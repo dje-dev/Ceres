@@ -138,32 +138,11 @@ except cache size 5,000,000, and 6 man tablebases.
 
 * Openings: 50 openings from TCEC 19 (each engine plays both side)
 
+![Perf Fixed Nodes](PerfFixedNodes.png)
 
-##### Fixed Nodes Test - Elo superiority at specified nodes per move (without smart pruning)
-
-| Network       |1K|5K|50K|
-| ------------- ||:----:| ----:|-----:|
-| 703810        |7|48|17|
-| 42767         |10|10|11|
-| 66193         |45|27|17|
-
-##### 1 GPU (one of A100, Titan RTX, Titan V), time control: 60 seconds + 1 second
-
-| Network       |Ceres W/D/L| Elo Diff|LC0 Nodes (bn)  |Ceres Nodes (bn)|
-| ------------- ||:-------------:| -----:|-----:|------:|
-| 703810        |23/71/8| 51 (+/- 19)   | 2.9 |5.1|
-| 42767         |20/68/12| 28 (+/- 20)   | 1.9 |2.5|
-| j92-280       |17/75/10| 24 (+/- 18)   | 0.9 |1.4|
-
+![Perf Time1 G P U](PerfTime1GPU.png)
                                                   
-##### 2 GPU (A100), time control: 120 seconds + 0.5 second (LC0 demux backend with 2 threads)
-
-| Network       |Ceres W/D/L| Elo Diff|LC0 Nodes (bn)  |Ceres Nodes (bn)|
-| ------------- ||:-------------:| -----:|-----:|------:|
-| 703810        |33/69/0| 117 (+/- 18)   | 4.4 |10.2|
-| 42767         |22/75/5| 58 (+/- 17)   | 4.2 |7.4|
-| 66666       |20/73/9| 38 (+/- 18)   | 2.4 |3.3|
-
+![Perf Time2 G P U](PerfTime2GPU.png)
 
 ## Scaling benchmarks
 
@@ -171,13 +150,7 @@ Searches were run to 100,000,000 nodes from the starting position
 (with smart pruning turned off) using mulitple GPUs(A100 + A100 + Titan RTX + Titan X).
 The roundrobin backend with 5 threads was used with LC0.
 
-| Network    |Engine|Memory|Elapsed Time|CPU  time|
-| ---------- |---|-------------:| -----:|-----:|------:|
-| 703810     |LC0|30gb|952 sec|77 min|
-| 703810     |Ceres|28gb|401 sec|59 min|
-| j92-280    |LC0|30gb|1432 sec|89 min|
-| j92-280    |Ceres|29gb|630 sec|88 min|
-
+![Perf Scaling](PerfScaling.png)
 ![Scaling703810](Scaling703810.png)
 s
 ![Scaling J92 280](ScalingJ92-280.png)
