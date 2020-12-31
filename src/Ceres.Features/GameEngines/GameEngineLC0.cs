@@ -1,0 +1,156 @@
+#region License notice
+
+/*
+  This file is part of the Ceres project at https://github.com/dje-dev/ceres.
+  Copyright (C) 2020- by David Elliott and the Ceres Authors.
+
+  Ceres is free software under the terms of the GNU General Public License v3.0.
+  You should have received a copy of the GNU General Public License
+  along with Ceres. If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#endregion
+
+#region Using directives
+
+using System;
+
+using Ceres.Chess;
+using Ceres.Chess.NNEvaluators.Defs;
+using System.Collections.Generic;
+using Ceres.Chess.LC0.Positions;
+using Ceres.Chess.LC0.Engine;
+using Ceres.Chess.LC0VerboseMoves;
+using Ceres.Chess.NNFiles;
+using Ceres.Chess.ExternalPrograms.UCI;
+using Ceres.Chess.GameEngines;
+using Ceres.Chess.Positions;
+using Ceres.MCTS.Params;
+
+#endregion
+
+namespace Ceres.Features.GameEngines
+{
+  /// <summary>
+  /// Subclass of GameEngine for Leela Zero chess engine accessed via UCI protocol.
+  /// </summary>
+  public class GameEngineLC0 : GameEngine, IUCIGameRunnerProvider                       
+  {
+    /// <summary>
+    /// Underlying LC0 engine object.
+    /// </summary>
+    public readonly LC0Engine LC0Engine;
+
+    /// <summary>
+    /// Underlying action to be applied as part of initialization.
+    /// </summary>
+    public readonly Action SetupAction = null;
+
+    /// <summary>
+    /// Underlying UCIRunner object which manages 
+    /// launcing external process and communicating via the UCI protocol.
+    /// </summary>
+    public UCIGameRunner UCIRunner => LC0Engine.Runner;
+
+
+    /// <summary>
+    /// Constructor
+    /// </summary>
+    /// <param name="searchParams"></param>
+    /// <param name="selectParams"></param>
+    /// <param name="paramsNN"></param>
+    /// <param name="id"></param>
+    /// <param name="networkID"></param>
+    /// <param name="emulateCeresSettings"></param>
+    /// <param name="setupAction"></param>
+    /// <param name="overrideEXE"></param>
+    public GameEngineLC0(string id, string networkID, bool forceDisableSmartPruning = false,
+                         bool emulateCeresSettings = false, 
+                         ParamsSearch searchParams = null, ParamsSelect selectParams = null, 
+                         NNEvaluatorDef paramsNN = null, 
+                         Action setupAction = null, 
+                         string overrideEXE = null,
+                         bool verbose = false, 
+                         bool alwaysFillHistory = false) : base(id)
+    {
+      SetupAction = setupAction;
+      if (SetupAction != null) SetupAction();
+      bool resetStateAndCachesBeforeMoves = searchParams != null && !searchParams.TreeReuseEnabled;
+
+      LC0Engine = LC0EngineConfigured.GetLC0Engine(searchParams, selectParams, paramsNN, 
+                                                   NNWeightsFiles.LookupNetworkFile(networkID), emulateCeresSettings,
+                                                   resetStateAndCachesBeforeMoves, verbose,
+                                                   forceDisableSmartPruning, overrideEXE,
+                                                   alwaysFillHistory);
+    }
+
+
+    /// <summary>
+    /// Returns UCI search information 
+    /// (such as would appear in a chess GUI describing search progress) 
+    /// based on last state of search.
+    /// </summary>
+    public override UCISearchInfo UCIInfo => new UCISearchInfo(UCIRunner.LastInfoString);
+
+    public override void ResetGame() => UCIRunner.StartNewGame();
+    
+
+    /// <summary>
+    /// Dispose method which releases underlying engine object.
+    /// </summary>
+    public override void Dispose() =>  LC0Engine.Dispose();
+        
+
+    /// <summary>
+    /// Executes any preparatory steps (that should not be counted in thinking time) before a search.
+    /// </summary>
+    protected override void DoSearchPrepare()
+    {
+      LC0Engine.DoSearchPrepare();
+    }
+
+    /// <summary>
+    /// Overridden virtual method that executs the search
+    /// by issuing UCI commands to the LC0 engine with appropriate search limit parameters.
+    /// </summary>
+    /// <param name="curPositionAndMoves"></param>
+    /// <param name="searchLimit"></param>
+    /// <param name="gameMoveHistory"></param>
+    /// <param name="callback"></param>
+    /// <returns></returns>
+    protected override GameEngineSearchResult DoSearch(PositionWithHistory curPositionAndMoves, SearchLimit searchLimit,
+                                                       List<GameMoveStat> gameMoveHistory, 
+                                                       ProgressCallback callback, bool verbose)
+    {
+      DoSearchPrepare();
+
+      if (SetupAction != null) SetupAction();
+
+      string fen = curPositionAndMoves.InitialPosition.FEN;
+      string endFEN = curPositionAndMoves.FinalPosition.FEN;
+      string moveStr = curPositionAndMoves.MovesStr;
+
+      // Run the analysis
+      LC0VerboseMoveStats lc0Analysis = LC0Engine.AnalyzePositionFromFENAndMoves(fen, moveStr, endFEN, searchLimit);
+
+      if (verbose) lc0Analysis.Dump();
+
+      float scoreLC0 = (int)MathF.Round(EncodedEvalLogistic.LogisticToCentipawn(lc0Analysis.SearchEvalLogistic), 0);
+
+      // TODO: can we somehow correctly set the staring N arugment here?
+      return new GameEngineSearchResult(lc0Analysis.BestMove, lc0Analysis.SearchEvalLogistic, scoreLC0, float.NaN,
+                                        searchLimit, default, 0, (int)lc0Analysis.NumNodes, (int)lc0Analysis.UCIInfo.Depth);
+    }
+
+    /// <summary>
+    /// Returns string summary of object.
+    /// </summary>
+    /// <returns></returns>
+    public override string ToString()
+    {
+      return $"<GameEngineLC0 {LC0Engine.Runner.EngineEXE} {LC0Engine.Runner.EngineExtraCommand}>";
+    }
+
+  }
+
+}

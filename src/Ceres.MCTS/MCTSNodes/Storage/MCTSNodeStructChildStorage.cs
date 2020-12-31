@@ -1,0 +1,301 @@
+#region License notice
+
+/*
+  This file is part of the Ceres project at https://github.com/dje-dev/ceres.
+  Copyright (C) 2020- by David Elliott and the Ceres Authors.
+
+  Ceres is free software under the terms of the GNU General Public License v3.0.
+  You should have received a copy of the GNU General Public License
+  along with Ceres. If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#endregion
+
+#define SPAN
+
+#region Using directives
+
+using System;
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+
+using Ceres.Base.DataTypes;
+using Ceres.Base.OperatingSystem;
+using Ceres.Chess.EncodedPositions.Basic;
+using Ceres.MCTS.MTCSNodes.Struct;
+using Ceres.MCTS.Params;
+
+#endregion
+
+namespace Ceres.MCTS.MTCSNodes.Storage
+{
+  [Serializable]
+  public class MCTSNodeStructChildStorage
+  {
+    /// <summary>
+    /// Only about 2 billion values are available for the 
+    /// the child start indices stored in MCTSNodeStruct
+    /// (since they are ints, with negative values reserved).
+    /// 
+    /// However with an average of about 35 children per node,
+    /// this would severly limit the maximum search tree size.
+    /// 
+    /// Therefore we allocate children in blocks and the values 
+    /// we record are indexes of the block, not the index of the child.
+    /// 
+    /// For example:
+    ///    1 per block --> 2 billion / 40_per_node = 50,000,000 nodes
+    ///   16 per block --> 32 billion / 40_per_node = 800,000,000 nodes
+    ///   
+    /// The value of 16 allows a large search tree and also has the benefit
+    /// that the blocks fall on cache lines (64 bytes), while keeping small
+    /// average number of chilren slots unused.
+    /// </summary>
+    public const int NUM_CHILDREN_PER_BLOCK = 16;
+
+    /// <summary>
+    /// Maximum number of nodes for which we have room to accomodate children.
+    /// See comment above.
+    /// </summary>
+    public const int MAX_NODES = 750_000_000;
+
+    /// <summary>
+    /// The main store to which these children below.
+    /// </summary>
+    public readonly MCTSNodeStore ParentStore;
+
+    /// <summary>
+    /// Keep track of index of next available block.
+    /// </summary>
+    internal long nextFreeBlockIndex = 1; // never allocate index 0 (null node)
+
+#if SPAN
+    const string SharedMemChildrenName = MCTSParamsFixed.STORAGE_USE_EXISTING_SHARED_MEM
+                                          ? "CeresSharedChildren"
+                                          : null;
+
+    /// <summary>
+    /// Low-level operating system data structure holding children nodes.
+    /// </summary>
+    internal MemoryBufferOS<MCTSNodeStructChild> childIndices;
+
+    public Span<MCTSNodeStructChild> Span => childIndices.Span;
+
+    internal void CopyEntries(int sourceBlockIndex, int destinationBlockIndex, int numChildren)
+      =>  childIndices.CopyEntries((long)sourceBlockIndex * (long)NUM_CHILDREN_PER_BLOCK, 
+                                   (long)destinationBlockIndex * (long)NUM_CHILDREN_PER_BLOCK, 
+                                   numChildren);
+
+#else
+    internal MCTSNodeStructChild[] childIndices;
+    internal Span<MCTSNodeStructChild> Span => childIndices.AsSpan();
+    internal void CopyEntries(int sourceBlockIndex, int destinationBlockIndex, int numChildren)
+    {
+      Array.Copy(childIndices, 
+                 sourceBlockIndex  * NUM_CHILDREN_PER_BLOCK, 
+                 childIndices, 
+                 destinationBlockIndex * NUM_CHILDREN_PER_BLOCK, 
+                 numChildren);
+    }
+
+#endif
+
+    /// <summary>
+    /// Maximum number of children which this child store is configured to hold.
+    /// </summary>
+    public readonly long MaxChildren;
+
+
+
+    /// <summary>
+    /// Constructor.
+    /// </summary>
+    /// <param name="parentStore"></param>
+    /// <param name="maxChildren"></param>
+    public MCTSNodeStructChildStorage(MCTSNodeStore parentStore, long maxChildren)
+    {
+      ParentStore = parentStore;
+#if SPAN
+      MaxChildren = 1 + maxChildren;
+      childIndices = new MemoryBufferOS<MCTSNodeStructChild>(MaxChildren,
+                                                             MCTSParamsFixed.STORAGE_LARGE_PAGES,
+                                                             SharedMemChildrenName, MCTSParamsFixed.STORAGE_USE_EXISTING_SHARED_MEM,
+                                                             MCTSParamsFixed.STORAGE_USE_INCREMENTAL_ALLOC);
+#else
+    throw new NotImplementedException("Currently only SPAN mode is supported because otherwise GC may relocate nodes violating assumption");
+    childIndices = new MCTSNodeStructChild[1 + numChildren];
+#endif
+    }
+
+    /// <summary>
+    /// Pointer to raw underlying memory at beginning of child store.
+    /// </summary>
+    public unsafe void* RawMemory => childIndices.RawMemory;
+
+
+    /// <summary>
+    /// Releases storage associated with the store.
+    /// </summary>
+    public void Deallocate()
+    {
+#if SPAN
+      childIndices.Dispose();
+#endif
+      childIndices = null;
+    }
+
+    /// <summary>
+    /// Number of allocated children blocks.
+    /// 
+    /// Note that this is not the actual number of children in use,
+    /// but rather the number of children slots allocated including the initial null child block 
+    /// and potential padding for each set of children.
+    /// </summary>
+    public long NumAllocatedChildren => (long)NumTotalBlocks * (long)NUM_CHILDREN_PER_BLOCK;
+
+    internal long NumTotalBlocks => nextFreeBlockIndex; // includes reserved null entry at 0
+
+    readonly object lockObj = new ();
+
+    /// <summary>
+    /// Insures a specified number of children are allocated.
+    /// </summary>
+    /// <param name="numChildren"></param>
+    internal void InsureAllocated(int numChildren) => childIndices.InsureAllocated(numChildren);
+
+
+    /// <summary>
+    /// Determins number of blocks needed to hold a specified number of children.
+    /// </summary>
+    /// <param name="numChildren"></param>
+    /// <returns></returns>
+    static internal int NumBlocksReservedForNumChildren(int numChildren)
+    {
+      bool fitsExactly = numChildren % NUM_CHILDREN_PER_BLOCK == 0;
+
+      return (numChildren / NUM_CHILDREN_PER_BLOCK) + (fitsExactly ? 0 : 1);
+    }
+
+
+    /// <summary>
+    /// Returns the index of block at which a specified number of new 
+    /// children are guaranteed to be allocated.
+    /// </summary>
+    /// <param name="numPolicyMoves"></param>
+    /// <returns></returns>
+    public long AllocateEntriesStartBlock(int numPolicyMoves)
+    {
+      long numBlocksRequired = NumBlocksReservedForNumChildren(numPolicyMoves);
+
+      long newNumBlocks = nextFreeBlockIndex + numBlocksRequired;
+      long newNumEntries = newNumBlocks * NUM_CHILDREN_PER_BLOCK;
+      if (newNumEntries >= childIndices.Length)
+        throw new Exception($"MCTSNodeStructChildStorage overflow, max size {childIndices.Length}. "
+                           + "The number of child pointers (moves per position) exceeded the expected maximum value considered plausible.");
+
+      lock (lockObj)
+      {
+        childIndices.InsureAllocated(newNumEntries);
+
+        long thisStartIndex = nextFreeBlockIndex;
+
+#if NOT
+        // If the children for this node would start
+        // just before a cache line boundary, we may skip
+        // a small number of items to allow it to
+        // start exactly on the cache line for efficiency
+        // At max skip of 4 (out of 16 in a cache line)
+        // we skip 1/4 of the time with an average skip of
+        // 2 items, for an average waste of 2 items per node
+        // which is 8 bytes per node (compared to the average
+        // size of about 160 bytes (40 children per node)
+        const int CACHE_LINE_ALIGNMENT_MAX_SKIP_ITEMS = 4;
+
+        if (CACHE_LINE_ALIGNMENT_MAX_SKIP_ITEMS > 0)
+        {
+          const int CACHE_LINE_SIZE = 64;
+          const int CHILDREN_PER_CACHE_LINE = CACHE_LINE_SIZE / MCTSNodeStructChild.SIZE_BYTES;
+          int childrenAwayFromNextCacheLineStart = CHILDREN_PER_CACHE_LINE - thisStartIndex % CHILDREN_PER_CACHE_LINE;
+          if (childrenAwayFromNextCacheLineStart <= CACHE_LINE_ALIGNMENT_MAX_SKIP_ITEMS)
+          {
+            thisStartIndex += childrenAwayFromNextCacheLineStart;
+            nextFreeBlockIndex += childrenAwayFromNextCacheLineStart;
+          }
+        }
+#endif
+
+        nextFreeBlockIndex += numBlocksRequired;
+
+        return thisStartIndex;
+      }
+    }
+
+
+    /// <summary>
+    /// Sets the raw data in the child node to specified values.
+    /// </summary>
+    /// <param name="node"></param>
+    /// <param name="childIndex"></param>
+    /// <param name="p"></param>
+    /// <param name="moveIndex"></param>
+    public void SetNodeChildAsPAndMove(in MCTSNodeStruct node, int childIndex, FP16 p, EncodedMove moveIndex)
+    {
+      Span<MCTSNodeStructChild> overflows = SpanForNode(in node);
+      overflows[childIndex].p = p;
+      overflows[childIndex].lc0PositionMoveRawValue = (ushort)moveIndex.IndexNeuralNet;
+    }
+
+
+    /// <summary>
+    /// Returns a span of MCTSNodeStructChild which covers thie children for 
+    /// node with a specified index.
+    /// </summary>
+    /// <param name="nodeIndex"></param>
+    /// <returns></returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+    public Span<MCTSNodeStructChild> SpanForNode(MCTSNodeStructIndex nodeIndex)
+    {
+      ref readonly MCTSNodeStruct nodeRef = ref ParentStore.Nodes.nodes[nodeIndex.Index];
+
+      if (nodeRef.NumPolicyMoves == 0) return Span<MCTSNodeStructChild>.Empty;
+
+      Debug.Assert(nodeRef.childStartBlockIndex > 0);
+#if SPAN
+      return childIndices.Slice(nodeRef.ChildStartIndex, nodeRef.NumPolicyMoves);
+#else
+      return new Span<MCTSNodeStructChild>(childIndices, node.ChildStartIndex, node.NumPolicyMoves);
+#endif
+    }
+
+
+    /// <summary>
+    /// Returns a span of MCTSNodeStructChild which covers thie children for a specified node.
+    /// </summary>
+    /// <param name="node"></param>
+    /// <returns></returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+    public Span<MCTSNodeStructChild> SpanForNode(in MCTSNodeStruct node)
+    {
+      if (node.NumPolicyMoves == 0) return Span<MCTSNodeStructChild>.Empty;
+
+      Debug.Assert(node.childStartBlockIndex > 0);
+#if SPAN
+      return childIndices.Slice(node.ChildStartIndex, node.NumPolicyMoves);
+#else
+      return new Span<MCTSNodeStructChild>(childIndices, node.ChildStartIndex, node.NumPolicyMoves);
+#endif
+    }
+
+
+    /// <summary>
+    /// Returns string summary of object.
+    /// </summary>
+    /// <returns></returns>
+    public override string ToString()
+    {
+      return $"<MCTSNodeStructChildStorage NumAllocatedChildren={NumAllocatedChildren} UsedNodes~{nextFreeBlockIndex*NUM_CHILDREN_PER_BLOCK}>";
+    }
+
+  }
+}

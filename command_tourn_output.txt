@@ -1,0 +1,37 @@
+C:\dev\Ceres\artifacts\release\net5.0>ceres tourn openings=TCEC19_NoomenSelect.pgn opponent=z:\chess\engines\stockfish_20090216_x64_bmi2.exe network=lc0:j92-280 device=gpu:0,1 limit=0.5sm show-moves=false
+
+|=====================================================|
+| Ceres - A Monte Carlo Tree Search Chess Engine      |
+|                                                     |
+| (c) 2020- David Elliott and the Ceres Authors       |
+|   With network backend code from Leela Chess Zero.  |
+|                                                     |
+|  Version 0.80. Use help to list available commands. |
+|  git Branch:master Commit:9959d85 (dirty)           |
+|=====================================================|
+
+
+Ceres user settings loaded from file Ceres.json
+TOURNAMENT    Tournament
+  Game Pairs:
+  Openings  : TCEC19_NoomenSelect.pgn
+  Adjudicate: 2 moves at 350cp or via tablebases
+  Player 1  : <EnginePlayerDef Ceres SearchLimit=<SM   0.50 Moves > Def=<GameEngineDefCeres Ceres using <NNEvaluatorDef Network=LC0:j92-280 Device=GPU:0@0.5,1@0.5 >>>
+  Player 2  : <EnginePlayerDef stockfish_20 SearchLimit=<SM   0.50 Moves > Def=<GameEngineDefUCI <GameEngineUCISpec stockfish_20 using z:\chess\engines\stockfish_20090216_x64_bmi2.exe >>>
+
+Found 510 WDL, 0 DTM and 510 DTZ tablebase files.
+TODO: TournamentGameRunner constructor extra code
+
+  ELO   +/-  LOS   GAME#     TIME    TH#   OP#       TIME1     TIME2          NODES 1            NODES 2      PLY    RES    W   D   L   FEN
+  ---   ---  ---   ----   --------   ---   ---    --------  --------    ----------------  ----------------   ----    ---    -   -   -   --------------------------------------------------
+    ∞  NaN    84      1   10:43:27     0     0       21.01     24.42           1,741,032        39,232,477     97     +b    1   0   0   rnbqkb1r/1p2pppp/p2p1n2/8/3NP3/2N5/PPP2PPP/R1BQKB1R w KQkq - 0 11
+  191  250    84      2   10:44:23     1     0       26.13     29.87           2,260,294        44,278,617    120      =    1   1   0   rnbqkb1r/1p2pppp/p2p1n2/8/3NP3/2N5/PPP2PPP/R1BQKB1R w KQkq - 0 11
+  280  321    92      3   10:44:42     2     1        7.91     10.11             446,047        13,299,089     42     +w    2   1   0   r1bq1rk1/ppp1npbp/3p1np1/3Pp3/2P1P3/2N2N2/PP2BPPP/R1BQ1RK1 w - - 1 17
+  338  369    96      4   10:45:22     3     1       18.01     22.38           1,648,796        33,084,224     88     +b    3   1   0   r1bq1rk1/ppp1npbp/3p1np1/3Pp3/2P1P3/2N2N2/PP2BPPP/R1BQ1RK1 w - - 1 17
+  241  160    96      5   10:46:43     4     2       37.38     43.63           4,809,068        65,069,660    173      =    3   2   0   rnbqkbnr/ppp2ppp/4p3/3pP3/3P4/2N5/PPP2PPP/R1BQKBNR w KQkq - 1 9
+  280  169    98      6   10:47:03     5     2        8.92     10.66             582,171        13,658,739     43     +w    4   2   0   rnbqkbnr/ppp2ppp/4p3/3pP3/3P4/2N5/PPP2PPP/R1BQKBNR w KQkq - 1 9
+  226  119    98      7   10:49:27     6     3       70.24     74.47           3,604,018       128,341,297    295      =    4   3   0   rn1qkb1r/pb3ppp/2p1p3/1p1nP3/P1pPN3/5N2/1P2BPPP/R1BQK2R b KQkq - 3 18
+  255  123    99      8   10:49:56     7     3       12.46     15.77             915,841        21,036,339     63     +b    5   3   0   rn1qkb1r/pb3ppp/2p1p3/1p1nP3/P1pPN3/5N2/1P2BPPP/R1BQK2R b KQkq - 3 18
+  280  126    99      9   10:50:26     8     4       13.52     16.75           1,078,160        23,006,056     67     +b    6   3   0   rnbqkbnr/pppp1p1p/8/6p1/4Pp2/2N2N2/PPPP2PP/R1BQKB1R b KQkq - 1 8
+  301  129   100     10   10:50:56     9     4       12.39     17.23           1,376,706        28,599,325     68     +w    7   3   0   rnbqkbnr/pppp1p1p/8/6p1/4Pp2/2N2N2/PPPP2PP/R1BQKB1R b KQkq - 1 8
+

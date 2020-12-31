@@ -1,0 +1,5 @@
+David Elliott
+The Ceres Authors
+The Leela Chess Zero authors at https://github.com/LeelaChessZero/
+Clinton Sheppard for PGN file reader code at https://github.com/handcraftsman/PgnFileTools
+Judd Niemann for move generator code (translated and adapted from C++) at https://github.com/jniemann66/juddperft

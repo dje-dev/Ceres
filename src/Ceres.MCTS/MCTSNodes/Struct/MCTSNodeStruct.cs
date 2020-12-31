@@ -1,0 +1,406 @@
+#region License notice
+
+/*
+  This file is part of the Ceres project at https://github.com/dje-dev/ceres.
+  Copyright (C) 2020- by David Elliott and the Ceres Authors.
+
+  Ceres is free software under the terms of the GNU General Public License v3.0.
+  You should have received a copy of the GNU General Public License
+  along with Ceres. If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#endregion
+
+#region Using directives
+
+using System;
+using System.Diagnostics;
+using System.Runtime;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+
+using Ceres.Base;
+using Ceres.Base.DataTypes;
+using Ceres.Base.OperatingSystem;
+using Ceres.Chess;
+using Ceres.Chess.EncodedPositions.Basic;
+using Ceres.Chess.MoveGen;
+using Ceres.Chess.MoveGen.Converters;
+using Ceres.MCTS.LeafExpansion;
+using Ceres.MCTS.MTCSNodes.Annotation;
+using Ceres.MCTS.MTCSNodes.Storage;
+using Ceres.MCTS.Params;
+
+#endregion
+
+namespace Ceres.MCTS.MTCSNodes.Struct
+{
+  /// <summary>
+  /// Raw low-level structure used to hold core MCTS tree node data.
+  /// 
+  /// Note that size exactly 64 bytes to align with cache lines.
+  ///   
+  /// Notes on children layout:
+  ///   - child arrays (expanded or unexpanded) are always sorted desecending by P
+  ///     (with ties believed impossible due to code run at policy initialization which enforces this)
+  ///   - NumChildrenExpanded tracks how many moves have been expanded to be their own nodes 
+  ///   - NumChildrenVisited field tracks how many children have actually been visited (N > 0)
+  ///   - typically NumChildrenExpanded and NumChildrenVisited have the same value, since we generally 
+  ///     the MCTS algorithm will choose new children to visit strictly in order by P
+  ///   - however NumChildrenExpanded and NumChildrenVisited could rarely differ. For example,
+  ///     if we are enforcing limits on NN batch size in leaf selection and a selected node  
+  ///     ends up being dropped because it exceeded the limit and another child with a higher index
+  ///     was also selected in the same batch, the dropped node will have been expanded but not visited.
+  ///      
+  /// </summary>
+  public partial struct MCTSNodeStruct
+  {
+    #region Data
+
+    /// <summary>
+    /// Node estimated value
+    /// </summary>
+    public FP16 V => WinP - LossP;
+
+    /// <summary>
+    /// Draw probability
+    /// </summary>
+    public readonly FP16 DrawP => ParamsSelect.VIsForcedResult(V) ? 0 : (FP16)(1.0f - (WinP + LossP));
+
+
+    /// <summary>
+    /// Average M (moves left estimate) for this subtree
+    /// </summary>
+    public float MAvg => mSum / N;  
+
+    /// <summary>
+    /// The starting index of entries for this node within the child info array
+    /// Uninitialized (null) nodes will have an invalid value of zero
+    /// Negative values are special indicators that the node is
+    /// linked to a transposition root (having index the negative of that value)
+    /// </summary>
+    internal readonly long ChildStartIndex { get => (long)childStartBlockIndex * (long)MCTSNodeStructChildStorage.NUM_CHILDREN_PER_BLOCK; }
+
+    /// <summary>
+    /// Currently not used (and no room in structure for it).
+    /// </summary>
+    public int NextTranspositionLinked 
+    { 
+      get => throw new NotImplementedException();
+      set { if (value != 0) throw new NotImplementedException(); }
+    }
+    //    public short TranspositionNumBorrowed;
+
+
+    public float QUpdatesWtdAvg { get => throw new NotImplementedException(); set { } }
+
+    public float QUpdatesWtdVariance { get => throw new NotImplementedException(); set { } }
+
+    //    public float VVariance => W == 0 ? 0 : (VSumSquares - (float)W) / N;
+
+
+    internal float VSumSquares { get => float.NaN; set { } }
+
+    /// <summary>
+    /// Variance of all V values backed up from subtree
+    /// </summary>
+    public float VVariance => W == 0 ? 0 : (VSumSquares - (float)W) / N;
+
+    /// <summary>
+    /// Average win probability of subtree
+    /// </summary>
+    public float WAvg => 1.0f - DAvg - LAvg;
+
+    /// <summary>
+    /// Average draw probability of subtree
+    /// </summary>
+    public float DAvg => dSum / N;
+
+    /// <summary>
+    /// Average loss probability of subbtree
+    /// </summary>
+    public float LAvg => 0.5f * (1.0f - DAvg - (float)Q);
+
+    public byte NumChildrenVisited
+    {
+      readonly get => numChildrenVisited <= 64 ? numChildrenVisited : (byte)0;
+      set => numChildrenVisited = value;
+    }
+
+
+    #endregion
+
+    public readonly bool IsRoot => ParentIndex.IsNull;
+
+    public readonly bool IsNull => Index.IsNull;
+
+    public readonly bool IsEvaluated => !float.IsNaN(V);
+
+    public readonly bool IsInFlight => NInFlight != 0 || NInFlight2 != 0;
+
+    public FP16 SumPVisited => (FP16)CalcSumPVisited();
+
+    /// <summary>
+    /// The number of evaluations that have so far been extracted via
+    /// the transposition root (or zero if not transposition linked).
+    /// This is encoded in the numChildrenVisited.
+    /// </summary>
+    public int NumNodesTranspositionExtracted
+    {
+      readonly get => numChildrenVisited <= 64 ? 0 : 256 - numChildrenVisited;
+      set
+      {
+        Debug.Assert(value >= 0 && value < (256 - 64));
+        numChildrenVisited = (value == 0) ? (byte)0 : (byte)(256 - value);
+      }
+    }
+
+    /// <summary>
+    /// If the tree is truncated at this node and generating position
+    /// values via the subtree linked to its tranposition root
+    /// </summary>
+    public bool IsTranspositionLinked => childStartBlockIndex < 0;
+
+    public int TranspositionRootIndex
+    {
+      // Note: we make use of ChildStartIndex as a place to store this value
+      readonly get
+      {
+        if (childStartBlockIndex >= 0)
+          return 0;
+        else
+          return -childStartBlockIndex;
+      }
+      set
+      {
+        Debug.Assert(value >= 0);
+        childStartBlockIndex = -value;
+      }
+    }
+
+  
+    /// <summary>
+    /// Sets fields to their inital values upon node creation
+    /// Note that it is assumed the node is already in the default (zeroed) state.
+    /// </summary>
+    /// <param name="parentIndex"></param>
+    /// <param name="p"></param>
+    /// <param name="priorMove"></param>
+    public void Initialize(MCTSNodeStructIndex parentIndex, FP16 p, EncodedMove priorMove)
+    {
+      ParentIndex = parentIndex;
+      P = p;
+      PriorMove = priorMove;
+
+      WinP = FP16.NaN;
+      LossP = FP16.NaN;
+      MPosition = FP16.NaN;
+      ReuseGenerationNum = 0;
+      ZobristHash = 0;
+      //Weight = 1.0f;
+    }
+
+
+    /// <summary>
+    /// Returns index of child containing a specified move (or null if none).
+    /// </summary>
+    /// <param name="move"></param>
+    /// <returns></returns>
+    public int? ChildIndexWithMove (MGMove move)
+    {
+      EncodedMove lzMove = ConverterMGMoveEncodedMove.MGChessMoveToEncodedMove(move);
+      Span<MCTSNodeStructChild> children = this.Children;
+      for (int i = 0; i < NumPolicyMoves; i++)
+        if (children[i].Move == lzMove)
+          return i;
+      return null;
+    }
+
+    /// <summary>
+    /// If a node has been deleted then Parent is set to a special value
+    /// </summary>
+    const int DETACHED_NODE_NINFLIGHT_MARKER = short.MaxValue;
+
+    
+    /// <summary>
+    /// Returns if the node has been removed from the currently active tree
+    /// The raw data still exists in the store, but the root of the subtree 
+    /// to which this node belongs is detched (unlinked to from rest of tree).
+    /// 
+    /// We represent this setting the NInFlight to a special market value.
+    /// </summary>
+    public bool Detached
+    {
+      readonly get
+      {
+        return NInFlight == DETACHED_NODE_NINFLIGHT_MARKER;
+      }
+      internal set
+      {
+        NInFlight = DETACHED_NODE_NINFLIGHT_MARKER;
+      }
+    }
+
+
+
+    /// <summary>
+    /// Average evaluation value of visited children
+    /// (from perspective of side to move)
+    /// </summary>
+    public readonly double Q => W / N;
+
+    public readonly bool IsFullyEvaluated => throw new NotImplementedException();
+                                             //   Terminal != TerminalStatus.NotTerminal 
+                                             // || (NumPolicyMoves > 0 && NumChildrenFullyEvaluated == Children.Length);
+
+
+
+    public readonly ref MCTSNodeStruct ParentRef
+    {
+      get
+      {
+        Debug.Assert(!ParentIndex.IsNull);
+        return ref MCTSNodeStoreContext.Nodes[ParentIndex.Index];
+      }
+    }
+
+    public readonly int ParentN => ParentRef.IsNull ? 0 : ParentRef.N;
+
+
+    public ref readonly MCTSNodeStruct ChildAtIndexRef(int childIndex)
+    {
+      Debug.Assert(childIndex < NumPolicyMoves);
+      return ref Children[childIndex].ChildRef;
+    }
+
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly MCTSNodeStructChild ChildAtIndex(int childIndex)
+    {
+      Debug.Assert(childIndex < NumPolicyMoves);
+      return MCTSNodeStoreContext.Children[ChildStartIndex + childIndex];
+    }
+
+
+    /// <summary>
+    /// 
+    /// TODO: someday we want to mark this as readonly (which is critical for readonly refs)
+    ///       However seemingly no efficient way to do that (using Unsafe class). See CTNodeStorage.NodeOffsetFromFirst.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public unsafe readonly MCTSNodeStructIndex IndexInStore(MCTSNodeStore store)
+    {
+     // This relies on fact that the array of nodes resides at a fixed address
+      // which will be assured if either:
+      //   - the object is on the large object heap, and compaction is not enabled for this heap, or
+      //   - we are using nonmanaged memory
+      int thisIndex = ((int)store.Nodes.NodeOffsetFromFirst(in this) / MCTSNodeStructSizeBytes);
+      Debug.Assert(thisIndex <= store.Nodes.NumUsedNodes);
+      return new MCTSNodeStructIndex(thisIndex);
+    }
+
+
+    /// <summary>
+    /// Returns index of node within node array.
+    /// 
+    /// TODO: someday we want to mark this as readonly (which is critical for readonly refs)
+    ///       However seemingly no efficient way to do that (using Unsafe class). See CTNodeStorage.NodeOffsetFromFirst.
+    /// </summary>
+    public unsafe readonly MCTSNodeStructIndex Index
+    {
+      get
+      {
+        return IndexInStore(MCTSNodeStoreContext.Store);
+      }
+    }
+
+    // Choice of divisor of 64 is very important for performance, for two reasons:
+    //   - cache line is generally 64 bytes, thus this allows us to allocate in an array 
+    //     such that each is aligned with a cache line and exactly one memory access per node, and
+    //   - because power of 2, indexing into the array of nodes can be done using shifting instead of multiplication
+    // By using a const here, compiler recognize opportunity to use shifting 
+    internal const int MCTSNodeStructSizeBytes = 64; 
+
+
+    /// <summary>
+    /// Perform various integrity checks on structure layout (debug mode only).
+    /// </summary>
+    [Conditional("DEBUG")]
+    internal static void ValidateMCTSNodeStruct()
+    {
+      // Verify expected size
+      long size = Marshal.SizeOf<MCTSNodeStruct>();
+      if (size != MCTSNodeStructSizeBytes) throw new Exception("Internal error, wrong size MCTSNodeStruct " + size);
+
+      // We rely upon immovability of the array of nodes 
+      Debug.Assert(GCSettings.LargeObjectHeapCompactionMode == GCLargeObjectHeapCompactionMode.Default);
+
+      Debug.Assert(Marshal.SizeOf<MCTSNodeStructIndex>() == 4);
+    }
+
+
+
+    public override string ToString()
+    {
+      string indexStr = $"#{Index.Index}";
+//      string indexStr = $"#?"; // not possible to determine, since we can be passed by value and not ref
+
+      //      float score = ParentIndex.IsNull ? 0 : ParentRef.ScoreForChild(ParentRef.Children[IndexWithinParentsChildren]);
+      return $"<Node [#{indexStr}] Depth{DepthInTree} {Terminal} {PriorMove} ({N},{NInFlight},{NInFlight2})  P={P*100.0f:F3}% " 
+            + $"V={V:F3}" +(VSecondary == 0 ? "" : $"VSecondary={VSecondary:F3} ") +  $" W={W:F3} "
+            + $"MPos={MPosition:F3} MAvg={MAvg:F3} "
+           + $"Parent={(ParentIndex.IsNull ? "none" : ParentIndex.Index.ToString())}"
+           + (IsTranspositionLinked ? $" TRANSPOSITION LINKED, extracted { NumNodesTranspositionExtracted}" : "")
+           + $" Score=(?) > with {NumPolicyMoves} policy moves";
+      //    + $" Score={score,6:F2} > with {NumPolicyMoves} policy moves"; // can't do this until/if we restore IndexWithinParentsChildren or do linear search to find
+    }
+
+
+    public readonly Span<MCTSNodeStructChild> ChildrenFromStore(MCTSNodeStore store)
+    {
+
+      if (NumPolicyMoves == 0)
+        return new Span<MCTSNodeStructChild>();
+      else
+        return store.Children.SpanForNode(in this);
+
+    }
+
+
+    public readonly Span<MCTSNodeStructChild> Children
+    {
+      get
+      {
+        if (NumPolicyMoves == 0)
+          return new Span<MCTSNodeStructChild>();
+        else
+          return MCTSNodeStoreContext.Store.Children.SpanForNode(in this);
+      }
+    }
+
+
+    /// <summary>
+    /// Computes and returns the depth of node in the tree by ascending to root.
+    /// </summary>
+    public readonly byte DepthInTree
+    {
+      get
+      {        
+        int count = 0;
+        ref readonly MCTSNodeStruct node = ref this;
+        while (!node.IsRoot)
+        {
+          // Don't allow infinite loop (this makes debugging difficult due to debugger displays hanging)
+          if (count > 9999) return 255;
+
+          count++;
+          node = ref node.ParentRef;
+        }
+
+        return count > 255 ? (byte)255 : (byte)count;
+      }
+    }
+
+  }
+
+}

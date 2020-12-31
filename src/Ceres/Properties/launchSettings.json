@@ -1,0 +1,15 @@
+{
+  "profiles": {
+    "Ceres": {
+      "commandName": "Project",
+      "commandLineArgs": "CUSTOM",
+      "nativeDebugging": false
+    },
+    "Docker": {
+      "commandName": "Docker"
+    },
+    "WSL 2": {
+      "commandName": "WSL2"
+    }
+  }
+}

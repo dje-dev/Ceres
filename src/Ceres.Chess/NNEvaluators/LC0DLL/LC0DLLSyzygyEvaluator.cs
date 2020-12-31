@@ -1,0 +1,231 @@
+#region License notice
+
+/*
+  This file is part of the Ceres project at https://github.com/dje-dev/ceres.
+  Copyright (C) 2020- by David Elliott and the Ceres Authors.
+
+  Ceres is free software under the terms of the GNU General Public License v3.0.
+  You should have received a copy of the GNU General Public License
+  along with Ceres. If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#endregion
+
+#region Using directives
+
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Runtime.InteropServices;
+using Ceres.Chess.MoveGen;
+
+#endregion
+
+namespace Ceres.Chess.NNEvaluators.LC0DLL
+{
+  /// <summary>
+  /// Interface to Syzygy tablebase probing routines 
+  /// exposed by the LC0 DLL.
+  /// </summary>
+  public partial class LC0DLLSyzygyEvaluator : IDisposable
+  {
+    public enum WDLScore
+    {
+      /// <summary>
+      /// Loss
+      /// </summary>
+      WDLLoss = -2,
+
+      /// <summary>
+      /// Loss, but draw under 50-move rule
+      /// </summary>
+      WDLBlessedLoss = -1,
+
+      /// <summary>
+      /// Draw
+      /// </summary>
+      WDLDraw = 0,
+
+      /// <summary>
+      /// Win, but draw under 50-move rule
+      /// </summary>
+      WDLCursedWin = 1,
+
+      /// <summary>
+      /// Win
+      /// </summary>
+      WDLWin = 2
+    }
+    public enum ProbeState
+    {
+      /// <summary>
+      /// DTZ should check other side
+      /// </summary>
+      ChangeSTM = -1,
+
+      /// <summary>
+      /// Fail
+      /// </summary>
+      Fail = 0,
+
+      /// <summary>
+      /// Ok
+      /// </summary>
+      Ok = 1,
+
+      /// <summary>
+      /// Best move zeros DTZ
+      /// </summary>
+      ZeroingBestMove = 2
+    }
+
+
+    /// <summary>
+    /// Static counter of succesful tablebase probes.
+    /// </summary>
+    public static long NumTablebaseHits = 0;
+
+    /// <summary>
+    /// Session ID under which the registration with LC0 DLL was made.
+    /// </summary>
+    private int sessionID;
+
+    /// <summary>
+    /// Returns the maximum cardinality supported by loaded tablebase(number of pieces on board).
+    /// </summary>
+    public int MaxCardinality { private set; get; }
+
+
+    /// <summary>
+    /// Constructor that prepares evaluator.
+    /// </summary>
+    /// <param name="sessionID"></param>
+    /// <param name="paths"></param>
+    public LC0DLLSyzygyEvaluator(int sessionID, string paths)
+    {
+      this.sessionID = sessionID;
+      Initialize(paths);
+    }
+
+
+    /// <summary>
+    /// Internal initialization routine to register with LC0 DLL.
+    /// </summary>
+    /// <param name="paths"></param>
+    /// <returns></returns>
+    bool Initialize(string paths)
+    {
+      // Validate that all the requested paths actually exist
+      string[] directories = paths.Split(new char[] { ';', ',' });
+      foreach (string dir in directories)
+      {
+        if (!Directory.Exists(dir))
+        {
+          throw new Exception($"Requested tablebase directory does not exist or is inaccessible: {dir}");
+        }
+      }
+
+      LCO_Interop.CheckLibraryDirectoryOnPath();
+
+      // Determine the maximum cardinality (number of pieces) supported
+      bool initialized = LCO_Interop.TBInitialize(sessionID, paths);
+      if (initialized)
+      {
+        MaxCardinality = LCO_Interop.MaxCardinality(sessionID);
+      }
+      else
+      {
+        throw new Exception($"Loading tablebases failed, attempted {paths}");
+      }
+      return initialized;
+    }
+
+    /// <summary>  
+    /// Probes WDL tables for the given position to determine a WDLScore.
+    /// Result is only strictly valid for positions with 0 ply 50 move counter.
+    ///</ summary>
+    public void ProbeWDL(in Position pos, out WDLScore score, out ProbeState result)
+    {
+      // Make sure sufficiently few pieces remain on board
+      // and not castling rights
+      if (pos.PieceCount > MaxCardinality || pos.MiscInfo.CastlingRightsAny)
+      {
+        score = default;
+        result = ProbeState.Fail;
+        return;
+      }
+
+      // Call DLL function to do the probe and return encoded result
+      int resultCode = LCO_Interop.ProbeWDL(sessionID, pos.FEN);
+
+      // Unpack the encoded result code
+      result = (ProbeState)(resultCode / 256 - 10);
+      score = (WDLScore)(resultCode % 256 - 10);
+
+      if (result == ProbeState.Ok || result == ProbeState.ZeroingBestMove)
+      {
+        NumTablebaseHits++;
+      }
+    }
+
+
+    /// <summary>/
+    /// Probes DTZ tables for the given position to determine the number of ply
+    /// before a zeroing move under optimal play.
+    ///</summary>
+    public int ProbeDTZ(string position, out ProbeState state)
+    {
+      //  int probe_dtz(const Position& pos, ProbeState* result);
+      state = ProbeState.Fail;
+      return -1;
+    }
+
+    /// Probes DTZ tables to determine which moves are on the optimal play path.
+    /// Assumes the position is one reached such that the side to move has been
+    /// performing optimal play moves since the last 50 move counter reset.
+    /// has_repeated should be whether there are any repeats since last 50 move
+    /// counter reset.
+    /// Safe moves are added to the safe_moves output paramater.
+
+    public bool RootProbe(string position, bool hasRepeated, List<MGMove> moves)
+    {
+      //bool root_probe(const Position&pos, bool has_repeated, std::vector < Move > *safe_moves);
+      return false;
+    }
+
+    /// <summary>
+    /// Probes WDL tables to determine which moves might be on the optimal play
+    /// path. If 50 move ply counter is non-zero some (or maybe even all) of the
+    /// returned safe moves in a 'winning' position, may actually be draws.
+    /// Safe moves are added to the safe_moves output paramater.
+    /// </summary>
+    public bool RootProbeWDL(string position, List<MGMove> moves)
+    {
+      //  bool root_probe_wdl(const Position& pos, std::vector<Move>* safe_moves);
+      return false;
+    }
+
+    #region Disposal
+
+    bool isDisposed = false;
+
+    ~LC0DLLSyzygyEvaluator()
+    {
+      Dispose();
+    }
+
+    // --------------------------------------------------------------------------------------------
+    public void Dispose()
+    {
+      if (!isDisposed)
+      {
+        // Currently we do nothing.
+      }
+
+      isDisposed = true;
+    }
+
+    #endregion
+
+  }
+}
