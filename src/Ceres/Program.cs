@@ -39,6 +39,11 @@ namespace Ceres
     /// <param name="args"></param>
     static void Main(string[] args)
     {
+#if DEBUG
+      Console.WriteLine();
+      ConsoleUtils.WriteLineColored(ConsoleColor.Red, "*** WARNING: Ceres binaries built in Debug mode and will run much more slowly than Release");
+#endif
+
       OutputBanner();
       CheckRecursiveOverflow();
       HardwareManager.VerifyHardwareSoftwareCompatability();
