@@ -113,7 +113,8 @@ namespace Ceres
         }
         else
         {
-          if (line.Contains("{git}"))
+          // DISABLED git functionality until crash on a user's computer is better understood
+          if (false && line.Contains("{git}"))
           {
             string outString = line.Replace("{git}", GitInfo.VersionString).TrimEnd();
             outString = outString.PadRight(bannerLines[1].Length - 1);
