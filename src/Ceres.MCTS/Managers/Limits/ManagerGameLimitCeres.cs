@@ -31,7 +31,6 @@ namespace Ceres.MCTS.Managers.Limits
   [Serializable]
   public class ManagerGameLimitCeres : IManagerGameLimit
   {
-
     static readonly SearchLimit zeroSeconds = new SearchLimit(SearchLimitType.SecondsPerMove, 0);
     static readonly SearchLimit zeroNodes = new SearchLimit(SearchLimitType.NodesPerMove, 0);
 
@@ -113,8 +112,7 @@ namespace Ceres.MCTS.Managers.Limits
     ManagerGameLimitOutputs MoveTimeForFirstMove(ManagerGameLimitInputs inputs, float estNumMovesLeftHard)
     {
       float fractionFirstMove = 0.05f;
-      float targetUnits = inputs.RemainingFixedSelf * fractionFirstMove
-                        + inputs.IncrementSelf;
+      float targetUnits = inputs.RemainingFixedSelf * fractionFirstMove;
       return new ManagerGameLimitOutputs(new SearchLimit(inputs.TargetLimitType, targetUnits));
     }
 
@@ -173,13 +171,16 @@ namespace Ceres.MCTS.Managers.Limits
       }
       else
       {
-        // Compute some trailing statistics
+        // Compute some trailing statistics on how many final nodes were in the search tree
         float trailingFinalNodes = inputs.TrailingAvgFinalNodes(5, inputs.StartPos.MiscInfo.SideToMove);
 
+        // If we haven't accumulated sufficient history of prior moves
+        // just return this naive target directly
         if (SearchLimit.TypeIsTimeLimit(inputs.TargetLimitType) && float.IsNaN(trailingNPS))
           return new ManagerGameLimitOutputs(new SearchLimit(inputs.TargetLimitType, targetUnitsBase));
 
         // Translate the time budget into an estimated nodes budget
+        // using 
         float targetNodesRawViaNPS = targetUnitsBase * trailingNPS;
 
         float targetNodesViaPriorFinalN;
@@ -196,10 +197,14 @@ namespace Ceres.MCTS.Managers.Limits
 
         targetNodes = StatUtils.Average(targetNodesViaPriorFinalN, targetNodesViaNPS);
       }
-      float MULT = 1.75f; // Testing suggests 1.75 as be approximate peak
 
-      if (inputs.RootN > targetNodes * MULT)
+      float MULTIPLIER_BYPASS_SEARCH = 1.75f; // Testing suggests 1.75 as be approximate peak
+
+      if (inputs.RootN > targetNodes * MULTIPLIER_BYPASS_SEARCH)
       {
+        // Current tree (thanks to tree reuse) is already 
+        // much larger than our target, so decide to do no search at all.
+        // TODO: in this situation we could not bother doing MakeNewRoot operation to save time
         return inputs.TargetLimitType == SearchLimitType.SecondsPerMove
                                  ? new ManagerGameLimitOutputs(zeroSeconds)
                                  : new ManagerGameLimitOutputs(zeroNodes);
@@ -211,7 +216,11 @@ namespace Ceres.MCTS.Managers.Limits
         if (inputs.TargetLimitType == SearchLimitType.NodesPerMove)
         {
           if (inputs.RemainingFixedSelf < 100)
-            targetAllocUnits = inputs.RemainingFixedSelf / 30;
+          {
+            // We need to get very conservative with low nodes
+            // since they are whole numbers not infinitely divisible.
+            targetAllocUnits = Math.Max(1, inputs.RemainingFixedSelf / 50);
+          }
           else
           {
             targetAllocUnits = targetNodes;
@@ -221,10 +230,11 @@ namespace Ceres.MCTS.Managers.Limits
         }
         else
         {
+          // Convert target nodes back into estimated time
           targetAllocUnits = targetNodes / trailingNPS;
 
-          // Never spend too much of remaining time on a single node
-          float maxAllocUnits = inputs.IncrementSelf + 0.07f * inputs.RemainingFixedSelf;
+          // As a safety check, never spend too much of remaining time on a single move
+          float maxAllocUnits = 0.07f * inputs.RemainingFixedSelf;
           if (targetAllocUnits > maxAllocUnits) targetAllocUnits = maxAllocUnits;
         }
 
