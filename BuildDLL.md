@@ -15,11 +15,10 @@ this capability within Ceres.
 This support takes the form of a custom library file (LC0.DLL) which 
 can be built from the LC0 code base on github with just two 
 minor modifications:
-* the network_cuda.cc file is modified to append code that
+* the network_cudnn.cc file is modified to append code that
  exposes certain data structures and functions to Ceres 
 for direct access via interop. This modified file can be found in the 
-in the Ceres source code tree or eventually  From the fork at 
-https://github.com/dje-dev/lc0.
+in the Ceres source code tree under \src\Ceres.Chess\NNEvaluators\LC0DLL\network_cudnn.cc.
 * the project file configuration is changed to output a library (DLL) instead
  of an executable (EXE)
 
