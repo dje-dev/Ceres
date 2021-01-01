@@ -35,7 +35,7 @@ namespace Ceres.Chess.UserSettings
     /// </summary>
     public static void DoSetupInitialize()   
     {
-      string dirLC0Binaries = GetDirectoryString("  LC0 binaries (with plug-in Ceres.DLL) : ", true);
+      string dirLC0Binaries = GetDirectoryString("  LC0 binaries (with plug-in LC0.DLL)   : ", true);
       string dirLC0Networks = GetDirectoryString("  LC0 network weights files             : ");
       string defaultNetworkString = GetString("  Default network specification (e.g. \"LC0:703810\")                    : ", 
                                               s => NNNetSpecificationString.IsValid(s));
