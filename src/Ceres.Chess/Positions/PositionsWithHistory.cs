@@ -32,6 +32,9 @@ namespace Ceres.Chess.Positions
   /// <summary>
   /// Represents an enumerable and indexable set of MoveSequence 
   /// sourced from somewhere (such as a PGN or EPD file).
+  /// 
+  /// TODO: it would be more elegant to use polymorphism as a way 
+  ///       of supporting the various modes (PGN, EPD, etc.).
   /// </summary>
   public class PositionsWithHistory : IEnumerable<PositionWithHistory>
   {
@@ -206,7 +209,7 @@ namespace Ceres.Chess.Positions
         fullName = baseName;
 
       if (!System.IO.File.Exists(fullName))
-        throw new Exception($"Requested start position source file at {fullName} does not exist.");
+        throw new Exception($"The source file {fullName} does not exist.");
       else
         return fullName;
     }
@@ -245,6 +248,10 @@ namespace Ceres.Chess.Positions
       }
     }
 
+    /// <summary>
+    /// Returns enumerator to iterate over the constituent PositionWithHistory.
+    /// </summary>
+    /// <returns></returns>
     public IEnumerator<PositionWithHistory> GetEnumerator()
     {
       return MoveSequences.GetEnumerator();
