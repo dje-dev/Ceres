@@ -15,6 +15,7 @@
 
 using System;
 using System.Diagnostics;
+using Ceres.Base.Misc;
 
 #endregion
 
@@ -74,6 +75,10 @@ namespace Ceres.Features.UCI
     public UCIGoCommandParsed(string goCommand, bool weAreWhite)
     {
       bool weAreBlack = !weAreWhite;
+
+      // Remove any extraneous whitespaces
+      goCommand = StringUtils.WhitespaceRemoved(goCommand);
+
       string[] strParts = goCommand.Split(" ");
       Debug.Assert(strParts[0] == "go");
 
@@ -86,6 +91,9 @@ namespace Ceres.Features.UCI
         int TakeIntToken()
         {
           string intToken = strParts[partIndex++];
+
+          // If we see an empty string (due to extraneous spaces)
+          if (intToken == "") return TakeIntToken();
 
           // Allow numbers to include underscore characters (like in C# numeric literals)
           // for readability by stripping out these characters.

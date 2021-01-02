@@ -13,6 +13,7 @@
 
 #region Using directives
 
+using System.Text.RegularExpressions;
 
 #endregion
 
@@ -23,6 +24,19 @@ namespace Ceres.Base.Misc
   /// </summary>
   public static class StringUtils
   {
+    /// <summary>
+    /// Compiled regular expression that squashes repeated characters.
+    /// </summary>
+    static readonly Regex repeatedCharTrimmer = new Regex(@"\s\s+", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Returns the specified string with all extraneous spaces removed
+    /// (repeated spaces in the middle of the string are compacted).
+    /// </summary>
+    /// <param name="str"></param>
+    /// <returns></returns>
+    public static string WhitespaceRemoved(string str) => repeatedCharTrimmer.Replace(str, " ");
+
     /// <summary>
     /// Adjust a string's length to be exactly specified value,
     /// truncating or padding on the right as needed.
