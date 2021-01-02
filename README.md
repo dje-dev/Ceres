@@ -75,7 +75,8 @@ strong performance of both search speed and play quality, including:
 * A novel "dual CPUCT node selection algorithm" is used which alternates between two 
 CPUCT levels (centered around the target CPUCT) on each batch, thereby minimizing collisions
 (and allowing larger batches) in selected leafs and combining elements of 
-greater breadth and depth simultaneously for improved play quality.
+greater breadth and depth simultaneously for improved play quality (suggested earlier
+by LC0 contributor Naphthalin).
 
 * MCTS leaf selection is highly parallelized in an almost lock-free way, 
 with only a single descent and each visited node being visited at most once.
@@ -154,6 +155,26 @@ The roundrobin backend with 5 threads was used with LC0.
 ![Scaling703810](Scaling703810.png)
 s
 ![Scaling J92 280](ScalingJ92-280.png)
+
+
+## Speculation on the implications of Ceres for high-end chess play
+
+How might Ceres impact high-end chess? The implications are unclear. On the one hand,
+we already have very strong engines in the two major styles: Stockfish with alpha beta,
+and LC0 with neural network/MCTS. When playing at the long time controls
+an big hardware the phenomenon of Elo compression is very apparent. Therefore possibly
+incremental gains will be limited.
+
+However there are other possible reasons why perhaps the impact of Ceres enhancements 
+(especially greater speed) might be more impactful than otherwise expected:
+* top tournaments are played at 20x or more longer time controls than those tested so far,
+ and the speed improvements of Ceres are most apparent in longer searches
+* the speed of GPUs continues to increase at a rapid pace, making faster search more important over time
+* potentially low precision (Int8) neural networks will become practical in the near future, increasing
+nodes per second by about 70%, which can be effectively utilized with a faster engine, and
+* the tests performed so far are all against an MCTS opponent but one might speculate that
+the benefits of deeper search to avoid missing tactics will be even more important against 
+an alpha/beta style engine such as Stockfish.
 
 
 ## Configuration and Installation
