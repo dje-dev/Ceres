@@ -96,11 +96,25 @@ namespace Ceres.Features.Tournaments
     }
 
 
-
-    static void TrySetDeviceID(TournamentDef def, int deviceID)
+    /// <summary>
+    /// If running multiple match threads then we need to make sure the 
+    /// neural network evaluators are suitable for parallel execution, either by:
+    ///   - being of type Pooled, so that all evaluator definitions reference
+    ///     the same underlying evaluator which will pool positions from many
+    ///     threads into one batch, or
+    ///   - each thread being assigned to a different GPU
+    ///   
+    /// This method handles the latter case, if the evaluators are not pooled
+    /// then it will sequentially apply them to GPUs with successive indices.
+    /// 
+    /// TODO: detect error condition where the number of threads exceeds number of GPUs.
+    /// </summary>
+    /// <param name="def"></param>
+    /// <param name="relativeDeviceIndex"></param>
+    static void TrySetRelativeDeviceIDIfNotPooled(TournamentDef def, int relativeDeviceIndex)
     {
-      def.Player1Def.EngineDef.ModifyDeviceIndex(deviceID);
-      def.Player2Def.EngineDef.ModifyDeviceIndex(deviceID);
+      def.Player1Def.EngineDef.ModifyDeviceIndexIfNotPooled(relativeDeviceIndex);
+      def.Player2Def.EngineDef.ModifyDeviceIndexIfNotPooled(relativeDeviceIndex);
     }
 
     public TournamentResultStats RunTournament()
@@ -120,13 +134,10 @@ namespace Ceres.Features.Tournaments
       {
         TournamentDef tournamentDefClone = Def.Clone();
 
-        // TODO:
-        //   - the action will not clone properly (?)
-        //   - add int[] GPU_IDs in definition
+        // Make sure the threads will use either different or pooled evaluators
         if (NumConcurrent > 1)
         {
-          int gpuID = i;
-          TrySetDeviceID(tournamentDefClone, gpuID);
+          TrySetRelativeDeviceIDIfNotPooled(tournamentDefClone, i);
         }
 
         if (Def.Player1Def is GameEngineDefCeres 
@@ -136,6 +147,10 @@ namespace Ceres.Features.Tournaments
         {
           GameEngineDefCeres thisDefCeres1 = Def.Player1Def.EngineDef as GameEngineDefCeres;
           GameEngineDefCeres thisDefCeres2 = Def.Player2Def.EngineDef as GameEngineDefCeres;
+
+          // TODO: possibly add optimization here which will share trees
+          //       with ReusePositionEvaluationsFromOtherTree.
+          //       See the suite manager for an example of how this is done.
         }
 
         TournamentGameThread gameTest = new TournamentGameThread(tournamentDefClone, parentTest);

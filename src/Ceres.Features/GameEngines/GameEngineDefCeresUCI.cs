@@ -89,14 +89,14 @@ namespace Ceres.Features.GameEngines
 
     /// <summary>
     /// If applicable, modifies the device index associated with the underlying evaluator.
+    /// The new index will be the current index plus a specified increment.
     /// </summary>
-    /// <param name="deviceIndex"></param>
-    public override void ModifyDeviceIndex(int deviceIndex)
+    /// <param name="deviceIndexIncrement"></param>
+    public override void ModifyDeviceIndexIfNotPooled(int deviceIndexIncrement)
     {
-      if (EvaluatorDef.DeviceCombo == NNEvaluatorDeviceComboType.Pooled)
-        throw new Exception("Evaluators for GameEngineDefCeresUCI should not be created as Pooled.");
-
-      EvaluatorDef.TryModifyDeviceID(deviceIndex);
+      // Note that the GameEngineCeresUCI constructor
+      // will verify the evaluator is not Pooled so no need to check here.
+      EvaluatorDef.TryModifyDeviceID(EvaluatorDef.DeviceIndices[0] + deviceIndexIncrement);
     }
 
   }

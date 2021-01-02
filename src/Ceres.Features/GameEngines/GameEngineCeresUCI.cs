@@ -39,7 +39,7 @@ namespace Ceres.Features.GameEngines
     /// Constructor. 
     /// </summary>
     /// <param name="id">descriptive identifier</param>
-    /// <param name="paramsNN">specification of the neural network to be used</param>
+    /// <param name="evaluatorDef">specification of the neural network to be used</param>
     /// <param name="forceDisableSmartPruning"></param>
     /// <param name="emulateCeresSettings"></param>
     /// <param name="searchParams"></param>
@@ -48,20 +48,23 @@ namespace Ceres.Features.GameEngines
     /// <param name="callback"></param>
     /// <param name="overrideEXE">optinally the full name of the executable file(otherwise looks for Ceres executable in working directory)</param>
     public GameEngineCeresUCI(string id,
-                              NNEvaluatorDef paramsNN,
+                              NNEvaluatorDef evaluatorDef,
                               bool forceDisableSmartPruning = false,
                               bool emulateCeresSettings = false,
-                              ParamsSearch searchParams = null, ParamsSelect selectParams = null,
+                              ParamsSearch searchParams = null, 
+                              ParamsSelect selectParams = null,
                               string[] uciSetOptionCommands = null,
                               ProgressCallback callback = null,
                               string overrideEXE = null)
-      : base(id, GetExecutableFN(overrideEXE), null, null, null, uciSetOptionCommands, callback, false, ExtraArgsForEvaluator(paramsNN))
+      : base(id, GetExecutableFN(overrideEXE), null, null, null, uciSetOptionCommands, callback, false, ExtraArgsForEvaluator(evaluatorDef))
     {
       // TODO: support some limited emulation of options
       if (searchParams != null || selectParams != null) throw new NotSupportedException("Customized searchParams and selectParams not yet supported");
-      if (paramsNN == null) throw new ArgumentNullException(nameof(paramsNN));
+      if (evaluatorDef == null) throw new ArgumentNullException(nameof(evaluatorDef));
       if (forceDisableSmartPruning) throw new NotImplementedException(nameof(forceDisableSmartPruning));
       if (emulateCeresSettings) throw new NotImplementedException(nameof(emulateCeresSettings));
+      if (evaluatorDef.DeviceCombo == NNEvaluatorDeviceComboType.Pooled)
+        throw new Exception("Evaluators for GameEngineDefCeresUCI should not be created as Pooled.");
     }
 
 

@@ -50,8 +50,10 @@ namespace Ceres.Features.GameEngines
 
     /// <summary>
     /// If applicable, modifies the device index associated with the underlying evaluator.
+    /// The new index will be the current index plus a specified increment.
     /// </summary>
-    /// <param name="deviceIndex"></param>
-    public abstract void ModifyDeviceIndex(int deviceIndex);
+    /// <param name="deviceIndexIncrement"></param>
+    public abstract void ModifyDeviceIndexIfNotPooled(int deviceIndexIncrement);
   }
 }
+
