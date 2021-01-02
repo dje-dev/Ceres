@@ -76,6 +76,13 @@ namespace Ceres.Chess.UserSettings
     /// </summary>
     public string URLLC0Networks { get; set; } = @"http://training.lczero.org/networks";
 
+    /// <summary>
+    /// Ceres will not run if compiled in Debug mode
+    /// (Release required) unless this setting is true
+    /// or alternately the OS environment variable CERES_DEBUG exists.
+    /// </summary>
+    public bool DebugAllowed { get; set; } = false;
+
     #region Metrics and Logging
 
     /// <summary>

@@ -17,6 +17,7 @@ using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics.X86;
+using Ceres.Base.Misc;
 using Ceres.Base.OperatingSystem.Windows;
 using Microsoft.Extensions.Logging;
 
@@ -60,11 +61,7 @@ namespace Ceres.Base.OperatingSystem
 
       if (errorString != null)
       {
-        ConsoleColor priorColor = Console.ForegroundColor;
-        Console.ForegroundColor = ConsoleColor.Red;
-        Console.WriteLine($"Fatal Error. {errorString}");
-        Console.WriteLine();
-        Console.ForegroundColor = priorColor;
+        ConsoleUtils.WriteLineColored(ConsoleColor.Red, $"Fatal Error. {errorString}");
         System.Environment.Exit(-1);
       }
     }

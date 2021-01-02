@@ -67,15 +67,20 @@ namespace Ceres
 
       CeresEnvironment.MONITORING_METRICS = CeresUserSettingsManager.Settings.LaunchMonitor;
 
-//      if (CeresUserSettingsManager.Settings.DirLC0Networks != null)
-//        NNWeightsFilesLC0.RegisterDirectory(CeresUserSettingsManager.Settings.DirLC0Networks);
+      //      if (CeresUserSettingsManager.Settings.DirLC0Networks != null)
+      //        NNWeightsFilesLC0.RegisterDirectory(CeresUserSettingsManager.Settings.DirLC0Networks);
 
       MCTSEngineInitialization.BaseInitialize();
+
+
+#if DEBUG
+      CheckDebugAllowed();
+#endif
 
       if (args.Length > 0 && args[0].ToUpper() == "CUSTOM")
       {
         TournamentTest.Test(); return;
-//        SuiteTest.RunSuiteTest(); return;
+        //        SuiteTest.RunSuiteTest(); return;
       }
 
       StringBuilder allArgs = new StringBuilder();
@@ -87,7 +92,28 @@ namespace Ceres
 
 
       //  Win32.WriteCrashdumpFile(@"d:\temp\dump.dmp");
-   }
+    }
+
+
+    /// <summary>
+    /// Because Ceres runs much more slowly under Debug mode (at least 30%)
+    /// this check verifies a debug bulid will not run unless explicitly
+    /// requested in the options file or environment variables.
+    /// </summary>
+    private static void CheckDebugAllowed()
+    {
+      if (!CeresUserSettingsManager.Settings.DebugAllowed
+        && Environment.GetEnvironmentVariable("CERES_DEBUG") == null)
+      {
+        const string MSG = "ERROR: Ceres was compiled in Debug mode and will only run\r\n"
+                         + "if the the DebugAllowed option is set to true\r\n"
+                         + "or the operating system environment variable CERES_DEBUG is defined.";
+        Console.WriteLine();
+        ConsoleUtils.WriteLineColored(ConsoleColor.Red, MSG);
+        System.Environment.Exit(-1);
+      }
+    }
+
 
     const string BannerString =
 @"
