@@ -24,15 +24,17 @@ using System;
 namespace Ceres.MCTS.Params
 {
   /// <summary>
-  /// MCTS coefficients and parameters related to core search algorithm
-  /// and implementation details (nested within the ParamsSearchExecution field).
+  /// MCTS coefficients and parameters related to core search algorithm.
+  /// The nested object ParamsSearchExecution contains parameters 
+  /// related to implementation (such as batch sizing and parallelization)
+  /// that may be dynamically changed tuned for each batch based on its characteristics.
   /// </summary>
   [Serializable]
   public class ParamsSearch
   {
     /// <summary>
     /// If a set of small adjustments to parameters resulting from tuning tests
-    /// should be applied (otherwise baseline LC0-like parameters retained).
+    /// that differ from LC0 defaults that are applied if true.
     /// </summary>
     public const bool USE_CERES_ADJUSTMENTS = true;
 
@@ -50,10 +52,16 @@ namespace Ceres.MCTS.Params
       TopQIfSufficientN, 
     };
 
+    /// <summary>
+    /// Method for choosing which move is best to make at end of search.
+    /// Using Q instead of the AlphaZero approach of N (in most situations)
+    /// seems to slightly improve play quality and opens the possibilty
+    /// of experimenting with leaf selection strategies which are more exploratory.
+    /// </summary>
     public BestMoveModeEnum BestMoveMode = BestMoveModeEnum.TopQIfSufficientN;
 
     /// <summary>
-    /// If a bonus should be given to children which have a 
+    /// Experimental. If a bonus should be given to children which have a 
     /// positive trend in their recent backed-up V values.
     /// This is found to help modestly with position testing and Ceres tests,
     /// but probably perform meaningfully worse against Stockfish (up to 50 Elo).
@@ -62,7 +70,7 @@ namespace Ceres.MCTS.Params
 
 
     /// <summary>
-    /// If a bonus should be applied to favor low M (moves left)
+    /// Experimental. If a bonus should be applied to favor low M (moves left)
     /// when not winning by at least contempt threshold, otherwise favor high M.
     /// 0.003f
     /// </summary>
@@ -75,7 +83,7 @@ namespace Ceres.MCTS.Params
     public ParamsSearchExecution Execution;
 
     /// <summary>
-    /// If an "iterated" MCTS strategy should be followed in search,
+    /// Experimental. If an "iterated" MCTS strategy should be followed in search,
     /// involving building trees of intermediate size and then resetting them
     /// and rewriting the P priors from the neural network partly based on
     /// the emprical policy distribution (to reduce memory consumption or possibly improve play).
@@ -109,8 +117,8 @@ namespace Ceres.MCTS.Params
     /// (i.e. games rather than single test positions).
     /// 
     /// TODO: Consider speeding up via one or both of:
-    ///         - allocate a second store (transiently) and just copy nodes over - possibly much faster
-    ///         - just keep the old nodes in the tree and change the root (at least until/if it has too much wasted space)
+    ///   - allocate a second store (transiently) and just copy nodes over - possibly much faster
+    ///   - just keep the old nodes in the tree and change the root (at least until/if it has too much wasted space)
     /// </summary>
     public bool TreeReuseEnabled = true;
 
@@ -137,11 +145,11 @@ namespace Ceres.MCTS.Params
     /// the value score of evaluted nodes which is the product of the
     /// Contempt and the node's draw probability.
     /// </summary>
-    [CeresOption(Name = "contempt", Desc = "Contempt coefficient which penalizes draw outcomes", Default = "0")]
+    [CeresOption(Name = "contempt", Desc = "Contempt coefficient which penalizes draw outcomes", Default = "0.01")]
     public float Contempt = 0.01f;
 
     /// <summary>
-    /// The fraction of the final contempt which is derived from an
+    /// Experimental. The fraction of the final contempt which is derived from an
     /// auto scaled value estimated continuously and dynamically,
     /// based on degree of agreement between opponents moves and
     /// estimated  suboptimality relative to Ceres estimated optimal move.
@@ -155,26 +163,42 @@ namespace Ceres.MCTS.Params
 
     /// <summary>
     /// Scaling factor to batch sizes:
-    ///    - first a good default batch size is estimated based on characteristics of hardware and search,
+    ///    - first a good default batch size is estimated based on 
+    ///      characteristics of hardware and search,
     ///    - then this default value is scaled up/or down by the BATCH_SIZE_MULTIPLIER
     /// </summary>
     public float BatchSizeMultiplier = 1.0f;
 
+    /// <summary>
+    /// In the case that only a single position (without any history)
+    /// is being searched (e.g. from a FEN or at the beginning of a game),
+    /// this flag controls if the single position should be replicated across
+    /// all 8 history planes. For some networks this can influence NN output considerably,
+    /// and it is believed that this is best set a true, i.e. that having
+    /// "all zeros" for the history planes  is a bad idea because it
+    /// generates inputs discontinuous with what the network saw in training 
+    /// (except possibly at the start position).
+    /// </summary>
     [CeresOption(Name = "history-fill-in", Desc = "If the history planes ", Default = "true")]
     public bool HistoryFillIn = true;
 
-    [CeresOption(Name = "tablebases", Desc = "Enable external endgame tablebases", Default = "false")]
+    /// <summary>
+    /// If tablebases are enabled.
+    /// This will be overrideen by the value specifid by user in Ceres user settings
+    /// (if DirTablebases is empty or not.)
+    /// </summary>
+    [CeresOption(Name = "tablebases", Desc = "Enable external endgame tablebases", Default = "true")]
     public bool EnableTablebases = true;
 
-    // To detect draws by 3-fold repetition, in theory we need to look back over full game
-    // but for efficiency reasons we restrict to last 22 positions
+
 
     /// <summary>
     /// The number of plies to look back during search when evaluating if
     /// a node should be draw by repetition.
     /// 
-    /// According to the rules of chess the lookback should go to the beginning of game.
-    /// However for efficiency reasons typically a limited window is used.
+    /// To detect draws by 3-fold repetition, according to the rules of chess
+    /// we need to look back over full game, but for efficiency reasons we 
+    /// typically restrict lookback to a limited window.
     /// </summary>
     public int DrawByRepetitionLookbackPlies = 22;
 
@@ -194,10 +218,11 @@ namespace Ceres.MCTS.Params
 
     /// <summary>
     /// Aggressiveness with which searches from moves at the root of the search are pruned
+    /// (including the best/only remaining move if FutilityPruningStopSearchEnabled is true)
     /// from further visits due to impossibility or implausability that they will be the best move.
     /// TODO: make this smarter, possibly look at recent trends
     /// </summary>
-    [CeresOption(Name = "move-futility-pruning-aggressiveness", Desc = "Aggresiveness for early termination of searches to less promising root search subtrees in range [0..1], 0 disables.", Default = "0.0")]
+    [CeresOption(Name = "move-futility-pruning-aggressiveness", Desc = "Aggresiveness for early termination of searches to less promising root search subtrees in range [0..1], 0 disables.", Default = "1.0")]
     public float MoveFutilityPruningAggressiveness = 1.0f;
 
     /// <summary>
@@ -218,7 +243,7 @@ namespace Ceres.MCTS.Params
     public float PaddedExtraNodesMultiplier = 0.03f;
 
     /// <summary>
-    /// Optionally leaf selection can be influenced
+    /// Experimental. Optionally leaf selection can be influenced
     /// by a specified amount of noise applied to Q
     /// (applied only in case child already has N > 1000).
     /// Suggested value: 0.04.
@@ -226,7 +251,7 @@ namespace Ceres.MCTS.Params
     public float QNoiseFactorRoot = 0.0f;
 
     /// <summary>
-    /// Optionally leaf selection can be influenced
+    /// Experimental. Optionally leaf selection can be influenced
     /// by a specified amount of noise applied to Q
     /// (applied only in case child already has N > 1000).
     /// Suggested value: 0.02.
@@ -241,14 +266,20 @@ namespace Ceres.MCTS.Params
     /// </summary>
     public bool TranspositionUseTransposedQ = true; 
 
-                                                   
+    
+    /// <summary>
+    /// Experiemental feature that a initializes a new leaf
+    /// with the averge V or Q across all nodes in tree which
+    /// are equivalent.
+    /// </summary>
     public bool TranspositionUseCluster = false; // not sure if better in games
 
 
     /// <summary>
-    /// Optinal flag that can be defined by developers for ad-hoc testing.
+    /// Optional flag that can be defined by developers for ad-hoc testing.
     /// </summary>
     public bool TestFlag = false;
+
 
     /// <summary>
     /// Constructor.
