@@ -35,6 +35,7 @@ using Ceres.Chess.Positions;
 using System.Collections.Generic;
 using Ceres.MCTS.Params;
 using Ceres.MCTS.MTCSNodes.Storage;
+using Ceres.Base.OperatingSystem;
 
 #endregion
 
@@ -257,6 +258,10 @@ namespace Ceres.Features.UCI
               curManager.DumpParams();
             else
               Console.WriteLine("info string No search manager created");
+            break;
+
+          case "dump-processor":
+            HardwareManager.DumpProcessorInfo();
             break;
 
           case "dump-time":

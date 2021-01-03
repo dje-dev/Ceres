@@ -68,28 +68,51 @@ namespace Ceres.Base.OperatingSystem
 
     static bool haveAffinitizedSingle = false;
 
+
+    /// <summary>
+    /// Write diagnostic information to console relating to processor configuration.
+    /// </summary>
+    public static void DumpProcessorInfo()
+    {
+      Console.WriteLine("NumCPUSockets: " + WindowsHardware.NumCPUSockets);
+      Console.WriteLine("NumProcessors: " + System.Environment.ProcessorCount);
+      Console.WriteLine("Affinity Mask: " + Process.GetCurrentProcess().ProcessorAffinity);
+    }
+
     private static void AffinitizeSingleProcessor()
     {
-      // NOTE: Someday it would be desirable to allow different
-      //       logical calculations (e.g. chess tree searches)
-      //       to be placed on distinct sockets, and not restrict
-      //       all computation to a single socket.
-      //       But then we'd have to abandon use of TPL and .NET thread pool
-      //       completely and use our own versions which were processor constrained.
-      bool isMultisocket = WindowsHardware.NumCPUSockets > 1;
-      if (isMultisocket)
+      try
       {
-        // This dramatically improves performance (multithreading)
-        Process Proc = Process.GetCurrentProcess();
-        long AffinityMask = (long)Proc.ProcessorAffinity;
-        // TODO: need to calculate correct mask. Currently below we only take half the bits (processors)
-        var mask = (1 << (System.Environment.ProcessorCount / 2)) - 1;
-        AffinityMask &= mask; 
-        Proc.ProcessorAffinity = (IntPtr)AffinityMask;
+        // NOTE: Someday it would be desirable to allow different
+        //       logical calculations (e.g. chess tree searches)
+        //       to be placed on distinct sockets, and not restrict
+        //       all computation to a single socket.
+        //       But then we'd have to abandon use of TPL and .NET thread pool
+        //       completely and use our own versions which were processor constrained.
+        bool isMultisocket = WindowsHardware.NumCPUSockets > 1;
+        if (isMultisocket)
+        {
+          // This dramatically improves performance (multithreading)
+          Process Proc = Process.GetCurrentProcess();
+          long AffinityMask = (long)Proc.ProcessorAffinity;
+          // TODO: need to calculate correct mask. Currently below we only take half the bits (processors)
+          var mask = (1 << (System.Environment.ProcessorCount / 2)) - 1;
+          AffinityMask &= mask;
+          Proc.ProcessorAffinity = (IntPtr)AffinityMask;
 
-        haveAffinitizedSingle = true;
+          haveAffinitizedSingle = true;
+        }
       }
+      catch (Exception exc)
+      {
+        // Some AMD systems fail when setting affinity mask
+        // Therefore recover gracefully
+        // TODO: resolve this on AMD systems
+        Console.WriteLine("Note: failure in call to AffinitizeSingleProcessor.");
+      }
+
     }
+
 
   }
 }
