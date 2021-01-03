@@ -90,7 +90,12 @@ namespace Ceres.Chess.MoveGen
     /// <summary>
     /// Leela chess zero coordinate format.
     /// </summary>
-    LC0Coordinate
+    LC0Coordinate,
+
+    /// <summary>
+    /// Leela chess zero coordinate format, with 960 extension for castling moves.
+    /// </summary>
+    LC0Coordinate960Format
   };
 
 
@@ -117,6 +122,24 @@ namespace Ceres.Chess.MoveGen
 
       int from = BitOperations.TrailingZeroCount(bbFrom);
       int to = BitOperations.TrailingZeroCount(bbTo);
+
+      if (style == MGMoveNotationStyle.LC0Coordinate960Format)
+      {
+        if (IsCastle)
+        {
+          // Castling moves always indicate target file at edge of board
+          bool isWhite = ToSquare.Rank == 0;
+          if (isWhite) 
+            return CastleLong ? "e1a1" : "e1h1";
+          else
+            return CastleLong ? "e8a8" : "e8h8";
+        }
+        else
+        {
+          // Not castle, so in that case the format will be identical to LC0 coordinate.
+          style = MGMoveNotationStyle.LC0Coordinate;
+        }
+      }
 
       if (style != MGMoveNotationStyle.CoOrdinate && style != MGMoveNotationStyle.LC0Coordinate)
       {

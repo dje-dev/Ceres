@@ -239,6 +239,11 @@ namespace Ceres.Chess.MoveGen
     }
 
     /// <summary>
+    /// Returns if the move is either a short or long castle.
+    /// </summary>
+    public bool IsCastle => CastleShort || CastleLong;
+
+    /// <summary>
     /// Returns if the move is a castle short move.
     /// </summary>
     public bool CastleShort

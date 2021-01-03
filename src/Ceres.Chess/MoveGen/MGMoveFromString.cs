@@ -65,8 +65,10 @@ namespace Ceres.Chess.MoveGen
       MGMoveGen.GenerateMoves(in pos, moves);
       foreach (MGMove moveTry in moves.MovesArray)
       {
+        // Accept moves in any of multiple formats, including Chess 960 (for castling variation)
         if (moveTry.MoveStr(MGMoveNotationStyle.LC0Coordinate).ToLower() == moveStr
-        || (moveTry.MoveStr(MGMoveNotationStyle.LongAlgebraic).ToLower() == moveStr))
+        ||  moveTry.MoveStr(MGMoveNotationStyle.LC0Coordinate960Format).ToLower() == moveStr
+        ||  moveTry.MoveStr(MGMoveNotationStyle.LongAlgebraic).ToLower() == moveStr)
         {
           move = moveTry;
           return true;
