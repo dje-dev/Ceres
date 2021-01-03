@@ -71,7 +71,7 @@ namespace Ceres.MCTS.Iteration
       // Because estimates of nodes remaining are noisy for searces with time limits,
       // we conservatively decline to set MinNToVisit unless we are 
       // reasonably close to the end of the search (and thus had sufficient time to get accurate statistics)
-      if (Manager.FractionSearchRemaining > 0.50) return;
+      if (Manager.FractionSearchRemaining > 0.25) return;
       if (Manager.NumStepsTakenThisSearch < 100) return;
 
       if (Context.RootMovesArePruned == null) Context.RootMovesArePruned = new bool[Root.NumPolicyMoves];
@@ -95,7 +95,7 @@ namespace Ceres.MCTS.Iteration
       // Calibrate aggressiveness such that :
       //   - at maximum value of 1.0 we assume 50% visits go to second best move(s)
       //   - at reasonable default value 0.5 we assume 75% of visits to go second best move(s) 
-      float aggressivenessMultiplier = 1.0f / (1.0f - aggressiveness * 0.5f);
+      float aggressivenessMultiplier = 1.0f / (1.0f - aggressiveness * 0.6f);
 
       int? numRemainingSteps = Manager.EstimatedNumVisitsRemaining();
 
