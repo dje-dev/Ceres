@@ -61,7 +61,7 @@ namespace Ceres.MCTS.Managers.Limits
       // This method is likely imprecise, but is always available.
       // We subtract 6 from number of pieces since game is mostly or completely
       // over when 6 pieces are recahed (either via tablebases or very simple play).
-      float estNumMovesLeftPieces = Math.Max(5, (numPieces - 6) * 2);
+      float estNumMovesLeftPieces = Math.Max(5, (numPieces - 14) * 2);
 
 #if NOT
       // Attempts at using MLH were not immediately successful.
@@ -86,7 +86,7 @@ namespace Ceres.MCTS.Managers.Limits
       // e.g. at end of game the moves may become easier 
       // due to tablebases or more transpositions available, 
       // or narrower search trees due to simpler positions.
-      const float MULTIPLIER = 0.65f;
+      const float MULTIPLIER = 0.85f;
 
       if (inputs.MaxMovesToGo.HasValue)
       {
@@ -234,7 +234,7 @@ namespace Ceres.MCTS.Managers.Limits
           targetAllocUnits = targetNodes / trailingNPS;
 
           // As a safety check, never spend too much of remaining time on a single move
-          float maxAllocUnits = 0.07f * inputs.RemainingFixedSelf;
+          float maxAllocUnits = 0.13f * inputs.RemainingFixedSelf;
           if (targetAllocUnits > maxAllocUnits) targetAllocUnits = maxAllocUnits;
         }
 
