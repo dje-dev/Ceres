@@ -122,13 +122,13 @@ namespace Ceres.Chess.Textual
       while (charIndex < fen.Length)
       {
         char thisChar = fen[charIndex++];
-        if (thisChar == 'K')
+        if (thisChar == 'K' || thisChar == 'A')
           whiteCanOO = true;
-        else if (thisChar == 'Q')
+        else if (thisChar == 'Q' || thisChar == 'H')
           whiteCanOOO = true;
-        else if (thisChar == 'k')
+        else if (thisChar == 'k' || thisChar == 'a')
           blackCanOO = true;
-        else if (thisChar == 'q')
+        else if (thisChar == 'q' || thisChar == 'h')
           blackCanOOO = true;
         else if (thisChar == ' ')
           break;
