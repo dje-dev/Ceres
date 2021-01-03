@@ -20,6 +20,7 @@ using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.MCTS.LeafExpansion;
 using Ceres.Features.GameEngines;
 using Ceres.MCTS.Params;
+using Ceres.Base.Misc;
 
 #endregion
 
@@ -95,7 +96,10 @@ namespace Ceres.Features.GameEngines
       if (evaluatorDef.NetCombo != NNEvaluatorNetComboType.Single) throw new Exception("Network Type must be Single");
 
       ID = id;
-      EvaluatorDef = evaluatorDef ?? throw new ArgumentNullException(nameof(evaluatorDef));
+
+      // Make a defensive clone of the EvaluatorDef so it will definitely not be shared.
+      EvaluatorDef = ObjUtils.DeepClone(evaluatorDef);
+
       ForceDisableSmartPruning = forceDisableSmartPruning;
 
       SearchParamsEmulate = searchParamsEmulate;

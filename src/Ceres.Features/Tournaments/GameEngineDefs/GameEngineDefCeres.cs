@@ -67,7 +67,8 @@ namespace Ceres.Features.GameEngines
                               ParamsSelect selectParams = null, IManagerGameLimit overrideTimeManager = null)
       : base(id)
     {
-      EvaluatorDef = evaluatorDef;
+      // Make a defensive clone of the EvaluatorDef so it will definitely not be shared.
+      EvaluatorDef = ObjUtils.DeepClone(evaluatorDef);
       SearchParams = searchParams ?? new ParamsSearch();
       ParamsSearchExecutionPostprocessor = paramsSearchExecutionPostprocessor;
       SelectParams = selectParams ?? new ParamsSelect();
