@@ -51,7 +51,7 @@ namespace Ceres.Base.DataTypes
           if (kvpParts.Length == 2)
             KeyValuePairs.Add((kvpParts[0], kvpParts[1]));
           else
-            throw new Exception("Expected key=value pair");
+            throw new Exception("Expected key=value pair (without spaces)");
         }
       }
 
