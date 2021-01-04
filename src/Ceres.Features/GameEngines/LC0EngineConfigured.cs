@@ -201,7 +201,10 @@ namespace Ceres.Features.GameEngines
     /// <param name="resetStateAndCachesBeforeMoves"></param>
     /// <param name="emulateCeresOptions"></param>
     /// <param name="verboseOutput"></param>
+    /// <param name="forceDisableSmartPruning"></param>
     /// <param name="overrideEXE"></param>
+    /// <param name="alwaysFillHistory"></param>
+    /// <param name="extraCommandLineArgs"></param>
     /// <returns></returns>
     public static LC0Engine GetLC0Engine(ParamsSearch paramsSearch,
                                          ParamsSelect paramsSelect,
@@ -212,11 +215,13 @@ namespace Ceres.Features.GameEngines
                                          bool verboseOutput,
                                          bool forceDisableSmartPruning,
                                          string overrideEXE = null,
-                                         bool alwaysFillHistory = false)
+                                         bool alwaysFillHistory = false,
+                                         string extraCommandLineArgs = null)
     {
       (string EXE, string lzOptions) = GetLC0EngineOptions(paramsSearch, paramsSelect, evaluatorDef, network, 
                                                            emulateCeresOptions, verboseOutput, overrideEXE, 
                                                            forceDisableSmartPruning, alwaysFillHistory);
+      if (extraCommandLineArgs != null) lzOptions += " " + extraCommandLineArgs;
       return new LC0Engine(EXE, lzOptions, resetStateAndCachesBeforeMoves);
     }
   }

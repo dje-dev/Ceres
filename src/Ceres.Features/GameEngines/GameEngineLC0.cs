@@ -54,16 +54,20 @@ namespace Ceres.Features.GameEngines
 
 
     /// <summary>
-    /// Constructor
+    /// Constructor.
     /// </summary>
+    /// <param name="id"></param>
+    /// <param name="networkID"></param>
+    /// <param name="forceDisableSmartPruning"></param>
+    /// <param name="emulateCeresSettings"></param>
     /// <param name="searchParams"></param>
     /// <param name="selectParams"></param>
     /// <param name="paramsNN"></param>
-    /// <param name="id"></param>
-    /// <param name="networkID"></param>
-    /// <param name="emulateCeresSettings"></param>
     /// <param name="setupAction"></param>
     /// <param name="overrideEXE"></param>
+    /// <param name="verbose"></param>
+    /// <param name="alwaysFillHistory"></param>
+    /// <param name="extraCommandLineArgs"></param>
     public GameEngineLC0(string id, string networkID, bool forceDisableSmartPruning = false,
                          bool emulateCeresSettings = false, 
                          ParamsSearch searchParams = null, ParamsSelect selectParams = null, 
@@ -71,7 +75,8 @@ namespace Ceres.Features.GameEngines
                          Action setupAction = null, 
                          string overrideEXE = null,
                          bool verbose = false, 
-                         bool alwaysFillHistory = false) : base(id)
+                         bool alwaysFillHistory = false,
+                         string extraCommandLineArgs = null) : base(id)
     {
       SetupAction = setupAction;
       if (SetupAction != null) SetupAction();
@@ -81,7 +86,7 @@ namespace Ceres.Features.GameEngines
                                                    NNWeightsFiles.LookupNetworkFile(networkID), emulateCeresSettings,
                                                    resetStateAndCachesBeforeMoves, verbose,
                                                    forceDisableSmartPruning, overrideEXE,
-                                                   alwaysFillHistory);
+                                                   alwaysFillHistory, extraCommandLineArgs);
     }
 
 

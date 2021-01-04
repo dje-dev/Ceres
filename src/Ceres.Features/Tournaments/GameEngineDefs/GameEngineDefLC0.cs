@@ -68,6 +68,11 @@ namespace Ceres.Features.GameEngines
     /// </summary>
     public readonly string OverrideEXE;
 
+    /// <summary>
+    /// Optional additional string that is appended to the end of the LC0 arguments.
+    /// </summary>
+    public readonly string ExtraCommandLineArgs;
+
 
     /// <summary>
     /// Constructor.
@@ -78,12 +83,14 @@ namespace Ceres.Features.GameEngines
     /// <param name="searchParamsEmulate"></param>
     /// <param name="selectParamsEmulate"></param>
     /// <param name="overrideEXE"></param>
+    /// <param name="extraCommandLineArgs"></param>
     public GameEngineDefLC0(string id,
                             NNEvaluatorDef evaluatorDef,
                             bool forceDisableSmartPruning,
                             ParamsSearch searchParamsEmulate = null, 
                             ParamsSelect selectParamsEmulate = null, 
-                            string overrideEXE = null)
+                            string overrideEXE = null,
+                            string extraCommandLineArgs = null)
       : base(id)
     {
       if ((SearchParamsEmulate == null) != (SelectParamsEmulate == null))
@@ -105,6 +112,7 @@ namespace Ceres.Features.GameEngines
       SearchParamsEmulate = searchParamsEmulate;
       SelectParamsEmulate = selectParamsEmulate;
       OverrideEXE = overrideEXE;
+      ExtraCommandLineArgs = extraCommandLineArgs;
     }
 
 
@@ -118,7 +126,7 @@ namespace Ceres.Features.GameEngines
         return new GameEngineLC0(ID, EvaluatorDef.Nets[0].Net.NetworkID, 
                                  ForceDisableSmartPruning, emulate,
                                  SearchParamsEmulate, SelectParamsEmulate, EvaluatorDef,                               
-                                 null, OverrideEXE);   
+                                 null, OverrideEXE, extraCommandLineArgs:ExtraCommandLineArgs);   
     }
 
 
