@@ -1,7 +1,7 @@
 #### Leela Chess Zero Plugin (LC0.DLL)
 
-TLDR summary: Build LC0 from source, outputting a DLL with one file (network_cuda.cc) 
-substituted from the Ceres source code tree.
+TLDR summary: Build LC0 from source, replacing just one file (network_cudnn.cc) 
+with the version provided in Ceres source code tree, and change output target to DLL.
 
 A chess engine such as Ceres requires a network file with 
 a set of weights and also "backend" code that can 
@@ -28,5 +28,8 @@ and will be loaded in-process by Ceres for network evaluation.
 If LC0 building from source, more detailed instructions can be found in the Ceres source
 code under the file named "building_LC0_EXE_and_DLL.txt."
 
+Also, some Ceres users have offered the following additional tips:
+* If you get build classes between backends, edit meson_options.txt to disable plain_cuda
+* Verify you see that "Library cudnn found: YES" when you run build.cmd (otherwise it isn't going to build the new files)
 
  
