@@ -19,6 +19,7 @@ using System.IO;
 using System.Reflection.PortableExecutable;
 using Ceres.Base.DataTypes;
 using Ceres.Chess.UserSettings;
+using Ceres.Features.GameEngines;
 using Ceres.Features.Players;
 using Ceres.Features.Suites;
 
@@ -53,7 +54,7 @@ namespace Ceres.Commands
 
     public static void RunSuiteTest(FeatureSuiteParams suiteParams)
     {
-      (EnginePlayerDef player, EnginePlayerDef playerExternal) = suiteParams.GetEngineDefs(false);
+      (EnginePlayerDef player, EnginePlayerDef playerOther) = suiteParams.GetEngineDefs(false);
 
       // Add .EPD if not already present
       string suiteName = suiteParams.EPD;
@@ -62,8 +63,11 @@ namespace Ceres.Commands
       string epdFilename = Path.Combine(CeresUserSettingsManager.Settings.DirEPD, suiteName);
       if (!File.Exists(epdFilename)) throw new Exception($"Specified EPD not found: {epdFilename}");
 
+      bool opponentIsCeres = playerOther.EngineDef is GameEngineDefCeres;
+      EnginePlayerDef engineExternal = opponentIsCeres ? null : playerOther;
+      EnginePlayerDef engineCeres2 = opponentIsCeres ? playerOther : null;
       SuiteTestDef suiteDef = new SuiteTestDef($"SUITE TEST {CeresUserSettingsManager.Settings.DirEPD}", 
-                                               epdFilename, player, null, playerExternal);
+                                               epdFilename, player, engineCeres2, engineExternal);
 
       SuiteTestRunner suiteTest = new SuiteTestRunner(suiteDef);
       suiteTest.Run(1, true, false);
