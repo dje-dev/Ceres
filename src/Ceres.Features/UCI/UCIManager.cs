@@ -416,8 +416,12 @@ namespace Ceres.Features.UCI
           // Parse the search limit
           searchLimit = GetSearchLimit(command);
 
-          // Run the actual search
-          GameEngineSearchResultCeres result = RunSearch(searchLimit);
+          GameEngineSearchResultCeres result = null;
+          if (searchLimit != null)
+          {
+            // Run the actual search
+            result = RunSearch(searchLimit);
+          }
 
           taskSearchCurrentlyExecuting = null;
           return result;
@@ -437,6 +441,7 @@ namespace Ceres.Features.UCI
 
     /// <summary>
     /// Parses a specification of search time in UCI format into an equivalent SearchLimit.
+    /// Returns null if parsing failed.
     /// </summary>
     /// <param name="command"></param>
     /// <returns></returns>
@@ -444,6 +449,7 @@ namespace Ceres.Features.UCI
     {
       bool weAreWhite = curPositionAndMoves.FinalPosition.MiscInfo.SideToMove == SideType.White;
       UCIGoCommandParsed goInfo = new UCIGoCommandParsed(command, weAreWhite);
+      if (!goInfo.IsValid) return null;
 
       if (goInfo.Nodes.HasValue)
       {
@@ -469,7 +475,10 @@ namespace Ceres.Features.UCI
         return SearchLimit.SecondsForAllMoves(goInfo.TimeOurs.Value / 1000.0f, increment, movesToGo, true);
       }
       else
-        throw new Exception("Unsupported time control in UCI go comand");
+      {
+        Console.WriteLine($"Unsupported time control in UCI go command {command}");
+        return null;
+      }
     }
 
 

@@ -27,44 +27,49 @@ namespace Ceres.Features.UCI
   internal record UCIGoCommandParsed
   {
     /// <summary>
+    /// If the go command was successfully parsed.
+    /// </summary>
+    public readonly bool IsValid;
+
+    /// <summary>
     /// Number of nodes to process
     /// </summary>
-    public int? Nodes;
+    public readonly int? Nodes;
 
     /// <summary>
     /// If inifinite analysis was requested
     /// </summary>
-    public bool Infinite = false;
+    public readonly bool Infinite = false;
 
     /// <summary>
     /// Requested move time (in milliseconds)
     /// </summary>
-    public int? MoveTime;
+    public readonly int? MoveTime;
 
     /// <summary>
     /// Remaining time for our side (in milliseconds)
     /// </summary>
-    public int? TimeOurs;
+    public readonly int? TimeOurs;
 
     /// <summary>
     /// Remaining time for opponent side (in milliseconds)
     /// </summary>
-    public int? TimeOpponent;
+    public readonly int? TimeOpponent;
 
     /// <summary>
     /// Increment time per move for our side (in milliseconds)
     /// </summary>
-    public int? IncrementOurs;
+    public readonly int? IncrementOurs;
 
     /// <summary>
     /// Increment time per move for opopnent (in milliseconds)
     /// </summary>
-    public int? IncrementOpponent;
+    public readonly int? IncrementOpponent;
 
     /// <summary>
     /// Number of moves left to go for the specified time allotment
     /// </summary>
-    public int? MovesToGo;
+    public readonly int? MovesToGo;
 
 
     /// <summary>
@@ -83,6 +88,8 @@ namespace Ceres.Features.UCI
       Debug.Assert(strParts[0] == "go");
 
       int partIndex = 1;
+
+      IsValid = true;
 
       while (partIndex < strParts.Length)
       {
@@ -155,10 +162,14 @@ namespace Ceres.Features.UCI
           case "depth":
           case "ponder":
           case "searchmoves":
-            throw new Exception($"Unsupported UCI go mode: {token}");
+            Console.WriteLine($"Unsupported UCI go mode: {token}");
+            IsValid = false;
+            break;
 
           default:
-            throw new Exception($"Unexpected UCI token with in go command: {token}");
+            Console.WriteLine($"Unexpected UCI token within go command: {token}");
+            IsValid = false;
+            break;
 
         }
       }
