@@ -72,7 +72,7 @@ namespace Ceres.Commands
 
     const string CERES_HELP_UCI =
     @"  UCI - Run in UCI Engine Mode (equivalently omit this subcommand)
-    Optional key/values   :  { network, device }
+    Optional key/values   :  { network, device, pruning }
 ";
 
     const string CERES_HELP_ANALYZE =

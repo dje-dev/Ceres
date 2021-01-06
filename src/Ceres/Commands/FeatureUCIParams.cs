@@ -25,15 +25,17 @@ namespace Ceres.Commands
   {
     public NNNetSpecificationString NetworkSpec { init; get; }
     public NNDevicesSpecificationString DeviceSpec { init; get; }
+    public bool Pruning { init; get; }
 
     public static FeatureUCIParams ParseUCICommand(string fen, string args)
     {
-      KeyValueSetParsed keys = new KeyValueSetParsed(args, new string[] { "NETWORK", "DEVICE" });
+      KeyValueSetParsed keys = new KeyValueSetParsed(args, new string[] { "NETWORK", "DEVICE", "PRUNING" });
 
       return new FeatureUCIParams()
       {
         NetworkSpec = keys.GetValueOrDefaultMapped<NNNetSpecificationString>("Network", CeresUserSettingsManager.Settings.DefaultNetworkSpecString, true, spec => new NNNetSpecificationString(spec)),
         DeviceSpec = keys.GetValueOrDefaultMapped("Device", CeresUserSettingsManager.Settings.DefaultDeviceSpecString, true, spec => new NNDevicesSpecificationString(spec)),
+        Pruning = keys.GetValueOrDefaultMapped<bool>("Pruning", "true", false, str => bool.Parse(str))
       };
     }
 

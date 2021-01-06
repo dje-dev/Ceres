@@ -100,17 +100,19 @@ namespace Ceres.Features.UCI
     /// <param name="searchFinishedEvent"></param>
     public UCIManager(NNEvaluatorDef evaluatorDef, 
                       TextReader inStream = null, TextWriter outStream = null,                       
-                      Action<MCTSManager> searchFinishedEvent = null)
+                      Action<MCTSManager> searchFinishedEvent = null,
+                      bool disablePruning = false)
     {
       InStream = inStream ?? Console.In;
       OutStream = outStream ?? Console.Out;
       SearchFinishedEvent = searchFinishedEvent;
-
+      
       EvaluatorDef = evaluatorDef;      
 
       ParamsSearch = new ParamsSearch();
       ParamsSelect = new ParamsSelect();
 
+      if (disablePruning) ParamsSearch.FutilityPruningStopSearchEnabled = false;
     }
 
     /// <summary>
