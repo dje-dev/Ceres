@@ -16,7 +16,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
-
+using Ceres.Base.Misc;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.Positions;
 using Ceres.Chess.Textual;
@@ -87,7 +87,14 @@ namespace Ceres.Chess.Games
 
     }
 
-    void WriteTag(string tagName, string tagValue) => WriteHeaderLine($"[{tagName} \"{tagValue}\"]");
+
+    void WriteTag(string tagName, string tagValue)
+    {
+      // Truncate tag value if very long (to work around Fritz problem with very long tag value)
+      tagValue = StringUtils.TrimmedIfNeeded(tagValue, 115);
+      WriteHeaderLine($"[{tagName} \"{tagValue}\"]");
+    }
+
     void WriteResult(string resultStr) { WriteBodyLine(" " + resultStr); WriteTag("Result", resultStr); }
 
     public void WriteResultDraw() => WriteResult(RESULT_DRAW);

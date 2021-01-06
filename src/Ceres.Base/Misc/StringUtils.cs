@@ -37,6 +37,16 @@ namespace Ceres.Base.Misc
     /// <returns></returns>
     public static string WhitespaceRemoved(string str) => repeatedCharTrimmer.Replace(str, " ");
 
+
+    /// <summary>
+    /// Returns a string truncated if necessary to fit within specified length.
+    /// </summary>
+    /// <param name="s"></param>
+    /// <param name="len"></param>
+    /// <returns></returns>
+    public static string TrimmedIfNeeded(string s, int len) => s.Length > len ? s.Substring(0, len) : s;
+
+
     /// <summary>
     /// Adjust a string's length to be exactly specified value,
     /// truncating or padding on the right as needed.
