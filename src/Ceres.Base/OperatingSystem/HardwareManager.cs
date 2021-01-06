@@ -50,9 +50,9 @@ namespace Ceres.Base.OperatingSystem
       {
         errorString = "Windows Version 10 or above required.";
       }
-      else if (!Avx2.IsSupported)
+      else if (!Avx.IsSupported)
       {
-        errorString = "AVX2 hardware support is required but not available on this processor.";
+        errorString = "AVX hardware support is required but not available on this processor.";
       }
       else if (!SoftwareManager.IsCUDAInstalled)
       {

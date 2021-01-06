@@ -49,8 +49,8 @@ namespace Ceres.APIExamples
 
 //      NNEvaluatorDef def0 = NNEvaluatorDefFactory.FromSpecification("LC0:j92-280", "GPU:1:POOLED");// POOLED");//:POOLED");
 //      NNEvaluatorDef def1 = NNEvaluatorDefFactory.FromSpecification("LC0:66666", "GPU:1:POOLED");// POOLED");//:POOLED");
-      NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification("LC0:703810", "GPU:0,1");// POOLED");//:POOLED");
-      NNEvaluatorDef evalDef2 = NNEvaluatorDefFactory.FromSpecification("LC0:703810", "GPU:0,1");// POOLED");//:POOLED");
+      NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification("LC0:J94-100", "GPU:0");// POOLED");//:POOLED");
+      NNEvaluatorDef evalDef2 = NNEvaluatorDefFactory.FromSpecification("LC0:66740", "GPU:0");// POOLED");//:POOLED");
                                                                    // sv5300 j104.0-10000
       //      def1.MakePersistent();
       //def1.PersistentID = "PERSIST";
@@ -70,16 +70,18 @@ namespace Ceres.APIExamples
       const int HASH_SIZE_MB = 2048;
       string TB_PATH = CeresUserSettingsManager.Settings.DirTablebases;
 
-      SearchLimit limit = SearchLimit.NodesPerMove(1_000);
+      SearchLimit limit1 = SearchLimit.NodesPerMove(10_000);
+//      SearchLimit limit2 = SearchLimit.NodesPerMove((int)(2.3f * limit1.Value));
+
       //limit = SearchLimit.SecondsForAllMoves(60);
       //limit = SearchLimit.SecondsForAllMoves(60, 1f);
-      limit = SearchLimit.SecondsForAllMoves(120, 0.5f);
+      //limit = SearchLimit.SecondsForAllMoves(120, 0.5f);
 
 
       GameEngineDefCeres engineDefCeres1 = new GameEngineDefCeres("Ceres1", evalDef1, new ParamsSearch(), null, new ParamsSelect(), null);
       GameEngineDefCeres engineDefCeres2 = new GameEngineDefCeres("Ceres2", evalDef2, new ParamsSearch(), null, new ParamsSelect(), null);
 
-      bool forceDisableSmartPruning = limit.IsNodesLimit;
+      bool forceDisableSmartPruning = limit1.IsNodesLimit;
       if (forceDisableSmartPruning)
       {
         engineDefCeres1.SearchParams.FutilityPruningStopSearchEnabled = false;
@@ -94,19 +96,20 @@ namespace Ceres.APIExamples
 
 
       GameEngineDefLC0 engineDefLC1 = new GameEngineDefLC0("LC0_0", evalDef1, forceDisableSmartPruning, null, null);
-      GameEngineDefLC0 engineDefLC2 = new GameEngineDefLC0("LC0_1", evalDef2, forceDisableSmartPruning, null, null);
+      GameEngineDefLC0 engineDefLC2Tilps = new GameEngineDefLC0("LC0_Tilps", evalDef2, forceDisableSmartPruning, null, null,
+                                                                overrideEXE: @"c:\dev\lc0\lc_263\lc0_TILPS.EXE",
+                                                                extraCommandLineArgs: "--max-out-of-order-evals-factor=2.4 --max-collision-events=917"); 
 
+      EnginePlayerDef playerCeres1UCI = new EnginePlayerDef(engineDefCeresUCI, limit1);
+      EnginePlayerDef playerCeres2UCI = new EnginePlayerDef(engineDefCeresUCI, limit1);
 
-      EnginePlayerDef playerCeres1UCI = new EnginePlayerDef(engineDefCeresUCI, limit);
-      EnginePlayerDef playerCeres2UCI = new EnginePlayerDef(engineDefCeresUCI, limit);
-
-      EnginePlayerDef playerCeres1 = new EnginePlayerDef(engineDefCeres1, limit);
-      EnginePlayerDef playerCeres2 = new EnginePlayerDef(engineDefCeres2, limit);
-      EnginePlayerDef playerEthereal = new EnginePlayerDef(engineDefEthereal, limit);
-      EnginePlayerDef playerStockfish11 = new EnginePlayerDef(engineDefStockfish11, limit);
-      EnginePlayerDef playerStockfish12 = new EnginePlayerDef(engineDefStockfish12, limit);
-      EnginePlayerDef playerLC0 = new EnginePlayerDef(engineDefLC1, limit);
-      EnginePlayerDef playerLC1 = new EnginePlayerDef(engineDefLC2, limit);
+      EnginePlayerDef playerCeres1 = new EnginePlayerDef(engineDefCeres1, limit1);
+      EnginePlayerDef playerCeres2 = new EnginePlayerDef(engineDefCeres2, limit1);
+      EnginePlayerDef playerEthereal = new EnginePlayerDef(engineDefEthereal, limit1);
+      EnginePlayerDef playerStockfish11 = new EnginePlayerDef(engineDefStockfish11, limit1);
+      EnginePlayerDef playerStockfish12 = new EnginePlayerDef(engineDefStockfish12, limit1);
+      EnginePlayerDef playerLC0 = new EnginePlayerDef(engineDefLC1, limit1);
+      EnginePlayerDef playerLC0Tilps = new EnginePlayerDef(engineDefLC2Tilps, limit1);
 
       //      def.SearchLimitEngine1 = def.SearchLimitEngine2 = SearchLimit.SecondsForAllMoves(15, 0.25f);
       //      def.SearchLimitEngine2 = def.SearchLimitEngine2 = SearchLimit.SecondsForAllMoves(15, 0.25f);
@@ -132,8 +135,8 @@ namespace Ceres.APIExamples
 //engineDefCeres2.SearchParams.FutilityPruningStopSearchEnabled= false;
 //engineDefLC0.SearchParamsEmulate.FutilityPruningStopSearchEnabled= false;
 
-      //TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerLC0);
-      TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerLC0);
+      TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerCeres2);
+      //TournamentDef def = new TournamentDef("TOURN", playerLC0Tilps, playerLC0);
 
       def.NumGamePairs = 50;
 //      def.ShowGameMoves = false;
@@ -148,7 +151,7 @@ namespace Ceres.APIExamples
       //      def.AdjudicationThresholdCentipawns = 500;
       //      def.AdjudicationThresholdNumMoves = 3;
 
-      const int CONCURRENCY = 1;// 15;
+      const int CONCURRENCY = 4;// 15;
       TournamentManager runner = new TournamentManager(def, CONCURRENCY);
 
       TournamentResultStats results;

@@ -27,7 +27,7 @@ using Ceres.MCTS.Params;
 namespace Ceres.MCTS.LeafExpansion
 {
   /// <summary>
-  /// SIMD (AVX2) code for selecting one or (typically) more children
+  /// SIMD (AVX) code for selecting one or (typically) more children
   /// to be followed next according to PUCT in the tree descent.
   /// 
   /// Note that an attempt was made to pipelining/unroll the AVX code
@@ -82,7 +82,7 @@ namespace Ceres.MCTS.LeafExpansion
       Debug.Assert(w.Length == MAX_CHILDREN);
       Debug.Assert(n.Length == MAX_CHILDREN);
       Debug.Assert(nInFlight.Length == MAX_CHILDREN);
-      Debug.Assert(numChildren <= MAX_CHILDREN && Avx2.IsSupported);
+      Debug.Assert(numChildren <= MAX_CHILDREN);
 
       Debug.Assert(outputScores == default || outputScores.Length >= numChildren);
       Debug.Assert(outputChildVisitCounts.Length >= numChildren);
@@ -272,7 +272,7 @@ namespace Ceres.MCTS.LeafExpansion
                                            Vector256<float> vVirtualLossMultiplier, float[] computedChildScores, 
                                            float cpuctSqrtParentN, float uctDenominatorPower)
     {
-      // Process in AVX2 blocks of 8 at a time
+      // Process in AVX blocks of 8 at a time
       int blockCount = 0;
       while (blockCount < numBlocks)
       {

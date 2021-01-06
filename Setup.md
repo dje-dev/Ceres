@@ -6,7 +6,7 @@ This is expected to be simplified in the future.
 #### Hardware/Software Requirements
 * Windows 10 (a Linux version is under development)
 * Processor based on Intel/AMD x86 architecture
-* Processor support for AVX2 instruction set (standard since about 2014)
+* Processor support for AVX instruction set
 * At least one NVIDIA GPU with CUDA drivers installed
 * Minimum 8GB of memory (recommended)
 

@@ -75,6 +75,12 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     }
 
 
+    /// <summary>
+    /// Copy over all the child information from another node
+    /// which is in the same transposition equivalence class.
+    /// </summary>
+    /// <param name="tree"></param>
+    /// <param name="otherNodeIndex"></param>
     public void CopyUnexpandedChildrenFromOtherNode(MCTSTree tree, MCTSNodeStructIndex otherNodeIndex)
     {
       ref MCTSNodeStruct otherNode = ref tree.Store.Nodes.nodes[otherNodeIndex.Index];
@@ -129,34 +135,6 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     }
 
 
-
-    public (int indexBest, int indexSecondBest) IndicesMaxExpandedChildren(MCTSNodeStructMetricFunc rankFunc)
-    {
-      float bestV = float.MinValue;
-      int bestI = -1;
-      float nextBestV = float.MinValue;
-      int nextBestI = -1;
-      for (int i=0; i<NumChildrenExpanded; i++)
-      {
-        float value = rankFunc(in ChildAtIndexRef(i));
-        if (value > bestV)
-        {
-          nextBestV = bestV;
-          nextBestI = bestI;
-          bestV = value;
-          bestI = i;
-        }
-        else if (value > nextBestV)
-        {
-          nextBestV = value;
-          nextBestI = i;
-        }
-      }
-
-      return (bestI, nextBestI);
-    }
-
-
     /// <summary>
     /// Computes the sum of probabilities of all expanded nodes.
     /// </summary>
@@ -177,50 +155,6 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     }
 
 
-#if NOT
-
-    /// <summary>
-    /// Returns a span which re-interprets the child array as an array of FP16
-    /// to be used as a V buffer.
-    /// </summary>
-    /// <param name="store"></param>
-    /// <returns></returns>
-    internal unsafe Span<FP16> ChildrenArrayAsVBuffer(MCTSNodeStore store)
-    {
-      // Determine how many V scores we have room for
-      int maxVScores = NumPolicyMoves * (Marshal.SizeOf<MCTSNodeStructChild>() / Marshal.SizeOf<FP16>());
-      return new Span<FP16>(Unsafe.AsPointer(ref store.Children.childIndices[ChildStartIndex]), maxVScores);
-    }
-
-
-    public unsafe void FillChidrenWithVScores(MCTSNodeStore store, ref MCTSNodeStruct source)
-    {
-      if (NumPolicyMoves > 0)
-      {
-        // We expect child array to e already allocated
-        Debug.Assert(ChildStartBlockIndex > 0);
-
-        // Interpet the 
-        Span<FP16> vScores = ChildrenArrayAsVBuffer(store);
-
-        int count = 0;
-        MCTSNodeSequentialVisitor visitor = new MCTSNodeSequentialVisitor(store, source.Index);
-        foreach (MCTSNodeStructIndex childNodeIndex in visitor.Iterate)
-        {
-          if (count >= vScores.Length)
-            break;
-          else
-            vScores[count++] = store.Nodes.nodes[childNodeIndex.Index].V;
-        }
-
-        // If we did not fill V array completely, set the 
-        // next element as an "end" market (NaN)
-        if (count < vScores.Length) vScores[count] = FP16.NaN;
-      }
-    }
-
-#endif
-
     /// <summary>
     /// Clones a subtree rooted at "source" onto this node,
     /// but only as many nodes in the subtre as specified by "numNodesToClone" (visited in order of creation)
@@ -229,8 +163,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <param name="transpositionDictionary"></param>
     /// <param name="source"></param>
     /// <param name="numNodesToClone"></param>
-    public void CloneSubtree(MCTSNodeStore store, 
-                             ConcurrentDictionary<int, MCTSNodeTranspositionVisitor> transpositionDictionary, 
+    public void CloneSubtree(MCTSNodeStore store,
+                             ConcurrentDictionary<int, MCTSNodeTranspositionVisitor> transpositionDictionary,
                              ref MCTSNodeStruct source, int numNodesToClone)
     {
       Debug.Assert(source.N >= numNodesToClone);
@@ -251,8 +185,15 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     }
 
 
-    public void CloneSubtree(MCTSNodeStore store, 
-                             ConcurrentDictionary<int, MCTSNodeTranspositionVisitor> activeTranspositionVisitors, 
+    /// <summary>
+    /// Clones a full subtree (transposition equivalent).
+    /// </summary>
+    /// <param name="store"></param>
+    /// <param name="activeTranspositionVisitors"></param>
+    /// <param name="source"></param>
+    /// <param name="highestIndexToKeep"></param>
+    public void CloneSubtree(MCTSNodeStore store,
+                             ConcurrentDictionary<int, MCTSNodeTranspositionVisitor> activeTranspositionVisitors,
                              ref MCTSNodeStruct source, MCTSNodeStructIndex highestIndexToKeep)
     {
       throw new NotImplementedException("Needs remediation due to change to use allocate children in blocks rather than indivdually, also more fields need cloning");
@@ -346,16 +287,14 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         W = (FP16)clonedSumW;
       }
     }
-  }
 
-  public partial struct MCTSNodeStruct
-  {
-    public enum CacheLevel 
-    { 
+
+    public enum CacheLevel
+    {
       None,
       Level0,
-      Level1, 
-      Level2 
+      Level1,
+      Level2
     };
 
 
@@ -364,59 +303,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       PossiblyPrefetchNodeAndChildrenInRange(store, nodeIndex, childIndex, 1);
     }
 
-#if NOT
-    // This is an alternate version which uses Avx2.GatherVector256
-    // It seems to be correct, but in extensive tests August 2020 did not seem any faster
 
-    public unsafe void PrefetchChildren(MCTSNodeStore store, MCTSNodeStructIndex nodeIndex, int minIndex, int maxIndex)
-    {
-      Debug.Assert(maxIndex - minIndex < 8);
-
-      // The AVX instructions load from array of floats, but we are actually a
-      int FLOATS_PER_NODE = Marshal.SizeOf <MCTSNodeStruct>() / sizeof(float);
-
-      // Prepare array of indices at which these nodes exist
-      Span<int> indices = stackalloc int[8];
-
-      Span<MCTSNodeStructChild> childSpan = store.Children.SpanForNode(in store.Nodes.Span[nodeIndex.Index]); // TODO: maybe just pass in the struct here instead of node Index?
-      for (int i = minIndex; i < maxIndex; i++)
-      {
-        MCTSNodeStructChild child = childSpan[i];
-        if (child.IsExpanded)
-        {
-          indices[i - minIndex] = child.ChildIndex.Index * FLOATS_PER_NODE;
-        }
-      }
-
-      // Prefetch node data
-      void* nodePtr = Unsafe.AsPointer(ref store.Nodes.Span[nodeIndex.Index]);
-      PrefetchDataAt(nodePtr);
-
-
-      fixed (int* indicesPtr = &indices[0])
-      {
-        Vector256<int> indicesVector = Avx2.LoadVector256(indicesPtr);
-        Vector256<float> result = Avx2.GatherVector256((float*)store.Nodes.RawMemory, indicesVector, 4);
-      }
-
-    }
-    // --------------------------------------------------------------------------------------------
     public void PossiblyPrefetchNodeAndChildrenInRange(MCTSNodeStore store, MCTSNodeStructIndex nodeIndex,
-                                                       int firstChildIndex, int numChildren)
-    {
-      int numDone = 0;
-      while ((numChildren - numDone) > 3)
-      {
-        int numThisLoop = Math.Min(8, numChildren - numDone);
-        PrefetchChildren(store, nodeIndex, firstChildIndex + numDone, firstChildIndex + numDone + numThisLoop - 1);
-        numDone += numThisLoop;
-      }
-    }
-
-#endif
-
-
-    public void PossiblyPrefetchNodeAndChildrenInRange(MCTSNodeStore store, MCTSNodeStructIndex nodeIndex, 
                                                        int firstChildIndex, int numChildren)
     {
       unsafe
@@ -459,11 +347,11 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     private static unsafe void PrefetchDataAt(void* nodePtr)
     {
       if (MCTSParamsFixed.PrefetchCacheLevel == CacheLevel.Level0)
-        System.Runtime.Intrinsics.X86.Sse.Prefetch0(nodePtr);
+        Sse.Prefetch0(nodePtr);
       else if (MCTSParamsFixed.PrefetchCacheLevel == CacheLevel.Level1)
-        System.Runtime.Intrinsics.X86.Sse.Prefetch1(nodePtr);
+        Sse.Prefetch1(nodePtr);
       else if (MCTSParamsFixed.PrefetchCacheLevel == CacheLevel.Level2)
-        System.Runtime.Intrinsics.X86.Sse.Prefetch2(nodePtr);
+        Sse.Prefetch2(nodePtr);
       else if (MCTSParamsFixed.PrefetchCacheLevel == CacheLevel.None)
       {
       }
@@ -513,7 +401,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       return MathHelpers.Bounded(bonus, -MAX_ENTROPY_BONUS_MAGNITUDE, MAX_ENTROPY_BONUS_MAGNITUDE);
     }
 
-    #endif
+#endif
 
 
     public float TrendBonusToP
@@ -533,7 +421,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
           const float MULT = 0.04f;
           float bonus = MathHelpers.Bounded(stdErr * MULT, -0.02f, 0.02f);
-//          if (COUNT++ % 9999 == 9998) Console.WriteLine(Q + " " + bonus);
+          //          if (COUNT++ % 9999 == 9998) Console.WriteLine(Q + " " + bonus);
           return bonus;
         }
         else
@@ -553,14 +441,14 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <param name="nInFlight"></param>
     /// <param name="p"></param>
     /// <param name="w"></param>
-    public void GatherChildInfo(MCTSIterator context, MCTSNodeStructIndex index, int selectorID, int depth, int maxIndex, 
+    public void GatherChildInfo(MCTSIterator context, MCTSNodeStructIndex index, int selectorID, int depth, int maxIndex,
                                 Span<float> n, Span<float> nInFlight, Span<float> p, Span<float> w)
     {
       MCTSNodeStore store = context.Tree.Store;
 
       Debug.Assert(maxIndex >= 0 && (maxIndex + 1) <= n.Length);
 
-      PossiblyPrefetchNodeAndChildrenInRange(store, index, 0, (maxIndex  + 1));
+      PossiblyPrefetchNodeAndChildrenInRange(store, index, 0, (maxIndex + 1));
 
       bool applyTrendBonus = context.ParamsSearch.ApplyTrendBonus;
       bool applyMBonus = false;// WE NO LONGER APPLY M BONUS ANYWHERE EXCEPT ROOT. context.ParamsSearch.MLHBonusFactor;
@@ -569,7 +457,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       // if the power mean coefficient ends up being very lose to 1 (less than this value) then don't bother to use power mean
       const float POWER_MEAN_SUBTRACT = 2.0f;
       const float MIN_POWER_MEAN_COEFF = POWER_MEAN_SUBTRACT + 1;
-      float powerMeanMinN = powerMeanNExponent == 0 ? float.MaxValue : 
+      float powerMeanMinN = powerMeanNExponent == 0 ? float.MaxValue :
                                                       MathF.Pow(MIN_POWER_MEAN_COEFF, 1.0f / powerMeanNExponent);
 
       float dualCollisionFraction = context.ParamsSearch.Execution.DualSelectorAlternateCollisionFraction;
@@ -599,7 +487,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           }
           else
           {
-            if (powerMeanNExponent != 0 && childNode.N > powerMeanMinN) 
+            if (powerMeanNExponent != 0 && childNode.N > powerMeanMinN)
             {
               float power = MathF.Pow(childNode.N, powerMeanNExponent) - POWER_MEAN_SUBTRACT;
               //float power = (MathF.Log(childNode.N) - 7) * powerMeanNExponent; (try 1 or 2 for powerMeanNExponent, but works poorly)
@@ -634,7 +522,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
 
 
-    #if WIP
+#if WIP
 
     /// <summary>
     /// Extracts values of 4 fields (N, NInFlight, P, and W) into arrays
@@ -731,7 +619,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     {
       Debug.Assert(adjustNInFlight >= 0 || NInFlight >= -adjustNInFlight);
       Debug.Assert(System.Math.Abs(NInFlight + adjustNInFlight) < short.MaxValue);
-      
+
       Debug.Assert(NInFlight + adjustNInFlight >= 0);
       NInFlight += adjustNInFlight;
 
@@ -766,7 +654,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <summary>
     /// Increments N in flight by specified value for this node and all predecessors.
     /// </summary>
-    public void BackupIncrementInFlight(int numInFlight1, int numInFlight2) =>  BackupUpdateInFlight(numInFlight1, numInFlight2);
+    public void BackupIncrementInFlight(int numInFlight1, int numInFlight2) => BackupUpdateInFlight(numInFlight1, numInFlight2);
 
 
     /// <summary>
@@ -823,9 +711,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         else
           node = ref node.ParentRef;
       }
-
     }
-
 
 
     /// <summary>
@@ -837,8 +723,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <param name="wasTerminal"></param>
     /// <param name="numInFlight1"></param>
     /// <param name="numInFlight2"></param>
-    public unsafe void BackupApply(Span<MCTSNodeStruct> nodes, 
-                                   float vToApply, float mToApply, float dToApply, bool wasTerminal, 
+    public unsafe void BackupApply(Span<MCTSNodeStruct> nodes,
+                                   float vToApply, float mToApply, float dToApply, bool wasTerminal,
                                    int numInFlight1, int numInFlight2,
                                    out MCTSNodeStructIndex indexOfChildDescendentFromRoot)
     {
@@ -877,7 +763,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           {
             vToApply = 0;
             mToApply = 0;
-             dToApply = 1; // TODO: is this ok even if not WDL network?
+            dToApply = 1; // TODO: is this ok even if not WDL network?
           }
 
           // Visits to non-terminal nodes are applied only once
@@ -952,7 +838,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       }
     }
 
-#endregion
+    #endregion
 
     /// <summary>
     /// Computes the power mean over all children Q values using specified coefficient.
@@ -995,7 +881,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           {
             double adjustedQ = 0.55 + 0.5 * (inverted ? -childNode.Q : childNode.Q);
             pwc.AddValue(adjustedQ, childNode.N);
-//            Console.WriteLine($"{(inverted ? -childNode.Q : childNode.Q)} {childNode.N}");
+            //            Console.WriteLine($"{(inverted ? -childNode.Q : childNode.Q)} {childNode.N}");
           }
         }
       }
@@ -1003,10 +889,135 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       float pm = (float)pwc.PowerMean;
       float adjustedPM = (pm - 0.55f) * 2.0f;
       float ret = inverted ? adjustedPM : -adjustedPM;
-//      Console.WriteLine($" {N}  PowerMean({p}) " + Q + " ==> " + ret);
+      //      Console.WriteLine($" {N}  PowerMean({p}) " + Q + " ==> " + ret);
       return ret;
     }
 
-
   }
+
 }
+
+#if EXPERIMENTAL
+    // This is an alternate version which uses Avx2.GatherVector256
+    // It seems to be correct, but in extensive tests August 2020 did not seem any faster
+
+    public unsafe void PrefetchChildren(MCTSNodeStore store, MCTSNodeStructIndex nodeIndex, int minIndex, int maxIndex)
+    {
+      Debug.Assert(maxIndex - minIndex < 8);
+
+      // The AVX instructions load from array of floats, but we are actually a
+      int FLOATS_PER_NODE = Marshal.SizeOf <MCTSNodeStruct>() / sizeof(float);
+
+      // Prepare array of indices at which these nodes exist
+      Span<int> indices = stackalloc int[8];
+
+      Span<MCTSNodeStructChild> childSpan = store.Children.SpanForNode(in store.Nodes.Span[nodeIndex.Index]); // TODO: maybe just pass in the struct here instead of node Index?
+      for (int i = minIndex; i < maxIndex; i++)
+      {
+        MCTSNodeStructChild child = childSpan[i];
+        if (child.IsExpanded)
+        {
+          indices[i - minIndex] = child.ChildIndex.Index * FLOATS_PER_NODE;
+        }
+      }
+
+      // Prefetch node data
+      void* nodePtr = Unsafe.AsPointer(ref store.Nodes.Span[nodeIndex.Index]);
+      PrefetchDataAt(nodePtr);
+
+
+      fixed (int* indicesPtr = &indices[0])
+      {
+        Vector256<int> indicesVector = Avx2.LoadVector256(indicesPtr);
+        Vector256<float> result = Avx2.GatherVector256((float*)store.Nodes.RawMemory, indicesVector, 4);
+      }
+
+    }
+    // --------------------------------------------------------------------------------------------
+    public void PossiblyPrefetchNodeAndChildrenInRange(MCTSNodeStore store, MCTSNodeStructIndex nodeIndex,
+                                                       int firstChildIndex, int numChildren)
+    {
+      int numDone = 0;
+      while ((numChildren - numDone) > 3)
+      {
+        int numThisLoop = Math.Min(8, numChildren - numDone);
+        PrefetchChildren(store, nodeIndex, firstChildIndex + numDone, firstChildIndex + numDone + numThisLoop - 1);
+        numDone += numThisLoop;
+      }
+    }
+
+#endif
+
+#if EXPERIMENTAL
+    public (int indexBest, int indexSecondBest) IndicesMaxExpandedChildren(MCTSNodeStructMetricFunc rankFunc)
+    {
+      float bestV = float.MinValue;
+      int bestI = -1;
+      float nextBestV = float.MinValue;
+      int nextBestI = -1;
+      for (int i=0; i<NumChildrenExpanded; i++)
+      {
+        float value = rankFunc(in ChildAtIndexRef(i));
+        if (value > bestV)
+        {
+          nextBestV = bestV;
+          nextBestI = bestI;
+          bestV = value;
+          bestI = i;
+        }
+        else if (value > nextBestV)
+        {
+          nextBestV = value;
+          nextBestI = i;
+        }
+      }
+
+      return (bestI, nextBestI);
+    }
+#endif
+
+
+#if NOT
+
+    /// <summary>
+    /// Returns a span which re-interprets the child array as an array of FP16
+    /// to be used as a V buffer.
+    /// </summary>
+    /// <param name="store"></param>
+    /// <returns></returns>
+    internal unsafe Span<FP16> ChildrenArrayAsVBuffer(MCTSNodeStore store)
+    {
+      // Determine how many V scores we have room for
+      int maxVScores = NumPolicyMoves * (Marshal.SizeOf<MCTSNodeStructChild>() / Marshal.SizeOf<FP16>());
+      return new Span<FP16>(Unsafe.AsPointer(ref store.Children.childIndices[ChildStartIndex]), maxVScores);
+    }
+
+
+    public unsafe void FillChidrenWithVScores(MCTSNodeStore store, ref MCTSNodeStruct source)
+    {
+      if (NumPolicyMoves > 0)
+      {
+        // We expect child array to e already allocated
+        Debug.Assert(ChildStartBlockIndex > 0);
+
+        // Interpet the 
+        Span<FP16> vScores = ChildrenArrayAsVBuffer(store);
+
+        int count = 0;
+        MCTSNodeSequentialVisitor visitor = new MCTSNodeSequentialVisitor(store, source.Index);
+        foreach (MCTSNodeStructIndex childNodeIndex in visitor.Iterate)
+        {
+          if (count >= vScores.Length)
+            break;
+          else
+            vScores[count++] = store.Nodes.nodes[childNodeIndex.Index].V;
+        }
+
+        // If we did not fill V array completely, set the 
+        // next element as an "end" market (NaN)
+        if (count < vScores.Length) vScores[count] = FP16.NaN;
+      }
+    }
+
+#endif
+

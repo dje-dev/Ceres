@@ -25,7 +25,7 @@ is hoped to provide four important benefits:
 ## Caveats
 
 In its first beta release, Ceres software and hardware requirements are fairly restrictive (Windows operating system,
-processors with AVX2, and NVIDIA GPUs). Currently the installation and configuration burden
+processors with AVX, and NVIDIA GPUs). Currently the installation and configuration burden
 is fairly significant and only suggested for hardcore enthusiasts with substantial computer expertise.
 
 Initial testing suggests Ceres play quality is already highly competitive with 
@@ -81,7 +81,7 @@ by LC0 contributor Naphthalin).
 * MCTS leaf selection is highly parallelized in an almost lock-free way, 
 with only a single descent and each visited node being visited at most once.
 
-* MCTS leaf selection via PUCT algorithm is accelerated via SIMD hardware intrinsics (AVX2),
+* MCTS leaf selection via PUCT algorithm is accelerated via SIMD hardware intrinsics (AVX),
 which is made feasible by the above-mentioned parallelized descent algorithm.
 
 * An overlapping execution approach allows efficient concurrent gathering and evaluation of batches.
