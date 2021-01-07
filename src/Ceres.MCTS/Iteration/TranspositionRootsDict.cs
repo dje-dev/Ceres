@@ -13,6 +13,7 @@
 
 #region Using directives
 
+using System;
 using System.Collections.Generic;
 
 #endregion
@@ -30,11 +31,14 @@ namespace Ceres.MCTS.Iteration
     /// </summary>
     Dictionary<ulong, int> table;
 
+
     /// <summary>
     /// Constructor for a dictionary of specified approximate final size.
+    /// Limit max hint to 5mm in case very optimistic value was passed in
+    /// (e.g. in case of a search that was requested to be infinite).
     /// </summary>
     /// <param name="sizingHint"></param>
-    public TranspositionRootsDict(int sizingHint) => table = new Dictionary<ulong, int>(sizingHint);
+    public TranspositionRootsDict(int sizingHint) => table = new Dictionary<ulong, int>(Math.Min(5_000_000, sizingHint));
 
 
     /// <summary>
