@@ -129,7 +129,7 @@ search algorithm.
 
 Details:
 
-* The hardware used was dual Intel® Xeon® Gold 6142 Processor 
+* The hardware used was dual IntelÂ® XeonÂ® Gold 6142 Processor 
 an done or more NVIDIA GPUs as detailed below with each test.
 
 * LC0: version 0.26.3 configured with default settings 
@@ -201,7 +201,7 @@ it is suggested that contributions would be most useful in the following areas:
 * comments on the design and API surface
 * suggestions for the most needed missing features
 
-Somewhat bigger picture, thoughts and help with the architeture and implementation of backends would be 
+Somewhat bigger picture, thoughts and help with the architecture and implementation of backends would be 
 especially welcomed. Some open questions/opportunities:
 * extend the LC0 backend support beyond just CUDA
 * possibly generalize the interface between LC0 backends and arbitrary clients so this large and
