@@ -463,7 +463,6 @@ namespace Ceres.Features.UCI
       }
       else if (goInfo.Infinite)
       {
-        // TODO: determine a reasonable maximum value based on memory in computer
         return SearchLimit.NodesPerMove(MCTSNodeStore.MAX_NODES);
       }
       else if (goInfo.TimeOurs.HasValue)

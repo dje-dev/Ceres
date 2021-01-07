@@ -30,6 +30,7 @@ using Ceres.Base.Environment;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.Chess.Positions;
 using Ceres.MCTS.Params;
+using Ceres.Base.OperatingSystem.Windows;
 
 #endregion
 
@@ -41,7 +42,23 @@ namespace Ceres.MCTS.MTCSNodes.Storage
   /// </summary>
   public partial class MCTSNodeStore : IDisposable
   {
-    public const int MAX_NODES = MCTSNodeStructChildStorage.MAX_NODES;
+    /// <summary>
+    /// Approximate total bytes consumed by a node, child pointers, and associated data structures.
+    /// </summary>
+    const ulong APPROX_BYTES_PER_NODE = 300;
+
+    /// <summary>
+    /// Maximum number of nodes for which which the store could accomodate.
+    /// This is bounded by physical RAM and also data structure limitations.
+    /// </summary>
+    public static int MAX_NODES
+    {
+      get
+      {
+        int maxByMemory = (int)(Win32.MemorySize / APPROX_BYTES_PER_NODE);
+        return Math.Min(maxByMemory, MCTSNodeStructChildStorage.MAX_NODES);
+      }
+    }
 
     /// <summary>
     /// The maximum number of nodes for which this store was configured.

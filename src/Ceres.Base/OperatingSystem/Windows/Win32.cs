@@ -30,6 +30,45 @@ namespace Ceres.Base.OperatingSystem.Windows
   [SupportedOSPlatform("windows")]
   public static class Win32
   {
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+    private class MEMORYSTATUSEX
+    {
+      public uint dwLength;
+      public uint dwMemoryLoad;
+      public ulong ullTotalPhys;
+      public ulong ullAvailPhys;
+      public ulong ullTotalPageFile;
+      public ulong ullAvailPageFile;
+      public ulong ullTotalVirtual;
+      public ulong ullAvailVirtual;
+      public ulong ullAvailExtendedVirtual;
+
+      public MEMORYSTATUSEX()
+      {
+        dwLength = (uint)Marshal.SizeOf(typeof(MEMORYSTATUSEX));
+      }
+    }
+
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool GlobalMemoryStatusEx([In, Out] MEMORYSTATUSEX lpBuffer);
+
+
+    /// <summary>
+    /// Returns physical memory size.
+    /// </summary>
+    [SupportedOSPlatform("windows")]
+    public static ulong MemorySize
+    {
+      get
+      {
+        MEMORYSTATUSEX status = new MEMORYSTATUSEX();
+        GlobalMemoryStatusEx(status);
+        return status.ullTotalPhys;
+      }
+    }
+
     [DllImport("kernel32.dll", SetLastError = true)]
     public static extern IntPtr VirtualAlloc(IntPtr lpAddress, IntPtr dwSize, int flAllocationType, int flProtect);
 
