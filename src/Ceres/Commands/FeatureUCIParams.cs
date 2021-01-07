@@ -27,7 +27,7 @@ namespace Ceres.Commands
     public NNDevicesSpecificationString DeviceSpec { init; get; }
     public bool Pruning { init; get; }
 
-    public static FeatureUCIParams ParseUCICommand(string fen, string args)
+    public static FeatureUCIParams ParseUCICommand(string args)
     {
       KeyValueSetParsed keys = new KeyValueSetParsed(args, new string[] { "NETWORK", "DEVICE", "PRUNING" });
 

@@ -68,11 +68,26 @@ namespace Ceres.Commands
 
     public static void ProcessCommand(string cmd)
     {
-      cmd = cmd.Replace("  ", " ").TrimEnd();
+      cmd = StringUtils.WhitespaceRemoved(cmd).TrimEnd();
+      string[] parts = cmd.Split(" ");
+
       if (cmd == "")
       {
-        LaunchUCI("", "");
-        System.Environment.Exit(0);
+        // No arguments at all
+        LaunchUCI("");
+        Environment.Exit(0);
+      }
+      else if (parts.Length > 0 && parts[0].ToUpper() == "UCI")
+      {
+        // First argument explicit UCI
+        LaunchUCI(cmd.Substring(cmd.IndexOf("UCI ") + 4));
+        Environment.Exit(0);
+      }
+      else if (parts.Length > 0 && parts[0].Contains("="))
+      {
+        // No command, just some immediate key-value pairs
+        LaunchUCI(cmd);
+        Environment.Exit(0);
       }
 
 
@@ -171,10 +186,6 @@ namespace Ceres.Commands
         FeatureAnalyzeParams analyzeParams = FeatureAnalyzeParams.ParseAnalyzeCommand(fen, keyValueArgs);
         analyzeParams.Execute(fen);
       }
-      else if (featureName == "UCI")
-      {
-        LaunchUCI(keyValueArgs, fen);
-      }
       else if (featureName == "SETUP")
       {
         if (File.Exists(CeresUserSettingsManager.DefaultCeresConfigFileName))
@@ -201,9 +212,9 @@ namespace Ceres.Commands
                    +"                                             dir-tablebases, launch-monitor, log-info, log-warn }");
     }
 
-    private static void LaunchUCI(string keyValueArgs, string fen)
+    private static void LaunchUCI(string keyValueArgs)
     {
-      FeatureUCIParams uciParams = FeatureUCIParams.ParseUCICommand(fen, keyValueArgs);     
+      FeatureUCIParams uciParams = FeatureUCIParams.ParseUCICommand(keyValueArgs);     
 
       NNEvaluatorDef evaluatorDef = new NNEvaluatorDef(uciParams.NetworkSpec.ComboType, uciParams.NetworkSpec.NetDefs,
                                                        uciParams.DeviceSpec.ComboType, uciParams.DeviceSpec.Devices);

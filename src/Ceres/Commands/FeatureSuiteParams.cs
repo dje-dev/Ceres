@@ -45,6 +45,8 @@ namespace Ceres.Commands
         EPD = keys.GetValue("EPD"),
       };
 
+      if (parms.EPD == null) DispatchCommands.ShowErrorExit("EPD file must be specified, for example: EPD=NoomenBigTestsuite");
+
       // Add in all the fields from the base class
       parms.ParseBaseFields(args);
 
@@ -63,7 +65,7 @@ namespace Ceres.Commands
       string epdFilename = Path.Combine(CeresUserSettingsManager.Settings.DirEPD, suiteName);
       if (!File.Exists(epdFilename)) throw new Exception($"Specified EPD not found: {epdFilename}");
 
-      bool opponentIsCeres = playerOther.EngineDef is GameEngineDefCeres;
+      bool opponentIsCeres = playerOther != null && (playerOther.EngineDef is GameEngineDefCeres);
       EnginePlayerDef engineExternal = opponentIsCeres ? null : playerOther;
       EnginePlayerDef engineCeres2 = opponentIsCeres ? playerOther : null;
       SuiteTestDef suiteDef = new SuiteTestDef($"SUITE TEST {CeresUserSettingsManager.Settings.DirEPD}", 

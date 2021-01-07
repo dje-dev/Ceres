@@ -73,6 +73,8 @@ namespace Ceres
       MCTSEngineInitialization.BaseInitialize();
 
 
+      Console.WriteLine();
+
 #if DEBUG
       CheckDebugAllowed();
 #endif

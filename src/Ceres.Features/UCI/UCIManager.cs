@@ -421,8 +421,11 @@ namespace Ceres.Features.UCI
           GameEngineSearchResultCeres result = null;
           if (searchLimit != null)
           {
-            // Run the actual search
-            result = RunSearch(searchLimit);
+            if (searchLimit.Value > 0)
+            {
+              // Run the actual search
+              result = RunSearch(searchLimit);
+            }
           }
 
           taskSearchCurrentlyExecuting = null;
