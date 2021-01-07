@@ -124,7 +124,6 @@ namespace Ceres
 |   With network backend code from Leela Chess Zero.  |
 |                                                     |
 |  Version 0.80. Use help to list available commands. |
-|  {git}
 |=====================================================|
 ";
 
@@ -144,18 +143,7 @@ namespace Ceres
         }
         else
         {
-          // DISABLED git functionality until crash on a user's computer is better understood
-          if (false && line.Contains("{git}"))
-          {
-            string outString = line.Replace("{git}", GitInfo.VersionString).TrimEnd();
-            outString = outString.PadRight(bannerLines[1].Length - 1);
-            outString = outString + "|";
-            Console.WriteLine(outString);
-          }
-          else
-          {
-            Console.WriteLine(line);
-          }
+          Console.WriteLine(line);
         }
       }
 

@@ -15,6 +15,7 @@
 
 using System;
 using Ceres.Base.Benchmarking;
+using Ceres.Base.Environment;
 using Ceres.Base.Math;
 using Ceres.Base.Misc;
 using Ceres.Base.OperatingSystem.NVML;
@@ -39,8 +40,16 @@ namespace Ceres.Commands
     /// </summary>
     public static void DumpBenchmark()
     {
-      DumpCPUBenchmark();
-      DumpGPUBenchmark();
+      Console.WriteLine();
+      int gpuScore = DumpCPUBenchmark();
+      int gpuSumNPS = DumpGPUBenchmark();
+      Console.WriteLine();
+
+      // Finally output a short summary of results and Ceres version
+      // (useful single line of information for testers to include in postings).
+      Console.WriteLine($"GPU Score={gpuScore}, NPS={gpuSumNPS} "
+                      + $"using {CeresUserSettingsManager.Settings.DefaultNetworkSpecString} "
+                      + $"{GitInfo.VersionString}");
       Console.WriteLine();
     }
 
@@ -49,7 +58,8 @@ namespace Ceres.Commands
     /// Runs CPU benchmark and outputs summary results,
     /// with an overall statistic provided (index to 100 on a Intel Skylake 6142).
     /// </summary>
-    static void DumpCPUBenchmark()
+    /// <returns>Relative CPU index (baseline 100)</returns>
+    static int DumpCPUBenchmark()
     {
       Console.WriteLine("-----------------------------------------------------------------------------------");
       Console.WriteLine("CPU BENCHMARK");
@@ -78,13 +88,16 @@ namespace Ceres.Commands
 
       Console.WriteLine();
       Console.WriteLine($"CERES CPU BENCHMARK SCORE: {avg*100,4:F0}");
+
+      return (int)MathF.Round(avg * 100, 0);
     }
 
 
     /// <summary>
     /// Dumps GPU information and runs benchmarks.
     /// </summary>
-    public static void DumpGPUBenchmark()
+    /// <returns>Sum of NPS across all GPUs</returns>
+    public static int DumpGPUBenchmark()
     {
       Console.WriteLine();
       Console.WriteLine("-----------------------------------------------------------------------------------");
@@ -93,6 +106,7 @@ namespace Ceres.Commands
       Console.WriteLine(NVML.InfoDescriptionHeaderLine1 + "   NPS 1  NPS Batch");
       Console.WriteLine(NVML.InfoDescriptionHeaderLine2 + "   -----  ---------");
 
+      int sumNPS = 0;
       foreach (NVMLGPUInfo info in NVML.GetGPUsInfo())
       {
         NNEvaluatorDef evaluatorDef = NNEvaluatorDef.FromSpecification(CeresUserSettingsManager.Settings.DefaultNetworkSpecString,
@@ -101,8 +115,11 @@ namespace Ceres.Commands
         (float npsSingletons, float npsBigBatch, _) = NNEvaluatorBenchmark.EstNPS(evaluator, false, 512, true, 3);
 
         Console.WriteLine(NVML.GetInfoDescriptionLine(info) + $"    {npsSingletons,6:N0} { npsBigBatch,10:N0}");
+        sumNPS += (int)npsBigBatch;
         evaluator.Dispose();
       }
+
+      return sumNPS;
     }
 
 
