@@ -42,28 +42,11 @@ using Ceres.Base.Benchmarking;
 
 namespace Ceres.MCTS.Iteration
 {
+  /// <summary>
+  /// Set of static helper methods which launch MCTS searches.
+  /// </summary>
   public static class MCTSLaunch
   {
-    public static (MCTSManager, MGMove, TimingStats)
-      SearchOnFEN(NNEvaluatorSet nnEvaluators,
-                  ParamsSelect paramsChildSelect,
-                  ParamsSearch paramsSearch,
-                  IManagerGameLimit timeManager,
-                  ParamsSearchExecutionModifier paramsSearchExecutionPostprocessor,
-                  MCTSIterator reuseOtherContextForEvaluatedNodes,
-                  string fen, string movesStr, SearchLimit searchLimit,
-                  bool verbose = false,
-                  MCTSManager.MCTSProgressCallback progressCallback = null,
-                  bool possiblyEnablePositionCache = false,
-                  List<GameMoveStat> gameMoveHistory = null)
-    {
-      PositionWithHistory priorMoves = PositionWithHistory.FromFENAndMovesUCI(fen, movesStr);
-      return Search(nnEvaluators, paramsChildSelect, paramsSearch, timeManager, paramsSearchExecutionPostprocessor,
-                    reuseOtherContextForEvaluatedNodes, priorMoves, searchLimit, verbose,
-                    DateTime.Now, gameMoveHistory, progressCallback, possiblyEnablePositionCache);
-    }
-
-
     public static (MCTSManager, MGMove, TimingStats)
       Search(NNEvaluatorSet nnEvaluators,
              ParamsSelect paramsSelect,
@@ -85,7 +68,7 @@ namespace Ceres.MCTS.Iteration
         // In this mode, we are just reserving virtual address space
         // from a very large pool (e.g. 256TB for Windows).
         // Therefore it is safe to reserve a very large block.
-        maxNodes = int.MaxValue;
+        maxNodes = (int)(1.1f * MCTSNodeStore.MAX_NODES);
       }
       else
       {

@@ -91,9 +91,10 @@ namespace Ceres.Commands
       {
         ParamsSearch searchParams = new ParamsSearch();
         searchParams.FutilityPruningStopSearchEnabled = !forceDisablePruning;
-        ceresResults = MCTSLaunch.SearchOnFEN(nnEvaluators, new ParamsSelect(), searchParams, null, null, null,
-                               fen, null, searchLimit, true,
-                               manager => lastCeresInfo = new UCISearchInfo(UCIManager.UCIInfoString(manager), null, null), true, null);
+        PositionWithHistory positionWithHistory = PositionWithHistory.FromFENAndMovesUCI(fen, null);
+        ceresResults = MCTSLaunch.Search(nnEvaluators, new ParamsSelect(), searchParams, null, null, 
+                                         null, positionWithHistory, searchLimit, verbose, DateTime.Now, null,
+                                         manager => lastCeresInfo = new UCISearchInfo(UCIManager.UCIInfoString(manager), null, null), false, true);
       });
 
       // Possibly launch search for other engine

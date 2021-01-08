@@ -319,25 +319,6 @@ namespace Ceres.Features.Suites
     }
 
 
-    /// <summary>
-    /// Leela sometimes cheats and exceeds node budgets; try to compensate for that.
-    /// </summary>
-    /// <param name="limitOrg"></param>
-    /// <returns></returns>
-    static SearchLimit MakeCeresSearchLimit(SuiteTestDef def, UCISearchInfo searchInfo, SearchLimit limitOrg)
-    {
-      // Can't change unless both were nodes per move limits that were the same
-      if (searchInfo == null
-       || limitOrg.Type != SearchLimitType.NodesPerMove
-       || def.ExternalEngineDef.SearchLimit.Type != SearchLimitType.NodesPerMove
-       || def.ExternalEngineDef.SearchLimit.Value != limitOrg.Value) return limitOrg;
-
-      // Otherwise try to exactly match how many Leela searched if it went over
-      if (searchInfo.Nodes > limitOrg.Value)
-        return new SearchLimit(SearchLimitType.NodesPerMove, searchInfo.Nodes);
-      else
-        return limitOrg;
-    }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "HAA0201:Implicit string concatenation allocation", Justification = "<Pending>")]
     void ProcessEPD(int epdNum, EPDEntry epd, bool outputDetail, ObjectPool<object> otherEngines)
@@ -399,42 +380,40 @@ namespace Ceres.Features.Suites
       MGMove bestMoveMG1, bestMoveMG2 = default;
       TimingStats stats1, stats2 = default;
 
+      PositionWithHistory pos = PositionWithHistory.FromFENAndMovesSAN(epdToUse.FEN, epdToUse.StartMoves);
+
       // Note that if we are running both Ceres1 and Ceres2 we alternate which search goes first.
       // This prevents any systematic difference/benefit that might come from order
       // (for example if we reuse position evaluations from the other tree, which can benefit only one of the two searches).
       if (epdNum % 2 == 0 || Def.CeresEngine2Def == null)
       {
         (worker1, bestMoveMG1, stats1) 
-          = MCTSLaunch.SearchOnFEN(evaluatorSet1, Def.Engine1Def.SelectParams, Def.Engine1Def.SearchParams, null, null, null,
-                                   epdToUse.FEN, epd.StartMoves,
-                                   MakeCeresSearchLimit(Def, otherEngineAnalysis2, ceresSearchLimit1), false, null, true, null);
+          = MCTSLaunch.Search(evaluatorSet1, Def.Engine1Def.SelectParams, Def.Engine1Def.SearchParams, null, null, null,
+                                   pos, ceresSearchLimit1, false, DateTime.Now, null, null, true);
 
         MCTSIterator shareContext = null;
         if (Def.RunCeres2Engine)
         {
           if (Def.Engine2Def.SearchParams.ReusePositionEvaluationsFromOtherTree) shareContext = worker1.Context;
 
-          (worker2, bestMoveMG2, stats2) 
-              = MCTSLaunch.SearchOnFEN(evaluatorSet2, Def.Engine2Def.SelectParams, Def.Engine2Def.SearchParams, null, null, shareContext,
-                                       epdToUse.FEN, epd.StartMoves,
-                                       MakeCeresSearchLimit(Def, otherEngineAnalysis2, ceresSearchLimit2), false, null, true, null);
+          (worker2, bestMoveMG2, stats2)
+              = MCTSLaunch.Search(evaluatorSet2, Def.Engine2Def.SelectParams, Def.Engine2Def.SearchParams, null, null, shareContext,
+                                  pos, ceresSearchLimit2, false, DateTime.Now, null, null, true);
         }
         
       }
       else
       {
         (worker2, bestMoveMG2, stats2) 
-          = MCTSLaunch.SearchOnFEN(evaluatorSet2, Def.Engine2Def.SelectParams, Def.Engine2Def.SearchParams, null, null, null,
-                                   epdToUse.FEN, epd.StartMoves,
-                                   MakeCeresSearchLimit(Def, otherEngineAnalysis2, ceresSearchLimit2), false, null, true, null);
+          = MCTSLaunch.Search(evaluatorSet2, Def.Engine2Def.SelectParams, Def.Engine2Def.SearchParams, null, null, null,
+                              pos, ceresSearchLimit2, false, DateTime.Now, null, null, true);
 
         MCTSIterator shareContext = null;
         if (Def.Engine1Def.SearchParams.ReusePositionEvaluationsFromOtherTree) shareContext = worker2.Context;
 
         (worker1, bestMoveMG1, stats1) 
-          = MCTSLaunch.SearchOnFEN(evaluatorSet1, Def.Engine1Def.SelectParams, Def.Engine1Def.SearchParams, null, null, shareContext,
-                                   epdToUse.FEN, epd.StartMoves,
-                                   MakeCeresSearchLimit(Def, otherEngineAnalysis2, ceresSearchLimit1), false, null, true, null);
+          = MCTSLaunch.Search(evaluatorSet1, Def.Engine1Def.SelectParams, Def.Engine1Def.SearchParams, null, null, shareContext,
+                              pos, ceresSearchLimit1, false, DateTime.Now, null, null, true);
 
       }
 

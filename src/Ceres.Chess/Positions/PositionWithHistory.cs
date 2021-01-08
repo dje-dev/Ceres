@@ -124,9 +124,12 @@ namespace Ceres.Chess.Positions
       {
         foreach (string sanMoveString in sanMoves)
         {
-          Move move = pos.MoveSAN(sanMoveString);
-          ret.AppendMove(MGMoveConverter.MGMoveFromPosAndMove(pos, move));
-          pos = pos.AfterMove(move);
+          if (sanMoveString != null)
+          {
+            Move move = pos.MoveSAN(sanMoveString);
+            ret.AppendMove(MGMoveConverter.MGMoveFromPosAndMove(pos, move));
+            pos = pos.AfterMove(move);
+          }
         }
       }
 
