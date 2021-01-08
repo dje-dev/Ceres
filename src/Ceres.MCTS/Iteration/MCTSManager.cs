@@ -502,12 +502,15 @@ namespace Ceres.MCTS.Iteration
           // TODO: possibly use distance to mate to set the distance more accurately than fixed at 1
           const int DISTANCE_TO_MATE = 1;
 
-          Context.Root.Ref.W = ParamsSelect.WinPForProvenWin(DISTANCE_TO_MATE);
+          float winP = ParamsSelect.WinPForProvenWin(DISTANCE_TO_MATE);
+
+          Context.Root.Ref.W = winP;
           Context.Root.Ref.N = 1;
-          Context.Root.Ref.WinP = (FP16)1.0f;
+          Context.Root.Ref.WinP = (FP16)winP;
           Context.Root.Ref.LossP = 0;
           Context.Root.Ref.MPosition = DISTANCE_TO_MATE;
-          //Context.Root.Ref.Terminal = GameResultBest.Checkmate;
+          Context.Root.EvalResult = new LeafEvaluationResult(GameResult.Checkmate, (FP16)winP, 0, DISTANCE_TO_MATE);
+          Context.Root.Ref.Terminal = GameResult.Checkmate;
         }
         else if (result == GameResult.Draw)
         {
@@ -522,6 +525,7 @@ namespace Ceres.MCTS.Iteration
           Context.Root.Ref.LossP = 0;
           Context.Root.Ref.MPosition = DISTANCE_TO_END_OF_GAME;
           Context.Root.Ref.Terminal = GameResult.Draw;
+          Context.Root.EvalResult = new LeafEvaluationResult(GameResult.Draw, 0, 0, 1);
         }
 
       }
