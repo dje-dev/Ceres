@@ -136,11 +136,10 @@ namespace Ceres.MCTS.Search
     public void ProcessDirectOverlapped(MCTSManager manager, int hardLimitNumNodes, int startingBatchSequenceNum, int? forceBatchSize)
     {
       Debug.Assert(!manager.Root.IsInFlight);
-
+      if (hardLimitNumNodes == 0) hardLimitNumNodes = 1;
 
       bool overlappingAllowed = Context.ParamsSearch.Execution.FlowDirectOverlapped;
       int initialRootN = Context.Root.N;
-
 
       int guessMaxNumLeaves = MCTSParamsFixed.MAX_NN_BATCH_SIZE;
 
@@ -453,7 +452,18 @@ namespace Ceres.MCTS.Search
 
     bool haveWarned = false;
 
-    private void TryAddRootPreloadNodes(MCTSManager manager, int maxNodes, MCTSNodesSelectedSet selectedNodes, ILeafSelector selector)
+
+    /// <summary>
+    /// Possibly run preloader to evaluate and cache 
+    /// nodes near the root during early phases of search.
+    /// 
+    /// </summary>
+    /// <param name="manager"></param>
+    /// <param name="maxNodes"></param>
+    /// <param name="selectedNodes"></param>
+    /// <param name="selector"></param>
+    private void TryAddRootPreloadNodes(MCTSManager manager, int maxNodes, 
+                                        MCTSNodesSelectedSet selectedNodes, ILeafSelector selector)
     {
       if (rootPreloader == null) return;
 
