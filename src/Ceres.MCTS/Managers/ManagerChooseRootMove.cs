@@ -94,123 +94,146 @@ namespace Ceres.MCTS.Managers
         if (Node.NumPolicyMoves == 1)
         {
           MCTSNode onlyChild = Node.NumChildrenExpanded == 0 ? Node.CreateChild(0) : Node.ChildAtIndex(0);
-          return new BestMoveInfo(onlyChild, (float)onlyChild.Q, onlyChild.N, 0);
+          return new BestMoveInfo(onlyChild, (float)onlyChild.Q, onlyChild.N, 1, 0);
         }
 
         if (Node.NumChildrenExpanded == 0)
         {
           // No visits, create a node for the first child (which will be move with highest prior)
-          return new BestMoveInfo(Node.CreateChild(0), float.NaN, 0, 0);
+          return new BestMoveInfo(Node.CreateChild(0), float.NaN, 0, 1, 0);
         }
         else if (Node.NumChildrenExpanded == 1)
         {
           MCTSNode onlyChild = Node.ChildAtIndex(0);
-          return new BestMoveInfo(onlyChild, (float)onlyChild.Q, onlyChild.N, 0);
+          return new BestMoveInfo(onlyChild, (float)onlyChild.Q, onlyChild.N, TopNRatio, 0);
         }
 
         return DoCalcBestMove();
       }
     }
 
-      public BestMoveInfo DoCalcBestMove()
-      { 
-        bool useMLH = MBonusMultiplier > 0 && !float.IsNaN(Node.MAvg);
-        if (useMLH && UpdateStatistics) countBestMovesWithMLHChosen++;
+    /// <summary>
+    /// Returns the ratio of the highest N to second highest N at root.
+    /// </summary>
+    private float TopNRatio
+    {
+      get
+      {
+        MCTSNode[] childrenSortedN = Node.ChildrenSorted(node => -node.N);
 
-        // Get nodes sorted by N and Q (with most attractive move into beginning of array)
-        // Note that the sort on N is augmented with an additional term based on Q so that tied N leads to lower Q preferred
-        MCTSNode[] childrenSortedN = Node.ChildrenSorted(node => -node.N + (float)node.Q * 0.1f);
-        MCTSNode[] childrenSortedQ = Node.ChildrenSorted(n => (float)n.Q);
+        if (childrenSortedN.Length < 2) return 1.0f;
+        return (float)childrenSortedN[0].N 
+             / (float)childrenSortedN[1].N;
+      }
+    }
 
-        float mAvgOfBestQ = childrenSortedQ[0].MAvg;
-        MCTSNode priorBest = childrenSortedQ[0];
+    /// <summary>
+    /// Worker method that implements the rules to 
+    /// to determine the best move to make.
+    /// </summary>
+    /// <returns></returns>
+    public BestMoveInfo DoCalcBestMove()
+    {
+      bool useMLH = MBonusMultiplier > 0 && !float.IsNaN(Node.MAvg);
+      if (useMLH && UpdateStatistics) countBestMovesWithMLHChosen++;
 
-        if (useMLH)
+      // Get nodes sorted by N and Q (with most attractive move into beginning of array)
+      // Note that the sort on N is augmented with an additional term based on Q so that tied N leads to lower Q preferred
+      MCTSNode[] childrenSortedN = Node.ChildrenSorted(node => -node.N + (float)node.Q * 0.1f);
+      MCTSNode[] childrenSortedQ = Node.ChildrenSorted(n => (float)n.Q);
+
+      float mAvgOfBestQ = childrenSortedQ[0].MAvg;
+      MCTSNode priorBest = childrenSortedQ[0];
+
+      if (useMLH)
+      {
+        childrenSortedQ = Node.ChildrenSorted(n => (float)n.Q + -MLHBoostForNode(n, mAvgOfBestQ));
+      }
+
+      const bool VERBOSE = false;
+      if (VERBOSE
+        && useMLH
+        && Math.Abs(Node.Context.Root.Q) > 0.05f
+        && childrenSortedQ[0] != priorBest)
+      {
+        Console.WriteLine("\r\n" + Node.Context.Root.Q + " " + Node.Context.Root.MPosition + " " + Node.Context.Root.MAvg);
+        Console.WriteLine(priorBest + "  ==> " + childrenSortedQ[0]);
+        for (int i = 0; i < Node.Context.Root.NumChildrenExpanded; i++)
         {
-          childrenSortedQ = Node.ChildrenSorted(n => (float)n.Q + -MLHBoostForNode(n, mAvgOfBestQ));
+          MCTSNode nodeInner = Node.Context.Root.ChildAtIndex(i);
+          Console.WriteLine($" {nodeInner.Q,6:F3} [MAvg= {nodeInner.MAvg,6:F3}] ==> {MLHBoostForNode(nodeInner, mAvgOfBestQ),6:F3} {nodeInner}");
         }
+        Console.ReadKey();
+      }
 
-        const bool VERBOSE = false;
-        if (VERBOSE
-          && useMLH
-          && Math.Abs(Node.Context.Root.Q) > 0.05f
-          && childrenSortedQ[0] != priorBest)
+
+      // First see if any were forced losses for the child (i.e. wins for us)
+      if (childrenSortedQ.Length == 1 || ParamsSelect.VIsForcedLoss((float)childrenSortedQ[0].Q))
+        return new BestMoveInfo(childrenSortedQ[0], (float)childrenSortedQ[0].Q, childrenSortedN[0].N, TopNRatio, 0); // TODO: look for quickest win?
+
+      int thisMoveNum = Node.Context.StartPosAndPriorMoves.Moves.Count / 2; // convert ply to moves
+
+      if (Node.Context.ParamsSearch.SearchNoiseBestMoveSampling != null
+       && thisMoveNum < Node.Context.ParamsSearch.SearchNoiseBestMoveSampling.MoveSamplingNumMovesApply
+       && Node.Context.NumMovesNoiseOverridden < Node.Context.ParamsSearch.SearchNoiseBestMoveSampling.MoveSamplingMaxMoveModificationsPerGame
+       )
+      {
+        // TODO: currently only supported for sorting by N
+        MCTSNode bestMoveWithNoise = BestMoveByNWithNoise(childrenSortedN);
+        return new BestMoveInfo(bestMoveWithNoise, (float)childrenSortedN[0].Q, childrenSortedN[0].N,
+                                TopNRatio, MLHBoostForNode(bestMoveWithNoise, mAvgOfBestQ)); // TODO: look for quickest win?
+      }
+      else
+      {
+        if (Node.Context.ParamsSearch.BestMoveMode == ParamsSearch.BestMoveModeEnum.TopN)
         {
-          Console.WriteLine("\r\n" + Node.Context.Root.Q + " " + Node.Context.Root.MPosition + " " + Node.Context.Root.MAvg);
-          Console.WriteLine(priorBest + "  ==> " + childrenSortedQ[0]);
-          for (int i = 0; i < Node.Context.Root.NumChildrenExpanded; i++)
+          // Just return best N (note that tiebreaks are already decided with sort logic above)
+          return new BestMoveInfo(childrenSortedN[0], (float)childrenSortedN[0].Q, childrenSortedN[0].N,
+                                  TopNRatio, 0); // TODO: look for quickest win?
+        }
+        else if (Node.Context.ParamsSearch.BestMoveMode == ParamsSearch.BestMoveModeEnum.TopQIfSufficientN)
+        {
+          float qOfBestNMove = (float)childrenSortedN[0].Q;
+
+          // Only consider moves having number of visits which is some minimum fraction of visits to most visisted move
+          int nOfChildWithHighestN = childrenSortedN[0].N;
+
+
+          for (int i = 0; i < childrenSortedQ.Length; i++)
           {
-            MCTSNode nodeInner = Node.Context.Root.ChildAtIndex(i);
-            Console.WriteLine($" {nodeInner.Q,6:F3} [MAvg= {nodeInner.MAvg,6:F3}] ==> {MLHBoostForNode(nodeInner, mAvgOfBestQ),6:F3} {nodeInner}");
+            MCTSNode candidate = childrenSortedQ[i];
+
+            // Return if this has a worse Q (for the opponent) and meets minimum move threshold
+            if ((float)candidate.Q > qOfBestNMove) break;
+
+            float differenceFromQOfBestN = MathF.Abs((float)candidate.Q - (float)childrenSortedN[0].Q);
+
+            float minFrac = MinFractionNToUseQ(differenceFromQOfBestN);
+
+            int minNToBeConsideredForBestQ = (int)(nOfChildWithHighestN * minFrac);
+            if (candidate.N >= minNToBeConsideredForBestQ)
+            {
+              if (useMLH && UpdateStatistics)
+              {
+                ManagerChooseRootMove bestMoveChooserWithoutMLH = new ManagerChooseRootMove(this.Node, false, 0);
+                if (bestMoveChooserWithoutMLH.BestMoveCalc.BestMoveNode != candidate)
+                  countBestMovesWithMLHChosenWithModification++;
+              }
+
+              return new BestMoveInfo(candidate, (float)childrenSortedN[0].Q, childrenSortedN[0].N,
+                                      TopNRatio, MLHBoostForNode(candidate, mAvgOfBestQ)); // TODO: look for quickest win?
+            }
           }
-          Console.ReadKey();
-        }
 
-
-        // First see if any were forced losses for the child (i.e. wins for us)
-        if (childrenSortedQ.Length == 1 || ParamsSelect.VIsForcedLoss((float)childrenSortedQ[0].Q))
-          return new BestMoveInfo(childrenSortedQ[0], (float)childrenSortedQ[0].Q, childrenSortedN[0].N, 0); // TODO: look for quickest win?
-
-        int thisMoveNum = Node.Context.StartPosAndPriorMoves.Moves.Count / 2; // convert ply to moves
-
-        if (Node.Context.ParamsSearch.SearchNoiseBestMoveSampling != null
-         && thisMoveNum < Node.Context.ParamsSearch.SearchNoiseBestMoveSampling.MoveSamplingNumMovesApply
-         && Node.Context.NumMovesNoiseOverridden < Node.Context.ParamsSearch.SearchNoiseBestMoveSampling.MoveSamplingMaxMoveModificationsPerGame
-         )
-        {
-          // TODO: currently only supported for sorting by N
-          MCTSNode bestMoveWithNoise = BestMoveByNWithNoise(childrenSortedN);
-          return new BestMoveInfo(bestMoveWithNoise, (float)childrenSortedN[0].Q, childrenSortedN[0].N, MLHBoostForNode(bestMoveWithNoise, mAvgOfBestQ)); // TODO: look for quickest win?
+          // We didn't find any moves qualified by Q, fallback to move with highest N
+          return new BestMoveInfo(childrenSortedN[0], (float)childrenSortedN[0].Q, childrenSortedN[0].N,
+                                  TopNRatio, 0);
         }
         else
-        {
-          if (Node.Context.ParamsSearch.BestMoveMode == ParamsSearch.BestMoveModeEnum.TopN)
-          {
-            // Just return best N (note that tiebreaks are already decided with sort logic above)
-            return new BestMoveInfo(childrenSortedN[0], (float)childrenSortedN[0].Q, childrenSortedN[0].N, 0); // TODO: look for quickest win?
-          }
-          else if (Node.Context.ParamsSearch.BestMoveMode == ParamsSearch.BestMoveModeEnum.TopQIfSufficientN)
-          {
-            float qOfBestNMove = (float)childrenSortedN[0].Q;
-
-            // Only consider moves having number of visits which is some minimum fraction of visits to most visisted move
-            int nOfChildWithHighestN = childrenSortedN[0].N;
-
-
-            for (int i = 0; i < childrenSortedQ.Length; i++)
-            {
-              MCTSNode candidate = childrenSortedQ[i];
-
-              // Return if this has a worse Q (for the opponent) and meets minimum move threshold
-              if ((float)candidate.Q > qOfBestNMove) break;
-
-              float differenceFromQOfBestN = MathF.Abs((float)candidate.Q - (float)childrenSortedN[0].Q);
-
-              float minFrac = MinFractionNToUseQ(differenceFromQOfBestN);
-
-              int minNToBeConsideredForBestQ = (int)(nOfChildWithHighestN * minFrac);
-              if (candidate.N >= minNToBeConsideredForBestQ)
-              {
-                if (useMLH && UpdateStatistics)
-                {
-                  ManagerChooseRootMove bestMoveChooserWithoutMLH = new ManagerChooseRootMove(this.Node, false, 0);
-                  if (bestMoveChooserWithoutMLH.BestMoveCalc.BestMoveNode != candidate)
-                    countBestMovesWithMLHChosenWithModification++;
-                }
-                //                Console.WriteLine(childrenSortedQ[0].Q + "/" + childrenSortedQ[1].N + "  " +
-                //                  childrenSortedQ[1].Q + "/" + childrenSortedQ[1].N);
-                return new BestMoveInfo(candidate, (float)childrenSortedN[0].Q, childrenSortedN[0].N, MLHBoostForNode(candidate, mAvgOfBestQ)); // TODO: look for quickest win?
-              }
-            }
-
-            // We didn't find any moves qualified by Q, fallback to move with highest N
-            return new BestMoveInfo(childrenSortedN[0], (float)childrenSortedN[0].Q, childrenSortedN[0].N, 0);
-          }
-          else
-            throw new Exception("Internal error, unknown BestMoveMode");
-        }
+          throw new Exception("Internal error, unknown BestMoveMode");
       }
-    
+    }
+
 
 
     static internal float MIN_FRAC_N_REQUIRED_MIN(MCTSIterator context) => 0.30f;

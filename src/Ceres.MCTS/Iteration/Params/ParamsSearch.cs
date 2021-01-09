@@ -231,6 +231,13 @@ namespace Ceres.MCTS.Params
     [CeresOption(Name = "time-management-aggressiveness", Desc = "Aggressiveness with which limited search resource (time or nodes) is consumed.", Default = "1.0")]
     public float GameLimitUsageAggressiveness = 1.0f;
 
+    /// <summary>
+    /// If moves are possibly made instantly (with no search) if a large tree 
+    /// from reuse is already available and the best move also seems relatively clear.
+    /// Instamoves are only made if FutilityPruningStopSearchEnabled is also true.
+    /// </summary>
+    public bool EnableInstamoves = true;
+
     // Due to immediate nodes (cache hits, tablebase hit), or collisions or terminals the number of nodes 
     // sent to the NN will generally be less than the requested batch size.
     // The optional PADDED feature expands the batch size somewhat to compensate for this

@@ -151,15 +151,27 @@ namespace Ceres.MCTS.Iteration
 
     public readonly bool IsFirstMoveOfGame;
 
+
+    ManagerGameLimitInputs limitsManagerInputs;
+
+
     /// <summary>
-    /// Constructor.
+    /// 
     /// </summary>
     /// <param name="store"></param>
-    /// <param name="nnParams"></param>
+    /// <param name="reuseOtherContextForEvaluatedNodes"></param>
+    /// <param name="reusePositionCache"></param>
+    /// <param name="reuseTranspositionRoots"></param>
+    /// <param name="nnEvaluators"></param>
     /// <param name="searchParams"></param>
     /// <param name="childSelectParams"></param>
-    /// <param name="priorMoves">if null, the prior moves are taken from the passed store</param>
     /// <param name="searchLimit"></param>
+    /// <param name="paramsSearchExecutionPostprocessor"></param>
+    /// <param name="limitManager"></param>
+    /// <param name="startTime"></param>
+    /// <param name="priorManager"></param>
+    /// <param name="gameMoveHistory"></param>
+    /// <param name="isFirstMoveOfGame"></param>
     public MCTSManager(MCTSNodeStore store,
                        MCTSIterator reuseOtherContextForEvaluatedNodes,
                        PositionEvalCache reusePositionCache,
@@ -169,7 +181,7 @@ namespace Ceres.MCTS.Iteration
                        ParamsSelect childSelectParams,
                        SearchLimit searchLimit,
                        ParamsSearchExecutionModifier paramsSearchExecutionPostprocessor,
-                       IManagerGameLimit timeManager,
+                       IManagerGameLimit limitManager,
                        DateTime startTime,
                        MCTSManager priorManager,
                        List<GameMoveStat> gameMoveHistory,
@@ -195,15 +207,17 @@ namespace Ceres.MCTS.Iteration
                                                        ? SearchLimitType.SecondsPerMove
                                                        : SearchLimitType.NodesPerMove;
         float rootQ = priorManager == null ? float.NaN : (float)store.RootNode.Q;
-        ManagerGameLimitInputs timeManagerInputs = new(store.Nodes.PriorMoves.FinalPosition, 
-                                                  searchParams, PriorMoveStats,
-                                                  type, store.RootNode.N, rootQ, 
-                                                  searchLimit.Value, searchLimit.ValueIncrement, 
-                                                  float.NaN, float.NaN, 
-                                                  maxMovesToGo:searchLimit.MaxMovesToGo,                                                  
-                                                  isFirstMoveOfGame: isFirstMoveOfGame);
 
-        ManagerGameLimitOutputs timeManagerOutputs = timeManager.ComputeMoveAllocation(timeManagerInputs);
+
+        limitsManagerInputs = new(store.Nodes.PriorMoves.FinalPosition, 
+                                searchParams, PriorMoveStats,
+                                type, store.RootNode.N, rootQ, 
+                                searchLimit.Value, searchLimit.ValueIncrement, 
+                                float.NaN, float.NaN, 
+                                maxMovesToGo:searchLimit.MaxMovesToGo,                                                  
+                                isFirstMoveOfGame: isFirstMoveOfGame);
+
+        ManagerGameLimitOutputs timeManagerOutputs = limitManager.ComputeMoveAllocation(limitsManagerInputs);
         SearchLimit = timeManagerOutputs.LimitTarget;
       }
       else
@@ -216,7 +230,7 @@ namespace Ceres.MCTS.Iteration
                                                                                     searchParams, childSelectParams, searchLimit);
 
       // TODO: technically this is overwriting the params belonging to the prior search, that's ugly (but won't actually cause a problem)
-      paramsChooser.ChooseOptimal(searchLimit.EstNumNodes(50_000), paramsSearchExecutionPostprocessor); // TODO: make 50_000 smarter
+      paramsChooser.ChooseOptimal(searchLimit.EstNumNodes(50_000, false), paramsSearchExecutionPostprocessor); // TODO: make 50_000 smarter
 
 
       int estNumNodes = EstimatedNumSearchNodesForEvaluator(searchLimit, nnEvaluators);
@@ -231,7 +245,7 @@ namespace Ceres.MCTS.Iteration
       ThreadSearchContext = Context;
 
       TerminationManager = new MCTSFutilityPruning(this, Context);
-      LimitManager = timeManager;
+      LimitManager = limitManager;
 
       CeresEnvironment.LogInfo("MCTS", "Init", $"SearchManager created for store {store}", InstanceID);
     }
@@ -568,7 +582,7 @@ namespace Ceres.MCTS.Iteration
      
       // Do the search
       IteratedMCTSDef schedule = manager.Context.ParamsSearch.IMCTSSchedule;
-      bool useIMCTS = schedule != null & manager.SearchLimit.EstNumNodes(30_000) > 100;
+      bool useIMCTS = schedule != null & manager.SearchLimit.EstNumNodes(30_000, false) > 100;
       (TimingStats stats, MCTSNode selectedMove) =
         useIMCTS ? new IteratedMCTSSearchManager().IteratedSearch(manager, progressCallback, schedule)
                  : manager.DoSearch(manager.SearchLimit, progressCallback);
@@ -833,7 +847,7 @@ namespace Ceres.MCTS.Iteration
 
       float elapsedSecs = (float)(DateTime.Now -  StartTimeFirstVisit).TotalSeconds;
       bool insufficientData = elapsedSecs < MIN_TIME || NumStepsTakenThisSearch < MIN_VISITS;
-      estimatedNPS = insufficientData ? float.NaN : (estimatedNPS = NumStepsTakenThisSearch / elapsedSecs);     
+      estimatedNPS = insufficientData ? float.NaN : NumStepsTakenThisSearch / elapsedSecs;
     }
 
     public int? EstimatedNumVisitsRemaining()

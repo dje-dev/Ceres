@@ -37,7 +37,16 @@ namespace Ceres.MCTS.Environment
   [EventSource(Guid= "6501e085-68df-43e6-8371-714c437e0638", Name = "Ceres.MCTS.Environment.MCTSEventSource")]
   public sealed class MCTSEventSource : EventSource
   {
+    /// <summary>
+    /// Spare counter reserved for temporary ad-hoc use when debugging new features.
+    /// </summary>
+    public static long TestCounter = 0;
+
+    private PollingCounter instamoveCounter;
+
     private static MCTSEventSource? mctsEventSource;
+
+    private PollingCounter testCounter;
 
     private PollingCounter storageVirtualAllocBytes;
 
@@ -105,6 +114,10 @@ namespace Ceres.MCTS.Environment
     {
       if (command.Command == EventCommand.Enable)
       {
+        testCounter ??= new PollingCounter("TestCounter", this, () => TestCounter);
+
+        instamoveCounter ??= new PollingCounter("instamove-count", this, () => MCTSLaunch.InstamoveCount);
+
         storageVirtualAllocBytes ??= new PollingCounter("storage-virtual-alloc-bytes", this, () => WindowsVirtualAllocManager.BytesCurrentlyAllocated);
         
 //        storageNodesAllocated ??= new PollingCounter("storage-nodes-allocated", this, () => MCTSNodeStructStorage.NumAllocatedNodes);
@@ -158,6 +171,8 @@ namespace Ceres.MCTS.Environment
         {
           DisplayName = "node-annotation-cache-hit-rate"
         };
+
+        testCounter ??= new PollingCounter("test", this, () => TestCounter);
 
       }
     }

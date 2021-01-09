@@ -16,14 +16,12 @@
 using System;
 using System.Collections.Generic;
 
-using Ceres.Base;
 using Ceres.Base.Environment;
 using Ceres.Chess;
 using Ceres.Chess.GameEngines;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
 using Ceres.Chess.PositionEvalCaching;
-using Ceres.MCTS.LeafExpansion;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.Managers.Limits;
 using Ceres.MCTS.MTCSNodes.Storage;
@@ -34,19 +32,20 @@ using Ceres.Base.Benchmarking;
 
 #endregion
 
-/* TODO:  
- Searching on B7/8/8/8/8/8/K7/5kb1 w - - 63 255 causes Exception
- because is a draw, how to handle better
- Can check if (forwardToPosition.CheckDrawBasedOnMaterial != Ceres.Chess.Position.PositionDrawStatus.NotDraw) continue;
- */
-
 namespace Ceres.MCTS.Iteration
 {
   /// <summary>
   /// Set of static helper methods which launch MCTS searches.
   /// </summary>
-  public static class MCTSLaunch
+  public static partial class MCTSLaunch
   {
+    /// <summary>
+    /// Cumulative count of number of instant moves made due to 
+    /// tree at start of search combined with a best move well ahead of others.
+    /// </summary>
+    public static int InstamoveCount { get; private set; }
+
+
     public static (MCTSManager, MGMove, TimingStats)
       Search(NNEvaluatorSet nnEvaluators,
              ParamsSelect paramsSelect,
@@ -85,7 +84,7 @@ namespace Ceres.MCTS.Iteration
 
       MCTSManager manager = new MCTSManager(store, reuseOtherContextForEvaluatedNodes, null, null,
                                             nnEvaluators, paramsSearch, paramsSelect,
-                                            searchLimit, paramsSearchExecutionPostprocessor, timeManager, 
+                                            searchLimit, paramsSearchExecutionPostprocessor, timeManager,
                                             startTime, null, gameMoveHistory, isFirstMoveOfGame);
 
       using (new SearchContextExecutionBlock(manager.Context))
@@ -94,6 +93,8 @@ namespace Ceres.MCTS.Iteration
         return (manager, result.move, result.stats);
       }
     }
+
+
 
     public static (MCTSManager, MGMove, TimingStats)
       SearchContinue(MCTSManager priorManager,
@@ -119,6 +120,11 @@ namespace Ceres.MCTS.Iteration
         // (for example if it was resolved via tablebase)
         // thus in that case we pretend as if we didn't find it
         if (newRoot != null && (newRoot.N == 0 || newRoot.NumPolicyMoves == 0)) newRoot = null;
+
+        // Check for possible instant move
+        (MCTSManager, MGMove, TimingStats) instamove = CheckInstamove(priorManager, searchLimit, newRoot);
+
+        if (instamove != default) return instamove;
 
         // TODO: don't reuse tree if it would cause the nodes in use
         //       to exceed a reasonable value for this machine
