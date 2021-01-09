@@ -155,26 +155,28 @@ namespace Ceres.Chess
       return ret;
     }
 
-    public int EstNumNodes(int estNumNodesPerSecond)
+    public int EstNumNodes(int estNumNodesPerSecond, bool estIsObserved)
     {
       // TODO: make the estimations below smarter
       return Type switch
       {
         SearchLimitType.NodesPerMove => (int)Value,
-        SearchLimitType.SecondsPerMove => (int)SecsToNodes(Value + ValueIncrement, estNumNodesPerSecond),
+        SearchLimitType.SecondsPerMove => (int)SecsToNodes(Value + ValueIncrement, estNumNodesPerSecond, estIsObserved),
         SearchLimitType.SecondsForAllMoves => (int)((ValueIncrement + (Value / 20.0f)) * estNumNodesPerSecond),
         SearchLimitType.NodesForAllMoves => (int)(ValueIncrement + (Value / 20.0f)),
         _ => throw new NotImplementedException()
       };
     }
 
-    static float SecsToNodes(float secs, int estNumNodesPerSecond)
+    static float SecsToNodes(float secs, int estNumNodesPerSecond, bool estNodesIsObserved)
     {
-      if (secs > 0.2)
-        return 0.2f * estNumNodesPerSecond * 0.2f // first nodes are much slower due to lagency
-             + (secs - 0.2f) * estNumNodesPerSecond;
+      if (!estNodesIsObserved && secs < 0.1)
+      {
+        // first nodes are much slower due to lagency
+        return secs * estNumNodesPerSecond * 0.3f;
+      }
       else
-        return secs * estNumNodesPerSecond * 0.2f;
+        return secs * estNumNodesPerSecond;
     }
 
     #endregion
