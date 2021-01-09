@@ -474,6 +474,7 @@ namespace Ceres.Features.Tournaments
           _ => throw new Exception($"Internal error, unknown SearchLimit.LimitType {searchLimit.Type}")
         };
 
+        // TODO: check for time exhaustion?
         //if (thisMoveSearchLimit.Value < 0) throw new Exception($"Time exhausted {thisMoveSearchLimit.Value} for engine {engine}");
 
         //Console.WriteLine("GameTestThread::ALLOT " + thisMoveSearchLimit);
@@ -488,6 +489,16 @@ namespace Ceres.Features.Tournaments
         {
           checkSearch = checkMoveEngine.Search(curPositionAndMoves, searchLimit);
           checkMove = checkSearch.MoveString;
+        }
+
+        // Verify the engine's move was legal by trying to make it.
+        try
+        {
+          Position positionAfterMoveTest = curPositionAndMoves.FinalPosition.AfterMove(Move.FromUCI(engineMove.MoveString));
+        }
+        catch (Exception exc)
+        {
+          throw new Exception($"Engine {engine.ID} made illegal move {engineMove.MoveString} in position {curPositionAndMoves.FinalPosition.FEN}");
         }
 
         PositionWithHistory newPosition = new PositionWithHistory(curPositionAndMoves);
