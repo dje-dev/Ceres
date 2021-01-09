@@ -36,7 +36,10 @@ namespace Ceres.Chess
     {
       SearchLimit limit = TryParse(specificationString, out string errorString);
       if (limit == null)
-        throw new Exception($"Error parsing SearchLimit specification string {specificationString}");
+      {
+        throw new Exception($"Error parsing SearchLimit specification string {specificationString}. "
+                           + "Expecting a number followed by NM, NG, SM or SG (nodes/seconds per move/game).");
+      }
       else
         return limit;     
     }
