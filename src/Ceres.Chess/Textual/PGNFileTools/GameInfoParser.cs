@@ -166,10 +166,19 @@ namespace Ceres.Chess.Textual.PgnFileTools
       }
       if (ch == '.')
       {
-        _moveNumber = Int32.Parse(_partial.ToString());
-        _partial.Length = 0;
-        _handle = HandleMoveText;
-        return true;
+        if (_partial.Length == 0)
+        {
+          // Silently consume any extra '.' because they could be from a
+          // black first move of game, e.g. "17...Kd5"
+          return true;
+        }
+        else
+        {
+          _moveNumber = Int32.Parse(_partial.ToString());
+          _partial.Length = 0;
+          _handle = HandleMoveText;
+          return true;
+        }
       }
       return false;
     }

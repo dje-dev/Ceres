@@ -105,6 +105,8 @@ namespace Ceres.Chess.Games
     public void WriteMove(MGMove move, Position pos, float? moveTimeSeconds = null, 
                           int? depth = null, float? scoreCentipawns = null)
     {
+      bool isFirstMoveWritten = numPlyWritten == 0;
+
       // Write only two ply (one full move) per line.
       if (numPlyWritten++ % 2 == 0) WriteBodyLine("");
 
@@ -122,8 +124,16 @@ namespace Ceres.Chess.Games
       }
 
       string algebraicStr = MGMoveToString.AlgebraicMoveString(move, pos);
-      if (!move.BlackToMove)
+      if (move.WhiteToMove)
+      {
         WriteBodyString($" {fullMoveNum}.");
+      }
+      else if (isFirstMoveWritten)
+      {
+        // Black makes first move, special case needing to write
+        // move number before black move (see Section 8.2.2.2 of  PGN specification).
+        WriteBodyString($" {fullMoveNum}...");
+      }
 
       WriteBodyString($" {algebraicStr}{comment}");
     }
