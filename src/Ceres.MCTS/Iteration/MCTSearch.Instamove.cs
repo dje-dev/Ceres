@@ -23,7 +23,10 @@ using System;
 
 namespace Ceres.MCTS.Iteration
 {
-  public static partial class MCTSLaunch
+  /// <summary>
+  /// Internal helper method for MCTSearch relating to instant move handling.
+  /// </summary>
+  public partial class MCTSearch
   {
     /// <summary>
     /// Returns instant move that should be made, if any, due to either:

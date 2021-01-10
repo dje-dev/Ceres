@@ -171,7 +171,7 @@ namespace Ceres.Features.UCI
               if (taskSearchCurrentlyExecuting != null)
               {
                 taskSearchCurrentlyExecuting.Wait();
-                if (!debug && taskSearchCurrentlyExecuting != null) taskSearchCurrentlyExecuting.Result?.Manager?.Dispose();
+                if (!debug && taskSearchCurrentlyExecuting != null) taskSearchCurrentlyExecuting.Result?.Search?.Manager?.Dispose();
                 taskSearchCurrentlyExecuting = null;
               }
 
@@ -534,16 +534,17 @@ namespace Ceres.Features.UCI
 
       gameMoveHistory.Add(moveStat);
 
-      MCTSManager manager = result.Manager;
+      if (SearchFinishedEvent != null) SearchFinishedEvent(result.Search.Manager);
 
-      if (SearchFinishedEvent != null) SearchFinishedEvent(manager);
-
-      // Send the final info string
-      Send(UCIInfoString(manager));
+      // Send the final info string (unless this was an instamove).
+      if (result.Search.CountSearchContinuations == 0)
+      {
+        Send(UCIInfoString(result.Search.Manager));
+      }
 
       // Send the best move
-      Send("bestmove " + manager.BestMoveMG.MoveStr(MGMoveNotationStyle.LC0Coordinate));
-      if (debug) Send("info string " + manager.Root.BestMoveInfo(false));
+      Send("bestmove " + result.Search.BestMove.MoveStr(MGMoveNotationStyle.LC0Coordinate));
+      if (debug) Send("info string " + result.Search.BestMoveRoot.BestMoveInfo(false));
 
       return result;
     }

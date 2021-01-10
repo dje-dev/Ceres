@@ -29,15 +29,19 @@ using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.Chess.Positions;
 using Ceres.MCTS.Params;
 using Ceres.Base.Benchmarking;
+using System.Security.Policy;
 
 #endregion
 
 namespace Ceres.MCTS.Iteration
 {
   /// <summary>
-  /// Set of static helper methods which launch MCTS searches.
+  /// Entry point for launching a search and capturing the results.
+
+  /// Note that in most situations instead the class GameEngineCeresInProcess 
+  /// is preferrable as the entry point for launching searches.
   /// </summary>
-  public static partial class MCTSLaunch
+  public partial class MCTSearch
   {
     /// <summary>
     /// Cumulative count of number of instant moves made due to 
@@ -46,20 +50,30 @@ namespace Ceres.MCTS.Iteration
     public static int InstamoveCount { get; private set; }
 
 
-    public static (MCTSManager, MGMove, TimingStats)
-      Search(NNEvaluatorSet nnEvaluators,
-             ParamsSelect paramsSelect,
-             ParamsSearch paramsSearch,
-             IManagerGameLimit timeManager,
-             ParamsSearchExecutionModifier paramsSearchExecutionPostprocessor,
-             MCTSIterator reuseOtherContextForEvaluatedNodes,
-             PositionWithHistory priorMoves,
-             SearchLimit searchLimit, bool verbose,
-             DateTime startTime,
-             List<GameMoveStat> gameMoveHistory,
-             MCTSManager.MCTSProgressCallback progressCallback = null,
-             bool possiblyUsePositionCache = false,
-             bool isFirstMoveOfGame = false)
+    public MCTSManager Manager { get; private set; }
+    public MGMove BestMove { get; private set; }
+    public TimingStats TimingInfo { get; private set; }
+
+    private MCTSNode continationSubroot;
+
+    public MCTSNode BestMoveRoot => continationSubroot != null ? continationSubroot : Manager.Root;
+
+    public int CountSearchContinuations { get; private set; }
+
+
+    public void Search(NNEvaluatorSet nnEvaluators,
+                       ParamsSelect paramsSelect,
+                       ParamsSearch paramsSearch,
+                       IManagerGameLimit timeManager,
+                       ParamsSearchExecutionModifier paramsSearchExecutionPostprocessor,
+                       MCTSIterator reuseOtherContextForEvaluatedNodes,
+                       PositionWithHistory priorMoves,
+                       SearchLimit searchLimit, bool verbose,
+                       DateTime startTime,
+                       List<GameMoveStat> gameMoveHistory,
+                       MCTSManager.MCTSProgressCallback progressCallback = null,
+                       bool possiblyUsePositionCache = false,
+                       bool isFirstMoveOfGame = false)
     {
       int maxNodes;
       if (MCTSParamsFixed.STORAGE_USE_INCREMENTAL_ALLOC)
@@ -82,31 +96,32 @@ namespace Ceres.MCTS.Iteration
 
       MCTSNodeStore store = new MCTSNodeStore(maxNodes, priorMoves);
 
-      MCTSManager manager = new MCTSManager(store, reuseOtherContextForEvaluatedNodes, null, null,
-                                            nnEvaluators, paramsSearch, paramsSelect,
-                                            searchLimit, paramsSearchExecutionPostprocessor, timeManager,
-                                            startTime, null, gameMoveHistory, isFirstMoveOfGame);
+      Manager = new MCTSManager(store, reuseOtherContextForEvaluatedNodes, null, null,
+                                nnEvaluators, paramsSearch, paramsSelect,
+                                searchLimit, paramsSearchExecutionPostprocessor, timeManager,
+                                startTime, null, gameMoveHistory, isFirstMoveOfGame);
 
-      using (new SearchContextExecutionBlock(manager.Context))
+      using (new SearchContextExecutionBlock(Manager.Context))
       {
-        (MGMove move, TimingStats stats) result = MCTSManager.Search(manager, verbose, progressCallback, possiblyUsePositionCache);
-        return (manager, result.move, result.stats);
+        (MGMove move, TimingStats stats) result = MCTSManager.Search(Manager, verbose, progressCallback, possiblyUsePositionCache);
+        BestMove = result.move;
+        TimingInfo = result.stats;
       }
     }
 
 
-
-    public static (MCTSManager, MGMove, TimingStats)
-      SearchContinue(MCTSManager priorManager,
-                     MCTSIterator reuseOtherContextForEvaluatedNodes,
-                     IEnumerable<MGMove> moves, PositionWithHistory newPositionAndMoves,
-                     List<GameMoveStat> gameMoveHistory,
-                     SearchLimit searchLimit,
-                     bool verbose,  DateTime startTime,
-                     MCTSManager.MCTSProgressCallback progressCallback, 
-                     float thresholdMinFractionNodesRetained,
-                     bool isFirstMoveOfGame = false)
+    public void SearchContinue(MCTSManager priorManager,
+                               MCTSIterator reuseOtherContextForEvaluatedNodes,
+                               IEnumerable<MGMove> moves, PositionWithHistory newPositionAndMoves,
+                               List<GameMoveStat> gameMoveHistory,
+                               SearchLimit searchLimit,
+                               bool verbose,  DateTime startTime,
+                               MCTSManager.MCTSProgressCallback progressCallback, 
+                               float thresholdMinFractionNodesRetained,
+                               bool isFirstMoveOfGame = false)
     {
+      Manager = priorManager;
+
       MCTSIterator priorContext = priorManager.Context;
       MCTSNodeStore store = priorContext.Tree.Store;
       int numNodesInitial = priorManager == null ? 0 : priorManager.Root.N;
@@ -124,7 +139,15 @@ namespace Ceres.MCTS.Iteration
         // Check for possible instant move
         (MCTSManager, MGMove, TimingStats) instamove = CheckInstamove(priorManager, searchLimit, newRoot);
 
-        if (instamove != default) return instamove;
+        if (instamove != default)
+        {
+          // Modify in place to point to the new root
+          continationSubroot = newRoot;
+          BestMove = instamove.Item2;
+          TimingInfo = new TimingStats();
+          CountSearchContinuations++;
+          return;
+        }
 
         // TODO: don't reuse tree if it would cause the nodes in use
         //       to exceed a reasonable value for this machine
@@ -204,9 +227,12 @@ namespace Ceres.MCTS.Iteration
                                                     searchLimitAdjusted, priorManager.ParamsSearchExecutionPostprocessor, priorManager.LimitManager, 
                                                     startTime, priorManager, gameMoveHistory, isFirstMoveOfGame: isFirstMoveOfGame);
           manager.Context.ContemptManager = priorContext.ContemptManager;
-
-          (MGMove move, TimingStats stats) result = MCTSManager.Search(manager, verbose, progressCallback, false);
-          return (manager, result.move, result.stats);
+         
+          bool possiblyUsePositionCache = false; // TODO could this be relaxed?
+          (MGMove move, TimingStats stats) result = MCTSManager.Search(manager, verbose, progressCallback, possiblyUsePositionCache);
+          BestMove = result.move;
+          TimingInfo = result.stats;
+          Manager = manager;
         }
 
         else
@@ -215,11 +241,10 @@ namespace Ceres.MCTS.Iteration
           // Just run the search from scratch
           if (verbose) Console.WriteLine("\r\nFailed nSearchFollowingMoves.");
 
-          return Search(priorManager.Context.NNEvaluators, priorManager.Context.ParamsSelect,
+          Search(priorManager.Context.NNEvaluators, priorManager.Context.ParamsSelect,
                         priorManager.Context.ParamsSearch, priorManager.LimitManager,
                         null, reuseOtherContextForEvaluatedNodes, newPositionAndMoves, searchLimit, verbose, 
                         startTime, gameMoveHistory, progressCallback, false);
-          //        priorManager.Context.StartPosAndPriorMoves, searchLimit, verbose, progressCallback, false);
         }
       }
 

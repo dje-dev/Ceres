@@ -86,15 +86,16 @@ namespace Ceres.Commands
       UCISearchInfo lastCeresInfo = null;
 
       // Launch Ceres
-      (MCTSManager worker2, MGMove bestMoveMG2, TimingStats stats2) ceresResults = default;
+      MCTSearch ceresResults = null;
       Task searchCeres = Task.Run(() =>
       {
         ParamsSearch searchParams = new ParamsSearch();
         searchParams.FutilityPruningStopSearchEnabled = !forceDisablePruning;
         PositionWithHistory positionWithHistory = PositionWithHistory.FromFENAndMovesUCI(fen, null);
-        ceresResults = MCTSLaunch.Search(nnEvaluators, new ParamsSelect(), searchParams, null, null, 
-                                         null, positionWithHistory, searchLimit, verbose, DateTime.Now, null,
-                                         manager => lastCeresInfo = new UCISearchInfo(UCIManager.UCIInfoString(manager), null, null), false, true);
+        ceresResults = new MCTSearch();
+        ceresResults.Search(nnEvaluators, new ParamsSelect(), searchParams, null, null, 
+                            null, positionWithHistory, searchLimit, verbose, DateTime.Now, null,
+                            manager => lastCeresInfo = new UCISearchInfo(UCIManager.UCIInfoString(manager), null, null), false, true);
       });
 
       // Possibly launch search for other engine
@@ -152,11 +153,11 @@ namespace Ceres.Commands
       searchCeres.Wait();
       searchComparison?.Wait();
 
-      string infoUpdate = UCIManager.UCIInfoString(ceresResults.worker2);
+      string infoUpdate = UCIManager.UCIInfoString(ceresResults.Manager);
 
-      double q2 = ceresResults.worker2.Root.Q;
+      double q2 = ceresResults.BestMoveRoot.Q;
       //SearchPrincipalVariation pv2 = new SearchPrincipalVariation(worker2.Root);
-      MCTSPosTreeNodeDumper.DumpPV(ceresResults.worker2.Context.StartPosAndPriorMoves, ceresResults.worker2.Context.Root, true, null);
+      MCTSPosTreeNodeDumper.DumpPV(ceresResults.Manager.Context.StartPosAndPriorMoves, ceresResults.BestMoveRoot, true, null);
 
     }
 

@@ -116,7 +116,7 @@ namespace Ceres.MCTS.Environment
       {
         testCounter ??= new PollingCounter("TestCounter", this, () => TestCounter);
 
-        instamoveCounter ??= new PollingCounter("instamove-count", this, () => MCTSLaunch.InstamoveCount);
+        instamoveCounter ??= new PollingCounter("instamove-count", this, () => MCTSearch.InstamoveCount);
 
         storageVirtualAllocBytes ??= new PollingCounter("storage-virtual-alloc-bytes", this, () => WindowsVirtualAllocManager.BytesCurrentlyAllocated);
         

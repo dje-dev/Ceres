@@ -376,44 +376,45 @@ namespace Ceres.Features.Suites
           ceresSearchLimit2 = new SearchLimit(SearchLimitType.NodesPerMove, otherEngineAnalysis2.Nodes);
       }
 
-      MCTSManager worker1, worker2 = default;
-      MGMove bestMoveMG1, bestMoveMG2 = default;
-      TimingStats stats1, stats2 = default;
-
       PositionWithHistory pos = PositionWithHistory.FromFENAndMovesSAN(epdToUse.FEN, epdToUse.StartMoves);
+
+      // TODO: should this be switched to GameEngineCeresInProcess?
 
       // Note that if we are running both Ceres1 and Ceres2 we alternate which search goes first.
       // This prevents any systematic difference/benefit that might come from order
       // (for example if we reuse position evaluations from the other tree, which can benefit only one of the two searches).
+      MCTSearch search1 = null;
+      MCTSearch search2 = null;
+
       if (epdNum % 2 == 0 || Def.CeresEngine2Def == null)
       {
-        (worker1, bestMoveMG1, stats1) 
-          = MCTSLaunch.Search(evaluatorSet1, Def.Engine1Def.SelectParams, Def.Engine1Def.SearchParams, null, null, null,
-                                   pos, ceresSearchLimit1, false, DateTime.Now, null, null, true);
+        search1 = new MCTSearch();
+        search1.Search(evaluatorSet1, Def.Engine1Def.SelectParams, Def.Engine1Def.SearchParams, null, null, null,
+                         pos, ceresSearchLimit1, false, DateTime.Now, null, null, true);
 
         MCTSIterator shareContext = null;
         if (Def.RunCeres2Engine)
         {
-          if (Def.Engine2Def.SearchParams.ReusePositionEvaluationsFromOtherTree) shareContext = worker1.Context;
+          if (Def.Engine2Def.SearchParams.ReusePositionEvaluationsFromOtherTree) shareContext = search1.Manager.Context;
 
-          (worker2, bestMoveMG2, stats2)
-              = MCTSLaunch.Search(evaluatorSet2, Def.Engine2Def.SelectParams, Def.Engine2Def.SearchParams, null, null, shareContext,
-                                  pos, ceresSearchLimit2, false, DateTime.Now, null, null, true);
+          search2 = new MCTSearch();
+          search2.Search(evaluatorSet2, Def.Engine2Def.SelectParams, Def.Engine2Def.SearchParams, null, null, shareContext,
+                         pos, ceresSearchLimit2, false, DateTime.Now, null, null, true);
         }
         
       }
       else
       {
-        (worker2, bestMoveMG2, stats2) 
-          = MCTSLaunch.Search(evaluatorSet2, Def.Engine2Def.SelectParams, Def.Engine2Def.SearchParams, null, null, null,
-                              pos, ceresSearchLimit2, false, DateTime.Now, null, null, true);
+        search2 = new MCTSearch();
+        search2.Search(evaluatorSet2, Def.Engine2Def.SelectParams, Def.Engine2Def.SearchParams, null, null, null,
+                       pos, ceresSearchLimit2, false, DateTime.Now, null, null, true);
 
         MCTSIterator shareContext = null;
-        if (Def.Engine1Def.SearchParams.ReusePositionEvaluationsFromOtherTree) shareContext = worker2.Context;
+        if (Def.Engine1Def.SearchParams.ReusePositionEvaluationsFromOtherTree) shareContext = search2.Manager.Context;
 
-        (worker1, bestMoveMG1, stats1) 
-          = MCTSLaunch.Search(evaluatorSet1, Def.Engine1Def.SelectParams, Def.Engine1Def.SearchParams, null, null, shareContext,
-                              pos, ceresSearchLimit1, false, DateTime.Now, null, null, true);
+        search1 = new MCTSearch();
+        search1.Search(evaluatorSet1, Def.Engine1Def.SelectParams, Def.Engine1Def.SearchParams, null, null, shareContext,
+                       pos, ceresSearchLimit1, false, DateTime.Now, null, null, true);
 
       }
 
@@ -430,8 +431,8 @@ namespace Ceres.Features.Suites
         bestMoveOtherEngine = MGMoveConverter.ToMove(lzMoveMG1);
       }
 
-      Move bestMoveCeres1 = MGMoveConverter.ToMove(bestMoveMG1);
-      Move bestMoveCeres2 = MGMoveConverter.ToMove(bestMoveMG2);
+      Move bestMoveCeres1 = MGMoveConverter.ToMove(search1.BestMove);
+      Move bestMoveCeres2 = search2 == null ? default : MGMoveConverter.ToMove(search2.BestMove);
 
       char CorrectStr(Move move) => epdToUse.CorrectnessScore(move, 10) == 10 ? '+' : '.';
 
@@ -439,18 +440,18 @@ namespace Ceres.Features.Suites
       int scoreCeres2 = epdToUse.CorrectnessScore(bestMoveCeres2, 10);
       int scoreOtherEngine = epdToUse.CorrectnessScore(bestMoveOtherEngine, 10);
 
-      SearchResultInfo result1 = new SearchResultInfo(worker1, bestMoveMG1);
-      SearchResultInfo result2 = worker2 == null ? null : new SearchResultInfo(worker2, bestMoveMG2);
+      SearchResultInfo result1 = new SearchResultInfo(search1.Manager, search1.BestMove);
+      SearchResultInfo result2 = search2 == null ? null : new SearchResultInfo(search2.Manager, search2.BestMove);
 
       accCeres1 += scoreCeres1;
       accCeres2 += scoreCeres2;
 
       // Accumulate how many nodes were required to find one of the correct moves
       // (in the cases where both succeeded)
-      if (scoreCeres1 > 0 && (worker2 == null || scoreCeres2 > 0))
+      if (scoreCeres1 > 0 && (search2 == null || scoreCeres2 > 0))
       {
         accWCeres1 += (scoreCeres1 == 0) ? result1.N : result1.NumNodesWhenChoseTopNNode;
-        if (worker2 != null)
+        if (search2 != null)
         {
           accWCeres2 += (scoreCeres2 == 0) ? result2.N : result2.NumNodesWhenChoseTopNNode;
         }
@@ -474,8 +475,8 @@ namespace Ceres.Features.Suites
       //NodeEvaluatorNeuralNetwork
       int evalNumBatches1 = result1.NumNNBatches;
       int evalNumPos1 = result1.NumNNNodes;
-      int evalNumBatches2 = worker2 == null ? 0 : result2.NumNNBatches;
-      int evalNumPos2 = worker2 == null ? 0 : result2.NumNNNodes;
+      int evalNumBatches2 = search2 == null ? 0 : result2.NumNNBatches;
+      int evalNumPos2 = search2 == null ? 0 : result2.NumNNNodes;
 
       string correctMove = null;
       if (epdToUse.AMMoves != null)
@@ -486,7 +487,7 @@ namespace Ceres.Features.Suites
       float otherEngineTime = otherEngineAnalysis2 == null ? 0 : (float)otherEngineAnalysis2.EngineReportedSearchTime / 1000.0f;
 
       totalTimeOther += otherEngineTime;
-      totalTimeCeres1 += (float)stats1.ElapsedTimeSecs;
+      totalTimeCeres1 += (float)search1.TimingInfo.ElapsedTimeSecs;
 
       totalNodesOther += otherEngineAnalysis2 == null ? 0 : (int)otherEngineAnalysis2.Nodes;
       totalNodes1 += (int)result1.N;
@@ -497,7 +498,7 @@ namespace Ceres.Features.Suites
 
       if (Def.RunCeres2Engine)
       {
-        totalTimeCeres2 += (float)stats2.ElapsedTimeSecs;
+        totalTimeCeres2 += (float)search2.TimingInfo.ElapsedTimeSecs;
         totalNodes2 += (int)result2.N;
         sumEvalNumBatches2 += evalNumBatches2;
         sumEvalNumPos2 += evalNumPos2;
@@ -509,7 +510,7 @@ namespace Ceres.Features.Suites
       string worker2PickedNonTopNMoveStr = result2?.PickedNonTopNMoveStr;
 
       bool ex = otherEngineAnalysis2 != null;
-      bool c2 = worker2 != null;
+      bool c2 = search2 != null;
 
       Writer writer = new Writer(epdNum == 0);
       writer.Add("#", $"{epdNum,4}", 6);
@@ -526,8 +527,8 @@ namespace Ceres.Features.Suites
       if (c2) writer.Add("SC2", $"{scoreCeres2,3}", 5);
 
       if (ex) writer.Add("MEx", $"{otherEngineAnalysis2.BestMove,7}", 9);
-      writer.Add("MC", $"{worker1.BestMoveMG,7}", 9);
-      if (c2) writer.Add("MC2", $"{worker2.BestMoveMG,7}", 9);
+      writer.Add("MC", $"{search1.Manager.BestMoveMG,7}", 9);
+      if (c2) writer.Add("MC2", $"{search2.Manager.BestMoveMG,7}", 9);
 
       writer.Add("Fr", $"{worker1PickedNonTopNMoveStr}{ 100.0f * result1.TopNNodeN / result1.N,3:F0}%", 9);
       if (c2) writer.Add("Fr2", $"{worker2PickedNonTopNMoveStr}{ 100.0f * result2?.TopNNodeN / result2?.N,3:F0}%", 9);
@@ -537,8 +538,8 @@ namespace Ceres.Features.Suites
 
       // Search time
       if (ex) writer.Add("TimeEx", $"{otherEngineTime,7:F2}", 9);
-      writer.Add("TimeC", $"{stats1.ElapsedTimeSecs,7:F2}", 9);
-      if (c2) writer.Add("TimeC2", $"{stats2.ElapsedTimeSecs,7:F2}", 9);
+      writer.Add("TimeC", $"{search1.TimingInfo.ElapsedTimeSecs,7:F2}", 9);
+      if (c2) writer.Add("TimeC2", $"{search2.TimingInfo.ElapsedTimeSecs,7:F2}", 9);
 
       writer.Add("Dep", $"{result1.AvgDepth,5:f1}", 7);
       if (c2) writer.Add("Dep2", $"{result2.AvgDepth,5:f1}", 7);
@@ -567,8 +568,8 @@ namespace Ceres.Features.Suites
       }
 
       // Tablebase hits
-      writer.Add("TBase", $"{worker1.CountTablebaseHits,8:N0}", 10);
-      if (c2) writer.Add("TBase2", $"{worker2.CountTablebaseHits,8:N0}", 10);
+      writer.Add("TBase", $"{(search1.CountSearchContinuations > 0 ? 0 : search1.Manager.CountTablebaseHits),8:N0}", 10);
+      if (c2) writer.Add("TBase2", $"{(search2.CountSearchContinuations > 0 ? 0 : search2.Manager.CountTablebaseHits),8:N0}", 10);
 
 //      writer.Add("EPD", $"{epdToUse.ID,-30}", 32);
 
@@ -584,8 +585,8 @@ namespace Ceres.Features.Suites
 
       //      MCTSNodeStorageSerialize.Save(worker1.Context.Store, @"c:\temp", "TESTSORE");
 
-      worker1?.Dispose();
-      if (!object.ReferenceEquals(worker1, worker2)) worker2?.Dispose();
+      search1?.Manager?.Dispose();
+      if (!object.ReferenceEquals(search1?.Manager, search2?.Manager)) search2?.Manager?.Dispose();
     }
 
 

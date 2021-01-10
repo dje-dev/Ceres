@@ -29,9 +29,9 @@ namespace Ceres.Features.GameEngines
   public record GameEngineSearchResultCeres : GameEngineSearchResult
   {
     /// <summary>
-    /// MCTS manager associated with the search that produced this result.
+    /// MCTSearch used to generate this result.
     /// </summary>
-    public readonly MCTSManager Manager;
+    public readonly MCTSearch Search;
 
 
     /// <summary>
@@ -49,10 +49,10 @@ namespace Ceres.Features.GameEngines
     /// <param name="manager"></param>
     public GameEngineSearchResultCeres(string moveString, float scoreQ, float scoreCentipawns, float mAvg, 
                                        SearchLimit searchLimit, TimingStats timingStats, 
-                                       int startingN, int endingN, int depth, MCTSManager manager)
+                                       int startingN, int endingN, int depth, MCTSearch search)
       : base(moveString, scoreQ, scoreCentipawns, mAvg, searchLimit, timingStats, startingN, endingN, depth)
     {
-      Manager = manager;
+      Search = search;
     }
   }
 }
