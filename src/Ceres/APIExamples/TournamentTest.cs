@@ -50,8 +50,8 @@ namespace Ceres.APIExamples
 
       //      NNEvaluatorDef def0 = NNEvaluatorDefFactory.FromSpecification("LC0:j92-280", "GPU:1:POOLED");// POOLED");//:POOLED");
       //      NNEvaluatorDef def1 = NNEvaluatorDefFactory.FromSpecification("LC0:66666", "GPU:1:POOLED");// POOLED");//:POOLED");
-      NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification("LC0:66666", "GPU:0");// POOLED");//:POOLED");
-      NNEvaluatorDef evalDef2 = NNEvaluatorDefFactory.FromSpecification("LC0:66666", "GPU:0");// POOLED");//:POOLED");
+      NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification("LC0:703810", "GPU:0");// POOLED");//:POOLED");
+      NNEvaluatorDef evalDef2 = NNEvaluatorDefFactory.FromSpecification("LC0:703810", "GPU:0");// POOLED");//:POOLED");
                                                                                               // sv5300 j104.0-10000
                                                                                               //      def1.MakePersistent();
                                                                                               //def1.PersistentID = "PERSIST";
@@ -75,10 +75,10 @@ namespace Ceres.APIExamples
       //      SearchLimit limit2 = SearchLimit.NodesPerMove((int)(2.3f * limit1.Value));
 
       //limit1 = SearchLimit.SecondsForAllMoves(300);
-//      limit1 = SearchLimit.NodesForAllMoves(1_500_000);
-//      limit1 = SearchLimit.SecondsForAllMoves(25);// 20 + 0.5f) ;
-//      limit1 = SearchLimit.SecondsForAllMoves(10);
-      limit1 = SearchLimit.SecondsForAllMoves(60 * 0.5f, 1 * 0.5f);
+      //            limit1 = SearchLimit.NodesForAllMoves(1_500_000);
+      //      limit1 = SearchLimit.SecondsForAllMoves(25, 0.1f);
+      //      limit1 = SearchLimit.SecondsForAllMoves(10);
+      limit1 = SearchLimit.SecondsForAllMoves(60f, 1f);// * 0.33f;
 
 
       GameEngineDefCeres engineDefCeres1 = new GameEngineDefCeres("Ceres1", evalDef1, new ParamsSearch(), null, new ParamsSelect(), null);
@@ -90,7 +90,7 @@ namespace Ceres.APIExamples
 //engineDefCeres2.OverrideTimeManager = new ManagerGameLimitSimple(18);
 
 //engineDefCeres1.SearchParams.EnableInstamoves = false;
-//engineDefCeres2.SearchParams.TestFlag = true;
+//engineDefCeres1.SearchParams.TestFlag = true;
 
       //engineDefCeres2.OverrideTimeManager = new ManagerGameLimitSimple();
 
@@ -149,8 +149,8 @@ namespace Ceres.APIExamples
       //engineDefCeres2.SearchParams.FutilityPruningStopSearchEnabled= false;
       //engineDefLC0.SearchParamsEmulate.FutilityPruningStopSearchEnabled= false;
 
-      TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerLC0);
-//      TournamentDef def = new TournamentDef("TOURN", playerCeres1UCI, playerCeres2UCI);
+//      TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerLC0);
+      TournamentDef def = new TournamentDef("TOURN", playerCeres1UCI, playerCeres2UCI);
 
       //TournamentDef def = new TournamentDef("TOURN", playerLC0Tilps, playerLC0);
 
@@ -161,7 +161,7 @@ namespace Ceres.APIExamples
 
       //      def.StartingFEN = "1q6/2n4k/1r1p1pp1/RP1P2p1/2Q1P1P1/2N4P/3K4/8 b - - 8 71";
       //      def.OpeningsFileName = @"\\synology\dev\chess\data\openings\Drawkiller_500pos_reordered.pgn";//                                                                                                 
-      //def.OpeningsFileName = "TCEC19_NoomenSelect.pgn";
+//      def.OpeningsFileName = "TCEC18_NoomenSelect.pgn";
             def.OpeningsFileName = "TCEC1819.pgn";
 
       //      def.AdjudicationThresholdCentipawns = 500;
