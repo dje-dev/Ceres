@@ -68,9 +68,9 @@ namespace Ceres.Features.GameEngines
     public readonly IManagerGameLimit GameLimitManager;
 
     /// <summary>
-    /// Manager used for previous search.
+    /// Last executed search.
     /// </summary>
-    public MCTSManager LastManager;
+    public MCTSearch LastSearch;
 
     #region Internal data
 
@@ -91,7 +91,7 @@ namespace Ceres.Features.GameEngines
     /// <param name="childSelectParams"></param>
     /// <param name="gameLimitManager"></param>
     /// <param name="paramsSearchExecutionModifier"></param>
-    public GameEngineCeresInProcess(string id, NNEvaluatorDef evaluatorDef, 
+    public GameEngineCeresInProcess(string id, NNEvaluatorDef evaluatorDef,
                                     ParamsSearch searchParams = null,
                                     ParamsSelect childSelectParams = null,
                                     IManagerGameLimit gameLimitManager = null,
@@ -121,11 +121,11 @@ namespace Ceres.Features.GameEngines
     /// </summary>
     public override void ResetGame()
     {
-      LastManager = null;
+      LastSearch = null;
       isFirstMoveOfGame = true;
     }
 
-        /// <summary>
+    /// <summary>
     /// Executes any preparatory steps (that should not be counted in thinking time) before a search.
     /// </summary>
     protected override void DoSearchPrepare()
@@ -158,13 +158,13 @@ namespace Ceres.Features.GameEngines
     /// <param name="gameMoveHistory"></param>
     /// <param name="callback"></param>
     /// <returns></returns>
-    protected override GameEngineSearchResult DoSearch(PositionWithHistory curPositionAndMoves, 
+    protected override GameEngineSearchResult DoSearch(PositionWithHistory curPositionAndMoves,
                                                        SearchLimit searchLimit,
-                                                       List<GameMoveStat> gameMoveHistory, 
+                                                       List<GameMoveStat> gameMoveHistory,
                                                        ProgressCallback callback,
                                                        bool verbose)
     {
-      if (LastManager != null && curPositionAndMoves.InitialPosMG != LastManager.Context.StartPosAndPriorMoves.InitialPosMG)
+      if (LastSearch != null && curPositionAndMoves.InitialPosMG != LastSearch.Manager.Context.StartPosAndPriorMoves.InitialPosMG)
         throw new Exception("ResetGame must be called if not continuing same line");
 
       MCTSearch searchResult;
@@ -179,12 +179,12 @@ namespace Ceres.Features.GameEngines
       {
         GameEngineCeresInProcess ceresOpponentEngine = OpponentEngine as GameEngineCeresInProcess;
 
-        if (LastManager is not null
-         && LastManager.Context.ParamsSearch.ReusePositionEvaluationsFromOtherTree
-         && ceresOpponentEngine?.LastManager != null
-         && LeafEvaluatorReuseOtherTree.ContextsCompatibleForReuse(LastManager.Context, ceresOpponentEngine.LastManager.Context))
+        if (LastSearch is not null
+         && LastSearch.Manager.Context.ParamsSearch.ReusePositionEvaluationsFromOtherTree
+         && ceresOpponentEngine?.LastSearch.Manager != null
+         && LeafEvaluatorReuseOtherTree.ContextsCompatibleForReuse(LastSearch.Manager.Context, ceresOpponentEngine.LastSearch.Manager.Context))
         {
-          shareContext = ceresOpponentEngine.LastManager.Context;
+          shareContext = ceresOpponentEngine.LastSearch.Manager.Context;
 
           // Clear any prior shared context from the shared context
           // to prevent unlimited backward chaining (keeping unneeded prior contexts alive)
@@ -194,13 +194,12 @@ namespace Ceres.Features.GameEngines
 
       void InnerCallback(MCTSManager manager)
       {
-        LastManager = manager;
         callbackMCTS?.Invoke(manager);
       }
 
-    // Run the search
-    searchResult = RunSearchPossiblyTreeReuse(shareContext, curPositionAndMoves, gameMoveHistory, 
-                                                searchLimit, InnerCallback, verbose);
+      // Run the search
+      searchResult = RunSearchPossiblyTreeReuse(shareContext, curPositionAndMoves, gameMoveHistory,
+                                                  searchLimit, InnerCallback, verbose);
 
       int scoreCeresCP = (int)Math.Round(EncodedEvalLogistic.LogisticToCentipawn((float)searchResult.Manager.Root.Q), 0);
 
@@ -208,14 +207,14 @@ namespace Ceres.Features.GameEngines
 
       int N = (int)searchResult.BestMoveRoot.N;
 
-      // Save (do not dispose) last manager in case we can reuse it next time
-      LastManager = searchResult.Manager;
+      // Save (do not dispose) last search in case we can reuse it next time
+      LastSearch = searchResult;
 
       isFirstMoveOfGame = false;
 
       // TODO is the RootNWhenSearchStarted correct because we may be following a continuation (BestMoveRoot)
-      return new GameEngineSearchResultCeres(bestMoveMG.MoveStr(MGMoveNotationStyle.LC0Coordinate), 
-                                             (float)searchResult.BestMoveRoot.Q, scoreCeresCP, searchResult.BestMoveRoot.MAvg, searchResult.Manager.SearchLimit, default, 
+      return new GameEngineSearchResultCeres(bestMoveMG.MoveStr(MGMoveNotationStyle.LC0Coordinate),
+                                             (float)searchResult.BestMoveRoot.Q, scoreCeresCP, searchResult.BestMoveRoot.MAvg, searchResult.Manager.SearchLimit, default,
                                              searchResult.Manager.RootNWhenSearchStarted, N, (int)searchResult.Manager.Context.AvgDepth, searchResult);
     }
 
@@ -232,8 +231,8 @@ namespace Ceres.Features.GameEngines
     /// <returns></returns>
     private MCTSearch RunSearchPossiblyTreeReuse(MCTSIterator reuseOtherContextForEvaluatedNodes,
                                                  PositionWithHistory curPositionAndMoves,
-                                                 List<GameMoveStat> gameMoveHistory, 
-                                                 SearchLimit searchLimit, 
+                                                 List<GameMoveStat> gameMoveHistory,
+                                                 SearchLimit searchLimit,
                                                  MCTSManager.MCTSProgressCallback callback,
                                                  bool verbose)
     {
@@ -243,11 +242,11 @@ namespace Ceres.Features.GameEngines
 
       MCTSearch mctSearch = new MCTSearch();
 
-      if (LastManager == null)
+      if (LastSearch == null)
       {
         if (evaluators == null) evaluators = new NNEvaluatorSet(EvaluatorDef);
 
-        mctSearch.Search(evaluators, ChildSelectParams, SearchParams, GameLimitManager, 
+        mctSearch.Search(evaluators, ChildSelectParams, SearchParams, GameLimitManager,
                       ParamsSearchExecutionModifier,
                       reuseOtherContextForEvaluatedNodes,
                       curPositionAndMoves, searchLimit, verbose, startTime,
@@ -255,11 +254,11 @@ namespace Ceres.Features.GameEngines
         return mctSearch;
       }
 
-      if (LastManager.Context.StartPosAndPriorMoves.InitialPosMG != curPositionAndMoves.InitialPosMG)
-        throw new Exception("Internal error: not same starting position");      
-      
-      List<MGMove> forwardMoves =  new List<MGMove>();
-      List<MGMove> lastMoves = LastManager.Context.StartPosAndPriorMoves.Moves;
+      if (LastSearch.Manager.Context.StartPosAndPriorMoves.InitialPosMG != curPositionAndMoves.InitialPosMG)
+        throw new Exception("Internal error: not same starting position");
+
+      List<MGMove> forwardMoves = new List<MGMove>();
+      List<MGMove> lastMoves = LastSearch.Manager.Context.StartPosAndPriorMoves.Moves;
       for (int i = 0; i < curPositionAndMoves.Moves.Count; i++)
       {
         if (i < lastMoves.Count)
@@ -277,11 +276,11 @@ namespace Ceres.Features.GameEngines
       // (because unused nodes remain in node store) but not appreciably improve search speed.
       //TODO: tweak this parameter, possibly make it larger if small hardwre config is in use
       float THRESHOLD_FRACTION_NODES_REUSABLE = 0.05f;
-      mctSearch.SearchContinue(LastManager, reuseOtherContextForEvaluatedNodes,
-                            forwardMoves, curPositionAndMoves, 
-                            gameMoveHistory, searchLimit, verbose, startTime,
-                            callback, THRESHOLD_FRACTION_NODES_REUSABLE,
-                            isFirstMoveOfGame);
+      mctSearch.SearchContinue(LastSearch, reuseOtherContextForEvaluatedNodes,
+                               forwardMoves, curPositionAndMoves,
+                               gameMoveHistory, searchLimit, verbose, startTime,
+                               callback, THRESHOLD_FRACTION_NODES_REUSABLE,
+                               isFirstMoveOfGame);
 
       return mctSearch;
     }
@@ -290,11 +289,11 @@ namespace Ceres.Features.GameEngines
     public override void DumpMoveHistory(List<GameMoveStat> gameMoveHistory, SideType? side)
     {
       // TODO: fill in increemental time below (last argument)
-      ManagerGameLimitInputs timeManagerInputs = new (LastManager.Context.StartPosAndPriorMoves.FinalPosition,
-                                                LastManager.Context.ParamsSearch,
+      ManagerGameLimitInputs timeManagerInputs = new(LastSearch.Manager.Context.StartPosAndPriorMoves.FinalPosition,
+                                                LastSearch.Manager.Context.ParamsSearch,
                                                 gameMoveHistory, SearchLimitType.SecondsPerMove,
-                                                LastManager.Root.N, (float)LastManager.Root.Q,
-                                                LastManager.SearchLimit.Value, 0, 0, 0);
+                                                LastSearch.Manager.Root.N, (float)LastSearch.Manager.Root.Q,
+                                                LastSearch.Manager.SearchLimit.Value, 0, 0, 0);
       timeManagerInputs.Dump(side);
     }
 
@@ -308,8 +307,8 @@ namespace Ceres.Features.GameEngines
     {
       get
       {
-        if (LastManager != null)
-          return new UCISearchInfo(UCIManager.UCIInfoString(LastManager));
+        if (LastSearch != null)
+          return new UCISearchInfo(UCIManager.UCIInfoString(LastSearch.Manager));
         else
           return null;
       }
@@ -324,8 +323,8 @@ namespace Ceres.Features.GameEngines
       evaluators?.Dispose();
       evaluators = null;
 
-      LastManager?.Dispose();
-      LastManager = null;
+      LastSearch?.Manager.Dispose();
+      LastSearch = null;
     }
 
   }

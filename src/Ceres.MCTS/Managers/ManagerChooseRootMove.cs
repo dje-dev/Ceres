@@ -100,12 +100,12 @@ namespace Ceres.MCTS.Managers
         if (Node.NumChildrenExpanded == 0)
         {
           // No visits, create a node for the first child (which will be move with highest prior)
-          return new BestMoveInfo(Node.CreateChild(0), float.NaN, 0, 1, 0);
+          return new BestMoveInfo(Node.CreateChild(0), float.NaN, 0, 0, 0);
         }
         else if (Node.NumChildrenExpanded == 1)
         {
           MCTSNode onlyChild = Node.ChildAtIndex(0);
-          return new BestMoveInfo(onlyChild, (float)onlyChild.Q, onlyChild.N, TopNRatio, 0);
+          return new BestMoveInfo(onlyChild, (float)onlyChild.Q, onlyChild.N, BestNSecond, 0);
         }
 
         return DoCalcBestMove();
@@ -113,17 +113,18 @@ namespace Ceres.MCTS.Managers
     }
 
     /// <summary>
-    /// Returns the ratio of the highest N to second highest N at root.
+    /// N of the move having second best N.
     /// </summary>
-    private float TopNRatio
+    private float BestNSecond
     {
       get
       {
         MCTSNode[] childrenSortedN = Node.ChildrenSorted(node => -node.N);
 
-        if (childrenSortedN.Length < 2) return 1.0f;
-        return (float)childrenSortedN[0].N 
-             / (float)childrenSortedN[1].N;
+        if (childrenSortedN.Length < 2)
+          return childrenSortedN[0].N;
+        else
+          return childrenSortedN[1].N;
       }
     }
 
@@ -169,7 +170,7 @@ namespace Ceres.MCTS.Managers
 
       // First see if any were forced losses for the child (i.e. wins for us)
       if (childrenSortedQ.Length == 1 || ParamsSelect.VIsForcedLoss((float)childrenSortedQ[0].Q))
-        return new BestMoveInfo(childrenSortedQ[0], (float)childrenSortedQ[0].Q, childrenSortedN[0].N, TopNRatio, 0); // TODO: look for quickest win?
+        return new BestMoveInfo(childrenSortedQ[0], (float)childrenSortedQ[0].Q, childrenSortedN[0].N, BestNSecond, 0); // TODO: look for quickest win?
 
       int thisMoveNum = Node.Context.StartPosAndPriorMoves.Moves.Count / 2; // convert ply to moves
 
@@ -181,7 +182,7 @@ namespace Ceres.MCTS.Managers
         // TODO: currently only supported for sorting by N
         MCTSNode bestMoveWithNoise = BestMoveByNWithNoise(childrenSortedN);
         return new BestMoveInfo(bestMoveWithNoise, (float)childrenSortedN[0].Q, childrenSortedN[0].N,
-                                TopNRatio, MLHBoostForNode(bestMoveWithNoise, mAvgOfBestQ)); // TODO: look for quickest win?
+                                BestNSecond, MLHBoostForNode(bestMoveWithNoise, mAvgOfBestQ)); // TODO: look for quickest win?
       }
       else
       {
@@ -189,7 +190,7 @@ namespace Ceres.MCTS.Managers
         {
           // Just return best N (note that tiebreaks are already decided with sort logic above)
           return new BestMoveInfo(childrenSortedN[0], (float)childrenSortedN[0].Q, childrenSortedN[0].N,
-                                  TopNRatio, 0); // TODO: look for quickest win?
+                                  BestNSecond, 0); // TODO: look for quickest win?
         }
         else if (Node.Context.ParamsSearch.BestMoveMode == ParamsSearch.BestMoveModeEnum.TopQIfSufficientN)
         {
@@ -221,13 +222,13 @@ namespace Ceres.MCTS.Managers
               }
 
               return new BestMoveInfo(candidate, (float)childrenSortedN[0].Q, childrenSortedN[0].N,
-                                      TopNRatio, MLHBoostForNode(candidate, mAvgOfBestQ)); // TODO: look for quickest win?
+                                      BestNSecond, MLHBoostForNode(candidate, mAvgOfBestQ)); // TODO: look for quickest win?
             }
           }
 
           // We didn't find any moves qualified by Q, fallback to move with highest N
           return new BestMoveInfo(childrenSortedN[0], (float)childrenSortedN[0].Q, childrenSortedN[0].N,
-                                  TopNRatio, 0);
+                                  BestNSecond, 0);
         }
         else
           throw new Exception("Internal error, unknown BestMoveMode");

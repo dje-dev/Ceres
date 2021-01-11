@@ -59,9 +59,9 @@ namespace Ceres.MCTS.MTCSNodes
     public readonly float BestN;
 
     /// <summary>
-    /// Ratio of the highest N to second highest N at root.
+    /// The N of the move having second largest N (or same as BestN if none).
     /// </summary>
-    public float TopMovesNRatio;
+    public float BestNSecond;
 
     /// <summary>
     /// The optional moves left head bonus applied in selecting this move.
@@ -75,9 +75,9 @@ namespace Ceres.MCTS.MTCSNodes
     /// <param name="node"></param>
     /// <param name="bestQ"></param>
     /// <param name="bestN"></param>
-    /// <param name="topMovesNRatio"></param>
+    /// <param name="bestNSecond"></param>
     /// <param name="mlhBonusApplied"></param>
-    internal BestMoveInfo(MCTSNode node, float bestQ, float bestN, float topMovesNRatio, float mlhBonusApplied)
+    internal BestMoveInfo(MCTSNode node, float bestQ, float bestN, float bestNSecond, float mlhBonusApplied)
     {
       BestMoveNode = node;
       BestMove = node.Annotation.PriorMoveMG;
@@ -85,7 +85,7 @@ namespace Ceres.MCTS.MTCSNodes
       Q = (float)node.Q;
       BestQ = bestQ;
       BestN = bestN;
-      TopMovesNRatio = topMovesNRatio;
+      BestNSecond = bestNSecond;
       MLHBonusApplied = mlhBonusApplied;
     }
 
@@ -99,7 +99,7 @@ namespace Ceres.MCTS.MTCSNodes
       string bestNStr = BestN == N ? "(same)" : $"{BestN:N0}";
       string bestQStr = BestQ == Q ? "(same)" : $"{BestQ:F2}";
       string mlhStr = MLHBonusApplied == 0 ? "" : $" MLHBonus={MLHBonusApplied}";
-      return $"<BestMoveInfo {BestMove.MoveStr(MGMoveNotationStyle.LC0Coordinate)} N={N} Q={Q} BestN={bestNStr} BestQ={bestQStr} TopNR={TopMovesNRatio,5:F1} {mlhStr}>";
+      return $"<BestMoveInfo {BestMove.MoveStr(MGMoveNotationStyle.LC0Coordinate)} N={N} Q={Q} BestN={bestNStr} BestQ={bestQStr} BestN2={BestNSecond,5:F1} {mlhStr}>";
     }
   }
 }

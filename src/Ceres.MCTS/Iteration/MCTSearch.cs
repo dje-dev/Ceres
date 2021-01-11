@@ -89,6 +89,12 @@ namespace Ceres.MCTS.Iteration
 
     #endregion
 
+    /// <summary>
+    /// Constructor.
+    /// </summary>
+    public MCTSearch()
+    {
+    }
 
     /// <summary>
     /// Runs a new search.
@@ -160,7 +166,7 @@ namespace Ceres.MCTS.Iteration
     /// Runs a search, possibly continuing from node 
     /// nested in a prior search (tree reuse).
     /// </summary>
-    /// <param name="priorManager"></param>
+    /// <param name="priorSearch"></param>
     /// <param name="reuseOtherContextForEvaluatedNodes"></param>
     /// <param name="moves"></param>
     /// <param name="newPositionAndMoves"></param>
@@ -171,7 +177,7 @@ namespace Ceres.MCTS.Iteration
     /// <param name="progressCallback"></param>
     /// <param name="thresholdMinFractionNodesRetained"></param>
     /// <param name="isFirstMoveOfGame"></param>
-    public void SearchContinue(MCTSManager priorManager,
+    public void SearchContinue(MCTSearch priorSearch,
                                MCTSIterator reuseOtherContextForEvaluatedNodes,
                                IEnumerable<MGMove> moves, PositionWithHistory newPositionAndMoves,
                                List<GameMoveStat> gameMoveHistory,
@@ -181,16 +187,17 @@ namespace Ceres.MCTS.Iteration
                                float thresholdMinFractionNodesRetained,
                                bool isFirstMoveOfGame = false)
     {
-      Manager = priorManager;
+      CountSearchContinuations = priorSearch.CountSearchContinuations;
+      Manager = priorSearch.Manager;
 
-      MCTSIterator priorContext = priorManager.Context;
+      MCTSIterator priorContext = Manager.Context;
       MCTSNodeStore store = priorContext.Tree.Store;
-      int numNodesInitial = priorManager == null ? 0 : priorManager.Root.N;
+      int numNodesInitial = Manager == null ? 0 : Manager.Root.N;
 
       MCTSNodeStructIndex newRootIndex;
       using (new SearchContextExecutionBlock(priorContext))
       {
-        MCTSNode newRoot = FollowMovesToNode(priorManager.Root, moves);
+        MCTSNode newRoot = FollowMovesToNode(Manager.Root, moves);
 
         // New root is not useful if contained no search
         // (for example if it was resolved via tablebase)
@@ -198,7 +205,7 @@ namespace Ceres.MCTS.Iteration
         if (newRoot != null && (newRoot.N == 0 || newRoot.NumPolicyMoves == 0)) newRoot = null;
 
         // Check for possible instant move
-        (MCTSManager, MGMove, TimingStats) instamove = CheckInstamove(priorManager, searchLimit, newRoot);
+        (MCTSManager, MGMove, TimingStats) instamove = CheckInstamove(Manager, searchLimit, newRoot);
 
         if (instamove != default)
         {
@@ -206,8 +213,11 @@ namespace Ceres.MCTS.Iteration
           continationSubroot = newRoot;
           BestMove = instamove.Item2;
           TimingInfo = new TimingStats();
-          CountSearchContinuations++;
           return;
+        }
+        else
+        {
+          CountSearchContinuations = 0;
         }
 
         // TODO: don't reuse tree if it would cause the nodes in use
@@ -230,7 +240,7 @@ namespace Ceres.MCTS.Iteration
           {
             float bestQ = (float)bestMove.Q;
             float actualQ = (float)opponentsPriorMove.Q;
-            priorManager.Context.ContemptManager.RecordOpponentMove(actualQ, bestQ);
+            Manager.Context.ContemptManager.RecordOpponentMove(actualQ, bestQ);
             //Console.WriteLine("Record " + actualQ + " vs best " + bestQ + " target contempt " + priorManager.Context.ContemptManager.TargetContempt);
           }
         }
@@ -241,7 +251,7 @@ namespace Ceres.MCTS.Iteration
         {
           SearchLimit searchLimitAdjusted = searchLimit;
 
-          if (priorManager.Context.ParamsSearch.Execution.TranspositionMode != TranspositionMode.None)
+          if (Manager.Context.ParamsSearch.Execution.TranspositionMode != TranspositionMode.None)
           {
             // The MakeChildNewRoot method is not able to handle transposition linkages
             // (this would be complicated and could involve linkages to nodes no longer in the retained subtree).
@@ -254,7 +264,7 @@ namespace Ceres.MCTS.Iteration
 
           // Now rewrite the tree nodes and children "in situ"
           PositionEvalCache reusePositionCache = null;
-          if (priorManager.Context.ParamsSearch.TreeReuseRetainedPositionCacheEnabled)
+          if (Manager.Context.ParamsSearch.TreeReuseRetainedPositionCacheEnabled)
             reusePositionCache = new PositionEvalCache(0);
 
           TranspositionRootsDict newTranspositionRoots = null;
@@ -270,7 +280,7 @@ namespace Ceres.MCTS.Iteration
           TimingStats makeNewRootTimingStats = new TimingStats();
           using (new TimingBlock(makeNewRootTimingStats, TimingBlock.LoggingType.None))
           {
-            MCTSNodeStructStorage.MakeChildNewRoot(store, priorManager.Context.ParamsSelect.PolicySoftmax, ref newRoot.Ref, newPositionAndMoves,
+            MCTSNodeStructStorage.MakeChildNewRoot(store, Manager.Context.ParamsSelect.PolicySoftmax, ref newRoot.Ref, newPositionAndMoves,
                                                    reusePositionCache, newTranspositionRoots);
           }
           MCTSManager.TotalTimeSecondsInMakeNewRoot += (float)makeNewRootTimingStats.ElapsedTimeSecs;
@@ -285,8 +295,8 @@ namespace Ceres.MCTS.Iteration
           // Construct a new search manager reusing this modified store and modified transposition roots
           MCTSManager manager = new MCTSManager(store, reuseOtherContextForEvaluatedNodes, reusePositionCache, newTranspositionRoots,
                                                     priorContext.NNEvaluators, priorContext.ParamsSearch, priorContext.ParamsSelect,
-                                                    searchLimitAdjusted, priorManager.ParamsSearchExecutionPostprocessor, priorManager.LimitManager, 
-                                                    startTime, priorManager, gameMoveHistory, isFirstMoveOfGame: isFirstMoveOfGame);
+                                                    searchLimitAdjusted, Manager.ParamsSearchExecutionPostprocessor, Manager.LimitManager, 
+                                                    startTime, Manager, gameMoveHistory, isFirstMoveOfGame: isFirstMoveOfGame);
           manager.Context.ContemptManager = priorContext.ContemptManager;
          
           bool possiblyUsePositionCache = false; // TODO could this be relaxed?
@@ -302,10 +312,10 @@ namespace Ceres.MCTS.Iteration
           // Just run the search from scratch
           if (verbose) Console.WriteLine("\r\nFailed nSearchFollowingMoves.");
 
-          Search(priorManager.Context.NNEvaluators, priorManager.Context.ParamsSelect,
-                        priorManager.Context.ParamsSearch, priorManager.LimitManager,
-                        null, reuseOtherContextForEvaluatedNodes, newPositionAndMoves, searchLimit, verbose, 
-                        startTime, gameMoveHistory, progressCallback, false);
+          Search(Manager.Context.NNEvaluators, Manager.Context.ParamsSelect,
+                 Manager.Context.ParamsSearch, Manager.LimitManager,
+                 null, reuseOtherContextForEvaluatedNodes, newPositionAndMoves, searchLimit, verbose, 
+                 startTime, gameMoveHistory, progressCallback, false);
         }
       }
 
