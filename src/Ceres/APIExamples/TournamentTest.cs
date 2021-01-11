@@ -25,6 +25,7 @@ using Ceres.Features.Tournaments;
 using Ceres.Features.GameEngines;
 using Ceres.MCTS.Params;
 using Ceres.Base.Benchmarking;
+using Ceres.MCTS.Managers.Limits;
 
 #endregion
 
@@ -49,8 +50,8 @@ namespace Ceres.APIExamples
 
       //      NNEvaluatorDef def0 = NNEvaluatorDefFactory.FromSpecification("LC0:j92-280", "GPU:1:POOLED");// POOLED");//:POOLED");
       //      NNEvaluatorDef def1 = NNEvaluatorDefFactory.FromSpecification("LC0:66666", "GPU:1:POOLED");// POOLED");//:POOLED");
-      NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification("LC0:66740", "GPU:0");// POOLED");//:POOLED");
-      NNEvaluatorDef evalDef2 = NNEvaluatorDefFactory.FromSpecification("LC0:66740", "GPU:0");// POOLED");//:POOLED");
+      NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification("LC0:66666", "GPU:0");// POOLED");//:POOLED");
+      NNEvaluatorDef evalDef2 = NNEvaluatorDefFactory.FromSpecification("LC0:66666", "GPU:0");// POOLED");//:POOLED");
                                                                                               // sv5300 j104.0-10000
                                                                                               //      def1.MakePersistent();
                                                                                               //def1.PersistentID = "PERSIST";
@@ -61,7 +62,7 @@ namespace Ceres.APIExamples
       //      SearchLimit slLC0 = SearchLimit.NodesPerMove(10_000);
       //      SearchLimit slEthereal = slLC0 * 875;
       //      SearchLimit slSF = slLC0 * 875;
-     
+
       //specEthereal = specSF;
 
       string[] extraUCI = null;// new string[] {"setoption name Contempt value 5000" };
@@ -73,15 +74,27 @@ namespace Ceres.APIExamples
       SearchLimit limit1 = SearchLimit.NodesPerMove(10_000);
       //      SearchLimit limit2 = SearchLimit.NodesPerMove((int)(2.3f * limit1.Value));
 
-      //limit = SearchLimit.SecondsForAllMoves(60);
-      //limit = SearchLimit.SecondsForAllMoves(60, 1f);
-      //limit = SearchLimit.SecondsForAllMoves(120, 0.5f);
+      //limit1 = SearchLimit.SecondsForAllMoves(300);
+//      limit1 = SearchLimit.NodesForAllMoves(1_500_000);
+//      limit1 = SearchLimit.SecondsForAllMoves(25);// 20 + 0.5f) ;
+//      limit1 = SearchLimit.SecondsForAllMoves(10);
+      limit1 = SearchLimit.SecondsForAllMoves(60 * 0.5f, 1 * 0.5f);
 
 
       GameEngineDefCeres engineDefCeres1 = new GameEngineDefCeres("Ceres1", evalDef1, new ParamsSearch(), null, new ParamsSelect(), null);
       GameEngineDefCeres engineDefCeres2 = new GameEngineDefCeres("Ceres2", evalDef2, new ParamsSearch(), null, new ParamsSelect(), null);
+//engineDefCeres1.OverrideTimeManager = new ManagerGameLimitCeres();
+//engineDefCeres2.OverrideTimeManager = new ManagerGameLimitCeres();
 
-      bool forceDisableSmartPruning = limit1.IsNodesLimit;
+//engineDefCeres1.OverrideTimeManager = new ManagerGameLimitCeres();
+//engineDefCeres2.OverrideTimeManager = new ManagerGameLimitSimple(18);
+
+//engineDefCeres1.SearchParams.EnableInstamoves = false;
+//engineDefCeres2.SearchParams.TestFlag = true;
+
+      //engineDefCeres2.OverrideTimeManager = new ManagerGameLimitSimple();
+
+      bool forceDisableSmartPruning = false;// limit1.IsNodesLimit;
       if (forceDisableSmartPruning)
       {
         engineDefCeres1.SearchParams.FutilityPruningStopSearchEnabled = false;
@@ -92,7 +105,8 @@ namespace Ceres.APIExamples
       GameEngineDef engineDefStockfish12 = new GameEngineDefUCI("SF12", new GameEngineUCISpec("SF12", SF12_EXE, NUM_THREADS, HASH_SIZE_MB, TB_PATH, uciSetOptionCommands: extraUCI));
 
       //GameEngineDef engineDefCeresUCI = new GameEngineDefUCI("CeresUCI", new GameEngineUCISpec("CeresUCI", @"c:\dev\ceres\artifacts\release\net5.0\ceres.exe"));
-      GameEngineDef engineDefCeresUCI = new GameEngineDefCeresUCI("CeresUCI", evalDef1, overrideEXE: @"c:\dev\ceres\artifacts\release\net5.0\ceres.exe");
+      GameEngineDef engineDefCeresUCI1 = new GameEngineDefCeresUCI("CeresUCINew", evalDef1, overrideEXE: @"C:\dev\Ceres\artifacts\release\net5.0\ceres.exe");
+      GameEngineDef engineDefCeresUCI2 = new GameEngineDefCeresUCI("CeresUCIGit", evalDef2, overrideEXE: @"C:\dev\Ceres.github\Ceres\artifacts\release\net5.0\ceres.exe");
 
 
       GameEngineDefLC0 engineDefLC1 = new GameEngineDefLC0("LC0_0", evalDef1, forceDisableSmartPruning, null, null);
@@ -100,8 +114,8 @@ namespace Ceres.APIExamples
                                                                 overrideEXE: @"c:\dev\lc0\lc_263\lc0_TILPS6.EXE",
                                                                 extraCommandLineArgs: "--max-out-of-order-evals-factor=2.4 --max-collision-events=917");
 
-      EnginePlayerDef playerCeres1UCI = new EnginePlayerDef(engineDefCeresUCI, limit1);
-      EnginePlayerDef playerCeres2UCI = new EnginePlayerDef(engineDefCeresUCI, limit1);
+      EnginePlayerDef playerCeres1UCI = new EnginePlayerDef(engineDefCeresUCI1, limit1);
+      EnginePlayerDef playerCeres2UCI = new EnginePlayerDef(engineDefCeresUCI2, limit1);
 
       EnginePlayerDef playerCeres1 = new EnginePlayerDef(engineDefCeres1, limit1);
       EnginePlayerDef playerCeres2 = new EnginePlayerDef(engineDefCeres2, limit1);
@@ -135,7 +149,9 @@ namespace Ceres.APIExamples
       //engineDefCeres2.SearchParams.FutilityPruningStopSearchEnabled= false;
       //engineDefLC0.SearchParamsEmulate.FutilityPruningStopSearchEnabled= false;
 
-      TournamentDef def = new TournamentDef("TOURN", playerLC0Tilps, playerLC0);
+      TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerLC0);
+//      TournamentDef def = new TournamentDef("TOURN", playerCeres1UCI, playerCeres2UCI);
+
       //TournamentDef def = new TournamentDef("TOURN", playerLC0Tilps, playerLC0);
 
       def.NumGamePairs = 50;
@@ -145,8 +161,8 @@ namespace Ceres.APIExamples
 
       //      def.StartingFEN = "1q6/2n4k/1r1p1pp1/RP1P2p1/2Q1P1P1/2N4P/3K4/8 b - - 8 71";
       //      def.OpeningsFileName = @"\\synology\dev\chess\data\openings\Drawkiller_500pos_reordered.pgn";//                                                                                                 
-      def.OpeningsFileName = "TCEC19_NoomenSelect.pgn";
-      //      def.OpeningsFileName = "TCEC1819.pgn";
+      //def.OpeningsFileName = "TCEC19_NoomenSelect.pgn";
+            def.OpeningsFileName = "TCEC1819.pgn";
 
       //      def.AdjudicationThresholdCentipawns = 500;
       //      def.AdjudicationThresholdNumMoves = 3;
@@ -167,6 +183,10 @@ namespace Ceres.APIExamples
       Console.WriteLine();
       Console.WriteLine($"Tournament completed in {stats.ElapsedTimeSecs,8:F2} seconds.");
       Console.WriteLine(results.GameOutcomesString);
+
+      Console.WriteLine();
+      Console.WriteLine("<CRLF> to continue");
+      Console.ReadLine();
     }
 
   }
