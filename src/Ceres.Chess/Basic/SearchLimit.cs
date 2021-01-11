@@ -182,6 +182,20 @@ namespace Ceres.Chess
     #endregion
 
 
+    public SearchLimit ConvertedGameToMoveLimit
+    {
+      get
+      {
+        if (Type == SearchLimitType.NodesForAllMoves)
+          return this with { Type = SearchLimitType.NodesPerMove };
+        else if (Type == SearchLimitType.SecondsForAllMoves)
+          return this with { Type = SearchLimitType.SecondsPerMove };
+        else
+          return this;
+      }
+    }
+
+
     public string TypeShortStr => Type switch
     {
       SearchLimitType.NodesForAllMoves => "NG",

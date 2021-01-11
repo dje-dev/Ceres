@@ -53,6 +53,11 @@ namespace Ceres.Commands
       // Add in all the fields from the base class
       parms.ParseBaseFields(args);
 
+      if (parms.SearchLimit != null)
+        parms.SearchLimit = parms.SearchLimit.ConvertedGameToMoveLimit;
+      if (parms.SearchLimitOpponent != null)
+        parms.SearchLimitOpponent = parms.SearchLimitOpponent.ConvertedGameToMoveLimit;
+
       if (parms.Opponent != null && parms.SearchLimit != parms.SearchLimitOpponent)
         throw new Exception("Unequal search limits not currently supported for ANALYZE command");
 

@@ -18,6 +18,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection.PortableExecutable;
 using Ceres.Base.DataTypes;
+using Ceres.Chess;
 using Ceres.Chess.UserSettings;
 using Ceres.Features.GameEngines;
 using Ceres.Features.Players;
@@ -49,6 +50,11 @@ namespace Ceres.Commands
 
       // Add in all the fields from the base class
       parms.ParseBaseFields(args);
+
+      if (parms.SearchLimit != null)
+        parms.SearchLimit = parms.SearchLimit.ConvertedGameToMoveLimit;
+      if (parms.SearchLimitOpponent != null)
+        parms.SearchLimitOpponent = parms.SearchLimitOpponent.ConvertedGameToMoveLimit;
 
       return parms;
     }
