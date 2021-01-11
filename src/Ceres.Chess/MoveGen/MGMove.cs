@@ -178,8 +178,14 @@ namespace Ceres.Chess.MoveGen
     /// Returns if the move is a promotion.
     /// </summary>
     public bool IsPromotion => (Flags & PromotionFlags) != 0;
-    
-    
+
+
+    /// <summary>
+    /// Returns if white is to move.
+    /// </summary>
+    public bool WhiteToMove => !BlackToMove;
+
+
     /// <summary>
     /// Returns if black is to move.
     /// </summary>
@@ -189,6 +195,7 @@ namespace Ceres.Chess.MoveGen
       get => (Flags & MGChessMoveFlags.BlackToMove) != 0;
       set { if (value) Flags |= MGChessMoveFlags.BlackToMove; else Flags &= ~MGChessMoveFlags.BlackToMove; }
     }
+
 
     /// <summary>
     /// Resets the move 50 counter.

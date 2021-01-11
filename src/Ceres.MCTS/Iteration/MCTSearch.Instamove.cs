@@ -13,11 +13,12 @@
 
 #region Using directives
 
-using Ceres.Chess.MoveGen;
-using Ceres.MCTS.MTCSNodes;
+using System;
+
 using Ceres.Base.Benchmarking;
 using Ceres.Chess;
-using System;
+using Ceres.Chess.MoveGen;
+using Ceres.MCTS.MTCSNodes;
 
 #endregion
 
@@ -36,14 +37,22 @@ namespace Ceres.MCTS.Iteration
     /// <param name="priorManager"></param>
     /// <param name="newRoot"></param>
     /// <returns></returns>
-    static (MCTSManager, MGMove, TimingStats) CheckInstamove(MCTSManager priorManager, 
-                                                             SearchLimit searchLimit, 
-                                                             MCTSNode newRoot)
+    (MCTSManager, MGMove, TimingStats) CheckInstamove(MCTSManager priorManager, 
+                                                      SearchLimit searchLimit, 
+                                                      MCTSNode newRoot)
     {
-      if (newRoot != null && priorManager != null
+
+      if (newRoot != null 
+        && priorManager != null
         && priorManager.Context.ParamsSearch.FutilityPruningStopSearchEnabled
         && priorManager.Context.ParamsSearch.EnableInstamoves)
       {
+        // Don't make too many instamoves in a row because
+        // time control state has been improved by the instamoves, 
+        // so further search may now be warranted.
+        const int MAX_CONSECUTIVE_INSTAMOVES = 2;
+        if (CountSearchContinuations >= MAX_CONSECUTIVE_INSTAMOVES)
+          return default;
 
         if (double.IsNaN(priorManager.EstimatedNPS)) return default;
 
@@ -58,13 +67,16 @@ namespace Ceres.MCTS.Iteration
 
         // Key parameter which determines how "sure" the top move
         // must be to selected as an instamove.
-        const float INSTAMOVE_SURENESS_THRESHOLD = 5;
+        // The threshold increases with the number of already-done continuations,
+        // to gently discourage too many consecutive instamoves unless they are compelling.
+        float instamoveSurenessThreshold = 4 + (2 * CountSearchContinuations);
 
         if (!bestMoveInfo.BestMove.IsNull)
         {
-          if (surenessFactor >= INSTAMOVE_SURENESS_THRESHOLD)
+          if (surenessFactor >= instamoveSurenessThreshold)
           {
             InstamoveCount++;
+            CountSearchContinuations++;
             return (priorManager, newRoot.BestMoveInfo(false).BestMove, null);
           }
         }

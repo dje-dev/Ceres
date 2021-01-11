@@ -17,19 +17,19 @@ using System;
 using System.Collections.Generic;
 
 using Ceres.Base.Environment;
+using Ceres.Base.Benchmarking;
+
 using Ceres.Chess;
 using Ceres.Chess.GameEngines;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
+using Ceres.Chess.Positions;
 using Ceres.Chess.PositionEvalCaching;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.Managers.Limits;
 using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.MTCSNodes.Struct;
-using Ceres.Chess.Positions;
 using Ceres.MCTS.Params;
-using Ceres.Base.Benchmarking;
-using System.Security.Policy;
 
 #endregion
 
@@ -44,23 +44,69 @@ namespace Ceres.MCTS.Iteration
   public partial class MCTSearch
   {
     /// <summary>
+    /// The underlying serach manager.
+    /// </summary>
+    public MCTSManager Manager { get; private set; }
+
+    /// <summary>
+    /// Selected best move from last search.
+    /// </summary>
+    public MGMove BestMove { get; private set; }
+
+    /// <summary>
+    /// Time statistics of last search.
+    /// </summary>
+    public TimingStats TimingInfo { get; private set; }
+
+
+    /// <summary>
+    /// The node in the tree which was the root for the last search,
+    /// possible not the root of the whole tree if the
+    /// the last search was satisifed directly from tree reuse.
+    /// </summary>
+    public MCTSNode BestMoveRoot => continationSubroot != null ? continationSubroot : Manager.Root;
+
+
+    #region Tree reuse related
+
+    /// <summary>
     /// Cumulative count of number of instant moves made due to 
     /// tree at start of search combined with a best move well ahead of others.
     /// </summary>
     public static int InstamoveCount { get; private set; }
 
-
-    public MCTSManager Manager { get; private set; }
-    public MGMove BestMove { get; private set; }
-    public TimingStats TimingInfo { get; private set; }
-
+    /// <summary>
+    /// If not null, the non-root node which was used
+    /// to satisfy the last search request (out of tree reuse).
+    /// </summary>
     private MCTSNode continationSubroot;
 
-    public MCTSNode BestMoveRoot => continationSubroot != null ? continationSubroot : Manager.Root;
-
+    /// <summary>
+    /// The number of times a search from this tree
+    /// has been satisfied out of tree reuse (no actual search).
+    /// </summary>
     public int CountSearchContinuations { get; private set; }
 
+    #endregion
 
+
+    /// <summary>
+    /// Runs a new search.
+    /// </summary>
+    /// <param name="nnEvaluators"></param>
+    /// <param name="paramsSelect"></param>
+    /// <param name="paramsSearch"></param>
+    /// <param name="timeManager"></param>
+    /// <param name="paramsSearchExecutionPostprocessor"></param>
+    /// <param name="reuseOtherContextForEvaluatedNodes"></param>
+    /// <param name="priorMoves"></param>
+    /// <param name="searchLimit"></param>
+    /// <param name="verbose"></param>
+    /// <param name="startTime"></param>
+    /// <param name="gameMoveHistory"></param>
+    /// <param name="progressCallback"></param>
+    /// <param name="possiblyUsePositionCache"></param>
+    /// <param name="isFirstMoveOfGame"></param>
     public void Search(NNEvaluatorSet nnEvaluators,
                        ParamsSelect paramsSelect,
                        ParamsSearch paramsSearch,
@@ -110,6 +156,21 @@ namespace Ceres.MCTS.Iteration
     }
 
 
+    /// <summary>
+    /// Runs a search, possibly continuing from node 
+    /// nested in a prior search (tree reuse).
+    /// </summary>
+    /// <param name="priorManager"></param>
+    /// <param name="reuseOtherContextForEvaluatedNodes"></param>
+    /// <param name="moves"></param>
+    /// <param name="newPositionAndMoves"></param>
+    /// <param name="gameMoveHistory"></param>
+    /// <param name="searchLimit"></param>
+    /// <param name="verbose"></param>
+    /// <param name="startTime"></param>
+    /// <param name="progressCallback"></param>
+    /// <param name="thresholdMinFractionNodesRetained"></param>
+    /// <param name="isFirstMoveOfGame"></param>
     public void SearchContinue(MCTSManager priorManager,
                                MCTSIterator reuseOtherContextForEvaluatedNodes,
                                IEnumerable<MGMove> moves, PositionWithHistory newPositionAndMoves,
@@ -267,6 +328,12 @@ namespace Ceres.MCTS.Iteration
 #endif
     }
 
+    /// <summary>
+    /// Attempts to find a subnode by following specified moves from root.
+    /// </summary>
+    /// <param name="priorRoot"></param>
+    /// <param name="movesMade"></param>
+    /// <returns></returns>
     static MCTSNode FollowMovesToNode(MCTSNode priorRoot, IEnumerable<MGMove> movesMade)
     {
       PositionWithHistory startingPriorMove = priorRoot.Context.StartPosAndPriorMoves;

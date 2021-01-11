@@ -36,6 +36,7 @@ using System.Collections.Generic;
 using Ceres.MCTS.Params;
 using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.Base.OperatingSystem;
+using Ceres.MCTS.MTCSNodes;
 
 #endregion
 
@@ -537,10 +538,7 @@ namespace Ceres.Features.UCI
       if (SearchFinishedEvent != null) SearchFinishedEvent(result.Search.Manager);
 
       // Send the final info string (unless this was an instamove).
-      if (result.Search.CountSearchContinuations == 0)
-      {
-        Send(UCIInfoString(result.Search.Manager));
-      }
+      Send(UCIInfoString(result.Search.Manager, result.Search.BestMoveRoot));
 
       // Send the best move
       Send("bestmove " + result.Search.BestMove.MoveStr(MGMoveNotationStyle.LC0Coordinate));
@@ -549,29 +547,44 @@ namespace Ceres.Features.UCI
       return result;
     }
 
-    public static string UCIInfoString(MCTSManager manager)
+    public static string UCIInfoString(MCTSManager manager, MCTSNode bestMoveRoot = null)
     {
-      float elapsedTimeSeconds = (float)(DateTime.Now - manager.StartTimeThisSearch).TotalSeconds;
+      // If no override bestMoveRoot was specified
+      // then it is assumed the move chosen was from the root (not an instamove)
+      if (bestMoveRoot == null) bestMoveRoot = manager.Root;
 
-      float scoreCentipawn = MathF.Round(EncodedEvalLogistic.LogisticToCentipawn((float)manager.Root.Q), 0);
+      bool wasInstamove = manager.Root != bestMoveRoot;
+
+      float elapsedTimeSeconds = wasInstamove ? 0 : (float)(DateTime.Now - manager.StartTimeThisSearch).TotalSeconds;
+
+      float scoreCentipawn = MathF.Round(EncodedEvalLogistic.LogisticToCentipawn((float)bestMoveRoot.Q), 0);
       float nps = manager.NumStepsTakenThisSearch / elapsedTimeSeconds;
 
       SearchPrincipalVariation pv;
       using (new SearchContextExecutionBlock(manager.Context))
       {
-        pv = new SearchPrincipalVariation(manager.Root);
+        pv = new SearchPrincipalVariation(bestMoveRoot);
       }
 
       //info depth 12 seldepth 27 time 30440 nodes 51100 score cp 105 hashfull 241 nps 1678 tbhits 0 pv e6c6 c5b4 d5e4 d1e1 
       int selectiveDepth = pv.Nodes.Count - 1;
-      int depth = (int)MathF.Round(manager.Context.AvgDepth, 0);
+      int depthOfBestMoveInTree = wasInstamove ? bestMoveRoot.Depth : 0;
+      int depth = (int)MathF.Round(manager.Context.AvgDepth - depthOfBestMoveInTree, 0);
 
-      // TODO: tb, hashfull
-      string infoUpdate = $"info depth {depth} seldepth {selectiveDepth} time {elapsedTimeSeconds * 1000.0f:F0} "
-                        + $"nodes {manager.Root.N:F0} score cp {scoreCentipawn:F0} tbhits {manager.CountTablebaseHits} nps {nps:F0} "
-                        + $"pv {pv.ShortStr()} string M= {manager.Root.MAvg:F0}";
 
-      return infoUpdate;
+      if (wasInstamove)
+      {
+        // Note that the correct tablebase hits cannot be easily calculated and reported
+        return $"info depth {depth} seldepth {selectiveDepth} time 0 "
+             + $"nodes {bestMoveRoot.N:F0} score cp {scoreCentipawn:F0} tbhits {manager.CountTablebaseHits} nps 0 "
+             + $"pv {pv.ShortStr()} string M= {bestMoveRoot.MAvg:F0} instamove";
+      }
+      else
+      {
+        return $"info depth {depth} seldepth {selectiveDepth} time {elapsedTimeSeconds * 1000.0f:F0} "
+             + $"nodes {manager.Root.N:F0} score cp {scoreCentipawn:F0} tbhits {manager.CountTablebaseHits} nps {nps:F0} "
+             + $"pv {pv.ShortStr()} string M= {manager.Root.MAvg:F0}";
+      }
     }
 
   }
