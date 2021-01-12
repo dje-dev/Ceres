@@ -224,13 +224,15 @@ namespace Ceres.Features.Suites
       {
         if (Def.ExternalEngineDef.EngineDef is GameEngineDefLC0)
         {
-          bool forceDisableSmartPruning = (Def.ExternalEngineDef.EngineDef as GameEngineDefLC0).ForceDisableSmartPruning;
+          GameEngineDefLC0 lc0EngineDef = Def.ExternalEngineDef.EngineDef as GameEngineDefLC0;
+          bool forceDisableSmartPruning = lc0EngineDef.ForceDisableSmartPruning;
           makeExternalEngine = () =>
           {
             LC0Engine engine = LC0EngineConfigured.GetLC0Engine(null, null, Def.Engine1Def.EvaluatorDef,
                                                                 NNWeightsFiles.LookupNetworkFile(Def.Engine1Def.EvaluatorDef.Nets[0].Net.NetworkID),
                                                                 true,
-                                                                false, leelaVerboseMovesStats, forceDisableSmartPruning);
+                                                                false, leelaVerboseMovesStats, forceDisableSmartPruning,
+                                                                lc0EngineDef.OverrideEXE, false, lc0EngineDef.ExtraCommandLineArgs);
             // WARMUP
             engine.AnalyzePositionFromFEN(Position.StartPosition.FEN, null, SearchLimit.NodesPerMove(1));
             return engine;
