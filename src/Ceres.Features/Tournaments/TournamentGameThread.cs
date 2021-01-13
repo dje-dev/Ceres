@@ -408,8 +408,11 @@ namespace Ceres.Features.Tournaments
           return MakeGameInfo(TournamentGameResult.Draw);
 
         // Check for draw according to tablebase
-        result = TournamentUtils.GetGameResultFromTablebase(curPositionAndMoves, engine2IsWhite, useTablebasesForAdjudication);
-        if (result != TournamentGameResult.None) return MakeGameInfo(result);
+        if (!string.IsNullOrEmpty(CeresUserSettingsManager.Settings.DirTablebases))
+        {
+          result = TournamentUtils.GetGameResultFromTablebase(curPositionAndMoves, engine2IsWhite, useTablebasesForAdjudication);
+          if (result != TournamentGameResult.None) return MakeGameInfo(result);
+        }
 
         plyCount++;
 
