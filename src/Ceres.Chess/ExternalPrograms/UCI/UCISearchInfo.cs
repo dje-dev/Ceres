@@ -99,7 +99,11 @@ namespace Ceres.Chess.ExternalPrograms.UCI
       {
         if (RawString == null) return null;
         int indexPV = RawString.IndexOf(" pv ");
-        return RawString[(indexPV + 4)..];
+        string stripped = RawString[(indexPV + 4)..];
+        if (stripped.Contains(" string "))
+          stripped = stripped.Substring(0, stripped.IndexOf(" string"));
+        return stripped;
+        
       }
     }
 
