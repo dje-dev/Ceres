@@ -98,8 +98,8 @@ namespace Ceres.Chess.ExternalPrograms.UCI
       get
       {
         if (RawString == null) return null;
-        int indexPV = RawString.IndexOf("pv");
-        return RawString[(indexPV + 3)..];
+        int indexPV = RawString.IndexOf(" pv ");
+        return RawString[(indexPV + 4)..];
       }
     }
 
