@@ -74,8 +74,11 @@ namespace Ceres.Features.Tournaments
 
     public long TotalNodesEngine1 = 0;
     public long TotalNodesEngine2 = 0;
+    public int TotalMovesEngine1 = 0;
+    public int TotalMovesEngine2 = 0;
     public float TotalTimeEngine1 = 0;
     public float TotalTimeEngine2 = 0;
+    public float NumGames;
 
     public TournamentGameRunner Run;
 
@@ -262,8 +265,12 @@ namespace Ceres.Features.Tournaments
 
       TotalNodesEngine1 += thisResult.TotalNodesEngine1;
       TotalNodesEngine2 += thisResult.TotalNodesEngine2;
+      TotalMovesEngine1 += thisResult.PlyCount;
+      TotalMovesEngine2 += thisResult.PlyCount;
       TotalTimeEngine1 += thisResult.TotalTimeEngine1;
       TotalTimeEngine2 += thisResult.TotalTimeEngine2;
+
+      NumGames++;
     }
 
 

@@ -184,13 +184,17 @@ namespace Ceres.Features.Tournaments
       // Calculate and write summary line
       long totalNodesEngine1 = gameThreads.Sum(g => g.TotalNodesEngine1);
       long totalNodesEngine2 = gameThreads.Sum(g => g.TotalNodesEngine2);
+      int totalMovesEngine1 = gameThreads.Sum(g => g.TotalMovesEngine1);
+      int totalMovesEngine2 = gameThreads.Sum(g => g.TotalMovesEngine2);
       float totalTimeEngine1 = gameThreads.Sum(g => g.TotalTimeEngine1);
       float totalTimeEngine2 = gameThreads.Sum(g => g.TotalTimeEngine2);
+      float numGames = gameThreads.Sum(g => g.NumGames);
 
-      Def.Logger.WriteLine("                                                  --------  --------    ----------------  ----------------");
+      Def.Logger.WriteLine("					          --------  --------    --------------  --------------   ----"); 
       Def.Logger.Write("                                                 ");
-      Def.Logger.Write($"{totalTimeEngine1,9:F2} {totalTimeEngine2,9:F2}   ");
-      Def.Logger.WriteLine($"{totalNodesEngine1,17:N0} {totalNodesEngine2,17:N0}   ");
+      Def.Logger.Write($"{totalTimeEngine1,9:F2} {totalTimeEngine2,9:F2} ");
+      Def.Logger.Write($"{totalNodesEngine1,17:N0} {totalNodesEngine2,15:N0}   ");
+      Def.Logger.Write($"{totalMovesEngine1 / numGames,4:F0}");
 
       Def.Logger.WriteLine();
       parentTest.Dump();
