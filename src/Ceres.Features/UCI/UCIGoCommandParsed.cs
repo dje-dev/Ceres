@@ -157,9 +157,21 @@ namespace Ceres.Features.UCI
               IncrementOpponent = TakeIntToken();
             break;
 
+          case "depth":
+            int depth = TakeIntToken();
+            if (depth < 100)
+            {
+              Console.WriteLine($"Unsupported UCI go mode: {token}");
+            }
+            else
+            {
+              // Some clients may always send very large depths (like 9999).
+              // Since these are effecitvely never binding, just ignore them.
+            }
+            break;
+
           case "moves":
           case "mate":
-          case "depth":
           case "ponder":
           case "searchmoves":
             Console.WriteLine($"Unsupported UCI go mode: {token}");
