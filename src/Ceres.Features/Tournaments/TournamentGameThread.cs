@@ -158,6 +158,8 @@ namespace Ceres.Features.Tournaments
     }
 
 
+    HashSet<int> openingsFinishedAtLeastOnce = new();
+
     private void RunGame(string pgnFileName, bool engine2White, int openingIndex, 
                          int gameSequenceNum, int roundNumber)
     {
@@ -243,8 +245,8 @@ namespace Ceres.Features.Tournaments
         Console.WriteLine($"Games will be incrementally written to file: {pgnFileName}");
         Console.WriteLine();
 
-        Console.WriteLine("  ELO   +/-  LOS   GAME#     TIME    TH#   OP#       TIME1     TIME2        NODES 1          NODES 2      PLY    RES    W   D   L   FEN");
-        Console.WriteLine("  ---   ---  ---   ----   --------   ---   ---    --------  --------    --------------  --------------   ----    ---    -   -   -   --------------------------------------------------");
+        Console.WriteLine("  ELO   +/-  LOS   GAME#     TIME    TH#   OP#     TIME1   TIME2        NODES 1          NODES 2      PLY   RES    W   D   L   FEN");
+        Console.WriteLine("  ---   ---  ---   ----   --------   ---   ---    ------  ------    --------------  --------------   ----   ---    -   -   -   --------------------------------------------------");
         havePrintedHeaders = true;
       }
 
@@ -254,12 +256,15 @@ namespace Ceres.Features.Tournaments
 
       string wdlStr = $"{ParentStats.Player1Wins,3} {ParentStats.Draws,3} {ParentStats.Player1Losses,3}";
 
+      // Show a "." after the opening index if this was the second of the pair of games played.
+      string openingPlayedBothWaysStr = openingsFinishedAtLeastOnce.Contains(openingIndex) ? "." : " ";
+
       if (Def.ShowGameMoves) Def.Logger.WriteLine();
       Def.Logger.Write($"{eloAvg,5:0} {eloSD,4:0} {100.0f * los,5:0}  ");
-      Def.Logger.Write($"{ParentStats.NumGames,5} {DateTime.Now.ToString().Split(" ")[1],10}  {gameSequenceNum,4:F0}  {openingIndex,4:F0}   ");
-      Def.Logger.Write($"{thisResult.TotalTimeEngine1,9:F2} {thisResult.TotalTimeEngine2,9:F2}   ");
+      Def.Logger.Write($"{ParentStats.NumGames,5} {DateTime.Now.ToString().Split(" ")[1],10}  {gameSequenceNum,4:F0}  {openingIndex,4:F0}{openingPlayedBothWaysStr}  ");
+      Def.Logger.Write($"{thisResult.TotalTimeEngine1,7:F2} {thisResult.TotalTimeEngine2,7:F2}   ");
       Def.Logger.Write($"{thisResult.TotalNodesEngine1,15:N0} {thisResult.TotalNodesEngine2,15:N0}   ");
-      Def.Logger.Write($"{thisResult.PlyCount,4:F0}  {TournamentUtils.ResultStr(thisResult.Result, engine2White),5}  ");
+      Def.Logger.Write($"{thisResult.PlyCount,4:F0}  {TournamentUtils.ResultStr(thisResult.Result, engine2White),4}  ");
       Def.Logger.Write($"{wdlStr}   {thisResult.FEN} ");
       Def.Logger.WriteLine();
 
@@ -270,6 +275,7 @@ namespace Ceres.Features.Tournaments
       TotalTimeEngine1 += thisResult.TotalTimeEngine1;
       TotalTimeEngine2 += thisResult.TotalTimeEngine2;
 
+      openingsFinishedAtLeastOnce.Add(openingIndex);
       NumGames++;
     }
 
