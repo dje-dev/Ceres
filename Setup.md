@@ -41,7 +41,7 @@ This file contains various configuration entries (some required, some optional).
 If Ceres launched run without a Ceres.json file in the working directory,
 the user will be prompted to enter the values of 4 required configuration settings.
 These will then be used to initialize a functional Ceres.json file, which 
-can then be customzied at will using a text editor (or the SETOPT command in Ceres).
+can then be customized at will using a text editor (or the SETOPT command in Ceres).
 
 The following is a complete [example](SetupExample.png) of this setup process, followed by a 
 simple UCI search command using the newly configured settings.

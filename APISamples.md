@@ -33,7 +33,7 @@ J94-80: 30x384 WDL MLH     <NNPositionEvaluation V=  0.51 Policy= g2g3 [ 90.22%]
 ### Human grandmaster move agreement analysis 
 The second sample extracts a large subset of games from a set
 of top chess players in history and compares their actual moves made
-against an LC0 policy network, quantifying the aggrement to 
+against an LC0 policy network, quantifying the agreement to 
 assess their strength and/or similarity to the playing style of 
 the Leela networks.
 
