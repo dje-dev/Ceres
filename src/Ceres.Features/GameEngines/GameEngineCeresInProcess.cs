@@ -68,7 +68,12 @@ namespace Ceres.Features.GameEngines
     public readonly IManagerGameLimit GameLimitManager;
 
     /// <summary>
-    /// Last executed search.
+    /// Current or most recently executed search.
+    /// </summary>
+    public MCTSearch Search;
+
+    /// <summary>
+    /// Search conducted prior to current search.
     /// </summary>
     public MCTSearch LastSearch;
 
@@ -121,6 +126,7 @@ namespace Ceres.Features.GameEngines
     /// </summary>
     public override void ResetGame()
     {
+      Search = null;
       LastSearch = null;
       isFirstMoveOfGame = true;
     }
@@ -240,18 +246,18 @@ namespace Ceres.Features.GameEngines
 
       PositionEvalCache positionCacheOpponent = null;
 
-      MCTSearch mctSearch = new MCTSearch();
+      Search = new MCTSearch(); 
 
       if (LastSearch == null)
       {
         if (evaluators == null) evaluators = new NNEvaluatorSet(EvaluatorDef);
 
-        mctSearch.Search(evaluators, ChildSelectParams, SearchParams, GameLimitManager,
+        Search.Search(evaluators, ChildSelectParams, SearchParams, GameLimitManager,
                       ParamsSearchExecutionModifier,
                       reuseOtherContextForEvaluatedNodes,
                       curPositionAndMoves, searchLimit, verbose, startTime,
                       gameMoveHistory, callback, false, isFirstMoveOfGame);
-        return mctSearch;
+        return Search;
       }
 
       if (LastSearch.Manager.Context.StartPosAndPriorMoves.InitialPosMG != curPositionAndMoves.InitialPosMG)
@@ -276,13 +282,13 @@ namespace Ceres.Features.GameEngines
       // (because unused nodes remain in node store) but not appreciably improve search speed.
       //TODO: tweak this parameter, possibly make it larger if small hardwre config is in use
       float THRESHOLD_FRACTION_NODES_REUSABLE = 0.05f;
-      mctSearch.SearchContinue(LastSearch, reuseOtherContextForEvaluatedNodes,
-                               forwardMoves, curPositionAndMoves,
-                               gameMoveHistory, searchLimit, verbose, startTime,
-                               callback, THRESHOLD_FRACTION_NODES_REUSABLE,
-                               isFirstMoveOfGame);
+      Search.SearchContinue(LastSearch, reuseOtherContextForEvaluatedNodes,
+                                   forwardMoves, curPositionAndMoves,
+                                   gameMoveHistory, searchLimit, verbose, startTime,
+                                   callback, THRESHOLD_FRACTION_NODES_REUSABLE,
+                                   isFirstMoveOfGame);
 
-      return mctSearch;
+      return Search;
     }
 
 
@@ -322,6 +328,9 @@ namespace Ceres.Features.GameEngines
     {
       evaluators?.Dispose();
       evaluators = null;
+
+      Search?.Manager.Dispose();
+      Search = null;
 
       LastSearch?.Manager.Dispose();
       LastSearch = null;
