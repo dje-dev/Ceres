@@ -129,8 +129,13 @@ namespace Ceres.Features.Tournaments
         // if REUSE_POSITION_EVALUATIONS_FROM_OTHER_TREE is true.
         // Therefore we alternate each pair which one goes first.
         int roundNumber = 1 + gameSequenceNum / 2;
-        RunGame(pgnFileName, numPairsProcessed % 2 == 0, openingIndex, gameSequenceNum, roundNumber);
-        RunGame(pgnFileName, numPairsProcessed % 2 == 1, openingIndex, gameSequenceNum + 1, roundNumber);
+
+        // Alternate which side gets white to avoid any clustered imbalance
+        // which could happen if multiple threads are active
+        // (possibly otherwise all first giving white to one particular side).
+        bool engine2White = (numPairsProcessed + runnerIndex) % 2 == 0;
+        RunGame(pgnFileName, engine2White, openingIndex, gameSequenceNum, roundNumber);
+        RunGame(pgnFileName, !engine2White, openingIndex, gameSequenceNum + 1, roundNumber);
 
         numPairsProcessed++;
       }
