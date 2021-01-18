@@ -314,7 +314,7 @@ namespace Ceres.Features.GameEngines
       get
       {
         if (LastSearch != null)
-          return new UCISearchInfo(UCIManager.UCIInfoString(LastSearch.Manager));
+          return new UCISearchInfo(UCIManager.UCIInfoString(Search.Manager, Search.BestMoveRoot));
         else
           return null;
       }
