@@ -37,6 +37,7 @@ using Ceres.MCTS.Params;
 using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.Base.OperatingSystem;
 using Ceres.MCTS.MTCSNodes;
+using Ceres.Base.Misc;
 
 #endregion
 
@@ -72,7 +73,7 @@ namespace Ceres.Features.UCI
     /// </summary>
     public GameEngineCeresInProcess CeresEngine;
 
-    Task<GameEngineSearchResultCeres> taskSearchCurrentlyExecuting;
+    volatile Task<GameEngineSearchResultCeres> taskSearchCurrentlyExecuting;
 
     bool haveInitializedEngine;
 
@@ -82,10 +83,7 @@ namespace Ceres.Features.UCI
     PositionWithHistory curPositionAndMoves;
     bool curPositionIsContinuationOfPrior;
 
-    MCTSIterator curContext => curManager.Context;
-
     List<GameMoveStat> gameMoveHistory = new List<GameMoveStat>();
-    MCTSManager curManager;
 
     bool stopIsPending;
     bool debug = false;
@@ -131,8 +129,7 @@ namespace Ceres.Features.UCI
     public void PlayUCI()
     {
       // Default to the startpos.
-      curPositionAndMoves = PositionWithHistory.FromFENAndMovesUCI(Position.StartPosition.FEN, null);
-      curManager = null;
+      curPositionAndMoves = PositionWithHistory.FromFENAndMovesUCI(Position.StartPosition.FEN);
       gameMoveHistory = new List<GameMoveStat>();
 
       while (true)
@@ -162,13 +159,7 @@ namespace Ceres.Features.UCI
             {
               stopIsPending = true;
 
-              // TODO: cleanup
-              //       Possible race condition, curManager is only set in search callback which may not have hit yet
-              //       Fix eventually by rewriting SerchManager to have a constructor and then non-static Search method,
-              //       os we can get the context in this class directly after construction
-              while (curManager == null) Thread.Sleep(1); // **** TEMPORARY ***
-
-              curManager.ExternalStopRequested = true;
+              CeresEngine.Search.Manager.ExternalStopRequested = true;
               if (taskSearchCurrentlyExecuting != null)
               {
                 taskSearchCurrentlyExecuting.Wait();
@@ -178,7 +169,6 @@ namespace Ceres.Features.UCI
 
             }
 
-            curManager = null;
             stopIsPending = false;
 
             break;
@@ -210,9 +200,9 @@ namespace Ceres.Features.UCI
             break;
 
           case "quit":
-            if (curManager != null)
+            if (taskSearchCurrentlyExecuting != null)
             {
-              curManager.ExternalStopRequested = true;
+              CeresEngine.Search.Manager.ExternalStopRequested = true;
               taskSearchCurrentlyExecuting?.Wait();
             }
 
@@ -244,11 +234,11 @@ namespace Ceres.Features.UCI
 
           // Proprietary commands
           case "lc0-config":
-            if (curManager != null)
+            if (CeresEngine?.Search != null)
             {
               string netID = EvaluatorDef.Nets[0].Net.NetworkID;
               INNWeightsFileInfo netDef = NNWeightsFiles.LookupNetworkFile(netID);
-              (string exe, string options) = LC0EngineConfigured.GetLC0EngineOptions(null, null, curContext.EvaluatorDef, netDef, false, false);
+              (string exe, string options) = LC0EngineConfigured.GetLC0EngineOptions(null, null, CeresEngine.Search.Manager.Context.EvaluatorDef, netDef, false, false);
               Console.WriteLine("info string " + exe + " " + options);
             }
             else
@@ -257,8 +247,8 @@ namespace Ceres.Features.UCI
             break;
 
           case "dump-params":
-            if (curManager != null)
-              curManager.DumpParams();
+            if (CeresEngine?.Search != null)
+              CeresEngine?.Search.Manager.DumpParams();
             else
               Console.WriteLine("info string No search manager created");
             break;
@@ -268,27 +258,27 @@ namespace Ceres.Features.UCI
             break;
 
           case "dump-time":
-            if (curManager != null)
-              curManager.DumpTimeInfo();
+            if (CeresEngine?.Search != null)
+              CeresEngine?.Search.Manager.DumpTimeInfo();
             else
               Console.WriteLine("info string No search manager created");
             break;
 
           case "dump-store": 
-            if (curManager != null)
+            if (CeresEngine?.Search != null)
             {
-              using (new SearchContextExecutionBlock(curContext))
-                curManager.Context.Tree.Store.Dump(true);
+              using (new SearchContextExecutionBlock(CeresEngine.Search.Manager.Context))
+                CeresEngine.Search.Manager.Context.Tree.Store.Dump(true);
             }
             else
               Console.WriteLine("info string No search manager created");
             break;
 
           case "dump-move-stats":
-            if (curManager != null)
+            if (CeresEngine?.Search != null)
             {
-              using (new SearchContextExecutionBlock(curContext))
-                curManager.Context.Root.Dump(1, 1, prefixString:"info string ");
+              using (new SearchContextExecutionBlock(CeresEngine.Search.Manager.Context))
+                CeresEngine.Search.Manager.Context.Root.Dump(1, 1, prefixString:"info string ");
             }
             else
               Console.WriteLine("info string No search manager created");
@@ -324,12 +314,13 @@ namespace Ceres.Features.UCI
     /// <param name="withDetail"></param>
     private void DumpPV(bool withDetail)
     {
-      if (curManager != null)
+      if (CeresEngine?.Search != null)
       {
-        using (new SearchContextExecutionBlock(curContext))
+        using (new SearchContextExecutionBlock(CeresEngine?.Search.Manager.Context))
         {
-          SearchPrincipalVariation pv2 = new SearchPrincipalVariation(curContext.Root);
-          MCTSPosTreeNodeDumper.DumpPV(curContext.StartPosAndPriorMoves, curContext.Root, withDetail, null);
+          SearchPrincipalVariation pv2 = new SearchPrincipalVariation(CeresEngine.Search.Manager.Root);
+          MCTSPosTreeNodeDumper.DumpPV(CeresEngine.Search.Manager.Context.StartPosAndPriorMoves, 
+                                       CeresEngine.Search.Manager.Context.Root, withDetail, null);
         }
       }
       else
@@ -358,39 +349,12 @@ namespace Ceres.Features.UCI
     /// <param name="command"></param>
     private void ProcessPosition(string command)
     {
-      string[] parts = command.Split(" ");
+      command = StringUtils.WhitespaceRemoved(command).ToLower();
+      string startFENAndMoves = command.Substring(9); // strip off position
+      
+      startFENAndMoves = startFENAndMoves.Replace("startpos", Position.StartPosition.FEN);
 
-      string fen;
-      int nextIndex;
-
-      string startFEN;
-      switch (parts[1])
-      {
-        case "fen":
-          fen = command.Substring(command.IndexOf("fen") + 4);
-          nextIndex = 2;
-          while (parts.Length > nextIndex && parts[nextIndex] != "moves")
-            fen = fen + " " + parts[nextIndex++];
-          startFEN = fen;
-          break;
-
-        case "startpos":
-          startFEN = Position.StartPosition.FEN;
-          nextIndex = 2;
-          break;
-
-        default:
-          throw new Exception("invalid " + command);
-      }
-
-      string movesSubstring = "";
-      if (parts.Length > nextIndex && parts[nextIndex] == "moves")
-      {
-        for (int i = nextIndex + 1; i < parts.Length; i++)
-          movesSubstring += parts[i] + " ";
-      }
-
-      PositionWithHistory newPositionAndMoves = PositionWithHistory.FromFENAndMovesUCI(startFEN, movesSubstring);
+      PositionWithHistory newPositionAndMoves = PositionWithHistory.FromFENAndMovesUCI(startFENAndMoves);
 
       curPositionIsContinuationOfPrior = newPositionAndMoves.IsIdenticalToPriorToLastMove(curPositionAndMoves);
       if (!curPositionIsContinuationOfPrior && CeresEngine != null)
@@ -501,16 +465,14 @@ namespace Ceres.Features.UCI
       MCTSManager.MCTSProgressCallback callback =
         (manager) =>
         {
-          curManager = manager;
-
           DateTime now = DateTime.Now;
           float timeSinceLastUpdate = (float)(now - lastInfoUpdate).TotalSeconds;
 
           bool isFirstUpdate = numUpdatesSent == 0;
           float UPDATE_INTERVAL_SECONDS = isFirstUpdate ? 0.1f : 0.5f;
-          if (curManager != null && timeSinceLastUpdate > UPDATE_INTERVAL_SECONDS && curManager.Root.N > 0)
+          if (manager != null && timeSinceLastUpdate > UPDATE_INTERVAL_SECONDS && manager.Root.N > 0)
           {
-            Send(UCIInfoString(curManager));
+            Send(UCIInfoString(manager));
 
             numUpdatesSent++;
             lastInfoUpdate = now;
