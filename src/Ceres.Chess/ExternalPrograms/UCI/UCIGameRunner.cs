@@ -154,13 +154,12 @@ namespace Ceres.Chess.ExternalPrograms.UCI
     }
 
 
-    public UCISearchInfo EvalPositionToMovetime(string fen, string movesString, int moveTimeMilliseconds)
+    public UCISearchInfo EvalPositionToMovetime(string fenAndMovesString, int moveTimeMilliseconds)
     {
-      return EvalPosition(fen, movesString, "movetime", moveTimeMilliseconds);
+      return EvalPosition(fenAndMovesString, "movetime", moveTimeMilliseconds);
     }
 
-    public UCISearchInfo EvalPositionRemainingTime(string fen,
-                                                   string movesString,
+    public UCISearchInfo EvalPositionRemainingTime(string fenAndMovesString,
                                                    bool whiteToMove,
                                                    int? movesToGo,
                                                    int remainingTimeMilliseconds, 
@@ -170,13 +169,13 @@ namespace Ceres.Chess.ExternalPrograms.UCI
       string moveStr = $"go {prefixChar}time {Math.Max(1, remainingTimeMilliseconds)}";
       if (incrementTimeMilliseconds > 0) moveStr += $" {prefixChar}inc {incrementTimeMilliseconds}";
       if (movesToGo.HasValue) moveStr += " movestogo " + movesToGo.Value;
-      return EvalPosition(fen, movesString, null, 0, moveStr);
+      return EvalPosition(fenAndMovesString, null, 0, moveStr);
     }
 
 
-    public UCISearchInfo EvalPositionToNodes(string fen, string movesString, int numNodes)
+    public UCISearchInfo EvalPositionToNodes(string fenAndMovesString, int numNodes)
     {
-      return EvalPosition(fen, movesString, "nodes", numNodes);
+      return EvalPosition(fenAndMovesString, "nodes", numNodes);
     }
 
 
@@ -228,7 +227,27 @@ namespace Ceres.Chess.ExternalPrograms.UCI
     /// <param name="moveMetric"></param>
     /// <param name="moveOverrideString"></param>
     /// <returns></returns>
-    public UCISearchInfo EvalPosition(string fen, string movesString, 
+    public UCISearchInfo EvalPosition(string fen, string movesString,
+                                      string moveType, int moveMetric,
+                                      string moveOverrideString = null)
+    {
+      string fenAndMovesStr = fen;
+      if (movesString != null && movesString != "")
+        fenAndMovesStr = fen + " moves " + movesString;
+
+      return EvalPosition(fenAndMovesStr, moveType, moveMetric, moveOverrideString);
+    }
+
+
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="fenAndMovesString"></param>
+    /// <param name="moveType"></param>
+    /// <param name="moveMetric"></param>
+    /// <param name="moveOverrideString"></param>
+    /// <returns></returns>
+    public UCISearchInfo EvalPosition(string fenAndMovesString,
                                       string moveType, int moveMetric, 
                                       string moveOverrideString = null)
     {
@@ -238,8 +257,13 @@ namespace Ceres.Chess.ExternalPrograms.UCI
       lastBestMove = null;
       lastInfo = null;
 
-      string curPosCmd = "position fen " + fen;
-      if (movesString != null && movesString != "") curPosCmd += " moves " + movesString;
+//      string posString = fenAndMovesString.Contains("startpos") ? fen
+      string curPosCmd = "position ";
+      if (fenAndMovesString.Contains("startpos"))
+        curPosCmd+= fenAndMovesString;
+      else
+        curPosCmd+= "fen " + fenAndMovesString;
+
       SendCommandCRLF(engine, curPosCmd);
 
       if (moveOverrideString != null)

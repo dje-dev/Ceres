@@ -234,7 +234,7 @@ namespace Ceres.Features.Suites
                                                                 false, leelaVerboseMovesStats, forceDisableSmartPruning,
                                                                 lc0EngineDef.OverrideEXE, false, lc0EngineDef.ExtraCommandLineArgs);
             // WARMUP
-            engine.AnalyzePositionFromFEN(Position.StartPosition.FEN, null, SearchLimit.NodesPerMove(1));
+            engine.AnalyzePositionFromFEN(Position.StartPosition.FEN, SearchLimit.NodesPerMove(1));
             return engine;
           };
         }
@@ -340,7 +340,7 @@ namespace Ceres.Features.Suites
             LC0Engine le = (LC0Engine)engineObj;
 
             // Run test 2 first since that's the one we dump in detail, to avoid any possible caching effect from a prior run
-            otherEngineAnalysis2 = le.AnalyzePositionFromFEN(epdToUse.FEN, epdToUse.StartMoves, Def.ExternalEngineDef.SearchLimit);
+            otherEngineAnalysis2 = le.AnalyzePositionFromFEN(epdToUse.FENAndMoves, Def.ExternalEngineDef.SearchLimit);
             //            leelaAnalysis2 = le.AnalyzePositionFromFEN(epdToUse.FEN, new SearchLimit(SearchLimit.LimitType.NodesPerMove, 2)); // **** TEMP
             otherEngines.RestoreToPool(le);
           }
@@ -521,19 +521,19 @@ namespace Ceres.Features.Suites
       writer.Add("CC", $"{avgCeres1,5:F2}", 7);
       if (c2) writer.Add("CC2", $"{avgCeres2,5:F2}", 7);
 
-      writer.Add("P", $" {0.001f * avgWCeres1,7:f2}", 9);
-      if (c2) writer.Add("P2", $" {0.001f * avgWCeres2,7:f2}", 9);
+      writer.Add("P", $"{0.001f * avgWCeres1,6:f2}", 8);
+      if (c2) writer.Add("P2", $"{0.001f * avgWCeres2,6:f2}", 8);
 
-      if (ex) writer.Add("SEx", $"{scoreOtherEngine,3}", 5);
-      writer.Add("SC", $"{scoreCeres1,3}", 5);
-      if (c2) writer.Add("SC2", $"{scoreCeres2,3}", 5);
+      if (ex) writer.Add("SEx", $" {scoreOtherEngine,3}", 5);
+      writer.Add("SC", $" {scoreCeres1,3}", 5);
+      if (c2) writer.Add("SC2", $" {scoreCeres2,3}", 5);
 
       if (ex) writer.Add("MEx", $"{otherEngineAnalysis2.BestMove,7}", 9);
       writer.Add("MC", $"{search1.Manager.BestMoveMG,7}", 9);
       if (c2) writer.Add("MC2", $"{search2.Manager.BestMoveMG,7}", 9);
 
-      writer.Add("Fr", $"{worker1PickedNonTopNMoveStr}{ 100.0f * result1.TopNNodeN / result1.N,3:F0}%", 9);
-      if (c2) writer.Add("Fr2", $"{worker2PickedNonTopNMoveStr}{ 100.0f * result2?.TopNNodeN / result2?.N,3:F0}%", 9);
+      writer.Add("Fr", $"{worker1PickedNonTopNMoveStr}{ 100.0f * result1.TopNNodeN / result1.N,3:F0}%", 8);
+      if (c2) writer.Add("Fr2", $"{worker2PickedNonTopNMoveStr}{ 100.0f * result2?.TopNNodeN / result2?.N,3:F0}%", 8);
 
       writer.Add("Yld", $"{result1.NodeSelectionYieldFrac,6:f3}", 9);
       if (c2) writer.Add("Yld2", $"{result2.NodeSelectionYieldFrac,6:f3}", 9);

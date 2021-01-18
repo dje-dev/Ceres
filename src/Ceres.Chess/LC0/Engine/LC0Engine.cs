@@ -19,6 +19,7 @@ using System.Collections.Generic;
 using Ceres.Chess.ExternalPrograms.UCI;
 using Ceres.Chess.LC0.Positions;
 using Ceres.Chess.LC0VerboseMoves;
+using Ceres.Chess.Positions;
 using Chess.Ceres.NNEvaluators;
 
 #endregion
@@ -71,16 +72,16 @@ namespace Ceres.Chess.LC0.Engine
     /// <param name="fenOrFENAndMoves">a FEN</param>
     /// <param name="nodes"></param>
     /// <returns></returns>
-    public UCISearchInfo AnalyzePositionFromFEN(string fen, string movesString, SearchLimit searchLimit)
+    public UCISearchInfo AnalyzePositionFromFEN(string fenAndMovesString, SearchLimit searchLimit)
     {
       List<LC0VerboseMoveStat> moves = new List<LC0VerboseMoveStat>();
       Runner.EvalPositionPrepare();
 
       UCISearchInfo searchInfo;
       if (searchLimit.Type == SearchLimitType.SecondsPerMove)
-        searchInfo = Runner.EvalPositionToMovetime(fen, movesString, (int)(searchLimit.Value * 1000.0f));
+        searchInfo = Runner.EvalPositionToMovetime(fenAndMovesString, (int)(searchLimit.Value * 1000.0f));
       else if (searchLimit.Type == SearchLimitType.NodesPerMove)
-        searchInfo = Runner.EvalPositionToNodes(fen, movesString, (int)searchLimit.Value);
+        searchInfo = Runner.EvalPositionToNodes(fenAndMovesString, (int)searchLimit.Value);
       else
         throw new Exception("Unknown search limit " + searchLimit.Type);
 
@@ -88,7 +89,8 @@ namespace Ceres.Chess.LC0.Engine
 
       // no more, we now assume  win_percentages is requested     LeelaVerboseMoveStats ret = new LeelaVerboseMoveStats(positionEnd, searchInfo.BestMove, elapsed, searchInfo.Nodes, LZPositionEvalLogistic.CentipawnToLogistic2018(searchInfo.Score));
       float scoreConverted = 2.0f * (((float)searchInfo.ScoreCentipawns / 10_000f) - 0.5f);
-      LC0VerboseMoveStats ret = new LC0VerboseMoveStats(Position.FromFEN(fen), searchInfo.BestMove, elapsed, searchInfo.Nodes, scoreConverted, searchInfo);
+      PositionWithHistory pwh = PositionWithHistory.FromFENAndMovesUCI(fenAndMovesString);
+      LC0VerboseMoveStats ret = new LC0VerboseMoveStats(pwh.FinalPosition, searchInfo.BestMove, elapsed, searchInfo.Nodes, scoreConverted, searchInfo);
 
       foreach (string info in searchInfo.Infos)
       {
@@ -114,14 +116,13 @@ namespace Ceres.Chess.LC0.Engine
     /// <summary>
     /// Analyzes a position until a specified search limit is exhausted.
     /// </summary>
-    /// <param name="fen">a FEN</param>
-    /// <param name="nodes"></param>
+    /// <param name="fenAndMovesStr"></param>
+    /// <param name="searchLimit"></param>
     /// <returns></returns>
-    public LC0VerboseMoveStats AnalyzePositionFromFENAndMoves(string startFEN, string movesStr, string endFEN, 
-                                                              SearchLimit searchLimit)
+    public LC0VerboseMoveStats AnalyzePositionFromFENAndMoves(string fenAndMovesStr, SearchLimit searchLimit)
     {
-      Position positionEnd = Position.FromFEN(endFEN);
       List<LC0VerboseMoveStat> moves = new List<LC0VerboseMoveStat>();
+      PositionWithHistory pwh = PositionWithHistory.FromFENAndMovesUCI(fenAndMovesStr);
 
       UCISearchInfo searchInfo;
 
@@ -129,20 +130,20 @@ namespace Ceres.Chess.LC0.Engine
       switch (searchLimit.Type)
       {
         case SearchLimitType.NodesPerMove:
-          searchInfo = Runner.EvalPositionToNodes(startFEN, movesStr, (int)searchLimit.Value);
+          searchInfo = Runner.EvalPositionToNodes(fenAndMovesStr, (int)searchLimit.Value);
           break;
 
         case SearchLimitType.SecondsPerMove:
-          searchInfo = Runner.EvalPositionToMovetime(startFEN, movesStr, searchValueMilliseconds);
+          searchInfo = Runner.EvalPositionToMovetime(fenAndMovesStr, searchValueMilliseconds);
           break;
 
         case SearchLimitType.NodesForAllMoves:
           throw new Exception("NodesForAllMoves not supported for Leela Chess Zero");
 
         case SearchLimitType.SecondsForAllMoves:
-          bool weAreWhite = positionEnd.MiscInfo.SideToMove == SideType.White;
+          bool weAreWhite = pwh.FinalPosition.MiscInfo.SideToMove == SideType.White;
 
-          searchInfo = Runner.EvalPositionRemainingTime(startFEN, movesStr,
+          searchInfo = Runner.EvalPositionRemainingTime(fenAndMovesStr,
                                                         weAreWhite,
                                                         searchLimit.MaxMovesToGo,
                                                         (int)(searchLimit.Value * 1000),
@@ -157,7 +158,7 @@ namespace Ceres.Chess.LC0.Engine
 
       // no more, we now assume  win_percentages is requested     LeelaVerboseMoveStats ret = new LeelaVerboseMoveStats(positionEnd, searchInfo.BestMove, elapsed, searchInfo.Nodes, LZPositionEvalLogistic.CentipawnToLogistic2018(searchInfo.Score));
       float scoreLogistic = searchInfo.ScoreLogistic;
-      LC0VerboseMoveStats ret = new LC0VerboseMoveStats(positionEnd, searchInfo.BestMove, elapsed, searchInfo.Nodes, scoreLogistic, searchInfo);
+      LC0VerboseMoveStats ret = new LC0VerboseMoveStats(pwh.FinalPosition, searchInfo.BestMove, elapsed, searchInfo.Nodes, scoreLogistic, searchInfo);
 
       searchInfo.Infos.Reverse();
       foreach (string info in searchInfo.Infos)

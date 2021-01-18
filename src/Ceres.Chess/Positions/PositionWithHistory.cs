@@ -153,6 +153,39 @@ namespace Ceres.Chess.Positions
 
     /// <summary>
     /// Constructs a new MGMoveSequence given a starting position (as a FEN) 
+    /// followed by an optional string containing a sequence of subsequent moves (in coordiante notation).
+    /// </summary>
+    /// <param name="fenAndMovesStr"></param>
+    /// <returns></returns>
+    public static PositionWithHistory FromFENAndMovesUCI(string fenAndMovesStr)
+    {
+      int movesIndex = fenAndMovesStr.IndexOf(" moves ");
+      if (movesIndex == -1) return FromFENAndMovesUCI(fenAndMovesStr, null);
+
+      fenAndMovesStr = fenAndMovesStr.Replace("startpos", Position.StartPosition.FEN);
+
+      string[] parts = fenAndMovesStr.Split(" moves ");
+      if (parts.Length != 2) throw new Exception($"Multiple moves not allowed {fenAndMovesStr}");
+
+      return FromFENAndMovesUCI(parts[0], parts[1]);
+    }
+
+    /// <summary>
+    /// Returns the FEN followed by "moves" and the move list (if any).
+    /// </summary>
+    public string FENAndMovesString
+    {
+      get
+      {
+        string ret = InitialPosition.FEN;
+        if (Moves != null && Moves.Count > 0) ret += " moves " + MovesStr;
+        return ret;
+      }
+    }
+
+
+    /// <summary>
+    /// Constructs a new MGMoveSequence given a starting position (as a FEN) 
     /// and an optional string containing a sequence of subsequent moves (in coordiante notation).
     /// </summary>
     /// <param name="fen"></param>
@@ -160,6 +193,7 @@ namespace Ceres.Chess.Positions
     /// <returns></returns>
     public static PositionWithHistory FromFENAndMovesUCI(string fen, string movesStr)
     {
+      fen = fen.Replace("startpos", Position.StartPosition.FEN);
       MGPosition mgPos = MGPosition.FromFEN(fen);
 
       PositionWithHistory ret = new PositionWithHistory(mgPos);
@@ -190,6 +224,11 @@ namespace Ceres.Chess.Positions
 
     Position[] positions;
 
+    /// <summary>
+    /// Returns array of all Positions which sequentially
+    /// occurred in the PositionWitHistory..
+    /// </summary>
+    /// <returns></returns>
     public Position[] GetPositions()
     {
       CheckInit();

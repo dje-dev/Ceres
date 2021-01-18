@@ -123,7 +123,8 @@ namespace Ceres.Features.GameEngines
     /// <param name="gameMoveHistory"></param>
     /// <param name="callback"></param>
     /// <returns></returns>
-    protected override GameEngineSearchResult DoSearch(PositionWithHistory curPositionAndMoves, SearchLimit searchLimit,
+    protected override GameEngineSearchResult DoSearch(PositionWithHistory curPositionAndMoves, 
+                                                       SearchLimit searchLimit,
                                                        List<GameMoveStat> gameMoveHistory, 
                                                        ProgressCallback callback, bool verbose)
     {
@@ -131,12 +132,8 @@ namespace Ceres.Features.GameEngines
 
       if (SetupAction != null) SetupAction();
 
-      string fen = curPositionAndMoves.InitialPosition.FEN;
-      string endFEN = curPositionAndMoves.FinalPosition.FEN;
-      string moveStr = curPositionAndMoves.MovesStr;
-
       // Run the analysis
-      LC0VerboseMoveStats lc0Analysis = LC0Engine.AnalyzePositionFromFENAndMoves(fen, moveStr, endFEN, searchLimit);
+      LC0VerboseMoveStats lc0Analysis = LC0Engine.AnalyzePositionFromFENAndMoves(curPositionAndMoves.FENAndMovesString, searchLimit);
 
       if (verbose) lc0Analysis.Dump();
 

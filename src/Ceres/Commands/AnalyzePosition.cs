@@ -55,7 +55,7 @@ namespace Ceres.Commands
     }
 
 
-    public static void Analyze(string fen, SearchLimit searchLimit,
+    public static void Analyze(string fenAndMoves, SearchLimit searchLimit,
                                NNEvaluatorDef evaluatorDef,
                                bool forceDisablePruning,
                                LC0Engine lc0Engine = null,
@@ -63,7 +63,7 @@ namespace Ceres.Commands
                                bool verbose = false)
     {
       Console.WriteLine("=============================================================================");
-      Console.WriteLine("Analyzing FEN   : " + fen);
+      Console.WriteLine("Analyzing FEN   : " + fenAndMoves);
       Console.WriteLine("Search limit    : " + searchLimit.ToString());
       Console.WriteLine("Ceres evaluator : " + evaluatorDef.ToString());
       if (comparisonEngine != null)
@@ -91,7 +91,7 @@ namespace Ceres.Commands
       {
         ParamsSearch searchParams = new ParamsSearch();
         searchParams.FutilityPruningStopSearchEnabled = !forceDisablePruning;
-        PositionWithHistory positionWithHistory = PositionWithHistory.FromFENAndMovesUCI(fen, null);
+        PositionWithHistory positionWithHistory = PositionWithHistory.FromFENAndMovesUCI(fenAndMoves);
         ceresResults = new MCTSearch();
         ceresResults.Search(nnEvaluators, new ParamsSelect(), searchParams, null, null, 
                             null, positionWithHistory, searchLimit, verbose, DateTime.Now, null,
@@ -107,12 +107,11 @@ namespace Ceres.Commands
           if (lc0Engine != null)
           {
             lc0Engine.DoSearchPrepare();
-            lc0Engine.AnalyzePositionFromFENAndMoves(fen, null, fen, searchLimit);
+            lc0Engine.AnalyzePositionFromFENAndMoves(fenAndMoves, searchLimit);
           }
           else
           {
-            // TODO: someday enable passing in of moves here
-            comparisonEngine.Search(PositionWithHistory.FromFENAndMovesUCI(fen, null), searchLimit, verbose:true);
+            comparisonEngine.Search(PositionWithHistory.FromFENAndMovesUCI(fenAndMoves), searchLimit, verbose:true);
           }
         });
       };

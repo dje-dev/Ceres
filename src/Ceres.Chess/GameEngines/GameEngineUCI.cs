@@ -177,24 +177,22 @@ namespace Ceres.Chess.GameEngines
       UCIRunner.EvalPositionPrepare();
     }
 
-    protected override GameEngineSearchResult DoSearch(PositionWithHistory curPositionAndMoves, SearchLimit searchLimit,
+    protected override GameEngineSearchResult DoSearch(PositionWithHistory curPositionAndMoves, 
+                                                       SearchLimit searchLimit,
                                                        List<GameMoveStat> gameMoveHistory, ProgressCallback callback,
                                                        bool verbose)
     {
       DoSearchPrepare();
 
-      string startFEN = curPositionAndMoves.InitialPosition.FEN;
-      string movesStr = curPositionAndMoves.MovesStr;
-
       UCISearchInfo gameInfo;
       switch (searchLimit.Type)
       {
         case SearchLimitType.SecondsPerMove:
-          gameInfo = UCIRunner.EvalPositionToMovetime(startFEN, movesStr, (int)(searchLimit.Value * 1000));
+          gameInfo = UCIRunner.EvalPositionToMovetime(curPositionAndMoves.FENAndMovesString, (int)(searchLimit.Value * 1000));
           break;
 
         case SearchLimitType.NodesPerMove:
-          gameInfo = UCIRunner.EvalPositionToNodes(startFEN, movesStr, (int)(searchLimit.Value));
+          gameInfo = UCIRunner.EvalPositionToNodes(curPositionAndMoves.FENAndMovesString, (int)(searchLimit.Value));
           break;
 
         case SearchLimitType.NodesForAllMoves:
@@ -206,7 +204,7 @@ namespace Ceres.Chess.GameEngines
           TimingStats stats = new TimingStats();
           using (new TimingBlock(stats, TimingBlock.LoggingType.None))
           {
-            gameInfo = UCIRunner.EvalPositionRemainingTime(startFEN, movesStr,
+            gameInfo = UCIRunner.EvalPositionRemainingTime(curPositionAndMoves.FENAndMovesString,
                                                            weAreWhite,
                                                            searchLimit.MaxMovesToGo,
                                                            (int)(searchLimit.Value * 1000),
