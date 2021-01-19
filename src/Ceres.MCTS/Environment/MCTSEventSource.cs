@@ -25,6 +25,7 @@ using Ceres.Chess.NNEvaluators.LC0DLL;
 using Ceres.Chess.NNEvaluators.Internals;
 using Ceres.MCTS.Managers;
 using Ceres.MCTS.Iteration;
+using Ceres.MCTS.MTCSNodes.Struct;
 
 #endregion
 
@@ -40,13 +41,13 @@ namespace Ceres.MCTS.Environment
     /// <summary>
     /// Spare counter reserved for temporary ad-hoc use when debugging new features.
     /// </summary>
-    public static long TestCounter = 0;
+    public static long TestCounter1 = 0;
 
     private PollingCounter instamoveCounter;
 
     private static MCTSEventSource? mctsEventSource;
 
-    private PollingCounter testCounter;
+    private PollingCounter testCounter1;
 
     private PollingCounter storageVirtualAllocBytes;
 
@@ -114,7 +115,7 @@ namespace Ceres.MCTS.Environment
     {
       if (command.Command == EventCommand.Enable)
       {
-        testCounter ??= new PollingCounter("TestCounter", this, () => TestCounter);
+        testCounter1 ??= new PollingCounter("test-counter1", this, () => TestCounter1);
 
         instamoveCounter ??= new PollingCounter("instamove-count", this, () => MCTSearch.InstamoveCount);
 
@@ -135,10 +136,10 @@ namespace Ceres.MCTS.Environment
 
 
         numNodesApplied ??= new IncrementingPollingCounter("applied", this, () => MCTSApply.TotalNumNodesApplied);
-        numNodesDualSelectorDuplicate ??= new IncrementingPollingCounter("mcts-selected-dual-duplicate", this, () => MCTSNodesSelectedSet.TotalNumDualSelectorDuplicates);
+        numNodesDualSelectorDuplicate ??= new IncrementingPollingCounter("selected-dual-duplicate", this, () => MCTSNodesSelectedSet.TotalNumDualSelectorDuplicates);
 
-        numNodesSelectedIntoTreeCache ??= new PollingCounter("mcts-nodes-selected-into-tree-cache", this, () => MCTSNodesSelectedSet.TotalNumNodesSelectedIntoTreeCache);
-        numNodesAppliedFromTreeCache ??= new PollingCounter("mcts-nodes-appled-from-tree-cache", this, () => MCTSNodesSelectedSet.TotalNumNodesAppliedFromTreeCache);
+        numNodesSelectedIntoTreeCache ??= new PollingCounter("nodes-selected-into-tree-cache", this, () => MCTSNodesSelectedSet.TotalNumNodesSelectedIntoTreeCache);
+        numNodesAppliedFromTreeCache ??= new PollingCounter("nodes-appled-from-tree-cache", this, () => MCTSNodesSelectedSet.TotalNumNodesAppliedFromTreeCache);
         
         lastBatchYield ??= new PollingCounter("yield_pct_last_batch", this, () => 100.0f * MCTSIterator.LastBatchYieldFrac);
         batchYield ??= new PollingCounter("yield-pct-total", this, () => 100.0f * MCTSIterator.TotalYieldFrac);
@@ -149,19 +150,19 @@ namespace Ceres.MCTS.Environment
         totalUnutilizedNNEvaluationTimeMS ??= new PollingCounter("nn-idle-time-sec-total", this, () => MCTSSearchFlow.TotalNNIdleTimeSecs);
         totalNNWaitingTimeMS ??= new PollingCounter("nn-wait-time-sec-total", this, () => MCTSSearchFlow.TotalNNWaitTimeSecs);
 
-        makeNewRootTotalTimeSeconds ??= new PollingCounter("mcts-make-new-root-total-secs", this, () => MCTSManager.TotalTimeSecondsInMakeNewRoot); ;
+        makeNewRootTotalTimeSeconds ??= new PollingCounter("make-new-root-total-secs", this, () => MCTSManager.TotalTimeSecondsInMakeNewRoot); ;
 
         totalNumMovesNoiseOverridden ??= new PollingCounter("noise_best_move_overrides_total", this, () => MCTSIterator.TotalNumMovesNoiseOverridden);
         
-        nnCacheHitRate ??= new PollingCounter("mcts-nncache-hit-rate_pct", this, () => LeafEvaluatorCache.HitRatePct);
-        opponentTreeReuseHitRate ??= new PollingCounter("mcts-opponent-tree-reuse-hit-rate-pct", this, () => 100.0f * LeafEvaluatorReuseOtherTree.HitRate);
-        opponentTreeReuseNumHits ??= new PollingCounter("mcts-opponent-tree-reuse-hit-count", this, () => LeafEvaluatorReuseOtherTree.NumHits);
+        nnCacheHitRate ??= new PollingCounter("nncache-hit-rate_pct", this, () => LeafEvaluatorCache.HitRatePct);
+        opponentTreeReuseHitRate ??= new PollingCounter("opponent-tree-reuse-hit-rate-pct", this, () => 100.0f * LeafEvaluatorReuseOtherTree.HitRate);
+        opponentTreeReuseNumHits ??= new PollingCounter("opponent-tree-reuse-hit-count", this, () => LeafEvaluatorReuseOtherTree.NumHits);
 
-        nnTranspositionsHitRate ??= new PollingCounter("mcts-transposition-hit-rate_pct", this, () => LeafEvaluatorTransposition.HitRatePct);
+        nnTranspositionsHitRate ??= new PollingCounter("transposition-hit-rate_pct", this, () => LeafEvaluatorTransposition.HitRatePct);
         totalNumInFlightTranspositions ??= new PollingCounter("transpositions-in-flight-total", this, () => MCTSNodesSelectedSet.TotalNumInFlightTranspositions);
-        numRootPreloadNodes ??= new IncrementingPollingCounter("mcts-root-preload-nodes", this, () => MCTSRootPreloader.TotalCumulativeRootPreloadNodes);
+        numRootPreloadNodes ??= new IncrementingPollingCounter("root-preload-nodes", this, () => MCTSRootPreloader.TotalCumulativeRootPreloadNodes);
 
-        mlhMoveModificationFraction ??= new PollingCounter("mcts-mlh-move-modified-pct", this, () => 100.0f * ManagerChooseRootMove.MLHMoveModifiedFraction);
+        mlhMoveModificationFraction ??= new PollingCounter("mlh-move-modified-pct", this, () => 100.0f * ManagerChooseRootMove.MLHMoveModifiedFraction);
 
         tablebaseHitsTotal ??= new PollingCounter("tablebase-hits-total", this, () => LC0DLLSyzygyEvaluator.NumTablebaseHits);
         tablebaseHits ??= new IncrementingPollingCounter("tablebase-hits", this, () => LC0DLLSyzygyEvaluator.NumTablebaseHits);
@@ -172,7 +173,7 @@ namespace Ceres.MCTS.Environment
           DisplayName = "node-annotation-cache-hit-rate"
         };
 
-        testCounter ??= new PollingCounter("test", this, () => TestCounter);
+        testCounter1 ??= new PollingCounter("test", this, () => TestCounter1);
 
       }
     }
