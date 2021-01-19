@@ -192,9 +192,9 @@ namespace Ceres.Chess.LC0.Batches
 
     // TODO: relocate this
     public static void ExpandPositionsInfoFlatRepresentation(IEncodedPositionBatchFlat batch,
-                                                             int numPositions, int numBoardsPerPosition, float[] flatValues, bool[] excludePlanes = null)
+                                                             int numPositions, int numBoardsPerPosition, 
+                                                             float[] flatValues, bool[] excludePlanes = null)
     {
-      if (excludePlanes != null) throw new NotImplementedException();
       Debug.Assert(flatValues.Length >= numPositions * numBoardsPerPosition * EncodedPositionBoard.NUM_PLANES_PER_BOARD * 64);
 
       Span<byte> planeValues = batch.PosPlaneValues;
