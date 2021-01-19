@@ -59,7 +59,7 @@ namespace Ceres.MCTS.Params
 
 
     [CeresOption(Name = "cpuct", Desc = "Scaling used in node selection to encourage exploration (traditional UCT)", Default = "2.15")]
-    public float CPUCT = ParamsSearch.USE_CERES_ADJUSTMENTS ? (2.15f * 0.8f) : 2.15f;
+    public float CPUCT = 2.15f;
 
     [CeresOption(Name = "cpuct-base", Desc = "Constant (base) used in node selection to weight exploration", Default = "18368")]
     public float CPUCTBase = 18368;
@@ -137,7 +137,7 @@ namespace Ceres.MCTS.Params
     [CeresOption(Name = "policy-softmax", Desc = "Controls degree of flatness of policy via specified level of exponentation", Default = "1.61")]
     public float PolicySoftmax = 1.61f;
 
-
+ 
     /// <summary>
     /// If using dual selectors, we perturb CPUCT by this fraction (one is perturbed up, one down)
     /// Among other beneifts, this reduces collisions in building batches because we get diversity from the two selectors.
