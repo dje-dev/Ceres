@@ -99,23 +99,23 @@ namespace Ceres.Features.Tournaments
       }
       else if (Def.StartingFEN != null)
       {
-        openings = PositionsWithHistory.FromFENs(Def.StartingFEN);
+        openings = PositionsWithHistory.FromFEN(Def.StartingFEN, Def.NumGamePairs ?? 1);
       }
       else
-        throw new Exception("Either OpeningFileName or StartingFEN must be specified in TournamentDef");
-
-      if (Def.NumGamePairs.HasValue)
-        openings.SetNumStartPosOpenings(Math.Min(Def.NumGamePairs.Value, openings.Count));
-
+      {
+        openings = PositionsWithHistory.FromFEN(Position.StartPosition.FEN, Def.NumGamePairs ?? 1);
+      }
 
       Random rand = new Random();
 
       //Console.WriteLine($"Begin {def.NumGames} game test with limit {def.SearchLimitEngine1} {def.SearchLimitEngine2} ID { gameSequenceNum } ");
       int numPairsProcessed = 0;
 
+      int maxOpenings = Def.NumGamePairs ?? openings.Count;
+
       while (true)
       {
-        (int gameSequenceNum, int openingIndex) = getGamePairToProcess(openings.Count);
+        (int gameSequenceNum, int openingIndex) = getGamePairToProcess(maxOpenings);
 
         // Look for sentinel indicating end
         if (gameSequenceNum < 0) return;
