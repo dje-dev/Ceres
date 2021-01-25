@@ -37,6 +37,7 @@ using Ceres.MCTS.Params;
 using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.Base.OperatingSystem;
 using Ceres.MCTS.MTCSNodes;
+using Ceres.MCTS.TreeVisualization;
 
 #endregion
 
@@ -304,6 +305,29 @@ namespace Ceres.Features.UCI
 
           case "dump-nvidia":
             NVML.DumpInfo();
+            break;
+
+          case string c when c.StartsWith("save-tree-plot"):
+            if (curManager != null)
+              {
+              string[] parts = command.Split(" ");
+              if(parts.Length == 2)
+              {
+                string fileName = parts[1];
+                using (new SearchContextExecutionBlock(curContext))
+                  TreePlot.Save(curManager.Context.Root.Ref, fileName);
+              }
+              else if(parts.Length == 1)
+              {
+                Console.WriteLine("Filename was not provided");
+              }
+              else
+              {
+                Console.WriteLine("Filename cannot contain spaces");
+              }
+            }
+            else
+              Console.WriteLine("info string No search manager created");
             break;
 
 

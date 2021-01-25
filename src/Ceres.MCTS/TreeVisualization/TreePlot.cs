@@ -19,7 +19,7 @@ using System.Diagnostics;
 using System.Globalization;
 using Ceres.MCTS.MTCSNodes.Struct;
 
-namespace Ceres.MCTS.TreePlot
+namespace Ceres.MCTS.TreeVisualization
 {
     /// <summary>
     /// Search tree node with (x,y)-coordinates and means to calculate these.
