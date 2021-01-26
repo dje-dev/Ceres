@@ -253,6 +253,7 @@ namespace Ceres.MCTS.Managers
 
     static internal float MIN_FRAC_N_REQUIRED_MIN(MCTSIterator context) => 0.30f;
 
+
     /// <summary>
     /// Given a specified superiority of Q relative to another move,
     /// returns the minimum fraction of N (relative to the other move)
@@ -267,6 +268,8 @@ namespace Ceres.MCTS.Managers
     /// <returns></returns>
     internal float MinFractionNToUseQ(float qDifferenceFromBestQ)
     {
+      bool test = this.Node.Context.ParamsSearch.TestFlag;
+
       bool isSmallTree = Node.Context.Root.N < 50_000;
 
       float minFrac;
@@ -292,6 +295,24 @@ namespace Ceres.MCTS.Managers
           _ => 0.90f
         };
       }
+
+#if EXPERIMENTAL
+      // Not completely successful attempt to simplify 
+      // the above overparameterized logic.
+      if (test)
+      {
+        if (qDifferenceFromBestQ < 0.002f)
+          return 0.95f;
+
+        // A LTC test (3+ min/game) with J94-100 yielded:
+        //   -28 +/- 21 with 25
+        //    -7 +/- 13 with 20
+        const float POWER = 20f;
+        minFrac = MathF.Pow(1.0f - qDifferenceFromBestQ, POWER) - 0.05f;
+
+        if (minFrac < 0.35f) minFrac = 0.35f;
+      }
+#endif
 
       return minFrac;
     }
