@@ -33,6 +33,8 @@ namespace Ceres
 {
   static class Program
   {
+    const string VERSION = "0.87";
+
     /// <summary>
     /// Startup method for Ceres UCI chess engine and supplemental features.
     /// </summary>
@@ -75,6 +77,7 @@ namespace Ceres
 
       Console.WriteLine();
 
+      //Features.BatchAnalysis.BatchAnalyzer.Test();      return;
 #if DEBUG
       CheckDebugAllowed();
 #endif
@@ -125,7 +128,7 @@ namespace Ceres
 | (c) 2020- David Elliott and the Ceres Authors       |
 |   With network backend code from Leela Chess Zero.  |
 |                                                     |
-|  Version 0.86. Use help to list available commands. |
+|  Version {VER} Use help to list available commands. |
 |=====================================================|
 ";
 
@@ -145,7 +148,7 @@ namespace Ceres
         }
         else
         {
-          Console.WriteLine(line);
+          Console.WriteLine(line.Replace("{VER}", VERSION + " "));
         }
       }
 
