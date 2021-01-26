@@ -111,7 +111,7 @@ namespace Ceres.Features.Tournaments
       //Console.WriteLine($"Begin {def.NumGames} game test with limit {def.SearchLimitEngine1} {def.SearchLimitEngine2} ID { gameSequenceNum } ");
       int numPairsProcessed = 0;
 
-      int maxOpenings = Def.NumGamePairs ?? openings.Count;
+      int maxOpenings = Math.Min(Def.NumGamePairs ?? int.MaxValue, openings.Count);
 
       while (true)
       {
@@ -595,12 +595,23 @@ namespace Ceres.Features.Tournaments
     {
       int WIN_THRESHOLD = Run.Def.AdjudicationThresholdCentipawns;
       int NUM_MOVES = Run.Def.AdjudicationThresholdNumMoves;
-      
+
+      // Return if insufficient moves in history to make determination.
+      if (scoresCPEngine2.Count < NUM_MOVES || scoresCPEngine1.Count < NUM_MOVES)
+        return result;
+
       if (MinLastN(scoresCPEngine2, NUM_MOVES) > WIN_THRESHOLD && MaxLastN(scoresCPEngine1, NUM_MOVES) < -WIN_THRESHOLD)
-        result = TournamentGameResult.Win;
+      {
+        return TournamentGameResult.Win;
+      }
       else if (MinLastN(scoresCPEngine1, NUM_MOVES) > WIN_THRESHOLD && MaxLastN(scoresCPEngine2, NUM_MOVES) < -WIN_THRESHOLD)
-        result = TournamentGameResult.Loss;
-      return result;
+      {
+        return TournamentGameResult.Loss;
+      }
+      else
+      {
+        return result;
+      }
     }
 
   }
