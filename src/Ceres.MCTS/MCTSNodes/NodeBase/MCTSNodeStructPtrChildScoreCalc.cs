@@ -115,14 +115,15 @@ namespace Ceres.MCTS.MTCSNodes
       ApplyPolicyDecay(numToProcess, gatherStatsPSpan);
 
       // Possibly disqualify pruned moves from selection.
-      if (IsRoot && Context.RootMovesArePruned != null)
+      if (IsRoot && Context.RootMovesPruningStatus != null)
       {
         for (int i = 0; i < numToProcess; i++)
         {
           // Note that moves are never pruned if the do not yet have any visits
           // because otherwise the subsequent leaf selection will never 
           // be able to proceed beyond this unvisited child.
-          if (Context.RootMovesArePruned[i] && gatherStatsNSpan[i] > 0)
+          if (Context.RootMovesPruningStatus[i] != Iteration.MCTSFutilityPruningStatus.NotPruned
+           && gatherStatsNSpan[i] > 0)
           {
             // At root the search wants best Q values 
             // but because of minimax prefers moves with worse Q and W for the children

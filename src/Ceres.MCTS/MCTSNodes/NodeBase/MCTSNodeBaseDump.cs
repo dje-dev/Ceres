@@ -86,7 +86,9 @@ namespace Ceres.MCTS.MTCSNodes
 
       // Print extra characters for nodes with special characteristics
       char extraFlag = ' ';
-      if (!IsRoot && parent.IsRoot && Context.RootMovesArePruned != null && Context.RootMovesArePruned[IndexInParentsChildren])
+      if (!IsRoot && parent.IsRoot 
+        && Context.RootMovesPruningStatus != null 
+        && Context.RootMovesPruningStatus[IndexInParentsChildren] != Iteration.MCTSFutilityPruningStatus.NotPruned)
         extraFlag = 'S'; // move has been shutdown from further leaf expansion due to futility pruning
       else if (Terminal == GameResult.Draw)
         extraFlag = 'D';

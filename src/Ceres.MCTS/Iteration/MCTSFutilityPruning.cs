@@ -81,10 +81,10 @@ namespace Ceres.MCTS.Iteration
 
       if (SearchMoves != null)
       {
-        if (Context.RootMovesArePruned == null) Context.RootMovesArePruned = new bool[Root.NumPolicyMoves];
+        if (Context.RootMovesPruningStatus == null) Context.RootMovesPruningStatus = new MCTSFutilityPruningStatus[Root.NumPolicyMoves];
 
         // Start by assuming all are pruned.
-        Array.Fill(Context.RootMovesArePruned, true);
+        Array.Fill(Context.RootMovesPruningStatus, MCTSFutilityPruningStatus.PrunedDueToSearchMoves);
 
         // Specifically un-prune any which are specified as valid search moves.
         foreach (Move move in SearchMoves)
@@ -95,7 +95,7 @@ namespace Ceres.MCTS.Iteration
             EncodedMove moveEncoded = Root.ChildAtIndexInfo(i).move;
             if (move.ToString().ToLower() == moveEncoded.AlgebraicStr)
             {
-              Context.RootMovesArePruned[i] = false;
+              Context.RootMovesPruningStatus[i] = MCTSFutilityPruningStatus.NotPruned;
               found = true;
               break;
             }
@@ -122,7 +122,7 @@ namespace Ceres.MCTS.Iteration
       if (Manager.FractionSearchRemaining > 0.50) return;
       if (Manager.NumStepsTakenThisSearch < 100) return;
 
-      if (Context.RootMovesArePruned == null) Context.RootMovesArePruned = new bool[Root.NumPolicyMoves];
+      if (Context.RootMovesPruningStatus == null) Context.RootMovesPruningStatus = new MCTSFutilityPruningStatus[Root.NumPolicyMoves];
 
       DoSetEarlyStopMoveSecondaryFlags();
      }
@@ -171,9 +171,11 @@ namespace Ceres.MCTS.Iteration
         {
           MCTSNode secondBestMove = Context.ParamsSearch.BestMoveMode == ParamsSearch.BestMoveModeEnum.TopN ? nodesSortedN[1] : nodesSortedQ[1];
           bool isSecondBestMove = children[i].Move == secondBestMove.PriorMove;
-          if (isSecondBestMove && !Context.ParamsSearch.FutilityPruningStopSearchEnabled)
+          if (isSecondBestMove 
+           && !Context.ParamsSearch.FutilityPruningStopSearchEnabled
+           && Context.RootMovesPruningStatus[i] != MCTSFutilityPruningStatus.PrunedDueToSearchMoves)
           {
-            Context.RootMovesArePruned[i] = false;
+            Context.RootMovesPruningStatus[i] = MCTSFutilityPruningStatus.NotPruned;
             continue;
           }
         }
@@ -194,7 +196,7 @@ namespace Ceres.MCTS.Iteration
 
         if (MCTSDiagnostics.DumpSearchFutilityShutdown
           && earlyStopSimple
-          && !Context.RootMovesArePruned[i]
+          && Context.RootMovesPruningStatus[i]  != MCTSFutilityPruningStatus.NotPruned
           && NumberOfNotShutdownChildren() < 3)
         {
           Console.WriteLine();
@@ -203,7 +205,11 @@ namespace Ceres.MCTS.Iteration
           DumpDiagnosticsMoveShutdown();
         }
 
-        Context.RootMovesArePruned[i] |= earlyStopSimple;
+        if (Context.RootMovesPruningStatus[i] == MCTSFutilityPruningStatus.NotPruned
+         && earlyStopSimple)
+        {
+          Context.RootMovesPruningStatus[i] = MCTSFutilityPruningStatus.PrunedDueToFutility;
+        }
         // Console.WriteLine(i + $" EarlyStopMoveSecondary(simple) gap={gapToBest} adjustedGap={inflatedGap} remaining={numRemainingSteps} ");
       }
 
@@ -233,12 +239,12 @@ namespace Ceres.MCTS.Iteration
     /// <returns></returns>
     public int NumberOfNotShutdownChildren()
     {
-      if (Context.RootMovesArePruned == null) return Context.Root.NumPolicyMoves;
+      if (Context.RootMovesPruningStatus == null) return Context.Root.NumPolicyMoves;
 
       int count = 0;
       for (int i = 0; i < Root.NumPolicyMoves; i++)
       {
-        if (!Context.RootMovesArePruned[i])
+        if (Context.RootMovesPruningStatus[i] == MCTSFutilityPruningStatus.NotPruned)
           count++;
       }
 
