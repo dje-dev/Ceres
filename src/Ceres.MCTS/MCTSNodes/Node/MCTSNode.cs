@@ -508,7 +508,7 @@ namespace Ceres.MCTS.MTCSNodes
     }
 
 
-    public double Q => W / N;
+    public double Q => N == 0 ? 0 : (W / N);
 
 #region Children
 
