@@ -1017,6 +1017,10 @@ namespace lczero {
 
   static std::unique_ptr<SyzygyTablebase> syzygy_tb_[32];
 
+#define TB_INITIALIZE_FAIL 0
+#define TB_INITIALIZE_OK_WDL_ONLY 1
+#define TB_INITIALIZE_OK_WDL_DTZ 2
+
 
   bool TBInitialize(int sessionIndex, char* paths) {
     lczero::InitializeMagicBitboards();
@@ -1024,10 +1028,10 @@ namespace lczero {
     syzygy_tb_[sessionIndex] = std::make_unique<SyzygyTablebase>();
     if (!syzygy_tb_[sessionIndex]->init(paths)) {
       CERR << "Failed to load Syzygy tablebases!";
-      return false;
+      return TB_INITIALIZE_FAIL;
     }
     else {
-      return true;
+      return TB_INITIALIZE_OK_WDL_DTZ;
     }
   }
 
@@ -1050,6 +1054,24 @@ namespace lczero {
       return syzygy_tb_[sessionIndex]->max_cardinality();
   }
 
+
+  int ProbeDTZ(int sessionIndex, char* fen) {
+    if (syzygy_tb_[sessionIndex] == nullptr) {
+      printf("LC0 DLL error: unallocated session %f (ProbeDTZ)\r\n",
+        (float)sessionIndex);
+    }
+    else {
+      ChessBoard board;
+      PositionHistory history;
+      board.SetFromFen(fen);
+      history.Reset(board, 0, 1);
+
+      ProbeState result;
+      return syzygy_tb_[sessionIndex]->probe_dtz(history.Last(), &result);
+    }
+  }
+
+
   int ProbeWDL(int sessionIndex, char* fen)
   {
     if (syzygy_tb_[sessionIndex] == nullptr) {
@@ -1060,8 +1082,6 @@ namespace lczero {
       PositionHistory history;
       board.SetFromFen(fen);
       history.Reset(board, 0, 1);
-
-      //    auto move_list = history.Last().GetBoard().GenerateLegalMoves();
 
       ProbeState result;
       WDLScore score =
@@ -1095,6 +1115,7 @@ extern "C" {
   __declspec(dllimport) void TBFree(int sessionIndex);
   __declspec(dllimport) int MaxCardinality(int sessionIndex);
   __declspec(dllimport) int ProbeWDL(int sessionIndex, char* fen);
+  __declspec(dllimport) int ProbeDTZ(int sessionIndex, char* fen);
 }
 
 
@@ -1113,3 +1134,4 @@ void TBFree(int sessionIndex) { lczero::TBFree(sessionIndex); }
 int MaxCardinality(int sessionIndex) { return lczero::MaxCardinality(sessionIndex); }
 
 int ProbeWDL(int sessionIndex, char* fen) { return lczero::ProbeWDL(sessionIndex, fen); }
+int ProbeDTZ(int sessionIndex, char* fen) { return lczero::ProbeDTZ(sessionIndex, fen); }
