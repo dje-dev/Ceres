@@ -16,7 +16,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-
+using System.Text;
 using Ceres.Chess.MoveGen.Converters;
 using Ceres.Chess.Positions;
 using Ceres.Chess.Textual.PgnFileTools;
@@ -68,7 +68,28 @@ namespace Ceres.Chess
     /// </summary>
     public List<Move> Moves { get; init; }
 
-   
+
+    /// <summary>
+    /// Returns string consisting of sequence of 
+    /// all moves made in game (in UCI format).
+    /// </summary>
+    public string MoveStr
+    {
+      get
+      {
+        StringBuilder str = new StringBuilder();
+        int i = 0;
+        foreach (Move move in Moves)
+        {
+          if (i > 0) str.Append(" ");
+          str.Append(move.ToString());
+          i++;
+        }
+        return str.ToString();
+      }
+    }
+
+
     /// <summary>
     /// Returns a List of Games from a PGN file with specified name.
     /// </summary>
