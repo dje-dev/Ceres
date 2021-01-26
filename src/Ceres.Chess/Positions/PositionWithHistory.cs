@@ -13,11 +13,11 @@
 
 #region Using directives
 
-using Ceres.Chess.MoveGen;
-using Ceres.Chess.MoveGen.Converters;
 using System;
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
+
+using Ceres.Chess.MoveGen;
+using Ceres.Chess.MoveGen.Converters;
 
 #endregion
 
@@ -159,15 +159,17 @@ namespace Ceres.Chess.Positions
     /// <returns></returns>
     public static PositionWithHistory FromFENAndMovesUCI(string fenAndMovesStr)
     {
-      int movesIndex = fenAndMovesStr.IndexOf(" moves ");
+      int movesIndex = fenAndMovesStr.IndexOf(" moves");
       if (movesIndex == -1) return FromFENAndMovesUCI(fenAndMovesStr, null);
 
       fenAndMovesStr = fenAndMovesStr.Replace("startpos", Position.StartPosition.FEN);
 
-      string[] parts = fenAndMovesStr.Split(" moves ");
-      if (parts.Length != 2) throw new Exception($"Multiple moves not allowed {fenAndMovesStr}");
+      string[] parts = fenAndMovesStr.Split(" moves");
 
-      return FromFENAndMovesUCI(parts[0], parts[1]);
+      if (parts.Length == 1)
+        return FromFENAndMovesUCI(parts[0], ""); // nothing after the moves token
+      else
+        return FromFENAndMovesUCI(parts[0], parts[1]);
     }
 
     /// <summary>
@@ -335,6 +337,30 @@ namespace Ceres.Chess.Positions
         }
       }
     }
+
+
+    /// <summary>
+    /// Enumerates all positions in game (including their move histories).
+    /// </summary>
+    public IEnumerable<PositionWithHistory> PositionWithHistories
+    {
+      get
+      {
+        PositionWithHistory pwh = new(InitialPosMG);
+
+        // Return first position.
+        yield return new PositionWithHistory(pwh);
+
+        // Return all subsequent positions.
+        for (int i = 0; i < Moves.Count; i++)
+        {
+          // Append this move and return a clone.
+          pwh.AppendMove(Moves[i]);
+          yield return new PositionWithHistory(pwh); 
+        }
+      }
+    }
+
 
     /// <summary>
     /// Enumerates all the positions in the history.
