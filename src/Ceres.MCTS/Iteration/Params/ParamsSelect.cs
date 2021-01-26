@@ -83,13 +83,11 @@ namespace Ceres.MCTS.Params
     [CeresOption(Name = "cpuct-factor-at-root", Desc = "Constant (factor) used in node selection (at root) to weight exploration", Default = "2.82")]
     public float CPUCTFactorAtRoot = 2.82f;
 
+    [CeresOption(Name = "policy-decay-factor", Desc = "Linear scaling factor used in node selection to shrink policy toward uniform as N grows. Zero to disable, typical value 5.0", Default = "0")]
+    public float PolicyDecayFactor = 0;
 
-    [CeresOption(Name = "cpuct2", Desc = "Scaling constant used in node selection to weight deep exploration", Default = "0")]
-    public float CPUCT2 = 0; // Tried value of around 1.0, possibly also reducing CPUCT to 1/2 usual level. Possible small benefit
-
-    // NOTE: value of 1.0 or 1.5 seemed possibly better in suites, but underperformed 3 190 5 in a T40 match @500,000 nodes per move
-    [CeresOption(Name = "cpolicy-fade", Desc = "Scaling constant used in node selection to weight exploration (policy prior fade). Zero to disable, typical value 1.0", Default = "0")]
-    public float CPolicyFade = 0;
+    [CeresOption(Name = "policy-decay-exponent", Desc = "Exponent used in scaling factor (applied to N) used in node selection to shrink policy toward uniform as N grows. Zero to disable, typical value 0.38", Default = "0")]
+    public float PolicyDecayExponent = 0.38f;
 
     /// <summary>
     /// Amount of relative virtual loss to apply in leaf selection to discourage collisions.
@@ -99,7 +97,7 @@ namespace Ceres.MCTS.Params
     // Smaller values yield higher fidelity leaf selection 
     // (but possibly slightly slower due to increased collisions, especially at smaller node counts)      
     [CeresOption(Name = "vloss-relative", Desc = "Virtual loss (relative) to be applied when collisions encountered", Default = "-0.15")]
-    public float VirtualLossDefaultRelative = ParamsSearch.USE_CERES_ADJUSTMENTS ? -0.10f : -0.15f;
+    public float VirtualLossDefaultRelative = -0.10f;
 
     /// <summary>
     /// Virtual loss to be used if VLossRelative is false.

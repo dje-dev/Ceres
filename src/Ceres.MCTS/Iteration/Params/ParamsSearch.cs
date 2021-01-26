@@ -13,11 +13,11 @@
 
 #region Using directives
 
+using System;
+
 using Ceres.Chess.UserSettings;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.Search.IteratedMCTS;
-using LINQPad.Controls;
-using System;
 
 #endregion
 
@@ -248,22 +248,6 @@ namespace Ceres.MCTS.Params
     public bool PaddedBatchSizing = false;
     public int PaddedExtraNodesBase = 5;
     public float PaddedExtraNodesMultiplier = 0.03f;
-
-    /// <summary>
-    /// Experimental. Optionally leaf selection can be influenced
-    /// by a specified amount of noise applied to Q
-    /// (applied only in case child already has N > 1000).
-    /// Suggested value: 0.04.
-    /// </summary>
-    public float QNoiseFactorRoot = 0.0f;
-
-    /// <summary>
-    /// Experimental. Optionally leaf selection can be influenced
-    /// by a specified amount of noise applied to Q
-    /// (applied only in case child already has N > 1000).
-    /// Suggested value: 0.02.
-    /// </summary>
-    public float QNoiseFactorNonRoot = 0.0f;
 
 
     /// <summary>
