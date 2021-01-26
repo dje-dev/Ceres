@@ -359,6 +359,11 @@ namespace Ceres.MCTS.Search
           //Console.WriteLine("applied " + selector.Leafs.Count + " " + manager.Root);
         }
 
+        if (manager.Root.N == 1)
+        {
+          manager.TerminationManager.ApplySearchMoves();
+        }
+
         RunPeriodicMaintenance(manager, batchSequenceNum, iterationCount);
 
         // Advance (rotate) selector

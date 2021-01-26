@@ -244,7 +244,7 @@ namespace Ceres.MCTS.Iteration
                                   nnEvaluators, searchParams, childSelectParams, searchLimit, estNumNodes);
       ThreadSearchContext = Context;
 
-      TerminationManager = new MCTSFutilityPruning(this, Context);
+      TerminationManager = new MCTSFutilityPruning(this, searchLimit.SearchMoves);
       LimitManager = limitManager;
 
       CeresEnvironment.LogInfo("MCTS", "Init", $"SearchManager created for store {store}", InstanceID);

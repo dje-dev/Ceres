@@ -14,7 +14,13 @@
 #region Using directives
 
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Runtime.Versioning;
 using Ceres.Base.Math;
+using Ceres.Chess;
+using Ceres.Chess.EncodedPositions.Basic;
+using Ceres.Chess.MoveGen;
 using Ceres.MCTS.Managers;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Struct;
@@ -50,13 +56,55 @@ namespace Ceres.MCTS.Iteration
     public MCTSNode Root => Context.Root;
 
     /// <summary>
+    /// Optional List of moves to which the top-level search is to be restricted.
+    /// </summary>
+    public List<Move> SearchMoves;
+
+
+    /// <summary>
     /// Constructor.
     /// </summary>
     /// <param name="manager"></param>
-    /// <param name="context"></param>
-    public MCTSFutilityPruning(MCTSManager manager, MCTSIterator context)
+    public MCTSFutilityPruning(MCTSManager manager, List<Move> searchMoves)
     {
       Manager = manager;
+      SearchMoves = searchMoves;
+    }
+
+
+    bool haveAppliedSearchMoves = false;
+
+    internal void ApplySearchMoves()
+    {
+      // This is intended to be called only once, immediately after the root is evaluated.
+      Debug.Assert(Context.Root.N == 1 && !haveAppliedSearchMoves);
+
+      if (SearchMoves != null)
+      {
+        if (Context.RootMovesArePruned == null) Context.RootMovesArePruned = new bool[Root.NumPolicyMoves];
+
+        // Start by assuming all are pruned.
+        Array.Fill(Context.RootMovesArePruned, true);
+
+        // Specifically un-prune any which are specified as valid search moves.
+        foreach (Move move in SearchMoves)
+        {
+          bool found = false;
+          for (int i=0; i<Root.NumPolicyMoves;i++)
+          {
+            EncodedMove moveEncoded = Root.ChildAtIndexInfo(i).move;
+            if (move.ToString().ToLower() == moveEncoded.AlgebraicStr)
+            {
+              Context.RootMovesArePruned[i] = false;
+              found = true;
+              break;
+            }
+          }
+
+          if (!found) throw new Exception($"Specified search move not found {move}");
+        }
+      }
+      haveAppliedSearchMoves = true;
     }
 
 
@@ -155,7 +203,7 @@ namespace Ceres.MCTS.Iteration
           DumpDiagnosticsMoveShutdown();
         }
 
-        Context.RootMovesArePruned[i] = earlyStopSimple;
+        Context.RootMovesArePruned[i] |= earlyStopSimple;
         // Console.WriteLine(i + $" EarlyStopMoveSecondary(simple) gap={gapToBest} adjustedGap={inflatedGap} remaining={numRemainingSteps} ");
       }
 
