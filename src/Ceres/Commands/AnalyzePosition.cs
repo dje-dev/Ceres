@@ -29,6 +29,7 @@ using Ceres.Features.UCI;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.MTCSNodes.Analysis;
 using Ceres.MCTS.Params;
+using Ceres.MCTS.Utils;
 
 #endregion
 
@@ -49,7 +50,7 @@ namespace Ceres.Commands
       float UPDATE_INTERVAL_SECONDS = 1;// isFirstUpdate ? 0.1f : 3f;
       if (timeSinceLastUpdate > UPDATE_INTERVAL_SECONDS && manager.Root.N > 0)
       {
-        Console.WriteLine(UCIManager.UCIInfoString(manager));
+        Console.WriteLine(UCIInfo.UCIInfoString(manager));
         lastInfoUpdate = now;
       }
     }
@@ -95,7 +96,7 @@ namespace Ceres.Commands
         ceresResults = new MCTSearch();
         ceresResults.Search(nnEvaluators, new ParamsSelect(), searchParams, null, null, 
                             null, positionWithHistory, searchLimit, verbose, DateTime.Now, null,
-                            manager => lastCeresInfo = new UCISearchInfo(UCIManager.UCIInfoString(manager), null, null), false, true);
+                            manager => lastCeresInfo = new UCISearchInfo(UCIInfo.UCIInfoString(manager), null, null), false, true);
       });
 
       // Possibly launch search for other engine
@@ -152,11 +153,11 @@ namespace Ceres.Commands
       searchCeres.Wait();
       searchComparison?.Wait();
 
-      string infoUpdate = UCIManager.UCIInfoString(ceresResults.Manager);
+      string infoUpdate = UCIInfo.UCIInfoString(ceresResults.Manager);
 
-      double q2 = ceresResults.BestMoveRoot.Q;
+      double q2 = ceresResults.SearchRootNode.Q;
       //SearchPrincipalVariation pv2 = new SearchPrincipalVariation(worker2.Root);
-      MCTSPosTreeNodeDumper.DumpPV(ceresResults.Manager.Context.StartPosAndPriorMoves, ceresResults.BestMoveRoot, true, null);
+      MCTSPosTreeNodeDumper.DumpPV(ceresResults.Manager.Context.StartPosAndPriorMoves, ceresResults.SearchRootNode, true, null);
 
     }
 

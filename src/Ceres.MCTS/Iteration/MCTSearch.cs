@@ -64,7 +64,7 @@ namespace Ceres.MCTS.Iteration
     /// possible not the root of the whole tree if the
     /// the last search was satisifed directly from tree reuse.
     /// </summary>
-    public MCTSNode BestMoveRoot => continuationSubroot != null ? continuationSubroot : Manager.Root;
+    public MCTSNode SearchRootNode => continuationSubroot != null ? continuationSubroot : Manager.Root;
 
 
     #region Tree reuse related

@@ -211,7 +211,7 @@ namespace Ceres.Features.GameEngines
 
       MGMove bestMoveMG = searchResult.BestMove;
 
-      int N = (int)searchResult.BestMoveRoot.N;
+      int N = (int)searchResult.SearchRootNode.N;
 
       // Save (do not dispose) last search in case we can reuse it next time
       LastSearch = searchResult;
@@ -220,7 +220,7 @@ namespace Ceres.Features.GameEngines
 
       // TODO is the RootNWhenSearchStarted correct because we may be following a continuation (BestMoveRoot)
       return new GameEngineSearchResultCeres(bestMoveMG.MoveStr(MGMoveNotationStyle.LC0Coordinate),
-                                             (float)searchResult.BestMoveRoot.Q, scoreCeresCP, searchResult.BestMoveRoot.MAvg, searchResult.Manager.SearchLimit, default,
+                                             (float)searchResult.SearchRootNode.Q, scoreCeresCP, searchResult.SearchRootNode.MAvg, searchResult.Manager.SearchLimit, default,
                                              searchResult.Manager.RootNWhenSearchStarted, N, (int)searchResult.Manager.Context.AvgDepth, searchResult);
     }
 
@@ -314,7 +314,7 @@ namespace Ceres.Features.GameEngines
       get
       {
         if (LastSearch != null)
-          return new UCISearchInfo(UCIManager.UCIInfoString(Search.Manager, Search.BestMoveRoot));
+          return new UCISearchInfo(MCTS.Utils.UCIInfo.UCIInfoString(Search.Manager, Search.SearchRootNode));
         else
           return null;
       }

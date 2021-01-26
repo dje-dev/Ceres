@@ -14,8 +14,10 @@
 #region Using directives
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using Ceres.Base.Misc;
+using Ceres.Chess;
 
 #endregion
 
@@ -71,6 +73,10 @@ namespace Ceres.Features.UCI
     /// </summary>
     public readonly int? MovesToGo;
 
+    /// <summary>
+    /// Optionally a list of root-level moves to which the search is restricted.
+    /// </summary>
+    public readonly List<Move> SearchMoves;
 
     /// <summary>
     /// Constructor from UCI string received
@@ -173,9 +179,17 @@ namespace Ceres.Features.UCI
           case "moves":
           case "mate":
           case "ponder":
-          case "searchmoves":
             Console.WriteLine($"Unsupported UCI go mode: {token}");
             IsValid = false;
+            break;
+
+          case "searchmoves":
+            SearchMoves = new List<Move>();
+            for (int i=partIndex; i<strParts.Length;i++)
+            {
+              SearchMoves.Add(Move.FromUCI(strParts[i]));
+              partIndex++;
+            }
             break;
 
           default:
