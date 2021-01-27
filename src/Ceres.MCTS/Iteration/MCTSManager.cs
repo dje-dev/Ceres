@@ -44,12 +44,15 @@ using Ceres.Chess.Positions;
 using System.Threading;
 using Ceres.MCTS.Params;
 using Ceres.Base.Benchmarking;
+using Ceres.MCTS.MTCSNodes.Analysis;
+using Ceres.MCTS.Utils;
+using System.IO;
 
 #endregion
 
 namespace Ceres.MCTS.Iteration
 {
-  public class MCTSManager : ObjectWithInstanceID, IDisposable
+  public partial class MCTSManager : ObjectWithInstanceID, IDisposable
   {
     /// <summary>
     /// Reason a search was stopped.
@@ -633,23 +636,9 @@ namespace Ceres.MCTS.Iteration
         Console.WriteLine("VERBOSE ROOT MOVE STATISTICS");
         node.Dump(1, 1, maxMoves: maxMoves);
         Console.WriteLine("-----------------------------------------------------------------------------------------------------------------\r\n");
-
-        if (false)
-        {
-          Console.WriteLine("PV DUMP");
-          node.Dump(2, 3, maxMoves:maxMoves);
-          Console.WriteLine("-----------------------------------------------------------------------------------------------------------------\r\n");
-
-          // Then more full dump
-          //            const int MAX_DUMP_DEPTH = 2;
-          // const int MIN_NODES_DUMP = 50;
-          //            root.Dump((manager.Context, MAX_DUMP_DEPTH, MAX_DUMP_DEPTH, MIN_NODES_DUMP);
-        }
-
-        //Console.Write("\r\nPrincipal Variation: ");
-        //        search.Root.DumpPrincipalVariation();      
       }
     }
+
 
     /// <summary>
     /// Sets the level of Dirichlet noise if this feature is enabled.
@@ -682,24 +671,31 @@ namespace Ceres.MCTS.Iteration
       }
     }
 
+
+    bool disposed = false;
+
     public void Dispose()
     {
-      //      MCTSPosTreeNodeDumper.DumpAllNodes(Context, ref Context.Store.RootNode);
-      Context.Tree.Store.Dispose();
+      if (!disposed)
+      {
+        //      MCTSPosTreeNodeDumper.DumpAllNodes(Context, ref Context.Store.RootNode);
+        Context.Tree.Store.Dispose();
 
-      // Release references to objects
-      ThreadSearchContext = null;
-      Context = null;
+        // Release references to objects
+        ThreadSearchContext = null;
+        Context = null;
 
-      // If the search was sufficeintly large, trigger an aynchronous full garbage collection
-      // We do this now for two reasons:
-      //   - we have just released references to potentially large objects, and
-      //   - possibly this search will result in a move being played followed by waiting time
-      //     during which we can do the GC "for free"
-      //int finalN = Context.Root.N;      
-      //    const int THRESHOLD_N_TRIGGER_GC = 2_000;
-      //    if (finalN >= THRESHOLD_N_TRIGGER_GC)
-      //      ThreadPool.QueueUserWorkItem((obj) => System.GC.Collect(1, GCCollectionMode.Optimized));
+        // If the search was sufficeintly large, trigger an aynchronous full garbage collection
+        // We do this now for two reasons:
+        //   - we have just released references to potentially large objects, and
+        //   - possibly this search will result in a move being played followed by waiting time
+        //     during which we can do the GC "for free"
+        //int finalN = Context.Root.N;      
+        //    const int THRESHOLD_N_TRIGGER_GC = 2_000;
+        //    if (finalN >= THRESHOLD_N_TRIGGER_GC)
+        //      ThreadPool.QueueUserWorkItem((obj) => System.GC.Collect(1, GCCollectionMode.Optimized));
+        disposed = true;
+      }
     }
 
     #endregion
@@ -772,24 +768,6 @@ namespace Ceres.MCTS.Iteration
       }
     }
 
-    public void DumpTimeInfo()
-    {
-      Console.WriteLine();
-      Console.WriteLine($"StartTimeFirstVisit        {StartTimeFirstVisit}");
-      Console.WriteLine($"StartTimeThisSearch        {StartTimeThisSearch}");
-
-      Console.WriteLine($"Root N                     {Root.N}");
-      Console.WriteLine($"RootNWhenSearchStarted     {RootNWhenSearchStarted}");
-
-      Console.WriteLine($"SearchLimit.Type           {SearchLimit.Type}");
-      Console.WriteLine($"SearchLimit.Value          {SearchLimit.Value}");
-      Console.WriteLine($"Elapsed Search Time        {(DateTime.Now - StartTimeThisSearch).TotalSeconds}");
-
-      Console.WriteLine($"FractionSearchRemaining    {FractionSearchRemaining}");
-      Console.WriteLine($"Estimated NPS              {EstimatedNPS}");
-
-      Console.WriteLine($"EstimatedNumStepsRemaining {EstimatedNumVisitsRemaining()}");
-    }
 
     public float RemainingTime
     {

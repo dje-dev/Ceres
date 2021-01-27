@@ -20,6 +20,7 @@ using Ceres.Chess;
 using Ceres.Base.DataType.Trees;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
+using System.IO;
 
 #endregion
 
@@ -65,16 +66,21 @@ namespace Ceres.MCTS.MTCSNodes
                      int minNodes = int.MinValue,
                      string prefixString = null,
                      Predicate<MCTSNode> shouldAbort = null,
-                     int maxMoves = int.MaxValue)
+                     int maxMoves = int.MaxValue,
+                     TextWriter writer = null,
+                     MCTSNode dumpRoot = null)
     {
       if (N < minNodes) return;
 
       if (shouldAbort != null && shouldAbort(this))
         return;
 
+      dumpRoot = dumpRoot ?? this.Tree.Root;
+      writer = writer ?? Console.Out;
+
       Position cPos = MGChessPositionConverter.PositionFromMGChessPosition(Annotation.PosMG);
 
-      float multiplerOurPerspective = Annotation.PosMG.BlackToMove ? -1.0f : 1.0f;
+      float multiplerOurPerspective = dumpRoot == null || (dumpRoot.Depth % 2 == Depth % 2) ? 1.0f : -1.0f;
 
       bool minimize = true;
       float bestChildValue = minimize ? int.MaxValue : int.MinValue;
@@ -100,12 +106,11 @@ namespace Ceres.MCTS.MTCSNodes
       double u = float.NaN;
       // not yet implemented      if (!IsRoot) u = Parent.U(Context.ParamsSearch.Execution.FLOW_DUAL_SELECTORS, Context.ParamsSelect, 0, this.IndexInParentsChildren);
       string extraInfo = prefixString;
-      float sideMult = Depth % 1 == 0 ? -1.0f : 1.0f;
 
-//      extraInfo = $" N={N,9:F0}  Q={sideMult * Q,6:F3}   P={P * 100,6:F2}%  V={ multiplerOurPerspective * V,6:F3} ";
-      extraInfo = $" N={N,9:F0}  Q={sideMult * Q,6:F3}  V={ multiplerOurPerspective * V,6:F3} ";
-      extraInfo += $" WDL= {WinP,4:F2} {DrawP,4:F2} {LossP,4:F2} ";
-      extraInfo += $" WDL Avg= {WAvg,4:F2} {DAvg,4:F2} {LAvg,4:F2}  ";
+      bool invert = multiplerOurPerspective == -1;
+      extraInfo = $" N={N,9:F0}  Q={multiplerOurPerspective * Q,6:F3}  V={  multiplerOurPerspective * V,6:F3} ";
+      extraInfo += $" WDL= {(invert ? LossP : WinP),4:F2} {DrawP,4:F2} {(invert ? WinP : LossP),4:F2} ";
+      extraInfo += $" WDL Avg= {(invert ? LAvg : WAvg),4:F2} {DAvg,4:F2} {(invert ? WAvg : LAvg),4:F2}  ";
       extraInfo += $"M = {MPosition,4:F0} {MAvg,4:F0}  ";
 
       //float qStdDev = MathF.Sqrt(Ref.VVariance);
@@ -113,18 +118,16 @@ namespace Ceres.MCTS.MTCSNodes
       //extraInfo+= $"U={u,5:F3} {cPos.FEN}";
 
       MGMove move = Annotation.PriorMoveMG;
-      Console.WriteLine(
-                        $"{extraFlag} {Depth,4:F0} {move.MoveStr(MGMoveNotationStyle.ShortAlgebraic),-6} {100 * P,8:F2}% " +
-                        extraInfo
-                        );
+      writer.WriteLine($"{extraFlag} {Depth,4:F0} {move.MoveStr(MGMoveNotationStyle.ShortAlgebraic),-6} {100 * P,8:F2}% " +
+                       extraInfo);
       
       if (Depth < lastLevel && ExpandedChildrenList.Count > 0)
       {
         if (Depth >= firstLevelStartPVOnly)
         {
           MCTSNode[] sortedChildren2 = ChildrenSorted(n => -n.N);
-          sortedChildren2[0].Dump(firstLevelStartPVOnly, lastLevel, minNodes, maxMoves:maxMoves);
-
+          sortedChildren2[0].Dump(firstLevelStartPVOnly, lastLevel, minNodes, maxMoves:maxMoves, 
+                                  writer:writer, dumpRoot : dumpRoot);
         }
         else
         {
@@ -138,9 +141,9 @@ namespace Ceres.MCTS.MTCSNodes
           }
 
           foreach (MCTSNode child in sortedChildren1)
-            child.Dump(lastLevel, firstLevelStartPVOnly, minNodes, maxMoves: maxMoves);
-          if (otherNodesMessage != null) Console.WriteLine(otherNodesMessage);
-          Console.WriteLine();
+            child.Dump(lastLevel, firstLevelStartPVOnly, minNodes, maxMoves: maxMoves, writer:writer, dumpRoot: dumpRoot);
+          if (otherNodesMessage != null) writer.WriteLine(otherNodesMessage);
+          writer.WriteLine();
         }
       }
     }

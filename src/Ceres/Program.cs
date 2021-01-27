@@ -26,6 +26,7 @@ using Ceres.Chess.UserSettings;
 using Ceres.MCTS.Environment;
 using Ceres.APIExamples;
 using Ceres.Commands;
+using Ceres.Features;
 
 #endregion
 
@@ -33,8 +34,6 @@ namespace Ceres
 {
   static class Program
   {
-    const string VERSION = "0.87";
-
     /// <summary>
     /// Startup method for Ceres UCI chess engine and supplemental features.
     /// </summary>
@@ -148,7 +147,7 @@ namespace Ceres
         }
         else
         {
-          Console.WriteLine(line.Replace("{VER}", VERSION + " "));
+          Console.WriteLine(line.Replace("{VER}", CeresVersion.VersionString + " "));
         }
       }
 

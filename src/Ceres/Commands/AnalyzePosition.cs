@@ -157,7 +157,7 @@ namespace Ceres.Commands
 
       double q2 = ceresResults.SearchRootNode.Q;
       //SearchPrincipalVariation pv2 = new SearchPrincipalVariation(worker2.Root);
-      MCTSPosTreeNodeDumper.DumpPV(ceresResults.Manager.Context.StartPosAndPriorMoves, ceresResults.SearchRootNode, true, null);
+      MCTSPosTreeNodeDumper.DumpPV(ceresResults.SearchRootNode, true);
 
     }
 

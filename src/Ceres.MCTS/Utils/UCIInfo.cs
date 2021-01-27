@@ -41,7 +41,8 @@ namespace Ceres.MCTS.Utils
                                        MCTSNode overrideBestMoveNodeAtRoot = null,
                                        int? multiPVIndex = null,
                                        bool useParentN = true,
-                                       bool showWDL = false)
+                                       bool showWDL = false,
+                                       bool scoreAsQ = false)
     {
       bool wasInstamove = manager.Root != overrideRootMove;
 
@@ -51,7 +52,16 @@ namespace Ceres.MCTS.Utils
 
       float elapsedTimeSeconds = wasInstamove ? 0 : (float)(DateTime.Now - manager.StartTimeThisSearch).TotalSeconds;
 
-      float scoreCentipawn = MathF.Round(EncodedEvalLogistic.LogisticToCentipawn((float)thisRootNode.Q), 0);
+      float scoreToShow;
+      if (scoreAsQ)
+      {
+        scoreToShow = MathF.Round((float)thisRootNode.Q * 1000, 0);
+      }
+      else
+      { 
+        scoreToShow = MathF.Round(EncodedEvalLogistic.LogisticToCentipawn((float)thisRootNode.Q), 0);
+      }
+
       float nps = manager.NumStepsTakenThisSearch / elapsedTimeSeconds;
 
       // Get the principal variation (the first move of which will be the best move)
@@ -85,13 +95,13 @@ namespace Ceres.MCTS.Utils
       {
         // Note that the correct tablebase hits cannot be easily calculated and reported
         return $"info depth {depth} seldepth {selectiveDepth} time 0 "
-             + $"nodes {n:F0} score cp {scoreCentipawn:F0}{strWDL} tbhits {manager.CountTablebaseHits} nps 0 "
+             + $"nodes {n:F0} score cp {scoreToShow}{strWDL} tbhits {manager.CountTablebaseHits} nps 0 "
              + $"{pvString} {pv.ShortStr()} string M= {thisRootNode.MAvg:F0} ";
       }
       else
       {
         return $"info depth {depth} seldepth {selectiveDepth} time {elapsedTimeSeconds * 1000.0f:F0} "
-             + $"nodes {n:F0} score cp {scoreCentipawn:F0}{strWDL} tbhits {manager.CountTablebaseHits} nps {nps:F0} "
+             + $"nodes {n:F0} score cp {scoreToShow}{strWDL} tbhits {manager.CountTablebaseHits} nps {nps:F0} "
              + $"{pvString} string M= {thisRootNode.MAvg:F0}";
       }
     }

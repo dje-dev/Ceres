@@ -58,13 +58,20 @@ namespace Ceres.Features.GameEngines
     /// </summary>
     public IManagerGameLimit OverrideTimeManager;
 
+    /// <summary>
+    /// Optional name of log file to which detailed diagnostics information is written.
+    /// </summary>
+    public string LogFileName;
+
 
     /// <summary>
     /// Constructor.
     /// </summary>
     public GameEngineDefCeres(string id, NNEvaluatorDef evaluatorDef, ParamsSearch searchParams= null,
                               ParamsSearchExecutionModifier paramsSearchExecutionPostprocessor = null,
-                              ParamsSelect selectParams = null, IManagerGameLimit overrideTimeManager = null)
+                              ParamsSelect selectParams = null, 
+                              IManagerGameLimit overrideTimeManager = null,
+                              string logFileName = null)
       : base(id)
     {
       // Make a defensive clone of the EvaluatorDef so it will definitely not be shared.
@@ -73,6 +80,7 @@ namespace Ceres.Features.GameEngines
       ParamsSearchExecutionPostprocessor = paramsSearchExecutionPostprocessor;
       SelectParams = selectParams ?? new ParamsSelect();
       OverrideTimeManager = overrideTimeManager;
+      LogFileName = logFileName;
     }
 
     /// <summary>
@@ -82,7 +90,8 @@ namespace Ceres.Features.GameEngines
     public override GameEngine CreateEngine()
     {
       return new GameEngineCeresInProcess(ID, EvaluatorDef, SearchParams, SelectParams, 
-                                 OverrideTimeManager, ParamsSearchExecutionPostprocessor);
+                                          OverrideTimeManager, ParamsSearchExecutionPostprocessor,
+                                          LogFileName);
     }
 
 

@@ -31,6 +31,8 @@ using Ceres.MCTS.Managers.Limits;
 using Ceres.MCTS.Params;
 
 using Ceres.Features.UCI;
+using System.IO;
+using System.Text;
 
 #endregion
 
@@ -77,6 +79,17 @@ namespace Ceres.Features.GameEngines
     /// </summary>
     public MCTSearch LastSearch;
 
+    /// <summary>
+    /// Optional name of file to which detailed log information 
+    /// will be written after each move.
+    /// </summary>
+    public string LogFileName;
+
+    /// <summary>
+    /// Optional descriptive information for current game.
+    /// </summary>
+    public string CurrentGameID;
+
     #region Internal data
 
     /// <summary>
@@ -91,16 +104,18 @@ namespace Ceres.Features.GameEngines
     /// Constructor.
     /// </summary>
     /// <param name="id"></param>
-    /// <param name="nnEvaluator"></param>
+    /// <param name="evaluatorDef"></param>
     /// <param name="searchParams"></param>
     /// <param name="childSelectParams"></param>
     /// <param name="gameLimitManager"></param>
     /// <param name="paramsSearchExecutionModifier"></param>
+    /// <param name="logFileName"></param>
     public GameEngineCeresInProcess(string id, NNEvaluatorDef evaluatorDef,
                                     ParamsSearch searchParams = null,
                                     ParamsSelect childSelectParams = null,
                                     IManagerGameLimit gameLimitManager = null,
-                                    ParamsSearchExecutionModifier paramsSearchExecutionModifier = null) : base(id)
+                                    ParamsSearchExecutionModifier paramsSearchExecutionModifier = null,
+                                    string logFileName = null) : base(id)
     {
       if (evaluatorDef == null) throw new ArgumentNullException(nameof(evaluatorDef));
 
@@ -116,19 +131,22 @@ namespace Ceres.Features.GameEngines
       SearchParams = searchParams;
       GameLimitManager = gameLimitManager;
       ChildSelectParams = childSelectParams;
+      LogFileName = logFileName;
     }
 
 
     bool isFirstMoveOfGame = true;
 
     /// <summary>
-    /// Resets state to prepare for new game to be started.
+    /// Resets all state between games.
     /// </summary>
-    public override void ResetGame()
+    /// <param name="gameID">optional game descriptive string</param>
+    public override void ResetGame(string gameID = null)
     {
       Search = null;
       LastSearch = null;
       isFirstMoveOfGame = true;
+      CurrentGameID = gameID;
     }
 
     /// <summary>
@@ -153,7 +171,7 @@ namespace Ceres.Features.GameEngines
                                                    ProgressCallback callback = null,
                                                    bool verbose = false)
     {
-      return (GameEngineSearchResultCeres)Search(curPositionAndMoves, searchLimit, gameMoveHistory, callback, verbose);
+      return Search(curPositionAndMoves, searchLimit, gameMoveHistory, callback, verbose) as GameEngineSearchResultCeres;
     }
 
     /// <summary>
@@ -219,9 +237,20 @@ namespace Ceres.Features.GameEngines
       isFirstMoveOfGame = false;
 
       // TODO is the RootNWhenSearchStarted correct because we may be following a continuation (BestMoveRoot)
-      return new GameEngineSearchResultCeres(bestMoveMG.MoveStr(MGMoveNotationStyle.LC0Coordinate),
-                                             (float)searchResult.SearchRootNode.Q, scoreCeresCP, searchResult.SearchRootNode.MAvg, searchResult.Manager.SearchLimit, default,
-                                             searchResult.Manager.RootNWhenSearchStarted, N, (int)searchResult.Manager.Context.AvgDepth, searchResult);
+      GameEngineSearchResultCeres result = 
+        new GameEngineSearchResultCeres(bestMoveMG.MoveStr(MGMoveNotationStyle.LC0Coordinate),
+                                        (float)searchResult.SearchRootNode.Q, scoreCeresCP, searchResult.SearchRootNode.MAvg, searchResult.Manager.SearchLimit, default,
+                                        searchResult.Manager.RootNWhenSearchStarted, N, (int)searchResult.Manager.Context.AvgDepth, searchResult);
+
+      // Append search result information to log file (if any).
+      StringWriter dumpInfo = new StringWriter();
+      if (LogFileName != null)
+      {
+        result.Search.Manager.DumpFullInfo(result.Search.SearchRootNode, dumpInfo, CurrentGameID);
+        File.AppendAllText(LogFileName, dumpInfo.GetStringBuilder().ToString());
+      }
+
+      return result;
     }
 
 

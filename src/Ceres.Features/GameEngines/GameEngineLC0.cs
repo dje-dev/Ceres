@@ -97,7 +97,12 @@ namespace Ceres.Features.GameEngines
     /// </summary>
     public override UCISearchInfo UCIInfo => new UCISearchInfo(UCIRunner.LastInfoString);
 
-    public override void ResetGame() => UCIRunner.StartNewGame();
+
+    /// <summary>
+    /// Resets all state between games.
+    /// </summary>
+    /// <param name="gameID">optional game descriptive string</param>
+    public override void ResetGame(string gameID = null) => UCIRunner.StartNewGame();
     
 
     /// <summary>

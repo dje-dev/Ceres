@@ -144,10 +144,9 @@ namespace Ceres.Features.UCI
             break;
 
           case "uci":
-            Send("id name Ceres"); // TODO: Add executable version
+            Send($"id name Ceres {CeresVersion.VersionString}");
             Send("id author David Elliott and the Ceres Authors");
-            // todo output options such as:
-            //   option name Logfile type check default false
+            Send(SetOptionUCIDescriptions);
             Send("uciok");
             break;
 
@@ -260,7 +259,7 @@ namespace Ceres.Features.UCI
 
           case "dump-time":
             if (CeresEngine?.Search != null)
-              CeresEngine?.Search.Manager.DumpTimeInfo();
+              CeresEngine?.Search.Manager.DumpTimeInfo(OutStream);
             else
               OutStream.WriteLine("info string No search manager created");
             break;
@@ -318,8 +317,7 @@ namespace Ceres.Features.UCI
         using (new SearchContextExecutionBlock(CeresEngine?.Search.Manager.Context))
         {
           SearchPrincipalVariation pv2 = new SearchPrincipalVariation(CeresEngine.Search.Manager.Root);
-          MCTSPosTreeNodeDumper.DumpPV(CeresEngine.Search.Manager.Context.StartPosAndPriorMoves, 
-                                       CeresEngine.Search.Manager.Context.Root, withDetail, null);
+          MCTSPosTreeNodeDumper.DumpPV(CeresEngine.Search.Manager.Context.Root, withDetail);
         }
       }
       else
@@ -332,7 +330,7 @@ namespace Ceres.Features.UCI
       if (!haveInitializedEngine)
       {
         // Create the engine (to be subsequently reused).
-        CeresEngine = new GameEngineCeresInProcess("Ceres", EvaluatorDef, ParamsSearch, ParamsSelect);
+        CeresEngine = new GameEngineCeresInProcess("Ceres", EvaluatorDef, ParamsSearch, ParamsSelect, logFileName:logFileName);
 
         // Initialize engine
         CeresEngine.Warmup();
@@ -523,7 +521,8 @@ namespace Ceres.Features.UCI
     {
       if (numPV == 1)
       {
-        Send(UCIInfo.UCIInfoString(CeresEngine.Search.Manager, CeresEngine.Search.SearchRootNode, showWDL:showWDL));
+        Send(UCIInfo.UCIInfoString(CeresEngine.Search.Manager, CeresEngine.Search.SearchRootNode, 
+                                  showWDL:showWDL, scoreAsQ:scoreAsQ));
       }
       else
       {
@@ -532,7 +531,8 @@ namespace Ceres.Features.UCI
         BestMoveInfo best = searchRootNode.BestMoveInfo(false);
 
         // Send top move
-        Send(UCIInfo.UCIInfoString(manager, searchRootNode, best.BestMoveNode, 1, showWDL: showWDL));
+        Send(UCIInfo.UCIInfoString(manager, searchRootNode, best.BestMoveNode, 1, 
+                                   showWDL: showWDL, useParentN: !perPVCounters, scoreAsQ: scoreAsQ));
 
         // Send other moves visited
         MCTSNode[] sortedN = searchRootNode.ChildrenSorted(s => -(float)s.N);
@@ -541,7 +541,8 @@ namespace Ceres.Features.UCI
         {
           if (!object.ReferenceEquals(sortedN[i], best.BestMoveNode))
           {
-            Send(UCIInfo.UCIInfoString(manager, searchRootNode, sortedN[i], multiPVIndex, showWDL: showWDL));
+            Send(UCIInfo.UCIInfoString(manager, searchRootNode, sortedN[i], multiPVIndex, 
+                                       showWDL: showWDL, useParentN: !perPVCounters, scoreAsQ: scoreAsQ));
             multiPVIndex++;
           }
         }

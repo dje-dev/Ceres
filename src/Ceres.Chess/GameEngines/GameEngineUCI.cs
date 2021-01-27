@@ -149,7 +149,11 @@ namespace Ceres.Chess.GameEngines
                                     uciSetOptionCommands: extraCommandsArray);
     }
 
-    public override void ResetGame()
+    /// <summary>
+    /// Resets all state between games.
+    /// </summary>
+    /// <param name="gameID">optional game descriptive string</param>
+    public override void ResetGame(string gameID = null)
     {
       UCIRunner.StartNewGame();
     }

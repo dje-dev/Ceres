@@ -157,7 +157,8 @@ namespace Ceres.Features.Tournaments
 
       tags.Add((engine2White ? "BlackEngine" : "WhiteEngine", Def.Player1Def.EngineDef.ToString()));
       tags.Add((engine2White ? "WhiteEngine" : "BlackEngine", Def.Player2Def.EngineDef.ToString()));
-      tags.Add(("CeresVersion", GitInfo.VersionString));
+      tags.Add(("CeresVersion", CeresVersion.VersionString));
+      tags.Add(("CeresGIT", GitInfo.VersionString));
 
       return tags;   
     }
@@ -184,14 +185,16 @@ namespace Ceres.Features.Tournaments
       TimingStats gameTimingStats = new TimingStats();
       using (new TimingBlock(gameTimingStats, TimingBlock.LoggingType.None))
       {
+        // Start new game
+        string gameID = $"{Def.ID}_GAME_SEQ{gameSequenceNum}_OPENING_{openingIndex}";
+        Run.Engine1.ResetGame(gameID);
+        Run.Engine2.ResetGame(gameID);
+
         thisResult = DoGameTest(clearHashTable, Def.Logger, pgnWriter, openingIndex,
                                 Run.Engine1, Run.Engine2,
                                 Run.Engine2CheckEngine, engine2White,
                                 Def.Player1Def.SearchLimit, Def.Player2Def.SearchLimit,
                                 Def.UseTablebasesForAdjudication, Def.ShowGameMoves);
-        // End games
-        Run.Engine1.ResetGame();
-        Run.Engine2.ResetGame();
 
         if (MCTSDiagnostics.TournamentDumpEngine2EndOfGameSummary)
         {
@@ -217,7 +220,7 @@ namespace Ceres.Features.Tournaments
 
         if (pgnFileName != null)
         {
-          lock (writePGNLock) System.IO.File.AppendAllText(pgnFileName, pgnWriter.GetText());
+          lock (writePGNLock) File.AppendAllText(pgnFileName, pgnWriter.GetText());
         }
 
         Run.Engine1.ResetGame();
@@ -503,7 +506,7 @@ namespace Ceres.Features.Tournaments
 
         GameEngineSearchResult engineMove = engine.Search(curPositionAndMoves, thisMoveSearchLimit, gameMoveHistory);
         float engineTime = (float)engineMove.TimingStats.ElapsedTimeSecs;
-
+       
         GameEngineSearchResult checkSearch = default;
         string checkMove = "";
         if (checkMoveEngine != null)

@@ -69,8 +69,14 @@ namespace Ceres.Chess.GameEngines
       ID = id;
     }
 
-    public abstract void ResetGame();
 
+    /// <summary>
+    /// Resets all state between games.
+    /// </summary>
+    /// <param name="gameID">optional game descriptive string</param>
+    public abstract void ResetGame(string gameID = null);
+
+    
     /// <summary>
     /// Runs a search, calling DoSearch and adjusting the cumulative search time
     /// </summary>
@@ -99,7 +105,6 @@ namespace Ceres.Chess.GameEngines
       CumulativeSearchTimeSeconds += (float)stats.ElapsedTimeSecs;
       CumulativeNodes += result.FinalN;
 
-// XXY Console.WriteLine(this.GetType() + " limit " + searchLimit + " elapsed " + stats.ElapsedTimeSecs);
       result.TimingStats = stats;
       return result;
     }
