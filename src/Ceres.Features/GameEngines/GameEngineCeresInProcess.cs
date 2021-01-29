@@ -156,6 +156,9 @@ namespace Ceres.Features.GameEngines
     {
     }
 
+
+    static readonly object logFileWriteObj = new object();
+
     /// <summary>
     /// Runs a search, calling DoSearch and adjusting the cumulative search time
     /// (convenience method with same functionality but returns the as the subclass
@@ -247,7 +250,10 @@ namespace Ceres.Features.GameEngines
       if (LogFileName != null)
       {
         result.Search.Manager.DumpFullInfo(result.Search.SearchRootNode, dumpInfo, CurrentGameID);
-        File.AppendAllText(LogFileName, dumpInfo.GetStringBuilder().ToString());
+        lock (logFileWriteObj)
+        {
+          File.AppendAllText(LogFileName, dumpInfo.GetStringBuilder().ToString());
+        }
       }
 
       return result;
