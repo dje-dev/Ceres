@@ -63,17 +63,19 @@ namespace Ceres.MCTS.Managers.Limits
           factorLargeIncrement = MathF.Min(MAX_LARGE_INCREMENT_MULTIPLIER, factorLargeIncrement);
         }
       }
+      
 
       // When we are behind then it's worth taking a gamble and using more time
       // but when we are ahead, take a little less time to be sure we don't err in time pressure.
       float factorWinningness = inputs.RootQ switch
       {
-        < -0.25f => 1.15f,
-        < -0.15f => 1.05f,
-        > 0.25f => 0.90f,
-        > 0.15f => 0.95f,
+        < -0.40f => 1.15f,
+        < -0.25f => 1.05f,
+        > 0.40f => 0.90f,
+        > 0.25f => 0.95f,
         _ => 1.0f
       };
+    
 
       // Spend 30% more on first move of game (definitely no tree reuse, etc.)
       float factorFirstMove = inputs.IsFirstMoveOfGame ? 1.3f : 1.0f;
