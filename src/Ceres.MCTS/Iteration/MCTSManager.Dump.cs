@@ -15,7 +15,7 @@
 
 using System;
 using System.IO;
-
+using System.Threading;
 using Ceres.Chess;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Analysis;
@@ -43,7 +43,8 @@ namespace Ceres.MCTS.Iteration
 
       writer.WriteLine();
       writer.WriteLine("=================================================================================");
-      writer.WriteLine(DateTime.Now + " SEARCH RESULT INFORMATION,  Move = " + ((1 + moveIndex / 2)));
+      writer.Write(DateTime.Now + " SEARCH RESULT INFORMATION,  Move = " + ((1 + moveIndex / 2)));
+      writer.WriteLine($" Thread = {Thread.CurrentThread.ManagedThreadId}");
       if (description != null) writer.WriteLine(description);
       writer.WriteLine();
 
@@ -57,18 +58,6 @@ namespace Ceres.MCTS.Iteration
       // Output position (with history) information.
       writer.WriteLine("Position            : " + searchRootNode.Annotation.Pos.FEN);
       writer.WriteLine("Tree root position  : " + Context.Tree.Store.Nodes.PriorMoves);
-      if (searchRootNode != Root)
-      {
-        string priorMoves = "";
-        MCTSNode node = searchRootNode;
-        while ((node = searchRootNode.Parent) != null)
-        {
-          priorMoves = node.Annotation.PriorMoveMG.ToString() + " " + priorMoves;
-        }
-        writer.WriteLine($"Moves from root    : {priorMoves}");
-        writer.WriteLine();
-      }
-
       writer.WriteLine();
 
       using (new SearchContextExecutionBlock(Context))

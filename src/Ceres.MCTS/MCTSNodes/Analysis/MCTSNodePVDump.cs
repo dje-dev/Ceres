@@ -35,20 +35,28 @@ namespace Ceres.MCTS.MTCSNodes.Analysis
   {
     static void DumpWithColor(float v, string s, float thresholdRed, float thresholdGreen, TextWriter writer)
     {
-      ConsoleColor defaultColor = Console.ForegroundColor;
-
-      try
+      if (writer != Console.Out)
       {
-        if (v > thresholdGreen)
-          Console.ForegroundColor = ConsoleColor.Green;
-        else if (v < thresholdRed)
-          Console.ForegroundColor = ConsoleColor.Red;
-
+        // No point in using color if not the Console
         writer.Write(s);
       }
-      finally
+      else
       {
-        Console.ForegroundColor = defaultColor;
+        ConsoleColor defaultColor = Console.ForegroundColor;
+
+        try
+        {
+          if (v > thresholdGreen)
+            Console.ForegroundColor = ConsoleColor.Green;
+          else if (v < thresholdRed)
+            Console.ForegroundColor = ConsoleColor.Red;
+
+          writer.Write(s);
+        }
+        finally
+        {
+          Console.ForegroundColor = defaultColor;
+        }
       }
     }
 
