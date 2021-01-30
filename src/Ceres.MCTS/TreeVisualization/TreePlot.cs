@@ -358,8 +358,8 @@ namespace Ceres.MCTS.TreeVisualization
             rawRoot = node;
             Stopwatch sw = Stopwatch.StartNew();
             (root, treeInfo) = DrawTreeNode.Layout(node);
-            Console.WriteLine("Layout time in ms:");
-            Console.WriteLine(sw.ElapsedMilliseconds);
+            //Console.WriteLine("Layout time in ms:");
+            //Console.WriteLine(sw.ElapsedMilliseconds);
             canvasHeight *= superSample;
             canvasWidth *= superSample;
             pointRadius *= superSample;
@@ -427,8 +427,8 @@ namespace Ceres.MCTS.TreeVisualization
                 //Draw the tree
                 Stopwatch sw = Stopwatch.StartNew();
                 DrawTree(root, gfx, penEdge, brushRoot, brushEven, brushOdd);
-                Console.WriteLine("Draw time in ms:");
-                Console.WriteLine(sw.ElapsedMilliseconds);
+                //Console.WriteLine("Draw time in ms:");
+                //Console.WriteLine(sw.ElapsedMilliseconds);
 
                 // Scale down to final image size.
                 gfxFinal.DrawImage(bmp, 0, 0, canvasWidth / superSample, canvasHeight / superSample);
@@ -439,7 +439,6 @@ namespace Ceres.MCTS.TreeVisualization
         {
             fileName += fileName.EndsWith(".png") ? "" : ".png";
             image.Save(fileName);
-            //image.Save("C:\\temp\\drawing_test24.png");
         }
 
         /// <summary>
