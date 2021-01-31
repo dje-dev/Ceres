@@ -42,12 +42,19 @@ namespace Ceres.MCTS.Environment
     /// Spare counter reserved for temporary ad-hoc use when debugging new features.
     /// </summary>
     public static long TestCounter1 = 0;
+    
+    /// <summary>
+    /// Spare counter reserved for temporary ad-hoc use when debugging new features.
+    /// </summary>
+    public static float TestMetric1 = 0;
+
 
     private PollingCounter instamoveCounter;
 
     private static MCTSEventSource? mctsEventSource;
 
-    private PollingCounter testCounter1;
+    private PollingCounter testCounter1, testMetric1;
+    private PollingCounter searchCount;
 
     private PollingCounter storageVirtualAllocBytes;
 
@@ -77,7 +84,7 @@ namespace Ceres.MCTS.Environment
     private IncrementingPollingCounter searchNumCache;
 
     private IncrementingPollingCounter numNodesApplied;
-    private IncrementingPollingCounter numNodesAppliedInc;
+    private PollingCounter numNodesAppliedTotal;
     private IncrementingPollingCounter numNodesDualSelectorDuplicate;
 
     private PollingCounter numNodesSelectedIntoTreeCache;
@@ -116,6 +123,8 @@ namespace Ceres.MCTS.Environment
       if (command.Command == EventCommand.Enable)
       {
         testCounter1 ??= new PollingCounter("test-counter1", this, () => TestCounter1);
+        testMetric1 ??= new PollingCounter("test-metric", this, () => TestMetric1);
+        searchCount ??= new PollingCounter("mcts-search-count", this, () => MCTSearch.SearchCount);
 
         instamoveCounter ??= new PollingCounter("instamove-count", this, () => MCTSearch.InstamoveCount);
 
@@ -135,6 +144,7 @@ namespace Ceres.MCTS.Environment
         numPositionsGPU3 ??= new PollingCounter("gpu-3-positions", this, () => NNEvaluatorStats.TotalPosEvaluationsPerGPU[3]);
 
 
+        numNodesAppliedTotal ??= new PollingCounter("applied-tot", this, () => MCTSApply.TotalNumNodesApplied);
         numNodesApplied ??= new IncrementingPollingCounter("applied", this, () => MCTSApply.TotalNumNodesApplied);
         numNodesDualSelectorDuplicate ??= new IncrementingPollingCounter("selected-dual-duplicate", this, () => MCTSNodesSelectedSet.TotalNumDualSelectorDuplicates);
 
