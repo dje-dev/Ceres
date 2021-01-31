@@ -218,7 +218,8 @@ namespace Ceres.MCTS.LeafExpansion
 
 
     /// <summary>
-    /// 
+    /// Initializes all fields in the Annotation field (if not already initialized).
+    /// Also runs the immediate evaluators to determine if the node can be immediately applied.
     /// </summary>
     /// <param name="node"></param>
     /// <param name="parentAnnotation">optionally a precomputed parent annotation (otherwise computed)</param>
