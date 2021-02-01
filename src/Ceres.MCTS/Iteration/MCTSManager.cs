@@ -15,38 +15,29 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 
-using Ceres.Base;
+using Ceres.Base.Benchmarking;
 using Ceres.Base.DataTypes;
 using Ceres.Base.Environment;
 using Ceres.Base.Math;
 using Ceres.Base.Misc;
+
 using Ceres.Chess;
-using Ceres.Chess.EncodedPositions.Basic;
+using Ceres.Chess.Positions;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.PositionEvalCaching;
-using Ceres.Chess.LC0;
-using Ceres.MCTS.Environment;
-using Ceres.MCTS.Evaluators;
-using Ceres.MCTS.LeafExpansion;
-using Ceres.MCTS.MTCSNodes;
-using Ceres.MCTS.Search;
-using Ceres.MCTS.Search.IteratedMCTS;
-using Ceres.Chess.LC0.Positions;
 using Ceres.Chess.NNFiles;
 using Ceres.Chess.GameEngines;
 using Ceres.Chess.EncodedPositions;
+
+using Ceres.MCTS.Evaluators;
+using Ceres.MCTS.MTCSNodes;
+using Ceres.MCTS.Search;
+using Ceres.MCTS.Search.IteratedMCTS;
 using Ceres.MCTS.Managers.Limits;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.MTCSNodes.Storage;
-using Ceres.Chess.Positions;
-using System.Threading;
 using Ceres.MCTS.Params;
-using Ceres.Base.Benchmarking;
-using Ceres.MCTS.MTCSNodes.Analysis;
-using Ceres.MCTS.Utils;
-using System.IO;
 
 #endregion
 
@@ -556,6 +547,8 @@ namespace Ceres.MCTS.Iteration
            MCTSProgressCallback progressCallback = null,
            bool possiblyUsePositionCache = false)
     {
+      MCTSearch.SearchCount++;
+
       MCTSIterator context = manager.Context;
       PositionWithHistory priorMoves = context.Tree.Store.Nodes.PriorMoves;
 
@@ -655,7 +648,7 @@ namespace Ceres.MCTS.Iteration
       }
     }
 
-    #region IDisposable Support
+#region IDisposable Support
 
     public MGMove BestMoveMG
     {
@@ -698,9 +691,9 @@ namespace Ceres.MCTS.Iteration
       }
     }
 
-    #endregion
+#endregion
 
-    #region Time management
+#region Time management
 
     // TODO: make this smarter (aware of hardware and NN)
     public int EstimatedNumSearchNodes => EstimatedNumSearchNodesForEvaluator(SearchLimit, Context.NNEvaluators);
@@ -878,7 +871,8 @@ namespace Ceres.MCTS.Iteration
 
     }
 
-    #endregion
+#endregion
+
 
     /// <summary>
     /// Returns string summary.
@@ -891,3 +885,4 @@ namespace Ceres.MCTS.Iteration
 
   }
 }
+
