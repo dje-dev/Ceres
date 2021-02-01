@@ -13,9 +13,11 @@
 
 #region Using directives
 
-#endregion
+using System.IO;
+using Ceres.Chess.UserSettings;
+using Ceres.MCTS.Params;
 
-using System.ComponentModel.DataAnnotations;
+#endregion
 
 namespace Ceres.Features.UCI
 {
@@ -56,6 +58,36 @@ namespace Ceres.Features.UCI
     /// Number of moves for which to output PVs in UCI input (multiPV mode is where numPV > 1).
     /// </summary>
     int numPV = 1;
+
+    /// <summary>
+    /// ParamsSelect.CPUCT
+    /// </summary>
+    float cpuct = new ParamsSelect().CPUCT;
+
+    /// <summary>
+    /// ParamsSelect.CPUCTBase
+    /// </summary>
+    float cpuctBase = new ParamsSelect().CPUCTBase;
+
+    /// <summary>
+    /// ParamsSelect.CPUCTFactor
+    /// </summary>
+    float cpuctFactor = new ParamsSelect().CPUCTFactor;
+
+    /// <summary>
+    /// ParamsSelect.CPUCTAtRoot
+    /// </summary>
+    float cpuctAtRoot = new ParamsSelect().CPUCTAtRoot;
+
+    /// <summary>
+    /// ParamsSelect.CPUCTBaseAtRoot
+    /// </summary>
+    float cpuctBaseAtRoot = new ParamsSelect().CPUCTBaseAtRoot;
+
+    /// <summary>
+    /// ParamsSelect.CPUCTFactorAtRoot
+    /// </summary>
+    float cpuctFactorAtRoot = new ParamsSelect().CPUCTFactorAtRoot;
 
 
     void ProcessSetOption(string command)
@@ -123,10 +155,43 @@ namespace Ceres.Features.UCI
           SetBool(value, ref showWDL);
           break;
 
-      }
+        case "syzygypath":
+          if (!Directory.Exists(value))
+          {
+            OutStream.Write("Path not found: { value }");
+          }
+          else
+          {
+            CeresUserSettingsManager.Settings.DirTablebases = value;
+          }
+          break;
 
-      //setoption name VerboseMoveStats value true
-      //setoption name LogLiveStats value true
+
+        case "cpuct":
+          SetFloat(value, 0, float.MaxValue, ref cpuct);
+          break;
+
+        case "cpuctbase":
+          SetFloat(value, 0, float.MaxValue, ref cpuctBase);
+          break;
+
+        case "cpuctfactor":
+          SetFloat(value, 0, float.MaxValue, ref cpuctFactor);
+          break;
+
+        case "cpuctatroot":
+          SetFloat(value, 0, float.MaxValue, ref cpuctAtRoot);
+          break;
+
+        case "cpuctbaseatroot":
+          SetFloat(value, 0, float.MaxValue, ref cpuctBaseAtRoot);
+          break;
+
+        case "cpuctfactoratroot":
+          SetFloat(value, 0, float.MaxValue, ref cpuctFactorAtRoot);
+          break;
+     }
+
 
     }
 
@@ -160,9 +225,9 @@ namespace Ceres.Features.UCI
         value = newValue;
     }
 
-    void SetFloat(string intStr, float minValue, float maxValue, ref float value)
+    void SetFloat(string floatStr, float minValue, float maxValue, ref float value)
     {
-      if (!float.TryParse(intStr, out float newValue))
+      if (!float.TryParse(floatStr, out float newValue))
       {
         OutStream.WriteLine("Invalid value, expected number");
       }
@@ -179,8 +244,8 @@ namespace Ceres.Features.UCI
         value = newValue;
     }
 
-    const string SetOptionUCIDescriptions =
-@"
+    static string SetOptionUCIDescriptions => 
+@$"
 option name LogFile type string default
 option name MultiPV type spin default 1 min 1 max 500
 option name VerboseMoveStats type check default false
@@ -188,19 +253,18 @@ option name LogLiveStats type check default false
 option name SmartPruningFactor type string default 1
 option name PerPVCounters type check default false
 option name ScoreType type combo default centipawn var centipawn var Q var W-L
+option name UCI_ShowWDL type check default false
+option name SyzygyPath type string default
+option name CPUCT type string default {new ParamsSelect().CPUCT}
+option name CPUCTAtRoot type string default {new ParamsSelect().CPUCTAtRoot}
+option name CPuctBase type string default {new ParamsSelect().CPUCTBase}
+option name CPuctBaseAtRoot type string default {new ParamsSelect().CPUCTBaseAtRoot}
+option name CPuctFactor type string default {new ParamsSelect().CPUCTFactor}
+option name CPuctFactorAtRoot type string default {new ParamsSelect().CPUCTFactorAtRoot}
 ";
     /*
-option name SyzygyPath type string default
-option name UCI_ShowWDL type check default false
 option name ConfigFile type string default lc0.config
-
 option name HistoryFill type combo default fen_only var no var fen_only var always
-option name CPuct type string default 2.147000
-option name CPuctAtRoot type string default 2.147000
-option name CPuctBase type string default 18368.000000
-option name CPuctBaseAtRoot type string default 18368.000000
-option name CPuctFactor type string default 2.815000
-option name CPuctFactorAtRoot type string default 2.815000
 option name RamLimitMb type spin default 0 min 0 max 100000000
 option name MoveOverheadMs type spin default 200 min 0 max 100000000
 ";

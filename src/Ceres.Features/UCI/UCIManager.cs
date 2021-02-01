@@ -41,6 +41,7 @@ using Ceres.MCTS.Managers;
 using Ceres.Chess.LC0VerboseMoves;
 using Ceres.Base.DataTypes;
 using Ceres.Chess.EncodedPositions.Basic;
+using LINQPad;
 
 #endregion
 
@@ -68,8 +69,6 @@ namespace Ceres.Features.UCI
     public Action<MCTSManager> SearchFinishedEvent;
 
     public readonly NNEvaluatorDef EvaluatorDef;
-    public readonly ParamsSearch ParamsSearch;
-    public readonly ParamsSelect ParamsSelect;
 
     /// <summary>
     /// Ceres engine instance used for current UCI game.
@@ -109,13 +108,35 @@ namespace Ceres.Features.UCI
       OutStream = outStream ?? Console.Out;
       SearchFinishedEvent = searchFinishedEvent;
       
-      EvaluatorDef = evaluatorDef;      
-
-      ParamsSearch = new ParamsSearch();
-      ParamsSelect = new ParamsSelect();
+      EvaluatorDef = evaluatorDef;
 
       if (disablePruning) ParamsSearch.FutilityPruningStopSearchEnabled = false;
     }
+
+    public ParamsSelect ParamsSelect
+    {
+      get
+      {
+        ParamsSelect parms = new ParamsSelect();
+        parms.CPUCT = cpuct;
+        parms.CPUCTBase = cpuctBase;
+        parms.CPUCTFactor = cpuctFactor;
+        parms.CPUCTAtRoot = cpuctAtRoot;
+        parms.CPUCTBaseAtRoot = cpuctBaseAtRoot;
+        parms.CPUCTFactorAtRoot = cpuctFactorAtRoot;
+        return parms;
+      }
+    }
+
+    public ParamsSearch ParamsSearch
+    {
+      get
+      {
+        ParamsSearch parms = new ParamsSearch();
+        return parms;
+      }
+    }
+
 
     /// <summary>
     /// Outputs line to UCI.
