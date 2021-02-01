@@ -268,8 +268,6 @@ namespace Ceres.MCTS.Managers
     /// <returns></returns>
     internal float MinFractionNToUseQ(float qDifferenceFromBestQ)
     {
-      bool test = this.Node.Context.ParamsSearch.TestFlag;
-
       bool isSmallTree = Node.Context.Root.N < 50_000;
 
       float minFrac;
@@ -297,6 +295,7 @@ namespace Ceres.MCTS.Managers
       }
 
 #if EXPERIMENTAL
+      bool test = this.Node.Context.ParamsSearch.TestFlag;
       // Not completely successful attempt to simplify 
       // the above overparameterized logic.
       if (test)
