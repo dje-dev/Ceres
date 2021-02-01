@@ -67,6 +67,11 @@ namespace Ceres.MCTS.Iteration
     public MCTSNode SearchRootNode => continuationSubroot != null ? continuationSubroot : Manager.Root;
 
 
+    /// <summary>
+    /// Total number of searches conducted.
+    /// </summary>
+    public static int SearchCount { get; internal set; }
+
     #region Tree reuse related
 
     /// <summary>
