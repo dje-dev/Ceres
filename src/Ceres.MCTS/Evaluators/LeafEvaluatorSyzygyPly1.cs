@@ -45,12 +45,21 @@ namespace Ceres.MCTS.Evaluators
     public static long NumHits = 0;
 
 
+    /// <summary>
+    /// Constructor.
+    /// </summary>
+    /// <param name="ply0Evaluator"></param>
     public LeafEvaluatorSyzygyPly1(LeafEvaluatorSyzygyLC0 ply0Evaluator)
     {
       Ply0Evaluator = ply0Evaluator;
     }
 
 
+    /// <summary>
+    /// Implementation of evaluation method.
+    /// </summary>
+    /// <param name="node"></param>
+    /// <returns></returns>
     protected override LeafEvaluationResult DoTryEvaluate(MCTSNode node)
     {
       Position pos = node.Annotation.Pos;
@@ -59,13 +68,22 @@ namespace Ceres.MCTS.Evaluators
       // one more piece than the max cardinality of our tablebases.
       if (pos.PieceCount != (Ply0Evaluator.MaxCardinality + 1)) return default;
 
-      // Iterate over the capture moves
+      // Iterate over the capture moves.
       foreach ((MGMove move, Position newPos) in PositionsGenerator1Ply.GenPositions(pos, move => move.Capture))
       {
-        // Check if this position is in tablebase and it is a definitive win for our side
+        // Check if this position is in tablebase and it is a definitive win for our side.
         LeafEvaluationResult result = Ply0Evaluator.Lookup(in newPos);
         if (result.TerminalStatus == GameResult.Checkmate)
         {
+          if (node.Depth < 5)
+          {
+            // Don't use this evaluator near the root because 
+            // the tablebases do not yet contain the best move thus
+            // we still need search and therefore to allow 
+            // neural network evaluations to find the win.
+            return default;
+          }
+
           // Check if loss for them (win for us)
           bool posLoses = result.V < 0;
           if (!posLoses) return default;
