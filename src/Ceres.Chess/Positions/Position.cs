@@ -1106,7 +1106,7 @@ namespace Ceres.Chess
     public Position AfterMove(Move move)
     {
       // TODO: improve efficiency by implementing directly (instead of via MGMove)
-      MGMove mgMove = MGMoveConverter.MGMoveFromPosAndMove(this, move);
+      MGMove mgMove = MGMoveConverter.MGMoveFromPosAndMove(in this, move);
       MGPosition mgPos = MGPosition.FromPosition(in this);
       mgPos.MakeMove(mgMove);
       return MGChessPositionConverter.PositionFromMGChessPosition(in mgPos);

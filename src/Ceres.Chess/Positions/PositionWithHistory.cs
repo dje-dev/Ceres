@@ -127,7 +127,7 @@ namespace Ceres.Chess.Positions
           if (sanMoveString != null)
           {
             Move move = pos.MoveSAN(sanMoveString);
-            ret.AppendMove(MGMoveConverter.MGMoveFromPosAndMove(pos, move));
+            ret.AppendMove(MGMoveConverter.MGMoveFromPosAndMove(in pos, move));
             pos = pos.AfterMove(move);
           }
         }
