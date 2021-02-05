@@ -146,9 +146,6 @@ namespace Ceres.MCTS.Iteration
     public readonly bool IsFirstMoveOfGame;
 
 
-    ManagerGameLimitInputs limitsManagerInputs;
-
-
     /// <summary>
     /// 
     /// </summary>
@@ -181,42 +178,20 @@ namespace Ceres.MCTS.Iteration
                        List<GameMoveStat> gameMoveHistory,
                        bool isFirstMoveOfGame)
     {
+      if (searchLimit.IsPerGameLimit) throw new Exception("Per game search limits not supported");
+
       StartTimeThisSearch = startTime;
       RootNWhenSearchStarted = store.Nodes.nodes[store.RootIndex.Index].N;
       ParamsSearchExecutionPostprocessor = paramsSearchExecutionPostprocessor;
       IsFirstMoveOfGame = isFirstMoveOfGame;
+      SearchLimit = searchLimit;
 
-      PriorMoveStats = new List<GameMoveStat>();
 
       // Make our own copy of move history.
+      PriorMoveStats = new List<GameMoveStat>();
       if (gameMoveHistory != null)
       {
         PriorMoveStats.AddRange(gameMoveHistory);
-      }
-
-      // Possibly convert time limit per game into time for this move.
-      if (searchLimit.IsPerGameLimit)
-      {
-        SearchLimitType type = searchLimit.Type == SearchLimitType.SecondsForAllMoves
-                                                       ? SearchLimitType.SecondsPerMove
-                                                       : SearchLimitType.NodesPerMove;
-        float rootQ = priorManager == null ? float.NaN : (float)store.RootNode.Q;
-
-
-        limitsManagerInputs = new(store.Nodes.PriorMoves.FinalPosition, 
-                                searchParams, PriorMoveStats,
-                                type, store.RootNode.N, rootQ, 
-                                searchLimit.Value, searchLimit.ValueIncrement, 
-                                float.NaN, float.NaN, 
-                                maxMovesToGo:searchLimit.MaxMovesToGo,                                                  
-                                isFirstMoveOfGame: isFirstMoveOfGame);
-
-        ManagerGameLimitOutputs timeManagerOutputs = limitManager.ComputeMoveAllocation(limitsManagerInputs);
-        SearchLimit = timeManagerOutputs.LimitTarget;
-      }
-      else
-      {
-        SearchLimit = searchLimit;
       }
 
       // Possibly autoselect new optimal parameters

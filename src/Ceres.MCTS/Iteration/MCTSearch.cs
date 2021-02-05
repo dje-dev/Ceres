@@ -108,7 +108,7 @@ namespace Ceres.MCTS.Iteration
     /// <param name="nnEvaluators"></param>
     /// <param name="paramsSelect"></param>
     /// <param name="paramsSearch"></param>
-    /// <param name="timeManager"></param>
+    /// <param name="limitManager"></param>
     /// <param name="paramsSearchExecutionPostprocessor"></param>
     /// <param name="reuseOtherContextForEvaluatedNodes"></param>
     /// <param name="priorMoves"></param>
@@ -122,7 +122,7 @@ namespace Ceres.MCTS.Iteration
     public void Search(NNEvaluatorSet nnEvaluators,
                        ParamsSelect paramsSelect,
                        ParamsSearch paramsSearch,
-                       IManagerGameLimit timeManager,
+                       IManagerGameLimit limitManager,
                        ParamsSearchExecutionModifier paramsSearchExecutionPostprocessor,
                        MCTSIterator reuseOtherContextForEvaluatedNodes,
                        PositionWithHistory priorMoves,
@@ -154,9 +154,12 @@ namespace Ceres.MCTS.Iteration
 
       MCTSNodeStore store = new MCTSNodeStore(maxNodes, priorMoves);
 
+      SearchLimit searchLimitToUse = ConvertedSearchLimit(searchLimit, store, paramsSearch, limitManager,
+                                                          null, gameMoveHistory, isFirstMoveOfGame);
+
       Manager = new MCTSManager(store, reuseOtherContextForEvaluatedNodes, null, null,
                                 nnEvaluators, paramsSearch, paramsSelect,
-                                searchLimit, paramsSearchExecutionPostprocessor, timeManager,
+                                searchLimitToUse, paramsSearchExecutionPostprocessor, limitManager,
                                 startTime, null, gameMoveHistory, isFirstMoveOfGame);
 
       using (new SearchContextExecutionBlock(Manager.Context))
@@ -165,6 +168,54 @@ namespace Ceres.MCTS.Iteration
       }
     }
 
+
+    /// <summary>
+    /// Returns a new SearchLimit, which is converted
+    /// from a game limit to per-move limit if necessary.
+    /// </summary>
+    /// <param name="searchLimit"></param>
+    /// <param name="store"></param>
+    /// <param name="searchParams"></param>
+    /// <param name="limitManager"></param>
+    /// <param name="priorManager"></param>
+    /// <param name="gameMoveHistory"></param>
+    /// <param name="isFirstMoveOfGame"></param>
+    /// <returns></returns>
+    SearchLimit ConvertedSearchLimit(SearchLimit searchLimit, 
+                                     MCTSNodeStore store,
+                                     ParamsSearch searchParams,
+                                     IManagerGameLimit limitManager,
+                                     MCTSManager priorManager,
+                                     List<GameMoveStat> gameMoveHistory,
+                                     bool isFirstMoveOfGame)
+    {
+      // Possibly convert time limit per game into time for this move.
+      if (!searchLimit.IsPerGameLimit)
+      {
+        // Return a clone.
+        return searchLimit with { };
+      }
+      else
+      {
+        SearchLimitType type = searchLimit.Type == SearchLimitType.SecondsForAllMoves
+                                                       ? SearchLimitType.SecondsPerMove
+                                                       : SearchLimitType.NodesPerMove;
+        float rootQ = priorManager == null ? float.NaN : (float)store.RootNode.Q;
+
+
+        ManagerGameLimitInputs limitsManagerInputs = new(store.Nodes.PriorMoves.FinalPosition,
+                                searchParams, gameMoveHistory,
+                                type, store.RootNode.N, rootQ,
+                                searchLimit.Value, searchLimit.ValueIncrement,
+                                float.NaN, float.NaN,
+                                maxMovesToGo: searchLimit.MaxMovesToGo,
+                                isFirstMoveOfGame: isFirstMoveOfGame);
+
+        ManagerGameLimitOutputs timeManagerOutputs = limitManager.ComputeMoveAllocation(limitsManagerInputs);
+        return timeManagerOutputs.LimitTarget;
+      }
+    }
+   
 
     /// <summary>
     /// Runs a search, possibly continuing from node 
@@ -211,8 +262,20 @@ namespace Ceres.MCTS.Iteration
         // Update contempt manager (if any) based opponent's prior move
         UpdateContemptManager(newRoot);
 
+        SearchLimit searchLimitAdjusted;
+        if (searchLimit.Type == SearchLimitType.NodesPerMove)
+        {
+          // Nodes per move are treated as incremental beyond initial starting size of tree.
+          searchLimitAdjusted = new SearchLimit(SearchLimitType.NodesPerMove, searchLimit.Value + store.RootNode.N);
+        }
+        else
+        {
+          searchLimitAdjusted = ConvertedSearchLimit(searchLimit, store, priorContext.ParamsSearch, Manager.LimitManager,
+                                                     Manager, gameMoveHistory, isFirstMoveOfGame);
+        }
+
         // Check for possible instant move
-        (MCTSManager, MGMove, TimingStats) instamove = CheckInstamove(Manager, searchLimit, newRoot);
+        (MCTSManager, MGMove, TimingStats) instamove = CheckInstamove(Manager, searchLimitAdjusted, newRoot);
         if (instamove != default)
         {
           // Modify in place to point to the new root
@@ -225,6 +288,8 @@ namespace Ceres.MCTS.Iteration
         {
           CountSearchContinuations = 0;
         }
+
+        const bool possiblyUsePositionCache = false; // TODO: could this be relaxed?
 
         bool storeIsAlmostFull = priorContext.Tree.Store.FractionInUse > 0.9f;
         bool newRootIsBigEnoughForReuse = newRoot != null && newRoot.N >= (priorContext.Root.N * thresholdMinFractionNodesRetained);
@@ -266,13 +331,6 @@ namespace Ceres.MCTS.Iteration
           CeresEnvironment.LogInfo("MCTS", "MakeChildNewRoot", $"Select {newRoot.N:N0} from {numNodesInitial:N0} "
                                   + $"in {(int)(makeNewRootTimingStats.ElapsedTimeSecs / 1000.0)}ms");
 
-          // Finally if nodes adjust based on current nodes.
-          SearchLimit searchLimitAdjusted = searchLimit;
-          if (searchLimit.Type == SearchLimitType.NodesPerMove)
-          {
-            searchLimitAdjusted = new SearchLimit(SearchLimitType.NodesPerMove, searchLimit.Value + store.RootNode.N);
-          }
-
           // Construct a new search manager reusing this modified store and modified transposition roots.
           Manager = new MCTSManager(store, reuseOtherContextForEvaluatedNodes, reusePositionCache, newTranspositionRoots,
                                     priorContext.NNEvaluators, priorContext.ParamsSearch, priorContext.ParamsSelect,
@@ -280,7 +338,6 @@ namespace Ceres.MCTS.Iteration
                                     startTime, Manager, gameMoveHistory, isFirstMoveOfGame: isFirstMoveOfGame);
           Manager.Context.ContemptManager = priorContext.ContemptManager;
 
-          bool possiblyUsePositionCache = false; // TODO: could this be relaxed?
           (BestMove, TimingInfo) = MCTSManager.Search(Manager, verbose, progressCallback, possiblyUsePositionCache);
         }
 
@@ -291,7 +348,7 @@ namespace Ceres.MCTS.Iteration
           Search(Manager.Context.NNEvaluators, Manager.Context.ParamsSelect,
                  Manager.Context.ParamsSearch, Manager.LimitManager,
                  null, reuseOtherContextForEvaluatedNodes, newPositionAndMoves, searchLimit, verbose,
-                 startTime, gameMoveHistory, progressCallback, false);
+                 startTime, gameMoveHistory, progressCallback, possiblyUsePositionCache, isFirstMoveOfGame);
         }
       }
 
