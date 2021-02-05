@@ -14,9 +14,13 @@
 #region Using directives
 
 using Ceres.Chess;
+using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Chess.MoveGen;
+using Ceres.Chess.MoveGen.Converters;
 using Ceres.Chess.Positions;
+using Ceres.Chess.UserSettings;
 using System;
+using System.Diagnostics;
 
 #endregion
 
@@ -48,6 +52,64 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
         return default;
       }
 
+      if (DTZAvailable)
+      {
+        return CheckTablebaseBestNextMoveViaDTZ(in currentPos, out result);
+      }
+      else
+      {
+        return CheckTablebaseBestNextMoveViaDTM(in currentPos, out result);
+      }
+    }
+
+   
+    MGMove CheckTablebaseBestNextMoveViaDTZ(in Position currentPos, out GameResult result)
+    {
+      ProbeWDL(in currentPos, out WDLScore score, out ProbeState probeResult);
+      if (!(probeResult == ProbeState.Ok || probeResult == ProbeState.ZeroingBestMove))
+      {
+        result = GameResult.Unknown;
+        return default(MGMove);
+      }
+
+      switch (score)
+      {
+        case WDLScore.WDLLoss:
+        case WDLScore.WDLBlessedLoss:
+          result = GameResult.Unknown;
+          break;
+
+        case WDLScore.WDLWin:
+        case WDLScore.WDLCursedWin:
+          result = GameResult.Checkmate;
+          break;
+
+        case WDLScore.WDLDraw:
+          result = GameResult.Draw;
+          break;
+
+        default:
+          throw new Exception($"Unexpected WDLScore {score} {currentPos.FEN}");
+      }
+
+      // Try to find best move (quickest mate, else draw if possible).
+      int dtzMove = ProbeDTZ(in currentPos);
+      if (dtzMove < 0)
+      {
+        result = GameResult.Unknown;
+        return default(MGMove);
+      }
+      else
+      {
+        EncodedMove encodedMove = new EncodedMove((ushort)dtzMove);
+        MGMove mgMove = MGMoveConverter.ToMGMove(in currentPos, encodedMove);
+        return mgMove;
+      }
+    }
+
+
+    MGMove CheckTablebaseBestNextMoveViaDTM(in Position currentPos, out GameResult result)
+    {
       // First check for immediate winning or drawing moves known by TB probe
       MGMove winningMove = default;
       MGMove winningCursedMove = default;
@@ -108,6 +170,34 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
 
       return bestMove;
     }
+
+
+    #region Tests
+
+    static void Check(LC0DLLSyzygyEvaluator eval, string fen, GameResult result, string moveStr)
+    {
+      MGMove move = eval.CheckTablebaseBestNextMove(Position.FromFEN(fen), out GameResult gr);
+      Debug.Assert(result == gr);
+      if (gr != GameResult.Unknown)
+      {
+        Debug.Assert(moveStr == move.ToString());
+      }
+    }
+
+
+    public static void RunUnitTests()
+    {
+      //  CeresUserSettingsManager.LoadFromDefaultFile();
+
+      LC0DLLSyzygyEvaluator eval = new(0, CeresUserSettingsManager.Settings.DirTablebases);
+      //Check(eval, "8/8/6R1/8/7k/8/6K1/8 w - - 0 1", GameResult.Checkmate, "Rg6-g3");
+      Check(eval, "k7/P6R/2K5/8/7P/1r6/8/8 w - -", GameResult.Checkmate, "Rh7-h8"); // DTM 46
+      Check(eval, "8/8/8/8/5kp1/P7/8/1K1N4 w - -", GameResult.Checkmate, "Kb1-c2"); // DTM 50
+      Check(eval, "8/1k6/1p1r4/5K2/8/8/8/2R5 w - -", GameResult.Draw, "Kf5-e4");
+      Check(eval, "4kq2/8/8/8/8/8/8/4K3 w - - 0 1", GameResult.Unknown, null);
+    }
+
+    #endregion
   }
 
 }

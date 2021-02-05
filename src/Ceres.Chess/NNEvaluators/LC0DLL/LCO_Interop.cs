@@ -47,7 +47,7 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
 
     #region Evaluator functions    
 
-    public enum TBInitializeStatus
+    public enum TBInitializeStatus : int
     {
       ERROR = 0,
       OK_WITH_DTM = 1,

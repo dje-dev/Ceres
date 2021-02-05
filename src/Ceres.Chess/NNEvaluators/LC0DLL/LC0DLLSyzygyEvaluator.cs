@@ -179,7 +179,9 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
     {
       // Make sure sufficiently few pieces remain on board
       // and not castling rights
-      if (pos.PieceCount > MaxCardinality || pos.MiscInfo.CastlingRightsAny)
+      if (!DTZAvailable 
+       || pos.PieceCount > MaxCardinality 
+       || pos.MiscInfo.CastlingRightsAny)
       {
         return -1;
       }

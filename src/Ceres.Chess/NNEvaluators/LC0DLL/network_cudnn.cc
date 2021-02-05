@@ -1022,7 +1022,7 @@ namespace lczero {
 #define TB_INITIALIZE_OK_WDL_DTZ 2
 
 
-  bool TBInitialize(int sessionIndex, char* paths) {
+  int TBInitialize(int sessionIndex, char* paths) {
     lczero::InitializeMagicBitboards();
 
     syzygy_tb_[sessionIndex] = std::make_unique<SyzygyTablebase>();
@@ -1066,8 +1066,19 @@ namespace lczero {
       board.SetFromFen(fen);
       history.Reset(board, 0, 1);
 
-      ProbeState result;
-      return syzygy_tb_[sessionIndex]->probe_dtz(history.Last(), &result);
+      MoveList root_moves;
+      if (syzygy_tb_[sessionIndex]->root_probe(
+        history.Last(),
+        0, /*fast_play || history.DidRepeatSinceLastZeroingMove(),*/
+        &root_moves))
+      {
+        return root_moves[0].as_packed_int();//      .as_nn_index(0);
+      }
+      else
+        return -1;
+
+      //    ProbeState result;
+      //    return syzygy_tb_[sessionIndex]->probe_dtz(history.Last(), &result);
     }
   }
 
@@ -1111,7 +1122,7 @@ extern "C" {
 }
 
 extern "C" {
-  __declspec(dllimport) bool TBInitialize(int sessionIndex, char* paths);
+  __declspec(dllimport) int TBInitialize(int sessionIndex, char* paths);
   __declspec(dllimport) void TBFree(int sessionIndex);
   __declspec(dllimport) int MaxCardinality(int sessionIndex);
   __declspec(dllimport) int ProbeWDL(int sessionIndex, char* fen);
@@ -1129,7 +1140,7 @@ int Compute(int sessionIndex, int batchSize, CeresTransferBlockIn* inputs,
   return lczero::Compute(sessionIndex, batchSize, inputs, outputs);
 }
 
-bool TBInitialize(int sessionIndex, char* paths) { return lczero::TBInitialize(sessionIndex, paths); }
+int TBInitialize(int sessionIndex, char* paths) { return lczero::TBInitialize(sessionIndex, paths); }
 void TBFree(int sessionIndex) { lczero::TBFree(sessionIndex); }
 int MaxCardinality(int sessionIndex) { return lczero::MaxCardinality(sessionIndex); }
 
