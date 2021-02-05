@@ -75,10 +75,12 @@ namespace Ceres.MCTS.MTCSNodes
       if (shouldAbort != null && shouldAbort(this))
         return;
 
+      Annotate();
+
       dumpRoot = dumpRoot ?? this.Tree.Root;
       writer = writer ?? Console.Out;
 
-      Position cPos = MGChessPositionConverter.PositionFromMGChessPosition(Annotation.PosMG);
+      Position cPos = MGChessPositionConverter.PositionFromMGChessPosition(in Annotation.PosMG);
 
       float multiplerOurPerspective = dumpRoot == null || (dumpRoot.Depth % 2 == Depth % 2) ? 1.0f : -1.0f;
 
@@ -107,8 +109,23 @@ namespace Ceres.MCTS.MTCSNodes
       // not yet implemented      if (!IsRoot) u = Parent.U(Context.ParamsSearch.Execution.FLOW_DUAL_SELECTORS, Context.ParamsSelect, 0, this.IndexInParentsChildren);
       string extraInfo = prefixString;
 
+      string fracVisitStr = "   ";
+      if (Depth == 1 && Context?.RootMoveTracker.RunningFractionVisits != null)
+      {
+        float runningAvg = Context.RootMoveTracker.RunningFractionVisits[IndexInParentsChildren];
+        fracVisitStr = $"{Math.Round(runningAvg * 100, 0),3:F0}";
+      }
+
+      string recentQAvgStr = "     ";
+      if (Depth == 1 && Context?.RootMoveTracker.RunningQValues != null)
+      {
+        float runningQ = Context.RootMoveTracker.RunningQValues[IndexInParentsChildren];
+        recentQAvgStr = $"{multiplerOurPerspective * runningQ,5:F2}";
+
+      }
+
       bool invert = multiplerOurPerspective == -1;
-      extraInfo = $" N={N,9:F0}  Q={multiplerOurPerspective * Q,6:F3}  V={  multiplerOurPerspective * V,6:F3} ";
+      extraInfo = $" N={N,9:F0} ({fracVisitStr}@{recentQAvgStr})  Q= {multiplerOurPerspective * Q,6:F3}  V= {  multiplerOurPerspective * V,6:F3} ";
       extraInfo += $" WDL= {(invert ? LossP : WinP),4:F2} {DrawP,4:F2} {(invert ? WinP : LossP),4:F2} ";
       extraInfo += $" WDL Avg= {(invert ? LAvg : WAvg),4:F2} {DAvg,4:F2} {(invert ? WAvg : LAvg),4:F2}  ";
       extraInfo += $"M = {MPosition,4:F0} {MAvg,4:F0}  ";

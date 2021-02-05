@@ -54,9 +54,9 @@ namespace Ceres.Features.GameEngines
     public ParamsSelect SelectParams;
 
     /// <summary>
-    /// Optional override time manager.
+    /// Optional override limits manager.
     /// </summary>
-    public IManagerGameLimit OverrideTimeManager;
+    public IManagerGameLimit OverrideLimitManager;
 
     /// <summary>
     /// Optional name of log file to which detailed diagnostics information is written.
@@ -70,7 +70,7 @@ namespace Ceres.Features.GameEngines
     public GameEngineDefCeres(string id, NNEvaluatorDef evaluatorDef, ParamsSearch searchParams= null,
                               ParamsSearchExecutionModifier paramsSearchExecutionPostprocessor = null,
                               ParamsSelect selectParams = null, 
-                              IManagerGameLimit overrideTimeManager = null,
+                              IManagerGameLimit overrideLimitManager = null,
                               string logFileName = null)
       : base(id)
     {
@@ -79,7 +79,7 @@ namespace Ceres.Features.GameEngines
       SearchParams = searchParams ?? new ParamsSearch();
       ParamsSearchExecutionPostprocessor = paramsSearchExecutionPostprocessor;
       SelectParams = selectParams ?? new ParamsSelect();
-      OverrideTimeManager = overrideTimeManager;
+      OverrideLimitManager = overrideLimitManager;
       LogFileName = logFileName;
     }
 
@@ -90,7 +90,7 @@ namespace Ceres.Features.GameEngines
     public override GameEngine CreateEngine()
     {
       return new GameEngineCeresInProcess(ID, EvaluatorDef, SearchParams, SelectParams, 
-                                          OverrideTimeManager, ParamsSearchExecutionPostprocessor,
+                                          OverrideLimitManager, ParamsSearchExecutionPostprocessor,
                                           LogFileName);
     }
 
@@ -123,8 +123,8 @@ namespace Ceres.Features.GameEngines
       writer.WriteLine("\r\n-----------------------------------------------------------------------");
       writer.WriteLine("Evaluator 1     : " + EvaluatorDef);
       writer.WriteLine("Evaluator 2     : " + other.EvaluatorDef);
-      writer.WriteLine("Time Manager 1  : " + (OverrideTimeManager == null ? "(default)" : OverrideTimeManager));
-      writer.WriteLine("Time Manager 2  : " + (other.OverrideTimeManager == null ? "(default)" : other.OverrideTimeManager));
+      writer.WriteLine("Time Manager 1  : " + (OverrideLimitManager == null ? "(default)" : OverrideLimitManager));
+      writer.WriteLine("Time Manager 2  : " + (other.OverrideLimitManager == null ? "(default)" : other.OverrideLimitManager));
       writer.WriteLine("Postprocessor 1 : " + (ParamsSearchExecutionPostprocessor == null ? "(none)" : "Present"));
       writer.WriteLine("Postprocessor 2 : " + (other.ParamsSearchExecutionPostprocessor == null ? "(none)" : "Present"));
       writer.WriteLine();

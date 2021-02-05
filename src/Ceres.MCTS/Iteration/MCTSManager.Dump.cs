@@ -58,6 +58,7 @@ namespace Ceres.MCTS.Iteration
       // Output position (with history) information.
       writer.WriteLine("Position            : " + searchRootNode.Annotation.Pos.FEN);
       writer.WriteLine("Tree root position  : " + Context.Tree.Store.Nodes.PriorMoves);
+      writer.WriteLine("Search stop status  : " + StopStatus);
       writer.WriteLine();
 
       using (new SearchContextExecutionBlock(Context))
