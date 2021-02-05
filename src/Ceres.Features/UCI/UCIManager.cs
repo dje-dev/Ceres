@@ -124,6 +124,8 @@ namespace Ceres.Features.UCI
         parms.CPUCTAtRoot = cpuctAtRoot;
         parms.CPUCTBaseAtRoot = cpuctBaseAtRoot;
         parms.CPUCTFactorAtRoot = cpuctFactorAtRoot;
+        parms.PolicySoftmax = policySoftmax;
+
         return parms;
       }
     }

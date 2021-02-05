@@ -89,6 +89,11 @@ namespace Ceres.Features.UCI
     /// </summary>
     float cpuctFactorAtRoot = new ParamsSelect().CPUCTFactorAtRoot;
 
+    /// <summary>
+    /// ParamsSelect.PolicySoftmax
+    /// </summary>
+    float policySoftmax = new ParamsSelect().PolicySoftmax;
+
 
     void ProcessSetOption(string command)
     {
@@ -172,7 +177,7 @@ namespace Ceres.Features.UCI
           break;
 
         case "cpuctbase":
-          SetFloat(value, 0, float.MaxValue, ref cpuctBase);
+          SetFloat(value, 1, float.MaxValue, ref cpuctBase);
           break;
 
         case "cpuctfactor":
@@ -184,13 +189,18 @@ namespace Ceres.Features.UCI
           break;
 
         case "cpuctbaseatroot":
-          SetFloat(value, 0, float.MaxValue, ref cpuctBaseAtRoot);
+          SetFloat(value, 1, float.MaxValue, ref cpuctBaseAtRoot);
           break;
 
         case "cpuctfactoratroot":
           SetFloat(value, 0, float.MaxValue, ref cpuctFactorAtRoot);
           break;
-     }
+
+        case "policytemperature":
+          SetFloat(value, 0.1f, float.MaxValue, ref policySoftmax);
+          break;
+
+      }
 
 
     }
@@ -261,6 +271,7 @@ option name CPuctBase type string default {new ParamsSelect().CPUCTBase}
 option name CPuctBaseAtRoot type string default {new ParamsSelect().CPUCTBaseAtRoot}
 option name CPuctFactor type string default {new ParamsSelect().CPUCTFactor}
 option name CPuctFactorAtRoot type string default {new ParamsSelect().CPUCTFactorAtRoot}
+option name PolicyTemperature type string default {new ParamsSelect().PolicySoftmax}
 ";
     /*
 option name ConfigFile type string default lc0.config
