@@ -318,8 +318,8 @@ namespace Ceres.Chess.LC0.Batches
 
     void Init(EncodedPositionType trainingType)
     {
-      PosPlaneBitmaps = GC.AllocateUninitializedArray<ulong>(MaxBatchSize * EncodedPositionWithHistory.NUM_PLANES_TOTAL);
-      PosPlaneValues = GC.AllocateUninitializedArray<byte>(MaxBatchSize * EncodedPositionWithHistory.NUM_PLANES_TOTAL);
+      PosPlaneBitmaps = new ulong[MaxBatchSize * EncodedPositionWithHistory.NUM_PLANES_TOTAL];
+      PosPlaneValues = new byte[MaxBatchSize * EncodedPositionWithHistory.NUM_PLANES_TOTAL];
 
       if (trainingType == EncodedPositionType.PositionAndTrainingData)
       {
