@@ -107,11 +107,6 @@ namespace Ceres.Chess.LC0.Batches
     /// </summary>
     public short PreferredEvaluatorIndex;
 
-    bool arraysWereRented = false;
-
-    //    static ArrayPool<float> floatPool = ArrayPool<float>.Create();
-    //    static ArrayPool<uint> uintPool = ArrayPool<uint>.Create();
-
 
     public IEncodedPositionBatchFlat GetSubBatchSlice(int startIndex, int count)
     {
@@ -188,7 +183,8 @@ namespace Ceres.Chess.LC0.Batches
           for (int j = 0; j < EncodedPolicyVector.POLICY_VECTOR_LENGTH; j++)
           {
             float val = posRef.Policies.Probabilities[j];
-            if (val != 0 && !float.IsNaN(val)) Policy[nextPolicyIndex] = (FP16)val; // ******************** NOTE!!! **** WE CONVERT NaN to 0.0 (in later V4 data this indicates illegal move)
+            // NOTE: We convert NaN to 0.0 (in later V4 data this indicates illegal move)
+            if (val != 0 && !float.IsNaN(val)) Policy[nextPolicyIndex] = (FP16)val;
             nextPolicyIndex++;
           }
         }
@@ -316,33 +312,14 @@ namespace Ceres.Chess.LC0.Batches
     /// </summary>
     public void Shutdown()
     {
-      if (PosPlaneBitmaps != null && arraysWereRented)
-      {
-        ArrayPool<ulong>.Shared.Return(PosPlaneBitmaps);
-        ArrayPool<byte>.Shared.Return(PosPlaneValues);
-      }
       PosPlaneBitmaps = null;
       PosPlaneValues = null;
     }
 
     void Init(EncodedPositionType trainingType)
     {
-      // It seems that ArrayPool will not share/reuse large arrays, instead just allocates
-      // Therefore we possibly don't get any benefit from use here
-      const bool USE_POOL = false;
-
-      if (USE_POOL)
-      {
-        PosPlaneBitmaps = ArrayPool<ulong>.Shared.Rent(MaxBatchSize * EncodedPositionWithHistory.NUM_PLANES_TOTAL);
-        PosPlaneValues = ArrayPool<byte>.Shared.Rent(MaxBatchSize * EncodedPositionWithHistory.NUM_PLANES_TOTAL);
-        arraysWereRented = true;
-      }
-      else
-      {
-        PosPlaneBitmaps = new ulong[MaxBatchSize * EncodedPositionWithHistory.NUM_PLANES_TOTAL];
-        PosPlaneValues = new byte[MaxBatchSize * EncodedPositionWithHistory.NUM_PLANES_TOTAL];
-        arraysWereRented = false;
-      }
+      PosPlaneBitmaps = GC.AllocateUninitializedArray<ulong>(MaxBatchSize * EncodedPositionWithHistory.NUM_PLANES_TOTAL);
+      PosPlaneValues = GC.AllocateUninitializedArray<byte>(MaxBatchSize * EncodedPositionWithHistory.NUM_PLANES_TOTAL);
 
       if (trainingType == EncodedPositionType.PositionAndTrainingData)
       {

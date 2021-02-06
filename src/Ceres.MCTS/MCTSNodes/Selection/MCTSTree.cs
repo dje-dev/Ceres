@@ -100,7 +100,9 @@ namespace Ceres.MCTS.LeafExpansion
     /// <param name="context"></param>
     /// <param name="maxNodesBound"></param>
     /// <param name="positionCache"></param>
-    public MCTSTree(MCTSNodeStore store, MCTSIterator context, int maxNodesBound, PositionEvalCache positionCache)
+    public MCTSTree(MCTSNodeStore store, MCTSIterator context, 
+                    int maxNodesBound, int estimatedNumNodes,
+                    PositionEvalCache positionCache)
     {
       if (context.ParamsSearch.DrawByRepetitionLookbackPlies > MAX_LENGTH_POS_HISTORY)
         throw new Exception($"DrawByRepetitionLookbackPlies exceeds maximum length of {MAX_LENGTH_POS_HISTORY}");
@@ -111,11 +113,15 @@ namespace Ceres.MCTS.LeafExpansion
 
       ChildCreateLocks = new LockSet(128);
 
-      int annotationCacheSize = context.ParamsSearch.Execution.NodeAnnotationCacheSize;
       const int ANNOTATION_MIN_CACHE_SIZE = 50_000;
-      if (annotationCacheSize < ANNOTATION_MIN_CACHE_SIZE) throw new Exception($"NODE_ANNOTATION_CACHE_SIZE is below minimum size of {ANNOTATION_MIN_CACHE_SIZE}");
+      int annotationCacheSize = Math.Min(maxNodesBound, context.ParamsSearch.Execution.NodeAnnotationCacheSize);
+      if (annotationCacheSize < ANNOTATION_MIN_CACHE_SIZE
+       && annotationCacheSize < maxNodesBound)
+      {
+        throw new Exception($"NODE_ANNOTATION_CACHE_SIZE is below minimum size of {ANNOTATION_MIN_CACHE_SIZE}");
+      }
 
-      if (maxNodesBound < annotationCacheSize && !context.ParamsSearch.TreeReuseEnabled)
+      if (maxNodesBound <= annotationCacheSize && !context.ParamsSearch.TreeReuseEnabled)
       {
         // We know with certainty the maximum size, and it will fit inside the cache
         // without purging needed - so just use a simple fixed size cache
@@ -123,7 +129,7 @@ namespace Ceres.MCTS.LeafExpansion
       }
       else
       {
-        cache = new MCTSNodeCacheArrayPurgeableSet(this, annotationCacheSize);
+        cache = new MCTSNodeCacheArrayPurgeableSet(this, annotationCacheSize, estimatedNumNodes);
       }
 
       // Populate EncodedPriorPositions with encoded boards

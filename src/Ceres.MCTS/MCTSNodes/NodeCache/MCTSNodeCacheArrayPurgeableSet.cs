@@ -17,6 +17,7 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Ceres.Base.Math;
 using Ceres.MCTS.LeafExpansion;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Storage;
@@ -49,7 +50,7 @@ namespace Ceres.MCTS.NodeCache
 
     #region Private data
 
-    const int MAX_SUBCACHES = 16;
+    public readonly int NumSubcaches;
 
     MCTSNodeCacheArrayPurgeable[] subCaches;
 
@@ -61,16 +62,25 @@ namespace Ceres.MCTS.NodeCache
     /// Constructor.
     /// </summary>
     /// <param name="parentTree"></param>
-    /// <param name="maxCacheSize"></param>
-    public MCTSNodeCacheArrayPurgeableSet(MCTSTree parentTree, int maxCacheSize)
+    /// <param name="definitiveMaxCacheSize"></param>
+    /// <param name="estimatedNumNodesInSearch"></param>
+    public MCTSNodeCacheArrayPurgeableSet(MCTSTree parentTree, 
+                                          int definitiveMaxCacheSize,
+                                          int estimatedNumNodesInSearch)
     {
       ParentTree = parentTree;
-      MaxCacheSize = maxCacheSize;
+      MaxCacheSize = definitiveMaxCacheSize;
+
+      // Compute number of subcaches, increasing as a function of estimates search size
+      // (because degree of concurrency rises with size of batches and search.
+      NumSubcaches = (int)StatUtils.Bounded(2 * MathF.Log2((float)estimatedNumNodesInSearch / 1000), 3, 16);
 
       // Initialize the sub-caches
-      subCaches = new MCTSNodeCacheArrayPurgeable[MAX_SUBCACHES];
-      for (int i = 0; i < MAX_SUBCACHES; i++)
-        subCaches[i] = new MCTSNodeCacheArrayPurgeable(parentTree, maxCacheSize / MAX_SUBCACHES);
+      subCaches = new MCTSNodeCacheArrayPurgeable[NumSubcaches];
+      for (int i = 0; i < NumSubcaches; i++)
+      {
+        subCaches[i] = new MCTSNodeCacheArrayPurgeable(parentTree, definitiveMaxCacheSize / NumSubcaches);
+      }
     }
 
     public void Clear() => throw new NotImplementedException();
@@ -88,7 +98,7 @@ namespace Ceres.MCTS.NodeCache
     /// </summary>
     /// <param name="nodeIndex"></param>
     /// <returns></returns>
-    public void Add(MCTSNode node) => subCaches[node.Index % MAX_SUBCACHES].Add(node);
+    public void Add(MCTSNode node) => subCaches[node.Index % NumSubcaches].Add(node);
     
 
     /// <summary>
@@ -118,7 +128,7 @@ namespace Ceres.MCTS.NodeCache
         Interlocked.Increment(ref numCachePrunesInProgress);
 
         int countPurged = 0;
-        Parallel.ForEach(Enumerable.Range(0, MAX_SUBCACHES),
+        Parallel.ForEach(Enumerable.Range(0, NumSubcaches),
                          new ParallelOptions() { MaxDegreeOfParallelism = 4 }, // memory access already saturated at 4
           i =>
           {
@@ -137,7 +147,7 @@ namespace Ceres.MCTS.NodeCache
     /// <param name="nodeIndex"></param>
     /// <returns></returns>
     public MCTSNode Lookup(MCTSNodeStructIndex nodeIndex)
-      => subCaches[nodeIndex.Index % MAX_SUBCACHES].Lookup(nodeIndex);
+      => subCaches[nodeIndex.Index % NumSubcaches].Lookup(nodeIndex);
 
 
     /// <summary>
