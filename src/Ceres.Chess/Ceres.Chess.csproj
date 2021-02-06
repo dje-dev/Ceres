@@ -30,7 +30,6 @@
     <PackageReference Include="Google.ProtocolBuffers" Version="2.4.1.555" />
     <PackageReference Include="HtmlAgilityPack" Version="1.11.28" />
     <PackageReference Include="LINQPad.Runtime" Version="6.7.5" />
-    <PackageReference Include="Microsoft.ML.OnnxRuntime.Managed" Version="1.6.0" />
     <PackageReference Include="protobuf-net" Version="3.0.29" />
     <PackageReference Include="SharpCompress" Version="0.26.0" />
   </ItemGroup>

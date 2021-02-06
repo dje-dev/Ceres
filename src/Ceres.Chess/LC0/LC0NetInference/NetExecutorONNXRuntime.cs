@@ -15,15 +15,18 @@
 
 #region Using directives
 
-using Ceres.Base;
-using Microsoft.ML.OnnxRuntime;
 using System;
-using System.Collections.Generic;
-using Microsoft.ML.OnnxRuntime;
-
-using Ceres.Base;
-using Microsoft.ML.OnnxRuntime.Tensors;
 using System.Diagnostics;
+using System.Collections.Generic;
+using Ceres.Base;
+
+#if FEATURE_ONNX
+// needs     <PackageReference Include="Microsoft.ML.OnnxRuntime.Managed" Version="1.6.0" />
+
+using Microsoft.ML.OnnxRuntime;
+using Microsoft.ML.OnnxRuntime;
+using Microsoft.ML.OnnxRuntime.Tensors;
+#endif
 
 #endregion
 
@@ -41,10 +44,12 @@ namespace Ceres.Chess.LC0NetInference
 {
   public class NetExecutorONNXRuntime : IDisposable
   {
+#if FEATURE_ONNX
     /// <summary>
     /// Underlying ONNX runtime session
     /// </summary>
     public readonly InferenceSession Session;
+#endif
 
     /// <summary>
     /// ID (index) of GPU to use
@@ -64,7 +69,7 @@ namespace Ceres.Chess.LC0NetInference
     public NetExecutorONNXRuntime(string onnxFileName, int gpuID)
     {
       //     if (gpuID < 0 || gpuID > 16) throw new Exception($"Invalid GPU ID { gpuID}");
-
+#if FEATURE_ONNX
 #if CUDA
       if (gpuID == -999) // CPU. TO DO: clean this up
         Session = new InferenceSession(onnxFileName);
@@ -85,7 +90,9 @@ namespace Ceres.Chess.LC0NetInference
 #else
         Session = new InferenceSession(onnxFileName);
 #endif
-
+#else
+      throw new Exception("NetExecutorONNXRuntine feature is not enabled.");
+#endif
       GPUID = gpuID;
     }
 
@@ -98,6 +105,7 @@ namespace Ceres.Chess.LC0NetInference
     /// <returns></returns>
     public float[][] Run(Memory<float> input, int[] shape)
     {
+#if FEATURE_ONNX
       // Determine input name
       // NOTE: experienced strange lowlevel crash when tried to break out this into name retrieval into a separate method
       string inputName = null;
@@ -135,17 +143,21 @@ namespace Ceres.Chess.LC0NetInference
         i++;
       }
       return resultArrays;
+#else
+      return default;
+#endif
     }
 
     
     public void Dispose()
     {
-
+#if FEATURE_ONNX
       if (!disposed)
       {
         Session.Dispose();
         disposed = true;
       }
+#endif
     }
 
 
