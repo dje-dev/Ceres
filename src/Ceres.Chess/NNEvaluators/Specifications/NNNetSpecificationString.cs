@@ -51,15 +51,17 @@ namespace Ceres.Chess.NNEvaluators.Specifications
     /// <param name="netString"></param>
     public NNNetSpecificationString(string netString)
     {
-      // Net specification "LC0:703810=0.5,66193=0.5";
-      string[] netSplit = netString.Split(":");
-      if (netSplit.Length != 2) throw new Exception("Expected network specification string of form TYPE:NET_ID such as LC0:703810");
-
-      string netTypeStr = netSplit[0].ToUpper();
-      if (netTypeStr != "LC0") throw new Exception("Error in network specification: currently only LC0 type nets supported");
-
-      string netIDs = netSplit[1];
-      string[] nets = netIDs.Split(",");
+      string netIDs;
+      if (netString.ToUpper().StartsWith("LC0:"))
+      {
+        // Net specification "LC0:703810=0.5,66193=0.5";
+        netIDs = netString.Substring(4);
+      }
+      else
+      {
+        // Prefix optionally omitted
+        netIDs = netString;
+      }
 
       // Build network definitions
       List<(string, float)> netParts = OptionsParserHelpers.ParseCommaSeparatedWithOptionalWeights(netIDs);
