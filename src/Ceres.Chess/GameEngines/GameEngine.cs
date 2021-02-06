@@ -110,6 +110,12 @@ namespace Ceres.Chess.GameEngines
     }
 
     /// <summary>
+    /// If the NodesPerGame time control mode is supported.
+    /// </summary>
+    public abstract bool SupportsNodesPerGameMode { get; }
+
+
+    /// <summary>
     /// Executes any preparatory steps (that should not be counted in thinking time) before a search.
     /// </summary>
     protected abstract void DoSearchPrepare();

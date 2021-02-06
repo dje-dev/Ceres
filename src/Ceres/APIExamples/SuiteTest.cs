@@ -48,7 +48,7 @@ namespace Ceres.APIExamples
       GameEngineDef ged1 = new GameEngineDefCeres("Ceres1", evalDef1);
       GameEngineDef ged2 = new GameEngineDefCeres("Ceres1", evalDef2);
       GameEngineUCISpec geSF = new GameEngineUCISpec("SF12", @"\\synology\dev\chess\engines\stockfish_20090216_x64_avx2.exe",
-                                                     32, 2048, CeresUserSettingsManager.Settings.DirTablebases, 
+                                                     32, 2048, CeresUserSettingsManager.Settings.TablebaseDirectory, 
                                                      uciSetOptionCommands: extraUCI);
 
       EnginePlayerDef ceresEngineDef1 = new EnginePlayerDef(ged1, limit);

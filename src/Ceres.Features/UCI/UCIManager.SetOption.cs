@@ -167,7 +167,8 @@ namespace Ceres.Features.UCI
           }
           else
           {
-            CeresUserSettingsManager.Settings.DirTablebases = value;
+            CeresUserSettingsManager.Settings.SyzygyPath = value;
+            CeresUserSettingsManager.Settings.DirTablebases = null;
           }
           break;
 

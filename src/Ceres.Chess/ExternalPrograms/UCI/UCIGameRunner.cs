@@ -178,6 +178,20 @@ namespace Ceres.Chess.ExternalPrograms.UCI
       return EvalPosition(fenAndMovesString, "nodes", numNodes);
     }
 
+    public UCISearchInfo EvalPositionRemainingNodes(string fenAndMovesString,
+                                                    bool whiteToMove,
+                                                    int? movesToGo,
+                                                    int remainingNodes,
+                                                    int incrementNodes)
+    {
+      string prefixChar = whiteToMove ? "w" : "b";
+      string moveStr = $"go {prefixChar}nodes {Math.Max(1, remainingNodes)}";
+      if (incrementNodes > 0) moveStr += $" {prefixChar}inc {incrementNodes}";
+      if (movesToGo.HasValue) moveStr += " movestogo " + movesToGo.Value;
+      return EvalPosition(fenAndMovesString, null, 0, moveStr);
+    }
+
+
 
     protected void SendCommandCRLF(UCIEngineProcess thisEngine, string cmd)
     {

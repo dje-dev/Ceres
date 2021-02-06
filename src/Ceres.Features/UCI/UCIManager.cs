@@ -355,6 +355,10 @@ namespace Ceres.Features.UCI
         // Create the engine (to be subsequently reused).
         CeresEngine = new GameEngineCeresInProcess("Ceres", EvaluatorDef, ParamsSearch, ParamsSelect, logFileName:logFileName);
 
+        // Disable verbose move stats from the engine since 
+        // this class manages the possibly dumping of verbose move stats itself.
+        CeresEngine.VerboseMoveStats = false;
+
         // Initialize engine
         CeresEngine.Warmup();
         haveInitializedEngine = true;
@@ -470,6 +474,16 @@ namespace Ceres.Features.UCI
         if (goInfo.MovesToGo.HasValue) movesToGo = goInfo.MovesToGo.Value;
 
         searchLimit = SearchLimit.SecondsForAllMoves(goInfo.TimeOurs.Value / 1000.0f, increment, movesToGo, true);
+      }
+      else if (goInfo.NodesOurs.HasValue)
+      {
+        float increment = 0;
+        if (goInfo.IncrementOurs.HasValue) increment = goInfo.IncrementOurs.Value;
+
+        int? movesToGo = null;
+        if (goInfo.MovesToGo.HasValue) movesToGo = goInfo.MovesToGo.Value;
+
+        searchLimit = SearchLimit.NodesForAllMoves(goInfo.NodesOurs.Value, (int)increment, movesToGo, true);
       }
       else
       {
