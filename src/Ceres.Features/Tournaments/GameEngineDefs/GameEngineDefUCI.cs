@@ -44,6 +44,13 @@ namespace Ceres.Features.GameEngines
       UCIEngineSpec = uciEngineSpec;
     }
 
+
+    /// <summary>
+    /// If the NodesPerGame time control mode is supported.
+    /// </summary>
+    public override bool SupportsNodesPerGameMode => false;
+
+
     /// <summary>
     /// Implementation of virtual method to create underlying engine.
     /// </summary>

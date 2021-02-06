@@ -33,6 +33,7 @@ using Ceres.MCTS.Params;
 using Ceres.Features.UCI;
 using System.IO;
 using System.Text;
+using Ceres.Chess.UserSettings;
 
 #endregion
 
@@ -86,9 +87,16 @@ namespace Ceres.Features.GameEngines
     public string LogFileName;
 
     /// <summary>
+    /// If detailed information relating to search status of
+    /// moves at root should be output at end of a search.
+    /// </summary>
+    public bool VerboseMoveStats;
+
+    /// <summary>
     /// Optional descriptive information for current game.
     /// </summary>
     public string CurrentGameID;
+
 
     #region Internal data
 
@@ -132,7 +140,16 @@ namespace Ceres.Features.GameEngines
       GameLimitManager = gameLimitManager;
       ChildSelectParams = childSelectParams;
       LogFileName = logFileName;
+      VerboseMoveStats = CeresUserSettingsManager.Settings.VerboseMoveStats;
+
+      if (LogFileName == null) LogFileName = CeresUserSettingsManager.Settings.LogFile;
     }
+
+
+    /// <summary>
+    /// If the NodesPerGame time control mode is supported.
+    /// </summary>
+    public override bool SupportsNodesPerGameMode => true;
 
 
     bool isFirstMoveOfGame = true;
@@ -254,6 +271,11 @@ namespace Ceres.Features.GameEngines
         {
           File.AppendAllText(LogFileName, dumpInfo.GetStringBuilder().ToString());
         }
+      }
+
+      if (VerboseMoveStats)
+      {
+        result.Search.Manager.Context.Root.Dump(1, 1);
       }
 
       return result;

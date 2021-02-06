@@ -59,12 +59,22 @@ namespace Ceres.Features.UCI
     public readonly int? TimeOpponent;
 
     /// <summary>
-    /// Increment time per move for our side (in milliseconds)
+    /// Remaining nodes for our side (proprietary UCI go mode)
+    /// </summary>
+    public readonly int? NodesOurs;
+
+    /// <summary>
+    /// Remaining nodes for opponent side (proprietary UCI go mode)
+    /// </summary>
+    public readonly int? NodesOpponent;
+
+    /// <summary>
+    /// Increment per move for our side (in milliseconds or nodes)
     /// </summary>
     public readonly int? IncrementOurs;
 
     /// <summary>
-    /// Increment time per move for opopnent (in milliseconds)
+    /// Increment per move for opopnent (in milliseconds or nodes)
     /// </summary>
     public readonly int? IncrementOpponent;
 
@@ -147,6 +157,20 @@ namespace Ceres.Features.UCI
               TimeOurs = Math.Max(0, TakeIntToken());
             else
               TimeOpponent = Math.Max(0, TakeIntToken());
+            break;
+
+          case "wnodes":
+            if (weAreWhite)
+              NodesOurs = Math.Max(0, TakeIntToken());
+            else
+              NodesOpponent = Math.Max(0, TakeIntToken());
+            break;
+
+          case "bnodes":
+            if (weAreBlack)
+              NodesOurs = Math.Max(0, TakeIntToken());
+            else
+              NodesOpponent = Math.Max(0, TakeIntToken());
             break;
 
           case "winc":

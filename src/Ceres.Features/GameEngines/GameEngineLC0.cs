@@ -91,6 +91,12 @@ namespace Ceres.Features.GameEngines
 
 
     /// <summary>
+    /// If the NodesPerGame time control mode is supported.
+    /// </summary>
+    public override bool SupportsNodesPerGameMode => false;
+
+
+    /// <summary>
     /// Returns UCI search information 
     /// (such as would appear in a chess GUI describing search progress) 
     /// based on last state of search.
