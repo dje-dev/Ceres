@@ -66,6 +66,8 @@ namespace Ceres.Features.BatchAnalysis
   /// (either standalone or as part or all of a game)
   /// efficiently batches analysis requests and outputs 
   /// summary of search result for each position.
+  /// 
+  /// The design is inspired by the KataGo implementation of a similar feature.
   /// </summary>
   public class BatchAnalyzer
   {
@@ -233,6 +235,7 @@ namespace Ceres.Features.BatchAnalysis
     void ProcessAnalysisItemQueue(object cancellationToken)
     {
       GameEngineCeresInProcess ges = new("BatchAnalyzer", evaluatorDef);
+      ges.VerboseMoveStats = false;
       Console.WriteLine("analyzer started " + ges);
 
 
