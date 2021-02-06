@@ -223,7 +223,7 @@ namespace Ceres.MCTS.Managers
 
             float differenceFromQOfBestN = MathF.Abs((float)candidate.Q - (float)childrenSortedN[0].Q);
 
-            float minFrac = MinFractionNToUseQ(differenceFromQOfBestN);
+            float minFrac = MinFractionNToUseQ(Node, differenceFromQOfBestN);
 
             int minNToBeConsideredForBestQ = (int)(nOfChildWithHighestN * minFrac);
             if (candidate.N >= minNToBeConsideredForBestQ)
@@ -251,7 +251,7 @@ namespace Ceres.MCTS.Managers
 
 
 
-    static internal float MIN_FRAC_N_REQUIRED_MIN(MCTSIterator context) => 0.30f;
+    internal const float MIN_FRAC_N_REQUIRED_MIN = 0.30f;
 
 
     /// <summary>
@@ -266,9 +266,9 @@ namespace Ceres.MCTS.Managers
     /// </summary>
     /// <param name="qDifferenceFromBestQ"></param>
     /// <returns></returns>
-    internal float MinFractionNToUseQ(float qDifferenceFromBestQ)
+    static internal float MinFractionNToUseQ(MCTSNode node, float qDifferenceFromBestQ)
     {
-      bool isSmallTree = Node.Context.Root.N < 50_000;
+      bool isSmallTree = node.Context.Root.N < 50_000;
 
       float minFrac;
 
@@ -277,7 +277,7 @@ namespace Ceres.MCTS.Managers
         // For small trees we are even more reluctant to rely upon Q if few visits
         minFrac = qDifferenceFromBestQ switch
         {
-          >= 0.06f => MIN_FRAC_N_REQUIRED_MIN(Node.Context) + 0.10f,
+          >= 0.06f => MIN_FRAC_N_REQUIRED_MIN + 0.10f,
           >= 0.04f => 0.55f,
           >= 0.02f => 0.75f,
           _ => 0.90f
@@ -287,7 +287,7 @@ namespace Ceres.MCTS.Managers
       {
         minFrac = qDifferenceFromBestQ switch
         {
-          >= 0.05f => MIN_FRAC_N_REQUIRED_MIN(Node.Context),
+          >= 0.05f => MIN_FRAC_N_REQUIRED_MIN,
           >= 0.02f => 0.55f,
           >= 0.01f => 0.75f,
           _ => 0.90f

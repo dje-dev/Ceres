@@ -80,12 +80,15 @@ namespace Ceres.MCTS.Managers.Limits
       // Spend 30% more on first move of game (definitely no tree reuse, etc.)
       float factorFirstMove = inputs.IsFirstMoveOfGame ? 1.3f : 1.0f;
 
-      // Make a divisor which is between about 12 and 17
+      // Make a divisor which is between about 11 and 17
       // and a incresing function of the piece count.
       // Note that this is a relatively small number because
       //  - some moves will not do any search at all (due to instamoves), and
       //  - many moves will not actually run the full search duration (due to smart pruning)
-      float baseDivisor = 10 + MathF.Pow(inputs.StartPos.PieceCount, 0.5f);
+      //  - thinking time is deliberately somewhat frontloaded because 
+      //    its value as a deferred asset must be discounted by the possibility
+      //    that it might never be gainfully used (if a loss comes first).
+      float baseDivisor = 9 + MathF.Pow(inputs.StartPos.PieceCount, 0.5f);
 
       float ret = Aggressiveness * (1.0f / baseDivisor) * factorLargeIncrement * factorWinningness * factorFirstMove;
 
