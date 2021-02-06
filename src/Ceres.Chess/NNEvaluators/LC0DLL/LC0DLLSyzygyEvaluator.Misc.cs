@@ -189,7 +189,7 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
     {
       //  CeresUserSettingsManager.LoadFromDefaultFile();
 
-      LC0DLLSyzygyEvaluator eval = new(0, CeresUserSettingsManager.Settings.DirTablebases);
+      LC0DLLSyzygyEvaluator eval = new(0, CeresUserSettingsManager.Settings.TablebaseDirectory);
       //Check(eval, "8/8/6R1/8/7k/8/6K1/8 w - - 0 1", GameResult.Checkmate, "Rg6-g3");
       Check(eval, "k7/P6R/2K5/8/7P/1r6/8/8 w - -", GameResult.Checkmate, "Rh7-h8"); // DTM 46
       Check(eval, "8/8/8/8/5kp1/P7/8/1K1N4 w - -", GameResult.Checkmate, "Kb1-c2"); // DTM 50

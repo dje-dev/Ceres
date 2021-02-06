@@ -19,6 +19,7 @@ using System.IO;
 
 using Ceres.Base;
 using Ceres.Base.Benchmarking;
+using Ceres.Base.Misc;
 using Ceres.Chess.ExternalPrograms.UCI;
 using Ceres.Chess.LC0.Positions;
 using Ceres.Chess.MoveGen;
@@ -99,9 +100,9 @@ namespace Ceres.Chess.GameEngines
     /// <param name="callback"></param>
     /// <param name="resetGameBetweenMoves"></param>
     /// <param name="extraArgs"></param>
-    public GameEngineUCI(string name, string executablePath, 
-                         int? numThreads = null, 
-                         int? hashSizeMB = null, 
+    public GameEngineUCI(string name, string executablePath,
+                         int? numThreads = null,
+                         int? hashSizeMB = null,
                          string syzygyPath = null,
                          string[] uciSetOptionCommands = null,
                          ProgressCallback callback = null,
@@ -126,7 +127,10 @@ namespace Ceres.Chess.GameEngines
 
       if (syzygyPath != null)
       {
-        if (!Directory.Exists(syzygyPath)) throw new Exception($"Specified Syzygy path not found or inaccessilbe: {syzygyPath} ");
+        if (!FileUtils.PathsListAllExist(syzygyPath))
+        {
+          throw new Exception($"One or more specified Syzygy paths not found or inaccessible: {syzygyPath} ");
+        }
         extraCommands.Add($"setoption name SyzygyPath value {syzygyPath}");
       }
 
@@ -145,10 +149,17 @@ namespace Ceres.Chess.GameEngines
       string[] extraCommandsArray = extraCommands.ToArray();
 
       UCIRunner = new UCIGameRunner(executablePath, resetGameBetweenMoves,
-                                    extraCommandLineArguments : extraArgs,
+                                    extraCommandLineArguments: extraArgs,
                                     uciSetOptionCommands: extraCommandsArray);
     }
 
+
+    /// <summary>
+    /// If the NodesPerGame time control mode is supported.
+    /// </summary>
+    public override bool SupportsNodesPerGameMode => false;
+
+    
     /// <summary>
     /// Resets all state between games.
     /// </summary>
@@ -188,6 +199,8 @@ namespace Ceres.Chess.GameEngines
     {
       DoSearchPrepare();
 
+      bool weAreWhite = curPositionAndMoves.FinalPosition.MiscInfo.SideToMove == SideType.White;
+
       UCISearchInfo gameInfo;
       switch (searchLimit.Type)
       {
@@ -200,13 +213,19 @@ namespace Ceres.Chess.GameEngines
           break;
 
         case SearchLimitType.NodesForAllMoves:
-          throw new Exception("NodesForAllMoves not supported for generic UCI engine");
+           using (new TimingBlock(new TimingStats(), TimingBlock.LoggingType.None))
+          {
+            gameInfo = UCIRunner.EvalPositionRemainingNodes(curPositionAndMoves.FENAndMovesString,
+                                                            weAreWhite,
+                                                            searchLimit.MaxMovesToGo,
+                                                            (int)(searchLimit.Value),
+                                                            (int)(searchLimit.ValueIncrement));
+          }
+
+          break;
 
         case SearchLimitType.SecondsForAllMoves:
-          bool weAreWhite = curPositionAndMoves.FinalPosition.MiscInfo.SideToMove == SideType.White;
-
-          TimingStats stats = new TimingStats();
-          using (new TimingBlock(stats, TimingBlock.LoggingType.None))
+           using (new TimingBlock(new TimingStats(), TimingBlock.LoggingType.None))
           {
             gameInfo = UCIRunner.EvalPositionRemainingTime(curPositionAndMoves.FENAndMovesString,
                                                            weAreWhite,

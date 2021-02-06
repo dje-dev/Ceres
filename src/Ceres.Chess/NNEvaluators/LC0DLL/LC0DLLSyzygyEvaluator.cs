@@ -17,6 +17,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
+using Ceres.Base.Misc;
 using Ceres.Chess.MoveGen;
 
 #endregion
@@ -117,13 +118,9 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
     bool Initialize(string paths)
     {
       // Validate that all the requested paths actually exist
-      string[] directories = paths.Split(new char[] { ';', ',' });
-      foreach (string dir in directories)
+      if (!FileUtils.PathsListAllExist(paths))
       {
-        if (!Directory.Exists(dir))
-        {
-          throw new Exception($"Requested tablebase directory does not exist or is inaccessible: {dir}");
-        }
+        throw new Exception($"One or more specified Syzygy paths not found or inaccessible: {paths} ");
       }
 
       LCO_Interop.CheckLibraryDirectoryOnPath();
