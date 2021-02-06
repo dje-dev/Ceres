@@ -222,8 +222,8 @@ namespace Ceres.MCTS.Params
     /// from further visits due to impossibility or implausability that they will be the best move.
     /// TODO: make this smarter, possibly look at recent trends
     /// </summary>
-    [CeresOption(Name = "move-futility-pruning-aggressiveness", Desc = "Aggresiveness for early termination of searches to less promising root search subtrees in range [0..1], 0 disables.", Default = "1.0")]
-    public float MoveFutilityPruningAggressiveness = 1.0f;
+    [CeresOption(Name = "move-futility-pruning-aggressiveness", Desc = "Aggresiveness for early termination of searches to less promising root search subtrees in range [0..1.5], 0 disables.", Default = "0.4")]
+    public float MoveFutilityPruningAggressiveness = 0.5f;
 
     /// <summary>
     /// Aggressiveness with which limited search resource (time or nodes) is consumed.
@@ -273,12 +273,25 @@ namespace Ceres.MCTS.Params
 
 
     /// <summary>
-    /// Constructor.
+    /// Constructor (uses default values for the class unless overridden in settings file).
     /// </summary>
     public ParamsSearch()
     {
+      if (CeresUserSettingsManager.Settings.SmartPruningFactor.HasValue)
+      {
+        if (CeresUserSettingsManager.Settings.SmartPruningFactor.Value == 0)
+        {
+          FutilityPruningStopSearchEnabled = false;
+          MoveFutilityPruningAggressiveness = 0;
+        }
+        else
+        {
+          throw new Exception("SmartPruningFactor in Ceres.json must either have value 0 or be absent.");
+        }
+      }
+
       // Check user settings to see if tablebases are configured.
-      EnableTablebases = CeresUserSettingsManager.Settings.DirTablebases != "";
+      EnableTablebases = CeresUserSettingsManager.Settings.TablebaseDirectory != "";
 
       // Start with default execution params,
       // but these may be updated dynamicaly during search
