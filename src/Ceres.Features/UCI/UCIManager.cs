@@ -517,7 +517,7 @@ namespace Ceres.Features.UCI
           float UPDATE_INTERVAL_SECONDS = isFirstUpdate ? 0.1f : 0.5f;
           if (manager != null && timeSinceLastUpdate > UPDATE_INTERVAL_SECONDS && manager.Root.N > 0)
           {
-            OutputUCIInfo();
+            OutputUCIInfo(CeresEngine.Search.Manager, CeresEngine.Search.SearchRootNode);
 
             numUpdatesSent++;
             lastInfoUpdate = now;
@@ -544,7 +544,7 @@ namespace Ceres.Features.UCI
 
       if (SearchFinishedEvent != null) SearchFinishedEvent(result.Search.Manager);
 
-      OutputUCIInfo(true);
+      OutputUCIInfo(result.Search.Manager, result.Search.SearchRootNode, true);
 
       // Send the best move
       Send("bestmove " + result.Search.BestMove.MoveStr(MGMoveNotationStyle.LC0Coordinate));
@@ -554,19 +554,17 @@ namespace Ceres.Features.UCI
     }
 
 
-    void OutputUCIInfo(bool isFinalInfo = false)
+    void OutputUCIInfo(MCTSManager manager, MCTSNode searchRootNode, bool isFinalInfo = false)
     {
+      BestMoveInfo best = searchRootNode.BestMoveInfo(false);
+
       if (numPV == 1)
       {
-        Send(UCIInfo.UCIInfoString(CeresEngine.Search.Manager, CeresEngine.Search.SearchRootNode, 
+        Send(UCIInfo.UCIInfoString(manager, searchRootNode, best.BestMoveNode, 
                                   showWDL:showWDL, scoreAsQ:scoreAsQ));
       }
       else
       {
-        MCTSManager manager = CeresEngine.Search.Manager;
-        MCTSNode searchRootNode = CeresEngine.Search.SearchRootNode;
-        BestMoveInfo best = searchRootNode.BestMoveInfo(false);
-
         // Send top move
         Send(UCIInfo.UCIInfoString(manager, searchRootNode, best.BestMoveNode, 1, 
                                    showWDL: showWDL, useParentN: !perPVCounters, scoreAsQ: scoreAsQ));

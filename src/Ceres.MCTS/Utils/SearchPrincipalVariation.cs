@@ -32,23 +32,30 @@ namespace Ceres.MCTS.Utils
   /// </summary>
   public class SearchPrincipalVariation
   {
-    public readonly MCTSNode Root;
+    /// <summary>
+    /// Search root for the PV.
+    /// </summary>
+    public readonly MCTSNode SearchRoot;
+
+    /// <summary>
+    /// Set of nodes comprising the PV.
+    /// </summary>
     public readonly List<MCTSNode> Nodes;
 
-    public SearchPrincipalVariation(MCTSNode root, MCTSNode overrideBestMoveNodeAtRoot = null)
+    public SearchPrincipalVariation(MCTSNode searchRoot, MCTSNode overrideBestMoveNodeAtRoot = null)
     {
       Nodes = new List<MCTSNode>();
 
-      MCTSNode node = root;
+      MCTSNode node = searchRoot;
       do
       {
-        root.Context.Tree.Annotate(node);
+        searchRoot.Context.Tree.Annotate(node);
 
         Nodes.Add(node);
 
         if (node.NumPolicyMoves > 0)
         {
-          if (node.IsRoot)
+          if (node == searchRoot)
           {
             // Apply special logic at root for best move
             node = overrideBestMoveNodeAtRoot ?? node.BestMove(false);
@@ -66,15 +73,24 @@ namespace Ceres.MCTS.Utils
     }
 
 
+    /// <summary>
+    /// A short descriptive string listing the PV moves (suitable for UCI output).
+    /// </summary>
+    /// <returns></returns>
     public string ShortStr()
     {
       StringBuilder sb = new StringBuilder();
 
+      bool haveSkippedSearchRoot = false;
       foreach (MCTSNode node in Nodes)
       {
-        if (!node.IsRoot)
+        if (haveSkippedSearchRoot)
         {
           sb.Append(node.Annotation.PriorMoveMG.MoveStr(MGMoveNotationStyle.LC0Coordinate) + " ");
+        }
+        else
+        {
+          haveSkippedSearchRoot = true;
         }
       }
       return sb.ToString();

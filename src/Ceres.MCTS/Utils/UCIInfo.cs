@@ -14,7 +14,6 @@
 #region Using directives
 
 using System;
-
 using Ceres.Chess.LC0.Positions;
 
 using Ceres.MCTS.Iteration;
@@ -96,7 +95,7 @@ namespace Ceres.MCTS.Utils
         // Note that the correct tablebase hits cannot be easily calculated and reported
         return $"info depth {depth} seldepth {selectiveDepth} time 0 "
              + $"nodes {n:F0} score cp {scoreToShow}{strWDL} tbhits {manager.CountTablebaseHits} nps 0 "
-             + $"{pvString} {pv.ShortStr()} string M= {thisRootNode.MAvg:F0} ";
+             + $"{pvString} string M= {thisRootNode.MAvg:F0} ";
       }
       else
       {
