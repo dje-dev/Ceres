@@ -35,6 +35,7 @@ using Ceres.Base.Threading;
 using Ceres.Chess;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.Positions;
+using Ceres.MCTS.Environment;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Storage;
@@ -173,6 +174,9 @@ namespace Ceres.MCTS.Search
     {
       Reset();
 
+#if FEATURE_SUPPLEMENTAL
+      supplementalCandidates.Clear();
+#endif
       DoSelectNewLeafBatchlet(root, numTargetVisits, vLossDynamicBoost);
 
       root.Context.BatchPostprocessAllEvaluators();
@@ -199,9 +203,9 @@ namespace Ceres.MCTS.Search
       return leafs;
     }
 
-    #endregion
+#endregion
 
-    #region Clear
+#region Clear
 
     /// <summary>
     /// Resets state of selector to be prepared for 
@@ -214,9 +218,9 @@ namespace Ceres.MCTS.Search
       leafs.Clear();
     }
 
-    #endregion
+#endregion
 
-    #region Annotation
+#region Annotation
 
     /// <summary>
     /// Annotates specified node if not already annotated.
@@ -228,9 +232,9 @@ namespace Ceres.MCTS.Search
         Context.Tree.Annotate(node);
     }
 
-    #endregion
+#endregion
 
-    #region Threads
+#region Threads
 
     /// <summary>
     /// Waits until all threads have completed their work
@@ -248,9 +252,9 @@ namespace Ceres.MCTS.Search
       }
     }
 
-    #endregion
+#endregion
 
-    #region Node visitation
+#region Node visitation
 
     /// <summary>
     /// Takes any actions necessary upon visit to an inner note.
@@ -285,7 +289,7 @@ namespace Ceres.MCTS.Search
       return true;
     }
 
-    void DoVisitLeafNode(MCTSNode node, int numVisits)
+    internal void DoVisitLeafNode(MCTSNode node, int numVisits)
     {
       ref MCTSNodeStruct nodeRef = ref node.Ref;
 
@@ -331,9 +335,9 @@ namespace Ceres.MCTS.Search
     }
 
 
-    #endregion
+#endregion
 
-    #region Selection algorithm
+#region Selection algorithm
 
 
     /// <summary>
@@ -396,78 +400,15 @@ namespace Ceres.MCTS.Search
       else
       {
 #endif
+
       node.ComputeTopChildScores(selectorID, node.Depth,
                                  vLossDynamicBoost, 0, numChildrenToCheck - 1, numTargetLeafs,
                                  scores, visitChildCounts);
 
-      if (false &&
-        node.Depth == 0
-  && node.Context.ParamsSearch.TestFlag
-  && node.N > 1000
-//  && node.N > node.Context.SearchLimit.EstNumNodes(30_000) / 4   // *** CLEANUP ***
-  && node.N % 4 != 0 // ** 3 out of 4 in second half are done with sampling *** CLEANUP ***
-  )
+      if (node.Depth == 0)
       {
-        float[] q = new float[numChildrenToCheck];
-        int[] n = new int[numChildrenToCheck];
-        float[] p = new float[numChildrenToCheck];
-
-        for (int i = 0; i < numChildrenToCheck; i++)
-        {
-          var childInfo = node.ChildAtIndexInfo(i);
-          if (i >= node.NumChildrenExpanded)
-          {
-            q[i] = -2;
-            n[i] = node.N;
-            p[i] = childInfo.p;
-          }
-          else
-          {
-            MCTSNode thisChild = node.ChildAtIndex(i);
-            q[i] = -(float)(double.IsNaN(thisChild.Q) ? 1 : thisChild.Q);
-            n[i] = thisChild.N + thisChild.NInFlight + thisChild.NInFlight2;
-            p[i] = thisChild.P;
-          }
-        }
-
-        // Request special emphasis on the top move if we may possibly be able to reuse visits thru subsequent tree reuse
-        // in subsequent tree reuse (when many visits sent to one single probable response that can probably be reused)
-        float emphasizeTopMoveFactor;
-        if (Context.ParamsSearch.TreeReuseEnabled)
-        {
-          const float SCALE = 1.0f;
-          emphasizeTopMoveFactor = SCALE * TopNFractionToTopQMove switch
-          {
-            > 0.75f => 2.0f,
-            > 0.50f => 1.0f,
-            _ => 0.5f
-          };
-        }
-        else
-          emphasizeTopMoveFactor = 1.5f;
-
-        //float[] fractions = CalcVisitsBAI(q, n, node.NumChildrenExpanded, numTargetLeafs, emphasizeTopMoveFactor, visitChildCounts.ToArray());
-        int largestValidChildIndex = Math.Min(node.NumPolicyMoves - 1, node.NumChildrenExpanded);
-        var baiResult = CalcVisitsBAI(q, n, p, node.N, largestValidChildIndex, numTargetLeafs, emphasizeTopMoveFactor, visitChildCounts.ToArray());
-
-
-        //        float[] fractions = CalcVisitsBAICauchy(q, n, node.NumChildrenExpanded, numTargetLeafs, emphasizeTopMoveFactor, visitChildCounts.ToArray());
-
-        //        short[] priorVisitChildCounts = visitChildCounts.ToArray();
-        visitChildCounts.Clear();
-        //        for (int i = 0; i < baiResult.visits.Length; i++)
-        //          visitChildCounts[i] = (short)Math.Max((short)0, (short)baiResult.visits[i]);
-
-        visitChildCounts.Clear();
-        for (int i = 0; i < numTargetLeafs; i++)
-          visitChildCounts[ThompsonSampling.Draw(baiResult.fractions)]++;
-
-        //TEMP
-        for (int i = node.NumChildrenExpanded + 1; i < node.NumPolicyMoves; i++)
-          visitChildCounts[i] = 0;
-
+        Context.RootMoveTracker?.UpdateVisitCounts(visitChildCounts, numChildrenToCheck, numTargetLeafs);
       }
-
     }
 
 
@@ -485,6 +426,11 @@ namespace Ceres.MCTS.Search
         return (float)childrenSorted[0].N / (float)topMove.N;
       }
     }
+
+
+#if FEATURE_SUPPLEMENTAL
+    internal ConcurrentBag<(MCTSNode ParentNode, int SelectorID, int ChildIndex)> supplementalCandidates = new ();
+#endif
 
     /// <summary>
     /// Starts or continues a MCTS descent to ultimately select a set of leaf nodes
@@ -611,8 +557,8 @@ namespace Ceres.MCTS.Search
         // Immediately make a first pass to immediately launch the children
         // that have enough visits to be processed in parallel  
         ProcessSelectedChildren(node, numTargetLeafs, vLossDynamicBoost, numChildrenToCheck,
-                        paramsExecution.SelectParallelThreshold, true,
-                        childVisitCounts, children, ref numVisitsProcessed);
+                                paramsExecution.SelectParallelThreshold, true,
+                                childVisitCounts, children, ref numVisitsProcessed);
 
         // Make a second pass process any remaining chidren having visits (not parallel)
         if (numVisitsProcessed < numTargetLeafs)
@@ -626,10 +572,10 @@ namespace Ceres.MCTS.Search
       {
         // Process all children with nonzero counts (not parallel)
         ProcessSelectedChildren(node, numTargetLeafs, vLossDynamicBoost, numChildrenToCheck,
-                                1, false,
-                                childVisitCounts, children, ref numVisitsProcessed);
+                                1, false, childVisitCounts, children, ref numVisitsProcessed);
       }
     }
+
 
     void ProcessSelectedChildren(MCTSNode node, int numTargetLeafs, float vLossDynamicBoost, int numChildrenToCheck,
                                  int minVisitsCountToProcess, bool launchParallel,
@@ -673,6 +619,16 @@ namespace Ceres.MCTS.Search
 
             nodeRef.PossiblyPrefetchChild(node.Context.Tree.Store, new MCTSNodeStructIndex(node.Index), childIndex);
           }
+
+#if FEATURE_SUPPLEMENTAL
+          // Warning: this slows down search by up to 10%
+          if (node.NumPolicyMoves > childIndex + 1
+           && node.ChildAtIndexInfo(childIndex).p > 0.18f
+           && node.ChildAtIndexInfo(childIndex).p - node.ChildAtIndexInfo(childIndex + 1).p < 0.03)
+          {
+            supplementalCandidates.Add((node, SelectorID, childIndex + 1));
+          }
+#endif
 
           Debug.Assert(node.Depth < 255);
 
@@ -753,9 +709,9 @@ namespace Ceres.MCTS.Search
         ThreadPool.QueueUserWorkItem(action);
     }
 
-    #endregion
+#endregion
 
-    #region Internals
+#region Internals
 
     /// <summary>
     /// Diagnostic method that verifies internal consistency of child visit counts.
@@ -776,87 +732,7 @@ namespace Ceres.MCTS.Search
       }
     }
 
-    #endregion
-
-    #region Helper methods for experimental features
-
-    static float Adj(float f) => MathF.Max(f, 0.002f);
-    static float QProximityMultiplier(float diff) => (1.0f / (1 * MathF.Pow(Adj(diff), 1.5f)));// + 1 / MathF.Pow(Adj(diff), 1.1f));
-    static float NUncertaintyDivisor(int n) => MathF.Pow(MathF.Log(n + 3), 3.5f);
-    static float VisitsWeight(float diff, int n) => QProximityMultiplier(diff) / NUncertaintyDivisor(n);
-
-    static (float[] fractions, int[] visits) CalcVisitsBAI(float[] q, int[] n, float[] priors, int parentN, int largestValidChildIndex, int totalVisits, float emphasizeTopMoveFactor, short[] comparison)
-    {
-      bool VERBOSE = false;
-
-      if (VERBOSE) Console.WriteLine();
-
-      // Determine best so far
-      int bestQIndex = ArrayUtils.IndexOfElementWithMaxValue(q, q.Length);
-      float bestQValue = q[bestQIndex];
-
-      q[bestQIndex] = float.MinValue;
-      int secondBestQIndex = ArrayUtils.IndexOfElementWithMaxValue(q, q.Length);
-      q[bestQIndex] = bestQValue; // restore
-
-      // Assign scores using formula
-      float[] scores = new float[q.Length];
-      float sum = 0;
-      for (int i = 0; i <= largestValidChildIndex; i++)
-      {
-        float diff = Math.Abs(q[i] - (i == bestQIndex ? q[secondBestQIndex] : bestQValue));
-        scores[i] = VisitsWeight(diff, n[i]);
-        sum += scores[i];
-      }
-
-      float[] fractions = new float[q.Length];
-      float sum2 = 0;
-
-      for (int i = 0; i <= largestValidChildIndex; i++)
-      {
-        fractions[i] = (scores[i] / sum);
-
-        const float MIN_FRAC = 1.0f / 5000.0f;
-        const float MIN_FRAC_BEST = 0.20f;
-        if (float.IsInfinity(scores[i]))
-          fractions[i] = 0.001f; // not yet visited
-        else if (fractions[i] < MIN_FRAC)
-          fractions[i] = MIN_FRAC;
-        else if (i == bestQIndex)
-          fractions[i] = MathF.Max(MIN_FRAC_BEST, fractions[i]);
-
-        sum2 += fractions[i];
-      }
-
-      if (parentN < 1000) throw new Exception("parentN must be at least 1000");
-      const float PRIOR_POWER = 0.2f;
-
-      float fractionPriors = 0.1f / MathF.Pow((parentN + 1) / 1000.0f, PRIOR_POWER);
-
-      // Second normalization and add in priors
-      float sum3 = 0;
-      for (int i = 0; i <= largestValidChildIndex; i++)
-      {
-        fractions[i] /= sum2;
-        fractions[i] = priors[i] * fractionPriors
-                      + fractions[i] * (1.0f - fractionPriors);
-        Debug.Assert(!float.IsNaN(fractions[i]));
-        sum3 += fractions[i];
-      }
-
-      // Convert to visits
-      int[] visits = new int[q.Length];
-      for (int i = 0; i <= largestValidChildIndex; i++)
-      {
-        fractions[i] /= sum3;
-        visits[i] = (int)(fractions[i] * totalVisits);
-        if (VERBOSE) Console.WriteLine($"{i,5:F2} {q[i],6:F2} {n[i],8:F0} {100.0f * priors[i],6:F2}  {scores[i],6:F3} {100.0f * fractions[i],6:F2}% {visits[i],8:F0} vs {comparison[i],8:F0}");
-      }
-
-      return (fractions, visits);
-    }
-
-    #endregion
+#endregion
 
   }
 }
