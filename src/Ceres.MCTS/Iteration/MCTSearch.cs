@@ -262,20 +262,12 @@ namespace Ceres.MCTS.Iteration
         // Update contempt manager (if any) based opponent's prior move
         UpdateContemptManager(newRoot);
 
-        SearchLimit searchLimitAdjusted;
-        if (searchLimit.Type == SearchLimitType.NodesPerMove)
-        {
-          // Nodes per move are treated as incremental beyond initial starting size of tree.
-          searchLimitAdjusted = new SearchLimit(SearchLimitType.NodesPerMove, searchLimit.Value + store.RootNode.N);
-        }
-        else
-        {
-          searchLimitAdjusted = ConvertedSearchLimit(searchLimit, store, priorContext.ParamsSearch, Manager.LimitManager,
-                                                     Manager, gameMoveHistory, isFirstMoveOfGame);
-        }
+        // Compute search limits
+        ComputeSearchLimits(gameMoveHistory, searchLimit, isFirstMoveOfGame, priorContext, 
+                            out SearchLimit searchLimitTargetAdjusted, out SearchLimit searchLimitIncremental);
 
         // Check for possible instant move
-        (MCTSManager, MGMove, TimingStats) instamove = CheckInstamove(Manager, searchLimitAdjusted, newRoot);
+        (MCTSManager, MGMove, TimingStats) instamove = CheckInstamove(Manager, searchLimitIncremental, newRoot);
         if (instamove != default)
         {
           // Modify in place to point to the new root
@@ -293,7 +285,7 @@ namespace Ceres.MCTS.Iteration
 
         bool storeIsAlmostFull = priorContext.Tree.Store.FractionInUse > 0.9f;
         bool newRootIsBigEnoughForReuse = newRoot != null && newRoot.N >= (priorContext.Root.N * thresholdMinFractionNodesRetained);
-        if (priorContext.ParamsSearch.TreeReuseEnabled 
+        if (priorContext.ParamsSearch.TreeReuseEnabled
          && newRootIsBigEnoughForReuse
          && !storeIsAlmostFull)
         {
@@ -334,7 +326,7 @@ namespace Ceres.MCTS.Iteration
           // Construct a new search manager reusing this modified store and modified transposition roots.
           Manager = new MCTSManager(store, reuseOtherContextForEvaluatedNodes, reusePositionCache, newTranspositionRoots,
                                     priorContext.NNEvaluators, priorContext.ParamsSearch, priorContext.ParamsSelect,
-                                    searchLimitAdjusted, Manager.ParamsSearchExecutionPostprocessor, Manager.LimitManager,
+                                    searchLimitTargetAdjusted, Manager.ParamsSearchExecutionPostprocessor, Manager.LimitManager,
                                     startTime, Manager, gameMoveHistory, isFirstMoveOfGame: isFirstMoveOfGame);
           Manager.Context.ContemptManager = priorContext.ContemptManager;
 
@@ -369,6 +361,45 @@ namespace Ceres.MCTS.Iteration
         return Search(manager, false, verbose, progressCallback, false);
       }
 #endif
+    }
+
+
+    private void ComputeSearchLimits(List<GameMoveStat> gameMoveHistory, SearchLimit searchLimit, bool isFirstMoveOfGame, MCTSIterator priorContext, 
+                                     out SearchLimit searchLimitTargetAdjusted, out SearchLimit searchLimitIncremental)
+    {
+      MCTSNodeStore store = priorContext.Tree.Store;
+
+      switch (searchLimit.Type)
+      {
+        case SearchLimitType.NodesPerMove:
+          searchLimitIncremental = searchLimit;
+
+          // Nodes per move are treated as incremental beyond initial starting size of tree.
+          searchLimitTargetAdjusted = new SearchLimit(SearchLimitType.NodesPerMove, searchLimit.Value + store.RootNode.N);
+          break;
+
+        case SearchLimitType.SecondsPerMove:
+          searchLimitIncremental = searchLimit with { };
+          searchLimitTargetAdjusted = searchLimit with { };
+          break;
+
+        case SearchLimitType.NodesForAllMoves:
+          searchLimitIncremental = ConvertedSearchLimit(searchLimit, store, priorContext.ParamsSearch, Manager.LimitManager,
+                                                        Manager, gameMoveHistory, isFirstMoveOfGame);
+          // Nodes per move are treated as incremental beyond initial starting size of tree.
+          searchLimitTargetAdjusted = new SearchLimit(SearchLimitType.NodesPerMove, searchLimitIncremental.Value + store.RootNode.N);
+          break;
+
+        case SearchLimitType.SecondsForAllMoves:
+          searchLimitTargetAdjusted = ConvertedSearchLimit(searchLimit, store, priorContext.ParamsSearch, Manager.LimitManager,
+                                                           Manager, gameMoveHistory, isFirstMoveOfGame);
+          searchLimitIncremental = searchLimitTargetAdjusted;
+          break;
+
+        default:
+          throw new Exception($"Unsupported limit type {searchLimit.Type}");
+          break;
+      }
     }
 
     private static void MaterializeAllTranspositionLinkages(MCTSNode newRoot)

@@ -40,7 +40,7 @@ namespace Ceres.MCTS.Iteration
     /// <param name="newRoot"></param>
     /// <returns></returns>
     (MCTSManager, MGMove, TimingStats) CheckInstamove(MCTSManager priorManager, 
-                                                      SearchLimit searchLimit, 
+                                                      SearchLimit searchLimitIncremental, 
                                                       MCTSNode newRoot)
     {
       if (newRoot != null
@@ -54,7 +54,7 @@ namespace Ceres.MCTS.Iteration
         // time control state has been improved by the instamoves, 
         // so further search may now be warranted.
         // (Also, for some reason, humans tend to find it annoying/suspicious!).
-        const int MAX_CONSECUTIVE_INSTAMOVES = 3;
+        const int MAX_CONSECUTIVE_INSTAMOVES = 2;
         if (CountSearchContinuations >= MAX_CONSECUTIVE_INSTAMOVES)
           return default;
 
@@ -63,7 +63,7 @@ namespace Ceres.MCTS.Iteration
         MCTSNode lastSearchRoot = priorManager.Root;
         float baselineTreeSize = lastSearchRoot.N;
 
-        int estNewVisitsThisMove = searchLimit.EstNumNodes((int)priorManager.EstimatedNPS, true);
+        int estNewVisitsThisMove = searchLimitIncremental.EstNumNodes((int)priorManager.EstimatedNPS, true);
         float ratioNewToBaseline = ((float)newRoot.N + (float)estNewVisitsThisMove) / (float)baselineTreeSize;
         float thresholdRatioNewToCurrent = 1.4f - (0.10f * CountSearchContinuations);
         bool treeIsBigEnough = ratioNewToBaseline < thresholdRatioNewToCurrent;
