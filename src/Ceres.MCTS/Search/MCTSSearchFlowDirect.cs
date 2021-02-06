@@ -24,6 +24,7 @@ using Ceres.Base.Environment;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.Params;
+using Ceres.MCTS.Environment;
 
 #endregion
 
@@ -314,6 +315,13 @@ namespace Ceres.MCTS.Search
           TryAddRootPreloadNodes(manager, MAX_PRELOAD_NODES_PER_BATCH, nodesSelectedSet, selector);
         }
 
+#if FEATURE_SUPPLEMENTAL
+        //if (Context.ParamsSearch.TestFlag)
+        {
+          TryAddSupplementalNodes(manager, MAX_PRELOAD_NODES_PER_BATCH, nodesSelectedSet, selector);
+        }
+#endif
+
         // TODO: make flow private belows   
         if (Context.EvaluatorDef.SECONDARY_NETWORK_ID != null && (manager.Root.N - nodesLastSecondaryNetEvaluation > 500))
         {
@@ -485,6 +493,51 @@ namespace Ceres.MCTS.Search
 
       }
     }
+
+
+#if FEATURE_SUPPLEMENTAL
+    private void TryAddSupplementalNodes(MCTSManager manager, int maxNodes,
+                                         MCTSNodesSelectedSet selectedNodes, ILeafSelector selector)
+    {
+      foreach ((MCTSNode parentNode, int selectorID, int childIndex) in ((LeafSelectorMulti)selector).supplementalCandidates) // TODO: remove cast
+      {
+        if (childIndex <= parentNode.NumChildrenExpanded -1)
+        {
+          // This child was already selected as part of the normal leaf gathering process.
+          continue;
+        }
+        else
+        {
+          MCTSEventSource.TestCounter1++;
+
+          // Record visit to this child in the parent (also increments the child NInFlight counter)
+          parentNode.UpdateRecordVisitsToChild(selectorID, childIndex, 1);
+
+          MCTSNode node = parentNode.CreateChild(childIndex);
+
+          ((LeafSelectorMulti)selector).DoVisitLeafNode(node, 1);// TODO: remove cast
+
+          if (!parentNode.IsRoot)
+          {
+            if (selectorID == 0)
+              parentNode.Parent.Ref.BackupIncrementInFlight(1, 0);
+            else
+              parentNode.Parent.Ref.BackupIncrementInFlight(0, 1);
+          }
+
+          // Try to process this node
+          int nodesBefore = selectedNodes.NodesNN.Count;
+          selector.InsureAnnotated(node);
+          selectedNodes.ProcessNode(node);
+          bool wasSentToNN = selectedNodes.NodesNN.Count != nodesBefore;
+          //if (wasSentToNN) MCTSEventSource.TestCounter2++;
+
+          // dje: add counter?
+        }
+      }
+
+    }
+#endif
 
     enum ApplyMode { ApplyNone, ApplyIfImmediate, ApplyAll };
 
