@@ -117,9 +117,9 @@ namespace Ceres.MCTS.MTCSNodes
       }
 
       string recentQAvgStr = "     ";
-      if (Depth == 1 && Context?.RootMoveTracker.RunningQValues != null)
+      if (Depth == 1 && Context?.RootMoveTracker.RunningVValues != null)
       {
-        float runningQ = Context.RootMoveTracker.RunningQValues[IndexInParentsChildren];
+        float runningQ = Context.RootMoveTracker.RunningVValues[IndexInParentsChildren];
         recentQAvgStr = $"{multiplerOurPerspective * runningQ,5:F2}";
 
       }
