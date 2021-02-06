@@ -41,7 +41,7 @@ namespace Ceres.MCTS.MTCSNodes
      
       string priorMoveStr = Annotation.PriorMoveMG.ToString();
 
-      return $"<MCTSNode [#{Index}] Depth {Depth} {priorMoveStr} [{ActionType}]  ({N},{NInFlight},{NInFlight2})  [{P:F3}%] {Q:F3} "
+      return $"<MCTSNode [#{Index}] Depth {Depth} {priorMoveStr} [{ActionType}]  ({N},{NInFlight},{NInFlight2})  [{P*100:F3}%] {Q:F3} "
            + $"Parent={(ParentIndex.IsNull ? "none" : ParentIndex.Index.ToString())}"
            + $" V={V:F3} " + (VSecondary == 0 ? "" : $"VSecondary={VSecondary:F3} ")
            + pendingWDL
