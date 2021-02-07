@@ -54,7 +54,6 @@ namespace Ceres.MCTS.NodeCache
 
     MCTSNodeCacheArrayPurgeable[] subCaches;
 
-    int numCachePrunesInProgress = 0;
 
     #endregion
 
@@ -115,6 +114,7 @@ namespace Ceres.MCTS.NodeCache
       }
     }
 
+    static readonly object lockObj = new();
 
     /// <summary>
     /// Possibly prunes the cache to remove some of the least recently accessed nodes.
@@ -123,19 +123,19 @@ namespace Ceres.MCTS.NodeCache
     public void PossiblyPruneCache(MCTSNodeStore store)
     {
       bool almostFull = NumInUse > (MaxCacheSize * 85) / 100;
-      if (numCachePrunesInProgress == 0 && almostFull)
+      lock (lockObj)
       {
-        Interlocked.Increment(ref numCachePrunesInProgress);
+        if (almostFull)
+        {
+          int countPurged = 0;
+          Parallel.ForEach(Enumerable.Range(0, NumSubcaches),
+                           new ParallelOptions() { MaxDegreeOfParallelism = 4 }, // memory access already saturated at 4
+            i =>
+            {
+              Interlocked.Add(ref countPurged, subCaches[i].Prune(store, -1));
+            });
 
-        int countPurged = 0;
-        Parallel.ForEach(Enumerable.Range(0, NumSubcaches),
-                         new ParallelOptions() { MaxDegreeOfParallelism = 4 }, // memory access already saturated at 4
-          i =>
-          {
-            Interlocked.Add(ref countPurged, subCaches[i].Prune(store, -1));
-          });
-
-        Interlocked.Decrement(ref numCachePrunesInProgress);
+        }
       }
     }
 
