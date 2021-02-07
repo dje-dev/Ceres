@@ -76,7 +76,8 @@ namespace Ceres.Chess.GameEngines
     /// <param name="gameID">optional game descriptive string</param>
     public abstract void ResetGame(string gameID = null);
 
-    
+    volatile bool inSearch = false;
+
     /// <summary>
     /// Runs a search, calling DoSearch and adjusting the cumulative search time
     /// </summary>
@@ -90,6 +91,9 @@ namespace Ceres.Chess.GameEngines
                                          ProgressCallback callback = null,
                                          bool verbose = false)
     {
+      if (inSearch) throw new Exception("GameEngine.Search cannot be called concurrently by more than one thread.");
+      inSearch = true;
+
       // Execute any preparation which should not be counted against thinking time
       // For example, Stockfish can require hundreds of milliseconds to process "ucinewgame"
       // which is used to reset state/hash table when the tree reuse option is enabled.
@@ -106,6 +110,8 @@ namespace Ceres.Chess.GameEngines
       CumulativeNodes += result.FinalN;
 
       result.TimingStats = stats;
+
+      inSearch = false;
       return result;
     }
 
