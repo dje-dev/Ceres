@@ -273,6 +273,7 @@ namespace Ceres.MCTS.Iteration
           // Modify in place to point to the new root
           continuationSubroot = newRoot;
           BestMove = instamove.Item2;
+          Manager.StopStatus = MCTSManager.SearchStopStatus.Instamove;
           TimingInfo = new TimingStats();
           return;
         }

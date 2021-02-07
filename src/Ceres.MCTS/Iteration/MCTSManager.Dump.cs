@@ -70,7 +70,7 @@ namespace Ceres.MCTS.Iteration
         DumpTimeInfo(writer);
 
         writer.WriteLine();
-        Context.Root.Dump(1, 1, writer: writer);
+        searchRootNode.Dump(1, 1, writer: writer);
 
         writer.WriteLine();
         MCTSPosTreeNodeDumper.DumpPV(searchRootNode, true, writer);
@@ -86,9 +86,13 @@ namespace Ceres.MCTS.Iteration
     {
       writer = writer ?? Console.Out;
 
-      writer.WriteLine();
-      writer.WriteLine($"StartTimeFirstVisit        {StartTimeFirstVisit}");
-      writer.WriteLine($"StartTimeThisSearch        {StartTimeThisSearch}");
+      if (StopStatus != SearchStopStatus.Instamove
+       && StopStatus != SearchStopStatus.TablebaseImmediateMove)
+      {
+        writer.WriteLine();
+        writer.WriteLine($"StartTimeFirstVisit        {StartTimeFirstVisit}");
+        writer.WriteLine($"StartTimeThisSearch        {StartTimeThisSearch}");
+      }
 
       writer.WriteLine($"Root N                     {Root.N}");
       writer.WriteLine($"RootNWhenSearchStarted     {RootNWhenSearchStarted}");

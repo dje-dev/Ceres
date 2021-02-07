@@ -125,14 +125,10 @@ namespace Ceres.MCTS.MTCSNodes
       }
 
       bool invert = multiplerOurPerspective == -1;
-      extraInfo = $" N={N,9:F0} ({fracVisitStr}@{recentQAvgStr})  Q= {multiplerOurPerspective * Q,6:F3}  V= {  multiplerOurPerspective * V,6:F3} ";
+      extraInfo = $" N={N,9:F0} ({fracVisitStr}%{recentQAvgStr})  Q= {multiplerOurPerspective * Q,6:F3}  V= {  multiplerOurPerspective * V,6:F3} ";
       extraInfo += $" WDL= {(invert ? LossP : WinP),4:F2} {DrawP,4:F2} {(invert ? WinP : LossP),4:F2} ";
       extraInfo += $" WDL Avg= {(invert ? LAvg : WAvg),4:F2} {DAvg,4:F2} {(invert ? WAvg : LAvg),4:F2}  ";
       extraInfo += $"M = {MPosition,4:F0} {MAvg,4:F0}  ";
-
-      //float qStdDev = MathF.Sqrt(Ref.VVariance);
-      //extraInfo += $"Sc={sideMult * Q + u,5:F3}  ";//
-      //extraInfo+= $"U={u,5:F3} {cPos.FEN}";
 
       MGMove move = Annotation.PriorMoveMG;
       writer.WriteLine($"{extraFlag} {Depth,4:F0} {move.MoveStr(MGMoveNotationStyle.ShortAlgebraic),-6} {100 * P,8:F2}% " +
@@ -166,6 +162,5 @@ namespace Ceres.MCTS.MTCSNodes
     }
 
   }
-
 
 }

@@ -54,7 +54,9 @@ namespace Ceres.MCTS.Iteration
       OnlyOneLegalMove,
       ExternalStopRequested,
       TimeExpired,
-      FutilityPrunedAllMoves
+      FutilityPrunedAllMoves,
+      Instamove,
+      TablebaseImmediateMove
     }
 
 
@@ -548,6 +550,7 @@ namespace Ceres.MCTS.Iteration
       if (manager.TablebaseImmediateBestMove != default(MGMove))
       {
         manager.StartTimeThisSearch = DateTime.Now;
+        manager.StopStatus = SearchStopStatus.TablebaseImmediateMove;
         return (manager.TablebaseImmediateBestMove, new TimingStats());
       }
      
