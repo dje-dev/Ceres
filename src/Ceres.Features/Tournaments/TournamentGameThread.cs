@@ -270,8 +270,8 @@ namespace Ceres.Features.Tournaments
       if (Def.ShowGameMoves) Def.Logger.WriteLine();
       Def.Logger.Write($"{eloAvg,5:0} {eloSD,4:0} {100.0f * los,5:0}  ");
       Def.Logger.Write($"{ParentStats.NumGames,5} {DateTime.Now.ToString().Split(" ")[1],10}  {gameSequenceNum,4:F0}  {openingIndex,4:F0}{openingPlayedBothWaysStr}  ");
-      Def.Logger.Write($"{thisResult.TotalTimeEngine1,7:F2} {thisResult.TotalTimeEngine2,7:F2}   ");
-      Def.Logger.Write($"{thisResult.TotalNodesEngine1,15:N0} {thisResult.TotalNodesEngine2,15:N0}   ");
+      Def.Logger.Write($"{thisResult.TotalTimeEngine1,8:F2} {thisResult.TotalTimeEngine2,8:F2}   ");
+      Def.Logger.Write($"{thisResult.TotalNodesEngine1,16:N0} {thisResult.TotalNodesEngine2,16:N0}   ");
       Def.Logger.Write($"{thisResult.PlyCount,4:F0}  {TournamentUtils.ResultStr(thisResult.Result, engine2White),4}  ");
       Def.Logger.Write($"{wdlStr}   {thisResult.FEN} ");
       Def.Logger.WriteLine();

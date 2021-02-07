@@ -209,10 +209,10 @@ namespace Ceres.Features.Tournaments
       float totalTimeEngine2 = gameThreads.Sum(g => g.TotalTimeEngine2);
       float numGames = gameThreads.Sum(g => g.NumGames);
 
-      Def.Logger.WriteLine("					          ------  ------    --------------  --------------   ----"); 
+      Def.Logger.WriteLine("					           ------   ------     --------------   --------------   ----"); 
       Def.Logger.Write("                                                ");
-      Def.Logger.Write($"{totalTimeEngine1,8:F2}{totalTimeEngine2,8:F2}");
-      Def.Logger.Write($"{totalNodesEngine1,18:N0}{totalNodesEngine2,16:N0}   ");
+      Def.Logger.Write($"{totalTimeEngine1,9:F2}{totalTimeEngine2,9:F2}");
+      Def.Logger.Write($"{totalNodesEngine1,19:N0}{totalNodesEngine2,17:N0}   ");
       Def.Logger.Write($"{Math.Round(totalMovesEngine1 / numGames, 0),4:F0}");
 
       Def.Logger.WriteLine();
