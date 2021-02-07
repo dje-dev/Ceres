@@ -25,7 +25,6 @@ using Ceres.Features.Tournaments;
 using Ceres.Features.GameEngines;
 using Ceres.MCTS.Params;
 using Ceres.Base.Benchmarking;
-using Ceres.MCTS.Managers.Limits;
 using System.IO;
 using System.Diagnostics;
 
@@ -63,12 +62,12 @@ namespace Ceres.APIExamples
       GameEngineUCISpec specSF = new GameEngineUCISpec("SF12", SF12_EXE);
       GameEngineUCISpec specLC0 = new GameEngineUCISpec("LC0", "lc0.exe");
 
-      const bool POOLED = false;
+      const bool POOLED = true;
       string GPUS = POOLED ? "GPU:0,1,2,3:POOLED"
                            : "GPU:0";
       //703810
       NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification("LC0:j64-210", GPUS); // j64-210
-      NNEvaluatorDef evalDef2 = NNEvaluatorDefFactory.FromSpecification("LC0:j64-210", GPUS);
+      NNEvaluatorDef evalDef2 = NNEvaluatorDefFactory.FromSpecification("LC0:j64-210", GPUS); // j104.1-30 61339
 
       // was 703810 @ 50k
 
@@ -91,12 +90,12 @@ namespace Ceres.APIExamples
       SearchLimit limit1 = SearchLimit.NodesPerMove(11_000);
 
 //      limit1 = SearchLimit.SecondsForAllMoves(15, 0.25f);
-      limit1 = SearchLimit.SecondsForAllMoves(20);
+//      limit1 = SearchLimit.SecondsForAllMoves(10);
 
       //limit1 = SearchLimit.NodesForAllMoves(500_000);//, 25_000);
 
-      //limit1 = SearchLimit.SecondsForAllMoves(10);
-      //limit1 = SearchLimit.NodesPerMove(1_000);
+      //limit1 = SearchLimit.SecondsForAllMoves(15);
+      limit1 = SearchLimit.NodesPerMove(1_000);
 
       // Don't output log if very small games
       // (to avoid making very large log files or slowing down play).
@@ -115,7 +114,7 @@ namespace Ceres.APIExamples
       ////////
 
       //engineDefCeres1.SelectParams.CPUCTAtRoot *= 1.5f;
-      //engineDefCeres1.SearchParams.TestFlag = true;
+//engineDefCeres1.SearchParams.TestFlag = true;
       //engineDefCeres1.SearchParams.MoveFutilityPruningAggressiveness = 0.60f;
 //engineDefCeres1.SearchParams.GameLimitUsageAggressiveness *= 1.2f;
 //engineDefCeres1.SearchParams.MoveFutilityPruningAggressiveness = 0.75f;
@@ -173,7 +172,7 @@ namespace Ceres.APIExamples
       EnginePlayerDef playerCeres2 = new EnginePlayerDef(engineDefCeres2, limit1);
       EnginePlayerDef playerEthereal = new EnginePlayerDef(engineDefEthereal, limit1);
       EnginePlayerDef playerStockfish11 = new EnginePlayerDef(engineDefStockfish11, limit1);
-      EnginePlayerDef playerStockfish12 = new EnginePlayerDef(engineDefStockfish12, limit1);// * 350);
+      EnginePlayerDef playerStockfish12 = new EnginePlayerDef(engineDefStockfish12, limit1 * 0.5f);// * 350);
       EnginePlayerDef playerLC0 = new EnginePlayerDef(engineDefLC1, limit1);
       EnginePlayerDef playerLC0TCEC = new EnginePlayerDef(engineDefLC2TCEC, limit1);
 
@@ -208,8 +207,8 @@ namespace Ceres.APIExamples
       //engineDefCeres2.SearchParams.FutilityPruningStopSearchEnabled= false;
       //engineDefLC0.SearchParamsEmulate.FutilityPruningStopSearchEnabled= false;
 
-      TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerLC0);// playerCeres2UCI);// playerLC0TCEC);
-                                                                                 //    TournamentDef def = new TournamentDef("TOURN", playerCeres1UCI, playerCeres2UCI);
+      TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerLC0TCEC);// playerCeres2UCI);// playerLC0TCEC);
+//    TournamentDef def = new TournamentDef("TOURN", playerCeres1UCI, playerCeres2UCI);
 
       //TournamentDef def = new TournamentDef("TOURN", playerLC0Tilps, playerLC0);
 
@@ -220,8 +219,8 @@ namespace Ceres.APIExamples
 
       //      def.StartingFEN = "1q6/2n4k/1r1p1pp1/RP1P2p1/2Q1P1P1/2N4P/3K4/8 b - - 8 71";
       //      def.OpeningsFileName = @"\\synology\dev\chess\data\openings\Drawkiller_500pos_reordered.pgn";//                                                                                                 
-//      def.OpeningsFileName = "TCEC19_NoomenSelect.pgn";
-      def.OpeningsFileName = "TCEC1819.pgn";
+      def.OpeningsFileName = "TCEC18_NoomenSelect.pgn";
+      //def.OpeningsFileName = "TCEC1819.pgn";
       // broken      def.OpeningsFileName = "TCEC_9-20.pgn";
       //            def.OpeningsFileName = "4mvs_+90_+99.pgn";
       //      def.OpeningsFileName = "startpos.pgn";
