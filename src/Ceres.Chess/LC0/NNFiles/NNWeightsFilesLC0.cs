@@ -36,16 +36,26 @@ namespace Ceres.Chess.LC0.NNFiles
     {
       NNWeightsFiles.RegisterDirectory(directoryName, searchPattern, (string id, string fileName) =>
       {
-        string cleanedFileName = Path.GetFileName(fileName).ToLower();
-        if (cleanedFileName.StartsWith("weights_run1_")) cleanedFileName = cleanedFileName.Replace("weights_run1_", "");
-        if (cleanedFileName.StartsWith("weights_run2_")) cleanedFileName = cleanedFileName.Replace("weights_run2_", "");
-        if (cleanedFileName.StartsWith("weights_run3_")) cleanedFileName = cleanedFileName.Replace("weights_run3_", "");
-        cleanedFileName = cleanedFileName.Replace(".gz", "").Replace(".pb", "");
-
-        if (cleanedFileName == id.ToLower())
+        if (new FileInfo(id).FullName == new FileInfo(fileName).FullName)
+        {
+          // Full filename directly specified, just directly use it.
           return new NNWeightsFileLC0(id, fileName);
+        }
         else
-          return null;
+        {
+          // Check if the filename seems to correspond to the requested ID,
+          // after stipping off common prefixes and suffixes.
+          string cleanedFileName = Path.GetFileName(fileName).ToLower();
+          if (cleanedFileName.StartsWith("weights_run1_")) cleanedFileName = cleanedFileName.Replace("weights_run1_", "");
+          if (cleanedFileName.StartsWith("weights_run2_")) cleanedFileName = cleanedFileName.Replace("weights_run2_", "");
+          if (cleanedFileName.StartsWith("weights_run3_")) cleanedFileName = cleanedFileName.Replace("weights_run3_", "");
+          cleanedFileName = cleanedFileName.Replace(".gz", "").Replace(".pb", "");
+
+          if (cleanedFileName == id.ToLower())
+            return new NNWeightsFileLC0(id, fileName);
+          else
+            return null;
+        }
       });
 
     }

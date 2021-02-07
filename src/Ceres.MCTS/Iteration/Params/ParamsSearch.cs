@@ -13,11 +13,11 @@
 
 #region Using directives
 
+using System;
+
 using Ceres.Chess.UserSettings;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.Search.IteratedMCTS;
-using LINQPad.Controls;
-using System;
 
 #endregion
 
@@ -222,8 +222,8 @@ namespace Ceres.MCTS.Params
     /// from further visits due to impossibility or implausability that they will be the best move.
     /// TODO: make this smarter, possibly look at recent trends
     /// </summary>
-    [CeresOption(Name = "move-futility-pruning-aggressiveness", Desc = "Aggresiveness for early termination of searches to less promising root search subtrees in range [0..1], 0 disables.", Default = "1.0")]
-    public float MoveFutilityPruningAggressiveness = 1.0f;
+    [CeresOption(Name = "move-futility-pruning-aggressiveness", Desc = "Aggresiveness for early termination of searches to less promising root search subtrees in range [0..1.5], 0 disables.", Default = "0.4")]
+    public float MoveFutilityPruningAggressiveness = 0.5f;
 
     /// <summary>
     /// Aggressiveness with which limited search resource (time or nodes) is consumed.
@@ -249,22 +249,6 @@ namespace Ceres.MCTS.Params
     public int PaddedExtraNodesBase = 5;
     public float PaddedExtraNodesMultiplier = 0.03f;
 
-    /// <summary>
-    /// Experimental. Optionally leaf selection can be influenced
-    /// by a specified amount of noise applied to Q
-    /// (applied only in case child already has N > 1000).
-    /// Suggested value: 0.04.
-    /// </summary>
-    public float QNoiseFactorRoot = 0.0f;
-
-    /// <summary>
-    /// Experimental. Optionally leaf selection can be influenced
-    /// by a specified amount of noise applied to Q
-    /// (applied only in case child already has N > 1000).
-    /// Suggested value: 0.02.
-    /// </summary>
-    public float QNoiseFactorNonRoot = 0.0f;
-
 
     /// <summary>
     /// If the V take from a node found to be a transposition
@@ -289,12 +273,25 @@ namespace Ceres.MCTS.Params
 
 
     /// <summary>
-    /// Constructor.
+    /// Constructor (uses default values for the class unless overridden in settings file).
     /// </summary>
     public ParamsSearch()
     {
+      if (CeresUserSettingsManager.Settings.SmartPruningFactor.HasValue)
+      {
+        if (CeresUserSettingsManager.Settings.SmartPruningFactor.Value == 0)
+        {
+          FutilityPruningStopSearchEnabled = false;
+          MoveFutilityPruningAggressiveness = 0;
+        }
+        else
+        {
+          throw new Exception("SmartPruningFactor in Ceres.json must either have value 0 or be absent.");
+        }
+      }
+
       // Check user settings to see if tablebases are configured.
-      EnableTablebases = CeresUserSettingsManager.Settings.DirTablebases != "";
+      EnableTablebases = CeresUserSettingsManager.Settings.TablebaseDirectory != "";
 
       // Start with default execution params,
       // but these may be updated dynamicaly during search

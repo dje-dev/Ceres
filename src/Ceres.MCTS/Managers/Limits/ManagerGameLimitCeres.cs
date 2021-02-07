@@ -63,27 +63,32 @@ namespace Ceres.MCTS.Managers.Limits
           factorLargeIncrement = MathF.Min(MAX_LARGE_INCREMENT_MULTIPLIER, factorLargeIncrement);
         }
       }
+      
 
       // When we are behind then it's worth taking a gamble and using more time
       // but when we are ahead, take a little less time to be sure we don't err in time pressure.
       float factorWinningness = inputs.RootQ switch
       {
-        < -0.25f => 1.15f,
-        < -0.15f => 1.05f,
-        > 0.25f => 0.90f,
-        > 0.15f => 0.95f,
+        < -0.40f => 1.15f,
+        < -0.25f => 1.05f,
+        > 0.40f => 0.90f,
+        > 0.25f => 0.95f,
         _ => 1.0f
       };
+    
 
       // Spend 30% more on first move of game (definitely no tree reuse, etc.)
       float factorFirstMove = inputs.IsFirstMoveOfGame ? 1.3f : 1.0f;
 
-      // Make a divisor which is between about 12 and 17
+      // Make a divisor which is between about 11 and 17
       // and a incresing function of the piece count.
       // Note that this is a relatively small number because
       //  - some moves will not do any search at all (due to instamoves), and
       //  - many moves will not actually run the full search duration (due to smart pruning)
-      float baseDivisor = 10 + MathF.Pow(inputs.StartPos.PieceCount, 0.5f);
+      //  - thinking time is deliberately somewhat frontloaded because 
+      //    its value as a deferred asset must be discounted by the possibility
+      //    that it might never be gainfully used (if a loss comes first).
+      float baseDivisor = 9 + MathF.Pow(inputs.StartPos.PieceCount, 0.5f);
 
       float ret = Aggressiveness * (1.0f / baseDivisor) * factorLargeIncrement * factorWinningness * factorFirstMove;
 

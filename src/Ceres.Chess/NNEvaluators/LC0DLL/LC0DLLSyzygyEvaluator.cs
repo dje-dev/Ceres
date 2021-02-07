@@ -17,6 +17,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
+using Ceres.Base.Misc;
 using Ceres.Chess.MoveGen;
 
 #endregion
@@ -107,6 +108,7 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
       Initialize(paths);
     }
 
+    public static bool DTZAvailable = false;
 
     /// <summary>
     /// Internal initialization routine to register with LC0 DLL.
@@ -116,28 +118,25 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
     bool Initialize(string paths)
     {
       // Validate that all the requested paths actually exist
-      string[] directories = paths.Split(new char[] { ';', ',' });
-      foreach (string dir in directories)
+      if (!FileUtils.PathsListAllExist(paths))
       {
-        if (!Directory.Exists(dir))
-        {
-          throw new Exception($"Requested tablebase directory does not exist or is inaccessible: {dir}");
-        }
+        throw new Exception($"One or more specified Syzygy paths not found or inaccessible: {paths} ");
       }
 
       LCO_Interop.CheckLibraryDirectoryOnPath();
 
       // Determine the maximum cardinality (number of pieces) supported
-      bool initialized = LCO_Interop.TBInitialize(sessionID, paths);
-      if (initialized)
-      {
-        MaxCardinality = LCO_Interop.MaxCardinality(sessionID);
-      }
-      else
+      LCO_Interop.TBInitializeStatus initStatus = LCO_Interop.TBInitialize(sessionID, paths);
+      if (initStatus == LCO_Interop.TBInitializeStatus.ERROR)
       {
         throw new Exception($"Loading tablebases failed, attempted {paths}");
       }
-      return initialized;
+      else
+      {
+        DTZAvailable = initStatus == LCO_Interop.TBInitializeStatus.OK_WITH_DTM_DTZ;
+        MaxCardinality = LCO_Interop.MaxCardinality(sessionID);
+        return true;
+      }
     }
 
     /// <summary>  
@@ -173,11 +172,19 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
     /// Probes DTZ tables for the given position to determine the number of ply
     /// before a zeroing move under optimal play.
     ///</summary>
-    public int ProbeDTZ(string position, out ProbeState state)
+    public int ProbeDTZ(in Position pos)
     {
-      //  int probe_dtz(const Position& pos, ProbeState* result);
-      state = ProbeState.Fail;
-      return -1;
+      // Make sure sufficiently few pieces remain on board
+      // and not castling rights
+      if (!DTZAvailable 
+       || pos.PieceCount > MaxCardinality 
+       || pos.MiscInfo.CastlingRightsAny)
+      {
+        return -1;
+      }
+
+      // Call DLL function to do the probe and return encoded result
+      return LCO_Interop.ProbeDTZ(sessionID, pos.FEN);
     }
 
     /// Probes DTZ tables to determine which moves are on the optimal play path.
@@ -205,7 +212,7 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
       return false;
     }
 
-    #region Disposal
+#region Disposal
 
     bool isDisposed = false;
 
@@ -225,7 +232,7 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
       isDisposed = true;
     }
 
-    #endregion
+#endregion
 
   }
 }

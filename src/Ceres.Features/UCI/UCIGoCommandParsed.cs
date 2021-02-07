@@ -14,8 +14,10 @@
 #region Using directives
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using Ceres.Base.Misc;
+using Ceres.Chess;
 
 #endregion
 
@@ -57,12 +59,22 @@ namespace Ceres.Features.UCI
     public readonly int? TimeOpponent;
 
     /// <summary>
-    /// Increment time per move for our side (in milliseconds)
+    /// Remaining nodes for our side (proprietary UCI go mode)
+    /// </summary>
+    public readonly int? NodesOurs;
+
+    /// <summary>
+    /// Remaining nodes for opponent side (proprietary UCI go mode)
+    /// </summary>
+    public readonly int? NodesOpponent;
+
+    /// <summary>
+    /// Increment per move for our side (in milliseconds or nodes)
     /// </summary>
     public readonly int? IncrementOurs;
 
     /// <summary>
-    /// Increment time per move for opopnent (in milliseconds)
+    /// Increment per move for opopnent (in milliseconds or nodes)
     /// </summary>
     public readonly int? IncrementOpponent;
 
@@ -71,6 +83,10 @@ namespace Ceres.Features.UCI
     /// </summary>
     public readonly int? MovesToGo;
 
+    /// <summary>
+    /// Optionally a list of root-level moves to which the search is restricted.
+    /// </summary>
+    public readonly List<Move> SearchMoves;
 
     /// <summary>
     /// Constructor from UCI string received
@@ -143,6 +159,20 @@ namespace Ceres.Features.UCI
               TimeOpponent = Math.Max(0, TakeIntToken());
             break;
 
+          case "wnodes":
+            if (weAreWhite)
+              NodesOurs = Math.Max(0, TakeIntToken());
+            else
+              NodesOpponent = Math.Max(0, TakeIntToken());
+            break;
+
+          case "bnodes":
+            if (weAreBlack)
+              NodesOurs = Math.Max(0, TakeIntToken());
+            else
+              NodesOpponent = Math.Max(0, TakeIntToken());
+            break;
+
           case "winc":
             if (weAreWhite) 
               IncrementOurs = TakeIntToken(); 
@@ -157,13 +187,33 @@ namespace Ceres.Features.UCI
               IncrementOpponent = TakeIntToken();
             break;
 
+          case "depth":
+            int depth = TakeIntToken();
+            if (depth < 100)
+            {
+              Console.WriteLine($"Unsupported UCI go mode: {token}");
+            }
+            else
+            {
+              // Some clients may always send very large depths (like 9999).
+              // Since these are effecitvely never binding, just ignore them.
+            }
+            break;
+
           case "moves":
           case "mate":
-          case "depth":
           case "ponder":
-          case "searchmoves":
             Console.WriteLine($"Unsupported UCI go mode: {token}");
             IsValid = false;
+            break;
+
+          case "searchmoves":
+            SearchMoves = new List<Move>();
+            for (int i=partIndex; i<strParts.Length;i++)
+            {
+              SearchMoves.Add(Move.FromUCI(strParts[i]));
+              partIndex++;
+            }
             break;
 
           default:

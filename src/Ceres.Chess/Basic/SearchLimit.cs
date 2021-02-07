@@ -13,10 +13,10 @@
 
 #region Using directives
 
+using System;
+using System.Collections.Generic;
 
 #endregion
-
-using System;
 
 namespace Ceres.Chess
 {
@@ -57,6 +57,11 @@ namespace Ceres.Chess
     /// </summary>
     public bool SearchCanBeExpanded { init; get; } = true;
 
+    /// <summary>
+    /// Optionally a list of moves to which the search is restricted.
+    /// </summary>
+    public List<Move> SearchMoves;
+
     #region Static Factory methods
 
     public static SearchLimit NodesPerMove(int nodes, bool searchContinuationSupported = true)
@@ -89,8 +94,9 @@ namespace Ceres.Chess
     /// <param name="searchCanBeExpanded"></param>
     /// <param name="valueIncrement"></param>
     /// <param name="maxMovesToGo"></param>
+    /// <param name="searchMoves"></param>
     public SearchLimit(SearchLimitType type, float value, bool searchCanBeExpanded = true, 
-                       float valueIncrement = 0, int? maxMovesToGo = null)
+                       float valueIncrement = 0, int? maxMovesToGo = null, List<Move> searchMoves = null)
     {
       if (value < 0) throw new ArgumentOutOfRangeException(nameof(value), "cannot be negative");
       if (valueIncrement > 0 && !TypeIsPerGameLimit(type))
@@ -101,6 +107,10 @@ namespace Ceres.Chess
       SearchCanBeExpanded = searchCanBeExpanded;
       ValueIncrement = valueIncrement;
       MaxMovesToGo = maxMovesToGo;
+      if (searchMoves != null && searchMoves.Count > 0)
+      {
+        SearchMoves = searchMoves;
+      }
     }
 
     #region Predicates
@@ -181,7 +191,9 @@ namespace Ceres.Chess
 
     #endregion
 
-
+    /// <summary>
+    /// Converts SearchLimit to from a per-game limit to a per-move limit, if applicable.
+    /// </summary>
     public SearchLimit ConvertedGameToMoveLimit
     {
       get
@@ -196,6 +208,9 @@ namespace Ceres.Chess
     }
 
 
+    /// <summary>
+    /// Returns a short code string indicating the type of limit.
+    /// </summary>
     public string TypeShortStr => Type switch
     {
       SearchLimitType.NodesForAllMoves => "NG",
@@ -206,12 +221,25 @@ namespace Ceres.Chess
     };
 
 
+    /// <summary>
+    /// Returns string summary of SearchLimit.
+    /// </summary>
+    /// <returns></returns>
     public override string ToString()
     {
       string movesToGoPart = MaxMovesToGo != int.MaxValue ? $" Moves { MaxMovesToGo }" : "";
       string valuePart = IsTimeLimit ? $"{Value,5:F2}" : $"{Value,9:N0}";
       string incrPart = IsTimeLimit ? $"{ValueIncrement,5:F2}" : $"{ValueIncrement,9:N0}";
-      return $"<{TypeShortStr,-4}{valuePart}{(ValueIncrement > 0 ? $" +{incrPart}" : "")}{movesToGoPart}>";
+
+      string searchMovesPart = "";
+      if (SearchMoves != null)
+      {
+        searchMovesPart = " searchmoves ";
+        for (int i = 0; i < SearchMoves.Count; i++)
+          searchMovesPart += SearchMoves[i] + " ";
+      }
+
+      return $"<{TypeShortStr,-4}{valuePart}{(ValueIncrement > 0 ? $" +{incrPart}" : "")}{movesToGoPart}{searchMovesPart}>";
     }
   }
 }

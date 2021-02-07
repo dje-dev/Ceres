@@ -95,13 +95,13 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// If not null then all evaluators built from definitions
     /// having this same name are shared.
     /// </summary>
-    internal object persistentID;
+    internal string persistentID;
 
     public void MakePersistent()
     {
       if (persistentID != null) throw new Exception("NNEvaluatorDef is already persistent.");
 
-      persistentID = new object();
+      persistentID = DateTime.Now.Ticks.ToString();
     }
 
     public bool IsPersistent => persistentID != null;

@@ -30,6 +30,8 @@ using Ceres.MCTS.MTCSNodes.Annotation;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.Iteration;
+using Ceres.Chess.Positions;
+using Ceres.Chess.MoveGen.Converters;
 
 #endregion
 
@@ -506,7 +508,7 @@ namespace Ceres.MCTS.MTCSNodes
     }
 
 
-    public double Q => W / N;
+    public double Q => N == 0 ? 0 : (W / N);
 
 #region Children
 
@@ -635,6 +637,57 @@ namespace Ceres.MCTS.MTCSNodes
         }
         throw new Exception("Not found");
       }
+    }
+
+    #endregion
+
+    #region Miscellaneous
+
+    /// <summary>
+    /// Attempts to find a subnode by following specified moves from root.
+    /// </summary>
+    /// <param name="priorRoot"></param>
+    /// <param name="movesMade"></param>
+    /// <returns></returns>
+    public MCTSNode FollowMovesToNode(IEnumerable<MGMove> movesMade)
+    {
+      PositionWithHistory startingPriorMove = Context.StartPosAndPriorMoves;
+      MGPosition position = startingPriorMove.FinalPosMG;
+      MCTSIterator context = Context;
+
+      // Advance root node and update prior moves
+      MCTSNode newRoot = this;
+      foreach (MGMove moveMade in movesMade)
+      {
+        bool foundChild = false;
+
+        // Find this new root node (after these moves)
+        foreach (MCTSNodeStructChild child in newRoot.Ref.Children)
+        {
+          if (child.IsExpanded)
+          {
+            MGMove thisChildMove = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(child.Move, in position);
+            if (thisChildMove == moveMade)
+            {
+              // Advance new root to reflect this move
+              newRoot = context.Tree.GetNode(child.ChildIndex, newRoot);
+
+              // Advance position
+              position.MakeMove(thisChildMove);
+
+              // Done looking for match
+              foundChild = true;
+              break;
+            }
+          }
+        }
+
+        if (!foundChild)
+          return null;
+      }
+
+      // Found it
+      return newRoot;
     }
 
     #endregion

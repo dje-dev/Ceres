@@ -18,6 +18,7 @@ using Ceres.Base.DataTypes;
 using Ceres.Chess;
 using Ceres.Chess.GameEngines;
 using Ceres.Chess.NNEvaluators.Defs;
+using Ceres.Chess.Positions;
 using Ceres.Chess.Textual;
 using Ceres.Features.GameEngines;
 using Ceres.Features.Players;
@@ -29,7 +30,7 @@ namespace Ceres.Commands
 {
   public record FeatureAnalyzeParams : FeaturePlayWithOpponent
   {
-    public Position Position { init; get; }
+    public string FenAndMovesStr { init; get; }
 
     /// <summary>
     /// Constructor which parses arguments.
@@ -37,17 +38,25 @@ namespace Ceres.Commands
     /// <param name="fen"></param>
     /// <param name="args"></param>
     /// <returns></returns>
-    public static FeatureAnalyzeParams ParseAnalyzeCommand(string fen, string args)
+    public static FeatureAnalyzeParams ParseAnalyzeCommand(string fenAndMovesStr, string args)
     {
-      if (fen == null) throw new Exception("ANALYZE command expected to end with FEN to be analyzed");
+      if (fenAndMovesStr == null) throw new Exception("ANALYZE command expected to end with FEN to be analyzed");
+
+      // Make sure string is valid
+      try
+      {
+        PositionWithHistory position = PositionWithHistory.FromFENAndMovesUCI(fenAndMovesStr);
+      }
+      catch (Exception exc)
+      {
+        throw new Exception($"Error parsing expected FEN (and possible moves string) {fenAndMovesStr}");
+      }
 
       KeyValueSetParsed keys = new KeyValueSetParsed(args, FEATURE_PLAY_COMMON_ARGS);
 
-      Position position = fen == null ? Position.StartPosition : FENParser.ParseFEN(fen).AsPosition;
-
       FeatureAnalyzeParams parms = new FeatureAnalyzeParams()
       {
-        Position = position
+        FenAndMovesStr = fenAndMovesStr
       };
 
       // Add in all the fields from the base class

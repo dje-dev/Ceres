@@ -15,41 +15,35 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 
-using Ceres.Base;
+using Ceres.Base.Benchmarking;
 using Ceres.Base.DataTypes;
 using Ceres.Base.Environment;
 using Ceres.Base.Math;
 using Ceres.Base.Misc;
+
 using Ceres.Chess;
-using Ceres.Chess.EncodedPositions.Basic;
+using Ceres.Chess.Positions;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.PositionEvalCaching;
-using Ceres.Chess.LC0;
-using Ceres.MCTS.Environment;
-using Ceres.MCTS.Evaluators;
-using Ceres.MCTS.LeafExpansion;
-using Ceres.MCTS.MTCSNodes;
-using Ceres.MCTS.Search;
-using Ceres.MCTS.Search.IteratedMCTS;
-using Ceres.Chess.LC0.Positions;
 using Ceres.Chess.NNFiles;
 using Ceres.Chess.GameEngines;
 using Ceres.Chess.EncodedPositions;
+
+using Ceres.MCTS.Evaluators;
+using Ceres.MCTS.MTCSNodes;
+using Ceres.MCTS.Search;
+using Ceres.MCTS.Search.IteratedMCTS;
 using Ceres.MCTS.Managers.Limits;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.MTCSNodes.Storage;
-using Ceres.Chess.Positions;
-using System.Threading;
 using Ceres.MCTS.Params;
-using Ceres.Base.Benchmarking;
 
 #endregion
 
 namespace Ceres.MCTS.Iteration
 {
-  public class MCTSManager : ObjectWithInstanceID, IDisposable
+  public partial class MCTSManager : ObjectWithInstanceID, IDisposable
   {
     /// <summary>
     /// Reason a search was stopped.
@@ -60,7 +54,9 @@ namespace Ceres.MCTS.Iteration
       OnlyOneLegalMove,
       ExternalStopRequested,
       TimeExpired,
-      FutilityPrunedAllMoves
+      FutilityPrunedAllMoves,
+      Instamove,
+      TablebaseImmediateMove
     }
 
 
@@ -152,9 +148,6 @@ namespace Ceres.MCTS.Iteration
     public readonly bool IsFirstMoveOfGame;
 
 
-    ManagerGameLimitInputs limitsManagerInputs;
-
-
     /// <summary>
     /// 
     /// </summary>
@@ -187,42 +180,20 @@ namespace Ceres.MCTS.Iteration
                        List<GameMoveStat> gameMoveHistory,
                        bool isFirstMoveOfGame)
     {
+      if (searchLimit.IsPerGameLimit) throw new Exception("Per game search limits not supported");
+
       StartTimeThisSearch = startTime;
       RootNWhenSearchStarted = store.Nodes.nodes[store.RootIndex.Index].N;
       ParamsSearchExecutionPostprocessor = paramsSearchExecutionPostprocessor;
       IsFirstMoveOfGame = isFirstMoveOfGame;
+      SearchLimit = searchLimit;
 
-      PriorMoveStats = new List<GameMoveStat>();
 
       // Make our own copy of move history.
+      PriorMoveStats = new List<GameMoveStat>();
       if (gameMoveHistory != null)
       {
         PriorMoveStats.AddRange(gameMoveHistory);
-      }
-
-      // Possibly convert time limit per game into time for this move.
-      if (searchLimit.IsPerGameLimit)
-      {
-        SearchLimitType type = searchLimit.Type == SearchLimitType.SecondsForAllMoves
-                                                       ? SearchLimitType.SecondsPerMove
-                                                       : SearchLimitType.NodesPerMove;
-        float rootQ = priorManager == null ? float.NaN : (float)store.RootNode.Q;
-
-
-        limitsManagerInputs = new(store.Nodes.PriorMoves.FinalPosition, 
-                                searchParams, PriorMoveStats,
-                                type, store.RootNode.N, rootQ, 
-                                searchLimit.Value, searchLimit.ValueIncrement, 
-                                float.NaN, float.NaN, 
-                                maxMovesToGo:searchLimit.MaxMovesToGo,                                                  
-                                isFirstMoveOfGame: isFirstMoveOfGame);
-
-        ManagerGameLimitOutputs timeManagerOutputs = limitManager.ComputeMoveAllocation(limitsManagerInputs);
-        SearchLimit = timeManagerOutputs.LimitTarget;
-      }
-      else
-      {
-        SearchLimit = searchLimit;
       }
 
       // Possibly autoselect new optimal parameters
@@ -244,7 +215,7 @@ namespace Ceres.MCTS.Iteration
                                   nnEvaluators, searchParams, childSelectParams, searchLimit, estNumNodes);
       ThreadSearchContext = Context;
 
-      TerminationManager = new MCTSFutilityPruning(this, Context);
+      TerminationManager = new MCTSFutilityPruning(this, searchLimit.SearchMoves);
       LimitManager = limitManager;
 
       CeresEnvironment.LogInfo("MCTS", "Init", $"SearchManager created for store {store}", InstanceID);
@@ -553,6 +524,8 @@ namespace Ceres.MCTS.Iteration
            MCTSProgressCallback progressCallback = null,
            bool possiblyUsePositionCache = false)
     {
+      MCTSearch.SearchCount++;
+
       MCTSIterator context = manager.Context;
       PositionWithHistory priorMoves = context.Tree.Store.Nodes.PriorMoves;
 
@@ -577,6 +550,7 @@ namespace Ceres.MCTS.Iteration
       if (manager.TablebaseImmediateBestMove != default(MGMove))
       {
         manager.StartTimeThisSearch = DateTime.Now;
+        manager.StopStatus = SearchStopStatus.TablebaseImmediateMove;
         return (manager.TablebaseImmediateBestMove, new TimingStats());
       }
      
@@ -633,23 +607,9 @@ namespace Ceres.MCTS.Iteration
         Console.WriteLine("VERBOSE ROOT MOVE STATISTICS");
         node.Dump(1, 1, maxMoves: maxMoves);
         Console.WriteLine("-----------------------------------------------------------------------------------------------------------------\r\n");
-
-        if (false)
-        {
-          Console.WriteLine("PV DUMP");
-          node.Dump(2, 3, maxMoves:maxMoves);
-          Console.WriteLine("-----------------------------------------------------------------------------------------------------------------\r\n");
-
-          // Then more full dump
-          //            const int MAX_DUMP_DEPTH = 2;
-          // const int MIN_NODES_DUMP = 50;
-          //            root.Dump((manager.Context, MAX_DUMP_DEPTH, MAX_DUMP_DEPTH, MIN_NODES_DUMP);
-        }
-
-        //Console.Write("\r\nPrincipal Variation: ");
-        //        search.Root.DumpPrincipalVariation();      
       }
     }
+
 
     /// <summary>
     /// Sets the level of Dirichlet noise if this feature is enabled.
@@ -666,7 +626,7 @@ namespace Ceres.MCTS.Iteration
       }
     }
 
-    #region IDisposable Support
+#region IDisposable Support
 
     public MGMove BestMoveMG
     {
@@ -682,29 +642,36 @@ namespace Ceres.MCTS.Iteration
       }
     }
 
+
+    bool disposed = false;
+
     public void Dispose()
     {
-      //      MCTSPosTreeNodeDumper.DumpAllNodes(Context, ref Context.Store.RootNode);
-      Context.Tree.Store.Dispose();
+      if (!disposed)
+      {
+        //      MCTSPosTreeNodeDumper.DumpAllNodes(Context, ref Context.Store.RootNode);
+        Context.Tree.Store.Dispose();
 
-      // Release references to objects
-      ThreadSearchContext = null;
-      Context = null;
+        // Release references to objects
+        ThreadSearchContext = null;
+        Context = null;
 
-      // If the search was sufficeintly large, trigger an aynchronous full garbage collection
-      // We do this now for two reasons:
-      //   - we have just released references to potentially large objects, and
-      //   - possibly this search will result in a move being played followed by waiting time
-      //     during which we can do the GC "for free"
-      //int finalN = Context.Root.N;      
-      //    const int THRESHOLD_N_TRIGGER_GC = 2_000;
-      //    if (finalN >= THRESHOLD_N_TRIGGER_GC)
-      //      ThreadPool.QueueUserWorkItem((obj) => System.GC.Collect(1, GCCollectionMode.Optimized));
+        // If the search was sufficeintly large, trigger an aynchronous full garbage collection
+        // We do this now for two reasons:
+        //   - we have just released references to potentially large objects, and
+        //   - possibly this search will result in a move being played followed by waiting time
+        //     during which we can do the GC "for free"
+        //int finalN = Context.Root.N;      
+        //    const int THRESHOLD_N_TRIGGER_GC = 2_000;
+        //    if (finalN >= THRESHOLD_N_TRIGGER_GC)
+        //      ThreadPool.QueueUserWorkItem((obj) => System.GC.Collect(1, GCCollectionMode.Optimized));
+        disposed = true;
+      }
     }
 
-    #endregion
+#endregion
 
-    #region Time management
+#region Time management
 
     // TODO: make this smarter (aware of hardware and NN)
     public int EstimatedNumSearchNodes => EstimatedNumSearchNodesForEvaluator(SearchLimit, Context.NNEvaluators);
@@ -772,24 +739,6 @@ namespace Ceres.MCTS.Iteration
       }
     }
 
-    public void DumpTimeInfo()
-    {
-      Console.WriteLine();
-      Console.WriteLine($"StartTimeFirstVisit        {StartTimeFirstVisit}");
-      Console.WriteLine($"StartTimeThisSearch        {StartTimeThisSearch}");
-
-      Console.WriteLine($"Root N                     {Root.N}");
-      Console.WriteLine($"RootNWhenSearchStarted     {RootNWhenSearchStarted}");
-
-      Console.WriteLine($"SearchLimit.Type           {SearchLimit.Type}");
-      Console.WriteLine($"SearchLimit.Value          {SearchLimit.Value}");
-      Console.WriteLine($"Elapsed Search Time        {(DateTime.Now - StartTimeThisSearch).TotalSeconds}");
-
-      Console.WriteLine($"FractionSearchRemaining    {FractionSearchRemaining}");
-      Console.WriteLine($"Estimated NPS              {EstimatedNPS}");
-
-      Console.WriteLine($"EstimatedNumStepsRemaining {EstimatedNumVisitsRemaining()}");
-    }
 
     public float RemainingTime
     {
@@ -900,7 +849,8 @@ namespace Ceres.MCTS.Iteration
 
     }
 
-    #endregion
+#endregion
+
 
     /// <summary>
     /// Returns string summary.
@@ -913,3 +863,4 @@ namespace Ceres.MCTS.Iteration
 
   }
 }
+

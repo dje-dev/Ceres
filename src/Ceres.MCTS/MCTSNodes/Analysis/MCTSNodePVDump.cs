@@ -15,17 +15,14 @@
 
 using System;
 using System.Collections.Generic;
-using System.Text;
+using System.IO;
 
 using Ceres.Chess;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
 using Ceres.Chess.Positions;
 using Ceres.MCTS.Iteration;
-using Ceres.MCTS.LeafExpansion;
-using Ceres.MCTS.MTCSNodes.Annotation;
 using Ceres.MCTS.MTCSNodes.Struct;
-using SharpCompress.Compressors.Xz;
 
 #endregion
 
@@ -36,28 +33,41 @@ namespace Ceres.MCTS.MTCSNodes.Analysis
   /// </summary>
   public static class MCTSPosTreeNodeDumper
   {
-    static void DumpWithColor(float v, string s, float thresholdRed, float thresholdGreen)
+    static void DumpWithColor(float v, string s, float thresholdRed, float thresholdGreen, TextWriter writer)
     {
-      ConsoleColor defaultColor = Console.ForegroundColor;
-
-      try
+      if (writer != Console.Out)
       {
-        if (v > thresholdGreen)
-          Console.ForegroundColor = ConsoleColor.Green;
-        else if (v < thresholdRed)
-          Console.ForegroundColor = ConsoleColor.Red;
-
-        Console.Write(s);
+        // No point in using color if not the Console
+        writer.Write(s);
       }
-      finally
+      else
       {
-        Console.ForegroundColor = defaultColor;
+        ConsoleColor defaultColor = Console.ForegroundColor;
+
+        try
+        {
+          if (v > thresholdGreen)
+            Console.ForegroundColor = ConsoleColor.Green;
+          else if (v < thresholdRed)
+            Console.ForegroundColor = ConsoleColor.Red;
+
+          writer.Write(s);
+        }
+        finally
+        {
+          Console.ForegroundColor = defaultColor;
+        }
       }
     }
 
 
-    static void DumpNodeStr(PositionWithHistory priorMoves, MCTSNode node, int depth, int countTimesSeen, bool fullDetail)
+    static void DumpNodeStr(MCTSNode searchRootNode, MCTSNode node, 
+                            int countTimesSeen, bool fullDetail, TextWriter writer = null)
     {
+      int depth = node.Depth - searchRootNode.Depth;
+
+      writer = writer ?? Console.Out;
+
       node.Context.Tree.Annotate(node);
 
       char extraChar = ' ';
@@ -68,7 +78,7 @@ namespace Ceres.MCTS.MTCSNodes.Analysis
       else if (countTimesSeen > 1)
         extraChar = countTimesSeen > 9 ? '9' : countTimesSeen.ToString()[0];
 
-      float multiplier = depth % 2 == 0 ? 1.0f : -1.0f;
+      float multiplier = 1; // currently alternate perspective
 
       float pctOfVisits = node.IsRoot ? 100.0f : (100.0f * node.N / node.Parent.N);
 
@@ -82,81 +92,82 @@ namespace Ceres.MCTS.MTCSNodes.Analysis
       }
 
       // Depth, move
-      Console.Write($"{depth,3}. ");
-      Console.Write(extraChar);
-      Console.Write($" {node.NumPolicyMoves,3} ");
+      writer.Write($"{depth,3}. ");
+      writer.Write(extraChar);
+      writer.Write($" {node.NumPolicyMoves,3} ");
 
-      Console.Write($"{node.Index,13:N0}");
+      writer.Write($"{node.Index,13:N0}");
 
-      string san         = node.IsRoot ? "" : MGMoveConverter.ToMove(node        .Annotation.PriorMoveMG).ToSAN(in node.Parent.Annotation.Pos);
+      string san = node.IsRoot ? "" : MGMoveConverter.ToMove(node.Annotation.PriorMoveMG).ToSAN(in node.Parent.Annotation.Pos);
 //      string sanNextBest = node.IsRoot ? "" : MGMoveConverter.ToMove(nextBestMove.Annotation.PriorMoveMG).ToSAN(in node.Parent.Annotation.Pos);
       if (node.Annotation.Pos.MiscInfo.SideToMove == SideType.White)
       {
-        Console.Write($"      ");
-        Console.Write($"{san,6}");
+        writer.Write($"      ");
+        writer.Write($"{san,6}");
 
       }
       else
       {
-        Console.Write($"{san,6}");
-        Console.Write($"      ");
+        writer.Write($"{san,6}");
+        writer.Write($"      ");
       }
 
 //      float diffBestNextBestQ = 0;
 //      if (nextBestMove != null) diffBestNextBestQ = (float)(bestMove.Q - nextBestMove.Q);
-//      Console.Write($"{  (nextBestMove?.Annotation == null ? "" : nextBestMove.Annotation.PriorMoveMG.ToString()),8}");
-//      Console.Write($"{diffBestNextBestQ,8:F2}");
+//      writer.Write($"{  (nextBestMove?.Annotation == null ? "" : nextBestMove.Annotation.PriorMoveMG.ToString()),8}");
+//      writer.Write($"{diffBestNextBestQ,8:F2}");
 
 
-      Console.Write($"{node.N,13:N0} ");
-      Console.Write($" {pctOfVisits,5:F0}%");
-      Console.Write($"   {100.0 * node.P,6:F2}%  ");
-      DumpWithColor(multiplier * node.V, $" {multiplier * node.V,6:F3}  ", -0.2f, 0.2f);
+      writer.Write($"{node.N,13:N0} ");
+      writer.Write($" {pctOfVisits,5:F0}%");
+      writer.Write($"   {100.0 * node.P,6:F2}%  ");
+      DumpWithColor(multiplier * node.V, $" {multiplier * node.V,6:F3}  ", -0.2f, 0.2f, writer);
 //      DumpWithColor(multiplier * node.VSecondary, $" {multiplier * node.VSecondary,6:F3} ", -0.2f, 0.2f);
       double q = multiplier * node.Q;
-      DumpWithColor((float)q, $" {q,6:F3} ", -0.2f, 0.2f);
+      DumpWithColor((float)q, $" {q,6:F3} ", -0.2f, 0.2f, writer);
 
       //      float qStdDev = MathF.Sqrt(node.Ref.VVariance);
       //      if (float.IsNaN(qStdDev))
-      //        Console.WriteLine("found negative var");
-      //      Console.Write($" +/-{qStdDev,5:F2}  ");
+      //        writer.WriteLine("found negative var");
+      //      writer.Write($" +/-{qStdDev,5:F2}  ");
 
-      Console.Write($" {node.WinP,5:F2}/{node.DrawP,5:F2}/{node.LossP,5:F2}  ");
+      bool invert = multiplier == -1;
+      writer.Write($" {(invert ? node.LossP : node.WinP),5:F2}/{node.DrawP,5:F2}/{(invert ? node.WinP : node.LossP),5:F2}  ");
 
-      Console.Write($" {node.WAvg,5:F2}/{node.DAvg,5:F2}/{node.LAvg,5:F2}  ");
+      writer.Write($" {(invert ? node.LAvg : node.WAvg),5:F2}/{node.DAvg,5:F2}/{(invert ? node.WAvg : node.LAvg),5:F2}  ");
 
-      //      Console.Write($"   {node.Ref.QUpdatesWtdAvg,5:F2}  ");
-      //      Console.Write($" +/-:{MathF.Sqrt(node.Ref.QUpdatesWtdVariance),5:F2}  ");
-      //      Console.Write($" {node.Ref.TrendBonusToP,5:F2}  ");
+      //      writer.Write($"   {node.Ref.QUpdatesWtdAvg,5:F2}  ");
+      //      writer.Write($" +/-:{MathF.Sqrt(node.Ref.QUpdatesWtdVariance),5:F2}  ");
+      //      writer.Write($" {node.Ref.TrendBonusToP,5:F2}  ");
 
-      Console.Write($" {node.MPosition,3:F0} ");
-      Console.Write($" {node.MAvg,3:F0}  ");
+      writer.Write($" {node.MPosition,3:F0} ");
+      writer.Write($" {node.MAvg,3:F0}  ");
 
       if (fullDetail)
       {
         int numPieces = node.Annotation.Pos.PieceCount;
 
-//        Console.Write($" {PosStr(node.Annotation.Pos)} ");
-        Console.Write($" {node.Annotation.Pos.FEN}");
+//        writer.Write($" {PosStr(node.Annotation.Pos)} ");
+        writer.Write($" {node.Annotation.Pos.FEN}");
       }
 
 
-      Console.WriteLine();
+      writer.WriteLine();
     }
 
-    private static void WriteHeaders(bool fullDetail)
+    private static void WriteHeaders(bool fullDetail, TextWriter writer)
     {
       // Write headers
-      Console.Write(" Dep  T #M    FirstVisit   MvWh  MvBl           N  Visits    Policy     V         Q     WPos  DPos  LPos   WTree DTree LTree  MPos MTree");
+      writer.Write(" Dep  T #M    FirstVisit   MvWh  MvBl           N  Visits    Policy     V         Q     WPos  DPos  LPos   WTree DTree LTree  MPos MTree");
       if (fullDetail)
-        Console.WriteLine("  FEN");
+        writer.WriteLine("  FEN");
       else
-        Console.WriteLine();
+        writer.WriteLine();
 
       if (fullDetail)
-        Console.WriteLine("----  - --  ------------  -----  ---- -----------  ------  --------  -------    -----   ----  ----  ----   -----  ---- -----  ---- -----");
+        writer.WriteLine("----  - --  ------------  -----  ---- -----------  ------  --------  -------    -----   ----  ----  ----   -----  ---- -----  ---- -----");
       else
-        Console.WriteLine();
+        writer.WriteLine();
     }
 
 
@@ -250,21 +261,12 @@ namespace Ceres.MCTS.MTCSNodes.Analysis
     }
 
 
-    public static void DumpPV(PositionWithHistory priorMoves, MCTSNode node, 
-                               bool fullDetail, List<MGMove> subvariation = null)
+    public static void DumpPV(MCTSNode node, bool fullDetail, TextWriter writer = null)
     {
-      if (subvariation != null)
-      {
-        List<MGMove> allMoves = new List<MGMove>();
-        allMoves.AddRange(priorMoves.Moves);
-        allMoves.AddRange(subvariation);
-        DumpPV(new PositionWithHistory(priorMoves.InitialPosMG, allMoves),
-                                  DescendMovesToNode(node, subvariation), fullDetail);
-      }
-
-      Console.WriteLine();
-      WriteHeaders(fullDetail);
-
+      writer = writer ?? Console.Out;
+      
+      writer.WriteLine();
+      WriteHeaders(fullDetail, writer);
 
       List<Position> seenPositions = new List<Position>();
 
@@ -279,13 +281,14 @@ namespace Ceres.MCTS.MTCSNodes.Analysis
       }
 
       int depth = 0;
+      MCTSNode searchRootNode = node;
       while (true)
       {
         node.Context.Tree.Annotate(node);
         seenPositions.Add(node.Annotation.Pos);
         int countSeen = CountDuplicatePos(node.Annotation.Pos);
 
-        DumpNodeStr(priorMoves, node, depth, countSeen, fullDetail);
+        DumpNodeStr(searchRootNode, node, countSeen, fullDetail, writer);
 
         if (node.NumChildrenVisited == 0)
           return;

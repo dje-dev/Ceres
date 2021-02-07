@@ -125,7 +125,7 @@ namespace Ceres.Chess.LC0.Positions
     #endregion
 
     #region Internals
-    private EncodedEvalLogistic(float val) => LogisticValue = val;
+    public EncodedEvalLogistic(float val) => LogisticValue = val;
 
 #endregion
 

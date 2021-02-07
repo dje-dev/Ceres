@@ -59,7 +59,7 @@ namespace Ceres.Chess.MoveGen.Converters
     /// <param name="pos"></param>
     /// <param name="move"></param>
     /// <returns></returns>
-    public static MGMove MGMoveFromPosAndMove(Position pos, Move move)
+    public static MGMove MGMoveFromPosAndMove(in Position pos, Move move)
     {
       PositionWithMove moveAndPos = new PositionWithMove(pos, move);
       MGPosition mgPos = MGPosition.FromPosition(in moveAndPos.Position);
@@ -74,9 +74,9 @@ namespace Ceres.Chess.MoveGen.Converters
       throw new Exception("Move not found");
     }
 
-    public static MGMove ToMGMove(Position position, EncodedMove encodedMove) => ToMGMove(MGPosition.FromPosition(position), encodedMove);
+    public static MGMove ToMGMove(in Position position, EncodedMove encodedMove) => ToMGMove(MGPosition.FromPosition(in position), encodedMove);
 
-    public static MGMove ToMGMove(MGPosition mgPos, EncodedMove encodedMove)
+    public static MGMove ToMGMove(in MGPosition mgPos, EncodedMove encodedMove)
     {
       MGMoveList movesLegal = new MGMoveList();
       MGMoveGen.GenerateMoves(in mgPos, movesLegal);

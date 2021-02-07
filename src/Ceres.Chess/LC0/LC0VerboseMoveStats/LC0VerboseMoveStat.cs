@@ -114,7 +114,15 @@ namespace Ceres.Chess.LC0VerboseMoves
     public LC0VerboseMoveStat(LC0VerboseMoveStats parent, string line)
     {
       Parent = parent;
-      Valid = ParseLine(line);
+
+      if (line != null)
+      {
+        Valid = ParseLine(line);
+      }
+      else
+      {
+        Valid = true;
+      }
     }
 
 
@@ -226,6 +234,20 @@ namespace Ceres.Chess.LC0VerboseMoves
       }
 
       return ret;
+    }
+
+
+    /// <summary>
+    /// Returns a string in same format as used by Leela Chess Zero.
+    /// </summary>
+    public string LC0String
+    {
+      get
+      {
+        // TODO: difference between WL and V (related to contempt?).
+        return $"info string {MoveString}  ({MoveCode,3:F0} ) N:    {VisitCount,11:F0} (+{VisitInFlightCount,5:F0}) (P: {P,9:F2}%) "
+             + $"(WL:  {V.LogisticValue,9:F4}) (D: {D,9:F4}) (M: {M,6:F1}) (Q:  {Q.LogisticValue,9:F4}) (V: {V.LogisticValue,9:F4})";
+      }
     }
 
 

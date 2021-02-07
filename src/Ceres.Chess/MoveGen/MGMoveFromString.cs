@@ -39,7 +39,7 @@ namespace Ceres.Chess.MoveGen
       {
         Position position = MGChessPositionConverter.PositionFromMGChessPosition(in pos);
         PositionWithMove mfp = SANParser.FromSAN(moveStr, position);
-        return MGMoveConverter.MGMoveFromPosAndMove(position, mfp.Move);
+        return MGMoveConverter.MGMoveFromPosAndMove(in position, mfp.Move);
       }
       else
         return move;

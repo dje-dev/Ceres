@@ -15,28 +15,33 @@
 
 using System;
 using System.IO;
-using System.Threading;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 
+using Ceres.Base.Misc;
+using Ceres.Base.OperatingSystem;
 using Ceres.Base.OperatingSystem.NVML;
 
 using Ceres.Chess;
+using Ceres.Chess.Positions;
 using Ceres.Chess.GameEngines;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.NNFiles;
-using Ceres.MCTS.LeafExpansion;
-using Ceres.MCTS.MTCSNodes.Analysis;
-using Ceres.Features.GameEngines;
-using Ceres.Chess.LC0.Positions;
-using Ceres.Features.Analysis;
+
 using Ceres.MCTS.Iteration;
-using Ceres.Chess.Positions;
-using System.Collections.Generic;
 using Ceres.MCTS.Params;
 using Ceres.MCTS.MTCSNodes.Storage;
-using Ceres.Base.OperatingSystem;
+using Ceres.MCTS.MTCSNodes.Analysis;
+using Ceres.MCTS.Utils;
+
+using Ceres.Features.GameEngines;
 using Ceres.MCTS.MTCSNodes;
+using Ceres.MCTS.Managers;
+using Ceres.Chess.LC0VerboseMoves;
+using Ceres.Base.DataTypes;
+using Ceres.Chess.EncodedPositions.Basic;
+using LINQPad;
 
 #endregion
 
@@ -46,7 +51,7 @@ namespace Ceres.Features.UCI
   /// Manager of UCI game loop, parsing and executing commands from Console
   /// and outputting appropriate UCI lines such as bestmove and info.
   /// </summary>
-  public class UCIManager
+  public partial class UCIManager
   {
     /// <summary>
     /// Input stream.
@@ -64,15 +69,13 @@ namespace Ceres.Features.UCI
     public Action<MCTSManager> SearchFinishedEvent;
 
     public readonly NNEvaluatorDef EvaluatorDef;
-    public readonly ParamsSearch ParamsSearch;
-    public readonly ParamsSelect ParamsSelect;
 
     /// <summary>
     /// Ceres engine instance used for current UCI game.
     /// </summary>
     public GameEngineCeresInProcess CeresEngine;
 
-    Task<GameEngineSearchResultCeres> taskSearchCurrentlyExecuting;
+    volatile Task<GameEngineSearchResultCeres> taskSearchCurrentlyExecuting;
 
     bool haveInitializedEngine;
 
@@ -82,10 +85,7 @@ namespace Ceres.Features.UCI
     PositionWithHistory curPositionAndMoves;
     bool curPositionIsContinuationOfPrior;
 
-    MCTSIterator curContext => curManager.Context;
-
     List<GameMoveStat> gameMoveHistory = new List<GameMoveStat>();
-    MCTSManager curManager;
 
     bool stopIsPending;
     bool debug = false;
@@ -108,13 +108,37 @@ namespace Ceres.Features.UCI
       OutStream = outStream ?? Console.Out;
       SearchFinishedEvent = searchFinishedEvent;
       
-      EvaluatorDef = evaluatorDef;      
-
-      ParamsSearch = new ParamsSearch();
-      ParamsSelect = new ParamsSelect();
+      EvaluatorDef = evaluatorDef;
 
       if (disablePruning) ParamsSearch.FutilityPruningStopSearchEnabled = false;
     }
+
+    public ParamsSelect ParamsSelect
+    {
+      get
+      {
+        ParamsSelect parms = new ParamsSelect();
+        parms.CPUCT = cpuct;
+        parms.CPUCTBase = cpuctBase;
+        parms.CPUCTFactor = cpuctFactor;
+        parms.CPUCTAtRoot = cpuctAtRoot;
+        parms.CPUCTBaseAtRoot = cpuctBaseAtRoot;
+        parms.CPUCTFactorAtRoot = cpuctFactorAtRoot;
+        parms.PolicySoftmax = policySoftmax;
+
+        return parms;
+      }
+    }
+
+    public ParamsSearch ParamsSearch
+    {
+      get
+      {
+        ParamsSearch parms = new ParamsSearch();
+        return parms;
+      }
+    }
+
 
     /// <summary>
     /// Outputs line to UCI.
@@ -123,16 +147,13 @@ namespace Ceres.Features.UCI
     void Send(string result) => OutStream.WriteLine(result);
     
 
-
-
     /// <summary>
     /// Runs the UCI loop.
     /// </summary>
     public void PlayUCI()
     {
       // Default to the startpos.
-      curPositionAndMoves = PositionWithHistory.FromFENAndMovesUCI(Position.StartPosition.FEN, null);
-      curManager = null;
+      curPositionAndMoves = PositionWithHistory.FromFENAndMovesUCI(Position.StartPosition.FEN);
       gameMoveHistory = new List<GameMoveStat>();
 
       while (true)
@@ -146,29 +167,22 @@ namespace Ceres.Features.UCI
             break;
 
           case "uci":
-            Send("id name Ceres"); // TODO: Add executable version
+            Send($"id name Ceres {CeresVersion.VersionString}");
             Send("id author David Elliott and the Ceres Authors");
-            // todo output options such as:
-            //   option name Logfile type check default false
+            Send(SetOptionUCIDescriptions);
             Send("uciok");
             break;
 
-          case "setoption":
-            OutStream.WriteLine("Not processing option " + command);
-            return;
+          case string c when c.StartsWith("setoption"):
+            ProcessSetOption(command);
+            break;
 
           case "stop":
             if (taskSearchCurrentlyExecuting != null && !stopIsPending)
             {
               stopIsPending = true;
 
-              // TODO: cleanup
-              //       Possible race condition, curManager is only set in search callback which may not have hit yet
-              //       Fix eventually by rewriting SerchManager to have a constructor and then non-static Search method,
-              //       os we can get the context in this class directly after construction
-              while (curManager == null) Thread.Sleep(1); // **** TEMPORARY ***
-
-              curManager.ExternalStopRequested = true;
+              CeresEngine.Search.Manager.ExternalStopRequested = true;
               if (taskSearchCurrentlyExecuting != null)
               {
                 taskSearchCurrentlyExecuting.Wait();
@@ -178,7 +192,6 @@ namespace Ceres.Features.UCI
 
             }
 
-            curManager = null;
             stopIsPending = false;
 
             break;
@@ -210,9 +223,9 @@ namespace Ceres.Features.UCI
             break;
 
           case "quit":
-            if (curManager != null)
+            if (taskSearchCurrentlyExecuting != null)
             {
-              curManager.ExternalStopRequested = true;
+              CeresEngine.Search.Manager.ExternalStopRequested = true;
               taskSearchCurrentlyExecuting?.Wait();
             }
 
@@ -244,23 +257,23 @@ namespace Ceres.Features.UCI
 
           // Proprietary commands
           case "lc0-config":
-            if (curManager != null)
+            if (CeresEngine?.Search != null)
             {
               string netID = EvaluatorDef.Nets[0].Net.NetworkID;
               INNWeightsFileInfo netDef = NNWeightsFiles.LookupNetworkFile(netID);
-              (string exe, string options) = LC0EngineConfigured.GetLC0EngineOptions(null, null, curContext.EvaluatorDef, netDef, false, false);
-              Console.WriteLine("info string " + exe + " " + options);
+              (string exe, string options) = LC0EngineConfigured.GetLC0EngineOptions(null, null, CeresEngine.Search.Manager.Context.EvaluatorDef, netDef, false, false);
+              OutStream.WriteLine("info string " + exe + " " + options);
             }
             else
-              Console.WriteLine("info string No search manager created");
+              OutStream.WriteLine("info string No search manager created");
 
             break;
 
           case "dump-params":
-            if (curManager != null)
-              curManager.DumpParams();
+            if (CeresEngine?.Search != null)
+              CeresEngine?.Search.Manager.DumpParams();
             else
-              Console.WriteLine("info string No search manager created");
+              OutStream.WriteLine("info string No search manager created");
             break;
 
           case "dump-processor":
@@ -268,30 +281,29 @@ namespace Ceres.Features.UCI
             break;
 
           case "dump-time":
-            if (curManager != null)
-              curManager.DumpTimeInfo();
+            if (CeresEngine?.Search != null)
+              CeresEngine?.Search.Manager.DumpTimeInfo(OutStream);
             else
-              Console.WriteLine("info string No search manager created");
+              OutStream.WriteLine("info string No search manager created");
             break;
 
           case "dump-store": 
-            if (curManager != null)
+            if (CeresEngine?.Search != null)
             {
-              using (new SearchContextExecutionBlock(curContext))
-                curManager.Context.Tree.Store.Dump(true);
+              using (new SearchContextExecutionBlock(CeresEngine.Search.Manager.Context))
+                CeresEngine.Search.Manager.Context.Tree.Store.Dump(true);
             }
             else
-              Console.WriteLine("info string No search manager created");
+              OutStream.WriteLine("info string No search manager created");
             break;
 
           case "dump-move-stats":
-            if (curManager != null)
+            if (CeresEngine?.Search != null)
             {
-              using (new SearchContextExecutionBlock(curContext))
-                curManager.Context.Root.Dump(1, 1, prefixString:"info string ");
+              OutputVerboseMoveStats(CeresEngine.Search.SearchRootNode);
             }
             else
-              Console.WriteLine("info string No search manager created");
+              OutStream.WriteLine("info string No search manager created");
             break;
 
           case "dump-pv":
@@ -306,13 +318,12 @@ namespace Ceres.Features.UCI
             NVML.DumpInfo();
             break;
 
-
-          case "waitdone": // proprietary verb
+          case "waitdone": // proprietary verb used for test driver
             taskSearchCurrentlyExecuting?.Wait();
             break;
 
           default:
-            Console.WriteLine($"error Unknown command: {command}");
+            OutStream.WriteLine($"error Unknown command: {command}");
             break;
         }
       }
@@ -324,16 +335,16 @@ namespace Ceres.Features.UCI
     /// <param name="withDetail"></param>
     private void DumpPV(bool withDetail)
     {
-      if (curManager != null)
+      if (CeresEngine?.Search != null)
       {
-        using (new SearchContextExecutionBlock(curContext))
+        using (new SearchContextExecutionBlock(CeresEngine?.Search.Manager.Context))
         {
-          SearchPrincipalVariation pv2 = new SearchPrincipalVariation(curContext.Root);
-          MCTSPosTreeNodeDumper.DumpPV(curContext.StartPosAndPriorMoves, curContext.Root, withDetail, null);
+          SearchPrincipalVariation pv2 = new SearchPrincipalVariation(CeresEngine.Search.Manager.Root);
+          MCTSPosTreeNodeDumper.DumpPV(CeresEngine.Search.Manager.Context.Root, withDetail);
         }
       }
       else
-        Console.WriteLine("info string No search manager created");
+        OutStream.WriteLine("info string No search manager created");
     }
 
 
@@ -342,7 +353,11 @@ namespace Ceres.Features.UCI
       if (!haveInitializedEngine)
       {
         // Create the engine (to be subsequently reused).
-        CeresEngine = new GameEngineCeresInProcess("Ceres", EvaluatorDef, ParamsSearch, ParamsSelect);
+        CeresEngine = new GameEngineCeresInProcess("Ceres", EvaluatorDef, ParamsSearch, ParamsSelect, logFileName:logFileName);
+
+        // Disable verbose move stats from the engine since 
+        // this class manages the possibly dumping of verbose move stats itself.
+        CeresEngine.VerboseMoveStats = false;
 
         // Initialize engine
         CeresEngine.Warmup();
@@ -358,39 +373,19 @@ namespace Ceres.Features.UCI
     /// <param name="command"></param>
     private void ProcessPosition(string command)
     {
-      string[] parts = command.Split(" ");
+      command = StringUtils.WhitespaceRemoved(command);
+      
+      string commandLower = command.ToLower();
 
-      string fen;
-      int nextIndex;
-
-      string startFEN;
-      switch (parts[1])
-      {
-        case "fen":
-          fen = command.Substring(command.IndexOf("fen") + 4);
-          nextIndex = 2;
-          while (parts.Length > nextIndex && parts[nextIndex] != "moves")
-            fen = fen + " " + parts[nextIndex++];
-          startFEN = fen;
-          break;
-
-        case "startpos":
-          startFEN = Position.StartPosition.FEN;
-          nextIndex = 2;
-          break;
-
-        default:
-          throw new Exception("invalid " + command);
-      }
-
-      string movesSubstring = "";
-      if (parts.Length > nextIndex && parts[nextIndex] == "moves")
-      {
-        for (int i = nextIndex + 1; i < parts.Length; i++)
-          movesSubstring += parts[i] + " ";
-      }
-
-      PositionWithHistory newPositionAndMoves = PositionWithHistory.FromFENAndMovesUCI(startFEN, movesSubstring);
+      string posString;
+      if (commandLower.StartsWith("position fen "))
+        posString = command.Substring(13);
+      else if (commandLower.StartsWith("position startpos"))
+        posString = command.Substring(9);
+      else
+        throw new Exception($"Illegal position command, expected to start with position fen or position startpos");
+      
+      PositionWithHistory newPositionAndMoves = PositionWithHistory.FromFENAndMovesUCI(posString);
 
       curPositionIsContinuationOfPrior = newPositionAndMoves.IsIdenticalToPriorToLastMove(curPositionAndMoves);
       if (!curPositionIsContinuationOfPrior && CeresEngine != null)
@@ -434,9 +429,9 @@ namespace Ceres.Features.UCI
         }
         catch (Exception exc)
         {
-          Console.WriteLine("Exception in Ceres engine execution:");
-          Console.WriteLine(exc);
-          Console.WriteLine(exc.StackTrace);
+          OutStream.WriteLine("Exception in Ceres engine execution:");
+          OutStream.WriteLine(exc);
+          OutStream.WriteLine(exc.StackTrace);
 
           System.Environment.Exit(3);
           return null;
@@ -453,21 +448,22 @@ namespace Ceres.Features.UCI
     /// <returns></returns>
     private SearchLimit GetSearchLimit(string command)
     {
+      SearchLimit searchLimit;
       bool weAreWhite = curPositionAndMoves.FinalPosition.MiscInfo.SideToMove == SideType.White;
       UCIGoCommandParsed goInfo = new UCIGoCommandParsed(command, weAreWhite);
       if (!goInfo.IsValid) return null;
 
       if (goInfo.Nodes.HasValue)
       {
-        return SearchLimit.NodesPerMove(goInfo.Nodes.Value);
+        searchLimit =  SearchLimit.NodesPerMove(goInfo.Nodes.Value);
       }
       else if (goInfo.MoveTime.HasValue)
       {
-        return SearchLimit.SecondsPerMove(goInfo.MoveTime.Value / 1000.0f);
+        searchLimit = SearchLimit.SecondsPerMove(goInfo.MoveTime.Value / 1000.0f);
       }
       else if (goInfo.Infinite)
       {
-        return SearchLimit.NodesPerMove(MCTSNodeStore.MAX_NODES);
+        searchLimit = SearchLimit.NodesPerMove(MCTSNodeStore.MAX_NODES);
       }
       else if (goInfo.TimeOurs.HasValue)
       {
@@ -477,13 +473,26 @@ namespace Ceres.Features.UCI
         int? movesToGo = null;
         if (goInfo.MovesToGo.HasValue) movesToGo = goInfo.MovesToGo.Value;
 
-        return SearchLimit.SecondsForAllMoves(goInfo.TimeOurs.Value / 1000.0f, increment, movesToGo, true);
+        searchLimit = SearchLimit.SecondsForAllMoves(goInfo.TimeOurs.Value / 1000.0f, increment, movesToGo, true);
+      }
+      else if (goInfo.NodesOurs.HasValue)
+      {
+        float increment = 0;
+        if (goInfo.IncrementOurs.HasValue) increment = goInfo.IncrementOurs.Value;
+
+        int? movesToGo = null;
+        if (goInfo.MovesToGo.HasValue) movesToGo = goInfo.MovesToGo.Value;
+
+        searchLimit = SearchLimit.NodesForAllMoves(goInfo.NodesOurs.Value, (int)increment, movesToGo, true);
       }
       else
       {
-        Console.WriteLine($"Unsupported time control in UCI go command {command}");
+        OutStream.WriteLine($"Unsupported time control in UCI go command {command}");
         return null;
       }
+
+      // Add on possible search moves restriction.
+      return searchLimit with { SearchMoves = goInfo.SearchMoves };
     }
 
 
@@ -501,16 +510,14 @@ namespace Ceres.Features.UCI
       MCTSManager.MCTSProgressCallback callback =
         (manager) =>
         {
-          curManager = manager;
-
           DateTime now = DateTime.Now;
           float timeSinceLastUpdate = (float)(now - lastInfoUpdate).TotalSeconds;
 
           bool isFirstUpdate = numUpdatesSent == 0;
           float UPDATE_INTERVAL_SECONDS = isFirstUpdate ? 0.1f : 0.5f;
-          if (curManager != null && timeSinceLastUpdate > UPDATE_INTERVAL_SECONDS && curManager.Root.N > 0)
+          if (manager != null && timeSinceLastUpdate > UPDATE_INTERVAL_SECONDS && manager.Root.N > 0)
           {
-            Send(UCIInfoString(curManager));
+            OutputUCIInfo(CeresEngine.Search.Manager, CeresEngine.Search.SearchRootNode);
 
             numUpdatesSent++;
             lastInfoUpdate = now;
@@ -537,53 +544,84 @@ namespace Ceres.Features.UCI
 
       if (SearchFinishedEvent != null) SearchFinishedEvent(result.Search.Manager);
 
-      // Send the final info string (unless this was an instamove).
-      Send(UCIInfoString(result.Search.Manager, result.Search.BestMoveRoot));
+      OutputUCIInfo(result.Search.Manager, result.Search.SearchRootNode, true);
 
       // Send the best move
       Send("bestmove " + result.Search.BestMove.MoveStr(MGMoveNotationStyle.LC0Coordinate));
-      if (debug) Send("info string " + result.Search.BestMoveRoot.BestMoveInfo(false));
+      if (debug) Send("info string " + result.Search.SearchRootNode.BestMoveInfo(false));
 
       return result;
     }
 
-    public static string UCIInfoString(MCTSManager manager, MCTSNode bestMoveRoot = null)
+
+    void OutputUCIInfo(MCTSManager manager, MCTSNode searchRootNode, bool isFinalInfo = false)
     {
-      // If no override bestMoveRoot was specified
-      // then it is assumed the move chosen was from the root (not an instamove)
-      if (bestMoveRoot == null) bestMoveRoot = manager.Root;
+      BestMoveInfo best = searchRootNode.BestMoveInfo(false);
 
-      bool wasInstamove = manager.Root != bestMoveRoot;
-
-      float elapsedTimeSeconds = wasInstamove ? 0 : (float)(DateTime.Now - manager.StartTimeThisSearch).TotalSeconds;
-
-      float scoreCentipawn = MathF.Round(EncodedEvalLogistic.LogisticToCentipawn((float)bestMoveRoot.Q), 0);
-      float nps = manager.NumStepsTakenThisSearch / elapsedTimeSeconds;
-
-      SearchPrincipalVariation pv;
-      using (new SearchContextExecutionBlock(manager.Context))
+      if (numPV == 1)
       {
-        pv = new SearchPrincipalVariation(bestMoveRoot);
-      }
-
-      //info depth 12 seldepth 27 time 30440 nodes 51100 score cp 105 hashfull 241 nps 1678 tbhits 0 pv e6c6 c5b4 d5e4 d1e1 
-      int selectiveDepth = pv.Nodes.Count - 1;
-      int depthOfBestMoveInTree = wasInstamove ? bestMoveRoot.Depth : 0;
-      int depth = (int)MathF.Round(manager.Context.AvgDepth - depthOfBestMoveInTree, 0);
-
-
-      if (wasInstamove)
-      {
-        // Note that the correct tablebase hits cannot be easily calculated and reported
-        return $"info depth {depth} seldepth {selectiveDepth} time 0 "
-             + $"nodes {bestMoveRoot.N:F0} score cp {scoreCentipawn:F0} tbhits {manager.CountTablebaseHits} nps 0 "
-             + $"pv {pv.ShortStr()} string M= {bestMoveRoot.MAvg:F0} instamove";
+        Send(UCIInfo.UCIInfoString(manager, searchRootNode, best.BestMoveNode, 
+                                  showWDL:showWDL, scoreAsQ:scoreAsQ));
       }
       else
       {
-        return $"info depth {depth} seldepth {selectiveDepth} time {elapsedTimeSeconds * 1000.0f:F0} "
-             + $"nodes {manager.Root.N:F0} score cp {scoreCentipawn:F0} tbhits {manager.CountTablebaseHits} nps {nps:F0} "
-             + $"pv {pv.ShortStr()} string M= {manager.Root.MAvg:F0}";
+        // Send top move
+        Send(UCIInfo.UCIInfoString(manager, searchRootNode, best.BestMoveNode, 1, 
+                                   showWDL: showWDL, useParentN: !perPVCounters, scoreAsQ: scoreAsQ));
+
+        // Send other moves visited
+        MCTSNode[] sortedN = searchRootNode.ChildrenSorted(s => -(float)s.N);
+        int multiPVIndex = 2;
+        for (int i=0;i<sortedN.Length && i <numPV; i++)
+        {
+          if (!object.ReferenceEquals(sortedN[i], best.BestMoveNode))
+          {
+            Send(UCIInfo.UCIInfoString(manager, searchRootNode, sortedN[i], multiPVIndex, 
+                                       showWDL: showWDL, useParentN: !perPVCounters, scoreAsQ: scoreAsQ));
+            multiPVIndex++;
+          }
+        }
+
+
+        // Finally show moves that had no visits
+        float elapsedTimeSeconds = (float)(DateTime.Now - manager.StartTimeThisSearch).TotalSeconds;
+        string timeStr = $"{ elapsedTimeSeconds * 1000.0f:F0}";
+        for (int i = multiPVIndex-1; i<searchRootNode.NumPolicyMoves; i++)
+        {
+          (MCTSNode node, EncodedMove move, FP16 p) info = searchRootNode.ChildAtIndexInfo(i);
+          if (info.node == null)
+          {
+            string str = $"info depth 0 seldepth 0 time { timeStr } nodes 1 score cp 0 tbhits 0 multipv {multiPVIndex} pv {info.move.AlgebraicStr} ";
+            OutStream.WriteLine(str);
+            multiPVIndex++;
+          }
+        }
+
+      }
+      if (verboseMoveStats && (logLiveStats || isFinalInfo)) OutputVerboseMoveStats(CeresEngine.Search.SearchRootNode);
+    }
+
+    /// <summary>
+    /// Since "log live stats" is a LC0 only feature (used for example Nibbler)
+    /// if in this mode we use the LC0 format instead of Ceres' own.
+    /// </summary>
+    bool ShouldUseLC0FormatForVerboseMoves => logLiveStats;
+
+    void OutputVerboseMoveStats(MCTSNode searchRootNode)
+    {
+      using (new SearchContextExecutionBlock(CeresEngine.Search.Manager.Context))
+      {
+        if (ShouldUseLC0FormatForVerboseMoves)
+        {
+          foreach (LC0VerboseMoveStat stat in LC0VerboseMoveStatsFromMCTSNode.BuildStats(searchRootNode))
+          {
+            OutStream.WriteLine(stat.LC0String);
+          }
+        }
+        else
+        {
+          CeresEngine.Search.Manager.Context.Root.Dump(1, 1, prefixString: "info string ");
+        }
       }
     }
 

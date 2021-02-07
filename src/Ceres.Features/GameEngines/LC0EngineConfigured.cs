@@ -156,7 +156,7 @@ namespace Ceres.Features.GameEngines
 
       }
 
-      string tbPath = CeresUserSettingsManager.Settings.DirTablebases;
+      string tbPath = CeresUserSettingsManager.Settings.TablebaseDirectory;
       if (paramsSearch.EnableTablebases) lzOptions += (@$" --syzygy-paths=#{tbPath}# ").Replace("#", "\"");
 
       if (verboseOutput) lzOptions += " --verbose-move-stats ";

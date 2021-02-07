@@ -58,6 +58,12 @@ namespace Ceres.Chess.Games.Utils
 
 
     /// <summary>
+    /// Returns as a FEN and also "moves" with list of moves (if any).
+    /// </summary>
+    public string FENAndMoves => FEN + StartMoves == null ? "" : " moves " + StartMoves;
+
+
+    /// <summary>
     /// Creates a new EPD entry identical to this, except FEN is changed as specified
     /// </summary>
     /// <param name="newFEN"></param>

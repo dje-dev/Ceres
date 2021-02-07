@@ -86,9 +86,12 @@ namespace Ceres.MCTS.Evaluators
     /// <param name="transpositionRootNodeIndex"></param>
     /// <param name="transpositionRootNode"></param>
     /// <returns></returns>
-    LeafEvaluationResult ProcessFirstLinkage(MCTSNode node, MCTSNodeStructIndex transpositionRootNodeIndex, ref MCTSNodeStruct transpositionRootNode)
+    LeafEvaluationResult ProcessFirstLinkage(MCTSNode node, MCTSNodeStructIndex transpositionRootNodeIndex, 
+                                             ref MCTSNodeStruct transpositionRootNode)
     {
       ref MCTSNodeStruct nodeRef = ref node.Ref;
+
+      nodeRef.NumPolicyMoves = transpositionRootNode.NumPolicyMoves;
 
       Debug.Assert(transpositionRootNodeIndex.Index != 0);
 

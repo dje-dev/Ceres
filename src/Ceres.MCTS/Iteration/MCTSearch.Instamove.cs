@@ -19,6 +19,7 @@ using Ceres.Base.Benchmarking;
 using Ceres.Chess;
 using Ceres.Chess.MoveGen;
 using Ceres.MCTS.Environment;
+using Ceres.MCTS.Managers;
 using Ceres.MCTS.MTCSNodes;
 
 #endregion
@@ -39,11 +40,13 @@ namespace Ceres.MCTS.Iteration
     /// <param name="newRoot"></param>
     /// <returns></returns>
     (MCTSManager, MGMove, TimingStats) CheckInstamove(MCTSManager priorManager, 
-                                                      SearchLimit searchLimit, 
+                                                      SearchLimit searchLimitIncremental, 
                                                       MCTSNode newRoot)
     {
       if (newRoot != null
         && priorManager != null
+        && newRoot.N > 100
+        && newRoot.NumChildrenExpanded > 1
         && priorManager.Context.ParamsSearch.FutilityPruningStopSearchEnabled
         && priorManager.Context.ParamsSearch.EnableInstamoves)
       {
@@ -57,37 +60,41 @@ namespace Ceres.MCTS.Iteration
 
         if (double.IsNaN(priorManager.EstimatedNPS)) return default;
 
-        int estNewVisitsThisMove = searchLimit.EstNumNodes((int)priorManager.EstimatedNPS, true);
-        float treeSizeFactor = (float)newRoot.N / (float)estNewVisitsThisMove;
+        MCTSNode lastSearchRoot = priorManager.Root;
+        float baselineTreeSize = lastSearchRoot.N;
 
+        int estNewVisitsThisMove = searchLimitIncremental.EstNumNodes((int)priorManager.EstimatedNPS, true);
+        float ratioNewToBaseline = ((float)newRoot.N + (float)estNewVisitsThisMove) / (float)baselineTreeSize;
+        float thresholdRatioNewToCurrent = 1.4f - (0.10f * CountSearchContinuations);
+        bool treeIsBigEnough = ratioNewToBaseline < thresholdRatioNewToCurrent;
+        if (!treeIsBigEnough) return default;
+
+        // Possibly veto the instamove if there is a second-best move that could
+        // catch up to best move if the planned search were conducted.
         BestMoveInfo bestMoveInfo = newRoot.BestMoveInfo(false);
+        if (bestMoveInfo.BestMove.IsNull) return default;
 
-        // The "sureness" that a move is best and not needing more search
-        // is the product of treeSizeFactor and TopMovesNRatio
-        float topNRatio = bestMoveInfo.BestN / bestMoveInfo.BestNSecond;
-        float surenessFactor = treeSizeFactor * MathF.Min(10, topNRatio);
+        MCTSNode[] childrenSortedQ = newRoot.ChildrenSorted(n => (float)n.Q);
+        MCTSNode[] childrenSortedN = newRoot.ChildrenSorted(n => -n.N);
+        float nGap = Math.Abs(childrenSortedQ[0].N - childrenSortedQ[1].N);
+        float qGap = (float)(Math.Abs(childrenSortedQ[0].Q - childrenSortedQ[1].Q));
+        //float biggestN = Math.Max(bestMoveInfo.BestN, bestMoveInfo.BestNSecond);
+        float minNRequiredToChange = nGap / ManagerChooseRootMove.MinFractionNToUseQ(newRoot, qGap);
+        bool couldCatchUp = (estNewVisitsThisMove * 0.25f) > minNRequiredToChange;
+        if (couldCatchUp)
+          MCTSEventSource.TestCounter1++;
+        else
+          MCTSEventSource.TestMetric1++;
 
-        // Don't instamove unless the tree size is
-        // close to what we would expect after doing multiple searches
-        float estExpectedTreeSize = estNewVisitsThisMove 
-                                 + (estNewVisitsThisMove * 0.15f * CountSearchContinuations);
-        float ratioActualToExpected = newRoot.N / estExpectedTreeSize;
+        if (couldCatchUp) return default;
+        //Console.WriteLine("catchup " + couldCatchUp + " visits: " + estNewVisitsThisMove + " " + minNRequiredToChange);
 
-        // Try to make sure the second best node could not likely catch up upon deeper search
-        float optimisticNewSecondBestN = bestMoveInfo.BestNSecond + estNewVisitsThisMove * 0.75f;
-        bool couldCatchUp = optimisticNewSecondBestN > bestMoveInfo.BestN;
+        // Log.Info($"\r\nInstamove already {CountSearchContinuations} sureness {surenessFactor} " +
+        //          $"Tree size factor {treeSizeFactor} N={bestMoveInfo.BestN} N2={bestMoveInfo.BestNSecond}");
+        InstamoveCount++;
+        CountSearchContinuations++;
 
-        bool qualifies = !couldCatchUp && ratioActualToExpected >= 0.75f;
-
-        if (!bestMoveInfo.BestMove.IsNull && qualifies)
-        {
-          // Log.Info($"\r\nInstamove already {CountSearchContinuations} sureness {surenessFactor} " +
-          //          $"Tree size factor {treeSizeFactor} N={bestMoveInfo.BestN} N2={bestMoveInfo.BestNSecond}");
-          InstamoveCount++;
-          CountSearchContinuations++;
-
-          return (priorManager, newRoot.BestMoveInfo(false).BestMove, null);
-        }
+        return (priorManager, newRoot.BestMoveInfo(false).BestMove, null);        
       }
       return default;
     }

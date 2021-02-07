@@ -54,9 +54,14 @@ namespace Ceres.Features.GameEngines
     public ParamsSelect SelectParams;
 
     /// <summary>
-    /// Optional override time manager.
+    /// Optional override limits manager.
     /// </summary>
-    public IManagerGameLimit OverrideTimeManager;
+    public IManagerGameLimit OverrideLimitManager;
+
+    /// <summary>
+    /// Optional name of log file to which detailed diagnostics information is written.
+    /// </summary>
+    public string LogFileName;
 
 
     /// <summary>
@@ -64,7 +69,9 @@ namespace Ceres.Features.GameEngines
     /// </summary>
     public GameEngineDefCeres(string id, NNEvaluatorDef evaluatorDef, ParamsSearch searchParams= null,
                               ParamsSearchExecutionModifier paramsSearchExecutionPostprocessor = null,
-                              ParamsSelect selectParams = null, IManagerGameLimit overrideTimeManager = null)
+                              ParamsSelect selectParams = null, 
+                              IManagerGameLimit overrideLimitManager = null,
+                              string logFileName = null)
       : base(id)
     {
       // Make a defensive clone of the EvaluatorDef so it will definitely not be shared.
@@ -72,8 +79,16 @@ namespace Ceres.Features.GameEngines
       SearchParams = searchParams ?? new ParamsSearch();
       ParamsSearchExecutionPostprocessor = paramsSearchExecutionPostprocessor;
       SelectParams = selectParams ?? new ParamsSelect();
-      OverrideTimeManager = overrideTimeManager;
+      OverrideLimitManager = overrideLimitManager;
+      LogFileName = logFileName;
     }
+
+
+    /// <summary>
+    /// If the NodesPerGame time control mode is supported.
+    /// </summary>
+    public override bool SupportsNodesPerGameMode => true;
+
 
     /// <summary>
     /// Implementation of virtual method to create underlying engine.
@@ -82,7 +97,8 @@ namespace Ceres.Features.GameEngines
     public override GameEngine CreateEngine()
     {
       return new GameEngineCeresInProcess(ID, EvaluatorDef, SearchParams, SelectParams, 
-                                 OverrideTimeManager, ParamsSearchExecutionPostprocessor);
+                                          OverrideLimitManager, ParamsSearchExecutionPostprocessor,
+                                          LogFileName);
     }
 
 
@@ -114,8 +130,8 @@ namespace Ceres.Features.GameEngines
       writer.WriteLine("\r\n-----------------------------------------------------------------------");
       writer.WriteLine("Evaluator 1     : " + EvaluatorDef);
       writer.WriteLine("Evaluator 2     : " + other.EvaluatorDef);
-      writer.WriteLine("Time Manager 1  : " + (OverrideTimeManager == null ? "(default)" : OverrideTimeManager));
-      writer.WriteLine("Time Manager 2  : " + (other.OverrideTimeManager == null ? "(default)" : other.OverrideTimeManager));
+      writer.WriteLine("Time Manager 1  : " + (OverrideLimitManager == null ? "(default)" : OverrideLimitManager));
+      writer.WriteLine("Time Manager 2  : " + (other.OverrideLimitManager == null ? "(default)" : other.OverrideLimitManager));
       writer.WriteLine("Postprocessor 1 : " + (ParamsSearchExecutionPostprocessor == null ? "(none)" : "Present"));
       writer.WriteLine("Postprocessor 2 : " + (other.ParamsSearchExecutionPostprocessor == null ? "(none)" : "Present"));
       writer.WriteLine();
