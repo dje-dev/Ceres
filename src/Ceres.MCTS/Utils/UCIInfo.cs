@@ -51,24 +51,28 @@ namespace Ceres.MCTS.Utils
 
       float elapsedTimeSeconds = wasInstamove ? 0 : (float)(DateTime.Now - manager.StartTimeThisSearch).TotalSeconds;
 
-      float scoreToShow;
-      if (scoreAsQ)
-      {
-        scoreToShow = MathF.Round((float)thisRootNode.Q * 1000, 0);
-      }
-      else
-      { 
-        scoreToShow = MathF.Round(EncodedEvalLogistic.LogisticToCentipawn((float)thisRootNode.Q), 0);
-      }
-
-      float nps = manager.NumStepsTakenThisSearch / elapsedTimeSeconds;
-
       // Get the principal variation (the first move of which will be the best move)
       SearchPrincipalVariation pv;
       using (new SearchContextExecutionBlock(manager.Context))
       {
         pv = new SearchPrincipalVariation(thisRootNode, overrideBestMoveNodeAtRoot);
       }
+
+      MCTSNode bestMoveNode = pv.Nodes[0];
+
+      // The score displayed corresponds to
+      // the Q (average visit value) of the move to be made.
+      float scoreToShow;
+      if (scoreAsQ)
+      {
+        scoreToShow = MathF.Round((float)bestMoveNode.Q * 1000, 0);
+      }
+      else
+      { 
+        scoreToShow = MathF.Round(EncodedEvalLogistic.LogisticToCentipawn((float)bestMoveNode.Q), 0);
+      }
+
+      float nps = manager.NumStepsTakenThisSearch / elapsedTimeSeconds;
 
       //info depth 12 seldepth 27 time 30440 nodes 51100 score cp 105 hashfull 241 nps 1678 tbhits 0 pv e6c6 c5b4 d5e4 d1e1 
       int selectiveDepth = pv.Nodes.Count;
@@ -85,9 +89,9 @@ namespace Ceres.MCTS.Utils
       string strWDL = "";
       if (showWDL)
       {
-        strWDL = $" wdl {Math.Round(thisRootNode.WinP * 1000)} " 
-               + $"{Math.Round(thisRootNode.DrawP * 1000)} " 
-               + $"{Math.Round(thisRootNode.LossP * 1000)}";
+        strWDL = $" wdl {Math.Round(bestMoveNode.WinP * 1000)} " 
+               + $"{Math.Round(bestMoveNode.DrawP * 1000)} " 
+               + $"{Math.Round(bestMoveNode.LossP * 1000)}";
       }
 
       if (wasInstamove)
