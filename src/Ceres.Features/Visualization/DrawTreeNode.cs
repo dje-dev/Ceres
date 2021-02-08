@@ -73,12 +73,12 @@ namespace Ceres.Features.Visualization.TreePlot
 
     internal DrawTreeNode Left()
     {
-      return !(Thread is null) ? Thread : (Children.Count > 0 ? Children[0] : null);
+      return Thread ?? (Children.Count > 0 ? Children[0] : null);
     }
 
     internal DrawTreeNode Right()
     {
-      return !(Thread is null) ? Thread : (Children.Count > 0 ? Children[^1] : null);
+      return Thread ?? (Children.Count > 0 ? Children[^1] : null);
     }
 
     internal DrawTreeNode LeftSibling()
