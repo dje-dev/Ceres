@@ -220,10 +220,9 @@ namespace Ceres.MCTS.Params
     /// Aggressiveness with which searches from moves at the root of the search are pruned
     /// (including the best/only remaining move if FutilityPruningStopSearchEnabled is true)
     /// from further visits due to impossibility or implausability that they will be the best move.
-    /// TODO: make this smarter, possibly look at recent trends
     /// </summary>
     [CeresOption(Name = "move-futility-pruning-aggressiveness", Desc = "Aggresiveness for early termination of searches to less promising root search subtrees in range [0..1.5], 0 disables.", Default = "0.4")]
-    public float MoveFutilityPruningAggressiveness = 0.5f;
+    public float MoveFutilityPruningAggressiveness = 0.4f;
 
     /// <summary>
     /// Aggressiveness with which limited search resource (time or nodes) is consumed.
@@ -291,7 +290,7 @@ namespace Ceres.MCTS.Params
       }
 
       // Check user settings to see if tablebases are configured.
-      EnableTablebases = CeresUserSettingsManager.Settings.TablebaseDirectory != "";
+      EnableTablebases = CeresUserSettingsManager.Settings.TablebaseDirectory is not null;
 
       // Start with default execution params,
       // but these may be updated dynamicaly during search
