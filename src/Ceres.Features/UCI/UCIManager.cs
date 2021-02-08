@@ -37,7 +37,7 @@ using Ceres.MCTS.Params;
 using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.Base.OperatingSystem;
 using Ceres.MCTS.MTCSNodes;
-using Ceres.MCTS.TreeVisualization;
+using Ceres.Features.Visualization.TreePlot;
 
 #endregion
 
