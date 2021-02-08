@@ -299,12 +299,9 @@ namespace Ceres.Features.Visualization.TreePlot
 
         scale = (bottomHistogramHeight - verticalSpacing - fontHeight - titleFontHeight) / (float)maxVisits;
 
-        var branches = (from ind in Enumerable.Range(0, rawRoot.NumChildrenExpanded) select rawRoot.ChildAtIndexRef(ind)).ToArray();
-        branches = branches.OrderBy(c => -c.N).ToArray();
-
-        for (int i = 0; i < numBranches; i++)
+        int i = 0;
+        foreach (MCTSNodeStruct child in (from ind in Enumerable.Range(0, rawRoot.NumChildrenExpanded) select rawRoot.ChildAtIndexRef(ind)).OrderBy(c => -c.N))
         {
-          MCTSNodeStruct child = branches[i];
           x0 = (leftMargin + horisontalSpacing + barWidth / 2) + i * ((plotAreaWidth - barWidth) / (float)(numBranches - 1));
           y0 = canvasHeight - bottomMargin - bottomHistogramHeight + verticalSpacing;
           y1 = y0 + fontHeight + scale * child.N;
@@ -313,6 +310,7 @@ namespace Ceres.Features.Visualization.TreePlot
 
           gfx.DrawString(label, font, brush, x0 - gfx.MeasureString(label, font).Width / 2, y0);
           gfx.DrawLine(pen, x0, y0 + fontHeight, x0, y1);
+          i++;
         }
       }
     }
