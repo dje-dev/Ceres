@@ -77,7 +77,7 @@ namespace Ceres.MCTS.Managers.Limits
       };
     
 
-      // Spend 30% more on first move of game (definitely no tree reuse, etc.)
+      // Spend 20% more on first move of game (definitely no tree reuse, etc.)
       float factorFirstMove = inputs.IsFirstMoveOfGame ? 1.2f : 1.0f;
 
       // Make a divisor which is between about 11 and 17
