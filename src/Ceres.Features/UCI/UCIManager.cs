@@ -544,7 +544,11 @@ namespace Ceres.Features.UCI
 
       if (SearchFinishedEvent != null) SearchFinishedEvent(result.Search.Manager);
 
-      OutputUCIInfo(result.Search.Manager, result.Search.SearchRootNode, true);
+      // Output the final UCI info line containing end of search information
+      using (new SearchContextExecutionBlock(result.Search.Manager.Context))
+      {
+        OutputUCIInfo(result.Search.Manager, result.Search.SearchRootNode, true);
+      }
 
       // Send the best move
       Send("bestmove " + result.Search.BestMove.MoveStr(MGMoveNotationStyle.LC0Coordinate));
