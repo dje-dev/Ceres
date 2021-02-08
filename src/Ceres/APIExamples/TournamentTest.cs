@@ -62,7 +62,7 @@ namespace Ceres.APIExamples
       GameEngineUCISpec specSF = new GameEngineUCISpec("SF12", SF12_EXE);
       GameEngineUCISpec specLC0 = new GameEngineUCISpec("LC0", "lc0.exe");
 
-      const bool POOLED = true;
+      const bool POOLED = false;
       string GPUS = POOLED ? "GPU:0,1,2,3:POOLED"
                            : "GPU:0";
       //703810
@@ -89,13 +89,14 @@ namespace Ceres.APIExamples
 
       SearchLimit limit1 = SearchLimit.NodesPerMove(11_000);
 
-//      limit1 = SearchLimit.SecondsForAllMoves(15, 0.25f);
-//      limit1 = SearchLimit.SecondsForAllMoves(10);
+      //      limit1 = SearchLimit.SecondsForAllMoves(15, 0.25f);
+      //      limit1 = SearchLimit.SecondsForAllMoves(10);
 
       //limit1 = SearchLimit.NodesForAllMoves(500_000);//, 25_000);
 
-      //limit1 = SearchLimit.SecondsForAllMoves(15);
-      limit1 = SearchLimit.NodesPerMove(1_000);
+      limit1 = SearchLimit.SecondsForAllMoves(20);
+      //limit1 = SearchLimit.NodesPerMove(5_000);
+      //limit1 = SearchLimit.NodesPerMove(1_000);
 
       // Don't output log if very small games
       // (to avoid making very large log files or slowing down play).
@@ -115,7 +116,7 @@ namespace Ceres.APIExamples
 
       //engineDefCeres1.SelectParams.CPUCTAtRoot *= 1.5f;
 //engineDefCeres1.SearchParams.TestFlag = true;
-      //engineDefCeres1.SearchParams.MoveFutilityPruningAggressiveness = 0.60f;
+//engineDefCeres1.SearchParams.MoveFutilityPruningAggressiveness = 0.4f;
 //engineDefCeres1.SearchParams.GameLimitUsageAggressiveness *= 1.2f;
 //engineDefCeres1.SearchParams.MoveFutilityPruningAggressiveness = 0.75f;
       //      engineDefCeres2.SearchParams.MoveFutilityPruningAggressiveness = 1.25f;// 0.75f;
@@ -143,7 +144,7 @@ namespace Ceres.APIExamples
       //engineDefCeres1.SearchParams.EnableTablebases = false;
 
       // TODO: support this in GameEngineDefCeresUCI
-      bool forceDisableSmartPruning = false;// limit1.IsNodesLimit;
+      bool forceDisableSmartPruning = limit1.IsNodesLimit;
       if (forceDisableSmartPruning)
       {
         engineDefCeres1.SearchParams.FutilityPruningStopSearchEnabled = false;
@@ -212,24 +213,24 @@ namespace Ceres.APIExamples
 
       //TournamentDef def = new TournamentDef("TOURN", playerLC0Tilps, playerLC0);
 
-      //      def.NumGamePairs = 3;
+      //def.NumGamePairs = 20;
       //      def.ShowGameMoves = false;
 
       //      def.OpeningsFileName = @"HERT_2017\Hert500.pgn";
 
       //      def.StartingFEN = "1q6/2n4k/1r1p1pp1/RP1P2p1/2Q1P1P1/2N4P/3K4/8 b - - 8 71";
       //      def.OpeningsFileName = @"\\synology\dev\chess\data\openings\Drawkiller_500pos_reordered.pgn";//                                                                                                 
-      def.OpeningsFileName = "TCEC18_NoomenSelect.pgn";
-      //def.OpeningsFileName = "TCEC1819.pgn";
+      //def.OpeningsFileName = "TCEC19_NoomenSelect.pgn";
+      def.OpeningsFileName = "TCEC1819.pgn";
       // broken      def.OpeningsFileName = "TCEC_9-20.pgn";
-      //            def.OpeningsFileName = "4mvs_+90_+99.pgn";
+      //def.OpeningsFileName = "4mvs_+90_+99.pgn";
       //      def.OpeningsFileName = "startpos.pgn";
 
       //def.AdjudicationThresholdCentipawns = 500;
       //def.AdjudicationThresholdNumMoves = 3000;
       //def.UseTablebasesForAdjudication = false;
 
-      const int CONCURRENCY = POOLED ? 20 : 4;
+      const int CONCURRENCY = POOLED ? 20 : 2;
       TournamentManager runner = new TournamentManager(def, CONCURRENCY);
 
       TournamentResultStats results;
