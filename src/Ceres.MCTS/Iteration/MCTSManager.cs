@@ -282,7 +282,16 @@ namespace Ceres.MCTS.Iteration
         Console.WriteLine($"Internal error: search ended with N={Root.N} NInFlight={Root.NInFlight} NInFlight2={Root.NInFlight2} {Root}");
         haveWarned = true;
       }
-       
+
+      // Possibly validate tree integrity.
+      if (MCTSDiagnostics.VerifyTreeIntegrityAtSearchEnd)
+      {
+        using (new SearchContextExecutionBlock(Context))
+        {
+          Context.Tree.Store.Validate();
+        }
+      }
+
       return (stats, Root);
     }
 
