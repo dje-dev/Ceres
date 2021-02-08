@@ -117,7 +117,7 @@ namespace Ceres.Features.Visualization.TreePlot
         using (var titleFont = new Font("Arial", histogramTitleFontSize))
         {
           SizeF titleSize = gfx.MeasureString("Depth", titleFont);
-          SizeF size = gfx.MeasureString(treeInfo.maxDepth.ToString(), font);
+          SizeF size = gfx.MeasureString(treeInfo.MaxDepth.ToString(), font);
 
           // Update space reserved for left margin.
           // Title height is used here since text is rotated by 90 degrees.
@@ -129,8 +129,8 @@ namespace Ceres.Features.Visualization.TreePlot
         TreeStats(gfx);
 
         // Multipiers used for transforming node's x,y-coordinates to canvas coordinates.
-        scaleX = plotAreaWidth / treeInfo.maxX;
-        scaleY = plotAreaHeight / treeInfo.maxDepth;
+        scaleX = plotAreaWidth / treeInfo.MaxX;
+        scaleY = plotAreaHeight / treeInfo.MaxDepth;
 
         // Draw grid lines.
         GridLines(gfx);
@@ -176,11 +176,11 @@ namespace Ceres.Features.Visualization.TreePlot
     internal void TreeStats(Graphics gfx)
     {
       string text = "";
-      text += "Node count " + treeInfo.nrNodes.ToString();
+      text += "Node count " + treeInfo.NrNodes.ToString();
       //average branching factor = total nr of child nodes / total nr of nodes with children.
-      double branchingFactor = Math.Round((treeInfo.nrNodes - 1) / ((float)(treeInfo.nrNodes - treeInfo.nrLeafNodes)), 3);
+      double branchingFactor = Math.Round((treeInfo.NrNodes - 1) / ((float)(treeInfo.NrNodes - treeInfo.NrLeafNodes)), 3);
       text += ", Branching factor " + branchingFactor.ToString(CultureInfo.GetCultureInfo("en-GB"));
-      double leafShare = Math.Round(100.0f * treeInfo.nrLeafNodes / treeInfo.nrNodes, 2);
+      double leafShare = Math.Round(100.0f * treeInfo.NrLeafNodes / treeInfo.NrNodes, 2);
       text += ", Leaf nodes " + leafShare.ToString(CultureInfo.GetCultureInfo("en-GB")) + "%";
       using (var brush = new SolidBrush(fontColor))
       using (var font = new Font("Arial", histogramTitleFontSize))
@@ -211,14 +211,14 @@ namespace Ceres.Features.Visualization.TreePlot
       using (var titleFont = new Font("Arial", histogramTitleFontSize))
       {
         SizeF titleSize = gfx.MeasureString(title, titleFont);
-        SizeF size = gfx.MeasureString(treeInfo.maxDepth.ToString(), font);
+        SizeF size = gfx.MeasureString(treeInfo.MaxDepth.ToString(), font);
         gfx.RotateTransform(-90);
         gfx.DrawString(title, titleFont, brush, -(topMargin + plotAreaHeight / 2.0f + titleSize.Width / 2), leftMargin - titleSize.Height - size.Width - 1);
         gfx.ResetTransform();
-        for (int i = 0; i <= treeInfo.maxDepth; i++)
+        for (int i = 0; i <= treeInfo.MaxDepth; i++)
         {
           (x0, y) = CanvasXY(0, i);
-          x1 = CanvasX(treeInfo.maxX);
+          x1 = CanvasX(treeInfo.MaxX);
           gfx.DrawLine(pen, x0, y, x1, y);
           label = i.ToString();
           gfx.DrawString(label, font, brush, x0 - size.Width - horisontalSpacing, y + 1 - size.Height / 2);
@@ -239,8 +239,8 @@ namespace Ceres.Features.Visualization.TreePlot
 
       string title = "Nodes per depth";
 
-      int maxNodesPerDepth = treeInfo.nodesPerDepth.Max();
-      float width = 0.75f * plotAreaHeight / treeInfo.maxDepth;
+      int maxNodesPerDepth = treeInfo.NodesPerDepth.Max();
+      float width = 0.75f * plotAreaHeight / treeInfo.MaxDepth;
 
       using (var pen = new Pen(oddNodeColor, width))
       using (var font = new Font("Arial", tickFontSize))
@@ -250,16 +250,16 @@ namespace Ceres.Features.Visualization.TreePlot
       {
         titleFormat.FormatFlags = StringFormatFlags.DirectionVertical;
         SizeF titleSize = gfx.MeasureString(title, titleFont);
-        SizeF maxLabelSize = gfx.MeasureString(treeInfo.nodesPerDepth.Max().ToString(), font);
+        SizeF maxLabelSize = gfx.MeasureString(treeInfo.NodesPerDepth.Max().ToString(), font);
         float scale = (rightHistogramWidth - maxLabelSize.Width - horisontalSpacing - titleSize.Height) / maxNodesPerDepth;
         gfx.DrawString(title, titleFont, brush, canvasWidth - rightMargin - titleSize.Height, topMargin + plotAreaHeight / 2.0f - titleSize.Width / 2, titleFormat);
-        for (int i = 0; i <= treeInfo.maxDepth; i++)
+        for (int i = 0; i <= treeInfo.MaxDepth; i++)
         {
-          label = treeInfo.nodesPerDepth[i].ToString();
-          (x, y) = CanvasXY(treeInfo.maxX, i);
+          label = treeInfo.NodesPerDepth[i].ToString();
+          (x, y) = CanvasXY(treeInfo.MaxX, i);
           x += horisontalSpacing;
           gfx.DrawString(label, font, brush, x, y + 1 - maxLabelSize.Height / 2);
-          gfx.DrawLine(pen, x + maxLabelSize.Width, y, x + maxLabelSize.Width + treeInfo.nodesPerDepth[i] * scale, y);
+          gfx.DrawLine(pen, x + maxLabelSize.Width, y, x + maxLabelSize.Width + treeInfo.NodesPerDepth[i] * scale, y);
         }
       }
     }
@@ -353,13 +353,13 @@ namespace Ceres.Features.Visualization.TreePlot
     {
       float x;
       float y;
-      SolidBrush brush = node.branchIndex == -1 ? brushRoot : node.branchIndex % 2 == 0 ? brushEven : brushOdd;
-      (x, y) = CanvasXY(node.x, node.y);
+      SolidBrush brush = node.BranchIndex == -1 ? brushRoot : node.BranchIndex % 2 == 0 ? brushEven : brushOdd;
+      (x, y) = CanvasXY(node.X, node.Y);
       if (!(node.Parent is null))
       {
         float xParent;
         float yParent;
-        (xParent, yParent) = CanvasXY(node.Parent.x, node.Parent.y);
+        (xParent, yParent) = CanvasXY(node.Parent.X, node.Parent.Y);
         gfx.DrawLine(penEdge, x, y, xParent, yParent);
       }
       foreach (DrawTreeNode child in node.Children)

@@ -20,19 +20,19 @@ namespace Ceres.Features.Visualization.TreePlot
   /// </summary>
   public class DrawTreeInfo
   {
-    public float maxX;
-    public float maxDepth;
-    public List<int> nodesPerDepth;
-    public int nrLeafNodes;
-    public int nrNodes;
+    public float MaxX;
+    public float MaxDepth;
+    public List<int> NodesPerDepth;
+    public int NrLeafNodes;
+    public int NrNodes;
 
     public DrawTreeInfo()
     {
-      maxX = float.MinValue;
-      maxDepth = float.MinValue;
-      nodesPerDepth = new List<int>();
-      nrNodes = 0;
-      nrLeafNodes = 0;
+      MaxX = float.MinValue;
+      MaxDepth = float.MinValue;
+      NodesPerDepth = new List<int>();
+      NrNodes = 0;
+      NrLeafNodes = 0;
     }
   }
 }

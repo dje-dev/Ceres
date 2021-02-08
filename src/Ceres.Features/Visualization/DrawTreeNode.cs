@@ -29,28 +29,28 @@ namespace Ceres.Features.Visualization.TreePlot
   /// </summary>
   public class DrawTreeNode
   {
-    public float x;
-    public float y;
+    public float X;
+    public float Y;
     public DrawTreeNode Parent;
     public List<DrawTreeNode> Children;
+    // -1 for root, 0 for nodes of leftmost subtree, 1 for next and so on. Used to determine node coloring.
+    public int BranchIndex;
     internal float mod;
     internal float change;
     internal float shift;
-    internal DrawTreeNode Ancestor;
+    internal DrawTreeNode ancestor;
     internal DrawTreeNode lmostSibling;
     // link between nodes in tree contour if no parent-child relation exists.
-    internal DrawTreeNode Thread;
+    internal DrawTreeNode thread;
     internal int siblingIndex;
     internal int id;
-    // -1 for root, 0 for nodes of leftmost subtree, 1 for next and so on. Used to determine node coloring.
-    public int branchIndex;
 
     internal DrawTreeNode(DrawTreeNode parent, MCTSNodeStruct node, int depth, int siblingIndex, ref int identifier)
     {
-      x = -1.0f;
-      y = (float)depth;
+      X = -1.0f;
+      Y = (float)depth;
       id = identifier;
-      branchIndex = parent is null ? -1 : parent.branchIndex != -1 ? parent.branchIndex : siblingIndex;
+      BranchIndex = parent is null ? -1 : parent.BranchIndex != -1 ? parent.BranchIndex : siblingIndex;
       identifier++;
       Children = new List<DrawTreeNode>();
       int childIndex = 0;
@@ -65,20 +65,20 @@ namespace Ceres.Features.Visualization.TreePlot
       mod = 0.0f;
       change = 0.0f;
       shift = 0.0f;
-      Ancestor = this;
+      ancestor = this;
       lmostSibling = null;
       this.siblingIndex = siblingIndex;
-      Thread = null;
+      thread = null;
     }
 
     internal DrawTreeNode Left()
     {
-      return Thread ?? (Children.Count > 0 ? Children[0] : null);
+      return thread ?? (Children.Count > 0 ? Children[0] : null);
     }
 
     internal DrawTreeNode Right()
     {
-      return Thread ?? (Children.Count > 0 ? Children[^1] : null);
+      return thread ?? (Children.Count > 0 ? Children[^1] : null);
     }
 
     internal DrawTreeNode LeftSibling()
@@ -120,7 +120,7 @@ namespace Ceres.Features.Visualization.TreePlot
     {
       if (Children.Count == 0)
       {
-        x = siblingIndex != 0 ? LeftSibling().x + 1.0f : 0.0f;
+        X = siblingIndex != 0 ? LeftSibling().X + 1.0f : 0.0f;
       }
       else
       {
@@ -132,16 +132,16 @@ namespace Ceres.Features.Visualization.TreePlot
         }
 
         ExecuteShifts();
-        float midPoint = (Children[0].x + Children[^1].x) / 2;
+        float midPoint = (Children[0].X + Children[^1].X) / 2;
         DrawTreeNode leftBro = LeftSibling();
         if (leftBro is null)
         {
-          x = midPoint;
+          X = midPoint;
         }
         else
         {
-          x = leftBro.x + 1.0f;
-          mod = x - midPoint;
+          X = leftBro.X + 1.0f;
+          mod = X - midPoint;
         }
       }
     }
@@ -166,8 +166,8 @@ namespace Ceres.Features.Visualization.TreePlot
           nodeInnerRight = nodeInnerRight.Left();
           nodeOuterLeft = nodeOuterLeft.Left();
           nodeOuterRight = nodeOuterRight.Right();
-          nodeOuterRight.Ancestor = this;
-          shiftLocal = (nodeInnerLeft.x + shiftInnerLeft) - (nodeInnerRight.x + shiftInnerRight) + 1.0f;
+          nodeOuterRight.ancestor = this;
+          shiftLocal = (nodeInnerLeft.X + shiftInnerLeft) - (nodeInnerRight.X + shiftInnerRight) + 1.0f;
           if (shiftLocal > 0)
           {
             MoveSubtrees(PickAncestor(nodeInnerLeft, defaultAncestor), shiftLocal);
@@ -181,14 +181,14 @@ namespace Ceres.Features.Visualization.TreePlot
         }
         if (!(nodeInnerLeft.Right() is null) && nodeOuterRight.Right() is null)
         {
-          nodeOuterRight.Thread = nodeInnerLeft.Right();
+          nodeOuterRight.thread = nodeInnerLeft.Right();
           nodeOuterRight.mod += shiftInnerLeft - shiftOuterRight;
         }
         else
         {
           if (!(nodeInnerRight.Left() is null) && nodeOuterLeft.Left() is null)
           {
-            nodeOuterLeft.Thread = nodeInnerRight.Left();
+            nodeOuterLeft.thread = nodeInnerRight.Left();
             nodeOuterLeft.mod += shiftInnerRight - shiftOuterLeft;
           }
 
@@ -206,7 +206,7 @@ namespace Ceres.Features.Visualization.TreePlot
       for (int i = Children.Count - 1; i >= 0; i--)
       {
         child = Children[i];
-        child.x += cumShift;
+        child.X += cumShift;
         child.mod += cumShift;
         cumChange += child.change;
         cumShift += child.shift + cumChange;
@@ -217,9 +217,9 @@ namespace Ceres.Features.Visualization.TreePlot
     {
       // TODO perhaps there is neater way to check if Ancestor is sibling without relying to the id field.
       // id could then be removed as this is the only place where we use it.
-      if (Parent.Children.Any(child => child.id == innerLeftNode.Ancestor.id))
+      if (Parent.Children.Any(child => child.id == innerLeftNode.ancestor.id))
       {
-        return innerLeftNode.Ancestor;
+        return innerLeftNode.ancestor;
       }
       else
       {
@@ -233,7 +233,7 @@ namespace Ceres.Features.Visualization.TreePlot
       change -= xShift / subtrees;
       shift += xShift;
       nodeLeft.change += xShift / subtrees;
-      x += xShift;
+      X += xShift;
       mod += xShift;
     }
 
@@ -242,11 +242,11 @@ namespace Ceres.Features.Visualization.TreePlot
     /// </summary>
     internal float SecondWalk(float xShift, float min)
     {
-      x += xShift;
+      X += xShift;
 
-      if (x < min)
+      if (X < min)
       {
-        min = x;
+        min = X;
       }
       foreach (DrawTreeNode child in Children)
       {
@@ -261,19 +261,19 @@ namespace Ceres.Features.Visualization.TreePlot
     /// </summary>
     internal void ThirdWalk(float xShift, DrawTreeInfo treeInfo)
     {
-      if (treeInfo.nodesPerDepth.Count <= (int)y)
+      if (treeInfo.NodesPerDepth.Count <= (int)Y)
       {
-        treeInfo.nodesPerDepth.Add(1);
+        treeInfo.NodesPerDepth.Add(1);
       }
       else
       {
-        treeInfo.nodesPerDepth[(int)y] += 1;
+        treeInfo.NodesPerDepth[(int)Y] += 1;
       }
-      x += xShift;
-      treeInfo.maxX = Math.Max(x, treeInfo.maxX);
-      treeInfo.maxDepth = Math.Max(y, treeInfo.maxDepth);
-      treeInfo.nrNodes++;
-      treeInfo.nrLeafNodes += Children.Count > 0 ? 1 : 0;
+      X += xShift;
+      treeInfo.MaxX = Math.Max(X, treeInfo.MaxX);
+      treeInfo.MaxDepth = Math.Max(Y, treeInfo.MaxDepth);
+      treeInfo.NrNodes++;
+      treeInfo.NrLeafNodes += Children.Count > 0 ? 1 : 0;
       foreach (DrawTreeNode child in Children)
       {
         child.ThirdWalk(xShift, treeInfo);
