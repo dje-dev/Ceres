@@ -152,12 +152,6 @@ namespace Ceres.Features.Visualization.TreePlot
       }
     }
 
-    internal void Save(string fileName)
-    {
-      fileName += fileName.EndsWith(".png") ? "" : ".png";
-      image.Save(fileName);
-    }
-
     /// <summary>
     /// Plots the search tree for given root node and saves the image as png-file.
     /// </summary>
@@ -167,6 +161,12 @@ namespace Ceres.Features.Visualization.TreePlot
       TreePlot treePlot = new TreePlot(rawNode);
       treePlot.Save(fileName);
       treePlot.Dispose();
+    }
+
+    internal void Save(string fileName)
+    {
+      fileName += fileName.EndsWith(".png") ? "" : ".png";
+      image.Save(fileName);
     }
 
     /// <summary>
