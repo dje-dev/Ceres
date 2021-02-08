@@ -47,7 +47,7 @@ namespace Ceres.Features.Visualization.TreePlot
     readonly int horisontalSpacing = 5;
     // Spacing between treeplot and bottom histogram.
     readonly int verticalSpacing = 5;
-    // Spacing between plot title and tree plot
+    // Spacing between plot title and tree plot.
     readonly int titleMargin = 20;
 
     int plotAreaWidth;
@@ -112,7 +112,7 @@ namespace Ceres.Features.Visualization.TreePlot
         gfx.Clear(Color.White);
         gfxFinal.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
 
-        //Adjust left margin as it needs to contains depth axis' title and tick labels
+        //Adjust left margin as it needs to contains depth axis' title and tick labels.
         using (var font = new Font("Arial", tickFontSize))
         using (var titleFont = new Font("Arial", histogramTitleFontSize))
         {
@@ -125,23 +125,23 @@ namespace Ceres.Features.Visualization.TreePlot
           plotAreaWidth = canvasWidth - leftMargin - rightMargin - rightHistogramWidth - 2 * horisontalSpacing;
         }
 
-        //Write tree statistics into top margin
+        //Write tree statistics into top margin.
         TreeStats(gfx);
 
         // Multipiers used for transforming node's x,y-coordinates to canvas coordinates.
         scaleX = plotAreaWidth / treeInfo.maxX;
         scaleY = plotAreaHeight / treeInfo.maxDepth;
 
-        // Draw grid lines
+        // Draw grid lines.
         GridLines(gfx);
 
-        // Draw right hand side histogram
+        // Draw right hand side histogram.
         NodesPerDepthHistogram(gfx);
 
-        //Draw bottom histogram
+        //Draw bottom histogram.
         VisitDistributionHistogram(gfx);
 
-        //Draw the tree
+        //Draw the tree.
         //Stopwatch sw = Stopwatch.StartNew();
         DrawTree(root, gfx, penEdge, brushRoot, brushEven, brushOdd);
         //Console.WriteLine("Draw time in ms:");
@@ -177,7 +177,7 @@ namespace Ceres.Features.Visualization.TreePlot
     {
       string text = "";
       text += "Node count " + treeInfo.nrNodes.ToString();
-      //average branching factor = total nr of child nodes / total nr of nodes with children
+      //average branching factor = total nr of child nodes / total nr of nodes with children.
       double branchingFactor = Math.Round((treeInfo.nrNodes - 1) / ((float)(treeInfo.nrNodes - treeInfo.nrLeafNodes)), 3);
       text += ", Branching factor " + branchingFactor.ToString(CultureInfo.GetCultureInfo("en-GB"));
       double leafShare = Math.Round(100.0f * treeInfo.nrLeafNodes / treeInfo.nrNodes, 2);
@@ -331,7 +331,7 @@ namespace Ceres.Features.Visualization.TreePlot
 
     internal float CanvasX(float x)
     {
-      // Without 0.0f check we hit Overflow error, it is a mystery how 0.0f * scaleX can overflow
+      // Without 0.0f check we hit Overflow error, it is a mystery how 0.0f * scaleX can overflow.
       float canvasX = leftMargin + horisontalSpacing + (x != 0.0f ? x * scaleX : 0.0f);
       return canvasX;
     }
@@ -377,7 +377,7 @@ namespace Ceres.Features.Visualization.TreePlot
     }
 
     /// <summary>
-    /// Dispose method which disposes the draw objects
+    /// Dispose method which disposes the draw objects.
     /// </summary>
     public void Dispose()
     {

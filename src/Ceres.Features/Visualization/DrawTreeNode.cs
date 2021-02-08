@@ -54,7 +54,7 @@ namespace Ceres.Features.Visualization.TreePlot
       identifier++;
       Children = new List<DrawTreeNode>();
       int childIndex = 0;
-      // Sort children based on N so that heaviest subtree is always drawn leftmost
+      // Sort children based on N so that heaviest subtree is always drawn leftmost.
       foreach (MCTSNodeStruct child in (from ind in Enumerable.Range(0, node.NumChildrenExpanded) select node.ChildAtIndexRef(ind)).OrderBy(c => -c.N))
       {
         Children.Add(new DrawTreeNode(this, child, depth + 1, childIndex, ref identifier));
@@ -114,7 +114,7 @@ namespace Ceres.Features.Visualization.TreePlot
     }
 
     /// <summary>
-    /// First tree walk (bottom-up) of Buckheim's layout algorithm
+    /// First tree walk (bottom-up) of Buckheim's layout algorithm.
     /// </summary>
     internal void FirstWalk()
     {
@@ -238,7 +238,7 @@ namespace Ceres.Features.Visualization.TreePlot
     }
 
     /// <summary>
-    /// Second tree walk (top-down) of Buckheim's layout algorithm
+    /// Second tree walk (top-down) of Buckheim's layout algorithm.
     /// </summary>
     internal float SecondWalk(float xShift, float min)
     {
