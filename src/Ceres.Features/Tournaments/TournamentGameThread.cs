@@ -253,8 +253,8 @@ namespace Ceres.Features.Tournaments
         Console.WriteLine($"Games will be incrementally written to file: {pgnFileName}");
         Console.WriteLine();
 
-        Console.WriteLine("  ELO   +/-  LOS   GAME#     TIME    TH#   OP#     TIME1   TIME2        NODES 1          NODES 2      PLY   RES    W   D   L   FEN");
-        Console.WriteLine("  ---   ---  ---   ----   --------   ---   ---    ------  ------    --------------  --------------   ----   ---    -   -   -   --------------------------------------------------");
+        Console.WriteLine("  ELO   +/-  LOS   GAME#     TIME    TH#   OP#      TIME1    TIME2        NODES 1           NODES 2       PLY   RES    W   D   L   FEN");
+        Console.WriteLine("  ---   ---  ---   ----   --------   ---   ---     ------   ------     --------------   --------------   ----   ---    -   -   -   --------------------------------------------------");
         havePrintedHeaders = true;
       }
 
