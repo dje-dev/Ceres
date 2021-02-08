@@ -53,10 +53,9 @@ namespace Ceres.MCTS.TreeVisualization
             branchIndex = parent is null ? -1 : parent.branchIndex != -1 ? parent.branchIndex : siblingIndex;
             identifier++;
             Children = new List<DrawTreeNode>();
-            // Sort children based on N so that heaviest subtree is always drawn leftmost
-            var children = (from ind in Enumerable.Range(0, node.NumChildrenExpanded) select node.ChildAtIndexRef(ind)).ToArray();
             int childIndex = 0;
-            foreach (MCTSNodeStruct child in children.OrderBy(c => -c.N))
+            // Sort children based on N so that heaviest subtree is always drawn leftmost
+            foreach (MCTSNodeStruct child in (from ind in Enumerable.Range(0, node.NumChildrenExpanded) select node.ChildAtIndexRef(ind)).OrderBy(c => -c.N))
             {
                 Children.Add(new DrawTreeNode(this, child, depth + 1, childIndex, ref identifier));
                 childIndex++;
@@ -356,7 +355,7 @@ namespace Ceres.MCTS.TreeVisualization
         public TreePlot(MCTSNodeStruct node)
         {
             rawRoot = node;
-            Stopwatch sw = Stopwatch.StartNew();
+            //Stopwatch sw = Stopwatch.StartNew();
             (root, treeInfo) = DrawTreeNode.Layout(node);
             //Console.WriteLine("Layout time in ms:");
             //Console.WriteLine(sw.ElapsedMilliseconds);
