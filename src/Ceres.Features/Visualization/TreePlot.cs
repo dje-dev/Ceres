@@ -17,6 +17,7 @@ using System.Drawing;
 using System.Diagnostics;
 using System.Globalization;
 using Ceres.MCTS.MTCSNodes.Struct;
+using System.IO;
 
 namespace Ceres.Features.Visualization.TreePlot
 {
@@ -167,6 +168,23 @@ namespace Ceres.Features.Visualization.TreePlot
     {
       fileName += fileName.EndsWith(".png") ? "" : ".png";
       image.Save(fileName);
+    }
+
+    /// <summary>
+    /// Plots the search tree and opens it in image viewer.
+    /// </summary>
+    /// <param name="rawNode"></param>
+    public static void Show(MCTSNodeStruct rawNode)
+    {
+      string file = Path.GetTempFileName() + ".png";
+      Save(rawNode, file);
+      new Process
+      {
+        StartInfo = new ProcessStartInfo(file)
+        {
+          UseShellExecute = true
+        }
+      }.Start();
     }
 
     /// <summary>

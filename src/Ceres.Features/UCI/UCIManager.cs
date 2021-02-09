@@ -307,6 +307,11 @@ namespace Ceres.Features.UCI
             NVML.DumpInfo();
             break;
 
+          case "show-tree-plot":
+            using (new SearchContextExecutionBlock(curContext))
+              TreePlot.Show(curManager.Context.Root.Ref);
+            break;
+
           case string c when c.StartsWith("save-tree-plot"):
             if (curManager != null)
               {
