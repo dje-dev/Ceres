@@ -58,18 +58,18 @@ namespace Ceres.MCTS.Utils
         pv = new SearchPrincipalVariation(thisRootNode, overrideBestMoveNodeAtRoot);
       }
 
-      MCTSNode bestMoveNode = pv.Nodes[0];
+      MCTSNode bestMoveNode = pv.Nodes.Count > 1 ? pv.Nodes[1] : pv.Nodes[0];
 
       // The score displayed corresponds to
       // the Q (average visit value) of the move to be made.
       float scoreToShow;
       if (scoreAsQ)
       {
-        scoreToShow = MathF.Round((float)bestMoveNode.Q * 1000, 0);
+        scoreToShow = MathF.Round((float)-bestMoveNode.Q * 1000, 0);
       }
       else
       { 
-        scoreToShow = MathF.Round(EncodedEvalLogistic.LogisticToCentipawn((float)bestMoveNode.Q), 0);
+        scoreToShow = MathF.Round(EncodedEvalLogistic.LogisticToCentipawn((float)-bestMoveNode.Q), 0);
       }
 
       float nps = manager.NumStepsTakenThisSearch / elapsedTimeSeconds;
@@ -89,9 +89,10 @@ namespace Ceres.MCTS.Utils
       string strWDL = "";
       if (showWDL)
       {
-        strWDL = $" wdl {Math.Round(bestMoveNode.WinP * 1000)} " 
+        // Note that win and loss inverted to reverse perspective.
+        strWDL = $" wdl {Math.Round(bestMoveNode.LossP * 1000)} " 
                + $"{Math.Round(bestMoveNode.DrawP * 1000)} " 
-               + $"{Math.Round(bestMoveNode.LossP * 1000)}";
+               + $"{Math.Round(bestMoveNode.WinP * 1000)}";
       }
 
       if (wasInstamove)

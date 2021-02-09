@@ -81,6 +81,7 @@ namespace Ceres.MCTS.Evaluators
             // the tablebases do not yet contain the best move thus
             // we still need search and therefore to allow 
             // neural network evaluations to find the win.
+            // TODO: clean this up somehow (see also similar situation in LeafEvaluatorTerminal)
             return default;
           }
 

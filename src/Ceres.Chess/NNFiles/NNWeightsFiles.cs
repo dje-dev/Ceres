@@ -54,7 +54,7 @@ namespace Ceres.Chess.NNFiles
                                          Func<string, string, INNWeightsFileInfo> filenameToWeightsFileFunc)
     {
       if (!Directory.Exists(directory))
-        throw new ArgumentException(nameof(directory), "Specified directory does not exist {directory}");
+        throw new ArgumentException(nameof(directory), $"Specified directory does not exist {directory}");
 
       RegisteredDirectories.Add(new NNWeightsFileDirectory(directory, filenameToWeightsFileFunc, searchPattern));
     }

@@ -43,7 +43,7 @@ namespace Ceres.MCTS.Managers.Limits
     /// <param name="timeRemainingFixedOpponent"></param>
     /// <param name="timeRemainingIncrementOpponent"></param>
     /// <param name="maxMovesToGo"></param>
-    public ManagerGameLimitInputs(Position startPos, ParamsSearch searchParams, 
+    public ManagerGameLimitInputs(in Position startPos, ParamsSearch searchParams, 
                                  List<GameMoveStat> priorMoveStats,
                                  SearchLimitType limitType,
                                  int rootN,
