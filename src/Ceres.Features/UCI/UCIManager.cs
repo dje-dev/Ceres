@@ -42,6 +42,7 @@ using Ceres.Chess.LC0VerboseMoves;
 using Ceres.Base.DataTypes;
 using Ceres.Chess.EncodedPositions.Basic;
 using LINQPad;
+using Ceres.Features.Visualization.TreePlot;
 
 #endregion
 
@@ -316,6 +317,41 @@ namespace Ceres.Features.UCI
 
           case "dump-nvidia":
             NVML.DumpInfo();
+            break;
+
+          case "show-tree-plot":
+            if (CeresEngine?.Search != null)
+              using (new SearchContextExecutionBlock(CeresEngine.Search.Manager.Context))
+              {
+                TreePlot.Show(CeresEngine.Search.Manager.Context.Root.Ref);
+              }
+            else
+              OutStream.WriteLine("info string No search manager created");
+            break;
+
+          case string c when c.StartsWith("save-tree-plot"):
+            if (CeresEngine?.Search != null)
+            {
+              string[] parts = command.Split(" ");
+              if (parts.Length == 2)
+              {
+                string fileName = parts[1];
+                using (new SearchContextExecutionBlock(CeresEngine.Search.Manager.Context))
+                {
+                  TreePlot.Save(CeresEngine.Search.Manager.Context.Root.Ref, fileName);
+                }
+              }
+              else if (parts.Length == 1)
+              {
+                OutStream.WriteLine("Filename was not provided");
+              }
+              else
+              {
+                OutStream.WriteLine("Filename cannot contain spaces");
+              }
+            }
+            else
+              OutStream.WriteLine("info string No search manager created");
             break;
 
           case "waitdone": // proprietary verb used for test driver
