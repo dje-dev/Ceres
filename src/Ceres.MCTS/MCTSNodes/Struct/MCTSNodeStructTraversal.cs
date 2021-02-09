@@ -101,23 +101,26 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         if (!visitorFunc(ref node))
           return false;
 
-      // For efficiency, we track number of children already visited and 
-      // abort visiting children when we know there are no more unvisited
-      int numChildrenVisited = 0;
-      int numChildren = node.N - 1;
-      int numPolicyMoves = node.NumPolicyMoves;
-
-      for (int i = 0; i < numPolicyMoves; i++)
+      if (!node.IsTranspositionLinked)
       {
-        MCTSNodeStructChild child = node.ChildAtIndex(i);
-        if (child.IsExpanded)
-        {
-          ref MCTSNodeStruct childRef = ref child.ChildRef;
-          childRef.DoTraverse(store, visitorFunc, traversalType);          
+        // For efficiency, we track number of children already visited and 
+        // abort visiting children when we know there are no more unvisited
+        int numChildrenVisited = 0;
+        int numChildren = node.N - 1;
+        int numPolicyMoves = node.NumPolicyMoves;
 
-          // Update statistcs and check if we can early abort
-          numChildrenVisited += childRef.N;
-          if (numChildrenVisited == numChildren) break;
+        for (int i = 0; i < numPolicyMoves; i++)
+        {
+          MCTSNodeStructChild child = node.ChildAtIndex(i);
+          if (child.IsExpanded)
+          {
+            ref MCTSNodeStruct childRef = ref child.ChildRef;
+            childRef.DoTraverse(store, visitorFunc, traversalType);
+
+            // Update statistcs and check if we can early abort
+            numChildrenVisited += childRef.N;
+            if (numChildrenVisited == numChildren) break;
+          }
         }
       }
 

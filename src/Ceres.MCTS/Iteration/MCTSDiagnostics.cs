@@ -35,6 +35,11 @@ namespace Ceres.MCTS.Iteration
     /// at the end of a tournament game.
     /// </summary>
     public static bool TournamentDumpEngine2EndOfGameSummary = false;
+
+    /// <summary>
+    /// If the tree integrity verification runs at the end of each search.
+    /// </summary>
+    public static bool VerifyTreeIntegrityAtSearchEnd = false;
   }
 }
 

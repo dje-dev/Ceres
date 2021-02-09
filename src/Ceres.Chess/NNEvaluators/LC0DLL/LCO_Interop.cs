@@ -47,6 +47,13 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
 
     #region Evaluator functions    
 
+    public enum TBInitializeStatus : int
+    {
+      ERROR = 0,
+      OK_WITH_DTM = 1,
+      OK_WITH_DTM_DTZ = 2
+    }
+
     public enum AllocErrorCode : int
     {
       NO_ERROR = 0,
@@ -68,13 +75,17 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
     #region Tablebase functions
 
     [DllImport(LC0_LIBRARY_FILENAME)]
-    internal static extern bool TBInitialize(int sessionIndex, string paths);
+    internal static extern TBInitializeStatus TBInitialize(int sessionIndex, string paths);
 
     [DllImport(LC0_LIBRARY_FILENAME)]
     internal static extern int TBFree(int sessionIndex);
 
     [DllImport(LC0_LIBRARY_FILENAME)]
     internal static extern int ProbeWDL(int sessionIndex, string fen);
+
+    [DllImport(LC0_LIBRARY_FILENAME)]
+    internal static extern int ProbeDTZ(int sessionIndex, string fen);
+
 
     [DllImport(LC0_LIBRARY_FILENAME)]
     internal static extern int MaxCardinality(int sessionIndex);

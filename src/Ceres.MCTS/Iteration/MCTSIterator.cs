@@ -51,6 +51,8 @@ namespace Ceres.MCTS.Iteration
 
     public ContemptManager ContemptManager;
 
+    public MCTSNodeChildrenStatsTracker RootMoveTracker = new MCTSNodeChildrenStatsTracker();
+
     internal struct TranspositionCluster
     {
       internal int ParentIndex;
@@ -83,15 +85,15 @@ namespace Ceres.MCTS.Iteration
     public MCTSManager.MCTSProgressCallback  ProgressCallback;
 
     /// <summary>
-    /// Boolean flags which indicate if moves at the root
-    /// should be ignored in subsequent serch.
+    /// Pruning status of root moves which may flag certain 
+    /// moves as not being eligible for additional search visits.
     /// 
-    /// This Booleans can be progressively toggled as search progresses and it becomes
+    /// These status be progressively toggled as search progresses and it becomes
     /// clear that certain children can never "catch up" to 
     /// the current highest N node and thus would never be chosen
     /// (instead we can allocate remaining visits over children still having a chance)
     /// </summary>
-    public bool[] RootMovesArePruned;
+    public MCTSFutilityPruningStatus[] RootMovesPruningStatus;
 
     // Incremented by the depth of every node selected
     // Used to track "average depth" of search tree
@@ -258,17 +260,22 @@ namespace Ceres.MCTS.Iteration
       else if (nnEvaluators.EvaluatorDef.CacheMode != PositionEvalCache.CacheMode.None)
         positionCache = new PositionEvalCache();
 
+      const int NUM_BUFFER_NODES = 1500;
       int maxNodesBound = int.MaxValue;
+      if (searchLimit.Type == SearchLimitType.NodesPerMove
+        || searchLimit.Type == SearchLimitType.NodesForAllMoves)         
+      {
+        maxNodesBound = (int)searchLimit.Value + store.Nodes.NumUsedNodes + NUM_BUFFER_NODES;
+      }
 
-      if (searchLimit.Type == SearchLimitType.NodesPerMove)
-        maxNodesBound = (int)searchLimit.Value + store.Nodes.NumUsedNodes + 5000;
+      int estimatedNodesBound = store.Nodes.NumUsedNodes + estimatedNumSearchNodes;
 
-      Tree = new MCTSTree(store, this, maxNodesBound, positionCache);
+      Tree = new MCTSTree(store, this, maxNodesBound, estimatedNodesBound, positionCache);
 
       // TODO: apply sizing and concurrency hints
       if (ParamsSearch.Execution.TranspositionMode != TranspositionMode.None)
       {
-        Tree.TranspositionRoots = reuseTranspositionRoots ?? new TranspositionRootsDict(estimatedNumSearchNodes);
+        Tree.TranspositionRoots = reuseTranspositionRoots ?? new TranspositionRootsDict(estimatedNodesBound);
       }
 
       LeafEvaluators = BuildPreprocessors();
@@ -324,7 +331,7 @@ namespace Ceres.MCTS.Iteration
 
       if (ParamsSearch.EnableTablebases)
       {
-        var evaluatorTB  = new LeafEvaluatorSyzygyLC0(CeresUserSettingsManager.Settings.DirTablebases);
+        LeafEvaluatorSyzygyLC0 evaluatorTB  = new (CeresUserSettingsManager.Settings.TablebaseDirectory);
         evaluators.Add(evaluatorTB);
         CheckTablebaseBestNextMove = (in Position currentPos, out GameResult result) => evaluatorTB.Evaluator.CheckTablebaseBestNextMove(in currentPos, out result);
 

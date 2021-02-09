@@ -91,13 +91,24 @@ namespace Ceres.Features.GameEngines
 
 
     /// <summary>
+    /// If the NodesPerGame time control mode is supported.
+    /// </summary>
+    public override bool SupportsNodesPerGameMode => false;
+
+
+    /// <summary>
     /// Returns UCI search information 
     /// (such as would appear in a chess GUI describing search progress) 
     /// based on last state of search.
     /// </summary>
     public override UCISearchInfo UCIInfo => new UCISearchInfo(UCIRunner.LastInfoString);
 
-    public override void ResetGame() => UCIRunner.StartNewGame();
+
+    /// <summary>
+    /// Resets all state between games.
+    /// </summary>
+    /// <param name="gameID">optional game descriptive string</param>
+    public override void ResetGame(string gameID = null) => UCIRunner.StartNewGame();
     
 
     /// <summary>
@@ -123,7 +134,8 @@ namespace Ceres.Features.GameEngines
     /// <param name="gameMoveHistory"></param>
     /// <param name="callback"></param>
     /// <returns></returns>
-    protected override GameEngineSearchResult DoSearch(PositionWithHistory curPositionAndMoves, SearchLimit searchLimit,
+    protected override GameEngineSearchResult DoSearch(PositionWithHistory curPositionAndMoves, 
+                                                       SearchLimit searchLimit,
                                                        List<GameMoveStat> gameMoveHistory, 
                                                        ProgressCallback callback, bool verbose)
     {
@@ -131,12 +143,8 @@ namespace Ceres.Features.GameEngines
 
       if (SetupAction != null) SetupAction();
 
-      string fen = curPositionAndMoves.InitialPosition.FEN;
-      string endFEN = curPositionAndMoves.FinalPosition.FEN;
-      string moveStr = curPositionAndMoves.MovesStr;
-
       // Run the analysis
-      LC0VerboseMoveStats lc0Analysis = LC0Engine.AnalyzePositionFromFENAndMoves(fen, moveStr, endFEN, searchLimit);
+      LC0VerboseMoveStats lc0Analysis = LC0Engine.AnalyzePositionFromFENAndMoves(curPositionAndMoves.FENAndMovesString, searchLimit);
 
       if (verbose) lc0Analysis.Dump();
 

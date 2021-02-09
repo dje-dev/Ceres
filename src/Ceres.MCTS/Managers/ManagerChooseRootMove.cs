@@ -60,23 +60,36 @@ namespace Ceres.MCTS.Managers
     /// <summary>
     /// 
     /// </summary>
-    /// <param name="n"></param>
+    /// <param name="moveNode"></param>
     /// <param name="mAvgOfBestQ"></param>
     /// <returns></returns>
-    float MLHBoostForNode(MCTSNode n, float mAvgOfBestQ)
+    float MLHBoostForMove(MCTSNode moveNode, float mAvgOfBestQ)
     {
-      float delta = n.MAvg - mAvgOfBestQ;
-      if (float.IsNaN(delta)) return 0;
+      const float MLH_DELTA_BOUND = 50; // truncate outliers
+      float mHigherBy = StatUtils.Bounded(moveNode.MAvg - mAvgOfBestQ, -MLH_DELTA_BOUND, MLH_DELTA_BOUND);
+      if (float.IsNaN(mHigherBy)) return 0; // no MLH support in network
 
-      //float scaledDelta = 0.004f * MathF.Sqrt(MathF.Abs(delta)) * MathF.Sign(delta);
-      float scaledDelta = 0.0005f * StatUtils.Bounded(delta, -30, 30);
-      scaledDelta = StatUtils.Bounded(delta, -30, 30) * StatUtils.Bounded(MathF.Abs((float)Node.Context.Root.Q), -0.5f, 0.5f) * MBonusMultiplier;
-      if (Node.Context.Root.Q > 0.03f) // we are winning
-        return -scaledDelta;
-      else if (Node.Context.Root.Q < -0.03f) // we are losing
-        return scaledDelta;
+      const float Q_BOUND = 0.5f;
+      float boundedRootQ = StatUtils.Bounded(MathF.Abs((float)Node.Context.Root.Q), -Q_BOUND, Q_BOUND);
+
+      // Produce bonus which is more negative if the game will be longer and we are winning 
+      float bonusMagnitude = mHigherBy * -boundedRootQ;
+
+      const float MAX_BONUS = 0.03f;
+      return StatUtils.Bounded(MBonusMultiplier * bonusMagnitude, -MAX_BONUS, MAX_BONUS);
+#if NOT
+
+      // Return function increasing in MBonusMultiplier, 
+      return MBonusMultiplier * mHigherBy * boundedRootQ;
+
+      float scaledDelta = mHigherBy * boundedRootQ * MBonusMultiplier;
+      if (Node.Context.Root.Q > 0.10f) // we are winning
+        return -scaledDelta; // We are winning therefore don't prefer moves leading to longer games
+      else if (Node.Context.Root.Q < -0.10f) // we are losing
+        return scaledDelta; // We are losing therefore we 
       else
         return 0;
+#endif
     }
 
     /// <summary>
@@ -148,7 +161,8 @@ namespace Ceres.MCTS.Managers
 
       if (useMLH)
       {
-        childrenSortedQ = Node.ChildrenSorted(n => (float)n.Q + -MLHBoostForNode(n, mAvgOfBestQ));
+        // Note that more attractive moves have more negative Q, hence we invert MLHBoostForMove value
+        childrenSortedQ = Node.ChildrenSorted(n => (float)n.Q + -MLHBoostForMove(n, mAvgOfBestQ));
       }
 
       const bool VERBOSE = false;
@@ -162,7 +176,7 @@ namespace Ceres.MCTS.Managers
         for (int i = 0; i < Node.Context.Root.NumChildrenExpanded; i++)
         {
           MCTSNode nodeInner = Node.Context.Root.ChildAtIndex(i);
-          Console.WriteLine($" {nodeInner.Q,6:F3} [MAvg= {nodeInner.MAvg,6:F3}] ==> {MLHBoostForNode(nodeInner, mAvgOfBestQ),6:F3} {nodeInner}");
+          Console.WriteLine($" {nodeInner.Q,6:F3} [MAvg= {nodeInner.MAvg,6:F3}] ==> {MLHBoostForMove(nodeInner, mAvgOfBestQ),6:F3} {nodeInner}");
         }
         Console.ReadKey();
       }
@@ -182,7 +196,7 @@ namespace Ceres.MCTS.Managers
         // TODO: currently only supported for sorting by N
         MCTSNode bestMoveWithNoise = BestMoveByNWithNoise(childrenSortedN);
         return new BestMoveInfo(bestMoveWithNoise, (float)childrenSortedN[0].Q, childrenSortedN[0].N,
-                                BestNSecond, MLHBoostForNode(bestMoveWithNoise, mAvgOfBestQ)); // TODO: look for quickest win?
+                                BestNSecond, MLHBoostForMove(bestMoveWithNoise, mAvgOfBestQ)); // TODO: look for quickest win?
       }
       else
       {
@@ -209,7 +223,7 @@ namespace Ceres.MCTS.Managers
 
             float differenceFromQOfBestN = MathF.Abs((float)candidate.Q - (float)childrenSortedN[0].Q);
 
-            float minFrac = MinFractionNToUseQ(differenceFromQOfBestN);
+            float minFrac = MinFractionNToUseQ(Node, differenceFromQOfBestN);
 
             int minNToBeConsideredForBestQ = (int)(nOfChildWithHighestN * minFrac);
             if (candidate.N >= minNToBeConsideredForBestQ)
@@ -222,7 +236,7 @@ namespace Ceres.MCTS.Managers
               }
 
               return new BestMoveInfo(candidate, (float)childrenSortedN[0].Q, childrenSortedN[0].N,
-                                      BestNSecond, MLHBoostForNode(candidate, mAvgOfBestQ)); // TODO: look for quickest win?
+                                      BestNSecond, MLHBoostForMove(candidate, mAvgOfBestQ)); // TODO: look for quickest win?
             }
           }
 
@@ -237,7 +251,8 @@ namespace Ceres.MCTS.Managers
 
 
 
-    static internal float MIN_FRAC_N_REQUIRED_MIN(MCTSIterator context) => 0.30f;
+    internal const float MIN_FRAC_N_REQUIRED_MIN = 0.30f;
+
 
     /// <summary>
     /// Given a specified superiority of Q relative to another move,
@@ -251,9 +266,9 @@ namespace Ceres.MCTS.Managers
     /// </summary>
     /// <param name="qDifferenceFromBestQ"></param>
     /// <returns></returns>
-    internal float MinFractionNToUseQ(float qDifferenceFromBestQ)
+    static internal float MinFractionNToUseQ(MCTSNode node, float qDifferenceFromBestQ)
     {
-      bool isSmallTree = Node.Context.Root.N < 50_000;
+      bool isSmallTree = node.Context.Root.N < 50_000;
 
       float minFrac;
 
@@ -262,7 +277,7 @@ namespace Ceres.MCTS.Managers
         // For small trees we are even more reluctant to rely upon Q if few visits
         minFrac = qDifferenceFromBestQ switch
         {
-          >= 0.06f => MIN_FRAC_N_REQUIRED_MIN(Node.Context) + 0.10f,
+          >= 0.06f => MIN_FRAC_N_REQUIRED_MIN + 0.10f,
           >= 0.04f => 0.55f,
           >= 0.02f => 0.75f,
           _ => 0.90f
@@ -272,12 +287,31 @@ namespace Ceres.MCTS.Managers
       {
         minFrac = qDifferenceFromBestQ switch
         {
-          >= 0.05f => MIN_FRAC_N_REQUIRED_MIN(Node.Context),
+          >= 0.05f => MIN_FRAC_N_REQUIRED_MIN,
           >= 0.02f => 0.55f,
           >= 0.01f => 0.75f,
           _ => 0.90f
         };
       }
+
+#if EXPERIMENTAL
+      bool test = this.Node.Context.ParamsSearch.TestFlag;
+      // Not completely successful attempt to simplify 
+      // the above overparameterized logic.
+      if (test)
+      {
+        if (qDifferenceFromBestQ < 0.002f)
+          return 0.95f;
+
+        // A LTC test (3+ min/game) with J94-100 yielded:
+        //   -28 +/- 21 with 25
+        //    -7 +/- 13 with 20
+        const float POWER = 20f;
+        minFrac = MathF.Pow(1.0f - qDifferenceFromBestQ, POWER) - 0.05f;
+
+        if (minFrac < 0.35f) minFrac = 0.35f;
+      }
+#endif
 
       return minFrac;
     }

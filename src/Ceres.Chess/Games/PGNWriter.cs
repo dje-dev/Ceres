@@ -110,7 +110,7 @@ namespace Ceres.Chess.Games
       // Write only two ply (one full move) per line.
       if (numPlyWritten++ % 2 == 0) WriteBodyLine("");
 
-      int fullMoveNum = (1 + startingPos.MiscInfo.MoveNum + numPlyWritten) / 2;
+      int fullMoveNum = (startingPos.MiscInfo.MoveNum + numPlyWritten) / 2;
 
       string comment = "";
       if (moveTimeSeconds.HasValue || scoreCentipawns.HasValue)

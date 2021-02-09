@@ -17,6 +17,7 @@ using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using Ceres.Base.Math;
+using Ceres.Chess.UserSettings;
 
 #endregion
 
@@ -57,9 +58,8 @@ namespace Ceres.MCTS.Params
     public float RootCPUCTExtraMultiplierDivisor = 10_000f;
     public float RootCPUCTExtraMultiplierExponent = 0; // zero to disable, typical value 0.43f
 
-
     [CeresOption(Name = "cpuct", Desc = "Scaling used in node selection to encourage exploration (traditional UCT)", Default = "2.15")]
-    public float CPUCT = ParamsSearch.USE_CERES_ADJUSTMENTS ? (2.15f * 0.8f) : 2.15f;
+    public float CPUCT = 2.15f;
 
     [CeresOption(Name = "cpuct-base", Desc = "Constant (base) used in node selection to weight exploration", Default = "18368")]
     public float CPUCTBase = 18368;
@@ -68,8 +68,19 @@ namespace Ceres.MCTS.Params
     public float CPUCTFactor = 2.82f;
 
 
-    [CeresOption(Name = "cpuct-at-root", Desc = "Scaling used in node selection (at root) to encourage exploration (traditional UCT)", Default = "2.15")]
+    /// <summary>
+    /// 
+    /// NOTE: In theory, higher values might be superior because Ceres 
+    ///       usually uses Q instead of N to choose the best move and 
+    ///       therefore extra exploratory visits at theroot will 
+    ///       not contaminate best move selection.
+    /// NOTE: However in parctice higher values such as 3 are
+    ///       clealy helpful with smaller networks but
+    ///       clearly harmful with large networks.
+    /// </summary>
+    [CeresOption(Name = "cpuct-at-root", Desc = "Scaling used in node selection (at root) to encourage exploration (traditional UCT)", Default = "3")]
     public float CPUCTAtRoot = 2.15f;
+
 
     [CeresOption(Name = "cpuct-base-at-root", Desc = "Constant (base) used in node selection (at root) to weight exploration", Default = "18368")]
     public float CPUCTBaseAtRoot = 18368;
@@ -83,13 +94,11 @@ namespace Ceres.MCTS.Params
     [CeresOption(Name = "cpuct-factor-at-root", Desc = "Constant (factor) used in node selection (at root) to weight exploration", Default = "2.82")]
     public float CPUCTFactorAtRoot = 2.82f;
 
+    [CeresOption(Name = "policy-decay-factor", Desc = "Linear scaling factor used in node selection to shrink policy toward uniform as N grows. Zero to disable, typical value 5.0", Default = "0")]
+    public float PolicyDecayFactor = 0;
 
-    [CeresOption(Name = "cpuct2", Desc = "Scaling constant used in node selection to weight deep exploration", Default = "0")]
-    public float CPUCT2 = 0; // Tried value of around 1.0, possibly also reducing CPUCT to 1/2 usual level. Possible small benefit
-
-    // NOTE: value of 1.0 or 1.5 seemed possibly better in suites, but underperformed 3 190 5 in a T40 match @500,000 nodes per move
-    [CeresOption(Name = "cpolicy-fade", Desc = "Scaling constant used in node selection to weight exploration (policy prior fade). Zero to disable, typical value 1.0", Default = "0")]
-    public float CPolicyFade = 0;
+    [CeresOption(Name = "policy-decay-exponent", Desc = "Exponent used in scaling factor (applied to N) used in node selection to shrink policy toward uniform as N grows. Zero to disable, typical value 0.38", Default = "0")]
+    public float PolicyDecayExponent = 0.38f;
 
     /// <summary>
     /// Amount of relative virtual loss to apply in leaf selection to discourage collisions.
@@ -99,7 +108,7 @@ namespace Ceres.MCTS.Params
     // Smaller values yield higher fidelity leaf selection 
     // (but possibly slightly slower due to increased collisions, especially at smaller node counts)      
     [CeresOption(Name = "vloss-relative", Desc = "Virtual loss (relative) to be applied when collisions encountered", Default = "-0.15")]
-    public float VirtualLossDefaultRelative = ParamsSearch.USE_CERES_ADJUSTMENTS ? -0.10f : -0.15f;
+    public float VirtualLossDefaultRelative = -0.10f;
 
     /// <summary>
     /// Virtual loss to be used if VLossRelative is false.
@@ -137,6 +146,26 @@ namespace Ceres.MCTS.Params
     [CeresOption(Name = "policy-softmax", Desc = "Controls degree of flatness of policy via specified level of exponentation", Default = "1.61")]
     public float PolicySoftmax = 1.61f;
 
+
+    /// <summary>
+    /// Constructor (uses default values for the class unless overridden in settings file).
+    /// </summary>
+    public ParamsSelect()
+    {
+      static void MaybeSet(float? value, ref float target) { if (value.HasValue) target = value.Value; }
+
+      MaybeSet(CeresUserSettingsManager.Settings.CPUCT, ref CPUCT);
+      MaybeSet(CeresUserSettingsManager.Settings.CPUCTBase, ref CPUCTBase);
+      MaybeSet(CeresUserSettingsManager.Settings.CPUCTFactor, ref CPUCTFactor);
+      MaybeSet(CeresUserSettingsManager.Settings.CPUCTAtRoot, ref CPUCTAtRoot);
+      MaybeSet(CeresUserSettingsManager.Settings.CPUCTBaseAtRoot, ref CPUCTBaseAtRoot);
+      MaybeSet(CeresUserSettingsManager.Settings.CPUCTFactorAtRoot, ref CPUCTFactorAtRoot);
+      MaybeSet(CeresUserSettingsManager.Settings.PolicyTemperature, ref PolicySoftmax);
+    }
+
+
+
+#region Helper methods
 
     /// <summary>
     /// If using dual selectors, we perturb CPUCT by this fraction (one is perturbed up, one down)
@@ -248,6 +277,7 @@ namespace Ceres.MCTS.Params
     internal float CalcFPUValue(bool isRoot) => (isRoot && FPUModeAtRoot != FPUType.Same) ? FPUValueAtRoot : FPUValue;
     internal FPUType GetFPUMode(bool isRoot) => (isRoot && FPUModeAtRoot != FPUType.Same) ? FPUModeAtRoot : FPUMode;
 
+#endregion
 
   }
 

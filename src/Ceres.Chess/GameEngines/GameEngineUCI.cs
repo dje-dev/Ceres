@@ -19,6 +19,7 @@ using System.IO;
 
 using Ceres.Base;
 using Ceres.Base.Benchmarking;
+using Ceres.Base.Misc;
 using Ceres.Chess.ExternalPrograms.UCI;
 using Ceres.Chess.LC0.Positions;
 using Ceres.Chess.MoveGen;
@@ -99,9 +100,9 @@ namespace Ceres.Chess.GameEngines
     /// <param name="callback"></param>
     /// <param name="resetGameBetweenMoves"></param>
     /// <param name="extraArgs"></param>
-    public GameEngineUCI(string name, string executablePath, 
-                         int? numThreads = null, 
-                         int? hashSizeMB = null, 
+    public GameEngineUCI(string name, string executablePath,
+                         int? numThreads = null,
+                         int? hashSizeMB = null,
                          string syzygyPath = null,
                          string[] uciSetOptionCommands = null,
                          ProgressCallback callback = null,
@@ -126,7 +127,10 @@ namespace Ceres.Chess.GameEngines
 
       if (syzygyPath != null)
       {
-        if (!Directory.Exists(syzygyPath)) throw new Exception($"Specified Syzygy path not found or inaccessilbe: {syzygyPath} ");
+        if (!FileUtils.PathsListAllExist(syzygyPath))
+        {
+          throw new Exception($"One or more specified Syzygy paths not found or inaccessible: {syzygyPath} ");
+        }
         extraCommands.Add($"setoption name SyzygyPath value {syzygyPath}");
       }
 
@@ -145,11 +149,22 @@ namespace Ceres.Chess.GameEngines
       string[] extraCommandsArray = extraCommands.ToArray();
 
       UCIRunner = new UCIGameRunner(executablePath, resetGameBetweenMoves,
-                                    extraCommandLineArguments : extraArgs,
+                                    extraCommandLineArguments: extraArgs,
                                     uciSetOptionCommands: extraCommandsArray);
     }
 
-    public override void ResetGame()
+
+    /// <summary>
+    /// If the NodesPerGame time control mode is supported.
+    /// </summary>
+    public override bool SupportsNodesPerGameMode => false;
+
+    
+    /// <summary>
+    /// Resets all state between games.
+    /// </summary>
+    /// <param name="gameID">optional game descriptive string</param>
+    public override void ResetGame(string gameID = null)
     {
       UCIRunner.StartNewGame();
     }
@@ -177,36 +192,42 @@ namespace Ceres.Chess.GameEngines
       UCIRunner.EvalPositionPrepare();
     }
 
-    protected override GameEngineSearchResult DoSearch(PositionWithHistory curPositionAndMoves, SearchLimit searchLimit,
+    protected override GameEngineSearchResult DoSearch(PositionWithHistory curPositionAndMoves, 
+                                                       SearchLimit searchLimit,
                                                        List<GameMoveStat> gameMoveHistory, ProgressCallback callback,
                                                        bool verbose)
     {
       DoSearchPrepare();
 
-      string startFEN = curPositionAndMoves.InitialPosition.FEN;
-      string movesStr = curPositionAndMoves.MovesStr;
+      bool weAreWhite = curPositionAndMoves.FinalPosition.MiscInfo.SideToMove == SideType.White;
 
       UCISearchInfo gameInfo;
       switch (searchLimit.Type)
       {
         case SearchLimitType.SecondsPerMove:
-          gameInfo = UCIRunner.EvalPositionToMovetime(startFEN, movesStr, (int)(searchLimit.Value * 1000));
+          gameInfo = UCIRunner.EvalPositionToMovetime(curPositionAndMoves.FENAndMovesString, (int)(searchLimit.Value * 1000));
           break;
 
         case SearchLimitType.NodesPerMove:
-          gameInfo = UCIRunner.EvalPositionToNodes(startFEN, movesStr, (int)(searchLimit.Value));
+          gameInfo = UCIRunner.EvalPositionToNodes(curPositionAndMoves.FENAndMovesString, (int)(searchLimit.Value));
           break;
 
         case SearchLimitType.NodesForAllMoves:
-          throw new Exception("NodesForAllMoves not supported for generic UCI engine");
+           using (new TimingBlock(new TimingStats(), TimingBlock.LoggingType.None))
+          {
+            gameInfo = UCIRunner.EvalPositionRemainingNodes(curPositionAndMoves.FENAndMovesString,
+                                                            weAreWhite,
+                                                            searchLimit.MaxMovesToGo,
+                                                            (int)(searchLimit.Value),
+                                                            (int)(searchLimit.ValueIncrement));
+          }
+
+          break;
 
         case SearchLimitType.SecondsForAllMoves:
-          bool weAreWhite = curPositionAndMoves.FinalPosition.MiscInfo.SideToMove == SideType.White;
-
-          TimingStats stats = new TimingStats();
-          using (new TimingBlock(stats, TimingBlock.LoggingType.None))
+           using (new TimingBlock(new TimingStats(), TimingBlock.LoggingType.None))
           {
-            gameInfo = UCIRunner.EvalPositionRemainingTime(startFEN, movesStr,
+            gameInfo = UCIRunner.EvalPositionRemainingTime(curPositionAndMoves.FENAndMovesString,
                                                            weAreWhite,
                                                            searchLimit.MaxMovesToGo,
                                                            (int)(searchLimit.Value * 1000),

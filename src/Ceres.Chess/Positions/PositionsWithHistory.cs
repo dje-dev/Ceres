@@ -44,7 +44,6 @@ namespace Ceres.Chess.Positions
     List<EPDEntry> epds = null;
     List<string> fensAndMoves = null;
     List<PositionWithHistory> moveSequences = null;
-    int numGamesFromStartPosition;
 
     #endregion
 
@@ -78,17 +77,29 @@ namespace Ceres.Chess.Positions
       return source;
     }
 
+    /// <summary>
+    /// Returns a position source that returns a single starting position (possibly multiple times).
+    /// </summary>
+    /// <param name="fen"></param>
+    /// <returns></returns>
+    public static PositionsWithHistory FromFEN(string fen, int repeatCount)
+    {
+      if (repeatCount > 1_000_000) throw new ArgumentOutOfRangeException(nameof(repeatCount), "is too large, maximum 1_000_000");
+
+      PositionsWithHistory source = new PositionsWithHistory();
+      source.fensAndMoves = new List<string>();
+      for (int i=0; i<repeatCount;i++)
+        source.fensAndMoves.Add(fen);
+      return source;
+    }
+
+
     public static PositionsWithHistory FromEPDOrPGNFile(string fileName)
     {
       PositionsWithHistory source = new PositionsWithHistory();
       source.LoadOpenings(fileName);
       return source;
     }
-
-    /// <summary>
-    /// Returns a position source that returns only a the starting position.
-    /// </summary>
-    public static PositionsWithHistory StartPosition => FromFENs(Position.StartPosition.FEN);
 
     #endregion
 
@@ -109,7 +120,7 @@ namespace Ceres.Chess.Positions
         else if (moveSequences != null)
           return moveSequences.Count;
         else
-          return numGamesFromStartPosition;
+          throw new NotImplementedException();
       }
     }
 
@@ -172,17 +183,11 @@ namespace Ceres.Chess.Positions
       {
         return new PositionWithHistory(MGPosition.FromFEN(epds[index].FEN));
       }
-      else if (numGamesFromStartPosition > 0)
-      {
-        numGamesFromStartPosition--;
-        return PositionWithHistory.StartPosition;
-      }
       else
         throw new Exception("PositionsWithHistory exhausted set of game start positions.");
     }
 
-    public void SetNumStartPosOpenings(int numGames) => numGamesFromStartPosition = numGames;
-   
+  
     public void LoadOpeningsFENsAndMoves(string[] fensAndMoves)
     {
       this.fensAndMoves = fensAndMoves.ToList();

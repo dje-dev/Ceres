@@ -3,10 +3,10 @@
 1. Clone latest git repo from Github.
 
 2. Modify build.bat in obvious ways to select which backends and path to CUDA/CUDNN.
-   Example: changed these 3 lines:
+   Example: changed these 3 lines (probably Cuda 11.1 or 11.2 will both work).
      set CUDNN=true
-     set CUDA_PATH=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.2
-     set CUDNN_PATH=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.2
+     set CUDA_PATH=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.1
+     set CUDNN_PATH=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.1
    Possibly also the path to Visual Studio needs to be changed, 
    for example perhaps "Community" needs to be changed to "Preview" if running preview edition.
 
@@ -20,7 +20,7 @@
 6. Now build in Visual Studio. Works fine, generates the usual LC0 executable.
    Maybe save a copy of this plain EXE or whole build directory somewhere (build_exe)
 
-7. Modify network_cudnn.cc file with Ceres custom logic
+7. Modify network_cuda.cc file with Ceres custom logic
    (just overwrite this file with the replacement version).
    There are 3 places
      - some data structures near top of file (outside Leela namespace)

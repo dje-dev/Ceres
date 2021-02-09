@@ -16,7 +16,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-
+using Ceres.Base.Misc;
 using static Ceres.Chess.PieceType;
 using static Ceres.Chess.SideType;
 
@@ -207,6 +207,13 @@ namespace Ceres.Chess.Textual
       // Fill in move count with 1 if none found
       if (fullmoveCount == 0)
         fullmoveCount = 1;
+
+      if (charIndex < fen.Length - 1)
+      {
+        string remainder = fen.Substring(charIndex);
+        if (StringUtils.WhitespaceRemoved(remainder) != "")
+          throw new Exception($"Unexpected characters after FEN {remainder} ");
+      }
 
       PositionMiscInfo miscInfo = new PositionMiscInfo(whiteCanOO, whiteCanOOO, blackCanOO, blackCanOOO, sideToMove, move50Count, 0, fullmoveCount, epColIndex);
 

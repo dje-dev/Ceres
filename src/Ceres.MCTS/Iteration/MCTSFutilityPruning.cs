@@ -14,7 +14,14 @@
 #region Using directives
 
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Runtime.Versioning;
 using Ceres.Base.Math;
+using Ceres.Chess;
+using Ceres.Chess.EncodedPositions.Basic;
+using Ceres.Chess.MoveGen;
+using Ceres.MCTS.Environment;
 using Ceres.MCTS.Managers;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Struct;
@@ -50,13 +57,55 @@ namespace Ceres.MCTS.Iteration
     public MCTSNode Root => Context.Root;
 
     /// <summary>
+    /// Optional List of moves to which the top-level search is to be restricted.
+    /// </summary>
+    public List<Move> SearchMoves;
+
+
+    /// <summary>
     /// Constructor.
     /// </summary>
     /// <param name="manager"></param>
-    /// <param name="context"></param>
-    public MCTSFutilityPruning(MCTSManager manager, MCTSIterator context)
+    public MCTSFutilityPruning(MCTSManager manager, List<Move> searchMoves)
     {
       Manager = manager;
+      SearchMoves = searchMoves;
+    }
+
+
+    bool haveAppliedSearchMoves = false;
+
+    internal void ApplySearchMoves()
+    {
+      // This is intended to be called only once, immediately after the root is evaluated.
+      Debug.Assert(Context.Root.N == 1 && !haveAppliedSearchMoves);
+
+      if (SearchMoves != null)
+      {
+        if (Context.RootMovesPruningStatus == null) Context.RootMovesPruningStatus = new MCTSFutilityPruningStatus[Root.NumPolicyMoves];
+
+        // Start by assuming all are pruned.
+        Array.Fill(Context.RootMovesPruningStatus, MCTSFutilityPruningStatus.PrunedDueToSearchMoves);
+
+        // Specifically un-prune any which are specified as valid search moves.
+        foreach (Move move in SearchMoves)
+        {
+          bool found = false;
+          for (int i=0; i<Root.NumPolicyMoves;i++)
+          {
+            EncodedMove moveEncoded = Root.ChildAtIndexInfo(i).move;
+            if (move.ToString().ToLower() == moveEncoded.AlgebraicStr)
+            {
+              Context.RootMovesPruningStatus[i] = MCTSFutilityPruningStatus.NotPruned;
+              found = true;
+              break;
+            }
+          }
+
+          if (!found) throw new Exception($"Specified search move not found {move}");
+        }
+      }
+      haveAppliedSearchMoves = true;
     }
 
 
@@ -69,12 +118,17 @@ namespace Ceres.MCTS.Iteration
       if (Context.ParamsSearch.MoveFutilityPruningAggressiveness == 0f) return;
 
       // Because estimates of nodes remaining are noisy for searces with time limits,
-      // we conservatively decline to set MinNToVisit unless we are 
+      // conservatively decline to set MinNToVisit unless we are 
       // reasonably close to the end of the search (and thus had sufficient time to get accurate statistics)
-      if (Manager.FractionSearchRemaining > 0.50) return;
       if (Manager.NumStepsTakenThisSearch < 100) return;
 
-      if (Context.RootMovesArePruned == null) Context.RootMovesArePruned = new bool[Root.NumPolicyMoves];
+      // Potentially Q still could change significantly with a large fraction of search remaining.
+      // Therefore never allow search abort unless at least 50% complete.
+      // Even if the extra visits almost all go to a dominant move, they 
+      // are likely to be benefical subsequently due to tree reuse.
+      if (Manager.FractionSearchRemaining > 0.50) return;
+
+      if (Context.RootMovesPruningStatus == null) Context.RootMovesPruningStatus = new MCTSFutilityPruningStatus[Root.NumPolicyMoves];
 
       DoSetEarlyStopMoveSecondaryFlags();
      }
@@ -88,9 +142,9 @@ namespace Ceres.MCTS.Iteration
       if (Manager.Root.NumChildrenExpanded == 0) return;
 
       float aggressiveness = Context.ParamsSearch.MoveFutilityPruningAggressiveness;
-      if (aggressiveness > 1.0f) throw new Exception("Ceres configuration error: maximum value of EarlyStopMoveSecondaryAggressiveness is 1.0.");
+      if (aggressiveness >= 1.5f) throw new Exception("Ceres configuration error: maximum value of EarlyStopMoveSecondaryAggressiveness is 1.5.");
 
-      float MIN_BEST_N_FRAC_REQUIRED = ManagerChooseRootMove.MIN_FRAC_N_REQUIRED_MIN(Context);
+      float MIN_BEST_N_FRAC_REQUIRED = ManagerChooseRootMove.MIN_FRAC_N_REQUIRED_MIN;
 
       // Calibrate aggressiveness such that :
       //   - at maximum value of 1.0 we assume 50% visits go to second best move(s)
@@ -113,7 +167,6 @@ namespace Ceres.MCTS.Iteration
 
       float bestQ = (float)bestQNode.Q;
 
-
       ManagerChooseRootMove bestMoveChoser = new(Context.Root, false, Context.ParamsSearch.MLHBonusFactor);
       Span<MCTSNodeStructChild> children = Root.Ref.Children;
       for (int i = 0; i < Root.Ref.NumChildrenExpanded; i++)
@@ -123,9 +176,11 @@ namespace Ceres.MCTS.Iteration
         {
           MCTSNode secondBestMove = Context.ParamsSearch.BestMoveMode == ParamsSearch.BestMoveModeEnum.TopN ? nodesSortedN[1] : nodesSortedQ[1];
           bool isSecondBestMove = children[i].Move == secondBestMove.PriorMove;
-          if (isSecondBestMove && !Context.ParamsSearch.FutilityPruningStopSearchEnabled)
+          if (isSecondBestMove 
+           && !Context.ParamsSearch.FutilityPruningStopSearchEnabled
+           && Context.RootMovesPruningStatus[i] != MCTSFutilityPruningStatus.PrunedDueToSearchMoves)
           {
-            Context.RootMovesArePruned[i] = false;
+            Context.RootMovesPruningStatus[i] = MCTSFutilityPruningStatus.NotPruned;
             continue;
           }
         }
@@ -141,21 +196,38 @@ namespace Ceres.MCTS.Iteration
           earlyStopGapRaw = minNRequired - children[i].N;
         }
 
-        float earlyStopGapAjusted = earlyStopGapRaw * aggressivenessMultiplier;
-        bool earlyStopSimple = earlyStopGapRaw > numRemainingSteps;
+        float earlyStopGapAdjusted = earlyStopGapRaw * aggressivenessMultiplier;
+        bool earlyStop = earlyStopGapAdjusted > numRemainingSteps;
 
-        if (MCTSDiagnostics.DumpSearchFutilityShutdown
-          && earlyStopSimple
-          && !Context.RootMovesArePruned[i]
-          && NumberOfNotShutdownChildren() < 3)
+
+        if (Context.RootMovesPruningStatus[i] == MCTSFutilityPruningStatus.NotPruned && earlyStop)
         {
-          Console.WriteLine();
-          Console.WriteLine($"\r\nShutdown {children[i].Move} [{children[i].N}] at root N  {Context.Root.N} with remaning {numRemainingSteps}"
-                          + $" due to raw gapN {earlyStopGapRaw} adusted to {earlyStopGapAjusted} in mode {Context.ParamsSearch.BestMoveMode} aggmult {aggressivenessMultiplier}");
-          DumpDiagnosticsMoveShutdown();
-        }
+#if NOT_HELPFUL
+          // Never shutdown nodes getting large fraction of all visits
+          float fracVisitsThisMoveRunningAverage = Context.RootMoveTracker != null ? Context.RootMoveTracker.RunningFractionVisits[i] : 0;
 
-        Context.RootMovesArePruned[i] = earlyStopSimple;
+          const float THRESHOLD_VISIT_FRACTION_DO_NOT_SHUTDOWN_CHILD = 0.20f;
+          bool shouldVeto = (fracVisitsThisMoveRunningAverage > THRESHOLD_VISIT_FRACTION_DO_NOT_SHUTDOWN_CHILD);
+
+          if (Context.ParamsSearch.TestFlag 
+            && nodesSortedN[0] != Context.Root.ChildAtIndex(i)
+           && NumberOfNotShutdownChildren() > 1
+           && shouldVeto)
+          {
+            MCTSEventSource.TestCounter1++;
+            continue;
+          }
+          else
+#endif
+          Context.RootMovesPruningStatus[i] = MCTSFutilityPruningStatus.PrunedDueToFutility;
+          if (MCTSDiagnostics.DumpSearchFutilityShutdown)
+          {
+            Console.WriteLine();
+            Console.WriteLine($"\r\nShutdown {children[i].Move} [{children[i].N}] at root N  {Context.Root.N} with remaning {numRemainingSteps}"
+                            + $" due to raw gapN {earlyStopGapRaw} adusted to {earlyStopGapAdjusted} in mode {Context.ParamsSearch.BestMoveMode} aggmult {aggressivenessMultiplier}");
+            DumpDiagnosticsMoveShutdown();
+          }
+        }
         // Console.WriteLine(i + $" EarlyStopMoveSecondary(simple) gap={gapToBest} adjustedGap={inflatedGap} remaining={numRemainingSteps} ");
       }
 
@@ -185,12 +257,12 @@ namespace Ceres.MCTS.Iteration
     /// <returns></returns>
     public int NumberOfNotShutdownChildren()
     {
-      if (Context.RootMovesArePruned == null) return Context.Root.NumPolicyMoves;
+      if (Context.RootMovesPruningStatus == null) return Context.Root.NumPolicyMoves;
 
       int count = 0;
       for (int i = 0; i < Root.NumPolicyMoves; i++)
       {
-        if (!Context.RootMovesArePruned[i])
+        if (Context.RootMovesPruningStatus[i] == MCTSFutilityPruningStatus.NotPruned)
           count++;
       }
 
@@ -198,7 +270,7 @@ namespace Ceres.MCTS.Iteration
     }
 
 
-#if EXPERIMENTAL    
+#if EXPERIMENTAL
     private bool PossiblyEarlyStopMoveSecondary(int childIndex, in MCTSNodeStruct child, int numRemainingSteps,
                                                 MCTSNode bestMove, float qAdjustment)
     {

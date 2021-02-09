@@ -26,6 +26,7 @@ using Ceres.Chess.UserSettings;
 using Ceres.MCTS.Environment;
 using Ceres.APIExamples;
 using Ceres.Commands;
+using Ceres.Features;
 
 #endregion
 
@@ -75,6 +76,7 @@ namespace Ceres
 
       Console.WriteLine();
 
+      //Features.BatchAnalysis.BatchAnalyzer.Test();      return;
 #if DEBUG
       CheckDebugAllowed();
 #endif
@@ -125,7 +127,7 @@ namespace Ceres
 | (c) 2020- David Elliott and the Ceres Authors       |
 |   With network backend code from Leela Chess Zero.  |
 |                                                     |
-|  Version 0.86. Use help to list available commands. |
+|  Version {VER} Use help to list available commands. |
 |=====================================================|
 ";
 
@@ -145,7 +147,7 @@ namespace Ceres
         }
         else
         {
-          Console.WriteLine(line);
+          Console.WriteLine(line.Replace("{VER}", CeresVersion.VersionString + " "));
         }
       }
 

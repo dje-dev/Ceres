@@ -13,11 +13,11 @@
 
 #region Using directives
 
-using Ceres.Chess.MoveGen;
-using Ceres.Chess.MoveGen.Converters;
 using System;
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
+
+using Ceres.Chess.MoveGen;
+using Ceres.Chess.MoveGen.Converters;
 
 #endregion
 
@@ -127,7 +127,7 @@ namespace Ceres.Chess.Positions
           if (sanMoveString != null)
           {
             Move move = pos.MoveSAN(sanMoveString);
-            ret.AppendMove(MGMoveConverter.MGMoveFromPosAndMove(pos, move));
+            ret.AppendMove(MGMoveConverter.MGMoveFromPosAndMove(in pos, move));
             pos = pos.AfterMove(move);
           }
         }
@@ -153,6 +153,41 @@ namespace Ceres.Chess.Positions
 
     /// <summary>
     /// Constructs a new MGMoveSequence given a starting position (as a FEN) 
+    /// followed by an optional string containing a sequence of subsequent moves (in coordiante notation).
+    /// </summary>
+    /// <param name="fenAndMovesStr"></param>
+    /// <returns></returns>
+    public static PositionWithHistory FromFENAndMovesUCI(string fenAndMovesStr)
+    {
+      int movesIndex = fenAndMovesStr.IndexOf(" moves");
+      if (movesIndex == -1) return FromFENAndMovesUCI(fenAndMovesStr, null);
+
+      fenAndMovesStr = fenAndMovesStr.Replace("startpos", Position.StartPosition.FEN);
+
+      string[] parts = fenAndMovesStr.Split(" moves");
+
+      if (parts.Length == 1)
+        return FromFENAndMovesUCI(parts[0], ""); // nothing after the moves token
+      else
+        return FromFENAndMovesUCI(parts[0], parts[1]);
+    }
+
+    /// <summary>
+    /// Returns the FEN followed by "moves" and the move list (if any).
+    /// </summary>
+    public string FENAndMovesString
+    {
+      get
+      {
+        string ret = InitialPosition.FEN;
+        if (Moves != null && Moves.Count > 0) ret += " moves " + MovesStr;
+        return ret;
+      }
+    }
+
+
+    /// <summary>
+    /// Constructs a new MGMoveSequence given a starting position (as a FEN) 
     /// and an optional string containing a sequence of subsequent moves (in coordiante notation).
     /// </summary>
     /// <param name="fen"></param>
@@ -160,6 +195,7 @@ namespace Ceres.Chess.Positions
     /// <returns></returns>
     public static PositionWithHistory FromFENAndMovesUCI(string fen, string movesStr)
     {
+      fen = fen.Replace("startpos", Position.StartPosition.FEN);
       MGPosition mgPos = MGPosition.FromFEN(fen);
 
       PositionWithHistory ret = new PositionWithHistory(mgPos);
@@ -190,6 +226,11 @@ namespace Ceres.Chess.Positions
 
     Position[] positions;
 
+    /// <summary>
+    /// Returns array of all Positions which sequentially
+    /// occurred in the PositionWitHistory..
+    /// </summary>
+    /// <returns></returns>
     public Position[] GetPositions()
     {
       CheckInit();
@@ -296,6 +337,30 @@ namespace Ceres.Chess.Positions
         }
       }
     }
+
+
+    /// <summary>
+    /// Enumerates all positions in game (including their move histories).
+    /// </summary>
+    public IEnumerable<PositionWithHistory> PositionWithHistories
+    {
+      get
+      {
+        PositionWithHistory pwh = new(InitialPosMG);
+
+        // Return first position.
+        yield return new PositionWithHistory(pwh);
+
+        // Return all subsequent positions.
+        for (int i = 0; i < Moves.Count; i++)
+        {
+          // Append this move and return a clone.
+          pwh.AppendMove(Moves[i]);
+          yield return new PositionWithHistory(pwh); 
+        }
+      }
+    }
+
 
     /// <summary>
     /// Enumerates all the positions in the history.

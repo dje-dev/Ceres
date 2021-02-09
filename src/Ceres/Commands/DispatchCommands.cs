@@ -159,7 +159,10 @@ namespace Ceres.Commands
           else if (keyLower == "dir-lc0-networks")
             CeresUserSettingsManager.Settings.DirLC0Networks = value;
           else if (keyLower == "dir-tablebases")
-            CeresUserSettingsManager.Settings.DirTablebases = value;
+          {
+            CeresUserSettingsManager.Settings.SyzygyPath = value;
+            CeresUserSettingsManager.Settings.DirTablebases = null;
+          }
           else if (keyLower == "launch-monitor")
             CeresUserSettingsManager.Settings.LaunchMonitor = bool.Parse(value);
           else if (keyLower == "log-info")

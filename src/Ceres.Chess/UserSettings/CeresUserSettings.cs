@@ -57,11 +57,6 @@ namespace Ceres.Chess.UserSettings
     public string DirExternalEngines { get; set; } = ".";
 
     /// <summary>
-    /// Directory in which Syzygy tablebases are located, or empty if none.
-    /// </summary>
-    public string DirTablebases { get; set; } = "";
-
-    /// <summary>
     /// Default value for Ceres network specification string (for network evaluation).
     /// </summary>
     public string DefaultNetworkSpecString { get; set; }
@@ -99,6 +94,60 @@ namespace Ceres.Chess.UserSettings
     /// If logging messages of Warn severity should be output.
     /// </summary>
     public bool LogWarn { get; set; } = false;
+
+    #endregion
+
+    #region UCI setoptions
+
+    public string LogFile { get; set; }
+    public bool VerboseMoveStats { get; set; } = false;
+    public float? SmartPruningFactor { get; set; }
+
+    public float? CPUCT { get; set; }
+    public float? CPUCTAtRoot { get; set; }
+    public float? CPUCTBase { get; set; }
+    public float? CPUCTBaseAtRoot { get; set; }
+    public float? CPUCTFactor { get; set; }
+    public float? CPUCTFactorAtRoot { get; set; }
+    public float? PolicyTemperature { get; set; }
+
+    #region Tablebases
+
+    public string TablebaseDirectory
+    {
+      // Prefer SyzygyPath entry but also support DirTablebases
+      // for legacy compatability.
+      get
+      {
+        bool hasDirTablebases = DirTablebases != null & DirTablebases != "";
+        bool hasSyzygyPath = SyzygyPath != null & SyzygyPath != "";
+        if (hasDirTablebases && hasSyzygyPath)
+        {
+          throw new Exception("Ceres.json cannot contain both SyzygyPath and DirTablebases");
+        }
+
+        if (hasDirTablebases)
+          return DirTablebases;
+        else if (hasSyzygyPath)
+          return SyzygyPath;
+        else
+          return null;
+      }
+    }
+
+    /// <summary>
+    /// Directory in which Syzygy tablebases are located, or null if none
+    /// (synonym for SyzygyPath).
+    /// </summary>
+    public string DirTablebases { get; set; }
+
+    /// <summary>
+    /// Directory in which Syzygy tablebases are located, or null if none
+    /// (synonym for DirTablebases).
+    /// </summary>
+    public string SyzygyPath { get; set; }
+
+    #endregion
 
     #endregion
   }

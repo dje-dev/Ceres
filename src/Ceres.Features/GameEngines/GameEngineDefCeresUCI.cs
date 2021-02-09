@@ -78,6 +78,12 @@ namespace Ceres.Features.GameEngines
 
 
     /// <summary>
+    /// If the NodesPerGame time control mode is supported.
+    /// </summary>
+    public override bool SupportsNodesPerGameMode => true;
+
+
+    /// <summary>
     /// Abstract virtual mthod to create underlying engine.
     /// </summary>
     /// <returns></returns>

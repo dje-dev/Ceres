@@ -795,7 +795,11 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         else
         {
           if (parentRef.IsRoot)
+          {
             indexOfChildDescendentFromRoot = node.Index;
+            int numVisits = numInFlight1 + numInFlight2;
+            MCTSManager.ThreadSearchContext.RootMoveTracker.UpdateQValue(IndexInParent, vToApply, numVisits);
+          }
 
 #if NOT
 //          bool thisNodeExploratory = valuePriorAvgIsBetter < -0.03f; // -0.03f
@@ -839,6 +843,26 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     }
 
     #endregion
+
+    /// <summary>
+    /// Returns the index of this node in the array of parent's children.
+    /// </summary>
+    public int IndexInParent
+    {
+      get 
+      {
+        if (IsRoot) throw new Exception("Root has not IndexInParent");
+
+        ref readonly MCTSNodeStruct parent = ref ParentRef;
+        MCTSNodeStructIndex ourIndex = Index;
+        for (int i=0; i<parent.NumChildrenExpanded;i++)
+        {
+          if (ParentRef.ChildAtIndex(i).ChildIndex == ourIndex)
+            return i;
+        }
+        throw new Exception("Internal error: IndexInParent not found");
+      }
+    }
 
     /// <summary>
     /// Computes the power mean over all children Q values using specified coefficient.

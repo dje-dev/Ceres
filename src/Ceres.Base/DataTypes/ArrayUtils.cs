@@ -24,23 +24,15 @@ namespace Ceres.Base.DataType
 
   public static class ArrayUtils
   {
-    public static float[] Subtract(float[] v1, float[] v2)
-    {
-      float[] ret = new float[v1.Length];
-      for (int i = 0; i < ret.Length; i++)
-        ret[i] = v1[i] - v2[i];
-      return ret;
-    }
-
     #region Change shape
 
-    public static float[] To1D(float[][] raw)
+    public static T[] To1D<T>(T[][] raw)
     {
-      if (raw.Length == 0) return new float[0];
+      if (raw.Length == 0) return Array.Empty<T>();
 
       int countRight = raw[0].Length;
       int totalCount = countRight * raw.Length;
-      float[] ret = new float[totalCount];
+      T[] ret = new T[totalCount];
       int offset = 0;
       for (int i = 0; i < raw.Length; i++)
         for (int j = 0; j < countRight; j++)
@@ -105,6 +97,7 @@ namespace Ceres.Base.DataType
       return ret;
     }
 
+
     /// <summary>
     /// Unpacks 1D float array into array of arrays of floats.
     /// </summary>
@@ -129,13 +122,14 @@ namespace Ceres.Base.DataType
       return ret;
     }
 
+
     /// <summary>
-    /// Unpacks 2D float array into array of arrays of floats.
+    /// Unpacks 1D array into 2D array.
     /// </summary>
     /// <param name="raw"></param>
     /// <param name="numOuter"></param>
     /// <returns></returns>
-    public static float[,] To2D(float[] raw, int numInner)
+    public static T[,] To2D<T>(T[] raw, int numInner)
     {
       if (raw == null) return null;
 
@@ -143,55 +137,7 @@ namespace Ceres.Base.DataType
       int numOuter = raw.Length / numInner;
 
       // TO DO: make faster with memory copy
-      float[,] ret = new float[numOuter, numInner];
-      int count = 0;
-      for (int i = 0; i < numOuter; i++)
-      {
-        for (int j = 0; j < numInner; j++)
-          ret[i, j] = raw[count++];
-      }
-      return ret;
-    }
-
-    /// <summary>
-    /// Unpacks 2D short array into array of arrays of floats.
-    /// </summary>
-    /// <param name="raw"></param>
-    /// <param name="numOuter"></param>
-    /// <returns></returns>
-    public static float[,] To2D(byte[] raw, int numInner)
-    {
-      if (raw == null) return null;
-
-      if (raw.Length % numInner != 0) throw new Exception("does not evenly divide");
-      int numOuter = raw.Length / numInner;
-
-      // TO DO: make faster with memory copy
-      float[,] ret = new float[numOuter, numInner];
-      int count = 0;
-      for (int i = 0; i < numOuter; i++)
-      {
-        for (int j = 0; j < numInner; j++)
-          ret[i, j] = raw[count++];
-      }
-      return ret;
-    }
-
-    /// <summary>
-    /// Unpacks 2D short array into array of arrays of floats.
-    /// </summary>
-    /// <param name="raw"></param>
-    /// <param name="numOuter"></param>
-    /// <returns></returns>
-    public static float[,] To2D(short[] raw, int numInner)
-    {
-      if (raw == null) return null;
-
-      if (raw.Length % numInner != 0) throw new Exception("does not evenly divide");
-      int numOuter = raw.Length / numInner;
-
-      // TO DO: make faster with memory copy
-      float[,] ret = new float[numOuter, numInner];
+      T[,] ret = new T[numOuter, numInner];
       int count = 0;
       for (int i = 0; i < numOuter; i++)
       {
@@ -203,12 +149,12 @@ namespace Ceres.Base.DataType
 
 
     /// <summary>
-    /// Unpacks 2D float array into array of arrays of floats (shuffle/transposed)
+    /// Unpacks 1D array into 2D array (shuffle/transposed).
     /// </summary>
     /// <param name="raw"></param>
     /// <param name="numOuter"></param>
     /// <returns></returns>
-    public static float[,] To2DShuffled(float[] raw, int numInner)
+    public static T[,] To2DShuffled<T>(T[] raw, int numInner)
     {
       if (raw == null) return null;
 
@@ -216,7 +162,7 @@ namespace Ceres.Base.DataType
       int numOuter = raw.Length / numInner;
 
       // TO DO: make faster with memory copy
-      float[,] ret = new float[numOuter, numInner];
+      T[,] ret = new T[numOuter, numInner];
       int count = 0;
       for (int j = 0; j < numInner; j++)
       {
@@ -259,6 +205,7 @@ namespace Ceres.Base.DataType
 
       throw new Exception("Value not found");
     }
+
 
     /// <summary>
     /// Returns the index of the element having maximal value.

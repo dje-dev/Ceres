@@ -73,6 +73,12 @@ namespace Ceres.MCTS.Evaluators
       }
       else
       {
+        // Bypass any nodes shallow in the tree,
+        // since we may need to actually choose a move to make
+        // and for this some search is necessary.
+        // TODO: clean this up somehow (see also similar situation in LeafEvaluatorSyzygyPly1)
+        if (node.Depth < 5) return default;
+
         // Check final possibility of draw by insufficient material
         if (node.Annotation.Pos.CheckDrawBasedOnMaterial == Position.PositionDrawStatus.DrawByInsufficientMaterial)
         {

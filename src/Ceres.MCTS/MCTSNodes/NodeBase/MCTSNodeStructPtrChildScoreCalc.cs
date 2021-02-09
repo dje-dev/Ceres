@@ -112,84 +112,23 @@ namespace Ceres.MCTS.MTCSNodes
                               gatherStatsNSpan, gatherStatsInFlightSpan,
                               gatherStatsPSpan, gatherStatsWSpan);
 
-      // Possibly add an additional exploration bonus term with two features:
-      //   - does not go to zero as quickly as n --> N
-      //   - influence of the prior probabiities diminish as N gets larger
-      // TODO: inefficient
-      float CPUCT2 = Context.ParamsSelect.CPUCT2 / 1000.0f;
-      const int CPUCT2_THRESHOLD = 10;
-      if (CPUCT2 > 0)
-      {
-        Span<float> w = gatherStatsWSpan;
-        Span<float> n = gatherStatsNSpan;
+      ApplyPolicyDecay(numToProcess, gatherStatsPSpan);
 
-        // float newV2 = MathF.Sqrt(P) * (MathF.Log(N / n) * CPUCT2);
-        for (int i = 0; i < numToProcess; i++)
-        {
-          if (n[i] > CPUCT2_THRESHOLD)
-            w[i] -= CPUCT2 * FastLog.Ln(N) / n[i];
-        }
-      }
-
-      float cPolicyFade = Context.ParamsSelect.CPolicyFade;
-      const int MIN_N = 1000; // too little impact to bother spending time on this if if few nodes
-      if (depth == 0 && N > MIN_N && cPolicyFade > 0) 
-      {
-        // Determine how much probability is included in this set of moves
-        // (when we are done we must leave this undisturbed)
-        float startingProb = 0;
-        for (int i = 0; i < gatherStatsPSpan.Length; i++) startingProb += gatherStatsPSpan[i];
-
-        // determine what softmax exponent to use
-        float softmax = 1.0f + (cPolicyFade * (MathF.Log(N, 2) - 8) / 100);
-
-        float acc = 0;
-        for (int i = 0; i < gatherStatsPSpan.Length; i++)
-        {
-          float value = MathF.Pow(gatherStatsPSpan[i], 1.0f / softmax);
-          gatherStatsPSpan[i] = value;
-          acc += value;
-        }
-
-        // Renormalize so that the final sum of probability is still startingProb
-        for (int i = 0; i < gatherStatsPSpan.Length; i++) gatherStatsPSpan[i] *= startingProb / acc;
-      }
-
-      // Possibly apply Q noise     
-      if (Context.ParamsSearch.QNoiseFactorNonRoot > 0 
-       || Context.ParamsSearch.QNoiseFactorRoot > 0)
-      {
-        float qRandomVariabilityRoot = Context.ParamsSearch.QNoiseFactorRoot;
-        float qRandomVariabilityNonRoot = Context.ParamsSearch.QNoiseFactorNonRoot;
-        for (int i = 0; i < numToProcess; i++)
-        {
-          // Apply noise only to nodes with many visits
-          // since exploration will already play a major role
-          if (gatherStatsNSpan[i] > 1000)
-          {
-            float rand = (float)qNoise.NextDouble();
-
-            // Adjust W by:
-            //   - shift to center noise around 0
-            //   - scale by specified coefficient
-            //   - also scale by N since W is N times Q
-            float multiplier = IsRoot ? qRandomVariabilityRoot : qRandomVariabilityNonRoot;
-            gatherStatsWSpan[i] += gatherStatsNSpan[i] * (rand - 0.5f) * multiplier;
-          }
-        }
-      }
-
-      // Strongly disfavor node if smaller than specified minimum
-      if (IsRoot && Context.RootMovesArePruned != null)
+      // Possibly disqualify pruned moves from selection.
+      if (IsRoot && Context.RootMovesPruningStatus != null)
       {
         for (int i = 0; i < numToProcess; i++)
         {
-          if (Context.RootMovesArePruned[i])
+          // Note that moves are never pruned if the do not yet have any visits
+          // because otherwise the subsequent leaf selection will never 
+          // be able to proceed beyond this unvisited child.
+          if (Context.RootMovesPruningStatus[i] != Iteration.MCTSFutilityPruningStatus.NotPruned
+           && gatherStatsNSpan[i] > 0)
           {
             // At root the search wants best Q values 
             // but because of minimax prefers moves with worse Q and W for the children
-            // Therefore we set W of the child very high to make it discourage visits to it
-            gatherStatsWSpan[i] = gatherStatsNSpan[i];
+            // Therefore we set W of the child very high to make it discourage visits to it.
+            gatherStatsWSpan[i] = float.MaxValue;
           }
         }
       }
@@ -202,6 +141,53 @@ namespace Ceres.MCTS.MTCSNodes
                                          gatherStatsNSpan, gatherStatsInFlightSpan,
                                          numToProcess, numVisitsToCompute,
                                          scores, childVisitCounts);
+    }
+
+
+    /// <summary>
+    /// Possibly applies supplemental decay to policies priors
+    /// (if PolicyDecayFactor is not zero).
+    /// </summary>
+    /// <param name="numToProcess"></param>
+    /// <param name="gatherStatsPSpan"></param>
+    private void ApplyPolicyDecay(int numToProcess, Span<float> gatherStatsPSpan)
+    {
+      const int MIN_N = 100; // too little impact to bother spending time on this if if few nodes
+
+      // Policy decay is only applied at root node where
+      // the distortion created from pure MCTS will not be problematic
+      // because the extra visits are not propagated up and
+      // the problem at the root is best arm identification.
+      if (N > MIN_N && Depth == 0)
+      {
+        float policyDecayFactor = Context.ParamsSelect.PolicyDecayFactor;
+
+        if (policyDecayFactor > 0)
+        {
+          float policyDecayExponent = Context.ParamsSelect.PolicyDecayExponent;
+
+          // Determine how much probability is included in this set of moves
+          // (when we are done we must leave this undisturbed)
+          float startingProb = 0;
+          for (int i = 0; i < numToProcess; i++) startingProb += gatherStatsPSpan[i];
+
+          // determine what softmax exponent to use
+          float softmax = 1 + MathF.Log(1 + policyDecayFactor * 0.0002f * MathF.Pow(N, policyDecayExponent));
+
+          float acc = 0;
+          float power = 1.0f / softmax;
+          for (int i = 0; i < numToProcess; i++)
+          {
+            float value = MathF.Pow(gatherStatsPSpan[i], power);
+            gatherStatsPSpan[i] = value;
+            acc += value;
+          }
+
+          // Renormalize so that the final sum of probability is still startingProb
+          float multiplier = startingProb / acc;
+          for (int i = 0; i < numToProcess; i++) gatherStatsPSpan[i] *= multiplier;
+        }
+      }
     }
 
 

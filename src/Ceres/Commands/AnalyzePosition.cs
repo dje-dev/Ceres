@@ -29,6 +29,7 @@ using Ceres.Features.UCI;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.MTCSNodes.Analysis;
 using Ceres.MCTS.Params;
+using Ceres.MCTS.Utils;
 
 #endregion
 
@@ -49,13 +50,13 @@ namespace Ceres.Commands
       float UPDATE_INTERVAL_SECONDS = 1;// isFirstUpdate ? 0.1f : 3f;
       if (timeSinceLastUpdate > UPDATE_INTERVAL_SECONDS && manager.Root.N > 0)
       {
-        Console.WriteLine(UCIManager.UCIInfoString(manager));
+        Console.WriteLine(UCIInfo.UCIInfoString(manager));
         lastInfoUpdate = now;
       }
     }
 
 
-    public static void Analyze(string fen, SearchLimit searchLimit,
+    public static void Analyze(string fenAndMoves, SearchLimit searchLimit,
                                NNEvaluatorDef evaluatorDef,
                                bool forceDisablePruning,
                                LC0Engine lc0Engine = null,
@@ -63,7 +64,7 @@ namespace Ceres.Commands
                                bool verbose = false)
     {
       Console.WriteLine("=============================================================================");
-      Console.WriteLine("Analyzing FEN   : " + fen);
+      Console.WriteLine("Analyzing FEN   : " + fenAndMoves);
       Console.WriteLine("Search limit    : " + searchLimit.ToString());
       Console.WriteLine("Ceres evaluator : " + evaluatorDef.ToString());
       if (comparisonEngine != null)
@@ -91,11 +92,11 @@ namespace Ceres.Commands
       {
         ParamsSearch searchParams = new ParamsSearch();
         searchParams.FutilityPruningStopSearchEnabled = !forceDisablePruning;
-        PositionWithHistory positionWithHistory = PositionWithHistory.FromFENAndMovesUCI(fen, null);
+        PositionWithHistory positionWithHistory = PositionWithHistory.FromFENAndMovesUCI(fenAndMoves);
         ceresResults = new MCTSearch();
         ceresResults.Search(nnEvaluators, new ParamsSelect(), searchParams, null, null, 
                             null, positionWithHistory, searchLimit, verbose, DateTime.Now, null,
-                            manager => lastCeresInfo = new UCISearchInfo(UCIManager.UCIInfoString(manager), null, null), false, true);
+                            manager => lastCeresInfo = new UCISearchInfo(UCIInfo.UCIInfoString(manager), null, null), false, true);
       });
 
       // Possibly launch search for other engine
@@ -107,12 +108,11 @@ namespace Ceres.Commands
           if (lc0Engine != null)
           {
             lc0Engine.DoSearchPrepare();
-            lc0Engine.AnalyzePositionFromFENAndMoves(fen, null, fen, searchLimit);
+            lc0Engine.AnalyzePositionFromFENAndMoves(fenAndMoves, searchLimit);
           }
           else
           {
-            // TODO: someday enable passing in of moves here
-            comparisonEngine.Search(PositionWithHistory.FromFENAndMovesUCI(fen, null), searchLimit, verbose:true);
+            comparisonEngine.Search(PositionWithHistory.FromFENAndMovesUCI(fenAndMoves), searchLimit, verbose:true);
           }
         });
       };
@@ -153,11 +153,11 @@ namespace Ceres.Commands
       searchCeres.Wait();
       searchComparison?.Wait();
 
-      string infoUpdate = UCIManager.UCIInfoString(ceresResults.Manager);
+      string infoUpdate = UCIInfo.UCIInfoString(ceresResults.Manager);
 
-      double q2 = ceresResults.BestMoveRoot.Q;
+      double q2 = ceresResults.SearchRootNode.Q;
       //SearchPrincipalVariation pv2 = new SearchPrincipalVariation(worker2.Root);
-      MCTSPosTreeNodeDumper.DumpPV(ceresResults.Manager.Context.StartPosAndPriorMoves, ceresResults.BestMoveRoot, true, null);
+      MCTSPosTreeNodeDumper.DumpPV(ceresResults.SearchRootNode, true);
 
     }
 

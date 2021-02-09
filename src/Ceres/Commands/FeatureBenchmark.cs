@@ -28,6 +28,7 @@ using Ceres.Chess.MoveGen.Converters;
 using Ceres.Chess.NNEvaluators;
 using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.UserSettings;
+using Ceres.Features;
 
 #endregion
 
@@ -41,16 +42,16 @@ namespace Ceres.Commands
     public static void DumpBenchmark()
     {
       Console.WriteLine();
-      int gpuScore = DumpCPUBenchmark();
+      int cpuScore = DumpCPUBenchmark();
       (int countGPU, int gpuSumNPS) = DumpGPUBenchmark();
       Console.WriteLine();
 
       // Finally output a short summary of results and Ceres version
       // (useful single line of information for testers to include in posts).
       string gpuCountStr = countGPU == 1 ? "" : $" ({countGPU})";
-      Console.WriteLine($"GPU Score={gpuScore}, NPS={gpuSumNPS}{gpuCountStr} "
+      Console.WriteLine($"CPU Score={cpuScore}, NPS={gpuSumNPS}{gpuCountStr} "
                       + $"using {CeresUserSettingsManager.Settings.DefaultNetworkSpecString} "
-                      + $"{GitInfo.VersionString}");
+                      + $"v{CeresVersion.VersionString} {GitInfo.VersionString}");
       Console.WriteLine();
     }
 
