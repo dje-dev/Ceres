@@ -58,7 +58,7 @@ namespace Ceres.MCTS.Utils
         pv = new SearchPrincipalVariation(thisRootNode, overrideBestMoveNodeAtRoot);
       }
 
-      MCTSNode bestMoveNode = pv.Nodes[1];
+      MCTSNode bestMoveNode = pv.Nodes.Count > 1 ? pv.Nodes[1] : pv.Nodes[0];
 
       // The score displayed corresponds to
       // the Q (average visit value) of the move to be made.
