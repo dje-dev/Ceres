@@ -1069,7 +1069,7 @@ namespace lczero {
       MoveList root_moves;
       if (syzygy_tb_[sessionIndex]->root_probe(
         history.Last(),
-        0, /*fast_play || history.DidRepeatSinceLastZeroingMove(),*/
+        true, /*fast_play || history.DidRepeatSinceLastZeroingMove(),*/
         &root_moves))
       {
         return root_moves[0].as_packed_int();//      .as_nn_index(0);
