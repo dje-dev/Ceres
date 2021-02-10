@@ -187,7 +187,7 @@ namespace Ceres.Features.UCI
               if (taskSearchCurrentlyExecuting != null)
               {
                 taskSearchCurrentlyExecuting.Wait();
-                if (!debug && taskSearchCurrentlyExecuting != null) taskSearchCurrentlyExecuting.Result?.Search?.Manager?.Dispose();
+//                if (!debug && taskSearchCurrentlyExecuting != null) taskSearchCurrentlyExecuting.Result?.Search?.Manager?.Dispose();
                 taskSearchCurrentlyExecuting = null;
               }
 
@@ -553,7 +553,7 @@ namespace Ceres.Features.UCI
 
       // Send the best move
       Send("bestmove " + result.Search.BestMove.MoveStr(MGMoveNotationStyle.LC0Coordinate));
-      if (debug) Send("info string " + result.Search.SearchRootNode.BestMoveInfo(false));
+//      if (debug) Send("info string " + result.Search.SearchRootNode.BestMoveInfo(false));
 
       return result;
     }
