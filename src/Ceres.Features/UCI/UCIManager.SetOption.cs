@@ -143,8 +143,10 @@ namespace Ceres.Features.UCI
           SetFloat(value, 0, int.MaxValue, ref factor);
           if (factor == 0)
             futilityPruningDisabled = true;
+          else if (factor == ParamsSearch.LC0_DEFAULT_SMART_PRUNING_FACTOR)
+            futilityPruningDisabled = false;
           else
-            throw new System.Exception("Ceres only supports value 0 for SmartPruningFactor");
+            throw new System.Exception("Ceres only supports value 0 (indicating turnd off) or 1.33 (indicating default) for SmartPruningFactor");
           break;
 
         case "verbosemovestats":
@@ -282,7 +284,7 @@ option name LogFile type string default
 option name MultiPV type spin default 1 min 1 max 500
 option name VerboseMoveStats type check default false
 option name LogLiveStats type check default false
-option name SmartPruningFactor type string default 1
+option name SmartPruningFactor type string default 1.33
 option name PerPVCounters type check default false
 option name ScoreType type combo default centipawn var centipawn var Q var W-L
 option name UCI_ShowWDL type check default false

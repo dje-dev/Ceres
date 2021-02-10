@@ -38,6 +38,15 @@ namespace Ceres.MCTS.Params
     /// </summary>
     public const bool USE_CERES_ADJUSTMENTS = true;
 
+    /// <summary>
+    /// Default value used by LC0 for smart pruning.
+    /// This corresponds to somewhat to the Ceres MoveFutilityPruningAggressiveness value.
+    /// For compatability with LC0 we accpet only two value in UCI inerface,
+    /// interpreting 0 as "off" and 1.33 meaning "default" for both programs.
+    /// </summary>
+    public const float LC0_DEFAULT_SMART_PRUNING_FACTOR = 1.33f;
+
+
     public enum BestMoveModeEnum 
     { 
       /// <summary>
@@ -278,14 +287,20 @@ namespace Ceres.MCTS.Params
     {
       if (CeresUserSettingsManager.Settings.SmartPruningFactor.HasValue)
       {
-        if (CeresUserSettingsManager.Settings.SmartPruningFactor.Value == 0)
+        float pruningFactorValue = CeresUserSettingsManager.Settings.SmartPruningFactor.Value;
+        if (pruningFactorValue == 0)
         {
           FutilityPruningStopSearchEnabled = false;
           MoveFutilityPruningAggressiveness = 0;
         }
+        else if (pruningFactorValue == LC0_DEFAULT_SMART_PRUNING_FACTOR)
+        {
+          FutilityPruningStopSearchEnabled = new ParamsSearch().FutilityPruningStopSearchEnabled;
+          MoveFutilityPruningAggressiveness = new ParamsSearch().MoveFutilityPruningAggressiveness;
+        }
         else
         {
-          throw new Exception("SmartPruningFactor in Ceres.json must either have value 0 or be absent.");
+          throw new Exception("SmartPruningFactor in Ceres.json must either have value 0, 1.33 or be absent.");
         }
       }
 
