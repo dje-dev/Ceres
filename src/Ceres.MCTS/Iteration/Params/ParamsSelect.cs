@@ -137,11 +137,11 @@ namespace Ceres.MCTS.Params
     [CeresOption(Name = "fpu-type", Desc = "Type of first play urgency (root nodes)", Default = "Same")]
     public FPUType FPUModeAtRoot = FPUType.Same;
 
-    [CeresOption(Name = "fpu-value", Desc = "FPU constant used at root node", Default = "-0.44")]
-    public float FPUValue = -0.44f;
+    [CeresOption(Name = "fpu-value", Desc = "FPU constant used at root node", Default = "0.44")]
+    public float FPUValue = 0.44f;
 
-    [CeresOption(Name = "fpu-value-at-root", Desc = "FPU constant used at root node", Default = "-1")]
-    public float FPUValueAtRoot = -1.0f;
+    [CeresOption(Name = "fpu-value-at-root", Desc = "FPU constant used at root node", Default = "1")]
+    public float FPUValueAtRoot = 1.0f;
 
     [CeresOption(Name = "policy-softmax", Desc = "Controls degree of flatness of policy via specified level of exponentation", Default = "1.61")]
     public float PolicySoftmax = 1.61f;
@@ -161,11 +161,13 @@ namespace Ceres.MCTS.Params
       MaybeSet(CeresUserSettingsManager.Settings.CPUCTBaseAtRoot, ref CPUCTBaseAtRoot);
       MaybeSet(CeresUserSettingsManager.Settings.CPUCTFactorAtRoot, ref CPUCTFactorAtRoot);
       MaybeSet(CeresUserSettingsManager.Settings.PolicyTemperature, ref PolicySoftmax);
+      MaybeSet(CeresUserSettingsManager.Settings.FPU, ref FPUValue);
+      MaybeSet(CeresUserSettingsManager.Settings.FPUAtRoot, ref FPUValueAtRoot);
     }
 
 
 
-#region Helper methods
+    #region Helper methods
 
     /// <summary>
     /// If using dual selectors, we perturb CPUCT by this fraction (one is perturbed up, one down)
@@ -184,19 +186,19 @@ namespace Ceres.MCTS.Params
       if (dualSelectorMode)
         return baseCPUCT * (selectorID == 0 ? DUAL_SELECTOR_0_CPUCT_MULTIPLIER : DUAL_SELECTOR_1_CPUCT_MULTIPLIER);
       else
-        return baseCPUCT;      
+        return baseCPUCT;
     }
 
-  // Using a virtual relative loss (a negative offset versus the Q of the parent node)
-  // is found to be greatly superior to traditional fixed values such as -1
-  internal const bool VLossRelative = true;
+    // Using a virtual relative loss (a negative offset versus the Q of the parent node)
+    // is found to be greatly superior to traditional fixed values such as -1
+    internal const bool VLossRelative = true;
 
-    public float VLossContribToW(float nInFlight, float parentQ) 
+    public float VLossContribToW(float nInFlight, float parentQ)
       => VLossRelative ? nInFlight * (parentQ + VirtualLossDefaultRelative)
                         : nInFlight * VirtualLossDefaultAbsolute;
 
 
-#region Proven win/lost handling
+    #region Proven win/lost handling
 
     //TODO: encapsulate all the below in a separate class
 
@@ -235,9 +237,9 @@ namespace Ceres.MCTS.Params
     public static bool VIsForcedLoss(float v) => v < -1.00f;
 
 
-#endregion
+    #endregion
 
-   // TODO: these static UCT helpers would more cleanly be in their own helper class
+    // TODO: these static UCT helpers would more cleanly be in their own helper class
     public static float UCTParentMultiplier(float parentN, float uctNumeratorPower)
     {
       if (uctNumeratorPower == 0.5f)
@@ -260,7 +262,7 @@ namespace Ceres.MCTS.Params
     {
       if (parentIsRoot)
       {
-        float CPUCT_EXTRA = (CPUCTFactorAtRoot == 0) ? 0 : CPUCTFactorAtRoot * FastLog.Ln((parentN + CPUCTBaseAtRoot + 1.0f) / CPUCTBaseAtRoot); 
+        float CPUCT_EXTRA = (CPUCTFactorAtRoot == 0) ? 0 : CPUCTFactorAtRoot * FastLog.Ln((parentN + CPUCTBaseAtRoot + 1.0f) / CPUCTBaseAtRoot);
         float thisCPUCT = CPUCTAtRoot + CPUCT_EXTRA;
         float cpuctValue = CPUCTForSelector(dualSelectorMode, selectorID, thisCPUCT);
         return cpuctValue;
@@ -277,7 +279,7 @@ namespace Ceres.MCTS.Params
     internal float CalcFPUValue(bool isRoot) => (isRoot && FPUModeAtRoot != FPUType.Same) ? FPUValueAtRoot : FPUValue;
     internal FPUType GetFPUMode(bool isRoot) => (isRoot && FPUModeAtRoot != FPUType.Same) ? FPUModeAtRoot : FPUMode;
 
-#endregion
+    #endregion
 
   }
 

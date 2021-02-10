@@ -98,7 +98,7 @@ namespace Ceres.MCTS.LeafExpansion
       float cpuctValue = paramsSelect.CalcCPUCT(parentIsRoot, dualSelectorMode, selectorID, parentN);
 
       // Compute qWhenNoChildren
-      float fpuValue = paramsSelect.CalcFPUValue(parentIsRoot);
+      float fpuValue = -paramsSelect.CalcFPUValue(parentIsRoot);
 
       // TODO: to be more precise, parentSumPVisited should possibly be updated as we visit children
       bool useFPUReduction = paramsSelect.GetFPUMode(parentIsRoot) == ParamsSelect.FPUType.Reduction;

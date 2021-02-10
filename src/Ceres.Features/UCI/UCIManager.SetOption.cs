@@ -99,6 +99,16 @@ namespace Ceres.Features.UCI
     /// </summary>
     bool futilityPruningDisabled = new ParamsSearch().FutilityPruningStopSearchEnabled == false;
 
+    /// <summary>
+    /// First play urgency coefficient.
+    /// </summary>
+    float fpu = new ParamsSelect().FPUValue;
+
+    /// <summary>
+    /// First play urgency (at root) coefficient.
+    /// </summary>
+    float fpuAtRoot = new ParamsSelect().FPUValueAtRoot;
+
 
     void ProcessSetOption(string command)
     {
@@ -151,7 +161,7 @@ namespace Ceres.Features.UCI
             OutStream.Write("Invalid value for ScoreType, allowable values are Centipawn, Q or W-L");
           break;
 
-          //option name ScoreType type combo default centipawn var centipawn var Q var W-L
+        //option name ScoreType type combo default centipawn var centipawn var Q var W-L
 
         case "multipv":
           SetInt(value, 1, int.MaxValue, ref numPV);
@@ -206,8 +216,14 @@ namespace Ceres.Features.UCI
           SetFloat(value, 0.1f, float.MaxValue, ref policySoftmax);
           break;
 
-      }
+        case "fpu":
+          SetFloat(value, 0, float.MaxValue, ref fpu);
+          break;
 
+        case "fpuatroot":
+          SetFloat(value, 0, float.MaxValue, ref fpuAtRoot);
+          break;
+      }
 
     }
 
@@ -260,7 +276,7 @@ namespace Ceres.Features.UCI
         value = newValue;
     }
 
-    static string SetOptionUCIDescriptions => 
+    static string SetOptionUCIDescriptions =>
 @$"
 option name LogFile type string default
 option name MultiPV type spin default 1 min 1 max 500
@@ -278,6 +294,8 @@ option name CPuctBaseAtRoot type string default {new ParamsSelect().CPUCTBaseAtR
 option name CPuctFactor type string default {new ParamsSelect().CPUCTFactor}
 option name CPuctFactorAtRoot type string default {new ParamsSelect().CPUCTFactorAtRoot}
 option name PolicyTemperature type string default {new ParamsSelect().PolicySoftmax}
+option name FPU type string default {new ParamsSelect().FPUValue}
+option name FPUAtRoot type string default {new ParamsSelect().FPUValueAtRoot}
 ";
     /*
 option name ConfigFile type string default lc0.config

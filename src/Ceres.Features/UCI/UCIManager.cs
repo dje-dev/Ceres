@@ -125,6 +125,8 @@ namespace Ceres.Features.UCI
         parms.CPUCTBaseAtRoot = cpuctBaseAtRoot;
         parms.CPUCTFactorAtRoot = cpuctFactorAtRoot;
         parms.PolicySoftmax = policySoftmax;
+        parms.FPUValue = fpu;
+        parms.FPUValueAtRoot = fpuAtRoot;
 
         return parms;
       }
