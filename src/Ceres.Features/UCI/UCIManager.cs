@@ -110,7 +110,7 @@ namespace Ceres.Features.UCI
       
       EvaluatorDef = evaluatorDef;
 
-      if (disablePruning) ParamsSearch.FutilityPruningStopSearchEnabled = false;
+      if (disablePruning) futilityPruningDisabled = true;
     }
 
     public ParamsSelect ParamsSelect
@@ -135,6 +135,7 @@ namespace Ceres.Features.UCI
       get
       {
         ParamsSearch parms = new ParamsSearch();
+        if (futilityPruningDisabled) parms.FutilityPruningStopSearchEnabled = false;
         return parms;
       }
     }

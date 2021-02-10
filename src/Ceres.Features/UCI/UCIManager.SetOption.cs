@@ -94,6 +94,11 @@ namespace Ceres.Features.UCI
     /// </summary>
     float policySoftmax = new ParamsSelect().PolicySoftmax;
 
+    /// <summary>
+    /// If futiltiy pruning (smart pruning) is disabled.
+    /// </summary>
+    bool futilityPruningDisabled = new ParamsSearch().FutilityPruningStopSearchEnabled == false;
+
 
     void ProcessSetOption(string command)
     {
@@ -127,7 +132,7 @@ namespace Ceres.Features.UCI
           float factor = -1;
           SetFloat(value, 0, int.MaxValue, ref factor);
           if (factor == 0)
-            ParamsSearch.FutilityPruningStopSearchEnabled = false;
+            futilityPruningDisabled = true;
           else
             throw new System.Exception("Ceres only supports value 0 for SmartPruningFactor");
           break;
