@@ -81,10 +81,6 @@ namespace Ceres.MCTS.Iteration
         //float biggestN = Math.Max(bestMoveInfo.BestN, bestMoveInfo.BestNSecond);
         float minNRequiredToChange = nGap / ManagerChooseRootMove.MinFractionNToUseQ(newRoot, qGap);
         bool couldCatchUp = (estNewVisitsThisMove * 0.25f) > minNRequiredToChange;
-        if (couldCatchUp)
-          MCTSEventSource.TestCounter1++;
-        else
-          MCTSEventSource.TestMetric1++;
 
         if (couldCatchUp) return default;
         //Console.WriteLine("catchup " + couldCatchUp + " visits: " + estNewVisitsThisMove + " " + minNRequiredToChange);
