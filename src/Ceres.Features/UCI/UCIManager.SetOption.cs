@@ -146,7 +146,7 @@ namespace Ceres.Features.UCI
           else if (factor == ParamsSearch.LC0_DEFAULT_SMART_PRUNING_FACTOR)
             futilityPruningDisabled = false;
           else
-            throw new System.Exception("Ceres only supports value 0 (indicating turnd off) or 1.33 (indicating default) for SmartPruningFactor");
+            OutStream.Write($"Ceres does not support {factor}, only value 0 (indicating turned off) or 1.33 (indicating default) for SmartPruningFactor");
           break;
 
         case "verbosemovestats":
