@@ -294,7 +294,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       // which will be assured if either:
       //   - the object is on the large object heap, and compaction is not enabled for this heap, or
       //   - we are using nonmanaged memory
-      int thisIndex = ((int)store.Nodes.NodeOffsetFromFirst(in this) / MCTSNodeStructSizeBytes);
+      int thisIndex = (int)((long)store.Nodes.NodeOffsetFromFirst(in this) / MCTSNodeStructSizeBytes);
       Debug.Assert(thisIndex <= store.Nodes.NumUsedNodes);
       return new MCTSNodeStructIndex(thisIndex);
     }
