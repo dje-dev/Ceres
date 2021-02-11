@@ -14,8 +14,9 @@
 #region Using directives
 
 using System;
+using Ceres.Chess;
 using Ceres.Chess.LC0.Positions;
-
+using Ceres.Chess.MoveGen;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.MTCSNodes;
 
@@ -43,11 +44,29 @@ namespace Ceres.MCTS.Utils
                                        bool showWDL = false,
                                        bool scoreAsQ = false)
     {
+      if (manager.TablebaseImmediateBestMove != default)
+      {
+        if (multiPVIndex.HasValue && multiPVIndex != 1)
+        {
+          return null;
+        }
+        else
+        {
+          return OutputUCIInfoTablebaseImmediate(manager, overrideRootMove ?? manager.Root, scoreAsQ);
+        }
+      }
+
       bool wasInstamove = manager.Root != overrideRootMove;
 
       // If no override bestMoveRoot was specified
       // then it is assumed the move chosen was from the root (not an instamove)
       MCTSNode thisRootNode = overrideRootMove ?? manager.Root;
+
+      if (thisRootNode.NumPolicyMoves == 0)
+      {
+        // Terminal position, nothing to output
+        return null;
+      }
 
       float elapsedTimeSeconds = wasInstamove ? 0 : (float)(DateTime.Now - manager.StartTimeThisSearch).TotalSeconds;
 
@@ -108,6 +127,39 @@ namespace Ceres.MCTS.Utils
              + $"nodes {n:F0} score cp {scoreToShow}{strWDL} tbhits {manager.CountTablebaseHits} nps {nps:F0} "
              + $"{pvString} string M= {thisRootNode.MAvg:F0}";
       }
+    }
+
+
+    /// <summary>
+    /// Handles special case that move was selected immediately at root from tablebase.
+    /// </summary>
+    /// <param name="manager"></param>
+    /// <param name="searchRootNode"></param>
+    /// <param name="scoreAsQ"></param>
+    /// <returns></returns>
+    static string OutputUCIInfoTablebaseImmediate(MCTSManager manager, MCTSNode searchRootNode, bool scoreAsQ)
+    {
+      GameResult result = searchRootNode.Ref.Terminal;
+
+      string scoreStr;
+      if (result == GameResult.Checkmate)
+      {
+        scoreStr = scoreAsQ ? "1.0" : "9999";
+      }
+      else if (result == GameResult.Draw)
+      {
+        scoreStr = "0";
+      }
+      else
+      {
+        // TODO: cleanup, see comment in MCTSManager.TrySetImmediateBestMove
+        //       explaining special meeting of Unknown status to actually mean loss.
+        scoreStr = scoreAsQ ? "-1.0" : "-9999";
+      }
+
+      string moveStr = manager.TablebaseImmediateBestMove.MoveStr(MGMoveNotationStyle.LC0Coordinate);
+      string str = $"info depth 1 seldepth 1 time 0 nodes 1 score cp {scoreStr} pv {moveStr}";
+      return str;
     }
 
   }

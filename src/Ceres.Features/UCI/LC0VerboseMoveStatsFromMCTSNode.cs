@@ -45,7 +45,7 @@ namespace Ceres.Features.UCI
         (MCTSNode node, EncodedMove move, FP16 p) info = searchRootNode.ChildAtIndexInfo(i);
         if (info.node == null)
         {
-          LC0VerboseMoveStat stat = BuildStat(searchRootNode.ChildAtIndexRef(i));
+          LC0VerboseMoveStat stat = BuildStatNotExpanded(searchRootNode, i);
           stats.Add(stat);
         }
       }
@@ -55,30 +55,32 @@ namespace Ceres.Features.UCI
       foreach (MCTSNode node in sortedN)
       {
         if (!object.ReferenceEquals(node, best.BestMoveNode))
-          stats.Add(BuildStat(node, false));
+          stats.Add(BuildStatExpanded(node, false));
       }
 
       // Save the best move for last.
-      stats.Add(BuildStat(best.BestMoveNode, false));
+      stats.Add(BuildStatExpanded(best.BestMoveNode, false));
 
       // Finally, output the search root node.
-      stats.Add(BuildStat(searchRootNode, true));
+      stats.Add(BuildStatExpanded(searchRootNode, true));
 
       return stats;
     }
 
 
-    static LC0VerboseMoveStat BuildStat(MCTSNodeStructChild child)
+    static LC0VerboseMoveStat BuildStatNotExpanded(MCTSNode node, int childIndex)
     {
+      MCTSNodeStructChild child = node.ChildAtIndexRef(childIndex);
       LC0VerboseMoveStat stat = new LC0VerboseMoveStat(null, null);
       stat.MoveString = child.Move.ToString();
       stat.MoveCode = child.Move.IndexNeuralNet;
       stat.P = child.P * 100.0f;
+      stat.U = node.ChildU(childIndex);
       return stat;
     }
 
 
-    static LC0VerboseMoveStat BuildStat(MCTSNode node, bool isSearchRoot)
+    static LC0VerboseMoveStat BuildStatExpanded(MCTSNode node, bool isSearchRoot)
     {
       LC0VerboseMoveStat stat = new LC0VerboseMoveStat(null, null);
       float multiplier = isSearchRoot ? 1 : -1;
@@ -92,6 +94,7 @@ namespace Ceres.Features.UCI
       stat.Q = new EncodedEvalLogistic((float)node.Q * multiplier);
       stat.M = node.MPosition;
       stat.V = new EncodedEvalLogistic((float)node.V * multiplier);
+      stat.U = isSearchRoot ? 0 : node.Parent.ChildU(node.IndexInParentsChildren);
       return stat;
     }
 

@@ -32,6 +32,8 @@ using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.Iteration;
 using Ceres.Chess.Positions;
 using Ceres.Chess.MoveGen.Converters;
+using Ceres.MCTS.Params;
+using Ceres.Base.Math;
 
 #endregion
 
@@ -688,6 +690,46 @@ namespace Ceres.MCTS.MTCSNodes
 
       // Found it
       return newRoot;
+    }
+
+
+    /// <summary>
+    /// Calculates exploratory U value (in PUCT) for a child at a given index.
+    /// NOTE: currently only supported at root.
+    /// </summary>
+    /// <param name="childIndex"></param>
+    /// <returns></returns>
+    public float ChildU(int childIndex)
+    {
+      ParamsSelect parms = Context.ParamsSelect;
+      if (parms.PolicyDecayFactor != 0) throw new NotImplementedException();
+
+      float cpuct = CPUCT(IsRoot, N, parms);
+
+      (MCTSNode node, EncodedMove move, FP16 p) child = ChildAtIndexInfo(childIndex);
+      float n = child.node == null ? 0 : child.node.N;
+      float p = child.p;
+
+      float denominator = parms.UCTRootDenominatorExponent == 1.0f ? (n + 1) : MathF.Pow(n + 1, parms.UCTRootDenominatorExponent);
+      float u = cpuct * p * (ParamsSelect.UCTParentMultiplier(N, parms.UCTRootNumeratorExponent) / denominator);
+
+      return u;
+    }
+
+
+    static float CPUCT(bool isRoot, int n, ParamsSelect parms)
+    {
+      return CalcCPUCT(n,
+                       isRoot ? parms.CPUCTAtRoot : parms.CPUCT,
+                       isRoot ? parms.CPUCTBaseAtRoot : parms.CPUCTBase,
+                       isRoot ? parms.CPUCTFactorAtRoot : parms.CPUCTFactor);
+    }
+
+    static float CalcCPUCT(int n, float cpuct, float cpuctBase, float cpuctFactor)
+    { 
+      float CPUCT_EXTRA = (cpuctFactor == 0) ? 0 : cpuctFactor * FastLog.Ln((n + cpuctBase + 1.0f) / cpuctBase);
+      float thisCPUCT = cpuct + CPUCT_EXTRA;
+      return thisCPUCT;
     }
 
     #endregion

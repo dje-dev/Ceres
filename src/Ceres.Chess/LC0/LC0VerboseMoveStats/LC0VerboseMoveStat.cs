@@ -246,30 +246,9 @@ namespace Ceres.Chess.LC0VerboseMoves
       {
         // TODO: difference between WL and V (related to contempt?).
         return $"info string {MoveString}  ({MoveCode,3:F0} ) N:    {VisitCount,11:F0} (+{VisitInFlightCount,5:F0}) (P: {P,9:F2}%) "
-             + $"(WL:  {V.LogisticValue,9:F4}) (D: {D,9:F4}) (M: {M,6:F1}) (Q:  {Q.LogisticValue,9:F4}) (V: {V.LogisticValue,9:F4})";
+             + $"(WL:  {V.LogisticValue,9:F4}) (D: {D,9:F4}) (M: {M,6:F1}) (Q:  {Q.LogisticValue,9:F4}) "
+             + $"(U: {U,9:F4}) (V: {V.LogisticValue,9:F4})";
       }
-    }
-
-
-    public static void Test()
-    {
-
-#if NOT
-info string g2g4  (378 ) N:       0 (+ 0) (P:  0.83%) (WL:  -.-----) (D: -.---) (M:  -.-) (Q: -0.35554) (U: 0.51364) (S:  0.15810) (V:  -.----)
-
-info string e2e4  (322 ) N:     494 (+78) (P: 43.01%) (WL:  0.10861) (D: 0.000) (M: 10.3) (Q:  0.10861) (U: 0.04631) (S:  0.15493) (V:  0.1261)
-info string node  (  20) N:     751 (+81) (P: 99.16%) (WL:  0.08560) (D: 0.000) (M:  9.3) (Q:  0.08560) (V:  0.0952)
-#endif
-
-      string test = @"info string d5c6(1006) N: 0(+0)(P: 46.12 %)(Q: 0.76964)(U: 1.38359)(Q + U:  2.15323)(V: -.----)";
-      string testNew = "info string e4b7  (1020) N:       0 (+ 0) (P:  0.21%) (WL:  -.-----) (D: -.---) (M:  -.-) (Q: -0.55847) (U: 0.24295) (S: -0.31552) (V:  -.----) ";
-
-      LC0VerboseMoveStat lpa = new LC0VerboseMoveStat(null, testNew);
-
-      string[] split = test.Split(new char[] { ' ', '(', ')', });
-      foreach (string s in split)
-        Console.WriteLine(s);
-
     }
 
   }
