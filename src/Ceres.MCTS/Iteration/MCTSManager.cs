@@ -521,6 +521,25 @@ namespace Ceres.MCTS.Iteration
           Context.Root.Ref.Terminal = GameResult.Draw;
           Context.Root.EvalResult = new LeafEvaluationResult(GameResult.Draw, 0, 0, 1);
         }
+        else if (result == GameResult.Unknown && TablebaseImmediateBestMove != default)
+        {
+          // N.B. Unknown as a result actually means "Lost"
+          //      base currently the GameResult enum has no way to represent that.
+          //      TODO: Clean thi sup, create a new Enum to represent this more cleanly.
+          // Set the evaluation of the position to be a loss.
+          // TODO: possibly use distance to mate to set the distance more accurately than fixed at 1
+          const int DISTANCE_TO_MATE = 1;
+
+          float lossP = ParamsSelect.LossPForProvenLoss(DISTANCE_TO_MATE);
+
+          Context.Root.Ref.W = -lossP;
+          Context.Root.Ref.N = 1;
+          Context.Root.Ref.WinP = 0;
+          Context.Root.Ref.LossP = (FP16)lossP;
+          Context.Root.Ref.MPosition = DISTANCE_TO_MATE;
+          Context.Root.EvalResult = new LeafEvaluationResult(GameResult.Checkmate, 0, (FP16)lossP, DISTANCE_TO_MATE);
+          Context.Root.Ref.Terminal = GameResult.Checkmate;
+        }
 
       }
     }

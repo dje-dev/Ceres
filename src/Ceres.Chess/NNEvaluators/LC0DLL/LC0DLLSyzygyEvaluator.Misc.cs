@@ -76,6 +76,8 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
       {
         case WDLScore.WDLLoss:
         case WDLScore.WDLBlessedLoss:
+          // This is probably actually a loss, but not way to represent that with this enum.
+          // TODO: Clean this up.
           result = GameResult.Unknown;
           break;
 

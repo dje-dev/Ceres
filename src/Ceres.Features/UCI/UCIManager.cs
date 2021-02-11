@@ -567,7 +567,7 @@ namespace Ceres.Features.UCI
 
       if (numPV == 1)
       {
-        Send(UCIInfo.UCIInfoString(manager, searchRootNode, best.BestMoveNode, 
+        Send(UCIInfo.UCIInfoString(manager, searchRootNode, best?.BestMoveNode, 
                                   showWDL:showWDL, scoreAsQ:scoreAsQ));
       }
       else
