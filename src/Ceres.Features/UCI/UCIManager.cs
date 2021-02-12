@@ -138,6 +138,7 @@ namespace Ceres.Features.UCI
       {
         ParamsSearch parms = new ParamsSearch();
         if (futilityPruningDisabled) parms.FutilityPruningStopSearchEnabled = false;
+        parms.MoveOverheadSeconds = moveOverheadSeconds;
         return parms;
       }
     }

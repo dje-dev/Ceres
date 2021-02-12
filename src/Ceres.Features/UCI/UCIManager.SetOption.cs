@@ -100,6 +100,11 @@ namespace Ceres.Features.UCI
     bool futilityPruningDisabled = new ParamsSearch().FutilityPruningStopSearchEnabled == false;
 
     /// <summary>
+    /// Amount of seconds subtracted from time limits to compensate for overhead/latency.
+    /// </summary>
+    float moveOverheadSeconds = new ParamsSearch().MoveOverheadSeconds;
+
+    /// <summary>
     /// First play urgency coefficient.
     /// </summary>
     float fpu = new ParamsSelect().FPUValue;
@@ -136,6 +141,12 @@ namespace Ceres.Features.UCI
 
         case "loglivestats":
           SetBool(value, ref logLiveStats);
+          break;
+
+        case "moveoverheadms":
+          float moveOverheadMilliseconds = 0;
+          SetFloat(value, 0, int.MaxValue, ref moveOverheadMilliseconds);
+          moveOverheadSeconds = moveOverheadMilliseconds / 1000f;
           break;
 
         case "smartpruningfactor":
@@ -285,6 +296,7 @@ option name MultiPV type spin default 1 min 1 max 500
 option name VerboseMoveStats type check default false
 option name LogLiveStats type check default false
 option name SmartPruningFactor type string default 1.33
+option name MoveOverheadMs type spin default {new ParamsSearch().MoveOverheadSeconds * 1000} min 0 max 100000000
 option name PerPVCounters type check default false
 option name ScoreType type combo default centipawn var centipawn var Q var W-L
 option name UCI_ShowWDL type check default false
