@@ -267,10 +267,13 @@ namespace Ceres.Features.Tournaments
       // Show a "." after the opening index if this was the second of the pair of games played.
       string openingPlayedBothWaysStr = openingsFinishedAtLeastOnce.Contains(openingIndex) ? "." : " ";
 
+      string player1ForfeitChar = thisResult.ShouldHaveForfeitedOnLimitsEngine1 ? "f" : " ";
+      string player2ForfeitChar = thisResult.ShouldHaveForfeitedOnLimitsEngine2 ? "f" : " ";
+
       if (Def.ShowGameMoves) Def.Logger.WriteLine();
       Def.Logger.Write($"{eloAvg,5:0} {eloSD,4:0} {100.0f * los,5:0}  ");
       Def.Logger.Write($"{ParentStats.NumGames,5} {DateTime.Now.ToString().Split(" ")[1],10}  {gameSequenceNum,4:F0}  {openingIndex,4:F0}{openingPlayedBothWaysStr}  ");
-      Def.Logger.Write($"{thisResult.TotalTimeEngine1,8:F2} {thisResult.TotalTimeEngine2,8:F2}   ");
+      Def.Logger.Write($"{thisResult.TotalTimeEngine1,8:F2}{player1ForfeitChar}{thisResult.TotalTimeEngine2,8:F2}{player2ForfeitChar}  ");
       Def.Logger.Write($"{thisResult.TotalNodesEngine1,16:N0} {thisResult.TotalNodesEngine2,16:N0}   ");
       Def.Logger.Write($"{thisResult.PlyCount,4:F0}  {TournamentUtils.ResultStr(thisResult.Result, engine2White),4}  ");
       Def.Logger.Write($"{wdlStr}   {thisResult.FEN} ");
@@ -334,6 +337,9 @@ namespace Ceres.Features.Tournaments
       long nodesEngine1Tot = 0;
       long nodesEngine2Tot = 0;
 
+      bool engine1ShouldHaveForfieted = false;
+      bool engine2ShouldHaveForfieted = false;
+
       List<float> scoresEngine1 = new List<float>();
       List<float> scoresEngine2 = new List<float>();
 
@@ -364,6 +370,8 @@ namespace Ceres.Features.Tournaments
           TotalTimeEngine2 = timeEngine2Tot,
           TotalNodesEngine1 = nodesEngine1Tot,
           TotalNodesEngine2 = nodesEngine2Tot,
+          ShouldHaveForfeitedOnLimitsEngine1 = engine1ShouldHaveForfieted,
+          ShouldHaveForfeitedOnLimitsEngine2 = engine2ShouldHaveForfieted,
           GameMoveHistory = gameMoveHistory
         };
 
@@ -447,11 +455,16 @@ namespace Ceres.Features.Tournaments
                         gameMoveHistory, searchLimitWithIncrementsEngine2, scoresEngine2,
                         ref nodesEngine2Tot, ref timeEngine2Tot);
 
-
           if (engine2IsWhite)
+          {
+            engine2ShouldHaveForfieted |= info.WhiteShouldHaveForfeitedOnLimit;
             moveStat = new GameMoveStat(plyCount, SideType.White, info.WhiteScoreQ, info.WhiteScoreCentipawns, engine2.CumulativeSearchTimeSeconds, numPieces, info.WhiteMAvg, info.WhiteFinalN, info.WhiteNumNodesComputed, info.WhiteSearchLimitPre, info.WhiteMoveTimeUsed);
+          }
           else
+          {
+            engine2ShouldHaveForfieted |= info.BlackShouldHaveForfeitedOnLimit;
             moveStat = new GameMoveStat(plyCount, SideType.Black, info.BlackScoreQ, info.BlackScoreCentipawns, engine2.CumulativeSearchTimeSeconds, numPieces, info.BlackMAvg, info.BlackFinalN, info.BlackNumNodesComputed, info.BlackSearchLimitPre, info.BlackMoveTimeUsed);
+          }
         }
         else
         {
@@ -460,10 +473,17 @@ namespace Ceres.Features.Tournaments
                         ref nodesEngine1Tot, ref timeEngine1Tot);
 
           if (engine2IsWhite)
+          {
+            engine1ShouldHaveForfieted |= info.BlackShouldHaveForfeitedOnLimit;
             moveStat = new GameMoveStat(plyCount, SideType.Black, info.BlackScoreQ, info.BlackScoreCentipawns, engine1.CumulativeSearchTimeSeconds, numPieces, info.BlackMAvg, info.BlackFinalN, info.BlackNumNodesComputed, info.BlackSearchLimitPre, info.BlackMoveTimeUsed);
+          }
           else
+          {
+            engine1ShouldHaveForfieted |= info.WhiteShouldHaveForfeitedOnLimit;
             moveStat = new GameMoveStat(plyCount, SideType.White, info.WhiteScoreQ, info.WhiteScoreCentipawns, engine1.CumulativeSearchTimeSeconds, numPieces, info.WhiteMAvg, info.WhiteFinalN, info.WhiteNumNodesComputed, info.WhiteSearchLimitPre, info.WhiteMoveTimeUsed);
+          }
         }
+        
 
         gameMoveHistory.Add(moveStat);
 
@@ -498,15 +518,30 @@ namespace Ceres.Features.Tournaments
           _ => throw new Exception($"Internal error, unknown SearchLimit.LimitType {searchLimit.Type}")
         };
 
-        // TODO: check for time exhaustion?
-        //if (thisMoveSearchLimit.Value < 0) throw new Exception($"Time exhausted {thisMoveSearchLimit.Value} for engine {engine}");
-
         //Console.WriteLine("GameTestThread::ALLOT " + thisMoveSearchLimit);
         // TODO: remove this old method?    ? UCIManager.CalcTimeAllotmentThisMove(curPositionAndMoves.FinalPosition, searchLimit.Value - engine.CumulativeSearchTimeSeconds, null)
 
         GameEngineSearchResult engineMove = engine.Search(curPositionAndMoves, thisMoveSearchLimit, gameMoveHistory);
         float engineTime = (float)engineMove.TimingStats.ElapsedTimeSecs;
-       
+
+        // Check for time forfeit
+        bool shouldHaveForfeited = false;
+        if (thisMoveSearchLimit.IsTimeLimit)
+        {
+          const float GRACE_FRACTION = 0.02f; // Allow up to 2% over
+          float GRACE_SECONDS = searchLimit.Value * GRACE_FRACTION;
+          float timeExcess = engineTime - thisMoveSearchLimit.Value;
+          if (gameMoveHistory.Count >= 2 && timeExcess > GRACE_SECONDS)
+          {
+            shouldHaveForfeited = true;
+
+            // TODO: (a) remove the "Count > 2" restriction above,
+            //       (b) reconsider the GRACE_FRACTION above
+            //       (b) log this
+            //throw new Exception($"Time forfeit, allotted {thisMoveSearchLimit.Value} used {engineTime} for engine {engine}");
+          }
+        }
+
         GameEngineSearchResult checkSearch = default;
         string checkMove = "";
         if (checkMoveEngine != null)
@@ -549,6 +584,7 @@ namespace Ceres.Features.Tournaments
           info.WhiteFinalN = engineMove.FinalN;
           info.WhiteMAvg = engineMove.MAvg;
           info.WhiteCheckMoveStr = checkMove;
+          info.WhiteShouldHaveForfeitedOnLimit = shouldHaveForfeited;
         }
         else
         {
@@ -564,6 +600,7 @@ namespace Ceres.Features.Tournaments
           info.BlackFinalN = engineMove.FinalN;
           info.BlackMAvg = engineMove.MAvg;
           info.BlackCheckMoveStr = checkMove;
+          info.BlackShouldHaveForfeitedOnLimit = shouldHaveForfeited;
         }
 
         if (showMoves) info.PutStr();

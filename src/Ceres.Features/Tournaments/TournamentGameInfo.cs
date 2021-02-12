@@ -53,6 +53,16 @@ namespace Ceres.Features.Tournaments
     public float TotalTimeEngine2;
 
     /// <summary>
+    /// If engine 1 should have forfeited due to exceeding specified search limit at least once.
+    /// </summary>
+    public bool ShouldHaveForfeitedOnLimitsEngine1;
+
+    /// <summary>
+    /// If engine 2 should have forfeited due to exceeding specified search limit at least once.
+    /// </summary>
+    public bool ShouldHaveForfeitedOnLimitsEngine2;
+
+    /// <summary>
     /// Total number of nodes evaluated by engine 1.
     /// </summary>
     public long TotalNodesEngine1;
