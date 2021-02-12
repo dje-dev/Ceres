@@ -30,4 +30,8 @@
     <None Include="Suites\SearchResultInfo.cs" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="System.Drawing.Common" Version="5.0.0" />
+  </ItemGroup>
+
 </Project>
