@@ -132,6 +132,8 @@ namespace Ceres.MCTS.Iteration
                        bool possiblyUsePositionCache = false,
                        bool isFirstMoveOfGame = false)
     {
+      searchLimit = AdjustedSearchLimit(searchLimit, paramsSearch);
+
       int maxNodes;
       if (MCTSParamsFixed.STORAGE_USE_INCREMENTAL_ALLOC)
       {
@@ -243,6 +245,8 @@ namespace Ceres.MCTS.Iteration
       CountSearchContinuations = priorSearch.CountSearchContinuations;
       Manager = priorSearch.Manager;
 
+      searchLimit = AdjustedSearchLimit(searchLimit, Manager.Context.ParamsSearch);
+
       MCTSIterator priorContext = Manager.Context;
       MCTSNodeStore store = priorContext.Tree.Store;
       int numNodesInitial = Manager == null ? 0 : Manager.Root.N;
@@ -346,6 +350,25 @@ namespace Ceres.MCTS.Iteration
         }
       }
 
+    }
+
+
+    /// <summary>
+    /// Returns new SearchLimit, possibly adjusted for time overhead.
+    /// </summary>
+    /// <param name="limit"></param>
+    /// <param name="paramsSearch"></param>
+    /// <returns></returns>
+    SearchLimit AdjustedSearchLimit(SearchLimit limit, ParamsSearch paramsSearch)
+    {
+      if (limit.IsTimeLimit)
+      {
+        return limit with { Value = Math.Max(0.01f, limit.Value - paramsSearch.MoveOverheadSeconds) };
+      }
+      else
+      {
+        return limit with { };
+      }
     }
 
 

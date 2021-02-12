@@ -275,6 +275,13 @@ namespace Ceres.MCTS.Params
 
 
     /// <summary>
+    /// Amount of time subtracted from time allotments to 
+    /// compensate for lag or various unpredictable latencies.
+    /// </summary>
+    public float MoveOverheadSeconds = 0.2f;
+
+
+    /// <summary>
     /// Optional flag that can be defined by developers for ad-hoc testing.
     /// </summary>
     public bool TestFlag = false;
