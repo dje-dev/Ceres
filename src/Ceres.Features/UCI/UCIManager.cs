@@ -626,7 +626,6 @@ namespace Ceres.Features.UCI
           }
         }
 
-
         // Finally show moves that had no visits
         float elapsedTimeSeconds = (float)(DateTime.Now - manager.StartTimeThisSearch).TotalSeconds;
         string timeStr = $"{ elapsedTimeSeconds * 1000.0f:F0}";
@@ -635,7 +634,10 @@ namespace Ceres.Features.UCI
           (MCTSNode node, EncodedMove move, FP16 p) info = searchRootNode.ChildAtIndexInfo(i);
           if (info.node == null)
           {
-            string str = $"info depth 0 seldepth 0 time { timeStr } nodes 1 score cp 0 tbhits 0 multipv {multiPVIndex} pv {info.move.AlgebraicStr} ";
+            bool isWhite = searchRootNode.Annotation.Pos.MiscInfo.SideToMove == SideType.White;
+            EncodedMove moveCorrectPerspective = isWhite ? info.move : info.move.Flipped;
+            string str = $"info depth 0 seldepth 0 time { timeStr } nodes 1 score cp 0 tbhits 0 " 
+                       + $"multipv {multiPVIndex} pv {moveCorrectPerspective.AlgebraicStr} ";
             OutStream.WriteLine(str);
             multiPVIndex++;
           }
