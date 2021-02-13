@@ -106,6 +106,8 @@ namespace Ceres.Features.GameEngines
 
       string lzOptions = "--nodes-as-playouts "; // essential to get same behavior as Ceres with go nodes command 
 
+      lzOptions += "--multi-gather "; // greatly improves search speed
+
       if (forceDisableSmartPruning || (emulateCeresOptions && !paramsSearch.FutilityPruningStopSearchEnabled))
         lzOptions += " --smart-pruning-factor=0 ";
 
