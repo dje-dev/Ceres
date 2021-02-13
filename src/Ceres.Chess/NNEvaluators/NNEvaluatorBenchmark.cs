@@ -102,7 +102,7 @@ namespace Ceres.Chess.NNEvaluators
     /// <param name="numWarmups"></param>
     /// <returns></returns>
     public static (float NPSSingletons, float NPSBigBatch, int[] Breaks) EstNPS(NNEvaluator evaluator, bool computeBreaks = false,
-                                                                                int bigBatchSize = 512, bool estimateSingletons = true,
+                                                                                int bigBatchSize = 256, bool estimateSingletons = true,
                                                                                 int numWarmups = 1)
     {
       if (batch1 == null)
@@ -116,9 +116,9 @@ namespace Ceres.Chess.NNEvaluators
       // Run numerous batches to "warm up" the GPU (make sure in full power state).
       for (int i = 0; i < numWarmups; i++)
       {
-        for (int j=0;j<100;j++) evaluator.EvaluateIntoBuffers(batch1, false);
+        for (int j=0;j<50;j++) evaluator.EvaluateIntoBuffers(batch1, false);
         result = evaluator.EvaluateIntoBuffers(batchBig, false);
-        for (int j = 0; j < 100; j++) evaluator.EvaluateIntoBuffers(batch1, false);
+        for (int j = 0; j < 50; j++) evaluator.EvaluateIntoBuffers(batch1, false);
       }
 
       float npsSingletons = float.NaN;
