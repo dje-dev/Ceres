@@ -142,7 +142,10 @@ namespace Ceres.Features.GameEngines
       LogFileName = logFileName;
       VerboseMoveStats = CeresUserSettingsManager.Settings.VerboseMoveStats;
 
-      if (LogFileName == null) LogFileName = CeresUserSettingsManager.Settings.LogFile;
+      if (!string.IsNullOrEmpty(CeresUserSettingsManager.Settings.LogFile))
+      {
+        LogFileName = CeresUserSettingsManager.Settings.LogFile;
+      }
     }
 
 
