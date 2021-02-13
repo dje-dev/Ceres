@@ -24,6 +24,11 @@ namespace Ceres.Features.UCI
   public partial class UCIManager
   {
     /// <summary>
+    /// Optional override neural network weights file.
+    /// </summary>
+    string overrideWeightsFile = null;
+
+    /// <summary>
     /// Optional text file to receive diagnostic log relating to Ceres engine moves.
     /// </summary>
     string logFileName = null;
@@ -134,6 +139,37 @@ namespace Ceres.Features.UCI
 
       switch (name.ToLower())
       {
+        case "weightsfile":
+          if (taskSearchCurrentlyExecuting != null)
+          {
+            OutStream.WriteLine("Cannot change weights while search is running.");
+          }
+          else
+          {
+            if (value == null || value == "")
+            {
+              OutStream.WriteLine("Network file name expected");
+            }
+            else
+            {
+              if (EvaluatorDef != null && EvaluatorDef.Nets[0].Net.NetworkID.ToLower() == value.ToLower())
+              {
+                OutStream.WriteLine($"Specified network file is already {value}");
+              }
+              else if (CeresEngine != null)
+              {
+                OutStream.WriteLine("Implementation limitation: cannot modify weights file after initialization");
+              }
+              else
+              {
+                overrideWeightsFile = value;
+                EvaluatorDef.TryModifyNetworkID(overrideWeightsFile);
+//                ReinitializeEngine();
+              }
+            }
+          }
+          break;
+
         case "logfile":
           logFileName = value == "" ? null : value;
           if (CeresEngine != null) CeresEngine.LogFileName = logFileName;
@@ -291,6 +327,7 @@ namespace Ceres.Features.UCI
 
     static string SetOptionUCIDescriptions =>
 @$"
+option name WeightsFile type string default <from DefaultNetworkSpecString in Ceres.json>
 option name LogFile type string default
 option name MultiPV type spin default 1 min 1 max 500
 option name VerboseMoveStats type check default false

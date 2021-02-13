@@ -101,15 +101,15 @@ namespace Ceres.Features.UCI
     /// <param name="inStream"></param>
     /// <param name="outStream"></param>
     /// <param name="searchFinishedEvent"></param>
-    public UCIManager(NNEvaluatorDef evaluatorDef, 
-                      TextReader inStream = null, TextWriter outStream = null,                       
+    public UCIManager(NNEvaluatorDef evaluatorDef,
+                      TextReader inStream = null, TextWriter outStream = null,
                       Action<MCTSManager> searchFinishedEvent = null,
                       bool disablePruning = false)
     {
       InStream = inStream ?? Console.In;
       OutStream = outStream ?? Console.Out;
       SearchFinishedEvent = searchFinishedEvent;
-      
+
       EvaluatorDef = evaluatorDef;
 
       if (disablePruning) futilityPruningDisabled = true;
@@ -151,7 +151,7 @@ namespace Ceres.Features.UCI
     /// </summary>
     /// <param name="result"></param>
     void Send(string result) => OutStream.WriteLine(result);
-    
+
 
     /// <summary>
     /// Runs the UCI loop.
@@ -198,7 +198,7 @@ namespace Ceres.Features.UCI
               if (taskSearchCurrentlyExecuting != null)
               {
                 taskSearchCurrentlyExecuting.Wait();
-//                if (!debug && taskSearchCurrentlyExecuting != null) taskSearchCurrentlyExecuting.Result?.Search?.Manager?.Dispose();
+                //                if (!debug && taskSearchCurrentlyExecuting != null) taskSearchCurrentlyExecuting.Result?.Search?.Manager?.Dispose();
                 taskSearchCurrentlyExecuting = null;
               }
 
@@ -299,7 +299,7 @@ namespace Ceres.Features.UCI
               OutStream.WriteLine("info string No search manager created");
             break;
 
-          case "dump-store": 
+          case "dump-store":
             if (CeresEngine?.Search != null)
             {
               using (new SearchContextExecutionBlock(CeresEngine.Search.Manager.Context))
@@ -394,6 +394,17 @@ namespace Ceres.Features.UCI
         OutStream.WriteLine("info string No search manager created");
     }
 
+
+    private void ReinitializeEngine()
+    {
+      if (haveInitializedEngine && CeresEngine != null)
+      {
+        CeresEngine.Dispose();
+      }
+
+      haveInitializedEngine = false;
+      InitializeEngineIfNeeded();
+    }
 
     private void InitializeEngineIfNeeded()
     {

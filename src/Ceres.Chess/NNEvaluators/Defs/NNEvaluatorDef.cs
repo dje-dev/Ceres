@@ -319,6 +319,18 @@ namespace Ceres.Chess.NNEvaluators.Defs
     #endregion
 
     /// <summary>
+    /// Modifies the evaluator definition to point to a specified network
+    /// instead of the network currently specified.
+    /// </summary>
+    /// <param name="networkID"></param>
+    public void TryModifyNetworkID(string networkID)
+    {
+      if (Nets.Length > 1) throw new Exception("TryModifyNetworkID only supported with single nets");
+
+      Nets[0].Net = Nets[0].Net with { NetworkID = networkID };
+    }
+
+    /// <summary>
     /// Modifies the evaluator definition to point to a specified device
     /// instead of the device currently specified.
     /// </summary>
