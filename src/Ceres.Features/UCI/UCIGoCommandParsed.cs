@@ -143,6 +143,11 @@ namespace Ceres.Features.UCI
 
           case "movestogo":
             MovesToGo = TakeIntToken();
+
+            // Convert big values to none,
+            // as a workaround for clients that may use 
+            // extremely large value as a proxy for "all."
+            if (MovesToGo >= 99) MovesToGo = null;
             break;
 
           case "wtime":
