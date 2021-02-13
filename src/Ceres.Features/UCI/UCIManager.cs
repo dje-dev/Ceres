@@ -43,6 +43,7 @@ using Ceres.Base.DataTypes;
 using Ceres.Chess.EncodedPositions.Basic;
 using LINQPad;
 using Ceres.Features.Visualization.TreePlot;
+using System.Threading;
 
 #endregion
 
@@ -186,6 +187,12 @@ namespace Ceres.Features.UCI
             if (taskSearchCurrentlyExecuting != null && !stopIsPending)
             {
               stopIsPending = true;
+
+              // Avoid race condition by mkaing sure the search is already created.
+              while (CeresEngine.Search?.Manager == null)
+              {
+                Thread.Sleep(20);
+              }
 
               CeresEngine.Search.Manager.ExternalStopRequested = true;
               if (taskSearchCurrentlyExecuting != null)
