@@ -49,9 +49,13 @@ namespace Ceres.MCTS.Environment
     public static float TestMetric1 = 0;
 
 
+    public static float MaximumTimeAllotmentOvershoot = -9999f;
+
     private PollingCounter instamoveCounter;
 
     private static MCTSEventSource? mctsEventSource;
+
+    private PollingCounter timeAllotmentOvershootMax;
 
     private PollingCounter testCounter1, testMetric1;
     private PollingCounter searchCount;
@@ -93,7 +97,6 @@ namespace Ceres.MCTS.Environment
 
     private IncrementingPollingCounter dualSelectorAverageNNEvalWaitMS;
 
-    private PollingCounter totalNumInFlightTranspositions;
     private PollingCounter nodeAnnotateCacheHitRate;
     private PollingCounter nnCacheHitRate;
     private PollingCounter opponentTreeReuseHitRate;
@@ -169,7 +172,6 @@ namespace Ceres.MCTS.Environment
         opponentTreeReuseNumHits ??= new PollingCounter("opponent-tree-reuse-hit-count", this, () => LeafEvaluatorReuseOtherTree.NumHits);
 
         nnTranspositionsHitRate ??= new PollingCounter("transposition-hit-rate_pct", this, () => LeafEvaluatorTransposition.HitRatePct);
-        totalNumInFlightTranspositions ??= new PollingCounter("transpositions-in-flight-total", this, () => MCTSNodesSelectedSet.TotalNumInFlightTranspositions);
         numRootPreloadNodes ??= new IncrementingPollingCounter("root-preload-nodes", this, () => MCTSRootPreloader.TotalCumulativeRootPreloadNodes);
 
         mlhMoveModificationFraction ??= new PollingCounter("mlh-move-modified-pct", this, () => 100.0f * ManagerChooseRootMove.MLHMoveModifiedFraction);
@@ -182,6 +184,9 @@ namespace Ceres.MCTS.Environment
         {
           DisplayName = "node-annotation-cache-hit-rate"
         };
+
+        timeAllotmentOvershootMax ??= new PollingCounter("max-search-time-overshoot", this, () => MaximumTimeAllotmentOvershoot);
+       
 
         testCounter1 ??= new PollingCounter("test", this, () => TestCounter1);
 

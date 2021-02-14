@@ -34,6 +34,7 @@ using Ceres.Features.UCI;
 using System.IO;
 using System.Text;
 using Ceres.Chess.UserSettings;
+using Ceres.MCTS.Environment;
 
 #endregion
 
@@ -306,7 +307,7 @@ namespace Ceres.Features.GameEngines
 
       PositionEvalCache positionCacheOpponent = null;
 
-      Search = new MCTSearch(); 
+      Search = new MCTSearch();
 
       if (LastSearch == null)
       {
@@ -317,36 +318,50 @@ namespace Ceres.Features.GameEngines
                       reuseOtherContextForEvaluatedNodes,
                       curPositionAndMoves, searchLimit, verbose, startTime,
                       gameMoveHistory, callback, false, isFirstMoveOfGame);
-        return Search;
       }
-
-      if (LastSearch.Manager.Context.StartPosAndPriorMoves.InitialPosMG != curPositionAndMoves.InitialPosMG)
-        throw new Exception("Internal error: not same starting position");
-
-      List<MGMove> forwardMoves = new List<MGMove>();
-      List<MGMove> lastMoves = LastSearch.Manager.Context.StartPosAndPriorMoves.Moves;
-      for (int i = 0; i < curPositionAndMoves.Moves.Count; i++)
+      else
       {
-        if (i < lastMoves.Count)
+        if (LastSearch.Manager.Context.StartPosAndPriorMoves.InitialPosMG != curPositionAndMoves.InitialPosMG)
+          throw new Exception("Internal error: not same starting position");
+
+        List<MGMove> forwardMoves = new List<MGMove>();
+        List<MGMove> lastMoves = LastSearch.Manager.Context.StartPosAndPriorMoves.Moves;
+        for (int i = 0; i < curPositionAndMoves.Moves.Count; i++)
         {
-          if (lastMoves[i] != curPositionAndMoves.Moves[i])
-            throw new Exception("Internal error: move sequence is not a prefix");
+          if (i < lastMoves.Count)
+          {
+            if (lastMoves[i] != curPositionAndMoves.Moves[i])
+              throw new Exception("Internal error: move sequence is not a prefix");
+          }
+          else
+            forwardMoves.Add(curPositionAndMoves.Moves[i]);
         }
-        else
-          forwardMoves.Add(curPositionAndMoves.Moves[i]);
+
+        // Determine the minimum fraction of tree that would need to be useful
+        // before we would possibly reuse part of tree from prior search.
+        // Below a certain level the tree reuse would increase memory consumption
+        // (because unused nodes remain in node store) but not appreciably improve search speed.
+        //TODO: tweak this parameter, possibly make it larger if small hardwre config is in use
+        float THRESHOLD_FRACTION_NODES_REUSABLE = 0.05f;
+        Search.SearchContinue(LastSearch, reuseOtherContextForEvaluatedNodes,
+                                     forwardMoves, curPositionAndMoves,
+                                     gameMoveHistory, searchLimit, verbose, startTime,
+                                     callback, THRESHOLD_FRACTION_NODES_REUSABLE,
+                                     isFirstMoveOfGame);
       }
 
-      // Determine the minimum fraction of tree that would need to be useful
-      // before we would possibly reuse part of tree from prior search.
-      // Below a certain level the tree reuse would increase memory consumption
-      // (because unused nodes remain in node store) but not appreciably improve search speed.
-      //TODO: tweak this parameter, possibly make it larger if small hardwre config is in use
-      float THRESHOLD_FRACTION_NODES_REUSABLE = 0.05f;
-      Search.SearchContinue(LastSearch, reuseOtherContextForEvaluatedNodes,
-                                   forwardMoves, curPositionAndMoves,
-                                   gameMoveHistory, searchLimit, verbose, startTime,
-                                   callback, THRESHOLD_FRACTION_NODES_REUSABLE,
-                                   isFirstMoveOfGame);
+      // Update the statistic on possible overshoot of internally alloted time and actual
+      // (unless first move, since extra overhead is perhaps unavoidable in that situation).
+      if (!isFirstMoveOfGame)
+      {
+        TimeSpan elapsedTime = DateTime.Now - startTime;
+        if (Search.Manager.SearchLimit.IsTimeLimit)
+        {
+          if (Search.Manager.SearchLimit.IsPerGameLimit) throw new NotImplementedException();
+          float timeOvershoot = (float)elapsedTime.TotalSeconds - Search.Manager.SearchLimit.Value;
+          MCTSEventSource.MaximumTimeAllotmentOvershoot = Math.Max(MCTSEventSource.MaximumTimeAllotmentOvershoot, timeOvershoot);
+        }
+      }
 
       return Search;
     }
