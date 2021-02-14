@@ -410,8 +410,10 @@ namespace Ceres.Features.UCI
     {
       if (!haveInitializedEngine)
       {
+        ShowWeightsFileInfo();
+
         // Create the engine (to be subsequently reused).
-        CeresEngine = new GameEngineCeresInProcess("Ceres", EvaluatorDef, ParamsSearch, ParamsSelect, logFileName:logFileName);
+        CeresEngine = new GameEngineCeresInProcess("Ceres", EvaluatorDef, ParamsSearch, ParamsSelect, logFileName: logFileName);
 
         // Disable verbose move stats from the engine since 
         // this class manages the possibly dumping of verbose move stats itself.
@@ -421,6 +423,29 @@ namespace Ceres.Features.UCI
         CeresEngine.Warmup();
         haveInitializedEngine = true;
       }
+    }
+
+    private void ShowWeightsFileInfo()
+    {
+      OutStream.WriteLine();
+      OutStream.Write("Loading network weights:");
+      if (EvaluatorDef.Nets.Length == 1)
+      {
+        INNWeightsFileInfo net = NNWeightsFiles.LookupNetworkFile(EvaluatorDef.Nets[0].Net.NetworkID, false);
+        string infoStr = net == null ? "(unknown)" : net.ShortStr;
+        OutStream.WriteLine(infoStr);
+      }
+      else
+      {
+        Console.WriteLine();
+        for (int i = 0; i < EvaluatorDef.Nets.Length; i++)
+        {
+          INNWeightsFileInfo net = NNWeightsFiles.LookupNetworkFile(EvaluatorDef.Nets[i].Net.NetworkID);
+          string infoStr = net == null ? "(unknown)" : net.ShortStr;
+          OutStream.WriteLine("  " + infoStr);
+        }
+      }
+      OutStream.WriteLine();
     }
 
 

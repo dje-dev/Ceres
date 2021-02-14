@@ -48,5 +48,24 @@ namespace Ceres.Base.Misc
 
       return true;
     }
+
+
+    /// <summary>
+    /// Returns if file with specified name appears to be a 
+    /// file compressed using ZIP format.
+    /// </summary>
+    public static bool IsZippedFile(string fn)
+    {
+      const byte ZIP_MAGIC_BYTE_0 = 0x1F;
+      const byte ZIP_MAGIC_BYTE_1 = 0x8B;
+
+      FileStream file = File.OpenRead(fn);
+      bool isZipped = file.Length > 2
+                   && file.ReadByte() == ZIP_MAGIC_BYTE_0
+                   && file.ReadByte() == ZIP_MAGIC_BYTE_1;
+      file.Close();
+      return isZipped;
+    }
+
   }
 }

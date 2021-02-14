@@ -14,8 +14,10 @@
 #region Using directives
 
 using System.IO;
+using Ceres.Chess.NNFiles;
 using Ceres.Chess.UserSettings;
 using Ceres.MCTS.Params;
+using Pblczero;
 
 #endregion
 
@@ -140,34 +142,7 @@ namespace Ceres.Features.UCI
       switch (name.ToLower())
       {
         case "weightsfile":
-          if (taskSearchCurrentlyExecuting != null)
-          {
-            OutStream.WriteLine("Cannot change weights while search is running.");
-          }
-          else
-          {
-            if (value == null || value == "")
-            {
-              OutStream.WriteLine("Network file name expected");
-            }
-            else
-            {
-              if (EvaluatorDef != null && EvaluatorDef.Nets[0].Net.NetworkID.ToLower() == value.ToLower())
-              {
-                OutStream.WriteLine($"Specified network file is already {value}");
-              }
-              else if (CeresEngine != null)
-              {
-                OutStream.WriteLine("Implementation limitation: cannot modify weights file after initialization");
-              }
-              else
-              {
-                overrideWeightsFile = value;
-                EvaluatorDef.TryModifyNetworkID(overrideWeightsFile);
-//                ReinitializeEngine();
-              }
-            }
-          }
+          ProcessWeightsFile(value);
           break;
 
         case "logfile":
@@ -273,7 +248,47 @@ namespace Ceres.Features.UCI
           SetFloat(value, 0, float.MaxValue, ref fpuAtRoot);
           break;
       }
+    }
 
+
+    private void ProcessWeightsFile(string value)
+    {
+      if (taskSearchCurrentlyExecuting != null)
+      {
+        OutStream.WriteLine("Cannot change weights while search is running.");
+      }
+      else
+      {
+        if (value == null || value == "")
+        {
+          OutStream.WriteLine("Network file name expected");
+        }
+        else
+        {
+          if (EvaluatorDef != null && EvaluatorDef.Nets[0].Net.NetworkID.ToLower() == value.ToLower())
+          {
+            OutStream.WriteLine($"Specified network file is already {value}");
+          }
+          else if (CeresEngine != null)
+          {
+            OutStream.WriteLine("Implementation limitation: cannot modify weights file after initialization");
+          }
+          else
+          {
+            INNWeightsFileInfo net = NNWeightsFiles.LookupNetworkFile(value, false);
+            if (net == null)
+            {
+              OutStream.WriteLine($"Unable to locate network file: {value}");
+            }
+            else
+            {
+              overrideWeightsFile = value;
+              EvaluatorDef.TryModifyNetworkID(overrideWeightsFile);
+              //                ReinitializeEngine();
+            }
+          }
+        }
+      }
     }
 
     void SetBool(string boolStr, ref bool value)

@@ -66,6 +66,26 @@ namespace Ceres.Chess.NNFiles
     public FileInfo FileInfo { get; }
 
 
+    /// <summary>
+    /// Returns a short descriptive string.
+    /// </summary>
+    public string ShortStr
+    {
+      get
+      {
+        string headsString = (IsWDL ? "WDL " : "") + (HasMovesLeft ? "MLH " : "");
+        if (string.Compare(NetworkID, FileName, true) == 0)
+        {
+          // Network ID is already the full file name
+          return $"{NumBlocks}x{NumFilters} {headsString} from {FileName}";
+        }
+        else
+        {
+          return $"{NetworkID}: {NumBlocks}x{NumFilters} {headsString} from {FileName}";
+        }
+      }
+    }
+
     public string ONNXFileName
     {
       // TODO: eliminate hardcoding
