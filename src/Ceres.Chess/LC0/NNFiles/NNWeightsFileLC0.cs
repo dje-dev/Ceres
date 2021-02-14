@@ -121,7 +121,7 @@ namespace Ceres.Chess.LC0.NNFiles
       /// <param name="filename"></param>
     public NNWeightsFileLC0(string id, string filename)
     {
-      if (!System.IO.File.Exists(filename)) throw new ArgumentException($"NNWeightsFileLC0 file {id} not found with name {filename}");
+      if (!File.Exists(filename)) throw new ArgumentException($"NNWeightsFileLC0 file {id} not found with name {filename}");
 
       NetworkID = id;
       FileName = filename;
@@ -148,25 +148,12 @@ namespace Ceres.Chess.LC0.NNFiles
 
 
     /// <summary>
-    /// Returns a short descriptive string.
-    /// </summary>
-    public string ShortStr
-    {
-      get
-      {
-        string headsString = (IsWDL ? "WDL " : "") + (HasMovesLeft ? "MLH " : "");
-        return $"{NetworkID}: {NumBlocks}x{NumFilters} {headsString}";
-      }
-    }
-
-
-    /// <summary>
     /// Returns string summary.
     /// </summary>
     /// <returns></returns>
     public override string ToString()
     {
-      return $"<NNWeightsFileLC0 {ShortStr} at {FileName} >";
+      return $"<NNWeightsFileLC0 {NetworkID} at {FileName} >";
     }
 
   }
