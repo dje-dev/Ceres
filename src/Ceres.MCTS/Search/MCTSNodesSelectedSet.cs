@@ -170,7 +170,9 @@ namespace Ceres.MCTS.Search
       transpositionRootsOtherBatch = new Dictionary<ulong, MCTSNode>(maxNodes);
 
       if (IN_FLIGHT_THIS_BATCH_LINKAGE_ENABLED)
-        transpositionRootsThisBatch = new Dictionary<ulong, MCTSNode>(maxNodes);
+      {
+        transpositionRootsThisBatch = new Dictionary<ulong, MCTSNode>(32);
+      }
     }
 
     /// <summary>
