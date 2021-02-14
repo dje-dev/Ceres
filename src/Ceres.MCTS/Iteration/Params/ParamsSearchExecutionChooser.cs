@@ -105,7 +105,10 @@ namespace Ceres.MCTS.Params
     void DoChooseOptimal(int estNumNodes)
     {
       // TODO: lift restriction that SMART_SIZE only works with single device
-      ParamsSearch.Execution.SmartSizeBatches = estNumNodes > 1000 && NNEvaluatorDef.NumDevices == 1;
+      bool defaultUseSmartSizeBatches = new ParamsSearchExecution().SmartSizeBatches;
+      ParamsSearch.Execution.SmartSizeBatches = defaultUseSmartSizeBatches 
+                                             && estNumNodes > 1000 
+                                             && NNEvaluatorDef.NumDevices == 1;
                               
       if (NNEvaluatorDef.DeviceCombo == NNEvaluatorDeviceComboType.Pooled)
         AdjustForPooled();
