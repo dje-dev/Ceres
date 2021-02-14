@@ -60,7 +60,7 @@ namespace Ceres.Chess.Games.Utils
     /// <summary>
     /// Returns as a FEN and also "moves" with list of moves (if any).
     /// </summary>
-    public string FENAndMoves => FEN + StartMoves == null ? "" : " moves " + StartMoves;
+    public string FENAndMoves => FEN + (StartMoves == null ? "" : " moves " + StartMoves);
 
 
     /// <summary>
