@@ -116,11 +116,7 @@ namespace Ceres.Features.GameEngines
       // However note that for very small nets such as 128x10 it may be faster to uze zero nncache.
       const int LC0_CACHE_SIZE = 5_000_000;
 
-      // The LC0 default move-overhead is 200ms.
-      // That might be appropriate for long searches (where LC0 tends to overshoot time otherwise)
-      // but is too distortive/unfair to LC0 in short games.
-      // Therefore we set this to 10.
-      const int MOVE_OVERHEAD = 10;
+      int MOVE_OVERHEAD = (int)(new ParamsSearch().MoveOverheadSeconds * 1000);
       lzOptions += $"--move-overhead={MOVE_OVERHEAD}  ";
       if (alwaysFillHistory) lzOptions += $" --history-fill=always "; 
 
