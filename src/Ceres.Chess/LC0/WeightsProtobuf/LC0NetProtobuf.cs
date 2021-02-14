@@ -88,9 +88,14 @@ namespace Ceres.Chess.LC0.WeightsProtobuf
     /// <param name="fn"></param>
     public LC0ProtobufNet(string fn)
     {
-      if (!System.IO.File.Exists(fn)) throw new ArgumentException($"No such protobuf file found {fn}");
+      if (!File.Exists(fn)) throw new ArgumentException($"No such protobuf file found {fn}");
 
-      Net = SerializationUtils.ProtoDeserialize<Net>(fn.EndsWith(".gz") ? CompressionUtils.GetDecompressedBytes(fn) : System.IO.File.ReadAllBytes(fn));
+      // Read data from file, decompressing if necessary.
+      byte[] data = FileUtils.IsZippedFile(fn) ? CompressionUtils.GetDecompressedBytes(fn) 
+                                               : File.ReadAllBytes(fn);
+
+      Net = SerializationUtils.ProtoDeserialize<Net>(data);
+
       if (Net == null) throw new Exception($"Failure reading/parsing net {fn}");
     }
 
