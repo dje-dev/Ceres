@@ -38,7 +38,7 @@ namespace Ceres.Chess.MoveGen
       if (!TryParseMoveCoordinateOrAlgebraic(pos, moveStr, out MGMove move))
       {
         Position position = MGChessPositionConverter.PositionFromMGChessPosition(in pos);
-        PositionWithMove mfp = SANParser.FromSAN(moveStr, position);
+        PositionWithMove mfp = SANParser.FromSAN(moveStr, in position);
         return MGMoveConverter.MGMoveFromPosAndMove(in position, mfp.Move);
       }
       else
@@ -66,9 +66,9 @@ namespace Ceres.Chess.MoveGen
       foreach (MGMove moveTry in moves.MovesArray)
       {
         // Accept moves in any of multiple formats, including Chess 960 (for castling variation)
-        if (moveTry.MoveStr(MGMoveNotationStyle.LC0Coordinate).ToLower() == moveStr
-        ||  moveTry.MoveStr(MGMoveNotationStyle.LC0Coordinate960Format).ToLower() == moveStr
-        ||  moveTry.MoveStr(MGMoveNotationStyle.LongAlgebraic).ToLower() == moveStr)
+        if (String.Equals(moveTry.MoveStr(MGMoveNotationStyle.LC0Coordinate), moveStr, StringComparison.OrdinalIgnoreCase)
+         || String.Equals(moveTry.MoveStr(MGMoveNotationStyle.LC0Coordinate960Format), moveStr, StringComparison.OrdinalIgnoreCase)
+         || String.Equals(moveTry.MoveStr(MGMoveNotationStyle.LongAlgebraic), moveStr, StringComparison.OrdinalIgnoreCase))
         {
           move = moveTry;
           return true;
