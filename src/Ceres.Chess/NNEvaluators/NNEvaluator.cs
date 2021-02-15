@@ -316,14 +316,17 @@ namespace Ceres.Chess.NNEvaluators
     {
       lock (this)
       {
-        if (NumInstanceReferences > 0)
+        bool shouldShutdown = true;
+        if (IsPersistent)
         {
           NumInstanceReferences--;
-          if (!IsPersistent)
-          {
-            DoShutdown();
-            IsShutdown = true;
-          }
+          shouldShutdown = NumInstanceReferences == 0;
+        }
+
+        if (shouldShutdown)
+        {
+          DoShutdown();
+          IsShutdown = true;
         }
       }
     }
@@ -334,11 +337,18 @@ namespace Ceres.Chess.NNEvaluators
     public void Shutdown()
     {
       if (NumInstanceReferences > 0)
+      {
         throw new Exception("Cannot shutdown until all instances call Release()");
+      }
       else
       {
         DoShutdown();
-        NNEvaluatorFactory.DeletePersistent(this);
+
+        if (IsPersistent)
+        {
+          NNEvaluatorFactory.DeletePersistent(this);
+        }
+
         IsShutdown = true;
       }
     }
