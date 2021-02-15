@@ -134,11 +134,11 @@ namespace Ceres.Features.UCI
             break;
 
           case "nodes":
-            Nodes = TakeIntToken();
+            Nodes = Math.Max(1, TakeIntToken());
             break;
 
           case "movetime":
-            MoveTime = TakeIntToken();
+            MoveTime = Math.Max(1, TakeIntToken());
             break;
 
           case "movestogo":
@@ -152,30 +152,30 @@ namespace Ceres.Features.UCI
 
           case "wtime":
             if (weAreWhite) 
-              TimeOurs = Math.Max(0, TakeIntToken()); 
+              TimeOurs = Math.Max(1, TakeIntToken()); 
             else 
-              TimeOpponent = Math.Max(0, TakeIntToken());
+              TimeOpponent = Math.Max(1, TakeIntToken());
             break;
 
           case "btime":
             if (weAreBlack)
-              TimeOurs = Math.Max(0, TakeIntToken());
+              TimeOurs = Math.Max(1, TakeIntToken());
             else
-              TimeOpponent = Math.Max(0, TakeIntToken());
+              TimeOpponent = Math.Max(1, TakeIntToken());
             break;
 
           case "wnodes":
             if (weAreWhite)
-              NodesOurs = Math.Max(0, TakeIntToken());
+              NodesOurs = Math.Max(1, TakeIntToken());
             else
-              NodesOpponent = Math.Max(0, TakeIntToken());
+              NodesOpponent = Math.Max(1, TakeIntToken());
             break;
 
           case "bnodes":
             if (weAreBlack)
-              NodesOurs = Math.Max(0, TakeIntToken());
+              NodesOurs = Math.Max(1, TakeIntToken());
             else
-              NodesOpponent = Math.Max(0, TakeIntToken());
+              NodesOpponent = Math.Max(1, TakeIntToken());
             break;
 
           case "winc":
@@ -201,7 +201,7 @@ namespace Ceres.Features.UCI
             else
             {
               // Some clients may always send very large depths (like 9999).
-              // Since these are effecitvely never binding, just ignore them.
+              // Since these are effectively never binding, just ignore them.
             }
             break;
 
