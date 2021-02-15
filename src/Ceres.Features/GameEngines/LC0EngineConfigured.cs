@@ -52,6 +52,8 @@ namespace Ceres.Features.GameEngines
       return LC0EngineArgs.BackendArgumentsString(evaluatorDef.DeviceIndices, precision, evaluatorDef.EqualFractions);
     }
 
+    public static bool USE_LC0_SMALL_SEARCH_SETTINGS = false;
+
 
     /// <summary>
     /// Returns the executable location and program arguments appropriate
@@ -117,7 +119,19 @@ namespace Ceres.Features.GameEngines
       const int LC0_CACHE_SIZE = 5_000_000;
 
       int MOVE_OVERHEAD = (int)(new ParamsSearch().MoveOverheadSeconds * 1000);
-      lzOptions += $"--move-overhead={MOVE_OVERHEAD}  ";
+      lzOptions += $"--move-overhead={MOVE_OVERHEAD} ";
+      if (USE_LC0_SMALL_SEARCH_SETTINGS)
+      {
+        // Works better for smaller searchs (such as 1000 nodes)
+        lzOptions += " --max-collision-visits=32 ";
+
+      }
+      else
+      {
+        // Much faster for large searches with multigather enabled.
+        lzOptions+= " --max-out-of-order-evals-factor=2.4 --max-collision-events=500 --max-collision-visits=500 ";
+      }
+
       if (alwaysFillHistory) lzOptions += $" --history-fill=always "; 
 
       if (emulateCeresOptions)
