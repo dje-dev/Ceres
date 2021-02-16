@@ -58,6 +58,7 @@ using System.Text;
 
 namespace Ceres.Base.DataTypes // TO DO: get rid of this in favor of BitVector64_DJE
 {
+  [Serializable]
   public struct BitVector64
   {
     long data;
