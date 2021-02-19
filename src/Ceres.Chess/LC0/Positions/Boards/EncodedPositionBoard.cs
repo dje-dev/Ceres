@@ -317,6 +317,20 @@ namespace Ceres.Chess.LC0.Boards
     }
 
 
+    public int CountPieces
+    {
+      get
+      {
+        return (OurQueens.NumberBitsSet + TheirQueens.NumberBitsSet) +
+                (OurRooks.NumberBitsSet + TheirRooks.NumberBitsSet) +
+                (OurBishops.NumberBitsSet + TheirBishops.NumberBitsSet) +
+                (OurKnights.NumberBitsSet + TheirKnights.NumberBitsSet) +
+                (OurPawns.NumberBitsSet + TheirPawns.NumberBitsSet) +
+                (OurKing.NumberBitsSet + TheirKing.NumberBitsSet);
+      }
+    }
+
+
     public float RelativePointsUs
     {
       get
