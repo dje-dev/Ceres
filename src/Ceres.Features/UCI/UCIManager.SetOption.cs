@@ -13,6 +13,7 @@
 
 #region Using directives
 
+using System.Globalization;
 using System.IO;
 using Ceres.Chess.NNFiles;
 using Ceres.Chess.UserSettings;
@@ -323,7 +324,7 @@ namespace Ceres.Features.UCI
 
     void SetFloat(string floatStr, float minValue, float maxValue, ref float value)
     {
-      if (!float.TryParse(floatStr, out float newValue))
+      if (!float.TryParse(floatStr, NumberStyles.Any, CultureInfo.InvariantCulture, out float newValue))
       {
         OutStream.WriteLine("Invalid value, expected number");
       }

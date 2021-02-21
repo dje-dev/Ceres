@@ -14,6 +14,7 @@
 #region Using directives
 
 using System;
+using System.Globalization;
 
 #endregion
 
@@ -77,7 +78,7 @@ namespace Ceres.Chess
       string[] plusParts = specificationString[..^2].Split("+");
       float partIncrement = 0;
       float partBase;
-      if (!float.TryParse(plusParts[0], out partBase))
+      if (!float.TryParse(plusParts[0], NumberStyles.Any, CultureInfo.InvariantCulture, out partBase))
       {
         errorString = "Invalid SearchLimit specification, exected number of nodes/seconds at beginning of specification";
         return null;
@@ -90,7 +91,7 @@ namespace Ceres.Chess
           errorString = "Invalid SearchLimit specification, increments are only valid with per game (ng or sg) limit types";
           return null;
         }
-        if (!float.TryParse(plusParts[1], out partIncrement))
+        if (!float.TryParse(plusParts[1], NumberStyles.Any, CultureInfo.InvariantCulture, out partIncrement))
         {
           errorString = "Invalid SearchLimit specification, exected + to be followed by a number indicating incremental nodes/seconds per move";
           return null;

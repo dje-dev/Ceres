@@ -15,6 +15,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 
 #endregion
 
@@ -45,7 +46,8 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
 
         if (netParts.Length == 2)
         {
-          if (float.TryParse(netParts[1], out float netWeight))
+          
+          if (float.TryParse(netParts[1], NumberStyles.Any, CultureInfo.InvariantCulture, out float netWeight))
           {
             weight = netWeight;
           }

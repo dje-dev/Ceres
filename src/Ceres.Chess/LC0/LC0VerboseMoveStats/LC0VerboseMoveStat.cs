@@ -15,7 +15,7 @@
 
 using System;
 using System.Collections.Generic;
-
+using System.Globalization;
 using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Chess.LC0.Positions;
 
@@ -154,7 +154,8 @@ namespace Ceres.Chess.LC0VerboseMoves
         {
           if (nextPos >= split.Length) return double.NaN;
           while (nextPos < split.Length && split[nextPos] == "") nextPos++;
-          if (double.TryParse(split[nextPos++].Replace("%", ""), out double val))
+
+          if (double.TryParse(split[nextPos++].Replace("%", ""), NumberStyles.Any, CultureInfo.InvariantCulture, out double val))
             return val;
         } while(true);
       }
@@ -228,7 +229,7 @@ namespace Ceres.Chess.LC0VerboseMoves
         while (curIndex < statsLine.Length && (char.IsDigit(statsLine[curIndex]) || statsLine[curIndex] == '.') || statsLine[curIndex] == '-')
           valueStr += statsLine[curIndex++];
 
-        if (float.TryParse(valueStr, out float value))
+        if (float.TryParse(valueStr, NumberStyles.Any, CultureInfo.InvariantCulture, out float value))
           ret[label] = value;
 
       }
