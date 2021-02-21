@@ -95,12 +95,11 @@ namespace Ceres.Chess
     /// </summary>
     /// <param name="pgnFileName"></param>
     /// <returns></returns>
-    public static List<Game> FromPGN(string pgnFileName)
+    public static IEnumerable<Game> FromPGN(string pgnFileName)
     {
       if (!System.IO.File.Exists(pgnFileName)) 
         throw new ArgumentException($"Requested pgn file does not exist {pgnFileName}");
 
-      List<Game> games = new List<Game>();
       PgnStreamReader pgnReader = new PgnStreamReader();
       foreach (GameInfo game in pgnReader.Read(pgnFileName))
       {
@@ -109,11 +108,9 @@ namespace Ceres.Chess
         // Skip null games
         if (gameS.Moves.Count > 0)
         {
-          games.Add(gameS);
+          yield return gameS;
         }
       }
-
-      return games;
     }
 
 
