@@ -229,9 +229,62 @@ namespace Ceres.Chess.LC0.Boards
     }
 
 
+    /// <summary>
+    /// Converts to an array of bytes, each representing
+    /// a single bit (inverse of FromExpandedBytes).
+    /// </summary>
+    /// <returns></returns>
+    public byte[] ToExpandedBytes()
+    {
+      ulong[] decoded = new ulong[EncodedPositionBoard.NUM_PLANES_PER_BOARD];
+      ExtractPlanesValuesIntoArray(decoded, 0);
+
+      byte[] ret = new byte[64 * EncodedPositionBoard.NUM_PLANES_PER_BOARD];
+      int index = 0;
+      for (int i = 0; i < decoded.Length; i++)
+      {
+        BitVector64 bv = new BitVector64(decoded[i]);
+        for (int j = 0; j < 64; j++)
+        {
+          ret[index++] = bv.BitIsSet(j) ? 1 : 0;
+        }
+      }
+      return ret;
+    }
+
+    /// <summary>
+    /// Converts an array of bytes containing the consecutive bitboards
+    /// of an EncodedPositionBoard which were expanded (each bit to a byte).
+    /// Inverse of ToExpandedBytes.
+    /// </summary>
+    /// <param name="bytes"></param>
+    /// <returns></returns>
+    public static EncodedPositionBoard FromExpandedBytes(byte[] bytes)
+    {
+      BitVector64 repetitionVector = new BitVector64();
+
+      return new(
+        BitVector64.FromExpandedBytes(bytes, 64 * 0),
+        BitVector64.FromExpandedBytes(bytes, 64 * 1),
+        BitVector64.FromExpandedBytes(bytes, 64 * 2),
+        BitVector64.FromExpandedBytes(bytes, 64 * 3),
+        BitVector64.FromExpandedBytes(bytes, 64 * 4),
+        BitVector64.FromExpandedBytes(bytes, 64 * 5),
+
+        BitVector64.FromExpandedBytes(bytes, 64 * 6),
+        BitVector64.FromExpandedBytes(bytes, 64 * 7),
+        BitVector64.FromExpandedBytes(bytes, 64 * 8),
+        BitVector64.FromExpandedBytes(bytes, 64 * 9),
+        BitVector64.FromExpandedBytes(bytes, 64 * 10),
+        BitVector64.FromExpandedBytes(bytes, 64 * 11),
+        bytes[^1] == 1  // The 64 bytes are either all 1's or all 0's.
+        );
+    }
+
+
     public void ExtractPlanesValuesIntoArray(ulong[] dest, int destIndex)
     {
-      const uint BYTES = sizeof(uint) * EncodedPositionBoard.NUM_PLANES_PER_BOARD;
+      const uint BYTES = sizeof(ulong) * EncodedPositionBoard.NUM_PLANES_PER_BOARD;
 
       unsafe
       {
@@ -566,6 +619,7 @@ namespace Ceres.Chess.LC0.Boards
 
       return planes;
     }
+
 
   }
 
