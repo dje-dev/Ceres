@@ -130,6 +130,22 @@ namespace Ceres.Base.DataTypes // TO DO: get rid of this in favor of BitVector64
       return ToString(this);
     }
 
+    /// <summary>
+    /// Returns a BitVector64 assembled from an array of bytes
+    /// which contain the expanded (each bit to a byte) representation.
+    /// </summary>
+    /// <param name="bytes"></param>
+    /// <param name="startIndex"></param>
+    /// <returns></returns>
+    public static BitVector64 FromExpandedBytes(byte[] bytes, int startIndex)
+    {
+      BitVector64 bits = new BitVector64();
+      for (int i = startIndex; i < startIndex + 64; i++)
+        if (bytes[i] == 1)
+          bits.SetBit(i - startIndex);
+      return bits;
+    }
+
 
     public static string ToString(BitVector64 value)
     {
