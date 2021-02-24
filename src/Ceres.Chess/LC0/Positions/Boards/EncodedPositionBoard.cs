@@ -79,6 +79,22 @@ namespace Ceres.Chess.LC0.Boards
 
     public static int PlaneStartIndex(EncodedPositionBoardPlane.PlanesType type) => (int)type * 64;
 
+    /// <summary>
+    /// Constructor from explicit set of encoded planes.
+    /// </summary>
+    /// <param name="ourPawns"></param>
+    /// <param name="ourKnights"></param>
+    /// <param name="ourBishops"></param>
+    /// <param name="ourRooks"></param>
+    /// <param name="ourQueens"></param>
+    /// <param name="ourKing"></param>
+    /// <param name="theirPawns"></param>
+    /// <param name="theirKnights"></param>
+    /// <param name="theirBishops"></param>
+    /// <param name="theirRooks"></param>
+    /// <param name="theirQueens"></param>
+    /// <param name="theirKing"></param>
+    /// <param name="repetitions"></param>
     public EncodedPositionBoard(EncodedPositionBoardPlane ourPawns, EncodedPositionBoardPlane ourKnights,
                    EncodedPositionBoardPlane ourBishops, EncodedPositionBoardPlane ourRooks,
                    EncodedPositionBoardPlane ourQueens, EncodedPositionBoardPlane ourKing,
@@ -105,6 +121,13 @@ namespace Ceres.Chess.LC0.Boards
 
     const long ALL_ONES_LONG = -1;
 
+
+    /// <summary>
+    /// Constructor from Spans of "ours" and "theirs" planes.
+    /// </summary>
+    /// <param name="spanOurPawnsKnightsBishipsRooksQueensKing"></param>
+    /// <param name="spanTheirPawnsKnightsBishipsRooksQueensKing"></param>
+    /// <param name="repetitions"></param>
     public EncodedPositionBoard(Span<BitVector64> spanOurPawnsKnightsBishipsRooksQueensKing,
                    Span<BitVector64> spanTheirPawnsKnightsBishipsRooksQueensKing,
                    bool repetitions)
@@ -159,6 +182,12 @@ namespace Ceres.Chess.LC0.Boards
     public EncodedPositionBoard ReversedAndMirrored => new EncodedPositionBoard(this, true, true);
 
 
+    /// <summary>
+    /// Copy constructor (with optional mirror and/or reverse applied).
+    /// </summary>
+    /// <param name="other"></param>
+    /// <param name="mirror"></param>
+    /// <param name="reverse"></param>
     private EncodedPositionBoard(EncodedPositionBoard other, bool mirror, bool reverse)
     {
       if (reverse & mirror)
@@ -261,8 +290,6 @@ namespace Ceres.Chess.LC0.Boards
     /// <returns></returns>
     public static EncodedPositionBoard FromExpandedBytes(byte[] bytes)
     {
-      BitVector64 repetitionVector = new BitVector64();
-
       return new(
         BitVector64.FromExpandedBytes(bytes, 64 * 0),
         BitVector64.FromExpandedBytes(bytes, 64 * 1),
@@ -282,6 +309,11 @@ namespace Ceres.Chess.LC0.Boards
     }
 
 
+    /// <summary>
+    /// Extracts all planes into an array of ulong.
+    /// </summary>
+    /// <param name="dest"></param>
+    /// <param name="destIndex">starting index to receive values</param>
     public void ExtractPlanesValuesIntoArray(ulong[] dest, int destIndex)
     {
       const uint BYTES = sizeof(ulong) * EncodedPositionBoard.NUM_PLANES_PER_BOARD;
@@ -297,8 +329,9 @@ namespace Ceres.Chess.LC0.Boards
       destIndex += EncodedPositionBoard.NUM_PLANES_PER_BOARD;
     }
 
+
     /// <summary>
-    /// 
+    /// Performs integrity check on structure definition.
     /// </summary>
     public static void Validate()
     {
@@ -306,6 +339,10 @@ namespace Ceres.Chess.LC0.Boards
       if (Marshal.SizeOf(typeof(EncodedPositionBoard)) != 8 * EncodedPositionBoard.NUM_PLANES_PER_BOARD) throw new Exception("Unexpected LZBoard size");
     }
 
+
+    /// <summary>
+    /// Returns new board which is reversed and flipped.
+    /// </summary>
     public EncodedPositionBoard ReversedAndFlipped
     {
       get
@@ -317,6 +354,9 @@ namespace Ceres.Chess.LC0.Boards
     }
 
 
+    /// <summary>
+    /// Returns a new board which is flipped.
+    /// </summary>
     public EncodedPositionBoard Flipped
     {
       get
@@ -328,6 +368,11 @@ namespace Ceres.Chess.LC0.Boards
     }
 
 
+    /// <summary>
+    /// Decodes board into corresponding FEN.
+    /// </summary>
+    /// <param name="weAreWhite"></param>
+    /// <returns></returns>
     public string GetFEN(bool weAreWhite)
     {
       string fen = "";
@@ -357,7 +402,11 @@ namespace Ceres.Chess.LC0.Boards
       return fen;
     }
 
-
+    /// <summary>
+    /// Returns ASCII representation of board.
+    /// </summary>
+    /// <param name="weAreWhite"></param>
+    /// <returns></returns>
     public string GetBoardPicture(bool weAreWhite)
     {
       string fen = "";
@@ -370,6 +419,9 @@ namespace Ceres.Chess.LC0.Boards
     }
 
 
+    /// <summary>
+    /// Returns total number of pieces on the board.
+    /// </summary>
     public int CountPieces
     {
       get
@@ -384,6 +436,10 @@ namespace Ceres.Chess.LC0.Boards
     }
 
 
+    /// <summary>
+    /// Returns number of relative points by which side
+    /// is ahead in points (using the typical approximate point values of pieces).
+    /// </summary>
     public float RelativePointsUs
     {
       get
