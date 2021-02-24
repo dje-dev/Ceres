@@ -34,11 +34,6 @@ namespace Ceres.MCTS.MTCSNodes
     public MCTSNode BestMoveNode { get; init; }
 
     /// <summary>
-    /// The best move that was chosen.
-    /// </summary>
-    public readonly MGMove BestMove;
-
-    /// <summary>
     /// The number of visits beneath the best node.
     /// </summary>
     public readonly int N;
@@ -80,7 +75,6 @@ namespace Ceres.MCTS.MTCSNodes
     internal BestMoveInfo(MCTSNode node, float bestQ, float bestN, float bestNSecond, float mlhBonusApplied)
     {
       BestMoveNode = node;
-      BestMove = node.Annotation.PriorMoveMG;
       N = node.N;
       Q = (float)node.Q;
       BestQ = bestQ;
@@ -88,6 +82,12 @@ namespace Ceres.MCTS.MTCSNodes
       BestNSecond = bestNSecond;
       MLHBonusApplied = mlhBonusApplied;
     }
+
+
+    /// <summary>
+    /// Returns associated best move.
+    /// </summary>
+    public MGMove BestMove => BestMoveNode.Annotation.PriorMoveMG;
 
 
     /// <summary>

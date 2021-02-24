@@ -428,6 +428,8 @@ namespace Ceres.MCTS.Iteration
 
     private void UpdateContemptManager(MCTSNode newRoot)
     {
+      newRoot?.Annotate();
+
       // Inform contempt manager about the opponents move
       // (compared to the move we believed was optimal)
       if (newRoot != null && newRoot.Depth == 2)

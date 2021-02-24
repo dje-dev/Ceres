@@ -123,6 +123,7 @@ namespace Ceres.MCTS.Search
       {
         (MCTSNode childNode, EncodedMove move, FP16 p) = node.ChildAtIndexInfo(i);
 
+
         if (float.IsNaN(pThreshold) || p >= pThreshold)
         {
           // Add this node if not already extant
@@ -139,11 +140,16 @@ namespace Ceres.MCTS.Search
             nodes.Add(childNode);
             if (nodes.Count == maxNodes) return;
           }
-          else if (node.Depth < maxDepth - 1 && childNode.N > 0)
+          else
           {
-            // Recursively descend
-            Debug.Assert(childNode != null);
-            GatherRootPreloadNodes(selectorID, childNode, maxNodes, maxDepth, width, nodes, pThreshold);
+            node.Annotate();
+
+            if (node.Depth < maxDepth - 1 && childNode.N > 0)
+            {
+              // Recursively descend
+              Debug.Assert(childNode != null);
+              GatherRootPreloadNodes(selectorID, childNode, maxNodes, maxDepth, width, nodes, pThreshold);
+            }
           }
         }
       }

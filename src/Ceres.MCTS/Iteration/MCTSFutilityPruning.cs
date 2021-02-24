@@ -167,7 +167,7 @@ namespace Ceres.MCTS.Iteration
 
       float bestQ = (float)bestQNode.Q;
 
-      ManagerChooseRootMove bestMoveChoser = new(Context.Root, false, Context.ParamsSearch.MLHBonusFactor);
+      ManagerChooseRootMove bestMoveChoser = new(Context.Root, false, Context.ParamsSearch.MLHBonusFactor, false);
       Span<MCTSNodeStructChild> children = Root.Ref.Children;
       for (int i = 0; i < Root.Ref.NumChildrenExpanded; i++)
       {

@@ -31,6 +31,7 @@ using Ceres.Chess.Positions;
 using Ceres.MCTS.Evaluators;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.MTCSNodes;
+using Ceres.MCTS.MTCSNodes.Annotation;
 using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.NodeCache;
@@ -232,7 +233,9 @@ namespace Ceres.MCTS.LeafExpansion
     /// <returns></returns>
     public unsafe void Annotate(MCTSNode node)
     {
-      if (node.Annotation.IsInitialized) return;
+      if (node.IsAnnotated) return;
+
+      ref MCTSNodeAnnotation annotation = ref node.annotation;
 
       NumAnnotations++;
 
@@ -271,23 +274,23 @@ namespace Ceres.MCTS.LeafExpansion
       ulong zobristHashForCaching = EncodedBoardZobrist.ZobristHash(posHistoryForCaching, node.Context.EvaluatorDef.HashMode);
 
       node.LastAccessedSequenceCounter = node.Context.Tree.SEQUENCE_COUNTER++;
-      node.Annotation.PriorMoveMG = priorMoveMG;
+      annotation.PriorMoveMG = priorMoveMG;
 
-      node.Annotation.Pos = posHistory[^1]; // this will have had its repetition count set
-      node.Annotation.PosMG = newPos;
+      annotation.Pos = posHistory[^1]; // this will have had its repetition count set
+      annotation.PosMG = newPos;
 
-      node.Annotation.PositionHashForCaching = zobristHashForCaching; // TODO: remove this, use hash in node itself
+      annotation.PositionHashForCaching = zobristHashForCaching; // TODO: remove this, use hash in node itself
       node.Ref.ZobristHash = zobristHashForCaching;
 
       const bool FAST = true;
       if (!FAST)
       {
-        node.Annotation.LC0BoardPosition = EncodedPositionBoard.GetBoard(in posHistory[^1], node.Annotation.PosMG.SideToMove, posHistory[^1].MiscInfo.RepetitionCount > 0);
+        annotation.LC0BoardPosition = EncodedPositionBoard.GetBoard(in posHistory[^1], annotation.PosMG.SideToMove, posHistory[^1].MiscInfo.RepetitionCount > 0);
       }
       else
       {
-        EncodedPositionBoard.SetBoard(ref node.Annotation.LC0BoardPosition, in node.Annotation.PosMG, node.Annotation.PosMG.SideToMove, posHistory[^1].MiscInfo.RepetitionCount > 0);
-        node.Annotation.MiscInfo = EncodedPositionWithHistory.GetMiscFromPosition(posHistory[^1].MiscInfo, SideType.White);
+        EncodedPositionBoard.SetBoard(ref annotation.LC0BoardPosition, in annotation.PosMG, annotation.PosMG.SideToMove, posHistory[^1].MiscInfo.RepetitionCount > 0);
+        annotation.MiscInfo = EncodedPositionWithHistory.GetMiscFromPosition(posHistory[^1].MiscInfo, SideType.White);
       }
 
       bool alreadyEvaluated = !FP16.IsNaN(node.V);

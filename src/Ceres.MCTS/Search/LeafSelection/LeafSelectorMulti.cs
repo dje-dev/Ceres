@@ -228,8 +228,10 @@ namespace Ceres.MCTS.Search
     /// <param name="node"></param>
     public void InsureAnnotated(MCTSNode node)
     {
-      if (!node.Annotation.IsInitialized)
+      if (!node.IsAnnotated)
+      {
         Context.Tree.Annotate(node);
+      }
     }
 
 #endregion
