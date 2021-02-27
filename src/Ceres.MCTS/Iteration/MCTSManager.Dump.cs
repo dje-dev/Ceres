@@ -17,6 +17,7 @@ using System;
 using System.IO;
 using System.Threading;
 using Ceres.Chess;
+using Ceres.Chess.MoveGen;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Analysis;
 using Ceres.MCTS.Utils;
@@ -34,7 +35,7 @@ namespace Ceres.MCTS.Iteration
     /// <param name="searchRootNode"></param>
     /// <param name="writer"></param>
     /// <param name="description"></param>
-    public void DumpFullInfo(MCTSNode searchRootNode = null, TextWriter writer = null, string description = null)
+    public void DumpFullInfo(MGMove bestMove, MCTSNode searchRootNode = null, TextWriter writer = null, string description = null)
     {
       searchRootNode = searchRootNode ?? Root;
       writer = writer ?? Console.Out;
@@ -55,10 +56,31 @@ namespace Ceres.MCTS.Iteration
       }
       writer.WriteLine();
 
+      MCTSNode[] nodesSortedN = null;
+      MCTSNode[] nodesSortedQ = null;
+
+      string bestMoveInfo = "";
+      if (searchRootNode.NumChildrenExpanded > 0 
+       && StopStatus != SearchStopStatus.TablebaseImmediateMove
+       && StopStatus != SearchStopStatus.OnlyOneLegalMove)
+      {
+        MCTSNode[] childrenSortedN = searchRootNode.ChildrenSorted(node => -node.N);
+        MCTSNode[] childrenSortedQ = searchRootNode.ChildrenSorted(node => (float)node.Q);
+        bool isTopN = childrenSortedN[0].Annotation.PriorMoveMG == bestMove;
+        bool isTopQ = childrenSortedQ[0].Annotation.PriorMoveMG == bestMove;
+        if (isTopN && isTopQ)
+          bestMoveInfo = "(TopN and TopQ)";
+        else if (isTopN)
+          bestMoveInfo = "(TopN)";
+        else if (isTopQ)
+          bestMoveInfo = "(TopQ)";
+      }
+
       // Output position (with history) information.
       writer.WriteLine("Position            : " + searchRootNode.Annotation.Pos.FEN);
       writer.WriteLine("Tree root position  : " + Context.Tree.Store.Nodes.PriorMoves);
       writer.WriteLine("Search stop status  : " + StopStatus);
+      writer.WriteLine("Best move selected  : " + bestMove.MoveStr(MGMoveNotationStyle.LC0Coordinate) + " " + bestMoveInfo);
       writer.WriteLine();
 
       using (new SearchContextExecutionBlock(Context))

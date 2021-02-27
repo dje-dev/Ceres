@@ -328,8 +328,20 @@ namespace Ceres.MCTS.MTCSNodes
       }
     }
 
-    public ref MCTSNodeAnnotation Annotation => ref annotation;
-    MCTSNodeAnnotation annotation;
+    internal MCTSNodeAnnotation annotation;
+    public ref MCTSNodeAnnotation Annotation
+    {
+      get
+      {
+        Debug.Assert(annotation.IsInitialized);
+        return ref annotation;
+      }
+    }
+
+    /// <summary>
+    /// Returns if the associated annotation has been initialized.
+    /// </summary>
+    public bool IsAnnotated => annotation.IsInitialized;
 
 
     /// <summary>
@@ -337,9 +349,10 @@ namespace Ceres.MCTS.MTCSNodes
     /// </summary>
     public void Annotate()
     {
-      if (!Annotation.IsInitialized)
+      if (!IsAnnotated)
         Context.Tree.Annotate(this);
     }
+
 
     /// <summary>
     /// Counter used for LRU caching (keeps track of last time accessed)
