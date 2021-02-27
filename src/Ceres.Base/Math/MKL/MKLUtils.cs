@@ -81,9 +81,6 @@ namespace Ceres.Base.Math.MKL
                                       (IntPtr)right, rightColDim, 0, (IntPtr)ret, rightColDim);
     }
 
-    #region Utils
-
-
 
     [ThreadStatic] static float[] bufferValues = null;
     [ThreadStatic] static int[] bufferCols = null;
