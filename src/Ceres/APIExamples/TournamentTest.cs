@@ -66,8 +66,8 @@ namespace Ceres.APIExamples
       string GPUS = POOLED ? "GPU:0,1,2,3:POOLED"
                            : "GPU:0";
       //703810
-      NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification("LC0:LS16", GPUS); // j64-210
-      NNEvaluatorDef evalDef2 = NNEvaluatorDefFactory.FromSpecification("LC0:LS16", GPUS); // j104.1-30 61339
+      NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification("LC0:j94-100", GPUS); // j64-210 LS16
+      NNEvaluatorDef evalDef2 = NNEvaluatorDefFactory.FromSpecification("LC0:j94-100", GPUS); // j104.1-30 61339
 
       // was 703810 @ 50k
 
@@ -87,19 +87,21 @@ namespace Ceres.APIExamples
       const int HASH_SIZE_MB = 2048;
       string TB_PATH = CeresUserSettingsManager.Settings.TablebaseDirectory;
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(11_000);
+      SearchLimit limit1 = SearchLimit.NodesPerMove(100_000);
 
-      limit1 = SearchLimit.SecondsForAllMoves(900, 15) * 0.03f;
+      //      limit1 = SearchLimit.SecondsForAllMoves(900, 15) * 0.03f;
       //limit1 = SearchLimit.SecondsPerMove(5);
 
       //limit1 = SearchLimit.NodesForAllMoves(500_000);//, 25_000);
 
-      //limit1 = SearchLimit.SecondsForAllMoves(5, 0.25f);
+      limit1 = SearchLimit.SecondsForAllMoves(120, 2);
+      limit1 = SearchLimit.SecondsForAllMoves(10, 1f);
       //limit1 = SearchLimit.NodesPerMove(100_000);
 
       // Don't output log if very small games
       // (to avoid making very large log files or slowing down play).
       bool outputLog = limit1.EstNumNodes(30_000, false) > 10_000;
+outputLog=false;
       GameEngineDefCeres engineDefCeres1 = new GameEngineDefCeres("Ceres1", evalDef1, new ParamsSearch(), null, new ParamsSelect(),
                                                                   null, outputLog ? "Ceres1.log.txt" : null);
       GameEngineDefCeres engineDefCeres2 = new GameEngineDefCeres("Ceres2", evalDef2, new ParamsSearch(), null, new ParamsSelect(),
@@ -114,7 +116,7 @@ namespace Ceres.APIExamples
       ////////
 
       //engineDefCeres1.SelectParams.CPUCTAtRoot *= 1.5f;
-      //engineDefCeres1.SearchParams.TestFlag = true;
+engineDefCeres1.SearchParams.TestFlag = true;
       //engineDefCeres1.SearchParams.MoveFutilityPruningAggressiveness = 0.4f;
       //engineDefCeres1.SearchParams.GameLimitUsageAggressiveness *= 1.2f;
       //engineDefCeres1.SearchParams.MoveFutilityPruningAggressiveness = 0.75f;
@@ -154,7 +156,7 @@ namespace Ceres.APIExamples
       //engineDefCeres1.SearchParams.EnableTablebases = false;
 
       // TODO: support this in GameEngineDefCeresUCI
-      bool forceDisableSmartPruning = true;// limit1.IsNodesLimit;
+      bool forceDisableSmartPruning = limit1.IsNodesLimit;
       if (forceDisableSmartPruning)
       {
         engineDefCeres1.SearchParams.FutilityPruningStopSearchEnabled = false;
@@ -168,12 +170,12 @@ namespace Ceres.APIExamples
 
       //GameEngineDef engineDefCeresUCI = new GameEngineDefUCI("CeresUCI", new GameEngineUCISpec("CeresUCI", @"c:\dev\ceres\artifacts\release\net5.0\ceres.exe"));
       GameEngineDef engineDefCeresUCI1 = new GameEngineDefCeresUCI("CeresUCINew", evalDef1, overrideEXE: @"C:\dev\Ceres\artifacts\release\net5.0\ceres.exe");
-      GameEngineDef engineDefCeresUCI2 = new GameEngineDefCeresUCI("CeresUCIGit", evalDef2, overrideEXE: @"c:\dev\ceres.github.v86\ceres\artifacts\release\net5.0\ceres.exe");
+      GameEngineDef engineDefCeresUCI2 = new GameEngineDefCeresUCI("CeresUCIGit", evalDef2, overrideEXE: @"C:\ceres\releases\v0.88\ceres.exe");
 
 
       GameEngineDefLC0 engineDefLC1 = new GameEngineDefLC0("LC0_0", evalDef1, forceDisableSmartPruning, null, null);
       GameEngineDefLC0 engineDefLC2TCEC = new GameEngineDefLC0("LC0_TCEC", evalDef2, forceDisableSmartPruning, null, null,
-                                                                overrideEXE: @"c:\dev\lc0\lc_263\lc0_TCEC.EXE",
+                                                                overrideEXE: @"c:\dev\lc0\lc_270rc2\lc0.exe",
                                                                 extraCommandLineArgs: "--max-out-of-order-evals-factor=2.4 --max-collision-events=917");
 
       EnginePlayerDef playerCeres1UCI = new EnginePlayerDef(engineDefCeresUCI1, limit1);
@@ -206,7 +208,7 @@ namespace Ceres.APIExamples
 
         SuiteTestRunner suiteRunner = new SuiteTestRunner(suiteDef);
 
-        suiteRunner.Run(POOLED ? 20 : 1, true, false);
+        suiteRunner.Run(POOLED ? 20 : 4, true, false);
         return;
         // ===============================================================================
       }
@@ -218,12 +220,12 @@ namespace Ceres.APIExamples
       //engineDefCeres2.SearchParams.FutilityPruningStopSearchEnabled= false;
       //engineDefLC0.SearchParamsEmulate.FutilityPruningStopSearchEnabled= false;
 
-      TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerLC0);// playerCeres2UCI);// playerLC0TCEC);
+      TournamentDef def = new TournamentDef("TOURN", playerCeres1UCI, playerCeres2UCI);// playerCeres2UCI);// playerLC0TCEC);
 //    TournamentDef def = new TournamentDef("TOURN", playerCeres1UCI, playerCeres2UCI);
 
       //TournamentDef def = new TournamentDef("TOURN", playerLC0Tilps, playerLC0);
 
-      //def.NumGamePairs = 20;
+      //def.NumGamePairs = 10;
       //      def.ShowGameMoves = false;
 
       //      def.OpeningsFileName = @"HERT_2017\Hert500.pgn";
@@ -233,7 +235,7 @@ namespace Ceres.APIExamples
       //def.OpeningsFileName = "TCEC19_NoomenSelect.pgn";
       def.OpeningsFileName = "TCEC1819.pgn";
       // broken      def.OpeningsFileName = "TCEC_9-20.pgn";
-      //def.OpeningsFileName = "4mvs_+90_+99.pgn";
+//      def.OpeningsFileName = "4mvs_+90_+99.pgn";
       //      def.OpeningsFileName = "startpos.pgn";
 
       if (false)
@@ -243,7 +245,7 @@ namespace Ceres.APIExamples
         def.UseTablebasesForAdjudication = false;
       }
 
-      const int CONCURRENCY = POOLED ? 20 : 1;
+      const int CONCURRENCY = POOLED ? 16 : 4;
       TournamentManager runner = new TournamentManager(def, CONCURRENCY);
 
       TournamentResultStats results;
