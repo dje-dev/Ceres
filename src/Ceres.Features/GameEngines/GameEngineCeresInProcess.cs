@@ -85,7 +85,7 @@ namespace Ceres.Features.GameEngines
     /// Optional name of file to which detailed log information 
     /// will be written after each move.
     /// </summary>
-    public string LogFileName;
+    public string SearchLogFileName;
 
     /// <summary>
     /// If detailed information relating to search status of
@@ -140,12 +140,12 @@ namespace Ceres.Features.GameEngines
       SearchParams = searchParams;
       GameLimitManager = gameLimitManager;
       ChildSelectParams = childSelectParams;
-      LogFileName = logFileName;
+      SearchLogFileName = logFileName;
       VerboseMoveStats = CeresUserSettingsManager.Settings.VerboseMoveStats;
 
-      if (!string.IsNullOrEmpty(CeresUserSettingsManager.Settings.LogFile))
+      if (!string.IsNullOrEmpty(CeresUserSettingsManager.Settings.SearchLogFile))
       {
-        LogFileName = CeresUserSettingsManager.Settings.LogFile;
+        SearchLogFileName = CeresUserSettingsManager.Settings.SearchLogFile;
       }
     }
 
@@ -268,12 +268,12 @@ namespace Ceres.Features.GameEngines
 
       // Append search result information to log file (if any).
       StringWriter dumpInfo = new StringWriter();
-      if (LogFileName != null)
+      if (SearchLogFileName != null)
       {
-        result.Search.Manager.DumpFullInfo(result.Search.SearchRootNode, dumpInfo, CurrentGameID);
+        result.Search.Manager.DumpFullInfo(bestMoveMG, result.Search.SearchRootNode, dumpInfo, CurrentGameID);
         lock (logFileWriteObj)
         {
-          File.AppendAllText(LogFileName, dumpInfo.GetStringBuilder().ToString());
+          File.AppendAllText(SearchLogFileName, dumpInfo.GetStringBuilder().ToString());
         }
       }
 

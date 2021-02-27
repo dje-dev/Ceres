@@ -99,7 +99,8 @@ namespace Ceres.Chess.UserSettings
 
     #region UCI setoptions
 
-    public string LogFile { get; set; }
+    public string UCILogFile { get; set; }
+    public string SearchLogFile { get; set; }
     public bool VerboseMoveStats { get; set; } = false;
     public float? SmartPruningFactor { get; set; }
 

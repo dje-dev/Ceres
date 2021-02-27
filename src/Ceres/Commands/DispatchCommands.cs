@@ -217,14 +217,13 @@ namespace Ceres.Commands
 
     private static void LaunchUCI(string keyValueArgs)
     {
-      FeatureUCIParams uciParams = FeatureUCIParams.ParseUCICommand(keyValueArgs);     
+      FeatureUCIParams uciParams = FeatureUCIParams.ParseUCICommand(keyValueArgs);
 
-      NNEvaluatorDef evaluatorDef = new NNEvaluatorDef(uciParams.NetworkSpec.ComboType, uciParams.NetworkSpec.NetDefs,
-                                                       uciParams.DeviceSpec.ComboType, uciParams.DeviceSpec.Devices);
+      UCIManager ux = new UCIManager(uciParams.NetworkSpec, uciParams.DeviceSpec, null, null, null,
+                                     uciParams.Pruning == false,
+                                     CeresUserSettingsManager.Settings.UCILogFile,
+                                     CeresUserSettingsManager.Settings.SearchLogFile);
 
-      Console.WriteLine($"Network evaluation configured to use: {evaluatorDef.ToString()}");
-
-      UCIManager ux = new UCIManager(evaluatorDef, null, null, disablePruning: uciParams.Pruning == false);
 
       Console.WriteLine();
       Console.WriteLine("Entering UCI command processing mode.");

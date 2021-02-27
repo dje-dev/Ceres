@@ -13,12 +13,13 @@
 
 #region Using directives
 
-using System.Globalization;
 using System.IO;
-using Ceres.Chess.NNFiles;
+using System.Globalization;
+
+using Ceres.Chess.NNEvaluators.Specifications;
 using Ceres.Chess.UserSettings;
 using Ceres.MCTS.Params;
-using Pblczero;
+
 
 #endregion
 
@@ -27,14 +28,14 @@ namespace Ceres.Features.UCI
   public partial class UCIManager
   {
     /// <summary>
-    /// Optional override neural network weights file.
+    /// Optional text file to receive log of all UCI dialog between engine and client.
     /// </summary>
-    string overrideWeightsFile = null;
+    string uciLogFileName = null;
 
     /// <summary>
     /// Optional text file to receive diagnostic log relating to Ceres engine moves.
     /// </summary>
-    string logFileName = null;
+    string searchLogFileName = null;
 
     /// <summary>
     /// If verbose move stats should be output at periodic intervals.
@@ -138,17 +139,29 @@ namespace Ceres.Features.UCI
       }
 
       string name = parts[2];
-      string value = parts.Length < 5 ? "" : parts[4];
-
+      string value = command.Substring(command.IndexOf("value ") + 6);
+      
       switch (name.ToLower())
       {
         case "weightsfile":
           ProcessWeightsFile(value);
           break;
 
+        case "searchlogfile":
+          searchLogFileName = value == "" ? null : value;
+          if (CeresEngine != null) CeresEngine.SearchLogFileName = searchLogFileName;
+          break;
+
         case "logfile":
-          logFileName = value == "" ? null : value;
-          if (CeresEngine != null) CeresEngine.LogFileName = logFileName;
+          uciLogFileName = value == "" ? null : value;
+          if (uciLogFileName == null)
+          {
+            uciLogWriter = null;
+          }
+          else
+          {
+            uciLogWriter = new StreamWriter(new FileStream(uciLogFileName, FileMode.Append, FileAccess.Write));
+          }
           break;
 
         case "loglivestats":
@@ -203,7 +216,7 @@ namespace Ceres.Features.UCI
         case "syzygypath":
           if (!Directory.Exists(value))
           {
-            OutStream.Write("Path not found: { value }");
+            OutStream.WriteLine("Path not found: { value }");
           }
           else
           {
@@ -276,17 +289,8 @@ namespace Ceres.Features.UCI
           }
           else
           {
-            INNWeightsFileInfo net = NNWeightsFiles.LookupNetworkFile(value, false);
-            if (net == null)
-            {
-              OutStream.WriteLine($"Unable to locate network file: {value}");
-            }
-            else
-            {
-              overrideWeightsFile = value;
-              EvaluatorDef.TryModifyNetworkID(overrideWeightsFile);
-              //                ReinitializeEngine();
-            }
+            NetworkSpec = new NNNetSpecificationString(value);
+            CreateEvaluator();
           }
         }
       }
@@ -345,6 +349,7 @@ namespace Ceres.Features.UCI
 @$"
 option name WeightsFile type string default <from DefaultNetworkSpecString in Ceres.json>
 option name LogFile type string default
+option name SearchLogFile type string default
 option name MultiPV type spin default 1 min 1 max 500
 option name VerboseMoveStats type check default false
 option name LogLiveStats type check default false

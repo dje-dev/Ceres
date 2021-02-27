@@ -44,6 +44,7 @@ using Ceres.Chess.EncodedPositions.Basic;
 using LINQPad;
 using Ceres.Features.Visualization.TreePlot;
 using System.Threading;
+using Ceres.Chess.NNEvaluators.Specifications;
 
 #endregion
 
@@ -70,7 +71,7 @@ namespace Ceres.Features.UCI
     /// </summary>
     public Action<MCTSManager> SearchFinishedEvent;
 
-    public readonly NNEvaluatorDef EvaluatorDef;
+    public NNEvaluatorDef EvaluatorDef;
 
     /// <summary>
     /// Ceres engine instance used for current UCI game.
@@ -92,6 +93,29 @@ namespace Ceres.Features.UCI
     bool stopIsPending;
     bool debug = false;
 
+    /// <summary>
+    /// Stream to which all UCI input and output is echoed.
+    /// </summary>
+    StreamWriter uciLogWriter;
+
+    /// <summary>
+    /// Specification string for which neural network to use.
+    /// </summary>
+    NNNetSpecificationString NetworkSpec;
+
+    /// <summary>
+    /// Specification string for which device to use for network inference.
+    /// </summary>
+    NNDevicesSpecificationString DeviceSpec;
+
+
+    void CreateEvaluator()
+    {
+      EvaluatorDef = new NNEvaluatorDef(NetworkSpec.ComboType, NetworkSpec.NetDefs,
+                                        DeviceSpec.ComboType, DeviceSpec.Devices);
+
+      OutStream.WriteLine($"Network evaluation configured to use: {EvaluatorDef}");
+    }
 
 
     /// <summary>
@@ -101,19 +125,57 @@ namespace Ceres.Features.UCI
     /// <param name="inStream"></param>
     /// <param name="outStream"></param>
     /// <param name="searchFinishedEvent"></param>
-    public UCIManager(NNEvaluatorDef evaluatorDef,
+    public UCIManager(NNNetSpecificationString networkSpec,
+                      NNDevicesSpecificationString deviceSpec,
                       TextReader inStream = null, TextWriter outStream = null,
                       Action<MCTSManager> searchFinishedEvent = null,
-                      bool disablePruning = false)
+                      bool disablePruning = false,
+                      string uciLogFileName = null,
+                      string searchLogFileName = null)
     {
       InStream = inStream ?? Console.In;
       OutStream = outStream ?? Console.Out;
       SearchFinishedEvent = searchFinishedEvent;
 
-      EvaluatorDef = evaluatorDef;
+      NetworkSpec = networkSpec;
+      DeviceSpec = deviceSpec;
+      CreateEvaluator();
 
       if (disablePruning) futilityPruningDisabled = true;
+
+      this.searchLogFileName = searchLogFileName;
+
+      // Possibly all UCI input/output to log file.
+      if (uciLogFileName != null)
+      {
+        uciLogWriter = new StreamWriter(new FileStream(uciLogFileName, FileMode.Append, FileAccess.Write));
+      }
     }
+
+
+    void LogWriteLine(string prefix, string line)
+    {
+      uciLogWriter.WriteLine(prefix + 
+                            " [" 
+                            + DateTime.Now.ToString("MM/dd/yyyy hh:mm:ss.fff tt")
+                            + "]"
+                            + line);
+      uciLogWriter.Flush();
+    }
+
+    /// <summary>
+    /// Outputs line to UCI.
+    /// </summary>
+    /// <param name="result"></param>
+    void UCIWriteLine(string result = null)
+    {
+      OutStream.WriteLine(result);
+      if (uciLogWriter != null)
+      {
+        LogWriteLine("OUT:", result);
+      }
+    }
+
 
     public ParamsSelect ParamsSelect
     {
@@ -146,12 +208,6 @@ namespace Ceres.Features.UCI
     }
 
 
-    /// <summary>
-    /// Outputs line to UCI.
-    /// </summary>
-    /// <param name="result"></param>
-    void Send(string result) => OutStream.WriteLine(result);
-
 
     /// <summary>
     /// Runs the UCI loop.
@@ -165,6 +221,10 @@ namespace Ceres.Features.UCI
       while (true)
       {
         string command = InStream.ReadLine();
+        if (uciLogWriter != null)
+        {
+          LogWriteLine("IN:", command);
+        }
 
         switch (command)
         {
@@ -173,10 +233,10 @@ namespace Ceres.Features.UCI
             break;
 
           case "uci":
-            Send($"id name Ceres {CeresVersion.VersionString}");
-            Send("id author David Elliott and the Ceres Authors");
-            Send(SetOptionUCIDescriptions);
-            Send("uciok");
+            UCIWriteLine($"id name Ceres {CeresVersion.VersionString}");
+            UCIWriteLine("id author David Elliott and the Ceres Authors");
+            UCIWriteLine(SetOptionUCIDescriptions);
+            UCIWriteLine("uciok");
             break;
 
           case string c when c.StartsWith("setoption"):
@@ -226,7 +286,7 @@ namespace Ceres.Features.UCI
 
           case "isready":
             InitializeEngineIfNeeded();
-            Send("readyok");
+            UCIWriteLine("readyok");
             break;
 
           case "ucinewgame":
@@ -248,8 +308,21 @@ namespace Ceres.Features.UCI
             break;
 
           case string c when c.StartsWith("go"):
-            if (taskSearchCurrentlyExecuting != null)
-              throw new Exception("Received go command when another search was running and not stopped first");
+
+            // Possibly another search is already executing.
+            // The UCI specification is unclear about what to do in this situation.
+            // Some engines seem to enqueue these for later execution (e.g. Stockfish)
+            // whereas others (e.g. Python chess) report this as an error condition.
+            // Currently Ceres waits only a short while for any possible pending search
+            // to finish (e.g. to avoid a race condition if it is in the process of being shutdown)
+            // and aborts with an error if search is still in progress.
+            // It is not viable to wait indefinitely, since (among other reasons)
+            // the engine needs to monitor for stop commands.
+            const int MAX_MILLISECONDS_WAIT = 500;
+            taskSearchCurrentlyExecuting?.Wait(MAX_MILLISECONDS_WAIT);
+
+            if (taskSearchCurrentlyExecuting != null && !taskSearchCurrentlyExecuting.IsCompleted)
+              throw new Exception("Received go command when another search was running and not stopped first.");
 
             InitializeEngineIfNeeded();
 
@@ -263,7 +336,7 @@ namespace Ceres.Features.UCI
             }
             catch (Exception e)
             {
-              Send($"Illegal position command: \"{c}\"" + System.Environment.NewLine + e.ToString());
+              UCIWriteLine($"Illegal position command: \"{c}\"" + System.Environment.NewLine + e.ToString());
             }
             break;
 
@@ -274,10 +347,10 @@ namespace Ceres.Features.UCI
               string netID = EvaluatorDef.Nets[0].Net.NetworkID;
               INNWeightsFileInfo netDef = NNWeightsFiles.LookupNetworkFile(netID);
               (string exe, string options) = LC0EngineConfigured.GetLC0EngineOptions(null, null, CeresEngine.Search.Manager.Context.EvaluatorDef, netDef, false, false);
-              OutStream.WriteLine("info string " + exe + " " + options);
+              UCIWriteLine("info string " + exe + " " + options);
             }
             else
-              OutStream.WriteLine("info string No search manager created");
+              UCIWriteLine("info string No search manager created");
 
             break;
 
@@ -285,7 +358,7 @@ namespace Ceres.Features.UCI
             if (CeresEngine?.Search != null)
               CeresEngine?.Search.Manager.DumpParams();
             else
-              OutStream.WriteLine("info string No search manager created");
+              UCIWriteLine("info string No search manager created");
             break;
 
           case "dump-processor":
@@ -296,7 +369,7 @@ namespace Ceres.Features.UCI
             if (CeresEngine?.Search != null)
               CeresEngine?.Search.Manager.DumpTimeInfo(OutStream);
             else
-              OutStream.WriteLine("info string No search manager created");
+              UCIWriteLine("info string No search manager created");
             break;
 
           case "dump-store":
@@ -306,7 +379,7 @@ namespace Ceres.Features.UCI
                 CeresEngine.Search.Manager.Context.Tree.Store.Dump(true);
             }
             else
-              OutStream.WriteLine("info string No search manager created");
+              UCIWriteLine("info string No search manager created");
             break;
 
           case "dump-move-stats":
@@ -315,7 +388,7 @@ namespace Ceres.Features.UCI
               OutputVerboseMoveStats(CeresEngine.Search.SearchRootNode);
             }
             else
-              OutStream.WriteLine("info string No search manager created");
+              UCIWriteLine("info string No search manager created");
             break;
 
           case "dump-pv":
@@ -337,7 +410,7 @@ namespace Ceres.Features.UCI
                 TreePlot.Show(CeresEngine.Search.Manager.Context.Root.Ref);
               }
             else
-              OutStream.WriteLine("info string No search manager created");
+              UCIWriteLine("info string No search manager created");
             break;
 
           case string c when c.StartsWith("save-tree-plot"):
@@ -354,15 +427,15 @@ namespace Ceres.Features.UCI
               }
               else if (parts.Length == 1)
               {
-                OutStream.WriteLine("Filename was not provided");
+                UCIWriteLine("Filename was not provided");
               }
               else
               {
-                OutStream.WriteLine("Filename cannot contain spaces");
+                UCIWriteLine("Filename cannot contain spaces");
               }
             }
             else
-              OutStream.WriteLine("info string No search manager created");
+              UCIWriteLine("info string No search manager created");
             break;
 
           case "waitdone": // proprietary verb used for test driver
@@ -370,7 +443,7 @@ namespace Ceres.Features.UCI
             break;
 
           default:
-            OutStream.WriteLine($"error Unknown command: {command}");
+            UCIWriteLine($"error Unknown command: {command}");
             break;
         }
       }
@@ -391,7 +464,7 @@ namespace Ceres.Features.UCI
         }
       }
       else
-        OutStream.WriteLine("info string No search manager created");
+        UCIWriteLine("info string No search manager created");
     }
 
 
@@ -413,7 +486,7 @@ namespace Ceres.Features.UCI
         ShowWeightsFileInfo();
 
         // Create the engine (to be subsequently reused).
-        CeresEngine = new GameEngineCeresInProcess("Ceres", EvaluatorDef, ParamsSearch, ParamsSelect, logFileName: logFileName);
+        CeresEngine = new GameEngineCeresInProcess("Ceres", EvaluatorDef, ParamsSearch, ParamsSelect, logFileName: searchLogFileName);
 
         // Disable verbose move stats from the engine since 
         // this class manages the possibly dumping of verbose move stats itself.
@@ -427,13 +500,12 @@ namespace Ceres.Features.UCI
 
     private void ShowWeightsFileInfo()
     {
-      OutStream.WriteLine();
-      OutStream.Write("Loading network weights:");
+      UCIWriteLine();
       if (EvaluatorDef.Nets.Length == 1)
       {
         INNWeightsFileInfo net = NNWeightsFiles.LookupNetworkFile(EvaluatorDef.Nets[0].Net.NetworkID, false);
         string infoStr = net == null ? "(unknown)" : net.ShortStr;
-        OutStream.WriteLine(infoStr);
+        UCIWriteLine($"Loaded network weights: { infoStr}");
       }
       else
       {
@@ -442,10 +514,10 @@ namespace Ceres.Features.UCI
         {
           INNWeightsFileInfo net = NNWeightsFiles.LookupNetworkFile(EvaluatorDef.Nets[i].Net.NetworkID);
           string infoStr = net == null ? "(unknown)" : net.ShortStr;
-          OutStream.WriteLine("  " + infoStr);
+          UCIWriteLine($"Loaded network weights: {i} { infoStr}");
         }
       }
-      OutStream.WriteLine();
+      UCIWriteLine();
     }
 
 
@@ -512,9 +584,9 @@ namespace Ceres.Features.UCI
         }
         catch (Exception exc)
         {
-          OutStream.WriteLine("Exception in Ceres engine execution:");
-          OutStream.WriteLine(exc);
-          OutStream.WriteLine(exc.StackTrace);
+          UCIWriteLine("Exception in Ceres engine execution:");
+          UCIWriteLine(exc.ToString());
+          UCIWriteLine(exc.StackTrace);
 
           System.Environment.Exit(3);
           return null;
@@ -570,7 +642,7 @@ namespace Ceres.Features.UCI
       }
       else
       {
-        OutStream.WriteLine($"Unsupported time control in UCI go command {command}");
+        UCIWriteLine($"Unsupported time control in UCI go command {command}");
         return null;
       }
 
@@ -634,7 +706,7 @@ namespace Ceres.Features.UCI
       }
 
       // Send the best move
-      Send("bestmove " + result.Search.BestMove.MoveStr(MGMoveNotationStyle.LC0Coordinate));
+      UCIWriteLine("bestmove " + result.Search.BestMove.MoveStr(MGMoveNotationStyle.LC0Coordinate));
 //      if (debug) Send("info string " + result.Search.SearchRootNode.BestMoveInfo(false));
 
       return result;
@@ -647,13 +719,13 @@ namespace Ceres.Features.UCI
 
       if (numPV == 1)
       {
-        Send(UCIInfo.UCIInfoString(manager, searchRootNode, best?.BestMoveNode, 
+        UCIWriteLine(UCIInfo.UCIInfoString(manager, searchRootNode, best?.BestMoveNode, 
                                   showWDL:showWDL, scoreAsQ:scoreAsQ));
       }
       else
       {
         // Send top move
-        Send(UCIInfo.UCIInfoString(manager, searchRootNode, best.BestMoveNode, 1, 
+        UCIWriteLine(UCIInfo.UCIInfoString(manager, searchRootNode, best.BestMoveNode, 1, 
                                    showWDL: showWDL, useParentN: !perPVCounters, scoreAsQ: scoreAsQ));
 
         // Send other moves visited
@@ -663,7 +735,7 @@ namespace Ceres.Features.UCI
         {
           if (!object.ReferenceEquals(sortedN[i], best.BestMoveNode))
           {
-            Send(UCIInfo.UCIInfoString(manager, searchRootNode, sortedN[i], multiPVIndex, 
+            UCIWriteLine(UCIInfo.UCIInfoString(manager, searchRootNode, sortedN[i], multiPVIndex, 
                                        showWDL: showWDL, useParentN: !perPVCounters, scoreAsQ: scoreAsQ));
             multiPVIndex++;
           }
@@ -681,7 +753,7 @@ namespace Ceres.Features.UCI
             EncodedMove moveCorrectPerspective = isWhite ? info.move : info.move.Flipped;
             string str = $"info depth 0 seldepth 0 time { timeStr } nodes 1 score cp 0 tbhits 0 " 
                        + $"multipv {multiPVIndex} pv {moveCorrectPerspective.AlgebraicStr} ";
-            OutStream.WriteLine(str);
+            UCIWriteLine(str);
             multiPVIndex++;
           }
         }
@@ -704,7 +776,7 @@ namespace Ceres.Features.UCI
         {
           foreach (LC0VerboseMoveStat stat in LC0VerboseMoveStatsFromMCTSNode.BuildStats(searchRootNode))
           {
-            OutStream.WriteLine(stat.LC0String);
+            UCIWriteLine(stat.LC0String);
           }
         }
         else
