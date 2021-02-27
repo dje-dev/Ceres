@@ -36,10 +36,10 @@ namespace Ceres.Chess.LC0.NNFiles
     {
       NNWeightsFiles.RegisterDirectory(directoryName, searchPattern, (string id, string fileName) =>
       {
-        if (new FileInfo(id).FullName.ToLower() == new FileInfo(fileName).FullName.ToLower())
+        if (new FileInfo(id).Exists)
         {
           // Full filename directly specified, just directly use it.
-          return new NNWeightsFileLC0(id, fileName);
+          return new NNWeightsFileLC0(id, id);
         }
         else
         {
