@@ -251,7 +251,7 @@ namespace Ceres.MCTS.Managers
 
 
 
-    internal const float MIN_FRAC_N_REQUIRED_MIN = 0.30f;
+    internal const float MIN_FRAC_N_REQUIRED_MIN = 0.35f;
 
 
     /// <summary>
@@ -259,62 +259,26 @@ namespace Ceres.MCTS.Managers
     /// returns the minimum fraction of N (relative to the other move)
     /// required before the move will be preferred.
     /// 
-    /// Returned values are fairly close to 1.0 
-    /// to avoid choising moves which are relatively much less explored.
-    ///
-    /// The greater the Q superiority of the cadidate, the lower the fraction required.
+    /// Relatively unexplored nodes are only chose when the Q difference is very large,
+    /// because:
+    ///   - the less explored (lower N) a move is, the more uncertain we are of its true Q (could be worse).
+    ///   - N partly reflects the influence of policy, which should not be lightly ignored.
     /// </summary>
     /// <param name="qDifferenceFromBestQ"></param>
     /// <returns></returns>
     static internal float MinFractionNToUseQ(MCTSNode node, float qDifferenceFromBestQ)
     {
-      bool isSmallTree = node.Context.Root.N < 50_000;
+      // Compute fraction required which decreases slowly below 1.0
+      // as the Q difference increases (using a power function).
+      const float POWER = 25f;
+      float minFrac = MathF.Pow(1.0f - qDifferenceFromBestQ, POWER);
 
-      float minFrac;
-
-      if (isSmallTree)
-      {
-        // For small trees we are even more reluctant to rely upon Q if few visits
-        minFrac = qDifferenceFromBestQ switch
-        {
-          >= 0.06f => MIN_FRAC_N_REQUIRED_MIN + 0.10f,
-          >= 0.04f => 0.55f,
-          >= 0.02f => 0.75f,
-          _ => 0.90f
-        };
-      }
-      else
-      {
-        minFrac = qDifferenceFromBestQ switch
-        {
-          >= 0.05f => MIN_FRAC_N_REQUIRED_MIN,
-          >= 0.02f => 0.55f,
-          >= 0.01f => 0.75f,
-          _ => 0.90f
-        };
-      }
-
-#if EXPERIMENTAL
-      bool test = this.Node.Context.ParamsSearch.TestFlag;
-      // Not completely successful attempt to simplify 
-      // the above overparameterized logic.
-      if (test)
-      {
-        if (qDifferenceFromBestQ < 0.002f)
-          return 0.95f;
-
-        // A LTC test (3+ min/game) with J94-100 yielded:
-        //   -28 +/- 21 with 25
-        //    -7 +/- 13 with 20
-        const float POWER = 20f;
-        minFrac = MathF.Pow(1.0f - qDifferenceFromBestQ, POWER) - 0.05f;
-
-        if (minFrac < 0.35f) minFrac = 0.35f;
-      }
-#endif
+      // Impose absolute minimum fraction.
+      if (minFrac < MIN_FRAC_N_REQUIRED_MIN) minFrac = MIN_FRAC_N_REQUIRED_MIN;
 
       return minFrac;
     }
+
 
     private MCTSNode BestMoveByNWithNoise(MCTSNode[] childrenSortedByAttractiveness)
     {
