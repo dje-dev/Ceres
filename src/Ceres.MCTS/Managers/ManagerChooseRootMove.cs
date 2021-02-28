@@ -250,8 +250,70 @@ namespace Ceres.MCTS.Managers
     }
 
 
+    /// <summary>
+    /// Given a specified superiority of Q relative to another move,
+    /// returns the minimum fraction of N (relative to the other move)
+    /// required before the move will be preferred.
+    /// 
+    /// Returned values are fairly close to 1.0 
+    /// to avoid choising moves which are relatively much less explored.
+    ///
+    /// The greater the Q superiority of the cadidate, the lower the fraction required.
+    /// </summary>
+    /// <param name="qDifferenceFromBestQ"></param>
+    /// <returns></returns>
+    static internal float MinFractionNToUseQOLD(MCTSNode node, float qDifferenceFromBestQ)
+    {
+      bool isSmallTree = node.Context.Root.N < 50_000;
 
-    internal const float MIN_FRAC_N_REQUIRED_MIN = 0.35f;
+      float minFrac;
+
+      if (isSmallTree)
+      {
+        // For small trees we are even more reluctant to rely upon Q if few visits
+        minFrac = qDifferenceFromBestQ switch
+        {
+          >= 0.06f => MIN_FRAC_N_REQUIRED_MIN + 0.10f,
+          >= 0.04f => 0.55f,
+          >= 0.02f => 0.75f,
+          _ => 0.90f
+        };
+      }
+      else
+      {
+        minFrac = qDifferenceFromBestQ switch
+        {
+          >= 0.05f => MIN_FRAC_N_REQUIRED_MIN,
+          >= 0.02f => 0.55f,
+          >= 0.01f => 0.75f,
+          _ => 0.90f
+        };
+      }
+
+#if EXPERIMENTAL
+      bool test = this.Node.Context.ParamsSearch.TestFlag;
+      // Not completely successful attempt to simplify 
+      // the above overparameterized logic.
+      if (test)
+      {
+        if (qDifferenceFromBestQ < 0.002f)
+          return 0.95f;
+
+        // A LTC test (3+ min/game) with J94-100 yielded:
+        //   -28 +/- 21 with 25
+        //    -7 +/- 13 with 20
+        const float POWER = 20f;
+        minFrac = MathF.Pow(1.0f - qDifferenceFromBestQ, POWER) - 0.05f;
+
+        if (minFrac < 0.35f) minFrac = 0.35f;
+      }
+#endif
+
+      return minFrac;
+    }
+
+
+    internal const float MIN_FRAC_N_REQUIRED_MIN = 0.325f;
 
 
     /// <summary>
@@ -268,9 +330,12 @@ namespace Ceres.MCTS.Managers
     /// <returns></returns>
     static internal float MinFractionNToUseQ(MCTSNode node, float qDifferenceFromBestQ)
     {
+//      if (!node.Context.ParamsSearch.TestFlag)
+//      return MinFractionNToUseQOLD(node, qDifferenceFromBestQ);
+
       // Compute fraction required which decreases slowly below 1.0
       // as the Q difference increases (using a power function).
-      const float POWER = 25f;
+      const float POWER = 20f;
       float minFrac = MathF.Pow(1.0f - qDifferenceFromBestQ, POWER);
 
       // Impose absolute minimum fraction.
