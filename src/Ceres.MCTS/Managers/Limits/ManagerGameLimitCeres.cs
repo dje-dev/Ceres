@@ -48,22 +48,20 @@ namespace Ceres.MCTS.Managers.Limits
     float FractionOfBasePerMoveToUse(ManagerGameLimitInputs inputs)
     {
       float factorLargeIncrement = 1.0f;
+      const float MAX_LARGE_INCREMENT_MULTIPLIER = 2.0f;
+
       if (inputs.IncrementSelf > 0)
       {
-        // With increasingly significant increment,
-        // frontload the use of base time more aggressively
-        // because we don't have to worry about 
-        // "running out of time."
-        const float MAX_LARGE_INCREMENT_MULTIPLIER = 2.5f;
         float estBasePerMove = inputs.RemainingFixedSelf / 30;
         float incrementRelativeToBasePerMove = inputs.IncrementSelf / estBasePerMove;
-        if (incrementRelativeToBasePerMove > 0.2)
-        {
-          factorLargeIncrement = 1.0f + 0.5f * ((incrementRelativeToBasePerMove - 0.2f) / 0.3f);
-          factorLargeIncrement = MathF.Min(MAX_LARGE_INCREMENT_MULTIPLIER, factorLargeIncrement);
-        }
+
+        // The more increment relative to base time, the more aggressively the base time is used up
+        // (because we don't have to worry about running out of time if game runs to many moves).
+        factorLargeIncrement = 1.0f + incrementRelativeToBasePerMove;
+
+        // Don't allow multiplier to be too large, since it ultimately has an exponentially increasing impact.
+        factorLargeIncrement = MathF.Min(MAX_LARGE_INCREMENT_MULTIPLIER, factorLargeIncrement);
       }
-      
 
       // When we are behind then it's worth taking a gamble and using more time
       // but when we are ahead, take a little less time to be sure we don't err in time pressure.
@@ -143,18 +141,12 @@ namespace Ceres.MCTS.Managers.Limits
 
       float baseTimeToUse = inputs.RemainingFixedSelf * FractionOfBasePerMoveToUse(inputs);
 
-      if (inputs.RemainingFixedSelf > inputs.IncrementSelf)
-      {
-        // Since no danger of running out of time, use almost all of the increment now.
-        return Return(baseTimeToUse + inputs.IncrementSelf * 0.95f);
-      }
-      else
-      {
-        // Can't spend the increment because we haven't been awarded it yet
-        // for this move, and not enough left on clock. 
-        // Just use most of fixed time, counting on increment to rebulid spare time in the future.
-        return Return(MathF.Min(baseTimeToUse, inputs.RemainingFixedSelf * 0.9f));
-      }
+      // Try to use almost all of the increment plus part of base time remaining.
+      float totalTimeToUse = baseTimeToUse + inputs.IncrementSelf * 0.95f;
+
+      // But never spend more than 35% of fixed time remaining
+      // (since the increment is not earned until after the move is made).
+      return Return(MathF.Min(totalTimeToUse, inputs.RemainingFixedSelf * 0.35f));
     }
 
   }
