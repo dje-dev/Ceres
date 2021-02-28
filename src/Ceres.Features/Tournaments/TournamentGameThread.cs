@@ -253,8 +253,8 @@ namespace Ceres.Features.Tournaments
         Console.WriteLine($"Games will be incrementally written to file: {pgnFileName}");
         Console.WriteLine();
 
-        Console.WriteLine("  ELO   +/-  LOS   GAME#     TIME    TH#   OP#      TIME1    TIME2        NODES 1           NODES 2       PLY   RES    W   D   L   FEN");
-        Console.WriteLine("  ---   ---  ---   ----   --------   ---   ---     ------   ------     --------------   --------------   ----   ---    -   -   -   --------------------------------------------------");
+        Console.WriteLine("  Player1  Player2  ELO   +/-  LOS   GAME#     TIME    TH#   OP#      TIME1    TIME2        NODES 1           NODES 2       PLY   RES    W   D   L   FEN");
+        Console.WriteLine("  -------  -------  ---   ---  ---   ----   --------   ---   ---     ------   ------     --------------   --------------   ----   ---    -   -   -   --------------------------------------------------");
         havePrintedHeaders = true;
       }
 
@@ -270,14 +270,18 @@ namespace Ceres.Features.Tournaments
       string player1ForfeitChar = thisResult.ShouldHaveForfeitedOnLimitsEngine1 ? "f" : " ";
       string player2ForfeitChar = thisResult.ShouldHaveForfeitedOnLimitsEngine2 ? "f" : " ";
 
-      if (Def.ShowGameMoves) Def.Logger.WriteLine();
-      Def.Logger.Write($"{eloAvg,5:0} {eloSD,4:0} {100.0f * los,5:0}  ");
-      Def.Logger.Write($"{ParentStats.NumGames,5} {DateTime.Now.ToString().Split(" ")[1],10}  {gameSequenceNum,4:F0}  {openingIndex,4:F0}{openingPlayedBothWaysStr}  ");
-      Def.Logger.Write($"{thisResult.TotalTimeEngine1,8:F2}{player1ForfeitChar}{thisResult.TotalTimeEngine2,8:F2}{player2ForfeitChar}  ");
-      Def.Logger.Write($"{thisResult.TotalNodesEngine1,16:N0} {thisResult.TotalNodesEngine2,16:N0}   ");
-      Def.Logger.Write($"{thisResult.PlyCount,4:F0}  {TournamentUtils.ResultStr(thisResult.Result, engine2White),4}  ");
-      Def.Logger.Write($"{wdlStr}   {thisResult.FEN} ");
-      Def.Logger.WriteLine();
+      lock (outputLockObj)
+      {
+        if (Def.ShowGameMoves) Def.Logger.WriteLine();
+        Def.Logger.Write($"{Def.Player1Def.ID,8} {Def.Player2Def.ID,8}  ");
+        Def.Logger.Write($"{eloAvg,5:0} {eloSD,4:0} {100.0f * los,5:0}  ");
+        Def.Logger.Write($"{ParentStats.NumGames,5} {DateTime.Now.ToString().Split(" ")[1],10}  {gameSequenceNum,4:F0}  {openingIndex,4:F0}{openingPlayedBothWaysStr}  ");
+        Def.Logger.Write($"{thisResult.TotalTimeEngine1,8:F2}{player1ForfeitChar}{thisResult.TotalTimeEngine2,8:F2}{player2ForfeitChar}  ");
+        Def.Logger.Write($"{thisResult.TotalNodesEngine1,16:N0} {thisResult.TotalNodesEngine2,16:N0}   ");
+        Def.Logger.Write($"{thisResult.PlyCount,4:F0}  {TournamentUtils.ResultStr(thisResult.Result, engine2White),4}  ");
+        Def.Logger.Write($"{wdlStr}   {thisResult.FEN} ");
+        Def.Logger.WriteLine();
+      }
 
       TotalNodesEngine1 += thisResult.TotalNodesEngine1;
       TotalNodesEngine2 += thisResult.TotalNodesEngine2;
@@ -290,6 +294,7 @@ namespace Ceres.Features.Tournaments
       NumGames++;
     }
 
+    static readonly object outputLockObj = new();
 
     /// <summary>
     /// 
