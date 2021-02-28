@@ -27,6 +27,8 @@ using Ceres.MCTS.Params;
 using Ceres.Base.Benchmarking;
 using System.IO;
 using System.Diagnostics;
+using System.Threading.Tasks;
+using System.Threading;
 
 #endregion
 
@@ -44,30 +46,87 @@ namespace Ceres.APIExamples
       }
     }
 
-    /// <summary>
-    /// Test code. Currently configured for 703810 using 2A100 versus LC0.
-    /// </summary>
-    public static void Test()
+    const string ETHERAL_EXE = @"\\synology\dev\chess\engines\Ethereal12.75-x64-popcnt-avx2.exe";
+    const string SF11_EXE = @"\\synology\dev\chess\engines\stockfish_11_x64_bmi2.exe";
+    const string SF12_EXE = @"\\synology\dev\chess\engines\stockfish_20090216_x64_avx2.exe";
+    const string SF13_EXE = @"\\synology\dev\chess\engines\stockfish_13_win_x64_bmi2.exe";
+
+    static GameEngineUCISpec specEthereal = new GameEngineUCISpec("Ethereal12", ETHERAL_EXE);
+    static GameEngineUCISpec specSF13 = new GameEngineUCISpec("SF13", SF13_EXE);
+    static GameEngineUCISpec specLC0 = new GameEngineUCISpec("LC0", "lc0.exe");
+
+    static string[] extraUCI = null;// new string[] {"setoption name Contempt value 5000" };
+    static GameEngineDef engineDefEthereal = new GameEngineDefUCI("Etheral", new GameEngineUCISpec("Etheral", ETHERAL_EXE, SF_NUM_THREADS, SF_HASH_SIZE_MB, TB_PATH, uciSetOptionCommands: extraUCI));
+    static GameEngineDef engineDefStockfish11 = new GameEngineDefUCI("SF11", new GameEngineUCISpec("SF11", SF11_EXE, SF_NUM_THREADS, SF_HASH_SIZE_MB, TB_PATH, uciSetOptionCommands: extraUCI));
+    static GameEngineDef engineDefStockfish13 = new GameEngineDefUCI("SF13", new GameEngineUCISpec("SF13", SF13_EXE, SF_NUM_THREADS, SF_HASH_SIZE_MB, TB_PATH, uciSetOptionCommands: extraUCI));
+
+    const int SF_NUM_THREADS = 15;
+    static string TB_PATH => CeresUserSettingsManager.Settings.TablebaseDirectory;
+    const int SF_HASH_SIZE_MB = 2048;
+
+    public static void PreTournamentCleanup()
     {
       KillCERES();
 
       File.Delete("Ceres1.log.txt");
       File.Delete("Ceres2.log.txt");
+    }
 
-      string ETHERAL_EXE = @"\\synology\dev\chess\engines\Ethereal12.75-x64-popcnt-avx2.exe";
-      string SF11_EXE = @"\\synology\dev\chess\engines\stockfish_11_x64_bmi2.exe";
-      string SF12_EXE = @"\\synology\dev\chess\engines\stockfish_20090216_x64_avx2.exe";
+    public static void TestSF(int index, bool gitVersion)
+    {
+      NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification("LC0:j94-100", "GPU:" + index);
+      GameEngineDefCeres engineDefCeres1 = new GameEngineDefCeres("CeresInProc", evalDef1, 
+                                                                  new ParamsSearch(), null, new ParamsSelect(),
+                                                                  null, "CeresSF.log.txt");
 
-      GameEngineUCISpec specEthereal = new GameEngineUCISpec("Ethereal12", ETHERAL_EXE);
-      GameEngineUCISpec specSF = new GameEngineUCISpec("SF12", SF12_EXE);
-      GameEngineUCISpec specLC0 = new GameEngineUCISpec("LC0", "lc0.exe");
+      SearchLimit limitCeres = SearchLimit.SecondsForAllMoves(60, 1.25f);
+      SearchLimit limitSF = limitCeres * 2f;
+
+      GameEngineDef engineDefCeresUCIGit = new GameEngineDefCeresUCI("CeresUCIGit", evalDef1, overrideEXE: @"C:\ceres\releases\v0.88\ceres.exe");
+      EnginePlayerDef playerCeres = new EnginePlayerDef(gitVersion ? engineDefCeresUCIGit : engineDefCeres1, 
+                                                        limitCeres);
+
+
+      EnginePlayerDef playerSF = new EnginePlayerDef(engineDefStockfish13, limitSF);
+
+      TournamentDef def = new TournamentDef("TOURN", playerCeres, playerSF);
+      def.OpeningsFileName = "TCEC1819.pgn";
+      //def.NumGamePairs = 10;
+      def.ShowGameMoves = false;
+
+      TournamentManager runner = new TournamentManager(def, 1);
+
+      TournamentResultStats results;
+      TimingStats stats = new TimingStats();
+      using (new TimingBlock(stats, TimingBlock.LoggingType.None))
+      {
+        results = runner.RunTournament();
+      }
+
+      Console.WriteLine();
+      Console.WriteLine($"Tournament completed in {stats.ElapsedTimeSecs,8:F2} seconds.");
+      Console.WriteLine(playerCeres + " " + results.GameOutcomesString);
+    }
+
+    /// <summary>
+    /// Test code.
+    /// </summary>
+    public static void Test()
+    {
+      PreTournamentCleanup();
+
+      if (false)
+      {
+        Parallel.Invoke(() => TestSF(0, true), () => { Thread.Sleep(10_000); TestSF(1, false); });
+        System.Environment.Exit(3);
+      }
 
       const bool POOLED = false;
       string GPUS = POOLED ? "GPU:0,1,2,3:POOLED"
                            : "GPU:0";
       //703810
-      NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification("LC0:j94-100", GPUS); // j64-210 LS16
-      NNEvaluatorDef evalDef2 = NNEvaluatorDefFactory.FromSpecification("LC0:j94-100", GPUS); // j104.1-30 61339
+      NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification("LC0:j64-210", GPUS); // j64-210 LS16
+      NNEvaluatorDef evalDef2 = NNEvaluatorDefFactory.FromSpecification("LC0:j64-210", GPUS); // j104.1-30 61339
 
       // was 703810 @ 50k
 
@@ -81,21 +140,18 @@ namespace Ceres.APIExamples
       //      SearchLimit slEthereal = slLC0 * 875;
       //      SearchLimit slSF = slLC0 * 875;
 
-      string[] extraUCI = null;// new string[] {"setoption name Contempt value 5000" };
-
-      const int NUM_THREADS = 15;
-      const int HASH_SIZE_MB = 2048;
-      string TB_PATH = CeresUserSettingsManager.Settings.TablebaseDirectory;
 
       SearchLimit limit1 = SearchLimit.NodesPerMove(100_000);
 
-      //      limit1 = SearchLimit.SecondsForAllMoves(900, 15) * 0.03f;
+      limit1 = SearchLimit.SecondsForAllMoves(900, 15) * 0.03f;
       //limit1 = SearchLimit.SecondsPerMove(5);
 
       //limit1 = SearchLimit.NodesForAllMoves(500_000);//, 25_000);
 
-      limit1 = SearchLimit.SecondsForAllMoves(120, 2);
-      limit1 = SearchLimit.SecondsForAllMoves(10, 1f);
+//      limit1 = SearchLimit.SecondsForAllMoves(60, 1) *0.15f;
+      //limit1 = SearchLimit.SecondsForAllMoves(40, 0.5f);
+      //limit1 = SearchLimit.SecondsForAllMoves(900, 15) * 0.05f;
+
       //limit1 = SearchLimit.NodesPerMove(100_000);
 
       // Don't output log if very small games
@@ -164,9 +220,6 @@ engineDefCeres1.SearchParams.TestFlag = true;
         engineDefCeres1.SearchParams.MoveFutilityPruningAggressiveness = 0;
         engineDefCeres2.SearchParams.MoveFutilityPruningAggressiveness = 0;
       }
-      GameEngineDef engineDefEthereal = new GameEngineDefUCI("Etheral", new GameEngineUCISpec("Etheral", ETHERAL_EXE, NUM_THREADS, HASH_SIZE_MB, TB_PATH, uciSetOptionCommands: extraUCI));
-      GameEngineDef engineDefStockfish11 = new GameEngineDefUCI("SF11", new GameEngineUCISpec("SF11", SF11_EXE, NUM_THREADS, HASH_SIZE_MB, TB_PATH, uciSetOptionCommands: extraUCI));
-      GameEngineDef engineDefStockfish12 = new GameEngineDefUCI("SF12", new GameEngineUCISpec("SF12", SF12_EXE, NUM_THREADS, HASH_SIZE_MB, TB_PATH, uciSetOptionCommands: extraUCI));
 
       //GameEngineDef engineDefCeresUCI = new GameEngineDefUCI("CeresUCI", new GameEngineUCISpec("CeresUCI", @"c:\dev\ceres\artifacts\release\net5.0\ceres.exe"));
       GameEngineDef engineDefCeresUCI1 = new GameEngineDefCeresUCI("CeresUCINew", evalDef1, overrideEXE: @"C:\dev\Ceres\artifacts\release\net5.0\ceres.exe");
@@ -185,7 +238,7 @@ engineDefCeres1.SearchParams.TestFlag = true;
       EnginePlayerDef playerCeres2 = new EnginePlayerDef(engineDefCeres2, limit1);
       EnginePlayerDef playerEthereal = new EnginePlayerDef(engineDefEthereal, limit1);
       EnginePlayerDef playerStockfish11 = new EnginePlayerDef(engineDefStockfish11, limit1);
-      EnginePlayerDef playerStockfish12 = new EnginePlayerDef(engineDefStockfish12, limit1);// * 350);
+      EnginePlayerDef playerStockfish12 = new EnginePlayerDef(engineDefStockfish13, limit1);// * 350);
       EnginePlayerDef playerLC0 = new EnginePlayerDef(engineDefLC1, limit1);
       EnginePlayerDef playerLC0TCEC = new EnginePlayerDef(engineDefLC2TCEC, limit1);
 
@@ -220,8 +273,9 @@ engineDefCeres1.SearchParams.TestFlag = true;
       //engineDefCeres2.SearchParams.FutilityPruningStopSearchEnabled= false;
       //engineDefLC0.SearchParamsEmulate.FutilityPruningStopSearchEnabled= false;
 
-      TournamentDef def = new TournamentDef("TOURN", playerCeres1UCI, playerCeres2UCI);// playerCeres2UCI);// playerLC0TCEC);
-//    TournamentDef def = new TournamentDef("TOURN", playerCeres1UCI, playerCeres2UCI);
+//      TournamentDef def = new TournamentDef("TOURN", playerCeres1UCI, playerCeres2UCI);// playerCeres2UCI);// playerLC0TCEC);
+//      TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerCeres2);// playerCeres2UCI);// playerLC0TCEC);
+    TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerCeres2UCI);
 
       //TournamentDef def = new TournamentDef("TOURN", playerLC0Tilps, playerLC0);
 
