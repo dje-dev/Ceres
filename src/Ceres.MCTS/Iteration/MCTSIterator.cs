@@ -37,6 +37,7 @@ using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.Params;
+using Ceres.MCTS.Search;
 
 #endregion
 
@@ -260,7 +261,7 @@ namespace Ceres.MCTS.Iteration
       else if (nnEvaluators.EvaluatorDef.CacheMode != PositionEvalCache.CacheMode.None)
         positionCache = new PositionEvalCache();
 
-      const int NUM_BUFFER_NODES = 1500;
+      const int NUM_BUFFER_NODES = 1500 + MCTSRootPreloader.MAX_PRELOAD_NODES_TOTAL;
       int maxNodesBound = int.MaxValue;
       if (searchLimit.Type == SearchLimitType.NodesPerMove
         || searchLimit.Type == SearchLimitType.NodesForAllMoves)         

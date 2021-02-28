@@ -35,6 +35,14 @@ namespace Ceres.MCTS.Search
   /// </summary>
   public class MCTSRootPreloader
   {
+    // Total number of allowed nodes to prelaod is limited for two reasons:
+    //   - preloading is to only modestly increase sizes of first few batches,
+    //     being only moderately speculative in the early stages when
+    //     batches would otherwise not be very full
+    //   - having an upper bound maximum that might be be preloaded
+    //     may help size some data structures more precisely.
+    internal const int MAX_PRELOAD_NODES_TOTAL = 256;
+
     /// <summary>
     /// Only nodes having prior probability above this threshold are eligible for preloading.
     /// </summary>
@@ -51,10 +59,15 @@ namespace Ceres.MCTS.Search
     /// </summary>
     public static long TotalCumulativeRootPreloadNodes;
 
+    /// <summary>
+    /// Number of nodes preloaded thus far.
+    /// </summary>
+    public int NumPreloaded;
+
 
     /// <summary>
     /// Publicly exposed method that launches a round of root preloading
-    /// based on search paratemrs and updates associated statistics.
+    /// based on search parameters and updates associated statistics.
     /// </summary>
     /// <param name="root"></param>
     /// <param name="selectorID"></param>
@@ -94,6 +107,7 @@ namespace Ceres.MCTS.Search
     List<MCTSNode> GatherRootPreloadNodes(int selectorID, MCTSNode root, int maxNodes, int maxDepth, int width, float pThreshold)
     {
       if (root.NumPolicyMoves == 0) return null;
+      if (NumPreloaded >= MAX_PRELOAD_NODES_TOTAL) return null;
 
       List<MCTSNode> nodes = new List<MCTSNode>();
 
@@ -121,8 +135,9 @@ namespace Ceres.MCTS.Search
       // For each top child
       for (int i = 0; i < Math.Min(node.NumPolicyMoves, width); i++)
       {
-        (MCTSNode childNode, EncodedMove move, FP16 p) = node.ChildAtIndexInfo(i);
+        if (NumPreloaded >= MAX_PRELOAD_NODES_TOTAL) return;
 
+        (MCTSNode childNode, EncodedMove move, FP16 p) = node.ChildAtIndexInfo(i);
 
         if (float.IsNaN(pThreshold) || p >= pThreshold)
         {
@@ -138,6 +153,8 @@ namespace Ceres.MCTS.Search
               childNode.Ref.BackupIncrementInFlight(0, 1);
 
             nodes.Add(childNode);
+            NumPreloaded++;
+
             if (nodes.Count == maxNodes) return;
           }
           else
