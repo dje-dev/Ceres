@@ -201,8 +201,8 @@ namespace Ceres.Features.Suites
 
       if (numConcurrentSuiteThreads > 1)
       {
-        bool evaluator1NonPooled = Def.Engine1Def.EvaluatorDef != null && Def.Engine1Def.EvaluatorDef.DeviceCombo != Chess.NNEvaluators.Defs.NNEvaluatorDeviceComboType.Pooled;
-        bool evaluator2NonPooled = Def.Engine2Def.EvaluatorDef != null && Def.Engine2Def.EvaluatorDef.DeviceCombo != Chess.NNEvaluators.Defs.NNEvaluatorDeviceComboType.Pooled;
+        bool evaluator1NonPooled = Def.Engine1Def?.EvaluatorDef != null && Def.Engine1Def.EvaluatorDef.DeviceCombo != Chess.NNEvaluators.Defs.NNEvaluatorDeviceComboType.Pooled;
+        bool evaluator2NonPooled = Def.Engine2Def?.EvaluatorDef != null && Def.Engine2Def.EvaluatorDef.DeviceCombo != Chess.NNEvaluators.Defs.NNEvaluatorDeviceComboType.Pooled;
 
         if (evaluator1NonPooled || evaluator2NonPooled)
         {
