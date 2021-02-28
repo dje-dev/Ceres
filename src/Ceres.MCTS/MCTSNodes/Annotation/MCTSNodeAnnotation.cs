@@ -86,7 +86,7 @@ namespace Ceres.MCTS.MTCSNodes.Annotation
           // Get MGMoveList based on local temporary buffer
           if (movesBuffer == null) movesBuffer = new MGMoveList(128);
           MGMoveList localMovesBuffer = movesBuffer;
-          movesBuffer.Clear();
+          localMovesBuffer.Clear();
 
           MGMoveGen.GenerateMoves(in PosMG, localMovesBuffer);
           moves = new MGMoveList(localMovesBuffer); // make a copy (with exact size)
