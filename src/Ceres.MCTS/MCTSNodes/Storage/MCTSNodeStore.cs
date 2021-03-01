@@ -44,8 +44,9 @@ namespace Ceres.MCTS.MTCSNodes.Storage
   {
     /// <summary>
     /// Approximate total bytes consumed by a node, child pointers, and associated data structures.
+    /// Expanded nodes may be closer to 300 nodes, but transposed leaf nodes will only be 64.
     /// </summary>
-    const ulong APPROX_BYTES_PER_NODE = 300;
+    const ulong APPROX_BYTES_PER_NODE = 225;
 
     /// <summary>
     /// Maximum number of nodes for which which the store could accomodate.
