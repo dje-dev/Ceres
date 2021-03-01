@@ -240,9 +240,9 @@ namespace Ceres.Features.Suites
         }
         else
         {
-          bool resetMovesBetweenMoves = !Def.Engine2Def.SearchParams.TreeReuseEnabled;
-          bool enableTranpsositions = Def.Engine2Def.SearchParams.Execution.TranspositionMode != TranspositionMode.None;
-          bool enableTablebases = Def.Engine2Def.SearchParams.EnableTablebases;
+          //bool resetMovesBetweenMoves = !Def.Engine2Def.SearchParams.TreeReuseEnabled;
+          //bool enableTranpsositions = Def.Engine2Def.SearchParams.Execution.TranspositionMode != TranspositionMode.None;
+          //bool enableTablebases = Def.Engine2Def.SearchParams.EnableTablebases;
 
           makeExternalEngine = () => Def.ExternalEngineDef.EngineDef.CreateEngine();
         }
