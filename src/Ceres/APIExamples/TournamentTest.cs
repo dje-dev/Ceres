@@ -79,8 +79,8 @@ namespace Ceres.APIExamples
                                                                   new ParamsSearch(), null, new ParamsSelect(),
                                                                   null, "CeresSF.log.txt");
 
-      SearchLimit limitCeres = SearchLimit.SecondsForAllMoves(60, 1.25f);
-      SearchLimit limitSF = limitCeres * 2f;
+      SearchLimit limitCeres = SearchLimit.SecondsForAllMoves(60, 1.25f) * 0.15f;
+      SearchLimit limitSF = limitCeres * 1.5f;
 
       GameEngineDef engineDefCeresUCIGit = new GameEngineDefCeresUCI("CeresUCIGit", evalDef1, overrideEXE: @"C:\ceres\releases\v0.88\ceres.exe");
       EnginePlayerDef playerCeres = new EnginePlayerDef(gitVersion ? engineDefCeresUCIGit : engineDefCeres1, 
@@ -115,9 +115,9 @@ namespace Ceres.APIExamples
     {
       PreTournamentCleanup();
 
-      if (false)
+      if (true)
       {
-        Parallel.Invoke(() => TestSF(0, true), () => { Thread.Sleep(10_000); TestSF(1, false); });
+        Parallel.Invoke(() => TestSF(0, true), () => { Thread.Sleep(7_000); TestSF(1, false); });
         System.Environment.Exit(3);
       }
 
@@ -125,8 +125,8 @@ namespace Ceres.APIExamples
       string GPUS = POOLED ? "GPU:0,1,2,3:POOLED"
                            : "GPU:0";
       //703810
-      NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification("LC0:j64-210", GPUS); // j64-210 LS16
-      NNEvaluatorDef evalDef2 = NNEvaluatorDefFactory.FromSpecification("LC0:j64-210", GPUS); // j104.1-30 61339
+      NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification("LC0:j94-100", GPUS); // j64-210 LS16
+      NNEvaluatorDef evalDef2 = NNEvaluatorDefFactory.FromSpecification("LC0:j94-100", GPUS); // j104.1-30 61339
 
       // was 703810 @ 50k
 
@@ -141,9 +141,9 @@ namespace Ceres.APIExamples
       //      SearchLimit slSF = slLC0 * 875;
 
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(100_000);
+      SearchLimit limit1 = SearchLimit.NodesPerMove(15_000);
 
-      limit1 = SearchLimit.SecondsForAllMoves(900, 15) * 0.03f;
+      //limit1 = SearchLimit.SecondsForAllMoves(900, 15) * 0.04f;
       //limit1 = SearchLimit.SecondsPerMove(5);
 
       //limit1 = SearchLimit.NodesForAllMoves(500_000);//, 25_000);
@@ -172,7 +172,7 @@ outputLog=false;
       ////////
 
       //engineDefCeres1.SelectParams.CPUCTAtRoot *= 1.5f;
-engineDefCeres1.SearchParams.TestFlag = true;
+//engineDefCeres1.SearchParams.TestFlag = true;
       //engineDefCeres1.SearchParams.MoveFutilityPruningAggressiveness = 0.4f;
       //engineDefCeres1.SearchParams.GameLimitUsageAggressiveness *= 1.2f;
       //engineDefCeres1.SearchParams.MoveFutilityPruningAggressiveness = 0.75f;
@@ -248,20 +248,21 @@ engineDefCeres1.SearchParams.TestFlag = true;
 
       //(playerCeres1.EngineDef as GameEngineDefCeres).SearchParams.DrawByRepetitionLookbackPlies = 40;
 
-      if (false)
+      if (true)
       {
         // ===============================================================================
         SuiteTestDef suiteDef = new SuiteTestDef("Suite",
                                                 //@"\\synology\dev\chess\data\epd\chad_tactics-100M.epd",
-                                                @"\\synology\dev\chess\data\epd\ERET.epd",
-                                                //@"\\synology\dev\chess\data\epd\ERET_VESELY203.epd",
+                                                //@"\\synology\dev\chess\data\epd\ERET.epd",
+                                                @"\\synology\dev\chess\data\epd\ERET_VESELY203.epd",
                                                 //   @"\\synology\dev\chess\data\epd\sts.epd",
-                                                playerCeres1, null, playerLC0);
+                                                playerCeres1, null, playerCeres2UCI);
 //        suiteDef.MaxNumPositions = 50;
 
         SuiteTestRunner suiteRunner = new SuiteTestRunner(suiteDef);
 
-        suiteRunner.Run(POOLED ? 20 : 4, true, false);
+//        suiteRunner.Run(POOLED ? 20 : 4, true, false);
+        suiteRunner.Run(1, true, false);
         return;
         // ===============================================================================
       }
@@ -275,7 +276,7 @@ engineDefCeres1.SearchParams.TestFlag = true;
 
 //      TournamentDef def = new TournamentDef("TOURN", playerCeres1UCI, playerCeres2UCI);// playerCeres2UCI);// playerLC0TCEC);
 //      TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerCeres2);// playerCeres2UCI);// playerLC0TCEC);
-    TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerCeres2UCI);
+    TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerLC0);
 
       //TournamentDef def = new TournamentDef("TOURN", playerLC0Tilps, playerLC0);
 
