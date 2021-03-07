@@ -46,9 +46,9 @@ namespace Ceres.Base.OperatingSystem
       {
         errorString = "Currently only Windows or Linux operating systems is supported.";
       }
-      else if (System.Environment.OSVersion.Version.Major < 10)
+      else if (System.Environment.OSVersion.Version.Major < 7)
       {
-        errorString = "Windows Version 10 or above required.";
+        errorString = "Windows Version 7 or above required.";
       }
       else if (!Avx.IsSupported)
       {
