@@ -55,7 +55,7 @@ namespace Ceres.Chess.LC0.WeightsProtobuf
       if (value < layer.MinVal) value = layer.MinVal;
       if (value > layer.MaxVal) value = layer.MaxVal;
 
-      float width = (layer.MaxVal - layer.MinVal) / 65536.0f;
+      float width = (layer.MaxVal - layer.MinVal) / 65535.0f;
       float offset = value - layer.MinVal;
       float increment = MathF.Round(offset / width, 0);
       byte b0 = (byte)(increment % 256);
@@ -78,7 +78,7 @@ namespace Ceres.Chess.LC0.WeightsProtobuf
       b[0] = layer.Params[index * 2];
       b[1] = layer.Params[index * 2 + 1];
       float v1 = 256 * b[1] + b[0];
-      float v1a = layer.MinVal + v1 * (layer.MaxVal - layer.MinVal) / 65536.0f;
+      float v1a = layer.MinVal + v1 * (layer.MaxVal - layer.MinVal) / 65535.0f;
       return v1a;
     }
 
