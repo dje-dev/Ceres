@@ -22,6 +22,7 @@ using Ceres.Chess.NNEvaluators;
 using Ceres.Chess.NetEvaluation.Batch;
 using Ceres.Chess.LC0.Batches;
 using Ceres.Base.Benchmarking;
+using Ceres.Base.DataTypes;
 
 #endregion
 
@@ -54,10 +55,18 @@ namespace Chess.Ceres.NNEvaluators
     /// </summary>
     public readonly ONNXRuntimeExecutor Executor;
 
+
+    /// <summary>
+    /// Types of input(s) required by the evaluator.
+    /// </summary>
+    public override InputTypes InputsRequired => InputTypes.Boards | InputTypes.Moves;
+
+
     public override bool IsWDL => isWDL;
-    public override bool HasM => false;
+    public override bool HasM => hasM;
 
     readonly bool isWDL;
+    readonly bool hasM;
 
     #region Statics
 
@@ -69,7 +78,8 @@ namespace Chess.Ceres.NNEvaluators
 
     #endregion
 
-    public NNEvaluatorEngineONNX(string engineID, string weightsFN, int gpuID, ONNXRuntimeExecutor.NetTypeEnum type, int batchSize, bool isWDL)
+    public NNEvaluatorEngineONNX(string engineID, string weightsFN, int gpuID, 
+                                 ONNXRuntimeExecutor.NetTypeEnum type, int batchSize, bool isWDL, bool hasM)
     {
       if (batchSize > MAX_BATCH_SIZE) throw new ArgumentOutOfRangeException(nameof(batchSize), $"exceeds maximum of {MAX_BATCH_SIZE}");
 
@@ -78,6 +88,7 @@ namespace Chess.Ceres.NNEvaluators
       ONNXFileName = weightsFN;
       BatchSize = batchSize;
       this.isWDL = isWDL;
+      this.hasM = hasM;
 
       if (lastONNXFileName == weightsFN && lastBatchSize == batchSize
         && lastIsWDL == isWDL && lastType == type)
@@ -150,9 +161,14 @@ namespace Chess.Ceres.NNEvaluators
         }
       }
 
+      FP16[] mFP16 = null;
+      if (HasM)
+      {
+        mFP16 = Array.ConvertAll<float, FP16>(result.MLH, m => (FP16)m);
+      }
       // NOTE: inefficient, above we convert from [] (flat) to [][] and here we convert back to []
-      return new PositionEvaluationBatch(IsWDL, HasM, numPos, result.ValuesRaw, result.PolicyFlat, null, true,
-                                   PositionEvaluationBatch.PolicyType.LogProbabilities, false, stats);
+      return new PositionEvaluationBatch(IsWDL, HasM, numPos, result.ValuesRaw, result.PolicyFlat, mFP16, null,  true,
+                                         PositionEvaluationBatch.PolicyType.LogProbabilities, false, stats);
     }
 
     #endregion
