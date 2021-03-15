@@ -82,7 +82,6 @@ namespace Ceres.Features.GameEngines
     {
       if (paramsSearch == null) paramsSearch = new ParamsSearch();
       if (paramsSelect == null) paramsSelect = new ParamsSelect();
-
       //fail int8  string precisionStr = MCTSParams.PRECISION == WFEvalNetTensorRT.TRTPrecision.Int8 ? "trt-int8" : "cudnn-fp16";
 
       // Must reverse values to conform to LZ0 convention
@@ -109,6 +108,16 @@ namespace Ceres.Features.GameEngines
       string lzOptions = "--nodes-as-playouts "; // essential to get same behavior as Ceres with go nodes command 
 
       lzOptions += "--multi-gather "; // greatly improves search speed
+
+      lzOptions += "--max-out-of-order-evals-factor=2.4 "; // to be default in versions >0.27 
+
+#if NOT
+      if (paramsSearch.TestFlag)
+      {
+        // Turn off MLH
+        lzOptions += " --moves-left-max-effect=0 --moves-left-threshold=1 --moves-left-scaled-factor=0 --moves-left-quadratic-factor=0 ";
+      }
+#endif
 
       if (forceDisableSmartPruning || (emulateCeresOptions && !paramsSearch.FutilityPruningStopSearchEnabled))
         lzOptions += " --smart-pruning-factor=0 ";
