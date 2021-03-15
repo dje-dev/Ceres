@@ -17,7 +17,6 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
-
 using Ceres.Base;
 using Ceres.Base.Benchmarking;
 using Ceres.Base.DataType;
@@ -274,7 +273,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
           {
             w[i] = valueEvals[i * 3 + 0];
             l[i] = valueEvals[i * 3 + 2];
-            Debug.Assert(Math.Abs(100 - valueEvals[i * 3 + 0] + valueEvals[i * 3 + 1] + valueEvals[i * 3 + 2]) <= 0.001);
+            Debug.Assert(Math.Abs(1 - (valueEvals[i * 3 + 0] + valueEvals[i * 3 + 1] + valueEvals[i * 3 + 2])) <= 0.001);
           }
           else
           {
@@ -341,7 +340,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <param name="valsAreLogistic"></param>
     /// <param name="stats"></param>
     private PositionEvaluationBatch(bool isWDL, bool hasM, int numPos, 
-                                    Span<FP16> valueEvals, 
+                                    Span<FP16> valueEvals, Span<FP16> m,
                                     float[] valueHeadConvFlat, 
                                     bool valsAreLogistic, TimingStats stats)
     {
@@ -352,6 +351,10 @@ namespace Ceres.Chess.NetEvaluation.Batch
       ValueHeadConv = valueHeadConvFlat;
 
       InitializeValueEvals(valueEvals, valsAreLogistic);
+      if (hasM)
+      {
+        this.M = m.ToArray();
+      }
 
       if (valueEvals != null && valueEvals.Length < numPos * (IsWDL ? 3 : 1)) throw new ArgumentException("Wrong value size");
 
@@ -369,9 +372,10 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <param name="valueHeadConvFlat"></param>
     /// <param name="probType"></param>
     /// <param name="stats"></param>
-    public PositionEvaluationBatch(bool isWDL, bool hasM, int numPos, Span<FP16> valueEvals, float[] policyProbs, float[] valueHeadConvFlat,
-                             bool valsAreLogistic, PolicyType probType, bool policyAlreadySorted, TimingStats stats) 
-      : this(isWDL, hasM, numPos, valueEvals, valueHeadConvFlat, valsAreLogistic, stats)
+    public PositionEvaluationBatch(bool isWDL, bool hasM, int numPos, Span<FP16> valueEvals, float[] policyProbs, 
+                                   FP16[] m, float[] valueHeadConvFlat,
+                                   bool valsAreLogistic, PolicyType probType, bool policyAlreadySorted, TimingStats stats) 
+      : this(isWDL, hasM, numPos, valueEvals, m, valueHeadConvFlat, valsAreLogistic, stats)
     {
       Policies = ExtractPoliciesBufferFlat(numPos, policyProbs, probType, policyAlreadySorted);
     }
@@ -390,9 +394,10 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <param name="stats"></param>
     public PositionEvaluationBatch(bool isWDL, bool hasM, int numPos, Span<FP16> valueEvals, 
                              int topK, Span<int> policyIndices, Span<float> policyProbabilties,
+                             Span<FP16> m,
                              float[] valueHeadConvFlat, bool valsAreLogistic,
                              PolicyType probType, TimingStats stats)
-      : this(isWDL, hasM, numPos, valueEvals, valueHeadConvFlat, valsAreLogistic, stats)
+      : this(isWDL, hasM, numPos, valueEvals, m, valueHeadConvFlat, valsAreLogistic, stats)
     {
       Policies = ExtractPoliciesTopK(numPos, topK, policyIndices, policyProbabilties, probType);
     }
