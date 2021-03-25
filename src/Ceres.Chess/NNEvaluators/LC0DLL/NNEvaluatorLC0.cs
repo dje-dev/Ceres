@@ -126,16 +126,19 @@ namespace Ceres.Chess.NNEvaluators
       {
         float thisQ = thisItemsOut.Q;
         float thisD = thisItemsOut.D;
-        float thisM = thisItemsOut.M;
         float thisW = (1.0f - thisD + thisQ) / 2.0f;
         float thisL = 1.0f - (thisD + thisW);
 
         w[i] = (FP16)thisW;
         l[i] = (FP16)thisL;
-        m[i] = (FP16)thisM;
       }
       else
         w[i] = (FP16)thisItemsOut.Q;
+
+      if (HasM)
+      {
+        m[i] = (FP16)thisItemsOut.M;
+      }
 
       int numMoves = Evaluator.ItemsIn[i].NumMoves;
 
