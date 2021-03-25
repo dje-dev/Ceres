@@ -375,7 +375,9 @@ namespace Ceres.Chess.MoveGen
     [ModuleInitializer]
     internal static void ClassInitialize()
     {
-      SquareMap = new Lazy<BitBoard[]>(() => CreateSquareMap());
+      // do not use lambda express here
+      //  "() => CreateSquareMap()" code is not good because it creates inner class or deeper method calls
+      SquareMap = new Lazy<BitBoard[]>(CreateSquareMap);
 
       MGPieceCodeToPieceType = new[] { PieceType.None, PieceType.Pawn, PieceType.Bishop, PieceType.None, PieceType.Rook, PieceType.Knight, PieceType.Queen, PieceType.King,
                                        PieceType.None, PieceType.Pawn, PieceType.Bishop, PieceType.None, PieceType.Rook, PieceType.Knight, PieceType.Queen, PieceType.King };
