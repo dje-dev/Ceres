@@ -57,6 +57,10 @@ namespace Ceres.Base.OperatingSystem.NVML
         NVMLMethods.nvmlDeviceGetName(device, name, 50);
         NVMLMethods.nvmlDeviceGetTemperature(device, 0, out uint temperatureCentigrade);
         NVMLMethods.nvmlDeviceGetUtilizationRates(device, out NVMLUtilization utilization);
+
+        NVMLMethods.nvmlDeviceGetPowerUsage(device, out uint powerUsage);
+        NVMLMethods.nvmlDeviceGetArchitecture(device, out uint architecture);
+
         NVMLClocksThrottleReasons clocksThrottleReasons = 0;
         NVMLMethods.nvmlDeviceGetCurrentClocksThrottleReasons(device, ref clocksThrottleReasons);
 
@@ -68,8 +72,9 @@ namespace Ceres.Base.OperatingSystem.NVML
         NVMLMethods.nvmlDeviceGetClockInfo(device, nvmlClockType.Graphics, ref clocksSM);
 
         infos.Add(new NVMLGPUInfo((int)i, name.ToString(), 
-                  (int)major, (int)minor, (int)clocksSM,
-                  (int)utilization.UtilizationGPUPct, (int)utilization.UtilizationMemoryPct, (int)temperatureCentigrade, clocksThrottleReasons));
+                  (int)major, (int)minor, (int)architecture, (int)clocksSM,
+                  (int)utilization.UtilizationGPUPct, (int)utilization.UtilizationMemoryPct, 
+                  (float)powerUsage / 1000.0f, (int)temperatureCentigrade, clocksThrottleReasons));
       }
 
       return infos;

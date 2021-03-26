@@ -51,6 +51,12 @@ namespace Ceres.Base.OperatingSystem.NVML
     public static extern uint nvmlDeviceGetUtilizationRates(IntPtr device, out NVMLUtilization utilization);
 
     [DllImport(NVML_LIB_NAME)]
+    public static extern uint nvmlDeviceGetPowerUsage(IntPtr device, out uint powerUsage);
+
+    [DllImport(NVML_LIB_NAME)]
+    public static extern uint nvmlDeviceGetArchitecture(IntPtr device, out uint architecture);
+
+    [DllImport(NVML_LIB_NAME)]
     public static extern uint nvmlDeviceGetClockInfo(IntPtr device, nvmlClockType type, ref uint clock);
 
     [DllImport(NVML_LIB_NAME)]
