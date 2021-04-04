@@ -96,7 +96,7 @@ namespace Ceres.Chess.LC0NetInference
       }
 
       // ** NICE DEBUGGING!
-      if (debuggingDump) EncodedPositionBatchFlat.DumpDecoded(positionEncoding, 112 * 2);
+      if (debuggingDump) EncodedPositionBatchFlat.DumpDecoded(positionEncoding, 112);
 
       float[][] eval = executor.Run(positionEncoding, new int[] { numPositionsUsed, 112, 64 });
 
@@ -111,15 +111,16 @@ namespace Ceres.Chess.LC0NetInference
       }
       else
       {
-        FP16[] values = FP16.ToFP16(eval[0]);
-        Debug.Assert(values.Length == (isWDL ? 3 : 1) * numPositionsUsed);
+        float[] mlh = eval[0];
 
         float[] policiesLogistics = eval[1];
-        //for (int j = 0; j < policies.Length; j++) policies[j] = (float)Math.Exp(policies[j]);
-        //float[] draws = NetType == NetTypeEnum.Ceres ? ExtractFloats(result1[2], BatchSize) : null;
-        float[] value_fc_activations = eval.Length < 3 ? null : eval[2];
 
-        ONNXRuntimeExecutorResultBatch result = new ONNXRuntimeExecutorResultBatch(isWDL, values, policiesLogistics, value_fc_activations, numPositionsUsed);
+        FP16[] values = FP16.ToFP16(eval[2]);
+        Debug.Assert(values.Length == (isWDL ? 3 : 1) * numPositionsUsed);
+
+        float[] value_fc_activations = null;// eval.Length < 3 ? null : eval[2];
+
+        ONNXRuntimeExecutorResultBatch result = new ONNXRuntimeExecutorResultBatch(isWDL, values, policiesLogistics, mlh, value_fc_activations, numPositionsUsed);
         return result;
 
       }

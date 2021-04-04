@@ -1,3 +1,10 @@
+//#define FEATURE_ONNX
+#if NOT
+// requires packages:
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.7.0" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu" Version="1.7.1" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.Managed" Version="1.7.1" />
+#endif
 #region License notice
 
 /*
@@ -20,10 +27,10 @@ using System.Diagnostics;
 using System.Collections.Generic;
 using Ceres.Base;
 
+
 #if FEATURE_ONNX
 // needs     <PackageReference Include="Microsoft.ML.OnnxRuntime.Managed" Version="1.6.0" />
 
-using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 #endif
@@ -85,7 +92,7 @@ namespace Ceres.Chess.LC0NetInference
 //        options.AppendExecutionProvider_CUDA();
         Session = new InferenceSession(onnxFileName, options);
 #endif
-        Session = new InferenceSession(onnxFileName, SessionOptions.MakeSessionOptionWithCudaProvider(gpuID));
+        Session = new InferenceSession(onnxFileName, SessionOptions.MakeSessionOptionWithCudaProvider(/*gpuID*/));
       }
 #else
         Session = new InferenceSession(onnxFileName);
