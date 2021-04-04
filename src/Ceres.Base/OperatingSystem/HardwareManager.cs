@@ -41,12 +41,13 @@ namespace Ceres.Base.OperatingSystem
     public static void VerifyHardwareSoftwareCompatability()
     {
       string errorString = null;
-      if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
-        && !RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+      bool isWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+      bool isLinux = RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
+      if (!isWindows && !isLinux)
       {
         errorString = "Currently only Windows or Linux operating systems is supported.";
       }
-      else if (System.Environment.OSVersion.Version.Major < 7)
+      else if (isWindows && System.Environment.OSVersion.Version.Major < 7)
       {
         errorString = "Windows Version 7 or above required.";
       }
