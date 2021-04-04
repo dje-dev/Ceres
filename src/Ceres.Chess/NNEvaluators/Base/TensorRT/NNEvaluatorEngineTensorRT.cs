@@ -61,6 +61,9 @@ namespace Chess.Ceres.NNEvaluators.TensorRT
     public readonly NNEvaluatorEngineTensorRTConfig.NetTypeEnum Type;
     public readonly NNEvaluatorEngineTensorRTConfig.TRTPriorityLevel PriorityLevel;
 
+    // TODO: possibly the requirement of Moves can be lifted?
+    public override InputTypes InputsRequired => InputTypes.Boards | InputTypes.Moves;
+
 
     /// <summary>
     /// Constructor.
@@ -248,12 +251,15 @@ Updated notes:
         Span<Int32> policyIndicies = MemoryMarshal.Cast<float, Int32>(rawResultsPolicy).Slice(0, NUM_ELEMENTS);
         Span<float> policyProbabilities = rawResultsPolicy.Slice(Config.MaxBatchSize * NUM_TOPK_POLICY, NUM_ELEMENTS);
 
+        if (Config.HasM) throw new Exception("MLH not currenty retrieved");
+
         const bool VALUES_ARE_LOGISTIC = true; // the values are exponentiated already in the C++ code
         PositionEvaluationBatch retBatch = new PositionEvaluationBatch(Config.IsWDL, Config.HasM, 
                                      numToProcess, results, 
                                      NUM_TOPK_POLICY,
                                      policyIndicies, policyProbabilities,
-                                     rawResultsConvValFlat,
+                                     null, // TODO: MLH not yet supported
+                                     null, //rawResultsConvValFlat,
                                      VALUES_ARE_LOGISTIC,
                                      PositionEvaluationBatch.PolicyType.Probabilities, timeStats);
 
