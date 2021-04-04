@@ -275,7 +275,7 @@ namespace Ceres.Chess.LC0.Boards
         BitVector64 bv = new BitVector64(decoded[i]);
         for (int j = 0; j < 64; j++)
         {
-          ret[index++] = bv.BitIsSet(j) ? 0b_1 : 0b_0;
+          ret[index++] = (byte)(bv.BitIsSet(j) ? 1 : 0);
         }
       }
       return ret;
