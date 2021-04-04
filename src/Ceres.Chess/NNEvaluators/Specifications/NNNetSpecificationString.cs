@@ -59,6 +59,11 @@ namespace Ceres.Chess.NNEvaluators.Specifications
         // Net specification "LC0:703810=0.5,66193=0.5";
         netIDs = netString.Substring(4);
       }
+      else if (netString.ToUpper().StartsWith("CUSTOM1:"))
+      {
+        netIDs = netString.Substring(8);
+        NN_EVAL_TYPE = NNEvaluatorType.Custom1;
+      }
       else if (netString.ToUpper().StartsWith("ONNX:"))
       {
         netIDs = netString.Substring(5);

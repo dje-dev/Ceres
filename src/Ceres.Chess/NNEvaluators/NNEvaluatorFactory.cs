@@ -34,6 +34,11 @@ namespace Ceres.Chess.NNEvaluators
   /// </summary>
   public static class NNEvaluatorFactory
   {
+    /// <summary>
+    /// Custom factory method installable at runtime (CUSTOM1).
+    /// </summary>
+    public static Func<string, int, NNEvaluator> Custom1Factory;
+
     static Dictionary<object, (NNEvaluatorDef, NNEvaluator)> persistentEvaluators = new();
 
     internal static void DeletePersistent(NNEvaluator evaluator)
@@ -125,8 +130,18 @@ namespace Ceres.Chess.NNEvaluators
         ret = new NNEvaluatorEngineONNX(netDef.NetworkID, fn, deviceDef.DeviceIndex,
                                         ONNXRuntimeExecutor.NetTypeEnum.LC0, 1024, isWDL, hasMLH);
       }
+      else if (netDef.Type == NNEvaluatorType.Custom1)
+      {
+        if (Custom1Factory == null)
+        {
+          throw new Exception("NNEvaluatorFactory.Custom1Factory static variable must be initialized.");
+        }
+        ret = Custom1Factory(net.NetworkID, deviceDef.DeviceIndex);
+      }
       else
+      {
         throw new Exception($"Requested neural network evaluator type not supported: {netDef.Type}");
+      }
 
       return  ret;
     }
