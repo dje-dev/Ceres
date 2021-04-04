@@ -56,7 +56,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     {
       get
       {
-        int maxByMemory = (int)(Win32.MemorySize / APPROX_BYTES_PER_NODE);
+        int maxByMemory = (int)(HardwareManager.MemorySize / (long)APPROX_BYTES_PER_NODE);
         return Math.Min(maxByMemory, MCTSNodeStructChildStorage.MAX_NODES);
       }
     }

@@ -48,6 +48,21 @@ namespace Ceres.Base.OperatingSystem.Linux
 
     public const int MFD_HUGETLB = 4;
 
+    
+    #region System configuration
+
+    [DllImport(LIBC)] public static extern long sysconf(int name);
+
+    const int _SC_PAGESIZE = 8;
+    const int _SC_PHYS_PAGES = 11;
+
+    public static long PhysicalMemorySize => sysconf(_SC_PHYS_PAGES) * sysconf(_SC_PAGESIZE);
+
+    #endregion
+
+    //#define _SC_NPROCESSORS_CONF              9
+    //#define _SC_NPROCESSORS_ONLN             10
+
     [DllImport(LIBC)] public static extern int getpid();
 
     #region Memory allocation 

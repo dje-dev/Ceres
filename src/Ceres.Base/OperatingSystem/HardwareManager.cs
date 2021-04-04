@@ -18,6 +18,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics.X86;
 using Ceres.Base.Misc;
+using Ceres.Base.OperatingSystem.Linux;
 using Ceres.Base.OperatingSystem.Windows;
 using Microsoft.Extensions.Logging;
 
@@ -78,6 +79,25 @@ namespace Ceres.Base.OperatingSystem
       Console.WriteLine("NumCPUSockets: " + WindowsHardware.NumCPUSockets);
       Console.WriteLine("NumProcessors: " + System.Environment.ProcessorCount);
       Console.WriteLine("Affinity Mask: " + Process.GetCurrentProcess().ProcessorAffinity);
+      Console.WriteLine("Memory Size  : " + MemorySize);
+    }
+
+    /// <summary>
+    /// Returns amount physical memory visible (in bytes).
+    /// </summary>
+    public static long MemorySize
+    {
+      get
+      {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        {
+          return LinuxAPI.PhysicalMemorySize;
+        }
+        else
+        {
+          return (long) Win32.MemorySize;
+        }
+      }
     }
 
     private static void AffinitizeSingleProcessor()
