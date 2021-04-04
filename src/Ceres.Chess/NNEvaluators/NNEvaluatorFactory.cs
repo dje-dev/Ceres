@@ -22,6 +22,7 @@ using Chess.Ceres.NNEvaluators;
 using Ceres.Chess.NNFiles;
 using System.Collections.Generic;
 using Chess.Ceres.NNEvaluators.TensorRT;
+using Ceres.Chess.LC0NetInference;
 
 #endregion
 
@@ -82,7 +83,10 @@ namespace Ceres.Chess.NNEvaluators
 
       const bool LOW_PRIORITY = false;
       //LC0DownloadedNetDef net = LC0DownloadedNetDef.ByID(netDef.NetworkID);
-      INNWeightsFileInfo net = NNWeightsFiles.LookupNetworkFile(netDef.NetworkID);
+      INNWeightsFileInfo net = null;
+
+      // TODO: also do this for ONNX
+      if( netDef.Type != NNEvaluatorType.ONNX) net = NNWeightsFiles.LookupNetworkFile(netDef.NetworkID);
 
       if (netDef.Type == NNEvaluatorType.RandomWide)
         ret = new NNEvaluatorRandom(NNEvaluatorRandom.RandomType.WidePolicy, true);
@@ -114,8 +118,12 @@ namespace Ceres.Chess.NNEvaluators
       }
       else if (netDef.Type == NNEvaluatorType.ONNX)
       {
-        ret = new NNEvaluatorEngineONNX(net.NetworkID, net.ONNXFileName, deviceDef.DeviceIndex,
-                                        LC0NetInference.ONNXRuntimeExecutor.NetTypeEnum.LC0, 1024, net.IsWDL);
+        // TODO: fill these in properly
+        string fn = @$"C:\dev\CeresDev\src\Ceres.TFTrain\{netDef.NetworkID}.onnx";
+        bool isWDL = true;
+        bool hasMLH = true;
+        ret = new NNEvaluatorEngineONNX(netDef.NetworkID, fn, deviceDef.DeviceIndex,
+                                        ONNXRuntimeExecutor.NetTypeEnum.LC0, 1024, isWDL, hasMLH);
       }
       else
         throw new Exception($"Requested neural network evaluator type not supported: {netDef.Type}");
