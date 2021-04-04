@@ -165,13 +165,15 @@ namespace Ceres.Chess.NNEvaluators
     /// <param name="result"></param>
     /// <param name="batch"></param>
     /// <param name="batchIndex"></param>
-    private void ExtractToNNEvaluatorResult(out NNEvaluatorResult result, IPositionEvaluationBatch batch, int batchIndex)
+    private void ExtractToNNEvaluatorResult(out NNEvaluatorResult result, 
+                                            IPositionEvaluationBatch batch, int batchIndex)
     {
       float w = batch.GetWinP(batchIndex);
       float l = IsWDL ? batch.GetLossP(batchIndex) : float.NaN;
       float m = HasM ? batch.GetM(batchIndex) : float.NaN;
+      NNEvaluatorResultActivations activations = batch.GetActivations(batchIndex);
       (Memory<CompressedPolicyVector> policies, int index) policyRef = batch.GetPolicy(batchIndex);
-      result = new NNEvaluatorResult(w, l, m, policyRef.policies.Span[policyRef.index]);
+      result = new NNEvaluatorResult(w, l, m, policyRef.policies.Span[policyRef.index], activations);
     }
 
     #endregion
@@ -190,7 +192,7 @@ namespace Ceres.Chess.NNEvaluators
       EncodedPositionBatchBuilder builder = new EncodedPositionBatchBuilder(1, NNEvaluator.InputTypes.All);
       builder.Add(position);
 
-      NNEvaluatorResult[] result = EvaluateBatch(builder.GetBatch());
+      NNEvaluatorResult[] result = EvaluateBatch(builder.GetBatch(), retrieveSupplementalResults);
       return result[0];
     }
 
@@ -210,7 +212,7 @@ namespace Ceres.Chess.NNEvaluators
       foreach (PositionWithHistory position in positionsAll)
         builder.Add(position);
 
-      return EvaluateBatch(builder.GetBatch());
+      return EvaluateBatch(builder.GetBatch(), retrieveSupplementalResults);
     }
 
 

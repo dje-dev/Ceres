@@ -37,10 +37,16 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// </summary>
     public readonly float M;
 
-        /// <summary>
+    /// <summary>
     /// Policy head output.
     /// </summary>
     public readonly CompressedPolicyVector Policy;
+
+    /// <summary>
+    /// Activations from certain hidden layers (optional).
+    /// </summary>
+    public readonly NNEvaluatorResultActivations Activations;
+
 
     /// <summary>
     /// Constructor.
@@ -49,28 +55,36 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <param name="lossP"></param>
     /// <param name="m"></param>
     /// <param name="policy"></param>
-    public NNEvaluatorResult(float winP, float lossP, float m, CompressedPolicyVector policy)
+    /// <param name="activations"></param>
+    public NNEvaluatorResult(float winP, float lossP, float m, 
+                             CompressedPolicyVector policy, 
+                             NNEvaluatorResultActivations activations)
     {
       this.winP = winP;
       this.lossP = lossP;
       M = m;
       Policy = policy;
+      Activations = activations;
     }
+
 
     /// <summary>
     /// Value (win minus loss probability).
     /// </summary>
     public readonly float V => float.IsNaN(lossP) ? winP : (winP - lossP);
 
+
     /// <summary>
     /// Draw probability.
     /// </summary>
     public readonly float D => 1.0f - (winP + lossP);
 
+
     /// <summary>
     /// Win probability.
     /// </summary>
     public readonly float W => float.IsNaN(lossP) ? float.NaN : winP;
+
 
     /// <summary>
     /// Draw probability.

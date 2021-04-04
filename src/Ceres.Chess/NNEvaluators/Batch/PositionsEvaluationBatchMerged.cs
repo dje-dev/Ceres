@@ -140,22 +140,28 @@ namespace Ceres.Chess.NetEvaluation.Batch
 
     (Memory<CompressedPolicyVector> policies, int index) IPositionEvaluationBatch.GetPolicy(int index)
     {
-      (int, int) indices = GetIndices(index);
-      return Batches[indices.Item1].GetPolicy(indices.Item2);
+      (int, int) indicies = GetIndices(index);
+      return Batches[indicies.Item1].GetPolicy(indicies.Item2);
     }
 
 
     FP16 IPositionEvaluationBatch.GetM(int index)
     {
-      (int, int) indices = GetIndices(index);
-      return Batches[indices.Item1].GetM(indices.Item2);
+      (int, int) indicies = GetIndices(index);
+      return Batches[indicies.Item1].GetM(indicies.Item2);
     }
 
 
     FP16 IPositionEvaluationBatch.GetWinP(int index)
     {
-      (int, int) indices = GetIndices(index);
-      return Batches[indices.Item1].GetWinP(indices.Item2);
+      (int, int) indicies = GetIndices(index);
+      return Batches[indicies.Item1].GetWinP(indicies.Item2);
+    }
+
+    public NNEvaluatorResultActivations GetActivations(int index)
+    {
+      (int, int) indicies = GetIndices(index);
+      return Batches[indicies.Item1].GetActivations(indicies.Item2);
     }
 
 
@@ -169,5 +175,6 @@ namespace Ceres.Chess.NetEvaluation.Batch
     {
       throw new NotImplementedException();
     }
+
   }
 }

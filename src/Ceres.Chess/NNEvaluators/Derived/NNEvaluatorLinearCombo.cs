@@ -132,6 +132,9 @@ namespace Ceres.Chess.NNEvaluators
         FP16[] l = null;
         FP16[] m = null;
 
+        // TODO: also compute and pass on the averaged Activations
+        Memory<NNEvaluatorResultActivations> activations = new Memory<NNEvaluatorResultActivations>();
+
         w = WeightsPolicyOverrideFunc == null ? AverageFP16(positions.NumPos, subResults, (e, i) => e.GetWinP(i), WeightsValue)
                                               : AverageFP16(positions.NumPos, subResults, (e, i) => e.GetWinP(i), WeightsValueOverrideFunc, positions);
 
@@ -148,7 +151,7 @@ namespace Ceres.Chess.NNEvaluators
         }
 
         TimingStats stats = new TimingStats();
-        return new PositionEvaluationBatch(IsWDL, HasM, positions.NumPos, policies, w, l, m, valueHeadConvFlat, stats);
+        return new PositionEvaluationBatch(IsWDL, HasM, positions.NumPos, policies, w, l, m, activations, stats);
       }
     }
 

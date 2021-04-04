@@ -107,10 +107,7 @@ namespace Ceres.Chess.NNEvaluators
           CompressedPolicyVector.InitializeAsRandom(ref policies[i], Type == RandomType.WidePolicy);
         }
 
-        if (retrieveSupplementalResults) throw new NotImplementedException();
-        float[] supplemental = null;
-
-        return new PositionEvaluationBatch(IsWDL, HasM, positions.NumPos, policies, w, l, m, supplemental, timingStats);
+        return new PositionEvaluationBatch(IsWDL, HasM, positions.NumPos, policies, w, l, m, null, timingStats);
       }
     }
 

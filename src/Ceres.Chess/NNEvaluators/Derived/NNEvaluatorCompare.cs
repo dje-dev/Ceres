@@ -61,7 +61,7 @@ namespace Ceres.Chess.NNEvaluators
 
         // Check W/D/L
         if (MathF.Abs(v0 - v1) > 0.02)
-          Console.WriteLine($"WFEvalNetCompare V discrepancy: {i,6:F0} {v0,7:F3} {v1,7:F3}");
+          Console.WriteLine($"NNEvaluatorCompare V discrepancy at POS: {i,6:F0}  {v0,7:F3} {v1,7:F3}");
         else
           numVOK++;
         
@@ -80,9 +80,9 @@ namespace Ceres.Chess.NNEvaluators
           float tolerance = Math.Max(0.03f, 0.07f * MathF.Abs(policies0[p] + policies1[p] * 0.5f));
           if (diff > maxDiff && (diff > tolerance))
           {
-            if (maxDiff == 0) Console.WriteLine("WFEvalNetCompare policy discrepancies:");
+            if (maxDiff == 0) Console.WriteLine("NNEvaluatorCompare policy discrepancies ");
             maxDiff = policies0[p] - policies1[p];
-            Console.WriteLine($"  {p,6} {policies0[p], 6:F3} { policies1[p], 6:F3}");
+            Console.WriteLine($"  POS: {i,6:F0}   {p,6} {policies0[p], 6:F3} { policies1[p], 6:F3}");
           }
         }
 
