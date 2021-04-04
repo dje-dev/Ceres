@@ -364,15 +364,7 @@ namespace Ceres.Chess.MoveGen
     /// <returns></returns>
     public bool EqualsMove(Move move)
     {
-      if (CastleLong && move.Type == Move.MoveType.MoveCastleLong)
-      {
-        return true;
-      }
-      else if (CastleShort && move.Type == Move.MoveType.MoveCastleShort)
-      {
-        return true;
-      }
-      else if (move.Type == Move.MoveType.MoveNonCastle)
+      if (move.Type == Move.MoveType.MoveNonCastle)
       {
         if (FromSquare == move.FromSquare && ToSquare == move.ToSquare)
         {
@@ -384,7 +376,15 @@ namespace Ceres.Chess.MoveGen
           if (PromoteBishop && (move.PromoteTo == PieceType.Bishop)) return true;
         }
       }
-
+      else if (CastleLong && move.Type == Move.MoveType.MoveCastleLong)
+      {
+        return true;
+      }
+      else if (CastleShort && move.Type == Move.MoveType.MoveCastleShort)
+      {
+        return true;
+      }
+      
       return false;
     }
 
