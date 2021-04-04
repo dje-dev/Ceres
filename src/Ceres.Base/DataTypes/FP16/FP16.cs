@@ -59,7 +59,6 @@ namespace Ceres.Base.DataTypes
       return ret;
     }
 
-
     public static FP16[] ToFP16(float[] data)
     {
       FP16[] ret = new FP16[data.Length];
@@ -78,7 +77,49 @@ namespace Ceres.Base.DataTypes
       return ret;
     }
 
+    public unsafe static float[,] ToFloat(FP16* data, int numRows, int numColumns)
+    {
+      float[,] ret = new float[numRows, numColumns];
+      for (int i = 0; i < numRows; i++)
+        for (int j = 0; j < numColumns; j++)
+          ret[i, j] = data[i * numColumns + j];
+      return ret;
+    }
+
+    public unsafe static float[,] ToFloat(Span<FP16> data, int numRows, int numColumns)
+    {
+      float[,] ret = new float[numRows, numColumns];
+      for (int i = 0; i < numRows; i++)
+        for (int j = 0; j < numColumns; j++)
+          ret[i, j] = data[i * numColumns + j];
+      return ret;
+    }
+
+    public static unsafe float[] ToFloat(FP16* data, int numElements)
+    {
+      float[] ret = new float[numElements];
+      for (int i = 0; i < ret.Length; i++)
+        ret[i] = data[i];
+      return ret;
+    }
+
+    public static unsafe float[] ToFloat(Span<FP16> data, int numElements)
+    {
+      float[] ret = new float[numElements];
+      for (int i = 0; i < ret.Length; i++)
+        ret[i] = data[i];
+      return ret;
+    }
+
     public static float[] ToFloat(FP16[] data)
+    {
+      float[] ret = new float[data.Length];
+      for (int i = 0; i < ret.Length; i++)
+        ret[i] = data[i];
+      return ret;
+    }
+
+    public static float[] ToFloat(Span<FP16> data)
     {
       float[] ret = new float[data.Length];
       for (int i = 0; i < ret.Length; i++)
@@ -165,8 +206,9 @@ namespace Ceres.Base.DataTypes
 
     /// <summary>
     /// 
-    /// Warning: it is not clear this is faster, and results in memory cache pollution.    /// </summary>    
-    public unsafe float ToSingleViaLookup => FP16Helper.HalfToSingleLookup(this);
+    /// Warning: it is not clear this is faster, and results in memory cache pollution.    
+    /// </summary>    
+    public float ToSingleViaLookup => FP16Helper.HalfToSingleLookup(this);
 
     #endregion
 
