@@ -50,19 +50,26 @@ namespace Ceres.Chess.LC0.WeightsProtobuf
     /// <param name="layer"></param>
     /// <param name="index"></param>
     /// <param name="value"></param>
-    public static void SetLayerLinear16(Weights.Layer layer, int index, float value)
+    public static void SetLayerLinear16(Weights.Layer layer, float[] values, float newMin, float newMax)
     {
-      if (value < layer.MinVal) value = layer.MinVal;
-      if (value > layer.MaxVal) value = layer.MaxVal;
+      // Update bounds
+      layer.MinVal = newMin;
+      layer.MaxVal = newMax;
 
-      float width = (layer.MaxVal - layer.MinVal) / 65535.0f;
-      float offset = value - layer.MinVal;
-      float increment = MathF.Round(offset / width, 0);
-      byte b0 = (byte)(increment % 256);
-      byte b1 = (byte)(increment / 256);
+      // Rewrite shifted/scaled values
+      float width = (newMax - newMin) / 65535.0f;
+      for (int i = 0; i < values.Length; i++)
+      {
+        float value = values[i];
 
-      layer.Params[index * 2] = b0;
-      layer.Params[index * 2 + 1] = b1;
+        float offset = value - layer.MinVal;
+        float increment = MathF.Round(offset / width, 0);
+        byte b0 = (byte)(increment % 256);
+        byte b1 = (byte)(increment / 256);
+
+        layer.Params[i * 2] = b0;
+        layer.Params[i * 2 + 1] = b1;
+      }
     }
 
 
@@ -74,10 +81,9 @@ namespace Ceres.Chess.LC0.WeightsProtobuf
     /// <returns></returns>
     public static float GetLayerLinear16Single(Weights.Layer layer, int index)
     {
-      byte[] b = new byte[2];
-      b[0] = layer.Params[index * 2];
-      b[1] = layer.Params[index * 2 + 1];
-      float v1 = 256 * b[1] + b[0];
+      byte b0 = layer.Params[index * 2];
+      byte b1 = layer.Params[index * 2 + 1];
+      float v1 = 256 * b1 + b0;
       float v1a = layer.MinVal + v1 * (layer.MaxVal - layer.MinVal) / 65535.0f;
       return v1a;
     }
@@ -92,8 +98,26 @@ namespace Ceres.Chess.LC0.WeightsProtobuf
     {
       if (layer.Params.Length != values.Length *  2) throw new System.Exception("not expected size");
 
+      // Compute new min and max over array
+      float newMin = float.MaxValue;
+      float newMax = float.MinValue;
       for (int i = 0; i < values.Length; i++)
-        SetLayerLinear16(layer, i, values[i]);
+      {
+        float value = values[i];
+
+        if (value < newMin)
+        {
+          newMin = value;
+        }
+
+        if (value > newMax)
+        {
+          newMax = value;
+        }
+      }
+
+      // Update layer
+      SetLayerLinear16(layer, values, newMin, newMax);
     }
 
 
