@@ -28,6 +28,7 @@ using Ceres.Chess.NNFiles;
 using static Ceres.Chess.NNEvaluators.LC0DLL.LCO_Interop;
 using Ceres.Chess.LC0.Batches;
 using Ceres.Base.Benchmarking;
+using Ceres.Base.OperatingSystem;
 
 #endregion
 
@@ -64,6 +65,11 @@ namespace Ceres.Chess.NNEvaluators
     {
       if (gpuIDs.Length != 1) throw new ArgumentException(nameof(gpuIDs), "Implementation limitation: one GPU id must be specified");
       if (precision != NNEvaluatorPrecision.FP16) throw new ArgumentException(nameof(precision), "Implementation: only FP16 supported");
+
+      if (!SoftwareManager.IsCUDAInstalled)
+      {
+        throw new Exception("GPU hardware with CUDA installation is required but not found.");
+      }
 
       isWDL = net.IsWDL;
       hasM = net.HasMovesLeft;

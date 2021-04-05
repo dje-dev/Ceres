@@ -16,6 +16,7 @@
 using System;
 using System.IO;
 using System.Text.Json;
+using Ceres.Base.OperatingSystem;
 using Ceres.Chess.LC0.NNFiles;
 
 #endregion
@@ -30,7 +31,26 @@ namespace Ceres.Chess.UserSettings
     /// <summary>
     /// Default name of file to which Ceres user settings are serialized (in JSON).
     /// </summary>
-    public const string DefaultCeresConfigFileName = "Ceres.json";
+
+    public static string DefaultCeresConfigFileName
+    {
+      get
+      {
+        if (SoftwareManager.IsWSL2 && File.Exists(DEFAULT_SETTINGS_WSL_FN))
+        {
+          // Optional override for WSL
+          return DEFAULT_SETTINGS_WSL_FN;
+        }
+        else
+        {
+          return DEFAULT_SETTINGS_FN;
+        }
+      }
+
+    }
+
+    const string DEFAULT_SETTINGS_FN = "Ceres.json";
+    const string DEFAULT_SETTINGS_WSL_FN = "Ceres.wsl.json";
 
 
     /// <summary>

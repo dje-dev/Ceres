@@ -48,7 +48,7 @@ namespace Ceres.Base.OperatingSystem.Linux
 
     public const int MFD_HUGETLB = 4;
 
-    
+
     #region System configuration
 
     [DllImport(LIBC)] public static extern long sysconf(int name);
@@ -56,7 +56,21 @@ namespace Ceres.Base.OperatingSystem.Linux
     const int _SC_PAGESIZE = 8;
     const int _SC_PHYS_PAGES = 11;
 
-    public static long PhysicalMemorySize => sysconf(_SC_PHYS_PAGES) * sysconf(_SC_PAGESIZE);
+    public static long PhysicalMemorySize
+    {
+      get
+      {
+        if (SoftwareManager.IsWSL2)
+        {
+          // API not reliable under WSL, so return 1TB.
+          return (long)1024 * (long)1024 * (long)1024 * (long)1024;
+        }
+        else
+        {
+          return sysconf(_SC_PHYS_PAGES) * sysconf(_SC_PAGESIZE);
+        }
+      }
+  }
 
     #endregion
 

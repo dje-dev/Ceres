@@ -56,10 +56,6 @@ namespace Ceres.Base.OperatingSystem
       {
         errorString = "AVX hardware support is required but not available on this processor.";
       }
-      else if (!SoftwareManager.IsCUDAInstalled)
-      {
-        errorString = "GPU hardware with CUDA installation is required but not found.";
-      }
 
       if (errorString != null)
       {

@@ -14,6 +14,7 @@
 #region Using Directives
 
 using System;
+using System.IO;
 using System.Runtime.InteropServices;
 
 #endregion
@@ -27,7 +28,24 @@ namespace Ceres.Base.OperatingSystem
   {
     //    public enum OSEnvironment {  Windows, Linux };
 
+    /// <summary>
+    /// Returns if running under Linux operating system.
+    /// </summary>
     public static bool IsLinux => RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
+
+
+    /// <summary>
+    /// Returns if running under WSL2 (Windows subsystem for Linux).
+    /// </summary>
+    public static bool IsWSL2
+    {
+      get
+      {
+        string fn = Path.Combine(Path.DirectorySeparatorChar.ToString(), "proc", "version");
+        return IsLinux && File.Exists(fn) && File.ReadAllText(fn).Contains("microsoft");
+      }
+    }
+
 
     /// <summary>
     /// Returns if NVIDIA CUDA library is installed.

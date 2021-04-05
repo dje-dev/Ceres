@@ -47,18 +47,18 @@ namespace Ceres.Base.OperatingSystem
       long numBytes = numItems * sizeof(T) + PAGE_SIZE;
       rawMemoryPointer = (float*)LinuxAPI.mmap(null, numBytes, LinuxAPI.PROT_NONE, LinuxAPI.MAP_PRIVATE | LinuxAPI.MAP_ANONYMOUS, -1, 0);
 
-      if (rawMemoryPointer == null) throw new Exception("Virtual memory reservation of {numBytes} bytes failed using mmap");
+      if (rawMemoryPointer == null) throw new Exception($"Virtual memory reservation of {numBytes} bytes failed using mmap");
     }
 
     public void InsureAllocated(long numItems)
     {
-      long numBytesNeeded = numItems * sizeof(T);
+      long numBytesNeeded = numItems * sizeof(T) + PAGE_SIZE; // overallocate to avoid partial page access
       if (numBytesNeeded > numBytesAllocated)
       {
         numBytesAllocated += ALLOCATE_INCREMENTAL_BYTES;
         numItemsAllocated = numItems;
         int resultCode = LinuxAPI.mprotect(rawMemoryPointer, numBytesAllocated, LinuxAPI.PROT_READ | LinuxAPI.PROT_WRITE);
-        if (resultCode != 0) throw new Exception("Virtual memory extension to size {numBytes} failed");
+        if (resultCode != 0) throw new Exception($"Virtual memory extension to size {numBytesAllocated} failed with error {resultCode}");
       }
     }
 
