@@ -14,6 +14,7 @@
 #region Using directives
 
 using Ceres.Base.DataType;
+using Ceres.Base.DataTypes;
 using Pblczero;
 using ProtoBuf;
 using System;
@@ -40,6 +41,20 @@ namespace Ceres.Chess.LC0.WeightsProtobuf
 
       for (int i = 0; i < ret.Length; i++)
         ret[i] = GetLayerLinear16Single(layer, i);
+      return ret;
+    }
+
+    /// <summary>
+    /// Retrieves the weights values from a specified layer.
+    /// </summary>
+    /// <param name="layer"></param>
+    /// <returns></returns>
+    public static FP16[] GetLayerLinear16FP16(Weights.Layer layer)
+    {
+      FP16[] ret = new FP16[layer.Params.Length / 2];
+
+      for (int i = 0; i < ret.Length; i++)
+        ret[i] = (FP16)GetLayerLinear16Single(layer, i);
       return ret;
     }
 
