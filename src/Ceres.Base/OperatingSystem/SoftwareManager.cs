@@ -50,7 +50,7 @@ namespace Ceres.Base.OperatingSystem
     /// <summary>
     /// Returns if NVIDIA CUDA library is installed.
     /// </summary>
-    public static bool IsCUDAInstalled => LibraryLoaded("NVCUDA.DLL");
+    public static bool IsCUDAInstalled => LibraryLoaded("NVCUDA.DLL", "libcuda");
 
 
     #region Private helpers
@@ -61,10 +61,12 @@ namespace Ceres.Base.OperatingSystem
     /// <summary>
     /// Returns if the library with a specified file could be successfully loaded.
     /// </summary>
-    static bool LibraryLoaded(string libraryName)
+    static bool LibraryLoaded(string libraryNameWindows, string libraryNameLinux)
     {
-      if (IsLinux) throw new NotImplementedException();
-      LoadLibrary(libraryName);
+      if (IsLinux)
+        LoadLibrary(libraryNameLinux);
+      else
+        LoadLibrary(libraryNameWindows);
       return Marshal.GetLastWin32Error() == 0;
     }
 

@@ -67,6 +67,35 @@ namespace Ceres.Base.OperatingSystem.NVML
 
     [DllImport(NVML_LIB_NAME)]
     public static extern uint nvmlDeviceGetCurrentClocksThrottleReasons(IntPtr device, ref NVMLClocksThrottleReasons clocksThrottleReasons);
+
+    #region Resolve import
+
+    internal const string NVML_LINUX = "libnvidia-ml.so";
+    internal const string NVML_WINDOWS = "nvml.dll";
+
+    static NVMLMethods()
+    {
+      NativeLibrary.SetDllImportResolver(typeof(NVMLMethods).Assembly, ImportResolver);
+    }
+
+    private static IntPtr ImportResolver(string libraryName, System.Reflection.Assembly assembly, DllImportSearchPath? searchPath)
+    {
+      if (libraryName == NVML_LIB_NAME)
+      {
+        string libName = RuntimeInformation.IsOSPlatform(OSPlatform.Linux)
+                          ? NVML_LINUX
+                          : NVML_WINDOWS;
+        NativeLibrary.TryLoad(libName, assembly, DllImportSearchPath.SafeDirectories, out IntPtr libHandle);
+        return libHandle;
+      }
+      else
+      {
+        return default;
+      }
+    }
+
+    #endregion
+
   }
 
   public struct NVMLUtilization
@@ -115,5 +144,6 @@ namespace Ceres.Base.OperatingSystem.NVML
     Unknown = 0x8000000000000000L,
     None = 0x0000000000000000L
   }
+
 
 }
