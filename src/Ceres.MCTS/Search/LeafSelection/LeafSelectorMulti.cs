@@ -143,7 +143,7 @@ namespace Ceres.MCTS.Search
     static ObjectPool<ThreadPoolManaged> MakeObjectPoolThreads()
     {
       // Make sure pool is intialized
-      const int MAX_THREAD_POOLS = 32;
+      const int MAX_THREAD_POOLS = 16;
       return new ObjectPool<ThreadPoolManaged>(() => new ThreadPoolManaged(numThreadPoolsCreated++.ToString(), HardwareManager.NumAffinitizedThreadsInProcess, 0), MAX_THREAD_POOLS);
     }
 
