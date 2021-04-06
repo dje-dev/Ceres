@@ -31,8 +31,10 @@ namespace Ceres.Base.OperatingSystem
   /// </summary>
   public static class HardwareManager
   {
-
-    public static int NumAffinitizedThreadsInProcess => System.Environment.ProcessorCount / (haveAffinitizedSingle ? 2 : 1);
+    /// <summary>
+    /// Maximum number of processors which are active for this process.
+    /// </summary>
+    public static int MaxAvailableProcessors { private set; get; } = System.Environment.ProcessorCount;
 
     public static void Initialize(bool affinitizeSingleProcessor)
     {
@@ -96,6 +98,7 @@ namespace Ceres.Base.OperatingSystem
       }
     }
 
+
     private static void AffinitizeSingleProcessor()
     {
       try
@@ -114,6 +117,7 @@ namespace Ceres.Base.OperatingSystem
         const int MAX_PROCESSORS_TO_USE = 16;
         if (System.Environment.ProcessorCount > MAX_PROCESSORS_TO_USE)
         {
+          MaxAvailableProcessors = MAX_PROCESSORS_TO_USE;
           int mask = (1 << MAX_PROCESSORS_TO_USE) - 1;
 
           Process.GetCurrentProcess().ProcessorAffinity = (IntPtr)mask;

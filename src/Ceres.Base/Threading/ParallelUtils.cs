@@ -14,6 +14,7 @@
 #region Using directives
 
 using System.Threading.Tasks;
+using Ceres.Base.OperatingSystem;
 
 #endregion
 
@@ -25,8 +26,7 @@ namespace Ceres.Base.Threading
   /// </summary>
   public static class ParallelUtils
   {
-    public static readonly int NUM_PROCESSORS = System.Environment.ProcessorCount;
-
+   
     // Reuse ParallelOptions objects if possible to reduce GC pressure
     const int MAX_CACHED_OPTIONS = 64;
     static ParallelOptions[] cachedOptions = new ParallelOptions[MAX_CACHED_OPTIONS];
@@ -56,7 +56,7 @@ namespace Ceres.Base.Threading
       if (numItems < optimalItemsPerThread + optimalItemsPerThread / 2)
         return 1;
 
-      return System.Math.Min(NUM_PROCESSORS, numItems / optimalItemsPerThread);
+      return System.Math.Min(HardwareManager.MaxAvailableProcessors, numItems / optimalItemsPerThread);
     }
 
 
@@ -69,7 +69,7 @@ namespace Ceres.Base.Threading
     /// <returns></returns>
     static int CalcNumThreadsForBatch(int numBatchItems, int targetNumItemsPerThread)
     {
-      int numProcessors = NUM_PROCESSORS;
+      int numProcessors = HardwareManager.MaxAvailableProcessors;
 
       int idealNumThreads = 1 + (numBatchItems / targetNumItemsPerThread);
 
