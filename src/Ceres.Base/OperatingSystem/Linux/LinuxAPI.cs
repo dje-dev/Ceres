@@ -53,22 +53,21 @@ namespace Ceres.Base.OperatingSystem.Linux
 
     [DllImport(LIBC)] public static extern long sysconf(int name);
 
-    const int _SC_PAGESIZE = 8;
-    const int _SC_PHYS_PAGES = 11;
 
+    /// <summary>
+    /// Returns total amount of physical memory available.
+    /// </summary>
     public static long PhysicalMemorySize
     {
       get
       {
-        if (SoftwareManager.IsWSL2)
-        {
-          // API not reliable under WSL, so return 1TB.
-          return (long)1024 * (long)1024 * (long)1024 * (long)1024;
-        }
-        else
-        {
-          return sysconf(_SC_PHYS_PAGES) * sysconf(_SC_PAGESIZE);
-        }
+        // API not reliable under Linux, so return 1TB.
+        // TODO: improve.
+        return (long)1024 * (long)1024 * (long)1024 * (long)1024;
+
+        const int _SC_PAGESIZE = 8;
+        const int _SC_PHYS_PAGES = 11;
+        return sysconf(_SC_PHYS_PAGES) * sysconf(_SC_PAGESIZE);
       }
   }
 

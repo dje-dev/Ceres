@@ -55,8 +55,10 @@ namespace Ceres.Base.OperatingSystem
 
     #region Private helpers
 
-    [DllImport("kernel32.dll", SetLastError = true)]
-    static extern IntPtr LoadLibrary(string dllToLoad);
+    static bool LoadLibrary(string libraryName)
+    {
+      return NativeLibrary.TryLoad(libraryName, out IntPtr _);
+    }
 
     /// <summary>
     /// Returns if the library with a specified file could be successfully loaded.
