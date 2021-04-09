@@ -79,19 +79,29 @@ namespace Ceres.Base.DataTypes
 
     public unsafe static float[,] ToFloat(FP16* data, int numRows, int numColumns)
     {
+      int sourceOffset = 0;
       float[,] ret = new float[numRows, numColumns];
       for (int i = 0; i < numRows; i++)
+      {
         for (int j = 0; j < numColumns; j++)
-          ret[i, j] = data[i * numColumns + j];
+        {
+          ret[i, j] = data[sourceOffset++];
+        }
+      }
       return ret;
     }
 
     public unsafe static float[,] ToFloat(Span<FP16> data, int numRows, int numColumns)
     {
+      int sourceOffset = 0;
       float[,] ret = new float[numRows, numColumns];
       for (int i = 0; i < numRows; i++)
+      {
         for (int j = 0; j < numColumns; j++)
-          ret[i, j] = data[i * numColumns + j];
+        {
+          ret[i, j] = data[sourceOffset++];
+        }
+      }
       return ret;
     }
 
