@@ -60,10 +60,5 @@ namespace Ceres.MCTS.Params
     /// Possibly using Level1 helps. However possibly with large pages it is better to use None (?).
     /// </summary>
     public const MTCSNodes.Struct.MCTSNodeStruct.CacheLevel PrefetchCacheLevel = MTCSNodes.Struct.MCTSNodeStruct.CacheLevel.Level1;
-
-
-    public const int MAX_BATCH_SIZE = 1024;
-    public const int MAX_NN_BATCH_SIZE = 1024;
-
   }
 }

@@ -37,11 +37,6 @@ namespace Ceres.Chess.NNEvaluators.Defs
   public class NNEvaluatorDef
   {
     /// <summary>
-    /// The default maximum batch size that an evaluator can support.
-    /// </summary>
-    public const int MAX_BATCH_SIZE = 1024;
-
-    /// <summary>
     /// Default minimum batch size before a batch can be 
     /// possibly split over multiple evaluators.
     /// </summary>

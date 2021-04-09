@@ -93,7 +93,7 @@ namespace Ceres.MCTS.Evaluators
                            PositionEvalCache cache,
                            Func<MCTSIterator, int> batchEvaluatorIndexDynamicSelector)
     {
-      rawPosArray = posArrayPool.Rent(NNEvaluatorDef.MAX_BATCH_SIZE);
+      rawPosArray = posArrayPool.Rent(NNEvaluator.MAX_BATCH_SIZE);
 
       EvaluatorDef = evaluatorDef;
       SaveToCache = saveToCache;
@@ -101,7 +101,7 @@ namespace Ceres.MCTS.Evaluators
       Cache = cache;
       this.BatchEvaluatorIndexDynamicSelector = batchEvaluatorIndexDynamicSelector;
 
-      Batch = new EncodedPositionBatchFlat(EncodedPositionType.PositionOnly, NNEvaluatorDef.MAX_BATCH_SIZE);
+      Batch = new EncodedPositionBatchFlat(EncodedPositionType.PositionOnly, NNEvaluator.MAX_BATCH_SIZE);
 
       if (evaluatorDef.Location == NNEvaluatorDef.LocationType.Local)
         localEvaluator = evaluator;// isEvaluator1 ? Params.Evaluator1 : Params.Evaluator2;
@@ -157,7 +157,7 @@ namespace Ceres.MCTS.Evaluators
     int SetBatch(MCTSIterator context, Span<MCTSNode> nodes)
     {
       //Console.WriteLine(nodes.Length + " BATCH NODES");
-      if (nodes.Length > NNEvaluatorDef.MAX_BATCH_SIZE) throw new Exception($"Requested batch is larger than {NNEvaluatorDef.MAX_BATCH_SIZE}");
+      if (nodes.Length > NNEvaluator.MAX_BATCH_SIZE) throw new Exception($"Requested batch is larger than {NNEvaluator.MAX_BATCH_SIZE}");
 
       if (nodes.Length > 0)
       {

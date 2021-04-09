@@ -25,6 +25,7 @@ using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.Params;
 using Ceres.MCTS.Environment;
+using Ceres.Chess.NNEvaluators;
 
 #endregion
 
@@ -142,7 +143,7 @@ namespace Ceres.MCTS.Search
       bool overlappingAllowed = Context.ParamsSearch.Execution.FlowDirectOverlapped;
       int initialRootN = Context.Root.N;
 
-      int guessMaxNumLeaves = MCTSParamsFixed.MAX_NN_BATCH_SIZE;
+      int guessMaxNumLeaves = NNEvaluator.MAX_BATCH_SIZE;
 
       ILeafSelector selector1;
       ILeafSelector selector2;

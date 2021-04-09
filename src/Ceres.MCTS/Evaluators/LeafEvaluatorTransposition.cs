@@ -19,6 +19,7 @@ using System.Threading;
 
 using Ceres.Base.DataTypes;
 using Ceres.Base.Environment;
+using Ceres.Chess.NNEvaluators;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Struct;
@@ -73,7 +74,7 @@ namespace Ceres.MCTS.Evaluators
     {
       TranspositionRoots = transpositionRoots;
 
-      pendingTranspositionRoots = new (ulong, int)[MCTSParamsFixed.MAX_BATCH_SIZE];
+      pendingTranspositionRoots = new (ulong, int)[NNEvaluator.MAX_BATCH_SIZE];
     }
 
 
