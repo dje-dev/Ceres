@@ -113,12 +113,20 @@ namespace Ceres.Base.OperatingSystem
         //       But then we'd have to abandon use of TPL and .NET thread pool
         //       completely and use our own versions which were processor constrained.
 
-        // Use at most 16 processors, more are typically not needed/helpful
-        const int MAX_PROCESSORS_TO_USE = 16;
-        if (System.Environment.ProcessorCount > MAX_PROCESSORS_TO_USE)
+        // Use at most 32 processors, more are almost never going to be helpful.
+        int maxProcessors;
+        int numProcessors = System.Environment.ProcessorCount;
+        if (numProcessors > 64)
+          maxProcessors = 32;
+        else if (numProcessors >= 32)
+          maxProcessors = numProcessors / 2;
+        else
+          maxProcessors = numProcessors;
+
+        if (System.Environment.ProcessorCount > maxProcessors)
         {
-          MaxAvailableProcessors = MAX_PROCESSORS_TO_USE;
-          int mask = (1 << MAX_PROCESSORS_TO_USE) - 1;
+          MaxAvailableProcessors = maxProcessors;
+          long mask = ((long)1 << maxProcessors) - 1;
 
           Process.GetCurrentProcess().ProcessorAffinity = (IntPtr)mask;
           haveAffinitizedSingle = true;
