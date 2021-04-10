@@ -457,9 +457,8 @@ namespace Ceres.MCTS.Search
         manager.TerminationManager.UpdatePruningFlags();
       }
 
-      // Periodically check if we should prune cache
-      if (iterationCount % 5 == 4)
-        Context.Tree?.PossiblyPruneCache();
+      // Check if node cache needs pruning.
+      Context.Tree?.PossiblyPruneCache();
     }
 
 
