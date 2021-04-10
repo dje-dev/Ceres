@@ -72,7 +72,7 @@ namespace Ceres.MCTS.NodeCache
 
       // Compute number of subcaches, increasing as a function of estimates search size
       // (because degree of concurrency rises with size of batches and search.
-      NumSubcaches = (int)StatUtils.Bounded(2 * MathF.Log2((float)estimatedNumNodesInSearch / 1000), 3, 16);
+      NumSubcaches = (int)StatUtils.Bounded(2 * MathF.Log2((float)estimatedNumNodesInSearch / 1000), 3, 24);
 
       // Initialize the sub-caches
       subCaches = new MCTSNodeCacheArrayPurgeable[NumSubcaches];
@@ -108,8 +108,10 @@ namespace Ceres.MCTS.NodeCache
       get
       {
         int numInUse = 0;
-        for (int i = 0; i < subCaches.Length; i++)
-          numInUse += subCaches[i].NumInUse;
+        {
+          for (int i = 0; i < subCaches.Length; i++)
+            numInUse += subCaches[i].NumInUse;
+        }
         return numInUse;
       }
     }
@@ -122,14 +124,14 @@ namespace Ceres.MCTS.NodeCache
     /// <param name="store"></param>
     public void PossiblyPruneCache(MCTSNodeStore store)
     {
-      bool almostFull = NumInUse > (MaxCacheSize * 85) / 100;
-      lock (lockObj)
+      bool almostFull = NumInUse > (MaxCacheSize * 90) / 100;
+      if (almostFull)
       {
-        if (almostFull)
+        lock (lockObj)
         {
           int countPurged = 0;
           Parallel.ForEach(Enumerable.Range(0, NumSubcaches),
-                           new ParallelOptions() { MaxDegreeOfParallelism = 4 }, // memory access already saturated at 4
+                           new ParallelOptions() { MaxDegreeOfParallelism = 12 }, 
             i =>
             {
               Interlocked.Add(ref countPurged, subCaches[i].Prune(store, -1));
