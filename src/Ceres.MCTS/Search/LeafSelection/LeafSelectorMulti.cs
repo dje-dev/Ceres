@@ -599,29 +599,21 @@ namespace Ceres.MCTS.Search
           }
           MCTSNode thisChild = default;
 
-          // NOTE: for unclear reasons, the lock here cannot be limited
-          //       to the (potetial call to CreateChild)
-          //       because that results in fairly rapid curruption when parallel and transposition both enabled
-          //       (to see this, call store.Validate at the beginning of each batch and run few a few minutes).
           using (node.Tree.ChildCreateLocks.LockBlock(node.Index))
           {
             MCTSNodeStructChild childInfo = children[childIndex];
             if (!childInfo.IsExpanded)
             {
-              //lock (node.Context.ChildCreateLockObjs[node.Index % SearchContext.NUM_LOCK_OBJ])
-              {
-                thisChild = node.CreateChild(childIndex);
-                node.UpdateRecordVisitsToChild(SelectorID, childIndex, numThisChild);
-              }
+              thisChild = node.CreateChild(childIndex);
             }
             else
             {
               thisChild = node.Child(childInfo);
-              node.UpdateRecordVisitsToChild(SelectorID, childIndex, numThisChild);
             }
-
-            nodeRef.PossiblyPrefetchChild(node.Context.Tree.Store, new MCTSNodeStructIndex(node.Index), childIndex);
           }
+
+          node.UpdateRecordVisitsToChild(SelectorID, childIndex, numThisChild);
+          nodeRef.PossiblyPrefetchChild(node.Context.Tree.Store, new MCTSNodeStructIndex(node.Index), childIndex);
 
 #if FEATURE_SUPPLEMENTAL
           // Warning: this slows down search by up to 10%
