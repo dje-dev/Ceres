@@ -82,18 +82,17 @@ namespace Ceres.Chess.NNEvaluators
 
         FP16[] w = new FP16[positions.NumPos];
         FP16[] l = IsWDL ? new FP16[positions.NumPos] : null;
-        FP16[] m = IsWDL ? new FP16[positions.NumPos] : null;
 
         for (int i = 0; i < positions.NumPos; i++)
         {
           int hashPos = HashInRange(positions.PosPlaneBitmaps, i * EncodedPositionWithHistory.NUM_PLANES_TOTAL, EncodedPositionWithHistory.NUM_PLANES_TOTAL);
-          hashPos = (Math.Abs(hashPos)) ^ 172854;
+          if (hashPos < 0) hashPos *= -1;
+          //hashPos = Math.Abs(hashPos) ^ 172854;
 
           // Generate value
           if (IsWDL)
           {
             GenerateRandValue(hashPos, ref w[i], ref l[i]);
-            m[i] = 30 + i % 7;
           }
           else
           {
@@ -107,7 +106,7 @@ namespace Ceres.Chess.NNEvaluators
           CompressedPolicyVector.InitializeAsRandom(ref policies[i], Type == RandomType.WidePolicy);
         }
 
-        return new PositionEvaluationBatch(IsWDL, HasM, positions.NumPos, policies, w, l, m, null, timingStats);
+        return new PositionEvaluationBatch(IsWDL, HasM, positions.NumPos, policies, w, l, null, null, timingStats);
       }
     }
 
