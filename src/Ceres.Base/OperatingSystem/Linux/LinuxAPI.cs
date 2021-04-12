@@ -13,11 +13,7 @@
 
 #region Using directives
 
-using System;
-using System.IO;
-using System.IO.MemoryMappedFiles;
 using System.Runtime.InteropServices;
-using System.Threading;
 
 #endregion
 
@@ -42,7 +38,9 @@ namespace Ceres.Base.OperatingSystem.Linux
     public const int MAP_FIXED = 0x10;
     public const int MAP_ANONYMOUS = 0x20;
     public const int MAP_NORESERVE = 0x4000;
+    public const int MAP_HUGETLB = 0x40000;
     public const int MAP_FILE = 0;
+
     public const int MREMAP_MAYMOVE = 1;
     public const int MREMAP_FIXED = 2;
 
@@ -69,7 +67,7 @@ namespace Ceres.Base.OperatingSystem.Linux
         const int _SC_PHYS_PAGES = 11;
         return sysconf(_SC_PHYS_PAGES) * sysconf(_SC_PAGESIZE);
       }
-  }
+    }
 
     #endregion
 

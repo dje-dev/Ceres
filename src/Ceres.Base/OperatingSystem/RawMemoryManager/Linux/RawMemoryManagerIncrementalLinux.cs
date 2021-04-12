@@ -33,30 +33,52 @@ namespace Ceres.Base.OperatingSystem
     long numItemsAllocated;
     long numBytesAllocated = 0;
 
-    const long ALLOCATE_INCREMENTAL_BYTES = 1024 * 1024;
-    const int  PAGE_SIZE = 4096;
+    const long ALLOCATE_INCREMENTAL_BYTES = 1024 * 1024 * 2;
+    const int PAGE_SIZE = 1024 * 2048;//4096;
 
-    public void Reserve(string sharedMemName, bool useExistingSharedMemory, long numItems, bool largePages)
+    static long RoundToHugePageSize(long numBytes)
     {
+      // TO DO: determine the true page size at runtime (what if possibly 1GB huge pages?) 
+      const int HUGE_PAGE_SIZE = 1024 * 2048;
+      return (((numBytes - 1) / HUGE_PAGE_SIZE) + 1) * HUGE_PAGE_SIZE;
+    }
+
+
+    public void Reserve(string sharedMemName, bool useExistingSharedMemory, long numItems, bool? useLargePages = true)
+    {
+      // By default we enable large pages under Linux, typically
+      // the OS will fallback to non-large pages if necessary.
+      useLargePages = useLargePages ?? true;
+
       if (rawMemoryPointer != null) throw new Exception("Internal error: Reserve should be called only once");
       if (useExistingSharedMemory) throw new NotImplementedException("Use existing shared memory not yet implemented under Linux");
-      if (largePages) throw new NotImplementedException("Large page support not yet implemented under Linux");
-
 
       // We overreserve by one PAGE_SIZE since the OS may not allow partial page allocation
       long numBytes = numItems * sizeof(T) + PAGE_SIZE;
-      rawMemoryPointer = (float*)LinuxAPI.mmap(null, numBytes, LinuxAPI.PROT_NONE, LinuxAPI.MAP_PRIVATE | LinuxAPI.MAP_ANONYMOUS, -1, 0);
+      numBytes = RoundToHugePageSize(numBytes);
+
+      int mapFlags = LinuxAPI.MAP_NORESERVE | LinuxAPI.MAP_PRIVATE | LinuxAPI.MAP_ANONYMOUS;
+      if (useLargePages.Value)
+      {
+        mapFlags |= LinuxAPI.MAP_HUGETLB;
+      };
+
+      rawMemoryPointer = (float*)LinuxAPI.mmap(null, numBytes, LinuxAPI.PROT_NONE, mapFlags, -1, 0);
 
       if (rawMemoryPointer == null) throw new Exception($"Virtual memory reservation of {numBytes} bytes failed using mmap");
     }
 
+
     public void InsureAllocated(long numItems)
     {
       long numBytesNeeded = numItems * sizeof(T) + PAGE_SIZE; // overallocate to avoid partial page access
+      numBytesNeeded = RoundToHugePageSize(numBytesNeeded);
+
       if (numBytesNeeded > numBytesAllocated)
       {
         numBytesAllocated += ALLOCATE_INCREMENTAL_BYTES;
         numItemsAllocated = numItems;
+
         int resultCode = LinuxAPI.mprotect(rawMemoryPointer, numBytesAllocated, LinuxAPI.PROT_READ | LinuxAPI.PROT_WRITE);
         if (resultCode != 0) throw new Exception($"Virtual memory extension to size {numBytesAllocated} failed with error {resultCode}");
       }

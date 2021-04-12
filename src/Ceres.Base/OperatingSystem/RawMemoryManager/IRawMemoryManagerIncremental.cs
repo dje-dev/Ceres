@@ -31,7 +31,7 @@ namespace Ceres.Base.OperatingSystem
   {
     internal void* RawMemoryAddress { get; }
 
-    void Reserve(string sharedMemName, bool useExistingSharedMemory, long numItems, bool largePages);
+    void Reserve(string sharedMemName, bool useExistingSharedMemory, long numItems, bool? largePages);
     void InsureAllocated(long numItems);
     
     long NumItemsAllocated { get; }
