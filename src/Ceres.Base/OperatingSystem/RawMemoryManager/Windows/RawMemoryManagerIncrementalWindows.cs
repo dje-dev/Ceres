@@ -44,9 +44,9 @@ namespace Ceres.Base.OperatingSystem
     {
     }
 
-    void IRawMemoryManagerIncremental<T>.Reserve(string sharedMemName, bool useExistingSharedMemory, long numItems, bool? largePages = false)
+    void IRawMemoryManagerIncremental<T>.Reserve(string sharedMemName, bool useExistingSharedMemory, long numItems, bool largePages)
     {
-      if (largePages.HasValue && largePages.Value)
+      if (largePages)
         throw new Exception("Large pages not supported with RawMemoryManagerIncremental");
 
       if (sharedMemName != null || useExistingSharedMemory)

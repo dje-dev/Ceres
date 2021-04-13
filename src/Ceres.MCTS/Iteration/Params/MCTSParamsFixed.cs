@@ -14,7 +14,7 @@
 #region Using directives
 
 using System;
-
+using Ceres.Base.OperatingSystem;
 using Ceres.Chess;
 using Ceres.Chess.PositionEvalCaching;
 
@@ -39,9 +39,10 @@ namespace Ceres.MCTS.Params
     /// 
     /// NOTE: On a dual socket machine performance was clearly inferior with large pages.
     ///       On a single socket machine performance was considerably improved, although
-    ///       a limitation is that larges pages is incompatible with incremental allocation.
+    ///       a limitation (on Windows only) is that larges pages is incompatible 
+    ///       with incremental allocation under Windows.
     /// </summary>
-    public const bool STORAGE_LARGE_PAGES = false;
+    public static bool TryEnableLargePages => SoftwareManager.IsLinux ? true : false;
 
     /// <summary>
     /// Optionally the storage can make use of an another running process

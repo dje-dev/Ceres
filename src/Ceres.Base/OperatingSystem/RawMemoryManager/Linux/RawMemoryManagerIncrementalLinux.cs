@@ -44,12 +44,8 @@ namespace Ceres.Base.OperatingSystem
     }
 
 
-    public void Reserve(string sharedMemName, bool useExistingSharedMemory, long numItems, bool? useLargePages = true)
+    public void Reserve(string sharedMemName, bool useExistingSharedMemory, long numItems, bool useLargePages)
     {
-      // By default we enable large pages under Linux, typically
-      // the OS will fallback to non-large pages if necessary.
-      useLargePages = useLargePages ?? true;
-
       if (rawMemoryPointer != null) throw new Exception("Internal error: Reserve should be called only once");
       if (useExistingSharedMemory) throw new NotImplementedException("Use existing shared memory not yet implemented under Linux");
 
@@ -58,7 +54,7 @@ namespace Ceres.Base.OperatingSystem
       numBytes = RoundToHugePageSize(numBytes);
 
       int mapFlags = LinuxAPI.MAP_NORESERVE | LinuxAPI.MAP_PRIVATE | LinuxAPI.MAP_ANONYMOUS;
-      if (useLargePages.Value)
+      if (useLargePages)
       {
         mapFlags |= LinuxAPI.MAP_HUGETLB;
       };

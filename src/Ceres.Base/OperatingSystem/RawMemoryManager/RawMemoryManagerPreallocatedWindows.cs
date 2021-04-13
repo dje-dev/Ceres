@@ -49,7 +49,7 @@ namespace Ceres.Base.OperatingSystem
     {
     }
 
-    void IRawMemoryManagerIncremental<T>.Reserve(string sharedMemName, bool useExistingSharedMemory, long numItems, bool? largePages = false)
+    void IRawMemoryManagerIncremental<T>.Reserve(string sharedMemName, bool useExistingSharedMemory, long numItems, bool largePages)
     {
       NumAllocatedItems = numItems;
       if (numItems > int.MaxValue - 1) throw new ArgumentOutOfRangeException(nameof(numItems), "numItems must be < int.MaxValue");

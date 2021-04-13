@@ -36,7 +36,7 @@ namespace Ceres.Base.OperatingSystem
   {
     IRawMemoryManagerIncremental<T> rawMemoryManager;
 
-    public ArrayStructsIncrementalPinned(int maxItems, bool useLargePages = false)
+    public ArrayStructsIncrementalPinned(int maxItems, bool useLargePages)
     {
       if (SoftwareManager.IsLinux)
         rawMemoryManager = new RawMemoryManagerIncrementalLinux<T>();
