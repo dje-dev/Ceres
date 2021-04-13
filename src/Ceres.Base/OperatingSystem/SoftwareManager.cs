@@ -58,7 +58,7 @@ namespace Ceres.Base.OperatingSystem
       {
         if (cudaInstalled == null)
         {
-          cudaInstalled = IsLinux ? LoadLibrary("libcuda") : LoadLibrary("NVCUDA.DLL");
+          cudaInstalled = IsLinux ? LoadLibrary("libcuda.so") : LoadLibrary("NVCUDA.DLL");
         }
 
         return cudaInstalled.Value;
