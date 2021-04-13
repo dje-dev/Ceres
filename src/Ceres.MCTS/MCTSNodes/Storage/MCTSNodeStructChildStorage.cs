@@ -119,7 +119,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 #if SPAN
       MaxChildren = 1 + maxChildren;
       childIndices = new MemoryBufferOS<MCTSNodeStructChild>(MaxChildren,
-                                                             MCTSParamsFixed.STORAGE_LARGE_PAGES,
+                                                             MCTSParamsFixed.TryEnableLargePages,
                                                              SharedMemChildrenName, MCTSParamsFixed.STORAGE_USE_EXISTING_SHARED_MEM,
                                                              MCTSParamsFixed.STORAGE_USE_INCREMENTAL_ALLOC);
 #else

@@ -109,7 +109,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       
       Nodes = new MCTSNodeStructStorage(allocNodes, null, 
                                         MCTSParamsFixed.STORAGE_USE_INCREMENTAL_ALLOC, 
-                                        MCTSParamsFixed.STORAGE_LARGE_PAGES,
+                                        MCTSParamsFixed.TryEnableLargePages,
                                         MCTSParamsFixed.STORAGE_USE_EXISTING_SHARED_MEM);
       
       long reserveChildren = maxNodes * (long)AVG_CHILDREN_PER_NODE;
