@@ -26,12 +26,16 @@ namespace Ceres.Base.OperatingSystem
   /// </summary>
   public static class SoftwareManager
   {
-    //    public enum OSEnvironment {  Windows, Linux };
-
     /// <summary>
     /// Returns if running under Linux operating system.
     /// </summary>
     public static bool IsLinux => RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
+
+
+    /// <summary>
+    /// Returns if running under Windows operating system.
+    /// </summary>
+    public static bool IsWindows => RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
 
 
     /// <summary>

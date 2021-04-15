@@ -74,7 +74,7 @@ namespace Ceres.Base.OperatingSystem
     /// </summary>
     public static void DumpProcessorInfo()
     {
-      Console.WriteLine("NumCPUSockets: " + WindowsHardware.NumCPUSockets);
+      if (!SoftwareManager.IsLinux) Console.WriteLine("NumCPUSockets: " + WindowsHardware.NumCPUSockets);
       Console.WriteLine("NumProcessors: " + System.Environment.ProcessorCount);
       Console.WriteLine("Affinity Mask: " + Process.GetCurrentProcess().ProcessorAffinity);
       Console.WriteLine("Memory Size  : " + MemorySize);
@@ -113,15 +113,22 @@ namespace Ceres.Base.OperatingSystem
         //       But then we'd have to abandon use of TPL and .NET thread pool
         //       completely and use our own versions which were processor constrained.
 
-        // Use at most 32 processors, more are almost never going to be helpful.
         int maxProcessors;
+
+        // Default assumption to use all processors.
         int numProcessors = System.Environment.ProcessorCount;
-        if (numProcessors > 64)
-          maxProcessors = 32;
-        else if (numProcessors >= 32)
-          maxProcessors = numProcessors / 2;
+
+        bool isKnownDualSocket = SoftwareManager.IsWindows && WindowsHardware.NumCPUSockets > 1;
+        if (isKnownDualSocket)
+        {
+          // Only use half to improve affinity.
+          maxProcessors = System.Math.Max(1, System.Environment.ProcessorCount / 2);
+        }
         else
-          maxProcessors = numProcessors;
+        {
+          // Use at most 32 processors, more are almost never going to be helpful.
+          maxProcessors = System.Math.Min(32, System.Environment.ProcessorCount);
+        }
 
         if (System.Environment.ProcessorCount > maxProcessors)
         {
