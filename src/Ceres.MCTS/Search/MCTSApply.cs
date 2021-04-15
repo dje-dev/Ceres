@@ -30,6 +30,7 @@ using Ceres.Base.Math.Probability;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.Params;
+using Ceres.Base.Benchmarking;
 
 #endregion
 
@@ -371,6 +372,7 @@ namespace Ceres.MCTS.Search
 
       MCTSIterator context = nodes[0].Context;
       bool cachingInUse = context.EvaluatorDef.CacheMode > PositionEvalCache.CacheMode.None;
+      bool movesSameOrderMoveList = context.NNEvaluators.PolicyReturnedSameOrderMoveList;
 
       float policySoftmax = context.ParamsSelect.PolicySoftmax;
 
@@ -380,13 +382,13 @@ namespace Ceres.MCTS.Search
         node =>
         {
           using (new SearchContextExecutionBlock(context))
-            SetPolicy(node, policySoftmax, cachingInUse);
+            SetPolicy(node, policySoftmax, cachingInUse, movesSameOrderMoveList);
         });
       }
       else
       {
         foreach (MCTSNode node in nodes)
-          SetPolicy(node, policySoftmax, cachingInUse);
+          SetPolicy(node, policySoftmax, cachingInUse, movesSameOrderMoveList);
       }
     }
 
@@ -397,7 +399,8 @@ namespace Ceres.MCTS.Search
     /// <param name="node"></param>
     /// <param name="policySoftmax"></param>
     /// <param name="cachingInUse"></param>
-    void SetPolicy(MCTSNode node, float policySoftmax, bool cachingInUse)
+    void SetPolicy(MCTSNode node, float policySoftmax, bool cachingInUse,
+                   bool returnedMovesAreInSameOrderAsMGMoveList)
     {
       // If already set by another overlapped/concurrent selector we don't need to repeat this
       if (node.ActionType == MCTSNode.NodeActionType.CacheOnly && cachingInUse)
@@ -414,7 +417,10 @@ namespace Ceres.MCTS.Search
         if (!node.PolicyHasAlreadyBeenInitialized)
         {
           if (!node.EvalResult.TerminalStatus.IsTerminal())
-            node.SetPolicy(policySoftmax, ParamsSelect.MinPolicyProbability, in node.Annotation.PosMG, node.Annotation.Moves, in node.EvalResult.PolicyRef);
+          {
+            node.SetPolicy(policySoftmax, ParamsSelect.MinPolicyProbability, in node.Annotation.PosMG, node.Annotation.Moves, 
+                           in node.EvalResult.PolicyRef, returnedMovesAreInSameOrderAsMGMoveList);
+          }
 
           if (node.Context.ParamsSearch.Execution.InFlightOtherBatchLinkageEnabled)
           {
