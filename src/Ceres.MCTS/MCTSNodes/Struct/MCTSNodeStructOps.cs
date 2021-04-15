@@ -84,7 +84,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     public void CopyUnexpandedChildrenFromOtherNode(MCTSTree tree, MCTSNodeStructIndex otherNodeIndex)
     {
       ref MCTSNodeStruct otherNode = ref tree.Store.Nodes.nodes[otherNodeIndex.Index];
-      using (tree.ChildCreateLocks.LockBlock(otherNodeIndex.Index))
+      MCTSNode otherNodeNode = tree.GetNode(otherNodeIndex);
+      lock (otherNodeNode)
       {
         // Detach
         NumNodesTranspositionExtracted = 0;

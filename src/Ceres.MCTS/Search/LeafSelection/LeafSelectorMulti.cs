@@ -557,11 +557,14 @@ namespace Ceres.MCTS.Search
       int numVisitsProcessed = 0;
       if (paramsExecution.SelectParallelEnabled)
       {
-        // Immediately make a first pass to immediately launch the children
-        // that have enough visits to be processed in parallel  
-        ProcessSelectedChildren(node, numTargetLeafs, vLossDynamicBoost, numChildrenToCheck,
+        if (numTargetLeafs > paramsExecution.SelectParallelThreshold)
+        {
+          // Immediately make a first pass to immediately launch the children
+          // that have enough visits to be processed in parallel  
+          ProcessSelectedChildren(node, numTargetLeafs, vLossDynamicBoost, numChildrenToCheck,
                                 paramsExecution.SelectParallelThreshold, true,
                                 childVisitCounts, children, ref numVisitsProcessed);
+        }
 
         // Make a second pass process any remaining chidren having visits (not parallel)
         if (numVisitsProcessed < numTargetLeafs)
@@ -599,7 +602,7 @@ namespace Ceres.MCTS.Search
           }
           MCTSNode thisChild = default;
 
-          using (node.Tree.ChildCreateLocks.LockBlock(node.Index))
+          lock(node)
           {
             MCTSNodeStructChild childInfo = children[childIndex];
             if (!childInfo.IsExpanded)
