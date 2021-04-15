@@ -70,6 +70,12 @@ namespace Ceres.Chess.NNEvaluators
     /// </summary>
     public NNEvaluatorPerformanceStats PerformanceStats;
 
+    /// <summary>
+    /// If the network returns policy moves in the same order
+    /// as the legal MGMoveList.
+    /// </summary>
+    public virtual bool PolicyReturnedSameOrderMoveList => false;
+
 
     /// <summary>
     /// Performs quick benchmarks on evaluator to determine performance

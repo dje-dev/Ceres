@@ -48,7 +48,8 @@ namespace Ceres.MCTS.MTCSNodes
     static internal int InitializeFromPolicyInfo(float policySoftmax, float minPolicyProbability,
                                                    in MGPosition posMG, in CompressedPolicyVector policyVector,
                                                    MGMoveList movesMG, Span<FP16> childrenProbabilites, 
-                                                   Span<EncodedMove> validLZMovesUsed)
+                                                   Span<EncodedMove> validLZMovesUsed,
+                                                   bool returnedMovesAreInSameOrderAsMGMoveList = false)
     {
       // Check for either of two special cases
       if (movesMG.NumMovesUsed == 0)
@@ -69,7 +70,9 @@ namespace Ceres.MCTS.MTCSNodes
       }
       else
       {
-        return DoInitializeFromPolicyInfo(policySoftmax, minPolicyProbability, in posMG, in policyVector, movesMG, childrenProbabilites, validLZMovesUsed);
+        return DoInitializeFromPolicyInfo(policySoftmax, minPolicyProbability, in posMG, in policyVector, 
+                                          movesMG, childrenProbabilites, validLZMovesUsed, 
+                                          returnedMovesAreInSameOrderAsMGMoveList);
       }
     }
 
@@ -77,7 +80,8 @@ namespace Ceres.MCTS.MTCSNodes
     static private int DoInitializeFromPolicyInfo(float policySoftmax, float minPolicyProbability,
                                                   in MGPosition posMG, in CompressedPolicyVector policyVector,
                                                   MGMoveList movesMG, Span<FP16> childrenProbabilites, 
-                                                  Span<EncodedMove> validLZMovesUsed)
+                                                  Span<EncodedMove> validLZMovesUsed,
+                                                  bool returnedMovesAreInSameOrderAsMGMoveList = false)
     { 
       // Get local copy of the ThreadStatic buffer (for efficiency)
       if (movesFromPolicyTempBuffer == null) movesFromPolicyTempBuffer = new (EncodedMove, float)[64];
@@ -117,7 +121,15 @@ namespace Ceres.MCTS.MTCSNodes
         Debug.Assert(float.IsNaN(lastP) || thisPolicyProb <= lastP);
 
         // Find index of this move in the MG moves
-        int indexLegalMove = MoveInMGMovesArrayLocator.FindMoveInMGMoves(in posMG, legalMoveArray, thisPolicyMove, countPolicyMovesProcessed, movesMG.NumMovesUsed, blackToMove);
+        int indexLegalMove;
+        if (returnedMovesAreInSameOrderAsMGMoveList)
+        {
+          indexLegalMove = policyMoveIndex;
+        }
+        else
+        {
+          indexLegalMove = MoveInMGMovesArrayLocator.FindMoveInMGMoves(in posMG, legalMoveArray, thisPolicyMove, countPolicyMovesProcessed, movesMG.NumMovesUsed, blackToMove);
+        }
 
         // The NN might output illegal moves (not found in list of legal moves), ignore these
         if (indexLegalMove != -1)
@@ -248,7 +260,8 @@ namespace Ceres.MCTS.MTCSNodes
     /// <param name="policyVector"></param>
     public void SetPolicy(float policySoftmax, float minPolicyProbability, 
                           in MGPosition mgPos, MGMoveList moves, 
-                          in CompressedPolicyVector policyVector)
+                          in CompressedPolicyVector policyVector,
+                          bool returnedMovesAreInSameOrderAsMGMoveList)
     {
       // Create new move array which also includes unpacked associated policy vector probabilities
       Span<FP16> childrenProbabilites = stackalloc FP16[moves.NumMovesUsed];
@@ -256,7 +269,8 @@ namespace Ceres.MCTS.MTCSNodes
       // Actually unpack
       Span<EncodedMove> validLZMovesUsed = stackalloc EncodedMove[moves.NumMovesUsed];
       int numUsedPolicyMoves = InitializeFromPolicyInfo(policySoftmax, minPolicyProbability, 
-                                                        in mgPos, in policyVector, moves, childrenProbabilites, validLZMovesUsed);
+                                                        in mgPos, in policyVector, moves, childrenProbabilites, 
+                                                        validLZMovesUsed, returnedMovesAreInSameOrderAsMGMoveList);
 
       // Allocate children
       Ref.SetNumPolicyMovesAndAllocateChildInfo(Tree, numUsedPolicyMoves);

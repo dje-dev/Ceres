@@ -81,6 +81,9 @@ namespace Ceres.MCTS.Params
     public bool IsWDL => evaluator1.IsWDL;
     public bool HasM => evaluator1.HasM;
 
+    public bool PolicyReturnedSameOrderMoveList => evaluator1.PolicyReturnedSameOrderMoveList;
+
+
     public void Warmup(bool alsoCalcStatistics)
     {
       if (alsoCalcStatistics)
