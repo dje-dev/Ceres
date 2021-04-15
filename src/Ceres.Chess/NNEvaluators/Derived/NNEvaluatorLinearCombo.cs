@@ -118,7 +118,7 @@ namespace Ceres.Chess.NNEvaluators
         Parallel.For(0, Evaluators.Length,
           delegate (int i)
           {
-            subResults[i] = (PositionEvaluationBatch)Evaluators[i].EvaluateIntoBuffers(positions, retrieveSupplementalResults);
+            subResults[i] = (IPositionEvaluationBatch)Evaluators[i].EvaluateIntoBuffers(positions, retrieveSupplementalResults);
           });
 
         if (retrieveSupplementalResults) throw new NotImplementedException();
