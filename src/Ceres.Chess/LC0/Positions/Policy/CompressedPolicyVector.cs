@@ -740,10 +740,15 @@ namespace Ceres.Chess.EncodedPositions
         {
           for (int i = 0; i < topN; i++)
           {
-            if (moveIndices[i] == SPECIAL_VALUE_SENTINEL_TERMINATOR)
-              break; // terminator
-            else if (moveIndices[i] == SPECIAL_VALUE_RANDOM_NARROW || moveIndices[i] == SPECIAL_VALUE_RANDOM_WIDE)
-              moves[count++] = (new EncodedMove(moveIndices[i]), float.NaN);
+            if (MoveIsSentinel(moveIndices[i]))
+            {
+              if (moveIndices[i] == SPECIAL_VALUE_SENTINEL_TERMINATOR)
+                break; // terminator
+              else if (moveIndices[i] == SPECIAL_VALUE_RANDOM_NARROW || moveIndices[i] == SPECIAL_VALUE_RANDOM_WIDE)
+                moves[count++] = (new EncodedMove(moveIndices[i]), float.NaN);
+              else
+                throw new Exception("Internal error, unknown sentinel.");
+            }
             else
             {
               float decodedProb = DecodedProbability(moveProbabilitiesEncoded[i]);
