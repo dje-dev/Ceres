@@ -193,20 +193,25 @@ namespace Ceres.MCTS.Search
     /// <param name="numTargetLeafs"></param>
     /// <param name="vLossDynamicBoost"></param>
     /// <returns></returns>
-    ListBounded<MCTSNode> DoSelectNewLeafBatchlet(MCTSNode root, int numTargetLeafs, float vLossDynamicBoost)
+    void DoSelectNewLeafBatchlet(MCTSNode root, int numTargetLeafs, float vLossDynamicBoost)
     {
       InsureAnnotated(root);
-      DoGatherLeafBatchlet(root, numTargetLeafs, vLossDynamicBoost);
+
+      ListBounded<MCTSNode> gatheredNodes = new ListBounded<MCTSNode>(numTargetLeafs);
+      DoGatherLeafBatchlet(root, numTargetLeafs, vLossDynamicBoost, gatheredNodes);
 
       if (paramsExecution.SelectParallelEnabled)
+      {
         WaitDone();
+      }
 
-      return leafs;
+ 
+      leafs.Add(gatheredNodes);
     }
 
-#endregion
+    #endregion
 
-#region Clear
+    #region Clear
 
     /// <summary>
     /// Resets state of selector to be prepared for 
@@ -292,7 +297,7 @@ namespace Ceres.MCTS.Search
       return true;
     }
 
-    internal void DoVisitLeafNode(MCTSNode node, int numVisits)
+    internal void DoVisitLeafNode(MCTSNode node, int numVisits, ListBounded<MCTSNode> gatheredNodes)
     {
       ref MCTSNodeStruct nodeRef = ref node.Ref;
 
@@ -327,12 +332,7 @@ namespace Ceres.MCTS.Search
         //    Console.WriteLine($"{node.Ref.NumNodesTranspositionExtracted}  transposition multivisted {node}");
 
         // Add to set of leafs
-        if (paramsExecution.SelectParallelEnabled)
-        {
-          lock (leafs) leafs.Add(node);
-        }
-        else
-          leafs.Add(node);
+        gatheredNodes.Add(node);
       }
 
     }
@@ -443,7 +443,8 @@ namespace Ceres.MCTS.Search
     /// <param name="node"></param>
     /// <param name="parentNode"></param>
     /// <param name="numTargetLeafs"></param>
-    private void DoGatherLeafBatchlet(MCTSNode node, int numTargetLeafs, float vLossDynamicBoost)
+    private void DoGatherLeafBatchlet(MCTSNode node, int numTargetLeafs, float vLossDynamicBoost,
+                                      ListBounded<MCTSNode> gatheredNodes)
     {
       ref MCTSNodeStruct nodeRef = ref node.Ref;
 
@@ -464,7 +465,7 @@ namespace Ceres.MCTS.Search
       bool isUnvisited = node.N == 0;
       if (isUnvisited || nodeRef.Terminal.IsTerminal() || nodeRef.IsTranspositionLinked)
       {
-        DoVisitLeafNode(node, numTargetLeafs);
+        DoVisitLeafNode(node, numTargetLeafs, gatheredNodes);
         return;
       }
 
@@ -489,7 +490,7 @@ namespace Ceres.MCTS.Search
             //                     / (float)(biggestTranspositionNode.N - node.N));
             //node.OverrideMPositionToApplyFromTransposition = mToUse;
 
-            DoVisitLeafNode(node, numTargetLeafs);
+            DoVisitLeafNode(node, numTargetLeafs, gatheredNodes);
             return;
           }
           else if (biggestTranspositionNode.N == node.N)
@@ -563,14 +564,14 @@ namespace Ceres.MCTS.Search
           // that have enough visits to be processed in parallel  
           ProcessSelectedChildren(node, numTargetLeafs, vLossDynamicBoost, numChildrenToCheck,
                                 paramsExecution.SelectParallelThreshold, true,
-                                childVisitCounts, children, ref numVisitsProcessed);
+                                childVisitCounts, children, ref numVisitsProcessed, gatheredNodes);
         }
 
         // Make a second pass process any remaining chidren having visits (not parallel)
         if (numVisitsProcessed < numTargetLeafs)
         {
           ProcessSelectedChildren(node, numTargetLeafs, vLossDynamicBoost, numChildrenToCheck,
-                                  1, false, childVisitCounts, children, ref numVisitsProcessed);
+                                  1, false, childVisitCounts, children, ref numVisitsProcessed, gatheredNodes);
         }
 
       }
@@ -578,7 +579,7 @@ namespace Ceres.MCTS.Search
       {
         // Process all children with nonzero counts (not parallel)
         ProcessSelectedChildren(node, numTargetLeafs, vLossDynamicBoost, numChildrenToCheck,
-                                1, false, childVisitCounts, children, ref numVisitsProcessed);
+                                1, false, childVisitCounts, children, ref numVisitsProcessed, gatheredNodes);
       }
     }
 
@@ -586,7 +587,7 @@ namespace Ceres.MCTS.Search
     void ProcessSelectedChildren(MCTSNode node, int numTargetLeafs, float vLossDynamicBoost, int numChildrenToCheck,
                                  int minVisitsCountToProcess, bool launchParallel,
                                  Span<short> childVisitCounts, Span<MCTSNodeStructChild> children,
-                                 ref int numVisitsProcessed)
+                                 ref int numVisitsProcessed, ListBounded<MCTSNode> gatheredNodes)
     {
       MCTSNodeStruct nodeRef = node.Ref;
 
@@ -632,16 +633,22 @@ namespace Ceres.MCTS.Search
 
           int numVisitsLeftAfterThisChild = numTargetLeafs - (numVisitsProcessed + numThisChild);
           if (launchParallel && numVisitsLeftAfterThisChild > minVisitsCountToProcess / 2)
+          {
             LaunchGatherLeafBatchletParallel(node, numThisChild, thisChild, vLossDynamicBoost);
+          }
           else
-            DoGatherLeafBatchlet(thisChild, numThisChild, vLossDynamicBoost);
+          {
+            DoGatherLeafBatchlet(thisChild, numThisChild, vLossDynamicBoost, gatheredNodes);
+          }
 
           // mark this child as done
           childVisitCounts[childIndex] = 0;
 
           numVisitsProcessed += numThisChild;
-          if (numVisitsProcessed == numTargetLeafs)
-            break;
+          {
+            if (numVisitsProcessed == numTargetLeafs)
+              break;
+          }
         }
       }
     }
@@ -689,11 +696,24 @@ namespace Ceres.MCTS.Search
       {
         try
         {
+          // Gather the nodes.
+          ListBounded<MCTSNode> gatheredNodes = new(numThisChild);
           using (new SearchContextExecutionBlock(thisContext))
           {
-            DoGatherLeafBatchlet(thisChild, numThisChild, vLossDynamicBoost);
+            DoGatherLeafBatchlet(thisChild, numThisChild, vLossDynamicBoost, gatheredNodes);
           }
-          if (!USE_CUSTOM_THREADPOOL) countdownPendingNumLeafs.Signal(numThisChild);
+
+          // Append nodes to node list.
+          lock(leafs)
+          {
+            leafs.Add(gatheredNodes);
+          }
+
+          // Signal done.
+          if (!USE_CUSTOM_THREADPOOL)
+          {
+            countdownPendingNumLeafs.Signal(numThisChild);
+          }
         }
         catch (Exception exc)
         {
