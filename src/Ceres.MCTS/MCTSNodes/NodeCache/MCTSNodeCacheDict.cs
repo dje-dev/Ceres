@@ -80,9 +80,9 @@ namespace Ceres.MCTS.NodeCache
     /// <summary>
     /// Resets back to null (zero) the CacheIndex for every node currently in the cache.
     /// </summary>
-    public void ClearMCTSNodeStructValues()
+    public void ResetCache()
     {
-      // Nothing to do.
+      nodeCache.Clear();
     }
 
     /// <summary>
