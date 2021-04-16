@@ -14,6 +14,7 @@
 #region Using directives
 
 using System;
+using Ceres.Base.OperatingSystem;
 using Ceres.Chess.NNEvaluators;
 
 #endregion
@@ -31,7 +32,7 @@ namespace Ceres.MCTS.Params
   [Serializable]
   public class ParamsSearchExecution
   {
-    public const int ParallelMultiplier = 1; // 2 much better for Linux
+    public const int ParallelMultiplier = 1; 
 
     /// <summary>
     /// Method used for explotiing transpositions within the tree
@@ -123,7 +124,7 @@ namespace Ceres.MCTS.Params
     /// Minimum number of targeted leaf visits which must be present
     /// for parallel subthreads to be allocated.
     /// </summary>
-    public int SelectParallelThreshold = 6 * ParallelMultiplier;
+    public int SelectParallelThreshold = ParallelMultiplier * (SoftwareManager.IsLinux ? 9 : 6);
 
     /// <summary>
     /// If the initialization of poliices in tree nodes (after retrieval from NN)
