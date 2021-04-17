@@ -87,7 +87,14 @@ namespace Ceres.MCTS.MTCSNodes
     /// <summary>
     /// Returns associated best move.
     /// </summary>
-    public MGMove BestMove => BestMoveNode.Annotation.PriorMoveMG;
+    public MGMove BestMove
+    {
+      get
+      {
+        BestMoveNode.Annotate();
+        return BestMoveNode.Annotation.PriorMoveMG;
+      }
+    }
 
 
     /// <summary>
