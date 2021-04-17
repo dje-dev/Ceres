@@ -149,6 +149,11 @@ namespace Ceres.Chess.NNEvaluators
     /// <returns></returns>
     public NNEvaluatorResult[] EvaluateBatch(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
     {
+      if (positions.NumPos == 0)
+      {
+        throw new ArgumentException("Illegal input batch, empty.");
+      }
+
       lock (lockObj)
       {
         // Evaluate into evaluators buffers
