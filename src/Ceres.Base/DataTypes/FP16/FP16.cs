@@ -211,8 +211,14 @@ namespace Ceres.Base.DataTypes
     /// <param name="value">The value to represent as a FP16.</param>
     public FP16(ulong value) : this((float)value) { }
 
-    internal FP16(ushort value, bool directAssigment = true) =>  this.Value = value;
-    
+    internal  FP16(ushort value, bool directAssigment = true) =>  Value = value;
+
+    /// <summary>
+    /// Returns an FP16 created from its raw (bits) value.
+    /// </summary>
+    /// <param name="value"></param>
+    /// <returns></returns>
+    public static FP16 FromRaw(ushort value) => new FP16(value, true);
 
     /// <summary>
     /// 
