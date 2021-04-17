@@ -51,6 +51,7 @@ namespace Ceres.Chess.EncodedPositions
       CompressedPolicyVector.Initialize(ref policyRef, indicesA.Slice(0, numMovesToSave), probsA.Slice(0, numMovesToSave));
     }
 
+
     /// <summary>
     /// Performs partition step of a quick sort of probability entries.
     /// </summary>
@@ -60,13 +61,12 @@ namespace Ceres.Chess.EncodedPositions
     /// <returns></returns>
     static int Partition(Span<ProbEntry> array, int min, int max)
     {
-      ProbEntry pivot = array[max];
-
+      float pivotP = array[max].P;
       int lowIndex = (min - 1);
 
       for (int j = min; j < max; j++)
       {
-        if (array[j].P > pivot.P)
+        if (array[j].P > pivotP)
         {
           lowIndex++;
 
