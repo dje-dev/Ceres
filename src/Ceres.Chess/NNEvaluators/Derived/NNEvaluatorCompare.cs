@@ -127,7 +127,7 @@ namespace Ceres.Chess.NNEvaluators
         float v1 = subResults[1].GetWinP(i) - subResults[1].GetLossP(i);
 
         // Check W/D/L
-        if (MathF.Abs(v0 - v1) > 0.02)
+        if (float.IsNaN(v0) || float.IsNaN(v1) || MathF.Abs(v0 - v1) > 0.02)
         {
           string refString = "";
           if (Mode == CompareMode.FullWithReferenceEvaluator)
@@ -155,7 +155,9 @@ namespace Ceres.Chess.NNEvaluators
         {
           float diff = MathF.Abs(policies0[p] - policies1[p]);
           float tolerance = Math.Max(0.03f, 0.07f * MathF.Abs(policies0[p] + policies1[p] * 0.5f));
-          if (diff > maxDiff && (diff > tolerance))
+          if ( float.IsNaN(policies0[p]) 
+            || float.IsNaN(policies1[p]) 
+            || (diff > maxDiff && (diff > tolerance)))
           {
             string refString = "";
             if (Mode == CompareMode.FullWithReferenceEvaluator)
