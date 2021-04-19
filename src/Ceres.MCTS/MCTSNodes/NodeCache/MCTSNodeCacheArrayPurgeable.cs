@@ -38,8 +38,8 @@ namespace Ceres.MCTS.NodeCache
   /// </summary>
   public class MCTSNodeCacheArrayPurgeable : IMCTSNodeCache
   {
-    internal const int THRESHOLD_PCT_DO_PRUNE = 90;
-    internal const int THRESHOLD_PCT_PRUNE_TO = 75;
+    internal const int THRESHOLD_PCT_DO_PRUNE = 75;
+    internal const int THRESHOLD_PCT_PRUNE_TO = 55;
 
     public MCTSTree ParentTree;
 
@@ -113,12 +113,14 @@ namespace Ceres.MCTS.NodeCache
           // is allocated (and typically purged) all at once, leading to "clumps"
           // which then can cause longer search times to find a free entry.
           // Therefore we leave a few spaces in the table on the first pass.
+          thisIndex = nextIndexPreWrap;
+
           int increment = numInUse % 20 == 0 ? 2 : 1;
-          thisIndex = nextIndexPreWrap + increment;
           nextIndexPreWrap = thisIndex + increment;
           if (nextIndexPreWrap >  MaxCacheSize - 2)
           {
             firstPassAllocateSequential = false;
+            nextIndexPreWrap = 0;
           }
         }
         else
