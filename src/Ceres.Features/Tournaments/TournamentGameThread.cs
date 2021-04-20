@@ -16,19 +16,18 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Runtime.InteropServices;
-using System.Text;
-using Ceres.Base;
+
+using static Ceres.Base.Misc.StringUtils;
 using Ceres.Chess;
 using Ceres.Chess.Games;
 using Chess.Ceres.PlayEvaluation;
 using Ceres.Chess.GameEngines;
 using Ceres.Chess.UserSettings;
-using Ceres.Chess.NNEvaluators;
 using Ceres.Base.Environment;
 using Ceres.MCTS.Iteration;
 using Ceres.Chess.Positions;
 using Ceres.Base.Benchmarking;
+using Ceres.Base.Misc;
 
 #endregion
 
@@ -253,8 +252,8 @@ namespace Ceres.Features.Tournaments
         Console.WriteLine($"Games will be incrementally written to file: {pgnFileName}");
         Console.WriteLine();
 
-        Console.WriteLine("  Player1  Player2  ELO   +/-  LOS   GAME#     TIME    TH#   OP#      TIME1    TIME2        NODES 1           NODES 2       PLY   RES    W   D   L   FEN");
-        Console.WriteLine("  -------  -------  ---   ---  ---   ----   --------   ---   ---     ------   ------     --------------   --------------   ----   ---    -   -   -   --------------------------------------------------");
+        Console.WriteLine("  Player1    Player2   ELO   +/-  LOS   GAME#     TIME    TH#   OP#      TIME1    TIME2        NODES 1           NODES 2       PLY   RES    W   D   L   FEN");
+        Console.WriteLine(" ---------  ---------  ---   ---  ---   -----  --------   ---   ---     ------   ------     --------------   --------------   ----   ---    -   -   -   --------------------------------------------------");
         havePrintedHeaders = true;
       }
 
@@ -273,8 +272,8 @@ namespace Ceres.Features.Tournaments
       lock (outputLockObj)
       {
         if (Def.ShowGameMoves) Def.Logger.WriteLine();
-        Def.Logger.Write($"{Def.Player1Def.ID,8} {Def.Player2Def.ID,8}  ");
-        Def.Logger.Write($"{eloAvg,5:0} {eloSD,4:0} {100.0f * los,5:0}  ");
+        Def.Logger.Write($" {TrimmedIfNeeded(Def.Player1Def.ID, 10),-10} {TrimmedIfNeeded(Def.Player2Def.ID, 10),-10}");
+        Def.Logger.Write($"{eloAvg,4:0} {eloSD,4:0} {100.0f * los,5:0}  ");
         Def.Logger.Write($"{ParentStats.NumGames,5} {DateTime.Now.ToString().Split(" ")[1],10}  {gameSequenceNum,4:F0}  {openingIndex,4:F0}{openingPlayedBothWaysStr}  ");
         Def.Logger.Write($"{thisResult.TotalTimeEngine1,8:F2}{player1ForfeitChar}{thisResult.TotalTimeEngine2,8:F2}{player2ForfeitChar}  ");
         Def.Logger.Write($"{thisResult.TotalNodesEngine1,16:N0} {thisResult.TotalNodesEngine2,16:N0}   ");

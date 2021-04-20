@@ -61,7 +61,10 @@ namespace Ceres.Features.Tournaments
 
       // Turn off showing game moves if running parallel,
       // since the moves of various games would be intermixed.
-      if (numParallel > 1) def.ShowGameMoves = false;
+      if (numParallel > 1)
+      {
+        def.ShowGameMoves = false;
+      }
 
 #if NOT
       if (def.EvaluatorDef2.DeviceCombo == NNEvaluators.Defs.NNEvaluatorDeviceComboType.Pooled)
@@ -136,6 +139,9 @@ namespace Ceres.Features.Tournaments
 
     public TournamentResultStats RunTournament()
     {
+      if (Def.Player1Def == null) throw new ArgumentNullException("Def.Player1Def is null)");
+      if (Def.Player2Def == null) throw new ArgumentNullException("Def.Player2Def is null)");
+
       VerifyEnginesCompatible();
 
       TournamentResultStats parentTest = new TournamentResultStats(Def.Player1Def.ID, Def.Player2Def.ID);
@@ -175,25 +181,6 @@ namespace Ceres.Features.Tournaments
         TournamentGameThread gameTest = new TournamentGameThread(tournamentDefClone, parentTest);
         gameThreads.Add(gameTest);
 
-
-#if NOT
-        // TODO: need to clean up, figure out how to not exceed the maximum avaliable GPU ID
-        int? gpuID = null;
-        if (Def.EvaluatorDef2 != null && SeparateGPUs)
-        {
-          gpuID = i + Def.EvaluatorDef2.Devices[0].Device.DeviceIndex;
-        }
-
-        TournamentDef tournamentDefClone = Def.Clone();
-        tournamentDefClone.ForceUseGPUIndex = gpuID;
-        tournamentDefClone.NumGamePairs = (Def.NumGamePairs / NumParallel)
-                                        + ((Def.NumGamePairs % NumParallel > i) ? 1 : 0);
-
-#endif
-
-        //        if (NUM_PARALLEL > new ParamsNN().NNEVAL_NUM_GPUS && limit1.Type != SearchLimit.LimitType.NodesPerMove)
-        //          throw new Exception("Running in timed mode yet NUM_PARALLEL > NNEVAL_NUM_GPUS, this will not be fair test.")
-
         Task thisTask = new Task(() => TournamentManagerThreadMainMethod(i, gameTest));
         tasks.Add(thisTask);
         thisTask.Start();
@@ -209,8 +196,10 @@ namespace Ceres.Features.Tournaments
       float totalTimeEngine2 = gameThreads.Sum(g => g.TotalTimeEngine2);
       float numGames = gameThreads.Sum(g => g.NumGames);
 
-      Def.Logger.WriteLine("					           ------   ------     --------------   --------------   ----"); 
+      Def.Logger.Write("	      	                    			           ");
+      Def.Logger.WriteLine("     ------   ------     --------------   --------------   ----"); 
       Def.Logger.Write("                                                ");
+      Def.Logger.Write("                     ");
       Def.Logger.Write($"{totalTimeEngine1,9:F2}{totalTimeEngine2,9:F2}");
       Def.Logger.Write($"{totalNodesEngine1,19:N0}{totalNodesEngine2,17:N0}   ");
       Def.Logger.Write($"{Math.Round(totalMovesEngine1 / numGames, 0),4:F0}");
