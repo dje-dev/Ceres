@@ -30,6 +30,7 @@ namespace Ceres.Base.OperatingSystem
 
     void* IRawMemoryManagerIncremental<T>.RawMemoryAddress => rawMemoryPointer;
 
+    public long NumItemsReserved { get; private set; }
     long numItemsAllocated;
     long numBytesAllocated = 0;
 
@@ -46,8 +47,17 @@ namespace Ceres.Base.OperatingSystem
 
     public void Reserve(string sharedMemName, bool useExistingSharedMemory, long numItems, bool useLargePages)
     {
-      if (rawMemoryPointer != null) throw new Exception("Internal error: Reserve should be called only once");
-      if (useExistingSharedMemory) throw new NotImplementedException("Use existing shared memory not yet implemented under Linux");
+      if (rawMemoryPointer != null)
+      {
+        throw new Exception("Internal error: Reserve should be called only once");
+      }
+
+      if (useExistingSharedMemory)
+      {
+        throw new NotImplementedException("Use existing shared memory not yet implemented under Linux");
+      }
+
+      NumItemsReserved = numItems;
 
       // We overreserve by one PAGE_SIZE since the OS may not allow partial page allocation
       long numBytes = numItems * sizeof(T) + PAGE_SIZE;
@@ -67,6 +77,11 @@ namespace Ceres.Base.OperatingSystem
 
     public void InsureAllocated(long numItems)
     {
+      if (numItems > NumItemsReserved)
+      {
+        throw new ArgumentException($"Allocation overflow, requested {numItems} but maximum was set as {NumItemsReserved}");
+      }
+
       long numBytesNeeded = numItems * sizeof(T) + PAGE_SIZE; // overallocate to avoid partial page access
       numBytesNeeded = RoundToHugePageSize(numBytesNeeded);
 
