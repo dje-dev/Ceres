@@ -156,24 +156,32 @@ namespace Ceres.Chess.UserSettings
     {
       string dir = Settings.DirLC0Binaries;
       if (dir == null)
+      {
         throw new Exception("Required setting DirLC0Binaries not defined in user settings.");
+      }
       else if (!Directory.Exists(dir))
+      {
         throw new Exception($"Directory {dir} specified by the user setting DirLC0Binaries does not exist. ");
+      }
 
       string extension;
       if (executable)
+      {
         extension = OperatingSystem.IsLinux() ? "" : ".exe";
+      }
       else
+      {
         extension = OperatingSystem.IsLinux() ? ".so" : ".dll";
+      }
 
-      string fn = Path.Combine(dir, "LC0" + extension);
+      string fn = Path.Combine(dir, "lc0" + extension);
 
       if (!System.IO.File.Exists(fn))
       {
         if (executable)
-          Console.WriteLine($"LC0 executable {fn} not found  (using path referenced in DirLC0Binaries user setting.");
+          Console.WriteLine($"lc0 executable {fn} not found  (using path referenced in DirLC0Binaries user setting.");
         else
-          Console.WriteLine($"LC0 library file {fn} not found. This file is a modified Leela Chess Zero binary, uisng a patch provided by the Ceres project.");
+          Console.WriteLine($"lc0 library file {fn} not found. This file is a modified Leela Chess Zero binary, uisng a patch provided by the Ceres project.");
 
         throw new Exception("Missing LC0 binary");
       }
