@@ -15,6 +15,7 @@
 
 using Ceres.Chess.EncodedPositions;
 using System;
+using System.Runtime.CompilerServices;
 
 #endregion
 
@@ -26,9 +27,12 @@ namespace Ceres.Chess.EncodedPositions
   /// </summary>
   public class PolicyVectorCompressedInitializerFromProbs
   {
+    [SkipLocalsInit]
     public static void InitializeFromProbsArray(ref CompressedPolicyVector policyRef, int numMoves, int numMovesToSave, Span<ProbEntry> probs)
     {
-      QuickSort(probs, 0, numMoves - 1);
+      // Due to small size insertion sort seems faster
+      InsertionSort(probs, 0, numMoves - 1);
+      // QuickSort(probs, 0, numMoves - 1);
 
       // Compute max probability so we can then
       // avoid overflow during exponentation by subtracting off
@@ -84,6 +88,23 @@ namespace Ceres.Chess.EncodedPositions
     }
 
 
+    static void InsertionSort(Span<ProbEntry> array, int min, int max)
+    {
+      int i = min + 1;
+      while (i <= max)
+      {
+        ProbEntry x = array[i];
+        int j = i - 1;
+        while (j >= 0 && array[j].P < x.P)
+        {
+          array[j + 1] = array[j];
+          j--;
+        }
+        array[j + 1] = x;
+        i++;
+      }
+    }
+
     /// <summary>
     /// Performs quick sort on probability entries.
     /// </summary>
@@ -101,29 +122,10 @@ namespace Ceres.Chess.EncodedPositions
       }
     }
 
-#if NOT
-    // --------------------------------------------------------------------------------------------
-    static void InsertionSort(Span<ProbEntry> inputArray, int numItems)
-    {
-      for (int i = 0; i < numItems - 1; i++)
-      {
-        for (int j = i + 1; j > 0; j--)
-        {
-          if (inputArray[j - 1].P < inputArray[j].P)
-          {
-            ProbEntry temp = inputArray[j - 1];
-            inputArray[j - 1] = inputArray[j];
-            inputArray[j] = temp;
-          }
-        }
-      }
-    }
-#endif
-
     public readonly struct ProbEntry
     {
-      public readonly short Index;
       public readonly float P;
+      public readonly short Index;
 
       public ProbEntry(short index, float p)
       {
