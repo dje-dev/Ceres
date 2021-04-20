@@ -50,11 +50,9 @@ namespace Ceres.MCTS.MTCSNodes.Storage
   ///   6) "pointers" from one node occupy less memory (4 bytes instead of 8),
   ///      saving perhaps 8 (2 * 4) bytes per node, no average
   /// but disadvantages:
-  ///   1) it is necessary preallocate some fixed number of nodes at start of search
-  ///      (unless we eventually implement dynamic resizing)
-  ///   2) the code is somewhat more complex (using refs) and possibly error prone
-  ///   3) there is some overhead with using array indexing instead of direct memory pointers
-  ///   4) changing the root of the tree and releasing unused nodes is no longer 
+  ///   1) the code is somewhat more complex (using refs) and possibly error prone
+  ///   2) there is some overhead with using array indexing instead of direct memory pointers
+  ///   3) changing the root of the tree and releasing unused nodes is no longer 
   ///      as trivial as just changing the root pointer (the tree must be rewritten).
   public partial class MCTSNodeStructStorage
   {
@@ -153,9 +151,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     {
       lock (lockObj)
       {
-        if (nextFreeIndex >= MaxNodes)
-          throw new Exception($"MCTSNodeStructStorage overflow, max size {nodes.Length} ");
-
+        // No bounds check here because this will be done at lower levels.
         nodes.InsureAllocated(nextFreeIndex + 1);
 
         return new MCTSNodeStructIndex(nextFreeIndex++);
@@ -202,7 +198,10 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     public unsafe bool VerifyBelongsToStorage(ref MCTSNodeStruct node)
     {
       if (!BelongsToStorage(ref node))
+      {
         throw new Exception("Invalid node. Should be created within storage index " + node.ToString());
+      }
+
       return true;
     }
 
@@ -263,8 +262,12 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       {
         string childStr = "";
         foreach (MCTSNodeStructChild child in nodes[i].Children)
+        {
           if (child.IsExpanded)
+          {
             childStr += $"[child={child.ChildIndex.Index} parent={child.ChildRef.ParentIndex.Index}] ";
+          }
+        }
 
         Console.WriteLine($" {i,9} {nodes[i]} children-> {childStr}");
       }
