@@ -23,6 +23,13 @@ namespace Ceres.MCTS.Iteration
   /// <summary>
   /// Data structure holding a mapping between hash keys 
   /// of nodes in a search tree and the index of the associated node.
+  /// 
+  /// Fortunately all updates to this table can be held until
+  /// a full batch is gathered (perhaps in parallel) 
+  /// and then the bulk update can be applied.
+  /// 
+  /// Therefore concurrent updates are not expected or supported 
+  /// and we can use simple Dictionary implementation.
   /// </summary>
   public class TranspositionRootsDict
   {
@@ -34,11 +41,11 @@ namespace Ceres.MCTS.Iteration
 
     /// <summary>
     /// Constructor for a dictionary of specified approximate final size.
-    /// Limit max hint to 5mm in case very optimistic value was passed in
+    /// Limit max hint to 20mm in case very optimistic value was passed in
     /// (e.g. in case of a search that was requested to be infinite).
     /// </summary>
     /// <param name="sizingHint"></param>
-    public TranspositionRootsDict(int sizingHint) => table = new Dictionary<ulong, int>(Math.Min(5_000_000, sizingHint));
+    public TranspositionRootsDict(int sizingHint) => table = new Dictionary<ulong, int>(Math.Min(20_000_000, sizingHint));
 
 
     /// <summary>
