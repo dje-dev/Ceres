@@ -36,6 +36,7 @@ namespace Ceres.MCTS.Search
 {
   public interface InstalledThreadPool
   {
+    bool SupportsWaitDone => false;
     void QueueUserWorkItem(WaitCallback callback);
     void WaitDone();
     void Shutdown();
@@ -59,12 +60,9 @@ namespace Ceres.MCTS.Search
   /// </summary>
   public class LeafSelectorMulti : ILeafSelector
   {
-    // Using the custom threadpool implementation in Ceres is generally slightly more efficient 
-    // (especially from the persective of total CPU time rather than elapsed time)
-    // than the shared System.Threading.ThreadPool, partly because it only
-    // needs to support the narrow set of requirements here 
-    // (e.g. no need to dynamically shirnk or grow the pool).
-    const bool USE_CUSTOM_THREADPOOL = true;
+    // Especially with .NET 6.0 it seems that the custom thread pool
+    // is no longer more efficient than the standard .NET one.
+    const bool USE_CUSTOM_THREADPOOL = false;
     
     #region Constructor arguments
 
@@ -80,7 +78,7 @@ namespace Ceres.MCTS.Search
 
     #region Internal data
 
-    CountdownEvent countdownPendingNumLeafs = USE_CUSTOM_THREADPOOL ? null : new CountdownEvent(1);
+    CountdownEvent countdownPendingNumLeafs;
 
     public readonly MCTSIterator Context;
 
@@ -110,6 +108,20 @@ namespace Ceres.MCTS.Search
 
     private InstalledThreadPool installedThreadPool;
     
+    bool TrackWaitCount
+    {
+      get
+      {
+        if (installedThreadPool != null)
+        {
+          return !installedThreadPool.SupportsWaitDone;
+        }
+        else
+        {
+          return !USE_CUSTOM_THREADPOOL;
+        }
+      }
+    }
 
     /// <summary>
     /// Constructor for selector over specified MCTSIterator.
@@ -132,8 +144,9 @@ namespace Ceres.MCTS.Search
         {
           tpm = tpmPool.Value.GetFromPool();
         }
-
       }
+
+      countdownPendingNumLeafs = TrackWaitCount ? new CountdownEvent(1) : null;
 
       SelectorID = selectorID;
       PriorSequence = priorSequence;
@@ -263,19 +276,19 @@ namespace Ceres.MCTS.Search
     /// </summary>
     void WaitDone()
     {
-      if (installedThreadPool != null)
-      {
-        installedThreadPool.WaitDone();
-      }
-      else if (USE_CUSTOM_THREADPOOL)
-      {
-        tpm.WaitDone();
-      }
-      else
+      if (TrackWaitCount)
       {
         countdownPendingNumLeafs.Signal(); // take out initialization value of 1
         countdownPendingNumLeafs.Wait();
         countdownPendingNumLeafs.Reset();
+      }
+      else if (installedThreadPool != null)
+      {
+        installedThreadPool.WaitDone();
+      }
+      else
+      {
+        tpm.WaitDone();
       }
     }
 
@@ -444,8 +457,7 @@ namespace Ceres.MCTS.Search
         MCTSNode topMove = Context.Root.BestMove(false);
         if (topMove == null || topMove.NumPolicyMoves <= 1) return 1.0f;
 
-        MCTSNode[] childrenSorted = topMove.ChildrenSorted(c => (float)-c.N);
-        return (float)childrenSorted[0].N / (float)topMove.N;
+        return (float)topMove.ChildWithLargestN.N / (float)topMove.N;
       }
     }
 
@@ -707,7 +719,10 @@ namespace Ceres.MCTS.Search
 
     private void LaunchGatherLeafBatchletParallel(MCTSNode node, int numThisChild, MCTSNode thisChild, float vLossDynamicBoost)
     {
-      if (!USE_CUSTOM_THREADPOOL) countdownPendingNumLeafs.AddCount(numThisChild);
+      if (TrackWaitCount)
+      {
+        countdownPendingNumLeafs.AddCount(numThisChild);
+      }
 
       MCTSIterator thisContext = node.Context;
 
@@ -729,7 +744,7 @@ namespace Ceres.MCTS.Search
           }
 
           // Signal done.
-          if (!USE_CUSTOM_THREADPOOL)
+          if (TrackWaitCount)
           {
             countdownPendingNumLeafs.Signal(numThisChild);
           }
