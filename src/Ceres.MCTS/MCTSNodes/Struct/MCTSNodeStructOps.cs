@@ -734,11 +734,9 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       ref MCTSNodeStruct node = ref this;
       while (true)
       {
-        node.UpdateNInFlight(-numInFlight1, -numInFlight2);
-
-        // Get parent reference (and initiate prefetch)
         ref MCTSNodeStruct parentRef = ref nodes[node.ParentIndex.Index];
-        PrefetchNode(ref parentRef);
+
+        node.UpdateNInFlight(-numInFlight1, -numInFlight2);
 
         //        float valuePriorAvgIsBetter = node.IsRoot ? float.NaN : (float)(-node.Q - node.ParentRef.Q);
         //        float valueThisSampleBetter = node.IsRoot ? float.NaN : (float)(-vToApply - node.ParentRef.Q);
@@ -792,7 +790,9 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         }
 
         if (node.IsRoot)
+        {
           return;
+        }
         else
         {
           if (parentRef.IsRoot)
@@ -800,6 +800,13 @@ namespace Ceres.MCTS.MTCSNodes.Struct
             indexOfChildDescendentFromRoot = node.Index;
             int numVisits = numInFlight1 + numInFlight2;
             MCTSManager.ThreadSearchContext.RootMoveTracker.UpdateQValue(IndexInParent, vToApply, numVisits);
+          }
+          else
+          {
+            // Initiate a prefetch of parent's parent.
+            // This happens far early enough that the memory access 
+            // should be complete by the time we need the data.
+            PrefetchNode(ref parentRef.ParentRef);
           }
 
 #if NOT
@@ -823,6 +830,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
     public void BackupApplyWDeltaOnly(float wDelta)
     {
+      throw new NotImplementedException();
+#if NOT
       Span<MCTSNodeStruct> nodes = MCTSNodeStoreContext.Nodes.Span;
 
       ref MCTSNodeStruct node = ref this;
@@ -841,9 +850,10 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         }
 
       }
+#endif
     }
 
-    #endregion
+#endregion
 
     /// <summary>
     /// Returns the index of this node in the array of parent's children.
