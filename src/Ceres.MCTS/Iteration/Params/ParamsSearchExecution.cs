@@ -32,6 +32,12 @@ namespace Ceres.MCTS.Params
   [Serializable]
   public class ParamsSearchExecution
   {
+    /// <summary>
+    /// Scaling factor with higher values decreasing 
+    /// the degree of fine-grained parallelism employed
+    /// in various places (ParallelFor granularity).
+    /// Higher values may be optimal for Linux.
+    /// </summary>
     public const int ParallelMultiplier = 1; 
 
     /// <summary>
@@ -41,7 +47,9 @@ namespace Ceres.MCTS.Params
     public TranspositionMode TranspositionMode = TranspositionMode.SingleNodeDeferredCopy;
 
     /// <summary>
-    /// If transpositions are detected and copied within a single batch.
+    /// If transpositions are detected and copied within a single batch,
+    /// thereby reducing the number of NN evaluations needed.
+    /// This is beneficial unless the NN is evaluation rate is extremely high.
     /// </summary>
     public bool InFlightThisBatchLinkageEnabled = true;
 
@@ -72,8 +80,21 @@ namespace Ceres.MCTS.Params
     /// </summary>
     public bool FlowDirectOverlapped = true;
 
-    // DUAL
+    /// <summary>
+    /// If two selectors should be used in batch gathering,
+    /// each taking CPUCT values slightly offset from the baseline value.
+    /// </summary>
     public bool FlowDualSelectors = true;
+
+    /// <summary>
+    /// If each batch should be gathered in two passes 
+    /// of the tree from root to leaves.
+    /// 
+    /// If true, the immediate nodes are applied after
+    /// the first pass and the second pass is sometimes
+    /// skipped if the yield is low indicating 
+    /// many collisions and likely lower node selection purity.
+    /// </summary>
     public bool FlowSplitSelects = true;
 
 
