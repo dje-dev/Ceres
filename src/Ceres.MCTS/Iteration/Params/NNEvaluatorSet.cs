@@ -14,6 +14,7 @@
 #region Using directives
 
 using System;
+using System.Diagnostics;
 using System.Threading.Tasks;
 
 using Ceres.Chess.NNEvaluators;
@@ -28,12 +29,16 @@ namespace Ceres.MCTS.Params
   /// 
   /// For example, an MCTS search may require:
   ///   - a primary evaluator,
-  ///   - possibly a second evaluator to support overlapped (concurrent) evaluations,
-  ///   - and possibly a supplemental evaluator used for ancillary purposes.
-  /// if 
+  ///   - possibly a second evaluator (sharing the same definition) 
+  ///     to support overlapped (concurrent) evaluations,
+  ///   - possibly a supplemental evaluator (with a possibly different definition)
+  ///     used for ancillary purposes.
   /// </summary>
   public partial class NNEvaluatorSet : IDisposable
   {
+    /// <summary>
+    /// Definition of the evaluators to be used for Evaluator1 and Evaluator2.
+    /// </summary>
     public readonly NNEvaluatorDef EvaluatorDef;
 
     #region Internal data
@@ -65,6 +70,7 @@ namespace Ceres.MCTS.Params
 
     #endregion
 
+
     /// <summary>
     /// Standard constructor which builds the evaluator
     /// (or two evaluators, if running with overlapping)
@@ -73,7 +79,10 @@ namespace Ceres.MCTS.Params
     /// <param name="evaluatorDef"></param>
     public NNEvaluatorSet(NNEvaluatorDef evaluatorDef)
     {
-      if (evaluatorDef == null) throw new ArgumentNullException(nameof(evaluatorDef));
+      if (evaluatorDef == null)
+      {
+        throw new ArgumentNullException(nameof(evaluatorDef));
+      }
 
       EvaluatorDef = evaluatorDef;
     }
@@ -111,58 +120,74 @@ namespace Ceres.MCTS.Params
     public void CalcStatistics(bool computeBreaks, float maxSeconds = 1.0f)
     {
       if (Evaluator1.PerformanceStats == null)
+      {
         evaluator1.CalcStatistics(computeBreaks, maxSeconds);
+      }
       perfStatsPrimary = evaluator1.PerformanceStats;
     }
 
 
-    NNEvaluator MakeEvaluator()
-    {
-      return NNEvaluatorFactory.BuildEvaluator(EvaluatorDef);
-    }
-
+    /// <summary>
+    /// Returns the first evaluator in the set.
+    /// </summary>
     public NNEvaluator Evaluator1
     {
       get
       {
-        const bool SHARED = true;
         if (evaluator1 == null)
+        {
           lock (makeEvaluator1Lock)
+          {
             if (evaluator1 == null)
-              evaluator1 = MakeEvaluator();
+            {
+              evaluator1 = NNEvaluatorFactory.BuildEvaluator(EvaluatorDef, null);
+            }
+          }
+        }
 
         return evaluator1;
       }
     }
 
+
+    /// <summary>
+    /// Returns the second evaluator in the set.
+    /// </summary>
     public NNEvaluator Evaluator2
     {
       get
       {
-        const bool SHARED = false; // we need to overlap concurrent execution, therefore must be a different session
-        if (SHARED) return Evaluator1;
-
         if (evaluator2 == null)
+        {
           lock (makeEvaluator2Lock)
+          {
             if (evaluator2 == null)
-              evaluator2 = MakeEvaluator();
+            {
+              Debug.Assert(Evaluator1 != null);
+              evaluator2 = NNEvaluatorFactory.BuildEvaluator(EvaluatorDef, Evaluator1);
+            }
+          }
+        }
 
         return evaluator2;
       }
     }
 
+
+    /// <summary>
+    /// Returns the optional secondary evaluator in the set
+    /// (often used for comparison purposes).
+    /// </summary>
     public NNEvaluator EvaluatorSecondary
     {
       get
       {
-        const bool SHARED = false; // ??
         if (evaluatorSecondary == null)
         {
           lock (makeEvaluatorSecondaryLock)
           {
             if (evaluatorSecondary == null)
             {
-              // TODO: someday enable fancy combo nets like in Evaluator1 above
               throw new NotImplementedException("Needs remediation");
               //evaluatorSecondary = MakeLocalNNEvaluator(0, 0, SHARED, Params.SECONDARY_NETWORK_ID);
               //if (Params.EstimatePerformanceCharacteristics) evaluatorSecondary.CalcStatistics(true);
@@ -175,6 +200,9 @@ namespace Ceres.MCTS.Params
     }
 
 
+    /// <summary>
+    /// Disposes of underlying evaluators.
+    /// </summary>
     public void Dispose()
     {
       evaluator1?.Dispose();
@@ -187,6 +215,5 @@ namespace Ceres.MCTS.Params
     }
 
   }
-
 
 }
