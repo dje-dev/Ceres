@@ -14,28 +14,16 @@
 #region Using directives
 
 using System;
-using System.Buffers;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using System.Threading;
-using System.Threading.Tasks;
 
-using Ceres.Base;
-using Ceres.Base.DataType;
 using Ceres.Base.DataTypes;
 using Ceres.Base.Math;
-using Ceres.Base.Math.Random;
 using Ceres.Base.OperatingSystem;
 using Ceres.Base.Threading;
 
 using Ceres.Chess;
-using Ceres.Chess.MoveGen;
 using Ceres.Chess.Positions;
-using Ceres.MCTS.Environment;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Storage;
@@ -46,6 +34,13 @@ using Ceres.MCTS.Params;
 
 namespace Ceres.MCTS.Search
 {
+  public interface InstalledThreadPool
+  {
+    void QueueUserWorkItem(WaitCallback callback);
+    void WaitDone();
+    void Shutdown();
+  }
+
   /// <summary>
   /// MCTS leaf selector algorithm which descends tree, choosing highest scoring children
   /// according to PUCT algorithm, yielding a set of leafs each of which is either:
@@ -109,6 +104,13 @@ namespace Ceres.MCTS.Search
 
     static int numThreadPoolsCreated = 0;
 
+    public delegate InstalledThreadPool ThreadPoolFactory(int numThreads);
+
+    public static ThreadPoolFactory InstalledThreadPoolFactory;
+
+    private InstalledThreadPool installedThreadPool;
+    
+
     /// <summary>
     /// Constructor for selector over specified MCTSIterator.
     /// </summary>
@@ -120,7 +122,18 @@ namespace Ceres.MCTS.Search
     {
       Debug.Assert(selectorID < ILeafSelector.MAX_SELECTORS);
 
-      if (USE_CUSTOM_THREADPOOL) tpm = tpmPool.Value.GetFromPool();
+      if (InstalledThreadPoolFactory != null)
+      {
+        installedThreadPool = InstalledThreadPoolFactory(HardwareManager.MaxAvailableProcessors);
+      }
+      else
+      {
+        if (USE_CUSTOM_THREADPOOL)
+        {
+          tpm = tpmPool.Value.GetFromPool();
+        }
+
+      }
 
       SelectorID = selectorID;
       PriorSequence = priorSequence;
@@ -250,8 +263,14 @@ namespace Ceres.MCTS.Search
     /// </summary>
     void WaitDone()
     {
-      if (USE_CUSTOM_THREADPOOL)
+      if (installedThreadPool != null)
+      {
+        installedThreadPool.WaitDone();
+      }
+      else if (USE_CUSTOM_THREADPOOL)
+      {
         tpm.WaitDone();
+      }
       else
       {
         countdownPendingNumLeafs.Signal(); // take out initialization value of 1
@@ -721,10 +740,18 @@ namespace Ceres.MCTS.Search
         }
       };
 
-      if (USE_CUSTOM_THREADPOOL)
+      if (installedThreadPool != null)
+      {
+        installedThreadPool.QueueUserWorkItem(action);
+      }
+      else if (USE_CUSTOM_THREADPOOL)
+      {
         tpm.QueueUserWorkItem(action);
+      }
       else
+      {
         ThreadPool.QueueUserWorkItem(action);
+      }
     }
 
 #endregion
