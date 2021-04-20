@@ -25,6 +25,7 @@ using Ceres.Chess.MoveGen.Converters;
 using Ceres.Base.OperatingSystem;
 using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.MCTS.MTCSNodes.Struct;
+using System.Runtime.CompilerServices;
 
 #endregion
 
@@ -258,6 +259,7 @@ namespace Ceres.MCTS.MTCSNodes
     /// <param name="mgPos"></param>
     /// <param name="moves"></param>
     /// <param name="policyVector"></param>
+    [SkipLocalsInit]
     public void SetPolicy(float policySoftmax, float minPolicyProbability, 
                           in MGPosition mgPos, MGMoveList moves, 
                           in CompressedPolicyVector policyVector,
@@ -281,7 +283,9 @@ namespace Ceres.MCTS.MTCSNodes
 
         // Finally, set these in the child policy vector
         for (int i = 0; i < numUsedPolicyMoves; i++)
+        {
           children[i].SetUnexpandedPolicyValues(validLZMovesUsed[i], childrenProbabilites[i]);
+        }
       }
     }
 
