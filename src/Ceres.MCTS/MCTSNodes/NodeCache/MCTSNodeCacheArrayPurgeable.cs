@@ -38,8 +38,8 @@ namespace Ceres.MCTS.NodeCache
   /// </summary>
   public class MCTSNodeCacheArrayPurgeable : IMCTSNodeCache
   {
-    internal const int THRESHOLD_PCT_DO_PRUNE = 75;
-    internal const int THRESHOLD_PCT_PRUNE_TO = 55;
+    internal const int THRESHOLD_PCT_DO_PRUNE = 80;
+    internal const int THRESHOLD_PCT_PRUNE_TO = 60;
 
     public MCTSTree ParentTree;
 
@@ -90,9 +90,26 @@ namespace Ceres.MCTS.NodeCache
     /// </summary>
     public int NumInUse => numInUse;
 
-    bool firstPassAllocateSequential = true;
 
-    int nextIndexPreWrap = 0;
+    bool TryTake(MCTSNode node, int thisTryIndex)
+    {
+      // Try to make the swap, but only if prior entry was null.
+      MCTSNode exchangeTry = Interlocked.CompareExchange(ref nodes[thisTryIndex], node, null);
+      if (exchangeTry == null)
+      {
+        // Success
+        searchFreeEntryNextIndex = thisTryIndex + 1;
+        Interlocked.Increment(ref numInUse);
+        node.Ref.CacheIndex = thisTryIndex;
+
+        return true;
+      }
+      else
+      {
+        return false;
+      }
+    }
+
 
     /// <summary>
     /// Returns the MCTSNode having the specified index and stored in the cache
@@ -102,73 +119,35 @@ namespace Ceres.MCTS.NodeCache
     /// <returns></returns>
     public void Add(MCTSNode node)
     {
-      lock (lockObj)
+      int numTries = 0;
+
+      // Make local copy of the entry we are going to try
+      int thisTryIndex = searchFreeEntryNextIndex;
+
+      // Repeatedly try to grab a slot.
+      while (true)
       {
-        int thisIndex;
-
-        if (firstPassAllocateSequential)
+        // Wrap around if necessary.
+        if (thisTryIndex >= nodes.Length - 1)
         {
-          // If we have never wrapped, we can just allocate mostly sequentially.
-          // However initially the table is empty so each batch of nodes
-          // is allocated (and typically purged) all at once, leading to "clumps"
-          // which then can cause longer search times to find a free entry.
-          // Therefore we leave a few spaces in the table on the first pass.
-          thisIndex = nextIndexPreWrap;
-
-          int increment = numInUse % 20 == 0 ? 2 : 1;
-          nextIndexPreWrap = thisIndex + increment;
-          if (nextIndexPreWrap >  MaxCacheSize - 2)
-          {
-            firstPassAllocateSequential = false;
-            nextIndexPreWrap = 0;
-          }
-        }
-        else
-        {
-          thisIndex = NextSearchFreeEntry();
+          thisTryIndex = 0;
         }
 
-        nodes[thisIndex] = node;
-        node.Ref.CacheIndex = thisIndex;
-
-        numInUse++;
-      }
-    }
-
-    /// <summary>
-    /// Determines the index of the next unused node.
-    /// </summary>
-    /// <param name="recursionDepth"></param>
-    /// <returns></returns>
-    int NextSearchFreeEntry(int recursionDepth = 0)
-    {
-      if (numInUse >= nodes.Length - 2 || recursionDepth > 1)
-      {
-        throw new Exception("Internal table: MCTSNodeCache overflow");
-      }
-
-      int foundIndex = -1;
-      for (int i = searchFreeEntryNextIndex; i < nodes.Length; i++)
-      {
-        if (nodes[i] == null)
+        if (TryTake(node, thisTryIndex))
         {
-          foundIndex = i;
-          break;
+          return;
         }
-      }
 
-      if (foundIndex == -1)
-      {
-        searchFreeEntryNextIndex = 1;
+        // Make sure we haven't overflowed.
+        numTries++;
+        if (numTries > nodes.Length * 2)
+        {
+          throw new Exception("MCTSNodeCache overflow");
+        }
 
-        // Skip this null position, restart search from here.
-        return NextSearchFreeEntry(++recursionDepth); 
-      }
-      else
-      {
-        searchFreeEntryNextIndex = foundIndex + 1;
-        return foundIndex;
-      }
+        // Move to next possible slot.
+        thisTryIndex++;
+      };
 
     }
 
@@ -181,20 +160,20 @@ namespace Ceres.MCTS.NodeCache
     {
       bool almostFull = numInUse > (nodes.Length * THRESHOLD_PCT_DO_PRUNE) / 100;
       if (numCachePrunesInProgress == 0 && almostFull)
+      {
+        Task.Run(() =>
         {
-          Task.Run(() =>
+          //using (new TimingBlock("Prune"))
           {
-            //using (new TimingBlock("Prune"))
-            {
-              Interlocked.Increment(ref numCachePrunesInProgress);
-              int targetSize = (nodes.Length * THRESHOLD_PCT_PRUNE_TO) / 100;
-              Prune(store, targetSize);
-              Interlocked.Decrement(ref numCachePrunesInProgress);
-            };
-          });
-        }
-
+            Interlocked.Increment(ref numCachePrunesInProgress);
+            int targetSize = (nodes.Length * THRESHOLD_PCT_PRUNE_TO) / 100;
+            Prune(store, targetSize);
+            Interlocked.Decrement(ref numCachePrunesInProgress);
+          };
+        });
       }
+
+    }
 
     int pruneCount = 0;
 
@@ -287,17 +266,16 @@ namespace Ceres.MCTS.NodeCache
     public void ResetCache()
     {
       for (int i = 1; i <= nodes.Length; i++)
-       {
+      {
         if (nodes[i] != null)
         {
           nodes[i].Ref.CacheIndex = 0;
         }
-       }
+      }
 
       Array.Clear(nodes, 0, nodes.Length);
       numInUse = 0;
       searchFreeEntryNextIndex = 0;
-      firstPassAllocateSequential = true;
     }
 
 
