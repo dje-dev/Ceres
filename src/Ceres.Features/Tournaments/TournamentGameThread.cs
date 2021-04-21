@@ -189,11 +189,12 @@ namespace Ceres.Features.Tournaments
         Run.Engine1.ResetGame(gameID);
         Run.Engine2.ResetGame(gameID);
 
+        bool checkTablebases = Def.UseTablebasesForAdjudication && CeresUserSettingsManager.Settings.TablebaseDirectory != null;
         thisResult = DoGameTest(clearHashTable, Def.Logger, pgnWriter, openingIndex,
                                 Run.Engine1, Run.Engine2,
                                 Run.Engine2CheckEngine, engine2White,
                                 Def.Player1Def.SearchLimit, Def.Player2Def.SearchLimit,
-                                Def.UseTablebasesForAdjudication, Def.ShowGameMoves);
+                                checkTablebases, Def.ShowGameMoves);
 
         if (MCTSDiagnostics.TournamentDumpEngine2EndOfGameSummary)
         {
