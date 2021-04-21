@@ -31,6 +31,8 @@ namespace Ceres.Base.OperatingSystem
     void* IRawMemoryManagerIncremental<T>.RawMemoryAddress => rawMemoryPointer;
 
     public long NumItemsReserved { get; private set; }
+    public long NumBytesReserved { get; private set; }
+
     long numItemsAllocated;
     long numBytesAllocated = 0;
 
@@ -60,8 +62,7 @@ namespace Ceres.Base.OperatingSystem
       NumItemsReserved = numItems;
 
       // We overreserve by one PAGE_SIZE since the OS may not allow partial page allocation
-      long numBytes = numItems * sizeof(T) + PAGE_SIZE;
-      numBytes = RoundToHugePageSize(numBytes);
+      NumBytesReserved = RoundToHugePageSize(numItems * sizeof(T) + PAGE_SIZE);
 
       int mapFlags = LinuxAPI.MAP_NORESERVE | LinuxAPI.MAP_PRIVATE | LinuxAPI.MAP_ANONYMOUS;
       if (useLargePages)
@@ -69,9 +70,12 @@ namespace Ceres.Base.OperatingSystem
         mapFlags |= LinuxAPI.MAP_HUGETLB;
       };
 
-      rawMemoryPointer = (float*)LinuxAPI.mmap(null, numBytes, LinuxAPI.PROT_NONE, mapFlags, -1, 0);
+      rawMemoryPointer = (float*)LinuxAPI.mmap(null, NumBytesReserved, LinuxAPI.PROT_NONE, mapFlags, -1, 0);
 
-      if (rawMemoryPointer == null) throw new Exception($"Virtual memory reservation of {numBytes} bytes failed using mmap");
+      if (rawMemoryPointer == null)
+      {
+        throw new Exception($"Virtual memory reservation of {NumBytesReserved} bytes failed using mmap");
+      }
     }
 
 
@@ -95,12 +99,14 @@ namespace Ceres.Base.OperatingSystem
       }
     }
 
-    public long NumItemsAllocated => this.numBytesAllocated / sizeof(T); // TODO: make faster?
+    public long NumItemsAllocated => this.numBytesAllocated / sizeof(T);
 
     public void Dispose()
     {
-      LinuxAPI.munmap(rawMemoryPointer, numBytesAllocated);
+      LinuxAPI.munmap(rawMemoryPointer, NumBytesReserved);
       numBytesAllocated = 0;
+      NumBytesReserved = 0;
+      NumItemsReserved = 0;
       rawMemoryPointer = null;
     }
 
