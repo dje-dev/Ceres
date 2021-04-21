@@ -53,7 +53,7 @@ namespace Ceres.Features.Tournaments
     static Lazy<LC0DLLSyzygyEvaluator> tbEvaluator = new Lazy<LC0DLLSyzygyEvaluator>(() =>
     LC0DLLSyzygyEvaluatorPool.GetSessionForPaths(CeresUserSettingsManager.Settings.TablebaseDirectory));
 
-    internal static TournamentGameResult GetGameResultFromTablebase(PositionWithHistory game, bool playerIsWhite, bool useTablebasesForAdjudication)
+    internal static TournamentGameResult TryGetGameResultIfTerminal(PositionWithHistory game, bool playerIsWhite, bool useTablebasesForAdjudication)
     {
       Position pos = game.FinalPosition;
       bool whiteToMove = pos.MiscInfo.SideToMove == SideType.White;
@@ -76,12 +76,12 @@ namespace Ceres.Features.Tournaments
         }
       }
 
-      Chess.GameResult terminalStatus = pos.CalcTerminalStatus();
-      if (terminalStatus == Chess.GameResult.Unknown)
+      GameResult terminalStatus = pos.CalcTerminalStatus();
+      if (terminalStatus == GameResult.Unknown)
         return TournamentGameResult.None;
-      else if (terminalStatus == Chess.GameResult.Draw)
+      else if (terminalStatus == GameResult.Draw)
         return TournamentGameResult.Draw;
-      else if (terminalStatus == Chess.GameResult.Checkmate)
+      else if (terminalStatus == GameResult.Checkmate)
       {
         return weArePlayerToMove ? TournamentGameResult.Loss : TournamentGameResult.Win;
       }
