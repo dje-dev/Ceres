@@ -425,7 +425,9 @@ namespace Ceres.Features.Tournaments
         foreach (Position pos in encounteredPositions)
         {
           if (pos.EqualAsRepetition(in currentPosition))
+          {
             countRepetitions++;
+          }
         }
 
         if (countRepetitions >= 3)
@@ -438,13 +440,15 @@ namespace Ceres.Features.Tournaments
         if (curPositionAndMoves.FinalPosition.CheckDrawBasedOnMaterial == Position.PositionDrawStatus.DrawByInsufficientMaterial
          || curPositionAndMoves.FinalPosition.CheckDrawCanBeClaimed == Position.PositionDrawStatus.DrawCanBeClaimed
          || plyCount >= 500)
-          return MakeGameInfo(TournamentGameResult.Draw);
-
-        // Check for draw according to tablebase
-        if (!string.IsNullOrEmpty(CeresUserSettingsManager.Settings.TablebaseDirectory))
         {
-          result = TournamentUtils.GetGameResultFromTablebase(curPositionAndMoves, engine2IsWhite, useTablebasesForAdjudication);
-          if (result != TournamentGameResult.None) return MakeGameInfo(result);
+          return MakeGameInfo(TournamentGameResult.Draw);
+        }
+
+        // Check for terminal result (tablebase or intrinsically terminal)
+        result = TournamentUtils.TryGetGameResultIfTerminal(curPositionAndMoves, engine2IsWhite, useTablebasesForAdjudication);
+        if (result != TournamentGameResult.None)
+        {
+          return MakeGameInfo(result);
         }
 
         plyCount++;
