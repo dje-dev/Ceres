@@ -16,17 +16,17 @@
 #region Using directives
 
 using System;
-using System.Collections;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Threading;
+
 using Ceres.Base.DataTypes;
 using Ceres.Base.OperatingSystem;
 using Ceres.Chess;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.Positions;
 using Ceres.MCTS.MTCSNodes.Struct;
-//using Ceres.MCTS.Context;
+
 
 #endregion
 
@@ -153,7 +153,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       int gotIndex = Interlocked.Increment(ref nextFreeIndex);
 
       // Check for overflow (with padding for page effects)
-      long sizeWithPadding = gotIndex + 1024;
+      long sizeWithPadding = gotIndex + (HardwareManager.PAGE_SIZE_MAX / MCTSNodeStruct.MCTSNodeStructSizeBytes);
       if (nodes.NumItemsAllocated <= sizeWithPadding)
       {
         lock (lockObj)

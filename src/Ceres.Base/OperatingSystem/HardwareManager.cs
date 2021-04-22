@@ -32,6 +32,11 @@ namespace Ceres.Base.OperatingSystem
   public static class HardwareManager
   {
     /// <summary>
+    /// Maximum expected pages size across all supported OS.
+    /// </summary>
+    public const int PAGE_SIZE_MAX = 2048 * 1024;
+
+    /// <summary>
     /// Maximum number of processors which are active for this process.
     /// </summary>
     public static int MaxAvailableProcessors { private set; get; } = System.Environment.ProcessorCount;

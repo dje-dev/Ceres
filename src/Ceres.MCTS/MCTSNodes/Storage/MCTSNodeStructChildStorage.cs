@@ -192,7 +192,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       long newNextFreeBlockIndex = Interlocked.Add(ref nextFreeBlockIndex, numBlocksRequired);
 
       // Check for overflow (with padding for page effects)
-      long newNumEntriesWithPadding = newNextFreeBlockIndex * NUM_CHILDREN_PER_BLOCK + 1024;
+      long newNumEntriesWithPadding = newNextFreeBlockIndex * NUM_CHILDREN_PER_BLOCK + (1024 * 2048 / MCTSNodeStruct.MCTSNodeStructSizeBytes);
       if (newNumEntriesWithPadding >= childIndices.Length)
       {
         throw new Exception($"MCTSNodeStructChildStorage overflow, max size {childIndices.Length}. "
