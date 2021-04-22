@@ -14,7 +14,7 @@
 #region Using directives
 
 using System;
-
+using System.Diagnostics;
 using Ceres.Base.DataType;
 using Ceres.Base.Math;
 
@@ -50,24 +50,22 @@ namespace Ceres.MCTS.MTCSNodes
 
     [ThreadStatic] static GatheredChildStats gatherStats;
 
-    [ThreadStatic] static Random qNoiseRandom;
-
 
     /// <summary>
     /// Returns the thread static variables, intializaing if first time accessed by this thread.
     /// </summary>
     /// <returns></returns>
-    static (GatheredChildStats, Random) CheckInitThreadStatics()
+    static GatheredChildStats CheckInitThreadStatics()
     {
       GatheredChildStats stats = gatherStats;
       if (stats == null)
       {
-        stats = gatherStats = new GatheredChildStats();
-        Random noiseRandom = qNoiseRandom = new Random();
-        return (gatherStats, noiseRandom);
+        return gatherStats = new GatheredChildStats();
       }
       else
-        return (stats, qNoiseRandom);
+      {
+        return stats;
+      }
     }
 
 
@@ -88,11 +86,11 @@ namespace Ceres.MCTS.MTCSNodes
                                       int minChildIndex, int maxChildIndex, int numVisitsToCompute,
                                       Span<float> scores, Span<short> childVisitCounts)
     {
-      (GatheredChildStats stats, Random qNoise) = CheckInitThreadStatics();
+      GatheredChildStats stats = CheckInitThreadStatics();
 
-      if (numVisitsToCompute <= 0) throw new ArgumentOutOfRangeException(nameof(numVisitsToCompute), "must be positive");
-      if (minChildIndex != 0) throw new ArgumentOutOfRangeException(nameof(minChildIndex), "must be zero (current implementation restriction)");
-      if (maxChildIndex > MCTSScoreCalcVector.MAX_CHILDREN) throw new ArgumentOutOfRangeException(nameof(maxChildIndex), "must be less than MCTSScoreCalcVector.MAX_CHILDREN");
+      Debug.Assert(numVisitsToCompute > 0);
+      Debug.Assert(minChildIndex == 0); // implementation restriction
+      Debug.Assert(maxChildIndex <= MCTSScoreCalcVector.MAX_CHILDREN);
 
       ref MCTSNodeStruct nodeRef = ref Ref;
 
