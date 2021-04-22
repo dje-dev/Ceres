@@ -566,7 +566,8 @@ namespace Ceres.MCTS.Search
       // Mark node as visited, make sure we get associated annotation
       DoVisitInnerNode(node);
 
-      node.Ref.PossiblyPrefetchChildArray(node.Context.Tree.Store, new MCTSNodeStructIndex(node.Index));
+      // Prefetch not obviously helpful
+      //node.Ref.PossiblyPrefetchChildArray(node.Context.Tree.Store, new MCTSNodeStructIndex(node.Index));
 
       int numChildrenToCheck = NumChildrenNeededToBeChecked(node, numTargetLeafs);
       Span<short> childVisitCounts = stackalloc short[numChildrenToCheck];
@@ -648,7 +649,9 @@ namespace Ceres.MCTS.Search
           }
 
           node.UpdateRecordVisitsToChild(SelectorID, childIndex, numThisChild);
-          nodeRef.PossiblyPrefetchChild(node.Context.Tree.Store, new MCTSNodeStructIndex(node.Index), childIndex);
+
+          // Prefetch not obviously helpful
+          // nodeRef.PossiblyPrefetchChild(node.Context.Tree.Store, new MCTSNodeStructIndex(node.Index), childIndex);
 
 #if FEATURE_SUPPLEMENTAL
           // Warning: this slows down search by up to 10%
