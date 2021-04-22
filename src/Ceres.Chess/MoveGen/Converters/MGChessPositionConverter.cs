@@ -142,6 +142,7 @@ namespace Ceres.Chess.MoveGen.Converters
     /// </summary>
     /// <param name="mgPos"></param>
     /// <returns></returns>
+    [SkipLocalsInit]
     public static Position PositionFromMGChessPosition(in MGPosition mgPos)
     {
       Span<PieceOnSquare> piecesArrayBufferLocal = stackalloc PieceOnSquare[MAX_PIECES];
@@ -205,7 +206,7 @@ namespace Ceres.Chess.MoveGen.Converters
                               sideToMove, move50Count, repetitionCount,
                               moveNum, enPassantColIndex);
 
-      return new Position(piecesArrayBufferLocal, miscInfo);
+      return new Position(piecesArrayBufferLocal, in miscInfo);
     }
 
 

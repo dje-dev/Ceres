@@ -451,9 +451,9 @@ namespace Ceres.Chess.EncodedPositions
                                                          sourceMiscInfo.SideToMove == EncodedPositionMiscInfo.SideToMoveEnum.White ? SideType.White : SideType.Black,
                                                          sourceMiscInfo.Rule50Count, (int)board0.Repetitions.Data, sourceMiscInfo.MoveCount, epColIndex);
 
-        pc = new Position(board0.OurKing.Data, board0.OurQueens.Data, board0.OurRooks.Data, board0.OurBishops.Data, board0.OurKnights.Data, board0.OurPawns.Data,
-                          board0.TheirKing.Data, board0.TheirQueens.Data, board0.TheirRooks.Data, board0.TheirBishops.Data, board0.TheirKnights.Data, board0.TheirPawns.Data,
-                          miscInfo);
+        return new Position(board0.OurKing.Data, board0.OurQueens.Data, board0.OurRooks.Data, board0.OurBishops.Data, board0.OurKnights.Data, board0.OurPawns.Data,
+                            board0.TheirKing.Data, board0.TheirQueens.Data, board0.TheirRooks.Data, board0.TheirBishops.Data, board0.TheirKnights.Data, board0.TheirPawns.Data,
+                            in miscInfo);
       }
       else
       {
@@ -462,12 +462,10 @@ namespace Ceres.Chess.EncodedPositions
                                                          sourceMiscInfo.SideToMove == EncodedPositionMiscInfo.SideToMoveEnum.White ? SideType.White : SideType.Black,
                                                          sourceMiscInfo.Rule50Count, (int)board0.Repetitions.Data, sourceMiscInfo.MoveCount, epColIndex);
         board0 = board0.Reversed;
-        pc = new Position(board0.TheirKing.Data, board0.TheirQueens.Data, board0.TheirRooks.Data, board0.TheirBishops.Data, board0.TheirKnights.Data, board0.TheirPawns.Data,
-                          board0.OurKing.Data, board0.OurQueens.Data, board0.OurRooks.Data, board0.OurBishops.Data, board0.OurKnights.Data, board0.OurPawns.Data,
-                          miscInfo);
+        return new Position(board0.TheirKing.Data, board0.TheirQueens.Data, board0.TheirRooks.Data, board0.TheirBishops.Data, board0.TheirKnights.Data, board0.TheirPawns.Data,
+                            board0.OurKing.Data, board0.OurQueens.Data, board0.OurRooks.Data, board0.OurBishops.Data, board0.OurKnights.Data, board0.OurPawns.Data,
+                            in miscInfo);
       }
-
-      return pc;
     }
 
 

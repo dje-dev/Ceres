@@ -270,7 +270,7 @@ namespace Ceres.Chess
                     ulong whiteBishopBitmap, ulong whiteKnightBitmap, ulong whitePawnBitmap,
                     ulong blackKingBitmap, ulong blackQueenBitmap, ulong blackRookBitmap,
                     ulong blackBishopBitmap, ulong blackKnightBitmap, ulong blackPawnBitmap,
-                    PositionMiscInfo miscInfo)
+                    in PositionMiscInfo miscInfo)
     {
       // Obviate requirement of definite assignment to all fields
       Unsafe.SkipInit<Position>(out this);
@@ -304,7 +304,7 @@ namespace Ceres.Chess
     /// </summary>
     /// <param name="pieces"></param>
     /// <param name="miscInfo"></param>
-    public unsafe Position(Span<PieceOnSquare> pieces, PositionMiscInfo miscInfo)
+    public unsafe Position(Span<PieceOnSquare> pieces, in PositionMiscInfo miscInfo)
     {
       // Workaround to suppress definite assigment rules (TODO: pending .NET enhancmements may provide a cleaner/faster way)
       fixed (void* ptr = &this) { }
@@ -312,10 +312,12 @@ namespace Ceres.Chess
       PieceCount = 0;
       MiscInfo = miscInfo;
 
-      int squareIndex = 0;
       foreach (PieceOnSquare pieceSquare in pieces)
       {
-        if (pieceSquare.Piece.Type == PieceType.None) break;
+        if (pieceSquare.Piece.Type == PieceType.None)
+        {
+          break;
+        }
 
         int pieceCount = (byte)SetPieceOnSquare(pieceSquare.Square.SquareIndexStartA1, pieceSquare.Piece);
 
@@ -364,11 +366,17 @@ namespace Ceres.Chess
           found = true;
         }
         else
+        {
           pieces.Add(piece);
+        }
       }
+
       if (!found)
+      {
         throw new Exception("En passant pawn was not found");
-      return new Position(pieces.ToArray(), newMiscInfo);
+      }
+
+      return new Position(pieces.ToArray(), in newMiscInfo);
     }
 
 
@@ -1039,7 +1047,7 @@ namespace Ceres.Chess
       };
 
       PositionMiscInfo miscInfo = new PositionMiscInfo(true, true, true, true, SideType.White, 0, 0, 1, PositionMiscInfo.EnPassantFileIndexEnum.FileNone);
-      return new Position(pieces, miscInfo);
+      return new Position(pieces,in miscInfo);
     }
 
     #endregion
