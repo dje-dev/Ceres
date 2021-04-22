@@ -191,19 +191,19 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       // Take next available (lock-free)
       long newNextFreeBlockIndex = Interlocked.Add(ref nextFreeBlockIndex, numBlocksRequired);
 
-      long newNumEntries = newNextFreeBlockIndex * NUM_CHILDREN_PER_BLOCK;
-      if (newNumEntries >= childIndices.Length)
+      long newNumEntriesWithPadding = newNextFreeBlockIndex * NUM_CHILDREN_PER_BLOCK + (2048 / 4);
+      if (newNumEntriesWithPadding >= childIndices.Length)
       {
         throw new Exception($"MCTSNodeStructChildStorage overflow, max size {childIndices.Length}. "
                            + "The number of child pointers (moves per position) exceeded the expected maximum value considered plausible.");
       }
 
       // Make sure we have allocated to this length
-      if (childIndices.NumItemsAllocated <= newNumEntries)
+      if (childIndices.NumItemsAllocated <= newNumEntriesWithPadding)
       {
         lock (lockObj)
         {
-          childIndices.InsureAllocated(newNumEntries);
+          childIndices.InsureAllocated(newNumEntriesWithPadding);
         }
       }
 
