@@ -862,15 +862,20 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     {
       get 
       {
-        if (IsRoot) throw new Exception("Root has not IndexInParent");
+        Debug.Assert(!IsRoot);
 
         ref readonly MCTSNodeStruct parent = ref ParentRef;
-        MCTSNodeStructIndex ourIndex = Index;
-        for (int i=0; i<parent.NumChildrenExpanded;i++)
+        int ourIndex = Index.Index;
+
+        Span<MCTSNodeStructChild> children = parent.Children;
+        for (int i = 0; i < parent.NumChildrenExpanded; i++)
         {
-          if (ParentRef.ChildAtIndex(i).ChildIndex == ourIndex)
+          if (children[i].ChildIndex.Index == ourIndex)
+          {
             return i;
+          }
         }
+
         throw new Exception("Internal error: IndexInParent not found");
       }
     }
