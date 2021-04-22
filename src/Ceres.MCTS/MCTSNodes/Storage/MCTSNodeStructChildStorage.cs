@@ -19,7 +19,7 @@ using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-
+using System.Threading;
 using Ceres.Base.DataTypes;
 using Ceres.Base.OperatingSystem;
 using Ceres.Chess.EncodedPositions.Basic;
@@ -188,47 +188,26 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     {
       long numBlocksRequired = NumBlocksReservedForNumChildren(numPolicyMoves);
 
-      long newNumBlocks = nextFreeBlockIndex + numBlocksRequired;
-      long newNumEntries = newNumBlocks * NUM_CHILDREN_PER_BLOCK;
+      // Take next available (lock-free)
+      long newNextFreeBlockIndex = Interlocked.Add(ref nextFreeBlockIndex, numBlocksRequired);
+
+      long newNumEntries = newNextFreeBlockIndex * NUM_CHILDREN_PER_BLOCK;
       if (newNumEntries >= childIndices.Length)
+      {
         throw new Exception($"MCTSNodeStructChildStorage overflow, max size {childIndices.Length}. "
                            + "The number of child pointers (moves per position) exceeded the expected maximum value considered plausible.");
-
-      lock (lockObj)
-      {
-        childIndices.InsureAllocated(newNumEntries);
-
-        long thisStartIndex = nextFreeBlockIndex;
-
-#if NOT
-        // If the children for this node would start
-        // just before a cache line boundary, we may skip
-        // a small number of items to allow it to
-        // start exactly on the cache line for efficiency
-        // At max skip of 4 (out of 16 in a cache line)
-        // we skip 1/4 of the time with an average skip of
-        // 2 items, for an average waste of 2 items per node
-        // which is 8 bytes per node (compared to the average
-        // size of about 160 bytes (40 children per node)
-        const int CACHE_LINE_ALIGNMENT_MAX_SKIP_ITEMS = 4;
-
-        if (CACHE_LINE_ALIGNMENT_MAX_SKIP_ITEMS > 0)
-        {
-          const int CACHE_LINE_SIZE = 64;
-          const int CHILDREN_PER_CACHE_LINE = CACHE_LINE_SIZE / MCTSNodeStructChild.SIZE_BYTES;
-          int childrenAwayFromNextCacheLineStart = CHILDREN_PER_CACHE_LINE - thisStartIndex % CHILDREN_PER_CACHE_LINE;
-          if (childrenAwayFromNextCacheLineStart <= CACHE_LINE_ALIGNMENT_MAX_SKIP_ITEMS)
-          {
-            thisStartIndex += childrenAwayFromNextCacheLineStart;
-            nextFreeBlockIndex += childrenAwayFromNextCacheLineStart;
-          }
-        }
-#endif
-
-        nextFreeBlockIndex += numBlocksRequired;
-
-        return thisStartIndex;
       }
+
+      // Make sure we have allocated to this length
+      if (childIndices.NumItemsAllocated <= newNumEntries)
+      {
+        lock (lockObj)
+        {
+          childIndices.InsureAllocated(newNumEntries);
+        }
+      }
+
+      return newNextFreeBlockIndex - numBlocksRequired;
     }
 
 

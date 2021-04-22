@@ -19,7 +19,7 @@ using System;
 using System.Collections;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
-
+using System.Threading;
 using Ceres.Base.DataTypes;
 using Ceres.Base.OperatingSystem;
 using Ceres.Chess;
@@ -149,13 +149,17 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public MCTSNodeStructIndex AllocateNext()
     {
-      lock (lockObj)
+      // Take next available (lock-free)
+      int gotIndex = Interlocked.Increment(ref nextFreeIndex);
+      if (nodes.NumItemsAllocated <= gotIndex)
       {
-        // No bounds check here because this will be done at lower levels.
-        nodes.InsureAllocated(nextFreeIndex + 1);
-
-        return new MCTSNodeStructIndex(nextFreeIndex++);
+        lock (lockObj)
+        {
+          nodes.InsureAllocated(gotIndex + 1);
+        }
       }
+
+      return new MCTSNodeStructIndex(gotIndex);
     }
 
     public void InsureAllocated(int numNodes) =>  nodes.InsureAllocated(numNodes);

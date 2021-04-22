@@ -33,7 +33,6 @@ namespace Ceres.Base.OperatingSystem
     public long NumItemsReserved { get; private set; }
     public long NumBytesReserved { get; private set; }
 
-    long numItemsAllocated;
     long numBytesAllocated = 0;
 
     const long ALLOCATE_INCREMENTAL_BYTES = 1024 * 1024 * 2;
@@ -92,7 +91,6 @@ namespace Ceres.Base.OperatingSystem
       if (numBytesNeeded > numBytesAllocated)
       {
         numBytesAllocated += ALLOCATE_INCREMENTAL_BYTES;
-        numItemsAllocated = numItems;
 
         int resultCode = LinuxAPI.mprotect(rawMemoryPointer, numBytesAllocated, LinuxAPI.PROT_READ | LinuxAPI.PROT_WRITE);
         if (resultCode != 0) throw new Exception($"Virtual memory extension to size {numBytesAllocated} failed with error {resultCode}");

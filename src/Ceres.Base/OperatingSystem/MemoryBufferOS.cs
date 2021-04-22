@@ -105,6 +105,8 @@ namespace Ceres.Base.OperatingSystem
 
     public void InsureAllocated(long numItems) => rawMemoryManager.InsureAllocated(numItems);
 
+    public long NumItemsAllocated => rawMemoryManager.NumItemsAllocated;
+
     public void Dispose() => rawMemoryManager.Dispose();   
   
 
