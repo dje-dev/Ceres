@@ -45,10 +45,6 @@ namespace Ceres.MCTS.NodeCache
 
     public readonly int MaxCacheSize;
 
-    public static long NUM_HITS = 0;
-    public static long NUM_MISSES = 0;
-    public static float HitRate => 100.0f * ((float)NUM_HITS / (float)(NUM_HITS + NUM_MISSES));
-
     #region Cache data
 
     MCTSNode[] nodes;
@@ -248,14 +244,12 @@ namespace Ceres.MCTS.NodeCache
 
       if (nodeRef.CacheIndex == 0)
       {
-        NUM_MISSES++;
         return null;
       }
       else
       {
         MCTSNode node = nodes[nodeRef.CacheIndex];
 
-        NUM_HITS++;
         return node;
       }
     }
