@@ -131,7 +131,7 @@ namespace Ceres.Features.GameEngines
       if (evaluatorDef == null) throw new ArgumentNullException(nameof(evaluatorDef));
 
       // TODO: remove, temporary testing 
-      InstallCUSTOM1AsDynamicByPosition();
+      //InstallCUSTOM1AsDynamicByPosition();
 
       // Use default settings for search and select params if not specified.
       if (searchParams == null) searchParams = new ParamsSearch();
