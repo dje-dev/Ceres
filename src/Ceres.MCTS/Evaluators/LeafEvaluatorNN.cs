@@ -215,7 +215,7 @@ namespace Ceres.MCTS.Evaluators
         // Assign win and loss probabilities
         // If they look like non-WDL result, try to rewrite them
         // in equivalent way that avoids negative probabilities
-        if (rawWinP < 0 && rawLossP == 0)
+        if (rawLossP == 0 && rawWinP < 0)
         {
           winP = 0;
           lossP = -rawWinP;

@@ -293,7 +293,7 @@ namespace Ceres.MCTS.LeafExpansion
         annotation.MiscInfo = EncodedPositionWithHistory.GetMiscFromPosition(posHistory[^1].MiscInfo, SideType.White);
       }
 
-      bool alreadyEvaluated = !FP16.IsNaN(node.V);
+      bool alreadyEvaluated = !float.IsNaN(node.V);
 
       if (alreadyEvaluated)
       {

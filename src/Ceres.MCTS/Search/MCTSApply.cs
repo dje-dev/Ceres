@@ -199,7 +199,9 @@ namespace Ceres.MCTS.Search
 
         float contemptAdjustment = 0;
         if (!float.IsNaN(dToApply))
+        {
           contemptAdjustment = (node.IsOurMove ? -1 : 1) * (dToApply * node.Context.CurrentContempt);
+        }
 
         // If we are revisiting a terminal node, just reiterate the prior evaluation
         if (wasTerminal && node.EvalResult.IsNull)
@@ -248,7 +250,7 @@ namespace Ceres.MCTS.Search
           }
 
           vToApply = nodeRef.V;
-          float mToApply = nodeRef.MPosition;
+          float mToApply = nodeRef.MPosition.ToFloatApprox;
 
           if (!FP16.IsNaN(node.OverrideVToApplyFromTransposition))
           {

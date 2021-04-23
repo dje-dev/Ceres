@@ -150,7 +150,9 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
       Span<MCTSNodeStructChild> theseChildren = Children;
       for (int i = 0; i < NumChildrenExpanded; i++)
-        sumPVisited += theseChildren[i].ChildRefFromStore(store).P;
+      {
+        sumPVisited += theseChildren[i].ChildRefFromStore(store).P.ToFloatApprox;
+      }
 
       return sumPVisited;
     }
@@ -476,7 +478,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           else
             nInFlight[i] = childNode.NInFlight2 + dualCollisionFraction * childNode.NInFlight;
 
-          p[i] = childNode.P;// * childNode.Weight;
+          p[i] = childNode.P.ToFloatApprox;// * childNode.Weight;
 
 
           bool isOurMove = depth % 2 == 0;
@@ -514,7 +516,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         {
           n[i] = 0;
           nInFlight[i] = 0;
-          p[i] = child.P;
+          p[i] = child.P.ToFloatApprox;
           w[i] = 0;
         }
       }
