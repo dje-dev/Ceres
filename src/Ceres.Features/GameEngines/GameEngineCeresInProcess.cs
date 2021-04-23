@@ -35,6 +35,8 @@ using System.IO;
 using System.Text;
 using Ceres.Chess.UserSettings;
 using Ceres.MCTS.Environment;
+using Ceres.Chess.NNEvaluators;
+using Ceres.Chess.NetEvaluation.Batch;
 
 #endregion
 
@@ -127,6 +129,9 @@ namespace Ceres.Features.GameEngines
                                     string logFileName = null) : base(id)
     {
       if (evaluatorDef == null) throw new ArgumentNullException(nameof(evaluatorDef));
+
+      // TODO: remove, temporary testing 
+      InstallCUSTOM1AsDynamicByPosition();
 
       // Use default settings for search and select params if not specified.
       if (searchParams == null) searchParams = new ParamsSearch();
@@ -410,6 +415,59 @@ namespace Ceres.Features.GameEngines
       LastSearch?.Manager.Dispose();
       LastSearch = null;
     }
+
+
+    static bool HAVE_NOTIFIED = false;
+    /// <summary>
+    /// TODO: remove, temporary testing code
+    /// </summary>
+    public static void InstallCUSTOM1AsDynamicByPosition()
+    {
+      NNEvaluator Build(string netID, int gpuID, NNEvaluator referenceEvaluator)
+      {
+        // ************************************************** NET SELECTION HERE
+        const string gpuFast = "GPU:0";
+        const string gpuSlow = "GPU:0";
+
+        const string netFast = "LC0:jj_ensemble";
+        const string netSlow = "LC0:j94-100";
+
+        // *************************************************** END NET SELECTION
+
+        // Construct a compound evaluator which does both fast and slow (potentially parallel)
+        NNEvaluator[] evaluators = new NNEvaluator[] {NNEvaluator.FromSpecification(netFast, gpuFast),
+                                                      NNEvaluator.FromSpecification(netSlow, gpuSlow)};
+        NNEvaluatorDynamicByPos.DynamicEvaluatorIndexPredicate chooserFunc = delegate (NNPositionEvaluationBatchMember[] evaluatorResults)
+        {
+          if (!HAVE_NOTIFIED)
+          {
+            Console.WriteLine($"\r\n*** NOTE: InstallCUSTOM1AsDynamicByPosition is in use for CUSTOM1 with fast/slow net combination logic (see GameEngineCeresInProcess) using {netFast} and {netSlow}\r\n");
+            HAVE_NOTIFIED = true;
+          }
+
+          NNPositionEvaluationBatchMember resultFast = evaluatorResults[0];
+          NNPositionEvaluationBatchMember resultSlow = evaluatorResults[1];
+
+          // ************************************************** LOGIC GOES HERE
+          // Determine which network to use
+          float absVFromFast = System.Math.Abs(resultFast.V);
+          bool useFast = absVFromFast > 0.33f;
+          // *************************************************** END LOGIC
+
+          if (useFast)
+          {
+            // Add a statistic showing eval comes from fast net
+            MCTSEventSource.TestCounter1++;
+          }
+          return useFast ? 0 : 1;
+        };
+
+        NNEvaluatorDynamicByPos evalChoose = new(evaluators, chooserFunc);
+        return evalChoose;
+      }
+      NNEvaluatorFactory.Custom1Factory = Build;
+    }
+
 
   }
 }
