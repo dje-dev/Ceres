@@ -68,7 +68,7 @@ namespace Ceres.APIExamples
 
     public static void PreTournamentCleanup()
     {
-//      KillCERES();
+      //      KillCERES();
 
       File.Delete("Ceres1.log.txt");
       File.Delete("Ceres2.log.txt");
@@ -77,7 +77,7 @@ namespace Ceres.APIExamples
     public static void TestSF(int index, bool gitVersion)
     {
       NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification("LC0:j94-100", "GPU:" + index);
-      GameEngineDefCeres engineDefCeres1 = new GameEngineDefCeres("CeresInProc", evalDef1, 
+      GameEngineDefCeres engineDefCeres1 = new GameEngineDefCeres("CeresInProc", evalDef1,
                                                                   new ParamsSearch(), null, new ParamsSelect(),
                                                                   null, "CeresSF.log.txt");
 
@@ -85,7 +85,7 @@ namespace Ceres.APIExamples
       SearchLimit limitSF = limitCeres * 1.5f;
 
       GameEngineDef engineDefCeresUCIGit = new GameEngineDefCeresUCI("CeresUCIGit", evalDef1, overrideEXE: @"C:\ceres\releases\v0.88\ceres.exe");
-      EnginePlayerDef playerCeres = new EnginePlayerDef(gitVersion ? engineDefCeresUCIGit : engineDefCeres1, 
+      EnginePlayerDef playerCeres = new EnginePlayerDef(gitVersion ? engineDefCeresUCIGit : engineDefCeres1,
                                                         limitCeres);
 
 
@@ -127,19 +127,19 @@ namespace Ceres.APIExamples
       string GPUS = POOLED ? "GPU:0,1,2,3:POOLED"
                            : "GPU:0";
       //703810 KovaxBig
-      NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification("LC0:68372", GPUS); // j64-210 LS16
-      //evalDef1 = NNEvaluatorDefFactory.FromSpecification("ONNX:tfmodelc", "GPU:0");
-      
-      NNEvaluatorDef evalDef2 = NNEvaluatorDefFactory.FromSpecification("j94-100", GPUS); // j104.1-30 61339
+      NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification("LC0:750692", GPUS); // j64-210 LS16
+                                                                                             //evalDef1 = NNEvaluatorDefFactory.FromSpecification("ONNX:tfmodelc", "GPU:0");
+
+      NNEvaluatorDef evalDef2 = NNEvaluatorDefFactory.FromSpecification("LC0:j64-210", GPUS); // j104.1-30 61339 j64-210
 
       // Good progress. 68240 versus j94-100 yields: +21 (+/- 11) at 1k/move and +15 (+- 11) at 10k/move
       if (false)
       {
         NNEvaluatorNetDef nnd8 = new NNEvaluatorNetDef("59999", NNEvaluatorType.LC0TensorRT, NNEvaluatorPrecision.FP16);
         NNEvaluatorDef nd8 = new NNEvaluatorDef(nnd8, NNEvaluatorDeviceComboType.Single, new NNEvaluatorDeviceDef(NNDeviceType.GPU, 0));
-//        NNEvaluatorNetDef nnd16 = new NNEvaluatorNetDef("62242", NNEvaluatorType.LC0TensorRT, NNEvaluatorPrecision.FP16);
-//        NNEvaluatorDef nd16 = new NNEvaluatorDef(nnd16, NNEvaluatorDeviceComboType.Single, new NNEvaluatorDeviceDef(NNDeviceType.GPU, 0));
-      var nd16 = NNEvaluatorDefFactory.FromSpecification("LC0:59999", GPUS); // j104.1-30 61339
+        //        NNEvaluatorNetDef nnd16 = new NNEvaluatorNetDef("62242", NNEvaluatorType.LC0TensorRT, NNEvaluatorPrecision.FP16);
+        //        NNEvaluatorDef nd16 = new NNEvaluatorDef(nnd16, NNEvaluatorDeviceComboType.Single, new NNEvaluatorDeviceDef(NNDeviceType.GPU, 0));
+        var nd16 = NNEvaluatorDefFactory.FromSpecification("LC0:59999", GPUS); // j104.1-30 61339
 
         if (true)
         {
@@ -185,8 +185,8 @@ namespace Ceres.APIExamples
 
       // Don't output log if very small games
       // (to avoid making very large log files or slowing down play).
-      bool outputLog = limit1.EstNumNodes(30_000, false) > 10_000;
-outputLog=false;
+      bool outputLog = limit1.EstNumNodes(50_000, false) > 10_000;
+      outputLog = false;
       GameEngineDefCeres engineDefCeres1 = new GameEngineDefCeres("Ceres1", evalDef1, new ParamsSearch(), null, new ParamsSelect(),
                                                                   null, outputLog ? "Ceres1.log.txt" : null);
       GameEngineDefCeres engineDefCeres2 = new GameEngineDefCeres("Ceres2", evalDef2, new ParamsSearch(), null, new ParamsSelect(),
@@ -199,9 +199,9 @@ outputLog=false;
       // THIS MIGHT BE GOOD - but only with T60 networks with quality MLH
       //      engineDefCeres1.SearchParams.MLHBonusFactor = 0.50f;
       ////////
-      
-//engineDefCeres1.SelectParams.CPUCTAtRoot *= 1.4f;
-//engineDefCeres1.SearchParams.TestFlag = true;
+
+      //engineDefCeres1.SelectParams.CPUCTAtRoot *= 1.4f;
+      //engineDefCeres1.SearchParams.TestFlag = true;
       //engineDefCeres1.SearchParams.MoveFutilityPruningAggressiveness = 0.4f;
       //engineDefCeres1.SearchParams.GameLimitUsageAggressiveness *= 1.2f;
       //engineDefCeres1.SearchParams.MoveFutilityPruningAggressiveness = 0.75f;
@@ -269,8 +269,8 @@ outputLog=false;
       GameEngineDefLC0 engineDefLC2 = null;// new GameEngineDefLC0("LC0_2", evalDef1, forceDisableSmartPruning, null, null);
 
       GameEngineDefLC0 engineDefLC2TCEC = null;// new GameEngineDefLC0("LC0_TCEC", evalDef2, forceDisableSmartPruning, null, null,
-                                                 //               overrideEXE: @"c:\dev\lc0\lc_270\lc0.exe",
-                                                   //             extraCommandLineArgs: "--max-out-of-order-evals-factor=2.4 --max-collision-events=917");
+                                               //               overrideEXE: @"c:\dev\lc0\lc_270\lc0.exe",
+                                               //             extraCommandLineArgs: "--max-out-of-order-evals-factor=2.4 --max-collision-events=917");
 
       EnginePlayerDef playerEthereal = new EnginePlayerDef(engineDefEthereal, limit1);
       EnginePlayerDef playerStockfish11 = new EnginePlayerDef(engineDefStockfish11, limit1);
@@ -278,7 +278,7 @@ outputLog=false;
       EnginePlayerDef playerLC0 = null;// new EnginePlayerDef(engineDefLC1, limit1);
       EnginePlayerDef playerLC0_2 = null;// new EnginePlayerDef(engineDefLC2, limit1);
       EnginePlayerDef playerLC0TCEC = null;// new EnginePlayerDef(engineDefLC2TCEC, limit1);
-//#endif
+                                           //#endif
 
       //      def.SearchLimitEngine1 = def.SearchLimitEngine2 = SearchLimit.SecondsForAllMoves(15, 0.25f);
       //      def.SearchLimitEngine2 = def.SearchLimitEngine2 = SearchLimit.SecondsForAllMoves(15, 0.25f);
@@ -295,12 +295,12 @@ outputLog=false;
                                                 @"\\synology\dev\chess\data\epd\ERET_VESELY203.epd",
                                                 //   @"\\synology\dev\chess\data\epd\sts.epd",
                                                 null, null, null);
-                                                //playerCeres1, null, playerCeres2UCI);
-//        suiteDef.MaxNumPositions = 50;
+        //playerCeres1, null, playerCeres2UCI);
+        //        suiteDef.MaxNumPositions = 50;
 
         SuiteTestRunner suiteRunner = new SuiteTestRunner(suiteDef);
 
-//        suiteRunner.Run(POOLED ? 20 : 4, true, false);
+        //        suiteRunner.Run(POOLED ? 20 : 4, true, false);
         suiteRunner.Run(1, true, false);
         return;
         // ===============================================================================
@@ -313,9 +313,9 @@ outputLog=false;
       //engineDefCeres2.SearchParams.FutilityPruningStopSearchEnabled= false;
       //engineDefLC0.SearchParamsEmulate.FutilityPruningStopSearchEnabled= false;
 
-//      TournamentDef def = new TournamentDef("TOURN", playerCeres1UCI, playerCeres2UCI);// playerCeres2UCI);// playerLC0TCEC);
-//      TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerCeres2);// playerCeres2UCI);// playerLC0TCEC);
-    TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerCeres2);
+      //      TournamentDef def = new TournamentDef("TOURN", playerCeres1UCI, playerCeres2UCI);// playerCeres2UCI);// playerLC0TCEC);
+      //      TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerCeres2);// playerCeres2UCI);// playerLC0TCEC);
+      TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerCeres2);
 
       //TournamentDef def = new TournamentDef("TOURN", playerLC0Tilps, playerLC0);
 
@@ -340,7 +340,7 @@ outputLog=false;
         def.UseTablebasesForAdjudication = false;
       }
 
-      const int CONCURRENCY = POOLED ? 16 : 2;
+      const int CONCURRENCY = POOLED ? 16 : 4;
       TournamentManager runner = new TournamentManager(def, CONCURRENCY);
 
       TournamentResultStats results;

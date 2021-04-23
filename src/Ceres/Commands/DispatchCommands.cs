@@ -148,29 +148,40 @@ namespace Ceres.Commands
         foreach ((string key, string value) in keyValues.KeyValuePairs)
         {
           string keyLower = key.ToLower();
-          if (keyLower == "network")
-            CeresUserSettingsManager.Settings.DefaultNetworkSpecString = value;
-          else if (keyLower == "device")
-            CeresUserSettingsManager.Settings.DefaultDeviceSpecString = value;
-          else if (keyLower == "dir-epd")
-            CeresUserSettingsManager.Settings.DirEPD = value;
-          else if (keyLower == "dir-pgn")
-            CeresUserSettingsManager.Settings.DirPGN = value;
-          else if (keyLower == "dir-lc0-networks")
-            CeresUserSettingsManager.Settings.DirLC0Networks = value;
-          else if (keyLower == "dir-tablebases")
+          switch (keyLower)
           {
-            CeresUserSettingsManager.Settings.SyzygyPath = value;
-            CeresUserSettingsManager.Settings.DirTablebases = null;
+            case "network":
+              CeresUserSettingsManager.Settings.DefaultNetworkSpecString = value;
+              break;
+            case "device":
+              CeresUserSettingsManager.Settings.DefaultDeviceSpecString = value;
+              break;
+            case "dir-epd":
+              CeresUserSettingsManager.Settings.DirEPD = value;
+              break;
+            case "dir-pgn":
+              CeresUserSettingsManager.Settings.DirPGN = value;
+              break;
+            case "dir-lc0-networks":
+              CeresUserSettingsManager.Settings.DirLC0Networks = value;
+              break;
+            case "dir-tablebases":
+              CeresUserSettingsManager.Settings.SyzygyPath = value;
+              CeresUserSettingsManager.Settings.DirTablebases = null;
+              break;
+            case "launch-monitor":
+              CeresUserSettingsManager.Settings.LaunchMonitor = bool.Parse(value);
+              break;
+            case "log-info":
+              CeresUserSettingsManager.Settings.LogInfo = bool.Parse(value);
+              break;
+            case "log-warn":
+              CeresUserSettingsManager.Settings.LogWarn = bool.Parse(value);
+              break;
+            default:
+              SetoptError();
+              break;
           }
-          else if (keyLower == "launch-monitor")
-            CeresUserSettingsManager.Settings.LaunchMonitor = bool.Parse(value);
-          else if (keyLower == "log-info")
-            CeresUserSettingsManager.Settings.LogInfo = bool.Parse(value);
-          else if (keyLower == "log-warn")
-            CeresUserSettingsManager.Settings.LogWarn = bool.Parse(value);
-          else
-            SetoptError();
 
           Console.WriteLine($"Set {key} to {value}");
         }
