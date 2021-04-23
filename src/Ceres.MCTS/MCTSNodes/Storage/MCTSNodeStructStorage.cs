@@ -149,6 +149,24 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public MCTSNodeStructIndex AllocateNext()
     {
+      lock (lockObj)
+      {
+        // No bounds check here because this will be done at lower levels.
+        nodes.InsureAllocated(nextFreeIndex + 1);
+
+        return new MCTSNodeStructIndex(nextFreeIndex++);
+      }
+    }
+
+
+#if EXPERIMENTAL
+    /// <summary>
+    /// Allocates and returns the next available node index.
+    /// </summary>
+    /// <returns></returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public MCTSNodeStructIndex AllocateNext()
+    {
       // Take next available (lock-free)
       int gotIndex = Interlocked.Increment(ref nextFreeIndex);
 
@@ -164,6 +182,8 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 
       return new MCTSNodeStructIndex(gotIndex);
     }
+
+#endif
 
     public void InsureAllocated(int numNodes) =>  nodes.InsureAllocated(numNodes);
 
