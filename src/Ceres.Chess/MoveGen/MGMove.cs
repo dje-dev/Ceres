@@ -323,7 +323,11 @@ namespace Ceres.Chess.MoveGen
 
     public MGPositionConstants.MCChessPositionPieceEnum Piece
     {
-      get { return (MGPositionConstants.MCChessPositionPieceEnum)(((int)(Flags & MGChessMoveFlags.Piece)) >> PIECE_SHIFT); }
+      [MethodImpl(MethodImplOptions.AggressiveInlining)]
+      get
+      { 
+        return (MGPositionConstants.MCChessPositionPieceEnum)(((int)(Flags & MGChessMoveFlags.Piece)) >> PIECE_SHIFT); 
+      }
 
       set
       {
