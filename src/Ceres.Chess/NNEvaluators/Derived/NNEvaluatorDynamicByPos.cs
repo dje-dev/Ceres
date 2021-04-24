@@ -111,7 +111,7 @@ namespace Ceres.Chess.NNEvaluators
         {
           // Need to downgrade representation from the WDL evaluator
           // to make it expressed in same way as would be by an non-WDL evaluator.
-          w[posNum] = batches[index].GetWinP(posNum);
+          w[posNum] = batches[index].GetWinP(posNum) - batches[index].GetLossP(posNum);
           l[posNum] = 0;
         }
         else
