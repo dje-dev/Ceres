@@ -16,6 +16,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 
 #endregion
 
@@ -157,6 +158,8 @@ namespace Ceres.Chess
 
     #region Square names
 
+    static string[] squareNames;
+
     /// <summary>
     /// Helper method to initialize the array of 
     /// square names over all squares on board.
@@ -164,19 +167,17 @@ namespace Ceres.Chess
     /// <returns></returns>
     static string[] GenerateSquareNames()
     {
-      string[] squareNames = new string[64];
+      squareNames = new string[64];
       for (int i = 0; i < 64; i++)
         squareNames[i] = ((SquareNames)i).ToString();
       return squareNames;
     }
 
-    static Lazy<string[]> squareNames => new Lazy<string[]>(() => GenerateSquareNames());
-
     /// <summary>
     /// Returns string representation of square.
     /// </summary>
     /// <returns></returns>
-    public override string ToString() => squareNames.Value[SquareIndexStartA1];
+    public override string ToString() => squareNames[SquareIndexStartA1];
 
     #endregion
 
@@ -214,6 +215,16 @@ namespace Ceres.Chess
     public bool Equals(Square other) => SquareIndexStartA1 == other.SquareIndexStartA1;
 
     public override int GetHashCode() => SquareIndexStartA1;
+
+    #endregion
+
+    #region Initialization
+
+    [ModuleInitializer]
+    internal static void Init()
+    {
+      GenerateSquareNames();
+    }
 
     #endregion
   }
