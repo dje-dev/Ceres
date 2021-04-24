@@ -517,7 +517,11 @@ namespace Ceres.MCTS.MTCSNodes
                    (ref MCTSNodeStruct nodeRef) =>
                    {
                      if (nodeRef.IsTranspositionLinked)
-                       nodeRef.CopyUnexpandedChildrenFromOtherNode(Tree, new MCTSNodeStructIndex(nodeRef.TranspositionRootIndex));
+                     {
+                       // Note that we pass argument indicating "exclusive access guaranteed" 
+                       // to avoid having to try to take (many!) locks over nodes in the tree.
+                       nodeRef.CopyUnexpandedChildrenFromOtherNode(Tree, new MCTSNodeStructIndex(nodeRef.TranspositionRootIndex), true);
+                     }
                      return true;
                    }, TreeTraversalType.Sequential);
     }
