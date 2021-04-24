@@ -417,6 +417,10 @@ namespace Ceres.Features.GameEngines
     }
 
 
+    static long countChooseFast = 0;
+    static long countAll = 0;
+
+
     static bool HAVE_NOTIFIED = false;
     /// <summary>
     /// TODO: remove, temporary testing code
@@ -451,8 +455,17 @@ namespace Ceres.Features.GameEngines
           // ************************************************** LOGIC GOES HERE
           // Determine which network to use
           float absVFromFast = System.Math.Abs(resultFast.V);
-          bool useFast = absVFromFast > 0.33f;
+          bool useFast = absVFromFast  > 0.6f;
           // *************************************************** END LOGIC
+
+          // Track this as a metric (Custom1)
+          countAll++;
+          if (useFast)
+          {
+            countChooseFast++;
+          }
+          MCTSEventSource.TestMetric1 = (float)countChooseFast / (float)countAll;
+
 
           if (useFast)
           {
