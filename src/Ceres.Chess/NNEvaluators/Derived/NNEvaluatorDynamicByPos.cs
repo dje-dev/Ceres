@@ -105,8 +105,21 @@ namespace Ceres.Chess.NNEvaluators
         }
 
         // Extract out the evaluation results from the preferred evaluator.
-        w[posNum] = batches[index].GetWinP(posNum);
-        l[posNum] = batches[index].GetLossP(posNum);
+
+        bool chosenEvaluatorIsWDL = Evaluators[index].IsWDL;
+        if (!IsWDL && chosenEvaluatorIsWDL)
+        {
+          // Need to downgrade representation from the WDL evaluator
+          // to make it expressed in same way as would be by an non-WDL evaluator.
+          w[posNum] = batches[index].GetWinP(posNum);
+          l[posNum] = 0;
+        }
+        else
+        {
+          w[posNum] = batches[index].GetWinP(posNum);
+          l[posNum] = batches[index].GetLossP(posNum);
+        }
+
         if (HasM)
         {
           m[posNum] = batches[index].GetM(posNum);
