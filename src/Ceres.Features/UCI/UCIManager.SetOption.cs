@@ -114,6 +114,11 @@ namespace Ceres.Features.UCI
     float moveOverheadSeconds = new ParamsSearch().MoveOverheadSeconds;
 
     /// <summary>
+    /// Multiplier applied to all requested time limits.
+    /// </summary>
+    float searchLimitMultiplier = 1.0f;
+
+    /// <summary>
     /// First play urgency coefficient.
     /// </summary>
     float fpu = new ParamsSelect().FPUValue;
@@ -166,6 +171,10 @@ namespace Ceres.Features.UCI
 
         case "loglivestats":
           SetBool(value, ref logLiveStats);
+          break;
+
+        case "searchlimitmultiplier":
+          SetFloat(value, 0.001f, 1_000_000, ref searchLimitMultiplier);
           break;
 
         case "moveoverheadms":
@@ -368,6 +377,8 @@ option name CPuctFactorAtRoot type string default {new ParamsSelect().CPUCTFacto
 option name PolicyTemperature type string default {new ParamsSelect().PolicySoftmax}
 option name FPU type string default {new ParamsSelect().FPUValue}
 option name FPUAtRoot type string default {new ParamsSelect().FPUValueAtRoot}
+option name SearchLimitMultiplier type string default 1.00
+
 ";
     /*
 option name ConfigFile type string default lc0.config
