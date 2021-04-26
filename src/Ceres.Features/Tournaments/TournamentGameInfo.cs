@@ -13,6 +13,7 @@
 
 #region Using directives
 
+using System;
 using System.Collections.Generic;
 using Ceres.Chess.GameEngines;
 
@@ -76,5 +77,25 @@ namespace Ceres.Features.Tournaments
     /// List of descriptive information relating to all moves played.
     /// </summary>
     public List<GameMoveStat> GameMoveHistory;
+
+
+    /// <summary>
+    /// Returns the reverse of a specified game result.
+    /// </summary>
+    /// <param name="result"></param>
+    /// <returns></returns>
+    public static TournamentGameResult InvertedResult(TournamentGameResult result)
+    {
+      switch (result)
+      {
+        case TournamentGameResult.Draw:
+          return TournamentGameResult.Draw;
+        case TournamentGameResult.Win:
+          return TournamentGameResult.Loss;
+        case TournamentGameResult.Loss:
+          return TournamentGameResult.Win;
+      }
+      throw new Exception("Internal error: unexpected result");
+    }
   }
 }

@@ -74,6 +74,32 @@ namespace Ceres.Features.Tournaments
 
 
     /// <summary>
+    /// Updates tournament statistics based on a game with specified result.
+    /// </summary>
+    /// <param name="thisResult"></param>
+    public void UpdateTournamentStats(TournamentGameInfo thisResult)
+    {
+      switch (thisResult.Result)
+      {
+        case TournamentGameResult.Win:
+          Player1Wins++;
+          GameOutcomesString += "+";
+          break;
+
+        case TournamentGameResult.Loss:
+          Player1Losses++;
+          GameOutcomesString += "-";
+          break;
+
+        default:
+          Draws++;
+          GameOutcomesString += "=";
+          break;
+      }
+    }
+
+
+    /// <summary>
     /// Dumps summary to Console.
     /// </summary>
     public void Dump()

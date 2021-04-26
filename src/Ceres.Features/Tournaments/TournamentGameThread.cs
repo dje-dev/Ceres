@@ -81,6 +81,7 @@ namespace Ceres.Features.Tournaments
 
     public TournamentGameRunner Run;
 
+
     public void RunGameTests(int runnerIndex, Func<int, (int gameSequenceNum, int openingIndex)> getGamePairToProcess)
     {
       Run = new TournamentGameRunner(Def);
@@ -133,8 +134,8 @@ namespace Ceres.Features.Tournaments
         // which could happen if multiple threads are active
         // (possibly otherwise all first giving white to one particular side).
         bool engine2White = (numPairsProcessed + runnerIndex) % 2 == 0;
-        RunGame(pgnFileName, engine2White, openingIndex, gameSequenceNum, roundNumber);
-        RunGame(pgnFileName, !engine2White, openingIndex, gameSequenceNum + 1, roundNumber);
+        TournamentGameInfo gameInfo = RunGame(pgnFileName, engine2White, openingIndex, gameSequenceNum, roundNumber);
+        TournamentGameInfo gameReverseInfo = RunGame(pgnFileName, !engine2White, openingIndex, gameSequenceNum + 1, roundNumber);
 
         numPairsProcessed++;
       }
@@ -165,7 +166,17 @@ namespace Ceres.Features.Tournaments
 
     HashSet<int> openingsFinishedAtLeastOnce = new();
 
-    private TournamentGameInfo RunGame(string pgnFileName, bool engine2White, int openingIndex, int gameSequenceNum, int roundNumber)
+    public record TournamentGameRunRequest
+    {
+      public string PGNFileName;
+      public bool Engine2White;
+      public int OpeningIndex;
+      public int GameSequenceNum;
+      public int RoundNumber;
+    }
+
+    private TournamentGameInfo RunGame(string pgnFileName, bool engine2White, 
+                                       int openingIndex, int gameSequenceNum, int roundNumber)
     {
       TournamentGameInfo thisResult;
 
@@ -177,7 +188,7 @@ namespace Ceres.Features.Tournaments
       PGNWriter pgnWriter = new PGNWriter(null, engine2White ? Run.Engine2.ID : Run.Engine1.ID,
                                   engine2White ? Run.Engine1.ID : Run.Engine2.ID,
                                   extraTags.ToArray());
-                                  
+
 
       TimingStats gameTimingStats = new TimingStats();
       using (new TimingBlock(gameTimingStats, TimingBlock.LoggingType.None))
@@ -213,23 +224,7 @@ namespace Ceres.Features.Tournaments
 
       lock (ParentStats)
       {
-        switch (thisResult.Result)
-        {
-          case TournamentGameResult.Win:
-            ParentStats.Player1Wins++;
-            ParentStats.GameOutcomesString += "+";
-            break;
-
-          case TournamentGameResult.Loss:
-            ParentStats.Player1Losses++;
-            ParentStats.GameOutcomesString += "-";
-            break;
-
-          default:
-            ParentStats.Draws++;
-            ParentStats.GameOutcomesString += "=";
-            break;
-        }
+        ParentStats.UpdateTournamentStats(thisResult);
       }
 
       engine2White = !engine2White;
@@ -265,17 +260,23 @@ namespace Ceres.Features.Tournaments
         Def.Logger.WriteLine();
       }
 
+      UpdateAggregateGameStats(thisResult);
+
+      openingsFinishedAtLeastOnce.Add(openingIndex);
+      NumGames++;
+
+      return thisResult;
+    }
+
+
+    private void UpdateAggregateGameStats(TournamentGameInfo thisResult)
+    {
       TotalNodesEngine1 += thisResult.TotalNodesEngine1;
       TotalNodesEngine2 += thisResult.TotalNodesEngine2;
       TotalMovesEngine1 += thisResult.PlyCount;
       TotalMovesEngine2 += thisResult.PlyCount;
       TotalTimeEngine1 += thisResult.TotalTimeEngine1;
       TotalTimeEngine2 += thisResult.TotalTimeEngine2;
-
-      openingsFinishedAtLeastOnce.Add(openingIndex);
-      NumGames++;
-
-      return thisResult;
     }
 
     private static void WritePGNResult(bool engine2White, TournamentGameInfo thisResult, PGNWriter pgnWriter)
@@ -320,6 +321,7 @@ namespace Ceres.Features.Tournaments
       Def.Logger.WriteLine(" ---------  ---------  ---   ---  ---   -----  --------   ---   ---     ------   ------     --------------   --------------   ----   ---    -   -   -   --------------------------------------------------");
       havePrintedHeaders = true;
     }
+
 
     static readonly object outputLockObj = new();
 
@@ -377,26 +379,13 @@ namespace Ceres.Features.Tournaments
 
       List<GameMoveStat> gameMoveHistory = new List<GameMoveStat>();
 
-      static TournamentGameResult Invert(TournamentGameResult result)
-      {
-        switch (result)
-        {
-          case TournamentGameResult.Draw:
-            return TournamentGameResult.Draw;
-          case TournamentGameResult.Win:
-            return TournamentGameResult.Loss;
-          case TournamentGameResult.Loss:
-            return TournamentGameResult.Win;
-        }
-        throw new Exception("Internal error: unexpected result");
-      }
 
       TournamentGameInfo MakeGameInfo(TournamentGameResult resultOpponent)
       {
         return new TournamentGameInfo()
         {
           FEN = startFEN,
-          Result = Invert(resultOpponent),
+          Result = TournamentGameInfo.InvertedResult(resultOpponent),
           PlyCount = plyCount,
           TotalTimeEngine1 = timeEngine1Tot,
           TotalTimeEngine2 = timeEngine2Tot,
