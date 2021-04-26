@@ -94,6 +94,11 @@ namespace Ceres.MCTS.MTCSNodes
       ref MCTSNodeStruct thisNode = ref Store.Nodes.nodes[thisNodeIndex.Index];
       
       int numChildren = thisNode.NumChildrenExpanded;
+      if (numChildren == 0)
+      {
+        return new MCTSNodeStructIndex(0);
+      }
+
       Span<MCTSNodeStructChild> children = thisNode.Children;
       for (int i = 0; i < numChildren; i++)
       {
