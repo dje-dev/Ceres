@@ -116,7 +116,7 @@ namespace Ceres.Base.Math
     public static int MaxOfPositivesFast(int x, int y)
     {
       // Only works of most significant bit zero
-      Debug.Assert(x > 0 && y > 0);
+      Debug.Assert(x >= 0 && y >= 0);
 
       int sub = x - y;
       int shift = sub >> 31;
@@ -131,7 +131,7 @@ namespace Ceres.Base.Math
     public static int MinOfPositivesFast(int x, int y)
     {
       // Only works of most significant bit zero
-      Debug.Assert(x > 0 && y > 0);
+      Debug.Assert(x >= 0 && y >= 0);
 
       int sub = x - y;
       int shift = sub >> 31;
