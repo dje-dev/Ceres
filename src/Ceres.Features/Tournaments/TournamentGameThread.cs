@@ -223,6 +223,7 @@ namespace Ceres.Features.Tournaments
         string gameID = $"{Def.ID}_GAME_SEQ{gameSequenceNum}_OPENING_{openingIndex}";
         Run.Engine1.ResetGame(gameID);
         Run.Engine2.ResetGame(gameID);
+        Run.Engine2CheckEngine?.ResetGame(gameID);
 
         bool checkTablebases = Def.UseTablebasesForAdjudication && CeresUserSettingsManager.Settings.TablebaseDirectory != null;
         thisResult = DoGameTest(Def.Logger, pgnWriter, openingIndex,
@@ -243,9 +244,6 @@ namespace Ceres.Features.Tournaments
           lock (writePGNLock) File.AppendAllText(pgnFileName, pgnWriter.GetText());
         }
 
-        Run.Engine1.ResetGame();
-        Run.Engine2.ResetGame();
-        Run.Engine2CheckEngine?.ResetGame();
       }
 
       UpdateStatsAndOutputSummaryFromGameResult(pgnFileName, engine2White, openingIndex, gameSequenceNum, thisResult);
