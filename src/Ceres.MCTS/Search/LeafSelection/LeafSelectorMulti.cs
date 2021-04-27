@@ -71,11 +71,6 @@ namespace Ceres.MCTS.Search
 
     #endregion
 
-    #region Statistics
-    public int CountChooseChild { get; private set; }
-
-    #endregion
-
     #region Internal data
 
     CountdownEvent countdownPendingNumLeafs;
@@ -244,9 +239,7 @@ namespace Ceres.MCTS.Search
     /// selecting a new set of nodes.
     /// </summary>
     public void Reset()
-    {
-      CountChooseChild = 0;
-    
+    {   
       leafs.Clear();
     }
 
@@ -392,8 +385,7 @@ namespace Ceres.MCTS.Search
     internal void GetChildSelectionCounts(int selectorID, MCTSNode node, int numTargetLeafs, int numChildrenToCheck,
                                           Span<short> visitChildCounts, float vLossDynamicBoost)
     {
-      CountChooseChild++;
-
+#if NOT
       // TODO: clean up
       // NOTE: 
       //   - below limited, including to second half of search
@@ -415,7 +407,7 @@ namespace Ceres.MCTS.Search
         //CalcWeightedDistanceFromBestMoveVisitCounts(node, numTargetLeafs, visitChildCounts);
         return;
       }
-      Span<float> scores = default;
+#endif
 #if EXPERIMENTAL
       if (node.Context.ParamsSearch.TEST_FLAG && node.N > 2)
       {
@@ -436,6 +428,7 @@ namespace Ceres.MCTS.Search
       {
 #endif
 
+      Span<float> scores = default;
       node.ComputeTopChildScores(selectorID, node.Depth,
                                  vLossDynamicBoost, 0, numChildrenToCheck - 1, numTargetLeafs,
                                  scores, visitChildCounts);
@@ -446,9 +439,6 @@ namespace Ceres.MCTS.Search
       }
     }
 
-
-    static int nextWorkerPoolToReceiveSelect = 0;
-    static int abandonCount = 0;
 
     float TopNFractionToTopQMove
     {
