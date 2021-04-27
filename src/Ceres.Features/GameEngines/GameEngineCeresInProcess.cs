@@ -260,7 +260,8 @@ namespace Ceres.Features.GameEngines
 
       int N = (int)searchResult.SearchRootNode.N;
 
-      // Save (do not dispose) last search in case we can reuse it next time
+      // Save (do not dispose) this search in case we can reuse it next time.
+      LastSearch?.Manager.Dispose();
       LastSearch = searchResult;
 
       isFirstMoveOfGame = false;

@@ -97,11 +97,16 @@ namespace Ceres.Base.OperatingSystem
       }
     }
 
-    public long NumItemsAllocated => this.numBytesAllocated / sizeof(T);
+    public long NumItemsAllocated => numBytesAllocated / sizeof(T);
 
     public void Dispose()
     {
-      LinuxAPI.munmap(rawMemoryPointer, NumBytesReserved);
+      int resultCode = LinuxAPI.munmap(rawMemoryPointer, NumBytesReserved);
+      if (resultCode != 0)
+      {
+        throw new Exception($"Virtual memory munmap of size {NumBytesReserved} failed with error {resultCode}");
+      }
+
       numBytesAllocated = 0;
       NumBytesReserved = 0;
       NumItemsReserved = 0;
