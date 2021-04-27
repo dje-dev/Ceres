@@ -110,7 +110,10 @@ namespace Ceres.Features.Tournaments
         (int gameSequenceNum, int openingIndex) = getGamePairToProcess(maxOpenings);
 
         // Look for sentinel indicating end
-        if (gameSequenceNum < 0) return;
+        if (gameSequenceNum < 0)
+        {
+          break;
+        }
 #if NOT
         // Some engines such as LZ0 doesn't seem to support "setoption name Clear Hash"
         // Therefore we don't clear cache every time, instead let it stick around unless first game in a set
