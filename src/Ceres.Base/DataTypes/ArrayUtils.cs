@@ -87,7 +87,7 @@ namespace Ceres.Base.DataType
       int numInner = raw.GetLength(1);
 
       T[][] ret = new T[numOuter][];
-      
+
       for (int i = 0; i < numOuter; i++)
       {
         ret[i] = new T[numInner];
@@ -216,7 +216,7 @@ namespace Ceres.Base.DataType
     /// <param name="count"></param>
     /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static int IndexOfElementWithMaxValue(float[] array, int count)
+    public static int IndexOfElementWithMaxValue(Span<float> array, int count)
     {
       Debug.Assert(count > 0);
 
@@ -278,4 +278,5 @@ namespace Ceres.Base.DataType
     }
 
   }
+
 }
