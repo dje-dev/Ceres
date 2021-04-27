@@ -39,6 +39,8 @@ namespace Ceres.Features.Tournaments
   /// </summary>
   public class TournamentGameThread
   {
+    public delegate TournamentGameInfo GamePairRunnerDelegate(string pgnFileName, int gameSequenceNum, int openingIndex, int roundNumber, bool engine2White);
+
     /// <summary>
     /// Definition of associated parent tournament definition.
     /// </summary>
@@ -82,29 +84,19 @@ namespace Ceres.Features.Tournaments
     public TournamentGameRunner Run;
 
 
-    public void RunGameTests(int runnerIndex, Func<int, (int gameSequenceNum, int openingIndex)> getGamePairToProcess)
+    public void RunGameTests(int runnerIndex, Func<int, (int gameSequenceNum, int openingIndex)> getGamePairToProcess,
+                             GamePairRunnerDelegate overrideRemoteGamePairRunner = null)
     {
       Run = new TournamentGameRunner(Def);
 
       // Create a file name that will be common to all threads in tournament.
-      string pgnFileName = Path.Combine(CeresUserSettingsManager.Settings.DirCeresOutput, "match_" + Def.ID + "_" 
+      string pgnFileName = Path.Combine(CeresUserSettingsManager.Settings.DirCeresOutput, "match_" + Def.ID + "_"
                                       + Run.Engine1.ID + "_" + Run.Engine2.ID + "_" + Def.StartTime.Ticks + ".pgn");
       lock (writePGNLock) File.AppendAllText(pgnFileName, "");
 
       havePrintedHeaders = false;
 
-      if (Def.OpeningsFileName != null)
-      {
-        openings = PositionsWithHistory.FromEPDOrPGNFile(Def.OpeningsFileName);
-      }
-      else if (Def.StartingFEN != null)
-      {
-        openings = PositionsWithHistory.FromFEN(Def.StartingFEN, Def.NumGamePairs ?? 1);
-      }
-      else
-      {
-        openings = PositionsWithHistory.FromFEN(Position.StartPosition.FEN, Def.NumGamePairs ?? 1);
-      }
+      SetOpeningsSource();
 
       Random rand = new Random();
 
@@ -134,8 +126,21 @@ namespace Ceres.Features.Tournaments
         // which could happen if multiple threads are active
         // (possibly otherwise all first giving white to one particular side).
         bool engine2White = (numPairsProcessed + runnerIndex) % 2 == 0;
-        TournamentGameInfo gameInfo = RunGame(pgnFileName, engine2White, openingIndex, gameSequenceNum, roundNumber);
-        TournamentGameInfo gameReverseInfo = RunGame(pgnFileName, !engine2White, openingIndex, gameSequenceNum + 1, roundNumber);
+
+        if (overrideRemoteGamePairRunner == null)
+        {
+          RunGame(pgnFileName, engine2White, openingIndex, gameSequenceNum, roundNumber);
+          RunGame(pgnFileName, !engine2White, openingIndex, gameSequenceNum + 1, roundNumber);
+        }
+        else
+        {
+          // R
+//          TournamentGameInfo gameInfo = overrideRemoteGamePairRunner(pgnFileName, engine2White, openingIndex, gameSequenceNum, roundNumber);
+//          UpdateStatsAndOutputSummaryFromGameResult(pgnFileName, engine2White, openingIndex, gameSequenceNum, gameInfo);
+
+//          TournamentGameInfo gameReverseInfo = overrideRemoteGamePairRunner(pgnFileName, !engine2White, openingIndex, gameSequenceNum + 1, roundNumber);
+//          UpdateStatsAndOutputSummaryFromGameResult(pgnFileName, !engine2White, openingIndex, gameSequenceNum + 1, gameReverseInfo);
+        }
 
         numPairsProcessed++;
       }
@@ -144,6 +149,23 @@ namespace Ceres.Features.Tournaments
       Run.Engine2.Dispose();
       Run.Engine2CheckEngine?.Dispose();
     }
+
+    private void SetOpeningsSource()
+    {
+      if (Def.OpeningsFileName != null)
+      {
+        openings = PositionsWithHistory.FromEPDOrPGNFile(Def.OpeningsFileName);
+      }
+      else if (Def.StartingFEN != null)
+      {
+        openings = PositionsWithHistory.FromFEN(Def.StartingFEN, Def.NumGamePairs ?? 1);
+      }
+      else
+      {
+        openings = PositionsWithHistory.FromFEN(Position.StartPosition.FEN, Def.NumGamePairs ?? 1);
+      }
+    }
+
 
     /// <summary>
     /// Returns list of supplemental name/value tags to be 
@@ -166,6 +188,7 @@ namespace Ceres.Features.Tournaments
 
     HashSet<int> openingsFinishedAtLeastOnce = new();
 
+#if NOT
     public record TournamentGameRunRequest
     {
       public string PGNFileName;
@@ -174,9 +197,9 @@ namespace Ceres.Features.Tournaments
       public int GameSequenceNum;
       public int RoundNumber;
     }
+#endif
 
-    private TournamentGameInfo RunGame(string pgnFileName, bool engine2White, 
-                                       int openingIndex, int gameSequenceNum, int roundNumber)
+    private TournamentGameInfo RunGame(string pgnFileName, bool engine2White, int openingIndex, int gameSequenceNum, int roundNumber)
     {
       TournamentGameInfo thisResult;
 
@@ -222,12 +245,17 @@ namespace Ceres.Features.Tournaments
         Run.Engine2CheckEngine?.ResetGame();
       }
 
+      UpdateStatsAndOutputSummaryFromGameResult(pgnFileName, engine2White, openingIndex, gameSequenceNum, thisResult);
+
+      return thisResult;
+    }
+
+    private void UpdateStatsAndOutputSummaryFromGameResult(string pgnFileName, bool engine2White, int openingIndex, int gameSequenceNum, TournamentGameInfo thisResult)
+    {
       lock (ParentStats)
       {
         ParentStats.UpdateTournamentStats(thisResult);
       }
-
-      engine2White = !engine2White;
 
       // Only show headers first time for first thread
       if (!havePrintedHeaders)
@@ -235,6 +263,11 @@ namespace Ceres.Features.Tournaments
         OutputHeaders(pgnFileName);
       }
 
+      OutputGameResultInfo(!engine2White, openingIndex, gameSequenceNum, thisResult);
+    }
+
+    private void OutputGameResultInfo(bool engine2White, int openingIndex, int gameSequenceNum, TournamentGameInfo thisResult)
+    {
       (float eloMin, float eloAvg, float eloMax) = EloCalculator.EloConfidenceInterval(ParentStats.Player1Wins, ParentStats.Draws, ParentStats.Player1Losses);
       float eloSD = eloMax - eloAvg;
       float los = EloCalculator.LikelihoodSuperiority(ParentStats.Player1Wins, ParentStats.Draws, ParentStats.Player1Losses);
@@ -264,10 +297,7 @@ namespace Ceres.Features.Tournaments
 
       openingsFinishedAtLeastOnce.Add(openingIndex);
       NumGames++;
-
-      return thisResult;
     }
-
 
     private void UpdateAggregateGameStats(TournamentGameInfo thisResult)
     {
