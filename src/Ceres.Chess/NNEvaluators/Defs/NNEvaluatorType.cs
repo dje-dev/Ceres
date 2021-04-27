@@ -53,6 +53,11 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// <summary>
     /// A custom evaluator installed into NNEvaluatorDefFactory.Custom1Factory.
     /// </summary>
-    Custom1
+    Custom1,
+
+    /// <summary>
+    /// A custom evaluator installed into NNEvaluatorDefFactory.Custom2Factory.
+    /// </summary>
+    Custom2
   };
 }

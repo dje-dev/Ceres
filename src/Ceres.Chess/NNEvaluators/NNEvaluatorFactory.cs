@@ -44,6 +44,11 @@ namespace Ceres.Chess.NNEvaluators
     /// </summary>
     public static CustomDelegate Custom1Factory;
 
+    /// <summary>
+    /// Custom factory method installable at runtime (CUSTOM2).
+    /// </summary>
+    public static CustomDelegate Custom2Factory;
+
 
     static Dictionary<object, (NNEvaluatorDef, NNEvaluator)> persistentEvaluators = new();
 
@@ -165,6 +170,14 @@ namespace Ceres.Chess.NNEvaluators
             throw new Exception("NNEvaluatorFactory.Custom1Factory static variable must be initialized.");
           }
           ret = Custom1Factory(net.NetworkID, deviceDef.DeviceIndex, referenceEvaluator);
+          break;
+
+        case NNEvaluatorType.Custom2:
+          if (Custom2Factory == null)
+          {
+            throw new Exception("NNEvaluatorFactory.Custom2Factory static variable must be initialized.");
+          }
+          ret = Custom2Factory(net.NetworkID, deviceDef.DeviceIndex, referenceEvaluator);
           break;
 
         default:

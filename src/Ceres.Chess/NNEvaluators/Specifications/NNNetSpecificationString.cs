@@ -74,6 +74,11 @@ namespace Ceres.Chess.NNEvaluators.Specifications
         netIDs = netString.Substring(8);
         NN_EVAL_TYPE = NNEvaluatorType.Custom1;
       }
+      else if (netString.ToUpper().StartsWith("CUSTOM2:"))
+      {
+        netIDs = netString.Substring(8);
+        NN_EVAL_TYPE = NNEvaluatorType.Custom2;
+      }
       else if (netString.ToUpper().StartsWith("ONNX:"))
       {
         netIDs = netString.Substring(5);
