@@ -36,10 +36,6 @@ namespace Ceres.MCTS.Iteration
     MCTSIterator priorContext;
     MCTSNodeStoreContext storeContext;
 
-    static int numExtant = 0;
-
-    public static bool IsInitialized => numExtant > 0;
-
 
     /// <summary>
     /// Constructor.
@@ -47,8 +43,6 @@ namespace Ceres.MCTS.Iteration
     /// <param name="context"></param>
     public SearchContextExecutionBlock(MCTSIterator context)
     {
-      Interlocked.Increment(ref numExtant);
-
       priorContext = MCTSManager.ThreadSearchContext;
       Context = context;
       storeContext = new MCTSNodeStoreContext(context.Tree.Store);
@@ -61,7 +55,6 @@ namespace Ceres.MCTS.Iteration
     /// </summary>
     public void Dispose()
     {
-      Interlocked.Decrement(ref numExtant);
       storeContext.Dispose();
       storeContext = default;
       MCTSManager.ThreadSearchContext = priorContext;
