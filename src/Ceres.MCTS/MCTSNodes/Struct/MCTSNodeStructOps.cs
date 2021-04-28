@@ -687,6 +687,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// </summary>
     void BackupUpdateInFlight(int numInFlight1, int numInFlight2)
     {
+      Span<MCTSNodeStruct> nodes = MCTSNodeStoreContext.Store.Nodes.Span;
+
       ref MCTSNodeStruct node = ref this;
       while (true)
       {
@@ -695,7 +697,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         if (node.IsRoot)
           return;
         else
-          node = ref node.ParentRef;
+          node = ref nodes[node.ParentRef.Index.Index];
       }
     }
 
@@ -705,6 +707,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// </summary>
     public void BackupAbort0(short numInFlight)
     {
+      Span<MCTSNodeStruct> nodes = MCTSNodeStoreContext.Store.Nodes.Span;
+
       short updateAmount = (short)-numInFlight;
       ref MCTSNodeStruct node = ref this;
       while (true)
@@ -714,7 +718,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         if (node.IsRoot)
           return;
         else
-          node = ref node.ParentRef;
+          node = ref nodes[node.ParentRef.Index.Index];
       }
 
     }
@@ -725,6 +729,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// </summary>
     public void BackupAbort1(short numInFlight)
     {
+      Span<MCTSNodeStruct> nodes = MCTSNodeStoreContext.Store.Nodes.Span;
+
       short updateAmount = (short)-numInFlight;
       ref MCTSNodeStruct node = ref this;
       while (true)
@@ -734,7 +740,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         if (node.IsRoot)
           return;
         else
-          node = ref node.ParentRef;
+          node = ref nodes[node.ParentRef.Index.Index];
       }
     }
 
@@ -830,7 +836,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
             // Initiate a prefetch of parent's parent.
             // This happens far early enough that the memory access 
             // should be complete by the time we need the data.
-            PrefetchNode(ref parentRef.ParentRef);
+            PrefetchNode(ref nodes[parentRef.ParentIndex.Index]);
           }
 
 #if NOT
