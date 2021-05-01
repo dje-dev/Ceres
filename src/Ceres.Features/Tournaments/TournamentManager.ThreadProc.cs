@@ -63,12 +63,12 @@ namespace Ceres.Features.Tournaments
           // Note that this retrieved result is not necessarily for this just-enqueued game request.
           (TournamentGameInfo gameInfo, TournamentGameInfo gameReverseInfo) = QueueManager.GetGamePairResult();
 
-Console.WriteLine(openingIndex + " retrieved game pair result " + gameInfo.OpeningIndex + " " + gameReverseInfo.OpeningIndex + "count was " + gameTest.NumGames);
+//Console.WriteLine(openingIndex + " retrieved game pair result " + gameInfo.OpeningIndex + " " + gameReverseInfo.OpeningIndex + "count was " + gameTest.NumGames);
           // Finally, integrate this into our overall results.
           string pgnFileName = null; // TODO: collect these someday as well?
           gameTest.UpdateStatsAndOutputSummaryFromGameResult(pgnFileName, gameInfo.Engine2IsWhite, gameInfo.OpeningIndex, gameInfo.GameSequenceNum, gameInfo);
           gameTest.UpdateStatsAndOutputSummaryFromGameResult(pgnFileName, gameReverseInfo.Engine2IsWhite, gameReverseInfo.OpeningIndex, gameReverseInfo.GameSequenceNum, gameReverseInfo);
-Console.WriteLine("Count now " + gameTest.NumGames);
+//Console.WriteLine("Count now " + gameTest.NumGames);
         }
         catch (Exception exc)
         {
