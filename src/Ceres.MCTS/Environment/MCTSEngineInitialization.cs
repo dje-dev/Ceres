@@ -29,7 +29,7 @@ namespace Ceres.MCTS.Environment
   /// </summary>
   public static class MCTSEngineInitialization
   {
-    public static void BaseInitialize()
+    public static void BaseInitialize(bool launchMonitor, int? numaNode)
     {
       HardwareManager.VerifyHardwareSoftwareCompatability();
 
@@ -37,9 +37,9 @@ namespace Ceres.MCTS.Environment
       System.Threading.ThreadPool.SetMinThreads(minNumThreads, 32);
       GCSettings.LatencyMode = GCLatencyMode.Batch;
 
-      HardwareManager.Initialize(true);
+      HardwareManager.Initialize(numaNode);
 
-      if (CeresEnvironment.MONITORING_METRICS && RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+      if (launchMonitor && RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
       {
         // TODO: log this. Console.WriteLine($"dotnet-counters  monitor --process-id {Process.GetCurrentProcess().Id} Ceres System.Runtime Ceres.MCTS.Environment.MCTSEventSource");
         EventSourceCeres.ENABLED = true;
@@ -47,7 +47,6 @@ namespace Ceres.MCTS.Environment
       }
 
       MCTSEventSource.Initialize();
-
     }
 
   }

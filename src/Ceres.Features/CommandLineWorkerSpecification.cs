@@ -31,11 +31,12 @@ namespace Ceres.Features
   public static class CommandLineWorkerSpecification
   {
     public static bool IsWorker { get; private set; }
-    public static int NumaNodeID { get; private set; }
+    public static int? NumaNodeID { get; private set; }
     public static int GPUID { get; private set; }
 
     static CommandLineWorkerSpecification()
     {
+      // Start with defaults.
       NumaNodeID = 0;
       GPUID = 0;
 
@@ -50,7 +51,8 @@ namespace Ceres.Features
           string[] workerParts = argument.Split(".");
           if (workerParts.Length > 1)
           {
-            NumaNodeID = int.Parse(workerParts[1]);
+            // Asterist indicates no NUMA binding.
+            NumaNodeID = workerParts[1] == "*" ? null : int.Parse(workerParts[1]);
           }
           if (workerParts.Length > 2)
           {

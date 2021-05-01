@@ -17,6 +17,7 @@ using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics.X86;
+using System.Security.Policy;
 using Ceres.Base.Misc;
 using Ceres.Base.OperatingSystem.Linux;
 using Ceres.Base.OperatingSystem.Windows;
@@ -41,10 +42,14 @@ namespace Ceres.Base.OperatingSystem
     /// </summary>
     public static int MaxAvailableProcessors { private set; get; } = System.Environment.ProcessorCount;
 
-    public static void Initialize(bool affinitizeSingleProcessor)
+    public static void Initialize(int? numaNode)
     {
-      if (affinitizeSingleProcessor) AffinitizeSingleProcessor();
+      if (numaNode.HasValue)
+      {
+        AffinitizeSingleNUMANode(numaNode.Value);
+      }
     }
+
 
     public static void VerifyHardwareSoftwareCompatability()
     {
@@ -98,27 +103,61 @@ namespace Ceres.Base.OperatingSystem
         }
         else
         {
-          return (long) Win32.MemorySize;
+          return (long)Win32.MemorySize;
         }
       }
     }
 
+#if NOT
+    /// <summary>
+    /// Description of the system processor(s) including NUMA domains and virtuaul processors.
+    /// </summary>
+    public class HardwareNUMAInfo
+    {
+      public int NumNUMADomains { get; private set; }
+      public int? OffsetFirstVirtualProcessor { get; private set; }
+      public int NumProcessorsPerNUMADomain { get; private set; }
 
-    private static void AffinitizeSingleProcessor()
+      public static HardwareNUMAInfo SystemInfo
+      {
+        get
+        {
+          // TODO: make dynamic
+          string computerName = System.Environment.GetEnvironmentVariable("COMPUTERNAME");
+          if (computerName == "S1")
+          {
+            return new HardwareNUMAInfo() { NumNUMADomains = 2, NumProcessorsPerNUMADomain = 16, OffsetFirstVirtualProcessor = null };
+
+          }
+          else if (computerName == "S2")
+          {
+            return new HardwareNUMAInfo() { NumNUMADomains = 4, NumProcessorsPerNUMADomain = 16, OffsetFirstVirtualProcessor = 64 };
+
+          }
+          else
+          {
+            return null;
+          }
+        }
+      }
+    }
+
+#endif
+    public static void AffinitizeSingleNUMANode(int numaNode)
     {
       try
       {
-        // In non-NUMA situations better to limit number of processors, 
-        // this sometimes dramatically improves performance.
+          // In non-NUMA situations better to limit number of processors, 
+          // this sometimes dramatically improves performance.
 
-        // TODO: Someday it would be desirable to allow different
-        //       logical calculations (e.g. chess tree searches)
-        //       to be placed on distinct sockets, and not restrict
-        //       all computation to a single socket.
-        //       But then we'd have to abandon use of TPL and .NET thread pool
-        //       completely and use our own versions which were processor constrained.
+          // TODO: Someday it would be desirable to allow different
+          //       logical calculations (e.g. chess tree searches)
+          //       to be placed on distinct sockets, and not restrict
+          //       all computation to a single socket.
+          //       But then we'd have to abandon use of TPL and .NET thread pool
+          //       completely and use our own versions which were processor constrained.
 
-        int maxProcessors;
+          int maxProcessors;
 
         // Default assumption to use all processors.
         int numProcessors = System.Environment.ProcessorCount;
@@ -147,12 +186,10 @@ namespace Ceres.Base.OperatingSystem
       catch (Exception exc)
       {
         // Therefore recover gracefully if failed for some reason.
-        Console.WriteLine("Note: failure in call to AffinitizeSingleProcessor.");
+        Console.WriteLine("Note: failure in call to AffinitizeSingleNUMANode.");
       }
-
     }
-
-
   }
+
 }
 
