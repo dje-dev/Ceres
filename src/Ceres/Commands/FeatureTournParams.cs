@@ -73,7 +73,7 @@ namespace Ceres.Commands
         def.StartingFEN = Position.StartPosition.FEN;
 
       TournamentManager runner = new TournamentManager(def, 1);
-      runner.RunTournament();
+      runner.RunTournament(null);
     }
 
   }

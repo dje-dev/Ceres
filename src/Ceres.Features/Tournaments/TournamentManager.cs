@@ -18,12 +18,8 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Collections.Generic;
-using System.Diagnostics;
 
 using Ceres.Chess.UserSettings;
-using Ceres.Chess.NNEvaluators;
-using Ceres.Chess.GameEngines;
-using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Features.GameEngines;
 using Ceres.Chess;
 
@@ -35,7 +31,7 @@ namespace Ceres.Features.Tournaments
   /// Manages execution of a tournament (match) of games
   /// of one engine against another, possibly multithreaded.
   /// </summary>
-  public class TournamentManager
+  public partial class TournamentManager
   {
     /// <summary>
     /// Number of touranment games to play in parallel.
@@ -49,6 +45,13 @@ namespace Ceres.Features.Tournaments
 
 
     /// <summary>
+    /// Optionally a queue manager object which is used when running
+    /// distributed model (running either as a coordinator or worker process).
+    /// </summary>
+    public TournamentGameQueueManager QueueManager;
+
+
+    /// <summary>
     /// Constructor.
     /// </summary>
     /// <param name="def"></param>
@@ -57,7 +60,7 @@ namespace Ceres.Features.Tournaments
     public TournamentManager(TournamentDef def, int numParallel = 1)
     {
       Def = def;
-      NumConcurrent = numParallel;
+      NumConcurrent = Math.Min(numParallel, def.NumGamePairs ?? int.MaxValue);
 
       // Turn off showing game moves if running parallel,
       // since the moves of various games would be intermixed.
@@ -83,7 +86,7 @@ namespace Ceres.Features.Tournaments
     /// Method called by threads to get the next available game to be played.
     /// </summary>
     /// <returns></returns>
-    (int gameSequenceNum, int openingIndex) GetNextGameForThread(int maxOpenings)
+    int GetNextOpeningIndexForLocalThread(int maxOpenings)
     {
       if (Def.RandomizeOpenings) throw new NotImplementedException();
 
@@ -91,11 +94,10 @@ namespace Ceres.Features.Tournaments
       {
         if (numGamePairsLaunched < maxOpenings)
         {
-          int thisOpeningIndex = numGamePairsLaunched++;
-          return (thisOpeningIndex * 2, thisOpeningIndex);
+          return numGamePairsLaunched++;
         }
         else
-          return (-1, -1);
+          return -1;
       }
     }
 
@@ -137,12 +139,19 @@ namespace Ceres.Features.Tournaments
     }
 
 
-    public TournamentResultStats RunTournament()
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="queueManager">optional associated queue manager if running in distributed mode</param>
+    /// <returns></returns>
+    public TournamentResultStats RunTournament(TournamentGameQueueManager queueManager = null)
     {
       if (Def.Player1Def == null) throw new ArgumentNullException("Def.Player1Def is null)");
       if (Def.Player2Def == null) throw new ArgumentNullException("Def.Player2Def is null)");
 
       VerifyEnginesCompatible();
+
+      QueueManager = queueManager;
 
       TournamentResultStats parentTest = new TournamentResultStats(Def.Player1Def.ID, Def.Player2Def.ID);
 
@@ -155,7 +164,10 @@ namespace Ceres.Features.Tournaments
 
       Directory.CreateDirectory(CeresUserSettingsManager.Settings.DirCeresOutput);
 
-      for (int i = 0; i < NumConcurrent; i++)
+      // If we are a worker process then run only a single game thread.
+      int numConcurrent = queueManager != null && !queueManager.IsCoordinator ? 1 : NumConcurrent;
+
+      for (int i = 0; i < numConcurrent; i++)
       {
         TournamentDef tournamentDefClone = Def.Clone();
 
@@ -165,7 +177,7 @@ namespace Ceres.Features.Tournaments
           TrySetRelativeDeviceIDIfNotPooled(tournamentDefClone, i);
         }
 
-        if (Def.Player1Def is GameEngineDefCeres 
+        if (Def.Player1Def is GameEngineDefCeres
          && Def.Player2Def is GameEngineDefCeres
          && Def.Player1Def.SearchLimit.IsNodesLimit
          && Def.Player2Def.SearchLimit.IsNodesLimit)
@@ -181,7 +193,25 @@ namespace Ceres.Features.Tournaments
         TournamentGameThread gameTest = new TournamentGameThread(tournamentDefClone, parentTest);
         gameThreads.Add(gameTest);
 
-        Task thisTask = new Task(() => TournamentManagerThreadMainMethod(i, gameTest));
+        Action action;
+        if (QueueManager == null)
+        {
+          // Everything happens locally, data structures updated as part of processing.
+          action = () => ThreadProcLocalWorker(i, gameTest);
+        }
+        else if (QueueManager.IsCoordinator)
+        {
+          // We are coordinator. Repeatedly enqueue request to play game pairs and retireve/show results.
+          action = () => ThreadProcCoordinator(i, gameTest);
+        }
+        else
+        {
+          // Worker method (which will forward result data structure back to coordinator).
+          action = () => ThreadProcDistributedWorker(i, gameTest);
+        }
+
+
+        Task thisTask = new Task(action);
         tasks.Add(thisTask);
         thisTask.Start();
       }
@@ -197,7 +227,7 @@ namespace Ceres.Features.Tournaments
       float numGames = gameThreads.Sum(g => g.NumGames);
 
       Def.Logger.Write("	      	                    			           ");
-      Def.Logger.WriteLine("     ------   ------     --------------   --------------   ----"); 
+      Def.Logger.WriteLine("     ------   ------     --------------   --------------   ----");
       Def.Logger.Write("                                                ");
       Def.Logger.Write("                     ");
       Def.Logger.Write($"{totalTimeEngine1,9:F2}{totalTimeEngine2,9:F2}");
@@ -207,19 +237,6 @@ namespace Ceres.Features.Tournaments
       Def.Logger.WriteLine();
       parentTest.Dump();
       return parentTest;
-    }
-
-
-    private void TournamentManagerThreadMainMethod(int i, TournamentGameThread gameTest)
-    {
-      try
-      {
-        gameTest.RunGameTests(i, GetNextGameForThread);
-      }
-      catch (Exception exc)
-      {
-        Console.WriteLine("Exception in TournamentManager thread: " + exc.ToString());
-      }
     }
 
   }

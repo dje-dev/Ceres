@@ -13,6 +13,7 @@
 
 #region Using directives
 
+using System;
 using Ceres.Chess;
 
 #endregion
@@ -22,6 +23,7 @@ namespace Ceres.Chess.GameEngines
   /// <summary>
   /// Summary statistics describing the search charactersitics for a move in a game.
   /// </summary>
+  [Serializable]
   public record GameMoveStat
   {
     /// <summary>

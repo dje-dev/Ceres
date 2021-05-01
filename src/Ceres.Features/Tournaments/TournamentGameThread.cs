@@ -83,9 +83,30 @@ namespace Ceres.Features.Tournaments
 
     public TournamentGameRunner Run;
 
+    int numGamePairsLaunched = 0;
+    readonly object lockObj = new();
 
-    public void RunGameTests(int runnerIndex, Func<int, (int gameSequenceNum, int openingIndex)> getGamePairToProcess,
-                             GamePairRunnerDelegate overrideRemoteGamePairRunner = null)
+    /// <summary>
+    /// Method called by threads to get the next available game to be played.
+    /// </summary>
+    /// <returns></returns>
+    int GetNextOpeningIndexForLocalThread(int maxOpenings)
+    {
+      if (Def.RandomizeOpenings) throw new NotImplementedException();
+
+      lock (lockObj)
+      {
+        if (numGamePairsLaunched < maxOpenings)
+        {
+          return numGamePairsLaunched++;
+        }
+        else
+          return -1;
+      }
+    }
+
+    public void RunGameTests(int runnerIndex, Func<int> getGamePairToProcess,
+                             Action<TournamentGameInfo, TournamentGameInfo> doneGamePairCallback = null)     
     {
       Run = new TournamentGameRunner(Def);
 
@@ -107,10 +128,10 @@ namespace Ceres.Features.Tournaments
 
       while (true)
       {
-        (int gameSequenceNum, int openingIndex) = getGamePairToProcess(maxOpenings);
+        int openingIndex = getGamePairToProcess();
 
         // Look for sentinel indicating end
-        if (gameSequenceNum < 0)
+        if (openingIndex < 0)
         {
           break;
         }
@@ -119,6 +140,8 @@ namespace Ceres.Features.Tournaments
         // Therefore we don't clear cache every time, instead let it stick around unless first game in a set
         bool clearHashTable = isFirstGameOfPossiblePair;
 #endif
+
+        int gameSequenceNum = openingIndex * 2;
 
         // The engine going second could possibly benefit 
         // if REUSE_POSITION_EVALUATIONS_FROM_OTHER_TREE is true.
@@ -130,20 +153,10 @@ namespace Ceres.Features.Tournaments
         // (possibly otherwise all first giving white to one particular side).
         bool engine2White = (numPairsProcessed + runnerIndex) % 2 == 0;
 
-        if (overrideRemoteGamePairRunner == null)
-        {
-          RunGame(pgnFileName, engine2White, openingIndex, gameSequenceNum, roundNumber);
-          RunGame(pgnFileName, !engine2White, openingIndex, gameSequenceNum + 1, roundNumber);
-        }
-        else
-        {
-          // R
-//          TournamentGameInfo gameInfo = overrideRemoteGamePairRunner(pgnFileName, engine2White, openingIndex, gameSequenceNum, roundNumber);
-//          UpdateStatsAndOutputSummaryFromGameResult(pgnFileName, engine2White, openingIndex, gameSequenceNum, gameInfo);
+        TournamentGameInfo gameInfo        = RunGame(pgnFileName, engine2White, openingIndex, gameSequenceNum, roundNumber);
+        TournamentGameInfo gameReverseInfo = RunGame(pgnFileName, !engine2White, openingIndex, gameSequenceNum + 1, roundNumber);
 
-//          TournamentGameInfo gameReverseInfo = overrideRemoteGamePairRunner(pgnFileName, !engine2White, openingIndex, gameSequenceNum + 1, roundNumber);
-//          UpdateStatsAndOutputSummaryFromGameResult(pgnFileName, !engine2White, openingIndex, gameSequenceNum + 1, gameReverseInfo);
-        }
+        doneGamePairCallback?.Invoke(gameInfo, gameReverseInfo);
 
         numPairsProcessed++;
       }
@@ -226,7 +239,7 @@ namespace Ceres.Features.Tournaments
         Run.Engine2CheckEngine?.ResetGame(gameID);
 
         bool checkTablebases = Def.UseTablebasesForAdjudication && CeresUserSettingsManager.Settings.TablebaseDirectory != null;
-        thisResult = DoGameTest(Def.Logger, pgnWriter, openingIndex,
+        thisResult = DoGameTest(Def.Logger, pgnWriter, gameSequenceNum, openingIndex,
                                 Run.Engine1, Run.Engine2,
                                 Run.Engine2CheckEngine, engine2White,
                                 Def.Player1Def.SearchLimit, Def.Player2Def.SearchLimit,
@@ -251,7 +264,7 @@ namespace Ceres.Features.Tournaments
       return thisResult;
     }
 
-    private void UpdateStatsAndOutputSummaryFromGameResult(string pgnFileName, bool engine2White, int openingIndex, int gameSequenceNum, TournamentGameInfo thisResult)
+    internal void UpdateStatsAndOutputSummaryFromGameResult(string pgnFileName, bool engine2White, int openingIndex, int gameSequenceNum, TournamentGameInfo thisResult)
     {
       lock (ParentStats)
       {
@@ -365,7 +378,7 @@ namespace Ceres.Features.Tournaments
     /// <param name="engine2IsWhite"></param>
     /// <param name="searchLimit"></param>
     /// <returns>GameResult (from the perspective of engine2)</returns>
-    TournamentGameInfo DoGameTest(TextWriter logger, PGNWriter pgnWriter, int openingIndex,
+    TournamentGameInfo DoGameTest(TextWriter logger, PGNWriter pgnWriter, int gameSequenceNum, int openingIndex,
                                  GameEngine engine1, GameEngine engine2, GameEngine engineCheckAgainstEngine2,
                                  bool engine2IsWhite,
                                  SearchLimit searchLimitEngine1, SearchLimit searchLimitEngine2,
@@ -415,6 +428,9 @@ namespace Ceres.Features.Tournaments
       {
         return new TournamentGameInfo()
         {
+          Engine2IsWhite = engine2IsWhite,
+          GameSequenceNum = gameSequenceNum,
+          OpeningIndex = openingIndex,
           FEN = startFEN,
           Result = TournamentGameInfo.InvertedResult(resultOpponent),
           PlyCount = plyCount,
