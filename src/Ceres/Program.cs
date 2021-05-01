@@ -66,12 +66,13 @@ namespace Ceres
       LoggerTypes loggerTypes = LoggerTypes.WinDebugLogger | LoggerTypes.ConsoleLogger;
       CeresEnvironment.Initialize(loggerTypes, logLevel);
 
-      CeresEnvironment.MONITORING_METRICS = CeresUserSettingsManager.Settings.LaunchMonitor;
+      CeresEnvironment.MONITORING_METRICS = !CommandLineWorkerSpecification.IsWorker 
+                                           && CeresUserSettingsManager.Settings.LaunchMonitor;
 
       //      if (CeresUserSettingsManager.Settings.DirLC0Networks != null)
       //        NNWeightsFilesLC0.RegisterDirectory(CeresUserSettingsManager.Settings.DirLC0Networks);
 
-      MCTSEngineInitialization.BaseInitialize();
+      MCTSEngineInitialization.BaseInitialize(CeresEnvironment.MONITORING_METRICS, CommandLineWorkerSpecification.NumaNodeID);
 
 
       Console.WriteLine();
@@ -81,7 +82,7 @@ namespace Ceres
       CheckDebugAllowed();
 #endif
 
-      if (args.Length > 0 && args[0].ToUpper() == "CUSTOM")
+      if (args.Length > 0 && args[0].ToUpper() == "CUSTOM" || args[0].StartsWith("WORKER"))
       {
         TournamentTest.Test(); return;
         //        SuiteTest.RunSuiteTest(); return;

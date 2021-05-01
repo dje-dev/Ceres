@@ -31,6 +31,7 @@ using System.Threading.Tasks;
 using System.Threading;
 using Ceres.Chess.NNEvaluators;
 using Chess.Ceres.NNEvaluators;
+using Ceres.Features;
 
 #endregion
 
@@ -97,12 +98,16 @@ namespace Ceres.APIExamples
       def.ShowGameMoves = false;
 
       TournamentManager runner = new TournamentManager(def, 1);
+      TournamentGameQueueManager queueManager = null;
 
       TournamentResultStats results;
       TimingStats stats = new TimingStats();
+
+
       using (new TimingBlock(stats, TimingBlock.LoggingType.None))
       {
-        results = runner.RunTournament();
+
+        results = runner.RunTournament(queueManager);
       }
 
       Console.WriteLine();
@@ -127,7 +132,7 @@ namespace Ceres.APIExamples
       string GPUS = POOLED ? "GPU:0,1,2,3:POOLED"
                            : "GPU:0";
       //703810 KovaxBig
-      NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification("LC0:750692", GPUS); // j64-210 LS16
+      NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification("LC0:750856", GPUS); // j64-210 LS16
                                                                                              //evalDef1 = NNEvaluatorDefFactory.FromSpecification("ONNX:tfmodelc", "GPU:0");
 
       NNEvaluatorDef evalDef2 = NNEvaluatorDefFactory.FromSpecification("LC0:j64-210", GPUS); // j104.1-30 61339 j64-210
@@ -170,10 +175,10 @@ namespace Ceres.APIExamples
       //      SearchLimit slSF = slLC0 * 875;
 
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(10_000);
+      SearchLimit limit1 = SearchLimit.NodesPerMove(50_000);
 
       //limit1 = SearchLimit.SecondsForAllMoves(900, 15) * 0.04f;
-      //limit1 = SearchLimit.SecondsPerMove(5);
+      //limit1 = SearchLimit.NodesPerMove(1);
 
       //limit1 = SearchLimit.NodesForAllMoves(500_000);//, 25_000);
 
@@ -181,7 +186,7 @@ namespace Ceres.APIExamples
       //limit1 = SearchLimit.SecondsForAllMoves(40, 0.5f);
       //limit1 = SearchLimit.SecondsForAllMoves(900, 15) * 0.05f;
 
-      //limit1 = SearchLimit.NodesPerMove(100_000);
+      limit1 = SearchLimit.NodesPerMove(5000);
 
       // Don't output log if very small games
       // (to avoid making very large log files or slowing down play).
@@ -242,6 +247,7 @@ namespace Ceres.APIExamples
 
       // TODO: support this in GameEngineDefCeresUCI
       bool forceDisableSmartPruning = limit1.IsNodesLimit;
+//forceDisableSmartPruning=true;
       if (forceDisableSmartPruning)
       {
         engineDefCeres1.SearchParams.FutilityPruningStopSearchEnabled = false;
@@ -252,7 +258,7 @@ namespace Ceres.APIExamples
 
       //GameEngineDef engineDefCeresUCI = new GameEngineDefUCI("CeresUCI", new GameEngineUCISpec("CeresUCI", @"c:\dev\ceres\artifacts\release\net5.0\ceres.exe"));
       GameEngineDef engineDefCeresUCI1 = new GameEngineDefCeresUCI("CeresUCINew", evalDef1, overrideEXE: @"C:\dev\Ceres\artifacts\release\net5.0\ceres.exe");
-      GameEngineDef engineDefCeresUCI2 = new GameEngineDefCeresUCI("CeresUCIGit", evalDef2, overrideEXE: @"C:\ceres\releases\v0.88\ceres.exe");
+      GameEngineDef engineDefCeresUCI2 = new GameEngineDefCeresUCI("CeresUCIGit", evalDef2, overrideEXE: @"C:\ceres\releases\v0.89\ceres.exe");
 
 
       EnginePlayerDef playerCeres1UCI = new EnginePlayerDef(engineDefCeresUCI1, limit1);
@@ -263,10 +269,10 @@ namespace Ceres.APIExamples
 
       //#if NOTParamsSearch
       ParamsSearch paramsSearchLC0 = new ParamsSearch();
-      paramsSearchLC0.TestFlag = true;
+//      paramsSearchLC0.TestFlag = true;
 
-      GameEngineDefLC0 engineDefLC1 = null;// new GameEngineDefLC0("LC0_0", evalDef1, forceDisableSmartPruning, paramsSearchLC0, null);
-      GameEngineDefLC0 engineDefLC2 = null;// new GameEngineDefLC0("LC0_2", evalDef1, forceDisableSmartPruning, null, null);
+      GameEngineDefLC0 engineDefLC1 =  new GameEngineDefLC0("LC0_0", evalDef1, forceDisableSmartPruning, paramsSearchLC0, null);
+      GameEngineDefLC0 engineDefLC2 =  new GameEngineDefLC0("LC0_2", evalDef1, forceDisableSmartPruning, null, null);
 
       GameEngineDefLC0 engineDefLC2TCEC = null;// new GameEngineDefLC0("LC0_TCEC", evalDef2, forceDisableSmartPruning, null, null,
                                                //               overrideEXE: @"c:\dev\lc0\lc_270\lc0.exe",
@@ -275,9 +281,9 @@ namespace Ceres.APIExamples
       EnginePlayerDef playerEthereal = new EnginePlayerDef(engineDefEthereal, limit1);
       EnginePlayerDef playerStockfish11 = new EnginePlayerDef(engineDefStockfish11, limit1);
       EnginePlayerDef playerStockfish12 = new EnginePlayerDef(engineDefStockfish13, limit1);// * 350);
-      EnginePlayerDef playerLC0 = null;// new EnginePlayerDef(engineDefLC1, limit1);
-      EnginePlayerDef playerLC0_2 = null;// new EnginePlayerDef(engineDefLC2, limit1);
-      EnginePlayerDef playerLC0TCEC = null;// new EnginePlayerDef(engineDefLC2TCEC, limit1);
+      EnginePlayerDef playerLC0 = new EnginePlayerDef(engineDefLC1, limit1);
+      EnginePlayerDef playerLC0_2 =  new EnginePlayerDef(engineDefLC2, limit1);
+//      EnginePlayerDef playerLC0TCEC =  new EnginePlayerDef(engineDefLC2TCEC, limit1);
                                            //#endif
 
       //      def.SearchLimitEngine1 = def.SearchLimitEngine2 = SearchLimit.SecondsForAllMoves(15, 0.25f);
@@ -291,12 +297,12 @@ namespace Ceres.APIExamples
         // ===============================================================================
         SuiteTestDef suiteDef = new SuiteTestDef("Suite",
                                                 //@"\\synology\dev\chess\data\epd\chad_tactics-100M.epd",
-                                                //@"\\synology\dev\chess\data\epd\ERET.epd",
-                                                @"\\synology\dev\chess\data\epd\ERET_VESELY203.epd",
+                                                @"\\synology\dev\chess\data\epd\ERET.epd",
+                                                //@"\\synology\dev\chess\data\epd\ERET_VESELY203.epd", 
                                                 //   @"\\synology\dev\chess\data\epd\sts.epd",
-                                                null, null, null);
+                                                playerCeres1, null, playerLC0);
         //playerCeres1, null, playerCeres2UCI);
-        //        suiteDef.MaxNumPositions = 50;
+        //suiteDef.MaxNumPositions = 50;
 
         SuiteTestRunner suiteRunner = new SuiteTestRunner(suiteDef);
 
@@ -319,17 +325,16 @@ namespace Ceres.APIExamples
 
       //TournamentDef def = new TournamentDef("TOURN", playerLC0Tilps, playerLC0);
 
-      //def.NumGamePairs = 10;
-      //      def.ShowGameMoves = false;
+      def.NumGamePairs = 50;
+      def.ShowGameMoves = false;
 
       //      def.OpeningsFileName = @"HERT_2017\Hert500.pgn";
 
       //      def.StartingFEN = "1q6/2n4k/1r1p1pp1/RP1P2p1/2Q1P1P1/2N4P/3K4/8 b - - 8 71";
       //      def.OpeningsFileName = @"\\synology\dev\chess\data\openings\Drawkiller_500pos_reordered.pgn";//                                                                                                 
       //def.OpeningsFileName = "TCEC19_NoomenSelect.pgn";
-      //def.OpeningsFileName = "TCEC1819.pgn";
-      // broken      def.OpeningsFileName = "TCEC_9-20.pgn";
-      def.OpeningsFileName = "4mvs_+90_+99.pgn";
+      def.OpeningsFileName = "TCEC1819.pgn";
+      //def.OpeningsFileName = "4mvs_+90_+99.pgn";
       ///def.OpeningsFileName = "book-ply8-unifen-Q-0.40-1.0.pgn";
       //      def.OpeningsFileName = "startpos.pgn";
 
@@ -342,6 +347,26 @@ namespace Ceres.APIExamples
 
       const int CONCURRENCY = POOLED ? 16 : 4;
       TournamentManager runner = new TournamentManager(def, CONCURRENCY);
+      TournamentGameQueueManager queueManager = null;
+
+      if (CommandLineWorkerSpecification.IsWorker)
+      {
+        queueManager = new TournamentGameQueueManager(Environment.GetCommandLineArgs()[2]);
+        int gpuID = CommandLineWorkerSpecification.GPUID;
+        Console.WriteLine($"\r\n***** Running in DISTRIBUTED mode as WORKER on gpu {gpuID} (queue directory {queueManager.QueueDirectory})\r\n");
+
+        def.Player1Def.EngineDef.ModifyDeviceIndexIfNotPooled(gpuID);
+        def.Player2Def.EngineDef.ModifyDeviceIndexIfNotPooled(gpuID);
+      }
+      else
+      {
+        const bool RUN_DISTRIBUTED = false;
+        if (RUN_DISTRIBUTED)
+        {
+          queueManager = new TournamentGameQueueManager(null);
+          Console.WriteLine($"\r\n***** Running in DISTRIBUTED mode as COORDINATOR (queue directory {queueManager.QueueDirectory})\r\n");
+        }
+      }
 
       TournamentResultStats results;
 
@@ -350,7 +375,7 @@ namespace Ceres.APIExamples
       TimingStats stats = new TimingStats();
       using (new TimingBlock(stats, TimingBlock.LoggingType.None))
       {
-        results = runner.RunTournament();
+        results = runner.RunTournament(queueManager);
       }
 
       Console.WriteLine();
