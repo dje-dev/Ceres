@@ -268,7 +268,9 @@ namespace Ceres.MCTS.LeafExpansion
       Span<Position> posHistoryForCaching = posHistory;
       int numCacheHashPositions = node.Context.EvaluatorDef.NumCacheHashPositions;
       if (posHistory.Length > numCacheHashPositions)
+      {
         posHistoryForCaching = posHistory.Slice(posHistory.Length - numCacheHashPositions, numCacheHashPositions);
+      }
 
       // Compute the actual hash
       ulong zobristHashForCaching = EncodedBoardZobrist.ZobristHash(posHistoryForCaching, node.Context.EvaluatorDef.HashMode);
@@ -293,7 +295,7 @@ namespace Ceres.MCTS.LeafExpansion
         annotation.MiscInfo = EncodedPositionWithHistory.GetMiscFromPosition(posHistory[^1].MiscInfo, SideType.White);
       }
 
-      bool alreadyEvaluated = !float.IsNaN(node.V);
+      bool alreadyEvaluated = !FP16.IsNaN(node.V);
 
       if (alreadyEvaluated)
       {
