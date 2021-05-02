@@ -107,7 +107,7 @@ namespace Ceres.Chess.MoveGen
       CheckmateBlack = 1 << 14,
     }
 
-    public static ulong MGBitBoardFromSquare(Square square) { return SquareMap.Value[square.SquareIndexStartA1]; }
+    public static ulong MGBitBoardFromSquare(Square square) => SquareMap[square.SquareIndexStartA1];
 
     /// <summary>
     /// Returns MGPosition corresponding to specified FEN string.
@@ -359,23 +359,24 @@ namespace Ceres.Chess.MoveGen
 
     #region Initialization
 
-    static Lazy<ulong[]> SquareMap;
+    static ulong[] SquareMap;
 
-    static ulong[] CreateSquareMap()
+
+    static void InitializeSquareMap()
     {
-      ulong[] squareMap = new ulong[64];
+      SquareMap = new BitBoard[64];
       for (int i = 0; i < 64; i++)
       {
         Square square = new Square(i);
-        squareMap[i] = 1UL << (square.Rank * 8 + (7 - square.File));
+        SquareMap[i] = 1UL << (square.Rank * 8 + (7 - square.File));
       }
-      return squareMap;
     }
+
 
     [ModuleInitializer]
     internal static void ClassInitialize()
     {
-      SquareMap = new Lazy<BitBoard[]>(() => CreateSquareMap());
+      InitializeSquareMap();
 
       MGPieceCodeToPieceType = new[] { PieceType.None, PieceType.Pawn, PieceType.Bishop, PieceType.None, PieceType.Rook, PieceType.Knight, PieceType.Queen, PieceType.King,
                                        PieceType.None, PieceType.Pawn, PieceType.Bishop, PieceType.None, PieceType.Rook, PieceType.Knight, PieceType.Queen, PieceType.King };
