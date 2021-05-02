@@ -574,28 +574,16 @@ namespace Ceres.Chess
 
     static ulong[][] FastHashTable; // size [32,256] = 8192*8=128k
 
-    static object lockInitFastHashTableObject = new object();
 
     static void InitFastHashTable()
     {
-      lock (lockInitFastHashTableObject)
-      {
-        // Initialize (unless another thread did this)
-        if (FastHashTable == null)
-          FastHashTable = CalcFastHashTable();
-      }
-    }
-
-
-    static ulong[][] CalcFastHashTable()
-    {
       ulong[][][] keys = EncodedBoardZobrist.Keys;
 
-      ulong[][] fastHashTable = new ulong[32][];
+      FastHashTable = new ulong[32][];
 
       for (int i = 0; i < 32; i++)
       {
-        fastHashTable[i] = new ulong[256];
+        FastHashTable[i] = new ulong[256];
 
         for (int rawValue = 0; rawValue < 256; rawValue++)
         {
@@ -618,11 +606,9 @@ namespace Ceres.Chess
             thisHashRight = keys[(int)pieceRight.Side][(int)pieceRight.Type][squareIndex];
           }
 
-          fastHashTable[i][rawValue] = thisHashLeft ^ thisHashRight;
+          FastHashTable[i][rawValue] = thisHashLeft ^ thisHashRight;
         }
       }
-
-      return fastHashTable;
     }
 
     /// <summary>
@@ -698,10 +684,9 @@ namespace Ceres.Chess
 
       hash ^= (ulong)MiscInfo.HashPosition(hashMode, includeRepetitions);
 
-      if (MiscInfo.EnPassantFileIndex != PositionMiscInfo.EnPassantFileIndexEnum.FileNone)
-        return hash = hash * 31 + (ulong)MiscInfo.EnPassantFileIndex;
-      else
-        return hash;
+      return MiscInfo.EnPassantFileIndex != PositionMiscInfo.EnPassantFileIndexEnum.FileNone
+          ? (hash = hash * 31 + (ulong)MiscInfo.EnPassantFileIndex)
+          : hash;
     }
 
 
@@ -773,8 +758,15 @@ namespace Ceres.Chess
 
             byte valueLeft = (byte)(rawValue & 0b0000_1111);
             byte valueRight = (byte)(rawValue >> 4);
-            if (valueLeft != 0) array[count++] = (new Piece(valueLeft), new Square(i * 2));
-            if (valueRight != 0) array[count++] = (new Piece(valueRight), new Square(i * 2 + 1));
+            if (valueLeft != 0)
+            {
+              array[count++] = (new Piece(valueLeft), new Square(i * 2));
+            }
+
+            if (valueRight != 0)
+            {
+              array[count++] = (new Piece(valueRight), new Square(i * 2 + 1));
+            }
           }
         }
       }
@@ -796,10 +788,7 @@ namespace Ceres.Chess
         fixed (byte* pieceSquares = &Square_0_1)
         {
           rawValue = pieceSquares[square.SquareIndexStartA1 / 2];
-          if (square.SquareIndexStartA1 % 2 == 1)
-            rawValue = (byte)(rawValue >> 4);
-          else
-            rawValue = (byte)(rawValue & 0b0000_1111);
+          rawValue = square.SquareIndexStartA1 % 2 == 1 ? (byte)(rawValue >> 4) : (byte)(rawValue & 0b0000_1111);
         }
       }
       return new Piece(rawValue);
@@ -822,7 +811,9 @@ namespace Ceres.Chess
           Square sq = new Square(i);
           Piece piece = this[sq];
           if (piece.Type != PieceType.None)
+          {
             yield return (sq, piece);
+          }
         }
       }
     }
@@ -850,11 +841,17 @@ namespace Ceres.Chess
       }
 
       if (moves.NumMovesUsed > 0)
+      {
         return GameResult.Unknown;
+      }
       else if (MGMoveGen.IsInCheck(in posMG, posMG.BlackToMove))
+      {
         return GameResult.Checkmate;
+      }
       else
+      {
         return GameResult.Draw; // stalemate
+      }
     }
 
 
@@ -901,10 +898,9 @@ namespace Ceres.Chess
         fixed (byte* pieceSquares = &Square_0_1)
         {
           byte byteValue = pieceSquares[thisIndex];
-          if (squareIndex % 2 == 1)
-            byteValue = (byte)((byteValue & 0b0000_1111) | piece.RawValue << 4);
-          else
-            byteValue = (byte)((byteValue & 0b1111_0000) | piece.RawValue);
+          byteValue = squareIndex % 2 == 1
+              ? (byte)((byteValue & 0b0000_1111) | piece.RawValue << 4)
+              : (byte)((byteValue & 0b1111_0000) | piece.RawValue);
           pieceSquares[thisIndex] = byteValue;
         }
       }
@@ -928,10 +924,7 @@ namespace Ceres.Chess
           for (int i = 0; i < 64; i++)
           {
             byte byteValue = pieceSquares[i / 2];
-            if (i % 2 == 1)
-              byteValue = (byte)(byteValue >> 4);
-            else
-              byteValue = (byte)(byteValue & 0b0000_1111);
+            byteValue = i % 2 == 1 ? (byte)(byteValue >> 4) : (byte)(byteValue & 0b0000_1111);
 
             if (byteValue == piece.RawValue) return true;
           }
@@ -956,10 +949,7 @@ namespace Ceres.Chess
           for (int i = 0; i < 64; i++)
           {
             byte byteValue = pieceSquares[i / 2];
-            if (i % 2 == 1)
-              byteValue = (byte)(byteValue >> 4);
-            else
-              byteValue = (byte)(byteValue & 0b0000_1111);
+            byteValue = i % 2 == 1 ? (byte)(byteValue >> 4) : (byte)(byteValue & 0b0000_1111);
 
             if (byteValue == piece.RawValue) count++;
           }
@@ -985,7 +975,9 @@ namespace Ceres.Chess
         int numBits = bitmap.GetSetBitIndices(scratchIndices, 0, 64);
 
         for (int i = 0; i < numBits; i++)
+        {
           numPieces += (byte)SetPieceOnSquare(scratchIndices[i],  piece);
+        }
       }
       return numPieces;
     }
@@ -1100,7 +1092,9 @@ namespace Ceres.Chess
     {
       Position pos = this;
       foreach (string sanMoveString in sanMoveStrings)
+      {
         pos = pos.AfterMove(pos.MoveSAN(sanMoveString));
+      }
 
       return pos;
     }
@@ -1167,6 +1161,14 @@ namespace Ceres.Chess
 
     #endregion
 
+    #region Initialization
 
+    [ModuleInitializer]
+    internal static void Init()
+    {
+      InitFastHashTable();
+    }
+
+    #endregion
   }
 }
