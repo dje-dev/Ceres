@@ -91,17 +91,22 @@ namespace Ceres.Base.DataTypes
       return ret;
     }
 
-    public unsafe static float[,] ToFloat(Span<FP16> data, int numRows, int numColumns)
+    public unsafe static void ToFloat(Span<FP16> source, float[,] dest, int numRows, int numColumns)
     {
       int sourceOffset = 0;
-      float[,] ret = new float[numRows, numColumns];
       for (int i = 0; i < numRows; i++)
       {
         for (int j = 0; j < numColumns; j++)
         {
-          ret[i, j] = data[sourceOffset++];
+          dest[i, j] = source[sourceOffset++];
         }
       }
+    }
+
+    public unsafe static float[,] ToFloat(Span<FP16> data, int numRows, int numColumns)
+    {
+      float[,] ret = new float[numRows, numColumns];
+      ToFloat(data, ret, numRows, numColumns);
       return ret;
     }
 
@@ -109,15 +114,26 @@ namespace Ceres.Base.DataTypes
     {
       float[] ret = new float[numElements];
       for (int i = 0; i < ret.Length; i++)
+      {
         ret[i] = data[i];
+      }
+
       return ret;
+    }
+
+    public static unsafe void ToFloat(Span<FP16> source, float[] dest, int numElements)
+    {
+      float[] ret = new float[numElements];
+      for (int i = 0; i < ret.Length; i++)
+      {
+        dest[i] = source[i];
+      }
     }
 
     public static unsafe float[] ToFloat(Span<FP16> data, int numElements)
     {
       float[] ret = new float[numElements];
-      for (int i = 0; i < ret.Length; i++)
-        ret[i] = data[i];
+      ToFloat(data, ret, numElements);
       return ret;
     }
 
