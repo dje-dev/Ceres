@@ -114,7 +114,7 @@ namespace Ceres.MCTS.Evaluators
         if (VERBOSE) Console.WriteLine($"num allocated {node.Context.Tree.Store.Nodes.NumUsedNodes - startNodes} " +
                         $"when cloning node of size {transpositionRootNode.N} with target {numAlreadyLinked} " +
                          $"total nodes now { node.Context.Tree.Store.Nodes.NumUsedNodes}");
-        NumDelinked++;
+        //NumDelinked++;
         NumExtractedAndNeverCloned -= (ulong)(numAlreadyLinked);
 
         // We have cloned and will use this tree directly in the future.

@@ -58,9 +58,6 @@ namespace Ceres.MCTS.Evaluators
     public static ulong NUM_BATCHES_EVALUATED = 0;
     public static ulong NUM_POSITIONS_EVALUATED = 0;
 
-    public static ulong NUM_REMOTE_BATCHES_EVALUATED = 0;
-    public static ulong NUM_REMOTE_POSITIONS_EVALUATED = 0;
-
 
     /// <summary>
     /// Reusable batch for NN evaluations

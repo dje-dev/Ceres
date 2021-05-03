@@ -40,16 +40,6 @@ namespace Ceres.MCTS.Evaluators
     public static float HitRatePct => 100.0f * (float)NumHits / (float)(NumHits + NumMisses);
 
 
-    /// <summary>
-    /// Number of nodes whose evaluation were linked backed to extant transposition node.
-    /// </summary>
-    public static ulong NumLinked;
-
-    /// <summary>
-    /// Number of nodes previously linked that were subseuently replicated in the search tree and unlinked.
-    /// </summary>
-    public static ulong NumDelinked;
-
 
     public static ulong NumExtractedAndNeverCloned;
 
@@ -117,7 +107,6 @@ namespace Ceres.MCTS.Evaluators
         if (VERBOSE) Console.WriteLine($" {node.Index} first linkage to {transpositionRootNode.Index.Index}");
         nodeRef.NumNodesTranspositionExtracted = 1;
         nodeRef.TranspositionRootIndex = transpositionRootNodeIndex.Index;
-        NumLinked++;
       }
 
       if (CeresEnvironment.MONITORING_METRICS) NumHits++;
