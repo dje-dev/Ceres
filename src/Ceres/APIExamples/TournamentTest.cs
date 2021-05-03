@@ -39,6 +39,8 @@ namespace Ceres.APIExamples
 {
   public static class TournamentTest
   {
+    static int CONCURRENCY = 4; // POOLED ? 16 : 4;
+    static bool RUN_DISTRIBUTED = false;
 
     private static void KillCERES()
     {
@@ -131,11 +133,11 @@ namespace Ceres.APIExamples
       const bool POOLED = false;
       string GPUS = POOLED ? "GPU:0,1,2,3:POOLED"
                            : "GPU:0";
-      //703810 KovaxBig
-      NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification("LC0:750856", GPUS); // j64-210 LS16
+      //LC0:40x512-lr015-swa-115000
+      NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification("LC0:40x512-lr015-swa-167500", GPUS); // j64-210 LS16
                                                                                              //evalDef1 = NNEvaluatorDefFactory.FromSpecification("ONNX:tfmodelc", "GPU:0");
 
-      NNEvaluatorDef evalDef2 = NNEvaluatorDefFactory.FromSpecification("LC0:j64-210", GPUS); // j104.1-30 61339 j64-210
+      NNEvaluatorDef evalDef2 = NNEvaluatorDefFactory.FromSpecification("LC0:40x512-lr015-swa-150000", GPUS); // j104.1-30 61339 j64-210
 
       // Good progress. 68240 versus j94-100 yields: +21 (+/- 11) at 1k/move and +15 (+- 11) at 10k/move
       if (false)
@@ -186,7 +188,7 @@ namespace Ceres.APIExamples
       //limit1 = SearchLimit.SecondsForAllMoves(40, 0.5f);
       //limit1 = SearchLimit.SecondsForAllMoves(900, 15) * 0.05f;
 
-      limit1 = SearchLimit.NodesPerMove(5000);
+      limit1 = SearchLimit.NodesPerMove(500);
 
       // Don't output log if very small games
       // (to avoid making very large log files or slowing down play).
@@ -230,7 +232,7 @@ namespace Ceres.APIExamples
 #endif
       }
 
-      if (true)
+      if (!limit1.IsNodesLimit)
       {
         engineDefCeres1.SearchParams.ReusePositionEvaluationsFromOtherTree = false;
         engineDefCeres2.SearchParams.ReusePositionEvaluationsFromOtherTree = false;
@@ -247,7 +249,7 @@ namespace Ceres.APIExamples
 
       // TODO: support this in GameEngineDefCeresUCI
       bool forceDisableSmartPruning = limit1.IsNodesLimit;
-//forceDisableSmartPruning=true;
+forceDisableSmartPruning=false;
       if (forceDisableSmartPruning)
       {
         engineDefCeres1.SearchParams.FutilityPruningStopSearchEnabled = false;
@@ -325,7 +327,7 @@ namespace Ceres.APIExamples
 
       //TournamentDef def = new TournamentDef("TOURN", playerLC0Tilps, playerLC0);
 
-      def.NumGamePairs = 50;
+      def.NumGamePairs = 200;
       def.ShowGameMoves = false;
 
       //      def.OpeningsFileName = @"HERT_2017\Hert500.pgn";
@@ -333,8 +335,8 @@ namespace Ceres.APIExamples
       //      def.StartingFEN = "1q6/2n4k/1r1p1pp1/RP1P2p1/2Q1P1P1/2N4P/3K4/8 b - - 8 71";
       //      def.OpeningsFileName = @"\\synology\dev\chess\data\openings\Drawkiller_500pos_reordered.pgn";//                                                                                                 
       //def.OpeningsFileName = "TCEC19_NoomenSelect.pgn";
-      def.OpeningsFileName = "TCEC1819.pgn";
-      //def.OpeningsFileName = "4mvs_+90_+99.pgn";
+//      def.OpeningsFileName = "TCEC1819.pgn";
+      def.OpeningsFileName = "4mvs_+90_+99.pgn";
       ///def.OpeningsFileName = "book-ply8-unifen-Q-0.40-1.0.pgn";
       //      def.OpeningsFileName = "startpos.pgn";
 
@@ -345,7 +347,11 @@ namespace Ceres.APIExamples
         def.UseTablebasesForAdjudication = false;
       }
 
-      const int CONCURRENCY = POOLED ? 16 : 4;
+      if (POOLED)
+      {
+        CONCURRENCY = 16;
+      }
+
       TournamentManager runner = new TournamentManager(def, CONCURRENCY);
       TournamentGameQueueManager queueManager = null;
 
@@ -360,7 +366,6 @@ namespace Ceres.APIExamples
       }
       else
       {
-        const bool RUN_DISTRIBUTED = false;
         if (RUN_DISTRIBUTED)
         {
           queueManager = new TournamentGameQueueManager(null);
@@ -368,7 +373,7 @@ namespace Ceres.APIExamples
         }
       }
 
-      TournamentResultStats results;
+       TournamentResultStats results;
 
       //UCIEngineProcess.VERBOSE = true;
 
