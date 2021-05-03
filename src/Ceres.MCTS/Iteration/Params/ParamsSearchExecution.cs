@@ -65,7 +65,7 @@ namespace Ceres.MCTS.Params
     /// Size of the cache used to store miscellaneous supplemental
     /// information (such as the actual Position) relating to recently visited nodes.
     /// </summary>
-    public int NodeAnnotationCacheSize = 500_000;
+    public int NodeAnnotationCacheSize = 750_000;
 
     /// <summary>
     /// If the batch size is dynamically computed each time based on
@@ -145,7 +145,7 @@ namespace Ceres.MCTS.Params
     /// Minimum number of targeted leaf visits which must be present
     /// for parallel subthreads to be allocated.
     /// </summary>
-    public int SelectParallelThreshold = ParallelMultiplier * (SoftwareManager.IsLinux ? 9 : 6);
+    public int SelectParallelThreshold = ParallelMultiplier * (SoftwareManager.IsLinux ? 7 : 5);
 
     /// <summary>
     /// If the initialization of poliices in tree nodes (after retrieval from NN)
@@ -156,7 +156,7 @@ namespace Ceres.MCTS.Params
     /// <summary>
     /// Target number of policies to be initialized by each thread.
     /// </summary>
-    public int SetPoliciesNumPoliciesPerThread = 24 * ParallelMultiplier;
+    public int SetPoliciesNumPoliciesPerThread = 32 * ParallelMultiplier;
 
 
   }
