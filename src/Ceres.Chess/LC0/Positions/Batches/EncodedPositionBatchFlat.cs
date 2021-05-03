@@ -220,14 +220,17 @@ namespace Ceres.Chess.LC0.Batches
 
       const int PLANES_WRITTEN = EncodedPositionBoard.NUM_PLANES_PER_BOARD * EncodedPositionBoards.NUM_MOVES_HISTORY;
 
-      // Start by setting all plane values to 1.
-      Unsafe.InitBlock(ref PosPlaneValues[0], 1, (uint)(numToProcess * PLANES_WRITTEN));
+//      Unsafe.InitBlock(ref PosPlaneValues[0], 1, (uint)(numToProcess * PLANES_WRITTEN));
 
       // Initialize planes
       for (int i = 0; i < numToProcess; i++)
       {
         // Set planes (NOTE: we move all 8 history planes)
         positions[i].ExtractPlanesValuesIntoArray(EncodedPositionBoards.NUM_MOVES_HISTORY, PosPlaneBitmaps, nextOutPlaneIndex);
+
+        // Start by setting all plane values to 1.
+        Unsafe.InitBlock(ref PosPlaneValues[nextOutPlaneIndex], 1, (uint)PLANES_WRITTEN);
+//        Array.Fill<byte>(PosPlaneValues, 1, nextOutPlaneIndex, PLANES_WRITTEN);
 
         // Advance
         nextOutPlaneIndex += PLANES_WRITTEN;
