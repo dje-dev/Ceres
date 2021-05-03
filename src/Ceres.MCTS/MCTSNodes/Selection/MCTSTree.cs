@@ -48,12 +48,19 @@ namespace Ceres.MCTS.LeafExpansion
   public class MCTSTree
   {
     const bool VERBOSE = false;
+
+    /// <summary>
+    /// Nodes in node cache are stamped with the sequence number
+    /// of the last batch in which they were accessed.
+    /// </summary>
+    internal long BATCH_SEQUENCE_COUNTER = 0;
+
+
     PositionWithHistory PriorMoves => Store.Nodes.PriorMoves;
 
     MCTSIterator Context;
     IMCTSNodeCache cache;
 
-    internal long SEQUENCE_COUNTER = 0;
 
     /// <summary>
     /// Underlying store of nodes.
@@ -191,7 +198,7 @@ namespace Ceres.MCTS.LeafExpansion
       }
       else
       {
-        ret.LastAccessedSequenceCounter = SEQUENCE_COUNTER++;
+        ret.LastAccessedSequenceCounter = BATCH_SEQUENCE_COUNTER;
       }
 
       Debug.Assert(ret.Index == nodeIndex.Index);
@@ -264,7 +271,7 @@ namespace Ceres.MCTS.LeafExpansion
       // Compute the actual hash
       ulong zobristHashForCaching = EncodedBoardZobrist.ZobristHash(posHistoryForCaching, node.Context.EvaluatorDef.HashMode);
 
-      node.LastAccessedSequenceCounter = node.Context.Tree.SEQUENCE_COUNTER++;
+      node.LastAccessedSequenceCounter = node.Context.Tree.BATCH_SEQUENCE_COUNTER;
       annotation.PriorMoveMG = priorMoveMG;
 
       annotation.Pos = posHistory[^1]; // this will have had its repetition count set
