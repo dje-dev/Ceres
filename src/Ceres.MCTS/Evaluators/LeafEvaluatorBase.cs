@@ -30,11 +30,6 @@ namespace Ceres.MCTS.Evaluators
   public abstract class LeafEvaluatorBase
   {
     /// <summary>
-    /// The number of leaf nodes succesefully evaluated.
-    /// </summary>
-    public int CountHits;
-
-    /// <summary>
     /// Attempts to evaluate node immediately and returns if successful (else default).
     /// </summary>
     /// <param name="node"></param>
@@ -55,7 +50,6 @@ namespace Ceres.MCTS.Evaluators
     public  LeafEvaluationResult TryEvaluate(MCTSNode node)
     {
       LeafEvaluationResult result = DoTryEvaluate(node);
-      if (!result.IsNull) Interlocked.Increment(ref CountHits);
       return result;
     }
 

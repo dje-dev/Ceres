@@ -106,7 +106,7 @@ namespace Ceres.MCTS.Evaluators
         nodeRef.TranspositionRootIndex = transpositionRootNodeIndex.Index;
       }
 
-      if (CeresEnvironment.MONITORING_METRICS) NumHits++;
+//      if (CeresEnvironment.MONITORING_METRICS) NumHits++;
 
       if (node.Context.ParamsSearch.TranspositionUseTransposedQ && transpositionMode != TranspositionMode.SharedSubtree)
       {
@@ -167,7 +167,7 @@ namespace Ceres.MCTS.Evaluators
         // because it is new (in process of initialization)
         if (transpositionNode.N == 0)
         {
-          if (CeresEnvironment.MONITORING_METRICS) NumMisses++;
+//          if (CeresEnvironment.MONITORING_METRICS) NumMisses++;
           return default;
         }
 
@@ -181,7 +181,7 @@ namespace Ceres.MCTS.Evaluators
         int pendingIndex = Interlocked.Increment(ref nextIndexPendingTranspositionRoots) - 1;
         pendingTranspositionRoots[pendingIndex] = (node.Annotation.PositionHashForCaching, node.Index);
 
-        if (CeresEnvironment.MONITORING_METRICS) NumMisses++;
+//        if (CeresEnvironment.MONITORING_METRICS) NumMisses++;
 
         return default;
       }
