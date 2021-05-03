@@ -121,12 +121,12 @@ namespace Ceres.Base.DataTypes
       return ret;
     }
 
-    public static unsafe void ToFloat(Span<FP16> source, float[] dest, int numElements)
+
+    public static unsafe void ToFloat(Span<FP16> data, float[] dest, int numElements)
     {
-      float[] ret = new float[numElements];
-      for (int i = 0; i < ret.Length; i++)
+      for (int i = 0; i < data.Length; i++)
       {
-        dest[i] = source[i];
+        dest[i] = data[i];
       }
     }
 
