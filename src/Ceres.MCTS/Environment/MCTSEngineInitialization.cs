@@ -33,8 +33,10 @@ namespace Ceres.MCTS.Environment
     {
       HardwareManager.VerifyHardwareSoftwareCompatability();
 
-      int minNumThreads = Math.Min(96, System.Environment.ProcessorCount * 4);
+      int minNumThreads = Math.Min(64, System.Environment.ProcessorCount * 2);
       System.Threading.ThreadPool.SetMinThreads(minNumThreads, 32);
+
+      // TODO: consider using SustainedLowLatency when running under timed time control
       GCSettings.LatencyMode = GCLatencyMode.Batch;
 
       HardwareManager.Initialize(numaNode);
