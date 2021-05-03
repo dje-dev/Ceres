@@ -227,29 +227,61 @@ namespace Ceres.Chess.MoveGen.Converters
     public static EncodedMove MGChessMoveToEncodedMove(MGMove thisMove)
     {
       // LZPositionMove always from perspective of white to move
-      if (thisMove.BlackToMove) thisMove = thisMove.Reversed;
+      if (thisMove.BlackToMove)
+      {
+        thisMove = thisMove.Reversed;
+      }
+      return MGChessMoveToEncodedMoveWhite(thisMove);
+    }
 
-      if (thisMove.CastleShort)
-        return moveCastle;
-      else if (thisMove.CastleLong)
-        return moveCastleLong;
+    public static EncodedMove MGChessMoveToEncodedMoveBlack(MGMove thisMove)
+    {
+      Debug.Assert(thisMove.BlackToMove);
+      return MGChessMoveToEncodedMoveWhite(thisMove.Reversed);
+    } 
+
+    public static EncodedMove MGChessMoveToEncodedMoveWhite(MGMove thisMove)
+    {
+      Debug.Assert(!thisMove.BlackToMove);
 
       EncodedMove.PromotionType promotion = EncodedMove.PromotionType.None;
-      if (thisMove.IsPromotion)
+      if (thisMove.IsCastleOrPromotion)
       {
-        if (thisMove.PromoteQueen)
-          promotion = EncodedMove.PromotionType.Queen;
-        else if (thisMove.PromoteRook)
-          promotion = EncodedMove.PromotionType.Rook;
-        else if (thisMove.PromoteKnight)
-          promotion = EncodedMove.PromotionType.Knight;
-        else if (thisMove.PromoteBishop)
-          promotion = EncodedMove.PromotionType.Bishop;
+        if (thisMove.CastleShort)
+        {
+          return moveCastle;
+        }
+        else if (thisMove.CastleLong)
+        {
+          return moveCastleLong;
+        }
+        else if (thisMove.IsPromotion)
+        {
+          if (thisMove.PromoteQueen)
+          {
+            promotion = EncodedMove.PromotionType.Queen;
+          }
+          else if (thisMove.PromoteRook)
+          {
+            promotion = EncodedMove.PromotionType.Rook;
+          }
+          else if (thisMove.PromoteKnight)
+          {
+            promotion = EncodedMove.PromotionType.Knight;
+          }
+          else if (thisMove.PromoteBishop)
+          {
+            promotion = EncodedMove.PromotionType.Bishop;
+          }
+          else
+            throw new Exception("Internal error, unknown promotion type");
+        }
       }
 
       Square squareFrom = squareMap[thisMove.FromSquareIndex];
       Square squareTo = squareMap[thisMove.ToSquareIndex];
-      return new EncodedMove(new EncodedSquare(squareFrom.SquareIndexStartA1), new EncodedSquare(squareTo.SquareIndexStartA1), promotion, false);
+      return new EncodedMove(new EncodedSquare(squareFrom.SquareIndexStartA1), 
+                             new EncodedSquare(squareTo.SquareIndexStartA1), promotion, false);
     }
 
     #region Table

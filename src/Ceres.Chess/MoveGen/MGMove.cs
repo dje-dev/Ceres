@@ -246,9 +246,20 @@ namespace Ceres.Chess.MoveGen
     }
 
     /// <summary>
+    /// Returns if the move is either a castle or promotion move.
+    /// </summary>
+    public bool IsCastleOrPromotion
+      => (Flags & (MGChessMoveFlags.CastleShort 
+                 | MGChessMoveFlags.CastleLong
+                 | MGChessMoveFlags.PromoteQueen
+                 | MGChessMoveFlags.PromoteRook
+                 | MGChessMoveFlags.PromoteBishop
+                 | MGChessMoveFlags.PromoteKnight)) != 0;
+
+    /// <summary>
     /// Returns if the move is either a short or long castle.
     /// </summary>
-    public bool IsCastle => CastleShort || CastleLong;
+    public bool IsCastle => (Flags & (MGChessMoveFlags.CastleShort | MGChessMoveFlags.CastleLong)) != 0;
 
     /// <summary>
     /// Returns if the move is a castle short move.
@@ -311,7 +322,11 @@ namespace Ceres.Chess.MoveGen
     public bool IllegalMove
     {
       get => (PromoteBishop && PromoteKnight);
+#if DEBUG
       set { if (value) { PromoteBishop = true; PromoteKnight = true; } else throw new NotImplementedException(); }
+#else
+      set { PromoteBishop = true; PromoteKnight = true; }
+#endif
     }
 
 
@@ -350,7 +365,7 @@ namespace Ceres.Chess.MoveGen
 
     public override bool Equals(object obj) => obj is MGMove && Equals((MGMove)obj);
 
-    #endregion
+#endregion
 
     /// <summary>
     /// Helper comparer class for MGMove which uses FromAndToCombined.
