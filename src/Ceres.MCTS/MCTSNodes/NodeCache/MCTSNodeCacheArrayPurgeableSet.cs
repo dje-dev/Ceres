@@ -72,8 +72,7 @@ namespace Ceres.MCTS.NodeCache
 
       // Compute number of subcaches, increasing as a function of estimates search size
       // (because degree of concurrency rises with size of batches and search.
-//      NumSubcaches = (int)StatUtils.Bounded(2 * MathF.Log2((float)estimatedNumNodesInSearch / 1000), 3, 24);
-      NumSubcaches = (int)StatUtils.Bounded(3 * MathF.Log2((float)estimatedNumNodesInSearch / 1000), 4, 32);
+      NumSubcaches = (int)StatUtils.Bounded(4 * MathF.Log2((float)estimatedNumNodesInSearch / 1000), 4, 32);
 
       // Initialize the sub-caches
       subCaches = new MCTSNodeCacheArrayPurgeable[NumSubcaches];

@@ -38,8 +38,8 @@ namespace Ceres.MCTS.NodeCache
   /// </summary>
   public class MCTSNodeCacheArrayPurgeable : IMCTSNodeCache
   {
-    internal const int THRESHOLD_PCT_DO_PRUNE = 80;
-    internal const int THRESHOLD_PCT_PRUNE_TO = 60;
+    internal const int THRESHOLD_PCT_DO_PRUNE = 85;
+    internal const int THRESHOLD_PCT_PRUNE_TO = 50;
 
     public MCTSTree ParentTree;
 
