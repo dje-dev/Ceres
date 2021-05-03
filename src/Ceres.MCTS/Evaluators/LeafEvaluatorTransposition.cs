@@ -40,9 +40,6 @@ namespace Ceres.MCTS.Evaluators
     public static float HitRatePct => 100.0f * (float)NumHits / (float)(NumHits + NumMisses);
 
 
-
-    public static ulong NumExtractedAndNeverCloned;
-
     /// <summary>
     /// Maintain data structure to map between position hash codes and 
     /// indices of nodes already extant in the search tree store.

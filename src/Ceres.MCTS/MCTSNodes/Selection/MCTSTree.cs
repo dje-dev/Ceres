@@ -47,8 +47,6 @@ namespace Ceres.MCTS.LeafExpansion
   /// </summary>
   public class MCTSTree
   {
-    public static long NumAnnotations;
-
     const bool VERBOSE = false;
     PositionWithHistory PriorMoves => Store.Nodes.PriorMoves;
 
@@ -173,11 +171,6 @@ namespace Ceres.MCTS.LeafExpansion
       }
     }
 
-    public static long NUM_HITS = 0;
-    public static long NUM_MISSES = 0;
-
-    public static float HitRate => 100.0f * ((float)NUM_HITS / (float)(NUM_HITS + NUM_MISSES));
-
 
     /// <summary>
     /// Attempts to return the MCTSNode associated with an annotation in the cache, 
@@ -195,11 +188,9 @@ namespace Ceres.MCTS.LeafExpansion
 
         ret = new MCTSNode(Context, nodeIndex, parent);
         cache?.Add(ret);
-        NUM_MISSES++;
       }
       else
       {
-        NUM_HITS++;
         ret.LastAccessedSequenceCounter = SEQUENCE_COUNTER++;
       }
 
@@ -236,8 +227,6 @@ namespace Ceres.MCTS.LeafExpansion
       if (node.IsAnnotated) return;
 
       ref MCTSNodeAnnotation annotation = ref node.annotation;
-
-      NumAnnotations++;
 
       // Get the position corresponding to this node
       MGPosition newPos;
