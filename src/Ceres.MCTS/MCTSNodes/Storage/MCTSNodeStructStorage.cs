@@ -151,12 +151,13 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       // Take next available (lock-free)
       int gotIndex = Interlocked.Increment(ref nextFreeIndex) - 1;
 
-      // Check for overflow
-      if (nodes.NumItemsAllocated <= gotIndex)
+      // Check for overflow (with page buffer)
+      int BUFFER_NODES = (2048 * 1024) / MCTSNodeStruct.MCTSNodeStructSizeBytes;
+      if (nodes.NumItemsAllocated <= gotIndex + BUFFER_NODES)
       {
         lock (lockObj)
         {
-          nodes.InsureAllocated(gotIndex + 1);
+          nodes.InsureAllocated(gotIndex + BUFFER_NODES);
         }
       }
 
