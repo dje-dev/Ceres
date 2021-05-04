@@ -145,7 +145,7 @@ namespace Ceres.MCTS.Params
     /// Minimum number of targeted leaf visits which must be present
     /// for parallel subthreads to be allocated.
     /// </summary>
-    public int SelectParallelThreshold = ParallelMultiplier * (SoftwareManager.IsLinux ? 7 : 5);
+    public int SelectParallelThreshold = ParallelMultiplier * (SoftwareManager.IsLinux ? 10 : 5);
 
     /// <summary>
     /// If the initialization of poliices in tree nodes (after retrieval from NN)
