@@ -81,8 +81,6 @@ namespace Chess.Ceres.NNEvaluators
     public NNEvaluatorEngineONNX(string engineID, string weightsFN, int gpuID, 
                                  ONNXRuntimeExecutor.NetTypeEnum type, int batchSize, bool isWDL, bool hasM)
     {
-      if (batchSize > MAX_BATCH_SIZE) throw new ArgumentOutOfRangeException(nameof(batchSize), $"exceeds maximum of {MAX_BATCH_SIZE}");
-
       EngineType = type == ONNXRuntimeExecutor.NetTypeEnum.Ceres ? "ONNX_DJE" : "ONNX_LZ0";
       EngineNetworkID = engineID;
       ONNXFileName = weightsFN;
@@ -137,6 +135,12 @@ namespace Chess.Ceres.NNEvaluators
       return evaluator is NNEvaluatorEngineONNX
           && ((NNEvaluatorEngineONNX)evaluator).EngineNetworkID == EngineNetworkID;
     }
+
+    /// <summary>
+    /// The maximum number of positions that can be evaluated in a single batch.
+    /// </summary>
+    public override int MaxBatchSize => BatchSize;
+
 
     #region Internals
 

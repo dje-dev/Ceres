@@ -265,9 +265,13 @@ Updated notes:
 
         return retBatch;
       }
+  }
 
+    /// <summary>
+    /// The maximum number of positions that can be evaluated in a single batch.
+    /// </summary>
+    public override int MaxBatchSize => Config.MaxBatchSize;
 
-    }
 
     #region DLL interface
 

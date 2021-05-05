@@ -143,7 +143,7 @@ namespace Ceres.MCTS.Search
       bool overlappingAllowed = Context.ParamsSearch.Execution.FlowDirectOverlapped;
       int initialRootN = Context.Root.N;
 
-      int guessMaxNumLeaves = NNEvaluator.MAX_BATCH_SIZE;
+      int guessMaxNumLeaves = manager.Context.NNEvaluators.MaxBatchSize;
 
       ILeafSelector selector1;
       ILeafSelector selector2;
@@ -162,6 +162,8 @@ namespace Ceres.MCTS.Search
                                                         Context.ParamsSearch.Execution.InFlightThisBatchLinkageEnabled,
                                                         Context.ParamsSearch.Execution.InFlightOtherBatchLinkageEnabled);
       }
+
+      int maxBatchSize = Math.Min(Context.NNEvaluators.MaxBatchSize, Context.ParamsSearch.Execution.MaxBatchSize);
 
       int selectorID = 0;
       int batchSequenceNum = startingBatchSequenceNum;
@@ -208,11 +210,10 @@ namespace Ceres.MCTS.Search
           if (hardLimitNumNodesThisBatch <= numApplied / 1000) break;
         }
 
-        //          Console.WriteLine($"Remap {targetThisBatch} ==> {Context.Root.N} {TargetBatchSize(Context.EstimatedNumSearchNodes, Context.Root.N)}");
         int targetThisBatch = OptimalBatchSizeCalculator.CalcOptimalBatchSize(Manager.EstimatedNumSearchNodes, Context.Root.N,
                                                                               overlapThisSet,                                                                    
                                                                               Context.ParamsSearch.Execution.FlowDualSelectors,
-                                                                              Context.ParamsSearch.Execution.MaxBatchSize,
+                                                                              maxBatchSize,
                                                                               Context.ParamsSearch.BatchSizeMultiplier);
 
         targetThisBatch = Math.Min(targetThisBatch, Manager.MaxBatchSizeDueToPossibleNearTimeExhaustion);

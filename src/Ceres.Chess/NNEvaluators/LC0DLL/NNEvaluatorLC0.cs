@@ -74,10 +74,10 @@ namespace Ceres.Chess.NNEvaluators
       isWDL = net.IsWDL;
       hasM = net.HasMovesLeft;
 
-      policies = new CompressedPolicyVector[MAX_BATCH_SIZE];
-      w = new FP16[MAX_BATCH_SIZE];
-      l = isWDL ? new FP16[MAX_BATCH_SIZE] : null;
-      m = isWDL ? new FP16[MAX_BATCH_SIZE] : null;
+      policies = new CompressedPolicyVector[MaxBatchSize];
+      w = new FP16[MaxBatchSize];
+      l = isWDL ? new FP16[MaxBatchSize] : null;
+      m = isWDL ? new FP16[MaxBatchSize] : null;
 
       // Create NN evaluator and attach to it
       //TODO: set precision
@@ -96,6 +96,14 @@ namespace Ceres.Chess.NNEvaluators
       : this(net, new int[] { gpuID }, precision)
     {
     }
+
+
+    /// <summary>
+    /// The maximum number of positions that can be evaluated in a single batch.
+    /// 
+    /// CUDA/cuDNN backend hardcoded to 1024, others might be smaller (e.g. 512 for DX12).
+    /// </summary>
+    public override int MaxBatchSize => 1024;
 
 
     /// <summary>

@@ -15,6 +15,8 @@
 
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
 using Ceres.Base.Benchmarking;
@@ -53,6 +55,29 @@ namespace Ceres.Chess.NNEvaluators
     public readonly int MinSplitSize;
 
     int indexPerferredEvalator;
+
+
+    /// <summary>
+    /// The maximum number of positions that can be evaluated in a single batch.
+    /// </summary>
+    public override int MaxBatchSize
+    {
+      get
+      {
+        int maxBatchSizeMostRestrictiveEvaluator = int.MaxValue;
+        for (int i=0; i<Evaluators.Length; i++)
+        {
+          int maxThisEvaluator = (int)Math.Floor(Evaluators[i].MaxBatchSize / PreferredFractions[i]);
+
+          if (maxThisEvaluator < maxBatchSizeMostRestrictiveEvaluator)
+          {
+            maxBatchSizeMostRestrictiveEvaluator = maxThisEvaluator;
+          }
+        }
+        
+        return maxBatchSizeMostRestrictiveEvaluator;
+      }
+    }
 
 
     /// <summary>

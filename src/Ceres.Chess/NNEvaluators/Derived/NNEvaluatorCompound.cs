@@ -82,6 +82,20 @@ namespace Ceres.Chess.NNEvaluators
       }
     }
 
+    protected int MinBatchSizeAmongAllEvaluators
+    {
+      get
+      {
+        int min = int.MaxValue;
+        for (int i = 0; i < Evaluators.Length; i++)
+        {
+          min = System.Math.Min(min, Evaluators[i].MaxBatchSize);
+        }
+
+        return min;
+      }
+    }
+
     protected override void DoShutdown()
     {
       foreach (NNEvaluator evaluator in Evaluators)

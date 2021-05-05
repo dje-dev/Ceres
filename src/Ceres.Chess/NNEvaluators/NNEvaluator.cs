@@ -16,9 +16,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.LC0.Batches;
-using Ceres.Chess.MoveGen;
 using Ceres.Chess.NetEvaluation.Batch;
 using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.Positions;
@@ -32,7 +32,6 @@ namespace Ceres.Chess.NNEvaluators
   /// </summary>
   public abstract class NNEvaluator : IDisposable
   {
-    protected abstract void DoShutdown();
     internal object PersistentID { set; get; }
     public bool IsPersistent => PersistentID != null;
     public int NumInstanceReferences { internal set; get; }
@@ -49,11 +48,6 @@ namespace Ceres.Chess.NNEvaluators
 
       All =  Boards | Hashes | Moves | Positions
     };
-
-    /// <summary>
-    /// Maximum number of positions per batch.
-    /// </summary>
-    public const int MAX_BATCH_SIZE = 1024;
 
     /// <summary>
     /// String description of underlying engine type.
@@ -94,8 +88,6 @@ namespace Ceres.Chess.NNEvaluators
     public virtual float EstNPSBatch => PerformanceStats == null ? 30_000 : PerformanceStats.BigBatchNPS;
     public virtual float EstNPSSingleton => PerformanceStats == null ? 500 : PerformanceStats.SingletonNPS;
 
-    public virtual int MaxBatchSize => MAX_BATCH_SIZE;
-
     /// <summary>
     /// Types of input(s) required by the evaluator.
     /// </summary>
@@ -110,6 +102,11 @@ namespace Ceres.Chess.NNEvaluators
     /// If the evaluator has an M (moves left) head.
     /// </summary>
     public abstract bool HasM { get; }
+
+    /// <summary>
+    /// The maximum number of positions that can be evaluated in a single batch.
+    /// </summary>
+    public abstract int MaxBatchSize { get; }
 
 
     #region Static helpers
@@ -164,7 +161,9 @@ namespace Ceres.Chess.NNEvaluators
 
         // Extract values to copy buffers
         for (int i = 0; i < bufferedResult.NumPos; i++)
+        {
           ExtractToNNEvaluatorResult(out ret[i], bufferedResult, i);
+        }
 
         return ret;
       }
@@ -343,6 +342,8 @@ namespace Ceres.Chess.NNEvaluators
         }
       }
     }
+
+    protected abstract void DoShutdown();
 
     /// <summary>
     /// Shuts down the evaluator, releasing all associated resources.

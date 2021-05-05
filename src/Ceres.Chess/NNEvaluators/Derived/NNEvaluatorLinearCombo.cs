@@ -99,6 +99,13 @@ namespace Ceres.Chess.NNEvaluators
       WeightsPolicyOverrideFunc = weightsPolicyOverrideFunc;
     }
 
+    /// <summary>
+    /// The maximum number of positions that can be evaluated in a single batch.
+    /// </summary>
+    public override int MaxBatchSize => MinBatchSizeAmongAllEvaluators;
+
+
+
     object execLockObj = new object();
 
 

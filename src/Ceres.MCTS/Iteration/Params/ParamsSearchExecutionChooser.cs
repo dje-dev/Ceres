@@ -166,7 +166,7 @@ namespace Ceres.MCTS.Params
 
       // Reduce maximum batch size to avoid overflow in multibatch evaluator
       // where some pooling with other batches may be unavoidable.
-      int maxBatchSize = NNEvaluator.MAX_BATCH_SIZE - 200;
+      int maxBatchSize = 800;
       ParamsSearch.Execution.MaxBatchSize = Math.Min(ParamsSearch.Execution.MaxBatchSize, maxBatchSize);
     }
 

@@ -64,6 +64,12 @@ namespace Ceres.Chess.NNEvaluators
     }
 
 
+    /// <summary>
+    /// The maximum number of positions that can be evaluated in a single batch.
+    /// </summary>
+    public override int MaxBatchSize => 4096;
+
+
     static int HashInRange<T>(Span<T> items, int startIndex, int length)
     {
       int hash = 0;

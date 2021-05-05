@@ -88,6 +88,12 @@ namespace Ceres.Chess.NNEvaluators
     }
 
 
+    /// <summary>
+    /// The maximum number of positions that can be evaluated in a single batch.
+    /// </summary>
+    public override int MaxBatchSize => MinBatchSizeAmongAllEvaluators;
+
+
     int countPolicyErr = 0;
     int countValueErr = 0;
     float sumPolicy0Err = 0;

@@ -57,6 +57,12 @@ namespace Ceres.Chess.NNEvaluators
 
 
     /// <summary>
+    /// The maximum number of positions that can be evaluated in a single batch.
+    /// </summary>
+    public override int MaxBatchSize => MinBatchSizeAmongAllEvaluators;
+
+
+    /// <summary>
     /// Virtual method that evaluates batch into internal buffers.
     /// </summary>
     /// <param name="positions"></param>

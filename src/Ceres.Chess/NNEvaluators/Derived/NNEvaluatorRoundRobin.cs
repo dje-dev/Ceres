@@ -13,6 +13,7 @@
 
 #region Using directives
 
+using System.Net.NetworkInformation;
 using Ceres.Chess.LC0.Batches;
 using Ceres.Chess.NetEvaluation.Batch;
 
@@ -36,6 +37,13 @@ namespace Ceres.Chess.NNEvaluators
     {
       nextIndex = 0;
     }
+
+
+    /// <summary>
+    /// The maximum number of positions that can be evaluated in a single batch.
+    /// </summary>
+    public override int MaxBatchSize => MinBatchSizeAmongAllEvaluators;
+
 
     public override IPositionEvaluationBatch EvaluateIntoBuffers(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
     {

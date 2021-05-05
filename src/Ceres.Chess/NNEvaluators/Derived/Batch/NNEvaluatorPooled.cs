@@ -123,7 +123,7 @@ namespace Ceres.Chess.NNEvaluators
                              float batchDelayMilliseconds = DEFAULT_DELAY_MS, 
                              bool retrieveSupplementalResults = false) : base(evaluators)
     {
-      const int MAX_BATCH_SIZE_THRESHOLD = NNEvaluator.MAX_BATCH_SIZE / 2;
+      int MAX_BATCH_SIZE_THRESHOLD = MaxBatchSize / 2;
       if (batchSizeThreshold > MAX_BATCH_SIZE_THRESHOLD)
       {
         // Don't allow the batch size threshold to be too close to
@@ -187,6 +187,12 @@ namespace Ceres.Chess.NNEvaluators
                retrieveSupplementalResults)
     {
     }
+
+    /// <summary>
+    /// The maximum number of positions that can be evaluated in a single batch.
+    /// </summary>
+    public override int MaxBatchSize => MinBatchSizeAmongAllEvaluators;
+
 
 
     /// <summary>

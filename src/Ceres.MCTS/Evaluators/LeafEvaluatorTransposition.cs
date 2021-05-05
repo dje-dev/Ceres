@@ -46,6 +46,11 @@ namespace Ceres.MCTS.Evaluators
     /// </summary>
     public readonly TranspositionRootsDict TranspositionRoots;
 
+    /// <summary>
+    /// Record new pending transposition roots accumulated during a batch
+    /// so they can be added to the TranspositionRoots dictionary 
+    /// all at once at end of batch collection.
+    /// </summary>
     int nextIndexPendingTranspositionRoots;
     (ulong, int)[] pendingTranspositionRoots;
 
@@ -61,7 +66,9 @@ namespace Ceres.MCTS.Evaluators
     {
       TranspositionRoots = transpositionRoots;
 
-      pendingTranspositionRoots = new (ulong, int)[NNEvaluator.MAX_BATCH_SIZE];
+      // TODO: currently hardcoded at 2048, potentially
+      // dynamically detemrine possibly smaller necessary value
+      pendingTranspositionRoots = new (ulong, int)[2048];
     }
 
 

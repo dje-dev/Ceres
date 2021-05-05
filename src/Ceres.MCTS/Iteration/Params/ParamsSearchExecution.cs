@@ -119,7 +119,12 @@ namespace Ceres.MCTS.Params
 
     #endregion
 
-    public int MaxBatchSize = NNEvaluator.MAX_BATCH_SIZE;
+    /// <summary>
+    /// Hard limit on maximum number of positions per gathered batch.
+    /// The actual number used in gathering may end up smaller 
+    /// due to limits placed by NNEvaluator(s) in use.
+    /// </summary>
+    public int MaxBatchSize = 2048;
 
     /// <summary>
     /// If we are running dual selectors it is possible that some nodes
