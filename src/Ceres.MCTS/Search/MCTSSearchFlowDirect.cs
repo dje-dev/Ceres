@@ -164,7 +164,7 @@ namespace Ceres.MCTS.Search
       }
 
       int maxBatchSize = Math.Min(Context.NNEvaluators.MaxBatchSize, Context.ParamsSearch.Execution.MaxBatchSize);
-
+      
       int selectorID = 0;
       int batchSequenceNum = startingBatchSequenceNum;
 

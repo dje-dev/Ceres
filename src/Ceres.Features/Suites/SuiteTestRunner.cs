@@ -391,7 +391,7 @@ namespace Ceres.Features.Suites
       if (epdNum % 2 == 0 || Def.CeresEngine2Def == null)
       {
         search1 = new MCTSearch();
-        search1.Search(evaluatorSet1, Def.Engine1Def.SelectParams, Def.Engine1Def.SearchParams, null, null, null,
+        search1.Search(evaluatorSet1, Def.Engine1Def.SelectParams, Def.Engine1Def.SearchParams, null, null,
                          pos, ceresSearchLimit1, false, DateTime.Now, null, null, true);
 
         MCTSIterator shareContext = null;
@@ -400,7 +400,7 @@ namespace Ceres.Features.Suites
           if (Def.Engine2Def.SearchParams.ReusePositionEvaluationsFromOtherTree) shareContext = search1.Manager.Context;
 
           search2 = new MCTSearch();
-          search2.Search(evaluatorSet2, Def.Engine2Def.SelectParams, Def.Engine2Def.SearchParams, null, null, shareContext,
+          search2.Search(evaluatorSet2, Def.Engine2Def.SelectParams, Def.Engine2Def.SearchParams, null, shareContext,
                          pos, ceresSearchLimit2, false, DateTime.Now, null, null, true);
         }
         
@@ -408,14 +408,14 @@ namespace Ceres.Features.Suites
       else
       {
         search2 = new MCTSearch();
-        search2.Search(evaluatorSet2, Def.Engine2Def.SelectParams, Def.Engine2Def.SearchParams, null, null, null,
+        search2.Search(evaluatorSet2, Def.Engine2Def.SelectParams, Def.Engine2Def.SearchParams, null, null,
                        pos, ceresSearchLimit2, false, DateTime.Now, null, null, true);
 
         MCTSIterator shareContext = null;
         if (Def.Engine1Def.SearchParams.ReusePositionEvaluationsFromOtherTree) shareContext = search2.Manager.Context;
 
         search1 = new MCTSearch();
-        search1.Search(evaluatorSet1, Def.Engine1Def.SelectParams, Def.Engine1Def.SearchParams, null, null, shareContext,
+        search1.Search(evaluatorSet1, Def.Engine1Def.SelectParams, Def.Engine1Def.SearchParams, null, shareContext,
                        pos, ceresSearchLimit1, false, DateTime.Now, null, null, true);
 
       }

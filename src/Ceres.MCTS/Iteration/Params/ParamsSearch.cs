@@ -92,6 +92,13 @@ namespace Ceres.MCTS.Params
     public ParamsSearchExecution Execution;
 
     /// <summary>
+    /// Optionally the ID of a delegate registered with ParamsSearchExecutionModifier
+    /// which will be called before each batch to allow customization
+    /// of the nested Execution field members.
+    /// </summary>
+    public string ExecutionModifierID = null;
+
+    /// <summary>
     /// Experimental. If an "iterated" MCTS strategy should be followed in search,
     /// involving building trees of intermediate size and then resetting them
     /// and rewriting the P priors from the neural network partly based on

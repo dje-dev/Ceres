@@ -48,11 +48,6 @@ namespace Ceres.Features.GameEngines
   public class GameEngineCeresInProcess : GameEngine
   {
     /// <summary>
-    /// Optinal modifier action to be applied to ParamsSearchExecution before each search batch iteration.
-    /// </summary>
-    public readonly ParamsSearchExecutionModifier ParamsSearchExecutionModifier;
-
-    /// <summary>
     /// Definition of neural network evaluator used for execution.
     /// </summary>
     public readonly NNEvaluatorDef EvaluatorDef;
@@ -119,13 +114,11 @@ namespace Ceres.Features.GameEngines
     /// <param name="searchParams"></param>
     /// <param name="childSelectParams"></param>
     /// <param name="gameLimitManager"></param>
-    /// <param name="paramsSearchExecutionModifier"></param>
     /// <param name="logFileName"></param>
     public GameEngineCeresInProcess(string id, NNEvaluatorDef evaluatorDef,
                                     ParamsSearch searchParams = null,
                                     ParamsSelect childSelectParams = null,
                                     IManagerGameLimit gameLimitManager = null,
-                                    ParamsSearchExecutionModifier paramsSearchExecutionModifier = null,
                                     string logFileName = null) : base(id)
     {
       if (evaluatorDef == null) throw new ArgumentNullException(nameof(evaluatorDef));
@@ -140,7 +133,6 @@ namespace Ceres.Features.GameEngines
       // Use default limit manager if not specified.
       if (gameLimitManager == null) gameLimitManager = new ManagerGameLimitCeres();
 
-      ParamsSearchExecutionModifier = paramsSearchExecutionModifier;
       EvaluatorDef = evaluatorDef;
       SearchParams = searchParams;
       GameLimitManager = gameLimitManager;
@@ -319,7 +311,6 @@ namespace Ceres.Features.GameEngines
         if (evaluators == null) evaluators = new NNEvaluatorSet(EvaluatorDef);
 
         Search.Search(evaluators, ChildSelectParams, SearchParams, GameLimitManager,
-                      ParamsSearchExecutionModifier,
                       reuseOtherContextForEvaluatedNodes,
                       curPositionAndMoves, searchLimit, verbose, startTime,
                       gameMoveHistory, callback, false, isFirstMoveOfGame);

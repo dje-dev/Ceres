@@ -141,8 +141,6 @@ namespace Ceres.MCTS.Iteration
     public int NumNodesWhenChoseTopNNode;
     public float FractionNumNodesWhenChoseTopNNode => (float)NumNodesWhenChoseTopNNode / Root.N;
 
-    public ParamsSearchExecutionModifier ParamsSearchExecutionPostprocessor;
-
     internal MCTSSearchFlow flow; // TODO: make private
 
     public readonly bool IsFirstMoveOfGame;
@@ -173,7 +171,6 @@ namespace Ceres.MCTS.Iteration
                        ParamsSearch searchParams,
                        ParamsSelect childSelectParams,
                        SearchLimit searchLimit,
-                       ParamsSearchExecutionModifier paramsSearchExecutionPostprocessor,
                        IManagerGameLimit limitManager,
                        DateTime startTime,
                        MCTSManager priorManager,
@@ -184,7 +181,6 @@ namespace Ceres.MCTS.Iteration
 
       StartTimeThisSearch = startTime;
       RootNWhenSearchStarted = store.Nodes.nodes[store.RootIndex.Index].N;
-      ParamsSearchExecutionPostprocessor = paramsSearchExecutionPostprocessor;
       IsFirstMoveOfGame = isFirstMoveOfGame;
       SearchLimit = searchLimit;
 
@@ -201,7 +197,7 @@ namespace Ceres.MCTS.Iteration
                                                                                     searchParams, childSelectParams, searchLimit);
 
       // TODO: technically this is overwriting the params belonging to the prior search, that's ugly (but won't actually cause a problem)
-      paramsChooser.ChooseOptimal(searchLimit.EstNumNodes(50_000, false), paramsSearchExecutionPostprocessor); // TODO: make 50_000 smarter
+      paramsChooser.ChooseOptimal(searchLimit.EstNumNodes(50_000, false)); // TODO: make 50_000 smarter
 
 
       int estNumNodes = EstimatedNumSearchNodesForEvaluator(searchLimit, nnEvaluators);

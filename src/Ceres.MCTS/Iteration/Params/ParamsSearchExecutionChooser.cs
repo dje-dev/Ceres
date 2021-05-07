@@ -83,7 +83,7 @@ namespace Ceres.MCTS.Params
     /// </summary>
     /// <param name="estNumNodes"></param>
     /// <param name="postprocessor">optional delegated called after parameters are set allowing modifications</param>
-    public void ChooseOptimal(int estNumNodes, ParamsSearchExecutionModifier postprocessor)
+    public void ChooseOptimal(int estNumNodes)
     {
       if (ParamsSearch.AutoOptimizeEnabled)
       {
@@ -94,7 +94,10 @@ namespace Ceres.MCTS.Params
         DoChooseOptimal(estNumNodes);
       }
 
-      postprocessor?.Invoke(ParamsSearch.Execution);
+      if (ParamsSearch.ExecutionModifierID != null)
+      {
+        ParamsSearchExecutionModifier.Invoke(ParamsSearch.ExecutionModifierID, ParamsSearch.Execution);
+      }
     }
 
 

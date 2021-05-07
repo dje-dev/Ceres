@@ -108,7 +108,6 @@ namespace Ceres.MCTS.Iteration
     /// <param name="paramsSelect"></param>
     /// <param name="paramsSearch"></param>
     /// <param name="limitManager"></param>
-    /// <param name="paramsSearchExecutionPostprocessor"></param>
     /// <param name="reuseOtherContextForEvaluatedNodes"></param>
     /// <param name="priorMoves"></param>
     /// <param name="searchLimit"></param>
@@ -122,7 +121,6 @@ namespace Ceres.MCTS.Iteration
                        ParamsSelect paramsSelect,
                        ParamsSearch paramsSearch,
                        IManagerGameLimit limitManager,
-                       ParamsSearchExecutionModifier paramsSearchExecutionPostprocessor,
                        MCTSIterator reuseOtherContextForEvaluatedNodes,
                        PositionWithHistory priorMoves,
                        SearchLimit searchLimit, bool verbose,
@@ -160,9 +158,8 @@ namespace Ceres.MCTS.Iteration
                                                           gameMoveHistory, isFirstMoveOfGame);
 
       Manager = new MCTSManager(store, reuseOtherContextForEvaluatedNodes, null, null,
-                                nnEvaluators, paramsSearch, paramsSelect,
-                                searchLimitToUse, paramsSearchExecutionPostprocessor, limitManager,
-                                startTime, null, gameMoveHistory, isFirstMoveOfGame);
+                                nnEvaluators, paramsSearch, paramsSelect,  searchLimitToUse, 
+                                limitManager, startTime, null, gameMoveHistory, isFirstMoveOfGame);
 
       using (new SearchContextExecutionBlock(Manager.Context))
       {
@@ -307,7 +304,7 @@ namespace Ceres.MCTS.Iteration
           // Now just run the search from a new tree.
           Search(Manager.Context.NNEvaluators, Manager.Context.ParamsSelect,
                  Manager.Context.ParamsSearch, Manager.LimitManager,
-                 null, reuseOtherContextForEvaluatedNodes, newPositionAndMoves, searchLimit, verbose,
+                 reuseOtherContextForEvaluatedNodes, newPositionAndMoves, searchLimit, verbose,
                  startTime, gameMoveHistory, progressCallback, possiblyUsePositionCache, isFirstMoveOfGame);
         }
       }
@@ -353,7 +350,7 @@ namespace Ceres.MCTS.Iteration
       // Construct a new search manager reusing this modified store and modified transposition roots.
       Manager = new MCTSManager(store, reuseOtherContextForEvaluatedNodes, reusePositionCache, newTranspositionRoots,
                                 priorContext.NNEvaluators, priorContext.ParamsSearch, priorContext.ParamsSelect,
-                                searchLimitTargetAdjusted, Manager.ParamsSearchExecutionPostprocessor, Manager.LimitManager,
+                                searchLimitTargetAdjusted, Manager.LimitManager,
                                 startTime, Manager, gameMoveHistory, isFirstMoveOfGame: isFirstMoveOfGame);
       Manager.Context.ContemptManager = priorContext.ContemptManager;
 
