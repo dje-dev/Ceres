@@ -63,8 +63,27 @@ namespace Ceres.Base.DataTypes
     {
       FP16[] ret = new FP16[data.Length];
       for (int i = 0; i < ret.Length; i++)
+      {
         if (data[i] != 0.0f)
+        {
           ret[i] = (FP16)data[i];
+        }
+      }
+
+      return ret;
+    }
+
+    public static FP16[] ToFP16Approx(float[] data)
+    {
+      FP16[] ret = new FP16[data.Length];
+      for (int i = 0; i < ret.Length; i++)
+      {
+        if (data[i] != 0.0f)
+        {
+          ret[i] = FP16.FromFloatApprox(data[i]);
+        }
+      }
+
       return ret;
     }
 
@@ -243,9 +262,8 @@ namespace Ceres.Base.DataTypes
     public float ToSingleViaLookup => FP16Helper.HalfToSingleLookup(this);
 
     /// <summary>
-    /// Converts from FP16 to float in a fast way.
-    /// WARNING: does not handle special cases (e.g. NaN, infinity)
-    ///          and has other limitations (e.g. zero is mapped to 3.0517578E-05)
+    /// Fast approximate conversion from FP16 to float.
+    /// Note that this does not support all FP16, for example NaNs.
     /// </summary>
     /// <param name="fp16"></param>
     /// <returns></returns>
@@ -254,23 +272,45 @@ namespace Ceres.Base.DataTypes
       [MethodImpl(MethodImplOptions.AggressiveInlining)]
       get
       {
-        int conv = (((Value & 0x8000) << 16) | (((Value & 0x7c00) + 0x1C000) << 13) | ((Value & 0x03FF) << 13));
-        return Unsafe.As<int, float>(ref conv);
+        if (Value == Zero.Value)
+        {
+          return 0.0f;
+        }
+        else
+        {
+          int conv = (((Value & 0x8000) << 16) | (((Value & 0x7c00) + 0x1C000) << 13) | ((Value & 0x03FF) << 13));
+          float ret = Unsafe.As<int, float>(ref conv);
+          Debug.Assert(MathF.Abs(ret - (FP16)this) < 0.01f); // TO DO: be more precise in testing expected precision
+          return ret;
+        }
       }
     }
 
-#if NOT
-// needs testing
+    /// <summary>
+    /// Fast approximate conversion from float to FP16.
+    /// Note that this does not support all FP16, for example NaNs.
+    /// </summary>
+    /// <param name="f"></param>
+    /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-
     public static FP16 FromFloatApprox(float f)
     {
-      int x = Unsafe.As<float, int>(ref f);
-      int xx = (((x >> 16) & 0x8000) | ((((x & 0x7f800000) - 0x38000000) >> 13) & 0x7c00) | ((x >> 13) & 0x03ff));
+      const float MIN_FP16 = 0.0000610352f; // 0.00006103515625f;
+      if (MathF.Abs(f) < MIN_FP16)
+      {
+        return FP16.Zero;
+      }
+      else
+      {
+        int x = Unsafe.As<float, int>(ref f);
+        short xx = (short)(((x >> 16) & 0x8000) | ((((x & 0x7f800000) - 0x38000000) >> 13) & 0x7c00) | ((x >> 13) & 0x03ff));
 
-      return FP16.FromRaw((ushort)xx);
+        FP16 ret = Unsafe.As<short, FP16>(ref xx);
+        Debug.Assert(MathF.Abs((float)ret - f) < 0.01f); // TO DO: be more precise in testing expected precision
+        return ret;
+      }
     }
-#endif
+
 #endregion
 
 #region Numeric operators

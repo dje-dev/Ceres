@@ -19,6 +19,7 @@ using Pblczero;
 using ProtoBuf;
 using System;
 using System.IO;
+using System.Runtime.CompilerServices;
 
 #endregion
 
@@ -39,10 +40,16 @@ namespace Ceres.Chess.LC0.WeightsProtobuf
     {
       float[] ret = new float[layer.Params.Length / 2];
 
+      float minVal = layer.MinVal;
+      float maxVal = layer.MaxVal;
+      float scale = (maxVal - minVal) / 65535.0f;
       for (int i = 0; i < ret.Length; i++)
-        ret[i] = GetLayerLinear16Single(layer, i);
+      {
+        ret[i] = GetLayerLinear16Single(layer, i, minVal, scale);
+      }
       return ret;
     }
+
 
     /// <summary>
     /// Retrieves the weights values from a specified layer.
@@ -54,7 +61,10 @@ namespace Ceres.Chess.LC0.WeightsProtobuf
       FP16[] ret = new FP16[layer.Params.Length / 2];
 
       for (int i = 0; i < ret.Length; i++)
+      {
         ret[i] = (FP16)GetLayerLinear16Single(layer, i);
+      }
+
       return ret;
     }
 
@@ -96,10 +106,22 @@ namespace Ceres.Chess.LC0.WeightsProtobuf
     /// <returns></returns>
     public static float GetLayerLinear16Single(Weights.Layer layer, int index)
     {
+      return GetLayerLinear16Single(layer, index, layer.MinVal, (layer.MaxVal - layer.MinVal) / 65535.0f);
+    }
+
+    /// <summary>
+    /// Gets a single layer vector within a speciifed layer.
+    /// </summary>
+    /// <param name="layer"></param>
+    /// <param name="index"></param>
+    /// <returns></returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static float GetLayerLinear16Single(Weights.Layer layer, int index, float minVal, float scale)
+    {
       byte b0 = layer.Params[index * 2];
       byte b1 = layer.Params[index * 2 + 1];
       float v1 = 256 * b1 + b0;
-      float v1a = layer.MinVal + v1 * (layer.MaxVal - layer.MinVal) / 65535.0f;
+      float v1a = minVal + v1 * scale;
       return v1a;
     }
 
