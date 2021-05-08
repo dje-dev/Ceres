@@ -13,6 +13,7 @@
 
 #region Using directives
 
+using System.Collections.Generic;
 
 #endregion
 
@@ -43,6 +44,9 @@ namespace Ceres.Features.Suites
     public float TotalNodesLC0;
     public float TotalNodes1;
     public float TotalNodes2;
+
+    public float[] FinalQ1;
+    public float[] FinalQ2;
 
     public string SummaryLine
     {

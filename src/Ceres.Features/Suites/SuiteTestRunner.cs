@@ -16,8 +16,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using System.Threading.Tasks;
-using Ceres.Base;
+
 using Ceres.Base.DataTypes;
 using Ceres.Chess;
 using Ceres.Chess.ExternalPrograms.UCI;
@@ -27,14 +28,11 @@ using Ceres.Chess.LC0.Engine;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
 using Ceres.Chess.NNFiles;
-using Ceres.MCTS.LeafExpansion;
-using Ceres.MCTS.Search;
 using Ceres.MCTS.Utils;
 using Ceres.Features.GameEngines;
 using Ceres.MCTS.Iteration;
 using Ceres.Chess.Positions;
 using Ceres.MCTS.Params;
-using System.Text;
 using Ceres.Base.Misc;
 using Ceres.Base.Benchmarking;
 
@@ -277,6 +275,45 @@ namespace Ceres.Features.Suites
                      });
       }
 
+      WriteSummaries();
+
+      Shutdown(externalEnginePool);
+
+      return new SuiteTestResult(Def)
+      {
+        AvgScore1 = (float)accCeres1 / numSearches,
+        AvgScore2 = (float)accCeres2 / numSearches,
+        AvgWScore1 = (float)accWCeres1 / numSearches,
+        AvgWScore2 = (float)accWCeres2 / numSearches,
+        AvgScoreLC0 = (float)avgOther / numSearches,
+
+        TotalRuntimeLC0 = totalTimeOther,
+        TotalRuntime1 = totalTimeCeres1,
+        TotalRuntime2 = totalTimeCeres2,
+
+        FinalQ1 = finalQ1.ToArray(),
+        FinalQ2 = finalQ2?.ToArray(),
+
+        TotalNodesLC0 = totalNodesOther,
+        TotalNodes1 = totalNodes1,
+        TotalNodes2 = totalNodes2
+      };
+
+    }
+
+    private void Shutdown(ObjectPool<object> externalEnginePool)
+    {
+      EngineCeres1.Dispose();
+      EngineCeres2?.Dispose();
+      EngineExternal?.Dispose();
+
+      externalEnginePool.Shutdown(engineObj => (engineObj as LC0Engine).Dispose());
+      evaluatorSet1.Dispose();
+      evaluatorSet2?.Dispose();
+    }
+
+    private void WriteSummaries()
+    {
       Def.Output.WriteLine();
 
       Def.Output.WriteLine();
@@ -291,38 +328,13 @@ namespace Ceres.Features.Suites
 
       Def.Output.WriteLine();
       Def.Output.WriteLine();
-
-
-      EngineCeres1.Dispose();
-      EngineCeres2?.Dispose();
-      EngineExternal?.Dispose();
-
-      externalEnginePool.Shutdown(engineObj => (engineObj as LC0Engine).Dispose());
-      evaluatorSet1.Dispose();
-      evaluatorSet2?.Dispose();
-
-      return new SuiteTestResult(Def)
-      {
-        AvgScore1 = (float)accCeres1 / numSearches,
-        AvgScore2 = (float)accCeres2 / numSearches,
-        AvgWScore1 = (float)accWCeres1 / numSearches,
-        AvgWScore2 = (float)accWCeres2 / numSearches,
-        AvgScoreLC0 = (float)avgOther / numSearches,
-
-        TotalRuntimeLC0 = totalTimeOther,
-        TotalRuntime1 = totalTimeCeres1,
-        TotalRuntime2 = totalTimeCeres2,
-
-        TotalNodesLC0 = totalNodesOther,
-        TotalNodes1 = totalNodes1,
-        TotalNodes2 = totalNodes2
-      };
-
     }
 
 
 
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "HAA0201:Implicit string concatenation allocation", Justification = "<Pending>")]
+    List<float> finalQ1 = new();
+    List<float> finalQ2 = new();
+
     void ProcessEPD(int epdNum, EPDEntry epd, bool outputDetail, ObjectPool<object> otherEngines)
     {
       UCISearchInfo otherEngineAnalysis2 = default;
@@ -418,6 +430,23 @@ namespace Ceres.Features.Suites
         search1.Search(evaluatorSet1, Def.Engine1Def.SelectParams, Def.Engine1Def.SearchParams, null, shareContext,
                        pos, ceresSearchLimit1, false, DateTime.Now, null, null, true);
 
+      }
+
+      while (finalQ1.Count <= epdNum)
+      {
+        finalQ1.Add(float.NaN);
+      }
+
+      finalQ1[epdNum] = (float)search1.SearchRootNode.Q;
+
+      if (search2 != null)
+      {
+        while (finalQ2.Count <= epdNum)
+        {
+          finalQ2.Add(float.NaN);
+        }
+
+        finalQ2[epdNum] = (float)search2.SearchRootNode.Q;
       }
 
       // Wait for LZ analysis
