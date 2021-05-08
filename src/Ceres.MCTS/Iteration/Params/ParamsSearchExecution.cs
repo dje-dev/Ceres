@@ -124,7 +124,7 @@ namespace Ceres.MCTS.Params
     /// The actual number used in gathering may end up smaller 
     /// due to limits placed by NNEvaluator(s) in use.
     /// </summary>
-    public int MaxBatchSize = 2048;
+    public int MaxBatchSize = 1024;
 
     /// <summary>
     /// If we are running dual selectors it is possible that some nodes
