@@ -250,7 +250,7 @@ namespace Ceres.MCTS.Search
           }
 
           vToApply = nodeRef.V;
-          float mToApply = nodeRef.MPosition.ToFloatApprox;
+          float mToApply = nodeRef.MPosition;
 
           if (!FP16.IsNaN(node.OverrideVToApplyFromTransposition))
           {
