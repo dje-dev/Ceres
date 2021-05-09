@@ -383,7 +383,19 @@ namespace Ceres.Base.Math
     /// <returns></returns>
     public static double Correlation(Span<float> xs, Span<float> ys)
     {
-      //TODO: check here that arrays are not null, of the same length etc
+      if (xs.Length == 0)
+      {
+        throw new Exception("No data provided to Correlation");
+      }
+      if (xs.Length != ys.Length)
+      {
+        throw new ArgumentException("Spans not of same length");
+      }
+
+      if (xs.Length == 1)
+      {
+        return 1;
+      }
 
       double sx = 0.0;
       double sy = 0.0;
@@ -414,9 +426,73 @@ namespace Ceres.Base.Math
       // standard error of y
       double sigmay = System.Math.Sqrt(syy / n - sy * sy / n / n);
 
+      if (cov == 0 || sigmax == 0 || sigmay == 0)
+      {
+        return 0;
+      }
+
       // correlation is just a normalized covariation
       return cov / sigmax / sigmay;
     }
+
+
+    /// <summary>
+    /// Returns rank correlation of two arrays.
+    /// </summary>
+    /// <param name="values1"></param>
+    /// <param name="values2"></param>
+    /// <returns></returns>
+    public static float RankCorrelation(Span<float> values1, Span<float> values2) => (float)StatUtils.Correlation(ToRanks(values1), ToRanks(values2));
+
+
+    /// <summary>
+    /// Returns array of ranks of values in specified array (starting with 0).
+    /// </summary>
+    /// <param name="values"></param>
+    /// <returns></returns>
+    public static float[] ToRanks(Span<float> values)
+    {
+      int N = values.Length;
+
+      float[] ranks = new float[N];
+
+      for (int i = 0; i < N; i++)
+      {
+        int rank1 = 0;
+        int rank2 = 0;
+
+        for (int j = 0; j < i; j++)
+        {
+          if (values[j] < values[i])
+          {
+            rank1++;
+          }
+          else if (values[j] == values[i])
+          {
+            rank2++;
+          }
+        }
+
+        for (int j = i + 1; j < N; j++)
+        {
+          if (values[j] < values[i])
+          {
+            rank1++;
+          }
+          else if (values[j] == values[i])
+
+          {
+            rank2++;
+          }
+        }
+
+        ranks[i] = rank1 + (rank2 - 1f) * 0.5f;
+      }
+
+
+      return ranks;
+    }
+
   }
 
 }
