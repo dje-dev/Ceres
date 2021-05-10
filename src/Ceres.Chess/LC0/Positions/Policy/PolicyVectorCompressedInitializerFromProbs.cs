@@ -90,20 +90,29 @@ namespace Ceres.Chess.EncodedPositions
 
     static void InsertionSort(Span<ProbEntry> array, int min, int max)
     {
-      int i = min + 1;
-      while (i <= max)
+      // Use unsafe code to avoid array boundary checks
+      // since this is very hot code path.
+      unsafe
       {
-        ProbEntry x = array[i];
-        int j = i - 1;
-        while (j >= 0 && array[j].P < x.P)
+        fixed (ProbEntry* arrayPtr = &array[0])
         {
-          array[j + 1] = array[j];
-          j--;
+          int i = min + 1;
+          while (i <= max)
+          {
+            ProbEntry x = arrayPtr[i];
+            int j = i - 1;
+            while (j >= 0 && arrayPtr[j].P < x.P)
+            {
+              arrayPtr[j + 1] = arrayPtr[j];
+              j--;
+            }
+            arrayPtr[j + 1] = x;
+            i++;
+          }
         }
-        array[j + 1] = x;
-        i++;
       }
     }
+
 
     /// <summary>
     /// Performs quick sort on probability entries.
