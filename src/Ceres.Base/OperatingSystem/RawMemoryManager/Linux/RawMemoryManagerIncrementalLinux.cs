@@ -46,6 +46,8 @@ namespace Ceres.Base.OperatingSystem
     }
 
 
+    static bool largePageAllocationFailed = false;
+
     public void Reserve(string sharedMemName, bool useExistingSharedMemory, long numItems, bool useLargePages)
     {
       if (rawMemoryPointer != null)
@@ -64,17 +66,33 @@ namespace Ceres.Base.OperatingSystem
       NumBytesReserved = RoundToHugePageSize(numItems * sizeof(T) + PAGE_SIZE);
 
       int mapFlags = LinuxAPI.MAP_NORESERVE | LinuxAPI.MAP_PRIVATE | LinuxAPI.MAP_ANONYMOUS;
-      if (useLargePages)
+      if (useLargePages && !largePageAllocationFailed)
       {
         mapFlags |= LinuxAPI.MAP_HUGETLB;
       };
 
-      rawMemoryPointer = (float*)LinuxAPI.mmap(null, NumBytesReserved, LinuxAPI.PROT_NONE, mapFlags, -1, 0);
-
-      if (rawMemoryPointer == null)
+      IntPtr mapPtr = (IntPtr)LinuxAPI.mmap(null, NumBytesReserved, LinuxAPI.PROT_NONE, mapFlags, -1, 0);
+      if (mapPtr.ToInt64() == -1)
       {
-        throw new Exception($"Virtual memory reservation of {NumBytesReserved} bytes failed using mmap");
+        if (useLargePages)
+        {
+          // Attempt without large pages.
+          mapPtr = (IntPtr)LinuxAPI.mmap(null, NumBytesReserved, LinuxAPI.PROT_NONE, mapFlags ^= LinuxAPI.MAP_HUGETLB, -1, 0);
+          if (mapPtr.ToInt64() != -1)
+          {
+            largePageAllocationFailed = true;
+            Console.WriteLine("NOTE: Attempt to allocate large page failed, falling back to non-large pages.");
+          }
+        }
+
+        if (mapPtr.ToInt64() != -1)
+        {
+          throw new Exception($"Virtual memory reservation of {NumBytesReserved} bytes failed using mmap.");
+        }
+
       }
+      rawMemoryPointer = (float*)mapPtr;
+
     }
 
 
@@ -93,7 +111,10 @@ namespace Ceres.Base.OperatingSystem
         numBytesAllocated += ALLOCATE_INCREMENTAL_BYTES;
 
         int resultCode = LinuxAPI.mprotect(rawMemoryPointer, numBytesAllocated, LinuxAPI.PROT_READ | LinuxAPI.PROT_WRITE);
-        if (resultCode != 0) throw new Exception($"Virtual memory extension to size {numBytesAllocated} failed with error {resultCode}");
+        if (resultCode != 0)
+        {
+          throw new Exception($"Virtual memory extension to size {numBytesAllocated} failed with error {resultCode}");
+        }
       }
     }
 
