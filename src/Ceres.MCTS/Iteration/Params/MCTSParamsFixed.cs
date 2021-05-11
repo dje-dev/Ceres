@@ -17,6 +17,7 @@ using System;
 using Ceres.Base.OperatingSystem;
 using Ceres.Chess;
 using Ceres.Chess.PositionEvalCaching;
+using Ceres.Chess.UserSettings;
 
 #endregion
 
@@ -41,8 +42,11 @@ namespace Ceres.MCTS.Params
     ///       On a single socket machine performance was considerably improved, although
     ///       a limitation (on Windows only) is that larges pages is incompatible 
     ///       with incremental allocation under Windows.
+    ///       
+    /// NOTE: On Linux sometimes large page allocations may fail and seemingly cannot 
+    ///       be detected in the mreserve or mprotect call, causing access violations.
     /// </summary>
-    public static bool TryEnableLargePages => SoftwareManager.IsLinux ? true : false;
+    public static bool TryEnableLargePages => CeresUserSettingsManager.Settings.UseLargePages && SoftwareManager.IsLinux ? true : false;
 
     /// <summary>
     /// Optionally the storage can make use of an another running process

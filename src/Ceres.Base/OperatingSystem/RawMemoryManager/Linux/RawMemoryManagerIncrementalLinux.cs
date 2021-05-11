@@ -85,13 +85,13 @@ namespace Ceres.Base.OperatingSystem
           }
         }
 
-        if (mapPtr.ToInt64() != -1)
+        if (mapPtr.ToInt64() == -1)
         {
           throw new Exception($"Virtual memory reservation of {NumBytesReserved} bytes failed using mmap.");
         }
 
       }
-      rawMemoryPointer = (float*)mapPtr;
+      rawMemoryPointer = (void*)mapPtr;
 
     }
 

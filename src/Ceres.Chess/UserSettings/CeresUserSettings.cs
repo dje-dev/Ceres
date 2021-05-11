@@ -95,6 +95,11 @@ namespace Ceres.Chess.UserSettings
     /// </summary>
     public bool LogWarn { get; set; } = false;
 
+    /// <summary>
+    /// If memory allocations should attempt to use large pages for improved performance.
+    /// </summary>
+    public bool UseLargePages { get; set; } = false;
+
     #endregion
 
     #region UCI setoptions
