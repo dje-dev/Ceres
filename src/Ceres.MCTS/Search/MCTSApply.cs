@@ -31,6 +31,7 @@ using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.Params;
 using Ceres.Base.Benchmarking;
+using System.Collections.Concurrent;
 
 #endregion
 
@@ -380,11 +381,17 @@ namespace Ceres.MCTS.Search
 
       if (context.ParamsSearch.Execution.SetPoliciesParallelEnabled)
       {
-        Parallel.ForEach(nodes, ParallelUtils.ParallelOptions(nodes.Count, context.ParamsSearch.Execution.SetPoliciesNumPoliciesPerThread),
-        node =>
+//        Parallel.ForEach(nodes, ParallelUtils.ParallelOptions(nodes.Count, context.ParamsSearch.Execution.SetPoliciesNumPoliciesPerThread),
+        Parallel.ForEach(Partitioner.Create(0, nodes.Count), ParallelUtils.ParallelOptions(nodes.Count, context.ParamsSearch.Execution.SetPoliciesNumPoliciesPerThread),
+        (range) =>
         {
           using (new SearchContextExecutionBlock(context))
-            SetPolicy(node, policySoftmax, cachingInUse, movesSameOrderMoveList);
+          {
+            for (int i = range.Item1; i < range.Item2; i++)
+            {
+              SetPolicy(nodes[i], policySoftmax, cachingInUse, movesSameOrderMoveList);
+            }
+          }
         });
       }
       else
