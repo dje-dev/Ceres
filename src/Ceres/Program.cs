@@ -82,7 +82,7 @@ namespace Ceres
       CheckDebugAllowed();
 #endif
 
-      if (args.Length > 0 && args[0].ToUpper() == "CUSTOM" || args[0].StartsWith("WORKER"))
+      if (args.Length > 0 && (args[0].ToUpper() == "CUSTOM" || args[0].StartsWith("WORKER")))
       {
         TournamentTest.Test(); return;
         //        SuiteTest.RunSuiteTest(); return;
