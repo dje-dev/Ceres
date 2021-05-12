@@ -82,17 +82,6 @@ namespace Ceres.MCTS.LeafExpansion
 
 
     /// <summary>
-    /// Potentially parallel leaf selector threads could concurrently access/modify child node information:
-    ///   - one selecting a new leaf child and calling CreateChild
-    ///   - another which is transposition linked and is in the process of delinking and copying all child information
-    /// Therefore these two operations are serialized by acquiring a lock.
-    /// We use multiple locks to reduce contention. 
-    /// (Note that under Linux perforamnce seems to degrade significantly when large values such as 256 are used.)
-    /// </summary>
-
-    public readonly LockSet ChildCreateLocks;
-
-    /// <summary>
     /// Optionally an externally provided position cache
     /// may be provided to obviate neural network evaluation.
     /// </summary>
@@ -111,13 +100,13 @@ namespace Ceres.MCTS.LeafExpansion
                     PositionEvalCache positionCache)
     {
       if (context.ParamsSearch.DrawByRepetitionLookbackPlies > MAX_LENGTH_POS_HISTORY)
+      {
         throw new Exception($"DrawByRepetitionLookbackPlies exceeds maximum length of {MAX_LENGTH_POS_HISTORY}");
+      }
 
       Store = store;
       Context = context;
       PositionCache = positionCache;
-
-      ChildCreateLocks = new LockSet(128);
 
       const int ANNOTATION_MIN_CACHE_SIZE = 50_000;
       int annotationCacheSize = Math.Min(maxNodesBound, context.ParamsSearch.Execution.NodeAnnotationCacheSize);

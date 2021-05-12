@@ -55,10 +55,6 @@ namespace Ceres.MCTS.Evaluators
     /// </summary>
     public bool LowPriority { get; }
 
-    public static ulong NUM_BATCHES_EVALUATED = 0;
-    public static ulong NUM_POSITIONS_EVALUATED = 0;
-
-
     /// <summary>
     /// Reusable batch for NN evaluations
     /// </summary>
@@ -86,7 +82,7 @@ namespace Ceres.MCTS.Evaluators
     /// <param name="lowPriority"></param>
     public LeafEvaluatorNN(NNEvaluatorDef evaluatorDef, NNEvaluator evaluator,
                            bool saveToCache,
-                            bool lowPriority,
+                           bool lowPriority,
                            PositionEvalCache cache,
                            Func<MCTSIterator, int> batchEvaluatorIndexDynamicSelector)
     {
@@ -249,7 +245,6 @@ namespace Ceres.MCTS.Evaluators
 
     void RunLocal(Span<MCTSNode> nodes, EvalResultTarget resultTarget)
     {
-//      Span<NodeEvaluatorResult> resultSpan;
       const bool RETRIEVE_SUPPLEMENTAL = false;
 
       IPositionEvaluationBatch result;
@@ -305,9 +300,6 @@ namespace Ceres.MCTS.Evaluators
         Console.WriteLine("Error in NodeEvaluatorNN " + exc);
         throw exc;
       }
-
-      NUM_BATCHES_EVALUATED++;
-      NUM_POSITIONS_EVALUATED += (ulong)Batch.NumPos;
     }
 
 

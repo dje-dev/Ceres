@@ -119,8 +119,6 @@ namespace Ceres.MCTS.Iteration
 
     public static float TotalYieldFrac => (float)totalNumNodeVisitsSucceeded / (float) totalNumNodeVisitsAttempted;
 
-    public int NumNodeSelectedDuplicatesInDual = 0;
-
     public MultinomialBayesianThompsonSampler FirstMoveSampler;
 
     MCTSIterator reuseOtherContextForEvaluatedNodes;

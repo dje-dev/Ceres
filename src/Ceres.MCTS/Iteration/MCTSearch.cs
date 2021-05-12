@@ -426,9 +426,7 @@ namespace Ceres.MCTS.Iteration
       // (this would be complicated and could involve linkages to nodes no longer in the retained subtree).
       // Therefore we first materialize any transposition linked nodes in the subtree.
       // Since this is not currently multithreaded we can turn off tree node locking for the duration.
-      newRoot.Tree.ChildCreateLocks.LockingActive = false;
       newRoot.MaterializeAllTranspositionLinks();
-      newRoot.Tree.ChildCreateLocks.LockingActive = true;
     }
 
     private void UpdateContemptManager(MCTSNode newRoot)
