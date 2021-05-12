@@ -15,6 +15,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Text;
 using Ceres.Base.Misc;
 
@@ -85,8 +86,8 @@ namespace Ceres.Base.OperatingSystem.NVML
                              (float)powerUsage / 1000.0f, (int)temperatureCentigrade, clocksThrottleReasons);
     }
 
-    public const string InfoDescriptionHeaderLine1 = "ID  Name                Ver  SMClk  GPU%  Mem%   Temp   Throttle Reasons";
-    public const string InfoDescriptionHeaderLine2 = "--  ------------------  ---  -----  ----  ----   ----   ----------------";
+    public const string InfoDescriptionHeaderLine1 = "ID  Name                     Ver  SMClk  GPU%  Mem%   Temp   Throttle Reasons";
+    public const string InfoDescriptionHeaderLine2 = "--  -----------------------  ---  -----  ----  ----   ----   ----------------";
 
 
     /// <summary>
@@ -103,12 +104,13 @@ namespace Ceres.Base.OperatingSystem.NVML
       }
     }
 
+
     public static string GetInfoDescriptionLine(NVMLGPUInfo info)
     {
       StringBuilder desc = new StringBuilder();
 
-      desc.Append($"{info.ID,2:F0}  {info.Name,-15}     {info.CapabilityMajor}{info.CapabilityMinor}  ");
-      desc.Append($"{info.ClocksSMMhz,6}  {info.GPUUtilizationPct,3}%  {info.MemoryUtilizationPct,3}%  ");
+      desc.Append($"{info.ID,2:F0}  {info.Name,-20}     {info.CapabilityMajor,1}{info.CapabilityMinor,1}  ");
+      desc.Append($"{info.ClocksSMMhz,5}  {info.GPUUtilizationPct,3}%  {info.MemoryUtilizationPct,3}%  ");
       desc.Append($"{info.TemperatureCentigrade,4}C   {StringUtils.Sized(info.ClocksThrottleReasons.ToString(), 14)}");
 
       return desc.ToString();
