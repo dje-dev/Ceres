@@ -202,7 +202,7 @@ namespace Ceres.Chess.EncodedPositions
       if (enPassant != PositionMiscInfo.EnPassantFileIndexEnum.FileNone)
         epTarget = PositionMiscInfo.EPFileChars[(int)enPassant] + (weAreWhite ? "6" : "3");
 
-      fen = fen + castling + " " + epTarget + " " + MiscInfo.InfoPosition.Rule50Count + " " + (1 + MiscInfo.InfoPosition.MoveCount); // Sometimes 2 dashes?
+      fen = fen + castling + " " + epTarget + " " + MiscInfo.InfoPosition.Rule50Count;// + " " + (1 + MiscInfo.InfoPosition.MoveCount); // Sometimes 2 dashes?
 
       return fen;
     }
@@ -377,7 +377,7 @@ namespace Ceres.Chess.EncodedPositions
       EncodedPositionMiscInfo miscInfo = GetMiscFromPosition(posMiscInfo, desiredFromSidePerspective);
       MiscInfo.SetMisc(miscInfo.Castling_US_OOO, miscInfo.Castling_US_OO,
                        miscInfo.Castling_Them_OOO, miscInfo.Castling_Them_OO,
-                       (byte)miscInfo.SideToMove, miscInfo.Rule50Count, miscInfo.MoveCount);
+                       (byte)miscInfo.SideToMove, miscInfo.Rule50Count);
 
     }
 
@@ -409,12 +409,11 @@ namespace Ceres.Chess.EncodedPositions
 
       //bool flip = pos.MiscInfo.SideToMove != desiredFromSidePerspective; // WRONG: we flip above at top of this method pos.MiscInfo.SideToMove != desiredFromSidePerspective;
 
-      byte moveCount = 0;// LZ0 always exepcts this to be zero
       byte rule50 = posMiscInfo.Move50Count > (byte)255 ? (byte)255 : (byte)posMiscInfo.Move50Count;
 
       return new EncodedPositionMiscInfo(castling_US_OOO, castling_US_OO,
                                             castling_Them_OOO, castling_Them_OO,
-                                           (EncodedPositionMiscInfo.SideToMoveEnum)sideToMove, rule50, moveCount);
+                                           (EncodedPositionMiscInfo.SideToMoveEnum)sideToMove, rule50);
     }
 
     
@@ -449,7 +448,7 @@ namespace Ceres.Chess.EncodedPositions
         PositionMiscInfo miscInfo = new PositionMiscInfo(sourceMiscInfo.Castling_US_OO == 1 ? true : false, sourceMiscInfo.Castling_US_OOO == 1 ? true : false,
                                                          sourceMiscInfo.Castling_Them_OO == 1 ? true : false, sourceMiscInfo.Castling_Them_OOO == 1 ? true : false,
                                                          sourceMiscInfo.SideToMove == EncodedPositionMiscInfo.SideToMoveEnum.White ? SideType.White : SideType.Black,
-                                                         sourceMiscInfo.Rule50Count, (int)board0.Repetitions.Data, sourceMiscInfo.MoveCount, epColIndex);
+                                                         sourceMiscInfo.Rule50Count, (int)board0.Repetitions.Data, 0, epColIndex);
 
         return new Position(board0.OurKing.Data, board0.OurQueens.Data, board0.OurRooks.Data, board0.OurBishops.Data, board0.OurKnights.Data, board0.OurPawns.Data,
                             board0.TheirKing.Data, board0.TheirQueens.Data, board0.TheirRooks.Data, board0.TheirBishops.Data, board0.TheirKnights.Data, board0.TheirPawns.Data,
@@ -460,7 +459,7 @@ namespace Ceres.Chess.EncodedPositions
         PositionMiscInfo miscInfo = new PositionMiscInfo(sourceMiscInfo.Castling_Them_OO == 1 ? true : false, sourceMiscInfo.Castling_Them_OOO == 1 ? true : false,
                                                          sourceMiscInfo.Castling_US_OO == 1 ? true : false, sourceMiscInfo.Castling_US_OOO == 1 ? true : false,
                                                          sourceMiscInfo.SideToMove == EncodedPositionMiscInfo.SideToMoveEnum.White ? SideType.White : SideType.Black,
-                                                         sourceMiscInfo.Rule50Count, (int)board0.Repetitions.Data, sourceMiscInfo.MoveCount, epColIndex);
+                                                         sourceMiscInfo.Rule50Count, (int)board0.Repetitions.Data, 0, epColIndex);
         board0 = board0.Reversed;
         return new Position(board0.TheirKing.Data, board0.TheirQueens.Data, board0.TheirRooks.Data, board0.TheirBishops.Data, board0.TheirKnights.Data, board0.TheirPawns.Data,
                             board0.OurKing.Data, board0.OurQueens.Data, board0.OurRooks.Data, board0.OurBishops.Data, board0.OurKnights.Data, board0.OurPawns.Data,

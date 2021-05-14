@@ -60,11 +60,8 @@ namespace Ceres.Chess.EncodedPositions
     /// <param name="blackToMove"></param>
     /// <param name="rule50Count"></param>
     /// <param name="moveCount"></param>
-    public void SetMisc(byte castling_US_OOO, byte castling_US_OO, byte castling_Them_OOO, byte castling_Them_OO, byte blackToMove, byte rule50Count, byte moveCount)
+    public void SetMisc(byte castling_US_OOO, byte castling_US_OO, byte castling_Them_OOO, byte castling_Them_OO, byte blackToMove, byte rule50Count)
     {
-      // Leela always leaves this as zero
-      moveCount = 0;
-
       fixed (byte* c = &InfoPosition.Castling_US_OOO) *c = castling_US_OOO;
       fixed (byte* c = &InfoPosition.Castling_US_OO) *c = castling_US_OO;
       fixed (byte* c = &InfoPosition.Castling_Them_OOO) *c = castling_Them_OOO;
@@ -72,7 +69,6 @@ namespace Ceres.Chess.EncodedPositions
 
       fixed (EncodedPositionMiscInfo.SideToMoveEnum* c = &InfoPosition.SideToMove) *c = (EncodedPositionMiscInfo.SideToMoveEnum)blackToMove;
       fixed (byte* c = &InfoPosition.Rule50Count) *c = rule50Count;
-      fixed (byte* c = &InfoPosition.MoveCount) *c = moveCount;
     }
 
     public float BestQW => 0.5f * (1.0f - InfoTraining.BestD + InfoTraining.BestQ);
