@@ -24,7 +24,7 @@ namespace Ceres.Chess.EncodedPositions
   /// Raw data structure in training data containing both miscellaneous info
   /// relating to both position and training result.
   /// </summary>
-  [StructLayout(LayoutKind.Sequential, Pack = 2)]
+  [StructLayout(LayoutKind.Sequential, Pack = 1)]
   public readonly unsafe struct EncodedTrainingPositionMiscInfo : IEquatable<EncodedTrainingPositionMiscInfo>
   {
     /// <summary>
@@ -35,7 +35,7 @@ namespace Ceres.Chess.EncodedPositions
     /// <summary>
     /// Miscellaneous information relating to training data.
     /// </summary>
-    public readonly EncodedPositionEvalMiscInfo InfoTraining;
+    public readonly EncodedPositionEvalMiscInfoV6 InfoTraining;
 
 
     /// <summary>
@@ -43,7 +43,7 @@ namespace Ceres.Chess.EncodedPositions
     /// </summary>
     /// <param name="infoPosition"></param>
     /// <param name="infoTraining"></param>
-    public EncodedTrainingPositionMiscInfo(EncodedPositionMiscInfo infoPosition, EncodedPositionEvalMiscInfo infoTraining)
+    public EncodedTrainingPositionMiscInfo(EncodedPositionMiscInfo infoPosition, EncodedPositionEvalMiscInfoV6 infoTraining)
     {
       InfoPosition = infoPosition;
       InfoTraining = infoTraining;
@@ -81,9 +81,9 @@ namespace Ceres.Chess.EncodedPositions
 
     public float[] BestQArray => new float[] { BestQW, BestQD, BestQL };
 
-    static EncodedPositionEvalMiscInfo.ResultCode ReversedResult(EncodedPositionEvalMiscInfo.ResultCode result) => result == EncodedPositionEvalMiscInfo.ResultCode.Draw ? EncodedPositionEvalMiscInfo.ResultCode.Draw
-                                                                                     : (result == EncodedPositionEvalMiscInfo.ResultCode.Win ? EncodedPositionEvalMiscInfo.ResultCode.Loss : EncodedPositionEvalMiscInfo.ResultCode.Win);
-    public EncodedPositionEvalMiscInfo.ResultCode ResultFromWhitePerspective => WhiteToMove ? InfoTraining.ResultFromOurPerspective : ReversedResult(InfoTraining.ResultFromOurPerspective);
+    static EncodedPositionMiscInfo.ResultCode ReversedResult(EncodedPositionMiscInfo.ResultCode result) => result == EncodedPositionMiscInfo.ResultCode.Draw ? EncodedPositionMiscInfo.ResultCode.Draw
+                                                                                     : (result == EncodedPositionMiscInfo.ResultCode.Win ? EncodedPositionMiscInfo.ResultCode.Loss : EncodedPositionMiscInfo.ResultCode.Win);
+    public EncodedPositionMiscInfo.ResultCode ResultFromWhitePerspective => WhiteToMove ? InfoTraining.ResultFromOurPerspective : ReversedResult(InfoTraining.ResultFromOurPerspective);
 
     public bool WhiteToMove => InfoPosition.SideToMove == 0;
 

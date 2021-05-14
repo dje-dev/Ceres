@@ -169,9 +169,9 @@ namespace Ceres.Chess.LC0.Batches
         W = new float[NumPos];
         L = new float[NumPos];
         sbyte result = (sbyte)positions[i].Position.MiscInfo.InfoTraining.ResultFromOurPerspective;
-        if (result == (sbyte)EncodedPositionEvalMiscInfo.ResultCode.Win)
+        if (result == (sbyte)EncodedPositionMiscInfo.ResultCode.Win)
           W[i] = 1.0f;
-        else if (result == (sbyte)EncodedPositionEvalMiscInfo.ResultCode.Loss)
+        else if (result == (sbyte)EncodedPositionMiscInfo.ResultCode.Loss)
           L[i] = 1.0f;
         else
           throw new Exception("Internal error: Unknown result code");

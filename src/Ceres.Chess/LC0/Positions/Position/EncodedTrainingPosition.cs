@@ -26,14 +26,13 @@ namespace Ceres.Chess.EncodedPositions
   /// Mirrors the binary representation of a single training position
   /// as stored in LC0 training files (typically within compressed TAR file).
   /// </summary>
-  [StructLayout(LayoutKind.Sequential, Pack = 2)]
+  [StructLayout(LayoutKind.Sequential, Pack = 1)]
   [Serializable]
   public readonly partial struct EncodedTrainingPosition : IEquatable<EncodedTrainingPosition>
   {
-    // We support conversion from two versions from LC0
-    // But internally we always store in V4 format (with extra fields)
-    public const int V3_LEN = 8276;
-    public const int V4_LEN = V3_LEN + 16;
+    public const int V4_LEN = 8276 + 16;
+    public const int V5_LEN = 8308;
+    public const int V6_LEN = 8356;
 
     #region Raw structure data (Version, Policies, BoardsHistory, and MiscInfo)
 
@@ -41,6 +40,11 @@ namespace Ceres.Chess.EncodedPositions
     /// Version number of file.
     /// </summary>
     public readonly int Version;
+
+    /// <summary>
+    ///  Board representation input format.
+    /// </summary>
+    public readonly int InputFormat;
 
     /// <summary>
     /// Policies (of length 1858 * 4 bytes).
@@ -86,14 +90,18 @@ namespace Ceres.Chess.EncodedPositions
     public void CheckValid()
     {
       int size = Marshal.SizeOf(typeof(EncodedTrainingPosition));
-      if (size != 8276 + 16) throw new Exception("LZTrainingPositionRaw wrong size: " + size);
+      //if (size != 8276 + 16) throw new Exception("LZTrainingPositionRaw wrong size: " + size);
 
       if (Position.BoardsHistory.History_0.OurKing.NumberBitsSet != 1 || Position.BoardsHistory.History_0.OurKing.NumberBitsSet != 1)
+      {
         throw new Exception("Invalid position, does not have one king per side");
+      }
 
       float sumProbs = Policies.SumProbabilites;
       if (sumProbs < 0.995 || sumProbs > 1.005)
+      {
         throw new Exception("Probabilities sum to " + sumProbs);
+      }
     }
 
     #region Overrides

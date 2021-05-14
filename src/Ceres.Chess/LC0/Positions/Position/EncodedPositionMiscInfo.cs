@@ -41,6 +41,8 @@ namespace Ceres.Chess.EncodedPositions
   {
     public enum SideToMoveEnum : byte {  White = 0, Black = 1};
 
+    public enum ResultCode : sbyte { Loss = -1, Draw = 0, Win = 1 };
+
     /// <summary>
     /// If our side has long castling rights.
     /// </summary>

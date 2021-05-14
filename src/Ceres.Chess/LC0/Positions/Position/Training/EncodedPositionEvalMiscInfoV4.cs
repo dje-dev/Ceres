@@ -1,3 +1,4 @@
+﻿
 #region License notice
 
 /*
@@ -25,14 +26,20 @@ namespace Ceres.Chess.EncodedPositions
   /// (binary compatible with LZ training files).
   /// </summary>
   [StructLayout(LayoutKind.Sequential, Pack = 1)]
-  public readonly struct EncodedPositionEvalMiscInfo : IEquatable<EncodedPositionEvalMiscInfo>
+  public readonly struct EncodedPositionEvalMiscInfoV4 : IEquatable<EncodedPositionEvalMiscInfoV4>
   {
-    public enum ResultCode : sbyte { Loss = -1, Draw = 0, Win = 1 };
+    // **********************************************************************
+    // NOTE:
+    //   The field InputFormat in EncodedTrainingPosition would have to be deleted
+    //   if we wanted to support V4 since it is not present in that format.
+    // ***********************************************************************
 
+
+    //
     /// <summary>
     /// Game result
     /// </summary>
-    public readonly ResultCode ResultFromOurPerspective;
+    public readonly EncodedPositionMiscInfo.ResultCode ResultFromOurPerspective;
 
     /// <summary>
     /// Q at root node (from side-to-move perspective)
@@ -71,16 +78,16 @@ namespace Ceres.Chess.EncodedPositions
     // --------------------------------------------------------------------------------------------
     public override bool Equals(object obj)
     {
-      if (obj is EncodedPositionEvalMiscInfo)
-        return Equals((EncodedPositionEvalMiscInfo)obj);
+      if (obj is EncodedPositionEvalMiscInfoV4)
+        return Equals((EncodedPositionEvalMiscInfoV4)obj);
       else
         return false;
     }
 
     // --------------------------------------------------------------------------------------------
-    public bool Equals(EncodedPositionEvalMiscInfo other)
+    public bool Equals(EncodedPositionEvalMiscInfoV4 other)
     {
-      return  this.ResultFromOurPerspective == other.ResultFromOurPerspective
+      return this.ResultFromOurPerspective == other.ResultFromOurPerspective
            && this.RootQ == other.RootQ
            && this.BestQ == other.BestQ
            && this.RootD == other.RootD
