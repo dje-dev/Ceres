@@ -1,6 +1,8 @@
 //#define FEATURE_ONNX
 #if NOT
-// requires packages:
+// requires packages: (actually, probably possible and best to install the Gpu package only)
+// NOTE: the Gpu version may have a dependency on a specific version of CUDA \
+//       and fail to load onnxruntime.dll otherwise
     <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.7.0" />
     <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu" Version="1.7.1" />
     <PackageReference Include="Microsoft.ML.OnnxRuntime.Managed" Version="1.7.1" />
