@@ -59,11 +59,13 @@ namespace Ceres.Chess.EncodedPositions
         {
           if (numPositionsProcessed >= maxPositions) yield break;
 
-          if (!reader.Entry.IsDirectory)
+          if (!reader.Entry.IsDirectory && reader.Entry.Key.ToLower().EndsWith("gz"))
           {
             // Skip if this file does not match our filter
             if (processFilePredicate != null && !processFilePredicate(reader.Entry.Key.ToUpper()))
+            {
               continue;
+            }
 
             using (EntryStream es = reader.OpenEntryStream())
             {
