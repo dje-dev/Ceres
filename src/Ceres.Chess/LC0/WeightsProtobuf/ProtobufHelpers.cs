@@ -31,6 +31,8 @@ namespace Ceres.Chess.LC0.WeightsProtobuf
   /// </summary>
   public static class ProtobufHelpers
   {
+    static bool haveWarned = false;
+
     /// <summary>
     /// Retrieves the weights values from a specified layer.
     /// </summary>
@@ -43,6 +45,14 @@ namespace Ceres.Chess.LC0.WeightsProtobuf
       float minVal = layer.MinVal;
       float maxVal = layer.MaxVal;
       float scale = (maxVal - minVal) / 65535.0f;
+      
+      if (scale > 1 && !haveWarned)
+      {
+        Console.Write($"** Warning: network weights encountered outside expected range, layer min = {minVal} max = {maxVal}. ");
+        Console.WriteLine("Further warnings will be suppressed.");
+        haveWarned = true;
+      }
+
       for (int i = 0; i < ret.Length; i++)
       {
         ret[i] = GetLayerLinear16Single(layer, i, minVal, scale);
