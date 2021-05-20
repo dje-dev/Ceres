@@ -263,6 +263,29 @@ namespace Ceres.Chess.LC0.Boards
     /// a single bit (inverse of FromExpandedBytes).
     /// </summary>
     /// <returns></returns>
+    public void SetExpandedBytes(byte[] buffer, int startIndex)
+    {
+      OurPawns.SetBytesRepresentation(buffer, 64 * 0 + startIndex);
+      OurKnights.SetBytesRepresentation(buffer, 64 * 1 + startIndex);
+      OurBishops.SetBytesRepresentation(buffer, 64 * 2 + startIndex);
+      OurRooks.SetBytesRepresentation(buffer, 64 * 3 + startIndex);
+      OurQueens.SetBytesRepresentation(buffer, 64 * 4 + startIndex);
+      OurKing.SetBytesRepresentation(buffer, 64 * 5 + startIndex);
+      TheirPawns.SetBytesRepresentation(buffer, 64 * 6 + startIndex);
+      TheirKnights.SetBytesRepresentation(buffer, 64 * 7 + startIndex);
+      TheirBishops.SetBytesRepresentation(buffer, 64 * 8 + startIndex);
+      TheirRooks.SetBytesRepresentation(buffer, 64 * 9 + startIndex);
+      TheirQueens.SetBytesRepresentation(buffer, 64 * 10 + startIndex);
+      TheirKing.SetBytesRepresentation(buffer, 64 * 11 + startIndex);
+      Repetitions.SetBytesRepresentation(buffer, 64 * 12 + startIndex);
+    }
+
+
+    /// <summary>
+    /// Converts to an array of bytes, each representing
+    /// a single bit (inverse of FromExpandedBytes).
+    /// </summary>
+    /// <returns></returns>
     public byte[] ToExpandedBytes()
     {
       ulong[] decoded = new ulong[EncodedPositionBoard.NUM_PLANES_PER_BOARD];
