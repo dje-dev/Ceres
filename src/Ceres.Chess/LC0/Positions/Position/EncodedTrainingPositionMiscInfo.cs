@@ -71,6 +71,41 @@ namespace Ceres.Chess.EncodedPositions
       fixed (byte* c = &InfoPosition.Rule50Count) *c = rule50Count;
     }
 
+    public enum GameResultEnum 
+    {
+      Loss ,
+      Draw,
+      Win
+    }
+
+    public void SetResult(GameResultEnum gameResult)
+    {
+      fixed (float* ptrQ = &InfoTraining.ResultQ)
+      {
+        fixed (float* ptrD = &InfoTraining.ResultD)
+        {
+          switch (gameResult)
+          {
+            case GameResultEnum.Win:
+              *ptrQ = 1.0f;
+              *ptrD = 0.0f;
+              break;
+
+            case GameResultEnum.Draw:
+              *ptrQ = 0.0f;
+              *ptrD = 0.0f;
+              break;
+
+            case GameResultEnum.Loss:
+              *ptrQ = -1.0f;
+              *ptrD = 0.0f;
+              break;
+
+          }
+        }
+      }
+    }
+
     public float BestQW => 0.5f * (1.0f - InfoTraining.BestD + InfoTraining.BestQ);
     public float BestQD => InfoTraining.BestD;
     public float BestQL => 0.5f * (1.0f - InfoTraining.BestD - InfoTraining.BestQ);
