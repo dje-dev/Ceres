@@ -107,7 +107,7 @@ namespace Ceres.Chess.NNEvaluators
     /// <param name="positions"></param>
     /// <param name="retrieveSupplementalResults"></param>
     /// <returns></returns>
-    public override IPositionEvaluationBatch EvaluateIntoBuffers(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
+    public override IPositionEvaluationBatch DoEvaluateIntoBuffers(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
     {
       IPositionEvaluationBatch result = base.EvaluateIntoBuffers(positions, retrieveSupplementalResults);
 

@@ -79,7 +79,7 @@ namespace Ceres.Chess.NNEvaluators
     }
 
 
-    public override IPositionEvaluationBatch EvaluateIntoBuffers(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
+    public override IPositionEvaluationBatch DoEvaluateIntoBuffers(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
     {
       TimingStats timingStats = new TimingStats();
       using (new TimingBlock("EvalBatch", timingStats, TimingBlock.LoggingType.None))

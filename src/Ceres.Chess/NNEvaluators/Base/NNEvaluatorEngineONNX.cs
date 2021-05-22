@@ -113,7 +113,7 @@ namespace Chess.Ceres.NNEvaluators
     /// <param name="batch"></param>
     /// <param name="retrieveSupplementalResults"></param>
     /// <returns></returns>
-    public override IPositionEvaluationBatch EvaluateIntoBuffers(IEncodedPositionBatchFlat batch, bool retrieveSupplementalResults = false)
+    public override IPositionEvaluationBatch DoEvaluateIntoBuffers(IEncodedPositionBatchFlat batch, bool retrieveSupplementalResults = false)
     {
       int bufferLength = 112 * batch.NumPos * 64;
       float[] flatValues = ArrayPool<float>.Shared.Rent(bufferLength);

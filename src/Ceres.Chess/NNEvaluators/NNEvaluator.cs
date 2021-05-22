@@ -19,6 +19,7 @@ using System.Linq;
 
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.LC0.Batches;
+using Ceres.Chess.MoveGen;
 using Ceres.Chess.NetEvaluation.Batch;
 using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.Positions;
@@ -124,19 +125,46 @@ namespace Ceres.Chess.NNEvaluators
     #region Basic evaluator methods
 
     /// <summary>
-    /// Evaluates batch of positions into the buffers local to this object.
-    /// 
-    /// Note that the batch returned is built over the local buffers 
-    /// and may be overwritten upon next call to this method.
-    /// 
-    /// Therefore this method is intended only for low-level
+    /// Worker method that evaluates batch of positions into the internal buffers.
     /// </summary>
     /// <param name="positions"></param>
     /// <param name="retrieveSupplementalResults"></param>
     /// <returns></returns>
-    public abstract IPositionEvaluationBatch EvaluateIntoBuffers(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false);
+    public abstract IPositionEvaluationBatch DoEvaluateIntoBuffers(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false);
+
+
+    public long NumBatchesEvaluated { private set; get; }
+
+    public long NumPositionsEvaluated { private set; get; }
+
+    /// <summary>
+    /// Evaluates positions into internal buffers. 
+    /// 
+    /// Note that the batch returned is built over the local buffers 
+    /// and may be overwritten upon next call to this method.
+    /// 
+    /// Therefore this method is intended only for low-level use.
+    /// </summary>
+    /// <param name="positions"></param>
+    /// <param name="retrieveSupplementalResults"></param>
+    /// <returns></returns>
+    public IPositionEvaluationBatch EvaluateIntoBuffers(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
+    {
+      // Compute Moves if necessary
+      if (positions.Moves == null && InputsRequired.HasFlag(InputTypes.Moves))
+      {
+        positions.TrySetMoves();
+      }
+
+      IPositionEvaluationBatch batch = DoEvaluateIntoBuffers(positions, retrieveSupplementalResults);
+
+      NumBatchesEvaluated++;
+      NumPositionsEvaluated += positions.NumPos;
+      return batch;
+    }
 
     object lockObj = new ();
+
 
     /// <summary>
     /// Evaluates batch of positions into newly allocated (and returned) result buffers.
@@ -300,6 +328,33 @@ namespace Ceres.Chess.NNEvaluators
 
       return EvaluateIntoBuffers(batch, retrieveSupplementalResults);
     }
+
+
+    /// <summary>
+    /// Evaluates all positions in an oversized batch (that cannot be evaluated all at once).
+    /// The batch is broken into sub-batches, evaluated, and each sub-batch is passed to a provided delete.
+    /// </summary>
+    /// <param name="bigBatch"></param>
+    /// <param name="processor"></param>
+    public void EvaluateOversizedBatch(EncodedPositionBatchFlat bigBatch, Action<(int, NNEvaluatorResult[])> processor)
+    {
+      int subBatchSize = MaxBatchSize;
+      if (bigBatch.NumPos % subBatchSize != 0) throw new Exception("Size not divisible by " + subBatchSize);
+
+      // Process each sub-batch.
+      for (int i = 0; i < bigBatch.NumPos / subBatchSize; i++)
+      {
+        // Extract a slice of manageable size.
+        EncodedPositionBatchFlatSlice slice = new EncodedPositionBatchFlatSlice(bigBatch, i * subBatchSize, subBatchSize);
+
+        // Evaluate with the neural network.
+        NNEvaluatorResult[] result = EvaluateBatch(slice);
+
+        // Passs sub-batch to delegate.
+        processor((i * subBatchSize, result));
+      }
+    }
+
 
     /// <summary>
     /// If this evaluator produces the same output as another specified evaluator.

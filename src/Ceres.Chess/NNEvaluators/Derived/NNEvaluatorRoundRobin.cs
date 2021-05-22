@@ -45,7 +45,7 @@ namespace Ceres.Chess.NNEvaluators
     public override int MaxBatchSize => MinBatchSizeAmongAllEvaluators;
 
 
-    public override IPositionEvaluationBatch EvaluateIntoBuffers(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
+    public override IPositionEvaluationBatch DoEvaluateIntoBuffers(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
     {
       // Evaluate using next evaluator
       IPositionEvaluationBatch batch = Evaluators[nextIndex++].EvaluateIntoBuffers(positions, retrieveSupplementalResults);
