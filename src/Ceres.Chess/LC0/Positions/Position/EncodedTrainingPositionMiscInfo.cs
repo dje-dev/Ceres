@@ -78,6 +78,19 @@ namespace Ceres.Chess.EncodedPositions
       Win
     }
 
+    public void SetUnusedFields(float unused1, float unused2)
+    {
+      fixed (float* ptr1 = &InfoTraining.Unused1)
+      {
+        *ptr1 = unused1;
+      }
+
+      fixed (float* ptr2 = &InfoTraining.Unused2)
+      {
+        *ptr2 = unused2;
+      }
+    }
+
     public void SetResult(GameResultEnum gameResult)
     {
       fixed (float* ptrQ = &InfoTraining.ResultQ)

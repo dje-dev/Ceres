@@ -64,7 +64,10 @@ namespace Ceres.Chess.EncodedPositions
     // Indices in the probabilities array.
     public readonly short PlayedIndex;
     public readonly short BestIndex;
-    public readonly long Reserved;
+
+    // originally: public readonly long Reserved;
+    public readonly float Unused1;
+    public readonly float Unused2;
 
     public override int GetHashCode()
     {

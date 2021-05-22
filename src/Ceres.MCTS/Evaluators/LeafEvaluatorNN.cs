@@ -171,7 +171,8 @@ namespace Ceres.MCTS.Evaluators
 
         if (EvaluatorDef.Location == NNEvaluatorDef.LocationType.Local)
         {
-          Batch.Set(rawPosArray, nodes.Length);
+          const bool SET_POSITIONS = false; // we assume this is already done (if needed)
+          Batch.Set(rawPosArray, nodes.Length, SET_POSITIONS);
         }
 
         if (BatchEvaluatorIndexDynamicSelector != null)

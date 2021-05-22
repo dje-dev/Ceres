@@ -119,7 +119,6 @@ namespace Ceres.Chess.NNEvaluators
         
     public override IPositionEvaluationBatch DoEvaluateIntoBuffers(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
     {
-      if (positions.Positions.Length < positions.NumPos) throw new Exception("NNEvaluatorLC0 requires Positions to be provided");
       if (retrieveSupplementalResults) throw new NotImplementedException("retrieveSupplementalResults not supported");
 
       Evaluator.EvaluateNN(positions, positions.Positions);

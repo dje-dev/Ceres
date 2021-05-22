@@ -151,10 +151,16 @@ namespace Ceres.Chess.NNEvaluators
     public IPositionEvaluationBatch EvaluateIntoBuffers(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
     {
       // Compute Moves if necessary
-      if (positions.Moves == null && InputsRequired.HasFlag(InputTypes.Moves))
+      if (InputsRequired.HasFlag(InputTypes.Moves))
       {
         positions.TrySetMoves();
+
+        if (positions.Moves == null)
+        {
+          throw new Exception($"NNEvaluator requires Positions to be provided {this}");
+        }
       }
+
 
       IPositionEvaluationBatch batch = DoEvaluateIntoBuffers(positions, retrieveSupplementalResults);
 
@@ -300,7 +306,10 @@ namespace Ceres.Chess.NNEvaluators
         batch = builder.GetBatch();
       }
       else
-        batch = new EncodedPositionBatchFlat(encodedPositions, numPositions);
+      {
+        bool setPositions = InputsRequired.HasFlag(InputTypes.Positions);
+        batch = new EncodedPositionBatchFlat(encodedPositions, numPositions, setPositions);
+      }
 
       return EvaluateIntoBuffers(batch, retrieveSupplementalResults);
     }
@@ -324,7 +333,10 @@ namespace Ceres.Chess.NNEvaluators
         batch = builder.GetBatch();
       }
       else
-        batch = new EncodedPositionBatchFlat(encodedPositions, numPositions, EncodedPositionType.PositionOnly);
+      {
+        bool setPositions = InputsRequired.HasFlag(InputTypes.Positions);
+        batch = new EncodedPositionBatchFlat(encodedPositions, numPositions, EncodedPositionType.PositionOnly, setPositions);
+      }
 
       return EvaluateIntoBuffers(batch, retrieveSupplementalResults);
     }
