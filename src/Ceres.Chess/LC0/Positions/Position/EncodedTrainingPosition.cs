@@ -74,7 +74,7 @@ namespace Ceres.Chess.EncodedPositions
       for (int i=0;i<8;i++) Console.WriteLine("History " + i + " " + Position.FENForHistoryBoard(i));
       for (int i = 0; i < EncodedPolicyVector.POLICY_VECTOR_LENGTH; i++)
       {
-        if (Policies.Probabilities[i] != 0 && !float.IsNaN(Policies.Probabilities[i]))
+        if (Policies.ProbabilitiesPtr[i] != 0 && !float.IsNaN(Policies.ProbabilitiesPtr[i]))
         {
           bool isPawnMove = false; // TO DO: fill in 
           bool isKingMove = false; // TO DO: fill in

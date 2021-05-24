@@ -219,7 +219,7 @@ namespace Ceres.Chess.LC0.Batches
         {
           for (int j = 0; j < EncodedPolicyVector.POLICY_VECTOR_LENGTH; j++)
           {
-            float val = posRef.Policies.Probabilities[j];
+            float val = posRef.Policies.ProbabilitiesPtr[j];
             // NOTE: We convert NaN to 0.0 (in later V4 data this indicates illegal move)
             if (val != 0 && !float.IsNaN(val)) Policy[nextPolicyIndex] = (FP16)val;
             nextPolicyIndex++;
@@ -428,7 +428,7 @@ namespace Ceres.Chess.LC0.Batches
     }
 
     /// <summary>
-    /// Static factor method to return a batch from a LZTrainingPositionRaw
+    /// Static factor method to return a batch from a span of EncodedPositionWithHistory.
     /// </summary>
     /// <param name="fillInHistoryPlanes"></param>
     /// <param name="fens"></param>
@@ -438,6 +438,18 @@ namespace Ceres.Chess.LC0.Batches
       return new EncodedPositionBatchFlat(pos, pos.Length, setPositions);
     }
 
+
+    /// <summary>
+    /// Static factor method to return a batch from an EncodedPositionWithHistory.
+    /// </summary>
+    /// <param name="fillInHistoryPlanes"></param>
+    /// <param name="fens"></param>
+    /// <returns></returns>
+    public static EncodedPositionBatchFlat FromTrainingPositionRaw(EncodedPositionWithHistory pos, bool setPositions)
+    {
+      EncodedPositionWithHistory[] array = new EncodedPositionWithHistory[] { pos };
+      return new EncodedPositionBatchFlat(array, 1, setPositions);
+    }
 
     /// <summary>
     /// Static factor method to return a batch from a LZTrainingPositionRaw

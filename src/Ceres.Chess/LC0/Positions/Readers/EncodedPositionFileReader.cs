@@ -126,10 +126,10 @@ namespace Ceres.Chess.EncodedPositions
         {
           for (int j = 0; j < EncodedPolicyVector.POLICY_VECTOR_LENGTH; j++)
           {
-            if (float.IsNaN(buffer[i].Policies.Probabilities[j]))
+            if (float.IsNaN(buffer[i].Policies.ProbabilitiesPtr[j]))
             {
               Console.WriteLine("FoundNaNProb");
-              buffer[i].Policies.Probabilities[j] = 0f;
+              buffer[i].Policies.ProbabilitiesPtr[j] = 0f;
             }
           }
         }
