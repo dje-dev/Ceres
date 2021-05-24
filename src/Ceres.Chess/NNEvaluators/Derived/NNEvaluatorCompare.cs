@@ -109,7 +109,7 @@ namespace Ceres.Chess.NNEvaluators
     /// <returns></returns>
     public override IPositionEvaluationBatch DoEvaluateIntoBuffers(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
     {
-      IPositionEvaluationBatch result = base.EvaluateIntoBuffers(positions, retrieveSupplementalResults);
+      IPositionEvaluationBatch result = base.DoEvaluateIntoBuffers(positions, retrieveSupplementalResults);
 
       static string ErrMagnitudes(float eval0, float eval1, float evalRef, 
                                   ref float sumErr0, ref float sumErr1, ref int count)
