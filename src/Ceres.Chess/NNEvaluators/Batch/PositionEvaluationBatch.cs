@@ -211,6 +211,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
         {
           // Avoid overflow by subtracting off max
           float max = 0.0f;
+
           for (int j = 0; j < EncodedPolicyVector.POLICY_VECTOR_LENGTH; j++)
           {
             float val = policyProbs[startIndex + j];
@@ -218,7 +219,9 @@ namespace Ceres.Chess.NetEvaluation.Batch
           }
 
           for (int j = 0; j < EncodedPolicyVector.POLICY_VECTOR_LENGTH; j++)
+          {
             buffer[j] = (float)Math.Exp(policyProbs[startIndex + j] - max); // TODO: make faster
+          }
         }
 
         double acc = 0;
@@ -393,7 +396,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     }
 
 
-    #region Dump utilities
+#region Dump utilities
 
     /// <summary>
     /// Diagnostic method that dumps the contents of the batch to the Console.
@@ -468,7 +471,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
       throw new NotImplementedException();
     }
 
-    #endregion
+#endregion
 
   }
 }

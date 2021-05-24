@@ -254,7 +254,9 @@ namespace Ceres.Chess.NNEvaluators
       // TODO: someday we might be able to relax the InputTypes.All below
       EncodedPositionBatchBuilder builder = new EncodedPositionBatchBuilder(positionsAll.Length, NNEvaluator.InputTypes.All);
       foreach (PositionWithHistory position in positionsAll)
+      {
         builder.Add(position);
+      }
 
       return EvaluateBatch(builder.GetBatch(), retrieveSupplementalResults);
     }
@@ -272,7 +274,7 @@ namespace Ceres.Chess.NNEvaluators
       EncodedPositionBatchBuilder builder = new EncodedPositionBatchBuilder(1, NNEvaluator.InputTypes.All);
       builder.Add(in position);
 
-      NNEvaluatorResult[] result = EvaluateBatch(builder.GetBatch());
+      NNEvaluatorResult[] result = EvaluateBatch(builder.GetBatch(), retrieveSupplementalResults);
       return result[0];
     }
 
@@ -300,9 +302,11 @@ namespace Ceres.Chess.NNEvaluators
       EncodedPositionBatchFlat batch;
       if (InputsRequired > InputTypes.Boards)
       {
-        EncodedPositionBatchBuilder builder = new EncodedPositionBatchBuilder(numPositions, InputsRequired);
+        EncodedPositionBatchBuilder builder = new EncodedPositionBatchBuilder(numPositions, InputsRequired | InputTypes.Positions);
         for (int i = 0; i < numPositions; i++)
+        {
           builder.Add(in encodedPositions[i]);
+        }
         batch = builder.GetBatch();
       }
       else
