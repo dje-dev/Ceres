@@ -111,11 +111,17 @@ namespace Ceres.Chess.LC0NetInference
       }
       else
       {
-        float[] mlh = eval[0];
+        bool hasMLH = eval.Length >= 3;
 
-        float[] policiesLogistics = eval[1];
+        const int INDEX_POLICIES = 0;
+        const int INDEX_MLH = 1;
+        int INDEX_WDL = hasMLH ? 2 : 1;
 
-        FP16[] values = FP16.ToFP16(eval[2]);
+        float[] mlh = hasMLH ? eval[INDEX_MLH] : null;
+
+        float[] policiesLogistics = eval[INDEX_POLICIES];
+
+        FP16[] values = FP16.ToFP16(eval[INDEX_WDL]);
         Debug.Assert(values.Length == (isWDL ? 3 : 1) * numPositionsUsed);
 
         float[] value_fc_activations = null;// eval.Length < 3 ? null : eval[2];
