@@ -493,6 +493,65 @@ namespace Ceres.Base.Math
       return ranks;
     }
 
+
+    #region Probabilities
+
+    /// <summary>
+    /// Converts values to logits.
+    /// </summary>
+    public static float[] ToLogits(float[] f)
+    {
+      float[] ret = new float[f.Length];
+      for (int i = 0; i < f.Length; i++)
+      {
+        ret[i] = MathF.Log(f[i] + 1E-10f);
+      }
+      return ret;
+    }
+
+    /// <summary>
+    /// Computes softmax function.
+    /// </summary>
+    public static float[] Softmax(float[] f)
+    {
+      float acc = 0;
+      for (int i = 0; i < f.Length; i++)
+      {
+        acc += MathF.Exp(f[i]);
+      }
+
+      float[] ret = new float[f.Length];
+      for (int i = 0; i < f.Length; i++)
+      {
+        ret[i] = MathF.Exp(f[i]) / acc;
+      }
+      return ret;
+    }
+
+    /// <summary>
+    /// Equivalent to Tensorflow softmax_cross_entropy_with_logits.
+    /// </summary>
+    public static float SoftmaxCrossEntropyWithLogits(float[] labels, float[] logits)
+    {
+      float[] probs = Softmax(logits);
+      return SoftmaxCrossEntropy(labels, probs);
+    }
+
+
+    /// <summary>
+    /// Equivalent to Tensorflow softmax_cross_entropy_with_logits.
+    /// </summary>
+    public static float SoftmaxCrossEntropy(float[] labels, float[] values)
+    {
+      float acc = 0;
+      for (int i = 0; i < labels.Length; i++)
+      {
+        acc += labels[i] * MathF.Log(values[i] + 0.0000001f);
+      }
+      return -acc;
+    }
+
+    #endregion
   }
 
 }
