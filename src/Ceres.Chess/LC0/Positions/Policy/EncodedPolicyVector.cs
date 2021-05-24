@@ -1899,17 +1899,20 @@ namespace Ceres.Chess.EncodedPositions
     /// <summary>
     /// Returns pointer to begining of array of probabilities.
     /// </summary>
-    internal float* Probabilities
+    internal float* ProbabilitiesPtr
     {
       get
       {
         unsafe
         {
           fixed (float* f = &Probability_0)
+          {
             return f;
+          }
         }
       }
     }
+
 
     /// <summary>
     /// Returns the Encoded move and associated policy for the move at a specified index.
@@ -1917,7 +1920,7 @@ namespace Ceres.Chess.EncodedPositions
     /// <param name="index"></param>
     /// <returns></returns>
     public (EncodedMove move, float probability) this[int index]
-         =>  (EncodedMove.FromNeuralNetIndex(index), Probabilities[index]);
+         =>  (EncodedMove.FromNeuralNetIndex(index), ProbabilitiesPtr[index]);
 
 
     /// <summary>
@@ -1929,7 +1932,14 @@ namespace Ceres.Chess.EncodedPositions
       {
         float acc = 0.0f;
         for (int i = 0; i < POLICY_VECTOR_LENGTH; i++)
-          acc += Probabilities[i];
+        {
+          float value = ProbabilitiesPtr[i];
+          if (value > 0)
+          {
+            acc += value;
+          }
+        }
+
         return acc;
       }
     }
@@ -1942,8 +1952,10 @@ namespace Ceres.Chess.EncodedPositions
     {
       for (int i = 0; i < EncodedPolicyVector.POLICY_VECTOR_LENGTH; i++)
       {
-        if (Probabilities[i] != 0)
-          Console.WriteLine(i + " " + Probabilities[i]);
+        if (ProbabilitiesPtr[i] > 0)
+        {
+          Console.WriteLine(i + " " + ProbabilitiesPtr[i]);
+        }
       }
     }
 
@@ -1969,13 +1981,40 @@ namespace Ceres.Chess.EncodedPositions
     }
 
 
+    /// <summary>
+    /// Returns array of probabiliites.
+    /// </summary>
+    public float[] Probabilities
+    {
+      get
+      {
+        float[] ret = new float[POLICY_VECTOR_LENGTH];
+        for (short i = 0; i < POLICY_VECTOR_LENGTH; i++)
+        {
+          (EncodedMove move, float probability) tt = this[i];
+          if (tt.probability > 0)
+          {
+            ret[i] = tt.probability;
+          }
+        }
+        return ret;
+      }
+    }
+
+
+    /// <summary>
+    /// Enumerates over all (nonzero) probabilities.
+    /// </summary>
+    /// <returns></returns>
     public IEnumerable<(EncodedMove move, float probability, short index)> Enumerator()
     {
       for (short i = 0; i < POLICY_VECTOR_LENGTH; i++)
       {
         (EncodedMove move, float probability) tt = this[i];
-        if (!float.IsNaN(tt.probability) && tt.probability > 0)
-          yield return (tt.move, tt.probability, i);
+        {
+          if (!float.IsNaN(tt.probability) && tt.probability > 0)
+            yield return (tt.move, tt.probability, i);
+        }
       }
     }
 
