@@ -23,6 +23,9 @@ using Ceres.Chess.NetEvaluation.Batch;
 using Ceres.Chess.LC0.Batches;
 using Ceres.Base.Benchmarking;
 using Ceres.Base.DataTypes;
+using System.Collections.Generic;
+using Ceres.Chess.MoveGen.Converters;
+using Ceres.Chess.EncodedPositions.Basic;
 
 #endregion
 
@@ -119,7 +122,7 @@ namespace Chess.Ceres.NNEvaluators
       float[] flatValues = ArrayPool<float>.Shared.Rent(bufferLength);
         
       batch.ValuesFlatFromPlanes(flatValues);
-      PositionEvaluationBatch ret = DoEvaluateBatch(flatValues, batch.NumPos, retrieveSupplementalResults);
+      PositionEvaluationBatch ret = DoEvaluateBatch(batch, flatValues, batch.NumPos, retrieveSupplementalResults);
 
       ArrayPool<float>.Shared.Return(flatValues);
       return ret;
@@ -151,7 +154,7 @@ namespace Chess.Ceres.NNEvaluators
     /// <param name="numPos"></param>
     /// <param name="retrieveSupplementalResults"></param>
     /// <returns></returns>
-    PositionEvaluationBatch DoEvaluateBatch(float[] flatValues, int numPos, bool retrieveSupplementalResults)
+    PositionEvaluationBatch DoEvaluateBatch(IEncodedPositionBatchFlat batch, float[] flatValues, int numPos, bool retrieveSupplementalResults)
     {
       if (retrieveSupplementalResults) throw new Exception("retrieveSupplementalResults not supported");
 
@@ -170,6 +173,27 @@ namespace Chess.Ceres.NNEvaluators
       {
         mFP16 = Array.ConvertAll<float, FP16>(result.MLH, m => (FP16)m);
       }
+
+      // Set probability of illegal moves to 0.
+      HashSet<int> legalIndices = new HashSet<int>(96);
+      for (int pos=0; pos<numPos;pos++)
+      {
+        legalIndices.Clear();
+        for (int i = 0; i <batch.Moves[pos].NumMovesUsed;i++)
+        {
+          EncodedMove encodedMove  = ConverterMGMoveEncodedMove.MGChessMoveToEncodedMove(batch.Moves[pos].MovesArray[i]);
+          legalIndices.Add(encodedMove.IndexNeuralNet);
+        }
+
+        for (int i=0;i<1858;i++)
+        {
+          if (!legalIndices.Contains(i))
+          {
+            result.PolicyVectors[pos][i] = -1E10f;
+          }
+        }
+      }
+
       // NOTE: inefficient, above we convert from [] (flat) to [][] and here we convert back to []
       return new PositionEvaluationBatch(IsWDL, HasM, numPos, result.ValuesRaw, result.PolicyFlat, mFP16, null,  true,
                                          PositionEvaluationBatch.PolicyType.LogProbabilities, false, stats);
