@@ -69,6 +69,34 @@ namespace Ceres.Chess.EncodedPositions
     public readonly float Unused1;
     public readonly float Unused2;
 
+
+    #region Helper methods
+
+    /// <summary>
+    /// Returns if the played move was not the best move (noise induced alternate chosen).
+    /// </summary>
+    public bool NotBestMove => PlayedIndex != BestIndex;
+
+    /// <summary>
+    /// Returns the Q amount by which the playing the best move would have 
+    /// been better then the move actually played.
+    /// </summary>
+    public float QSuboptimality => BestQ - PlayedQ;
+
+    /// <summary>
+    /// Fill-in value for the small (circa 3%) fraction of source data 
+    /// with missing (NaN) OriginalQ data.
+    /// </summary>
+    public const float FILL_IN_UNCERTAINTY = 0.15f;
+
+
+    /// <summary>
+    ///  Uncertainty is a measure of how incorrect the position evaluation (V)
+    ///  turned out to be relative to the search evaluation (Q).
+    /// </summary>
+    public float Uncertainty => float.IsNaN(OriginalQ) ? FILL_IN_UNCERTAINTY : MathF.Pow(OriginalQ - BestQ, 2);
+
+
     public override int GetHashCode()
     {
       int part1 = ResultFromOurPerspective.GetHashCode();
@@ -96,5 +124,6 @@ namespace Ceres.Chess.EncodedPositions
            && this.BestD == other.BestD;
     }
 
+    #endregion
   }
 }
