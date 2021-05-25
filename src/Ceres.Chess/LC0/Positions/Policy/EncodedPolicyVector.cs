@@ -2018,7 +2018,27 @@ namespace Ceres.Chess.EncodedPositions
       }
     }
 
-   
+
+    /// <summary>
+    /// Returns the move having highest probability.
+    /// </summary>
+    public EncodedMove BestMove
+    {
+      get
+      {
+        EncodedMove bestMove = default;
+        float bestProb = 0;
+        foreach (var entry in Enumerator())
+        {
+          if (entry.probability > bestProb)
+          {
+            bestProb = entry.probability;
+            bestMove = entry.move;
+          }
+        }
+        return bestMove;
+      }
+    }
 
     #endregion
 
