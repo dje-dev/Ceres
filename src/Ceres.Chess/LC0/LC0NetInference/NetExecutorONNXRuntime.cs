@@ -1,4 +1,4 @@
-//#define FEATURE_ONNX
+#define FEATURE_ONNX
 #if NOT
 // requires packages: (actually, probably possible and best to install the Gpu package only)
 // NOTE: the Gpu version may have a dependency on a specific version of CUDA \
@@ -28,13 +28,11 @@ using System;
 using System.Diagnostics;
 using System.Collections.Generic;
 using Ceres.Base;
+using Microsoft.ML.OnnxRuntime;
+using Microsoft.ML.OnnxRuntime.Tensors;
 
 
 #if FEATURE_ONNX
-// needs     <PackageReference Include="Microsoft.ML.OnnxRuntime.Managed" Version="1.6.0" />
-
-using Microsoft.ML.OnnxRuntime;
-using Microsoft.ML.OnnxRuntime.Tensors;
 #endif
 
 #endregion
@@ -94,7 +92,11 @@ namespace Ceres.Chess.LC0NetInference
 //        options.AppendExecutionProvider_CUDA();
         Session = new InferenceSession(onnxFileName, options);
 #endif
-        Session = new InferenceSession(onnxFileName, SessionOptions.MakeSessionOptionWithCudaProvider(/*gpuID*/));
+        SessionOptions so = new SessionOptions();
+        so.GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_EXTENDED;
+        so.AppendExecutionProvider_CUDA(0);
+
+        Session = new InferenceSession(onnxFileName, so);
       }
 #else
         Session = new InferenceSession(onnxFileName);
