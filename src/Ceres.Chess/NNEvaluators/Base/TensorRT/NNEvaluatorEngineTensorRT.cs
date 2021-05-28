@@ -136,19 +136,17 @@ namespace Chess.Ceres.NNEvaluators.TensorRT
     PositionEvaluationBatch DoEvaluateBatch(IEncodedPositionBatchFlat batch, int numToProcess, bool verbose = false, 
                                       bool retrieveValueFCActivations = false) // ** MAKE VIRTUAL
     {
-      if (batch.NumPos > Config.MaxBatchSize) 
+      if (batch.NumPos > Config.MaxBatchSize)
+      {
         throw new Exception($"Requested batch size {batch.NumPos} for TensorRT exceeds specified maximum {Config.MaxBatchSize}");
-      if (batch.NumPos == 0) throw new Exception("Empty batch");
+      }
+
+      if (batch.NumPos == 0)
+      {
+        throw new Exception("Empty batch");
+      }
 
       NNEvaluatorStats.UpdateStatsForBatch(GPUID, numToProcess);
-
-#if NOT
-      if (Config.GPUID !=  TRT_GPU)
-      {
-        if (TRT_GPU != -1) throw new NotImplementedException("Implementation restriction: DLL TRTRun call not multithreaded");
-        TRT_GPU = Config.GPUID;
-      }
-#endif
 
       if (numToProcess <= 0) throw new ArgumentOutOfRangeException($"numToProcess must be greater than zero {numToProcess}");
       if (numToProcess > 2048) throw new ArgumentOutOfRangeException("TensorRT engines are unlikely to be able to process >2048 positions");
@@ -168,6 +166,7 @@ namespace Chess.Ceres.NNEvaluators.TensorRT
                     : new float[numToProcessPadded * EncodedPolicyVector.POLICY_VECTOR_LENGTH]; 
         int NUM_VALUE_OUTPUTS = (Config.IsWDL ? 3 : 1);
         Span<FP16> results = stackalloc FP16[numToProcessPadded * NUM_VALUE_OUTPUTS];
+        Span<FP16> resultsMLH = stackalloc FP16[numToProcessPadded * 1];
 
         if (retrieveValueFCActivations) throw new Exception("The ONNX version of our TensorRT library does not expose inner layers");
         float[] rawResultsConvValFlat = retrieveValueFCActivations ? new float[numToProcessPadded * NUM_VALUE_OUTPUTS * 32 * 64] : new float[1]; // Note: can't be null or empty, since we use in fixed statement below
@@ -201,6 +200,7 @@ Updated notes:
         unsafe
         {
           float* rawResultsValue = stackalloc float[numToProcessPadded * NUM_VALUE_OUTPUTS];
+          float* rawResultsMLH = stackalloc float[numToProcessPadded * 1];
 
           fixed (byte* inputPlaneValuesF = &batch.PosPlaneValues[0])
           fixed (ulong* inputPlaneBitmapsF = &batch.PosPlaneBitmaps[0])
@@ -220,7 +220,9 @@ Updated notes:
                                inputPlaneBitmapsF, inputPlaneValuesF, numToProcessPadded,
                                rawInputModificationIndex,
                                rawInputModificationDelta,
-                               rawResultsValue, resultsPolicyPtr, resultsValueFC2Ptr);
+                               rawResultsValue,
+                               rawResultsMLH,
+                               resultsPolicyPtr, resultsValueFC2Ptr);
 
               if (errCode != 0)
               {
@@ -231,19 +233,13 @@ Updated notes:
 
             if (verbose) Console.WriteLine($"\r\n {numToProcess} BEST NUM BATCHES PER SECOND, exit now " + (1.0 / bestTime)); //           System.Environment.Exit(3);
 
-//            EventSourceCeres.Log.WriteMetric("TRT (last eval/sec)", (numToProcess / (float)bestTime));
-//            EventSourceCeres.Log.WriteMetric("TRT (last batch size)", numToProcess);
-
             Span<float> rawResultsValueSpan = new Span<float>(rawResultsValue, numToProcess * NUM_VALUE_OUTPUTS);
+            Span<float> rawResultsMLHSpan = new Span<float>(rawResultsMLH, numToProcess * 1);
             for (int i = 0; i < numToProcess; i++)
+            {
               results[i] = (FP16)rawResultsValueSpan[i];
-//              rawResultsValueSpan.CopyTo(results);
-
-#if NOT
-            for (int i = 0; i < numToProcess; i++)
-              if (float.IsNaN(results[i]))
-                Console.WriteLine("TRT sees NaN " + i);
-#endif
+              resultsMLH[i] = (FP16)rawResultsMLHSpan[i];
+            }
           }
         }
 
@@ -251,14 +247,17 @@ Updated notes:
         Span<Int32> policyIndicies = MemoryMarshal.Cast<float, Int32>(rawResultsPolicy).Slice(0, NUM_ELEMENTS);
         Span<float> policyProbabilities = rawResultsPolicy.Slice(Config.MaxBatchSize * NUM_TOPK_POLICY, NUM_ELEMENTS);
 
-        if (Config.HasM) throw new Exception("MLH not currenty retrieved");
+        if (!Config.IsWDL || !Config.HasM)
+        {
+          throw new Exception("WDL and/or MLH missing, TRT backend currently probably assumes they are present");
+        }
 
         const bool VALUES_ARE_LOGISTIC = true; // the values are exponentiated already in the C++ code
         PositionEvaluationBatch retBatch = new PositionEvaluationBatch(Config.IsWDL, Config.HasM, 
                                      numToProcess, results, 
                                      NUM_TOPK_POLICY,
                                      policyIndicies, policyProbabilities,
-                                     null, // TODO: MLH not yet supported
+                                     resultsMLH,
                                      null, //rawResultsConvValFlat,
                                      VALUES_ARE_LOGISTIC,
                                      PositionEvaluationBatch.PolicyType.Probabilities, timeStats);
@@ -275,16 +274,9 @@ Updated notes:
 
     #region DLL interface
 
-    // NOTE that versions of TensorRT prior to late 2020 had an insidious bug
-    // where the results for certain batch sizes were incorrect.
-
-    const bool USE_TRT7 = false; // latency seems maybe 15% lower (better) for TRT7 version (?)
-    const bool USE_TRT713 = true;
-    public const string DLL = USE_TRT713 ?
-                                @"c:\dev\CeresOther\trt713\TRTEXEC.DLL"   //*** see notes above
-                               : (USE_TRT7 ? @"c:\dev\CeresOther\trt7\TRTEXEC.DLL" 
-                                           : @"c:\dev\CeresOther\trt\TRTEXEC.DLL");
-
+    // TODO: remove hardcoding
+    public const string DLL = @"c:\dev\CeresOther\trt713\TRTEXEC.DLL";
+                              
     [DllImport(DLL, CallingConvention = CallingConvention.Cdecl)]
     [SuppressUnmanagedCodeSecurity()]
     public unsafe static extern int TRTInit(int sessionID, int gpuID, int priorityLevel,
@@ -303,7 +295,9 @@ Updated notes:
                                         int inputDataNumInputs,
                                         int rawInputModificationIndex,
                                         float rawInputModificationDelta,
-                                        float* resultValue, float* resultsPolicy,
+                                        float* resultValue,
+                                        float* resultMLH,
+                                        float* resultsPolicy,
                                         float* resultsValueFC2);
 
     [DllImport(DLL, CallingConvention = CallingConvention.Cdecl)]
@@ -323,16 +317,10 @@ Updated notes:
 
     static NNEvaluatorEngineTensorRT()
     {
-//      Environment.SetEnvironmentVariable("Path", @"C:\dev\CeresOther\trt713;" + Environment.GetEnvironmentVariable("Path"));
-
+      // TODO: remove hardcoding
       string path = System.Environment.GetEnvironmentVariable("PATH");
-      if (USE_TRT713)
-        path = PATH_PREPEND = @"c:\dev\CeresOther\trt713;" + path;
-      else if (USE_TRT7)
-        path = PATH_PREPEND = @"c:\dev\CeresOther\trt7;" + path;
-      else
-        path = PATH_PREPEND = @"c:\dev\CeresOther\trt;" + path;
-      System.Environment.SetEnvironmentVariable("PATH", path);
+      path = PATH_PREPEND = @"c:\dev\CeresOther\trt713;" + path;
+      Environment.SetEnvironmentVariable("PATH", path);
     }
 
 
@@ -359,7 +347,6 @@ Updated notes:
     static object[] sessionActiveLocks = new object[MAX_SESSIONS];
 
 
-    // --------------------------------------------------------------------------------------------
     public static void ReleaseAllSessions()
     {
       lock (sessionLockObj)
@@ -368,8 +355,11 @@ Updated notes:
         for (int i = 0; i < MAX_SESSIONS; i++)
         {
           if (sessionAttachCounts[i] > 0)
+          {
             throw new Exception($"Cannot release session {i}, currently active");
+          }
         }
+
         for (int i = 0; i < MAX_SESSIONS; i++)
         {
           if (sessionConfigs[i] != null)
@@ -381,12 +371,10 @@ Updated notes:
             sessionActiveLocks[i] = null;
           }
         }
-
       }
-
     }
 
-    // --------------------------------------------------------------------------------------------
+
     static void DetachFromSession(int sessionID)
     {
       lock (sessionLockObj)
@@ -399,7 +387,7 @@ Updated notes:
 
     }
 
-    // --------------------------------------------------------------------------------------------
+
     static unsafe int GetSessionToAttachTo(NNEvaluatorEngineTensorRTConfig config, bool shared)
     {
       // TRTInit is not threadsafe, so use of lock above is essential 
@@ -408,7 +396,10 @@ Updated notes:
         int firstFree = -1;
         for (int i = 0; i < MAX_SESSIONS; i++)
         {
-          if (sessionConfigs[i] == null && firstFree == -1) firstFree = i;
+          if (sessionConfigs[i] == null && firstFree == -1)
+          {
+            firstFree = i;
+          }
 
           if (sessionConfigs[i] != null && sessionConfigs[i].Equals(config))
           {
@@ -424,12 +415,13 @@ Updated notes:
         if (firstFree == -1) throw new Exception($"Too many WFEvalNetTensorRT sessions active simultaneously, maximum {MAX_SESSIONS}");
 
         const bool FORCE_REBUILD = false;
-
         int errCode = TRTInit(firstFree, config.GPUID, (int)config.PriorityLevel, config.UFFFileName, config.IsWDL, FORCE_REBUILD,
                               config.MaxBatchSize, null, config.MaxBatchSize, (int)config.Precision, config.RetrieveValueFCActivations);
 
         if (errCode != 0)
+        {
           throw new Exception("TRTInit returned error code " + errCode);
+        }
 
         sessionAttachCounts[firstFree]++;
         sessionConfigs[firstFree] = config;
