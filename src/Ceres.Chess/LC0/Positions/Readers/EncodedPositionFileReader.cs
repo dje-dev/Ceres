@@ -78,7 +78,7 @@ namespace Ceres.Chess.EncodedPositions
                 if (numGamesProcessed >= maxGames) yield break;
 
                 // Uncompressed read
-                const bool MIRROR_PLANES = true; // The board convention differs between this file storage format and what is sent to the neural network input
+                const bool MIRROR_PLANES = false; // The board convention differs between this file storage format and what is sent to the neural network input
                 int numRead = ReadFromStream(decompressionStream, buffer, ref rawPosBuffer, MIRROR_PLANES);
 
                 if (options.HasFlag(ReaderOptions.FillInMoveNum))

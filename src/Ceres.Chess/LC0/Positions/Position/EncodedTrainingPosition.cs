@@ -13,10 +13,8 @@
 
 #region Using directives
 
-using Ceres.Chess.EncodedPositions.Basic;
 using System;
 using System.Runtime.InteropServices;
-
 
 #endregion
 
@@ -58,51 +56,6 @@ namespace Ceres.Chess.EncodedPositions
 
     #endregion
 
-    // Version
-    // V4_STRUCT_STRING = '4s7432s832sBBBBBBBbffff'
-    // V3_STRUCT_STRING = '4s7432s832sBBBBBBBb'
-
-
-    /// <summary>
-    /// Dumps information about the training position to the Console.
-    /// </summary>
-    public unsafe void Dump()
-    {
-      Console.WriteLine("\r\nEncodedTrainingPosition");
-      Console.WriteLine ("We are " + (Position.MiscInfo.InfoPosition.SideToMove == 0 ? "White" : "Black") + " result our perspective: " + Position.MiscInfo.InfoTraining.ResultFromOurPerspective);
-      Console.WriteLine("Relative points us " + Position.GetPlanesForHistoryBoard(0).RelativePointsUs);
-      for (int i=0;i<8;i++) Console.WriteLine("History " + i + " " + Position.FENForHistoryBoard(i));
-      for (int i = 0; i < EncodedPolicyVector.POLICY_VECTOR_LENGTH; i++)
-      {
-        if (Policies.ProbabilitiesPtr[i] != 0 && !float.IsNaN(Policies.ProbabilitiesPtr[i]))
-        {
-          bool isPawnMove = false; // TO DO: fill in 
-          bool isKingMove = false; // TO DO: fill in
-          EncodedMove lm = EncodedMove.FromNeuralNetIndex(i, isPawnMove, isKingMove);
-        }
-      }
-
-    }
-
-    /// <summary>
-    /// Performs a few integrity checks on the position and throws Exception if any fail.
-    /// </summary>
-    public void CheckValid()
-    {
-      int size = Marshal.SizeOf(typeof(EncodedTrainingPosition));
-      //if (size != 8276 + 16) throw new Exception("LZTrainingPositionRaw wrong size: " + size);
-
-      if (Position.BoardsHistory.History_0.OurKing.NumberBitsSet != 1 || Position.BoardsHistory.History_0.OurKing.NumberBitsSet != 1)
-      {
-        throw new Exception("Invalid position, does not have one king per side");
-      }
-
-      float sumProbs = Policies.SumProbabilites;
-      if (sumProbs < 0.995 || sumProbs > 1.005)
-      {
-        throw new Exception("Probabilities sum to " + sumProbs);
-      }
-    }
 
     #region Overrides
 
