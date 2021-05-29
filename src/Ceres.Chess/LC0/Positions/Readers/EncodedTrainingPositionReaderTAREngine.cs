@@ -29,10 +29,10 @@ using Ceres.Base.DataType;
 namespace Ceres.Chess.EncodedPositions
 {
   /// <summary>
-  /// Static helper method for enumerating all the raw positions
-  /// contained in a Leela Chess Zero raw training file (packed withTAR).
+  /// Static internal helper class for enumerating all the raw positions
+  /// contained in a Leela Chess Zero raw training file (packed with TAR).
   /// </summary>
-  public static class EncodedPositionFileReader
+  internal static class EncodedTrainingPositionReaderTAREngine
   {
     [Flags]
     public enum ReaderOptions {  None, FillInMoveNum };
@@ -57,7 +57,10 @@ namespace Ceres.Chess.EncodedPositions
         IReader reader = ReaderFactory.Open(stream);
         while (reader.MoveToNextEntry())
         {
-          if (numPositionsProcessed >= maxPositions) yield break;
+          if (numPositionsProcessed >= maxPositions)
+          {
+            yield break;
+          }
 
           if (!reader.Entry.IsDirectory && reader.Entry.Key.ToLower().EndsWith("gz"))
           {
