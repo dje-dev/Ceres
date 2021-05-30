@@ -32,7 +32,7 @@ namespace Ceres.Chess.EncodedPositions
   /// Static internal helper class for enumerating all the raw positions
   /// contained in a Leela Chess Zero raw training file (packed with TAR).
   /// </summary>
-  internal static class EncodedTrainingPositionReaderTAREngine
+  public static class EncodedTrainingPositionReaderTAREngine
   {
     [Flags]
     public enum ReaderOptions {  None, FillInMoveNum };

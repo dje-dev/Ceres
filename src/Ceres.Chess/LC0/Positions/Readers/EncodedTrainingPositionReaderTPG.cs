@@ -94,9 +94,9 @@ namespace Ceres.Chess.EncodedPositions
     /// </summary>
     public ReadOnlySpan<EncodedTrainingPosition> Read(int numPositions)
     {
-      if (numPositions > BUFFER_POSITIONS_PER_BUFFER)
+      if (buffer == null || buffer.Length < numPositions)
       {
-        throw new Exception($"Maximum supported numPositions per read is {numPositions}");
+        buffer = new byte[numPositions * Marshal.SizeOf<EncodedTrainingPosition>()];
       }
 
       int numBytes;
@@ -108,7 +108,6 @@ namespace Ceres.Chess.EncodedPositions
       if (numBytesRead == 0) return null;
 
       Span<byte> bufferSpan = buffer.AsSpan().Slice(0, numBytesRead);
-      int numRecordsRead = numBytesRead / EncodedTrainingPosition.V6_LEN;
       ReadOnlySpan<EncodedTrainingPosition> bufferAsPositions = MemoryMarshal.Cast<byte, EncodedTrainingPosition>(bufferSpan);
       return bufferAsPositions;
     }
