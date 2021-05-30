@@ -37,16 +37,17 @@ namespace Ceres.Chess.LC0.WeightsProtobuf
     /// Retrieves the weights values from a specified layer.
     /// </summary>
     /// <param name="layer"></param>
+    /// <param name="scale">the linear scaling factor use to encode the layer</param>
     /// <returns></returns>
-    public static float[] GetLayerLinear16(Weights.Layer layer)
+    public static float[] GetLayerLinear16(Weights.Layer layer, out float scaleUsed)
     {
       float[] ret = new float[layer.Params.Length / 2];
 
       float minVal = layer.MinVal;
       float maxVal = layer.MaxVal;
-      float scale = (maxVal - minVal) / 65535.0f;
+      scaleUsed = (maxVal - minVal) / 65535.0f;
       
-      if (scale > 1 && !haveWarned)
+      if (scaleUsed > 1 && !haveWarned)
       {
         Console.Write($"** Warning: network weights encountered outside expected range, layer min = {minVal} max = {maxVal}. ");
         Console.WriteLine("Further warnings will be suppressed.");
@@ -55,8 +56,9 @@ namespace Ceres.Chess.LC0.WeightsProtobuf
 
       for (int i = 0; i < ret.Length; i++)
       {
-        ret[i] = GetLayerLinear16Single(layer, i, minVal, scale);
+        ret[i] = GetLayerLinear16Single(layer, i, minVal, scaleUsed);
       }
+
       return ret;
     }
 
@@ -184,7 +186,7 @@ namespace Ceres.Chess.LC0.WeightsProtobuf
       Weights.Layer layer = layerMap(pbn);
 
       // Get current layer values and get them rewritten
-      float[] values = ProtobufHelpers.GetLayerLinear16(layer);
+      float[] values = ProtobufHelpers.GetLayerLinear16(layer, out _);
       for (int i = 0; i < values.Length; i++)
         values[i] = valueCalc(i, values[i]);
 

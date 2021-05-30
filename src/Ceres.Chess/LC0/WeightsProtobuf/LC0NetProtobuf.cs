@@ -133,14 +133,5 @@ namespace Ceres.Chess.LC0.WeightsProtobuf
       Console.WriteLine($"Accuracy       { Net.TrainingParams.Accuracy,  10:F2}%");
     }
 
-    public float[] biasesFirstConvLayer => ProtobufHelpers.GetLayerLinear16(Net.Weights.Input.Biases);
-    public float[] weightsFirstConvLayer => ProtobufHelpers.GetLayerLinear16(Net.Weights.Input.Weights);
-
-    public float[] ValueHeadFC1Weights => ProtobufHelpers.GetLayerLinear16(Net.Weights.Ip1ValW);
-    public float[] ValueHeadFC2Weights => ProtobufHelpers.GetLayerLinear16(Net.Weights.Ip2ValW);
-
-    public float[] ValueHeadFC1Biases => ProtobufHelpers.GetLayerLinear16(Net.Weights.Ip1ValB);
-    public float[] ValueHeadFC2Biases => ProtobufHelpers.GetLayerLinear16(Net.Weights.Ip2ValB);
-
   }
 }
