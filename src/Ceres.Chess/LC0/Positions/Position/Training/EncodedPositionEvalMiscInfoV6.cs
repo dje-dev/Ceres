@@ -40,37 +40,123 @@ namespace Ceres.Chess.EncodedPositions
     public readonly byte InvarianceInfo;
     public readonly EncodedPositionMiscInfo.ResultCode ResultFromOurPerspective;
 
+    /// <summary>
+    /// (Win - loss) probability at root. [8280]
+    /// </summary>
     public readonly float RootQ;
+
+    /// <summary>
+    /// (Win - loss) probability at best move node. [8284]
+    /// </summary>
     public readonly float BestQ;
+
+    /// <summary>
+    /// Draw probability at root of search. [8288]
+    /// </summary>
     public readonly float RootD;
+
+    /// <summary>
+    /// Draw probability at best move node. [8292]
+    /// </summary>
     public readonly float BestD;
 
-    public readonly float RootM;      // In plies.             
-    public readonly float BestM;      // In plies.              
-    public readonly float PliesLeft;
+    /// <summary>
+    /// MLH average at root at end of search (in plies). [8296]
+    /// </summary>
+    public readonly float RootM; 
 
+    /// <summary>
+    /// MLH average of node having top N at root (in plies). [8300]
+    /// </summary>
+    public readonly float BestM;
+
+    /// <summary>
+    /// Actual number of plies remaining in game. [8304]
+    /// </summary>
+    public readonly float PliesLeft; 
+
+    /// <summary>
+    /// Value head output (W-L) of move with max N. [8308]
+    /// </summary>
     public readonly float ResultQ;
+
+    /// <summary>
+    /// Value head output (D) of move with max N. [8312]
+    /// </summary>
     public readonly float ResultD;
+
+    /// <summary>
+    /// Q value of move actually played. [8316]
+    /// </summary>
     public readonly float PlayedQ;
+
+    /// <summary>
+    /// D value of move actually playeed. [8320]
+    /// </summary>
     public readonly float PlayedD;
+
+    /// <summary>
+    /// M value of move actually played. [8324]
+    /// </summary>
     public readonly float PlayedM;
 
     // The folowing may be NaN if not found in cache.
-    public readonly float OriginalQ;      // For value repair.     
+    /// <summary>
+    /// Value head output (W-L) at root node (possibly NaN if not found in cache, useful for value repair). [8328]
+    /// </summary>
+    public readonly float OriginalQ;
+
+    /// <summary>
+    /// Value head output (D) at root node (possibly NaN if not found in cache, useful for value repair). [8332]
+    /// </summary>
     public readonly float OriginalD;
+
+    /// <summary>
+    /// Moves left head output (M) at root node (possibly NaN if not found in cache). [8336]
+    /// </summary>
     public readonly float OriginalM;
+
+    /// <summary>
+    /// Number of visits below root node in search. [8340]
+    /// </summary>
     public readonly int NumVisits;
 
-    // Indices in the probabilities array.
+    /// <summary>
+    /// Index of the actually played move in game. [8344]
+    /// </summary>
     public readonly short PlayedIndex;
+
+    /// <summary>
+    /// Index of move having maximal N at end of search. [8346]
+    /// </summary>
     public readonly short BestIndex;
 
-    // originally: public readonly long Reserved;
+    // originally: public readonly long Reserved; [8348]
     public readonly float Unused1;
     public readonly float Unused2;
 
 
     #region Helper methods
+
+    /// <summary>
+    /// Result (game outcome) WDL distribution.
+    /// </summary>
+    public (float w, float d, float l) ResultWDL =>  
+         (0.5f * (1.0f - ResultD + ResultQ),
+          ResultD,
+          0.5f * (1.0f - ResultD - ResultQ)
+         );
+    
+
+    /// <summary>
+    /// Neural network WDL distribution at best move node after search.
+    /// </summary>
+    public (float w, float d, float l) BestWDL =>
+         (0.5f * (1.0f - BestD + BestQ),
+          BestD,
+          0.5f * (1.0f - BestD - BestQ)
+         );
+
 
     /// <summary>
     /// Returns if the played move was not the best move (noise induced alternate chosen).
@@ -124,6 +210,6 @@ namespace Ceres.Chess.EncodedPositions
            && this.BestD == other.BestD;
     }
 
-    #endregion
+#endregion
   }
 }

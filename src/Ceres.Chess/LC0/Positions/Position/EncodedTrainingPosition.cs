@@ -15,6 +15,7 @@
 
 using System;
 using System.Runtime.InteropServices;
+using Google.Protobuf.Reflection;
 
 #endregion
 
@@ -56,6 +57,70 @@ namespace Ceres.Chess.EncodedPositions
 
     #endregion
 
+    #region Validity checking
+
+
+    /// <summary>
+    /// Validates that a givne value is a valid probability.
+    /// </summary>
+    /// <param name="desc1"></param>
+    /// <param name="desc2"></param>
+    /// <param name="prob"></param>
+    static void ValidateProbability(string desc1, string desc2, float prob)
+    {
+      if (float.IsNaN(prob))
+      {
+        throw new Exception("NaN probability found " + desc1 + " " + desc2);
+      }
+
+      if (prob < -1.01f || prob > 1.01f)
+      {
+        throw new Exception("Probability outside range [-1.01, 1.01] " + desc1 + " " + desc2);
+      }
+    }
+
+    /// <summary>
+    /// Validates that all values in a WDL triple are valid probabilities.
+    /// </summary>
+    /// <param name="desc1"></param>
+    /// <param name="desc2"></param>
+    /// <param name="wdl"></param>
+    static void ValidateWDL(string desc1, string desc2, (float w, float d, float l) wdl)
+    {
+      ValidateProbability(desc1, desc2, wdl.w);
+      ValidateProbability(desc1, desc2, wdl.d);
+      ValidateProbability(desc1, desc2, wdl.l);
+    }
+
+    /// <summary>
+    /// Validates that key fields (game result, best Q, policies) are all valid.
+    /// </summary>
+    /// <param name="desc"></param>
+    public void ValidateIntegrity(string desc)
+    {
+      ValidateWDL(desc, "BestWDL", Position.MiscInfo.InfoTraining.BestWDL);
+      ValidateWDL(desc, "ResultWDL", Position.MiscInfo.InfoTraining.ResultWDL);
+
+      float[] probs = Policies.Probabilities;
+      for (int i = 0; i < 1858; i++)
+      {
+        
+        float policy = probs[i];
+        if (policy == -1)
+        {
+          // Invalid policiies may be represented as -1
+          policy = 0;
+        }
+
+        if (float.IsNaN(policy) || policy > 1.01 || policy < 0)
+        {
+          throw new Exception("Policy invalid " + policy + " " + desc);
+        }
+      }
+
+    }
+
+    #endregion
 
     #region Overrides
 
