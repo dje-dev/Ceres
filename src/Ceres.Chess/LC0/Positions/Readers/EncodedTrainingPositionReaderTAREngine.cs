@@ -81,8 +81,7 @@ namespace Ceres.Chess.EncodedPositions
                 if (numGamesProcessed >= maxGames) yield break;
 
                 // Uncompressed read
-                const bool MIRROR_PLANES = false; // The board convention differs between this file storage format and what is sent to the neural network input
-                int numRead = ReadFromStream(decompressionStream, buffer, ref rawPosBuffer, MIRROR_PLANES);
+                int numRead = ReadFromStream(decompressionStream, buffer, ref rawPosBuffer);
 
                 if (options.HasFlag(ReaderOptions.FillInMoveNum))
                 {
@@ -112,7 +111,7 @@ namespace Ceres.Chess.EncodedPositions
     }
 
 
-    public static int ReadFromStream(Stream stream, byte[] rawBuffer, ref EncodedTrainingPosition[] buffer, bool mirrorBoardBitmaps)
+    public static int ReadFromStream(Stream stream, byte[] rawBuffer, ref EncodedTrainingPosition[] buffer)
     {
       // Read decompressed bytes
       int bytesRead = stream.Read(rawBuffer, 0, rawBuffer.Length);
@@ -138,13 +137,6 @@ namespace Ceres.Chess.EncodedPositions
         }
       }
 
-      if (mirrorBoardBitmaps)
-      {
-        for (int i = 0; i < numDeserialized; i++)
-        {
-          buffer[i].Position.BoardsHistory.MirrorBoardsInPlace();
-        }
-      }
       return numDeserialized;
     }
 

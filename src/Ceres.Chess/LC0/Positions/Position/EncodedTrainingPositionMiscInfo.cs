@@ -91,6 +91,10 @@ namespace Ceres.Chess.EncodedPositions
       }
     }
 
+    /// <summary>
+    /// Updates ResultQ and ResultD fields to reflect specified game result.
+    /// </summary>
+    /// <param name="gameResult"></param>
     public void SetResult(GameResultEnum gameResult)
     {
       fixed (float* ptrQ = &InfoTraining.ResultQ)
@@ -118,12 +122,6 @@ namespace Ceres.Chess.EncodedPositions
         }
       }
     }
-
-    public float BestQW => 0.5f * (1.0f - InfoTraining.BestD + InfoTraining.BestQ);
-    public float BestQD => InfoTraining.BestD;
-    public float BestQL => 0.5f * (1.0f - InfoTraining.BestD - InfoTraining.BestQ);
-
-    public float[] BestQArray => new float[] { BestQW, BestQD, BestQL };
 
     static EncodedPositionMiscInfo.ResultCode ReversedResult(EncodedPositionMiscInfo.ResultCode result) => result == EncodedPositionMiscInfo.ResultCode.Draw ? EncodedPositionMiscInfo.ResultCode.Draw
                                                                                      : (result == EncodedPositionMiscInfo.ResultCode.Win ? EncodedPositionMiscInfo.ResultCode.Loss : EncodedPositionMiscInfo.ResultCode.Win);
