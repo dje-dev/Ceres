@@ -13,6 +13,7 @@
 
 #region Using directives
 
+using System;
 using System.Collections.Generic;
 
 #endregion
@@ -25,7 +26,49 @@ namespace Ceres.Chess.EncodedPositions
   /// </summary>
   public interface IEncodedTrainingPositionReader
   {
+    /// <summary>
+    /// Enumerates all positions sequentiall.
+    /// </summary>
+    /// <returns></returns>
     IEnumerable<EncodedTrainingPosition> EnumeratePositions();
+
+
+    /// <summary>
+    /// Enumerates as a sequence of batches of specified maximum size.
+    /// </summary>
+    /// <param name="maxPositionsPerBatch"></param>
+    /// <param name="positionSkipCount">difference in sequential position index between selected positions, 1 for all positions</param>
+    /// <returns></returns>
+    IEnumerable<Memory<EncodedTrainingPosition>> EnumerateBatches(int maxPositionsPerBatch, int positionSkipCount = 1)
+    {
+      EncodedTrainingPosition[] buffer = new EncodedTrainingPosition[maxPositionsPerBatch];
+
+      int countRead = 0;
+      int countWrittenThisBatch = 0;
+      foreach (EncodedTrainingPosition pos in EnumeratePositions())
+      {
+        if (countRead++ % positionSkipCount != 0)
+        {
+          continue;
+        }
+
+        buffer[countWrittenThisBatch++] = pos;
+
+        if (countWrittenThisBatch >= maxPositionsPerBatch)
+        {
+          yield return buffer;
+          countWrittenThisBatch = 0;
+          break;
+        }
+      }
+
+      // Return any residual positions not filling batch.
+      if (countWrittenThisBatch > 0)
+      {
+        yield return new Memory<EncodedTrainingPosition>(buffer).Slice(0, countWrittenThisBatch);
+      }
+    }
+
   }
 
 }
