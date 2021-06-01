@@ -38,7 +38,11 @@ namespace Ceres.Chess.EncodedPositions
     //  bit 1: mirror transform (input type 3)
     //  bit 0: flip transform (input type 3)
     public readonly byte InvarianceInfo;
-    public readonly EncodedPositionMiscInfo.ResultCode ResultFromOurPerspective;
+
+    /// <summary>
+    /// Game result prior to v6.
+    /// </summary>
+    public readonly byte DepResult;
 
     /// <summary>
     /// (Win - loss) probability at root. [8280]
@@ -185,10 +189,11 @@ namespace Ceres.Chess.EncodedPositions
 
     public override int GetHashCode()
     {
-      int part1 = ResultFromOurPerspective.GetHashCode();
-      int part2 = HashCode.Combine(BestD, BestQ, RootD, BestD);
+      throw new NotImplementedException();
+      //int part1 = ResultFromOurPerspective.GetHashCode();
+      //int part2 = HashCode.Combine(BestD, BestQ, RootD, BestD);
 
-      return HashCode.Combine(part1, part2);
+      //return HashCode.Combine(part1, part2);
     }
 
 
@@ -203,11 +208,7 @@ namespace Ceres.Chess.EncodedPositions
 
     public bool Equals(EncodedPositionEvalMiscInfoV6 other)
     {
-      return this.ResultFromOurPerspective == other.ResultFromOurPerspective
-           && this.RootQ == other.RootQ
-           && this.BestQ == other.BestQ
-           && this.RootD == other.RootD
-           && this.BestD == other.BestD;
+      throw new NotImplementedException();
     }
 
 #endregion

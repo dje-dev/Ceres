@@ -110,7 +110,7 @@ namespace Ceres.Chess.EncodedPositions
 
             case GameResultEnum.Draw:
               *ptrQ = 0.0f;
-              *ptrD = 0.0f;
+              *ptrD = 1.0f;
               break;
 
             case GameResultEnum.Loss:
@@ -125,7 +125,6 @@ namespace Ceres.Chess.EncodedPositions
 
     static EncodedPositionMiscInfo.ResultCode ReversedResult(EncodedPositionMiscInfo.ResultCode result) => result == EncodedPositionMiscInfo.ResultCode.Draw ? EncodedPositionMiscInfo.ResultCode.Draw
                                                                                      : (result == EncodedPositionMiscInfo.ResultCode.Win ? EncodedPositionMiscInfo.ResultCode.Loss : EncodedPositionMiscInfo.ResultCode.Win);
-    public EncodedPositionMiscInfo.ResultCode ResultFromWhitePerspective => WhiteToMove ? InfoTraining.ResultFromOurPerspective : ReversedResult(InfoTraining.ResultFromOurPerspective);
 
     public bool WhiteToMove => InfoPosition.SideToMove == 0;
 
