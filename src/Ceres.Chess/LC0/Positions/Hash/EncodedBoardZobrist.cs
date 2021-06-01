@@ -185,24 +185,6 @@ namespace Ceres.Chess.EncodedPositions
 
     #endregion
 
-    /// <summary>
-    ///
-    /// Performance August 2019: approximately positions 11mm/second (thus just over 1 million positions with  history)
-    /// </summary>
-    public static void PerformanceTest()
-    {
-      Position posx = Position.FromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
-      EncodedTrainingPosition rawPos = default;
-      rawPos.Position.SetFromPosition(in posx, true, posx.MiscInfo.SideToMove);
-
-      EncodedPositionBoard board = rawPos.Position.GetPlanesForHistoryBoard(0);
-
-      while (true)
-        using (new TimingBlock("Zobrist"))
-          for (int i = 0; i < 1_000_000; i++)
-            ZobristHash(in board);
-    }
-
   }
 
 }
