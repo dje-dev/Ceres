@@ -528,6 +528,28 @@ namespace Ceres.Base.Math
       return ret;
     }
 
+
+    /// <summary>
+    /// Returns entropy of a probability distribution.
+    /// </summary>
+    /// <param name="f"></param>
+    /// <returns></returns>
+    public static float Entropy(Span<float> f)
+    {
+      float acc = 0;
+      for (int i=0; i<f.Length;i++)
+      {
+        float value = f[i];
+        if (value > 0)
+        {
+          acc += value * System.MathF.Log(value);
+        }
+      }
+
+      return -acc;
+    }
+
+
     /// <summary>
     /// Equivalent to Tensorflow softmax_cross_entropy_with_logits.
     /// </summary>
