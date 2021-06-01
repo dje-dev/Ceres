@@ -88,7 +88,10 @@ namespace Ceres.Chess.LC0.WeightsProtobuf
     /// <param name="fn"></param>
     public LC0ProtobufNet(string fn)
     {
-      if (!File.Exists(fn)) throw new ArgumentException($"No such protobuf file found {fn}");
+      if (!File.Exists(fn))
+      {
+        throw new ArgumentException($"No such protobuf file found {fn}");
+      }
 
       // Read data from file, decompressing if necessary.
       byte[] data = FileUtils.IsZippedFile(fn) ? CompressionUtils.GetDecompressedBytes(fn) 
@@ -96,7 +99,15 @@ namespace Ceres.Chess.LC0.WeightsProtobuf
 
       Net = SerializationUtils.ProtoDeserialize<Net>(data);
 
-      if (Net == null) throw new Exception($"Failure reading/parsing net {fn}");
+      if (Net == null)
+      {
+        throw new Exception($"Failure reading/parsing net {fn}");
+      }
+
+      if (Net.Format.NetworkFormat.Input != NetworkFormat.InputFormat.InputClassical112Plane)
+      {
+        throw new Exception($"Only network format InputClassical112Plane is supported, not {Net.Format.NetworkFormat.Input} in {fn}.");
+      }
     }
 
 
