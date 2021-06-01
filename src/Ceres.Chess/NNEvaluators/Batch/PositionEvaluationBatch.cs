@@ -17,9 +17,8 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
-using Ceres.Base;
+
 using Ceres.Base.Benchmarking;
-using Ceres.Base.DataType;
 using Ceres.Base.DataTypes;
 using Ceres.Chess.EncodedPositions;
 
@@ -225,15 +224,24 @@ namespace Ceres.Chess.NetEvaluation.Batch
         }
 
         double acc = 0;
-        for (int j = 0; j < EncodedPolicyVector.POLICY_VECTOR_LENGTH; j++) acc += buffer[j];
-        if (acc == 0.0) throw new Exception("Sum of unnormalized probabilities was zero.");
+        for (int j = 0; j < EncodedPolicyVector.POLICY_VECTOR_LENGTH; j++)
+        {
+          acc += buffer[j];
+        }
+
+        if (acc == 0.0)
+        {
+          throw new Exception("Sum of unnormalized probabilities was zero.");
+        }
 
         // As performance optimization, only adjust if significantly different from 1.0
         const float MAX_DEVIATION = 0.001f;
         if (acc < 1.0f - MAX_DEVIATION || acc > 1.0f + MAX_DEVIATION)
         {
-          for (int j = 0; j < EncodedPolicyVector.POLICY_VECTOR_LENGTH; j++) 
+          for (int j = 0; j < EncodedPolicyVector.POLICY_VECTOR_LENGTH; j++)
+          {
             buffer[j] = (float)(buffer[j] / acc);
+          }
         }
 
         CompressedPolicyVector.Initialize(ref retPolicies[i], buffer, alreadySorted);
@@ -349,7 +357,10 @@ namespace Ceres.Chess.NetEvaluation.Batch
         this.M = m.ToArray();
       }
 
-      if (valueEvals != null && valueEvals.Length < numPos * (IsWDL ? 3 : 1)) throw new ArgumentException("Wrong value size");
+      if (valueEvals != null && valueEvals.Length < numPos * (IsWDL ? 3 : 1))
+      {
+        throw new ArgumentException("Wrong value size");
+      }
 
       Stats = stats;
     }
@@ -396,36 +407,6 @@ namespace Ceres.Chess.NetEvaluation.Batch
     }
 
 
-#region Dump utilities
-
-    /// <summary>
-    /// Diagnostic method that dumps the contents of the batch to the Console.
-    /// </summary>
-    /// <param name="batchIn"></param>
-    /// <param name="maxPositionsToDump"></param>
-    /// <param name="posAnnotations"></param>
-    public void DumpBatch(EncodedTrainingPosition[] batchIn, int maxPositionsToDump = int.MaxValue, string[] posAnnotations = null)
-    {
-      maxPositionsToDump = Math.Min(this.NumPos, maxPositionsToDump);
-
-      Console.WriteLine($"\r\nWFEvaluationBatch of size {this.NumPos} evaluated in {this.Stats.ElapsedTimeSecs} secs");
-      for (int i = 0; i < maxPositionsToDump; i++)
-      {
-        string fen = batchIn == null ? "(FEN unavailable)" : batchIn[0].Position.FENForHistoryBoard(0);
-
-        string policy = this.Policies.Span[i].DumpStrShort(0, 3);
-        if (posAnnotations != null)
-        {
-          if (i < posAnnotations.Length)
-            Console.Write($"  {posAnnotations[i],-20}");
-          else
-            Console.Write($"  {"",-20}");
-        }
-        Console.WriteLine($"  {fen,-70} Value: {GetV(i),7:F3} ={GetWinP(i):F3}/{GetDrawP(i):F3}/{GetLossP(i):F3}  Policy: {policy} ");
-      }
-
-    }
-
     /// <summary>
     /// Gets the value from the value head at a specified index indicating the win probabilty.
     /// </summary>
@@ -471,7 +452,6 @@ namespace Ceres.Chess.NetEvaluation.Batch
       throw new NotImplementedException();
     }
 
-#endregion
 
   }
 }
