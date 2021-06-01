@@ -60,7 +60,15 @@ namespace Chess.Ceres.NNEvaluators.TensorRT
         fens[0] = Position.StartPosition.FEN;
         fens[1] = Position.StartPosition.FEN;
 
-        EncodedPositionBatchFlat batch = EncodedPositionBatchFlat.FromFENs(true, fens.ToArray());
+        throw new Exception("This needs rewriting to include history planes");
+
+        EncodedPositionBatchFlat batch = null;// new EncodedPositionBatchFlat(EncodedPositionType.PositionOnly, fens.Count);
+#if NOT
+        for (int i = 0; i < count; i++)
+        {
+          batch.Add(position);
+        }
+#endif
         bool append = numWritten > 0;
         WriteCalibFilesNEW(batch,batch.NumPos, append);
 
