@@ -205,13 +205,19 @@ namespace Ceres.Chess.LC0.Batches
       {
         W = new float[NumPos];
         L = new float[NumPos];
-        sbyte result = (sbyte)positions[i].Position.MiscInfo.InfoTraining.ResultFromOurPerspective;
-        if (result == (sbyte)EncodedPositionMiscInfo.ResultCode.Win)
-          W[i] = 1.0f;
-        else if (result == (sbyte)EncodedPositionMiscInfo.ResultCode.Loss)
-          L[i] = 1.0f;
-        else
-          throw new Exception("Internal error: Unknown result code");
+        
+        throw new NotImplementedException("result needs remediation, probably take from ResultD");
+        sbyte result = 0;// (sbyte)positions[i].Position.MiscInfo.InfoTraining.ResultFromOurPerspective;
+
+        switch (result)
+        {
+          case (sbyte)EncodedPositionMiscInfo.ResultCode.Win:
+            W[i] = 1.0f;
+          case (sbyte)EncodedPositionMiscInfo.ResultCode.Loss:
+            L[i] = 1.0f;
+          default:
+            throw new Exception("Internal error: Unknown result code");
+        }
 
 
         ref readonly EncodedTrainingPosition posRef = ref positions[i];
@@ -426,7 +432,10 @@ namespace Ceres.Chess.LC0.Batches
       PosPlaneValues = posPlaneValuesEncoded;
       MaxBatchSize = numPos;
 
-      if (policy != null) Policy = FP16.ToFP16(policy);
+      if (policy != null)
+      {
+        Policy = FP16.ToFP16(policy);
+      }
     }
 
 
@@ -435,7 +444,9 @@ namespace Ceres.Chess.LC0.Batches
       int baseOffset = positionIndex * TOTAL_NUM_PLANES_ALL_HISTORIES;
       Console.WriteLine();
       for (int i = 0; i < 112; i++)
+      {
         Console.WriteLine($"({i},{PosPlaneBitmaps[baseOffset + i] }, {PosPlaneValues[baseOffset + i]}),");
+      }
     }
 
     /// <summary>
@@ -545,10 +556,16 @@ namespace Ceres.Chess.LC0.Batches
           bool shouldCopy = false;
 
           // Is it in the postfix miscellaneous planes?
-          if (modulo112 > 104) shouldCopy = true;
+          if (modulo112 > 104)
+          {
+            shouldCopy = true;
+          }
 
           // Is this plane encoding info from within the first numHistoryPositions positions
-          if (modulo112 < numHistoryPositions * 13) shouldCopy = true;
+          if (modulo112 < numHistoryPositions * 13)
+          {
+            shouldCopy = true;
+          }
 
           if (shouldCopy)
           {
