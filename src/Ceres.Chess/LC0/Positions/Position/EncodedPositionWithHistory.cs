@@ -424,7 +424,7 @@ namespace Ceres.Chess.EncodedPositions
     /// <returns></returns>
     public static Position PositionFromEncodedTrainingPosition(in EncodedTrainingPosition pos)
     {
-      return PositionFromEncodedPosition(in pos.Position);
+      return PositionFromEncodedPosition(pos.PositionWithBoardsMirrored.Mirrored);
     }
 
 

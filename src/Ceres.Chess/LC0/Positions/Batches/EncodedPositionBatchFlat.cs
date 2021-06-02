@@ -189,7 +189,7 @@ namespace Ceres.Chess.LC0.Batches
       Positions = new MGPosition[NumPos];
       for (int i = 0; i < Positions.Length; i++)
       {
-        Positions[i] = trainingPositions[i].Position.FinalPosition.ToMGPosition;
+        Positions[i] = trainingPositions[i].PositionWithBoardsMirrored.Mirrored.FinalPosition.ToMGPosition;
       }
     }
 
@@ -302,6 +302,12 @@ namespace Ceres.Chess.LC0.Batches
       NumPos = numToProcess;
       TrainingType = trainingType;
 
+      if (setPositions)
+      {
+        // Note that the SetPositions method will take care of the necessary unmirroring itself.
+        SetPositions(positions.Slice(0, numToProcess));
+      }
+
       // The position data is stored with the board bitmaps mirrored.
       // Therefore unmirror them here (making a copy so we don't disturb original data).
       // TODO: make this more efficient by eliminating copy and doing the BitVector64.Mirror only when setting target value.
@@ -309,18 +315,13 @@ namespace Ceres.Chess.LC0.Batches
       for (int i = 0; i < NumPos; i++)
       {
         positionsCopy[i] = positions[i];
-        positionsCopy[i].Position.BoardsHistory.MirrorBoardsInPlace();
+        positionsCopy[i].PositionWithBoardsMirrored.BoardsHistory.MirrorBoardsInPlace();
       }
       positions = default; // Make sure the original is not subsequently used.
 
       if (trainingType == EncodedPositionType.PositionAndTrainingData)
       {
         SetTrainingData(positionsCopy);
-      }
-
-      if (setPositions)
-      {
-        SetPositions(positionsCopy);
       }
 
       int nextOutPlaneIndex = 0;
@@ -345,7 +346,7 @@ namespace Ceres.Chess.LC0.Batches
       for (int i = 0; i < numToProcess; i++)
       {
         // Set planes (NOTE: we move all 8 history planes)
-        positionsCopy[i].Position.ExtractPlanesValuesIntoArray(EncodedPositionBoards.NUM_MOVES_HISTORY, PosPlaneBitmaps, nextOutPlaneIndex);
+        positionsCopy[i].PositionWithBoardsMirrored.ExtractPlanesValuesIntoArray(EncodedPositionBoards.NUM_MOVES_HISTORY, PosPlaneBitmaps, nextOutPlaneIndex);
         const int PLANES_WRITTEN = EncodedPositionBoard.NUM_PLANES_PER_BOARD * EncodedPositionBoards.NUM_MOVES_HISTORY;
 
         // Set all values to 1.0f
@@ -355,7 +356,7 @@ namespace Ceres.Chess.LC0.Batches
         nextOutPlaneIndex += PLANES_WRITTEN;
 
         // Copy in special plane values
-        EncodedPositionMiscInfo miscInfo = positionsCopy[i].Position.MiscInfo.InfoPosition;
+        EncodedPositionMiscInfo miscInfo = positionsCopy[i].PositionWithBoardsMirrored.MiscInfo.InfoPosition;
         WritePairWithValue1(miscInfo.Castling_US_OOO > 0 ? ulong.MaxValue : 0);
         WritePairWithValue1(miscInfo.Castling_US_OO > 0 ? ulong.MaxValue : 0);
         WritePairWithValue1(miscInfo.Castling_Them_OOO > 0 ? ulong.MaxValue : 0);
@@ -484,28 +485,6 @@ namespace Ceres.Chess.LC0.Batches
       return new EncodedPositionBatchFlat(pos, pos.Length, EncodedPositionType.PositionOnly, setPositions);
     }
 
-    /// <summary>
-    /// Static factor method to return a batch from a set of FENs 
-    /// </summary>
-    /// <param name="fillInHistoryPlanes"></param>
-    /// <param name="fens"></param>
-    /// <returns></returns>
-    public static EncodedPositionBatchFlat FromFENs(bool fillInHistoryPlanes, params string[] fens)
-    {
-      EncodedTrainingPosition[] pos = new EncodedTrainingPosition[fens.Length];
-
-      for (int i=0;i<fens.Length;i++)
-      {
-        string fen = fens[i];
-
-        Position thisPos = Position.FromFEN(fen);
-        pos[i].Position.SetFromPosition(in thisPos, fillInHistoryPlanes, thisPos.MiscInfo.SideToMove);       
-      }
-
-      EncodedPositionBatchFlat batch = new EncodedPositionBatchFlat(pos, pos.Length, EncodedPositionType.PositionOnly, true);
-      return batch;
-
-    }
 
     /// <summary>
     /// NOTE: not fully tested, and may not be needed anywhere

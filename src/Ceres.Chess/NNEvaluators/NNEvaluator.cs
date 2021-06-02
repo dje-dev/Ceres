@@ -326,14 +326,18 @@ namespace Ceres.Chess.NNEvaluators
     /// <param name="numPositions"></param>
     /// <param name="retrieveSupplementalResults"></param>
     /// <returns></returns>
-    public IPositionEvaluationBatch Evaluate(EncodedTrainingPosition[] encodedPositions, int numPositions, bool retrieveSupplementalResults = false)
+    public IPositionEvaluationBatch Evaluate(Span<EncodedTrainingPosition> encodedPositions, int numPositions, bool retrieveSupplementalResults = false)
     {
       EncodedPositionBatchFlat batch;
       if (InputsRequired > InputTypes.Boards)
       {
         EncodedPositionBatchBuilder builder = new EncodedPositionBatchBuilder(numPositions, InputsRequired);
         for (int i = 0; i < numPositions; i++)
-          builder.Add(in encodedPositions[i].Position);
+        {
+          // Unmirror before adding.
+          builder.Add(encodedPositions[i].PositionWithBoardsMirrored.Mirrored);
+        }
+
         batch = builder.GetBatch();
       }
       else

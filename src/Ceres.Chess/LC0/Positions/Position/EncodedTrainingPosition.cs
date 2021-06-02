@@ -22,7 +22,7 @@ using Google.Protobuf.Reflection;
 namespace Ceres.Chess.EncodedPositions
 {
   /// <summary>
-  /// Mirrors the binary representation of a single training position
+  /// Identical binary representation of a single training position
   /// as stored in LC0 training files (typically within compressed TAR file).
   /// </summary>
   [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -52,8 +52,10 @@ namespace Ceres.Chess.EncodedPositions
 
     /// <summary>
     /// Board position (including history planes).
+    /// Note that the actual board planes are stored in a mirrored representation
+    /// compared to what needs to be fed to the neural network.
     /// </summary>
-    public readonly EncodedPositionWithHistory Position;
+    public readonly EncodedPositionWithHistory PositionWithBoardsMirrored;
 
     #endregion
 
@@ -98,8 +100,8 @@ namespace Ceres.Chess.EncodedPositions
     /// <param name="desc"></param>
     public void ValidateIntegrity(string desc)
     {
-      ValidateWDL(desc, "BestWDL", Position.MiscInfo.InfoTraining.BestWDL);
-      ValidateWDL(desc, "ResultWDL", Position.MiscInfo.InfoTraining.ResultWDL);
+      ValidateWDL(desc, "BestWDL", PositionWithBoardsMirrored.MiscInfo.InfoTraining.BestWDL);
+      ValidateWDL(desc, "ResultWDL", PositionWithBoardsMirrored.MiscInfo.InfoTraining.ResultWDL);
 
       float[] probs = Policies.Probabilities;
       for (int i = 0; i < 1858; i++)
@@ -134,13 +136,13 @@ namespace Ceres.Chess.EncodedPositions
 
     public bool Equals(EncodedTrainingPosition other)
     {
-      return Position.BoardsHistory.Equals(other.Position.BoardsHistory)
+      return PositionWithBoardsMirrored.BoardsHistory.Equals(other.PositionWithBoardsMirrored.BoardsHistory)
           && Version == other.Version
           && Policies.Equals(other.Policies)
-          && Position.MiscInfo.Equals(other.Position.MiscInfo);          
+          && PositionWithBoardsMirrored.MiscInfo.Equals(other.PositionWithBoardsMirrored.MiscInfo);          
     }
 
-    public override int GetHashCode() => HashCode.Combine(Version, Policies, Position.BoardsHistory, Position.MiscInfo);
+    public override int GetHashCode() => HashCode.Combine(Version, Policies, PositionWithBoardsMirrored.BoardsHistory, PositionWithBoardsMirrored.MiscInfo);
     
 
     #endregion
