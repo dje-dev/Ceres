@@ -65,7 +65,14 @@ namespace Chess.Ceres.NNEvaluators
     public override InputTypes InputsRequired => InputTypes.Boards | InputTypes.Moves;
 
 
+    /// <summary>
+    /// If the network contains a WDL (win/draw/loss) style value head.
+    /// </summary>
     public override bool IsWDL => isWDL;
+
+    /// <summary>
+    /// If the network contains a MLH (moves left head).
+    /// </summary>
     public override bool HasM => hasM;
 
     readonly bool isWDL;
@@ -171,6 +178,10 @@ namespace Chess.Ceres.NNEvaluators
       FP16[] mFP16 = null;
       if (HasM)
       {
+        if (result.MLH == null)
+        {
+          throw new Exception("ONNX evaluator was created with MLH argument true but network does not appear to contain MLH head: " + EngineNetworkID);
+        }
         mFP16 = Array.ConvertAll<float, FP16>(result.MLH, m => (FP16)m);
       }
 
