@@ -156,11 +156,11 @@ namespace Ceres.Chess.NNEvaluators
         case NNEvaluatorType.ONNX:
           {
             // TODO: fill these in properly
-            string fn = @$"C:\dev\CeresDev\src\Ceres.TFTrain\{netDef.NetworkID}.onnx";
+            string fn = @$"d:\weights\lczero.org\{netDef.NetworkID}.onnx";
             bool isWDL = true;
-            bool hasMLH = true;
+            bool hasMLH =  false; // TODO: fix. Eventually put in netDef
             ret = new NNEvaluatorEngineONNX(netDef.NetworkID, fn, deviceDef.DeviceIndex,
-                                            ONNXRuntimeExecutor.NetTypeEnum.LC0, 1024, isWDL, hasMLH);
+                                            ONNXRuntimeExecutor.NetTypeEnum.LC0, 1024, netDef.Precision, isWDL, hasMLH);
             break;
           }
 

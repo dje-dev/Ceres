@@ -54,6 +54,12 @@ namespace Chess.Ceres.NNEvaluators
 
 
     /// <summary>
+    /// Precision of network.
+    /// </summary>
+    public readonly NNEvaluatorPrecision Precision;
+
+
+    /// <summary>
     /// Executor object to run ONNX network evaluation.
     /// </summary>
     public readonly ONNXRuntimeExecutor Executor;
@@ -89,12 +95,14 @@ namespace Chess.Ceres.NNEvaluators
     #endregion
 
     public NNEvaluatorEngineONNX(string engineID, string weightsFN, int gpuID, 
-                                 ONNXRuntimeExecutor.NetTypeEnum type, int batchSize, bool isWDL, bool hasM)
+                                 ONNXRuntimeExecutor.NetTypeEnum type, int batchSize,
+                                 NNEvaluatorPrecision precision, bool isWDL, bool hasM)
     {
       EngineType = type == ONNXRuntimeExecutor.NetTypeEnum.Ceres ? "ONNX_DJE" : "ONNX_LZ0";
       EngineNetworkID = engineID;
       ONNXFileName = weightsFN;
       BatchSize = batchSize;
+      Precision = precision;
       this.isWDL = isWDL;
       this.hasM = hasM;
 
@@ -107,7 +115,7 @@ namespace Chess.Ceres.NNEvaluators
       {
         Console.WriteLine("Starting ONNX runtime against " + engineID + " from " + weightsFN + " with GPU " + gpuID);
 
-        Executor = new ONNXRuntimeExecutor(weightsFN, batchSize, type, gpuID);
+        Executor = new ONNXRuntimeExecutor(weightsFN, batchSize, type, precision, gpuID);
         lastONNXFileName = weightsFN;
         lastBatchSize = batchSize;
         lastIsWDL = isWDL;

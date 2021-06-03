@@ -18,6 +18,8 @@ using System.Diagnostics;
 using System.Text;
 using Ceres.Base.DataTypes;
 using Ceres.Chess.LC0.Batches;
+using Chess.Ceres.NNEvaluators;
+using Microsoft.ML.OnnxRuntime.Tensors;
 
 #endregion
 
@@ -33,6 +35,11 @@ namespace Ceres.Chess.LC0NetInference
     /// File name of source ONNX file
     /// </summary>
     public readonly string ONNXFileName;
+
+    /// <summary>
+    /// Precision of network.
+    /// </summary>
+    public readonly NNEvaluatorPrecision Precision;
 
     /// <summary>
     /// 
@@ -58,13 +65,23 @@ namespace Ceres.Chess.LC0NetInference
     /// <param name="batchSize"></param>
     /// <param name="netType"></param>
     /// <param name="gpuNum"></param>
-    public ONNXRuntimeExecutor(string onnxFileName, int batchSize, NetTypeEnum netType, int gpuNum = -1)
+    public ONNXRuntimeExecutor(string onnxFileName, int batchSize, NetTypeEnum netType, 
+                               NNEvaluatorPrecision precision, int gpuNum = -1)
     {
-      if (!onnxFileName.ToUpper().EndsWith(".ONNX")) throw new Exception("Expected file with ONNX extension.");
+      if (!onnxFileName.ToUpper().EndsWith(".ONNX"))
+      {
+        throw new Exception("Expected file with ONNX extension.");
+      }
+
+      if (precision != NNEvaluatorPrecision.FP32 && precision != NNEvaluatorPrecision.FP16)
+      {
+        throw new ArgumentException($"Only supported ONNX precisions are FP32 and FP16, not {precision}");
+      }
 
       ONNXFileName = onnxFileName;
       NetType = netType;
       BatchSize = batchSize;
+      Precision = precision;
 
       executor = new NetExecutorONNXRuntime(onnxFileName, gpuNum);
     }
@@ -92,13 +109,16 @@ namespace Ceres.Chess.LC0NetInference
           positionEncoding = ONNXRuntimeExecutorResultBatch.RebuildInputsForLC0Network(positionEncoding, BatchSize); // Centralize this
         }
         else
+        {
           throw new NotImplementedException();
+        }
       }
+
 
       // ** NICE DEBUGGING!
       if (debuggingDump) EncodedPositionBatchFlat.DumpDecoded(positionEncoding, 112);
 
-      float[][] eval = executor.Run(positionEncoding, new int[] { numPositionsUsed, 112, 64 });
+      float[][] eval = executor.Run(positionEncoding, new int[] { numPositionsUsed, 112, 64 }, Precision == NNEvaluatorPrecision.FP16);
 
       const int VALUE_FC_SIZE = 32 * 64;
 
