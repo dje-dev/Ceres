@@ -81,6 +81,11 @@ namespace Ceres.Chess.LC0.WeightsProtobuf
     /// </summary>
     public int? NumPolicyChannels => Net.Weights.Policy.BnBetas?.Params.Length / 2;
 
+    /// <summary>
+    /// Statistics about min/max values within weights layers.
+    /// </summary>
+    public LC0ProtobufNetWeightsMinMaxStats Stats => new LC0ProtobufNetWeightsMinMaxStats(Net.Weights);
+
 
     /// <summary>
     /// Constructor.
