@@ -15,6 +15,7 @@
 
 using System;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography.X509Certificates;
 using Google.Protobuf.Reflection;
 
 #endregion
@@ -29,6 +30,11 @@ namespace Ceres.Chess.EncodedPositions
   [Serializable]
   public readonly partial struct EncodedTrainingPosition : IEquatable<EncodedTrainingPosition>
   {
+    // Only v6 data using input format 1 is supported.
+    // This keeps the code simple and allows unrestricted use of advanced v6 features.
+    const int SUPPORTED_VERSION = 6;
+    const int SUPPORTED_INPUT_FORMAT = 1;
+
     public const int V4_LEN = 8276 + 16;
     public const int V5_LEN = 8308;
     public const int V6_LEN = 8356;
@@ -92,21 +98,85 @@ namespace Ceres.Chess.EncodedPositions
       ValidateProbability(desc1, desc2, wdl.w);
       ValidateProbability(desc1, desc2, wdl.d);
       ValidateProbability(desc1, desc2, wdl.l);
+
+      float sum = wdl.w + wdl.d + wdl.l;
+      if (sum < 0.99f || sum > 1.01f)
+      {
+        throw new Exception("Sum probabilities not 1" + desc1 + " " + desc2);
+      }
     }
 
     /// <summary>
-    /// Validates that key fields (game result, best Q, policies) are all valid.
+    /// Validates that key fields (game result, best Q, policies, etc.) are all valid.
+    /// 
+    /// Mostly taken from:
+    ///   https://github.com/Tilps/lc0/blob/rescore_tb/src/selfplay/loop.cc#L204
     /// </summary>
     /// <param name="desc"></param>
     public void ValidateIntegrity(string desc)
     {
-      ValidateWDL(desc, "BestWDL", PositionWithBoardsMirrored.MiscInfo.InfoTraining.BestWDL);
-      ValidateWDL(desc, "ResultWDL", PositionWithBoardsMirrored.MiscInfo.InfoTraining.ResultWDL);
+      // Make sure this is the supported version and input format of training data
+      if (InputFormat != SUPPORTED_INPUT_FORMAT)
+      {
+        throw new Exception($"Found unsupported input format { InputFormat }, required is {SUPPORTED_INPUT_FORMAT}, {desc}.");
+      }
 
+      if (Version != SUPPORTED_VERSION)
+      {
+        throw new Exception($"Found unsupported version { Version }, required is {SUPPORTED_VERSION}, {desc}.");
+      }
+
+
+      int countPieces = PositionWithBoardsMirrored.BoardsHistory.History_0.CountPieces;
+      if (countPieces == 0 || countPieces > 32)
+      {
+        throw new Exception("History board 0 has count pieces " + countPieces + ") " + desc);
+      }
+
+      ref readonly EncodedPositionEvalMiscInfoV6 refTraining = ref PositionWithBoardsMirrored.MiscInfo.InfoTraining;
+
+      if (!float.IsNaN(refTraining.OriginalM) && refTraining.OriginalM < 0)
+      {
+        throw new Exception("OriginalM < 0 (" + refTraining.OriginalM + ") " + desc);
+      }
+
+      if (refTraining.ResultD == 0 && refTraining.ResultQ == 0)
+      {
+        throw new Exception("Both ResultD and ResultQ are zero. " + desc);
+      }
+
+      if (refTraining.BestD == 0 && refTraining.BestQ == 0)
+      {
+        throw new Exception("Both BestD and BestQ are zero. " + desc);
+      }
+
+      ValidateWDL(desc, "BestWDL", refTraining.BestWDL);
+      ValidateWDL(desc, "ResultWDL", refTraining.ResultWDL);
+
+      float[] probs = CheckPolicyValidity(desc);
+
+      if (refTraining.PliesLeft < 0)
+      {
+        throw new Exception("Plies left < 0 (" + refTraining.PliesLeft + ") " + desc);
+      }
+
+      if (probs[refTraining.BestIndex] <= 0)
+      {
+        throw new Exception("Best policy index not positive: (" + probs[refTraining.BestIndex] + ") " + desc);
+      }
+
+      if (probs[refTraining.PlayedIndex] <= 0)
+      {
+        throw new Exception("Played policy index not positive: (" + probs[refTraining.PlayedIndex] + ") " + desc);
+      }
+    }
+
+    private float[] CheckPolicyValidity(string desc)
+    {
       float[] probs = Policies.Probabilities;
+      float sumPolicy = 0;
       for (int i = 0; i < 1858; i++)
       {
-        
         float policy = probs[i];
         if (policy == -1)
         {
@@ -114,12 +184,20 @@ namespace Ceres.Chess.EncodedPositions
           policy = 0;
         }
 
+        sumPolicy += policy;
+
         if (float.IsNaN(policy) || policy > 1.01 || policy < 0)
         {
           throw new Exception("Policy invalid " + policy + " " + desc);
         }
       }
 
+      if (sumPolicy < 0.99f || sumPolicy > 1.01f)
+      {
+        throw new Exception("Sum policy not 1 (" + sumPolicy + ") " + desc);
+      }
+
+      return probs;
     }
 
     #endregion
