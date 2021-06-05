@@ -261,6 +261,8 @@ namespace Ceres.Base.DataTypes
     /// </summary>    
     public float ToSingleViaLookup => FP16Helper.HalfToSingleLookup(this);
 
+    const bool DISABLE_APPROX_FP16_CONVERSIONS = false;
+
     /// <summary>
     /// Fast approximate conversion from FP16 to float.
     /// Note that this does not support all FP16, for example NaNs.
@@ -272,6 +274,11 @@ namespace Ceres.Base.DataTypes
       [MethodImpl(MethodImplOptions.AggressiveInlining)]
       get
       {
+        if (DISABLE_APPROX_FP16_CONVERSIONS)
+        {
+          return (FP16)this;
+        }
+
         if (Value == Zero.Value)
         {
           return 0.0f;
@@ -295,6 +302,11 @@ namespace Ceres.Base.DataTypes
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static FP16 FromFloatApprox(float f)
     {
+      if (DISABLE_APPROX_FP16_CONVERSIONS)
+      {
+        return (FP16)f;
+      }
+
       const float MIN_FP16 = 0.0000610352f; // 0.00006103515625f;
       if (MathF.Abs(f) < MIN_FP16)
       {
