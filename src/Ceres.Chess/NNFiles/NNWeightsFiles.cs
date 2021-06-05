@@ -17,6 +17,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using Ceres.Chess.LC0.NNFiles;
 
 #endregion
 
@@ -89,9 +90,15 @@ namespace Ceres.Chess.NNFiles
     /// <returns></returns>
     public static INNWeightsFileInfo LookupNetworkFile(string netWeightsID, bool throwExceptionIfMissing = true)
     {
-      // First look in set of explicitly registered files
-      if (RegisteredFiles.TryGetValue(netWeightsID, out INNWeightsFileInfo weightsFile))
+      if (netWeightsID.Contains(":") && File.Exists(netWeightsID.Substring(netWeightsID.IndexOf(":") + 1)))
+      {
+        return NNWeightsFileLC0.LookupOrDownload(netWeightsID.Substring(netWeightsID.IndexOf(":") + 1));
+      }
+      else if (RegisteredFiles.TryGetValue(netWeightsID, out INNWeightsFileInfo weightsFile))
+      {
+        // Prefer if found in set of explicitly registered files
         return weightsFile;
+      }
       else
       {
         // Next check each file in each of the directories registered
@@ -110,10 +117,9 @@ namespace Ceres.Chess.NNFiles
         }
       }
 
-      if (throwExceptionIfMissing)
-        throw new Exception($"Network {netWeightsID} not registered via Register or discoverable via directories specified via NNWeightsFilesLC0.RegisterDirectory method.");
-      else
-        return null;
+      return !throwExceptionIfMissing
+          ? null
+          : throw new Exception($"Network {netWeightsID} not registered via Register or discoverable via directories specified via NNWeightsFilesLC0.RegisterDirectory method.");
     }
 
     
