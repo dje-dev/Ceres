@@ -36,6 +36,7 @@ using Ceres.MCTS.Iteration;
 using Ceres.Base.Math;
 using Ceres.Base.Misc;
 using Ceres.Base.DataType;
+using Microsoft.ML.OnnxRuntime;
 
 #endregion
 
@@ -43,7 +44,7 @@ namespace Ceres.APIExamples
 {
   public static class TournamentTest
   {
-    static int CONCURRENCY = 4; // POOLED ? 16 : 4;
+    static int CONCURRENCY = 3; // POOLED ? 16 : 4;
     static bool RUN_DISTRIBUTED = false;
 
     private static void KillCERES()
@@ -81,45 +82,6 @@ namespace Ceres.APIExamples
       File.Delete("Ceres2.log.txt");
     }
 
-    public static void TestSF(int index, bool gitVersion)
-    {
-      NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification("LC0:j94-100", "GPU:" + index);
-      GameEngineDefCeres engineDefCeres1 = new GameEngineDefCeres("CeresInProc", evalDef1,
-                                                                  new ParamsSearch(), new ParamsSelect(), null,
-                                                                  "CeresSF.log.txt");
-
-      SearchLimit limitCeres = SearchLimit.SecondsForAllMoves(60, 1.25f) * 0.15f;
-      SearchLimit limitSF = limitCeres * 1.5f;
-
-      GameEngineDef engineDefCeresUCIGit = new GameEngineDefCeresUCI("CeresUCIGit", evalDef1, overrideEXE: @"C:\ceres\releases\v0.88\ceres.exe");
-      EnginePlayerDef playerCeres = new EnginePlayerDef(gitVersion ? engineDefCeresUCIGit : engineDefCeres1,
-                                                        limitCeres);
-
-
-      EnginePlayerDef playerSF = new EnginePlayerDef(engineDefStockfish13, limitSF);
-
-      TournamentDef def = new TournamentDef("TOURN", playerCeres, playerSF);
-      def.OpeningsFileName = "TCEC1819.pgn";
-      //def.NumGamePairs = 10;
-      def.ShowGameMoves = false;
-
-      TournamentManager runner = new TournamentManager(def, 1);
-      TournamentGameQueueManager queueManager = null;
-
-      TournamentResultStats results;
-      TimingStats stats = new TimingStats();
-
-
-      using (new TimingBlock(stats, TimingBlock.LoggingType.None))
-      {
-
-        results = runner.RunTournament(queueManager);
-      }
-
-      Console.WriteLine();
-      Console.WriteLine($"Tournament completed in {stats.ElapsedTimeSecs,8:F2} seconds.");
-      Console.WriteLine(playerCeres + " " + results.GameOutcomesString);
-    }
 
     /// <summary>
     /// Test code.
@@ -135,13 +97,35 @@ namespace Ceres.APIExamples
       }
 
       const bool POOLED = false;
-      string GPUS = POOLED ? "GPU:0,1,2,3:POOLED"
-                           : "GPU:0";
+      string GPUS = POOLED ? "GPU:1,2,3:POOLED"
+                           : "GPU:1";
       //LC0:40x512-lr015-swa-115000 20b_1-15000.pb.gz 20b_1-15000 20b_1-swa-90000
-      NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification("LC0:42767", GPUS); // j64-210 LS16 40x512-lr015-swa-167500
-                                                                                            //evalDef1 = NNEvaluatorDefFactory.FromSpecification("ONNX:tfmodelc", "GPU:0");
+      // 460000 best? 20b_500000 teck45_190k.gz
+      // /raid/train/nets/40b/40b/40b-swa-20000.pb.gz
+      // 20b_500000 vs LC0:66511
+      // teck45_170k 40b-swa-80000
+      // test-250
+      //      NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification("LC0:test-swa-2500", GPUS); // j64-210 LS16 40x512-lr015-swa-167500
+      //      NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification("LC0:40bs-swa-212500", GPUS); // j64-210 LS16 40x512-lr015-swa-167500
+      //      NNEvaluatorDef evalDef2 = NNEvaluatorDefFactory.FromSpecification("LC0:40bs-swa-210000", GPUS); // j64-210 LS16 40x512-lr015-swa-167500
 
-      NNEvaluatorDef evalDef2 = NNEvaluatorDefFactory.FromSpecification("LC0:42767", GPUS); // j104.1-30 61339 j64-210
+      //      NNEvaluatorDef evalDef2 = NNEvaluatorDefFactory.FromSpecification("LC0:20b_500000", GPUS); // j104.1-30 61339 j64-210
+      // badgyal-3 testFILL96s2-swa-10000 testFILL96noqs2-swa-15000 751156
+      //      NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification(@"LC0:d:\nets\20b_128\20b_128\20b_128-swa-40000.pb.gz", GPUS); // j64-210 LS16 40x512-lr015-swa-167500
+      //      NNEvaluatorDef evalDef2 = NNEvaluatorDefFactory.FromSpecification(@"LC0:751156", GPUS); // j64-210 LS16 40x512-lr015-swa-167500
+      //      NNEvaluatorDef evalDef2 = NNEvaluatorDefFactory.FromSpecification(@"LC0:d:\temp\20b_128-swa-40000.pb.gz", GPUS); // j104.1-30 61339 j64-210
+
+      //      NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification(@"LC0:d:\nets\tinkerF_biasReg2\tinkerF_biasReg2-12500.pb.gz", GPUS); // j64-210 LS16 40x512-lr015-swa-167500
+
+      string NET1 = @"d:\weights\lczero.org\t64df-17500.pb.gz"; // direct Linux T75 192
+      string NET2 = @"d:\weights\lczero.org\t64d-17500.pb.gz"; // chunkparser Linux T75 192 (good)
+//string       NET2 = @"j64-210";
+      NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification(@$"LC0:{NET1}", GPUS); // j64-210 LS16 40x512-lr015-swa-167500
+      NNEvaluatorDef evalDef2 = NNEvaluatorDefFactory.FromSpecification($@"LC0:{NET2}", GPUS); ;
+
+      //NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification(@"ONNX:tinkerF_normal_vq-50000", GPUS); // j64-210 LS16 40x512-lr015-swa-167500
+      //d:\weights\lczero.org\tinkerF_normal_vq-5000.onnx
+      //evalDef1 = NNEvaluatorDefFactory.FromSpecification("ONNX:tfmodelc", "GPU:0");
 
       // Good progress. 68240 versus j94-100 yields: +21 (+/- 11) at 1k/move and +15 (+- 11) at 10k/move
       if (false)
@@ -189,10 +173,14 @@ namespace Ceres.APIExamples
       //limit1 = SearchLimit.NodesForAllMoves(500_000);//, 25_000);
 
       limit1 = SearchLimit.SecondsForAllMoves(60, 4);
-      //limit1 = SearchLimit.SecondsForAllMoves(40, 0.5f);
+      limit1 = SearchLimit.SecondsForAllMoves(15, 1.0f) * 2f;
       //limit1 = SearchLimit.SecondsForAllMoves(900, 15) * 0.05f;
 
-      limit1 = SearchLimit.NodesPerMove(1900);
+      limit1 = SearchLimit.NodesPerMove(100);
+
+      SearchLimit limit2 = limit1;// * 0.2f;// SearchLimit.NodesPerMove(2500);
+//      limit2 *= 0.5f;
+//      limit2 = SearchLimit.NodesPerMove(400);
 
 
       ParamsSearchExecutionModifier.Register("SetBatchSize", pe => pe.MaxBatchSize = 1024);
@@ -217,8 +205,8 @@ namespace Ceres.APIExamples
       //      engineDefCeres1.SearchParams.MLHBonusFactor = 0.50f;
       ////////
 
-      //engineDefCeres1.SelectParams.CPUCTAtRoot *= 1.4f;
-engineDefCeres1.SearchParams.TestFlag = true;
+
+//engineDefCeres1.SearchParams.TestFlag = true;
       //engineDefCeres1.SearchParams.MoveFutilityPruningAggressiveness = 0.4f;
       //engineDefCeres1.SearchParams.GameLimitUsageAggressiveness *= 1.2f;
       //engineDefCeres1.SearchParams.MoveFutilityPruningAggressiveness = 0.75f;
@@ -259,7 +247,7 @@ engineDefCeres1.SearchParams.TestFlag = true;
       //engineDefCeres1.SearchParams.EnableTablebases = false;
 
       // TODO: support this in GameEngineDefCeresUCI
-      bool forceDisableSmartPruning = limit1.IsNodesLimit;
+      bool forceDisableSmartPruning = false;// limit1.IsNodesLimit;
 //forceDisableSmartPruning=true;
       if (forceDisableSmartPruning)
       {
@@ -275,17 +263,18 @@ engineDefCeres1.SearchParams.TestFlag = true;
 
 
       EnginePlayerDef playerCeres1UCI = new EnginePlayerDef(engineDefCeresUCI1, limit1);
-      EnginePlayerDef playerCeres2UCI = new EnginePlayerDef(engineDefCeresUCI2, limit1);
+      EnginePlayerDef playerCeres2UCI = new EnginePlayerDef(engineDefCeresUCI2, limit2);
 
       EnginePlayerDef playerCeres1 = new EnginePlayerDef(engineDefCeres1, limit1);
-      EnginePlayerDef playerCeres2 = new EnginePlayerDef(engineDefCeres2, limit1);
+      EnginePlayerDef playerCeres2 = new EnginePlayerDef(engineDefCeres2, limit2);
 
       //#if NOTParamsSearch
       ParamsSearch paramsSearchLC0 = new ParamsSearch();
-//      paramsSearchLC0.TestFlag = true;
+      //      paramsSearchLC0.TestFlag = true;
 
-      GameEngineDefLC0 engineDefLC1 =  new GameEngineDefLC0("LC0_0", evalDef1, forceDisableSmartPruning, paramsSearchLC0, null);
-      GameEngineDefLC0 engineDefLC2 =  new GameEngineDefLC0("LC0_2", evalDef1, forceDisableSmartPruning, null, null);
+      bool ENABLE_LC0 = evalDef1.Nets[0].Net.Type == NNEvaluatorType.LC0Library;
+      GameEngineDefLC0 engineDefLC1 = ENABLE_LC0 ? new GameEngineDefLC0("LC0_0", evalDef1, forceDisableSmartPruning, paramsSearchLC0, null) : null;
+      GameEngineDefLC0 engineDefLC2 = ENABLE_LC0 ? new GameEngineDefLC0("LC0_2", evalDef1, forceDisableSmartPruning, null, null) : null;
 
       GameEngineDefLC0 engineDefLC2TCEC = null;// new GameEngineDefLC0("LC0_TCEC", evalDef2, forceDisableSmartPruning, null, null,
                                                //               overrideEXE: @"c:\dev\lc0\lc_270\lc0.exe",
@@ -294,8 +283,8 @@ engineDefCeres1.SearchParams.TestFlag = true;
       EnginePlayerDef playerEthereal = new EnginePlayerDef(engineDefEthereal, limit1);
       EnginePlayerDef playerStockfish11 = new EnginePlayerDef(engineDefStockfish11, limit1);
       EnginePlayerDef playerStockfish12 = new EnginePlayerDef(engineDefStockfish13, limit1);// * 350);
-      EnginePlayerDef playerLC0 = new EnginePlayerDef(engineDefLC1, limit1);
-      EnginePlayerDef playerLC0_2 =  new EnginePlayerDef(engineDefLC2, limit1);
+      EnginePlayerDef playerLC0 = ENABLE_LC0 ? new EnginePlayerDef(engineDefLC1, limit1) : null;
+      EnginePlayerDef playerLC0_2 = ENABLE_LC0 ? new EnginePlayerDef(engineDefLC2, limit2) : null;
 //      EnginePlayerDef playerLC0TCEC =  new EnginePlayerDef(engineDefLC2TCEC, limit1);
                                            //#endif
 
@@ -311,9 +300,9 @@ engineDefCeres1.SearchParams.TestFlag = true;
         SuiteTestDef suiteDef = new SuiteTestDef("Suite",
                                                 //@"\\synology\dev\chess\data\epd\chad_tactics-100M.epd",
                                                 //@"\\synology\dev\chess\data\epd\ERET.epd",
-                                                @"\\synology\dev\chess\data\epd\ERET_VESELY203.epd",
-                                                //   @"\\synology\dev\chess\data\epd\sts.epd",
-                                                playerCeres1, null, null);// playerLC0);
+                                                //@"\\synology\dev\chess\data\epd\ERET_VESELY203.epd",
+                                                   @"\\synology\dev\chess\data\epd\sts.epd",
+                                                playerCeres1, playerCeres2, null);// playerLC0);
         //playerCeres1, null, playerCeres2UCI);
         suiteDef.MaxNumPositions = 200;
 
@@ -321,6 +310,7 @@ engineDefCeres1.SearchParams.TestFlag = true;
 
         //        suiteRunner.Run(POOLED ? 20 : 4, true, false);
         SuiteTestResult suiteResult = suiteRunner.Run(1, true, false);
+#if NOT
         SysMisc.WriteObj("FinalQ1.dat", suiteResult.FinalQ1);
 
         float[] priorQ1 = null;
@@ -348,6 +338,7 @@ engineDefCeres1.SearchParams.TestFlag = true;
 
         return;
         // ===============================================================================
+#endif
       }
 
       //      engineDefCeres2.SearchParams.TwofoldDrawEnabled = false;
@@ -363,7 +354,7 @@ engineDefCeres1.SearchParams.TestFlag = true;
 
       //TournamentDef def = new TournamentDef("TOURN", playerLC0Tilps, playerLC0);
 
-      def.NumGamePairs = 125;
+      def.NumGamePairs = 1000;
       def.ShowGameMoves = false;
 
       //      def.OpeningsFileName = @"HERT_2017\Hert500.pgn";
@@ -372,8 +363,8 @@ engineDefCeres1.SearchParams.TestFlag = true;
       //      def.OpeningsFileName = @"\\synology\dev\chess\data\openings\Drawkiller_500pos_reordered.pgn";//                                                                                                 
       //def.OpeningsFileName = "TCEC19_NoomenSelect.pgn";
 //      def.OpeningsFileName = "TCEC1819.pgn";
-      def.OpeningsFileName = "4mvs_+90_+99.pgn";
-      ///def.OpeningsFileName = "book-ply8-unifen-Q-0.40-1.0.pgn";
+      //def.OpeningsFileName = "4mvs_+90_+99.pgn";
+      def.OpeningsFileName = "book-ply8-unifen-Q-0.0-0.25.pgn"; //book-ply8-unifen-Q-0.0-0.25
       //      def.OpeningsFileName = "startpos.pgn";
 
       if (false)
@@ -426,6 +417,47 @@ engineDefCeres1.SearchParams.TestFlag = true;
       Console.WriteLine();
       Console.WriteLine("<CRLF> to continue");
       Console.ReadLine();
+    }
+
+
+    public static void TestSF(int index, bool gitVersion)
+    {
+      NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification("LC0:j94-100", "GPU:" + index);
+      GameEngineDefCeres engineDefCeres1 = new GameEngineDefCeres("CeresInProc", evalDef1,
+                                                                  new ParamsSearch(), new ParamsSelect(), null,
+                                                                  "CeresSF.log.txt");
+
+      SearchLimit limitCeres = SearchLimit.SecondsForAllMoves(60, 1.25f) * 0.15f;
+      SearchLimit limitSF = limitCeres * 1.5f;
+
+      GameEngineDef engineDefCeresUCIGit = new GameEngineDefCeresUCI("CeresUCIGit", evalDef1, overrideEXE: @"C:\ceres\releases\v0.88\ceres.exe");
+      EnginePlayerDef playerCeres = new EnginePlayerDef(gitVersion ? engineDefCeresUCIGit : engineDefCeres1,
+                                                        limitCeres);
+
+
+      EnginePlayerDef playerSF = new EnginePlayerDef(engineDefStockfish13, limitSF);
+
+      TournamentDef def = new TournamentDef("TOURN", playerCeres, playerSF);
+      def.OpeningsFileName = "TCEC1819.pgn";
+      //def.NumGamePairs = 10;
+      def.ShowGameMoves = false;
+
+      TournamentManager runner = new TournamentManager(def, 1);
+      TournamentGameQueueManager queueManager = null;
+
+      TournamentResultStats results;
+      TimingStats stats = new TimingStats();
+
+
+      using (new TimingBlock(stats, TimingBlock.LoggingType.None))
+      {
+
+        results = runner.RunTournament(queueManager);
+      }
+
+      Console.WriteLine();
+      Console.WriteLine($"Tournament completed in {stats.ElapsedTimeSecs,8:F2} seconds.");
+      Console.WriteLine(playerCeres + " " + results.GameOutcomesString);
     }
 
   }
