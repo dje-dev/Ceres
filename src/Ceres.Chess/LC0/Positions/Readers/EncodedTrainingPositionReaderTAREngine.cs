@@ -115,29 +115,10 @@ namespace Ceres.Chess.EncodedPositions
     {
       // Read decompressed bytes
       int bytesRead = stream.Read(rawBuffer, 0, rawBuffer.Length);
-      if (bytesRead == 0) throw new Exception(" trying to read " + rawBuffer.Length);
 
-
-      int numDeserialized = SerializationUtils.DeSerializeArrayIntoBuffer(rawBuffer, bytesRead, ref buffer);
-
-      // Data has some probabilities NaNs (indicates illegal move)
-      // But we zero that out.
-      unsafe
-      {
-        for (int i = 0; i < numDeserialized; i++)
-        {
-          for (int j = 0; j < EncodedPolicyVector.POLICY_VECTOR_LENGTH; j++)
-          {
-            if (float.IsNaN(buffer[i].Policies.ProbabilitiesPtr[j]))
-            {
-              Console.WriteLine("FoundNaNProb");
-              buffer[i].Policies.ProbabilitiesPtr[j] = 0f;
-            }
-          }
-        }
-      }
-
-      return numDeserialized;
+      return bytesRead == 0
+          ? throw new Exception(" trying to read " + rawBuffer.Length)
+          : SerializationUtils.DeSerializeArrayIntoBuffer(rawBuffer, bytesRead, ref buffer);
     }
 
 
