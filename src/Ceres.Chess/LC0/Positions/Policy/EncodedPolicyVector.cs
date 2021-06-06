@@ -1988,13 +1988,15 @@ namespace Ceres.Chess.EncodedPositions
     {
       get
       {
+        float* probs = ProbabilitiesPtr;
         float[] ret = new float[POLICY_VECTOR_LENGTH];
         for (short i = 0; i < POLICY_VECTOR_LENGTH; i++)
         {
-          (EncodedMove move, float probability) tt = this[i];
-          if (tt.probability > 0)
+          float value = probs[i];
+         
+          if (value > 0)
           {
-            ret[i] = tt.probability;
+            ret[i] = value;
           }
         }
         return ret;
