@@ -135,6 +135,16 @@ namespace Ceres.Chess.EncodedPositions
 
       ref readonly EncodedPositionEvalMiscInfoV6 refTraining = ref PositionWithBoardsMirrored.MiscInfo.InfoTraining;
 
+      if (float.IsNaN(refTraining.BestD + refTraining.BestQ))
+      {
+        throw new Exception("BestD or BestQ is NaN");
+      }
+
+      if (float.IsNaN(refTraining.ResultD + refTraining.ResultQ))
+      {
+        throw new Exception("ResultD or ResultQ is NaN");
+      }
+
       if (!float.IsNaN(refTraining.OriginalM) && refTraining.OriginalM < 0)
       {
         throw new Exception("OriginalM < 0 (" + refTraining.OriginalM + ") " + desc);

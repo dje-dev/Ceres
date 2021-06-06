@@ -92,36 +92,44 @@ namespace Ceres.Chess.EncodedPositions
     }
 
     /// <summary>
-    /// Updates ResultQ and ResultD fields to reflect specified game result.
+    /// Updates ResultQ and ResultD fields to specified values.
     /// </summary>
     /// <param name="gameResult"></param>
-    public void SetResult(GameResultEnum gameResult)
+    public void SetResult(float q, float d)
     {
       fixed (float* ptrQ = &InfoTraining.ResultQ)
       {
         fixed (float* ptrD = &InfoTraining.ResultD)
         {
-          switch (gameResult)
-          {
-            case GameResultEnum.Win:
-              *ptrQ = 1.0f;
-              *ptrD = 0.0f;
-              break;
-
-            case GameResultEnum.Draw:
-              *ptrQ = 0.0f;
-              *ptrD = 1.0f;
-              break;
-
-            case GameResultEnum.Loss:
-              *ptrQ = -1.0f;
-              *ptrD = 0.0f;
-              break;
-
-          }
+          *ptrQ = q;
+          *ptrD = d;
         }
       }
     }
+
+
+    /// <summary>
+    /// Updates ResultQ and ResultD fields to reflect specified game result.
+    /// </summary>
+    /// <param name="gameResult"></param>
+    public void SetResult(GameResultEnum gameResult)
+    {
+      switch (gameResult)
+      {
+        case GameResultEnum.Win:
+          SetResult(1, 0);
+          break;
+
+        case GameResultEnum.Draw:
+          SetResult(0, 1);
+          break;
+
+        case GameResultEnum.Loss:
+          SetResult(-1, 0);
+          break;
+      }
+    }
+
 
     static EncodedPositionMiscInfo.ResultCode ReversedResult(EncodedPositionMiscInfo.ResultCode result) => result == EncodedPositionMiscInfo.ResultCode.Draw ? EncodedPositionMiscInfo.ResultCode.Draw
                                                                                      : (result == EncodedPositionMiscInfo.ResultCode.Win ? EncodedPositionMiscInfo.ResultCode.Loss : EncodedPositionMiscInfo.ResultCode.Win);
