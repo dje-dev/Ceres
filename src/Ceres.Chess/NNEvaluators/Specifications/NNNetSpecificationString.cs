@@ -91,14 +91,14 @@ namespace Ceres.Chess.NNEvaluators.Specifications
       }
 
       // Build network definitions
-      List<(string, float)> netParts = OptionsParserHelpers.ParseCommaSeparatedWithOptionalWeights(netIDs);
+      List<(string, float, float, float)> netParts = OptionsParserHelpers.ParseCommaSeparatedWithOptionalWeights(netIDs, true);
 
       const NNEvaluatorPrecision NN_PRECISION = NNEvaluatorPrecision.FP16;
 
       NetDefs = new List<(NNEvaluatorNetDef, float, float, float)>();
       foreach (var netSegment in netParts)
       {
-        NetDefs.Add((new NNEvaluatorNetDef(netSegment.Item1, NN_EVAL_TYPE, NN_PRECISION), netSegment.Item2, netSegment.Item2, netSegment.Item2));
+        NetDefs.Add((new NNEvaluatorNetDef(netSegment.Item1, NN_EVAL_TYPE, NN_PRECISION), netSegment.Item2, netSegment.Item3, netSegment.Item4));
       }
 
       ComboType = NetDefs.Count == 1 ? NNEvaluatorNetComboType.Single : NNEvaluatorNetComboType.WtdAverage;

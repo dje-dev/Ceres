@@ -67,7 +67,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications
         throw new Exception($"{deviceString} not valid, device specification expected to begin with 'GPU:'");
       }
 
-      List<(string, float)> deviceParts = OptionsParserHelpers.ParseCommaSeparatedWithOptionalWeights(deviceStringParts[1]);
+      List<(string, float, float, float)> deviceParts = OptionsParserHelpers.ParseCommaSeparatedWithOptionalWeights(deviceStringParts[1], false);
 
       foreach (var device in deviceParts)
       {
