@@ -104,7 +104,7 @@ namespace Ceres.Base.DataType
     /// <param name="raw"></param>
     /// <param name="numOuter"></param>
     /// <returns></returns>
-    public static T[][] ToArrayOfArray<T>(T[] raw, int numInner)
+    public static T[][] ToArrayOfArray<T>(Span<T> raw, int numInner)
     {
       if (raw == null) return null;
 
@@ -129,7 +129,7 @@ namespace Ceres.Base.DataType
     /// <param name="raw"></param>
     /// <param name="numOuter"></param>
     /// <returns></returns>
-    public static T[,] To2D<T>(T[] raw, int numInner)
+    public static T[,] To2D<T>(Span<T> raw, int numInner)
     {
       if (raw == null) return null;
 
@@ -154,7 +154,7 @@ namespace Ceres.Base.DataType
     /// <param name="raw"></param>
     /// <param name="numOuter"></param>
     /// <returns></returns>
-    public static T[,] To2DShuffled<T>(T[] raw, int numInner)
+    public static T[,] To2DShuffled<T>(Span<T> raw, int numInner)
     {
       if (raw == null) return null;
 

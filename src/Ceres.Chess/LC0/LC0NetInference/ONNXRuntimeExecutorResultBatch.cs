@@ -76,8 +76,8 @@ namespace Ceres.Chess.LC0NetInference
     /// <param name="draws"></param>
     public ONNXRuntimeExecutorResultBatch(bool isWDL, FP16[] values, float[] policyLogisticVectorsFlatAs, float[] mlh, 
                                           float[] valueFCActiviationsFlat, int numPositionsUsed) 
-      : this (isWDL, values, ArrayUtils.ToArrayOfArray(policyLogisticVectorsFlatAs, EncodedPolicyVector.POLICY_VECTOR_LENGTH), 
-              mlh, ArrayUtils.ToArrayOfArray(valueFCActiviationsFlat, 32 * 64), numPositionsUsed)
+      : this (isWDL, values, ArrayUtils.ToArrayOfArray<float>(policyLogisticVectorsFlatAs, EncodedPolicyVector.POLICY_VECTOR_LENGTH), 
+              mlh, ArrayUtils.ToArrayOfArray<float>(valueFCActiviationsFlat, 32 * 64), numPositionsUsed)
     {
     }
 
