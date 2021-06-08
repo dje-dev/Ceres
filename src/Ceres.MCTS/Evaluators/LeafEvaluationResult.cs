@@ -79,7 +79,7 @@ namespace Ceres.MCTS.Evaluators
         float lossP = LossP.ToFloatApprox;
         float v = winP - lossP;
         return ParamsSelect.VIsForcedResult(v) ? 0 
-                                               : 1.0f - (winP - lossP);
+                                               : 1.0f - (winP + lossP);
 #if NOT
         float correct = ParamsSelect.VIsForcedResult(V) ? 0 : 1.0f - (WinP + LossP);
         float tryx;
