@@ -183,7 +183,7 @@ namespace Ceres.Chess.EncodedPositions
 
     private float[] CheckPolicyValidity(string desc)
     {
-      float[] probs = Policies.Probabilities;
+      float[] probs = Policies.ProbabilitiesWithNegativeOneZeroed;
       float sumPolicy = 0;
       for (int i = 0; i < 1858; i++)
       {

@@ -92,6 +92,22 @@ namespace Ceres.Chess.EncodedPositions
     }
 
     /// <summary>
+    /// Updates BestQ and BestD fields to specified values.
+    /// </summary>
+    /// <param name="gameResult"></param>
+    public void SetBestQ(float q, float d)
+    {
+      fixed (float* ptrQ = &InfoTraining.BestQ)
+      {
+        fixed (float* ptrD = &InfoTraining.BestD)
+        {
+          *ptrQ = q;
+          *ptrD = d;
+        }
+      }
+    }
+
+    /// <summary>
     /// Updates ResultQ and ResultD fields to specified values.
     /// </summary>
     /// <param name="gameResult"></param>

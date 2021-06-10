@@ -1984,7 +1984,7 @@ namespace Ceres.Chess.EncodedPositions
     /// <summary>
     /// Returns array of probabiliites.
     /// </summary>
-    public float[] Probabilities
+    public float[] ProbabilitiesWithNegativeOneZeroed
     {
       get
       {
@@ -1994,7 +1994,7 @@ namespace Ceres.Chess.EncodedPositions
         {
           float value = probs[i];
          
-          if (value > 0)
+          if (value != -1)
           {
             ret[i] = value;
           }
