@@ -44,8 +44,19 @@ namespace Ceres.Chess.NNEvaluators
     public readonly float[] WeightsPolicy;
     public readonly float[] WeightsM;
 
+    /// <summary>
+    /// Optional delegate called for each position to determine weights to use for value head for that position.
+    /// </summary>
     public readonly WeightsOverrideDelegate WeightsValueOverrideFunc;
+
+    /// <summary>
+    /// Optional delegate called for each position to determine weights to use for MLH head for that position.
+    /// </summary>
     public readonly WeightsOverrideDelegate WeightsMOverrideFunc;
+
+    /// <summary>
+    /// Optional delegate called for each position to determine weights to use for policy head for that position.
+    /// </summary>
     public readonly WeightsOverrideDelegate WeightsPolicyOverrideFunc;
 
     protected IPositionEvaluationBatch[] subResults;
@@ -142,8 +153,8 @@ namespace Ceres.Chess.NNEvaluators
         // TODO: also compute and pass on the averaged Activations
         Memory<NNEvaluatorResultActivations> activations = new Memory<NNEvaluatorResultActivations>();
 
-        w = WeightsPolicyOverrideFunc == null ? AverageFP16(positions.NumPos, subResults, (e, i) => e.GetWinP(i), WeightsValue)
-                                              : AverageFP16(positions.NumPos, subResults, (e, i) => e.GetWinP(i), WeightsValueOverrideFunc, positions);
+        w = WeightsValueOverrideFunc == null ? AverageFP16(positions.NumPos, subResults, (e, i) => e.GetWinP(i), WeightsValue)
+                                             : AverageFP16(positions.NumPos, subResults, (e, i) => e.GetWinP(i), WeightsValueOverrideFunc, positions);
 
         if (IsWDL)
         {
@@ -184,7 +195,9 @@ namespace Ceres.Chess.NNEvaluators
           {
             if (moveInfo.move.RawValue == CompressedPolicyVector.SPECIAL_VALUE_RANDOM_NARROW ||
                 moveInfo.move.RawValue == CompressedPolicyVector.SPECIAL_VALUE_RANDOM_WIDE)
+            {
               throw new NotImplementedException("Mixing NNEvaluatorLinearCombo and random evaluator probably not yet supported");
+            }
 
             float thisContribution = weights[evaluatorIndex] * moveInfo.probability;
             policyAverages[moveInfo.move.IndexNeuralNet] += thisContribution;
@@ -206,8 +219,13 @@ namespace Ceres.Chess.NNEvaluators
     {
       FP16[] ret = new FP16[numPos];
       for (int i = 0; i < numPos; i++)
+      {
         for (int evaluatorIndex = 0; evaluatorIndex < batches.Length; evaluatorIndex++)
+        {
           ret[i] += (FP16)(weights[evaluatorIndex] * getValueFunc(batches[evaluatorIndex], i));
+        }
+      }
+
       return ret;
     }
 
@@ -221,7 +239,6 @@ namespace Ceres.Chess.NNEvaluators
       {
         for (int evaluatorIndex = 0; evaluatorIndex < batches.Length; evaluatorIndex++)
         {
-
           float[] weight = weightFunc(MGChessPositionConverter.PositionFromMGChessPosition(in positions.Positions[i]));
           ret[i] += (FP16)(weight[evaluatorIndex] * getValueFunc(batches[evaluatorIndex], i));
         }
