@@ -38,8 +38,11 @@ namespace Ceres.Chess.EncodedPositions
     /// </summary>
     /// <param name="maxPositionsPerBatch"></param>
     /// <param name="positionSkipCount">difference in sequential position index between selected positions, 1 for all positions</param>
+    /// <param name="returnFinalPartialBatch">if any final batch which would be less than requested batch size should be returned</param>
     /// <returns></returns>
-    IEnumerable<Memory<EncodedTrainingPosition>> EnumerateBatches(int maxPositionsPerBatch, int positionSkipCount = 1)
+    IEnumerable<Memory<EncodedTrainingPosition>> EnumerateBatches(int maxPositionsPerBatch, 
+                                                                  int positionSkipCount = 1, 
+                                                                  bool returnFinalPartialBatch = true)
     {
       EncodedTrainingPosition[] buffer = new EncodedTrainingPosition[maxPositionsPerBatch];
 
@@ -58,12 +61,11 @@ namespace Ceres.Chess.EncodedPositions
         {
           yield return buffer;
           countWrittenThisBatch = 0;
-          break;
         }
       }
 
       // Return any residual positions not filling batch.
-      if (countWrittenThisBatch > 0)
+      if (returnFinalPartialBatch && countWrittenThisBatch > 0)
       {
         yield return new Memory<EncodedTrainingPosition>(buffer).Slice(0, countWrittenThisBatch);
       }
