@@ -28,13 +28,13 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <summary>
     /// Activations of neurons in first fully connected layer of value head.
     /// </summary>
-    public readonly FP16[,] ValueFC1Activations;
+    public readonly FP16[] ValueFC1Activations;
 
 
     /// <summary>
     /// Activations of neurons in second fully connected layer of value head.
     /// </summary>
-    public readonly FP16[,] ValueFC2Activations;
+    public readonly FP16[] ValueFC2Activations;
 
 
     /// <summary>
@@ -42,36 +42,51 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// </summary>
     /// <param name="valueFC1Activations"></param>
     /// <param name="valueFC2Activations"></param>
-    public NNEvaluatorResultActivations(float[,] valueFC1Activations, float[,] valueFC2Activations)
+    public NNEvaluatorResultActivations(int index, float[,] valueFC1Activations, float[,] valueFC2Activations)
     {
       if (valueFC1Activations != null)
       {
-        ValueFC1Activations = FP16.ToFP16(valueFC1Activations);
+        ValueFC1Activations = new FP16[valueFC1Activations.GetLength(1)];
+        for (int i=0;i< ValueFC1Activations.Length;i++)
+        {
+          ValueFC1Activations[i] = (FP16)valueFC1Activations[index, i];
+        }
       }
 
       if (valueFC2Activations != null)
       {
-        ValueFC2Activations = FP16.ToFP16(valueFC2Activations);
+        ValueFC2Activations = new FP16[valueFC2Activations.GetLength(1)];
+        for (int i = 0; i < ValueFC2Activations.Length; i++)
+        {
+          ValueFC2Activations[i] = (FP16)valueFC2Activations[index, i];
+        }
       }
     }
+
 
     /// <summary>
     /// Constructor (from FP16).
     /// </summary>
     /// <param name="valueFC1Activations"></param>
     /// <param name="valueFC2Activations"></param>
-    public NNEvaluatorResultActivations(FP16[,] valueFC1Activations, FP16[,] valueFC2Activations)
+    public NNEvaluatorResultActivations(int index, FP16[,] valueFC1Activations, FP16[,] valueFC2Activations)
     {
       if (valueFC1Activations != null)
       {
-        ValueFC1Activations = new FP16[valueFC1Activations.GetLength(0), valueFC1Activations.GetLength(1)];
-        Array.Copy(valueFC1Activations, valueFC1Activations, valueFC1Activations.Length);
+        ValueFC1Activations = new FP16[valueFC1Activations.GetLength(1)];
+        for (int i = 0; i < ValueFC1Activations.Length; i++)
+        {
+          ValueFC1Activations[i] = valueFC1Activations[index, i];
+        }
       }
 
       if (valueFC2Activations != null)
       {
-        ValueFC2Activations = new FP16[valueFC1Activations.GetLength(0), valueFC1Activations.GetLength(1)];
-        Array.Copy(valueFC2Activations, valueFC2Activations, valueFC2Activations.Length);
+        ValueFC2Activations = new FP16[valueFC1Activations.GetLength(1)];
+        for (int i = 0; i < ValueFC2Activations.Length; i++)
+        {
+          ValueFC2Activations[i] = valueFC2Activations[index, i];
+        }
       }
     }
 
