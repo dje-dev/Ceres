@@ -109,7 +109,8 @@ namespace Ceres.Chess.LC0.WeightsProtobuf
         throw new Exception($"Failure reading/parsing net {fn}");
       }
 
-      if (Net.Format.NetworkFormat.Input != NetworkFormat.InputFormat.InputClassical112Plane)
+      if (Net.Format.NetworkFormat != null && 
+          Net.Format.NetworkFormat.Input != NetworkFormat.InputFormat.InputClassical112Plane)
       {
         throw new Exception($"Only network format InputClassical112Plane is supported, not {Net.Format.NetworkFormat.Input} in {fn}.");
       }
