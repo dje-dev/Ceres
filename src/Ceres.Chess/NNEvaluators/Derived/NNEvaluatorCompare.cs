@@ -64,13 +64,20 @@ namespace Ceres.Chess.NNEvaluators
     /// <summary>
     /// Constructor.
     /// </summary>
+    /// <param name="stats"></param>
+    /// <param name="referenceEvaluator">evaluator used only in FullWithReferenceEvaluator returning what are believed most accurate values</param>
     /// <param name="evaluators"></param>
     public NNEvaluatorCompare(CompareMode stats, NNEvaluator referenceEvaluator, params NNEvaluator[] evaluators)
       : base(evaluators, null)
     {
+      if (evaluators.Length < 2)
+      {
+        throw new Exception("At least two evaluators must be provided with NNEvaluatorCompare.");
+      }
+
       if (stats == CompareMode.FullWithReferenceEvaluator && referenceEvaluator == null)
       {
-        throw new Exception("Reference evaluator must be non-null in FullWithReferenceEvaluator mode");
+        throw new Exception("Reference evaluator must be non-null in FullWithReferenceEvaluator mode.");
       }
 
       Mode = stats;
