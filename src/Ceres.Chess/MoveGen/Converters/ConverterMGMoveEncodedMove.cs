@@ -109,7 +109,11 @@ namespace Ceres.Chess.MoveGen.Converters
                                                       bool setFlags = true)
     {
       MGMove moveMG = DoEncodedMoveToMGChessMove(thisMove, in position, setFlags);
-      if (position.SideToMove == SideType.Black) moveMG = moveMG.Reversed;
+      if (position.SideToMove == SideType.Black)
+      {
+        moveMG = moveMG.Reversed;
+      }
+
       return moveMG;
     }
 
@@ -130,7 +134,10 @@ namespace Ceres.Chess.MoveGen.Converters
       byte toSquare = fromTo.To;
 
       // All done if we don't have to set the flags
-      if (!setFlags) return new MGMove(fromSquare, toSquare, MGMove.MGChessMoveFlags.None);
+      if (!setFlags)
+      {
+        return new MGMove(fromSquare, toSquare, MGMove.MGChessMoveFlags.None);
+      }
 
       PieceType pieceMoving = position.PieceMoving(thisMove);
       PieceType pieceCapture = position.PieceCapturing(thisMove);
@@ -142,9 +149,13 @@ namespace Ceres.Chess.MoveGen.Converters
       int pieceMGFlags = (int)pieceMG << MGMove.PIECE_SHIFT;
       int captureFlag = 0;
       if (pieceCapture != PieceType.None)
+        {
         captureFlag = (int)MGMove.MGChessMoveFlags.Capture;
+      }
       else if (pieceMoving == PieceType.Pawn && (rawPieceAtToSquare == MCChessPositionPieceEnum.WhiteEnPassant || rawPieceAtToSquare == MCChessPositionPieceEnum.BlackEnPassant))
+      {
         captureFlag = (int)MGMove.MGChessMoveFlags.EnPassantCapture;
+      }
 
       bool isMovingToRank8 = thisMove.ToSquare.IsRank8;
       if (isMovingToRank8 && pieceMoving == PieceType.Pawn)
@@ -172,7 +183,9 @@ namespace Ceres.Chess.MoveGen.Converters
         int thisNNIndex = thisMove.IndexNeuralNet;
         bool isCastlingFromAndToSquares = thisNNIndex == 103 || thisNNIndex == 97;
         if (isCastlingFromAndToSquares)
+        {
           isCastling = (pieceMoving == PieceType.King);
+        }
 
         if (isCastling)
         {
@@ -213,7 +226,6 @@ namespace Ceres.Chess.MoveGen.Converters
         for (int i = 0; i < 64; i++)
         {
           temp[i] = Square.FromFileAndRank(7 - (i % 8), i / 8);
-          //mgSquareToLZSquareMap[i] = CalcMGSquareFromLZSquare((byte)i);
         }
         squareMap = temp;
       }
@@ -234,12 +246,15 @@ namespace Ceres.Chess.MoveGen.Converters
       return MGChessMoveToEncodedMoveWhite(thisMove);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static EncodedMove MGChessMoveToEncodedMoveBlack(MGMove thisMove)
     {
       Debug.Assert(thisMove.BlackToMove);
       return MGChessMoveToEncodedMoveWhite(thisMove.Reversed);
-    } 
+    }
 
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static EncodedMove MGChessMoveToEncodedMoveWhite(MGMove thisMove)
     {
       Debug.Assert(!thisMove.BlackToMove);
@@ -295,7 +310,9 @@ namespace Ceres.Chess.MoveGen.Converters
       get
       {
         if (cachedLC0NNIndexToMGIndex == null)
+        {
           cachedLC0NNIndexToMGIndex = BuildLC0NNIndexToMGIndexTable();
+        }
 
         return cachedLC0NNIndexToMGIndex;
       }
@@ -320,7 +337,6 @@ namespace Ceres.Chess.MoveGen.Converters
               if (promo > 1 && ((rankFrom != 6 || rankTo != 7))) continue;
 
               MGMove.MGChessMoveFlags flags = (MGMove.MGChessMoveFlags)(1 << (6 + promo));
-              //  PromoteKnight = 1 << 7, PromoteBishop = 1 << 8, PromoteRook = 1 << 9, PromoteQueen = 1 << 10,
 
               MGMove moveMG = new MGMove(from, to, flags);
               EncodedMove moveLZ = ConverterMGMoveEncodedMove.MGChessMoveToEncodedMove(moveMG);
@@ -328,7 +344,9 @@ namespace Ceres.Chess.MoveGen.Converters
               if (indexNN != -1)
               {
                 if (table[indexNN] != 0)
+                {
                   throw new Exception("already set");
+                }
                 table[indexNN] = MGInfoToTableIndex(from, to, promo);
                 numAdded++;
               }
