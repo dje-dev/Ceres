@@ -229,6 +229,36 @@ namespace Ceres.Chess
       }
     }
 
+    #region Set fields
+
+    // Note: These methods abuse the readonly marking on this structure by making direct changes.
+
+    internal unsafe void SetMiscInfo(PositionMiscInfo miscInfo)
+    {
+      fixed (PositionMiscInfo* infoPtr = &MiscInfo)
+      {
+        *infoPtr = miscInfo;
+      }
+    }
+
+    internal unsafe void SetPieceCount(byte pieceCount)
+    {
+      fixed (byte* countPtr = &PieceCount)
+      {
+        *countPtr = pieceCount;
+      }
+    }
+
+    internal unsafe void SetShortHash()
+    {
+      fixed (byte* hashPtr = &PiecesShortHash)
+      {
+        *hashPtr = CalcShortHash();
+      }
+    }
+
+    #endregion
+
     #region Constructors
 
     /// <summary>
@@ -888,7 +918,7 @@ namespace Ceres.Chess
     /// <param name="piece"></param>
     /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private int SetPieceOnSquare(int squareIndex, Piece piece)
+    internal int SetPieceOnSquare(int squareIndex, Piece piece)
     {
       Debug.Assert(piece.RawValue < 15);
 
