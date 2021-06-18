@@ -75,6 +75,20 @@ namespace Ceres.MCTS.LeafExpansion
                                       int numChildren, int numVisitsToCompute,
                                       Span<float> outputScores, Span<short> outputChildVisitCounts)
     {
+#if NOT
+Note: Possible optimization/inefficiency: 
+       the profiler shows about 5% of runtime here, 
+       and the disassembly shows an unexplained zeroing 
+       of seemingly about 500 bytes, possibly related to passing the Spans
+       on to the Compute method at the end of the method.
+  00007FFD0D4BAA0C  vxorps      xmm4,xmm4,xmm4  
+  00007FFD0D4BAA10  mov         rax,0FFFFFFFFFFFFFF10h  
+  00007FFD0D4BAA1A  vmovdqa     xmmword ptr [rax+rbp],xmm4  
+  00007FFD0D4BAA1F  vmovdqa     xmmword ptr [rbp+rax+10h],xmm4  
+  00007FFD0D4BAA25  vmovdqa     xmmword ptr [rbp+rax+20h],xmm4  
+  00007FFD0D4BAA2B  add         rax,30h  
+#endif
+
       // Saving output scores only makes sense when a single visit being computed
       Debug.Assert(!(outputScores != default && numVisitsToCompute > 1));
 
@@ -207,15 +221,16 @@ namespace Ceres.MCTS.LeafExpansion
         // 
         // Note that would be possible to try this "jump ahead" technique
         // after not only the first visit, but in practice this did not improve performance.
-        const int NUM_ADDITIONAL_TRY_VISITS_PER_ITERATION = 10;
-        if (numVisits == 1 && numRemainingVisits > NUM_ADDITIONAL_TRY_VISITS_PER_ITERATION + 5)
+        const int REPEATED_VISITS_DIVISOR = 10;
+        int numAdditionalTryVisitsPerIteration = Math.Max(10, numRemainingVisits / REPEATED_VISITS_DIVISOR);
+        if (numVisits == 1 && numRemainingVisits > numAdditionalTryVisitsPerIteration + 5)
         {
           int numSuccessfulVisitsAllIterations = 0;
 
           do
           {
             // Modify state to simulate additional visits to this top child
-            float newNInFlight = nInFlight[maxIndex] += NUM_ADDITIONAL_TRY_VISITS_PER_ITERATION;
+            float newNInFlight = nInFlight[maxIndex] += numAdditionalTryVisitsPerIteration;
 
             // Compute new child scores
             numVisitsByParentToChildren = newNInFlight + parentNInFlight + ((parentN < 2) ? 1 : parentN - 1);
@@ -227,16 +242,18 @@ namespace Ceres.MCTS.LeafExpansion
             if (maxIndex == ArrayUtils.IndexOfElementWithMaxValue(localResultAVXScratch, numChildren))
             {
               // Child remained same, increment successful count
-              numSuccessfulVisitsAllIterations += NUM_ADDITIONAL_TRY_VISITS_PER_ITERATION;
+              numSuccessfulVisitsAllIterations += numAdditionalTryVisitsPerIteration;
             }
             else
             {
               // Failed, back out the last update to nInFlight and stop iterating
-              nInFlight[maxIndex] -= NUM_ADDITIONAL_TRY_VISITS_PER_ITERATION;
+              nInFlight[maxIndex] -= numAdditionalTryVisitsPerIteration;
 
               break;
             }
-          } while (numRemainingVisits - numSuccessfulVisitsAllIterations > NUM_ADDITIONAL_TRY_VISITS_PER_ITERATION);
+
+            numAdditionalTryVisitsPerIteration = Math.Max(10, numRemainingVisits / REPEATED_VISITS_DIVISOR);
+          } while (numRemainingVisits - numSuccessfulVisitsAllIterations > numAdditionalTryVisitsPerIteration);
 
           if (numSuccessfulVisitsAllIterations > 0)
           {
