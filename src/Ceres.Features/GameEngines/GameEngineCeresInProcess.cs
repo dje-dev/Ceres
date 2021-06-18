@@ -14,29 +14,23 @@
 #region Using directives
 
 using System;
+using System.IO;
 using System.Collections.Generic;
 
-using Ceres.Base.Benchmarking;
 using Ceres.Chess;
 using Ceres.Chess.ExternalPrograms.UCI;
 using Ceres.Chess.GameEngines;
 using Ceres.Chess.LC0.Positions;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.NNEvaluators.Defs;
+using Ceres.Chess.UserSettings;
 using Ceres.Chess.PositionEvalCaching;
 using Ceres.Chess.Positions;
 using Ceres.MCTS.Evaluators;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.Managers.Limits;
 using Ceres.MCTS.Params;
-
-using Ceres.Features.UCI;
-using System.IO;
-using System.Text;
-using Ceres.Chess.UserSettings;
 using Ceres.MCTS.Environment;
-using Ceres.Chess.NNEvaluators;
-using Ceres.Chess.NetEvaluation.Batch;
 
 #endregion
 
@@ -121,17 +115,27 @@ namespace Ceres.Features.GameEngines
                                     IManagerGameLimit gameLimitManager = null,
                                     string logFileName = null) : base(id)
     {
-      if (evaluatorDef == null) throw new ArgumentNullException(nameof(evaluatorDef));
-
-      // TODO: remove, temporary testing 
-      InstallCUSTOM1AsDynamicByPosition();
+      if (evaluatorDef == null)
+      {
+        throw new ArgumentNullException(nameof(evaluatorDef));
+      }
 
       // Use default settings for search and select params if not specified.
-      if (searchParams == null) searchParams = new ParamsSearch();
-      if (childSelectParams == null) childSelectParams = new ParamsSelect();
+      if (searchParams == null)
+      {
+        searchParams = new ParamsSearch();
+      }
+
+      if (childSelectParams == null)
+      {
+        childSelectParams = new ParamsSelect();
+      }
 
       // Use default limit manager if not specified.
-      if (gameLimitManager == null) gameLimitManager = new ManagerGameLimitCeres();
+      if (gameLimitManager == null)
+      {
+        gameLimitManager = new ManagerGameLimitCeres();
+      }
 
       EvaluatorDef = evaluatorDef;
       SearchParams = searchParams;
@@ -210,13 +214,18 @@ namespace Ceres.Features.GameEngines
                                                        bool verbose)
     {
       if (LastSearch != null && curPositionAndMoves.InitialPosMG != LastSearch.Manager.Context.StartPosAndPriorMoves.InitialPosMG)
+      {
         throw new Exception("ResetGame must be called if not continuing same line");
+      }
 
       MCTSearch searchResult;
 
       // Set up callback passthrough if provided
       MCTSManager.MCTSProgressCallback callbackMCTS = null;
-      if (callback != null) callbackMCTS = callbackContext => callback((MCTSManager)callbackContext);
+      if (callback != null)
+      {
+        callbackMCTS = callbackContext => callback((MCTSManager)callbackContext);
+      }
 
       // Possibly use the context of opponent to reuse position evaluations
       MCTSIterator shareContext = null;
@@ -250,7 +259,7 @@ namespace Ceres.Features.GameEngines
 
       MGMove bestMoveMG = searchResult.BestMove;
 
-      int N = (int)searchResult.SearchRootNode.N;
+      int N = searchResult.SearchRootNode.N;
 
       // Save (do not dispose) this search in case we can reuse it next time.
       LastSearch = searchResult;
@@ -308,7 +317,10 @@ namespace Ceres.Features.GameEngines
 
       if (LastSearch == null)
       {
-        if (evaluators == null) evaluators = new NNEvaluatorSet(EvaluatorDef);
+        if (evaluators == null)
+        {
+          evaluators = new NNEvaluatorSet(EvaluatorDef);
+        }
 
         Search.Search(evaluators, ChildSelectParams, SearchParams, GameLimitManager,
                       reuseOtherContextForEvaluatedNodes,
@@ -327,7 +339,9 @@ namespace Ceres.Features.GameEngines
           if (i < lastMoves.Count)
           {
             if (lastMoves[i] != curPositionAndMoves.Moves[i])
+            {
               throw new Exception("Internal error: move sequence is not a prefix");
+            }
           }
           else
             forwardMoves.Add(curPositionAndMoves.Moves[i]);
@@ -353,7 +367,11 @@ namespace Ceres.Features.GameEngines
         TimeSpan elapsedTime = DateTime.Now - startTime;
         if (Search.Manager.SearchLimit.IsTimeLimit)
         {
-          if (Search.Manager.SearchLimit.IsPerGameLimit) throw new NotImplementedException();
+          if (Search.Manager.SearchLimit.IsPerGameLimit)
+          {
+            throw new NotImplementedException();
+          }
+
           float timeOvershoot = (float)elapsedTime.TotalSeconds - Search.Manager.SearchLimit.Value;
           MCTSEventSource.MaximumTimeAllotmentOvershoot = Math.Max(MCTSEventSource.MaximumTimeAllotmentOvershoot, timeOvershoot);
         }
@@ -385,9 +403,13 @@ namespace Ceres.Features.GameEngines
       get
       {
         if (LastSearch != null)
+        {
           return new UCISearchInfo(MCTS.Utils.UCIInfo.UCIInfoString(Search.Manager, Search.SearchRootNode));
+        }
         else
+        {
           return null;
+        }
       }
     }
 
@@ -406,72 +428,6 @@ namespace Ceres.Features.GameEngines
       LastSearch?.Manager.Dispose();
       LastSearch = null;
     }
-
-
-    static long countChooseFast = 0;
-    static long countAll = 0;
-
-
-    static bool HAVE_NOTIFIED = false;
-    /// <summary>
-    /// TODO: remove, temporary testing code
-    /// </summary>
-    public static void InstallCUSTOM1AsDynamicByPosition()
-    {
-      NNEvaluator Build(string netID, int gpuID, NNEvaluator referenceEvaluator)
-      {
-        // ************************************************** NET SELECTION HERE
-        const string gpuFast = "GPU:0";
-        const string gpuSlow = "GPU:0";
-
-        const string netFast = "LC0:jj_ensemble";
-        const string netSlow = "LC0:j94-100";
-
-        // *************************************************** END NET SELECTION
-
-        // Construct a compound evaluator which does both fast and slow (potentially parallel)
-        NNEvaluator[] evaluators = new NNEvaluator[] {NNEvaluator.FromSpecification(netFast, gpuFast),
-                                                      NNEvaluator.FromSpecification(netSlow, gpuSlow)};
-        NNEvaluatorDynamicByPos.DynamicEvaluatorIndexPredicate chooserFunc = delegate (NNPositionEvaluationBatchMember[] evaluatorResults)
-        {
-          if (!HAVE_NOTIFIED)
-          {
-            Console.WriteLine($"\r\n*** NOTE: InstallCUSTOM1AsDynamicByPosition is in use for CUSTOM1 with fast/slow net combination logic (see GameEngineCeresInProcess) using {netFast} and {netSlow}\r\n");
-            HAVE_NOTIFIED = true;
-          }
-
-          NNPositionEvaluationBatchMember resultFast = evaluatorResults[0];
-          NNPositionEvaluationBatchMember resultSlow = evaluatorResults[1];
-
-          // ************************************************** LOGIC GOES HERE
-          // Determine which network to use
-          float absVFromFast = System.Math.Abs(resultFast.V);
-          bool useFast = absVFromFast  > 0.6f;
-          // *************************************************** END LOGIC
-
-          // Track this as a metric (Custom1)
-          countAll++;
-          if (useFast)
-          {
-            countChooseFast++;
-          }
-          MCTSEventSource.TestMetric1 = (float)countChooseFast / (float)countAll;
-
-
-          if (useFast)
-          {
-            // Add a statistic showing eval comes from fast net
-            MCTSEventSource.TestCounter1++;
-          }
-          return useFast ? 0 : 1;
-        };
-
-        NNEvaluatorDynamicByPos evalChoose = new(evaluators, chooserFunc);
-        return evalChoose;
-      }
-      NNEvaluatorFactory.Custom1Factory = Build;
-    }
-
 
   }
 }
