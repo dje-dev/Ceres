@@ -114,6 +114,13 @@ namespace Ceres.Chess.LC0.Batches
     }
 
 
+    /// <summary>
+    /// Returns a new EncodedPositionBatchFlat which contains a specified 
+    /// subset of positions in this batch (by copying the underlying values).
+    /// </summary>
+    /// <param name="startIndex"></param>
+    /// <param name="count"></param>
+    /// <returns></returns>
     public IEncodedPositionBatchFlat GetSubBatchCopied(int startIndex, int count)
     {
       float[] w = null;
@@ -389,14 +396,14 @@ namespace Ceres.Chess.LC0.Batches
 
     void Init(EncodedPositionType trainingType)
     {
-      PosPlaneBitmaps = new ulong[MaxBatchSize * EncodedPositionWithHistory.NUM_PLANES_TOTAL];
-      PosPlaneValues = new byte[MaxBatchSize * EncodedPositionWithHistory.NUM_PLANES_TOTAL];
+      PosPlaneBitmaps = GC.AllocateUninitializedArray<ulong>(MaxBatchSize * EncodedPositionWithHistory.NUM_PLANES_TOTAL);
+      PosPlaneValues = GC.AllocateUninitializedArray<byte>(MaxBatchSize * EncodedPositionWithHistory.NUM_PLANES_TOTAL);
 
       if (trainingType == EncodedPositionType.PositionAndTrainingData)
       {
-        W = new float[MaxBatchSize];
-        L = new float[MaxBatchSize];
-        Policy = new FP16[MaxBatchSize * EncodedPolicyVector.POLICY_VECTOR_LENGTH];
+        W = GC.AllocateUninitializedArray<float>(MaxBatchSize);
+        L = GC.AllocateUninitializedArray<float>(MaxBatchSize);
+        Policy = GC.AllocateUninitializedArray<FP16>(MaxBatchSize * EncodedPolicyVector.POLICY_VECTOR_LENGTH);
       }
     }
 
@@ -522,7 +529,9 @@ namespace Ceres.Chess.LC0.Batches
       float[] ret;
 
       if (numHistoryPositions == NUM_HISTORY_POSITIONS)
+      {
         ret = ValuesFlatFromPlanes();
+      }
       else
       {
         ret = new float[numChannels * NumPos * 64];
@@ -573,8 +582,10 @@ namespace Ceres.Chess.LC0.Batches
         ret = preallocatedBuffer;
         Array.Clear(ret, 0, length);
       }
-      else 
+      else
+      {
         ret = new float[length];
+      }
 
       ConvertToFlat(ret);
       return ret;
@@ -639,7 +650,7 @@ namespace Ceres.Chess.LC0.Batches
     }
 
 
-#region Dump diagostics
+    #region Dump diagostics
 
     // --------------------------------------------------------------------------------------------
     public void DumpDecoded()
@@ -726,26 +737,6 @@ namespace Ceres.Chess.LC0.Batches
 
     #endregion
 
-    #region Helpers
-
-    public static IEnumerable<(EncodedTrainingPosition[], int)> GenBatchesFromRawPositions(string trainingTARFileName,
-                                                                                         int batchSize,
-                                                                                         Predicate<string> processFilePredicate = null,
-                                                                                         int maxGames = int.MaxValue,
-                                                                                         int maxPositions = int.MaxValue)
-    {
-      throw new NotImplementedException("Yet to implement: batchSize in GenBatchesFromRawPositions");
-//      foreach (var (rawPosBuffer, numGamesThisBuffer) in LZTrainingPositionRawReader.EnumerateRawPos(trainingTARFileName, processFilePredicate, 
-//                                                                                                     LZTrainingPositionRawReader.ReaderOptions.None, maxGames, maxPositions))
-//      {
-//        yield return (rawPosBuffer, numGamesThisBuffer);
-//      }
-    }
-
-
-
-    #endregion
-
     #region Utils
 
     static bool Equals<T>(T[] v1, T[] v2) where T : struct
@@ -826,3 +817,4 @@ namespace Ceres.Chess.LC0.Batches
 
 
 }
+
