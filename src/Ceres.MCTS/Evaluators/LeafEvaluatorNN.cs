@@ -145,16 +145,21 @@ namespace Ceres.MCTS.Evaluators
     // TO DO: make uses elsewhere of ArrayPool use the shared
     static ArrayPool<EncodedPositionWithHistory> posArrayPool = ArrayPool<EncodedPositionWithHistory>.Shared;
 
+    readonly object shutdownLockObj = new();
     public void Shutdown()
     {
       if (rawPosArray != null)
       {
-        Batch.Shutdown();
-        posArrayPool.Return(rawPosArray);
-
+        lock (shutdownLockObj)
+        {
+          if (rawPosArray != null)
+          {
+            posArrayPool.Return(rawPosArray);
+            rawPosArray = null;
+            Batch?.Shutdown();
+          }
+        }
       }
-      rawPosArray = null;
-
     }
 
     ~LeafEvaluatorNN()
