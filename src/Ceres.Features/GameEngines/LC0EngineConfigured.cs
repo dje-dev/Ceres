@@ -15,6 +15,7 @@
 
 using System;
 using System.Collections.Concurrent;
+using System.Diagnostics.SymbolStore;
 using System.Linq;
 using System.Text;
 using Ceres.Chess;
@@ -37,20 +38,10 @@ namespace Ceres.Features.GameEngines
   public static class LC0EngineConfigured
   {
     /// <summary>
-    /// Returns set of backend arguments to configure the
-    /// backend (based net being used).
+    /// If the configuration parameters should be optimized
+    /// for LC0 version 0.28 or later.
     /// </summary>
-    /// <param name="evaluatorDef"></param>
-    /// <returns></returns>
-    static string BackendArgumentsString(NNEvaluatorDef evaluatorDef)
-    {
-      // LC0 does not genearlly support Int8; map into FP16 silently
-      NNEvaluatorPrecision precision = evaluatorDef.Nets[0].Net.Precision;
-      if (precision == NNEvaluatorPrecision.Int8)
-        precision = NNEvaluatorPrecision.FP16;
-
-      return LC0EngineArgs.BackendArgumentsString(evaluatorDef.DeviceIndices, precision, evaluatorDef.EqualFractions);
-    }
+    public static bool CONFIGURE_FOR_V28_OR_LATER = true;
 
     public static bool USE_LC0_SMALL_SEARCH_SETTINGS = false;
 
@@ -80,8 +71,15 @@ namespace Ceres.Features.GameEngines
                                                  bool forceDisableSmartPruning = false,
                                                  bool alwaysFillHistory = false)
     {
-      if (paramsSearch == null) paramsSearch = new ParamsSearch();
-      if (paramsSelect == null) paramsSelect = new ParamsSelect();
+      if (paramsSearch == null)
+      {
+        paramsSearch = new ParamsSearch();
+      }
+
+      if (paramsSelect == null)
+      {
+        paramsSelect = new ParamsSelect();
+      }
       //fail int8  string precisionStr = MCTSParams.PRECISION == WFEvalNetTensorRT.TRTPrecision.Int8 ? "trt-int8" : "cudnn-fp16";
 
       // Must reverse values to conform to LZ0 convention
@@ -109,8 +107,6 @@ namespace Ceres.Features.GameEngines
 
       lzOptions += "--multi-gather "; // greatly improves search speed
 
-      lzOptions += "--max-out-of-order-evals-factor=2.4 "; // to be default in versions >0.27 
-
 #if NOT
       if (paramsSearch.TestFlag)
       {
@@ -127,18 +123,28 @@ namespace Ceres.Features.GameEngines
       // However note that for very small nets such as 128x10 it may be faster to uze zero nncache.
       const int LC0_CACHE_SIZE = 5_000_000;
 
+
       int MOVE_OVERHEAD = (int)(new ParamsSearch().MoveOverheadSeconds * 1000);
       lzOptions += $"--move-overhead={MOVE_OVERHEAD} ";
-      if (USE_LC0_SMALL_SEARCH_SETTINGS)
-      {
-        // Works better for smaller searchs (such as 1000 nodes)
-        lzOptions += " --max-collision-visits=32 ";
 
+      if (CONFIGURE_FOR_V28_OR_LATER)
+      {
+//        lzOptions += " --max-collision-visits=1 --max-collision-events=1 "; // as used for training
       }
       else
       {
-        // Much faster for large searches with multigather enabled.
-        lzOptions+= " --max-out-of-order-evals-factor=2.4 --max-collision-events=500 --max-collision-visits=500 ";
+        lzOptions += " --max-out-of-order-evals-factor=2.4 --max-collision-events=500 ";
+
+        if (USE_LC0_SMALL_SEARCH_SETTINGS)
+        {
+          // Works better for smaller searchs (such as 1000 nodes)
+          lzOptions += " --max-collision-visits=32 ";
+        }
+        else
+        {
+          // Much faster for large searches with multigather enabled.
+          lzOptions += " --max-collision-visits=500 ";
+        }
       }
 
       if (alwaysFillHistory) lzOptions += $" --history-fill=always "; 
@@ -245,6 +251,27 @@ namespace Ceres.Features.GameEngines
       if (extraCommandLineArgs != null) lzOptions += " " + extraCommandLineArgs;
       return new LC0Engine(EXE, lzOptions, resetStateAndCachesBeforeMoves);
     }
+
+
+    /// <summary>
+    /// Returns set of backend arguments to configure the
+    /// backend (based net being used).
+    /// </summary>
+    /// <param name="evaluatorDef"></param>
+    /// <returns></returns>
+    static string BackendArgumentsString(NNEvaluatorDef evaluatorDef)
+    {
+      // LC0 does not genearlly support Int8; map into FP16 silently
+      NNEvaluatorPrecision precision = evaluatorDef.Nets[0].Net.Precision;
+      if (precision == NNEvaluatorPrecision.Int8)
+      {
+        precision = NNEvaluatorPrecision.FP16;
+      }
+
+      return LC0EngineArgs.BackendArgumentsString(evaluatorDef.DeviceIndices, precision, evaluatorDef.EqualFractions);
+    }
+
+
   }
 
 }
