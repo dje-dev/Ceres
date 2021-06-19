@@ -105,8 +105,6 @@ namespace Ceres.Features.GameEngines
 
       string lzOptions = "--nodes-as-playouts "; // essential to get same behavior as Ceres with go nodes command 
 
-      lzOptions += "--multi-gather "; // greatly improves search speed
-
 #if NOT
       if (paramsSearch.TestFlag)
       {
@@ -133,6 +131,7 @@ namespace Ceres.Features.GameEngines
       }
       else
       {
+        lzOptions += "--multi-gather "; // greatly improves search speed
         lzOptions += " --max-out-of-order-evals-factor=2.4 --max-collision-events=500 ";
 
         if (USE_LC0_SMALL_SEARCH_SETTINGS)
@@ -184,35 +183,22 @@ namespace Ceres.Features.GameEngines
       }
 
       string tbPath = CeresUserSettingsManager.Settings.TablebaseDirectory;
-      if (paramsSearch.EnableTablebases) lzOptions += (@$" --syzygy-paths=#{tbPath}# ").Replace("#", "\"");
+      if (paramsSearch.EnableTablebases)
+      {
+        lzOptions += (@$" --syzygy-paths=#{tbPath}# ").Replace("#", "\"");
+      }
 
-      if (verboseOutput) lzOptions += " --verbose-move-stats ";
+      if (verboseOutput)
+      {
+        lzOptions += " --verbose-move-stats ";
+      }
 
       string EXE = CeresUserSettingsManager.GetLC0ExecutableFileName();
 
-#if EXPERIMENTAL
-      const bool LZ_USE_TRT = false; // NOTE: if true, the GPU is seemingly currently hardcoded to 3. The max batch size is 512
-
-      if (LZ_USE_TRT)
+      if (overrideEXE != null)
       {
-        if (network.NetworkID == "59999")
-          EXE = @"C:\dev\lc0\19May\lc0\build\lc0_59999.exe";
-        else if (network.NetworkID == "42767")
-          EXE = @"C:\dev\lc0\19May\lc0\build\lc0_42767.exe";
-        else
-          throw new Exception("Unknown net for EXE " + network.NetworkID);
-
-        if (evaluatorDef.Nets[0].Net.Precision == NNEvaluatorPrecision.Int8)
-          lzOptions = lzOptions.Replace("cudnn-fp16", "trt-int8");
-        else if (evaluatorDef.Nets[0].Net.Precision == NNEvaluatorPrecision.FP16)
-          lzOptions = lzOptions.Replace("cudnn-fp16", "trt-fp16");
-        else
-          throw new NotImplementedException();
+        EXE = overrideEXE;
       }
-
-#endif
-
-      if (overrideEXE != null) EXE = overrideEXE;
 
       return (EXE, lzOptions);
     }
