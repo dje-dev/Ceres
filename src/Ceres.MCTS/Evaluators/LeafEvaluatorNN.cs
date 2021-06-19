@@ -58,7 +58,7 @@ namespace Ceres.MCTS.Evaluators
     /// <summary>
     /// Reusable batch for NN evaluations
     /// </summary>
-    public readonly EncodedPositionBatchFlat Batch;
+    public EncodedPositionBatchFlat Batch { private set; get; }
 
     public enum LocationType { Local, Remote };
 
@@ -92,9 +92,7 @@ namespace Ceres.MCTS.Evaluators
       SaveToCache = saveToCache;
       LowPriority = lowPriority;
       Cache = cache;
-      this.BatchEvaluatorIndexDynamicSelector = batchEvaluatorIndexDynamicSelector;
-
-      Batch = new EncodedPositionBatchFlat(EncodedPositionType.PositionOnly, evaluator.MaxBatchSize);
+      BatchEvaluatorIndexDynamicSelector = batchEvaluatorIndexDynamicSelector;
 
       if (evaluatorDef.Location == NNEvaluatorDef.LocationType.Local)
       {
@@ -119,6 +117,26 @@ namespace Ceres.MCTS.Evaluators
       }
 #endif
     }
+
+
+    /// <summary>
+    /// Verifies that Batch is allocated and has sufficient size.
+    /// The batch is grown incrementally if/as needed starting from a modest size.
+    /// </summary>
+    /// <param name="batchSize"></param>
+    void VerifyBatchAllocated(int batchSize)
+    {    
+      int currentSize = Batch == null ? 0 : Batch.MaxBatchSize;
+      if (batchSize > currentSize)
+      {
+        // Double the current size to make room
+        const int INITAL_BATCH_SIZE = 128;
+        int newSize = currentSize == 0 ? INITAL_BATCH_SIZE : currentSize * 2;
+
+        Batch = new EncodedPositionBatchFlat(EncodedPositionType.PositionOnly, newSize);
+      }
+    }
+
 
     protected override LeafEvaluationResult DoTryEvaluate(MCTSNode node) => default;
 
@@ -155,6 +173,8 @@ namespace Ceres.MCTS.Evaluators
     {
       if (nodes.Length > 0)
       {
+        VerifyBatchAllocated(nodes.Length);
+
         for (int i = 0; i < nodes.Length; i++)
         {
           if (EvaluatorDef.PositionTransform == NNEvaluatorDef.PositionTransformType.Mirror)
