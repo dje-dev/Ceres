@@ -34,19 +34,20 @@ namespace Ceres.MCTS.MTCSNodes.Storage
   public class MCTSNodeStructChildStorage
   {
     /// <summary>
-    /// Only about 2 billion values are available for the 
+    /// Only about 2.1 billion values are available for the 
     /// the child start indices stored in MCTSNodeStruct
     /// (since they are ints, with negative values reserved).
     /// 
-    /// However with an average of about 35 children per node,
-    /// this would severly limit the maximum search tree size.
+    /// However with an average of about 32 children per node,
+    /// (considering that some will be unexpanded transposition nodes)
+    /// this would severely limit the maximum search tree size.
     /// 
     /// Therefore we allocate children in blocks and the values 
     /// we record are indexes of the block, not the index of the child.
     /// 
     /// For example:
-    ///    1 per block --> 2 billion / 40_per_node = 50,000,000 nodes
-    ///   16 per block --> 32 billion / 40_per_node = 800,000,000 nodes
+    ///    1 per block --> 2.1 billion  / 32_per_node =    65,625,000 nodes
+    ///   16 per block --> 33.6 billion / 32_per_node = 1,050,000,000 nodes
     ///   
     /// The value of 16 allows a large search tree and also has the benefit
     /// that the blocks fall on cache lines (64 bytes), while keeping small
@@ -55,10 +56,11 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     public const int NUM_CHILDREN_PER_BLOCK = 16;
 
     /// <summary>
-    /// Maximum number of nodes for which we have room to accomodate children.
+    /// Maximum number of nodes for which we have room to accomodate
+    /// children, as constrained by the data structures.
     /// See comment above.
     /// </summary>
-    public const int MAX_NODES = 750_000_000;
+    public const int MAX_NODES = 1_050_000_000;
 
     /// <summary>
     /// The main store to which these children below.
