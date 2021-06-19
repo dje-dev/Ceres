@@ -67,7 +67,10 @@ namespace Ceres.MCTS.Managers
     {
       const float MLH_DELTA_BOUND = 50; // truncate outliers
       float mHigherBy = StatUtils.Bounded(moveNode.MAvg - mAvgOfBestQ, -MLH_DELTA_BOUND, MLH_DELTA_BOUND);
-      if (float.IsNaN(mHigherBy)) return 0; // no MLH support in network
+      if (float.IsNaN(mHigherBy))
+      {
+        return 0; // no MLH support in network
+      }
 
       const float Q_BOUND = 0.5f;
       float boundedRootQ = StatUtils.Bounded(MathF.Abs((float)Node.Context.Root.Q), -Q_BOUND, Q_BOUND);
@@ -101,7 +104,9 @@ namespace Ceres.MCTS.Managers
       get
       {
         if (Node.NumPolicyMoves == 0)
+        {
           return default;
+        }
 
         // If only one move, make it!
         if (Node.NumPolicyMoves == 1)
@@ -200,7 +205,10 @@ namespace Ceres.MCTS.Managers
       }
       else
       {
-        if (Node.Context.ParamsSearch.BestMoveMode == ParamsSearch.BestMoveModeEnum.TopN)
+        // Always use Top N for very small trees
+        const int MIN_N_USE_TOP_Q = 100;
+        if (Node.Context.ParamsSearch.BestMoveMode == ParamsSearch.BestMoveModeEnum.TopN
+          || Node.N < MIN_N_USE_TOP_Q)
         {
           // Just return best N (note that tiebreaks are already decided with sort logic above)
           return new BestMoveInfo(childrenSortedN[0], (float)childrenSortedN[0].Q, childrenSortedN[0].N,
@@ -219,7 +227,10 @@ namespace Ceres.MCTS.Managers
             MCTSNode candidate = childrenSortedQ[i];
 
             // Return if this has a worse Q (for the opponent) and meets minimum move threshold
-            if ((float)candidate.Q > qOfBestNMove) break;
+            if ((float)candidate.Q > qOfBestNMove)
+            {
+              break;
+            }
 
             float differenceFromQOfBestN = MathF.Abs((float)candidate.Q - (float)childrenSortedN[0].Q);
 
@@ -339,7 +350,10 @@ namespace Ceres.MCTS.Managers
       float minFrac = MathF.Pow(1.0f - qDifferenceFromBestQ, POWER);
 
       // Impose absolute minimum fraction.
-      if (minFrac < MIN_FRAC_N_REQUIRED_MIN) minFrac = MIN_FRAC_N_REQUIRED_MIN;
+      if (minFrac < MIN_FRAC_N_REQUIRED_MIN)
+      {
+        minFrac = MIN_FRAC_N_REQUIRED_MIN;
+      }
 
       return minFrac;
     }
@@ -364,7 +378,9 @@ namespace Ceres.MCTS.Managers
       }
 
       if (childrenWithinThreshold.Count == 1)
+      {
         return childrenSortedByAttractiveness[0];
+      }
       else
       {
         MCTSNode bestMove = childrenWithinThreshold[ThompsonSampling.Draw(densities.ToArray(), Node.Context.ParamsSearch.SearchNoiseBestMoveSampling.MoveSamplingConsideredMovesTemperature)];
