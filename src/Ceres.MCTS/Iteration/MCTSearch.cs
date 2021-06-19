@@ -130,25 +130,34 @@ namespace Ceres.MCTS.Iteration
                        bool possiblyUsePositionCache = false,
                        bool isFirstMoveOfGame = false)
     {
+      if (searchLimit.SearchCanBeExpanded)
+      {
+        if (!MCTSParamsFixed.STORAGE_USE_INCREMENTAL_ALLOC)
+        {
+          throw new Exception("STORAGE_USE_INCREMENTAL_ALLOC must be true when SearchCanBeExpanded.");
+        }
+
+      }
+
+      if (!MCTSParamsFixed.STORAGE_USE_INCREMENTAL_ALLOC 
+        && !searchLimit.IsNodesLimit)
+      {
+        throw new Exception("SearchLimit must be NodesPerMove or NodesPerGame when STORAGE_USE_INCREMENTAL_ALLOC is false");
+      }
+
       searchLimit = AdjustedSearchLimit(searchLimit, paramsSearch);
 
       int maxNodes;
-      if (MCTSParamsFixed.STORAGE_USE_INCREMENTAL_ALLOC)
+      if (!searchLimit.SearchCanBeExpanded && searchLimit.IsNodesLimit)
       {
+        maxNodes = (int)(searchLimit.Value + searchLimit.ValueIncrement + 5000);
+      }
+      else
+      { 
         // In this mode, we are just reserving virtual address space
         // from a very large pool (e.g. 256TB for Windows).
         // Therefore it is safe to reserve a very large block.
         maxNodes = (int)(1.1f * MCTSNodeStore.MAX_NODES);
-      }
-      else
-      {
-        if (searchLimit.SearchCanBeExpanded)
-          throw new Exception("STORAGE_USE_INCREMENTAL_ALLOC must be true when SearchCanBeExpanded.");
-
-        if (searchLimit.Type != SearchLimitType.NodesPerMove)
-          maxNodes = (int)searchLimit.Value + 5_000;
-        else
-          throw new Exception("STORAGE_USE_INCREMENTAL_ALLOC must be true when using time search limits.");
       }
 
       MCTSNodeStore store = new MCTSNodeStore(maxNodes, priorMoves);
