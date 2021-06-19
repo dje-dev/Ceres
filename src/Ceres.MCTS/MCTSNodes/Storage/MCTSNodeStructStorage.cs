@@ -117,7 +117,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 #if SPAN
       string memorySegmentName = useExistingSharedMem ? "CeresSharedNodes" : null;
 
-      nodes = new MemoryBufferOS<MCTSNodeStruct>(numNodes, largePages, memorySegmentName,
+      nodes = new MemoryBufferOS<MCTSNodeStruct>(numNodes + BUFFER_NODES, largePages, memorySegmentName,
                                                  useExistingSharedMem,
                                                  useIncrementalAlloc);
 #else
@@ -152,7 +152,6 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       int gotIndex = Interlocked.Increment(ref nextFreeIndex) - 1;
 
       // Check for overflow (with page buffer)
-      int BUFFER_NODES = (2048 * 1024) / MCTSNodeStruct.MCTSNodeStructSizeBytes;
       if (nodes.NumItemsAllocated <= gotIndex + BUFFER_NODES)
       {
         lock (lockObj)
@@ -164,6 +163,11 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       return new MCTSNodeStructIndex(gotIndex);
     }
 
+
+    /// <summary>
+    /// Overallocate sufficiently to make sure allocation reaches to end of a (possibly huge) page
+    /// </summary>
+    static int BUFFER_NODES => (2048 * 1024) / MCTSNodeStruct.MCTSNodeStructSizeBytes;
 
     public void InsureAllocated(int numNodes) =>  nodes.InsureAllocated(numNodes);
 
