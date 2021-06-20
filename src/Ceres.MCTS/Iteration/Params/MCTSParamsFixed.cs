@@ -61,6 +61,16 @@ namespace Ceres.MCTS.Params
     public const bool STORAGE_USE_INCREMENTAL_ALLOC = true;
 
     /// <summary>
+    /// If enabled the largest possible search tree is about 2 billion nodes
+    /// rather than the default of 1 billion nodes.
+    /// 
+    /// This should be enabled only if needed and obviously 
+    /// only if the system has the required 250GB to 500GB of memory
+    /// (because it slightly increases memory usage per node).
+    /// </summary>
+    public const bool ENABLE_MAX_SEARCH_TREE = false;
+
+    /// <summary>
     /// 
     /// Possibly using Level1 helps. However possibly with large pages it is better to use None (?).
     /// </summary>

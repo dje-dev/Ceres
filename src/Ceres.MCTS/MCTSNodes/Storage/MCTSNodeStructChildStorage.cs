@@ -48,19 +48,20 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     /// For example:
     ///    1 per block --> 2.1 billion  / 32_per_node =    65,625,000 nodes
     ///   16 per block --> 33.6 billion / 32_per_node = 1,050,000,000 nodes
+    ///   32 per block --> 67.2 billion / 32_per_node = 2,100,000,000 nodes
     ///   
     /// The value of 16 allows a large search tree and also has the benefit
     /// that the blocks fall on cache lines (64 bytes), while keeping small
     /// average number of chilren slots unused.
     /// </summary>
-    public const int NUM_CHILDREN_PER_BLOCK = 16;
+    public const int NUM_CHILDREN_PER_BLOCK = MCTSParamsFixed.ENABLE_MAX_SEARCH_TREE ? 32 : 16;
 
     /// <summary>
     /// Maximum number of nodes for which we have room to accomodate
     /// children, as constrained by the data structures.
     /// See comment above.
     /// </summary>
-    public const int MAX_NODES = 1_050_000_000;
+    public const int MAX_NODES = MCTSParamsFixed.ENABLE_MAX_SEARCH_TREE ? 2_100_000_000 : 1_050_000_000;
 
     /// <summary>
     /// The main store to which these children below.
