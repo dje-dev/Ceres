@@ -108,14 +108,14 @@ namespace Ceres.MCTS.Params
     void DoChooseOptimal(int estNumNodes)
     {
       // TODO: lift restriction that SMART_SIZE only works with single device
-      bool defaultUseSmartSizeBatches = new ParamsSearchExecution().SmartSizeBatches;
-      ParamsSearch.Execution.SmartSizeBatches = defaultUseSmartSizeBatches 
+      ParamsSearch.Execution.SmartSizeBatches = ParamsSearchExecution.DEFAULT_USE_SMART_SIZE_BATCHES
                                              && estNumNodes > 1000 
                                              && NNEvaluatorDef.NumDevices == 1;
-                              
-      if (NNEvaluatorDef.DeviceCombo == NNEvaluatorDeviceComboType.Pooled)
-        AdjustForPooled();
 
+      if (NNEvaluatorDef.DeviceCombo == NNEvaluatorDeviceComboType.Pooled)
+      {
+        AdjustForPooled();
+      }
 
       // Turn off some features if search is very small (overhead of initializing them not worth it)
       const int CUTOVER_NUM_NODES_TINY = 200;
@@ -156,7 +156,7 @@ namespace Ceres.MCTS.Params
       // TODO: set the GPU fractions if multiple
     }
 
-
+    
     /// <summary>
     /// Makes adjustmens to parmaeters that are appropriate when 
     /// a pooled evaluator is being used.

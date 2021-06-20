@@ -30,7 +30,7 @@ namespace Ceres.MCTS.Params
   /// disabled for very small searches because it is not beneficial.
   /// </summary>
   [Serializable]
-  public class ParamsSearchExecution
+  public record ParamsSearchExecution
   {
     /// <summary>
     /// Scaling factor with higher values decreasing 
@@ -67,11 +67,14 @@ namespace Ceres.MCTS.Params
     /// </summary>
     public int NodeAnnotationCacheSize = 750_000;
 
+
+    internal const bool DEFAULT_USE_SMART_SIZE_BATCHES = true;
+
     /// <summary>
     /// If the batch size is dynamically computed each time based on
     /// search characateristics  (e.g. larger batches when the tree is already large).
     /// </summary>
-    public bool SmartSizeBatches = true;
+    public bool SmartSizeBatches = DEFAULT_USE_SMART_SIZE_BATCHES;
 
     /// <summary>
     /// If two batches should procesed used in flight simultaneously,

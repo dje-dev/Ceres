@@ -30,7 +30,7 @@ namespace Ceres.MCTS.Params
   /// that may be dynamically changed tuned for each batch based on its characteristics.
   /// </summary>
   [Serializable]
-  public class ParamsSearch
+  public record ParamsSearch
   {
     /// <summary>
     /// If a set of small adjustments to parameters resulting from tuning tests
