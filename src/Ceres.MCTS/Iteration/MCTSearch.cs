@@ -153,11 +153,11 @@ namespace Ceres.MCTS.Iteration
         maxNodes = (int)(searchLimit.Value + searchLimit.ValueIncrement + 5000);
       }
       else
-      { 
+      {
         // In this mode, we are just reserving virtual address space
         // from a very large pool (e.g. 256TB for Windows).
         // Therefore it is safe to reserve a very large block.
-        maxNodes = (int)(1.1f * MCTSNodeStore.MAX_NODES);
+        maxNodes = MCTSNodeStore.MAX_NODES;
       }
 
       MCTSNodeStore store = new MCTSNodeStore(maxNodes, priorMoves);
