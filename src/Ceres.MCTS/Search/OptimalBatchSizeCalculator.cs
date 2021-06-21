@@ -45,7 +45,8 @@ namespace Ceres.MCTS.Search
     /// <returns></returns>
     internal static int CalcOptimalBatchSize(int estimatedTotalSearchNodes, int currentTreeSize, 
                         bool overlapInUse, bool dualSelectorsInUse, 
-                        int maxBatchSize, float batchSizeMultiplier = 1.0f)
+                        int maxBatchSize, float batchSizeMultiplier,
+                        bool testMode)
     {
       // Follow pure MCTS for extremely small searches.
       if (estimatedTotalSearchNodes < 10) return 1;
@@ -62,12 +63,15 @@ namespace Ceres.MCTS.Search
           return 3;
       }
 
+
       // At larger tree sizes, we have two components,
       // one of which has a low exponent and becomes meaningful only at larger tree sizes.
       // Note that play quality (with small number of nodes per moves, e.g. 5000) 
       // is quite sensitive to changes in these parameters, with larger clearly worse.
-      float part1 = 0.2f * MathF.Pow(currentTreeSize, 0.65f);
-      float part2 = 2.0f * MathF.Pow(currentTreeSize, 0.45f);
+      float MULT1 = testMode ? 0 : 0.2f;
+      float MULT2 = testMode ? 3 : 2;
+      float part1 = MULT1 * MathF.Pow(currentTreeSize, 0.65f);
+      float part2 = MULT2 * MathF.Pow(currentTreeSize, 0.45f);
 
       int value = (int)(part1 + part2);
 
