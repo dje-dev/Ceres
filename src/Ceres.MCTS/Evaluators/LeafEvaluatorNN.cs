@@ -131,7 +131,7 @@ namespace Ceres.MCTS.Evaluators
       {
         // Double the current size to make room
         const int INITAL_BATCH_SIZE = 128;
-        int newSize = currentSize == 0 ? INITAL_BATCH_SIZE : currentSize * 2;
+        int newSize = currentSize == 0 ? Math.Max(INITAL_BATCH_SIZE, batchSize) : currentSize * 2;
 
         Batch = new EncodedPositionBatchFlat(EncodedPositionType.PositionOnly, newSize);
       }
