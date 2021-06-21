@@ -214,7 +214,8 @@ namespace Ceres.MCTS.Search
                                                                               overlapThisSet,                                                                    
                                                                               Context.ParamsSearch.Execution.FlowDualSelectors,
                                                                               maxBatchSize,
-                                                                              Context.ParamsSearch.BatchSizeMultiplier);
+                                                                              Context.ParamsSearch.BatchSizeMultiplier,
+                                                                              Context.ParamsSearch.TestFlag);
 
         targetThisBatch = Math.Min(targetThisBatch, Manager.MaxBatchSizeDueToPossibleNearTimeExhaustion);
         if (forceBatchSize.HasValue) targetThisBatch = forceBatchSize.Value;
@@ -244,6 +245,9 @@ namespace Ceres.MCTS.Search
         // Select the batch of nodes  
         if (numVisitsTryThisBatch < 5 || !Context.ParamsSearch.Execution.FlowSplitSelects)
         {
+          // Possibly compute a smart sized batch
+          SetMaxNNNodesUsingSmartSizing(nodesSelectedSet, (int)(targetThisBatch * 0.8f));
+
           thisBatchTotalNumLeafsTargeted += numVisitsTryThisBatch;
           ListBounded<MCTSNode> selectedNodes = selector.SelectNewLeafBatchlet(Context.Root, numVisitsTryThisBatch, thisBatchDynamicVLossBoost);
           nodesSelectedSet.AddSelectedNodes(selectedNodes, true);
@@ -253,45 +257,18 @@ namespace Ceres.MCTS.Search
           // Set default assumed max batch size
           nodesSelectedSet.MaxNodesNN = numVisitsTryThisBatch;
 
-          // In first attempt try to get 60% of target
+          // In first attempt try to get 60% of target, second 40%
           int numTry1 = Math.Max(1, (int)(numVisitsTryThisBatch * 0.60f));
           int numTry2 = (int)(numVisitsTryThisBatch * 0.40f);
           thisBatchTotalNumLeafsTargeted += numTry1;
+
+          // Possibly compute a smart sized batch
+          SetMaxNNNodesUsingSmartSizing(nodesSelectedSet, (int)(numTry1 * 0.9f));
 
           ListBounded<MCTSNode> selectedNodes1 = selector.SelectNewLeafBatchlet(Context.Root, numTry1, thisBatchDynamicVLossBoost);
           nodesSelectedSet.AddSelectedNodes(selectedNodes1, true);
           int numGot1 = nodesSelectedSet.NumNewLeafsAddedNonDuplicates;
           nodesSelectedSet.ApplyImmeditateNotYetApplied();
-
-          // In second try target remaining 40%
-          if (Context.ParamsSearch.Execution.SmartSizeBatches
-           && Context.EvaluatorDef.NumDevices == 1
-           && Context.NNEvaluators.PerfStatsPrimary != null) // TODO: somehow handle this for multiple GPUs
-          {
-            int[] optimalBatchSizeBreaks;
-            if (Context.NNEvaluators.PerfStatsPrimary.Breaks != null)
-              optimalBatchSizeBreaks = Context.NNEvaluators.PerfStatsPrimary.Breaks;
-            else
-              optimalBatchSizeBreaks = Context.GetOptimalBatchSizeBreaks(Context.EvaluatorDef.DeviceIndices[0]);
-
-            // Make an educated guess about the total number of NN nodes that will be sent 
-            // to the NN (resulting from both try1 and try2)
-            // We base this on the fraction of nodes in try1 which actually are going to NN
-            // then discounted by 0.8 because the yield on the second try is typically lower
-            const float TRY2_SUCCESS_DISCOUNT_FACTOR = 0.8f;
-            float fracNodesFirstTryGoingToNN = (float)nodesSelectedSet.NodesNN.Count / (float)numTry1;
-            int estimatedAdditionalNNNodesTry2 = (int)(numTry2 * fracNodesFirstTryGoingToNN * TRY2_SUCCESS_DISCOUNT_FACTOR);
-
-            int estimatedTotalNNNodes = nodesSelectedSet.NodesNN.Count + estimatedAdditionalNNNodesTry2;
-
-            const float NEARBY_BREAK_FRACTION = 0.20f;
-            int? closeByBreak = NearbyBreak(optimalBatchSizeBreaks, estimatedTotalNNNodes, NEARBY_BREAK_FRACTION);
-            if (closeByBreak is not null)
-            {
-              nodesSelectedSet.MaxNodesNN = closeByBreak.Value;
-            }
-
-          }
 
           // Only try to collect the second half of the batch if the first one yielded
           // a good fraction of desired nodes (otherwise too many collisions to profitably continue)
@@ -299,6 +276,9 @@ namespace Ceres.MCTS.Search
           bool shouldProcessTry2 = numTry1 < 10 || ((float)numGot1 / (float)numTry1) >= THRESHOLD_SUCCESS_TRY1;
           if (shouldProcessTry2)
           {
+            // Possibly compute a smart sized batch
+            SetMaxNNNodesUsingSmartSizing(nodesSelectedSet, EstAdditionalNNNodesForTry2(nodesSelectedSet, numTry1, numTry2));
+
             thisBatchTotalNumLeafsTargeted += numTry2;
             ListBounded<MCTSNode> selectedNodes2 = selector.SelectNewLeafBatchlet(Context.Root, numTry2, thisBatchDynamicVLossBoost);
 
@@ -404,6 +384,46 @@ namespace Ceres.MCTS.Search
       selector2?.Shutdown();
     }
 
+    private void SetMaxNNNodesUsingSmartSizing(MCTSNodesSelectedSet nodesSelectedSet, int estimatedNNNodes)
+    {
+      // TODO: Handle this for multiple GPUs, at least the simple case when they are homogeneous.
+      if (Context.ParamsSearch.Execution.SmartSizeBatches
+       && Context.EvaluatorDef.NumDevices == 1
+       && Context.NNEvaluators.PerfStatsPrimary != null) 
+      {
+        int[] optimalBatchSizeBreaks;
+        if (Context.NNEvaluators.PerfStatsPrimary.Breaks != null)
+        {
+          optimalBatchSizeBreaks = Context.NNEvaluators.PerfStatsPrimary.Breaks;
+        }
+        else
+        {
+          optimalBatchSizeBreaks = Context.GetOptimalBatchSizeBreaks(Context.EvaluatorDef.DeviceIndices[0]);
+        }
+
+        // Fallback to any break value which is not more than 20% below current estimate
+        const float NEARBY_BREAK_FRACTION = 0.20f;
+        int? closeByBreak = NearbyBreak(optimalBatchSizeBreaks, estimatedNNNodes, NEARBY_BREAK_FRACTION);
+        if (closeByBreak is not null)
+        {
+          nodesSelectedSet.MaxNodesNN = nodesSelectedSet.NodesNN.Count + closeByBreak.Value;
+          //Console.WriteLine($"Selecting total {numTry2} est nn {estimatedAdditionalNNNodesTry2} using break {closeByBreak} total NN max {nodesSelectedSet.MaxNodesNN}");
+        }
+
+      }
+    }
+
+    private static int EstAdditionalNNNodesForTry2(MCTSNodesSelectedSet nodesSelectedSet, int numTry1, int numTry2)
+    {
+      // Make an educated guess about the total number of NN nodes that will found in try2
+      // We base this on the fraction of nodes in try1 which actually are going to NN
+      // then discounted by 0.8 because the yield on the second try is typically lower
+      const float TRY2_SUCCESS_DISCOUNT_FACTOR = 0.8f;
+      float fracNodesFirstTryGoingToNN = (float)nodesSelectedSet.NodesNN.Count / (float)numTry1;
+      int estimatedAdditionalNNNodesTry2 = (int)(numTry2 * fracNodesFirstTryGoingToNN * TRY2_SUCCESS_DISCOUNT_FACTOR);
+      return estimatedAdditionalNNNodesTry2;
+    }
+
 
     /// <summary>
     /// 
@@ -419,8 +439,12 @@ namespace Ceres.MCTS.Search
 
       // Find break value which largest break less than targetTotalNumNodes
       for (int i = 0; i < breaks.Length; i++)
+      {
         if (breaks[i] >= min && breaks[i] < max)
+        {
           return breaks[i];
+        }
+      }
 
       return null;
     }
