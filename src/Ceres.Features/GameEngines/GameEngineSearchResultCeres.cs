@@ -18,6 +18,7 @@ using Ceres.Base.Benchmarking;
 using Ceres.Chess;
 using Ceres.Chess.GameEngines;
 using Ceres.MCTS.Iteration;
+using Ceres.MCTS.MTCSNodes;
 
 #endregion
 
@@ -33,6 +34,10 @@ namespace Ceres.Features.GameEngines
     /// </summary>
     public readonly MCTSearch Search;
 
+    /// <summary>
+    /// Information about the best (selected move) from teh search/
+    /// </summary>
+    public readonly BestMoveInfo BestMove;
 
     /// <summary>
     /// Constructor.
@@ -46,13 +51,16 @@ namespace Ceres.Features.GameEngines
     /// <param name="startingN"></param>
     /// <param name="endingN"></param>
     /// <param name="depth"></param>
-    /// <param name="manager"></param>
+    /// <param name="search"></param>
+    /// <param name="bestMoveInfo"></param>
     public GameEngineSearchResultCeres(string moveString, float scoreQ, float scoreCentipawns, float mAvg, 
                                        SearchLimit searchLimit, TimingStats timingStats, 
-                                       int startingN, int endingN, int depth, MCTSearch search)
+                                       int startingN, int endingN, int depth, MCTSearch search,
+                                       BestMoveInfo bestMove)
       : base(moveString, scoreQ, scoreCentipawns, mAvg, searchLimit, timingStats, startingN, endingN, depth)
     {
       Search = search;
+      BestMove = bestMove;
     }
   }
 }

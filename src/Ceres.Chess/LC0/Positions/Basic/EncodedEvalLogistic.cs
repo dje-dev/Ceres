@@ -39,10 +39,12 @@ namespace Ceres.Chess.LC0.Positions
 
     public float CentipawnValue => LogisticToCentipawn(LogisticValue);
 
-
-    // The conversion formula is adopted from LC0
-    //   90 * tan(1.5637541897 * wl)
-
+    /// <summary>
+    /// Based on LC0 definition "centipawn."
+    /// </summary>
+    /// <param name="wl"></param>
+    /// <returns></returns>
+    public static float WinLossToCentipawn(float wl) => 90f * MathF.Tan(1.5637541897f * wl);
 
     /// <summary>
     /// Outer multiplier on in conversion formula.

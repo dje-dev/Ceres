@@ -173,10 +173,9 @@ namespace Ceres.Chess.ExternalPrograms.UCI
       {
         // TODO: make more elegant via subclassing as noted above
         // TODO: consider switching to the LC0 2019 variant formula
-        if (ExtraInfo is LC0VerboseMoveStats)
-          return ((LC0VerboseMoveStats)ExtraInfo).SearchEvalLogistic;
-        else
-          return EncodedEvalLogistic.CentipawnToLogistic(ScoreCentipawns);
+        return ExtraInfo is LC0VerboseMoveStats
+            ? ((LC0VerboseMoveStats)ExtraInfo).ScoreCentipawns
+            : EncodedEvalLogistic.CentipawnToLogistic(ScoreCentipawns);
       }
     }
 
@@ -188,7 +187,9 @@ namespace Ceres.Chess.ExternalPrograms.UCI
     {
       // TODO: make more elegant via subclassing as noted above
       if (ExtraInfo is LC0VerboseMoveStats)
+      {
         ((LC0VerboseMoveStats)ExtraInfo).Dump();
+      }
     }
   }
 

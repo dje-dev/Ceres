@@ -143,7 +143,10 @@ namespace Ceres.Chess.LC0VerboseMoves
       // info string c2c4(264 ) N: 30259(+0)(V: 4.38 %)(P: 14.09 %)(Q: 0.03985)(U: 0.00501)(Q + U:  0.04486)
 
       string[] split = line.Split(new char[] { ' ', '(', ')', });
-      if (split[0] != "info" || split[1] != "string") return false;
+      if (split[0] != "info" || split[1] != "string")
+      {
+        return false;
+      }
 
       MoveString = split[2];
 
@@ -180,7 +183,7 @@ namespace Ceres.Chess.LC0VerboseMoves
       stats.TryGetValue("M", out M);
 
       float rawQ;
-      stats.TryGetValue("QL", out rawQ);
+      stats.TryGetValue("Q", out rawQ);
       Q = EncodedEvalLogistic.FromLogistic(rawQ);
 
       stats.TryGetValue("D", out D);
@@ -213,25 +216,38 @@ namespace Ceres.Chess.LC0VerboseMoves
       while (true)
       {
         curIndex = statsLine.IndexOf(":", curIndex + 1);
-        if (curIndex == -1) break;
+        if (curIndex == -1)
+        {
+          break;
+        }
 
         // backup to get label
         int backIndex = curIndex - 1;
-        while (backIndex >= 0 && char.IsLetter(statsLine[backIndex])) backIndex--;
+        while (backIndex >= 0 && char.IsLetter(statsLine[backIndex]))
+        {
+          backIndex--;
+        }
+
         string label = statsLine.Substring(backIndex + 1, curIndex - backIndex - 1);
 
         // advance past spaces
         curIndex++;
-        while (curIndex < statsLine.Length && statsLine[curIndex] == ' ') curIndex++;
+        while (curIndex < statsLine.Length && statsLine[curIndex] == ' ')
+        {
+          curIndex++;
+        }
 
         // Extract numeric value
         string valueStr = "";
         while (curIndex < statsLine.Length && (char.IsDigit(statsLine[curIndex]) || statsLine[curIndex] == '.') || statsLine[curIndex] == '-')
+        {
           valueStr += statsLine[curIndex++];
+        }
 
         if (float.TryParse(valueStr, NumberStyles.Any, CultureInfo.InvariantCulture, out float value))
+        {
           ret[label] = value;
-
+        }
       }
 
       return ret;

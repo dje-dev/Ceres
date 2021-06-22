@@ -31,6 +31,7 @@ using Ceres.MCTS.Iteration;
 using Ceres.MCTS.Managers.Limits;
 using Ceres.MCTS.Params;
 using Ceres.MCTS.Environment;
+using Ceres.MCTS.MTCSNodes;
 
 #endregion
 
@@ -253,9 +254,15 @@ namespace Ceres.Features.GameEngines
 
       // Run the search
       searchResult = RunSearchPossiblyTreeReuse(shareContext, curPositionAndMoves, gameMoveHistory,
-                                                  searchLimit, InnerCallback, verbose);
+                                                searchLimit, InnerCallback, verbose);
 
-      int scoreCeresCP = (int)Math.Round(EncodedEvalLogistic.LogisticToCentipawn((float)searchResult.Manager.Root.Q), 0);
+      BestMoveInfo bestMoveInfo;
+      using (new SearchContextExecutionBlock(searchResult.Manager.Context))
+      {
+        bestMoveInfo = searchResult.Manager.Root.BestMoveInfo(false);
+      }
+
+      int scoreCeresCP = (int)MathF.Round(EncodedEvalLogistic.WinLossToCentipawn(-bestMoveInfo.BestQ), 0);
 
       MGMove bestMoveMG = searchResult.BestMove;
 
@@ -265,12 +272,12 @@ namespace Ceres.Features.GameEngines
       LastSearch = searchResult;
 
       isFirstMoveOfGame = false;
-
       // TODO is the RootNWhenSearchStarted correct because we may be following a continuation (BestMoveRoot)
       GameEngineSearchResultCeres result = 
         new GameEngineSearchResultCeres(bestMoveMG.MoveStr(MGMoveNotationStyle.LC0Coordinate),
                                         (float)searchResult.SearchRootNode.Q, scoreCeresCP, searchResult.SearchRootNode.MAvg, searchResult.Manager.SearchLimit, default,
-                                        searchResult.Manager.RootNWhenSearchStarted, N, (int)searchResult.Manager.Context.AvgDepth, searchResult);
+                                        searchResult.Manager.RootNWhenSearchStarted, N, (int)searchResult.Manager.Context.AvgDepth, 
+                                        searchResult, bestMoveInfo);
 
       // Append search result information to log file (if any).
       StringWriter dumpInfo = new StringWriter();
@@ -330,7 +337,9 @@ namespace Ceres.Features.GameEngines
       else
       {
         if (LastSearch.Manager.Context.StartPosAndPriorMoves.InitialPosMG != curPositionAndMoves.InitialPosMG)
+        {
           throw new Exception("Internal error: not same starting position");
+        }
 
         List<MGMove> forwardMoves = new List<MGMove>();
         List<MGMove> lastMoves = LastSearch.Manager.Context.StartPosAndPriorMoves.Moves;
