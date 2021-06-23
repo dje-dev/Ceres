@@ -293,6 +293,11 @@ namespace Ceres.MCTS.Params
     /// </summary>
     public bool TestFlag = false;
 
+    /// <summary>
+    /// Optional scalar that can be defined by developers for ad-hoc testing.
+    /// </summary>
+    public float TestScalar = 0.0f;
+
 
     /// <summary>
     /// Constructor (uses default values for the class unless overridden in settings file).

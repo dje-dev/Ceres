@@ -14,6 +14,7 @@
 #region Using directives
 
 using Ceres.Chess.NNEvaluators;
+using Ceres.MCTS.Params;
 using System;
 
 #endregion
@@ -42,11 +43,12 @@ namespace Ceres.MCTS.Search
     /// <param name="dualSelectorsInUse"></param>
     /// <param name="maxBatchSize"></param>
     /// <param name="batchSizeMultiplier"></param>
+    /// <param name="paramsSearch"></param>
     /// <returns></returns>
     internal static int CalcOptimalBatchSize(int estimatedTotalSearchNodes, int currentTreeSize, 
-                        bool overlapInUse, bool dualSelectorsInUse, 
-                        int maxBatchSize, float batchSizeMultiplier,
-                        bool testMode)
+                                             bool overlapInUse, bool dualSelectorsInUse, 
+                                             int maxBatchSize, float batchSizeMultiplier,
+                                             ParamsSearch paramsSearch)
     {
       // Follow pure MCTS for extremely small searches.
       if (estimatedTotalSearchNodes < 10) return 1;
@@ -64,16 +66,9 @@ namespace Ceres.MCTS.Search
       }
 
 
-      // At larger tree sizes, we have two components,
-      // one of which has a low exponent and becomes meaningful only at larger tree sizes.
-      // Note that play quality (with small number of nodes per moves, e.g. 5000) 
-      // is quite sensitive to changes in these parameters, with larger clearly worse.
-      float MULT1 = testMode ? 0 : 0.2f;
-      float MULT2 = testMode ? 3 : 2;
-      float part1 = MULT1 * MathF.Pow(currentTreeSize, 0.65f);
-      float part2 = MULT2 * MathF.Pow(currentTreeSize, 0.45f);
-
-      int value = (int)(part1 + part2);
+      const float MULT = 3.0f;
+      const float POW = 0.45f;
+      int value = (int)(MULT * MathF.Pow(currentTreeSize, POW));
 
       if (overlapInUse && !dualSelectorsInUse)
       {

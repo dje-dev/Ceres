@@ -215,7 +215,7 @@ namespace Ceres.MCTS.Search
                                                                               Context.ParamsSearch.Execution.FlowDualSelectors,
                                                                               maxBatchSize,
                                                                               Context.ParamsSearch.BatchSizeMultiplier,
-                                                                              Context.ParamsSearch.TestFlag);
+                                                                              Context.ParamsSearch);
 
         targetThisBatch = Math.Min(targetThisBatch, Manager.MaxBatchSizeDueToPossibleNearTimeExhaustion);
         if (forceBatchSize.HasValue) targetThisBatch = forceBatchSize.Value;
