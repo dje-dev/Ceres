@@ -256,13 +256,29 @@ namespace Ceres.Features.GameEngines
       searchResult = RunSearchPossiblyTreeReuse(shareContext, curPositionAndMoves, gameMoveHistory,
                                                 searchLimit, InnerCallback, verbose);
 
-      BestMoveInfo bestMoveInfo;
-      using (new SearchContextExecutionBlock(searchResult.Manager.Context))
+      int scoreCeresCP;
+      BestMoveInfo bestMoveInfo = null;
+      if (searchResult.Manager.Root.Terminal != GameResult.Unknown)
       {
-        bestMoveInfo = searchResult.Manager.Root.BestMoveInfo(false);
+        if (searchResult.SearchRootNode.V == 0)
+          scoreCeresCP =  0;
+        else if (searchResult.SearchRootNode.V <= -1)
+          scoreCeresCP = -9999;
+        else if (searchResult.SearchRootNode.V >= 1)
+          scoreCeresCP = 9999;
+        else
+          throw new Exception("Unexpected game result type");
+      }
+      else
+      {
+        using (new SearchContextExecutionBlock(searchResult.Manager.Context))
+        {
+          bestMoveInfo = searchResult.Manager.Root.BestMoveInfo(false);
+        }
+
+        scoreCeresCP = (int)MathF.Round(EncodedEvalLogistic.WinLossToCentipawn(-bestMoveInfo.BestQ), 0);
       }
 
-      int scoreCeresCP = (int)MathF.Round(EncodedEvalLogistic.WinLossToCentipawn(-bestMoveInfo.BestQ), 0);
 
       MGMove bestMoveMG = searchResult.BestMove;
 
