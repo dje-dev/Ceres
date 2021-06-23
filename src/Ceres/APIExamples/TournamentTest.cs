@@ -37,6 +37,7 @@ using Ceres.Base.Math;
 using Ceres.Base.Misc;
 using Ceres.Base.DataType;
 using Microsoft.ML.OnnxRuntime;
+using Ceres.Base.OperatingSystem;
 
 #endregion
 
@@ -44,9 +45,10 @@ namespace Ceres.APIExamples
 {
   public static class TournamentTest
   {
-    static int CONCURRENCY = 3; // POOLED ? 16 : 4;
+    static int CONCURRENCY = 1; // POOLED ? 16 : 4;
     static bool RUN_DISTRIBUTED = false;
 
+    
     private static void KillCERES()
     {
       foreach (Process p in Process.GetProcesses())
@@ -59,7 +61,8 @@ namespace Ceres.APIExamples
     const string ETHERAL_EXE = @"\\synology\dev\chess\engines\Ethereal12.75-x64-popcnt-avx2.exe";
     const string SF11_EXE = @"\\synology\dev\chess\engines\stockfish_11_x64_bmi2.exe";
     const string SF12_EXE = @"\\synology\dev\chess\engines\stockfish_20090216_x64_avx2.exe";
-    const string SF13_EXE = @"\\synology\dev\chess\engines\stockfish_13_win_x64_bmi2.exe";
+    static string SF13_EXE => SoftwareManager.IsLinux ? @"/raid/dev/SF13/stockfish_13_linux_x64_avx2"
+                                                      : @"\\synology\dev\chess\engines\stockfish_13_win_x64_bmi2.exe";
 
     static GameEngineUCISpec specEthereal = new GameEngineUCISpec("Ethereal12", ETHERAL_EXE);
     static GameEngineUCISpec specSF13 = new GameEngineUCISpec("SF13", SF13_EXE);
@@ -68,7 +71,10 @@ namespace Ceres.APIExamples
     static string[] extraUCI = null;// new string[] {"setoption name Contempt value 5000" };
     static GameEngineDef engineDefEthereal = new GameEngineDefUCI("Etheral", new GameEngineUCISpec("Etheral", ETHERAL_EXE, SF_NUM_THREADS, SF_HASH_SIZE_MB, TB_PATH, uciSetOptionCommands: extraUCI));
     static GameEngineDef engineDefStockfish11 = new GameEngineDefUCI("SF11", new GameEngineUCISpec("SF11", SF11_EXE, SF_NUM_THREADS, SF_HASH_SIZE_MB, TB_PATH, uciSetOptionCommands: extraUCI));
-    static GameEngineDef engineDefStockfish13 = new GameEngineDefUCI("SF13", new GameEngineUCISpec("SF13", SF13_EXE, SF_NUM_THREADS, SF_HASH_SIZE_MB, TB_PATH, uciSetOptionCommands: extraUCI));
+
+    public static GameEngineDef EngineDefStockfish13(int numThreads = SF_HASH_SIZE_MB, int hastableSize = SF_NUM_THREADS) =>
+      new GameEngineDefUCI("SF13", new GameEngineUCISpec("SF13", SF13_EXE, numThreads,
+                           hastableSize, TB_PATH, uciSetOptionCommands: extraUCI));
 
     const int SF_NUM_THREADS = 15;
     static string TB_PATH => CeresUserSettingsManager.Settings.TablebaseDirectory;
@@ -98,7 +104,7 @@ namespace Ceres.APIExamples
 
       const bool POOLED = false;
       string GPUS = POOLED ? "GPU:1,2,3:POOLED"
-                           : "GPU:1";
+                           : "GPU:0";
       //LC0:40x512-lr015-swa-115000 20b_1-15000.pb.gz 20b_1-15000 20b_1-swa-90000
       // 460000 best? 20b_500000 teck45_190k.gz
       // /raid/train/nets/40b/40b/40b-swa-20000.pb.gz
@@ -117,11 +123,89 @@ namespace Ceres.APIExamples
 
       //      NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification(@"LC0:d:\nets\tinkerF_biasReg2\tinkerF_biasReg2-12500.pb.gz", GPUS); // j64-210 LS16 40x512-lr015-swa-167500
 
-      string NET1 = @"d:\weights\lczero.org\t64df-17500.pb.gz"; // direct Linux T75 192
-      string NET2 = @"d:\weights\lczero.org\t64d-17500.pb.gz"; // chunkparser Linux T75 192 (good)
-//string       NET2 = @"j64-210";
+      string NET1 = @"d:\weights\lczero.org\t64df-5000.pb.gz"; // direct Linux T75 192
+      string NET2 = @"d:\weights\lczero.org\t64dbm-5000.pb.gz";
+
+      NET1 = @"d:\weights\lczero.org\t60apr2k-swa-227500.pb.gz";
+      NET2 = @"d:\weights\lczero.org\t60apr4k-67500.pb.gz";
+      NET2 = @"703810";
+
+
+      NET1 = @"d:\weights\lczero.org\t60apr2kmdb-swa-47500.pb.gz"; ///raid/train/nets/t60apr2kmdb/t60apr2kmdb-swa-47500.pb.gz
+      NET2 = @"D:\weights\lczero.org\t60apr4k-67500.pb.gz";
+
+      NET2 = @"d:\weights\lczero.org\t60apr4kMDB-swa-125000.pb.gz";
+//      NET2 = @"d:\weights\lczero.org\t60apr2kmdb-swa-250000.pb.gz";
+      NET2 = @"d:\weights\lczero.org\t60apr2kmdc-swa-250000.pb.gz";
+      //      NET1 = @"d:\weights\lczero.org\t60apr2kmdb-swa-50000.pb.gz";
+
+
+      NET1 = @"d:\weights\lczero.org\t60apr2kmdb1-swa-200000.pb.gz";
+      //      NET2 = @"d:\weights\lczero.org\t60apr2kmdc1-swa-200000.pb.gz";
+      //      NET2 = @"d:\weights\lczero.org\t60apr4kMDB1-swa-100000.pb.gz";
+      //t60apr2kmdc-250000.pb.gz
+      //NET1 = @"d:\weights\lczero.org\512x30b-swa-65000.pb.gz";
+      //NET1 = "j94-100";
+      NET1 = @"d:\weights\lczero.org\t60apr2kmdc1-swa-200000.pb.gz";
+      NET2 = "703810";
+      //      NET2 = "751267";
+      //      NET2 = "badgyal-3";
+
+      ///raid/train/nets/512x30b/512x30b-swa-112500.pb.gz 975
+      NET2 = "J94-100";
+
+      ///raid/train/nets/t60apr2kmdc1/t60apr2kmdc1-swa-477500.pb.gz
+      //////raid/train/nets/512x30b/512x30b-swa-407500.pb.gz
+      NET1 = @"t60apr2kmdc1-swa-787500"; // was 320 t60apr2kmdc1-swa-400000.pb.gz
+      NET2 = @"t60apr2kmdc1-swa-700000"; // was 320 t60apr2kmdc1-swa-400000.pb.gz
+//      NET2 = @"t60apr2kmdc1-swa-450000"; // was 320 t60apr2kmdc1-swa-400000.pb.gz
+
+      NET1 = @"d:\weights\lczero.org\512x30b-swa-407500.pb.gz"; // 352500
+      NET2 = @"d:\weights\lczero.org\512x30b-swa-295000.pb.gz"; ///raid/train/nets/512x30b/512x30b-252500.pb.gz
+      //NET2 = @"d:\weights\lczero.org\40bs-swa-182500.pb.gz"; // prior 512x24 effort, LR 0.002 (?)
+      //      / raid / train / nets / 512x30b / 512x30b - swa - 155000.pb.gz
+//NET2 = "J94-100";
+      //NET1 = @"d:\weights\lczero.org\shrink_no-swa-300000.pb.gz";
+      //NET2 = @"d:\weights\lczero.org\shrink_no-swa-200000.pb.gz";
+
+      NET1 = "751381"; // 5+/- 13
+      NET2 = "751381";// j64-210";
+
+      //NET1 = "TK-6430 aka 128x10-BPR-64M-6430000"; // GOOD NET - better thatn 703810
+      //      NET2 = "j94-100";
+      //      NET1 = @"badgyal-3";
+      //      NET2 = @"d:\weights\lczero.org\t60apr4_64-swa-57500.pb.gz"; // direct Linux T75 192
+
+//      NET1 = @"d:\weights\lczero.org\test64a-swa-75000.pb.gz"; // 475
+//      NET1 = "test64c_2k-swa-492500";
+//      NET1 = "test64c-swa-147500";
+
+
+// Good 64x6 test
+//      NET1 = "test64c_2k-565000";
+//      NET2 = "11258-64x6-se";// "badgyal-3";
+
+// Good 128x10b test
+//      NET1 = "t60apr2kmdc1-swa-700000";
+//      NET2 = @"703810";
+
+      //string       NET2 = @"j64-210";
       NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification(@$"LC0:{NET1}", GPUS); // j64-210 LS16 40x512-lr015-swa-167500
       NNEvaluatorDef evalDef2 = NNEvaluatorDefFactory.FromSpecification($@"LC0:{NET2}", GPUS); ;
+
+
+      static NNEvaluatorDef EvaluatorValueOnly(string netID1, string netID2, int gpuID, bool valueNet1)
+      {
+//        string wtStr1 = valueNet1 ? "1.0;0.5;0.5" : "0.0;0.5;0.5";
+//       string wtStr2 = valueNet1 ? "0.0;0.5;0.5" : "1.0;0.5;0.5";
+       string wtStr1 = valueNet1 ? "0.5;1.0;0.5" : "0.5;0.0;0.5";
+        string wtStr2 = valueNet1 ? "0.5;0.0;0.5" : "0.5;1.0;0.5";
+        NNEvaluatorDef spec = NNEvaluatorDef.FromSpecification($"LC0:{netID1}@{wtStr1},{netID2}@{wtStr2}", $"GPU:{gpuID}");
+        return spec;
+      }
+
+//      evalDef1 = EvaluatorValueOnly(NET1, NET2, 0, true);
+//      evalDef2 = EvaluatorValueOnly(NET1, NET2, 0, false);
 
       //NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification(@"ONNX:tinkerF_normal_vq-50000", GPUS); // j64-210 LS16 40x512-lr015-swa-167500
       //d:\weights\lczero.org\tinkerF_normal_vq-5000.onnx
@@ -176,9 +260,10 @@ namespace Ceres.APIExamples
       limit1 = SearchLimit.SecondsForAllMoves(15, 1.0f) * 2f;
       //limit1 = SearchLimit.SecondsForAllMoves(900, 15) * 0.05f;
 
-      limit1 = SearchLimit.NodesPerMove(100);
+      limit1 = SearchLimit.NodesPerMove(50000 * 1);
 
       SearchLimit limit2 = limit1;// * 0.2f;// SearchLimit.NodesPerMove(2500);
+      //limit2 = limit1 * 3;
 //      limit2 *= 0.5f;
 //      limit2 = SearchLimit.NodesPerMove(400);
 
@@ -272,7 +357,7 @@ namespace Ceres.APIExamples
       ParamsSearch paramsSearchLC0 = new ParamsSearch();
       //      paramsSearchLC0.TestFlag = true;
 
-      bool ENABLE_LC0 = evalDef1.Nets[0].Net.Type == NNEvaluatorType.LC0Library;
+      bool ENABLE_LC0 = evalDef1.Nets[0].Net.Type == NNEvaluatorType.LC0Library && (evalDef1.Nets[0].WeightValue == 1 && evalDef1.Nets[0].WeightPolicy == 1 && evalDef1.Nets[0].WeightM == 1);
       GameEngineDefLC0 engineDefLC1 = ENABLE_LC0 ? new GameEngineDefLC0("LC0_0", evalDef1, forceDisableSmartPruning, paramsSearchLC0, null) : null;
       GameEngineDefLC0 engineDefLC2 = ENABLE_LC0 ? new GameEngineDefLC0("LC0_2", evalDef1, forceDisableSmartPruning, null, null) : null;
 
@@ -282,7 +367,7 @@ namespace Ceres.APIExamples
 
       EnginePlayerDef playerEthereal = new EnginePlayerDef(engineDefEthereal, limit1);
       EnginePlayerDef playerStockfish11 = new EnginePlayerDef(engineDefStockfish11, limit1);
-      EnginePlayerDef playerStockfish12 = new EnginePlayerDef(engineDefStockfish13, limit1);// * 350);
+      EnginePlayerDef playerStockfish12 = new EnginePlayerDef(EngineDefStockfish13(), limit1);// * 350);
       EnginePlayerDef playerLC0 = ENABLE_LC0 ? new EnginePlayerDef(engineDefLC1, limit1) : null;
       EnginePlayerDef playerLC0_2 = ENABLE_LC0 ? new EnginePlayerDef(engineDefLC2, limit2) : null;
 //      EnginePlayerDef playerLC0TCEC =  new EnginePlayerDef(engineDefLC2TCEC, limit1);
@@ -354,7 +439,7 @@ namespace Ceres.APIExamples
 
       //TournamentDef def = new TournamentDef("TOURN", playerLC0Tilps, playerLC0);
 
-      def.NumGamePairs = 1000;
+      def.NumGamePairs = 100;// 1000;
       def.ShowGameMoves = false;
 
       //      def.OpeningsFileName = @"HERT_2017\Hert500.pgn";
@@ -435,7 +520,7 @@ namespace Ceres.APIExamples
                                                         limitCeres);
 
 
-      EnginePlayerDef playerSF = new EnginePlayerDef(engineDefStockfish13, limitSF);
+      EnginePlayerDef playerSF = new EnginePlayerDef(EngineDefStockfish13(), limitSF);
 
       TournamentDef def = new TournamentDef("TOURN", playerCeres, playerSF);
       def.OpeningsFileName = "TCEC1819.pgn";
