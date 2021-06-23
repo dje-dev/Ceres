@@ -261,7 +261,10 @@ namespace Ceres.Base.DataTypes
     /// </summary>    
     public float ToSingleViaLookup => FP16Helper.HalfToSingleLookup(this);
 
-    const bool DISABLE_APPROX_FP16_CONVERSIONS = false;
+    // WARNING: Do not enable these approximations.
+    //          They seem sufficiently imprecise that
+    //          they negatively impact qualitY (e.g. play quality at 3 nodes/move).
+    const bool DISABLE_APPROX_FP16_CONVERSIONS = true;
 
     /// <summary>
     /// Fast approximate conversion from FP16 to float.
