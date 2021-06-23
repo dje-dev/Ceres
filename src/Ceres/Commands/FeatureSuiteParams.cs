@@ -49,12 +49,7 @@ namespace Ceres.Commands
       if (parms.EPD == null) DispatchCommands.ShowErrorExit("EPD file must be specified, for example: EPD=NoomenBigTestsuite");
 
       // Add in all the fields from the base class
-      parms.ParseBaseFields(args);
-
-      if (parms.SearchLimit != null)
-        parms.SearchLimit = parms.SearchLimit.ConvertedGameToMoveLimit;
-      if (parms.SearchLimitOpponent != null)
-        parms.SearchLimitOpponent = parms.SearchLimitOpponent.ConvertedGameToMoveLimit;
+      parms.ParseBaseFields(args, true);
 
       return parms;
     }

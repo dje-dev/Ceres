@@ -50,10 +50,12 @@ namespace Ceres.Commands
       };
 
       // Add in all the fields from the base class
-      parms.ParseBaseFields(args);
+      parms.ParseBaseFields(args, false);
 
       if (fen != null && parms.Openings != null)
+      {
         throw new Exception("Only one of FEN Openings should be specified with the TOURN command");
+      }
 
       return parms;
     }
@@ -66,11 +68,17 @@ namespace Ceres.Commands
       def.ShowGameMoves = tournParams.ShowMoves;
 
       if (tournParams.Openings != null)
+      {
         def.OpeningsFileName = tournParams.Openings;
+      }
       else if (fen != null)
+      {
         def.StartingFEN = fen;
+      }
       else
+      {
         def.StartingFEN = Position.StartPosition.FEN;
+      }
 
       TournamentManager runner = new TournamentManager(def, 1);
       runner.RunTournament(null);

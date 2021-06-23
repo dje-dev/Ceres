@@ -14,12 +14,9 @@
 #region Using directive
 
 using System;
-using Ceres.Base.DataTypes;
-using Ceres.Chess;
 using Ceres.Chess.GameEngines;
 using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.Positions;
-using Ceres.Chess.Textual;
 using Ceres.Features.GameEngines;
 using Ceres.Features.Players;
 using Ceres.MCTS.Params;
@@ -52,23 +49,18 @@ namespace Ceres.Commands
         throw new Exception($"Error parsing expected FEN (and possible moves string) {fenAndMovesStr}");
       }
 
-      KeyValueSetParsed keys = new KeyValueSetParsed(args, FEATURE_PLAY_COMMON_ARGS);
-
       FeatureAnalyzeParams parms = new FeatureAnalyzeParams()
       {
         FenAndMovesStr = fenAndMovesStr
       };
 
       // Add in all the fields from the base class
-      parms.ParseBaseFields(args);
-
-      if (parms.SearchLimit != null)
-        parms.SearchLimit = parms.SearchLimit.ConvertedGameToMoveLimit;
-      if (parms.SearchLimitOpponent != null)
-        parms.SearchLimitOpponent = parms.SearchLimitOpponent.ConvertedGameToMoveLimit;
+      parms.ParseBaseFields(args, true);
 
       if (parms.Opponent != null && parms.SearchLimit != parms.SearchLimitOpponent)
+      {
         throw new Exception("Unequal search limits not currently supported for ANALYZE command");
+      }
 
       return parms;
     }
@@ -83,13 +75,16 @@ namespace Ceres.Commands
       NNEvaluatorDef evaluatorDef = new NNEvaluatorDef(NetworkSpec.ComboType, NetworkSpec.NetDefs,
                                                         DeviceSpec.ComboType, DeviceSpec.Devices);
 
-      // Check if different network and device speciifed for opponent
+      // Check if different network and device specified for opponent
       NNEvaluatorDef evaluatorDefOpponent;
       if (Opponent != null &&
         (NetworkOpponentSpec != null || DeviceOpponentSpec != null))
       {
         if (NetworkOpponentSpec == null || DeviceOpponentSpec == null)
+        {
           throw new Exception("Both network-opponent and device-opponent must be provided");
+        }
+
         evaluatorDefOpponent = new NNEvaluatorDef(NetworkOpponentSpec.ComboType, NetworkOpponentSpec.NetDefs,
                                                   DeviceOpponentSpec.ComboType, DeviceOpponentSpec.Devices);
       }

@@ -14,14 +14,10 @@
 #region Using directive
 
 using System;
-using System.Drawing;
 using System.IO;
-using System.Security.Cryptography;
 using Ceres.Base.DataTypes;
 using Ceres.Base.Misc;
 using Ceres.Chess;
-using Ceres.Chess.NNEvaluators.Defs;
-using Ceres.Chess.NNEvaluators.Specifications;
 using Ceres.Chess.UserSettings;
 using Ceres.Features.UCI;
 
@@ -215,8 +211,20 @@ namespace Ceres.Commands
       {
         FeatureBenchmark.DumpBenchmark();
       }
+      else if (featureName == "BACKENDBENCH")
+      {
+        FeatureBenchmarkBackend backendBench = new FeatureBenchmarkBackend();
+        backendBench.ParseFields(keyValueArgs);
+        backendBench.Execute();
+      }
+      else if (featureName == "BENCHMARK")
+      {
+        FeatureBenchmarkSearch analyzeParams = FeatureBenchmarkSearch.ParseBenchmarkCommand(keyValueArgs);
+        analyzeParams.Execute();
+      }
       else
-        ShowErrorExit("Expected argument to begin with one of the features UCI, ANALYZE, SUITE, TOURN, SYSBENCH or SETOPT");
+        ShowErrorExit("Expected argument to begin with one of the features " + 
+                       "UCI, ANALYZE, SUITE, TOURN, SYSBENCH, BACKENDBENCH, BENCHMARK or SETOPT");
 
     }
 
