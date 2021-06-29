@@ -82,7 +82,7 @@ namespace Ceres.Chess.LC0NetInference
       if (gpuID == -999) // CPU. TO DO: clean this up
         Session = new InferenceSession(onnxFileName);
       else if (gpuID == -1)
-        Session = new InferenceSession(onnxFileName, SessionOptions.MakeSessionOptionWithCudaProvider());
+        Session = new InferenceSession(onnxFileName, SessionOptions.MakeSessionOptionWithCudaProvider(gpuID));
       else
       {
 #if NOT
@@ -95,7 +95,7 @@ namespace Ceres.Chess.LC0NetInference
 #endif
         SessionOptions so = new SessionOptions();
         so.GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_EXTENDED;
-        so.AppendExecutionProvider_CUDA(0);
+        so.AppendExecutionProvider_CUDA(gpuID);
 
         Session = new InferenceSession(onnxFileName, so);
       }
