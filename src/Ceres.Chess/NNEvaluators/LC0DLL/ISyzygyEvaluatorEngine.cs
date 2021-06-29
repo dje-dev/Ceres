@@ -34,7 +34,8 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
 
 
     /// <summary>
-    /// If the DTZ files are available.
+    /// If the DTZ files supported by the engine and potentially usable
+    /// (if the necessary tablebase files are found for a given piece combination).
     /// </summary>
     public bool DTZAvailable { get;}
 
@@ -89,12 +90,16 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
 
       if (DTZAvailable)
       {
-        return CheckTablebaseBestNextMoveViaDTZ(in currentPos, out result);
+        // Try to use DTZ table, which may may not work (depending on file availability).
+        MGMove dtzMove = CheckTablebaseBestNextMoveViaDTZ(in currentPos, out result);
+        if (result != GameResult.Unknown)
+        {
+          return dtzMove;
+        }
       }
-      else
-      {
-        return CheckTablebaseBestNextMoveViaWDL(in currentPos, out result);
-      }
+
+      // Fall thru to use WDL
+      return CheckTablebaseBestNextMoveViaWDL(in currentPos, out result);
     }
 
 

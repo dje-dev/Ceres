@@ -50,7 +50,7 @@ namespace Ceres.Features.Tournaments
 
 
 
-    static Lazy<LC0DLLSyzygyEvaluator> tbEvaluator = new Lazy<LC0DLLSyzygyEvaluator>(() =>
+    static Lazy<ISyzygyEvaluatorEngine> tbEvaluator = new Lazy<ISyzygyEvaluatorEngine>(() =>
     LC0DLLSyzygyEvaluatorPool.GetSessionForPaths(CeresUserSettingsManager.Settings.TablebaseDirectory));
 
     internal static TournamentGameResult TryGetGameResultIfTerminal(PositionWithHistory game, bool playerIsWhite, bool useTablebasesForAdjudication)
