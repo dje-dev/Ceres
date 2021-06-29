@@ -384,6 +384,11 @@ namespace Ceres.Features.Tournaments
                                  SearchLimit searchLimitEngine1, SearchLimit searchLimitEngine2,
                                  bool useTablebasesForAdjudication, bool showMoves)
     {
+      if (openingIndex >= openings.Count)
+      {
+        throw new Exception($"Reached end of openings of size {openings.Count}.");
+      }
+
       PositionWithHistory curPositionAndMoves = openings.GetAtIndex(openingIndex);
       string startFEN = curPositionAndMoves.FinalPosition.FEN;
       bool engine2ToMove = engine2IsWhite == (curPositionAndMoves.FinalPosition.MiscInfo.SideToMove == SideType.White);
