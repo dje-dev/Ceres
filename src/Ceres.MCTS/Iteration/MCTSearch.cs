@@ -260,7 +260,11 @@ namespace Ceres.MCTS.Iteration
       MCTSNodeStructIndex newRootIndex;
       using (new SearchContextExecutionBlock(priorContext))
       {
-        MCTSNode newRoot = Manager.Root.FollowMovesToNode(moves);
+        MCTSNode newRoot = null;
+        if (Manager.TablebaseImmediateBestMove != default)
+        {
+          newRoot = Manager.Root.FollowMovesToNode(moves);
+        }
 
         // New root is not useful if contained no search
         // (for example if it was resolved via tablebase)
