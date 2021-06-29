@@ -13,6 +13,7 @@
 
 #region Using directives
 
+using System;
 using System.Collections.Generic;
 
 using Ceres.Base.DataTypes;
@@ -29,19 +30,25 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
     const int MAX_SESSIONS = 32; // hardcoded in C++
     static IDPool sessionIDPool = new IDPool("LC0DLLSyzygyEvaluator", MAX_SESSIONS);
 
-    static Dictionary<string, LC0DLLSyzygyEvaluator> pathsToEvaluatorDict = new Dictionary<string, LC0DLLSyzygyEvaluator>();
+    static Dictionary<string, ISyzygyEvaluatorEngine> pathsToEvaluatorDict = new ();
 
-    public static LC0DLLSyzygyEvaluator GetSessionForPaths(string paths)
+    public static Func<ISyzygyEvaluatorEngine> OverrideEvaluatorFactory;
+
+    public static ISyzygyEvaluatorEngine GetSessionForPaths(string paths)
     {
       lock (sessionIDPool)
       {
-        LC0DLLSyzygyEvaluator evaluator;
+        ISyzygyEvaluatorEngine evaluator;
         if (pathsToEvaluatorDict.TryGetValue(paths, out evaluator))
+        {
           return evaluator;
+        }
         else
         {
           int sessionID = sessionIDPool.GetFreeID();
-          evaluator = new LC0DLLSyzygyEvaluator(sessionID, paths);
+          evaluator = OverrideEvaluatorFactory == null ? new LC0DLLSyzygyEvaluator(sessionID) 
+                                                       : OverrideEvaluatorFactory();
+          evaluator.Initialize(paths);
           pathsToEvaluatorDict[paths] = evaluator;
           return evaluator;
         }

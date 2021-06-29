@@ -38,6 +38,8 @@ using Ceres.MCTS.Managers.Limits;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.Params;
+using Ceres.Chess.MoveGen.Converters;
+using System.Diagnostics;
 
 #endregion
 
@@ -484,10 +486,13 @@ namespace Ceres.MCTS.Iteration
       if (Context.CheckTablebaseBestNextMove != null)
       {
         GameResult result;
-        TablebaseImmediateBestMove = Context.CheckTablebaseBestNextMove(Context.Tree.Store.Nodes.PriorMoves.FinalPosition, out result);
+        Position pos = Context.Tree.Store.Nodes.PriorMoves.FinalPosition;
+        TablebaseImmediateBestMove = Context.CheckTablebaseBestNextMove(pos, out result);
 
         if (result == GameResult.Checkmate)
         {
+          Debug.Assert(pos.ToMGPosition.IsLegalMove(TablebaseImmediateBestMove));
+
           // Set the evaluation of the position to be a win
           // TODO: possibly use distance to mate to set the distance more accurately than fixed at 1
           const int DISTANCE_TO_MATE = 1;
@@ -521,7 +526,7 @@ namespace Ceres.MCTS.Iteration
         {
           // N.B. Unknown as a result actually means "Lost"
           //      base currently the GameResult enum has no way to represent that.
-          //      TODO: Clean thi sup, create a new Enum to represent this more cleanly.
+          //      TODO: Clean this up, create a new Enum to represent this more cleanly.
           // Set the evaluation of the position to be a loss.
           // TODO: possibly use distance to mate to set the distance more accurately than fixed at 1
           const int DISTANCE_TO_MATE = 1;
