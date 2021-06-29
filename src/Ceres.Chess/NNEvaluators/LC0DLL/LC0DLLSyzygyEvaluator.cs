@@ -181,6 +181,8 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
         return -1;
       }
 
+      NumTablebaseHits++;
+
       // Call DLL function to do the probe and return encoded result
       return LCO_Interop.ProbeDTZ(sessionID, pos.FEN);
     }
