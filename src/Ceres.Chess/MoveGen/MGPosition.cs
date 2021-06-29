@@ -117,6 +117,11 @@ namespace Ceres.Chess.MoveGen
     public static MGPosition FromFEN(string fen) => MGChessPositionConverter.MGChessPositionFromFEN(fen);
 
 
+    /// <summary>
+    /// Converts Position to MGPosition.
+    /// </summary>
+    /// <param name="pos"></param>
+    /// <returns></returns>
     public static MGPosition FromPosition(in Position pos) => MGChessPositionConverter.MCChessPositionFromPosition(in pos);
 
 
@@ -216,11 +221,14 @@ namespace Ceres.Chess.MoveGen
       set { if (value) Flags |= FlagsEnum.BlackDidCastleLong; else Flags &= ~FlagsEnum.BlackDidCastleLong; }
     }
 
+
     public bool CheckmateWhite
     {
       readonly get => (Flags & FlagsEnum.CheckmateWhite) != 0;
       set { if (value) Flags |= FlagsEnum.CheckmateWhite; else Flags &= ~FlagsEnum.CheckmateWhite; }
     }
+
+
     public bool CheckmateBlack
     {
       readonly get => (Flags & FlagsEnum.CheckmateBlack) != 0;
@@ -261,6 +269,7 @@ namespace Ceres.Chess.MoveGen
                          : GetPieceAtSquare(new Square(square.AsByte)).Type;
     }
 
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly PieceType PieceCapturing(EncodedMove thisMove)
     {
@@ -269,6 +278,7 @@ namespace Ceres.Chess.MoveGen
                          : GetPieceAtSquare(new Square(square.AsByte)).Type;
     }
 
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal readonly MGPositionConstants.MCChessPositionPieceEnum PieceCapturingRaw(EncodedMove thisMove)
     {
@@ -276,6 +286,7 @@ namespace Ceres.Chess.MoveGen
       return BlackToMove ? RawPieceAtSquare(new Square(square.Flipped.AsByte))
                          : RawPieceAtSquare(new Square(square.AsByte));
     }
+
 
     public void SetPieceAtBitboardSquare(ulong piece, BitBoard square)
     {
@@ -318,11 +329,32 @@ namespace Ceres.Chess.MoveGen
       return new Piece(side, pieceType);
     }
 
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     readonly MGPositionConstants.MCChessPositionPieceEnum RawPieceAtSquare(Square square)
     {
       int pieceCode = GetPieceAtBitboardSquare(MGBitBoardFromSquare(square));
       return (MGPositionConstants.MCChessPositionPieceEnum)pieceCode;
+    }
+
+
+    /// <summary>
+    /// Returns if the specified move is legal from this position.
+    /// </summary>
+    /// <param name="move"></param>
+    /// <returns></returns>
+    public bool IsLegalMove(MGMove move)
+    {
+      MGMoveList moves = new MGMoveList();
+      MGMoveGen.GenerateMoves(in this, moves);
+      for (int i = 0; i < moves.NumMovesUsed; i++)
+      {
+        if (moves.MovesArray[i] == move)
+        {
+          return true;
+        }
+      }
+      return false;
     }
 
     #region Overrides
