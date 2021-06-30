@@ -261,7 +261,7 @@ namespace Ceres.MCTS.Iteration
       using (new SearchContextExecutionBlock(priorContext))
       {
         MCTSNode newRoot = null;
-        if (Manager.TablebaseImmediateBestMove != default)
+        if (Manager.TablebaseImmediateBestMove.IsNull)
         {
           newRoot = Manager.Root.FollowMovesToNode(moves);
         }
