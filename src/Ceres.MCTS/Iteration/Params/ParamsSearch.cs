@@ -161,8 +161,8 @@ namespace Ceres.MCTS.Params
     /// the value score of evaluted nodes which is the product of the
     /// Contempt and the node's draw probability.
     /// </summary>
-    [CeresOption(Name = "contempt", Desc = "Contempt coefficient which penalizes draw outcomes", Default = "0.01")]
-    public float Contempt = 0.01f;
+    [CeresOption(Name = "contempt", Desc = "Contempt coefficient which penalizes draw outcomes", Default = "0.0")]
+    public float Contempt = 0.0f;
 
     /// <summary>
     /// Experimental. The fraction of the final contempt which is derived from an
