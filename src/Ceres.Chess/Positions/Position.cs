@@ -165,36 +165,46 @@ namespace Ceres.Chess
             if (piece.piece.Type == PieceType.Bishop)
             {
               if (piece.piece.Side == MiscInfo.SideToMove)
+              {
                 bishopCountUs++;
+              }
               else
+              {
                 bishopCountThem++;
+              }
             }
             else if (piece.piece.Type == PieceType.Knight)
             {
               if (piece.piece.Side == MiscInfo.SideToMove)
+              {
                 knightCountUs++;
+              }
               else
+              {
                 knightCountThem++;
+              }
             }
             else
             {
               if (piece.piece.Type != PieceType.King)
+                {
                 otherPieceCount++;
+              }
             }
           }
 
           // Not draw if pawn, rook or queen present
           if (otherPieceCount > 0)
           {
-            return PositionDrawStatus.NotDraw;
             // Can't mate with single knight or bishop
+            return PositionDrawStatus.NotDraw;
           }
           else if (pieceCount == 3)
           {
             // 3 pieces with all of them either King, Bishop or Knight is a draw
             return PositionDrawStatus.DrawByInsufficientMaterial;
           }
-          else if (bishopCountThem != 2 || bishopCountThem != 2) // two bishops same side may not be a draw
+          else if (bishopCountThem != 2 || bishopCountUs != 2) // two bishops same side may not be a draw
           {
             bool isKightAndBishopSameSide = (knightCountUs == 1 && bishopCountUs == 1)
                                           || (knightCountThem == 1 && bishopCountThem == 1);
@@ -219,13 +229,12 @@ namespace Ceres.Chess
       {
         // Check for 50 move rule
         if (MiscInfo.Move50Count > 99)
+        {
           return PositionDrawStatus.DrawCanBeClaimed;
+        }
 
         // Two repetitions would mean the position occurred at least 3 times
-        if (MiscInfo.RepetitionCount >= 2)
-          return PositionDrawStatus.DrawCanBeClaimed;
-
-        return PositionDrawStatus.NotDraw;
+        return MiscInfo.RepetitionCount >= 2 ? PositionDrawStatus.DrawCanBeClaimed : PositionDrawStatus.NotDraw;
       }
     }
 
@@ -430,7 +439,9 @@ namespace Ceres.Chess
       {
         Piece newPiece = modifyFunc(new PieceOnSquare(square, this[square]));
         if (newPiece.Type != PieceType.None)
+        {
           ps.Add(new PieceOnSquare(square, newPiece));
+        }
       }
 
       Position newPos = new Position(ps.ToArray(), miscInfo);
@@ -448,7 +459,9 @@ namespace Ceres.Chess
         PieceOnSquare[] ps = new PieceOnSquare[PieceCount];
         int count = 0;
         foreach (PieceOnSquare pieceOnSquare in PiecesEnumeration)
+        {
           ps[count++] = new PieceOnSquare(pieceOnSquare.Square.Mirrored, pieceOnSquare.Piece);
+        }
 
         Position newPos = new Position(ps, MiscInfo.Mirrored);
         return newPos;
@@ -862,7 +875,9 @@ namespace Ceres.Chess
       // Generate moves to check for checkmake
       MGMoveList moves;
       if (knownMoveList != null)
+      {
         moves = knownMoveList;
+      }
       else
       {
         // Move list not already known, generate
