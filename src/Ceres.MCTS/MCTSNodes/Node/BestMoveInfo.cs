@@ -13,6 +13,7 @@
 
 #region Using directives
 
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using Ceres.Chess.MoveGen;
 
@@ -28,8 +29,38 @@ namespace Ceres.MCTS.MTCSNodes
   /// </summary>
   public record BestMoveInfo
   {
+    public enum BestMoveReason
+    {
+      /// <summary>
+      /// There are no legal moves (terminal).
+      /// </summary>
+      NoLegalMoves,
+
+      /// <summary>
+      /// There is only one legal move.
+      /// </summary>
+      OneLegalMove,
+
+      /// <summary>
+      /// The best immediate move is given by the tablebase.
+      /// </summary>
+      TablebaseImmediateMove,
+
+      /// <summary>
+      /// The search determined the best move.
+      /// </summary>
+      SearchResult
+     };
+
+
+    /// <summary>
+    /// The method used to determine the best move.
+    /// </summary>
+    public readonly BestMoveReason Reason;
+
     /// <summary>
     /// The node corresponding to the move that was chosen to be best.
+    /// This can possibly be null (e.g in case of tablebase immediate move or forced move).
     /// </summary>
     public MCTSNode BestMoveNode { get; init; }
 
@@ -63,6 +94,10 @@ namespace Ceres.MCTS.MTCSNodes
     /// </summary>
     public readonly float MLHBonusApplied;
 
+    /// <summary>
+    /// Best move in this position.
+    /// </summary>
+    public MGMove BestMove;
 
     /// <summary>
     /// Constructor.
@@ -72,7 +107,7 @@ namespace Ceres.MCTS.MTCSNodes
     /// <param name="bestN"></param>
     /// <param name="bestNSecond"></param>
     /// <param name="mlhBonusApplied"></param>
-    internal BestMoveInfo(MCTSNode node, float bestQ, float bestN, float bestNSecond, float mlhBonusApplied)
+    public BestMoveInfo(MCTSNode node, float bestQ, float bestN, float bestNSecond, float mlhBonusApplied)
     {
       BestMoveNode = node;
       N = node.N;
@@ -81,19 +116,23 @@ namespace Ceres.MCTS.MTCSNodes
       BestN = bestN;
       BestNSecond = bestNSecond;
       MLHBonusApplied = mlhBonusApplied;
+      BestMoveNode.Annotate();
+      BestMove = node.Annotation.PriorMoveMG;
     }
 
-
     /// <summary>
-    /// Returns associated best move.
+    /// Constructor for case of immediate move determined without search.
     /// </summary>
-    public MGMove BestMove
+    /// <param name="reason"></param>
+    /// <param name="bestMove"></param>
+    /// <param name="bestQ"></param>
+    public BestMoveInfo(BestMoveReason reason, MGMove bestMove, float bestQ)
     {
-      get
-      {
-        BestMoveNode.Annotate();
-        return BestMoveNode.Annotation.PriorMoveMG;
-      }
+      Debug.Assert(reason != BestMoveReason.SearchResult);
+
+      Reason = reason;
+      Q = bestQ;
+      BestMove = bestMove;
     }
 
 

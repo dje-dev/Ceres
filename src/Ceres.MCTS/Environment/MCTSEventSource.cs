@@ -169,7 +169,7 @@ namespace Ceres.MCTS.Environment
         nnTranspositionsHitRate ??= new PollingCounter("transposition-hit-rate_pct", this, () => LeafEvaluatorTransposition.HitRatePct);
         numRootPreloadNodes ??= new IncrementingPollingCounter("root-preload-nodes", this, () => MCTSRootPreloader.TotalCumulativeRootPreloadNodes);
 
-        mlhMoveModificationFraction ??= new PollingCounter("mlh-move-modified-pct", this, () => 100.0f * ManagerChooseRootMove.MLHMoveModifiedFraction);
+        mlhMoveModificationFraction ??= new PollingCounter("mlh-move-modified-pct", this, () => 100.0f * ManagerChooseBestMove.MLHMoveModifiedFraction);
 
         tablebaseHitsTotal ??= new PollingCounter("tablebase-hits-total", this, () => LC0DLLSyzygyEvaluator.NumTablebaseHits);
         tablebaseHits ??= new IncrementingPollingCounter("tablebase-hits", this, () => LC0DLLSyzygyEvaluator.NumTablebaseHits);

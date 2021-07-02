@@ -21,6 +21,8 @@ using Ceres.Chess.LC0.Positions;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.Base.DataTypes;
 using Ceres.Chess.EncodedPositions.Basic;
+using Ceres.MCTS.Iteration;
+using Ceres.Chess.MoveGen.Converters;
 
 #endregion
 
@@ -59,7 +61,14 @@ namespace Ceres.Features.UCI
       }
 
       // Save the best move for last.
-      stats.Add(BuildStatExpanded(best.BestMoveNode, false));
+      if (best.BestMoveNode == null)
+      {
+        stats.Add(BuildStatNoSearch(searchRootNode, best));
+      }
+      else
+      {
+        stats.Add(BuildStatExpanded(best.BestMoveNode, false));
+      }
 
       // Finally, output the search root node.
       stats.Add(BuildStatExpanded(searchRootNode, true));
@@ -67,6 +76,18 @@ namespace Ceres.Features.UCI
       return stats;
     }
 
+
+    static LC0VerboseMoveStat BuildStatNoSearch(MCTSNode parent, BestMoveInfo info)
+    {
+      LC0VerboseMoveStat stat = new LC0VerboseMoveStat(null, null);
+      stat.MoveString = info.BestMove.MoveStr(MGMoveNotationStyle.LC0Coordinate);
+      float v = parent.V;
+      stat.WL = v;
+      stat.Q = new EncodedEvalLogistic(v);
+      stat.V = new EncodedEvalLogistic(v);
+      stat.D = v == 0 ? 1 : 0;
+      return stat;
+    }
 
     static LC0VerboseMoveStat BuildStatNotExpanded(MCTSNode node, int childIndex)
     {
@@ -85,17 +106,22 @@ namespace Ceres.Features.UCI
       LC0VerboseMoveStat stat = new LC0VerboseMoveStat(null, null);
       float multiplier = isSearchRoot ? 1 : -1;
 
-      stat.MoveString = isSearchRoot ? "node" : node.Annotation.PriorMoveMG.MoveStr(MGMoveNotationStyle.LC0Coordinate);
-      stat.MoveCode = isSearchRoot ? 20 : node.Parent.ChildAtIndexInfo(node.IndexInParentsChildren).move.IndexNeuralNet;
-      stat.VisitCount = node.N;
-      stat.P = isSearchRoot ? 100 : (node.P * 100.0f);
-      stat.D = node.Ref.DrawP;
-      stat.WL = (node.IsRoot && node.N == 0) ? node.V : (float)node.Q * multiplier;
-      stat.Q = new EncodedEvalLogistic((float)node.Q * multiplier);
-      stat.M = node.MPosition;
-      stat.V = new EncodedEvalLogistic((float)node.V * multiplier);
-      stat.U = isSearchRoot ? 0 : node.Parent.ChildU(node.IndexInParentsChildren);
-      return stat;
+      using (new SearchContextExecutionBlock(node.Context))
+      {
+        node.Annotate();
+
+        stat.MoveString = isSearchRoot ? "node" : node.Annotation.PriorMoveMG.MoveStr(MGMoveNotationStyle.LC0Coordinate);
+        stat.MoveCode = isSearchRoot ? 20 : node.Parent.ChildAtIndexInfo(node.IndexInParentsChildren).move.IndexNeuralNet;
+        stat.VisitCount = node.N;
+        stat.P = isSearchRoot ? 100 : (node.P * 100.0f);
+        stat.D = node.Ref.DrawP;
+        stat.WL = (node.IsRoot && node.N == 0) ? node.V : (float)node.Q * multiplier;
+        stat.Q = new EncodedEvalLogistic((float)node.Q * multiplier);
+        stat.M = node.MPosition;
+        stat.V = new EncodedEvalLogistic((float)node.V * multiplier);
+        stat.U = isSearchRoot ? 0 : node.Parent.ChildU(node.IndexInParentsChildren);
+        return stat;
+      }
     }
 
   }

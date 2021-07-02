@@ -144,7 +144,7 @@ namespace Ceres.MCTS.Iteration
       float aggressiveness = Context.ParamsSearch.MoveFutilityPruningAggressiveness;
       if (aggressiveness >= 1.5f) throw new Exception("Ceres configuration error: maximum value of EarlyStopMoveSecondaryAggressiveness is 1.5.");
 
-      float MIN_BEST_N_FRAC_REQUIRED = ManagerChooseRootMove.MIN_FRAC_N_REQUIRED_MIN;
+      float MIN_BEST_N_FRAC_REQUIRED = ManagerChooseBestMove.MIN_FRAC_N_REQUIRED_MIN;
 
       // Calibrate aggressiveness such that :
       //   - at maximum value of 1.0 we assume 50% visits go to second best move(s)
@@ -167,7 +167,7 @@ namespace Ceres.MCTS.Iteration
 
       float bestQ = (float)bestQNode.Q;
 
-      ManagerChooseRootMove bestMoveChoser = new(Context.Root, false, Context.ParamsSearch.MLHBonusFactor);
+      ManagerChooseBestMove bestMoveChoser = new(Context.Root, false, Context.ParamsSearch.MLHBonusFactor);
       Span<MCTSNodeStructChild> children = Root.Ref.Children;
       for (int i = 0; i < Root.Ref.NumChildrenExpanded; i++)
       {
