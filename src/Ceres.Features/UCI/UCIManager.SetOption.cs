@@ -225,7 +225,7 @@ namespace Ceres.Features.UCI
         case "syzygypath":
           if (!Directory.Exists(value))
           {
-            OutStream.WriteLine("Path not found: { value }");
+            OutStream.WriteLine($"Path not found: { value }");
           }
           else
           {
