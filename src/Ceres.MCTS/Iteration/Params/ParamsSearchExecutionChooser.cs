@@ -56,6 +56,11 @@ namespace Ceres.MCTS.Params
     /// </summary>
     public SearchLimit SearchLimit;
 
+
+    private static ParamsSearchExecution  DEFAULT_PARAMS = new ();
+
+
+
     /// <summary>
     /// Constructor.
     /// </summary>
@@ -120,7 +125,10 @@ namespace Ceres.MCTS.Params
       // Turn off some features if search is very small (overhead of initializing them not worth it)
       const int CUTOVER_NUM_NODES_TINY = 200;
       const int CUTOVER_NUM_NODES_SMALL = 20_000;
-      const int CUTOVER_NUM_NODES_MEDIUM = 100_000;
+
+      ParamsSearch.Execution.FlowDirectOverlapped = DEFAULT_PARAMS.FlowDirectOverlapped && estNumNodes > 5000;
+      ParamsSearch.Execution.FlowDualSelectors = DEFAULT_PARAMS.FlowDualSelectors && estNumNodes > 5000;
+
 
       if (estNumNodes < CUTOVER_NUM_NODES_SMALL)
       {
@@ -139,19 +147,11 @@ namespace Ceres.MCTS.Params
         ParamsSearch.Execution.SelectParallelEnabled = false;
         ParamsSearch.Execution.SetPoliciesParallelEnabled = false;
       }
-      else if (estNumNodes < CUTOVER_NUM_NODES_MEDIUM)
-      {
-        ParamsSearch.Execution.SelectParallelEnabled = true;
-        ParamsSearch.Execution.SetPoliciesParallelEnabled = true;
-      }
       else
       {
-        ParamsSearch.Execution.SelectParallelEnabled = true;
-        ParamsSearch.Execution.SetPoliciesParallelEnabled = true;
+        ParamsSearch.Execution.SelectParallelEnabled = DEFAULT_PARAMS.SelectParallelEnabled;
+        ParamsSearch.Execution.SetPoliciesParallelEnabled = DEFAULT_PARAMS.SetPoliciesParallelEnabled;
       }
-
-      ParamsSearch.Execution.FlowDirectOverlapped = estNumNodes > 5000;
-      ParamsSearch.Execution.FlowDualSelectors = estNumNodes > 5000;
 
       // TODO: set the GPU fractions if multiple
     }
