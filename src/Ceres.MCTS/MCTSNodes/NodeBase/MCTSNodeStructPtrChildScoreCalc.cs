@@ -84,7 +84,7 @@ namespace Ceres.MCTS.MTCSNodes
     /// <param name="childVisitCounts">the output child visit counts</param>
     public void ComputeTopChildScores(int selectorID, int depth, float dynamicVLossBoost,
                                       int minChildIndex, int maxChildIndex, int numVisitsToCompute,
-                                      Span<float> scores, Span<short> childVisitCounts)
+                                      Span<float> scores, Span<short> childVisitCounts, float cpuctMultiplier)
     {
       GatheredChildStats stats = CheckInitThreadStatics();
 
@@ -138,7 +138,7 @@ namespace Ceres.MCTS.MTCSNodes
                                          gatherStatsPSpan, gatherStatsWSpan,
                                          gatherStatsNSpan, gatherStatsInFlightSpan,
                                          numToProcess, numVisitsToCompute,
-                                         scores, childVisitCounts);
+                                         scores, childVisitCounts, cpuctMultiplier);
     }
 
 
@@ -196,7 +196,7 @@ namespace Ceres.MCTS.MTCSNodes
     /// <param name="depth"></param>
     /// <param name="childIndex"></param>
     /// <returns></returns>
-    public float ChildScore(int selectorID, int depth, int childIndex) => CalcChildScores(selectorID, depth, 0)[childIndex];
+    public float ChildScore(int selectorID, int depth, int childIndex) => CalcChildScores(selectorID, depth, 0, 0)[childIndex];
 
 
     /// <summary>
@@ -206,12 +206,12 @@ namespace Ceres.MCTS.MTCSNodes
     /// <param name="depth"></param>
     /// <param name="dynamicVLossBoost"></param>
     /// <returns></returns>
-    public float[] CalcChildScores(int selectorID, int depth, float dynamicVLossBoost)
+    public float[] CalcChildScores(int selectorID, int depth, float dynamicVLossBoost, float cpuctMultiplier)
     {
       Span<float> scores = new Span<float>(new float[NumPolicyMoves]);
       Span<short> childVisitCounts = new Span<short>(new short[NumPolicyMoves]);
 
-      ComputeTopChildScores(selectorID, depth, dynamicVLossBoost, 0, NumPolicyMoves - 1, 1, scores, childVisitCounts);
+      ComputeTopChildScores(selectorID, depth, dynamicVLossBoost, 0, NumPolicyMoves - 1, 1, scores, childVisitCounts, cpuctMultiplier);
       return scores.ToArray();
     }
 

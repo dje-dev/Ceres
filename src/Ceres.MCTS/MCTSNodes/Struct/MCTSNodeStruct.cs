@@ -178,10 +178,12 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       }
     }
 
-  
+
     /// <summary>
     /// Sets fields to their inital values upon node creation
     /// Note that it is assumed the node is already in the default (zeroed) state.
+    /// 
+    /// NOTE: Try to keep changes synchronized with MCTSNodeStructFields.ResetExpandedState.
     /// </summary>
     /// <param name="parentIndex"></param>
     /// <param name="p"></param>
@@ -197,6 +199,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       MPosition = FP16.NaN;
       ReuseGenerationNum = 0;
       ZobristHash = 0;
+      Uncertainty = UNCERTAINTY_PRIOR;
+
       //Weight = 1.0f;
     }
 

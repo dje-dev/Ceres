@@ -261,6 +261,8 @@ namespace Ceres.MCTS.MTCSNodes
     /// </summary>
     public float VVariance => (*ptr).VVariance;
 
+    public FP16 Uncertainty => (*ptr).Uncertainty;
+
     #endregion
 
 

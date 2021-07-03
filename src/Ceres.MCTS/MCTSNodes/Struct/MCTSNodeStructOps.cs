@@ -392,7 +392,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
     #region Gather fields
 
-    const float LAMBDA = 0.97f;
+    const float LAMBDA = 0.94f;
 
 #if NOT
 // probably ill conceived, using draw probabilities a more direct way
@@ -802,6 +802,10 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           node.mSum += mToApply;
           node.dSum += dToApply;
         }
+
+        // Update uncertainty (exponentially weighted moving average)
+        float absDiff = MathF.Abs(vToApply - (float)node.Q);
+        node.Uncertainty = (FP16)(LAMBDA * node.Uncertainty + (1.0f - LAMBDA) * absDiff);
 
         if (MCTSParamsFixed.TRACK_NODE_TREND)
         {

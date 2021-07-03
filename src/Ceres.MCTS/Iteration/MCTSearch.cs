@@ -130,6 +130,11 @@ namespace Ceres.MCTS.Iteration
                        bool possiblyUsePositionCache = false,
                        bool isFirstMoveOfGame = false)
     {
+      if (searchLimit == null)
+      {
+        throw new ArgumentNullException(nameof(searchLimit));
+      }
+
       if (searchLimit.SearchCanBeExpanded)
       {
         if (!MCTSParamsFixed.STORAGE_USE_INCREMENTAL_ALLOC)

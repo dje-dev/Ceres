@@ -73,7 +73,8 @@ namespace Ceres.MCTS.LeafExpansion
                                       float qParent, float parentSumPVisited,
                                       Span<float> p, Span<float> w, Span<float> n, Span<float> nInFlight,
                                       int numChildren, int numVisitsToCompute,
-                                      Span<float> outputScores, Span<short> outputChildVisitCounts)
+                                      Span<float> outputScores, Span<short> outputChildVisitCounts,
+                                      float cpuctMultiplier)
     {
 #if NOT
 Note: Possible optimization/inefficiency: 
@@ -109,7 +110,7 @@ Note: Possible optimization/inefficiency:
       else
         virtualLossMultiplier = paramsSelect.VirtualLossDefaultAbsolute;
 
-      float cpuctValue = paramsSelect.CalcCPUCT(parentIsRoot, dualSelectorMode, selectorID, parentN);
+      float cpuctValue = cpuctMultiplier * paramsSelect.CalcCPUCT(parentIsRoot, dualSelectorMode, selectorID, parentN);
 
       // Compute qWhenNoChildren
       float fpuValue = -paramsSelect.CalcFPUValue(parentIsRoot);
