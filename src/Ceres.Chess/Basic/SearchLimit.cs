@@ -223,9 +223,9 @@ namespace Ceres.Chess
     /// <returns></returns>
     public override string ToString()
     {
-      string movesToGoPart = MaxMovesToGo != int.MaxValue ? $" Moves { MaxMovesToGo }" : "";
-      string valuePart = IsTimeLimit ? $"{Value,5:F2}" : $"{Value,9:N0}";
-      string incrPart = IsTimeLimit ? $"{ValueIncrement,5:F2}" : $"{ValueIncrement,9:N0}";
+      string movesToGoPart = MaxMovesToGo.HasValue ? $" Moves { MaxMovesToGo }" : "";
+      string valuePart = IsTimeLimit ? $"{Value,5:F2}s" : $"{Value,9:N0} nodes";
+      string incrPart = IsTimeLimit ? $"{ValueIncrement,5:F2}s" : $"{ValueIncrement,9:N0} nodes";
 
       string searchMovesPart = "";
       if (SearchMoves != null)
