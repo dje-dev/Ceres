@@ -15,6 +15,7 @@
 
 using System;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Threading;
 
 using Ceres.Base.DataTypes;
@@ -24,6 +25,7 @@ using Ceres.Base.Threading;
 
 using Ceres.Chess;
 using Ceres.Chess.Positions;
+using Ceres.MCTS.Environment;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Storage;
@@ -363,10 +365,13 @@ namespace Ceres.MCTS.Search
     }
 
 
-#endregion
+    #endregion
 
-#region Selection algorithm
+    #region Selection algorithm
 
+    static long applyCount = 0;
+    static double applyCPUCTTot = 0;
+    static double applyAbsUncertaintyTot = 0;
 
     /// <summary>
     /// To get numTargetLeafs we usually don't have to check all children. 
@@ -428,10 +433,31 @@ namespace Ceres.MCTS.Search
       {
 #endif
 
+      float cpuctMultiplier = 1;
+
+      const float UNCERTAINTY_CUTOFF_LOW = 0.125f;
+      const float UNCERTAINTY_CUTOFF_HIGH = 0.275f;
+      const float UNCERTAINTY_MIDPOINT = UNCERTAINTY_CUTOFF_HIGH - UNCERTAINTY_CUTOFF_LOW;
+      const float UNCERTAINTY_SCALE = 3.0f;
+      if (node.Context.ParamsSearch.TestFlag)
+      {
+        float uncertaintyDiff = node.Uncertainty - UNCERTAINTY_MIDPOINT;
+        cpuctMultiplier = 1.0f + uncertaintyDiff * UNCERTAINTY_SCALE;
+        cpuctMultiplier = StatUtils.Bounded(cpuctMultiplier, 0.8f, 1.25f);
+
+        applyCount++;
+        applyCPUCTTot += cpuctMultiplier;
+        applyAbsUncertaintyTot += Math.Abs(uncertaintyDiff);
+
+        MCTSEventSource.TestMetric1 = (float)(applyCPUCTTot / applyCount);
+        MCTSEventSource.TestCounter1 = (int)Math.Round(100 * (applyAbsUncertaintyTot / applyCount), 0);
+      }
+
+
       Span<float> scores = default;
       node.ComputeTopChildScores(selectorID, node.Depth,
                                  vLossDynamicBoost, 0, numChildrenToCheck - 1, numTargetLeafs,
-                                 scores, visitChildCounts);
+                                 scores, visitChildCounts, cpuctMultiplier);
 
       if (node.Depth == 0)
       {
