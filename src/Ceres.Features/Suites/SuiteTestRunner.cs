@@ -261,7 +261,10 @@ namespace Ceres.Features.Suites
                          EPDEntry epd = epds[gameNum];
 
                          // Skip positions which are already draws
-                         if (epd.Position.CheckDrawBasedOnMaterial == Position.PositionDrawStatus.DrawByInsufficientMaterial) return;
+                         if (epd.Position.CheckDrawBasedOnMaterial == Position.PositionDrawStatus.DrawByInsufficientMaterial)
+                         {
+                           return;
+                         }
                          // TODO: also do this for checkmate?
 
                          ProcessEPD(gameNum, epds[gameNum], outputDetail, externalEnginePool);
@@ -317,14 +320,28 @@ namespace Ceres.Features.Suites
       Def.Output.WriteLine();
 
       Def.Output.WriteLine();
-      if (Def.ExternalEngineDef != null) Def.Output.WriteLine($"Total {Def.ExternalEngineDef.ID} Time {totalTimeOther,6:F2}");
+      if (Def.ExternalEngineDef != null)
+      {
+        Def.Output.WriteLine($"Total {Def.ExternalEngineDef.ID} Time {totalTimeOther,6:F2}");
+      }
+
       Def.Output.WriteLine($"Total C1 Time {totalTimeCeres1,6:F2}");
-      if (Def.CeresEngine2Def != null) Def.Output.WriteLine($"Total C2 Time {totalTimeCeres2,6:F2}");
+      if (Def.CeresEngine2Def != null)
+      {
+        Def.Output.WriteLine($"Total C2 Time {totalTimeCeres2,6:F2}");
+      }
 
       Def.Output.WriteLine();
-      if (Def.ExternalEngineDef != null) Def.Output.WriteLine($"Avg {Def.ExternalEngineDef.ID} pos/sec    {totalNodesOther / totalTimeOther,8:F2}");
+      if (Def.ExternalEngineDef != null)
+      {
+        Def.Output.WriteLine($"Avg {Def.ExternalEngineDef.ID} pos/sec    {totalNodesOther / totalTimeOther,8:F2}");
+      }
+
       Def.Output.WriteLine($"Avg Ceres    pos/sec    {totalNodes1 / totalTimeCeres1,8:F2}");
-      if (Def.CeresEngine2Def != null) Def.Output.WriteLine($"Avg Ceres2    pos/sec    {totalNodes2 / totalTimeCeres2,8:F2}");
+      if (Def.CeresEngine2Def != null)
+      {
+        Def.Output.WriteLine($"Avg Ceres2    pos/sec    {totalNodes2 / totalTimeCeres2,8:F2}");
+      }
 
       Def.Output.WriteLine();
       Def.Output.WriteLine();
@@ -347,12 +364,13 @@ namespace Ceres.Features.Suites
         {
           object engineObj = otherEngines.GetFromPool();
 
+          SearchLimit adjustedLimit = Def.ExternalEngineDef.SearchLimit.ConvertedGameToMoveLimit;
           if (engineObj is LC0Engine)
           {
             LC0Engine le = (LC0Engine)engineObj;
 
             // Run test 2 first since that's the one we dump in detail, to avoid any possible caching effect from a prior run
-            otherEngineAnalysis2 = le.AnalyzePositionFromFEN(epdToUse.FENAndMoves, Def.ExternalEngineDef.SearchLimit);
+            otherEngineAnalysis2 = le.AnalyzePositionFromFEN(epdToUse.FENAndMoves, adjustedLimit);
             //            leelaAnalysis2 = le.AnalyzePositionFromFEN(epdToUse.FEN, new SearchLimit(SearchLimit.LimitType.NodesPerMove, 2)); // **** TEMP
             otherEngines.RestoreToPool(le);
           }
@@ -361,7 +379,7 @@ namespace Ceres.Features.Suites
             UCIGameRunner runner = (engineObj is UCIGameRunner) ? (engineObj as UCIGameRunner) 
             : (engineObj as GameEngineUCI).UCIRunner;
             string moveType = Def.ExternalEngineDef.SearchLimit.Type == SearchLimitType.NodesPerMove ? "nodes" : "movetime";
-            int moveValue = moveType == "nodes" ? (int)Def.ExternalEngineDef.SearchLimit.Value : (int)Def.ExternalEngineDef.SearchLimit.Value * 1000;
+            int moveValue = moveType == "nodes" ? (int)Def.ExternalEngineDef.SearchLimit.Value : (int)adjustedLimit.Value * 1000;
             runner.EvalPositionPrepare();
             otherEngineAnalysis2 = runner.EvalPosition(epdToUse.FEN, epdToUse.StartMoves, moveType, moveValue, null);
             otherEngines.RestoreToPool(runner);
@@ -377,17 +395,21 @@ namespace Ceres.Features.Suites
 
       // Comptue search limit
       // If possible, adjust for the fact that LC0 "cheats" by going slightly over node budget
-      SearchLimit ceresSearchLimit1 = Def.CeresEngine1Def.SearchLimit;
-      SearchLimit ceresSearchLimit2 = Def.CeresEngine2Def?.SearchLimit;
+      SearchLimit ceresSearchLimit1 = Def.CeresEngine1Def.SearchLimit.ConvertedGameToMoveLimit;
+      SearchLimit ceresSearchLimit2 = Def.CeresEngine2Def?.SearchLimit.ConvertedGameToMoveLimit;
 
       if (Def.CeresEngine1Def.SearchLimit.Type == SearchLimitType.NodesPerMove
        && otherEngineAnalysis2 != null
        && !Def.Engine1Def.SearchParams.FutilityPruningStopSearchEnabled)
       {
         if (Def.CeresEngine1Def.SearchLimit.Type == SearchLimitType.NodesPerMove)
+        {
           ceresSearchLimit1 = new SearchLimit(SearchLimitType.NodesPerMove, otherEngineAnalysis2.Nodes);
+        }
         if (Def.CeresEngine1Def.SearchLimit.Type == SearchLimitType.NodesPerMove)
+        {
           ceresSearchLimit2 = new SearchLimit(SearchLimitType.NodesPerMove, otherEngineAnalysis2.Nodes);
+        }
       }
 
       PositionWithHistory pos = PositionWithHistory.FromFENAndMovesSAN(epdToUse.FEN, epdToUse.StartMoves);
@@ -404,7 +426,7 @@ namespace Ceres.Features.Suites
       {
         search1 = new MCTSearch();
         search1.Search(evaluatorSet1, Def.Engine1Def.SelectParams, Def.Engine1Def.SearchParams, null, null,
-                         pos, ceresSearchLimit1, false, DateTime.Now, null, null, true);
+                       pos, ceresSearchLimit1, false, DateTime.Now, null, null, true);
 
         MCTSIterator shareContext = null;
         if (Def.RunCeres2Engine)
@@ -511,9 +533,13 @@ namespace Ceres.Features.Suites
 
       string correctMove = null;
       if (epdToUse.AMMoves != null)
+      {
         correctMove = "-" + epdToUse.AMMoves[0];
+      }
       else if (epdToUse.BMMoves != null)
+      {
         correctMove = epdToUse.BMMoves[0];
+      }
 
       float otherEngineTime = otherEngineAnalysis2 == null ? 0 : (float)otherEngineAnalysis2.EngineReportedSearchTime / 1000.0f;
 
@@ -646,11 +672,18 @@ namespace Ceres.Features.Suites
     {
       if (WithHeader)
       {
-        if (id.Length > width) id = id.Substring(width);
+        if (id.Length > width)
+        {
+          id = id.Substring(width);
+        }
 
         ids.Append(Center(id, width));
 
-        for (int i = 0; i < width - 2; i++) dividers.Append("-");
+        for (int i = 0; i < width - 2; i++)
+        {
+          dividers.Append("-");
+        }
+
         dividers.Append("  ");
       }
 
