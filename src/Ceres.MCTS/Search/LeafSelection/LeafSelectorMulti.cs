@@ -435,22 +435,23 @@ namespace Ceres.MCTS.Search
 
       float cpuctMultiplier = 1;
 
-      const float UNCERTAINTY_CUTOFF_LOW = 0.125f;
-      const float UNCERTAINTY_CUTOFF_HIGH = 0.275f;
-      const float UNCERTAINTY_MIDPOINT = UNCERTAINTY_CUTOFF_HIGH - UNCERTAINTY_CUTOFF_LOW;
-      const float UNCERTAINTY_SCALE = 3.0f;
-      if (node.Context.ParamsSearch.TestFlag)
+      const float UNCERTAINTY_MIDPOINT = 0.05f;
+      const float UNCERTAINTY_SCALE = 1.5f;
+      if (node.Context.ParamsSearch.TestFlag && node.N > 10)
       {
         float uncertaintyDiff = node.Uncertainty - UNCERTAINTY_MIDPOINT;
-        cpuctMultiplier = 1.0f + uncertaintyDiff * UNCERTAINTY_SCALE;
-        cpuctMultiplier = StatUtils.Bounded(cpuctMultiplier, 0.8f, 1.25f);
+        cpuctMultiplier = 0.90f + uncertaintyDiff * UNCERTAINTY_SCALE;
+        cpuctMultiplier = StatUtils.Bounded(cpuctMultiplier, 0.80f, 1.25f);
 
         applyCount++;
         applyCPUCTTot += cpuctMultiplier;
         applyAbsUncertaintyTot += Math.Abs(uncertaintyDiff);
 
-        MCTSEventSource.TestMetric1 = (float)(applyCPUCTTot / applyCount);
-        MCTSEventSource.TestCounter1 = (int)Math.Round(100 * (applyAbsUncertaintyTot / applyCount), 0);
+        if (node.Ref.ZobristHash % 1000 == 999)
+        {
+          MCTSEventSource.TestMetric1 = (float)(applyCPUCTTot / applyCount);
+          MCTSEventSource.TestCounter1 = (int)Math.Round(100 * (applyAbsUncertaintyTot / applyCount), 0);
+        }
       }
 
 

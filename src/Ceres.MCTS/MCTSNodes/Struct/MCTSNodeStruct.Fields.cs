@@ -167,7 +167,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     public FP16 Uncertainty;
 
     // TODO: make compile time constant
-    internal FP16 UNCERTAINTY_PRIOR => (FP16)0.2f;
+    internal FP16 UNCERTAINTY_PRIOR => (FP16)0.10f;
 
     public void ResetSearchInProgressState()
     {

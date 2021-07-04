@@ -392,7 +392,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
     #region Gather fields
 
-    const float LAMBDA = 0.94f;
+    const float LAMBDA = 0.96f;
 
 #if NOT
 // probably ill conceived, using draw probabilities a more direct way
