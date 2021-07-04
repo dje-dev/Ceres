@@ -113,6 +113,11 @@ namespace Ceres.Chess.UserSettings
     /// </summary>
     public bool EnableCUDAGraphs { get; set; } = true;
 
+    /// <summary>
+    /// If the legacy LC0.dll evaluator should be used for NN evaluation.
+    /// </summary>
+    public bool UseLegacyLC0Evaluator { get; set; } = false;
+
     #endregion
 
     #region UCI setoptions

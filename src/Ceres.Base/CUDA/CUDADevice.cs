@@ -91,7 +91,7 @@ namespace Ceres.Base.CUDA
     }
 
 
-    const string BASE_RESOURCE_NAME = @"Ceres.Experiments.NNBackend.CUDA.Kernels.PTX.";
+    const string BASE_RESOURCE_NAME = @"Ceres.Chess.NNBackends.CUDA.Kernels.PTX.";
 
     static Dictionary<string, Stream> resourceStreams = new Dictionary<string, Stream>();
 

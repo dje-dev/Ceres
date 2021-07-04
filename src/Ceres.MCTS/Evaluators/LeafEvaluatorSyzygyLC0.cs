@@ -51,7 +51,7 @@ namespace Ceres.MCTS.Evaluators
 
     public LeafEvaluatorSyzygyLC0(string paths)
     {
-      Evaluator = LC0DLLSyzygyEvaluatorPool.GetSessionForPaths(paths);
+      Evaluator = SyzygyEvaluatorPool.GetSessionForPaths(paths);
       MaxCardinality = Evaluator.MaxCardinality;
     }
 

@@ -17,12 +17,25 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="NNBackends\CUDA\Kernels\PTX\ceres_kernels.ptx" />
+    <None Remove="NNBackends\CUDA\Kernels\PTX\common_kernels.ptx" />
+    <None Remove="NNBackends\CUDA\Kernels\PTX\fp16_kernels.ptx" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="NNBackends\CUDA\Kernels\PTX\ceres_kernels.ptx" />
+    <EmbeddedResource Include="NNBackends\CUDA\Kernels\PTX\common_kernels.ptx" />
+    <EmbeddedResource Include="NNBackends\CUDA\Kernels\PTX\fp16_kernels.ptx" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Ceres.Base\Ceres.Base.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <Folder Include="Data\Players\" />
     <Folder Include="LC0\Positions\Position\Training\" />
+    <Folder Include="TBBackends\Fathom\" />
   </ItemGroup>
 
   <ItemGroup>

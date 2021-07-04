@@ -122,14 +122,14 @@ namespace Ceres
 
     const string BannerString =
 @"
-|=====================================================|
-| Ceres - A Monte Carlo Tree Search Chess Engine      |
-|                                                     |
-| (c) 2020- David Elliott and the Ceres Authors       |
-|   With network backend code from Leela Chess Zero.  |
-|                                                     |
+|=========================================================|
+| Ceres - A Monte Carlo Tree Search Chess Engine          |
+|                                                         |
+| (c) 2020- David Elliott and the Ceres Authors           |
+|   With network backend code from Leela Chess Zero.      |
+|                                                         |
 |  Version {VER} Use help to list available commands. |
-|=====================================================|
+|=========================================================|
 ";
 
     static void OutputBanner()

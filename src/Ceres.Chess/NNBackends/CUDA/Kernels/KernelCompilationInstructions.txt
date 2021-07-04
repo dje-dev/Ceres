@@ -1,0 +1,29 @@
+﻿Instructions to genrerate kernels (PTX from CU).
+Needs 3 files from LC0 project (unchanged)
+  winograd_helper.inc
+  fp16_kernels.cu
+  common_kernels.cu
+and one small file from Ceres
+  ceres_kernels.cu
+
+Steps:
+  1. Pull Git code at 62741d5
+  2. Create  utils subdirectory under D:\dev\lc0_new\lc0\src\neural\cuda and copy the LC0 utils source code files there (so CUDA compiler will find)
+  3. Launch a console session from menu bar using "x64 Native Tools  Command Propmt for Visual Studio 2019"
+  4. Change into directory where CU files are located (e.g. D:\dev\lc0_new\lc0\src\neural\cuda)
+  5. Run the 3 commands to generate PTX and then copy to source code tree (update directory as needed).
+  6. Rebuild C# project and test.
+
+Batch file (go.cmd):
+"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.1\bin\nvcc.EXE" -ptx -o common_kernels.ptx  -c common_kernels.cu -arch=sm_70
+"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.1\bin\nvcc.EXE" -ptx -o fp16_kernels.ptx  -c fp16_kernels.cu -arch=sm_70
+"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.1\bin\nvcc.EXE" -ptx -o ceres_kernels.ptx  -c ceres_kernels.cu -arch=sm_70
+
+copy common_kernels.ptx C:\dev\CeresDev\src\ceres.Samples\nnbackend\cuda\kernels\ptx
+copy fp16_kernels.ptx C:\dev\CeresDev\src\ceres.Samples\nnbackend\cuda\kernels\ptx
+copy ceres_kernels.ptx C:\dev\CeresDev\src\ceres.Samples\nnbackend\cuda\kernels\ptx
+
+rem TODO: someday maybe run for all possible kernels
+rem nvcc -h
+rem foreach x : ['sm_80', 'sm_75', 'sm_86', 'sm_70', 'sm_60' , 'sm_72', 'sm_62', 'sm_53']
+rem         nvcc_extra_args += '-code=' + x

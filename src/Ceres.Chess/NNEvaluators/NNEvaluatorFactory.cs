@@ -23,6 +23,9 @@ using Ceres.Chess.NNFiles;
 using System.Collections.Generic;
 using Chess.Ceres.NNEvaluators.TensorRT;
 using Ceres.Chess.LC0NetInference;
+using Ceres.Chess.UserSettings;
+using Ceres.Chess.NNEvaluators.CUDA;
+using Ceres.Chess.LC0.NNFiles;
 
 #endregion
 
@@ -126,7 +129,33 @@ namespace Ceres.Chess.NNEvaluators
           break;
 
         case NNEvaluatorType.LC0Library:
-          ret = new NNEvaluatorLC0(net, deviceDef.DeviceIndex, netDef.Precision);
+          if (CeresUserSettingsManager.Settings.UseLegacyLC0Evaluator)
+          {
+            ret = new NNEvaluatorLC0(net, deviceDef.DeviceIndex, netDef.Precision);
+          }
+          else
+          {
+            NNEvaluatorCUDA referenceEvaluatorCast = null;
+
+            if (referenceEvaluator != null)
+            {
+              if (referenceEvaluator is NNEvaluatorCUDA)
+              {
+                referenceEvaluatorCast = referenceEvaluator as NNEvaluatorCUDA;
+              }
+              else if (referenceEvaluator is NNEvaluatorSplit)
+              {
+                referenceEvaluatorCast = ((NNEvaluatorSplit)referenceEvaluator).Evaluators[0] as NNEvaluatorCUDA;
+              }
+            }
+
+
+            int maxBatchSize = CeresUserSettingsManager.Settings.MaxBatchSize;
+            bool enableCUDAGraphs = CeresUserSettingsManager.Settings.EnableCUDAGraphs;
+            return new NNEvaluatorCUDA(net as NNWeightsFileLC0, deviceDef.DeviceIndex, maxBatchSize, 
+                                       false, netDef.Precision, false, enableCUDAGraphs, 1, referenceEvaluatorCast);
+          }
+
           break;
 
         case NNEvaluatorType.LC0TensorRT:
@@ -286,9 +315,6 @@ namespace Ceres.Chess.NNEvaluators
         {
           throw new NotImplementedException();
         }
-
-        INNWeightsFileInfo netDef = NNWeightsFiles.LookupNetworkFile(def.Nets[0].Net.NetworkID);
-        return new NNEvaluatorLC0(netDef, deviceIndices, def.Nets[0].Net.Precision);
       }
 
       if (def.DeviceCombo != NNEvaluatorDeviceComboType.Single)
