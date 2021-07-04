@@ -56,7 +56,7 @@ namespace Ceres.Commands
 
       if (Opponent != null)
       {
-        if (Opponent == "LC0")
+        if (Opponent.ToString() == "LC0")
         {
           withLC0 = true;
         }
