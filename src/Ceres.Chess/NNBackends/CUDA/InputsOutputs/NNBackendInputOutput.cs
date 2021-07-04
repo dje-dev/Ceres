@@ -29,10 +29,10 @@ namespace Ceres.Chess.NNBackends.CUDA
   /// <summary>
   /// Set of variables used to exchange data with GPU.
   /// </summary>
-  internal class NNBackendInputOutput
+  public class NNBackendInputOutput
   {
-    internal const int NUM_OUTPUT_POLICY = EncodedPolicyVector.POLICY_VECTOR_LENGTH;
-    internal const int NUM_INPUT_PLANES = 112;
+    public const int NUM_OUTPUT_POLICY = EncodedPolicyVector.POLICY_VECTOR_LENGTH;
+    public const int NUM_INPUT_PLANES = 112;
 
     public const int MAX_MOVES = 96;
 
@@ -48,7 +48,7 @@ namespace Ceres.Chess.NNBackends.CUDA
     // Outputs
     internal CUDAPinnedMemory<float> OutputPolicyHeadMasked;
 
-    static internal float[,] OutputValueHeadRaw; // before exponentiation and normalization. EXPERIMENTAL STATIC
+    static public float[,] OutputValueHeadRaw; // before exponentiation and normalization. EXPERIMENTAL STATIC
 
     internal float[,] OutputValueHead;
     internal float[,] OutputValueHeadFC2;

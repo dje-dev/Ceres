@@ -21,7 +21,7 @@
 
 namespace Ceres.Chess.NNBackends.CUDA
 {
-  internal static class PolicyMap
+  public static class PolicyMap
   {
     // 73x8x8.
     public static readonly short[] ConvolutionPolicyMap = new short[] {

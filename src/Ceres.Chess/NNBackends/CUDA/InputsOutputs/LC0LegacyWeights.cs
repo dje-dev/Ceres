@@ -91,12 +91,12 @@ namespace Ceres.Chess.NNBackends.CUDA
 
     public record ConvBlock
     {
-      internal float[] weights;
-      internal float[] biases;
-      internal float[] bn_gammas;
-      internal float[] bn_betas;
-      internal float[] bn_means;
-      internal float[] bn_stddivs;
+      public float[] weights;
+      public float[] biases;
+      public float[] bn_gammas;
+      public float[] bn_betas;
+      public float[] bn_means;
+      public float[] bn_stddivs;
 
       public ConvBlock(LC0LegacyWeights parent, Pblczero.Weights.ConvBlock block)
       {
@@ -180,10 +180,10 @@ namespace Ceres.Chess.NNBackends.CUDA
         b2 = parent.WeightsDecoded(se.B2);
       }
 
-      internal float[] w1;
-      internal float[] b1;
-      internal float[] w2;
-      internal float[] b2;
+      public float[] w1;
+      public float[] b1;
+      public float[] w2;
+      public float[] b2;
     }
 
     public struct Residual
@@ -203,44 +203,44 @@ namespace Ceres.Chess.NNBackends.CUDA
         }
       }
 
-      internal ConvBlock conv1;
-      internal ConvBlock conv2;
-      internal SEunit se;
-      internal bool has_se;
+      public ConvBlock conv1;
+      public ConvBlock conv2;
+      public SEunit se;
+      public bool has_se;
     }
 
     // Input convnet.
-    internal ConvBlock input;
+    public ConvBlock input;
 
     // Residual tower.
-    internal Residual[] residual;
+    public Residual[] residual;
 
     // Policy head
     // Extra convolution for AZ-style policy head
-    internal ConvBlock policy1;
-    internal ConvBlock policy;
-    internal float[] ip_pol_w;
-    internal float[] ip_pol_b;
+    public ConvBlock policy1;
+    public ConvBlock policy;
+    public float[] ip_pol_w;
+    public float[] ip_pol_b;
 
     // Value head
-    internal ConvBlock value;
-    internal float[] ip1_val_w;
-    internal float[] ip1_val_b;
-    internal float[] ip2_val_w;
-    internal float[] ip2_val_b;
+    public ConvBlock value;
+    public float[] ip1_val_w;
+    public float[] ip1_val_b;
+    public float[] ip2_val_w;
+    public float[] ip2_val_b;
 
     // Action head (experimental)
-    internal ConvBlock action;
-    internal float[] ip1_action_w;
-    internal float[] ip1_action_b;
+    public ConvBlock action;
+    public float[] ip1_action_w;
+    public float[] ip1_action_b;
 
 
     // Moves left head
-    internal ConvBlock moves_left;
-    internal float[] ip1_mov_w;
-    internal float[] ip1_mov_b;
-    internal float[] ip2_mov_w;
-    internal float[] ip2_mov_b;
+    public ConvBlock moves_left;
+    public float[] ip1_mov_w;
+    public float[] ip1_mov_b;
+    public float[] ip2_mov_w;
+    public float[] ip2_mov_b;
     };
   }
 
