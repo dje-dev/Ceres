@@ -227,19 +227,23 @@ namespace Ceres.Chess.NNEvaluators
 
       try
       {
-        Parallel.For(0, def.Devices.Length, delegate (int i)
-        {
-          if (def.Nets.Length == 1)
+        // TODO: someday enable this, currently causes crash with C# CUDA evaluator
+        const bool PARALLEL_INIT_ENABLED = false;
+  
+        Parallel.For(0, def.Devices.Length, new ParallelOptions() { MaxDegreeOfParallelism = PARALLEL_INIT_ENABLED ? int.MaxValue : 1 }, 
+          delegate (int i)
           {
-            evaluators[i] = Singleton(def.Nets[0].Net, def.Devices[i].Device, referenceEvaluator);
-          }
-          else
-          {
-            throw new NotImplementedException();
-          }
+            if (def.Nets.Length == 1)
+            {
+              evaluators[i] = Singleton(def.Nets[0].Net, def.Devices[i].Device, referenceEvaluator);
+            }
+            else
+            {
+              throw new NotImplementedException();
+            }
 
-        fractions[i] = def.Devices[i].Fraction;
-        });
+          fractions[i] = def.Devices[i].Fraction;
+          });
       }
       catch (Exception exc)
       {
