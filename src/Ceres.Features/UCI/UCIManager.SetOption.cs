@@ -278,23 +278,23 @@ namespace Ceres.Features.UCI
     {
       if (taskSearchCurrentlyExecuting != null)
       {
-        OutStream.WriteLine("Cannot change weights while search is running.");
+        OutStream.WriteLine("uci info Implementation limitation: cannot change weights while search is running.");
       }
       else
       {
         if (value == null || value == "")
         {
-          OutStream.WriteLine("Network file name expected");
+          OutStream.WriteLine("uci info Network file name expected");
         }
         else
         {
           if (EvaluatorDef != null && EvaluatorDef.Nets[0].Net.NetworkID.ToLower() == value.ToLower())
           {
-            OutStream.WriteLine($"Specified network file is already {value}");
+            OutStream.WriteLine($"uci info Specified network file is already {value}");
           }
           else if (CeresEngine != null)
           {
-            OutStream.WriteLine("Implementation limitation: cannot modify weights file after initialization");
+            OutStream.WriteLine("uci info Implementation limitation: cannot modify weights file after initialization");
           }
           else
           {
