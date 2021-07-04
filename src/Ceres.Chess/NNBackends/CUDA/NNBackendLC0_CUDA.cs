@@ -271,7 +271,7 @@ namespace Ceres.Chess.NNBackends.CUDA
       }
       else
       {
-        Console.WriteLine($"CUDA device { deviceProperties.DeviceName} SMs:{ deviceProperties.MultiProcessorCount } Mem:{ deviceProperties.TotalGlobalMemory / (1024 * 1024 * 1024) }gb");
+        Console.WriteLine($"CUDA device {GPUID}: { deviceProperties.DeviceName} SMs: { deviceProperties.MultiProcessorCount } Mem: { deviceProperties.TotalGlobalMemory / (1024 * 1024 * 1024) }gb");
       }
       // showInfo();
 
