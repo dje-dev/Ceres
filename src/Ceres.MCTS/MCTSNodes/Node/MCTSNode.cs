@@ -261,7 +261,11 @@ namespace Ceres.MCTS.MTCSNodes
     /// </summary>
     public float VVariance => (*ptr).VVariance;
 
+#if FEATURE_UNCERTAINTY
     public FP16 Uncertainty => (*ptr).Uncertainty;
+#else
+    public short Unused;
+#endif
 
     #endregion
 
@@ -277,7 +281,7 @@ namespace Ceres.MCTS.MTCSNodes
     /// </summary>
     public MCTSNode InFlightLinkedNode;
 
-    #endregion
+#endregion
 
     /// <summary>
     /// If the tree is truncated at this node and generating position
@@ -531,7 +535,7 @@ namespace Ceres.MCTS.MTCSNodes
 
     public double Q => N == 0 ? 0 : (W / N);
 
-    #region Children
+#region Children
 
     public bool IsRoot => ParentIndex.IsNull;
 
@@ -575,9 +579,9 @@ namespace Ceres.MCTS.MTCSNodes
         return cachedDepth;
       }
     }
-    #endregion
+#endregion
 
-    #region Helpers
+#region Helpers
 
 
     /// <summary>
@@ -689,9 +693,9 @@ namespace Ceres.MCTS.MTCSNodes
       }
     }
 
-    #endregion
+#endregion
 
-    #region Miscellaneous
+#region Miscellaneous
 
     /// <summary>
     /// Attempts to find a subnode by following specified moves from root.
@@ -780,9 +784,9 @@ namespace Ceres.MCTS.MTCSNodes
       return thisCPUCT;
     }
 
-    #endregion
+#endregion
 
-    #region ITreeNode
+#region ITreeNode
 
     ITreeNode ITreeNode.IParent => Parent;
 
@@ -801,10 +805,10 @@ namespace Ceres.MCTS.MTCSNodes
 
     ITreeNode ITreeNode.IChildAtIndex(int index) => ChildAtIndex(index);
 
-    #endregion
+#endregion
 
 
-    #region Overrides (object)
+#region Overrides (object)
 
     public int GetHashCode() => Index;
 
@@ -815,7 +819,7 @@ namespace Ceres.MCTS.MTCSNodes
 
     public int GetHashCode(MCTSNode obj) => obj.index.Index;
 
-    #endregion
+#endregion
   }
 }
 

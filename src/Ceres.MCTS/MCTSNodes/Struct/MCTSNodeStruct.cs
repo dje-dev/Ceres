@@ -199,8 +199,10 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       MPosition = FP16.NaN;
       ReuseGenerationNum = 0;
       ZobristHash = 0;
-      Uncertainty = UNCERTAINTY_PRIOR;
 
+#if FEATURE_UNCERTAINTY
+      Uncertainty = UNCERTAINTY_PRIOR;
+#endif
       //Weight = 1.0f;
     }
 

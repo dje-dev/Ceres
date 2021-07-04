@@ -803,9 +803,11 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           node.dSum += dToApply;
         }
 
+#if FEATURE_UNCERTAINTY
         // Update uncertainty (exponentially weighted moving average)
         float absDiff = MathF.Abs(vToApply - (float)node.Q);
         node.Uncertainty = (FP16)(LAMBDA * node.Uncertainty + (1.0f - LAMBDA) * absDiff);
+#endif
 
         if (MCTSParamsFixed.TRACK_NODE_TREND)
         {

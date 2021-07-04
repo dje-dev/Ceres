@@ -433,6 +433,8 @@ namespace Ceres.MCTS.Search
       {
 #endif
 
+#if FEATURE_UNCERTAINTY
+
       float cpuctMultiplier = 1;
 
       const float UNCERTAINTY_MIDPOINT = 0.05f;
@@ -453,7 +455,9 @@ namespace Ceres.MCTS.Search
           MCTSEventSource.TestCounter1 = (int)Math.Round(100 * (applyAbsUncertaintyTot / applyCount), 0);
         }
       }
-
+#else
+      const float cpuctMultiplier = 1;
+#endif
 
       Span<float> scores = default;
       node.ComputeTopChildScores(selectorID, node.Depth,

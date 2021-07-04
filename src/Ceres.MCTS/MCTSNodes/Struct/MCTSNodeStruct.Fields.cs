@@ -199,8 +199,9 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       DrawKnownToExistAmongChildren = 0;
       CacheIndex = 0;
 
+#if FEATURE_UNCERTAINTY
       Uncertainty = UNCERTAINTY_PRIOR;
-
+#endif
       VSumSquares = 0;
 
       QUpdatesWtdAvg = 0;
