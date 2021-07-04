@@ -56,7 +56,7 @@ namespace Ceres.Commands
 
       if (Opponent != null)
       {
-        if (Opponent.ToString() == "LC0")
+        if (Opponent.ToUpper() == "LC0")
         {
           withLC0 = true;
         }
@@ -163,6 +163,7 @@ namespace Ceres.Commands
       }
 
       npsCeres.Sort();
+      Console.WriteLine();
       Console.WriteLine("Ceres Benchmark Results =======");
       Console.WriteLine($"Total time(ms)   : {timeMSCeres,12:N0}");
       Console.WriteLine($"Nodes searched   : {numNodesCeres,12:N0}");
