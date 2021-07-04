@@ -88,12 +88,11 @@ namespace Ceres.Commands
       Console.WriteLine();
       Console.WriteLine($"Benchmark Position Performance Test using {nnDefCeres}");
 
-
       ParamsSearch paramsSearch = new ParamsSearch();
       paramsSearch.FutilityPruningStopSearchEnabled = false;
       GameEngineCeresInProcess engineCeres = new GameEngineCeresInProcess("Ceres", nnDefCeres, paramsSearch);
-      engineCeres.SearchCeres(PositionWithHistory.StartPosition, SearchLimit.SecondsPerMove(1)); // warmup
-      engineCeres.SearchCeres(PositionWithHistory.StartPosition, SearchLimit.SecondsPerMove(1)); // warmup
+      engineCeres.SearchCeres(PositionWithHistory.StartPosition, SearchLimit.SecondsPerMove(0.1f)); // warmup
+      engineCeres.SearchCeres(PositionWithHistory.StartPosition, SearchLimit.NodesPerMove(15_000)); // warmup
       engineCeres.ResetGame();
 
       GameEngineLC0 engineLC0 = null;
@@ -103,12 +102,9 @@ namespace Ceres.Commands
         engineLC0 = new GameEngineLC0("LC0", nnDefCeres.Nets[0].Net.NetworkID, 
                                       forceDisableSmartPruning: true, paramsNN: nnDefCeres,
                                       alwaysFillHistory: true, verbose: false);
-        var xx = engineLC0.Search(PositionWithHistory.StartPosition, SearchLimit.SecondsPerMove(1)); // warmup
-        engineLC0.Search(PositionWithHistory.StartPosition, SearchLimit.SecondsPerMove(1)); // warmup
+        engineLC0.Search(PositionWithHistory.StartPosition, SearchLimit.SecondsPerMove(0.1f)); // warmup
+        engineLC0.Search(PositionWithHistory.StartPosition, SearchLimit.NodesPerMove(15_000)); // warmup
         engineLC0.ResetGame();
-
-        //        Console.WriteLine((xx as GameEngineSearchResult))
-        engineLC0.Search(PositionWithHistory.StartPosition, SearchLimit.SecondsPerMove(1)); // warmup
       }
 
       Console.WriteLine("  " + engineCeres);
@@ -132,6 +128,8 @@ namespace Ceres.Commands
       long timeMSCeres = 0;
       long numNodesLC0 = 0;
       long timeMSLC0 = 0;
+      int countCeresFaster = 0;
+
       for (int i = 0; i < Math.Min(BENCHMARK_POS.Length, maxPositions); i++)
       {
         string fen = BENCHMARK_POS[i];
@@ -139,9 +137,10 @@ namespace Ceres.Commands
 
         GameEngineSearchResultCeres resultCeres = engineCeres.SearchCeres(benchmarkPos, searchLimit);
         float ceresSearchSecs = (float)resultCeres.TimingStats.ElapsedTimeSecs;
-        int ceresN = resultCeres.Search.SearchRootNode.N;
-        npsCeres.Add(resultCeres.FinalN / ceresSearchSecs);
-        Console.WriteLine($"{ i,5:N0}. {ceresN,10:N0} nodes " + $" {ceresSearchSecs,7:F2} secs  {ceresN / ceresSearchSecs,8:N0} / sec"
+        float thisNpsCeres = resultCeres.FinalN / ceresSearchSecs;
+        npsCeres.Add(thisNpsCeres);
+          
+        Console.WriteLine($"{ i,5:N0}. {resultCeres.FinalN,10:N0} nodes " + $" {ceresSearchSecs,7:F2} secs  {thisNpsCeres,8:N0} / sec"
           + $"  {resultCeres.ScoreCentipawns,6:N0} cp {resultCeres.MoveString,7}      {fen}");
 
         numNodesCeres += resultCeres.Search.SearchRootNode.N;
@@ -151,12 +150,19 @@ namespace Ceres.Commands
         {
           GameEngineSearchResult resultLC0 = engineLC0.Search(benchmarkPos, searchLimit);
           float lc0SearchSecs = (float)resultLC0.TimingStats.ElapsedTimeSecs;
-          npsLC0.Add(resultLC0.FinalN / lc0SearchSecs);
-          Console.WriteLine($"       {resultLC0.FinalN,10:N0} nodes " + $" {lc0SearchSecs,7:F2} secs  {resultLC0.FinalN / lc0SearchSecs,8:N0} / sec"
+          float thisNPSLC0 = resultLC0.FinalN / lc0SearchSecs;
+          npsLC0.Add(thisNPSLC0);
+          Console.WriteLine($"       {resultLC0.FinalN,10:N0} nodes " + $" {lc0SearchSecs,7:F2} secs  {thisNPSLC0,8:N0} / sec"
             + $"  {resultLC0.ScoreCentipawns,6:N0} cp {resultLC0.MoveString,7}    ");
 
           numNodesLC0 += resultLC0.FinalN;
           timeMSLC0 += (long)(Math.Round(resultLC0.TimingStats.ElapsedTimeSecs * 1000, 0)); // Make TimingStats/TimingInfo consisten between Ceres and LC0, maybe maybe make interface?
+
+          if (thisNpsCeres > thisNPSLC0)
+          {
+            countCeresFaster++;
+          }
+
         }
         Console.WriteLine();
         engineCeres.ResetGame();
@@ -172,6 +178,8 @@ namespace Ceres.Commands
 
       if (withLC0)
       {
+        Console.WriteLine($"Positions faster : {countCeresFaster,12:N0}");
+
         npsLC0.Sort();
         Console.WriteLine();
         Console.WriteLine("LC0 Benchmark Results =========");
@@ -179,6 +187,7 @@ namespace Ceres.Commands
         Console.WriteLine($"Nodes searched   : {numNodesLC0,12:N0}");
         Console.WriteLine($"Avg nodes/sec    : {1000 * numNodesLC0 / timeMSLC0,12:N0}");
         Console.WriteLine($"Median nodes/sec : {npsLC0[npsLC0.Count / 2],12:N0}");
+        Console.WriteLine($"Positions faster : {npsCeres.Count - countCeresFaster,12:N0}");
       }
 
       engineCeres.Dispose();
