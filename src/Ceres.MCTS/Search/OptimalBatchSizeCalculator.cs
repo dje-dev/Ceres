@@ -66,7 +66,7 @@ namespace Ceres.MCTS.Search
       }
 
 
-      const float MULT = 3.0f;
+      const float MULT = 2.7f;
       const float POW = 0.45f;
       int value = (int)(MULT * MathF.Pow(currentTreeSize, POW));
 
