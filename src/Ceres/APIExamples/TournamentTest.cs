@@ -61,22 +61,22 @@ namespace Ceres.APIExamples
     const string ETHERAL_EXE = @"\\synology\dev\chess\engines\Ethereal12.75-x64-popcnt-avx2.exe";
     const string SF11_EXE = @"\\synology\dev\chess\engines\stockfish_11_x64_bmi2.exe";
     const string SF12_EXE = @"\\synology\dev\chess\engines\stockfish_20090216_x64_avx2.exe";
-    static string SF13_EXE => SoftwareManager.IsLinux ? @"/raid/dev/SF13/stockfish_13_linux_x64_avx2"
-                                                      : @"\\synology\dev\chess\engines\stockfish_13_win_x64_bmi2.exe";
+    static string SF14_EXE => SoftwareManager.IsLinux ? @"/raid/dev/SF14/stockfish_14_linux_x64_avx2"
+                                                      : @"\\synology\dev\chess\engines\stockfish_14_x64_avx2.exe";
 
     static GameEngineUCISpec specEthereal = new GameEngineUCISpec("Ethereal12", ETHERAL_EXE);
-    static GameEngineUCISpec specSF13 = new GameEngineUCISpec("SF13", SF13_EXE);
+    static GameEngineUCISpec specSF14 = new GameEngineUCISpec("SF14", SF14_EXE);
     static GameEngineUCISpec specLC0 = new GameEngineUCISpec("LC0", "lc0.exe");
 
     static string[] extraUCI = null;// new string[] {"setoption name Contempt value 5000" };
     static GameEngineDef engineDefEthereal = new GameEngineDefUCI("Etheral", new GameEngineUCISpec("Etheral", ETHERAL_EXE, SF_NUM_THREADS, SF_HASH_SIZE_MB, TB_PATH, uciSetOptionCommands: extraUCI));
     static GameEngineDef engineDefStockfish11 = new GameEngineDefUCI("SF11", new GameEngineUCISpec("SF11", SF11_EXE, SF_NUM_THREADS, SF_HASH_SIZE_MB, TB_PATH, uciSetOptionCommands: extraUCI));
 
-    public static GameEngineDef EngineDefStockfish13(int numThreads = SF_HASH_SIZE_MB, int hastableSize = SF_NUM_THREADS) =>
-      new GameEngineDefUCI("SF13", new GameEngineUCISpec("SF13", SF13_EXE, numThreads,
+    public static GameEngineDef EngineDefStockfish14(int numThreads = SF_HASH_SIZE_MB, int hastableSize = SF_NUM_THREADS) =>
+      new GameEngineDefUCI("SF14", new GameEngineUCISpec("SF14", SF14_EXE, numThreads,
                            hastableSize, TB_PATH, uciSetOptionCommands: extraUCI));
 
-    const int SF_NUM_THREADS = 15;
+    const int SF_NUM_THREADS = 8;
     static string TB_PATH => CeresUserSettingsManager.Settings.TablebaseDirectory;
     const int SF_HASH_SIZE_MB = 2048;
 
