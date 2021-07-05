@@ -148,77 +148,71 @@ namespace Ceres.Chess
         if (pieceCount == 2) return PositionDrawStatus.DrawByInsufficientMaterial;
 
         // Our special material rules only apply of 4 or less pieces
-        if (pieceCount <= 4)
+        if (pieceCount > 4)
         {
-          // Insufficient material?
-          Span<(Piece, Square)> spanPieces = stackalloc (Piece, Square)[4];
+          return PositionDrawStatus.NotDraw;
+        }
 
-          // Count number of bishops and knights, 
-          // and immediately return false if Rook or Queen seen
-          int bishopCountUs = 0;
-          int bishopCountThem = 0;
-          int knightCountUs = 0;
-          int knightCountThem = 0;
-          int otherPieceCount = 0;
-          foreach ((Piece piece, Square square) piece in this.GetPiecesOnSquares(spanPieces))
+        // Insufficient material?
+        Span<(Piece, Square)> spanPieces = stackalloc (Piece, Square)[4];
+
+        // Count number of bishops and knights, 
+        // and immediately return false if Rook or Queen seen
+        int bishopCountUs = 0;
+        int bishopCountThem = 0;
+        int knightCountUs = 0;
+        int knightCountThem = 0;
+        int otherPieceCount = 0;
+        foreach ((Piece piece, Square square) piece in this.GetPiecesOnSquares(spanPieces))
+        {
+          if (piece.piece.Type == PieceType.Bishop)
           {
-            if (piece.piece.Type == PieceType.Bishop)
+            if (piece.piece.Side == MiscInfo.SideToMove)
             {
-              if (piece.piece.Side == MiscInfo.SideToMove)
-              {
-                bishopCountUs++;
-              }
-              else
-              {
-                bishopCountThem++;
-              }
-            }
-            else if (piece.piece.Type == PieceType.Knight)
-            {
-              if (piece.piece.Side == MiscInfo.SideToMove)
-              {
-                knightCountUs++;
-              }
-              else
-              {
-                knightCountThem++;
-              }
+              bishopCountUs++;
             }
             else
             {
-              if (piece.piece.Type != PieceType.King)
-                {
-                otherPieceCount++;
-              }
+              bishopCountThem++;
             }
           }
-
-          // Not draw if pawn, rook or queen present
-          if (otherPieceCount > 0)
+          else if (piece.piece.Type == PieceType.Knight)
           {
-            // Can't mate with single knight or bishop
-            return PositionDrawStatus.NotDraw;
-          }
-          else if (pieceCount == 3)
-          {
-            // 3 pieces with all of them either King, Bishop or Knight is a draw
-            return PositionDrawStatus.DrawByInsufficientMaterial;
-          }
-          else if (bishopCountThem != 2 || bishopCountUs != 2) // two bishops same side may not be a draw
-          {
-            bool isKightAndBishopSameSide = (knightCountUs == 1 && bishopCountUs == 1)
-                                          || (knightCountThem == 1 && bishopCountThem == 1);
-            if (!isKightAndBishopSameSide)
+            if (piece.piece.Side == MiscInfo.SideToMove)
             {
-              // 2 minor pieces shown not to be two bishops same side nor bishop+knight same side, must be a draw
-              return PositionDrawStatus.DrawByInsufficientMaterial;
+              knightCountUs++;
+            }
+            else
+            {
+              knightCountThem++;
+            }
+          }
+          else
+          {
+            if (piece.piece.Type != PieceType.King)
+            {
+              otherPieceCount++;
             }
           }
         }
 
-        return PositionDrawStatus.NotDraw;
+        // Not draw if pawn, rook or queen present
+        if (otherPieceCount > 0)
+        {
+          return PositionDrawStatus.NotDraw;
+        }
+
+        if (bishopCountThem == 2 
+        || (bishopCountThem == 1 && knightCountThem == 1))
+        {
+          return PositionDrawStatus.NotDraw;
+        }
+
+
+        return PositionDrawStatus.DrawByInsufficientMaterial;
       }
     }
+
 
     /// <summary>
     /// Calculate the draw status for this position.
