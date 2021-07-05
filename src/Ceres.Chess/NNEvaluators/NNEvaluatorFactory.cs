@@ -221,6 +221,13 @@ namespace Ceres.Chess.NNEvaluators
     {
       Debug.Assert(def.Nets.Length == 1);
 
+      if (def.Devices.Length > 1 && referenceEvaluator != null)
+      {
+        referenceEvaluator = null;
+        // TODO: Fix this. We get CUDA crash if enabled for unknown reasons.
+        Console.WriteLine("NOTE: Weight sharing to conserve memory on GPU is currently disabled in multi-gpu configuration.");
+      }
+
       // Build underlying device evaluators in parallel
       NNEvaluator[] evaluators = new NNEvaluator[def.Devices.Length];
       float[] fractions = new float[def.Devices.Length];
