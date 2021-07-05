@@ -367,7 +367,7 @@ namespace Ceres.APIExamples
 
       EnginePlayerDef playerEthereal = new EnginePlayerDef(engineDefEthereal, limit1);
       EnginePlayerDef playerStockfish11 = new EnginePlayerDef(engineDefStockfish11, limit1);
-      EnginePlayerDef playerStockfish12 = new EnginePlayerDef(EngineDefStockfish13(), limit1);// * 350);
+      EnginePlayerDef playerStockfish14 = new EnginePlayerDef(EngineDefStockfish14(), limit1);// * 350);
       EnginePlayerDef playerLC0 = ENABLE_LC0 ? new EnginePlayerDef(engineDefLC1, limit1) : null;
       EnginePlayerDef playerLC0_2 = ENABLE_LC0 ? new EnginePlayerDef(engineDefLC2, limit2) : null;
 //      EnginePlayerDef playerLC0TCEC =  new EnginePlayerDef(engineDefLC2TCEC, limit1);
@@ -520,7 +520,7 @@ namespace Ceres.APIExamples
                                                         limitCeres);
 
 
-      EnginePlayerDef playerSF = new EnginePlayerDef(EngineDefStockfish13(), limitSF);
+      EnginePlayerDef playerSF = new EnginePlayerDef(EngineDefStockfish14(), limitSF);
 
       TournamentDef def = new TournamentDef("TOURN", playerCeres, playerSF);
       def.OpeningsFileName = "TCEC1819.pgn";
