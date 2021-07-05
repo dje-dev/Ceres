@@ -17,6 +17,13 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="LC0\LC0NetInference\NetExecutorONNXRuntime.cs" />
+    <Compile Remove="LC0\LC0NetInference\ONNXRuntimeExecutor.cs" />
+    <Compile Remove="LC0\LC0NetInference\ONNXRuntimeExecutorResultBatch.cs" />
+    <Compile Remove="NNEvaluators\Base\NNEvaluatorEngineONNX.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <EmbeddedResource Include="NNBackends\CUDA\Kernels\CU\ceres_kernels.cu" />
     <EmbeddedResource Include="NNBackends\CUDA\Kernels\CU\common_kernels.cu" />
     <EmbeddedResource Include="NNBackends\CUDA\Kernels\CU\fp16_kernels.cu" />
@@ -33,6 +40,13 @@
     <Folder Include="Data\Players\" />
     <Folder Include="LC0\Positions\Position\Training\" />
     <Folder Include="TBBackends\Fathom\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="LC0\LC0NetInference\NetExecutorONNXRuntime.cs" />
+    <None Include="LC0\LC0NetInference\ONNXRuntimeExecutor.cs" />
+    <None Include="LC0\LC0NetInference\ONNXRuntimeExecutorResultBatch.cs" />
+    <None Include="NNEvaluators\Base\NNEvaluatorEngineONNX.cs" />
   </ItemGroup>
 
   <ItemGroup>

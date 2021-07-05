@@ -36,7 +36,6 @@ using Ceres.MCTS.Iteration;
 using Ceres.Base.Math;
 using Ceres.Base.Misc;
 using Ceres.Base.DataType;
-using Microsoft.ML.OnnxRuntime;
 using Ceres.Base.OperatingSystem;
 
 #endregion

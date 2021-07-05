@@ -22,7 +22,6 @@ using Chess.Ceres.NNEvaluators;
 using Ceres.Chess.NNFiles;
 using System.Collections.Generic;
 using Chess.Ceres.NNEvaluators.TensorRT;
-using Ceres.Chess.LC0NetInference;
 using Ceres.Chess.UserSettings;
 using Ceres.Chess.NNEvaluators.CUDA;
 using Ceres.Chess.LC0.NNFiles;
@@ -184,6 +183,8 @@ namespace Ceres.Chess.NNEvaluators
 
         case NNEvaluatorType.ONNX:
           {
+            throw new NotImplementedException();
+#if NOT
             // TODO: fill these in properly
             string fn = @$"d:\weights\lczero.org\{netDef.NetworkID}.onnx";
             bool isWDL = true;
@@ -191,6 +192,7 @@ namespace Ceres.Chess.NNEvaluators
             ret = new NNEvaluatorEngineONNX(netDef.NetworkID, fn, deviceDef.DeviceIndex,
                                             ONNXRuntimeExecutor.NetTypeEnum.LC0, 1024, netDef.Precision, isWDL, hasMLH);
             break;
+#endif
           }
 
         case NNEvaluatorType.Custom1:
