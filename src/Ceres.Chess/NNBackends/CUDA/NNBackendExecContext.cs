@@ -25,6 +25,7 @@ using Ceres.Base.CUDA;
 
 namespace Ceres.Chess.NNBackends.CUDA
 {
+
   /// <summary>
   /// Captures all the state variables related to CUDA
   /// as used by a specific instance of an NN backend.
@@ -87,6 +88,13 @@ namespace Ceres.Chess.NNBackends.CUDA
       PTXAssembly = ptxAssembly ?? throw new ArgumentNullException(nameof(ptxAssembly));
       DumpTimings = dumpTimings;
     }
+
+
+    public override string ToString()
+    {
+      return $"<NNBackendExecContext on GPU {Device.GPUID} {(ReferenceLayers == null ? "without" : "with")} reference layer>";
+    }
+
   }
 
 }

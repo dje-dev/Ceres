@@ -31,11 +31,10 @@ namespace Ceres.Base.CUDA
   /// </summary>
   public class CUDADevice
   {
-    public const bool VERBOSE = false;
-
     /// <summary>
     /// Index of underlying GPU device.
     public readonly int GPUID;
+
 
     /// <summary>
     /// Associated (default) context for this device.
@@ -47,6 +46,7 @@ namespace Ceres.Base.CUDA
     /// Lock to prevent concurrent evaluation.
     /// </summary>
     public readonly object ExecLockObj = new object();
+
 
     // It seems not possible to capture a graph on any device
     // while any other device is active. Therefore we 
@@ -69,7 +69,7 @@ namespace Ceres.Base.CUDA
       //int deviceCount = CudaContext.GetDeviceCount();
 
       GPUID = gpuID;
-      Context = new CudaContext(gpuID, false);
+      Context = new CudaContext(gpuID, true);
     }
 
     public void SetCurrent()
@@ -136,7 +136,13 @@ namespace Ceres.Base.CUDA
       return device;
     }
 
-#endregion
+    #endregion
+
+
+    public override string ToString()
+    {
+      return $"<CUDADevice GPU {GPUID} on CUDA context {Context.Context.Pointer}>";
+    }
 
   }
 }
