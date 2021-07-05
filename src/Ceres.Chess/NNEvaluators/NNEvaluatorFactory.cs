@@ -234,8 +234,8 @@ namespace Ceres.Chess.NNEvaluators
 
       try
       {
-        // TODO: someday enable this, currently causes crash with C# CUDA evaluator
-        const bool PARALLEL_INIT_ENABLED = false;
+        // Option to disable if problems are seen
+        const bool PARALLEL_INIT_ENABLED = true;
   
         Parallel.For(0, def.Devices.Length, new ParallelOptions() { MaxDegreeOfParallelism = PARALLEL_INIT_ENABLED ? int.MaxValue : 1 }, 
           delegate (int i)
