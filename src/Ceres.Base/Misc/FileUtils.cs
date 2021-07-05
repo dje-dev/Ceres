@@ -14,6 +14,7 @@
 #region Using directives
 
 using System.IO;
+using Ceres.Base.OperatingSystem;
 
 #endregion
 
@@ -25,7 +26,7 @@ namespace Ceres.Base.Misc
   public static class FileUtils
   {
     /// <summary>
-    /// Returns if all of the semicolon separated paths exist.
+    /// Returns if all of the semicolon/colon separated paths exist.
     /// </summary>
     /// <param name="paths"></param>
     /// <returns></returns>
@@ -36,8 +37,8 @@ namespace Ceres.Base.Misc
         return true;
       }
 
-      // Verify each of the parths exists
-      string[] parts = paths.Split(new char[] { ';', ',' });
+      // Verify each of the parts exists.
+      string[] parts = paths.Split(SoftwareManager.IsLinux ? ":" : ";");
       foreach (string part in parts)
       {
         if (!Directory.Exists(part))
