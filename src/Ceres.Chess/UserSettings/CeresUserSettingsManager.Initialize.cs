@@ -35,8 +35,8 @@ namespace Ceres.Chess.UserSettings
     /// </summary>
     public static void DoSetupInitialize()   
     {
-      string dirLC0Binaries = GetDirectoryString("  LC0 binaries (with plug-in LC0.DLL)   : ", true);
-      string dirLC0Networks = GetDirectoryString("  LC0 network weights files             : ");
+      string dirLC0Networks = GetDirectoryString("  LC0 network weights files (optional)  : ", false);
+      string dirLC0Binaries = GetDirectoryString("  LC0 binaries (optional)               : ", false);
       string defaultNetworkString = GetString("  Default network specification (e.g. \"LC0:703810\")                    : ", 
                                               s => NNNetSpecificationString.IsValid(s));
       string defaultDeviceString = GetString("  Default device specification (e.g. \"GPU:0\")                          : ", 
@@ -75,7 +75,7 @@ namespace Ceres.Chess.UserSettings
       }
     }
 
-    static string GetDirectoryString(string description, bool checkLC0DLL = false)
+    static string GetDirectoryString(string description, bool required)
     {
       string dir = null;
       while (true)
@@ -85,17 +85,17 @@ namespace Ceres.Chess.UserSettings
         if (dir.EndsWith("\\")) dir = dir.Substring(dir.Length - 1);
 
         Console.WriteLine();
-        if (dir == "" || !Directory.Exists(dir))
+        if (dir != "" && !Directory.Exists(dir))
+        {
           Console.WriteLine("No such directory.");
+        }
+        else if (dir == "" && required)
+        {
+          Console.WriteLine("This directory is required.");
+        }
         else
         {
-          if (checkLC0DLL && !File.Exists(Path.Combine(dir, "lc0.DLL")))
-          {
-            Console.WriteLine("ERROR: the directory was successfully found, but the required plug-in DLL built for Ceres (LC0.DLL) was not found.");
-            Console.WriteLine();
-          }
-          else
-            return dir;
+          return dir;
         }
       }
     }
