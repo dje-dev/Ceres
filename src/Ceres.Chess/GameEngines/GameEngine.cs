@@ -13,13 +13,10 @@
 
 #region Using directives
 
-using Ceres.Base;
 using Ceres.Base.Benchmarking;
-using Ceres.Chess;
 using Ceres.Chess.ExternalPrograms.UCI;
-using Ceres.Chess.MoveGen;
-using Ceres.Chess.NNEvaluators;
 using Ceres.Chess.Positions;
+
 using System;
 using System.Collections.Generic;
 
@@ -166,7 +163,8 @@ namespace Ceres.Chess.GameEngines
     /// </summary>
     public void Warmup()
     {
-      Search(PositionWithHistory.StartPosition, SearchLimit.NodesPerMove(1));
+      const int NUM_WARMUP_NODES = 6_000; // enough to trigger overlapping evaluators in the case of Ceres
+      Search(PositionWithHistory.StartPosition, SearchLimit.NodesPerMove(NUM_WARMUP_NODES));
       ResetGame();
     }
 
