@@ -55,7 +55,7 @@ namespace Ceres
         Console.WriteLine();
         ConsoleUtils.WriteLineColored(ConsoleColor.Red, $"*** NOTE: Configuration file {CeresUserSettingsManager.DefaultCeresConfigFileName} not found in working directory.");
         Console.WriteLine();
-        Console.WriteLine($"Prompting to for required values to initialize:");
+        Console.WriteLine($"Prompting for 4 configuration values to be written to Ceres.json:");
         CeresUserSettingsManager.DoSetupInitialize();
       }
 
@@ -90,7 +90,10 @@ namespace Ceres
 
       StringBuilder allArgs = new StringBuilder();
       for (int i = 0; i < args.Length; i++)
+      {
         allArgs.Append(args[i] + " ");
+      }
+
       string allArgsString = allArgs.ToString();
 
       DispatchCommands.ProcessCommand(allArgsString);
