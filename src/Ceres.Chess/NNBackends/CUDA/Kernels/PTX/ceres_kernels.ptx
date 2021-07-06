@@ -7,7 +7,7 @@
 //
 
 .version 7.1
-.target sm_70
+.target sm_60
 .address_size 64
 
 	// .globl	_ZN5ceres21copyMaskedMovesKernelEP6__halfPsPfi
