@@ -7,21 +7,23 @@ and one small file from Ceres
   ceres_kernels.cu
 
 Steps:
-  1. Pull Git code at 62741d5
-  2. Create  utils subdirectory under D:\dev\lc0_new\lc0\src\neural\cuda and copy the LC0 utils source code files there (so CUDA compiler will find)
+  1. Pull LC0 code from the point just before the multistream optimizations were added to CUDA backend.
+  2. Create utils subdirectory under C:\dev\lc0\master1\lc0\src\neural\cuda and copy the LC0 utils source code files there (so CUDA compiler will find)
   3. Launch a console session from menu bar using "x64 Native Tools  Command Propmt for Visual Studio 2019"
-  4. Change into directory where CU files are located (e.g. D:\dev\lc0_new\lc0\src\neural\cuda)
+  4. Change into directory where CU files are located
   5. Run the 3 commands to generate PTX and then copy to source code tree (update directory as needed).
   6. Rebuild C# project and test.
+
+My working directory was: C:\dev\lc0\master1\lc0\src\neural\cuda.
 
 Batch file (go.cmd):
 "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.1\bin\nvcc.EXE" -ptx -o common_kernels.ptx  -c common_kernels.cu -arch=sm_70
 "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.1\bin\nvcc.EXE" -ptx -o fp16_kernels.ptx  -c fp16_kernels.cu -arch=sm_70
 "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.1\bin\nvcc.EXE" -ptx -o ceres_kernels.ptx  -c ceres_kernels.cu -arch=sm_70
 
-copy common_kernels.ptx C:\dev\CeresDev\src\ceres.Samples\nnbackend\cuda\kernels\ptx
-copy fp16_kernels.ptx C:\dev\CeresDev\src\ceres.Samples\nnbackend\cuda\kernels\ptx
-copy ceres_kernels.ptx C:\dev\CeresDev\src\ceres.Samples\nnbackend\cuda\kernels\ptx
+copy common_kernels.ptx C:\dev\Ceres\src\Ceres.Chess\NNBackends\CUDA\Kernels\PTX
+copy fp16_kernels.ptx C:\dev\Ceres\src\Ceres.Chess\NNBackends\CUDA\Kernels\PTX
+copy ceres_kernels.ptx C:\dev\Ceres\src\Ceres.Chess\NNBackends\CUDA\Kernels\PTX
 
 rem TODO: someday maybe run for all possible kernels
 rem nvcc -h
