@@ -21,7 +21,72 @@ using Ceres.Chess.GameEngines;
 
 namespace Ceres.Features.Tournaments
 {
-  public enum TournamentGameResult { None, Win, Loss, Draw };
+  public enum TournamentGameResult 
+  { 
+    /// <summary>
+    /// Game not completed.
+    /// </summary>
+    None, 
+
+    /// <summary>
+    /// Win.
+    /// </summary>
+    Win, 
+
+    /// <summary>
+    /// Loss.
+    /// </summary>
+    Loss, 
+
+    /// <summary>
+    /// Draw.
+    /// </summary>
+    Draw 
+  };
+
+
+  public enum TournamentGameResultReason
+  {
+    /// <summary>
+    /// Checkmate. (C)
+    /// </summary>
+    Checkmate,
+
+    /// <summary>
+    /// Stalemate. (S)
+    /// </summary>
+    Stalemate,
+
+    /// <summary>
+    /// Adjudicate tablebase known result. (T)
+    /// </summary>
+    AdjudicateTB,
+
+    /// <summary>
+    /// Adjudicate insufficient mating material. (M)
+    /// </summary>
+    AdjudicateMaterial,
+
+    /// <summary>
+    /// Aborted due to too excessive moves. (E)
+    /// </summary>
+    ExcessiveMoves,
+
+    /// <summary>
+    /// Draw by repetition. (D)
+    /// </summary>
+    Repetition,
+
+    /// <summary>
+    /// Both players agree on same result based on evaluation.
+    /// </summary>
+    MutualAgreement,
+
+    /// <summary>
+    /// Player forfeited due to exceeding time/node limit. (L)
+    /// </summary>
+    LimitsForfeit,
+  }
 
   /// <summary>
   /// Record summarizing result of a tournament game.
@@ -53,6 +118,11 @@ namespace Ceres.Features.Tournaments
     /// Result of game.
     /// </summary>
     public TournamentGameResult Result;
+
+    /// <summary>
+    /// Reason for game termination.
+    /// </summary>
+    public TournamentGameResultReason ResultReason;
 
     /// <summary>
     /// Number of ply in game.
