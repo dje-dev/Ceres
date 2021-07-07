@@ -14,23 +14,12 @@
 #region Using directives
 
 using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Threading;
 
-using Microsoft.Extensions.Logging;
-
-using Ceres.Chess.MoveGen;
-using Ceres.Chess.MoveGen.Converters;
-using Ceres.MCTS.Environment;
-using System.Runtime.CompilerServices;
 using Ceres.Base.OperatingSystem;
-using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.Base.Environment;
-using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.Chess.Positions;
 using Ceres.MCTS.Params;
-using Ceres.Base.OperatingSystem.Windows;
+using Ceres.MCTS.MTCSNodes.Struct;
 
 #endregion
 
@@ -44,9 +33,10 @@ namespace Ceres.MCTS.MTCSNodes.Storage
   {
     /// <summary>
     /// Approximate total bytes consumed by a node, child pointers, and associated data structures.
-    /// Expanded nodes may be closer to 300 nodes, but transposed leaf nodes will only be 64.
+    /// Expanded nodes may be closer to 300 nodes, but both unexpanded leaf nodes 
+    /// and transposed leaf nodes will much smaller (and are very numerous).
     /// </summary>
-    const ulong APPROX_BYTES_PER_NODE = 225;
+    const ulong APPROX_BYTES_PER_NODE = 200;
 
     /// <summary>
     /// Maximum number of nodes for which which the store could accomodate.
