@@ -53,8 +53,11 @@ namespace Ceres.Features.Tournaments
     static Lazy<ISyzygyEvaluatorEngine> tbEvaluator = new Lazy<ISyzygyEvaluatorEngine>(() =>
     SyzygyEvaluatorPool.GetSessionForPaths(CeresUserSettingsManager.Settings.TablebaseDirectory));
 
-    internal static TournamentGameResult TryGetGameResultIfTerminal(PositionWithHistory game, bool playerIsWhite, bool useTablebasesForAdjudication)
+    internal static TournamentGameResult TryGetGameResultIfTerminal(PositionWithHistory game, 
+                                                                    bool playerIsWhite, bool useTablebasesForAdjudication,
+                                                                    out TournamentGameResultReason reason)
     {
+      reason = default;
       Position pos = game.FinalPosition;
       bool whiteToMove = pos.MiscInfo.SideToMove == SideType.White;
       bool weArePlayerToMove = whiteToMove == playerIsWhite;
@@ -68,21 +71,36 @@ namespace Ceres.Features.Tournaments
         if (result == LC0DLLSyzygyEvaluator.ProbeState.Ok)
         {
           if (score == LC0DLLSyzygyEvaluator.WDLScore.WDLWin)
+          {
+            reason = TournamentGameResultReason.AdjudicateTB;
             return weArePlayerToMove ? TournamentGameResult.Win : TournamentGameResult.Loss;
+          }
           else if (score == LC0DLLSyzygyEvaluator.WDLScore.WDLLoss)
+          {
+            reason = TournamentGameResultReason.AdjudicateTB;
             return weArePlayerToMove ? TournamentGameResult.Loss : TournamentGameResult.Win;
+          }
           else if (score == LC0DLLSyzygyEvaluator.WDLScore.WDLDraw)
+          {
+            reason = TournamentGameResultReason.AdjudicateTB;
             return TournamentGameResult.Draw;
+          }
         }
       }
 
       GameResult terminalStatus = pos.CalcTerminalStatus();
       if (terminalStatus == GameResult.Unknown)
+      {
         return TournamentGameResult.None;
+      }
       else if (terminalStatus == GameResult.Draw)
+      {
+        reason = TournamentGameResultReason.Stalemate;
         return TournamentGameResult.Draw;
+      }
       else if (terminalStatus == GameResult.Checkmate)
       {
+        reason = TournamentGameResultReason.Checkmate;
         return weArePlayerToMove ? TournamentGameResult.Loss : TournamentGameResult.Win;
       }
 
