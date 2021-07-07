@@ -44,7 +44,8 @@ namespace Ceres.Chess.LC0.Positions
     /// </summary>
     /// <param name="wl"></param>
     /// <returns></returns>
-    public static float WinLossToCentipawn(float wl) => 90f * MathF.Tan(1.5637541897f * wl);
+    public static float WinLossToCentipawn(float wl) 
+      => StatUtils.Bounded(90f * MathF.Tan(1.5637541897f * wl), -9999, 9999);
 
     /// <summary>
     /// Outer multiplier on in conversion formula.
