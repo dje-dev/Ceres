@@ -195,7 +195,9 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     public void ClearAllCacheIndices()
     {
       for (int i = 1; i < Nodes.nextFreeIndex; i++)
+      {
         Nodes.nodes[i].CacheIndex = 0;
+      }
     }
 
 #if EXPERIMENTAL
@@ -291,7 +293,9 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       void Assert(bool condition, string err)
       {
         if (!condition)
+        {
           throw new Exception($"MCTSNodeStore::Validate failed: {err} ");
+        }
       }
 
       Assert(Nodes.nodes[0].N == 0, "Null node");
@@ -304,11 +308,16 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 
         Assert(!nodeR.IsInFlight, "Node in flight");
 
-        if (nodeR.NumPolicyMoves > 0) Assert(nodeR.childStartBlockIndex != 0, "ChildStartIndex nonzero");
+        if (nodeR.NumPolicyMoves > 0)
+        {
+          Assert(nodeR.childStartBlockIndex != 0, "ChildStartIndex nonzero");
+        }
 
-        if (nodeR.NumNodesTranspositionExtracted > 0)          
+        if (nodeR.NumNodesTranspositionExtracted > 0)
+        {
           Assert(nodeR.TranspositionRootIndex != 0, 
             $"TranspositionRootIndex zero when NumNodesTranspositionExtracted > 0 : {nodeR.NumNodesTranspositionExtracted} {nodeR.TranspositionRootIndex}");
+        }
 
         if (!nodeR.IsTranspositionLinked)
         {
@@ -350,10 +359,9 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     /// <returns></returns>
     public override string ToString()
     {
-      if (Nodes == null)
-        return "<MCTSNodeStore DISPOSED>";
-
-      return $"<MCTSNodeStore Nodes Occupied {Nodes.NumUsedNodes,-15:N0}"
+      return Nodes == null
+          ? "<MCTSNodeStore DISPOSED>"
+          : $"<MCTSNodeStore Nodes Occupied {Nodes.NumUsedNodes,-15:N0}"
            + $" Chldren Allocated {Children.NumAllocatedChildren,-15:N0}>";
     }
 
@@ -363,7 +371,8 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     /// (optionally with full child detail).
     /// </summary>
     /// <param name="childDetail"></param>
-    public void Dump(bool childDetail)
+    /// <param name="annotater">optionally a method called for each node which can further annotate</param>
+    public void Dump(bool childDetail, Func<MCTSNodeStructIndex,string> annotater = null)
     {
       Console.WriteLine();
       Console.WriteLine();
@@ -372,9 +381,11 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       for (int i = 1; i <= Nodes.NumUsedNodes; i++)
       {
         ref MCTSNodeStruct node = ref Nodes.nodes[i];
+
+        string annotation = annotater?.Invoke(new MCTSNodeStructIndex(i));
         Console.WriteLine($"{i,7} {node.PriorMove} {node.V,6:F2} {node.Terminal} {node.W,9:F2} Parent={node.ParentIndex.Index} " +
                           $"InFlights={node.NInFlight}/{node.NInFlight2}" +
-                          $"ChildStartIndex={node.ChildStartIndex} NumPolicyMoves={node.NumPolicyMoves}");
+                          $"ChildStartIndex={node.ChildStartIndex} NumPolicyMoves={node.NumPolicyMoves} " + annotation);
 
         if (childDetail)
         {
@@ -387,12 +398,18 @@ namespace Ceres.MCTS.MTCSNodes.Storage
             if (child.IsExpanded)
             {
               if (MCTSNodeStoreContext.Store != null)
+              {
                 Console.WriteLine($"{child.ChildIndex} --> {child.ChildRefFromStore(this).ToString()}");
+              }
               else
+              {
                 Console.WriteLine($"{child.ChildIndex}");
+              }
             }
             else
+            {
               Console.WriteLine($"{child.Move} {child.P} ");
+            }
 
             if (childIndex > maxExpandedIndex + 1)
             {
