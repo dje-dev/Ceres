@@ -376,8 +376,11 @@ namespace Ceres.MCTS.MTCSNodes.Storage
         Console.WriteLine($"{i,7} {node.PriorMove} {node.V,6:F2} {node.Terminal} {node.W,9:F2} Parent={node.ParentIndex.Index} " +
                           $"InFlights={node.NInFlight}/{node.NInFlight2}" +
                           $"ChildStartIndex={node.ChildStartIndex} NumPolicyMoves={node.NumPolicyMoves} " + annotation);
-
-        if (childDetail)
+        if (node.IsTranspositionLinked)
+        {
+          Console.WriteLine("          Transposition Linked to " + -node.ChildStartIndex);
+        }
+        else if (childDetail)
         {
           int maxExpandedIndex = node.NumChildrenExpanded - 1;
 
