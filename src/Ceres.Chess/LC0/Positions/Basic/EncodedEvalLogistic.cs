@@ -44,8 +44,22 @@ namespace Ceres.Chess.LC0.Positions
     /// </summary>
     /// <param name="wl"></param>
     /// <returns></returns>
-    public static float WinLossToCentipawn(float wl) 
-      => StatUtils.Bounded(90f * MathF.Tan(1.5637541897f * wl), -9999, 9999);
+    public static float WinLossToCentipawn(float wl)
+    {
+      if (wl <= -1)
+      {
+        return -9999;
+      }
+      else if (wl >= 1)
+      {
+        return 9999;
+      }
+      else
+      {
+        // This function is not well behaved outside [-1, 1].
+        return StatUtils.Bounded(CENTIPAWN_MULT * MathF.Tan(CENTIPAWN_TAN_MULT * wl), -9999, 9999);
+      }
+    }
 
     /// <summary>
     /// Outer multiplier on in conversion formula.
@@ -92,11 +106,17 @@ namespace Ceres.Chess.LC0.Positions
 
       // Set bound (values convered from another program's centipawn evaluation could sometimes fall outside [-1.0, 1.0]
       if (raw < -1)
+      {
         return -1;
+      }
       else if (raw > 1)
+      {
         return 1;
+      }
       else
+      {
         return raw;
+      }
     }
 
     #region Static helpers
@@ -113,7 +133,10 @@ namespace Ceres.Chess.LC0.Positions
     {
       float[] ret = new float[evals.Length];
       for (int i = 0; i < ret.Length; i++)
+      {
         ret[i] = (float)evals[i].CentipawnValue;
+      }
+
       return ret;
     }
 
@@ -121,7 +144,10 @@ namespace Ceres.Chess.LC0.Positions
     {
       EncodedEvalLogistic[] ret = new EncodedEvalLogistic[logistics.Length];
       for (int i = 0; i < ret.Length; i++)
+      {
         ret[i] = FromLogistic(logistics[i]);
+      }
+
       return ret;
     }
 
