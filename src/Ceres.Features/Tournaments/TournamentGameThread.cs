@@ -17,17 +17,16 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
+using Ceres.Base.Benchmarking;
+using Ceres.Base.Environment;
+using Ceres.Chess.Positions;
 using static Ceres.Base.Misc.StringUtils;
 using Ceres.Chess;
 using Ceres.Chess.Games;
 using Chess.Ceres.PlayEvaluation;
 using Ceres.Chess.GameEngines;
 using Ceres.Chess.UserSettings;
-using Ceres.Base.Environment;
 using Ceres.MCTS.Iteration;
-using Ceres.Chess.Positions;
-using Ceres.Base.Benchmarking;
-using Ceres.Base.Misc;
 
 #endregion
 
@@ -277,7 +276,7 @@ namespace Ceres.Features.Tournaments
         OutputHeaders(pgnFileName);
       }
 
-      OutputGameResultInfo(!engine2White, openingIndex, gameSequenceNum, thisResult);
+      OutputGameResultInfo(engine2White, openingIndex, gameSequenceNum, thisResult);
     }
 
     private void OutputGameResultInfo(bool engine2White, int openingIndex, int gameSequenceNum, TournamentGameInfo thisResult)
@@ -294,6 +293,45 @@ namespace Ceres.Features.Tournaments
       string player1ForfeitChar = thisResult.ShouldHaveForfeitedOnLimitsEngine1 ? "f" : " ";
       string player2ForfeitChar = thisResult.ShouldHaveForfeitedOnLimitsEngine2 ? "f" : " ";
 
+      const string TournamentGameResultReasonCodes = "CSTMERVL";
+
+      char resultReasonChar = TournamentGameResultReasonCodes[(int)thisResult.ResultReason];
+
+      static bool EvalInconsistent(TournamentGameResult outcome, float scoreCP, int numMovesBack)
+      {
+        float mult = numMovesBack % 2 == 1 ? 1 : -1; // adjust for side to move perspective
+        float adjustedCP = mult * scoreCP;
+        return (outcome == TournamentGameResult.Win && adjustedCP < 100) ||
+               (outcome == TournamentGameResult.Draw && MathF.Abs(adjustedCP) > 50) ||
+               (outcome == TournamentGameResult.Loss && adjustedCP > -100);
+      }
+
+      // Possibly show one or two "?" characters if the evaluations of the final two positions
+      // are very inconsisten with the actual game outcome (as a diagnostic).
+      string questionableFinalCP = "  ";
+      float endingCP = 0;
+      if (thisResult.GameMoveHistory.Count > 0)
+      {
+        bool finalMoveIsPlayer1 = (thisResult.GameMoveHistory[^1].Side == SideType.White) != engine2White;
+        float reverseMult = finalMoveIsPlayer1 ? -1 : 1;
+//        if (thisResult.ResultReason == TournamentGameResultReason.Checkmate) reverseMult *= -1;
+        endingCP = reverseMult * thisResult.GameMoveHistory[^1].ScoreCentipawns;
+
+        if (EvalInconsistent(thisResult.Result, reverseMult * thisResult.GameMoveHistory[^1].ScoreCentipawns, 1))
+        {
+          questionableFinalCP = "? ";
+        }
+
+        if (thisResult.GameMoveHistory.Count > 1)
+        {
+          if (EvalInconsistent(thisResult.Result, reverseMult * thisResult.GameMoveHistory[^2].ScoreCentipawns, 2))
+          {
+            questionableFinalCP = questionableFinalCP[0] + "?";
+          }
+
+        }
+      }
+
       lock (outputLockObj)
       {
         if (Def.ShowGameMoves) Def.Logger.WriteLine();
@@ -302,8 +340,9 @@ namespace Ceres.Features.Tournaments
         Def.Logger.Write($"{ParentStats.NumGames,5} {DateTime.Now.ToString().Split(" ")[1],10}  {gameSequenceNum,4:F0}  {openingIndex,4:F0}{openingPlayedBothWaysStr}  ");
         Def.Logger.Write($"{thisResult.TotalTimeEngine1,8:F2}{player1ForfeitChar}{thisResult.TotalTimeEngine2,8:F2}{player2ForfeitChar}  ");
         Def.Logger.Write($"{thisResult.TotalNodesEngine1,16:N0} {thisResult.TotalNodesEngine2,16:N0}   ");
-        Def.Logger.Write($"{thisResult.PlyCount,4:F0}  {TournamentUtils.ResultStr(thisResult.Result, engine2White),4}  ");
-        Def.Logger.Write($"{wdlStr}   {thisResult.FEN} ");
+        Def.Logger.Write($"{thisResult.PlyCount,4:F0}  {TournamentUtils.ResultStr(thisResult.Result, !engine2White),4}  ");
+        Def.Logger.Write($" {resultReasonChar}   {endingCP,5:F0}{questionableFinalCP}");
+        Def.Logger.Write($" {wdlStr}   {thisResult.FEN} ");
         Def.Logger.WriteLine();
       }
 
@@ -355,14 +394,16 @@ namespace Ceres.Features.Tournaments
       }
     }
 
+
     private void OutputHeaders(string pgnFileName)
     {
       Def.Logger.WriteLine();
       Def.Logger.WriteLine($"Games will be incrementally written to file: {pgnFileName}");
+      Def.Logger.WriteLine("Result codes: C=checkmate S=stalemate T=tablebase M=insufficient material E=excessive moves R=draw by repetition V=evaluation agreement F=time forfeit");
       Def.Logger.WriteLine();
 
-      Def.Logger.WriteLine("  Player1    Player2   ELO   +/-  LOS   GAME#     TIME    TH#   OP#      TIME1    TIME2        NODES 1           NODES 2       PLY   RES    W   D   L   FEN");
-      Def.Logger.WriteLine(" ---------  ---------  ---   ---  ---   -----  --------   ---   ---     ------   ------     --------------   --------------   ----   ---    -   -   -   --------------------------------------------------");
+      Def.Logger.WriteLine("  Player1    Player2   ELO   +/-  LOS   GAME#     TIME    TH#   OP#      TIME1    TIME2        NODES 1           NODES 2       PLY    RES  R   ENDCP     W   D   L   FEN");
+      Def.Logger.WriteLine(" ---------  ---------  ---   ---  ---   -----  --------   ---   ---     ------   ------     --------------   --------------   ----    ---  -   -----     -   -   -   ---------------------------------------------------");
       havePrintedHeaders = true;
     }
 
@@ -429,7 +470,7 @@ namespace Ceres.Features.Tournaments
       List<GameMoveStat> gameMoveHistory = new List<GameMoveStat>();
 
 
-      TournamentGameInfo MakeGameInfo(TournamentGameResult resultOpponent)
+      TournamentGameInfo MakeGameInfo(TournamentGameResult result, TournamentGameResultReason reason)
       {
         return new TournamentGameInfo()
         {
@@ -437,7 +478,8 @@ namespace Ceres.Features.Tournaments
           GameSequenceNum = gameSequenceNum,
           OpeningIndex = openingIndex,
           FEN = startFEN,
-          Result = TournamentGameInfo.InvertedResult(resultOpponent),
+          Result =  result,
+          ResultReason = reason,
           PlyCount = plyCount,
           TotalTimeEngine1 = timeEngine1Tot,
           TotalTimeEngine2 = timeEngine2Tot,
@@ -473,8 +515,15 @@ namespace Ceres.Features.Tournaments
 
         // If time or node increment was specified for game-level search limit,
         // adjust the search limit to give credit for this increment
-        if (!engine2ToMove && searchLimitEngine1.ValueIncrement != 0) searchLimitWithIncrementsEngine1 = searchLimitWithIncrementsEngine1.WithIncrementApplied();
-        if (engine2ToMove && searchLimitEngine2.ValueIncrement != 0) searchLimitWithIncrementsEngine2 = searchLimitWithIncrementsEngine2.WithIncrementApplied();
+        if (!engine2ToMove && searchLimitEngine1.ValueIncrement != 0)
+        {
+          searchLimitWithIncrementsEngine1 = searchLimitWithIncrementsEngine1.WithIncrementApplied();
+        }
+
+        if (engine2ToMove && searchLimitEngine2.ValueIncrement != 0)
+        {
+          searchLimitWithIncrementsEngine2 = searchLimitWithIncrementsEngine2.WithIncrementApplied();
+        }
 
         // Check for very bad evaluation for one side (agreed by both sides)
         if (scoresEngine1.Count > 5)
@@ -482,7 +531,7 @@ namespace Ceres.Features.Tournaments
           result = CheckResultAgreedBothEngines(scoresEngine1, scoresEngine2, result);
           if (result != TournamentGameResult.None)
           {
-            return MakeGameInfo(result);
+            return MakeGameInfo(result, TournamentGameResultReason.AdjudicatedEvaluation);
           }
         }
 
@@ -501,23 +550,30 @@ namespace Ceres.Features.Tournaments
 
         if (countRepetitions >= 3)
         {
-          return MakeGameInfo(TournamentGameResult.Draw);
+          return MakeGameInfo(TournamentGameResult.Draw, TournamentGameResultReason.Repetition);
         }
 
 
         // Check for draw by insufficient material
-        if (curPositionAndMoves.FinalPosition.CheckDrawBasedOnMaterial == Position.PositionDrawStatus.DrawByInsufficientMaterial
-         || curPositionAndMoves.FinalPosition.CheckDrawCanBeClaimed == Position.PositionDrawStatus.DrawCanBeClaimed
-         || plyCount >= 500)
+        if (curPositionAndMoves.FinalPosition.CheckDrawBasedOnMaterial == Position.PositionDrawStatus.DrawByInsufficientMaterial)
         {
-          return MakeGameInfo(TournamentGameResult.Draw);
+          return MakeGameInfo(TournamentGameResult.Draw, TournamentGameResultReason.AdjudicateMaterial);
+        }
+        else if( curPositionAndMoves.FinalPosition.CheckDrawCanBeClaimed == Position.PositionDrawStatus.DrawCanBeClaimed)
+        {
+          return MakeGameInfo(TournamentGameResult.Draw, TournamentGameResultReason.Repetition);
+        }
+        else if (plyCount >= 500)
+        {
+          return MakeGameInfo(TournamentGameResult.Draw, TournamentGameResultReason.ExcessiveMoves);
         }
 
         // Check for terminal result (tablebase or intrinsically terminal)
-        result = TournamentUtils.TryGetGameResultIfTerminal(curPositionAndMoves, engine2IsWhite, useTablebasesForAdjudication);
+        TournamentGameResultReason reason;
+        result = TournamentUtils.TryGetGameResultIfTerminal(curPositionAndMoves, !engine2IsWhite, useTablebasesForAdjudication, out reason);
         if (result != TournamentGameResult.None)
         {
-          return MakeGameInfo(result);
+          return MakeGameInfo(result, reason);
         }
 
         plyCount++;

@@ -48,44 +48,44 @@ namespace Ceres.Features.Tournaments
   public enum TournamentGameResultReason
   {
     /// <summary>
-    /// Checkmate. (C)
+    /// Checkmate.
     /// </summary>
     Checkmate,
 
     /// <summary>
-    /// Stalemate. (S)
+    /// Stalemate.
     /// </summary>
     Stalemate,
 
     /// <summary>
-    /// Adjudicate tablebase known result. (T)
+    /// Adjudicate tablebase known result.
     /// </summary>
     AdjudicateTB,
 
     /// <summary>
-    /// Adjudicate insufficient mating material. (M)
+    /// Adjudicate insufficient mating material.
     /// </summary>
     AdjudicateMaterial,
 
     /// <summary>
-    /// Aborted due to too excessive moves. (E)
+    /// Aborted due to too excessive moves
     /// </summary>
     ExcessiveMoves,
 
     /// <summary>
-    /// Draw by repetition. (D)
+    /// Draw by repetition.
     /// </summary>
     Repetition,
 
     /// <summary>
-    /// Both players agree on same result based on evaluation.
+    /// Both players agree on advantage of one side of sufficient magnitude.
     /// </summary>
-    MutualAgreement,
+    AdjudicatedEvaluation,
 
     /// <summary>
-    /// Player forfeited due to exceeding time/node limit. (L)
+    /// Player forfeited due to exceeding time/node limit.
     /// </summary>
-    LimitsForfeit,
+    ForfeitLimits,
   }
 
   /// <summary>
