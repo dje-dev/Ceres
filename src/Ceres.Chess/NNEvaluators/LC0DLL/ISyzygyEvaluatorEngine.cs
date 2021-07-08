@@ -79,10 +79,8 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
     /// <returns></returns>
     public MGMove CheckTablebaseBestNextMove(in Position currentPos, out GameResult result)
     {
-      // Finding best move is only possible if the number of pieces
-      // at most one more than the max tablebase cardinality
-      // (because the next move considered might be a capture reducing count by 1)
-      if (currentPos.PieceCount > MaxCardinality + 1)
+      // TODO: Ponder if this could be done for PieceCount == MaxCardinality + 1
+      if (currentPos.PieceCount > MaxCardinality)
       {
         result = GameResult.Unknown;
         return default;
