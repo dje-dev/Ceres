@@ -258,26 +258,12 @@ namespace Ceres.Features.GameEngines
 
       int scoreCeresCP;
       BestMoveInfo bestMoveInfo = null;
-      if (searchResult.Manager.Root.Terminal != GameResult.Unknown)
+      using (new SearchContextExecutionBlock(searchResult.Manager.Context))
       {
-        if (searchResult.SearchRootNode.V == 0)
-          scoreCeresCP =  0;
-        else if (searchResult.SearchRootNode.V <= -1)
-          scoreCeresCP = -9999;
-        else if (searchResult.SearchRootNode.V >= 1)
-          scoreCeresCP = 9999;
-        else
-          throw new Exception("Unexpected game result type");
+        bestMoveInfo = searchResult.Manager.Root.BestMoveInfo(false);
       }
-      else
-      {
-        using (new SearchContextExecutionBlock(searchResult.Manager.Context))
-        {
-          bestMoveInfo = searchResult.Manager.Root.BestMoveInfo(false);
-        }
 
-        scoreCeresCP = (int)MathF.Round(EncodedEvalLogistic.WinLossToCentipawn(-bestMoveInfo.BestQ), 0);
-      }
+      scoreCeresCP = (int)MathF.Round(EncodedEvalLogistic.WinLossToCentipawn(bestMoveInfo.BestQ), 0);
 
 
       MGMove bestMoveMG = searchResult.BestMove;
@@ -291,7 +277,7 @@ namespace Ceres.Features.GameEngines
       // TODO is the RootNWhenSearchStarted correct because we may be following a continuation (BestMoveRoot)
       GameEngineSearchResultCeres result = 
         new GameEngineSearchResultCeres(bestMoveMG.MoveStr(MGMoveNotationStyle.LC0Coordinate),
-                                        (float)searchResult.SearchRootNode.Q, scoreCeresCP, searchResult.SearchRootNode.MAvg, searchResult.Manager.SearchLimit, default,
+                                        (float)bestMoveInfo.BestQ, scoreCeresCP, searchResult.SearchRootNode.MAvg, searchResult.Manager.SearchLimit, default,
                                         searchResult.Manager.RootNWhenSearchStarted, N, (int)searchResult.Manager.Context.AvgDepth, 
                                         searchResult, bestMoveInfo);
 
