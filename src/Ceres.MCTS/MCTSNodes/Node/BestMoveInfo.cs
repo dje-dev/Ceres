@@ -132,6 +132,7 @@ namespace Ceres.MCTS.MTCSNodes
 
       Reason = reason;
       Q = bestQ;
+      BestQ = bestQ;
       BestMove = bestMove;
     }
 
