@@ -26,6 +26,13 @@ namespace Ceres.Chess.Positions
   /// <summary>
   /// Represents a position position possibly also with history
   /// (set of prior moves that preceeded to this position).
+  /// 
+  /// TODO: The "finalization" of setting the repetition count
+  ///       is probably done inconsistenly below.
+  ///       Perhaps make this done only upon explicit call.
+  ///       Note that in search (Annotate) we do not want this class
+  ///       to do the calculation of reptition counts since it is 
+  ///       already done there efficiently.
   /// </summary>
   [Serializable]
   public class PositionWithHistory : ICloneable
