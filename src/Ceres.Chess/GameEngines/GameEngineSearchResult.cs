@@ -27,15 +27,50 @@ namespace Ceres.Chess.GameEngines
   public record GameEngineSearchResult
   {
     #region Basic Values
-
+    
+    /// <summary>
+    /// String representation of the selected best move.
+    /// </summary>
     public string MoveString;
+
+    /// <summary>
+    /// Score of best move (win - loss).
+    /// </summary>
     public float ScoreQ;
+
+    /// <summary>
+    /// Score of best move (centipawns).
+    /// </summary>
     public float ScoreCentipawns;
+
+    /// <summary>
+    /// The N of the tree at beginning of search.
+    /// </summary>
     public int StartingN;
+
+    /// <summary>
+    /// The N of the tree at end of search.
+    /// </summary>
     public int FinalN;
+
+    /// <summary>
+    /// Average depth of search tree.
+    /// </summary>
     public int Depth;
+
+    /// <summary>
+    /// Average MLH head value at root.
+    /// </summary>
     public float MAvg;
+
+    /// <summary>
+    /// The SeaarchLimit used for the search.
+    /// </summary>
     public SearchLimit Limit;
+
+    /// <summary>
+    /// Time required for search.
+    /// </summary>
     public TimingStats TimingStats;
 
     #endregion
@@ -45,7 +80,6 @@ namespace Ceres.Chess.GameEngines
                                   int startingN, int finalN, int depth)
     {
       MoveString = moveString ?? throw new ArgumentNullException(nameof(moveString));
-      ScoreCentipawns = scoreCentipawns;
       ScoreQ = scoreQ;
       ScoreCentipawns = scoreCentipawns;
       MAvg = mAvg;
