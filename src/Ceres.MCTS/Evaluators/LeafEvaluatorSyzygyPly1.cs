@@ -62,6 +62,13 @@ namespace Ceres.MCTS.Evaluators
     /// <returns></returns>
     protected override LeafEvaluationResult DoTryEvaluate(MCTSNode node)
     {
+      if (node.Depth == 0)
+      {
+        // Don't attempt at the root to avoid short-circuiting search here
+        // (we need to build a tree to be able to choose a best move).
+        return default;
+      }
+
       Position pos = node.Annotation.Pos;
 
       // Abort immediately unless this position has exactly
@@ -75,16 +82,6 @@ namespace Ceres.MCTS.Evaluators
         LeafEvaluationResult result = Ply0Evaluator.Lookup(in newPos);
         if (result.TerminalStatus == GameResult.Checkmate)
         {
-          if (node.Depth < 5)
-          {
-            // Don't use this evaluator near the root because 
-            // the tablebases do not yet contain the best move thus
-            // we still need search and therefore to allow 
-            // neural network evaluations to find the win.
-            // TODO: clean this up somehow (see also similar situation in LeafEvaluatorTerminal)
-            return default;
-          }
-
           // Check if loss for them (win for us)
           bool posLoses = result.V < 0;
           if (!posLoses) return default;
