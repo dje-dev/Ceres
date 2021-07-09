@@ -15,6 +15,7 @@
 
 using System.IO;
 using System.Globalization;
+using static System.FormattableString;
 
 using Ceres.Chess.NNEvaluators.Specifications;
 using Ceres.Chess.UserSettings;
@@ -354,7 +355,7 @@ namespace Ceres.Features.UCI
         value = newValue;
     }
 
-    static string SetOptionUCIDescriptions =>
+    static string SetOptionUCIDescriptions => Invariant(
 @$"
 option name WeightsFile type string default <from DefaultNetworkSpecString in Ceres.json>
 option name LogFile type string default
@@ -379,8 +380,8 @@ option name FPU type string default {new ParamsSelect().FPUValue}
 option name FPUAtRoot type string default {new ParamsSelect().FPUValueAtRoot}
 option name SearchLimitMultiplier type string default 1.00
 
-";
-    /*
+");
+    /* 
 option name ConfigFile type string default lc0.config
 option name HistoryFill type combo default fen_only var no var fen_only var always
 option name RamLimitMb type spin default 0 min 0 max 100000000
