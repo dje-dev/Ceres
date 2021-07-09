@@ -15,6 +15,7 @@
 
 using Ceres.Chess.EncodedPositions;
 using System;
+using System.Runtime.CompilerServices;
 
 #endregion
 
@@ -26,9 +27,12 @@ namespace Ceres.Chess.EncodedPositions
   /// </summary>
   public class PolicyVectorCompressedInitializerFromProbs
   {
+    [SkipLocalsInit]
     public static void InitializeFromProbsArray(ref CompressedPolicyVector policyRef, int numMoves, int numMovesToSave, Span<ProbEntry> probs)
     {
-      QuickSort(probs, 0, numMoves - 1);
+      // Due to small size insertion sort seems faster
+      InsertionSort(probs, 0, numMoves - 1);
+      // QuickSort(probs, 0, numMoves - 1);
 
       // Compute max probability so we can then
       // avoid overflow during exponentation by subtracting off
@@ -51,6 +55,7 @@ namespace Ceres.Chess.EncodedPositions
       CompressedPolicyVector.Initialize(ref policyRef, indicesA.Slice(0, numMovesToSave), probsA.Slice(0, numMovesToSave));
     }
 
+
     /// <summary>
     /// Performs partition step of a quick sort of probability entries.
     /// </summary>
@@ -60,13 +65,12 @@ namespace Ceres.Chess.EncodedPositions
     /// <returns></returns>
     static int Partition(Span<ProbEntry> array, int min, int max)
     {
-      ProbEntry pivot = array[max];
-
+      float pivotP = array[max].P;
       int lowIndex = (min - 1);
 
       for (int j = min; j < max; j++)
       {
-        if (array[j].P > pivot.P)
+        if (array[j].P > pivotP)
         {
           lowIndex++;
 
@@ -81,6 +85,32 @@ namespace Ceres.Chess.EncodedPositions
       array[max] = temp1;
 
       return lowIndex + 1;
+    }
+
+
+    static void InsertionSort(Span<ProbEntry> array, int min, int max)
+    {
+      // Use unsafe code to avoid array boundary checks
+      // since this is very hot code path.
+      unsafe
+      {
+        fixed (ProbEntry* arrayPtr = &array[0])
+        {
+          int i = min + 1;
+          while (i <= max)
+          {
+            ProbEntry x = arrayPtr[i];
+            int j = i - 1;
+            while (j >= 0 && arrayPtr[j].P < x.P)
+            {
+              arrayPtr[j + 1] = arrayPtr[j];
+              j--;
+            }
+            arrayPtr[j + 1] = x;
+            i++;
+          }
+        }
+      }
     }
 
 
@@ -101,29 +131,10 @@ namespace Ceres.Chess.EncodedPositions
       }
     }
 
-#if NOT
-    // --------------------------------------------------------------------------------------------
-    static void InsertionSort(Span<ProbEntry> inputArray, int numItems)
-    {
-      for (int i = 0; i < numItems - 1; i++)
-      {
-        for (int j = i + 1; j > 0; j--)
-        {
-          if (inputArray[j - 1].P < inputArray[j].P)
-          {
-            ProbEntry temp = inputArray[j - 1];
-            inputArray[j - 1] = inputArray[j];
-            inputArray[j] = temp;
-          }
-        }
-      }
-    }
-#endif
-
     public readonly struct ProbEntry
     {
-      public readonly short Index;
       public readonly float P;
+      public readonly short Index;
 
       public ProbEntry(short index, float p)
       {

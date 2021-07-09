@@ -22,7 +22,7 @@ namespace Ceres.Commands
 {
   internal static class HelpCommands
   {
-    internal const string VALID_COMMANDS = "HELP, UCI, ANALYZE, SUITE, TOURN, SYSBENCH, SETOPT or SETUP";
+    internal const string VALID_COMMANDS = "HELP, UCI, ANALYZE, SUITE, TOURN, SYSBENCH, BACKENDBENCH, BENCHMARK, SETOPT or SETUP";
 
     internal static void ProcessHelpCommand(string cmd)
     {
@@ -49,6 +49,10 @@ namespace Ceres.Commands
         DumpHelpText(CERES_HELP_SETOPT);
       else if (parts[1] == "SYSBENCH")
         DumpHelpText(CERES_HELP_SYSBENCH);
+      else if (parts[1] == "BACKENDBENCH")
+        DumpHelpText(CERES_HELP_BACKENDBENCH);
+      else if (parts[1] == "BENCHMARK")
+        DumpHelpText(CERES_HELP_BENCHMARK);
       else
         DispatchCommands.ShowErrorExit($"Unrecognized command {parts[1]}, try " + HelpCommands.VALID_COMMANDS);
       System.Environment.Exit(0);
@@ -105,9 +109,19 @@ namespace Ceres.Commands
     @"  SYSBENCH - Runs CPU and GPU benchmarks and dumps summary result to console.
 ";
 
-    const string CERES_HELP_BENCHMARK =
-    @"  BENCHMARK                         
+    const string CERES_HELP_BACKENDBENCH =
+    @"  BACKENDBENCH - Runs neural network backend benchmark.
+    Optional key/values   : { network, device }
+    Example               : Ceres BACKENDBENCH network=LC0:73810 device=GPU:0
+
 ";
+
+    const string CERES_HELP_BENCHMARK =
+    @"  BENCHMARK - Runs search benchmarks across a set of standard benchmark positinos.
+    Optional key/values   : { network, device, limit, opponent, network-opponent, device-opponent, limit-opponent, pruning }
+    Example               : Ceres BENCHMARK limit=30sm network=LC0:73810 device=GPU:0 opponent=lc0
+";
+
 
     static void DumpAllHelp()
     {
@@ -116,6 +130,8 @@ namespace Ceres.Commands
       DumpHelpText(CERES_HELP_TOURN);
       DumpHelpText(CERES_HELP_SUITE);
       DumpHelpText(CERES_HELP_SYSBENCH);
+      DumpHelpText(CERES_HELP_BACKENDBENCH);
+      DumpHelpText(CERES_HELP_BENCHMARK);
       DumpHelpText(CERES_HELP_SETOPT);
       DumpHelpText(CERES_HELP_SETUP);
     }

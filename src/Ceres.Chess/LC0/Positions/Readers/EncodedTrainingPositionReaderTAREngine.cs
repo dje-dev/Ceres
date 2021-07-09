@@ -29,10 +29,10 @@ using Ceres.Base.DataType;
 namespace Ceres.Chess.EncodedPositions
 {
   /// <summary>
-  /// Static helper method for enumerating all the raw positions
-  /// contained in a Leela Chess Zero raw training file (packed withTAR).
+  /// Static internal helper class for enumerating all the raw positions
+  /// contained in a Leela Chess Zero raw training file (packed with TAR).
   /// </summary>
-  public static class EncodedPositionFileReader
+  public static class EncodedTrainingPositionReaderTAREngine
   {
     [Flags]
     public enum ReaderOptions {  None, FillInMoveNum };
@@ -57,13 +57,18 @@ namespace Ceres.Chess.EncodedPositions
         IReader reader = ReaderFactory.Open(stream);
         while (reader.MoveToNextEntry())
         {
-          if (numPositionsProcessed >= maxPositions) yield break;
+          if (numPositionsProcessed >= maxPositions)
+          {
+            yield break;
+          }
 
-          if (!reader.Entry.IsDirectory)
+          if (!reader.Entry.IsDirectory && reader.Entry.Key.ToLower().EndsWith("gz"))
           {
             // Skip if this file does not match our filter
             if (processFilePredicate != null && !processFilePredicate(reader.Entry.Key.ToUpper()))
+            {
               continue;
+            }
 
             using (EntryStream es = reader.OpenEntryStream())
             {
@@ -76,8 +81,7 @@ namespace Ceres.Chess.EncodedPositions
                 if (numGamesProcessed >= maxGames) yield break;
 
                 // Uncompressed read
-                const bool MIRROR_PLANES = true; // The board convention differs between this file storage format and what is sent to the neural network input
-                int numRead = ReadFromStream(decompressionStream, buffer, ref rawPosBuffer, MIRROR_PLANES);
+                int numRead = ReadFromStream(decompressionStream, buffer, ref rawPosBuffer);
 
                 if (options.HasFlag(ReaderOptions.FillInMoveNum))
                 {
@@ -89,8 +93,10 @@ namespace Ceres.Chess.EncodedPositions
 
                     // We start counting at 1, and truncate at 255 due to size being byte
                     // WARNING: this potential truncation causes these values to be not always correct
-                    byte moveCountValue = moveNum >= 254 ? (byte)255 : (byte)(moveNum + 1);
-                    SetMoveNum(rawPosBuffer, moveNum, moveCountValue);
+                    //byte moveCountValue = moveNum >= 254 ? (byte)255 : (byte)(moveNum + 1);
+                    //SetMoveNum(rawPosBuffer, moveNum, moveCountValue);
+
+                    throw new NotImplementedException();
                   }
                 }
 
@@ -105,56 +111,14 @@ namespace Ceres.Chess.EncodedPositions
     }
 
 
-    private unsafe static void SetMoveNum(EncodedTrainingPosition[] rawPos, int index, byte value)
-    {
-      fixed (byte *moveCountPtr = &rawPos[index].Position.MiscInfo.InfoPosition.MoveCount)
-        *moveCountPtr = value;
-    }
-
-
-    public static int ReadFromStream(Stream stream, byte[] rawBuffer, ref EncodedTrainingPosition[] buffer, bool mirrorBoardBitmaps)
+    public static int ReadFromStream(Stream stream, byte[] rawBuffer, ref EncodedTrainingPosition[] buffer)
     {
       // Read decompressed bytes
       int bytesRead = stream.Read(rawBuffer, 0, rawBuffer.Length);
-      if (bytesRead == 0) throw new Exception(" trying to read " + rawBuffer.Length);
 
-      // If this is legacy V3 data, remap it on the fly to look like V2
-      bool isV3 = rawBuffer[0] == 3;
-      if (isV3)
-      {
-        if (bytesRead % EncodedTrainingPosition.V3_LEN != 0) throw new Exception("data not of expected length");
-        int numPos = bytesRead / EncodedTrainingPosition.V3_LEN;
-
-        // Spread out the V3 data into the V4 structures
-        byte[] expandedBytes = new byte[numPos * EncodedTrainingPosition.V4_LEN];
-        for (int i = 0; i < numPos; i++)
-          Array.Copy(rawBuffer, i * EncodedTrainingPosition.V3_LEN, expandedBytes, i * EncodedTrainingPosition.V4_LEN, EncodedTrainingPosition.V3_LEN);
-
-        rawBuffer = expandedBytes;
-        bytesRead = numPos * EncodedTrainingPosition.V4_LEN;
-      }
-
-      // Convert to LeelaTrainingEncodedPos
-      int numDeserialized = SerializationUtils.DeSerializeArrayIntoBuffer<EncodedTrainingPosition>(rawBuffer, bytesRead, ref buffer);
-
-#if NOT
-      if (!isV3)
-      {
-        // V4 data has some probabilities NaNs (indicates illegal move)
-        // But we zero that out
-        for (int i = 0; i < numDeserialized; i++)
-          for (int j = 0; j < EncodedPolicyVector.POLICY_VECTOR_LENGTH; j++)
-            if (float.IsNaN(buffer[i].Probabilities[j]))
-              buffer[i].Probabilities[j] = 0f;
-      }
-#endif
-
-      if (mirrorBoardBitmaps)
-      {
-        for (int i = 0; i < numDeserialized; i++)
-          buffer[i].Position.BoardsHistory.MirrorBoardsInPlace();
-      }
-      return numDeserialized;
+      return bytesRead == 0
+          ? throw new Exception(" trying to read " + rawBuffer.Length)
+          : SerializationUtils.DeSerializeArrayIntoBuffer(rawBuffer, bytesRead, ref buffer);
     }
 
 

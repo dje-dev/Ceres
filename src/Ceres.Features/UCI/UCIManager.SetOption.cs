@@ -15,7 +15,6 @@
 
 using System.IO;
 using System.Globalization;
-using static System.FormattableString;
 
 using Ceres.Chess.NNEvaluators.Specifications;
 using Ceres.Chess.UserSettings;
@@ -115,6 +114,11 @@ namespace Ceres.Features.UCI
     float moveOverheadSeconds = new ParamsSearch().MoveOverheadSeconds;
 
     /// <summary>
+    /// Multiplier applied to all requested time limits.
+    /// </summary>
+    float searchLimitMultiplier = 1.0f;
+
+    /// <summary>
     /// First play urgency coefficient.
     /// </summary>
     float fpu = new ParamsSelect().FPUValue;
@@ -169,6 +173,10 @@ namespace Ceres.Features.UCI
           SetBool(value, ref logLiveStats);
           break;
 
+        case "searchlimitmultiplier":
+          SetFloat(value, 0.001f, 1_000_000, ref searchLimitMultiplier);
+          break;
+
         case "moveoverheadms":
           float moveOverheadMilliseconds = 0;
           SetFloat(value, 0, int.MaxValue, ref moveOverheadMilliseconds);
@@ -217,7 +225,7 @@ namespace Ceres.Features.UCI
         case "syzygypath":
           if (!Directory.Exists(value))
           {
-            OutStream.WriteLine("Path not found: { value }");
+            OutStream.WriteLine($"Path not found: { value }");
           }
           else
           {
@@ -270,23 +278,23 @@ namespace Ceres.Features.UCI
     {
       if (taskSearchCurrentlyExecuting != null)
       {
-        OutStream.WriteLine("Cannot change weights while search is running.");
+        OutStream.WriteLine("uci info Implementation limitation: cannot change weights while search is running.");
       }
       else
       {
         if (value == null || value == "")
         {
-          OutStream.WriteLine("Network file name expected");
+          OutStream.WriteLine("uci info Network file name expected");
         }
         else
         {
           if (EvaluatorDef != null && EvaluatorDef.Nets[0].Net.NetworkID.ToLower() == value.ToLower())
           {
-            OutStream.WriteLine($"Specified network file is already {value}");
+            OutStream.WriteLine($"uci info Specified network file is already {value}");
           }
           else if (CeresEngine != null)
           {
-            OutStream.WriteLine("Implementation limitation: cannot modify weights file after initialization");
+            OutStream.WriteLine("uci info Implementation limitation: cannot modify weights file after initialization");
           }
           else
           {
@@ -346,7 +354,7 @@ namespace Ceres.Features.UCI
         value = newValue;
     }
 
-    static string SetOptionUCIDescriptions => Invariant(
+    static string SetOptionUCIDescriptions =>
 @$"
 option name WeightsFile type string default <from DefaultNetworkSpecString in Ceres.json>
 option name LogFile type string default
@@ -369,7 +377,9 @@ option name CPuctFactorAtRoot type string default {new ParamsSelect().CPUCTFacto
 option name PolicyTemperature type string default {new ParamsSelect().PolicySoftmax}
 option name FPU type string default {new ParamsSelect().FPUValue}
 option name FPUAtRoot type string default {new ParamsSelect().FPUValueAtRoot}
-");
+option name SearchLimitMultiplier type string default 1.00
+
+";
     /*
 option name ConfigFile type string default lc0.config
 option name HistoryFill type combo default fen_only var no var fen_only var always

@@ -15,6 +15,8 @@
 
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
 using Ceres.Base.Benchmarking;
@@ -54,6 +56,30 @@ namespace Ceres.Chess.NNEvaluators
 
     int indexPerferredEvalator;
 
+
+    /// <summary>
+    /// The maximum number of positions that can be evaluated in a single batch.
+    /// </summary>
+    public override int MaxBatchSize
+    {
+      get
+      {
+        int maxBatchSizeMostRestrictiveEvaluator = int.MaxValue;
+        for (int i=0; i<Evaluators.Length; i++)
+        {
+          int maxThisEvaluator = (int)Math.Floor(Evaluators[i].MaxBatchSize / PreferredFractions[i]);
+
+          if (maxThisEvaluator < maxBatchSizeMostRestrictiveEvaluator)
+          {
+            maxBatchSizeMostRestrictiveEvaluator = maxThisEvaluator;
+          }
+        }
+        
+        return maxBatchSizeMostRestrictiveEvaluator;
+      }
+    }
+
+
     /// <summary>
     /// Constructor.
     /// </summary>
@@ -63,15 +89,19 @@ namespace Ceres.Chess.NNEvaluators
     /// <param name="useMergedBatch"></param>
     public NNEvaluatorSplit(NNEvaluator[] evaluators, 
                             float[] preferredFractions = null, 
-                            int minSplitSize = 32,
+                            int minSplitSize = 48, // TODO: make this smarter (based on NPS)
                             bool useMergedBatch = true)
       : base(evaluators)
     {
-      if (preferredFractions == null)
-        preferredFractions = MathUtils.Uniform(evaluators.Length);
-
       if (preferredFractions != null && preferredFractions.Length != evaluators.Length)
+      {
         throw new ArgumentException($"Number of preferred fractions {preferredFractions.Length} does not match number of evaluators {evaluators.Length}");
+      }
+
+      if (preferredFractions == null)
+      {
+        preferredFractions = MathUtils.Uniform(evaluators.Length);
+      }
 
       MinSplitSize = minSplitSize;
       UseMergedBatch = useMergedBatch;
@@ -97,7 +127,7 @@ namespace Ceres.Chess.NNEvaluators
     /// <param name="positions"></param>
     /// <param name="retrieveSupplementalResults"></param>
     /// <returns></returns>
-    public override IPositionEvaluationBatch EvaluateIntoBuffers(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
+    public override IPositionEvaluationBatch DoEvaluateIntoBuffers(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
     {
       if (retrieveSupplementalResults) throw new NotImplementedException();
 
@@ -113,19 +143,21 @@ namespace Ceres.Chess.NNEvaluators
         //       Need to create a new constructor for WFEvaluationBatch
         IPositionEvaluationBatch[] results = new IPositionEvaluationBatch[Evaluators.Length];
 
-        List<Task> tasks = new List<Task>();
+        Task[] tasks = new Task[Evaluators.Length];
         int[] subBatchSizes = new int[Evaluators.Length];
         for (int i = 0; i < Evaluators.Length; i++)
         {
           int capI = i;
           IEncodedPositionBatchFlat thisSubBatch = GetSubBatch(positions, PreferredFractions, capI);
           subBatchSizes[capI] = thisSubBatch.NumPos;
-          tasks.Add(Task.Run(() => results[capI] = Evaluators[capI].EvaluateIntoBuffers(thisSubBatch, retrieveSupplementalResults)));
+          tasks[i] = Task.Run(() => results[capI] = Evaluators[capI].EvaluateIntoBuffers(thisSubBatch, retrieveSupplementalResults));
         }
-        Task.WaitAll(tasks.ToArray());
+        Task.WaitAll(tasks);
 
         if (UseMergedBatch)
+        {
           return new PositionsEvaluationBatchMerged(results, subBatchSizes);
+        }
         else
         {
           CompressedPolicyVector[] policies = new CompressedPolicyVector[positions.NumPos];

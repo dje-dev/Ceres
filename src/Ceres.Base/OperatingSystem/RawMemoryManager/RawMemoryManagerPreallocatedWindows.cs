@@ -86,25 +86,28 @@ namespace Ceres.Base.OperatingSystem
       }
     }
 
-    void RawAlloc(int numItems, string sharedMemorySegmentName, bool useExistingSharedMemory, bool largePages)
+    void RawAlloc(int numItems, string sharedMemorySegmentName, bool useExistingSharedMemory, bool? largePages)
     {
+      // Default value is false on Windows
+      largePages = largePages ?? false;
+
       long LARGE_PAGE_SIZE = Win32SharedMappedMemory.LargePageSize;
 
       // Determine actual size for allocation (padded to round up to full large page size)
       long allocSizePadded = (numItems * Marshal.SizeOf(typeof(T)));
-      if (largePages) allocSizePadded = MathUtils.RoundedUp(allocSizePadded, LARGE_PAGE_SIZE);
+      if (largePages.Value) allocSizePadded = MathUtils.RoundedUp(allocSizePadded, LARGE_PAGE_SIZE);
 
       allocBytesSize = (IntPtr)allocSizePadded;
 
       if (sharedMemorySegmentName != null)
       {
-        mmf = new Win32SharedMappedMemory(sharedMemorySegmentName, useExistingSharedMemory, (uint)allocSizePadded, largePages);
+        mmf = new Win32SharedMappedMemory(sharedMemorySegmentName, useExistingSharedMemory, (uint)allocSizePadded, largePages.Value);
         allocPointer = mmf.MemoryStartPtr;
       }
       else
       {
         // Note that VirtualAlloc is guaranteed to zero memory before returning
-        if (largePages)
+        if (largePages.Value)
         {
           // Acquire special priveleges required to allocate large pages
           Win32AcquirePrivilege.VerifyCouldAcquireSeLockPrivilege();

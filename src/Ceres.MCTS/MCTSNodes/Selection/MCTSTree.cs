@@ -47,15 +47,20 @@ namespace Ceres.MCTS.LeafExpansion
   /// </summary>
   public class MCTSTree
   {
-    public static long NumAnnotations;
-
     const bool VERBOSE = false;
+
+    /// <summary>
+    /// Nodes in node cache are stamped with the sequence number
+    /// of the last batch in which they were accessed.
+    /// </summary>
+    internal long BATCH_SEQUENCE_COUNTER = 0;
+
+
     PositionWithHistory PriorMoves => Store.Nodes.PriorMoves;
 
     MCTSIterator Context;
     IMCTSNodeCache cache;
 
-    internal long SEQUENCE_COUNTER = 0;
 
     /// <summary>
     /// Underlying store of nodes.
@@ -77,17 +82,6 @@ namespace Ceres.MCTS.LeafExpansion
 
 
     /// <summary>
-    /// Potentially parallel leaf selector threads could concurrently access/modify child node information:
-    ///   - one selecting a new leaf child and calling CreateChild
-    ///   - another which is transposition linked and is in the process of delinking and copying all child information
-    /// Therefore these two operations are serialized by acquiring a lock.
-    /// We use multiple locks to reduce contention. 
-    /// (Note that under Linux perforamnce seems to degrade significantly when large values such as 256 are used.)
-    /// </summary>
-
-    public readonly LockSet ChildCreateLocks;
-
-    /// <summary>
     /// Optionally an externally provided position cache
     /// may be provided to obviate neural network evaluation.
     /// </summary>
@@ -106,13 +100,13 @@ namespace Ceres.MCTS.LeafExpansion
                     PositionEvalCache positionCache)
     {
       if (context.ParamsSearch.DrawByRepetitionLookbackPlies > MAX_LENGTH_POS_HISTORY)
+      {
         throw new Exception($"DrawByRepetitionLookbackPlies exceeds maximum length of {MAX_LENGTH_POS_HISTORY}");
+      }
 
       Store = store;
       Context = context;
       PositionCache = positionCache;
-
-      ChildCreateLocks = new LockSet(128);
 
       const int ANNOTATION_MIN_CACHE_SIZE = 50_000;
       int annotationCacheSize = Math.Min(maxNodesBound, context.ParamsSearch.Execution.NodeAnnotationCacheSize);
@@ -173,11 +167,6 @@ namespace Ceres.MCTS.LeafExpansion
       }
     }
 
-    public static long NUM_HITS = 0;
-    public static long NUM_MISSES = 0;
-
-    public static float HitRate => 100.0f * ((float)NUM_HITS / (float)(NUM_HITS + NUM_MISSES));
-
 
     /// <summary>
     /// Attempts to return the MCTSNode associated with an annotation in the cache, 
@@ -195,12 +184,10 @@ namespace Ceres.MCTS.LeafExpansion
 
         ret = new MCTSNode(Context, nodeIndex, parent);
         cache?.Add(ret);
-        NUM_MISSES++;
       }
       else
       {
-        NUM_HITS++;
-        ret.LastAccessedSequenceCounter = SEQUENCE_COUNTER++;
+        ret.LastAccessedSequenceCounter = BATCH_SEQUENCE_COUNTER;
       }
 
       Debug.Assert(ret.Index == nodeIndex.Index);
@@ -237,8 +224,6 @@ namespace Ceres.MCTS.LeafExpansion
 
       ref MCTSNodeAnnotation annotation = ref node.annotation;
 
-      NumAnnotations++;
-
       // Get the position corresponding to this node
       MGPosition newPos;
       if (!node.IsRoot)
@@ -268,12 +253,14 @@ namespace Ceres.MCTS.LeafExpansion
       Span<Position> posHistoryForCaching = posHistory;
       int numCacheHashPositions = node.Context.EvaluatorDef.NumCacheHashPositions;
       if (posHistory.Length > numCacheHashPositions)
+      {
         posHistoryForCaching = posHistory.Slice(posHistory.Length - numCacheHashPositions, numCacheHashPositions);
+      }
 
       // Compute the actual hash
       ulong zobristHashForCaching = EncodedBoardZobrist.ZobristHash(posHistoryForCaching, node.Context.EvaluatorDef.HashMode);
 
-      node.LastAccessedSequenceCounter = node.Context.Tree.SEQUENCE_COUNTER++;
+      node.LastAccessedSequenceCounter = node.Context.Tree.BATCH_SEQUENCE_COUNTER;
       annotation.PriorMoveMG = priorMoveMG;
 
       annotation.Pos = posHistory[^1]; // this will have had its repetition count set

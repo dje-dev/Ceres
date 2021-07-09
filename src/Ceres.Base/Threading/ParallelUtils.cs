@@ -14,6 +14,7 @@
 #region Using directives
 
 using System.Threading.Tasks;
+using Ceres.Base.OperatingSystem;
 
 #endregion
 
@@ -25,10 +26,9 @@ namespace Ceres.Base.Threading
   /// </summary>
   public static class ParallelUtils
   {
-    public static readonly int NUM_PROCESSORS = System.Environment.ProcessorCount;
-
+  
     // Reuse ParallelOptions objects if possible to reduce GC pressure
-    const int MAX_CACHED_OPTIONS = 64;
+    const int MAX_CACHED_OPTIONS = 256;
     static ParallelOptions[] cachedOptions = new ParallelOptions[MAX_CACHED_OPTIONS];
 
 
@@ -42,21 +42,29 @@ namespace Ceres.Base.Threading
     public static ParallelOptions ParallelOptions(int numItems, int optimalItemsPerThread)
     {
       int maxThreads = CalcMaxParallelism(numItems, optimalItemsPerThread);
-      if (maxThreads > MAX_CACHED_OPTIONS)
+      if (maxThreads >= MAX_CACHED_OPTIONS)
+      {
         return new ParallelOptions() { MaxDegreeOfParallelism = maxThreads };
+      }
       else if (cachedOptions[maxThreads] != null)
+      {
         return cachedOptions[maxThreads];
+      }
       else
+      {
         return cachedOptions[maxThreads] = new ParallelOptions() { MaxDegreeOfParallelism = maxThreads };
+      }
     }
 
 
     public static int CalcMaxParallelism(int numItems, int optimalItemsPerThread)
     {
       if (numItems < optimalItemsPerThread + optimalItemsPerThread / 2)
+      {
         return 1;
+      }
 
-      return System.Math.Min(NUM_PROCESSORS, numItems / optimalItemsPerThread);
+      return System.Math.Min(HardwareManager.MaxAvailableProcessors, numItems / optimalItemsPerThread);
     }
 
 
@@ -69,22 +77,28 @@ namespace Ceres.Base.Threading
     /// <returns></returns>
     static int CalcNumThreadsForBatch(int numBatchItems, int targetNumItemsPerThread)
     {
-      int numProcessors = NUM_PROCESSORS;
+      int numProcessors = HardwareManager.MaxAvailableProcessors;
 
       int idealNumThreads = 1 + (numBatchItems / targetNumItemsPerThread);
 
       // Try to leave a small number of processors not involved in this task
       if (numProcessors <= 6)
+      {
         idealNumThreads = System.Math.Min(idealNumThreads, numProcessors - 1); // If <=6 processors, leave 1 unused
+      }
       else
+      {
         idealNumThreads = System.Math.Min(idealNumThreads, numProcessors - 2); // if >6 processors, leave 2 unused
+      }
 
       // Final check:  can't have less than one processor!
-      if (idealNumThreads <= 1) idealNumThreads = 1;
+      if (idealNumThreads <= 1)
+      {
+        idealNumThreads = 1;
+      }
 
       return idealNumThreads;
     }
-
 
   }
 }

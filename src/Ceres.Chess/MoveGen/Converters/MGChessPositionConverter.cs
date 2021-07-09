@@ -130,36 +130,23 @@ namespace Ceres.Chess.MoveGen.Converters
       }
     }
 
-    const int MAX_PIECES = 33; // 32 actual pieces, and one possible en passant
 
-    static readonly int[] pieceIndexMap = new int[] { 0, (int)PieceType.Pawn, (int)PieceType.Bishop, -1, (int)PieceType.Rook, (int)PieceType.Knight, (int)PieceType.Queen, (int)PieceType.King,
-                                                      0, (int)PieceType.Pawn, (int)PieceType.Bishop, -1, (int)PieceType.Rook, (int)PieceType.Knight, (int)PieceType.Queen, (int)PieceType.King, };
-
+    static readonly sbyte[] pieceIndexMapS = new sbyte[] { 0, (sbyte)PieceType.Pawn, (sbyte)PieceType.Bishop, -1, (sbyte)PieceType.Rook, (sbyte)PieceType.Knight, (sbyte)PieceType.Queen, (sbyte)PieceType.King,
+                                                      0, (sbyte)PieceType.Pawn, (sbyte)PieceType.Bishop, -1, (sbyte)PieceType.Rook, (sbyte)PieceType.Knight, (sbyte)PieceType.Queen, (sbyte)PieceType.King, };
 
     /// <summary>
     /// Converts from MGPosition to Position.
-    /// Note that [SkipLocalsInitAttribute] only makes 2% faster.
     /// </summary>
     /// <param name="mgPos"></param>
     /// <returns></returns>
     public static Position PositionFromMGChessPosition(in MGPosition mgPos)
     {
-      Span<PieceOnSquare> piecesArrayBufferLocal = stackalloc PieceOnSquare[MAX_PIECES];
+      Position pos = default;
+      byte pieceCount = 0;
+      ulong occupied = mgPos.A | mgPos.B | mgPos.C; // all squares occupied by something
 
-      int pieceCount = 0;
-
-      bool whiteCanCastleOO = mgPos.WhiteCanCastle;
-      bool whiteCanCastleOOO = mgPos.WhiteCanCastleLong;
-      bool blackCanCastleOO = mgPos.BlackCanCastle;
-      bool blackCanCastleOOO = mgPos.BlackCanCastleLong;
-
-      SideType sideToMove = mgPos.BlackToMove ? SideType.Black : SideType.White;
-      int move50Count = mgPos.Rule50Count;
-      int repetitionCount = 0; // unknowable
-      int moveNum = mgPos.MoveNumber;
       PositionMiscInfo.EnPassantFileIndexEnum enPassantColIndex = PositionMiscInfo.EnPassantFileIndexEnum.FileNone;
 
-      ulong occupied = mgPos.A | mgPos.B | mgPos.C; // all squares occupied by something
       byte thisSquare;
       do
       {
@@ -187,9 +174,9 @@ namespace Ceres.Chess.MoveGen.Converters
           }
           else
           {
-            // Get piece type
-            int pieceIndex = pieceIndexMap[pieceCode];
-            piecesArrayBufferLocal[pieceCount++] = new PieceOnSquare(square, new Piece(side, (PieceType)pieceIndex));
+            int pieceType = pieceIndexMapS[pieceCode] % 8;
+            int addPieceCount = (byte)pos.SetPieceOnSquare(square.SquareIndexStartA1, new Piece(side, (PieceType)pieceType));
+            pieceCount += (byte)addPieceCount;
           }
         }
         else
@@ -197,16 +184,19 @@ namespace Ceres.Chess.MoveGen.Converters
 
       } while (true);
 
-      // Mark end of populated array if we did not fill it up
-      if (pieceCount < MAX_PIECES) piecesArrayBufferLocal[pieceCount] = default;
 
-      PositionMiscInfo miscInfo = new PositionMiscInfo(whiteCanCastleOO, whiteCanCastleOOO,
-                              blackCanCastleOO, blackCanCastleOOO,
-                              sideToMove, move50Count, repetitionCount,
-                              moveNum, enPassantColIndex);
+      SideType sideToMove = mgPos.BlackToMove ? SideType.Black : SideType.White;
+      PositionMiscInfo miscInfo = new PositionMiscInfo(mgPos.WhiteCanCastle, mgPos.WhiteCanCastleLong,
+                              mgPos.BlackCanCastle, mgPos.BlackCanCastleLong,
+                              sideToMove, mgPos.Rule50Count, 0,
+                              mgPos.MoveNumber, enPassantColIndex);
 
-      return new Position(piecesArrayBufferLocal, miscInfo);
+      pos.SetMiscInfo(miscInfo);
+      pos.SetPieceCount(pieceCount);
+      pos.SetShortHash();
+      return pos;
     }
+
 
 
     /// <summary>
@@ -220,7 +210,10 @@ namespace Ceres.Chess.MoveGen.Converters
 
       MGPosition pos = default;
       foreach (PieceOnSquare ps in fenParsed.Pieces)
+      {
         pos.SetPieceAtBitboardSquare((ulong)MGPieceFromPiece(ps.Piece), MGPosition.MGBitBoardFromSquare(ps.Square));
+      }
+
       pos.Rule50Count = fenParsed.MiscInfo.Move50Count;
       pos.MoveNumber = fenParsed.MiscInfo.MoveNum;
       pos.BlackToMove = fenParsed.MiscInfo.SideToMove == SideType.Black;

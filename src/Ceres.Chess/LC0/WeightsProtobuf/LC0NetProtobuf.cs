@@ -81,6 +81,11 @@ namespace Ceres.Chess.LC0.WeightsProtobuf
     /// </summary>
     public int? NumPolicyChannels => Net.Weights.Policy.BnBetas?.Params.Length / 2;
 
+    /// <summary>
+    /// Statistics about min/max values within weights layers.
+    /// </summary>
+    public LC0ProtobufNetWeightsMinMaxStats Stats => new LC0ProtobufNetWeightsMinMaxStats(Net.Weights);
+
 
     /// <summary>
     /// Constructor.
@@ -88,7 +93,10 @@ namespace Ceres.Chess.LC0.WeightsProtobuf
     /// <param name="fn"></param>
     public LC0ProtobufNet(string fn)
     {
-      if (!File.Exists(fn)) throw new ArgumentException($"No such protobuf file found {fn}");
+      if (!File.Exists(fn))
+      {
+        throw new ArgumentException($"No such protobuf file found {fn}");
+      }
 
       // Read data from file, decompressing if necessary.
       byte[] data = FileUtils.IsZippedFile(fn) ? CompressionUtils.GetDecompressedBytes(fn) 
@@ -96,10 +104,19 @@ namespace Ceres.Chess.LC0.WeightsProtobuf
 
       Net = SerializationUtils.ProtoDeserialize<Net>(data);
 
-      if (Net == null) throw new Exception($"Failure reading/parsing net {fn}");
+      if (Net == null)
+      {
+        throw new Exception($"Failure reading/parsing net {fn}");
+      }
+
+      if (Net.Format.NetworkFormat != null && 
+          Net.Format.NetworkFormat.Input != NetworkFormat.InputFormat.InputClassical112Plane)
+      {
+        throw new Exception($"Only network format InputClassical112Plane is supported, not {Net.Format.NetworkFormat.Input} in {fn}.");
+      }
     }
 
-   
+
     /// <summary>
     /// Dumps summay of network characteristics to Console.
     /// </summary>
@@ -110,7 +127,7 @@ namespace Ceres.Chess.LC0.WeightsProtobuf
       Console.WriteLine("Filters         : " + Net.Weights.Residuals[0].Conv1.BnMeans.Params.Length / 2);
       Console.WriteLine("Blocks          : " + Net.Weights.Residuals.Count);
 
-      Console.WriteLine("SE Ratio(?)     : " + SERatio);
+      Console.WriteLine("SE Ratio        : " + SERatio);
       Console.WriteLine("Policy channels : " + NumPolicyChannels);
 
       if (Net.Format.NetworkFormat != null)
@@ -125,22 +142,13 @@ namespace Ceres.Chess.LC0.WeightsProtobuf
         Console.WriteLine("  Network format: cannot be determined (not saved in this version of the protobuf)");
 
       Console.WriteLine();
-      Console.WriteLine("LC0Params     " + Net.TrainingParams.Lc0Params);
-      Console.WriteLine("Learning rate " + Net.TrainingParams.LearningRate);
-      Console.WriteLine("Steps         " + Net.TrainingParams.TrainingSteps);
-      Console.WriteLine("MSE           " + Net.TrainingParams.MseLoss);
-      Console.WriteLine("Policy Loss   " + Net.TrainingParams.PolicyLoss);
-      Console.WriteLine("Accuracy      " + Net.TrainingParams.Accuracy);
+      Console.WriteLine($"LC0Params      { Net.TrainingParams.Lc0Params}");
+      Console.WriteLine($"Learning rate  { Net.TrainingParams.LearningRate,10:F6}");
+      Console.WriteLine($"Steps          { Net.TrainingParams.TrainingSteps, 10:N0}");
+      Console.WriteLine($"MSE            { Net.TrainingParams.MseLoss, 10:F5}");
+      Console.WriteLine($"Policy Loss    { Net.TrainingParams.PolicyLoss, 10:F2}");
+      Console.WriteLine($"Accuracy       { Net.TrainingParams.Accuracy,  10:F2}%");
     }
-
-    public float[] biasesFirstConvLayer => ProtobufHelpers.GetLayerLinear16(Net.Weights.Input.Biases);
-    public float[] weightsFirstConvLayer => ProtobufHelpers.GetLayerLinear16(Net.Weights.Input.Weights);
-
-    public float[] ValueHeadFC1Weights => ProtobufHelpers.GetLayerLinear16(Net.Weights.Ip1ValW);
-    public float[] ValueHeadFC2Weights => ProtobufHelpers.GetLayerLinear16(Net.Weights.Ip2ValW);
-
-    public float[] ValueHeadFC1Biases => ProtobufHelpers.GetLayerLinear16(Net.Weights.Ip1ValB);
-    public float[] ValueHeadFC2Biases => ProtobufHelpers.GetLayerLinear16(Net.Weights.Ip2ValB);
 
   }
 }

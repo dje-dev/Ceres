@@ -26,24 +26,24 @@ namespace Ceres.MCTS.Search
 {
   public class MCTSNNEvaluator
   {
-    public static long NUM_EVALUATED = 0;
-
     public readonly LeafEvaluatorNN Evaluator;
 
     LeafEvaluatorNN.EvalResultTarget resultTarget;
-
 
     public ListBounded<MCTSNode> Evaluate(MCTSIterator context, ListBounded<MCTSNode> nodes)
     {
       nodes[0].Context.NumNNBatches++;
       nodes[0].Context.NumNNNodes+= nodes.Count;
 
-      NUM_EVALUATED += nodes.Count;
-
+      
       if (resultTarget == LeafEvaluatorNN.EvalResultTarget.PrimaryEvalResult)
+      {
         Debug.Assert(nodes[0].EvalResult.IsNull); // null evaluator indicates should have been sent here
+      }
       else if (resultTarget == LeafEvaluatorNN.EvalResultTarget.SecondaryEvalResult)
+      {
         Debug.Assert(nodes[0].EvalResultSecondary.IsNull); // null evaluator indicates should have been sent here
+      }
 
       Evaluator.BatchGenerate(context, nodes.AsSpan, resultTarget);
 

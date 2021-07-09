@@ -28,6 +28,7 @@ using Ceres.Chess.NNFiles;
 using static Ceres.Chess.NNEvaluators.LC0DLL.LCO_Interop;
 using Ceres.Chess.LC0.Batches;
 using Ceres.Base.Benchmarking;
+using Ceres.Base.OperatingSystem;
 
 #endregion
 
@@ -65,13 +66,18 @@ namespace Ceres.Chess.NNEvaluators
       if (gpuIDs.Length != 1) throw new ArgumentException(nameof(gpuIDs), "Implementation limitation: one GPU id must be specified");
       if (precision != NNEvaluatorPrecision.FP16) throw new ArgumentException(nameof(precision), "Implementation: only FP16 supported");
 
+      if (!SoftwareManager.IsCUDAInstalled)
+      {
+        throw new Exception("GPU hardware with CUDA installation is required but not found.");
+      }
+
       isWDL = net.IsWDL;
       hasM = net.HasMovesLeft;
 
-      policies = new CompressedPolicyVector[MAX_BATCH_SIZE];
-      w = new FP16[MAX_BATCH_SIZE];
-      l = isWDL ? new FP16[MAX_BATCH_SIZE] : null;
-      m = isWDL ? new FP16[MAX_BATCH_SIZE] : null;
+      policies = new CompressedPolicyVector[MaxBatchSize];
+      w = new FP16[MaxBatchSize];
+      l = isWDL ? new FP16[MaxBatchSize] : null;
+      m = isWDL ? new FP16[MaxBatchSize] : null;
 
       // Create NN evaluator and attach to it
       //TODO: set precision
@@ -93,6 +99,14 @@ namespace Ceres.Chess.NNEvaluators
 
 
     /// <summary>
+    /// The maximum number of positions that can be evaluated in a single batch.
+    /// 
+    /// CUDA/cuDNN backend hardcoded to 1024, others might be smaller (e.g. 512 for DX12).
+    /// </summary>
+    public override int MaxBatchSize => 1024;
+
+
+    /// <summary>
     /// If this evaluator produces the same output as another specified evaluator.
     /// </summary>
     /// <param name="evaluator"></param>
@@ -103,9 +117,8 @@ namespace Ceres.Chess.NNEvaluators
     }
 
         
-    public override IPositionEvaluationBatch EvaluateIntoBuffers(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
+    public override IPositionEvaluationBatch DoEvaluateIntoBuffers(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
     {
-      if (positions.Moves == null) throw new Exception("NNEvaluatorLC0NNEvaluator requires Moves to be provided");
       if (retrieveSupplementalResults) throw new NotImplementedException("retrieveSupplementalResults not supported");
 
       Evaluator.EvaluateNN(positions, positions.Positions);
@@ -126,16 +139,19 @@ namespace Ceres.Chess.NNEvaluators
       {
         float thisQ = thisItemsOut.Q;
         float thisD = thisItemsOut.D;
-        float thisM = thisItemsOut.M;
         float thisW = (1.0f - thisD + thisQ) / 2.0f;
         float thisL = 1.0f - (thisD + thisW);
 
         w[i] = (FP16)thisW;
         l[i] = (FP16)thisL;
-        m[i] = (FP16)thisM;
       }
       else
         w[i] = (FP16)thisItemsOut.Q;
+
+      if (HasM)
+      {
+        m[i] = (FP16)thisItemsOut.M;
+      }
 
       int numMoves = Evaluator.ItemsIn[i].NumMoves;
 

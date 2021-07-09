@@ -19,6 +19,7 @@ using System.Threading;
 
 using Ceres.Base.DataTypes;
 using Ceres.Base.Environment;
+using Ceres.Chess.NNEvaluators;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Struct;
@@ -34,23 +35,11 @@ namespace Ceres.MCTS.Evaluators
   /// </summary>
   public partial class LeafEvaluatorTransposition : LeafEvaluatorBase
   {
+    // TODO: Transposition counts temporarily disabled for performance reasons (false sharing)
     static ulong NumHits = 0;
     static ulong NumMisses = 0;
     public static float HitRatePct => 100.0f * (float)NumHits / (float)(NumHits + NumMisses);
 
-
-    /// <summary>
-    /// Number of nodes whose evaluation were linked backed to extant transposition node.
-    /// </summary>
-    public static ulong NumLinked;
-
-    /// <summary>
-    /// Number of nodes previously linked that were subseuently replicated in the search tree and unlinked.
-    /// </summary>
-    public static ulong NumDelinked;
-
-
-    public static ulong NumExtractedAndNeverCloned;
 
     /// <summary>
     /// Maintain data structure to map between position hash codes and 
@@ -58,6 +47,11 @@ namespace Ceres.MCTS.Evaluators
     /// </summary>
     public readonly TranspositionRootsDict TranspositionRoots;
 
+    /// <summary>
+    /// Record new pending transposition roots accumulated during a batch
+    /// so they can be added to the TranspositionRoots dictionary 
+    /// all at once at end of batch collection.
+    /// </summary>
     int nextIndexPendingTranspositionRoots;
     (ulong, int)[] pendingTranspositionRoots;
 
@@ -73,7 +67,9 @@ namespace Ceres.MCTS.Evaluators
     {
       TranspositionRoots = transpositionRoots;
 
-      pendingTranspositionRoots = new (ulong, int)[MCTSParamsFixed.MAX_BATCH_SIZE];
+      // TODO: currently hardcoded at 2048, potentially
+      // dynamically detemrine possibly smaller necessary value
+      pendingTranspositionRoots = new (ulong, int)[2048];
     }
 
 
@@ -116,10 +112,9 @@ namespace Ceres.MCTS.Evaluators
         if (VERBOSE) Console.WriteLine($" {node.Index} first linkage to {transpositionRootNode.Index.Index}");
         nodeRef.NumNodesTranspositionExtracted = 1;
         nodeRef.TranspositionRootIndex = transpositionRootNodeIndex.Index;
-        NumLinked++;
       }
 
-      if (CeresEnvironment.MONITORING_METRICS) NumHits++;
+//      if (CeresEnvironment.MONITORING_METRICS) NumHits++;
 
       if (node.Context.ParamsSearch.TranspositionUseTransposedQ && transpositionMode != TranspositionMode.SharedSubtree)
       {
@@ -174,27 +169,28 @@ namespace Ceres.MCTS.Evaluators
         ref MCTSNodeStruct transpositionNode = ref node.Context.Tree.Store.Nodes.nodes[transpositionNodeIndex];
 
         if (node.Context.ParamsSearch.TranspositionUseCluster)
+        {
           MCTSNodeTranspositionManager.CheckAddToCluster(node);
+        }
 
         // Only attempt transposition linkage if the node is possibly not fully initialized
         // because it is new (in process of initialization)
         if (transpositionNode.N == 0)
         {
-          if (CeresEnvironment.MONITORING_METRICS) NumMisses++;
+//          if (CeresEnvironment.MONITORING_METRICS) NumMisses++;
           return default;
         }
 
-        if (node.Ref.NumNodesTranspositionExtracted > 1)
-          throw new Exception("Internal error: Unexpected NumNodesTranspositionExtracted > 1");
-        else
-          return ProcessFirstLinkage(node, new MCTSNodeStructIndex(transpositionNodeIndex), ref transpositionNode);
+        return node.Ref.NumNodesTranspositionExtracted > 1
+            ? throw new Exception("Internal error: Unexpected NumNodesTranspositionExtracted > 1")
+            : ProcessFirstLinkage(node, new MCTSNodeStructIndex(transpositionNodeIndex), ref transpositionNode);
       }
       else
       {
         int pendingIndex = Interlocked.Increment(ref nextIndexPendingTranspositionRoots) - 1;
         pendingTranspositionRoots[pendingIndex] = (node.Annotation.PositionHashForCaching, node.Index);
 
-        if (CeresEnvironment.MONITORING_METRICS) NumMisses++;
+//        if (CeresEnvironment.MONITORING_METRICS) NumMisses++;
 
         return default;
       }
@@ -212,7 +208,9 @@ namespace Ceres.MCTS.Evaluators
         // Add in all the accumulated transposition roots to the dictionary.
         // This is done in postprocessing for efficiency because it obviates any locking.
         for (int i = 0; i < nextIndexPendingTranspositionRoots - 1; i++)
+        {
           TranspositionRoots.TryAdd(pendingTranspositionRoots[i].Item1, pendingTranspositionRoots[i].Item2);
+        }
 
         nextIndexPendingTranspositionRoots = 0;
       }

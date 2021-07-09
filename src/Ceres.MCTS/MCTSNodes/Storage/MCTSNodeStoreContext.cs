@@ -42,18 +42,11 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     [ThreadStatic]
     static MCTSNodeStoreContext curContext;
 
-    [ThreadStatic]
-    static MemoryBufferOS<MCTSNodeStruct> curNodes;
-
-    [ThreadStatic]
-    static MemoryBufferOS<MCTSNodeStructChild> curChildren;
-
-
     public static MCTSNodeStore Store => curStore;
 
-    public static MemoryBufferOS<MCTSNodeStruct> Nodes => curNodes;
+    public static MemoryBufferOS<MCTSNodeStruct> Nodes => curContext.NodeStore.Nodes.nodes;
 
-    public static MemoryBufferOS<MCTSNodeStructChild> Children => curChildren;
+    public static MemoryBufferOS<MCTSNodeStructChild> Children => curContext.NodeStore.Children.childIndices;
 
 
     public readonly MCTSNodeStore NodeStore;
@@ -68,8 +61,6 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 
       // Update statics
       curStore = store;
-      curNodes = store.Nodes.nodes;
-      curChildren = store.Children.childIndices;
       curContext = this;
     }
 
@@ -81,8 +72,6 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       if (PriorContext != null)
       {
         curStore = PriorContext.NodeStore;
-        curNodes = PriorContext.NodeStore.Nodes.nodes;
-        curChildren = PriorContext.NodeStore.Children.childIndices;
       }
       curContext = PriorContext;
     }

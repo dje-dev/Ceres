@@ -30,7 +30,7 @@ namespace Ceres.MCTS.Params
   /// that may be dynamically changed tuned for each batch based on its characteristics.
   /// </summary>
   [Serializable]
-  public class ParamsSearch
+  public record ParamsSearch
   {
     /// <summary>
     /// If a set of small adjustments to parameters resulting from tuning tests
@@ -90,6 +90,13 @@ namespace Ceres.MCTS.Params
     /// which are potentially recomputed based on the characterstic of the batch.
     /// </summary>
     public ParamsSearchExecution Execution;
+
+    /// <summary>
+    /// Optionally the ID of a delegate registered with ParamsSearchExecutionModifier
+    /// which will be called before each batch to allow customization
+    /// of the nested Execution field members.
+    /// </summary>
+    public string ExecutionModifierID = null;
 
     /// <summary>
     /// Experimental. If an "iterated" MCTS strategy should be followed in search,
@@ -154,8 +161,8 @@ namespace Ceres.MCTS.Params
     /// the value score of evaluted nodes which is the product of the
     /// Contempt and the node's draw probability.
     /// </summary>
-    [CeresOption(Name = "contempt", Desc = "Contempt coefficient which penalizes draw outcomes", Default = "0.01")]
-    public float Contempt = 0.01f;
+    [CeresOption(Name = "contempt", Desc = "Contempt coefficient which penalizes draw outcomes", Default = "0.0")]
+    public float Contempt = 0.0f;
 
     /// <summary>
     /// Experimental. The fraction of the final contempt which is derived from an
@@ -191,9 +198,10 @@ namespace Ceres.MCTS.Params
     [CeresOption(Name = "history-fill-in", Desc = "If the history planes ", Default = "true")]
     public bool HistoryFillIn = true;
 
+
     /// <summary>
     /// If tablebases are enabled.
-    /// This will be overrideen by the value specifid by user in Ceres user settings
+    /// This will be initialized according to the value specifid by user in Ceres user settings
     /// (if DirTablebases is empty or not.)
     /// </summary>
     [CeresOption(Name = "tablebases", Desc = "Enable external endgame tablebases", Default = "true")]
@@ -211,11 +219,13 @@ namespace Ceres.MCTS.Params
     /// </summary>
     public int DrawByRepetitionLookbackPlies = 22;
 
+
     /// <summary>
     /// If search considers positions arising twice as already a draw.
     /// Seems to slightly improve play quality due to early detection of draw by repetition subtrees.
     /// </summary>
     public bool TwofoldDrawEnabled = true;
+
 
     /// <summary>
     /// If searches are possibily terminated early if it is determined the top move
@@ -225,6 +235,7 @@ namespace Ceres.MCTS.Params
     [CeresOption(Name = "early-stop-search-enabled", Desc = "If searches are possibly exited early due to leading move being ahead.", Default = "true")]
     public bool FutilityPruningStopSearchEnabled = true;
 
+
     /// <summary>
     /// Aggressiveness with which searches from moves at the root of the search are pruned
     /// (including the best/only remaining move if FutilityPruningStopSearchEnabled is true)
@@ -233,11 +244,13 @@ namespace Ceres.MCTS.Params
     [CeresOption(Name = "move-futility-pruning-aggressiveness", Desc = "Aggresiveness for early termination of searches to less promising root search subtrees in range [0..1.5], 0 disables.", Default = "0.4")]
     public float MoveFutilityPruningAggressiveness = 0.4f;
 
+
     /// <summary>
     /// Aggressiveness with which limited search resource (time or nodes) is consumed.
     /// </summary>
     [CeresOption(Name = "time-management-aggressiveness", Desc = "Aggressiveness with which limited search resource (time or nodes) is consumed.", Default = "1.0")]
     public float GameLimitUsageAggressiveness = 1.0f;
+
 
     /// <summary>
     /// If moves are possibly made instantly (with no search) if a large tree 
@@ -285,6 +298,12 @@ namespace Ceres.MCTS.Params
     /// Optional flag that can be defined by developers for ad-hoc testing.
     /// </summary>
     public bool TestFlag = false;
+
+
+    /// <summary>
+    /// Optional scalar that can be defined by developers for ad-hoc testing.
+    /// </summary>
+    public float TestScalar = 0.0f;
 
 
     /// <summary>

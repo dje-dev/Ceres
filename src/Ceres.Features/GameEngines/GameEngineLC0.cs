@@ -79,7 +79,11 @@ namespace Ceres.Features.GameEngines
                          string extraCommandLineArgs = null) : base(id)
     {
       SetupAction = setupAction;
-      if (SetupAction != null) SetupAction();
+      if (SetupAction != null)
+      {
+        SetupAction();
+      }
+
       bool resetStateAndCachesBeforeMoves = searchParams != null && !searchParams.TreeReuseEnabled;
 
       LC0Engine = LC0EngineConfigured.GetLC0Engine(searchParams, selectParams, paramsNN, 
@@ -146,12 +150,13 @@ namespace Ceres.Features.GameEngines
       // Run the analysis
       LC0VerboseMoveStats lc0Analysis = LC0Engine.AnalyzePositionFromFENAndMoves(curPositionAndMoves.FENAndMovesString, searchLimit);
 
-      if (verbose) lc0Analysis.Dump();
-
-      float scoreLC0 = (int)MathF.Round(EncodedEvalLogistic.LogisticToCentipawn(lc0Analysis.SearchEvalLogistic), 0);
+      if (verbose)
+      {
+        lc0Analysis.Dump();
+      }
 
       // TODO: can we somehow correctly set the staring N arugment here?
-      return new GameEngineSearchResult(lc0Analysis.BestMove, lc0Analysis.SearchEvalLogistic, scoreLC0, float.NaN,
+      return new GameEngineSearchResult(lc0Analysis.BestMove, float.NaN, lc0Analysis.ScoreCentipawns, float.NaN,
                                         searchLimit, default, 0, (int)lc0Analysis.NumNodes, (int)lc0Analysis.UCIInfo.Depth);
     }
 

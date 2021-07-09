@@ -54,12 +54,13 @@ namespace Ceres.Chess.NNEvaluators
       EncodedPositionWithHistory[] positions = new EncodedPositionWithHistory[count];
       Array.Fill(positions, position);
 
-      batch = new EncodedPositionBatchFlat(positions, count);
 
       bool hasPositions = evaluator.InputsRequired.HasFlag(NNEvaluator.InputTypes.Positions);
       bool hasMoves = evaluator.InputsRequired.HasFlag(NNEvaluator.InputTypes.Moves);
       bool hasHashes = evaluator.InputsRequired.HasFlag(NNEvaluator.InputTypes.Hashes);
       bool hasBoards = evaluator.InputsRequired.HasFlag(NNEvaluator.InputTypes.Boards);
+
+      batch = new EncodedPositionBatchFlat(positions, count, hasPositions);
 
       if (fen != null)
       {

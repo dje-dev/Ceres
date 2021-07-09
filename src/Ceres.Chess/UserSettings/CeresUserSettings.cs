@@ -95,6 +95,29 @@ namespace Ceres.Chess.UserSettings
     /// </summary>
     public bool LogWarn { get; set; } = false;
 
+    /// <summary>
+    /// If memory allocations should attempt to use large pages for improved performance.
+    /// </summary>
+    public bool UseLargePages { get; set; } = false;
+
+    /// <summary>
+    /// The maximum number of position in each batch sent to the neural network.
+    /// Smaller values reduce GPU memory usage somewhat.
+    /// </summary>
+    public int MaxBatchSize { get; set; } = 1024;
+
+    /// <summary>
+    /// If the CUDA graphs features should be used 
+    /// improve speed of execution of smaller batches
+    /// (at the expense of higher GPU memory utilization).
+    /// </summary>
+    public bool EnableCUDAGraphs { get; set; } = true;
+
+    /// <summary>
+    /// If the legacy LC0.dll evaluator should be used for NN evaluation.
+    /// </summary>
+    public bool UseLegacyLC0Evaluator { get; set; } = false;
+
     #endregion
 
     #region UCI setoptions

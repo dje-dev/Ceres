@@ -81,37 +81,60 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// </summary>
     /// <param name="tree"></param>
     /// <param name="otherNodeIndex"></param>
-    public void CopyUnexpandedChildrenFromOtherNode(MCTSTree tree, MCTSNodeStructIndex otherNodeIndex)
+    /// <param name="exclusiveAccessGuaranteed"> </param>
+    public void CopyUnexpandedChildrenFromOtherNode(MCTSTree tree, 
+                                                    MCTSNodeStructIndex otherNodeIndex, 
+                                                    bool exclusiveAccessGuaranteed = false)
+    {
+      if (exclusiveAccessGuaranteed)
+      {
+        DoCopyUnexpandedChildrenFromOtherNode(tree, otherNodeIndex);
+      }
+      else
+      {
+        MCTSNode otherNodeNode = tree.GetNode(otherNodeIndex);
+        lock (otherNodeNode)
+        {
+          DoCopyUnexpandedChildrenFromOtherNode(tree, otherNodeIndex);
+        }
+      }
+    }
+
+
+    /// <summary>
+    /// Worker method which copies unexpanded children.
+    /// </summary>
+    /// <param name="tree"></param>
+    /// <param name="otherNodeIndex"></param>
+    public void DoCopyUnexpandedChildrenFromOtherNode(MCTSTree tree, MCTSNodeStructIndex otherNodeIndex)
     {
       ref MCTSNodeStruct otherNode = ref tree.Store.Nodes.nodes[otherNodeIndex.Index];
-      using (tree.ChildCreateLocks.LockBlock(otherNodeIndex.Index))
+
+      // Detach
+      NumNodesTranspositionExtracted = 0;
+      TranspositionRootIndex = 0;
+
+      SetNumPolicyMovesAndAllocateChildInfo(tree, otherNode.NumPolicyMoves);
+
+      if (otherNode.NumPolicyMoves > 0)
       {
-        // Detach
-        NumNodesTranspositionExtracted = 0;
-        TranspositionRootIndex = 0;
+        // First, copy any expanded nodes
+        // We have to descend to the expanded node to retrieve 
+        // the move and policy needed for the new child (which will be not yet expanded)
+        Span<MCTSNodeStructChild> children = tree.Store.Children.SpanForNode(in this);
+        Span<MCTSNodeStructChild> otherChildren = tree.Store.Children.SpanForNode(in otherNode);
 
-        SetNumPolicyMovesAndAllocateChildInfo(tree, otherNode.NumPolicyMoves);
-
-        if (otherNode.NumPolicyMoves > 0)
+        for (int i = 0; i < otherNode.NumPolicyMoves; i++)
         {
-          // First, copy any expanded nodes
-          // We have to descend to the expanded node to retrieve 
-          // the move and policy needed for the new child (which will be not yet expanded)
-          Span<MCTSNodeStructChild> children = tree.Store.Children.SpanForNode(in this);
-          Span<MCTSNodeStructChild> otherChildren = tree.Store.Children.SpanForNode(in otherNode);
-
-          for (int i = 0; i < otherNode.NumPolicyMoves; i++)
+          MCTSNodeStructChild info = otherChildren[i];
+          if (info.IsExpanded)
           {
-            MCTSNodeStructChild info = otherChildren[i];
-            if (info.IsExpanded)
-            {
-              ref MCTSNodeStruct childNodeRef = ref info.ChildRefFromStore(tree.Store);
-              children[i].SetUnexpandedPolicyValues(childNodeRef.PriorMove, childNodeRef.P);
-            }
-            else
-            {
-              children[i] = otherChildren[i];
-            }
+            ref MCTSNodeStruct childNodeRef = ref info.ChildRefFromStore(tree.Store);
+            children[i].SetUnexpandedPolicyValues(childNodeRef.PriorMove, childNodeRef.P);
+          }
+          else
+          {
+            children[i] = otherChildren[i];
           }
         }
       }
@@ -149,7 +172,9 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
       Span<MCTSNodeStructChild> theseChildren = Children;
       for (int i = 0; i < NumChildrenExpanded; i++)
-        sumPVisited += theseChildren[i].ChildRefFromStore(store).P;
+      {
+        sumPVisited += theseChildren[i].ChildRefFromStore(store).P.ToFloatApprox;
+      }
 
       return sumPVisited;
     }
@@ -367,7 +392,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
     #region Gather fields
 
-    const float LAMBDA = 0.97f;
+    const float LAMBDA = 0.96f;
 
 #if NOT
 // probably ill conceived, using draw probabilities a more direct way
@@ -475,7 +500,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           else
             nInFlight[i] = childNode.NInFlight2 + dualCollisionFraction * childNode.NInFlight;
 
-          p[i] = childNode.P;// * childNode.Weight;
+          p[i] = childNode.P.ToFloatApprox;// * childNode.Weight;
 
 
           bool isOurMove = depth % 2 == 0;
@@ -513,7 +538,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         {
           n[i] = 0;
           nInFlight[i] = 0;
-          p[i] = child.P;
+          p[i] = child.P.ToFloatApprox;
           w[i] = 0;
         }
       }
@@ -662,6 +687,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// </summary>
     void BackupUpdateInFlight(int numInFlight1, int numInFlight2)
     {
+      Span<MCTSNodeStruct> nodes = MCTSNodeStoreContext.Store.Nodes.Span;
+
       ref MCTSNodeStruct node = ref this;
       while (true)
       {
@@ -670,7 +697,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         if (node.IsRoot)
           return;
         else
-          node = ref node.ParentRef;
+          node = ref nodes[node.ParentRef.Index.Index];
       }
     }
 
@@ -680,6 +707,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// </summary>
     public void BackupAbort0(short numInFlight)
     {
+      Span<MCTSNodeStruct> nodes = MCTSNodeStoreContext.Store.Nodes.Span;
+
       short updateAmount = (short)-numInFlight;
       ref MCTSNodeStruct node = ref this;
       while (true)
@@ -689,7 +718,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         if (node.IsRoot)
           return;
         else
-          node = ref node.ParentRef;
+          node = ref nodes[node.ParentRef.Index.Index];
       }
 
     }
@@ -700,6 +729,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// </summary>
     public void BackupAbort1(short numInFlight)
     {
+      Span<MCTSNodeStruct> nodes = MCTSNodeStoreContext.Store.Nodes.Span;
+
       short updateAmount = (short)-numInFlight;
       ref MCTSNodeStruct node = ref this;
       while (true)
@@ -709,7 +740,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         if (node.IsRoot)
           return;
         else
-          node = ref node.ParentRef;
+          node = ref nodes[node.ParentRef.Index.Index];
       }
     }
 
@@ -733,11 +764,9 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       ref MCTSNodeStruct node = ref this;
       while (true)
       {
-        node.UpdateNInFlight(-numInFlight1, -numInFlight2);
-
-        // Get parent reference (and initiate prefetch)
         ref MCTSNodeStruct parentRef = ref nodes[node.ParentIndex.Index];
-        PrefetchNode(ref parentRef);
+
+        node.UpdateNInFlight(-numInFlight1, -numInFlight2);
 
         //        float valuePriorAvgIsBetter = node.IsRoot ? float.NaN : (float)(-node.Q - node.ParentRef.Q);
         //        float valueThisSampleBetter = node.IsRoot ? float.NaN : (float)(-vToApply - node.ParentRef.Q);
@@ -774,6 +803,12 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           node.dSum += dToApply;
         }
 
+#if FEATURE_UNCERTAINTY
+        // Update uncertainty (exponentially weighted moving average)
+        float absDiff = MathF.Abs(vToApply - (float)node.Q);
+        node.Uncertainty = (FP16)(LAMBDA * node.Uncertainty + (1.0f - LAMBDA) * absDiff);
+#endif
+
         if (MCTSParamsFixed.TRACK_NODE_TREND)
         {
           if (node.QUpdatesWtdVariance == 0)
@@ -791,7 +826,9 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         }
 
         if (node.IsRoot)
+        {
           return;
+        }
         else
         {
           if (parentRef.IsRoot)
@@ -799,6 +836,13 @@ namespace Ceres.MCTS.MTCSNodes.Struct
             indexOfChildDescendentFromRoot = node.Index;
             int numVisits = numInFlight1 + numInFlight2;
             MCTSManager.ThreadSearchContext.RootMoveTracker.UpdateQValue(IndexInParent, vToApply, numVisits);
+          }
+          else
+          {
+            // Initiate a prefetch of parent's parent.
+            // This happens far early enough that the memory access 
+            // should be complete by the time we need the data.
+            PrefetchNode(ref nodes[parentRef.ParentIndex.Index]);
           }
 
 #if NOT
@@ -822,6 +866,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
     public void BackupApplyWDeltaOnly(float wDelta)
     {
+      throw new NotImplementedException();
+#if NOT
       Span<MCTSNodeStruct> nodes = MCTSNodeStoreContext.Nodes.Span;
 
       ref MCTSNodeStruct node = ref this;
@@ -840,9 +886,10 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         }
 
       }
+#endif
     }
 
-    #endregion
+#endregion
 
     /// <summary>
     /// Returns the index of this node in the array of parent's children.
@@ -851,15 +898,20 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     {
       get 
       {
-        if (IsRoot) throw new Exception("Root has not IndexInParent");
+        Debug.Assert(!IsRoot);
 
         ref readonly MCTSNodeStruct parent = ref ParentRef;
-        MCTSNodeStructIndex ourIndex = Index;
-        for (int i=0; i<parent.NumChildrenExpanded;i++)
+        int ourIndex = Index.Index;
+
+        Span<MCTSNodeStructChild> children = parent.Children;
+        for (int i = 0; i < parent.NumChildrenExpanded; i++)
         {
-          if (ParentRef.ChildAtIndex(i).ChildIndex == ourIndex)
+          if (children[i].ChildIndex.Index == ourIndex)
+          {
             return i;
+          }
         }
+
         throw new Exception("Internal error: IndexInParent not found");
       }
     }

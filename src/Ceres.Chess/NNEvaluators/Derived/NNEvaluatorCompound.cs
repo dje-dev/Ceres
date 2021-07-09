@@ -32,6 +32,7 @@ namespace Ceres.Chess.NNEvaluators
 
     readonly bool isWDL;
     readonly bool hasM;
+    readonly bool policyReturnedSameOrderMoveList;
 
     #endregion
 
@@ -52,6 +53,13 @@ namespace Ceres.Chess.NNEvaluators
     /// If the evaluator has an M (moves left) head.    /// </summary>
     public override bool HasM => hasM;
 
+    /// <summary>
+    /// If the network returns policy moves in the same order
+    /// as the legal MGMoveList.
+    /// </summary>
+    public override bool PolicyReturnedSameOrderMoveList => policyReturnedSameOrderMoveList;
+
+
     #endregion
 
     public NNEvaluatorCompound(NNEvaluator[] evaluators)
@@ -60,7 +68,8 @@ namespace Ceres.Chess.NNEvaluators
 
       // until possibly prove false below
       isWDL = true; 
-      hasM = true; 
+      hasM = true;
+      policyReturnedSameOrderMoveList = true;
 
       // We must track additional position information if required by any of the evaluators
       foreach (NNEvaluator evaluator in evaluators)
@@ -69,6 +78,21 @@ namespace Ceres.Chess.NNEvaluators
 
         if (!evaluator.IsWDL) isWDL = false;
         if (!evaluator.HasM) hasM = false;
+        if (!evaluator.PolicyReturnedSameOrderMoveList) policyReturnedSameOrderMoveList = false;
+      }
+    }
+
+    protected int MinBatchSizeAmongAllEvaluators
+    {
+      get
+      {
+        int min = int.MaxValue;
+        for (int i = 0; i < Evaluators.Length; i++)
+        {
+          min = System.Math.Min(min, Evaluators[i].MaxBatchSize);
+        }
+
+        return min;
       }
     }
 

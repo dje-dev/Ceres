@@ -17,6 +17,7 @@ using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.LC0.Batches;
 using Ceres.Chess.NetEvaluation.Batch;
 using System;
+using System.Collections.Generic;
 
 #endregion
 
@@ -31,15 +32,81 @@ namespace Ceres.Chess.NNEvaluators
   {
     public static bool VERBOSE = false;
 
+    public enum CompareMode
+    {
+      /// <summary>
+      /// No supplemental statistics.
+      /// </summary>
+      None, 
+
+      /// <summary>
+      /// Basic supplemental statistics.
+      /// </summary>
+      Full,
+
+      /// <summary>
+      /// Supplemental statistics with comparison against a third reference evaluator.
+      /// </summary>
+      FullWithReferenceEvaluator
+    }
+
+    /// <summary>
+    /// Type of statistics or reference checking conducted.
+    /// </summary>
+    public readonly CompareMode Mode;
+
+    /// <summary>
+    /// The reference evaluator to use (in FullWithReferenceMode).
+    /// </summary>
+    public readonly NNEvaluator ReferenceEvaluator;
+
+
+    /// <summary>
+    /// Constructor.
+    /// </summary>
+    /// <param name="stats"></param>
+    /// <param name="referenceEvaluator">evaluator used only in FullWithReferenceEvaluator returning what are believed most accurate values</param>
+    /// <param name="evaluators"></param>
+    public NNEvaluatorCompare(CompareMode stats, NNEvaluator referenceEvaluator, params NNEvaluator[] evaluators)
+      : base(evaluators, null)
+    {
+      if (evaluators.Length < 2)
+      {
+        throw new Exception("At least two evaluators must be provided with NNEvaluatorCompare.");
+      }
+
+      if (stats == CompareMode.FullWithReferenceEvaluator && referenceEvaluator == null)
+      {
+        throw new Exception("Reference evaluator must be non-null in FullWithReferenceEvaluator mode.");
+      }
+
+      Mode = stats;
+      ReferenceEvaluator = referenceEvaluator;
+    }
+
+
     /// <summary>
     /// Constructor.
     /// </summary>
     /// <param name="evaluators"></param>
     public NNEvaluatorCompare(params NNEvaluator[] evaluators)
-      : base(evaluators, null)
+      : this(CompareMode.None, null, evaluators)
     {
     }
 
+
+    /// <summary>
+    /// The maximum number of positions that can be evaluated in a single batch.
+    /// </summary>
+    public override int MaxBatchSize => MinBatchSizeAmongAllEvaluators;
+
+
+    int countPolicyErr = 0;
+    int countValueErr = 0;
+    float sumPolicy0Err = 0;
+    float sumPolicy1Err = 0;
+    float sumValue0Err = 0;
+    float sumValue1Err = 0;
 
     /// <summary>
     /// Evaluates specified batch into internal buffers.
@@ -47,9 +114,22 @@ namespace Ceres.Chess.NNEvaluators
     /// <param name="positions"></param>
     /// <param name="retrieveSupplementalResults"></param>
     /// <returns></returns>
-    public override IPositionEvaluationBatch EvaluateIntoBuffers(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
+    public override IPositionEvaluationBatch DoEvaluateIntoBuffers(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
     {
-      IPositionEvaluationBatch result = base.EvaluateIntoBuffers(positions, retrieveSupplementalResults);
+      IPositionEvaluationBatch result = base.DoEvaluateIntoBuffers(positions, retrieveSupplementalResults);
+
+      static string ErrMagnitudes(float eval0, float eval1, float evalRef, 
+                                  ref float sumErr0, ref float sumErr1, ref int count)
+      {
+        float err0 = MathF.Abs(evalRef - eval0);
+        float err1 = MathF.Abs(evalRef - eval1);
+
+        count++;
+        sumErr0 += err0;
+        sumErr1 += err1;
+
+        return $" err0:{err0, 7:F4} err1: {err1, 7:F4}  avg0: {sumErr0/count, 7:F4}  avg1: {sumErr1 / count,7:F4}";
+      }
 
       int numVOK = 0;
       int numPolicyOK = 0;
@@ -60,10 +140,20 @@ namespace Ceres.Chess.NNEvaluators
         float v1 = subResults[1].GetWinP(i) - subResults[1].GetLossP(i);
 
         // Check W/D/L
-        if (MathF.Abs(v0 - v1) > 0.02)
-          Console.WriteLine($"WFEvalNetCompare V discrepancy: {i,6:F0} {v0,7:F3} {v1,7:F3}");
+        if (float.IsNaN(v0) || float.IsNaN(v1) || MathF.Abs(v0 - v1) > 0.02)
+        {
+          string refString = "";
+          if (Mode == CompareMode.FullWithReferenceEvaluator)
+          {
+            NNEvaluatorResult[] refResult = ReferenceEvaluator.EvaluateBatch(positions.GetSubBatchSlice(i, 1));
+            refString = ErrMagnitudes(v0, v1, refResult[0].V, ref sumValue0Err, ref sumValue1Err, ref countValueErr);
+          }
+          Console.WriteLine($"NNEvaluatorCompare V discrepancy at POS: {i,6:F0}  {v0,7:F3} {v1,7:F3} {refString}");
+        }
         else
+        {
           numVOK++;
+        }
         
         (Memory<CompressedPolicyVector> policiesArray0, int policyIndex0) = subResults[0].GetPolicy(i);
         CompressedPolicyVector thesePolicies0 = policiesArray0.Span[policyIndex0];
@@ -78,11 +168,21 @@ namespace Ceres.Chess.NNEvaluators
         {
           float diff = MathF.Abs(policies0[p] - policies1[p]);
           float tolerance = Math.Max(0.03f, 0.07f * MathF.Abs(policies0[p] + policies1[p] * 0.5f));
-          if (diff > maxDiff && (diff > tolerance))
+          if ( float.IsNaN(policies0[p]) 
+            || float.IsNaN(policies1[p]) 
+            || (diff > maxDiff && (diff > tolerance)))
           {
-            if (maxDiff == 0) Console.WriteLine("WFEvalNetCompare policy discrepancies:");
+            string refString = "";
+            if (Mode == CompareMode.FullWithReferenceEvaluator)
+            {
+              NNEvaluatorResult[] refResult = ReferenceEvaluator.EvaluateBatch(positions.GetSubBatchSlice(i, 1));
+              refString = ErrMagnitudes(policies0[p], policies1[p], refResult[0].Policy.DecodedAndNormalized[p],
+                                        ref sumPolicy0Err, ref sumPolicy1Err, ref countPolicyErr);
+            }
+
+            if (maxDiff == 0) Console.WriteLine("NNEvaluatorCompare policy discrepancies ");
             maxDiff = policies0[p] - policies1[p];
-            Console.WriteLine($"  {p,6} {policies0[p], 6:F3} { policies1[p], 6:F3}");
+            Console.WriteLine($"  POS: {i,6:F0}   {p,6} {policies0[p], 6:F3} { policies1[p], 6:F3} {refString}");
           }
         }
 
@@ -101,6 +201,7 @@ namespace Ceres.Chess.NNEvaluators
 
       return result;
     }
+
 
     protected override void DoShutdown()
     {

@@ -14,9 +14,10 @@
 #region Using directives
 
 using System;
-
+using Ceres.Base.OperatingSystem;
 using Ceres.Chess;
 using Ceres.Chess.PositionEvalCaching;
+using Ceres.Chess.UserSettings;
 
 #endregion
 
@@ -39,9 +40,13 @@ namespace Ceres.MCTS.Params
     /// 
     /// NOTE: On a dual socket machine performance was clearly inferior with large pages.
     ///       On a single socket machine performance was considerably improved, although
-    ///       a limitation is that larges pages is incompatible with incremental allocation.
+    ///       a limitation (on Windows only) is that larges pages is incompatible 
+    ///       with incremental allocation under Windows.
+    ///       
+    /// NOTE: On Linux sometimes large page allocations may fail and seemingly cannot 
+    ///       be detected in the mreserve or mprotect call, causing access violations.
     /// </summary>
-    public const bool STORAGE_LARGE_PAGES = false;
+    public static bool TryEnableLargePages => CeresUserSettingsManager.Settings.UseLargePages && SoftwareManager.IsLinux ? true : false;
 
     /// <summary>
     /// Optionally the storage can make use of an another running process
@@ -56,14 +61,19 @@ namespace Ceres.MCTS.Params
     public const bool STORAGE_USE_INCREMENTAL_ALLOC = true;
 
     /// <summary>
+    /// If enabled the largest possible search tree is about 2 billion nodes
+    /// rather than the default of 1 billion nodes.
+    /// 
+    /// This should be enabled only if needed and obviously 
+    /// only if the system has the required 250GB to 500GB of memory
+    /// (because it slightly increases memory usage per node).
+    /// </summary>
+    public const bool ENABLE_MAX_SEARCH_TREE = false;
+
+    /// <summary>
     /// 
     /// Possibly using Level1 helps. However possibly with large pages it is better to use None (?).
     /// </summary>
     public const MTCSNodes.Struct.MCTSNodeStruct.CacheLevel PrefetchCacheLevel = MTCSNodes.Struct.MCTSNodeStruct.CacheLevel.Level1;
-
-
-    public const int MAX_BATCH_SIZE = 1024;
-    public const int MAX_NN_BATCH_SIZE = 1024;
-
   }
 }

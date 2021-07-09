@@ -56,8 +56,9 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     {
       get
       {
-        int maxByMemory = (int)(Win32.MemorySize / APPROX_BYTES_PER_NODE);
-        return Math.Min(maxByMemory, MCTSNodeStructChildStorage.MAX_NODES);
+        long maxByMemory = (long)HardwareManager.MemorySize / (long)APPROX_BYTES_PER_NODE;
+        maxByMemory = Math.Min(int.MaxValue, maxByMemory);
+        return Math.Min((int)maxByMemory, MCTSNodeStructChildStorage.MAX_NODES);
       }
     }
 
@@ -109,7 +110,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       
       Nodes = new MCTSNodeStructStorage(allocNodes, null, 
                                         MCTSParamsFixed.STORAGE_USE_INCREMENTAL_ALLOC, 
-                                        MCTSParamsFixed.STORAGE_LARGE_PAGES,
+                                        MCTSParamsFixed.TryEnableLargePages,
                                         MCTSParamsFixed.STORAGE_USE_EXISTING_SHARED_MEM);
       
       long reserveChildren = maxNodes * (long)AVG_CHILDREN_PER_NODE;

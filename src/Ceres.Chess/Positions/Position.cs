@@ -148,67 +148,71 @@ namespace Ceres.Chess
         if (pieceCount == 2) return PositionDrawStatus.DrawByInsufficientMaterial;
 
         // Our special material rules only apply of 4 or less pieces
-        if (pieceCount <= 4)
+        if (pieceCount > 4)
         {
-          // Insufficient material?
-          Span<(Piece, Square)> spanPieces = stackalloc (Piece, Square)[4];
+          return PositionDrawStatus.NotDraw;
+        }
 
-          // Count number of bishops and knights, 
-          // and immediately return false if Rook or Queen seen
-          int bishopCountUs = 0;
-          int bishopCountThem = 0;
-          int knightCountUs = 0;
-          int knightCountThem = 0;
-          int otherPieceCount = 0;
-          foreach ((Piece piece, Square square) piece in this.GetPiecesOnSquares(spanPieces))
+        // Insufficient material?
+        Span<(Piece, Square)> spanPieces = stackalloc (Piece, Square)[4];
+
+        // Count number of bishops and knights, 
+        // and immediately return false if Rook or Queen seen
+        int bishopCountUs = 0;
+        int bishopCountThem = 0;
+        int knightCountUs = 0;
+        int knightCountThem = 0;
+        int otherPieceCount = 0;
+        foreach ((Piece piece, Square square) piece in this.GetPiecesOnSquares(spanPieces))
+        {
+          if (piece.piece.Type == PieceType.Bishop)
           {
-            if (piece.piece.Type == PieceType.Bishop)
+            if (piece.piece.Side == MiscInfo.SideToMove)
             {
-              if (piece.piece.Side == MiscInfo.SideToMove)
-                bishopCountUs++;
-              else
-                bishopCountThem++;
-            }
-            else if (piece.piece.Type == PieceType.Knight)
-            {
-              if (piece.piece.Side == MiscInfo.SideToMove)
-                knightCountUs++;
-              else
-                knightCountThem++;
+              bishopCountUs++;
             }
             else
             {
-              if (piece.piece.Type != PieceType.King)
-                otherPieceCount++;
+              bishopCountThem++;
             }
           }
-
-          // Not draw if pawn, rook or queen present
-          if (otherPieceCount > 0)
+          else if (piece.piece.Type == PieceType.Knight)
           {
-            return PositionDrawStatus.NotDraw;
-            // Can't mate with single knight or bishop
-          }
-          else if (pieceCount == 3)
-          {
-            // 3 pieces with all of them either King, Bishop or Knight is a draw
-            return PositionDrawStatus.DrawByInsufficientMaterial;
-          }
-          else if (bishopCountThem != 2 || bishopCountThem != 2) // two bishops same side may not be a draw
-          {
-            bool isKightAndBishopSameSide = (knightCountUs == 1 && bishopCountUs == 1)
-                                          || (knightCountThem == 1 && bishopCountThem == 1);
-            if (!isKightAndBishopSameSide)
+            if (piece.piece.Side == MiscInfo.SideToMove)
             {
-              // 2 minor pieces shown not to be two bishops same side nor bishop+knight same side, must be a draw
-              return PositionDrawStatus.DrawByInsufficientMaterial;
+              knightCountUs++;
+            }
+            else
+            {
+              knightCountThem++;
+            }
+          }
+          else
+          {
+            if (piece.piece.Type != PieceType.King)
+            {
+              otherPieceCount++;
             }
           }
         }
 
-        return PositionDrawStatus.NotDraw;
+        // Not draw if pawn, rook or queen present
+        if (otherPieceCount > 0)
+        {
+          return PositionDrawStatus.NotDraw;
+        }
+
+        if (bishopCountThem == 2 
+        || (bishopCountThem == 1 && knightCountThem == 1))
+        {
+          return PositionDrawStatus.NotDraw;
+        }
+
+
+        return PositionDrawStatus.DrawByInsufficientMaterial;
       }
     }
+
 
     /// <summary>
     /// Calculate the draw status for this position.
@@ -219,15 +223,44 @@ namespace Ceres.Chess
       {
         // Check for 50 move rule
         if (MiscInfo.Move50Count > 99)
+        {
           return PositionDrawStatus.DrawCanBeClaimed;
+        }
 
         // Two repetitions would mean the position occurred at least 3 times
-        if (MiscInfo.RepetitionCount >= 2)
-          return PositionDrawStatus.DrawCanBeClaimed;
-
-        return PositionDrawStatus.NotDraw;
+        return MiscInfo.RepetitionCount >= 2 ? PositionDrawStatus.DrawCanBeClaimed : PositionDrawStatus.NotDraw;
       }
     }
+
+    #region Set fields
+
+    // Note: These methods abuse the readonly marking on this structure by making direct changes.
+
+    internal unsafe void SetMiscInfo(PositionMiscInfo miscInfo)
+    {
+      fixed (PositionMiscInfo* infoPtr = &MiscInfo)
+      {
+        *infoPtr = miscInfo;
+      }
+    }
+
+    internal unsafe void SetPieceCount(byte pieceCount)
+    {
+      fixed (byte* countPtr = &PieceCount)
+      {
+        *countPtr = pieceCount;
+      }
+    }
+
+    internal unsafe void SetShortHash()
+    {
+      fixed (byte* hashPtr = &PiecesShortHash)
+      {
+        *hashPtr = CalcShortHash();
+      }
+    }
+
+    #endregion
 
     #region Constructors
 
@@ -270,7 +303,7 @@ namespace Ceres.Chess
                     ulong whiteBishopBitmap, ulong whiteKnightBitmap, ulong whitePawnBitmap,
                     ulong blackKingBitmap, ulong blackQueenBitmap, ulong blackRookBitmap,
                     ulong blackBishopBitmap, ulong blackKnightBitmap, ulong blackPawnBitmap,
-                    PositionMiscInfo miscInfo)
+                    in PositionMiscInfo miscInfo)
     {
       // Obviate requirement of definite assignment to all fields
       Unsafe.SkipInit<Position>(out this);
@@ -304,7 +337,7 @@ namespace Ceres.Chess
     /// </summary>
     /// <param name="pieces"></param>
     /// <param name="miscInfo"></param>
-    public unsafe Position(Span<PieceOnSquare> pieces, PositionMiscInfo miscInfo)
+    public unsafe Position(Span<PieceOnSquare> pieces, in PositionMiscInfo miscInfo)
     {
       // Workaround to suppress definite assigment rules (TODO: pending .NET enhancmements may provide a cleaner/faster way)
       fixed (void* ptr = &this) { }
@@ -312,10 +345,12 @@ namespace Ceres.Chess
       PieceCount = 0;
       MiscInfo = miscInfo;
 
-      int squareIndex = 0;
       foreach (PieceOnSquare pieceSquare in pieces)
       {
-        if (pieceSquare.Piece.Type == PieceType.None) break;
+        if (pieceSquare.Piece.Type == PieceType.None)
+        {
+          break;
+        }
 
         int pieceCount = (byte)SetPieceOnSquare(pieceSquare.Square.SquareIndexStartA1, pieceSquare.Piece);
 
@@ -364,11 +399,17 @@ namespace Ceres.Chess
           found = true;
         }
         else
+        {
           pieces.Add(piece);
+        }
       }
+
       if (!found)
+      {
         throw new Exception("En passant pawn was not found");
-      return new Position(pieces.ToArray(), newMiscInfo);
+      }
+
+      return new Position(pieces.ToArray(), in newMiscInfo);
     }
 
 
@@ -392,7 +433,9 @@ namespace Ceres.Chess
       {
         Piece newPiece = modifyFunc(new PieceOnSquare(square, this[square]));
         if (newPiece.Type != PieceType.None)
+        {
           ps.Add(new PieceOnSquare(square, newPiece));
+        }
       }
 
       Position newPos = new Position(ps.ToArray(), miscInfo);
@@ -410,7 +453,9 @@ namespace Ceres.Chess
         PieceOnSquare[] ps = new PieceOnSquare[PieceCount];
         int count = 0;
         foreach (PieceOnSquare pieceOnSquare in PiecesEnumeration)
+        {
           ps[count++] = new PieceOnSquare(pieceOnSquare.Square.Mirrored, pieceOnSquare.Piece);
+        }
 
         Position newPos = new Position(ps, MiscInfo.Mirrored);
         return newPos;
@@ -566,28 +611,16 @@ namespace Ceres.Chess
 
     static ulong[][] FastHashTable; // size [32,256] = 8192*8=128k
 
-    static object lockInitFastHashTableObject = new object();
 
     static void InitFastHashTable()
     {
-      lock (lockInitFastHashTableObject)
-      {
-        // Initialize (unless another thread did this)
-        if (FastHashTable == null)
-          FastHashTable = CalcFastHashTable();
-      }
-    }
-
-
-    static ulong[][] CalcFastHashTable()
-    {
       ulong[][][] keys = EncodedBoardZobrist.Keys;
 
-      ulong[][] fastHashTable = new ulong[32][];
+      FastHashTable = new ulong[32][];
 
       for (int i = 0; i < 32; i++)
       {
-        fastHashTable[i] = new ulong[256];
+        FastHashTable[i] = new ulong[256];
 
         for (int rawValue = 0; rawValue < 256; rawValue++)
         {
@@ -610,11 +643,9 @@ namespace Ceres.Chess
             thisHashRight = keys[(int)pieceRight.Side][(int)pieceRight.Type][squareIndex];
           }
 
-          fastHashTable[i][rawValue] = thisHashLeft ^ thisHashRight;
+          FastHashTable[i][rawValue] = thisHashLeft ^ thisHashRight;
         }
       }
-
-      return fastHashTable;
     }
 
     /// <summary>
@@ -690,10 +721,9 @@ namespace Ceres.Chess
 
       hash ^= (ulong)MiscInfo.HashPosition(hashMode, includeRepetitions);
 
-      if (MiscInfo.EnPassantFileIndex != PositionMiscInfo.EnPassantFileIndexEnum.FileNone)
-        return hash = hash * 31 + (ulong)MiscInfo.EnPassantFileIndex;
-      else
-        return hash;
+      return MiscInfo.EnPassantFileIndex != PositionMiscInfo.EnPassantFileIndexEnum.FileNone
+          ? (hash = hash * 31 + (ulong)MiscInfo.EnPassantFileIndex)
+          : hash;
     }
 
 
@@ -765,8 +795,15 @@ namespace Ceres.Chess
 
             byte valueLeft = (byte)(rawValue & 0b0000_1111);
             byte valueRight = (byte)(rawValue >> 4);
-            if (valueLeft != 0) array[count++] = (new Piece(valueLeft), new Square(i * 2));
-            if (valueRight != 0) array[count++] = (new Piece(valueRight), new Square(i * 2 + 1));
+            if (valueLeft != 0)
+            {
+              array[count++] = (new Piece(valueLeft), new Square(i * 2));
+            }
+
+            if (valueRight != 0)
+            {
+              array[count++] = (new Piece(valueRight), new Square(i * 2 + 1));
+            }
           }
         }
       }
@@ -788,10 +825,7 @@ namespace Ceres.Chess
         fixed (byte* pieceSquares = &Square_0_1)
         {
           rawValue = pieceSquares[square.SquareIndexStartA1 / 2];
-          if (square.SquareIndexStartA1 % 2 == 1)
-            rawValue = (byte)(rawValue >> 4);
-          else
-            rawValue = (byte)(rawValue & 0b0000_1111);
+          rawValue = square.SquareIndexStartA1 % 2 == 1 ? (byte)(rawValue >> 4) : (byte)(rawValue & 0b0000_1111);
         }
       }
       return new Piece(rawValue);
@@ -814,7 +848,9 @@ namespace Ceres.Chess
           Square sq = new Square(i);
           Piece piece = this[sq];
           if (piece.Type != PieceType.None)
+          {
             yield return (sq, piece);
+          }
         }
       }
     }
@@ -833,7 +869,9 @@ namespace Ceres.Chess
       // Generate moves to check for checkmake
       MGMoveList moves;
       if (knownMoveList != null)
+      {
         moves = knownMoveList;
+      }
       else
       {
         // Move list not already known, generate
@@ -842,11 +880,17 @@ namespace Ceres.Chess
       }
 
       if (moves.NumMovesUsed > 0)
+      {
         return GameResult.Unknown;
+      }
       else if (MGMoveGen.IsInCheck(in posMG, posMG.BlackToMove))
+      {
         return GameResult.Checkmate;
+      }
       else
+      {
         return GameResult.Draw; // stalemate
+      }
     }
 
 
@@ -883,7 +927,7 @@ namespace Ceres.Chess
     /// <param name="piece"></param>
     /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private int SetPieceOnSquare(int squareIndex, Piece piece)
+    internal int SetPieceOnSquare(int squareIndex, Piece piece)
     {
       Debug.Assert(piece.RawValue < 15);
 
@@ -893,10 +937,9 @@ namespace Ceres.Chess
         fixed (byte* pieceSquares = &Square_0_1)
         {
           byte byteValue = pieceSquares[thisIndex];
-          if (squareIndex % 2 == 1)
-            byteValue = (byte)((byteValue & 0b0000_1111) | piece.RawValue << 4);
-          else
-            byteValue = (byte)((byteValue & 0b1111_0000) | piece.RawValue);
+          byteValue = squareIndex % 2 == 1
+              ? (byte)((byteValue & 0b0000_1111) | piece.RawValue << 4)
+              : (byte)((byteValue & 0b1111_0000) | piece.RawValue);
           pieceSquares[thisIndex] = byteValue;
         }
       }
@@ -920,10 +963,7 @@ namespace Ceres.Chess
           for (int i = 0; i < 64; i++)
           {
             byte byteValue = pieceSquares[i / 2];
-            if (i % 2 == 1)
-              byteValue = (byte)(byteValue >> 4);
-            else
-              byteValue = (byte)(byteValue & 0b0000_1111);
+            byteValue = i % 2 == 1 ? (byte)(byteValue >> 4) : (byte)(byteValue & 0b0000_1111);
 
             if (byteValue == piece.RawValue) return true;
           }
@@ -948,10 +988,7 @@ namespace Ceres.Chess
           for (int i = 0; i < 64; i++)
           {
             byte byteValue = pieceSquares[i / 2];
-            if (i % 2 == 1)
-              byteValue = (byte)(byteValue >> 4);
-            else
-              byteValue = (byte)(byteValue & 0b0000_1111);
+            byteValue = i % 2 == 1 ? (byte)(byteValue >> 4) : (byte)(byteValue & 0b0000_1111);
 
             if (byteValue == piece.RawValue) count++;
           }
@@ -977,7 +1014,9 @@ namespace Ceres.Chess
         int numBits = bitmap.GetSetBitIndices(scratchIndices, 0, 64);
 
         for (int i = 0; i < numBits; i++)
+        {
           numPieces += (byte)SetPieceOnSquare(scratchIndices[i],  piece);
+        }
       }
       return numPieces;
     }
@@ -1039,7 +1078,7 @@ namespace Ceres.Chess
       };
 
       PositionMiscInfo miscInfo = new PositionMiscInfo(true, true, true, true, SideType.White, 0, 0, 1, PositionMiscInfo.EnPassantFileIndexEnum.FileNone);
-      return new Position(pieces, miscInfo);
+      return new Position(pieces,in miscInfo);
     }
 
     #endregion
@@ -1092,7 +1131,9 @@ namespace Ceres.Chess
     {
       Position pos = this;
       foreach (string sanMoveString in sanMoveStrings)
+      {
         pos = pos.AfterMove(pos.MoveSAN(sanMoveString));
+      }
 
       return pos;
     }
@@ -1159,6 +1200,14 @@ namespace Ceres.Chess
 
     #endregion
 
+    #region Initialization
 
+    [ModuleInitializer]
+    internal static void Init()
+    {
+      InitFastHashTable();
+    }
+
+    #endregion
   }
 }

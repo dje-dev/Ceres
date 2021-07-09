@@ -18,9 +18,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 
-using Ceres.Base;
 using Ceres.Base.Benchmarking;
-using Ceres.Base.DataType;
 using Ceres.Base.DataTypes;
 using Ceres.Chess.EncodedPositions;
 
@@ -59,9 +57,9 @@ namespace Ceres.Chess.NetEvaluation.Batch
     public Memory<FP16> M;
 
     /// <summary>
-    /// Vector if activations from intermediate layer in value head.
+    /// Activations of inner layers.
     /// </summary>
-    public Memory<float> ValueHeadConv;
+    public Memory<NNEvaluatorResultActivations> Activations;  
 
     #endregion
 
@@ -102,6 +100,12 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <returns></returns>
     public FP16 GetM(int index) => HasM ? M.Span[index] : FP16.NaN;
 
+    /// <summary>
+    /// Returns inner layer activations.
+    /// </summary>
+    /// <param name="index"></param>
+    /// <returns></returns>
+    NNEvaluatorResultActivations GetActivations(int index) => Activations.IsEmpty ? null : Activations.Span[index];
 
     /// <summary>
     /// Returns string representation of the WDL values for position at a specified index.
@@ -120,12 +124,6 @@ namespace Ceres.Chess.NetEvaluation.Batch
 
 
     public TimingStats Stats;
-
-    /// <summary>
-    /// Returns the values of the innervalue head layer (as a 2D array).
-    /// </summary>
-    public float[,] ValueHeadConvFlat => ArrayUtils.To2D(ValueHeadConv.ToArray(), 32 * 64);
-
 
     /// <summary>
     /// Returns if the batch was evaluated with a network that has an WDL head.
@@ -153,18 +151,6 @@ namespace Ceres.Chess.NetEvaluation.Batch
       return $"<PositionEvaluationBatch of {NumPos:n0}{timeStr} with first V: {GetV(0):F2}>";
     }
 
-
-    /// <summary>
-    /// Returns the value of the inner layer in the value head.
-    /// </summary>
-    /// <param name="index"></param>
-    /// <returns></returns>
-    public float[] GetValueHeadConvFlat(int index)
-    {
-      float[] ret = new float[32 * 64];
-      Array.Copy(ValueHeadConv.ToArray(), index * 32 * 64, ret, 0, 32 * 64);
-      return ret;
-    }
 
 
     /// <summary>
@@ -224,6 +210,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
         {
           // Avoid overflow by subtracting off max
           float max = 0.0f;
+
           for (int j = 0; j < EncodedPolicyVector.POLICY_VECTOR_LENGTH; j++)
           {
             float val = policyProbs[startIndex + j];
@@ -231,19 +218,30 @@ namespace Ceres.Chess.NetEvaluation.Batch
           }
 
           for (int j = 0; j < EncodedPolicyVector.POLICY_VECTOR_LENGTH; j++)
+          {
             buffer[j] = (float)Math.Exp(policyProbs[startIndex + j] - max); // TODO: make faster
+          }
         }
 
         double acc = 0;
-        for (int j = 0; j < EncodedPolicyVector.POLICY_VECTOR_LENGTH; j++) acc += buffer[j];
-        if (acc == 0.0) throw new Exception("Sum of unnormalized probabilities was zero.");
+        for (int j = 0; j < EncodedPolicyVector.POLICY_VECTOR_LENGTH; j++)
+        {
+          acc += buffer[j];
+        }
+
+        if (acc == 0.0)
+        {
+          throw new Exception("Sum of unnormalized probabilities was zero.");
+        }
 
         // As performance optimization, only adjust if significantly different from 1.0
         const float MAX_DEVIATION = 0.001f;
         if (acc < 1.0f - MAX_DEVIATION || acc > 1.0f + MAX_DEVIATION)
         {
-          for (int j = 0; j < EncodedPolicyVector.POLICY_VECTOR_LENGTH; j++) 
+          for (int j = 0; j < EncodedPolicyVector.POLICY_VECTOR_LENGTH; j++)
+          {
             buffer[j] = (float)(buffer[j] / acc);
+          }
         }
 
         CompressedPolicyVector.Initialize(ref retPolicies[i], buffer, alreadySorted);
@@ -274,7 +272,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
           {
             w[i] = valueEvals[i * 3 + 0];
             l[i] = valueEvals[i * 3 + 2];
-            Debug.Assert(Math.Abs(100 - valueEvals[i * 3 + 0] + valueEvals[i * 3 + 1] + valueEvals[i * 3 + 2]) <= 0.001);
+            Debug.Assert(Math.Abs(1 - (valueEvals[i * 3 + 0] + valueEvals[i * 3 + 1] + valueEvals[i * 3 + 2])) <= 0.001);
           }
           else
           {
@@ -310,18 +308,20 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <param name="d"></param>
     /// <param name="l"></param>
     /// <param name="m"></param>
-    /// <param name="valueHeadConvFlat"></param>
+    /// <param name="activations"></param>
     /// <param name="stats"></param>
     public PositionEvaluationBatch(bool isWDL, bool hasM, int numPos, Memory<CompressedPolicyVector> policies,
                              Memory<FP16> w, Memory<FP16> l, Memory<FP16> m,
-                             Memory<float> valueHeadConvFlat, TimingStats stats, bool makeCopy = false)
+                             Memory<NNEvaluatorResultActivations> activations,
+                             TimingStats stats, bool makeCopy = false)
     {
       IsWDL = isWDL;
       HasM = hasM;
       NumPos = numPos;
-      ValueHeadConv = valueHeadConvFlat;
 
       Policies = makeCopy ? policies.ToArray() : policies;
+      Activations = activations;
+
       W = makeCopy ? w.ToArray() : w;
       L = (isWDL && makeCopy) ? l.ToArray() : l;
       M = (hasM && makeCopy) ? m.ToArray() : m;
@@ -341,19 +341,26 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <param name="valsAreLogistic"></param>
     /// <param name="stats"></param>
     private PositionEvaluationBatch(bool isWDL, bool hasM, int numPos, 
-                                    Span<FP16> valueEvals, 
-                                    float[] valueHeadConvFlat, 
+                                    Span<FP16> valueEvals, Span<FP16> m,
+                                    Span<NNEvaluatorResultActivations> activations, 
                                     bool valsAreLogistic, TimingStats stats)
     {
       IsWDL = isWDL;
       HasM = hasM;
 
       NumPos = numPos;
-      ValueHeadConv = valueHeadConvFlat;
+      Activations = activations.ToArray();
 
       InitializeValueEvals(valueEvals, valsAreLogistic);
+      if (hasM)
+      {
+        this.M = m.ToArray();
+      }
 
-      if (valueEvals != null && valueEvals.Length < numPos * (IsWDL ? 3 : 1)) throw new ArgumentException("Wrong value size");
+      if (valueEvals != null && valueEvals.Length < numPos * (IsWDL ? 3 : 1))
+      {
+        throw new ArgumentException("Wrong value size");
+      }
 
       Stats = stats;
     }
@@ -366,12 +373,13 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <param name="numPos"></param>
     /// <param name="valueEvals"></param>
     /// <param name="policyProbs"></param>
-    /// <param name="valueHeadConvFlat"></param>
+    /// <param name="activations"></param>
     /// <param name="probType"></param>
     /// <param name="stats"></param>
-    public PositionEvaluationBatch(bool isWDL, bool hasM, int numPos, Span<FP16> valueEvals, float[] policyProbs, float[] valueHeadConvFlat,
-                             bool valsAreLogistic, PolicyType probType, bool policyAlreadySorted, TimingStats stats) 
-      : this(isWDL, hasM, numPos, valueEvals, valueHeadConvFlat, valsAreLogistic, stats)
+    public PositionEvaluationBatch(bool isWDL, bool hasM, int numPos, Span<FP16> valueEvals, float[] policyProbs, 
+                                   FP16[] m, NNEvaluatorResultActivations[] activations,
+                                   bool valsAreLogistic, PolicyType probType, bool policyAlreadySorted, TimingStats stats) 
+      : this(isWDL, hasM, numPos, valueEvals, m, activations, valsAreLogistic, stats)
     {
       Policies = ExtractPoliciesBufferFlat(numPos, policyProbs, probType, policyAlreadySorted);
     }
@@ -385,48 +393,19 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <param name="valueEvals"></param>
     /// <param name="policyIndices"></param>
     /// <param name="policyProbabilties"></param>
-    /// <param name="valueHeadConvFlat"></param>
+    /// <param name="activations"></param>
     /// <param name="probType"></param>
     /// <param name="stats"></param>
     public PositionEvaluationBatch(bool isWDL, bool hasM, int numPos, Span<FP16> valueEvals, 
                              int topK, Span<int> policyIndices, Span<float> policyProbabilties,
-                             float[] valueHeadConvFlat, bool valsAreLogistic,
+                             Span<FP16> m,
+                             Span<NNEvaluatorResultActivations> activations, bool valsAreLogistic,
                              PolicyType probType, TimingStats stats)
-      : this(isWDL, hasM, numPos, valueEvals, valueHeadConvFlat, valsAreLogistic, stats)
+      : this(isWDL, hasM, numPos, valueEvals, m, activations, valsAreLogistic, stats)
     {
       Policies = ExtractPoliciesTopK(numPos, topK, policyIndices, policyProbabilties, probType);
     }
 
-
-    #region Dump utilities
-
-    /// <summary>
-    /// Diagnostic method that dumps the contents of the batch to the Console.
-    /// </summary>
-    /// <param name="batchIn"></param>
-    /// <param name="maxPositionsToDump"></param>
-    /// <param name="posAnnotations"></param>
-    public void DumpBatch(EncodedTrainingPosition[] batchIn, int maxPositionsToDump = int.MaxValue, string[] posAnnotations = null)
-    {
-      maxPositionsToDump = Math.Min(this.NumPos, maxPositionsToDump);
-
-      Console.WriteLine($"\r\nWFEvaluationBatch of size {this.NumPos} evaluated in {this.Stats.ElapsedTimeSecs} secs");
-      for (int i = 0; i < maxPositionsToDump; i++)
-      {
-        string fen = batchIn == null ? "(FEN unavailable)" : batchIn[0].Position.FENForHistoryBoard(0);
-
-        string policy = this.Policies.Span[i].DumpStrShort(0, 3);
-        if (posAnnotations != null)
-        {
-          if (i < posAnnotations.Length)
-            Console.Write($"  {posAnnotations[i],-20}");
-          else
-            Console.Write($"  {"",-20}");
-        }
-        Console.WriteLine($"  {fen,-70} Value: {GetV(i),7:F3} ={GetWinP(i):F3}/{GetDrawP(i):F3}/{GetLossP(i):F3}  Policy: {policy} ");
-      }
-
-    }
 
     /// <summary>
     /// Gets the value from the value head at a specified index indicating the win probabilty.
@@ -450,12 +429,16 @@ namespace Ceres.Chess.NetEvaluation.Batch
     (Memory<CompressedPolicyVector> policies, int index)
       IPositionEvaluationBatch.GetPolicy(int index) => (Policies, index);
 
+
     /// <summary>
     /// Gets the value from the MLH head at a specified index.
     /// </summary>
     /// <param name="index"></param>
     /// <returns></returns>
     FP16 IPositionEvaluationBatch.GetM(int index) => GetM(index);
+
+
+    NNEvaluatorResultActivations IPositionEvaluationBatch.GetActivations(int index) => GetActivations(index);
 
     public IEnumerator<NNPositionEvaluationBatchMember> GetEnumerator()
     {
@@ -469,8 +452,6 @@ namespace Ceres.Chess.NetEvaluation.Batch
       throw new NotImplementedException();
     }
 
-
-    #endregion
 
   }
 }

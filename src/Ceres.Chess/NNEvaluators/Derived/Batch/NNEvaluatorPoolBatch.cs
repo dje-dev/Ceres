@@ -168,7 +168,7 @@ namespace Ceres.Chess.NNEvaluators
 
       Span<FP16> fullL = fullBatchResult.IsWDL ? fullBatchResult.L.Span : default;
       Span<FP16> fullM = fullBatchResult.IsWDL ? fullBatchResult.M.Span : default;
-      Span<float> fullValueHeadConv = retrieveSupplementalResults ? fullBatchResult.ValueHeadConv.Span : new float[0];
+      Span<NNEvaluatorResultActivations> fullActivations = fullBatchResult.Activations.IsEmpty ? null : fullBatchResult.Activations.Span;
 
       // Finally, disaggregate the big batch back into a set of individual subbatch results
       PositionEvaluationBatch[] completedBatches = new PositionEvaluationBatch[pendingBatches.Count];
@@ -186,7 +186,7 @@ namespace Ceres.Chess.NNEvaluators
                                 fullW.Slice(nextPosIndex, numPos).ToArray(),
                                 fullBatchResult.IsWDL ? fullL.Slice(nextPosIndex, numPos).ToArray() : null,
                                 fullBatchResult.IsWDL ? fullM.Slice(nextPosIndex, numPos).ToArray() : null,
-                                retrieveSupplementalResults ? fullValueHeadConv.Slice(nextPosIndex, numPos).ToArray() : null,
+                                fullBatchResult.Activations.IsEmpty ? null : fullActivations.Slice(nextPosIndex, numPos).ToArray(),
                                 fullBatchResult.Stats);
 
         nextPosIndex += numPos;

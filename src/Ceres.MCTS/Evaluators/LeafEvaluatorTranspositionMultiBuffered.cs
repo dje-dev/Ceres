@@ -57,7 +57,6 @@ namespace Ceres.MCTS.Evaluators
         MCTSNodeStructIndex transpositionSubnodeIndex = linkedVisitor.Visitor.GetNext();
         Debug.Assert(!transpositionSubnodeIndex.IsNull);
 
-        NumExtractedAndNeverCloned++;
         numAlreadyLinked++;
 
         // Prepare the result to return
@@ -114,8 +113,6 @@ namespace Ceres.MCTS.Evaluators
         if (VERBOSE) Console.WriteLine($"num allocated {node.Context.Tree.Store.Nodes.NumUsedNodes - startNodes} " +
                         $"when cloning node of size {transpositionRootNode.N} with target {numAlreadyLinked} " +
                          $"total nodes now { node.Context.Tree.Store.Nodes.NumUsedNodes}");
-        NumDelinked++;
-        NumExtractedAndNeverCloned -= (ulong)(numAlreadyLinked);
 
         // We have cloned and will use this tree directly in the future.
         // Delete the transposition visitor previously used

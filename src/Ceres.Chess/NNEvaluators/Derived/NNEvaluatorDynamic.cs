@@ -47,13 +47,19 @@ namespace Ceres.Chess.NNEvaluators
 
 
     /// <summary>
+    /// The maximum number of positions that can be evaluated in a single batch.
+    /// </summary>
+    public override int MaxBatchSize => MinBatchSizeAmongAllEvaluators;
+
+
+    /// <summary>
     /// Virtual method that evaluates batch into internal buffers.
     /// </summary>
     /// <param name="positions"></param>
     /// <param name="retrieveSupplementalResults"></param>
     /// <returns></returns>
-    public override IPositionEvaluationBatch EvaluateIntoBuffers(IEncodedPositionBatchFlat positions, 
-                                                                      bool retrieveSupplementalResults = false)
+    public override IPositionEvaluationBatch DoEvaluateIntoBuffers(IEncodedPositionBatchFlat positions, 
+                                                                   bool retrieveSupplementalResults = false)
     {
       int index;
       if (DynamicEvaluatorIndexPredicate != null)

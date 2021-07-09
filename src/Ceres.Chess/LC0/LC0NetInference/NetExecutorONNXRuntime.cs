@@ -1,3 +1,12 @@
+#define FEATURE_ONNX
+#if NOT
+// requires packages: (actually, probably possible and best to install the Gpu package only)
+// NOTE: the Gpu version may have a dependency on a specific version of CUDA \
+//       and fail to load onnxruntime.dll otherwise
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.7.0" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu" Version="1.7.1" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.Managed" Version="1.7.1" />
+#endif
 #region License notice
 
 /*
@@ -19,13 +28,12 @@ using System;
 using System.Diagnostics;
 using System.Collections.Generic;
 using Ceres.Base;
-
-#if FEATURE_ONNX
-// needs     <PackageReference Include="Microsoft.ML.OnnxRuntime.Managed" Version="1.6.0" />
-
-using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
+using Ceres.Base.DataTypes;
+
+
+#if FEATURE_ONNX
 #endif
 
 #endregion
@@ -74,7 +82,7 @@ namespace Ceres.Chess.LC0NetInference
       if (gpuID == -999) // CPU. TO DO: clean this up
         Session = new InferenceSession(onnxFileName);
       else if (gpuID == -1)
-        Session = new InferenceSession(onnxFileName, SessionOptions.MakeSessionOptionWithCudaProvider());
+        Session = new InferenceSession(onnxFileName, SessionOptions.MakeSessionOptionWithCudaProvider(gpuID));
       else
       {
 #if NOT
@@ -85,7 +93,11 @@ namespace Ceres.Chess.LC0NetInference
 //        options.AppendExecutionProvider_CUDA();
         Session = new InferenceSession(onnxFileName, options);
 #endif
-        Session = new InferenceSession(onnxFileName, SessionOptions.MakeSessionOptionWithCudaProvider(gpuID));
+        SessionOptions so = new SessionOptions();
+        so.GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_EXTENDED;
+        so.AppendExecutionProvider_CUDA(gpuID);
+
+        Session = new InferenceSession(onnxFileName, so);
       }
 #else
         Session = new InferenceSession(onnxFileName);
@@ -103,7 +115,7 @@ namespace Ceres.Chess.LC0NetInference
     /// <param name="input"></param>
     /// <param name="shape"></param>
     /// <returns></returns>
-    public float[][] Run(Memory<float> input, int[] shape)
+    public float[][] Run(Memory<float> input, int[] shape, bool float16)
     {
 #if FEATURE_ONNX
       // Determine input name
@@ -122,6 +134,65 @@ namespace Ceres.Chess.LC0NetInference
       foreach (int dimSize in shape) numElements *= dimSize;
       if (input.Length < numElements) throw new Exception($"Unexpected number of elements {numElements} {input.Length} {shape.ToString()}");
 
+      if (float16)
+      {
+        return RunFloat16(input, shape, inputName, numElements);
+      }
+      else
+      {
+        return RunFloat(input, shape, inputName, numElements);
+      }
+#else
+      return default;
+#endif
+    }
+
+
+    /// <summary>
+    /// 
+    /// 
+    /// TO DO: eventually we could have a separate (more efficient) code path 
+    ///        which is FP16 throughout rather than multiple conversions.
+    /// </summary>
+    /// <param name="input"></param>
+    /// <param name="shape"></param>
+    /// <param name="inputName"></param>
+    /// <param name="numElements"></param>
+    /// <returns></returns>
+    private float[][] RunFloat16(Memory<float> input, int[] shape, string inputName, int numElements)
+    {
+      Span<float> inputSpan = input.Span;
+      Float16[] inputFloat16 = new Float16[numElements];
+      for (int ix = 0; ix < numElements; ix++)
+      {
+        inputFloat16[ix] = (Float16)inputSpan[ix];
+      }
+
+      DenseTensor<Float16> inputTensor = new DenseTensor<Float16>(inputFloat16, shape);
+      List<NamedOnnxValue> inputs = new List<NamedOnnxValue>() { NamedOnnxValue.CreateFromTensor(inputName, inputTensor) };
+
+      IDisposableReadOnlyCollection<DisposableNamedOnnxValue> runResult;
+
+      lock (lockObject)
+      {
+        runResult = Session.Run(inputs);
+      }
+
+      float[][] resultArrays = new float[Session.OutputMetadata.Count][];
+      int i = 0;
+      foreach (DisposableNamedOnnxValue resultValue in runResult)
+      {
+        DenseTensor<Float16> tensor = (DenseTensor<Float16>)resultValue.AsTensor<Float16>();
+        Float16[] valuesFP16 = tensor.Buffer.ToArray();
+        resultArrays[i++] = Array.ConvertAll<Float16, float>(valuesFP16, f => FP16.FromRaw((ushort)f));
+      }
+      return resultArrays;
+    }
+
+
+
+    private float[][] RunFloat(Memory<float> input, int[] shape, string inputName, int numElements)
+    {
       //System.Memory Memory<float> inputAsMemory = (Memory<float>)input;
       DenseTensor<float> inputTensor = new DenseTensor<float>(input.Slice(0, numElements), shape);
       List<NamedOnnxValue> inputs = new List<NamedOnnxValue>() { NamedOnnxValue.CreateFromTensor(inputName, inputTensor) };
@@ -143,12 +214,8 @@ namespace Ceres.Chess.LC0NetInference
         i++;
       }
       return resultArrays;
-#else
-      return default;
-#endif
     }
 
-    
     public void Dispose()
     {
 #if FEATURE_ONNX

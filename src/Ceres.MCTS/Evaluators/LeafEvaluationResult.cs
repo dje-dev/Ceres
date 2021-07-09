@@ -21,6 +21,7 @@ using Ceres.MCTS.Params;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 #endregion
@@ -69,12 +70,35 @@ namespace Ceres.MCTS.Evaluators
     /// <summary>
     /// Policy draw probability percentage.
     /// </summary>
-    public float DrawP => ParamsSelect.VIsForcedResult(V) ? 0 : 1.0f - (WinP + LossP);
+    public float DrawP
+    {
+      [MethodImpl(MethodImplOptions.AggressiveInlining)]
+      get
+      {
+        float winP = WinP.ToFloatApprox;
+        float lossP = LossP.ToFloatApprox;
+        float v = winP - lossP;
+        return ParamsSelect.VIsForcedResult(v) ? 0 
+                                               : 1.0f - (winP + lossP);
+#if NOT
+        float correct = ParamsSelect.VIsForcedResult(V) ? 0 : 1.0f - (WinP + LossP);
+        float tryx;
+
+        if (ParamsSelect.VIsForcedResult(V)) 
+          tryx = 0;
+        else
+          tryx = 1.0f - (WinP.ToFloatApprox + LossP.ToFloatApprox);
+        if (MathF.Abs(tryx - correct) > 0.0001)
+          throw new Exception($"BAD { tryx } correct { correct} from {WinP} {LossP}  {ToF(WinP)} {ToF(LossP)}");
+        return tryx;
+#endif
+      }
+    }
 
     /// <summary>
     /// Value estimate (logistic).
     /// </summary>
-    public float V => WinP - LossP;
+    public float V => WinP.ToFloatApprox - LossP.ToFloatApprox;
 
     /// <summary>
     /// If the underlying policy has been released.

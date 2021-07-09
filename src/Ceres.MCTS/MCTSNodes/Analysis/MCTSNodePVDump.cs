@@ -47,9 +47,13 @@ namespace Ceres.MCTS.MTCSNodes.Analysis
         try
         {
           if (v > thresholdGreen)
+          {
             Console.ForegroundColor = ConsoleColor.Green;
+          }
           else if (v < thresholdRed)
+          {
             Console.ForegroundColor = ConsoleColor.Red;
+          }
 
           writer.Write(s);
         }
@@ -71,12 +75,22 @@ namespace Ceres.MCTS.MTCSNodes.Analysis
       node.Context.Tree.Annotate(node);
 
       char extraChar = ' ';
-      if (node.Terminal == GameResult.Checkmate)
-        extraChar = 'C';
-      else if (node.Terminal == GameResult.Draw)
-        extraChar = 'D';
-      else if (countTimesSeen > 1)
-        extraChar = countTimesSeen > 9 ? '9' : countTimesSeen.ToString()[0];
+      switch (node.Terminal)
+      {
+        case GameResult.Checkmate:
+          extraChar = 'C';
+          break;
+        case GameResult.Draw:
+          extraChar = 'D';
+          break;
+        default:
+          if (countTimesSeen > 1)
+          {
+            extraChar = countTimesSeen > 9 ? '9' : countTimesSeen.ToString()[0];
+          }
+
+          break;
+      }
 
       float multiplier = 1; // currently alternate perspective
 
@@ -87,8 +101,11 @@ namespace Ceres.MCTS.MTCSNodes.Analysis
       if (!node.IsRoot)
       {
         MCTSNode[] parentsChildrenSortedQ = node.ChildrenSorted(innerNode => -multiplier * (float)innerNode.Q);
-        if (parentsChildrenSortedQ.Length > 0) bestMove = parentsChildrenSortedQ[0];
-//        if (parentsChildrenSortedQ.Length > 1) nextBestMove = parentsChildrenSortedQ[1];
+        if (parentsChildrenSortedQ.Length > 0)
+        {
+          bestMove = parentsChildrenSortedQ[0];
+        }
+        //        if (parentsChildrenSortedQ.Length > 1) nextBestMove = parentsChildrenSortedQ[1];
       }
 
       // Depth, move
@@ -160,14 +177,22 @@ namespace Ceres.MCTS.MTCSNodes.Analysis
       // Write headers
       writer.Write(" Dep  T #M    FirstVisit   MvWh  MvBl           N  Visits    Policy     V         Q     WPos  DPos  LPos   WTree DTree LTree  MPos MTree");
       if (fullDetail)
+      {
         writer.WriteLine("  FEN");
+      }
       else
+      {
         writer.WriteLine();
+      }
 
       if (fullDetail)
+      {
         writer.WriteLine("----  - --  ------------  -----  ---- -----------  ------  --------  -------    -----   ----  ----  ----   -----  ---- -----  ---- -----");
+      }
       else
+      {
         writer.WriteLine();
+      }
     }
 
 
@@ -179,16 +204,23 @@ namespace Ceres.MCTS.MTCSNodes.Analysis
       {
         // Rare case of more than expected number of pieces (due to promotion)
         ret += pieceChar + count.ToString();
-        for (int i = 0; i < maxCount - 2; i++) ret += " ";
+        for (int i = 0; i < maxCount - 2; i++)
+        {
+          ret += " ";
+        }
       }
       else
       {
         for (int i = 0; i < maxCount; i++)
         {
           if (count > i)
+          {
             ret += pieceChar;
+          }
           else
+          {
             ret += " ";
+          }
         }
       }
       return ret;
@@ -252,10 +284,14 @@ namespace Ceres.MCTS.MTCSNodes.Analysis
       foreach (MGMove move in moves)
       {
         int? childIndex = node.Ref.ChildIndexWithMove(move);
-        if (childIndex is null) 
+        if (childIndex is null)
+        {
           throw new Exception($"Move  {move} not found at node {node}");
+        }
         else
+        {
           (node, _, _) = node.ChildAtIndexInfo(childIndex.Value);
+        }
       }
       return node;
     }
@@ -263,40 +299,49 @@ namespace Ceres.MCTS.MTCSNodes.Analysis
 
     public static void DumpPV(MCTSNode node, bool fullDetail, TextWriter writer = null)
     {
-      writer = writer ?? Console.Out;
-      
-      writer.WriteLine();
-      WriteHeaders(fullDetail, writer);
-
-      List<Position> seenPositions = new List<Position>();
-
-      int CountDuplicatePos(Position pos)
+      using (new SearchContextExecutionBlock(node.Context))
       {
-        int count = 0;
-        foreach (Position priorPos in seenPositions)
-          if (pos.EqualAsRepetition(priorPos))
-            count++;
+        writer = writer ?? Console.Out;
 
-        return count;
+        writer.WriteLine();
+        WriteHeaders(fullDetail, writer);
+
+        List<Position> seenPositions = new List<Position>();
+
+        int CountDuplicatePos(Position pos)
+        {
+          int count = 0;
+          foreach (Position priorPos in seenPositions)
+          {
+            if (pos.EqualAsRepetition(in priorPos))
+            {
+              count++;
+            }
+          }
+
+          return count;
+        }
+
+        int depth = 0;
+        MCTSNode searchRootNode = node;
+        while (true)
+        {
+          node.Context.Tree.Annotate(node);
+          seenPositions.Add(node.Annotation.Pos);
+          int countSeen = CountDuplicatePos(node.Annotation.Pos);
+
+          DumpNodeStr(searchRootNode, node, countSeen, fullDetail, writer);
+
+          if (node.NumChildrenVisited == 0)
+          {
+            return;
+          }
+
+          node = node.BestMove(false);
+
+          depth++;
+        }
       }
-
-      int depth = 0;
-      MCTSNode searchRootNode = node;
-      while (true)
-      {
-        node.Context.Tree.Annotate(node);
-        seenPositions.Add(node.Annotation.Pos);
-        int countSeen = CountDuplicatePos(node.Annotation.Pos);
-
-        DumpNodeStr(searchRootNode, node, countSeen, fullDetail, writer);
-
-        if (node.NumChildrenVisited == 0)
-          return;
-        node = node.BestMove(false);
-
-        depth++;
-      }
-
     }
 
   }

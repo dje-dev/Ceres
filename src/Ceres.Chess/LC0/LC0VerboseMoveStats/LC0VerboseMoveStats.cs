@@ -52,9 +52,9 @@ namespace Ceres.Chess.LC0VerboseMoves
     public readonly ulong NumNodes;
 
     /// <summary>
-    /// Final position evaluation as a logistic.
+    /// Final position evaluation in centipawns.
     /// </summary>
-    public readonly float SearchEvalLogistic;
+    public readonly float ScoreCentipawns;
 
     /// <summary>
     /// Results as a UCISearchInfo object.
@@ -74,17 +74,17 @@ namespace Ceres.Chess.LC0VerboseMoves
     /// <param name="bestMove"></param>
     /// <param name="processorTime"></param>
     /// <param name="numNodes"></param>
-    /// <param name="searchEvalLogistic"></param>
+    /// <param name="scoreCentipawns"></param>
     /// <param name="uciSearchInfo"></param>
     public LC0VerboseMoveStats(Position position, string bestMove, 
-                               double processorTime, ulong numNodes, float searchEvalLogistic, 
+                               double processorTime, ulong numNodes, float scoreCentipawns, 
                                UCISearchInfo uciSearchInfo)
     {
       Position = position;
       ElapsedTime = processorTime;
       BestMove = bestMove;
       NumNodes = numNodes;
-      SearchEvalLogistic = searchEvalLogistic;
+      ScoreCentipawns = scoreCentipawns;
       UCIInfo = uciSearchInfo;
     }
 
@@ -125,8 +125,12 @@ namespace Ceres.Chess.LC0VerboseMoves
     public LC0VerboseMoveStat Move(Move move)
     {
       foreach (LC0VerboseMoveStat stat in Moves)
+      {
         if (stat.Move == move)
+        {
           return stat;
+        }
+      }
 
       throw new Exception("No such move " + move);
     }
@@ -140,8 +144,12 @@ namespace Ceres.Chess.LC0VerboseMoves
     public LC0VerboseMoveStat MoveByCode(int moveCode)
     {
       foreach (LC0VerboseMoveStat stat in Moves)
-        if (stat.MoveCode == moveCode) 
+      {
+        if (stat.MoveCode == moveCode)
+        {
           return stat;
+        }
+      }
 
       throw new Exception("No such move " + moveCode);
     }
@@ -157,15 +165,15 @@ namespace Ceres.Chess.LC0VerboseMoves
       double best = int.MinValue;
       LC0VerboseMoveStat bestStat = default;
       foreach (LC0VerboseMoveStat stat in Moves)
+      {
         if (metric(stat) > best)
         {
           bestStat = stat;
           best = metric(stat);
         }
+      }
 
-      if (bestStat == default(LC0VerboseMoveStat)) throw new Exception("Internal error ,no moves?");
-
-      return bestStat;
+      return bestStat == default(LC0VerboseMoveStat) ? throw new Exception("Internal error ,no moves?") : bestStat;
     }
 
 
@@ -179,7 +187,9 @@ namespace Ceres.Chess.LC0VerboseMoves
       foreach (LC0VerboseMoveStat stat in Moves)
       {
         if (stat.MoveString == moveStr)
+        {
           return stat;
+        }
       }
       throw new Exception("Move not found " + moveStr);
     }
@@ -194,8 +204,13 @@ namespace Ceres.Chess.LC0VerboseMoves
       get
       {
         foreach (LC0VerboseMoveStat stat in Moves)
+        {
           if (stat.MoveString == move)
+          {
             return stat;
+          }
+        }
+
         throw new Exception("Move not found " + move);
       }
     }
@@ -207,7 +222,9 @@ namespace Ceres.Chess.LC0VerboseMoves
     public void Dump()
     {
       foreach (LC0VerboseMoveStat mi in Moves)
+      {
         Console.WriteLine(mi.ToString());
+      }
     }
 
   }

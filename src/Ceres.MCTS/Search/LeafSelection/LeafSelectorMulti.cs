@@ -14,26 +14,16 @@
 #region Using directives
 
 using System;
-using System.Buffers;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
-using System.Threading.Tasks;
 
-using Ceres.Base;
-using Ceres.Base.DataType;
 using Ceres.Base.DataTypes;
 using Ceres.Base.Math;
-using Ceres.Base.Math.Random;
 using Ceres.Base.OperatingSystem;
 using Ceres.Base.Threading;
 
 using Ceres.Chess;
-using Ceres.Chess.MoveGen;
 using Ceres.Chess.Positions;
 using Ceres.MCTS.Environment;
 using Ceres.MCTS.Iteration;
@@ -46,6 +36,14 @@ using Ceres.MCTS.Params;
 
 namespace Ceres.MCTS.Search
 {
+  public interface InstalledThreadPool
+  {
+    bool SupportsWaitDone => false;
+    void QueueUserWorkItem(WaitCallback callback);
+    void WaitDone();
+    void Shutdown();
+  }
+
   /// <summary>
   /// MCTS leaf selector algorithm which descends tree, choosing highest scoring children
   /// according to PUCT algorithm, yielding a set of leafs each of which is either:
@@ -64,12 +62,9 @@ namespace Ceres.MCTS.Search
   /// </summary>
   public class LeafSelectorMulti : ILeafSelector
   {
-    // Using the custom threadpool implementation in Ceres is generally slightly more efficient 
-    // (especially from the persective of total CPU time rather than elapsed time)
-    // than the shared System.Threading.ThreadPool, partly because it only
-    // needs to support the narrow set of requirements here 
-    // (e.g. no need to dynamically shirnk or grow the pool).
-    const bool USE_CUSTOM_THREADPOOL = true;
+    // Especially with .NET 6.0 it seems that the custom thread pool
+    // is no longer more efficient than the standard .NET one.
+    const bool USE_CUSTOM_THREADPOOL = false;
     
     #region Constructor arguments
 
@@ -78,14 +73,9 @@ namespace Ceres.MCTS.Search
 
     #endregion
 
-    #region Statistics
-    public int CountChooseChild { get; private set; }
-
-    #endregion
-
     #region Internal data
 
-    CountdownEvent countdownPendingNumLeafs = USE_CUSTOM_THREADPOOL ? null : new CountdownEvent(1);
+    CountdownEvent countdownPendingNumLeafs;
 
     public readonly MCTSIterator Context;
 
@@ -109,6 +99,27 @@ namespace Ceres.MCTS.Search
 
     static int numThreadPoolsCreated = 0;
 
+    public delegate InstalledThreadPool ThreadPoolFactory(int numThreads);
+
+    public static ThreadPoolFactory InstalledThreadPoolFactory;
+
+    private InstalledThreadPool installedThreadPool;
+    
+    bool TrackWaitCount
+    {
+      get
+      {
+        if (installedThreadPool != null)
+        {
+          return !installedThreadPool.SupportsWaitDone;
+        }
+        else
+        {
+          return !USE_CUSTOM_THREADPOOL;
+        }
+      }
+    }
+
     /// <summary>
     /// Constructor for selector over specified MCTSIterator.
     /// </summary>
@@ -120,7 +131,19 @@ namespace Ceres.MCTS.Search
     {
       Debug.Assert(selectorID < ILeafSelector.MAX_SELECTORS);
 
-      if (USE_CUSTOM_THREADPOOL) tpm = tpmPool.Value.GetFromPool();
+      if (InstalledThreadPoolFactory != null)
+      {
+        installedThreadPool = InstalledThreadPoolFactory(HardwareManager.MaxAvailableProcessors);
+      }
+      else
+      {
+        if (USE_CUSTOM_THREADPOOL)
+        {
+          tpm = tpmPool.Value.GetFromPool();
+        }
+      }
+
+      countdownPendingNumLeafs = TrackWaitCount ? new CountdownEvent(1) : null;
 
       SelectorID = selectorID;
       PriorSequence = priorSequence;
@@ -143,8 +166,9 @@ namespace Ceres.MCTS.Search
     static ObjectPool<ThreadPoolManaged> MakeObjectPoolThreads()
     {
       // Make sure pool is intialized
-      const int MAX_THREAD_POOLS = 32;
-      return new ObjectPool<ThreadPoolManaged>(() => new ThreadPoolManaged(numThreadPoolsCreated++.ToString(), HardwareManager.NumAffinitizedThreadsInProcess, 0), MAX_THREAD_POOLS);
+      const int MAX_THREAD_POOLS = 128;
+      return new ObjectPool<ThreadPoolManaged>(() => new ThreadPoolManaged(numThreadPoolsCreated++.ToString(), HardwareManager.MaxAvailableProcessors, 0),
+                                               MAX_THREAD_POOLS);
     }
 
     /// <summary>
@@ -192,29 +216,32 @@ namespace Ceres.MCTS.Search
     /// <param name="numTargetLeafs"></param>
     /// <param name="vLossDynamicBoost"></param>
     /// <returns></returns>
-    ListBounded<MCTSNode> DoSelectNewLeafBatchlet(MCTSNode root, int numTargetLeafs, float vLossDynamicBoost)
+    void DoSelectNewLeafBatchlet(MCTSNode root, int numTargetLeafs, float vLossDynamicBoost)
     {
       InsureAnnotated(root);
-      DoGatherLeafBatchlet(root, numTargetLeafs, vLossDynamicBoost);
+
+      ListBounded<MCTSNode> gatheredNodes = new ListBounded<MCTSNode>(numTargetLeafs);
+      DoGatherLeafBatchlet(root, numTargetLeafs, vLossDynamicBoost, gatheredNodes);
 
       if (paramsExecution.SelectParallelEnabled)
+      {
         WaitDone();
+      }
 
-      return leafs;
+ 
+      leafs.Add(gatheredNodes);
     }
 
-#endregion
+    #endregion
 
-#region Clear
+    #region Clear
 
     /// <summary>
     /// Resets state of selector to be prepared for 
     /// selecting a new set of nodes.
     /// </summary>
     public void Reset()
-    {
-      CountChooseChild = 0;
-    
+    {   
       leafs.Clear();
     }
 
@@ -244,13 +271,19 @@ namespace Ceres.MCTS.Search
     /// </summary>
     void WaitDone()
     {
-      if (USE_CUSTOM_THREADPOOL)
-        tpm.WaitDone();
-      else
+      if (TrackWaitCount)
       {
         countdownPendingNumLeafs.Signal(); // take out initialization value of 1
         countdownPendingNumLeafs.Wait();
         countdownPendingNumLeafs.Reset();
+      }
+      else if (installedThreadPool != null)
+      {
+        installedThreadPool.WaitDone();
+      }
+      else
+      {
+        tpm.WaitDone();
       }
     }
 
@@ -291,7 +324,7 @@ namespace Ceres.MCTS.Search
       return true;
     }
 
-    internal void DoVisitLeafNode(MCTSNode node, int numVisits)
+    internal void DoVisitLeafNode(MCTSNode node, int numVisits, ListBounded<MCTSNode> gatheredNodes)
     {
       ref MCTSNodeStruct nodeRef = ref node.Ref;
 
@@ -326,21 +359,19 @@ namespace Ceres.MCTS.Search
         //    Console.WriteLine($"{node.Ref.NumNodesTranspositionExtracted}  transposition multivisted {node}");
 
         // Add to set of leafs
-        if (paramsExecution.SelectParallelEnabled)
-        {
-          lock (leafs) leafs.Add(node);
-        }
-        else
-          leafs.Add(node);
+        gatheredNodes.Add(node);
       }
 
     }
 
 
-#endregion
+    #endregion
 
-#region Selection algorithm
+    #region Selection algorithm
 
+    static long applyCount = 0;
+    static double applyCPUCTTot = 0;
+    static double applyAbsUncertaintyTot = 0;
 
     /// <summary>
     /// To get numTargetLeafs we usually don't have to check all children. 
@@ -359,8 +390,7 @@ namespace Ceres.MCTS.Search
     internal void GetChildSelectionCounts(int selectorID, MCTSNode node, int numTargetLeafs, int numChildrenToCheck,
                                           Span<short> visitChildCounts, float vLossDynamicBoost)
     {
-      CountChooseChild++;
-
+#if NOT
       // TODO: clean up
       // NOTE: 
       //   - below limited, including to second half of search
@@ -382,7 +412,7 @@ namespace Ceres.MCTS.Search
         //CalcWeightedDistanceFromBestMoveVisitCounts(node, numTargetLeafs, visitChildCounts);
         return;
       }
-      Span<float> scores = default;
+#endif
 #if EXPERIMENTAL
       if (node.Context.ParamsSearch.TEST_FLAG && node.N > 2)
       {
@@ -403,9 +433,36 @@ namespace Ceres.MCTS.Search
       {
 #endif
 
+#if FEATURE_UNCERTAINTY
+
+      float cpuctMultiplier = 1;
+
+      const float UNCERTAINTY_MIDPOINT = 0.05f;
+      const float UNCERTAINTY_SCALE = 1.5f;
+      if (node.Context.ParamsSearch.TestFlag && node.N > 10)
+      {
+        float uncertaintyDiff = node.Uncertainty - UNCERTAINTY_MIDPOINT;
+        cpuctMultiplier = 0.90f + uncertaintyDiff * UNCERTAINTY_SCALE;
+        cpuctMultiplier = StatUtils.Bounded(cpuctMultiplier, 0.80f, 1.25f);
+
+        applyCount++;
+        applyCPUCTTot += cpuctMultiplier;
+        applyAbsUncertaintyTot += Math.Abs(uncertaintyDiff);
+
+        if (node.Ref.ZobristHash % 1000 == 999)
+        {
+          MCTSEventSource.TestMetric1 = (float)(applyCPUCTTot / applyCount);
+          MCTSEventSource.TestCounter1 = (int)Math.Round(100 * (applyAbsUncertaintyTot / applyCount), 0);
+        }
+      }
+#else
+      const float cpuctMultiplier = 1;
+#endif
+
+      Span<float> scores = default;
       node.ComputeTopChildScores(selectorID, node.Depth,
                                  vLossDynamicBoost, 0, numChildrenToCheck - 1, numTargetLeafs,
-                                 scores, visitChildCounts);
+                                 scores, visitChildCounts, cpuctMultiplier);
 
       if (node.Depth == 0)
       {
@@ -414,9 +471,6 @@ namespace Ceres.MCTS.Search
     }
 
 
-    static int nextWorkerPoolToReceiveSelect = 0;
-    static int abandonCount = 0;
-
     float TopNFractionToTopQMove
     {
       get
@@ -424,8 +478,7 @@ namespace Ceres.MCTS.Search
         MCTSNode topMove = Context.Root.BestMove(false);
         if (topMove == null || topMove.NumPolicyMoves <= 1) return 1.0f;
 
-        MCTSNode[] childrenSorted = topMove.ChildrenSorted(c => (float)-c.N);
-        return (float)childrenSorted[0].N / (float)topMove.N;
+        return (float)topMove.ChildWithLargestN.N / (float)topMove.N;
       }
     }
 
@@ -442,7 +495,8 @@ namespace Ceres.MCTS.Search
     /// <param name="node"></param>
     /// <param name="parentNode"></param>
     /// <param name="numTargetLeafs"></param>
-    private void DoGatherLeafBatchlet(MCTSNode node, int numTargetLeafs, float vLossDynamicBoost)
+    private void DoGatherLeafBatchlet(MCTSNode node, int numTargetLeafs, float vLossDynamicBoost,
+                                      ListBounded<MCTSNode> gatheredNodes)
     {
       ref MCTSNodeStruct nodeRef = ref node.Ref;
 
@@ -463,7 +517,7 @@ namespace Ceres.MCTS.Search
       bool isUnvisited = node.N == 0;
       if (isUnvisited || nodeRef.Terminal.IsTerminal() || nodeRef.IsTranspositionLinked)
       {
-        DoVisitLeafNode(node, numTargetLeafs);
+        DoVisitLeafNode(node, numTargetLeafs, gatheredNodes);
         return;
       }
 
@@ -488,7 +542,7 @@ namespace Ceres.MCTS.Search
             //                     / (float)(biggestTranspositionNode.N - node.N));
             //node.OverrideMPositionToApplyFromTransposition = mToUse;
 
-            DoVisitLeafNode(node, numTargetLeafs);
+            DoVisitLeafNode(node, numTargetLeafs, gatheredNodes);
             return;
           }
           else if (biggestTranspositionNode.N == node.N)
@@ -533,7 +587,8 @@ namespace Ceres.MCTS.Search
       // Mark node as visited, make sure we get associated annotation
       DoVisitInnerNode(node);
 
-      node.Ref.PossiblyPrefetchChildArray(node.Context.Tree.Store, new MCTSNodeStructIndex(node.Index));
+      // Prefetch not obviously helpful
+      //node.Ref.PossiblyPrefetchChildArray(node.Context.Tree.Store, new MCTSNodeStructIndex(node.Index));
 
       int numChildrenToCheck = NumChildrenNeededToBeChecked(node, numTargetLeafs);
       Span<short> childVisitCounts = stackalloc short[numChildrenToCheck];
@@ -556,17 +611,20 @@ namespace Ceres.MCTS.Search
       int numVisitsProcessed = 0;
       if (paramsExecution.SelectParallelEnabled)
       {
-        // Immediately make a first pass to immediately launch the children
-        // that have enough visits to be processed in parallel  
-        ProcessSelectedChildren(node, numTargetLeafs, vLossDynamicBoost, numChildrenToCheck,
+        if (numTargetLeafs > paramsExecution.SelectParallelThreshold)
+        {
+          // Immediately make a first pass to immediately launch the children
+          // that have enough visits to be processed in parallel  
+          ProcessSelectedChildren(node, numTargetLeafs, vLossDynamicBoost, numChildrenToCheck,
                                 paramsExecution.SelectParallelThreshold, true,
-                                childVisitCounts, children, ref numVisitsProcessed);
+                                childVisitCounts, children, ref numVisitsProcessed, gatheredNodes);
+        }
 
         // Make a second pass process any remaining chidren having visits (not parallel)
         if (numVisitsProcessed < numTargetLeafs)
         {
           ProcessSelectedChildren(node, numTargetLeafs, vLossDynamicBoost, numChildrenToCheck,
-                                  1, false, childVisitCounts, children, ref numVisitsProcessed);
+                                  1, false, childVisitCounts, children, ref numVisitsProcessed, gatheredNodes);
         }
 
       }
@@ -574,7 +632,7 @@ namespace Ceres.MCTS.Search
       {
         // Process all children with nonzero counts (not parallel)
         ProcessSelectedChildren(node, numTargetLeafs, vLossDynamicBoost, numChildrenToCheck,
-                                1, false, childVisitCounts, children, ref numVisitsProcessed);
+                                1, false, childVisitCounts, children, ref numVisitsProcessed, gatheredNodes);
       }
     }
 
@@ -582,7 +640,7 @@ namespace Ceres.MCTS.Search
     void ProcessSelectedChildren(MCTSNode node, int numTargetLeafs, float vLossDynamicBoost, int numChildrenToCheck,
                                  int minVisitsCountToProcess, bool launchParallel,
                                  Span<short> childVisitCounts, Span<MCTSNodeStructChild> children,
-                                 ref int numVisitsProcessed)
+                                 ref int numVisitsProcessed, ListBounded<MCTSNode> gatheredNodes)
     {
       MCTSNodeStruct nodeRef = node.Ref;
 
@@ -598,29 +656,23 @@ namespace Ceres.MCTS.Search
           }
           MCTSNode thisChild = default;
 
-          // NOTE: for unclear reasons, the lock here cannot be limited
-          //       to the (potetial call to CreateChild)
-          //       because that results in fairly rapid curruption when parallel and transposition both enabled
-          //       (to see this, call store.Validate at the beginning of each batch and run few a few minutes).
-          using (node.Tree.ChildCreateLocks.LockBlock(node.Index))
+          lock(node)
           {
             MCTSNodeStructChild childInfo = children[childIndex];
             if (!childInfo.IsExpanded)
             {
-              //lock (node.Context.ChildCreateLockObjs[node.Index % SearchContext.NUM_LOCK_OBJ])
-              {
-                thisChild = node.CreateChild(childIndex);
-                node.UpdateRecordVisitsToChild(SelectorID, childIndex, numThisChild);
-              }
+              thisChild = node.CreateChild(childIndex);
             }
             else
             {
               thisChild = node.Child(childInfo);
-              node.UpdateRecordVisitsToChild(SelectorID, childIndex, numThisChild);
             }
-
-            nodeRef.PossiblyPrefetchChild(node.Context.Tree.Store, new MCTSNodeStructIndex(node.Index), childIndex);
           }
+
+          node.UpdateRecordVisitsToChild(SelectorID, childIndex, numThisChild);
+
+          // Prefetch not obviously helpful
+          // nodeRef.PossiblyPrefetchChild(node.Context.Tree.Store, new MCTSNodeStructIndex(node.Index), childIndex);
 
 #if FEATURE_SUPPLEMENTAL
           // Warning: this slows down search by up to 10%
@@ -636,16 +688,22 @@ namespace Ceres.MCTS.Search
 
           int numVisitsLeftAfterThisChild = numTargetLeafs - (numVisitsProcessed + numThisChild);
           if (launchParallel && numVisitsLeftAfterThisChild > minVisitsCountToProcess / 2)
+          {
             LaunchGatherLeafBatchletParallel(node, numThisChild, thisChild, vLossDynamicBoost);
+          }
           else
-            DoGatherLeafBatchlet(thisChild, numThisChild, vLossDynamicBoost);
+          {
+            DoGatherLeafBatchlet(thisChild, numThisChild, vLossDynamicBoost, gatheredNodes);
+          }
 
           // mark this child as done
           childVisitCounts[childIndex] = 0;
 
           numVisitsProcessed += numThisChild;
-          if (numVisitsProcessed == numTargetLeafs)
-            break;
+          {
+            if (numVisitsProcessed == numTargetLeafs)
+              break;
+          }
         }
       }
     }
@@ -685,7 +743,10 @@ namespace Ceres.MCTS.Search
 
     private void LaunchGatherLeafBatchletParallel(MCTSNode node, int numThisChild, MCTSNode thisChild, float vLossDynamicBoost)
     {
-      if (!USE_CUSTOM_THREADPOOL) countdownPendingNumLeafs.AddCount(numThisChild);
+      if (TrackWaitCount)
+      {
+        countdownPendingNumLeafs.AddCount(numThisChild);
+      }
 
       MCTSIterator thisContext = node.Context;
 
@@ -693,11 +754,24 @@ namespace Ceres.MCTS.Search
       {
         try
         {
+          // Gather the nodes.
+          ListBounded<MCTSNode> gatheredNodes = new(numThisChild);
           using (new SearchContextExecutionBlock(thisContext))
           {
-            DoGatherLeafBatchlet(thisChild, numThisChild, vLossDynamicBoost);
+            DoGatherLeafBatchlet(thisChild, numThisChild, vLossDynamicBoost, gatheredNodes);
           }
-          if (!USE_CUSTOM_THREADPOOL) countdownPendingNumLeafs.Signal(numThisChild);
+
+          // Append nodes to node list.
+          lock(leafs)
+          {
+            leafs.Add(gatheredNodes);
+          }
+
+          // Signal done.
+          if (TrackWaitCount)
+          {
+            countdownPendingNumLeafs.Signal(numThisChild);
+          }
         }
         catch (Exception exc)
         {
@@ -705,10 +779,18 @@ namespace Ceres.MCTS.Search
         }
       };
 
-      if (USE_CUSTOM_THREADPOOL)
+      if (installedThreadPool != null)
+      {
+        installedThreadPool.QueueUserWorkItem(action);
+      }
+      else if (USE_CUSTOM_THREADPOOL)
+      {
         tpm.QueueUserWorkItem(action);
+      }
       else
+      {
         ThreadPool.QueueUserWorkItem(action);
+      }
     }
 
 #endregion

@@ -13,11 +13,7 @@
 
 #region Using directives
 
-using System;
-using System.IO;
-using System.IO.MemoryMappedFiles;
 using System.Runtime.InteropServices;
-using System.Threading;
 
 #endregion
 
@@ -42,11 +38,41 @@ namespace Ceres.Base.OperatingSystem.Linux
     public const int MAP_FIXED = 0x10;
     public const int MAP_ANONYMOUS = 0x20;
     public const int MAP_NORESERVE = 0x4000;
+    public const int MAP_HUGETLB = 0x40000;
     public const int MAP_FILE = 0;
+
     public const int MREMAP_MAYMOVE = 1;
     public const int MREMAP_FIXED = 2;
 
     public const int MFD_HUGETLB = 4;
+
+
+    #region System configuration
+
+    [DllImport(LIBC)] public static extern long sysconf(int name);
+
+
+    /// <summary>
+    /// Returns total amount of physical memory available.
+    /// </summary>
+    public static long PhysicalMemorySize
+    {
+      get
+      {
+        // API not reliable under Linux, so return 1TB.
+        // TODO: improve.
+        return (long)1024 * (long)1024 * (long)1024 * (long)1024;
+
+        const int _SC_PAGESIZE = 8;
+        const int _SC_PHYS_PAGES = 11;
+        return sysconf(_SC_PHYS_PAGES) * sysconf(_SC_PAGESIZE);
+      }
+    }
+
+    #endregion
+
+    //#define _SC_NPROCESSORS_CONF              9
+    //#define _SC_NPROCESSORS_ONLN             10
 
     [DllImport(LIBC)] public static extern int getpid();
 

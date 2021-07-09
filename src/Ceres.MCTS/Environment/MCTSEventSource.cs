@@ -97,7 +97,6 @@ namespace Ceres.MCTS.Environment
 
     private IncrementingPollingCounter dualSelectorAverageNNEvalWaitMS;
 
-    private PollingCounter nodeAnnotateCacheHitRate;
     private PollingCounter nnCacheHitRate;
     private PollingCounter opponentTreeReuseHitRate;
     private PollingCounter opponentTreeReuseNumHits;
@@ -105,8 +104,6 @@ namespace Ceres.MCTS.Environment
 
 
     private PollingCounter mlhMoveModificationFraction;
-
-    private PollingCounter numAnnotations;
 
     static bool initialized = false;
     public static void Initialize()
@@ -157,8 +154,6 @@ namespace Ceres.MCTS.Environment
         lastBatchYield ??= new PollingCounter("yield_pct_last_batch", this, () => 100.0f * MCTSIterator.LastBatchYieldFrac);
         batchYield ??= new PollingCounter("yield-pct-total", this, () => 100.0f * MCTSIterator.TotalYieldFrac);
       
-        numAnnotations ??= new PollingCounter("num-annotations", this, () => MCTSTree.NumAnnotations);
-
         lastUnutilizedNNEvaluationTimeMS ??= new PollingCounter("nn-idle-time-ms-last", this, () => 1000.0f * MCTSSearchFlow.LastNNIdleTimeSecs);
         totalUnutilizedNNEvaluationTimeMS ??= new PollingCounter("nn-idle-time-sec-total", this, () => MCTSSearchFlow.TotalNNIdleTimeSecs);
         totalNNWaitingTimeMS ??= new PollingCounter("nn-wait-time-sec-total", this, () => MCTSSearchFlow.TotalNNWaitTimeSecs);
@@ -174,16 +169,12 @@ namespace Ceres.MCTS.Environment
         nnTranspositionsHitRate ??= new PollingCounter("transposition-hit-rate_pct", this, () => LeafEvaluatorTransposition.HitRatePct);
         numRootPreloadNodes ??= new IncrementingPollingCounter("root-preload-nodes", this, () => MCTSRootPreloader.TotalCumulativeRootPreloadNodes);
 
-        mlhMoveModificationFraction ??= new PollingCounter("mlh-move-modified-pct", this, () => 100.0f * ManagerChooseRootMove.MLHMoveModifiedFraction);
+        mlhMoveModificationFraction ??= new PollingCounter("mlh-move-modified-pct", this, () => 100.0f * ManagerChooseBestMove.MLHMoveModifiedFraction);
 
         tablebaseHitsTotal ??= new PollingCounter("tablebase-hits-total", this, () => LC0DLLSyzygyEvaluator.NumTablebaseHits);
         tablebaseHits ??= new IncrementingPollingCounter("tablebase-hits", this, () => LC0DLLSyzygyEvaluator.NumTablebaseHits);
         tablebasePly1HitsTotal ??= new PollingCounter("tablebase-ply1-hits-total", this, () => LeafEvaluatorSyzygyPly1.NumHits);
 
-        nodeAnnotateCacheHitRate = new PollingCounter("node-cache-hit-rate", this, () => MCTSTree.HitRate)
-        {
-          DisplayName = "node-annotation-cache-hit-rate"
-        };
 
         timeAllotmentOvershootMax ??= new PollingCounter("max-search-time-overshoot", this, () => MaximumTimeAllotmentOvershoot);
        

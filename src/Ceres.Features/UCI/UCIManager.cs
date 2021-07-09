@@ -575,7 +575,7 @@ namespace Ceres.Features.UCI
             if (searchLimit.Value > 0)
             {
               // Run the actual search
-              result = RunSearch(searchLimit);
+              result = RunSearch(searchLimit * searchLimitMultiplier);
             }
           }
 

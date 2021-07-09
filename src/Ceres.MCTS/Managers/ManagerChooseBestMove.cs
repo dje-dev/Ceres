@@ -16,9 +16,13 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq.Expressions;
 using System.Runtime.CompilerServices;
 using Ceres.Base.Math;
 using Ceres.Base.Math.Random;
+using Ceres.Chess;
+using Ceres.Chess.MoveGen;
+using Ceres.Chess.NNEvaluators.LC0DLL;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.LeafExpansion;
 using Ceres.MCTS.MTCSNodes;
@@ -33,7 +37,7 @@ namespace Ceres.MCTS.Managers
   /// <summary>
   /// Manager that selects which move at the root of the search is best to play.
   /// </summary>
-  public class ManagerChooseRootMove
+  public class ManagerChooseBestMove
   {
     public static float MLHMoveModifiedFraction => (float)countBestMovesWithMLHChosenWithModification / (float)countBestMovesWithMLHChosen;
 
@@ -50,7 +54,7 @@ namespace Ceres.MCTS.Managers
     /// <param name="node"></param>
     /// <param name="updateStatistics"></param>
     /// <param name="mBonusMultiplier"></param>
-    public ManagerChooseRootMove(MCTSNode node, bool updateStatistics, float mBonusMultiplier)
+    public ManagerChooseBestMove(MCTSNode node, bool updateStatistics, float mBonusMultiplier)
     {
       Node = node;
       UpdateStatistics = updateStatistics;
@@ -67,7 +71,10 @@ namespace Ceres.MCTS.Managers
     {
       const float MLH_DELTA_BOUND = 50; // truncate outliers
       float mHigherBy = StatUtils.Bounded(moveNode.MAvg - mAvgOfBestQ, -MLH_DELTA_BOUND, MLH_DELTA_BOUND);
-      if (float.IsNaN(mHigherBy)) return 0; // no MLH support in network
+      if (float.IsNaN(mHigherBy))
+      {
+        return 0; // no MLH support in network
+      }
 
       const float Q_BOUND = 0.5f;
       float boundedRootQ = StatUtils.Bounded(MathF.Abs((float)Node.Context.Root.Q), -Q_BOUND, Q_BOUND);
@@ -94,23 +101,32 @@ namespace Ceres.MCTS.Managers
 
     /// <summary>
     /// Calculates the best move to play from root 
-    /// given the current state of teh search t
+    /// given the current state of the search.
     /// </summary>
     public BestMoveInfo BestMoveCalc
     {
       get
       {
-        if (Node.NumPolicyMoves == 0)
-          return default;
+        if (Node.N <= 1 && Node.Context.CheckTablebaseBestNextMove != null)
+        {
+          Node.Annotate();
+          MGMove tablebaseMove = Node.Context.CheckTablebaseBestNextMove(in Node.Annotation.Pos, out GameResult result);
+          if (tablebaseMove != default)
+          {
+            return new BestMoveInfo(BestMoveInfo.BestMoveReason.TablebaseImmediateMove, tablebaseMove, Node.V);
+          }
+        }
 
-        // If only one move, make it!
-        if (Node.NumPolicyMoves == 1)
+        if (Node.NumPolicyMoves == 0)
+        {
+          return new BestMoveInfo(BestMoveInfo.BestMoveReason.NoLegalMoves, default, Node.V);
+        }
+        else if (Node.NumPolicyMoves == 1)
         {
           MCTSNode onlyChild = Node.NumChildrenExpanded == 0 ? Node.CreateChild(0) : Node.ChildAtIndex(0);
           return new BestMoveInfo(onlyChild, (float)onlyChild.Q, onlyChild.N, 1, 0);
         }
-
-        if (Node.NumChildrenExpanded == 0)
+        else if (Node.NumChildrenExpanded == 0)
         {
           // No visits, create a node for the first child (which will be move with highest prior)
           return new BestMoveInfo(Node.CreateChild(0), float.NaN, 0, 0, 0);
@@ -134,10 +150,12 @@ namespace Ceres.MCTS.Managers
       {
         MCTSNode[] childrenSortedN = Node.ChildrenSorted(node => -node.N);
 
-        if (childrenSortedN.Length < 2)
-          return childrenSortedN[0].N;
-        else
-          return childrenSortedN[1].N;
+        return childrenSortedN.Length switch
+        {
+          0 => 0,
+          < 2 => childrenSortedN[0].N,
+          _ => childrenSortedN[1].N
+        };
       }
     }
 
@@ -200,7 +218,10 @@ namespace Ceres.MCTS.Managers
       }
       else
       {
-        if (Node.Context.ParamsSearch.BestMoveMode == ParamsSearch.BestMoveModeEnum.TopN)
+        // Always use Top N for very small trees
+        const int MIN_N_USE_TOP_Q = 100;
+        if (Node.Context.ParamsSearch.BestMoveMode == ParamsSearch.BestMoveModeEnum.TopN
+          || Node.N < MIN_N_USE_TOP_Q)
         {
           // Just return best N (note that tiebreaks are already decided with sort logic above)
           return new BestMoveInfo(childrenSortedN[0], (float)childrenSortedN[0].Q, childrenSortedN[0].N,
@@ -219,7 +240,10 @@ namespace Ceres.MCTS.Managers
             MCTSNode candidate = childrenSortedQ[i];
 
             // Return if this has a worse Q (for the opponent) and meets minimum move threshold
-            if ((float)candidate.Q > qOfBestNMove) break;
+            if ((float)candidate.Q > qOfBestNMove)
+            {
+              break;
+            }
 
             float differenceFromQOfBestN = MathF.Abs((float)candidate.Q - (float)childrenSortedN[0].Q);
 
@@ -230,7 +254,7 @@ namespace Ceres.MCTS.Managers
             {
               if (useMLH && UpdateStatistics)
               {
-                ManagerChooseRootMove bestMoveChooserWithoutMLH = new ManagerChooseRootMove(this.Node, false, 0);
+                ManagerChooseBestMove bestMoveChooserWithoutMLH = new ManagerChooseBestMove(this.Node, false, 0);
                 if (bestMoveChooserWithoutMLH.BestMoveCalc.BestMoveNode != candidate)
                   countBestMovesWithMLHChosenWithModification++;
               }
@@ -339,7 +363,10 @@ namespace Ceres.MCTS.Managers
       float minFrac = MathF.Pow(1.0f - qDifferenceFromBestQ, POWER);
 
       // Impose absolute minimum fraction.
-      if (minFrac < MIN_FRAC_N_REQUIRED_MIN) minFrac = MIN_FRAC_N_REQUIRED_MIN;
+      if (minFrac < MIN_FRAC_N_REQUIRED_MIN)
+      {
+        minFrac = MIN_FRAC_N_REQUIRED_MIN;
+      }
 
       return minFrac;
     }
@@ -364,7 +391,9 @@ namespace Ceres.MCTS.Managers
       }
 
       if (childrenWithinThreshold.Count == 1)
+      {
         return childrenSortedByAttractiveness[0];
+      }
       else
       {
         MCTSNode bestMove = childrenWithinThreshold[ThompsonSampling.Draw(densities.ToArray(), Node.Context.ParamsSearch.SearchNoiseBestMoveSampling.MoveSamplingConsideredMovesTemperature)];

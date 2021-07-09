@@ -42,13 +42,9 @@ namespace Ceres.MCTS.Search
     #region Static statistics
 
     public static long TotalNumDualSelectorDuplicates = 0;
-    public static int TotalNumInFlightTranspositions => TotalNumThisBatchTranspositions + TotalNumOtherBatchTranspositions;
 
     public static long TotalNumNodesSelectedIntoTreeCache;
     public static long TotalNumNodesAppliedFromTreeCache;
-
-    public static int TotalNumThisBatchTranspositions;
-    public static int TotalNumOtherBatchTranspositions;
 
     #endregion
 
@@ -115,10 +111,6 @@ namespace Ceres.MCTS.Search
 
     public int CountNodesDuplicatedInFlightDropped = 0;
     public int CountExcessNodesNNAborted = 0;
-
-    public int NumThisBatchTranspositions = 0;
-
-    public int NumOtherBatchTranspositions = 0;
 
     public int NumCacheOnly;
     public int NumNotApply;
@@ -197,8 +189,6 @@ namespace Ceres.MCTS.Search
       NumLeafsFromNodesImmediatelyApplied = 0;
       CountNodesDuplicatedInFlightDropped = 0;
       CountExcessNodesNNAborted = 0;
-      NumThisBatchTranspositions = 0;
-      NumOtherBatchTranspositions = 0;
       NumCacheOnly = 0;
       NumNotApply = 0;
 
@@ -319,8 +309,6 @@ namespace Ceres.MCTS.Search
         Debug.Assert(inFlightLinkedNode != null);
         node.InFlightLinkedNode = inFlightLinkedNode;
         NodesTranspositionInFlightOtherBatchLinked.Add(node);
-        NumOtherBatchTranspositions++;
-        TotalNumOtherBatchTranspositions++;
         return;
       }
 
@@ -332,8 +320,6 @@ namespace Ceres.MCTS.Search
         Debug.Assert(inFlightLinkedNode != null);
         node.InFlightLinkedNode = inFlightLinkedNode;
         NodesTranspositionInFlightThisBatchLinked.Add(node);
-        NumThisBatchTranspositions++;
-        TotalNumThisBatchTranspositions++;
         return;
       }
 
@@ -343,9 +329,14 @@ namespace Ceres.MCTS.Search
       {
         // We already full. Abort immediately.
         if (SelectorID == 0)
+        {
           node.Ref.BackupAbort0(node.NInFlight);
+        }
         else
+        {
           node.Ref.BackupAbort1(node.NInFlight2);
+        }
+
         CountExcessNodesNNAborted++;
       }
       else

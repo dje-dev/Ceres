@@ -48,6 +48,16 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// <summary>
     /// Random policy and value, using a relatively narrow policy distribution (leading to deep search trees)
     /// </summary>
-    RandomNarrow
+    RandomNarrow,
+
+    /// <summary>
+    /// A custom evaluator installed into NNEvaluatorDefFactory.Custom1Factory.
+    /// </summary>
+    Custom1,
+
+    /// <summary>
+    /// A custom evaluator installed into NNEvaluatorDefFactory.Custom2Factory.
+    /// </summary>
+    Custom2
   };
 }

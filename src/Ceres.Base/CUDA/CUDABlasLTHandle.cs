@@ -1,4 +1,4 @@
-#region License notice
+﻿#region License notice
 
 /*
   This file is part of the Ceres project at https://github.com/dje-dev/ceres.
@@ -8,17 +8,26 @@
   You should have received a copy of the GNU General Public License
   along with Ceres. If not, see <http://www.gnu.org/licenses/>.
 */
-
 #endregion
 
 #region Using directives
 
+using System;
+using ManagedCuda.CudaBlas;
 
 #endregion
 
-namespace Ceres.Commands
+namespace Ceres.Base.CUDA
 {
-  public static class BenchmarkSearch
+  /// <summary>
+  /// Wrapper for a CUBLAS handle.
+  /// </summary>
+  public struct CudaBlasLTHandle
   {
+    public CudaBlasLTHandle(CudaBlasHandle handle)
+    {
+      Handle = handle.Pointer;
+    }
+    public readonly IntPtr Handle;
   }
 }

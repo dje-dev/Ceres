@@ -185,7 +185,7 @@ namespace Ceres.Chess.LC0.Batches
     /// <returns></returns>
     public EncodedPositionBatchFlat GetBatch()
     {
-      batch.Set(new Span<EncodedPositionWithHistory>(pendingPositions).Slice(0, NumPositionsAdded), NumPositionsAdded);
+      batch.Set(new Span<EncodedPositionWithHistory>(pendingPositions).Slice(0, NumPositionsAdded), NumPositionsAdded, true);
       return batch;
     }
 

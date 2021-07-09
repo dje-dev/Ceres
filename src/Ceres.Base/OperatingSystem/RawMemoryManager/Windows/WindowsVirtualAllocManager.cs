@@ -101,20 +101,24 @@ namespace Ceres.Base.OperatingSystem
       if (info.dwNumberOfProcessors == 0)
         Win32SystemInfo.GetSystemInfo(ref info);
 
- //     if (info.dwPageSize % itemSizeBytes != 0)
- //       throw new Exception("Internal error: implementation limitation that page size must be a multiple of element length");
+      //     if (info.dwPageSize % itemSizeBytes != 0)
+      //       throw new Exception("Internal error: implementation limitation that page size must be a multiple of element length");
 
       // VirtualAlloc works at minimum granularity of 64KB
       // but for efficiency reasons we allocate even larger blocks
       // of 512KB to reduce number of calls to VirtualAlloc
-      const int BLOCK_SIZE_BYTES = 512 * 1024;
+      const int BLOCK_SIZE_BYTES = 2 * 1024 * 1024;
       Debug.Assert(BLOCK_SIZE_BYTES % info.dwPageSize == 0);
 
       long requiredMaxBytes  = MathUtils.RoundedUp(maxItems * itemSizeBytes, info.dwPageSize);
       if (requiredMaxBytes < BLOCK_SIZE_BYTES)
+      {
         AllocBlockSizeBytes = (int)requiredMaxBytes;
+      }
       else
+      {
         AllocBlockSizeBytes = BLOCK_SIZE_BYTES;
+      }
 
       minimumExtraItems = System.Math.Min((int)info.dwPageSize, (int)info.dwPageSize / ItemSizeBytes);
     }
@@ -149,7 +153,9 @@ namespace Ceres.Base.OperatingSystem
     public void InsureItemsAllocated(long numItems)
     {
       if (numItems > MaxItems)
+      {
         throw new ArgumentException($"Allocation overflow, requested {numItems} but maximum was set as {MaxItems}");
+      }
 
       long numItemsDeficient = (numItems + minimumExtraItems) - NumItemsCommitted;
 

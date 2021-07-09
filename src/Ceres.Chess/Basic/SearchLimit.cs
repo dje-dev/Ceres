@@ -129,10 +129,13 @@ namespace Ceres.Chess
     {
       // Add search limit increment, if any
       if (ValueIncrement != 0 && IsPerGameLimit)
-          return this with { Value = Value + ValueIncrement };      
+      {
+        return this with { Value = Value + ValueIncrement };
+      }
       else
+      {
         return this;
-
+      }
     }
 
     #region Multiplication and Addition operators
@@ -145,25 +148,16 @@ namespace Ceres.Chess
     /// <returns></returns>
     public static SearchLimit operator *(SearchLimit left, float scalingFactor)
     {
-      if (scalingFactor <= 0) throw new ArgumentOutOfRangeException(nameof(scalingFactor) + " must be a positive value");
+      if (scalingFactor <= 0)
+      {
+        throw new ArgumentOutOfRangeException(nameof(scalingFactor) + " must be a positive value");
+      }
 
-      SearchLimit ret = new SearchLimit(left.Type, left.Value * scalingFactor, left.SearchCanBeExpanded, 
-                                        left.ValueIncrement * scalingFactor);
-      return ret;
+      return left with { Value = left.Value * scalingFactor, 
+                         ValueIncrement = left.ValueIncrement * scalingFactor 
+                       };
     }
 
-    /// <summary>
-    /// Returns a new SearchLimit with the duration incremented by a specified value.
-    /// </summary>
-    /// <param name="left"></param>
-    /// <param name="scalingFactor"></param>
-    /// <returns></returns>
-    public static SearchLimit operator +(SearchLimit left, float increment)
-    {
-      SearchLimit ret = new SearchLimit(left.Type, left.Value + increment);
-     
-      return ret;
-    }
 
     public int EstNumNodes(int estNumNodesPerSecond, bool estIsObserved)
     {
@@ -199,11 +193,13 @@ namespace Ceres.Chess
       get
       {
         if (Type == SearchLimitType.NodesForAllMoves)
+        {
           return this with { Type = SearchLimitType.NodesPerMove };
-        else if (Type == SearchLimitType.SecondsForAllMoves)
-          return this with { Type = SearchLimitType.SecondsPerMove };
+        }
         else
-          return this;
+        {
+          return Type == SearchLimitType.SecondsForAllMoves ? (this with { Type = SearchLimitType.SecondsPerMove }) : this;
+        }
       }
     }
 
@@ -227,16 +223,18 @@ namespace Ceres.Chess
     /// <returns></returns>
     public override string ToString()
     {
-      string movesToGoPart = MaxMovesToGo != int.MaxValue ? $" Moves { MaxMovesToGo }" : "";
-      string valuePart = IsTimeLimit ? $"{Value,5:F2}" : $"{Value,9:N0}";
-      string incrPart = IsTimeLimit ? $"{ValueIncrement,5:F2}" : $"{ValueIncrement,9:N0}";
+      string movesToGoPart = MaxMovesToGo.HasValue ? $" Moves { MaxMovesToGo }" : "";
+      string valuePart = IsTimeLimit ? $"{Value,5:F2}s" : $"{Value,9:N0} nodes";
+      string incrPart = IsTimeLimit ? $"{ValueIncrement,5:F2}s" : $"{ValueIncrement,9:N0} nodes";
 
       string searchMovesPart = "";
       if (SearchMoves != null)
       {
         searchMovesPart = " searchmoves ";
         for (int i = 0; i < SearchMoves.Count; i++)
+        {
           searchMovesPart += SearchMoves[i] + " ";
+        }
       }
 
       return $"<{TypeShortStr,-4}{valuePart}{(ValueIncrement > 0 ? $" +{incrPart}" : "")}{movesToGoPart}{searchMovesPart}>";

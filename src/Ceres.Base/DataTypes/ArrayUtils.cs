@@ -87,7 +87,7 @@ namespace Ceres.Base.DataType
       int numInner = raw.GetLength(1);
 
       T[][] ret = new T[numOuter][];
-      
+
       for (int i = 0; i < numOuter; i++)
       {
         ret[i] = new T[numInner];
@@ -104,7 +104,7 @@ namespace Ceres.Base.DataType
     /// <param name="raw"></param>
     /// <param name="numOuter"></param>
     /// <returns></returns>
-    public static T[][] ToArrayOfArray<T>(T[] raw, int numInner)
+    public static T[][] ToArrayOfArray<T>(Span<T> raw, int numInner)
     {
       if (raw == null) return null;
 
@@ -129,7 +129,7 @@ namespace Ceres.Base.DataType
     /// <param name="raw"></param>
     /// <param name="numOuter"></param>
     /// <returns></returns>
-    public static T[,] To2D<T>(T[] raw, int numInner)
+    public static T[,] To2D<T>(Span<T> raw, int numInner)
     {
       if (raw == null) return null;
 
@@ -154,7 +154,7 @@ namespace Ceres.Base.DataType
     /// <param name="raw"></param>
     /// <param name="numOuter"></param>
     /// <returns></returns>
-    public static T[,] To2DShuffled<T>(T[] raw, int numInner)
+    public static T[,] To2DShuffled<T>(Span<T> raw, int numInner)
     {
       if (raw == null) return null;
 
@@ -216,7 +216,7 @@ namespace Ceres.Base.DataType
     /// <param name="count"></param>
     /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static int IndexOfElementWithMaxValue(float[] array, int count)
+    public static int IndexOfElementWithMaxValue(Span<float> array, int count)
     {
       Debug.Assert(count > 0);
 
@@ -278,4 +278,5 @@ namespace Ceres.Base.DataType
     }
 
   }
+
 }

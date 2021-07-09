@@ -164,7 +164,10 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// </summary>
     public FP16 VSecondary;
 
-    public short Unused1;
+    public FP16 Uncertainty;
+
+    // TODO: make compile time constant
+    internal FP16 UNCERTAINTY_PRIOR => (FP16)0.10f;
 
     public void ResetSearchInProgressState()
     {
@@ -175,6 +178,11 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       CacheIndex = 0;
     }
 
+
+    /// <summary>
+    /// 
+    /// NOTE: try to keep changes in sync with MCTSNodeStruct.Initialize.
+    /// </summary>
     public void ResetExpandedState()
     {
       Debug.Assert(!IsTranspositionLinked);
@@ -191,9 +199,13 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       DrawKnownToExistAmongChildren = 0;
       CacheIndex = 0;
 
+#if FEATURE_UNCERTAINTY
+      Uncertainty = UNCERTAINTY_PRIOR;
+#endif
       VSumSquares = 0;
 
       QUpdatesWtdAvg = 0;
+
     }
 
     public void Dump()

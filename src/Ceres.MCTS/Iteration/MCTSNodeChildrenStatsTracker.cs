@@ -105,7 +105,7 @@ namespace Ceres.MCTS.Iteration
       // Put this in UpdateTopNodeInfo ??
       short[] historyValues = HISTORY_LENGTH > 0 ? new short[64] : null;
 
-      for (int i=0; i<RunningFractionVisits.Length; i++)
+      for (int i=0; i<visits.Length; i++)
       {
         if (i < numChildrenEligible)
         {

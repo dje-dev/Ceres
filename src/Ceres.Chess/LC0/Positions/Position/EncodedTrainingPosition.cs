@@ -13,27 +13,31 @@
 
 #region Using directives
 
-using Ceres.Chess.EncodedPositions.Basic;
 using System;
 using System.Runtime.InteropServices;
-
+using System.Security.Cryptography.X509Certificates;
+using Google.Protobuf.Reflection;
 
 #endregion
 
 namespace Ceres.Chess.EncodedPositions
 {
   /// <summary>
-  /// Mirrors the binary representation of a single training position
+  /// Identical binary representation of a single training position
   /// as stored in LC0 training files (typically within compressed TAR file).
   /// </summary>
-  [StructLayout(LayoutKind.Sequential, Pack = 2)]
+  [StructLayout(LayoutKind.Sequential, Pack = 1)]
   [Serializable]
   public readonly partial struct EncodedTrainingPosition : IEquatable<EncodedTrainingPosition>
   {
-    // We support conversion from two versions from LC0
-    // But internally we always store in V4 format (with extra fields)
-    public const int V3_LEN = 8276;
-    public const int V4_LEN = V3_LEN + 16;
+    // Only v6 data using input format 1 is supported.
+    // This keeps the code simple and allows unrestricted use of advanced v6 features.
+    const int SUPPORTED_VERSION = 6;
+    const int SUPPORTED_INPUT_FORMAT = 1;
+
+    public const int V4_LEN = 8276 + 16;
+    public const int V5_LEN = 8308;
+    public const int V6_LEN = 8356;
 
     #region Raw structure data (Version, Policies, BoardsHistory, and MiscInfo)
 
@@ -43,58 +47,170 @@ namespace Ceres.Chess.EncodedPositions
     public readonly int Version;
 
     /// <summary>
+    ///  Board representation input format.
+    /// </summary>
+    public readonly int InputFormat;
+
+    /// <summary>
     /// Policies (of length 1858 * 4 bytes).
     /// </summary>
     public readonly EncodedPolicyVector Policies;
 
     /// <summary>
     /// Board position (including history planes).
+    /// Note that the actual board planes are stored in a mirrored representation
+    /// compared to what needs to be fed to the neural network.
     /// </summary>
-    public readonly EncodedPositionWithHistory Position;
+    public readonly EncodedPositionWithHistory PositionWithBoardsMirrored;
 
     #endregion
 
-    // Version
-    // V4_STRUCT_STRING = '4s7432s832sBBBBBBBbffff'
-    // V3_STRUCT_STRING = '4s7432s832sBBBBBBBb'
+    #region Validity checking
 
 
     /// <summary>
-    /// Dumps information about the training position to the Console.
+    /// Validates that a givne value is a valid probability.
     /// </summary>
-    public unsafe void Dump()
+    /// <param name="desc1"></param>
+    /// <param name="desc2"></param>
+    /// <param name="prob"></param>
+    static void ValidateProbability(string desc1, string desc2, float prob)
     {
-      Console.WriteLine("\r\nEncodedTrainingPosition");
-      Console.WriteLine ("We are " + (Position.MiscInfo.InfoPosition.SideToMove == 0 ? "White" : "Black") + " result our perspective: " + Position.MiscInfo.InfoTraining.ResultFromOurPerspective);
-      Console.WriteLine("Relative points us " + Position.GetPlanesForHistoryBoard(0).RelativePointsUs);
-      for (int i=0;i<8;i++) Console.WriteLine("History " + i + " " + Position.FENForHistoryBoard(i));
-      for (int i = 0; i < EncodedPolicyVector.POLICY_VECTOR_LENGTH; i++)
+      if (float.IsNaN(prob))
       {
-        if (Policies.Probabilities[i] != 0 && !float.IsNaN(Policies.Probabilities[i]))
+        throw new Exception("NaN probability found " + desc1 + " " + desc2);
+      }
+
+      if (prob < -1.01f || prob > 1.01f)
+      {
+        throw new Exception("Probability outside range [-1.01, 1.01] " + desc1 + " " + desc2);
+      }
+    }
+
+    /// <summary>
+    /// Validates that all values in a WDL triple are valid probabilities.
+    /// </summary>
+    /// <param name="desc1"></param>
+    /// <param name="desc2"></param>
+    /// <param name="wdl"></param>
+    static void ValidateWDL(string desc1, string desc2, (float w, float d, float l) wdl)
+    {
+      ValidateProbability(desc1, desc2, wdl.w);
+      ValidateProbability(desc1, desc2, wdl.d);
+      ValidateProbability(desc1, desc2, wdl.l);
+
+      float sum = wdl.w + wdl.d + wdl.l;
+      if (sum < 0.99f || sum > 1.01f)
+      {
+        throw new Exception("Sum probabilities not 1" + desc1 + " " + desc2);
+      }
+    }
+
+    /// <summary>
+    /// Validates that key fields (game result, best Q, policies, etc.) are all valid.
+    /// 
+    /// Mostly taken from:
+    ///   https://github.com/Tilps/lc0/blob/rescore_tb/src/selfplay/loop.cc#L204
+    /// </summary>
+    /// <param name="desc"></param>
+    public void ValidateIntegrity(string desc)
+    {
+      // Make sure this is the supported version and input format of training data
+      if (InputFormat != SUPPORTED_INPUT_FORMAT)
+      {
+        throw new Exception($"Found unsupported input format { InputFormat }, required is {SUPPORTED_INPUT_FORMAT}, {desc}.");
+      }
+
+      if (Version != SUPPORTED_VERSION)
+      {
+        throw new Exception($"Found unsupported version { Version }, required is {SUPPORTED_VERSION}, {desc}.");
+      }
+
+
+      int countPieces = PositionWithBoardsMirrored.BoardsHistory.History_0.CountPieces;
+      if (countPieces == 0 || countPieces > 32)
+      {
+        throw new Exception("History board 0 has count pieces " + countPieces + ") " + desc);
+      }
+
+      ref readonly EncodedPositionEvalMiscInfoV6 refTraining = ref PositionWithBoardsMirrored.MiscInfo.InfoTraining;
+
+      if (float.IsNaN(refTraining.BestD + refTraining.BestQ))
+      {
+        throw new Exception("BestD or BestQ is NaN");
+      }
+
+      if (float.IsNaN(refTraining.ResultD + refTraining.ResultQ))
+      {
+        throw new Exception("ResultD or ResultQ is NaN");
+      }
+
+      if (!float.IsNaN(refTraining.OriginalM) && refTraining.OriginalM < 0)
+      {
+        throw new Exception("OriginalM < 0 (" + refTraining.OriginalM + ") " + desc);
+      }
+
+      if (refTraining.ResultD == 0 && refTraining.ResultQ == 0)
+      {
+        throw new Exception("Both ResultD and ResultQ are zero. " + desc);
+      }
+
+      if (refTraining.BestD == 0 && refTraining.BestQ == 0)
+      {
+        throw new Exception("Both BestD and BestQ are zero. " + desc);
+      }
+
+      ValidateWDL(desc, "BestWDL", refTraining.BestWDL);
+      ValidateWDL(desc, "ResultWDL", refTraining.ResultWDL);
+
+      float[] probs = CheckPolicyValidity(desc);
+
+      if (refTraining.PliesLeft < 0)
+      {
+        throw new Exception("Plies left < 0 (" + refTraining.PliesLeft + ") " + desc);
+      }
+
+      if (probs[refTraining.BestIndex] <= 0)
+      {
+        throw new Exception("Best policy index not positive: (" + probs[refTraining.BestIndex] + ") " + desc);
+      }
+
+      if (probs[refTraining.PlayedIndex] <= 0)
+      {
+        throw new Exception("Played policy index not positive: (" + probs[refTraining.PlayedIndex] + ") " + desc);
+      }
+    }
+
+    private float[] CheckPolicyValidity(string desc)
+    {
+      float[] probs = Policies.ProbabilitiesWithNegativeOneZeroed;
+      float sumPolicy = 0;
+      for (int i = 0; i < 1858; i++)
+      {
+        float policy = probs[i];
+        if (policy == -1)
         {
-          bool isPawnMove = false; // TO DO: fill in 
-          bool isKingMove = false; // TO DO: fill in
-          EncodedMove lm = EncodedMove.FromNeuralNetIndex(i, isPawnMove, isKingMove);
+          // Invalid policiies may be represented as -1
+          policy = 0;
+        }
+
+        sumPolicy += policy;
+
+        if (float.IsNaN(policy) || policy > 1.01 || policy < 0)
+        {
+          throw new Exception("Policy invalid " + policy + " " + desc);
         }
       }
 
+      if (sumPolicy < 0.99f || sumPolicy > 1.01f)
+      {
+        throw new Exception("Sum policy not 1 (" + sumPolicy + ") " + desc);
+      }
+
+      return probs;
     }
 
-    /// <summary>
-    /// Performs a few integrity checks on the position and throws Exception if any fail.
-    /// </summary>
-    public void CheckValid()
-    {
-      int size = Marshal.SizeOf(typeof(EncodedTrainingPosition));
-      if (size != 8276 + 16) throw new Exception("LZTrainingPositionRaw wrong size: " + size);
-
-      if (Position.BoardsHistory.History_0.OurKing.NumberBitsSet != 1 || Position.BoardsHistory.History_0.OurKing.NumberBitsSet != 1)
-        throw new Exception("Invalid position, does not have one king per side");
-
-      float sumProbs = Policies.SumProbabilites;
-      if (sumProbs < 0.995 || sumProbs > 1.005)
-        throw new Exception("Probabilities sum to " + sumProbs);
-    }
+    #endregion
 
     #region Overrides
 
@@ -108,13 +224,13 @@ namespace Ceres.Chess.EncodedPositions
 
     public bool Equals(EncodedTrainingPosition other)
     {
-      return Position.BoardsHistory.Equals(other.Position.BoardsHistory)
+      return PositionWithBoardsMirrored.BoardsHistory.Equals(other.PositionWithBoardsMirrored.BoardsHistory)
           && Version == other.Version
           && Policies.Equals(other.Policies)
-          && Position.MiscInfo.Equals(other.Position.MiscInfo);          
+          && PositionWithBoardsMirrored.MiscInfo.Equals(other.PositionWithBoardsMirrored.MiscInfo);          
     }
 
-    public override int GetHashCode() => HashCode.Combine(Version, Policies, Position.BoardsHistory, Position.MiscInfo);
+    public override int GetHashCode() => HashCode.Combine(Version, Policies, PositionWithBoardsMirrored.BoardsHistory, PositionWithBoardsMirrored.MiscInfo);
     
 
     #endregion

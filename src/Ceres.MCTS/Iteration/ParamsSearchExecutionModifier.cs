@@ -30,16 +30,10 @@ namespace Ceres.MCTS.Iteration
   /// 
   /// TODO: this could be generalized to be a generic class.
   /// </summary>
-  [Serializable]
-  public class ParamsSearchExecutionModifier
+  public static class ParamsSearchExecutionModifier
   {
     [NonSerialized]
-    static Dictionary<string, Action<ParamsSearchExecution>> DictModifiers = new();
-
-    /// <summary>
-    /// Unique identifier.
-    /// </summary>
-    public readonly string ID;
+    static Dictionary<string, Action<ParamsSearchExecution>> dictModifiers = new();
 
     /// <summary>
     /// Global registeres a modifier.
@@ -48,33 +42,29 @@ namespace Ceres.MCTS.Iteration
     /// <param name="modifier"></param>
     public static void Register(string id, Action<ParamsSearchExecution> modifier)
     {
-      if (DictModifiers.ContainsKey(id))
+      if (dictModifiers.ContainsKey(id))
+      {
         throw new Exception($"Already registered with ParamsSearchExecutionModifier.Register: {id}");
+      }
 
-      DictModifiers[id] = modifier;
+      dictModifiers[id] = modifier;
     }
 
     /// <summary>
-    /// Constructor.
+    /// Invokes modifier with specified ID
     /// </summary>
     /// <param name="id"></param>
-    public ParamsSearchExecutionModifier(string id)
+    public static void Invoke(string id, ParamsSearchExecution parms)
     {
-      if (!DictModifiers.ContainsKey(id)) throw new Exception("Modifier must be already registered with ParamsSearchExecutionModifier.Register");
-
-      ID = id;
-    }
-
-    /// <summary>
-    /// Invokes the modifier on specified object.
-    /// </summary>
-    /// <param name="parms"></param>
-    public void Invoke(ParamsSearchExecution parms)
-    {
-      if (!DictModifiers.TryGetValue(ID, out Action<ParamsSearchExecution> modifier))
-        throw new Exception("Modifier no registered with ParamsSearchExecutionModifier.Register");
-
-      modifier(parms);
+      Action<ParamsSearchExecution> modifier = null;
+      if (!dictModifiers.TryGetValue(id, out modifier))
+      {
+        throw new Exception("Modifier must be already registered with ParamsSearchExecutionModifier.Register");
+      }
+      else
+      {
+        modifier.Invoke(parms);
+      }
     }
   }
 }

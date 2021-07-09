@@ -56,6 +56,11 @@ namespace Ceres.MCTS.Params
     /// </summary>
     public SearchLimit SearchLimit;
 
+
+    private static ParamsSearchExecution  DEFAULT_PARAMS = new ();
+
+
+
     /// <summary>
     /// Constructor.
     /// </summary>
@@ -83,7 +88,7 @@ namespace Ceres.MCTS.Params
     /// </summary>
     /// <param name="estNumNodes"></param>
     /// <param name="postprocessor">optional delegated called after parameters are set allowing modifications</param>
-    public void ChooseOptimal(int estNumNodes, ParamsSearchExecutionModifier postprocessor)
+    public void ChooseOptimal(int estNumNodes)
     {
       if (ParamsSearch.AutoOptimizeEnabled)
       {
@@ -94,7 +99,10 @@ namespace Ceres.MCTS.Params
         DoChooseOptimal(estNumNodes);
       }
 
-      postprocessor?.Invoke(ParamsSearch.Execution);
+      if (ParamsSearch.ExecutionModifierID != null)
+      {
+        ParamsSearchExecutionModifier.Invoke(ParamsSearch.ExecutionModifierID, ParamsSearch.Execution);
+      }
     }
 
 
@@ -105,19 +113,22 @@ namespace Ceres.MCTS.Params
     void DoChooseOptimal(int estNumNodes)
     {
       // TODO: lift restriction that SMART_SIZE only works with single device
-      bool defaultUseSmartSizeBatches = new ParamsSearchExecution().SmartSizeBatches;
-      ParamsSearch.Execution.SmartSizeBatches = defaultUseSmartSizeBatches 
+      ParamsSearch.Execution.SmartSizeBatches = ParamsSearchExecution.DEFAULT_USE_SMART_SIZE_BATCHES
                                              && estNumNodes > 1000 
                                              && NNEvaluatorDef.NumDevices == 1;
-                              
-      if (NNEvaluatorDef.DeviceCombo == NNEvaluatorDeviceComboType.Pooled)
-        AdjustForPooled();
 
+      if (NNEvaluatorDef.DeviceCombo == NNEvaluatorDeviceComboType.Pooled)
+      {
+        AdjustForPooled();
+      }
 
       // Turn off some features if search is very small (overhead of initializing them not worth it)
       const int CUTOVER_NUM_NODES_TINY = 200;
       const int CUTOVER_NUM_NODES_SMALL = 20_000;
-      const int CUTOVER_NUM_NODES_MEDIUM = 100_000;
+
+      ParamsSearch.Execution.FlowDirectOverlapped = DEFAULT_PARAMS.FlowDirectOverlapped && estNumNodes > 5000;
+      ParamsSearch.Execution.FlowDualSelectors = DEFAULT_PARAMS.FlowDualSelectors && estNumNodes > 5000;
+
 
       if (estNumNodes < CUTOVER_NUM_NODES_SMALL)
       {
@@ -136,24 +147,16 @@ namespace Ceres.MCTS.Params
         ParamsSearch.Execution.SelectParallelEnabled = false;
         ParamsSearch.Execution.SetPoliciesParallelEnabled = false;
       }
-      else if (estNumNodes < CUTOVER_NUM_NODES_MEDIUM)
-      {
-        ParamsSearch.Execution.SelectParallelEnabled = true;
-        ParamsSearch.Execution.SetPoliciesParallelEnabled = true;
-      }
       else
       {
-        ParamsSearch.Execution.SelectParallelEnabled = true;
-        ParamsSearch.Execution.SetPoliciesParallelEnabled = true;
+        ParamsSearch.Execution.SelectParallelEnabled = DEFAULT_PARAMS.SelectParallelEnabled;
+        ParamsSearch.Execution.SetPoliciesParallelEnabled = DEFAULT_PARAMS.SetPoliciesParallelEnabled;
       }
-
-      ParamsSearch.Execution.FlowDirectOverlapped = estNumNodes > 5000;
-      ParamsSearch.Execution.FlowDualSelectors = estNumNodes > 5000;
 
       // TODO: set the GPU fractions if multiple
     }
 
-
+    
     /// <summary>
     /// Makes adjustmens to parmaeters that are appropriate when 
     /// a pooled evaluator is being used.
@@ -166,7 +169,7 @@ namespace Ceres.MCTS.Params
 
       // Reduce maximum batch size to avoid overflow in multibatch evaluator
       // where some pooling with other batches may be unavoidable.
-      int maxBatchSize = NNEvaluator.MAX_BATCH_SIZE - 200;
+      int maxBatchSize = 800;
       ParamsSearch.Execution.MaxBatchSize = Math.Min(ParamsSearch.Execution.MaxBatchSize, maxBatchSize);
     }
 

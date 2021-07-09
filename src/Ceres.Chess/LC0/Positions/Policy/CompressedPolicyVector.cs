@@ -263,7 +263,9 @@ namespace Ceres.Chess.EncodedPositions
           for (int i = 0; i < indices.Length && i < NUM_MOVE_SLOTS; i++)
           {
             if (indices[i] == SPECIAL_VALUE_SENTINEL_TERMINATOR)
+            {
               break;
+            }
 
             moveIndices[i] = indices[i];
             moveProbabilitiesEncoded[i] = probsEncoded[i];
@@ -282,8 +284,8 @@ namespace Ceres.Chess.EncodedPositions
     /// <param name="policy"></param>
     /// <param name="indices"></param>
     /// <param name="probs"></param>
-    internal static void Initialize(ref CompressedPolicyVector policy,
-                                    Span<int> indices, Span<float> probs, bool alreadySorted = true)
+    public static void Initialize(ref CompressedPolicyVector policy,
+                                  Span<int> indices, Span<float> probs, bool alreadySorted = true)
     {
       // TODO: the Span<int> can actually be shortend to Span<short>
 
@@ -332,7 +334,9 @@ namespace Ceres.Chess.EncodedPositions
           // Normalize to sum to 1.0
           float adj = 1.0f / probabilityAcc;
           for (int i = 0; i < numMovesUsed; i++)
+          {
             moveProbabilitiesEncoded[i] = EncodedProbability(probs[i] * adj);
+          }
         }
 
         if (!alreadySorted) policy.Sort(numMovesUsed);
@@ -403,7 +407,9 @@ namespace Ceres.Chess.EncodedPositions
         {
           if (moveInfo.move.RawValue == SPECIAL_VALUE_RANDOM_NARROW ||
               moveInfo.move.RawValue == SPECIAL_VALUE_RANDOM_WIDE)
+          {
             throw new NotImplementedException("Method LinearlyCombined probably not yet supported with random evaluations.");
+          }
 
           float thisContribution = weights[i] * moveInfo.probability;
           policyAverages[moveInfo.move.IndexNeuralNet] += thisContribution;
@@ -438,7 +444,9 @@ namespace Ceres.Chess.EncodedPositions
 
               // Transfer move mirrored (unless just a sentinel)
               if (MoveIsSentinel(moveIndicesSource[i]))
+              {
                 indices[i] = moveIndicesSource[i];
+              }
               else
               {
                 EncodedMove move = EncodedMove.FromNeuralNetIndex(moveIndicesSource[i]);// EncodedMove.FromNeuralNetIndex(moveIndicesSource[i]);
@@ -447,8 +455,9 @@ namespace Ceres.Chess.EncodedPositions
 
               // All done if we saw the terminator
               if (moveIndicesSource[i] == SPECIAL_VALUE_SENTINEL_TERMINATOR)
+              {
                 break;
-
+              }
             }
           }
         }
@@ -521,11 +530,16 @@ namespace Ceres.Chess.EncodedPositions
             }
 
             // Add terminator if not full
-            if (numSlotsUsed < NUM_MOVE_SLOTS) moveIndices[numSlotsUsed] = SPECIAL_VALUE_SENTINEL_TERMINATOR;
+            if (numSlotsUsed < NUM_MOVE_SLOTS)
+            {
+              moveIndices[numSlotsUsed] = SPECIAL_VALUE_SENTINEL_TERMINATOR;
+            }
           }
 
           if (probabilityAcc < 0.995 || probabilityAcc > 1.005)
-            throw new Exception($"Internal error: NN probabilities sum to { probabilityAcc}");
+            {
+            throw new Exception($"Internal error: NN probabilities sum to {probabilityAcc}");
+          }
         }
       }
 
@@ -547,7 +561,11 @@ namespace Ceres.Chess.EncodedPositions
         float[] policyDecoded = DoDecoded(false);
         float acc = StatUtils.Sum(policyDecoded);
         float adj = 1.0f / acc;
-        for (int j = 0; j < EncodedPolicyVector.POLICY_VECTOR_LENGTH; j++) policyDecoded[j] *= adj;
+        for (int j = 0; j < EncodedPolicyVector.POLICY_VECTOR_LENGTH; j++)
+        {
+          policyDecoded[j] *= adj;
+        }
+
         return policyDecoded;
       }
     }
@@ -574,7 +592,10 @@ namespace Ceres.Chess.EncodedPositions
           float[] ret = preallocatedBuffer ?? new float[EncodedPolicyVector.POLICY_VECTOR_LENGTH];
           for (int i = 0; i < NUM_MOVE_SLOTS; i++)
           {
-            if (moveIndices[i] == SPECIAL_VALUE_SENTINEL_TERMINATOR) break; // terminator
+            if (moveIndices[i] == SPECIAL_VALUE_SENTINEL_TERMINATOR)
+            {
+              break; // terminator
+            }
 
             float decodedProb = DecodedProbability(moveProbabilitiesEncoded[i]);
             acc += decodedProb;
@@ -587,9 +608,7 @@ namespace Ceres.Chess.EncodedPositions
             ret[moveIndices[i]] = decodedProb;
           }
 
-          if (validate && (acc < 0.99 || acc > 1.01)) throw new Exception("Probability " + acc);
-
-          return ret;
+          return validate && (acc < 0.99 || acc > 1.01) ? throw new Exception("Probability " + acc) : ret;
         }
       }
 
@@ -659,7 +678,9 @@ namespace Ceres.Chess.EncodedPositions
       {
         float diff = Math.Abs(decoded[i] - otherDecoded[i]);
         if (diff > max)
+        {
           max = diff;
+        }
       }
       return max;
     }
@@ -700,7 +721,9 @@ namespace Ceres.Chess.EncodedPositions
       int moveCount = ProbabilitySummaryList(moves, minProbability, topN);
 
       for (int i = 0; i < moveCount; i++)
+      {
         yield return moves[i];
+      }
     }
 
 
@@ -740,16 +763,30 @@ namespace Ceres.Chess.EncodedPositions
         {
           for (int i = 0; i < topN; i++)
           {
-            if (moveIndices[i] == SPECIAL_VALUE_SENTINEL_TERMINATOR)
-              break; // terminator
-            else if (moveIndices[i] == SPECIAL_VALUE_RANDOM_NARROW || moveIndices[i] == SPECIAL_VALUE_RANDOM_WIDE)
-              moves[count++] = (new EncodedMove(moveIndices[i]), float.NaN);
+            if (MoveIsSentinel(moveIndices[i]))
+            {
+              if (moveIndices[i] == SPECIAL_VALUE_SENTINEL_TERMINATOR)
+              {
+                break; // terminator
+              }
+              else if (moveIndices[i] == SPECIAL_VALUE_RANDOM_NARROW || moveIndices[i] == SPECIAL_VALUE_RANDOM_WIDE)
+              {
+                moves[count++] = (new EncodedMove(moveIndices[i]), float.NaN);
+              }
+              else
+              {
+                throw new Exception("Internal error, unknown sentinel.");
+              }
+            }
             else
             {
               float decodedProb = DecodedProbability(moveProbabilitiesEncoded[i]);
 
               // Break if we see a probability too small (since they are known to be sorted)
-              if (decodedProb < minProbability) break;
+              if (decodedProb < minProbability)
+              {
+                break;
+              }
 
               moves[count++] = (EncodedMove.FromNeuralNetIndex(moveIndices[i]), decodedProb);
             }
@@ -782,7 +819,11 @@ namespace Ceres.Chess.EncodedPositions
       int count = 0;
       foreach (var entry in sorted)
       {
-        if (count++ >= topN) break;
+        if (count++ >= topN)
+        {
+          break;
+        }
+
         ret += " " + entry.Move.ToString() + " [" + $" {entry.Probability * 100,5:F2}%" + "] ";
       }
 
@@ -800,7 +841,9 @@ namespace Ceres.Chess.EncodedPositions
       foreach ((EncodedMove move, float probability) moveInfo in ProbabilitySummary(minProbability, topN))
       {
         if (moveInfo.probability > 0)
+        {
           Console.WriteLine(moveInfo.move + " " + moveInfo.probability);
+        }
       }
     }
 

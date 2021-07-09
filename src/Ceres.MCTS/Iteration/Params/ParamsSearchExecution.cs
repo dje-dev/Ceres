@@ -14,6 +14,7 @@
 #region Using directives
 
 using System;
+using Ceres.Base.OperatingSystem;
 using Ceres.Chess.NNEvaluators;
 
 #endregion
@@ -29,9 +30,15 @@ namespace Ceres.MCTS.Params
   /// disabled for very small searches because it is not beneficial.
   /// </summary>
   [Serializable]
-  public class ParamsSearchExecution
+  public record ParamsSearchExecution
   {
-    public const int ParallelMultiplier = 1; // 2 much better for Linux
+    /// <summary>
+    /// Scaling factor with higher values decreasing 
+    /// the degree of fine-grained parallelism employed
+    /// in various places (ParallelFor granularity).
+    /// Higher values may be optimal for Linux.
+    /// </summary>
+    public const int ParallelMultiplier = 1; 
 
     /// <summary>
     /// Method used for explotiing transpositions within the tree
@@ -40,7 +47,9 @@ namespace Ceres.MCTS.Params
     public TranspositionMode TranspositionMode = TranspositionMode.SingleNodeDeferredCopy;
 
     /// <summary>
-    /// If transpositions are detected and copied within a single batch.
+    /// If transpositions are detected and copied within a single batch,
+    /// thereby reducing the number of NN evaluations needed.
+    /// This is beneficial unless the NN is evaluation rate is extremely high.
     /// </summary>
     public bool InFlightThisBatchLinkageEnabled = true;
 
@@ -56,13 +65,16 @@ namespace Ceres.MCTS.Params
     /// Size of the cache used to store miscellaneous supplemental
     /// information (such as the actual Position) relating to recently visited nodes.
     /// </summary>
-    public int NodeAnnotationCacheSize = 500_000;
+    public int NodeAnnotationCacheSize = 750_000;
+
+
+    internal const bool DEFAULT_USE_SMART_SIZE_BATCHES = true;
 
     /// <summary>
     /// If the batch size is dynamically computed each time based on
     /// search characateristics  (e.g. larger batches when the tree is already large).
     /// </summary>
-    public bool SmartSizeBatches = true;
+    public bool SmartSizeBatches = DEFAULT_USE_SMART_SIZE_BATCHES;
 
     /// <summary>
     /// If two batches should procesed used in flight simultaneously,
@@ -71,8 +83,21 @@ namespace Ceres.MCTS.Params
     /// </summary>
     public bool FlowDirectOverlapped = true;
 
-    // DUAL
+    /// <summary>
+    /// If two selectors should be used in batch gathering,
+    /// each taking CPUCT values slightly offset from the baseline value.
+    /// </summary>
     public bool FlowDualSelectors = true;
+
+    /// <summary>
+    /// If each batch should be gathered in two passes 
+    /// of the tree from root to leaves.
+    /// 
+    /// If true, the immediate nodes are applied after
+    /// the first pass and the second pass is sometimes
+    /// skipped if the yield is low indicating 
+    /// many collisions and likely lower node selection purity.
+    /// </summary>
     public bool FlowSplitSelects = true;
 
 
@@ -97,7 +122,12 @@ namespace Ceres.MCTS.Params
 
     #endregion
 
-    public int MaxBatchSize = NNEvaluator.MAX_BATCH_SIZE;
+    /// <summary>
+    /// Hard limit on maximum number of positions per gathered batch.
+    /// The actual number used in gathering may end up smaller 
+    /// due to limits placed by NNEvaluator(s) in use.
+    /// </summary>
+    public int MaxBatchSize = 1024;
 
     /// <summary>
     /// If we are running dual selectors it is possible that some nodes
@@ -123,7 +153,7 @@ namespace Ceres.MCTS.Params
     /// Minimum number of targeted leaf visits which must be present
     /// for parallel subthreads to be allocated.
     /// </summary>
-    public int SelectParallelThreshold = 6 * ParallelMultiplier;
+    public int SelectParallelThreshold = ParallelMultiplier * (SoftwareManager.IsLinux ? 10 : 5);
 
     /// <summary>
     /// If the initialization of poliices in tree nodes (after retrieval from NN)
@@ -134,7 +164,7 @@ namespace Ceres.MCTS.Params
     /// <summary>
     /// Target number of policies to be initialized by each thread.
     /// </summary>
-    public int SetPoliciesNumPoliciesPerThread = 24 * ParallelMultiplier;
+    public int SetPoliciesNumPoliciesPerThread = 32 * ParallelMultiplier;
 
 
   }

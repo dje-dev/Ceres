@@ -46,10 +46,10 @@ namespace Ceres.MCTS.MTCSNodes
   /// 
   /// Also contains additional properties used transiently in tree operations such as search.
   /// </summary>
-  public unsafe sealed partial class MCTSNode 
-    : ITreeNode, 
+  public unsafe sealed partial class MCTSNode
+    : ITreeNode,
       IComparable<MCTSNode>,
-      IEquatable<MCTSNode>, 
+      IEquatable<MCTSNode>,
       IEqualityComparer<MCTSNode>
   {
     /// <summary>
@@ -98,9 +98,9 @@ namespace Ceres.MCTS.MTCSNodes
     internal MCTSNode(MCTSIterator context, MCTSNodeStructIndex index, MCTSNode parent = null)
     {
       Debug.Assert(context.Tree.Store.Nodes != null);
-      Debug.Assert(index.Index <= context.Tree.Store.Nodes.MaxNodes);      
+      Debug.Assert(index.Index <= context.Tree.Store.Nodes.MaxNodes);
 
-      Context= context;
+      Context = context;
       Tree = context.Tree;
 
       this.parent = parent;
@@ -152,12 +152,12 @@ namespace Ceres.MCTS.MTCSNodes
     /// <summary>
     /// Sum of all V from children
     /// </summary>
-    public double W => (*ptr).W; 
+    public double W => (*ptr).W;
 
     /// <summary>
     /// Moves left estimate for this position
     /// </summary>
-    public FP16 MPosition => (*ptr).MPosition; 
+    public FP16 MPosition => (*ptr).MPosition;
 
     /// <summary>
     /// Moves left estimate for this subtree
@@ -192,7 +192,7 @@ namespace Ceres.MCTS.MTCSNodes
     /// </summary>
     internal long ChildStartIndex => (*ptr).ChildStartIndex;
 
-    internal int TranspositionRootIndex => (*ptr).TranspositionRootIndex; 
+    internal int TranspositionRootIndex => (*ptr).TranspositionRootIndex;
 
     /// <summary>
     /// The move was just played to reach this node (or default if root node)
@@ -202,27 +202,27 @@ namespace Ceres.MCTS.MTCSNodes
     /// <summary>
     /// Policy probability
     /// </summary>
-    public FP16 P => (*ptr).P; 
+    public FP16 P => (*ptr).P;
 
     /// <summary>
     /// Node estimated value 
     /// </summary>
-    public FP16 V => (*ptr).V; 
+    public FP16 V => (*ptr).V;
 
 
     public FP16 VSecondary => (*ptr).VSecondary;
 
-    public FP16 WinP => (*ptr).WinP;  
+    public FP16 WinP => (*ptr).WinP;
 
-    public FP16 DrawP => (*ptr).DrawP;  
+    public FP16 DrawP => (*ptr).DrawP;
 
-    public FP16 LossP => (*ptr).LossP;  
+    public FP16 LossP => (*ptr).LossP;
 
     /// <summary>
     /// Number of times node has been visited during current batch
     /// </summary>
     public short NInFlight => (*ptr).NInFlight;
-    
+
     /// <summary>
     /// Number of times node has been visited during current batch
     /// </summary>
@@ -236,7 +236,7 @@ namespace Ceres.MCTS.MTCSNodes
     /// <summary>
     /// Sum of P of all children that have had at least one visit
     /// </summary>
-    public FP16 SumPVisited  => (*ptr).SumPVisited;
+    public FP16 SumPVisited => (*ptr).SumPVisited;
 
     /// <summary>
     /// Number of policy moves (children)
@@ -244,12 +244,12 @@ namespace Ceres.MCTS.MTCSNodes
     ///   - implementation decision to "throw away" lowest probability moves to save storage, or
     ///   - error in policy evaluation which resulted in certain legal moves not being recognized
     /// </summary>
-    public byte NumPolicyMoves => (*ptr).NumPolicyMoves; 
+    public byte NumPolicyMoves => (*ptr).NumPolicyMoves;
 
     /// <summary>
     /// Game terminal status
     /// </summary>
-    public GameResult Terminal => (*ptr).Terminal; 
+    public GameResult Terminal => (*ptr).Terminal;
 
     /// <summary>
     /// Returns if the children (if any) with policy values have been initialized
@@ -261,11 +261,17 @@ namespace Ceres.MCTS.MTCSNodes
     /// </summary>
     public float VVariance => (*ptr).VVariance;
 
+#if FEATURE_UNCERTAINTY
+    public FP16 Uncertainty => (*ptr).Uncertainty;
+#else
+    public short Unused;
+#endif
+
     #endregion
 
 
     #region Fields used by search
-    
+
     /// <summary>
     /// If a transposition match for this node is already 
     /// "in flight" for evaluation in another batch by another selector,
@@ -275,13 +281,13 @@ namespace Ceres.MCTS.MTCSNodes
     /// </summary>
     public MCTSNode InFlightLinkedNode;
 
-    #endregion
+#endregion
 
     /// <summary>
     /// If the tree is truncated at this node and generating position
     /// values via the subtree linked to its tranposition root
     /// </summary>
-    public bool IsTranspositionLinked => (*ptr).IsTranspositionLinked; 
+    public bool IsTranspositionLinked => (*ptr).IsTranspositionLinked;
 
 
     /// <summary>
@@ -294,8 +300,8 @@ namespace Ceres.MCTS.MTCSNodes
     /// <summary>
     /// Returns the side to move as of this node.
     /// </summary>
-    public SideType SideToMove 
-    { 
+    public SideType SideToMove
+    {
       get
       {
         // TODO: this only works if we are part of the fixed global array
@@ -382,7 +388,7 @@ namespace Ceres.MCTS.MTCSNodes
           return null;
         else
           return parent = Context.Tree.GetNode(ParentIndex);
-        }
+      }
     }
 
 
@@ -424,9 +430,9 @@ namespace Ceres.MCTS.MTCSNodes
 
       ref readonly MCTSNodeStructChild childRef = ref Context.Tree.Store.Children.childIndices[ChildStartIndex + childIndex];
       if (childRef.IsExpanded)
-      {      
+      {
         MCTSNode childObj = Context.Tree.GetNode(childRef.ChildIndex, this);
-        return (childObj, childObj.PriorMove, childObj.P); 
+        return (childObj, childObj.PriorMove, childObj.P);
       }
       else
         return (null, childRef.Move, childRef.P);
@@ -470,7 +476,7 @@ namespace Ceres.MCTS.MTCSNodes
         // This is because when we visited a new unvisited child we are
         // always choosing the child with highest P, and the univisted children
         // cluster at the end and are maintained in order (by P) at all times
-// almost always true, not when doing tree purification(?)        Debug.Assert(childIndex == nodeRef.NumChildrenVisited);
+        // almost always true, not when doing tree purification(?)        Debug.Assert(childIndex == nodeRef.NumChildrenVisited);
 
         nodeRef.NumChildrenVisited = (byte)(childIndex + 1);
       }
@@ -517,7 +523,11 @@ namespace Ceres.MCTS.MTCSNodes
                    (ref MCTSNodeStruct nodeRef) =>
                    {
                      if (nodeRef.IsTranspositionLinked)
-                       nodeRef.CopyUnexpandedChildrenFromOtherNode(Tree, new MCTSNodeStructIndex(nodeRef.TranspositionRootIndex));
+                     {
+                       // Note that we pass argument indicating "exclusive access guaranteed" 
+                       // to avoid having to try to take (many!) locks over nodes in the tree.
+                       nodeRef.CopyUnexpandedChildrenFromOtherNode(Tree, new MCTSNodeStructIndex(nodeRef.TranspositionRootIndex), true);
+                     }
                      return true;
                    }, TreeTraversalType.Sequential);
     }
@@ -541,7 +551,7 @@ namespace Ceres.MCTS.MTCSNodes
     /// <returns></returns>
     public MCTSNode NodeForMove(MGMove move)
     {
-      for (int i=0; i<NumPolicyMoves;i++)
+      for (int i = 0; i < NumPolicyMoves; i++)
       {
         MCTSNode child = this.ChildAtIndex(i);
         if (child.Annotation.PriorMoveMG == move)
@@ -569,9 +579,9 @@ namespace Ceres.MCTS.MTCSNodes
         return cachedDepth;
       }
     }
-    #endregion
+#endregion
 
-    #region Helpers
+#region Helpers
 
 
     /// <summary>
@@ -583,7 +593,7 @@ namespace Ceres.MCTS.MTCSNodes
       {
         List<MCTSNode> ret = new List<MCTSNode>(NumChildrenExpanded);
         for (int i = 0; i < NumChildrenExpanded; i++)
-            ret.Add(ChildAtIndex(i));
+          ret.Add(ChildAtIndex(i));
 
         return ret;
       }
@@ -593,9 +603,9 @@ namespace Ceres.MCTS.MTCSNodes
 
     public BestMoveInfo BestMoveInfo(bool updateStatistics)
     {
-      return new ManagerChooseRootMove(this, updateStatistics, Context.ParamsSearch.MLHBonusFactor).BestMoveCalc;
+      return new ManagerChooseBestMove(this, updateStatistics, Context.ParamsSearch.MLHBonusFactor).BestMoveCalc;
     }
-  
+
 
     /// <summary>
     /// Returns the MCTSNode among all children having largest value returned by speciifed function.
@@ -604,12 +614,30 @@ namespace Ceres.MCTS.MTCSNodes
     /// <returns></returns>
     public MCTSNode ChildWithLargestValue(Func<MCTSNode, float> sortFunc)
     {
-      MCTSNode[] children = ChildrenSorted(sortFunc);
-      if (children.Length == 0)
+      if (NumChildrenExpanded == 0)
+      {
         return null;
+      }
       else
-        return children[^1];
+      {
+        MCTSNode maxNode = null;
+        float maxN = float.MinValue;
+        for (int i = 0; i < NumChildrenExpanded; i++)
+        {
+          MCTSNode thisNode = ChildAtIndex(i);
+          float thisN = sortFunc(thisNode);
+          if (thisN > maxN)
+          {
+            maxNode = thisNode;
+            maxN = thisN;
+          }
+        }
+
+        return maxNode;
+      }
     }
+
+  
 
 
     /// <summary>
@@ -624,6 +652,17 @@ namespace Ceres.MCTS.MTCSNodes
       Array.Sort(children, (v1, v2) => sortValueFunc(v1).CompareTo(sortValueFunc(v2)));
       return children;
     }
+
+    /// <summary>
+    /// Returns the expanded node having the largest N.
+    /// </summary>
+    public MCTSNode ChildWithLargestN => ChildWithLargestValue(n => n.N);
+
+    /// <summary>
+    /// Returns the expanded node having the largest Q.
+    /// </summary>
+    public MCTSNode ChildWithLargestQ => ChildWithLargestValue(n => (float)n.Q);
+
 
 
     /// <summary>
@@ -654,9 +693,9 @@ namespace Ceres.MCTS.MTCSNodes
       }
     }
 
-    #endregion
+#endregion
 
-    #region Miscellaneous
+#region Miscellaneous
 
     /// <summary>
     /// Attempts to find a subnode by following specified moves from root.
@@ -745,9 +784,9 @@ namespace Ceres.MCTS.MTCSNodes
       return thisCPUCT;
     }
 
-    #endregion
+#endregion
 
-    #region ITreeNode
+#region ITreeNode
 
     ITreeNode ITreeNode.IParent => Parent;
 
@@ -766,10 +805,10 @@ namespace Ceres.MCTS.MTCSNodes
 
     ITreeNode ITreeNode.IChildAtIndex(int index) => ChildAtIndex(index);
 
-    #endregion
+#endregion
 
 
-    #region Overrides (object)
+#region Overrides (object)
 
     public int GetHashCode() => Index;
 
@@ -780,7 +819,7 @@ namespace Ceres.MCTS.MTCSNodes
 
     public int GetHashCode(MCTSNode obj) => obj.index.Index;
 
-    #endregion
+#endregion
   }
 }
 

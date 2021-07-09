@@ -27,31 +27,23 @@ namespace Ceres.Base.Misc
   public static class CompressionUtils
   {
     /// <summary>
-    /// TODO: make this in a central place
+    /// Returns decompressed bytes from a file with specified name encoded using Gzip.
     /// </summary>
     /// <param name="fn"></param>
     /// <returns></returns>
     public static byte[] GetDecompressedBytes(string fn)
     {
-      byte[] allBytes = new byte[new FileInfo(fn).Length * 2];
-      int bytesRead = 0;
-
-      using (FileStream fileReader = System.IO.File.OpenRead(fn))
-      using (GZipStream compressionStream = new GZipStream(fileReader, CompressionMode.Decompress))
-      {
-        // Decompresses and reads data from stream to file
-        int readlength = 0;
-        byte[] buffer = new byte[65536];
-        do
+        using (FileStream inStream = File.OpenRead(fn))
         {
-          readlength = compressionStream.Read(buffer, 0, buffer.Length);
-          Array.Copy(buffer, 0, allBytes, bytesRead, readlength);
-          bytesRead += readlength;
-        } while (readlength > 0);
+        using (GZipStream gzipStream = new GZipStream(inStream, CompressionMode.Decompress))
+        {
+          using (MemoryStream outStream = new MemoryStream())
+          {
+            gzipStream.CopyTo(outStream);
+            return outStream.ToArray();
+          }
+        }
       }
-
-      Array.Resize(ref allBytes, bytesRead);
-      return allBytes;
     }
 
 

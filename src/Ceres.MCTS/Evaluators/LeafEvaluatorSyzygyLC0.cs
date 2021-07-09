@@ -47,11 +47,11 @@ namespace Ceres.MCTS.Evaluators
     /// <summary>
     /// 
     /// </summary>
-    public readonly LC0DLLSyzygyEvaluator Evaluator;
+    public readonly ISyzygyEvaluatorEngine Evaluator;
 
     public LeafEvaluatorSyzygyLC0(string paths)
     {
-      Evaluator = LC0DLLSyzygyEvaluatorPool.GetSessionForPaths(paths);
+      Evaluator = SyzygyEvaluatorPool.GetSessionForPaths(paths);
       MaxCardinality = Evaluator.MaxCardinality;
     }
 

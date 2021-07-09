@@ -92,6 +92,16 @@ namespace Ceres.Base.Math.MKL
     [DllImport(dllName, EntryPoint = "cblas_sgemm", ExactSpelling = true, SetLastError = false, CallingConvention = CallingConvention.Cdecl)]
     public static extern void cblas_sgemm1D2D(BlasOrderType order, BlasTransType transA, BlasTransType transB, int m, int n, int k, float alpha, float[] a, int lda, float[,] b, int ldb, float beta, [In, Out] float[] c, int ldc);
 
+    [DllImport(dllName, EntryPoint = "cblas_sgemm", ExactSpelling = true, SetLastError = false, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void cblas_sgemm1D(BlasOrderType order, BlasTransType transA, BlasTransType transB, int m, int n, int k, float alpha, float[] a, int lda, float[] b, int ldb, float beta, [In, Out] float[] c, int ldc);
+
+    [DllImport(dllName, EntryPoint = "cblas_sgemm", ExactSpelling = true, SetLastError = false, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void cblas_sgemm1DPtr(BlasOrderType order, BlasTransType transA, BlasTransType transB, int m, int n, int k, float alpha, float[] a, int lda, float* b, int ldb, float beta, float* c, int ldc);
+
+    [DllImport(dllName, EntryPoint = "cblas_sgemm", ExactSpelling = true, SetLastError = false, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void cblas_sgemm1DPtrAll(BlasOrderType order, BlasTransType transA, BlasTransType transB, int m, int n, int k, float alpha, float* a, int lda, float* b, int ldb, float beta, float* c, int ldc);
+
+
     // this method not in mklmkl, and uses "old style" pointers
     [DllImport(dllName, EntryPoint = "mkl_scoomm", ExactSpelling = true, SetLastError = false, CallingConvention = CallingConvention.Cdecl)]
     public static extern void cblas_scoomm(ref char transT, ref int m, ref int n, ref int k, ref float alpha,

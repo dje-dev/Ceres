@@ -109,6 +109,10 @@ namespace Ceres.Chess.LC0.NNFiles
       NNWeightsFileLC0Downloader downloader = new NNWeightsFileLC0Downloader(baseURL, 
                                                                              CeresUserSettingsManager.Settings.DirLC0Networks);
       string fn = downloader.Download(networkID);
+      if (fn == null)
+      {
+        throw new Exception($"Failure in download of {networkID}");
+      }
 
       // Load and return the file.
       return new NNWeightsFileLC0(networkID, fn);

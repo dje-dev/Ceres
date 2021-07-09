@@ -22,6 +22,9 @@ using Chess.Ceres.NNEvaluators;
 using Ceres.Chess.NNFiles;
 using System.Collections.Generic;
 using Chess.Ceres.NNEvaluators.TensorRT;
+using Ceres.Chess.UserSettings;
+using Ceres.Chess.NNEvaluators.CUDA;
+using Ceres.Chess.LC0.NNFiles;
 
 #endregion
 
@@ -33,6 +36,22 @@ namespace Ceres.Chess.NNEvaluators
   /// </summary>
   public static class NNEvaluatorFactory
   {
+    /// <summary>
+    /// Delegate type which constructs evaluator from specified definition.
+    /// </summary>
+    public delegate NNEvaluator CustomDelegate(string netID, int gpuID, NNEvaluator referenceEvaluator);
+
+    /// <summary>
+    /// Custom factory method installable at runtime (CUSTOM1).
+    /// </summary>
+    public static CustomDelegate Custom1Factory;
+
+    /// <summary>
+    /// Custom factory method installable at runtime (CUSTOM2).
+    /// </summary>
+    public static CustomDelegate Custom2Factory;
+
+
     static Dictionary<object, (NNEvaluatorDef, NNEvaluator)> persistentEvaluators = new();
 
     internal static void DeletePersistent(NNEvaluator evaluator)
@@ -41,7 +60,15 @@ namespace Ceres.Chess.NNEvaluators
       persistentEvaluators.Remove(evaluator.PersistentID);
     }
 
-    public static NNEvaluator BuildEvaluator(NNEvaluatorDef def)
+    /// <summary>
+    /// Constructs an evaluator based on specified definition,
+    /// optionally setting an associated (already initialized) 
+    /// reference evaluator which shares the same weights.
+    /// </summary>
+    /// <param name="def"></param>
+    /// <param name="referenceEvaluator"></param>
+    /// <returns></returns>
+    public static NNEvaluator BuildEvaluator(NNEvaluatorDef def, NNEvaluator referenceEvaluator = null)
     {
       if (def.IsPersistent)
       {
@@ -54,7 +81,7 @@ namespace Ceres.Chess.NNEvaluators
           }
           else
           {
-            NNEvaluator evaluator = DoBuildEvaluator(def);
+            NNEvaluator evaluator = DoBuildEvaluator(def, referenceEvaluator);
             evaluator.PersistentID = def.persistentID;
             evaluator.NumInstanceReferences++;
             persistentEvaluators[def.persistentID] = (def, evaluator);
@@ -64,7 +91,7 @@ namespace Ceres.Chess.NNEvaluators
       }
       else
       {
-        return DoBuildEvaluator(def);
+        return DoBuildEvaluator(def, referenceEvaluator);
       }
     }
 
@@ -76,57 +103,132 @@ namespace Ceres.Chess.NNEvaluators
       }
     }
 
-    static NNEvaluator Singleton(NNEvaluatorNetDef netDef, NNEvaluatorDeviceDef deviceDef)
+    static NNEvaluator Singleton(NNEvaluatorNetDef netDef, NNEvaluatorDeviceDef deviceDef, NNEvaluator referenceEvaluator)
     {
       NNEvaluator ret = null;
 
       const bool LOW_PRIORITY = false;
-      //LC0DownloadedNetDef net = LC0DownloadedNetDef.ByID(netDef.NetworkID);
-      INNWeightsFileInfo net = NNWeightsFiles.LookupNetworkFile(netDef.NetworkID);
+      
+      INNWeightsFileInfo net = null;
 
-      if (netDef.Type == NNEvaluatorType.RandomWide)
-        ret = new NNEvaluatorRandom(NNEvaluatorRandom.RandomType.WidePolicy, true);
-      else if (netDef.Type == NNEvaluatorType.RandomNarrow)
-        ret = new NNEvaluatorRandom(NNEvaluatorRandom.RandomType.NarrowPolicy, true);
-      else if (netDef.Type == NNEvaluatorType.LC0Library)
-        ret = new NNEvaluatorLC0(net, deviceDef.DeviceIndex, netDef.Precision);
+      // TODO: also do this for ONNX
+      if (netDef.Type != NNEvaluatorType.ONNX)
+      {
+        net = NNWeightsFiles.LookupNetworkFile(netDef.NetworkID);
+      }
 
-      else if (netDef.Type == NNEvaluatorType.LC0TensorRT)
+      switch (netDef.Type)
       {
-        NNEvaluatorEngineTensorRTConfig.TRTPriorityLevel priority = LOW_PRIORITY ? NNEvaluatorEngineTensorRTConfig.TRTPriorityLevel.Medium
-                                                                                 : NNEvaluatorEngineTensorRTConfig.TRTPriorityLevel.High;
-        const int MAX_TRT_BATCH_SIZE = 1024; // TODO: move this elsewhere
-        const bool SHARED = false;
-        const bool USE_MULTI = false; // attempt to to workaround apparent bug in TRT where cannot change batch size (probably unusccessful)
-        if (USE_MULTI)
-        {
-          throw new NotImplementedException();
-          //          ret = new NNEvaluatorEngineTensorRTMultiBatchSizes(net.NetworkID, net.ONNXFileName, net.IsWDL, net.HasMovesLeft, deviceDef.DeviceIndex,
-          //                                                             NNEvaluatorEngineTensorRTConfig.NetTypeEnum.LC0,
-          //                                                             MAX_TRT_BATCH_SIZE, netDef.Precision, priority, null, shared: SHARED);
-        }
-        else
-        {
-          ret = new NNEvaluatorEngineTensorRT(net.NetworkID, net.ONNXFileName, net.IsWDL, net.HasMovesLeft, deviceDef.DeviceIndex,
-                                              NNEvaluatorEngineTensorRTConfig.NetTypeEnum.LC0,
-                                              MAX_TRT_BATCH_SIZE, netDef.Precision, priority, null, shared: SHARED);
-        }
+        case NNEvaluatorType.RandomWide:
+          ret = new NNEvaluatorRandom(NNEvaluatorRandom.RandomType.WidePolicy, true);
+          break;
+
+        case NNEvaluatorType.RandomNarrow:
+          ret = new NNEvaluatorRandom(NNEvaluatorRandom.RandomType.NarrowPolicy, true);
+          break;
+
+        case NNEvaluatorType.LC0Library:
+          if (CeresUserSettingsManager.Settings.UseLegacyLC0Evaluator)
+          {
+            ret = new NNEvaluatorLC0(net, deviceDef.DeviceIndex, netDef.Precision);
+          }
+          else
+          {
+            NNEvaluatorCUDA referenceEvaluatorCast = null;
+
+            if (referenceEvaluator != null)
+            {
+              if (referenceEvaluator is NNEvaluatorCUDA)
+              {
+                referenceEvaluatorCast = referenceEvaluator as NNEvaluatorCUDA;
+              }
+              else if (referenceEvaluator is NNEvaluatorSplit)
+              {
+                referenceEvaluatorCast = ((NNEvaluatorSplit)referenceEvaluator).Evaluators[0] as NNEvaluatorCUDA;
+              }
+            }
+
+
+            int maxBatchSize = CeresUserSettingsManager.Settings.MaxBatchSize;
+            bool enableCUDAGraphs = CeresUserSettingsManager.Settings.EnableCUDAGraphs;
+            return new NNEvaluatorCUDA(net as NNWeightsFileLC0, deviceDef.DeviceIndex, maxBatchSize, 
+                                       false, netDef.Precision, false, enableCUDAGraphs, 1, referenceEvaluatorCast);
+          }
+
+          break;
+
+        case NNEvaluatorType.LC0TensorRT:
+          {
+            NNEvaluatorEngineTensorRTConfig.TRTPriorityLevel priority = LOW_PRIORITY ? NNEvaluatorEngineTensorRTConfig.TRTPriorityLevel.Medium
+                                                                                     : NNEvaluatorEngineTensorRTConfig.TRTPriorityLevel.High;
+            const int MAX_TRT_BATCH_SIZE = 1024; // TODO: move this elsewhere
+            const bool SHARED = false;
+            const bool USE_MULTI = false; // attempt to to workaround apparent bug in TRT where cannot change batch size (probably unusccessful)
+            if (USE_MULTI)
+            {
+              throw new NotImplementedException();
+              //          ret = new NNEvaluatorEngineTensorRTMultiBatchSizes(net.NetworkID, net.ONNXFileName, net.IsWDL, net.HasMovesLeft, deviceDef.DeviceIndex,
+              //                                                             NNEvaluatorEngineTensorRTConfig.NetTypeEnum.LC0,
+              //                                                             MAX_TRT_BATCH_SIZE, netDef.Precision, priority, null, shared: SHARED);
+            }
+            else
+            {
+              ret = new NNEvaluatorEngineTensorRT(net.NetworkID, net.ONNXFileName, net.IsWDL, net.HasMovesLeft, deviceDef.DeviceIndex,
+                                                  NNEvaluatorEngineTensorRTConfig.NetTypeEnum.LC0,
+                                                  MAX_TRT_BATCH_SIZE, netDef.Precision, priority, null, shared: SHARED);
+            }
+
+            break;
+          }
+
+        case NNEvaluatorType.ONNX:
+          {
+            throw new NotImplementedException();
+#if NOT
+            // TODO: fill these in properly
+            string fn = @$"d:\weights\lczero.org\{netDef.NetworkID}.onnx";
+            bool isWDL = true;
+            bool hasMLH =  false; // TODO: fix. Eventually put in netDef
+            ret = new NNEvaluatorEngineONNX(netDef.NetworkID, fn, deviceDef.DeviceIndex,
+                                            ONNXRuntimeExecutor.NetTypeEnum.LC0, 1024, netDef.Precision, isWDL, hasMLH);
+            break;
+#endif
+          }
+
+        case NNEvaluatorType.Custom1:
+          if (Custom1Factory == null)
+          {
+            throw new Exception("NNEvaluatorFactory.Custom1Factory static variable must be initialized.");
+          }
+          ret = Custom1Factory(net.NetworkID, deviceDef.DeviceIndex, referenceEvaluator);
+          break;
+
+        case NNEvaluatorType.Custom2:
+          if (Custom2Factory == null)
+          {
+            throw new Exception("NNEvaluatorFactory.Custom2Factory static variable must be initialized.");
+          }
+          ret = Custom2Factory(net.NetworkID, deviceDef.DeviceIndex, referenceEvaluator);
+          break;
+
+        default:
+          throw new Exception($"Requested neural network evaluator type not supported: {netDef.Type}");
       }
-      else if (netDef.Type == NNEvaluatorType.ONNX)
-      {
-        ret = new NNEvaluatorEngineONNX(net.NetworkID, net.ONNXFileName, deviceDef.DeviceIndex,
-                                        LC0NetInference.ONNXRuntimeExecutor.NetTypeEnum.LC0, 1024, net.IsWDL);
-      }
-      else
-        throw new Exception($"Requested neural network evaluator type not supported: {netDef.Type}");
 
       return  ret;
     }
 
 
-    static NNEvaluator BuildDeviceCombo(NNEvaluatorDef def)
+    static NNEvaluator BuildDeviceCombo(NNEvaluatorDef def, NNEvaluator referenceEvaluator)
     {
       Debug.Assert(def.Nets.Length == 1);
+
+      if (def.Devices.Length > 1 && referenceEvaluator != null)
+      {
+        referenceEvaluator = null;
+        // TODO: Fix this. We get CUDA crash if enabled for unknown reasons.
+        Console.WriteLine("NOTE: Weight sharing to conserve memory on GPU is currently disabled in multi-gpu configuration.");
+      }
 
       // Build underlying device evaluators in parallel
       NNEvaluator[] evaluators = new NNEvaluator[def.Devices.Length];
@@ -134,16 +236,23 @@ namespace Ceres.Chess.NNEvaluators
 
       try
       {
-        Parallel.For(0, def.Devices.Length, delegate (int i)
-        {
-          if (def.Nets.Length == 1)
-            evaluators[i] = Singleton(def.Nets[0].Net, def.Devices[i].Device);
-          else
-            throw new NotImplementedException();
-        //evaluators[i] = BuildNetCombo(def.Nets[0].Net, def.Devices[i].Device);
+        // Option to disable if problems are seen
+        const bool PARALLEL_INIT_ENABLED = true;
+  
+        Parallel.For(0, def.Devices.Length, new ParallelOptions() { MaxDegreeOfParallelism = PARALLEL_INIT_ENABLED ? int.MaxValue : 1 }, 
+          delegate (int i)
+          {
+            if (def.Nets.Length == 1)
+            {
+              evaluators[i] = Singleton(def.Nets[0].Net, def.Devices[i].Device, referenceEvaluator);
+            }
+            else
+            {
+              throw new NotImplementedException();
+            }
 
-        fractions[i] = def.Devices[i].Fraction;
-        });
+          fractions[i] = def.Devices[i].Fraction;
+          });
       }
       catch (Exception exc)
       {
@@ -151,25 +260,18 @@ namespace Ceres.Chess.NNEvaluators
       }
 
       // Combine together devices
-      if (def.DeviceCombo == NNEvaluatorDeviceComboType.Split)
-        return new NNEvaluatorSplit(evaluators, fractions, def.MinSplitNumPositions);
-      else if (def.DeviceCombo == NNEvaluatorDeviceComboType.RoundRobin)
-        return new NNEvaluatorRoundRobin(evaluators);
-      else if (def.DeviceCombo == NNEvaluatorDeviceComboType.Pooled)
+      return def.DeviceCombo switch
       {
-//        const int MULTIBATCH_THRESHOLD_NUM_POSITIONS = 150;// 128;
-//        const int MULTIBATCH_THRESHOLD_WAIT_TIME_MS = 10;// 2; 
-
-        return new NNEvaluatorPooled(evaluators);//, MULTIBATCH_THRESHOLD_NUM_POSITIONS, MULTIBATCH_THRESHOLD_WAIT_TIME_MS, def.RetrieveSupplementalLayers);
-      }
-      else if (def.DeviceCombo == NNEvaluatorDeviceComboType.Compare)
-        return new NNEvaluatorCompare(evaluators);
-      else
-        throw new NotImplementedException();
+        NNEvaluatorDeviceComboType.Split      => new NNEvaluatorSplit(evaluators, fractions, def.MinSplitNumPositions),
+        NNEvaluatorDeviceComboType.RoundRobin => new NNEvaluatorRoundRobin(evaluators),
+        NNEvaluatorDeviceComboType.Pooled     => new NNEvaluatorPooled(evaluators),
+        NNEvaluatorDeviceComboType.Compare    => new NNEvaluatorCompare(evaluators),
+        _ => throw new NotImplementedException()
+      };
     }
 
 
-    static NNEvaluator BuildNetCombo(NNEvaluatorDef def)
+    static NNEvaluator BuildNetCombo(NNEvaluatorDef def, NNEvaluator referenceEvaluator)
     {
       Debug.Assert(def.Devices.Length == 1);
 
@@ -180,30 +282,36 @@ namespace Ceres.Chess.NNEvaluators
       float[] weightsM = new float[def.Nets.Length];
       Parallel.For(0, def.Nets.Length, delegate (int i)
       {
-        evaluators[i] = Singleton(def.Nets[i].Net, def.Devices[0].Device);
+        evaluators[i] = Singleton(def.Nets[i].Net, def.Devices[0].Device, referenceEvaluator);
         weightsValue[i] = def.Nets[i].WeightValue;
         weightsPolicy[i] = def.Nets[i].WeightPolicy;
         weightsM[i] = def.Nets[i].WeightM;
       });
 
-      if (def.NetCombo == NNEvaluatorNetComboType.WtdAverage)
-        return new NNEvaluatorLinearCombo(evaluators, weightsValue, weightsPolicy, weightsM, null, null);
-      else if (def.NetCombo == NNEvaluatorNetComboType.Compare)
-        return new NNEvaluatorCompare(evaluators);
-      else
-        throw new NotImplementedException();
+      return def.NetCombo switch
+      {
+        NNEvaluatorNetComboType.WtdAverage => new NNEvaluatorLinearCombo(evaluators, weightsValue, weightsPolicy, weightsM, null, null),
+        NNEvaluatorNetComboType.Compare    => new NNEvaluatorCompare(evaluators),
+        _ => throw new NotImplementedException()
+      };
     }
 
-     static NNEvaluator DoBuildEvaluator(NNEvaluatorDef def)
+    static NNEvaluator DoBuildEvaluator(NNEvaluatorDef def, NNEvaluator referenceEvaluator)
     {
       if (def.DeviceCombo == NNEvaluatorDeviceComboType.Single && def.DeviceIndices.Length > 1)
+      {
         throw new Exception("DeviceComboType.Single is not expected when number of DeviceIndices is greater than 1.");
+      }
 
       if (def.NetCombo == NNEvaluatorNetComboType.Dynamic)
+      {
         throw new NotImplementedException("Dynamic not yet implemented");
+      }
 
       if (def.NetCombo != NNEvaluatorNetComboType.Single && def.DeviceCombo != NNEvaluatorDeviceComboType.Single)
+      {
         throw new NotImplementedException("Currently either NetComboType or DeviceComboType must be Single.");
+      }
 
       //        if (Params.EstimatePerformanceCharacteristics) ret.CalcStatistics(true);
 
@@ -216,23 +324,24 @@ namespace Ceres.Chess.NNEvaluators
             && def.Nets[0].Net.Type == NNEvaluatorType.LC0Library)
       {
         int[] deviceIndices = new int[def.Devices.Length];
-        for (int i=0; i < def.Devices.Length;i++)
+        for (int i=0; i < def.Devices.Length; i++)
         {
           throw new NotImplementedException();
-          //if (def.Devices[i].Type)
         }
-
-        INNWeightsFileInfo netDef = NNWeightsFiles.LookupNetworkFile(def.Nets[0].Net.NetworkID);
-        return new NNEvaluatorLC0(netDef, deviceIndices, def.Nets[0].Net.Precision);
-//        return new NNEvaluatorLC0Server(netDef, deviceIndices, def.Nets[0].Net.Precision);
       }
 
       if (def.DeviceCombo != NNEvaluatorDeviceComboType.Single)
-        return BuildDeviceCombo(def);
+      {
+        return BuildDeviceCombo(def, referenceEvaluator);
+      }
       else if (def.NetCombo != NNEvaluatorNetComboType.Single)
-        return BuildNetCombo(def);
+      {
+        return BuildNetCombo(def, referenceEvaluator);
+      }
       else
-        return Singleton(def.Nets[0].Net, def.Devices[0].Device);
+      {
+        return Singleton(def.Nets[0].Net, def.Devices[0].Device, referenceEvaluator);
+      }
 
     }
   }

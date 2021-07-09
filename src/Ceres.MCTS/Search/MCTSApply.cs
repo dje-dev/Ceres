@@ -30,6 +30,8 @@ using Ceres.Base.Math.Probability;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.Params;
+using Ceres.Base.Benchmarking;
+using System.Collections.Concurrent;
 
 #endregion
 
@@ -198,7 +200,9 @@ namespace Ceres.MCTS.Search
 
         float contemptAdjustment = 0;
         if (!float.IsNaN(dToApply))
+        {
           contemptAdjustment = (node.IsOurMove ? -1 : 1) * (dToApply * node.Context.CurrentContempt);
+        }
 
         // If we are revisiting a terminal node, just reiterate the prior evaluation
         if (wasTerminal && node.EvalResult.IsNull)
@@ -371,22 +375,29 @@ namespace Ceres.MCTS.Search
 
       MCTSIterator context = nodes[0].Context;
       bool cachingInUse = context.EvaluatorDef.CacheMode > PositionEvalCache.CacheMode.None;
+      bool movesSameOrderMoveList = context.NNEvaluators.PolicyReturnedSameOrderMoveList;
 
       float policySoftmax = context.ParamsSelect.PolicySoftmax;
 
       if (context.ParamsSearch.Execution.SetPoliciesParallelEnabled)
       {
-        Parallel.ForEach(nodes, ParallelUtils.ParallelOptions(nodes.Count, context.ParamsSearch.Execution.SetPoliciesNumPoliciesPerThread),
-        node =>
+//        Parallel.ForEach(nodes, ParallelUtils.ParallelOptions(nodes.Count, context.ParamsSearch.Execution.SetPoliciesNumPoliciesPerThread),
+        Parallel.ForEach(Partitioner.Create(0, nodes.Count), ParallelUtils.ParallelOptions(nodes.Count, context.ParamsSearch.Execution.SetPoliciesNumPoliciesPerThread),
+        (range) =>
         {
           using (new SearchContextExecutionBlock(context))
-            SetPolicy(node, policySoftmax, cachingInUse);
+          {
+            for (int i = range.Item1; i < range.Item2; i++)
+            {
+              SetPolicy(nodes[i], policySoftmax, cachingInUse, movesSameOrderMoveList);
+            }
+          }
         });
       }
       else
       {
         foreach (MCTSNode node in nodes)
-          SetPolicy(node, policySoftmax, cachingInUse);
+          SetPolicy(node, policySoftmax, cachingInUse, movesSameOrderMoveList);
       }
     }
 
@@ -397,7 +408,8 @@ namespace Ceres.MCTS.Search
     /// <param name="node"></param>
     /// <param name="policySoftmax"></param>
     /// <param name="cachingInUse"></param>
-    void SetPolicy(MCTSNode node, float policySoftmax, bool cachingInUse)
+    void SetPolicy(MCTSNode node, float policySoftmax, bool cachingInUse,
+                   bool returnedMovesAreInSameOrderAsMGMoveList)
     {
       // If already set by another overlapped/concurrent selector we don't need to repeat this
       if (node.ActionType == MCTSNode.NodeActionType.CacheOnly && cachingInUse)
@@ -414,7 +426,10 @@ namespace Ceres.MCTS.Search
         if (!node.PolicyHasAlreadyBeenInitialized)
         {
           if (!node.EvalResult.TerminalStatus.IsTerminal())
-            node.SetPolicy(policySoftmax, ParamsSelect.MinPolicyProbability, in node.Annotation.PosMG, node.Annotation.Moves, in node.EvalResult.PolicyRef);
+          {
+            node.SetPolicy(policySoftmax, ParamsSelect.MinPolicyProbability, in node.Annotation.PosMG, node.Annotation.Moves, 
+                           in node.EvalResult.PolicyRef, returnedMovesAreInSameOrderAsMGMoveList);
+          }
 
           if (node.Context.ParamsSearch.Execution.InFlightOtherBatchLinkageEnabled)
           {

@@ -15,6 +15,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Text;
 using Ceres.Base.Misc;
 
@@ -51,33 +52,42 @@ namespace Ceres.Base.OperatingSystem.NVML
 
       for (uint i = 0; i < deviceCount; i++)
       {
-        uint ret = NVMLMethods.nvmlDeviceGetHandleByIndex(i, out IntPtr device);
-
-        StringBuilder name = new StringBuilder(50);
-        NVMLMethods.nvmlDeviceGetName(device, name, 50);
-        NVMLMethods.nvmlDeviceGetTemperature(device, 0, out uint temperatureCentigrade);
-        NVMLMethods.nvmlDeviceGetUtilizationRates(device, out NVMLUtilization utilization);
-        NVMLClocksThrottleReasons clocksThrottleReasons = 0;
-        NVMLMethods.nvmlDeviceGetCurrentClocksThrottleReasons(device, ref clocksThrottleReasons);
-
-        uint major = 0;
-        uint minor = 0;
-        NVMLMethods.nvmlDeviceGetCudaComputeCapability(device, ref major, ref minor);
-
-        uint clocksSM = 0;
-        NVMLMethods.nvmlDeviceGetClockInfo(device, nvmlClockType.Graphics, ref clocksSM);
-
-        infos.Add(new NVMLGPUInfo((int)i, name.ToString(), 
-                  (int)major, (int)minor, (int)clocksSM,
-                  (int)utilization.UtilizationGPUPct, (int)utilization.UtilizationMemoryPct, (int)temperatureCentigrade, clocksThrottleReasons));
+        infos.Add(GetGPUInfo(i));
       }
 
       return infos;
     }
 
+    public static NVMLGPUInfo GetGPUInfo(uint i)
+    {
+      uint ret = NVMLMethods.nvmlDeviceGetHandleByIndex(i, out IntPtr device);
 
-    public const string InfoDescriptionHeaderLine1 = "ID  Name                Ver  SMClk  GPU%  Mem%   Temp   Throttle Reasons";
-    public const string InfoDescriptionHeaderLine2 = "--  ------------------  ---  -----  ----  ----   ----   ----------------";
+      StringBuilder name = new StringBuilder(50);
+      NVMLMethods.nvmlDeviceGetName(device, name, 50);
+      NVMLMethods.nvmlDeviceGetTemperature(device, 0, out uint temperatureCentigrade);
+      NVMLMethods.nvmlDeviceGetUtilizationRates(device, out NVMLUtilization utilization);
+
+      NVMLMethods.nvmlDeviceGetPowerUsage(device, out uint powerUsage);
+      NVMLMethods.nvmlDeviceGetArchitecture(device, out uint architecture);
+
+      NVMLClocksThrottleReasons clocksThrottleReasons = 0;
+      NVMLMethods.nvmlDeviceGetCurrentClocksThrottleReasons(device, ref clocksThrottleReasons);
+
+      uint major = 0;
+      uint minor = 0;
+      NVMLMethods.nvmlDeviceGetCudaComputeCapability(device, ref major, ref minor);
+
+      uint clocksSM = 0;
+      NVMLMethods.nvmlDeviceGetClockInfo(device, nvmlClockType.Graphics, ref clocksSM);
+
+      return new NVMLGPUInfo((int)i, name.ToString(),
+                             (int)major, (int)minor, (int)architecture, (int)clocksSM,
+                             (int)utilization.UtilizationGPUPct, (int)utilization.UtilizationMemoryPct,
+                             (float)powerUsage / 1000.0f, (int)temperatureCentigrade, clocksThrottleReasons);
+    }
+
+    public const string InfoDescriptionHeaderLine1 = "ID  Name                     Ver  SMClk  GPU%  Mem%   Temp   Throttle Reasons";
+    public const string InfoDescriptionHeaderLine2 = "--  -----------------------  ---  -----  ----  ----   ----   ----------------";
 
 
     /// <summary>
@@ -94,12 +104,13 @@ namespace Ceres.Base.OperatingSystem.NVML
       }
     }
 
+
     public static string GetInfoDescriptionLine(NVMLGPUInfo info)
     {
       StringBuilder desc = new StringBuilder();
 
-      desc.Append($"{info.ID,2:F0}  {info.Name,-15}     {info.CapabilityMajor}{info.CapabilityMinor}  ");
-      desc.Append($"{info.ClocksSMMhz,6}  {info.GPUUtilizationPct,3}%  {info.MemoryUtilizationPct,3}%  ");
+      desc.Append($"{info.ID,2:F0}  {info.Name,-20}     {info.CapabilityMajor,1}{info.CapabilityMinor,1}  ");
+      desc.Append($"{info.ClocksSMMhz,5}  {info.GPUUtilizationPct,3}%  {info.MemoryUtilizationPct,3}%  ");
       desc.Append($"{info.TemperatureCentigrade,4}C   {StringUtils.Sized(info.ClocksThrottleReasons.ToString(), 14)}");
 
       return desc.ToString();

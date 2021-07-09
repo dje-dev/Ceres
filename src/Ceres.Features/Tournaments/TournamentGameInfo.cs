@@ -13,6 +13,7 @@
 
 #region Using directives
 
+using System;
 using System.Collections.Generic;
 using Ceres.Chess.GameEngines;
 
@@ -25,8 +26,24 @@ namespace Ceres.Features.Tournaments
   /// <summary>
   /// Record summarizing result of a tournament game.
   /// </summary>
+  [Serializable]
   public record TournamentGameInfo
   {
+    /// <summary>
+    /// Sequence number within tournament.
+    /// </summary>
+    public int GameSequenceNum;
+
+    /// <summary>
+    /// Index of opening from opening book.
+    /// </summary>
+    public int OpeningIndex;
+
+    /// <summary>
+    /// If Engine2 is playing the white pieces.
+    /// </summary>
+    public bool Engine2IsWhite;
+
     /// <summary>
     /// Starting FEN of game.
     /// </summary>
@@ -76,5 +93,24 @@ namespace Ceres.Features.Tournaments
     /// List of descriptive information relating to all moves played.
     /// </summary>
     public List<GameMoveStat> GameMoveHistory;
+
+    /// <summary>
+    /// Returns the reverse of a specified game result.
+    /// </summary>
+    /// <param name="result"></param>
+    /// <returns></returns>
+    public static TournamentGameResult InvertedResult(TournamentGameResult result)
+    {
+      switch (result)
+      {
+        case TournamentGameResult.Draw:
+          return TournamentGameResult.Draw;
+        case TournamentGameResult.Win:
+          return TournamentGameResult.Loss;
+        case TournamentGameResult.Loss:
+          return TournamentGameResult.Win;
+      }
+      throw new Exception("Internal error: unexpected result");
+    }
   }
 }

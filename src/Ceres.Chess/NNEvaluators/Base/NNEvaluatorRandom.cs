@@ -64,6 +64,12 @@ namespace Ceres.Chess.NNEvaluators
     }
 
 
+    /// <summary>
+    /// The maximum number of positions that can be evaluated in a single batch.
+    /// </summary>
+    public override int MaxBatchSize => 4096;
+
+
     static int HashInRange<T>(Span<T> items, int startIndex, int length)
     {
       int hash = 0;
@@ -73,7 +79,7 @@ namespace Ceres.Chess.NNEvaluators
     }
 
 
-    public override IPositionEvaluationBatch EvaluateIntoBuffers(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
+    public override IPositionEvaluationBatch DoEvaluateIntoBuffers(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
     {
       TimingStats timingStats = new TimingStats();
       using (new TimingBlock("EvalBatch", timingStats, TimingBlock.LoggingType.None))
@@ -82,18 +88,17 @@ namespace Ceres.Chess.NNEvaluators
 
         FP16[] w = new FP16[positions.NumPos];
         FP16[] l = IsWDL ? new FP16[positions.NumPos] : null;
-        FP16[] m = IsWDL ? new FP16[positions.NumPos] : null;
 
         for (int i = 0; i < positions.NumPos; i++)
         {
           int hashPos = HashInRange(positions.PosPlaneBitmaps, i * EncodedPositionWithHistory.NUM_PLANES_TOTAL, EncodedPositionWithHistory.NUM_PLANES_TOTAL);
-          hashPos = (Math.Abs(hashPos)) ^ 172854;
+          if (hashPos < 0) hashPos *= -1;
+          //hashPos = Math.Abs(hashPos) ^ 172854;
 
           // Generate value
           if (IsWDL)
           {
             GenerateRandValue(hashPos, ref w[i], ref l[i]);
-            m[i] = 30 + i % 7;
           }
           else
           {
@@ -107,10 +112,7 @@ namespace Ceres.Chess.NNEvaluators
           CompressedPolicyVector.InitializeAsRandom(ref policies[i], Type == RandomType.WidePolicy);
         }
 
-        if (retrieveSupplementalResults) throw new NotImplementedException();
-        float[] supplemental = null;
-
-        return new PositionEvaluationBatch(IsWDL, HasM, positions.NumPos, policies, w, l, m, supplemental, timingStats);
+        return new PositionEvaluationBatch(IsWDL, HasM, positions.NumPos, policies, w, l, null, null, timingStats);
       }
     }
 

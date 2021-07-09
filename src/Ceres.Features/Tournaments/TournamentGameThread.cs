@@ -16,19 +16,18 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Runtime.InteropServices;
-using System.Text;
-using Ceres.Base;
+
+using static Ceres.Base.Misc.StringUtils;
 using Ceres.Chess;
 using Ceres.Chess.Games;
 using Chess.Ceres.PlayEvaluation;
 using Ceres.Chess.GameEngines;
 using Ceres.Chess.UserSettings;
-using Ceres.Chess.NNEvaluators;
 using Ceres.Base.Environment;
 using Ceres.MCTS.Iteration;
 using Ceres.Chess.Positions;
 using Ceres.Base.Benchmarking;
+using Ceres.Base.Misc;
 
 #endregion
 
@@ -40,6 +39,8 @@ namespace Ceres.Features.Tournaments
   /// </summary>
   public class TournamentGameThread
   {
+    public delegate TournamentGameInfo GamePairRunnerDelegate(string pgnFileName, int gameSequenceNum, int openingIndex, int roundNumber, bool engine2White);
+
     /// <summary>
     /// Definition of associated parent tournament definition.
     /// </summary>
@@ -82,17 +83,91 @@ namespace Ceres.Features.Tournaments
 
     public TournamentGameRunner Run;
 
-    public void RunGameTests(int runnerIndex, Func<int, (int gameSequenceNum, int openingIndex)> getGamePairToProcess)
+    int numGamePairsLaunched = 0;
+    readonly object lockObj = new();
+
+    /// <summary>
+    /// Method called by threads to get the next available game to be played.
+    /// </summary>
+    /// <returns></returns>
+    int GetNextOpeningIndexForLocalThread(int maxOpenings)
+    {
+      if (Def.RandomizeOpenings) throw new NotImplementedException();
+
+      lock (lockObj)
+      {
+        if (numGamePairsLaunched < maxOpenings)
+        {
+          return numGamePairsLaunched++;
+        }
+        else
+          return -1;
+      }
+    }
+
+    public void RunGameTests(int runnerIndex, Func<int> getGamePairToProcess,
+                             Action<TournamentGameInfo, TournamentGameInfo> doneGamePairCallback = null)     
     {
       Run = new TournamentGameRunner(Def);
 
       // Create a file name that will be common to all threads in tournament.
-      string pgnFileName = Path.Combine(CeresUserSettingsManager.Settings.DirCeresOutput, "match_" + Def.ID + "_" 
+      string pgnFileName = Path.Combine(CeresUserSettingsManager.Settings.DirCeresOutput, "match_" + Def.ID + "_"
                                       + Run.Engine1.ID + "_" + Run.Engine2.ID + "_" + Def.StartTime.Ticks + ".pgn");
       lock (writePGNLock) File.AppendAllText(pgnFileName, "");
 
       havePrintedHeaders = false;
 
+      SetOpeningsSource();
+
+      Random rand = new Random();
+
+      // Def.Logger.WriteLine($"Begin {def.NumGames} game test with limit {def.SearchLimitEngine1} {def.SearchLimitEngine2} ID { gameSequenceNum } ");
+      int numPairsProcessed = 0;
+
+      int maxOpenings = Math.Min(Def.NumGamePairs ?? int.MaxValue, openings.Count);
+
+      while (true)
+      {
+        int openingIndex = getGamePairToProcess();
+
+        // Look for sentinel indicating end
+        if (openingIndex < 0)
+        {
+          break;
+        }
+#if NOT
+        // Some engines such as LZ0 doesn't seem to support "setoption name Clear Hash"
+        // Therefore we don't clear cache every time, instead let it stick around unless first game in a set
+        bool clearHashTable = isFirstGameOfPossiblePair;
+#endif
+
+        int gameSequenceNum = openingIndex * 2;
+
+        // The engine going second could possibly benefit 
+        // if REUSE_POSITION_EVALUATIONS_FROM_OTHER_TREE is true.
+        // Therefore we alternate each pair which one goes first.
+        int roundNumber = 1 + gameSequenceNum / 2;
+
+        // Alternate which side gets white to avoid any clustered imbalance
+        // which could happen if multiple threads are active
+        // (possibly otherwise all first giving white to one particular side).
+        bool engine2White = (numPairsProcessed + runnerIndex) % 2 == 0;
+
+        TournamentGameInfo gameInfo        = RunGame(pgnFileName, engine2White, openingIndex, gameSequenceNum, roundNumber);
+        TournamentGameInfo gameReverseInfo = RunGame(pgnFileName, !engine2White, openingIndex, gameSequenceNum + 1, roundNumber);
+
+        doneGamePairCallback?.Invoke(gameInfo, gameReverseInfo);
+
+        numPairsProcessed++;
+      }
+
+      Run.Engine1.Dispose();
+      Run.Engine2.Dispose();
+      Run.Engine2CheckEngine?.Dispose();
+    }
+
+    private void SetOpeningsSource()
+    {
       if (Def.OpeningsFileName != null)
       {
         openings = PositionsWithHistory.FromEPDOrPGNFile(Def.OpeningsFileName);
@@ -105,45 +180,8 @@ namespace Ceres.Features.Tournaments
       {
         openings = PositionsWithHistory.FromFEN(Position.StartPosition.FEN, Def.NumGamePairs ?? 1);
       }
-
-      Random rand = new Random();
-
-      //Console.WriteLine($"Begin {def.NumGames} game test with limit {def.SearchLimitEngine1} {def.SearchLimitEngine2} ID { gameSequenceNum } ");
-      int numPairsProcessed = 0;
-
-      int maxOpenings = Math.Min(Def.NumGamePairs ?? int.MaxValue, openings.Count);
-
-      while (true)
-      {
-        (int gameSequenceNum, int openingIndex) = getGamePairToProcess(maxOpenings);
-
-        // Look for sentinel indicating end
-        if (gameSequenceNum < 0) return;
-#if NOT
-        // Some engines such as LZ0 doesn't seem to support "setoption name Clear Hash"
-        // Therefore we don't clear cache every time, instead let it stick around unless first game in a set
-        bool clearHashTable = isFirstGameOfPossiblePair;
-#endif
-
-        // The engine going second could possibly benefit 
-        // if REUSE_POSITION_EVALUATIONS_FROM_OTHER_TREE is true.
-        // Therefore we alternate each pair which one goes first.
-        int roundNumber = 1 + gameSequenceNum / 2;
-
-        // Alternate which side gets white to avoid any clustered imbalance
-        // which could happen if multiple threads are active
-        // (possibly otherwise all first giving white to one particular side).
-        bool engine2White = (numPairsProcessed + runnerIndex) % 2 == 0;
-        RunGame(pgnFileName, engine2White, openingIndex, gameSequenceNum, roundNumber);
-        RunGame(pgnFileName, !engine2White, openingIndex, gameSequenceNum + 1, roundNumber);
-
-        numPairsProcessed++;
-      }
-
-      Run.Engine1.Dispose();
-      Run.Engine2.Dispose();
-      Run.Engine2CheckEngine?.Dispose();
     }
+
 
     /// <summary>
     /// Returns list of supplemental name/value tags to be 
@@ -166,10 +204,19 @@ namespace Ceres.Features.Tournaments
 
     HashSet<int> openingsFinishedAtLeastOnce = new();
 
-    private void RunGame(string pgnFileName, bool engine2White, int openingIndex, 
-                         int gameSequenceNum, int roundNumber)
+#if NOT
+    public record TournamentGameRunRequest
     {
-      bool clearHashTable = false;
+      public string PGNFileName;
+      public bool Engine2White;
+      public int OpeningIndex;
+      public int GameSequenceNum;
+      public int RoundNumber;
+    }
+#endif
+
+    private TournamentGameInfo RunGame(string pgnFileName, bool engine2White, int openingIndex, int gameSequenceNum, int roundNumber)
+    {
       TournamentGameInfo thisResult;
 
       // Add some supplemental tags with round number and also
@@ -180,7 +227,7 @@ namespace Ceres.Features.Tournaments
       PGNWriter pgnWriter = new PGNWriter(null, engine2White ? Run.Engine2.ID : Run.Engine1.ID,
                                   engine2White ? Run.Engine1.ID : Run.Engine2.ID,
                                   extraTags.ToArray());
-                                  
+
 
       TimingStats gameTimingStats = new TimingStats();
       using (new TimingBlock(gameTimingStats, TimingBlock.LoggingType.None))
@@ -189,75 +236,52 @@ namespace Ceres.Features.Tournaments
         string gameID = $"{Def.ID}_GAME_SEQ{gameSequenceNum}_OPENING_{openingIndex}";
         Run.Engine1.ResetGame(gameID);
         Run.Engine2.ResetGame(gameID);
+        Run.Engine2CheckEngine?.ResetGame(gameID);
 
-        thisResult = DoGameTest(clearHashTable, Def.Logger, pgnWriter, openingIndex,
+        bool checkTablebases = Def.UseTablebasesForAdjudication && CeresUserSettingsManager.Settings.TablebaseDirectory != null;
+        thisResult = DoGameTest(Def.Logger, pgnWriter, gameSequenceNum, openingIndex,
                                 Run.Engine1, Run.Engine2,
                                 Run.Engine2CheckEngine, engine2White,
                                 Def.Player1Def.SearchLimit, Def.Player2Def.SearchLimit,
-                                Def.UseTablebasesForAdjudication, Def.ShowGameMoves);
+                                checkTablebases, Def.ShowGameMoves);
 
         if (MCTSDiagnostics.TournamentDumpEngine2EndOfGameSummary)
         {
           Run.Engine2.DumpFullMoveHistory(thisResult.GameMoveHistory, engine2White);
         }
 
-        if (thisResult.Result == TournamentGameResult.Win)
-        {
-          if (engine2White)
-            pgnWriter.WriteResultBlackWins();
-          else
-            pgnWriter.WriteResultWhiteWins();
-        }
-        else if (thisResult.Result == TournamentGameResult.Loss)
-        {
-          if (engine2White)
-            pgnWriter.WriteResultWhiteWins();
-          else
-            pgnWriter.WriteResultBlackWins();
-        }
-        else
-          pgnWriter.WriteResultDraw();
+        WritePGNResult(engine2White, thisResult, pgnWriter);
 
         if (pgnFileName != null)
         {
           lock (writePGNLock) File.AppendAllText(pgnFileName, pgnWriter.GetText());
         }
 
-        Run.Engine1.ResetGame();
-        Run.Engine2.ResetGame();
-        Run.Engine2CheckEngine?.ResetGame();
       }
 
+      UpdateStatsAndOutputSummaryFromGameResult(pgnFileName, engine2White, openingIndex, gameSequenceNum, thisResult);
+
+      return thisResult;
+    }
+
+    internal void UpdateStatsAndOutputSummaryFromGameResult(string pgnFileName, bool engine2White, int openingIndex, int gameSequenceNum, TournamentGameInfo thisResult)
+    {
       lock (ParentStats)
       {
-        if (thisResult.Result == TournamentGameResult.Win)
-        {
-          ParentStats.Player1Wins++; ParentStats.GameOutcomesString += "+";
-        }
-        else if (thisResult.Result == TournamentGameResult.Loss)
-        {
-          ParentStats.Player1Losses++; ParentStats.GameOutcomesString += "-";
-        }
-        else
-        {
-          ParentStats.Draws++; ParentStats.GameOutcomesString += "=";
-        }
+        ParentStats.UpdateTournamentStats(thisResult);
       }
-
-      engine2White = !engine2White;
 
       // Only show headers first time for first thread
       if (!havePrintedHeaders)
       {
-        Console.WriteLine();
-        Console.WriteLine($"Games will be incrementally written to file: {pgnFileName}");
-        Console.WriteLine();
-
-        Console.WriteLine("  Player1  Player2  ELO   +/-  LOS   GAME#     TIME    TH#   OP#      TIME1    TIME2        NODES 1           NODES 2       PLY   RES    W   D   L   FEN");
-        Console.WriteLine("  -------  -------  ---   ---  ---   ----   --------   ---   ---     ------   ------     --------------   --------------   ----   ---    -   -   -   --------------------------------------------------");
-        havePrintedHeaders = true;
+        OutputHeaders(pgnFileName);
       }
 
+      OutputGameResultInfo(!engine2White, openingIndex, gameSequenceNum, thisResult);
+    }
+
+    private void OutputGameResultInfo(bool engine2White, int openingIndex, int gameSequenceNum, TournamentGameInfo thisResult)
+    {
       (float eloMin, float eloAvg, float eloMax) = EloCalculator.EloConfidenceInterval(ParentStats.Player1Wins, ParentStats.Draws, ParentStats.Player1Losses);
       float eloSD = eloMax - eloAvg;
       float los = EloCalculator.LikelihoodSuperiority(ParentStats.Player1Wins, ParentStats.Draws, ParentStats.Player1Losses);
@@ -273,8 +297,8 @@ namespace Ceres.Features.Tournaments
       lock (outputLockObj)
       {
         if (Def.ShowGameMoves) Def.Logger.WriteLine();
-        Def.Logger.Write($"{Def.Player1Def.ID,8} {Def.Player2Def.ID,8}  ");
-        Def.Logger.Write($"{eloAvg,5:0} {eloSD,4:0} {100.0f * los,5:0}  ");
+        Def.Logger.Write($" {TrimmedIfNeeded(Def.Player1Def.ID, 10),-10} {TrimmedIfNeeded(Def.Player2Def.ID, 10),-10}");
+        Def.Logger.Write($"{eloAvg,4:0} {eloSD,4:0} {100.0f * los,5:0}  ");
         Def.Logger.Write($"{ParentStats.NumGames,5} {DateTime.Now.ToString().Split(" ")[1],10}  {gameSequenceNum,4:F0}  {openingIndex,4:F0}{openingPlayedBothWaysStr}  ");
         Def.Logger.Write($"{thisResult.TotalTimeEngine1,8:F2}{player1ForfeitChar}{thisResult.TotalTimeEngine2,8:F2}{player2ForfeitChar}  ");
         Def.Logger.Write($"{thisResult.TotalNodesEngine1,16:N0} {thisResult.TotalNodesEngine2,16:N0}   ");
@@ -283,16 +307,65 @@ namespace Ceres.Features.Tournaments
         Def.Logger.WriteLine();
       }
 
+      UpdateAggregateGameStats(thisResult);
+
+      openingsFinishedAtLeastOnce.Add(openingIndex);
+      NumGames++;
+    }
+
+    private void UpdateAggregateGameStats(TournamentGameInfo thisResult)
+    {
       TotalNodesEngine1 += thisResult.TotalNodesEngine1;
       TotalNodesEngine2 += thisResult.TotalNodesEngine2;
       TotalMovesEngine1 += thisResult.PlyCount;
       TotalMovesEngine2 += thisResult.PlyCount;
       TotalTimeEngine1 += thisResult.TotalTimeEngine1;
       TotalTimeEngine2 += thisResult.TotalTimeEngine2;
-
-      openingsFinishedAtLeastOnce.Add(openingIndex);
-      NumGames++;
     }
+
+    private static void WritePGNResult(bool engine2White, TournamentGameInfo thisResult, PGNWriter pgnWriter)
+    {
+      switch (thisResult.Result)
+      {
+        case TournamentGameResult.Win:
+          if (engine2White)
+          {
+            pgnWriter.WriteResultBlackWins();
+          }
+          else
+          {
+            pgnWriter.WriteResultWhiteWins();
+          }
+          break;
+
+        case TournamentGameResult.Loss:
+          if (engine2White)
+          {
+            pgnWriter.WriteResultWhiteWins();
+          }
+          else
+          {
+            pgnWriter.WriteResultBlackWins();
+          }
+          break;
+
+        default:
+          pgnWriter.WriteResultDraw();
+          break;
+      }
+    }
+
+    private void OutputHeaders(string pgnFileName)
+    {
+      Def.Logger.WriteLine();
+      Def.Logger.WriteLine($"Games will be incrementally written to file: {pgnFileName}");
+      Def.Logger.WriteLine();
+
+      Def.Logger.WriteLine("  Player1    Player2   ELO   +/-  LOS   GAME#     TIME    TH#   OP#      TIME1    TIME2        NODES 1           NODES 2       PLY   RES    W   D   L   FEN");
+      Def.Logger.WriteLine(" ---------  ---------  ---   ---  ---   -----  --------   ---   ---     ------   ------     --------------   --------------   ----   ---    -   -   -   --------------------------------------------------");
+      havePrintedHeaders = true;
+    }
+
 
     static readonly object outputLockObj = new();
 
@@ -305,12 +378,17 @@ namespace Ceres.Features.Tournaments
     /// <param name="engine2IsWhite"></param>
     /// <param name="searchLimit"></param>
     /// <returns>GameResult (from the perspective of engine2)</returns>
-    TournamentGameInfo DoGameTest(bool clearHashTable, TextWriter logger, PGNWriter pgnWriter, int openingIndex,
+    TournamentGameInfo DoGameTest(TextWriter logger, PGNWriter pgnWriter, int gameSequenceNum, int openingIndex,
                                  GameEngine engine1, GameEngine engine2, GameEngine engineCheckAgainstEngine2,
                                  bool engine2IsWhite,
                                  SearchLimit searchLimitEngine1, SearchLimit searchLimitEngine2,
                                  bool useTablebasesForAdjudication, bool showMoves)
     {
+      if (openingIndex >= openings.Count)
+      {
+        throw new Exception($"Reached end of openings of size {openings.Count}.");
+      }
+
       PositionWithHistory curPositionAndMoves = openings.GetAtIndex(openingIndex);
       string startFEN = curPositionAndMoves.FinalPosition.FEN;
       bool engine2ToMove = engine2IsWhite == (curPositionAndMoves.FinalPosition.MiscInfo.SideToMove == SideType.White);
@@ -350,26 +428,16 @@ namespace Ceres.Features.Tournaments
 
       List<GameMoveStat> gameMoveHistory = new List<GameMoveStat>();
 
-      static TournamentGameResult Invert(TournamentGameResult result)
-      {
-        switch (result)
-        {
-          case TournamentGameResult.Draw:
-            return TournamentGameResult.Draw;
-          case TournamentGameResult.Win:
-            return TournamentGameResult.Loss;
-          case TournamentGameResult.Loss:
-            return TournamentGameResult.Win;
-        }
-        throw new Exception("Internal error: unexpected result");
-      }
 
       TournamentGameInfo MakeGameInfo(TournamentGameResult resultOpponent)
       {
         return new TournamentGameInfo()
         {
+          Engine2IsWhite = engine2IsWhite,
+          GameSequenceNum = gameSequenceNum,
+          OpeningIndex = openingIndex,
           FEN = startFEN,
-          Result = Invert(resultOpponent),
+          Result = TournamentGameInfo.InvertedResult(resultOpponent),
           PlyCount = plyCount,
           TotalTimeEngine1 = timeEngine1Tot,
           TotalTimeEngine2 = timeEngine2Tot,
@@ -426,7 +494,9 @@ namespace Ceres.Features.Tournaments
         foreach (Position pos in encounteredPositions)
         {
           if (pos.EqualAsRepetition(in currentPosition))
+          {
             countRepetitions++;
+          }
         }
 
         if (countRepetitions >= 3)
@@ -439,13 +509,15 @@ namespace Ceres.Features.Tournaments
         if (curPositionAndMoves.FinalPosition.CheckDrawBasedOnMaterial == Position.PositionDrawStatus.DrawByInsufficientMaterial
          || curPositionAndMoves.FinalPosition.CheckDrawCanBeClaimed == Position.PositionDrawStatus.DrawCanBeClaimed
          || plyCount >= 500)
-          return MakeGameInfo(TournamentGameResult.Draw);
-
-        // Check for draw according to tablebase
-        if (!string.IsNullOrEmpty(CeresUserSettingsManager.Settings.TablebaseDirectory))
         {
-          result = TournamentUtils.GetGameResultFromTablebase(curPositionAndMoves, engine2IsWhite, useTablebasesForAdjudication);
-          if (result != TournamentGameResult.None) return MakeGameInfo(result);
+          return MakeGameInfo(TournamentGameResult.Draw);
+        }
+
+        // Check for terminal result (tablebase or intrinsically terminal)
+        result = TournamentUtils.TryGetGameResultIfTerminal(curPositionAndMoves, engine2IsWhite, useTablebasesForAdjudication);
+        if (result != TournamentGameResult.None)
+        {
+          return MakeGameInfo(result);
         }
 
         plyCount++;
@@ -522,9 +594,6 @@ namespace Ceres.Features.Tournaments
                                                                 searchLimit.MaxMovesToGo),
           _ => throw new Exception($"Internal error, unknown SearchLimit.LimitType {searchLimit.Type}")
         };
-
-        //Console.WriteLine("GameTestThread::ALLOT " + thisMoveSearchLimit);
-        // TODO: remove this old method?    ? UCIManager.CalcTimeAllotmentThisMove(curPositionAndMoves.FinalPosition, searchLimit.Value - engine.CumulativeSearchTimeSeconds, null)
 
         GameEngineSearchResult engineMove = engine.Search(curPositionAndMoves, thisMoveSearchLimit, gameMoveHistory);
         float engineTime = (float)engineMove.TimingStats.ElapsedTimeSecs;

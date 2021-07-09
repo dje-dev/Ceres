@@ -138,7 +138,7 @@ namespace Ceres.Commands
     /// Parses base fields common to all sublcasses.
     /// </summary>
     /// <param name="args"></param>
-    protected void ParseBaseFields(string args)
+    protected void ParseBaseFields(string args, bool convertGameLimitToMoveLimit)
     {
       KeyValueSetParsed keys = new KeyValueSetParsed(args, null);
 
@@ -168,6 +168,20 @@ namespace Ceres.Commands
         if (DeviceOpponentSpec == null)
           DeviceOpponentSpec = DeviceSpec;
       }
+
+      if (convertGameLimitToMoveLimit)
+      {
+        if (SearchLimit != null)
+        {
+          SearchLimit = SearchLimit.ConvertedGameToMoveLimit;
+        }
+
+        if (SearchLimitOpponent != null)
+        {
+          SearchLimitOpponent = SearchLimitOpponent.ConvertedGameToMoveLimit;
+        }
+      }
+
     }
 
   }

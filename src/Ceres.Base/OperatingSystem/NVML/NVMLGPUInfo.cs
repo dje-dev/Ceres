@@ -16,6 +16,7 @@
 
 #endregion
 
+
 namespace Ceres.Base.OperatingSystem.NVML
 {
   /// <summary>
@@ -33,6 +34,11 @@ namespace Ceres.Base.OperatingSystem.NVML
     /// GPU model name.
     /// </summary>
     public readonly string Name;
+
+    /// <summary>
+    /// Compute architecture.
+    /// </summary>
+    public readonly int Architecture;
 
     /// <summary>
     /// Compute capability (major version).
@@ -55,6 +61,11 @@ namespace Ceres.Base.OperatingSystem.NVML
     public readonly int GPUUtilizationPct;
 
     /// <summary>
+    /// Curernt power usage of GPU (in watts).
+    /// </summary>
+    public readonly float GPUPowerUsage;
+
+    /// <summary>
     /// Current percentage utilization of memory.
     /// </summary>
     public readonly int MemoryUtilizationPct;
@@ -74,25 +85,29 @@ namespace Ceres.Base.OperatingSystem.NVML
     /// </summary>
     /// <param name="id">GPU id number</param>
     /// <param name="name">GPU model name</param>
+    /// <param name="architecture">GPU model name</param>
     /// <param name="capabiiltyMajor">compute capability(major)</param>
     /// <param name="capabilityMinor">compute capability (minor)</param>
     /// <param name="clocksSMMhz">current operating frequencey</param>
     /// <param name="gpuUtilizationPct">current GPU utilization</param>
     /// <param name="memoryUtilizationPct">current memory utilization</param>
+    /// <param name="gpuPowerUsage">current GPU utilization</param>
     /// <param name="tempreatureCentrigrade">current temperature</param>
     /// <param name="clocksThrottleReasons">reasons for current GPU throttling</param>
-    public NVMLGPUInfo(int id, string name, 
+    public NVMLGPUInfo(int id, string name, int architecture,
                        int capabiiltyMajor, int capabilityMinor, int clocksSMMhz,
-                        int gpuUtilizationPct, int memoryUtilizationPct, 
-                        int tempreatureCentrigrade, NVMLClocksThrottleReasons clocksThrottleReasons)
+                       int gpuUtilizationPct, int memoryUtilizationPct, float gpuPowerUsage,
+                       int tempreatureCentrigrade, NVMLClocksThrottleReasons clocksThrottleReasons)
     {
       ID = id;
       Name = name;
+      Architecture = architecture;
       CapabilityMajor = capabiiltyMajor;
       CapabilityMinor = capabilityMinor;
       ClocksSMMhz = clocksSMMhz;
       GPUUtilizationPct = gpuUtilizationPct;
       MemoryUtilizationPct = memoryUtilizationPct;
+      GPUPowerUsage = gpuPowerUsage;
       TemperatureCentigrade = tempreatureCentrigrade;
       ClocksThrottleReasons = clocksThrottleReasons;
     }

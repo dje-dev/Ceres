@@ -31,6 +31,83 @@ namespace Ceres.Base.Math
   /// </summary>
   public static class MathUtils
   {
+    #region Half conversions
+
+    /// <summary>
+    /// Returns array of Half converted from array of float.
+    /// </summary>
+    /// <param name="floats"></param>
+    /// <returns></returns>
+    public static Half[] ToHalf(float[] floats)
+    {
+      if (floats == null) return null;
+
+      Half[] ret = new Half[floats.Length];
+      for (int i=0; i<ret.Length;i++)
+      {
+        ret[i] = (Half)floats[i];
+      }
+      return ret;
+    }
+
+    /// <summary>
+    /// Returns array of float converted from array of Half.
+    /// </summary>
+    /// <param name="floats"></param>
+    /// <param name="maxElements"></param>
+    /// <returns></returns>
+    public static float[] ToFloat(float[] halfs, int? maxElements = null)
+    {
+      if (halfs == null) return null;
+      
+      int length = System.Math.Min(halfs.Length, maxElements.HasValue ? maxElements.Value : int.MaxValue);
+
+      float[] ret = new float[length];
+      for (int i = 0; i < ret.Length; i++)
+      {
+        ret[i] = (float)halfs[i];
+      }
+      return ret;
+    }
+
+    /// <summary>
+    /// Returns array of float converted from Span of Half.
+    /// </summary>
+    /// <param name="floats"></param>
+    /// <param name="maxElements"></param>
+    /// <returns></returns>
+    public static float[] ToFloat(Span<Half> halfs, int? maxElements = null)
+    {
+      if (halfs == null) return null;
+
+      int length = System.Math.Min(halfs.Length, maxElements.HasValue ? maxElements.Value : int.MaxValue);
+
+      float[] ret = new float[length];
+      for (int i = 0; i < ret.Length; i++)
+      {
+        ret[i] = (float)halfs[i];
+      }
+      return ret;
+    }
+
+
+    /// <summary>
+    /// Returns float[] converted from array of Half.
+    /// </summary>
+    /// <param name="floats"></param>
+    /// <returns></returns>
+    public unsafe static float[,] ToFloat2D(Span<Half> data, int numRows, int numColumns)
+    {
+      float[,] ret = new float[numRows, numColumns];
+      for (int i = 0; i < numRows; i++)
+        for (int j = 0; j < numColumns; j++)
+          ret[i, j] = (float)data[i * numColumns + j];
+      return ret;
+    }
+
+    #endregion
+
+
     /// <summary>
     /// Returns maximum of two positive integers
     /// in a branchless way (using a bit hack).
@@ -39,7 +116,7 @@ namespace Ceres.Base.Math
     public static int MaxOfPositivesFast(int x, int y)
     {
       // Only works of most significant bit zero
-      Debug.Assert(x > 0 && y > 0);
+      Debug.Assert(x >= 0 && y >= 0);
 
       int sub = x - y;
       int shift = sub >> 31;
@@ -54,7 +131,7 @@ namespace Ceres.Base.Math
     public static int MinOfPositivesFast(int x, int y)
     {
       // Only works of most significant bit zero
-      Debug.Assert(x > 0 && y > 0);
+      Debug.Assert(x >= 0 && y >= 0);
 
       int sub = x - y;
       int shift = sub >> 31;

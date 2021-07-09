@@ -41,13 +41,6 @@ namespace Ceres.Features.GameEngines
     /// </summary>
     public ParamsSearch SearchParams;
 
-    // Optional postprocessor delegate called before each search that allows
-    // the ParamsSearchExecution to be possibly modified from the settings
-    // which will be either the default values for the class, or
-    // values selected by the ParamsSearchExecutionChooser if AutoOptimize is true.    
-    public readonly ParamsSearchExecutionModifier ParamsSearchExecutionPostprocessor;
-
-
     /// <summary>
     /// Select parameters to be used by MCTS engine.
     /// </summary>
@@ -68,7 +61,6 @@ namespace Ceres.Features.GameEngines
     /// Constructor.
     /// </summary>
     public GameEngineDefCeres(string id, NNEvaluatorDef evaluatorDef, ParamsSearch searchParams= null,
-                              ParamsSearchExecutionModifier paramsSearchExecutionPostprocessor = null,
                               ParamsSelect selectParams = null, 
                               IManagerGameLimit overrideLimitManager = null,
                               string logFileName = null)
@@ -77,7 +69,6 @@ namespace Ceres.Features.GameEngines
       // Make a defensive clone of the EvaluatorDef so it will definitely not be shared.
       EvaluatorDef = ObjUtils.DeepClone(evaluatorDef);
       SearchParams = searchParams ?? new ParamsSearch();
-      ParamsSearchExecutionPostprocessor = paramsSearchExecutionPostprocessor;
       SelectParams = selectParams ?? new ParamsSelect();
       OverrideLimitManager = overrideLimitManager;
       LogFileName = logFileName;
@@ -97,8 +88,7 @@ namespace Ceres.Features.GameEngines
     public override GameEngine CreateEngine()
     {
       return new GameEngineCeresInProcess(ID, EvaluatorDef, SearchParams, SelectParams, 
-                                          OverrideLimitManager, ParamsSearchExecutionPostprocessor,
-                                          LogFileName);
+                                          OverrideLimitManager, LogFileName);
     }
 
 
@@ -132,8 +122,6 @@ namespace Ceres.Features.GameEngines
       writer.WriteLine("Evaluator 2     : " + other.EvaluatorDef);
       writer.WriteLine("Time Manager 1  : " + (OverrideLimitManager == null ? "(default)" : OverrideLimitManager));
       writer.WriteLine("Time Manager 2  : " + (other.OverrideLimitManager == null ? "(default)" : other.OverrideLimitManager));
-      writer.WriteLine("Postprocessor 1 : " + (ParamsSearchExecutionPostprocessor == null ? "(none)" : "Present"));
-      writer.WriteLine("Postprocessor 2 : " + (other.ParamsSearchExecutionPostprocessor == null ? "(none)" : "Present"));
       writer.WriteLine();
 
       writer.WriteLine("ENGINE 1 Options Modifications from Default");

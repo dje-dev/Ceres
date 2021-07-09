@@ -141,7 +141,10 @@ namespace Ceres.Chess.NNEvaluators.Internals
     /// <param name="numPos"></param>
     unsafe void ProcessRequest(int numPos)
     {
-      if (numPos > MAX_POSITIONS_PER_BATCH) throw new ArgumentOutOfRangeException($"Internal error: numPos {numPos} exceeds limit of {MAX_POSITIONS_PER_BATCH}");
+      if (numPos > MAX_POSITIONS_PER_BATCH)
+      {
+        throw new ArgumentOutOfRangeException($"Internal error: numPos {numPos} exceeds limit of {MAX_POSITIONS_PER_BATCH}");
+      }
 
       // Insert an invalid value for output so we can detect if not properly processed
       ItemsOut[0].Q = float.NaN;
@@ -150,7 +153,9 @@ namespace Ceres.Chess.NNEvaluators.Internals
       Compute(SessionID, numPos, (CeresTransferBlockInItem*)ptrBlockInItems, (CeresTransferBlockOutItem*)ptrBlockOutItems);
 
       if (float.IsNaN(ItemsOut[0].Q))
+      {
         throw new Exception($"Internal error: LC0 DLL failed to process request");
+      }
 
       NNEvaluatorStats.UpdateStatsForBatch(GPUID, numPos);
     }
@@ -236,6 +241,7 @@ namespace Ceres.Chess.NNEvaluators.Internals
     {
       if (!isDisposed)
       {
+        Free(SessionID);
         sessionIDPool.ReleaseID(SessionID);
       }
 

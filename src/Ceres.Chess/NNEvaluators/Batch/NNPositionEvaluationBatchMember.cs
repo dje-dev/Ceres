@@ -66,7 +66,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// </summary>
     /// <param name="batch"></param>
     /// <param name="index"></param>
-    internal NNPositionEvaluationBatchMember(IPositionEvaluationBatch batch, int index)
+    public NNPositionEvaluationBatchMember(IPositionEvaluationBatch batch, int index)
     {
       this.batch = batch;
       this.index = index;

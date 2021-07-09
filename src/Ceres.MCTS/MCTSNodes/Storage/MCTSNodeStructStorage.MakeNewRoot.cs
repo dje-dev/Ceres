@@ -290,12 +290,14 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 
         Debug.Assert(!nodes[from.Index].IsRoot);
 
+        ref MCTSNodeStruct fromNodeRef = ref nodes[from.Index];
+
         // Swap references from parents to these children
-        ref MCTSNodeStruct parent = ref nodes[from.Index].ParentRef;
+        ref MCTSNodeStruct parent = ref nodes[fromNodeRef.ParentRef.Index.Index];
         parent.ModifyExpandedChildIndex(store, from, to);
 
         // Swap the parent references of any children in both
-        ModifyChildrensParentRef(store, ref nodes[from.Index], to);
+        ModifyChildrensParentRef(store, ref fromNodeRef, to);
 
         // Swap nodes themselves
         nodes[to.Index] = nodes[from.Index];

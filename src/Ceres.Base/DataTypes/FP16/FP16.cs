@@ -59,13 +59,31 @@ namespace Ceres.Base.DataTypes
       return ret;
     }
 
-
     public static FP16[] ToFP16(float[] data)
     {
       FP16[] ret = new FP16[data.Length];
       for (int i = 0; i < ret.Length; i++)
+      {
         if (data[i] != 0.0f)
+        {
           ret[i] = (FP16)data[i];
+        }
+      }
+
+      return ret;
+    }
+
+    public static FP16[] ToFP16Approx(float[] data)
+    {
+      FP16[] ret = new FP16[data.Length];
+      for (int i = 0; i < ret.Length; i++)
+      {
+        if (data[i] != 0.0f)
+        {
+          ret[i] = FP16.FromFloatApprox(data[i]);
+        }
+      }
+
       return ret;
     }
 
@@ -78,7 +96,75 @@ namespace Ceres.Base.DataTypes
       return ret;
     }
 
+    public unsafe static float[,] ToFloat(FP16* data, int numRows, int numColumns)
+    {
+      int sourceOffset = 0;
+      float[,] ret = new float[numRows, numColumns];
+      for (int i = 0; i < numRows; i++)
+      {
+        for (int j = 0; j < numColumns; j++)
+        {
+          ret[i, j] = data[sourceOffset++];
+        }
+      }
+      return ret;
+    }
+
+    public unsafe static void ToFloat(Span<FP16> source, float[,] dest, int numRows, int numColumns)
+    {
+      int sourceOffset = 0;
+      for (int i = 0; i < numRows; i++)
+      {
+        for (int j = 0; j < numColumns; j++)
+        {
+          dest[i, j] = source[sourceOffset++];
+        }
+      }
+    }
+
+    public unsafe static float[,] ToFloat(Span<FP16> data, int numRows, int numColumns)
+    {
+      float[,] ret = new float[numRows, numColumns];
+      ToFloat(data, ret, numRows, numColumns);
+      return ret;
+    }
+
+    public static unsafe float[] ToFloat(FP16* data, int numElements)
+    {
+      float[] ret = new float[numElements];
+      for (int i = 0; i < ret.Length; i++)
+      {
+        ret[i] = data[i];
+      }
+
+      return ret;
+    }
+
+
+    public static unsafe void ToFloat(Span<FP16> data, float[] dest, int numElements)
+    {
+      for (int i = 0; i < data.Length; i++)
+      {
+        dest[i] = data[i];
+      }
+    }
+
+    public static unsafe float[] ToFloat(Span<FP16> data, int numElements)
+    {
+      float[] ret = new float[numElements];
+      ToFloat(data, ret, numElements);
+      return ret;
+    }
+
     public static float[] ToFloat(FP16[] data)
+    {
+      float[] ret = new float[data.Length];
+      for (int i = 0; i < ret.Length; i++)
+        ret[i] = data[i];
+      return ret;
+    }
+
+    public static float[] ToFloat(Span<FP16> data)
     {
       float[] ret = new float[data.Length];
       for (int i = 0; i < ret.Length; i++)
@@ -160,17 +246,89 @@ namespace Ceres.Base.DataTypes
     /// <param name="value">The value to represent as a FP16.</param>
     public FP16(ulong value) : this((float)value) { }
 
-    internal FP16(ushort value, bool directAssigment = true) =>  this.Value = value;
-    
+    internal  FP16(ushort value, bool directAssigment = true) =>  Value = value;
+
+    /// <summary>
+    /// Returns an FP16 created from its raw (bits) value.
+    /// </summary>
+    /// <param name="value"></param>
+    /// <returns></returns>
+    public static FP16 FromRaw(ushort value) => new FP16(value, true);
 
     /// <summary>
     /// 
-    /// Warning: it is not clear this is faster, and results in memory cache pollution.    /// </summary>    
-    public unsafe float ToSingleViaLookup => FP16Helper.HalfToSingleLookup(this);
+    /// Warning: it is not clear this is faster, and results in memory cache pollution.    
+    /// </summary>    
+    public float ToSingleViaLookup => FP16Helper.HalfToSingleLookup(this);
 
-    #endregion
+    // WARNING: Do not enable these approximations.
+    //          They seem sufficiently imprecise that
+    //          they negatively impact qualitY (e.g. play quality at 3 nodes/move).
+    const bool DISABLE_APPROX_FP16_CONVERSIONS = true;
 
-    #region Numeric operators
+    /// <summary>
+    /// Fast approximate conversion from FP16 to float.
+    /// Note that this does not support all FP16, for example NaNs.
+    /// </summary>
+    /// <param name="fp16"></param>
+    /// <returns></returns>
+    public float ToFloatApprox
+    {
+      [MethodImpl(MethodImplOptions.AggressiveInlining)]
+      get
+      {
+        if (DISABLE_APPROX_FP16_CONVERSIONS)
+        {
+          return (FP16)this;
+        }
+
+        if (Value == Zero.Value)
+        {
+          return 0.0f;
+        }
+        else
+        {
+          int conv = (((Value & 0x8000) << 16) | (((Value & 0x7c00) + 0x1C000) << 13) | ((Value & 0x03FF) << 13));
+          float ret = Unsafe.As<int, float>(ref conv);
+          Debug.Assert(MathF.Abs(ret - (FP16)this) < 0.01f); // TO DO: be more precise in testing expected precision
+          return ret;
+        }
+      }
+    }
+
+    /// <summary>
+    /// Fast approximate conversion from float to FP16.
+    /// Note that this does not support all FP16, for example NaNs.
+    /// </summary>
+    /// <param name="f"></param>
+    /// <returns></returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static FP16 FromFloatApprox(float f)
+    {
+      if (DISABLE_APPROX_FP16_CONVERSIONS)
+      {
+        return (FP16)f;
+      }
+
+      const float MIN_FP16 = 0.0000610352f; // 0.00006103515625f;
+      if (MathF.Abs(f) < MIN_FP16)
+      {
+        return FP16.Zero;
+      }
+      else
+      {
+        int x = Unsafe.As<float, int>(ref f);
+        short xx = (short)(((x >> 16) & 0x8000) | ((((x & 0x7f800000) - 0x38000000) >> 13) & 0x7c00) | ((x >> 13) & 0x03ff));
+
+        FP16 ret = Unsafe.As<short, FP16>(ref xx);
+        Debug.Assert(MathF.Abs((float)ret - f) < 0.01f); // TO DO: be more precise in testing expected precision
+        return ret;
+      }
+    }
+
+#endregion
+
+#region Numeric operators
 
     /// <summary>
     /// Returns the result of multiplying the specified FP16 value by negative one.
@@ -302,9 +460,9 @@ namespace Ceres.Base.DataTypes
     /// <param name="half2">A FP16.</param>
     /// <returns>true if half1 is greater than or equal to half2; otherwise, false.</returns>
     public static bool operator >=(FP16 half1, FP16 half2) { return (half1 == half2) || (half1 > half2); }
-    #endregion
+#endregion
 
-    #region Type casting operators
+#region Type casting operators
     /// <summary>
     /// Converts an 8-bit unsigned integer to a FP16.
     /// </summary>
@@ -449,7 +607,7 @@ namespace Ceres.Base.DataTypes
     /// <param name="value">A FP16 to convert.</param>
     /// <returns>A 64-bit unsigned integer that represents the converted FP16.</returns>
     public static explicit operator ulong(FP16 value) { return (ulong)(float)value; }
-    #endregion
+#endregion
 
     /// <summary>
     /// Compares this instance to a specified FP16 object.
@@ -561,7 +719,7 @@ namespace Ceres.Base.DataTypes
     public static TypeCode GetTypeCode() => (TypeCode)255;
     
 
-    #region BitConverter & Math methods for FP16
+#region BitConverter & Math methods for FP16
     /// <summary>
     /// Returns the specified FP16-precision floating point value as an array of bytes.
     /// </summary>
@@ -658,7 +816,7 @@ namespace Ceres.Base.DataTypes
     /// </returns>
     public static FP16 Min(FP16 value1, FP16 value2) =>  (value1 < value2) ? value1 : value2;
     
-    #endregion
+#endregion
 
     /// <summary>
     /// Returns a value indicating whether the specified number evaluates to not a number (FP16.NaN).
@@ -689,7 +847,7 @@ namespace Ceres.Base.DataTypes
     public static bool IsPositiveInfinity(FP16 FP16) =>FP16Helper.IsPositiveInfinity(FP16);
     
 
-    #region String operations (Parse and ToString)
+#region String operations (Parse and ToString)
 
     /// <summary>
     /// Converts the string representation of a number to its FP16 equivalent.
@@ -855,9 +1013,9 @@ namespace Ceres.Base.DataTypes
     {
       return ((float)this).ToString(format, formatProvider);
     }
-    #endregion
+#endregion
 
-    #region IConvertible Members
+#region IConvertible Members
     float IConvertible.ToSingle(IFormatProvider provider)
     {
       return (float)this;
@@ -926,6 +1084,6 @@ namespace Ceres.Base.DataTypes
     {
       return Convert.ToUInt64((float)this);
     }
-    #endregion
+#endregion
   }
 }

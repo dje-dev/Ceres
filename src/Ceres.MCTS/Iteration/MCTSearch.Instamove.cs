@@ -79,7 +79,7 @@ namespace Ceres.MCTS.Iteration
         float nGap = Math.Abs(childrenSortedQ[0].N - childrenSortedQ[1].N);
         float qGap = (float)(Math.Abs(childrenSortedQ[0].Q - childrenSortedQ[1].Q));
         //float biggestN = Math.Max(bestMoveInfo.BestN, bestMoveInfo.BestNSecond);
-        float minNRequiredToChange = nGap / ManagerChooseRootMove.MinFractionNToUseQ(newRoot, qGap);
+        float minNRequiredToChange = nGap / ManagerChooseBestMove.MinFractionNToUseQ(newRoot, qGap);
         bool couldCatchUp = (estNewVisitsThisMove * 0.25f) > minNRequiredToChange;
 
         if (couldCatchUp) return default;

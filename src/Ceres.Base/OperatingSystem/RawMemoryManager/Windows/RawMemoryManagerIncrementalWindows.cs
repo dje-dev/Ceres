@@ -53,7 +53,7 @@ namespace Ceres.Base.OperatingSystem
         throw new Exception("RawMemoryManagerIncremental does not support use of shared memory segments");
 
       IAppLogger logger = null; //CeresLogger.Logger
-      allocManager = new WindowsVirtualAllocManager(logger, numItems, (uint)Marshal.SizeOf<T>(), largePages);
+      allocManager = new WindowsVirtualAllocManager(logger, numItems, (uint)Marshal.SizeOf<T>(), false);
       rawMemoryAddress = (void*)allocManager.ReserveAndAllocateFirstBlock();
     }
 

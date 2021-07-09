@@ -19,7 +19,7 @@ using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-
+using System.Threading;
 using Ceres.Base.DataTypes;
 using Ceres.Base.OperatingSystem;
 using Ceres.Chess.EncodedPositions.Basic;
@@ -34,31 +34,34 @@ namespace Ceres.MCTS.MTCSNodes.Storage
   public class MCTSNodeStructChildStorage
   {
     /// <summary>
-    /// Only about 2 billion values are available for the 
+    /// Only about 2.1 billion values are available for the 
     /// the child start indices stored in MCTSNodeStruct
     /// (since they are ints, with negative values reserved).
     /// 
-    /// However with an average of about 35 children per node,
-    /// this would severly limit the maximum search tree size.
+    /// However with an average of about 32 children per node,
+    /// (considering that some will be unexpanded transposition nodes)
+    /// this would severely limit the maximum search tree size.
     /// 
     /// Therefore we allocate children in blocks and the values 
     /// we record are indexes of the block, not the index of the child.
     /// 
     /// For example:
-    ///    1 per block --> 2 billion / 40_per_node = 50,000,000 nodes
-    ///   16 per block --> 32 billion / 40_per_node = 800,000,000 nodes
+    ///    1 per block --> 2.1 billion  / 32_per_node =    65,625,000 nodes
+    ///   16 per block --> 33.6 billion / 32_per_node = 1,050,000,000 nodes
+    ///   32 per block --> 67.2 billion / 32_per_node = 2,100,000,000 nodes
     ///   
     /// The value of 16 allows a large search tree and also has the benefit
     /// that the blocks fall on cache lines (64 bytes), while keeping small
     /// average number of chilren slots unused.
     /// </summary>
-    public const int NUM_CHILDREN_PER_BLOCK = 16;
+    public const int NUM_CHILDREN_PER_BLOCK = MCTSParamsFixed.ENABLE_MAX_SEARCH_TREE ? 32 : 16;
 
     /// <summary>
-    /// Maximum number of nodes for which we have room to accomodate children.
+    /// Maximum number of nodes for which we have room to accomodate
+    /// children, as constrained by the data structures.
     /// See comment above.
     /// </summary>
-    public const int MAX_NODES = 750_000_000;
+    public const int MAX_NODES = MCTSParamsFixed.ENABLE_MAX_SEARCH_TREE ? 2_100_000_000 : 1_050_000_000;
 
     /// <summary>
     /// The main store to which these children below.
@@ -68,7 +71,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     /// <summary>
     /// Keep track of index of next available block.
     /// </summary>
-    internal long nextFreeBlockIndex = 1; // never allocate index 0 (null node)
+    internal int nextFreeBlockIndex = 1; // never allocate index 0 (null node)
 
 #if SPAN
     const string SharedMemChildrenName = MCTSParamsFixed.STORAGE_USE_EXISTING_SHARED_MEM
@@ -119,7 +122,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 #if SPAN
       MaxChildren = 1 + maxChildren;
       childIndices = new MemoryBufferOS<MCTSNodeStructChild>(MaxChildren,
-                                                             MCTSParamsFixed.STORAGE_LARGE_PAGES,
+                                                             MCTSParamsFixed.TryEnableLargePages,
                                                              SharedMemChildrenName, MCTSParamsFixed.STORAGE_USE_EXISTING_SHARED_MEM,
                                                              MCTSParamsFixed.STORAGE_USE_INCREMENTAL_ALLOC);
 #else
@@ -178,57 +181,38 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     }
 
 
+
     /// <summary>
     /// Returns the index of block at which a specified number of new 
     /// children are guaranteed to be allocated.
     /// </summary>
-    /// <param name="numPolicyMoves"></param>
-    /// <returns></returns>
+    /// <param name="numPolicyMoves"></param>s
+    /// <returns></returns>    
     public long AllocateEntriesStartBlock(int numPolicyMoves)
     {
-      long numBlocksRequired = NumBlocksReservedForNumChildren(numPolicyMoves);
+      int numBlocksRequired = NumBlocksReservedForNumChildren(numPolicyMoves);
 
-      long newNumBlocks = nextFreeBlockIndex + numBlocksRequired;
-      long newNumEntries = newNumBlocks * NUM_CHILDREN_PER_BLOCK;
-      if (newNumEntries >= childIndices.Length)
+      // Take next available (lock-free)
+      long newNextFreeBlockIndex = Interlocked.Add(ref nextFreeBlockIndex, numBlocksRequired);
+
+      // Check for overflow (with padding for page effects)
+      long newNumEntriesWithPadding = newNextFreeBlockIndex * NUM_CHILDREN_PER_BLOCK + (1024 * 2048 / MCTSNodeStruct.MCTSNodeStructSizeBytes);
+      if (newNumEntriesWithPadding >= childIndices.Length)
+      {
         throw new Exception($"MCTSNodeStructChildStorage overflow, max size {childIndices.Length}. "
                            + "The number of child pointers (moves per position) exceeded the expected maximum value considered plausible.");
-
-      lock (lockObj)
-      {
-        childIndices.InsureAllocated(newNumEntries);
-
-        long thisStartIndex = nextFreeBlockIndex;
-
-#if NOT
-        // If the children for this node would start
-        // just before a cache line boundary, we may skip
-        // a small number of items to allow it to
-        // start exactly on the cache line for efficiency
-        // At max skip of 4 (out of 16 in a cache line)
-        // we skip 1/4 of the time with an average skip of
-        // 2 items, for an average waste of 2 items per node
-        // which is 8 bytes per node (compared to the average
-        // size of about 160 bytes (40 children per node)
-        const int CACHE_LINE_ALIGNMENT_MAX_SKIP_ITEMS = 4;
-
-        if (CACHE_LINE_ALIGNMENT_MAX_SKIP_ITEMS > 0)
-        {
-          const int CACHE_LINE_SIZE = 64;
-          const int CHILDREN_PER_CACHE_LINE = CACHE_LINE_SIZE / MCTSNodeStructChild.SIZE_BYTES;
-          int childrenAwayFromNextCacheLineStart = CHILDREN_PER_CACHE_LINE - thisStartIndex % CHILDREN_PER_CACHE_LINE;
-          if (childrenAwayFromNextCacheLineStart <= CACHE_LINE_ALIGNMENT_MAX_SKIP_ITEMS)
-          {
-            thisStartIndex += childrenAwayFromNextCacheLineStart;
-            nextFreeBlockIndex += childrenAwayFromNextCacheLineStart;
-          }
-        }
-#endif
-
-        nextFreeBlockIndex += numBlocksRequired;
-
-        return thisStartIndex;
       }
+
+      // Make sure we have allocated to this length
+      if (childIndices.NumItemsAllocated <= newNumEntriesWithPadding)
+      {
+        lock (lockObj)
+        {
+          childIndices.InsureAllocated(newNumEntriesWithPadding);
+        }
+      }
+
+      return newNextFreeBlockIndex - numBlocksRequired;
     }
 
 

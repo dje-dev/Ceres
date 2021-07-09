@@ -41,6 +41,8 @@ namespace Ceres.Chess.EncodedPositions
   {
     public enum SideToMoveEnum : byte {  White = 0, Black = 1};
 
+    public enum ResultCode : sbyte { Loss = -1, Draw = 0, Win = 1 };
+
     /// <summary>
     /// If our side has long castling rights.
     /// </summary>
@@ -72,13 +74,6 @@ namespace Ceres.Chess.EncodedPositions
     /// </summary>
     public readonly byte Rule50Count;
 
-    /// <summary>
-    /// Move (ply) within game.
-    /// Note: not used (this contains values in training data, 
-    /// but they are zeroed out when being input to training).
-    /// </summary>
-    public readonly byte MoveCount; 
-
 
     /// <summary>
     /// Constructor.
@@ -90,24 +85,21 @@ namespace Ceres.Chess.EncodedPositions
     /// <param name="sideToMove"></param>
     /// <param name="rule50Count"></param>
     /// <param name="moveCount"></param>
-    public EncodedPositionMiscInfo(byte castling_US_OOO, byte castling_US_OO, byte castling_Them_OOO, byte castling_Them_OO, SideToMoveEnum sideToMove, byte rule50Count, byte moveCount)
+    public EncodedPositionMiscInfo(byte castling_US_OOO, byte castling_US_OO, byte castling_Them_OOO, byte castling_Them_OO, SideToMoveEnum sideToMove, byte rule50Count)
     {
-      Debug.Assert(moveCount == 0); // see comment above for the MoveCount field 
-
       Castling_US_OOO = castling_US_OOO;
       Castling_US_OO = castling_US_OO;
       Castling_Them_OOO = castling_Them_OOO;
       Castling_Them_OO = castling_Them_OO;
       SideToMove = sideToMove;
       Rule50Count = Math.Min((byte)100, rule50Count); // above 100 LC0 behaves badly (crash or policy does not sum to 100%)
-      MoveCount = moveCount;
     }
 
 
     public override int GetHashCode()
     {
       int part1 = HashCode.Combine(Castling_US_OOO, Castling_US_OO, Castling_Them_OOO, Castling_Them_OO);
-      int part2 = HashCode.Combine(SideToMove, Rule50Count, MoveCount);
+      int part2 = HashCode.Combine(SideToMove, Rule50Count);
 
       return HashCode.Combine(part1, part2);
     }
@@ -144,8 +136,7 @@ namespace Ceres.Chess.EncodedPositions
            && Castling_Them_OOO == other.Castling_Them_OOO
            && Castling_Them_OO == other.Castling_Them_OO
            && SideToMove == other.SideToMove
-           && Rule50Count == other.Rule50Count
-           && MoveCount == other.MoveCount;
+           && Rule50Count == other.Rule50Count;
     }
 
     public bool MirrorEquivalent => Castling_US_OOO   == 0 && Castling_US_OO == 0 

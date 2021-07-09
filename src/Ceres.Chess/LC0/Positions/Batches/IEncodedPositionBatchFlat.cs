@@ -88,13 +88,13 @@ namespace Ceres.Chess.LC0.Batches
 
     float[] ValuesFlatFromPlanes(float[] preallocatedBuffer = null);
 
-    // --------------------------------------------------------------------------------------------
+    
     public IEncodedPositionBatchFlat GetSubBatchSlice(int startIndex, int count)
     {
       return new EncodedPositionBatchFlatSlice(this, startIndex, count);
     }
 
-    // --------------------------------------------------------------------------------------------
+   
     public EncodedPositionBatchFlat Mirrored
     {
       get
@@ -113,6 +113,25 @@ namespace Ceres.Chess.LC0.Batches
           builder.Add(in pos);
         }
         return builder.GetBatch();
+      }
+    }
+
+    /// <summary>
+    /// If possible, generates moves for this position and assigns to Moves field
+    /// if the Moves field is not already initialized.
+    /// </summary>
+    public void TrySetMoves()
+    {
+      if (Moves == null && Positions.Length == NumPos)
+      {
+        MGMoveList[] moves = new MGMoveList[NumPos];
+        for (int i = 0; i < moves.Length; i++)
+        {
+          MGMoveList thisPosMoves = new MGMoveList();
+          MGMoveGen.GenerateMoves(in Positions[i], thisPosMoves);
+          moves[i] = thisPosMoves;
+        }
+        Moves = moves;
       }
     }
 

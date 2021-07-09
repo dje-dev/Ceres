@@ -28,7 +28,7 @@ using Ceres.Chess.LC0.Positions;
 namespace Ceres.Chess.LC0NetInference
 {
   /// <summary>
-  /// Represents results coming back from NN for a batch of positions
+  /// Represents results coming back from NN for a batch of positions.
   /// </summary>
   public class ONNXRuntimeExecutorResultBatch
   {
@@ -43,6 +43,11 @@ namespace Ceres.Chess.LC0NetInference
     /// Policy head
     /// </summary>
     public readonly float[][] PolicyVectors;
+
+    /// <summary>
+    /// Moves left head.
+    /// </summary>
+    public readonly float[] MLH;
 
     /// <summary>
     /// Activation values for last FC layer before value output (possibly null)
@@ -69,8 +74,10 @@ namespace Ceres.Chess.LC0NetInference
     /// <param name="values"></param>
     /// <param name="policyLogisticVectorsFlatAs"></param>
     /// <param name="draws"></param>
-    public ONNXRuntimeExecutorResultBatch(bool isWDL, FP16[] values, float[] policyLogisticVectorsFlatAs, float[] valueFCActiviationsFlat, int numPositionsUsed) 
-      : this (isWDL, values, ArrayUtils.ToArrayOfArray(policyLogisticVectorsFlatAs, EncodedPolicyVector.POLICY_VECTOR_LENGTH), ArrayUtils.ToArrayOfArray(valueFCActiviationsFlat, 32 * 64), numPositionsUsed)
+    public ONNXRuntimeExecutorResultBatch(bool isWDL, FP16[] values, float[] policyLogisticVectorsFlatAs, float[] mlh, 
+                                          float[] valueFCActiviationsFlat, int numPositionsUsed) 
+      : this (isWDL, values, ArrayUtils.ToArrayOfArray<float>(policyLogisticVectorsFlatAs, EncodedPolicyVector.POLICY_VECTOR_LENGTH), 
+              mlh, ArrayUtils.ToArrayOfArray<float>(valueFCActiviationsFlat, 32 * 64), numPositionsUsed)
     {
     }
 
@@ -81,7 +88,8 @@ namespace Ceres.Chess.LC0NetInference
     /// <param name="values"></param>
     /// <param name="policyLogisticVectors"></param>
     /// <param name="draws"></param>
-    public ONNXRuntimeExecutorResultBatch(bool isWDL, FP16[] values, float[][] policyLogisticVectors, float[][] valueFCActiviations, int numPositionsUsed)
+    public ONNXRuntimeExecutorResultBatch(bool isWDL, FP16[] values, float[][] policyLogisticVectors, 
+                                          float[] mlh, float[][] valueFCActiviations, int numPositionsUsed)
     {
       ValuesRaw = values;
 
@@ -89,6 +97,7 @@ namespace Ceres.Chess.LC0NetInference
         Values = EncodedEvalLogistic.FromLogisticArray(values);
 
       PolicyVectors = policyLogisticVectors; // still in logistic form
+      MLH = mlh;
       ValueFCActivations = valueFCActiviations;
       NumPositionsUsed = numPositionsUsed;
       IsWDL = isWDL;

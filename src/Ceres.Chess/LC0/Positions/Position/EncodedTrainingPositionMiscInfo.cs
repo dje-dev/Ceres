@@ -24,7 +24,7 @@ namespace Ceres.Chess.EncodedPositions
   /// Raw data structure in training data containing both miscellaneous info
   /// relating to both position and training result.
   /// </summary>
-  [StructLayout(LayoutKind.Sequential, Pack = 2)]
+  [StructLayout(LayoutKind.Sequential, Pack = 1)]
   public readonly unsafe struct EncodedTrainingPositionMiscInfo : IEquatable<EncodedTrainingPositionMiscInfo>
   {
     /// <summary>
@@ -35,7 +35,7 @@ namespace Ceres.Chess.EncodedPositions
     /// <summary>
     /// Miscellaneous information relating to training data.
     /// </summary>
-    public readonly EncodedPositionEvalMiscInfo InfoTraining;
+    public readonly EncodedPositionEvalMiscInfoV6 InfoTraining;
 
 
     /// <summary>
@@ -43,7 +43,7 @@ namespace Ceres.Chess.EncodedPositions
     /// </summary>
     /// <param name="infoPosition"></param>
     /// <param name="infoTraining"></param>
-    public EncodedTrainingPositionMiscInfo(EncodedPositionMiscInfo infoPosition, EncodedPositionEvalMiscInfo infoTraining)
+    public EncodedTrainingPositionMiscInfo(EncodedPositionMiscInfo infoPosition, EncodedPositionEvalMiscInfoV6 infoTraining)
     {
       InfoPosition = infoPosition;
       InfoTraining = infoTraining;
@@ -60,11 +60,8 @@ namespace Ceres.Chess.EncodedPositions
     /// <param name="blackToMove"></param>
     /// <param name="rule50Count"></param>
     /// <param name="moveCount"></param>
-    public void SetMisc(byte castling_US_OOO, byte castling_US_OO, byte castling_Them_OOO, byte castling_Them_OO, byte blackToMove, byte rule50Count, byte moveCount)
+    public void SetMisc(byte castling_US_OOO, byte castling_US_OO, byte castling_Them_OOO, byte castling_Them_OO, byte blackToMove, byte rule50Count)
     {
-      // Leela always leaves this as zero
-      moveCount = 0;
-
       fixed (byte* c = &InfoPosition.Castling_US_OOO) *c = castling_US_OOO;
       fixed (byte* c = &InfoPosition.Castling_US_OO) *c = castling_US_OO;
       fixed (byte* c = &InfoPosition.Castling_Them_OOO) *c = castling_Them_OOO;
@@ -72,18 +69,86 @@ namespace Ceres.Chess.EncodedPositions
 
       fixed (EncodedPositionMiscInfo.SideToMoveEnum* c = &InfoPosition.SideToMove) *c = (EncodedPositionMiscInfo.SideToMoveEnum)blackToMove;
       fixed (byte* c = &InfoPosition.Rule50Count) *c = rule50Count;
-      fixed (byte* c = &InfoPosition.MoveCount) *c = moveCount;
     }
 
-    public float BestQW => 0.5f * (1.0f - InfoTraining.BestD + InfoTraining.BestQ);
-    public float BestQD => InfoTraining.BestD;
-    public float BestQL => 0.5f * (1.0f - InfoTraining.BestD - InfoTraining.BestQ);
+    public enum GameResultEnum 
+    {
+      Loss ,
+      Draw,
+      Win
+    }
 
-    public float[] BestQArray => new float[] { BestQW, BestQD, BestQL };
+    public void SetUnusedFields(float unused1, float unused2)
+    {
+      fixed (float* ptr1 = &InfoTraining.Unused1)
+      {
+        *ptr1 = unused1;
+      }
 
-    static EncodedPositionEvalMiscInfo.ResultCode ReversedResult(EncodedPositionEvalMiscInfo.ResultCode result) => result == EncodedPositionEvalMiscInfo.ResultCode.Draw ? EncodedPositionEvalMiscInfo.ResultCode.Draw
-                                                                                     : (result == EncodedPositionEvalMiscInfo.ResultCode.Win ? EncodedPositionEvalMiscInfo.ResultCode.Loss : EncodedPositionEvalMiscInfo.ResultCode.Win);
-    public EncodedPositionEvalMiscInfo.ResultCode ResultFromWhitePerspective => WhiteToMove ? InfoTraining.ResultFromOurPerspective : ReversedResult(InfoTraining.ResultFromOurPerspective);
+      fixed (float* ptr2 = &InfoTraining.Unused2)
+      {
+        *ptr2 = unused2;
+      }
+    }
+
+    /// <summary>
+    /// Updates BestQ and BestD fields to specified values.
+    /// </summary>
+    /// <param name="gameResult"></param>
+    public void SetBestQ(float q, float d)
+    {
+      fixed (float* ptrQ = &InfoTraining.BestQ)
+      {
+        fixed (float* ptrD = &InfoTraining.BestD)
+        {
+          *ptrQ = q;
+          *ptrD = d;
+        }
+      }
+    }
+
+    /// <summary>
+    /// Updates ResultQ and ResultD fields to specified values.
+    /// </summary>
+    /// <param name="gameResult"></param>
+    public void SetResult(float q, float d)
+    {
+      fixed (float* ptrQ = &InfoTraining.ResultQ)
+      {
+        fixed (float* ptrD = &InfoTraining.ResultD)
+        {
+          *ptrQ = q;
+          *ptrD = d;
+        }
+      }
+    }
+
+
+    /// <summary>
+    /// Updates ResultQ and ResultD fields to reflect specified game result.
+    /// </summary>
+    /// <param name="gameResult"></param>
+    public void SetResult(GameResultEnum gameResult)
+    {
+      switch (gameResult)
+      {
+        case GameResultEnum.Win:
+          SetResult(1, 0);
+          break;
+
+        case GameResultEnum.Draw:
+          SetResult(0, 1);
+          break;
+
+        case GameResultEnum.Loss:
+          SetResult(-1, 0);
+          break;
+      }
+    }
+
+
+    static EncodedPositionMiscInfo.ResultCode ReversedResult(EncodedPositionMiscInfo.ResultCode result) => result == EncodedPositionMiscInfo.ResultCode.Draw ? EncodedPositionMiscInfo.ResultCode.Draw
+                                                                                     : (result == EncodedPositionMiscInfo.ResultCode.Win ? EncodedPositionMiscInfo.ResultCode.Loss : EncodedPositionMiscInfo.ResultCode.Win);
 
     public bool WhiteToMove => InfoPosition.SideToMove == 0;
 

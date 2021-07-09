@@ -14,7 +14,9 @@
 #region Using directives
 
 using System;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
+using Ceres.Base.DataTypes;
 
 #endregion
 
@@ -85,6 +87,21 @@ namespace Ceres.Chess.LC0.Boards
       History_6.MirrorPlanesInPlace();
       History_7.MirrorPlanesInPlace();
     }
+
+    /// <summary>
+    /// Set a speciifed history board to a specified value.
+    /// </summary>
+    /// <param name="boardIndex"></param>
+    /// <param name="board"></param>
+    public void SetBoard(int boardIndex, EncodedPositionBoard board)
+    {
+      Debug.Assert(boardIndex >= 0 && boardIndex < 8);
+      fixed (EncodedPositionBoard* boards = &History_0)
+      {
+        boards[boardIndex] = board;
+      }
+    }
+
 
     /// <summary>
     /// Determines if en passant opportunity 

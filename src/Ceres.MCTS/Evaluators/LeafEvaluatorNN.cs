@@ -55,17 +55,10 @@ namespace Ceres.MCTS.Evaluators
     /// </summary>
     public bool LowPriority { get; }
 
-    public static ulong NUM_BATCHES_EVALUATED = 0;
-    public static ulong NUM_POSITIONS_EVALUATED = 0;
-
-    public static ulong NUM_REMOTE_BATCHES_EVALUATED = 0;
-    public static ulong NUM_REMOTE_POSITIONS_EVALUATED = 0;
-
-
     /// <summary>
     /// Reusable batch for NN evaluations
     /// </summary>
-    public readonly EncodedPositionBatchFlat Batch;
+    public EncodedPositionBatchFlat Batch { private set; get; }
 
     public enum LocationType { Local, Remote };
 
@@ -89,24 +82,26 @@ namespace Ceres.MCTS.Evaluators
     /// <param name="lowPriority"></param>
     public LeafEvaluatorNN(NNEvaluatorDef evaluatorDef, NNEvaluator evaluator,
                            bool saveToCache,
-                            bool lowPriority,
+                           bool lowPriority,
                            PositionEvalCache cache,
                            Func<MCTSIterator, int> batchEvaluatorIndexDynamicSelector)
     {
-      rawPosArray = posArrayPool.Rent(NNEvaluatorDef.MAX_BATCH_SIZE);
+      rawPosArray = posArrayPool.Rent(evaluator.MaxBatchSize);
 
       EvaluatorDef = evaluatorDef;
       SaveToCache = saveToCache;
       LowPriority = lowPriority;
       Cache = cache;
-      this.BatchEvaluatorIndexDynamicSelector = batchEvaluatorIndexDynamicSelector;
-
-      Batch = new EncodedPositionBatchFlat(EncodedPositionType.PositionOnly, NNEvaluatorDef.MAX_BATCH_SIZE);
+      BatchEvaluatorIndexDynamicSelector = batchEvaluatorIndexDynamicSelector;
 
       if (evaluatorDef.Location == NNEvaluatorDef.LocationType.Local)
+      {
         localEvaluator = evaluator;// isEvaluator1 ? Params.Evaluator1 : Params.Evaluator2;
+      }
       else
+      {
         throw new NotImplementedException();
+      }
 
       // TODO: auto-estimate performance
 #if SOMEDAY
@@ -123,6 +118,27 @@ namespace Ceres.MCTS.Evaluators
 #endif
     }
 
+
+    /// <summary>
+    /// Verifies that Batch is allocated and has sufficient size.
+    /// The batch is grown incrementally if/as needed starting from a modest size.
+    /// </summary>
+    /// <param name="batchSize"></param>
+    void VerifyBatchAllocated(int batchSize)
+    {    
+      int currentSize = Batch == null ? 0 : Batch.MaxBatchSize;
+      if (batchSize > currentSize)
+      {
+        // Double the current size to make room
+        const int INITAL_BATCH_SIZE = 128;
+        int newSize = currentSize == 0 ? Math.Max(INITAL_BATCH_SIZE, batchSize) 
+                                       : Math.Max(batchSize, currentSize * 2);
+
+        Batch = new EncodedPositionBatchFlat(EncodedPositionType.PositionOnly, newSize);
+      }
+    }
+
+
     protected override LeafEvaluationResult DoTryEvaluate(MCTSNode node) => default;
 
     EncodedPositionWithHistory[] rawPosArray;
@@ -130,16 +146,21 @@ namespace Ceres.MCTS.Evaluators
     // TO DO: make uses elsewhere of ArrayPool use the shared
     static ArrayPool<EncodedPositionWithHistory> posArrayPool = ArrayPool<EncodedPositionWithHistory>.Shared;
 
+    readonly object shutdownLockObj = new();
     public void Shutdown()
     {
       if (rawPosArray != null)
       {
-        Batch.Shutdown();
-        posArrayPool.Return(rawPosArray);
-
+        lock (shutdownLockObj)
+        {
+          if (rawPosArray != null)
+          {
+            posArrayPool.Return(rawPosArray);
+            rawPosArray = null;
+            Batch?.Shutdown();
+          }
+        }
       }
-      rawPosArray = null;
-
     }
 
     ~LeafEvaluatorNN()
@@ -156,11 +177,10 @@ namespace Ceres.MCTS.Evaluators
     /// <returns></returns>
     int SetBatch(MCTSIterator context, Span<MCTSNode> nodes)
     {
-      //Console.WriteLine(nodes.Length + " BATCH NODES");
-      if (nodes.Length > NNEvaluatorDef.MAX_BATCH_SIZE) throw new Exception($"Requested batch is larger than {NNEvaluatorDef.MAX_BATCH_SIZE}");
-
       if (nodes.Length > 0)
       {
+        VerifyBatchAllocated(nodes.Length);
+
         for (int i = 0; i < nodes.Length; i++)
         {
           if (EvaluatorDef.PositionTransform == NNEvaluatorDef.PositionTransformType.Mirror)
@@ -176,10 +196,15 @@ namespace Ceres.MCTS.Evaluators
         }
 
         if (EvaluatorDef.Location == NNEvaluatorDef.LocationType.Local)
-          Batch.Set(rawPosArray, nodes.Length);
+        {
+          const bool SET_POSITIONS = false; // we assume this is already done (if needed)
+          Batch.Set(rawPosArray, nodes.Length, SET_POSITIONS);
+        }
 
         if (BatchEvaluatorIndexDynamicSelector != null)
+        {
           Batch.PreferredEvaluatorIndex = (short)BatchEvaluatorIndexDynamicSelector(context);
+        }
       }
 
       return nodes.Length;
@@ -215,7 +240,7 @@ namespace Ceres.MCTS.Evaluators
         // Assign win and loss probabilities
         // If they look like non-WDL result, try to rewrite them
         // in equivalent way that avoids negative probabilities
-        if (rawWinP < 0 && rawLossP == 0)
+        if (rawLossP == 0 && rawWinP < 0)
         {
           winP = 0;
           lossP = -rawWinP;
@@ -247,7 +272,6 @@ namespace Ceres.MCTS.Evaluators
 
     void RunLocal(Span<MCTSNode> nodes, EvalResultTarget resultTarget)
     {
-//      Span<NodeEvaluatorResult> resultSpan;
       const bool RETRIEVE_SUPPLEMENTAL = false;
 
       IPositionEvaluationBatch result;
@@ -303,9 +327,6 @@ namespace Ceres.MCTS.Evaluators
         Console.WriteLine("Error in NodeEvaluatorNN " + exc);
         throw exc;
       }
-
-      NUM_BATCHES_EVALUATED++;
-      NUM_POSITIONS_EVALUATED += (ulong)Batch.NumPos;
     }
 
 

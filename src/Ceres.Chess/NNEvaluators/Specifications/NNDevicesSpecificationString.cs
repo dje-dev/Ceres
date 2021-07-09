@@ -56,16 +56,23 @@ namespace Ceres.Chess.NNEvaluators.Specifications
       string[] deviceStringParts = deviceString.Split(":");
 
       if (deviceStringParts.Length is not (2 or 3))
-        throw new Exception("Malformed device specification string"  + exampleString);
+      {
+        throw new Exception($"{deviceString} not valid device specification string { exampleString}");
+      }
 
       // Device specification such as "GPU:0,1" or "GPU:0,1:POOLED"
       string deviceTypeStr = deviceStringParts[0].ToUpper();
-      if (deviceTypeStr != "GPU") throw new Exception("Device specification expected to begin with 'GPU:'");
+      if (deviceTypeStr != "GPU")
+      { 
+        throw new Exception($"{deviceString} not valid, device specification expected to begin with 'GPU:'");
+      }
 
-      List<(string, float)> deviceParts = OptionsParserHelpers.ParseCommaSeparatedWithOptionalWeights(deviceStringParts[1]);
+      List<(string, float, float, float)> deviceParts = OptionsParserHelpers.ParseCommaSeparatedWithOptionalWeights(deviceStringParts[1], false);
 
       foreach (var device in deviceParts)
+      {
         Devices.Add((new NNEvaluatorDeviceDef(NNDeviceType.GPU, int.Parse(device.Item1)), device.Item2));
+      }
 
       ComboType = Devices.Count == 1 ? NNEvaluatorDeviceComboType.Single
                                      : NNEvaluatorDeviceComboType.Split;
@@ -73,7 +80,10 @@ namespace Ceres.Chess.NNEvaluators.Specifications
       // Possibly switch combinatin type to pooled if requested
       if (deviceStringParts.Length == 3)
       {
-        if (deviceStringParts[2].ToUpper() != "POOLED") throw new Exception("Unexpected third part, expected POOLED");
+        if (deviceStringParts[2].ToUpper() != "POOLED")
+        {
+          throw new Exception("Unexpected third part, expected POOLED");
+        }
 
         ComboType = NNEvaluatorDeviceComboType.Pooled;        
       }

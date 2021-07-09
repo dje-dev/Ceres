@@ -30,44 +30,107 @@ namespace Ceres.Base.OperatingSystem
 
     void* IRawMemoryManagerIncremental<T>.RawMemoryAddress => rawMemoryPointer;
 
-    long numItemsAllocated;
+    public long NumItemsReserved { get; private set; }
+    public long NumBytesReserved { get; private set; }
+
     long numBytesAllocated = 0;
 
-    const long ALLOCATE_INCREMENTAL_BYTES = 1024 * 1024;
-    const int  PAGE_SIZE = 4096;
+    const long ALLOCATE_INCREMENTAL_BYTES = 1024 * 1024 * 2;
+    const int PAGE_SIZE = 1024 * 2048;//4096;
 
-    public void Reserve(string sharedMemName, bool useExistingSharedMemory, long numItems, bool largePages)
+    static long RoundToHugePageSize(long numBytes)
     {
-      if (rawMemoryPointer != null) throw new Exception("Internal error: Reserve should be called only once");
-      if (useExistingSharedMemory) throw new NotImplementedException("Use existing shared memory not yet implemented under Linux");
-      if (largePages) throw new NotImplementedException("Large page support not yet implemented under Linux");
+      // TO DO: determine the true page size at runtime (what if possibly 1GB huge pages?) 
+      const int HUGE_PAGE_SIZE = 1024 * 2048;
+      return (((numBytes - 1) / HUGE_PAGE_SIZE) + 1) * HUGE_PAGE_SIZE;
+    }
 
+
+    static bool largePageAllocationFailed = false;
+
+    public void Reserve(string sharedMemName, bool useExistingSharedMemory, long numItems, bool useLargePages)
+    {
+      if (rawMemoryPointer != null)
+      {
+        throw new Exception("Internal error: Reserve should be called only once");
+      }
+
+      if (useExistingSharedMemory)
+      {
+        throw new NotImplementedException("Use existing shared memory not yet implemented under Linux");
+      }
+
+      NumItemsReserved = numItems;
 
       // We overreserve by one PAGE_SIZE since the OS may not allow partial page allocation
-      long numBytes = numItems * sizeof(T) + PAGE_SIZE;
-      rawMemoryPointer = (float*)LinuxAPI.mmap(null, numBytes, LinuxAPI.PROT_NONE, LinuxAPI.MAP_PRIVATE | LinuxAPI.MAP_ANONYMOUS, -1, 0);
+      NumBytesReserved = RoundToHugePageSize(numItems * sizeof(T) + PAGE_SIZE);
 
-      if (rawMemoryPointer == null) throw new Exception("Virtual memory reservation of {numBytes} bytes failed using mmap");
+      int mapFlags = LinuxAPI.MAP_NORESERVE | LinuxAPI.MAP_PRIVATE | LinuxAPI.MAP_ANONYMOUS;
+      if (useLargePages && !largePageAllocationFailed)
+      {
+        mapFlags |= LinuxAPI.MAP_HUGETLB;
+      };
+
+      IntPtr mapPtr = (IntPtr)LinuxAPI.mmap(null, NumBytesReserved, LinuxAPI.PROT_NONE, mapFlags, -1, 0);
+      if (mapPtr.ToInt64() == -1)
+      {
+        if (useLargePages)
+        {
+          // Attempt without large pages.
+          mapPtr = (IntPtr)LinuxAPI.mmap(null, NumBytesReserved, LinuxAPI.PROT_NONE, mapFlags ^= LinuxAPI.MAP_HUGETLB, -1, 0);
+          if (mapPtr.ToInt64() != -1)
+          {
+            largePageAllocationFailed = true;
+            Console.WriteLine("NOTE: Attempt to allocate large page failed, falling back to non-large pages.");
+          }
+        }
+
+        if (mapPtr.ToInt64() == -1)
+        {
+          throw new Exception($"Virtual memory reservation of {NumBytesReserved} bytes failed using mmap.");
+        }
+
+      }
+      rawMemoryPointer = (void*)mapPtr;
+
     }
+
 
     public void InsureAllocated(long numItems)
     {
-      long numBytesNeeded = numItems * sizeof(T);
+      if (numItems > NumItemsReserved)
+      {
+        throw new ArgumentException($"Allocation overflow, requested {numItems} but maximum was set as {NumItemsReserved}");
+      }
+
+      long numBytesNeeded = numItems * sizeof(T) + PAGE_SIZE; // overallocate to avoid partial page access
+      numBytesNeeded = RoundToHugePageSize(numBytesNeeded);
+
       if (numBytesNeeded > numBytesAllocated)
       {
         numBytesAllocated += ALLOCATE_INCREMENTAL_BYTES;
-        numItemsAllocated = numItems;
+
         int resultCode = LinuxAPI.mprotect(rawMemoryPointer, numBytesAllocated, LinuxAPI.PROT_READ | LinuxAPI.PROT_WRITE);
-        if (resultCode != 0) throw new Exception("Virtual memory extension to size {numBytes} failed");
+        if (resultCode != 0)
+        {
+          throw new Exception($"Virtual memory extension to size {numBytesAllocated} failed with error {resultCode}");
+        }
       }
     }
 
-    public long NumItemsAllocated => this.numBytesAllocated / sizeof(T); // TODO: make faster?
+    public long NumItemsAllocated => numBytesAllocated / sizeof(T);
 
     public void Dispose()
     {
-      LinuxAPI.munmap(rawMemoryPointer, numBytesAllocated);
+      int resultCode = LinuxAPI.munmap(rawMemoryPointer, NumBytesReserved);
+      if (resultCode != 0)
+      {
+        throw new Exception($"Virtual memory munmap of size {NumBytesReserved} failed with error {resultCode}");
+      }
+
       numBytesAllocated = 0;
+      NumBytesReserved = 0;
+      NumItemsReserved = 0;
       rawMemoryPointer = null;
     }
 

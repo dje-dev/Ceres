@@ -94,7 +94,7 @@ namespace Ceres.Commands
         searchParams.FutilityPruningStopSearchEnabled = !forceDisablePruning;
         PositionWithHistory positionWithHistory = PositionWithHistory.FromFENAndMovesUCI(fenAndMoves);
         ceresResults = new MCTSearch();
-        ceresResults.Search(nnEvaluators, new ParamsSelect(), searchParams, null, null, 
+        ceresResults.Search(nnEvaluators, new ParamsSelect(), searchParams, null, 
                             null, positionWithHistory, searchLimit, verbose, DateTime.Now, null,
                             manager => lastCeresInfo = new UCISearchInfo(UCIInfo.UCIInfoString(manager), null, null), false, true);
       });

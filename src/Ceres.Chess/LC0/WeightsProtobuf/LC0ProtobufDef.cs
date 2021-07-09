@@ -73,6 +73,18 @@ namespace Pblczero
     [global::ProtoBuf.ProtoMember(5, Name = @"ip_pol_b")]
     public Layer IpPolB { get; set; }
 
+    [global::ProtoBuf.ProtoMember(17, Name = @"action1")]
+    public ConvBlock Action1 { get; set; }
+
+    [global::ProtoBuf.ProtoMember(18, Name = @"action")]
+    public ConvBlock Action { get; set; }
+
+    [global::ProtoBuf.ProtoMember(19, Name = @"ip_act_w")]
+    public Layer IpActW { get; set; }
+
+    [global::ProtoBuf.ProtoMember(20, Name = @"ip_act_b")]
+    public Layer IpActB { get; set; }
+
     [global::ProtoBuf.ProtoMember(6, Name = @"value")]
     public ConvBlock Value { get; set; }
 
@@ -331,6 +343,17 @@ namespace Pblczero
     public void ResetPolicy() => __pbn__Policy = null;
     private PolicyFormat? __pbn__Policy;
 
+    [global::ProtoBuf.ProtoMember(7, Name = @"action")]
+    [global::System.ComponentModel.DefaultValue(ActionFormat.ActionUnknown)]
+    public ActionFormat Action
+    {
+      get => __pbn__Action ?? ActionFormat.ActionUnknown;
+      set => __pbn__Action = value;
+    }
+    public bool ShouldSerializeAction() => __pbn__Action != null;
+    public void ResetAction() => __pbn__Action = null;
+    private ActionFormat? __pbn__Action;
+
     [global::ProtoBuf.ProtoMember(5, Name = @"value")]
     [global::System.ComponentModel.DefaultValue(ValueFormat.ValueUnknown)]
     public ValueFormat Value
@@ -362,8 +385,6 @@ namespace Pblczero
       InputClassical112Plane = 1,
       [global::ProtoBuf.ProtoEnum(Name = @"INPUT_112_WITH_CASTLING_PLANE")]
       Input112WithCastlingPlane = 2,
-      [global::ProtoBuf.ProtoEnum(Name = @"INPUT_112_WITH_CANONICALIZATION")]
-      Input112WithCanonicalization = 3,
     }
 
     [global::ProtoBuf.ProtoContract()]
@@ -401,6 +422,17 @@ namespace Pblczero
       PolicyClassical = 1,
       [global::ProtoBuf.ProtoEnum(Name = @"POLICY_CONVOLUTION")]
       PolicyConvolution = 2,
+    }
+
+    [global::ProtoBuf.ProtoContract()]
+    public enum ActionFormat
+    {
+      [global::ProtoBuf.ProtoEnum(Name = @"ACTION_UNKNOWN")]
+      ActionUnknown = 0,
+      [global::ProtoBuf.ProtoEnum(Name = @"ACTION_CLASSICAL")]
+      ActionClassical = 1,
+      [global::ProtoBuf.ProtoEnum(Name = @"ACTION_CONVOLUTION")]
+      ActionConvolution = 2,
     }
 
     [global::ProtoBuf.ProtoContract()]

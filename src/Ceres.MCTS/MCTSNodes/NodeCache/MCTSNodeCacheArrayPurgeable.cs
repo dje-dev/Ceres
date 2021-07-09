@@ -16,7 +16,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-
+using Ceres.Base.Benchmarking;
 using Ceres.Base.DataTypes;
 using Ceres.MCTS.LeafExpansion;
 using Ceres.MCTS.MTCSNodes;
@@ -38,13 +38,12 @@ namespace Ceres.MCTS.NodeCache
   /// </summary>
   public class MCTSNodeCacheArrayPurgeable : IMCTSNodeCache
   {
+    internal const int THRESHOLD_PCT_DO_PRUNE = 85;
+    internal const int THRESHOLD_PCT_PRUNE_TO = 50;
+
     public MCTSTree ParentTree;
 
     public readonly int MaxCacheSize;
-
-    public static long NUM_HITS = 0;
-    public static long NUM_MISSES = 0;
-    public static float HitRate => 100.0f * ((float)NUM_HITS / (float)(NUM_HITS + NUM_MISSES));
 
     #region Cache data
 
@@ -88,6 +87,26 @@ namespace Ceres.MCTS.NodeCache
     public int NumInUse => numInUse;
 
 
+    bool TryTake(MCTSNode node, int thisTryIndex)
+    {
+      // Try to make the swap, but only if prior entry was null.
+      MCTSNode exchangeTry = Interlocked.CompareExchange(ref nodes[thisTryIndex], node, null);
+      if (exchangeTry == null)
+      {
+        // Success
+        searchFreeEntryNextIndex = thisTryIndex + 1;
+        Interlocked.Increment(ref numInUse);
+        node.Ref.CacheIndex = thisTryIndex;
+
+        return true;
+      }
+      else
+      {
+        return false;
+      }
+    }
+
+
     /// <summary>
     /// Returns the MCTSNode having the specified index and stored in the cache
     /// or null if not currently cached.
@@ -96,65 +115,36 @@ namespace Ceres.MCTS.NodeCache
     /// <returns></returns>
     public void Add(MCTSNode node)
     {
-      lock (lockObj)
+      int numTries = 0;
+
+      // Make local copy of the entry we are going to try
+      int thisTryIndex = searchFreeEntryNextIndex;
+
+      // Repeatedly try to grab a slot.
+      while (true)
       {
-        int thisIndex;
-
-        if (pruneCount == 0)
+        // Wrap around if necessary.
+        if (thisTryIndex >= nodes.Length - 1)
         {
-          // If we have never pruned, we can just allocate sequentially
-          thisIndex = numInUse + 1;
-        }
-        else
-        {
-          thisIndex = NextSearchFreeEntry();
+          thisTryIndex = 0;
         }
 
-        nodes[thisIndex] = node;
-        node.Ref.CacheIndex = thisIndex;
-
-        numInUse++;
-      }
-    }
-
-    /// <summary>
-    /// Determines the index of the next unused node.
-    /// </summary>
-    /// <param name="recursionDepth"></param>
-    /// <returns></returns>
-    int NextSearchFreeEntry(int recursionDepth = 0)
-    {
-      if (numInUse >= nodes.Length - 2 || recursionDepth > 1)
-        throw new Exception("Internal table: MCTSNodeCache overflow");
-
-      if (pruneCount == 0)
-      {
-        // Since we have not yet pruned, we know available slots run sequentially
-        return numInUse;
-      }
-      else
-      {
-        int foundIndex = -1;
-        for (int i=searchFreeEntryNextIndex; i<nodes.Length;i++)
+        if (TryTake(node, thisTryIndex))
         {
-          if (nodes[i] == null)
-          {
-            foundIndex = i;
-            break;
-          }
+          return;
         }
 
-        if (foundIndex == -1)
+        // Make sure we haven't overflowed.
+        numTries++;
+        if (numTries > nodes.Length * 2)
         {
-          searchFreeEntryNextIndex = 1;
-          return NextSearchFreeEntry(++recursionDepth); // we skip this null position, restart serach from here
+          throw new Exception("MCTSNodeCache overflow");
         }
-        else
-        {
-          searchFreeEntryNextIndex = foundIndex + 1;
-          return foundIndex;
-        }
-      }
+
+        // Move to next possible slot.
+        thisTryIndex++;
+      };
+
     }
 
 
@@ -164,24 +154,22 @@ namespace Ceres.MCTS.NodeCache
     /// <param name="store"></param>
     public void PossiblyPruneCache(MCTSNodeStore store)
     {
-      bool almostFull = numInUse > (nodes.Length * 90) / 100;
+      bool almostFull = numInUse > (nodes.Length * THRESHOLD_PCT_DO_PRUNE) / 100;
       if (numCachePrunesInProgress == 0 && almostFull)
+      {
+        Task.Run(() =>
         {
-          // Reduce to 80% of prior size
-          Task.Run(() =>
+          //using (new TimingBlock("Prune"))
           {
-            //using (new TimingBlock("Prune"))
-            {
-              Interlocked.Increment(ref numCachePrunesInProgress);
-              int targetSize = (nodes.Length * 70) / 100;
-              //using (new TimingBlock("xx"))  
-                Prune(store, targetSize);
-              Interlocked.Decrement(ref numCachePrunesInProgress);
-            };
-          });
-        }
-
+            Interlocked.Increment(ref numCachePrunesInProgress);
+            int targetSize = (nodes.Length * THRESHOLD_PCT_PRUNE_TO) / 100;
+            Prune(store, targetSize);
+            Interlocked.Decrement(ref numCachePrunesInProgress);
+          };
+        });
       }
+
+    }
 
     int pruneCount = 0;
 
@@ -198,8 +186,7 @@ namespace Ceres.MCTS.NodeCache
     {
       int startNumInUse = numInUse;
 
-      // Default target size is 70% of maximum.
-      if (targetSize == -1) targetSize = (nodes.Length * 70) / 100;
+      if (targetSize == -1) targetSize = (nodes.Length * THRESHOLD_PCT_PRUNE_TO) / 100;
       if (numInUse <= targetSize) return 0;
 
       lock (lockObj)
@@ -257,36 +244,32 @@ namespace Ceres.MCTS.NodeCache
 
       if (nodeRef.CacheIndex == 0)
       {
-        NUM_MISSES++;
         return null;
       }
       else
       {
         MCTSNode node = nodes[nodeRef.CacheIndex];
 
-        NUM_HITS++;
         return node;
       }
     }
 
     /// <summary>
-    /// Resets back to null (zero) the CacheIndex for every node currently in the cache.
+    /// Clears table entries and resets back to null the CacheIndex for every node.
     /// </summary>
-    public void ClearMCTSNodeStructValues()
+    public void ResetCache()
     {
-      if (pruneCount == 0)
+      for (int i = 1; i <= nodes.Length; i++)
       {
-        for (int i = 1; i <= numInUse; i++)
-          nodes[i].Ref.CacheIndex = 0;
-      }
-      else
-      {
-        for (int i = 1; i <= nodes.Length; i++)
+        if (nodes[i] != null)
         {
-          if (nodes[i] != null)
-            nodes[i].Ref.CacheIndex = 0;
+          nodes[i].Ref.CacheIndex = 0;
         }
       }
+
+      Array.Clear(nodes, 0, nodes.Length);
+      numInUse = 0;
+      searchFreeEntryNextIndex = 0;
     }
 
 

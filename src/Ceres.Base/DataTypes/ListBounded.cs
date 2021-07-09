@@ -66,7 +66,9 @@ namespace Ceres.Base.DataTypes
       MaxLength = length = members.Length;
 
       if (createMode == CopyMode.ReferencePassedMembers)
+      {
         array = members;
+      }
       else
       {
         DoCreate(members.Length, storageMode);
@@ -103,12 +105,12 @@ namespace Ceres.Base.DataTypes
     #region Access
 
     /// <summary>
-    /// Number of items added to the ArrayFixed
+    /// Number of items added to the ListBounded.
     /// </summary>
     public int Count => length;
 
     /// <summary>
-    /// A view of the ArrayFixed as a span
+    /// A view of the ListBounded as a span.
     /// </summary>
     public Span<T> AsSpan => new Span<T>(array).Slice(0, length);
 
@@ -127,7 +129,7 @@ namespace Ceres.Base.DataTypes
     }
 
     /// <summary>
-    /// Returns reference to item at specified index
+    /// Returns reference to item at specified index.
     /// </summary>
     /// <param name="index"></param>
     /// <returns></returns>
@@ -150,7 +152,7 @@ namespace Ceres.Base.DataTypes
     #region Updating
 
     /// <summary>
-    /// Adds a specified item to the array
+    /// Adds a specified item to the ListBounded.
     /// </summary>
     /// <param name="t"></param>
     public void Add(T t)
@@ -160,7 +162,7 @@ namespace Ceres.Base.DataTypes
     }
 
     /// <summary>
-    /// Adds a specified array of items to the array
+    /// Adds a specified array of items to the ListBounded.
     /// </summary>
     /// <param name="t"></param>
     public void Add(T[] t, int maxElements = int.MaxValue)
@@ -171,7 +173,7 @@ namespace Ceres.Base.DataTypes
     }
 
     /// <summary>
-    /// Adds a specified ListBounded of items to the array
+    /// Adds a specified ListBounded of items to the ListBounded.
     /// </summary>
     /// <param name="t"></param>
     public void Add(ListBounded<T> t, int maxElements = int.MaxValue)
@@ -182,7 +184,7 @@ namespace Ceres.Base.DataTypes
     }
 
     /// <summary>
-    /// Adds a specified item (by its reference) to the array
+    /// Adds a specified item (by its reference) to the ListBounded.
     /// </summary>
     /// <param name="t"></param>
     public void Add(ref T t)
@@ -192,9 +194,16 @@ namespace Ceres.Base.DataTypes
     }
 
 
+    /// <summary>
+    /// Clears (removes) all elements from the ListBounded.
+    /// </summary>
+    /// <param name="zeroItems"></param>
     public void Clear(bool zeroItems)
     {
-      if (zeroItems) Array.Clear(array, 0, length);
+      if (zeroItems)
+      {
+        Array.Clear(array, 0, length);
+      }
 
       length = 0;
       version++;
@@ -308,7 +317,10 @@ namespace Ceres.Base.DataTypes
 
       private bool MoveNextRare()
       {
-        if (version != list.version) ThrowHelper.ThrowWrongVersion();
+        if (version != list.version)
+        {
+          ThrowHelper.ThrowWrongVersion();
+        }
 
         index = list.length + 1;
         current = default(T);
@@ -322,7 +334,10 @@ namespace Ceres.Base.DataTypes
 
       void IEnumerator.Reset()
       {
-        if (version != list.version) ThrowHelper.ThrowWrongVersion();
+        if (version != list.version)
+        {
+          ThrowHelper.ThrowWrongVersion();
+        }
 
         index = 0;
         current = default(T);

@@ -16,9 +16,9 @@
 #region Using directives
 
 using System;
-using System.Collections;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Threading;
 
 using Ceres.Base.DataTypes;
 using Ceres.Base.OperatingSystem;
@@ -26,7 +26,7 @@ using Ceres.Chess;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.Positions;
 using Ceres.MCTS.MTCSNodes.Struct;
-//using Ceres.MCTS.Context;
+
 
 #endregion
 
@@ -50,11 +50,9 @@ namespace Ceres.MCTS.MTCSNodes.Storage
   ///   6) "pointers" from one node occupy less memory (4 bytes instead of 8),
   ///      saving perhaps 8 (2 * 4) bytes per node, no average
   /// but disadvantages:
-  ///   1) it is necessary preallocate some fixed number of nodes at start of search
-  ///      (unless we eventually implement dynamic resizing)
-  ///   2) the code is somewhat more complex (using refs) and possibly error prone
-  ///   3) there is some overhead with using array indexing instead of direct memory pointers
-  ///   4) changing the root of the tree and releasing unused nodes is no longer 
+  ///   1) the code is somewhat more complex (using refs) and possibly error prone
+  ///   2) there is some overhead with using array indexing instead of direct memory pointers
+  ///   3) changing the root of the tree and releasing unused nodes is no longer 
   ///      as trivial as just changing the root pointer (the tree must be rewritten).
   public partial class MCTSNodeStructStorage
   {
@@ -119,7 +117,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 #if SPAN
       string memorySegmentName = useExistingSharedMem ? "CeresSharedNodes" : null;
 
-      nodes = new MemoryBufferOS<MCTSNodeStruct>(numNodes, largePages, memorySegmentName,
+      nodes = new MemoryBufferOS<MCTSNodeStruct>(numNodes + BUFFER_NODES, largePages, memorySegmentName,
                                                  useExistingSharedMem,
                                                  useIncrementalAlloc);
 #else
@@ -143,7 +141,6 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       nodes = null;
     }
 
-
     /// <summary>
     /// Allocates and returns the next available node index.
     /// </summary>
@@ -151,16 +148,26 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public MCTSNodeStructIndex AllocateNext()
     {
-      lock (lockObj)
+      // Take next available (lock-free)
+      int gotIndex = Interlocked.Increment(ref nextFreeIndex) - 1;
+
+      // Check for overflow (with page buffer)
+      if (nodes.NumItemsAllocated <= gotIndex + BUFFER_NODES)
       {
-        if (nextFreeIndex >= MaxNodes)
-          throw new Exception($"MCTSNodeStructStorage overflow, max size {nodes.Length} ");
-
-        nodes.InsureAllocated(nextFreeIndex + 1);
-
-        return new MCTSNodeStructIndex(nextFreeIndex++);
+        lock (lockObj)
+        {
+          nodes.InsureAllocated(gotIndex + BUFFER_NODES);
+        }
       }
+
+      return new MCTSNodeStructIndex(gotIndex);
     }
+
+
+    /// <summary>
+    /// Overallocate sufficiently to make sure allocation reaches to end of a (possibly huge) page
+    /// </summary>
+    static int BUFFER_NODES => (2048 * 1024) / MCTSNodeStruct.MCTSNodeStructSizeBytes;
 
     public void InsureAllocated(int numNodes) =>  nodes.InsureAllocated(numNodes);
 
@@ -202,7 +209,10 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     public unsafe bool VerifyBelongsToStorage(ref MCTSNodeStruct node)
     {
       if (!BelongsToStorage(ref node))
+      {
         throw new Exception("Invalid node. Should be created within storage index " + node.ToString());
+      }
+
       return true;
     }
 
@@ -263,8 +273,12 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       {
         string childStr = "";
         foreach (MCTSNodeStructChild child in nodes[i].Children)
+        {
           if (child.IsExpanded)
+          {
             childStr += $"[child={child.ChildIndex.Index} parent={child.ChildRef.ParentIndex.Index}] ";
+          }
+        }
 
         Console.WriteLine($" {i,9} {nodes[i]} children-> {childStr}");
       }

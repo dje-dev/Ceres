@@ -18,6 +18,7 @@ using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.NodeCache;
+using System;
 using System.Threading;
 
 #endregion
@@ -95,15 +96,19 @@ namespace Ceres.MCTS.LeafExpansion
 
 
     /// <summary>
-    /// Resets back to null (zero) the CacheIndex for every node currently in the cache.
+    /// Clears table entries and resets back to null the CacheIndex for every node.
     /// </summary>
-    public void ClearMCTSNodeStructValues()
+    public void ResetCache()
     {
       for (int i = 0; i < nodes.Length; i++)
       {
         if (nodes[i] != null)
+        {
           nodes[i].Ref.CacheIndex = 0;
+        }
       }
+
+      Array.Clear(nodes, 0, nodes.Length);
     }
   }
 }

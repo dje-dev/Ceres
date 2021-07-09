@@ -28,7 +28,7 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
   /// Interface to Syzygy tablebase probing routines 
   /// exposed by the LC0 DLL.
   /// </summary>
-  public partial class LC0DLLSyzygyEvaluator : IDisposable
+  public partial class LC0DLLSyzygyEvaluator : IDisposable, ISyzygyEvaluatorEngine
   {
     public enum WDLScore
     {
@@ -101,21 +101,19 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
     /// Constructor that prepares evaluator.
     /// </summary>
     /// <param name="sessionID"></param>
-    /// <param name="paths"></param>
-    public LC0DLLSyzygyEvaluator(int sessionID, string paths)
+    public LC0DLLSyzygyEvaluator(int sessionID)
     {
       this.sessionID = sessionID;
-      Initialize(paths);
     }
 
-    public static bool DTZAvailable = false;
+    public bool DTZAvailable { private set; get; }
 
     /// <summary>
     /// Internal initialization routine to register with LC0 DLL.
     /// </summary>
     /// <param name="paths"></param>
     /// <returns></returns>
-    bool Initialize(string paths)
+    public bool Initialize(string paths)
     {
       // Validate that all the requested paths actually exist
       if (!FileUtils.PathsListAllExist(paths))
@@ -183,6 +181,8 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
         return -1;
       }
 
+      NumTablebaseHits++;
+
       // Call DLL function to do the probe and return encoded result
       return LCO_Interop.ProbeDTZ(sessionID, pos.FEN);
     }
@@ -221,7 +221,7 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
       Dispose();
     }
 
-    // --------------------------------------------------------------------------------------------
+    
     public void Dispose()
     {
       if (!isDisposed)

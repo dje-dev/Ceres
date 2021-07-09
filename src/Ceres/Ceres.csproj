@@ -13,8 +13,6 @@
     <StartupObject />
     <TieredCompilation>true</TieredCompilation>
     <GCLargePages>false</GCLargePages>
-    <xGCHeapHardLimitPercent>85</xGCHeapHardLimitPercent>
-    <GCHeapHardLimit>1000000000</GCHeapHardLimit>
     <ServerGarbageCollection>true</ServerGarbageCollection>
     <GCLOHThreshold>100000</GCLOHThreshold>
     <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>

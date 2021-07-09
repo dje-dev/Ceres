@@ -51,11 +51,38 @@ namespace Ceres.Chess.NNEvaluators.Specifications
     /// <param name="netString"></param>
     public NNNetSpecificationString(string netString)
     {
+      NNEvaluatorType NN_EVAL_TYPE = NNEvaluatorType.LC0Library;
+
       string netIDs;
       if (netString.ToUpper().StartsWith("LC0:"))
       {
         // Net specification "LC0:703810=0.5,66193=0.5";
         netIDs = netString.Substring(4);
+      }
+      else if (netString.ToUpper().StartsWith("RANDOM_WIDE:"))
+      {
+        netIDs = netString.Substring(12);
+        NN_EVAL_TYPE = NNEvaluatorType.RandomWide;
+      }
+      else if (netString.ToUpper().StartsWith("RANDOM_NARROW:"))
+      {
+        netIDs = netString.Substring(14);
+        NN_EVAL_TYPE = NNEvaluatorType.RandomNarrow;
+      }
+      else if (netString.ToUpper().StartsWith("CUSTOM1:"))
+      {
+        netIDs = netString.Substring(8);
+        NN_EVAL_TYPE = NNEvaluatorType.Custom1;
+      }
+      else if (netString.ToUpper().StartsWith("CUSTOM2:"))
+      {
+        netIDs = netString.Substring(8);
+        NN_EVAL_TYPE = NNEvaluatorType.Custom2;
+      }
+      else if (netString.ToUpper().StartsWith("ONNX:"))
+      {
+        netIDs = netString.Substring(5);
+        NN_EVAL_TYPE = NNEvaluatorType.ONNX;
       }
       else
       {
@@ -64,14 +91,15 @@ namespace Ceres.Chess.NNEvaluators.Specifications
       }
 
       // Build network definitions
-      List<(string, float)> netParts = OptionsParserHelpers.ParseCommaSeparatedWithOptionalWeights(netIDs);
+      List<(string, float, float, float)> netParts = OptionsParserHelpers.ParseCommaSeparatedWithOptionalWeights(netIDs, true);
 
-      const NNEvaluatorType NN_EVAL_TYPE = NNEvaluatorType.LC0Library;
       const NNEvaluatorPrecision NN_PRECISION = NNEvaluatorPrecision.FP16;
 
       NetDefs = new List<(NNEvaluatorNetDef, float, float, float)>();
       foreach (var netSegment in netParts)
-        NetDefs.Add((new NNEvaluatorNetDef(netSegment.Item1, NN_EVAL_TYPE, NN_PRECISION), netSegment.Item2, netSegment.Item2, netSegment.Item2));
+      {
+        NetDefs.Add((new NNEvaluatorNetDef(netSegment.Item1, NN_EVAL_TYPE, NN_PRECISION), netSegment.Item2, netSegment.Item3, netSegment.Item4));
+      }
 
       ComboType = NetDefs.Count == 1 ? NNEvaluatorNetComboType.Single : NNEvaluatorNetComboType.WtdAverage;
     }

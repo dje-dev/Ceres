@@ -55,7 +55,7 @@ namespace Ceres
         Console.WriteLine();
         ConsoleUtils.WriteLineColored(ConsoleColor.Red, $"*** NOTE: Configuration file {CeresUserSettingsManager.DefaultCeresConfigFileName} not found in working directory.");
         Console.WriteLine();
-        Console.WriteLine($"Prompting to for required values to initialize:");
+        Console.WriteLine($"Prompting for 4 configuration values to be written to Ceres.json:");
         CeresUserSettingsManager.DoSetupInitialize();
       }
 
@@ -66,12 +66,13 @@ namespace Ceres
       LoggerTypes loggerTypes = LoggerTypes.WinDebugLogger | LoggerTypes.ConsoleLogger;
       CeresEnvironment.Initialize(loggerTypes, logLevel);
 
-      CeresEnvironment.MONITORING_METRICS = CeresUserSettingsManager.Settings.LaunchMonitor;
+      CeresEnvironment.MONITORING_METRICS = !CommandLineWorkerSpecification.IsWorker 
+                                           && CeresUserSettingsManager.Settings.LaunchMonitor;
 
       //      if (CeresUserSettingsManager.Settings.DirLC0Networks != null)
       //        NNWeightsFilesLC0.RegisterDirectory(CeresUserSettingsManager.Settings.DirLC0Networks);
 
-      MCTSEngineInitialization.BaseInitialize();
+      MCTSEngineInitialization.BaseInitialize(CeresEnvironment.MONITORING_METRICS, CommandLineWorkerSpecification.NumaNodeID);
 
 
       Console.WriteLine();
@@ -81,7 +82,7 @@ namespace Ceres
       CheckDebugAllowed();
 #endif
 
-      if (args.Length > 0 && args[0].ToUpper() == "CUSTOM")
+      if (args.Length > 0 && (args[0].ToUpper() == "CUSTOM" || args[0].StartsWith("WORKER")))
       {
         TournamentTest.Test(); return;
         //        SuiteTest.RunSuiteTest(); return;
@@ -89,7 +90,10 @@ namespace Ceres
 
       StringBuilder allArgs = new StringBuilder();
       for (int i = 0; i < args.Length; i++)
+      {
         allArgs.Append(args[i] + " ");
+      }
+
       string allArgsString = allArgs.ToString();
 
       DispatchCommands.ProcessCommand(allArgsString);
@@ -121,14 +125,14 @@ namespace Ceres
 
     const string BannerString =
 @"
-|=====================================================|
-| Ceres - A Monte Carlo Tree Search Chess Engine      |
-|                                                     |
-| (c) 2020- David Elliott and the Ceres Authors       |
-|   With network backend code from Leela Chess Zero.  |
-|                                                     |
+|=========================================================|
+| Ceres - A Monte Carlo Tree Search Chess Engine          |
+|                                                         |
+| (c) 2020- David Elliott and the Ceres Authors           |
+|   With network backend code from Leela Chess Zero.      |
+|                                                         |
 |  Version {VER} Use help to list available commands. |
-|=====================================================|
+|=========================================================|
 ";
 
     static void OutputBanner()

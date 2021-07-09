@@ -38,6 +38,8 @@ using Ceres.MCTS.Managers.Limits;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.Params;
+using Ceres.Chess.MoveGen.Converters;
+using System.Diagnostics;
 
 #endregion
 
@@ -141,8 +143,6 @@ namespace Ceres.MCTS.Iteration
     public int NumNodesWhenChoseTopNNode;
     public float FractionNumNodesWhenChoseTopNNode => (float)NumNodesWhenChoseTopNNode / Root.N;
 
-    public ParamsSearchExecutionModifier ParamsSearchExecutionPostprocessor;
-
     internal MCTSSearchFlow flow; // TODO: make private
 
     public readonly bool IsFirstMoveOfGame;
@@ -173,7 +173,6 @@ namespace Ceres.MCTS.Iteration
                        ParamsSearch searchParams,
                        ParamsSelect childSelectParams,
                        SearchLimit searchLimit,
-                       ParamsSearchExecutionModifier paramsSearchExecutionPostprocessor,
                        IManagerGameLimit limitManager,
                        DateTime startTime,
                        MCTSManager priorManager,
@@ -184,7 +183,6 @@ namespace Ceres.MCTS.Iteration
 
       StartTimeThisSearch = startTime;
       RootNWhenSearchStarted = store.Nodes.nodes[store.RootIndex.Index].N;
-      ParamsSearchExecutionPostprocessor = paramsSearchExecutionPostprocessor;
       IsFirstMoveOfGame = isFirstMoveOfGame;
       SearchLimit = searchLimit;
 
@@ -201,7 +199,7 @@ namespace Ceres.MCTS.Iteration
                                                                                     searchParams, childSelectParams, searchLimit);
 
       // TODO: technically this is overwriting the params belonging to the prior search, that's ugly (but won't actually cause a problem)
-      paramsChooser.ChooseOptimal(searchLimit.EstNumNodes(50_000, false), paramsSearchExecutionPostprocessor); // TODO: make 50_000 smarter
+      paramsChooser.ChooseOptimal(searchLimit.EstNumNodes(50_000, false)); // TODO: make 50_000 smarter
 
 
       int estNumNodes = EstimatedNumSearchNodesForEvaluator(searchLimit, nnEvaluators);
@@ -488,10 +486,13 @@ namespace Ceres.MCTS.Iteration
       if (Context.CheckTablebaseBestNextMove != null)
       {
         GameResult result;
-        TablebaseImmediateBestMove = Context.CheckTablebaseBestNextMove(Context.Tree.Store.Nodes.PriorMoves.FinalPosition, out result);
+        Position pos = Context.Tree.Store.Nodes.PriorMoves.FinalPosition;
+        TablebaseImmediateBestMove = Context.CheckTablebaseBestNextMove(pos, out result);
 
         if (result == GameResult.Checkmate)
         {
+          Debug.Assert(pos.ToMGPosition.IsLegalMove(TablebaseImmediateBestMove));
+
           // Set the evaluation of the position to be a win
           // TODO: possibly use distance to mate to set the distance more accurately than fixed at 1
           const int DISTANCE_TO_MATE = 1;
@@ -525,7 +526,7 @@ namespace Ceres.MCTS.Iteration
         {
           // N.B. Unknown as a result actually means "Lost"
           //      base currently the GameResult enum has no way to represent that.
-          //      TODO: Clean thi sup, create a new Enum to represent this more cleanly.
+          //      TODO: Clean this up, create a new Enum to represent this more cleanly.
           // Set the evaluation of the position to be a loss.
           // TODO: possibly use distance to mate to set the distance more accurately than fixed at 1
           const int DISTANCE_TO_MATE = 1;
@@ -848,7 +849,7 @@ namespace Ceres.MCTS.Iteration
 
     public void UpdateTopNodeInfo()
     {
-      MCTSNode newBestNode = Root.NumChildrenExpanded == 0 ? null : Root.ChildrenSorted(n => -n.N)[0];
+      MCTSNode newBestNode = Root.ChildWithLargestN;
       if (TopNNode == null || (newBestNode != TopNNode))
       {
         TopNNode = newBestNode;
@@ -861,8 +862,8 @@ namespace Ceres.MCTS.Iteration
     {
       get
       {
-        LeafEvaluatorBase syzygyEvaluator = Context.LeafEvaluators.Find(eval => eval.GetType() == typeof(LeafEvaluatorSyzygyLC0));
-        return syzygyEvaluator == null ? 0 : syzygyEvaluator.CountHits;
+        LeafEvaluatorSyzygyLC0 syzygyEvaluator = (LeafEvaluatorSyzygyLC0)Context.LeafEvaluators.Find(eval => eval.GetType() == typeof(LeafEvaluatorSyzygyLC0));
+        return syzygyEvaluator == null ? 0 : syzygyEvaluator.NumHits;
       }
     }
 
