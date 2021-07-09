@@ -46,8 +46,8 @@ namespace Ceres.MCTS.MTCSNodes
            + $" V={V:F3} " + (VSecondary == 0 ? "" : $"VSecondary={VSecondary:F3} ")
            + pendingWDL
            + $" MPos={MPosition:F3} MAvg={MAvg:F3} "
-           + $" Score0={(IsRoot ? float.NaN : Parent.ChildScore(0, Depth, IndexInParentsChildren)),6:F3} "
-           + $" Score1={(IsRoot ? float.NaN : Parent.ChildScore(1, Depth, IndexInParentsChildren)),6:F3} "
+//           + $" Score0={(IsRoot ? float.NaN : Parent.ChildScore(0, Depth, IndexInParentsChildren)),6:F3} "
+//           + $" Score1={(IsRoot ? float.NaN : Parent.ChildScore(1, Depth, IndexInParentsChildren)),6:F3} "
            + $" with {NumPolicyMoves} policy moves>";
     }
 
