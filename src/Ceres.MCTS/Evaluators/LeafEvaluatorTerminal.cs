@@ -13,16 +13,13 @@
 
 #region Using directives
 
+using System;
 using Ceres.Base.DataTypes;
 using Ceres.Chess;
 using Ceres.Chess.MoveGen;
-using Ceres.Chess.NNEvaluators.LC0DLL;
-using Ceres.MCTS.LeafExpansion;
+using Ceres.MCTS.Environment;
 using Ceres.MCTS.MTCSNodes;
-using Ceres.MCTS.MTCSNodes.Annotation;
 using Ceres.MCTS.Params;
-using System;
-using System.Diagnostics;
 
 #endregion
 
@@ -42,11 +39,17 @@ namespace Ceres.MCTS.Evaluators
     static internal GameResult TryCalcTerminalStatus(MCTSNode node)
     {
       if (node.Annotation.Moves.NumMovesUsed > 0)
+      {
         return GameResult.Unknown;
+      }
       else if (MGMoveGen.IsInCheck(in node.Annotation.PosMG, node.Annotation.PosMG.BlackToMove))
+      {
         return GameResult.Checkmate;
+      }
       else
+      {
         return GameResult.Draw;
+      }
     }
 
 
@@ -69,16 +72,12 @@ namespace Ceres.MCTS.Evaluators
           
         }
         else
+        {
           throw new Exception($"Internal error: unexpected terminal status {terminalStatus} encountered for node {node}");
+        }
       }
       else
       {
-        // Bypass any nodes shallow in the tree,
-        // since we may need to actually choose a move to make
-        // and for this some search is necessary.
-        // TODO: clean this up somehow (see also similar situation in LeafEvaluatorSyzygyPly1)
-        if (node.Depth < 5) return default;
-
         // Check final possibility of draw by insufficient material
         if (node.Annotation.Pos.CheckDrawBasedOnMaterial == Position.PositionDrawStatus.DrawByInsufficientMaterial)
         {
@@ -92,7 +91,7 @@ namespace Ceres.MCTS.Evaluators
           // Unless we had asymmetric contempt (which is not currently supported)
           // either the opponent (who was about to make this move and could have claimed draw)
           // or we (who are now on move can now claim draw) will
-          // consider themselves inferior and will claimed the draw
+          // consider themselves inferior and will claim the draw
           LeafEvaluationResult evalResult = new LeafEvaluationResult(GameResult.Draw, 0, 0, 0);
           return evalResult;
         }
@@ -110,7 +109,9 @@ namespace Ceres.MCTS.Evaluators
           return default;
         }
         else
+        {
           return default;
+        }
       }
     }
 
@@ -118,6 +119,3 @@ namespace Ceres.MCTS.Evaluators
 
   }
 }
-
-
-
