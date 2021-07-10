@@ -72,8 +72,10 @@ namespace Ceres.MCTS.Utils
 
       // Get the principal variation (the first move of which will be the best move)
       SearchPrincipalVariation pv;
+      BestMoveInfo bestMoveInfo;
       using (new SearchContextExecutionBlock(manager.Context))
       {
+        bestMoveInfo = thisRootNode.BestMoveInfo(false);
         pv = new SearchPrincipalVariation(thisRootNode, overrideBestMoveNodeAtRoot);
       }
 
@@ -84,11 +86,11 @@ namespace Ceres.MCTS.Utils
       float scoreToShow;
       if (scoreAsQ)
       {
-        scoreToShow = MathF.Round((float)-bestMoveNode.Q * 1000, 0);
+        scoreToShow = MathF.Round(bestMoveInfo.QOfBest * 1000, 0);
       }
       else
-      { 
-        scoreToShow = MathF.Round(EncodedEvalLogistic.LogisticToCentipawn((float)-bestMoveNode.Q), 0);
+      {
+        scoreToShow = MathF.Round(EncodedEvalLogistic.LogisticToCentipawn(bestMoveInfo.QOfBest), 0);
       }
 
       float nps = manager.NumStepsTakenThisSearch / elapsedTimeSeconds;
