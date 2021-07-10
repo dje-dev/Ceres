@@ -37,54 +37,54 @@ namespace Ceres.MCTS.Iteration
     /// <param name="description"></param>
     public void DumpFullInfo(MGMove bestMove, MCTSNode searchRootNode = null, TextWriter writer = null, string description = null)
     {
-      searchRootNode = searchRootNode ?? Root;
-      writer = writer ?? Console.Out;
-
-      int moveIndex = searchRootNode.Tree.Store.Nodes.PriorMoves.Moves.Count;
-
-      writer.WriteLine();
-      writer.WriteLine("=================================================================================");
-      writer.Write(DateTime.Now + " SEARCH RESULT INFORMATION,  Move = " + ((1 + moveIndex / 2)));
-      writer.WriteLine($" Thread = {Thread.CurrentThread.ManagedThreadId}");
-      if (description != null) writer.WriteLine(description);
-      writer.WriteLine();
-
-      writer.WriteLine("Tree root           : " + Context.Root);
-      if (searchRootNode != Root)
+      using (new SearchContextExecutionBlock(this.Context))
       {
-        writer.WriteLine("Search root         : " + searchRootNode);
-      }
-      writer.WriteLine();
+        searchRootNode = searchRootNode ?? Root;
+        writer = writer ?? Console.Out;
 
-      MCTSNode[] nodesSortedN = null;
-      MCTSNode[] nodesSortedQ = null;
+        int moveIndex = searchRootNode.Tree.Store.Nodes.PriorMoves.Moves.Count;
 
-      string bestMoveInfo = "";
-      if (searchRootNode.NumChildrenExpanded > 0 
-       && StopStatus != SearchStopStatus.TablebaseImmediateMove
-       && StopStatus != SearchStopStatus.OnlyOneLegalMove)
-      {
-        MCTSNode[] childrenSortedN = searchRootNode.ChildrenSorted(node => -node.N);
-        MCTSNode[] childrenSortedQ = searchRootNode.ChildrenSorted(node => (float)node.Q);
-        bool isTopN = childrenSortedN[0].Annotation.PriorMoveMG == bestMove;
-        bool isTopQ = childrenSortedQ[0].Annotation.PriorMoveMG == bestMove;
-        if (isTopN && isTopQ)
-          bestMoveInfo = "(TopN and TopQ)";
-        else if (isTopN)
-          bestMoveInfo = "(TopN)";
-        else if (isTopQ)
-          bestMoveInfo = "(TopQ)";
-      }
+        writer.WriteLine();
+        writer.WriteLine("=================================================================================");
+        writer.Write(DateTime.Now + " SEARCH RESULT INFORMATION,  Move = " + ((1 + moveIndex / 2)));
+        writer.WriteLine($" Thread = {Thread.CurrentThread.ManagedThreadId}");
+        if (description != null) writer.WriteLine(description);
+        writer.WriteLine();
 
-      // Output position (with history) information.
-      writer.WriteLine("Position            : " + searchRootNode.Annotation.Pos.FEN);
-      writer.WriteLine("Tree root position  : " + Context.Tree.Store.Nodes.PriorMoves);
-      writer.WriteLine("Search stop status  : " + StopStatus);
-      writer.WriteLine("Best move selected  : " + bestMove.MoveStr(MGMoveNotationStyle.LC0Coordinate) + " " + bestMoveInfo);
-      writer.WriteLine();
+        writer.WriteLine("Tree root           : " + Context.Root);
+        if (searchRootNode != Root)
+        {
+          writer.WriteLine("Search root         : " + searchRootNode);
+        }
+        writer.WriteLine();
 
-      using (new SearchContextExecutionBlock(Context))
-      {
+        MCTSNode[] nodesSortedN = null;
+        MCTSNode[] nodesSortedQ = null;
+
+        string bestMoveInfo = "";
+        if (searchRootNode.NumChildrenExpanded > 0
+         && StopStatus != SearchStopStatus.TablebaseImmediateMove
+         && StopStatus != SearchStopStatus.OnlyOneLegalMove)
+        {
+          MCTSNode[] childrenSortedN = searchRootNode.ChildrenSorted(node => -node.N);
+          MCTSNode[] childrenSortedQ = searchRootNode.ChildrenSorted(node => (float)node.Q);
+          bool isTopN = childrenSortedN[0].Annotation.PriorMoveMG == bestMove;
+          bool isTopQ = childrenSortedQ[0].Annotation.PriorMoveMG == bestMove;
+          if (isTopN && isTopQ)
+            bestMoveInfo = "(TopN and TopQ)";
+          else if (isTopN)
+            bestMoveInfo = "(TopN)";
+          else if (isTopQ)
+            bestMoveInfo = "(TopQ)";
+        }
+
+        // Output position (with history) information.
+        writer.WriteLine("Position            : " + searchRootNode.Annotation.Pos.FEN);
+        writer.WriteLine("Tree root position  : " + Context.Tree.Store.Nodes.PriorMoves);
+        writer.WriteLine("Search stop status  : " + StopStatus);
+        writer.WriteLine("Best move selected  : " + bestMove.MoveStr(MGMoveNotationStyle.LC0Coordinate) + " " + bestMoveInfo);
+        writer.WriteLine();
+
         string infoUpdate = UCIInfo.UCIInfoString(this, searchRootNode);
         writer.WriteLine(infoUpdate);
 
