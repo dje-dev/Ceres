@@ -58,6 +58,11 @@ namespace Ceres.Features.Tournaments
     public EnginePlayerDef Player2Def;
 
     /// <summary>
+    /// Optinal definition of engine used to check moves of second player.
+    /// </summary>
+    public EnginePlayerDef CheckPlayer2Def;
+
+    /// <summary>
     /// If each move in each game should be output to the log/console.
     /// </summary>
     public bool ShowGameMoves = true;

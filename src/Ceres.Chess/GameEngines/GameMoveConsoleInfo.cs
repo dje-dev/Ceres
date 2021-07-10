@@ -64,15 +64,22 @@ namespace Ceres.Chess.GameEngines
 
     public string FEN;
 
-    // --------------------------------------------------------------------------------------------
     public void PutStr()
     {
-      if (WhiteCheckMoveStr != null && WhiteMoveStr == WhiteCheckMoveStr) WhiteCheckMoveStr = "";
-      if (BlackCheckMoveStr != null && BlackMoveStr == BlackCheckMoveStr) BlackCheckMoveStr = "";
+      // Only show the move from the check engine if it differed from the selected move
+      if (WhiteCheckMoveStr != null && WhiteMoveStr == WhiteCheckMoveStr)
+      {
+        WhiteCheckMoveStr = "";
+      }
+
+      if (BlackCheckMoveStr != null && BlackMoveStr == BlackCheckMoveStr)
+      {
+        BlackCheckMoveStr = "";
+      }
 
       Console.SetCursorPosition(0, Console.CursorTop);
 
-      var colorDefault = Console.ForegroundColor;
+      ConsoleColor colorDefault = Console.ForegroundColor;
 
       //      Console.Write($"{ ResultStr,10}  );
       Console.Write($"{MoveNum,5}.  ");

@@ -150,6 +150,11 @@ namespace Ceres.Features.Tournaments
     public bool ShouldHaveForfeitedOnLimitsEngine2;
 
     /// <summary>
+    /// If check engine is in use, the number of moves for which engine 2 played a different move from check engine.
+    /// </summary>
+    public int NumEngine2MovesDifferentFromCheckEngine;
+
+    /// <summary>
     /// Total number of nodes evaluated by engine 1.
     /// </summary>
     public long TotalNodesEngine1;
