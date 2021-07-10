@@ -26,6 +26,7 @@ using Ceres.Chess.ExternalPrograms.UCI;
 using Ceres.Chess.GameEngines;
 using Ceres.Chess.Positions;
 using Ceres.MCTS.Params;
+using Ceres.Base.Math;
 
 #endregion
 
@@ -156,7 +157,9 @@ namespace Ceres.Features.GameEngines
       }
 
       // TODO: can we somehow correctly set the staring N arugment here?
-      return new GameEngineSearchResult(lc0Analysis.BestMove, float.NaN, lc0Analysis.ScoreCentipawns, float.NaN,
+      float boundedCP = StatUtils.Bounded(lc0Analysis.ScoreCentipawns, - 9999, 9999);
+      float lc0Q = EncodedEvalLogistic.CentipawnToLogistic(boundedCP);
+      return new GameEngineSearchResult(lc0Analysis.BestMove, lc0Q, boundedCP, float.NaN,
                                         searchLimit, default, 0, (int)lc0Analysis.NumNodes, (int)lc0Analysis.UCIInfo.Depth);
     }
 
