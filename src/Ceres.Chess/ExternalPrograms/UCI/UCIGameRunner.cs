@@ -108,7 +108,9 @@ namespace Ceres.Chess.ExternalPrograms.UCI
       if (uciSetOptionCommands != null)
       {
         foreach (string extraCommand in uciSetOptionCommands)
+        {
           engine.SendCommandLine(extraCommand);
+        }
       }
 
       freq = Stopwatch.Frequency;
@@ -186,8 +188,16 @@ namespace Ceres.Chess.ExternalPrograms.UCI
     {
       string prefixChar = whiteToMove ? "w" : "b";
       string moveStr = $"go {prefixChar}nodes {Math.Max(1, remainingNodes)}";
-      if (incrementNodes > 0) moveStr += $" {prefixChar}inc {incrementNodes}";
-      if (movesToGo.HasValue) moveStr += " movestogo " + movesToGo.Value;
+      if (incrementNodes > 0)
+      {
+        moveStr += $" {prefixChar}inc {incrementNodes}";
+      }
+
+      if (movesToGo.HasValue)
+      {
+        moveStr += " movestogo " + movesToGo.Value;
+      }
+
       return EvalPosition(fenAndMovesString, null, 0, moveStr);
     }
 
@@ -195,7 +205,11 @@ namespace Ceres.Chess.ExternalPrograms.UCI
 
     protected void SendCommandCRLF(UCIEngineProcess thisEngine, string cmd)
     {
-      if (UCI_VERBOSE_LOGGING) Console.WriteLine("--> CMD " + cmd);
+      if (UCI_VERBOSE_LOGGING)
+      {
+        Console.WriteLine("--> CMD " + cmd);
+      }
+
       thisEngine.SendCommandLine(cmd);
     }
 
@@ -274,16 +288,24 @@ namespace Ceres.Chess.ExternalPrograms.UCI
 //      string posString = fenAndMovesString.Contains("startpos") ? fen
       string curPosCmd = "position ";
       if (fenAndMovesString.Contains("startpos"))
-        curPosCmd+= fenAndMovesString;
+      {
+        curPosCmd += fenAndMovesString;
+      }
       else
-        curPosCmd+= "fen " + fenAndMovesString;
+      {
+        curPosCmd += "fen " + fenAndMovesString;
+      }
 
       SendCommandCRLF(engine, curPosCmd);
 
       if (moveOverrideString != null)
+      {
         SendCommandCRLF(engine, moveOverrideString);
+      }
       else
+      {
         SendCommandCRLF(engine, "go " + moveType + " " + moveMetric);
+      }
 
       string desc = $"{curPosCmd} on {EngineEXE} {EngineExtraCommand}";
 
@@ -292,13 +314,20 @@ namespace Ceres.Chess.ExternalPrograms.UCI
       while (lastBestMove == null || !lastBestMove.Contains("bestmove"))
       {
         if (engine.EngineProcess.HasExited)
+        {
           throw new Exception($"The engine process has exited: {desc}");
+        }
         else if (lastError != null)
+        {
           throw new Exception($"UCI error {desc} : {lastError}");
+        }
 
-        System.Threading.Thread.Sleep(1);
+        System.Threading.Thread.Sleep(0);
         if ((waitCount == 5000 || waitCount == 9000) && moveType == "nodes" && moveMetric <= 1000)
+        {
           Console.WriteLine($"--------------> Warn: waiting >{waitCount}ms for {desc}");
+        }
+
         waitCount++;
       }
 
