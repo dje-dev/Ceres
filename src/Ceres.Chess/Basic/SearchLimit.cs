@@ -58,6 +58,13 @@ namespace Ceres.Chess
     public bool SearchCanBeExpanded { init; get; } = true;
 
     /// <summary>
+    /// The fraction by which the search limit can be expanded dynamically
+    /// if it is determined this would be particularly useful.
+    /// </summary>
+    public float FractionExtensibleIfNeeded { init; get; } = 0f;
+
+
+    /// <summary>
     /// Optionally a list of moves to which the search is restricted.
     /// </summary>
     public List<Move> SearchMoves;
@@ -86,6 +93,8 @@ namespace Ceres.Chess
 
     #endregion
 
+
+
     /// <summary>
     /// Constructor.
     /// </summary>
@@ -95,8 +104,10 @@ namespace Ceres.Chess
     /// <param name="valueIncrement"></param>
     /// <param name="maxMovesToGo"></param>
     /// <param name="searchMoves"></param>
+    /// <param name="fractionExtensibleIfNeeded"></param>
     public SearchLimit(SearchLimitType type, float value, bool searchCanBeExpanded = true, 
-                       float valueIncrement = 0, int? maxMovesToGo = null, List<Move> searchMoves = null)
+                       float valueIncrement = 0, int? maxMovesToGo = null, List<Move> searchMoves = null,
+                       float fractionExtensibleIfNeeded= 0f)
     {
       if (value < 0) throw new ArgumentOutOfRangeException(nameof(value), "cannot be negative");
       if (valueIncrement > 0 && !TypeIsPerGameLimit(type))
@@ -110,7 +121,9 @@ namespace Ceres.Chess
       if (searchMoves != null && searchMoves.Count > 0)
       {
         SearchMoves = searchMoves;
+      
       }
+      FractionExtensibleIfNeeded = fractionExtensibleIfNeeded;
     }
 
     #region Predicates
