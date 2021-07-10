@@ -72,10 +72,20 @@ namespace Ceres.MCTS.Iteration
         // Possibly veto the instamove if there is a second-best move that could
         // catch up to best move if the planned search were conducted.
         BestMoveInfo bestMoveInfo = newRoot.BestMoveInfo(false);
-        if (bestMoveInfo.BestMove.IsNull) return default;
+        if (bestMoveInfo.BestMove.IsNull)
+        {
+          return default;
+        }
 
-        MCTSNode[] childrenSortedQ = newRoot.ChildrenSorted(n => (float)n.Q);
+        MCTSNode[] childrenSortedQ = newRoot.ChildrenSorted(n => n.N == 0 ? float.MaxValue : (float)n.Q);
         MCTSNode[] childrenSortedN = newRoot.ChildrenSorted(n => -n.N);
+
+        if (childrenSortedN[0] != childrenSortedQ[0])
+        {
+          // If no agreement between best Q and N then don't instamove.
+          return default;
+        }
+
         float nGap = Math.Abs(childrenSortedQ[0].N - childrenSortedQ[1].N);
         float qGap = (float)(Math.Abs(childrenSortedQ[0].Q - childrenSortedQ[1].Q));
         //float biggestN = Math.Max(bestMoveInfo.BestN, bestMoveInfo.BestNSecond);
