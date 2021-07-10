@@ -48,7 +48,11 @@ namespace Ceres.MCTS.Iteration
         writer.WriteLine("=================================================================================");
         writer.Write(DateTime.Now + " SEARCH RESULT INFORMATION,  Move = " + ((1 + moveIndex / 2)));
         writer.WriteLine($" Thread = {Thread.CurrentThread.ManagedThreadId}");
-        if (description != null) writer.WriteLine(description);
+        if (description != null)
+        {
+          writer.WriteLine(description);
+        }
+
         writer.WriteLine();
 
         writer.WriteLine("Tree root           : " + Context.Root);
@@ -68,14 +72,24 @@ namespace Ceres.MCTS.Iteration
         {
           MCTSNode[] childrenSortedN = searchRootNode.ChildrenSorted(node => -node.N);
           MCTSNode[] childrenSortedQ = searchRootNode.ChildrenSorted(node => (float)node.Q);
+
+          childrenSortedQ[0].Annotate();
+          childrenSortedN[0].Annotate();
+
           bool isTopN = childrenSortedN[0].Annotation.PriorMoveMG == bestMove;
           bool isTopQ = childrenSortedQ[0].Annotation.PriorMoveMG == bestMove;
           if (isTopN && isTopQ)
+          {
             bestMoveInfo = "(TopN and TopQ)";
+          }
           else if (isTopN)
+          {
             bestMoveInfo = "(TopN)";
+          }
           else if (isTopQ)
+          {
             bestMoveInfo = "(TopQ)";
+          }
         }
 
         // Output position (with history) information.
