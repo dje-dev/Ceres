@@ -313,8 +313,7 @@ namespace Ceres.Features.Tournaments
       if (thisResult.GameMoveHistory.Count > 0)
       {
         bool finalMoveIsPlayer1 = (thisResult.GameMoveHistory[^1].Side == SideType.White) != engine2White;
-        float reverseMult = finalMoveIsPlayer1 ? -1 : 1;
-//        if (thisResult.ResultReason == TournamentGameResultReason.Checkmate) reverseMult *= -1;
+        float reverseMult = finalMoveIsPlayer1 ? 1 : -1;
         endingCP = reverseMult * thisResult.GameMoveHistory[^1].ScoreCentipawns;
 
         if (EvalInconsistent(thisResult.Result, reverseMult * thisResult.GameMoveHistory[^1].ScoreCentipawns, 1))
@@ -334,13 +333,23 @@ namespace Ceres.Features.Tournaments
 
       lock (outputLockObj)
       {
+        string checkEnginePlyDifferent = thisResult.NumEngine2MovesDifferentFromCheckEngine == 0 ? "   " : $"{thisResult.NumEngine2MovesDifferentFromCheckEngine,3:N0}";
         if (Def.ShowGameMoves) Def.Logger.WriteLine();
         Def.Logger.Write($" {TrimmedIfNeeded(Def.Player1Def.ID, 10),-10} {TrimmedIfNeeded(Def.Player2Def.ID, 10),-10}");
         Def.Logger.Write($"{eloAvg,4:0} {eloSD,4:0} {100.0f * los,5:0}  ");
         Def.Logger.Write($"{ParentStats.NumGames,5} {DateTime.Now.ToString().Split(" ")[1],10}  {gameSequenceNum,4:F0}  {openingIndex,4:F0}{openingPlayedBothWaysStr}  ");
         Def.Logger.Write($"{thisResult.TotalTimeEngine1,8:F2}{player1ForfeitChar}{thisResult.TotalTimeEngine2,8:F2}{player2ForfeitChar}  ");
         Def.Logger.Write($"{thisResult.TotalNodesEngine1,16:N0} {thisResult.TotalNodesEngine2,16:N0}   ");
-        Def.Logger.Write($"{thisResult.PlyCount,4:F0}  {TournamentUtils.ResultStr(thisResult.Result, !engine2White),4}  ");
+
+        if (Def.CheckPlayer2Def != null)
+        {
+          Def.Logger.Write($"{thisResult.PlyCount,4:F0}  {checkEnginePlyDifferent}  {TournamentUtils.ResultStr(thisResult.Result, !engine2White),4}  ");
+        }
+        else
+        {
+          Def.Logger.Write($"{thisResult.PlyCount,4:F0}  {TournamentUtils.ResultStr(thisResult.Result, !engine2White),4}  ");
+        }
+
         Def.Logger.Write($" {resultReasonChar}   {endingCP,5:F0}{questionableFinalCP}");
         Def.Logger.Write($" {wdlStr}   {thisResult.FEN} ");
         Def.Logger.WriteLine();
@@ -402,8 +411,16 @@ namespace Ceres.Features.Tournaments
       Def.Logger.WriteLine("Result codes: C=checkmate S=stalemate T=tablebase M=insufficient material E=excessive moves R=draw by repetition V=evaluation agreement F=time forfeit");
       Def.Logger.WriteLine();
 
-      Def.Logger.WriteLine("  Player1    Player2   ELO   +/-  LOS   GAME#     TIME    TH#   OP#      TIME1    TIME2        NODES 1           NODES 2       PLY    RES  R   ENDCP     W   D   L   FEN");
-      Def.Logger.WriteLine(" ---------  ---------  ---   ---  ---   -----  --------   ---   ---     ------   ------     --------------   --------------   ----    ---  -   -----     -   -   -   ---------------------------------------------------");
+      if (Def.CheckPlayer2Def != null)
+      {
+        Def.Logger.WriteLine("  Player1    Player2   ELO   +/-  LOS   GAME#     TIME    TH#   OP#      TIME1    TIME2        NODES 1           NODES 2       PLY  DIF    RES  R   ENDCP     W   D   L   FEN");
+        Def.Logger.WriteLine(" ---------  ---------  ---   ---  ---   -----  --------   ---   ---     ------   ------     --------------   --------------   ----  ---    ---  -   -----     -   -   -   ---------------------------------------------------");
+      }
+      else
+      {
+        Def.Logger.WriteLine("  Player1    Player2   ELO   +/-  LOS   GAME#     TIME    TH#   OP#      TIME1    TIME2        NODES 1           NODES 2       PLY    RES  R   ENDCP     W   D   L   FEN");
+        Def.Logger.WriteLine(" ---------  ---------  ---   ---  ---   -----  --------   ---   ---     ------   ------     --------------   --------------   ----    ---  -   -----     -   -   -   ---------------------------------------------------");
+      }
       havePrintedHeaders = true;
     }
 
@@ -464,6 +481,8 @@ namespace Ceres.Features.Tournaments
       bool engine1ShouldHaveForfieted = false;
       bool engine2ShouldHaveForfieted = false;
 
+      int numEngine2MovesDifferentFromCheckEngine = 0;
+
       List<float> scoresEngine1 = new List<float>();
       List<float> scoresEngine2 = new List<float>();
 
@@ -478,7 +497,7 @@ namespace Ceres.Features.Tournaments
           GameSequenceNum = gameSequenceNum,
           OpeningIndex = openingIndex,
           FEN = startFEN,
-          Result =  result,
+          Result = result, //TournamentGameInfo.InvertedResult(result),
           ResultReason = reason,
           PlyCount = plyCount,
           TotalTimeEngine1 = timeEngine1Tot,
@@ -487,6 +506,7 @@ namespace Ceres.Features.Tournaments
           TotalNodesEngine2 = nodesEngine2Tot,
           ShouldHaveForfeitedOnLimitsEngine1 = engine1ShouldHaveForfieted,
           ShouldHaveForfeitedOnLimitsEngine2 = engine2ShouldHaveForfieted,
+          NumEngine2MovesDifferentFromCheckEngine = numEngine2MovesDifferentFromCheckEngine,
           GameMoveHistory = gameMoveHistory
         };
 
@@ -678,6 +698,10 @@ namespace Ceres.Features.Tournaments
         {
           checkSearch = checkMoveEngine.Search(curPositionAndMoves, searchLimit);
           checkMove = checkSearch.MoveString;
+          if (engineMove.MoveString != checkMove)
+          {
+            numEngine2MovesDifferentFromCheckEngine++;
+          }
         }
 
         // Verify the engine's move was legal by trying to make it.
@@ -772,11 +796,11 @@ namespace Ceres.Features.Tournaments
 
       if (MinLastN(scoresCPEngine2, NUM_MOVES) > WIN_THRESHOLD && MaxLastN(scoresCPEngine1, NUM_MOVES) < -WIN_THRESHOLD)
       {
-        return TournamentGameResult.Win;
+        return TournamentGameResult.Loss;
       }
       else if (MinLastN(scoresCPEngine1, NUM_MOVES) > WIN_THRESHOLD && MaxLastN(scoresCPEngine2, NUM_MOVES) < -WIN_THRESHOLD)
       {
-        return TournamentGameResult.Loss;
+        return TournamentGameResult.Win;
       }
       else
       {

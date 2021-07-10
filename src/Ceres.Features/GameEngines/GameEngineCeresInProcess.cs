@@ -263,7 +263,7 @@ namespace Ceres.Features.GameEngines
         bestMoveInfo = searchResult.Manager.Root.BestMoveInfo(false);
       }
 
-      scoreCeresCP = (int)MathF.Round(EncodedEvalLogistic.WinLossToCentipawn(bestMoveInfo.BestQ), 0);
+      scoreCeresCP = (int)MathF.Round(EncodedEvalLogistic.WinLossToCentipawn(bestMoveInfo.QOfBest), 0);
 
 
       MGMove bestMoveMG = searchResult.BestMove;
@@ -277,7 +277,7 @@ namespace Ceres.Features.GameEngines
       // TODO is the RootNWhenSearchStarted correct because we may be following a continuation (BestMoveRoot)
       GameEngineSearchResultCeres result = 
         new GameEngineSearchResultCeres(bestMoveMG.MoveStr(MGMoveNotationStyle.LC0Coordinate),
-                                        (float)bestMoveInfo.BestQ, scoreCeresCP, searchResult.SearchRootNode.MAvg, searchResult.Manager.SearchLimit, default,
+                                        (float)bestMoveInfo.QOfBest, scoreCeresCP, searchResult.SearchRootNode.MAvg, searchResult.Manager.SearchLimit, default,
                                         searchResult.Manager.RootNWhenSearchStarted, N, (int)searchResult.Manager.Context.AvgDepth, 
                                         searchResult, bestMoveInfo);
 

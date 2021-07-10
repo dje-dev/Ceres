@@ -16,6 +16,7 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using Ceres.Chess.MoveGen;
+using Ceres.Chess.MoveGen.Converters;
 
 #endregion
 
@@ -40,6 +41,11 @@ namespace Ceres.MCTS.MTCSNodes
       /// There is only one legal move.
       /// </summary>
       OneLegalMove,
+
+      /// <summary>
+      /// Search was size zero, use best policy move.
+      /// </summary>
+      ImmediateNoSearchPolicyMove,
 
       /// <summary>
       /// The best immediate move is given by the tablebase.
@@ -70,14 +76,13 @@ namespace Ceres.MCTS.MTCSNodes
     public readonly int N;
 
     /// <summary>
-    /// The Q (average evaluation) corresponding to the chosen best move.
+    /// The Q for the best move (from the perspective of the player to move).
     /// </summary>
-    public readonly float Q;
+    public readonly float QOfBest;
 
     /// <summary>
-    /// The largest Q among all moves at the root.
-    /// </summary>
-    public readonly float BestQ;
+    /// The largest Q among all moves at the root (from the perspective of the player to move).
+    public readonly float QMaximal;
 
     /// <summary>
     /// The largest N among all moves at the root.
@@ -102,40 +107,63 @@ namespace Ceres.MCTS.MTCSNodes
     /// <summary>
     /// Constructor.
     /// </summary>
-    /// <param name="node"></param>
-    /// <param name="bestQ"></param>
+    /// <param name="bestMoveNode"></param>
+    /// <param name="qMaximal"></param>
     /// <param name="bestN"></param>
     /// <param name="bestNSecond"></param>
     /// <param name="mlhBonusApplied"></param>
-    public BestMoveInfo(MCTSNode node, float bestQ, float bestN, float bestNSecond, float mlhBonusApplied)
+    public BestMoveInfo(MCTSNode bestMoveNode, float qMaximal, float bestN, float bestNSecond, float mlhBonusApplied)
     {
-      BestMoveNode = node;
-      N = node.N;
-      Q = (float)node.Q;
-      BestQ = bestQ;
+      BestMoveNode = bestMoveNode;
+      N = bestMoveNode.N;
+      QOfBest = (float)-bestMoveNode.Q;
+      QMaximal = qMaximal;
       BestN = bestN;
       BestNSecond = bestNSecond;
       MLHBonusApplied = mlhBonusApplied;
       BestMoveNode.Annotate();
-      BestMove = node.Annotation.PriorMoveMG;
+      BestMove = bestMoveNode.Annotation.PriorMoveMG;
     }
+
+    /// <summary>
+    /// Constructor for case of immediate move based on policy (no search).
+    /// </summary>
+    /// <param name="reason"></param>
+    /// <param name="bestMove"></param>
+    /// <param name="qOfBest"></param>
+    public BestMoveInfo(MCTSNode parentNode, BestMoveReason reason, float q)
+    {
+      Debug.Assert(reason == BestMoveReason.ImmediateNoSearchPolicyMove);
+
+      Reason = BestMoveReason.ImmediateNoSearchPolicyMove;
+      QOfBest = QMaximal = q;
+      BestMove = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(parentNode.ChildAtIndexInfo(0).move, parentNode.Annotation.PosMG);
+    }
+
+
 
     /// <summary>
     /// Constructor for case of immediate move determined without search.
     /// </summary>
     /// <param name="reason"></param>
     /// <param name="bestMove"></param>
-    /// <param name="bestQ"></param>
-    public BestMoveInfo(BestMoveReason reason, MGMove bestMove, float bestQ)
+    /// <param name="qOfBest"></param>
+    public BestMoveInfo(BestMoveReason reason, MGMove bestMove, float qOfBest)
     {
       Debug.Assert(reason != BestMoveReason.SearchResult);
 
       Reason = reason;
-      Q = bestQ;
-      BestQ = bestQ;
+      QOfBest = QMaximal = qOfBest;
       BestMove = bestMove;
     }
 
+
+    /// <summary>
+    /// The magnitude of degree to which the Q associated with the chosen move
+    /// is worse (if any) than the node with the best Q.
+    /// </summary>
+    public float BestMoveQSuboptimality => QMaximal - QOfBest;
+      
 
     /// <summary>
     /// Returns string summary of information.
@@ -144,9 +172,9 @@ namespace Ceres.MCTS.MTCSNodes
     public override string ToString()
     {
       string bestNStr = BestN == N ? "(same)" : $"{BestN:N0}";
-      string bestQStr = BestQ == Q ? "(same)" : $"{BestQ:F2}";
+      string bestQStr = QMaximal == QOfBest ? "(same)" : $"{QMaximal:F2}";
       string mlhStr = MLHBonusApplied == 0 ? "" : $" MLHBonus={MLHBonusApplied}";
-      return $"<BestMoveInfo {BestMove.MoveStr(MGMoveNotationStyle.LC0Coordinate)} N={N} Q={Q} BestN={bestNStr} BestQ={bestQStr} BestN2={BestNSecond,5:F1} {mlhStr}>";
+      return $"<BestMoveInfo {BestMove.MoveStr(MGMoveNotationStyle.LC0Coordinate)} N={N} Q={QOfBest} BestN={bestNStr} BestQ={bestQStr} BestN2={BestNSecond,5:F1} {mlhStr}>";
     }
   }
 }
