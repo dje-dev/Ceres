@@ -172,6 +172,26 @@ namespace Ceres.Chess
     }
 
 
+    /// <summary>
+    /// Returns the maximum number of nodes possible for this search
+    /// if this can be determined, otherwise null.
+    /// </summary>
+    public int? KnownMaxNumNodes
+    {
+      get
+      {
+        if (Type == SearchLimitType.NodesPerMove)
+        {
+          return (int)Value;
+        }
+        else
+        {
+          return null;
+        }
+      }
+    }
+
+
     public int EstNumNodes(int estNumNodesPerSecond, bool estIsObserved)
     {
       // TODO: make the estimations below smarter
