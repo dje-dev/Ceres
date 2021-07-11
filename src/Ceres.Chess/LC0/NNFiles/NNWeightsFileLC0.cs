@@ -14,12 +14,15 @@
 #region Using directives
 
 using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.IO;
 using Ceres.Chess.LC0.WeightsProtobuf;
 using Ceres.Chess.NNFiles;
 using Ceres.Chess.UserSettings;
 
 #endregion
+
 namespace Ceres.Chess.LC0.NNFiles
 {
   /// <summary>
@@ -93,6 +96,11 @@ namespace Ceres.Chess.LC0.NNFiles
 
     public LC0ProtobufNet Info => new LC0ProtobufNet(FileName);
 
+
+    // Keep a static dictionary as cache of loaded networks,
+    // but only using WeakReference so they can be garbage collected away as needed.
+    static ConcurrentDictionary<string, WeakReference<NNWeightsFileLC0>> cachedWeightsFiles = new();
+
     /// <summary>
     /// 
     /// </summary>
@@ -100,13 +108,27 @@ namespace Ceres.Chess.LC0.NNFiles
     /// <returns></returns>
     public static NNWeightsFileLC0 LookupOrDownload(string networkID)
     {
+      // First check cache.      
+      if (cachedWeightsFiles.TryGetValue(networkID, out WeakReference<NNWeightsFileLC0> cachedRetRef))
+      {
+        if (cachedRetRef.TryGetTarget(out NNWeightsFileLC0 cachedRet))
+        {
+          return cachedRet;
+        }
+        else
+        {
+          // The reference is no longer valid, remove from dictionary.
+          cachedWeightsFiles.Remove(networkID, out _);
+        }
+      }
+
       // Try to load file from local disk, return if found.
       INNWeightsFileInfo existingFile = NNWeightsFiles.LookupNetworkFile(networkID, false);
       if (existingFile != null) return existingFile as NNWeightsFileLC0;
 
       // Download the file.
       string baseURL = CeresUserSettingsManager.URLLC0NetworksValidated;
-      NNWeightsFileLC0Downloader downloader = new NNWeightsFileLC0Downloader(baseURL, 
+      NNWeightsFileLC0Downloader downloader = new NNWeightsFileLC0Downloader(baseURL,
                                                                              CeresUserSettingsManager.Settings.DirLC0Networks);
       string fn = downloader.Download(networkID);
       if (fn == null)
@@ -114,15 +136,21 @@ namespace Ceres.Chess.LC0.NNFiles
         throw new Exception($"Failure in download of {networkID}");
       }
 
-      // Load and return the file.
-      return new NNWeightsFileLC0(networkID, fn);
+      // Load the net.
+      NNWeightsFileLC0 ret = new NNWeightsFileLC0(networkID, fn);
+
+      // Save back into cache.
+      cachedWeightsFiles[networkID] = new WeakReference<NNWeightsFileLC0>(ret, false);
+
+      return ret;
     }
 
-      /// <summary>
-      /// Constructor from a file with a specified ID and file name (other information determined from reading protofile).
-      /// </summary>
-      /// <param name="id"></param>
-      /// <param name="filename"></param>
+
+    /// <summary>
+    /// Constructor from a file with a specified ID and file name (other information determined from reading protofile).
+    /// </summary>
+    /// <param name="id"></param>
+    /// <param name="filename"></param>
     public NNWeightsFileLC0(string id, string filename)
     {
       if (!File.Exists(filename)) throw new ArgumentException($"NNWeightsFileLC0 file {id} not found with name {filename}");
