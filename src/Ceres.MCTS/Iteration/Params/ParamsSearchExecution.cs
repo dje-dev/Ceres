@@ -16,6 +16,7 @@
 using System;
 using Ceres.Base.OperatingSystem;
 using Ceres.Chess.NNEvaluators;
+using Ceres.Chess.UserSettings;
 
 #endregion
 
@@ -81,7 +82,7 @@ namespace Ceres.MCTS.Params
     /// with a second batch being assembled concurrently while the
     /// prior batch is being evaluated by the network evaluator.
     /// </summary>
-    public bool FlowDirectOverlapped = true;
+    public bool FlowDirectOverlapped = CeresUserSettingsManager.Settings.EnableOverlappingExecutors;
 
     /// <summary>
     /// If two selectors should be used in batch gathering,

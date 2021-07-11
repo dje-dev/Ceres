@@ -114,6 +114,14 @@ namespace Ceres.Chess.UserSettings
     public bool EnableCUDAGraphs { get; set; } = true;
 
     /// <summary>
+    /// If the "dual overlapped executors" feature should be enabled
+    /// for possible use to run two concurrent executors
+    /// (in different CUDA streams).
+    /// Disabling saves some GPU memory at the cost of some reduction in search speed.
+    /// </summary>
+    public bool EnableOverlappingExecutors { get; set; } = true;
+
+    /// <summary>
     /// If the legacy LC0.dll evaluator should be used for NN evaluation.
     /// </summary>
     public bool UseLegacyLC0Evaluator { get; set; } = false;
