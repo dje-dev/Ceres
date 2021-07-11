@@ -56,13 +56,13 @@ namespace Ceres.Features.Tournaments
       Def = def;
 
       // Create and warmup both engines (in parallel)
-      Parallel.Invoke(() => { Engine1 = def.Player1Def.EngineDef.CreateEngine(); Engine1.Warmup(); },
-                      () => { Engine2 = def.Player2Def.EngineDef.CreateEngine(); Engine2.Warmup(); });
+      Parallel.Invoke(() => { Engine1 = def.Player1Def.EngineDef.CreateEngine(); Engine1.Warmup(def.Player1Def.SearchLimit.KnownMaxNumNodes); },
+                      () => { Engine2 = def.Player2Def.EngineDef.CreateEngine(); Engine2.Warmup(def.Player2Def.SearchLimit.KnownMaxNumNodes); });
 
-      if (def.CheckPlayer2Def.EngineDef != null)
+      if (def.CheckPlayer2Def != null)
       {
         Engine2CheckEngine = def.CheckPlayer2Def.EngineDef.CreateEngine();
-        Engine2CheckEngine.Warmup();
+        Engine2CheckEngine.Warmup(def.CheckPlayer2Def.SearchLimit.KnownMaxNumNodes);
       }
 
       Engine1.OpponentEngine = Engine2;

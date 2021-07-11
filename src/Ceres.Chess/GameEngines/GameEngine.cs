@@ -158,12 +158,14 @@ namespace Ceres.Chess.GameEngines
 
     public abstract void Dispose();
 
+
     /// <summary>
     /// Attepts to perform preliminary initialization of engine.
     /// </summary>
-    public void Warmup()
+    /// <param name="knownMaxNumNodes">optional hint indicating known maximum number of nodes by any search</param>
+    public virtual void Warmup(int? knownMaxNumNodes = null)
     {
-      const int NUM_WARMUP_NODES = 6_000; // enough to trigger overlapping evaluators in the case of Ceres
+      const int NUM_WARMUP_NODES = 1;
       Search(PositionWithHistory.StartPosition, SearchLimit.NodesPerMove(NUM_WARMUP_NODES));
       ResetGame();
     }
