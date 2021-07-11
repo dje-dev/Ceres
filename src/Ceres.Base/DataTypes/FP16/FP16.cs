@@ -43,7 +43,6 @@ namespace Ceres.Base.DataTypes
   [Serializable]
   public readonly struct FP16 : IComparable, IFormattable, IConvertible, IComparable<FP16>, IEquatable<FP16>
   {
-
     public static FP16[,] ToFP16(float[,] data)
     {
       FP16[,] ret = new FP16[data.GetLength(0), data.GetLength(1)];
@@ -64,10 +63,7 @@ namespace Ceres.Base.DataTypes
       FP16[] ret = new FP16[data.Length];
       for (int i = 0; i < ret.Length; i++)
       {
-        if (data[i] != 0.0f)
-        {
-          ret[i] = (FP16)data[i];
-        }
+        ret[i] = (FP16)data[i];
       }
 
       return ret;
@@ -75,24 +71,33 @@ namespace Ceres.Base.DataTypes
 
     public static FP16[] ToFP16Approx(float[] data)
     {
-      FP16[] ret = new FP16[data.Length];
-      for (int i = 0; i < ret.Length; i++)
+      if (DISABLE_APPROX_FP16_CONVERSIONS)
       {
-        if (data[i] != 0.0f)
+        return ToFP16(data);
+      }
+      else
+      {
+        FP16[] ret = new FP16[data.Length];
+        for (int i = 0; i < ret.Length; i++)
         {
           ret[i] = FP16.FromFloatApprox(data[i]);
         }
-      }
 
-      return ret;
+        return ret;
+      }
     }
 
     public static float[,] ToFloat(FP16[,] data)
     {
       float[,] ret = new float[data.GetLength(0), data.GetLength(1)];
       for (int i = 0; i < ret.GetLength(0); i++)
+      {
         for (int j = 0; j < ret.GetLength(1); j++)
+        {
           ret[i, j] = data[i, j];
+        }
+      }
+
       return ret;
     }
 
