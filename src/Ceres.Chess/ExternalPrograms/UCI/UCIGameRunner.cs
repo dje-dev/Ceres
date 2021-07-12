@@ -318,6 +318,7 @@ namespace Ceres.Chess.ExternalPrograms.UCI
 
       string desc = $"{curPosCmd} on {EngineEXE} {EngineExtraCommand}";
 
+      bool isShortSearch = moveType == "nodes" && moveMetric <= 1000;
 
       int waitCount = 0;
       DateTime startTime = DateTime.Now;
@@ -329,18 +330,18 @@ namespace Ceres.Chess.ExternalPrograms.UCI
           throw new Exception($"UCI error {desc} : {lastError}");
         }
 
-        System.Threading.Thread.Sleep(0);
-        if ((elapsedSeconds > 5) && moveType == "nodes" && moveMetric <= 1000)
+        System.Threading.Thread.Sleep(isShortSearch ? 0 : 1);
+        if (elapsedSeconds > 5)
         {
           if (engine.EngineProcess.HasExited)
           {
             throw new Exception($"The engine process has exited: {desc}");
           }
-          else
+          else if (isShortSearch)
           {
             Console.WriteLine($"--------------> Warn: waiting >{waitCount}ms for {desc}");
-            startTime = DateTime.Now;
           }
+          startTime = DateTime.Now;
         }
 
         waitCount++;
