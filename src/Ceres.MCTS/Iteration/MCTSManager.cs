@@ -243,6 +243,8 @@ namespace Ceres.MCTS.Iteration
     internal (TimingStats, MCTSNode) DoSearch(SearchLimit searchLimit,
                                               MCTSProgressCallback progressCallback)
     {
+      SearchLimit = searchLimit;
+
       CheckMemoryExhaustion();
 
       ThreadSearchContext = this.Context;
@@ -582,33 +584,95 @@ namespace Ceres.MCTS.Iteration
         manager.StopStatus = SearchStopStatus.TablebaseImmediateMove;
         return (manager.TablebaseImmediateBestMove, new TimingStats());
       }
-     
-      // Do the search
-      IteratedMCTSDef schedule = manager.Context.ParamsSearch.IMCTSSchedule;
-      bool useIMCTS = schedule != null & manager.SearchLimit.EstNumNodes(30_000, false) > 100;
-      (TimingStats stats, MCTSNode selectedMove) =
-        useIMCTS ? new IteratedMCTSSearchManager().IteratedSearch(manager, progressCallback, schedule)
-                 : manager.DoSearch(manager.SearchLimit, progressCallback);
-
-      manager.UpdateTopNodeInfo();
 
       MCTSNode root = manager.Root;
 
-      // Get best child 
-      MCTSNode bestMoveNode = root.BestMove(true);
-      if (bestMoveNode == null)
-        throw new NotImplementedException("Cannot return best child, only zero or one nodes evaluated");
+      // Do the search
+      IteratedMCTSDef schedule = manager.Context.ParamsSearch.IMCTSSchedule;
+      bool useIMCTS = schedule != null & manager.SearchLimit.EstNumNodes(30_000, false) > 100;
+
+      TimingStats stats;
+      MCTSNode selectedMove;
+      BestMoveInfo bestMoveInfo;
+
+      SearchLimit thisSearchLimit = manager.SearchLimit;
+      int numSearches = 0;
+      BestMoveInfo firstTryBestMoveInfo = null;
+      SearchLimit startingSearchLimit = manager.SearchLimit;
+      bool shouldExtendSearch;
+      do
+      {
+        shouldExtendSearch = false;
+
+        (stats, selectedMove) = useIMCTS ? new IteratedMCTSSearchManager().IteratedSearch(manager, progressCallback, schedule)
+                                         : manager.DoSearch(thisSearchLimit, progressCallback);
+
+        // Get best child 
+        // TODO: technically the "updateStats" should only be true if we end up acccepting this move
+        bestMoveInfo = root.BestMoveInfo(true);
+
+        if (numSearches == 0)
+        {
+          firstTryBestMoveInfo = bestMoveInfo;
+        }
+        else
+        {
+          Console.WriteLine("after retry move " + bestMoveInfo.BestMove + " N now " + root.N + " Retry, Q now " + bestMoveInfo.QOfBest + " " + bestMoveInfo.BestMove + " on search" + thisSearchLimit);
+          if (firstTryBestMoveInfo.BestMove != bestMoveInfo.BestMove) Console.WriteLine("************* Changed");
+        }
+
+        // If the chosen move is far away from the best Q node, 
+        // try to extend the search unless the position is obviously won/lost.
+        const int MAX_RETRIES = 4;
+        const float Q_THRESHOLD = 0.01f;
+        const float INCREMENT_FRACTION = 0.20f;
+
+        float fractionExtendedSoFar = 0;
+        if (bestMoveInfo.BestMoveQSuboptimality > Q_THRESHOLD  // don't retry if Q is already best or nearly so
+         && Math.Abs(root.Q) < 0.75f                           // don't retry if position is already won/lost
+         && numSearches < MAX_RETRIES                          // don't retry many times to avoid using too much extra time
+         && manager.NumStepsTakenThisSearch > 100              // don't retry for very small searches to because batch sizing make this imprecise
+         && fractionExtendedSoFar <
+            startingSearchLimit.FractionExtensibleIfNeeded)    // only extend if we are limit constrained only at game level, not strictly each move
+        {
+
+          int incrementalNodes = (int)(manager.NumStepsTakenThisSearch * INCREMENT_FRACTION);
+          thisSearchLimit = SearchLimit.NodesPerMove(root.N + incrementalNodes);
+          fractionExtendedSoFar += INCREMENT_FRACTION;
+
+          //Console.WriteLine(" try " + numSearches + " Was " + bestMoveInfo.QOfBest + " " + bestMoveInfo.BestMove + "  Extending to " + thisSearchLimit + " because QSuboptimality " 
+          //                + bestMoveInfo.BestMoveQSuboptimality  + " original limit " + manager.SearchLimit);
+          shouldExtendSearch = true;
+          manager.StopStatus = SearchStopStatus.Continue;
+        }
+        else
+        {
+          shouldExtendSearch = false;
+          manager.UpdateTopNodeInfo();
+        }
+
+        numSearches++;
+      } while (shouldExtendSearch);
+
+
+//      MCTSNode bestMoveNode = bestMoveInfo.
+//      if (bestMoveNode == null)
+//      {
+//        throw new NotImplementedException("Cannot return best child, only zero or one nodes evaluated");
+//      }
+
 
       if (verbose)
       {
         DumpMoveStatistics(root);
       }
 
-      if (possiblyUsePositionCache && manager.Context.EvaluatorDef.CacheMode == PositionEvalCache.CacheMode.MemoryAndDisk) 
+      if (possiblyUsePositionCache && manager.Context.EvaluatorDef.CacheMode == PositionEvalCache.CacheMode.MemoryAndDisk)
+      {
         manager.SaveCache(manager.Context.EvaluatorDef.CacheFileName);
+      }
 
-      bestMoveNode.Annotate();
-      return (bestMoveNode.Annotation.PriorMoveMG, stats);
+      return (bestMoveInfo.BestMove, stats);
     }
 
 

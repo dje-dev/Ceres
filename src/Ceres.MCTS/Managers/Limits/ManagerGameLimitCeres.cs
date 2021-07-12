@@ -95,20 +95,23 @@ namespace Ceres.MCTS.Managers.Limits
 
     static bool Panic(ManagerGameLimitInputs inputs)
     {
-      if (inputs.TargetLimitType == SearchLimitType.NodesForAllMoves)
-        return inputs.RemainingFixedSelf + inputs.IncrementSelf < 50;
-      else
-        return (inputs.RemainingFixedSelf + inputs.IncrementSelf) < 0.25;
+      return inputs.TargetLimitType == SearchLimitType.NodesForAllMoves
+                                     ? inputs.RemainingFixedSelf + inputs.IncrementSelf < 50
+                                     : (inputs.RemainingFixedSelf + inputs.IncrementSelf) < 0.25;
     }
 
     static bool NearExhaustion(ManagerGameLimitInputs inputs)
     {
-      if (inputs.TargetLimitType == SearchLimitType.NodesForAllMoves)
-        return (inputs.RemainingFixedSelf + inputs.IncrementSelf) < 200;
-      else
-        return (inputs.RemainingFixedSelf + inputs.IncrementSelf) < 1;
+      return inputs.TargetLimitType == SearchLimitType.NodesForAllMoves
+                                     ? (inputs.RemainingFixedSelf + inputs.IncrementSelf) < 200
+                                     : (inputs.RemainingFixedSelf + inputs.IncrementSelf) < 1;
     }
 
+
+    // Amount of potential dynamic search extensions is gated by degree of time pressure.
+    const float EXTENSION_FRACTION_PANIC           = 0.0f;
+    const float EXTENSION_FRACTION_NEAR_EXHAUSTION = 0.2f;
+    const float EXTENSION_FRACTION_NORMAL          = 0.6f;
 
     /// Determines how much time or nodes resource to
     /// allocate to the the current move in a game subject to
@@ -116,12 +119,16 @@ namespace Ceres.MCTS.Managers.Limits
     /// some number of moves (or possibly all moves).
     public ManagerGameLimitOutputs ComputeMoveAllocation(ManagerGameLimitInputs inputs)
     {
-      ManagerGameLimitOutputs Return(float value) => new ManagerGameLimitOutputs(new SearchLimit(inputs.TargetLimitType, value));
+      ManagerGameLimitOutputs Return(float value, float extensionFraction)
+        => new ManagerGameLimitOutputs(new SearchLimit(inputs.TargetLimitType, value, 
+                                                       fractionExtensibleIfNeeded: extensionFraction));
 
       // If this is the last move to go, use almost all available time.
       // TODO: but can a player carry forward time on a clock? Then this doesn't make sense.
       if (inputs.MaxMovesToGo.HasValue && inputs.MaxMovesToGo < 2)
-        return Return(inputs.RemainingFixedSelf * 0.98f);
+      {
+        return Return(inputs.RemainingFixedSelf * 0.98f, 0);
+      }
 
       bool isNodes = inputs.TargetLimitType == SearchLimitType.NodesForAllMoves;
       float incrementMeaningfulThreshold = isNodes ? 1 : 0.01f;
@@ -130,12 +137,12 @@ namespace Ceres.MCTS.Managers.Limits
       if (Panic(inputs))
       {
         float multiplier = hasMeaningfulIncrement ? 0.50f : 0.01f;
-        return Return(inputs.RemainingFixedSelf * multiplier);
+        return Return(inputs.RemainingFixedSelf * multiplier, EXTENSION_FRACTION_PANIC);
       }
       else if (NearExhaustion(inputs))
       {
         float multiplier = hasMeaningfulIncrement ? 0.70f : 0.03f;
-        return Return(inputs.RemainingFixedSelf * multiplier);
+        return Return(inputs.RemainingFixedSelf * multiplier, EXTENSION_FRACTION_NEAR_EXHAUSTION);
 
       }
 
@@ -146,7 +153,7 @@ namespace Ceres.MCTS.Managers.Limits
 
       // But never spend more than 35% of fixed time remaining
       // (since the increment is not earned until after the move is made).
-      return Return(MathF.Min(totalTimeToUse, inputs.RemainingFixedSelf * 0.35f));
+      return Return(MathF.Min(totalTimeToUse, inputs.RemainingFixedSelf * 0.35f), EXTENSION_FRACTION_NORMAL);
     }
 
   }
