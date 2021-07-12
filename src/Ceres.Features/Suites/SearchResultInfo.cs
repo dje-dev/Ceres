@@ -15,6 +15,7 @@
 
 using Ceres.Chess.MoveGen;
 using Ceres.MCTS.Iteration;
+using Ceres.MCTS.MTCSNodes;
 using System;
 
 #endregion
@@ -37,48 +38,29 @@ namespace Ceres.Features.Suites
     public readonly float NodeSelectionYieldFrac;
     public readonly string PickedNonTopNMoveStr;
 
-    public SearchResultInfo(MCTSManager manager, MGMove bestMove)
+    public SearchResultInfo(MCTSManager manager, BestMoveInfo bestMove)
     {
       using (new SearchContextExecutionBlock(manager.Context))
       {
-        if (manager.TablebaseImmediateBestMove != default(MGMove))
-        {
-          Q = 1.0;
-          BestMove = manager.TablebaseImmediateBestMove;
-          PickedNonTopNMoveStr = " ";
-        }
-        else
-        {
-          Q = manager.Root.Q;
-          UCIInfoString = null;// DISABLED manager.UCIInfoString();
-          // SearchPrincipalVariation pv1 = new SearchPrincipalVariation(worker1.Root);
-          BestMove = bestMove;
-          N = manager.Context.Root.N;
-          NumNodesWhenChoseTopNNode = manager.NumNodesWhenChoseTopNNode;
-          NumNNBatches = manager.Context.NumNNBatches;
-          NumNNNodes = manager.Context.NumNNNodes;
+        Q = manager.Root.Q;
+        //UCIInfoString = manager.UCIInfoString();
+        // SearchPrincipalVariation pv1 = new SearchPrincipalVariation(worker1.Root);
+        BestMove = bestMove.BestMove;
+        N = manager.Context.Root.N;
+        NumNodesWhenChoseTopNNode = manager.NumNodesWhenChoseTopNNode;
+        NumNNBatches = manager.Context.NumNNBatches;
+        NumNNNodes = manager.Context.NumNNNodes;
 
-          TopNNodeN = manager.TopNNode == null ? 0 : manager.TopNNode.N;
-          FractionNumNodesWhenChoseTopNNode = manager.FractionNumNodesWhenChoseTopNNode;
-          AvgDepth = manager.Context.AvgDepth;
-          MAvg = manager.Context.Root.MAvg;
-          NodeSelectionYieldFrac = manager.Context.NodeSelectionYieldFrac;
+        TopNNodeN = manager.TopNNode == null ? 0 : manager.TopNNode.N;
+        FractionNumNodesWhenChoseTopNNode = manager.FractionNumNodesWhenChoseTopNNode;
+        AvgDepth = manager.Context.AvgDepth;
+        MAvg = manager.Context.Root.MAvg;
+        NodeSelectionYieldFrac = manager.Context.NodeSelectionYieldFrac;
 
-          // TODO: try removing this, clean up
-          try
-          {
-            PickedNonTopNMoveStr = !manager.Root.BestMove(false).Equals(manager.Root.ChildWithLargestValue(node => node.N)) ? "!" : " ";
-          }
-          catch (Exception excp)
-          {
-            // TODO: resolve this
-            PickedNonTopNMoveStr = "?";
-          }
-        }
+        PickedNonTopNMoveStr = bestMove.BestMoveWasTopN ? " " : "!";
+
       }
     }
   }
 
 }
-
-
