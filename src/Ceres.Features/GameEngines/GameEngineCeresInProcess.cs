@@ -329,6 +329,7 @@ namespace Ceres.Features.GameEngines
         if (evaluators == null)
         {
           evaluators = new NNEvaluatorSet(EvaluatorDef);
+          evaluators.Warmup(false);
         }
 
         Search.Search(evaluators, ChildSelectParams, SearchParams, GameLimitManager,
