@@ -87,7 +87,13 @@ namespace Ceres.MCTS.Search
       if (context.ParamsSearch.Execution.RootPreloadDepth > 0)
         rootPreloader = new MCTSRootPreloader();
 
-      if (context.ParamsSearch.Execution.SmartSizeBatches)
+      // TODO: Reconsider this. Current dynamic statistics calculation is disabled because:
+      //         - it slows startup
+      //         - in the current implementation, it  triggers both executors to initialize even if only 1 needed
+      //         - it is noisy to estimate on the fly
+      //         - it probably does not interact well with the fixed sized batches of graphs
+      const bool ENABLE_CALC_STATS = false;
+      if (ENABLE_CALC_STATS && context.ParamsSearch.Execution.SmartSizeBatches)
       {
         context.NNEvaluators.CalcStatistics(true, 1f);
       }
