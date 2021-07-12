@@ -40,6 +40,7 @@ using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.Params;
 using Ceres.Chess.MoveGen.Converters;
 using System.Diagnostics;
+using Ceres.Chess.Diagnostics;
 
 #endregion
 
@@ -617,8 +618,12 @@ namespace Ceres.MCTS.Iteration
         }
         else
         {
-          Console.WriteLine("after retry move " + bestMoveInfo.BestMove + " N now " + root.N + " Retry, Q now " + bestMoveInfo.QOfBest + " " + bestMoveInfo.BestMove + " on search" + thisSearchLimit);
-          if (firstTryBestMoveInfo.BestMove != bestMoveInfo.BestMove) Console.WriteLine("************* Changed");
+          //Console.WriteLine("after retry move " + bestMoveInfo.BestMove + " N now " + root.N + " Retry, Q now " + bestMoveInfo.QOfBest + " " + bestMoveInfo.BestMove + " on search" + thisSearchLimit);
+          if (firstTryBestMoveInfo.BestMove != bestMoveInfo.BestMove)
+          {
+            //Environment.MCTSEventSource.TestMetric1++;
+            //Console.WriteLine("************* Changed");
+          }
         }
 
         // If the chosen move is far away from the best Q node, 
@@ -653,14 +658,6 @@ namespace Ceres.MCTS.Iteration
 
         numSearches++;
       } while (shouldExtendSearch);
-
-
-//      MCTSNode bestMoveNode = bestMoveInfo.
-//      if (bestMoveNode == null)
-//      {
-//        throw new NotImplementedException("Cannot return best child, only zero or one nodes evaluated");
-//      }
-
 
       if (verbose)
       {
