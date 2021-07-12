@@ -163,7 +163,13 @@ namespace Ceres.MCTS.MTCSNodes
     /// is worse (if any) than the node with the best Q.
     /// </summary>
     public float BestMoveQSuboptimality => QMaximal - QOfBest;
-      
+
+
+    /// <summary>
+    /// Returns if the best move chosen was the move having largest N.
+    /// </summary>
+    public bool BestMoveWasTopN => N == BestN;
+
 
     /// <summary>
     /// Returns string summary of information.
