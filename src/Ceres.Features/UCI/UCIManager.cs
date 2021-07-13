@@ -45,6 +45,7 @@ using LINQPad;
 using Ceres.Features.Visualization.TreePlot;
 using System.Threading;
 using Ceres.Chess.NNEvaluators.Specifications;
+using System.Diagnostics;
 
 #endregion
 
@@ -201,12 +202,22 @@ namespace Ceres.Features.UCI
       get
       {
         ParamsSearch parms = new ParamsSearch();
-        if (futilityPruningDisabled) parms.FutilityPruningStopSearchEnabled = false;
+        if (futilityPruningDisabled)
+        {
+          parms.FutilityPruningStopSearchEnabled = false;
+        }
         parms.MoveOverheadSeconds = moveOverheadSeconds;
         return parms;
       }
     }
 
+
+    void ResetGame()
+    {
+      curPositionAndMoves = PositionWithHistory.FromFENAndMovesUCI(Position.StartPosition.FEN);
+      gameMoveHistory = new List<GameMoveStat>();
+      CeresEngine?.ResetGame();
+    }
 
 
     /// <summary>
@@ -214,9 +225,7 @@ namespace Ceres.Features.UCI
     /// </summary>
     public void PlayUCI()
     {
-      // Default to the startpos.
-      curPositionAndMoves = PositionWithHistory.FromFENAndMovesUCI(Position.StartPosition.FEN);
-      gameMoveHistory = new List<GameMoveStat>();
+      ResetGame();
 
       while (true)
       {
@@ -290,8 +299,7 @@ namespace Ceres.Features.UCI
             break;
 
           case "ucinewgame":
-            gameMoveHistory = new List<GameMoveStat>();
-            CeresEngine?.ResetGame();
+            ResetGame();
             break;
 
           case "quit":
@@ -356,7 +364,9 @@ namespace Ceres.Features.UCI
 
           case "dump-params":
             if (CeresEngine?.Search != null)
+            {
               CeresEngine?.Search.Manager.DumpParams();
+            }
             else
               UCIWriteLine("info string No search manager created");
             break;
@@ -367,7 +377,9 @@ namespace Ceres.Features.UCI
 
           case "dump-time":
             if (CeresEngine?.Search != null)
+            {
               CeresEngine?.Search.Manager.DumpTimeInfo(OutStream);
+            }
             else
               UCIWriteLine("info string No search manager created");
             break;
@@ -379,7 +391,10 @@ namespace Ceres.Features.UCI
                 CeresEngine.Search.Manager.Context.Tree.Store.Dump(true);
             }
             else
+            {
               UCIWriteLine("info string No search manager created");
+            }
+
             break;
 
           case "dump-move-stats":
