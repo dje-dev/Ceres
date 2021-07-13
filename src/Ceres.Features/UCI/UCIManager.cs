@@ -15,6 +15,7 @@
 
 using System;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 
@@ -37,15 +38,11 @@ using Ceres.MCTS.Utils;
 
 using Ceres.Features.GameEngines;
 using Ceres.MCTS.MTCSNodes;
-using Ceres.MCTS.Managers;
 using Ceres.Chess.LC0VerboseMoves;
 using Ceres.Base.DataTypes;
 using Ceres.Chess.EncodedPositions.Basic;
-using LINQPad;
 using Ceres.Features.Visualization.TreePlot;
-using System.Threading;
 using Ceres.Chess.NNEvaluators.Specifications;
-using System.Diagnostics;
 
 #endregion
 

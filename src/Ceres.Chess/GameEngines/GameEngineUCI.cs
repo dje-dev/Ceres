@@ -64,7 +64,7 @@ namespace Ceres.Chess.GameEngines
     /// Optional set of supplementary UCI set option 
     /// commands to be issued to engine at startup.
     /// </summary>
-    public string[] UCISetOptionCommands;
+    public List<string> UCISetOptionCommands;
 
     /// <summary>
     /// Supplemental arguments to be provided to engine on command line.
@@ -104,7 +104,7 @@ namespace Ceres.Chess.GameEngines
                          int? numThreads = null,
                          int? hashSizeMB = null,
                          string syzygyPath = null,
-                         string[] uciSetOptionCommands = null,
+                         List<string> uciSetOptionCommands = null,
                          ProgressCallback callback = null,
                          bool resetGameBetweenMoves = false,
                          string extraArgs = null) : base(name)

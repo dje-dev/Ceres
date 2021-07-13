@@ -16,6 +16,7 @@
 using System;
 using System.Reflection;
 using System.IO;
+using System.Collections.Generic;
 
 using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.GameEngines;
@@ -53,15 +54,16 @@ namespace Ceres.Features.GameEngines
                               bool emulateCeresSettings = false,
                               ParamsSearch searchParams = null, 
                               ParamsSelect selectParams = null,
-                              string[] uciSetOptionCommands = null,
+                              List<string> uciSetOptionCommands = null,
                               ProgressCallback callback = null,
                               string overrideEXE = null)
-      : base(id, GetExecutableFN(overrideEXE), null, null, null, uciSetOptionCommands, callback, false, ExtraArgsForEvaluator(evaluatorDef))
+      : base(id, GetExecutableFN(overrideEXE), null, null, null, 
+             forceDisableSmartPruning ? AddedDisableSetSmartPruning(uciSetOptionCommands) : uciSetOptionCommands,
+             callback, false, ExtraArgsForEvaluator(evaluatorDef))
     {
       // TODO: support some limited emulation of options
       if (searchParams != null || selectParams != null) throw new NotSupportedException("Customized searchParams and selectParams not yet supported");
       if (evaluatorDef == null) throw new ArgumentNullException(nameof(evaluatorDef));
-      if (forceDisableSmartPruning) throw new NotImplementedException(nameof(forceDisableSmartPruning));
       if (emulateCeresSettings) throw new NotImplementedException(nameof(emulateCeresSettings));
       if (evaluatorDef.DeviceCombo == NNEvaluatorDeviceComboType.Pooled)
         throw new Exception("Evaluators for GameEngineDefCeresUCI should not be created as Pooled.");
@@ -75,8 +77,17 @@ namespace Ceres.Features.GameEngines
 
 
 
-
     #region Internal helper methods
+
+    private static List<string> AddedDisableSetSmartPruning(List<string> options)
+    {
+      if (options == null)
+      {
+        options = new List<string>();
+        options.Add("setoption name smartpruningfactor value 0");
+      }
+      return options;
+    }
 
     /// <summary>
     /// Returns the network and device arguments string matching specified NNEvaluatorDef.

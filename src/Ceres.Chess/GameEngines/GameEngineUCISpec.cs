@@ -14,6 +14,7 @@
 #region Using directives
 
 using System;
+using System.Collections.Generic;
 using System.Reflection.Metadata.Ecma335;
 
 #endregion
@@ -57,7 +58,7 @@ namespace Ceres.Chess.GameEngines
     /// <summary>
     /// Optional set of commands sent to engine in intialization.
     /// </summary>
-    public readonly string[] UCISetOptionCommands;
+    public readonly List<string> UCISetOptionCommands;
 
     /// <summary>
     /// Optional callback that is called to report on engine progress.
@@ -86,7 +87,7 @@ namespace Ceres.Chess.GameEngines
                              string syzygyPath = null,
                              GameEngine.ProgressCallback callback = null,
                              bool resetGameBetweenMoves = false,
-                             string[] uciSetOptionCommands = null)
+                             List<string> uciSetOptionCommands = null)
     {
       if (exePath is null) throw new ArgumentNullException(nameof(exePath));
 
@@ -127,7 +128,7 @@ namespace Ceres.Chess.GameEngines
            + (HashSizeMB.HasValue ? $" HashSizeMB={HashSizeMB}" : "")
            + (SyzygyPath != null ? $" SyzygyPath={SyzygyPath}" : "")
            + (ResetGameBetweenMoves ? " ResetGameBetweenMoves" : "")
-           + (UCISetOptionCommands != null ? $" (and {UCISetOptionCommands.Length} additional options)" : "")
+           + (UCISetOptionCommands != null ? $" (and {UCISetOptionCommands.Count} additional options)" : "")
            + $" >";
     }
 

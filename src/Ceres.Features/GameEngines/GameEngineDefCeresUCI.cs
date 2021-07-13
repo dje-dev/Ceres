@@ -16,6 +16,7 @@
 using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.GameEngines;
 using System;
+using System.Collections.Generic;
 
 #endregion
 
@@ -39,7 +40,7 @@ namespace Ceres.Features.GameEngines
     /// <summary>
     /// Optional array of set option commands to be issued to engine at startup.
     /// </summary>
-    public readonly string[] UCISetOptionCommands;
+    public readonly List<string> UCISetOptionCommands;
 
     /// <summary>
     /// Optional callback to be called with progress updates.
@@ -54,6 +55,10 @@ namespace Ceres.Features.GameEngines
     /// </summary>
     public readonly string OverrideEXE;
 
+    /// <summary>
+    /// If every searche should be forced to run the full allotted amount of nodes/time.
+    /// </summary>
+    public readonly bool DisableFutilityStopSearch;
 
     /// <summary>
     /// Constructor.
@@ -65,15 +70,17 @@ namespace Ceres.Features.GameEngines
     /// <param name="overrideEXE"></param>
     public GameEngineDefCeresUCI(string id, 
                                  NNEvaluatorDef evaluatorDef,
-                                 string[] uciSetOptionCommands = null,
+                                 List<string> uciSetOptionCommands = null,
                                  GameEngine.ProgressCallback callback = null,
-                                 string overrideEXE = null) 
+                                 string overrideEXE = null,
+                                 bool disableFutilityStopSearch = false) 
       : base(id)
     {
       EvaluatorDef = evaluatorDef;
       UCISetOptionCommands = uciSetOptionCommands;
       Callback = callback;
       OverrideEXE = overrideEXE;
+      DisableFutilityStopSearch = disableFutilityStopSearch;
     }
 
 
@@ -89,7 +96,8 @@ namespace Ceres.Features.GameEngines
     /// <returns></returns>
     public override GameEngine CreateEngine()
     {
-      return new GameEngineCeresUCI(ID, EvaluatorDef, false, false, null, null, UCISetOptionCommands, Callback, OverrideEXE);
+      return new GameEngineCeresUCI(ID, EvaluatorDef, DisableFutilityStopSearch, 
+                                    false, null, null, UCISetOptionCommands, Callback, OverrideEXE);
     }
 
 
