@@ -32,7 +32,7 @@ using Ceres.Chess.NNEvaluators;
 namespace Ceres.MCTS.Search
 {
   /// <summary>
-  /// Primary coordinator of an MCTS search, orhestrating the
+  /// Primary coordinator of an MCTS search, orchestrating the
   /// dual overlapped selectors.
   /// 
   /// See the comments below for a sketch of the batch gathering/submission algorithm.
@@ -46,7 +46,6 @@ namespace Ceres.MCTS.Search
     const bool DUMP_WAITING = false;
 
     internal const int MAX_PRELOAD_NODES_PER_BATCH = 16;
-
 
     void WaitEvaluationDoneAndApply(Task<MCTSNodesSelectedSet> finalizingTask, int curCount = 0)
     {
@@ -478,10 +477,10 @@ namespace Ceres.MCTS.Search
       }
 
       // Use this time to perform housekeeping (tree is quiescent)
+      manager.TerminationManager.UpdatePruningFlags();
       if (batchSequenceNum % 3 == 2)
       {
         manager.UpdateEstimatedNPS();
-        manager.TerminationManager.UpdatePruningFlags();
       }
 
       // Check if node cache needs pruning.
@@ -582,12 +581,19 @@ namespace Ceres.MCTS.Search
         {
           // Mark the excess nodes as "CacheOnly"
           for (int i = numNodesTargeted; i < nodes.NodesNN.Count; i++)
+          {
             nodes.NodesNN[i].ActionType = MCTSNode.NodeActionType.CacheOnly;
+          }
         }
+
         if (isPrimary)
+        {
           BlockNNEval1.Evaluate(manager.Context, nodes.NodesNN);
+        }
         else
+        {
           BlockNNEval2.Evaluate(manager.Context, nodes.NodesNN);
+        }
 
         timeLastNNFinished = DateTime.Now;
         return nodes;
