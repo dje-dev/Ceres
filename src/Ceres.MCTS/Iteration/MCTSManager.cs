@@ -15,6 +15,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 
 using Ceres.Base.Benchmarking;
 using Ceres.Base.DataTypes;
@@ -38,9 +39,6 @@ using Ceres.MCTS.Managers.Limits;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.Params;
-using Ceres.Chess.MoveGen.Converters;
-using System.Diagnostics;
-using Ceres.Chess.Diagnostics;
 
 #endregion
 
@@ -180,13 +178,15 @@ namespace Ceres.MCTS.Iteration
                        List<GameMoveStat> gameMoveHistory,
                        bool isFirstMoveOfGame)
     {
-      if (searchLimit.IsPerGameLimit) throw new Exception("Per game search limits not supported");
+      if (searchLimit.IsPerGameLimit)
+      {
+        throw new Exception("Per game search limits not supported");
+      }
 
       StartTimeThisSearch = startTime;
       RootNWhenSearchStarted = store.Nodes.nodes[store.RootIndex.Index].N;
       IsFirstMoveOfGame = isFirstMoveOfGame;
       SearchLimit = searchLimit;
-
 
       // Make our own copy of move history.
       PriorMoveStats = new List<GameMoveStat>();
@@ -853,24 +853,40 @@ namespace Ceres.MCTS.Iteration
     SearchStopStatus CalcSearchStopStatus()
     {
       //if (Root == null) return true; // This seemed to happen?   8/8/1p3p1p/1P5k/5P1P/6K1/1P6/8 w - - 1 113 
-      if (Root.N < 2) return SearchStopStatus.Continue; // Have to search at least two nodes to successfully get a move
-      if (Root.NumPolicyMoves <= 1) return SearchStopStatus.OnlyOneLegalMove;
+      if (Root.N < 2)
+      {
+        return SearchStopStatus.Continue; // Have to search at least two nodes to successfully get a move
+      }
+      else if (Root.NumPolicyMoves <= 1)
+      {
+        return SearchStopStatus.OnlyOneLegalMove;
+      }
 
       UpdateTopNodeInfo();
 
-      if (ExternalStopRequested) return SearchStopStatus.ExternalStopRequested;
+      if (ExternalStopRequested)
+      {
+        return SearchStopStatus.ExternalStopRequested;
+      }
 
-//      if (SearchLimit == null) return false;
-
-      if (RemainingTime <= 0.01) return SearchStopStatus.TimeExpired;
+      if (RemainingTime <= 0.01)
+      {
+        return SearchStopStatus.TimeExpired;
+      }
 
       int numNotShutdowChildren = TerminationManager.NumberOfNotShutdownChildren();
 
       // Exit if only one possible move, and smart pruning is turned on
       if (Context.ParamsSearch.FutilityPruningStopSearchEnabled)
       {
-        if (Root.N > 0 && Root.NumPolicyMoves == 1) return SearchStopStatus.FutilityPrunedAllMoves;
-        if (numNotShutdowChildren == 1) return SearchStopStatus.FutilityPrunedAllMoves;
+        if (Root.N > 0 && Root.NumPolicyMoves == 1)
+        {
+          return SearchStopStatus.FutilityPrunedAllMoves;
+        }
+        else if (numNotShutdowChildren == 1)
+        {
+          return SearchStopStatus.FutilityPrunedAllMoves;
+        }
       }
 
       return SearchStopStatus.Continue;
