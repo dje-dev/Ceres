@@ -37,6 +37,7 @@ using Ceres.Base.Math;
 using Ceres.Base.Misc;
 using Ceres.Base.DataType;
 using Ceres.Base.OperatingSystem;
+using System.Collections.Generic;
 
 #endregion
 
@@ -44,7 +45,7 @@ namespace Ceres.APIExamples
 {
   public static class TournamentTest
   {
-    static int CONCURRENCY = 1; // POOLED ? 16 : 4;
+    static int CONCURRENCY = 4; // POOLED ? 16 : 4;
     static bool RUN_DISTRIBUTED = false;
 
     
@@ -67,7 +68,7 @@ namespace Ceres.APIExamples
     static GameEngineUCISpec specSF14 = new GameEngineUCISpec("SF14", SF14_EXE);
     static GameEngineUCISpec specLC0 = new GameEngineUCISpec("LC0", "lc0.exe");
 
-    static string[] extraUCI = null;// new string[] {"setoption name Contempt value 5000" };
+    static List<string> extraUCI = null;// new string[] {"setoption name Contempt value 5000" };
     static GameEngineDef engineDefEthereal = new GameEngineDefUCI("Etheral", new GameEngineUCISpec("Etheral", ETHERAL_EXE, SF_NUM_THREADS, SF_HASH_SIZE_MB, TB_PATH, uciSetOptionCommands: extraUCI));
     static GameEngineDef engineDefStockfish11 = new GameEngineDefUCI("SF11", new GameEngineUCISpec("SF11", SF11_EXE, SF_NUM_THREADS, SF_HASH_SIZE_MB, TB_PATH, uciSetOptionCommands: extraUCI));
 
@@ -151,7 +152,6 @@ namespace Ceres.APIExamples
       //      NET2 = "badgyal-3";
 
       ///raid/train/nets/512x30b/512x30b-swa-112500.pb.gz 975
-      NET2 = "J94-100";
 
       ///raid/train/nets/t60apr2kmdc1/t60apr2kmdc1-swa-477500.pb.gz
       //////raid/train/nets/512x30b/512x30b-swa-407500.pb.gz
@@ -167,8 +167,8 @@ namespace Ceres.APIExamples
       //NET1 = @"d:\weights\lczero.org\shrink_no-swa-300000.pb.gz";
       //NET2 = @"d:\weights\lczero.org\shrink_no-swa-200000.pb.gz";
 
-      NET1 = "751381"; // 5+/- 13
-      NET2 = "751381";// j64-210";
+//      NET1 = "703810"; // 5+/- 13
+//      NET2 = "703810";// j64-210";
 
       //NET1 = "TK-6430 aka 128x10-BPR-64M-6430000"; // GOOD NET - better thatn 703810
       //      NET2 = "j94-100";
@@ -187,6 +187,9 @@ namespace Ceres.APIExamples
 // Good 128x10b test
 //      NET1 = "t60apr2kmdc1-swa-700000";
 //      NET2 = @"703810";
+
+      NET1 = "J94-100";
+      NET2 = "J94-100";
 
       //string       NET2 = @"j64-210";
       NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification(@$"LC0:{NET1}", GPUS); // j64-210 LS16 40x512-lr015-swa-167500
@@ -259,7 +262,7 @@ namespace Ceres.APIExamples
       limit1 = SearchLimit.SecondsForAllMoves(15, 1.0f) * 2f;
       //limit1 = SearchLimit.SecondsForAllMoves(900, 15) * 0.05f;
 
-      limit1 = SearchLimit.NodesPerMove(50000 * 1);
+      limit1 = SearchLimit.NodesPerMove(15_000);
 
       SearchLimit limit2 = limit1;// * 0.2f;// SearchLimit.NodesPerMove(2500);
       //limit2 = limit1 * 3;
@@ -290,7 +293,7 @@ namespace Ceres.APIExamples
       ////////
 
 
-//engineDefCeres1.SearchParams.TestFlag = true;
+      //engineDefCeres1.SearchParams.TestFlag = true;
       //engineDefCeres1.SearchParams.MoveFutilityPruningAggressiveness = 0.4f;
       //engineDefCeres1.SearchParams.GameLimitUsageAggressiveness *= 1.2f;
       //engineDefCeres1.SearchParams.MoveFutilityPruningAggressiveness = 0.75f;
@@ -303,7 +306,7 @@ namespace Ceres.APIExamples
       //engineDefCeres2.SearchParams.TreeReuseEnabled = false;
       //engineDefCeres1.SearchParams.MLHBonusFactor = 0.1f;
 
-       
+//engineDefCeres1.SearchParams.TestFlag = true;
       if (false)
       {
 #if NOT
@@ -438,7 +441,7 @@ namespace Ceres.APIExamples
 
       //TournamentDef def = new TournamentDef("TOURN", playerLC0Tilps, playerLC0);
 
-      def.NumGamePairs = 100;// 1000;
+      def.NumGamePairs = 500;// 102;
       def.ShowGameMoves = false;
 
       //      def.OpeningsFileName = @"HERT_2017\Hert500.pgn";
@@ -447,13 +450,13 @@ namespace Ceres.APIExamples
       //      def.OpeningsFileName = @"\\synology\dev\chess\data\openings\Drawkiller_500pos_reordered.pgn";//                                                                                                 
       //def.OpeningsFileName = "TCEC19_NoomenSelect.pgn";
 //      def.OpeningsFileName = "TCEC1819.pgn";
-      //def.OpeningsFileName = "4mvs_+90_+99.pgn";
-      def.OpeningsFileName = "book-ply8-unifen-Q-0.0-0.25.pgn"; //book-ply8-unifen-Q-0.0-0.25
+      def.OpeningsFileName = "4mvs_+90_+99.pgn";
+//      def.OpeningsFileName = "book-ply8-unifen-Q-0.0-0.25.pgn"; //book-ply8-unifen-Q-0.0-0.25
       //      def.OpeningsFileName = "startpos.pgn";
 
       if (false)
       {
-        def.AdjudicationThresholdCentipawns = 500;
+        def.AdjudicationThresholdCentipawns = int.MaxValue;
         def.AdjudicationThresholdNumMoves = 3000;
         def.UseTablebasesForAdjudication = false;
       }

@@ -13,6 +13,7 @@
 
 #region Using directives
 
+using System.Collections.Generic;
 using Ceres.Chess;
 using Ceres.Chess.GameEngines;
 using Ceres.Chess.LC0.NNFiles;
@@ -43,7 +44,7 @@ namespace Ceres.APIExamples
 
       SearchLimit limit = SearchLimit.NodesPerMove(10_000);
 
-      string[] extraUCI = new string[] { "setoption name Contempt value 5000" };
+      List<string> extraUCI = null; // new string[] { "setoption name Contempt value 5000" };
 
       GameEngineDef ged1 = new GameEngineDefCeres("Ceres1", evalDef1);
       GameEngineDef ged2 = new GameEngineDefCeres("Ceres1", evalDef2);
