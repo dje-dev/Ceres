@@ -67,7 +67,9 @@ namespace Ceres.Chess.UserSettings
       get
       {
         if (settings == null && File.Exists(DefaultCeresConfigFileName))
+        {
           LoadFromDefaultFile();
+        }
 
         if (settings == null)
         {
@@ -80,12 +82,18 @@ namespace Ceres.Chess.UserSettings
           return null; // never reached
         }
         else
+        {
           return settings;
+        }
       }
 
       set
       {
-        if (value == null) throw new Exception("Cannot assign null to Settings.");
+        if (value == null)
+        {
+          throw new Exception("Cannot assign null to Settings.");
+        }
+
         settings = value;
       }
     }
@@ -110,13 +118,18 @@ namespace Ceres.Chess.UserSettings
     public static void LoadFromFile(string settingsFileName)
     {
       if (!File.Exists(settingsFileName))
+      {
         throw new ArgumentException($"No such file: {settingsFileName}");
+      }
 
       string jsonString = File.ReadAllText(settingsFileName);
-      settings = JsonSerializer.Deserialize<CeresUserSettings>(jsonString);
+      JsonSerializerOptions options = new JsonSerializerOptions() { AllowTrailingCommas = true };
+      settings = JsonSerializer.Deserialize<CeresUserSettings>(jsonString, options);
 
       if (settings.DirLC0Networks != null & settings.DirLC0Networks != "")
+      {
         NNWeightsFilesLC0.RegisterDirectory(settings.DirLC0Networks);
+      }
 
       Console.WriteLine($"Ceres user settings loaded from file {settingsFileName}");
     }
@@ -128,7 +141,7 @@ namespace Ceres.Chess.UserSettings
     public static void SaveToFile(string settingsFileName)
     {
       string ceresConfigJSON = JsonSerializer.Serialize(Settings, new JsonSerializerOptions() { WriteIndented = true });
-      System.IO.File.WriteAllText(settingsFileName, ceresConfigJSON);
+      File.WriteAllText(settingsFileName, ceresConfigJSON);
     }
 
     #region Helpers
@@ -142,9 +155,13 @@ namespace Ceres.Chess.UserSettings
     {
       get 
       {
-        if (Settings.URLLC0Networks == null) ThrowErrorWithMessage("URLLC0Networks", 
-                                                                   @", set to base URL from which LC0 networks available for downloading such as " + 
-                                                                   " http://training.lczero.org/networks");
+        if (Settings.URLLC0Networks == null)
+        {
+          ThrowErrorWithMessage("URLLC0Networks", 
+                               @", set to base URL from which LC0 networks available for downloading such as " + 
+                               " http://training.lczero.org/networks");
+        }
+
         return Settings.URLLC0Networks;
       }
     }
@@ -179,9 +196,13 @@ namespace Ceres.Chess.UserSettings
       if (!System.IO.File.Exists(fn))
       {
         if (executable)
+          {
           Console.WriteLine($"lc0 executable {fn} not found  (using path referenced in DirLC0Binaries user setting.");
+        }
         else
+        {
           Console.WriteLine($"lc0 library file {fn} not found. This file is a modified Leela Chess Zero binary, uisng a patch provided by the Ceres project.");
+        }
 
         throw new Exception("Missing LC0 binary");
       }
@@ -190,10 +211,7 @@ namespace Ceres.Chess.UserSettings
     }
 
 
-
-
     #endregion
   }
 
 }
-
