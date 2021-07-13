@@ -115,20 +115,32 @@ namespace Ceres.MCTS.Iteration
     internal void UpdatePruningFlags()
     {
       // Exit if early stopping not enabled
-      if (Context.ParamsSearch.MoveFutilityPruningAggressiveness == 0f) return;
+      if (Context.ParamsSearch.MoveFutilityPruningAggressiveness == 0f)
+      {
+        return;
+      }
 
       // Because estimates of nodes remaining are noisy for searces with time limits,
       // conservatively decline to set MinNToVisit unless we are 
       // reasonably close to the end of the search (and thus had sufficient time to get accurate statistics)
-      if (Manager.NumStepsTakenThisSearch < 100) return;
+      if (Manager.NumStepsTakenThisSearch < 100)
+      {
+        return;
+      }
 
       // Potentially Q still could change significantly with a large fraction of search remaining.
-      // Therefore never allow search abort unless at least 50% complete.
+      // Therefore never allow search abort unless at least 40% complete.
       // Even if the extra visits almost all go to a dominant move, they 
       // are likely to be benefical subsequently due to tree reuse.
-      if (Manager.FractionSearchRemaining > 0.50) return;
+      if (Manager.FractionSearchRemaining > 0.40)
+      {
+        return;
+      }
 
-      if (Context.RootMovesPruningStatus == null) Context.RootMovesPruningStatus = new MCTSFutilityPruningStatus[Root.NumPolicyMoves];
+      if (Context.RootMovesPruningStatus == null)
+      {
+        Context.RootMovesPruningStatus = new MCTSFutilityPruningStatus[Root.NumPolicyMoves];
+      }
 
       DoSetEarlyStopMoveSecondaryFlags();
      }
@@ -169,6 +181,7 @@ namespace Ceres.MCTS.Iteration
 
       ManagerChooseBestMove bestMoveChoser = new(Context.Root, false, Context.ParamsSearch.MLHBonusFactor);
       Span<MCTSNodeStructChild> children = Root.Ref.Children;
+      int numNewlyShutdown = 0;
       for (int i = 0; i < Root.Ref.NumChildrenExpanded; i++)
       {
         // Never shut down second best move unless the whole search is eligible to shut down
@@ -185,6 +198,11 @@ namespace Ceres.MCTS.Iteration
           }
         }
 
+        if (Context.RootMovesPruningStatus[i] != MCTSFutilityPruningStatus.NotPruned)
+        {
+          continue;
+        }
+
         float earlyStopGapRaw;
         if (Context.ParamsSearch.BestMoveMode == ParamsSearch.BestMoveModeEnum.TopN)
         {
@@ -198,7 +216,6 @@ namespace Ceres.MCTS.Iteration
 
         float earlyStopGapAdjusted = earlyStopGapRaw * aggressivenessMultiplier;
         bool earlyStop = earlyStopGapAdjusted > numRemainingSteps;
-
 
         if (Context.RootMovesPruningStatus[i] == MCTSFutilityPruningStatus.NotPruned && earlyStop)
         {
@@ -220,6 +237,7 @@ namespace Ceres.MCTS.Iteration
           else
 #endif
           Context.RootMovesPruningStatus[i] = MCTSFutilityPruningStatus.PrunedDueToFutility;
+          numNewlyShutdown++;
           if (MCTSDiagnostics.DumpSearchFutilityShutdown)
           {
             Console.WriteLine();
@@ -229,6 +247,15 @@ namespace Ceres.MCTS.Iteration
           }
         }
         // Console.WriteLine(i + $" EarlyStopMoveSecondary(simple) gap={gapToBest} adjustedGap={inflatedGap} remaining={numRemainingSteps} ");
+      }
+
+      if (numNewlyShutdown > 0)
+      {
+        // Once any node is pruned, no unexpanded nodes could ever become best. 
+        for (int i = Root.NumChildrenExpanded; i < Root.NumPolicyMoves; i++)
+        {
+          Context.RootMovesPruningStatus[i] = MCTSFutilityPruningStatus.PrunedDueToFutility;
+        }
       }
 
 
