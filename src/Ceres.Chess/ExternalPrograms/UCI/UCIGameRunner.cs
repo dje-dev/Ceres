@@ -75,7 +75,6 @@ namespace Ceres.Chess.ExternalPrograms.UCI
       engine.ReadAsync();
 
       engine.SendCommandLine("uci");
-      engine.SendIsReadyAndWaitForOK();
      
       return engine;
     }
@@ -108,8 +107,13 @@ namespace Ceres.Chess.ExternalPrograms.UCI
       if (uciSetOptionCommands != null)
       {
         foreach (string extraCommand in uciSetOptionCommands)
+        {
           engine.SendCommandLine(extraCommand);
+        }
       }
+
+      // Only now issue isready (after we've set options).
+      engine.SendIsReadyAndWaitForOK();
 
       freq = Stopwatch.Frequency;
       startTime = Stopwatch.GetTimestamp();
