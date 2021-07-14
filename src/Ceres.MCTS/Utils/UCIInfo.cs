@@ -56,7 +56,7 @@ namespace Ceres.MCTS.Utils
         }
       }
 
-      bool wasInstamove = manager.Root != overrideRootMove;
+      bool wasInstamove = manager.NumStepsTakenThisSearch == 0;
 
       // If no override bestMoveRoot was specified
       // then it is assumed the move chosen was from the root (not an instamove)

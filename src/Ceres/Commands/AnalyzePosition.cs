@@ -167,7 +167,7 @@ namespace Ceres.Commands
       {
         string pv = info.PVString;
         string truncatedInfoString = pv.Substring(0, Math.Min(100, pv.Length));
-        Console.Write($"{id,8} {info.ScoreCentipawns,4:F0}cp  {info.Nodes,11:N0} {info.NPS,9:F0}/s  ");
+        Console.Write($"{id,10}   {info.EngineReportedSearchTime/1000.0f,6:F2}s {info.ScoreCentipawns,4:F0}cp  {info.Nodes,11:N0} {info.NPS,9:N0}/s   ");
 
         ConsoleColor priorColor = Console.ForegroundColor;
         for (int i = 0; i < truncatedInfoString.Length; i++)
