@@ -113,9 +113,14 @@ namespace Ceres.Features.Tournaments
     public TournamentDef(string id, EnginePlayerDef player1Def, EnginePlayerDef player2Def)
     {
       ID = id;
-      Player1Def = player1Def;
-      Player2Def = player2Def;
+      Player1Def = player1Def ?? throw new ArgumentNullException(nameof(player1Def));
+      Player2Def = player2Def ?? throw new ArgumentNullException(nameof(player2Def));
       StartTime = DateTime.Now;
+
+      if (object.ReferenceEquals(player1Def, player2Def))
+      {
+        throw new Exception("player1Def must be different from player2Def");
+      }
     }
 
 
@@ -137,9 +142,6 @@ namespace Ceres.Features.Tournaments
       Console.WriteLine($"  Player 1  : {Player1Def} ");
       Console.WriteLine($"  Player 2  : {Player2Def} ");
 
-//      Console.WriteLine("ID       : " + ID);
-//      Console.WriteLine("Player 1 : " + Player1Def.ID + " with search limit " + Player1Def.SearchLimit);
-//      Console.WriteLine("Player 2 : " + Player2Def.ID + " with search limit " + Player2Def.SearchLimit);
 
       if (Player1Def.EngineDef is GameEngineDefCeres &&
         Player2Def.EngineDef is GameEngineDefCeres)
@@ -176,11 +178,7 @@ namespace Ceres.Features.Tournaments
 
     private string OpeningsDescription()
     {
-      string openingsInfo;
-      if (StartingFEN != null)
-        openingsInfo = StartingFEN;
-      else
-        openingsInfo = OpeningsFileName;
+      string openingsInfo = StartingFEN != null ? StartingFEN : OpeningsFileName;
       return openingsInfo;
     }
   }
