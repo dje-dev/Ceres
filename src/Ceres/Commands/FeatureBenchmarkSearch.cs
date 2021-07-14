@@ -140,7 +140,7 @@ namespace Ceres.Commands
         float thisNpsCeres = resultCeres.FinalN / ceresSearchSecs;
         npsCeres.Add(thisNpsCeres);
           
-        Console.WriteLine($"{ i,5:N0}. {resultCeres.FinalN,10:N0} nodes " + $" {ceresSearchSecs,7:F2} secs  {thisNpsCeres,8:N0} / sec"
+        Console.WriteLine($"{ i+1,5:N0}. {resultCeres.FinalN,10:N0} nodes " + $" {ceresSearchSecs,7:F2} secs  {thisNpsCeres,8:N0} / sec"
           + $"  {resultCeres.ScoreCentipawns,6:N0} cp {resultCeres.MoveString,7}      {fen}");
 
         numNodesCeres += resultCeres.Search.SearchRootNode.N;
