@@ -126,7 +126,7 @@ namespace Ceres.Base.CUDA
           {
             if (gpuID >= CudaContext.GetDeviceCount())
             {
-              throw new Exception("CUDA device does not exist: {gpuID}");
+              throw new Exception($"CUDA device does not exist: {gpuID}");
             }
 
             device = contexts[gpuID] = new CUDADevice(gpuID);
