@@ -144,7 +144,7 @@ namespace Ceres.Chess.NNEvaluators
               }
               else if (referenceEvaluator is NNEvaluatorSplit)
               {
-                referenceEvaluatorCast = ((NNEvaluatorSplit)referenceEvaluator).Evaluators[0] as NNEvaluatorCUDA;
+                referenceEvaluatorCast = ((NNEvaluatorSplit)referenceEvaluator).Evaluators[deviceDef.DeviceIndex] as NNEvaluatorCUDA;
               }
             }
 
@@ -222,13 +222,6 @@ namespace Ceres.Chess.NNEvaluators
     static NNEvaluator BuildDeviceCombo(NNEvaluatorDef def, NNEvaluator referenceEvaluator)
     {
       Debug.Assert(def.Nets.Length == 1);
-
-      if (def.Devices.Length > 1 && referenceEvaluator != null)
-      {
-        referenceEvaluator = null;
-        // TODO: Fix this. We get CUDA crash if enabled for unknown reasons.
-        Console.WriteLine("NOTE: Weight sharing to conserve memory on GPU is currently disabled in multi-gpu configuration.");
-      }
 
       // Build underlying device evaluators in parallel
       NNEvaluator[] evaluators = new NNEvaluator[def.Devices.Length];
