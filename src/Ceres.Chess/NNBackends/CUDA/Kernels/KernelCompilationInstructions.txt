@@ -17,12 +17,13 @@ Steps:
 My working directory was: C:\dev\lc0\master1\lc0\src\neural\cuda.
 
 NOTE: Initially "-arch=sm_70" was used but failed to run on 1080 GPUs. 
-      Then switched to "-arch=sm_60" with no apparent loss of performance.
+      Then switched to "-arch=sm_60" with no apparent loss of performance. But 1080 GPU does not work well (slow FP16).
+      So switch back to "-arch=sm_70"
 
 Batch file (go.cmd):
-"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.1\bin\nvcc.EXE" -ptx -o common_kernels.ptx  -c common_kernels.cu -arch=sm_60
-"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.1\bin\nvcc.EXE" -ptx -o fp16_kernels.ptx  -c fp16_kernels.cu -arch=sm_60
-"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.1\bin\nvcc.EXE" -ptx -o ceres_kernels.ptx  -c ceres_kernels.cu -arch=sm_60
+"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.1\bin\nvcc.EXE" -ptx -o common_kernels.ptx  -c common_kernels.cu -arch=sm_70
+"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.1\bin\nvcc.EXE" -ptx -o fp16_kernels.ptx  -c fp16_kernels.cu -arch=sm_70
+"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.1\bin\nvcc.EXE" -ptx -o ceres_kernels.ptx  -c ceres_kernels.cu -arch=sm_70
 
 copy common_kernels.ptx C:\dev\Ceres\src\Ceres.Chess\NNBackends\CUDA\Kernels\PTX
 copy fp16_kernels.ptx C:\dev\Ceres\src\Ceres.Chess\NNBackends\CUDA\Kernels\PTX

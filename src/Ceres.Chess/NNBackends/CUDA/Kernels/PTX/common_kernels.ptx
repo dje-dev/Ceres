@@ -7,7 +7,7 @@
 //
 
 .version 7.1
-.target sm_60
+.target sm_70
 .address_size 64
 
 	// .globl	_ZN6lczero13cudnn_backend25fp32NCHWtofp16NHWC_kernelEP6__halfPfiiiiii
