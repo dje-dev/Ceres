@@ -130,17 +130,17 @@ namespace Ceres.MCTS.Iteration
         writer.WriteLine($"StartTimeThisSearch        {StartTimeThisSearch}");
       }
 
-      writer.WriteLine($"Root N                     {Root.N}");
-      writer.WriteLine($"RootNWhenSearchStarted     {RootNWhenSearchStarted}");
+      writer.WriteLine($"Root N                     {Root.N,14:N0}");
+      writer.WriteLine($"RootNWhenSearchStarted     {RootNWhenSearchStarted,14:N0}");
 
       writer.WriteLine($"SearchLimit.Type           {SearchLimit.Type}");
-      writer.WriteLine($"SearchLimit.Value          {SearchLimit.Value}");
-      writer.WriteLine($"Elapsed Search Time        {(DateTime.Now - StartTimeThisSearch).TotalSeconds}");
+      writer.WriteLine($"SearchLimit.Value          {SearchLimit.Value,14:N2}");
+      writer.WriteLine($"Elapsed Search Time        {(DateTime.Now - StartTimeThisSearch).TotalSeconds,14:F2}");
 
-      writer.WriteLine($"FractionSearchRemaining    {FractionSearchRemaining}");
-      writer.WriteLine($"Estimated NPS              {EstimatedNPS}");
+      writer.WriteLine($"FractionSearchRemaining    {FractionSearchRemaining,14:F3}");
+      writer.WriteLine($"Estimated NPS              {EstimatedNPS,14:N0}");
 
-      writer.WriteLine($"EstimatedNumStepsRemaining {EstimatedNumVisitsRemaining()}");
+      writer.WriteLine($"EstimatedNumStepsRemaining {EstimatedNumVisitsRemaining(),14:N0}");
     }
 
   }
