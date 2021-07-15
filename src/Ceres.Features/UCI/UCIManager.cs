@@ -481,6 +481,10 @@ namespace Ceres.Features.UCI
     }
 
 
+    /// <summary>
+    /// Releases existing search engine (if any)
+    /// so that any subsequent search will rebuild (with current options).
+    /// </summary>
     private void ReinitializeEngine()
     {
       if (haveInitializedEngine && CeresEngine != null)
@@ -488,9 +492,10 @@ namespace Ceres.Features.UCI
         CeresEngine.Dispose();
       }
 
+      CeresEngine = null;
       haveInitializedEngine = false;
-      InitializeEngineIfNeeded();
     }
+
 
     private void InitializeEngineIfNeeded()
     {
