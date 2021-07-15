@@ -292,12 +292,9 @@ namespace Ceres.Features.UCI
           {
             OutStream.WriteLine($"uci info Specified network file is already {value}");
           }
-          else if (CeresEngine != null)
-          {
-            OutStream.WriteLine("uci info Implementation limitation: cannot modify weights file after initialization");
-          }
           else
           {
+            ReinitializeEngine();
             NetworkSpec = new NNNetSpecificationString(value);
             CreateEvaluator();
           }
@@ -308,11 +305,17 @@ namespace Ceres.Features.UCI
     void SetBool(string boolStr, ref bool value)
     {
       if (boolStr.ToLower() == "true")
+      {
         value = true;
+      }
       else if (boolStr.ToLower() == "false")
+      {
         value = false;
+      }
       else
+      {
         OutStream.WriteLine("Invalid value, expected true or false");
+      }
     }
 
 
