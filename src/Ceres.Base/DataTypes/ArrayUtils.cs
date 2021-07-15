@@ -174,38 +174,7 @@ namespace Ceres.Base.DataType
 
 
     #endregion
-
-    /// <summary>
-    /// Returns the index of a specified value in a Span<int>,
-    /// or throws Exception if not found.
-    /// </summary>
-    /// <param name="values"></param>
-    /// <param name="searchValue"></param>
-    /// <returns></returns>
-    public static int IndexOfValue(Span<int> values, int searchValue)
-    {
-      // partially unroll the loop to improve instruction-level parallelism
-      int i = 0;
-      while (i < values.Length - 2)
-      {
-        if (values[i] == searchValue) return i;
-        if (values[i + 1] == searchValue) return i + 1;
-        if (values[i + 2] == searchValue) return i + 2;
-
-        i += 3;
-      }
-
-      while (i < values.Length)
-      {
-        if (values[i] == searchValue)
-          return i;
-
-        i++;
-      }
-
-      throw new Exception("Value not found");
-    }
-
+   
 
     /// <summary>
     /// Returns the index of the element having maximal value.

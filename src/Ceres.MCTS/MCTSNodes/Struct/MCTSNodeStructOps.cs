@@ -56,7 +56,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     {
       Span<MCTSNodeStructChild> children = ChildrenFromStore(store).Slice(0, NumChildrenExpanded);
       Span<int> castChildren = MemoryMarshal.Cast<MCTSNodeStructChild, int>(children);
-      return ArrayUtils.IndexOfValue(castChildren, -childNodeIndex.Index);
+      return MemoryExtensions.IndexOf(castChildren, -childNodeIndex.Index);
     }
 
     /// <summary>
@@ -70,7 +70,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     {
       Span<MCTSNodeStructChild> children = ChildrenFromStore(store).Slice(0, NumChildrenExpanded);
       Span<int> castChildren = MemoryMarshal.Cast<MCTSNodeStructChild, int>(children);
-      int index = ArrayUtils.IndexOfValue(castChildren, -fromChildIndex.Index);
+      int index = MemoryExtensions.IndexOf(castChildren, -fromChildIndex.Index);
       children[index].SetExpandedChildIndex(toChildIndex);
     }
 
