@@ -88,10 +88,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public ref MCTSNodeStruct ChildRefFromStore(MCTSNodeStore store)
     {
-      if (!IsExpanded)
-        throw new Exception("Internal error: unepxanded node");
-      else
-        return ref store.Nodes.nodes[ChildIndex.Index];
+      Debug.Assert(IsExpanded);
+      return ref store.Nodes.nodes[ChildIndex.Index];
     }
 
 
@@ -100,10 +98,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       [MethodImpl(MethodImplOptions.AggressiveInlining)]
       get
       {
-        if (!IsExpanded)
-          throw new Exception("Internal error: unepxanded node");
-        else
-          return ref MCTSNodeStoreContext.Nodes[ChildIndex.Index];
+        Debug.Assert(IsExpanded);
+        return ref MCTSNodeStoreContext.Nodes[ChildIndex.Index];
       }
     }
 
@@ -131,9 +127,13 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     {
       string detail;
       if (IsExpanded)
+      {
         detail = "-->#" + ChildIndex;
+      }
       else
+      {
         detail = $"P={P*100.0f,6:F2},Move={Move.AlgebraicStr}";
+      }
 
       return "<MCTSNodeStructChild " + detail + ">";
     }

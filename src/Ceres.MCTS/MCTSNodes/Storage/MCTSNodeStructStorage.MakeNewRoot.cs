@@ -15,16 +15,11 @@
 
 using System;
 using System.Collections;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
-using Ceres.Base.DataType;
+
 using Ceres.Base.DataTypes;
 using Ceres.Base.OperatingSystem;
 using Ceres.Chess.EncodedPositions;
-using Ceres.Chess.MoveGen;
 using Ceres.Chess.PositionEvalCaching;
 using Ceres.Chess.Positions;
 using Ceres.MCTS.Iteration;
@@ -39,8 +34,6 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     // TODO: move this into MCTSNodeStoreClass??
 
     #region Structure modification
-
-    static int COUNT = 0;
 
     /// <summary>
     /// Makes node within the tree the root child, reorganizing the nodes and child arrays.
@@ -77,8 +70,6 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 #if DEBUG
       store.Validate();
 #endif
-
-      COUNT++;
 
       // Nothing to do if the requested node is already currently the root
       if (newRootChild.Index == store.RootNode.Index)
@@ -166,8 +157,9 @@ namespace Ceres.MCTS.MTCSNodes.Storage
             childrenToNodes[numRewrittenNodesDone] = new ChildStartIndexToNodeIndex(thisNode.childStartBlockIndex, nextAvailableNodeIndex, thisNode.NumPolicyMoves);
 
             // Re-insert this into the transpositionRoots (with the updated node index)
-            if (transpositionRoots != null)
-              transpositionRoots.TryAdd(thisNode.ZobristHash, nextAvailableNodeIndex);
+            // TODO: this is expensive, try to optimize by
+            //       possibly avoiding duplicates or parallelizing
+            transpositionRoots?.TryAdd(thisNode.ZobristHash, nextAvailableNodeIndex);
 
             Debug.Assert(thisNode.NumNodesTranspositionExtracted == 0);
 
@@ -187,7 +179,9 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 
       // Finally swap this new root in the root position (slot 1)
       if (newIndexOfNewParent != 1)
+      {
         SwapNodePositions(store, new MCTSNodeStructIndex(newIndexOfNewParent), new MCTSNodeStructIndex(1));
+      }
 
       // Finally, make this as the root (no parent)
       store.Nodes.nodes[1].ParentIndex = default;
@@ -209,8 +203,6 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     private static void ExtractPositionCacheNonRetainedNodes(MCTSNodeStore store, float policySoftmax, BitArray includedNodes, in MCTSNodeStruct newRoot, 
                                                              PositionEvalCache cacheNonRetainedNodes)
     {
-      //int numPiecesNewRoot = newRoot.Annotation.Pos.PieceCount
-
       for (int nodeIndex = 1; nodeIndex < store.Nodes.NumTotalNodes; nodeIndex++)
       {
         ref MCTSNodeStruct nodeRef = ref store.Nodes.nodes[nodeIndex];
@@ -225,7 +217,10 @@ namespace Ceres.MCTS.MTCSNodes.Storage
           continue;
         }
         {
-          if (nodeRef.IsTranspositionLinked) continue;
+          if (nodeRef.IsTranspositionLinked)
+          {
+            continue;
+          }
 
           // TODO: someday filter out impossible positions given new root
           // (consider pieces on board, pawns pushed castling rights, etc.)
@@ -236,10 +231,16 @@ namespace Ceres.MCTS.MTCSNodes.Storage
           CompressedPolicyVector policy = default;
           MCTSNodeStructUtils.ExtractPolicyVector(policySoftmax, nodeRef, ref policy);
 
-          if (nodeRef.ZobristHash == 0) throw new Exception("Internal error: node encountered without hash");
+          if (nodeRef.ZobristHash == 0)
+          {
+            throw new Exception("Internal error: node encountered without hash");
+          }
           // TODO: could the cast to FP16 below lose useful precision? Perhaps save as float instead
 
-          if (nodeRef.Terminal == Chess.GameResult.Unknown) cacheNonRetainedNodes.Store(nodeRef.ZobristHash, nodeRef.Terminal, (FP16)nodeRef.W, nodeRef.LossP, nodeRef.MPosition, in policy);
+          if (nodeRef.Terminal == Chess.GameResult.Unknown)
+          {
+            cacheNonRetainedNodes.Store(nodeRef.ZobristHash, nodeRef.Terminal, (FP16)nodeRef.W, nodeRef.LossP, nodeRef.MPosition, in policy);
+          }
         }
       }
 
@@ -279,14 +280,16 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       Span<MCTSNodeStructChild> children = node.ChildrenFromStore(store);
       int numChildrenExpanded = node.NumChildrenExpanded;
       for (int i = 0; i < numChildrenExpanded; i++)
+      {
         children[i].ChildRefFromStore(store).ParentIndex = newParentIndex;
+      }
     }
 
     public static void MoveNodePosition(MCTSNodeStore store, MCTSNodeStructIndex from, MCTSNodeStructIndex to)
     {
       if (from != to)
       {
-        MemoryBufferOS<MCTSNodeStruct> nodes = store.Nodes.nodes;
+        Span<MCTSNodeStruct> nodes = store.Nodes.Span;
 
         Debug.Assert(!nodes[from.Index].IsRoot);
 
@@ -303,6 +306,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
         nodes[to.Index] = nodes[from.Index];
       }
     }
+
 
     public static void SwapNodePositions(MCTSNodeStore store, MCTSNodeStructIndex i1, MCTSNodeStructIndex i2)
     {
@@ -328,7 +332,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       }
     }
 
-    // --------------------------------------------------------------------------------------------
+
     /// <summary>
     /// Iterate over the children of the parent of "from" to find "from" 
     /// and change that child index to point to the new index "to" of that child
@@ -369,14 +373,17 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 
     public int CompareTo(ChildStartIndexToNodeIndex other)
     {
-      if (other.PriorChildStartBlockIndex < PriorChildStartBlockIndex) return 1;
-      if (other.PriorChildStartBlockIndex > PriorChildStartBlockIndex) return -1;
-      return 0;
+      if (other.PriorChildStartBlockIndex < PriorChildStartBlockIndex)
+      {
+        return 1;
+      }
+
+      return other.PriorChildStartBlockIndex > PriorChildStartBlockIndex ? -1 : 0;
     }
 
     public override string ToString()
     {
-      return $"<Prior child entires starting at {PriorChildStartBlockIndex} for node at new index {NewNodeIndex} with policy move count {NumPolicyMoves}";
+      return $"<Prior child entries starting at {PriorChildStartBlockIndex} for node at new index {NewNodeIndex} with policy move count {NumPolicyMoves}";
     }
   }
 

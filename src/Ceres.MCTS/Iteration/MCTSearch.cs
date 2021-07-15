@@ -347,7 +347,7 @@ namespace Ceres.MCTS.Iteration
       TranspositionRootsDict newTranspositionRoots = null;
       if (priorContext.Tree.TranspositionRoots != null)
       {
-        int estNumNewTranspositionRoots = newRoot.N + newRoot.N / 3; // somewhat oversize to allow for growth in subsequent search
+        int estNumNewTranspositionRoots = (newRoot.N * 10) / 6; // account for many duplicates, but also leave room for subsequent search
         newTranspositionRoots = new TranspositionRootsDict(estNumNewTranspositionRoots);
       }
 
