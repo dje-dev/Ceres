@@ -296,6 +296,7 @@ namespace Ceres.Features.UCI
             break;
 
           case "ucinewgame":
+            InitializeEngineIfNeeded();
             ResetGame();
             break;
 
