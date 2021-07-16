@@ -27,6 +27,16 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="Networks\weights_run2_703810.pb.gz" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Networks\weights_run2_703810.pb.gz">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="GitInfo" Version="2.1.2">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -43,6 +53,12 @@
     <ProjectReference Include="..\Ceres.Chess\Ceres.Chess.csproj" />
     <ProjectReference Include="..\Ceres.Features\Ceres.Features.csproj" />
     <ProjectReference Include="..\Ceres.MCTS\Ceres.MCTS.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Ceres.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>
