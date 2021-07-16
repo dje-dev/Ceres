@@ -513,6 +513,7 @@ namespace Ceres.Features.UCI
         // Initialize engine
         CeresEngine.Warmup();
         haveInitializedEngine = true;
+        OutStream.WriteLine();
       }
     }
 
@@ -527,7 +528,7 @@ namespace Ceres.Features.UCI
       }
       else
       {
-        Console.WriteLine();
+        OutStream.WriteLine();
         for (int i = 0; i < EvaluatorDef.Nets.Length; i++)
         {
           INNWeightsFileInfo net = NNWeightsFiles.LookupNetworkFile(EvaluatorDef.Nets[i].Net.NetworkID);
