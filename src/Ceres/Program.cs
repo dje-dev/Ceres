@@ -131,7 +131,7 @@ namespace Ceres
 | (c) 2020- David Elliott and the Ceres Authors           |
 |   With network backend code from Leela Chess Zero.      |
 |                                                         |
-|  Version {VER} Use help to list available commands. |
+|  Version {VER} Use help to list available commands.     |
 |=========================================================|
 ";
 
