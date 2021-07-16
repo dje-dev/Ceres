@@ -77,15 +77,35 @@ namespace Ceres.Chess.TBBackends.Fathom
     }
 
 
+#if NOT
+//         n < -100 : loss, but draw under 50-move rule
+// -100 <= n < -1   : loss in n ply (assuming 50-move counter == 0)
+//         0        : draw
+//     1 < n <= 100 : win in n ply (assuming 50-move counter == 0)
+//   100 < n        : win, but draw under 50-move rule
+#endif
+
+#if NOT
+See the file syzygy.h (struct SyzygyTb) of the open source Arasan chess engine
+for an example of a simple interface used by a chess engine to the underlying Fathom code.
+
+However it seems like (in search.cpp) the probe_wdl is only called for move 50 counter equal to 0,
+so maybe this engine is not doing this optimally?
+
+#endif
+
     public MGMove CheckTablebaseBestNextMoveViaDTZ(in Position currentPos, out GameResult result)
     {
-      if (currentPos.PieceCount > MaxCardinality)
+      if (currentPos.PieceCount > MaxCardinality
+       || currentPos.MiscInfo.CastlingRightsAny)
       {
         result = GameResult.Unknown;
         return default;
       }
 
-      FathomProbeMove fathomResult = FathomTB.ProbeDTZ(currentPos.FEN, null);
+      FathomProbeMove fathomResult = FathomTB.ProbeDTZ(currentPos.FEN, out int minDTZ, null);
+      // int dtz = FathomTB.ProbeDTZOnly(currentPos.FEN, out int success); does not work
+
       MGMove fathomMove = default;
       if (fathomResult.Result == FathomWDLResult.Failure)
       {
@@ -162,6 +182,25 @@ namespace Ceres.Chess.TBBackends.Fathom
 
       result = LC0DLLSyzygyEvaluator.ProbeState.Ok;
       score = (LC0DLLSyzygyEvaluator.WDLScore)((int)probeResult) - 2;
+
+      // TODO: The original Fathom interface has a wrapper which
+      //       will reject positions with the 50 move counter nonzero.
+      //       This code really should do a DTZ lookup if it gets a hit
+      //       and make sure the win/loss is reachable in time.
+      //       However the ProbeDTZOnly is possibly not working, a
+      //       and calling ProveDTZ is probably too expensive.
+      const bool TEST = true;
+      if (TEST && (score == LC0DLLSyzygyEvaluator.WDLScore.WDLWin 
+                || score == LC0DLLSyzygyEvaluator.WDLScore.WDLLoss))
+      {
+        FathomProbeMove fathomResult = FathomTB.ProbeDTZ(pos.FEN, out int minDTZ, null);
+        int numMovesAvailable = 100 - pos.MiscInfo.Move50Count;
+        if (Math.Abs(minDTZ) > numMovesAvailable)
+        {
+          Console.WriteLine(pos.FEN + " " + score + " " + fathomResult + " but DTZ " + minDTZ);
+          // int dtz = FathomTB.ProbeDTZOnly(currentPos.FEN, out int success); does not work
+        }
+      }
 
       if (TESTING_MODE_COMPARE_RESULTS)
       {

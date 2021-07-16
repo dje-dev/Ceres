@@ -1003,8 +1003,8 @@ namespace Ceres.Chess.TBBackends.Fathom
 
 
     internal const uint TB_RESULT_FAILED = 0xFFFFFFFF;
-    static readonly uint TB_RESULT_CHECKMATE = TB_SET_WDL(0, (int)FathomWDLResult.Win); // TODO: make this truly const
-    static readonly uint TB_RESULT_STALEMATE = TB_SET_WDL(0, (int)FathomWDLResult.Draw); // TODO: make this truly cons
+    internal static readonly uint TB_RESULT_CHECKMATE = TB_SET_WDL(0, (int)FathomWDLResult.Win); // TODO: make this truly const
+    internal static readonly uint TB_RESULT_STALEMATE = TB_SET_WDL(0, (int)FathomWDLResult.Draw); // TODO: make this truly cons
 
 
     uint tb_probe_wdl(ulong white, ulong black, ulong kings, ulong queens, ulong rooks, ulong bishops, ulong knights, ulong pawns, uint ep, bool turn)
@@ -2106,7 +2106,7 @@ namespace Ceres.Chess.TBBackends.Fathom
     // In short, if a move is available resulting in dtz + 50-move-counter <= 99,
     // then do not accept moves leading to dtz + 50-move-counter == 100.
     //
-    int probe_dtz(in FathomPos pos, out int success)
+    internal int probe_dtz(in FathomPos pos, out int success)
     {
       int wdl = probe_wdl(pos, out success);
       if (success == 0)

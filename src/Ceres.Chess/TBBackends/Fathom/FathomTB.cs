@@ -19,6 +19,17 @@ using Ceres.Chess.MoveGen;
 
 #endregion
 
+#if NOT
+
+TO DO: possibly deal with positions which would be won/lost except DTZ is too big for position.
+See the file syzygy.h (struct SyzygyTb) of the open source Arasan chess engine
+for an example of a simple interface used by a chess engine to the underlying Fathom code.
+
+However it seems like (in search.cpp) the probe_wdl is only called for move 50 counter equal to 0,
+so maybe this engine is not doing this optimally?
+
+#endif
+
 namespace Ceres.Chess.TBBackends.Fathom
 {
   /// <summary>
@@ -42,6 +53,7 @@ namespace Ceres.Chess.TBBackends.Fathom
     public static int MaxPieces => probe != null ? probe.TB_LARGEST : 0;
 
     static FathomProbe probe = null;
+
 
     /// <summary>
     /// Initialize the tablebase.
@@ -131,6 +143,27 @@ namespace Ceres.Chess.TBBackends.Fathom
       return true;
     }
 
+
+    public static int ProbeDTZOnly(string fen, out int success)
+    {
+      if (!PreparePos(fen, out FathomPos pos))
+      {
+        success = 0; // failure 
+        return -1;
+      };
+
+      int ret = probe.probe_dtz(in pos, out success);
+      if (ret == 0)
+      {
+        return -1;
+      }
+      else
+      {
+        return ret;
+      }
+    }
+
+
     /// <summary>
     /// Probes the Distance to Zero table (DTZ),
     /// intended for probing at root.
@@ -141,43 +174,57 @@ namespace Ceres.Chess.TBBackends.Fathom
     /// TODO: verify if this is true or the restriction can be lifted.
     /// </summary>
     /// <param name="fen"></param>
+    /// <param name="minDTZ">the DTZ of the move having minimum DTZ value</param>
     /// <param name="results">if not null then the set of possible moves is populated</param>
     /// <returns>the suggested move (guaranteed to preserve the WDL value </returns>
-    public static FathomProbeMove ProbeDTZ(string fen, List<ulong> results = null)
+    public static FathomProbeMove ProbeDTZ(string fen, out int minDTZ, List<ulong> results = null)
     {
       if (results != null)
       {
         throw new ArgumentException(nameof(results) + " not currently supported");
       }
 
+      minDTZ = -1;
+
       // Currently feature disabled, to enable allocate this array
-      uint[] resultsArray = null;//= new uint[TB_MAX_MOVES];
+      uint[] resultsArray = new uint[FathomMoveGen.TB_MAX_MOVES];
 
       if (!PreparePos(fen, out FathomPos pos))
       {
         return new FathomProbeMove() { Result = FathomWDLResult.Failure };
       }
 
+      uint res;
       lock (dtzLockObj)
       {
-        uint res = probe.tb_probe_root(pos.white, pos.black, pos.kings,
-                          pos.queens, pos.rooks, pos.bishops, pos.knights, pos.pawns,
-                          pos.rule50, pos.castling, pos.ep, pos.turn, resultsArray);
-
-        if (res == uint.MaxValue)
-        {
-          return new FathomProbeMove() { Result = FathomWDLResult.Failure };
-        }
-
-        Position position = Position.FromFEN(fen);
-
-        MGMove move = ToMGMove(res, position);
-        return new FathomProbeMove()
-        {
-          Result = (FathomWDLResult)FathomProbe.TB_GET_WDL((int)res),
-          Move = move
-        };
+        res = probe.tb_probe_root(pos.white, pos.black, pos.kings,
+                                  pos.queens, pos.rooks, pos.bishops, pos.knights, pos.pawns,
+                                  pos.rule50, pos.castling, pos.ep, pos.turn, resultsArray);
       }
+
+      if (res == uint.MaxValue)
+      {
+        return new FathomProbeMove() { Result = FathomWDLResult.Failure };
+      }
+
+      minDTZ = int.MaxValue;
+      foreach (var result in resultsArray)
+      {
+        uint dtz = FathomProbe.TB_GET_DTZ((int)result);
+        if (dtz < minDTZ)
+        {
+          minDTZ = (int)dtz;
+        }
+      }
+
+      Position position = Position.FromFEN(fen);
+
+      MGMove move = ToMGMove(res, position);
+      return new FathomProbeMove()
+      {
+        Result = (FathomWDLResult)FathomProbe.TB_GET_WDL((int)res),
+        Move = move
+      };
     }
 
 
@@ -189,6 +236,12 @@ namespace Ceres.Chess.TBBackends.Fathom
     /// <returns></returns>
     private static MGMove ToMGMove(uint fathomResult, Position position)
     {
+      if (fathomResult == FathomProbe.TB_RESULT_STALEMATE 
+       || fathomResult == FathomProbe.TB_RESULT_CHECKMATE)
+      {
+        return default;
+      }
+
       static Square ToSquare(int s) => Square.FromFileAndRank(FathomMoveGen.file(s), FathomMoveGen.rank(s));
 
       MGMove.MGChessMoveFlags flags = MGMove.MGChessMoveFlags.None;
