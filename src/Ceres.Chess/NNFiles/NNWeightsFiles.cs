@@ -14,9 +14,8 @@
 #region Using directives
 
 using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.IO;
+using System.Collections.Concurrent;
 using Ceres.Chess.LC0.NNFiles;
 
 #endregion
@@ -55,34 +54,14 @@ namespace Ceres.Chess.NNFiles
                                          Func<string, string, INNWeightsFileInfo> filenameToWeightsFileFunc)
     {
       if (!Directory.Exists(directory))
+      {
         throw new ArgumentException(nameof(directory), $"Specified directory does not exist {directory}");
+      }
 
       RegisteredDirectories.Add(new NNWeightsFileDirectory(directory, filenameToWeightsFileFunc, searchPattern));
     }
 
-#if NOT
-    public static IEnumerable<INNWeightsFileInfo> AllFiles
-    {
-      get
-      {
-        // Yield indivdually registered files
-        foreach (KeyValuePair<string, INNWeightsFileInfo> file in RegisteredFiles) yield return file.Value;
 
-        // Yield all files in registered directories
-        // Next check each file in each of the directories registered
-        foreach (NNWeightsFileDirectory directory in RegisteredDirectories)
-        {
-          foreach (string fileName in Directory.EnumerateFiles(directory.DirectoryName, directory.SearchPattern))
-          {
-            // Check if the registration source accepts this file and creates an INNWeightsFile
-            INNWeightsFileInfo file = directory.FilenameToNetworkIDFunc(netWeightsID, fileName);
-            if (file != null)
-              yield return 
-
-//            yield break;
-      }
-    }
-#endif
     /// <summary>
     /// Attempts to locate and return information about the NN file containing a network with a specified ID.
     /// </summary>
@@ -92,7 +71,13 @@ namespace Ceres.Chess.NNFiles
     {
       if (netWeightsID.Contains(":") && File.Exists(netWeightsID.Substring(netWeightsID.IndexOf(":") + 1)))
       {
+        // Direct file name with LC0: prefix.
         return NNWeightsFileLC0.LookupOrDownload(netWeightsID.Substring(netWeightsID.IndexOf(":") + 1));
+      }
+      else if (File.Exists(netWeightsID))
+      {
+        // Direct file name with no LC0: prefix.
+        return new NNWeightsFileLC0(netWeightsID, netWeightsID);
       }
       else if (RegisteredFiles.TryGetValue(netWeightsID, out INNWeightsFileInfo weightsFile))
       {
