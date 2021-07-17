@@ -772,13 +772,9 @@ namespace Ceres.MCTS.Iteration
         return (int)searchLimit.Value;
       else if (searchLimit.Type == SearchLimitType.SecondsPerMove)
       {
-        INNWeightsFileInfo netDef = NNWeightsFiles.LookupNetworkFile(nnEvaluators.EvaluatorDef.Nets[0].Net.NetworkID);
-        bool isSmallNet = netDef.NumBlocks <= 20;
-
-        if (searchLimit.Value <= 0.5)
-          return isSmallNet ? 10_000 : 5_000;
-        else
-          return isSmallNet ? 40_000 : 20_000;
+        // TODO: someday look at the particular network and hardware to make this smarter.
+        const int EST_AVG_NPS = 20_000;
+        return (int)(searchLimit.Value * EST_AVG_NPS);
       }
       else if (searchLimit.Type == SearchLimitType.SecondsForAllMoves)
       {
