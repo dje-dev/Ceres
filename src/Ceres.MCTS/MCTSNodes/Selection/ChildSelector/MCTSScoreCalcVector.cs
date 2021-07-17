@@ -185,7 +185,9 @@ Note: Possible optimization/inefficiency:
       }
 
       int numVisits = 0;
-      while (numVisits < numVisitsToCompute)
+      while ((numVisits < numVisitsToCompute)
+          || (numVisits == 0 && numVisitsToCompute == 0) // just quering scores, no children to select
+            )
       {
         // Get constant term handy
         float numVisitsByParentToChildren = parentNInFlight + ((parentN < 2) ? 1 : parentN - 1);

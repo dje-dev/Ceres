@@ -69,6 +69,7 @@ namespace Ceres.MCTS.MTCSNodes
     }
 
 
+
     /// <summary>
     /// Applies CPUCT selection to determine for each child
     /// their U scores and the number of visits each should receive
@@ -79,16 +80,17 @@ namespace Ceres.MCTS.MTCSNodes
     /// <param name="dynamicVLossBoost"></param>
     /// <param name="minChildIndex"></param>
     /// <param name="maxChildIndex"></param>
-    /// <param name="numVisitsToCompute">target number of visits across all children</param>
-    /// <param name="scores">the output U values</param>
-    /// <param name="childVisitCounts">the output child visit counts</param>
+    /// <param name="numVisitsToCompute">number of child visits to select, or 0 to merely calculate scores</param>
+    /// <param name="scores"></param>
+    /// <param name="childVisitCounts"></param>
+    /// <param name="cpuctMultiplier"></param>
     public void ComputeTopChildScores(int selectorID, int depth, float dynamicVLossBoost,
                                       int minChildIndex, int maxChildIndex, int numVisitsToCompute,
                                       Span<float> scores, Span<short> childVisitCounts, float cpuctMultiplier)
     {
       GatheredChildStats stats = CheckInitThreadStatics();
 
-      Debug.Assert(numVisitsToCompute > 0);
+      Debug.Assert(numVisitsToCompute >= 0);
       Debug.Assert(minChildIndex == 0); // implementation restriction
       Debug.Assert(maxChildIndex <= MCTSScoreCalcVector.MAX_CHILDREN);
 
@@ -113,7 +115,9 @@ namespace Ceres.MCTS.MTCSNodes
       ApplyPolicyDecay(numToProcess, gatherStatsPSpan);
 
       // Possibly disqualify pruned moves from selection.
-      if (IsRoot && Context.RootMovesPruningStatus != null)
+      if ((IsRoot && Context.RootMovesPruningStatus != null)
+       && (numVisitsToCompute != 0) // do not skip any if only querying all scores 
+         )
       {
         for (int i = 0; i < numToProcess; i++)
         {
@@ -183,7 +187,10 @@ namespace Ceres.MCTS.MTCSNodes
 
           // Renormalize so that the final sum of probability is still startingProb
           float multiplier = startingProb / acc;
-          for (int i = 0; i < numToProcess; i++) gatherStatsPSpan[i] *= multiplier;
+          for (int i = 0; i < numToProcess; i++)
+          {
+            gatherStatsPSpan[i] *= multiplier;
+          }
         }
       }
     }
@@ -208,10 +215,10 @@ namespace Ceres.MCTS.MTCSNodes
     /// <returns></returns>
     public float[] CalcChildScores(int selectorID, int depth, float dynamicVLossBoost, float cpuctMultiplier)
     {
-      Span<float> scores = new Span<float>(new float[NumPolicyMoves]);
-      Span<short> childVisitCounts = new Span<short>(new short[NumPolicyMoves]);
+      Span<float> scores = new float[NumPolicyMoves];
+      Span<short> childVisitCounts = new short[NumPolicyMoves];
 
-      ComputeTopChildScores(selectorID, depth, dynamicVLossBoost, 0, NumPolicyMoves - 1, 1, scores, childVisitCounts, cpuctMultiplier);
+      ComputeTopChildScores(selectorID, depth, dynamicVLossBoost, 0, NumPolicyMoves - 1, 0, scores, childVisitCounts, cpuctMultiplier);
       return scores.ToArray();
     }
 
