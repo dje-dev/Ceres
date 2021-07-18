@@ -81,16 +81,26 @@ namespace Ceres.MCTS.Utils
 
       MCTSNode bestMoveNode = pv.Nodes.Count > 1 ? pv.Nodes[1] : pv.Nodes[0];
 
+      float thisQ;
+      if (overrideBestMoveNodeAtRoot != null)
+      {
+        thisQ = (float)-overrideBestMoveNodeAtRoot.Q;
+      }
+      else
+      {
+        thisQ = bestMoveInfo.QOfBest;
+      }
+
       // The score displayed corresponds to
       // the Q (average visit value) of the move to be made.
       float scoreToShow;
       if (scoreAsQ)
       {
-        scoreToShow = MathF.Round(bestMoveInfo.QOfBest * 1000, 0);
+        scoreToShow = MathF.Round(thisQ * 1000, 0);
       }
       else
       {
-        scoreToShow = MathF.Round(EncodedEvalLogistic.LogisticToCentipawn(bestMoveInfo.QOfBest), 0);
+        scoreToShow = MathF.Round(EncodedEvalLogistic.LogisticToCentipawn(thisQ), 0);
       }
 
       float nps = manager.NumStepsTakenThisSearch / elapsedTimeSeconds;
