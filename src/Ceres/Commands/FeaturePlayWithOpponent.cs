@@ -15,8 +15,9 @@
 
 using System;
 using System.IO;
-
+using System.Threading.Tasks;
 using Ceres.Base.DataTypes;
+using Ceres.Base.OperatingSystem;
 using Ceres.Chess;
 using Ceres.Chess.GameEngines;
 using Ceres.Chess.NNEvaluators.Defs;
@@ -86,6 +87,19 @@ namespace Ceres.Commands
       {
         player2 = new EnginePlayerDef(new GameEngineDefLC0("LC0", evaluatorDefOpponent, !Pruning),
                                                            SearchLimitOpponent ?? SearchLimit);
+      }
+      else if (Opponent != null && Opponent.ToUpper() == "SF14DJE")
+      {
+        // TODO: Internal testing option, remove or clean up/document.
+        const int SF_NUM_THREADS = 8;
+        const int SF_HASH_SIZE_MB = 2048;
+        string TB_PATH = CeresUserSettingsManager.Settings.TablebaseDirectory;
+        string SF14_EXE = SoftwareManager.IsLinux ? @"/raid/dev/SF14/stockfish_14_linux_x64_avx2"
+                                                  : @"\\synology\dev\chess\engines\stockfish_14_x64_avx2.exe";
+
+        GameEngineDef engineDefStockfish14 = new GameEngineDefUCI("SF14", new GameEngineUCISpec("SF14", SF14_EXE, SF_NUM_THREADS,
+                                                                  SF_HASH_SIZE_MB, TB_PATH, uciSetOptionCommands: null));
+        player2 = new EnginePlayerDef(engineDefStockfish14, SearchLimitOpponent ?? SearchLimit);
       }
       else if (Opponent != null && Opponent.ToUpper() == "CERES"
            || (Opponent == null && opponentRequired))

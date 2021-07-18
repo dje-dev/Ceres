@@ -115,8 +115,11 @@ namespace Ceres.Commands
       {
         (EnginePlayerDef def1, EnginePlayerDef def2) = GetEngineDefs(false);
 
-        comparisonEngine = def1.EngineDef.CreateEngine();
+        comparisonEngine = def2.EngineDef.CreateEngine();
       }
+
+      lc0?.Warmup();
+      comparisonEngine?.Warmup();
 
       const bool VERBOSE = true;
       AnalyzePosition.Analyze(fen, SearchLimit, evaluatorDef, !Pruning, lc0?.LC0Engine, comparisonEngine, VERBOSE);
