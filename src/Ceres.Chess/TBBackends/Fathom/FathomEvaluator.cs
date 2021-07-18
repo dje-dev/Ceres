@@ -189,7 +189,7 @@ so maybe this engine is not doing this optimally?
       //       and make sure the win/loss is reachable in time.
       //       However the ProbeDTZOnly is possibly not working, a
       //       and calling ProveDTZ is probably too expensive.
-      const bool TEST = true;
+      const bool TEST = false;
       if (TEST && (score == LC0DLLSyzygyEvaluator.WDLScore.WDLWin 
                 || score == LC0DLLSyzygyEvaluator.WDLScore.WDLLoss))
       {
