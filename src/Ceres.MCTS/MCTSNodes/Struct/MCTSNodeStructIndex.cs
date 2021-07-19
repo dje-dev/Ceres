@@ -32,12 +32,10 @@ namespace Ceres.MCTS.MTCSNodes.Struct
   /// 
   /// </summary>
   [Serializable]
-  [StructLayout(LayoutKind.Explicit, Size = 4, Pack = 2)]
   public readonly struct MCTSNodeStructIndex : IEquatable<MCTSNodeStructIndex>, IComparable<MCTSNodeStructIndex>
   {
     #region Data
 
-    [FieldOffset(0)]
     private readonly int index;
 
     #endregion
@@ -88,10 +86,6 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
     #endregion
 
-    #region Internals
-    internal readonly bool BelongsToStorage => throw new Exception("x");//MCTSNodeIndex.BelongsToStorage(this);
-
-    #endregion
 
     #region ToString/IEquatable
 
@@ -104,7 +98,11 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
     public readonly override bool Equals(object obj)
     {
-      if (obj.GetType() != typeof(MCTSNodeStructIndex)) return false;
+      if (obj.GetType() != typeof(MCTSNodeStructIndex))
+      {
+        return false;
+      }
+
       return ((MCTSNodeStructIndex)obj) == this;
     }
 
@@ -118,6 +116,15 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
     #endregion
 
+    #region Module Initiailzation
+
+    [ModuleInitializer]
+    internal static void ModuleInitializerCheckSize()
+    {
+      Debug.Assert(Marshal.SizeOf<MCTSNodeStructIndex>() == 4);
+    }
+    
+    #endregion
   }
 
 }
