@@ -426,16 +426,26 @@ namespace Ceres.MCTS.MTCSNodes
     public (MCTSNode node, EncodedMove move, FP16 p) ChildAtIndexInfo(int childIndex)
     {
       Debug.Assert(childIndex < NumPolicyMoves);
-      Debug.Assert(!IsTranspositionLinked);
 
-      ref readonly MCTSNodeStructChild childRef = ref Context.Tree.Store.Children.childIndices[ChildStartIndex + childIndex];
-      if (childRef.IsExpanded)
+      if (IsTranspositionLinked)
       {
-        MCTSNode childObj = Context.Tree.GetNode(childRef.ChildIndex, this);
-        return (childObj, childObj.PriorMove, childObj.P);
+        // Recursively ask our transposition root for this value.
+        MCTSNode transpositionRootNode = Tree.GetNode(new MCTSNodeStructIndex(TranspositionRootIndex));
+        return transpositionRootNode.ChildAtIndexInfo(childIndex);
       }
       else
-        return (null, childRef.Move, childRef.P);
+      {
+        ref readonly MCTSNodeStructChild childRef = ref Context.Tree.Store.Children.childIndices[ChildStartIndex + childIndex];
+        if (childRef.IsExpanded)
+        {
+          MCTSNode childObj = Context.Tree.GetNode(childRef.ChildIndex, this);
+          return (childObj, childObj.PriorMove, childObj.P);
+        }
+        else
+        {
+          return (null, childRef.Move, childRef.P);
+        }
+      }
     }
 
     // TODO: someday add another method that returns MCTSNodeStructChild (not ref as below), 
