@@ -236,6 +236,25 @@ namespace Ceres.Chess
       }
     }
 
+    /// <summary>
+    /// The maximum value (nodes or seconds) that would be allowed
+    /// cumulatively after a given number of moves.
+    /// </summary>
+    /// <param name="numMoves"></param>
+    /// <returns></returns>
+    public float MaxValueAfterMoves(int numMoves)
+    {
+      if (IsPerGameLimit)
+      {
+        return Value + ValueIncrement * numMoves;
+      }
+      else
+      {
+        // Not applicable.
+        return 0;
+      }
+    }
+
 
     /// <summary>
     /// Returns a short code string indicating the type of limit.

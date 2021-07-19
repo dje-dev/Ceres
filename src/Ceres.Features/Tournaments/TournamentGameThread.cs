@@ -338,7 +338,8 @@ namespace Ceres.Features.Tournaments
         Def.Logger.Write($" {TrimmedIfNeeded(Def.Player1Def.ID, 10),-10} {TrimmedIfNeeded(Def.Player2Def.ID, 10),-10}");
         Def.Logger.Write($"{eloAvg,4:0} {eloSD,4:0} {100.0f * los,5:0}  ");
         Def.Logger.Write($"{ParentStats.NumGames,5} {DateTime.Now.ToString().Split(" ")[1],10}  {gameSequenceNum,4:F0}  {openingIndex,4:F0}{openingPlayedBothWaysStr}  ");
-        Def.Logger.Write($"{thisResult.TotalTimeEngine1,8:F2}{player1ForfeitChar}{thisResult.TotalTimeEngine2,8:F2}{player2ForfeitChar}  ");
+        Def.Logger.Write($"{thisResult.TotalTimeEngine1,8:F2}{player1ForfeitChar}{thisResult.RemainingTimeEngine1,7:F2} ");
+        Def.Logger.Write($"{thisResult.TotalTimeEngine2,8:F2}{player2ForfeitChar}{thisResult.RemainingTimeEngine2,7:F2}  ");
         Def.Logger.Write($"{thisResult.TotalNodesEngine1,16:N0} {thisResult.TotalNodesEngine2,16:N0}   ");
 
         if (Def.CheckPlayer2Def != null)
@@ -413,13 +414,13 @@ namespace Ceres.Features.Tournaments
 
       if (Def.CheckPlayer2Def != null)
       {
-        Def.Logger.WriteLine("  Player1    Player2   ELO   +/-  LOS   GAME#     TIME    TH#   OP#      TIME1    TIME2        NODES 1           NODES 2       PLY  DIF    RES  R   ENDCP     W   D   L   FEN");
-        Def.Logger.WriteLine(" ---------  ---------  ---   ---  ---   -----  --------   ---   ---     ------   ------     --------------   --------------   ----  ---    ---  -   -----     -   -   -   ---------------------------------------------------");
+        Def.Logger.WriteLine("  Player1    Player2   ELO   +/-  LOS   GAME#     TIME    TH#   OP#      TIME1    REM1    TIME2    REM2        NODES 2       PLY  DIF    RES  R   ENDCP     W   D   L   FEN");
+        Def.Logger.WriteLine(" ---------  ---------  ---   ---  ---   -----  --------   ---   ---     ------  ------   ------  ------   --------------   ----  ---    ---  -   -----     -   -   -   ---------------------------------------------------");
       }
       else
       {
-        Def.Logger.WriteLine("  Player1    Player2   ELO   +/-  LOS   GAME#     TIME    TH#   OP#      TIME1    TIME2        NODES 1           NODES 2       PLY    RES  R   ENDCP     W   D   L   FEN");
-        Def.Logger.WriteLine(" ---------  ---------  ---   ---  ---   -----  --------   ---   ---     ------   ------     --------------   --------------   ----    ---  -   -----     -   -   -   ---------------------------------------------------");
+        Def.Logger.WriteLine("  Player1    Player2   ELO   +/-  LOS   GAME#     TIME    TH#   OP#      TIME1    REM1    TIME2    REM2       NODES 1           NODES 2       PLY    RES  R   ENDCP     W   D   L   FEN");
+        Def.Logger.WriteLine(" ---------  ---------  ---   ---  ---   -----  --------   ---   ---     ------  ------   ------  ------    --------------   --------------   ----    ---  -   -----     -   -   -   ---------------------------------------------------");
       }
       havePrintedHeaders = true;
     }
@@ -477,7 +478,8 @@ namespace Ceres.Features.Tournaments
       float timeEngine2Tot = 0;
       long nodesEngine1Tot = 0;
       long nodesEngine2Tot = 0;
-
+      int movesEngine1 = 0;
+      int movesEngine2 = 0;
       bool engine1ShouldHaveForfieted = false;
       bool engine2ShouldHaveForfieted = false;
 
@@ -488,6 +490,18 @@ namespace Ceres.Features.Tournaments
 
       List<GameMoveStat> gameMoveHistory = new List<GameMoveStat>();
 
+      static float RemainingTime(SearchLimit limit, int numMoves, float timeUsed)
+      {
+        if (limit.Type == SearchLimitType.SecondsForAllMoves)
+        {
+          return limit.MaxValueAfterMoves(numMoves) - timeUsed;
+        }
+        else
+        {
+          // TODO: in principle we could do this also for nodes per game limits
+          return 0;
+        }
+      }
 
       TournamentGameInfo MakeGameInfo(TournamentGameResult result, TournamentGameResultReason reason)
       {
@@ -504,6 +518,8 @@ namespace Ceres.Features.Tournaments
           TotalTimeEngine2 = timeEngine2Tot,
           TotalNodesEngine1 = nodesEngine1Tot,
           TotalNodesEngine2 = nodesEngine2Tot,
+          RemainingTimeEngine1 = RemainingTime(searchLimitEngine1, movesEngine1, timeEngine1Tot),
+          RemainingTimeEngine2 = RemainingTime(searchLimitEngine2, movesEngine2, timeEngine2Tot),
           ShouldHaveForfeitedOnLimitsEngine1 = engine1ShouldHaveForfieted,
           ShouldHaveForfeitedOnLimitsEngine2 = engine2ShouldHaveForfieted,
           NumEngine2MovesDifferentFromCheckEngine = numEngine2MovesDifferentFromCheckEngine,
@@ -607,6 +623,7 @@ namespace Ceres.Features.Tournaments
           info = DoMove(engine2, engineCheckAgainstEngine2,
                         gameMoveHistory, searchLimitWithIncrementsEngine2, scoresEngine2,
                         ref nodesEngine2Tot, ref timeEngine2Tot);
+          movesEngine2++;
 
           if (engine2IsWhite)
           {
@@ -624,7 +641,7 @@ namespace Ceres.Features.Tournaments
           info = DoMove(engine1, null,
                         gameMoveHistory, searchLimitWithIncrementsEngine1, scoresEngine1,
                         ref nodesEngine1Tot, ref timeEngine1Tot);
-
+          movesEngine1++;
           if (engine2IsWhite)
           {
             engine1ShouldHaveForfieted |= info.BlackShouldHaveForfeitedOnLimit;

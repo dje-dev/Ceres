@@ -64,7 +64,7 @@ namespace Ceres.Chess.GameEngines
     public float MAvg;
 
     /// <summary>
-    /// The SeaarchLimit used for the search.
+    /// The SearchLimit used for the search.
     /// </summary>
     public SearchLimit Limit;
 
