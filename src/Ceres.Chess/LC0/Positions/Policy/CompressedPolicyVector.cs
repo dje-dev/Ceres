@@ -205,7 +205,7 @@ namespace Ceres.Chess.EncodedPositions
 
     const float HALF_INCREMENT = (float)(0.5 / 65536.0);
 
-    // --------------------------------------------------------------------------------------------
+    
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ushort EncodedProbability(float v)
     {
@@ -253,7 +253,10 @@ namespace Ceres.Chess.EncodedPositions
     /// <param name="probs"></param>
     public static void Initialize(ref CompressedPolicyVector policy, Span<ushort> indices, Span<ushort> probsEncoded)
     {
-      if (indices.Length != probsEncoded.Length) throw new ArgumentException("Length of indicies and probabilities must be same");
+      if (indices.Length != probsEncoded.Length)
+      {
+        throw new ArgumentException("Length of indicies and probabilities must be same");
+      }
 
       float lastProb = float.MaxValue;
       fixed (ushort* moveIndices = &policy.MoveIndex_0)
@@ -289,7 +292,10 @@ namespace Ceres.Chess.EncodedPositions
     {
       // TODO: the Span<int> can actually be shortend to Span<short>
 
-      if (indices.Length != probs.Length) throw new ArgumentException("Length of indicies and probabilities must be same");
+      if (indices.Length != probs.Length)
+      {
+        throw new ArgumentException("Length of indicies and probabilities must be same");
+      }
 
       float probabilityAcc = 0.0f;
       float priorProb = float.MaxValue; // only used in debug mode for verifying in order
@@ -367,7 +373,7 @@ namespace Ceres.Chess.EncodedPositions
     /// </summary>
     public const ushort SPECIAL_VALUE_RANDOM_NARROW = ushort.MaxValue - 2;
 
-    bool MoveIsSentinel(ushort moveRawValue) => moveRawValue >= SPECIAL_VALUE_RANDOM_NARROW;
+    static bool MoveIsSentinel(ushort moveRawValue) => moveRawValue >= SPECIAL_VALUE_RANDOM_NARROW;
 
 
     /// <summary>
@@ -523,8 +529,6 @@ namespace Ceres.Chess.EncodedPositions
                 else
                 {
                   // just drop it (lost)
-                  //              Console.WriteLine(" drop " + encodedProb + " --> " + thisProb);
-
                 }
               }
             }
@@ -536,19 +540,24 @@ namespace Ceres.Chess.EncodedPositions
             }
           }
 
+#if DEBUG
           if (probabilityAcc < 0.995 || probabilityAcc > 1.005)
-            {
+          {
             throw new Exception($"Internal error: NN probabilities sum to {probabilityAcc}");
           }
+#endif
         }
       }
 
-      if (!alreadySorted) policy.Sort(numSlotsUsed);
+      if (!alreadySorted)
+      {
+        policy.Sort(numSlotsUsed);
+      }
     }
 
-    #endregion
+#endregion
 
-    #region Decoding
+#region Decoding
 
     /// <summary>
     /// Returns an expanded array of all policy probabilities
@@ -601,25 +610,57 @@ namespace Ceres.Chess.EncodedPositions
             acc += decodedProb;
 
             // Skip moves which are just special pseudo-values
-            if (moveIndices[i] == SPECIAL_VALUE_RANDOM_WIDE || moveIndices[i] == SPECIAL_VALUE_RANDOM_NARROW)
+            if (moveIndices[i] == SPECIAL_VALUE_RANDOM_WIDE 
+             || moveIndices[i] == SPECIAL_VALUE_RANDOM_NARROW)
+            {
               continue;
+            }
 
             Debug.Assert(moveIndices[i] < ret.Length);
             ret[moveIndices[i]] = decodedProb;
           }
 
-          return validate && (acc < 0.99 || acc > 1.01) ? throw new Exception("Probability " + acc) : ret;
+          return validate && (acc < 0.99 || acc > 1.01) ? throw new Exception("Probability " + acc) 
+                                                        : ret;
         }
       }
 
     }
 
-    #endregion
+#endregion
 
-    #region Helpers
+#region Helpers
 
     /// <summary>
-    /// Reorders the entires to be sorted descending based on policy probability.
+    /// Returns the index of the specified move, or -1 if not found.
+    /// </summary>
+    /// <param name="move"></param>
+    /// <returns></returns>
+    public int IndexOfMove(EncodedMove move)
+    {
+      ushort searchRawValue = (ushort)move.IndexNeuralNet;
+      fixed (ushort* moveIndices = &MoveIndex_0)
+      {
+        for (int i = 0; i < NUM_MOVE_SLOTS; i++)
+        {
+          ushort moveRaw = moveIndices[i];
+          if (moveRaw == SPECIAL_VALUE_SENTINEL_TERMINATOR)
+          {
+            break;
+          }
+          else if (moveRaw == searchRawValue)
+          {
+            return i;
+          }
+        }
+        return -1;
+      }
+    }
+
+
+
+    /// <summary>
+    /// Reorders the entries to be sorted descending based on policy probability.
     /// TODO: make faster, or call in parallel over batch? Currently can do about 300/second batches of 1024.
     /// </summary>
     public void Sort(int numToSort)
@@ -649,8 +690,10 @@ namespace Ceres.Chess.EncodedPositions
               }
             }
 
-
-            if (numSwapped == 0) return;
+            if (numSwapped == 0)
+            {
+              return;
+            }
           }
         }
       }
@@ -659,7 +702,7 @@ namespace Ceres.Chess.EncodedPositions
 #endregion
 
 
-    #region Diagnostics
+#region Diagnostics
 
 
     /// <summary>
@@ -698,8 +741,6 @@ namespace Ceres.Chess.EncodedPositions
       MovesAndProbabilities(Position startPosition, 
                             float minProbability = 0.0f, int topN = int.MaxValue)
     {
-//      (EncodedMove bestMoveEncoded, float probability) = result.Policy.PolicyInfoAtIndex(posIndex);
-
       MGPosition mgPos = MGPosition.FromPosition(in startPosition);
       foreach ((EncodedMove move, float probability) in ProbabilitySummary(minProbability, topN))
       {
@@ -847,7 +888,7 @@ namespace Ceres.Chess.EncodedPositions
       }
     }
 
-    #endregion
+#endregion
 
 
     /// <summary>
