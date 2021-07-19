@@ -89,7 +89,9 @@ namespace Ceres.MCTS.Environment
 
     private IncrementingPollingCounter numNodesApplied;
     private PollingCounter numNodesAppliedTotal;
+#if DEBUG
     private IncrementingPollingCounter numNodesDualSelectorDuplicate;
+#endif
 
     private PollingCounter numNodesSelectedIntoTreeCache;
     private PollingCounter numNodesAppliedFromTreeCache;
@@ -146,8 +148,9 @@ namespace Ceres.MCTS.Environment
 
         numNodesAppliedTotal ??= new PollingCounter("applied-tot", this, () => MCTSApply.TotalNumNodesApplied);
         numNodesApplied ??= new IncrementingPollingCounter("applied", this, () => MCTSApply.TotalNumNodesApplied);
+#if DEBUG
         numNodesDualSelectorDuplicate ??= new IncrementingPollingCounter("selected-dual-duplicate", this, () => MCTSNodesSelectedSet.TotalNumDualSelectorDuplicates);
-
+#endif
         numNodesSelectedIntoTreeCache ??= new PollingCounter("nodes-selected-into-tree-cache", this, () => MCTSNodesSelectedSet.TotalNumNodesSelectedIntoTreeCache);
         numNodesAppliedFromTreeCache ??= new PollingCounter("nodes-appled-from-tree-cache", this, () => MCTSNodesSelectedSet.TotalNumNodesAppliedFromTreeCache);
         

@@ -13,17 +13,15 @@
 
 #region Using directives
 
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 
 using Ceres.Base.DataTypes;
 using Ceres.Chess;
-using Ceres.MCTS.Evaluators;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.Params;
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Diagnostics;
 
 #endregion
 
@@ -41,12 +39,14 @@ namespace Ceres.MCTS.Search
   {
     #region Static statistics
 
+#if DEBUG
     public static long TotalNumDualSelectorDuplicates = 0;
+#endif
 
     public static long TotalNumNodesSelectedIntoTreeCache;
     public static long TotalNumNodesAppliedFromTreeCache;
 
-    #endregion
+#endregion
 
     int defaultMaxNodesNN;
     int maxNodesNN;
@@ -108,9 +108,6 @@ namespace Ceres.MCTS.Search
 
     public int NumNodesImmediatelyApplied = 0;
     public int NumLeafsFromNodesImmediatelyApplied = 0;
-
-    public int CountNodesDuplicatedInFlightDropped = 0;
-    public int CountExcessNodesNNAborted = 0;
 
     public int NumCacheOnly;
     public int NumNotApply;
@@ -187,8 +184,6 @@ namespace Ceres.MCTS.Search
       NumNewLeafsAddedNonDuplicates = 0;
       NumNodesImmediatelyApplied = 0;
       NumLeafsFromNodesImmediatelyApplied = 0;
-      CountNodesDuplicatedInFlightDropped = 0;
-      CountExcessNodesNNAborted = 0;
       NumCacheOnly = 0;
       NumNotApply = 0;
 
@@ -228,7 +223,9 @@ namespace Ceres.MCTS.Search
 
           // Possibly use as an in-flight tranposition source
           if (IN_FLIGHT_OTHER_BATCH_LINKAGE_ENABLED && eligibleForTranspositionLinkage)
+          {
             transpositionRootsOtherBatch[nodeOther.Annotation.PositionHashForCaching] = nodeOther;
+          }
         }
       }
     }
@@ -259,12 +256,18 @@ namespace Ceres.MCTS.Search
         node.startedAsCacheOnlyNode = true;
       }
       else if (node.ActionType == MCTSNode.NodeActionType.MCTSApply && node.startedAsCacheOnlyNode)
+      {
         TotalNumNodesAppliedFromTreeCache++;
+      }
 
       if (node.ActionType == MCTSNode.NodeActionType.CacheOnly)
+      {
         NumCacheOnly++;
+      }
       else if (node.ActionType == MCTSNode.NodeActionType.None)
+      {
         NumNotApply++;
+      }
 
       // ....................... NOT USED ........................
       if (node.Ref.IsTranspositionLinked && node.N > 0
@@ -293,9 +296,14 @@ namespace Ceres.MCTS.Search
       if (canProcessImmediate)
       {
         if (node.ActionType == MCTSNode.NodeActionType.CacheOnly)
+        {
           DropNode(node); // no point in adding or caching since can be resolved immediately
+        }
         else
+        {
           NodesImmediateNotYetApplied.Add(node);
+        }
+
         return;
       }
 
@@ -336,8 +344,6 @@ namespace Ceres.MCTS.Search
         {
           node.Ref.BackupAbort1(node.NInFlight2);
         }
-
-        CountExcessNodesNNAborted++;
       }
       else
       {
@@ -345,7 +351,9 @@ namespace Ceres.MCTS.Search
 
         // Add this node to the "this batch" transpositions dictionary
         if (IN_FLIGHT_THIS_BATCH_LINKAGE_ENABLED)
+        {
           transpositionRootsThisBatch[hash] = node;
+        }
       }
     }
 
@@ -354,12 +362,17 @@ namespace Ceres.MCTS.Search
       // Duplicate with other batch. Abort.
       // TODO: NOTE: if this is terminal, then we could probably still keep this, multivisits allowed
       if (SelectorID == 0)
+      {
         node.Ref.BackupAbort0(node.NInFlight);
+      }
       else
+      {
         node.Ref.BackupAbort1(node.NInFlight2);
+      }
 
-      CountNodesDuplicatedInFlightDropped++;
+#if DEBUG
       TotalNumDualSelectorDuplicates++;
+#endif
     }
 
     public void ApplyImmeditateNotYetApplied()
@@ -429,4 +442,3 @@ namespace Ceres.MCTS.Search
 
   }
 }
-
