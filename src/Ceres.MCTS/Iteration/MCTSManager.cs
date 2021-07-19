@@ -185,6 +185,7 @@ namespace Ceres.MCTS.Iteration
 
       StartTimeThisSearch = startTime;
       RootNWhenSearchStarted = store.Nodes.nodes[store.RootIndex.Index].N;
+
       IsFirstMoveOfGame = isFirstMoveOfGame;
       SearchLimit = searchLimit;
 
@@ -241,8 +242,7 @@ namespace Ceres.MCTS.Iteration
     /// <param name="progressCallback"></param>
     /// <param name="nnRemoteEvaluatorExtraSuffix"></param>
     /// <returns></returns>
-    internal (TimingStats, MCTSNode) DoSearch(SearchLimit searchLimit,
-                                              MCTSProgressCallback progressCallback)
+    internal (TimingStats, MCTSNode) DoSearch(SearchLimit searchLimit, MCTSProgressCallback progressCallback)
     {
       SearchLimit = searchLimit;
 
@@ -254,7 +254,6 @@ namespace Ceres.MCTS.Iteration
 
       TimingStats stats = new TimingStats();
 
-      int numMCTSNodesProcessedTotal = 0;
       using (new TimingBlock($"MCTS SEARCH {searchLimit}", stats, TimingBlock.LoggingType.None))
       {
         flow = new MCTSSearchFlow(this, Context);
@@ -557,6 +556,8 @@ namespace Ceres.MCTS.Iteration
            bool possiblyUsePositionCache = false)
     {
       MCTSearch.SearchCount++;
+      manager.StartTimeThisSearch = DateTime.Now;
+      manager.RootNWhenSearchStarted = manager.Root.N;
 
       MCTSIterator context = manager.Context;
       PositionWithHistory priorMoves = context.Tree.Store.Nodes.PriorMoves;
@@ -564,7 +565,9 @@ namespace Ceres.MCTS.Iteration
       // Make sure not already checkmate/stalemate
       GameResult terminalStatus = priorMoves.FinalPosition.CalcTerminalStatus();
       if (terminalStatus != GameResult.Unknown)
+      {
         throw new Exception($"The initial position is terminal: {terminalStatus} {priorMoves.FinalPosition.FEN}");
+      }
 
       // Possibly initialize cache
       if (possiblyUsePositionCache && context.EvaluatorDef.CacheMode == PositionEvalCache.CacheMode.MemoryAndDisk)
@@ -581,7 +584,6 @@ namespace Ceres.MCTS.Iteration
       manager.TrySetImmediateBestMove();
       if (manager.TablebaseImmediateBestMove != default(MGMove))
       {
-        manager.StartTimeThisSearch = DateTime.Now;
         manager.StopStatus = SearchStopStatus.TablebaseImmediateMove;
         return (manager.TablebaseImmediateBestMove, new TimingStats());
       }
