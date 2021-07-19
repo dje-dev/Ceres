@@ -114,7 +114,7 @@ namespace Ceres.MCTS.MTCSNodes.Annotation
     /// </summary>
     /// <param name="node"></param>
     /// <param name="boardsHistory"></param>
-    internal unsafe void CalcRawPosition(MCTSNode node, ref EncodedPositionWithHistory boardsHistory)
+    public unsafe void CalcRawPosition(MCTSNode node, ref EncodedPositionWithHistory boardsHistory)
     {
       Span<EncodedPositionBoard> destBoards = new Span<EncodedPositionBoard>(Unsafe.AsPointer(ref boardsHistory), EncodedPositionBoards.NUM_MOVES_HISTORY);
 
@@ -134,10 +134,8 @@ namespace Ceres.MCTS.MTCSNodes.Annotation
       int nextBoardIndex = 1;
       while (nextBoardIndex < EncodedPositionBoards.NUM_MOVES_HISTORY && priorNode != null)
       {
-        if (nextBoardIndex % 2 == 1)
-          destBoards[nextBoardIndex++] = priorNode.Annotation.LC0BoardPosition.ReversedAndFlipped;
-        else
-          destBoards[nextBoardIndex++] = priorNode.Annotation.LC0BoardPosition;
+        destBoards[nextBoardIndex++] = nextBoardIndex % 2 == 1 ? priorNode.Annotation.LC0BoardPosition.ReversedAndFlipped 
+                                                               : priorNode.Annotation.LC0BoardPosition;
 
         priorNode = priorNode.Parent;
       }
@@ -146,10 +144,9 @@ namespace Ceres.MCTS.MTCSNodes.Annotation
       int priorPositionsIndex = 0;
       while (nextBoardIndex < EncodedPositionBoards.NUM_MOVES_HISTORY && priorPositionsIndex < node.Tree.EncodedPriorPositions.Count)
       {
-        if (nextBoardIndex % 2 == 1)
-          destBoards[nextBoardIndex++] = node.Tree.EncodedPriorPositions[priorPositionsIndex].ReversedAndFlipped;
-        else
-          destBoards[nextBoardIndex++] = node.Tree.EncodedPriorPositions[priorPositionsIndex];
+        destBoards[nextBoardIndex++] = nextBoardIndex % 2 == 1
+            ? node.Tree.EncodedPriorPositions[priorPositionsIndex].ReversedAndFlipped
+            : node.Tree.EncodedPriorPositions[priorPositionsIndex];
 
         priorPositionsIndex++;
       }
@@ -159,10 +156,8 @@ namespace Ceres.MCTS.MTCSNodes.Annotation
       bool historyFillIn = node.Context.ParamsSearch.HistoryFillIn;
       while (nextBoardIndex < EncodedPositionBoards.NUM_MOVES_HISTORY)
       {
-        if (historyFillIn)
-          destBoards[nextBoardIndex++] = destBoards[indexBoardToRepeat];
-        else
-          destBoards[nextBoardIndex++] = default;
+        destBoards[nextBoardIndex++] = historyFillIn ? destBoards[indexBoardToRepeat] 
+                                                     : default;
       }
 
       boardsHistory.SetMiscInfo(new EncodedTrainingPositionMiscInfo(MiscInfo, default));

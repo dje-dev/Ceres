@@ -229,7 +229,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
           //  isEligible = false;
 
           CompressedPolicyVector policy = default;
-          MCTSNodeStructUtils.ExtractPolicyVector(policySoftmax, nodeRef, ref policy);
+          MCTSNodeStructUtils.ExtractPolicyVector(policySoftmax, in nodeRef, ref policy);
 
           if (nodeRef.ZobristHash == 0)
           {

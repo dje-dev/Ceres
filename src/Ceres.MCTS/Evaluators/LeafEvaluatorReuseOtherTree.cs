@@ -82,7 +82,7 @@ namespace Ceres.MCTS.Evaluators
           }
 
           LeafEvaluationResult ret = new(otherNodeRef.Terminal, otherNodeRef.WinP, otherNodeRef.LossP, otherNodeRef.MPosition, cpvArray, 0);
-          MCTSNodeStructUtils.ExtractPolicyVector(OtherContext.ParamsSelect.PolicySoftmax, otherNodeRef, ref cpvArray[0]);
+          MCTSNodeStructUtils.ExtractPolicyVector(OtherContext.ParamsSelect.PolicySoftmax, in otherNodeRef, ref cpvArray[0]);
 
           NumHits++;
           return ret;

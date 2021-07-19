@@ -31,10 +31,11 @@ namespace Ceres.MCTS.MTCSNodes.Struct
   public static class MCTSNodeStructUtils
   {
     [SkipLocalsInit]
-    public static void ExtractPolicyVector(float softmaxValue, MCTSNodeStruct nodeRef, ref CompressedPolicyVector policy)
+    public static void ExtractPolicyVector(float softmaxValue, in MCTSNodeStruct nodeRef, ref CompressedPolicyVector policy)
     {
       Span<ushort> indicies = stackalloc ushort[CompressedPolicyVector.NUM_MOVE_SLOTS];
       Span<ushort> probabilities = stackalloc ushort[CompressedPolicyVector.NUM_MOVE_SLOTS];
+
       for (int i = 0; i < nodeRef.NumPolicyMoves; i++)
       {
         MCTSNodeStructChild child = nodeRef.ChildAtIndex(i);
@@ -52,7 +53,9 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       }
 
       if (nodeRef.NumPolicyMoves < CompressedPolicyVector.NUM_MOVE_SLOTS)
+      {
         indicies[nodeRef.NumPolicyMoves] = CompressedPolicyVector.SPECIAL_VALUE_SENTINEL_TERMINATOR;
+      }
 
       CompressedPolicyVector.Initialize(ref policy, indicies, probabilities);
     }
@@ -69,9 +72,13 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         {
           Console.Write($"          [{node.ChildStartIndex + childIndex++,8}] ");
           if (child.IsExpanded)
+          {
             Console.WriteLine($"{child.ChildIndex} --> {child.ChildRef.ToString()}");
+          }
           else
+          {
             Console.WriteLine($"{child.Move} {child.P} ");
+          }
         }
       }
       Console.WriteLine();
