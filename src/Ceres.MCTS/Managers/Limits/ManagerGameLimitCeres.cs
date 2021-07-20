@@ -48,11 +48,11 @@ namespace Ceres.MCTS.Managers.Limits
     float FractionOfBasePerMoveToUse(ManagerGameLimitInputs inputs)
     {
       float factorLargeIncrement = 1.0f;
-      const float MAX_LARGE_INCREMENT_MULTIPLIER = 2.0f;
+      const float MAX_LARGE_INCREMENT_MULTIPLIER = 1.5f;
 
       if (inputs.IncrementSelf > 0)
       {
-        float estBasePerMove = inputs.RemainingFixedSelf / 30;
+        float estBasePerMove = inputs.RemainingFixedSelf / 27;
         float incrementRelativeToBasePerMove = inputs.IncrementSelf / estBasePerMove;
 
         // The more increment relative to base time, the more aggressively the base time is used up
