@@ -1922,7 +1922,7 @@ namespace Ceres.Chess.TBBackends.Fathom
 
       // Generate (at least) all legal captures including (under)promotions.
       // It is OK to generate more, as long as they are filtered out below.
-      TBMoveList moves = gen_captures(pos);
+      TBMoveList moves = gen_captures(in pos);
       for (int i = 0; i < moves.NumMoves; i++)
       {
         FathomPos pos1 = default;

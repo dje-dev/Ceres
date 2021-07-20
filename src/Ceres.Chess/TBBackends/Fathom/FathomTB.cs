@@ -102,7 +102,18 @@ namespace Ceres.Chess.TBBackends.Fathom
         return FathomWDLResult.Failure;
       }
 
-      int v = probe.probe_wdl(in pos, out int success);
+      int v;
+      int success = 0;
+      try
+      {
+        v = probe.probe_wdl(in pos, out success);
+      }
+      catch (Exception exc)
+      {
+        Console.WriteLine($"Exception in Fathom probe_wdl {fen} of {exc}");
+        return FathomWDLResult.Failure;
+      }
+
       if (success == 0)
       {
         return FathomWDLResult.Failure;
