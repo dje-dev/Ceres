@@ -644,6 +644,30 @@ namespace Ceres.MCTS.Search
     {
       MCTSNodeStruct nodeRef = node.Ref;
 
+#if NOT
+      if (node.Context.ParamsSearch.TestFlag)
+      {
+        // TODO: cleanup
+        // In test mode we might not have policy order and therefore get chosen nodes off end
+        // Fixup.
+        bool haveMoved = false;
+        for (int childIndex = 0; childIndex < numChildrenToCheck; childIndex++)
+        {
+          int numThisChild = childVisitCounts[childIndex];
+          //            Console.WriteLine("Saw (and ignoring) out of order possibly due to tie in score");
+          if (childIndex > node.NumChildrenExpanded)
+          {
+            if (!haveMoved && childVisitCounts[numChildrenToCheck - 1] == 0)
+            {
+              childVisitCounts[numChildrenToCheck - 1] = 1;
+              childVisitCounts[childIndex] = 0;
+              haveMoved = true;
+            }
+          }
+        }
+
+      }
+#endif
       for (int childIndex = 0; childIndex < numChildrenToCheck; childIndex++)
       {
         int numThisChild = childVisitCounts[childIndex];
@@ -651,7 +675,7 @@ namespace Ceres.MCTS.Search
         {
           if (childIndex > node.NumChildrenExpanded)
           {
-            Console.WriteLine("Saw (and ignoring) out of order possibly due to tie in score");
+//            Console.WriteLine("Saw (and ignoring) out of order possibly due to tie in score");
             continue;
           }
           MCTSNode thisChild = default;

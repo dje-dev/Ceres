@@ -140,6 +140,16 @@ namespace Ceres.Features.Tournaments
     public float TotalTimeEngine2;
 
     /// <summary>
+    /// Remaining time on clock left used by engine 1 in seconds.
+    /// </summary>
+    public float RemainingTimeEngine1;
+
+    /// <summary>
+    /// Remaining time on clock left used by engine 2 in seconds.
+    /// </summary>
+    public float RemainingTimeEngine2;
+
+    /// <summary>
     /// If engine 1 should have forfeited due to exceeding specified search limit at least once.
     /// </summary>
     public bool ShouldHaveForfeitedOnLimitsEngine1;
@@ -169,23 +179,5 @@ namespace Ceres.Features.Tournaments
     /// </summary>
     public List<GameMoveStat> GameMoveHistory;
 
-    /// <summary>
-    /// Returns the reverse of a specified game result.
-    /// </summary>
-    /// <param name="result"></param>
-    /// <returns></returns>
-    public static TournamentGameResult InvertedResult(TournamentGameResult result)
-    {
-      switch (result)
-      {
-        case TournamentGameResult.Draw:
-          return TournamentGameResult.Draw;
-        case TournamentGameResult.Win:
-          return TournamentGameResult.Loss;
-        case TournamentGameResult.Loss:
-          return TournamentGameResult.Win;
-      }
-      throw new Exception("Internal error: unexpected result");
-    }
   }
 }

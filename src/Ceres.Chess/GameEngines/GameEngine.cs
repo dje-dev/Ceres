@@ -57,6 +57,10 @@ namespace Ceres.Chess.GameEngines
     /// </summary>
     public int CumulativeNodes = 0;
 
+
+    protected DateTime lastSearchStartTime;
+
+
     /// <summary>
     /// Constructor.
     /// </summary>
@@ -88,7 +92,11 @@ namespace Ceres.Chess.GameEngines
                                          ProgressCallback callback = null,
                                          bool verbose = false)
     {
-      if (inSearch) throw new Exception("GameEngine.Search cannot be called concurrently by more than one thread.");
+      if (inSearch)
+      {
+        throw new Exception("GameEngine.Search cannot be called concurrently by more than one thread.");
+      }
+
       inSearch = true;
 
       // Execute any preparation which should not be counted against thinking time
@@ -96,7 +104,9 @@ namespace Ceres.Chess.GameEngines
       // which is used to reset state/hash table when the tree reuse option is enabled.
       DoSearchPrepare();
 
+      // Officially start timing now.
       TimingStats stats = new TimingStats();
+      lastSearchStartTime = DateTime.Now;
       GameEngineSearchResult result;
       using (new TimingBlock(stats, TimingBlock.LoggingType.None))
       {

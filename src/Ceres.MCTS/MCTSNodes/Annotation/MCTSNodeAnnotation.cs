@@ -14,8 +14,8 @@
 #region Using directives
 
 using System;
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
+
 using Ceres.Chess;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.LC0.Boards;
@@ -134,8 +134,14 @@ namespace Ceres.MCTS.MTCSNodes.Annotation
       int nextBoardIndex = 1;
       while (nextBoardIndex < EncodedPositionBoards.NUM_MOVES_HISTORY && priorNode != null)
       {
-        destBoards[nextBoardIndex++] = nextBoardIndex % 2 == 1 ? priorNode.Annotation.LC0BoardPosition.ReversedAndFlipped 
-                                                               : priorNode.Annotation.LC0BoardPosition;
+        if (nextBoardIndex % 2 == 1)
+        {
+          destBoards[nextBoardIndex++] = priorNode.Annotation.LC0BoardPosition.ReversedAndFlipped;
+        }
+        else
+        {
+          destBoards[nextBoardIndex++] = priorNode.Annotation.LC0BoardPosition;
+        }
 
         priorNode = priorNode.Parent;
       }
@@ -144,9 +150,14 @@ namespace Ceres.MCTS.MTCSNodes.Annotation
       int priorPositionsIndex = 0;
       while (nextBoardIndex < EncodedPositionBoards.NUM_MOVES_HISTORY && priorPositionsIndex < node.Tree.EncodedPriorPositions.Count)
       {
-        destBoards[nextBoardIndex++] = nextBoardIndex % 2 == 1
-            ? node.Tree.EncodedPriorPositions[priorPositionsIndex].ReversedAndFlipped
-            : node.Tree.EncodedPriorPositions[priorPositionsIndex];
+        if (nextBoardIndex % 2 == 1)
+        {
+          destBoards[nextBoardIndex++] = node.Tree.EncodedPriorPositions[priorPositionsIndex].ReversedAndFlipped;
+        }
+        else
+        {
+          destBoards[nextBoardIndex++] = node.Tree.EncodedPriorPositions[priorPositionsIndex];
+        }
 
         priorPositionsIndex++;
       }
@@ -156,8 +167,10 @@ namespace Ceres.MCTS.MTCSNodes.Annotation
       bool historyFillIn = node.Context.ParamsSearch.HistoryFillIn;
       while (nextBoardIndex < EncodedPositionBoards.NUM_MOVES_HISTORY)
       {
-        destBoards[nextBoardIndex++] = historyFillIn ? destBoards[indexBoardToRepeat] 
-                                                     : default;
+        if (historyFillIn)
+          destBoards[nextBoardIndex++] = destBoards[indexBoardToRepeat];
+        else
+          destBoards[nextBoardIndex++] = default;
       }
 
       boardsHistory.SetMiscInfo(new EncodedTrainingPositionMiscInfo(MiscInfo, default));

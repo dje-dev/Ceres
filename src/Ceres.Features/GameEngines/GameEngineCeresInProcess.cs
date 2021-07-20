@@ -318,8 +318,6 @@ namespace Ceres.Features.GameEngines
                                                  MCTSManager.MCTSProgressCallback callback,
                                                  bool verbose)
     {
-      DateTime startTime = DateTime.Now;
-
       PositionEvalCache positionCacheOpponent = null;
 
       Search = new MCTSearch();
@@ -334,7 +332,7 @@ namespace Ceres.Features.GameEngines
 
         Search.Search(evaluators, ChildSelectParams, SearchParams, GameLimitManager,
                       reuseOtherContextForEvaluatedNodes,
-                      curPositionAndMoves, searchLimit, verbose, startTime,
+                      curPositionAndMoves, searchLimit, verbose, lastSearchStartTime,
                       gameMoveHistory, callback, false, isFirstMoveOfGame);
       }
       else
@@ -367,7 +365,7 @@ namespace Ceres.Features.GameEngines
         float THRESHOLD_FRACTION_NODES_REUSABLE = 0.05f;
         Search.SearchContinue(LastSearch, reuseOtherContextForEvaluatedNodes,
                                      forwardMoves, curPositionAndMoves,
-                                     gameMoveHistory, searchLimit, verbose, startTime,
+                                     gameMoveHistory, searchLimit, verbose, lastSearchStartTime,
                                      callback, THRESHOLD_FRACTION_NODES_REUSABLE,
                                      isFirstMoveOfGame);
       }
@@ -376,7 +374,7 @@ namespace Ceres.Features.GameEngines
       // (unless first move, since extra overhead is perhaps unavoidable in that situation).
       if (!isFirstMoveOfGame)
       {
-        TimeSpan elapsedTime = DateTime.Now - startTime;
+        TimeSpan elapsedTime = DateTime.Now - lastSearchStartTime;
         if (Search.Manager.SearchLimit.IsTimeLimit)
         {
           if (Search.Manager.SearchLimit.IsPerGameLimit)

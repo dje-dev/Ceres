@@ -259,10 +259,10 @@ namespace Ceres.APIExamples
       //limit1 = SearchLimit.NodesForAllMoves(500_000);//, 25_000);
 
       limit1 = SearchLimit.SecondsForAllMoves(60, 4);
-      limit1 = SearchLimit.SecondsForAllMoves(15, 1.0f) * 2f;
+      limit1 = SearchLimit.SecondsForAllMoves(1, 0.15f) * 1f;
       //limit1 = SearchLimit.SecondsForAllMoves(900, 15) * 0.05f;
 
-      limit1 = SearchLimit.NodesPerMove(15_000);
+      //limit1 = SearchLimit.NodesPerMove(15_000);
 
       SearchLimit limit2 = limit1;// * 0.2f;// SearchLimit.NodesPerMove(2500);
       //limit2 = limit1 * 3;

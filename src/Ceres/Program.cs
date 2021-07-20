@@ -78,15 +78,16 @@ namespace Ceres
       Console.WriteLine();
 
       //Features.BatchAnalysis.BatchAnalyzer.Test();      return;
-#if DEBUG
-      CheckDebugAllowed();
-#endif
 
       if (args.Length > 0 && (args[0].ToUpper() == "CUSTOM" || args[0].StartsWith("WORKER")))
       {
         TournamentTest.Test(); return;
         //        SuiteTest.RunSuiteTest(); return;
       }
+
+#if DEBUG
+      CheckDebugAllowed();
+#endif
 
       StringBuilder allArgs = new StringBuilder();
       for (int i = 0; i < args.Length; i++)

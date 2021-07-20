@@ -141,14 +141,13 @@ namespace Ceres.MCTS.Iteration
         {
           throw new Exception("STORAGE_USE_INCREMENTAL_ALLOC must be true when SearchCanBeExpanded.");
         }
-
       }
 
-      if (!MCTSParamsFixed.STORAGE_USE_INCREMENTAL_ALLOC 
-        && !searchLimit.IsNodesLimit)
+      if (!MCTSParamsFixed.STORAGE_USE_INCREMENTAL_ALLOC  && !searchLimit.IsNodesLimit)
       {
         throw new Exception("SearchLimit must be NodesPerMove or NodesPerGame when STORAGE_USE_INCREMENTAL_ALLOC is false");
       }
+
 
       searchLimit = AdjustedSearchLimit(searchLimit, paramsSearch);
 
@@ -255,6 +254,8 @@ namespace Ceres.MCTS.Iteration
     {
       CountSearchContinuations = priorSearch.CountSearchContinuations;
       Manager = priorSearch.Manager;
+      Manager.StartTimeThisSearch = startTime;
+      Manager.RootNWhenSearchStarted = priorSearch.SearchRootNode.N;
 
       searchLimit = AdjustedSearchLimit(searchLimit, Manager.Context.ParamsSearch);
 
