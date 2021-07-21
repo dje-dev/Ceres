@@ -121,9 +121,11 @@ namespace Ceres.MCTS.Utils
       if (showWDL)
       {
         // Note that win and loss inverted to reverse perspective.
-        strWDL = $" wdl {Math.Round(bestMoveNode.LossP * 1000)} " 
-               + $"{Math.Round(bestMoveNode.DrawP * 1000)} " 
-               + $"{Math.Round(bestMoveNode.WinP * 1000)}";
+        // (except if only one node evaluated so we only have the root and not actual moves).
+        bool isRoot = bestMoveNode.IsRoot;
+        strWDL = $" wdl {Math.Round((isRoot ? bestMoveNode.WinP : bestMoveNode.LAvg) * 1000)} " 
+               + $"{Math.Round((isRoot ? bestMoveNode.DrawP : bestMoveNode.DAvg) * 1000)} " 
+               + $"{Math.Round((isRoot ? bestMoveNode.LossP : bestMoveNode.WAvg) * 1000)}";
       }
 
       if (wasInstamove)
