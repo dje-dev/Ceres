@@ -91,8 +91,7 @@ namespace Ceres.Commands
       ParamsSearch paramsSearch = new ParamsSearch();
       paramsSearch.FutilityPruningStopSearchEnabled = false;
       GameEngineCeresInProcess engineCeres = new GameEngineCeresInProcess("Ceres", nnDefCeres, paramsSearch);
-      engineCeres.SearchCeres(PositionWithHistory.StartPosition, SearchLimit.SecondsPerMove(0.1f)); // warmup
-      engineCeres.SearchCeres(PositionWithHistory.StartPosition, SearchLimit.NodesPerMove(15_000)); // warmup
+      engineCeres.Warmup();
       engineCeres.ResetGame();
 
       GameEngineLC0 engineLC0 = null;
@@ -102,8 +101,7 @@ namespace Ceres.Commands
         engineLC0 = new GameEngineLC0("LC0", nnDefCeres.Nets[0].Net.NetworkID, 
                                       forceDisableSmartPruning: true, paramsNN: nnDefCeres,
                                       alwaysFillHistory: true, verbose: false);
-        engineLC0.Search(PositionWithHistory.StartPosition, SearchLimit.SecondsPerMove(0.1f)); // warmup
-        engineLC0.Search(PositionWithHistory.StartPosition, SearchLimit.NodesPerMove(15_000)); // warmup
+        engineLC0.Warmup();
         engineLC0.ResetGame();
       }
 
