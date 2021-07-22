@@ -864,20 +864,24 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     }
 
 
+    /// <summary>
+    /// Applies specified update to W field (only) of node and all ancestors.
+    /// </summary>
+    /// <param name="wDelta"></param>
     public void BackupApplyWDeltaOnly(float wDelta)
     {
-      throw new NotImplementedException();
-#if NOT
       Span<MCTSNodeStruct> nodes = MCTSNodeStoreContext.Nodes.Span;
 
       ref MCTSNodeStruct node = ref this;
       while (true)
       {
-        throw new Exception("Review this code, the VSumSquares needs update too?"); // TODO
+        // TODO: updated needed to other fields, sucha s VSumSquares
         node.W += wDelta;
 
         if (node.IsRoot)
+        {
           return;
+        }
         else
         {
           // Backup in tree (flip sign for change in perspective)
@@ -886,7 +890,6 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         }
 
       }
-#endif
     }
 
 #endregion
