@@ -559,11 +559,28 @@ namespace Ceres.Chess.EncodedPositions
 
 #region Decoding
 
-    /// <summary>
-    /// Returns an expanded array of all policy probabilities
-    /// over all 1858 possible moves (with normalization to sum to 1.0).
-    /// </summary>
-    public float[] DecodedAndNormalized
+  /// <summary>
+  // Returns sum of all probabilities.
+  /// </summary>
+  public float SumProbabilities
+  {
+    get
+    {
+      float acc = 0;
+      foreach ((EncodedMove move, float probability) in ProbabilitySummary(0, int.MaxValue))
+      {
+        acc += probability;
+      }
+      return acc;
+    }
+  }
+
+
+  /// <summary>
+  /// Returns an expanded array of all policy probabilities
+  /// over all 1858 possible moves (with normalization to sum to 1.0).
+  /// </summary>
+  public float[] DecodedAndNormalized
     {
       get
       {
