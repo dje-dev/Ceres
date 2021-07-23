@@ -24,12 +24,12 @@ using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.NNEvaluators;
 using Ceres.Chess.PositionEvalCaching;
 using Ceres.Chess.MoveGen;
-
-using Ceres.MCTS.MTCSNodes;
 using Ceres.Chess.NetEvaluation.Batch;
 using Ceres.Chess.NNEvaluators.Defs;
-using Ceres.MCTS.Iteration;
 using Ceres.Chess.LC0.Batches;
+
+using Ceres.MCTS.MTCSNodes;
+using Ceres.MCTS.Iteration;
 
 #endregion
 
@@ -183,18 +183,12 @@ namespace Ceres.MCTS.Evaluators
 
         for (int i = 0; i < nodes.Length; i++)
         {
+          nodes[i].Annotate();
+          nodes[i].Annotation.CalcRawPosition(nodes[i], ref rawPosArray[i]);
+
           if (EvaluatorDef.PositionTransform == NNEvaluatorDef.PositionTransformType.Mirror)
           {
-            if (rawPosArray[i].MiscInfo.InfoPosition.MirrorEquivalent)
-            {
-              EncodedPositionWithHistory mirrored = rawPosArray[i].Mirrored;
-              nodes[i].Annotation.CalcRawPosition(nodes[i], ref mirrored);
-            }
-          }
-          else
-          {
-            nodes[i].Annotate();
-            nodes[i].Annotation.CalcRawPosition(nodes[i], ref rawPosArray[i]);
+            rawPosArray[i] = rawPosArray[i].Mirrored;
           }
         }
 
@@ -259,11 +253,17 @@ namespace Ceres.MCTS.Evaluators
 
         // Copy policy
         if (resultTarget == EvalResultTarget.PrimaryEvalResult)
+        {
           node.EvalResult = evalResult;
+        }
         else if (resultTarget == EvalResultTarget.SecondaryEvalResult)
+        {
           node.EvalResultSecondary = evalResult;
+        }
         else
+        {
           throw new Exception("Internal error: unexpected EvalResultTarget");
+        }
 
         // Save back to cache
         if (SaveToCache) Cache.Store(node.Annotation.PositionHashForCaching,
@@ -284,17 +284,39 @@ namespace Ceres.MCTS.Evaluators
         bool hasHashes = localEvaluator.InputsRequired.HasFlag(NNEvaluator.InputTypes.Hashes);
         bool hasMoves = localEvaluator.InputsRequired.HasFlag(NNEvaluator.InputTypes.Moves);
 
-        if (hasPositions && Batch.Positions == null) Batch.Positions = new MGPosition[Batch.MaxBatchSize];
-        if (hasHashes && Batch.PositionHashes == null) Batch.PositionHashes = new ulong[Batch.MaxBatchSize];
-        if (hasMoves && Batch.Moves == null) Batch.Moves = new MGMoveList[Batch.MaxBatchSize];
+        if (hasPositions && Batch.Positions == null)
+        {
+          Batch.Positions = new MGPosition[Batch.MaxBatchSize];
+        }
+
+        if (hasHashes && Batch.PositionHashes == null)
+        {
+          Batch.PositionHashes = new ulong[Batch.MaxBatchSize];
+        }
+
+        if (hasMoves && Batch.Moves == null)
+        {
+          Batch.Moves = new MGMoveList[Batch.MaxBatchSize];
+        }
 
         for (int i = 0; i < nodes.Length; i++)
         {
           MCTSNode node = nodes[i];
 
-          if (hasPositions) Batch.Positions[i] = node.Annotation.PosMG;
-          if (hasHashes) Batch.PositionHashes[i] = node.Annotation.PositionHashForCaching;
-          if (hasMoves) Batch.Moves[i] = node.Annotation.Moves;
+          if (hasPositions)
+          {
+            Batch.Positions[i] = node.Annotation.PosMG;
+          }
+
+          if (hasHashes)
+          {
+            Batch.PositionHashes[i] = node.Annotation.PositionHashForCaching;
+          }
+
+          if (hasMoves)
+          {
+            Batch.Moves[i] = node.Annotation.Moves;
+          }
         }
       }
 
@@ -304,8 +326,6 @@ namespace Ceres.MCTS.Evaluators
       Debug.Assert(!FP16.IsNaN(result.GetWinP(0)) && !FP16.IsNaN(result.GetLossP(0)));
 
       RetrieveResults(nodes, result, resultTarget);
-
-      //          if (MCTSParamsFixed.MONITORING) EventSourceCeres.Log.WriteMetric("MCTS.NodeEvaluatorNN_Local.Hit", counterNumHits++);
     }
 
 
@@ -340,4 +360,3 @@ namespace Ceres.MCTS.Evaluators
 
   }
 }
-
