@@ -107,6 +107,11 @@ namespace Ceres.MCTS.Params
     public IteratedMCTSDef IMCTSSchedule = null;
 
     /// <summary>
+    /// Parameters relating to the secondary neural network evaluator (if in use).
+    /// </summary>
+    public ParamsSearchSecondaryEvaluator ParamsSecondaryEvaluator;
+    
+    /// <summary>
     /// Optional policy used for applying Dirichlet noise at root.
     /// </summary>
     public SearchNoisePolicyDef SearchNoisePolicy;
@@ -337,6 +342,8 @@ namespace Ceres.MCTS.Params
       // but these may be updated dynamicaly during search
       // based on search state.
       Execution = new ParamsSearchExecution();
+
+      ParamsSecondaryEvaluator = new ();
     }
    
 

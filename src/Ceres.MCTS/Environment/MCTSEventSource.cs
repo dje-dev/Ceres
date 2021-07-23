@@ -148,7 +148,8 @@ namespace Ceres.MCTS.Environment
         numPositionsGPU3 ??= new PollingCounter("gpu-3-positions", this, () => NNEvaluatorStats.TotalPosEvaluationsPerGPU[3]);
 
 
-        numNodesAppliedTotal ??= new PollingCounter("applied-tot", this, () => MCTSApply.TotalNumNodesApplied);
+        numNodesAppliedTotal ??= new PollingCounter("applied-primary-tot", this, () => MCTSApply.TotalNumNodesApplied);
+        numSecondaryEvaluations ??= new PollingCounter("applied-secondary-tot", this, () => MCTSManager.NumSecondaryEvaluations);
         numNodesApplied ??= new IncrementingPollingCounter("applied", this, () => MCTSApply.TotalNumNodesApplied);
 #if DEBUG
         numNodesDualSelectorDuplicate ??= new IncrementingPollingCounter("selected-dual-duplicate", this, () => MCTSNodesSelectedSet.TotalNumDualSelectorDuplicates);
@@ -156,7 +157,6 @@ namespace Ceres.MCTS.Environment
         numNodesSelectedIntoTreeCache ??= new PollingCounter("nodes-selected-into-tree-cache", this, () => MCTSNodesSelectedSet.TotalNumNodesSelectedIntoTreeCache);
         numNodesAppliedFromTreeCache ??= new PollingCounter("nodes-appled-from-tree-cache", this, () => MCTSNodesSelectedSet.TotalNumNodesAppliedFromTreeCache);
 
-        numSecondaryEvaluations ??= new PollingCounter("nodes-secondary-evaluations", this, () => MCTSManager.NumSecondaryEvaluations);
 
         lastBatchYield ??= new PollingCounter("yield_pct_last_batch", this, () => 100.0f * MCTSIterator.LastBatchYieldFrac);
         batchYield ??= new PollingCounter("yield-pct-total", this, () => 100.0f * MCTSIterator.TotalYieldFrac);

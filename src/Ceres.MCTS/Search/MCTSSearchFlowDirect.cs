@@ -305,10 +305,20 @@ namespace Ceres.MCTS.Search
 #endif
 
         // TODO: make flow private belows   
-        if (Context.EvaluatorDef.SECONDARY_NETWORK_ID != null && (manager.Root.N - nodesLastSecondaryNetEvaluation > 500))
+        if (Context.EvaluatorDefSecondary != null)
         {
-          manager.RunSecondaryNetEvaluations(8, manager.flow.BlockNNEvalSecondaryNet);
-          nodesLastSecondaryNetEvaluation = manager.Root.N;
+          ParamsSearchSecondaryEvaluator secondaryParams = Context.ParamsSearch.ParamsSecondaryEvaluator;
+
+          int numNodesElapsed = manager.Root.N - nodesLastSecondaryNetEvaluation;
+          bool satisfiesAbsoluteMinN = numNodesElapsed >= secondaryParams.UpdateFrequencyMinNodesAbsolute;
+          bool satisfiesRelativeMinN = numNodesElapsed >= secondaryParams.UpdateFrequencyMinNodesRelative * manager.Root.N;
+
+          if (satisfiesAbsoluteMinN && satisfiesRelativeMinN)
+          {
+            int minN = (int)(secondaryParams.UpdateMinNFraction * Context.Root.N);
+            manager.RunSecondaryNetEvaluations(minN, manager.flow.BlockNNEvalSecondaryNet);
+            nodesLastSecondaryNetEvaluation = manager.Root.N;
+          }
         }
 
         // Update statistics

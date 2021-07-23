@@ -49,6 +49,7 @@ namespace Ceres.MCTS.Iteration
     public readonly ParamsSearch ParamsSearch;
     public readonly ParamsSelect ParamsSelect;
     public NNEvaluatorDef EvaluatorDef => NNEvaluators.EvaluatorDef;
+    public NNEvaluatorDef EvaluatorDefSecondary => NNEvaluators.EvaluatorDefSecondary;
 
     public ContemptManager ContemptManager;
 

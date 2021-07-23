@@ -92,6 +92,11 @@ namespace Ceres.MCTS.Iteration
     public static float TotalTimeSecondsInMakeNewRoot = 0;
 
     /// <summary>
+    /// Number of positions evaluated using a secondary evaluator.
+    /// </summary>
+    public static int NumSecondaryEvaluations = 0;
+
+    /// <summary>
     /// Associated searh context.
     /// </summary>
     public MCTSIterator Context { get; private set; }
@@ -341,11 +346,16 @@ namespace Ceres.MCTS.Iteration
 
       Root.Ref.TraverseSequential(Context.Tree.Store, (ref MCTSNodeStruct nodeRef, MCTSNodeStructIndex index) =>
       {
-        if (nodeRef.N >= minN && FP16.IsNaN(nodeRef.VSecondary))// && !nodeRef.IsTranspositionLinked)
+        if (nodeRef.N >= minN 
+         && nodeRef.Terminal == GameResult.Unknown 
+         && nodeRef.Uncertainty == 0 // ** TODO: fix this
+         /*&& FP16.IsNaN(nodeRef.VSecondary)*/)// && !nodeRef.IsTranspositionLinked)
         {
           MCTSNode node = Context.Tree.GetNode(index);
           node.EvalResultSecondary = default;
           nodes.Add(node);
+
+          nodeRef.Uncertainty = 1; // TODO: FIX THIS
 
           numNodes++;
 
@@ -362,77 +372,47 @@ namespace Ceres.MCTS.Iteration
       // Process any final nodes
       EvaluateSecondaryNodes(evaluatorSecondary, nodes, ref accAbsDiff);
 
-      Console.WriteLine($"V difference {numNodes} {accAbsDiff / numNodes:F2} from {Root.N}");
+      //Console.WriteLine($"V difference {numNodes} {accAbsDiff / numNodes:F2} from {Root.N}");
     }
 
-    float[] policyBuffer = new float[EncodedPolicyVector.POLICY_VECTOR_LENGTH];
 
     private void EvaluateSecondaryNodes(MCTSNNEvaluator evaluatorSecondary, List<MCTSNode> nodes, ref float accAbsDiff)
     {
       if (nodes.Count > 0)
       {
-        ListBounded<MCTSNode> thisBatch = new ListBounded<MCTSNode>(nodes.ToArray(), ListBounded<MCTSNode>.CopyMode.ReferencePassedMembers);
+        ListBounded<MCTSNode> thisBatch = new (nodes.ToArray(), ListBounded<MCTSNode>.CopyMode.ReferencePassedMembers);
         evaluatorSecondary.Evaluate(Context, thisBatch);
+
         foreach (MCTSNode node in nodes)
         {
           ref MCTSNodeStruct nodeRef = ref node.Ref;
-          nodeRef.VSecondary = (FP16)node.EvalResultSecondary.V;
-          float diff = nodeRef.VSecondary - nodeRef.V;
-          accAbsDiff += Math.Abs(diff);
 
-          // TODO: tune this threshold
-          if (node.Terminal == GameResult.Unknown)// && Math.Abs(diff) > 0.01)
+//          nodeRef.VSecondary = FP16.NaN;
+          //          nodeRef.VSecondary = (FP16)node.EvalResultSecondary.V;
+
+          if (node.Terminal == GameResult.Unknown)
           {
-            nodeRef.BackupApplyWDeltaOnly(diff); // MAYBE USE 2.0 multiplier
-#if NOT
-            // Update policy (replace)
-            // TODO: Remove this. Not working. 
-            //       Very difficult/impossible to change policy when already partly expanded,
-            //       particularly since chlidren are assumed sorted descending by policy.
-            ref readonly ChessPolicyVectorCompressed policy = ref node.EvalResultSecondary.PolicyRef;
-            policy.DoDecoded(false, policyBuffer);
-            foreach (MCTSNodeStructChild child in nodeRef.Children)
-            {
-              float policyValue = policyBuffer[child.Move.IndexNeuralNet];
-              if (policyValue != 0)
-              {
-                if (child.IsExpanded)
-                  child.ChildRef.P = (FP16)policyValue;
-                else
-                  child.SetUnexpandedPolicyValues(child.Move, (FP16)policyValue);                
-              }
-            }
+            ref readonly CompressedPolicyVector otherPolicy = ref node.EvalResultSecondary.PolicyRef;
 
-            if (node.NumChildrenVisited < node.NumPolicyMoves)
-            {
-              Span<MCTSNodeStructChild> children = node.Ref.Children;
-              int numSwapped;
-              do
-              {
-                numSwapped = 0;
-                for (int i = node.NumChildrenVisited + 1; i < node.NumPolicyMoves; i++)
-                {
-                  if (!children[i].IsExpanded && !children[i-1].IsExpanded)
-                  {
-                    if (children[i].p < children[i - 1].p)
-                    {
-                      FP16 temp = children[i].p;
-                      children[i].p = children[i - 1].p;
-                      children[i - 1].p = temp;
-                      numSwapped++;
-                    }
-                  }
-                }
-              }
-              while (numSwapped > 0);
+            ParamsSearchSecondaryEvaluator secondaryParams = Context.ParamsSearch.ParamsSecondaryEvaluator;
 
+            node.BlendPolicy(in otherPolicy, secondaryParams.UpdatePolicyFraction);
+
+            if (secondaryParams.UpdateValueFraction > 0)
+            {
+              throw new NotImplementedException();
+              // buggy?
+              float diff = node.EvalResultSecondary.V - nodeRef.V;
+              accAbsDiff += Math.Abs(diff);
+              // nodeRef.BackupApplyWDeltaOnly(diff); // TODO: MAYBE USE 2.0 multiplier
             }
-#endif
           }
         }
 
+        NumSecondaryEvaluations += thisBatch.Count;
       }
     }
+
 
     /// <summary>
     /// Resets the state of the tree back to all nodes

@@ -34,8 +34,31 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     public static void ExtractPolicyVector(float softmaxValue, in MCTSNodeStruct nodeRef, ref CompressedPolicyVector policy)
     {
       Span<ushort> indicies = stackalloc ushort[CompressedPolicyVector.NUM_MOVE_SLOTS];
+      Span<float> probsBeforeNormalization = stackalloc float[CompressedPolicyVector.NUM_MOVE_SLOTS];
       Span<ushort> probabilities = stackalloc ushort[CompressedPolicyVector.NUM_MOVE_SLOTS];
 
+      // Extract the probabilities, invert soft max, track sum.
+      float accProbabilities = 0;
+      for (int i = 0; i < nodeRef.NumPolicyMoves; i++)
+      {
+        MCTSNodeStructChild child = nodeRef.ChildAtIndex(i);
+        if (child.IsExpanded)
+        {
+          ref readonly MCTSNodeStruct childRef = ref child.ChildRef;
+          float prob = MathF.Pow(childRef.P, softmaxValue);
+          probsBeforeNormalization[i] = prob;
+          accProbabilities += prob;
+        }
+        else
+        {
+          float prob = MathF.Pow(child.P, softmaxValue);
+          probsBeforeNormalization[i] = prob;
+          accProbabilities += prob;
+        }
+      }
+
+      // Build spans of indices and probabilities (normalized and then encoded).
+      float probScaling = 1.0f / accProbabilities;
       for (int i = 0; i < nodeRef.NumPolicyMoves; i++)
       {
         MCTSNodeStructChild child = nodeRef.ChildAtIndex(i);
@@ -43,14 +66,16 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         {
           ref readonly MCTSNodeStruct childRef = ref child.ChildRef;
           indicies[i] = (ushort)childRef.PriorMove.IndexNeuralNet;
-          probabilities[i] = CompressedPolicyVector.EncodedProbability(MathF.Pow(childRef.P, softmaxValue));
+          probabilities[i] = CompressedPolicyVector.EncodedProbability(probsBeforeNormalization[i] * probScaling);
         }
         else
         {
           indicies[i] = (ushort)child.Move.IndexNeuralNet;
-          probabilities[i] = CompressedPolicyVector.EncodedProbability(MathF.Pow(child.P, softmaxValue));
+          float prob = MathF.Pow(child.P, softmaxValue);
+          probabilities[i] = CompressedPolicyVector.EncodedProbability(probsBeforeNormalization[i] * probScaling);
         }
       }
+
 
       if (nodeRef.NumPolicyMoves < CompressedPolicyVector.NUM_MOVE_SLOTS)
       {
