@@ -271,13 +271,15 @@ namespace Ceres.Chess
     unsafe readonly byte CalcShortHash()
     {
       // For efficiency we iterate over 4 longs (32 bytes)
-      // instead of 32 byte fields
+      // instead of 32 byte fields.
       long hash = 0;
       fixed (void* pieceSquares = &Square_0_1)
       {
         long* pieceSquaresUint = (long*)pieceSquares;
         for (int i = 0; i < 4; i++)
+        {
           hash = (long)hash * -1521134295L + pieceSquaresUint[i];
+        }
       }
       return (byte)(hash / 256);
     }
@@ -462,6 +464,26 @@ namespace Ceres.Chess
       }
     }
 
+    /// <summary>
+    /// Returns if this position is equivalent to another position
+    /// as far as repetition counting is concerned.
+    /// </summary>
+    /// <param name="otherPos"></param>
+    /// <returns></returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly bool EqualAsRepetition(in Position otherPos)
+    {
+      if (PiecesShortHash != otherPos.PiecesShortHash)
+      {
+        // Fast path check.
+        return false;
+      }
+      else
+      {
+        // Slow infrequent path.
+        return EqualAsRepetitionFullCheck(in otherPos);
+      }
+    }
 
     /// <summary>
     /// Returns if this position is equivalent to another position
@@ -469,19 +491,19 @@ namespace Ceres.Chess
     /// </summary>
     /// <param name="otherPos"></param>
     /// <returns></returns>
-    public readonly bool EqualAsRepetition(in Position otherPos)
+    readonly bool EqualAsRepetitionFullCheck(in Position otherPos)
     {
-      if (PiecesShortHash != otherPos.PiecesShortHash) return false;
       if (!PiecesEqual(in otherPos)) return false;
 
-      if (MiscInfo.SideToMove != otherPos.MiscInfo.SideToMove) return false;
-
-      if (MiscInfo.WhiteCanOOO != otherPos.MiscInfo.WhiteCanOOO) return false;
-      if (MiscInfo.WhiteCanOO != otherPos.MiscInfo.WhiteCanOO) return false;
-      if (MiscInfo.BlackCanOOO != otherPos.MiscInfo.BlackCanOOO) return false;
-      if (MiscInfo.BlackCanOO != otherPos.MiscInfo.BlackCanOO) return false;
-
-      if (MiscInfo.EnPassantFileIndex != otherPos.MiscInfo.EnPassantFileIndex) return false;
+      if (MiscInfo.SideToMove != otherPos.MiscInfo.SideToMove
+       || MiscInfo.WhiteCanOOO != otherPos.MiscInfo.WhiteCanOOO
+       || MiscInfo.WhiteCanOO != otherPos.MiscInfo.WhiteCanOO
+       || MiscInfo.BlackCanOOO != otherPos.MiscInfo.BlackCanOOO
+       || MiscInfo.BlackCanOO != otherPos.MiscInfo.BlackCanOO
+       || MiscInfo.EnPassantFileIndex != otherPos.MiscInfo.EnPassantFileIndex)
+      {
+        return false;
+      }  
 
       return true;
     }
@@ -545,9 +567,13 @@ namespace Ceres.Chess
     public void InitializeBitmaps(Span<BitVector64> bitmaps, bool reversed)
     {
       if (reversed)
+      {
         DoInitializeBitmapsReversed(bitmaps);
+      }
       else
+      {
         DoInitializeBitmaps(bitmaps);
+      }
     }
 
 
@@ -570,10 +596,16 @@ namespace Ceres.Chess
             int squareIndex = i * 2;
 
             byte rawValueLeft = (byte)(rawValue & 0b0000_1111);
-            if (rawValueLeft != 0) DoApply(bitmaps, squareIndex, rawValueLeft);
+            if (rawValueLeft != 0)
+            {
+              DoApply(bitmaps, squareIndex, rawValueLeft);
+            }
 
             byte rawValueRight = (byte)(rawValue >> 4);
-            if (rawValueRight != 0) DoApply(bitmaps, squareIndex + 1, rawValueRight);
+            if (rawValueRight != 0)
+            {
+              DoApply(bitmaps, squareIndex + 1, rawValueRight);
+            }
           }
         }
       }
@@ -965,7 +997,10 @@ namespace Ceres.Chess
             byte byteValue = pieceSquares[i / 2];
             byteValue = i % 2 == 1 ? (byte)(byteValue >> 4) : (byte)(byteValue & 0b0000_1111);
 
-            if (byteValue == piece.RawValue) return true;
+            if (byteValue == piece.RawValue)
+            {
+              return true;
+            }
           }
         }
         return false;
@@ -990,7 +1025,10 @@ namespace Ceres.Chess
             byte byteValue = pieceSquares[i / 2];
             byteValue = i % 2 == 1 ? (byte)(byteValue >> 4) : (byte)(byteValue & 0b0000_1111);
 
-            if (byteValue == piece.RawValue) count++;
+            if (byteValue == piece.RawValue)
+            {
+              count++;
+            }
           }
         }
       }
@@ -1041,7 +1079,10 @@ namespace Ceres.Chess
       pd.WriteStartSection();
       pd.WritePos(this, 40, viewboxSize: 130);
       pd.WriteEndSection();
-      for (int i = 0; i < 4; i++) label += "<br></br>";
+      for (int i = 0; i < 4; i++)
+      {
+        label += "<br></br>";
+      }
       return pd.FinalText() + label;
     }
 
