@@ -47,21 +47,6 @@ namespace Ceres.MCTS.Iteration
   public partial class MCTSManager : ObjectWithInstanceID, IDisposable
   {
     /// <summary>
-    /// Reason a search was stopped.
-    /// </summary>
-    public enum SearchStopStatus
-    {
-      Continue,
-      OnlyOneLegalMove,
-      ExternalStopRequested,
-      TimeExpired,
-      FutilityPrunedAllMoves,
-      Instamove,
-      TablebaseImmediateMove
-    }
-
-
-    /// <summary>
     /// Callback called periodically during search to facilitate
     /// tracking of search progress.
     /// </summary>
@@ -270,9 +255,14 @@ namespace Ceres.MCTS.Iteration
         if (searchLimit.Type == SearchLimitType.NodesPerMove)
         {
           if (Root.N >= searchLimit.Value)
+          {
             shouldProcess = false;
+            StopStatus = SearchStopStatus.SearchLimitExceeded;
+          }
           else
+          {
             hardLimitNumNodes = (int)searchLimit.Value - Root.N;
+          }
         }
 
         StartTimeFirstVisit = DateTime.Now;
@@ -347,11 +337,13 @@ namespace Ceres.MCTS.Iteration
       Root.Ref.TraverseSequential(Context.Tree.Store, (ref MCTSNodeStruct nodeRef, MCTSNodeStructIndex index) =>
       {
         if (nodeRef.N >= minN 
-         && nodeRef.Terminal == GameResult.Unknown 
+         && nodeRef.Terminal == GameResult.Unknown
+         && !nodeRef.IsTranspositionLinked
          && nodeRef.Uncertainty == 0 // ** TODO: fix this
-         /*&& FP16.IsNaN(nodeRef.VSecondary)*/)// && !nodeRef.IsTranspositionLinked)
+         /*&& FP16.IsNaN(nodeRef.VSecondary)*/)// )
         {
           MCTSNode node = Context.Tree.GetNode(index);
+
           node.EvalResultSecondary = default;
           nodes.Add(node);
 
@@ -383,6 +375,8 @@ namespace Ceres.MCTS.Iteration
         ListBounded<MCTSNode> thisBatch = new (nodes.ToArray(), ListBounded<MCTSNode>.CopyMode.ReferencePassedMembers);
         evaluatorSecondary.Evaluate(Context, thisBatch);
 
+        ParamsSearchSecondaryEvaluator secondaryParams = Context.ParamsSearch.ParamsSecondaryEvaluator;
+
         foreach (MCTSNode node in nodes)
         {
           ref MCTSNodeStruct nodeRef = ref node.Ref;
@@ -394,17 +388,14 @@ namespace Ceres.MCTS.Iteration
           {
             ref readonly CompressedPolicyVector otherPolicy = ref node.EvalResultSecondary.PolicyRef;
 
-            ParamsSearchSecondaryEvaluator secondaryParams = Context.ParamsSearch.ParamsSecondaryEvaluator;
-
             node.BlendPolicy(in otherPolicy, secondaryParams.UpdatePolicyFraction);
 
             if (secondaryParams.UpdateValueFraction > 0)
             {
-              throw new NotImplementedException();
-              // buggy?
               float diff = node.EvalResultSecondary.V - nodeRef.V;
+              nodeRef.BackupApplyWDeltaOnly(secondaryParams.UpdateValueFraction * diff); // TODO: MAYBE USE 2.0 multiplier (?)
+
               accAbsDiff += Math.Abs(diff);
-              // nodeRef.BackupApplyWDeltaOnly(diff); // TODO: MAYBE USE 2.0 multiplier
             }
           }
         }
@@ -824,8 +815,6 @@ namespace Ceres.MCTS.Iteration
     public void UpdateSearchStopStatus()
     {
       StopStatus = CalcSearchStopStatus();
-//      if (StopStatus != SearchStopStatus.Continue)
-//        Console.WriteLine("STOP " + StopStatus);
     }
 
     SearchStopStatus CalcSearchStopStatus()
