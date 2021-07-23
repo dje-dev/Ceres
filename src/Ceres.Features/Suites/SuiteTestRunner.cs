@@ -134,13 +134,23 @@ namespace Ceres.Features.Suites
       int timerFiredCount = 0;
 
       // TODO: add path automatically
-      List<EPDEntry> epds = EPDEntry.EPDEntriesInEPDFile(Def.EPDFileName, int.MaxValue);
-      if (Def.MaxNumPositions == 0) Def.MaxNumPositions = epds.Count;
+      List<EPDEntry> epds = EPDEntry.EPDEntriesInEPDFile(Def.EPDFileName, Def.MaxNumPositions, Def.EPDLichessPuzzleFormat);
+      if (Def.MaxNumPositions == 0)
+      {
+        Def.MaxNumPositions = epds.Count;
+      }
 
       Def.Output.WriteLine();
       Def.Output.WriteLine("C1 = " + Def.Engine1Def.EvaluatorDef);
-      if (Def.RunCeres2Engine) Def.Output.WriteLine("C2 = " + Def.Engine2Def.EvaluatorDef);
-      if (Def.ExternalEngineDef != null) Def.Output.WriteLine("EX = " + Def.ExternalEngineDef.EngineDef);
+      if (Def.RunCeres2Engine)
+      {
+        Def.Output.WriteLine("C2 = " + Def.Engine2Def.EvaluatorDef);
+      }
+
+      if (Def.ExternalEngineDef != null)
+      {
+        Def.Output.WriteLine("EX = " + Def.ExternalEngineDef.EngineDef);
+      }
 
 #if NOT
       // To make up for the fact that LZ0 "cheats" by sometimes running over specified number of nodes
@@ -396,7 +406,7 @@ namespace Ceres.Features.Suites
         }
       }
 
-      PositionWithHistory pos = PositionWithHistory.FromFENAndMovesSAN(epdToUse.FEN, epdToUse.StartMoves);
+      PositionWithHistory pos = epd.PosWithHistory;
 
       // TODO: should this be switched to GameEngineCeresInProcess?
 

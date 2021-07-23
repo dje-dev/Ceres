@@ -14,6 +14,7 @@
 #region Using directives
 
 
+using Ceres.Chess.Positions;
 using Ceres.Chess.Textual;
 using System;
 using System.Collections.Generic;
@@ -31,6 +32,12 @@ namespace Ceres.Chess.Games.Utils
   /// </summary>
   public partial record EPDEntry
   {
+    public enum MovesFormatEnum
+    {
+      SAN,
+      UCI
+    }
+
     /// <summary>
     /// Starting FEN.
     /// </summary>
@@ -55,6 +62,11 @@ namespace Ceres.Chess.Games.Utils
     /// Optional descriptio of position.
     /// </summary>
     public readonly string ID;
+
+    /// <summary>
+    /// Notation used to express any associated moves.
+    /// </summary>
+    public readonly MovesFormatEnum MovesFormat = MovesFormatEnum.SAN;
 
 
     /// <summary>
@@ -107,8 +119,12 @@ namespace Ceres.Chess.Games.Utils
     public int ValueOfMove(Move move, Position pos)
     {
       foreach (EPDScoredMove sm in ScoredMoves)
+      {
         if (SANParser.FromSAN(sm.MoveStr, pos).Move == move)
+        {
           return sm.Score;
+        }
+      }
 
       return 0;
     }
@@ -119,8 +135,30 @@ namespace Ceres.Chess.Games.Utils
     /// extracting FEN and benchmark moves/commentary
     /// </summary>
     /// <param name="epdLine"></param>
-    public EPDEntry(string epdLine)
+    public EPDEntry(string epdLine, bool lichessPuzzleFormat = false)
     {
+      //xxx,r6k/pp2r2p/4Rp1Q/3p4/8/1N1P2R1/PqP2bPP/7K b - - 0 24,f2g3 e6e7 b2b1 b3c1 b1c1 h6c1,2032,75,91,297,crushing hangingPiece long middlegame,https://lichess.org/787zsVup/black#48
+      if (lichessPuzzleFormat)
+      {
+        int indexFirstComma = epdLine.IndexOf(",");
+        ID = epdLine.Substring(0, indexFirstComma);
+
+        epdLine = epdLine.Substring(indexFirstComma + 1);
+        string[] parts = epdLine.Split(",");
+        string fen = parts[0];
+        string[] moveParts = parts[1].Split(" ");
+        string movePre = moveParts[0];
+        string moveCorrect = moveParts[1];
+
+        FEN = fen;
+        StartMoves = movePre;
+        BMMoves = new string[] { moveCorrect };
+        List<EPDScoredMove> moves = new List<EPDScoredMove>(1);
+        moves.Add(new EPDScoredMove(moveCorrect, 1));
+        MovesFormat = MovesFormatEnum.UCI;
+        return;
+      }
+
       int posBMOrAM = epdLine.IndexOf(" bm "); // benchmark move
       bool hasBM = posBMOrAM != -1;
       if (!hasBM) posBMOrAM = epdLine.IndexOf(" am "); // avoid move
@@ -142,7 +180,9 @@ namespace Ceres.Chess.Games.Utils
         // Replace any "-" at end indicating unknown move counts with default move counts since some programs don't accept this (e.g. Leela)
         string[] parts = fenStr.Split(' ');
         if (parts.Length == 4 || (parts.Length == 5 && parts[4] == "-"))
+        {
           fenStr = parts[0] + " " + parts[1] + " " + parts[2] + " " + parts[3] + " 0 1";
+        }
 
         GetFENAndStartMovesFromFENStr(fenStr, out FEN, out StartMoves);
 
@@ -152,7 +192,11 @@ namespace Ceres.Chess.Games.Utils
           {
             string[] left = epdLine.Substring(0, i).Split(new char[] { '"', ',', ' ' });
             string[] right = epdLine.Substring(i + 1).Split(new char[] { '"', ',', ' ' });
-            if (!char.IsNumber(right[0][0])) continue; // catch case where this is promotion, not a score, e.g. =Q
+            if (!char.IsNumber(right[0][0]))
+            {
+              continue; // catch case where this is promotion, not a score, e.g. =Q
+            }
+
             ScoredMoves.Add(new EPDScoredMove(left[left.Length - 1], int.Parse(right[0])));
           }
         }
@@ -165,8 +209,13 @@ namespace Ceres.Chess.Games.Utils
         // Remove empty tokens
         List<string> amOrBMMovesArrayList = new List<string>();
         foreach (string move in amOrBMMovesArray)
+        {
           if (move.Trim() != "")
+          {
             amOrBMMovesArrayList.Add(move);
+          }
+        }
+
         amOrBMMovesArray = amOrBMMovesArrayList.ToArray();
 
         // Check moves for validity
@@ -199,7 +248,7 @@ namespace Ceres.Chess.Games.Utils
     /// </summary>
     /// <param name="pos"></param>
     /// <param name="moves"></param>
-    static void CheckAllMovesValid(in Position pos, string[] moves)
+    void CheckAllMovesValid(in Position pos, string[] moves)
     {
       foreach (string move in moves)
       {
@@ -219,11 +268,12 @@ namespace Ceres.Chess.Games.Utils
     /// <param name="moveStr"></param>
     /// <param name="errString"></param>
     /// <returns></returns>
-    static bool MoveValid(in Position position, string moveStr, out string errString)
+    bool MoveValid(in Position position, string moveStr, out string errString)
     {
       try
       {
-        Move epdMove = SANParser.FromSAN(moveStr, position).Move;
+        Move epdMove = MovesFormat == MovesFormatEnum.SAN ? SANParser.FromSAN(moveStr, in position).Move
+                                                          : Move.FromUCI(moveStr);
         errString = null;
         return true;
       }
@@ -234,6 +284,28 @@ namespace Ceres.Chess.Games.Utils
       }
     }
 
+
+    /// <summary>
+    /// Returns starting position of the suite test.
+    /// </summary>
+    public PositionWithHistory PosWithHistory
+    {
+      get
+      {
+        if (MovesFormat == MovesFormatEnum.SAN)
+        {
+          return PositionWithHistory.FromFENAndMovesSAN(FEN, StartMoves);
+        }
+        else if (MovesFormat == MovesFormatEnum.UCI)
+        {
+          return PositionWithHistory.FromFENAndMovesUCI(FEN, StartMoves);
+        }
+        else
+        {
+          throw new Exception("Unsupported notation type " + MovesFormat);
+        }
+      }
+    }
 
     /// <summary>
     /// Checks the AMMoves and BMMoves for a specified move
@@ -250,8 +322,8 @@ namespace Ceres.Chess.Games.Utils
       if (AMMoves != null)
       {
         // avoid move
-        Move avoidMoveEPD = SANParser.FromSAN(AMMoves[0], Position).Move;
-
+        Move avoidMoveEPD = MovesFormat == MovesFormatEnum.SAN ? SANParser.FromSAN(AMMoves[0], Position).Move
+                                                               : Move.FromUCI(AMMoves[0]);
         correct = move != avoidMoveEPD;
         if (correct) value = valueOfBestMove;
       }
@@ -262,14 +334,26 @@ namespace Ceres.Chess.Games.Utils
           // best move
           foreach (string bmMove in BMMoves)
           {
-            if (bmMove != "" && Move.FromSAN(Position, bmMove) == move)
-              correct = true;
+            if (bmMove != "")
+            {
+              Move bmMoveDecoded = MovesFormat == MovesFormatEnum.SAN ? SANParser.FromSAN(BMMoves[0], Position).Move
+                                                                      : Move.FromUCI(BMMoves[0]);
+
+              if (bmMoveDecoded == move)
+              {
+                correct = true;
+              }
+            }
           }
 
           if (correct)
+          {
             value = valueOfBestMove; // Some entries only have single designated Bm move
+          }
           else
+          {
             value = ValueOfMove(move, Position);
+          }
         }
         catch (Exception e)
         {
@@ -287,22 +371,31 @@ namespace Ceres.Chess.Games.Utils
     /// <param name="epdFN"></param>
     /// <param name="maxEntries"></param>
     /// <returns></returns>
-    public static List<EPDEntry> EPDEntriesInEPDFile(string epdFN, int maxEntries = int.MaxValue)
+    public static List<EPDEntry> EPDEntriesInEPDFile(string epdFN, int maxEntries = int.MaxValue, bool skipFirstColumn = false)
     {
       string[] lines = System.IO.File.ReadAllLines(epdFN);
       List<EPDEntry> ret = new List<EPDEntry>(lines.Length);
 
       foreach (string line in lines)
       {
-        if (ret.Count >= maxEntries) break;
+        if (ret.Count >= maxEntries)
+        {
+          break;
+        }
 
         // Skip comment lines
-        if (line.StartsWith("#")) continue;
+        if (line.StartsWith("#"))
+        {
+          continue;
+        }
 
         // Skip emtpy line
-        if (line.Trim().Length == 0) continue;
+        if (line.Trim().Length == 0)
+        {
+          continue;
+        }
 
-        ret.Add(new EPDEntry(line));
+        ret.Add(new EPDEntry(line, skipFirstColumn));
       }
 
       return ret;
@@ -339,14 +432,12 @@ namespace Ceres.Chess.Games.Utils
     {
       string ret = "<EPDEntry "  /*+ Pos.pretty(0)*/ + " " + ID + " "; // TODO: + (BMMoves != null ?  "bm  + BMMoves[0]
       foreach (EPDScoredMove sm in ScoredMoves)
+      {
         ret += " " + sm.MoveStr + "=" + sm.Score;
+      }
 
       return ret + ">";
     }
-
-
   }
 
-
 }
-

@@ -61,6 +61,13 @@ namespace Ceres.Features.Suites
     public string EPDFileName;
 
     /// <summary>
+    /// If the line comes from a file in the Lichess puzzle format 
+    /// (identifie, then FEN, then set of moves the first of which should be played before the puzzle).
+    /// See: https://database.lichess.org/#puzzles.
+    /// </summary>
+    public bool EPDLichessPuzzleFormat;
+
+    /// <summary>
     /// The number of first position in file to test (zero-based, defaults to first position).
     /// </summary>
     public int FirstTestPosition;
@@ -93,10 +100,14 @@ namespace Ceres.Features.Suites
                         EnginePlayerDef externalEngineDef = null)
     {
       if (ceresEngine2Def != null && (ceresEngine2Def.EngineDef is not GameEngineDefCeres))
+      {
         throw new Exception("ceresEngine2Def is expected to be for a Ceres engine");
+      }
 
       if (externalEngineDef != null && (externalEngineDef.EngineDef is GameEngineDefCeres))
+      {
         throw new Exception("externalEngineDef is not expected to be for a Ceres engine, instead GameEngineDefLC0 or GameEngineDefUCI");
+      }
 
       ID = id;
       EPDFileName = epdFileName;
