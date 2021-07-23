@@ -192,7 +192,10 @@ namespace Ceres.MCTS.Evaluators
             }
           }
           else
+          {
+            nodes[i].Annotate();
             nodes[i].Annotation.CalcRawPosition(nodes[i], ref rawPosArray[i]);
+          }
         }
 
         if (EvaluatorDef.Location == NNEvaluatorDef.LocationType.Local)
