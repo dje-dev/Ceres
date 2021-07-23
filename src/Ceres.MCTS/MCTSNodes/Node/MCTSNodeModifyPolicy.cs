@@ -17,6 +17,7 @@ using System;
 using Ceres.Base.DataTypes;
 using Ceres.Chess.EncodedPositions;
 using Ceres.MCTS.MTCSNodes.Struct;
+using Ceres.MCTS.Params;
 
 #endregion
 
@@ -42,13 +43,20 @@ namespace Ceres.MCTS.MTCSNodes
         return;
       }
 
+      if (fracOther == 0)
+      {
+        return;
+      }
+
       float softmaxValue = Context.ParamsSelect.PolicySoftmax;
 
       const bool DEBUG = false;
       CompressedPolicyVector thisPolicy = default;
       if (DEBUG)
       {
-        MCTSNodeStructUtils.ExtractPolicyVector(softmaxValue, in Ref, ref thisPolicy); 
+        MCTSNodeStructUtils.ExtractPolicyVector(softmaxValue, in Ref, ref thisPolicy);
+//        Console.WriteLine(thisPolicy.ToString());
+//        Console.WriteLine(otherPolicy.ToString());
       }
 
       // Process expanded nodes
@@ -61,7 +69,7 @@ namespace Ceres.MCTS.MTCSNodes
         if (indexOther != -1)
         {
           float otherProbabilityRaw = otherPolicy.PolicyInfoAtIndex(indexOther).Probability;
-          FP16 newPolicy = BlendedP(softmaxValue, fracOther, childInfo.p, otherProbabilityRaw);
+          FP16 newPolicy = BlendedP(softmaxValue, fracOther, childInfo.p, otherProbabilityRaw, ParamsSelect.MinPolicyProbability);
 
           if (i < NumChildrenExpanded)
           {
@@ -87,10 +95,20 @@ namespace Ceres.MCTS.MTCSNodes
 
         MCTSNodeStructUtils.ExtractPolicyVector(softmaxValue, in Ref, ref modifiedPolicy);
 
-        Console.WriteLine(thisPolicy.ToString());
-        Console.WriteLine(otherPolicy.ToString());
-        Console.WriteLine(modifiedPolicy.ToString());
-        Console.WriteLine();
+        var p1 = modifiedPolicy.DecodedAndNormalized;
+        var p2 = thisPolicy.DecodedAndNormalized;
+        for (int i = 0; i < 1858; i++)
+          if (MathF.Abs(p1[i] - p2[i]) > 0.075)
+          {
+            Console.WriteLine(thisPolicy.ToString());
+            Console.WriteLine(otherPolicy.ToString());
+            Console.WriteLine(modifiedPolicy.ToString());
+            Console.WriteLine();
+
+//            throw new NotImplementedException();
+          }
+//        Console.WriteLine(modifiedPolicy.ToString());
+//        Console.WriteLine();
       }
     }
 
@@ -136,7 +154,7 @@ namespace Ceres.MCTS.MTCSNodes
           {
             //              node.Ref.NumChildrenVisited = (byte)Math.Max(node.NumChildrenVisited, i+1);
             //              node.Ref.NumChildrenExpanded = (byte)Math.Max(node.NumChildrenVisited, i + 1);
-            CreateChild(i);
+            CreateChild(i, true);
           }
         }
       }
@@ -147,14 +165,16 @@ namespace Ceres.MCTS.MTCSNodes
     /// Computes a blended policy probability value (after softmax)
     /// given two specified probabilties.
     /// </summary>
-    static FP16 BlendedP(float softmaxValue, float fracP2, float p1Softmaxed, float p2Raw)
+    static FP16 BlendedP(float softmaxValue, float fracP2, 
+                         float p1Softmaxed, float p2Raw, 
+                         float minProbability)
     {
       float p1Raw = MathF.Pow(p1Softmaxed, softmaxValue);
 //      p2Raw = MathF.Pow(p2Raw, 1.0f / softmaxValue);
       float avgRaw = (1.0f - fracP2) * p1Raw
                             + fracP2 * p2Raw;
       float softmaxed = MathF.Pow(avgRaw, 1.0f / softmaxValue);
-      return (FP16)softmaxed;
+      return (FP16)MathF.Max(softmaxed, minProbability);
     }
 
   }

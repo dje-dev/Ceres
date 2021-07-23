@@ -497,11 +497,12 @@ namespace Ceres.MCTS.MTCSNodes
     /// Creates a new child node at specified index.
     /// </summary>
     /// <param name="childIndex"></param>
+    /// <param name="possiblyOutOfOrder">normally children added only strictly sequentially unless true</param>
     /// <returns></returns>
-    public MCTSNode CreateChild(int childIndex)
+    public MCTSNode CreateChild(int childIndex, bool possiblyOutOfOrder = false)
     {
       // Make sure expanded children appear strictly clustered at lowest indices
-      Debug.Assert(childIndex == 0 || Ref.ChildAtIndex(childIndex - 1).IsExpanded);
+      Debug.Assert(possiblyOutOfOrder || childIndex == 0 || Ref.ChildAtIndex(childIndex - 1).IsExpanded);
 
       // Get child info and make sure not already expanded
       ref MCTSNodeStructChild thisChildRef = ref ChildAtIndexRef(childIndex);
