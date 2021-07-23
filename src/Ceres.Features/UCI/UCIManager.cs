@@ -504,7 +504,7 @@ namespace Ceres.Features.UCI
         ShowWeightsFileInfo();
 
         // Create the engine (to be subsequently reused).
-        CeresEngine = new GameEngineCeresInProcess("Ceres", EvaluatorDef, ParamsSearch, ParamsSelect, logFileName: searchLogFileName);
+        CeresEngine = new GameEngineCeresInProcess("Ceres", EvaluatorDef, null, ParamsSearch, ParamsSelect, logFileName: searchLogFileName);
 
         // Disable verbose move stats from the engine since 
         // this class manages the possibly dumping of verbose move stats itself.

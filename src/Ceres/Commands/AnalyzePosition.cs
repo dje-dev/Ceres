@@ -72,7 +72,7 @@ namespace Ceres.Commands
       Console.WriteLine();
       Console.WriteLine();
 
-      NNEvaluatorSet nnEvaluators = new NNEvaluatorSet(evaluatorDef);
+      NNEvaluatorSet nnEvaluators = new NNEvaluatorSet(evaluatorDef, null);
 
       // Warmup (in parallel)    
       lc0Engine?.DoSearchPrepare();

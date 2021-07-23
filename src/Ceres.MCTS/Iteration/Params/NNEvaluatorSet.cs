@@ -41,6 +41,12 @@ namespace Ceres.MCTS.Params
     /// </summary>
     public readonly NNEvaluatorDef EvaluatorDef;
 
+    /// <summary>
+    /// Definition of the evaluator to be used for EvaluatorSecondary (optional).
+    /// </summary>
+    public readonly NNEvaluatorDef EvaluatorDefSecondary;
+
+
     #region Internal data
 
     [NonSerialized]
@@ -77,7 +83,8 @@ namespace Ceres.MCTS.Params
     /// according to a specified definition.
     /// </summary>
     /// <param name="evaluatorDef"></param>
-    public NNEvaluatorSet(NNEvaluatorDef evaluatorDef)
+    /// <param name="evaluatorDefSecondary"></param>
+    public NNEvaluatorSet(NNEvaluatorDef evaluatorDef, NNEvaluatorDef evaluatorDefSecondary = null)
     {
       if (evaluatorDef == null)
       {
@@ -85,7 +92,9 @@ namespace Ceres.MCTS.Params
       }
 
       EvaluatorDef = evaluatorDef;
+      EvaluatorDefSecondary = evaluatorDefSecondary;
     }
+
 
     public bool IsWDL => evaluator1.IsWDL;
     public bool HasM => evaluator1.HasM;
@@ -113,16 +122,16 @@ namespace Ceres.MCTS.Params
       {
         Parallel.Invoke(
           () => CalcStatistics(true),
-          () => { if (Evaluator2 is not null) NNEvaluatorBenchmark.Warmup(Evaluator2); }
-//          () => { if (EvaluatorSecondary is not null) NNEvaluatorBenchmark.Warmup(EvaluatorSecondary); }
+          () => { if (Evaluator2 is not null) NNEvaluatorBenchmark.Warmup(Evaluator2); },
+          () => { if (EvaluatorSecondary is not null) NNEvaluatorBenchmark.Warmup(EvaluatorSecondary); }
           );
       }
       else
       {
         Parallel.Invoke(
           () => NNEvaluatorBenchmark.Warmup(Evaluator1),
-          () => { if (Evaluator2 is not null) NNEvaluatorBenchmark.Warmup(Evaluator2); }
-//          () => { if (EvaluatorSecondary is not null) NNEvaluatorBenchmark.Warmup(EvaluatorSecondary); }
+          () => { if (Evaluator2 is not null) NNEvaluatorBenchmark.Warmup(Evaluator2); },
+          () => { if (EvaluatorSecondary is not null) NNEvaluatorBenchmark.Warmup(EvaluatorSecondary); }
           );
       }
     }
@@ -196,16 +205,18 @@ namespace Ceres.MCTS.Params
     {
       get
       {
+        if (EvaluatorDefSecondary == null)
+        {
+          return null;
+        }
+
         if (evaluatorSecondary == null)
         {
           lock (makeEvaluatorSecondaryLock)
           {
             if (evaluatorSecondary == null)
             {
-              throw new NotImplementedException("Needs remediation");
-              //evaluatorSecondary = MakeLocalNNEvaluator(0, 0, SHARED, Params.SECONDARY_NETWORK_ID);
-              //if (Params.EstimatePerformanceCharacteristics) evaluatorSecondary.CalcStatistics(true);
-              return evaluatorSecondary;
+              evaluatorSecondary = NNEvaluatorFactory.BuildEvaluator(EvaluatorDefSecondary, null);
             }
           }
         }

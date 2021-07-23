@@ -234,7 +234,7 @@ namespace Ceres.Features.BatchAnalysis
 
     void ProcessAnalysisItemQueue(object cancellationToken)
     {
-      GameEngineCeresInProcess ges = new("BatchAnalyzer", evaluatorDef);
+      GameEngineCeresInProcess ges = new("BatchAnalyzer", evaluatorDef, null);
       ges.VerboseMoveStats = false;
       Console.WriteLine("analyzer started " + ges);
 

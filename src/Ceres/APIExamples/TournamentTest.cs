@@ -188,12 +188,25 @@ namespace Ceres.APIExamples
 //      NET1 = "t60apr2kmdc1-swa-700000";
 //      NET2 = @"703810";
 
-      NET1 = "J94-100";
-      NET2 = "J94-100";
+//      NET1 = "J94-100";
+//      NET2 = "J94-100";
 
+      NET1 = "703810";
+      NET2 = "703810";
+      string NET1_SECONDARY1 = "j94-100";
+        
       //string       NET2 = @"j64-210";
       NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification(@$"LC0:{NET1}", GPUS); // j64-210 LS16 40x512-lr015-swa-167500
+//evalDef1.SECONDARY_NETWORK_ID = "j94-100";
       NNEvaluatorDef evalDef2 = NNEvaluatorDefFactory.FromSpecification($@"LC0:{NET2}", GPUS); ;
+
+      NNEvaluatorDef evalDefSecondary1 = null;
+      if (NET1_SECONDARY1 != null)
+      {
+        evalDefSecondary1 = NNEvaluatorDefFactory.FromSpecification($@"LC0:{NET1_SECONDARY1}", GPUS);
+      }
+
+      NNEvaluatorDef evalDefSecondary2 = null;
 
 
       static NNEvaluatorDef EvaluatorValueOnly(string netID1, string netID2, int gpuID, bool valueNet1)
@@ -259,10 +272,10 @@ namespace Ceres.APIExamples
       //limit1 = SearchLimit.NodesForAllMoves(500_000);//, 25_000);
 
       limit1 = SearchLimit.SecondsForAllMoves(60, 4);
-      limit1 = SearchLimit.SecondsForAllMoves(1, 0.15f) * 1f;
+      //limit1 = SearchLimit.SecondsForAllMoves(1, 0.15f) * 1f;
       //limit1 = SearchLimit.SecondsForAllMoves(900, 15) * 0.05f;
 
-      //limit1 = SearchLimit.NodesPerMove(15_000);
+      limit1 = SearchLimit.NodesPerMove(3000);
 
       SearchLimit limit2 = limit1;// * 0.2f;// SearchLimit.NodesPerMove(2500);
       //limit2 = limit1 * 3;
@@ -277,9 +290,9 @@ namespace Ceres.APIExamples
       // (to avoid making very large log files or slowing down play).
       bool outputLog = limit1.EstNumNodes(200_000, false) > 10_000;
       outputLog = false;
-      GameEngineDefCeres engineDefCeres1 = new GameEngineDefCeres("Ceres1", evalDef1, new ParamsSearch(), new ParamsSelect(),
+      GameEngineDefCeres engineDefCeres1 = new GameEngineDefCeres("Ceres1", evalDef1, evalDefSecondary1, new ParamsSearch(), new ParamsSelect(),
                                                                   null, outputLog ? "Ceres1.log.txt" : null);
-      GameEngineDefCeres engineDefCeres2 = new GameEngineDefCeres("Ceres2", evalDef2, new ParamsSearch(), new ParamsSelect(),
+      GameEngineDefCeres engineDefCeres2 = new GameEngineDefCeres("Ceres2", evalDef2, evalDefSecondary2, new ParamsSearch(), new ParamsSelect(),
                                                                   null, outputLog ? "Ceres2.log.txt" : null);
 
       //engineDefCeres1.OverrideTimeManager = new ManagerGameLimitCeres();
@@ -293,7 +306,7 @@ namespace Ceres.APIExamples
       ////////
 
 
-      //engineDefCeres1.SearchParams.TestFlag = true;
+//engineDefCeres1.SearchParams.TestFlag = true;
       //engineDefCeres1.SearchParams.MoveFutilityPruningAggressiveness = 0.4f;
       //engineDefCeres1.SearchParams.GameLimitUsageAggressiveness *= 1.2f;
       //engineDefCeres1.SearchParams.MoveFutilityPruningAggressiveness = 0.75f;
@@ -510,7 +523,7 @@ namespace Ceres.APIExamples
     public static void TestSF(int index, bool gitVersion)
     {
       NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification("LC0:j94-100", "GPU:" + index);
-      GameEngineDefCeres engineDefCeres1 = new GameEngineDefCeres("CeresInProc", evalDef1,
+      GameEngineDefCeres engineDefCeres1 = new GameEngineDefCeres("CeresInProc", evalDef1, null,
                                                                   new ParamsSearch(), new ParamsSelect(), null,
                                                                   "CeresSF.log.txt");
 

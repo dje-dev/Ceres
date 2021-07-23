@@ -90,7 +90,7 @@ namespace Ceres.Commands
 
       ParamsSearch paramsSearch = new ParamsSearch();
       paramsSearch.FutilityPruningStopSearchEnabled = false;
-      GameEngineCeresInProcess engineCeres = new GameEngineCeresInProcess("Ceres", nnDefCeres, paramsSearch);
+      GameEngineCeresInProcess engineCeres = new GameEngineCeresInProcess("Ceres", nnDefCeres, null, paramsSearch);
       engineCeres.Warmup();
       engineCeres.ResetGame();
 

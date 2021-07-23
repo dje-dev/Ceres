@@ -75,17 +75,21 @@ namespace Ceres.MCTS.Search
         BlockNNEval2 = new MCTSNNEvaluator(nodeEvaluator2, true);
       }
 
-      if (context.EvaluatorDef.SECONDARY_NETWORK_ID != null)
+      if (context.EvaluatorDefSecondary != null)
       {
-        throw new NotImplementedException();
-        //NodeEvaluatorNN nodeEvaluatorSecondary = new NodeEvaluatorNN(context.EvaluatorDef, context.ParamsNN.Evaluators.EvaluatorSecondary, false, false, null, null);
-        //BlockNNEvalSecondaryNet = new MCTSNNEvaluate(nodeEvaluatorSecondary, false);
+        const bool CACHE_SECONDARY = false; // TODO: support this someday (in its own cache)?
+        LeafEvaluatorNN nodeEvaluatorSecondary = new LeafEvaluatorNN(context.EvaluatorDef, 
+                                                                     context.NNEvaluators.EvaluatorSecondary,
+                                                                     CACHE_SECONDARY, false, null, null);          
+        BlockNNEvalSecondaryNet = new MCTSNNEvaluator(nodeEvaluatorSecondary, false);
       }
 
       BlockApply = new MCTSApply(context.FirstMoveSampler);
 
       if (context.ParamsSearch.Execution.RootPreloadDepth > 0)
+      {
         rootPreloader = new MCTSRootPreloader();
+      }
 
       // TODO: Reconsider this. Current dynamic statistics calculation is disabled because:
       //         - it slows startup

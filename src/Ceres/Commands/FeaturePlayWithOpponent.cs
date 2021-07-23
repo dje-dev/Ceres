@@ -77,7 +77,7 @@ namespace Ceres.Commands
         evaluatorDefOpponent = evaluatorDef;
       }
 
-      GameEngineDefCeres defCeres1 = new GameEngineDefCeres("Ceres", evaluatorDef);
+      GameEngineDefCeres defCeres1 = new GameEngineDefCeres("Ceres", evaluatorDef, null);
       defCeres1.SearchParams.FutilityPruningStopSearchEnabled = Pruning;
       EnginePlayerDef player1 = new EnginePlayerDef(defCeres1, SearchLimit);
       
@@ -104,7 +104,7 @@ namespace Ceres.Commands
       else if (Opponent != null && Opponent.ToUpper() == "CERES"
            || (Opponent == null && opponentRequired))
       {
-        GameEngineDefCeres engineCeres = new GameEngineDefCeres("Ceres2", evaluatorDefOpponent);
+        GameEngineDefCeres engineCeres = new GameEngineDefCeres("Ceres2", evaluatorDefOpponent, null);
         engineCeres.SearchParams.FutilityPruningStopSearchEnabled = Pruning;
         player2 = new EnginePlayerDef(engineCeres, SearchLimitOpponent ?? SearchLimit);
       }

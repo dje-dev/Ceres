@@ -46,8 +46,8 @@ namespace Ceres.APIExamples
 
       List<string> extraUCI = null; // new string[] { "setoption name Contempt value 5000" };
 
-      GameEngineDef ged1 = new GameEngineDefCeres("Ceres1", evalDef1);
-      GameEngineDef ged2 = new GameEngineDefCeres("Ceres1", evalDef2);
+      GameEngineDef ged1 = new GameEngineDefCeres("Ceres1", evalDef1, null);
+      GameEngineDef ged2 = new GameEngineDefCeres("Ceres1", evalDef2, null);
       GameEngineUCISpec geSF = new GameEngineUCISpec("SF12", @"\\synology\dev\chess\engines\stockfish_20090216_x64_avx2.exe",
                                                      32, 2048, CeresUserSettingsManager.Settings.TablebaseDirectory, 
                                                      uciSetOptionCommands: extraUCI);

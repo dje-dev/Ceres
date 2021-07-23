@@ -48,6 +48,11 @@ namespace Ceres.Features.GameEngines
     public readonly NNEvaluatorDef EvaluatorDef;
 
     /// <summary>
+    /// Definition of neural network evaluator used for secondary execution.
+    /// </summary>
+    public readonly NNEvaluatorDef EvaluatorDefSecondary;
+
+    /// <summary>
     /// General search parameters used.
     /// </summary>
     public readonly ParamsSearch SearchParams;
@@ -106,11 +111,14 @@ namespace Ceres.Features.GameEngines
     /// </summary>
     /// <param name="id"></param>
     /// <param name="evaluatorDef"></param>
+    /// <param name="evaluatorDefsecondary"></param>
     /// <param name="searchParams"></param>
     /// <param name="childSelectParams"></param>
     /// <param name="gameLimitManager"></param>
     /// <param name="logFileName"></param>
-    public GameEngineCeresInProcess(string id, NNEvaluatorDef evaluatorDef,
+    public GameEngineCeresInProcess(string id, 
+                                    NNEvaluatorDef evaluatorDef,
+                                    NNEvaluatorDef evaluatorDefSecondary,
                                     ParamsSearch searchParams = null,
                                     ParamsSelect childSelectParams = null,
                                     IManagerGameLimit gameLimitManager = null,
@@ -139,6 +147,7 @@ namespace Ceres.Features.GameEngines
       }
 
       EvaluatorDef = evaluatorDef;
+      EvaluatorDefSecondary = evaluatorDefSecondary;
       SearchParams = searchParams;
       GameLimitManager = gameLimitManager;
       ChildSelectParams = childSelectParams;
@@ -326,7 +335,7 @@ namespace Ceres.Features.GameEngines
       {
         if (evaluators == null)
         {
-          evaluators = new NNEvaluatorSet(EvaluatorDef);
+          evaluators = new NNEvaluatorSet(EvaluatorDef, EvaluatorDefSecondary);
           evaluators.Warmup(false);
         }
 

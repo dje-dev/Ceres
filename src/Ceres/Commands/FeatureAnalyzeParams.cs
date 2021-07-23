@@ -108,7 +108,7 @@ namespace Ceres.Commands
         ParamsSelect paramsSelect = new();
         paramsSearch.FutilityPruningStopSearchEnabled = Pruning;
 
-        GameEngineCeresInProcess opponentCeres = new GameEngineCeresInProcess("Ceres2", evaluatorDefOpponent, paramsSearch, paramsSelect);
+        GameEngineCeresInProcess opponentCeres = new GameEngineCeresInProcess("Ceres2", evaluatorDefOpponent, null, paramsSearch, paramsSelect);
         comparisonEngine = opponentCeres;
       }
       else if (Opponent != null)

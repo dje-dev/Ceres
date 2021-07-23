@@ -43,11 +43,6 @@ namespace Ceres.Chess.NNEvaluators.Defs
     const int DEFAULT_MIN_SPLIT_POSITIONS = 32;
 
     /// <summary>
-    /// ID of optional secondary evaluator.
-    /// </summary>
-    public string SECONDARY_NETWORK_ID = null; //TO DO: move this elsewhere
-
-    /// <summary>
     /// Array of devices used for the evaluation.
     /// </summary>
     public readonly (NNEvaluatorDeviceDef Device, float Fraction)[] Devices;

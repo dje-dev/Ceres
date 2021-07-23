@@ -37,6 +37,11 @@ namespace Ceres.Features.GameEngines
     public NNEvaluatorDef EvaluatorDef;
 
     /// <summary>
+    /// Definition of secondary NN evaluator (optional).
+    /// </summary>
+    public NNEvaluatorDef EvaluatorDefSecondary;
+
+    /// <summary>
     /// Parameters applied to MCTS search.
     /// </summary>
     public ParamsSearch SearchParams;
@@ -60,7 +65,9 @@ namespace Ceres.Features.GameEngines
     /// <summary>
     /// Constructor.
     /// </summary>
-    public GameEngineDefCeres(string id, NNEvaluatorDef evaluatorDef, ParamsSearch searchParams= null,
+    public GameEngineDefCeres(string id, NNEvaluatorDef evaluatorDef,
+                              NNEvaluatorDef evaluatorDefSecondary,
+                              ParamsSearch searchParams= null,
                               ParamsSelect selectParams = null, 
                               IManagerGameLimit overrideLimitManager = null,
                               string logFileName = null)
@@ -68,6 +75,7 @@ namespace Ceres.Features.GameEngines
     {
       // Make a defensive clone of the EvaluatorDef so it will definitely not be shared.
       EvaluatorDef = ObjUtils.DeepClone(evaluatorDef);
+      EvaluatorDefSecondary = evaluatorDefSecondary == null ? null : ObjUtils.DeepClone(evaluatorDefSecondary);
       SearchParams = searchParams ?? new ParamsSearch();
       SelectParams = selectParams ?? new ParamsSelect();
       OverrideLimitManager = overrideLimitManager;
@@ -87,7 +95,7 @@ namespace Ceres.Features.GameEngines
     /// <returns></returns>
     public override GameEngine CreateEngine()
     {
-      return new GameEngineCeresInProcess(ID, EvaluatorDef, SearchParams, SelectParams, 
+      return new GameEngineCeresInProcess(ID, EvaluatorDef, EvaluatorDefSecondary, SearchParams, SelectParams, 
                                           OverrideLimitManager, LogFileName);
     }
 
@@ -102,6 +110,11 @@ namespace Ceres.Features.GameEngines
       if (EvaluatorDef.DeviceCombo != NNEvaluatorDeviceComboType.Pooled)
       {
         EvaluatorDef.TryModifyDeviceID(EvaluatorDef.DeviceIndices[0] + deviceIndexIncrement);
+      }
+
+      if (EvaluatorDefSecondary  != null && EvaluatorDef.DeviceCombo != NNEvaluatorDeviceComboType.Pooled)
+      {
+        EvaluatorDefSecondary.TryModifyDeviceID(EvaluatorDefSecondary.DeviceIndices[0] + deviceIndexIncrement);
       }
     }
 
@@ -120,6 +133,7 @@ namespace Ceres.Features.GameEngines
       writer.WriteLine("\r\n-----------------------------------------------------------------------");
       writer.WriteLine("Evaluator 1     : " + EvaluatorDef);
       writer.WriteLine("Evaluator 2     : " + other.EvaluatorDef);
+      if (EvaluatorDefSecondary != null) writer.WriteLine("Evaluator Secnd : " + other.EvaluatorDefSecondary);
       writer.WriteLine("Time Manager 1  : " + (OverrideLimitManager == null ? "(default)" : OverrideLimitManager));
       writer.WriteLine("Time Manager 2  : " + (other.OverrideLimitManager == null ? "(default)" : other.OverrideLimitManager));
       writer.WriteLine();
@@ -141,7 +155,6 @@ namespace Ceres.Features.GameEngines
       writer.Write(ObjUtils.FieldValuesDumpString<ParamsSearchExecution>(SearchParams.Execution, other.SearchParams.Execution, differentOnly));
       writer.WriteLine();
     }
-
 
   }
 }
