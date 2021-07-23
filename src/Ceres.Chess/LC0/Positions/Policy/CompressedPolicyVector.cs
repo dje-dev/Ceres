@@ -267,6 +267,7 @@ namespace Ceres.Chess.EncodedPositions
           {
             if (indices[i] == SPECIAL_VALUE_SENTINEL_TERMINATOR)
             {
+              moveIndices[i] = SPECIAL_VALUE_SENTINEL_TERMINATOR;
               break;
             }
 
@@ -912,7 +913,7 @@ namespace Ceres.Chess.EncodedPositions
     /// Returns string summary.
     /// </summary>
     /// <returns></returns>
-    public override string ToString() => DumpStrShort(0, 5);
+    public override string ToString() => DumpStrShort(0, 7);
   }
 
 }
