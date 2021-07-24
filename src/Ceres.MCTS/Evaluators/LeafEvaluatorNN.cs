@@ -183,7 +183,6 @@ namespace Ceres.MCTS.Evaluators
 
         for (int i = 0; i < nodes.Length; i++)
         {
-          nodes[i].Annotate();
           nodes[i].Annotation.CalcRawPosition(nodes[i], ref rawPosArray[i]);
 
           if (EvaluatorDef.PositionTransform == NNEvaluatorDef.PositionTransformType.Mirror)
