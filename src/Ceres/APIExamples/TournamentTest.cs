@@ -187,13 +187,13 @@ namespace Ceres.APIExamples
 // Good 128x10b test
 //      NET1 = "t60apr2kmdc1-swa-700000";
 //      NET2 = @"703810";
+string NET1_SECONDARY1 = null; 
+      NET1 = "J94-100";
+      NET2 = "J94-100";
 
-//      NET1 = "J94-100";
-//      NET2 = "J94-100";
-
-      NET1 = "703810";
-      NET2 = "703810";
-      string NET1_SECONDARY1 = "j94-100";
+//      NET1 = "703810";
+//      NET2 = "703810";
+//      string NET1_SECONDARY1 = "j94-100";
         
       //string       NET2 = @"j64-210";
       NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification(@$"LC0:{NET1}", GPUS); // j64-210 LS16 40x512-lr015-swa-167500
@@ -271,11 +271,11 @@ namespace Ceres.APIExamples
 
       //limit1 = SearchLimit.NodesForAllMoves(500_000);//, 25_000);
 
-      limit1 = SearchLimit.SecondsForAllMoves(60, 4);
+      limit1 = SearchLimit.SecondsForAllMoves(30);
       //limit1 = SearchLimit.SecondsForAllMoves(1, 0.15f) * 1f;
       //limit1 = SearchLimit.SecondsForAllMoves(900, 15) * 0.05f;
-
-      limit1 = SearchLimit.NodesPerMove(3000);
+//      limit1 = SearchLimit.SecondsPerMove(1);
+//      limit1 = SearchLimit.NodesPerMove(3000);
 
       SearchLimit limit2 = limit1;// * 0.2f;// SearchLimit.NodesPerMove(2500);
       //limit2 = limit1 * 3;
@@ -283,7 +283,7 @@ namespace Ceres.APIExamples
 //      limit2 = SearchLimit.NodesPerMove(400);
 
 
-      ParamsSearchExecutionModifier.Register("SetBatchSize", pe => pe.MaxBatchSize = 1024);
+//      ParamsSearchExecutionModifier.Register("SetBatchSize", pe => pe.MaxBatchSize = 1024);
 
 
       // Don't output log if very small games
@@ -298,7 +298,7 @@ namespace Ceres.APIExamples
       //engineDefCeres1.OverrideTimeManager = new ManagerGameLimitCeres();
       //      engineDefCeres1.SearchParams.EnableInstamoves = false;
 
-      engineDefCeres1.SearchParams.ExecutionModifierID = "SetBatchSize";
+//      engineDefCeres1.SearchParams.ExecutionModifierID = "SetBatchSize";
 
       ////////
       // THIS MIGHT BE GOOD - but only with T60 networks with quality MLH
@@ -359,11 +359,11 @@ namespace Ceres.APIExamples
 
       //GameEngineDef engineDefCeresUCI = new GameEngineDefUCI("CeresUCI", new GameEngineUCISpec("CeresUCI", @"c:\dev\ceres\artifacts\release\net5.0\ceres.exe"));
       GameEngineDef engineDefCeresUCI1 = new GameEngineDefCeresUCI("CeresUCINew", evalDef1, overrideEXE: @"C:\dev\Ceres\artifacts\release\net5.0\ceres.exe");
-      GameEngineDef engineDefCeresUCI2 = new GameEngineDefCeresUCI("CeresUCIGit", evalDef2, overrideEXE: @"C:\ceres\releases\v0.89\ceres.exe");
+      GameEngineDef engineDefCeres91 = new GameEngineDefCeresUCI("Ceres91", evalDef2, overrideEXE: @"C:\ceres\releases\v0.91b\ceres.exe");
 
 
       EnginePlayerDef playerCeres1UCI = new EnginePlayerDef(engineDefCeresUCI1, limit1);
-      EnginePlayerDef playerCeres2UCI = new EnginePlayerDef(engineDefCeresUCI2, limit2);
+      EnginePlayerDef playerCeres91 = new EnginePlayerDef(engineDefCeres91, limit2);
 
       EnginePlayerDef playerCeres1 = new EnginePlayerDef(engineDefCeres1, limit1);
       EnginePlayerDef playerCeres2 = new EnginePlayerDef(engineDefCeres2, limit2);
@@ -399,12 +399,12 @@ namespace Ceres.APIExamples
         // ===============================================================================
         SuiteTestDef suiteDef = new SuiteTestDef("Suite",
                                                 //@"\\synology\dev\chess\data\epd\chad_tactics-100M.epd",
-                                                //@"\\synology\dev\chess\data\epd\ERET.epd",
+                                                @"\\synology\dev\chess\data\epd\ERET.epd",
                                                 //@"\\synology\dev\chess\data\epd\ERET_VESELY203.epd",
-                                                   @"\\synology\dev\chess\data\epd\sts.epd",
-                                                playerCeres1, playerCeres2, null);// playerLC0);
+//                                                   @"\\synology\dev\chess\data\epd\sts.epd",
+                                                playerCeres1, null, playerCeres91);// playerLC0);
         //playerCeres1, null, playerCeres2UCI);
-        suiteDef.MaxNumPositions = 200;
+        suiteDef.MaxNumPositions = 100;
 
         SuiteTestRunner suiteRunner = new SuiteTestRunner(suiteDef);
 
@@ -448,24 +448,15 @@ namespace Ceres.APIExamples
       //engineDefCeres2.SearchParams.FutilityPruningStopSearchEnabled= false;
       //engineDefLC0.SearchParamsEmulate.FutilityPruningStopSearchEnabled= false;
 
-      //      TournamentDef def = new TournamentDef("TOURN", playerCeres1UCI, playerCeres2UCI);// playerCeres2UCI);// playerLC0TCEC);
-      //      TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerCeres2);// playerCeres2UCI);// playerLC0TCEC);
-      TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerCeres2);
+      TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerLC0);
 
-      //TournamentDef def = new TournamentDef("TOURN", playerLC0Tilps, playerLC0);
 
-      def.NumGamePairs = 500;// 102;
+      def.NumGamePairs = 102;// 102;
       def.ShowGameMoves = false;
 
-      //      def.OpeningsFileName = @"HERT_2017\Hert500.pgn";
-
-      //      def.StartingFEN = "1q6/2n4k/1r1p1pp1/RP1P2p1/2Q1P1P1/2N4P/3K4/8 b - - 8 71";
-      //      def.OpeningsFileName = @"\\synology\dev\chess\data\openings\Drawkiller_500pos_reordered.pgn";//                                                                                                 
-      //def.OpeningsFileName = "TCEC19_NoomenSelect.pgn";
-//      def.OpeningsFileName = "TCEC1819.pgn";
-      def.OpeningsFileName = "4mvs_+90_+99.pgn";
-//      def.OpeningsFileName = "book-ply8-unifen-Q-0.0-0.25.pgn"; //book-ply8-unifen-Q-0.0-0.25
-      //      def.OpeningsFileName = "startpos.pgn";
+      string baseName = "tcec1819.pgn";
+      def.OpeningsFileName = SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/openings/{baseName}.pgn"
+                                                     : @$"\\synology\dev\chess\data\openings\{baseName}.pgn";
 
       if (false)
       {
