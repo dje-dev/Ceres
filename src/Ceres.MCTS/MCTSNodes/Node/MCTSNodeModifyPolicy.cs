@@ -55,8 +55,8 @@ namespace Ceres.MCTS.MTCSNodes
       if (DEBUG)
       {
         MCTSNodeStructUtils.ExtractPolicyVector(softmaxValue, in Ref, ref thisPolicy);
-//        Console.WriteLine(thisPolicy.ToString());
-//        Console.WriteLine(otherPolicy.ToString());
+        Console.WriteLine(thisPolicy.ToString());
+        Console.WriteLine(otherPolicy.ToString());
       }
 
       // Process expanded nodes
@@ -95,20 +95,17 @@ namespace Ceres.MCTS.MTCSNodes
 
         MCTSNodeStructUtils.ExtractPolicyVector(softmaxValue, in Ref, ref modifiedPolicy);
 
+        Console.WriteLine(modifiedPolicy.ToString());
+
         var p1 = modifiedPolicy.DecodedAndNormalized;
         var p2 = thisPolicy.DecodedAndNormalized;
         for (int i = 0; i < 1858; i++)
           if (MathF.Abs(p1[i] - p2[i]) > 0.075)
           {
-            Console.WriteLine(thisPolicy.ToString());
-            Console.WriteLine(otherPolicy.ToString());
-            Console.WriteLine(modifiedPolicy.ToString());
-            Console.WriteLine();
-
-//            throw new NotImplementedException();
+            Console.WriteLine("*** BIG DISCREPANCY");
           }
-//        Console.WriteLine(modifiedPolicy.ToString());
-//        Console.WriteLine();
+
+        Console.WriteLine();
       }
     }
 
