@@ -302,7 +302,7 @@ namespace Ceres.Features.Suites
       EngineCeres2?.Dispose();
       EngineExternal?.Dispose();
 
-      externalEnginePool.Shutdown(engineObj => (engineObj as LC0Engine).Dispose());
+      externalEnginePool.Shutdown(engineObj => (engineObj as IDisposable)?.Dispose());
     }
 
     private void WriteSummaries()
