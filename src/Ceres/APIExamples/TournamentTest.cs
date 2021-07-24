@@ -271,7 +271,7 @@ string NET1_SECONDARY1 = null;
 
       //limit1 = SearchLimit.NodesForAllMoves(500_000);//, 25_000);
 
-      limit1 = SearchLimit.SecondsForAllMoves(30);
+      limit1 = SearchLimit.SecondsForAllMoves(1, 1);
       //limit1 = SearchLimit.SecondsForAllMoves(1, 0.15f) * 1f;
       //limit1 = SearchLimit.SecondsForAllMoves(900, 15) * 0.05f;
 //      limit1 = SearchLimit.SecondsPerMove(1);
@@ -448,7 +448,7 @@ string NET1_SECONDARY1 = null;
       //engineDefCeres2.SearchParams.FutilityPruningStopSearchEnabled= false;
       //engineDefLC0.SearchParamsEmulate.FutilityPruningStopSearchEnabled= false;
 
-      TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerLC0);
+      TournamentDef def = new TournamentDef("TOURN", playerCeres91, playerLC0);
 
 
       def.NumGamePairs = 102;// 102;
