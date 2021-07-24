@@ -22,6 +22,7 @@ using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.GameEngines;
 using Ceres.Chess.NNEvaluators.Specifications;
 using Ceres.MCTS.Params;
+using Ceres.Base.OperatingSystem;
 
 #endregion
 
@@ -74,6 +75,12 @@ namespace Ceres.Features.GameEngines
     /// If the NodesPerGame time control mode is supported.
     /// </summary>
     public override bool SupportsNodesPerGameMode => true;
+
+
+    /// <summary>
+    /// Optional name of program used as launcher for executable.
+    /// </summary>
+    public override string OverrideLaunchExecutable => SoftwareManager.IsLinux ? "dotnet" : null;
 
 
 

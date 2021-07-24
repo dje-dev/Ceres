@@ -20,6 +20,7 @@ using System.IO;
 using Ceres.Base;
 using Ceres.Base.Benchmarking;
 using Ceres.Base.Misc;
+using Ceres.Base.OperatingSystem;
 using Ceres.Chess.ExternalPrograms.UCI;
 using Ceres.Chess.LC0.Positions;
 using Ceres.Chess.MoveGen;
@@ -87,6 +88,11 @@ namespace Ceres.Chess.GameEngines
     /// </summary>
     UCIGameRunner IUCIGameRunnerProvider.UCIRunner => UCIRunner;
 
+    /// <summary>
+    /// Optional name of program used as launcher for executable.
+    /// </summary>
+    public virtual string OverrideLaunchExecutable => null;
+
 
     /// <summary>
     /// Constructor.
@@ -140,7 +146,9 @@ namespace Ceres.Chess.GameEngines
         foreach (string option in uciSetOptionCommands)
         {
           if (!option.ToLower().StartsWith("setoption name"))
+          {
             throw new Exception($"Supplemental UCI option expected to begin with 'setoption name' but see: {option}");
+          }
 
           extraCommands.Add(option);
         }
@@ -148,9 +156,18 @@ namespace Ceres.Chess.GameEngines
 
       string[] extraCommandsArray = extraCommands.ToArray();
 
-      UCIRunner = new UCIGameRunner(executablePath, resetGameBetweenMoves,
-                                    extraCommandLineArguments: extraArgs,
-                                    uciSetOptionCommands: extraCommandsArray);
+      if (OverrideLaunchExecutable != null)
+      {
+        UCIRunner = new UCIGameRunner(OverrideLaunchExecutable, resetGameBetweenMoves,
+                                      extraCommandLineArguments: executablePath + " " + extraArgs,
+                                      uciSetOptionCommands: extraCommandsArray, checkExecutableExists: false);
+      }
+      else
+      {
+        UCIRunner = new UCIGameRunner(executablePath, resetGameBetweenMoves,
+                                      extraCommandLineArguments: extraArgs,
+                                      uciSetOptionCommands: extraCommandsArray);
+      }
     }
 
 

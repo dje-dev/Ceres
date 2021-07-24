@@ -125,19 +125,34 @@ namespace Ceres.Chess.External.CEngine
     {
       if (!String.IsNullOrEmpty(e.Data))
       {
-        if (VERBOSE) Console.WriteLine(EngineID + " RECEIVE: " + e.Data);
+        if (VERBOSE)
+        {
+          Console.WriteLine(EngineID + " RECEIVE: " + e.Data);
+        }
 
-        if (e.Data != null && e.Data.Contains("readyok")) readyOKSeen = true;
+        if (e.Data != null && e.Data.Contains("readyok"))
+        {
+          readyOKSeen = true;
+        }
+
         if (ReadEvent != null)
+        {
           ReadEvent(((Process)sender).Id, e.Data);
+        }
       }
     }
 
-    public void StartEngine()
+    public void StartEngine(bool checkExecutableExists = true)
     {
-      if (EngineName == null) throw new Exception("EngineName not set");
+      if (EngineName == null)
+      {
+        throw new Exception("EngineName not set");
+      }
 
-      if (!System.IO.File.Exists(EXEPath)) throw new Exception($"Engine executable { EXEPath} not found");
+      if (checkExecutableExists && !File.Exists(EXEPath))
+      {
+        throw new Exception($"Engine executable { EXEPath} not found");
+      }
 
       EngineProcess.StartInfo.FileName = EXEPath;
       EngineProcess.StartInfo.Arguments = Args;

@@ -66,11 +66,12 @@ namespace Ceres.Chess.ExternalPrograms.UCI
     /// <param name="readHandler"></param>
     /// <param name="numThreads">N.B. when doing single static position evals from LC0, must set to 1</param>
     /// <returns></returns>
-    UCIEngineProcess StartEngine(string engineName, string exePath, string extraCommand, ReadEvent readHandler, int numThreads = 1)
+    UCIEngineProcess StartEngine(string engineName, string exePath, string extraCommand, ReadEvent readHandler,
+                                 int numThreads = 1, bool checkExecutableExists = true)
     {
       UCIEngineProcess engine = new UCIEngineProcess(engineName, exePath, extraCommand);
       engine.ReadEvent += readHandler;
-      engine.StartEngine();
+      engine.StartEngine(checkExecutableExists);
 
       engine.ReadAsync();
 
@@ -90,7 +91,8 @@ namespace Ceres.Chess.ExternalPrograms.UCI
                           bool resetStateAndCachesBeforeMoves,
                           string extraCommandLineArguments = null, 
                           string[] uciSetOptionCommands = null, 
-                          int runnerIndex = -1)
+                          int runnerIndex = -1,
+                          bool checkExecutableExists = true)
     {
       EngineEXE = engineEXE;
       ResetStateAndCachesBeforeMoves = resetStateAndCachesBeforeMoves;
@@ -100,7 +102,7 @@ namespace Ceres.Chess.ExternalPrograms.UCI
       ReadEvent readHandler = new ReadEvent(DataRead);
 
       string engine1Name = new FileInfo(engineEXE).Name;
-      engine = StartEngine(engine1Name, engineEXE, extraCommandLineArguments, readHandler);
+      engine = StartEngine(engine1Name, engineEXE, extraCommandLineArguments, readHandler, checkExecutableExists: checkExecutableExists);
 
       System.Threading.Thread.Sleep(20);
 
