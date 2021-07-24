@@ -359,8 +359,8 @@ string NET1_SECONDARY1 = null;
 
       //GameEngineDef engineDefCeresUCI = new GameEngineDefUCI("CeresUCI", new GameEngineUCISpec("CeresUCI", @"c:\dev\ceres\artifacts\release\net5.0\ceres.exe"));
       GameEngineDef engineDefCeresUCI1 = new GameEngineDefCeresUCI("CeresUCINew", evalDef1, overrideEXE: @"C:\dev\Ceres\artifacts\release\net5.0\ceres.exe");
-      GameEngineDef engineDefCeres91 = new GameEngineDefCeresUCI("Ceres91", evalDef2, overrideEXE: @"C:\ceres\releases\v0.91b\ceres.exe");
-
+      GameEngineDef engineDefCeres91 = new GameEngineDefCeresUCI("Ceres91", evalDef2, overrideEXE: SoftwareManager.IsLinux ? @"/raid/dev/Ceres91b/Ceres/artifacts/release/net5.0/Ceres.dll"
+                                                                                                                           : @"C:\ceres\releases\v0.91b\ceres.exe");
 
       EnginePlayerDef playerCeres1UCI = new EnginePlayerDef(engineDefCeresUCI1, limit1);
       EnginePlayerDef playerCeres91 = new EnginePlayerDef(engineDefCeres91, limit2);
@@ -454,7 +454,7 @@ string NET1_SECONDARY1 = null;
       def.NumGamePairs = 102;// 102;
       def.ShowGameMoves = false;
 
-      string baseName = "tcec1819.pgn";
+      string baseName = "tcec1819";
       def.OpeningsFileName = SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/openings/{baseName}.pgn"
                                                      : @$"\\synology\dev\chess\data\openings\{baseName}.pgn";
 
