@@ -15,7 +15,6 @@
 
 using System;
 using System.Diagnostics;
-using System.Runtime.InteropServices;
 using System.Threading;
 
 using Ceres.Base.DataTypes;
@@ -25,7 +24,6 @@ using Ceres.Base.Threading;
 
 using Ceres.Chess;
 using Ceres.Chess.Positions;
-using Ceres.MCTS.Environment;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Storage;
@@ -120,6 +118,7 @@ namespace Ceres.MCTS.Search
       }
     }
 
+
     /// <summary>
     /// Constructor for selector over specified MCTSIterator.
     /// </summary>
@@ -159,6 +158,7 @@ namespace Ceres.MCTS.Search
       Context = context;
     }
 
+
     /// <summary>
     /// Initializes the pool of worker thread pools.
     /// </summary>
@@ -170,6 +170,7 @@ namespace Ceres.MCTS.Search
       return new ObjectPool<ThreadPoolManaged>(() => new ThreadPoolManaged(numThreadPoolsCreated++.ToString(), HardwareManager.MaxAvailableProcessors, 0),
                                                MAX_THREAD_POOLS);
     }
+
 
     /// <summary>
     /// Shuts down the selector, restoring the thread pool back to the static pool
@@ -300,6 +301,7 @@ namespace Ceres.MCTS.Search
       InsureAnnotated(node);
     }
 
+
     /// <summary>
     /// Verifies the sum of the children inflight is equal to the parent in flight.
     /// </summary>
@@ -355,13 +357,9 @@ namespace Ceres.MCTS.Search
         // Set default action 
         node.ActionType = MCTSNode.NodeActionType.MCTSApply;
 
-        // if (node.Ref.NumNodesTranspositionExtracted > 0)
-        //    Console.WriteLine($"{node.Ref.NumNodesTranspositionExtracted}  transposition multivisted {node}");
-
         // Add to set of leafs
         gatheredNodes.Add(node);
       }
-
     }
 
 
@@ -675,7 +673,7 @@ namespace Ceres.MCTS.Search
         {
           if (childIndex > node.NumChildrenExpanded)
           {
-//            Console.WriteLine("Saw (and ignoring) out of order possibly due to tie in score");
+            Console.WriteLine("Saw (and ignoring) out of order possibly due to tie in score");
             continue;
           }
           MCTSNode thisChild = default;
