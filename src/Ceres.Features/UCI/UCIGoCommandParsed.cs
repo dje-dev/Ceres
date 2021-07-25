@@ -116,14 +116,20 @@ namespace Ceres.Features.UCI
           string intToken = strParts[partIndex++];
 
           // If we see an empty string (due to extraneous spaces)
-          if (intToken == "") return TakeIntToken();
+          if (intToken == "")
+          {
+            return TakeIntToken();
+          }
 
           // Allow numbers to include underscore characters (like in C# numeric literals)
           // for readability by stripping out these characters.
           intToken = intToken.Replace("_", "");
 
           if (!int.TryParse(intToken, out int ret))
-            throw new Exception("Expected integer in go command instead saw {intToken}");
+          {
+            throw new Exception($"Expected integer in go command instead saw {intToken}");
+          }
+
           return ret;
         }
 
