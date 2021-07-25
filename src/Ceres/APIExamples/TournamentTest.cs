@@ -217,7 +217,13 @@ string NET1_SECONDARY1 = null;
       }
 
       //GameEngineDef engineDefCeresUCI = new GameEngineDefUCI("CeresUCI", new GameEngineUCISpec("CeresUCI", @"c:\dev\ceres\artifacts\release\net5.0\ceres.exe"));
-      GameEngineDef engineDefCeresUCI1 = new GameEngineDefCeresUCI("CeresUCINew", evalDef1, overrideEXE: @"C:\dev\Ceres\artifacts\release\net5.0\ceres.exe");
+      //      GameEngineDef engineDefCeresUCI1x = new GameEngineDefCeresUCI("CeresUCINew", evalDef1, overrideEXE: @"C:\dev\Ceres\artifacts\release\net5.0\ceres.exe");
+
+      GameEngineDef engineDefCeresUCI1 = new GameEngineDefCeresUCI("CeresUCINew", evalDef1,
+                                                                   overrideEXE: SoftwareManager.IsLinux ? @"/raid/dev/Ceres/artifacts/release/net5.0/Ceres.dll"
+                                                                                                        : @"C:\dev\ceres\artifacts\release\net5.0\ceres.exe", 
+                                                                   disableFutilityStopSearch: forceDisableSmartPruning);
+
       GameEngineDef engineDefCeres91 = new GameEngineDefCeresUCI("Ceres91", evalDef2, overrideEXE: SoftwareManager.IsLinux ? @"/raid/dev/Ceres91b/Ceres/artifacts/release/net5.0/Ceres.dll"
                                                                                                                            : @"C:\ceres\releases\v0.91b\ceres.exe");
 
