@@ -105,88 +105,11 @@ namespace Ceres.APIExamples
       const bool POOLED = false;
       string GPUS = POOLED ? "GPU:1,2,3:POOLED"
                            : "GPU:0";
-      //LC0:40x512-lr015-swa-115000 20b_1-15000.pb.gz 20b_1-15000 20b_1-swa-90000
-      // 460000 best? 20b_500000 teck45_190k.gz
-      // /raid/train/nets/40b/40b/40b-swa-20000.pb.gz
-      // 20b_500000 vs LC0:66511
-      // teck45_170k 40b-swa-80000
-      // test-250
-      //      NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification("LC0:test-swa-2500", GPUS); // j64-210 LS16 40x512-lr015-swa-167500
-      //      NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification("LC0:40bs-swa-212500", GPUS); // j64-210 LS16 40x512-lr015-swa-167500
-      //      NNEvaluatorDef evalDef2 = NNEvaluatorDefFactory.FromSpecification("LC0:40bs-swa-210000", GPUS); // j64-210 LS16 40x512-lr015-swa-167500
-
-      //      NNEvaluatorDef evalDef2 = NNEvaluatorDefFactory.FromSpecification("LC0:20b_500000", GPUS); // j104.1-30 61339 j64-210
-      // badgyal-3 testFILL96s2-swa-10000 testFILL96noqs2-swa-15000 751156
-      //      NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification(@"LC0:d:\nets\20b_128\20b_128\20b_128-swa-40000.pb.gz", GPUS); // j64-210 LS16 40x512-lr015-swa-167500
-      //      NNEvaluatorDef evalDef2 = NNEvaluatorDefFactory.FromSpecification(@"LC0:751156", GPUS); // j64-210 LS16 40x512-lr015-swa-167500
-      //      NNEvaluatorDef evalDef2 = NNEvaluatorDefFactory.FromSpecification(@"LC0:d:\temp\20b_128-swa-40000.pb.gz", GPUS); // j104.1-30 61339 j64-210
-
-      //      NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification(@"LC0:d:\nets\tinkerF_biasReg2\tinkerF_biasReg2-12500.pb.gz", GPUS); // j64-210 LS16 40x512-lr015-swa-167500
 
       string NET1 = @"d:\weights\lczero.org\t64df-5000.pb.gz"; // direct Linux T75 192
       string NET2 = @"d:\weights\lczero.org\t64dbm-5000.pb.gz";
 
-      NET1 = @"d:\weights\lczero.org\t60apr2k-swa-227500.pb.gz";
-      NET2 = @"d:\weights\lczero.org\t60apr4k-67500.pb.gz";
-      NET2 = @"703810";
 
-
-      NET1 = @"d:\weights\lczero.org\t60apr2kmdb-swa-47500.pb.gz"; ///raid/train/nets/t60apr2kmdb/t60apr2kmdb-swa-47500.pb.gz
-      NET2 = @"D:\weights\lczero.org\t60apr4k-67500.pb.gz";
-
-      NET2 = @"d:\weights\lczero.org\t60apr4kMDB-swa-125000.pb.gz";
-//      NET2 = @"d:\weights\lczero.org\t60apr2kmdb-swa-250000.pb.gz";
-      NET2 = @"d:\weights\lczero.org\t60apr2kmdc-swa-250000.pb.gz";
-      //      NET1 = @"d:\weights\lczero.org\t60apr2kmdb-swa-50000.pb.gz";
-
-
-      NET1 = @"d:\weights\lczero.org\t60apr2kmdb1-swa-200000.pb.gz";
-      //      NET2 = @"d:\weights\lczero.org\t60apr2kmdc1-swa-200000.pb.gz";
-      //      NET2 = @"d:\weights\lczero.org\t60apr4kMDB1-swa-100000.pb.gz";
-      //t60apr2kmdc-250000.pb.gz
-      //NET1 = @"d:\weights\lczero.org\512x30b-swa-65000.pb.gz";
-      //NET1 = "j94-100";
-      NET1 = @"d:\weights\lczero.org\t60apr2kmdc1-swa-200000.pb.gz";
-      NET2 = "703810";
-      //      NET2 = "751267";
-      //      NET2 = "badgyal-3";
-
-      ///raid/train/nets/512x30b/512x30b-swa-112500.pb.gz 975
-
-      ///raid/train/nets/t60apr2kmdc1/t60apr2kmdc1-swa-477500.pb.gz
-      //////raid/train/nets/512x30b/512x30b-swa-407500.pb.gz
-      NET1 = @"t60apr2kmdc1-swa-787500"; // was 320 t60apr2kmdc1-swa-400000.pb.gz
-      NET2 = @"t60apr2kmdc1-swa-700000"; // was 320 t60apr2kmdc1-swa-400000.pb.gz
-//      NET2 = @"t60apr2kmdc1-swa-450000"; // was 320 t60apr2kmdc1-swa-400000.pb.gz
-
-      NET1 = @"d:\weights\lczero.org\512x30b-swa-407500.pb.gz"; // 352500
-      NET2 = @"d:\weights\lczero.org\512x30b-swa-295000.pb.gz"; ///raid/train/nets/512x30b/512x30b-252500.pb.gz
-      //NET2 = @"d:\weights\lczero.org\40bs-swa-182500.pb.gz"; // prior 512x24 effort, LR 0.002 (?)
-      //      / raid / train / nets / 512x30b / 512x30b - swa - 155000.pb.gz
-//NET2 = "J94-100";
-      //NET1 = @"d:\weights\lczero.org\shrink_no-swa-300000.pb.gz";
-      //NET2 = @"d:\weights\lczero.org\shrink_no-swa-200000.pb.gz";
-
-//      NET1 = "703810"; // 5+/- 13
-//      NET2 = "703810";// j64-210";
-
-      //NET1 = "TK-6430 aka 128x10-BPR-64M-6430000"; // GOOD NET - better thatn 703810
-      //      NET2 = "j94-100";
-      //      NET1 = @"badgyal-3";
-      //      NET2 = @"d:\weights\lczero.org\t60apr4_64-swa-57500.pb.gz"; // direct Linux T75 192
-
-//      NET1 = @"d:\weights\lczero.org\test64a-swa-75000.pb.gz"; // 475
-//      NET1 = "test64c_2k-swa-492500";
-//      NET1 = "test64c-swa-147500";
-
-
-// Good 64x6 test
-//      NET1 = "test64c_2k-565000";
-//      NET2 = "11258-64x6-se";// "badgyal-3";
-
-// Good 128x10b test
-//      NET1 = "t60apr2kmdc1-swa-700000";
-//      NET2 = @"703810";
 string NET1_SECONDARY1 = null; 
       NET1 = "J94-100";
       NET2 = "J94-100";
@@ -197,7 +120,6 @@ string NET1_SECONDARY1 = null;
         
       //string       NET2 = @"j64-210";
       NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification(@$"LC0:{NET1}", GPUS); // j64-210 LS16 40x512-lr015-swa-167500
-//evalDef1.SECONDARY_NETWORK_ID = "j94-100";
       NNEvaluatorDef evalDef2 = NNEvaluatorDefFactory.FromSpecification($@"LC0:{NET2}", GPUS); ;
 
       NNEvaluatorDef evalDefSecondary1 = null;
@@ -208,50 +130,7 @@ string NET1_SECONDARY1 = null;
 
       NNEvaluatorDef evalDefSecondary2 = null;
 
-
-      static NNEvaluatorDef EvaluatorValueOnly(string netID1, string netID2, int gpuID, bool valueNet1)
-      {
-//        string wtStr1 = valueNet1 ? "1.0;0.5;0.5" : "0.0;0.5;0.5";
-//       string wtStr2 = valueNet1 ? "0.0;0.5;0.5" : "1.0;0.5;0.5";
-       string wtStr1 = valueNet1 ? "0.5;1.0;0.5" : "0.5;0.0;0.5";
-        string wtStr2 = valueNet1 ? "0.5;0.0;0.5" : "0.5;1.0;0.5";
-        NNEvaluatorDef spec = NNEvaluatorDef.FromSpecification($"LC0:{netID1}@{wtStr1},{netID2}@{wtStr2}", $"GPU:{gpuID}");
-        return spec;
-      }
-
-//      evalDef1 = EvaluatorValueOnly(NET1, NET2, 0, true);
-//      evalDef2 = EvaluatorValueOnly(NET1, NET2, 0, false);
-
-      //NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification(@"ONNX:tinkerF_normal_vq-50000", GPUS); // j64-210 LS16 40x512-lr015-swa-167500
-      //d:\weights\lczero.org\tinkerF_normal_vq-5000.onnx
       //evalDef1 = NNEvaluatorDefFactory.FromSpecification("ONNX:tfmodelc", "GPU:0");
-
-      // Good progress. 68240 versus j94-100 yields: +21 (+/- 11) at 1k/move and +15 (+- 11) at 10k/move
-      if (false)
-      {
-        NNEvaluatorNetDef nnd8 = new NNEvaluatorNetDef("59999", NNEvaluatorType.LC0TensorRT, NNEvaluatorPrecision.FP16);
-        NNEvaluatorDef nd8 = new NNEvaluatorDef(nnd8, NNEvaluatorDeviceComboType.Single, new NNEvaluatorDeviceDef(NNDeviceType.GPU, 0));
-        //        NNEvaluatorNetDef nnd16 = new NNEvaluatorNetDef("62242", NNEvaluatorType.LC0TensorRT, NNEvaluatorPrecision.FP16);
-        //        NNEvaluatorDef nd16 = new NNEvaluatorDef(nnd16, NNEvaluatorDeviceComboType.Single, new NNEvaluatorDeviceDef(NNDeviceType.GPU, 0));
-        var nd16 = NNEvaluatorDefFactory.FromSpecification("LC0:59999", GPUS); // j104.1-30 61339
-
-        if (true)
-        {
-          NNEvaluator ntest = NNEvaluatorFactory.BuildEvaluator(nd8);
-          ntest.CalcStatistics(false);
-          for (int i = 0; i < 5; i++)
-          {
-            ntest.CalcStatistics(false);
-            Console.WriteLine(ntest.PerformanceStats);
-          }
-        }
-
-
-        evalDef1 = nd8;
-        evalDef2 = nd16;
-      }
-
-      // was 703810 @ 50k
 
       if (POOLED)
       {
@@ -259,29 +138,14 @@ string NET1_SECONDARY1 = null;
         evalDef2.MakePersistent();
       }
 
-      //      SearchLimit slLC0 = SearchLimit.NodesPerMove(10_000);
-      //      SearchLimit slEthereal = slLC0 * 875;
-      //      SearchLimit slSF = slLC0 * 875;
-
-
       SearchLimit limit1 = SearchLimit.NodesPerMove(500_000);
 
-      //limit1 = SearchLimit.SecondsForAllMoves(900, 15) * 0.04f;
-      //limit1 = SearchLimit.NodesPerMove(1);
-
-      //limit1 = SearchLimit.NodesForAllMoves(500_000);//, 25_000);
 
       limit1 = SearchLimit.SecondsForAllMoves(1, 1);
       //limit1 = SearchLimit.SecondsForAllMoves(1, 0.15f) * 1f;
-      //limit1 = SearchLimit.SecondsForAllMoves(900, 15) * 0.05f;
-//      limit1 = SearchLimit.SecondsPerMove(1);
-//      limit1 = SearchLimit.NodesPerMove(3000);
+      limit1 = SearchLimit.SecondsForAllMoves(60);
 
-      SearchLimit limit2 = limit1;// * 0.2f;// SearchLimit.NodesPerMove(2500);
-      //limit2 = limit1 * 3;
-//      limit2 *= 0.5f;
-//      limit2 = SearchLimit.NodesPerMove(400);
-
+      SearchLimit limit2 = limit1;// * 0.2f;
 
 //      ParamsSearchExecutionModifier.Register("SetBatchSize", pe => pe.MaxBatchSize = 1024);
 
@@ -294,11 +158,6 @@ string NET1_SECONDARY1 = null;
                                                                   null, outputLog ? "Ceres1.log.txt" : null);
       GameEngineDefCeres engineDefCeres2 = new GameEngineDefCeres("Ceres2", evalDef2, evalDefSecondary2, new ParamsSearch(), new ParamsSelect(),
                                                                   null, outputLog ? "Ceres2.log.txt" : null);
-
-      //engineDefCeres1.OverrideTimeManager = new ManagerGameLimitCeres();
-      //      engineDefCeres1.SearchParams.EnableInstamoves = false;
-
-//      engineDefCeres1.SearchParams.ExecutionModifierID = "SetBatchSize";
 
       ////////
       // THIS MIGHT BE GOOD - but only with T60 networks with quality MLH
@@ -368,29 +227,15 @@ string NET1_SECONDARY1 = null;
       EnginePlayerDef playerCeres1 = new EnginePlayerDef(engineDefCeres1, limit1);
       EnginePlayerDef playerCeres2 = new EnginePlayerDef(engineDefCeres2, limit2);
 
-      //#if NOTParamsSearch
-      ParamsSearch paramsSearchLC0 = new ParamsSearch();
-      //      paramsSearchLC0.TestFlag = true;
-
       bool ENABLE_LC0 = evalDef1.Nets[0].Net.Type == NNEvaluatorType.LC0Library && (evalDef1.Nets[0].WeightValue == 1 && evalDef1.Nets[0].WeightPolicy == 1 && evalDef1.Nets[0].WeightM == 1);
-      GameEngineDefLC0 engineDefLC1 = ENABLE_LC0 ? new GameEngineDefLC0("LC0_0", evalDef1, forceDisableSmartPruning, paramsSearchLC0, null) : null;
-      GameEngineDefLC0 engineDefLC2 = ENABLE_LC0 ? new GameEngineDefLC0("LC0_2", evalDef1, forceDisableSmartPruning, null, null) : null;
-
-      GameEngineDefLC0 engineDefLC2TCEC = null;// new GameEngineDefLC0("LC0_TCEC", evalDef2, forceDisableSmartPruning, null, null,
-                                               //               overrideEXE: @"c:\dev\lc0\lc_270\lc0.exe",
-                                               //             extraCommandLineArgs: "--max-out-of-order-evals-factor=2.4 --max-collision-events=917");
+      GameEngineDefLC0 engineDefLC1 = ENABLE_LC0 ? new GameEngineDefLC0("LC0_0", evalDef1, forceDisableSmartPruning, null, null) : null;
+      GameEngineDefLC0 engineDefLC2 = ENABLE_LC0 ? new GameEngineDefLC0("LC0_2", evalDef2, forceDisableSmartPruning, null, null) : null;
 
       EnginePlayerDef playerEthereal = new EnginePlayerDef(engineDefEthereal, limit1);
       EnginePlayerDef playerStockfish11 = new EnginePlayerDef(engineDefStockfish11, limit1);
       EnginePlayerDef playerStockfish14 = new EnginePlayerDef(EngineDefStockfish14(), limit1);// * 350);
       EnginePlayerDef playerLC0 = ENABLE_LC0 ? new EnginePlayerDef(engineDefLC1, limit1) : null;
       EnginePlayerDef playerLC0_2 = ENABLE_LC0 ? new EnginePlayerDef(engineDefLC2, limit2) : null;
-//      EnginePlayerDef playerLC0TCEC =  new EnginePlayerDef(engineDefLC2TCEC, limit1);
-                                           //#endif
-
-      //      def.SearchLimitEngine1 = def.SearchLimitEngine2 = SearchLimit.SecondsForAllMoves(15, 0.25f);
-      //      def.SearchLimitEngine2 = def.SearchLimitEngine2 = SearchLimit.SecondsForAllMoves(15, 0.25f);
-
 
       //(playerCeres1.EngineDef as GameEngineDefCeres).SearchParams.DrawByRepetitionLookbackPlies = 40;
 
@@ -399,17 +244,19 @@ string NET1_SECONDARY1 = null;
         // ===============================================================================
         SuiteTestDef suiteDef = new SuiteTestDef("Suite",
                                                 //@"\\synology\dev\chess\data\epd\chad_tactics-100M.epd",
-                                                @"\\synology\dev\chess\data\epd\ERET.epd",
-                                                //@"\\synology\dev\chess\data\epd\ERET_VESELY203.epd",
-//                                                   @"\\synology\dev\chess\data\epd\sts.epd",
-                                                playerCeres1, null, playerCeres91);// playerLC0);
+//                                                @"\\synology\dev\chess\data\epd\ERET.epd",
+                                                 SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/epd/ERET_VESELY203.epd"
+                                                                         : @$"\\synology\dev\chess\data\epd\ERET_VESELY203.epd",
+//                                                @"\\synology\dev\chess\data\epd\sts.epd",
+                                                playerCeres1, null, playerLC0);// playerLC0);
         //playerCeres1, null, playerCeres2UCI);
-        suiteDef.MaxNumPositions = 100;
+        suiteDef.MaxNumPositions = 20;
 
         SuiteTestRunner suiteRunner = new SuiteTestRunner(suiteDef);
 
         //        suiteRunner.Run(POOLED ? 20 : 4, true, false);
         SuiteTestResult suiteResult = suiteRunner.Run(1, true, false);
+        return;
 #if NOT
         SysMisc.WriteObj("FinalQ1.dat", suiteResult.FinalQ1);
 
@@ -441,14 +288,7 @@ string NET1_SECONDARY1 = null;
 #endif
       }
 
-      //      engineDefCeres2.SearchParams.TwofoldDrawEnabled = false;
-      //engineDefCeres1.SearchParams.TreeReuseEnabled = false;
-      //engineDefCeres2.SearchParams.TreeReuseEnabled = false;
-      //engineDefCeres1.SearchParams.FutilityPruningStopSearchEnabled= false;
-      //engineDefCeres2.SearchParams.FutilityPruningStopSearchEnabled= false;
-      //engineDefLC0.SearchParamsEmulate.FutilityPruningStopSearchEnabled= false;
-
-      TournamentDef def = new TournamentDef("TOURN", playerCeres91, playerLC0);
+      TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerLC0);
 
 
       def.NumGamePairs = 102;// 102;
@@ -550,6 +390,17 @@ string NET1_SECONDARY1 = null;
       Console.WriteLine($"Tournament completed in {stats.ElapsedTimeSecs,8:F2} seconds.");
       Console.WriteLine(playerCeres + " " + results.GameOutcomesString);
     }
+
+    static NNEvaluatorDef EvaluatorValueOnly(string netID1, string netID2, int gpuID, bool valueNet1)
+    {
+      string wtStr1 = valueNet1 ? "0.5;1.0;0.5" : "0.5;0.0;0.5";
+      string wtStr2 = valueNet1 ? "0.5;0.0;0.5" : "0.5;1.0;0.5";
+      NNEvaluatorDef spec = NNEvaluatorDef.FromSpecification($"LC0:{netID1}@{wtStr1},{netID2}@{wtStr2}", $"GPU:{gpuID}");
+      return spec;
+    }
+
+    //      evalDef1 = EvaluatorValueOnly(NET1, NET2, 0, true);
+    //      evalDef2 = EvaluatorValueOnly(NET1, NET2, 0, false);
 
   }
 }
