@@ -15,6 +15,7 @@
 
 using System;
 using System.Collections.Generic;
+using Ceres.Base.Math;
 
 #endregion
 
@@ -45,7 +46,7 @@ namespace Ceres.MCTS.Iteration
     /// (e.g. in case of a search that was requested to be infinite).
     /// </summary>
     /// <param name="sizingHint"></param>
-    public TranspositionRootsDict(int sizingHint) => table = new Dictionary<ulong, int>(Math.Min(20_000_000, sizingHint));
+    public TranspositionRootsDict(int sizingHint) => table = new Dictionary<ulong, int>((int)StatUtils.Bounded(sizingHint, 1000, 20_000_000));
 
 
     /// <summary>

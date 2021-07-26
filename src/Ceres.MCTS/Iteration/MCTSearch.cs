@@ -348,8 +348,9 @@ namespace Ceres.MCTS.Iteration
       TranspositionRootsDict newTranspositionRoots = null;
       if (priorContext.Tree.TranspositionRoots != null)
       {
-        int estNumNewTranspositionRoots = (newRoot.N * 10) / 6; // account for many duplicates, but also leave room for subsequent search
-        newTranspositionRoots = new TranspositionRootsDict(estNumNewTranspositionRoots);
+        long estNumNewTranspositionRoots = ((long)newRoot.N * 10) / 6; // account for many duplicates, but also leave room for subsequent search
+        estNumNewTranspositionRoots = Math.Min(int.MaxValue - 1, estNumNewTranspositionRoots);
+        newTranspositionRoots = new TranspositionRootsDict((int)estNumNewTranspositionRoots);
       }
 
       // TODO: Consider sometimes or always skip rebuild via MakeChildNewRoot,
