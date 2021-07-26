@@ -190,6 +190,22 @@ string NET1_SECONDARY1 = null;
 #endif
       }
 
+
+      if (true)
+      {
+        // ************ SPECIAL *****************
+        engineDefCeres1.SearchParams.ParamsSecondaryEvaluator.UpdateFrequencyMinNodesAbsolute = 200;
+        engineDefCeres1.SearchParams.ParamsSecondaryEvaluator.UpdateFrequencyMinNodesRelative = 0.03f;
+        engineDefCeres1.SearchParams.ParamsSecondaryEvaluator.UpdateMinNFraction = 0.03f; // was 0.01
+        engineDefCeres1.SearchParams.ParamsSecondaryEvaluator.UpdateValueFraction = 0.5f;
+        engineDefCeres1.SearchParams.ParamsSecondaryEvaluator.UpdatePolicyFraction = 0.5f;
+
+        engineDefCeres1.SearchParams.ReusePositionEvaluationsFromOtherTree = false;
+        engineDefCeres2.SearchParams.ReusePositionEvaluationsFromOtherTree = false;
+        // ****************************************************
+      }
+
+
       if (!limit1.IsNodesLimit)
       {
         engineDefCeres1.SearchParams.ReusePositionEvaluationsFromOtherTree = false;
