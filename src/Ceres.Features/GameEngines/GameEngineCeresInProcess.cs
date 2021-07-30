@@ -38,7 +38,7 @@ using Ceres.MCTS.MTCSNodes;
 namespace Ceres.Features.GameEngines
 {
   /// <summary>
-  /// Sublcass of GameEngine specialized for Ceres engine (in-process).
+  /// Sublcass of GameEngine specialized for Ceres engine (running in-process).
   /// </summary>
   public class GameEngineCeresInProcess : GameEngine
   {
@@ -109,16 +109,16 @@ namespace Ceres.Features.GameEngines
     /// <summary>
     /// Constructor.
     /// </summary>
-    /// <param name="id"></param>
-    /// <param name="evaluatorDef"></param>
-    /// <param name="evaluatorDefsecondary"></param>
-    /// <param name="searchParams"></param>
-    /// <param name="childSelectParams"></param>
-    /// <param name="gameLimitManager"></param>
-    /// <param name="logFileName"></param>
+    /// <param name="id">identifying string</param>
+    /// <param name="evaluatorDef">primary evalutor for all nodes</param>
+    /// <param name="evaluatorDefSecondary">optional secondary evaluator to be run on subset of tree</param>
+    /// <param name="searchParams">optional non-default search parameters</param>
+    /// <param name="childSelectParams">optional non-default child selection parameters </param>
+    /// <param name="gameLimitManager">optional override manager for search limits</param>
+    /// <param name="logFileName">optional name of file to which to write detailed log</param>
     public GameEngineCeresInProcess(string id, 
                                     NNEvaluatorDef evaluatorDef,
-                                    NNEvaluatorDef evaluatorDefSecondary,
+                                    NNEvaluatorDef evaluatorDefSecondary = null,
                                     ParamsSearch searchParams = null,
                                     ParamsSelect childSelectParams = null,
                                     IManagerGameLimit gameLimitManager = null,
