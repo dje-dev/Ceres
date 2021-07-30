@@ -190,84 +190,6 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       }
     }
 
-#if EXPERIMENTAL
-    /// <summary>
-    /// 
-    /// </summary>
-    /// <param name="movesMade"></param>
-    /// <param name="thresholdFractionNodesRetained"></param>
-    /// <returns></returns>
-    public bool ResetRootAssumingMovesMade(IEnumerable<MGMove> movesMade, float thresholdFractionNodesRetained)
-    {
-      PositionWithHistory staringPriorMove = Nodes.PriorMoves;
-      MGPosition position = Nodes.PriorMoves.FinalPosMG;
-
-      ref MCTSNodeStruct priorRoot = ref RootNode;
-
-      // Advance root node and update prior moves
-      ref MCTSNodeStruct newRoot = ref priorRoot;
-      foreach (MGMove moveMade in movesMade)
-      {
-        // Append the moves made to the prior moves
-        Nodes.PriorMoves.AppendMove(moveMade);
-
-        bool foundChild = false;
-
-        // Find this new root node (after these moves)
-        foreach (MCTSNodeStructChild child in newRoot.Children)
-        {
-          if (child.IsExpanded)
-          {
-            MGMove thisChildMove = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(child.Move, in position);
-            if (thisChildMove == moveMade)
-            {
-// NO! can't modify structure since we may need to abandon without modifying
-//              // Mark this node as deleted
-              newRoot.Detached = true;
-
-              // Advance new root to reflect this move
-              newRoot = ref child.ChildRef;
-
-              // Advance position
-              position.MakeMove(thisChildMove);
-
-              // Done looking for match
-              foundChild = true;
-              break;
-            }
-          }
-        }
-
-        if (!foundChild)
-        {
-          // Restore the tree the way we originally found it
-          Nodes.PriorMoves = staringPriorMove;
-          Console.WriteLine("No follow - not found");
-          return false;
-        }
-      }
-
-      // Only switch to this root if it meets the threshold size
-      float fractionNodesCouldBeRetained = (float)newRoot.N / (float)priorRoot.N;
-      if (fractionNodesCouldBeRetained < thresholdFractionNodesRetained)
-      {
-        Console.WriteLine("No follow - fraction too small " + fractionNodesCouldBeRetained);
-        return false;
-      }
-
-      // The new root no longer has a parent
-      newRoot.ParentIndex = MCTSNodeStructIndex.Null;
-
-      // Reset root to this node
-      RootIndex = newRoot.Index;
-
-      // TODO: should we consider removing the node from the transposition root table?
-
-      // Success
-      return true;
-    }
-
-#endif
 
     #endregion
 
@@ -309,7 +231,13 @@ namespace Ceres.MCTS.MTCSNodes.Storage
             $"TranspositionRootIndex zero when NumNodesTranspositionExtracted > 0 : {nodeR.NumNodesTranspositionExtracted} {nodeR.TranspositionRootIndex}");
         }
 
-        if (!nodeR.IsTranspositionLinked)
+        if (nodeR.IsTranspositionLinked)
+        {
+          ref readonly MCTSNodeStruct transpositionRoot = ref Nodes.nodes[nodeR.TranspositionRootIndex];
+          Assert(!transpositionRoot.IsTranspositionLinked, "transposition root was itself transposition linked");
+          Assert(nodeR.ZobristHash == transpositionRoot.ZobristHash, "transposition link was not to same Zobrist hash");
+        }
+        else
         {
           // Verify all expanded children point back to ourself
           int numExpanded = 0;
@@ -328,7 +256,9 @@ namespace Ceres.MCTS.MTCSNodes.Storage
               numExpanded++;
             }
             else
+            {
               haveSeenUnexpanded = true;
+            }
           }
 
           Assert(nodeR.NumPolicyMoves == numChildren, "NumPolicyMoves");
@@ -418,3 +348,83 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     #endregion
   }
 }
+
+
+#if EXPERIMENTAL
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="movesMade"></param>
+    /// <param name="thresholdFractionNodesRetained"></param>
+    /// <returns></returns>
+    public bool ResetRootAssumingMovesMade(IEnumerable<MGMove> movesMade, float thresholdFractionNodesRetained)
+    {
+      PositionWithHistory staringPriorMove = Nodes.PriorMoves;
+      MGPosition position = Nodes.PriorMoves.FinalPosMG;
+
+      ref MCTSNodeStruct priorRoot = ref RootNode;
+
+      // Advance root node and update prior moves
+      ref MCTSNodeStruct newRoot = ref priorRoot;
+      foreach (MGMove moveMade in movesMade)
+      {
+        // Append the moves made to the prior moves
+        Nodes.PriorMoves.AppendMove(moveMade);
+
+        bool foundChild = false;
+
+        // Find this new root node (after these moves)
+        foreach (MCTSNodeStructChild child in newRoot.Children)
+        {
+          if (child.IsExpanded)
+          {
+            MGMove thisChildMove = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(child.Move, in position);
+            if (thisChildMove == moveMade)
+            {
+// NO! can't modify structure since we may need to abandon without modifying
+//              // Mark this node as deleted
+              newRoot.Detached = true;
+
+              // Advance new root to reflect this move
+              newRoot = ref child.ChildRef;
+
+              // Advance position
+              position.MakeMove(thisChildMove);
+
+              // Done looking for match
+              foundChild = true;
+              break;
+            }
+          }
+        }
+
+        if (!foundChild)
+        {
+          // Restore the tree the way we originally found it
+          Nodes.PriorMoves = staringPriorMove;
+          Console.WriteLine("No follow - not found");
+          return false;
+        }
+      }
+
+      // Only switch to this root if it meets the threshold size
+      float fractionNodesCouldBeRetained = (float)newRoot.N / (float)priorRoot.N;
+      if (fractionNodesCouldBeRetained < thresholdFractionNodesRetained)
+      {
+        Console.WriteLine("No follow - fraction too small " + fractionNodesCouldBeRetained);
+        return false;
+      }
+
+      // The new root no longer has a parent
+      newRoot.ParentIndex = MCTSNodeStructIndex.Null;
+
+      // Reset root to this node
+      RootIndex = newRoot.Index;
+
+      // TODO: should we consider removing the node from the transposition root table?
+
+      // Success
+      return true;
+    }
+
+#endif
