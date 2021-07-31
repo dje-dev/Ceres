@@ -29,6 +29,7 @@ using Ceres.MCTS.Managers.Limits;
 using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.Params;
+using Ceres.MCTS.Environment;
 
 #endregion
 
@@ -332,9 +333,18 @@ namespace Ceres.MCTS.Iteration
 
     private void SearchContinueRetainTree(MCTSIterator reuseOtherContextForEvaluatedNodes, PositionWithHistory newPositionAndMoves, List<GameMoveStat> gameMoveHistory, bool verbose, DateTime startTime, MCTSManager.MCTSProgressCallback progressCallback, bool isFirstMoveOfGame, MCTSIterator priorContext, MCTSNodeStore store, int numNodesInitial, MCTSNode newRoot, SearchLimit searchLimitTargetAdjusted, bool possiblyUsePositionCache)
     {
+      bool FAST = Manager.Context.ParamsSearch.TestFlag;
+
+      TimingStats statsMaterialize = new();
       if (Manager.Context.ParamsSearch.Execution.TranspositionMode != TranspositionMode.None)
       {
-        MaterializeAllTranspositionLinkages(newRoot);
+        if (!FAST)
+        {
+          using (new TimingBlock(statsMaterialize, TimingBlock.LoggingType.None))
+          {
+            MaterializeAllTranspositionLinkages(newRoot);
+          }
+        }
       }
 
       // Now rewrite the tree nodes and children "in situ"
@@ -359,10 +369,15 @@ namespace Ceres.MCTS.Iteration
       TimingStats makeNewRootTimingStats = new TimingStats();
       using (new TimingBlock(makeNewRootTimingStats, TimingBlock.LoggingType.None))
       {
-        MCTSNodeStructStorage.MakeChildNewRoot(store, Manager.Context.ParamsSelect.PolicySoftmax, ref newRoot.Ref, newPositionAndMoves,
+        MCTSNodeStructStorage.MakeChildNewRoot(Manager.Context.Tree, Manager.Context.ParamsSelect.PolicySoftmax, ref newRoot.Ref, newPositionAndMoves,
                                                reusePositionCache, newTranspositionRoots);
       }
-      MCTSManager.TotalTimeSecondsInMakeNewRoot += (float)makeNewRootTimingStats.ElapsedTimeSecs;
+      MCTSManager.TotalTimeSecondsInMakeNewRoot += (float)(statsMaterialize.ElapsedTimeSecs + makeNewRootTimingStats.ElapsedTimeSecs);
+
+      if (newRoot.Context.ParamsSearch.TestFlag)
+      {
+        MCTSEventSource.TestMetric1 += (float)makeNewRootTimingStats.ElapsedTimeSecs;
+      }
 
       CeresEnvironment.LogInfo("MCTS", "MakeChildNewRoot", $"Select {newRoot.N:N0} from {numNodesInitial:N0} "
                               + $"in {(int)(makeNewRootTimingStats.ElapsedTimeSecs / 1000.0)}ms");

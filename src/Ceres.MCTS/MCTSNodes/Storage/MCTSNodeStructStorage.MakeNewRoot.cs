@@ -15,14 +15,17 @@
 
 using System;
 using System.Collections;
-using System.Diagnostics;
+using System.Collections.Generic;
 
+using System.Diagnostics;
+using Ceres.Base.Benchmarking;
 using Ceres.Base.DataTypes;
 using Ceres.Base.OperatingSystem;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.PositionEvalCaching;
 using Ceres.Chess.Positions;
 using Ceres.MCTS.Iteration;
+using Ceres.MCTS.LeafExpansion;
 using Ceres.MCTS.MTCSNodes.Struct;
 
 #endregion
@@ -57,56 +60,100 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     /// Additionally we may have to recreate the transposition roots dictionary because
     /// the set of roots is smaller (the retined subtree only) and the node indices will change.
     /// </summary>
-    /// <param name="store"></param>
+    /// <param name="tree"></param>
     /// <param name="newRootChild"></param>
     /// <param name="newPriorMoves"></param>
     /// <param name="transpositionRoots"></param>
-    public static void MakeChildNewRoot(MCTSNodeStore store, float policySoftmax, 
+    public static void MakeChildNewRoot(MCTSTree tree, float policySoftmax, 
                                         ref MCTSNodeStruct newRootChild,
                                         PositionWithHistory newPriorMoves,
                                         PositionEvalCache cacheNonRetainedNodes,
                                         TranspositionRootsDict transpositionRoots)
     {
 #if DEBUG
-      store.Validate();
+      tree.Store.Validate();
 #endif
 
       // Nothing to do if the requested node is already currently the root
-      if (newRootChild.Index == store.RootNode.Index)
+      if (newRootChild.Index == tree.Store.RootNode.Index)
       {
         // Nothing changing in the tree, just flush the cache references
-        store.ClearAllCacheIndices();
+        tree.Store.ClearAllCacheIndices();
       }
       else
       {
-        DoMakeChildNewRoot(store, policySoftmax, ref newRootChild, newPriorMoves, cacheNonRetainedNodes, transpositionRoots);
+        DoMakeChildNewRoot(tree, policySoftmax, ref newRootChild, newPriorMoves, cacheNonRetainedNodes, transpositionRoots);
       }
 
 #if DEBUG
-      store.Validate();
+      tree.Store.Validate();
 #endif
     }
 
-    static void DoMakeChildNewRoot(MCTSNodeStore store, float policySoftmax, ref MCTSNodeStruct newRootChild,
-                                        PositionWithHistory newPriorMoves,
-                                        PositionEvalCache cacheNonRetainedNodes,
-                                        TranspositionRootsDict transpositionRoots)
+    static void MaterializeNonRetainedNodes(MCTSTree tree, BitArray includedNodes, int newRootChildIndex)
     {
+      int numPrematerialized = 0;
+      MCTSNodeStore store = tree.Store;
+      MemoryBufferOS<MCTSNodeStruct> rawNodes = store.Nodes.nodes;
+
+      for (int i = 2; i < store.Nodes.nextFreeIndex; i++)
+      {
+        if (includedNodes.Get(i))
+        {
+          ref MCTSNodeStruct thisNode = ref store.Nodes.nodes[i];
+
+          // Materialize any nodes which are transposition linked to a non-retained node
+          if (thisNode.IsTranspositionLinked)
+          {
+            ref MCTSNodeStruct nodeRef = ref rawNodes[i];
+            int transpositionRootIndex = nodeRef.TranspositionRootIndex;
+            Debug.Assert(!rawNodes[transpositionRootIndex].IsTranspositionLinked);
+
+            bool linkedNodeRetained = includedNodes.Get(transpositionRootIndex);
+            if (!linkedNodeRetained || i == newRootChildIndex)
+            {
+              numPrematerialized++;
+              
+              // We are not retaining the transposition root, so we must 
+              // unlink the node from parent (copying over all child information).
+              nodeRef.CopyUnexpandedChildrenFromOtherNode(tree, new MCTSNodeStructIndex(transpositionRootIndex), true);
+            }
+          }
+        }
+
+      }
+
+#if DEBUG
+      tree.Store.Validate();
+#endif
+    }
+
+
+    static void DoMakeChildNewRoot(MCTSTree tree, float policySoftmax, ref MCTSNodeStruct newRootChild,
+                                   PositionWithHistory newPriorMoves,
+                                   PositionEvalCache cacheNonRetainedNodes,
+                                   TranspositionRootsDict transpositionRoots)
+    {
+      bool FAST = tree.Root.Context.ParamsSearch.TestFlag;
+
+      MCTSNodeStore store = tree.Store;
       ChildStartIndexToNodeIndex[] childrenToNodes;
 
       uint numNodesUsed;
-      uint numChildrenUsed;
-      BitArray includedNodes;
-
       int newRootChildIndex = newRootChild.Index.Index;
       int newIndexOfNewParent = -1;
 
       int nextAvailableNodeIndex = 1;
 
       // Traverse this subtree, building a bit array of visited nodes
-      includedNodes = MCTSNodeStructUtils.BitArrayNodesInSubtree(store, ref newRootChild, out numNodesUsed);
+      BitArray includedNodes = MCTSNodeStructUtils.BitArrayNodesInSubtree(store, ref newRootChild, out numNodesUsed);
 
-      //using (new TimingBlock("Build position cache "))
+      if (FAST)
+      {
+        MaterializeNonRetainedNodes(tree, includedNodes, newRootChildIndex);
+      }
+
+      // Possibly extract retained nodes into a cache.
       if (cacheNonRetainedNodes != null)
       {
         long estNumNodes = store.RootNode.N - numNodesUsed;
@@ -118,17 +165,21 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       // children associated with the nodes we are extracting
       childrenToNodes = GC.AllocateUninitializedArray<ChildStartIndexToNodeIndex>((int)numNodesUsed);
 
-      void RewriteNodes()
+
+      int RewriteNodesBuildChildrenInfo()
       {
+        int numChildrenFixups = 0;
+
         // TODO: Consider that the above is possibly all we need to do in some case
         //       Suppose the subtree is very large relative to the whole
         //       This approach would be much faster, and orphan an only small part of the storage
+        MemoryBufferOS<MCTSNodeStruct> rawNodes = store.Nodes.nodes;
+        Span<MCTSNodeStruct> nodesSpan = store.Nodes.Span;
 
         // Now scan all above nodes. 
         // If they don't belong, ignore. 
         // If they do belong, swap them down to the next available lower location
         // Note that this can't be parallelized, since we have to do it strictly in order of node index
-        int numRewrittenNodesDone = 0;
         for (int i = 2; i < store.Nodes.nextFreeIndex; i++)
         {
           if (includedNodes.Get(i))
@@ -142,40 +193,69 @@ namespace Ceres.MCTS.MTCSNodes.Storage
             // since the root may be in a part of the tree that is not retained
             // and possibly already overwritten.
             // We expect them to have already been materialized by the time we reach this point.
-            Debug.Assert(!thisNode.IsTranspositionLinked);
-            Debug.Assert(thisNode.NumNodesTranspositionExtracted == 0);
+            Debug.Assert(FAST || !thisNode.IsTranspositionLinked);
+            Debug.Assert(FAST || thisNode.NumNodesTranspositionExtracted == 0);
 
             // Remember this location if this is the new parent
-            if (i == newRootChildIndex) newIndexOfNewParent = nextAvailableNodeIndex;
+            if (i == newRootChildIndex)
+            { 
+              newIndexOfNewParent = nextAvailableNodeIndex;
+            }
 
+            // TODO: could we omit putting in the nodes which are transposition linked here?
+            //       This would reduce size of structure we need to sort and process.
+            //       But will this throw off alignment with numRewrittenNodesDone ?
+            if (!thisNode.IsTranspositionLinked)
+            {
+              childrenToNodes[numChildrenFixups++] = new ChildStartIndexToNodeIndex(thisNode.childStartBlockIndex, nextAvailableNodeIndex, thisNode.NumPolicyMoves);
+            }
+
+            if (thisNode.IsTranspositionLinked)
+            {
+              // This is a transposition linked node for which the 
+              // transposition root node will remain in the retained tree.
+              // Just point it back to the new index of the root node.
+              // Note that this is safe because the trees are always built and rebuilt (for make new root)
+              // retaining chronological order of visits, so the roots will always appear
+              // sequentially before linked nodes that refer to them.
+              Debug.Assert(FAST);
+              bool found = transpositionRoots.TryGetValue(thisNode.ZobristHash, out int transpositionRootIndex);
+              if (!found)
+              {
+                throw new Exception("Internal error: expected transposition root not found.");
+              }
+              else
+              {
+                Debug.Assert(rawNodes[transpositionRootIndex].ZobristHash == thisNode.ZobristHash);
+                thisNode.TranspositionRootIndex = transpositionRootIndex;
+              }
+            }
+            else
+            {
+              // Re-insert this into the transpositionRoots (with the updated node index)
+              // TODO: this is expensive, try to optimize by
+              //       possibly avoiding duplicates or parallelizing
+              transpositionRoots?.TryAdd(thisNode.ZobristHash, nextAvailableNodeIndex);
+            }
+           
             // Move the actual node
-            MoveNodePosition(store, new MCTSNodeStructIndex(i), new MCTSNodeStructIndex(nextAvailableNodeIndex));
+            SwapNodesPosition(store, nodesSpan, new MCTSNodeStructIndex(i), new MCTSNodeStructIndex(nextAvailableNodeIndex));
 
-            // Reset all transposition information
-            thisNode.NextTranspositionLinked = 0;
-
-            childrenToNodes[numRewrittenNodesDone] = new ChildStartIndexToNodeIndex(thisNode.childStartBlockIndex, nextAvailableNodeIndex, thisNode.NumPolicyMoves);
-
-            // Re-insert this into the transpositionRoots (with the updated node index)
-            // TODO: this is expensive, try to optimize by
-            //       possibly avoiding duplicates or parallelizing
-            transpositionRoots?.TryAdd(thisNode.ZobristHash, nextAvailableNodeIndex);
-
-            Debug.Assert(thisNode.NumNodesTranspositionExtracted == 0);
-
-            numRewrittenNodesDone++;
             nextAvailableNodeIndex++;
           }
         }
+
+        return numChildrenFixups;
       }
 
       // Rewrite nodes (and associated children)
-      RewriteNodes();
+      int numChildrenFixups = RewriteNodesBuildChildrenInfo();
 
       // Perform a sort so we can shift down the children in order of apperance
       // This is necessary because it guarantess we will always have sufficient room
-      new Span<ChildStartIndexToNodeIndex>(childrenToNodes).Sort();
-      RewriteChildren(store, childrenToNodes);
+      var usedChildStartIndexInfo = new Span<ChildStartIndexToNodeIndex>(childrenToNodes).Slice(0, numChildrenFixups);
+      usedChildStartIndexInfo.Sort();
+      RewriteChildren(store, usedChildStartIndexInfo);
 
       // Finally swap this new root in the root position (slot 1)
       if (newIndexOfNewParent != 1)
@@ -199,6 +279,8 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       // Update the prior moves
       store.Nodes.PriorMoves = new PositionWithHistory(newPriorMoves);
     }
+              
+    
 
     private static void ExtractPositionCacheNonRetainedNodes(MCTSNodeStore store, float policySoftmax, BitArray includedNodes, in MCTSNodeStruct newRoot, 
                                                              PositionEvalCache cacheNonRetainedNodes)
@@ -207,7 +289,6 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       {
         ref MCTSNodeStruct nodeRef = ref store.Nodes.nodes[nodeIndex];
 
-        bool nodeRetained = includedNodes[nodeIndex];
         int curGeneration = nodeRef.ReuseGenerationNum;
         if (!includedNodes[nodeIndex] || curGeneration > 0)
         {
@@ -243,11 +324,10 @@ namespace Ceres.MCTS.MTCSNodes.Storage
           }
         }
       }
-
     }
 
 
-    private static void RewriteChildren(MCTSNodeStore store, ChildStartIndexToNodeIndex[] childrenToNodes)
+    private static void RewriteChildren(MCTSNodeStore store, Span<ChildStartIndexToNodeIndex> childrenToNodes)
     {
       int nextAvailableChildBlockIndex = 1;
 
@@ -256,7 +336,13 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       {
         ChildStartIndexToNodeIndex childStartToNode = childrenToNodes[i];
 
-        if (childStartToNode.PriorChildStartBlockIndex != 0)
+        // Skip entries with negative index (which are transposition points)
+        bool isTranspositionLinked = childStartToNode.PriorChildStartBlockIndex < 0;
+        if (isTranspositionLinked)
+        {
+          // Nothing to do.
+        }
+        else if (childStartToNode.PriorChildStartBlockIndex > 0)
         {
           // Move the actual children entries
           store.Children.CopyEntries(childStartToNode.PriorChildStartBlockIndex, nextAvailableChildBlockIndex, childStartToNode.NumPolicyMoves);
@@ -271,26 +357,39 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 
       // Reset children to new length
       // Note that it is not assumed the unused portion of the array is zeros,
-      // so no need to zero anything here
+      // so no need to zero anything here.
       store.Children.nextFreeBlockIndex = nextAvailableChildBlockIndex;
     }
 
-    static void ModifyChildrensParentRef(MCTSNodeStore store, ref MCTSNodeStruct node, MCTSNodeStructIndex newParentIndex)
+
+    static void ModifyChildrensParentRef(MCTSNodeStore store, Span<MCTSNodeStruct> rawNodes, 
+                                         ref MCTSNodeStruct node, MCTSNodeStructIndex newParentIndex)
     {
-      Span<MCTSNodeStructChild> children = node.ChildrenFromStore(store);
-      int numChildrenExpanded = node.NumChildrenExpanded;
-      for (int i = 0; i < numChildrenExpanded; i++)
+      if (!node.IsTranspositionLinked)
       {
-        children[i].ChildRefFromStore(store).ParentIndex = newParentIndex;
+        Span<MCTSNodeStructChild> children = node.ChildrenFromStore(store);
+        int numChildrenExpanded = node.NumChildrenExpanded;
+        for (int i = 0; i < numChildrenExpanded; i++)
+        {
+          rawNodes[children[i].ChildIndex.Index].ParentIndex = newParentIndex;
+        }
       }
     }
 
-    public static void MoveNodePosition(MCTSNodeStore store, MCTSNodeStructIndex from, MCTSNodeStructIndex to)
+
+    /// <summary>
+    /// Swaps the position of two nodes within the store,
+    /// updating linked data structures as needed.
+    /// </summary>
+    /// <param name="store"></param>
+    /// <param name="nodes"></param>
+    /// <param name="from"></param>
+    /// <param name="to"></param>
+    public static void SwapNodesPosition(MCTSNodeStore store, Span<MCTSNodeStruct> nodes, 
+                                         MCTSNodeStructIndex from, MCTSNodeStructIndex to)
     {
       if (from != to)
       {
-        Span<MCTSNodeStruct> nodes = store.Nodes.Span;
-
         Debug.Assert(!nodes[from.Index].IsRoot);
 
         ref MCTSNodeStruct fromNodeRef = ref nodes[from.Index];
@@ -300,7 +399,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
         parent.ModifyExpandedChildIndex(store, from, to);
 
         // Swap the parent references of any children in both
-        ModifyChildrensParentRef(store, ref fromNodeRef, to);
+        ModifyChildrensParentRef(store, nodes, ref fromNodeRef, to);
 
         // Swap nodes themselves
         nodes[to.Index] = nodes[from.Index];
@@ -315,20 +414,20 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 
       if (i1 != i2)
       {
-        MemoryBufferOS<MCTSNodeStruct> nodesBuffer = store.Nodes.nodes;
+        Span<MCTSNodeStruct> nodes = store.Nodes.nodes.Span;
 
         // Swap references from parents to these children
         ModifyParentsChildRef(store, i1, i2);
         ModifyParentsChildRef(store, i2, i1);
 
         // Swap the parent references of any children in both
-        ModifyChildrensParentRef(store, ref nodesBuffer[i1.Index], i2);
-        ModifyChildrensParentRef(store, ref nodesBuffer[i2.Index], i1);
+        ModifyChildrensParentRef(store, nodes, ref nodes[i1.Index], i2);
+        ModifyChildrensParentRef(store, nodes, ref nodes[i2.Index], i1);
 
         // Swap nodes themselves
-        MCTSNodeStruct temp = nodesBuffer[i1.Index];
-        nodesBuffer[i1.Index] = nodesBuffer[i2.Index];
-        nodesBuffer[i2.Index] = temp;
+        MCTSNodeStruct temp = nodes[i1.Index];
+        nodes[i1.Index] = nodes[i2.Index];
+        nodes[i2.Index] = temp;
       }
     }
 
