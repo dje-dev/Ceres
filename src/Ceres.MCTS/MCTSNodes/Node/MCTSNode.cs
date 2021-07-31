@@ -234,11 +234,6 @@ namespace Ceres.MCTS.MTCSNodes
     public bool IsInFlight => NInFlight > 0 || NInFlight2 > 0;
 
     /// <summary>
-    /// Sum of P of all children that have had at least one visit
-    /// </summary>
-    public FP16 SumPVisited => (*ptr).SumPVisited;
-
-    /// <summary>
     /// Number of policy moves (children)
     /// Possibly this set of moves is incomplete due to either:
     ///   - implementation decision to "throw away" lowest probability moves to save storage, or

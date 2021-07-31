@@ -58,7 +58,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     #region Data
 
     /// <summary>
-    /// Node estimated value
+    /// Neural network evaluation of win - loss.
     /// </summary>
     public FP16 V => WinP - LossP;
 
@@ -138,8 +138,6 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
     public readonly bool IsInFlight => NInFlight != 0 || NInFlight2 != 0;
 
-    public FP16 SumPVisited => (FP16)CalcSumPVisited();
-
     /// <summary>
     /// The number of evaluations that have so far been extracted via
     /// the transposition root (or zero if not transposition linked).
@@ -217,8 +215,13 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       EncodedMove lzMove = ConverterMGMoveEncodedMove.MGChessMoveToEncodedMove(move);
       Span<MCTSNodeStructChild> children = this.Children;
       for (int i = 0; i < NumPolicyMoves; i++)
+      {
         if (children[i].Move == lzMove)
+        {
           return i;
+        }
+      }
+
       return null;
     }
 
@@ -255,14 +258,13 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// </summary>
     public readonly double Q => W / N;
 
-    public readonly bool IsFullyEvaluated => throw new NotImplementedException();
-                                             //   Terminal != TerminalStatus.NotTerminal 
-                                             // || (NumPolicyMoves > 0 && NumChildrenFullyEvaluated == Children.Length);
 
-
-
+    /// <summary>
+    /// Returns reference to parent of this node.
+    /// </summary>
     public readonly ref MCTSNodeStruct ParentRef
     {
+      [MethodImpl(MethodImplOptions.AggressiveInlining)]
       get
       {
         Debug.Assert(!ParentIndex.IsNull);
@@ -270,9 +272,18 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       }
     }
 
+    /// <summary>
+    /// Returns N of parent node.
+    /// </summary>
     public readonly int ParentN => ParentRef.IsNull ? 0 : ParentRef.N;
 
 
+    /// <summary>
+    /// Returns reference to child node at specified index within children.
+    /// </summary>
+    /// <param name="childIndex"></param>
+    /// <returns></returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public ref readonly MCTSNodeStruct ChildAtIndexRef(int childIndex)
     {
       Debug.Assert(childIndex < NumPolicyMoves);
@@ -280,6 +291,11 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     }
 
 
+    /// <summary>
+    /// Returns child information at specified index.
+    /// </summary>
+    /// <param name="childIndex"></param>
+    /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly MCTSNodeStructChild ChildAtIndex(int childIndex)
     {
@@ -289,6 +305,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
 
     /// <summary>
+    /// Returns index of specified node within the store.
     /// 
     /// TODO: someday we want to mark this as readonly (which is critical for readonly refs)
     ///       However seemingly no efficient way to do that (using Unsafe class). See CTNodeStorage.NodeOffsetFromFirst.
@@ -314,6 +331,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// </summary>
     public unsafe readonly MCTSNodeStructIndex Index
     {
+      [MethodImpl(MethodImplOptions.AggressiveInlining)]
       get
       {
         return IndexInStore(MCTSNodeStoreContext.Store);
@@ -336,7 +354,10 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     {
       // Verify expected size
       long size = Marshal.SizeOf<MCTSNodeStruct>();
-      if (size != MCTSNodeStructSizeBytes) throw new Exception("Internal error, wrong size MCTSNodeStruct " + size);
+      if (size != MCTSNodeStructSizeBytes)
+      {
+        throw new Exception("Internal error, wrong size MCTSNodeStruct " + size);
+      }
 
       // We rely upon immovability of the array of nodes 
       Debug.Assert(GCSettings.LargeObjectHeapCompactionMode == GCLargeObjectHeapCompactionMode.Default);
@@ -362,25 +383,34 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     }
 
 
+    /// <summary>
+    /// Returns span of children structures belonging to this node.
+    /// </summary>
+    /// <param name="store"></param>
+    /// <returns></returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly Span<MCTSNodeStructChild> ChildrenFromStore(MCTSNodeStore store)
     {
-
-      if (NumPolicyMoves == 0)
-        return new Span<MCTSNodeStructChild>();
-      else
-        return store.Children.SpanForNode(in this);
-
+      return store.Children.SpanForNode(in this);
     }
 
 
+    /// <summary>
+    /// Returns span of children structures belonging to this node.
+    /// </summary>
     public readonly Span<MCTSNodeStructChild> Children
     {
+      [MethodImpl(MethodImplOptions.AggressiveInlining)]
       get
       {
         if (NumPolicyMoves == 0)
+        {
           return new Span<MCTSNodeStructChild>();
+        }
         else
+        {
           return MCTSNodeStoreContext.Store.Children.SpanForNode(in this);
+        }
       }
     }
 
@@ -397,7 +427,10 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         while (!node.IsRoot)
         {
           // Don't allow infinite loop (this makes debugging difficult due to debugger displays hanging)
-          if (count > 9999) return 255;
+          if (count > 9999)
+          {
+            return 255;
+          }
 
           count++;
           node = ref node.ParentRef;

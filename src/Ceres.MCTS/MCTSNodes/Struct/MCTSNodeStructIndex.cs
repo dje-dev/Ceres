@@ -52,10 +52,17 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
     public bool IsRoot => index == 1;
 
-    public int Index => index;
+    public int Index
+    {
+      [DebuggerStepThrough]
+      [MethodImpl(MethodImplOptions.AggressiveInlining)]
+      get
+      {
+        return index;
+      }
+    }
 
     #endregion
-
     #region Constructor/conversion
 
     /// <summary>
@@ -77,7 +84,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     public ref MCTSNodeStruct Ref
     {
       [DebuggerStepThrough]
-      [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+      [MethodImpl(MethodImplOptions.AggressiveInlining)]
       get
       {
         return ref MCTSNodeStoreContext.Nodes[index];

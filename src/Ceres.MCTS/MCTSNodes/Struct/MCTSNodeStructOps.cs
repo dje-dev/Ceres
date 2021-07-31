@@ -113,6 +113,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       // Detach
       NumNodesTranspositionExtracted = 0;
       TranspositionRootIndex = 0;
+      NextTranspositionLinked = 0;
 
       SetNumPolicyMovesAndAllocateChildInfo(tree, otherNode.NumPolicyMoves);
 
@@ -159,25 +160,34 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
 
     /// <summary>
-    /// Computes the sum of probabilities of all expanded nodes.
+    /// Returns the sum of policy probabilities of all expanded nodes.
     /// </summary>
     /// <returns></returns>
-    public float CalcSumPVisited()
+    public float SumPVisited
     {
-      if (NumChildrenVisited == 0) return 0;
-
-      float sumPVisited = 0;
-
-      MCTSNodeStore store = MCTSNodeStoreContext.Store;
-
-      Span<MCTSNodeStructChild> theseChildren = Children;
-      for (int i = 0; i < NumChildrenExpanded; i++)
+      get
       {
-        sumPVisited += theseChildren[i].ChildRefFromStore(store).P.ToFloatApprox;
-      }
+        if (NumChildrenVisited == 0)
+        {
+          return 0;
+        }
 
-      return sumPVisited;
+        Span<MCTSNodeStruct> nodes = MCTSNodeStoreContext.Store.Nodes.nodes.Span;
+
+        // Get a slice of children in a way that avoids range checking in loop.
+        int numChildrenExpanded = NumChildrenExpanded;
+        Span<MCTSNodeStructChild> theseChildren = Children.Slice(0, numChildrenExpanded);
+
+        float sumPVisited = 0;
+        for (int i = 0; i < numChildrenExpanded; i++)
+        {
+          sumPVisited += nodes[theseChildren[i].ChildIndex.Index].P.ToFloatApprox;
+        }
+
+        return sumPVisited;
+      }
     }
+
 
 
     /// <summary>
@@ -356,7 +366,9 @@ namespace Ceres.MCTS.MTCSNodes.Struct
               PrefetchDataAt(childNodePtr);
             }
             else
+            {
               break;
+            }
           }
         }
       }
@@ -372,11 +384,17 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     private static unsafe void PrefetchDataAt(void* nodePtr)
     {
       if (MCTSParamsFixed.PrefetchCacheLevel == CacheLevel.Level0)
+      {
         Sse.Prefetch0(nodePtr);
+      }
       else if (MCTSParamsFixed.PrefetchCacheLevel == CacheLevel.Level1)
+      {
         Sse.Prefetch1(nodePtr);
+      }
       else if (MCTSParamsFixed.PrefetchCacheLevel == CacheLevel.Level2)
+      {
         Sse.Prefetch2(nodePtr);
+      }
       else if (MCTSParamsFixed.PrefetchCacheLevel == CacheLevel.None)
       {
       }
@@ -389,6 +407,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     {
       PossiblyPrefetchNodeAndChildrenInRange(store, index, 0, NumChildrenExpanded);
     }
+
 
     #region Gather fields
 
@@ -496,9 +515,13 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           ref MCTSNodeStruct childNode = ref child.ChildRef;
           n[i] = childNode.N;
           if (selectorID == 0)
+          {
             nInFlight[i] = childNode.NInFlight + dualCollisionFraction * childNode.NInFlight2;
+          }
           else
+          {
             nInFlight[i] = childNode.NInFlight2 + dualCollisionFraction * childNode.NInFlight;
+          }
 
           p[i] = childNode.P.ToFloatApprox;// * childNode.Weight;
 
@@ -928,7 +951,10 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <returns></returns>
     public float QPowerMean(double p, bool inverted)
     {
-      if (Terminal != Chess.GameResult.Unknown) return (float)Q;
+      if (Terminal != Chess.GameResult.Unknown)
+      {
+        return (float)Q;
+      }
 
 #if NOT
       // NOTE: this code was never tried, and left abandoned.
@@ -960,7 +986,6 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           {
             double adjustedQ = 0.55 + 0.5 * (inverted ? -childNode.Q : childNode.Q);
             pwc.AddValue(adjustedQ, childNode.N);
-            //            Console.WriteLine($"{(inverted ? -childNode.Q : childNode.Q)} {childNode.N}");
           }
         }
       }
