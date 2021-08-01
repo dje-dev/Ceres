@@ -51,6 +51,12 @@ namespace Ceres.MCTS.Iteration
       SearchLimitExceeded,
 
       /// <summary>
+      /// The MaxTreeNodes field in the SearchLimit was set
+      /// and the search tree has reached that limit.
+      /// </summary>
+      MaxTreeNodesExceeded,
+
+      /// <summary>
       /// All top-level moves were pruned.
       /// </summary>
       FutilityPrunedAllMoves,

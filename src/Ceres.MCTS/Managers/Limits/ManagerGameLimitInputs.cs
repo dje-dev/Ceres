@@ -40,15 +40,18 @@ namespace Ceres.MCTS.Managers.Limits
     /// <param name="rootQ"></param>
     /// <param name="timeRemainingFixedSelf"></param>
     /// <param name="timeRemainingIncrementSelf"></param>
+    /// <param name="maxTreeNodesSelf"></param>
     /// <param name="timeRemainingFixedOpponent"></param>
     /// <param name="timeRemainingIncrementOpponent"></param>
     /// <param name="maxMovesToGo"></param>
+    /// <param name="isFirstMoveOfGame"></param>
     public ManagerGameLimitInputs(in Position startPos, ParamsSearch searchParams, 
                                  List<GameMoveStat> priorMoveStats,
                                  SearchLimitType limitType,
                                  int rootN,
                                  float rootQ,
                                  float timeRemainingFixedSelf, float timeRemainingIncrementSelf,
+                                 int? maxTreeNodesSelf,
                                  float timeRemainingFixedOpponent, float timeRemainingIncrementOpponent,
                                  int? maxMovesToGo = null,
                                  bool isFirstMoveOfGame = false)
@@ -61,6 +64,7 @@ namespace Ceres.MCTS.Managers.Limits
       RootQ = rootQ;
       RemainingFixedSelf = MathF.Max(0.001f, timeRemainingFixedSelf);
       IncrementSelf = timeRemainingIncrementSelf;
+      MaxTreeNodesSelf = maxTreeNodesSelf;
       RemainingFixedOpponent = MathF.Max(0.001f, timeRemainingFixedOpponent);
       IncrementOpponent = timeRemainingIncrementOpponent;
       MaxMovesToGo = maxMovesToGo;
@@ -107,6 +111,11 @@ namespace Ceres.MCTS.Managers.Limits
     /// Amount of incremental search units (time or nodes) which will be added to allowance upon each move.
     /// </summary>
     public readonly float IncrementSelf;
+
+    /// <summary>
+    /// Maximum size in nodes which the search tree is allowed to grow.
+    /// </summary>
+    public readonly int? MaxTreeNodesSelf;
 
     /// <summary>
     /// Amount of remaining search units (time or nodes) until end of game.

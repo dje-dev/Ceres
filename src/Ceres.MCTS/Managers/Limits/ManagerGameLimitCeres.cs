@@ -14,6 +14,7 @@
 #region Using directives
 
 using System;
+using Ceres.Base.DataType.Trees;
 using Ceres.Chess;
 
 #endregion
@@ -122,8 +123,9 @@ namespace Ceres.MCTS.Managers.Limits
     public ManagerGameLimitOutputs ComputeMoveAllocation(ManagerGameLimitInputs inputs)
     {
       ManagerGameLimitOutputs Return(float value, float extensionFraction)
-        => new ManagerGameLimitOutputs(new SearchLimit(inputs.TargetLimitType, value, 
-                                                       fractionExtensibleIfNeeded: extensionFraction));
+        => new ManagerGameLimitOutputs(new SearchLimit(inputs.TargetLimitType, value,                                                        
+                                                       fractionExtensibleIfNeeded: extensionFraction,
+                                                       maxTreeNodes:inputs.MaxTreeNodesSelf));
 
       // If this is the last move to go, use almost all available time.
       // TODO: but can a player carry forward time on a clock? Then this doesn't make sense.

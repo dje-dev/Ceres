@@ -49,6 +49,12 @@ namespace Ceres.Chess
     public int? MaxMovesToGo { init; get; } = null;
 
     /// <summary>
+    /// Optionally the maximum number of nodes which are allowed in the search tree
+    /// at one time. Search is stopped if this limit is reached.
+    /// </summary>
+    public int? MaxTreeNodes { init; get; } = null;
+
+    /// <summary>
     /// If true then sufficent node storage is reserved so that
     /// the search can subsequently be expanded (without any practical bound).
     /// 
@@ -58,7 +64,8 @@ namespace Ceres.Chess
     public bool SearchCanBeExpanded { init; get; } = true;
 
     /// <summary>
-    /// The fraction by which the search limit can be expanded dynamically
+    /// Hint to the limits manager indicating the fraction by which 
+    /// the search limit can be expanded dynamically
     /// if it is determined this would be particularly useful.
     /// </summary>
     public float FractionExtensibleIfNeeded { init; get; } = 0f;
@@ -107,7 +114,8 @@ namespace Ceres.Chess
     /// <param name="fractionExtensibleIfNeeded"></param>
     public SearchLimit(SearchLimitType type, float value, bool searchCanBeExpanded = true, 
                        float valueIncrement = 0, int? maxMovesToGo = null, List<Move> searchMoves = null,
-                       float fractionExtensibleIfNeeded= 0f)
+                       float fractionExtensibleIfNeeded= 0f,
+                       int? maxTreeNodes = null)
     {
       if (value < 0) throw new ArgumentOutOfRangeException(nameof(value), "cannot be negative");
       if (valueIncrement > 0 && !TypeIsPerGameLimit(type))
@@ -118,6 +126,7 @@ namespace Ceres.Chess
       SearchCanBeExpanded = searchCanBeExpanded;
       ValueIncrement = valueIncrement;
       MaxMovesToGo = maxMovesToGo;
+      MaxTreeNodes = maxTreeNodes;
       if (searchMoves != null && searchMoves.Count > 0)
       {
         SearchMoves = searchMoves;
@@ -276,9 +285,10 @@ namespace Ceres.Chess
     public override string ToString()
     {
       string movesToGoPart = MaxMovesToGo.HasValue ? $" Moves { MaxMovesToGo }" : "";
-      string valuePart = IsTimeLimit ? $"{Value,5:F2}s" : $"{Value,9:N0} nodes";
-      string incrPart = IsTimeLimit ? $"{ValueIncrement,5:F2}s" : $"{ValueIncrement,9:N0} nodes";
+      string valuePart = IsTimeLimit ? $"{Value,8:F2}s" : $"{Value,12:N0} nodes";
+      string incrPart = IsTimeLimit ? $"{ValueIncrement,8:F2}s" : $"{ValueIncrement,12:N0} nodes";
 
+      string maxTree = MaxTreeNodes != null ? $" Tree max {MaxTreeNodes,12:N0}" : "";
       string searchMovesPart = "";
       if (SearchMoves != null)
       {
@@ -289,7 +299,7 @@ namespace Ceres.Chess
         }
       }
 
-      return $"<{TypeShortStr,-4}{valuePart}{(ValueIncrement > 0 ? $" +{incrPart}" : "")}{movesToGoPart}{searchMovesPart}>";
+      return $"<{TypeShortStr,-4}{valuePart}{(ValueIncrement > 0 ? $" +{incrPart}" : "")}{movesToGoPart}{maxTree}{searchMovesPart}>";
     }
   }
 }

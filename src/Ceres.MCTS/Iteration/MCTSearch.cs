@@ -162,7 +162,14 @@ namespace Ceres.MCTS.Iteration
         // In this mode, we are just reserving virtual address space
         // from a very large pool (e.g. 256TB for Windows).
         // Therefore it is safe to reserve a very large block.
-        maxNodes = MCTSNodeStore.MAX_NODES;
+        if (searchLimit.MaxTreeNodes != null && searchLimit.MaxTreeNodes > MCTSNodeStore.MAX_NODES)
+        {
+          maxNodes = searchLimit.MaxTreeNodes.Value + 100_000;
+        }
+        else
+        {
+          maxNodes = MCTSNodeStore.MAX_NODES;
+        }
       }
 
       MCTSNodeStore store = new MCTSNodeStore(maxNodes, priorMoves);
@@ -217,7 +224,7 @@ namespace Ceres.MCTS.Iteration
         ManagerGameLimitInputs limitsManagerInputs = new(in position,
                                 searchParams, gameMoveHistory,
                                 type, searchRootN, searchRootQ,
-                                searchLimit.Value, searchLimit.ValueIncrement,
+                                searchLimit.Value, searchLimit.ValueIncrement, searchLimit.MaxTreeNodes,
                                 float.NaN, float.NaN,
                                 maxMovesToGo: searchLimit.MaxMovesToGo,
                                 isFirstMoveOfGame: isFirstMoveOfGame);
@@ -424,7 +431,7 @@ namespace Ceres.MCTS.Iteration
           searchLimitIncremental = searchLimit with { };
 
           // Nodes per move are treated as incremental beyond initial starting size of tree.
-          searchLimitTargetAdjusted = new SearchLimit(SearchLimitType.NodesPerMove, searchLimit.Value + searchRootN);
+          searchLimitTargetAdjusted = new SearchLimit(SearchLimitType.NodesPerMove, searchLimit.Value + searchRootN, maxTreeNodes:searchLimit.MaxTreeNodes);
           break;
 
         case SearchLimitType.SecondsPerMove:
@@ -438,7 +445,8 @@ namespace Ceres.MCTS.Iteration
                                                         priorContext.ParamsSearch, Manager.LimitManager,
                                                         gameMoveHistory, isFirstMoveOfGame);
           // Nodes per move are treated as incremental beyond initial starting size of tree.
-          searchLimitTargetAdjusted = new SearchLimit(SearchLimitType.NodesPerMove, searchLimitIncremental.Value + searchRootN);
+          searchLimitTargetAdjusted = new SearchLimit(SearchLimitType.NodesPerMove, searchLimitIncremental.Value + searchRootN, 
+                                                      maxTreeNodes: searchLimit.MaxTreeNodes);
           break;
 
         case SearchLimitType.SecondsForAllMoves:

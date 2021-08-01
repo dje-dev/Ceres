@@ -115,6 +115,11 @@ namespace Ceres.Features.UCI
     float moveOverheadSeconds = new ParamsSearch().MoveOverheadSeconds;
 
     /// <summary>
+    /// Maximum size of tree allowed (in nodes).
+    /// </summary>
+    int? maxTreeNodes = null;
+
+    /// <summary>
     /// Multiplier applied to all requested time limits.
     /// </summary>
     float searchLimitMultiplier = 1.0f;
@@ -172,6 +177,10 @@ namespace Ceres.Features.UCI
 
         case "loglivestats":
           SetBool(value, ref logLiveStats);
+          break;
+
+        case "maxtreenodes":
+          SetInt(value, 1, int.MaxValue, ref maxTreeNodes);
           break;
 
         case "searchlimitmultiplier":
@@ -320,6 +329,13 @@ namespace Ceres.Features.UCI
     }
 
 
+    void SetInt(string intStr, int minValue, int maxValue, ref int? value)
+    {
+      int setValue = 0;
+      SetInt(intStr, minValue, maxValue, ref setValue);
+      value = setValue;
+    }
+
     void SetInt(string intStr, int minValue, int maxValue, ref int value)
     {
       if (!int.TryParse(intStr, out int newValue))
@@ -336,7 +352,9 @@ namespace Ceres.Features.UCI
         OutStream.WriteLine($"Value above maximum of {maxValue}");
       }
       else
+      {
         value = newValue;
+      }
     }
 
     void SetFloat(string floatStr, float minValue, float maxValue, ref float value)
@@ -382,7 +400,7 @@ option name PolicyTemperature type string default {new ParamsSelect().PolicySoft
 option name FPU type string default {new ParamsSelect().FPUValue}
 option name FPUAtRoot type string default {new ParamsSelect().FPUValueAtRoot}
 option name SearchLimitMultiplier type string default 1.00
-
+option name MaxTreeNodes type string default
 ");
     /* 
 option name ConfigFile type string default lc0.config

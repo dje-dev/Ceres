@@ -591,6 +591,11 @@ namespace Ceres.Features.UCI
           GameEngineSearchResultCeres result = null;
           if (searchLimit != null)
           {
+            if (maxTreeNodes != null)
+            {
+              searchLimit = searchLimit with { MaxTreeNodes = maxTreeNodes };
+            }
+
             if (searchLimit.Value > 0)
             {
               // Run the actual search
