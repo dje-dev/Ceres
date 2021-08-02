@@ -111,8 +111,8 @@ namespace Ceres.APIExamples
 
 
 string NET1_SECONDARY1 = null; 
-      NET1 = "J94-100";
-      NET2 = "J94-100";
+      NET1 = "LS15";
+      NET2 = "LS15";
 
 //      NET1 = "703810";
 //      NET2 = "703810";
@@ -138,12 +138,12 @@ string NET1_SECONDARY1 = null;
         evalDef2.MakePersistent();
       }
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(500_000);
+      SearchLimit limit1 = SearchLimit.NodesPerMove(10_000);
 
 
-      limit1 = SearchLimit.SecondsForAllMoves(1, 1);
-      //limit1 = SearchLimit.SecondsForAllMoves(1, 0.15f) * 1f;
-      limit1 = SearchLimit.SecondsForAllMoves(60);
+      //      limit1 = SearchLimit.SecondsForAllMoves(900, 2) * 0.2f;
+      limit1 = SearchLimit.SecondsForAllMoves(60);//
+      //limit1 = SearchLimit.SecondsPerMove(0.75f);
 
       SearchLimit limit2 = limit1;// * 0.2f;
 
@@ -165,7 +165,8 @@ string NET1_SECONDARY1 = null;
       ////////
 
 
-//engineDefCeres1.SearchParams.TestFlag = true;
+engineDefCeres1.SearchParams.TestFlag = true;
+
       //engineDefCeres1.SearchParams.MoveFutilityPruningAggressiveness = 0.4f;
       //engineDefCeres1.SearchParams.GameLimitUsageAggressiveness *= 1.2f;
       //engineDefCeres1.SearchParams.MoveFutilityPruningAggressiveness = 0.75f;
@@ -178,7 +179,7 @@ string NET1_SECONDARY1 = null;
       //engineDefCeres2.SearchParams.TreeReuseEnabled = false;
       //engineDefCeres1.SearchParams.MLHBonusFactor = 0.1f;
 
-//engineDefCeres1.SearchParams.TestFlag = true;
+      //engineDefCeres1.SearchParams.TestFlag = true;
       if (false)
       {
 #if NOT
@@ -222,7 +223,7 @@ string NET1_SECONDARY1 = null;
       //engineDefCeres1.SearchParams.EnableTablebases = false;
 
       // TODO: support this in GameEngineDefCeresUCI
-      bool forceDisableSmartPruning = false;// limit1.IsNodesLimit;
+      bool forceDisableSmartPruning = limit1.IsNodesLimit;
 //forceDisableSmartPruning=true;
       if (forceDisableSmartPruning)
       {
@@ -272,7 +273,7 @@ string NET1_SECONDARY1 = null;
 //                                                @"\\synology\dev\chess\data\epd\sts.epd",
                                                 playerCeres1, null, playerLC0);// playerLC0);
         //playerCeres1, null, playerCeres2UCI);
-        suiteDef.MaxNumPositions = 20;
+        suiteDef.MaxNumPositions = 10;
 
         SuiteTestRunner suiteRunner = new SuiteTestRunner(suiteDef);
 
@@ -313,10 +314,12 @@ string NET1_SECONDARY1 = null;
       TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerLC0);
 
 
-      def.NumGamePairs = 102;// 102;
+      def.NumGamePairs = 102;
       def.ShowGameMoves = false;
 
       string baseName = "tcec1819";
+//      baseName = "4mvs_+90_+99";
+
       def.OpeningsFileName = SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/openings/{baseName}.pgn"
                                                      : @$"\\synology\dev\chess\data\openings\{baseName}.pgn";
 
@@ -391,8 +394,8 @@ string NET1_SECONDARY1 = null;
       EnginePlayerDef playerSF = new EnginePlayerDef(EngineDefStockfish14(), limitSF);
 
       TournamentDef def = new TournamentDef("TOURN", playerCeres, playerSF);
-      def.OpeningsFileName = "TCEC1819.pgn";
-      //def.NumGamePairs = 10;
+      def.OpeningsFileName = "4mvs_+90_+99.pgn";// "TCEC1819.pgn";
+      def.NumGamePairs = 150;
       def.ShowGameMoves = false;
 
       TournamentManager runner = new TournamentManager(def, 1);
