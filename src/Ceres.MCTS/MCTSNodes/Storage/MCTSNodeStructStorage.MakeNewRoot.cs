@@ -253,7 +253,8 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 
             nextAvailableNodeIndex++;
 
-            if (presorter == null && i > presortBegin)
+            const bool ENABLE_PRESORTER = false; // TODO: enable after more correctness testing
+            if (ENABLE_PRESORTER && presorter == null && i > presortBegin)
             {
               // We are mostly done traversing the entires and have accumulate a large number of ChildStartIndexToNodeIndex.
               // Later we'll need to sort all of these accumulated so far (and subsequently).
