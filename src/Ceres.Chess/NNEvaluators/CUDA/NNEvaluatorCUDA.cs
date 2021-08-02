@@ -332,8 +332,7 @@ namespace Ceres.Chess.NNEvaluators.CUDA
           w[i] = (FP16)io.OutputValueHead[i, 0];
           if (float.IsNaN(w[i]))
           {
-            string posStr = null;
-            throw new Exception($"Neural network returned NaN value head for position {posStr} ");
+            throw new Exception($"Neural network backend returned NaN value head from evaluator {this}");
           }
 
           l[i] = (FP16)io.OutputValueHead[i, 2];
@@ -365,6 +364,11 @@ namespace Ceres.Chess.NNEvaluators.CUDA
             {
               short moveCode = moveIndicesSpan[moveBaseOffset + j];
               float p = policiesMasked[moveBaseOffset + j];
+              if (float.IsNaN(p))
+              {
+                throw new Exception($"Neural network backend return NaN in policy head from evaluator {this}");
+              }
+
               probs[j] = new PolicyVectorCompressedInitializerFromProbs.ProbEntry(moveCode, p);
             }
           }
