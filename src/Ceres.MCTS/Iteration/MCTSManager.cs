@@ -274,7 +274,7 @@ namespace Ceres.MCTS.Iteration
       // Make sure nothing was left in flight after the search
       if ((Root.NInFlight != 0 || Root.NInFlight2 != 0) && !haveWarned)
       {
-        Console.WriteLine($"Internal error: search ended with N={Root.N} NInFlight={Root.NInFlight} NInFlight2={Root.NInFlight2} {Root}");
+        Console.WriteLine($"Test={Root.Context.ParamsSearch.TestFlag} Internal error: search ended with N={Root.N} NInFlight={Root.NInFlight} NInFlight2={Root.NInFlight2} {Root}");
         haveWarned = true;
       }
 
@@ -819,7 +819,6 @@ namespace Ceres.MCTS.Iteration
 
     SearchStopStatus CalcSearchStopStatus()
     {
-      //if (Root == null) return true; // This seemed to happen?   8/8/1p3p1p/1P5k/5P1P/6K1/1P6/8 w - - 1 113 
       if (Root.N < 2)
       {
         return SearchStopStatus.Continue; // Have to search at least two nodes to successfully get a move
@@ -839,6 +838,14 @@ namespace Ceres.MCTS.Iteration
       if (RemainingTime <= 0.01)
       {
         return SearchStopStatus.TimeExpired;
+      }
+
+      if (SearchLimit.MaxTreeNodes != null 
+       && Root.N >= SearchLimit.MaxTreeNodes
+       && NumStepsTakenThisSearch > 0 // always allow a little search to insure state fully initialized
+         )
+      {
+        return SearchStopStatus.MaxTreeNodesExceeded;
       }
 
       int numNotShutdowChildren = TerminationManager.NumberOfNotShutdownChildren();
@@ -875,11 +882,16 @@ namespace Ceres.MCTS.Iteration
     public int? EstimatedNumVisitsRemaining()
     {
       if (SearchLimit.Type == SearchLimitType.NodesPerMove)
+      {
         return (int)(SearchLimit.Value - Root.N);
+      }
       else if (SearchLimit.Type == SearchLimitType.SecondsPerMove)
       {
         float estNPS = EstimatedNPS;
-        if (float.IsNaN(estNPS)) return null; // unkown
+        if (float.IsNaN(estNPS))
+        {
+          return null; // unkown
+        }
 
         float elapsedTime = (float)(DateTime.Now - StartTimeThisSearch).TotalSeconds;
         float remainingTime = SearchLimit.Value - elapsedTime;
