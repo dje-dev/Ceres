@@ -17,19 +17,18 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 
-using Ceres.Base;
 using Ceres.Base.Math;
 using Ceres.Base.Math.Probability;
 using Ceres.Base.Math.Random;
-using Ceres.Base.Threading;
+
 using Ceres.Chess;
-using Ceres.Chess.MoveGen;
 using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.NNEvaluators.LC0DLL;
 using Ceres.Chess.NNFiles;
 using Ceres.Chess.PositionEvalCaching;
 using Ceres.Chess.Positions;
 using Ceres.Chess.UserSettings;
+
 using Ceres.MCTS.Evaluators;
 using Ceres.MCTS.LeafExpansion;
 using Ceres.MCTS.Managers.Limits;
@@ -142,20 +141,23 @@ namespace Ceres.MCTS.Iteration
                                          : (float)NumNodeVisitsSucceeded / (float)NumNodeVisitsAttempted;
 
 
-    // --------------------------------------------------------------------------------------------
+
     void VerifyParamsValid()
     {
       // TODO: generalize this to validation method called on each of the parameter objects
       if (ParamsSearch.ApplyTrendBonus && !MCTSParamsFixed.TRACK_NODE_TREND)
+      {
         throw new Exception("ApplyTrendBonus requires MCTSParamsFixed.TRACK_NODE_TREND");
+      }
 
       if (ParamsSearch.Execution.TranspositionMode == TranspositionMode.None &&
         (ParamsSearch.Execution.InFlightThisBatchLinkageEnabled || ParamsSearch.Execution.InFlightOtherBatchLinkageEnabled))
+      {
         throw new Exception("Requesting IN_FLIGHT_LINKAGE_ENABLED is incompatible with TranspositionMode.None");
+      }
     }
 
 
-    // --------------------------------------------------------------------------------------------
     public void RecordVisitToTopLevelMove(MCTSNode leafNode, MCTSNodeStructIndex indexOfChildDescendentFromRoot, LeafEvaluationResult evalResult)
     {
 #if NOT
@@ -256,9 +258,13 @@ namespace Ceres.MCTS.Iteration
 
       PositionEvalCache positionCache = null;
       if (reusePositionCache != null)
+      {
         positionCache = reusePositionCache;
+      }
       else if (nnEvaluators.EvaluatorDef.CacheMode != PositionEvalCache.CacheMode.None)
+      {
         positionCache = new PositionEvalCache();
+      }
 
       const int NUM_BUFFER_NODES = 1500 + MCTSRootPreloader.MAX_PRELOAD_NODES_TOTAL;
       int maxNodesBound = int.MaxValue;
@@ -272,7 +278,6 @@ namespace Ceres.MCTS.Iteration
 
       Tree = new MCTSTree(store, this, maxNodesBound, estimatedNodesBound, positionCache);
 
-      // TODO: apply sizing and concurrency hints
       if (ParamsSearch.Execution.TranspositionMode != TranspositionMode.None)
       {
         Tree.TranspositionRoots = reuseTranspositionRoots ?? new TranspositionRootsDict(estimatedNodesBound);
@@ -309,7 +314,9 @@ namespace Ceres.MCTS.Iteration
 
       // Possibly try to levarage NN evaluations stored inside the tree from the separate search context
       if (ReuseOtherContextForEvaluatedNodes != null)
+      {
         evaluators.Add(new LeafEvaluatorReuseOtherTree(ReuseOtherContextForEvaluatedNodes));
+      }
 
       if (Tree.PositionCache != null)
       {
@@ -394,7 +401,9 @@ namespace Ceres.MCTS.Iteration
             numLayers = def.NumBlocks;
           }
           else
+          {
             return null; // give up if not all same. TODO: improve this
+          }
         }
       }
 
@@ -422,7 +431,9 @@ namespace Ceres.MCTS.Iteration
       // Normalize to sum to 1.0
       float adj = 1.0f / sumP;
       for (int i = 0; i < overrideRootMovePriors.Length; i++)
+      {
         overrideRootMovePriors[i] *= adj;
+      }
 
       throw new Exception("Dirichlet noise not yet fully working (next need to inject override P into node store and resort children)");
     }
@@ -451,9 +462,7 @@ namespace Ceres.MCTS.Iteration
       }
 //        bonus = (contempt - (float)Root.Q) * mChange * M_SCALE; // becomes more negative the higher our Q or the nubmer of moves left increases
 
-
       //      if (isOurMove) bonus *= -1;
-
 
       bonus = MathHelpers.Bounded(bonus, -MAX_BONUS, MAX_BONUS);
 

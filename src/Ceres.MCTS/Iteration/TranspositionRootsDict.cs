@@ -13,7 +13,6 @@
 
 #region Using directives
 
-using System;
 using System.Collections.Generic;
 using Ceres.Base.Math;
 
@@ -35,18 +34,23 @@ namespace Ceres.MCTS.Iteration
   public class TranspositionRootsDict
   {
     /// <summary>
+    /// The number of transposition roots in a tree 
+    /// will be much less than the total number of nodes due to transpositions.
+    /// </summary>
+    const float ESTIMATED_FRACTION_ROOTS = 0.40f;
+
+    /// <summary>
     /// Underlying mapping dictionary.
     /// </summary>
     Dictionary<ulong, int> table;
 
-
     /// <summary>
     /// Constructor for a dictionary of specified approximate final size.
-    /// Limit max hint to 20mm in case very optimistic value was passed in
+    /// Limit max hint to 300mm in case very optimistic value was passed in
     /// (e.g. in case of a search that was requested to be infinite).
     /// </summary>
     /// <param name="sizingHint"></param>
-    public TranspositionRootsDict(int sizingHint) => table = new Dictionary<ulong, int>((int)StatUtils.Bounded(sizingHint, 1000, 20_000_000));
+    public TranspositionRootsDict(int estimatedTreeSize) => table = new((int)StatUtils.Bounded((int)(estimatedTreeSize * ESTIMATED_FRACTION_ROOTS), 1000, 300_000_000));
 
 
     /// <summary>
@@ -54,7 +58,7 @@ namespace Ceres.MCTS.Iteration
     /// </summary>
     /// <param name="hashKey"></param>
     /// <param name="nodeIndex"></param>
-    public void TryAdd(ulong hashKey, int nodeIndex) => table.TryAdd(hashKey, nodeIndex);    
+    public void TryAdd(ulong hashKey, int nodeIndex) => table.TryAdd(hashKey, nodeIndex);
 
     /// <summary>
     /// Attempts to retrieve the index of the node in the tree having a speciifed hash value.
