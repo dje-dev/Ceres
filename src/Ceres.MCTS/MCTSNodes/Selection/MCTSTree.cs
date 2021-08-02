@@ -156,16 +156,7 @@ namespace Ceres.MCTS.LeafExpansion
     /// <summary>
     /// Returns root of node tree.
     /// </summary>
-    public MCTSNode Root
-    {
-      get
-      {
-        if (cachedRoot is null)
-          return cachedRoot = GetNode(Store.RootIndex);
-        else
-          return cachedRoot;
-      }
-    }
+    public MCTSNode Root => cachedRoot is null ? (cachedRoot = GetNode(Store.RootIndex)) : cachedRoot;
 
 
     /// <summary>
@@ -180,7 +171,9 @@ namespace Ceres.MCTS.LeafExpansion
       if (ret is null)
       {
         if (parent is null && !nodeIndex.IsRoot)
+        {
           parent = GetNode(nodeIndex.Ref.ParentIndex, null);
+        }
 
         ret = new MCTSNode(Context, nodeIndex, parent);
         cache?.Add(ret);
@@ -204,7 +197,10 @@ namespace Ceres.MCTS.LeafExpansion
       get
       {
         Position[] buffer = posScratchBuffer;
-        if (buffer != null) return buffer;
+        if (buffer != null)
+        {
+          return buffer;
+        }
 
         return posScratchBuffer = new Position[MAX_LENGTH_POS_HISTORY];     
       }
@@ -303,6 +299,8 @@ namespace Ceres.MCTS.LeafExpansion
           }
         }
       }
+
+      annotation.IsInitialized = true;
     }
 
 
