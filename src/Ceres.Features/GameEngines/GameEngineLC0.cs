@@ -54,6 +54,7 @@ namespace Ceres.Features.GameEngines
     public UCIGameRunner UCIRunner => LC0Engine.Runner;
 
 
+
     /// <summary>
     /// Constructor.
     /// </summary>
@@ -68,6 +69,8 @@ namespace Ceres.Features.GameEngines
     /// <param name="overrideEXE"></param>
     /// <param name="verbose"></param>
     /// <param name="alwaysFillHistory"></param>
+    /// <param name="overrideBatchSize"></param>
+    /// <param name="overrideCacheSize"></param>
     /// <param name="extraCommandLineArgs"></param>
     public GameEngineLC0(string id, string networkID, bool forceDisableSmartPruning = false,
                          bool emulateCeresSettings = false, 
@@ -77,6 +80,8 @@ namespace Ceres.Features.GameEngines
                          string overrideEXE = null,
                          bool verbose = false, 
                          bool alwaysFillHistory = false,
+                         int? overrideBatchSize = null,
+                         int? overrideCacheSize = null,
                          string extraCommandLineArgs = null) : base(id)
     {
       SetupAction = setupAction;
@@ -91,7 +96,8 @@ namespace Ceres.Features.GameEngines
                                                    NNWeightsFiles.LookupNetworkFile(networkID), emulateCeresSettings,
                                                    resetStateAndCachesBeforeMoves, verbose,
                                                    forceDisableSmartPruning, overrideEXE,
-                                                   alwaysFillHistory, extraCommandLineArgs);
+                                                   alwaysFillHistory, extraCommandLineArgs,
+                                                   overrideBatchSize, overrideCacheSize);
     }
 
 

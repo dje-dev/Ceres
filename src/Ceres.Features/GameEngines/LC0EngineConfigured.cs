@@ -37,13 +37,7 @@ namespace Ceres.Features.GameEngines
   /// </summary>
   public static class LC0EngineConfigured
   {
-    /// <summary>
-    /// If the configuration parameters should be optimized
-    /// for LC0 version 0.28 or later.
-    /// </summary>
-    public static bool CONFIGURE_FOR_V28_OR_LATER = true;
-
-    public static bool USE_LC0_SMALL_SEARCH_SETTINGS = false;
+    public static int? OVERRIDE_LC0_BATCH_SIZE = null;
 
 
     /// <summary>
@@ -60,6 +54,8 @@ namespace Ceres.Features.GameEngines
     /// <param name="overrideEXE"></param>
     /// <param name="forceDisableSmartPruning"></param>
     /// <param name="alwaysFillHistory"></param>
+    /// <param name="overrideBatchSize"></param>
+    /// <param name="overrideCacheSize"></param>
     /// <returns></returns>
     public static (string, string) GetLC0EngineOptions(ParamsSearch paramsSearch,
                                                  ParamsSelect paramsSelect,
@@ -69,7 +65,9 @@ namespace Ceres.Features.GameEngines
                                                  bool verboseOutput,
                                                  string overrideEXE = null,
                                                  bool forceDisableSmartPruning = false,
-                                                 bool alwaysFillHistory = false)
+                                                 bool alwaysFillHistory = false,
+                                                 int? overrideBatchSize = null,
+                                                 int? overrideCacheSize = null)
     {
       if (paramsSearch == null)
       {
@@ -82,21 +80,7 @@ namespace Ceres.Features.GameEngines
       }
       //fail int8  string precisionStr = MCTSParams.PRECISION == WFEvalNetTensorRT.TRTPrecision.Int8 ? "trt-int8" : "cudnn-fp16";
 
-      // Must reverse values to conform to LZ0 convention
-      float FPU_MULTIPLIER = paramsSelect.FPUMode == ParamsSelect.FPUType.Reduction ? -1.0f : 1.0f;
-
-      // TODO: plug in both versions of Centiapwn to low level Leela code
-      string fpuVals = $"--fpu-value={FPU_MULTIPLIER * paramsSelect.FPUValue} --fpu-value-at-root={FPU_MULTIPLIER * paramsSelect.FPUValueAtRoot} ";
-      string strategyStr = paramsSelect.FPUMode == ParamsSelect.FPUType.Absolute ? "absolute " : "reduction ";
-      string fpuStr = fpuVals + "--fpu-strategy=" + strategyStr;
-
-      string strategyAtRootStr = paramsSelect.FPUModeAtRoot == ParamsSelect.FPUType.Absolute ? "absolute " : "reduction ";
-      string fpuStrRoot = paramsSelect.FPUModeAtRoot == ParamsSelect.FPUType.Same ? "--fpu-strategy-at-root=same "
-                                                                          : "--fpu-strategy-at-root=" + strategyAtRootStr;
-
       string netSourceFile = network.FileName;
-
-      int minibatchSize = 256; // LC0 default
 
       // If GPUs have equal fractions then we use demux where only 2 threads needed,
       // otherwise we use roundrobin and best is 1 + number of GPUS
@@ -114,47 +98,47 @@ namespace Ceres.Features.GameEngines
 #endif
 
       if (forceDisableSmartPruning || (emulateCeresOptions && !paramsSearch.FutilityPruningStopSearchEnabled))
+      {
         lzOptions += " --smart-pruning-factor=0 ";
-
-      // Default nncache is only 200_000 but big tournaments (TCEC 19) have used as high as 20_000_000.
-      // To keep memory requires reasonable for typical systems we default to a value in between.
-      // However note that for very small nets such as 128x10 it may be faster to uze zero nncache.
-      const int LC0_CACHE_SIZE = 5_000_000;
+      }
 
 
       int MOVE_OVERHEAD = (int)(new ParamsSearch().MoveOverheadSeconds * 1000);
       lzOptions += $"--move-overhead={MOVE_OVERHEAD} ";
 
-      if (CONFIGURE_FOR_V28_OR_LATER)
-      {
-//        lzOptions += " --max-collision-visits=1 --max-collision-events=1 "; // as used for training
-      }
-      else
-      {
-        lzOptions += "--multi-gather "; // greatly improves search speed
-        lzOptions += " --max-out-of-order-evals-factor=2.4 --max-collision-events=500 ";
-
-        if (USE_LC0_SMALL_SEARCH_SETTINGS)
-        {
-          // Works better for smaller searchs (such as 1000 nodes)
-          lzOptions += " --max-collision-visits=32 ";
-        }
-        else
-        {
-          // Much faster for large searches with multigather enabled.
-          lzOptions += " --max-collision-visits=500 ";
-        }
-      }
-
       if (alwaysFillHistory) lzOptions += $" --history-fill=always "; 
+
+      if (overrideBatchSize != null)
+      {
+        lzOptions += "--minibatch-size={minibatchSize} ";
+      }
+
+      if (overrideCacheSize != null)
+      {
+        lzOptions += $"--nncache={overrideCacheSize.Value} ";
+      }
 
       if (emulateCeresOptions)
       {
+        throw new NotImplementedException();
+#if NOT
+        // Must reverse values to conform to LZ0 convention
+        float FPU_MULTIPLIER = paramsSelect.FPUMode == ParamsSelect.FPUType.Reduction ? -1.0f : 1.0f;
+
+        // TODO: plug in both versions of Centiapwn to low level Leela code
+        string fpuVals = $"--fpu-value={FPU_MULTIPLIER * paramsSelect.FPUValue} --fpu-value-at-root={FPU_MULTIPLIER * paramsSelect.FPUValueAtRoot} ";
+        string strategyStr = paramsSelect.FPUMode == ParamsSelect.FPUType.Absolute ? "absolute " : "reduction ";
+        string fpuStr = fpuVals + "--fpu-strategy=" + strategyStr;
+
+        string strategyAtRootStr = paramsSelect.FPUModeAtRoot == ParamsSelect.FPUType.Absolute ? "absolute " : "reduction ";
+        string fpuStrRoot = paramsSelect.FPUModeAtRoot == ParamsSelect.FPUType.Same ? "--fpu-strategy-at-root=same "
+                                                                            : "--fpu-strategy-at-root=" + strategyAtRootStr;
+
         bool useNNCache = evaluatorDef.CacheMode > PositionEvalCache.CacheMode.None
                        || paramsSearch.Execution.TranspositionMode > TranspositionMode.None;
-        int cacheSize = useNNCache ? LC0_CACHE_SIZE : 0;
+        int cacheSize = 0; //useNNCache ? LC0_CACHE_SIZE : 0;
 
-        lzOptions += $@"-w {netSourceFile} -t {NUM_THREADS} --minibatch-size={minibatchSize} " +
+        lzOptions += $@"-w {netSourceFile} -t {NUM_THREADS} " +
                          //        " --policy-softmax-temp=2.2  --backend=cudnn-fp16 ";
                          $" --policy-softmax-temp={paramsSelect.PolicySoftmax} --cache-history-length={evaluatorDef.NumCacheHashPositions - 1} " +
 //                         $" --score-type=win_percentage" +
@@ -168,6 +152,7 @@ namespace Ceres.Features.GameEngines
         // + --no-out-of-order-eval"; // *** NOTE: if we add this flag, LZ0 seems to play a little different and better. TODO: study this, should we adopt?
         lzOptions += $" --cpuct-factor={paramsSelect.CPUCTFactor} --cpuct-base={paramsSelect.CPUCTBase} --cpuct={paramsSelect.CPUCT} --nncache={cacheSize} ";
         //        lzOptions += $" --max-collision-visits={paramsSearch.MAX_COLLISIONS + 1 }"; // Must increment by 1 to make comparable (also, LC0 hangs at value ot zero)
+#endif
       }
       else
       {
@@ -176,7 +161,6 @@ namespace Ceres.Features.GameEngines
         //        lzOptions = $@"-w {weightsDir}\{netSourceFile} --minibatch-size={minibatchSize} -t {paramsNN.NNEVAL_NUM_GPUS + 1} " +
         lzOptions += $@"-w {netSourceFile} -t {NUM_THREADS} " +
 //                    $"--score-type=win_percentage " +
-                    $"--nncache={LC0_CACHE_SIZE} " +
                      // like TCEC 10, only 5% benefit     $"--max-prefetch=160 --max-collision-events=917 " +
                      BackendArgumentsString(evaluatorDef);
 
@@ -218,6 +202,8 @@ namespace Ceres.Features.GameEngines
     /// <param name="overrideEXE"></param>
     /// <param name="alwaysFillHistory"></param>
     /// <param name="extraCommandLineArgs"></param>
+    /// <param name="overrideBatchSize"></param>
+    /// <param name="overrideCacheSize"></param>
     /// <returns></returns>
     public static LC0Engine GetLC0Engine(ParamsSearch paramsSearch,
                                          ParamsSelect paramsSelect,
@@ -229,11 +215,14 @@ namespace Ceres.Features.GameEngines
                                          bool forceDisableSmartPruning,
                                          string overrideEXE = null,
                                          bool alwaysFillHistory = false,
-                                         string extraCommandLineArgs = null)
+                                         string extraCommandLineArgs = null,
+                                         int? overrideBatchSize = null,
+                                         int? overrideCacheSize = null)
     {
       (string EXE, string lzOptions) = GetLC0EngineOptions(paramsSearch, paramsSelect, evaluatorDef, network, 
                                                            emulateCeresOptions, verboseOutput, overrideEXE, 
-                                                           forceDisableSmartPruning, alwaysFillHistory);
+                                                           forceDisableSmartPruning, alwaysFillHistory, 
+                                                           overrideBatchSize, overrideCacheSize);
       if (extraCommandLineArgs != null) lzOptions += " " + extraCommandLineArgs;
       return new LC0Engine(EXE, lzOptions, resetStateAndCachesBeforeMoves);
     }
