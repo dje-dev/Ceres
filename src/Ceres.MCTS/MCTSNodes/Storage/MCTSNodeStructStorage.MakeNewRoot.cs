@@ -18,6 +18,7 @@ using System.Collections;
 using System.Collections.Generic;
 
 using System.Diagnostics;
+using System.Threading.Tasks;
 using Ceres.Base.Benchmarking;
 using Ceres.Base.DataTypes;
 using Ceres.Base.OperatingSystem;
@@ -110,7 +111,12 @@ namespace Ceres.MCTS.MTCSNodes.Storage
             Debug.Assert(!rawNodes[transpositionRootIndex].IsTranspositionLinked);
 
             bool linkedNodeRetained = includedNodes.Get(transpositionRootIndex);
-            if (!linkedNodeRetained || i == newRootChildIndex)
+
+            // NOTE: Generally it is not expected that a node will link forward to a transposition root,
+            //       so this will probably always be false, but for safety prematerialize if this happens.
+            bool linkedNodeSequentiallyLater = transpositionRootIndex > i;
+
+            if (!linkedNodeRetained || i == newRootChildIndex || linkedNodeSequentiallyLater)
             {
               numPrematerialized++;
               
@@ -168,6 +174,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 
       int RewriteNodesBuildChildrenInfo()
       {
+        Task presorter = null;
         int numChildrenFixups = 0;
 
         // TODO: Consider that the above is possibly all we need to do in some case
@@ -175,6 +182,9 @@ namespace Ceres.MCTS.MTCSNodes.Storage
         //       This approach would be much faster, and orphan an only small part of the storage
         MemoryBufferOS<MCTSNodeStruct> rawNodes = store.Nodes.nodes;
         Span<MCTSNodeStruct> nodesSpan = store.Nodes.Span;
+
+        // Number of nodes after which the parallel presorter will be started
+        int presortBegin = (int)(store.Nodes.nextFreeIndex * 0.70f);
 
         // Now scan all above nodes. 
         // If they don't belong, ignore. 
@@ -198,7 +208,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 
             // Remember this location if this is the new parent
             if (i == newRootChildIndex)
-            { 
+            {
               newIndexOfNewParent = nextAvailableNodeIndex;
             }
 
@@ -237,16 +247,32 @@ namespace Ceres.MCTS.MTCSNodes.Storage
               //       possibly avoiding duplicates or parallelizing
               transpositionRoots?.TryAdd(thisNode.ZobristHash, nextAvailableNodeIndex);
             }
-           
+
             // Move the actual node
             SwapNodesPosition(store, nodesSpan, new MCTSNodeStructIndex(i), new MCTSNodeStructIndex(nextAvailableNodeIndex));
 
             nextAvailableNodeIndex++;
+
+            if (presorter == null && i > presortBegin)
+            {
+              // We are mostly done traversing the entires and have accumulate a large number of ChildStartIndexToNodeIndex.
+              // Later we'll need to sort all of these accumulated so far (and subsequently).
+              // But at this point we can start a paralell thread to sort the entries created so far,
+              // which significantly speeds up the full sort of all items which will happen subsequently.
+              presorter = new Task(() =>
+              {
+                var childrenToNodesSoFar = new Span<ChildStartIndexToNodeIndex>(childrenToNodes).Slice(0, numChildrenFixups);
+                childrenToNodesSoFar.Sort();
+              });
+              presorter.Start();
+            }
           }
         }
 
+        presorter?.Wait();
         return numChildrenFixups;
       }
+
 
       // Rewrite nodes (and associated children)
       int numChildrenFixups = RewriteNodesBuildChildrenInfo();
