@@ -135,12 +135,14 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     }
 
 
+    // TODO: someday remove this, always use fast mode
+    const bool USE_FAST_TREE_REBUILD = true;
+
     static void DoMakeChildNewRoot(MCTSTree tree, float policySoftmax, ref MCTSNodeStruct newRootChild,
                                    PositionWithHistory newPriorMoves,
                                    PositionEvalCache cacheNonRetainedNodes,
                                    TranspositionRootsDict transpositionRoots)
     {
-      bool FAST = tree.Root.Context.ParamsSearch.TestFlag;
 
       MCTSNodeStore store = tree.Store;
       ChildStartIndexToNodeIndex[] childrenToNodes;
@@ -154,7 +156,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       // Traverse this subtree, building a bit array of visited nodes
       BitArray includedNodes = MCTSNodeStructUtils.BitArrayNodesInSubtree(store, ref newRootChild, out numNodesUsed);
 
-      if (FAST)
+      if (USE_FAST_TREE_REBUILD)
       {
         MaterializeNonRetainedNodes(tree, includedNodes, newRootChildIndex);
       }
@@ -203,8 +205,8 @@ namespace Ceres.MCTS.MTCSNodes.Storage
             // since the root may be in a part of the tree that is not retained
             // and possibly already overwritten.
             // We expect them to have already been materialized by the time we reach this point.
-            Debug.Assert(FAST || !thisNode.IsTranspositionLinked);
-            Debug.Assert(FAST || thisNode.NumNodesTranspositionExtracted == 0);
+            Debug.Assert(USE_FAST_TREE_REBUILD || !thisNode.IsTranspositionLinked);
+            Debug.Assert(USE_FAST_TREE_REBUILD || thisNode.NumNodesTranspositionExtracted == 0);
 
             // Remember this location if this is the new parent
             if (i == newRootChildIndex)
@@ -228,7 +230,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
               // Note that this is safe because the trees are always built and rebuilt (for make new root)
               // retaining chronological order of visits, so the roots will always appear
               // sequentially before linked nodes that refer to them.
-              Debug.Assert(FAST);
+              Debug.Assert(USE_FAST_TREE_REBUILD);
               bool found = transpositionRoots.TryGetValue(thisNode.ZobristHash, out int transpositionRootIndex);
               if (!found)
               {
