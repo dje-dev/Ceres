@@ -255,16 +255,19 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 
             nextAvailableNodeIndex++;
 
-            const bool ENABLE_PRESORTER = false; // TODO: enable after more correctness testing
+            const bool ENABLE_PRESORTER = true;
             if (ENABLE_PRESORTER && presorter == null && i > presortBegin)
             {
+              // Capture the number of items to be fixed up by the task.
+              int presorterNumChildrenFixups = numChildrenFixups;
+
               // We are mostly done traversing the entires and have accumulate a large number of ChildStartIndexToNodeIndex.
               // Later we'll need to sort all of these accumulated so far (and subsequently).
               // But at this point we can start a paralell thread to sort the entries created so far,
               // which significantly speeds up the full sort of all items which will happen subsequently.
               presorter = new Task(() =>
               {
-                var childrenToNodesSoFar = new Span<ChildStartIndexToNodeIndex>(childrenToNodes).Slice(0, numChildrenFixups);
+                var childrenToNodesSoFar = new Span<ChildStartIndexToNodeIndex>(childrenToNodes).Slice(0, presorterNumChildrenFixups);
                 childrenToNodesSoFar.Sort();
               });
               presorter.Start();
