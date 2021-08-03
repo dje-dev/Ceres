@@ -340,12 +340,10 @@ namespace Ceres.MCTS.Iteration
 
     private void SearchContinueRetainTree(MCTSIterator reuseOtherContextForEvaluatedNodes, PositionWithHistory newPositionAndMoves, List<GameMoveStat> gameMoveHistory, bool verbose, DateTime startTime, MCTSManager.MCTSProgressCallback progressCallback, bool isFirstMoveOfGame, MCTSIterator priorContext, MCTSNodeStore store, int numNodesInitial, MCTSNode newRoot, SearchLimit searchLimitTargetAdjusted, bool possiblyUsePositionCache)
     {
-      bool FAST = Manager.Context.ParamsSearch.TestFlag;
-
       TimingStats statsMaterialize = new();
       if (Manager.Context.ParamsSearch.Execution.TranspositionMode != TranspositionMode.None)
       {
-        if (!FAST)
+        if (!MCTSNodeStructStorage.USE_FAST_TREE_REBUILD)
         {
           using (new TimingBlock(statsMaterialize, TimingBlock.LoggingType.None))
           {

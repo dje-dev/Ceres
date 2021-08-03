@@ -37,6 +37,9 @@ namespace Ceres.MCTS.MTCSNodes.Storage
   {
     // TODO: move this into MCTSNodeStoreClass??
 
+    // TODO: someday remove this, always use fast mode
+    internal const bool USE_FAST_TREE_REBUILD = true;
+
     #region Structure modification
 
     /// <summary>
@@ -134,9 +137,6 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 #endif
     }
 
-
-    // TODO: someday remove this, always use fast mode
-    const bool USE_FAST_TREE_REBUILD = true;
 
     static void DoMakeChildNewRoot(MCTSTree tree, float policySoftmax, ref MCTSNodeStruct newRootChild,
                                    PositionWithHistory newPriorMoves,
