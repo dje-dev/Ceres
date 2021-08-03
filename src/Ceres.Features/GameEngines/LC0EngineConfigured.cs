@@ -86,7 +86,7 @@ namespace Ceres.Features.GameEngines
       // otherwise we use roundrobin and best is 1 + number of GPUS
       // Note that with increasing threads Leela plays significantly non-deterministically and somewhat worse
       int NUM_THREADS = evaluatorDef.EqualFractions ? 2 : evaluatorDef.Devices.Length + 1;
-
+      
       string lzOptions = "--nodes-as-playouts "; // essential to get same behavior as Ceres with go nodes command 
 
 #if NOT
@@ -110,7 +110,7 @@ namespace Ceres.Features.GameEngines
 
       if (overrideBatchSize != null)
       {
-        lzOptions += "--minibatch-size={minibatchSize} ";
+        lzOptions += $"--minibatch-size={overrideBatchSize} ";
       }
 
       if (overrideCacheSize != null)

@@ -79,7 +79,7 @@ namespace Ceres.Features.GameEngines
                          Action setupAction = null, 
                          string overrideEXE = null,
                          bool verbose = false, 
-                         bool alwaysFillHistory = false,
+                         bool alwaysFillHistory = true,
                          int? overrideBatchSize = null,
                          int? overrideCacheSize = null,
                          string extraCommandLineArgs = null) : base(id)
