@@ -111,8 +111,8 @@ namespace Ceres.APIExamples
 
 
 string NET1_SECONDARY1 = null; 
-      NET1 = "LS15";
-      NET2 = "LS15";
+      NET1 = "69722_value_focus_2";
+      NET2 = "69722_value_focus_2";
 
 //      NET1 = "703810";
 //      NET2 = "703810";
@@ -138,11 +138,11 @@ string NET1_SECONDARY1 = null;
         evalDef2.MakePersistent();
       }
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(10_000);
+      SearchLimit limit1 = SearchLimit.NodesPerMove(20_000);
 
 
       //      limit1 = SearchLimit.SecondsForAllMoves(900, 2) * 0.2f;
-      limit1 = SearchLimit.SecondsForAllMoves(60);//
+      limit1 = SearchLimit.SecondsForAllMoves(60);
       //limit1 = SearchLimit.SecondsPerMove(0.75f);
 
       SearchLimit limit2 = limit1;// * 0.2f;
@@ -165,7 +165,7 @@ string NET1_SECONDARY1 = null;
       ////////
 
 
-engineDefCeres1.SearchParams.TestFlag = true;
+//engineDefCeres1.SearchParams.TestFlag = true;
 
       //engineDefCeres1.SearchParams.MoveFutilityPruningAggressiveness = 0.4f;
       //engineDefCeres1.SearchParams.GameLimitUsageAggressiveness *= 1.2f;
@@ -192,7 +192,7 @@ engineDefCeres1.SearchParams.TestFlag = true;
       }
 
 
-      if (true)
+      if (false)
       {
         // ************ SPECIAL *****************
         engineDefCeres1.SearchParams.ParamsSecondaryEvaluator.UpdateFrequencyMinNodesAbsolute = 200;
@@ -221,7 +221,7 @@ engineDefCeres1.SearchParams.TestFlag = true;
 
       //engineDefCeres1.SelectParams.EnableExplorationGuard = true;
       //engineDefCeres1.SearchParams.EnableTablebases = false;
-
+//      engineDefCeres1.SearchParams.Execution.FlowDualSelectors = false;
       // TODO: support this in GameEngineDefCeresUCI
       bool forceDisableSmartPruning = limit1.IsNodesLimit;
 //forceDisableSmartPruning=true;
@@ -267,13 +267,14 @@ engineDefCeres1.SearchParams.TestFlag = true;
         // ===============================================================================
         SuiteTestDef suiteDef = new SuiteTestDef("Suite",
                                                 //@"\\synology\dev\chess\data\epd\chad_tactics-100M.epd",
-//                                                @"\\synology\dev\chess\data\epd\ERET.epd",
-                                                 SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/epd/ERET_VESELY203.epd"
-                                                                         : @$"\\synology\dev\chess\data\epd\ERET_VESELY203.epd",
+                                                @"\\synology\dev\chess\data\epd\lichess_chad_bad.csv",
+//                                                 SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/epd/ERET_VESELY203.epd"
+//                                                                         : @$"\\synology\dev\chess\data\epd\ERET_VESELY203.epd",
 //                                                @"\\synology\dev\chess\data\epd\sts.epd",
                                                 playerCeres1, null, playerLC0);// playerLC0);
         //playerCeres1, null, playerCeres2UCI);
-        suiteDef.MaxNumPositions = 10;
+        suiteDef.MaxNumPositions = 50;
+        suiteDef.EPDLichessPuzzleFormat = suiteDef.EPDFileName.ToUpper().Contains("LICHESS");
 
         SuiteTestRunner suiteRunner = new SuiteTestRunner(suiteDef);
 
