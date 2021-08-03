@@ -278,6 +278,10 @@ namespace Ceres.MCTS.LeafExpansion
 
       bool alreadyEvaluated = !FP16.IsNaN(node.V);
 
+      // Consider the annotation complete at this point
+      // (code which sets the EvalResult below expects that).
+      annotation.IsInitialized = true;
+
       if (alreadyEvaluated)
       {
         // Reconstruct the eval result from value already stored
@@ -300,7 +304,6 @@ namespace Ceres.MCTS.LeafExpansion
         }
       }
 
-      annotation.IsInitialized = true;
     }
 
 
