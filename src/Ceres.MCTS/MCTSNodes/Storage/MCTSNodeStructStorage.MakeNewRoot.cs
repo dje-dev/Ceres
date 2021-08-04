@@ -94,6 +94,13 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 #endif
     }
 
+    /// <summary>
+    /// Sequentially traverses nodes and materializes any nodes which 
+    /// have transposition roots which will not be included in the new tree.
+    /// </summary>
+    /// <param name="tree"></param>
+    /// <param name="includedNodes"></param>
+    /// <param name="newRootChildIndex"></param>
     static void MaterializeNonRetainedNodes(MCTSTree tree, BitArray includedNodes, int newRootChildIndex)
     {
       int numPrematerialized = 0;
@@ -129,7 +136,6 @@ namespace Ceres.MCTS.MTCSNodes.Storage
             }
           }
         }
-
       }
 
 #if DEBUG
@@ -359,6 +365,12 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     }
 
 
+    /// <summary>
+    /// Processes all the entries in the childrenToNodes span,
+    /// moving child entries into new locations.
+    /// </summary>
+    /// <param name="store"></param>
+    /// <param name="childrenToNodes"></param>
     private static void RewriteChildren(MCTSNodeStore store, Span<ChildStartIndexToNodeIndex> childrenToNodes)
     {
       int nextAvailableChildBlockIndex = 1;
