@@ -540,22 +540,34 @@ namespace Ceres.Chess.NNBackends.CUDA
           Array.Copy(io.OutputValueHead, NNBackendInputOutput.OutputValueHeadRaw, batchSize * 3);
         }
 
-        // 0.030ms for 1000. Or use AVX (https://github.com/reyoung/avx_mathfun)
+        // TODO: Improve performance of softmax.
+        // Currently 0.030ms for 1000. Or use AVX (https://github.com/reyoung/avx_mathfun)
         if (HasWDL)
         {
           // Value softmax done cpu side.
           for (int i = 0; i < batchSize; i++)
           {
-            float win = MathF.Exp(io.OutputValueHead[i, 0]);
-            float draw = MathF.Exp(io.OutputValueHead[i, 1]);
-            float loss = MathF.Exp(io.OutputValueHead[i, 2]);
+            float win = io.OutputValueHead[i, 0];
+            float draw = io.OutputValueHead[i, 1];
+            float loss = io.OutputValueHead[i, 2];
+
+            float max = MathF.Max(MathF.Max(win, draw), loss);
+
+            win = MathF.Exp(win - max);
+            draw = MathF.Exp(draw - max);
+            loss = MathF.Exp(loss - max);
 
             float sum = win + draw + loss;
+
+            if (float.IsNaN(sum))
+            {
+              throw new Exception("NaN in value head");
+            }
+
             win /= sum;
             loss /= sum;
             draw = 1.0f - win - loss;
-            if (float.IsNaN(win))
-              throw new Exception("NaN in value head");
+
             io.OutputValueHead[i, 0] = win;
             io.OutputValueHead[i, 1] = draw;
             io.OutputValueHead[i, 2] = loss;
