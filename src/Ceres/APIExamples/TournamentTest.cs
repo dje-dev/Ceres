@@ -48,7 +48,7 @@ namespace Ceres.APIExamples
     static int CONCURRENCY = 4; // POOLED ? 16 : 4;
     static bool RUN_DISTRIBUTED = false;
 
-    
+
     private static void KillCERES()
     {
       foreach (Process p in Process.GetProcesses())
@@ -72,7 +72,7 @@ namespace Ceres.APIExamples
     static GameEngineDef engineDefEthereal = new GameEngineDefUCI("Etheral", new GameEngineUCISpec("Etheral", ETHERAL_EXE, SF_NUM_THREADS, SF_HASH_SIZE_MB, TB_PATH, uciSetOptionCommands: extraUCI));
     static GameEngineDef engineDefStockfish11 = new GameEngineDefUCI("SF11", new GameEngineUCISpec("SF11", SF11_EXE, SF_NUM_THREADS, SF_HASH_SIZE_MB, TB_PATH, uciSetOptionCommands: extraUCI));
 
-    public static GameEngineDef EngineDefStockfish14(int numThreads = SF_HASH_SIZE_MB, int hastableSize = SF_NUM_THREADS) =>
+    public static GameEngineDef EngineDefStockfish14(int numThreads = SF_NUM_THREADS, int hastableSize = SF_HASH_SIZE_MB) =>
       new GameEngineDefUCI("SF14", new GameEngineUCISpec("SF14", SF14_EXE, numThreads,
                            hastableSize, TB_PATH, uciSetOptionCommands: extraUCI));
 
@@ -110,14 +110,14 @@ namespace Ceres.APIExamples
       string NET2 = @"d:\weights\lczero.org\t64dbm-5000.pb.gz";
 
 
-string NET1_SECONDARY1 = null; 
+      string NET1_SECONDARY1 = null;
       NET1 = "69722_value_focus_2";
       NET2 = "69722_value_focus_2";
 
-//      NET1 = "703810";
-//      NET2 = "703810";
-//      string NET1_SECONDARY1 = "j94-100";
-        
+      //      NET1 = "badgyal-3";
+      //      NET2 = "badgyal-3";
+      //      string NET1_SECONDARY1 = "j94-100";
+
       //string       NET2 = @"j64-210";
       NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification(@$"LC0:{NET1}", GPUS); // j64-210 LS16 40x512-lr015-swa-167500
       NNEvaluatorDef evalDef2 = NNEvaluatorDefFactory.FromSpecification($@"LC0:{NET2}", GPUS); ;
@@ -138,16 +138,16 @@ string NET1_SECONDARY1 = null;
         evalDef2.MakePersistent();
       }
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(20_000);
+      SearchLimit limit1 = SearchLimit.NodesPerMove(200_000);
 
 
       //      limit1 = SearchLimit.SecondsForAllMoves(900, 2) * 0.2f;
-      limit1 = SearchLimit.SecondsForAllMoves(60);
+      limit1 = SearchLimit.SecondsForAllMoves(45);
       //limit1 = SearchLimit.SecondsPerMove(0.75f);
 
       SearchLimit limit2 = limit1;// * 0.2f;
 
-//      ParamsSearchExecutionModifier.Register("SetBatchSize", pe => pe.MaxBatchSize = 1024);
+      //      ParamsSearchExecutionModifier.Register("SetBatchSize", pe => pe.MaxBatchSize = 1024);
 
 
       // Don't output log if very small games
@@ -165,7 +165,7 @@ string NET1_SECONDARY1 = null;
       ////////
 
 
-//engineDefCeres1.SearchParams.TestFlag = true;
+      //engineDefCeres1.SearchParams.TestFlag = true;
 
       //engineDefCeres1.SearchParams.MoveFutilityPruningAggressiveness = 0.4f;
       //engineDefCeres1.SearchParams.GameLimitUsageAggressiveness *= 1.2f;
@@ -190,6 +190,7 @@ string NET1_SECONDARY1 = null;
         engineDefCeres1.SelectParams.PolicySoftmax = 1.359f;
 #endif
       }
+      //engineDefCeres1.SelectParams.CPUCTAtRoot *=1.5f;
 
 
       if (false)
@@ -221,10 +222,10 @@ string NET1_SECONDARY1 = null;
 
       //engineDefCeres1.SelectParams.EnableExplorationGuard = true;
       //engineDefCeres1.SearchParams.EnableTablebases = false;
-//      engineDefCeres1.SearchParams.Execution.FlowDualSelectors = false;
+      //      engineDefCeres1.SearchParams.Execution.FlowDualSelectors = false;
       // TODO: support this in GameEngineDefCeresUCI
       bool forceDisableSmartPruning = limit1.IsNodesLimit;
-//forceDisableSmartPruning=true;
+      //forceDisableSmartPruning=true;
       if (forceDisableSmartPruning)
       {
         engineDefCeres1.SearchParams.FutilityPruningStopSearchEnabled = false;
@@ -238,7 +239,7 @@ string NET1_SECONDARY1 = null;
 
       GameEngineDef engineDefCeresUCI1 = new GameEngineDefCeresUCI("CeresUCINew", evalDef1,
                                                                    overrideEXE: SoftwareManager.IsLinux ? @"/raid/dev/Ceres/artifacts/release/net5.0/Ceres.dll"
-                                                                                                        : @"C:\dev\ceres\artifacts\release\net5.0\ceres.exe", 
+                                                                                                        : @"C:\dev\ceres\artifacts\release\net5.0\ceres.exe",
                                                                    disableFutilityStopSearch: forceDisableSmartPruning);
 
       GameEngineDef engineDefCeres91 = new GameEngineDefCeresUCI("Ceres91", evalDef2, overrideEXE: SoftwareManager.IsLinux ? @"/raid/dev/Ceres91b/Ceres/artifacts/release/net5.0/Ceres.dll"
@@ -264,16 +265,17 @@ string NET1_SECONDARY1 = null;
 
       if (false)
       {
+        string BASE_NAME = "Stockfish238"; // ERET_VESELY203
+
         // ===============================================================================
         SuiteTestDef suiteDef = new SuiteTestDef("Suite",
-                                                //@"\\synology\dev\chess\data\epd\chad_tactics-100M.epd",
-                                                @"\\synology\dev\chess\data\epd\lichess_chad_bad.csv",
-//                                                 SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/epd/ERET_VESELY203.epd"
-//                                                                         : @$"\\synology\dev\chess\data\epd\ERET_VESELY203.epd",
-//                                                @"\\synology\dev\chess\data\epd\sts.epd",
+                                                 //@"\\synology\dev\chess\data\epd\chad_tactics-100M.epd",
+                                                 //@"\\synology\dev\chess\data\epd\lichess_chad_bad.csv",
+                                                 SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/epd/{BASE_NAME}.epd"
+                                                                         : @$"\\synology\dev\chess\data\epd\{BASE_NAME}.epd",
                                                 playerCeres1, null, playerLC0);// playerLC0);
-        //playerCeres1, null, playerCeres2UCI);
-        suiteDef.MaxNumPositions = 50;
+
+//        suiteDef.MaxNumPositions = 50;
         suiteDef.EPDLichessPuzzleFormat = suiteDef.EPDFileName.ToUpper().Contains("LICHESS");
 
         SuiteTestRunner suiteRunner = new SuiteTestRunner(suiteDef);
@@ -312,14 +314,14 @@ string NET1_SECONDARY1 = null;
 #endif
       }
 
-      TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerLC0);
+      TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerCeres91);
 
 
       def.NumGamePairs = 102;
       def.ShowGameMoves = false;
 
       string baseName = "tcec1819";
-//      baseName = "4mvs_+90_+99";
+      //      baseName = "4mvs_+90_+99";
 
       def.OpeningsFileName = SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/openings/{baseName}.pgn"
                                                      : @$"\\synology\dev\chess\data\openings\{baseName}.pgn";
@@ -357,7 +359,7 @@ string NET1_SECONDARY1 = null;
         }
       }
 
-       TournamentResultStats results;
+      TournamentResultStats results;
 
       //UCIEngineProcess.VERBOSE = true;
 
