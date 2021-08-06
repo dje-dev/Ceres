@@ -132,18 +132,6 @@ namespace Ceres.MCTS.Params
 
       if (estNumNodes < CUTOVER_NUM_NODES_SMALL)
       {
-        if (estNumNodes < 10)
-        {
-          ParamsSearch.Execution.RootPreloadDepth = 0;
-          ParamsSearch.Execution.RootPreloadWidth = 0;
-        }
-
-        else if (estNumNodes < CUTOVER_NUM_NODES_TINY)
-        {
-          ParamsSearch.Execution.RootPreloadDepth = 2;
-          ParamsSearch.Execution.RootPreloadWidth = 2;
-        }
-
         ParamsSearch.Execution.SelectParallelEnabled = false;
         ParamsSearch.Execution.SetPoliciesParallelEnabled = false;
       }

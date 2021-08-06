@@ -159,14 +159,13 @@ namespace Ceres.MCTS.Search
       PriorSequence = priorSequence;
       paramsExecution = context.ParamsSearch.Execution;
 
-      int maxNodesPerBatchForRootPreload = context.ParamsSearch.Execution.RootPreloadDepth > 0 ? MCTSSearchFlow.MAX_PRELOAD_NODES_PER_BATCH : 0;
       int extraLeafsDynamic = 0;
       if (context.ParamsSearch.PaddedBatchSizing)
       {
         extraLeafsDynamic = context.ParamsSearch.PaddedExtraNodesBase + (int)(context.ParamsSearch.PaddedExtraNodesMultiplier * guessNumLeaves);
       }
 
-      leafs = new ListBounded<MCTSNode>(guessNumLeaves + maxNodesPerBatchForRootPreload + extraLeafsDynamic);
+      leafs = new ListBounded<MCTSNode>(guessNumLeaves + extraLeafsDynamic);
 
       Context = context;
     }
