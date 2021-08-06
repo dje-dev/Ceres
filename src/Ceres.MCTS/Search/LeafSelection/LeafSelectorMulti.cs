@@ -66,13 +66,24 @@ namespace Ceres.MCTS.Search
     
     #region Constructor arguments
 
+    /// <summary>
+    /// The sequence of moves which preceeded search.
+    /// </summary>
     public readonly PositionWithHistory PriorSequence;
+
+
+    /// <summary>
+    /// Index of this selector.
+    /// </summary>
     public int SelectorID { get; private set; }
 
     #endregion
 
     #region Internal data
 
+    /// <summary>
+    /// Synchronization object used to signal when all leaves have finished being gathered.
+    /// </summary>
     CountdownEvent countdownPendingNumLeafs;
 
     public readonly MCTSIterator Context;
@@ -151,7 +162,9 @@ namespace Ceres.MCTS.Search
       int maxNodesPerBatchForRootPreload = context.ParamsSearch.Execution.RootPreloadDepth > 0 ? MCTSSearchFlow.MAX_PRELOAD_NODES_PER_BATCH : 0;
       int extraLeafsDynamic = 0;
       if (context.ParamsSearch.PaddedBatchSizing)
+      {
         extraLeafsDynamic = context.ParamsSearch.PaddedExtraNodesBase + (int)(context.ParamsSearch.PaddedExtraNodesMultiplier * guessNumLeaves);
+      }
 
       leafs = new ListBounded<MCTSNode>(guessNumLeaves + maxNodesPerBatchForRootPreload + extraLeafsDynamic);
 
@@ -177,7 +190,11 @@ namespace Ceres.MCTS.Search
     /// </summary>
     public void Shutdown()
     {
-      if (tpm != null) tpmPool.Value.RestoreToPool(tpm);
+      if (tpm != null)
+      {
+        tpmPool.Value.RestoreToPool(tpm);
+      }
+
       tpm = null;
     }
 
@@ -673,12 +690,15 @@ namespace Ceres.MCTS.Search
         {
           if (childIndex > node.NumChildrenExpanded)
           {
-            Console.WriteLine("Saw (and ignoring) out of order possibly due to tie in score");
+            Console.WriteLine("Warning: saw (and ignoring) out of order possibly due to tie in score");
             continue;
           }
           MCTSNode thisChild = default;
 
-          lock(node)
+          // Take a lock on the node to avoid creating a child
+          // concurrent with another node which uses this node as tranasposition
+          // root being in the process of copying over the child data (in CopyUnexpandedChildrenFromOtherNode).
+          lock (node)
           {
             MCTSNodeStructChild childInfo = children[childIndex];
             if (!childInfo.IsExpanded)
