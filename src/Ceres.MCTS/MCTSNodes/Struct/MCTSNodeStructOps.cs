@@ -82,8 +82,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <param name="tree"></param>
     /// <param name="otherNodeIndex"></param>
     /// <param name="exclusiveAccessGuaranteed"> </param>
-    public void CopyUnexpandedChildrenFromOtherNode(MCTSTree tree, 
-                                                    MCTSNodeStructIndex otherNodeIndex, 
+    public void CopyUnexpandedChildrenFromOtherNode(MCTSTree tree,
+                                                    MCTSNodeStructIndex otherNodeIndex,
                                                     bool exclusiveAccessGuaranteed = false)
     {
       if (exclusiveAccessGuaranteed)
@@ -123,24 +123,21 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         // We have to descend to the expanded node to retrieve 
         // the move and policy needed for the new child (which will be not yet expanded)
         Span<MCTSNodeStructChild> children = tree.Store.Children.SpanForNode(in this);
-        ReadOnlySpan<MCTSNodeStructChild> otherChildren = tree.Store.Children.SpanForNode(in otherNode);
+        Span<MCTSNodeStructChild> otherChildren = tree.Store.Children.SpanForNode(in otherNode);
 
-        int numPolicyMoves = otherNode.NumPolicyMoves;
-        int numChildrenExpanded = otherNode.NumChildrenExpanded;
-
-        // Copy expanded children.
-        for (int i = 0; i < numChildrenExpanded; i++)
+        for (int i = 0; i < otherNode.NumPolicyMoves; i++)
         {
           MCTSNodeStructChild info = otherChildren[i];
-          ref MCTSNodeStruct childNodeRef = ref info.ChildRefFromStore(tree.Store);
-          children[i].SetUnexpandedPolicyValues(childNodeRef.PriorMove, childNodeRef.P);
+          if (info.IsExpanded)
+          {
+            ref MCTSNodeStruct childNodeRef = ref info.ChildRefFromStore(tree.Store);
+            children[i].SetUnexpandedPolicyValues(childNodeRef.PriorMove, childNodeRef.P);
+          }
+          else
+          {
+            children[i] = otherChildren[i];
+          }
         }
-
-        // Copy unexpanded child entries.
-        int numChildrenUnexpanded = numPolicyMoves - numChildrenExpanded;
-        Span<MCTSNodeStructChild> unexpandedChildren = children.Slice(numChildrenExpanded, numChildrenUnexpanded);
-        ReadOnlySpan<MCTSNodeStructChild> unexpandedOtherChildren = otherChildren.Slice(numChildrenExpanded, numChildrenUnexpanded);
-        unexpandedOtherChildren.CopyTo(unexpandedChildren);
       }
     }
 
@@ -918,14 +915,14 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       }
     }
 
-#endregion
+    #endregion
 
     /// <summary>
     /// Returns the index of this node in the array of parent's children.
     /// </summary>
     public int IndexInParent
     {
-      get 
+      get
       {
         Debug.Assert(!IsRoot);
 
