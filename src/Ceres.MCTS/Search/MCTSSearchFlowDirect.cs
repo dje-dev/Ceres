@@ -15,17 +15,15 @@
 
 using System;
 using System.Threading.Tasks;
-using System.Collections.Generic;
+using System.Diagnostics;
+
+using Ceres.Base.DataTypes;
+using Ceres.Base.Environment;
 
 using Ceres.MCTS.MTCSNodes;
-using Ceres.Base.DataTypes;
-using System.Diagnostics;
-using Ceres.Base.Environment;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.Params;
-using Ceres.MCTS.Environment;
-using Ceres.Chess.NNEvaluators;
 
 #endregion
 
@@ -44,8 +42,6 @@ namespace Ceres.MCTS.Search
     public static float TotalNNWaitTimeSecs = 0;
 
     const bool DUMP_WAITING = false;
-
-    internal const int MAX_PRELOAD_NODES_PER_BATCH = 16;
 
     void WaitEvaluationDoneAndApply(Task<MCTSNodesSelectedSet> finalizingTask, int curCount = 0)
     {
@@ -84,10 +80,14 @@ namespace Ceres.MCTS.Search
         MCTSNodesSelectedSet resultNodes = finalizingTask.Result;
 
         if (timeStartedWait != default)
+        {
           TotalNNWaitTimeSecs += (float)(DateTime.Now - timeStartedWait).TotalSeconds;
+        }
 
         if (DUMP_WAITING && waited && resultNodes != null)
+        {
           Console.WriteLine(resultNodes.NodesNN.Count);
+        }
 
         if (resultNodes != null)
         {
@@ -288,13 +288,6 @@ namespace Ceres.MCTS.Search
             // *** WARNING*** However, setting this to false causes NInFlight errors (seen when running test matches within 1 or 2 minutes)
             nodesSelectedSet.AddSelectedNodes(selectedNodes2, true); // MUST BE true; see above
           }
-        }
-
-        // Possibly pad with "preload nodes"
-        if (rootPreloader != null && nodesSelectedSet.NodesNN.Count <=  MCTSRootPreloader.PRELOAD_THRESHOLD_BATCH_SIZE)
-        {
-          // TODO: do we need to update thisBatchTotalNumLeafsTargeted ?
-          TryAddRootPreloadNodes(manager, MAX_PRELOAD_NODES_PER_BATCH, nodesSelectedSet, selector);
         }
 
 #if FEATURE_SUPPLEMENTAL
@@ -500,35 +493,6 @@ namespace Ceres.MCTS.Search
 
 
     bool haveWarned = false;
-
-
-    /// <summary>
-    /// Possibly run preloader to evaluate and cache 
-    /// nodes near the root during early phases of search.
-    /// 
-    /// </summary>
-    /// <param name="manager"></param>
-    /// <param name="maxNodes"></param>
-    /// <param name="selectedNodes"></param>
-    /// <param name="selector"></param>
-    private void TryAddRootPreloadNodes(MCTSManager manager, int maxNodes, 
-                                        MCTSNodesSelectedSet selectedNodes, ILeafSelector selector)
-    {
-      if (rootPreloader == null) return;
-
-      List<MCTSNode> rootPreloadNodes = rootPreloader.GetRootPreloadNodes(manager.Root, selector.SelectorID, maxNodes, MCTSRootPreloader.PRELOAD_MIN_P);
-
-      if (rootPreloadNodes != null)
-      {
-        for (int i = 0; i < rootPreloadNodes.Count; i++)
-        {
-          MCTSNode node = rootPreloadNodes[i];
-          selector.InsureAnnotated(node);
-          selectedNodes.ProcessNode(node);
-        }
-
-      }
-    }
 
 
 #if FEATURE_SUPPLEMENTAL

@@ -37,12 +37,6 @@ namespace Ceres.MCTS.Search
 
     public readonly MCTSApply BlockApply;
 
-    /// <summary>
-    /// Object that manages preloading of nodes near the root 
-    /// at beginning of search.
-    /// </summary>
-    MCTSRootPreloader rootPreloader;
-
 
     MCTSBatchParamsManager[] batchingManagers;
 
@@ -85,11 +79,6 @@ namespace Ceres.MCTS.Search
       }
 
       BlockApply = new MCTSApply(context.FirstMoveSampler);
-
-      if (context.ParamsSearch.Execution.RootPreloadDepth > 0)
-      {
-        rootPreloader = new MCTSRootPreloader();
-      }
 
       // TODO: Reconsider this. Current dynamic statistics calculation is disabled because:
       //         - it slows startup

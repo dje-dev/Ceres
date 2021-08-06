@@ -70,8 +70,6 @@ namespace Ceres.MCTS.Environment
     private IncrementingPollingCounter tablebaseHits;
     private PollingCounter tablebasePly1HitsTotal;
 
-    private IncrementingPollingCounter numRootPreloadNodes;
-
     private PollingCounter makeNewRootTotalTimeSeconds;
 
     private PollingCounter lastBatchYield;
@@ -174,7 +172,6 @@ namespace Ceres.MCTS.Environment
         opponentTreeReuseNumHits ??= new PollingCounter("opponent-tree-reuse-hit-count", this, () => LeafEvaluatorReuseOtherTree.NumHits);
 
         nnTranspositionsHitRate ??= new PollingCounter("transposition-hit-rate_pct", this, () => LeafEvaluatorTransposition.HitRatePct);
-        numRootPreloadNodes ??= new IncrementingPollingCounter("root-preload-nodes", this, () => MCTSRootPreloader.TotalCumulativeRootPreloadNodes);
 
         mlhMoveModificationFraction ??= new PollingCounter("mlh-move-modified-pct", this, () => 100.0f * ManagerChooseBestMove.MLHMoveModifiedFraction);
 

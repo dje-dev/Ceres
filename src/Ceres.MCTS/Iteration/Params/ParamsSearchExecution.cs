@@ -102,27 +102,6 @@ namespace Ceres.MCTS.Params
     public bool FlowSplitSelects = true;
 
 
-    #region Preloading
-
-    // <summary>
-    // Optionally "preloading" maybe used to augment the early 
-    // small batches in a search with nodes which are preloaded
-    // for and cached in the tree (but not incorporated in the rolled up Q values).
-    // </summary>
-   
-
-    /// <summary>
-    /// Maximum depth of nodes which are eligible for preloading.
-    /// </summary>
-    public int RootPreloadDepth = 6;
-
-    /// <summary>
-    /// Maximum branching factor applied to preload nodes.
-    /// </summary>
-    public int RootPreloadWidth = 5;
-
-    #endregion
-
     /// <summary>
     /// Hard limit on maximum number of positions per gathered batch.
     /// The actual number used in gathering may end up smaller 
