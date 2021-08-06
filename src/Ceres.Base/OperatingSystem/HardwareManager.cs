@@ -60,7 +60,7 @@ namespace Ceres.Base.OperatingSystem
       {
         errorString = "Currently only Windows or Linux operating systems is supported.";
       }
-      else if (isWindows && System.Environment.OSVersion.Version.Major < 7)
+      else if (isWindows && System.Environment.OSVersion.Version.Major < 6) // Note that Windows 7 is version 6
       {
         errorString = "Windows Version 7 or above required.";
       }
