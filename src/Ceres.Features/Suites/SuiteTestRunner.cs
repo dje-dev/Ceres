@@ -424,18 +424,24 @@ namespace Ceres.Features.Suites
         MCTSIterator shareContext = null;
         if (Def.RunCeres2Engine)
         {
-          if (Def.Engine2Def.SearchParams.ReusePositionEvaluationsFromOtherTree) shareContext = search1.Search.Manager.Context;
+          if (Def.Engine2Def.SearchParams.ReusePositionEvaluationsFromOtherTree)
+          {
+            shareContext = search1.Search.Manager.Context;
+          }
 
-          search2 = EngineCeres1.SearchCeres(pos, ceresSearchLimit2);
+          search2 = EngineCeres2.SearchCeres(pos, ceresSearchLimit2);
         }
         
       }
       else
       {
-        search2 = EngineCeres1.SearchCeres(pos, ceresSearchLimit2);
+        search2 = EngineCeres2.SearchCeres(pos, ceresSearchLimit2);
 
         MCTSIterator shareContext = null;
-        if (Def.Engine1Def.SearchParams.ReusePositionEvaluationsFromOtherTree) shareContext = search2.Search.Manager.Context;
+        if (Def.Engine1Def.SearchParams.ReusePositionEvaluationsFromOtherTree)
+        {
+          shareContext = search2.Search.Manager.Context;
+        }
 
         search1 = EngineCeres1.SearchCeres(pos, ceresSearchLimit1);
 
