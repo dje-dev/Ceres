@@ -53,14 +53,14 @@ namespace Ceres.MCTS.MTCSNodes
       IEqualityComparer<MCTSNode>
   {
     /// <summary>
-    /// Search context within which this node exists
-    /// </summary>
-    public readonly MCTSIterator Context;
-
-    /// <summary>
     /// Pointer directly to this structure
     /// </summary>
     private readonly MCTSNodeStruct* ptr;
+
+    /// <summary>
+    /// Search context within which this node exists
+    /// </summary>
+    public readonly MCTSIterator Context;
 
     /// <summary>
     /// Index of this structure within the array
@@ -88,7 +88,6 @@ namespace Ceres.MCTS.MTCSNodes
     internal bool startedAsCacheOnlyNode = false;
 
     public readonly MCTSTree Tree;
-
     /// <summary>
     /// Constructor which creates an MCTSNode wrapper for the raw node at specified index.
     /// </summary>
@@ -121,13 +120,6 @@ namespace Ceres.MCTS.MTCSNodes
     {
       get => evalResult;
       set => evalResult = value;
-    }
-
-    LeafEvaluationResult evalResultSubleaf;
-    public LeafEvaluationResult EvalResultSubleaf
-    {
-      get => evalResultSubleaf;
-      set => evalResultSubleaf = value;
     }
 
     LeafEvaluationResult evalResultSecondary;
@@ -301,10 +293,9 @@ namespace Ceres.MCTS.MTCSNodes
       {
         // TODO: this only works if we are part of the fixed global array
         // WARNING : probably slow
-        if (Depth % 2 == 0)
-          return Context.Tree.Store.Nodes.PriorMoves.FinalPosition.MiscInfo.SideToMove;
-        else
-          return Context.Tree.Store.Nodes.PriorMoves.FinalPosition.MiscInfo.SideToMove.Reversed();
+
+        SideType rawSide = Context.Tree.Store.Nodes.PriorMoves.FinalPosition.MiscInfo.SideToMove;
+        return (Depth % 2 == 0) ? rawSide : rawSide.Reversed();
       }
     }
 
@@ -351,7 +342,9 @@ namespace Ceres.MCTS.MTCSNodes
     public void Annotate()
     {
       if (!IsAnnotated)
+      {
         Context.Tree.Annotate(this);
+      }
     }
 
 
@@ -377,12 +370,12 @@ namespace Ceres.MCTS.MTCSNodes
       [MethodImpl(MethodImplOptions.AggressiveInlining)]
       get
       {
-        if (parent != null) return parent;
+        if (parent != null)
+        {
+          return parent;
+        }
 
-        if (Value.ParentIndex.IsNull)
-          return null;
-        else
-          return parent = Context.Tree.GetNode(ParentIndex);
+        return Value.ParentIndex.IsNull ? null : (parent = Context.Tree.GetNode(ParentIndex));
       }
     }
 
@@ -470,9 +463,13 @@ namespace Ceres.MCTS.MTCSNodes
       ref MCTSNodeStruct nodeRef = ref Ref;
 
       if (selectorID == 0)
+      {
         Ref.UpdateNInFlight(numVisits, 0);
+      }
       else
+      {
         Ref.UpdateNInFlight(0, numVisits);
+      }
 
       // Update statistics if we are visting this child for the first time
       if (childIndex >= nodeRef.NumChildrenVisited)
@@ -549,7 +546,6 @@ namespace Ceres.MCTS.MTCSNodes
 
     public bool IsOurMove => Depth % 2 == 0;
 
-    // --------------------------------------------------------------------------------------------
     /// <summary>
     /// Returns the MTSNode corresponding to a specified top-level child. 
     /// </summary>
@@ -561,7 +557,9 @@ namespace Ceres.MCTS.MTCSNodes
       {
         MCTSNode child = this.ChildAtIndex(i);
         if (child.Annotation.PriorMoveMG == move)
+        {
           return child;
+        }
       }
 
       // It is (rarely) possible that a legal move is not in the tree
@@ -569,7 +567,7 @@ namespace Ceres.MCTS.MTCSNodes
       return null;
     }
 
-    // --------------------------------------------------------------------------------------------
+
     public short Depth
     {
       get
@@ -599,7 +597,9 @@ namespace Ceres.MCTS.MTCSNodes
       {
         List<MCTSNode> ret = new List<MCTSNode>(NumChildrenExpanded);
         for (int i = 0; i < NumChildrenExpanded; i++)
+        {
           ret.Add(ChildAtIndex(i));
+        }
 
         return ret;
       }
@@ -693,7 +693,9 @@ namespace Ceres.MCTS.MTCSNodes
           (MCTSNode childNode, EncodedMove move, FP16 _) = parent.ChildAtIndexInfo(i);
           if ((childNode != null && childNode.Index == thisIndex)
             || (childNode == null && move == thisMove))
+          {
             return i;
+          }
         }
         throw new Exception("Not found");
       }
@@ -743,7 +745,9 @@ namespace Ceres.MCTS.MTCSNodes
         }
 
         if (!foundChild)
+        {
           return null;
+        }
       }
 
       // Found it
@@ -804,7 +808,9 @@ namespace Ceres.MCTS.MTCSNodes
         {
           (MCTSNode childNode, EncodedMove move, FP16 p) info = ChildAtIndexInfo(i);
           if (info.Item1 != null)
+          {
             yield return info.childNode;
+          }
         }
       }
     }
