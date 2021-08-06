@@ -194,7 +194,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
       WinP = FP16.NaN;
       LossP = FP16.NaN;
-      MPosition = FP16.NaN;
+      MPosition = 0;
       ReuseGenerationNum = 0;
       ZobristHash = 0;
 

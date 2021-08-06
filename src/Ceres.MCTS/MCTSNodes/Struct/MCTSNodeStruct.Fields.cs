@@ -52,6 +52,11 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     public double W;
 
     /// <summary>
+    /// Set of packed miscellaneous fields.
+    /// </summary>
+    MCTSNodeStructMiscFields miscFields;
+    
+    /// <summary>
     /// Policy probability
     /// </summary>
     public FP16 P;
@@ -76,10 +81,17 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// </summary>
     public FP16 LossP;
 
+
+    const byte MAX_M = 255;
+
     /// <summary>
     ///  Moves left estimate for this position
     /// </summary>
-    public FP16 MPosition;
+    public byte MPosition
+    {
+      get => miscFields.MPosition;
+      set => miscFields.MPosition = Math.Min(MAX_M, value);
+    }
 
     /// <summary>
     /// Accumulator for M (moves left) values across all visits.
@@ -92,17 +104,13 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     private float dSum;
 
     /// <summary>
-    /// Number of policy moves (children)
-    /// Possibly this set of moves is incomplete due to either:
-    ///   - implementation decision to "throw away" lowest probability moves to save storage, or
-    ///   - error in policy evaluation which resulted in certain legal moves not being recognized
-    /// </summary>
-    public byte NumPolicyMoves;
-
-    /// <summary>
     /// Game terminal status
     /// </summary>
-    public GameResult Terminal;
+    public GameResult Terminal
+    {
+      get => miscFields.Terminal;
+      set => miscFields.Terminal = value;
+    }
 
     /// <summary>
     /// Index of the parent, or null if root node
@@ -123,6 +131,14 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     public ulong ZobristHash;
 
     /// <summary>
+    /// Number of policy moves (children)
+    /// Possibly this set of moves is incomplete due to either:
+    ///   - implementation decision to "throw away" lowest probability moves to save storage, or
+    ///   - error in policy evaluation which resulted in certain legal moves not being recognized
+    /// </summary>
+    public byte NumPolicyMoves;
+
+    /// <summary>
     /// The number of children that have been visited in the current search
     /// Note that children are always visited in descending order by the policy prior probability.
     /// Also note that in rare circumstances nodes could have been visited (as counted by this nubmer)
@@ -137,11 +153,19 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// </summary>
     public byte NumChildrenExpanded;
 
+    public byte Unused1;
+
+
     /// <summary>
     /// If at least one of the children has been found to 
     /// be a draw (terminal node).
     /// </summary>
-    public byte DrawKnownToExistAmongChildren;
+    public bool DrawKnownToExistAmongChildren
+    {
+      get => miscFields.DrawKnownToExistAmongChildren;
+      set => miscFields.DrawKnownToExistAmongChildren = value;
+    }
+
 
     /// <summary>
     /// Nodes active in current tree have generation 0.
@@ -150,7 +174,12 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// The generation number indicates how many moves prior the node was last active.
     /// TODO: currently we only maintain these values if enabled TREE_REUSE_RETAINED_POSITION_CACHE_ENABLED
     /// </summary>
-    public byte ReuseGenerationNum;
+    public byte ReuseGenerationNum   
+    {
+      get => miscFields.ReuseGenerationNum;
+      set => miscFields.ReuseGenerationNum = value;
+    }
+   
 
     /// <summary>
     /// If nonzero represents the index of the node an associated IMCTSNodeCache.
@@ -165,6 +194,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     public FP16 VSecondary;
 
     public FP16 Uncertainty;
+
 
     // TODO: make compile time constant
     internal FP16 UNCERTAINTY_PRIOR => (FP16)0.10f;
@@ -196,7 +226,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       dSum = 0;
 
       numChildrenVisited = 0;
-      DrawKnownToExistAmongChildren = 0;
+      DrawKnownToExistAmongChildren = false;
       CacheIndex = 0;
 
 #if FEATURE_UNCERTAINTY

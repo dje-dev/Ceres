@@ -811,7 +811,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           // assume it would have been if the alternative was worse
           // (use value of 0 here and further up in tree)
           // TODO: Verify this makes play better! Extensive testing was less than conclusive.
-          if (vToApply < 0 && node.DrawKnownToExistAmongChildren == 1)
+          if (vToApply < 0 && node.DrawKnownToExistAmongChildren)
           {
             vToApply = 0;
             mToApply = 0;

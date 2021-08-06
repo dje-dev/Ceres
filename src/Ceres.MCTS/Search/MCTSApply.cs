@@ -63,9 +63,6 @@ namespace Ceres.MCTS.Search
     /// </summary>
     internal static long TotalNumNodesApplied;
 
-    // Truncate any large M values seen
-    static FP16 MAX_M;
-
 
     /// <summary>
     /// Constructor.
@@ -74,7 +71,6 @@ namespace Ceres.MCTS.Search
     public MCTSApply(MultinomialBayesianThompsonSampler firstMoveSampler)
     {
       FirstMoveSampler = firstMoveSampler;
-      MAX_M = 250;
     }
 
 
@@ -231,7 +227,7 @@ namespace Ceres.MCTS.Search
 
           if (!node.IsRoot && node.Terminal == GameResult.Draw)
           {
-            node.Parent.Ref.DrawKnownToExistAmongChildren = 1;
+            node.Parent.Ref.DrawKnownToExistAmongChildren = true;
             //Chess.NNEvaluators.LC0DLL.LC0DLLSyzygyEvaluator.NumTablebaseMisses++;
           }
 
@@ -243,11 +239,7 @@ namespace Ceres.MCTS.Search
           {
             nodeRef.WinP = evalResult.WinP;
             nodeRef.LossP = evalResult.LossP;
-
-            if (!FP16.IsNaN(evalResult.M) && evalResult.M > MAX_M)
-              nodeRef.MPosition = MAX_M;
-            else
-              nodeRef.MPosition = evalResult.M;
+            nodeRef.MPosition = (byte)MathF.Round(evalResult.M, 0);
           }
 
           vToApply = nodeRef.V;
@@ -349,7 +341,8 @@ namespace Ceres.MCTS.Search
 
       nodeRef.WinP = 0;
       nodeRef.LossP = (FP16)lossP;
-      nodeRef.MPosition = (FP16)m;
+      nodeRef.MPosition = (byte)MathF.Round(m, 0);
+
       if (!node.IsRoot)
       {
         // This checkmate will obviously be chosen by the opponent
@@ -360,7 +353,7 @@ namespace Ceres.MCTS.Search
         parentRef.WinP = (FP16)lossP;
         parentRef.LossP = 0;
         parentRef.W = parentRef.V * parentRef.N; // Make Q come out to be same as V (which has already been set to the sure win)
-        parentRef.MPosition = (FP16)(m + 1);
+        parentRef.MPosition = (byte)MathF.Round(m + 1, 0);
       }
     }
 
