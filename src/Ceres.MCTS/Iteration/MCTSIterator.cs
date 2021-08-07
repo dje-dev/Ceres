@@ -266,7 +266,7 @@ namespace Ceres.MCTS.Iteration
         positionCache = new PositionEvalCache();
       }
 
-      const int NUM_BUFFER_NODES = 1500 + MCTSRootPreloader.MAX_PRELOAD_NODES_TOTAL;
+      const int NUM_BUFFER_NODES = 1500;
       int maxNodesBound = int.MaxValue;
       if (searchLimit.Type == SearchLimitType.NodesPerMove
         || searchLimit.Type == SearchLimitType.NodesForAllMoves)         
@@ -302,15 +302,18 @@ namespace Ceres.MCTS.Iteration
       // or easier to compute (e.g. cache lookup) first
       List<LeafEvaluatorBase> evaluators = new List<LeafEvaluatorBase>();
 
-      evaluators.Add(new LeafEvaluatorTerminal());
-
       // First check transposition table (if enabled)
+      // since this is very inexpensive (just a dictionary lookup)
+      // and does not need to generate and store moves for the node.
       if (ParamsSearch.Execution.TranspositionMode != TranspositionMode.None)
       {
 //        if (ParamsNN.CACHE_MODE != Chess.PositionEvalCaching.PositionEvalCache.CacheMode.None)
 //          throw new Exception("USE_TRANSPOSITIONS requires CACHE_MODE be None, probably incompatable.");
         evaluators.Add(new LeafEvaluatorTransposition(Tree.TranspositionRoots));
       }
+
+      // Next check for terminal (which will need to generate moves).
+      evaluators.Add(new LeafEvaluatorTerminal());
 
       // Possibly try to levarage NN evaluations stored inside the tree from the separate search context
       if (ReuseOtherContextForEvaluatedNodes != null)
@@ -348,6 +351,7 @@ namespace Ceres.MCTS.Iteration
 
       return evaluators;
     }
+
 
     public int[] OptimalBatchSizesForNetDims(int gpuNum, int numFilters, int numLayers)
     {
