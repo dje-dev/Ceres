@@ -14,24 +14,23 @@
 #region Using directives
 
 using System;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Diagnostics;
-
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 
-using Ceres.MCTS.MTCSNodes;
 using Ceres.Base.DataTypes;
+using Ceres.Base.Math.Probability;
 using Ceres.Base.Threading;
-using Ceres.MCTS.Evaluators;
+
 using Ceres.Chess;
 using Ceres.Chess.PositionEvalCaching;
-using Ceres.Base.Math.Probability;
+
+using Ceres.MCTS.Evaluators;
+using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.Params;
-using Ceres.Base.Benchmarking;
-using System.Collections.Concurrent;
 
 #endregion
 
@@ -56,10 +55,9 @@ namespace Ceres.MCTS.Search
     /// </summary>
     public int NumBatchesApplied;
 
-    public static int TOTAL_APPLIED = 0;
 
     /// <summary>
-    /// Global cumulative number of nodes applied
+    /// Global cumulative number of nodes applied.
     /// </summary>
     internal static long TotalNumNodesApplied;
 
@@ -127,8 +125,10 @@ namespace Ceres.MCTS.Search
     {
       DebugVerifyNoDuplicatesAndInFlight(batchlet);
 
-      TOTAL_APPLIED += batchlet.Count;
-      if (batchlet.Count == 0) return;
+      if (batchlet.Count == 0)
+      {
+        return;
+      }
 
       MCTSIterator context = batchlet[0].Context;
 
@@ -218,7 +218,9 @@ namespace Ceres.MCTS.Search
             nodeRef.BackupApply(nodes, vToApply, 0, dToApply, wasTerminal, numUpdateSelector1, numUpdateSelector2, out indexOfChildDescendentFromRoot);
           }
           else
+          {
             throw new Exception("Internal error: Unexpected N > 0 on non-terminal");
+          }
         }
         else
         {
@@ -272,6 +274,7 @@ namespace Ceres.MCTS.Search
       node.Context.RecordVisitToTopLevelMove(node, indexOfChildDescendentFromRoot, evalResult);
     }
 
+
     private void PossiblyUpateFirstMoveSampler(MCTSNode node, MCTSNodeStructIndex indexOfChildDescendentFromRoot, int numUpdateSelector1, int numUpdateSelector2, bool wasTerminal, float vToApply)
     {
       if (FirstMoveSampler != null && indexOfChildDescendentFromRoot != default)
@@ -317,7 +320,9 @@ namespace Ceres.MCTS.Search
         if (node.EvalResult.ExtraResults != null)
         {
           foreach (LeafEvaluationResult result in node.EvalResult.ExtraResults)
+          {
             ApplyResult(nodesSpan, selectorID, node, result);
+          }
         }
 
         // Note that we cannot clear the EvalResult
@@ -390,7 +395,9 @@ namespace Ceres.MCTS.Search
       else
       {
         foreach (MCTSNode node in nodes)
+        {
           SetPolicy(node, policySoftmax, cachingInUse, movesSameOrderMoveList);
+        }
       }
     }
 
