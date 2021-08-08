@@ -37,7 +37,7 @@ namespace Ceres.MCTS.Iteration
     /// The number of transposition roots in a tree 
     /// will be much less than the total number of nodes due to transpositions.
     /// </summary>
-    const float ESTIMATED_FRACTION_ROOTS = 0.40f;
+    const float ESTIMATED_FRACTION_ROOTS = 0.50f;
 
     /// <summary>
     /// Underlying mapping dictionary.
