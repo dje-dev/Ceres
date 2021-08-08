@@ -263,7 +263,7 @@ namespace Ceres.MCTS.Iteration
       }
       else if (nnEvaluators.EvaluatorDef.CacheMode != PositionEvalCache.CacheMode.None)
       {
-        positionCache = new PositionEvalCache();
+        positionCache = new PositionEvalCache(true);
       }
 
       const int NUM_BUFFER_NODES = 1500;

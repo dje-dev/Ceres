@@ -128,6 +128,7 @@ namespace Ceres.MCTS.Iteration
                        DateTime startTime,
                        List<GameMoveStat> gameMoveHistory,
                        MCTSManager.MCTSProgressCallback progressCallback = null,
+                       PositionEvalCache positionEvalCache = null,
                        bool possiblyUsePositionCache = false,
                        bool isFirstMoveOfGame = false)
     {
@@ -178,7 +179,7 @@ namespace Ceres.MCTS.Iteration
                                                           paramsSearch, limitManager,
                                                           gameMoveHistory, isFirstMoveOfGame);
 
-      Manager = new MCTSManager(store, reuseOtherContextForEvaluatedNodes, null, null,
+      Manager = new MCTSManager(store, reuseOtherContextForEvaluatedNodes, positionEvalCache, null,
                                 nnEvaluators, paramsSearch, paramsSelect,  searchLimitToUse, 
                                 limitManager, startTime, null, gameMoveHistory, isFirstMoveOfGame);
 
@@ -313,6 +314,8 @@ namespace Ceres.MCTS.Iteration
 
         const bool possiblyUsePositionCache = false; // TODO: could this be relaxed?
 
+        PositionEvalCache positionEvalCache = null;
+
         bool storeIsAlmostFull = priorContext.Tree.Store.FractionInUse > 0.9f;
         bool newRootIsBigEnoughForReuse = newRoot != null && newRoot.N >= (priorContext.Root.N * thresholdMinFractionNodesRetained);
         if (priorContext.ParamsSearch.TreeReuseEnabled
@@ -321,9 +324,36 @@ namespace Ceres.MCTS.Iteration
         {
           SearchContinueRetainTree(reuseOtherContextForEvaluatedNodes, newPositionAndMoves, gameMoveHistory, verbose, startTime, progressCallback, isFirstMoveOfGame, priorContext, store, numNodesInitial, newRoot, searchLimitTargetAdjusted, possiblyUsePositionCache);
         }
-
         else
         {
+#if NOT
+          // Although it works, there actually seems no benefit to this idea.
+          // The time spent on tree rebuild is proportional to benefit (nodes extracted)
+          // so it's always better to directly rebuild tree.
+
+          if ( newRoot != null && 
+               priorContext.ParamsSearch.TestFlag &&
+               priorContext.ParamsSearch.TreeReuseEnabled) // ????????????
+          {
+//            using (new TimingBlock("ExtractCacheNodesInSubtree"))
+            {
+              // TODO: One idea is to not create a separate data structure for this cache.
+              //       Instead, store these extracted values into a List and
+              //       store the index of each position in the primary transposition table,
+              //       but with the value equal to the negative of the index 
+              //       (so it can be distinguished from a "normal" entry pointing to a node in the new tree)
+
+              // TODO: Some of the entires in the subtree are transposition linked.
+              //       Currently ExtractCacheNodesInSubtree isn't smart enough to recover them.
+              positionEvalCache = MCTSNodeStructStorage.ExtractCacheNodesInSubtree(priorContext.Tree, ref newRoot.Ref);
+              MCTSEventSource.TestMetric1 += positionEvalCache.Count;
+//              Console.WriteLine("got " + positionEvalCache.Count + " from prior root " + priorContext.Tree.Root.N + " new root " + newRoot.N);
+//              positionEvalCache = null;
+
+            }
+          }
+#endif
+
           // We decided not to (or couldn't find) that path in the existing tree.
           // First immediately release the prior store to allow memory reclamation.
           priorContext.Tree.Store.Dispose();
@@ -332,7 +362,7 @@ namespace Ceres.MCTS.Iteration
           Search(Manager.Context.NNEvaluators, Manager.Context.ParamsSelect,
                  Manager.Context.ParamsSearch, Manager.LimitManager,
                  reuseOtherContextForEvaluatedNodes, newPositionAndMoves, searchLimit, verbose,
-                 startTime, gameMoveHistory, progressCallback, possiblyUsePositionCache, isFirstMoveOfGame);
+                 startTime, gameMoveHistory, progressCallback, positionEvalCache, possiblyUsePositionCache, isFirstMoveOfGame);
         }
       }
 
@@ -356,7 +386,7 @@ namespace Ceres.MCTS.Iteration
       PositionEvalCache reusePositionCache = null;
       if (Manager.Context.ParamsSearch.TreeReuseRetainedPositionCacheEnabled)
       {
-        reusePositionCache = new PositionEvalCache(0);
+        reusePositionCache = new PositionEvalCache(false, 0);
       }
 
       // Create a new dictionary to recieve the new transposition roots
@@ -372,7 +402,7 @@ namespace Ceres.MCTS.Iteration
       TimingStats makeNewRootTimingStats = new TimingStats();
       using (new TimingBlock(makeNewRootTimingStats, TimingBlock.LoggingType.None))
       {
-        MCTSNodeStructStorage.MakeChildNewRoot(Manager.Context.Tree, Manager.Context.ParamsSelect.PolicySoftmax, ref newRoot.Ref, newPositionAndMoves,
+        MCTSNodeStructStorage.MakeChildNewRoot(Manager.Context.Tree, ref newRoot.Ref, newPositionAndMoves,
                                                reusePositionCache, newTranspositionRoots);
       }
       MCTSManager.TotalTimeSecondsInMakeNewRoot += (float)(statsMaterialize.ElapsedTimeSecs + makeNewRootTimingStats.ElapsedTimeSecs);

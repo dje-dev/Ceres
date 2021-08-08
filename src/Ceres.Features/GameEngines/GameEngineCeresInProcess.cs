@@ -342,7 +342,7 @@ namespace Ceres.Features.GameEngines
         Search.Search(evaluators, ChildSelectParams, SearchParams, GameLimitManager,
                       reuseOtherContextForEvaluatedNodes,
                       curPositionAndMoves, searchLimit, verbose, lastSearchStartTime,
-                      gameMoveHistory, callback, false, isFirstMoveOfGame);
+                      gameMoveHistory, callback, null, false, isFirstMoveOfGame);
       }
       else
       {
@@ -373,12 +373,10 @@ namespace Ceres.Features.GameEngines
         int currentN = LastSearch.SearchRootNode.N;
 
         // Determine threshold to decide if tree is big enough to be reused.
-        // Speed seems linear in tree size (about 2.5mm/sec).
-        // Use a lower threshold for small trees since:
-        //   - rebuilding will be faster (better memory locality, smaller data structures)
-        //   - a significant fraction of time would otherwise be building from scratch,
-        //     involving delays due to small batch latency
-        float THRESHOLD_FRACTION_NODES_REUSABLE = currentN <= 10_000 ? 0.05f : 0.10f;
+        // Extraction time is about linear in number of nodes extracted (averages about 2.5mm/sec)
+        // except for a fixed time required to build BitArray of included nodes (which is only about 2% of total time).
+        // Therefore we almost always reuse the tree, unless extremely small.
+        float THRESHOLD_FRACTION_NODES_REUSABLE = 0.03f;
 
         Search.SearchContinue(LastSearch, reuseOtherContextForEvaluatedNodes,
                                      forwardMoves, curPositionAndMoves,

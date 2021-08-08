@@ -70,21 +70,22 @@ namespace Ceres.Chess.PositionEvalCaching
 
     const int EST_CONCURRENT_THREADS = 2;
 
-    public ConcurrentDictionary<ulong, PositionEvalCacheEntry> Cache => positionCache;
 
-    ConcurrentDictionary<ulong, PositionEvalCacheEntry> positionCache;
+    //ConcurrentDictionary<ulong, PositionEvalCacheEntry> positionCache;
+    IDictionary<ulong, PositionEvalCacheEntry> positionCache;
 
-    public PositionEvalCache(int initialSize = 1024)
+    public PositionEvalCache(bool supportConcurrency, int initialSize = 1024)
     {
       if (initialSize > 0)
       {
-        positionCache = new ConcurrentDictionary<ulong, PositionEvalCacheEntry>(EST_CONCURRENT_THREADS, initialSize);
+        InitializeWithSize(supportConcurrency, initialSize);
       }
     }
 
-    public void InitializeWithSize(int size)
+    public void InitializeWithSize(bool supportConcurrency, int size)
     {
-      positionCache = new ConcurrentDictionary<ulong, PositionEvalCacheEntry>(EST_CONCURRENT_THREADS, size);
+      positionCache = supportConcurrency ? new ConcurrentDictionary<ulong, PositionEvalCacheEntry>(EST_CONCURRENT_THREADS, size)
+                                        :  new Dictionary<ulong, PositionEvalCacheEntry>(/*EST_CONCURRENT_THREADS,*/ size);
     }
     public int Count => positionCache.Count;
 
@@ -121,13 +122,6 @@ namespace Ceres.Chess.PositionEvalCaching
 
     #region NEW
 
-    // --------------------------------------------------------------------------------------------
-    public void Clear()
-    {
-      positionCache = new ConcurrentDictionary<ulong, PositionEvalCacheEntry>();
-    }
-
-
     public void LoadFromDisk(string id)
     {
       if (!System.IO.File.Exists(CACHE_FN(id)))
@@ -154,7 +148,8 @@ namespace Ceres.Chess.PositionEvalCaching
 
           numEntriesUponLoad = sizeEntries;
 
-          positionCache = new ConcurrentDictionary<ulong, PositionEvalCacheEntry>(); // no hint available (int)(numEntriesUponLoad * 1.1));
+          throw new NotImplementedException();
+          //positionCache = new ConcurrentDictionary<ulong, PositionEvalCacheEntry>(); // no hint available (int)(numEntriesUponLoad * 1.1));
 
           byte[] keysRaw    = new byte[sizeEntries * sizeof(ulong)];
           ms.Read(keysRaw, 0, keysRaw.Length);

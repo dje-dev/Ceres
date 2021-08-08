@@ -38,6 +38,8 @@ using Ceres.Base.Misc;
 using Ceres.Base.DataType;
 using Ceres.Base.OperatingSystem;
 using System.Collections.Generic;
+using Ceres.MCTS.MTCSNodes.Struct;
+using System.Runtime.InteropServices;
 
 #endregion
 
@@ -94,6 +96,9 @@ namespace Ceres.APIExamples
     /// </summary>
     public static void Test()
     {
+      if (Marshal.SizeOf<MCTSNodeStruct>() != 64)
+        throw new Exception("Wrong size " + Marshal.SizeOf<MCTSNodeStruct>().ToString());
+
       PreTournamentCleanup();
 
       if (false)
@@ -114,8 +119,8 @@ namespace Ceres.APIExamples
       NET1 = "69722_value_focus_2";
       NET2 = "69722_value_focus_2";
 
-      //      NET1 = "badgyal-3";
-      //      NET2 = "badgyal-3";
+      //NET1 = "751675";
+      //NET2 = "751675";
       //      string NET1_SECONDARY1 = "j94-100";
 
       //string       NET2 = @"j64-210";
@@ -138,12 +143,12 @@ namespace Ceres.APIExamples
         evalDef2.MakePersistent();
       }
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(200_000);
-
+      SearchLimit limit1 = SearchLimit.NodesPerMove(3_000);
+      //limit1 = SearchLimit.NodesForAllMoves(1_000_000, 10_000);
 
       //      limit1 = SearchLimit.SecondsForAllMoves(900, 2) * 0.2f;
-      limit1 = SearchLimit.SecondsForAllMoves(45);
-      //limit1 = SearchLimit.SecondsPerMove(0.75f);
+            limit1 = SearchLimit.SecondsForAllMoves(30);
+      //limit1 = SearchLimit.NodesForAllMoves(1_000_000, 5_000);
 
       SearchLimit limit2 = limit1;// * 0.2f;
 
@@ -161,11 +166,12 @@ namespace Ceres.APIExamples
 
       ////////
       // THIS MIGHT BE GOOD - but only with T60 networks with quality MLH
-      //      engineDefCeres1.SearchParams.MLHBonusFactor = 0.50f;
+      //engineDefCeres1.SearchParams.MLHBonusFactor = 0.50f;
       ////////
 
 
-      //engineDefCeres1.SearchParams.TestFlag = true;
+//engineDefCeres1.SearchParams.TestFlag = true;
+      //engineDefCeres1.SearchParams.Execution.SmartSizeBatches = false;
 
       //engineDefCeres1.SearchParams.MoveFutilityPruningAggressiveness = 0.4f;
       //engineDefCeres1.SearchParams.GameLimitUsageAggressiveness *= 1.2f;
@@ -179,7 +185,6 @@ namespace Ceres.APIExamples
       //engineDefCeres2.SearchParams.TreeReuseEnabled = false;
       //engineDefCeres1.SearchParams.MLHBonusFactor = 0.1f;
 
-      //engineDefCeres1.SearchParams.TestFlag = true;
       if (false)
       {
 #if NOT
@@ -273,7 +278,7 @@ namespace Ceres.APIExamples
                                                  //@"\\synology\dev\chess\data\epd\lichess_chad_bad.csv",
                                                  SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/epd/{BASE_NAME}.epd"
                                                                          : @$"\\synology\dev\chess\data\epd\{BASE_NAME}.epd",
-                                                playerCeres1, null, playerLC0);// playerLC0);
+                                                playerCeres1, null, playerLC0);
 
 //        suiteDef.MaxNumPositions = 50;
         suiteDef.EPDLichessPuzzleFormat = suiteDef.EPDFileName.ToUpper().Contains("LICHESS");
@@ -318,10 +323,10 @@ namespace Ceres.APIExamples
 
 
       def.NumGamePairs = 102;
-      def.ShowGameMoves = false;
+      def.ShowGameMoves = true;
 
       string baseName = "tcec1819";
-      //      baseName = "4mvs_+90_+99";
+      //baseName = "4mvs_+90_+99";
 
       def.OpeningsFileName = SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/openings/{baseName}.pgn"
                                                      : @$"\\synology\dev\chess\data\openings\{baseName}.pgn";

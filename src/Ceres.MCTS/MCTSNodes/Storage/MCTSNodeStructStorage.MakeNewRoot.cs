@@ -68,7 +68,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     /// <param name="newRootChild"></param>
     /// <param name="newPriorMoves"></param>
     /// <param name="transpositionRoots"></param>
-    public static void MakeChildNewRoot(MCTSTree tree, float policySoftmax, 
+    public static void MakeChildNewRoot(MCTSTree tree, 
                                         ref MCTSNodeStruct newRootChild,
                                         PositionWithHistory newPriorMoves,
                                         PositionEvalCache cacheNonRetainedNodes,
@@ -77,6 +77,8 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 #if DEBUG
       tree.Store.Validate();
 #endif
+
+      float policySoftmax = tree.Root.Context.ParamsSelect.PolicySoftmax;
 
       // Nothing to do if the requested node is already currently the root
       if (newRootChild.Index == tree.Store.RootNode.Index)
@@ -143,6 +145,22 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 #endif
     }
 
+    public static PositionEvalCache ExtractCacheNodesInSubtree(MCTSTree tree, ref MCTSNodeStruct newRootChild)
+    {
+      float softmax = tree.Root.Context.ParamsSelect.PolicySoftmax;
+
+      // Traverse this subtree, building a bit array of visited nodes
+      BitArray includedNodes = MCTSNodeStructUtils.BitArrayNodesInSubtree(tree.Store, ref newRootChild, out uint numNodesUsed);
+
+      long estNumNodes = tree.Store.RootNode.N - numNodesUsed;
+      const bool SUPPORT_CACHE_CONCURRENCY = false; // No need for concurrency, is read-only during play.
+      PositionEvalCache cache = new PositionEvalCache(SUPPORT_CACHE_CONCURRENCY, (int)estNumNodes);
+
+      ExtractPositionCacheNodes(tree.Store, softmax, includedNodes, in newRootChild, ExtractMode.ExtractRetained, cache);
+      
+      return cache;
+    }
+
 
     static void DoMakeChildNewRoot(MCTSTree tree, float policySoftmax, ref MCTSNodeStruct newRootChild,
                                    PositionWithHistory newPriorMoves,
@@ -171,8 +189,10 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       if (cacheNonRetainedNodes != null)
       {
         long estNumNodes = store.RootNode.N - numNodesUsed;
-        cacheNonRetainedNodes.InitializeWithSize((int)estNumNodes);
-        ExtractPositionCacheNonRetainedNodes(store, policySoftmax, includedNodes, in newRootChild, cacheNonRetainedNodes);
+        const bool SUPPORT_CACHE_CONCURRENCY = false; // No need for concurrency, is read-only during play.
+        cacheNonRetainedNodes.InitializeWithSize(SUPPORT_CACHE_CONCURRENCY, (int)estNumNodes);
+        float softmax = tree.Root.Context.ParamsSelect.PolicySoftmax;
+        ExtractPositionCacheNodes(store, softmax, includedNodes, in newRootChild, ExtractMode.ExtractNonRetained, cacheNonRetainedNodes);
       }
 
       // We will constract a table indicating the starting index and length of
@@ -318,17 +338,19 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       store.Nodes.PriorMoves = new PositionWithHistory(newPriorMoves);
     }
               
-    
+    private enum ExtractMode {  ExtractNonRetained, ExtractRetained};
 
-    private static void ExtractPositionCacheNonRetainedNodes(MCTSNodeStore store, float policySoftmax, BitArray includedNodes, in MCTSNodeStruct newRoot, 
-                                                             PositionEvalCache cacheNonRetainedNodes)
+    private static void ExtractPositionCacheNodes(MCTSNodeStore store, float policySoftmax,
+                                                  BitArray includedNodes, in MCTSNodeStruct newRoot, 
+                                                  ExtractMode extractMode,
+                                                  PositionEvalCache cacheNodes)
     {
       for (int nodeIndex = 1; nodeIndex < store.Nodes.NumTotalNodes; nodeIndex++)
       {
         ref MCTSNodeStruct nodeRef = ref store.Nodes.nodes[nodeIndex];
 
-        int curGeneration = nodeRef.ReuseGenerationNum;
-        if (!includedNodes[nodeIndex] || curGeneration > 0)
+        int curGeneration = nodeRef.ReuseGenerationNum;        
+        if ((includedNodes[nodeIndex] != (extractMode == ExtractMode.ExtractRetained)) || curGeneration > 0)
         {
           // This node is either being retained,
           // or was already part of an older (discarded) generation
@@ -358,7 +380,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 
           if (nodeRef.Terminal == Chess.GameResult.Unknown)
           {
-            cacheNonRetainedNodes.Store(nodeRef.ZobristHash, nodeRef.Terminal, (FP16)nodeRef.W, nodeRef.LossP, nodeRef.MPosition, in policy);
+            cacheNodes.Store(nodeRef.ZobristHash, nodeRef.Terminal, nodeRef.WinP, nodeRef.LossP, nodeRef.MPosition, in policy);
           }
         }
       }

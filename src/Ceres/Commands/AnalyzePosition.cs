@@ -96,7 +96,7 @@ namespace Ceres.Commands
         ceresResults = new MCTSearch();
         ceresResults.Search(nnEvaluators, new ParamsSelect(), searchParams, null, 
                             null, positionWithHistory, searchLimit, verbose, DateTime.Now, null,
-                            manager => lastCeresInfo = new UCISearchInfo(UCIInfo.UCIInfoString(manager), null, null), false, true);
+                            manager => lastCeresInfo = new UCISearchInfo(UCIInfo.UCIInfoString(manager), null, null), null, false, true);
       });
 
       // Possibly launch search for other engine
