@@ -377,11 +377,6 @@ namespace Ceres.MCTS.Iteration
       }
       MCTSManager.TotalTimeSecondsInMakeNewRoot += (float)(statsMaterialize.ElapsedTimeSecs + makeNewRootTimingStats.ElapsedTimeSecs);
 
-      if (newRoot.Context.ParamsSearch.TestFlag)
-      {
-        MCTSEventSource.TestMetric1 += (float)makeNewRootTimingStats.ElapsedTimeSecs;
-      }
-
       CeresEnvironment.LogInfo("MCTS", "MakeChildNewRoot", $"Select {newRoot.N:N0} from {numNodesInitial:N0} "
                               + $"in {(int)(makeNewRootTimingStats.ElapsedTimeSecs / 1000.0)}ms");
 
