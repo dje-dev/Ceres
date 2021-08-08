@@ -108,5 +108,11 @@ namespace Ceres.Chess.GameEngines
       TimeElapsed = timeElapsed;
     }
 
+
+    public override string ToString()
+    {
+      return $"<GameMoveStat {PlyNum}. {Side} N {StartN} --> {FinalN} in {TimeElapsed,6:F2}sec Q={ScoreQ,6:F2}";
+    }
+
   }
 }
