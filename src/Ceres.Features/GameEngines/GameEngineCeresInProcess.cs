@@ -370,8 +370,16 @@ namespace Ceres.Features.GameEngines
         // before we would possibly reuse part of tree from prior search.
         // Below a certain level the tree reuse would increase memory consumption
         // (because unused nodes remain in node store) but not appreciably improve search speed.
-        //TODO: tweak this parameter, possibly make it larger if small hardwre config is in use
-        float THRESHOLD_FRACTION_NODES_REUSABLE = 0.05f;
+        int currentN = LastSearch.SearchRootNode.N;
+
+        // Determine threshold to decide if tree is big enough to be reused.
+        // Speed seems linear in tree size (about 2.5mm/sec).
+        // Use a lower threshold for small trees since:
+        //   - rebuilding will be faster (better memory locality, smaller data structures)
+        //   - a significant fraction of time would otherwise be building from scratch,
+        //     involving delays due to small batch latency
+        float THRESHOLD_FRACTION_NODES_REUSABLE = currentN <= 10_000 ? 0.05f : 0.10f;
+
         Search.SearchContinue(LastSearch, reuseOtherContextForEvaluatedNodes,
                                      forwardMoves, curPositionAndMoves,
                                      gameMoveHistory, searchLimit, verbose, lastSearchStartTime,
