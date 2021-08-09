@@ -113,10 +113,10 @@ namespace Ceres.Features.GameEngines
         lzOptions += $"--minibatch-size={overrideBatchSize} ";
       }
 
-      if (overrideCacheSize != null)
-      {
-        lzOptions += $"--nncache={overrideCacheSize.Value} ";
-      }
+      // LC0 speed generally much improved by a cache size larger than the default (200_000).
+      const int DEFAULT_CACHE_SIZE = 5_000_000;
+      int cacheSize = overrideCacheSize ?? DEFAULT_CACHE_SIZE;
+      lzOptions += $"--nncache={cacheSize} ";
 
       if (emulateCeresOptions)
       {
