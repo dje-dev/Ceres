@@ -476,6 +476,8 @@ namespace Ceres.Features.Tournaments
       int plyCount = 1;
       float timeEngine1Tot = 0;
       float timeEngine2Tot = 0;
+      long visitsEngine1Tot = 0;
+      long visitsEngine2Tot = 0;
       long nodesEngine1Tot = 0;
       long nodesEngine2Tot = 0;
       int movesEngine1 = 0;
@@ -622,7 +624,7 @@ namespace Ceres.Features.Tournaments
         {
           info = DoMove(engine2, engineCheckAgainstEngine2,
                         gameMoveHistory, searchLimitWithIncrementsEngine2, scoresEngine2,
-                        ref nodesEngine2Tot, ref timeEngine2Tot);
+                        ref nodesEngine2Tot, ref visitsEngine2Tot, ref timeEngine2Tot);
           movesEngine2++;
 
           if (engine2IsWhite)
@@ -640,7 +642,7 @@ namespace Ceres.Features.Tournaments
         {
           info = DoMove(engine1, null,
                         gameMoveHistory, searchLimitWithIncrementsEngine1, scoresEngine1,
-                        ref nodesEngine1Tot, ref timeEngine1Tot);
+                        ref nodesEngine1Tot, ref visitsEngine1Tot, ref timeEngine1Tot);
           movesEngine1++;
           if (engine2IsWhite)
           {
@@ -669,14 +671,14 @@ namespace Ceres.Features.Tournaments
       GameMoveConsoleInfo DoMove(GameEngine engine, GameEngine checkMoveEngine,
                                  List<GameMoveStat> gameMoveHistory,
                                  SearchLimit searchLimit, List<float> scoresCP,
-                                  ref long totalNodesUsed, ref float totalTimeUsed)
+                                  ref long totalNodesUsed, ref long totalVisitsUsed, ref float totalTimeUsed)
       {
         SearchLimit thisMoveSearchLimit = searchLimit.Type switch
         {
           SearchLimitType.SecondsPerMove => searchLimit,
           SearchLimitType.NodesPerMove => searchLimit,
           SearchLimitType.NodesForAllMoves => new SearchLimit(SearchLimitType.NodesForAllMoves,
-                                                              Math.Max(0, searchLimit.Value - totalNodesUsed),
+                                                              Math.Max(0, searchLimit.Value - totalVisitsUsed),
                                                               searchLimit.SearchCanBeExpanded, 
                                                               searchLimit.ValueIncrement,
                                                               searchLimit.MaxMovesToGo),
@@ -740,6 +742,7 @@ namespace Ceres.Features.Tournaments
         scoresCP.Add(engineMove.ScoreCentipawns);
 
         totalNodesUsed += engineMove.FinalN;
+        totalVisitsUsed += engineMove.Visits;
         totalTimeUsed += engineTime;
         if (curPositionAndMoves.FinalPosition.MiscInfo.SideToMove == SideType.White)
         {

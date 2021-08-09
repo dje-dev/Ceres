@@ -54,6 +54,11 @@ namespace Ceres.Chess.GameEngines
     public int FinalN;
 
     /// <summary>
+    /// Number of visits made during search.
+    /// </summary>
+    public int Visits => FinalN - StartingN;
+
+    /// <summary>
     /// Average depth of search tree.
     /// </summary>
     public int Depth;
