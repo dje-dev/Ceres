@@ -35,6 +35,8 @@ using Ceres.Chess.Positions;
 using Ceres.MCTS.Params;
 using Ceres.Base.Misc;
 using Ceres.Base.Benchmarking;
+using System.Collections.Concurrent;
+using Ceres.Features.Players;
 
 #endregion
 
@@ -55,12 +57,12 @@ namespace Ceres.Features.Suites
     /// <summary>
     /// Engine for first Ceres engine definition.
     /// </summary>
-    public GameEngineCeresInProcess EngineCeres1 { get; private set; }
+    public ConcurrentBag<GameEngineCeresInProcess> EnginesCeres1 = new();
 
     /// <summary>
     /// Engine for optional second optional Ceres engine definition.
     /// </summary>
-    public GameEngineCeresInProcess EngineCeres2 { get; private set; }
+    public ConcurrentBag<GameEngineCeresInProcess> EnginesCeres2 = new();
 
     /// <summary>
     /// Engine for optional external UCI engine.
@@ -71,6 +73,20 @@ namespace Ceres.Features.Suites
     int numConcurrentSuiteThreads;
 
 
+    static void PopulateCeresEngines(GameEngineDefCeres engineDefCeres, EnginePlayerDef engineDef, ConcurrentBag<GameEngineCeresInProcess> engines, int count)
+    {
+      if (engineDefCeres != null)
+      {
+        for (int i = 0; i < count; i++)
+        {
+          GameEngineCeresInProcess engine = engineDefCeres.CreateEngine() as GameEngineCeresInProcess;
+          engine.Warmup(engineDef.SearchLimit.KnownMaxNumNodes);
+          engines.Add(engine);
+        }
+      }
+    }
+
+
     /// <summary>
     /// Constructor.
     /// </summary>
@@ -78,13 +94,15 @@ namespace Ceres.Features.Suites
     public SuiteTestRunner(SuiteTestDef def)
     {
       Def = def;
-
-      // Create and warmup both engines (in parallel)
-      Parallel.Invoke(() => { EngineCeres1 = Def.Engine1Def.CreateEngine() as GameEngineCeresInProcess; EngineCeres1.Warmup(Def.CeresEngine1Def.SearchLimit.KnownMaxNumNodes); },
-                      () => { EngineCeres2 = Def.Engine2Def?.CreateEngine() as GameEngineCeresInProcess; EngineCeres2?.Warmup(Def.CeresEngine2Def.SearchLimit.KnownMaxNumNodes); },
-                      () => { EngineExternal = Def.ExternalEngineDef?.EngineDef.CreateEngine(); EngineExternal?.Warmup(Def.ExternalEngineDef.SearchLimit.KnownMaxNumNodes); });
     }
 
+    void Init()
+    {
+      // Create and warmup both engines (in parallel)
+      Parallel.Invoke(() => { PopulateCeresEngines(Def.Engine1Def, Def.CeresEngine1Def, EnginesCeres1, numConcurrentSuiteThreads); },
+                      () => { PopulateCeresEngines(Def.Engine2Def, Def.CeresEngine2Def, EnginesCeres2, numConcurrentSuiteThreads); },
+                      () => { EngineExternal = Def.ExternalEngineDef?.EngineDef.CreateEngine(); EngineExternal?.Warmup(Def.ExternalEngineDef.SearchLimit.KnownMaxNumNodes); });
+    }
 
     int numSearches = 0;
     int numSearchesBothFound = 0;
@@ -129,12 +147,15 @@ namespace Ceres.Features.Suites
       // for the warmup which is confusing because different parameters
       // will be chosen for the actual search.
       //DumpParams(Def.Output, true);
-      numConcurrentSuiteThreads = numConcurrentSuiteThreads;
+      this.numConcurrentSuiteThreads = numConcurrentSuiteThreads;
+
+      Init();
 
       int timerFiredCount = 0;
 
       // TODO: add path automatically
-      List<EPDEntry> epds = EPDEntry.EPDEntriesInEPDFile(Def.EPDFileName, Def.MaxNumPositions, Def.EPDLichessPuzzleFormat);
+      List<EPDEntry> epds = EPDEntry.EPDEntriesInEPDFile(Def.EPDFileName, Def.MaxNumPositions, 
+                                                         Def.EPDLichessPuzzleFormat, Def.EPDFilter);
       if (Def.MaxNumPositions == 0)
       {
         Def.MaxNumPositions = epds.Count;
@@ -299,8 +320,21 @@ namespace Ceres.Features.Suites
 
     private void Shutdown(ObjectPool<object> externalEnginePool)
     {
-      EngineCeres1.Dispose();
-      EngineCeres2?.Dispose();
+      return;
+
+      // TODO: restore this, currently buggy (stack overflow)
+      foreach (var engine in EnginesCeres1)
+      {
+        engine.Dispose();
+      }
+      EnginesCeres1.Clear();
+
+      foreach (var engine in EnginesCeres2)
+      {
+        engine.Dispose();
+      }
+      EnginesCeres2.Clear();
+
       EngineExternal?.Dispose();
 
       externalEnginePool.Shutdown(engineObj => (engineObj as IDisposable)?.Dispose());
@@ -343,9 +377,27 @@ namespace Ceres.Features.Suites
     List<float> finalQ1 = new();
     List<float> finalQ2 = new();
 
+    readonly object lockObj = new();
+
     void ProcessEPD(int epdNum, EPDEntry epd, bool outputDetail, ObjectPool<object> otherEngines)
     {
-      EngineCeres1?.ResetGame();
+      GameEngineCeresInProcess EngineCeres1 = null;
+      GameEngineCeresInProcess EngineCeres2 = null;
+
+      if (!EnginesCeres1.TryTake(out EngineCeres1))
+      {
+        throw new Exception("No engine available");
+      }
+
+      if (Def.Engine2Def != null)
+      {
+        if (!EnginesCeres2.TryTake(out EngineCeres2))
+        {
+          throw new Exception("No engine available");
+        }
+      }
+
+      EngineCeres1.ResetGame();
       EngineCeres2?.ResetGame();
       EngineExternal?.ResetGame();
 
@@ -388,7 +440,7 @@ namespace Ceres.Features.Suites
 
       Task lzTask = EXTERNAL_CONCURRENT ? Task.Run(RunNonCeres) : RunNonCeres();
 
-      // Comptue search limit
+      // Compute search limit
       // If possible, adjust for the fact that LC0 "cheats" by going slightly over node budget
       SearchLimit ceresSearchLimit1 = Def.CeresEngine1Def.SearchLimit.ConvertedGameToMoveLimit;
       SearchLimit ceresSearchLimit2 = Def.CeresEngine2Def?.SearchLimit.ConvertedGameToMoveLimit;
@@ -447,21 +499,28 @@ namespace Ceres.Features.Suites
 
       }
 
-      while (finalQ1.Count <= epdNum)
-      {
-        finalQ1.Add(float.NaN);
-      }
+      // Restore engines to pool
+      EnginesCeres1.Add(EngineCeres1);
+      EnginesCeres2?.Add(EngineCeres2);
 
-      finalQ1[epdNum] = (float)search1.ScoreQ;
-
-      if (search2 != null)
+      lock (lockObj)
       {
-        while (finalQ2.Count <= epdNum)
+        while (finalQ1.Count <= epdNum)
         {
-          finalQ2.Add(float.NaN);
+          finalQ1.Add(float.NaN);
         }
 
-        finalQ2[epdNum] = (float)search2.ScoreQ;
+        finalQ1[epdNum] = (float)search1.ScoreQ;
+
+        if (search2 != null)
+        {
+          while (finalQ2.Count <= epdNum)
+          {
+            finalQ2.Add(float.NaN);
+          }
+
+          finalQ2[epdNum] = (float)search2.ScoreQ;
+        }
       }
 
       // Wait for LZ analysis
@@ -489,69 +548,75 @@ namespace Ceres.Features.Suites
       SearchResultInfo result1 = new SearchResultInfo(search1.Search.Manager, search1.BestMove);
       SearchResultInfo result2 = search2 == null ? null : new SearchResultInfo(search2.Search.Manager, search2.BestMove);
 
-      accCeres1 += scoreCeres1;
-      accCeres2 += scoreCeres2;
-
-      // Accumulate how many nodes were required to find one of the correct moves
-      // (in the cases where both succeeded)
-      if (scoreCeres1 > 0 && (search2 == null || scoreCeres2 > 0))
-      {
-        accWCeres1 += (scoreCeres1 == 0) ? result1.N : result1.NumNodesWhenChoseTopNNode;
-        if (search2 != null)
-        {
-          accWCeres2 += (scoreCeres2 == 0) ? result2.N : result2.NumNodesWhenChoseTopNNode;
-        }
-        numSearchesBothFound++;
-      }
-      this.avgOther += scoreOtherEngine;
-
-      numSearches++;
-
-      float avgCeres1 = (float)accCeres1 / numSearches;
-      float avgCeres2 = (float)accCeres2 / numSearches;
-      float avgWCeres1 = (float)accWCeres1 / numSearchesBothFound;
-      float avgWCeres2 = (float)accWCeres2 / numSearchesBothFound;
-
-      float avgOther = (float)this.avgOther / numSearches;
-
-      string MoveIfWrong(Move m) => m.IsNull || epdToUse.CorrectnessScore(m, 10) == 10 ? "    " : m.ToString().ToLower();
-
-      int diff1 = scoreCeres1 - scoreOtherEngine;
-
-      //NodeEvaluatorNeuralNetwork
-      int evalNumBatches1 = result1.NumNNBatches;
-      int evalNumPos1 = result1.NumNNNodes;
-      int evalNumBatches2 = search2 == null ? 0 : result2.NumNNBatches;
-      int evalNumPos2 = search2 == null ? 0 : result2.NumNNNodes;
-
-      string correctMove = null;
-      if (epdToUse.AMMoves != null)
-      {
-        correctMove = "-" + epdToUse.AMMoves[0];
-      }
-      else if (epdToUse.BMMoves != null)
-      {
-        correctMove = epdToUse.BMMoves[0];
-      }
-
       float otherEngineTime = otherEngineAnalysis2 == null ? 0 : (float)otherEngineAnalysis2.EngineReportedSearchTime / 1000.0f;
 
-      totalTimeOther += otherEngineTime;
-      totalTimeCeres1 += (float)search1.TimingStats.ElapsedTimeSecs;
-
-      totalNodesOther += otherEngineAnalysis2 == null ? 0 : (int)otherEngineAnalysis2.Nodes;
-      totalNodes1 += (int)result1.N;
-
-      sumEvalNumPosOther += otherEngineAnalysis2 == null ? 0 : (int)otherEngineAnalysis2.Nodes;
-      sumEvalNumBatches1 += evalNumBatches1;
-      sumEvalNumPos1 += evalNumPos1;
-
-      if (Def.RunCeres2Engine)
+      lock (lockObj)
       {
-        totalTimeCeres2 += (float)search2.TimingStats.ElapsedTimeSecs;
-        totalNodes2 += (int)result2.N;
-        sumEvalNumBatches2 += evalNumBatches2;
-        sumEvalNumPos2 += evalNumPos2;
+        accCeres1 += scoreCeres1;
+        accCeres2 += scoreCeres2;
+
+        // Accumulate how many nodes were required to find one of the correct moves
+        // (in the cases where both succeeded)
+        if (scoreCeres1 > 0 && (search2 == null || scoreCeres2 > 0))
+        {
+          accWCeres1 += (scoreCeres1 == 0) ? result1.N : result1.NumNodesWhenChoseTopNNode;
+          if (search2 != null)
+          {
+            accWCeres2 += (scoreCeres2 == 0) ? result2.N : result2.NumNodesWhenChoseTopNNode;
+          }
+          numSearchesBothFound++;
+        }
+        this.avgOther += scoreOtherEngine;
+
+        numSearches++;
+       }
+
+        float avgCeres1 = (float)accCeres1 / numSearches;
+        float avgCeres2 = (float)accCeres2 / numSearches;
+        float avgWCeres1 = (float)accWCeres1 / numSearchesBothFound;
+        float avgWCeres2 = (float)accWCeres2 / numSearchesBothFound;
+
+        float avgOther = (float)this.avgOther / numSearches;
+
+        string MoveIfWrong(Move m) => m.IsNull || epdToUse.CorrectnessScore(m, 10) == 10 ? "    " : m.ToString().ToLower();
+
+        int diff1 = scoreCeres1 - scoreOtherEngine;
+
+        //NodeEvaluatorNeuralNetwork
+        int evalNumBatches1 = result1.NumNNBatches;
+        int evalNumPos1 = result1.NumNNNodes;
+        int evalNumBatches2 = search2 == null ? 0 : result2.NumNNBatches;
+        int evalNumPos2 = search2 == null ? 0 : result2.NumNNNodes;
+
+        string correctMove = null;
+        if (epdToUse.AMMoves != null)
+        {
+          correctMove = "-" + epdToUse.AMMoves[0];
+        }
+        else if (epdToUse.BMMoves != null)
+        {
+          correctMove = epdToUse.BMMoves[0];
+        }
+
+      lock (lockObj)
+      {
+        totalTimeOther += otherEngineTime;
+        totalTimeCeres1 += (float)search1.TimingStats.ElapsedTimeSecs;
+
+        totalNodesOther += otherEngineAnalysis2 == null ? 0 : (int)otherEngineAnalysis2.Nodes;
+        totalNodes1 += (int)result1.N;
+
+        sumEvalNumPosOther += otherEngineAnalysis2 == null ? 0 : (int)otherEngineAnalysis2.Nodes;
+        sumEvalNumBatches1 += evalNumBatches1;
+        sumEvalNumPos1 += evalNumPos1;
+
+        if (Def.RunCeres2Engine)
+        {
+          totalTimeCeres2 += (float)search2.TimingStats.ElapsedTimeSecs;
+          totalNodes2 += (int)result2.N;
+          sumEvalNumBatches2 += evalNumBatches2;
+          sumEvalNumPos2 += evalNumPos2;
+        }
       }
 
       float Adjust(int score, float frac) => score == 0 ? 0 : Math.Max(1.0f, MathF.Round(frac * 100.0f, 0));

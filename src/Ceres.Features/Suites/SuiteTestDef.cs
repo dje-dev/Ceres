@@ -68,6 +68,11 @@ namespace Ceres.Features.Suites
     public bool EPDLichessPuzzleFormat;
 
     /// <summary>
+    /// Optional filter predicate to select which raw lines in EPD are processed.
+    /// </summary>
+    public Predicate<string> EPDFilter;
+
+    /// <summary>
     /// The number of first position in file to test (zero-based, defaults to first position).
     /// </summary>
     public int FirstTestPosition;

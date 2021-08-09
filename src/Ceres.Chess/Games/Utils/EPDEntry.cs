@@ -384,7 +384,7 @@ namespace Ceres.Chess.Games.Utils
           break;
         }
 
-        if (c != null && !includeFilter(line))
+        if (includeFilter != null && !includeFilter(line))
         {
           continue;
         }
