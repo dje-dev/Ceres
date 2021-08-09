@@ -56,7 +56,7 @@ namespace Ceres.MCTS.Utils
         }
       }
 
-      bool wasInstamove = manager.NumStepsTakenThisSearch == 0;
+      bool wasInstamove = manager.StopStatus == MCTSManager.SearchStopStatus.Instamove;
 
       // If no override bestMoveRoot was specified
       // then it is assumed the move chosen was from the root (not an instamove)
@@ -104,6 +104,14 @@ namespace Ceres.MCTS.Utils
       }
 
       float nps = manager.NumStepsTakenThisSearch / elapsedTimeSeconds;
+
+      // If somehow the nps looks unreasonable then truncate it to zero
+      // to avoid making graphs in tournament managers show outlier points.
+      const float MAX_NPS = 3_000_000;
+      if (nps > MAX_NPS)
+      {
+        nps = 0;
+      }
 
       //info depth 12 seldepth 27 time 30440 nodes 51100 score cp 105 hashfull 241 nps 1678 tbhits 0 pv e6c6 c5b4 d5e4 d1e1 
       int selectiveDepth = pv.Nodes.Count;
