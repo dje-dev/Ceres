@@ -47,7 +47,7 @@ namespace Ceres.APIExamples
 {
   public static class TournamentTest
   {
-    static int CONCURRENCY = 4; // POOLED ? 16 : 4;
+    static int CONCURRENCY = 4; // overridden below if using POOLED
     static bool RUN_DISTRIBUTED = false;
 
 
@@ -108,7 +108,7 @@ namespace Ceres.APIExamples
       }
 
       const bool POOLED = false;
-      string GPUS = POOLED ? "GPU:1,2,3:POOLED"
+      string GPUS = POOLED ? "GPU:0,1,2,3:POOLED"
                            : "GPU:0";
 
       string NET1 = @"d:\weights\lczero.org\t64df-5000.pb.gz"; // direct Linux T75 192
@@ -121,6 +121,8 @@ namespace Ceres.APIExamples
 
       //NET1 = "751675";
       //NET2 = "751675";
+      //NET1 = "703810";
+      //NET2 = "703810";
       //      string NET1_SECONDARY1 = "j94-100";
 
       //string       NET2 = @"j64-210";
@@ -143,11 +145,11 @@ namespace Ceres.APIExamples
         evalDef2.MakePersistent();
       }
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(3_000);
+      SearchLimit limit1 = SearchLimit.NodesPerMove(11_000);
       //limit1 = SearchLimit.NodesForAllMoves(1_000_000, 10_000);
 
       //      limit1 = SearchLimit.SecondsForAllMoves(900, 2) * 0.2f;
-            limit1 = SearchLimit.SecondsForAllMoves(30);
+      limit1 = SearchLimit.SecondsForAllMoves(45);
       //limit1 = SearchLimit.NodesForAllMoves(1_000_000, 5_000);
 
       SearchLimit limit2 = limit1;// * 0.2f;
@@ -170,8 +172,8 @@ namespace Ceres.APIExamples
       ////////
 
 
-//engineDefCeres1.SearchParams.TestFlag = true;
-      //engineDefCeres1.SearchParams.Execution.SmartSizeBatches = false;
+      //engineDefCeres1.SearchParams.TestFlag = true;
+      //engineDefCeres1.SelectParams.UseDynamicVLoss = true;
 
       //engineDefCeres1.SearchParams.MoveFutilityPruningAggressiveness = 0.4f;
       //engineDefCeres1.SearchParams.GameLimitUsageAggressiveness *= 1.2f;
@@ -230,7 +232,7 @@ namespace Ceres.APIExamples
       //      engineDefCeres1.SearchParams.Execution.FlowDualSelectors = false;
       // TODO: support this in GameEngineDefCeresUCI
       bool forceDisableSmartPruning = limit1.IsNodesLimit;
-      //forceDisableSmartPruning=true;
+//forceDisableSmartPruning=true;
       if (forceDisableSmartPruning)
       {
         engineDefCeres1.SearchParams.FutilityPruningStopSearchEnabled = false;
@@ -270,7 +272,7 @@ namespace Ceres.APIExamples
 
       if (false)
       {
-        string BASE_NAME = "Stockfish238"; // ERET_VESELY203
+        string BASE_NAME = "Stockfish238";// "nice_lcx";// "Stockfish238"; // ERET_VESELY203
 
         // ===============================================================================
         SuiteTestDef suiteDef = new SuiteTestDef("Suite",
@@ -278,15 +280,16 @@ namespace Ceres.APIExamples
                                                  //@"\\synology\dev\chess\data\epd\lichess_chad_bad.csv",
                                                  SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/epd/{BASE_NAME}.epd"
                                                                          : @$"\\synology\dev\chess\data\epd\{BASE_NAME}.epd",
-                                                playerCeres1, null, playerLC0);
+                                                playerCeres1, playerCeres2, null);// playerLC0);
 
 //        suiteDef.MaxNumPositions = 50;
         suiteDef.EPDLichessPuzzleFormat = suiteDef.EPDFileName.ToUpper().Contains("LICHESS");
 
+        //suiteDef.EPDFilter = s => !s.Contains(".exe"); // For NICE suite, these represent positions with multiple choices
+
         SuiteTestRunner suiteRunner = new SuiteTestRunner(suiteDef);
 
-        //        suiteRunner.Run(POOLED ? 20 : 4, true, false);
-        SuiteTestResult suiteResult = suiteRunner.Run(1, true, false);
+        SuiteTestResult suiteResult = suiteRunner.Run(POOLED ? 16 : 1, true, false);
         return;
 #if NOT
         SysMisc.WriteObj("FinalQ1.dat", suiteResult.FinalQ1);
@@ -319,14 +322,14 @@ namespace Ceres.APIExamples
 #endif
       }
 
-      TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerCeres91);
+      TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerCeres2);
 
 
-      def.NumGamePairs = 102;
+      def.NumGamePairs = 250; // 102;
       def.ShowGameMoves = true;
 
       string baseName = "tcec1819";
-      //baseName = "4mvs_+90_+99";
+      baseName = "4mvs_+90_+99";
 
       def.OpeningsFileName = SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/openings/{baseName}.pgn"
                                                      : @$"\\synology\dev\chess\data\openings\{baseName}.pgn";
@@ -340,7 +343,7 @@ namespace Ceres.APIExamples
 
       if (POOLED)
       {
-        CONCURRENCY = 16;
+        CONCURRENCY = 1;
       }
 
       TournamentManager runner = new TournamentManager(def, CONCURRENCY);
