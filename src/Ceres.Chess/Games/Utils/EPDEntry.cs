@@ -371,7 +371,8 @@ namespace Ceres.Chess.Games.Utils
     /// <param name="epdFN"></param>
     /// <param name="maxEntries"></param>
     /// <returns></returns>
-    public static List<EPDEntry> EPDEntriesInEPDFile(string epdFN, int maxEntries = int.MaxValue, bool skipFirstColumn = false)
+    public static List<EPDEntry> EPDEntriesInEPDFile(string epdFN, int maxEntries = int.MaxValue, 
+                                                     bool skipFirstColumn = false, Predicate<string> includeFilter = null)
     {
       string[] lines = System.IO.File.ReadAllLines(epdFN);
       List<EPDEntry> ret = new List<EPDEntry>(lines.Length);
@@ -381,6 +382,11 @@ namespace Ceres.Chess.Games.Utils
         if (ret.Count >= maxEntries)
         {
           break;
+        }
+
+        if (c != null && !includeFilter(line))
+        {
+          continue;
         }
 
         // Skip comment lines
