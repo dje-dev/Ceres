@@ -233,6 +233,7 @@ namespace Ceres.MCTS.Search
         int numVisitsTryThisBatch = targetThisBatch + numNodesPadding;
 
         numVisitsTryThisBatch = (int)(numVisitsTryThisBatch * batchingManagers[selectorID].BatchSizeDynamicScaleForSelector());
+        numVisitsTryThisBatch = Math.Max(1, numVisitsTryThisBatch);
 
         // Select a batch using this selector
         // It will select a set of Leafs completely independent of what a possibly other selector already selected
