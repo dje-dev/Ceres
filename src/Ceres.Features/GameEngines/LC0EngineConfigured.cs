@@ -85,7 +85,7 @@ namespace Ceres.Features.GameEngines
       // If GPUs have equal fractions then we use demux where only 2 threads needed,
       // otherwise we use roundrobin and best is 1 + number of GPUS
       // Note that with increasing threads Leela plays significantly non-deterministically and somewhat worse
-      int NUM_THREADS = evaluatorDef.EqualFractions ? 2 : evaluatorDef.Devices.Length + 1;
+      int NUM_THREADS = (evaluatorDef == null || evaluatorDef.EqualFractions) ? 2 : evaluatorDef.Devices.Length + 1;
       
       string lzOptions = "--nodes-as-playouts "; // essential to get same behavior as Ceres with go nodes command 
 
@@ -236,14 +236,21 @@ namespace Ceres.Features.GameEngines
     /// <returns></returns>
     static string BackendArgumentsString(NNEvaluatorDef evaluatorDef)
     {
-      // LC0 does not genearlly support Int8; map into FP16 silently
-      NNEvaluatorPrecision precision = evaluatorDef.Nets[0].Net.Precision;
-      if (precision == NNEvaluatorPrecision.Int8)
+      if (evaluatorDef == null)
       {
-        precision = NNEvaluatorPrecision.FP16;
+        return "";
       }
+      else
+      {
+        // LC0 does not genearlly support Int8; map into FP16 silently
+        NNEvaluatorPrecision precision = evaluatorDef.Nets[0].Net.Precision;
+        if (precision == NNEvaluatorPrecision.Int8)
+        {
+          precision = NNEvaluatorPrecision.FP16;
+        }
 
       return LC0EngineArgs.BackendArgumentsString(evaluatorDef.DeviceIndices, precision, evaluatorDef.EqualFractions);
+      }
     }
 
 
