@@ -129,6 +129,9 @@ namespace Ceres.Chess.ExternalPrograms.UCI
     public string LastInfoString => lastInfo;
     public string LastBestMove => lastBestMove;
 
+    public UCISearchInfo LastSearchInfo => lastSearchInfo;
+
+
     protected volatile UCISearchInfo lastSearchInfo;
 
     protected UCISearchInfo engine1LastSearchInfo;
