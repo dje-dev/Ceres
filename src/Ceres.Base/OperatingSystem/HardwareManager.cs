@@ -147,26 +147,32 @@ namespace Ceres.Base.OperatingSystem
     {
       try
       {
-          // In non-NUMA situations better to limit number of processors, 
-          // this sometimes dramatically improves performance.
+        // In non-NUMA situations better to limit number of processors, 
+        // this sometimes dramatically improves performance.
 
-          // TODO: Someday it would be desirable to allow different
-          //       logical calculations (e.g. chess tree searches)
-          //       to be placed on distinct sockets, and not restrict
-          //       all computation to a single socket.
-          //       But then we'd have to abandon use of TPL and .NET thread pool
-          //       completely and use our own versions which were processor constrained.
+        // The coreinfo.exe from sysinternals is useful for dumping topology info under Windows.
 
-          int maxProcessors;
+        // TODO: Someday it would be desirable to allow different
+        //       logical calculations (e.g. chess tree searches)
+        //       to be placed on distinct sockets, and not restrict
+        //       all computation to a single socket.
+        //       But then we'd have to abandon use of TPL and .NET thread pool
+        //       completely and use our own versions which were processor constrained.
+
+        int maxProcessors;
 
         // Default assumption to use all processors.
         int numProcessors = System.Environment.ProcessorCount;
 
-        bool isKnownDualSocket = SoftwareManager.IsWindows && WindowsHardware.NumCPUSockets > 1;
-        if (isKnownDualSocket)
+        // TODO: extend this logic to also cover Linux.
+        bool isKnownMultisocket = SoftwareManager.IsWindows && WindowsHardware.NumCPUSockets > 1;
+        if (isKnownMultisocket)
         {
-          // Only use half to improve affinity.
-          maxProcessors = System.Math.Max(1, System.Environment.ProcessorCount / 2);
+          // Only use a single socket to improve affinity.
+          // CPUs in multisocket configurations are almost certainly at least 16 processors
+          // and any possible small benefit from going over 16 would almost certainly be
+          // overwhelemed by the increased latency.
+          maxProcessors = System.Math.Max(1, System.Environment.ProcessorCount / WindowsHardware.NumCPUSockets);
         }
         else
         {
@@ -176,6 +182,9 @@ namespace Ceres.Base.OperatingSystem
 
         if (System.Environment.ProcessorCount > maxProcessors)
         {
+          // TODO: Improve the mapping to NUMA nodes.
+          //       They assumption here that the processors are consecutive
+          //       within a NUMA node is not always correct.
           MaxAvailableProcessors = maxProcessors;
           long mask = ((long)1 << maxProcessors) - 1;
 
