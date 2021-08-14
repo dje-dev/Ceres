@@ -108,6 +108,11 @@ namespace Ceres.Features.GameEngines
 
       if (alwaysFillHistory) lzOptions += $" --history-fill=always "; 
 
+      if (overrideBatchSize == null && OVERRIDE_LC0_BATCH_SIZE.HasValue)
+      {
+        overrideBatchSize = OVERRIDE_LC0_BATCH_SIZE;
+      }
+
       if (overrideBatchSize != null)
       {
         lzOptions += $"--minibatch-size={overrideBatchSize} ";
