@@ -373,20 +373,35 @@ namespace Ceres.Features.UCI
             HardwareManager.DumpProcessorInfo();
             break;
 
+          case "dump-fen":
+            if (CeresEngine?.Search != null)
+            {
+              Console.WriteLine("info string " + CeresEngine.Search.Manager.Context.StartPosAndPriorMoves.FinalPosition.FEN);
+            }
+            else
+            {
+              UCIWriteLine("info string No search manager created");
+            }
+            break;
+
           case "dump-time":
             if (CeresEngine?.Search != null)
             {
-              CeresEngine?.Search.Manager.DumpTimeInfo(OutStream);
+              CeresEngine.Search.Manager.DumpTimeInfo(OutStream);
             }
             else
+            {
               UCIWriteLine("info string No search manager created");
+            }
             break;
 
           case "dump-store":
             if (CeresEngine?.Search != null)
             {
               using (new SearchContextExecutionBlock(CeresEngine.Search.Manager.Context))
+              {
                 CeresEngine.Search.Manager.Context.Tree.Store.Dump(true);
+              }
             }
             else
             {
