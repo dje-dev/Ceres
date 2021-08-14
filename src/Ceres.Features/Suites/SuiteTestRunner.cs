@@ -471,6 +471,7 @@ namespace Ceres.Features.Suites
 
       if (epdNum % 2 == 0 || Def.CeresEngine2Def == null)
       {
+        EngineCeres1.ResetGame();
         search1 = EngineCeres1.SearchCeres(pos, ceresSearchLimit1);
 
         MCTSIterator shareContext = null;
@@ -487,6 +488,7 @@ namespace Ceres.Features.Suites
       }
       else
       {
+        EngineCeres2.ResetGame();
         search2 = EngineCeres2.SearchCeres(pos, ceresSearchLimit2);
 
         MCTSIterator shareContext = null;
