@@ -713,45 +713,51 @@ namespace Ceres.MCTS.MTCSNodes
     /// <returns></returns>
     public MCTSNode FollowMovesToNode(IEnumerable<MGMove> movesMade)
     {
-      PositionWithHistory startingPriorMove = Context.StartPosAndPriorMoves;
-      MGPosition position = startingPriorMove.FinalPosMG;
-      MCTSIterator context = Context;
-
-      // Advance root node and update prior moves
-      MCTSNode newRoot = this;
-      foreach (MGMove moveMade in movesMade)
+      using (new SearchContextExecutionBlock(Context))
       {
-        bool foundChild = false;
+        PositionWithHistory startingPriorMove = Context.StartPosAndPriorMoves;
+        MGPosition position = startingPriorMove.FinalPosMG;
+        MCTSIterator context = Context;
 
-        // Find this new root node (after these moves)
-        foreach (MCTSNodeStructChild child in newRoot.Ref.Children)
+        // Advance root node and update prior moves
+        MCTSNode newRoot = this;
+        foreach (MGMove moveMade in movesMade)
         {
-          if (child.IsExpanded)
+          bool foundChild = false;
+
+          if (!newRoot.IsTranspositionLinked)
           {
-            MGMove thisChildMove = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(child.Move, in position);
-            if (thisChildMove == moveMade)
+            // Find this new root node (after these moves)
+            foreach (MCTSNodeStructChild child in newRoot.Ref.Children)
             {
-              // Advance new root to reflect this move
-              newRoot = context.Tree.GetNode(child.ChildIndex, newRoot);
+              if (child.IsExpanded)
+              {
+                MGMove thisChildMove = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(child.Move, in position);
+                if (thisChildMove == moveMade)
+                {
+                  // Advance new root to reflect this move
+                  newRoot = context.Tree.GetNode(child.ChildIndex, newRoot);
 
-              // Advance position
-              position.MakeMove(thisChildMove);
+                  // Advance position
+                  position.MakeMove(thisChildMove);
 
-              // Done looking for match
-              foundChild = true;
-              break;
+                  // Done looking for match
+                  foundChild = true;
+                  break;
+                }
+              }
             }
+          }
+
+          if (!foundChild)
+          {
+            return null;
           }
         }
 
-        if (!foundChild)
-        {
-          return null;
-        }
+        // Found it
+        return newRoot;
       }
-
-      // Found it
-      return newRoot;
     }
 
 
