@@ -32,6 +32,7 @@ using Ceres.MCTS.Managers.Limits;
 using Ceres.MCTS.Params;
 using Ceres.MCTS.Environment;
 using Ceres.MCTS.MTCSNodes;
+using Ceres.MCTS.MTCSNodes.Storage;
 
 #endregion
 
@@ -228,6 +229,9 @@ namespace Ceres.Features.GameEngines
         throw new Exception("ResetGame must be called if not continuing same line");
       }
 
+      // Make sure max tree nodes does not exceed maximum value supported by engine (with a small bufffer).
+      searchLimit = searchLimit with { MaxTreeNodes = Math.Min(MCTSNodeStore.MAX_NODES - 2500, searchLimit.MaxTreeNodes ?? int.MaxValue) };
+      Console.WriteLine(searchLimit.MaxTreeNodes);
       MCTSearch searchResult;
 
       // Set up callback passthrough if provided
