@@ -436,6 +436,18 @@ namespace Ceres.MCTS.MTCSNodes
       }
     }
 
+
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ref MCTSNodeStruct ChildNodeAtIndexRef(int childIndex)
+    {
+      Debug.Assert(childIndex < NumPolicyMoves);
+      Debug.Assert(ChildStartIndex > 0); // child at slot 0 is reserved for null
+
+      ref MCTSNodeStructChild childRef = ref ChildAtIndexRef(childIndex);
+      return ref childRef.ChildRef;
+    }
+
     // TODO: someday add another method that returns MCTSNodeStructChild (not ref as below), 
     // use this in places to avoid the expensive MCTSNode creation above
 

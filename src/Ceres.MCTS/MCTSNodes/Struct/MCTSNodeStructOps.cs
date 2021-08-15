@@ -339,8 +339,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     }
 
 
-    public void PossiblyPrefetchNodeAndChildrenInRange(MCTSNodeStore store, MCTSNodeStructIndex nodeIndex,
-                                                       int firstChildIndex, int numChildren)
+    public  static void PossiblyPrefetchNodeAndChildrenInRange(MCTSNodeStore store, MCTSNodeStructIndex nodeIndex,
+                                                               int firstChildIndex, int numChildren)
     {
       unsafe
       {
@@ -375,7 +375,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     }
 
 
-    private static unsafe void PrefetchNode(ref MCTSNodeStruct nodeRef)
+    internal static unsafe void PrefetchNode(ref MCTSNodeStruct nodeRef)
     {
       PrefetchDataAt(Unsafe.AsPointer<MCTSNodeStruct>(ref nodeRef));
     }
