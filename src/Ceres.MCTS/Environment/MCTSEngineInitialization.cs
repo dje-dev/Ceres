@@ -42,9 +42,6 @@ namespace Ceres.MCTS.Environment
       // (see for how to set this option: https://www.strathweb.com/2019/12/runtime-host-configuration-options-and-appcontext-data-in-net-core/)
       AppDomain.CurrentDomain.SetData("System.Threading.ThreadPool.UnfairSemaphoreSpinLimit", 5);
 
-      int minNumThreads = Math.Min(64, System.Environment.ProcessorCount * 2);
-      System.Threading.ThreadPool.SetMinThreads(minNumThreads, 32);
-
       // TODO: consider using SustainedLowLatency when running under timed time control
       GCSettings.LatencyMode = GCLatencyMode.Batch;
 
