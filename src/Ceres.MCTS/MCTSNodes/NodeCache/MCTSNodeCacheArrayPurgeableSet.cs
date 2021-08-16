@@ -175,15 +175,14 @@ namespace Ceres.MCTS.NodeCache
 
 
     /// <summary>
-    /// Clears table entries and resets back to null the CacheIndex for every node.
+    /// Clears table entries and possibly resets back to null the CacheIndex for every node.
     /// </summary>
-    public void ResetCache()
+    /// <param name="resetNodeCacheIndex"></param>
+    public void ResetCache(bool resetNodeCacheIndex)
     {
-      for (int i = 0; i < subCaches.Length; i++)
-      {
-        subCaches[i].ResetCache();
-      }
+      Parallel.For(0, subCaches.Length, i => subCaches[i].ResetCache(resetNodeCacheIndex));
     }
+
 
     public override string ToString()
     {

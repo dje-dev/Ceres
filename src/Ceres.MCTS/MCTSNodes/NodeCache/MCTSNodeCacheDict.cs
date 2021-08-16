@@ -14,7 +14,9 @@
 
 #region Using directives
 
+using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Ceres.Base.DataTypes;
@@ -78,10 +80,19 @@ namespace Ceres.MCTS.NodeCache
 
 
     /// <summary>
-    /// Resets back to null (zero) the CacheIndex for every node currently in the cache.
+    /// Clears table entries and possibly resets back to null the CacheIndex for every node.
     /// </summary>
-    public void ResetCache()
+    /// <param name="resetNodeCacheIndex"></param>
+    public void ResetCache(bool resetNodeCacheIndex)
     {
+      if (resetNodeCacheIndex)
+      {
+        foreach (KeyValuePair<int, MCTSNode> kvp in nodeCache)
+        {
+          kvp.Value.Ref.CacheIndex = 0;
+        }
+      }
+
       nodeCache.Clear();
     }
 

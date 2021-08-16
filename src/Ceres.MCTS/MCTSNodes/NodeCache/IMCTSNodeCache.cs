@@ -58,8 +58,9 @@ namespace Ceres.MCTS.NodeCache
     void PossiblyPruneCache(MCTSNodeStore store);
 
     /// <summary>
-    /// Clears table entries and resets back to null the CacheIndex for every node.
+    /// Clears table entries and possibly resets back to null the CacheIndex for every node.
     /// </summary>
-    void ResetCache();
+    /// <param name="resetNodeCacheIndex"></param>
+    void ResetCache(bool resetNodeCacheIndex);
   }
 }

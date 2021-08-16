@@ -96,15 +96,19 @@ namespace Ceres.MCTS.LeafExpansion
 
 
     /// <summary>
-    /// Clears table entries and resets back to null the CacheIndex for every node.
+    /// Clears table entries and possibly resets back to null the CacheIndex for every node.
     /// </summary>
-    public void ResetCache()
+    /// <param name="resetNodeCacheIndex"></param>
+    public void ResetCache(bool resetNodeCacheIndex)
     {
-      for (int i = 0; i < nodes.Length; i++)
+      if (resetNodeCacheIndex)
       {
-        if (nodes[i] != null)
+        for (int i = 0; i < nodes.Length; i++)
         {
-          nodes[i].Ref.CacheIndex = 0;
+          if (nodes[i] != null)
+          {
+            nodes[i].Ref.CacheIndex = 0;
+          }
         }
       }
 
