@@ -152,7 +152,7 @@ namespace Ceres.Features.GameEngines
       writer.Write(ObjUtils.FieldValuesDumpString<ParamsSelect>(other.SelectParams, SelectParams, differentOnly));
       writer.Write(ObjUtils.FieldValuesDumpString<ParamsSearch>(other.SearchParams, SearchParams, differentOnly));
       //      ParamsDump.DumpTimeManagerDifference(differentOnly, OverrideTimeManager, other.OverrideTimeManager);
-      writer.Write(ObjUtils.FieldValuesDumpString<ParamsSearchExecution>(SearchParams.Execution, other.SearchParams.Execution, differentOnly));
+      writer.Write(ObjUtils.FieldValuesDumpString<ParamsSearchExecution>(other.SearchParams.Execution, SearchParams.Execution, differentOnly));
       writer.WriteLine();
     }
 
