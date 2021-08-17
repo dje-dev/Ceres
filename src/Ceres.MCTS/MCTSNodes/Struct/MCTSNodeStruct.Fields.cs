@@ -174,10 +174,10 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// The generation number indicates how many moves prior the node was last active.
     /// TODO: currently we only maintain these values if enabled TREE_REUSE_RETAINED_POSITION_CACHE_ENABLED
     /// </summary>
-    public byte ReuseGenerationNum   
+    public bool IsOldGeneration   
     {
-      get => miscFields.ReuseGenerationNum;
-      set => miscFields.ReuseGenerationNum = value;
+      get => miscFields.IsOldGeneration;
+      set => miscFields.IsOldGeneration = value;
     }
    
 
@@ -240,7 +240,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
     public void Dump()
     {
-      Console.WriteLine($"[Inferred index {Index}]  ParentIndex {ParentIndex} ReuseGenerationNum {ReuseGenerationNum}");
+      Console.WriteLine($"[Inferred index {Index}]  ParentIndex {ParentIndex} ReuseGenerationNum {IsOldGeneration}");
       Console.WriteLine($"PriorMove {PriorMove}");
       Console.WriteLine($"ZobristHash {ZobristHash}");
 

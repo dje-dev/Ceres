@@ -181,46 +181,36 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     }
  
 
-  public static BitArray BitArrayNodesInSubtree(MCTSNodeStore store, ref MCTSNodeStruct root, out uint numNodes)
+  public static BitArray BitArrayNodesInSubtree(MCTSNodeStore store, ref MCTSNodeStruct newRoot, 
+                                                bool setOldGeneration, out uint numNodes)
     {
-#if OLD_SLOW
-      BitArray includedNodes = new BitArray(store.Nodes.NumTotalNodes);
-      uint countNumNodes = 0;
-      uint countNumChildren = 0;
-      VisitSubtreeBreadthFirst(ref root,
-        delegate (MCTSNodeStructIndex nodeIndex)
-        {
-          // Not possible to support transposition linked nodes,
-          // since the root may be in a part of the tree that is not retained
-          // and possibly already overwritten
-          Debug.Assert(!nodeIndex.Ref.IsTranspositionLinked); 
-
-          includedNodes.Set((int)nodeIndex.Index, true);
-
-          countNumNodes++;
-        });
-#endif
-
-      uint countNumNodes = 0;
       BitArray includedNodes = new BitArray(store.Nodes.NumTotalNodes);
 
-      // Starty by including the root node
-      includedNodes.Set(root.Index.Index, true);
-      countNumNodes = 1;
+      // Start by including the new root node.
+      includedNodes.Set(newRoot.Index.Index, true);
+      uint countNumNodes = 1;
 
       // We can use a highly efficient sequential scan, which is is possible only because the
       // tree has the special property that children of nodes always appear after their parent.
-      for (int i=root.Index.Index + 1; i < store.Nodes.nextFreeIndex;i++)
+      for (int i = 1; i < store.Nodes.nextFreeIndex; i++)
       {
         ref MCTSNodeStruct nodeRef = ref store.Nodes.nodes[i];
-        if (includedNodes.Get(nodeRef.ParentIndex.Index))
+        bool isOldGeneration = nodeRef.IsOldGeneration;
+
+        if (!isOldGeneration && includedNodes.Get(nodeRef.ParentIndex.Index))
         {
           includedNodes.Set(i, true);
           countNumNodes++;
+        } 
+        else if (setOldGeneration && !isOldGeneration && i != newRoot.Index.Index)
+        {
+          nodeRef.IsOldGeneration = true;
+          nodeRef.CacheIndex = 0; 
         }
       }
 
       numNodes = countNumNodes;
+
       return includedNodes;
     }
 

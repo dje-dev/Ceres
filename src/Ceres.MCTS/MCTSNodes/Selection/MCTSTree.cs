@@ -16,7 +16,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-
+using System.Runtime.CompilerServices;
 using Ceres.Base.DataTypes;
 using Ceres.Base.Threading;
 
@@ -172,6 +172,8 @@ namespace Ceres.MCTS.LeafExpansion
       {
         if (parent is null && !nodeIndex.IsRoot)
         {
+          Debug.Assert(nodeIndex.Ref.ParentIndex.Index != nodeIndex.Index);
+
           parent = GetNode(nodeIndex.Ref.ParentIndex, null);
         }
 
@@ -216,7 +218,13 @@ namespace Ceres.MCTS.LeafExpansion
     /// <returns></returns>
     public unsafe void Annotate(MCTSNode node)
     {
-      if (node.IsAnnotated) return;
+      if (node.IsAnnotated)
+      {
+        return;
+      }
+
+      Debug.Assert(!node.Ref.IsOldGeneration);
+      Debug.Assert(!node.Ref.IsTranspositionLinked);
 
       ref MCTSNodeAnnotation annotation = ref node.annotation;
 
@@ -361,7 +369,13 @@ namespace Ceres.MCTS.LeafExpansion
       return PositionHistoryGatherer.DoGetHistoryPositions(PriorMoves, posSpan, count, maxPositions, setFinalPositionRepetitionCount);
     }
 
+    /// <summary>
+    /// Resets cache of nodes, optionally also resetting the CacheIndex of each node.
+    /// </summary>
+    /// <param name="resetNodeCacheIndex"></param>
+    public void ClearNodeCache(bool resetNodeCacheIndex) => cache.ResetCache(resetNodeCacheIndex);
   }
+
 
   internal class NodeComparer : IEqualityComparer<MCTSNode>
   {
@@ -370,4 +384,3 @@ namespace Ceres.MCTS.LeafExpansion
   }
 
 }
-

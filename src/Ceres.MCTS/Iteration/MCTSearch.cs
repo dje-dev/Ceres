@@ -400,12 +400,37 @@ namespace Ceres.MCTS.Iteration
       //       instead just set a new root (move it into place as first node).
       //       Perhaps rebuild only if the MCTSNodeStore would become excessively large.
       TimingStats makeNewRootTimingStats = new TimingStats();
+      bool wasSwap = false;
       using (new TimingBlock(makeNewRootTimingStats, TimingBlock.LoggingType.None))
       {
-        MCTSNodeStructStorage.MakeChildNewRoot(Manager.Context.Tree, ref newRoot.Ref, newPositionAndMoves,
-                                               reusePositionCache, newTranspositionRoots);
+        const float THRESHOLD_RETAIN_TREE = 0.70f;
+
+        float fracRetain = (float)newRoot.Ref.N / priorContext.Tree.Root.N;
+        bool possiblyUseSwapRoot = priorContext.ParamsSearch.TestFlag;
+        if (fracRetain < THRESHOLD_RETAIN_TREE || !possiblyUseSwapRoot)
+        {
+//Console.WriteLine("New root " + fracRetain);
+          MCTSNodeStructStorage.MakeChildNewRoot(Manager.Context.Tree, ref newRoot.Ref, newPositionAndMoves,
+                                                 reusePositionCache, newTranspositionRoots, 
+                                                 priorContext.ParamsSearch.Execution.TranspositionMaximizeRootN);
+        }
+        else
+        {
+          wasSwap = true;
+//Console.WriteLine("Swap root " + fracRetain + " from index " + newRoot.Index);
+          MCTSNodeStructStorage.DoMakeChildNewRootSwapRoot(Manager.Context.Tree, ref newRoot.Ref, newPositionAndMoves,
+                                                           reusePositionCache, newTranspositionRoots,
+                                                           priorContext.ParamsSearch.Execution.TranspositionMaximizeRootN);
+        }
+
+// NO NEED: gets reconstructed
+//        const bool RESET_CACHE_INDEX = true; // TODO: this is probably unneeded, remove for efficiency
+//        Manager.Context.Tree.ClearNodeCache(RESET_CACHE_INDEX);
       }
       MCTSManager.TotalTimeSecondsInMakeNewRoot += (float)(statsMaterialize.ElapsedTimeSecs + makeNewRootTimingStats.ElapsedTimeSecs);
+//if (wasSwap) MCTSEventSource.TestMetric1 += (float)(statsMaterialize.ElapsedTimeSecs + makeNewRootTimingStats.ElapsedTimeSecs);
+if (this.Manager.Context.ParamsSearch.TestFlag) MCTSEventSource.TestMetric1 += (float)(statsMaterialize.ElapsedTimeSecs + makeNewRootTimingStats.ElapsedTimeSecs);
+if (wasSwap) MCTSEventSource.TestCounter1++;
 
       CeresEnvironment.LogInfo("MCTS", "MakeChildNewRoot", $"Select {newRoot.N:N0} from {numNodesInitial:N0} "
                               + $"in {(int)(makeNewRootTimingStats.ElapsedTimeSecs / 1000.0)}ms");

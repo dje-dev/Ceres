@@ -195,7 +195,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       WinP = FP16.NaN;
       LossP = FP16.NaN;
       MPosition = 0;
-      ReuseGenerationNum = 0;
+      IsOldGeneration = false;
       ZobristHash = 0;
 
 #if FEATURE_UNCERTAINTY

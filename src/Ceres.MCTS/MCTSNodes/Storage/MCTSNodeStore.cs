@@ -200,7 +200,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     /// a variety of integrity checks on internal consistency,
     /// throwing an Exception if any fails.
     /// </summary>
-    public void Validate()
+    public void Validate(bool expectCacheIndexZero = false)
     {
       void Assert(bool condition, string err)
       {
@@ -213,12 +213,29 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       Assert(Nodes.nodes[0].N == 0, "Null node");
       Assert(Nodes.nodes[1].IsRoot, "IsRoot");
 
+
       // Validate all nodes
       for (int i = 1; i < Nodes.nextFreeIndex; i++)
       {
         ref MCTSNodeStruct nodeR = ref Nodes.nodes[i];
 
+        if (nodeR.IsOldGeneration)
+        {
+          continue;
+        }
+
+        Assert(!expectCacheIndexZero || nodeR.CacheIndex == 0, "CacheIndex zeroed");
+
         Assert(!nodeR.IsInFlight, "Node in flight");
+
+        // Verify parent has a child that points to this node
+        if (!nodeR.IsRoot)
+        {
+          int indexInParentsChildList = nodeR.ParentRef.IndexOfExpandedChildForIndex(this, nodeR.Index);
+          Assert(indexInParentsChildList >= 0, "Parent's child list contains node");
+        }
+
+        Assert(nodeR.ParentIndex.Index != 0 || nodeR.Index.Index == 1, "Non-old generation nodes at indices other than 1 have a parent");
 
         if (nodeR.NumPolicyMoves > 0)
         {
@@ -297,6 +314,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       Console.WriteLine();
       Console.WriteLine();
       Console.WriteLine(ToString());
+      Console.WriteLine("Prior moves " + Nodes.PriorMoves);
       Console.WriteLine();
       for (int i = 1; i <= Nodes.NumUsedNodes; i++)
       {
@@ -305,8 +323,12 @@ namespace Ceres.MCTS.MTCSNodes.Storage
         string annotation = annotater?.Invoke(new MCTSNodeStructIndex(i));
         Console.WriteLine($"{i,7} {node.PriorMove} {node.V,6:F2} {node.Terminal} {node.W,9:F2} Parent={node.ParentIndex.Index} " +
                           $"InFlights={node.NInFlight}/{node.NInFlight2}" +
-                          $"ChildStartIndex={node.ChildStartIndex} NumPolicyMoves={node.NumPolicyMoves} " + annotation);
-        if (node.IsTranspositionLinked)
+                          $"ChildStartIndex={node.ChildStartIndex} NumPolicyMoves={node.NumPolicyMoves} CacheIndex={node.CacheIndex} " + annotation);
+        if (node.IsOldGeneration)
+        {
+          Console.WriteLine("          OLD GENERATION");
+        }
+        else if (node.IsTranspositionLinked)
         {
           Console.WriteLine("          Transposition Linked to " + -node.ChildStartIndex);
         }
@@ -336,7 +358,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 
             if (childIndex > maxExpandedIndex + 1)
             {
-              Console.WriteLine($"    (followed by {node.NumPolicyMoves - childIndex} additional unexpanded children");
+              Console.WriteLine($"    (followed by {node.NumPolicyMoves - childIndex} additional unexpanded children)");
               break;
             }
           }

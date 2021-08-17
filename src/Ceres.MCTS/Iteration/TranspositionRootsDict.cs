@@ -13,8 +13,10 @@
 
 #region Using directives
 
+using System;
 using System.Collections.Generic;
 using Ceres.Base.Math;
+using Ceres.MCTS.MTCSNodes.Struct;
 
 #endregion
 
@@ -60,6 +62,7 @@ namespace Ceres.MCTS.Iteration
     /// <param name="nodeIndex"></param>
     public void TryAdd(ulong hashKey, int nodeIndex) => table.TryAdd(hashKey, nodeIndex);
 
+
     /// <summary>
     /// Attempts to retrieve the index of the node in the tree having a speciifed hash value.
     /// </summary>
@@ -70,9 +73,71 @@ namespace Ceres.MCTS.Iteration
 
 
     /// <summary>
+    /// Sets/updates value assoicated with specified key.
+    /// </summary>
+    /// <param name="hashKey"></param>
+    /// <param name="nodeIndex"></param>
+    /// <returns></returns>
+    public void SetValue(ulong hashKey, int nodeIndex) => table[hashKey] = nodeIndex;
+
+
+    /// <summary>
     /// Returns total number of entries currently in the dictionary.
     /// </summary>
     public int Count => table.Count;
+
+    #region Helper methods
+
+    public void AddOrPossiblyUpdate(Span<MCTSNodeStruct> nodes, ulong hashKey, int possibleNewValue, int possibleNewValueN)
+    {
+      // TODO: much more efficient version for .NET 6 and above
+#if NOT
+      ref int refValue = ref CollectionsMarshal.GetValueRefOrAddDefault(table, hashKey, out bool exists);
+      if (!exists || shouldUpdatePredicate(refValue))
+      {
+        refValue = possibleNewValue;
+      }
+#endif
+
+      if (table.TryGetValue(hashKey, out int existingNodeIndex))
+      {
+        int existingN = nodes[existingNodeIndex].N;
+        if (possibleNewValueN > existingN)
+        {
+          table[hashKey] = possibleNewValue;
+        }
+      }
+      else
+      {
+        table.TryAdd(hashKey, possibleNewValue);
+      }
+    }
+
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="hashKey"></param>
+    /// <param name="possibleNewValue"></param>
+    /// <param name="shouldUpdatePredicate"></param>
+    public void AddOrPossiblyUpdate(ulong hashKey, int possibleNewValue, Predicate<int> shouldUpdatePredicate)
+    {
+//      #if NET50
+      if (table.TryGetValue(hashKey, out int existingValue))
+      {
+        if (shouldUpdatePredicate(existingValue))
+        { 
+          table[hashKey] = possibleNewValue;
+        }
+      }
+      else
+      {
+        table.TryAdd(hashKey, possibleNewValue);
+      }
+
+
+    }
+
+#endregion
   }
 
 }

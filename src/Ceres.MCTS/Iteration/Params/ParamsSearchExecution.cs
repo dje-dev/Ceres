@@ -48,6 +48,12 @@ namespace Ceres.MCTS.Params
     public TranspositionMode TranspositionMode = TranspositionMode.SingleNodeDeferredCopy;
 
     /// <summary>
+    /// If attempt is made to keep each transposition root as having
+    /// N large relative to other nodes in the same equivalence class.
+    /// </summary>
+    public bool TranspositionMaximizeRootN = true;
+
+    /// <summary>
     /// If transpositions are detected and copied within a single batch,
     /// thereby reducing the number of NN evaluations needed.
     /// This is beneficial unless the NN is evaluation rate is extremely high.
