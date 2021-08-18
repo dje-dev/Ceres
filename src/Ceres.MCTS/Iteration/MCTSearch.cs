@@ -365,7 +365,6 @@ namespace Ceres.MCTS.Iteration
                  startTime, gameMoveHistory, progressCallback, positionEvalCache, possiblyUsePositionCache, isFirstMoveOfGame);
         }
       }
-
     }
 
     private void SearchContinueRetainTree(MCTSIterator reuseOtherContextForEvaluatedNodes, PositionWithHistory newPositionAndMoves, List<GameMoveStat> gameMoveHistory, bool verbose, DateTime startTime, MCTSManager.MCTSProgressCallback progressCallback, bool isFirstMoveOfGame, MCTSIterator priorContext, MCTSNodeStore store, int numNodesInitial, MCTSNode newRoot, SearchLimit searchLimitTargetAdjusted, bool possiblyUsePositionCache)
@@ -409,23 +408,24 @@ namespace Ceres.MCTS.Iteration
         bool possiblyUseSwapRoot = priorContext.ParamsSearch.TestFlag;
         if (fracRetain < THRESHOLD_RETAIN_TREE || !possiblyUseSwapRoot)
         {
-//Console.WriteLine("New root " + fracRetain);
+          //Console.WriteLine("New root " + fracRetain);
           MCTSNodeStructStorage.MakeChildNewRoot(Manager.Context.Tree, ref newRoot.Ref, newPositionAndMoves,
-                                                 reusePositionCache, newTranspositionRoots, 
+                                                 reusePositionCache, newTranspositionRoots,
                                                  priorContext.ParamsSearch.Execution.TranspositionMaximizeRootN);
         }
         else
         {
           wasSwap = true;
-//Console.WriteLine("Swap root " + fracRetain + " from index " + newRoot.Index);
+          //Console.WriteLine("Swap root " + fracRetain + " from index " + newRoot.Index);
           MCTSNodeStructStorage.DoMakeChildNewRootSwapRoot(Manager.Context.Tree, ref newRoot.Ref, newPositionAndMoves,
                                                            reusePositionCache, newTranspositionRoots,
                                                            priorContext.ParamsSearch.Execution.TranspositionMaximizeRootN);
         }
-      MCTSManager.TotalTimeSecondsInMakeNewRoot += (float)(statsMaterialize.ElapsedTimeSecs + makeNewRootTimingStats.ElapsedTimeSecs);
-//if (wasSwap) MCTSEventSource.TestMetric1 += (float)(statsMaterialize.ElapsedTimeSecs + makeNewRootTimingStats.ElapsedTimeSecs);
-if (this.Manager.Context.ParamsSearch.TestFlag) MCTSEventSource.TestMetric1 += (float)(statsMaterialize.ElapsedTimeSecs + makeNewRootTimingStats.ElapsedTimeSecs);
-if (wasSwap) MCTSEventSource.TestCounter1++;
+        MCTSManager.TotalTimeSecondsInMakeNewRoot += (float)(statsMaterialize.ElapsedTimeSecs + makeNewRootTimingStats.ElapsedTimeSecs);
+        //if (wasSwap) MCTSEventSource.TestMetric1 += (float)(statsMaterialize.ElapsedTimeSecs + makeNewRootTimingStats.ElapsedTimeSecs);
+        if (this.Manager.Context.ParamsSearch.TestFlag) MCTSEventSource.TestMetric1 += (float)(statsMaterialize.ElapsedTimeSecs + makeNewRootTimingStats.ElapsedTimeSecs);
+        if (wasSwap) MCTSEventSource.TestCounter1++;
+      }
 
       CeresEnvironment.LogInfo("MCTS", "MakeChildNewRoot", $"Select {newRoot.N:N0} from {numNodesInitial:N0} "
                               + $"in {(int)(makeNewRootTimingStats.ElapsedTimeSecs / 1000.0)}ms");
