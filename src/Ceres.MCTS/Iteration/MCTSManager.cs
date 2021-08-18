@@ -124,12 +124,24 @@ namespace Ceres.MCTS.Iteration
 
     float estimatedNPS = float.NaN;
 
+
+    /// <summary>
+    /// The Node currently having the largest N value.
+    /// </summary>
     public MCTSNode TopNNode;
 
+
+    /// <summary>
+    /// Number of MCTS steps actually taken so far in this search (not including initial tree).
+    /// </summary>
     public int NumStepsTakenThisSearch => Root.N - RootNWhenSearchStarted;
 
-    // Information relating to move with highest N (at what point it was selected)
+
+    /// <summary>
+    /// The N value when the current best node came to be best.
+    /// </summary>
     public int NumNodesWhenChoseTopNNode;
+    
     public float FractionNumNodesWhenChoseTopNNode => (float)NumNodesWhenChoseTopNNode / Root.N;
 
     internal MCTSSearchFlow flow; // TODO: make private
@@ -138,7 +150,7 @@ namespace Ceres.MCTS.Iteration
 
 
     /// <summary>
-    /// 
+    /// Constructor.
     /// </summary>
     /// <param name="store"></param>
     /// <param name="reuseOtherContextForEvaluatedNodes"></param>
@@ -151,7 +163,6 @@ namespace Ceres.MCTS.Iteration
     /// <param name="paramsSearchExecutionPostprocessor"></param>
     /// <param name="limitManager"></param>
     /// <param name="startTime"></param>
-    /// <param name="priorManager"></param>
     /// <param name="gameMoveHistory"></param>
     /// <param name="isFirstMoveOfGame"></param>
     public MCTSManager(MCTSNodeStore store,
@@ -164,7 +175,6 @@ namespace Ceres.MCTS.Iteration
                        SearchLimit searchLimit,
                        IManagerGameLimit limitManager,
                        DateTime startTime,
-                       MCTSManager priorManager,
                        List<GameMoveStat> gameMoveHistory,
                        bool isFirstMoveOfGame)
     {
@@ -266,7 +276,10 @@ namespace Ceres.MCTS.Iteration
         }
 
         StartTimeFirstVisit = DateTime.Now;
-        if (shouldProcess) flow.ProcessDirectOverlapped(this, hardLimitNumNodes, batchNum, null);
+        if (shouldProcess)
+        {
+          flow.ProcessDirectOverlapped(this, hardLimitNumNodes, batchNum, null);
+        }
 
         batchNum++;
       }
@@ -292,31 +305,6 @@ namespace Ceres.MCTS.Iteration
 
   
     bool haveWarned = false;
-#if NOTUSED
-    private bool PossiblyEarlyStopMoveSecondary(int childIndex, in MCTSNodeStruct child, int numRemainingSteps, 
-                                                MCTSNode bestMove, float qAdjustment)
-    {
-      if (Root.N > 500)
-      {
-        if (Context.ParamsSelect.CPUCT2 != 0) throw new NotImplementedException(); // need to add to NumVisitsToEqualize method
-
-        int neededSteps = VisitsToEqualizeCalculator.NumVisitsToEqualize(
-                 Context.ParamsSelect.UCTNonRootNumeratorExponent,
-                 Context.ParamsSelect.UCTRootDenominatorExponent, 
-                 Root.N, 
-                 bestMove.P, (float)-bestMove.Q, bestMove.N,
-                 child.P, (float)-child.Q, child.N,
-                 StatUtils.Bounded(-(float)bestMove.Q - qAdjustment, -1, 1),
-                 StatUtils.Bounded(-(float)child.Q + qAdjustment, -1, 1));
-
-        return neededSteps > numRemainingSteps;
-      }
-      else
-        return false;
-    }
-
-#endif
-
 
     /// <summary>
     /// Runs the secondary network evaluator for all nodes in the tree
@@ -948,4 +936,3 @@ namespace Ceres.MCTS.Iteration
 
   }
 }
-

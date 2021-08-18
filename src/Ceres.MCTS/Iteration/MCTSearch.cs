@@ -181,7 +181,7 @@ namespace Ceres.MCTS.Iteration
 
       Manager = new MCTSManager(store, reuseOtherContextForEvaluatedNodes, positionEvalCache, null,
                                 nnEvaluators, paramsSearch, paramsSelect,  searchLimitToUse, 
-                                limitManager, startTime, null, gameMoveHistory, isFirstMoveOfGame);
+                                limitManager, startTime, gameMoveHistory, isFirstMoveOfGame);
 
       using (new SearchContextExecutionBlock(Manager.Context))
       {
@@ -422,11 +422,6 @@ namespace Ceres.MCTS.Iteration
                                                            reusePositionCache, newTranspositionRoots,
                                                            priorContext.ParamsSearch.Execution.TranspositionMaximizeRootN);
         }
-
-// NO NEED: gets reconstructed
-//        const bool RESET_CACHE_INDEX = true; // TODO: this is probably unneeded, remove for efficiency
-//        Manager.Context.Tree.ClearNodeCache(RESET_CACHE_INDEX);
-      }
       MCTSManager.TotalTimeSecondsInMakeNewRoot += (float)(statsMaterialize.ElapsedTimeSecs + makeNewRootTimingStats.ElapsedTimeSecs);
 //if (wasSwap) MCTSEventSource.TestMetric1 += (float)(statsMaterialize.ElapsedTimeSecs + makeNewRootTimingStats.ElapsedTimeSecs);
 if (this.Manager.Context.ParamsSearch.TestFlag) MCTSEventSource.TestMetric1 += (float)(statsMaterialize.ElapsedTimeSecs + makeNewRootTimingStats.ElapsedTimeSecs);
@@ -439,7 +434,7 @@ if (wasSwap) MCTSEventSource.TestCounter1++;
       Manager = new MCTSManager(store, reuseOtherContextForEvaluatedNodes, reusePositionCache, newTranspositionRoots,
                                 priorContext.NNEvaluators, priorContext.ParamsSearch, priorContext.ParamsSelect,
                                 searchLimitTargetAdjusted, Manager.LimitManager,
-                                startTime, Manager, gameMoveHistory, isFirstMoveOfGame: isFirstMoveOfGame);
+                                startTime, gameMoveHistory, isFirstMoveOfGame:isFirstMoveOfGame);
       Manager.Context.ContemptManager = priorContext.ContemptManager;
 
       (BestMove, TimingInfo) = MCTSManager.Search(Manager, verbose, progressCallback, possiblyUsePositionCache);
