@@ -45,6 +45,8 @@ namespace Ceres.Chess.Positions
     bool haveFinalized = false;
     MGPosition finalPosMG;
 
+    Position[] positions;
+
     /// <summary>
     /// Optionally the next actual move (made after the final position).
     /// </summary>
@@ -58,6 +60,12 @@ namespace Ceres.Chess.Positions
     {
       InitialPosMG = copy.InitialPosMG;
       Moves = new List<MGMove>(copy.Moves);
+      haveFinalized = copy.haveFinalized;
+      finalPosMG = copy.FinalPosMG;
+      NextMove = copy.NextMove;
+
+      positions = new Position[copy.positions.Length];
+      Array.Copy(copy.positions, positions, positions.Length);
     }
 
 
@@ -230,8 +238,6 @@ namespace Ceres.Chess.Positions
 
     public Position FinalPosition => GetPositions()[^1];
     public Position InitialPosition => GetPositions()[0];
-
-    Position[] positions;
 
     /// <summary>
     /// Returns array of all Positions which sequentially
