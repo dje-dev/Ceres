@@ -574,6 +574,62 @@ namespace Ceres.Base.Math
     }
 
     #endregion
+
+    #region Regression
+
+    /// <summary>
+    /// Returns parameters of a univariate linear regresssion from specified data.
+    /// Based closely upon https://gist.github.com/NikolayIT/d86118a3a0cb3f5ed63d674a350d75f2 (MIT License).
+    /// </summary>
+    /// <param name="xVals">The x-axis values.</param>
+    /// <param name="yVals">The y-axis values.</param>
+    /// <param name="rSquared">The r^2 value of the line.</param>
+    /// <param name="yIntercept">The y-intercept value of the line (i.e. y = ax + b, yIntercept is b).</param>
+    /// <param name="slope">The slope of the line (i.e. y = ax + b, slope is a).</param>
+    public static (float rSquared, float yIntercept, float slope) LinearRegression(float[] xVals, float[] yVals)
+    {
+      if (xVals.Length != yVals.Length)
+      {
+        throw new Exception("Regression failure, X and Y not same cardinality.");
+      }
+
+      float sumOfX = 0;
+      float sumOfY = 0;
+      float sumOfXSq = 0;
+      float sumOfYSq = 0;
+      float sumCodeviates = 0;
+
+      for (int i = 0; i < xVals.Length; i++)
+      {
+        float x = xVals[i];
+        float y = yVals[i];
+        sumCodeviates += x * y;
+        sumOfX += x;
+        sumOfY += y;
+        sumOfXSq += x * x;
+        sumOfYSq += y * y;
+      }
+
+      float count = xVals.Length;
+      float ssX = sumOfXSq - ((sumOfX * sumOfX) / count);
+
+      float rNumerator = (count * sumCodeviates) - (sumOfX * sumOfY);
+      float rDenom = (count * sumOfXSq - (sumOfX * sumOfX)) * (count * sumOfYSq - (sumOfY * sumOfY));
+      float sCo = sumCodeviates - ((sumOfX * sumOfY) / count);
+
+      float meanX = sumOfX / count;
+      float meanY = sumOfY / count;
+      float dblR = rNumerator / MathF.Sqrt(rDenom);
+
+      float rSquared = dblR * dblR;
+      float yIntercept = meanY - ((sCo / ssX) * meanX);
+      float slope = sCo / ssX;
+
+      return (rSquared, yIntercept, slope);
+    }
   }
 
+  #endregion
 }
+
+
