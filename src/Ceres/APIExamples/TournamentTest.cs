@@ -121,8 +121,8 @@ namespace Ceres.APIExamples
 
       //NET1 = "751675";
       //NET2 = "751675";
-      //NET1 = "703810";
-      //NET2 = "703810";
+      NET1 = "703810";
+      NET2 = "703810";
       //      string NET1_SECONDARY1 = "j94-100";
 
       //string       NET2 = @"j64-210";
@@ -145,11 +145,11 @@ namespace Ceres.APIExamples
         evalDef2.MakePersistent();
       }
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(11_000);
+      SearchLimit limit1 = SearchLimit.NodesPerMove(15_000);
       //limit1 = SearchLimit.NodesForAllMoves(1_000_000, 10_000);
 
       //      limit1 = SearchLimit.SecondsForAllMoves(900, 2) * 0.2f;
-      limit1 = SearchLimit.SecondsForAllMoves(45);
+      //limit1 = SearchLimit.SecondsForAllMoves(20 * 60);
       //limit1 = SearchLimit.NodesForAllMoves(1_000_000, 5_000);
 
       SearchLimit limit2 = limit1;// * 0.2f;
@@ -172,7 +172,13 @@ namespace Ceres.APIExamples
       ////////
 
 
-      //engineDefCeres1.SearchParams.TestFlag = true;
+//engineDefCeres1.SearchParams.TestFlag = true;
+//engineDefCeres2.SearchParams.TestFlag = false;
+
+//engineDefCeres1.SearchParams.Execution.TranspositionMaximizeRootN = false;
+//engineDefCeres2.SearchParams.Execution.TranspositionMaximizeRootN = false;
+
+
       //engineDefCeres1.SelectParams.UseDynamicVLoss = true;
 
       //engineDefCeres1.SearchParams.MoveFutilityPruningAggressiveness = 0.4f;
@@ -232,7 +238,7 @@ namespace Ceres.APIExamples
       //      engineDefCeres1.SearchParams.Execution.FlowDualSelectors = false;
       // TODO: support this in GameEngineDefCeresUCI
       bool forceDisableSmartPruning = limit1.IsNodesLimit;
-//forceDisableSmartPruning=true;
+//forceDisableSmartPruning=false;
       if (forceDisableSmartPruning)
       {
         engineDefCeres1.SearchParams.FutilityPruningStopSearchEnabled = false;
@@ -325,8 +331,8 @@ namespace Ceres.APIExamples
       TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerCeres2);
 
 
-      def.NumGamePairs = 250; // 102;
-      def.ShowGameMoves = true;
+      def.NumGamePairs = 500;// 100;// 250; // 102;
+      def.ShowGameMoves = false;
 
       string baseName = "tcec1819";
       baseName = "4mvs_+90_+99";

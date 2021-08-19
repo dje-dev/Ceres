@@ -50,8 +50,9 @@ namespace Ceres.MCTS.Params
     /// <summary>
     /// If attempt is made to keep each transposition root as having
     /// N large relative to other nodes in the same equivalence class.
+    /// Benefit is unclear in testing, though currently on maintained on tree rewrite.
     /// </summary>
-    public bool TranspositionMaximizeRootN = true;
+    public bool TranspositionMaximizeRootN = false;
 
     /// <summary>
     /// If transpositions are detected and copied within a single batch,
