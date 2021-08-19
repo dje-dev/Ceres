@@ -14,9 +14,12 @@
 #region Using directives
 
 
+using Ceres.Base.Math;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
+using Ceres.MCTS.Iteration;
 using Ceres.MCTS.MTCSNodes;
+using Ceres.MCTS.MTCSNodes.Analysis;
 using Ceres.MCTS.MTCSNodes.Annotation;
 using Ceres.MCTS.MTCSNodes.Struct;
 using System;
@@ -41,6 +44,79 @@ namespace Ceres.MCTS.Utils
     /// Set of nodes comprising the PV.
     /// </summary>
     public readonly List<MCTSNode> Nodes;
+
+    public static int? IndexOfChildWithBestQSlope(MCTSNode rootNode, int minN, float minFraction)
+    {
+      float bestSlope = float.MinValue;
+      int? bestIndex = null;
+        
+      using (new SearchContextExecutionBlock(rootNode.Context))
+      {
+        float rootQ = (float)rootNode.Q;
+        for (int i=0; i<rootNode.NumChildrenExpanded;i++)
+        {
+          MCTSNode node = rootNode.ChildAtIndex(i);
+          if (node.N > minN)
+          {
+            SearchPrincipalVariation spv = new SearchPrincipalVariation(node);
+            float pvSlope = spv.PVSlopeQ(rootQ, minFraction);
+            if (!float.IsNaN(pvSlope) && pvSlope > bestSlope)
+            {
+              bestIndex = i;
+              bestSlope = pvSlope;
+            }
+          }
+        }
+        return bestIndex;
+      }
+    }
+
+    public static void DumpChildQSlopes(MCTSNode rootNode)
+    {
+      using (new SearchContextExecutionBlock(rootNode.Context))
+      {
+        float rootQ = (float)rootNode.Q;
+        foreach (MCTSNode node in rootNode.ChildrenSorted(n => -n.N))
+        {
+          if (node.N > 100)
+          {
+            SearchPrincipalVariation spv = new SearchPrincipalVariation(node);
+            Console.WriteLine("\r\n");
+            Console.WriteLine((spv.PVSlopeQ(rootQ, 0.05f) * 100) + " " + node);
+            MCTSPosTreeNodeDumper.DumpPV(node, true);
+          }
+        }
+      }
+    }
+
+    public float PVSlopeQ(float priorQ, float minNFraction)
+    {
+      int i = 0;
+      List<float> x = new();
+      List<float> y = new();
+
+      if (!float.IsNaN(priorQ))
+      {
+        x.Add(i++);
+        y.Add(priorQ);
+      }
+      foreach (MCTSNode node in Nodes)
+      {
+        float frac = (float)node.N / Nodes[0].N;
+
+//        Console.WriteLine(frac + " " + node.N + " " + LinearRegression(x.ToArray(), y.ToArray()).slope);
+        
+        if (frac < minNFraction)
+        {
+          break;
+        }
+        x.Add(i++);
+        y.Add((float)node.Q * (node.IsOurMove ? -1f : 1f));
+      }
+
+      var regression = StatUtils.LinearRegression(x.ToArray(), y.ToArray());
+      return -regression.slope;
+    }
 
     public SearchPrincipalVariation(MCTSNode searchRoot, MCTSNode overrideBestMoveNodeAtRoot = null)
     {
