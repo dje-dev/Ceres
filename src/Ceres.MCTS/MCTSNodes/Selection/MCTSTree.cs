@@ -160,6 +160,14 @@ namespace Ceres.MCTS.LeafExpansion
 
 
     /// <summary>
+    /// Returns if a specified node is alredy in the cache.
+    /// </summary>
+    /// <param name="nodeIndex"></param>
+    /// <returns></returns>
+    public bool NodeInCache(MCTSNodeStructIndex nodeIndex) => cache.Lookup(nodeIndex) != null;
+    
+
+    /// <summary>
     /// Attempts to return the MCTSNode associated with an annotation in the cache, 
     /// or null if not found
     /// </summary>
