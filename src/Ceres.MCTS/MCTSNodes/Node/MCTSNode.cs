@@ -580,21 +580,28 @@ namespace Ceres.MCTS.MTCSNodes
     }
 
 
+    /// <summary>
+    /// Depth of node within tree.
+    /// </summary>
     public short Depth
     {
       get
       {
-        ref MCTSNodeAnnotation annotation = ref Annotation;
         if (cachedDepth == -1)
         {
           if (IsRoot)
+          {
             cachedDepth = Ref.DepthInTree;
+          }
           else
+          {
             cachedDepth = (short)(Parent.Depth + 1);
+          }
         }
         return cachedDepth;
       }
     }
+
 #endregion
 
 #region Helpers
@@ -852,4 +859,3 @@ namespace Ceres.MCTS.MTCSNodes
 #endregion
   }
 }
-
