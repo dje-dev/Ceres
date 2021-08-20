@@ -146,7 +146,7 @@ namespace Ceres.MCTS.Search.IteratedMCTS
 
         // Save back to cache
         // TODO: possibly blend in the search Q to the WinP/LossP (possibly M too?)
-        cache.Store(node.Annotation.PositionHashForCaching, node.Terminal, node.WinP, node.LossP, node.MPosition, in newPolicy);
+        cache.Store(node.Ref.ZobristHash, node.Terminal, node.WinP, node.LossP, node.MPosition, in newPolicy);
       }
     }
 

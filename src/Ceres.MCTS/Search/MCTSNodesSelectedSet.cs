@@ -224,7 +224,7 @@ namespace Ceres.MCTS.Search
           // Possibly use as an in-flight tranposition source
           if (IN_FLIGHT_OTHER_BATCH_LINKAGE_ENABLED && eligibleForTranspositionLinkage)
           {
-            transpositionRootsOtherBatch[nodeOther.Annotation.PositionHashForCaching] = nodeOther;
+            transpositionRootsOtherBatch[nodeOther.Ref.ZobristHash] = nodeOther;
           }
         }
       }
@@ -309,7 +309,7 @@ namespace Ceres.MCTS.Search
 
       // Case 3  - already in flight for evaluation in the other batch
       MCTSNode inFlightLinkedNode;
-      ulong hash = node.Annotation.PositionHashForCaching;
+      ulong hash = node.Ref.ZobristHash;
       if (IN_FLIGHT_OTHER_BATCH_LINKAGE_ENABLED &&
           NodesOtherBatch != null &&
           transpositionRootsOtherBatch.TryGetValue(hash, out inFlightLinkedNode))

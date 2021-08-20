@@ -48,11 +48,6 @@ namespace Ceres.MCTS.MTCSNodes.Annotation
     public MGMove PriorMoveMG;
 
     /// <summary>
-    /// Zobrist hash of position (used for caching)
-    /// </summary>
-    public ulong PositionHashForCaching;
-
-    /// <summary>
     /// Current position (as Position)
     /// </summary>
     public Position Pos;
@@ -186,14 +181,14 @@ namespace Ceres.MCTS.MTCSNodes.Annotation
     /// Returns a string description of the annotations.
     /// </summary>
     /// <returns></returns>
-    public override string ToString() => $"<MCTSNodeAnnotation   " + $"{PositionHashForCaching} >";
+    public override string ToString() => $"<MCTSNodeAnnotation>";
 
 
     /// <summary>
     /// Returns hash code.
     /// </summary>
     /// <returns></returns>
-    public override int GetHashCode() => (int)PositionHashForCaching;
+    public override int GetHashCode() => throw new NotImplementedException();
 
 
     /// <summary>

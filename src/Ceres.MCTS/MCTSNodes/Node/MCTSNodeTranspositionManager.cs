@@ -39,7 +39,7 @@ namespace Ceres.MCTS.MTCSNodes
     public static int CheckAddToCluster(MCTSNode node)
     {
       int rootIndex;
-      if (!node.Context.Tree.TranspositionRoots.TryGetValue(node.Annotation.PositionHashForCaching, out rootIndex))
+      if (!node.Context.Tree.TranspositionRoots.TryGetValue(node.Ref.ZobristHash, out rootIndex))
       {
         throw new Exception("Internal error");
 #if NOT
@@ -80,7 +80,7 @@ namespace Ceres.MCTS.MTCSNodes
     public static ref MCTSNodeStruct GetNodeWithMaxNInCluster(MCTSNode node)
     {
       int rootIndex;
-      if (!node.Context.Tree.TranspositionRoots.TryGetValue(node.Annotation.PositionHashForCaching, out rootIndex))
+      if (!node.Context.Tree.TranspositionRoots.TryGetValue(node.Ref.ZobristHash, out rootIndex))
         return ref node.Context.Tree.Store.Nodes.nodes[0]; // TODO clean up 
 
       int maxN = 0;

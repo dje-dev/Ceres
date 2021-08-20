@@ -278,7 +278,6 @@ namespace Ceres.MCTS.LeafExpansion
       annotation.Pos = posHistory[^1]; // this will have had its repetition count set
       annotation.PosMG = newPos;
 
-      annotation.PositionHashForCaching = zobristHashForCaching; // TODO: remove this, use hash in node itself
       node.Ref.ZobristHash = zobristHashForCaching;
 
       const bool FAST = true;
