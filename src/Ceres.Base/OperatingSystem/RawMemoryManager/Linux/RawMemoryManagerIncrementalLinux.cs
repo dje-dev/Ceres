@@ -15,11 +15,25 @@
 
 using Ceres.Base.OperatingSystem.Linux;
 using System;
+using System.Threading;
 
 #endregion
 
 namespace Ceres.Base.OperatingSystem
 {
+  public static class RawMemoryManagerIncrementalLinuxStats
+  {
+    /// <summary>
+    /// Current number of bytes allocated.
+    /// </summary>
+    public static long BytesCurrentlyAllocated = 0;
+
+    /// <summary>
+    /// Maximum number of bytes ever allocated at any point in time.
+    /// </summary>
+    public static long MaxBytesAllocated = 0;
+  }
+
   /// <summary>
   /// Linux memory allocation class which uses incrementally allocated blocks of memory.
   /// </summary>
@@ -35,8 +49,9 @@ namespace Ceres.Base.OperatingSystem
 
     long numBytesAllocated = 0;
 
+  
     const long ALLOCATE_INCREMENTAL_BYTES = 1024 * 1024 * 2;
-    const int PAGE_SIZE = 1024 * 2048;//4096;
+    const int PAGE_SIZE = 1024 * 2048;
 
     static long RoundToHugePageSize(long numBytes)
     {
@@ -115,6 +130,14 @@ namespace Ceres.Base.OperatingSystem
         {
           throw new Exception($"Virtual memory extension to size {numBytesAllocated} failed with error {resultCode}");
         }
+
+        Interlocked.Add(ref RawMemoryManagerIncrementalLinuxStats.BytesCurrentlyAllocated, numBytesAllocated);
+        if (RawMemoryManagerIncrementalLinuxStats.BytesCurrentlyAllocated > RawMemoryManagerIncrementalLinuxStats.MaxBytesAllocated)
+        {
+          RawMemoryManagerIncrementalLinuxStats.MaxBytesAllocated = RawMemoryManagerIncrementalLinuxStats.BytesCurrentlyAllocated;
+        }
+
+
       }
     }
 
@@ -127,6 +150,8 @@ namespace Ceres.Base.OperatingSystem
       {
         throw new Exception($"Virtual memory munmap of size {NumBytesReserved} failed with error {resultCode}");
       }
+
+      Interlocked.Add(ref RawMemoryManagerIncrementalLinuxStats.BytesCurrentlyAllocated, -numBytesAllocated);
 
       numBytesAllocated = 0;
       NumBytesReserved = 0;

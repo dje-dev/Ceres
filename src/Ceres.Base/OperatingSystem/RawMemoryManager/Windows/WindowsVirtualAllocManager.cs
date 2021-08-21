@@ -13,16 +13,16 @@
 
 #region Using directives
 
-using Ceres.Base.Environment;
-using Ceres.Base.Math;
-using Ceres.Base.OperatingSystem.Windows;
 using System;
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Threading;
+
+using Ceres.Base.OperatingSystem.Windows;
+using Ceres.Base.Math;
+using Ceres.Base.Environment;
 
 #endregion
 
@@ -77,7 +77,15 @@ namespace Ceres.Base.OperatingSystem
 
     static Win32SystemInfo.SYSTEM_INFO info = default;
 
+    /// <summary>
+    /// Current number of bytes allocated.
+    /// </summary>
     public static long BytesCurrentlyAllocated = 0;
+
+    /// <summary>
+    /// Maximum number of bytes ever allocated at any point in time.
+    /// </summary>
+    public static long MaxBytesAllocated = 0;
 
     // If we touch an OS page with items we need to be sure
     // the whole page has been allocated, so pad if necessary
@@ -126,9 +134,14 @@ namespace Ceres.Base.OperatingSystem
     public void Release()
     {
       Logger?.LogInfo("Memory", $"Release all memory", (int)AllocPtr);
+
       if (!Win32.VirtualFree(AllocPtr, IntPtr.Zero, Win32.MEM_RELEASE))
+      {
         if (!System.Environment.HasShutdownStarted)
+        {
           throw new Exception("VirtualFree", new Win32Exception(Marshal.GetLastWin32Error()));
+        }
+      }
 
       long bytesReleased = (long)NumBlocksCommitted * (long)AllocBlockSizeBytes;
       // BAD PERFORMANCE  GC.RemoveMemoryPressure(bytesReleased);
@@ -138,11 +151,17 @@ namespace Ceres.Base.OperatingSystem
     public IntPtr ReserveAndAllocateFirstBlock()
     {
       int allocationType = Win32.MEM_RESERVE;
-      if (LargePages) allocationType |= Win32SystemInfo.MEM_LARGE_PAGES;
+      if (LargePages)
+      {
+        allocationType |= Win32SystemInfo.MEM_LARGE_PAGES;
+      }
 
       long maxTotalSizeBytes = MathUtils.RoundedUp((MaxItems + minimumExtraItems) * ItemSizeBytes, AllocBlockSizeBytes);
       AllocPtr = Win32.VirtualAlloc(IntPtr.Zero, (IntPtr)maxTotalSizeBytes, allocationType, Win32.PAGE_NOACCESS);
-      if (AllocPtr.ToInt64() == 0) throw new Win32Exception($"Failure in memory reserve (VirtualAlloc) of size {maxTotalSizeBytes} with Windows error {Marshal.GetLastWin32Error()}");
+      if (AllocPtr.ToInt64() == 0)
+      {
+        throw new Win32Exception($"Failure in memory reserve (VirtualAlloc) of size {maxTotalSizeBytes} with Windows error {Marshal.GetLastWin32Error()}");
+      }
 
       // Allocate first block
       InsureItemsAllocated(1);
@@ -186,11 +205,15 @@ namespace Ceres.Base.OperatingSystem
       // BAD PERFORMANCE  GC.AddMemoryPressure(bytesAlloc);
       Interlocked.Add(ref BytesCurrentlyAllocated, bytesAlloc);
 
+      if (BytesCurrentlyAllocated > MaxBytesAllocated)
+      {
+        MaxBytesAllocated = BytesCurrentlyAllocated;
+      }
+
       NumItemsCommitted += numBlocks * ItemsPerBlock;
       NumBlocksCommitted += numBlocks;
     }
 
     #endregion
-
   }
 }

@@ -60,7 +60,8 @@ namespace Ceres.MCTS.Environment
     private PollingCounter testCounter1, testMetric1;
     private PollingCounter searchCount;
 
-    private PollingCounter storageVirtualAllocBytes;
+    private PollingCounter storageVirtualAllocCurrentBytes;
+    private PollingCounter storageVirtualAllocMaxBytes;
 
     PollingCounter numBatchesGPU0, numBatchesGPU1, numBatchesGPU2, numBatchesGPU3;
     PollingCounter numPositionsGPU0, numPositionsGPU1, numPositionsGPU2, numPositionsGPU3;
@@ -130,10 +131,13 @@ namespace Ceres.MCTS.Environment
 
         instamoveCounter ??= new PollingCounter("instamove-count", this, () => MCTSearch.InstamoveCount);
 
-        storageVirtualAllocBytes ??= new PollingCounter("storage-virtual-alloc-bytes", this, () => WindowsVirtualAllocManager.BytesCurrentlyAllocated);
-        
-//        storageNodesAllocated ??= new PollingCounter("storage-nodes-allocated", this, () => MCTSNodeStructStorage.NumAllocatedNodes);
-//        storageNodeChildrenAllocated ??= new PollingCounter("storage-node-children-allocated", this, () => MCTSNodeStructChildStorage.NumAllocatedNodes);
+        storageVirtualAllocCurrentBytes ??= new PollingCounter("storage-alloc-bytes-cur", this, 
+          () => SoftwareManager.IsWindows ? WindowsVirtualAllocManager.BytesCurrentlyAllocated : RawMemoryManagerIncrementalLinuxStats.BytesCurrentlyAllocated);
+        storageVirtualAllocCurrentBytes ??= new PollingCounter("storage-alloc-bytes-max", this,
+          () => SoftwareManager.IsWindows ? WindowsVirtualAllocManager.MaxBytesAllocated : RawMemoryManagerIncrementalLinuxStats.MaxBytesAllocated);
+
+        //        storageNodesAllocated ??= new PollingCounter("storage-nodes-allocated", this, () => MCTSNodeStructStorage.NumAllocatedNodes);
+        //        storageNodeChildrenAllocated ??= new PollingCounter("storage-node-children-allocated", this, () => MCTSNodeStructChildStorage.NumAllocatedNodes);
 
         numBatchesGPU0 ??= new PollingCounter("gpu-0-batches", this, () => NNEvaluatorStats.TotalBatchesPerGPU[0]);
         numBatchesGPU1 ??= new PollingCounter("gpu-1-batches", this, () => NNEvaluatorStats.TotalBatchesPerGPU[1]);
