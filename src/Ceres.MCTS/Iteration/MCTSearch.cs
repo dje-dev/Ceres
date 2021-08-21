@@ -405,8 +405,7 @@ namespace Ceres.MCTS.Iteration
         const float THRESHOLD_RETAIN_TREE = 0.70f;
 
         float fracRetain = (float)newRoot.Ref.N / priorContext.Tree.Root.N;
-        bool possiblyUseSwapRoot = priorContext.ParamsSearch.TestFlag;
-        if (fracRetain < THRESHOLD_RETAIN_TREE || !possiblyUseSwapRoot)
+        if (fracRetain < THRESHOLD_RETAIN_TREE || !priorContext.ParamsSearch.TreeReuseSwapRootEnabled)
         {
           //Console.WriteLine("New root " + fracRetain);
           MCTSNodeStructStorage.MakeChildNewRoot(Manager.Context.Tree, ref newRoot.Ref, newPositionAndMoves,

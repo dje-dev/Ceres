@@ -143,6 +143,13 @@ namespace Ceres.MCTS.Params
     /// </summary>
     public bool TreeReuseEnabled = true;
 
+    /// <summary>
+    /// If tree reuse may possibly make use of swapping root node into place
+    /// rather than rewriting entire tree. This can consume additional memory
+    /// but reduce time spent preparing tree for reuse.
+    /// </summary>
+    public bool TreeReuseSwapRootEnabled = true;
+
     // SLOW AND BUGGY ***
     // Also we find that only about 2% of positions saved are actually subsequently used, 
     // so this feature is probably not useful
