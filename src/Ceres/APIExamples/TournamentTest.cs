@@ -145,11 +145,11 @@ namespace Ceres.APIExamples
         evalDef2.MakePersistent();
       }
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(15_000);
+      SearchLimit limit1 = SearchLimit.NodesPerMove(20_000);
       //limit1 = SearchLimit.NodesForAllMoves(1_000_000, 10_000);
 
       //      limit1 = SearchLimit.SecondsForAllMoves(900, 2) * 0.2f;
-      //limit1 = SearchLimit.SecondsForAllMoves(20 * 60);
+      //limit1 = SearchLimit.SecondsForAllMoves(45);
       //limit1 = SearchLimit.NodesForAllMoves(1_000_000, 5_000);
 
       SearchLimit limit2 = limit1;// * 0.2f;
@@ -172,13 +172,7 @@ namespace Ceres.APIExamples
       ////////
 
 
-//engineDefCeres1.SearchParams.TestFlag = true;
-//engineDefCeres2.SearchParams.TestFlag = false;
-
-//engineDefCeres1.SearchParams.Execution.TranspositionMaximizeRootN = false;
-//engineDefCeres2.SearchParams.Execution.TranspositionMaximizeRootN = false;
-
-
+      //engineDefCeres1.SearchParams.TestFlag = true;
       //engineDefCeres1.SelectParams.UseDynamicVLoss = true;
 
       //engineDefCeres1.SearchParams.MoveFutilityPruningAggressiveness = 0.4f;
@@ -238,7 +232,7 @@ namespace Ceres.APIExamples
       //      engineDefCeres1.SearchParams.Execution.FlowDualSelectors = false;
       // TODO: support this in GameEngineDefCeresUCI
       bool forceDisableSmartPruning = limit1.IsNodesLimit;
-//forceDisableSmartPruning=false;
+      forceDisableSmartPruning = false;
       if (forceDisableSmartPruning)
       {
         engineDefCeres1.SearchParams.FutilityPruningStopSearchEnabled = false;
@@ -255,11 +249,11 @@ namespace Ceres.APIExamples
                                                                                                         : @"C:\dev\ceres\artifacts\release\net5.0\ceres.exe",
                                                                    disableFutilityStopSearch: forceDisableSmartPruning);
 
-      GameEngineDef engineDefCeres91 = new GameEngineDefCeresUCI("Ceres91", evalDef2, overrideEXE: SoftwareManager.IsLinux ? @"/raid/dev/Ceres91b/Ceres/artifacts/release/net5.0/Ceres.dll"
-                                                                                                                           : @"C:\ceres\releases\v0.91b\ceres.exe");
+      GameEngineDef engineDefCeres93 = new GameEngineDefCeresUCI("Ceres93", evalDef2, overrideEXE: SoftwareManager.IsLinux ? @"/raid/dev/Ceres93/Ceres/artifacts/release/net5.0/Ceres.dll"
+                                                                                                                           : @"C:\ceres\releases\v0.93\ceres.exe");
 
       EnginePlayerDef playerCeres1UCI = new EnginePlayerDef(engineDefCeresUCI1, limit1);
-      EnginePlayerDef playerCeres91 = new EnginePlayerDef(engineDefCeres91, limit2);
+      EnginePlayerDef playerCeres93 = new EnginePlayerDef(engineDefCeres93, limit2);
 
       EnginePlayerDef playerCeres1 = new EnginePlayerDef(engineDefCeres1, limit1);
       EnginePlayerDef playerCeres2 = new EnginePlayerDef(engineDefCeres2, limit2);
@@ -288,7 +282,7 @@ namespace Ceres.APIExamples
                                                                          : @$"\\synology\dev\chess\data\epd\{BASE_NAME}.epd",
                                                 playerCeres1, playerCeres2, null);// playerLC0);
 
-//        suiteDef.MaxNumPositions = 50;
+        //        suiteDef.MaxNumPositions = 50;
         suiteDef.EPDLichessPuzzleFormat = suiteDef.EPDFileName.ToUpper().Contains("LICHESS");
 
         //suiteDef.EPDFilter = s => !s.Contains(".exe"); // For NICE suite, these represent positions with multiple choices
@@ -328,10 +322,10 @@ namespace Ceres.APIExamples
 #endif
       }
 
-      TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerCeres2);
+      TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerCeres93);
 
 
-      def.NumGamePairs = 500;// 100;// 250; // 102;
+      def.NumGamePairs = 250; // 102;
       def.ShowGameMoves = false;
 
       string baseName = "tcec1819";
