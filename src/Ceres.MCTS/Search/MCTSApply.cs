@@ -31,6 +31,7 @@ using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.Params;
+using System.Reflection;
 
 #endregion
 
@@ -183,6 +184,8 @@ namespace Ceres.MCTS.Search
 
       int numUpdateSelector1 = selectorID == 0 ? nodeRef.NInFlight : 0;
       int numUpdateSelector2 = selectorID == 1 ? nodeRef.NInFlight2 : 0;
+      int numInFlight = numUpdateSelector1 + numUpdateSelector2;
+
 
       if (node.ActionType == MCTSNode.NodeActionType.CacheOnly ||
           node.ActionType == MCTSNode.NodeActionType.None)
@@ -206,16 +209,17 @@ namespace Ceres.MCTS.Search
 
         // Update statistics
         float vToApply;
-        node.Context.CumulativeSelectedLeafDepths += node.Depth;
+        int numToApply;
 
         if (nodeRef.N > 0)
         {
-          // Repeat visit (must be a terminal)
           if (wasTerminal)
           {
-            // In the special case of terminal positions, even "collisions" are applied
+            // Repeat visit to a terminal, even "collisions" are applied multiple times
+            numToApply = numInFlight;
             vToApply = nodeRef.V + contemptAdjustment;
-            nodeRef.BackupApply(nodes, vToApply, 0, dToApply, wasTerminal, numUpdateSelector1, numUpdateSelector2, out indexOfChildDescendentFromRoot);
+
+            nodeRef.BackupApply(nodes, numToApply, vToApply, 0, dToApply, wasTerminal, numUpdateSelector1, numUpdateSelector2, out indexOfChildDescendentFromRoot);
           }
           else
           {
@@ -225,6 +229,7 @@ namespace Ceres.MCTS.Search
         else
         {
           // First visit by any selector, set evaluation result and backup in tree
+          numToApply = 1;
           nodeRef.Terminal = node.EvalResult.TerminalStatus;
 
           if (!node.IsRoot && node.Terminal == GameResult.Draw)
@@ -254,16 +259,19 @@ namespace Ceres.MCTS.Search
             mToApply = node.OverrideMPositionToApplyFromTransposition;
           }
 
-          // TODO: further test this idea for making contempt increasing with position complexity
-          //contemptAdjustment *= (float)node.Annotation.Pos.PieceCount / (float)24.0f;
           vToApply += contemptAdjustment;
-          nodeRef.BackupApply(nodes, vToApply, mToApply, dToApply, wasTerminal, numUpdateSelector1, numUpdateSelector2, out indexOfChildDescendentFromRoot);
+
+          nodeRef.BackupApply(nodes, numToApply, vToApply, mToApply, dToApply, wasTerminal, numUpdateSelector1, numUpdateSelector2, out indexOfChildDescendentFromRoot);
         }
 
         PossiblyUpateFirstMoveSampler(node, indexOfChildDescendentFromRoot, numUpdateSelector1, numUpdateSelector2, wasTerminal, vToApply);
+
+        // Update depth statistic
+        node.Context.CumulativeSelectedLeafDepths += node.Depth * numToApply;
       }
       else
         throw new Exception("Internal error, unknown NodeActionType");
+
 
       if (FirstMoveSampler != null)
       {

@@ -17,10 +17,12 @@ using Ceres.Base.DataType;
 using Ceres.Base.DataType.Trees;
 using Ceres.Base.Math;
 using Ceres.Base.OperatingSystem;
+using Ceres.MCTS.Environment;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.LeafExpansion;
 using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.Params;
+using Ceres.MCTS.Search;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -643,6 +645,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <param name="numInFlight1"></param>
     /// <param name="numInFlight2"></param>
     public unsafe void BackupApply(Span<MCTSNodeStruct> nodes,
+                                   int numToApply,
                                    float vToApply, float mToApply, float dToApply, bool wasTerminal,
                                    int numInFlight1, int numInFlight2,
                                    out MCTSNodeStructIndex indexOfChildDescendentFromRoot)
@@ -658,39 +661,32 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
         node.UpdateNInFlight(-numInFlight1, -numInFlight2);
 
-        //        float valuePriorAvgIsBetter = node.IsRoot ? float.NaN : (float)(-node.Q - node.ParentRef.Q);
-        //        float valueThisSampleBetter = node.IsRoot ? float.NaN : (float)(-vToApply - node.ParentRef.Q);
-
-        if (wasTerminal)
+        // If a draw could have been claimed here, 
+        // assume it would have been if the alternative was worse
+        // (use value of 0 here and further up in tree)
+        if (vToApply < 0 && node.DrawKnownToExistAmongChildren)
         {
-          // All visits (possibly multiple) to terminal node are counted
-          int totalInFlightToApply = numInFlight1 + numInFlight2;
-
-          node.N += totalInFlightToApply;
-          node.W += vToApply * totalInFlightToApply;
-          //node.VSumSquares  += vToApply * vToApply * totalInFlightToApply;
-          node.mSum += mToApply * totalInFlightToApply;
-          node.dSum += dToApply * totalInFlightToApply;
+          MCTSEventSource.TestCounter1++;
+          vToApply = 0;
+          mToApply = 0;
+          dToApply = 1; // TODO: is this ok even if not WDL network?
         }
-        else
-        {
-          // If a draw could have been claimed here, 
-          // assume it would have been if the alternative was worse
-          // (use value of 0 here and further up in tree)
-          // TODO: Verify this makes play better! Extensive testing was less than conclusive.
-          if (vToApply < 0 && node.DrawKnownToExistAmongChildren)
-          {
-            vToApply = 0;
-            mToApply = 0;
-            dToApply = 1; // TODO: is this ok even if not WDL network?
-          }
 
-          // Visits to non-terminal nodes are applied only once
+        if (numToApply == 1)
+        {
           node.N++;
           node.W += vToApply;
           //node.VSumSquares += vToApply * vToApply;
           node.mSum += mToApply;
           node.dSum += dToApply;
+        }
+        else
+        {
+          node.N += numToApply;
+          node.W += vToApply * numToApply;
+          //node.VSumSquares  += vToApply * vToApply * totalInFlightToApply;
+          node.mSum += mToApply * numToApply;
+          node.dSum += dToApply * numToApply; 
         }
 
 #if FEATURE_UNCERTAINTY
@@ -724,8 +720,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           if (parentRef.IsRoot)
           {
             indexOfChildDescendentFromRoot = node.Index;
-            int numVisits = numInFlight1 + numInFlight2;
-            MCTSManager.ThreadSearchContext.RootMoveTracker.UpdateQValue(IndexInParent, vToApply, numVisits);
+            MCTSManager.ThreadSearchContext.RootMoveTracker.UpdateQValue(IndexInParent, vToApply, numToApply);
           }
           else
           {
