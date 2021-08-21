@@ -163,7 +163,7 @@ namespace Ceres.MCTS.Evaluators
       }
 
       // Check if this position already exists in the tree
-      if (TranspositionRoots.TryGetValue(node.Annotation.PositionHashForCaching, out int transpositionNodeIndex))
+      if (TranspositionRoots.TryGetValue(node.Ref.ZobristHash, out int transpositionNodeIndex))
       {
         // Found already existing node
         ref MCTSNodeStruct transpositionNode = ref node.Context.Tree.Store.Nodes.nodes[transpositionNodeIndex];
@@ -188,7 +188,7 @@ namespace Ceres.MCTS.Evaluators
       else
       {
         int pendingIndex = Interlocked.Increment(ref nextIndexPendingTranspositionRoots) - 1;
-        pendingTranspositionRoots[pendingIndex] = (node.Annotation.PositionHashForCaching, node.Index);
+        pendingTranspositionRoots[pendingIndex] = (node.Ref.ZobristHash, node.Index);
 
 //        if (CeresEnvironment.MONITORING_METRICS) NumMisses++;
 
