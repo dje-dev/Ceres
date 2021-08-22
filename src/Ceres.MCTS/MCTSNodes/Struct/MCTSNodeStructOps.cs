@@ -666,7 +666,6 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         // (use value of 0 here and further up in tree)
         if (vToApply < 0 && node.DrawKnownToExistAmongChildren)
         {
-          MCTSEventSource.TestCounter1++;
           vToApply = 0;
           mToApply = 0;
           dToApply = 1; // TODO: is this ok even if not WDL network?

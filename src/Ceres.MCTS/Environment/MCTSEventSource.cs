@@ -133,7 +133,7 @@ namespace Ceres.MCTS.Environment
 
         storageVirtualAllocCurrentBytes ??= new PollingCounter("storage-alloc-bytes-cur", this, 
           () => SoftwareManager.IsWindows ? WindowsVirtualAllocManager.BytesCurrentlyAllocated : RawMemoryManagerIncrementalLinuxStats.BytesCurrentlyAllocated);
-        storageVirtualAllocCurrentBytes ??= new PollingCounter("storage-alloc-bytes-max", this,
+        storageVirtualAllocMaxBytes ??= new PollingCounter("storage-alloc-bytes-max", this,
           () => SoftwareManager.IsWindows ? WindowsVirtualAllocManager.MaxBytesAllocated : RawMemoryManagerIncrementalLinuxStats.MaxBytesAllocated);
 
         //        storageNodesAllocated ??= new PollingCounter("storage-nodes-allocated", this, () => MCTSNodeStructStorage.NumAllocatedNodes);
