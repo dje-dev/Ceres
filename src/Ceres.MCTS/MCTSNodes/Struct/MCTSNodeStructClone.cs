@@ -170,7 +170,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
       if (source.IsTranspositionLinked)
       {
-        if (source.NumNodesTranspositionExtracted > 1)
+        if (source.NumVisitsPendingTranspositionRootExtraction > 1)
         {
           // This was a linked node, with active visitation in progress
           // Clone the visitor and add to the table so we are now another visitor 

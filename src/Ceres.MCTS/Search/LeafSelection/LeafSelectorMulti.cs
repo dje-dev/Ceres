@@ -518,12 +518,12 @@ namespace Ceres.MCTS.Search
       Debug.Assert(numTargetLeafs > 0);
 
       if (paramsExecution.TranspositionMode == TranspositionMode.SingleNodeDeferredCopy
-       && node.NumNodesTranspositionExtracted > 0)
+       && node.Ref.NumNodesTranspositionExtracted > 0)
       {
         InitializeChildrenFromDeferredTransposition(node);
       }
       else if (paramsExecution.TranspositionMode == TranspositionMode.SharedSubtree
-            && node.NumNodesTranspositionExtracted > 0)
+            && node.Ref.NumNodesTranspositionExtracted > 0)
       {
         InitializeChildrenFromDeferredTransposition(node);
       }
@@ -757,7 +757,7 @@ namespace Ceres.MCTS.Search
       // the extraction of the children from the tranposition root was deferred 
       // (because possibly it would never be required)
       // Now we will need the children to continue leaf selection, so copy them over now ("just in time")
-      Debug.Assert(node.NumNodesTranspositionExtracted == 1);
+      Debug.Assert(node.Ref.NumNodesTranspositionExtracted == 1);
 
       int transpositionNodeIndex = node.TranspositionRootIndex;
 

@@ -71,7 +71,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <summary>
     /// Average M (moves left estimate) for this subtree
     /// </summary>
-    public float MAvg => mSum / N;  
+    public float MAvg => mSum / N;
 
     /// <summary>
     /// The starting index of entries for this node within the child info array
@@ -84,8 +84,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <summary>
     /// Currently not used (and no room in structure for it).
     /// </summary>
-    public int NextTranspositionLinked 
-    { 
+    public int NextTranspositionLinked
+    {
       get => throw new NotImplementedException();
       set { if (value != 0) throw new NotImplementedException(); }
     }
@@ -136,8 +136,29 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
     public readonly bool IsEvaluated => !float.IsNaN(V);
 
-    public readonly bool IsInFlight => NInFlight != 0 || NInFlight2 != 0;
+    public readonly bool IsInFlight => (NInFlight + NInFlight2) > 0;
 
+
+    public const int MAX_NUM_VISITS_PENDING_TRANSPOSITION_ROOT_EXTRACTION = 256 - 64 - 1;
+
+    /// <summary>
+    /// The number of visits yet to be processed which will have their values taken from the 
+    /// the transposition root (or zero if not transposition linked).
+    /// This is encoded in the numChildrenVisited.
+    /// </summary>
+    public int NumVisitsPendingTranspositionRootExtraction
+    {
+      readonly get => numChildrenVisited <= 64 ? 0 : 256 - numChildrenVisited;
+      set
+      {
+        return; // *** TO BE REMOVED ***
+        Debug.Assert(value >= 0 && value <= MAX_NUM_VISITS_PENDING_TRANSPOSITION_ROOT_EXTRACTION);
+        numChildrenVisited = (value == 0) ? (byte)0 : (byte)(256 - value);
+      }
+    }
+
+
+  // ******************** TO BE REMOTED
     /// <summary>
     /// The number of evaluations that have so far been extracted via
     /// the transposition root (or zero if not transposition linked).
@@ -152,6 +173,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         numChildrenVisited = (value == 0) ? (byte)0 : (byte)(256 - value);
       }
     }
+
+    // ***************** TO BE REMOVED
 
     /// <summary>
     /// If the tree is truncated at this node and generating position
@@ -210,7 +233,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// </summary>
     /// <param name="move"></param>
     /// <returns></returns>
-    public int? ChildIndexWithMove (MGMove move)
+    public int? ChildIndexWithMove(MGMove move)
     {
       EncodedMove lzMove = ConverterMGMoveEncodedMove.MGChessMoveToEncodedMove(move);
       Span<MCTSNodeStructChild> children = this.Children;
@@ -230,7 +253,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// </summary>
     const int DETACHED_NODE_NINFLIGHT_MARKER = short.MaxValue;
 
-    
+
     /// <summary>
     /// Returns if the node has been removed from the currently active tree
     /// The raw data still exists in the store, but the root of the subtree 
@@ -313,7 +336,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public unsafe readonly MCTSNodeStructIndex IndexInStore(MCTSNodeStore store)
     {
-     // This relies on fact that the array of nodes resides at a fixed address
+      // This relies on fact that the array of nodes resides at a fixed address
       // which will be assured if either:
       //   - the object is on the large object heap, and compaction is not enabled for this heap, or
       //   - we are using nonmanaged memory
@@ -343,7 +366,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     //     such that each is aligned with a cache line and exactly one memory access per node, and
     //   - because power of 2, indexing into the array of nodes can be done using shifting instead of multiplication
     // By using a const here, compiler recognize opportunity to use shifting 
-    internal const int MCTSNodeStructSizeBytes = 64; 
+    internal const int MCTSNodeStructSizeBytes = 64;
 
 
     /// <summary>
@@ -370,14 +393,14 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     public override string ToString()
     {
       string indexStr = $"#{Index.Index}";
-//      string indexStr = $"#?"; // not possible to determine, since we can be passed by value and not ref
+      //      string indexStr = $"#?"; // not possible to determine, since we can be passed by value and not ref
 
       //      float score = ParentIndex.IsNull ? 0 : ParentRef.ScoreForChild(ParentRef.Children[IndexWithinParentsChildren]);
-      return $"<Node [#{indexStr}] Depth{DepthInTree} {Terminal} {PriorMove} ({N},{NInFlight},{NInFlight2})  P={P*100.0f:F3}% " 
-            + $"V={V:F3}" +(VSecondary == 0 ? "" : $"VSecondary={VSecondary:F3} ") +  $" W={W:F3} "
+      return $"<Node [#{indexStr}] Depth{DepthInTree} {Terminal} {PriorMove} ({N},{NInFlight},{NInFlight2})  P={P * 100.0f:F3}% "
+            + $"V={V:F3}" + (VSecondary == 0 ? "" : $"VSecondary={VSecondary:F3} ") + $" W={W:F3} "
             + $"MPos={MPosition:F3} MAvg={MAvg:F3} "
            + $"Parent={(ParentIndex.IsNull ? "none" : ParentIndex.Index.ToString())}"
-           + (IsTranspositionLinked ? $" TRANSPOSITION LINKED, extracted { NumNodesTranspositionExtracted}" : "")
+           + (IsTranspositionLinked ? $" TRANSPOSITION LINKED, pending { NumVisitsPendingTranspositionRootExtraction}" : "")
            + $" Score=(?) > with {NumPolicyMoves} policy moves";
       //    + $" Score={score,6:F2} > with {NumPolicyMoves} policy moves"; // can't do this until/if we restore IndexWithinParentsChildren or do linear search to find
     }
@@ -421,7 +444,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     public readonly byte DepthInTree
     {
       get
-      {        
+      {
         int count = 0;
         ref readonly MCTSNodeStruct node = ref this;
         while (!node.IsRoot)

@@ -51,8 +51,14 @@ namespace Ceres.MCTS.Iteration
       SearchLimitExceeded,
 
       /// <summary>
-      /// The MaxTreeNodes field in the SearchLimit was set
+      /// The MaxTreeVisits field in the SearchLimit was set
       /// and the search tree has reached that limit.
+      /// </summary>
+      MaxTreeVisitsExceeded,
+
+      /// <summary>
+      /// The MaxTreeNodes field in the SearchLimit was set
+      /// and the store backing the search tree has reached that limit.
       /// </summary>
       MaxTreeNodesExceeded,
 
@@ -69,7 +75,7 @@ namespace Ceres.MCTS.Iteration
       /// <summary>
       /// Root position in tablebase and optimal move available.
       /// </summary>
-      TablebaseImmediateMove        
+      TablebaseImmediateMove
     }
 
   }

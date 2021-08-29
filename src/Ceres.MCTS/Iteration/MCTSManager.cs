@@ -141,7 +141,7 @@ namespace Ceres.MCTS.Iteration
     /// The N value when the current best node came to be best.
     /// </summary>
     public int NumNodesWhenChoseTopNNode;
-    
+
     public float FractionNumNodesWhenChoseTopNNode => (float)NumNodesWhenChoseTopNNode / Root.N;
 
     internal MCTSSearchFlow flow; // TODO: make private
@@ -211,7 +211,7 @@ namespace Ceres.MCTS.Iteration
       {
         estNumNodes = Math.Max(0, estNumNodes - RootNWhenSearchStarted);
       }
-      Context = new MCTSIterator(store, reuseOtherContextForEvaluatedNodes, reusePositionCache, reuseTranspositionRoots, 
+      Context = new MCTSIterator(store, reuseOtherContextForEvaluatedNodes, reusePositionCache, reuseTranspositionRoots,
                                   nnEvaluators, searchParams, childSelectParams, searchLimit, estNumNodes);
       ThreadSearchContext = Context;
 
@@ -303,7 +303,7 @@ namespace Ceres.MCTS.Iteration
       return (stats, Root);
     }
 
-  
+
     bool haveWarned = false;
 
     /// <summary>
@@ -324,7 +324,7 @@ namespace Ceres.MCTS.Iteration
 
       Root.Ref.TraverseSequential(Context.Tree.Store, (ref MCTSNodeStruct nodeRef, MCTSNodeStructIndex index) =>
       {
-        if (nodeRef.N >= minN 
+        if (nodeRef.N >= minN
          && nodeRef.Terminal == GameResult.Unknown
          && !nodeRef.IsTranspositionLinked
          && nodeRef.Uncertainty == 0 // ** TODO: fix this
@@ -360,7 +360,7 @@ namespace Ceres.MCTS.Iteration
     {
       if (nodes.Count > 0)
       {
-        ListBounded<MCTSNode> thisBatch = new (nodes.ToArray(), ListBounded<MCTSNode>.CopyMode.ReferencePassedMembers);
+        ListBounded<MCTSNode> thisBatch = new(nodes.ToArray(), ListBounded<MCTSNode>.CopyMode.ReferencePassedMembers);
         evaluatorSecondary.Evaluate(Context, thisBatch);
 
         ParamsSearchSecondaryEvaluator secondaryParams = Context.ParamsSearch.ParamsSecondaryEvaluator;
@@ -369,7 +369,7 @@ namespace Ceres.MCTS.Iteration
         {
           ref MCTSNodeStruct nodeRef = ref node.Ref;
 
-//          nodeRef.VSecondary = FP16.NaN;
+          //          nodeRef.VSecondary = FP16.NaN;
           //          nodeRef.VSecondary = (FP16)node.EvalResultSecondary.V;
 
           if (node.Terminal == GameResult.Unknown)
@@ -506,7 +506,7 @@ namespace Ceres.MCTS.Iteration
       }
     }
 
-    readonly static object dumpToConsoleLock = new ();
+    readonly static object dumpToConsoleLock = new();
 
 
     public static (MGMove, TimingStats)
@@ -677,7 +677,7 @@ namespace Ceres.MCTS.Iteration
       }
     }
 
-#region IDisposable Support
+    #region IDisposable Support
 
     public MGMove BestMoveMG
     {
@@ -720,9 +720,9 @@ namespace Ceres.MCTS.Iteration
       }
     }
 
-#endregion
+    #endregion
 
-#region Time management
+    #region Time management
 
     // TODO: make this smarter (aware of hardware and NN)
     public int EstimatedNumSearchNodes => EstimatedNumSearchNodesForEvaluator(SearchLimit, Context.NNEvaluators);
@@ -828,10 +828,16 @@ namespace Ceres.MCTS.Iteration
         return SearchStopStatus.TimeExpired;
       }
 
-      if (SearchLimit.MaxTreeNodes != null 
-       && Root.N >= SearchLimit.MaxTreeNodes
-       && NumStepsTakenThisSearch > 0 // always allow a little search to insure state fully initialized
-         )
+      if (SearchLimit.MaxTreeVisits != null
+       && Root.N >= SearchLimit.MaxTreeVisits
+       && NumStepsTakenThisSearch > 0) // always allow a little search to insure state fully initialized
+      {
+        return SearchStopStatus.MaxTreeVisitsExceeded;
+      }
+
+      if (SearchLimit.MaxTreeNodes != null
+       && Root.Tree.Store.Nodes.NumTotalNodes >= (SearchLimit.MaxTreeNodes - 2048)
+       && NumStepsTakenThisSearch > 0) // always allow a little search to insure state fully initialized
       {
         return SearchStopStatus.MaxTreeNodesExceeded;
       }
@@ -862,7 +868,7 @@ namespace Ceres.MCTS.Iteration
       const float MIN_TIME = 0.02f;
       const float MIN_VISITS = 10;
 
-      float elapsedSecs = (float)(DateTime.Now -  StartTimeFirstVisit).TotalSeconds;
+      float elapsedSecs = (float)(DateTime.Now - StartTimeFirstVisit).TotalSeconds;
       bool insufficientData = elapsedSecs < MIN_TIME || NumStepsTakenThisSearch < MIN_VISITS;
       estimatedNPS = insufficientData ? float.NaN : NumStepsTakenThisSearch / elapsedSecs;
     }
@@ -922,7 +928,7 @@ namespace Ceres.MCTS.Iteration
 
     }
 
-#endregion
+    #endregion
 
 
     /// <summary>

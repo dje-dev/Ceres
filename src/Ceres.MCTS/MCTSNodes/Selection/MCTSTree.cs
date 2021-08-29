@@ -87,7 +87,7 @@ namespace Ceres.MCTS.LeafExpansion
     /// </summary>
     public PositionEvalCache PositionCache;
 
-    
+
     /// <summary>
     /// Constructor.
     /// </summary>
@@ -95,7 +95,7 @@ namespace Ceres.MCTS.LeafExpansion
     /// <param name="context"></param>
     /// <param name="maxNodesBound"></param>
     /// <param name="positionCache"></param>
-    public MCTSTree(MCTSNodeStore store, MCTSIterator context, 
+    public MCTSTree(MCTSNodeStore store, MCTSIterator context,
                     int maxNodesBound, int estimatedNumNodes,
                     PositionEvalCache positionCache)
     {
@@ -136,7 +136,7 @@ namespace Ceres.MCTS.LeafExpansion
       priorPositions = PositionHistoryGatherer.DoGetHistoryPositions(PriorMoves, priorPositions, 0, 8, false).ToArray();
 
 
-      for (int i=priorPositions.Length - 1; i>=0; i--)
+      for (int i = priorPositions.Length - 1; i >= 0; i--)
       {
         EncodedPositionBoard thisBoard = EncodedPositionBoard.GetBoard(in priorPositions[i], priorPositions[i].MiscInfo.SideToMove, false);
         EncodedPriorPositions.Add(thisBoard);
@@ -165,7 +165,7 @@ namespace Ceres.MCTS.LeafExpansion
     /// <param name="nodeIndex"></param>
     /// <returns></returns>
     public bool NodeInCache(MCTSNodeStructIndex nodeIndex) => cache.Lookup(nodeIndex) != null;
-    
+
 
     /// <summary>
     /// Attempts to return the MCTSNode associated with an annotation in the cache, 
@@ -201,7 +201,7 @@ namespace Ceres.MCTS.LeafExpansion
     [ThreadStatic]
     static Position[] posScratchBuffer;
 
-    const int MAX_LENGTH_POS_HISTORY = 100;    
+    const int MAX_LENGTH_POS_HISTORY = 100;
     static Position[] PosScratchBuffer
     {
       get
@@ -212,7 +212,7 @@ namespace Ceres.MCTS.LeafExpansion
           return buffer;
         }
 
-        return posScratchBuffer = new Position[MAX_LENGTH_POS_HISTORY];     
+        return posScratchBuffer = new Position[MAX_LENGTH_POS_HISTORY];
       }
     }
 
@@ -232,7 +232,7 @@ namespace Ceres.MCTS.LeafExpansion
       }
 
       Debug.Assert(!node.Ref.IsOldGeneration);
-      Debug.Assert(!node.Ref.IsTranspositionLinked);
+      //      Debug.Assert(!node.Ref.IsTranspositionLinked);
 
       ref MCTSNodeAnnotation annotation = ref node.annotation;
 
@@ -256,6 +256,7 @@ namespace Ceres.MCTS.LeafExpansion
       bool isRoot = node.IsRoot;
 
       Position newPosAsPos = newPos.ToPosition;
+      Debug.Assert(newPosAsPos.PieceExists(Pieces.WhiteKing) && newPosAsPos.PieceExists(Pieces.BlackKing));
 
       // Create history, with prepended move representing this move
       Span<Position> posHistory = GetPriorHistoryPositions(node.Parent, in newPosAsPos, PosScratchBuffer,

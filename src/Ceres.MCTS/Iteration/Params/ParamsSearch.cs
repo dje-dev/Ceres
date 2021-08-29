@@ -47,8 +47,8 @@ namespace Ceres.MCTS.Params
     public const float LC0_DEFAULT_SMART_PRUNING_FACTOR = 1.33f;
 
 
-    public enum BestMoveModeEnum 
-    { 
+    public enum BestMoveModeEnum
+    {
       /// <summary>
       /// The move receiving the most number of visits (N) is chosen (traditional AlphaZero).
       /// </summary>
@@ -58,7 +58,7 @@ namespace Ceres.MCTS.Params
       /// The move having the best Q value is chose, subject to 
       /// also having certain minimum minimum number of visits.
       /// </summary>
-      TopQIfSufficientN, 
+      TopQIfSufficientN,
     };
 
     /// <summary>
@@ -110,7 +110,7 @@ namespace Ceres.MCTS.Params
     /// Parameters relating to the secondary neural network evaluator (if in use).
     /// </summary>
     public ParamsSearchSecondaryEvaluator ParamsSecondaryEvaluator;
-    
+
     /// <summary>
     /// Optional policy used for applying Dirichlet noise at root.
     /// </summary>
@@ -288,9 +288,23 @@ namespace Ceres.MCTS.Params
     /// should be the Q from the whole transposition subtree 
     /// rather than just the transposed node.
     /// </summary>
-    public bool TranspositionUseTransposedQ = true; 
+    public bool TranspositionUseTransposedQ = true;
 
-    
+
+    /// <summary>
+    /// If using transposition root Q, determines the fixed count contribution
+    /// to number of times the root Q can possibly be applied.
+    /// </summary>
+    public int MaxTranspositionRootApplicationsFixed = 1;
+
+    /// <summary>
+    /// If using transposition root Q, determines the relative fractional contribution
+    /// to number of times the root Q can possibly be applied,
+    /// based on the N of the root node times this fraction.
+    /// </summary>
+    public float MaxTranspositionRootApplicationsFraction = 0;
+
+
     /// <summary>
     /// Experiemental feature that a initializes a new leaf
     /// with the averge V or Q across all nodes in tree which
@@ -350,9 +364,9 @@ namespace Ceres.MCTS.Params
       // based on search state.
       Execution = new ParamsSearchExecution();
 
-      ParamsSecondaryEvaluator = new ();
+      ParamsSecondaryEvaluator = new();
     }
-   
+
 
   }
 }

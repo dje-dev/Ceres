@@ -67,20 +67,6 @@ namespace Ceres.MCTS.MTCSNodes
     /// </summary>
     private readonly MCTSNodeStructIndex index;
 
-    /// <summary>
-    /// If not NaN, this is a value that should 
-    /// override V as the value to be used for backup
-    /// (it is derived from the transposition subtree)
-    /// </summary>
-    public FP16 OverrideVToApplyFromTransposition = FP16.NaN;
-
-    /// <summary>
-    /// If not NaN, this is a value that should 
-    /// override MPosition as the value to be used for backup
-    /// (it is derived from the transposition subtree)
-    /// </summary>
-    public FP16 OverrideMPositionToApplyFromTransposition = FP16.NaN;
-
     public enum NodeActionType : short { NotInitialized, None, MCTSApply, CacheOnly };
 
     public NodeActionType ActionType;
@@ -268,7 +254,7 @@ namespace Ceres.MCTS.MTCSNodes
     /// </summary>
     public MCTSNode InFlightLinkedNode;
 
-#endregion
+    #endregion
 
     /// <summary>
     /// If the tree is truncated at this node and generating position
@@ -276,13 +262,35 @@ namespace Ceres.MCTS.MTCSNodes
     /// </summary>
     public bool IsTranspositionLinked => (*ptr).IsTranspositionLinked;
 
+    /// <summary>
+    /// The number of visits yet to be processed which will have their values taken from the 
+    /// the transposition root (or zero if not transposition linked).
+    /// This is encoded in the numChildrenVisited.
+    /// </summary>
+    public int NumVisitsPendingTranspositionRootExtraction => (*ptr).NumVisitsPendingTranspositionRootExtraction;
+
+    // Values to use for pending transposition extractions 
+    // (if NumVisitsPendingTranspositionRootExtraction > 0).
+    public float PendingTranspositionV = float.NaN;
+    public float PendingTranspositionM;
+    public float PendingTranspositionD;
+
+// ************ DO BE REMOVED
+    /// <summary>
+    /// If not NaN, this is a value that should 
+    /// override V as the value to be used for backup
+    /// (it is derived from the transposition subtree)
+    /// </summary>
+    public FP16 OverrideVToApplyFromTransposition = FP16.NaN;
 
     /// <summary>
-    /// The number of evaluations that have so far been extracted via
-    /// the transposition root (or zero if not transposition linked).
+    /// If not NaN, this is a value that should 
+    /// override MPosition as the value to be used for backup
+    /// (it is derived from the transposition subtree)
     /// </summary>
-    public int NumNodesTranspositionExtracted => (*ptr).NumNodesTranspositionExtracted;
+    public FP16 OverrideMPositionToApplyFromTransposition = FP16.NaN;
 
+// ***************************
 
     /// <summary>
     /// Returns the side to move as of this node.
@@ -542,6 +550,7 @@ namespace Ceres.MCTS.MTCSNodes
                        // Note that we pass argument indicating "exclusive access guaranteed" 
                        // to avoid having to try to take (many!) locks over nodes in the tree.
                        nodeRef.CopyUnexpandedChildrenFromOtherNode(Tree, new MCTSNodeStructIndex(nodeRef.TranspositionRootIndex), true);
+                       nodeRef.NumVisitsPendingTranspositionRootExtraction = 0;
                      }
                      return true;
                    }, TreeTraversalType.Sequential);
@@ -550,7 +559,7 @@ namespace Ceres.MCTS.MTCSNodes
 
     public double Q => N == 0 ? 0 : (W / N);
 
-#region Children
+    #region Children
 
     public bool IsRoot => ParentIndex.IsNull;
 
@@ -602,9 +611,9 @@ namespace Ceres.MCTS.MTCSNodes
       }
     }
 
-#endregion
+    #endregion
 
-#region Helpers
+    #region Helpers
 
 
     /// <summary>
@@ -662,7 +671,7 @@ namespace Ceres.MCTS.MTCSNodes
       }
     }
 
-  
+
 
 
     /// <summary>
@@ -720,9 +729,9 @@ namespace Ceres.MCTS.MTCSNodes
       }
     }
 
-#endregion
+    #endregion
 
-#region Miscellaneous
+    #region Miscellaneous
 
     /// <summary>
     /// Attempts to find a subnode by following specified moves from root.
@@ -813,15 +822,15 @@ namespace Ceres.MCTS.MTCSNodes
     }
 
     static float CalcCPUCT(int n, float cpuct, float cpuctBase, float cpuctFactor)
-    { 
+    {
       float CPUCT_EXTRA = (cpuctFactor == 0) ? 0 : cpuctFactor * FastLog.Ln((n + cpuctBase + 1.0f) / cpuctBase);
       float thisCPUCT = cpuct + CPUCT_EXTRA;
       return thisCPUCT;
     }
 
-#endregion
+    #endregion
 
-#region ITreeNode
+    #region ITreeNode
 
     ITreeNode ITreeNode.IParent => Parent;
 
@@ -842,10 +851,10 @@ namespace Ceres.MCTS.MTCSNodes
 
     ITreeNode ITreeNode.IChildAtIndex(int index) => ChildAtIndex(index);
 
-#endregion
+    #endregion
 
 
-#region Overrides (object)
+    #region Overrides (object)
 
     public int GetHashCode() => Index;
 
@@ -856,6 +865,6 @@ namespace Ceres.MCTS.MTCSNodes
 
     public int GetHashCode(MCTSNode obj) => obj.index.Index;
 
-#endregion
+    #endregion
   }
 }

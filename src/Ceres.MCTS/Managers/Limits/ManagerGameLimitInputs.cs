@@ -45,13 +45,14 @@ namespace Ceres.MCTS.Managers.Limits
     /// <param name="timeRemainingIncrementOpponent"></param>
     /// <param name="maxMovesToGo"></param>
     /// <param name="isFirstMoveOfGame"></param>
-    public ManagerGameLimitInputs(in Position startPos, ParamsSearch searchParams, 
+    public ManagerGameLimitInputs(in Position startPos, ParamsSearch searchParams,
                                  List<GameMoveStat> priorMoveStats,
                                  SearchLimitType limitType,
                                  int rootN,
                                  float rootQ,
                                  float timeRemainingFixedSelf, float timeRemainingIncrementSelf,
                                  int? maxTreeNodesSelf,
+                                 int? maxTreeVisitsSelf,
                                  float timeRemainingFixedOpponent, float timeRemainingIncrementOpponent,
                                  int? maxMovesToGo = null,
                                  bool isFirstMoveOfGame = false)
@@ -65,11 +66,13 @@ namespace Ceres.MCTS.Managers.Limits
       RemainingFixedSelf = MathF.Max(0.001f, timeRemainingFixedSelf);
       IncrementSelf = timeRemainingIncrementSelf;
       MaxTreeNodesSelf = maxTreeNodesSelf;
+      MaxTreeVisitsSelf = maxTreeVisitsSelf;
       RemainingFixedOpponent = MathF.Max(0.001f, timeRemainingFixedOpponent);
       IncrementOpponent = timeRemainingIncrementOpponent;
       MaxMovesToGo = maxMovesToGo;
       IsFirstMoveOfGame = isFirstMoveOfGame;
     }
+
 
     /// <summary>
     /// Starting position for this search.
@@ -116,6 +119,11 @@ namespace Ceres.MCTS.Managers.Limits
     /// Maximum size in nodes which the search tree is allowed to grow.
     /// </summary>
     public readonly int? MaxTreeNodesSelf;
+
+    /// <summary>
+    /// Maximum size in visits which the search tree is allowed to grow.
+    /// </summary>
+    public readonly int? MaxTreeVisitsSelf;
 
     /// <summary>
     /// Amount of remaining search units (time or nodes) until end of game.
@@ -208,9 +216,9 @@ namespace Ceres.MCTS.Managers.Limits
       {
         if (side == null || move.Side == side)
         {
-          Console.WriteLine($" {move.ClockSecondsAlreadyConsumed,6:F2}   " 
-                          + $"Allot= {move.SearchLimit,6:F2} [Diff= {move.SearchLimit.Value - opponentTime,6:F2}]  Used= {move.TimeElapsed,6:F2}  Q= {move.ScoreQ,5:F2} " 
-                          + $"MAvg={move.MAvg,6:F0} #Pc={move.NumPieces}  {move.PlyNum,5} { move.Side,10} StartN= { move.StartN,10} " 
+          Console.WriteLine($" {move.ClockSecondsAlreadyConsumed,6:F2}   "
+                          + $"Allot= {move.SearchLimit,6:F2} [Diff= {move.SearchLimit.Value - opponentTime,6:F2}]  Used= {move.TimeElapsed,6:F2}  Q= {move.ScoreQ,5:F2} "
+                          + $"MAvg={move.MAvg,6:F0} #Pc={move.NumPieces}  {move.PlyNum,5} { move.Side,10} StartN= { move.StartN,10} "
                           + $"ComputeN ={move.NumNodesComputed,9}  EndN={move.FinalN,10}  NPS={move.NodesPerSecond,8:F0} ");
         }
         else

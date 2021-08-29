@@ -111,7 +111,9 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       ref MCTSNodeStruct otherNode = ref tree.Store.Nodes.nodes[otherNodeIndex.Index];
 
       // Detach
-      NumNodesTranspositionExtracted = 0;
+      // not needed     NumVisitsPendingTranspositionRootExtraction = 0;
+      NumNodesTranspositionExtracted = 0; // to be removed
+
       TranspositionRootIndex = 0;
       NextTranspositionLinked = 0;
 

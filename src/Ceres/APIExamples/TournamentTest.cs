@@ -40,6 +40,7 @@ using Ceres.Base.OperatingSystem;
 using System.Collections.Generic;
 using Ceres.MCTS.MTCSNodes.Struct;
 using System.Runtime.InteropServices;
+using Ceres.MCTS.Environment;
 
 #endregion
 
@@ -119,8 +120,8 @@ namespace Ceres.APIExamples
       NET1 = "69722_value_focus_2";
       NET2 = "69722_value_focus_2";
 
-      //NET1 = "751675";
-      //NET2 = "751675";
+      NET1 = "751675";
+      NET2 = "751675";
       NET1 = "703810";
       NET2 = "703810";
       //      string NET1_SECONDARY1 = "j94-100";
@@ -145,12 +146,12 @@ namespace Ceres.APIExamples
         evalDef2.MakePersistent();
       }
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(20_000);
+      SearchLimit limit1 = SearchLimit.NodesPerMove(75_000);
       //limit1 = SearchLimit.NodesForAllMoves(1_000_000, 10_000);
 
       //      limit1 = SearchLimit.SecondsForAllMoves(900, 2) * 0.2f;
-      //limit1 = SearchLimit.SecondsForAllMoves(45);
-      //limit1 = SearchLimit.NodesForAllMoves(1_000_000, 5_000);
+      //      limit1 = SearchLimit.SecondsForAllMoves(45);
+      //limit1 = SearchLimit.NodesPerMove(11_000);
 
       SearchLimit limit2 = limit1;// * 0.2f;
 
@@ -159,7 +160,7 @@ namespace Ceres.APIExamples
 
       // Don't output log if very small games
       // (to avoid making very large log files or slowing down play).
-      bool outputLog = limit1.EstNumNodes(200_000, false) > 10_000;
+      bool outputLog = limit1.EstNumNodes(500_000, false) > 10_000;
       outputLog = false;
       GameEngineDefCeres engineDefCeres1 = new GameEngineDefCeres("Ceres1", evalDef1, evalDefSecondary1, new ParamsSearch(), new ParamsSelect(),
                                                                   null, outputLog ? "Ceres1.log.txt" : null);
@@ -172,7 +173,12 @@ namespace Ceres.APIExamples
       ////////
 
 
-      //engineDefCeres1.SearchParams.TestFlag = true;
+      //      engineDefCeres1.SearchParams.TreeReuseSwapRootEnabled = false;
+      //      engineDefCeres2.SearchParams.TreeReuseSwapRootEnabled = false;
+
+//      engineDefCeres1.SearchParams.MaxTranspositionRootApplicationsFixed = 1;// 3;
+//      engineDefCeres1.SearchParams.MaxTranspositionRootApplicationsFraction = 0.0f;// 0.25f;
+
       //engineDefCeres1.SelectParams.UseDynamicVLoss = true;
 
       //engineDefCeres1.SearchParams.MoveFutilityPruningAggressiveness = 0.4f;
@@ -249,7 +255,7 @@ namespace Ceres.APIExamples
                                                                                                         : @"C:\dev\ceres\artifacts\release\net5.0\ceres.exe",
                                                                    disableFutilityStopSearch: forceDisableSmartPruning);
 
-      GameEngineDef engineDefCeres93 = new GameEngineDefCeresUCI("Ceres93", evalDef2, overrideEXE: SoftwareManager.IsLinux ? @"/raid/dev/Ceres93/Ceres/artifacts/release/net5.0/Ceres.dll"
+      GameEngineDef engineDefCeres93 = new GameEngineDefCeresUCI("Ceres93", evalDef2, overrideEXE: SoftwareManager.IsLinux ? @"/raid/dev/Ceres93/artifacts/release/5.0/Ceres.dll"
                                                                                                                            : @"C:\ceres\releases\v0.93\ceres.exe");
 
       EnginePlayerDef playerCeres1UCI = new EnginePlayerDef(engineDefCeresUCI1, limit1);
@@ -272,7 +278,7 @@ namespace Ceres.APIExamples
 
       if (false)
       {
-        string BASE_NAME = "Stockfish238";// "nice_lcx";// "Stockfish238"; // ERET_VESELY203
+        string BASE_NAME = "ERET_VESELY203";// "nice_lcx";// "Stockfish238"; // ERET_VESELY203
 
         // ===============================================================================
         SuiteTestDef suiteDef = new SuiteTestDef("Suite",
@@ -282,7 +288,7 @@ namespace Ceres.APIExamples
                                                                          : @$"\\synology\dev\chess\data\epd\{BASE_NAME}.epd",
                                                 playerCeres1, playerCeres2, null);// playerLC0);
 
-        //        suiteDef.MaxNumPositions = 50;
+        //suiteDef.MaxNumPositions = 1;
         suiteDef.EPDLichessPuzzleFormat = suiteDef.EPDFileName.ToUpper().Contains("LICHESS");
 
         //suiteDef.EPDFilter = s => !s.Contains(".exe"); // For NICE suite, these represent positions with multiple choices
@@ -290,6 +296,9 @@ namespace Ceres.APIExamples
         SuiteTestRunner suiteRunner = new SuiteTestRunner(suiteDef);
 
         SuiteTestResult suiteResult = suiteRunner.Run(POOLED ? 16 : 1, true, false);
+        Console.WriteLine("Max mbytes alloc: " + WindowsVirtualAllocManager.MaxBytesAllocated / (1024 * 1024));
+        Console.WriteLine("Test counter 1  : " + MCTSEventSource.TestCounter1);
+        Console.WriteLine("Test metric 1   : " + MCTSEventSource.TestMetric1);
         return;
 #if NOT
         SysMisc.WriteObj("FinalQ1.dat", suiteResult.FinalQ1);
@@ -322,11 +331,11 @@ namespace Ceres.APIExamples
 #endif
       }
 
-      TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerCeres93);
+      TournamentDef def = new TournamentDef("TOURN", playerCeres1UCI, playerCeres93);
 
 
-      def.NumGamePairs = 250; // 102;
-      def.ShowGameMoves = false;
+      def.NumGamePairs = 150;// 102;
+      def.ShowGameMoves = true;
 
       string baseName = "tcec1819";
       baseName = "4mvs_+90_+99";
@@ -406,7 +415,7 @@ namespace Ceres.APIExamples
 
       TournamentDef def = new TournamentDef("TOURN", playerCeres, playerSF);
       def.OpeningsFileName = "4mvs_+90_+99.pgn";// "TCEC1819.pgn";
-      def.NumGamePairs = 150;
+      def.NumGamePairs = 250;
       def.ShowGameMoves = false;
 
       TournamentManager runner = new TournamentManager(def, 1);

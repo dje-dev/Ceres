@@ -153,8 +153,8 @@ namespace Ceres.Features.UCI
 
     void LogWriteLine(string prefix, string line)
     {
-      uciLogWriter.WriteLine(prefix + 
-                            " [" 
+      uciLogWriter.WriteLine(prefix +
+                            " ["
                             + DateTime.Now.ToString("MM/dd/yyyy hh:mm:ss.fff tt")
                             + "]"
                             + line);
@@ -563,7 +563,7 @@ namespace Ceres.Features.UCI
     private void ProcessPosition(string command)
     {
       command = StringUtils.WhitespaceRemoved(command);
-      
+
       string commandLower = command.ToLower();
 
       string posString;
@@ -573,7 +573,7 @@ namespace Ceres.Features.UCI
         posString = command.Substring(9);
       else
         throw new Exception($"Illegal position command, expected to start with position fen or position startpos");
-      
+
       PositionWithHistory newPositionAndMoves = PositionWithHistory.FromFENAndMovesUCI(posString);
 
       curPositionIsContinuationOfPrior = newPositionAndMoves.IsIdenticalToPriorToLastMove(curPositionAndMoves);
@@ -608,7 +608,7 @@ namespace Ceres.Features.UCI
           {
             if (maxTreeNodes != null)
             {
-              searchLimit = searchLimit with { MaxTreeNodes = maxTreeNodes };
+              searchLimit = searchLimit with { MaxTreeVisits = maxTreeVisits, MaxTreeNodes = maxTreeNodes };
             }
 
             if (searchLimit.Value > 0)
@@ -649,7 +649,7 @@ namespace Ceres.Features.UCI
 
       if (goInfo.Nodes.HasValue)
       {
-        searchLimit =  SearchLimit.NodesPerMove(goInfo.Nodes.Value);
+        searchLimit = SearchLimit.NodesPerMove(goInfo.Nodes.Value);
       }
       else if (goInfo.MoveTime.HasValue)
       {
@@ -746,7 +746,7 @@ namespace Ceres.Features.UCI
 
       // Send the best move
       UCIWriteLine("bestmove " + result.Search.BestMove.MoveStr(MGMoveNotationStyle.LC0Coordinate));
-//      if (debug) Send("info string " + result.Search.SearchRootNode.BestMoveInfo(false));
+      //      if (debug) Send("info string " + result.Search.SearchRootNode.BestMoveInfo(false));
 
       return result;
     }
@@ -758,23 +758,23 @@ namespace Ceres.Features.UCI
 
       if (numPV == 1)
       {
-        UCIWriteLine(UCIInfo.UCIInfoString(manager, searchRootNode, best?.BestMoveNode, 
-                                  showWDL:showWDL, scoreAsQ:scoreAsQ));
+        UCIWriteLine(UCIInfo.UCIInfoString(manager, searchRootNode, best?.BestMoveNode,
+                                  showWDL: showWDL, scoreAsQ: scoreAsQ));
       }
       else
       {
         // Send top move
-        UCIWriteLine(UCIInfo.UCIInfoString(manager, searchRootNode, best.BestMoveNode, 1, 
+        UCIWriteLine(UCIInfo.UCIInfoString(manager, searchRootNode, best.BestMoveNode, 1,
                                    showWDL: showWDL, useParentN: !perPVCounters, scoreAsQ: scoreAsQ));
 
         // Send other moves visited
         MCTSNode[] sortedN = searchRootNode.ChildrenSorted(s => -(float)s.N);
         int multiPVIndex = 2;
-        for (int i=0;i<sortedN.Length && i <numPV; i++)
+        for (int i = 0; i < sortedN.Length && i < numPV; i++)
         {
           if (!object.ReferenceEquals(sortedN[i], best.BestMoveNode))
           {
-            UCIWriteLine(UCIInfo.UCIInfoString(manager, searchRootNode, sortedN[i], multiPVIndex, 
+            UCIWriteLine(UCIInfo.UCIInfoString(manager, searchRootNode, sortedN[i], multiPVIndex,
                                        showWDL: showWDL, useParentN: !perPVCounters, scoreAsQ: scoreAsQ));
             multiPVIndex++;
           }
@@ -783,14 +783,14 @@ namespace Ceres.Features.UCI
         // Finally show moves that had no visits
         float elapsedTimeSeconds = (float)(DateTime.Now - manager.StartTimeThisSearch).TotalSeconds;
         string timeStr = $"{ elapsedTimeSeconds * 1000.0f:F0}";
-        for (int i = multiPVIndex-1; i<searchRootNode.NumPolicyMoves; i++)
+        for (int i = multiPVIndex - 1; i < searchRootNode.NumPolicyMoves; i++)
         {
           (MCTSNode node, EncodedMove move, FP16 p) info = searchRootNode.ChildAtIndexInfo(i);
           if (info.node == null)
           {
             bool isWhite = searchRootNode.Annotation.Pos.MiscInfo.SideToMove == SideType.White;
             EncodedMove moveCorrectPerspective = isWhite ? info.move : info.move.Flipped;
-            string str = $"info depth 0 seldepth 0 time { timeStr } nodes 1 score cp 0 tbhits 0 " 
+            string str = $"info depth 0 seldepth 0 time { timeStr } nodes 1 score cp 0 tbhits 0 "
                        + $"multipv {multiPVIndex} pv {moveCorrectPerspective.AlgebraicStr} ";
             UCIWriteLine(str);
             multiPVIndex++;

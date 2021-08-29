@@ -115,6 +115,11 @@ namespace Ceres.Features.UCI
     float moveOverheadSeconds = new ParamsSearch().MoveOverheadSeconds;
 
     /// <summary>
+    /// Maximum size of tree allowed (in visits).
+    /// </summary>
+    int? maxTreeVisits = null;
+
+    /// <summary>
     /// Maximum size of tree allowed (in nodes).
     /// </summary>
     int? maxTreeNodes = null;
@@ -151,7 +156,7 @@ namespace Ceres.Features.UCI
 
       string name = parts[2];
       string value = command.Substring(command.IndexOf("value ") + 6);
-      
+
       switch (name.ToLower())
       {
         case "weightsfile":
@@ -177,6 +182,10 @@ namespace Ceres.Features.UCI
 
         case "loglivestats":
           SetBool(value, ref logLiveStats);
+          break;
+
+        case "maxtreevisits":
+          SetInt(value, 1, int.MaxValue, ref maxTreeVisits);
           break;
 
         case "maxtreenodes":
@@ -400,6 +409,7 @@ option name PolicyTemperature type string default {new ParamsSelect().PolicySoft
 option name FPU type string default {new ParamsSelect().FPUValue}
 option name FPUAtRoot type string default {new ParamsSelect().FPUValueAtRoot}
 option name SearchLimitMultiplier type string default 1.00
+option name MaxTreeVisits type string default
 option name MaxTreeNodes type string default
 ");
     /* 

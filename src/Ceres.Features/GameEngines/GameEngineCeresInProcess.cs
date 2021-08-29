@@ -117,7 +117,7 @@ namespace Ceres.Features.GameEngines
     /// <param name="childSelectParams">optional non-default child selection parameters </param>
     /// <param name="gameLimitManager">optional override manager for search limits</param>
     /// <param name="logFileName">optional name of file to which to write detailed log</param>
-    public GameEngineCeresInProcess(string id, 
+    public GameEngineCeresInProcess(string id,
                                     NNEvaluatorDef evaluatorDef,
                                     NNEvaluatorDef evaluatorDefSecondary = null,
                                     ParamsSearch searchParams = null,
@@ -229,9 +229,13 @@ namespace Ceres.Features.GameEngines
         throw new Exception("ResetGame must be called if not continuing same line");
       }
 
-      // Make sure max tree nodes does not exceed maximum value supported by engine (with a small bufffer).
-      searchLimit = searchLimit with { MaxTreeNodes = Math.Min(MCTSNodeStore.MAX_NODES - 2500, searchLimit.MaxTreeNodes ?? int.MaxValue) };
-      
+      // Set max tree nodes to maximum value based on memory (unless explicitly overridden in passed SearchLimit)
+      searchLimit = searchLimit with
+      {
+        MaxTreeVisits = searchLimit.MaxTreeVisits ?? MCTSParamsFixed.MAX_VISITS,
+        MaxTreeNodes = searchLimit.MaxTreeNodes ?? Math.Min(MCTSNodeStore.MAX_NODES - 2500, searchLimit.MaxTreeNodes ?? int.MaxValue)
+      };
+
       MCTSearch searchResult;
 
       // Set up callback passthrough if provided
@@ -288,10 +292,10 @@ namespace Ceres.Features.GameEngines
 
       isFirstMoveOfGame = false;
       // TODO is the RootNWhenSearchStarted correct because we may be following a continuation (BestMoveRoot)
-      GameEngineSearchResultCeres result = 
+      GameEngineSearchResultCeres result =
         new GameEngineSearchResultCeres(bestMoveMG.MoveStr(MGMoveNotationStyle.LC0Coordinate),
                                         (float)bestMoveInfo.QOfBest, scoreCeresCP, searchResult.SearchRootNode.MAvg, searchResult.Manager.SearchLimit, default,
-                                        searchResult.Manager.RootNWhenSearchStarted, N, (int)searchResult.Manager.Context.AvgDepth, 
+                                        searchResult.Manager.RootNWhenSearchStarted, N, (int)searchResult.Manager.Context.AvgDepth,
                                         searchResult, bestMoveInfo);
 
       // Append search result information to log file (if any).
@@ -417,7 +421,7 @@ namespace Ceres.Features.GameEngines
                                                 LastSearch.Manager.Context.ParamsSearch,
                                                 gameMoveHistory, SearchLimitType.SecondsPerMove,
                                                 LastSearch.Manager.Root.N, (float)LastSearch.Manager.Root.Q,
-                                                LastSearch.Manager.SearchLimit.Value, 0, null, 0, 0);
+                                                LastSearch.Manager.SearchLimit.Value, 0, null, null, 0, 0);
       timeManagerInputs.Dump(side);
     }
 

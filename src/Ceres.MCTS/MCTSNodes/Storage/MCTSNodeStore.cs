@@ -20,6 +20,8 @@ using Ceres.Base.Environment;
 using Ceres.Chess.Positions;
 using Ceres.MCTS.Params;
 using Ceres.MCTS.MTCSNodes.Struct;
+using System.Collections;
+using Ceres.Chess;
 
 #endregion
 
@@ -32,11 +34,12 @@ namespace Ceres.MCTS.MTCSNodes.Storage
   public partial class MCTSNodeStore : IDisposable
   {
     /// <summary>
-    /// Approximate average total bytes consumed by a node, child pointers, and associated data structures.
-    /// For very large trees with many transposition-linked nodes (not needing their own copy of child info)
-    /// this number can be as small as 130 bytes (on top of which there will be some fixed overhead of circa 5GB).
+    /// Approximate average total bytes consumed by a node, child pointers, 
+    /// and associated data structures (such as possible entry transposition roots table).
     /// </summary>
-    const ulong APPROX_BYTES_PER_NODE = 160;
+    const ulong APPROX_BYTES_PER_NODE = 16
+                                      + MCTSNodeStruct.MCTSNodeStructSizeBytes
+                                      + (4 * TYPICAL_AVG_CHILDREN_PER_NODE);
 
     /// <summary>
     /// Maximum number of nodes for which which the store could accomodate.
@@ -73,7 +76,8 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     /// </summary>
     public MCTSNodeStructIndex RootIndex { get; internal set; }
 
-    public const int AVG_CHILDREN_PER_NODE = 55;
+    public const int MAX_AVG_CHILDREN_PER_NODE = 55; // conservative value unlikely to be exceeded
+    public const int TYPICAL_AVG_CHILDREN_PER_NODE = 40; // typical value
 
     /// <summary>
     /// Returns reference to the root node.
@@ -97,15 +101,15 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 
       MaxNodes = maxNodes;
       int allocNodes = maxNodes;
-      
-      Nodes = new MCTSNodeStructStorage(allocNodes, null, 
-                                        MCTSParamsFixed.STORAGE_USE_INCREMENTAL_ALLOC, 
+
+      Nodes = new MCTSNodeStructStorage(allocNodes, null,
+                                        MCTSParamsFixed.STORAGE_USE_INCREMENTAL_ALLOC,
                                         MCTSParamsFixed.TryEnableLargePages,
                                         MCTSParamsFixed.STORAGE_USE_EXISTING_SHARED_MEM);
-      
-      long reserveChildren = maxNodes * (long)AVG_CHILDREN_PER_NODE;
+
+      long reserveChildren = maxNodes * (long)MAX_AVG_CHILDREN_PER_NODE;
       Children = new MCTSNodeStructChildStorage(this, reserveChildren);
-      
+
       // Save a copy of the prior moves
       Nodes.PriorMoves = new PositionWithHistory(priorMoves);
 
@@ -186,7 +190,8 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     {
       for (int i = 1; i < Nodes.nextFreeIndex; i++)
       {
-        Nodes.nodes[i].CacheIndex = 0;
+        ref MCTSNodeStruct nodeRef = ref Nodes.nodes[i];
+        nodeRef.CacheIndex = 0;
       }
     }
 
@@ -213,6 +218,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       Assert(Nodes.nodes[0].N == 0, "Null node");
       Assert(Nodes.nodes[1].IsRoot, "IsRoot");
 
+      BitArray includedNodes = MCTSNodeStructUtils.BitArrayNodesInSubtree(this, ref Nodes.nodes[1], false, out _);
 
       // Validate all nodes
       for (int i = 1; i < Nodes.nextFreeIndex; i++)
@@ -221,10 +227,17 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 
         if (nodeR.IsOldGeneration)
         {
+          Assert(!includedNodes[i], "Old generation node in live tree");
           continue;
         }
 
+        Assert(nodeR.Terminal != Chess.GameResult.NotInitialized, "Node not initialized");
         Assert(!expectCacheIndexZero || nodeR.CacheIndex == 0, "CacheIndex zeroed");
+
+        if (nodeR.TranspositionRootIndex == 0 && nodeR.N > 0 && !nodeR.Terminal.IsTerminal() && nodeR.NumPolicyMoves == 0)
+        {
+          Assert(false, "Non-transposition linked node without policy initialized");
+        }
 
         Assert(!nodeR.IsInFlight, "Node in flight");
 
@@ -242,10 +255,10 @@ namespace Ceres.MCTS.MTCSNodes.Storage
           Assert(nodeR.childStartBlockIndex != 0, "ChildStartIndex nonzero");
         }
 
-        if (nodeR.NumNodesTranspositionExtracted > 0)
+        if (nodeR.NumVisitsPendingTranspositionRootExtraction > 0)
         {
-          Assert(nodeR.TranspositionRootIndex != 0, 
-            $"TranspositionRootIndex zero when NumNodesTranspositionExtracted > 0 : {nodeR.NumNodesTranspositionExtracted} {nodeR.TranspositionRootIndex}");
+          Assert(nodeR.TranspositionRootIndex != 0,
+            $"TranspositionRootIndex zero when NumVisitsPendingTranspositionRootExtraction > 0 : {nodeR.NumVisitsPendingTranspositionRootExtraction} {nodeR.TranspositionRootIndex}");
         }
 
         if (nodeR.IsTranspositionLinked)
@@ -309,7 +322,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     /// </summary>
     /// <param name="childDetail"></param>
     /// <param name="annotater">optionally a method called for each node which can further annotate</param>
-    public void Dump(bool childDetail, Func<MCTSNodeStructIndex,string> annotater = null)
+    public void Dump(bool childDetail, Func<MCTSNodeStructIndex, string> annotater = null)
     {
       Console.WriteLine();
       Console.WriteLine();

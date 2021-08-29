@@ -73,7 +73,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 
     public MemoryBufferOS<MCTSNodeStruct> nodes;
 
-    [DebuggerBrowsable(DebuggerBrowsableState.Never)] 
+    [DebuggerBrowsable(DebuggerBrowsableState.Never)]
     public Span<MCTSNodeStruct> Span => nodes.Span;
 #else
     public const bool SPAN = false;
@@ -83,7 +83,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 
     internal const int FIRST_ALLOCATED_INDEX = 1;
 
-    readonly object lockObj = new ();
+    readonly object lockObj = new();
 
     /// <summary>
     /// Returns the numbrer of nodes allocated so far.
@@ -100,6 +100,12 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     /// </summary>
     internal int nextFreeIndex = FIRST_ALLOCATED_INDEX; // Index 0 reserved, indicates null node
 
+    /// <summary>
+    /// Number of nodes which have been marked as belonging to old generation of tree,
+    /// no longer used or reachable from current root.
+    /// </summary>
+    public int NumOldGeneration;
+
 
     /// <summary>
     /// Constructor.
@@ -109,7 +115,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     /// <param name="useIncrementalAlloc"></param>
     /// <param name="largePages"></param>
     /// <param name="useExistingSharedMem"></param>
-    public MCTSNodeStructStorage(int numNodes, PositionWithHistory priorMoves, bool useIncrementalAlloc, 
+    public MCTSNodeStructStorage(int numNodes, PositionWithHistory priorMoves, bool useIncrementalAlloc,
                                  bool largePages, bool useExistingSharedMem)
     {
       MaxNodes = numNodes;
@@ -169,7 +175,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     /// </summary>
     static int BUFFER_NODES => (2048 * 1024) / MCTSNodeStruct.MCTSNodeStructSizeBytes;
 
-    public void InsureAllocated(int numNodes) =>  nodes.InsureAllocated(numNodes);
+    public void InsureAllocated(int numNodes) => nodes.InsureAllocated(numNodes);
 
 
     /// <summary>

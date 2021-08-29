@@ -55,6 +55,12 @@ namespace Ceres.Chess
     public int? MaxTreeNodes { init; get; } = null;
 
     /// <summary>
+    /// Optionally the maximum number of visits which are allowed in the search tree
+    /// at one time. Search is stopped if this limit is reached.
+    /// </summary>
+    public int? MaxTreeVisits { init; get; } = null;
+
+    /// <summary>
     /// If true then sufficent node storage is reserved so that
     /// the search can subsequently be expanded (without any practical bound).
     /// 
@@ -94,7 +100,7 @@ namespace Ceres.Chess
     }
 
     public static SearchLimit NodesForAllMoves(int nodes, int nodesIncrement = 0, int? maxMovesToGo = null, bool searchContinuationSupported = true)
-    { 
+    {
       return new SearchLimit(SearchLimitType.NodesForAllMoves, nodes, searchContinuationSupported, nodesIncrement, maxMovesToGo);
     }
 
@@ -112,10 +118,13 @@ namespace Ceres.Chess
     /// <param name="maxMovesToGo"></param>
     /// <param name="searchMoves"></param>
     /// <param name="fractionExtensibleIfNeeded"></param>
-    public SearchLimit(SearchLimitType type, float value, bool searchCanBeExpanded = true, 
+    /// <param name="maxTreeNodes"></param>
+    /// <param name="maxTreeVisits"></param>
+    public SearchLimit(SearchLimitType type, float value, bool searchCanBeExpanded = true,
                        float valueIncrement = 0, int? maxMovesToGo = null, List<Move> searchMoves = null,
-                       float fractionExtensibleIfNeeded= 0f,
-                       int? maxTreeNodes = null)
+                       float fractionExtensibleIfNeeded = 0f,
+                       int? maxTreeNodes = null,
+                       int? maxTreeVisits = null)
     {
       if (value < 0) throw new ArgumentOutOfRangeException(nameof(value), "cannot be negative");
       if (valueIncrement > 0 && !TypeIsPerGameLimit(type))
@@ -127,10 +136,11 @@ namespace Ceres.Chess
       ValueIncrement = valueIncrement;
       MaxMovesToGo = maxMovesToGo;
       MaxTreeNodes = maxTreeNodes;
+      MaxTreeVisits = maxTreeVisits;
       if (searchMoves != null && searchMoves.Count > 0)
       {
         SearchMoves = searchMoves;
-      
+
       }
       FractionExtensibleIfNeeded = fractionExtensibleIfNeeded;
     }
@@ -175,9 +185,11 @@ namespace Ceres.Chess
         throw new ArgumentOutOfRangeException(nameof(scalingFactor) + " must be a positive value");
       }
 
-      return left with { Value = left.Value * scalingFactor, 
-                         ValueIncrement = left.ValueIncrement * scalingFactor 
-                       };
+      return left with
+      {
+        Value = left.Value * scalingFactor,
+        ValueIncrement = left.ValueIncrement * scalingFactor
+      };
     }
 
 
@@ -288,7 +300,8 @@ namespace Ceres.Chess
       string valuePart = IsTimeLimit ? $"{Value,8:F2}s" : $"{Value,12:N0} nodes";
       string incrPart = IsTimeLimit ? $"{ValueIncrement,8:F2}s" : $"{ValueIncrement,12:N0} nodes";
 
-      string maxTree = MaxTreeNodes != null ? $" Tree max {MaxTreeNodes,12:N0}" : "";
+      string maxNodes = MaxTreeNodes != null ? $" Nodes max {MaxTreeNodes,12:N0}" : "";
+      string maxVisits = MaxTreeVisits != null ? $" Visits max {MaxTreeVisits,12:N0}" : "";
       string searchMovesPart = "";
       if (SearchMoves != null)
       {
@@ -299,7 +312,7 @@ namespace Ceres.Chess
         }
       }
 
-      return $"<{TypeShortStr,-4}{valuePart}{(ValueIncrement > 0 ? $" +{incrPart}" : "")}{movesToGoPart}{maxTree}{searchMovesPart}>";
+      return $"<{TypeShortStr,-4}{valuePart}{(ValueIncrement > 0 ? $" +{incrPart}" : "")}{movesToGoPart}{maxNodes}{maxVisits}{searchMovesPart}>";
     }
   }
 }

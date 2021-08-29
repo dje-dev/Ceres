@@ -26,7 +26,7 @@ namespace Ceres.MCTS.Managers.Limits
   /// to spend on the next move (default Ceres version)
   /// </summary>
   [Serializable]
-  public class ManagerGameLimitCeres: IManagerGameLimit
+  public class ManagerGameLimitCeres : IManagerGameLimit
   {
     public readonly float Aggressiveness;
 
@@ -74,7 +74,7 @@ namespace Ceres.MCTS.Managers.Limits
         > 0.25f => 0.95f,
         _ => 1.0f
       };
-    
+
 
       // Spend 20% more on first move of game (definitely no tree reuse, etc.)
       float factorFirstMove = inputs.IsFirstMoveOfGame ? 1.2f : 1.0f;
@@ -112,9 +112,9 @@ namespace Ceres.MCTS.Managers.Limits
 
 
     // Amount of potential dynamic search extensions is gated by degree of time pressure.
-    const float EXTENSION_FRACTION_PANIC           = 0.0f;
+    const float EXTENSION_FRACTION_PANIC = 0.0f;
     const float EXTENSION_FRACTION_NEAR_EXHAUSTION = 0.2f;
-    const float EXTENSION_FRACTION_NORMAL          = 0.6f;
+    const float EXTENSION_FRACTION_NORMAL = 0.6f;
 
     /// Determines how much time or nodes resource to
     /// allocate to the the current move in a game subject to
@@ -123,9 +123,10 @@ namespace Ceres.MCTS.Managers.Limits
     public ManagerGameLimitOutputs ComputeMoveAllocation(ManagerGameLimitInputs inputs)
     {
       ManagerGameLimitOutputs Return(float value, float extensionFraction)
-        => new ManagerGameLimitOutputs(new SearchLimit(inputs.TargetLimitType, value,                                                        
+        => new ManagerGameLimitOutputs(new SearchLimit(inputs.TargetLimitType, value,
                                                        fractionExtensibleIfNeeded: extensionFraction,
-                                                       maxTreeNodes:inputs.MaxTreeNodesSelf));
+                                                       maxTreeNodes: inputs.MaxTreeNodesSelf,
+                                                       maxTreeVisits: inputs.MaxTreeVisitsSelf));
 
       // If this is the last move to go, use almost all available time.
       // TODO: but can a player carry forward time on a clock? Then this doesn't make sense.

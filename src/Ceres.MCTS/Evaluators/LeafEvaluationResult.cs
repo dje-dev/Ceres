@@ -78,7 +78,7 @@ namespace Ceres.MCTS.Evaluators
         float winP = WinP.ToFloatApprox;
         float lossP = LossP.ToFloatApprox;
         float v = winP - lossP;
-        return ParamsSelect.VIsForcedResult(v) ? 0 
+        return ParamsSelect.VIsForcedResult(v) ? 0
                                                : 1.0f - (winP + lossP);
 #if NOT
         float correct = ParamsSelect.VIsForcedResult(V) ? 0 : 1.0f - (WinP + LossP);
@@ -183,7 +183,7 @@ namespace Ceres.MCTS.Evaluators
       this.policyArrayIndex = policyArrayIndex;
       this.policyArray = policyArray;
 
-      ExtraResults  = null;
+      ExtraResults = null;
     }
 
     /// <summary>
@@ -193,8 +193,10 @@ namespace Ceres.MCTS.Evaluators
     {
       get
       {
-        if (policyArrayIndex == -1) 
+        if (policyArrayIndex == -1)
+        {
           throw new Exception("Internal error: access to release policy object");
+        }
         return ref policyArray.Span[policyArrayIndex];
       }
     }
@@ -205,6 +207,8 @@ namespace Ceres.MCTS.Evaluators
     /// </summary>
     public (Memory<CompressedPolicyVector> policies, int index) PolicyInArray
     {
+      get => (policyArray, policyArrayIndex);
+
       set
       {
         Debug.Assert(policyArrayIndex == -1 && value.index != -1);

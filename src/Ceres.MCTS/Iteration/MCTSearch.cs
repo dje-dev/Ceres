@@ -30,6 +30,7 @@ using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.Params;
 using Ceres.MCTS.Environment;
+using Ceres.MCTS.Managers;
 
 #endregion
 
@@ -145,7 +146,7 @@ namespace Ceres.MCTS.Iteration
         }
       }
 
-      if (!MCTSParamsFixed.STORAGE_USE_INCREMENTAL_ALLOC  && !searchLimit.IsNodesLimit)
+      if (!MCTSParamsFixed.STORAGE_USE_INCREMENTAL_ALLOC && !searchLimit.IsNodesLimit)
       {
         throw new Exception("SearchLimit must be NodesPerMove or NodesPerGame when STORAGE_USE_INCREMENTAL_ALLOC is false");
       }
@@ -163,9 +164,10 @@ namespace Ceres.MCTS.Iteration
         // In this mode, we are just reserving virtual address space
         // from a very large pool (e.g. 256TB for Windows).
         // Therefore it is safe to reserve a very large block.
-        if (searchLimit.MaxTreeNodes != null && searchLimit.MaxTreeNodes > MCTSNodeStore.MAX_NODES)
+        if (searchLimit.MaxTreeNodes != null)
         {
-          maxNodes = searchLimit.MaxTreeNodes.Value + 100_000;
+          long max = Math.Min(MCTSNodeStore.MAX_NODES, searchLimit.MaxTreeNodes.Value + 100_000);
+          maxNodes = (int)max;
         }
         else
         {
@@ -180,7 +182,7 @@ namespace Ceres.MCTS.Iteration
                                                           gameMoveHistory, isFirstMoveOfGame);
 
       Manager = new MCTSManager(store, reuseOtherContextForEvaluatedNodes, positionEvalCache, null,
-                                nnEvaluators, paramsSearch, paramsSelect,  searchLimitToUse, 
+                                nnEvaluators, paramsSearch, paramsSelect, searchLimitToUse,
                                 limitManager, startTime, gameMoveHistory, isFirstMoveOfGame);
 
       using (new SearchContextExecutionBlock(Manager.Context))
@@ -202,7 +204,7 @@ namespace Ceres.MCTS.Iteration
     /// <param name="isFirstMoveOfGame"></param>
     /// <returns></returns>
     SearchLimit ConvertedSearchLimit(in Position position,
-                                     SearchLimit searchLimit, 
+                                     SearchLimit searchLimit,
                                      int searchRootN, float searchRootQ,
                                      ParamsSearch searchParams,
                                      IManagerGameLimit limitManager,
@@ -225,7 +227,8 @@ namespace Ceres.MCTS.Iteration
         ManagerGameLimitInputs limitsManagerInputs = new(in position,
                                 searchParams, gameMoveHistory,
                                 type, searchRootN, searchRootQ,
-                                searchLimit.Value, searchLimit.ValueIncrement, searchLimit.MaxTreeNodes,
+                                searchLimit.Value, searchLimit.ValueIncrement,
+                                searchLimit.MaxTreeNodes, searchLimit.MaxTreeVisits,
                                 float.NaN, float.NaN,
                                 maxMovesToGo: searchLimit.MaxMovesToGo,
                                 isFirstMoveOfGame: isFirstMoveOfGame);
@@ -234,7 +237,7 @@ namespace Ceres.MCTS.Iteration
         return timeManagerOutputs.LimitTarget;
       }
     }
-   
+
 
     /// <summary>
     /// Runs a search, possibly continuing from node 
@@ -256,8 +259,8 @@ namespace Ceres.MCTS.Iteration
                                IEnumerable<MGMove> moves, PositionWithHistory newPositionAndMoves,
                                List<GameMoveStat> gameMoveHistory,
                                SearchLimit searchLimit,
-                               bool verbose,  DateTime startTime,
-                               MCTSManager.MCTSProgressCallback progressCallback, 
+                               bool verbose, DateTime startTime,
+                               MCTSManager.MCTSProgressCallback progressCallback,
                                float thresholdMinFractionNodesRetained,
                                bool isFirstMoveOfGame = false)
     {
@@ -284,25 +287,36 @@ namespace Ceres.MCTS.Iteration
         // New root is not useful if contained no search
         // (for example if it was resolved via tablebase)
         // thus in that case we pretend as if we didn't find it
-        if (newRoot != null && (newRoot.N == 0 || newRoot.NumPolicyMoves == 0)) newRoot = null;
+        if (newRoot != null && (newRoot.N == 0 || newRoot.NumPolicyMoves == 0))
+        {
+          newRoot = null;
+        }
 
         // Update contempt manager (if any) based opponent's prior move
         UpdateContemptManager(newRoot);
 
         // Compute search limits
-        ComputeSearchLimits(newPositionAndMoves.FinalPosition, 
+        ComputeSearchLimits(newPositionAndMoves.FinalPosition,
                             newRoot == null ? 0 : newRoot.N,
                             newRoot == null ? 0 : (float)newRoot.Q,
-                            gameMoveHistory, searchLimit, isFirstMoveOfGame, priorContext, 
+                            gameMoveHistory, searchLimit, isFirstMoveOfGame, priorContext,
                             out SearchLimit searchLimitTargetAdjusted, out SearchLimit searchLimitIncremental);
 
+
+        ManagerTreeReuse.Method reuseMethod = ManagerTreeReuse.Method.NewStore;
+        if (newRoot != null)
+        {
+          MCTSNode candidateBestMove = newRoot.BestMove(false);
+          reuseMethod = ManagerTreeReuse.ChooseMethod(priorContext.Tree.Root, candidateBestMove, searchLimitTargetAdjusted.MaxTreeNodes);
+        }
+
         // Check for possible instant move
-        (MCTSManager, MGMove, TimingStats) instamove = CheckInstamove(Manager, searchLimitIncremental, newRoot);
-        if (instamove != default)
+        bool instamove = CheckInstamove(Manager, searchLimitIncremental, newRoot, reuseMethod);
+        if (instamove)
         {
           // Modify in place to point to the new root
           continuationSubroot = newRoot;
-          BestMove = instamove.Item2;
+          BestMove = newRoot.BestMoveInfo(false).BestMove;
           Manager.StopStatus = MCTSManager.SearchStopStatus.Instamove;
           TimingInfo = new TimingStats();
           return;
@@ -316,13 +330,16 @@ namespace Ceres.MCTS.Iteration
 
         PositionEvalCache positionEvalCache = null;
 
-        bool storeIsAlmostFull = priorContext.Tree.Store.FractionInUse > 0.9f;
-        bool newRootIsBigEnoughForReuse = newRoot != null && newRoot.N >= (priorContext.Root.N * thresholdMinFractionNodesRetained);
+        //        bool storeIsAlmostFull = priorContext.Tree.Store.FractionInUse > 0.9f;
+        //        bool newRootIsBigEnoughForReuse = newRoot != null && newRoot.N >= (priorContext.Root.N * thresholdMinFractionNodesRetained);
         if (priorContext.ParamsSearch.TreeReuseEnabled
-         && newRootIsBigEnoughForReuse
-         && !storeIsAlmostFull)
+          && (reuseMethod == ManagerTreeReuse.Method.KeepStoreRebuildTree || reuseMethod == ManagerTreeReuse.Method.KeepStoreSwapRoot))
+        //         && newRootIsBigEnoughForReuse
+        //         && !storeIsAlmostFull//         
         {
-          SearchContinueRetainTree(reuseOtherContextForEvaluatedNodes, newPositionAndMoves, gameMoveHistory, verbose, startTime, progressCallback, isFirstMoveOfGame, priorContext, store, numNodesInitial, newRoot, searchLimitTargetAdjusted, possiblyUsePositionCache);
+          SearchContinueRetainTree(reuseOtherContextForEvaluatedNodes, newPositionAndMoves, gameMoveHistory, verbose, startTime,
+                                   progressCallback, isFirstMoveOfGame, priorContext, store, numNodesInitial, newRoot,
+                                   searchLimitTargetAdjusted, possiblyUsePositionCache, reuseMethod);
         }
         else
         {
@@ -367,7 +384,12 @@ namespace Ceres.MCTS.Iteration
       }
     }
 
-    private void SearchContinueRetainTree(MCTSIterator reuseOtherContextForEvaluatedNodes, PositionWithHistory newPositionAndMoves, List<GameMoveStat> gameMoveHistory, bool verbose, DateTime startTime, MCTSManager.MCTSProgressCallback progressCallback, bool isFirstMoveOfGame, MCTSIterator priorContext, MCTSNodeStore store, int numNodesInitial, MCTSNode newRoot, SearchLimit searchLimitTargetAdjusted, bool possiblyUsePositionCache)
+    private void SearchContinueRetainTree(MCTSIterator reuseOtherContextForEvaluatedNodes, PositionWithHistory newPositionAndMoves,
+                                          List<GameMoveStat> gameMoveHistory, bool verbose, DateTime startTime,
+                                          MCTSManager.MCTSProgressCallback progressCallback, bool isFirstMoveOfGame,
+                                          MCTSIterator priorContext, MCTSNodeStore store, int numNodesInitial, MCTSNode newRoot,
+                                          SearchLimit searchLimitTargetAdjusted, bool possiblyUsePositionCache,
+                                          ManagerTreeReuse.Method reuseMethod)
     {
       TimingStats statsMaterialize = new();
       if (Manager.Context.ParamsSearch.Execution.TranspositionMode != TranspositionMode.None)
@@ -395,6 +417,8 @@ namespace Ceres.MCTS.Iteration
         newTranspositionRoots = new TranspositionRootsDict(newRoot.N);
       }
 
+
+
       // TODO: Consider sometimes or always skip rebuild via MakeChildNewRoot,
       //       instead just set a new root (move it into place as first node).
       //       Perhaps rebuild only if the MCTSNodeStore would become excessively large.
@@ -402,17 +426,11 @@ namespace Ceres.MCTS.Iteration
       bool wasSwap = false;
       using (new TimingBlock(makeNewRootTimingStats, TimingBlock.LoggingType.None))
       {
-        const float THRESHOLD_RETAIN_TREE = 0.70f;
+        //        const float THRESHOLD_RETAIN_TREE = 0.70f;
 
-        float fracRetain = (float)newRoot.Ref.N / priorContext.Tree.Root.N;
-        if (fracRetain < THRESHOLD_RETAIN_TREE || !priorContext.ParamsSearch.TreeReuseSwapRootEnabled)
-        {
-          //Console.WriteLine("New root " + fracRetain);
-          MCTSNodeStructStorage.MakeChildNewRoot(Manager.Context.Tree, ref newRoot.Ref, newPositionAndMoves,
-                                                 reusePositionCache, newTranspositionRoots,
-                                                 priorContext.ParamsSearch.Execution.TranspositionMaximizeRootN);
-        }
-        else
+        //        float fracRetain = (float)newRoot.Ref.N / priorContext.Tree.Root.N;
+        if (reuseMethod == ManagerTreeReuse.Method.KeepStoreSwapRoot
+         && priorContext.ParamsSearch.TreeReuseSwapRootEnabled)
         {
           wasSwap = true;
           //Console.WriteLine("Swap root " + fracRetain + " from index " + newRoot.Index);
@@ -420,11 +438,21 @@ namespace Ceres.MCTS.Iteration
                                                            reusePositionCache, newTranspositionRoots,
                                                            priorContext.ParamsSearch.Execution.TranspositionMaximizeRootN);
         }
-        MCTSManager.TotalTimeSecondsInMakeNewRoot += (float)(statsMaterialize.ElapsedTimeSecs + makeNewRootTimingStats.ElapsedTimeSecs);
-        //if (wasSwap) MCTSEventSource.TestMetric1 += (float)(statsMaterialize.ElapsedTimeSecs + makeNewRootTimingStats.ElapsedTimeSecs);
-        if (this.Manager.Context.ParamsSearch.TestFlag) MCTSEventSource.TestMetric1 += (float)(statsMaterialize.ElapsedTimeSecs + makeNewRootTimingStats.ElapsedTimeSecs);
-        if (wasSwap) MCTSEventSource.TestCounter1++;
+        else
+        {
+          //Console.WriteLine("New root " + fracRetain);
+          MCTSNodeStructStorage.MakeChildNewRoot(Manager.Context.Tree, ref newRoot.Ref, newPositionAndMoves,
+                                                 reusePositionCache, newTranspositionRoots,
+                                                 priorContext.ParamsSearch.Execution.TranspositionMaximizeRootN);
+        }
+
+        //    if (wasSwap) MCTSEventSource.TestCounter1++;
       }
+
+      float secsMakeNewRoot = (float)(statsMaterialize.ElapsedTimeSecs + makeNewRootTimingStats.ElapsedTimeSecs);
+      MCTSManager.TotalTimeSecondsInMakeNewRoot += secsMakeNewRoot;
+      //      Console.WriteLine((wasSwap ? "SWAP " : "REBUILD ") + secsMakeNewRoot + " " + newRoot);
+      //      if (Manager.Context.ParamsSearch.TreeReuseSwapRootEnabled) MCTSEventSource.TestMetric1 += secsMakeNewRoot;
 
       CeresEnvironment.LogInfo("MCTS", "MakeChildNewRoot", $"Select {newRoot.N:N0} from {numNodesInitial:N0} "
                               + $"in {(int)(makeNewRootTimingStats.ElapsedTimeSecs / 1000.0)}ms");
@@ -433,7 +461,7 @@ namespace Ceres.MCTS.Iteration
       Manager = new MCTSManager(store, reuseOtherContextForEvaluatedNodes, reusePositionCache, newTranspositionRoots,
                                 priorContext.NNEvaluators, priorContext.ParamsSearch, priorContext.ParamsSelect,
                                 searchLimitTargetAdjusted, Manager.LimitManager,
-                                startTime, gameMoveHistory, isFirstMoveOfGame:isFirstMoveOfGame);
+                                startTime, gameMoveHistory, isFirstMoveOfGame: isFirstMoveOfGame);
       Manager.Context.ContemptManager = priorContext.ContemptManager;
 
       (BestMove, TimingInfo) = MCTSManager.Search(Manager, verbose, progressCallback, possiblyUsePositionCache);
@@ -461,8 +489,8 @@ namespace Ceres.MCTS.Iteration
 
     private void ComputeSearchLimits(in Position position,
                                      int searchRootN, float searchRootQ,
-                                     List<GameMoveStat> gameMoveHistory, SearchLimit searchLimit, 
-                                     bool isFirstMoveOfGame, MCTSIterator priorContext, 
+                                     List<GameMoveStat> gameMoveHistory, SearchLimit searchLimit,
+                                     bool isFirstMoveOfGame, MCTSIterator priorContext,
                                      out SearchLimit searchLimitTargetAdjusted, out SearchLimit searchLimitIncremental)
     {
       switch (searchLimit.Type)
@@ -471,7 +499,9 @@ namespace Ceres.MCTS.Iteration
           searchLimitIncremental = searchLimit with { };
 
           // Nodes per move are treated as incremental beyond initial starting size of tree.
-          searchLimitTargetAdjusted = new SearchLimit(SearchLimitType.NodesPerMove, searchLimit.Value + searchRootN, maxTreeNodes:searchLimit.MaxTreeNodes);
+          searchLimitTargetAdjusted = new SearchLimit(SearchLimitType.NodesPerMove, searchLimit.Value + searchRootN,
+                                                      maxTreeNodes: searchLimit.MaxTreeNodes,
+                                                      maxTreeVisits: searchLimit.MaxTreeVisits);
           break;
 
         case SearchLimitType.SecondsPerMove:
@@ -480,13 +510,14 @@ namespace Ceres.MCTS.Iteration
           break;
 
         case SearchLimitType.NodesForAllMoves:
-          searchLimitIncremental = ConvertedSearchLimit(in position,  searchLimit, 
+          searchLimitIncremental = ConvertedSearchLimit(in position, searchLimit,
                                                         searchRootN, searchRootQ,
                                                         priorContext.ParamsSearch, Manager.LimitManager,
                                                         gameMoveHistory, isFirstMoveOfGame);
           // Nodes per move are treated as incremental beyond initial starting size of tree.
-          searchLimitTargetAdjusted = new SearchLimit(SearchLimitType.NodesPerMove, searchLimitIncremental.Value + searchRootN, 
-                                                      maxTreeNodes: searchLimit.MaxTreeNodes);
+          searchLimitTargetAdjusted = new SearchLimit(SearchLimitType.NodesPerMove, searchLimitIncremental.Value + searchRootN,
+                                                      maxTreeNodes: searchLimit.MaxTreeNodes,
+                                                      maxTreeVisits: searchLimit.MaxTreeVisits);
           break;
 
         case SearchLimitType.SecondsForAllMoves:

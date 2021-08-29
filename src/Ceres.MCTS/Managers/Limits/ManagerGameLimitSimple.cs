@@ -45,14 +45,16 @@ namespace Ceres.MCTS.Managers.Limits
     /// some number of moves (or possibly all moves).
     public ManagerGameLimitOutputs ComputeMoveAllocation(ManagerGameLimitInputs inputs)
     {
-      ManagerGameLimitOutputs Return(float value) => new ManagerGameLimitOutputs(new SearchLimit(inputs.TargetLimitType, value, 
-                                                                                                 maxTreeNodes: inputs.MaxTreeNodesSelf));
+      ManagerGameLimitOutputs Return(float value) => new ManagerGameLimitOutputs(new SearchLimit(inputs.TargetLimitType, value,
+                                                                                                 maxTreeNodes: inputs.MaxTreeNodesSelf,
+                                                                                                 maxTreeVisits: inputs.MaxTreeVisitsSelf));
 
       if (inputs.MaxMovesToGo.HasValue && inputs.MaxMovesToGo < 2)
       {
         return new ManagerGameLimitOutputs(new SearchLimit(inputs.TargetLimitType,
                                                            inputs.RemainingFixedSelf * 0.99f,
-                                                           maxTreeNodes: inputs.MaxTreeNodesSelf));
+                                                           maxTreeNodes: inputs.MaxTreeNodesSelf,
+                                                           maxTreeVisits: inputs.MaxTreeVisitsSelf));
       }
 
       float baseTimeToUse = inputs.RemainingFixedSelf * FRACTION_PER_MOVE;

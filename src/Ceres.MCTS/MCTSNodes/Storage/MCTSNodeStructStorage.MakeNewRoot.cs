@@ -25,6 +25,7 @@ using Ceres.Base.OperatingSystem;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.PositionEvalCaching;
 using Ceres.Chess.Positions;
+using Ceres.MCTS.Evaluators;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.LeafExpansion;
 using Ceres.MCTS.MTCSNodes.Struct;
@@ -68,7 +69,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     /// <param name="newRootChild"></param>
     /// <param name="newPriorMoves"></param>
     /// <param name="transpositionRoots"></param>
-    public static void MakeChildNewRoot(MCTSTree tree, 
+    public static void MakeChildNewRoot(MCTSTree tree,
                                         ref MCTSNodeStruct newRootChild,
                                         PositionWithHistory newPriorMoves,
                                         PositionEvalCache cacheNonRetainedNodes,
@@ -115,10 +116,13 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       uint numNodesUsed;
       BitArray includedNodes = MCTSNodeStructUtils.BitArrayNodesInSubtree(store, ref newRootChild, true, out numNodesUsed);
 
+      // Materialize any nodes which point to transposition roots that do not survive
+      // TODO: potentially this is unnecessary; except for the new root node moving,
+      //       everything else remains in place and we could keep these linkages.
       MaterializeNodesWithNonRetainedTranspositionRoots(tree, includedNodes, newRootChildIndex);
 
       // Swap new root node into place at index 1.
-      SwapNodeIntoRootPosition(store, newRootChild.Index.Index, newPriorMoves);
+      SwapNodeIntoRootPosition(store, newRootChildIndex, newPriorMoves);
 
       // Update BitArray to reflect this swap.
       includedNodes[newRootChildIndex] = false;
@@ -137,14 +141,12 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 
           thisNode.CacheIndex = 0;
 
+          // No need to reset pending visits, they can carry forward.
+          // thisNode.NumVisitsPendingTranspositionRootExtraction = 0;
+
           if (thisNode.IsTranspositionLinked)
           {
-            // The only node that moves is the new root (to index 1).
-            // If the tranposition root was this new root, remap its index to 1.
-            if (thisNode.TranspositionRootIndex == newRootChildIndex)
-            {
-              thisNode.TranspositionRootIndex = 1;
-            }
+            Debug.Assert(transpositionRoots.TryGetValue(thisNode.ZobristHash, out _));
           }
           else
           {
@@ -157,12 +159,12 @@ namespace Ceres.MCTS.MTCSNodes.Storage
             }
             else
             {
-
               transpositionRoots?.TryAdd(thisNode.ZobristHash, i);
             }
           }
         }
       }
+
 
 #if DEBUG
       store.Validate(true);
@@ -250,7 +252,7 @@ return;
             // and possibly already overwritten.
             // We expect them to have already been materialized by the time we reach this point.
             Debug.Assert(USE_FAST_TREE_REBUILD || !thisNode.IsTranspositionLinked);
-            Debug.Assert(USE_FAST_TREE_REBUILD || thisNode.NumNodesTranspositionExtracted == 0);
+            Debug.Assert(USE_FAST_TREE_REBUILD || thisNode.NumVisitsPendingTranspositionRootExtraction == 0);
 
             // Remember this location if this is the new parent
             if (i == newRootChildIndex)
@@ -290,7 +292,7 @@ return;
             {
               if (tryKeepTranspositionRootsMaxN)
               {
-                transpositionRoots?.AddOrPossiblyUpdate(nodesSpan, thisNode.ZobristHash, 
+                transpositionRoots?.AddOrPossiblyUpdate(nodesSpan, thisNode.ZobristHash,
                                                         nextAvailableNodeIndex, nodesSpan[i].N);
               }
               else
@@ -331,7 +333,6 @@ return;
         return numChildrenFixups;
       }
 
-
       // Rewrite nodes (and associated children)
       int numChildrenFixups = RewriteNodesBuildChildrenInfo();
 
@@ -350,7 +351,9 @@ return;
 
       // Mark the new top of the nodes
       store.Nodes.nextFreeIndex = nextAvailableNodeIndex;
+      store.Nodes.NumOldGeneration = 0;
     }
+
 
     private static void SwapNodeIntoRootPosition(MCTSNodeStore store, int newIndexOfNewParent, PositionWithHistory newPriorMoves)
     {
@@ -370,10 +373,10 @@ return;
     }
 
 
-    private enum ExtractMode {  ExtractNonRetained, ExtractRetained};
+    private enum ExtractMode { ExtractNonRetained, ExtractRetained };
 
     private static void ExtractPositionCacheNodes(MCTSNodeStore store, float policySoftmax,
-                                                  BitArray includedNodes, in MCTSNodeStruct newRoot, 
+                                                  BitArray includedNodes, in MCTSNodeStruct newRoot,
                                                   ExtractMode extractMode,
                                                   PositionEvalCache cacheNodes)
     {
@@ -381,7 +384,7 @@ return;
       {
         ref MCTSNodeStruct nodeRef = ref store.Nodes.nodes[nodeIndex];
 
-        
+
         if ((includedNodes[nodeIndex] != (extractMode == ExtractMode.ExtractRetained)) || nodeRef.IsOldGeneration)
         {
           continue;
@@ -456,14 +459,15 @@ return;
       store.Children.nextFreeBlockIndex = nextAvailableChildBlockIndex;
     }
 
-#endregion
+    #endregion
 
 
-#region Helpers
+    #region Helpers
 
     /// <summary>
     /// Sequentially traverses nodes and materializes any nodes which 
     /// have transposition roots which will not be included in the new tree.
+    /// (additionally any nodes having root index pointing to new root are materialized).
     /// </summary>
     /// <param name="tree"></param>
     /// <param name="includedNodes"></param>
@@ -474,41 +478,42 @@ return;
       MCTSNodeStore store = tree.Store;
       MemoryBufferOS<MCTSNodeStruct> rawNodes = store.Nodes.nodes;
 
-      for (int i = 2; i < store.Nodes.nextFreeIndex; i++)
+      for (int i = 1; i < store.Nodes.nextFreeIndex; i++)
       {
         if (includedNodes.Get(i))
         {
-          ref MCTSNodeStruct thisNode = ref store.Nodes.nodes[i];
+          ref MCTSNodeStruct nodeRef = ref rawNodes[i];
 
           // Materialize any nodes which are transposition linked to a non-retained node
-          if (thisNode.IsTranspositionLinked)
+          if (nodeRef.IsTranspositionLinked)
           {
-            ref MCTSNodeStruct nodeRef = ref rawNodes[i];
             int transpositionRootIndex = nodeRef.TranspositionRootIndex;
             Debug.Assert(!rawNodes[transpositionRootIndex].IsTranspositionLinked);
 
+            // Determine if the transposition root will remain in the tree.
             bool linkedNodeRetained = includedNodes.Get(transpositionRootIndex);
 
             // NOTE: Generally it is not expected that a node will link forward to a transposition root,
             //       so this will probably always be false, but for safety prematerialize if this happens.
             bool linkedNodeSequentiallyLater = transpositionRootIndex > i;
 
-            if (!linkedNodeRetained || i == newRootChildIndex || linkedNodeSequentiallyLater)
+            if (!linkedNodeRetained
+              || linkedNodeSequentiallyLater
+              || transpositionRootIndex == newRootChildIndex // materialize since the index will be changing
+              )
             {
               numPrematerialized++;
 
               // We are not retaining the transposition root, so we must 
               // unlink the node from parent (copying over all child information).
               nodeRef.CopyUnexpandedChildrenFromOtherNode(tree, new MCTSNodeStructIndex(transpositionRootIndex), true);
+              nodeRef.NumVisitsPendingTranspositionRootExtraction = 0;
             }
           }
         }
       }
-
-#if DEBUG
-      tree.Store.Validate();
-#endif
     }
+
 
     public static PositionEvalCache ExtractCacheNodesInSubtree(MCTSTree tree, ref MCTSNodeStruct newRootChild)
     {
@@ -526,10 +531,10 @@ return;
       return cache;
     }
 
-#endregion
+    #endregion
   }
 
-#region Helper classes
+  #region Helper classes
 
   /// <summary>
   /// Helper class used to track association between children start indices
@@ -564,5 +569,5 @@ return;
     }
   }
 
-#endregion
+  #endregion
 }

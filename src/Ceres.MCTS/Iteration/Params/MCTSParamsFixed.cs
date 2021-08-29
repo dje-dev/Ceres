@@ -29,7 +29,7 @@ namespace Ceres.MCTS.Params
 
     public const bool LARGE_HARDWARE_CONFIG = true;
 
-   
+
     /// <summary>
     /// If operating system large pages (2MB each under Windows) 
     /// should be used for the arrays of raw nodes ahd child infos.
@@ -69,6 +69,12 @@ namespace Ceres.MCTS.Params
     /// (because it slightly increases memory usage per node).
     /// </summary>
     public const bool ENABLE_MAX_SEARCH_TREE = false;
+
+    /// <summary>
+    /// The use of int data type to encode N value within nodes limites the number of possible visits within a tree.
+    /// </summary>
+    public const int MAX_VISITS = int.MaxValue - 1_000_000;
+
 
     /// <summary>
     /// 

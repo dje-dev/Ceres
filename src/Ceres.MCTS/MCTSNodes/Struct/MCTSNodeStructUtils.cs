@@ -113,7 +113,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     {
       MCTSNodeStore store = MCTSNodeStoreContext.Store;
 
-      for (int i=1; i<store.Nodes.NumTotalNodes; i++)
+      for (int i = 1; i < store.Nodes.NumTotalNodes; i++)
       {
         action(new MCTSNodeStructIndex(i));
       }
@@ -153,7 +153,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       // Only spawn another thread if we have a chlid which is
       //   - not too big (otherwise we should do it inline to avoid recursively repeated forks)
       //   - not too small (otherwise not worth the effort of spawning)
-      int thresholdParallelMinThisLevel =  nodeRef.N / 3;
+      int thresholdParallelMinThisLevel = nodeRef.N / 3;
       int thresholdParallelMaxThisLevel = (nodeRef.N * 2) / 3;
       foreach (MCTSNodeStructChild child in span)
       {
@@ -179,33 +179,46 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
       }
     }
- 
 
-  public static BitArray BitArrayNodesInSubtree(MCTSNodeStore store, ref MCTSNodeStruct newRoot, 
-                                                bool setOldGeneration, out uint numNodes)
+
+    /// <summary>
+    /// Scans all nodes in store and constructs a BitArray capturing
+    /// all the nodes which belongs to the subtree rooted at a specified newRoot node.
+    /// 
+    /// Optionally any nodes not belonging are marked as old generation.
+    /// </summary>
+    /// <param name="store"></param>
+    /// <param name="newRoot"></param>
+    /// <param name="setOldGeneration"></param>
+    /// <param name="numNodes"></param>
+    /// <returns></returns>
+    public static BitArray BitArrayNodesInSubtree(MCTSNodeStore store, ref MCTSNodeStruct newRoot,
+                                                  bool setOldGeneration, out uint numNodes)
     {
       BitArray includedNodes = new BitArray(store.Nodes.NumTotalNodes);
 
       // Start by including the new root node.
-      includedNodes.Set(newRoot.Index.Index, true);
-      uint countNumNodes = 1;
+      int newRootIndex = newRoot.Index.Index;
+      includedNodes.Set(newRootIndex, true);
 
       // We can use a highly efficient sequential scan, which is is possible only because the
       // tree has the special property that children of nodes always appear after their parent.
+      uint countNumNodes = 0;
       for (int i = 1; i < store.Nodes.nextFreeIndex; i++)
       {
         ref MCTSNodeStruct nodeRef = ref store.Nodes.nodes[i];
-        bool isOldGeneration = nodeRef.IsOldGeneration;
-
-        if (!isOldGeneration && includedNodes.Get(nodeRef.ParentIndex.Index))
+        if (!nodeRef.IsOldGeneration)
         {
-          includedNodes.Set(i, true);
-          countNumNodes++;
-        } 
-        else if (setOldGeneration && !isOldGeneration && i != newRoot.Index.Index)
-        {
-          nodeRef.IsOldGeneration = true;
-          nodeRef.CacheIndex = 0; 
+          if (includedNodes.Get(nodeRef.ParentIndex.Index) || i == newRootIndex)
+          {
+            includedNodes.Set(i, true);
+            countNumNodes++;
+          }
+          else if (setOldGeneration)
+          {
+            nodeRef.IsOldGeneration = true;
+            store.Nodes.NumOldGeneration++;
+          }
         }
       }
 
