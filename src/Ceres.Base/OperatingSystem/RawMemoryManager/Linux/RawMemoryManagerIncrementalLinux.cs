@@ -15,6 +15,7 @@
 
 using Ceres.Base.OperatingSystem.Linux;
 using System;
+using System.Diagnostics;
 using System.Threading;
 
 #endregion
@@ -49,7 +50,7 @@ namespace Ceres.Base.OperatingSystem
 
     long numBytesAllocated = 0;
 
-  
+
     const long ALLOCATE_INCREMENTAL_BYTES = 1024 * 1024 * 2;
     const int PAGE_SIZE = 1024 * 2048;
 
@@ -131,7 +132,7 @@ namespace Ceres.Base.OperatingSystem
           throw new Exception($"Virtual memory extension to size {numBytesAllocated} failed with error {resultCode}");
         }
 
-        Interlocked.Add(ref RawMemoryManagerIncrementalLinuxStats.BytesCurrentlyAllocated, numBytesAllocated);
+        Interlocked.Add(ref RawMemoryManagerIncrementalLinuxStats.BytesCurrentlyAllocated, ALLOCATE_INCREMENTAL_BYTES);
         if (RawMemoryManagerIncrementalLinuxStats.BytesCurrentlyAllocated > RawMemoryManagerIncrementalLinuxStats.MaxBytesAllocated)
         {
           RawMemoryManagerIncrementalLinuxStats.MaxBytesAllocated = RawMemoryManagerIncrementalLinuxStats.BytesCurrentlyAllocated;
@@ -159,6 +160,30 @@ namespace Ceres.Base.OperatingSystem
       rawMemoryPointer = null;
     }
 
+    public void ResizeToNumItems(long numItems)
+    {
+      Debug.Assert(numItems <= NumItemsAllocated);
+
+      long numBytesNeeded = numItems * sizeof(T) + PAGE_SIZE; // overallocate to avoid partial page access
+      numBytesNeeded = RoundToHugePageSize(numBytesNeeded);
+
+      if (numBytesNeeded < numBytesAllocated)
+      {
+        long freeBlocksStart = ((IntPtr)rawMemoryPointer).ToInt64() + numItems * sizeof(T);
+        long itemsFree = NumItemsAllocated - numItems;
+        long bytesFree = itemsFree * sizeof(T);
+
+        int resultCode = LinuxAPI.munmap((void*)freeBlocksStart, bytesFree);
+        if (resultCode != 0)
+        {
+          throw new Exception($"Virtual memory munmap of size {bytesFree} failed with error {resultCode}");
+        }
+
+        Interlocked.Add(ref RawMemoryManagerIncrementalLinuxStats.BytesCurrentlyAllocated, -bytesFree);
+
+        numBytesAllocated -= bytesFree;
+      }
+    }
   }
 
 }

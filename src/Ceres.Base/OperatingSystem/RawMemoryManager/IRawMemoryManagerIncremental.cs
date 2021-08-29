@@ -33,7 +33,9 @@ namespace Ceres.Base.OperatingSystem
 
     void Reserve(string sharedMemName, bool useExistingSharedMemory, long numItems, bool largePages);
     void InsureAllocated(long numItems);
-    
+
+    void ResizeToNumItems(long numItems);
+
     long NumItemsAllocated { get; }
 
     void Dispose();

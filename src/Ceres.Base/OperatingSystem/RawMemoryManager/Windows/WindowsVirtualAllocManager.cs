@@ -64,7 +64,7 @@ namespace Ceres.Base.OperatingSystem
     public long AllocBlockSizeBytes;
     public IntPtr AllocPtr;
 
-    long NumBlocksCommitted; 
+    long NumBlocksCommitted;
     long NumItemsCommitted;
 
     /// <summary>
@@ -118,7 +118,7 @@ namespace Ceres.Base.OperatingSystem
       const int BLOCK_SIZE_BYTES = 2 * 1024 * 1024;
       Debug.Assert(BLOCK_SIZE_BYTES % info.dwPageSize == 0);
 
-      long requiredMaxBytes  = MathUtils.RoundedUp(maxItems * itemSizeBytes, info.dwPageSize);
+      long requiredMaxBytes = MathUtils.RoundedUp(maxItems * itemSizeBytes, info.dwPageSize);
       if (requiredMaxBytes < BLOCK_SIZE_BYTES)
       {
         AllocBlockSizeBytes = (int)requiredMaxBytes;
@@ -186,6 +186,14 @@ namespace Ceres.Base.OperatingSystem
       }
     }
 
+    public void ResizeToNumItems(long numItems)
+    {
+      long itemsToAllocate = MathUtils.RoundedUp(numItems, ItemsPerBlock);
+      long blocksToAllocate = itemsToAllocate / ItemsPerBlock;
+      ResizeToNumBlocks(blocksToAllocate);
+    }
+
+
     public long NumItemsAllocated => NumItemsCommitted;
 
     #endregion
@@ -199,7 +207,7 @@ namespace Ceres.Base.OperatingSystem
 
       IntPtr newBlocksStart = (IntPtr)(AllocPtr.ToInt64() + (NumBlocksCommitted * AllocBlockSizeBytes));
       long bytesAlloc = numBlocks * AllocBlockSizeBytes;
-      IntPtr newBlockAdr = Win32.VirtualAlloc(newBlocksStart, (IntPtr)bytesAlloc, allocationType, Win32.PAGE_READWRITE) ;
+      IntPtr newBlockAdr = Win32.VirtualAlloc(newBlocksStart, (IntPtr)bytesAlloc, allocationType, Win32.PAGE_READWRITE);
       if (newBlockAdr.ToInt64() == 0) throw new Exception($"Failure in memory incremental allocation (VirtualAlloc) of size {AllocBlockSizeBytes} with Windows error {Marshal.GetLastWin32Error()}");
 
       // BAD PERFORMANCE  GC.AddMemoryPressure(bytesAlloc);
@@ -212,6 +220,26 @@ namespace Ceres.Base.OperatingSystem
 
       NumItemsCommitted += numBlocks * ItemsPerBlock;
       NumBlocksCommitted += numBlocks;
+    }
+
+
+    void ResizeToNumBlocks(long numBlocks)
+    {
+      Debug.Assert(numBlocks <= NumBlocksCommitted);
+
+      if (numBlocks < NumBlocksCommitted)
+      {
+        IntPtr newBlocksStart = (IntPtr)(AllocPtr.ToInt64() + (NumBlocksCommitted * AllocBlockSizeBytes));
+        long bytesFree = (NumBlocksCommitted - numBlocks) * AllocBlockSizeBytes;
+        bool successFree = Win32.VirtualFree(newBlocksStart, (IntPtr)bytesFree, Win32.MEM_DECOMMIT);
+        if (!successFree) throw new Exception($"Failure in memory incremental release (VirtualFree) of size {bytesFree} with Windows error {Marshal.GetLastWin32Error()}");
+
+        // BAD PERFORMANCE  GC.AddMemoryPressure(bytesAlloc);
+        Interlocked.Add(ref BytesCurrentlyAllocated, -bytesFree);
+
+        NumItemsCommitted -= numBlocks * ItemsPerBlock;
+        NumBlocksCommitted -= numBlocks;
+      }
     }
 
     #endregion

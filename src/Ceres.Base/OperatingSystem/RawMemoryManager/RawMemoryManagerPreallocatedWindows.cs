@@ -79,7 +79,7 @@ namespace Ceres.Base.OperatingSystem
           if (!Win32.VirtualFree(allocPointer, IntPtr.Zero, Win32.MEM_RELEASE))
             if (!System.Environment.HasShutdownStarted)
               throw new Exception("VirtualFree", new Win32Exception(Marshal.GetLastWin32Error()));
-          
+
           // BAD PERFORMANCE GC.RemoveMemoryPressure((long)allocBytesSize);
         }
         allocPointer = default;
@@ -130,6 +130,9 @@ namespace Ceres.Base.OperatingSystem
 
     }
 
-
+    public void ResizeToNumItems(long numItems)
+    {
+      throw new NotImplementedException();
+    }
   }
 }

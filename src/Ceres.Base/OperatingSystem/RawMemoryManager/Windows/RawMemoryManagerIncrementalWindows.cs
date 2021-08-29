@@ -47,10 +47,14 @@ namespace Ceres.Base.OperatingSystem
     void IRawMemoryManagerIncremental<T>.Reserve(string sharedMemName, bool useExistingSharedMemory, long numItems, bool largePages)
     {
       if (largePages)
+      {
         throw new Exception("Large pages not supported with RawMemoryManagerIncremental");
+      }
 
       if (sharedMemName != null || useExistingSharedMemory)
+      {
         throw new Exception("RawMemoryManagerIncremental does not support use of shared memory segments");
+      }
 
       IAppLogger logger = null; //CeresLogger.Logger
       allocManager = new WindowsVirtualAllocManager(logger, numItems, (uint)Marshal.SizeOf<T>(), false);
@@ -59,9 +63,11 @@ namespace Ceres.Base.OperatingSystem
 
     void IRawMemoryManagerIncremental<T>.InsureAllocated(long numItems) => allocManager.InsureItemsAllocated(numItems);
 
+    void IRawMemoryManagerIncremental<T>.ResizeToNumItems(long numItems) => allocManager.ResizeToNumItems(numItems);
+
     long IRawMemoryManagerIncremental<T>.NumItemsAllocated => allocManager.NumItemsAllocated;
 
-    void IRawMemoryManagerIncremental<T>.Dispose() =>  allocManager.Release();  
+    void IRawMemoryManagerIncremental<T>.Dispose() => allocManager.Release();
   }
 
 }
