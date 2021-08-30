@@ -101,6 +101,15 @@ namespace Ceres.Chess.UserSettings
     public bool UseLargePages { get; set; } = false;
 
     /// <summary>
+    /// The maximum number tree nodes allowed in any single search tree
+    /// (yielding a number of visits which is typically 10% to 50% greater).
+    /// The average number of bytes per tree nodes is approximately 200.
+    /// If not explicitly set then a value will be automatically 
+    /// set based on the physical memory in the computer.
+    /// </summary>
+    public int? MaxTreeNodes { get; set; } = null;
+
+    /// <summary>
     /// The maximum number of position in each batch sent to the neural network.
     /// Smaller values reduce GPU memory usage somewhat.
     /// </summary>

@@ -122,7 +122,7 @@ namespace Ceres.Features.UCI
     /// <summary>
     /// Maximum size of tree allowed (in nodes).
     /// </summary>
-    int? maxTreeNodes = null;
+    int? maxTreeNodes = CeresUserSettingsManager.Settings.MaxTreeNodes;
 
     /// <summary>
     /// Multiplier applied to all requested time limits.
