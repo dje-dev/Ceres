@@ -336,7 +336,7 @@ namespace Ceres.Chess.ExternalPrograms.UCI
         float elapsedSeconds = (float)(DateTime.Now - startTime).TotalSeconds;
         if (lastError != null)
         {
-          throw new Exception($"UCI error {desc} : {lastError}");
+          Console.WriteLine($"WARNING: UCI error on external engines {desc} : {lastError}");
         }
 
         System.Threading.Thread.Sleep(isShortSearch ? 0 : 1);
