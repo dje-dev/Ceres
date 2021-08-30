@@ -151,30 +151,11 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       readonly get => numChildrenVisited <= 64 ? 0 : 256 - numChildrenVisited;
       set
       {
-        return; // *** TO BE REMOVED ***
         Debug.Assert(value >= 0 && value <= MAX_NUM_VISITS_PENDING_TRANSPOSITION_ROOT_EXTRACTION);
         numChildrenVisited = (value == 0) ? (byte)0 : (byte)(256 - value);
       }
     }
 
-
-  // ******************** TO BE REMOTED
-    /// <summary>
-    /// The number of evaluations that have so far been extracted via
-    /// the transposition root (or zero if not transposition linked).
-    /// This is encoded in the numChildrenVisited.
-    /// </summary>
-    public int NumNodesTranspositionExtracted
-    {
-      readonly get => numChildrenVisited <= 64 ? 0 : 256 - numChildrenVisited;
-      set
-      {
-        Debug.Assert(value >= 0 && value < (256 - 64));
-        numChildrenVisited = (value == 0) ? (byte)0 : (byte)(256 - value);
-      }
-    }
-
-    // ***************** TO BE REMOVED
 
     /// <summary>
     /// If the tree is truncated at this node and generating position

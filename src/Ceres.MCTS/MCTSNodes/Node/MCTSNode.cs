@@ -275,23 +275,6 @@ namespace Ceres.MCTS.MTCSNodes
     public float PendingTranspositionM;
     public float PendingTranspositionD;
 
-// ************ DO BE REMOVED
-    /// <summary>
-    /// If not NaN, this is a value that should 
-    /// override V as the value to be used for backup
-    /// (it is derived from the transposition subtree)
-    /// </summary>
-    public FP16 OverrideVToApplyFromTransposition = FP16.NaN;
-
-    /// <summary>
-    /// If not NaN, this is a value that should 
-    /// override MPosition as the value to be used for backup
-    /// (it is derived from the transposition subtree)
-    /// </summary>
-    public FP16 OverrideMPositionToApplyFromTransposition = FP16.NaN;
-
-// ***************************
-
     /// <summary>
     /// Returns the side to move as of this node.
     /// </summary>

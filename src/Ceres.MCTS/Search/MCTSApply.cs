@@ -32,6 +32,7 @@ using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.Params;
 using System.Reflection;
+using Ceres.MCTS.Environment;
 
 #endregion
 
@@ -187,10 +188,14 @@ namespace Ceres.MCTS.Search
       int numInFlight = numUpdateSelector1 + numUpdateSelector2;
 
 
-      if (node.ActionType == MCTSNode.NodeActionType.CacheOnly ||
-          node.ActionType == MCTSNode.NodeActionType.None)
+      if (node.ActionType == MCTSNode.NodeActionType.None)
       {
         nodeRef.BackupDecrementInFlight(numUpdateSelector1, numUpdateSelector2);
+      }
+      else if (node.ActionType == MCTSNode.NodeActionType.CacheOnly)
+      {
+        // TODO: needs remediation
+        throw new NotImplementedException(); // need to set value on node ? (V, WinP, LossP, M).
       }
       else if (node.ActionType == MCTSNode.NodeActionType.MCTSApply)
       {
@@ -203,33 +208,30 @@ namespace Ceres.MCTS.Search
           contemptAdjustment = (node.IsOurMove ? -1 : 1) * (dToApply * node.Context.CurrentContempt);
         }
 
-        // If we are revisiting a terminal node, just reiterate the prior evaluation
-        if (wasTerminal && node.EvalResult.IsNull)
+        // If we are revisiting a terminal or transposition linked node,
+        // just reiterate the prior evaluation.
+        if (node.EvalResult.IsNull && (wasTerminal || node.NumVisitsPendingTranspositionRootExtraction > 0))
+        {
           node.EvalResult = new LeafEvaluationResult(nodeRef.Terminal, nodeRef.WinP, nodeRef.LossP, nodeRef.MPosition);
+        }
 
         // Update statistics
         float vToApply;
         int numToApply;
 
-        if (nodeRef.N > 0)
+        if (nodeRef.N > 0 && wasTerminal)
         {
-          if (wasTerminal)
-          {
-            // Repeat visit to a terminal, even "collisions" are applied multiple times
-            numToApply = numInFlight;
-            vToApply = nodeRef.V + contemptAdjustment;
+          // Repeat visit to a terminal, even "collisions" are applied multiple times
+          numToApply = numInFlight;
+          vToApply = nodeRef.V + contemptAdjustment;
 
-            nodeRef.BackupApply(nodes, numToApply, vToApply, 0, dToApply, wasTerminal, numUpdateSelector1, numUpdateSelector2, out indexOfChildDescendentFromRoot);
-          }
-          else
-          {
-            throw new Exception("Internal error: Unexpected N > 0 on non-terminal");
-          }
+          nodeRef.BackupApply(nodes, numToApply, vToApply, 0, dToApply, wasTerminal, numUpdateSelector1, numUpdateSelector2, out indexOfChildDescendentFromRoot);
         }
         else
         {
           // First visit by any selector, set evaluation result and backup in tree
           numToApply = 1;
+          //TODO: maybe allow >1 if NumVisitsPendingTranspositionRootExtraction > 0 ??????
           nodeRef.Terminal = node.EvalResult.TerminalStatus;
 
           if (!node.IsRoot && node.Terminal == GameResult.Draw)
@@ -252,11 +254,27 @@ namespace Ceres.MCTS.Search
           vToApply = nodeRef.V;
           float mToApply = nodeRef.MPosition;
 
-          if (!FP16.IsNaN(node.OverrideVToApplyFromTransposition))
+          if (node.NumVisitsPendingTranspositionRootExtraction > 0)
           {
+            Debug.Assert(!float.IsNaN(node.PendingTranspositionV));
+            Debug.Assert(node.NumVisitsPendingTranspositionRootExtraction >= numToApply);
+
+            // Increment count of number of "extra" (beyond 1) values used without tree replication.
+            if (node.Ref.NumVisitsPendingTranspositionRootExtraction > 1) MCTSEventSource.TestCounter1++;
+
+            if (node.TranspositionRootIndex == 0)
+            {
+              // TODO: convert this into a Debug.Assert
+              throw new Exception("Internal error: Transposition root gone missing.");
+            }
+
             // Switch to propagate this "pseudo V" for this node and all nodes above
-            vToApply = node.OverrideVToApplyFromTransposition;
-            mToApply = node.OverrideMPositionToApplyFromTransposition;
+            vToApply = node.PendingTranspositionV;
+            mToApply = node.PendingTranspositionM;
+            dToApply = node.PendingTranspositionD;
+
+            // Now we've used one more instance, decrement count.
+            node.Ref.NumVisitsPendingTranspositionRootExtraction-= numToApply;
           }
 
           vToApply += contemptAdjustment;
@@ -275,9 +293,9 @@ namespace Ceres.MCTS.Search
 
       if (FirstMoveSampler != null)
       {
-// this mismatch can/will happen with tree reuse
-//        if (node.Context.Root.N > 1 && node.Context.Root.ChildAtIndex(0).N != FirstMoveSampler.childrenDistributions[0].NumSamples)
-//          Console.WriteLine("first mismatch on zero");
+        // this mismatch can/will happen with tree reuse
+        //        if (node.Context.Root.N > 1 && node.Context.Root.ChildAtIndex(0).N != FirstMoveSampler.childrenDistributions[0].NumSamples)
+        //          Console.WriteLine("first mismatch on zero");
       }
       node.Context.RecordVisitToTopLevelMove(node, indexOfChildDescendentFromRoot, evalResult);
     }
@@ -387,7 +405,7 @@ namespace Ceres.MCTS.Search
 
       if (context.ParamsSearch.Execution.SetPoliciesParallelEnabled)
       {
-//        Parallel.ForEach(nodes, ParallelUtils.ParallelOptions(nodes.Count, context.ParamsSearch.Execution.SetPoliciesNumPoliciesPerThread),
+        //        Parallel.ForEach(nodes, ParallelUtils.ParallelOptions(nodes.Count, context.ParamsSearch.Execution.SetPoliciesNumPoliciesPerThread),
         Parallel.ForEach(Partitioner.Create(0, nodes.Count), ParallelUtils.ParallelOptions(nodes.Count, context.ParamsSearch.Execution.SetPoliciesNumPoliciesPerThread),
         (range) =>
         {
@@ -431,22 +449,31 @@ namespace Ceres.MCTS.Search
       }
       else if (!node.IsTranspositionLinked)
       {
-        if (!node.PolicyHasAlreadyBeenInitialized)
+        if (!node.PolicyHasAlreadyBeenInitialized
+         && !node.Terminal.IsTerminal()
+         && !node.EvalResult.TerminalStatus.IsTerminal()
+         )
         {
-          if (!node.EvalResult.TerminalStatus.IsTerminal())
+          if (node.EvalResult.PolicyIsReleased || node.EvalResult.IsNull)
           {
-            node.SetPolicy(policySoftmax, ParamsSelect.MinPolicyProbability, in node.Annotation.PosMG, node.Annotation.Moves, 
+            Console.WriteLine("Warning: lost policy " + node.Annotation.Pos.FEN + " " + node.Terminal + " " + node + " " + node.Parent?.Annotation.Pos.FEN);
+            node.Ref.Terminal = GameResult.Draw; //Best alternative
+          }
+          else
+          {
+            node.SetPolicy(policySoftmax, ParamsSelect.MinPolicyProbability, in node.Annotation.PosMG, node.Annotation.Moves,
                            in node.EvalResult.PolicyRef, returnedMovesAreInSameOrderAsMGMoveList);
-          }
 
-          if (node.Context.ParamsSearch.Execution.InFlightOtherBatchLinkageEnabled)
-          {
-            throw new Exception("Unsupported. We would have to disable the ReleasePolicyValue here but unsure if that woudld create serious memory leak.");
-            // TODO: we shouldn't release policy because in flight transpositions requires them to stick around
-            //       but make sure that the memory is eventually released, not hung onto by annotation entries
+            if (node.Context.ParamsSearch.Execution.InFlightOtherBatchLinkageEnabled)
+            {
+              throw new Exception("Unsupported. We would have to disable the ReleasePolicyValue here but unsure if that would create serious memory leak.");
+              // TODO: we shouldn't release policy because in flight transpositions requires them to stick around
+              //       but make sure that the memory is eventually released, not hung onto by annotation entries
+            }
           }
-          node.EvalResult.ReleasePolicyValue();
         }
+
+        node.EvalResult.ReleasePolicyValue();
       }
     }
 

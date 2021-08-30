@@ -105,7 +105,7 @@ namespace Ceres.MCTS.Evaluators
           return evalResult;
 
           //node.OverrideVToApplyFromTransposition = node.Context.ContemptManager.BaseContempt;
-          node.OverrideVToApplyFromTransposition = 0;
+          //node.OverrideVToApplyFromTransposition = 0;
           return default;
         }
         else

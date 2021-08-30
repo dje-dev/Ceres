@@ -69,7 +69,7 @@ namespace Ceres.MCTS.Evaluators
 
         if (VERBOSE) Console.WriteLine($"ProcessAlreadyLinked {node.Index} yields {result.WinP} {result.LossP} via linked subnode root {transpositionRootNode.Index.Index} {transpositionRootNode} chose {transpositionSubnode.Index.Index}");
 
-        node.Ref.NumNodesTranspositionExtracted++;
+//        node.Ref.NumNodesTranspositionExtracted++;
       }
 
       return result;
@@ -127,7 +127,7 @@ namespace Ceres.MCTS.Evaluators
         }
 
         // Make sure we are now detached (this should have happened as part of the clone)
-        Debug.Assert(node.Ref.NumNodesTranspositionExtracted == 0);
+//        Debug.Assert(node.Ref.NumNodesTranspositionExtracted == 0);
         Debug.Assert(!node.IsTranspositionLinked);
       }
 
@@ -159,7 +159,8 @@ namespace Ceres.MCTS.Evaluators
 
     internal LeafEvaluationResult ProcessAlreadyLinked(MCTSNode node, MCTSNodeStructIndex transpositionRootNodeIndex, ref MCTSNodeStruct transpositionRootNode)
     {
-      int numAlreadyLinked = node.Ref.NumNodesTranspositionExtracted;
+      throw new NotImplementedException();
+      int numAlreadyLinked = 0;// ********* node.Ref.NumNodesTranspositionExtracted;
       Debug.Assert(numAlreadyLinked > 0);
 
       // Lookup (or create if never used before) a visitor which can traverse starting at the linked transposition subroot

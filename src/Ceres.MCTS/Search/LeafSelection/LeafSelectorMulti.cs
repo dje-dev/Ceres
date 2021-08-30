@@ -24,6 +24,7 @@ using Ceres.Base.Threading;
 
 using Ceres.Chess;
 using Ceres.Chess.Positions;
+using Ceres.MCTS.Evaluators;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Storage;
@@ -63,7 +64,7 @@ namespace Ceres.MCTS.Search
     // Especially with .NET 6.0 it seems that the custom thread pool
     // is no longer more efficient than the standard .NET one.
     const bool USE_CUSTOM_THREADPOOL = false;
-    
+
     #region Constructor arguments
 
     /// <summary>
@@ -113,7 +114,7 @@ namespace Ceres.MCTS.Search
     public static ThreadPoolFactory InstalledThreadPoolFactory;
 
     private InstalledThreadPool installedThreadPool;
-    
+
     bool TrackWaitCount
     {
       get
@@ -245,7 +246,7 @@ namespace Ceres.MCTS.Search
         WaitDone();
       }
 
- 
+
       leafs.Add(gatheredNodes);
     }
 
@@ -258,13 +259,13 @@ namespace Ceres.MCTS.Search
     /// selecting a new set of nodes.
     /// </summary>
     public void Reset()
-    {   
+    {
       leafs.Clear();
     }
 
-#endregion
+    #endregion
 
-#region Annotation
+    #region Annotation
 
     /// <summary>
     /// Annotates specified node if not already annotated.
@@ -278,9 +279,9 @@ namespace Ceres.MCTS.Search
       }
     }
 
-#endregion
+    #endregion
 
-#region Threads
+    #region Threads
 
     /// <summary>
     /// Waits until all threads have completed their work
@@ -304,9 +305,9 @@ namespace Ceres.MCTS.Search
       }
     }
 
-#endregion
+    #endregion
 
-#region Node visitation
+    #region Node visitation
 
     /// <summary>
     /// Takes any actions necessary upon visit to an inner note.
@@ -367,8 +368,7 @@ namespace Ceres.MCTS.Search
         // Verify this looks like a true non-leaf
         Debug.Assert(nodeRef.N == 0
                           || nodeRef.Terminal != Chess.GameResult.Unknown
-                          || nodeRef.NumNodesTranspositionExtracted > 0
-                          || !FP16.IsNaN(node.OverrideVToApplyFromTransposition));
+                          || nodeRef.NumVisitsPendingTranspositionRootExtraction > 0);
 
         // Set default action 
         node.ActionType = MCTSNode.NodeActionType.MCTSApply;
@@ -517,15 +517,34 @@ namespace Ceres.MCTS.Search
       //      Console.WriteLine($"target {numTargetLeafs} {node}");
       Debug.Assert(numTargetLeafs > 0);
 
+      // If the target number of leaves excees amount available from a 
+      // transposition linked node, unlink it now so we can continue descent thru this node.
       if (paramsExecution.TranspositionMode == TranspositionMode.SingleNodeDeferredCopy
-       && node.Ref.NumNodesTranspositionExtracted > 0)
+       && node.IsTranspositionLinked
+       && numTargetLeafs > node.NumVisitsPendingTranspositionRootExtraction
+       )
       {
         InitializeChildrenFromDeferredTransposition(node);
       }
-      else if (paramsExecution.TranspositionMode == TranspositionMode.SharedSubtree
-            && node.Ref.NumNodesTranspositionExtracted > 0)
+
+      if (paramsExecution.TranspositionMode == TranspositionMode.SingleNodeDeferredCopy
+       && node.IsTranspositionLinked)
       {
-        InitializeChildrenFromDeferredTransposition(node);
+        Debug.Assert(node.NumVisitsPendingTranspositionRootExtraction > 0);
+        Debug.Assert(node.TranspositionRootIndex != 0);
+        LeafEvaluatorTransposition.InsurePendingTranspositionValuesSet(node, false);
+        Debug.Assert(!float.IsNaN(node.PendingTranspositionV));
+
+        // Treat this as if it were a leaf node (i.e. do not descend further yet).
+        DoVisitLeafNode(node, numTargetLeafs, gatheredNodes);
+
+        return;
+      }
+      else if (paramsExecution.TranspositionMode == TranspositionMode.SharedSubtree)
+      //            && node.NumNodesTranspositionExtracted > 0)
+      {
+        throw new NotImplementedException();
+        //InitializeChildrenFromDeferredTransposition(node);
       }
 
       bool isUnvisited = node.N == 0;
@@ -549,9 +568,9 @@ namespace Ceres.MCTS.Search
             // Borrow from the other bigger subtree
             FP16 vToUse = (FP16)((float)(biggestTranspositionNode.W - node.W)
                                  / (float)(biggestTranspositionNode.N - node.N));
-            node.OverrideVToApplyFromTransposition = vToUse;
 
-            throw new Exception("need to restore following 3 lines, currently disabled since mSum is marked private");
+            throw new Exception("need to restore following lines, overrideV and m currently disabled since mSum is marked private");
+            //node.OverrideVToApplyFromTransposition = vToUse;
             //FP16 mToUse = (FP16)((float)(biggestTranspositionNode.mSum - node.Ref.mSum)
             //                     / (float)(biggestTranspositionNode.N - node.N));
             //node.OverrideMPositionToApplyFromTransposition = mToUse;
@@ -757,7 +776,6 @@ namespace Ceres.MCTS.Search
       // the extraction of the children from the tranposition root was deferred 
       // (because possibly it would never be required)
       // Now we will need the children to continue leaf selection, so copy them over now ("just in time")
-      Debug.Assert(node.Ref.NumNodesTranspositionExtracted == 1);
 
       int transpositionNodeIndex = node.TranspositionRootIndex;
 
@@ -803,7 +821,7 @@ namespace Ceres.MCTS.Search
           }
 
           // Append nodes to node list.
-          lock(leafs)
+          lock (leafs)
           {
             leafs.Add(gatheredNodes);
           }
@@ -834,9 +852,9 @@ namespace Ceres.MCTS.Search
       }
     }
 
-#endregion
+    #endregion
 
-#region Internals
+    #region Internals
 
     /// <summary>
     /// Diagnostic method that verifies internal consistency of child visit counts.
@@ -857,7 +875,7 @@ namespace Ceres.MCTS.Search
       }
     }
 
-#endregion
+    #endregion
 
   }
 }

@@ -146,7 +146,7 @@ namespace Ceres.APIExamples
         evalDef2.MakePersistent();
       }
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(75_000);
+      SearchLimit limit1 = SearchLimit.NodesPerMove(100_000);
       //limit1 = SearchLimit.NodesForAllMoves(1_000_000, 10_000);
 
       //      limit1 = SearchLimit.SecondsForAllMoves(900, 2) * 0.2f;
@@ -176,8 +176,8 @@ namespace Ceres.APIExamples
       //      engineDefCeres1.SearchParams.TreeReuseSwapRootEnabled = false;
       //      engineDefCeres2.SearchParams.TreeReuseSwapRootEnabled = false;
 
-//      engineDefCeres1.SearchParams.MaxTranspositionRootApplicationsFixed = 1;// 3;
-//      engineDefCeres1.SearchParams.MaxTranspositionRootApplicationsFraction = 0.0f;// 0.25f;
+      engineDefCeres1.SearchParams.MaxTranspositionRootApplicationsFixed = 2;// 3;
+      engineDefCeres1.SearchParams.MaxTranspositionRootApplicationsFraction = 0.0f;// 0.25f;
 
       //engineDefCeres1.SelectParams.UseDynamicVLoss = true;
 
@@ -331,7 +331,8 @@ namespace Ceres.APIExamples
 #endif
       }
 
-      TournamentDef def = new TournamentDef("TOURN", playerCeres1UCI, playerCeres93);
+      TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerCeres2);
+//      TournamentDef def = new TournamentDef("TOURN", playerCeres1UCI, playerCeres93);
 
 
       def.NumGamePairs = 150;// 102;

@@ -17,9 +17,7 @@ using System;
 using System.Diagnostics;
 using System.Threading;
 
-using Ceres.Base.DataTypes;
-using Ceres.Base.Environment;
-using Ceres.Chess.NNEvaluators;
+using Ceres.Chess;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Struct;
@@ -82,8 +80,8 @@ namespace Ceres.MCTS.Evaluators
     /// <param name="transpositionRootNodeIndex"></param>
     /// <param name="transpositionRootNode"></param>
     /// <returns></returns>
-    LeafEvaluationResult ProcessFirstLinkage(MCTSNode node, MCTSNodeStructIndex transpositionRootNodeIndex, 
-                                             ref MCTSNodeStruct transpositionRootNode)
+    LeafEvaluationResult ProcessFirstLinkage(MCTSNode node, MCTSNodeStructIndex transpositionRootNodeIndex,
+                                             in MCTSNodeStruct transpositionRootNode)
     {
       ref MCTSNodeStruct nodeRef = ref node.Ref;
 
@@ -92,32 +90,51 @@ namespace Ceres.MCTS.Evaluators
       Debug.Assert(transpositionRootNodeIndex.Index != 0);
 
       TranspositionMode transpositionMode = node.Context.ParamsSearch.Execution.TranspositionMode;
-      if (transpositionMode == TranspositionMode.SingleNodeCopy)
+      if (transpositionMode == TranspositionMode.SingleNodeCopy
+       || transpositionRootNode.Terminal.IsTerminal())
       {
         nodeRef.CopyUnexpandedChildrenFromOtherNode(node.Tree, transpositionRootNodeIndex);
       }
       else if (transpositionMode == TranspositionMode.SingleNodeDeferredCopy
             || transpositionMode == TranspositionMode.SharedSubtree)
       {
-        // We mark this as just extracted, but do not (yet) allocate and move over the children
-        nodeRef.NumNodesTranspositionExtracted = 1;
-        nodeRef.TranspositionRootIndex = transpositionRootNodeIndex.Index;
         Debug.Assert(transpositionRootNodeIndex.Index != 0);
-        // not needed node.NumPolicyMoves = transpositionRootNode.NumPolicyMoves; // Copy the number of children, but do not yet allocate/create them
+
+        // We mark this as just extracted, but do not (yet) allocate and move over the children.
+        nodeRef.TranspositionRootIndex = transpositionRootNodeIndex.Index;
+
+        // Compute the number of times to apply.
+        int applyTarget = node.Context.ParamsSearch.MaxTranspositionRootApplicationsFixed;
+        applyTarget += (int)Math.Round(transpositionRootNode.N * node.Context.ParamsSearch.MaxTranspositionRootApplicationsFraction, 0);
+        applyTarget = Math.Min(applyTarget, MCTSNodeStruct.MAX_NUM_VISITS_PENDING_TRANSPOSITION_ROOT_EXTRACTION);
+
+        // Repeatedly sampling the same leaf node value is not a reasonable strategy.
+        Debug.Assert(applyTarget <= 1 || node.Context.ParamsSearch.TranspositionUseTransposedQ);
+
+        // If the root has far more visits than our fixed target
+        // then only use it once (since it represents a value based on a very different subtree).
+        if (ForceUseV(node, in transpositionRootNode))
+        {
+          applyTarget = 1;
+        }
+
+        // Limit number of potential applications to be not greater than number of root nodes.
+        // TODO: could we apply this rule later, at such a time as the number may have grown?
+        nodeRef.NumVisitsPendingTranspositionRootExtraction = Math.Min(transpositionRootNode.N, applyTarget);
+
+ LeafEvaluatorTransposition.InsurePendingTranspositionValuesSet(node, false); // *********** TEMP *******************
+
       }
       else
       {
-        Debug.Assert(node.Context.ParamsSearch.Execution.TranspositionMode == TranspositionMode.MultiNodeBuffered);
-
-        if (VERBOSE) Console.WriteLine($" {node.Index} first linkage to {transpositionRootNode.Index.Index}");
-        nodeRef.NumNodesTranspositionExtracted = 1;
-        nodeRef.TranspositionRootIndex = transpositionRootNodeIndex.Index;
+        throw new NotImplementedException();
       }
 
-//      if (CeresEnvironment.MONITORING_METRICS) NumHits++;
+      //      if (CeresEnvironment.MONITORING_METRICS) NumHits++;
 
       if (node.Context.ParamsSearch.TranspositionUseTransposedQ && transpositionMode != TranspositionMode.SharedSubtree)
       {
+#if NOT
         // We deviate from pure MCTS and 
         // set the backed up node for this leaf node to be the 
         // overall score (Q) from the complete linked tranposition subtree
@@ -133,11 +150,14 @@ namespace Ceres.MCTS.Evaluators
           node.OverrideVToApplyFromTransposition = (FP16)transpositionRootNode.Q;
           node.OverrideMPositionToApplyFromTransposition = (FP16)transpositionRootNode.MPosition;
         }
+
+#endif
       }
 
       return new LeafEvaluationResult(transpositionRootNode.Terminal, transpositionRootNode.WinP,
                                       transpositionRootNode.LossP, transpositionRootNode.MPosition);
     }
+
 
 
     /// <summary>
@@ -150,16 +170,25 @@ namespace Ceres.MCTS.Evaluators
     {
       Debug.Assert(float.IsNaN(node.V));
 
-      if (node.Context.ParamsSearch.Execution.TranspositionMode == TranspositionMode.SharedSubtree
-       //&& node.Context.ParamsSearch.Execution.TRANSPOSITION_SINGLE_TREE
-       && !float.IsNaN(node.OverrideVToApplyFromTransposition))
+      if (node.Context.ParamsSearch.Execution.TranspositionMode == TranspositionMode.SingleNodeDeferredCopy
+       && node.IsTranspositionLinked)
       {
+        // Node is already being used for transpositions.
+        return default;
+      }
+
+      if (node.Context.ParamsSearch.Execution.TranspositionMode == TranspositionMode.SharedSubtree)
+      //&& node.Context.ParamsSearch.Execution.TRANSPOSITION_SINGLE_TREE
+      //       && !float.IsNaN(node.OverrideVToApplyFromTransposition))
+      {
+        throw new NotImplementedException();
+
         // If the selector already stopped descent here 
         // due to a tranpsosition cluster virtual visit,
         // return a NodeEvaluationResult to 
         // indicate this can be processed without NN
         // (and use an NodeEvaluationResult which leaves unchanged)
-        return new LeafEvaluationResult(node.Terminal, node.WinP, node.LossP, node.MPosition);
+        //return new LeafEvaluationResult(node.Terminal, node.WinP, node.LossP, node.MPosition);
       }
 
       // Check if this position already exists in the tree
@@ -168,29 +197,27 @@ namespace Ceres.MCTS.Evaluators
         // Found already existing node
         ref MCTSNodeStruct transpositionNode = ref node.Context.Tree.Store.Nodes.nodes[transpositionNodeIndex];
 
+        // Only attempt transposition linkage if the transposition root
+        // node is fully initialized (not in flight) and not terminal
+        if (transpositionNode.N == 0 || transpositionNode.Terminal.IsTerminal())
+        {
+          //          if (CeresEnvironment.MONITORING_METRICS) NumMisses++;
+          return default;
+        }
+
         if (node.Context.ParamsSearch.TranspositionUseCluster)
         {
           MCTSNodeTranspositionManager.CheckAddToCluster(node);
         }
 
-        // Only attempt transposition linkage if the node is possibly not fully initialized
-        // because it is new (in process of initialization)
-        if (transpositionNode.N == 0)
-        {
-//          if (CeresEnvironment.MONITORING_METRICS) NumMisses++;
-          return default;
-        }
-
-        return node.Ref.NumNodesTranspositionExtracted > 1
-            ? throw new Exception("Internal error: Unexpected NumNodesTranspositionExtracted > 1")
-            : ProcessFirstLinkage(node, new MCTSNodeStructIndex(transpositionNodeIndex), ref transpositionNode);
+        return ProcessFirstLinkage(node, new MCTSNodeStructIndex(transpositionNodeIndex), in transpositionNode);
       }
       else
       {
         int pendingIndex = Interlocked.Increment(ref nextIndexPendingTranspositionRoots) - 1;
         pendingTranspositionRoots[pendingIndex] = (node.Ref.ZobristHash, node.Index);
 
-//        if (CeresEnvironment.MONITORING_METRICS) NumMisses++;
+        //        if (CeresEnvironment.MONITORING_METRICS) NumMisses++;
 
         return default;
       }
@@ -214,7 +241,8 @@ namespace Ceres.MCTS.Evaluators
 
         nextIndexPendingTranspositionRoots = 0;
       }
-
     }
+
   }
+
 }

@@ -292,7 +292,9 @@ namespace Ceres.MCTS.Search
       NumNewLeafsAddedNonDuplicates++;
 
       // Case 2 - this is a node that was evaluated immediately (or terminal)
-      bool canProcessImmediate = !node.EvalResult.IsNull || node.Terminal.IsTerminal();
+      bool canProcessImmediate = !node.EvalResult.IsNull 
+                               || node.Terminal.IsTerminal() 
+                               || node.NumVisitsPendingTranspositionRootExtraction > 0;
       if (canProcessImmediate)
       {
         if (node.ActionType == MCTSNode.NodeActionType.CacheOnly)

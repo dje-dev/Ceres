@@ -377,7 +377,7 @@ namespace Ceres.MCTS.Search
         manager.Root.Ref.TraverseSequential(manager.Root.Context.Tree.Store, delegate (ref MCTSNodeStruct node, MCTSNodeStructIndex index)
         {
           if (node.IsInFlight && node.NumChildrenVisited == 0 && count++ < 20)
-            Console.WriteLine("  " + index.Index + " " + node.Terminal + " " + node.N + " " + node.IsTranspositionLinked + " " + node.NumNodesTranspositionExtracted);
+            Console.WriteLine("  " + index.Index + " " + node.Terminal + " " + node.N + " " + node.IsTranspositionLinked + " " + node.NumVisitsPendingTranspositionRootExtraction);
           return true;
         });
         haveWarned = true;

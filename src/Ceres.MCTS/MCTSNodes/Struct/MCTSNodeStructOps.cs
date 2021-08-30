@@ -112,10 +112,10 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
       // Detach
       // not needed     NumVisitsPendingTranspositionRootExtraction = 0;
-      NumNodesTranspositionExtracted = 0; // to be removed
 
       TranspositionRootIndex = 0;
       NextTranspositionLinked = 0;
+      NumVisitsPendingTranspositionRootExtraction = 0;
 
       SetNumPolicyMovesAndAllocateChildInfo(tree, otherNode.NumPolicyMoves);
 
