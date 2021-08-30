@@ -120,10 +120,10 @@ namespace Ceres.APIExamples
       NET1 = "69722_value_focus_2";
       NET2 = "69722_value_focus_2";
 
-      NET1 = "751675";
-      NET2 = "751675";
-      NET1 = "703810";
-      NET2 = "703810";
+      //NET1 = "751675";
+      //NET2 = "751675";
+      //NET1 = "703810";
+      //NET2 = "703810";
       //      string NET1_SECONDARY1 = "j94-100";
 
       //string       NET2 = @"j64-210";
@@ -146,7 +146,7 @@ namespace Ceres.APIExamples
         evalDef2.MakePersistent();
       }
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(100_000);
+      SearchLimit limit1 = SearchLimit.NodesPerMove(20_000);
       //limit1 = SearchLimit.NodesForAllMoves(1_000_000, 10_000);
 
       //      limit1 = SearchLimit.SecondsForAllMoves(900, 2) * 0.2f;
@@ -178,6 +178,7 @@ namespace Ceres.APIExamples
 
       engineDefCeres1.SearchParams.MaxTranspositionRootApplicationsFixed = 2;// 3;
       engineDefCeres1.SearchParams.MaxTranspositionRootApplicationsFraction = 0.0f;// 0.25f;
+      engineDefCeres1.SearchParams.MaxNTranspositionRootReuse = 10;
 
       //engineDefCeres1.SelectParams.UseDynamicVLoss = true;
 

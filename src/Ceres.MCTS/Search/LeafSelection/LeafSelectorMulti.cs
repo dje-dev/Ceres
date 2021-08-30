@@ -532,7 +532,7 @@ namespace Ceres.MCTS.Search
       {
         Debug.Assert(node.NumVisitsPendingTranspositionRootExtraction > 0);
         Debug.Assert(node.TranspositionRootIndex != 0);
-        LeafEvaluatorTransposition.InsurePendingTranspositionValuesSet(node, false);
+        LeafEvaluatorTransposition.EnsurePendingTranspositionValuesSet(node, true);
         Debug.Assert(!float.IsNaN(node.PendingTranspositionV));
 
         // Treat this as if it were a leaf node (i.e. do not descend further yet).

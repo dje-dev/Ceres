@@ -306,6 +306,12 @@ namespace Ceres.MCTS.Params
 
 
     /// <summary>
+    /// Value of N for transposition root above which attaching nodes will 
+    /// only use the V with no root reuse.
+    /// </summary>
+    public int MaxNTranspositionRootReuse = int.MaxValue;
+
+    /// <summary>
     /// Experiemental feature that a initializes a new leaf
     /// with the averge V or Q across all nodes in tree which
     /// are equivalent.

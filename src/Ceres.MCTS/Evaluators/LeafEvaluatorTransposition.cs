@@ -122,8 +122,7 @@ namespace Ceres.MCTS.Evaluators
         // TODO: could we apply this rule later, at such a time as the number may have grown?
         nodeRef.NumVisitsPendingTranspositionRootExtraction = Math.Min(transpositionRootNode.N, applyTarget);
 
- LeafEvaluatorTransposition.InsurePendingTranspositionValuesSet(node, false); // *********** TEMP *******************
-
+        EnsurePendingTranspositionValuesSet(node, false);
       }
       else
       {
