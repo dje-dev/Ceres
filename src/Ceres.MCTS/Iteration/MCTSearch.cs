@@ -31,6 +31,7 @@ using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.Params;
 using Ceres.MCTS.Environment;
 using Ceres.MCTS.Managers;
+using Ceres.Chess.UserSettings;
 
 #endregion
 
@@ -469,20 +470,42 @@ namespace Ceres.MCTS.Iteration
 
 
     /// <summary>
-    /// Returns new SearchLimit, possibly adjusted for time overhead.
+    /// Returns new SearchLimit, possibly adjusted for time overhead and max tree nodes.
     /// </summary>
     /// <param name="limit"></param>
     /// <param name="paramsSearch"></param>
     /// <returns></returns>
     SearchLimit AdjustedSearchLimit(SearchLimit limit, ParamsSearch paramsSearch)
     {
-      if (limit.IsTimeLimit)
+      // Determine maximum number of tree nodes to allow store to grow to.
+      int? maxTreeNodes;
+      if (limit.MaxTreeNodes is not null)
       {
-        return limit with { Value = Math.Max(0.01f, limit.Value - paramsSearch.MoveOverheadSeconds) };
+        // Use explicit value specified.
+        maxTreeNodes = limit.MaxTreeNodes;
+      }
+      else if (CeresUserSettingsManager.Settings.MaxTreeNodes is not null)
+      {
+        // Use value explicitly set in Ceres.json.
+        maxTreeNodes = CeresUserSettingsManager.Settings.MaxTreeNodes;
       }
       else
       {
-        return limit with { };
+        // Use default value based on amount of physical memory.
+        maxTreeNodes = MCTSNodeStore.MAX_NODES - 2500;
+      }
+
+      if (limit.IsTimeLimit)
+      {
+        return limit with
+        {
+          MaxTreeNodes = maxTreeNodes,
+          Value = Math.Max(0.01f, limit.Value - paramsSearch.MoveOverheadSeconds)
+        };
+      }
+      else
+      {
+        return limit with { MaxTreeNodes = maxTreeNodes };
       }
     }
 

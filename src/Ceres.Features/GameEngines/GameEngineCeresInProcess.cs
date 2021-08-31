@@ -233,7 +233,6 @@ namespace Ceres.Features.GameEngines
       searchLimit = searchLimit with
       {
         MaxTreeVisits = searchLimit.MaxTreeVisits ?? MCTSParamsFixed.MAX_VISITS,
-        MaxTreeNodes = searchLimit.MaxTreeNodes ?? Math.Min(MCTSNodeStore.MAX_NODES - 2500, searchLimit.MaxTreeNodes ?? int.MaxValue)
       };
 
       MCTSearch searchResult;
