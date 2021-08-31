@@ -170,15 +170,14 @@ namespace Ceres.MCTS.Managers
     /// </summary>
     static bool ShouldForceInstamove(MCTSNode currentRootNode, MCTSNode newRootNode, int? maxStoreNodes)
     {
-      if (maxStoreNodes.HasValue)
+      if (maxStoreNodes == null)
       {
         return false;
-
       }
 
-      float fracNewTreeOfMaxNodes = (float)newRootNode.N / maxStoreNodes.Value;
 
-      const float THRESHOLD_TREE_FULL_FRACTION_INSTAMOVE = 0.90f;
+      const float THRESHOLD_TREE_FULL_FRACTION_INSTAMOVE = 0.95f;
+      float fracNewTreeOfMaxNodes = (float)newRootNode.N / maxStoreNodes.Value;
       return fracNewTreeOfMaxNodes > THRESHOLD_TREE_FULL_FRACTION_INSTAMOVE;
     }
   }
