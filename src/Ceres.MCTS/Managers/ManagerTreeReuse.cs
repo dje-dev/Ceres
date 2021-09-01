@@ -143,14 +143,14 @@ namespace Ceres.MCTS.Managers
         return Method.KeepStoreRebuildTree;
       }
 
-      if (fracWastedOfAllocated > 0.60f) // was 0.8
+      if (fracWastedOfAllocated > 0.65f)
       {
         // Rebuild since tree is dominated by waste,
         // which bloats memory usage and
         // also creates more fixed scanning overhead upon each rebuild/swap-root operation.
         return Method.KeepStoreRebuildTree;
       }
-      else if (fracAvailableOfAllocatable < 0.25f)
+      else if (fracAvailableOfAllocatable < 0.20f)
       {
         // Rebuild since new search tree would have little additional room to grow.
         return Method.KeepStoreRebuildTree;
@@ -165,8 +165,7 @@ namespace Ceres.MCTS.Managers
 
 
     /// <summary>
-    /// If new search tree is already very near maximum allowable size of a search tree,
-    /// then instamove because little additional search progress is possible.
+    /// Instamove if available storage is almost all full with because little additional search progress is possible.
     /// </summary>
     static bool ShouldForceInstamove(MCTSNode currentRootNode, MCTSNode newRootNode, int? maxStoreNodes)
     {
@@ -175,10 +174,18 @@ namespace Ceres.MCTS.Managers
         return false;
       }
 
+      int numNodesThisGeneration = currentRootNode.Tree.Store.Nodes.NumTotalNodes - currentRootNode.Tree.Store.Nodes.NumOldGeneration;
+      float fracUsedOfAllocatable = (float)numNodesThisGeneration / maxStoreNodes.Value;
+      float treeShrinkagesFactor = ((float)newRootNode.N / currentRootNode.N);
+      float estFracNewTreeOfAllocatable = fracUsedOfAllocatable * treeShrinkagesFactor;
 
-      const float THRESHOLD_TREE_FULL_FRACTION_INSTAMOVE = 0.95f;
-      float fracNewTreeOfMaxNodes = (float)newRootNode.N / maxStoreNodes.Value;
-      return fracNewTreeOfMaxNodes > THRESHOLD_TREE_FULL_FRACTION_INSTAMOVE;
+
+      // If new tree is estimated to use almost all of allocatable space 
+      // then prefer to instamove since not much additional search progress is possible,
+      // thereby avoiding all the overhead that would be required to do the swap/rebuild
+      // before continuing search.
+      const float MIN_FRAC_NEW_TREE_OF_ALLOCATABLE = 0.80f;
+      return estFracNewTreeOfAllocatable > MIN_FRAC_NEW_TREE_OF_ALLOCATABLE;
     }
   }
 }
