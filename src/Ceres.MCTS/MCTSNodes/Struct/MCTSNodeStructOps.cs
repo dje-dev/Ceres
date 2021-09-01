@@ -18,6 +18,7 @@ using Ceres.Base.DataType.Trees;
 using Ceres.Base.Math;
 using Ceres.Base.OperatingSystem;
 using Ceres.MCTS.Environment;
+using Ceres.MCTS.Evaluators;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.LeafExpansion;
 using Ceres.MCTS.MTCSNodes.Storage;
@@ -354,7 +355,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <param name="nInFlight"></param>
     /// <param name="p"></param>
     /// <param name="w"></param>
-    public void GatherChildInfo(MCTSIterator context, MCTSNodeStructIndex index, int selectorID, int depth, int maxIndex,
+    public void GatherChildInfo(MCTSIterator context, MCTSNodeStructIndex index, 
+                                int selectorID, int depth, int maxIndex,
                                 Span<float> n, Span<float> nInFlight, Span<float> p, Span<float> w)
     {
       MCTSNodeStore store = context.Tree.Store;
@@ -413,7 +415,19 @@ namespace Ceres.MCTS.MTCSNodes.Struct
             }
             else
             {
-              w[i] = (float)childNode.W;
+              if (childNode.NumVisitsPendingTranspositionRootExtraction > 0)
+              {
+                MCTSNode node = context.Tree.GetNode(childNode.Index);
+                if (float.IsNaN(node.PendingTranspositionV))
+                {
+                  LeafEvaluatorTransposition.EnsurePendingTranspositionValuesSet(node, false);
+                }
+                w[i] = childNode.N * node.PendingTranspositionV;
+              }
+              else
+              {
+                w[i] = (float)childNode.W;
+              }
             }
           }
 

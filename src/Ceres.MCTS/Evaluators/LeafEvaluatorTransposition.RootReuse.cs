@@ -75,8 +75,6 @@ namespace Ceres.MCTS.Evaluators
       // If so recalculate and set it here.
       bool cachedTranspositionValuesMissing = float.IsNaN(node.PendingTranspositionV);
 
-      Debug.Assert(!possiblyRefresh || cachedTranspositionValuesMissing);
-
       //if (cachedTranspositionValuesMissing) MCTSEventSource.TestMetric1++;
 
       // Possibly periodically refresh the value used for transposition backup
@@ -121,7 +119,7 @@ namespace Ceres.MCTS.Evaluators
       {
         node.PendingTranspositionV = (float)transpositionRootNode.Q;
         node.PendingTranspositionM = transpositionRootNode.MAvg;
-        node.PendingTranspositionD = transpositionRootNode.DrawP;
+        node.PendingTranspositionD = transpositionRootNode.DAvg;
       }
     }
 
