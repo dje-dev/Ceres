@@ -82,19 +82,24 @@ namespace Ceres.MCTS.Iteration
 
       if (SearchMoves != null)
       {
-        if (Context.RootMovesPruningStatus == null) Context.RootMovesPruningStatus = new MCTSFutilityPruningStatus[Root.NumPolicyMoves];
+        if (Context.RootMovesPruningStatus == null)
+        {
+          Context.RootMovesPruningStatus = new MCTSFutilityPruningStatus[Root.NumPolicyMoves];
+        }
 
         // Start by assuming all are pruned.
         Array.Fill(Context.RootMovesPruningStatus, MCTSFutilityPruningStatus.PrunedDueToSearchMoves);
 
         // Specifically un-prune any which are specified as valid search moves.
+        bool whiteToMove = Root.Annotation.Pos.MiscInfo.SideToMove == SideType.White;
         foreach (Move move in SearchMoves)
         {
           bool found = false;
           for (int i=0; i<Root.NumPolicyMoves;i++)
           {
             EncodedMove moveEncoded = Root.ChildAtIndexInfo(i).move;
-            if (move.ToString().ToLower() == moveEncoded.AlgebraicStr)
+            EncodedMove moveCorrectPerspective = whiteToMove ? moveEncoded : moveEncoded.Flipped;
+            if (move.ToString().ToLower() == moveCorrectPerspective.AlgebraicStr)
             {
               Context.RootMovesPruningStatus[i] = MCTSFutilityPruningStatus.NotPruned;
               found = true;
@@ -102,7 +107,10 @@ namespace Ceres.MCTS.Iteration
             }
           }
 
-          if (!found) throw new Exception($"Specified search move not found {move}");
+          if (!found)
+          {
+            throw new Exception($"Specified search move not found {move}");
+          }
         }
       }
       haveAppliedSearchMoves = true;
