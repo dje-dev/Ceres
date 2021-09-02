@@ -19,6 +19,7 @@ using System.Diagnostics;
 using Ceres.MCTS.Environment;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Struct;
+using Ceres.MCTS.Params;
 
 #endregion
 
@@ -59,6 +60,62 @@ namespace Ceres.MCTS.Evaluators
   /// </summary>
   public partial class LeafEvaluatorTransposition
   {
+
+    /// <summary>
+    /// Upon first visit to node to be attached to transposition root, computes and sets in the node structure:
+    ///   - TranspositionRootIndex
+    ///   - NumVisitsPendingTranspositionRootExtraction
+    /// Also computes set the pending transposition fields in the Node object.  
+    /// </summary>
+    /// <param name="node"></param>
+    /// <param name="transpositionRootNodeIndex"></param>
+    /// <param name="transpositionRootNode"></param>
+    void SetTranspositionRootReuseFields(MCTSNode node, MCTSNodeStructIndex transpositionRootNodeIndex, in MCTSNodeStruct transpositionRootNode)
+    {
+      Debug.Assert(transpositionRootNodeIndex.Index != 0);
+
+      ref MCTSNodeStruct nodeRef = ref node.Ref;
+
+      // We mark this as just extracted, but do not (yet) allocate and move over the children.
+      nodeRef.NumPolicyMoves = transpositionRootNode.NumPolicyMoves;
+      nodeRef.TranspositionRootIndex = transpositionRootNodeIndex.Index;
+
+      ParamsSearch paramsSearch = node.Context.ParamsSearch;
+
+      // Compute the number of times to apply, first compute target based on fixed and fractional components.
+      int applyTarget = paramsSearch.MaxTranspositionRootApplicationsFixed;
+      applyTarget += (int)Math.Round(transpositionRootNode.N * paramsSearch.MaxTranspositionRootApplicationsFraction, 0);
+
+      // But never allow reuse more than the number of visits to the root.
+      applyTarget = Math.Min(applyTarget, transpositionRootNode.N);
+
+      // Also apply final max value specified in parameters.
+      applyTarget = Math.Min(applyTarget, paramsSearch.MaxTranspositionRootReuse);
+
+      // Finally, the field holding the target has a fixed maximum representable size, ensure not more than that.
+      applyTarget = Math.Min(applyTarget, MCTSNodeStruct.MAX_NUM_VISITS_PENDING_TRANSPOSITION_ROOT_EXTRACTION);
+
+      //      if (applyTarget > 1 && applyTarget == transpositionRootNode.N)
+      //      {
+      //        applyTarget--;
+      //      }
+
+      // Repeatedly sampling the same leaf node value is not a reasonable strategy.
+      Debug.Assert(applyTarget <= 1 || paramsSearch.TranspositionUseTransposedQ);
+
+      // If the root has far more visits than our fixed target
+      // then only use it once (since it represents a value based on a very different subtree).
+      if (ForceUseV(node, in transpositionRootNode))
+      {
+        applyTarget = 1;
+      }
+
+      nodeRef.NumVisitsPendingTranspositionRootExtraction = applyTarget;
+
+      EnsurePendingTranspositionValuesSet(node, false);
+    }
+
+
     /// <summary>
     /// Set or update the pending transposition values in a Node
     /// if they are missing or stale.
@@ -126,19 +183,7 @@ namespace Ceres.MCTS.Evaluators
 
     static bool ForceUseV(MCTSNode node, in MCTSNodeStruct transpositionRootNode)
     {
-      if (!node.Context.ParamsSearch.TranspositionUseTransposedQ)
-      {
-        return true;
-      }
-
-      bool tooBig = transpositionRootNode.N > node.Context.ParamsSearch.MaxNTranspositionRootReuse;
-
-      if (tooBig)
-      {
-        MCTSEventSource.TestMetric1++;
-      }
-
-      return tooBig;
+      return !node.Context.ParamsSearch.TranspositionUseTransposedQ;
     }
 
 

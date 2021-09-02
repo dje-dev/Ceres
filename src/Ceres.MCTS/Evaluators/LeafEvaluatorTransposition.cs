@@ -71,6 +71,7 @@ namespace Ceres.MCTS.Evaluators
     }
 
 
+
     /// <summary>
     /// Called when a node pending evaluation is found to be the same position
     /// (for the purposes of transposition equivalence classes)
@@ -83,46 +84,18 @@ namespace Ceres.MCTS.Evaluators
     LeafEvaluationResult ProcessFirstLinkage(MCTSNode node, MCTSNodeStructIndex transpositionRootNodeIndex,
                                              in MCTSNodeStruct transpositionRootNode)
     {
-      ref MCTSNodeStruct nodeRef = ref node.Ref;
-
-      nodeRef.NumPolicyMoves = transpositionRootNode.NumPolicyMoves;
-
       Debug.Assert(transpositionRootNodeIndex.Index != 0);
 
       TranspositionMode transpositionMode = node.Context.ParamsSearch.Execution.TranspositionMode;
       if (transpositionMode == TranspositionMode.SingleNodeCopy
        || transpositionRootNode.Terminal.IsTerminal())
       {
-        nodeRef.CopyUnexpandedChildrenFromOtherNode(node.Tree, transpositionRootNodeIndex);
+        node.Ref.CopyUnexpandedChildrenFromOtherNode(node.Tree, transpositionRootNodeIndex);
       }
       else if (transpositionMode == TranspositionMode.SingleNodeDeferredCopy
             || transpositionMode == TranspositionMode.SharedSubtree)
       {
-        Debug.Assert(transpositionRootNodeIndex.Index != 0);
-
-        // We mark this as just extracted, but do not (yet) allocate and move over the children.
-        nodeRef.TranspositionRootIndex = transpositionRootNodeIndex.Index;
-
-        // Compute the number of times to apply.
-        int applyTarget = node.Context.ParamsSearch.MaxTranspositionRootApplicationsFixed;
-        applyTarget += (int)Math.Round(transpositionRootNode.N * node.Context.ParamsSearch.MaxTranspositionRootApplicationsFraction, 0);
-        applyTarget = Math.Min(applyTarget, MCTSNodeStruct.MAX_NUM_VISITS_PENDING_TRANSPOSITION_ROOT_EXTRACTION);
-
-        // Repeatedly sampling the same leaf node value is not a reasonable strategy.
-        Debug.Assert(applyTarget <= 1 || node.Context.ParamsSearch.TranspositionUseTransposedQ);
-
-        // If the root has far more visits than our fixed target
-        // then only use it once (since it represents a value based on a very different subtree).
-        if (ForceUseV(node, in transpositionRootNode))
-        {
-          applyTarget = 1;
-        }
-
-        // Limit number of potential applications to be not greater than number of root nodes.
-        // TODO: could we apply this rule later, at such a time as the number may have grown?
-        nodeRef.NumVisitsPendingTranspositionRootExtraction = Math.Min(transpositionRootNode.N, applyTarget);
-
-        EnsurePendingTranspositionValuesSet(node, false);
+        SetTranspositionRootReuseFields(node, transpositionRootNodeIndex, in transpositionRootNode);
       }
       else
       {

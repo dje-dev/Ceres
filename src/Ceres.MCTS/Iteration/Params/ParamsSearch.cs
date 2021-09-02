@@ -306,10 +306,11 @@ namespace Ceres.MCTS.Params
 
 
     /// <summary>
-    /// Value of N for transposition root above which attaching nodes will 
-    /// only use the V with no root reuse.
+    /// Hard fixed limit on maximum number of times a transposition root can be reused
+    /// (applied after the fixed and fractional calculations controlled in above parameters).
     /// </summary>
-    public int MaxNTranspositionRootReuse = int.MaxValue;
+    public int MaxTranspositionRootReuse = 1;
+
 
     /// <summary>
     /// Experiemental feature that a initializes a new leaf
