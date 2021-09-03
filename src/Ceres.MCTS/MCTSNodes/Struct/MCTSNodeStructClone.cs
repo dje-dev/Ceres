@@ -14,6 +14,7 @@
 #region Using directives
 
 using Ceres.Base.DataTypes;
+using Ceres.MCTS.Environment;
 using Ceres.MCTS.Evaluators;
 using Ceres.MCTS.LeafExpansion;
 using Ceres.MCTS.MTCSNodes.Storage;
@@ -33,15 +34,16 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <param name="sourceParent"></param>
     /// <param name="targetParent"></param>
     /// <param name="childIndex"></param>
+    /// <param name="cloneSubchildIfPossible"></param>
     /// <returns></returns>
-    public static MCTSNode CloneChild(MCTSNode sourceParent, MCTSNode targetParent, int childIndex)
+    public static MCTSNode CloneChild(MCTSNode sourceParent, MCTSNode targetParent, int childIndex, bool cloneSubchildIfPossible)
     {
       Debug.Assert(childIndex < sourceParent.NumChildrenExpanded);
       Debug.Assert(childIndex == targetParent.NumChildrenExpanded); // must expand strictly in order by index
 
       MCTSTree tree = sourceParent.Tree;
 
-      MCTSNode sourceChild = sourceParent.ChildAtIndex(0);
+      MCTSNode sourceChild = sourceParent.ChildAtIndex(childIndex);
 
       lock (sourceParent)
       {
@@ -56,7 +58,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           ref MCTSNodeStruct targetChildRef = ref targetChild.Ref;
 
           // TODO: avoid ChildAtIndex to avoid dictionarylookup?
-          targetChildRef.CopyUnexpandedChildrenFromOtherNode(tree, new MCTSNodeStructIndex(sourceParent.ChildAtIndex(0).Index));
+          targetChildRef.CopyUnexpandedChildrenFromOtherNode(tree, new MCTSNodeStructIndex(sourceParent.ChildAtIndex(childIndex).Index));
 
           targetChildRef.numChildrenVisited = 0;
           targetChildRef.NumChildrenExpanded = 0;
@@ -79,13 +81,54 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           targetChildRef.VSecondary = sourceChildRef.VSecondary;
           targetChildRef.Uncertainty = sourceChildRef.Uncertainty;
 
+          static bool IsValidSource(MCTSNode testNode) => testNode != null && !testNode.IsTranspositionLinked && testNode.Terminal != Chess.GameResult.NotInitialized;
+
+          // Possibly move over a second sub-child in the clone.
+          // The second descendent (if it exsists and us usable)
+          // must be either the child of the child, or its sibling.
+          if (cloneSubchildIfPossible && targetParent.N >= 2)
+          {
+            Debug.Assert(childIndex == 0);
+
+            MCTSNode candidateSourceChildChild = sourceChild.NumChildrenExpanded > 0 ? sourceChild.ChildAtIndex(0) : null;
+            bool candidateSourceChildChildValid = IsValidSource(candidateSourceChildChild);
+
+            MCTSNode candidateSourceChildSibling = sourceParent.NumChildrenExpanded > 1 ? sourceParent.ChildAtIndex(1) : null;
+            bool candidateSourceChildSiblingValid = IsValidSource(candidateSourceChildSibling);
+            
+            if (candidateSourceChildChildValid && candidateSourceChildSiblingValid)
+            {
+              // Both child/child and sibling have been created, use the one selected (created) first.
+              if (candidateSourceChildChild.Index < candidateSourceChildSibling.Index)
+              {
+                candidateSourceChildSibling = null;
+              }
+              else
+              {
+                candidateSourceChildChild = null;
+              }
+            }
+            
+            if (candidateSourceChildChildValid)
+            {
+              CloneChild(sourceChild, targetChild, 0, false);
+              MCTSEventSource.TestMetric1++;
+            }
+            else if (candidateSourceChildSiblingValid)
+            {
+              CloneChild(sourceParent, targetParent, 1, false);
+              MCTSEventSource.TestMetric1++;
+            }
+
+          }
+
           return targetChild;
         }
       }
     }
 
 
-    #region Deep clone
+#region Deep clone
 
     /// <summary>
     /// Clones a subtree rooted at "source" onto this node,
@@ -218,7 +261,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         NumChildrenExpanded = (byte)clonedNumChildrenExpanded;
         W = (FP16)clonedSumW;
       }
-      #endregion
+#endregion
 
     }
 

@@ -529,17 +529,20 @@ namespace Ceres.MCTS.Search
         InitializeChildrenFromDeferredTransposition(node);
         if (node.N >= 2)
         {
-          //MCTSNode child0OfRoot = node.Context.Tree.GetNode(new MCTSNodeStructIndex(node.TranspositionRootIndex));
+          // Attempt to clone the first child from transposition root (and also possibly one subchild if possible)
+          // to bypass visits to these early subnodes since we've already incorporated some visits.
+          // This seems to improve play quality.
           MCTSNode transpositionRootNode = node.Context.Tree.GetNode(priorTranspositionRootIndex);
-          if (transpositionRootNode.NumChildrenExpanded > 0
-          && !transpositionRootNode.ChildAtIndex(0).IsTranspositionLinked
-          && transpositionRootNode.ChildAtIndex(0).Terminal != Chess.GameResult.NotInitialized // ???
-          && node.Context.ParamsSearch.TestFlag)
+          if (transpositionRootNode.NumChildrenExpanded > 0)
           {
-            MCTSNodeStruct.CloneChild(transpositionRootNode, node, 0);
-            MCTSEventSource.TestMetric1++;
+            var transpositionRootChild0 = transpositionRootNode.ChildAtIndex(0);
+            if (!transpositionRootChild0.IsTranspositionLinked
+              && transpositionRootChild0.Terminal != GameResult.NotInitialized)
+            {
+              MCTSNodeStruct.CloneChild(transpositionRootNode, node, 0, true);
+              MCTSEventSource.TestMetric1++;
+            }
           }
-          //node.Ref.CloneSubtree()
         }
       }
 
