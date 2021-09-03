@@ -27,6 +27,13 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 {
   public partial struct MCTSNodeStruct
   {
+    /// <summary>
+    /// Clones an extant node in tree as a new child in a specified other node.
+    /// </summary>
+    /// <param name="sourceParent"></param>
+    /// <param name="targetParent"></param>
+    /// <param name="childIndex"></param>
+    /// <returns></returns>
     public static MCTSNode CloneChild(MCTSNode sourceParent, MCTSNode targetParent, int childIndex)
     {
       Debug.Assert(childIndex < sourceParent.NumChildrenExpanded);
@@ -45,12 +52,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
           ref MCTSNodeStruct targetParentRef = ref targetParent.Ref;
 
-          // Create target child and copy children (as unexpanded).
-          targetParent.Ref.CopyUnexpandedChildrenFromOtherNode(tree, new MCTSNodeStructIndex(sourceParent.Index));
-
           MCTSNode targetChild = targetParent.CreateChild(childIndex);
           ref MCTSNodeStruct targetChildRef = ref targetChild.Ref;
-
 
           // TODO: avoid ChildAtIndex to avoid dictionarylookup?
           targetChildRef.CopyUnexpandedChildrenFromOtherNode(tree, new MCTSNodeStructIndex(sourceParent.ChildAtIndex(0).Index));
@@ -62,7 +65,10 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           Debug.Assert(!double.IsNaN(sourceChildRef.W));
 
           targetChildRef.N = 1;
+
+          Debug.Assert(sourceChildRef.Terminal != Chess.GameResult.NotInitialized);
           targetChildRef.Terminal = sourceChildRef.Terminal;
+
           targetChildRef.W = sourceChildRef.V;
           targetChildRef.ZobristHash = sourceChildRef.ZobristHash;
           targetChildRef.MPosition = sourceChildRef.MPosition;
@@ -70,39 +76,9 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           targetChildRef.dSum = 1.0f - sourceChildRef.WinP - sourceChildRef.LossP;
           targetChildRef.WinP = sourceChildRef.WinP;
           targetChildRef.LossP = sourceChildRef.LossP;
+          targetChildRef.VSecondary = sourceChildRef.VSecondary;
+          targetChildRef.Uncertainty = sourceChildRef.Uncertainty;
 
-          //      targetChildRef.P = sourceChildRef.P;
-          //      targetChildRef.ZobristHash = sourceChildRef.ZobristHash;
-
-          /* 
-          *N
-          *W
-          P
-          NInFlight
-          NInFlight2
-          *WinP
-          *LossP
-          *mSum
-          *dSum
-          ParentIndex
-          childStartBlockIndex
-          PriorMove
-          *ZobristHash
-          NumPolicyMoves
-          numChildrenVisited
-          NumChildrenExpanded
-          Unused1
-          CacheIndex
-          VSecondary
-          Uncertainty
-
-
-          MiscFields
-          *  Terminal
-            DrawKnownToExistAmongChildren
-          *  MPosition
-
-           */
           return targetChild;
         }
       }
