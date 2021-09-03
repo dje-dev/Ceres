@@ -83,12 +83,6 @@ namespace Ceres.Chess.NNEvaluators.CUDA
     public override bool PolicyReturnedSameOrderMoveList => true;
 
 
-    /// <summary>
-    /// Returns set of neural network weights used.
-    /// </summary>
-    public LC0LegacyWeights Weights => this.Evaluator.Weights;
-
-
     readonly bool isWDL;
     readonly bool hasM;
     readonly int maxBatchSize;

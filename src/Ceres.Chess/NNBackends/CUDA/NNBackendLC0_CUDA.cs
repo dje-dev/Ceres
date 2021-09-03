@@ -116,27 +116,6 @@ namespace Ceres.Chess.NNBackends.CUDA
     public float LargestLayerWeightsScale { private set; get; }
 
 
-    LC0LegacyWeights weights;
-
-    /// <summary>
-    /// The set of underlying weights used for the network.
-    /// </summary>
-    public LC0LegacyWeights Weights
-    {
-      get
-      {
-        if (!SaveActivations)
-        {
-          throw new Exception("Weights are only available when saveActivation is set true in constructor.");
-        }
-        else
-        {
-          return weights;
-        }
-      }
-    }
-
-
     #region Cuda context
 
     NNInputCudaVariables networkInputs;
@@ -238,6 +217,9 @@ namespace Ceres.Chess.NNBackends.CUDA
         InitGPUVars();
 
         InitNetwork(net);
+        
+        // Release very large weights object.
+        net.Weights = null;
       }
       finally
       {
@@ -304,7 +286,7 @@ namespace Ceres.Chess.NNBackends.CUDA
 
     public void InitNetwork(Net net)
     {
-      weights = new LC0LegacyWeights(net.Weights);
+      LC0LegacyWeights weights = new LC0LegacyWeights(net.Weights);
       LargestLayerWeightsScale = weights.LargestScaleSeen;
 
       ExecContext.ReferenceLayers = ReferenceBackend?.Layers;
