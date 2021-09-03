@@ -24,6 +24,7 @@ using Ceres.Base.Threading;
 
 using Ceres.Chess;
 using Ceres.Chess.Positions;
+using Ceres.MCTS.Environment;
 using Ceres.MCTS.Evaluators;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.MTCSNodes;
@@ -524,7 +525,22 @@ namespace Ceres.MCTS.Search
        && numTargetLeafs > node.NumVisitsPendingTranspositionRootExtraction
        )
       {
+        MCTSNodeStructIndex priorTranspositionRootIndex = new MCTSNodeStructIndex(node.TranspositionRootIndex);
         InitializeChildrenFromDeferredTransposition(node);
+        if (node.N >= 2)
+        {
+          //MCTSNode child0OfRoot = node.Context.Tree.GetNode(new MCTSNodeStructIndex(node.TranspositionRootIndex));
+          MCTSNode transpositionRootNode = node.Context.Tree.GetNode(priorTranspositionRootIndex);
+          if (transpositionRootNode.NumChildrenExpanded > 0
+          && !transpositionRootNode.ChildAtIndex(0).IsTranspositionLinked
+          && transpositionRootNode.ChildAtIndex(0).Terminal != Chess.GameResult.NotInitialized // ???
+          && node.Context.ParamsSearch.TestFlag)
+          {
+            MCTSNodeStruct.CloneChild(transpositionRootNode, node, 0);
+            MCTSEventSource.TestMetric1++;
+          }
+          //node.Ref.CloneSubtree()
+        }
       }
 
       if (paramsExecution.TranspositionMode == TranspositionMode.SingleNodeDeferredCopy
