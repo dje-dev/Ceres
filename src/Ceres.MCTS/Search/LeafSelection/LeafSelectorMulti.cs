@@ -540,7 +540,6 @@ namespace Ceres.MCTS.Search
               && transpositionRootChild0.Terminal != GameResult.NotInitialized)
             {
               MCTSNodeStruct.CloneChild(transpositionRootNode, node, 0, true);
-              MCTSEventSource.TestMetric1++;
             }
           }
         }

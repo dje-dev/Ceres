@@ -43,10 +43,10 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
       MCTSTree tree = sourceParent.Tree;
 
-      MCTSNode sourceChild = sourceParent.ChildAtIndex(childIndex);
-
       lock (sourceParent)
       {
+        MCTSNode sourceChild = sourceParent.ChildAtIndex(childIndex);
+
         lock (sourceChild)
         {
           ref readonly MCTSNodeStruct sourceParentRef = ref sourceParent.Ref;
@@ -60,33 +60,39 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           // TODO: avoid ChildAtIndex to avoid dictionarylookup?
           targetChildRef.CopyUnexpandedChildrenFromOtherNode(tree, new MCTSNodeStructIndex(sourceParent.ChildAtIndex(childIndex).Index));
 
+          MCTSEventSource.TestMetric1++;
+
           targetChildRef.numChildrenVisited = 0;
           targetChildRef.NumChildrenExpanded = 0;
 
           Debug.Assert(!double.IsNaN(sourceParent.W));
           Debug.Assert(!double.IsNaN(sourceChildRef.W));
 
-          targetChildRef.N = 1;
 
           Debug.Assert(sourceChildRef.Terminal != Chess.GameResult.NotInitialized);
           targetChildRef.Terminal = sourceChildRef.Terminal;
 
+          targetChildRef.N = 1;
           targetChildRef.W = sourceChildRef.V;
-          targetChildRef.ZobristHash = sourceChildRef.ZobristHash;
+
           targetChildRef.MPosition = sourceChildRef.MPosition;
           targetChildRef.mSum = sourceChildRef.MPosition;
-          targetChildRef.dSum = 1.0f - sourceChildRef.WinP - sourceChildRef.LossP;
+          targetChildRef.dSum = sourceChildRef.DrawP;
           targetChildRef.WinP = sourceChildRef.WinP;
           targetChildRef.LossP = sourceChildRef.LossP;
+
+          targetChildRef.ZobristHash = sourceChildRef.ZobristHash;
           targetChildRef.VSecondary = sourceChildRef.VSecondary;
           targetChildRef.Uncertainty = sourceChildRef.Uncertainty;
 
-          static bool IsValidSource(MCTSNode testNode) => testNode != null && !testNode.IsTranspositionLinked && testNode.Terminal != Chess.GameResult.NotInitialized;
+          static bool IsValidSource(MCTSNode testNode) => testNode != null 
+                                                      && !testNode.IsTranspositionLinked 
+                                                      && testNode.Terminal != Chess.GameResult.NotInitialized;
 
           // Possibly move over a second sub-child in the clone.
           // The second descendent (if it exsists and us usable)
           // must be either the child of the child, or its sibling.
-          if (cloneSubchildIfPossible && targetParent.N >= 2)
+          if (cloneSubchildIfPossible && targetParent.N >= 3)
           {
             Debug.Assert(childIndex == 0);
 
@@ -101,23 +107,27 @@ namespace Ceres.MCTS.MTCSNodes.Struct
               // Both child/child and sibling have been created, use the one selected (created) first.
               if (candidateSourceChildChild.Index < candidateSourceChildSibling.Index)
               {
-                candidateSourceChildSibling = null;
+                candidateSourceChildSiblingValid = false;
               }
               else
               {
-                candidateSourceChildChild = null;
+                candidateSourceChildChildValid = false;
               }
             }
             
             if (candidateSourceChildChildValid)
             {
-              CloneChild(sourceChild, targetChild, 0, false);
-              MCTSEventSource.TestMetric1++;
+              lock (candidateSourceChildChild)
+              {
+                CloneChild(sourceChild, targetChild, 0, false);
+              }
             }
             else if (candidateSourceChildSiblingValid)
             {
-              CloneChild(sourceParent, targetParent, 1, false);
-              MCTSEventSource.TestMetric1++;
+              lock (candidateSourceChildSibling)
+              {
+                CloneChild(sourceParent, targetParent, 1, false);
+              }
             }
 
           }
