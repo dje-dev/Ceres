@@ -31,7 +31,7 @@ namespace Ceres.MCTS.Evaluators
   /// Leaf evaluator that consults a PositionEvalCache to 
   /// try to return an already evaluated and stored result.
   /// </summary>
-  public class LeafEvaluatorCache : LeafEvaluatorBase
+  public sealed class LeafEvaluatorCache : LeafEvaluatorBase
   {
     /// <summary>
     /// Count of successful probes.

@@ -33,7 +33,7 @@ namespace Ceres.MCTS.Evaluators
   /// Obviously this is only possible when the other subtree contains compatible evaluations
   /// (such as same neural network).
   /// </summary>
-  public class LeafEvaluatorReuseOtherTree : LeafEvaluatorBase
+  public sealed class LeafEvaluatorReuseOtherTree : LeafEvaluatorBase
   {
     MCTSIterator OtherContext;
 

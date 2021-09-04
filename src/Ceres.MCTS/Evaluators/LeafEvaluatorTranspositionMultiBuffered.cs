@@ -30,7 +30,7 @@ namespace Ceres.MCTS.Evaluators
   /// Leaf evaluator which links to or extracts transposition nodes
   /// from another subtree. Only used for mode TranspositionMode.MultiNodeBuffered.
   /// </summary>
-  public partial class LeafEvaluatorTransposition : LeafEvaluatorBase
+  public sealed partial class LeafEvaluatorTransposition : LeafEvaluatorBase
   {
     ConcurrentDictionary<int, MCTSNodeTranspositionVisitor> activeTranspositionVisitors 
       = new ConcurrentDictionary<int, MCTSNodeTranspositionVisitor>();

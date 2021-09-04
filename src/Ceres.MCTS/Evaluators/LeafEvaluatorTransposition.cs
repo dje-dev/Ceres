@@ -31,7 +31,7 @@ namespace Ceres.MCTS.Evaluators
   /// Node evaluator which can yield evaluations by other nodes
   /// representing the same position which are already extant elsewhere in the search tree.
   /// </summary>
-  public partial class LeafEvaluatorTransposition : LeafEvaluatorBase
+  public sealed partial class LeafEvaluatorTransposition : LeafEvaluatorBase
   {
     // TODO: Transposition counts temporarily disabled for performance reasons (false sharing)
     static ulong NumHits = 0;

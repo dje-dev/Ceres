@@ -32,7 +32,7 @@ namespace Ceres.MCTS.Evaluators
   /// 
   /// NOTE: Currently only simple WDL support (no DTZ).
   /// </summary>
-  public class LeafEvaluatorSyzygyLC0 : LeafEvaluatorBase
+  public sealed class LeafEvaluatorSyzygyLC0 : LeafEvaluatorBase
   {
     /// <summary>
     /// Maximum cardinality (number of pieces) supported by tablebases.

@@ -30,7 +30,7 @@ namespace Ceres.MCTS.Evaluators
   /// (e.g. checkmate, stalemate, draw due to insufficient material).
   /// 
   /// </summary>
-  public class LeafEvaluatorTerminal : LeafEvaluatorBase
+  public sealed class LeafEvaluatorTerminal : LeafEvaluatorBase
   {
     /// <summary>
     /// Applies some tests to try to detect terminal positions, returning the TerminalStatus.

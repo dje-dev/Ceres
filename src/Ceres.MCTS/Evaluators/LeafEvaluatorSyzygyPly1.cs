@@ -32,7 +32,7 @@ namespace Ceres.MCTS.Evaluators
   /// of LeafEvaluatorSyzygyPly1 is typically approximately 10% that 
   /// of LeafEvaluatorSyzygyPly0 successful evaluations.
   /// </summary>
-  public class LeafEvaluatorSyzygyPly1 : LeafEvaluatorBase
+  public sealed class LeafEvaluatorSyzygyPly1 : LeafEvaluatorBase
   {
     /// <summary>
     /// Supporting tablebase evaluator.

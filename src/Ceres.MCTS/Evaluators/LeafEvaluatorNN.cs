@@ -38,7 +38,7 @@ namespace Ceres.MCTS.Evaluators
   /// <summary>
   /// Base class for an evaluator which performs inference using a neural network.
   /// </summary>
-  public class LeafEvaluatorNN : LeafEvaluatorBase
+  public sealed class LeafEvaluatorNN : LeafEvaluatorBase
   {
     /// <summary>
     ///
