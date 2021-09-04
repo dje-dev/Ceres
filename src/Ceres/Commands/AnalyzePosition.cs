@@ -25,6 +25,7 @@ using Ceres.Chess.LC0.Engine;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.Positions;
+using Ceres.Features.GameEngines;
 using Ceres.Features.UCI;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.MTCSNodes.Analysis;
@@ -37,25 +38,6 @@ namespace Ceres.Commands
 {
   public static class AnalyzePosition
   {
-    static DateTime lastInfoUpdate;
-
-    static void MCTSProgressCallback(MCTSManager manager)
-    {
-      int numUpdatesSent = 0;
-
-      DateTime now = DateTime.Now;
-      float timeSinceLastUpdate = (float)(now - lastInfoUpdate).TotalSeconds;
-
-      bool isFirstUpdate = numUpdatesSent == 0;
-      float UPDATE_INTERVAL_SECONDS = 1;// isFirstUpdate ? 0.1f : 3f;
-      if (timeSinceLastUpdate > UPDATE_INTERVAL_SECONDS && manager.Root.N > 0)
-      {
-        Console.WriteLine(UCIInfo.UCIInfoString(manager));
-        lastInfoUpdate = now;
-      }
-    }
-
-
     public static void Analyze(string fenAndMoves, SearchLimit searchLimit,
                                NNEvaluatorDef evaluatorDef,
                                bool forceDisablePruning,
@@ -72,31 +54,32 @@ namespace Ceres.Commands
       Console.WriteLine();
       Console.WriteLine();
 
-      NNEvaluatorSet nnEvaluators = new NNEvaluatorSet(evaluatorDef, null);
+      ParamsSearch searchParams = new ParamsSearch();
+      searchParams.FutilityPruningStopSearchEnabled = !forceDisablePruning;
+
+      GameEngineCeresInProcess ceresEngine = new GameEngineCeresInProcess("Ceres", evaluatorDef, null, searchParams);
 
       // Warmup (in parallel)    
       lc0Engine?.DoSearchPrepare();
       Parallel.Invoke(
-        () => nnEvaluators.Warmup(true),
-        () => comparisonEngine?.Warmup()); 
+        () => ceresEngine.Warmup(),
+        () => comparisonEngine?.Warmup());
 
+      ceresEngine.VerboseMoveStats = verbose;
       bool ceresDone = false;
-
-      lastInfoUpdate = DateTime.Now;
 
       UCISearchInfo lastCeresInfo = null;
 
+      GameEngine.ProgressCallback callback;
+      callback = manager => lastCeresInfo = new UCISearchInfo(UCIInfo.UCIInfoString((MCTSManager)manager));
+
+
       // Launch Ceres
-      MCTSearch ceresResults = null;
+      GameEngineSearchResultCeres ceresResults = null;
       Task searchCeres = Task.Run(() =>
       {
-        ParamsSearch searchParams = new ParamsSearch();
-        searchParams.FutilityPruningStopSearchEnabled = !forceDisablePruning;
         PositionWithHistory positionWithHistory = PositionWithHistory.FromFENAndMovesUCI(fenAndMoves);
-        ceresResults = new MCTSearch();
-        ceresResults.Search(nnEvaluators, new ParamsSelect(), searchParams, null, 
-                            null, positionWithHistory, searchLimit, verbose, DateTime.Now, null,
-                            manager => lastCeresInfo = new UCISearchInfo(UCIInfo.UCIInfoString(manager), null, null), null, false, true);
+        ceresResults = ceresEngine.Search(positionWithHistory, searchLimit, null, callback) as GameEngineSearchResultCeres;
       });
 
       // Possibly launch search for other engine
@@ -153,13 +136,14 @@ namespace Ceres.Commands
       searchCeres.Wait();
       searchComparison?.Wait();
 
-      string infoUpdate = UCIInfo.UCIInfoString(ceresResults.Manager);
+      string infoUpdate = UCIInfo.UCIInfoString(ceresResults.Search.Manager);
 
-      double q2 = ceresResults.SearchRootNode.Q;
+      double q2 = ceresResults.Search.SearchRootNode.Q;
       //SearchPrincipalVariation pv2 = new SearchPrincipalVariation(worker2.Root);
-      MCTSPosTreeNodeDumper.DumpPV(ceresResults.SearchRootNode, true);
+      MCTSPosTreeNodeDumper.DumpPV(ceresResults.Search.SearchRootNode, true);
 
     }
+
 
     static void WriteUCI(string id, UCISearchInfo info, int numGreenPV)
     {
