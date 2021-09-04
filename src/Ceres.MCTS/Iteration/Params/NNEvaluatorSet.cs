@@ -42,6 +42,11 @@ namespace Ceres.MCTS.Params
     public readonly NNEvaluatorDef EvaluatorDef;
 
     /// <summary>
+    /// If the overlapping evaluator (#2) will be required.
+    /// </summary>
+    public readonly bool UsesEvaluator2;
+
+    /// <summary>
     /// Definition of the evaluator to be used for EvaluatorSecondary (optional).
     /// </summary>
     public readonly NNEvaluatorDef EvaluatorDefSecondary;
@@ -83,8 +88,10 @@ namespace Ceres.MCTS.Params
     /// according to a specified definition.
     /// </summary>
     /// <param name="evaluatorDef"></param>
+    /// <param name="usesEvaluator2"></param>
     /// <param name="evaluatorDefSecondary"></param>
-    public NNEvaluatorSet(NNEvaluatorDef evaluatorDef, NNEvaluatorDef evaluatorDefSecondary = null)
+    public NNEvaluatorSet(NNEvaluatorDef evaluatorDef, bool usesEvaluator2, 
+                          NNEvaluatorDef evaluatorDefSecondary = null)
     {
       if (evaluatorDef == null)
       {
@@ -92,6 +99,7 @@ namespace Ceres.MCTS.Params
       }
 
       EvaluatorDef = evaluatorDef;
+      UsesEvaluator2 = usesEvaluator2;
       EvaluatorDefSecondary = evaluatorDefSecondary;
     }
 
@@ -122,7 +130,7 @@ namespace Ceres.MCTS.Params
       {
         Parallel.Invoke(
           () => CalcStatistics(true),
-          () => { if (Evaluator2 is not null) NNEvaluatorBenchmark.Warmup(Evaluator2); },
+          () => { if (UsesEvaluator2) NNEvaluatorBenchmark.Warmup(Evaluator2); },
           () => { if (EvaluatorSecondary is not null) NNEvaluatorBenchmark.Warmup(EvaluatorSecondary); }
           );
       }
@@ -130,7 +138,7 @@ namespace Ceres.MCTS.Params
       {
         Parallel.Invoke(
           () => NNEvaluatorBenchmark.Warmup(Evaluator1),
-          () => { if (Evaluator2 is not null) NNEvaluatorBenchmark.Warmup(Evaluator2); },
+          () => { if (UsesEvaluator2) NNEvaluatorBenchmark.Warmup(Evaluator2); },
           () => { if (EvaluatorSecondary is not null) NNEvaluatorBenchmark.Warmup(EvaluatorSecondary); }
           );
       }
