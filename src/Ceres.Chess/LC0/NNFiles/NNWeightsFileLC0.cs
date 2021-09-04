@@ -94,7 +94,7 @@ namespace Ceres.Chess.LC0.NNFiles
       fileInfo = new FileInfo(filename);
     }
 
-    public LC0ProtobufNet Info => new LC0ProtobufNet(FileName);
+    public LC0ProtobufNet Info => LC0ProtobufNet.LoadedNet(FileName);
 
 
     // Keep a static dictionary as cache of loaded networks,
@@ -161,7 +161,7 @@ namespace Ceres.Chess.LC0.NNFiles
 
       try
       {
-        LC0ProtobufNet pbn = new LC0ProtobufNet(filename);
+        LC0ProtobufNet pbn = LC0ProtobufNet.LoadedNet(filename);
         NumBlocks = pbn.NumBlocks;
         NumFilters = pbn.NumFilters;
         IsWDL = pbn.HasWDL;

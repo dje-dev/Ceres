@@ -182,7 +182,7 @@ namespace Ceres.Chess.LC0.WeightsProtobuf
                                          Func<int, float, float> valueCalc)
     {
       // Read from disk
-      LC0ProtobufNet pbn = new LC0ProtobufNet(fnOrg);
+      LC0ProtobufNet pbn = LC0ProtobufNet.LoadedNet(fnOrg);
       Weights.Layer layer = layerMap(pbn);
 
       // Get current layer values and get them rewritten

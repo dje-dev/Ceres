@@ -17,10 +17,13 @@ using Ceres.Base.DataType;
 using Ceres.Base.Misc;
 using Pblczero;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
 using System.Text;
+using System.Threading;
 
 #endregion
 
@@ -87,11 +90,45 @@ namespace Ceres.Chess.LC0.WeightsProtobuf
     public LC0ProtobufNetWeightsMinMaxStats Stats => new LC0ProtobufNetWeightsMinMaxStats(Net.Weights);
 
 
+    static ConcurrentDictionary<string, LC0ProtobufNet> cachedNets = new();
+
+    /// <summary>
+    /// Try to avoid concurrent loading of same nets.
+    /// </summary>
+    static ConcurrentDictionary<string, string> loadingNets = new();
+
+    /// <summary>
+    /// Loads and returns network stored in file with specified name.
+    /// </summary>
+    /// <param name="fn"></param>
+    /// <returns></returns>
+    public static LC0ProtobufNet LoadedNet(string fn)
+    {
+      LC0ProtobufNet net = null;
+
+      while (loadingNets.ContainsKey(fn))
+      {
+        // Already being loaded.
+        Thread.Sleep(50);
+      }
+
+      // TODO: consider having a bounded size of the cache to avoid excess memory use.
+      loadingNets.TryAdd(fn, fn);
+      if (!cachedNets.TryGetValue(fn, out net))
+      {
+        net = cachedNets[fn] = new LC0ProtobufNet(fn);
+      }
+      loadingNets.TryRemove(new KeyValuePair<string, string>(fn, fn));
+
+      return net;
+    }
+
+
     /// <summary>
     /// Constructor.
     /// </summary>
     /// <param name="fn"></param>
-    public LC0ProtobufNet(string fn)
+    private LC0ProtobufNet(string fn)
     {
       if (!File.Exists(fn))
       {
