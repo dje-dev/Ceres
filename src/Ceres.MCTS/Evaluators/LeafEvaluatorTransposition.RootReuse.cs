@@ -167,50 +167,41 @@ namespace Ceres.MCTS.Evaluators
       {
         if (node.N > 2) throw new Exception("SetPendingTransitionValues not supporting N > 2");
 
-        //        float wtQ = (0.5f / MathF.Pow(transpositionRootNode.N, 0.5f));
-        float wtQ = 1f / MathF.Pow(transpositionRootNode.N, 0.75f);
-        float wtV = 1.0f - wtQ;
+        ref MCTSNodeStruct nullNode = ref node.Context.Root.Ref;
+
+        var visit0Ref = MCTSNodeStruct.SubnodeRefVisitedAtIndex(in transpositionRootNode, 0, out bool foundV0);
+        var visit1Ref = MCTSNodeStruct.SubnodeRefVisitedAtIndex(in transpositionRootNode, 1, out bool foundV1);
+        var visit2Ref = MCTSNodeStruct.SubnodeRefVisitedAtIndex(in transpositionRootNode, 2, out bool foundV2);
+
+        float q = (float)transpositionRootNode.Q;
+        float v0 = foundV0 ? visit0Ref.V : transpositionRootNode.V;
+        float v1 = foundV1 ? -visit1Ref.V : v0;
+        float v2 = foundV2 ? visit2Ref.V : v1;
+
+        if (foundV2 && visit2Ref.ParentIndex == transpositionRootNode.Index)
+        {
+          v2 *= -1;
+        }
 
         if (node.N == 2)
         {
-          ref MCTSNodeStruct nullNode = ref node.Context.Root.Ref;
-          //var visit0Ref = MCTSNodeStruct.SubnodeRefVisitedAtIndex(in node.Ref, 0, in nullNode);
-          var visit1Ref = MCTSNodeStruct.SubnodeRefVisitedAtIndex(in node.Ref, 1, in nullNode);
-          var visit2Ref = MCTSNodeStruct.SubnodeRefVisitedAtIndex(in node.Ref, 2, in nullNode);
-
-          float v1 = visit1Ref.Index.Index == 0 ? node.PendingTranspositionV : visit1Ref.V;
-          float v2 = visit2Ref.Index.Index == 0 ? node.PendingTranspositionV : visit2Ref.V;
-          node.PendingTranspositionV = 0.5f * (v1 + v2);
+          node.PendingTranspositionV = 0.2f * q + 0.2f * v1 + 0.6f * v2;
           node.PendingTranspositionM = transpositionRootNode.MPosition;
           node.PendingTranspositionD = transpositionRootNode.DrawP;
         }
         else if (node.N == 1)
         {
-          if (transpositionRootNode.NumChildrenExpanded > 0
-           && transpositionRootNode.ChildAtIndexRef(0).Terminal != Chess.GameResult.NotInitialized
-           && !transpositionRootNode.ChildAtIndexRef(0).IsTranspositionLinked)
-          {
-            //            Console.WriteLine(transpositionRootNode.V + " " + -transpositionRootNode.ChildAtIndexRef(0).V);
-            float priorQ = (float)transpositionRootNode.Q;
-            float priorV = (float)transpositionRootNode.V;
-            transpositionRootNode = ref transpositionRootNode.ChildAtIndexRef(0);
-
-wtQ = 0;
-wtV = 1;
-            node.PendingTranspositionV = wtV * (0.5f * -transpositionRootNode.V + 0.5f * priorV);
-            //            node.PendingTranspositionV = wtQ * priorq + wtV * -transpositionRootNode.V;
-            node.PendingTranspositionM = transpositionRootNode.MPosition;
-            node.PendingTranspositionD = transpositionRootNode.DrawP;
-            return;
-          }
+          //          node.PendingTranspositionV = 0.333f * (q + v0 + v1);
+          node.PendingTranspositionV = 0.4f * q + 0.3f * v0 + 0.2f * v1;
+          node.PendingTranspositionM = transpositionRootNode.MPosition;
+          node.PendingTranspositionD = transpositionRootNode.DrawP;
         }
-
-wtQ = 1;
-wtV = 0;
-
-        node.PendingTranspositionV = wtV * transpositionRootNode.V + wtQ * (float)transpositionRootNode.Q;
-        node.PendingTranspositionM = transpositionRootNode.MPosition;
-        node.PendingTranspositionD = transpositionRootNode.DrawP;
+        else
+        {
+          node.PendingTranspositionV = 0.4f * q + 0.4f * v0 + 0.2f * v1;
+          node.PendingTranspositionM = transpositionRootNode.MPosition;
+          node.PendingTranspositionD = transpositionRootNode.DrawP;
+        }
       }
       else
       {
@@ -218,8 +209,13 @@ wtV = 0;
         node.PendingTranspositionM = transpositionRootNode.MAvg;
         node.PendingTranspositionD = transpositionRootNode.DAvg;
       }
+
     }
 
+    // -9
+    // node.PendingTranspositionV = 0.5f * (q + v0);
+    // node.PendingTranspositionV = 0.5f * q + 0.2f * v0 + 0.3f * v1;
+    // node.PendingTranspositionV = 0.5f * q + 0.2f * v1 + 0.3f * v2;
 
     static bool ForceUseV(MCTSNode node, in MCTSNodeStruct transpositionRootNode)
     {

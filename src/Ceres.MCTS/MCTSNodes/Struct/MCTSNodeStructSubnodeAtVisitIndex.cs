@@ -34,18 +34,18 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <param name="nullNodeRef">reference to the null root node</param>
     /// <returns></returns>
     public static ref readonly MCTSNodeStruct SubnodeRefVisitedAtIndex(in MCTSNodeStruct node, int depth, 
-                                                                       in MCTSNodeStruct nullNodeRef)
+                                                                       out bool found)
     {
-      Debug.Assert(nullNodeRef.IsRoot);
-
+      found = false;
       switch (depth)
       {
         case 0:
           if (IsValidVSource(in node))
           {
+            found = true;
             return ref node;
           }
-          return ref nullNodeRef;
+          return ref node;
 
         case 1:
           if (node.NumChildrenExpanded > 0)
@@ -53,10 +53,11 @@ namespace Ceres.MCTS.MTCSNodes.Struct
             ref readonly MCTSNodeStruct child = ref node.ChildAtIndexRef(0);
             if (IsValidVSource(in child))
             {
+              found = true;
               return ref child;
             }
           }
-          return ref nullNodeRef;
+          return ref node;
 
         case 2:
           // Only two possibilities to consider: child of child, or sibling (index 1) of child.
@@ -65,12 +66,14 @@ namespace Ceres.MCTS.MTCSNodes.Struct
             ref readonly MCTSNodeStruct child = ref node.ChildAtIndexRef(0);
 
             // Check for a valid child of the child.
-            ref readonly MCTSNodeStruct subchildRef = ref nullNodeRef;
+            ref readonly MCTSNodeStruct subchildRef = ref node; // dummy initialization
+            bool foundSubchild = false;
             if (child.NumChildrenExpanded > 0)
             {
               ref readonly MCTSNodeStruct subchild = ref child.ChildAtIndexRef(0);
               if (IsValidVSource(in subchild))
               {
+                foundSubchild = true;
                 subchildRef = ref subchild;
               }
             }
@@ -81,21 +84,22 @@ namespace Ceres.MCTS.MTCSNodes.Struct
               ref readonly MCTSNodeStruct sibling = ref node.ChildAtIndexRef(0);
               if (IsValidVSource(in sibling))
               {
-                if (subchildRef.Index.Index != 0
-                 && sibling.Index.Index < subchildRef.Index.Index)
+                if (foundSubchild && sibling.Index.Index < subchildRef.Index.Index)
                 {
+                  found = true;
                   return ref sibling;
                 }
               }
             }
 
             // Return the subchild if it was valid.
-            if (subchildRef.Index.Index != 0)
+            if (foundSubchild)
             {
+              found = true;
               return ref subchildRef;
             }
           }
-          return ref nullNodeRef;
+          return ref node;
 
         default:
           throw new Exception("Internal error: V3 and above not yet supported.");
