@@ -165,14 +165,26 @@ namespace Ceres.MCTS.Evaluators
     {
       if (forceUseV)
       {
-        if (node.N > 1) throw new Exception("SetPendingTransitionValues not supporting N > 1");
+        if (node.N > 2) throw new Exception("SetPendingTransitionValues not supporting N > 2");
 
         //        float wtQ = (0.5f / MathF.Pow(transpositionRootNode.N, 0.5f));
         float wtQ = 1f / MathF.Pow(transpositionRootNode.N, 0.75f);
         float wtV = 1.0f - wtQ;
 
+        if (node.N == 2)
+        {
+          ref MCTSNodeStruct nullNode = ref node.Context.Root.Ref;
+          //var visit0Ref = MCTSNodeStruct.SubnodeRefVisitedAtIndex(in node.Ref, 0, in nullNode);
+          var visit1Ref = MCTSNodeStruct.SubnodeRefVisitedAtIndex(in node.Ref, 1, in nullNode);
+          var visit2Ref = MCTSNodeStruct.SubnodeRefVisitedAtIndex(in node.Ref, 2, in nullNode);
 
-        if (node.N == 1)
+          float v1 = visit1Ref.Index.Index == 0 ? node.PendingTranspositionV : visit1Ref.V;
+          float v2 = visit2Ref.Index.Index == 0 ? node.PendingTranspositionV : visit2Ref.V;
+          node.PendingTranspositionV = 0.5f * (v1 + v2);
+          node.PendingTranspositionM = transpositionRootNode.MPosition;
+          node.PendingTranspositionD = transpositionRootNode.DrawP;
+        }
+        else if (node.N == 1)
         {
           if (transpositionRootNode.NumChildrenExpanded > 0
            && transpositionRootNode.ChildAtIndexRef(0).Terminal != Chess.GameResult.NotInitialized

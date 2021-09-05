@@ -58,7 +58,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           ref MCTSNodeStruct targetChildRef = ref targetChild.Ref;
 
 
-          targetParent.Ref.NumChildrenVisited = 1;
+          targetParent.Ref.NumChildrenVisited = (byte)(childIndex + 1);
 
           // TODO: avoid ChildAtIndex to avoid dictionarylookup?
           targetChildRef.CopyUnexpandedChildrenFromOtherNode(tree, new MCTSNodeStructIndex(sourceChild.Index));

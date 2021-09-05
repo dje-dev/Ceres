@@ -33,8 +33,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <param name="depth"></param>
     /// <param name="nullNodeRef">reference to the null root node</param>
     /// <returns></returns>
-    public static ref readonly MCTSNodeStruct SubnodeRefVisitedAtIndex(ref MCTSNodeStruct node, int depth, 
-                                                                        in MCTSNodeStruct nullNodeRef)
+    public static ref readonly MCTSNodeStruct SubnodeRefVisitedAtIndex(in MCTSNodeStruct node, int depth, 
+                                                                       in MCTSNodeStruct nullNodeRef)
     {
       Debug.Assert(nullNodeRef.IsRoot);
 
