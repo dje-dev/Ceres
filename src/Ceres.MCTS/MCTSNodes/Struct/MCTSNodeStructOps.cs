@@ -416,19 +416,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
             }
             else
             {
-              if (childNode.NumVisitsPendingTranspositionRootExtraction > 0)
-              {
-                MCTSNode node = context.Tree.GetNode(childNode.Index);
-                if (float.IsNaN(node.PendingTranspositionV))
-                {
-                  LeafEvaluatorTransposition.EnsurePendingTranspositionValuesSet(node, false);
-                }
-                w[i] = childNode.N * node.PendingTranspositionV;
-              }
-              else
-              {
-                w[i] = (float)childNode.W;
-              }
+              w[i] = (float)childNode.W;
             }
           }
 
