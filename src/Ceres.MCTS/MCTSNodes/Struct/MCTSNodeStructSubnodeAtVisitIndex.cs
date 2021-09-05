@@ -81,7 +81,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
             // Possibly return sibling if it exists and is valid and better (earlier).
             if (node.NumChildrenExpanded > 1)
             {
-              ref readonly MCTSNodeStruct sibling = ref node.ChildAtIndexRef(0);
+              ref readonly MCTSNodeStruct sibling = ref node.ChildAtIndexRef(1);
               if (IsValidVSource(in sibling))
               {
                 if (foundSubchild && sibling.Index.Index < subchildRef.Index.Index)
