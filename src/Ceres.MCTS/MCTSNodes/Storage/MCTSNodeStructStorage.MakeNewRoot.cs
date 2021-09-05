@@ -280,7 +280,8 @@ return;
               bool found = transpositionRoots.TryGetValue(thisNode.ZobristHash, out int transpositionRootIndex);
               if (!found)
               {
-                throw new Exception("Internal error: expected transposition root not found.");
+                Console.WriteLine("Warning: expected transposition root not found for " + thisNode);
+                thisNode.TranspositionRootIndex = 0;
               }
               else
               {
