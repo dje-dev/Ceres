@@ -40,7 +40,7 @@ namespace Ceres.MCTS.Evaluators
     /// <summary>
     /// The actual visitor which can enumerate the subtree nodes in order of creation
     /// </summary>
-    public MCTSNodeSequentialVisitor Visitor;
+    public MCTSNodeIteratorInVisitOrder Visitor;
 
 
     /// <summary>
@@ -53,7 +53,7 @@ namespace Ceres.MCTS.Evaluators
     public object Clone()
     {
       MCTSNodeTranspositionVisitor ret = new MCTSNodeTranspositionVisitor();
-      ret.Visitor = Visitor.Clone() as MCTSNodeSequentialVisitor;
+      ret.Visitor = Visitor.Clone() as MCTSNodeIteratorInVisitOrder;
       ret.TranspositionRootNWhenVisitsStarted = TranspositionRootNWhenVisitsStarted;
       return ret;
     }

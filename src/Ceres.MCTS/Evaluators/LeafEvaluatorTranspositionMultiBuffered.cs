@@ -143,7 +143,7 @@ namespace Ceres.MCTS.Evaluators
         linkedVisitor = new MCTSNodeTranspositionVisitor()
         {
           TranspositionRootNWhenVisitsStarted = transpositionRootNode.N,
-          Visitor = new MCTSNodeSequentialVisitor(node.Context.Tree.Store, transpositionRootNodeIndex)
+          Visitor = new MCTSNodeIteratorInVisitOrder(node.Context.Tree.Store, transpositionRootNodeIndex)
         };
 
         activeTranspositionVisitors[node.Index] = linkedVisitor;

@@ -57,8 +57,11 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           MCTSNode targetChild = targetParent.CreateChild(childIndex);
           ref MCTSNodeStruct targetChildRef = ref targetChild.Ref;
 
+
+          targetParent.Ref.NumChildrenVisited = 1;
+
           // TODO: avoid ChildAtIndex to avoid dictionarylookup?
-          targetChildRef.CopyUnexpandedChildrenFromOtherNode(tree, new MCTSNodeStructIndex(sourceParent.ChildAtIndex(childIndex).Index));
+          targetChildRef.CopyUnexpandedChildrenFromOtherNode(tree, new MCTSNodeStructIndex(sourceChild.Index));
 
           MCTSEventSource.TestMetric1++;
 
@@ -156,7 +159,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       int count = 0;
 
       MCTSNodeStructIndex lastIndex = default;
-      MCTSNodeSequentialVisitor visitor = new MCTSNodeSequentialVisitor(store, source.Index);
+      MCTSNodeIteratorInVisitOrder visitor = new MCTSNodeIteratorInVisitOrder(store, source.Index);
       foreach (MCTSNodeStructIndex childNodeIndex in visitor.Iterate)
       {
         if (++count == numNodesToClone)

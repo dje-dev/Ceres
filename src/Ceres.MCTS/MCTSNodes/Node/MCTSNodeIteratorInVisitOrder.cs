@@ -28,11 +28,17 @@ using Ceres.MCTS.MTCSNodes.Struct;
 namespace Ceres.MCTS.MTCSNodes
 {
   /// <summary>
-  /// Class that facilitates visitation of all nodes in a subtree,
-  /// explicitly capturing the state of the iteration so
-  /// it can be stored and subsequent retrieved and resumed.
+  /// Class that facilitates visitation of all nodes in a subtree
+  /// in the same order in which they were visited.
+  /// 
+  /// Also the state of the iteration is captured in a data structure
+  /// so it can be stored and subsequent retrieved and resumed.
+  /// 
+  /// TODO: Improve class to possibly handle the case of a tree 
+  ///       still being actively modified by search in progress
+  ///       (e.g. stop once an in-flight node is reached).
   /// </summary>
-  public class MCTSNodeSequentialVisitor : ICloneable
+  public class MCTSNodeIteratorInVisitOrder : ICloneable
   {
     /// <summary>
     /// Underlying node store.
@@ -71,7 +77,7 @@ namespace Ceres.MCTS.MTCSNodes
     /// </summary>
     /// <param name="store"></param>
     /// <param name="root"></param>
-    public MCTSNodeSequentialVisitor(MCTSNodeStore store, MCTSNodeStructIndex root)
+    public MCTSNodeIteratorInVisitOrder(MCTSNodeStore store, MCTSNodeStructIndex root)
     {
       Store = store;
       Root = root;
@@ -138,7 +144,10 @@ namespace Ceres.MCTS.MTCSNodes
       if (!nextBranch2.IsNull)
       {
         pendingBranches.Add(nextBranch2);
-        if (pendingBranches.Count > MaxBranches) MaxBranches = pendingBranches.Count;
+        if (pendingBranches.Count > MaxBranches)
+        {
+          MaxBranches = pendingBranches.Count;
+        }
       }
 
       // Switch to this branch
@@ -181,7 +190,10 @@ namespace Ceres.MCTS.MTCSNodes
           if (!nextBranch2.IsNull)
           {
             pendingBranches.Add(nextBranch2);
-            if (pendingBranches.Count > MaxBranches) MaxBranches = pendingBranches.Count;
+            if (pendingBranches.Count > MaxBranches)
+            {
+              MaxBranches = pendingBranches.Count;
+            }
           }
 
           currentNode = nextBranch1;
@@ -204,9 +216,13 @@ namespace Ceres.MCTS.MTCSNodes
         {
           MCTSNodeStructIndex nextValue = GetNext();
           if (nextValue.IsNull)
+          {
             yield break;
+          }
           else
+          {
             yield return nextValue;
+          }
         }
       }
     }
@@ -217,12 +233,14 @@ namespace Ceres.MCTS.MTCSNodes
     /// <returns></returns>
     public object Clone()
     {
-      MCTSNodeSequentialVisitor ret = new MCTSNodeSequentialVisitor(Store, Root);
+      MCTSNodeIteratorInVisitOrder ret = new MCTSNodeIteratorInVisitOrder(Store, Root);
 
       // Clone the sorted set
       ret.pendingBranches = new SortedSet<MCTSNodeStructIndex>();
       foreach (MCTSNodeStructIndex entry in pendingBranches)
+      {
         ret.pendingBranches.Add(entry);
+      }
 
       ret.MaxBranches = MaxBranches;
       ret.NumReturned = NumReturned;
