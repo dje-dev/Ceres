@@ -111,12 +111,11 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     {
       ref MCTSNodeStruct otherNode = ref tree.Store.Nodes.nodes[otherNodeIndex.Index];
 
-      // Detach
-      // not needed     NumVisitsPendingTranspositionRootExtraction = 0;
+      TranspositionUnlinkIsInProgress = true;
 
-      TranspositionRootIndex = 0;
       NextTranspositionLinked = 0;
       NumVisitsPendingTranspositionRootExtraction = 0;
+      TranspositionRootIndex = 0;
 
       SetNumPolicyMovesAndAllocateChildInfo(tree, otherNode.NumPolicyMoves);
 
@@ -142,6 +141,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           }
         }
       }
+
+      TranspositionUnlinkIsInProgress = false;
     }
 
 

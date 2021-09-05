@@ -260,7 +260,8 @@ namespace Ceres.MCTS.MTCSNodes
     /// If the tree is truncated at this node and generating position
     /// values via the subtree linked to its tranposition root
     /// </summary>
-    public bool IsTranspositionLinked => (*ptr).IsTranspositionLinked;
+    public bool IsTranspositionLinked => (*ptr).IsTranspositionLinked && !Ref.TranspositionUnlinkIsInProgress;
+
 
     /// <summary>
     /// The number of visits yet to be processed which will have their values taken from the 

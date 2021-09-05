@@ -179,7 +179,15 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       get => miscFields.IsOldGeneration;
       set => miscFields.IsOldGeneration = value;
     }
-   
+
+    /// <summary>
+    /// If the node is in the (very brief) process of being transposition unlinked.
+    /// </summary>
+    internal bool TranspositionUnlinkIsInProgress
+    {
+      get => miscFields.TranspositionUnlinkIsInProgress;
+      set => miscFields.TranspositionUnlinkIsInProgress = value;
+    }
 
     /// <summary>
     /// If nonzero represents the index of the node an associated IMCTSNodeCache.
