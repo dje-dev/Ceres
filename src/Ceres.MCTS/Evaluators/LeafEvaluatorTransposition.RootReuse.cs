@@ -15,8 +15,6 @@
 
 using System;
 using System.Diagnostics;
-
-using Ceres.MCTS.Environment;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.Params;
@@ -58,9 +56,8 @@ namespace Ceres.MCTS.Evaluators
   /// <summary>
   /// 
   /// </summary>
-  public partial class LeafEvaluatorTransposition
+  public sealed partial class LeafEvaluatorTransposition
   {
-
     /// <summary>
     /// Upon first visit to node to be attached to transposition root, computes and sets in the node structure:
     ///   - TranspositionRootIndex
@@ -101,13 +98,13 @@ namespace Ceres.MCTS.Evaluators
       //      }
 
       // Repeatedly sampling the same leaf node value is not a reasonable strategy.
-      Debug.Assert(applyTarget <= 1 || paramsSearch.TranspositionUseTransposedQ);
+//      Debug.Assert(applyTarget <= 1 || paramsSearch.TranspositionUseTransposedQ);
 
       // If the root has far more visits than our fixed target
       // then only use it once (since it represents a value based on a very different subtree).
       if (ForceUseV(node, in transpositionRootNode))
       {
-        applyTarget = 1;
+//        applyTarget = 1;
       }
 
       nodeRef.NumVisitsPendingTranspositionRootExtraction = applyTarget;
@@ -168,7 +165,38 @@ namespace Ceres.MCTS.Evaluators
     {
       if (forceUseV)
       {
-        node.PendingTranspositionV = transpositionRootNode.V;
+        if (node.N > 1) throw new Exception("SetPendingTransitionValues not supporting N > 1");
+
+        //        float wtQ = (0.5f / MathF.Pow(transpositionRootNode.N, 0.5f));
+        float wtQ = 1f / MathF.Pow(transpositionRootNode.N, 0.75f);
+        float wtV = 1.0f - wtQ;
+
+
+        if (node.N == 1)
+        {
+          if (transpositionRootNode.NumChildrenExpanded > 0
+           && transpositionRootNode.ChildAtIndexRef(0).Terminal != Chess.GameResult.NotInitialized
+           && !transpositionRootNode.ChildAtIndexRef(0).IsTranspositionLinked)
+          {
+            //            Console.WriteLine(transpositionRootNode.V + " " + -transpositionRootNode.ChildAtIndexRef(0).V);
+            float priorQ = (float)transpositionRootNode.Q;
+            float priorV = (float)transpositionRootNode.V;
+            transpositionRootNode = ref transpositionRootNode.ChildAtIndexRef(0);
+
+wtQ = 0;
+wtV = 1;
+            node.PendingTranspositionV = wtV * (0.5f * -transpositionRootNode.V + 0.5f * priorV);
+            //            node.PendingTranspositionV = wtQ * priorq + wtV * -transpositionRootNode.V;
+            node.PendingTranspositionM = transpositionRootNode.MPosition;
+            node.PendingTranspositionD = transpositionRootNode.DrawP;
+            return;
+          }
+        }
+
+wtQ = 1;
+wtV = 0;
+
+        node.PendingTranspositionV = wtV * transpositionRootNode.V + wtQ * (float)transpositionRootNode.Q;
         node.PendingTranspositionM = transpositionRootNode.MPosition;
         node.PendingTranspositionD = transpositionRootNode.DrawP;
       }
