@@ -163,7 +163,7 @@ namespace Ceres.MCTS.Evaluators
                                            in MCTSNodeStruct transpositionRootNode,
                                            bool forceUseV)
     {
-      if (forceUseV)
+      if (forceUseV && node.Context.ParamsSearch.TestFlag)
       {
         if (node.N > 2) throw new Exception("SetPendingTransitionValues not supporting N > 2");
 
@@ -182,26 +182,37 @@ namespace Ceres.MCTS.Evaluators
         {
           v2 *= -1;
         }
-
+        float FRAC_Q = 0.0f;
+        float FRAC_V = 1f - FRAC_Q;
+        float combo = 0.5f * q + 0.1f * v0 + 0.15f * v1 + 0.25f * v2;
+        if (float.IsNaN(combo)) Console.WriteLine(q + " " + v0 + " " + v1 + " " + v2);
         if (node.N == 2)
         {
-          node.PendingTranspositionV = 0.2f * q + 0.2f * v1 + 0.6f * v2;
+          //          node.PendingTranspositionV = 0.25f * q + 0.15f * v0 + 0.25f * v1 + 0.35f * v2;
+          node.PendingTranspositionV = v2 * FRAC_V + FRAC_Q * q; ;// 0.5f * (v1 + v2);
           node.PendingTranspositionM = transpositionRootNode.MPosition;
           node.PendingTranspositionD = transpositionRootNode.DrawP;
         }
         else if (node.N == 1)
         {
-          //          node.PendingTranspositionV = 0.333f * (q + v0 + v1);
-          node.PendingTranspositionV = 0.4f * q + 0.3f * v0 + 0.2f * v1;
+          //          node.PendingTranspositionV = 0.35f * q + 0.2f * v0 + 0.25f * v1 + 0.2f * v2;
+          node.PendingTranspositionV = v1 * FRAC_V + FRAC_Q * q; ;// 0.5f * (v0 + v1);
           node.PendingTranspositionM = transpositionRootNode.MPosition;
           node.PendingTranspositionD = transpositionRootNode.DrawP;
         }
         else
         {
-          node.PendingTranspositionV = 0.4f * q + 0.4f * v0 + 0.2f * v1;
+          //          node.PendingTranspositionV = 0.45f * q + 0.2f * v0 + 0.2f * v1 + 0.15f * v2;
+          node.PendingTranspositionV = v0 * FRAC_V + FRAC_Q * q;
           node.PendingTranspositionM = transpositionRootNode.MPosition;
           node.PendingTranspositionD = transpositionRootNode.DrawP;
         }
+      }
+      else if (!node.Context.ParamsSearch.TranspositionUseTransposedQ)
+      {
+        node.PendingTranspositionV = (float)transpositionRootNode.V;
+        node.PendingTranspositionM = transpositionRootNode.MAvg;
+        node.PendingTranspositionD = transpositionRootNode.DAvg;
       }
       else
       {
