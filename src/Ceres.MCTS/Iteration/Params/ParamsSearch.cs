@@ -295,7 +295,7 @@ namespace Ceres.MCTS.Params
     ///   - optionally some of the Q (subtree average) from the transposition root
     ///     can be mixed in with these visits (see TranspositionRootQFraction).
     /// </summary>
-    public int MaxTranspositionRootUseCount = 1;
+    public int MaxTranspositionRootUseCount = 3;
 
     
     /// <summary>
