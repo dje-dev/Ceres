@@ -46,7 +46,7 @@ namespace Ceres.MCTS.Environment
     /// <summary>
     /// Spare counter reserved for temporary ad-hoc use when debugging new features.
     /// </summary>
-    public static float TestMetric1 = 0;
+    public static double TestMetric1 = 0;
 
 
     public static float MaximumTimeAllotmentOvershoot = -9999f;
