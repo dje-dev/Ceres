@@ -15,6 +15,7 @@
 
 using System;
 using System.Diagnostics;
+using Ceres.Chess.EncodedPositions;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.Params;
@@ -79,33 +80,18 @@ namespace Ceres.MCTS.Evaluators
 
       ParamsSearch paramsSearch = node.Context.ParamsSearch;
 
-      // Compute the number of times to apply, first compute target based on fixed and fractional components.
-      int applyTarget = paramsSearch.MaxTranspositionRootApplicationsFixed;
-      applyTarget += (int)Math.Round(transpositionRootNode.N * paramsSearch.MaxTranspositionRootApplicationsFraction, 0);
+      // Compute the number of times to apply
+      int applyTarget = paramsSearch.MaxTranspositionRootUseCount;
+      if (applyTarget <= 0 || applyTarget > 3)
+      {
+        throw new Exception("MaxTranspositionRootUseCount must 1, 2 or 3, not: " + applyTarget);
+      }
 
       // But never allow reuse more than the number of visits to the root.
       applyTarget = Math.Min(applyTarget, transpositionRootNode.N);
 
-      // Also apply final max value specified in parameters.
-      applyTarget = Math.Min(applyTarget, paramsSearch.MaxTranspositionRootReuse);
-
       // Finally, the field holding the target has a fixed maximum representable size, ensure not more than that.
       applyTarget = Math.Min(applyTarget, MCTSNodeStruct.MAX_NUM_VISITS_PENDING_TRANSPOSITION_ROOT_EXTRACTION);
-
-      //      if (applyTarget > 1 && applyTarget == transpositionRootNode.N)
-      //      {
-      //        applyTarget--;
-      //      }
-
-      // Repeatedly sampling the same leaf node value is not a reasonable strategy.
-//      Debug.Assert(applyTarget <= 1 || paramsSearch.TranspositionUseTransposedQ);
-
-      // If the root has far more visits than our fixed target
-      // then only use it once (since it represents a value based on a very different subtree).
-      if (ForceUseV(node, in transpositionRootNode))
-      {
-//        applyTarget = 1;
-      }
 
       nodeRef.NumVisitsPendingTranspositionRootExtraction = applyTarget;
 
@@ -148,7 +134,7 @@ namespace Ceres.MCTS.Evaluators
         }
 
         ref readonly MCTSNodeStruct transpositionNode = ref node.Context.Tree.Store.Nodes.nodes[transpositionNodeIndex];
-        SetPendingTransitionValues(node, in transpositionNode, ForceUseV(node, in transpositionNode));
+        SetPendingTransitionValues(node, in transpositionNode);
         Debug.Assert(!float.IsNaN(node.PendingTranspositionV));
       }
     }
@@ -160,77 +146,67 @@ namespace Ceres.MCTS.Evaluators
     /// <param name="node"></param>
     /// <param name="transpositionRootNode"></param>
     static void SetPendingTransitionValues(MCTSNode node,
-                                           in MCTSNodeStruct transpositionRootNode,
-                                           bool forceUseV)
+                                           in MCTSNodeStruct transpositionRootNode)
     {
-      if (forceUseV && node.Context.ParamsSearch.TestFlag)
+      if (node.N > 2)
       {
-        if (node.N > 2) throw new Exception("SetPendingTransitionValues not supporting N > 2");
+        throw new Exception("Max supported N in SetPendingTransitionValues is 3");
+      }
 
-        ref MCTSNodeStruct nullNode = ref node.Context.Root.Ref;
+      float FRAC_Q = node.Context.ParamsSearch.TranspositionRootQFraction;
+      float FRAC_V = 1f - FRAC_Q;
 
-        var visit0Ref = MCTSNodeStruct.SubnodeRefVisitedAtIndex(in transpositionRootNode, 0, out bool foundV0);
-        var visit1Ref = MCTSNodeStruct.SubnodeRefVisitedAtIndex(in transpositionRootNode, 1, out bool foundV1);
-        var visit2Ref = MCTSNodeStruct.SubnodeRefVisitedAtIndex(in transpositionRootNode, 2, out bool foundV2);
+      var visit0Ref = MCTSNodeStruct.SubnodeRefVisitedAtIndex(in transpositionRootNode, 0, out bool foundV0);
+      var visit1Ref = MCTSNodeStruct.SubnodeRefVisitedAtIndex(in transpositionRootNode, 1, out bool foundV1);
+      var visit2Ref = MCTSNodeStruct.SubnodeRefVisitedAtIndex(in transpositionRootNode, 2, out bool foundV2);
 
-        float q = (float)transpositionRootNode.Q;
-        float v0 = foundV0 ? visit0Ref.V : transpositionRootNode.V;
-        float v1 = foundV1 ? -visit1Ref.V : v0;
-        float v2 = foundV2 ? visit2Ref.V : v1;
+      float transpositionRootMPosition = transpositionRootNode.MPosition;
+      float transpositionRootDrawP = transpositionRootNode.DrawP;
 
-        if (foundV2 && visit2Ref.ParentIndex == transpositionRootNode.Index)
+      float q = (float)transpositionRootNode.Q;
+      float v0 = foundV0 ? visit0Ref.V : transpositionRootNode.V;
+      float v1 = foundV1 ? -visit1Ref.V : v0;
+      float v2 = foundV2 ? visit2Ref.V : v1;
+      if (foundV2 && visit2Ref.ParentIndex == transpositionRootNode.Index)
+      {
+        v2 *= -1;
+      }
+
+
+      //      float combo = 0.5f * q + 0.1f * v0 + 0.15f * v1 + 0.25f * v2;
+
+      void SetNodePendingValues(float adjustedV, in MCTSNodeStruct subnodeRef, bool subnodeRefIsValid)
+      {
+        node.PendingTranspositionV = FRAC_V * adjustedV + FRAC_Q * q;
+        if (subnodeRefIsValid)
         {
-          v2 *= -1;
-        }
-        float FRAC_Q = 0.0f;
-        float FRAC_V = 1f - FRAC_Q;
-        float combo = 0.5f * q + 0.1f * v0 + 0.15f * v1 + 0.25f * v2;
-        if (float.IsNaN(combo)) Console.WriteLine(q + " " + v0 + " " + v1 + " " + v2);
-        if (node.N == 2)
-        {
-          //          node.PendingTranspositionV = 0.25f * q + 0.15f * v0 + 0.25f * v1 + 0.35f * v2;
-          node.PendingTranspositionV = v2 * FRAC_V + FRAC_Q * q; ;// 0.5f * (v1 + v2);
-          node.PendingTranspositionM = transpositionRootNode.MPosition;
-          node.PendingTranspositionD = transpositionRootNode.DrawP;
-        }
-        else if (node.N == 1)
-        {
-          //          node.PendingTranspositionV = 0.35f * q + 0.2f * v0 + 0.25f * v1 + 0.2f * v2;
-          node.PendingTranspositionV = v1 * FRAC_V + FRAC_Q * q; ;// 0.5f * (v0 + v1);
-          node.PendingTranspositionM = transpositionRootNode.MPosition;
-          node.PendingTranspositionD = transpositionRootNode.DrawP;
+          node.PendingTranspositionM = FRAC_V * subnodeRef.MPosition + FRAC_Q * subnodeRef.MAvg;
+          node.PendingTranspositionD = FRAC_V * subnodeRef.DrawP     + FRAC_Q * subnodeRef.DAvg;
         }
         else
         {
-          //          node.PendingTranspositionV = 0.45f * q + 0.2f * v0 + 0.2f * v1 + 0.15f * v2;
-          node.PendingTranspositionV = v0 * FRAC_V + FRAC_Q * q;
-          node.PendingTranspositionM = transpositionRootNode.MPosition;
-          node.PendingTranspositionD = transpositionRootNode.DrawP;
+          node.PendingTranspositionM = transpositionRootMPosition;
+          node.PendingTranspositionD = transpositionRootDrawP;
+
         }
       }
-      else if (!node.Context.ParamsSearch.TranspositionUseTransposedQ)
+
+      if (node.N == 0)
       {
-        node.PendingTranspositionV = (float)transpositionRootNode.V;
-        node.PendingTranspositionM = transpositionRootNode.MAvg;
-        node.PendingTranspositionD = transpositionRootNode.DAvg;
+        SetNodePendingValues(v0, visit0Ref, foundV0);
+      }
+      else if (node.N == 1)
+      {
+        SetNodePendingValues(v1, visit1Ref, foundV1);
+      }
+      else if (node.N == 2)
+      {
+        SetNodePendingValues(v2, visit2Ref, foundV2);        // 0.5f * (v1 + v2);
       }
       else
       {
-        node.PendingTranspositionV = (float)transpositionRootNode.Q;
-        node.PendingTranspositionM = transpositionRootNode.MAvg;
-        node.PendingTranspositionD = transpositionRootNode.DAvg;
+        throw new Exception("Unexpected N in SetPendingTransitionValues");
       }
-
-    }
-
-    // -9
-    // node.PendingTranspositionV = 0.5f * (q + v0);
-    // node.PendingTranspositionV = 0.5f * q + 0.2f * v0 + 0.3f * v1;
-    // node.PendingTranspositionV = 0.5f * q + 0.2f * v1 + 0.3f * v2;
-
-    static bool ForceUseV(MCTSNode node, in MCTSNodeStruct transpositionRootNode)
-    {
-      return !node.Context.ParamsSearch.TranspositionUseTransposedQ;
     }
 
 

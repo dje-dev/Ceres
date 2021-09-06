@@ -104,7 +104,7 @@ namespace Ceres.MCTS.Evaluators
 
       //      if (CeresEnvironment.MONITORING_METRICS) NumHits++;
 
-      if (node.Context.ParamsSearch.TranspositionUseTransposedQ && transpositionMode != TranspositionMode.SharedSubtree)
+      if (/*node.Context.ParamsSearch.TranspositionUseTransposedQ &&*/ transpositionMode != TranspositionMode.SharedSubtree)
       {
 #if NOT
         // We deviate from pure MCTS and 

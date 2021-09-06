@@ -284,32 +284,34 @@ namespace Ceres.MCTS.Params
 
 
     /// <summary>
-    /// If the V take from a node found to be a transposition
-    /// should be the Q from the whole transposition subtree 
-    /// rather than just the transposed node.
+    /// Hard fixed limit on maximum number of times (up to 3)
+    /// evaluations will be taken from a transposition root
+    /// (used only if transposition mode is SingleNodeDeferredCopy).
+    /// 
+    /// This feature offers two benefits:
+    ///   - the nodes are not instantiated in the tree until this value is exceeded
+    ///     (instead the data neeeded during searc visits is 
+    ///      plucked from the transposition root subtree).
+    ///   - optionally some of the Q (subtree average) from the transposition root
+    ///     can be mixed in with these visits (see TranspositionRootQFraction).
     /// </summary>
-    public bool TranspositionUseTransposedQ = true;
+    public int MaxTranspositionRootUseCount = 1;
 
-
+    
     /// <summary>
-    /// If using transposition root Q, determines the fixed count contribution
-    /// to number of times the root Q can possibly be applied.
+    /// Fractional weight given to Q of transposition root
+    /// (rather than V of node being visited at or under transposition root)
+    /// when computing value to be backed up tree after a visit
+    /// to a node still linked to a transposition root.
+    /// a transposition root.
+    ///
+    /// Nonzero values have the benefit of sharing information from possibly large
+    /// subtrees already explored below the transposition root.
+    /// 
+    /// However large values have the disadvantage of distorting the evaluations
+    /// at and above the node, effectively overweighting nodes deeper in the tree.
     /// </summary>
-    public int MaxTranspositionRootApplicationsFixed = 1;
-
-    /// <summary>
-    /// If using transposition root Q, determines the relative fractional contribution
-    /// to number of times the root Q can possibly be applied,
-    /// based on the N of the root node times this fraction.
-    /// </summary>
-    public float MaxTranspositionRootApplicationsFraction = 0;
-
-
-    /// <summary>
-    /// Hard fixed limit on maximum number of times a transposition root can be reused
-    /// (applied after the fixed and fractional calculations controlled in above parameters).
-    /// </summary>
-    public int MaxTranspositionRootReuse = 1;
+    public float TranspositionRootQFraction = 0.5f;
 
 
     /// <summary>
