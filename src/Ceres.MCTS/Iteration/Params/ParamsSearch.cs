@@ -311,7 +311,7 @@ namespace Ceres.MCTS.Params
     /// However large values have the disadvantage of distorting the evaluations
     /// at and above the node, effectively overweighting nodes deeper in the tree.
     /// </summary>
-    public float TranspositionRootQFraction = 0.5f;
+    public float TranspositionRootQFraction = 0.35f;
 
 
     /// <summary>

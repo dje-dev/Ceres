@@ -129,7 +129,11 @@ namespace Ceres.MCTS.Evaluators
         {
           if (!node.Tree.TranspositionRoots.TryGetValue(node.Ref.ZobristHash, out transpositionNodeIndex))
           {
-            throw new Exception("Internal error, transposition root lost");
+            Console.WriteLine("Internal error, transposition root lost in EnsurePendingTranspositionValuesSet" + node);
+
+            // Try to recover.
+            node.Ref.TranspositionRootIndex = 0;
+            node.Ref.NumVisitsPendingTranspositionRootExtraction = 0;
           }
         }
 
@@ -157,58 +161,61 @@ namespace Ceres.MCTS.Evaluators
       float FRAC_V = 1f - FRAC_Q;
 
       var visit0Ref = MCTSNodeStruct.SubnodeRefVisitedAtIndex(in transpositionRootNode, 0, out bool foundV0);
-      var visit1Ref = MCTSNodeStruct.SubnodeRefVisitedAtIndex(in transpositionRootNode, 1, out bool foundV1);
-      var visit2Ref = MCTSNodeStruct.SubnodeRefVisitedAtIndex(in transpositionRootNode, 2, out bool foundV2);
 
       float transpositionRootMPosition = transpositionRootNode.MPosition;
       float transpositionRootDrawP = transpositionRootNode.DrawP;
 
       float q = (float)transpositionRootNode.Q;
       float v0 = foundV0 ? visit0Ref.V : transpositionRootNode.V;
-      float v1 = foundV1 ? -visit1Ref.V : v0;
-      float v2 = foundV2 ? visit2Ref.V : v1;
-      if (foundV2 && visit2Ref.ParentIndex == transpositionRootNode.Index)
-      {
-        v2 *= -1;
-      }
 
 
-      //      float combo = 0.5f * q + 0.1f * v0 + 0.15f * v1 + 0.25f * v2;
-
+      // Helper method to set the PendingTransposition values from specified subnode.
       void SetNodePendingValues(float adjustedV, in MCTSNodeStruct subnodeRef, bool subnodeRefIsValid)
       {
         node.PendingTranspositionV = FRAC_V * adjustedV + FRAC_Q * q;
         if (subnodeRefIsValid)
         {
           node.PendingTranspositionM = FRAC_V * subnodeRef.MPosition + FRAC_Q * subnodeRef.MAvg;
-          node.PendingTranspositionD = FRAC_V * subnodeRef.DrawP     + FRAC_Q * subnodeRef.DAvg;
+          node.PendingTranspositionD = FRAC_V * subnodeRef.DrawP + FRAC_Q * subnodeRef.DAvg;
         }
         else
         {
           node.PendingTranspositionM = transpositionRootMPosition;
           node.PendingTranspositionD = transpositionRootDrawP;
-
         }
       }
 
       if (node.N == 0)
       {
-        SetNodePendingValues(v0, visit0Ref, foundV0);
-      }
-      else if (node.N == 1)
-      {
-        SetNodePendingValues(v1, visit1Ref, foundV1);
-      }
-      else if (node.N == 2)
-      {
-        SetNodePendingValues(v2, visit2Ref, foundV2);        // 0.5f * (v1 + v2);
+        SetNodePendingValues(v0, in visit0Ref, foundV0);
       }
       else
       {
-        throw new Exception("Unexpected N in SetPendingTransitionValues");
+        var visit1Ref = MCTSNodeStruct.SubnodeRefVisitedAtIndex(in transpositionRootNode, 1, out bool foundV1);
+        float v1 = foundV1 ? -visit1Ref.V : v0;
+
+        if (node.N == 1)
+        {
+          SetNodePendingValues(v1, in visit1Ref, foundV1);
+        }
+        else if (node.N == 2)
+        {
+          var visit2Ref = MCTSNodeStruct.SubnodeRefVisitedAtIndex(in transpositionRootNode, 2, out bool foundV2);
+          float v2 = foundV2 ? visit2Ref.V : v1;
+          if (foundV2 && visit2Ref.ParentIndex == transpositionRootNode.Index)
+          {
+            // This node was sibling, from perspective of opponent, invert.
+            v2 *= -1;
+          }
+
+          SetNodePendingValues(v2, in visit2Ref, foundV2);
+        }
+        else
+        {
+          throw new Exception("Unexpected N in SetPendingTransitionValues");
+        }
       }
     }
-
 
   }
 }
