@@ -175,6 +175,28 @@ namespace Ceres.Features.Tournaments
     public long TotalNodesEngine2;
 
     /// <summary>
+    /// Average score (in centipawns) across all moves.
+    /// </summary>
+    public float AvgScoreCentipawnsEngine1
+    {
+      get
+      {
+        float count = 0;
+        float sum = 0;
+        foreach (GameMoveStat stat in GameMoveHistory)
+        {
+          count++;
+          if ((stat.Side == Chess.SideType.Black && Engine2IsWhite)
+           || (stat.Side == Chess.SideType.White && !Engine2IsWhite))
+          {
+            sum += stat.ScoreCentipawns;
+          }
+        }
+        return sum / count;
+      }
+    }
+
+    /// <summary>
     /// List of descriptive information relating to all moves played.
     /// </summary>
     public List<GameMoveStat> GameMoveHistory;
