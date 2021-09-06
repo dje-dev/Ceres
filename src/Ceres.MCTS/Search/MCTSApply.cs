@@ -366,7 +366,7 @@ namespace Ceres.MCTS.Search
     /// <param name="node"></param>
     /// <param name="lossP"></param>
     /// <param name="m"></param>
-    private static void SetProvenLossAndPropagateToParent(MCTSNode node, float lossP, float m)
+    internal static void SetProvenLossAndPropagateToParent(MCTSNode node, float lossP, float m)
     {
       ref MCTSNodeStruct nodeRef = ref node.Ref;
 

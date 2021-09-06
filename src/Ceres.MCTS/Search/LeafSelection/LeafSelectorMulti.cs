@@ -533,15 +533,10 @@ namespace Ceres.MCTS.Search
           // to bypass visits to these early subnodes since we've already incorporated some visits.
           // This seems to improve play quality.
           MCTSNode transpositionRootNode = node.Context.Tree.GetNode(priorTranspositionRootIndex);
-          if (transpositionRootNode.NumChildrenExpanded > 0)
-          {
-            var transpositionRootChild0 = transpositionRootNode.ChildAtIndex(0);
-            if (!transpositionRootChild0.IsTranspositionLinked
-              && transpositionRootChild0.Terminal != GameResult.NotInitialized)
-            {
-              MCTSNodeStruct.CloneChild(transpositionRootNode, node, 0, true);
-            }
-          }
+          Debug.Assert(node.N <= 3);
+
+          bool cloneSubchild = node.N >= 3;
+          MCTSNodeStruct.TryCloneChild(transpositionRootNode, node, 0, cloneSubchild);
         }
       }
 

@@ -18,6 +18,8 @@ using Ceres.MCTS.Environment;
 using Ceres.MCTS.Evaluators;
 using Ceres.MCTS.LeafExpansion;
 using Ceres.MCTS.MTCSNodes.Storage;
+using Ceres.MCTS.Params;
+using Ceres.MCTS.Search;
 using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
@@ -28,6 +30,12 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 {
   public partial struct MCTSNodeStruct
   {
+
+    static bool IsValidSource(MCTSNode testNode) => testNode != null
+                                            && !testNode.IsTranspositionLinked
+                                            && !FP16.IsNaN(testNode.N)
+                                            && testNode.Terminal != Chess.GameResult.NotInitialized;
+
     /// <summary>
     /// Clones an extant node in tree as a new child in a specified other node.
     /// </summary>
@@ -36,16 +44,24 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <param name="childIndex"></param>
     /// <param name="cloneSubchildIfPossible"></param>
     /// <returns></returns>
-    public static MCTSNode CloneChild(MCTSNode sourceParent, MCTSNode targetParent, int childIndex, bool cloneSubchildIfPossible)
+    public static MCTSNode TryCloneChild(MCTSNode sourceParent, MCTSNode targetParent, int childIndex, bool cloneSubchildIfPossible)
     {
-      Debug.Assert(childIndex < sourceParent.NumChildrenExpanded);
       Debug.Assert(childIndex == targetParent.NumChildrenExpanded); // must expand strictly in order by index
+
+      if (sourceParent.NumChildrenExpanded == 0)
+      {
+        return null;
+      }
 
       MCTSTree tree = sourceParent.Tree;
 
       lock (sourceParent)
       {
         MCTSNode sourceChild = sourceParent.ChildAtIndex(childIndex);
+        if (!IsValidSource(sourceChild))
+        {
+          return null;
+        }
 
         lock (sourceChild)
         {
@@ -65,14 +81,10 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
           MCTSEventSource.TestMetric1++;
 
-          targetChildRef.numChildrenVisited = 0;
-          targetChildRef.NumChildrenExpanded = 0;
-
           Debug.Assert(!double.IsNaN(sourceParent.W));
           Debug.Assert(!double.IsNaN(sourceChildRef.W));
-
-
           Debug.Assert(sourceChildRef.Terminal != Chess.GameResult.NotInitialized);
+
           targetChildRef.Terminal = sourceChildRef.Terminal;
 
           targetChildRef.N = 1;
@@ -88,15 +100,21 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           targetChildRef.VSecondary = sourceChildRef.VSecondary;
           targetChildRef.Uncertainty = sourceChildRef.Uncertainty;
 
-          static bool IsValidSource(MCTSNode testNode) => testNode != null 
-                                                      && !testNode.IsTranspositionLinked 
-                                                      && !FP16.IsNaN(testNode.N)
-                                                      && testNode.Terminal != Chess.GameResult.NotInitialized;
+          // TODO: centralize this logic better (similar to what is in BackupApply).
+          if (targetChildRef.Terminal == Chess.GameResult.Draw)
+          {
+            targetParentRef.DrawKnownToExistAmongChildren = true;
+          }
+
+          if (ParamsSelect.VIsForcedLoss(targetChildRef.V))
+          {
+            MCTSApply.SetProvenLossAndPropagateToParent(targetChild, targetChildRef.LossP, targetChildRef.MPosition);
+          }
 
           // Possibly move over a second sub-child in the clone.
-          // The second descendent (if it exsists and us usable)
+          // The second descendent (if it exsists and is usable)
           // must be either the child of the child, or its sibling.
-          if (cloneSubchildIfPossible && targetParent.N >= 3)
+          if (cloneSubchildIfPossible)
           {
             Debug.Assert(childIndex == 0);
 
@@ -118,20 +136,31 @@ namespace Ceres.MCTS.MTCSNodes.Struct
                 candidateSourceChildChildValid = false;
               }
             }
-            
+
+            MCTSNode clonedSubchild = null;
             if (candidateSourceChildChildValid)
             {
               lock (candidateSourceChildChild)
               {
-                CloneChild(sourceChild, targetChild, 0, false);
+                clonedSubchild = TryCloneChild(sourceChild, targetChild, 0, false);
               }
             }
             else if (candidateSourceChildSiblingValid)
             {
               lock (candidateSourceChildSibling)
               {
-                CloneChild(sourceParent, targetParent, 1, false);
+                clonedSubchild = TryCloneChild(sourceParent, targetParent, 1, false);
               }
+            }
+
+            if (clonedSubchild != null)
+            {
+              // Update parent statistics to reflect the added subchild.
+              ref MCTSNodeStruct subchildParentRef = ref clonedSubchild.Parent.Ref;
+              subchildParentRef.N++;
+              subchildParentRef.W += -clonedSubchild.V;
+              subchildParentRef.dSum += clonedSubchild.DrawP;
+              subchildParentRef.mSum += clonedSubchild.MPosition;
             }
 
           }
