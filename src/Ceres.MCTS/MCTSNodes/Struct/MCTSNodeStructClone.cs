@@ -90,6 +90,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
           static bool IsValidSource(MCTSNode testNode) => testNode != null 
                                                       && !testNode.IsTranspositionLinked 
+                                                      && !FP16.IsNaN(testNode.N)
                                                       && testNode.Terminal != Chess.GameResult.NotInitialized;
 
           // Possibly move over a second sub-child in the clone.

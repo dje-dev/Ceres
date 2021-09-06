@@ -13,6 +13,7 @@
 
 #region Using directives
 
+using Ceres.Base.DataTypes;
 using System;
 using System.Diagnostics;
 
@@ -23,6 +24,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
   public partial struct MCTSNodeStruct
   {
     static bool IsValidVSource(in MCTSNodeStruct nodeRef) =>  !nodeRef.IsTranspositionLinked
+                                                            && !FP16.IsNaN(nodeRef.V)
                                                             && nodeRef.Terminal != Chess.GameResult.NotInitialized;
 
     /// <summary>
