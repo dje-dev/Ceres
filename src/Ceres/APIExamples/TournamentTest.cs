@@ -120,8 +120,8 @@ namespace Ceres.APIExamples
       NET1 = "69722_value_focus_2";
       NET2 = "69722_value_focus_2";
 
-      //NET1 = "751675";
-      //NET2 = "751675";
+      NET1 = "751675";
+      NET2 = "751675";
       //NET1 = "703810";
       //NET2 = "703810";
       //      string NET1_SECONDARY1 = "j94-100";
@@ -146,14 +146,13 @@ namespace Ceres.APIExamples
         evalDef2.MakePersistent();
       }
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(20_000);
+      SearchLimit limit1 = SearchLimit.NodesPerMove(2_000);
       //limit1 = SearchLimit.NodesForAllMoves(1_000_000, 10_000);
 
       //      limit1 = SearchLimit.SecondsForAllMoves(900, 2) * 0.2f;
-      //      limit1 = SearchLimit.SecondsForAllMoves(45);
-      //limit1 = SearchLimit.NodesPerMove(11_000);
-
-      SearchLimit limit2 = limit1;// * 0.2f;
+      //limit1 = SearchLimit.SecondsForAllMoves(180);
+      //limit1 = SearchLimit.SecondsPerMove(3);
+      SearchLimit limit2 = limit1;
 
       //      ParamsSearchExecutionModifier.Register("SetBatchSize", pe => pe.MaxBatchSize = 1024);
 
@@ -173,25 +172,22 @@ namespace Ceres.APIExamples
       ////////
 
 
-      //      engineDefCeres1.SearchParams.TreeReuseSwapRootEnabled = false;
-      //      engineDefCeres2.SearchParams.TreeReuseSwapRootEnabled = false;
+      if (true)
+      {
+        engineDefCeres1.SearchParams.MaxTranspositionRootUseCount = 3;
+        engineDefCeres1.SearchParams.TranspositionRootQFraction = 0.5f;
+        engineDefCeres1.SearchParams.TestFlag = true;
 
-      engineDefCeres1.SearchParams.MaxTranspositionRootApplicationsFixed = 2;// 3;
-      engineDefCeres1.SearchParams.MaxTranspositionRootApplicationsFraction = 0.0f;// 0.25f;
-      engineDefCeres1.SearchParams.MaxNTranspositionRootReuse = 10;
+        engineDefCeres2.SearchParams.TranspositionRootQFraction = 1.0f;
+        engineDefCeres2.SearchParams.MaxTranspositionRootUseCount = 1;
+      }
 
+      //engineDefCeres1.SearchParams.TestFlag = true;
       //engineDefCeres1.SelectParams.UseDynamicVLoss = true;
-
-      //engineDefCeres1.SearchParams.MoveFutilityPruningAggressiveness = 0.4f;
       //engineDefCeres1.SearchParams.GameLimitUsageAggressiveness *= 1.2f;
       //engineDefCeres1.SearchParams.MoveFutilityPruningAggressiveness = 0.75f;
-      //      engineDefCeres2.SearchParams.MoveFutilityPruningAggressiveness = 1.25f;// 0.75f;
-
       //engineDefCeres1.SearchParams.EnableInstamoves=false; 
-      //engineDefCeres2.SearchParams.EnableInstamoves = false;
-
       //engineDefCeres1.SearchParams.TreeReuseEnabled = false;
-      //engineDefCeres2.SearchParams.TreeReuseEnabled = false;
       //engineDefCeres1.SearchParams.MLHBonusFactor = 0.1f;
 
       if (false)
@@ -279,7 +275,7 @@ namespace Ceres.APIExamples
 
       if (false)
       {
-        string BASE_NAME = "ERET_VESELY203";// "nice_lcx";// "Stockfish238"; // ERET_VESELY203
+        string BASE_NAME = "Stockfish238";// nice_lcx Stockfish238 ERET_VESELY203 endgame2
 
         // ===============================================================================
         SuiteTestDef suiteDef = new SuiteTestDef("Suite",
@@ -333,15 +329,15 @@ namespace Ceres.APIExamples
       }
 
       TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerCeres2);
-//      TournamentDef def = new TournamentDef("TOURN", playerCeres1UCI, playerCeres93);
+      //      TournamentDef def = new TournamentDef("TOURN", playerCeres1UCI, playerCeres93);
 
 
-      def.NumGamePairs = 150;// 102;
+      def.NumGamePairs = 2 * 203;// 102; 203
       def.ShowGameMoves = true;
 
       string baseName = "tcec1819";
       baseName = "4mvs_+90_+99";
-
+      //baseName = "tcec_big";
       def.OpeningsFileName = SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/openings/{baseName}.pgn"
                                                      : @$"\\synology\dev\chess\data\openings\{baseName}.pgn";
 
