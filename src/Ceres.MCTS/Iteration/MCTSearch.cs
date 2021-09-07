@@ -372,6 +372,10 @@ namespace Ceres.MCTS.Iteration
           }
 #endif
 
+#if DEBUG
+          priorContext.Tree.Store.Validate();
+#endif
+
           // We decided not to (or couldn't find) that path in the existing tree.
           // First immediately release the prior store to allow memory reclamation.
           priorContext.Tree.Store.Dispose();
