@@ -33,7 +33,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
     static bool IsValidSource(MCTSNode testNode) => testNode != null
                                             && !testNode.IsTranspositionLinked
-                                            && !FP16.IsNaN(testNode.N)
+                                            && !FP16.IsNaN(testNode.V)
                                             && testNode.Terminal != Chess.GameResult.NotInitialized;
 
     /// <summary>
@@ -72,11 +72,9 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
           MCTSNode targetChild = targetParent.CreateChild(childIndex);
           ref MCTSNodeStruct targetChildRef = ref targetChild.Ref;
-
-
           targetParent.Ref.NumChildrenVisited = (byte)(childIndex + 1);
 
-          // TODO: avoid ChildAtIndex to avoid dictionarylookup?
+          // TODO: avoid ChildAtIndex to avoid dictionary lookup?
           targetChildRef.CopyUnexpandedChildrenFromOtherNode(tree, new MCTSNodeStructIndex(sourceChild.Index));
 
           MCTSEventSource.TestMetric1++;

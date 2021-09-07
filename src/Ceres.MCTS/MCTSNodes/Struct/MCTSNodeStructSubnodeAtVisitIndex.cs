@@ -23,8 +23,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 {
   public partial struct MCTSNodeStruct
   {
-    static bool IsValidVSource(in MCTSNodeStruct nodeRef) =>  !nodeRef.IsTranspositionLinked
-                                                            && !FP16.IsNaN(nodeRef.V)
+    static bool IsValidVSource(in MCTSNodeStruct nodeRef) => !FP16.IsNaN(nodeRef.V)
                                                             && nodeRef.Terminal != Chess.GameResult.NotInitialized;
 
     /// <summary>
@@ -83,13 +82,17 @@ namespace Ceres.MCTS.MTCSNodes.Struct
             // Possibly return sibling if it exists and is valid and better (earlier).
             if (node.NumChildrenExpanded > 1)
             {
-              ref readonly MCTSNodeStruct sibling = ref node.ChildAtIndexRef(1);
-              if (IsValidVSource(in sibling))
+              ref readonly MCTSNodeStruct siblingRef = ref node.ChildAtIndexRef(1);
+              if (IsValidVSource(in siblingRef))
               {
-                if (foundSubchild && sibling.Index.Index < subchildRef.Index.Index)
+                found = true;
+                if (foundSubchild && subchildRef.Index.Index < siblingRef.Index.Index)
                 {
-                  found = true;
-                  return ref sibling;
+                  return ref subchildRef;
+                }
+                else
+                {
+                  return ref siblingRef;
                 }
               }
             }
