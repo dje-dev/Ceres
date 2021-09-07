@@ -60,6 +60,39 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       return MemoryExtensions.IndexOf(castChildren, -childNodeIndex.Index);
     }
 
+
+    /// <summary>
+    /// Creates a new child node at specified index.
+    /// </summary>
+    /// <param name="childIndex"></param>
+    /// <param name="possiblyOutOfOrder">normally children added only strictly sequentially unless true</param>
+    /// <returns></returns>
+    public MCTSNodeStructIndex CreateChild(MCTSNodeStore store, int childIndex, bool possiblyOutOfOrder = false)
+    {
+      // Make sure expanded children appear strictly clustered at lowest indices
+      Debug.Assert(possiblyOutOfOrder || childIndex == 0 || ChildAtIndex(childIndex - 1).IsExpanded);
+
+      // Get child info and make sure not already expanded
+      ref MCTSNodeStructChild thisChildRef = ref store.Children.childIndices[ChildStartIndex + childIndex];
+      Debug.Assert(!thisChildRef.IsExpanded); // should not already be expanded!
+      Debug.Assert(!thisChildRef.IsNull);
+
+      // Allocate new node
+      MCTSNodeStructIndex childNodeIndex = store.Nodes.AllocateNext();
+      ref MCTSNodeStruct childNodeRef = ref store.Nodes.nodes[childNodeIndex.Index];
+
+      // Create new wrapper object and use it to initialize fields
+      childNodeRef.Initialize(new MCTSNodeStructIndex(Index.Index), thisChildRef.p, thisChildRef.Move);
+
+      // Modify child entry to refer to this new child
+      thisChildRef.SetExpandedChildIndex(childNodeIndex);
+
+      NumChildrenExpanded++;
+
+      return childNodeIndex;
+    }
+
+
     /// <summary>
     /// Modifies the node index within the child array having a specified prior value
     /// to have a specified new value.

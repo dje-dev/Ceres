@@ -482,8 +482,8 @@ namespace Ceres.MCTS.MTCSNodes
         // This is because when we visited a new unvisited child we are
         // always choosing the child with highest P, and the univisted children
         // cluster at the end and are maintained in order (by P) at all times
-        // almost always true, not when doing tree purification(?)        Debug.Assert(childIndex == nodeRef.NumChildrenVisited);
-
+        // almost always true, not when doing tree purification(?)
+        // Debug.Assert(childIndex == nodeRef.NumChildrenVisited);
         nodeRef.NumChildrenVisited = (byte)(childIndex + 1);
       }
     }
@@ -497,29 +497,8 @@ namespace Ceres.MCTS.MTCSNodes
     /// <returns></returns>
     public MCTSNode CreateChild(int childIndex, bool possiblyOutOfOrder = false)
     {
-      // Make sure expanded children appear strictly clustered at lowest indices
-      Debug.Assert(possiblyOutOfOrder || childIndex == 0 || Ref.ChildAtIndex(childIndex - 1).IsExpanded);
-
-      // Get child info and make sure not already expanded
-      ref MCTSNodeStructChild thisChildRef = ref ChildAtIndexRef(childIndex);
-      Debug.Assert(!thisChildRef.IsExpanded); // should not already be expanded!
-      Debug.Assert(!thisChildRef.IsNull);
-
-      // Allocate new node
-      MCTSNodeStructIndex childNodeIndex = Context.Tree.Store.Nodes.AllocateNext();
-      ref MCTSNodeStruct childNode = ref childNodeIndex.Ref;
-
-      // Create new wrapper object and use it to initialize fields
-      MCTSNode newChildNode = Context.Tree.GetNode(childNodeIndex, this, false);
-      newChildNode.Ref.Initialize(new MCTSNodeStructIndex(Index), thisChildRef.p, thisChildRef.Move);
-
-      // Modify child entry to refer to this new child
-      thisChildRef.SetExpandedChildIndex(childNodeIndex);
-
-      Ref.NumChildrenExpanded++;
-
-      return newChildNode;
-
+      MCTSNodeStructIndex childNodeIndex = Ref.CreateChild(Context.Tree.Store,  childIndex, possiblyOutOfOrder);
+      return Context.Tree.GetNode(childNodeIndex, this, false);
     }
 
 
@@ -531,10 +510,8 @@ namespace Ceres.MCTS.MTCSNodes
                    {
                      if (nodeRef.IsTranspositionLinked)
                      {
-                       // Note that we pass argument indicating "exclusive access guaranteed" 
-                       // to avoid having to try to take (many!) locks over nodes in the tree.
-                       nodeRef.CopyUnexpandedChildrenFromOtherNode(Tree, new MCTSNodeStructIndex(nodeRef.TranspositionRootIndex), true);
-                       nodeRef.NumVisitsPendingTranspositionRootExtraction = 0;
+                       throw new NotImplementedException();
+                       // need to call: MaterializeSubtreeFromTranspositionRoot() with argument for  "exclusive access guaranteed"  set to true
                      }
                      return true;
                    }, TreeTraversalType.Sequential);
