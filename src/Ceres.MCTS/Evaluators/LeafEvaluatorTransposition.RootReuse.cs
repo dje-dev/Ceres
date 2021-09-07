@@ -15,6 +15,7 @@
 
 using System;
 using System.Diagnostics;
+using Ceres.Base.DataTypes;
 using Ceres.Chess.EncodedPositions;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Struct;
@@ -53,12 +54,55 @@ namespace Ceres.MCTS.Evaluators
          Additionally NumVisitsPendingTranspositionRootExtraction is decremented by the number of visits to the node.
   */
 
-
+  
   /// <summary>
   /// 
   /// </summary>
   public sealed partial class LeafEvaluatorTransposition
   {
+    static int NumUsableSubnodes(in MCTSNodeStruct trNode)
+    {
+      if (trNode.IsTranspositionLinked)
+      {
+        return 0;
+      }
+
+      int count = 1;
+      if (trNode.NumChildrenExpanded > 0)
+      {
+        ref readonly MCTSNodeStruct child = ref trNode.ChildAtIndexRef(0);
+        if (!child.IsTranspositionLinked && !FP16.IsNaN(child.V))
+        {
+          count++;
+
+          // Check if subchild available.
+          if (child.NumChildrenExpanded > 0)
+          {
+            ref readonly MCTSNodeStruct subchild = ref child.ChildAtIndexRef(0);
+            if (!subchild.IsTranspositionLinked && !FP16.IsNaN(subchild.V))
+            {
+              count++;
+            }
+          }
+
+          // Check if sibing is available.
+          // Note that sibling is only considered if the primary child was also available,
+          // since when cloning we need to proceed strictly in order and the primary child comes first.
+          if (trNode.NumChildrenExpanded > 1)
+          {
+            ref readonly MCTSNodeStruct sibling = ref trNode.ChildAtIndexRef(1);
+            if (!sibling.IsTranspositionLinked && !FP16.IsNaN(sibling.V))
+            {
+              count++;
+            }
+          }
+
+        }
+      }
+
+      return count;
+    }
+
     /// <summary>
     /// Upon first visit to node to be attached to transposition root, computes and sets in the node structure:
     ///   - TranspositionRootIndex
@@ -89,6 +133,9 @@ namespace Ceres.MCTS.Evaluators
 
       // But never allow reuse more than the number of visits to the root.
       applyTarget = Math.Min(applyTarget, transpositionRootNode.N);
+
+      // Also never reuse more than are available from the transposition root subtree.
+      applyTarget = Math.Min(applyTarget, NumUsableSubnodes(in transpositionRootNode));
 
       // Finally, the field holding the target has a fixed maximum representable size, ensure not more than that.
       applyTarget = Math.Min(applyTarget, MCTSNodeStruct.MAX_NUM_VISITS_PENDING_TRANSPOSITION_ROOT_EXTRACTION);
@@ -143,6 +190,7 @@ namespace Ceres.MCTS.Evaluators
       }
     }
 
+    static bool haveWarned = false;
 
     /// <summary>
     /// Set the PendingTransposition values for this node based on speciifed transposition root.
@@ -162,17 +210,14 @@ namespace Ceres.MCTS.Evaluators
 
       var visit0Ref = MCTSNodeStruct.SubnodeRefVisitedAtIndex(in transpositionRootNode, 0, out bool foundV0);
 
-      float transpositionRootMPosition = transpositionRootNode.MPosition;
-      float transpositionRootDrawP = transpositionRootNode.DrawP;
-
-      float q = (float)transpositionRootNode.Q;
-      float v0 = foundV0 ? visit0Ref.V : transpositionRootNode.V;
-
+      //float transpositionRootMPosition = transpositionRootNode.MPosition;
+      //float transpositionRootDrawP = transpositionRootNode.DrawP;
 
       // Helper method to set the PendingTransposition values from specified subnode.
-      void SetNodePendingValues(float adjustedV, in MCTSNodeStruct subnodeRef, bool subnodeRefIsValid)
+      void SetNodePendingValues(float multiplier, in MCTSNodeStruct subnodeRef, bool subnodeRefIsValid)
       {
-        node.PendingTranspositionV = FRAC_V * adjustedV + FRAC_Q * q;
+        node.PendingTranspositionV = FRAC_V * multiplier * subnodeRef.V 
+                                   + FRAC_Q * multiplier * (float)subnodeRef.Q;
         if (subnodeRefIsValid)
         {
           node.PendingTranspositionM = FRAC_V * subnodeRef.MPosition + FRAC_Q * subnodeRef.MAvg;
@@ -180,35 +225,32 @@ namespace Ceres.MCTS.Evaluators
         }
         else
         {
-          node.PendingTranspositionM = transpositionRootMPosition;
-          node.PendingTranspositionD = transpositionRootDrawP;
+//          if (!haveWarned)
+            Console.WriteLine("invalid ");
+          haveWarned = true;
+          //node.PendingTranspositionM = transpositionRootMPosition;
+          //node.PendingTranspositionD = transpositionRootDrawP;
         }
       }
 
       if (node.N == 0)
       {
-        SetNodePendingValues(v0, in visit0Ref, foundV0);
+        SetNodePendingValues(1, in visit0Ref, foundV0);
       }
       else
       {
         var visit1Ref = MCTSNodeStruct.SubnodeRefVisitedAtIndex(in transpositionRootNode, 1, out bool foundV1);
-        float v1 = foundV1 ? -visit1Ref.V : v0;
 
         if (node.N == 1)
         {
-          SetNodePendingValues(v1, in visit1Ref, foundV1);
+          SetNodePendingValues(-1, in visit1Ref, foundV1);
         }
         else if (node.N == 2)
         {
           var visit2Ref = MCTSNodeStruct.SubnodeRefVisitedAtIndex(in transpositionRootNode, 2, out bool foundV2);
-          float v2 = foundV2 ? visit2Ref.V : v1;
-          if (foundV2 && visit2Ref.ParentIndex == transpositionRootNode.Index)
-          {
-            // This node was sibling, from perspective of opponent, invert.
-            v2 *= -1;
-          }
+          float multiplier = visit2Ref.ParentIndex == transpositionRootNode.Index ? -1 : 1;
 
-          SetNodePendingValues(v2, in visit2Ref, foundV2);
+          SetNodePendingValues(multiplier, in visit2Ref, foundV2);
         }
         else
         {
