@@ -215,6 +215,14 @@ namespace Ceres.MCTS.MTCSNodes.Storage
         }
       }
 
+      void AssertNode(bool condition, string err, int nodeIndex, in MCTSNodeStruct node)
+      {
+        if (!condition)
+        {
+          throw new Exception($"MCTSNodeStore::Validate failed: {err} on node: #{nodeIndex} {node.Terminal} Parent={node.ParentIndex} N={node.N} V={node.V,5:F2} TL={node.IsTranspositionLinked} ");
+        }
+      }
+
       Assert(Nodes.nodes[0].N == 0, "Null node");
       Assert(Nodes.nodes[1].IsRoot, "IsRoot");
 
@@ -231,41 +239,45 @@ namespace Ceres.MCTS.MTCSNodes.Storage
           continue;
         }
 
-        Assert(nodeR.Terminal != Chess.GameResult.NotInitialized, "Node not initialized");
-        Assert(!expectCacheIndexZero || nodeR.CacheIndex == 0, "CacheIndex zeroed");
+        AssertNode(nodeR.Terminal != Chess.GameResult.NotInitialized, "Node not initialized", i, in nodeR);
+        AssertNode(!expectCacheIndexZero || nodeR.CacheIndex == 0, "CacheIndex zeroed", i, in nodeR);
 
         if (nodeR.TranspositionRootIndex == 0 && nodeR.N > 0 && !nodeR.Terminal.IsTerminal() && nodeR.NumPolicyMoves == 0)
         {
-          Assert(false, "Non-transposition linked node without policy initialized");
+          AssertNode(false, "Non-transposition linked node without policy initialized", i, in nodeR);
         }
 
-        Assert(!nodeR.IsInFlight, "Node in flight");
+        AssertNode(!nodeR.IsInFlight, "Node in flight", i, in nodeR);
 
         // Verify parent has a child that points to this node
         if (!nodeR.IsRoot)
         {
           int indexInParentsChildList = nodeR.ParentRef.IndexOfExpandedChildForIndex(this, nodeR.Index);
-          Assert(indexInParentsChildList >= 0, "Parent's child list contains node");
+          AssertNode(indexInParentsChildList >= 0, "Parent's child list contains node", i, in nodeR);
         }
 
         Assert(nodeR.ParentIndex.Index != 0 || nodeR.Index.Index == 1, "Non-old generation nodes at indices other than 1 have a parent");
 
         if (nodeR.NumPolicyMoves > 0)
         {
-          Assert(nodeR.childStartBlockIndex != 0, "ChildStartIndex nonzero");
+          AssertNode(nodeR.childStartBlockIndex != 0, "ChildStartIndex nonzero", i, in nodeR);
         }
 
         if (nodeR.NumVisitsPendingTranspositionRootExtraction > 0)
         {
-          Assert(nodeR.TranspositionRootIndex != 0,
-            $"TranspositionRootIndex zero when NumVisitsPendingTranspositionRootExtraction > 0 : {nodeR.NumVisitsPendingTranspositionRootExtraction} {nodeR.TranspositionRootIndex}");
+          AssertNode(nodeR.TranspositionRootIndex != 0,
+            $"TranspositionRootIndex zero when NumVisitsPendingTranspositionRootExtraction > 0 : {nodeR.NumVisitsPendingTranspositionRootExtraction} {nodeR.TranspositionRootIndex}", i, in nodeR);
+
+          ref readonly MCTSNodeStruct transpositionRoot = ref Nodes.nodes[nodeR.TranspositionRootIndex];
+          AssertNode(nodeR.NumVisitsPendingTranspositionRootExtraction <= transpositionRoot.N,
+                     $"TranspositionRoot N less than NumVisitsPendingTranspositionRootExtraction:  {transpositionRoot.N} {nodeR.NumVisitsPendingTranspositionRootExtraction}", i, in nodeR);
         }
 
         if (nodeR.IsTranspositionLinked)
         {
           ref readonly MCTSNodeStruct transpositionRoot = ref Nodes.nodes[nodeR.TranspositionRootIndex];
-          Assert(!transpositionRoot.IsTranspositionLinked, "transposition root was itself transposition linked");
-          Assert(nodeR.ZobristHash == transpositionRoot.ZobristHash, "transposition link was not to same Zobrist hash");
+          AssertNode(!transpositionRoot.IsTranspositionLinked, "transposition root was itself transposition linked", i, in nodeR);
+          AssertNode(nodeR.ZobristHash == transpositionRoot.ZobristHash, "transposition link was not to same Zobrist hash", i, in nodeR);
         }
         else
         {
@@ -273,15 +285,18 @@ namespace Ceres.MCTS.MTCSNodes.Storage
           int numExpanded = 0;
           int numChildren = 0;
           bool haveSeenUnexpanded = false;
+          int sumN = 1;
+
           foreach (MCTSNodeStructChild child in Children.SpanForNode(in nodeR))
           {
+            sumN += child.N;
             numChildren++;
             if (child.IsExpanded)
             {
               // Any expanded nodes should appear before all unexpanded nodes
-              Assert(!haveSeenUnexpanded, "expanded after unexpanded");
-              Assert(child.ChildRef.ParentIndex == nodeR.Index, "ParentRef");
-              Assert(child.N <= nodeR.N, "child N");
+              AssertNode(!haveSeenUnexpanded, "expanded after unexpanded", i, in nodeR);
+              AssertNode(child.ChildRef.ParentIndex == nodeR.Index, "ParentRef", i, in nodeR);
+              AssertNode(child.N <= nodeR.N, "child N", i, in nodeR);
 
               numExpanded++;
             }
@@ -291,10 +306,15 @@ namespace Ceres.MCTS.MTCSNodes.Storage
             }
           }
 
-          Assert(nodeR.NumPolicyMoves == numChildren, "NumPolicyMoves");
+          if (!nodeR.Terminal.IsTerminal() && nodeR.NumVisitsPendingTranspositionRootExtraction == 0)
+          {
+            AssertNode(nodeR.N == sumN, $"N {nodeR.N} versus sum children {sumN}", i, in nodeR);
+          }
+
+          AssertNode(nodeR.NumPolicyMoves == numChildren, "NumPolicyMoves", i, in nodeR);
 
           // Verify the NumChildrenVisited is correct
-          Assert(numExpanded == nodeR.NumChildrenExpanded, "NumChildrenVisited");
+          AssertNode(numExpanded == nodeR.NumChildrenExpanded, "NumChildrenVisited", i, in nodeR);
         }
       }
     }
