@@ -280,8 +280,12 @@ return;
               bool found = transpositionRoots.TryGetValue(thisNode.ZobristHash, out int transpositionRootIndex);
               if (!found)
               {
-                Console.WriteLine("Warning: expected transposition root not found for " + thisNode);
+                Console.Write("Warning: expected transposition root not found for " + thisNode);
+
+                // Try to fix up node so this is recoverable and we don't crash (albeit at cost of a major distortion).
                 thisNode.TranspositionRootIndex = 0;
+                thisNode.NumVisitsPendingTranspositionRootExtraction = 0;
+                thisNode.Terminal = Chess.GameResult.Draw;
               }
               else
               {
