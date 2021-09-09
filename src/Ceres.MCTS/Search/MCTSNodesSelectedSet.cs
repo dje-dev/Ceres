@@ -385,12 +385,6 @@ namespace Ceres.MCTS.Search
 
     public void ApplyAll()
     {
-      if (false)
-      {
-        Console.WriteLine("apply imm pend " + this.NodesImmediateNotYetApplied.Count);
-        Console.WriteLine("apply NN " + this.NodesNN.Count);
-        Console.WriteLine();
-      }
 
       ApplyImmeditateNotYetApplied();
       BlockApply.Apply(SelectorID, NodesNN);
