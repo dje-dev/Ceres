@@ -497,7 +497,8 @@ namespace Ceres.MCTS.MTCSNodes
     /// <returns></returns>
     public MCTSNode CreateChild(int childIndex, bool possiblyOutOfOrder = false)
     {
-      MCTSNodeStructIndex childNodeIndex = Ref.CreateChild(Context.Tree.Store,  childIndex, possiblyOutOfOrder);
+      MCTSNodeStructIndex childNodeIndex = Ref.CreateChild(Context.Tree.Store, childIndex, possiblyOutOfOrder);
+
       return Context.Tree.GetNode(childNodeIndex, this, false);
     }
 
@@ -510,8 +511,7 @@ namespace Ceres.MCTS.MTCSNodes
                    {
                      if (nodeRef.IsTranspositionLinked)
                      {
-                       throw new NotImplementedException();
-                       // need to call: MaterializeSubtreeFromTranspositionRoot() with argument for  "exclusive access guaranteed"  set to true
+                       nodeRef.MaterializeSubtreeFromTranspositionRoot(Context.Tree);
                      }
                      return true;
                    }, TreeTraversalType.Sequential);

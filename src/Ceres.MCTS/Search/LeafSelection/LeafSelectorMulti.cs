@@ -518,26 +518,14 @@ namespace Ceres.MCTS.Search
       //      Console.WriteLine($"target {numTargetLeafs} {node}");
       Debug.Assert(numTargetLeafs > 0);
 
-      // If the target number of leaves excees amount available from a 
+      // If the target number of leaves exceeds amount available from a 
       // transposition linked node, unlink it now so we can continue descent thru this node.
       if (paramsExecution.TranspositionMode == TranspositionMode.SingleNodeDeferredCopy
        && node.IsTranspositionLinked
        && numTargetLeafs > node.NumVisitsPendingTranspositionRootExtraction
        )
       {
-        MCTSNodeStructIndex priorTranspositionRootIndex = new MCTSNodeStructIndex(node.TranspositionRootIndex);
-        InitializeChildrenFromDeferredTransposition(node);
-        if (node.N >= 2)
-        {
-          // Attempt to clone the first child from transposition root (and also possibly one subchild if possible)
-          // to bypass visits to these early subnodes since we've already incorporated some visits.
-          // This seems to improve play quality.
-          MCTSNode transpositionRootNode = node.Context.Tree.GetNode(priorTranspositionRootIndex);
-          Debug.Assert(node.N <= 3);
-
-          bool cloneSubchild = node.N >= 3;
-          MCTSNodeStruct.TryCloneChild(transpositionRootNode, node, 0, cloneSubchild);
-        }
+        node.Ref.MaterializeSubtreeFromTranspositionRoot(node.Tree);
       }
 
       if (paramsExecution.TranspositionMode == TranspositionMode.SingleNodeDeferredCopy
@@ -682,7 +670,6 @@ namespace Ceres.MCTS.Search
       }
     }
 
-
     void ProcessSelectedChildren(MCTSNode node, int numTargetLeafs, float vLossDynamicBoost, int numChildrenToCheck,
                                  int minVisitsCountToProcess, bool launchParallel,
                                  Span<short> childVisitCounts, Span<MCTSNodeStructChild> children,
@@ -729,17 +716,14 @@ namespace Ceres.MCTS.Search
           // Take a lock on the node to avoid creating a child
           // concurrent with another node which uses this node as tranasposition
           // root being in the process of copying over the child data (in CopyUnexpandedChildrenFromOtherNode).
-          lock (node)
+          MCTSNodeStructChild childInfo = children[childIndex];
+          if (!childInfo.IsExpanded)
           {
-            MCTSNodeStructChild childInfo = children[childIndex];
-            if (!childInfo.IsExpanded)
-            {
-              thisChild = node.CreateChild(childIndex);
-            }
-            else
-            {
-              thisChild = node.Child(childInfo);
-            }
+            thisChild = node.CreateChild(childIndex);
+          }
+          else
+          {
+            thisChild = node.Child(childInfo);
           }
 
           node.UpdateRecordVisitsToChild(SelectorID, childIndex, numThisChild);
@@ -781,36 +765,6 @@ namespace Ceres.MCTS.Search
       }
     }
 
-
-    private void InitializeChildrenFromDeferredTransposition(MCTSNode node)
-    {
-      // If this was a deferred single node copy,
-      // the node was already visited once and the V was extracted, but
-      // the extraction of the children from the tranposition root was deferred 
-      // (because possibly it would never be required)
-      // Now we will need the children to continue leaf selection, so copy them over now ("just in time")
-
-      int transpositionNodeIndex = node.TranspositionRootIndex;
-
-#if EXPERIMENTAL
-      if (node.Annotation != null && !node.Context.TranspositionRoots.ContainsKey(node.Annotation.PositionHashForCaching))
-      {
-        Console.WriteLine(node.Annotation.PositionHashForCaching);
-        node.Annotation = null;
-        node.Context.Annotater.Annotate(node);
-        Console.WriteLine(node.Annotation.PositionHashForCaching);
-        var otherNode = new MCTSNode(node.Context, new MCTSNodeStructIndex(transpositionNodeIndex));
-        var otherAnn = node.Context.Annotater.Annotate(otherNode);
-        Console.WriteLine(node.Annotation.Pos.FEN);
-        Console.WriteLine(otherAnn.Pos.FEN);
-        Console.WriteLine(otherAnn.PositionHashForCaching);
-        Console.WriteLine("num roots " + node.Context.TranspositionRoots.Count);
-      }
-#endif
-
-      // Copy children
-      node.Ref.CopyUnexpandedChildrenFromOtherNode(node.Tree, new MCTSNodeStructIndex(transpositionNodeIndex));
-    }
 
 
     private void LaunchGatherLeafBatchletParallel(MCTSNode node, int numThisChild, MCTSNode thisChild, float vLossDynamicBoost)

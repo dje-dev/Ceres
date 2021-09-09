@@ -187,7 +187,6 @@ namespace Ceres.MCTS.Search
       int numUpdateSelector2 = selectorID == 1 ? nodeRef.NInFlight2 : 0;
       int numInFlight = numUpdateSelector1 + numUpdateSelector2;
 
-
       if (node.ActionType == MCTSNode.NodeActionType.None)
       {
         nodeRef.BackupDecrementInFlight(numUpdateSelector1, numUpdateSelector2);
@@ -232,23 +231,28 @@ namespace Ceres.MCTS.Search
           // First visit by any selector, set evaluation result and backup in tree
           numToApply = 1;
           //TODO: maybe allow >1 if NumVisitsPendingTranspositionRootExtraction > 0 ??????
-          nodeRef.Terminal = node.EvalResult.TerminalStatus;
 
-          if (!node.IsRoot && node.Terminal == GameResult.Draw)
+          // If first time visiting this node then update values on the node itself.
+          if (nodeRef.N == 0)
           {
-            node.Parent.Ref.DrawKnownToExistAmongChildren = true;
-            //Chess.NNEvaluators.LC0DLL.LC0DLLSyzygyEvaluator.NumTablebaseMisses++;
-          }
+            nodeRef.Terminal = node.EvalResult.TerminalStatus;
 
-          if (ParamsSelect.VIsForcedLoss(node.EvalResult.V))
-          {
-            SetProvenLossAndPropagateToParent(node, node.EvalResult.LossP, node.EvalResult.M);
-          }
-          else
-          {
-            nodeRef.WinP = evalResult.WinP;
-            nodeRef.LossP = evalResult.LossP;
-            nodeRef.MPosition = (byte)MathF.Round(evalResult.M, 0);
+            if (!node.IsRoot && node.Terminal == GameResult.Draw)
+            {
+              node.Parent.Ref.DrawKnownToExistAmongChildren = true;
+              //Chess.NNEvaluators.LC0DLL.LC0DLLSyzygyEvaluator.NumTablebaseMisses++;
+            }
+
+            if (ParamsSelect.VIsForcedLoss(node.EvalResult.V))
+            {
+              nodeRef.SetProvenLossAndPropagateToParent(node.EvalResult.LossP, node.EvalResult.M);
+            }
+            else
+            {
+              nodeRef.WinP = evalResult.WinP;
+              nodeRef.LossP = evalResult.LossP;
+              nodeRef.MPosition = (byte)MathF.Round(evalResult.M, 0);
+            }
           }
 
           vToApply = nodeRef.V;
@@ -256,6 +260,7 @@ namespace Ceres.MCTS.Search
 
           if (node.NumVisitsPendingTranspositionRootExtraction > 0)
           {
+            Debug.Assert(nodeRef.N > 0 || !float.IsNaN(node.EvalResult.V));
             Debug.Assert(!float.IsNaN(node.PendingTranspositionV));
             Debug.Assert(node.NumVisitsPendingTranspositionRootExtraction >= numToApply);
 
@@ -354,37 +359,6 @@ namespace Ceres.MCTS.Search
         // Note that we cannot clear the EvalResult
         // because possibly the next overlapped batch
         // points back to this node and will need to copy the value for itself
-      }
-    }
-
-
-    /// <summary>
-    /// Processes a node which has been determined to be a proven loss.
-    /// Propagates this upward to the parent since parent's best move 
-    /// is now obviously this one.
-    /// </summary>
-    /// <param name="node"></param>
-    /// <param name="lossP"></param>
-    /// <param name="m"></param>
-    internal static void SetProvenLossAndPropagateToParent(MCTSNode node, float lossP, float m)
-    {
-      ref MCTSNodeStruct nodeRef = ref node.Ref;
-
-      nodeRef.WinP = 0;
-      nodeRef.LossP = (FP16)lossP;
-      nodeRef.MPosition = (byte)MathF.Round(m, 0);
-
-      if (!node.IsRoot)
-      {
-        // This checkmate will obviously be chosen by the opponent
-        // Therefore propagate the result up to the opponent as a victory,
-        // overriding such that the Q for that node reflects the certain loss
-        MCTSNode parent = node.Parent;
-        ref MCTSNodeStruct parentRef = ref parent.Ref;
-        parentRef.WinP = (FP16)lossP;
-        parentRef.LossP = 0;
-        parentRef.W = parentRef.V * parentRef.N; // Make Q come out to be same as V (which has already been set to the sure win)
-        parentRef.MPosition = (byte)MathF.Round(m + 1, 0);
       }
     }
 

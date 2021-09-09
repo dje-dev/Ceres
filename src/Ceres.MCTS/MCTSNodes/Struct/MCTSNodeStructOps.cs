@@ -15,6 +15,7 @@
 
 using Ceres.Base.DataType;
 using Ceres.Base.DataType.Trees;
+using Ceres.Base.DataTypes;
 using Ceres.Base.Math;
 using Ceres.Base.OperatingSystem;
 using Ceres.MCTS.Environment;
@@ -85,6 +86,9 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       childNodeRef.Initialize(new MCTSNodeStructIndex(Index.Index), thisChildRef.p, thisChildRef.Move);
 
       // Modify child entry to refer to this new child
+      // N.B: It is essential to only swap out the child index here
+      //      after the new child node has been fully initialized (above)
+      //      because another thread might see and then follow the child reference.
       thisChildRef.SetExpandedChildIndex(childNodeIndex);
 
       NumChildrenExpanded++;
@@ -102,10 +106,13 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <param name="toChildIndex"></param>
     public void ModifyExpandedChildIndex(MCTSNodeStore store, MCTSNodeStructIndex fromChildIndex, MCTSNodeStructIndex toChildIndex)
     {
-      Span<MCTSNodeStructChild> children = ChildrenFromStore(store).Slice(0, NumChildrenExpanded);
-      Span<int> castChildren = MemoryMarshal.Cast<MCTSNodeStructChild, int>(children);
-      int index = MemoryExtensions.IndexOf(castChildren, -fromChildIndex.Index);
-      children[index].SetExpandedChildIndex(toChildIndex);
+      if (NumChildrenExpanded > 0)
+      {
+        Span<MCTSNodeStructChild> children = ChildrenFromStore(store).Slice(0, NumChildrenExpanded);
+        Span<int> castChildren = MemoryMarshal.Cast<MCTSNodeStructChild, int>(children);
+        int index = MemoryExtensions.IndexOf(castChildren, -fromChildIndex.Index);
+        children[index].SetExpandedChildIndex(toChildIndex);
+      }
     }
 
 
@@ -115,23 +122,9 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// </summary>
     /// <param name="tree"></param>
     /// <param name="otherNodeIndex"></param>
-    /// <param name="exclusiveAccessGuaranteed"> </param>
-    public void CopyUnexpandedChildrenFromOtherNode(MCTSTree tree,
-                                                    MCTSNodeStructIndex otherNodeIndex,
-                                                    bool exclusiveAccessGuaranteed = false)
+    public void CopyUnexpandedChildrenFromOtherNode(MCTSTree tree, MCTSNodeStructIndex otherNodeIndex)
     {
-      if (exclusiveAccessGuaranteed)
-      {
-        DoCopyUnexpandedChildrenFromOtherNode(tree, otherNodeIndex);
-      }
-      else
-      {
-        MCTSNode otherNodeNode = tree.GetNode(otherNodeIndex);
-        lock (otherNodeNode)
-        {
-          DoCopyUnexpandedChildrenFromOtherNode(tree, otherNodeIndex);
-        }
-      }
+      DoCopyUnexpandedChildrenFromOtherNode(tree, otherNodeIndex);
     }
 
 
@@ -142,7 +135,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <param name="otherNodeIndex"></param>
     public void DoCopyUnexpandedChildrenFromOtherNode(MCTSTree tree, MCTSNodeStructIndex otherNodeIndex)
     {
-      ref MCTSNodeStruct otherNode = ref tree.Store.Nodes.nodes[otherNodeIndex.Index];
+      ref readonly MCTSNodeStruct otherNode = ref tree.Store.Nodes.nodes[otherNodeIndex.Index];
+      Debug.Assert(!otherNode.IsTranspositionLinked);
 
       TranspositionUnlinkIsInProgress = true;
 
@@ -157,20 +151,31 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         // First, copy any expanded nodes
         // We have to descend to the expanded node to retrieve 
         // the move and policy needed for the new child (which will be not yet expanded)
-        Span<MCTSNodeStructChild> children = tree.Store.Children.SpanForNode(in this);
-        Span<MCTSNodeStructChild> otherChildren = tree.Store.Children.SpanForNode(in otherNode);
+        MCTSNodeStructChildStorage childrenStore = tree.Store.Children;
+        Span <MCTSNodeStructChild> children = childrenStore.SpanForNode(in this);
+        Span<MCTSNodeStructChild> otherChildren = childrenStore.SpanForNode(in otherNode);
 
         for (int i = 0; i < otherNode.NumPolicyMoves; i++)
         {
-          MCTSNodeStructChild info = otherChildren[i];
-          if (info.IsExpanded)
+          // This code is robust to concurrency where
+          // other threads are possibly in the process of converting 
+          // unexpanded children to expanded children. That operation on
+          // the other thread (in CreateChild) is atomic where the childInfo
+          // object below is swapped within the array atomically
+          // from the pre-expansion unexpanded move/probability structure
+          // to the index of the newly created child node.
+          // The swapping happens only after the child node is fully initialized.
+          // In the next line we observe one or the other of these forms,
+          // and both are equally valid and containing the same data for move/probability.
+          MCTSNodeStructChild childInfo = otherChildren[i];
+          if (childInfo.IsExpanded)
           {
-            ref MCTSNodeStruct childNodeRef = ref info.ChildRefFromStore(tree.Store);
+            ref MCTSNodeStruct childNodeRef = ref childInfo.ChildRefFromStore(tree.Store);
             children[i].SetUnexpandedPolicyValues(childNodeRef.PriorMove, childNodeRef.P);
           }
           else
           {
-            children[i] = otherChildren[i];
+            children[i] = childInfo;
           }
         }
       }
@@ -813,6 +818,35 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
       }
     }
+
+    /// <summary>
+    /// Processes a node which has been determined to be a proven loss.
+    /// Propagates this upward to the parent since parent's best move 
+    /// is now obviously this one.
+    /// </summary>
+    /// <param name="node"></param>
+    /// <param name="lossP"></param>
+    /// <param name="m"></param>
+    internal void SetProvenLossAndPropagateToParent(float lossP, float m)
+    {
+      WinP = 0;
+      LossP = (FP16)lossP;
+      MPosition = (byte)MathF.Round(m, 0);
+
+      if (!IsRoot)
+      {
+        // This checkmate will obviously be chosen by the opponent
+        // Therefore propagate the result up to the opponent as a victory,
+        // overriding such that the Q for that node reflects the certain loss
+        ref MCTSNodeStruct parentRef = ref this.ParentRef;
+        parentRef.WinP = (FP16)lossP;
+        parentRef.LossP = 0;
+        parentRef.W = parentRef.V * parentRef.N; // Make Q come out to be same as V (which has already been set to the sure win)
+        parentRef.MPosition = (byte)MathF.Round(m + 1, 0);
+      }
+    }
+
+
 
     #endregion
 

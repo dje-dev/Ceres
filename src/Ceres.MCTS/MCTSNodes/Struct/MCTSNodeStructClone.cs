@@ -13,16 +13,16 @@
 
 #region Using directives
 
+using System;
+using System.Collections.Concurrent;
+using System.Diagnostics;
+
 using Ceres.Base.DataTypes;
 using Ceres.MCTS.Environment;
 using Ceres.MCTS.Evaluators;
 using Ceres.MCTS.LeafExpansion;
 using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.Params;
-using Ceres.MCTS.Search;
-using System;
-using System.Collections.Concurrent;
-using System.Diagnostics;
 
 #endregion
 
@@ -30,11 +30,96 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 {
   public partial struct MCTSNodeStruct
   {
+    /// <summary>
+    /// Determine how many nodes could be visited from this node 
+    /// if it is used as a transposition root for some other node.
+    /// 
+    /// Values up to 3 may be returned, if sufficiently many nodes
+    /// exist in the subtree and are suitable for use
+    /// (e.g. not in flight, not transposition linked).
+    /// 
+    /// </summary>
+    internal int NumUsableSubnodesForCloning
+    {
+      get
+      {
+        if (IsTranspositionLinked)
+        {
+          return 0;
+        }         
+        
+        int count = 1;
+        if (NumChildrenExpanded > 0)
+        {
+          ref readonly MCTSNodeStruct child = ref ChildAtIndexRef(0);
+          if (!child.IsTranspositionLinked && !FP16.IsNaN(child.V))
+          {
+            count++;
 
-    static bool IsValidSource(MCTSNode testNode) => testNode != null
-                                            && !testNode.IsTranspositionLinked
-                                            && !FP16.IsNaN(testNode.V)
-                                            && testNode.Terminal != Chess.GameResult.NotInitialized;
+            // Check if subchild available.
+            if (child.NumChildrenExpanded > 0)
+            {
+              ref readonly MCTSNodeStruct subchild = ref child.ChildAtIndexRef(0);
+              if (!subchild.IsTranspositionLinked && !FP16.IsNaN(subchild.V))
+              {
+                count++;
+              }
+            }
+
+            // Check if sibing is available.
+            // Note that sibling is only considered if the primary child was also available,
+            // since when cloning we need to proceed strictly in order and the primary child comes first.
+            if (NumChildrenExpanded > 1)
+            {
+              ref readonly MCTSNodeStruct sibling = ref ChildAtIndexRef(1);
+              if (!sibling.IsTranspositionLinked && !FP16.IsNaN(sibling.V))
+              {
+                count++;
+              }
+            }
+
+          }
+        }
+
+        return count;
+      }
+    }
+
+    /// <summary>
+    /// Fixes up this node to be fully materialized by
+    /// creating a subtree nodes (copied from transposition root)
+    /// and breaking the association with the former transposition root
+    /// by clearing TranspositionRootIndex and NumVisitsPendingTranspositionRootExtraction.
+    /// </summary>
+    /// <param name="tree"></param>
+    internal void MaterializeSubtreeFromTranspositionRoot(MCTSTree tree)
+    {      
+      Debug.Assert(N >= 1 && N <= 3);
+      Debug.Assert(IsTranspositionLinked);
+      Debug.Assert(NumChildrenExpanded == 0);
+
+      MCTSNodeStructIndex startingTranspositionRootIndex = new MCTSNodeStructIndex(TranspositionRootIndex);
+
+      // Copy children immediately at this node.
+      CopyUnexpandedChildrenFromOtherNode(tree, startingTranspositionRootIndex);
+
+      // Copy one or possibly two children from subtree to
+      // make the copied subtree look what it would 
+      if (N >= 2)
+      {
+        MCTSNode transpositionRootNode = tree.GetNode(startingTranspositionRootIndex);
+
+        bool cloneSubchild = N >= 3;
+        TryCloneChild(tree, in transpositionRootNode.Ref, ref this, 0, cloneSubchild);
+      }
+    }
+
+
+    static bool IsValidSource(MCTSNode testNode) => testNode != null && IsValidSource(testNode.Ref);
+    static bool IsValidSource(in MCTSNodeStruct testNode) => !testNode.IsTranspositionLinked
+                                                          && !FP16.IsNaN(testNode.V)
+                                                          && testNode.Terminal != Chess.GameResult.NotInitialized;
+
 
     /// <summary>
     /// Clones an extant node in tree as a new child in a specified other node.
@@ -44,130 +129,138 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <param name="childIndex"></param>
     /// <param name="cloneSubchildIfPossible"></param>
     /// <returns></returns>
-    public static MCTSNode TryCloneChild(MCTSNode sourceParent, MCTSNode targetParent, int childIndex, bool cloneSubchildIfPossible)
+    public static MCTSNodeStructIndex TryCloneChild(MCTSTree tree, 
+                                                    in MCTSNodeStruct sourceParentRef, ref MCTSNodeStruct targetParentRef,
+                                                    int childIndex, bool cloneSubchildIfPossible)
     {
-      Debug.Assert(childIndex == targetParent.NumChildrenExpanded); // must expand strictly in order by index
-
-      if (sourceParent.NumChildrenExpanded == 0)
+      if (sourceParentRef.NumChildrenExpanded == 0)
       {
-        return null;
+        return default;
       }
 
-      MCTSTree tree = sourceParent.Tree;
+      ref readonly MCTSNodeStruct sourceChildRef = ref sourceParentRef.ChildAtIndexRef(childIndex);
+      Debug.Assert(IsValidSource(in sourceChildRef));
+      MCTSNodeStructIndex targetChildIndex = targetParentRef.CreateChild(tree.Store, childIndex);
+      ref MCTSNodeStruct targetChildRef = ref tree.Store.Nodes.nodes[targetChildIndex.Index];
+      targetParentRef.NumChildrenVisited = (byte)(childIndex + 1);
 
-      lock (sourceParent)
+      // TODO: avoid ChildAtIndex to avoid dictionary lookup?
+      targetChildRef.CopyUnexpandedChildrenFromOtherNode(tree, new MCTSNodeStructIndex(sourceChildRef.Index.Index));
+
+      MCTSEventSource.TestMetric1++;
+
+      Debug.Assert(!double.IsNaN(sourceParentRef.W));
+      Debug.Assert(!double.IsNaN(sourceChildRef.W));
+      Debug.Assert(sourceChildRef.Terminal != Chess.GameResult.NotInitialized);
+
+      targetChildRef.Terminal = sourceChildRef.Terminal;
+
+      targetChildRef.N = 1;
+      targetChildRef.W = sourceChildRef.V;
+
+      targetChildRef.MPosition = sourceChildRef.MPosition;
+      targetChildRef.mSum = sourceChildRef.MPosition;
+      targetChildRef.dSum = sourceChildRef.DrawP;
+      targetChildRef.WinP = sourceChildRef.WinP;
+      targetChildRef.LossP = sourceChildRef.LossP;
+
+      targetChildRef.ZobristHash = sourceChildRef.ZobristHash;
+      targetChildRef.VSecondary = sourceChildRef.VSecondary;
+      targetChildRef.Uncertainty = sourceChildRef.Uncertainty;
+
+      targetChildRef.Unused1 = sourceChildRef.Unused1;
+
+      // TODO: centralize this logic better (similar to what is in BackupApply).
+      if (targetChildRef.Terminal == Chess.GameResult.Draw)
       {
-        MCTSNode sourceChild = sourceParent.ChildAtIndex(childIndex);
-        if (!IsValidSource(sourceChild))
+        targetParentRef.DrawKnownToExistAmongChildren = true;
+      }
+
+      if (ParamsSelect.VIsForcedLoss(targetChildRef.V))
+      {
+        targetChildRef.SetProvenLossAndPropagateToParent(targetChildRef.LossP, targetChildRef.MPosition);
+      }
+
+      // Possibly move over a second sub-child in the clone.
+      // The second descendent (if it exsists and is usable)
+      // must be either the child of the child, or its sibling.
+      if (cloneSubchildIfPossible)
+      {
+        Debug.Assert(childIndex == 0);
+
+        ref MCTSNodeStruct dummyRef = ref tree.Store.Nodes.nodes[0];
+        ref MCTSNodeStruct dummyRef2 = ref tree.Store.Nodes.nodes[0];
+        
+        ref readonly MCTSNodeStruct candidateSourceChildChild = ref dummyRef;
+        bool candidateSourceChildChildValid = false;
+        if (sourceChildRef.NumChildrenExpanded > 0)
         {
-          return null;
+          candidateSourceChildChild = ref sourceChildRef.ChildAtIndexRef(0);
+          candidateSourceChildChildValid = IsValidSource(in candidateSourceChildChild);
         }
 
-        lock (sourceChild)
+        ref readonly MCTSNodeStruct candidateSourceChildSibling =  ref dummyRef;
+        bool candidateSourceChildSiblingValid = false;
+        if (sourceParentRef.NumChildrenExpanded > 1)
         {
-          ref readonly MCTSNodeStruct sourceParentRef = ref sourceParent.Ref;
-          ref readonly MCTSNodeStruct sourceChildRef = ref sourceChild.Ref;
+          candidateSourceChildSibling = ref sourceParentRef.ChildAtIndexRef(1);
+          candidateSourceChildSiblingValid = IsValidSource(in candidateSourceChildSibling);
+        }
 
-          ref MCTSNodeStruct targetParentRef = ref targetParent.Ref;
-
-          MCTSNode targetChild = targetParent.CreateChild(childIndex);
-          ref MCTSNodeStruct targetChildRef = ref targetChild.Ref;
-          targetParent.Ref.NumChildrenVisited = (byte)(childIndex + 1);
-
-          // TODO: avoid ChildAtIndex to avoid dictionary lookup?
-          targetChildRef.CopyUnexpandedChildrenFromOtherNode(tree, new MCTSNodeStructIndex(sourceChild.Index));
-
-          MCTSEventSource.TestMetric1++;
-
-          Debug.Assert(!double.IsNaN(sourceParent.W));
-          Debug.Assert(!double.IsNaN(sourceChildRef.W));
-          Debug.Assert(sourceChildRef.Terminal != Chess.GameResult.NotInitialized);
-
-          targetChildRef.Terminal = sourceChildRef.Terminal;
-
-          targetChildRef.N = 1;
-          targetChildRef.W = sourceChildRef.V;
-
-          targetChildRef.MPosition = sourceChildRef.MPosition;
-          targetChildRef.mSum = sourceChildRef.MPosition;
-          targetChildRef.dSum = sourceChildRef.DrawP;
-          targetChildRef.WinP = sourceChildRef.WinP;
-          targetChildRef.LossP = sourceChildRef.LossP;
-
-          targetChildRef.ZobristHash = sourceChildRef.ZobristHash;
-          targetChildRef.VSecondary = sourceChildRef.VSecondary;
-          targetChildRef.Uncertainty = sourceChildRef.Uncertainty;
-
-          // TODO: centralize this logic better (similar to what is in BackupApply).
-          if (targetChildRef.Terminal == Chess.GameResult.Draw)
+        if (candidateSourceChildChildValid && candidateSourceChildSiblingValid)
+        {
+          // Both child/child and sibling have been created, use the one selected (created) first.
+          if (candidateSourceChildChild.Index.Index < candidateSourceChildSibling.Index.Index)
           {
-            targetParentRef.DrawKnownToExistAmongChildren = true;
+            candidateSourceChildSiblingValid = false;
           }
-
-          if (ParamsSelect.VIsForcedLoss(targetChildRef.V))
+          else
           {
-            MCTSApply.SetProvenLossAndPropagateToParent(targetChild, targetChildRef.LossP, targetChildRef.MPosition);
+            candidateSourceChildChildValid = false;
           }
+        }
 
-          // Possibly move over a second sub-child in the clone.
-          // The second descendent (if it exsists and is usable)
-          // must be either the child of the child, or its sibling.
-          if (cloneSubchildIfPossible)
-          {
-            Debug.Assert(childIndex == 0);
+        MCTSNodeStructIndex clonedSubchildIndex = default;
+        if (candidateSourceChildChildValid)
+        {
+          clonedSubchildIndex = TryCloneChild(tree, in sourceChildRef, ref targetChildRef, 0, false);
+        }
+        else if (candidateSourceChildSiblingValid)
+        {
+          clonedSubchildIndex = TryCloneChild(tree, in sourceParentRef, ref  targetParentRef, 1, false);
+        }
 
-            MCTSNode candidateSourceChildChild = sourceChild.NumChildrenExpanded > 0 ? sourceChild.ChildAtIndex(0) : null;
-            bool candidateSourceChildChildValid = IsValidSource(candidateSourceChildChild);
+        if (clonedSubchildIndex != default)
+        {
+          // Update parent statistics to reflect the added subchild.
+          ref MCTSNodeStruct clonedSubchild = ref tree.Store.Nodes.nodes[clonedSubchildIndex.Index];
+          ref MCTSNodeStruct subchildParentRef = ref clonedSubchild.ParentRef;
 
-            MCTSNode candidateSourceChildSibling = sourceParent.NumChildrenExpanded > 1 ? sourceParent.ChildAtIndex(1) : null;
-            bool candidateSourceChildSiblingValid = IsValidSource(candidateSourceChildSibling);
-            
-            if (candidateSourceChildChildValid && candidateSourceChildSiblingValid)
-            {
-              // Both child/child and sibling have been created, use the one selected (created) first.
-              if (candidateSourceChildChild.Index < candidateSourceChildSibling.Index)
-              {
-                candidateSourceChildSiblingValid = false;
-              }
-              else
-              {
-                candidateSourceChildChildValid = false;
-              }
-            }
-
-            MCTSNode clonedSubchild = null;
-            if (candidateSourceChildChildValid)
-            {
-              lock (candidateSourceChildChild)
-              {
-                clonedSubchild = TryCloneChild(sourceChild, targetChild, 0, false);
-              }
-            }
-            else if (candidateSourceChildSiblingValid)
-            {
-              lock (candidateSourceChildSibling)
-              {
-                clonedSubchild = TryCloneChild(sourceParent, targetParent, 1, false);
-              }
-            }
-
-            if (clonedSubchild != null)
-            {
-              // Update parent statistics to reflect the added subchild.
-              ref MCTSNodeStruct subchildParentRef = ref clonedSubchild.Parent.Ref;
-              subchildParentRef.N++;
-              subchildParentRef.W += -clonedSubchild.V;
-              subchildParentRef.dSum += clonedSubchild.DrawP;
-              subchildParentRef.mSum += clonedSubchild.MPosition;
-            }
-
-          }
-
-          return targetChild;
+          subchildParentRef.N++;
+          subchildParentRef.W += -clonedSubchild.V;
+          subchildParentRef.dSum += clonedSubchild.DrawP;
+          subchildParentRef.mSum += clonedSubchild.MPosition;
         }
       }
+
+      return targetChildIndex;    
+  }
+
+
+    public void CloneSubtree(MCTSNodeStore store,
+                             ConcurrentDictionary<int, MCTSNodeTranspositionVisitor> transpositionDictionary,
+                             ref MCTSNodeStruct source, int numNodesToClone)
+    {
+      throw new NotImplementedException(); // see below
     }
 
+
+  }
+
+}
+
+
+#if NOT
 
 #region Deep clone
 
@@ -303,8 +396,4 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         W = (FP16)clonedSumW;
       }
 #endregion
-
-    }
-
-  }
-}
+#endif

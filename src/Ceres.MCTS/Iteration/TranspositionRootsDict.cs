@@ -87,8 +87,24 @@ namespace Ceres.MCTS.Iteration
     public int Count => table.Count;
 
     #region Helper methods
+    public void AddIfNotPresent(ulong hashKey, int value)
+    {
+      // TODO: much more efficient version for .NET 6 and above
+#if NOT
+      ref int refValue = ref CollectionsMarshal.GetValueRefOrAddDefault(table, hashKey, out bool exists);
+      if (!exists || shouldUpdatePredicate(refValue))
+      {
+        refValue = possibleNewValue;
+      }
+#endif
 
-    public void AddOrPossiblyUpdate(Span<MCTSNodeStruct> nodes, ulong hashKey, int possibleNewValue, int possibleNewValueN)
+      if (!table.TryGetValue(hashKey, out int existingNodeIndex))
+      {
+        table.TryAdd(hashKey, value);
+      }
+    }
+
+    public void AddOrPossiblyUpdateUsingN(Span<MCTSNodeStruct> nodes, ulong hashKey, int possibleNewValue, int possibleNewValueN)
     {
       // TODO: much more efficient version for .NET 6 and above
 #if NOT

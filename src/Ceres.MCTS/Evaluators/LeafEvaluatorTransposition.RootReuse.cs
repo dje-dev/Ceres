@@ -18,6 +18,7 @@ using System.Diagnostics;
 using Ceres.Base.DataTypes;
 using Ceres.Chess.EncodedPositions;
 using Ceres.MCTS.MTCSNodes;
+using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.Params;
 
@@ -34,7 +35,7 @@ namespace Ceres.MCTS.Evaluators
        NumVisitsPendingTranspositionRootExtraction - the number of times future visits will be sourced from the transposition root instead of this node
 
     At MCTSNode has 3 new state variables which hold values computed during(parallel) 
-    batch gathering(in LeafSelectorMulti) and then used by during backup(in MCTSApply):
+    batch gathering (in LeafSelectorMulti) and then used by during backup(in MCTSApply):
        PendingTranspositionV
        PendingTranspositionM
        PendingTranspositionD
@@ -47,7 +48,7 @@ namespace Ceres.MCTS.Evaluators
             - they are treated as leafs if NumVisitsPendingTranspositionRootExtraction indicates sufficiently many 
               pending values can come from the node as requested as targets visits for the node.
               If so, the pending values stored in MCTSNode are potentially refreshed.
-            - otherwise the CopyUnexpandedChildrenFromOtherNode is called to permanently delink the node from its transposition root
+            - otherwise the MaterializeSubtreeFromTranspositionRoot is called to permanently delink the node from its transposition root
       3. (backup) 
          MCTSApply treats nodes which are still transposition linked in a special way.
          The 3 PendingTransposition values in MCTSNode are use to provide values for backup in the tree.
@@ -60,49 +61,6 @@ namespace Ceres.MCTS.Evaluators
   /// </summary>
   public sealed partial class LeafEvaluatorTransposition
   {
-    static int NumUsableSubnodes(in MCTSNodeStruct trNode)
-    {
-      if (trNode.IsTranspositionLinked)
-      {
-        return 0;
-      }
-
-      int count = 1;
-      if (trNode.NumChildrenExpanded > 0)
-      {
-        ref readonly MCTSNodeStruct child = ref trNode.ChildAtIndexRef(0);
-        if (!child.IsTranspositionLinked && !FP16.IsNaN(child.V))
-        {
-          count++;
-
-          // Check if subchild available.
-          if (child.NumChildrenExpanded > 0)
-          {
-            ref readonly MCTSNodeStruct subchild = ref child.ChildAtIndexRef(0);
-            if (!subchild.IsTranspositionLinked && !FP16.IsNaN(subchild.V))
-            {
-              count++;
-            }
-          }
-
-          // Check if sibing is available.
-          // Note that sibling is only considered if the primary child was also available,
-          // since when cloning we need to proceed strictly in order and the primary child comes first.
-          if (trNode.NumChildrenExpanded > 1)
-          {
-            ref readonly MCTSNodeStruct sibling = ref trNode.ChildAtIndexRef(1);
-            if (!sibling.IsTranspositionLinked && !FP16.IsNaN(sibling.V))
-            {
-              count++;
-            }
-          }
-
-        }
-      }
-
-      return count;
-    }
-
     /// <summary>
     /// Upon first visit to node to be attached to transposition root, computes and sets in the node structure:
     ///   - TranspositionRootIndex
@@ -135,11 +93,12 @@ namespace Ceres.MCTS.Evaluators
       applyTarget = Math.Min(applyTarget, transpositionRootNode.N);
 
       // Also never reuse more than are available from the transposition root subtree.
-      applyTarget = Math.Min(applyTarget, NumUsableSubnodes(in transpositionRootNode));
+      applyTarget = Math.Min(applyTarget, transpositionRootNode.NumUsableSubnodesForCloning);
 
       // Finally, the field holding the target has a fixed maximum representable size, ensure not more than that.
       applyTarget = Math.Min(applyTarget, MCTSNodeStruct.MAX_NUM_VISITS_PENDING_TRANSPOSITION_ROOT_EXTRACTION);
 
+      Debug.Assert(applyTarget > 0);
       nodeRef.NumVisitsPendingTranspositionRootExtraction = applyTarget;
 
       EnsurePendingTranspositionValuesSet(node, false);

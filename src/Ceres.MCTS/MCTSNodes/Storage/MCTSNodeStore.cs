@@ -207,6 +207,8 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     /// </summary>
     public void Validate(bool expectCacheIndexZero = false)
     {
+      int numWarnings = 0;
+
       void Assert(bool condition, string err)
       {
         if (!condition)
@@ -215,11 +217,24 @@ namespace Ceres.MCTS.MTCSNodes.Storage
         }
       }
 
-      void AssertNode(bool condition, string err, int nodeIndex, in MCTSNodeStruct node)
+      void AssertNode(bool condition, string err, int nodeIndex, in MCTSNodeStruct node, bool warnOnly = false)
       {
         if (!condition)
         {
-          throw new Exception($"MCTSNodeStore::Validate failed: {err} on node: #{nodeIndex} {node.Terminal} Parent={node.ParentIndex} N={node.N} V={node.V,5:F2} TL={node.IsTranspositionLinked} ");
+          string errStr = $"MCTSNodeStore::Validate failed: {err} on node: #{nodeIndex} {node.Terminal} Parent={node.ParentIndex} N={node.N} V={node.V,5:F2} TL={node.IsTranspositionLinked} PendTR={node.NumVisitsPendingTranspositionRootExtraction} ";
+          if (warnOnly)
+          {
+            if (numWarnings == 0)
+            {
+              Console.WriteLine(errStr);
+              Console.WriteLine("NOTE: Suppressing subsequent warnings for validation of tree.");
+            }
+            numWarnings++;
+          }
+          else
+          {
+            throw new Exception(errStr);
+          }
         }
       }
 
@@ -268,16 +283,21 @@ namespace Ceres.MCTS.MTCSNodes.Storage
           AssertNode(nodeR.TranspositionRootIndex != 0,
             $"TranspositionRootIndex zero when NumVisitsPendingTranspositionRootExtraction > 0 : {nodeR.NumVisitsPendingTranspositionRootExtraction} {nodeR.TranspositionRootIndex}", i, in nodeR);
 
-          ref readonly MCTSNodeStruct transpositionRoot = ref Nodes.nodes[nodeR.TranspositionRootIndex];
-          AssertNode(nodeR.NumVisitsPendingTranspositionRootExtraction <= transpositionRoot.N,
-                     $"TranspositionRoot N less than NumVisitsPendingTranspositionRootExtraction:  {transpositionRoot.N} {nodeR.NumVisitsPendingTranspositionRootExtraction}", i, in nodeR);
+          ref MCTSNodeStruct transpositionRoot = ref Nodes.nodes[nodeR.TranspositionRootIndex];
+          int numNeededValues = nodeR.N + nodeR.NumVisitsPendingTranspositionRootExtraction;
+          int numAvailableValues = transpositionRoot.NumUsableSubnodesForCloning;
+          AssertNode(numNeededValues <= numAvailableValues, $"Num needed transposition copy nodes less than number available:  {numNeededValues} {numAvailableValues}", i, in nodeR);
         }
 
         if (nodeR.IsTranspositionLinked)
         {
           ref readonly MCTSNodeStruct transpositionRoot = ref Nodes.nodes[nodeR.TranspositionRootIndex];
           AssertNode(!transpositionRoot.IsTranspositionLinked, "transposition root was itself transposition linked", i, in nodeR);
-          AssertNode(nodeR.ZobristHash == transpositionRoot.ZobristHash, "transposition link was not to same Zobrist hash", i, in nodeR);
+          AssertNode(nodeR.ZobristHash == transpositionRoot.ZobristHash, $"transposition link was not to same Zobrist hash with V values: {nodeR.V} vs. {transpositionRoot.V}", i, in nodeR, true); 
+
+          // Don't report error if proven win (V > 1) because this conversion may have happened later
+          AssertNode(MathF.Abs(nodeR.V - transpositionRoot.V) < 0.03f || nodeR.V > 1.0f || transpositionRoot.V > 1.0f, 
+                     $"transposition root had different V {nodeR.V} {transpositionRoot.V}", i, in nodeR, true);
         }
         else
         {
@@ -295,7 +315,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
             {
               // Any expanded nodes should appear before all unexpanded nodes
               AssertNode(!haveSeenUnexpanded, "expanded after unexpanded", i, in nodeR);
-              AssertNode(child.ChildRef.ParentIndex == nodeR.Index, "ParentRef", i, in nodeR);
+              AssertNode(child.ChildRef.ParentIndex == nodeR.Index, $"ParentRef is {child.ChildRef.ParentIndex}", i, in nodeR);
               AssertNode(child.N <= nodeR.N, "child N", i, in nodeR);
 
               numExpanded++;
@@ -316,6 +336,11 @@ namespace Ceres.MCTS.MTCSNodes.Storage
           // Verify the NumChildrenVisited is correct
           AssertNode(numExpanded == nodeR.NumChildrenExpanded, "NumChildrenVisited", i, in nodeR);
         }
+      }
+
+      if (numWarnings > 0)
+      {
+        Console.WriteLine($"Number of tree validation warnings: {numWarnings}");
       }
     }
 

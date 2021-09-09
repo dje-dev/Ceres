@@ -67,16 +67,23 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 
 
     /// <summary>
-    /// Swaps the position of two nodes within the store,
-    /// updating linked data structures as needed.
+    /// Moves a node to another location (strictly to a lower index) 
+    /// in the node store, updating children linked data structures as needed.
     /// </summary>
     /// <param name="store"></param>
     /// <param name="nodes"></param>
     /// <param name="from"></param>
     /// <param name="to"></param>
-    public static void SwapNodesPosition(MCTSNodeStore store, Span<MCTSNodeStruct> nodes,
-                                         MCTSNodeStructIndex from, MCTSNodeStructIndex to)
+    public static void MoveNodeDown(MCTSNodeStore store, Span<MCTSNodeStruct> nodes,
+                                    MCTSNodeStructIndex from, MCTSNodeStructIndex to)
     {
+      // Node order must be preserved, this is assumed/required
+      // several places in the code.
+      //
+      // For example, tree rebuilding is done in situ
+      // and nodes are shifted strictly down to
+      // prevent overwriting data yet to be rewritten.
+      Debug.Assert(to.Index <= from.Index);
       if (from != to)
       {
         Debug.Assert(!nodes[from.Index].IsRoot);
@@ -116,7 +123,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     static void ModifyChildrensParentRef(MCTSNodeStore store, Span<MCTSNodeStruct> rawNodes,
                                          ref MCTSNodeStruct node, MCTSNodeStructIndex newParentIndex)
     {
-      if (!node.IsTranspositionLinked)
+      if (!node.IsTranspositionLinked && node.NumChildrenExpanded > 0)
       {
         Span<MCTSNodeStructChild> children = node.ChildrenFromStore(store);
         int numChildrenExpanded = node.NumChildrenExpanded;

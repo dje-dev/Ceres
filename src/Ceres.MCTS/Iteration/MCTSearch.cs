@@ -396,18 +396,6 @@ namespace Ceres.MCTS.Iteration
                                           SearchLimit searchLimitTargetAdjusted, bool possiblyUsePositionCache,
                                           ManagerTreeReuse.Method reuseMethod)
     {
-      TimingStats statsMaterialize = new();
-      if (Manager.Context.ParamsSearch.Execution.TranspositionMode != TranspositionMode.None)
-      {
-        if (!MCTSNodeStructStorage.USE_FAST_TREE_REBUILD)
-        {
-          using (new TimingBlock(statsMaterialize, TimingBlock.LoggingType.None))
-          {
-            MaterializeAllTranspositionLinkages(newRoot);
-          }
-        }
-      }
-
       // Now rewrite the tree nodes and children "in situ"
       PositionEvalCache reusePositionCache = null;
       if (Manager.Context.ParamsSearch.TreeReuseRetainedPositionCacheEnabled)
@@ -438,14 +426,12 @@ namespace Ceres.MCTS.Iteration
          && priorContext.ParamsSearch.TreeReuseSwapRootEnabled)
         {
           wasSwap = true;
-          //Console.WriteLine("Swap root " + fracRetain + " from index " + newRoot.Index);
           MCTSNodeStructStorage.DoMakeChildNewRootSwapRoot(Manager.Context.Tree, ref newRoot.Ref, newPositionAndMoves,
                                                            reusePositionCache, newTranspositionRoots,
                                                            priorContext.ParamsSearch.Execution.TranspositionMaximizeRootN);
         }
         else
         {
-          //Console.WriteLine("New root " + fracRetain);
           MCTSNodeStructStorage.MakeChildNewRoot(Manager.Context.Tree, ref newRoot.Ref, newPositionAndMoves,
                                                  reusePositionCache, newTranspositionRoots,
                                                  priorContext.ParamsSearch.Execution.TranspositionMaximizeRootN);
@@ -454,10 +440,7 @@ namespace Ceres.MCTS.Iteration
         //    if (wasSwap) MCTSEventSource.TestCounter1++;
       }
 
-      float secsMakeNewRoot = (float)(statsMaterialize.ElapsedTimeSecs + makeNewRootTimingStats.ElapsedTimeSecs);
-      MCTSManager.TotalTimeSecondsInMakeNewRoot += secsMakeNewRoot;
-      //      Console.WriteLine((wasSwap ? "SWAP " : "REBUILD ") + secsMakeNewRoot + " " + newRoot);
-      //      if (Manager.Context.ParamsSearch.TreeReuseSwapRootEnabled) MCTSEventSource.TestMetric1 += secsMakeNewRoot;
+      MCTSManager.TotalTimeSecondsInMakeNewRoot += (float) makeNewRootTimingStats.ElapsedTimeSecs;
 
       CeresEnvironment.LogInfo("MCTS", "MakeChildNewRoot", $"Select {newRoot.N:N0} from {numNodesInitial:N0} "
                               + $"in {(int)(makeNewRootTimingStats.ElapsedTimeSecs / 1000.0)}ms");
@@ -561,14 +544,6 @@ namespace Ceres.MCTS.Iteration
       }
     }
 
-    private static void MaterializeAllTranspositionLinkages(MCTSNode newRoot)
-    {
-      // The MakeChildNewRoot method is not able to handle transposition linkages
-      // (this would be complicated and could involve linkages to nodes no longer in the retained subtree).
-      // Therefore we first materialize any transposition linked nodes in the subtree.
-      // Since this is not currently multithreaded we can turn off tree node locking for the duration.
-      newRoot.MaterializeAllTranspositionLinks();
-    }
 
     private void UpdateContemptManager(MCTSNode newRoot)
     {

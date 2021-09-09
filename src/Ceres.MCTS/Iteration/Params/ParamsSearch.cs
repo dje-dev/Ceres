@@ -33,12 +33,6 @@ namespace Ceres.MCTS.Params
   public record ParamsSearch
   {
     /// <summary>
-    /// If a set of small adjustments to parameters resulting from tuning tests
-    /// that differ from LC0 defaults that are applied if true.
-    /// </summary>
-    public const bool USE_CERES_ADJUSTMENTS = true;
-
-    /// <summary>
     /// Default value used by LC0 for smart pruning.
     /// This corresponds to somewhat to the Ceres MoveFutilityPruningAggressiveness value.
     /// For compatability with LC0 we accpet only two value in UCI inerface,

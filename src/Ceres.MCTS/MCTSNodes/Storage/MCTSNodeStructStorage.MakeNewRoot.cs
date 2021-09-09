@@ -18,6 +18,7 @@ using System.Collections;
 using System.Collections.Generic;
 
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Ceres.Base.Benchmarking;
 using Ceres.Base.DataTypes;
@@ -37,9 +38,6 @@ namespace Ceres.MCTS.MTCSNodes.Storage
   public partial class MCTSNodeStructStorage
   {
     // TODO: move this into MCTSNodeStoreClass??
-
-    // TODO: someday remove this, always use fast mode
-    internal const bool USE_FAST_TREE_REBUILD = true;
 
     #region Structure modification
 
@@ -119,7 +117,17 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       // Materialize any nodes which point to transposition roots that do not survive
       // TODO: potentially this is unnecessary; except for the new root node moving,
       //       everything else remains in place and we could keep these linkages.
-      MaterializeNodesWithNonRetainedTranspositionRoots(tree, includedNodes, newRootChildIndex);
+      int numNodesAddedDuringMaterialization = MaterializeNodesWithNonRetainedTranspositionRoots(tree, includedNodes, newRootChildIndex);
+
+      if (numNodesAddedDuringMaterialization > 0)
+      {
+//        Console.WriteLine(store.Nodes.NumTotalNodes +  " ==> swap appends " + numNodesAddedDuringMaterialization);
+#if DEBUG
+        store.Validate();
+#endif
+        // ********************* TO DO: Make more efficient by just appending ***************
+        includedNodes = MCTSNodeStructUtils.BitArrayNodesInSubtree(store, ref newRootChild, true, out numNodesUsed);
+      }
 
       // Swap new root node into place at index 1.
       SwapNodeIntoRootPosition(store, newRootChildIndex, newPriorMoves);
@@ -155,10 +163,12 @@ namespace Ceres.MCTS.MTCSNodes.Storage
             //       possibly avoiding duplicates or parallelizing
             if (tryKeepTranspositionRootsMaxN)
             {
-              transpositionRoots?.AddOrPossiblyUpdate(nodes, thisNode.ZobristHash, i, nodes[i].N);
+              throw new Exception("This method is probably unusable since we require to keep in same order as originally added");
+              transpositionRoots?.AddOrPossiblyUpdateUsingN(nodes, thisNode.ZobristHash, i, nodes[i].N);
             }
             else
             {
+//              transpositionRoots?.AddIfNotPresent(thisNode.ZobristHash, i);             
               transpositionRoots?.TryAdd(thisNode.ZobristHash, i);
             }
           }
@@ -177,17 +187,6 @@ namespace Ceres.MCTS.MTCSNodes.Storage
                                           TranspositionRootsDict transpositionRoots,
                                           bool tryKeepTranspositionRootsMaxN)
     {
-#if NOT
-      Console.WriteLine("\r\nBEFORE REBUILD");
-tree.Store.Dump(true);
-
-DoMakeChildNewRootSwapRoot(tree, policySoftmax, ref newRootChild, newPriorMoves, cacheNonRetainedNodes, transpositionRoots);
-
-Console.WriteLine("\r\nAFTER REBUILD");
-tree.Store.Dump(true);
-return;
-#endif
-
       MCTSNodeStore store = tree.Store;
       ChildStartIndexToNodeIndex[] childrenToNodes;
 
@@ -200,9 +199,16 @@ return;
       // Traverse this subtree, building a bit array of visited nodes
       BitArray includedNodes = MCTSNodeStructUtils.BitArrayNodesInSubtree(store, ref newRootChild, false, out numNodesUsed);
 
-      if (USE_FAST_TREE_REBUILD)
+      int numNodesAddedDuringMaterialization = MaterializeNodesWithNonRetainedTranspositionRoots(tree, includedNodes, newRootChildIndex);
+
+      if (numNodesAddedDuringMaterialization > 0)
       {
-        MaterializeNodesWithNonRetainedTranspositionRoots(tree, includedNodes, newRootChildIndex);
+//        Console.WriteLine(store.Nodes.NumTotalNodes + " ==> rewrite appends " + numNodesAddedDuringMaterialization);
+#if DEBUG
+        store.Validate(false);
+#endif
+        // ********************* TO DO: Make more efficient by just appending ***************
+        includedNodes = MCTSNodeStructUtils.BitArrayNodesInSubtree(store, ref newRootChild, false, out numNodesUsed);
       }
 
       // Possibly extract retained nodes into a cache.
@@ -219,6 +225,16 @@ return;
       // children associated with the nodes we are extracting
       childrenToNodes = GC.AllocateUninitializedArray<ChildStartIndexToNodeIndex>((int)numNodesUsed);
 
+      // Create an array which will map old node indices to new node indices.
+      // This allows the transposition root indices to be replaced with
+      // updated values as the table is sequentially updated.
+      // Note that this insures that the transposition linked nodes are always linked
+      // back to exactly the same node during the rebuild process
+      // (rather than to just any node in the same equivalence class).
+      // The exactly linkages is necessary because the linkage to the tranposition root may
+      // run more than 1 node deep (up to 3) and is relative to one specific node from which it was originally linked.
+      int numNodesRebuilt = 0;
+      int[] newIndices = GC.AllocateUninitializedArray<int>((int)store.Nodes.NumTotalNodes);
 
       int RewriteNodesBuildChildrenInfo()
       {
@@ -228,7 +244,6 @@ return;
         // TODO: Consider that the above is possibly all we need to do in some case
         //       Suppose the subtree is very large relative to the whole
         //       This approach would be much faster, and orphan an only small part of the storage
-        MemoryBufferOS<MCTSNodeStruct> rawNodes = store.Nodes.nodes;
         Span<MCTSNodeStruct> nodesSpan = store.Nodes.Span;
 
         // Number of nodes after which the parallel presorter will be started
@@ -242,30 +257,17 @@ return;
         {
           if (includedNodes.Get(i))
           {
+            newIndices[i] = ++numNodesRebuilt;
+
             ref MCTSNodeStruct thisNode = ref store.Nodes.nodes[i];
 
-            // Reset any cache entry
+            // Reset any cache entry.
             thisNode.CacheIndex = 0;
 
-            // Not possible to support transposition linked nodes,
-            // since the root may be in a part of the tree that is not retained
-            // and possibly already overwritten.
-            // We expect them to have already been materialized by the time we reach this point.
-            Debug.Assert(USE_FAST_TREE_REBUILD || !thisNode.IsTranspositionLinked);
-            Debug.Assert(USE_FAST_TREE_REBUILD || thisNode.NumVisitsPendingTranspositionRootExtraction == 0);
-
-            // Remember this location if this is the new parent
+            // Remember this location if this is the new parent.
             if (i == newRootChildIndex)
             {
               newIndexOfNewParent = nextAvailableNodeIndex;
-            }
-
-            // TODO: could we omit putting in the nodes which are transposition linked here?
-            //       This would reduce size of structure we need to sort and process.
-            //       But will this throw off alignment with numRewrittenNodesDone ?
-            if (!thisNode.IsTranspositionLinked)
-            {
-              childrenToNodes[numChildrenFixups++] = new ChildStartIndexToNodeIndex(thisNode.childStartBlockIndex, nextAvailableNodeIndex, thisNode.NumPolicyMoves);
             }
 
             if (thisNode.IsTranspositionLinked)
@@ -276,41 +278,49 @@ return;
               // Note that this is safe because the trees are always built and rebuilt (for make new root)
               // retaining chronological order of visits, so the roots will always appear
               // sequentially before linked nodes that refer to them.
-              Debug.Assert(USE_FAST_TREE_REBUILD);
-              bool found = transpositionRoots.TryGetValue(thisNode.ZobristHash, out int transpositionRootIndex);
-              if (!found)
-              {
-                Console.Write("Warning: expected transposition root not found for " + thisNode);
+              int transpositionRootIndex = newIndices[thisNode.TranspositionRootIndex];
 
-                // Try to fix up node so this is recoverable and we don't crash (albeit at cost of a major distortion).
-                thisNode.TranspositionRootIndex = 0;
-                thisNode.NumVisitsPendingTranspositionRootExtraction = 0;
-                thisNode.Terminal = Chess.GameResult.Draw;
-              }
-              else
+              Debug.Assert(nodesSpan[transpositionRootIndex].ZobristHash == thisNode.ZobristHash);
+              thisNode.TranspositionRootIndex = transpositionRootIndex;
+#if DEBUG
+              bool found = transpositionRoots.TryGetValue(thisNode.ZobristHash, out int transpositionRootIndexOther);
+              if (transpositionRootIndex != transpositionRootIndexOther)
+                Console.WriteLine(transpositionRootIndex + " " + transpositionRootIndexOther);
+
+              if (thisNode.NumVisitsPendingTranspositionRootExtraction > 0)
               {
-                Debug.Assert(rawNodes[transpositionRootIndex].ZobristHash == thisNode.ZobristHash);
-                thisNode.TranspositionRootIndex = transpositionRootIndex;
+                int maxPending = nodesSpan[transpositionRootIndex].NumUsableSubnodesForCloning - thisNode.N;
+                if (thisNode.NumVisitsPendingTranspositionRootExtraction > maxPending)
+                {
+                  throw new Exception($"Inconsistent pending from {thisNode.NumVisitsPendingTranspositionRootExtraction} to {maxPending}, V were {thisNode.V} {nodesSpan[transpositionRootIndex].V}");
+                }
               }
+#endif
+
             }
             else
             {
+              if (thisNode.NumPolicyMoves > 0)
+              {
+                childrenToNodes[numChildrenFixups++] = new ChildStartIndexToNodeIndex(thisNode.childStartBlockIndex, nextAvailableNodeIndex, thisNode.NumPolicyMoves);
+              }
+
               if (tryKeepTranspositionRootsMaxN)
               {
-                transpositionRoots?.AddOrPossiblyUpdate(nodesSpan, thisNode.ZobristHash,
-                                                        nextAvailableNodeIndex, nodesSpan[i].N);
+                transpositionRoots?.AddOrPossiblyUpdateUsingN(nodesSpan, thisNode.ZobristHash, nextAvailableNodeIndex, nodesSpan[i].N);
               }
               else
               {
                 // Re-insert this into the transpositionRoots (with the updated node index)
                 // TODO: this is expensive, try to optimize by
                 //       possibly avoiding duplicates or parallelizing
+                // TODO: possibly avoid re-adding this if already present? This preserves same order.
                 transpositionRoots?.TryAdd(thisNode.ZobristHash, nextAvailableNodeIndex);
               }
             }
 
             // Move the actual node
-            SwapNodesPosition(store, nodesSpan, new MCTSNodeStructIndex(i), new MCTSNodeStructIndex(nextAvailableNodeIndex));
+            MoveNodeDown(store, nodesSpan, new MCTSNodeStructIndex(i), new MCTSNodeStructIndex(nextAvailableNodeIndex));
 
             nextAvailableNodeIndex++;
 
@@ -359,6 +369,7 @@ return;
       store.Nodes.NumOldGeneration = 0;
     }
 
+    static long ok = 0;
 
     private static void SwapNodeIntoRootPosition(MCTSNodeStore store, int newIndexOfNewParent, PositionWithHistory newPriorMoves)
     {
@@ -434,40 +445,37 @@ return;
     {
       int nextAvailableChildBlockIndex = 1;
 
-      // Loop thru all the new nodes to process (already sorted by child start index)
+      // Loop thru all the new nodes to process (already sorted by child start index).
       for (int i = 0; i < childrenToNodes.Length; i++)
       {
         ChildStartIndexToNodeIndex childStartToNode = childrenToNodes[i];
 
-        // Skip entries with negative index (which are transposition points)
+        // Transposition-linked nodes are not intended to be put in this table.
         bool isTranspositionLinked = childStartToNode.PriorChildStartBlockIndex < 0;
-        if (isTranspositionLinked)
-        {
-          // Nothing to do.
-        }
-        else if (childStartToNode.PriorChildStartBlockIndex > 0)
-        {
-          // Move the actual children entries
-          store.Children.CopyEntries(childStartToNode.PriorChildStartBlockIndex, nextAvailableChildBlockIndex, childStartToNode.NumPolicyMoves);
+        Debug.Assert(!isTranspositionLinked);
+        Debug.Assert(childStartToNode.NumPolicyMoves > 0);
 
-          // Modify the child start index in the node itself
-          store.Nodes.nodes[childStartToNode.NewNodeIndex].childStartBlockIndex = nextAvailableChildBlockIndex;
+        // Move the actual children entries.
+        store.Children.CopyEntries(childStartToNode.PriorChildStartBlockIndex, nextAvailableChildBlockIndex, childStartToNode.NumPolicyMoves);
 
-          // Advance our index of next child
-          nextAvailableChildBlockIndex += MCTSNodeStructChildStorage.NumBlocksReservedForNumChildren(childStartToNode.NumPolicyMoves);
-        }
+        // Modify the child start index in the node itself.
+        store.Nodes.nodes[childStartToNode.NewNodeIndex].childStartBlockIndex = nextAvailableChildBlockIndex;
+
+        // Advance our index of next child.
+        nextAvailableChildBlockIndex += MCTSNodeStructChildStorage.NumBlocksReservedForNumChildren(childStartToNode.NumPolicyMoves);
       }
 
-      // Reset children to new length
+      // Reset children to new length.
       // Note that it is not assumed the unused portion of the array is zeros,
       // so no need to zero anything here.
       store.Children.nextFreeBlockIndex = nextAvailableChildBlockIndex;
     }
 
-    #endregion
+#endregion
 
 
-    #region Helpers
+#region Helpers
+
 
     /// <summary>
     /// Sequentially traverses nodes and materializes any nodes which 
@@ -477,13 +485,18 @@ return;
     /// <param name="tree"></param>
     /// <param name="includedNodes"></param>
     /// <param name="newRootChildIndex"></param>
-    static void MaterializeNodesWithNonRetainedTranspositionRoots(MCTSTree tree, BitArray includedNodes, int newRootChildIndex)
+    /// <returns>the number of nodes added during this operation</returns>
+    static int MaterializeNodesWithNonRetainedTranspositionRoots(MCTSTree tree, BitArray includedNodes, int newRootChildIndex)
     {
       int numPrematerialized = 0;
       MCTSNodeStore store = tree.Store;
       MemoryBufferOS<MCTSNodeStruct> rawNodes = store.Nodes.nodes;
 
-      for (int i = 1; i < store.Nodes.nextFreeIndex; i++)
+      // Record the starting number of nodes 
+      // (before any nodes are possibly added by this method).
+      int startingNumNodes = store.Nodes.NumTotalNodes;
+
+      for (int i = 1; i < startingNumNodes; i++)
       {
         if (includedNodes.Get(i))
         {
@@ -510,13 +523,16 @@ return;
               numPrematerialized++;
 
               // We are not retaining the transposition root, so we must 
-              // unlink the node from parent (copying over all child information).
-              nodeRef.CopyUnexpandedChildrenFromOtherNode(tree, new MCTSNodeStructIndex(transpositionRootIndex), true);
-              nodeRef.NumVisitsPendingTranspositionRootExtraction = 0;
+              // unlink the node from parent and copy over all
+              // children which we have already visited (virtually).
+              nodeRef.MaterializeSubtreeFromTranspositionRoot(tree);
             }
           }
         }
       }
+
+      int numNodesAdded = tree.Store.Nodes.NumTotalNodes - startingNumNodes;
+      return numNodesAdded;
     }
 
 
@@ -536,10 +552,10 @@ return;
       return cache;
     }
 
-    #endregion
+#endregion
   }
 
-  #region Helper classes
+#region Helper classes
 
   /// <summary>
   /// Helper class used to track association between children start indices
@@ -574,5 +590,5 @@ return;
     }
   }
 
-  #endregion
+#endregion
 }
