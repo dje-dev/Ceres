@@ -107,18 +107,17 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       // make the copied subtree look what it would 
       if (N >= 2)
       {
-        MCTSNode transpositionRootNode = tree.GetNode(startingTranspositionRootIndex);
-
+        ref readonly MCTSNodeStruct transpositionRootRef = ref tree.Store.Nodes.nodes[startingTranspositionRootIndex.Index];
         bool cloneSubchild = N >= 3;
-        TryCloneChild(tree, in transpositionRootNode.Ref, ref this, 0, cloneSubchild);
+        TryCloneChild(tree, in transpositionRootRef, ref this, 0, cloneSubchild);
       }
     }
 
 
-    static bool IsValidSource(MCTSNode testNode) => testNode != null && IsValidSource(testNode.Ref);
-    static bool IsValidSource(in MCTSNodeStruct testNode) => !testNode.IsTranspositionLinked
-                                                          && !FP16.IsNaN(testNode.V)
-                                                          && testNode.Terminal != Chess.GameResult.NotInitialized;
+    static bool IsValidTranspositionLinkedSourceNode(MCTSNode testNode) => testNode != null && testNode.Ref.IsValidTranspositionLinkedSource;
+    public readonly bool IsValidTranspositionLinkedSource => !IsTranspositionLinked
+                                                          && !FP16.IsNaN(V)
+                                                          && Terminal != Chess.GameResult.NotInitialized;
 
 
     /// <summary>
@@ -139,7 +138,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       }
 
       ref readonly MCTSNodeStruct sourceChildRef = ref sourceParentRef.ChildAtIndexRef(childIndex);
-      Debug.Assert(IsValidSource(in sourceChildRef));
+      Debug.Assert(sourceChildRef.IsValidTranspositionLinkedSource);
       MCTSNodeStructIndex targetChildIndex = targetParentRef.CreateChild(tree.Store, childIndex);
       ref MCTSNodeStruct targetChildRef = ref tree.Store.Nodes.nodes[targetChildIndex.Index];
       targetParentRef.NumChildrenVisited = (byte)(childIndex + 1);
@@ -196,7 +195,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         if (sourceChildRef.NumChildrenExpanded > 0)
         {
           candidateSourceChildChild = ref sourceChildRef.ChildAtIndexRef(0);
-          candidateSourceChildChildValid = IsValidSource(in candidateSourceChildChild);
+          candidateSourceChildChildValid = candidateSourceChildChild.IsValidTranspositionLinkedSource;
         }
 
         ref readonly MCTSNodeStruct candidateSourceChildSibling =  ref dummyRef;
@@ -204,7 +203,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         if (sourceParentRef.NumChildrenExpanded > 1)
         {
           candidateSourceChildSibling = ref sourceParentRef.ChildAtIndexRef(1);
-          candidateSourceChildSiblingValid = IsValidSource(in candidateSourceChildSibling);
+          candidateSourceChildSiblingValid = candidateSourceChildSibling.IsValidTranspositionLinkedSource;
         }
 
         if (candidateSourceChildChildValid && candidateSourceChildSiblingValid)

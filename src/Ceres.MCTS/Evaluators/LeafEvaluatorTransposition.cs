@@ -167,13 +167,10 @@ namespace Ceres.MCTS.Evaluators
       if (TranspositionRoots.TryGetValue(node.Ref.ZobristHash, out int transpositionNodeIndex))
       {
         // Found already existing node
-        ref MCTSNodeStruct transpositionNode = ref node.Context.Tree.Store.Nodes.nodes[transpositionNodeIndex];
+        ref readonly MCTSNodeStruct transpositionNode = ref node.Context.Tree.Store.Nodes.nodes[transpositionNodeIndex];
 
-        // Only attempt transposition linkage if the transposition root
-        // node is fully initialized (not in flight) and not terminal
-        if (transpositionNode.N == 0 || transpositionNode.Terminal.IsTerminal())
+        if (!transpositionNode.IsValidTranspositionLinkedSource)
         {
-          //          if (CeresEnvironment.MONITORING_METRICS) NumMisses++;
           return default;
         }
 

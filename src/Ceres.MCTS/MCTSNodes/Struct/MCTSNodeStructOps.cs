@@ -714,6 +714,10 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           dToApply = 1; // TODO: is this ok even if not WDL network?
         }
 
+        // NOTE: It is not possible to make the updates to both N and W atomic as a group.
+        //       Therefore there is a very small possibility that another thread will observe one updated but not the other
+        //       (e.g. thread gathering nodes which reaches over to use this as a transposition root and references Q)
+        //       To mitigate the possible distortion, N is updated before W so any distortions will shrink toward 0.
         if (numToApply == 1)
         {
           node.N++;

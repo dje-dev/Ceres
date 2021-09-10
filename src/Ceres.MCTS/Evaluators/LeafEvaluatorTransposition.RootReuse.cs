@@ -89,10 +89,7 @@ namespace Ceres.MCTS.Evaluators
         throw new Exception("MaxTranspositionRootUseCount must 1, 2 or 3, not: " + applyTarget);
       }
 
-      // But never allow reuse more than the number of visits to the root.
-      applyTarget = Math.Min(applyTarget, transpositionRootNode.N);
-
-      // Also never reuse more than are available from the transposition root subtree.
+      // Never reuse more than are available from the transposition root subtree.
       applyTarget = Math.Min(applyTarget, transpositionRootNode.NumUsableSubnodesForCloning);
 
       // Finally, the field holding the target has a fixed maximum representable size, ensure not more than that.
@@ -105,6 +102,11 @@ namespace Ceres.MCTS.Evaluators
     }
 
 
+    // TODO: make this a constant set in MCTSParamsFixed or MCTSSearch
+    const int TRANSPOSITION_VALUE_REFRESH_INTERVAL = 1;
+
+
+
     /// <summary>
     /// Set or update the pending transposition values in a Node
     /// if they are missing or stale.
@@ -113,9 +115,6 @@ namespace Ceres.MCTS.Evaluators
     /// <param name="transpositionRootNode"></param>
     public static void EnsurePendingTranspositionValuesSet(MCTSNode node, bool possiblyRefresh)
     {
-      // TODO: make this a constant set in MCTSParamsFixed or MCTSSearch
-      const int TRANSPOSITION_VALUE_REFRESH_INTERVAL = 1;
-
       // Possibly the value cached in PendingTranspositionV to be used for the pending
       // transposition values is not present (because the prior MCTSNode was lost from cache).
       // If so recalculate and set it here.
@@ -131,17 +130,7 @@ namespace Ceres.MCTS.Evaluators
       if (cachedTranspositionValuesMissing || timeToRefresh)
       {
         int transpositionNodeIndex = node.TranspositionRootIndex;
-        if (transpositionNodeIndex == 0)
-        {
-          if (!node.Tree.TranspositionRoots.TryGetValue(node.Ref.ZobristHash, out transpositionNodeIndex))
-          {
-            Console.WriteLine("Internal error, transposition root lost in EnsurePendingTranspositionValuesSet" + node);
-
-            // Try to recover.
-            node.Ref.TranspositionRootIndex = 0;
-            node.Ref.NumVisitsPendingTranspositionRootExtraction = 0;
-          }
-        }
+        Debug.Assert(transpositionNodeIndex != 0);
 
         ref readonly MCTSNodeStruct transpositionNode = ref node.Context.Tree.Store.Nodes.nodes[transpositionNodeIndex];
         SetPendingTransitionValues(node, in transpositionNode);
@@ -149,7 +138,6 @@ namespace Ceres.MCTS.Evaluators
       }
     }
 
-    static bool haveWarned = false;
 
     /// <summary>
     /// Set the PendingTransposition values for this node based on speciifed transposition root.
@@ -159,37 +147,23 @@ namespace Ceres.MCTS.Evaluators
     static void SetPendingTransitionValues(MCTSNode node,
                                            in MCTSNodeStruct transpositionRootNode)
     {
-      if (node.N > 2)
-      {
-        throw new Exception("Max supported N in SetPendingTransitionValues is 3");
-      }
+      Debug.Assert(node.N <= 2); // Max supported N in SetPendingTransitionValues is 3
 
       float FRAC_Q = node.Context.ParamsSearch.TranspositionRootQFraction;
       float FRAC_V = 1f - FRAC_Q;
 
       var visit0Ref = MCTSNodeStruct.SubnodeRefVisitedAtIndex(in transpositionRootNode, 0, out bool foundV0);
 
-      //float transpositionRootMPosition = transpositionRootNode.MPosition;
-      //float transpositionRootDrawP = transpositionRootNode.DrawP;
-
       // Helper method to set the PendingTransposition values from specified subnode.
       void SetNodePendingValues(float multiplier, in MCTSNodeStruct subnodeRef, bool subnodeRefIsValid)
       {
-        node.PendingTranspositionV = FRAC_V * multiplier * subnodeRef.V 
-                                   + FRAC_Q * multiplier * (float)subnodeRef.Q;
-        if (subnodeRefIsValid)
-        {
-          node.PendingTranspositionM = FRAC_V * subnodeRef.MPosition + FRAC_Q * subnodeRef.MAvg;
-          node.PendingTranspositionD = FRAC_V * subnodeRef.DrawP + FRAC_Q * subnodeRef.DAvg;
-        }
-        else
-        {
-//          if (!haveWarned)
-            Console.WriteLine("invalid ");
-          haveWarned = true;
-          //node.PendingTranspositionM = transpositionRootMPosition;
-          //node.PendingTranspositionD = transpositionRootDrawP;
-        }
+        Debug.Assert(subnodeRefIsValid);
+
+        node.PendingTranspositionV = multiplier * (FRAC_V * subnodeRef.V
+                                                 + FRAC_Q * (float)subnodeRef.Q);
+
+        node.PendingTranspositionM = FRAC_V * subnodeRef.MPosition + FRAC_Q * subnodeRef.MAvg;
+        node.PendingTranspositionD = FRAC_V * subnodeRef.DrawP + FRAC_Q * subnodeRef.DAvg;
       }
 
       if (node.N == 0)

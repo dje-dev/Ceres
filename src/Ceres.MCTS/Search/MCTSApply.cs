@@ -263,15 +263,10 @@ namespace Ceres.MCTS.Search
             Debug.Assert(nodeRef.N > 0 || !float.IsNaN(node.EvalResult.V));
             Debug.Assert(!float.IsNaN(node.PendingTranspositionV));
             Debug.Assert(node.NumVisitsPendingTranspositionRootExtraction >= numToApply);
+            Debug.Assert(node.TranspositionRootIndex != 0);
 
             // Increment count of number of "extra" (beyond 1) values used without tree replication.
             if (node.Ref.NumVisitsPendingTranspositionRootExtraction > 1) MCTSEventSource.TestCounter1++;
-
-            if (node.TranspositionRootIndex == 0)
-            {
-              // TODO: convert this into a Debug.Assert
-              throw new Exception("Internal error: Transposition root gone missing.");
-            }
 
             // Switch to propagate this "pseudo V" for this node and all nodes above
             vToApply = node.PendingTranspositionV;

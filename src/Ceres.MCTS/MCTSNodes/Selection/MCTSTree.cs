@@ -294,11 +294,6 @@ namespace Ceres.MCTS.LeafExpansion
 
       bool alreadyEvaluated = !FP16.IsNaN(node.V);
 
-      if (node.NumVisitsPendingTranspositionRootExtraction > 0)
-      {
-        LeafEvaluatorTransposition.EnsurePendingTranspositionValuesSet(node, false);
-      }
-
       // Consider the annotation complete at this point
       // (code which sets the EvalResult below expects that).
       annotation.IsInitialized = true;
