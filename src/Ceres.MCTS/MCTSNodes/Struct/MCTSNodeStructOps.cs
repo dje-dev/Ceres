@@ -18,6 +18,7 @@ using Ceres.Base.DataType.Trees;
 using Ceres.Base.DataTypes;
 using Ceres.Base.Math;
 using Ceres.Base.OperatingSystem;
+using Ceres.Chess;
 using Ceres.MCTS.Environment;
 using Ceres.MCTS.Evaluators;
 using Ceres.MCTS.Iteration;
@@ -152,7 +153,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         // We have to descend to the expanded node to retrieve 
         // the move and policy needed for the new child (which will be not yet expanded)
         MCTSNodeStructChildStorage childrenStore = tree.Store.Children;
-        Span <MCTSNodeStructChild> children = childrenStore.SpanForNode(in this);
+        Span<MCTSNodeStructChild> children = childrenStore.SpanForNode(in this);
         Span<MCTSNodeStructChild> otherChildren = childrenStore.SpanForNode(in otherNode);
 
         for (int i = 0; i < otherNode.NumPolicyMoves; i++)
@@ -211,13 +212,51 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       {
         if (NumChildrenVisited == 0)
         {
-          return 0;
+          if (N <= 1)
+          {
+            // First visit (N) is to the node itself, not children.
+            return 0;
+          }
+          else if (Terminal.IsTerminal())
+          {
+            return 1.0f;
+
+          }
+          else if (IsTranspositionLinked)
+          {
+            Debug.Assert(N <= 3);
+
+            Span<MCTSNodeStruct> nodesStore = MCTSNodeStoreContext.Store.Nodes.nodes.Span;
+            ref readonly MCTSNodeStruct transpositionRootRef = ref nodesStore[TranspositionRootIndex];
+            ref readonly MCTSNodeStruct transpositionRootChild = ref transpositionRootRef.ChildAtIndexRef(0);
+
+            float sumP = transpositionRootChild.P;
+            if (N == 3)
+            {
+              if (transpositionRootRef.NumChildrenVisited >= 1)
+              {
+                // Sibling exists and possibly the 3rd visit was to a sibling
+                // (but alternately it might have been to the child of the child).
+                // For runtime performance reasons, don't bother with complex logic to determine
+                // which of the two nodes was the actual 3rd virtual visit,
+                // instead just add half the probability from the sibling.
+                ref readonly MCTSNodeStruct transpositionRootSibling = ref transpositionRootRef.ChildAtIndexRef(1);
+                sumP += transpositionRootSibling.P * 0.5f;
+              }
+            }
+            return sumP;
+          }
+          else
+          {
+            throw new Exception();
+          }
         }
+
 
         Span<MCTSNodeStruct> nodes = MCTSNodeStoreContext.Store.Nodes.nodes.Span;
 
         // Get a slice of children in a way that avoids range checking in loop.
-        int numChildrenExpanded = NumChildrenExpanded;
+        int numChildrenExpanded = numChildrenVisited;
         Span<MCTSNodeStructChild> theseChildren = Children.Slice(0, numChildrenExpanded);
 
         float sumPVisited = 0;
@@ -248,7 +287,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     }
 
 
-    public  static void PossiblyPrefetchNodeAndChildrenInRange(MCTSNodeStore store, MCTSNodeStructIndex nodeIndex,
+    public static void PossiblyPrefetchNodeAndChildrenInRange(MCTSNodeStore store, MCTSNodeStructIndex nodeIndex,
                                                                int firstChildIndex, int numChildren)
     {
       unsafe
@@ -394,7 +433,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <param name="nInFlight"></param>
     /// <param name="p"></param>
     /// <param name="w"></param>
-    public void GatherChildInfo(MCTSIterator context, MCTSNodeStructIndex index, 
+    public void GatherChildInfo(MCTSIterator context, MCTSNodeStructIndex index,
                                 int selectorID, int depth, int maxIndex,
                                 Span<float> n, Span<float> nInFlight, Span<float> p, Span<float> w)
     {
@@ -732,7 +771,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           node.W += vToApply * numToApply;
           //node.VSumSquares  += vToApply * vToApply * totalInFlightToApply;
           node.mSum += mToApply * numToApply;
-          node.dSum += dToApply * numToApply; 
+          node.dSum += dToApply * numToApply;
         }
 
 #if FEATURE_UNCERTAINTY
