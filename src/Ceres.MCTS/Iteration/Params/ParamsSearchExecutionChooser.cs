@@ -92,8 +92,8 @@ namespace Ceres.MCTS.Params
     {
       if (ParamsSearch.AutoOptimizeEnabled)
       {
-        // Start by resetting to default values by constructing new instance.
-        ParamsSearch.Execution = new ParamsSearchExecution();
+        // Start by using a clone of existing settings (including possibly set by user and carried over).
+        ParamsSearch.Execution = ParamsSearch.Execution with { };
 
         // Then choose optimal values.
         DoChooseOptimal(estNumNodes);
