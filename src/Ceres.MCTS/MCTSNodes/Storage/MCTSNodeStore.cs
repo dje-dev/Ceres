@@ -22,6 +22,7 @@ using Ceres.MCTS.Params;
 using Ceres.MCTS.MTCSNodes.Struct;
 using System.Collections;
 using Ceres.Chess;
+using Ceres.MCTS.Iteration;
 
 #endregion
 
@@ -205,7 +206,9 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     /// a variety of integrity checks on internal consistency,
     /// throwing an Exception if any fails.
     /// </summary>
-    public void Validate(bool expectCacheIndexZero = false)
+    /// <param name="transpositionRoots"></param>
+    /// <param name="expectCacheIndexZero"></param>
+    public void Validate(TranspositionRootsDict transpositionRoots, bool expectCacheIndexZero = false)
     {
       int numWarnings = 0;
 
@@ -238,6 +241,13 @@ namespace Ceres.MCTS.MTCSNodes.Storage
         }
       }
 
+      // Check roots
+      foreach (var kvp in transpositionRoots.Dictionary)
+      {
+        AssertNode(Nodes.nodes[kvp.Value].IsTranspositionRoot, "Entry in transposition roots dictionary is not marked as transposition root", 
+                   kvp.Value, in Nodes.nodes[kvp.Value]); 
+      }
+
       Assert(Nodes.nodes[0].N == 0, "Null node");
       Assert(Nodes.nodes[1].IsRoot, "IsRoot");
 
@@ -250,7 +260,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 
         if (nodeR.IsOldGeneration)
         {
-          Assert(!includedNodes[i], "Old generation node in live tree");
+          AssertNode(!includedNodes[i], "Old generation node in live tree", i, in Nodes.nodes[i], true);
           continue;
         }
 
@@ -293,8 +303,8 @@ namespace Ceres.MCTS.MTCSNodes.Storage
         {
           ref readonly MCTSNodeStruct transpositionRoot = ref Nodes.nodes[nodeR.TranspositionRootIndex];
           AssertNode(!transpositionRoot.IsTranspositionLinked, "transposition root was itself transposition linked", i, in nodeR);
-          AssertNode(nodeR.ZobristHash == transpositionRoot.ZobristHash, $"transposition link was not to same Zobrist hash with V values: {nodeR.V} vs. {transpositionRoot.V}", i, in nodeR, true); 
-
+          AssertNode(nodeR.ZobristHash == transpositionRoot.ZobristHash, $"transposition link was not to same Zobrist hash with V values: {nodeR.V} vs. {transpositionRoot.V}", i, in nodeR, true);
+          AssertNode(transpositionRoot.IsTranspositionRoot, "node referred to via transposition root table is not marked as transposition root", nodeR.TranspositionRootIndex, in transpositionRoot, false);
           // Don't report error if proven win (V > 1) because this conversion may have happened later
           AssertNode(MathF.Abs(nodeR.V - transpositionRoot.V) < 0.03f || nodeR.V > 1.0f || transpositionRoot.V > 1.0f, 
                      $"transposition root had different V {nodeR.V} {transpositionRoot.V}", i, in nodeR, true);

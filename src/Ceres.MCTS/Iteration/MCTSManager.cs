@@ -296,7 +296,7 @@ namespace Ceres.MCTS.Iteration
       {
         using (new SearchContextExecutionBlock(Context))
         {
-          Context.Tree.Store.Validate();
+          Context.Tree.Store.Validate(Context.Tree.TranspositionRoots);
         }
       }
 
