@@ -181,6 +181,16 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     }
 
     /// <summary>
+    /// If the node was successfully added to the transposition root dictionary
+    /// as a transposition root.
+    /// </summary>
+    public bool IsTranspositionRoot 
+    {
+      get => miscFields.IsTranspositionRoot;
+      set => miscFields.IsTranspositionRoot = value;
+    }
+
+    /// <summary>
     /// If the node is in the (very brief) process of being transposition unlinked.
     /// </summary>
     internal bool TranspositionUnlinkIsInProgress
