@@ -373,7 +373,7 @@ namespace Ceres.MCTS.Iteration
 #endif
 
 #if DEBUG
-          priorContext.Tree.Store.Validate();
+          priorContext.Tree.Store.Validate(priorContext.Tree.TranspositionRoots);
 #endif
 
           // We decided not to (or couldn't find) that path in the existing tree.
@@ -403,20 +403,14 @@ namespace Ceres.MCTS.Iteration
         reusePositionCache = new PositionEvalCache(false, 0);
       }
 
-      // Create a new dictionary to recieve the new transposition roots
+      // We will either create a new transposition table (if tree rebuild) 
+      // or modify existing one (if swap root).
       TranspositionRootsDict newTranspositionRoots = null;
-      if (priorContext.Tree.TranspositionRoots != null)
-      {
-        newTranspositionRoots = new TranspositionRootsDict(newRoot.N);
-      }
-
-
 
       // TODO: Consider sometimes or always skip rebuild via MakeChildNewRoot,
       //       instead just set a new root (move it into place as first node).
       //       Perhaps rebuild only if the MCTSNodeStore would become excessively large.
       TimingStats makeNewRootTimingStats = new TimingStats();
-      bool wasSwap = false;
       using (new TimingBlock(makeNewRootTimingStats, TimingBlock.LoggingType.None))
       {
         //        const float THRESHOLD_RETAIN_TREE = 0.70f;
@@ -425,19 +419,23 @@ namespace Ceres.MCTS.Iteration
         if (reuseMethod == ManagerTreeReuse.Method.KeepStoreSwapRoot
          && priorContext.ParamsSearch.TreeReuseSwapRootEnabled)
         {
-          wasSwap = true;
+          newTranspositionRoots = Manager.Context.Tree.TranspositionRoots;
           MCTSNodeStructStorage.DoMakeChildNewRootSwapRoot(Manager.Context.Tree, ref newRoot.Ref, newPositionAndMoves,
                                                            reusePositionCache, newTranspositionRoots,
                                                            priorContext.ParamsSearch.Execution.TranspositionMaximizeRootN);
         }
         else
         {
+          // Create a new dictionary to recieve the new transposition roots
+          if (priorContext.Tree.TranspositionRoots != null)
+          {
+            newTranspositionRoots = new TranspositionRootsDict(newRoot.N);
+          }
+
           MCTSNodeStructStorage.MakeChildNewRoot(Manager.Context.Tree, ref newRoot.Ref, newPositionAndMoves,
                                                  reusePositionCache, newTranspositionRoots,
                                                  priorContext.ParamsSearch.Execution.TranspositionMaximizeRootN);
         }
-
-        //    if (wasSwap) MCTSEventSource.TestCounter1++;
       }
 
       MCTSManager.TotalTimeSecondsInMakeNewRoot += (float) makeNewRootTimingStats.ElapsedTimeSecs;

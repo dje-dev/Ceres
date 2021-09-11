@@ -309,7 +309,7 @@ namespace Ceres.MCTS.Iteration
       {
 //        if (ParamsNN.CACHE_MODE != Chess.PositionEvalCaching.PositionEvalCache.CacheMode.None)
 //          throw new Exception("USE_TRANSPOSITIONS requires CACHE_MODE be None, probably incompatable.");
-        evaluators.Add(new LeafEvaluatorTransposition(Tree.TranspositionRoots));
+        evaluators.Add(new LeafEvaluatorTransposition(Tree, Tree.TranspositionRoots));
       }
 
       // Next check for terminal (which will need to generate moves).

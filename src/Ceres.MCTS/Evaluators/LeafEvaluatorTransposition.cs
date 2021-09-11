@@ -19,6 +19,7 @@ using System.Threading;
 
 using Ceres.Chess;
 using Ceres.MCTS.Iteration;
+using Ceres.MCTS.LeafExpansion;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.Params;
@@ -56,14 +57,17 @@ namespace Ceres.MCTS.Evaluators
     const bool VERBOSE = false;
     static int WARN_COUNT = 0;
 
+    MCTSTree tree;
 
     /// <summary>
     /// Constructor.
     /// </summary>
+    /// <param name="treeRoots"></param>
     /// <param name="transpositionRoots"></param>
-    public LeafEvaluatorTransposition(TranspositionRootsDict transpositionRoots)
+    public LeafEvaluatorTransposition(MCTSTree tree, TranspositionRootsDict transpositionRoots)
     {
       TranspositionRoots = transpositionRoots;
+      this.tree = tree;
 
       // TODO: currently hardcoded at 2048, potentially
       // dynamically detemrine possibly smaller necessary value
@@ -201,11 +205,14 @@ namespace Ceres.MCTS.Evaluators
     {
       if (nextIndexPendingTranspositionRoots > 0)
       {
+        Span<MCTSNodeStruct> nodes = tree.Store.Nodes.Span;
+
         // Add in all the accumulated transposition roots to the dictionary.
         // This is done in postprocessing for efficiency because it obviates any locking.
         for (int i = 0; i < nextIndexPendingTranspositionRoots - 1; i++)
         {
-          TranspositionRoots.TryAdd(pendingTranspositionRoots[i].Item1, pendingTranspositionRoots[i].Item2);
+          (ulong, int) rootItem = pendingTranspositionRoots[i];
+          TranspositionRoots.TryAdd(rootItem.Item1, rootItem.Item2, rootItem.Item2, nodes);
         }
 
         nextIndexPendingTranspositionRoots = 0;

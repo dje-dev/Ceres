@@ -15,18 +15,13 @@
 
 using System;
 using System.Collections;
-using System.Collections.Generic;
 
 using System.Diagnostics;
-using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
-using Ceres.Base.Benchmarking;
-using Ceres.Base.DataTypes;
 using Ceres.Base.OperatingSystem;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.PositionEvalCaching;
 using Ceres.Chess.Positions;
-using Ceres.MCTS.Evaluators;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.LeafExpansion;
 using Ceres.MCTS.MTCSNodes.Struct;
@@ -75,7 +70,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
                                         bool tryKeepTranspositionRootsMaxN)
     {
 #if DEBUG
-      tree.Store.Validate();
+      tree.Store.Validate(tree.TranspositionRoots);
 #endif
 
       float policySoftmax = tree.Root.Context.ParamsSelect.PolicySoftmax;
@@ -92,124 +87,195 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       }
 
 #if DEBUG
-      tree.Store.Validate(true);
+      tree.Store.Validate(transpositionRoots, true);
 #endif
     }
 
 
+    /// <summary>
+    /// Makes an existing node in the tree the new root node
+    /// by simply swapping that node into the root position
+    /// and adjusting data structures to ignore the non-reachable nodes.
+    /// </summary>
+    /// <param name="tree"></param>
+    /// <param name="newRootChild"></param>
+    /// <param name="newPriorMoves"></param>
+    /// <param name="cacheNonRetainedNodes"></param>
+    /// <param name="transpositionRoots"></param>
+    /// <param name="tryKeepTranspositionRootsMaxN"></param>
     public static void DoMakeChildNewRootSwapRoot(MCTSTree tree, ref MCTSNodeStruct newRootChild,
                                                   PositionWithHistory newPriorMoves,
                                                   PositionEvalCache cacheNonRetainedNodes,
                                                   TranspositionRootsDict transpositionRoots,
                                                   bool tryKeepTranspositionRootsMaxN)
     {
+      DateTime start = DateTime.Now;
+
       MCTSNodeStore store = tree.Store;
       Span<MCTSNodeStruct> nodes = tree.Store.Nodes.Span;
-      int newRootChildIndex = newRootChild.Index.Index;
+      int indexOfNewRootBeforeRewrite = newRootChild.Index.Index;
 #if DEBUG
-      store.Validate(false);
+      store.Validate(tree.TranspositionRoots, false);
 #endif
 
       // Get array of included nodes, marking others as now belonging to a prior generation.
       uint numNodesUsed;
-      BitArray includedNodes = MCTSNodeStructUtils.BitArrayNodesInSubtree(store, ref newRootChild, true, out numNodesUsed);
+      BitArray nodesNewlyBecomingPriorGeneration = new BitArray(store.Nodes.NumTotalNodes);
+      BitArray includedNodes = MCTSNodeStructUtils.BitArrayNodesInSubtree(store, ref newRootChild, true, out numNodesUsed, ref nodesNewlyBecomingPriorGeneration, 0);
 
-      // Materialize any nodes which point to transposition roots that do not survive
-      // TODO: potentially this is unnecessary; except for the new root node moving,
-      //       everything else remains in place and we could keep these linkages.
-      int numNodesAddedDuringMaterialization = MaterializeNodesWithNonRetainedTranspositionRoots(tree, includedNodes, newRootChildIndex);
-
-      if (numNodesAddedDuringMaterialization > 0)
-      {
-//        Console.WriteLine(store.Nodes.NumTotalNodes +  " ==> swap appends " + numNodesAddedDuringMaterialization);
-#if DEBUG
-        store.Validate();
-#endif
-        // ********************* TO DO: Make more efficient by just appending ***************
-        includedNodes = MCTSNodeStructUtils.BitArrayNodesInSubtree(store, ref newRootChild, true, out numNodesUsed);
-      }
+      int nodesStartCount = tree.Store.Nodes.NumTotalNodes;
 
       // Swap new root node into place at index 1.
-      SwapNodeIntoRootPosition(store, newRootChildIndex, newPriorMoves);
+      SwapNodeIntoRootPosition(store, indexOfNewRootBeforeRewrite, newPriorMoves);
+
+      // If the new root node was a transposition root,
+      // fixup the transposition root table to point to the new location.
+      if (store.Nodes.nodes[1].IsTranspositionRoot)
+      {
+        ulong hash = store.Nodes.nodes[1].ZobristHash;
+        bool removed = transpositionRoots.Remove(hash, indexOfNewRootBeforeRewrite);
+        Debug.Assert(removed);
+        transpositionRoots.TryAdd(hash, 1, 1, store.Nodes.Span);
+      }
 
       // Update BitArray to reflect this swap.
-      includedNodes[newRootChildIndex] = false;
+      includedNodes[indexOfNewRootBeforeRewrite] = false;
       includedNodes[1] = true;
+      nodesNewlyBecomingPriorGeneration[indexOfNewRootBeforeRewrite] = true;
+
+      int numTryRemove = 0;
+      int numSucceedRemove = 0;
 
       // Traverse included nodes, and for each:
       //   - try to add to transposition dictionary
       //   - zero CacheIndex
-      for (int i = 1; i < store.Nodes.nextFreeIndex; i++)
+      int numNodes = store.Nodes.nextFreeIndex;
+      for (int i = 1; i < numNodes; i++)
       {
-        if (includedNodes.Get(i))
+        ref MCTSNodeStruct thisNode = ref nodes[i];
+
+        if (!includedNodes.Get(i))
         {
-          ref MCTSNodeStruct thisNode = ref nodes[i];
-
-          Debug.Assert(!thisNode.IsOldGeneration);
-
-          thisNode.CacheIndex = 0;
-
-          // No need to reset pending visits, they can carry forward.
-          // thisNode.NumVisitsPendingTranspositionRootExtraction = 0;
-
-          if (thisNode.IsTranspositionLinked)
+          if (nodesNewlyBecomingPriorGeneration[i] && nodes[i].IsTranspositionRoot)
           {
-            Debug.Assert(transpositionRoots.TryGetValue(thisNode.ZobristHash, out _));
-          }
-          else
-          {
-            // Re-insert this into the transpositionRoots
-            // TODO: this is expensive, try to optimize by
-            //       possibly avoiding duplicates or parallelizing
-            if (tryKeepTranspositionRootsMaxN)
+            // This node is newly becoming old generation.
+            // Possibly (but not definitely) it was in the table as a transposition root.
+            // Try to remove exactly this item (for this hash and index), but not indiscriminately
+            // any root having this hash (because it might have been entered from a different node).
+            // TODO: possibly we could avoid the inefficiency of making failed attempts (perhaps 30% to 40%)
+            //       at remove by tracking which nodes were ever entered into the transposition table
+            //       and only attempting removal here if that flag was true.
+            numTryRemove++;
+            int priorIndex = i == indexOfNewRootBeforeRewrite ? 1 : i;
+            if (transpositionRoots.Remove(thisNode.ZobristHash, priorIndex))
             {
-              throw new Exception("This method is probably unusable since we require to keep in same order as originally added");
-              transpositionRoots?.AddOrPossiblyUpdateUsingN(nodes, thisNode.ZobristHash, i, nodes[i].N);
+              numSucceedRemove++;
             }
             else
             {
-//              transpositionRoots?.AddIfNotPresent(thisNode.ZobristHash, i);             
-              transpositionRoots?.TryAdd(thisNode.ZobristHash, i);
+              Console.WriteLine("Warning: Unepxected failure to remove from transposition root table");
             }
           }
         }
+        else
+        {
+          Debug.Assert(!thisNode.IsOldGeneration);
+
+          thisNode.CacheIndex = 0;
+        }
       }
 
+      //double elapsed = (DateTime.Now - start).TotalSeconds;
+      //Console.WriteLine($"swap time: {elapsed}s  {nodesStartCount} --> {numNodesUsed} try delete: {numTryRemove} succeed: + {numSucceedRemove}");
 
 #if DEBUG
-      store.Validate(true);
+      store.Validate(tree.TranspositionRoots, true);
 #endif
     }
 
+
+
+    /// <summary>
+    /// Materializes any nodes which are transposition linked 
+    /// to nodes not being retained in tree
+    /// and returns back the BitArray of nodes to be retrained in tree.
+    /// </summary>
+    /// <param name="tree"></param>
+    /// <param name="newRootChild"></param>
+    /// <param name="numNodesUsed"></param>
+    /// <returns></returns>
+    static BitArray IncludedNodesAfterMaterializationOfNonRetainedLinkedNodes(MCTSTree tree, ref MCTSNodeStruct newRootChild, out uint numNodesUsed)
+    {
+      numNodesUsed = 0;
+      int numNodesBeforeMaterialization = tree.Store.Nodes.NumTotalNodes;
+
+      // Estimate the maximum number of nodes likely be added to the tree by the materialization process.
+      // Typically this is just a few percent (or less).
+      const float FRACTION_EXTRA_NODES = 0.07f;
+      int numExtraPaddingNodesAtEnd = 1 + (int)(newRootChild.N * FRACTION_EXTRA_NODES);
+
+      BitArray includedNodes = MCTSNodeStructUtils.BitArrayNodesInSubtree(tree.Store, ref newRootChild, false, out numNodesUsed, numExtraPaddingNodesAtEnd);
+
+      // In the rare situation where the actual number of extra nodes materialized
+      // nodes exceeds our allowance of extra nodes in the BitArray,
+      // we have no choice but to recompute and return a completely new BitArray.
+      int numNodesAddedDuringMaterialization = MaterializeNodesWithNonRetainedTranspositionRoots(tree, includedNodes, newRootChild.Index.Index);
+      if (numNodesAddedDuringMaterialization > numExtraPaddingNodesAtEnd)
+      {
+        return MCTSNodeStructUtils.BitArrayNodesInSubtree(tree.Store, ref newRootChild, false, out numNodesUsed, numExtraPaddingNodesAtEnd);
+      }
+
+      if (numNodesAddedDuringMaterialization > 0)
+      {
+//        Console.WriteLine(tree.Store.Nodes.NumTotalNodes + " ==> rewrite appends " + numNodesAddedDuringMaterialization);
+#if DEBUG
+        tree.Store.Validate(tree.TranspositionRoots, false);
+#endif
+
+        for (int i = (int)numNodesBeforeMaterialization; i < numNodesBeforeMaterialization + numNodesAddedDuringMaterialization; i++)
+        {
+          includedNodes[i] = true;
+        }
+        numNodesUsed += (uint)numNodesAddedDuringMaterialization;
+      }
+
+      return includedNodes;
+    }
+
+
+    /// <summary>
+    /// Makes an existing node in the tree the new root node
+    /// by rewriting (compacting) all remaining nodes.
+    /// </summary>
+    /// <param name="tree"></param>
+    /// <param name="policySoftmax"></param>
+    /// <param name="newRootChild"></param>
+    /// <param name="newPriorMoves"></param>
+    /// <param name="cacheNonRetainedNodes"></param>
+    /// <param name="transpositionRoots"></param>
+    /// <param name="tryKeepTranspositionRootsMaxN"></param>
     static void DoMakeChildNewRootRewrite(MCTSTree tree, float policySoftmax, ref MCTSNodeStruct newRootChild,
                                           PositionWithHistory newPriorMoves,
                                           PositionEvalCache cacheNonRetainedNodes,
                                           TranspositionRootsDict transpositionRoots,
                                           bool tryKeepTranspositionRootsMaxN)
     {
+      //DateTime start = DateTime.Now;
+      int nodesStartCount = tree.Store.Nodes.NumTotalNodes;
+
       MCTSNodeStore store = tree.Store;
       ChildStartIndexToNodeIndex[] childrenToNodes;
 
       uint numNodesUsed;
-      int newRootChildIndex = newRootChild.Index.Index;
+      int numNodesBeforeMaterialization = store.Nodes.NumTotalNodes;
+      int indexOfNewRootBeforeRewrite = newRootChild.Index.Index;
       int newIndexOfNewParent = -1;
 
       int nextAvailableNodeIndex = 1;
 
       // Traverse this subtree, building a bit array of visited nodes
-      BitArray includedNodes = MCTSNodeStructUtils.BitArrayNodesInSubtree(store, ref newRootChild, false, out numNodesUsed);
-
-      int numNodesAddedDuringMaterialization = MaterializeNodesWithNonRetainedTranspositionRoots(tree, includedNodes, newRootChildIndex);
-
-      if (numNodesAddedDuringMaterialization > 0)
-      {
-//        Console.WriteLine(store.Nodes.NumTotalNodes + " ==> rewrite appends " + numNodesAddedDuringMaterialization);
-#if DEBUG
-        store.Validate(false);
-#endif
-        // ********************* TO DO: Make more efficient by just appending ***************
-        includedNodes = MCTSNodeStructUtils.BitArrayNodesInSubtree(store, ref newRootChild, false, out numNodesUsed);
-      }
+      BitArray includedNodes = IncludedNodesAfterMaterializationOfNonRetainedLinkedNodes(tree, ref newRootChild, out numNodesUsed);
+      
 
       // Possibly extract retained nodes into a cache.
       if (cacheNonRetainedNodes != null)
@@ -221,29 +287,31 @@ namespace Ceres.MCTS.MTCSNodes.Storage
         ExtractPositionCacheNodes(store, softmax, includedNodes, in newRootChild, ExtractMode.ExtractNonRetained, cacheNonRetainedNodes);
       }
 
-      // We will constract a table indicating the starting index and length of
-      // children associated with the nodes we are extracting
+      // Constract a table indicating the starting index and length of
+      // children associated with the nodes being extracted.
       childrenToNodes = GC.AllocateUninitializedArray<ChildStartIndexToNodeIndex>((int)numNodesUsed);
 
       // Create an array which will map old node indices to new node indices.
       // This allows the transposition root indices to be replaced with
-      // updated values as the table is sequentially updated.
+      // updated values as the table is sequentially traversed.
       // Note that this insures that the transposition linked nodes are always linked
       // back to exactly the same node during the rebuild process
       // (rather than to just any node in the same equivalence class).
       // The exactly linkages is necessary because the linkage to the tranposition root may
       // run more than 1 node deep (up to 3) and is relative to one specific node from which it was originally linked.
       int numNodesRebuilt = 0;
-      int[] newIndices = GC.AllocateUninitializedArray<int>((int)store.Nodes.NumTotalNodes);
+      int[] mapOldIndicesToNewIndices = GC.AllocateUninitializedArray<int>((int)store.Nodes.NumTotalNodes);
+
+// TODO:
+// Consider eliminating special treatment of new root node everywhere
+// except in main loop below where the targetNewIndex is remapped to 1 instead of nextAvailableNodeIndex
+//mapOldIndicesToNewIndices[indexOfNewRootBeforeRewrite] = 1;
 
       int RewriteNodesBuildChildrenInfo()
       {
         Task presorter = null;
         int numChildrenFixups = 0;
 
-        // TODO: Consider that the above is possibly all we need to do in some case
-        //       Suppose the subtree is very large relative to the whole
-        //       This approach would be much faster, and orphan an only small part of the storage
         Span<MCTSNodeStruct> nodesSpan = store.Nodes.Span;
 
         // Number of nodes after which the parallel presorter will be started
@@ -257,7 +325,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
         {
           if (includedNodes.Get(i))
           {
-            newIndices[i] = ++numNodesRebuilt;
+            mapOldIndicesToNewIndices[i] = ++numNodesRebuilt;
 
             ref MCTSNodeStruct thisNode = ref store.Nodes.nodes[i];
 
@@ -265,7 +333,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
             thisNode.CacheIndex = 0;
 
             // Remember this location if this is the new parent.
-            if (i == newRootChildIndex)
+            if (i == indexOfNewRootBeforeRewrite)
             {
               newIndexOfNewParent = nextAvailableNodeIndex;
             }
@@ -278,25 +346,9 @@ namespace Ceres.MCTS.MTCSNodes.Storage
               // Note that this is safe because the trees are always built and rebuilt (for make new root)
               // retaining chronological order of visits, so the roots will always appear
               // sequentially before linked nodes that refer to them.
-              int transpositionRootIndex = newIndices[thisNode.TranspositionRootIndex];
-
-              Debug.Assert(nodesSpan[transpositionRootIndex].ZobristHash == thisNode.ZobristHash);
-              thisNode.TranspositionRootIndex = transpositionRootIndex;
-#if DEBUG
-              bool found = transpositionRoots.TryGetValue(thisNode.ZobristHash, out int transpositionRootIndexOther);
-              if (transpositionRootIndex != transpositionRootIndexOther)
-                Console.WriteLine(transpositionRootIndex + " " + transpositionRootIndexOther);
-
-              if (thisNode.NumVisitsPendingTranspositionRootExtraction > 0)
-              {
-                int maxPending = nodesSpan[transpositionRootIndex].NumUsableSubnodesForCloning - thisNode.N;
-                if (thisNode.NumVisitsPendingTranspositionRootExtraction > maxPending)
-                {
-                  throw new Exception($"Inconsistent pending from {thisNode.NumVisitsPendingTranspositionRootExtraction} to {maxPending}, V were {thisNode.V} {nodesSpan[transpositionRootIndex].V}");
-                }
-              }
-#endif
-
+              int newTranspositionRootIndex = mapOldIndicesToNewIndices[thisNode.TranspositionRootIndex];
+              Debug.Assert(nodesSpan[newTranspositionRootIndex].ZobristHash == thisNode.ZobristHash);
+              thisNode.TranspositionRootIndex = newTranspositionRootIndex;
             }
             else
             {
@@ -307,15 +359,17 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 
               if (tryKeepTranspositionRootsMaxN)
               {
-                transpositionRoots?.AddOrPossiblyUpdateUsingN(nodesSpan, thisNode.ZobristHash, nextAvailableNodeIndex, nodesSpan[i].N);
+                throw new NotImplementedException();
+                //transpositionRoots?.AddOrPossiblyUpdateUsingN(nodesSpan, thisNode.ZobristHash, nextAvailableNodeIndex, nodesSpan[i].N);
               }
-              else
+
+              if (thisNode.IsTranspositionRoot)
               {
                 // Re-insert this into the transpositionRoots (with the updated node index)
                 // TODO: this is expensive, try to optimize by
                 //       possibly avoiding duplicates or parallelizing
                 // TODO: possibly avoid re-adding this if already present? This preserves same order.
-                transpositionRoots?.TryAdd(thisNode.ZobristHash, nextAvailableNodeIndex);
+                transpositionRoots?.TryAdd(thisNode.ZobristHash, nextAvailableNodeIndex, i, nodesSpan);
               }
             }
 
@@ -367,9 +421,12 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       // Mark the new top of the nodes
       store.Nodes.nextFreeIndex = nextAvailableNodeIndex;
       store.Nodes.NumOldGeneration = 0;
+
+      //double elapsed = (DateTime.Now - start).TotalSeconds;
+      //Console.WriteLine($"rewrite time: {elapsed}s  {nodesStartCount} --> {numNodesUsed}");
+
     }
 
-    static long ok = 0;
 
     private static void SwapNodeIntoRootPosition(MCTSNodeStore store, int newIndexOfNewParent, PositionWithHistory newPriorMoves)
     {

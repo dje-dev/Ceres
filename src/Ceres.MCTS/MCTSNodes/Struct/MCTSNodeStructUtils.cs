@@ -180,6 +180,13 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       }
     }
 
+    public static BitArray BitArrayNodesInSubtree(MCTSNodeStore store, ref MCTSNodeStruct newRoot,
+                                                  bool setOldGeneration, out uint numNodes, int numExtraPaddingNodesAtEnd = 0)
+    {
+      BitArray dummy = null;
+      return BitArrayNodesInSubtree(store, ref newRoot, setOldGeneration, out numNodes, ref dummy, numExtraPaddingNodesAtEnd);
+    }
+
 
     /// <summary>
     /// Scans all nodes in store and constructs a BitArray capturing
@@ -191,11 +198,14 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <param name="newRoot"></param>
     /// <param name="setOldGeneration"></param>
     /// <param name="numNodes"></param>
+    /// <param name="nodesNewlyBecomingOldGeneration"></param>
     /// <returns></returns>
     public static BitArray BitArrayNodesInSubtree(MCTSNodeStore store, ref MCTSNodeStruct newRoot,
-                                                  bool setOldGeneration, out uint numNodes)
+                                                  bool setOldGeneration, out uint numNodes,
+                                                  ref BitArray nodesNewlyBecomingOldGeneration,
+                                                  int numExtraPaddingNodesAtEnd)
     {
-      BitArray includedNodes = new BitArray(store.Nodes.NumTotalNodes);
+      BitArray includedNodes = new BitArray(store.Nodes.NumTotalNodes + numExtraPaddingNodesAtEnd);
 
       // Start by including the new root node.
       int newRootIndex = newRoot.Index.Index;
@@ -216,6 +226,10 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           }
           else if (setOldGeneration)
           {
+            if (!nodeRef.IsOldGeneration)
+            {
+              nodesNewlyBecomingOldGeneration[i] = true;
+            }
             nodeRef.IsOldGeneration = true;
             store.Nodes.NumOldGeneration++;
           }
