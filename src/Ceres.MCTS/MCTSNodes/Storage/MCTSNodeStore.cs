@@ -241,11 +241,14 @@ namespace Ceres.MCTS.MTCSNodes.Storage
         }
       }
 
-      // Check roots
-      foreach (var kvp in transpositionRoots.Dictionary)
+      if (transpositionRoots != null)
       {
-        AssertNode(Nodes.nodes[kvp.Value].IsTranspositionRoot, "Entry in transposition roots dictionary is not marked as transposition root", 
-                   kvp.Value, in Nodes.nodes[kvp.Value]); 
+        // Check roots
+        foreach (var kvp in transpositionRoots.Dictionary)
+        {
+          AssertNode(Nodes.nodes[kvp.Value].IsTranspositionRoot, "Entry in transposition roots dictionary is not marked as transposition root",
+                     kvp.Value, in Nodes.nodes[kvp.Value]);
+        }
       }
 
       Assert(Nodes.nodes[0].N == 0, "Null node");
