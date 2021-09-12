@@ -198,98 +198,75 @@ namespace Ceres.MCTS.Search
       }
       else if (node.ActionType == MCTSNode.NodeActionType.MCTSApply)
       {
-        bool wasTerminal = node.Terminal.IsTerminal();
-        float dToApply = evalResult.DrawP;
-
-        float contemptAdjustment = 0;
-        if (!float.IsNaN(dToApply))
+        // If first time visiting this node then update values on the node itself.
+        if (nodeRef.N == 0)
         {
-          contemptAdjustment = (node.IsOurMove ? -1 : 1) * (dToApply * node.Context.CurrentContempt);
+          SetNodeEvaluationValues(node);
         }
+
+        bool wasTerminal = node.Terminal.IsTerminal();
 
         // If we are revisiting a terminal or transposition linked node,
         // just reiterate the prior evaluation.
-        if (node.EvalResult.IsNull && (wasTerminal || node.NumVisitsPendingTranspositionRootExtraction > 0))
+        if (nodeRef.N > 0 && node.EvalResult.IsNull)
         {
+          Debug.Assert(wasTerminal || node.NumVisitsPendingTranspositionRootExtraction > 0);
           node.EvalResult = new LeafEvaluationResult(nodeRef.Terminal, nodeRef.WinP, nodeRef.LossP, nodeRef.MPosition);
         }
 
-        // Update statistics
+        // First visit by any selector, set evaluation result and backup in tree
+        bool allowMultivisits = wasTerminal || node.NumVisitsPendingTranspositionRootExtraction > 1;
+        int numToApply = allowMultivisits ? numInFlight : 1;
+
+        float dToApply;
         float vToApply;
-        int numToApply;
+        float mToApply;
 
-        if (nodeRef.N > 0 && wasTerminal)
+        if (node.NumVisitsPendingTranspositionRootExtraction == 0)
         {
-          // Repeat visit to a terminal, even "collisions" are applied multiple times
-          numToApply = numInFlight;
-          vToApply = nodeRef.V + contemptAdjustment;
-
-          nodeRef.BackupApply(nodes, numToApply, vToApply, 0, dToApply, wasTerminal, numUpdateSelector1, numUpdateSelector2, out indexOfChildDescendentFromRoot);
+          vToApply = evalResult.V;
+          dToApply = evalResult.DrawP;
+          mToApply = evalResult.M;
         }
         else
         {
-          // First visit by any selector, set evaluation result and backup in tree
-          numToApply = 1;
-          //TODO: maybe allow >1 if NumVisitsPendingTranspositionRootExtraction > 0 ??????
+          Debug.Assert(nodeRef.N > 0 || !float.IsNaN(node.EvalResult.V));
+          Debug.Assert(!float.IsNaN(node.PendingTranspositionV));
+          Debug.Assert(nodeRef.TranspositionRootIndex != 0);
+          Debug.Assert(nodeRef.NumVisitsPendingTranspositionRootExtraction >= numToApply);
 
-          // If first time visiting this node then update values on the node itself.
-          if (nodeRef.N == 0)
-          {
-            nodeRef.Terminal = node.EvalResult.TerminalStatus;
+          // Increment count of number of "extra" (beyond 1) values used without tree replication.
+          if (nodeRef.NumVisitsPendingTranspositionRootExtraction > 1) MCTSEventSource.TestCounter1++;
 
-            if (!node.IsRoot && node.Terminal == GameResult.Draw)
-            {
-              node.Parent.Ref.DrawKnownToExistAmongChildren = true;
-              //Chess.NNEvaluators.LC0DLL.LC0DLLSyzygyEvaluator.NumTablebaseMisses++;
-            }
+          // Switch to propagate this "pseudo V" for this node and all nodes above
+          vToApply = node.PendingTranspositionV;
+          mToApply = node.PendingTranspositionM;
+          dToApply = node.PendingTranspositionD;
 
-            if (ParamsSelect.VIsForcedLoss(node.EvalResult.V))
-            {
-              nodeRef.SetProvenLossAndPropagateToParent(node.EvalResult.LossP, node.EvalResult.M);
-            }
-            else
-            {
-              nodeRef.WinP = evalResult.WinP;
-              nodeRef.LossP = evalResult.LossP;
-              nodeRef.MPosition = (byte)MathF.Round(evalResult.M, 0);
-            }
-          }
-
-          vToApply = nodeRef.V;
-          float mToApply = nodeRef.MPosition;
-
-          if (node.NumVisitsPendingTranspositionRootExtraction > 0)
-          {
-            Debug.Assert(nodeRef.N > 0 || !float.IsNaN(node.EvalResult.V));
-            Debug.Assert(!float.IsNaN(node.PendingTranspositionV));
-            Debug.Assert(node.NumVisitsPendingTranspositionRootExtraction >= numToApply);
-            Debug.Assert(node.TranspositionRootIndex != 0);
-            Debug.Assert(node.NumVisitsPendingTranspositionRootExtraction >= numToApply);
-
-            // Increment count of number of "extra" (beyond 1) values used without tree replication.
-            if (node.Ref.NumVisitsPendingTranspositionRootExtraction > 1) MCTSEventSource.TestCounter1++;
-
-            // Switch to propagate this "pseudo V" for this node and all nodes above
-            vToApply = node.PendingTranspositionV;
-            mToApply = node.PendingTranspositionM;
-            dToApply = node.PendingTranspositionD;
-
-            // Now we've used one more instance, decrement count.
-            node.Ref.NumVisitsPendingTranspositionRootExtraction-= numToApply;
-          }
-
-          vToApply += contemptAdjustment;
-
-          nodeRef.BackupApply(nodes, numToApply, vToApply, mToApply, dToApply, wasTerminal, numUpdateSelector1, numUpdateSelector2, out indexOfChildDescendentFromRoot);
+          // Now we've used up more visits, decrement count.
+          nodeRef.NumVisitsPendingTranspositionRootExtraction -= numToApply;
         }
 
-        PossiblyUpateFirstMoveSampler(node, indexOfChildDescendentFromRoot, numUpdateSelector1, numUpdateSelector2, wasTerminal, vToApply);
+        float contemptAdjustment = node.Context.CurrentContempt;
+        if (contemptAdjustment != 0 && !float.IsNaN(dToApply))
+        {
+          contemptAdjustment *= dToApply * (node.IsOurMove ? -1 : 1);
+          vToApply += contemptAdjustment;
+        }
+
+        Debug.Assert(!float.IsNaN(vToApply));
+
+        nodeRef.BackupApply(nodes, numToApply, vToApply, mToApply, dToApply, wasTerminal, numUpdateSelector1, numUpdateSelector2, out indexOfChildDescendentFromRoot);
+
+        PossiblyUpdateFirstMoveSampler(node, indexOfChildDescendentFromRoot, numUpdateSelector1, numUpdateSelector2, wasTerminal, vToApply);
 
         // Update depth statistic
         node.Context.CumulativeSelectedLeafDepths += node.Depth * numToApply;
       }
       else
+      {
         throw new Exception("Internal error, unknown NodeActionType");
+      }
 
 
       if (FirstMoveSampler != null)
@@ -302,7 +279,34 @@ namespace Ceres.MCTS.Search
     }
 
 
-    private void PossiblyUpateFirstMoveSampler(MCTSNode node, MCTSNodeStructIndex indexOfChildDescendentFromRoot, int numUpdateSelector1, int numUpdateSelector2, bool wasTerminal, float vToApply)
+    private static void SetNodeEvaluationValues(MCTSNode node)
+    {
+      Debug.Assert(!node.EvalResult.IsNull);
+
+      ref MCTSNodeStruct nodeRef = ref node.Ref;
+
+      nodeRef.Terminal = node.EvalResult.TerminalStatus;
+
+      if (ParamsSelect.VIsForcedLoss(node.EvalResult.V))
+      {
+        nodeRef.SetProvenLossAndPropagateToParent(node.EvalResult.LossP, node.EvalResult.M);
+      }
+      else
+      {
+        nodeRef.WinP = node.EvalResult.WinP;
+        nodeRef.LossP = node.EvalResult.LossP;
+        nodeRef.MPosition = (byte)MathF.Round(node.EvalResult.M, 0);
+      }
+
+      if (!node.IsRoot && nodeRef.Terminal == GameResult.Draw)
+      {
+        nodeRef.ParentRef.DrawKnownToExistAmongChildren = true;
+        //Chess.NNEvaluators.LC0DLL.LC0DLLSyzygyEvaluator.NumTablebaseMisses++;
+      }
+    }
+
+
+    private void PossiblyUpdateFirstMoveSampler(MCTSNode node, MCTSNodeStructIndex indexOfChildDescendentFromRoot, int numUpdateSelector1, int numUpdateSelector2, bool wasTerminal, float vToApply)
     {
       if (FirstMoveSampler != null && indexOfChildDescendentFromRoot != default)
       {
