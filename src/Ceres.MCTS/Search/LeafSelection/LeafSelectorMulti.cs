@@ -713,9 +713,6 @@ namespace Ceres.MCTS.Search
           }
           MCTSNode thisChild = default;
 
-          // Take a lock on the node to avoid creating a child
-          // concurrent with another node which uses this node as tranasposition
-          // root being in the process of copying over the child data (in CopyUnexpandedChildrenFromOtherNode).
           MCTSNodeStructChild childInfo = children[childIndex];
           if (!childInfo.IsExpanded)
           {
@@ -759,7 +756,9 @@ namespace Ceres.MCTS.Search
           numVisitsProcessed += numThisChild;
           {
             if (numVisitsProcessed == numTargetLeafs)
+            {
               break;
+            }
           }
         }
       }

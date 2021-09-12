@@ -264,6 +264,7 @@ namespace Ceres.MCTS.Search
             Debug.Assert(!float.IsNaN(node.PendingTranspositionV));
             Debug.Assert(node.NumVisitsPendingTranspositionRootExtraction >= numToApply);
             Debug.Assert(node.TranspositionRootIndex != 0);
+            Debug.Assert(node.NumVisitsPendingTranspositionRootExtraction >= numToApply);
 
             // Increment count of number of "extra" (beyond 1) values used without tree replication.
             if (node.Ref.NumVisitsPendingTranspositionRootExtraction > 1) MCTSEventSource.TestCounter1++;
