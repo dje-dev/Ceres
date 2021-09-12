@@ -56,6 +56,9 @@ namespace Ceres.Chess.ExternalPrograms.UCI
     protected double startTime;
     protected double freq;
 
+    int numWarningsShown = 0;
+
+
     public int EngineProcessID => engine.EngineProcess.Id;
 
     /// <summary>
@@ -334,9 +337,15 @@ namespace Ceres.Chess.ExternalPrograms.UCI
       while (lastBestMove == null || !lastBestMove.Contains("bestmove"))
       {
         float elapsedSeconds = (float)(DateTime.Now - startTime).TotalSeconds;
-        if (lastError != null)
+
+        const int MAX_WARNINGS_SHOW = 10;
+        if (lastError != null && numWarningsShown < MAX_WARNINGS_SHOW)
         {
           Console.WriteLine($"WARNING: UCI error on external engines {desc} : {lastError}");
+          if (++numWarningsShown == MAX_WARNINGS_SHOW)
+          {
+            Console.WriteLine("WARNING: Suppressing any possible additional warnings.");
+          }
         }
 
         System.Threading.Thread.Sleep(isShortSearch ? 0 : 1);
