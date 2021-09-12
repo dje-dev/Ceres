@@ -149,8 +149,8 @@ namespace Ceres.MCTS.Evaluators
     {
       Debug.Assert(node.N <= 2); // Max supported N in SetPendingTransitionValues is 3
 
-      float FRAC_Q = node.Context.ParamsSearch.TranspositionRootQFraction;
-      float FRAC_V = 1f - FRAC_Q;
+      float FRAC_ROOT = node.Context.ParamsSearch.TranspositionRootBlendFraction;
+      float FRAC_POS = 1f - FRAC_ROOT;
 
       var visit0Ref = MCTSNodeStruct.SubnodeRefVisitedAtIndex(in transpositionRootNode, 0, out bool foundV0);
 
@@ -159,11 +159,11 @@ namespace Ceres.MCTS.Evaluators
       {
         Debug.Assert(subnodeRefIsValid);
 
-        node.PendingTranspositionV = multiplier * (FRAC_V * subnodeRef.V
-                                                 + FRAC_Q * (float)subnodeRef.Q);
+        node.PendingTranspositionV = multiplier * (FRAC_POS * subnodeRef.V
+                                                 + FRAC_ROOT * (float)subnodeRef.Q);
 
-        node.PendingTranspositionM = FRAC_V * subnodeRef.MPosition + FRAC_Q * subnodeRef.MAvg;
-        node.PendingTranspositionD = FRAC_V * subnodeRef.DrawP + FRAC_Q * subnodeRef.DAvg;
+        node.PendingTranspositionM = FRAC_POS * subnodeRef.MPosition + FRAC_ROOT * subnodeRef.MAvg;
+        node.PendingTranspositionD = FRAC_POS * subnodeRef.DrawP + FRAC_ROOT * subnodeRef.DAvg;
       }
 
       if (node.N == 0)

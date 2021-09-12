@@ -107,9 +107,10 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       // make the copied subtree look what it would 
       if (N >= 2)
       {
+        float rootFrac = tree.Root.Context.ParamsSearch.TranspositionRootBlendFraction;
         ref readonly MCTSNodeStruct transpositionRootRef = ref tree.Store.Nodes.nodes[startingTranspositionRootIndex.Index];
         bool cloneSubchild = N >= 3;
-        TryCloneChild(tree, in transpositionRootRef, ref this, 0, cloneSubchild);
+        TryCloneChild(tree, in transpositionRootRef, ref this, 0, in transpositionRootRef, rootFrac, -1, cloneSubchild);
       }
     }
 
@@ -130,7 +131,9 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <returns></returns>
     public static MCTSNodeStructIndex TryCloneChild(MCTSTree tree, 
                                                     in MCTSNodeStruct sourceParentRef, ref MCTSNodeStruct targetParentRef,
-                                                    int childIndex, bool cloneSubchildIfPossible)
+                                                    int childIndex, 
+                                                    in MCTSNodeStruct rootNodeRef, float rootFraction, float rootMultiplier,
+                                                    bool cloneSubchildIfPossible)
     {
       if (sourceParentRef.NumChildrenExpanded == 0)
       {
@@ -154,12 +157,15 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
       targetChildRef.Terminal = sourceChildRef.Terminal;
 
+      float ROOT_FRAC = rootFraction;
+      float NODE_FRAC = 1.0f - ROOT_FRAC;
+
       targetChildRef.N = 1;
-      targetChildRef.W = sourceChildRef.V;
+      targetChildRef.W = sourceChildRef.V * NODE_FRAC + rootNodeRef.V * ROOT_FRAC * rootMultiplier;
+      targetChildRef.mSum = sourceChildRef.MPosition * NODE_FRAC + rootNodeRef.MPosition * ROOT_FRAC;
+      targetChildRef.dSum = sourceChildRef.DrawP * NODE_FRAC + rootNodeRef.DrawP * ROOT_FRAC;
 
       targetChildRef.MPosition = sourceChildRef.MPosition;
-      targetChildRef.mSum = sourceChildRef.MPosition;
-      targetChildRef.dSum = sourceChildRef.DrawP;
       targetChildRef.WinP = sourceChildRef.WinP;
       targetChildRef.LossP = sourceChildRef.LossP;
 
@@ -222,11 +228,11 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         MCTSNodeStructIndex clonedSubchildIndex = default;
         if (candidateSourceChildChildValid)
         {
-          clonedSubchildIndex = TryCloneChild(tree, in sourceChildRef, ref targetChildRef, 0, false);
+          clonedSubchildIndex = TryCloneChild(tree, in sourceChildRef, ref targetChildRef, 0, in rootNodeRef, rootFraction, 1, false);
         }
         else if (candidateSourceChildSiblingValid)
         {
-          clonedSubchildIndex = TryCloneChild(tree, in sourceParentRef, ref  targetParentRef, 1, false);
+          clonedSubchildIndex = TryCloneChild(tree, in sourceParentRef, ref  targetParentRef, 1, in rootNodeRef, rootFraction, -1, false);
         }
 
         if (clonedSubchildIndex != default)
@@ -235,10 +241,14 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           ref MCTSNodeStruct clonedSubchild = ref tree.Store.Nodes.nodes[clonedSubchildIndex.Index];
           ref MCTSNodeStruct subchildParentRef = ref clonedSubchild.ParentRef;
 
+          // Note that we want to pick up any possilbe root blending,
+          // therefore we take the subtree accumulators (already reflecting such blending)
+          // rather than the node values (such as V) which are pure.
+          Debug.Assert(clonedSubchild.N == 1);
           subchildParentRef.N++;
-          subchildParentRef.W += -clonedSubchild.V;
-          subchildParentRef.dSum += clonedSubchild.DrawP;
-          subchildParentRef.mSum += clonedSubchild.MPosition;
+          subchildParentRef.W += -clonedSubchild.W;
+          subchildParentRef.dSum += clonedSubchild.dSum;
+          subchildParentRef.mSum += clonedSubchild.mSum;
         }
       }
 

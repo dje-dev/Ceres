@@ -293,8 +293,8 @@ namespace Ceres.MCTS.Params
 
     
     /// <summary>
-    /// Fractional weight given to Q of transposition root
-    /// (rather than V of node being visited at or under transposition root)
+    /// Fractional weight given to transposition root
+    /// (rather than directly to node being visited at or under transposition root)
     /// when computing value to be backed up tree after a visit
     /// to a node still linked to a transposition root.
     /// a transposition root.
@@ -305,7 +305,7 @@ namespace Ceres.MCTS.Params
     /// However large values have the disadvantage of distorting the evaluations
     /// at and above the node, effectively overweighting nodes deeper in the tree.
     /// </summary>
-    public float TranspositionRootQFraction = 0.35f;
+    public float TranspositionRootBlendFraction = 0.35f;
 
 
     /// <summary>
