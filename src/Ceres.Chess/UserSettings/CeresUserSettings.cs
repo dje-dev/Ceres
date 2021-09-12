@@ -135,6 +135,13 @@ namespace Ceres.Chess.UserSettings
     /// </summary>
     public bool UseLegacyLC0Evaluator { get; set; } = false;
 
+    /// <summary>
+    /// If data structures and algorithms should favor low
+    /// memory consumption (at a cost of modest performance reduction).
+    /// </summary>
+    public bool MemoryReducedMode { get; set; } = false;
+
+
     #endregion
 
     #region UCI setoptions

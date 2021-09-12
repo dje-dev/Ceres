@@ -142,7 +142,7 @@ namespace Ceres.MCTS.Params
     /// rather than rewriting entire tree. This can consume additional memory
     /// but reduce time spent preparing tree for reuse.
     /// </summary>
-    public bool TreeReuseSwapRootEnabled = true;
+    public bool TreeReuseSwapRootEnabled = !CeresUserSettingsManager.Settings.MemoryReducedMode;
 
     // SLOW AND BUGGY ***
     // Also we find that only about 2% of positions saved are actually subsequently used, 
