@@ -161,9 +161,9 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       float NODE_FRAC = 1.0f - ROOT_FRAC;
 
       targetChildRef.N = 1;
-      targetChildRef.W = sourceChildRef.V * NODE_FRAC + rootNodeRef.V * ROOT_FRAC * rootMultiplier;
-      targetChildRef.mSum = sourceChildRef.MPosition * NODE_FRAC + rootNodeRef.MPosition * ROOT_FRAC;
-      targetChildRef.dSum = sourceChildRef.DrawP * NODE_FRAC + rootNodeRef.DrawP * ROOT_FRAC;
+      targetChildRef.W = sourceChildRef.V * NODE_FRAC            + sourceChildRef.Q    * ROOT_FRAC;
+      targetChildRef.mSum = sourceChildRef.MPosition * NODE_FRAC + sourceChildRef.MAvg * ROOT_FRAC;
+      targetChildRef.dSum = sourceChildRef.DrawP * NODE_FRAC     + sourceChildRef.DAvg * ROOT_FRAC;
 
       targetChildRef.MPosition = sourceChildRef.MPosition;
       targetChildRef.WinP = sourceChildRef.WinP;
