@@ -212,6 +212,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           candidateSourceChildSiblingValid = candidateSourceChildSibling.IsValidTranspositionLinkedSource;
         }
 
+        // Make sure only one or the other is marked as valid.
         if (candidateSourceChildChildValid && candidateSourceChildSiblingValid)
         {
           // Both child/child and sibling have been created, use the one selected (created) first.
@@ -225,6 +226,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           }
         }
 
+        // Do the clone from the transpose child.
         MCTSNodeStructIndex clonedSubchildIndex = default;
         if (candidateSourceChildChildValid)
         {
@@ -235,20 +237,28 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           clonedSubchildIndex = TryCloneChild(tree, in sourceParentRef, ref  targetParentRef, 1, in rootNodeRef, rootFraction, -1, false);
         }
 
-        if (clonedSubchildIndex != default)
+        // In the case of child of the child, the parent statistics
+        // need to be updated to reflect this visit from the child.
+        // (However not if a sibling was chosen since then the parent
+        // is the transposed noded itself which has already had
+        // accumulators (N, W, etc.) updated from the backup apply of
+        // the earlier "virtual" visits.
+        if (candidateSourceChildChildValid)
         {
-          // Update parent statistics to reflect the added subchild.
           ref MCTSNodeStruct clonedSubchild = ref tree.Store.Nodes.nodes[clonedSubchildIndex.Index];
-          ref MCTSNodeStruct subchildParentRef = ref clonedSubchild.ParentRef;
 
-          // Note that we want to pick up any possilbe root blending,
+          Debug.Assert(targetChildRef.Index.Index == clonedSubchild.ParentIndex.Index);
+          Debug.Assert(clonedSubchild.N == 1);
+          Debug.Assert(targetChildRef.N == 1);
+
+          // Update parent statistics to reflect the added subchild.
+          // Note that we want to pick up any possible root blending,
           // therefore we take the subtree accumulators (already reflecting such blending)
           // rather than the node values (such as V) which are pure.
-          Debug.Assert(clonedSubchild.N == 1);
-          subchildParentRef.N++;
-          subchildParentRef.W += -clonedSubchild.W;
-          subchildParentRef.dSum += clonedSubchild.dSum;
-          subchildParentRef.mSum += clonedSubchild.mSum;
+          targetChildRef.N++;
+          targetChildRef.W += -clonedSubchild.W;
+          targetChildRef.dSum += clonedSubchild.dSum;
+          targetChildRef.mSum += clonedSubchild.mSum;
         }
       }
 
