@@ -95,7 +95,10 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     /// <summary>
     /// Makes an existing node in the tree the new root node
     /// by simply swapping that node into the root position
-    /// and adjusting data structures to ignore the non-reachable nodes.
+    /// and adjusting data structures which refer to these indices.
+    /// 
+    /// All nodes are retainined in both the tree and transposition table
+    /// (though some nodes are marked as OldGeneration and no longer reachable from root).
     /// </summary>
     /// <param name="tree"></param>
     /// <param name="newRootChild"></param>
@@ -119,6 +122,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 #endif
 
       // Get array of included nodes, marking others as now belonging to a prior generation.
+      // TODO: the nodesNewlyBecomingPriorGeneration is probably not needed, BitArrayNodesInSubtree could be simplified
       uint numNodesUsed;
       BitArray nodesNewlyBecomingPriorGeneration = new BitArray(store.Nodes.NumTotalNodes);
       BitArray includedNodes = MCTSNodeStructUtils.BitArrayNodesInSubtree(store, ref newRootChild, true, out numNodesUsed, ref nodesNewlyBecomingPriorGeneration, 0);
@@ -128,60 +132,57 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       // Swap new root node into place at index 1.
       SwapNodeIntoRootPosition(store, indexOfNewRootBeforeRewrite, newPriorMoves);
 
-      // If the new root node was a transposition root,
-      // fixup the transposition root table to point to the new location.
-      if (store.Nodes.nodes[1].IsTranspositionRoot)
-      {
-        ulong hash = store.Nodes.nodes[1].ZobristHash;
-        bool removed = transpositionRoots.Remove(hash, indexOfNewRootBeforeRewrite);
-        Debug.Assert(removed);
-        transpositionRoots.TryAdd(hash, 1, 1, store.Nodes.Span);
-      }
-
       // Update BitArray to reflect this swap.
       includedNodes[indexOfNewRootBeforeRewrite] = false;
       includedNodes[1] = true;
       nodesNewlyBecomingPriorGeneration[indexOfNewRootBeforeRewrite] = true;
 
-      int numTryRemove = 0;
-      int numSucceedRemove = 0;
+      void ModifyRootsDictionaryForMovedNode(int priorIndex, int newIndex)
+      {
+        ref MCTSNodeStruct refNode = ref store.Nodes.nodes[newIndex];
+        if (refNode.IsTranspositionRoot)
+        {
+          ulong hash = refNode.ZobristHash;
+          bool removed = transpositionRoots.Remove(hash, priorIndex);
+          Debug.Assert(removed);
+          bool added = transpositionRoots.TryAdd(hash, newIndex, newIndex, store.Nodes.Span);
+          Debug.Assert(added);
+          if (!added) Console.WriteLine("fail add " + priorIndex);
+        }
+      }
+
+      // If one or both of the swapped nodes was a transposition root,
+      // fixup the transposition root table to point to the new location.
+      ModifyRootsDictionaryForMovedNode(indexOfNewRootBeforeRewrite, 1);
+      ModifyRootsDictionaryForMovedNode(1, indexOfNewRootBeforeRewrite);
 
       // Traverse included nodes, and for each:
       //   - try to add to transposition dictionary
       //   - zero CacheIndex
+      //   - remap any nodes with transposition link to new root to refer to new position
       int numNodes = store.Nodes.nextFreeIndex;
       for (int i = 1; i < numNodes; i++)
       {
         ref MCTSNodeStruct thisNode = ref nodes[i];
 
-        if (!includedNodes.Get(i))
+        if (includedNodes[i])
         {
-          if (nodesNewlyBecomingPriorGeneration[i] && nodes[i].IsTranspositionRoot)
-          {
-            // This node is newly becoming old generation.
-            // Possibly (but not definitely) it was in the table as a transposition root.
-            // Try to remove exactly this item (for this hash and index), but not indiscriminately
-            // any root having this hash (because it might have been entered from a different node).
-            // TODO: possibly we could avoid the inefficiency of making failed attempts (perhaps 30% to 40%)
-            //       at remove by tracking which nodes were ever entered into the transposition table
-            //       and only attempting removal here if that flag was true.
-            numTryRemove++;
-            int priorIndex = i == indexOfNewRootBeforeRewrite ? 1 : i;
-            if (transpositionRoots.Remove(thisNode.ZobristHash, priorIndex))
-            {
-              numSucceedRemove++;
-            }
-            else
-            {
-              Console.WriteLine("Warning: Unepxected failure to remove from transposition root table");
-            }
-          }
-        }
-        else
-        {
-          Debug.Assert(!thisNode.IsOldGeneration);
-
           thisNode.CacheIndex = 0;
+        }
+
+        // Two of the nodes have changed position,
+        // if this node was transposition linked to either
+        // then change the transposition link to reflect the change.
+        if (thisNode.IsTranspositionLinked)
+        {
+          if (thisNode.TranspositionRootIndex == indexOfNewRootBeforeRewrite)
+          {
+            thisNode.TranspositionRootIndex = 1;
+          }
+          else if (thisNode.TranspositionRootIndex == 1)
+          {
+            thisNode.TranspositionRootIndex = indexOfNewRootBeforeRewrite;
+          }
         }
       }
 

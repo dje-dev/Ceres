@@ -60,13 +60,14 @@ namespace Ceres.MCTS.Iteration
     /// </summary>
     /// <param name="hashKey"></param>
     /// <param name="nodeIndex"></param>
-    public void TryAdd(ulong hashKey, int nodeIndexNew, int nodeIndexCurrent, Span<MCTSNodeStruct> nodes)
+    public bool TryAdd(ulong hashKey, int nodeIndexNew, int nodeIndexCurrent, Span<MCTSNodeStruct> nodes)
     {
       bool added = table.TryAdd(hashKey, nodeIndexNew);
       if (added)
       {
         nodes[nodeIndexCurrent].IsTranspositionRoot = true;
       }
+      return added;
     }
 
     /// <summary>
