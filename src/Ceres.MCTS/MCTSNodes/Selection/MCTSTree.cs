@@ -72,7 +72,6 @@ namespace Ceres.MCTS.LeafExpansion
     /// </summary>
     public List<LeafEvaluatorBase> ImmediateEvaluators { get; set; }
 
-    bool annotationCacheEnabled;
 
     /// <summary>
     /// Maintains a dictionary mapping position hash code 

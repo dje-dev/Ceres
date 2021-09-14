@@ -191,6 +191,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <summary>
     /// Scans all nodes in store and constructs a BitArray capturing
     /// all the nodes which belongs to the subtree rooted at a specified newRoot node.
+    /// Additionally the CacheIndex is reset to 0 for all nodes not already old generation.
     /// 
     /// Optionally any nodes not belonging are marked as old generation.
     /// </summary>
@@ -217,8 +218,11 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       for (int i = 1; i < store.Nodes.nextFreeIndex; i++)
       {
         ref MCTSNodeStruct nodeRef = ref store.Nodes.nodes[i];
+
         if (!nodeRef.IsOldGeneration)
         {
+          nodeRef.CacheIndex = 0;
+
           if (includedNodes.Get(nodeRef.ParentIndex.Index) || i == newRootIndex)
           {
             includedNodes.Set(i, true);
@@ -226,10 +230,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           }
           else if (setOldGeneration)
           {
-            if (!nodeRef.IsOldGeneration)
-            {
-              nodesNewlyBecomingOldGeneration[i] = true;
-            }
+            nodesNewlyBecomingOldGeneration[i] = true;
             nodeRef.IsOldGeneration = true;
             store.Nodes.NumOldGeneration++;
           }

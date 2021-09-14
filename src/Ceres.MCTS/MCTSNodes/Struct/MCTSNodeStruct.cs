@@ -374,10 +374,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     public override string ToString()
     {
       string indexStr = $"#{Index.Index}";
-      //      string indexStr = $"#?"; // not possible to determine, since we can be passed by value and not ref
-
-      //      float score = ParentIndex.IsNull ? 0 : ParentRef.ScoreForChild(ParentRef.Children[IndexWithinParentsChildren]);
-      return $"<Node [#{indexStr}] Depth{DepthInTree} {Terminal} {PriorMove} ({N},{NInFlight},{NInFlight2})  P={P * 100.0f:F3}% "
+      string oldStr = IsOldGeneration ? " OLD" : "";
+      return $"<Node [#{indexStr}] {oldStr} Depth{DepthInTree} {Terminal} {PriorMove} ({N},{NInFlight},{NInFlight2})  P={P * 100.0f:F3}% "
             + $"V={V:F3}" + (VSecondary == 0 ? "" : $"VSecondary={VSecondary:F3} ") + $" W={W:F3} "
             + $"MPos={MPosition:F3} MAvg={MAvg:F3} "
            + $"Parent={(ParentIndex.IsNull ? "none" : ParentIndex.Index.ToString())}"

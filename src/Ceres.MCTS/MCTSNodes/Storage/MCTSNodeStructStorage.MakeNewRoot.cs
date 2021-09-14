@@ -165,11 +165,6 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       {
         ref MCTSNodeStruct thisNode = ref nodes[i];
 
-        if (includedNodes[i])
-        {
-          thisNode.CacheIndex = 0;
-        }
-
         // Two of the nodes have changed position,
         // if this node was transposition linked to either
         // then change the transposition link to reflect the change.
@@ -228,11 +223,6 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 
       if (numNodesAddedDuringMaterialization > 0)
       {
-//        Console.WriteLine(tree.Store.Nodes.NumTotalNodes + " ==> rewrite appends " + numNodesAddedDuringMaterialization);
-#if DEBUG
-        tree.Store.Validate(tree.TranspositionRoots, false);
-#endif
-
         for (int i = (int)numNodesBeforeMaterialization; i < numNodesBeforeMaterialization + numNodesAddedDuringMaterialization; i++)
         {
           includedNodes[i] = true;
