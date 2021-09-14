@@ -155,20 +155,22 @@ namespace Ceres.MCTS.Evaluators
       var visit0Ref = MCTSNodeStruct.SubnodeRefVisitedAtIndex(in transpositionRootNode, 0, out bool foundV0);
 
       // Helper method to set the PendingTransposition values from specified subnode.
-      void SetNodePendingValues(float multiplier, in MCTSNodeStruct subnodeRef, bool subnodeRefIsValid)
+      void SetNodePendingValues(in MCTSNodeStruct transpositionRootRef, float multiplier, in MCTSNodeStruct subnodeRef, bool subnodeRefIsValid)
       {
         Debug.Assert(subnodeRefIsValid);
 
-        node.PendingTranspositionV = multiplier * (FRAC_POS * subnodeRef.V
-                                                 + FRAC_ROOT * (float)subnodeRef.Q);
+        node.PendingTranspositionV = FRAC_POS * subnodeRef.V * multiplier
+                                   + FRAC_ROOT * (float)transpositionRootRef.Q;
 
-        node.PendingTranspositionM = FRAC_POS * subnodeRef.MPosition + FRAC_ROOT * subnodeRef.MAvg;
-        node.PendingTranspositionD = FRAC_POS * subnodeRef.DrawP + FRAC_ROOT * subnodeRef.DAvg;
+        node.PendingTranspositionM = FRAC_POS * subnodeRef.MPosition 
+                                   + FRAC_ROOT * transpositionRootRef.MAvg;
+        node.PendingTranspositionD = FRAC_POS * subnodeRef.DrawP 
+                                   + FRAC_ROOT * transpositionRootRef.DAvg;
       }
 
       if (node.N == 0)
       {
-        SetNodePendingValues(1, in visit0Ref, foundV0);
+        SetNodePendingValues(in transpositionRootNode, 1, in visit0Ref, foundV0);
       }
       else
       {
@@ -176,14 +178,14 @@ namespace Ceres.MCTS.Evaluators
 
         if (node.N == 1)
         {
-          SetNodePendingValues(-1, in visit1Ref, foundV1);
+          SetNodePendingValues(in transpositionRootNode, -1, in visit1Ref, foundV1);
         }
         else if (node.N == 2)
         {
           var visit2Ref = MCTSNodeStruct.SubnodeRefVisitedAtIndex(in transpositionRootNode, 2, out bool foundV2);
           float multiplier = visit2Ref.ParentIndex == transpositionRootNode.Index ? -1 : 1;
 
-          SetNodePendingValues(multiplier, in visit2Ref, foundV2);
+          SetNodePendingValues(in transpositionRootNode, multiplier, in visit2Ref, foundV2);
         }
         else
         {
