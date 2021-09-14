@@ -147,7 +147,6 @@ namespace Ceres.MCTS.MTCSNodes.Storage
           Debug.Assert(removed);
           bool added = transpositionRoots.TryAdd(hash, newIndex, newIndex, store.Nodes.Span);
           Debug.Assert(added);
-          if (!added) Console.WriteLine("fail add " + priorIndex);
         }
       }
 
@@ -156,20 +155,19 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       ModifyRootsDictionaryForMovedNode(indexOfNewRootBeforeRewrite, 1);
       ModifyRootsDictionaryForMovedNode(1, indexOfNewRootBeforeRewrite);
 
-      // Traverse included nodes, and for each:
-      //   - try to add to transposition dictionary
-      //   - zero CacheIndex
-      //   - remap any nodes with transposition link to new root to refer to new position
+      // Traverse included nodes, and for each remap any nodes
+      // with transposition link to new root to refer to new position.
       int numNodes = store.Nodes.nextFreeIndex;
       for (int i = 1; i < numNodes; i++)
       {
         ref MCTSNodeStruct thisNode = ref nodes[i];
 
-        // Two of the nodes have changed position,
-        // if this node was transposition linked to either
-        // then change the transposition link to reflect the change.
-        if (thisNode.IsTranspositionLinked)
+        if (!thisNode.IsOldGeneration ||
+             nodesNewlyBecomingPriorGeneration[i])
         {
+          // Two of the nodes have changed position,
+          // if this node was transposition linked to either
+          // then change the transposition link to reflect the change.
           if (thisNode.TranspositionRootIndex == indexOfNewRootBeforeRewrite)
           {
             thisNode.TranspositionRootIndex = 1;
@@ -178,6 +176,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
           {
             thisNode.TranspositionRootIndex = indexOfNewRootBeforeRewrite;
           }
+
         }
       }
 
