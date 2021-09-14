@@ -187,18 +187,17 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       }
 
       // Possibly move over a second sub-child in the clone.
-      // The second descendent (if it exsists and is usable)
+      // The second descendent (if it exists and is usable)
       // must be either the child of the child, or its sibling.
       if (cloneSubchildIfPossible)
       {
         Debug.Assert(childIndex == 0);
 
         ref MCTSNodeStruct dummyRef = ref tree.Store.Nodes.nodes[0];
-        ref MCTSNodeStruct dummyRef2 = ref tree.Store.Nodes.nodes[0];
         
         ref readonly MCTSNodeStruct candidateSourceChildChild = ref dummyRef;
         bool candidateSourceChildChildValid = false;
-        if (sourceChildRef.NumChildrenExpanded > 0)
+        if (sourceChildRef.NumChildrenVisited > 0)
         {
           candidateSourceChildChild = ref sourceChildRef.ChildAtIndexRef(0);
           candidateSourceChildChildValid = candidateSourceChildChild.IsValidTranspositionLinkedSource;
@@ -206,7 +205,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
         ref readonly MCTSNodeStruct candidateSourceChildSibling =  ref dummyRef;
         bool candidateSourceChildSiblingValid = false;
-        if (sourceParentRef.NumChildrenExpanded > 1)
+        if (sourceParentRef.NumChildrenVisited > 1)
         {
           candidateSourceChildSibling = ref sourceParentRef.ChildAtIndexRef(1);
           candidateSourceChildSiblingValid = candidateSourceChildSibling.IsValidTranspositionLinkedSource;
@@ -256,9 +255,10 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           // therefore we take the subtree accumulators (already reflecting such blending)
           // rather than the node values (such as V) which are pure.
           targetChildRef.N++;
-          targetChildRef.W += -clonedSubchild.W;
-          targetChildRef.dSum += clonedSubchild.dSum;
-          targetChildRef.mSum += clonedSubchild.mSum;
+
+          targetChildRef.W += -1 * (clonedSubchild.V * NODE_FRAC + clonedSubchild.Q * ROOT_FRAC);
+          targetChildRef.mSum += clonedSubchild.MPosition * NODE_FRAC + clonedSubchild.MAvg * ROOT_FRAC;
+          targetChildRef.dSum += clonedSubchild.DrawP * NODE_FRAC + clonedSubchild.DAvg * ROOT_FRAC;
         }
       }
 
