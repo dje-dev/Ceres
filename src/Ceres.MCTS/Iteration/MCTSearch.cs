@@ -132,7 +132,8 @@ namespace Ceres.MCTS.Iteration
                        MCTSManager.MCTSProgressCallback progressCallback = null,
                        PositionEvalCache positionEvalCache = null,
                        bool possiblyUsePositionCache = false,
-                       bool isFirstMoveOfGame = false)
+                       bool isFirstMoveOfGame = false,
+                       bool moveImmediateIfOnlyOneMove = false)
     {
       if (searchLimit == null)
       {
@@ -188,7 +189,8 @@ namespace Ceres.MCTS.Iteration
 
       using (new SearchContextExecutionBlock(Manager.Context))
       {
-        (BestMove, TimingInfo) = MCTSManager.Search(Manager, verbose, progressCallback, possiblyUsePositionCache);
+        (BestMove, TimingInfo) = MCTSManager.Search(Manager, verbose, progressCallback, 
+                                                    possiblyUsePositionCache, moveImmediateIfOnlyOneMove);
       }
     }
 
@@ -263,7 +265,8 @@ namespace Ceres.MCTS.Iteration
                                bool verbose, DateTime startTime,
                                MCTSManager.MCTSProgressCallback progressCallback,
                                float thresholdMinFractionNodesRetained,
-                               bool isFirstMoveOfGame = false)
+                               bool isFirstMoveOfGame = false,
+                               bool moveImmediateIfOnlyOneMove = false)
     {
       CountSearchContinuations = priorSearch.CountSearchContinuations;
       Manager = priorSearch.Manager;
@@ -340,7 +343,7 @@ namespace Ceres.MCTS.Iteration
         {
           SearchContinueRetainTree(reuseOtherContextForEvaluatedNodes, newPositionAndMoves, gameMoveHistory, verbose, startTime,
                                    progressCallback, isFirstMoveOfGame, priorContext, store, numNodesInitial, newRoot,
-                                   searchLimitTargetAdjusted, possiblyUsePositionCache, reuseMethod);
+                                   searchLimitTargetAdjusted, possiblyUsePositionCache, reuseMethod, moveImmediateIfOnlyOneMove);
         }
         else
         {
@@ -384,7 +387,8 @@ namespace Ceres.MCTS.Iteration
           Search(Manager.Context.NNEvaluators, Manager.Context.ParamsSelect,
                  Manager.Context.ParamsSearch, Manager.LimitManager,
                  reuseOtherContextForEvaluatedNodes, newPositionAndMoves, searchLimit, verbose,
-                 startTime, gameMoveHistory, progressCallback, positionEvalCache, possiblyUsePositionCache, isFirstMoveOfGame);
+                 startTime, gameMoveHistory, progressCallback, positionEvalCache, possiblyUsePositionCache, 
+                 isFirstMoveOfGame, moveImmediateIfOnlyOneMove);
         }
       }
     }
@@ -394,7 +398,8 @@ namespace Ceres.MCTS.Iteration
                                           MCTSManager.MCTSProgressCallback progressCallback, bool isFirstMoveOfGame,
                                           MCTSIterator priorContext, MCTSNodeStore store, int numNodesInitial, MCTSNode newRoot,
                                           SearchLimit searchLimitTargetAdjusted, bool possiblyUsePositionCache,
-                                          ManagerTreeReuse.Method reuseMethod)
+                                          ManagerTreeReuse.Method reuseMethod,
+                                          bool moveImmediateIfOnlyOneMove)
     {
       // Now rewrite the tree nodes and children "in situ"
       PositionEvalCache reusePositionCache = null;
@@ -450,7 +455,8 @@ namespace Ceres.MCTS.Iteration
                                 startTime, gameMoveHistory, isFirstMoveOfGame: isFirstMoveOfGame);
       Manager.Context.ContemptManager = priorContext.ContemptManager;
 
-      (BestMove, TimingInfo) = MCTSManager.Search(Manager, verbose, progressCallback, possiblyUsePositionCache);
+      (BestMove, TimingInfo) = MCTSManager.Search(Manager, verbose, progressCallback, 
+                                                  possiblyUsePositionCache, moveImmediateIfOnlyOneMove);
     }
 
 

@@ -28,6 +28,7 @@ using Ceres.Chess.GameEngines;
 using System.Text.Json.Serialization;
 using System.IO;
 using Ceres.Base.Benchmarking;
+using Ceres.MCTS.Params;
 
 #endregion
 
@@ -234,7 +235,8 @@ namespace Ceres.Features.BatchAnalysis
 
     void ProcessAnalysisItemQueue(object cancellationToken)
     {
-      GameEngineCeresInProcess ges = new("BatchAnalyzer", evaluatorDef, null);
+      GameEngineCeresInProcess ges = new("BatchAnalyzer", evaluatorDef, null, 
+                                         new ParamsSearch() { FutilityPruningStopSearchEnabled = false}, moveImmediateIfOnlyOneMove:false);
       ges.VerboseMoveStats = false;
       Console.WriteLine("analyzer started " + ges);
 

@@ -512,7 +512,8 @@ namespace Ceres.MCTS.Iteration
     public static (MGMove, TimingStats)
     Search(MCTSManager manager, bool verbose,
            MCTSProgressCallback progressCallback = null,
-           bool possiblyUsePositionCache = false)
+           bool possiblyUsePositionCache = false,
+           bool moveImmediateIfOnlyOneMove = false)
     {
       MCTSearch.SearchCount++;
       manager.StartTimeThisSearch = DateTime.Now;
@@ -545,6 +546,19 @@ namespace Ceres.MCTS.Iteration
       {
         manager.StopStatus = SearchStopStatus.TablebaseImmediateMove;
         return (manager.TablebaseImmediateBestMove, new TimingStats());
+      }
+
+      // Possibly move immediately if only one legal move
+      if (moveImmediateIfOnlyOneMove)
+      {
+        MGPosition startPos = priorMoves.FinalPosMG;
+        MGMoveList moves = new MGMoveList();
+        MGMoveGen.GenerateMoves(in startPos, moves);
+        if (moves.NumMovesUsed == 1)
+        {
+          manager.StopStatus = SearchStopStatus.OnlyOneLegalMove;
+          return (moves.MovesArray[0], new TimingStats());
+        }
       }
 
       MCTSNode root = manager.Root;
@@ -810,10 +824,6 @@ namespace Ceres.MCTS.Iteration
       if (Root.N < 2)
       {
         return SearchStopStatus.Continue; // Have to search at least two nodes to successfully get a move
-      }
-      else if (Root.NumPolicyMoves <= 1)
-      {
-        return SearchStopStatus.OnlyOneLegalMove;
       }
 
       UpdateTopNodeInfo();

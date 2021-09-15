@@ -57,7 +57,8 @@ namespace Ceres.Commands
       ParamsSearch searchParams = new ParamsSearch();
       searchParams.FutilityPruningStopSearchEnabled = !forceDisablePruning;
 
-      GameEngineCeresInProcess ceresEngine = new GameEngineCeresInProcess("Ceres", evaluatorDef, null, searchParams);
+      GameEngineCeresInProcess ceresEngine = new GameEngineCeresInProcess("Ceres", evaluatorDef, null, searchParams,
+                                                                          moveImmediateIfOnlyOneMove: false);
 
       // Warmup (in parallel)    
       lc0Engine?.DoSearchPrepare();

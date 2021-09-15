@@ -96,6 +96,11 @@ namespace Ceres.Features.GameEngines
     /// </summary>
     public string CurrentGameID;
 
+    /// <summary>
+    /// If search should be short-circuited if only one legal move at root.
+    /// </summary>
+    public bool MoveImmediateIfOnlyOneMove;
+
 
     #region Internal data
 
@@ -123,7 +128,8 @@ namespace Ceres.Features.GameEngines
                                     ParamsSearch searchParams = null,
                                     ParamsSelect childSelectParams = null,
                                     IManagerGameLimit gameLimitManager = null,
-                                    string logFileName = null) : base(id)
+                                    string logFileName = null,
+                                    bool moveImmediateIfOnlyOneMove = true) : base(id)
     {
       if (evaluatorDef == null)
       {
@@ -153,6 +159,7 @@ namespace Ceres.Features.GameEngines
       GameLimitManager = gameLimitManager;
       ChildSelectParams = childSelectParams;
       SearchLogFileName = logFileName;
+      MoveImmediateIfOnlyOneMove = moveImmediateIfOnlyOneMove;
       VerboseMoveStats = CeresUserSettingsManager.Settings.VerboseMoveStats;
 
       if (!string.IsNullOrEmpty(CeresUserSettingsManager.Settings.SearchLogFile))
@@ -349,7 +356,8 @@ namespace Ceres.Features.GameEngines
         Search.Search(evaluators, ChildSelectParams, SearchParams, GameLimitManager,
                       reuseOtherContextForEvaluatedNodes,
                       curPositionAndMoves, searchLimit, verbose, lastSearchStartTime,
-                      gameMoveHistory, callback, null, false, isFirstMoveOfGame);
+                      gameMoveHistory, callback, null, false, isFirstMoveOfGame,
+                      MoveImmediateIfOnlyOneMove);
       }
       else
       {
@@ -389,7 +397,7 @@ namespace Ceres.Features.GameEngines
                                      forwardMoves, curPositionAndMoves,
                                      gameMoveHistory, searchLimit, verbose, lastSearchStartTime,
                                      callback, THRESHOLD_FRACTION_NODES_REUSABLE,
-                                     isFirstMoveOfGame);
+                                     isFirstMoveOfGame, MoveImmediateIfOnlyOneMove);
       }
 
       // Update the statistic on possible overshoot of internally alloted time and actual
