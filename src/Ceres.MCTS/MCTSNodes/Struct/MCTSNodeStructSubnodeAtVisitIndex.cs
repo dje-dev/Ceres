@@ -34,7 +34,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <param name="depth"></param>
     /// <param name="nullNodeRef">reference to the null root node</param>
     /// <returns></returns>
-    public static ref readonly MCTSNodeStruct SubnodeRefVisitedAtIndex(in MCTSNodeStruct node, int depth, 
+    public static ref readonly MCTSNodeStruct SubnodeRefVisitedAtIndex(in MCTSNodeStruct node, int depth,
                                                                        out bool found)
     {
       found = false;
@@ -80,16 +80,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
             }
 
             // Possibly return sibling if it exists and is valid and better (earlier).
-            if (node.NumChildrenVisited < 2)
-            {
-              // Subchild is only possibility, return if was valid.
-              if (foundSubchild)
-              {
-                found = true;
-                return ref subchildRef;
-              }
-            }
-            else
+            if (node.NumChildrenVisited > 1)
             {
               ref readonly MCTSNodeStruct siblingRef = ref node.ChildAtIndexRef(1);
               if (IsValidVSource(in siblingRef))
@@ -106,7 +97,14 @@ namespace Ceres.MCTS.MTCSNodes.Struct
               }
             }
 
+            // Return the subchild if it was valid.
+            if (foundSubchild)
+            {
+              found = true;
+              return ref subchildRef;
+            }
           }
+
           return ref node;
 
         default:
