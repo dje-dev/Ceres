@@ -119,6 +119,16 @@ namespace Ceres.MCTS.Managers
           }
         }
 
+        if (Node.N == 0)
+        {
+          Node.Annotate();
+          if (Node.Annotation.Moves.NumMovesUsed == 1)
+          {
+            return new BestMoveInfo(BestMoveInfo.BestMoveReason.OneLegalMove, Node.Annotation.Moves.MovesArray[0], 0);
+          }
+        }
+
+
         if (Node.NumPolicyMoves == 0)
         {
           return new BestMoveInfo(BestMoveInfo.BestMoveReason.NoLegalMoves, default, Node.V);

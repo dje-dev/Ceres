@@ -548,16 +548,19 @@ namespace Ceres.MCTS.Iteration
         return (manager.TablebaseImmediateBestMove, new TimingStats());
       }
 
-      // Possibly move immediately if only one legal move
+      // If only one legal move then force the search to run only one node
+      // (to get root populated) and then stop.
+      MGPosition startPos = priorMoves.FinalPosMG;
+      MGMoveList moves = new MGMoveList();
+      MGMoveGen.GenerateMoves(in startPos, moves);
+
+      bool shouldStopAfterOneNodeDueToOnlyOneLegalMove = false;
       if (moveImmediateIfOnlyOneMove)
       {
-        MGPosition startPos = priorMoves.FinalPosMG;
-        MGMoveList moves = new MGMoveList();
-        MGMoveGen.GenerateMoves(in startPos, moves);
         if (moves.NumMovesUsed == 1)
         {
-          manager.StopStatus = SearchStopStatus.OnlyOneLegalMove;
-          return (moves.MovesArray[0], new TimingStats());
+          shouldStopAfterOneNodeDueToOnlyOneLegalMove = true;
+          manager.SearchLimit = SearchLimit.NodesPerMove(1);
         }
       }
 
@@ -608,7 +611,8 @@ namespace Ceres.MCTS.Iteration
         const float INCREMENT_FRACTION = 0.20f;
 
         float fractionExtendedSoFar = 0;
-        if (bestMoveInfo.BestMoveQSuboptimality > Q_THRESHOLD  // don't retry if Q is already best or nearly so
+        if (!shouldStopAfterOneNodeDueToOnlyOneLegalMove
+          && bestMoveInfo.BestMoveQSuboptimality > Q_THRESHOLD  // don't retry if Q is already best or nearly so
          && Math.Abs(root.Q) < 0.75f                           // don't retry if position is already won/lost
          && numSearches < MAX_RETRIES                          // don't retry many times to avoid using too much extra time
          && manager.NumStepsTakenThisSearch > 100              // don't retry for very small searches to because batch sizing make this imprecise
@@ -644,7 +648,15 @@ namespace Ceres.MCTS.Iteration
         manager.SaveCache(manager.Context.EvaluatorDef.CacheFileName);
       }
 
-      return (bestMoveInfo.BestMove, stats);
+      if (shouldStopAfterOneNodeDueToOnlyOneLegalMove)
+      {
+        manager.StopStatus = SearchStopStatus.OnlyOneLegalMove;
+        return (moves.MovesArray[0], stats);
+      }
+      else
+      {
+        return (bestMoveInfo.BestMove, stats);
+      }
     }
 
 
