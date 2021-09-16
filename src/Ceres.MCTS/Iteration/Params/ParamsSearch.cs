@@ -14,7 +14,7 @@
 #region Using directives
 
 using System;
-
+using Ceres.Base.Math;
 using Ceres.Chess.UserSettings;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.Search.IteratedMCTS;
@@ -289,26 +289,37 @@ namespace Ceres.MCTS.Params
     ///   - optionally some of the Q (subtree average) from the transposition root
     ///     can be mixed in with these visits (see TranspositionRootQFraction).
     /// </summary>
-    public int MaxTranspositionRootUseCount = 3;
+    public int MaxTranspositionRootUseCount => StatUtils.CountNonNaN(TranspositionRootBackupSubtreeFracs);
 
     
     /// <summary>
-    /// Fractional weight given to transposition root
+    /// Fractional weight given to transposition root when sending
+    /// backup value added into node accumulators (e.g. W) in the tree.
+    /// 
     /// (rather than directly to node being visited at or under transposition root)
     /// when computing value to be backed up tree after a visit
     /// to a node still linked to a transposition root.
     /// a transposition root.
     ///
+    /// Since up to 3 values can be borrowed from transposition root,
+    /// an array of 3 values is provided indicating weight for each corresponding visit.
+    /// 
+    /// NaN values indicate no transposition root reuse is used for the corresponding N.
+    /// 
     /// Nonzero values have the benefit of sharing information from possibly large
     /// subtrees already explored below the transposition root.
     /// 
     /// However large values have the disadvantage of distorting the evaluations
     /// at and above the node, effectively overweighting nodes deeper in the tree.
+    /// 
     /// </summary>
-    public float TranspositionRootBlendFraction = 0.35f;
+    public float[] TranspositionRootBackupSubtreeFracs = new float[] { 1, float.NaN, float.NaN };
 
-    public float[] TranspositionRootBackupSubtreeFracs = new float[] { 1, 0, 0 };
-    public float[] TranspositionRootCloneSubtreeFracs = new float[] { 1, 0, 0 };
+    /// <summary>
+    /// Fractional weight given to subtree averages (e.g. Q) from node being 
+    /// copied (cloned) from transposition root subtree when materializing.
+    /// </summary>
+    public float[] TranspositionRootCloneSubtreeFracs = new float[] { 1, float.NaN, float.NaN };
 
 
     /// <summary>

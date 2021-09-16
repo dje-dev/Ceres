@@ -45,6 +45,25 @@ namespace Ceres.Base.Math
     }
 
     /// <summary>
+    /// Returns count of number of values in array which are not NaN.
+    /// </summary>
+    /// <param name="values"></param>
+    /// <returns></returns>
+    public static int CountNonNaN(float[] values)
+    {
+      int count = 0;
+      for (int i=0; i<values.Length;i++)
+      {
+        if (!float.IsNaN(values[i]))
+        {
+          count++;
+        }
+      }
+      return count;
+    }
+
+
+    /// <summary>
     /// Returns average of an array of floats.
     /// </summary>
     /// <param name="xs"></param>

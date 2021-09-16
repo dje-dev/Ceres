@@ -144,6 +144,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
                                                     float subtreeFraction,
                                                     bool cloneSubchildIfPossible)
     {
+      Debug.Assert(!float.IsNaN(subtreeFraction));
+
       if (sourceParentRef.NumChildrenExpanded == 0)
       {
         return default;

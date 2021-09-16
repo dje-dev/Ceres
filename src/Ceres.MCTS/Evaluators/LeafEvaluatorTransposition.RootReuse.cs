@@ -159,6 +159,7 @@ namespace Ceres.MCTS.Evaluators
       Debug.Assert(node.N <= 2);
 
       float FRAC_ROOT = node.Context.ParamsSearch.TranspositionRootBackupSubtreeFracs[node.N];
+      Debug.Assert(!float.IsNaN(FRAC_ROOT));
       float FRAC_POS = 1f - FRAC_ROOT;
 
       var visit0Ref = MCTSNodeStruct.SubnodeRefVisitedAtIndex(in transpositionRootNode, 0, out bool foundV0);
