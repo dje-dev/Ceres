@@ -62,14 +62,14 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
         case 2:
           // Only two possibilities to consider: child of child, or sibling (index 1) of child.
-          if (node.NumChildrenExpanded > 0)
+          if (node.NumChildrenVisited > 0)
           {
             ref readonly MCTSNodeStruct child = ref node.ChildAtIndexRef(0);
 
             // Check for a valid child of the child.
             ref readonly MCTSNodeStruct subchildRef = ref node; // dummy initialization
             bool foundSubchild = false;
-            if (child.NumChildrenExpanded > 0)
+            if (child.NumChildrenVisited > 0)
             {
               ref readonly MCTSNodeStruct subchild = ref child.ChildAtIndexRef(0);
               if (IsValidVSource(in subchild))
@@ -80,7 +80,16 @@ namespace Ceres.MCTS.MTCSNodes.Struct
             }
 
             // Possibly return sibling if it exists and is valid and better (earlier).
-            if (node.NumChildrenExpanded > 1)
+            if (node.NumChildrenVisited < 2)
+            {
+              // Subchild is only possibility, return if was valid.
+              if (foundSubchild)
+              {
+                found = true;
+                return ref subchildRef;
+              }
+            }
+            else
             {
               ref readonly MCTSNodeStruct siblingRef = ref node.ChildAtIndexRef(1);
               if (IsValidVSource(in siblingRef))
@@ -97,12 +106,6 @@ namespace Ceres.MCTS.MTCSNodes.Struct
               }
             }
 
-            // Return the subchild if it was valid.
-            if (foundSubchild)
-            {
-              found = true;
-              return ref subchildRef;
-            }
           }
           return ref node;
 

@@ -515,15 +515,14 @@ namespace Ceres.MCTS.Search
     {
       ref MCTSNodeStruct nodeRef = ref node.Ref;
 
-      //      Console.WriteLine($"target {numTargetLeafs} {node}");
       Debug.Assert(numTargetLeafs > 0);
 
-      // If the target number of leaves exceeds amount available from a 
-      // transposition linked node, unlink it now so we can continue descent thru this node.
+      // Materialize if transposition linked and either:
+      //   - the number of target leaves is more than number available (pending)
+      //   - the number of target leaves is more than 1 (pending values are valid only for one use)
       if (paramsExecution.TranspositionMode == TranspositionMode.SingleNodeDeferredCopy
        && node.IsTranspositionLinked
-       && numTargetLeafs > node.NumVisitsPendingTranspositionRootExtraction
-       )
+       && (numTargetLeafs > 1  || numTargetLeafs > node.NumVisitsPendingTranspositionRootExtraction))
       {
         node.Ref.MaterializeSubtreeFromTranspositionRoot(node.Tree);
       }
@@ -542,7 +541,6 @@ namespace Ceres.MCTS.Search
         return;
       }
       else if (paramsExecution.TranspositionMode == TranspositionMode.SharedSubtree)
-      //            && node.NumNodesTranspositionExtracted > 0)
       {
         throw new NotImplementedException();
         //InitializeChildrenFromDeferredTransposition(node);

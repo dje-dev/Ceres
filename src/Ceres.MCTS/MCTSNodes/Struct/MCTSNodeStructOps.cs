@@ -73,6 +73,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     {
       // Make sure expanded children appear strictly clustered at lowest indices
       Debug.Assert(possiblyOutOfOrder || childIndex == 0 || ChildAtIndex(childIndex - 1).IsExpanded);
+      Debug.Assert(NumChildrenExpanded == childIndex);
 
       // Get child info and make sure not already expanded
       ref MCTSNodeStructChild thisChildRef = ref store.Children.childIndices[ChildStartIndex + childIndex];

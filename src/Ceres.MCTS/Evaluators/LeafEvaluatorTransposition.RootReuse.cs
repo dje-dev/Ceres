@@ -28,34 +28,42 @@ namespace Ceres.MCTS.Evaluators
 {
 
   /*
-    The state variables involved in tracking transposition linked nodes:
+    Description of the state variables and transitions involved in transposition root reuse:
 
     At MCTSNodeStruct there are 2 durable state variables possibly set by LeafEvaluatorTransposition:
-       TranspositionRootIndex - the index of the node which is our tranposition root to which the node is still attached
-       NumVisitsPendingTranspositionRootExtraction - the number of times future visits will be sourced from the transposition root instead of this node
+       - TranspositionRootIndex - the index of the node which is our tranposition root to which the node is still attached
+       - NumVisitsPendingTranspositionRootExtraction - the number of times future visits 
+         will be sourced from the transposition root instead of this node
 
-    At MCTSNode has 3 new state variables which hold values computed during(parallel) 
-    batch gathering (in LeafSelectorMulti) and then used by during backup(in MCTSApply):
+    MCTSNode has 3 new state variables which hold values computed during
+    batch gathering (in LeafSelectorMulti) and then used by during backup (in MCTSApply):
        PendingTranspositionV
        PendingTranspositionM
        PendingTranspositionD
 
     The sequence of processing during search is:
       1. (preprocessing in batch gathering): 
-         LeafEvaluatorTransposition will recognize transpositions set the two state variables at MCTSNodeStruct for them
+         LeafEvaluatorTransposition will recognize transpositions opportunities and
+         determine the maximum number of times it would be possible to borrow values
+         from the transposition root subtree in this node's future subtree 
+         (setting NumVisitsPendingTranspositionRootExtraction).
+         It is only possible to borrow values if they exist and are completely initialized.
       2. (batch gathering) 
           LeafSelectorMulti will notice transposition linked nodes and:
-            - they are treated as leafs if NumVisitsPendingTranspositionRootExtraction indicates sufficiently many 
-              pending values can come from the node as requested as targets visits for the node.
-              If so, the pending values stored in MCTSNode are potentially refreshed.
-            - otherwise the MaterializeSubtreeFromTranspositionRoot is called to permanently delink the node from its transposition root
+            - they are treated as leafs if numToApply is 1 and
+              NumVisitsPendingTranspositionRootExtraction has at least 1 value left to apply.
+              The appropriate the 3 pending state fields are updated from the 
+              appropriate subnode in the transposition subtree (within SetPendingTransitionValues)
+            - otherwise the MaterializeSubtreeFromTranspositionRoot is called to permanently delink the node from
+              it stransposition root,  creating children and copying values from transposition subtree to make it
+              look as if the virtual transposition borrowing had never happened.
       3. (backup) 
          MCTSApply treats nodes which are still transposition linked in a special way.
-         The 3 PendingTransposition values in MCTSNode are use to provide values for backup in the tree.
+         The 3 PendingTransposition values in MCTSNode provide values for backup in the tree (to update W etc.)
          Additionally NumVisitsPendingTranspositionRootExtraction is decremented by the number of visits to the node.
   */
 
-  
+
   /// <summary>
   /// 
   /// </summary>
@@ -115,6 +123,8 @@ namespace Ceres.MCTS.Evaluators
     /// <param name="transpositionRootNode"></param>
     public static void EnsurePendingTranspositionValuesSet(MCTSNode node, bool possiblyRefresh)
     {
+      Debug.Assert(node.N <= 2);
+
       // Possibly the value cached in PendingTranspositionV to be used for the pending
       // transposition values is not present (because the prior MCTSNode was lost from cache).
       // If so recalculate and set it here.
@@ -144,13 +154,11 @@ namespace Ceres.MCTS.Evaluators
     /// </summary>
     /// <param name="node"></param>
     /// <param name="transpositionRootNode"></param>
-    static void SetPendingTransitionValues(MCTSNode node,
-                                           in MCTSNodeStruct transpositionRootNode)
+    static void SetPendingTransitionValues(MCTSNode node, in MCTSNodeStruct transpositionRootNode)
     {
-      Debug.Assert(node.N <= 2); // Max supported N in SetPendingTransitionValues is 3
+      Debug.Assert(node.N <= 2);
 
       float FRAC_ROOT = node.Context.ParamsSearch.TranspositionRootBackupSubtreeFracs[node.N];
-
       float FRAC_POS = 1f - FRAC_ROOT;
 
       var visit0Ref = MCTSNodeStruct.SubnodeRefVisitedAtIndex(in transpositionRootNode, 0, out bool foundV0);
