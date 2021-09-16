@@ -463,6 +463,7 @@ namespace Ceres.MCTS.MTCSNodes
     public void UpdateRecordVisitsToChild(int selectorID, int childIndex, int numVisits)
     {
       Debug.Assert(numVisits > 0);
+      Debug.Assert(!IsTranspositionLinked);
 
       ref MCTSNodeStruct nodeRef = ref Ref;
 

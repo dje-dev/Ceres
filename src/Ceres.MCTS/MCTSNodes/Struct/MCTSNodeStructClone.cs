@@ -20,9 +20,11 @@ using System.Diagnostics;
 using Ceres.Base.DataTypes;
 using Ceres.MCTS.Environment;
 using Ceres.MCTS.Evaluators;
+using Ceres.MCTS.Iteration;
 using Ceres.MCTS.LeafExpansion;
 using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.Params;
+using Ceres.MCTS.Search;
 
 #endregion
 
@@ -98,6 +100,13 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       Debug.Assert(IsTranspositionLinked);
       Debug.Assert(NumChildrenExpanded == 0);
 
+      ParamsSearch paramsSearch = MCTSManager.ThreadSearchContext.ParamsSearch;
+      if (paramsSearch.TranspositionRootBackupSubtreeFracs[0] 
+       != paramsSearch.TranspositionRootCloneSubtreeFracs[0])
+      {
+        throw new Exception("First element of TranspositionRootBackupSubtreeFracs and TranspositionRootCloneSubtreeFracs must be same");
+      }
+
       MCTSNodeStructIndex startingTranspositionRootIndex = new MCTSNodeStructIndex(TranspositionRootIndex);
 
       // Copy children immediately at this node.
@@ -105,12 +114,12 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
       // Copy one or possibly two children from subtree to
       // make the copied subtree look what it would 
-      if (N >= 2)
+      if (N > 1)
       {
-        float rootFrac = tree.Root.Context.ParamsSearch.TranspositionRootBlendFraction;
+        float rootFrac = paramsSearch.TranspositionRootCloneSubtreeFracs[1];
         ref readonly MCTSNodeStruct transpositionRootRef = ref tree.Store.Nodes.nodes[startingTranspositionRootIndex.Index];
-        bool cloneSubchild = N >= 3;
-        TryCloneChild(tree, in transpositionRootRef, ref this, 0, in transpositionRootRef, rootFrac, -1, cloneSubchild);
+        bool cloneSubchild = N == 3;
+        TryCloneChild(tree, in transpositionRootRef, ref this, 0, rootFrac, cloneSubchild);
       }
     }
 
@@ -132,7 +141,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     public static MCTSNodeStructIndex TryCloneChild(MCTSTree tree, 
                                                     in MCTSNodeStruct sourceParentRef, ref MCTSNodeStruct targetParentRef,
                                                     int childIndex, 
-                                                    in MCTSNodeStruct rootNodeRef, float rootFraction, float rootMultiplier,
+                                                    float subtreeFraction,
                                                     bool cloneSubchildIfPossible)
     {
       if (sourceParentRef.NumChildrenExpanded == 0)
@@ -155,15 +164,14 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       Debug.Assert(!double.IsNaN(sourceChildRef.W));
       Debug.Assert(sourceChildRef.Terminal != Chess.GameResult.NotInitialized);
 
+      float SUBTREE_FRAC = subtreeFraction;
+      float NODE_FRAC = 1.0f - SUBTREE_FRAC;
+
       targetChildRef.Terminal = sourceChildRef.Terminal;
-
-      float ROOT_FRAC = rootFraction;
-      float NODE_FRAC = 1.0f - ROOT_FRAC;
-
       targetChildRef.N = 1;
-      targetChildRef.W = sourceChildRef.V * NODE_FRAC            + sourceChildRef.Q    * ROOT_FRAC;
-      targetChildRef.mSum = sourceChildRef.MPosition * NODE_FRAC + sourceChildRef.MAvg * ROOT_FRAC;
-      targetChildRef.dSum = sourceChildRef.DrawP * NODE_FRAC     + sourceChildRef.DAvg * ROOT_FRAC;
+      targetChildRef.W = sourceChildRef.V * NODE_FRAC            + sourceChildRef.Q    * SUBTREE_FRAC;
+      targetChildRef.mSum = sourceChildRef.MPosition * NODE_FRAC + sourceChildRef.MAvg * SUBTREE_FRAC;
+      targetChildRef.dSum = sourceChildRef.DrawP * NODE_FRAC     + sourceChildRef.DAvg * SUBTREE_FRAC;
 
       targetChildRef.MPosition = sourceChildRef.MPosition;
       targetChildRef.WinP = sourceChildRef.WinP;
@@ -225,15 +233,17 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           }
         }
 
+        float subchildSubtreeFraction = MCTSManager.ThreadSearchContext.ParamsSearch.TranspositionRootCloneSubtreeFracs[2];
+        
         // Do the clone from the transpose child.
         MCTSNodeStructIndex clonedSubchildIndex = default;
         if (candidateSourceChildChildValid)
         {
-          clonedSubchildIndex = TryCloneChild(tree, in sourceChildRef, ref targetChildRef, 0, in rootNodeRef, rootFraction, 1, false);
+          clonedSubchildIndex = TryCloneChild(tree, in sourceChildRef, ref targetChildRef, 0, subchildSubtreeFraction, false);
         }
         else if (candidateSourceChildSiblingValid)
         {
-          clonedSubchildIndex = TryCloneChild(tree, in sourceParentRef, ref  targetParentRef, 1, in rootNodeRef, rootFraction, -1, false);
+          clonedSubchildIndex = TryCloneChild(tree, in sourceParentRef, ref  targetParentRef, 1, subchildSubtreeFraction,  false);
         }
 
         // In the case of child of the child, the parent statistics
@@ -256,9 +266,9 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           // rather than the node values (such as V) which are pure.
           targetChildRef.N++;
 
-          targetChildRef.W += -1 * (clonedSubchild.V * NODE_FRAC + clonedSubchild.Q * ROOT_FRAC);
-          targetChildRef.mSum += clonedSubchild.MPosition * NODE_FRAC + clonedSubchild.MAvg * ROOT_FRAC;
-          targetChildRef.dSum += clonedSubchild.DrawP * NODE_FRAC + clonedSubchild.DAvg * ROOT_FRAC;
+          targetChildRef.W += -1 * (clonedSubchild.V * NODE_FRAC + clonedSubchild.Q * SUBTREE_FRAC);
+          targetChildRef.mSum += clonedSubchild.MPosition * NODE_FRAC + clonedSubchild.MAvg * SUBTREE_FRAC;
+          targetChildRef.dSum += clonedSubchild.DrawP * NODE_FRAC + clonedSubchild.DAvg * SUBTREE_FRAC;
         }
       }
 

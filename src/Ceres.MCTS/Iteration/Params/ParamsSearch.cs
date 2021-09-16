@@ -307,6 +307,9 @@ namespace Ceres.MCTS.Params
     /// </summary>
     public float TranspositionRootBlendFraction = 0.35f;
 
+    public float[] TranspositionRootBackupSubtreeFracs = new float[] { 1, 0, 0 };
+    public float[] TranspositionRootCloneSubtreeFracs = new float[] { 1, 0, 0 };
+
 
     /// <summary>
     /// Experiemental feature that a initializes a new leaf
