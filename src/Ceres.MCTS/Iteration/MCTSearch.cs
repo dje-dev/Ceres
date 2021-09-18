@@ -375,10 +375,6 @@ namespace Ceres.MCTS.Iteration
           }
 #endif
 
-#if DEBUG
-          priorContext.Tree.Store.Validate(priorContext.Tree.TranspositionRoots);
-#endif
-
           // We decided not to (or couldn't find) that path in the existing tree.
           // First immediately release the prior store to allow memory reclamation.
           priorContext.Tree.Store.Dispose();
