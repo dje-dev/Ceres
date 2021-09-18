@@ -187,6 +187,33 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
 
     /// <summary>
+    /// Destructively repacks child array such that the linkages to any 
+    /// expanded child nodes are undone and rewritten with just original
+    /// the policy move and prior probability.
+    /// </summary>
+    /// <param name="store"></param>
+    public void RepackChildren(MCTSNodeStore store)
+    {
+      if (NumChildrenExpanded > 0)
+      {
+        Span<MCTSNodeStructChild> children = ChildrenFromStore(store);
+
+        for (int i = 0; i < NumChildrenExpanded; i++)
+        {
+          MCTSNodeStructChild childInfo = children[i];
+
+          ref readonly MCTSNodeStruct otherNode = ref store.Nodes.nodes[childInfo.ChildIndex.Index];
+
+          children[i].SetUnexpandedPolicyValues(otherNode.PriorMove, otherNode.P);
+        }
+
+        NumChildrenExpanded = 0;
+        NumChildrenVisited = 0;
+      }
+    }
+
+
+    /// <summary>
     /// Allocates space for specified number of children
     /// </summary>
     /// <param name="numPolicyMoves">number of children to allocate space for (degenerate case of zero is acceptable)</param>
@@ -197,9 +224,13 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       NumPolicyMoves = (byte)numPolicyMoves;
 
       if (numPolicyMoves > 0)
+      {
         childStartBlockIndex = (int)tree.Store.Children.AllocateEntriesStartBlock(numPolicyMoves);
+      }
       else
+      {
         childStartBlockIndex = 0;
+      }
     }
 
 
