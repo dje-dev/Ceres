@@ -135,7 +135,6 @@ namespace Ceres.MCTS.Evaluators
     }
 
 
-
     /// <summary>
     /// Implements virtual method to try to resolve evaluation of a specified node
     /// from the transposition data structures.
@@ -172,6 +171,25 @@ namespace Ceres.MCTS.Evaluators
       {
         // Found already existing node
         ref readonly MCTSNodeStruct transpositionNode = ref node.Context.Tree.Store.Nodes.nodes[transpositionNodeIndex];
+
+        if (transpositionNodeIndex == 1)
+        {
+          return default;
+        }
+
+
+//#if NOTUSE_TRLOGIC
+        if (transpositionNode.IsOldGeneration)
+        {
+          // TODO: possibly relax this! These nodes are kept around and possibly useful,
+          //       seemingly about 3% of nodes can be satisfied from these old nodes.
+          //       However disabled because there is a correctness problem, the old nodes
+          //       are not kept fully up to date with nodes being moved around subsequently,
+          //       and currently causes Assertion failure quickly in SetExpandedChildIndex
+          //       because upon swap it tries to set a parent node to 1 (root) which is not meaningful.
+          return default;
+        }
+//#endif
 
         if (!transpositionNode.IsValidTranspositionLinkedSource)
         {

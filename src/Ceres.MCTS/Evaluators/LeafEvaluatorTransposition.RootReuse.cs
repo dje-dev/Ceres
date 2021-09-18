@@ -16,6 +16,7 @@
 using System;
 using System.Diagnostics;
 using Ceres.Base.DataTypes;
+using Ceres.Chess;
 using Ceres.Chess.EncodedPositions;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Storage;
@@ -162,25 +163,36 @@ namespace Ceres.MCTS.Evaluators
       Debug.Assert(!float.IsNaN(FRAC_ROOT));
       float FRAC_POS = 1f - FRAC_ROOT;
 
-      var visit0Ref = MCTSNodeStruct.SubnodeRefVisitedAtIndex(in transpositionRootNode, 0, out bool foundV0);
 
       // Helper method to set the PendingTransposition values from specified subnode.
       void SetNodePendingValues(in MCTSNodeStruct transpositionRootRef, float multiplier, in MCTSNodeStruct subnodeRef, bool subnodeRefIsValid)
       {
         Debug.Assert(subnodeRefIsValid);
 
+        float qToUse = (float)subnodeRef.Q;
+
+#if NOT
+        if (subnodeRef.N > 5 && subnodeRef.NumChildrenVisited > 0 && subnodeRef.ChildAtIndexRef(0).N > 0 && !subnodeRef.Terminal.IsTerminal())// && node.Context.ParamsSearch.TestFlag)
+        {
+          float local = 0.5f * (subnodeRef.V + (-1 * subnodeRef.ChildAtIndexRef(0).V));
+          qToUse = 0.5f + (float)subnodeRef.Q + 0.5f * local;
+
+        }
+#endif
+
         node.PendingTranspositionV = FRAC_POS * subnodeRef.V * multiplier
-                                   + FRAC_ROOT * (float)transpositionRootRef.Q;
+                                   + FRAC_ROOT * qToUse * multiplier;
 
         node.PendingTranspositionM = FRAC_POS * subnodeRef.MPosition 
-                                   + FRAC_ROOT * transpositionRootRef.MAvg;
+                                   + FRAC_ROOT * subnodeRef.MAvg;
         node.PendingTranspositionD = FRAC_POS * subnodeRef.DrawP 
-                                   + FRAC_ROOT * transpositionRootRef.DAvg;
+                                   + FRAC_ROOT * subnodeRef.DAvg;
       }
 
       if (node.N == 0)
       {
-        SetNodePendingValues(in transpositionRootNode, 1, in visit0Ref, foundV0);
+        // less efficient var visit0Ref = MCTSNodeStruct.SubnodeRefVisitedAtIndex(in transpositionRootNode, 0, out bool foundV0);
+        SetNodePendingValues(in transpositionRootNode, 1, in transpositionRootNode, true);
       }
       else
       {

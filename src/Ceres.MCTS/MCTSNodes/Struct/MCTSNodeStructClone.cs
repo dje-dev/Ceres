@@ -102,7 +102,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
       ParamsSearch paramsSearch = MCTSManager.ThreadSearchContext.ParamsSearch;
       if (paramsSearch.TranspositionRootBackupSubtreeFracs[0] 
-       != paramsSearch.TranspositionRootCloneSubtreeFracs[0])
+       != paramsSearch.TranspositionCloneNodeSubtreeFracs[0])
       {
         throw new Exception("First element of TranspositionRootBackupSubtreeFracs and TranspositionRootCloneSubtreeFracs must be same");
       }
@@ -113,13 +113,14 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       CopyUnexpandedChildrenFromOtherNode(tree, startingTranspositionRootIndex);
 
       // Copy one or possibly two children from subtree to
-      // make the copied subtree look what it would 
+      // make the copied subtree look what it would if we had not used transposition root reuse
+      // (except that the accumulator values may be different if TranspositionCloneNodeSubtreeFracs are nonzero).
       if (N > 1)
       {
-        float rootFrac = paramsSearch.TranspositionRootCloneSubtreeFracs[1];
+        float subtreeFrac = paramsSearch.TranspositionCloneNodeSubtreeFracs[1];
         ref readonly MCTSNodeStruct transpositionRootRef = ref tree.Store.Nodes.nodes[startingTranspositionRootIndex.Index];
         bool cloneSubchild = N == 3;
-        TryCloneChild(tree, in transpositionRootRef, ref this, 0, rootFrac, cloneSubchild);
+        TryCloneChild(tree, in transpositionRootRef, ref this, 0, subtreeFrac, cloneSubchild);
       }
     }
 
@@ -235,7 +236,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           }
         }
 
-        float subchildSubtreeFraction = MCTSManager.ThreadSearchContext.ParamsSearch.TranspositionRootCloneSubtreeFracs[2];
+        float subchildSubtreeFraction = MCTSManager.ThreadSearchContext.ParamsSearch.TranspositionCloneNodeSubtreeFracs[2];
         
         // Do the clone from the transpose child.
         MCTSNodeStructIndex clonedSubchildIndex = default;

@@ -128,6 +128,32 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       BitArray includedNodes = MCTSNodeStructUtils.BitArrayNodesInSubtree(store, ref newRootChild, true, out numNodesUsed, ref nodesNewlyBecomingPriorGeneration, 0);
 
       int nodesStartCount = tree.Store.Nodes.NumTotalNodes;
+      int numNodes = store.Nodes.nextFreeIndex;
+
+#if NOTUSE_TRLOGIC
+      for (int ix = 1; ix < numNodes; ix++)
+      {
+        if (nodesNewlyBecomingPriorGeneration[ix])
+        {
+          // We can't guarantee the children linkages will be kept up-to-date
+          // with future movement of nodes in tree, so not safe to rely upon children linkages.
+          // Thus the retained nodes becoming old generation will not be safe to rely upon
+          // except for a single instance of tree reuse (from the node itself).
+          // Materialize the linkages now if the current linkage depends on more than one reuse.
+          ref MCTSNodeStruct thisNode = ref nodes[ix];
+          if (thisNode.NumVisitsPendingTranspositionRootExtraction > 0 &&
+            thisNode.NumVisitsPendingTranspositionRootExtraction + thisNode.N > 1)
+          {
+            thisNode.MaterializeSubtreeFromTranspositionRoot(tree);
+          }
+
+          // But we want to keep the node available as a transposition root,
+          // so we repack expanded children so the necessary information for using
+          // the node as a transposition root source (for a single reuse) is safely maintained.
+//          thisNode.RepackChildren(store);
+        }
+      }
+#endif
 
       // Swap new root node into place at index 1.
       SwapNodeIntoRootPosition(store, indexOfNewRootBeforeRewrite, newPriorMoves);
@@ -157,7 +183,6 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 
       // Traverse included nodes, and for each remap any nodes
       // with transposition link to new root to refer to new position.
-      int numNodes = store.Nodes.nextFreeIndex;
       for (int i = 1; i < numNodes; i++)
       {
         ref MCTSNodeStruct thisNode = ref nodes[i];
@@ -165,17 +190,6 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 
         if (!thisNode.IsOldGeneration || isNewlyPriorGeneration)
         {
-#if NOT
-          if (isNewlyPriorGeneration)
-          {
-            // We can't guarantee the children linkages will be kept up-to-date
-            // with future movement of nodes in tree, so not safe to rely upon children linkages.
-            // But we want to keep the node available as a transposition root,
-            // so we repack expanded children so the necessary information for using
-            // the node as a transposition root source (for a single reuse) is safely maintained.
-            thisNode.RepackChildren(store);
-          }
-#endif
           // Two of the nodes have changed position,
           // if this node was transposition linked to either
           // then change the transposition link to reflect the change.

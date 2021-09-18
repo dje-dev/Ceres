@@ -313,13 +313,13 @@ namespace Ceres.MCTS.Params
     /// at and above the node, effectively overweighting nodes deeper in the tree.
     /// 
     /// </summary>
-    public float[] TranspositionRootBackupSubtreeFracs = new float[] { 1, float.NaN, float.NaN };
+    public float[] TranspositionRootBackupSubtreeFracs = new float[] { 1, 1, 1 };
 
     /// <summary>
     /// Fractional weight given to subtree averages (e.g. Q) from node being 
     /// copied (cloned) from transposition root subtree when materializing.
     /// </summary>
-    public float[] TranspositionRootCloneSubtreeFracs = new float[] { 1, float.NaN, float.NaN };
+    public float[] TranspositionCloneNodeSubtreeFracs = new float[] { 1, 1, 1 };
 
 
     /// <summary>
