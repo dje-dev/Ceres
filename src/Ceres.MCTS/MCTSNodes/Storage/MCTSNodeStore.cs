@@ -392,7 +392,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
         ref MCTSNodeStruct node = ref Nodes.nodes[i];
 
         string annotation = annotater?.Invoke(new MCTSNodeStructIndex(i));
-        Console.WriteLine($"{i,7} {node.PriorMove} {node.V,6:F2} {node.Terminal} {node.W,9:F2} Parent={node.ParentIndex.Index} " +
+        Console.WriteLine($"{i,7} N={node.N} {node.PriorMove} V={node.V,6:F3} {node.Terminal} W={node.W,10:F3} Parent={node.ParentIndex.Index} " +
                           $"InFlights={node.NInFlight}/{node.NInFlight2}" +
                           $"ChildStartIndex={node.ChildStartIndex} NumPolicyMoves={node.NumPolicyMoves} CacheIndex={node.CacheIndex} " + annotation);
         if (node.IsOldGeneration)
