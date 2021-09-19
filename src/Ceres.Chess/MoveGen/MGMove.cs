@@ -47,7 +47,6 @@ namespace Ceres.Chess.MoveGen
     [FieldOffset(1)]
     public byte ToSquareIndex;
 
-
     /// <summary>
     /// Flags indicating characteristics, such as if capture
     /// </summary>
@@ -58,7 +57,10 @@ namespace Ceres.Chess.MoveGen
     /// Alias of first two bytes together (used in some performance sensitive code to do quick compare)
     /// </summary>
     [FieldOffset(0)]
-    public short FromAndToCombined;
+    internal short FromAndToCombined;
+
+    [FieldOffset(0)]
+    internal uint AllFieldsCombined;
 
     #endregion
 
@@ -94,6 +96,7 @@ namespace Ceres.Chess.MoveGen
 
       // Obviate requirement of definite assignment to all fields
       Unsafe.SkipInit<short>(out FromAndToCombined);
+      Unsafe.SkipInit<uint>(out AllFieldsCombined);
 
       Piece = piece;
   }
@@ -117,6 +120,7 @@ namespace Ceres.Chess.MoveGen
 
       // Obviate requirement of definite assignment to all fields
       Unsafe.SkipInit<short>(out FromAndToCombined);
+      Unsafe.SkipInit<uint>(out AllFieldsCombined);
     }
 
 
@@ -143,6 +147,7 @@ namespace Ceres.Chess.MoveGen
 
       // Obviate requirement of definite assignment to all fields
       Unsafe.SkipInit<short>(out FromAndToCombined);
+      Unsafe.SkipInit<uint>(out AllFieldsCombined);
     }
 
 
@@ -151,6 +156,14 @@ namespace Ceres.Chess.MoveGen
 
     public const MGChessMoveFlags PromotionFlags = (MGChessMoveFlags.PromoteKnight | MGChessMoveFlags.PromoteBishop 
                                                  |  MGChessMoveFlags.PromoteRook   | MGChessMoveFlags.PromoteQueen);
+
+    /// <summary>
+    /// Returns a new MGMove initialized from a specified raw value.
+    /// </summary>
+    /// <param name="rawValue"></param>
+    /// <returns></returns>
+    public static MGMove FromRaw(uint rawValue) => new MGMove() { AllFieldsCombined = rawValue };
+
 
     /// <summary>
     /// Helper method to flip a square.
