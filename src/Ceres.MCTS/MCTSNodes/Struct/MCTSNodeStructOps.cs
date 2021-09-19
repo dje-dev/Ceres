@@ -13,29 +13,24 @@
 
 #region Using directives
 
-using Ceres.Base.DataType;
-using Ceres.Base.DataType.Trees;
+using System;
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics.X86;
+
 using Ceres.Base.DataTypes;
 using Ceres.Base.Math;
-using Ceres.Base.OperatingSystem;
+
 using Ceres.Chess;
-using Ceres.MCTS.Environment;
-using Ceres.MCTS.Evaluators;
+using Ceres.Chess.EncodedPositions.Basic;
+using Ceres.Chess.MoveGen;
+using Ceres.Chess.MoveGen.Converters;
+
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.LeafExpansion;
 using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.Params;
-using Ceres.MCTS.Search;
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq.Expressions;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
-using System.Runtime.Intrinsics;
-using System.Runtime.Intrinsics.X86;
-using System.Text;
-using System.Threading;
 
 #endregion
 
@@ -48,6 +43,50 @@ namespace Ceres.MCTS.MTCSNodes.Struct
   public partial struct MCTSNodeStruct
   {
     public delegate float MCTSNodeStructMetricFunc(in MCTSNodeStruct node);
+
+
+    /// <summary>
+    /// Returns the MGPosition corresponding to this node.
+    /// 
+    /// NOTE: this is inefficient, requiring descent from root including move generation at each level.
+    /// </summary>
+    /// <param name="store"></param>
+    /// <param name="nodeRef"></param>
+    /// <returns></returns>
+    public MGPosition CalcPosition(MCTSNodeStore store)
+    {
+      if (IsOldGeneration)
+      {
+        throw new Exception("Internal error: CalcPosition net yet supported for old generation nodes.");
+      }
+
+      ref readonly MCTSNodeStruct visitorNodeRef = ref this;
+
+      // Ascend up to root, keeping track of all moves along the way.
+      Span<MCTSNodeStruct> nodes = store.Nodes.Span;
+      Span<ushort> moves = stackalloc ushort[255];
+      int index = 0;
+      while (!visitorNodeRef.IsRoot)
+      {
+        moves[index++] = visitorNodeRef.PriorMove.RawValue;
+        visitorNodeRef = ref nodes[visitorNodeRef.ParentIndex.Index];
+      }
+
+      // Now reverse the ascent, tracking the position along the way.
+      // TODO: would it be possible to sometimes or always avoid the move generation
+      //       and instead use the EncodedMove directly?
+      MGPosition pos = store.Nodes.PriorMoves.FinalPosMG;
+      if (index > 0)
+      {
+        for (int i = index - 1; i >= 0; i--)
+        {
+          EncodedMove move = new EncodedMove(moves[i]);
+          MGMove moveMG = MGMoveConverter.ToMGMove(in pos, move);
+          pos.MakeMove(moveMG);
+        }
+      }
+      return pos;
+    }
 
     /// <summary>
     /// Returns the index within the child array of the expanded child haivng specified node index.
