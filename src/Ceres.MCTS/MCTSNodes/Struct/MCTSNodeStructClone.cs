@@ -45,7 +45,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     {
       get
       {
-        if (IsTranspositionLinked)
+        if (IsTranspositionLinked || Terminal == Chess.GameResult.NotInitialized)
         {
           return 0;
         }         
