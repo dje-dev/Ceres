@@ -143,7 +143,7 @@ namespace Ceres.MCTS.LeafExpansion
     }
 
     /// <summary>
-    /// 
+    /// Set encoded board positions corresponding to positions prior to root position in history.
     /// </summary>
     public List<EncodedPositionBoard> EncodedPriorPositions;
 
@@ -192,7 +192,10 @@ namespace Ceres.MCTS.LeafExpansion
         ret.LastAccessedSequenceCounter = BATCH_SEQUENCE_COUNTER;
       }
 
-      Debug.Assert(ret.Index == nodeIndex.Index);
+      if (ret.Index != nodeIndex.Index)
+      {
+        Console.WriteLine("Warning: GetNode found non-matching node.");
+      }
       return ret;
     }
 
