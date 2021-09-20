@@ -15,13 +15,13 @@
 
 using System;
 
+using System.Collections;
 using Ceres.Base.OperatingSystem;
 using Ceres.Base.Environment;
+using Ceres.Chess;
 using Ceres.Chess.Positions;
 using Ceres.MCTS.Params;
 using Ceres.MCTS.MTCSNodes.Struct;
-using System.Collections;
-using Ceres.Chess;
 using Ceres.MCTS.Iteration;
 
 #endregion
@@ -200,7 +200,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     #endregion
 
     #region Validation
-
+    
     /// <summary>
     /// Diagnostic method which traverses full tree and performs 
     /// a variety of integrity checks on internal consistency,
@@ -243,11 +243,12 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 
       if (transpositionRoots != null)
       {
+        Span<MCTSNodeStruct> nodes = Nodes.Span;
         // Check roots
         foreach (var kvp in transpositionRoots.Dictionary)
         {
-          AssertNode(Nodes.nodes[kvp.Value].IsTranspositionRoot, "Entry in transposition roots dictionary is not marked as transposition root",
-                     kvp.Value, in Nodes.nodes[kvp.Value]);
+          AssertNode(nodes[kvp.Value].IsTranspositionRoot, "Entry in transposition roots dictionary is not marked as transposition root",
+                     kvp.Value, in nodes[kvp.Value]);
         }
       }
 
@@ -259,12 +260,25 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       // Validate all nodes
       for (int i = 1; i < Nodes.nextFreeIndex; i++)
       {
-        ref MCTSNodeStruct nodeR = ref Nodes.nodes[i];
+        Span<MCTSNodeStruct> nodes = Nodes.Span;
+        ref MCTSNodeStruct nodeR = ref nodes[i];
+
+#if NOT
+        // Verify PriorMove is valid.
+        // TODO: Currently this is slow, requires retracing to root 
+        //       and generating moves all the way down.
+        //       Improve by doing a depth first descent in a separate pass, 
+        //       and/or making parallel.
+        if (!nodeR.IsOldGeneration)
+        {
+          Chess.MoveGen.MGPosition thisPos = nodeR.CalcPosition(this);
+        }
+#endif
 
         if (nodeR.IsOldGeneration)
         {
-          AssertNode(!includedNodes[i], "Old generation node in live tree", i, in Nodes.nodes[i], true);
-          continue;
+          AssertNode(!includedNodes[i], "Old generation node in live tree", i, in nodes[i], true);
+          return;
         }
 
         AssertNode(nodeR.Terminal != Chess.GameResult.NotInitialized, "Node not initialized", i, in nodeR);
@@ -304,16 +318,27 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 
         if (nodeR.IsTranspositionLinked)
         {
-          ref readonly MCTSNodeStruct transpositionRoot = ref Nodes.nodes[nodeR.TranspositionRootIndex];
+          ref readonly MCTSNodeStruct transpositionRoot = ref nodes[nodeR.TranspositionRootIndex];
           AssertNode(!transpositionRoot.IsTranspositionLinked, "transposition root was itself transposition linked", i, in nodeR);
           AssertNode(nodeR.ZobristHash == transpositionRoot.ZobristHash, $"transposition link was not to same Zobrist hash with V values: {nodeR.V} vs. {transpositionRoot.V}", i, in nodeR, true);
-          AssertNode(transpositionRoot.IsTranspositionRoot, "node referred to via transposition root table is not marked as transposition root", nodeR.TranspositionRootIndex, in transpositionRoot, false);
+          AssertNode(transpositionRoot.IsTranspositionRoot, "node marked as transposition linked links to node not marked as transposition root", nodeR.TranspositionRootIndex, in transpositionRoot, false);
           // Don't report error if proven win (V > 1) because this conversion may have happened later
-          AssertNode(MathF.Abs(nodeR.V - transpositionRoot.V) < 0.03f || nodeR.V > 1.0f || transpositionRoot.V > 1.0f, 
+          AssertNode(MathF.Abs(nodeR.V - transpositionRoot.V) < 0.03f || nodeR.V > 1.0f || transpositionRoot.V > 1.0f,
                      $"transposition root had different V {nodeR.V} {transpositionRoot.V}", i, in nodeR, true);
         }
         else
         {
+          // Check children
+          float lastP = float.MaxValue;
+          foreach (MCTSNodeStructChild child in nodeR.Children)
+          {
+            if (child.p > lastP)
+            {
+              AssertNode(child.p <= lastP, $"Children were not in descending order by prior probability: {child.p} vs. {lastP}", i, in nodeR);
+              lastP = child.p;
+            }
+          }
+
           // Verify all expanded children point back to ourself
           int numExpanded = 0;
           int numChildren = 0;
@@ -357,9 +382,9 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       }
     }
 
-    #endregion
+#endregion
 
-    #region Diagnostic output
+#region Diagnostic output
 
     /// <summary>
     /// Returns string summary.
@@ -438,7 +463,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       }
     }
 
-    #endregion
+#endregion
   }
 }
 
