@@ -19,10 +19,12 @@ using System.Collections;
 using Ceres.Base.OperatingSystem;
 using Ceres.Base.Environment;
 using Ceres.Chess;
+using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Chess.Positions;
 using Ceres.MCTS.Params;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.Iteration;
+
 
 #endregion
 
@@ -415,9 +417,13 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       for (int i = 1; i <= Nodes.NumUsedNodes; i++)
       {
         ref MCTSNodeStruct node = ref Nodes.nodes[i];
+        int depth = node.DepthInTree;
+        bool isWhite = Nodes.PriorMoves.FinalPosition.SideToMove == SideType.White == (depth % 2 == 1);
+        string sideChar = isWhite ? "w" : "b";
+        EncodedMove moveCorrectPerspective = isWhite ? node.PriorMove : node.PriorMove.Flipped;
 
         string annotation = annotater?.Invoke(new MCTSNodeStructIndex(i));
-        Console.WriteLine($"{i,7} N={node.N} {node.PriorMove} V={node.V,6:F3} {node.Terminal} W={node.W,10:F3} Parent={node.ParentIndex.Index} " +
+        Console.WriteLine($"{i,7} Depth={depth} N={node.N} {sideChar}:{moveCorrectPerspective} V={node.V,6:F3} {node.Terminal} W={node.W,10:F3} Parent={node.ParentIndex.Index} " +
                           $"InFlights={node.NInFlight}/{node.NInFlight2}" +
                           $"ChildStartIndex={node.ChildStartIndex} NumPolicyMoves={node.NumPolicyMoves} CacheIndex={node.CacheIndex} " + annotation);
         if (node.IsOldGeneration)
@@ -449,10 +455,10 @@ namespace Ceres.MCTS.MTCSNodes.Storage
             }
             else
             {
-              Console.WriteLine($"{child.Move} {child.P} ");
+              Console.WriteLine($"{(isWhite ? child.Move.Flipped : child.Move)} {child.P} ");
             }
 
-            if (childIndex > maxExpandedIndex + 1)
+            if (childIndex > maxExpandedIndex + 2)
             {
               Console.WriteLine($"    (followed by {node.NumPolicyMoves - childIndex} additional unexpanded children)");
               break;
