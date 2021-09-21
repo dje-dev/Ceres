@@ -281,7 +281,7 @@ namespace Ceres.Chess
           hash = (long)hash * -1521134295L + pieceSquaresUint[i];
         }
       }
-      return (byte)(hash / 256);
+      return (byte)(hash.GetHashCode());
     }
 
 
