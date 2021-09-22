@@ -48,10 +48,10 @@ namespace Ceres.Chess.TBBackends.Fathom
   /// </summary>
   internal static class FathomFENParsing
   {
-    const int TB_CASTLING_K = 0x1;     /* White king-side. */
-    const int TB_CASTLING_Q = 0x2;     /* White queen-side. */
-    const int TB_CASTLING_k = 0x4;     /* Black king-side. */
-    const int TB_CASTLING_q = 0x8;     /* Black queen-side. */
+    internal const int TB_CASTLING_K = 0x1;     /* White king-side. */
+    internal const int TB_CASTLING_Q = 0x2;     /* White queen-side. */
+    internal const int TB_CASTLING_k = 0x4;     /* Black king-side. */
+    internal const int TB_CASTLING_q = 0x8;     /* Black queen-side. */
 
     static ulong board(int s) => ((ulong)1 << (s));
 

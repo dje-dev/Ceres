@@ -40,12 +40,15 @@ SOFTWARE.
 
 #endregion
 
+using Ceres.Base.DataTypes;
+using System;
+
 namespace Ceres.Chess.TBBackends.Fathom
 {
   /// <summary>
   /// Represents a board position for use internally with Fathom methods.
   /// </summary>
-  public struct FathomPos
+  internal struct FathomPos
   {
     public ulong white;
     public ulong black;
@@ -61,7 +64,7 @@ namespace Ceres.Chess.TBBackends.Fathom
     public short move;
     public int castling;
 
-    public FathomPos(ulong white, ulong black, ulong kings, ulong queens, ulong rooks, ulong bishops, ulong knights, ulong pawns, byte rule50, byte ep, bool turn, short move, int castling)
+    internal FathomPos(ulong white, ulong black, ulong kings, ulong queens, ulong rooks, ulong bishops, ulong knights, ulong pawns, byte rule50, byte ep, bool turn, short move, int castling)
     {
       this.white = white;
       this.black = black;
@@ -78,9 +81,62 @@ namespace Ceres.Chess.TBBackends.Fathom
       this.castling = castling;
     }
 
+
+    /// <summary>
+    /// Converts a Position into corresponding FathomPos.
+    /// </summary>
+    public static FathomPos FromPosition(Position pos)
+    {
+      FathomPos fp2 = default;
+
+      if (pos.MiscInfo.EnPassantRightsPresent)
+      {
+        // The Fathom logic removes the ep indicator if
+        // the move list is not changed by it.
+        // To avoid complexity of checking this
+        // in the infrequent occurrence of en passant rights in tablebase probes.
+        // we fallback to the original implementation in this case.
+        FathomFENParsing.parse_FEN(ref fp2, pos.FEN);
+        return fp2;
+
+        // TODO: consider someday implementing this directly.
+        //       Note that looking at positions of opponent pawns
+        //       is not completely correct due to possible pins,
+        //       therefore a full movegen would be necessary
+        //       in cases where an opponent pawn is on a possible move square.
+
+        //static int square(int r, int f) => (8 * (r) + (f));
+        //    int rank = pos.MiscInfo.SideToMove == SideType.White ? 2 : 5;
+        //    int file = (int)pos.MiscInfo.EnPassantFileIndex;
+        //    fp2.ep = (byte)square(rank, file);
+      }
+
+      Span<BitVector64> bv = stackalloc BitVector64[16];
+      pos.InitializeBitmaps(bv, false);
+
+      fp2.rule50 = pos.MiscInfo.Move50Count;
+      fp2.turn = pos.MiscInfo.SideToMove == SideType.White;
+      fp2.move = Math.Min((byte)255, pos.MiscInfo.MoveNum);
+
+      
+      if (pos.MiscInfo.WhiteCanOO) fp2.castling |= FathomFENParsing.TB_CASTLING_K;
+      if (pos.MiscInfo.WhiteCanOOO) fp2.castling |= FathomFENParsing.TB_CASTLING_Q;
+      if (pos.MiscInfo.BlackCanOO) fp2.castling |= FathomFENParsing.TB_CASTLING_k;
+      if (pos.MiscInfo.BlackCanOOO) fp2.castling |= FathomFENParsing.TB_CASTLING_q;
+
+      fp2.white = (ulong)(bv[1].Data | bv[2].Data | bv[3].Data | bv[4].Data | bv[5].Data | bv[6].Data);
+      fp2.black = (ulong)(bv[9].Data | bv[10].Data | bv[11].Data | bv[12].Data | bv[13].Data | bv[14].Data);
+
+      fp2.pawns = (ulong)(bv[1].Data | bv[9].Data);
+      fp2.knights = (ulong)(bv[2].Data | bv[10].Data);
+      fp2.bishops = (ulong)(bv[3].Data | bv[11].Data);
+      fp2.rooks = (ulong)(bv[4].Data | bv[12].Data);
+      fp2.queens = (ulong)(bv[5].Data | bv[13].Data);
+      fp2.kings = (ulong)(bv[6].Data | bv[14].Data);
+
+      return fp2;
+    }
+
   }
-
-
-
 
 }
