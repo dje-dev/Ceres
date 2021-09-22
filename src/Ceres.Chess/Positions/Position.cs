@@ -202,12 +202,14 @@ namespace Ceres.Chess
           return PositionDrawStatus.NotDraw;
         }
 
-        if (bishopCountThem == 2 
-        || (bishopCountThem == 1 && knightCountThem == 1))
+        if (bishopCountThem == 2 || (bishopCountThem == 1 && knightCountThem == 1))
         {
           return PositionDrawStatus.NotDraw;
         }
-
+        else if (bishopCountUs == 2 || (bishopCountUs == 1 && knightCountUs == 1))
+        {
+          return PositionDrawStatus.NotDraw;
+        }
 
         return PositionDrawStatus.DrawByInsufficientMaterial;
       }
