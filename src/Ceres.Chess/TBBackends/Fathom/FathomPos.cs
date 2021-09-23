@@ -37,11 +37,14 @@ SOFTWARE.
 
 #region Using directives
 
+using System;
+using System.Runtime.CompilerServices;
+using Ceres.Base.DataTypes;
 
 #endregion
 
-using Ceres.Base.DataTypes;
-using System;
+
+[assembly: InternalsVisibleTo("Ceres.Chess.Test")]
 
 namespace Ceres.Chess.TBBackends.Fathom
 {
