@@ -510,7 +510,7 @@ namespace Ceres.MCTS.MTCSNodes
       Ref.Traverse(Context.Tree.Store,
                    (ref MCTSNodeStruct nodeRef) =>
                    {
-                     if (nodeRef.IsTranspositionLinked)
+                     if (!nodeRef.IsOldGeneration && nodeRef.IsTranspositionLinked)
                      {
                        nodeRef.MaterializeSubtreeFromTranspositionRoot(Context.Tree);
                      }
