@@ -18,9 +18,12 @@ using System.Diagnostics;
 using System.Threading;
 
 using Ceres.Chess;
+using Ceres.Chess.EncodedPositions.Basic;
+using Ceres.Chess.MoveGen.Converters;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.LeafExpansion;
 using Ceres.MCTS.MTCSNodes;
+using Ceres.MCTS.MTCSNodes.Annotation;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.Params;
 
@@ -182,6 +185,51 @@ namespace Ceres.MCTS.Evaluators
           return default;
         }
 
+
+        ref readonly MCTSNodeAnnotation annotationThisNode = ref node.annotation;
+#if NOT
+        MCTSNode transpositionNodeItem = tree.GetNode(new MCTSNodeStructIndex(transpositionNodeIndex));
+        transpositionNodeItem.Annotate();
+        ref readonly MCTSNodeAnnotation annotationTranspositionNode = ref transpositionNodeItem.annotation;
+
+        bool posIdentical = transpositionNodeItem.Annotation.Pos.PiecesShortHash == node.Annotation.Pos.PiecesShortHash
+                         && transpositionNodeItem.Annotation.PosMG.A == annotationThisNode.PosMG.A
+                         && transpositionNodeItem.Annotation.PosMG.B == annotationThisNode.PosMG.B
+                         && transpositionNodeItem.Annotation.PosMG.C == annotationThisNode.PosMG.C
+                         && transpositionNodeItem.Annotation.PosMG.D == annotationThisNode.PosMG.D;
+
+        if (!posIdentical)
+        {
+          Console.WriteLine("no p" + annotationThisNode.Pos.FEN + " ");
+        }
+#endif
+
+#if NOT
+        // Make sure the linked position is actually the same.
+        // In theory due to collisions perahps this would not be the case
+        // (and we might need to use the HashCrosscheck to avoid)
+        // but in practice does not seem to happen.
+        Span<EncodedMove> moves = stackalloc EncodedMove[annotationThisNode.Moves.NumMovesUsed];
+        for (int i = 0; i < annotationThisNode.Moves.NumMovesUsed; i++)
+        {
+          moves[i] = transpositionNode.ChildAtIndex(i).Move;
+        }
+        for (int i = 0; i < annotationThisNode.Moves.NumMovesUsed; i++)
+        {
+          EncodedMove moveThisPos = ConverterMGMoveEncodedMove.MGChessMoveToEncodedMove(annotationThisNode.Moves.MovesArray[i]);
+          if (MemoryExtensions.IndexOf(moves, moveThisPos) == -1)
+          {
+            Console.WriteLine("Warning: transposition link is to different position! fen= " + annotationThisNode.Pos.FEN);
+            Console.WriteLine(moveThisPos.RawValue + " "
+              + annotationThisNode.Moves.MovesArray[i] + " "
+              + annotationThisNode.Moves.MovesArray[i].FromSquareIndex + " "
+              + annotationThisNode.Moves.MovesArray[i].ToSquareIndex + " "
+              + annotationThisNode.Moves.MovesArray[i].Flags + " ");
+          }
+        }
+#endif        
+
+
         if (node.Context.ParamsSearch.TranspositionUseCluster)
         {
           MCTSNodeTranspositionManager.CheckAddToCluster(node);
@@ -191,8 +239,12 @@ namespace Ceres.MCTS.Evaluators
       }
       else
       {
-        int pendingIndex = Interlocked.Increment(ref nextIndexPendingTranspositionRoots) - 1;
-        pendingTranspositionRoots[pendingIndex] = (node.Ref.ZobristHash, node.Index);
+        // Never allow root to be transposition root.
+        if (node.Index != 1)
+        {
+          int pendingIndex = Interlocked.Increment(ref nextIndexPendingTranspositionRoots) - 1;
+          pendingTranspositionRoots[pendingIndex] = (node.Ref.ZobristHash, node.Index);
+        }
 
         //        if (CeresEnvironment.MONITORING_METRICS) NumMisses++;
 

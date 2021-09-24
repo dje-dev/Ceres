@@ -15,6 +15,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using Ceres.Base.Math;
 using Ceres.MCTS.MTCSNodes.Struct;
 
@@ -62,6 +63,8 @@ namespace Ceres.MCTS.Iteration
     /// <param name="nodeIndex"></param>
     public bool TryAdd(ulong hashKey, int nodeIndexNew, int nodeIndexCurrent, Span<MCTSNodeStruct> nodes)
     {
+      Debug.Assert(nodeIndexNew != 1); // Root not allowed to be transposition root
+
       bool added = table.TryAdd(hashKey, nodeIndexNew);
       if (added)
       {

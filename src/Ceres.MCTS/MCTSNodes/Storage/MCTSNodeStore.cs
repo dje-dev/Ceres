@@ -245,6 +245,8 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 
       if (transpositionRoots != null)
       {
+        Assert(MCTSNodeStructStorage.SWAP_ROOT_ENHANCED_METHOD || !RootNode.IsTranspositionRoot, "Root node is transposition root");
+
         Span<MCTSNodeStruct> nodes = Nodes.Span;
         // Check roots
         foreach (var kvp in transpositionRoots.Dictionary)
