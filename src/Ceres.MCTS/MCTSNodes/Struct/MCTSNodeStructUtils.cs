@@ -183,8 +183,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     public static BitArray BitArrayNodesInSubtree(MCTSNodeStore store, ref MCTSNodeStruct newRoot,
                                                   bool setOldGeneration, out uint numNodes, int numExtraPaddingNodesAtEnd = 0)
     {
-      BitArray dummy = null;
-      return BitArrayNodesInSubtree(store, ref newRoot, setOldGeneration, out numNodes, ref dummy, numExtraPaddingNodesAtEnd);
+      return BitArrayNodesInSubtree(store, ref newRoot, setOldGeneration, out numNodes, null, numExtraPaddingNodesAtEnd);
     }
 
 
@@ -203,7 +202,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <returns></returns>
     public static BitArray BitArrayNodesInSubtree(MCTSNodeStore store, ref MCTSNodeStruct newRoot,
                                                   bool setOldGeneration, out uint numNodes,
-                                                  ref BitArray nodesNewlyBecomingOldGeneration,
+                                                  BitArray nodesNewlyBecomingOldGeneration,
                                                   int numExtraPaddingNodesAtEnd)
     {
       BitArray includedNodes = new BitArray(store.Nodes.NumTotalNodes + numExtraPaddingNodesAtEnd);
@@ -230,7 +229,10 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           }
           else if (setOldGeneration)
           {
-            nodesNewlyBecomingOldGeneration[i] = true;
+            if (nodesNewlyBecomingOldGeneration != null)
+            {
+              nodesNewlyBecomingOldGeneration[i] = true;
+            }
             nodeRef.IsOldGeneration = true;
             store.Nodes.NumOldGeneration++;
           }
