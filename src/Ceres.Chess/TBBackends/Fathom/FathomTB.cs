@@ -93,11 +93,11 @@ namespace Ceres.Chess.TBBackends.Fathom
     /// </summary>
     /// <param name="fen">FEN of the position</param>
     /// <returns>the result of the lookup, or Error if not found</returns>
-    public static FathomWDLResult ProbeWDL(string fen)
+    public static FathomWDLResult ProbeWDL(in Position pos)
     {
       //      if (_rule50 != 0)        return TB_RESULT_FAILED;
 
-      if (!PreparePos(fen, out FathomPos pos))
+      if (!PreparePos(in pos, out FathomPos fathomPos))
       {
         return FathomWDLResult.Failure;
       }
@@ -106,11 +106,11 @@ namespace Ceres.Chess.TBBackends.Fathom
       int success = 0;
       try
       {
-        v = probe.probe_wdl(in pos, out success);
+        v = probe.probe_wdl(in fathomPos, out success);
       }
       catch (Exception exc)
       {
-        Console.WriteLine($"Exception in Fathom probe_wdl {fen} of {exc}");
+        Console.WriteLine($"Exception in Fathom probe_wdl {pos.FEN} of {exc}");
         return FathomWDLResult.Failure;
       }
 
@@ -139,15 +139,16 @@ namespace Ceres.Chess.TBBackends.Fathom
      *   3) TB_RESULT_FAILED is returned if the probe failed.
      */
 
-    static bool PreparePos(string fen, out FathomPos pos)
+    static bool PreparePos(in Position pos, out FathomPos fathomPos)
     {
-      pos = default;
-      if (!FathomFENParsing.parse_FEN(ref pos, fen))
-      {
-        throw new Exception("Internal error: FEN parse error in FathomTB.ProbeDTZ" + fen);
-      }
+      fathomPos = FathomPos.FromPosition(in pos);
 
-      if (pos.castling != 0)
+#if DEBUG
+      FathomPos fp2 = default;
+      Debug.Assert(FathomFENParsing.parse_FEN(ref fp2, pos.FEN) && fp2.Equals(fathomPos));
+#endif
+
+      if (fathomPos.castling != 0)
       {
         return false;
       }
@@ -155,15 +156,16 @@ namespace Ceres.Chess.TBBackends.Fathom
     }
 
 
-    public static int ProbeDTZOnly(string fen, out int success)
+
+    public static int ProbeDTZOnly(in Position pos, out int success)
     {
-      if (!PreparePos(fen, out FathomPos pos))
+      if (!PreparePos(in pos, out FathomPos fathomPos))
       {
         success = 0; // failure 
         return -1;
       };
 
-      int ret = probe.probe_dtz(in pos, out success);
+      int ret = probe.probe_dtz(in fathomPos, out success);
       if (ret == 0)
       {
         return -1;
@@ -188,7 +190,7 @@ namespace Ceres.Chess.TBBackends.Fathom
     /// <param name="minDTZ">the DTZ of the move having minimum DTZ value</param>
     /// <param name="results">if not null then the set of possible moves is populated</param>
     /// <returns>the suggested move (guaranteed to preserve the WDL value </returns>
-    public static FathomProbeMove ProbeDTZ(string fen, out int minDTZ, List<ulong> results = null)
+    public static FathomProbeMove ProbeDTZ(in Position pos, out int minDTZ, List<ulong> results = null)
     {
       if (results != null)
       {
@@ -200,7 +202,7 @@ namespace Ceres.Chess.TBBackends.Fathom
       // Currently feature disabled, to enable allocate this array
       uint[] resultsArray = new uint[FathomMoveGen.TB_MAX_MOVES];
 
-      if (!PreparePos(fen, out FathomPos pos))
+      if (!PreparePos(in pos, out FathomPos fathomPos))
       {
         return new FathomProbeMove() { Result = FathomWDLResult.Failure };
       }
@@ -208,9 +210,9 @@ namespace Ceres.Chess.TBBackends.Fathom
       uint res;
       lock (dtzLockObj)
       {
-        res = probe.tb_probe_root(pos.white, pos.black, pos.kings,
-                                  pos.queens, pos.rooks, pos.bishops, pos.knights, pos.pawns,
-                                  pos.rule50, pos.castling, pos.ep, pos.turn, resultsArray);
+        res = probe.tb_probe_root(fathomPos.white, fathomPos.black, fathomPos.kings,
+                                  fathomPos.queens, fathomPos.rooks, fathomPos.bishops, fathomPos.knights, fathomPos.pawns,
+                                  fathomPos.rule50, fathomPos.castling, fathomPos.ep, fathomPos.turn, resultsArray);
       }
 
       if (res == uint.MaxValue)
@@ -227,10 +229,8 @@ namespace Ceres.Chess.TBBackends.Fathom
           minDTZ = (int)dtz;
         }
       }
-
-      Position position = Position.FromFEN(fen);
-
-      MGMove move = ToMGMove(res, position);
+      
+      MGMove move = ToMGMove(res, in pos);
       return new FathomProbeMove()
       {
         Result = (FathomWDLResult)FathomProbe.TB_GET_WDL((int)res),
@@ -245,7 +245,7 @@ namespace Ceres.Chess.TBBackends.Fathom
     /// <param name="fathomResult"></param>
     /// <param name="position"></param>
     /// <returns></returns>
-    private static MGMove ToMGMove(uint fathomResult, Position position)
+    private static MGMove ToMGMove(uint fathomResult, in Position position)
     {
       if (fathomResult == FathomProbe.TB_RESULT_STALEMATE 
        || fathomResult == FathomProbe.TB_RESULT_CHECKMATE)
@@ -306,7 +306,7 @@ namespace Ceres.Chess.TBBackends.Fathom
 
     static object dtzLockObj = new ();
 
-      #if NOT
+#if NOT
 
 struct TbRootMove
     {

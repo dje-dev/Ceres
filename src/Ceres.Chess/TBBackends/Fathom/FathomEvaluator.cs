@@ -103,7 +103,7 @@ so maybe this engine is not doing this optimally?
         return default;
       }
 
-      FathomProbeMove fathomResult = FathomTB.ProbeDTZ(currentPos.FEN, out int minDTZ, null);
+      FathomProbeMove fathomResult = FathomTB.ProbeDTZ(currentPos, out int minDTZ, null);
       // int dtz = FathomTB.ProbeDTZOnly(currentPos.FEN, out int success); does not work
 
       MGMove fathomMove = default;
@@ -169,7 +169,7 @@ so maybe this engine is not doing this optimally?
         return;
       }
 
-      FathomWDLResult probeResult = FathomTB.ProbeWDL(pos.FEN);
+      FathomWDLResult probeResult = FathomTB.ProbeWDL(in pos);
 
       if (probeResult == FathomWDLResult.Failure)
       {
@@ -193,7 +193,7 @@ so maybe this engine is not doing this optimally?
       if (TEST && (score == LC0DLLSyzygyEvaluator.WDLScore.WDLWin 
                 || score == LC0DLLSyzygyEvaluator.WDLScore.WDLLoss))
       {
-        FathomProbeMove fathomResult = FathomTB.ProbeDTZ(pos.FEN, out int minDTZ, null);
+        FathomProbeMove fathomResult = FathomTB.ProbeDTZ(in pos, out int minDTZ, null);
         int numMovesAvailable = 100 - pos.MiscInfo.Move50Count;
         if (Math.Abs(minDTZ) > numMovesAvailable)
         {

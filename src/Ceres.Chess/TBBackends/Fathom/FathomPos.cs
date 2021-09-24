@@ -88,7 +88,7 @@ namespace Ceres.Chess.TBBackends.Fathom
     /// <summary>
     /// Converts a Position into corresponding FathomPos.
     /// </summary>
-    public static FathomPos FromPosition(Position pos)
+    public static FathomPos FromPosition(in Position pos)
     {
       FathomPos fp2 = default;
 
