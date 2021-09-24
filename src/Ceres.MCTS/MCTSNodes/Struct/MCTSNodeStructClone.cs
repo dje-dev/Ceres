@@ -184,7 +184,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       targetChildRef.VSecondary = sourceChildRef.VSecondary;
       targetChildRef.Uncertainty = sourceChildRef.Uncertainty;
 
-      targetChildRef.Unused1 = sourceChildRef.Unused1;
+      //targetChildRef.HashCrosscheck = sourceChildRef.HashCrosscheck;
 
       // TODO: centralize this logic better (similar to what is in BackupApply).
       if (targetChildRef.Terminal == Chess.GameResult.Draw)

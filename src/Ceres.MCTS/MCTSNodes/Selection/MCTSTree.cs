@@ -282,6 +282,7 @@ namespace Ceres.MCTS.LeafExpansion
       annotation.PosMG = newPos;
 
       node.Ref.ZobristHash = zobristHashForCaching;
+      //node.Ref.HashCrosscheck = annotation.Pos.PiecesShortHash;
 
       const bool FAST = true;
       if (!FAST)

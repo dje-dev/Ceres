@@ -26,6 +26,7 @@ using Ceres.Chess;
 using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
+using Ceres.MCTS.Iteration;
 using Ceres.MCTS.LeafExpansion;
 using Ceres.MCTS.MTCSNodes.Annotation;
 using Ceres.MCTS.MTCSNodes.Storage;
@@ -176,6 +177,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       set
       {
         Debug.Assert(value >= 0);
+        //Debug.Assert(value != 1);
         childStartBlockIndex = -value;
       }
     }
@@ -201,6 +203,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       MPosition = 0;
       IsOldGeneration = false;
       ZobristHash = 0;
+      //HashCrosscheck = 0;
 
 #if FEATURE_UNCERTAINTY
       Uncertainty = UNCERTAINTY_PRIOR;
@@ -375,7 +378,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     {
       string indexStr = $"#{Index.Index}";
       string oldStr = IsOldGeneration ? " OLD" : "";
-      return $"<Node [#{indexStr}] {oldStr} Depth{DepthInTree} {Terminal} {PriorMove} ({N},{NInFlight},{NInFlight2})  P={P * 100.0f:F3}% "
+      bool isWhite = (DepthInTree % 2 == 1) == (MCTSManager.ThreadSearchContext.Tree.Store.Nodes.PriorMoves.FinalPosition.SideToMove == SideType.White);
+      return $"<Node [#{indexStr}] {oldStr} Depth{DepthInTree} {Terminal} {(isWhite?PriorMove:PriorMove.Flipped)} ({N},{NInFlight},{NInFlight2})  P={P * 100.0f:F3}% "
             + $"V={V:F3}" + (VSecondary == 0 ? "" : $"VSecondary={VSecondary:F3} ") + $" W={W:F3} "
             + $"MPos={MPosition:F3} MAvg={MAvg:F3} "
            + $"Parent={(ParentIndex.IsNull ? "none" : ParentIndex.Index.ToString())}"
