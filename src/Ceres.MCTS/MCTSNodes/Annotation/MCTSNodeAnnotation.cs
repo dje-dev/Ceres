@@ -85,7 +85,10 @@ namespace Ceres.MCTS.MTCSNodes.Annotation
           {
             localMovesBuffer = movesBuffer = new MGMoveList(128);
           }
-          localMovesBuffer.Clear();
+          else
+          {
+            localMovesBuffer.Clear();
+          }
 
           MGMoveGen.GenerateMoves(in PosMG, localMovesBuffer);
           moves = new MGMoveList(localMovesBuffer); // make a copy (with exact size)
