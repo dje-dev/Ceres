@@ -155,6 +155,20 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
     public byte Unused1;
 
+#if NOT
+/// <summary>
+    /// The 64 bit Zobrist hash is used to find nodes in the transposition table
+    /// within the same hash equivlance class. However hash collisions will
+    /// occur (perhaps ever 300 million to 3 billion positions) and establishing
+    /// incorrect linkages could lead to incorrect valuations or invalid move lists
+    /// being propagated to the linked nodes.
+    /// 
+    /// The HashCrossheck is an independent 8 bit hash value used 
+    /// as an additional crosscheck for equality before establishing linkages
+    /// to transposition nodes to greatly reduce their likelihood.
+    /// </summary>
+    public byte HashCrosscheck;
+#endif
 
     /// <summary>
     /// If at least one of the children has been found to 
