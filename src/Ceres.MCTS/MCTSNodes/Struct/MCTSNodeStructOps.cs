@@ -13,24 +13,32 @@
 
 #region Using directives
 
-using System;
-using System.Diagnostics;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
-using System.Runtime.Intrinsics.X86;
-
+using Ceres.Base.DataType;
+using Ceres.Base.DataType.Trees;
 using Ceres.Base.DataTypes;
 using Ceres.Base.Math;
-
+using Ceres.Base.OperatingSystem;
 using Ceres.Chess;
 using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
-
+using Ceres.MCTS.Environment;
+using Ceres.MCTS.Evaluators;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.LeafExpansion;
 using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.Params;
+using Ceres.MCTS.Search;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq.Expressions;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.X86;
+using System.Text;
+using System.Threading;
 
 #endregion
 
@@ -87,6 +95,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       }
       return pos;
     }
+
 
     /// <summary>
     /// Returns the index within the child array of the expanded child haivng specified node index.
@@ -799,13 +808,18 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <param name="numInFlight2"></param>
     public unsafe void BackupApply(Span<MCTSNodeStruct> nodes,
                                    int numToApply,
-                                   float vToApply, float mToApply, float dToApply, bool wasTerminal,
+                                   float vToApplyFirst, float vToApplyNonFirst, float mToApply, 
+                                   float dToApplyFirst, float dToApplyNonFirst,
+                                   bool wasTerminal,
                                    int numInFlight1, int numInFlight2,
                                    out MCTSNodeStructIndex indexOfChildDescendentFromRoot)
     {
-      Debug.Assert(!float.IsNaN(vToApply));
+      Debug.Assert(!float.IsNaN(vToApplyFirst));
 
       indexOfChildDescendentFromRoot = default;
+      bool first = true;
+      float vToApply = vToApplyFirst;
+      float dToApply = dToApplyFirst;
 
       ref MCTSNodeStruct node = ref this;
       while (true)
@@ -819,9 +833,9 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         // (use value of 0 here and further up in tree)
         if (vToApply < 0 && node.DrawKnownToExistAmongChildren)
         {
-          vToApply = 0;
+          vToApply = vToApplyNonFirst = 0;
           mToApply = 0;
-          dToApply = 1; // TODO: is this ok even if not WDL network?
+          dToApply = dToApplyFirst = 1; // TODO: is this ok even if not WDL network?
         }
 
         // NOTE: It is not possible to make the updates to both N and W atomic as a group.
@@ -894,6 +908,13 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           if (node.N > 1 && node.ParentRef.N > 0 && !double.IsNaN(node.ParentRef.Q) && thisNodeMuchWorse && thisNodeExploratory && SearchManager.ThreadSearchContext.ParamsSearch.TEST_FLAG)
             vToApply = (float)node.Q;
 #endif
+
+          if (first)
+          {
+            vToApply = vToApplyNonFirst;
+            dToApply = dToApplyNonFirst;
+            first = false;
+          }
 
           // Backup in tree 
           vToApply *= -1; // flip sign to change perspective

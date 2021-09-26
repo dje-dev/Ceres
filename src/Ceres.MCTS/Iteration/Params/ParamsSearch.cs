@@ -331,6 +331,12 @@ namespace Ceres.MCTS.Params
 
 
     /// <summary>
+    /// If evaluations of siblings not yet visited (derived from transpositions)
+    /// should possibly be blended into backed up evaluations.
+    /// </summary>
+    public bool EnableUseSiblingEvaluations = true;
+
+    /// <summary>
     /// Amount of time subtracted from time allotments to 
     /// compensate for lag or various unpredictable latencies.
     /// </summary>
@@ -341,6 +347,11 @@ namespace Ceres.MCTS.Params
     /// Optional flag that can be defined by developers for ad-hoc testing.
     /// </summary>
     public bool TestFlag = false;
+
+    /// <summary>
+    /// Optional (secondary)flag that can be defined by developers for ad-hoc testing.
+    /// </summary>
+    public bool TestFlag2 = false;
 
 
     /// <summary>

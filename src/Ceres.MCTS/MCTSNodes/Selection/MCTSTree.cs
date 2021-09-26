@@ -16,9 +16,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Runtime.CompilerServices;
 using Ceres.Base.DataTypes;
-using Ceres.Base.Threading;
 
 using Ceres.Chess;
 using Ceres.Chess.EncodedPositions;
@@ -323,7 +321,19 @@ namespace Ceres.MCTS.LeafExpansion
         }
       }
 
+      // Possibly scan sibling and record information for
+      // possible use later in value backup.
+      if (node.N == 0
+       && node.Context.ParamsSearch.EnableUseSiblingEvaluations
+       && !node.IsRoot)
+      {
+        MCTSNodeSiblingEval.TrySetPendingSiblingValue(node, numCacheHashPositions);
+      }
+
     }
+
+
+
 
 
     /// <summary>

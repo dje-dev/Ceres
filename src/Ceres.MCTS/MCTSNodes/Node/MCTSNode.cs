@@ -118,6 +118,12 @@ namespace Ceres.MCTS.MTCSNodes
 
     private ref MCTSNodeStruct Value => ref Unsafe.AsRef<MCTSNodeStruct>(ptr);
 
+    /// <summary>
+    /// If present, information relating to the evaluation a node which 
+    /// is a (lower probability) sibling of a node currently in flight.
+    /// </summary>
+    public MCTSNodeSiblingEval? SiblingEval;
+
 
     #region Data
 

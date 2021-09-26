@@ -248,6 +248,23 @@ namespace Ceres.MCTS.Search
           nodeRef.NumVisitsPendingTranspositionRootExtraction -= numToApply;
         }
 
+        float vToApplyFirst = vToApply;
+        float vToApplyNonFirst;
+        float dToApplyFirst = dToApply;
+        float dToApplyNonFirst;
+
+        // Check if a sibling eval was previously calculated.
+        if (node.SiblingEval is not null)
+        {
+          (vToApplyNonFirst, dToApplyNonFirst) = node.SiblingEval.Value.BackupValueForNode(node, vToApply, dToApply);
+          node.SiblingEval = null;
+        }
+        else
+        {
+          vToApplyNonFirst = vToApply;
+          dToApplyNonFirst = dToApply;
+        }
+
         float contemptAdjustment = node.Context.CurrentContempt;
         if (contemptAdjustment != 0 && !float.IsNaN(dToApply))
         {
@@ -257,7 +274,10 @@ namespace Ceres.MCTS.Search
 
         Debug.Assert(!float.IsNaN(vToApply));
 
-        nodeRef.BackupApply(nodes, numToApply, vToApply, mToApply, dToApply, wasTerminal, numUpdateSelector1, numUpdateSelector2, out indexOfChildDescendentFromRoot);
+        nodeRef.BackupApply(nodes, numToApply, 
+                            vToApplyFirst, vToApplyNonFirst, mToApply, 
+                            dToApplyFirst, dToApplyNonFirst, 
+                            wasTerminal, numUpdateSelector1, numUpdateSelector2, out indexOfChildDescendentFromRoot);
 
         PossiblyUpdateFirstMoveSampler(node, indexOfChildDescendentFromRoot, numUpdateSelector1, numUpdateSelector2, wasTerminal, vToApply);
 
