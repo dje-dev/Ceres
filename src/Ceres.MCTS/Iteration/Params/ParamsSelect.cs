@@ -197,7 +197,7 @@ namespace Ceres.MCTS.Params
     // Distance that a proven win/loss is away from 1.0 or -1.0
     // In this way these definitive evaluations are given slightly more weight
     // than the approximations coming out of our value functions (which might also be very close to -1.0 or 1.0)
-    private const float V_PROVEN_DELTA = 0.1f;
+    private const float V_PROVEN_DELTA = 0.01f;
 
     private const float MAX_PLY_AWAY = 200;
 
