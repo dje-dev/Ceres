@@ -57,17 +57,6 @@ namespace Ceres.MCTS.MTCSNodes.Annotation
     /// </summary>
     public MGPosition PosMG;
 
-
-    /// <summary>
-    /// Board corresponding to this position
-    /// </summary>
-    internal EncodedPositionBoard LC0BoardPosition;
-
-    /// <summary>
-    /// Misc info associated with this position
-    /// </summary>
-    internal EncodedPositionMiscInfo MiscInfo;
-
     #region Moves
 
     /// <summary>
@@ -177,6 +166,21 @@ namespace Ceres.MCTS.MTCSNodes.Annotation
 
       boardsHistory.SetMiscInfo(new EncodedTrainingPositionMiscInfo(MiscInfo, default));
     }
+
+
+    #region Board information
+
+    /// <summary>
+    /// Board corresponding to this position.
+    /// </summary>
+    internal EncodedPositionBoard LC0BoardPosition;
+
+    /// <summary>
+    /// Misc info associated with this position.
+    /// </summary>
+    internal EncodedPositionMiscInfo MiscInfo;
+
+    #endregion
 
     #region Overrides
 

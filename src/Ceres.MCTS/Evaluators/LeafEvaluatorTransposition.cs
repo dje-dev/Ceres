@@ -173,7 +173,7 @@ namespace Ceres.MCTS.Evaluators
       if (TranspositionRoots.TryGetValue(node.Ref.ZobristHash, out int transpositionNodeIndex))
       {
         // Found already existing node
-        ref readonly MCTSNodeStruct transpositionNode = ref node.Context.Tree.Store.Nodes.nodes[transpositionNodeIndex];
+        ref readonly MCTSNodeStruct transpositionNode = ref node.Store.Nodes.nodes[transpositionNodeIndex];
 
         if (transpositionNodeIndex == 1)
         {

@@ -52,7 +52,7 @@ namespace Ceres.MCTS.Managers
     {
       Method decision = DoChooseMethod(currentRootNode, newRootNode, maxStoreNodes, VERBOSE);
 
-      maxAllocated = Math.Max(maxAllocated, currentRootNode.Context.Tree.Store.Nodes.NumTotalNodes);
+      maxAllocated = Math.Max(maxAllocated, currentRootNode.Store.Nodes.NumTotalNodes);
       counts[(int)decision]++;
 
       if (VERBOSE)

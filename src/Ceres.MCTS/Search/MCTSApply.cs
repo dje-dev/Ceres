@@ -360,7 +360,7 @@ namespace Ceres.MCTS.Search
     {
       if (nodes.Count == 0) return;
 
-      Span<MCTSNodeStruct> nodesSpan = nodes[0].Context.Tree.Store.Nodes.nodes.Span;
+      Span<MCTSNodeStruct> nodesSpan = nodes[0].Store.Nodes.nodes.Span;
 
       // Note that this is not parallelized to avoid updates
       // unsynchronized updates to fields in nodes higher up in the tree

@@ -39,7 +39,7 @@ namespace Ceres.MCTS.MTCSNodes
     public static int CheckAddToCluster(MCTSNode node)
     {
       int rootIndex;
-      if (!node.Context.Tree.TranspositionRoots.TryGetValue(node.Ref.ZobristHash, out rootIndex))
+      if (!node.Tree.TranspositionRoots.TryGetValue(node.Ref.ZobristHash, out rootIndex))
       {
         throw new Exception("Internal error");
 #if NOT
@@ -57,13 +57,13 @@ namespace Ceres.MCTS.MTCSNodes
       else
       {
         // Cluster already exists. Apppend ourself
-        ref MCTSNodeStruct traverseRef = ref node.Context.Tree.Store.Nodes.nodes[rootIndex];
+        ref MCTSNodeStruct traverseRef = ref node.Store.Nodes.nodes[rootIndex];
         while (true)
         {
           if (traverseRef.NextTranspositionLinked == 0) 
             break;
 
-          traverseRef = ref node.Context.Tree.Store.Nodes.nodes[traverseRef.NextTranspositionLinked];
+          traverseRef = ref node.Store.Nodes.nodes[traverseRef.NextTranspositionLinked];
         }
 
         // Tack ourself onto the end
@@ -80,13 +80,13 @@ namespace Ceres.MCTS.MTCSNodes
     public static ref MCTSNodeStruct GetNodeWithMaxNInCluster(MCTSNode node)
     {
       int rootIndex;
-      if (!node.Context.Tree.TranspositionRoots.TryGetValue(node.Ref.ZobristHash, out rootIndex))
-        return ref node.Context.Tree.Store.Nodes.nodes[0]; // TODO clean up 
+      if (!node.Tree.TranspositionRoots.TryGetValue(node.Ref.ZobristHash, out rootIndex))
+        return ref node.Store.Nodes.nodes[0]; // TODO clean up 
 
       int maxN = 0;
       ref MCTSNodeStruct bestNodeRef = ref node.Ref;
 
-      ref MCTSNodeStruct traverseNodeRef = ref node.Context.Tree.Store.Nodes.nodes[rootIndex];
+      ref MCTSNodeStruct traverseNodeRef = ref node.Store.Nodes.nodes[rootIndex];
       int count = 0;
       while (true)
       {
@@ -102,7 +102,7 @@ namespace Ceres.MCTS.MTCSNodes
         if (traverseNodeRef.NextTranspositionLinked == 0)
           break;
         else
-          traverseNodeRef = ref node.Context.Tree.Store.Nodes.nodes[traverseNodeRef.NextTranspositionLinked];
+          traverseNodeRef = ref node.Store.Nodes.nodes[traverseNodeRef.NextTranspositionLinked];
       }
 
       return ref bestNodeRef;

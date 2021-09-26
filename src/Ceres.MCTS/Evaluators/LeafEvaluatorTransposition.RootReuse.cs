@@ -143,7 +143,7 @@ namespace Ceres.MCTS.Evaluators
         int transpositionNodeIndex = node.TranspositionRootIndex;
         Debug.Assert(transpositionNodeIndex != 0);
 
-        ref readonly MCTSNodeStruct transpositionNode = ref node.Context.Tree.Store.Nodes.nodes[transpositionNodeIndex];
+        ref readonly MCTSNodeStruct transpositionNode = ref node.Store.Nodes.nodes[transpositionNodeIndex];
         SetPendingTransitionValues(node, in transpositionNode);
         Debug.Assert(!float.IsNaN(node.PendingTranspositionV));
       }

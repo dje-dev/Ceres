@@ -125,7 +125,7 @@ namespace Ceres.MCTS.Utils
       MCTSNode node = searchRoot;
       do
       {
-        searchRoot.Context.Tree.Annotate(node);
+        searchRoot.Tree.Annotate(node);
 
         Nodes.Add(node);
 
@@ -183,7 +183,7 @@ namespace Ceres.MCTS.Utils
       {
         if (node.Parent != null && node.Parent.N > 10)
         {
-          //node.Context.Tree.Annotate(node);
+          //node.Tree.Annotate(node);
           //Console.WriteLine(node.Annotation.Pos.FEN + " " + node.MPosition);
           acc = (node.MPosition + depth);
           count++;

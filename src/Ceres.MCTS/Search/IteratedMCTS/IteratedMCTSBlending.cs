@@ -44,12 +44,12 @@ namespace Ceres.MCTS.Search.IteratedMCTS
 
       PositionEvalCache posCache = cache ? new PositionEvalCache(true) : null;
 
-      root.Ref.TraverseSequential(root.Context.Tree.Store, (ref MCTSNodeStruct nodeRef, MCTSNodeStructIndex index) =>
+      root.Ref.TraverseSequential(root.Store, (ref MCTSNodeStruct nodeRef, MCTSNodeStructIndex index) =>
       {
         bool shouldBlend = nodeRef.N >= minN;
         if (shouldBlend || treeModificationType == IteratedMCTSDef.TreeModificationType.DeleteNodesMoveToCache)
         {
-          MCTSNode node = root.Context.Tree.GetNode(index);
+          MCTSNode node = root.Tree.GetNode(index);
 
           bool rewriteInTree = treeModificationType == IteratedMCTSDef.TreeModificationType.ClearNodeVisits 
                             && nodeRef.N >= minN;

@@ -273,7 +273,7 @@ namespace Ceres.MCTS.LeafExpansion
       // Compute the actual hash
       ulong zobristHashForCaching = EncodedBoardZobrist.ZobristHash(posHistoryForCaching, node.Context.EvaluatorDef.HashMode);
 
-      node.LastAccessedSequenceCounter = node.Context.Tree.BATCH_SEQUENCE_COUNTER;
+      node.LastAccessedSequenceCounter = node.Tree.BATCH_SEQUENCE_COUNTER;
       annotation.PriorMoveMG = priorMoveMG;
 
       annotation.Pos = posHistory[^1]; // this will have had its repetition count set

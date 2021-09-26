@@ -60,7 +60,7 @@ namespace Ceres.MCTS.Evaluators
         numAlreadyLinked++;
 
         // Prepare the result to return
-        ref MCTSNodeStruct transpositionSubnode = ref node.Context.Tree.Store.Nodes.nodes[transpositionSubnodeIndex.Index];
+        ref MCTSNodeStruct transpositionSubnode = ref node.Store.Nodes.nodes[transpositionSubnodeIndex.Index];
         LeafEvaluationResult thisResult = new LeafEvaluationResult(transpositionSubnode.Terminal, transpositionRootNode.WinP, 
                                                                    transpositionRootNode.LossP, transpositionRootNode.MPosition);
 
@@ -108,11 +108,11 @@ namespace Ceres.MCTS.Evaluators
 
         // We are almost exahusted in the trasposition subtree, 
         // so now we copy over the subtree so any subsequent visits to this node will continue descending
-        int startNodes = node.Context.Tree.Store.Nodes.NumUsedNodes;
-        node.Ref.CloneSubtree(node.Context.Tree.Store, activeTranspositionVisitors, ref transpositionRootNode, numAlreadyLinked);
-        if (VERBOSE) Console.WriteLine($"num allocated {node.Context.Tree.Store.Nodes.NumUsedNodes - startNodes} " +
+        int startNodes = node.Store.Nodes.NumUsedNodes;
+        node.Ref.CloneSubtree(node.Store, activeTranspositionVisitors, ref transpositionRootNode, numAlreadyLinked);
+        if (VERBOSE) Console.WriteLine($"num allocated {node.Store.Nodes.NumUsedNodes - startNodes} " +
                         $"when cloning node of size {transpositionRootNode.N} with target {numAlreadyLinked} " +
-                         $"total nodes now { node.Context.Tree.Store.Nodes.NumUsedNodes}");
+                         $"total nodes now { node.Store.Nodes.NumUsedNodes}");
 
         // We have cloned and will use this tree directly in the future.
         // Delete the transposition visitor previously used
@@ -143,7 +143,7 @@ namespace Ceres.MCTS.Evaluators
         linkedVisitor = new MCTSNodeTranspositionVisitor()
         {
           TranspositionRootNWhenVisitsStarted = transpositionRootNode.N,
-          Visitor = new MCTSNodeIteratorInVisitOrder(node.Context.Tree.Store, transpositionRootNodeIndex)
+          Visitor = new MCTSNodeIteratorInVisitOrder(node.Store, transpositionRootNodeIndex)
         };
 
         activeTranspositionVisitors[node.Index] = linkedVisitor;

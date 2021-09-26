@@ -72,7 +72,7 @@ namespace Ceres.MCTS.MTCSNodes.Analysis
 
       writer = writer ?? Console.Out;
 
-      node.Context.Tree.Annotate(node);
+      node.Tree.Annotate(node);
 
       char extraChar = ' ';
       switch (node.Terminal)
@@ -326,7 +326,7 @@ namespace Ceres.MCTS.MTCSNodes.Analysis
         MCTSNode searchRootNode = node;
         while (true)
         {
-          node.Context.Tree.Annotate(node);
+          node.Tree.Annotate(node);
           seenPositions.Add(node.Annotation.Pos);
           int countSeen = CountDuplicatePos(node.Annotation.Pos);
 

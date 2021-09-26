@@ -189,7 +189,7 @@ namespace Ceres.MCTS.MTCSNodes
 
       ref readonly MCTSNodeStruct parentRef = ref node.Parent.Ref;
       int parentChildIndex = node.IndexInParentsChildren;
-      Span<MCTSNodeStruct> nodes = node.Context.Tree.Store.Nodes.Span;
+      Span<MCTSNodeStruct> nodes = node.Store.Nodes.Span;
 
 
       int maxChildIndex = Math.Min(node.Parent.NumPolicyMoves - 1, parentChildIndex + MAX_SCAN);
@@ -232,7 +232,7 @@ namespace Ceres.MCTS.MTCSNodes
 
         // Compute hash of position and lookup in transposition table.
         ulong siblingHash = pos.CalcZobristHash(node.Context.EvaluatorDef.HashMode);
-        if (node.Context.Tree.TranspositionRoots.TryGetValue(siblingHash, out int siblingTanspositionNodeIndex))
+        if (node.Tree.TranspositionRoots.TryGetValue(siblingHash, out int siblingTanspositionNodeIndex))
         {
           ref readonly MCTSNodeStruct siblingTranspositionNodeRef = ref nodes[siblingTanspositionNodeIndex];
 

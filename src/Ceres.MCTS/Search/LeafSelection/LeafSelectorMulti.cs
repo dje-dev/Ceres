@@ -600,15 +600,15 @@ namespace Ceres.MCTS.Search
               MCTSNodeStructIndex indexTranspositionRoot = biggestTranspositionNode.Index;
               MCTSNodeStructIndex indexThis = new MCTSNodeStructIndex(node.Index);
 
-              MCTSNodeStructStorage.ModifyParentsChildRef(node.Context.Tree.Store, indexTranspositionRoot, indexThis);
-              MCTSNodeStructStorage.ModifyParentsChildRef(node.Context.Tree.Store, indexThis, indexTranspositionRoot);
+              MCTSNodeStructStorage.ModifyParentsChildRef(node.Store, indexTranspositionRoot, indexThis);
+              MCTSNodeStructStorage.ModifyParentsChildRef(node.Store, indexThis, indexTranspositionRoot);
 
               // Swap parents
               MCTSNodeStructIndex saveIndexThisParent = node.Ref.ParentIndex;
               nodeRef.ParentIndex = biggestTranspositionNode.ParentIndex;
               biggestTranspositionNode.ParentIndex = saveIndexThisParent;
 
-              node = node.Context.Tree.GetNode(biggestTranspositionNode.Index);
+              node = node.Tree.GetNode(biggestTranspositionNode.Index);
             }
 
           }
@@ -620,7 +620,7 @@ namespace Ceres.MCTS.Search
       DoVisitInnerNode(node);
 
       // Prefetch not obviously helpful
-      //node.Ref.PossiblyPrefetchChildArray(node.Context.Tree.Store, new MCTSNodeStructIndex(node.Index));
+      //node.Ref.PossiblyPrefetchChildArray(node.Store, new MCTSNodeStructIndex(node.Index));
 
       int numChildrenToCheck = NumChildrenNeededToBeChecked(node, numTargetLeafs);
       Span<short> childVisitCounts = stackalloc short[numChildrenToCheck];
@@ -638,7 +638,7 @@ namespace Ceres.MCTS.Search
 
       VerifyTargetLeafsCorrect(numChildrenToCheck, childVisitCounts, numTargetLeafs);
 
-      Span<MCTSNodeStructChild> children = nodeRef.ChildrenFromStore(node.Context.Tree.Store);
+      Span<MCTSNodeStructChild> children = nodeRef.ChildrenFromStore(node.Store);
 
       int numVisitsProcessed = 0;
       if (paramsExecution.SelectParallelEnabled)
@@ -724,7 +724,7 @@ namespace Ceres.MCTS.Search
           node.UpdateRecordVisitsToChild(SelectorID, childIndex, numThisChild);
 
           // Prefetch not obviously helpful
-          // nodeRef.PossiblyPrefetchChild(node.Context.Tree.Store, new MCTSNodeStructIndex(node.Index), childIndex);
+          // nodeRef.PossiblyPrefetchChild(node.Store, new MCTSNodeStructIndex(node.Index), childIndex);
 
 #if FEATURE_SUPPLEMENTAL
           // Warning: this slows down search by up to 10%

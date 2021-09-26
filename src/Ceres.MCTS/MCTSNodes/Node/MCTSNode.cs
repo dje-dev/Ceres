@@ -71,9 +71,17 @@ namespace Ceres.MCTS.MTCSNodes
 
     public NodeActionType ActionType;
 
-    internal bool startedAsCacheOnlyNode = false;
-
+    /// <summary>
+    /// Shortcut directly to associated MCTSTree.
+    /// </summary>
     public readonly MCTSTree Tree;
+
+    /// <summary>
+    /// Shortcut directly to associated MCTSNodeStore.
+    /// </summary>
+    public readonly MCTSNodeStore Store;
+
+
     /// <summary>
     /// Constructor which creates an MCTSNode wrapper for the raw node at specified index.
     /// </summary>
@@ -87,6 +95,7 @@ namespace Ceres.MCTS.MTCSNodes
 
       Context = context;
       Tree = context.Tree;
+      Store = context.Tree.Store;
 
       this.parent = parent;
       Span<MCTSNodeStruct> parentArray = context.Tree.Store.Nodes.Span;
@@ -107,14 +116,6 @@ namespace Ceres.MCTS.MTCSNodes
       get => evalResult;
       set => evalResult = value;
     }
-
-    LeafEvaluationResult evalResultSecondary;
-    public LeafEvaluationResult EvalResultSecondary
-    {
-      get => evalResultSecondary;
-      set => evalResultSecondary = value;
-    }
-
 
     private ref MCTSNodeStruct Value => ref Unsafe.AsRef<MCTSNodeStruct>(ptr);
 
@@ -242,8 +243,6 @@ namespace Ceres.MCTS.MTCSNodes
 
 #if FEATURE_UNCERTAINTY
     public FP16 Uncertainty => (*ptr).Uncertainty;
-#else
-    public short Unused;
 #endif
 
     #endregion
@@ -641,7 +640,6 @@ namespace Ceres.MCTS.MTCSNodes
 
 
 
-
     /// <summary>
     /// Returns array of all children MCTSNodes, sorted by specified function.
     /// </summary>
@@ -698,6 +696,23 @@ namespace Ceres.MCTS.MTCSNodes
     }
 
     #endregion
+
+    internal bool startedAsCacheOnlyNode = false;
+
+
+    #region Secondary Evaluation
+
+    // Note that this field is located toward end of class
+    // for access efficiency (rarely accessed).
+    LeafEvaluationResult evalResultSecondary;
+    public LeafEvaluationResult EvalResultSecondary
+    {
+      get => evalResultSecondary;
+      set => evalResultSecondary = value;
+    }
+
+    #endregion
+
 
     #region Miscellaneous
 
