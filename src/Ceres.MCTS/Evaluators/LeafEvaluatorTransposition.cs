@@ -37,6 +37,13 @@ namespace Ceres.MCTS.Evaluators
   /// </summary>
   public sealed partial class LeafEvaluatorTransposition : LeafEvaluatorBase
   {
+    // If TestMetric and TestCounter should track the number of
+    // virtual visits whih obviate node allocation (TestCounter1) 
+    // and also the number of nodes which subsequently had to be materialized (TestMetric)
+    // and were therefore not ultimately actual memory savings.
+    // Disabled by default due to performance impact (especially due to false sharing).
+    internal const bool TRACK_VIRTUAL_VISITS = false;
+
     // TODO: Transposition counts temporarily disabled for performance reasons (false sharing)
     static ulong NumHits = 0;
     static ulong NumMisses = 0;

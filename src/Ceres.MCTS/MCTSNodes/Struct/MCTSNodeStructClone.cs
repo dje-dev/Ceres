@@ -161,7 +161,10 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       // TODO: avoid ChildAtIndex to avoid dictionary lookup?
       targetChildRef.CopyUnexpandedChildrenFromOtherNode(tree, new MCTSNodeStructIndex(sourceChildRef.Index.Index));
 
-      MCTSEventSource.TestMetric1++;
+      if (LeafEvaluatorTransposition.TRACK_VIRTUAL_VISITS)
+      {
+        MCTSEventSource.TestMetric1++;
+      }
 
       Debug.Assert(!double.IsNaN(sourceParentRef.W));
       Debug.Assert(!double.IsNaN(sourceChildRef.W));

@@ -237,7 +237,10 @@ namespace Ceres.MCTS.Search
           numToApply = Math.Min(nodeRef.NumVisitsPendingTranspositionRootExtraction, numToApply);
 
           // Increment count of number of "extra" (beyond 1) values used without tree replication.
-          if (nodeRef.NumVisitsPendingTranspositionRootExtraction > 1) MCTSEventSource.TestCounter1++;
+          if (LeafEvaluatorTransposition.TRACK_VIRTUAL_VISITS && nodeRef.NumVisitsPendingTranspositionRootExtraction > 1)
+          {
+            MCTSEventSource.TestCounter1++;
+          }
 
           // Switch to propagate this "pseudo V" for this node and all nodes above
           vToApply = node.PendingTranspositionV;
