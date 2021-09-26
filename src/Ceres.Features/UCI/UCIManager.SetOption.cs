@@ -241,6 +241,12 @@ namespace Ceres.Features.UCI
           SetBool(value, ref showWDL);
           break;
 
+        case "reducedmemorymode":
+          bool reducedMemory = false;
+          SetBool(value, ref reducedMemory);
+          CeresUserSettingsManager.Settings.ReducedMemoryMode = reducedMemory;
+          break;          
+
         case "syzygypath":
           if (!Directory.Exists(value))
           {
@@ -411,12 +417,11 @@ option name FPUAtRoot type string default {new ParamsSelect().FPUValueAtRoot}
 option name SearchLimitMultiplier type string default 1.00
 option name MaxTreeVisits type string default
 option name MaxTreeNodes type string default
+option name ReducedMemoryMode type check default false
 ");
     /* 
 option name ConfigFile type string default lc0.config
 option name HistoryFill type combo default fen_only var no var fen_only var always
-option name RamLimitMb type spin default 0 min 0 max 100000000
-option name MoveOverheadMs type spin default 200 min 0 max 100000000
 ";
 */
 
