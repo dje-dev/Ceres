@@ -174,7 +174,78 @@ namespace Ceres.Base.DataType
 
 
     #endregion
-   
+
+    /// <summary>
+    /// Returns the index of the element having minimal value.
+    /// 
+    /// In the case of ties, the smallest index is returned.
+    /// </summary>
+    /// <param name="array"></param>
+    /// <param name="count"></param>
+    /// <returns></returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int IndexOfElementWithMinValue(Span<float> array, int count)
+    {
+      Debug.Assert(count > 0);
+
+      // Efficiently handle common cases with small count
+      if (count == 1)
+        return 0;
+      else if (count == 2)
+        return array[1] > array[0] ? 0 : 1;
+
+      // For better performance, we run two sets of comparisons (odd and even)
+      // at the same time (to increase instruction level parallelism)
+      // This improves performance by about 40%
+      int minIndex0 = 0;
+      int minIndex1 = 1;
+      float minValue0 = array[0];
+      float minValue1 = array[1];
+
+      int i = 2;
+      while (i < count - 1)
+      {
+        if (array[i] < minValue0)
+        {
+          minValue0 = array[i];
+          minIndex0 = i;
+        }
+        if (array[i + 1] < minValue1)
+        {
+          minValue1 = array[i + 1];
+          minIndex1 = i + 1;
+        }
+
+        i += 2;
+      }
+
+      // Make sure maxIndex0 has the smaller index
+      // (we prefer smaller indices in case of ties of values)
+      if (minIndex0 > minIndex1)
+      {
+        int temp = minIndex0;
+        minIndex0 = minIndex1;
+        minIndex1 = temp;
+
+        float tempV = minValue0;
+        minValue0 = minValue1;
+        minValue1 = tempV;
+      }
+
+      int lastIndex = count - 1;
+      if (i == lastIndex)
+      {
+        float last = array[lastIndex];
+        if (minValue0 <= minValue1)
+          return minValue0 <= last ? minIndex0 : lastIndex;
+        else
+          return minValue1  <= last ? minIndex1 : lastIndex;
+      }
+      else
+        return minValue0 <= minValue1 ? minIndex0 : minIndex1;
+    }
+
+
 
     /// <summary>
     /// Returns the index of the element having maximal value.
