@@ -100,7 +100,7 @@ Note: Possible optimization/inefficiency:
       Debug.Assert(numChildren <= MAX_CHILDREN);
 
       Debug.Assert(outputScores == default || outputScores.Length >= numChildren);
-      Debug.Assert(outputChildVisitCounts.Length >= numChildren);
+      Debug.Assert(numVisitsToCompute == 0 || outputChildVisitCounts.Length >= numChildren);
 
       int numBlocks = (numChildren / 8) + ((numChildren % 8 == 0) ? 0 : 1);
 
