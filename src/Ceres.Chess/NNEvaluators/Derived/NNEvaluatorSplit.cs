@@ -67,7 +67,7 @@ namespace Ceres.Chess.NNEvaluators
         int maxBatchSizeMostRestrictiveEvaluator = int.MaxValue;
         for (int i=0; i<Evaluators.Length; i++)
         {
-          int maxThisEvaluator = (int)Math.Floor(Evaluators[i].MaxBatchSize / PreferredFractions[i]);
+          int maxThisEvaluator = (int)Math.Floor(Evaluators[i].MaxBatchSize * PreferredFractions[i]);
 
           if (maxThisEvaluator < maxBatchSizeMostRestrictiveEvaluator)
           {
