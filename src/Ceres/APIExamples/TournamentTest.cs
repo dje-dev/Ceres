@@ -56,8 +56,8 @@ namespace Ceres.APIExamples
     {
       foreach (Process p in Process.GetProcesses())
       {
-        if (p.ProcessName.ToUpper().StartsWith("CERES") && p.Id != Process.GetCurrentProcess().Id)
-          p.Kill();
+       // if (p.ProcessName.ToUpper().StartsWith("CERES") && p.Id != Process.GetCurrentProcess().Id)
+       //   p.Kill();
       }
     }
 
@@ -124,8 +124,8 @@ namespace Ceres.APIExamples
 
       NET1 = "751675";
       NET2 = "751675";
-      NET1 = "703810";
-      NET2 = "703810";
+      NET1 = "badgyal-3";
+      NET2 = "badgyal-3";
       //      string NET1_SECONDARY1 = "j94-100";
 
       //string       NET2 = @"j64-210";
@@ -148,11 +148,11 @@ namespace Ceres.APIExamples
         evalDef2.MakePersistent();
       }
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(5_000_000);
+      SearchLimit limit1 = SearchLimit.NodesPerMove(250_000);
       //limit1 = SearchLimit.NodesForAllMoves(1_000_000, 10_000);
 
       //      limit1 = SearchLimit.SecondsForAllMoves(900, 2) * 0.2f;
-//      limit1 = SearchLimit.SecondsForAllMoves(30);
+      limit1 = SearchLimit.SecondsForAllMoves(30, 0.3f);
 //      limit1 = SearchLimit.SecondsForAllMoves(30);
       SearchLimit limit2 = limit1;
 
@@ -173,6 +173,7 @@ namespace Ceres.APIExamples
       //engineDefCeres1.SearchParams.MLHBonusFactor = 0.50f;
       ////////
 
+//      engineDefCeres1.SearchParams.TestFlag = true;
 
       if (false)
       {
@@ -268,9 +269,12 @@ namespace Ceres.APIExamples
 
       GameEngineDef engineDefCeres93 = new GameEngineDefCeresUCI("Ceres93", evalDef2, overrideEXE: SoftwareManager.IsLinux ? @"/raid/dev/Ceres93/artifacts/release/5.0/Ceres.dll"
                                                                                                                            : @"C:\ceres\releases\v0.93\ceres.exe");
+      GameEngineDef engineDefCeres94 = new GameEngineDefCeresUCI("Ceres94", evalDef2, overrideEXE: SoftwareManager.IsLinux ? @"/raid/dev/Ceres94/artifacts/release/5.0/Ceres.dll"
+                                                                                                                           : @"C:\ceres\releases\v0.94\ceres.exe");
 
       EnginePlayerDef playerCeres1UCI = new EnginePlayerDef(engineDefCeresUCI1, limit1);
       EnginePlayerDef playerCeres93 = new EnginePlayerDef(engineDefCeres93, limit2);
+      EnginePlayerDef playerCeres94 = new EnginePlayerDef(engineDefCeres94, limit2);
 
       EnginePlayerDef playerCeres1 = new EnginePlayerDef(engineDefCeres1, limit1);
       EnginePlayerDef playerCeres2 = new EnginePlayerDef(engineDefCeres2, limit2);
@@ -297,9 +301,9 @@ namespace Ceres.APIExamples
                                                  //@"\\synology\dev\chess\data\epd\lichess_chad_bad.csv",
                                                  SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/epd/{BASE_NAME}.epd"
                                                                          : @$"\\synology\dev\chess\data\epd\{BASE_NAME}.epd",
-                                                playerCeres1, null, playerCeres93);
+                                                playerCeres1, null, playerCeres94);
 
-        suiteDef.MaxNumPositions = 5;
+        suiteDef.MaxNumPositions = 10;
         suiteDef.EPDLichessPuzzleFormat = suiteDef.EPDFileName.ToUpper().Contains("LICHESS");
 
         //suiteDef.EPDFilter = s => !s.Contains(".exe"); // For NICE suite, these represent positions with multiple choices
@@ -342,7 +346,7 @@ namespace Ceres.APIExamples
 #endif
       }
 
-      TournamentDef def = new TournamentDef("TOURN", playerCeres1UCI, playerCeres93);
+      TournamentDef def = new TournamentDef("TOURN", playerCeres1UCI, playerCeres94);
       //      TournamentDef def = new TournamentDef("TOURN", playerCeres1UCI, playerCeres93);
 
 
