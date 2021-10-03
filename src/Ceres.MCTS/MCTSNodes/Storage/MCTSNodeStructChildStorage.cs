@@ -83,6 +83,11 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     /// </summary>
     internal MemoryBufferOS<MCTSNodeStructChild> childIndices;
 
+    /// <summary>
+    /// Copy of reference to associated nodes.
+    /// </summary>
+    internal MemoryBufferOS<MCTSNodeStruct> nodes;
+
     public Span<MCTSNodeStructChild> Span => childIndices.Span;
 
     internal void CopyEntries(int sourceBlockIndex, int destinationBlockIndex, int numChildren)
@@ -119,6 +124,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     public MCTSNodeStructChildStorage(MCTSNodeStore parentStore, long maxChildren)
     {
       ParentStore = parentStore;
+      nodes = parentStore.Nodes.nodes;
 #if SPAN
       MaxChildren = 1 + maxChildren;
       childIndices = new MemoryBufferOS<MCTSNodeStructChild>(MaxChildren,
@@ -146,6 +152,16 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       childIndices.Dispose();
 #endif
       childIndices = null;
+    }
+
+    /// <summary>
+    /// Indexer that returns reference to node at specified child index.
+    /// </summary>
+    /// <param name="childIndex"></param>
+    /// <returns></returns>
+    public ref MCTSNodeStruct this[int childIndex]
+    {
+      get => ref nodes[childIndex];
     }
 
     /// <summary>
@@ -240,7 +256,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
     public Span<MCTSNodeStructChild> SpanForNode(MCTSNodeStructIndex nodeIndex)
     {
-      ref readonly MCTSNodeStruct nodeRef = ref ParentStore.Nodes.nodes[nodeIndex.Index];
+      ref readonly MCTSNodeStruct nodeRef = ref nodes[nodeIndex.Index];
 
       if (nodeRef.NumPolicyMoves == 0) return Span<MCTSNodeStructChild>.Empty;
 

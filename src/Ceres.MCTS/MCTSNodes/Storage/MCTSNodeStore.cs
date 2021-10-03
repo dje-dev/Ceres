@@ -24,6 +24,8 @@ using Ceres.Chess.Positions;
 using Ceres.MCTS.Params;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.Iteration;
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
 
 
 #endregion
@@ -316,7 +318,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 
           ref MCTSNodeStruct transpositionRoot = ref Nodes.nodes[nodeR.TranspositionRootIndex];
           int numNeededValues = nodeR.N + nodeR.NumVisitsPendingTranspositionRootExtraction;
-          int numAvailableValues = transpositionRoot.NumUsableSubnodesForCloning;
+          int numAvailableValues = transpositionRoot.NumUsableSubnodesForCloning(this);
           AssertNode(numNeededValues <= numAvailableValues, $"Num needed transposition copy nodes less than number available:  {numNeededValues} {numAvailableValues}", i, in nodeR);
         }
 
@@ -386,9 +388,56 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       }
     }
 
-#endregion
+    #endregion
 
-#region Diagnostic output
+    #region Accessors
+
+    /// <summary>
+    /// Returns reference to node at specified index within store.
+    /// </summary>
+    /// <param name="index"></param>
+    /// <returns></returns>
+    public ref readonly MCTSNodeStruct this[MCTSNodeStructIndex index]
+    {
+      [MethodImpl(MethodImplOptions.AggressiveInlining)]
+      get
+      {
+        return ref Nodes.nodes[index.Index];
+      }
+    }
+
+    /// <summary>
+    /// Returns reference to node at specified index within store.
+    /// </summary>
+    /// <param name="index"></param>
+    /// <returns></returns>
+    public ref readonly MCTSNodeStruct this[int index]
+    {
+      [MethodImpl(MethodImplOptions.AggressiveInlining)]
+      get
+      {
+        return ref Nodes.nodes[index];
+      }
+    }
+
+    /// <summary>
+    /// Returns reference to child node at specified index within children.
+    /// </summary>
+    /// <param name="childIndex"></param>
+    /// <returns></returns>
+    public ref readonly MCTSNodeStruct this[in MCTSNodeStruct nodeRef, int childIndex]
+    {
+      [MethodImpl(MethodImplOptions.AggressiveInlining)]
+      get
+      {
+        Debug.Assert(childIndex < nodeRef.NumChildrenExpanded);
+        return ref Children[nodeRef.ChildAtIndex(childIndex).ChildIndex.Index];
+      }
+    }
+
+    #endregion
+
+    #region Diagnostic output
 
     /// <summary>
     /// Returns string summary.

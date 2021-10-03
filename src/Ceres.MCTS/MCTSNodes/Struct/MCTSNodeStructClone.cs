@@ -41,50 +41,47 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// (e.g. not in flight, not transposition linked).
     /// 
     /// </summary>
-    internal int NumUsableSubnodesForCloning
+    internal int NumUsableSubnodesForCloning(MCTSNodeStore store)
     {
-      get
+      if (IsTranspositionLinked || Terminal == Chess.GameResult.NotInitialized)
       {
-        if (IsTranspositionLinked || Terminal == Chess.GameResult.NotInitialized)
-        {
-          return 0;
-        }         
-        
-        int count = 1;
-        if (NumChildrenExpanded > 0)
-        {
-          ref readonly MCTSNodeStruct child = ref ChildAtIndexRef(0);
-          if (!child.IsTranspositionLinked && !FP16.IsNaN(child.V))
-          {
-            count++;
-
-            // Check if subchild available.
-            if (child.NumChildrenExpanded > 0)
-            {
-              ref readonly MCTSNodeStruct subchild = ref child.ChildAtIndexRef(0);
-              if (!subchild.IsTranspositionLinked && !FP16.IsNaN(subchild.V))
-              {
-                count++;
-              }
-            }
-
-            // Check if sibing is available.
-            // Note that sibling is only considered if the primary child was also available,
-            // since when cloning we need to proceed strictly in order and the primary child comes first.
-            if (NumChildrenExpanded > 1)
-            {
-              ref readonly MCTSNodeStruct sibling = ref ChildAtIndexRef(1);
-              if (!sibling.IsTranspositionLinked && !FP16.IsNaN(sibling.V))
-              {
-                count++;
-              }
-            }
-
-          }
-        }
-
-        return count;
+        return 0;
       }
+
+      int count = 1;
+      if (NumChildrenExpanded > 0)
+      {
+        ref readonly MCTSNodeStruct child = ref store[in this, 0];
+        if (!child.IsTranspositionLinked && !FP16.IsNaN(child.V))
+        {
+          count++;
+
+          // Check if subchild available.
+          if (child.NumChildrenExpanded > 0)
+          {
+            ref readonly MCTSNodeStruct subchild = ref store[in child, 0];
+            if (!subchild.IsTranspositionLinked && !FP16.IsNaN(subchild.V))
+            {
+              count++;
+            }
+          }
+
+          // Check if sibing is available.
+          // Note that sibling is only considered if the primary child was also available,
+          // since when cloning we need to proceed strictly in order and the primary child comes first.
+          if (NumChildrenExpanded > 1)
+          {
+            ref readonly MCTSNodeStruct sibling = ref store[in this, 1];
+            if (!sibling.IsTranspositionLinked && !FP16.IsNaN(sibling.V))
+            {
+              count++;
+            }
+          }
+
+        }
+      }
+
+      return count;
     }
 
     /// <summary>

@@ -306,9 +306,9 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           {
             Debug.Assert(N <= 3);
 
-            Span<MCTSNodeStruct> nodesStore = MCTSNodeStoreContext.Store.Nodes.nodes.Span;
-            ref readonly MCTSNodeStruct transpositionRootRef = ref nodesStore[TranspositionRootIndex];
-            ref readonly MCTSNodeStruct transpositionRootChild = ref transpositionRootRef.ChildAtIndexRef(0);
+            MCTSNodeStore store = MCTSNodeStoreContext.Store;
+            ref readonly MCTSNodeStruct transpositionRootRef = ref store[TranspositionRootIndex];
+            ref readonly MCTSNodeStruct transpositionRootChild = ref store[in transpositionRootRef, 0];
 
             float sumP = transpositionRootChild.P;
             if (N == 3)
@@ -320,7 +320,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
                 // For runtime performance reasons, don't bother with complex logic to determine
                 // which of the two nodes was the actual 3rd virtual visit,
                 // instead just add half the probability from the sibling.
-                ref readonly MCTSNodeStruct transpositionRootSibling = ref transpositionRootRef.ChildAtIndexRef(1);
+                ref readonly MCTSNodeStruct transpositionRootSibling = ref store[in transpositionRootRef, 1];
                 sumP += transpositionRootSibling.P * 0.5f;
               }
             }
@@ -518,6 +518,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
                                 Span<float> n, Span<float> nInFlight, Span<float> p, Span<float> w)
     {
       MCTSNodeStore store = context.Tree.Store;
+      Span<MCTSNodeStruct> nodes = store.Nodes.nodes.Span;
 
       Debug.Assert(maxIndex >= 0 && (maxIndex + 1) <= n.Length);
 
@@ -541,7 +542,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
         if (child.IsExpanded)
         {
-          ref MCTSNodeStruct childNode = ref child.ChildRef;
+          ref MCTSNodeStruct childNode = ref nodes[child.ChildIndex.Index];
           n[i] = childNode.N;
           if (selectorID == 0)
           {

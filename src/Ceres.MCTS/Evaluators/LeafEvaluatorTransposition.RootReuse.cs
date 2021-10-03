@@ -99,7 +99,7 @@ namespace Ceres.MCTS.Evaluators
       }
 
       // Never reuse more than are available from the transposition root subtree.
-      applyTarget = Math.Min(applyTarget, transpositionRootNode.NumUsableSubnodesForCloning);
+      applyTarget = Math.Min(applyTarget, transpositionRootNode.NumUsableSubnodesForCloning(node.Store));
 
       // Finally, the field holding the target has a fixed maximum representable size, ensure not more than that.
       applyTarget = Math.Min(applyTarget, MCTSNodeStruct.MAX_NUM_VISITS_PENDING_TRANSPOSITION_ROOT_EXTRACTION);
