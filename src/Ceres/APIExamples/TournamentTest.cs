@@ -117,15 +117,15 @@ namespace Ceres.APIExamples
 
 
       string NET1_SECONDARY1 = null;
-//      NET1 = "69722_value_focus_2";
-//      NET2 = "69722_value_focus_2";
-      //NET1 = "610024";
-      //NET2 = "610024";
+      NET1 = "j94-100";
+      NET2 = "j94-100";
+//      NET1 = "610024";
+//      NET2 = "610024";
 
       NET1 = "751675";
       NET2 = "751675";
-      NET1 = "badgyal-3";
-      NET2 = "badgyal-3";
+      NET1 = "703810";
+      NET2 = "703810";
       //      string NET1_SECONDARY1 = "j94-100";
 
       //string       NET2 = @"j64-210";
@@ -148,12 +148,13 @@ namespace Ceres.APIExamples
         evalDef2.MakePersistent();
       }
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(250_000);
+      SearchLimit limit1 = SearchLimit.NodesPerMove(39_900);
       //limit1 = SearchLimit.NodesForAllMoves(1_000_000, 10_000);
 
+      // 140 good for 203 pairs, 300 good for 100 pairs
       //      limit1 = SearchLimit.SecondsForAllMoves(900, 2) * 0.2f;
-      limit1 = SearchLimit.SecondsForAllMoves(30, 0.3f);
-//      limit1 = SearchLimit.SecondsForAllMoves(30);
+//      limit1 = SearchLimit.SecondsForAllMoves(20, 0.2f);
+//      limit1 = SearchLimit.SecondsForAllMoves(140);
       SearchLimit limit2 = limit1;
 
       //      ParamsSearchExecutionModifier.Register("SetBatchSize", pe => pe.MaxBatchSize = 1024);
@@ -173,7 +174,7 @@ namespace Ceres.APIExamples
       //engineDefCeres1.SearchParams.MLHBonusFactor = 0.50f;
       ////////
 
-//      engineDefCeres1.SearchParams.TestFlag = true;
+      engineDefCeres1.SearchParams.TestFlag = true;
 
       if (false)
       {
@@ -346,7 +347,7 @@ namespace Ceres.APIExamples
 #endif
       }
 
-      TournamentDef def = new TournamentDef("TOURN", playerCeres1UCI, playerCeres94);
+      TournamentDef def = new TournamentDef("TOURN", playerCeres1UCI, playerCeres93);
       //      TournamentDef def = new TournamentDef("TOURN", playerCeres1UCI, playerCeres93);
 
 
@@ -354,7 +355,7 @@ namespace Ceres.APIExamples
       def.ShowGameMoves = false;
 
       string baseName = "tcec1819";
-//      baseName = "4mvs_+90_+99";
+      baseName = "4mvs_+90_+99";
       baseName = "tcec_big";
       def.OpeningsFileName = SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/openings/{baseName}.pgn"
                                                      : @$"\\synology\dev\chess\data\openings\{baseName}.pgn";
