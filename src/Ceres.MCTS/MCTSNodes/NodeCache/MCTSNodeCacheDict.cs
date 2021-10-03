@@ -76,7 +76,8 @@ namespace Ceres.MCTS.NodeCache
     /// Adds a specified node to the cache.
     /// </summary>
     /// <param name="node"></param>
-    public void Add(MCTSNode node) => nodeCache.TryAdd(node.Index, node);
+    /// <returns>the internal index number assigned to this node</returns>
+    public int Add(MCTSNode node) => nodeCache.TryAdd(node.Index, node) ? 1 : 0;
 
 
     /// <summary>
@@ -117,6 +118,15 @@ namespace Ceres.MCTS.NodeCache
         });
       }
     }
+
+    /// <summary>
+    /// Returns the MCTSNode stored in the cache 
+    /// corresponding to specified MCTSNodeStruct
+    /// or null if not currently cached.
+    /// </summary>
+    /// <param name="nodeIndex"></param>
+    /// <returns></returns>
+    public MCTSNode Lookup(in MCTSNodeStruct nodeRef) => Lookup(nodeRef.Index);
 
 
     /// <summary>

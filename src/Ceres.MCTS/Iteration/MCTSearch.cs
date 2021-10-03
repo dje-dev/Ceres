@@ -417,9 +417,16 @@ namespace Ceres.MCTS.Iteration
         //        const float THRESHOLD_RETAIN_TREE = 0.70f;
 
         //        float fracRetain = (float)newRoot.Ref.N / priorContext.Tree.Root.N;
-        if (reuseMethod == ManagerTreeReuse.Method.KeepStoreSwapRoot
+        if (newRoot.Index == 1)
+        {
+          Manager.Context.Tree.ClearNodeCache(true);
+          // Root not changing. Reuse existing store and transposition roots.
+          newTranspositionRoots = Manager.Context.Tree.TranspositionRoots;
+        }
+        else if (reuseMethod == ManagerTreeReuse.Method.KeepStoreSwapRoot
          && priorContext.ParamsSearch.TreeReuseSwapRootEnabled)
         {
+          Manager.Context.Tree.ClearNodeCache(false);
           newTranspositionRoots = Manager.Context.Tree.TranspositionRoots;
           MCTSNodeStructStorage.DoMakeChildNewRootSwapRoot(Manager.Context.Tree, ref newRoot.Ref, newPositionAndMoves,
                                                            reusePositionCache, newTranspositionRoots,
@@ -427,6 +434,8 @@ namespace Ceres.MCTS.Iteration
         }
         else
         {
+          Manager.Context.Tree.ClearNodeCache(false);
+
           // Create a new dictionary to recieve the new transposition roots
           if (priorContext.Tree.TranspositionRoots != null)
           {

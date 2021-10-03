@@ -64,17 +64,21 @@ namespace Ceres.MCTS.LeafExpansion
     MCTSTree IMCTSNodeCache.ParentTree => ParentTree;
 
 
+
     /// <summary>
     /// Adds a specified node to the cache.
     /// </summary>
     /// <param name="node"></param>
-    public void Add(MCTSNode node)
+    /// <returns>the internal index number assigned to this node</returns>
+    public int Add(MCTSNode node)
     {
       int nodeIndex = node.Index;
 
       nodes[nodeIndex] = node;
       node.Ref.CacheIndex = nodeIndex;
+      return nodeIndex;
     }
+
 
     /// <summary>
     /// Returns the MCTSNode having the specified index and stored in the cache
@@ -83,6 +87,16 @@ namespace Ceres.MCTS.LeafExpansion
     /// <param name="nodeIndex"></param>
     /// <returns></returns>
     public MCTSNode Lookup(MCTSNodeStructIndex nodeIndex) => nodes[nodeIndex.Index];
+
+
+    /// <summary>
+    /// Returns the MCTSNode stored in the cache 
+    /// corresponding to specified MCTSNodeStruct
+    /// or null if not currently cached.
+    /// </summary>
+    /// <param name="nodeIndex"></param>
+    /// <returns></returns>
+    public MCTSNode Lookup(in MCTSNodeStruct nodeRef) => nodes[nodeRef.CacheIndex];
 
 
     /// <summary>

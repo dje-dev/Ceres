@@ -14,10 +14,12 @@
 #region Using directives
 
 using System;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using Ceres.Base.Benchmarking;
 using Ceres.Base.DataTypes;
+using Ceres.Base.OperatingSystem;
 using Ceres.MCTS.LeafExpansion;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Storage;
@@ -41,13 +43,19 @@ namespace Ceres.MCTS.NodeCache
     internal const int THRESHOLD_PCT_DO_PRUNE = 85;
     internal const int THRESHOLD_PCT_PRUNE_TO = 50;
 
+    /// <summary>
+    /// Parent MCTSTree to which the MCTSNode belong.
+    /// </summary>
     public MCTSTree ParentTree;
+
 
     public readonly int MaxCacheSize;
 
     #region Cache data
 
     MCTSNode[] nodes;
+
+    MemoryBufferOS<MCTSNodeStruct> nodesStore;
 
     readonly object lockObj = new object();
 
@@ -70,6 +78,7 @@ namespace Ceres.MCTS.NodeCache
       MaxCacheSize = maxCacheSize;
 
       nodes = new MCTSNode[maxCacheSize];
+      nodesStore = parentTree.Store.Nodes.nodes;
       pruneSequenceNums = GC.AllocateUninitializedArray<int>(maxCacheSize);
     }
 
@@ -106,14 +115,13 @@ namespace Ceres.MCTS.NodeCache
       }
     }
 
-
     /// <summary>
     /// Returns the MCTSNode having the specified index and stored in the cache
     /// or null if not currently cached.
     /// </summary>
     /// <param name="nodeIndex"></param>
     /// <returns></returns>
-    public void Add(MCTSNode node)
+    public int Add(MCTSNode node)
     {
       int numTries = 0;
 
@@ -131,7 +139,9 @@ namespace Ceres.MCTS.NodeCache
 
         if (TryTake(node, thisTryIndex))
         {
-          return;
+          // Make cache index which contains both set index and index within this array
+          node.Ref.CacheIndex = thisTryIndex;
+          return thisTryIndex;
         }
 
         // Make sure we haven't overflowed.
@@ -196,7 +206,9 @@ namespace Ceres.MCTS.NodeCache
         {
           // TODO: the long is cast to int, could we possibly overflow? make long?
           if (nodes[i] != null)
+          {
             pruneSequenceNums[count++] = (int)nodes[i].LastAccessedSequenceCounter;
+          }
         }
 
         Span<int> slice = new Span<int>(pruneSequenceNums).Slice(0, count);
@@ -215,15 +227,17 @@ namespace Ceres.MCTS.NodeCache
         {
           MCTSNode node = nodes[i];
           if (node != null && node.LastAccessedSequenceCounter < cutoff)
-          {
-            MCTSNodeStructIndex nodeIndex = new MCTSNodeStructIndex(node.Index);
-            nodes[i] = null;
+            if (node != null
+             && node.LastAccessedSequenceCounter < cutoff
+             && !node.IsInFlight // never prune active node in flight
+             )
+            {
+              MCTSNodeStructIndex nodeIndex = new MCTSNodeStructIndex(node.Index);
+              nodes[i] = null;
+              nodesStore[nodeIndex.Index].CacheIndex = 0;
 
-            ref MCTSNodeStruct refNode = ref store.Nodes.nodes[nodeIndex.Index];
-            refNode.CacheIndex = 0;
-
-            numInUse--;
-          }
+              numInUse--;
+            }
         }
         pruneCount++;
       }
@@ -231,6 +245,8 @@ namespace Ceres.MCTS.NodeCache
       return startNumInUse - numInUse;
     }
 
+    public MCTSNode AtIndex(int indexInCache) => nodes[indexInCache];
+    
 
     /// <summary>
     /// Returns the MCTSNode having the specified index and stored in the cache
@@ -240,18 +256,25 @@ namespace Ceres.MCTS.NodeCache
     /// <returns></returns>
     public MCTSNode Lookup(MCTSNodeStructIndex nodeIndex)
     {
-      ref MCTSNodeStruct nodeRef = ref nodeIndex.Ref;
+      ref readonly MCTSNodeStruct nodeRef = ref nodesStore[nodeIndex.Index];
 
-      if (nodeRef.CacheIndex == 0)
-      {
-        return null;
-      }
-      else
-      {
-        MCTSNode node = nodes[nodeRef.CacheIndex];
+      return  (nodeRef.CacheIndex == 0) ? null 
+                                        : nodes[nodeRef.CacheIndex];
+    }
 
-        return node;
-      }
+
+
+    /// <summary>
+    /// Returns the MCTSNode stored in the cache 
+    /// corresponding to specified MCTSNodeStruct
+    /// or null if not currently cached.
+    /// </summary>
+    /// <param name="nodeIndex"></param>
+    /// <returns></returns>
+    public MCTSNode Lookup(in MCTSNodeStruct nodeRef)
+    {
+      throw new NotImplementedException(); // below works but is too slow?
+      return Lookup(nodeRef.Index);
     }
 
     /// <summary>

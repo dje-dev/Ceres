@@ -14,10 +14,12 @@
 #region Using directives
 
 using System;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Ceres.Base.Math;
+using Ceres.Base.OperatingSystem;
 using Ceres.MCTS.LeafExpansion;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Storage;
@@ -44,6 +46,8 @@ namespace Ceres.MCTS.NodeCache
   /// </summary>
   public class MCTSNodeCacheArrayPurgeableSet : IMCTSNodeCache
   {
+    internal const int MAX_SETS = 256;
+
     public MCTSTree ParentTree;
 
     public readonly int MaxCacheSize;
@@ -55,6 +59,8 @@ namespace Ceres.MCTS.NodeCache
     MCTSNodeCacheArrayPurgeable[] subCaches;
 
 
+    MemoryBufferOS<MCTSNodeStruct> nodes;
+
     #endregion
 
     /// <summary>
@@ -63,12 +69,14 @@ namespace Ceres.MCTS.NodeCache
     /// <param name="parentTree"></param>
     /// <param name="definitiveMaxCacheSize"></param>
     /// <param name="estimatedNumNodesInSearch"></param>
-    public MCTSNodeCacheArrayPurgeableSet(MCTSTree parentTree, 
+    public MCTSNodeCacheArrayPurgeableSet(MCTSTree parentTree,
                                           int definitiveMaxCacheSize,
                                           int estimatedNumNodesInSearch)
     {
       ParentTree = parentTree;
       MaxCacheSize = definitiveMaxCacheSize;
+
+      nodes = parentTree.Store.Nodes.nodes;
 
       // Compute number of subcaches, increasing as a function of estimates search size
       // (because degree of concurrency rises with size of batches and search.
@@ -82,8 +90,6 @@ namespace Ceres.MCTS.NodeCache
       }
     }
 
-    public void Clear() => throw new NotImplementedException();
-
 
     /// <summary>
     /// Tree from which the MCTSNode objects originated.
@@ -92,13 +98,58 @@ namespace Ceres.MCTS.NodeCache
 
 
     /// <summary>
-    /// Returns the MCTSNode having the specified index and stored in the cache
+    /// Adds a specified node to the cache.
+    /// </summary>
+    /// <param name="node"></param>
+    /// <returns>the internal index number assigned to this node</returns>
+    public int Add(MCTSNode node)
+    {
+      int subcacheIndex = node.Index % NumSubcaches;
+      int indexInSubcache = subCaches[subcacheIndex].Add(node);
+      int cacheID = 1 + subcacheIndex + (indexInSubcache * MAX_SETS);
+      node.Ref.CacheIndex = cacheID;
+      
+      Debug.Assert(cacheID != 0); // reserved for null
+      //Console.WriteLine($" assigned cacheID={cacheID} from nodeIndex={node.Index} via {subcacheIndex} {indexInSubcache} ");
+      return cacheID;
+    }
+
+
+    public MCTSNode Lookup(MCTSNodeStructIndex nodeIndex)
+    {
+      int cacheIndex = nodes[nodeIndex.Index].CacheIndex;
+      return cacheIndex == 0 ? null 
+                             : LookupByCacheID(cacheIndex);
+    }
+
+
+    /// <summary>
+    /// Returns the MCTSNode stored in the cache 
+    /// corresponding to specified MCTSNodeStruct
     /// or null if not currently cached.
     /// </summary>
     /// <param name="nodeIndex"></param>
     /// <returns></returns>
-    public void Add(MCTSNode node) => subCaches[node.Index % NumSubcaches].Add(node);
-    
+    public MCTSNode Lookup(in MCTSNodeStruct nodeRef)
+    {
+      int cacheID = nodeRef.CacheIndex;
+      return cacheID == 0 ? null : LookupByCacheID(cacheID);
+    }
+
+
+    /// <summary>
+    /// Returns the MCTSNode at a specified cache index.
+    /// </summary>
+    /// <param name="cacheID"></param>
+    /// <returns></returns>
+    public MCTSNode LookupByCacheID(int cacheID)
+    {
+      int indexInCache = Math.DivRem(cacheID - 1, MAX_SETS, out int cacheSetNum);
+      MCTSNode node = subCaches[cacheSetNum].AtIndex(indexInCache);
+      Debug.Assert(node == null || node.Ref.CacheIndex == cacheID);
+      return node;
+    }
+
 
     /// <summary>
     /// Returns the number of nodes currently present in the cache.
@@ -156,22 +207,12 @@ namespace Ceres.MCTS.NodeCache
         lock (lockObj)
         {
           int countPurged = 0;
-          Parallel.ForEach(Enumerable.Range(0, NumSubcaches), 
+          Parallel.ForEach(Enumerable.Range(0, NumSubcaches),
                            i => Interlocked.Add(ref countPurged, subCaches[i].Prune(store, -1)));
 
         }
       }
     }
-
-
-    /// <summary>
-    /// Returns the MCTSNode having the specified index and stored in the cache
-    /// or null if not currently cached.
-    /// </summary>
-    /// <param name="nodeIndex"></param>
-    /// <returns></returns>
-    public MCTSNode Lookup(MCTSNodeStructIndex nodeIndex)
-      => subCaches[nodeIndex.Index % NumSubcaches].Lookup(nodeIndex);
 
 
     /// <summary>

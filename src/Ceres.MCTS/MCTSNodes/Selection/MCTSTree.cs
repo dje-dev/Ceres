@@ -156,12 +156,21 @@ namespace Ceres.MCTS.LeafExpansion
     public MCTSNode Root => cachedRoot is null ? (cachedRoot = GetNode(Store.RootIndex)) : cachedRoot;
 
 
+
     /// <summary>
-    /// Returns if a specified node is alredy in the cache.
+    /// Returns the MCTSNode stored in the cache 
+    /// corresponding to specified MCTSNodeStruct
+    /// or null if not currently cached.
     /// </summary>
-    /// <param name="nodeIndex"></param>
+    /// <param name="nodeRef"></param>
     /// <returns></returns>
-    public bool NodeInCache(MCTSNodeStructIndex nodeIndex) => cache.Lookup(nodeIndex) != null;
+    public MCTSNode GetNode(in MCTSNodeStruct nodeRef)
+    {
+      MCTSNode node = cache.Lookup(in nodeRef);
+      int nodeIndex = node == null ? (int)Store.Nodes.NodeOffsetFromFirst(in nodeRef) 
+                                   : node.Index;
+      return DoGetNode(node, new MCTSNodeStructIndex(nodeIndex), null);
+    }
 
 
     /// <summary>
@@ -173,28 +182,36 @@ namespace Ceres.MCTS.LeafExpansion
     public MCTSNode GetNode(MCTSNodeStructIndex nodeIndex, MCTSNode parent = null, bool checkCache = true)
     {
       MCTSNode ret = checkCache ? cache.Lookup(nodeIndex) : null;
-      if (ret is null)
+      return DoGetNode(ret, nodeIndex, parent, checkCache);
+    }
+
+    /// <summary>
+    /// Attempts to return the MCTSNode associated with an annotation in the cache, 
+    /// or null if not found
+    /// </summary>
+    /// <param name="nodeIndex"></param>
+    /// <returns></returns>
+    MCTSNode DoGetNode(MCTSNode node, MCTSNodeStructIndex nodeIndex, MCTSNode parent = null, bool checkCache = true)
+    {
+      if (node is null)
       {
+        ref readonly MCTSNodeStruct nodeRef = ref Store.Nodes.nodes[nodeIndex.Index];
         if (parent is null && !nodeIndex.IsRoot)
         {
-          Debug.Assert(nodeIndex.Ref.ParentIndex.Index != nodeIndex.Index);
+          Debug.Assert(nodeRef.ParentIndex.Index != nodeIndex.Index);
 
-          parent = GetNode(nodeIndex.Ref.ParentIndex, null);
+          parent = GetNode(nodeRef.ParentIndex, null);
         }
 
-        ret = new MCTSNode(Context, nodeIndex, parent);
-        cache?.Add(ret);
-      }
-      else
-      {
-        ret.LastAccessedSequenceCounter = BATCH_SEQUENCE_COUNTER;
+        node = new MCTSNode(Context, nodeIndex, parent);
+        cache?.Add(node);
       }
 
-      if (ret.Index != nodeIndex.Index)
-      {
-        Console.WriteLine("Warning: GetNode found non-matching node.");
-      }
-      return ret;
+      node.LastAccessedSequenceCounter = BATCH_SEQUENCE_COUNTER;
+
+      Debug.Assert(node.Index == nodeIndex.Index);
+
+      return node;
     }
 
 
