@@ -557,7 +557,7 @@ namespace Ceres.MCTS.Search
           // Mark the excess nodes as "CacheOnly"
           for (int i = numNodesTargeted; i < nodes.NodesNN.Count; i++)
           {
-            nodes.NodesNN[i].ActionType = MCTSNode.NodeActionType.CacheOnly;
+            nodes.NodesNN[i].ActionType = MCTSNodeInfo.NodeActionType.CacheOnly;
           }
         }
 

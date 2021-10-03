@@ -34,7 +34,7 @@ namespace Ceres.MCTS.MTCSNodes
   /// <summary>
   /// Methods at MCTSNode involved with initializing policy vectors.
   /// </summary>
-  public unsafe sealed partial class MCTSNode
+  public unsafe partial struct MCTSNodeInfo
   {
     [ThreadStatic]
     static (EncodedMove move, float probability)[] movesFromPolicyTempBuffer;

@@ -193,7 +193,7 @@ namespace Ceres.MCTS.Evaluators
         }
 
 
-        ref readonly MCTSNodeAnnotation annotationThisNode = ref node.annotation;
+        ref readonly MCTSNodeAnnotation annotationThisNode = ref node.Annotation;
 #if NOT
         MCTSNode transpositionNodeItem = tree.GetNode(new MCTSNodeStructIndex(transpositionNodeIndex));
         transpositionNodeItem.Annotate();

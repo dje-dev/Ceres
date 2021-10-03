@@ -32,7 +32,7 @@ namespace Ceres.MCTS.MTCSNodes
   /// including ToString() for a single node and Dump to dump statistics
   /// relating to moves from root.
   /// </summary>
-  public partial class MCTSNode : ITreeNode, IEqualityComparer<MCTSNode>
+  public partial struct MCTSNodeInfo
   {
     public override string ToString()
     {
@@ -73,6 +73,8 @@ namespace Ceres.MCTS.MTCSNodes
                      TextWriter writer = null,
                      MCTSNode dumpRoot = null)
     {
+      throw new NotImplementedException();
+#if NOT
       using (new SearchContextExecutionBlock(this.Context))
       {
         if (N < minNodes)
@@ -185,6 +187,7 @@ namespace Ceres.MCTS.MTCSNodes
           }
         }
       }
+#endif
     }
   }
 

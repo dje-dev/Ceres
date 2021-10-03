@@ -25,7 +25,7 @@ using Ceres.MCTS.MTCSNodes.Struct;
 
 namespace Ceres.MCTS.MTCSNodes
 {
-  public unsafe sealed partial class MCTSNode
+  public unsafe partial struct MCTSNodeInfo
   {
     /// <summary>
     /// Internal class that holds the spans in which the child statistcs are gathered.

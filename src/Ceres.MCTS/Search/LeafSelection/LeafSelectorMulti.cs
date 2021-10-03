@@ -372,7 +372,7 @@ namespace Ceres.MCTS.Search
                           || nodeRef.NumVisitsPendingTranspositionRootExtraction > 0);
 
         // Set default action 
-        node.ActionType = MCTSNode.NodeActionType.MCTSApply;
+        node.ActionType = MCTSNodeInfo.NodeActionType.MCTSApply;
 
         // Add to set of leafs
         gatheredNodes.Add(node);
@@ -475,7 +475,7 @@ namespace Ceres.MCTS.Search
 #endif
 
       Span<float> scores = default;
-      node.ComputeTopChildScores(selectorID, node.Depth,
+      node.Info.ComputeTopChildScores(selectorID, node.Depth,
                                  vLossDynamicBoost, 0, numChildrenToCheck - 1, numTargetLeafs,
                                  scores, visitChildCounts, cpuctMultiplier);
 

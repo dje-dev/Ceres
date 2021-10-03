@@ -376,7 +376,7 @@ namespace Ceres.MCTS.Iteration
           {
             ref readonly CompressedPolicyVector otherPolicy = ref node.EvalResultSecondary.PolicyRef;
 
-            node.BlendPolicy(in otherPolicy, secondaryParams.UpdatePolicyFraction);
+            node.Info.BlendPolicy(in otherPolicy, secondaryParams.UpdatePolicyFraction);
 
             if (secondaryParams.UpdateValueFraction > 0)
             {
@@ -682,7 +682,7 @@ namespace Ceres.MCTS.Iteration
         // First quick dump at level 1
         Console.WriteLine();
         Console.WriteLine("VERBOSE ROOT MOVE STATISTICS");
-        node.Dump(1, 1, maxMoves: maxMoves);
+        node.Info.Dump(1, 1, maxMoves: maxMoves);
         Console.WriteLine("-----------------------------------------------------------------------------------------------------------------\r\n");
       }
     }

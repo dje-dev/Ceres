@@ -251,7 +251,7 @@ namespace Ceres.MCTS.LeafExpansion
       Debug.Assert(!node.Ref.IsOldGeneration);
       //      Debug.Assert(!node.Ref.IsTranspositionLinked);
 
-      ref MCTSNodeAnnotation annotation = ref node.annotation;
+      ref MCTSNodeAnnotation annotation = ref node.Annotation;
 
       // Get the position corresponding to this node
       MGPosition newPos;

@@ -103,7 +103,7 @@ namespace Ceres.MCTS.Search
       HashSet<MCTSNode> nodesSet = new HashSet<MCTSNode>(nodes.Count);
       foreach (MCTSNode node in nodes)
       {
-        if (node.ActionType == MCTSNode.NodeActionType.MCTSApply
+        if (node.ActionType == MCTSNodeInfo.NodeActionType.MCTSApply
           && !node.Terminal.IsTerminal()
           && node.NInFlight == 0
           && node.NInFlight2 == 0)
@@ -187,16 +187,16 @@ namespace Ceres.MCTS.Search
       int numUpdateSelector2 = selectorID == 1 ? nodeRef.NInFlight2 : 0;
       int numInFlight = numUpdateSelector1 + numUpdateSelector2;
 
-      if (node.ActionType == MCTSNode.NodeActionType.None)
+      if (node.ActionType == MCTSNodeInfo.NodeActionType.None)
       {
         nodeRef.BackupDecrementInFlight(numUpdateSelector1, numUpdateSelector2);
       }
-      else if (node.ActionType == MCTSNode.NodeActionType.CacheOnly)
+      else if (node.ActionType == MCTSNodeInfo.NodeActionType.CacheOnly)
       {
         // TODO: needs remediation
         throw new NotImplementedException(); // need to set value on node ? (V, WinP, LossP, M).
       }
-      else if (node.ActionType == MCTSNode.NodeActionType.MCTSApply)
+      else if (node.ActionType == MCTSNodeInfo.NodeActionType.MCTSApply)
       {
         // If first time visiting this node then update values on the node itself.
         if (nodeRef.N == 0)
@@ -436,12 +436,12 @@ namespace Ceres.MCTS.Search
                    bool returnedMovesAreInSameOrderAsMGMoveList)
     {
       // If already set by another overlapped/concurrent selector we don't need to repeat this
-      if (node.ActionType == MCTSNode.NodeActionType.CacheOnly && cachingInUse)
+      if (node.ActionType == MCTSNodeInfo.NodeActionType.CacheOnly && cachingInUse)
       {
         // We don't put cached node in tree at all (it will have been stored in cache)
         return;
       }
-      else if (node.ActionType == MCTSNode.NodeActionType.None)
+      else if (node.ActionType == MCTSNodeInfo.NodeActionType.None)
       {
         // Nothing to do!
       }

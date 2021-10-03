@@ -34,6 +34,7 @@ using Ceres.Chess.Positions;
 using Ceres.Chess.MoveGen.Converters;
 using Ceres.MCTS.Params;
 using Ceres.Base.Math;
+using Ceres.Chess.EncodedPositions;
 
 #endregion
 
@@ -49,37 +50,39 @@ namespace Ceres.MCTS.MTCSNodes
   public unsafe sealed partial class MCTSNode
     : ITreeNode,
       IComparable<MCTSNode>,
-      IEquatable<MCTSNode>,
-      IEqualityComparer<MCTSNode>
+      IEquatable<MCTSNode>
+// DJE      IEqualityComparer<MCTSNode>
   {
     /// <summary>
     /// Pointer directly to this structure
     /// </summary>
-    private readonly MCTSNodeStruct* ptr;
+    private readonly MCTSNodeStruct* storePtr;
+
+    private MCTSNodeInfo infoPtr;
+
 
     /// <summary>
     /// Search context within which this node exists
     /// </summary>
-    public readonly MCTSIterator Context;
+    public MCTSIterator Context => infoPtr.Context;
 
     /// <summary>
     /// Index of this structure within the array
     /// </summary>
-    private readonly MCTSNodeStructIndex index;
+    private MCTSNodeStructIndex index => infoPtr.index;
 
-    public enum NodeActionType : short { NotInitialized, None, MCTSApply, CacheOnly };
 
-    public NodeActionType ActionType;
+    public ref MCTSNodeInfo.NodeActionType ActionType => ref infoPtr.ActionType;
 
     /// <summary>
     /// Shortcut directly to associated MCTSTree.
     /// </summary>
-    public readonly MCTSTree Tree;
+    public ref readonly MCTSTree Tree => ref infoPtr.Tree;
 
     /// <summary>
     /// Shortcut directly to associated MCTSNodeStore.
     /// </summary>
-    public readonly MCTSNodeStore Store;
+    public ref readonly MCTSNodeStore Store => ref infoPtr.Store;
 
 
     /// <summary>
@@ -92,82 +95,74 @@ namespace Ceres.MCTS.MTCSNodes
     {
       Debug.Assert(context.Tree.Store.Nodes != null);
       Debug.Assert(index.Index <= context.Tree.Store.Nodes.MaxNodes);
+      Debug.Assert(index.IsRoot || parent != null);
 
-      Context = context;
-      Tree = context.Tree;
-      Store = context.Tree.Store;
+      Parent = parent;
+      Info = new MCTSNodeInfo(context, index, parent);
 
-      this.parent = parent;
-      Span<MCTSNodeStruct> parentArray = context.Tree.Store.Nodes.Span;
+      storePtr = Info.ptr;
 
-      ptr = (MCTSNodeStruct*)Unsafe.AsPointer(ref parentArray[index.Index]);
-      this.index = index;
+//      Console.WriteLine("nodecreate " + index + " parent " + (parent == null ? "null" : parent.index));
     }
 
-
-    LeafEvaluationResult evalResult;
 
     /// <summary>
     /// The pending evaluation result 
     /// (cached here after evaluation but before backup)
     /// </summary>
-    public LeafEvaluationResult EvalResult
-    {
-      get => evalResult;
-      set => evalResult = value;
-    }
+    public ref LeafEvaluationResult EvalResult => ref infoPtr.EvalResult;
 
-    private ref MCTSNodeStruct Value => ref Unsafe.AsRef<MCTSNodeStruct>(ptr);
+    public ref MCTSNodeInfo Info => ref infoPtr;
 
     /// <summary>
     /// If present, information relating to the evaluation a node which 
     /// is a (lower probability) sibling of a node currently in flight.
     /// </summary>
-    public MCTSNodeSiblingEval? SiblingEval;
+    public ref MCTSNodeSiblingEval? SiblingEval => ref infoPtr.SiblingEval;
 
 
-    #region Data
+#region Data
 
     /// <summary>
     /// Number of visits to children
     /// N.B. This must appear first in the struture (see static constructor where refererence in fixed statement)
     /// </summary>
-    public int N => (*ptr).N;
+    public int N => (*storePtr).N;
 
     /// <summary>
     /// Sum of all V from children
     /// </summary>
-    public double W => (*ptr).W;
+    public double W => (*storePtr).W;
 
     /// <summary>
     /// Moves left estimate for this position
     /// </summary>
-    public FP16 MPosition => (*ptr).MPosition;
+    public FP16 MPosition => (*storePtr).MPosition;
 
     /// <summary>
     /// Moves left estimate for this subtree
     /// </summary>
-    public float MAvg => (*ptr).MAvg;
+    public float MAvg => (*storePtr).MAvg;
 
     /// <summary>
     /// Average win probability of subtree
     /// </summary>
-    public float WAvg => (*ptr).WAvg;
+    public float WAvg => (*storePtr).WAvg;
 
     /// <summary>
     /// Average draw probability of subtree
     /// </summary>
-    public float DAvg => (*ptr).DAvg;
+    public float DAvg => (*storePtr).DAvg;
 
     /// <summary>
     /// Average loss probability of subtree
     /// </summary>
-    public float LAvg => (*ptr).LAvg;
+    public float LAvg => (*storePtr).LAvg;
 
     /// <summary>
     /// Index of the parent, or null if root node
     /// </summary>
-    public MCTSNodeStructIndex ParentIndex => (*ptr).ParentIndex;
+    public MCTSNodeStructIndex ParentIndex => (*storePtr).ParentIndex;
 
     /// <summary>
     /// The starting index of entries for this node within the child info array
@@ -175,43 +170,43 @@ namespace Ceres.MCTS.MTCSNodes
     ///   - -1 if it was determined there were no children, otherwise
     ///   - positive value representing start index in child store if initialized
     /// </summary>
-    internal long ChildStartIndex => (*ptr).ChildStartIndex;
+    internal long ChildStartIndex => (*storePtr).ChildStartIndex;
 
-    internal int TranspositionRootIndex => (*ptr).TranspositionRootIndex;
+    internal int TranspositionRootIndex => (*storePtr).TranspositionRootIndex;
 
     /// <summary>
     /// The move was just played to reach this node (or default if root node)
     /// </summary>
-    public EncodedMove PriorMove => (*ptr).PriorMove;
+    public EncodedMove PriorMove => (*storePtr).PriorMove;
 
     /// <summary>
     /// Policy probability
     /// </summary>
-    public FP16 P => (*ptr).P;
+    public FP16 P => (*storePtr).P;
 
     /// <summary>
     /// Node estimated value 
     /// </summary>
-    public FP16 V => (*ptr).V;
+    public FP16 V => (*storePtr).V;
 
 
-    public FP16 VSecondary => (*ptr).VSecondary;
+    public FP16 VSecondary => (*storePtr).VSecondary;
 
-    public FP16 WinP => (*ptr).WinP;
+    public FP16 WinP => (*storePtr).WinP;
 
-    public FP16 DrawP => (*ptr).DrawP;
+    public FP16 DrawP => (*storePtr).DrawP;
 
-    public FP16 LossP => (*ptr).LossP;
-
-    /// <summary>
-    /// Number of times node has been visited during current batch
-    /// </summary>
-    public short NInFlight => (*ptr).NInFlight;
+    public FP16 LossP => (*storePtr).LossP;
 
     /// <summary>
     /// Number of times node has been visited during current batch
     /// </summary>
-    public short NInFlight2 => (*ptr).NInFlight2;
+    public short NInFlight => (*storePtr).NInFlight;
+
+    /// <summary>
+    /// Number of times node has been visited during current batch
+    /// </summary>
+    public short NInFlight2 => (*storePtr).NInFlight2;
 
     /// <summary>
     /// If the node is in flight (from one or both selectors)
@@ -224,12 +219,12 @@ namespace Ceres.MCTS.MTCSNodes
     ///   - implementation decision to "throw away" lowest probability moves to save storage, or
     ///   - error in policy evaluation which resulted in certain legal moves not being recognized
     /// </summary>
-    public byte NumPolicyMoves => (*ptr).NumPolicyMoves;
+    public byte NumPolicyMoves => (*storePtr).NumPolicyMoves;
 
     /// <summary>
     /// Game terminal status
     /// </summary>
-    public GameResult Terminal => (*ptr).Terminal;
+    public GameResult Terminal => (*storePtr).Terminal;
 
     /// <summary>
     /// Returns if the children (if any) with policy values have been initialized
@@ -239,16 +234,16 @@ namespace Ceres.MCTS.MTCSNodes
     /// <summary>
     /// Variance of all V values backed up from subtree
     /// </summary>
-    public float VVariance => (*ptr).VVariance;
+    public float VVariance => (*storePtr).VVariance;
 
 #if FEATURE_UNCERTAINTY
     public FP16 Uncertainty => (*ptr).Uncertainty;
 #endif
 
-    #endregion
+#endregion
 
 
-    #region Fields used by search
+#region Fields used by search
 
     /// <summary>
     /// If a transposition match for this node is already 
@@ -257,15 +252,19 @@ namespace Ceres.MCTS.MTCSNodes
     /// when evaluation finishes (which is guaranteed to be before
     /// we need it because it was launched in a prior batch).
     /// </summary>
-    public MCTSNode InFlightLinkedNode;
+    public MCTSNode InFlightLinkedNode
+    {
+      get => infoPtr.InFlightLinkedNode;
+      set => infoPtr.InFlightLinkedNode = value;
+    }
 
-    #endregion
+#endregion
 
     /// <summary>
     /// If the tree is truncated at this node and generating position
     /// values via the subtree linked to its tranposition root
     /// </summary>
-    public bool IsTranspositionLinked => (*ptr).IsTranspositionLinked && !Ref.TranspositionUnlinkIsInProgress;
+    public bool IsTranspositionLinked => (*storePtr).IsTranspositionLinked && !Ref.TranspositionUnlinkIsInProgress;
 
 
     /// <summary>
@@ -273,64 +272,41 @@ namespace Ceres.MCTS.MTCSNodes
     /// the transposition root (or zero if not transposition linked).
     /// This is encoded in the numChildrenVisited.
     /// </summary>
-    public int NumVisitsPendingTranspositionRootExtraction => (*ptr).NumVisitsPendingTranspositionRootExtraction;
+    public int NumVisitsPendingTranspositionRootExtraction => (*storePtr).NumVisitsPendingTranspositionRootExtraction;
 
     // Values to use for pending transposition extractions 
     // (if NumVisitsPendingTranspositionRootExtraction > 0).
-    public float PendingTranspositionV = float.NaN;
-    public float PendingTranspositionM;
-    public float PendingTranspositionD;
+    public ref float PendingTranspositionV => ref infoPtr.PendingTranspositionV;
+    public ref float PendingTranspositionM => ref infoPtr.PendingTranspositionM;
+    public ref float PendingTranspositionD => ref infoPtr.PendingTranspositionD;
 
     /// <summary>
     /// Returns the side to move as of this node.
     /// </summary>
-    public SideType SideToMove
-    {
-      get
-      {
-        // TODO: this only works if we are part of the fixed global array
-        // WARNING : probably slow
-
-        SideType rawSide = Context.Tree.Store.Nodes.PriorMoves.FinalPosition.MiscInfo.SideToMove;
-        return (Depth % 2 == 0) ? rawSide : rawSide.Reversed();
-      }
-    }
+    public SideType SideToMove => infoPtr.SideToMove;
 
 
     /// <summary>
     /// The number of children that have been visited in the current search
     /// Note that children are always visited in descending order by the policy prior probability.
     /// </summary>
-    public byte NumChildrenVisited => (*ptr).NumChildrenVisited;
+    public byte NumChildrenVisited => (*storePtr).NumChildrenVisited;
 
-    public byte NumChildrenExpanded => (*ptr).NumChildrenExpanded;
+    public byte NumChildrenExpanded => (*storePtr).NumChildrenExpanded;
 
 
     /// <summary>
     /// An integral index unique to each node, which is ascending in order of node creation.
     /// </summary>
-    public int Index
-    {
-      get
-      {
-        return index.Index;
-      }
-    }
+    public int Index => infoPtr.index.Index;
 
-    internal MCTSNodeAnnotation annotation;
-    public ref MCTSNodeAnnotation Annotation
-    {
-      get
-      {
-        Debug.Assert(annotation.IsInitialized);
-        return ref annotation;
-      }
-    }
+
+    public ref MCTSNodeAnnotation Annotation => ref infoPtr.Annotation;
 
     /// <summary>
     /// Returns if the associated annotation has been initialized.
     /// </summary>
-    public bool IsAnnotated => annotation.IsInitialized;
+    public bool IsAnnotated => infoPtr.Annotation.IsInitialized;
 
 
     /// <summary>
@@ -354,27 +330,13 @@ namespace Ceres.MCTS.MTCSNodes
     /// <summary>
     /// Returns reference to underlying MCTSNodeStruct.
     /// </summary>
-    public ref MCTSNodeStruct Ref => ref Unsafe.AsRef<MCTSNodeStruct>(ptr);
-
-    MCTSNode parent;
+    public ref MCTSNodeStruct Ref => ref Unsafe.AsRef<MCTSNodeStruct>(storePtr);
 
 
     /// <summary>
     /// Returns node which is the parent of this node (or null if none).
     /// </summary>
-    public MCTSNode Parent
-    {
-      [MethodImpl(MethodImplOptions.AggressiveInlining)]
-      get
-      {
-        if (parent != null)
-        {
-          return parent;
-        }
-
-        return Value.ParentIndex.IsNull ? null : (parent = Context.Tree.GetNode(ParentIndex));
-      }
-    }
+    public readonly MCTSNode Parent;
 
 
 
@@ -465,34 +427,7 @@ namespace Ceres.MCTS.MTCSNodes
     /// </summary>
     /// <param name="childIndex"></param>
     /// <param name="numVisits"></param>
-    public void UpdateRecordVisitsToChild(int selectorID, int childIndex, int numVisits)
-    {
-      Debug.Assert(numVisits > 0);
-      Debug.Assert(!IsTranspositionLinked);
-
-      ref MCTSNodeStruct nodeRef = ref Ref;
-
-      if (selectorID == 0)
-      {
-        Ref.UpdateNInFlight(numVisits, 0);
-      }
-      else
-      {
-        Ref.UpdateNInFlight(0, numVisits);
-      }
-
-      // Update statistics if we are visting this child for the first time
-      if (childIndex >= nodeRef.NumChildrenVisited)
-      {
-        // The children are expected to be visited strictly in order
-        // This is because when we visited a new unvisited child we are
-        // always choosing the child with highest P, and the univisted children
-        // cluster at the end and are maintained in order (by P) at all times
-        // almost always true, not when doing tree purification(?)
-        // Debug.Assert(childIndex == nodeRef.NumChildrenVisited);
-        nodeRef.NumChildrenVisited = (byte)(childIndex + 1);
-      }
-    }
+    public void UpdateRecordVisitsToChild(int selectorID, int childIndex, int numVisits) => infoPtr.UpdateRecordVisitsToChild(selectorID, childIndex, numVisits);
 
 
     /// <summary>
@@ -524,15 +459,14 @@ namespace Ceres.MCTS.MTCSNodes
     }
 
 
-    public double Q => N == 0 ? 0 : (W / N);
+    public double Q => infoPtr.Q;
 
-    #region Children
+#region Children
 
-    public bool IsRoot => ParentIndex.IsNull;
+    public bool IsRoot => infoPtr.ParentIndex.IsNull;
 
-    short cachedDepth = -1;
 
-    public bool IsOurMove => Depth % 2 == 0;
+    public bool IsOurMove => infoPtr.Depth % 2 == 0;
 
     /// <summary>
     /// Returns the MTSNode corresponding to a specified top-level child. 
@@ -559,28 +493,11 @@ namespace Ceres.MCTS.MTCSNodes
     /// <summary>
     /// Depth of node within tree.
     /// </summary>
-    public short Depth
-    {
-      get
-      {
-        if (cachedDepth == -1)
-        {
-          if (IsRoot)
-          {
-            cachedDepth = Ref.DepthInTree;
-          }
-          else
-          {
-            cachedDepth = (short)(Parent.Depth + 1);
-          }
-        }
-        return cachedDepth;
-      }
-    }
+    public short Depth => infoPtr.Depth;
 
-    #endregion
+#endregion
 
-    #region Helpers
+#region Helpers
 
 
     /// <summary>
@@ -609,7 +526,7 @@ namespace Ceres.MCTS.MTCSNodes
 
 
     /// <summary>
-    /// Returns the MCTSNode among all children having largest value returned by speciifed function.
+    /// Returns the MCTSNode among all children having largest value returned by specified function.
     /// </summary>
     /// <param name="sortFunc"></param>
     /// <returns></returns>
@@ -668,53 +585,33 @@ namespace Ceres.MCTS.MTCSNodes
     /// <summary>
     /// Returns the index of this child within the parent's child array.
     /// </summary>
-    public int IndexInParentsChildren
+    public int IndexInParentsChildren => infoPtr.IndexInParentsChildren;
+
+#endregion
+
+    internal bool startedAsCacheOnlyNode
     {
-      get
-      {
-        // TODO: This is slow. We could store this index, but it is subject to shuffling and usually unneeded.
-        //       Therefore probably we should just document that this property is slow 
-        if (IsRoot) throw new Exception("Can't call IndexInParentsChildren at the root");
-
-        int thisIndex = this.Index;
-        EncodedMove thisMove = this.PriorMove;
-
-
-        MCTSNode parent = Parent;
-
-        for (int i = 0; i < parent.NumPolicyMoves; i++)
-        {
-          (MCTSNode childNode, EncodedMove move, FP16 _) = parent.ChildAtIndexInfo(i);
-          if ((childNode != null && childNode.Index == thisIndex)
-            || (childNode == null && move == thisMove))
-          {
-            return i;
-          }
-        }
-        throw new Exception("Not found");
-      }
+      get => infoPtr.startedAsCacheOnlyNode;
+      set => infoPtr.startedAsCacheOnlyNode = value; 
     }
 
-    #endregion
 
-    internal bool startedAsCacheOnlyNode = false;
-
-
-    #region Secondary Evaluation
-
-    // Note that this field is located toward end of class
-    // for access efficiency (rarely accessed).
-    LeafEvaluationResult evalResultSecondary;
-    public LeafEvaluationResult EvalResultSecondary
+    public void SetPolicy(float policySoftmax, float minPolicyProbability,
+                      in MGPosition mgPos, MGMoveList moves,
+                      in CompressedPolicyVector policyVector,
+                      bool returnedMovesAreInSameOrderAsMGMoveList)
     {
-      get => evalResultSecondary;
-      set => evalResultSecondary = value;
+      infoPtr.SetPolicy(policySoftmax, minPolicyProbability, in mgPos, moves, in policyVector, returnedMovesAreInSameOrderAsMGMoveList);
     }
 
-    #endregion
+#region Secondary Evaluation
+
+    public ref LeafEvaluationResult EvalResultSecondary => ref infoPtr.EvalResultSecondary;
+
+#endregion
 
 
-    #region Miscellaneous
+#region Miscellaneous
 
     /// <summary>
     /// Attempts to find a subnode by following specified moves from root.
@@ -778,12 +675,18 @@ namespace Ceres.MCTS.MTCSNodes
     /// </summary>
     /// <param name="childIndex"></param>
     /// <returns></returns>
+    /// <summary>
+    /// Calculates exploratory U value (in PUCT) for a child at a given index.
+    /// NOTE: currently only supported at root.
+    /// </summary>
+    /// <param name="childIndex"></param>
+    /// <returns></returns>
     public float ChildU(int childIndex)
     {
       ParamsSelect parms = Context.ParamsSelect;
       if (parms.PolicyDecayFactor != 0) throw new NotImplementedException();
 
-      float cpuct = CPUCT(IsRoot, N, parms);
+      float cpuct = MCTSNodeInfo.CPUCT(IsRoot, N, parms);
 
       (MCTSNode node, EncodedMove move, FP16 p) child = ChildAtIndexInfo(childIndex);
       float n = child.node == null ? 0 : child.node.N;
@@ -796,20 +699,7 @@ namespace Ceres.MCTS.MTCSNodes
     }
 
 
-    static float CPUCT(bool isRoot, int n, ParamsSelect parms)
-    {
-      return CalcCPUCT(n,
-                       isRoot ? parms.CPUCTAtRoot : parms.CPUCT,
-                       isRoot ? parms.CPUCTBaseAtRoot : parms.CPUCTBase,
-                       isRoot ? parms.CPUCTFactorAtRoot : parms.CPUCTFactor);
-    }
 
-    static float CalcCPUCT(int n, float cpuct, float cpuctBase, float cpuctFactor)
-    {
-      float CPUCT_EXTRA = (cpuctFactor == 0) ? 0 : cpuctFactor * FastLog.Ln((n + cpuctBase + 1.0f) / cpuctBase);
-      float thisCPUCT = cpuct + CPUCT_EXTRA;
-      return thisCPUCT;
-    }
 
     #endregion
 
@@ -834,20 +724,22 @@ namespace Ceres.MCTS.MTCSNodes
 
     ITreeNode ITreeNode.IChildAtIndex(int index) => ChildAtIndex(index);
 
-    #endregion
+#endregion
 
 
-    #region Overrides (object)
+#region Overrides (object)
 
     public int GetHashCode() => Index;
 
-    public bool Equals(MCTSNode other) => index.Index == other.index.Index;
+    public bool Equals(MCTSNode other) => index.Index == other.Index;
 
-    public bool Equals(MCTSNode x, MCTSNode y) => x.index.Index == y.index.Index;
+    public bool Equals(MCTSNode x, MCTSNode y) => x.index.Index == y.Index;
     public int CompareTo(MCTSNode other) => Index.CompareTo(other.Index);
 
     public int GetHashCode(MCTSNode obj) => obj.index.Index;
 
-    #endregion
+#endregion
   }
 }
+
+

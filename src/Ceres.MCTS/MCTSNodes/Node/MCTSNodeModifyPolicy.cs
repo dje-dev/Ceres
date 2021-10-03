@@ -24,7 +24,7 @@ using Ceres.MCTS.Params;
 
 namespace Ceres.MCTS.MTCSNodes
 {
-  public unsafe sealed partial class MCTSNode
+  public unsafe partial struct MCTSNodeInfo
   {
     /// <summary>
     /// Modifies a specified node by blending in 
@@ -37,6 +37,8 @@ namespace Ceres.MCTS.MTCSNodes
     /// </summary>
     public void BlendPolicy(in CompressedPolicyVector otherPolicy, float fracOther)
     {
+      throw new NotImplementedException();
+#if NOT
       if (IsTranspositionLinked)
       {
         // TODO: should we apply this update to the transposition root?
@@ -107,6 +109,7 @@ namespace Ceres.MCTS.MTCSNodes
 
         Console.WriteLine();
       }
+#endif
     }
 
 
@@ -116,6 +119,8 @@ namespace Ceres.MCTS.MTCSNodes
     /// <param name="node"></param>
     public void EnsureChildrenOrderedByPolicy()
     {
+      throw new NotImplementedException();
+#if NOT
       bool didSwap = false;
       int numSwapped;
       Span<MCTSNodeStructChild> childrenRaw = Ref.Children;
@@ -155,6 +160,7 @@ namespace Ceres.MCTS.MTCSNodes
           }
         }
       }
+#endif
     }
 
 

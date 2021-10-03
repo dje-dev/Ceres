@@ -250,21 +250,21 @@ namespace Ceres.MCTS.Search
 
     public void ProcessNode(MCTSNode node)
     {
-      if (node.ActionType == MCTSNode.NodeActionType.CacheOnly)
+      if (node.ActionType == MCTSNodeInfo.NodeActionType.CacheOnly)
       {
         TotalNumNodesSelectedIntoTreeCache++;
         node.startedAsCacheOnlyNode = true;
       }
-      else if (node.ActionType == MCTSNode.NodeActionType.MCTSApply && node.startedAsCacheOnlyNode)
+      else if (node.ActionType == MCTSNodeInfo.NodeActionType.MCTSApply && node.startedAsCacheOnlyNode)
       {
         TotalNumNodesAppliedFromTreeCache++;
       }
 
-      if (node.ActionType == MCTSNode.NodeActionType.CacheOnly)
+      if (node.ActionType == MCTSNodeInfo.NodeActionType.CacheOnly)
       {
         NumCacheOnly++;
       }
-      else if (node.ActionType == MCTSNode.NodeActionType.None)
+      else if (node.ActionType == MCTSNodeInfo.NodeActionType.None)
       {
         NumNotApply++;
       }
@@ -297,7 +297,7 @@ namespace Ceres.MCTS.Search
                                || node.NumVisitsPendingTranspositionRootExtraction > 0;
       if (canProcessImmediate)
       {
-        if (node.ActionType == MCTSNode.NodeActionType.CacheOnly)
+        if (node.ActionType == MCTSNodeInfo.NodeActionType.CacheOnly)
         {
           DropNode(node); // no point in adding or caching since can be resolved immediately
         }

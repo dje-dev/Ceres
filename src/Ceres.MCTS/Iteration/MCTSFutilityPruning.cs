@@ -281,7 +281,7 @@ namespace Ceres.MCTS.Iteration
     public void DumpDiagnosticsMoveShutdown()
     {
       Manager.DumpTimeInfo();
-      Context.Root.Dump(1, 1);
+      Context.Root.Info.Dump(1, 1);
       Console.WriteLine();
     }
 
