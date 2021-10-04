@@ -197,7 +197,7 @@ it is suggested that contributions would be most useful in the following areas:
 * testing against alpha/beta engines such as Stockfish
 * feedback on the (limited) documentation provided so far
 * opening issues to identify any bugs or anomalies noted in testing
-* independent assesment of Ceres actual performance (speed and play quality)
+* independent assessment of Ceres actual performance (speed and play quality)
 * comments on the design and API surface
 * suggestions for the most needed missing features
 
