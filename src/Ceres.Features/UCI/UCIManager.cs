@@ -410,6 +410,21 @@ namespace Ceres.Features.UCI
 
             break;
 
+          case "validate-store":
+            if (CeresEngine?.Search != null)
+            {
+              using (new SearchContextExecutionBlock(CeresEngine.Search.Manager.Context))
+              {
+                CeresEngine.Search.Manager.Context.Tree.Store.Validate(null);
+              }
+            }
+            else
+            {
+              UCIWriteLine("info string No search manager created");
+            }
+
+            break;
+
           case "dump-move-stats":
             if (CeresEngine?.Search != null)
             {
