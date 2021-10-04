@@ -204,7 +204,7 @@ namespace Ceres.MCTS.Search
           SetNodeEvaluationValues(node);
         }
 
-        bool wasTerminal = node.Terminal.IsTerminal();
+        bool wasTerminal = nodeRef.Terminal.IsTerminal();
 
         // If we are revisiting a terminal or transposition linked node,
         // just reiterate the prior evaluation.

@@ -51,7 +51,7 @@ namespace Ceres.Features.Suites
         NumNNBatches = manager.Context.NumNNBatches;
         NumNNNodes = manager.Context.NumNNNodes;
 
-        TopNNodeN = manager.TopNNode == null ? 0 : manager.TopNNode.N;
+        TopNNodeN = manager.TopNNode.IsNull ? 0 : manager.TopNNode.N;
         FractionNumNodesWhenChoseTopNNode = manager.FractionNumNodesWhenChoseTopNNode;
         AvgDepth = manager.Context.AvgDepth;
         MAvg = manager.Context.Root.MAvg;

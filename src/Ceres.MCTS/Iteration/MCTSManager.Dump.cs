@@ -39,7 +39,7 @@ namespace Ceres.MCTS.Iteration
     {
       using (new SearchContextExecutionBlock(this.Context))
       {
-        searchRootNode = searchRootNode ?? Root;
+        searchRootNode = searchRootNode.IsNotNull ? searchRootNode : Root;
         writer = writer ?? Console.Out;
 
         int moveIndex = searchRootNode.Tree.Store.Nodes.PriorMoves.Moves.Count;

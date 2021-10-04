@@ -18,6 +18,7 @@ using Ceres.Chess;
 using Ceres.Chess.EncodedPositions;
 using Ceres.MCTS.LeafExpansion;
 using Ceres.MCTS.Params;
+using Pblczero;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -238,6 +239,17 @@ namespace Ceres.MCTS.Evaluators
     {
       policyArray = null;
       policyArrayIndex = -1;
+    }
+
+
+    /// <summary>
+    /// Returns string representation.
+    /// </summary>
+    /// <returns></returns>
+    public override string ToString()
+    {
+      string policyStr = PolicyIsReleased ? "(null)" : PolicyRef.ToString();
+      return $"<LeafEvaluationResult {(IsNull ? "(null)>" : $"{TerminalStatus} V={WinP - LossP,6:F3} Policy={policyStr}>")}";
     }
 
   }

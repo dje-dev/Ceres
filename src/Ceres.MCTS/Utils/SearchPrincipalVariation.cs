@@ -134,7 +134,7 @@ namespace Ceres.MCTS.Utils
           if (node == searchRoot)
           {
             // Apply special logic at root for best move
-            node = overrideBestMoveNodeAtRoot ?? node.BestMove(false);
+            node = overrideBestMoveNodeAtRoot.IsNotNull ? overrideBestMoveNodeAtRoot : node.BestMove(false);
           }
           else
           {

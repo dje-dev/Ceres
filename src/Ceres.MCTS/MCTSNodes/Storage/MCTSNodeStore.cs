@@ -79,7 +79,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     /// Returns the index of the root node.
     /// In the current implementation this is always 1.
     /// </summary>
-    public MCTSNodeStructIndex RootIndex { get; internal set; }
+    public MCTSNodeStructIndex RootIndex => new MCTSNodeStructIndex(1);
 
     public const int MAX_AVG_CHILDREN_PER_NODE = 55; // conservative value unlikely to be exceeded
     public const int TYPICAL_AVG_CHILDREN_PER_NODE = 40; // typical value
@@ -121,7 +121,6 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       CeresEnvironment.LogInfo("NodeStore", "Init", $"MCTSNodeStore created with max {maxNodes} nodes, max {reserveChildren} children");
 
       MCTSNodeStruct.ValidateMCTSNodeStruct();
-      RootIndex = new MCTSNodeStructIndex(1);
     }
 
     #region IDisposable Support

@@ -70,7 +70,7 @@ namespace Ceres.MCTS.Search.IteratedMCTS
                                                   IteratedMCTSDef iterationsDefinition)
     {
       TimingStats fullSearchTimingStats = new TimingStats();
-      MCTSNode fullSearchNode = null;
+      MCTSNode fullSearchNode = default;
 
       using (new TimingBlock(fullSearchTimingStats, TimingBlock.LoggingType.None))
       {

@@ -45,7 +45,7 @@ namespace Ceres.Features.UCI
       for (int i = searchRootNode.NumPolicyMoves - 1; i >= 0; i--)
       {
         (MCTSNode node, EncodedMove move, FP16 p) info = searchRootNode.ChildAtIndexInfo(i);
-        if (info.node == null)
+        if (info.node.IsNull)
         {
           LC0VerboseMoveStat stat = BuildStatNotExpanded(searchRootNode, i);
           stats.Add(stat);
@@ -56,12 +56,14 @@ namespace Ceres.Features.UCI
       MCTSNode[] sortedN = searchRootNode.ChildrenSorted(s => (float)s.N + 0.0001f * s.P);
       foreach (MCTSNode node in sortedN)
       {
-        if (!object.ReferenceEquals(node, best.BestMoveNode))
+        if (node != best.BestMoveNode)
+        {
           stats.Add(BuildStatExpanded(node, false));
+        }
       }
 
       // Save the best move for last.
-      if (best.BestMoveNode == null)
+      if (best.BestMoveNode.IsNull)
       {
         stats.Add(BuildStatNoSearch(searchRootNode, best));
       }

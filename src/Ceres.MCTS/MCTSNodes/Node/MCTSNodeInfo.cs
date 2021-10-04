@@ -111,7 +111,7 @@ namespace Ceres.MCTS.MTCSNodes
       Tree = context.Tree;
       Store = context.Tree.Store;
 
-      this.parent = parent;
+      this.parent = default;
       Span<MCTSNodeStruct> parentArray = context.Tree.Store.Nodes.Span;
 
       ptr = (MCTSNodeStruct*)Unsafe.AsPointer(ref parentArray[index.Index]);
@@ -484,8 +484,8 @@ namespace Ceres.MCTS.MTCSNodes
         for (int i = 0; i < parent.NumPolicyMoves; i++)
         {
           (MCTSNode childNode, EncodedMove move, FP16 _) = parent.ChildAtIndexInfo(i);
-          if ((childNode != null && childNode.Index == thisIndex)
-            || (childNode == null && move == thisMove))
+          if ((childNode.IsNotNull && childNode.Index == thisIndex)
+            || (childNode.IsNull && move == thisMove))
           {
             return i;
           }

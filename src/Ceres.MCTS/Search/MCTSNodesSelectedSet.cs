@@ -325,7 +325,7 @@ namespace Ceres.MCTS.Search
       // Case 4 - already in flight for evaluation within this same batch
       if (IN_FLIGHT_THIS_BATCH_LINKAGE_ENABLED
            && transpositionRootsThisBatch.TryGetValue(hash, out inFlightLinkedNode)
-           && !object.ReferenceEquals(node, inFlightLinkedNode))
+           && node != inFlightLinkedNode)
       {
         Debug.Assert(inFlightLinkedNode.IsNotNull);
         node.InFlightLinkedNode = inFlightLinkedNode;

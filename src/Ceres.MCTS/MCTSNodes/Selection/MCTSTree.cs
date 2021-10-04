@@ -17,7 +17,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using Ceres.Base.DataTypes;
-
+using Ceres.Base.OperatingSystem;
 using Ceres.Chess;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.LC0.Boards;
@@ -84,6 +84,7 @@ namespace Ceres.MCTS.LeafExpansion
     /// </summary>
     public PositionEvalCache PositionCache;
 
+    MemoryBufferOS<MCTSNodeStruct> nodes;
 
     /// <summary>
     /// Constructor.
@@ -104,6 +105,7 @@ namespace Ceres.MCTS.LeafExpansion
       Store = store;
       Context = context;
       PositionCache = positionCache;
+      nodes = store.Nodes.nodes;
 
       const int ANNOTATION_MIN_CACHE_SIZE = 50_000;
       int annotationCacheSize = Math.Min(maxNodesBound, context.ParamsSearch.Execution.NodeAnnotationCacheSize);
@@ -182,11 +184,10 @@ namespace Ceres.MCTS.LeafExpansion
     {
       if (nodeIndex.Index == 0)
       {
-        return new MCTSNode(Context, default, false);
-        Console.WriteLine("Internal error, attempt to GetNode on null node");
+        return new MCTSNode(Context, nodes, default, false);
       }
 
-      ref readonly MCTSNodeStruct nodeRef = ref Store.Nodes.nodes[nodeIndex.Index];
+      ref readonly MCTSNodeStruct nodeRef = ref nodes[nodeIndex.Index];
       bool wasAdded = false;
       if (nodeRef.CachedInfoPtr == null)
       {
@@ -195,7 +196,7 @@ namespace Ceres.MCTS.LeafExpansion
         wasAdded = true;
       }
 
-      MCTSNode node = new MCTSNode(Context, nodeIndex, wasAdded);
+      MCTSNode node = new MCTSNode(Context, nodes, nodeIndex, wasAdded);
       node.InfoRef.LastAccessedSequenceCounter = BATCH_SEQUENCE_COUNTER;
 
       Debug.Assert(node.Index == nodeIndex.Index);
@@ -230,9 +231,9 @@ namespace Ceres.MCTS.LeafExpansion
     /// <param name="node"></param>
     /// <param name="parentAnnotation">optionally a precomputed parent annotation (otherwise computed)</param>
     /// <returns></returns>
-    public unsafe void Annotate(MCTSNode node)
+    public unsafe void Annotate(MCTSNode node, bool forceAnnotate = false)
     {
-      if (node.IsAnnotated)
+      if (!forceAnnotate & node.IsAnnotated)
       {
         return;
       }

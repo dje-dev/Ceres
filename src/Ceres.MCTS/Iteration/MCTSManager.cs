@@ -922,7 +922,7 @@ namespace Ceres.MCTS.Iteration
     public void UpdateTopNodeInfo()
     {
       MCTSNode newBestNode = Root.ChildWithLargestN;
-      if (TopNNode == null || (newBestNode != TopNNode))
+      if (TopNNode.IsNull || (newBestNode != TopNNode))
       {
         TopNNode = newBestNode;
         NumNodesWhenChoseTopNNode = Root.N;

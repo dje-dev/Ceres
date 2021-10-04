@@ -122,7 +122,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     }
 
 
-    static bool IsValidTranspositionLinkedSourceNode(MCTSNode testNode) => testNode != null && testNode.StructRef.IsValidTranspositionLinkedSource;
+    static bool IsValidTranspositionLinkedSourceNode(MCTSNode testNode) => testNode.IsNotNull && testNode.StructRef.IsValidTranspositionLinkedSource;
     public readonly bool IsValidTranspositionLinkedSource => !IsTranspositionLinked
                                                           && !FP16.IsNaN(V)
                                                           && Terminal != Chess.GameResult.NotInitialized;

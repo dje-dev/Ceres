@@ -48,8 +48,10 @@ namespace Ceres.MCTS.Search
       int numSelectors = context.ParamsSearch.Execution.FlowDirectOverlapped ? 2 : 1;
       batchingManagers = new MCTSBatchParamsManager[numSelectors];
 
-      for (int i=0; i<numSelectors;i++)
+      for (int i = 0; i < numSelectors; i++)
+      {
         batchingManagers[i] = new MCTSBatchParamsManager(manager.Context.ParamsSelect.UseDynamicVLoss);
+      }
 
       bool shouldCache = context.EvaluatorDef.CacheMode != Chess.PositionEvalCaching.PositionEvalCache.CacheMode.None;
 

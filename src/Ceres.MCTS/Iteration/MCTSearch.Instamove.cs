@@ -42,7 +42,7 @@ namespace Ceres.MCTS.Iteration
     bool CheckInstamove(MCTSManager priorManager, SearchLimit searchLimitIncremental, MCTSNode newRoot, ManagerTreeReuse.Method reuseMethod)
     {
       // Do quick checks to see if instamove not possible/desirable.
-      if (newRoot == null
+      if (newRoot.IsNull
        || priorManager == null
        || newRoot.N <= 100
        || newRoot.NumChildrenExpanded <= 1)

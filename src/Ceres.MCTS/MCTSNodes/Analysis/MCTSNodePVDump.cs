@@ -96,7 +96,7 @@ namespace Ceres.MCTS.MTCSNodes.Analysis
 
       float pctOfVisits = node.IsRoot ? 100.0f : (100.0f * node.N / node.Parent.N);
 
-      MCTSNode bestMove = null;
+      MCTSNode bestMove = default;
 // TODO: someday show this too      MCTSNode nextBestMove = null;
       if (!node.IsRoot)
       {

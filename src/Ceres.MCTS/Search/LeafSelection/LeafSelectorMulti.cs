@@ -261,7 +261,7 @@ namespace Ceres.MCTS.Search
     /// </summary>
     public void Reset()
     {
-      leafs.Clear();
+      leafs.Clear(false);
     }
 
     #endregion
@@ -276,7 +276,7 @@ namespace Ceres.MCTS.Search
     {
       if (!node.IsAnnotated)
       {
-        Context.Tree.Annotate(node);
+        Context.Tree.Annotate(node, true);
       }
     }
 
@@ -491,7 +491,7 @@ namespace Ceres.MCTS.Search
       get
       {
         MCTSNode topMove = Context.Root.BestMove(false);
-        if (topMove == null || topMove.NumPolicyMoves <= 1) return 1.0f;
+        if (topMove.IsNull || topMove.NumPolicyMoves <= 1) return 1.0f;
 
         return (float)topMove.ChildWithLargestN.N / (float)topMove.N;
       }

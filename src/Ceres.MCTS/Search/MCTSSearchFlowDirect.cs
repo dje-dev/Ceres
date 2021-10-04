@@ -139,8 +139,10 @@ namespace Ceres.MCTS.Search
       Debug.Assert(!manager.Root.IsInFlight);
       if (hardLimitNumNodes == 0) hardLimitNumNodes = 1;
 
+      MCTSNode rootNode = Context.Root;
+
       bool overlappingAllowed = Context.ParamsSearch.Execution.FlowDirectOverlapped;
-      int initialRootN = Context.Root.N;
+      int initialRootN = rootNode.N;
 
       int guessMaxNumLeaves = manager.Context.NNEvaluators.MaxBatchSize;
 
@@ -192,11 +194,13 @@ namespace Ceres.MCTS.Search
         Context.ProgressCallback?.Invoke(manager);
         Manager.UpdateSearchStopStatus();
         if (Manager.StopStatus != MCTSManager.SearchStopStatus.Continue)
+        {
           break;
+        }
 
-        int numCurrentlyOverlapped = Context.Root.NInFlight + Context.Root.NInFlight2;
+        int numCurrentlyOverlapped = rootNode.NInFlight + rootNode.NInFlight2;
 
-        int numApplied = Context.Root.N - initialRootN;
+        int numApplied = rootNode.N - initialRootN;
         int hardLimitNumNodesThisBatch = int.MaxValue;
         if (hardLimitNumNodes > 0)
         {
@@ -209,7 +213,7 @@ namespace Ceres.MCTS.Search
           if (hardLimitNumNodesThisBatch <= numApplied / 1000) break;
         }
 
-        int targetThisBatch = OptimalBatchSizeCalculator.CalcOptimalBatchSize(Manager.EstimatedNumSearchNodes, Context.Root.N,
+        int targetThisBatch = OptimalBatchSizeCalculator.CalcOptimalBatchSize(Manager.EstimatedNumSearchNodes, rootNode.N,
                                                                               overlapThisSet,                                                                    
                                                                               Context.ParamsSearch.Execution.FlowDualSelectors,
                                                                               maxBatchSize,
@@ -227,7 +231,7 @@ namespace Ceres.MCTS.Search
 
         // Compute number of dynamic nodes to add (do not add any when tree is very small and impure child selection is particularly deleterious)
         int numNodesPadding = 0;
-        if (manager.Root.N > 50 && manager.Context.ParamsSearch.PaddedBatchSizing)
+        if (rootNode.N > 50 && manager.Context.ParamsSearch.PaddedBatchSizing)
           numNodesPadding = manager.Context.ParamsSearch.PaddedExtraNodesBase
                           + (int)(targetThisBatch * manager.Context.ParamsSearch.PaddedExtraNodesMultiplier);
         int numVisitsTryThisBatch = targetThisBatch + numNodesPadding;
@@ -249,7 +253,7 @@ namespace Ceres.MCTS.Search
           SetMaxNNNodesUsingSmartSizing(nodesSelectedSet, (int)(targetThisBatch * 0.8f));
 
           thisBatchTotalNumLeafsTargeted += numVisitsTryThisBatch;
-          ListBounded<MCTSNode> selectedNodes = selector.SelectNewLeafBatchlet(Context.Root, numVisitsTryThisBatch, thisBatchDynamicVLossBoost);
+          ListBounded<MCTSNode> selectedNodes = selector.SelectNewLeafBatchlet(rootNode, numVisitsTryThisBatch, thisBatchDynamicVLossBoost);
           nodesSelectedSet.AddSelectedNodes(selectedNodes, true);
         }
         else
@@ -265,7 +269,7 @@ namespace Ceres.MCTS.Search
           // Possibly compute a smart sized batch
           SetMaxNNNodesUsingSmartSizing(nodesSelectedSet, (int)(numTry1 * 0.9f));
 
-          ListBounded<MCTSNode> selectedNodes1 = selector.SelectNewLeafBatchlet(Context.Root, numTry1, thisBatchDynamicVLossBoost);
+          ListBounded<MCTSNode> selectedNodes1 = selector.SelectNewLeafBatchlet(rootNode, numTry1, thisBatchDynamicVLossBoost);
           nodesSelectedSet.AddSelectedNodes(selectedNodes1, true);
           int numGot1 = nodesSelectedSet.NumNewLeafsAddedNonDuplicates;
           nodesSelectedSet.ApplyImmeditateNotYetApplied();
@@ -280,7 +284,7 @@ namespace Ceres.MCTS.Search
             SetMaxNNNodesUsingSmartSizing(nodesSelectedSet, EstAdditionalNNNodesForTry2(nodesSelectedSet, numTry1, numTry2));
 
             thisBatchTotalNumLeafsTargeted += numTry2;
-            ListBounded<MCTSNode> selectedNodes2 = selector.SelectNewLeafBatchlet(Context.Root, numTry2, thisBatchDynamicVLossBoost);
+            ListBounded<MCTSNode> selectedNodes2 = selector.SelectNewLeafBatchlet(rootNode, numTry2, thisBatchDynamicVLossBoost);
 
             // TODO: clean this up
             //  - Note that ideally we might not apply immeidate nodes here (i.e. pass false instead of true in next line)
@@ -303,15 +307,15 @@ namespace Ceres.MCTS.Search
         {
           ParamsSearchSecondaryEvaluator secondaryParams = Context.ParamsSearch.ParamsSecondaryEvaluator;
 
-          int numNodesElapsed = manager.Root.N - nodesLastSecondaryNetEvaluation;
+          int numNodesElapsed = rootNode.N - nodesLastSecondaryNetEvaluation;
           bool satisfiesAbsoluteMinN = numNodesElapsed >= secondaryParams.UpdateFrequencyMinNodesAbsolute;
-          bool satisfiesRelativeMinN = numNodesElapsed >= secondaryParams.UpdateFrequencyMinNodesRelative * manager.Root.N;
+          bool satisfiesRelativeMinN = numNodesElapsed >= secondaryParams.UpdateFrequencyMinNodesRelative * rootNode.N;
 
           if (satisfiesAbsoluteMinN && satisfiesRelativeMinN)
           {
-            int minN = (int)(secondaryParams.UpdateMinNFraction * Context.Root.N);
+            int minN = (int)(secondaryParams.UpdateMinNFraction * rootNode.N);
             manager.RunSecondaryNetEvaluations(minN, manager.flow.BlockNNEvalSecondaryNet);
-            nodesLastSecondaryNetEvaluation = manager.Root.N;
+            nodesLastSecondaryNetEvaluation = rootNode.N;
           }
         }
 
@@ -351,10 +355,10 @@ namespace Ceres.MCTS.Search
         {
           LaunchEvaluate(manager, targetThisBatch, isPrimary, nodesSelectedSet);
           nodesSelectedSet.ApplyAll();
-          //Console.WriteLine("applied " + selector.Leafs.Count + " " + manager.Root);
+          //Console.WriteLine("applied " + selector.Leafs.Count + " " + rootNode);
         }
 
-        if (manager.Root.N == 1)
+        if (rootNode.N == 1)
         {
           manager.TerminationManager.ApplySearchMoves();
         }
@@ -370,14 +374,16 @@ namespace Ceres.MCTS.Search
 
       //      Debug.Assert(!manager.Root.IsInFlight);
 
-      if ((manager.Root.NInFlight != 0 || manager.Root.NInFlight2 != 0) && !haveWarned)
+      if ((rootNode.NInFlight != 0 || rootNode.NInFlight2 != 0) && !haveWarned)
       {
-        Console.WriteLine($"Internal error: search ended with N={manager.Root.N} NInFlight={manager.Root.NInFlight} NInFlight2={manager.Root.NInFlight2} " + manager.Root);
+        Console.WriteLine($"Internal error: search ended with N={rootNode.N} NInFlight={rootNode.NInFlight} NInFlight2={rootNode.NInFlight2} " + rootNode);
         int count = 0;
-        manager.Root.StructRef.TraverseSequential(manager.Root.Store, delegate (ref MCTSNodeStruct node, MCTSNodeStructIndex index)
+        rootNode.StructRef.TraverseSequential(rootNode.Store, delegate (ref MCTSNodeStruct node, MCTSNodeStructIndex index)
         {
           if (node.IsInFlight && node.NumChildrenVisited == 0 && count++ < 20)
+          {
             Console.WriteLine("  " + index.Index + " " + node.Terminal + " " + node.N + " " + node.IsTranspositionLinked + " " + node.NumVisitsPendingTranspositionRootExtraction);
+          }
           return true;
         });
         haveWarned = true;

@@ -758,7 +758,7 @@ namespace Ceres.Features.UCI
 
       if (numPV == 1)
       {
-        UCIWriteLine(UCIInfo.UCIInfoString(manager, searchRootNode, best?.BestMoveNode,
+        UCIWriteLine(UCIInfo.UCIInfoString(manager, searchRootNode, best == null ? default : best.BestMoveNode,
                                   showWDL: showWDL, scoreAsQ: scoreAsQ));
       }
       else
@@ -772,7 +772,7 @@ namespace Ceres.Features.UCI
         int multiPVIndex = 2;
         for (int i = 0; i < sortedN.Length && i < numPV; i++)
         {
-          if (!object.ReferenceEquals(sortedN[i], best.BestMoveNode))
+          if (sortedN[i] != best.BestMoveNode)
           {
             UCIWriteLine(UCIInfo.UCIInfoString(manager, searchRootNode, sortedN[i], multiPVIndex,
                                        showWDL: showWDL, useParentN: !perPVCounters, scoreAsQ: scoreAsQ));
@@ -786,7 +786,7 @@ namespace Ceres.Features.UCI
         for (int i = multiPVIndex - 1; i < searchRootNode.NumPolicyMoves; i++)
         {
           (MCTSNode node, EncodedMove move, FP16 p) info = searchRootNode.ChildAtIndexInfo(i);
-          if (info.node == null)
+          if (info.node.IsNull)
           {
             bool isWhite = searchRootNode.Annotation.Pos.MiscInfo.SideToMove == SideType.White;
             EncodedMove moveCorrectPerspective = isWhite ? info.move : info.move.Flipped;

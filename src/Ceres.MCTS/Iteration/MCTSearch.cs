@@ -66,7 +66,7 @@ namespace Ceres.MCTS.Iteration
     /// possible not the root of the whole tree if the
     /// the last search was satisifed directly from tree reuse.
     /// </summary>
-    public MCTSNode SearchRootNode => continuationSubroot != null ? continuationSubroot : Manager.Root;
+    public MCTSNode SearchRootNode => continuationSubroot.IsNotNull ? continuationSubroot : Manager.Root;
 
 
     /// <summary>
@@ -95,13 +95,6 @@ namespace Ceres.MCTS.Iteration
     public int CountSearchContinuations { get; private set; }
 
     #endregion
-
-    /// <summary>
-    /// Constructor.
-    /// </summary>
-    public MCTSearch()
-    {
-    }
 
 
     /// <summary>
@@ -282,7 +275,7 @@ namespace Ceres.MCTS.Iteration
       MCTSNodeStructIndex newRootIndex;
       using (new SearchContextExecutionBlock(priorContext))
       {
-        MCTSNode newRoot = null;
+        MCTSNode newRoot = default;
         if (Manager.TablebaseImmediateBestMove.IsNull)
         {
           newRoot = Manager.Root.FollowMovesToNode(moves);
@@ -291,9 +284,9 @@ namespace Ceres.MCTS.Iteration
         // New root is not useful if contained no search
         // (for example if it was resolved via tablebase)
         // thus in that case we pretend as if we didn't find it
-        if (newRoot != null && (newRoot.N == 0 || newRoot.NumPolicyMoves == 0))
+        if (newRoot.IsNotNull && (newRoot.N == 0 || newRoot.NumPolicyMoves == 0))
         {
-          newRoot = null;
+          newRoot = default;
         }
 
         // Update contempt manager (if any) based opponent's prior move
@@ -301,14 +294,14 @@ namespace Ceres.MCTS.Iteration
 
         // Compute search limits
         ComputeSearchLimits(newPositionAndMoves.FinalPosition,
-                            newRoot == null ? 0 : newRoot.N,
-                            newRoot == null ? 0 : (float)newRoot.Q,
+                            newRoot.IsNull ? 0 : newRoot.N,
+                            newRoot.IsNull ? 0 : (float)newRoot.Q,
                             gameMoveHistory, searchLimit, isFirstMoveOfGame, priorContext,
                             out SearchLimit searchLimitTargetAdjusted, out SearchLimit searchLimitIncremental);
 
 
         ManagerTreeReuse.Method reuseMethod = ManagerTreeReuse.Method.NewStore;
-        if (newRoot != null)
+        if (newRoot.IsNotNull)
         {
           MCTSNode candidateBestMove = newRoot.BestMove(false);
           reuseMethod = ManagerTreeReuse.ChooseMethod(priorContext.Tree.Root, candidateBestMove, searchLimitTargetAdjusted.MaxTreeNodes);
@@ -556,11 +549,14 @@ namespace Ceres.MCTS.Iteration
 
     private void UpdateContemptManager(MCTSNode newRoot)
     {
-      newRoot?.Annotate();
+      if (newRoot.IsNotNull)
+      {
+        newRoot.Annotate();
+      }
 
       // Inform contempt manager about the opponents move
       // (compared to the move we believed was optimal)
-      if (newRoot != null && newRoot.Depth == 2)
+      if (newRoot.IsNotNull && newRoot.Depth == 2)
       {
         MCTSNode opponentsPriorMove = newRoot;
         MCTSNode bestMove = opponentsPriorMove.Parent.ChildrenSorted(n => (float)n.Q)[0];

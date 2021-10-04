@@ -48,7 +48,10 @@ namespace Ceres.MCTS.MTCSNodes
 
       MCTSNodeStore store = new MCTSNodeStore(miscInfo.NumNodesReserved);
       store.Nodes.InsureAllocated(miscInfo.NumNodesAllocated);
-      store.RootIndex = miscInfo.RootIndex;
+      if (miscInfo.RootIndex.Index != 1)
+      {
+        throw new Exception("Root index must be 1.");
+      }
       store.Nodes.Reset(miscInfo.PriorMoves, true);
 
       long numNodes = SysMisc.ReadFileIntoSpan<MCTSNodeStruct>(Path.Combine(directory, id + FN_POSTFIX_NODES), store.Nodes.Span);

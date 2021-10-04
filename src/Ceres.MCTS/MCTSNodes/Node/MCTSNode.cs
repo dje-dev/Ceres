@@ -35,6 +35,8 @@ using Ceres.Chess.MoveGen.Converters;
 using Ceres.MCTS.Params;
 using Ceres.Base.Math;
 using Ceres.Chess.EncodedPositions;
+using Google.Protobuf.WellKnownTypes;
+using Ceres.Base.OperatingSystem;
 
 #endregion
 
@@ -47,31 +49,32 @@ namespace Ceres.MCTS.MTCSNodes
   /// 
   /// Also contains additional properties used transiently in tree operations such as search.
   /// </summary>
+  /// 
+  [DebuggerDisplay("ToString(),nq")]
   public unsafe partial struct MCTSNode
     : ITreeNode,
       IComparable<MCTSNode>,
       IEquatable<MCTSNode>
-// DJE      IEqualityComparer<MCTSNode>
   {
     /// <summary>
     /// Pointer directly to this structure
     /// </summary>
-    private readonly MCTSNodeStruct* storePtr;
+    private readonly MCTSNodeStruct* structPtr;
 
     /// <summary>
     /// Pointer directly to associated MCTSNodeInfo.
     /// </summary>
-    private void* infoPtr => storePtr->CachedInfoPtr;
+    private void* infoPtr => structPtr->CachedInfoPtr;
 
     /// <summary>
     /// Returns if the node is null.
     /// </summary>
-    public bool IsNull => storePtr == default;
+    public bool IsNull => structPtr == default;
 
     /// <summary>
     /// Returns if the node is not null.
     /// </summary>
-    public bool IsNotNull => storePtr != default;
+    public bool IsNotNull => structPtr != default;
 
 
     /// <summary>
@@ -104,7 +107,7 @@ namespace Ceres.MCTS.MTCSNodes
     /// <param name="context"></param>
     /// <param name="index"></param>
     /// <param name="parent">optionally the parent node</param>
-    internal MCTSNode(MCTSIterator context, MCTSNodeStructIndex index, bool reinitializeInfo)
+    internal MCTSNode(MCTSIterator context, MemoryBufferOS<MCTSNodeStruct> nodes, MCTSNodeStructIndex index, bool reinitializeInfo)
     {
       Debug.Assert(context.Tree.Store.Nodes != null);
       Debug.Assert(index.Index <= context.Tree.Store.Nodes.MaxNodes);
@@ -112,11 +115,11 @@ namespace Ceres.MCTS.MTCSNodes
 
       if (index == default)
       {
-        storePtr = null;
+        structPtr = null;
         return;
       }
 
-      storePtr = (MCTSNodeStruct *)Unsafe.AsPointer(ref context.Tree.Store.Nodes.nodes[index.Index]);
+      structPtr = (MCTSNodeStruct *)Unsafe.AsPointer(ref nodes[index.Index]);
       if (reinitializeInfo)
       {
         // ************** TODO: ******************
@@ -150,42 +153,42 @@ namespace Ceres.MCTS.MTCSNodes
     /// Number of visits to children
     /// N.B. This must appear first in the struture (see static constructor where refererence in fixed statement)
     /// </summary>
-    public int N => (*storePtr).N;
+    public int N => (*structPtr).N;
 
     /// <summary>
     /// Sum of all V from children
     /// </summary>
-    public double W => (*storePtr).W;
+    public double W => (*structPtr).W;
 
     /// <summary>
     /// Moves left estimate for this position
     /// </summary>
-    public FP16 MPosition => (*storePtr).MPosition;
+    public FP16 MPosition => (*structPtr).MPosition;
 
     /// <summary>
     /// Moves left estimate for this subtree
     /// </summary>
-    public float MAvg => (*storePtr).MAvg;
+    public float MAvg => (*structPtr).MAvg;
 
     /// <summary>
     /// Average win probability of subtree
     /// </summary>
-    public float WAvg => (*storePtr).WAvg;
+    public float WAvg => (*structPtr).WAvg;
 
     /// <summary>
     /// Average draw probability of subtree
     /// </summary>
-    public float DAvg => (*storePtr).DAvg;
+    public float DAvg => (*structPtr).DAvg;
 
     /// <summary>
     /// Average loss probability of subtree
     /// </summary>
-    public float LAvg => (*storePtr).LAvg;
+    public float LAvg => (*structPtr).LAvg;
 
     /// <summary>
     /// Index of the parent, or null if root node
     /// </summary>
-    public MCTSNodeStructIndex ParentIndex => (*storePtr).ParentIndex;
+    public MCTSNodeStructIndex ParentIndex => (*structPtr).ParentIndex;
 
     /// <summary>
     /// The starting index of entries for this node within the child info array
@@ -193,43 +196,43 @@ namespace Ceres.MCTS.MTCSNodes
     ///   - -1 if it was determined there were no children, otherwise
     ///   - positive value representing start index in child store if initialized
     /// </summary>
-    internal long ChildStartIndex => (*storePtr).ChildStartIndex;
+    internal long ChildStartIndex => (*structPtr).ChildStartIndex;
 
-    internal int TranspositionRootIndex => (*storePtr).TranspositionRootIndex;
+    internal int TranspositionRootIndex => (*structPtr).TranspositionRootIndex;
 
     /// <summary>
     /// The move was just played to reach this node (or default if root node)
     /// </summary>
-    public EncodedMove PriorMove => (*storePtr).PriorMove;
+    public EncodedMove PriorMove => (*structPtr).PriorMove;
 
     /// <summary>
     /// Policy probability
     /// </summary>
-    public FP16 P => (*storePtr).P;
+    public FP16 P => (*structPtr).P;
 
     /// <summary>
     /// Node estimated value 
     /// </summary>
-    public FP16 V => (*storePtr).V;
+    public FP16 V => (*structPtr).V;
 
 
-    public FP16 VSecondary => (*storePtr).VSecondary;
+    public FP16 VSecondary => (*structPtr).VSecondary;
 
-    public FP16 WinP => (*storePtr).WinP;
+    public FP16 WinP => (*structPtr).WinP;
 
-    public FP16 DrawP => (*storePtr).DrawP;
+    public FP16 DrawP => (*structPtr).DrawP;
 
-    public FP16 LossP => (*storePtr).LossP;
-
-    /// <summary>
-    /// Number of times node has been visited during current batch
-    /// </summary>
-    public short NInFlight => (*storePtr).NInFlight;
+    public FP16 LossP => (*structPtr).LossP;
 
     /// <summary>
     /// Number of times node has been visited during current batch
     /// </summary>
-    public short NInFlight2 => (*storePtr).NInFlight2;
+    public short NInFlight => (*structPtr).NInFlight;
+
+    /// <summary>
+    /// Number of times node has been visited during current batch
+    /// </summary>
+    public short NInFlight2 => (*structPtr).NInFlight2;
 
     /// <summary>
     /// If the node is in flight (from one or both selectors)
@@ -242,12 +245,12 @@ namespace Ceres.MCTS.MTCSNodes
     ///   - implementation decision to "throw away" lowest probability moves to save storage, or
     ///   - error in policy evaluation which resulted in certain legal moves not being recognized
     /// </summary>
-    public byte NumPolicyMoves => (*storePtr).NumPolicyMoves;
+    public byte NumPolicyMoves => (*structPtr).NumPolicyMoves;
 
     /// <summary>
     /// Game terminal status
     /// </summary>
-    public GameResult Terminal => (*storePtr).Terminal;
+    public GameResult Terminal => (*structPtr).Terminal;
 
     /// <summary>
     /// Returns if the children (if any) with policy values have been initialized
@@ -257,7 +260,7 @@ namespace Ceres.MCTS.MTCSNodes
     /// <summary>
     /// Variance of all V values backed up from subtree
     /// </summary>
-    public float VVariance => (*storePtr).VVariance;
+    public float VVariance => (*structPtr).VVariance;
 
 #if FEATURE_UNCERTAINTY
     public FP16 Uncertainty => (*ptr).Uncertainty;
@@ -287,7 +290,7 @@ namespace Ceres.MCTS.MTCSNodes
     /// If the tree is truncated at this node and generating position
     /// values via the subtree linked to its tranposition root
     /// </summary>
-    public bool IsTranspositionLinked => (*storePtr).IsTranspositionLinked && !StructRef.TranspositionUnlinkIsInProgress;
+    public bool IsTranspositionLinked => (*structPtr).IsTranspositionLinked && !StructRef.TranspositionUnlinkIsInProgress;
 
 
     /// <summary>
@@ -295,7 +298,7 @@ namespace Ceres.MCTS.MTCSNodes
     /// the transposition root (or zero if not transposition linked).
     /// This is encoded in the numChildrenVisited.
     /// </summary>
-    public int NumVisitsPendingTranspositionRootExtraction => (*storePtr).NumVisitsPendingTranspositionRootExtraction;
+    public int NumVisitsPendingTranspositionRootExtraction => (*structPtr).NumVisitsPendingTranspositionRootExtraction;
 
     // Values to use for pending transposition extractions 
     // (if NumVisitsPendingTranspositionRootExtraction > 0).
@@ -313,9 +316,9 @@ namespace Ceres.MCTS.MTCSNodes
     /// The number of children that have been visited in the current search
     /// Note that children are always visited in descending order by the policy prior probability.
     /// </summary>
-    public byte NumChildrenVisited => (*storePtr).NumChildrenVisited;
+    public byte NumChildrenVisited => (*structPtr).NumChildrenVisited;
 
-    public byte NumChildrenExpanded => (*storePtr).NumChildrenExpanded;
+    public byte NumChildrenExpanded => (*structPtr).NumChildrenExpanded;
 
 
     /// <summary>
@@ -323,17 +326,7 @@ namespace Ceres.MCTS.MTCSNodes
     /// </summary>
     public int Index => InfoRef.index.Index;
 
-    public override string ToString()
-    {
-      if (IsNull)
-      {
-        return "<MCTSNode NULL>";
-      }
-      else
-      {
-        return "<MCTSNode " + StructRef + ">";
-      }
-    }
+
     public ref MCTSNodeAnnotation Annotation => ref InfoRef.Annotation;
 
     /// <summary>
@@ -357,7 +350,7 @@ namespace Ceres.MCTS.MTCSNodes
     /// <summary>
     /// Returns reference to underlying MCTSNodeStruct.
     /// </summary>
-    public ref MCTSNodeStruct StructRef => ref Unsafe.AsRef<MCTSNodeStruct>(storePtr);
+    public ref MCTSNodeStruct StructRef => ref Unsafe.AsRef<MCTSNodeStruct>(structPtr);
 
 
     /// <summary>
@@ -478,13 +471,15 @@ namespace Ceres.MCTS.MTCSNodes
 
     public void MaterializeAllTranspositionLinks()
     {
+      MCTSTree tree = Context.Tree;
+
       // Sequentially traverse tree nodes and materialize any that are currently just linked.
       StructRef.Traverse(Context.Tree.Store,
                    (ref MCTSNodeStruct nodeRef) =>
                    {
                      if (!nodeRef.IsOldGeneration && nodeRef.IsTranspositionLinked)
                      {
-                       nodeRef.MaterializeSubtreeFromTranspositionRoot(Context.Tree);
+                       nodeRef.MaterializeSubtreeFromTranspositionRoot(tree);
                      }
                      return true;
                    }, TreeTraversalType.Sequential);
@@ -756,19 +751,31 @@ namespace Ceres.MCTS.MTCSNodes
 
     ITreeNode ITreeNode.IChildAtIndex(int index) => ChildAtIndex(index);
 
-#endregion
+    #endregion
 
 
-#region Overrides (object)
+    #region Overrides (object)
 
-    public int GetHashCode() => Index;
+    public override string ToString()
+    {
+      if (IsNull)
+      {
+        return "<MCTSNode NULL>";
+      }
+      else
+      {
+        return "<MCTSNode " + StructRef + ">";
+      }
+    }
 
-    public bool Equals(MCTSNode other) => index.Index == other.Index;
 
-    public bool Equals(MCTSNode x, MCTSNode y) => x.index.Index == y.Index;
-    public int CompareTo(MCTSNode other) => Index.CompareTo(other.Index);
+    public bool Equals(MCTSNode node) => structPtr == node.structPtr;
+    public override int GetHashCode() => ((IntPtr)structPtr).GetHashCode();
 
-    public int GetHashCode(MCTSNode obj) => obj.index.Index;
+    public static bool operator ==(MCTSNode lhs, MCTSNode rhs) => lhs.structPtr == rhs.structPtr;
+    public static bool operator !=(MCTSNode lhs, MCTSNode rhs) => lhs.structPtr != rhs.structPtr;
+
+    public int CompareTo(MCTSNode other) => ((IntPtr)structPtr).CompareTo((IntPtr)other.structPtr);
 
 #endregion
   }
