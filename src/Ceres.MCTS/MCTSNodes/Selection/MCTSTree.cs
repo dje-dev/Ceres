@@ -149,12 +149,10 @@ namespace Ceres.MCTS.LeafExpansion
     public void PossiblyPruneCache() => cache.PossiblyPruneCache(MCTSManager.ThreadSearchContext.Tree.Store);
 
 
-    MCTSNode cachedRoot = null;
-
     /// <summary>
     /// Returns root of node tree.
     /// </summary>
-    public MCTSNode Root => cachedRoot is null ? (cachedRoot = GetNode(Store.RootIndex)) : cachedRoot;
+    public MCTSNode Root => GetNode(Store.RootIndex);
 
 
 #if NOT

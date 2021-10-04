@@ -71,7 +71,7 @@ namespace Ceres.MCTS.MTCSNodes
                      Predicate<MCTSNode> shouldAbort = null,
                      int maxMoves = int.MaxValue,
                      TextWriter writer = null,
-                     MCTSNode dumpRoot = null)
+                     MCTSNode dumpRoot = default)
     {
       throw new NotImplementedException();
 #if NOT

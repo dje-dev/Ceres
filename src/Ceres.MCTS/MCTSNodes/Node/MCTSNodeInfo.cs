@@ -102,7 +102,7 @@ namespace Ceres.MCTS.MTCSNodes
     /// <param name="context"></param>
     /// <param name="index"></param>
     /// <param name="parent">optionally the parent node</param>
-    internal MCTSNodeInfo(MCTSIterator context, MCTSNodeStructIndex index, MCTSNode parent = null)
+    internal MCTSNodeInfo(MCTSIterator context, MCTSNodeStructIndex index)
     {
       Debug.Assert(context.Tree.Store.Nodes != null);
       Debug.Assert(index.Index <= context.Tree.Store.Nodes.MaxNodes);
@@ -127,7 +127,7 @@ namespace Ceres.MCTS.MTCSNodes
       Annotation = new MCTSNodeAnnotation();
       EvalResult = default;
       EvalResultSecondary = default;
-      InFlightLinkedNode = null;
+      InFlightLinkedNode = default;
       LastAccessedSequenceCounter = 0;
       SiblingEval = null;
     }
@@ -382,12 +382,12 @@ namespace Ceres.MCTS.MTCSNodes
       [MethodImpl(MethodImplOptions.AggressiveInlining)]
       get
       {
-        if (parent != null)
+        if (!parent.IsNull)
         {
           return parent;
         }
 
-        return Ref.ParentIndex.IsNull ? null : (parent = Context.Tree.GetNode(ParentIndex));
+        return Ref.ParentIndex.IsNull ? default : (parent = Context.Tree.GetNode(ParentIndex));
       }
     }
 

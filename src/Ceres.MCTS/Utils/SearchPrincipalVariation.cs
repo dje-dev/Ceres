@@ -118,7 +118,7 @@ namespace Ceres.MCTS.Utils
       return -regression.slope;
     }
 
-    public SearchPrincipalVariation(MCTSNode searchRoot, MCTSNode overrideBestMoveNodeAtRoot = null)
+    public SearchPrincipalVariation(MCTSNode searchRoot, MCTSNode overrideBestMoveNodeAtRoot = default)
     {
       Nodes = new List<MCTSNode>();
 
@@ -143,8 +143,8 @@ namespace Ceres.MCTS.Utils
           }
         }
         else
-          node = null;
-      } while (node != null);
+          node = default;
+      } while (node.IsNotNull);
 
     }
 
@@ -181,7 +181,7 @@ namespace Ceres.MCTS.Utils
       Console.WriteLine();
       foreach (MCTSNode node in Nodes)
       {
-        if (node.Parent != null && node.Parent.N > 10)
+        if (node.Parent.IsNotNull && node.Parent.N > 10)
         {
           //node.Tree.Annotate(node);
           //Console.WriteLine(node.Annotation.Pos.FEN + " " + node.MPosition);

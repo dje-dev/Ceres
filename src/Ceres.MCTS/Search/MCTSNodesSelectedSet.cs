@@ -316,7 +316,7 @@ namespace Ceres.MCTS.Search
           NodesOtherBatch != null &&
           transpositionRootsOtherBatch.TryGetValue(hash, out inFlightLinkedNode))
       {
-        Debug.Assert(inFlightLinkedNode != null);
+        Debug.Assert(inFlightLinkedNode.IsNotNull);
         node.InFlightLinkedNode = inFlightLinkedNode;
         NodesTranspositionInFlightOtherBatchLinked.Add(node);
         return;
@@ -327,7 +327,7 @@ namespace Ceres.MCTS.Search
            && transpositionRootsThisBatch.TryGetValue(hash, out inFlightLinkedNode)
            && !object.ReferenceEquals(node, inFlightLinkedNode))
       {
-        Debug.Assert(inFlightLinkedNode != null);
+        Debug.Assert(inFlightLinkedNode.IsNotNull);
         node.InFlightLinkedNode = inFlightLinkedNode;
         NodesTranspositionInFlightThisBatchLinked.Add(node);
         return;
@@ -408,7 +408,7 @@ namespace Ceres.MCTS.Search
         // Transfer the Eval results from the (now evaluated) nodes in this batch
         foreach (MCTSNode nodeInFlight in NodesTranspositionInFlightThisBatchLinked)
         {
-          Debug.Assert(nodeInFlight.InFlightLinkedNode != null);
+          Debug.Assert(nodeInFlight.InFlightLinkedNode.IsNotNull);
           Debug.Assert(!nodeInFlight.InFlightLinkedNode.EvalResult.IsNull);
           nodeInFlight.EvalResult = nodeInFlight.InFlightLinkedNode.EvalResult;
           // no need nodeInFlight.OverrideVToApplyFromTransposition = nodeInFlight.InFlightLinkedNode.OverrideVToApplyFromTransposition;

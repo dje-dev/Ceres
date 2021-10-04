@@ -35,7 +35,7 @@ namespace Ceres.MCTS.Iteration
     /// <param name="searchRootNode"></param>
     /// <param name="writer"></param>
     /// <param name="description"></param>
-    public void DumpFullInfo(MGMove bestMove, MCTSNode searchRootNode = null, TextWriter writer = null, string description = null)
+    public void DumpFullInfo(MGMove bestMove, MCTSNode searchRootNode = default, TextWriter writer = null, string description = null)
     {
       using (new SearchContextExecutionBlock(this.Context))
       {

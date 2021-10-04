@@ -37,8 +37,8 @@ namespace Ceres.MCTS.Utils
     /// <param name="overrideRootMove"></param>
     /// <returns></returns>
     public static string UCIInfoString(MCTSManager manager,
-                                       MCTSNode overrideRootMove = null,
-                                       MCTSNode overrideBestMoveNodeAtRoot = null,
+                                       MCTSNode overrideRootMove = default,
+                                       MCTSNode overrideBestMoveNodeAtRoot = default,
                                        int? multiPVIndex = null,
                                        bool useParentN = true,
                                        bool showWDL = false,
@@ -82,7 +82,7 @@ namespace Ceres.MCTS.Utils
       MCTSNode bestMoveNode = pv.Nodes.Count > 1 ? pv.Nodes[1] : pv.Nodes[0];
 
       float thisQ;
-      if (overrideBestMoveNodeAtRoot != null)
+      if (overrideBestMoveNodeAtRoot.IsNotNull)
       {
         thisQ = (float)-overrideBestMoveNodeAtRoot.Q;
       }
@@ -122,7 +122,7 @@ namespace Ceres.MCTS.Utils
                                               : $"pv {pv.ShortStr()}";
 
       int n = thisRootNode.N;
-      if (!useParentN && overrideBestMoveNodeAtRoot != null) n = overrideBestMoveNodeAtRoot.N;
+      if (!useParentN && overrideBestMoveNodeAtRoot.IsNotNull) n = overrideBestMoveNodeAtRoot.N;
 
       //score cp 27 wdl 384 326 290
       string strWDL = "";

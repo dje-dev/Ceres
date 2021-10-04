@@ -47,7 +47,7 @@ namespace Ceres.MCTS.MTCSNodes
   /// 
   /// Also contains additional properties used transiently in tree operations such as search.
   /// </summary>
-  public unsafe sealed partial class MCTSNode
+  public unsafe partial struct MCTSNode
     : ITreeNode,
       IComparable<MCTSNode>,
       IEquatable<MCTSNode>
@@ -67,6 +67,11 @@ namespace Ceres.MCTS.MTCSNodes
     /// Returns if the node is null.
     /// </summary>
     public bool IsNull => storePtr == default;
+
+    /// <summary>
+    /// Returns if the node is not null.
+    /// </summary>
+    public bool IsNotNull => storePtr != default;
 
 
     /// <summary>
@@ -417,7 +422,7 @@ namespace Ceres.MCTS.MTCSNodes
         }
         else
         {
-          return (null, childRef.Move, childRef.P);
+          return (default, childRef.Move, childRef.P);
         }
       }
     }
@@ -513,7 +518,7 @@ namespace Ceres.MCTS.MTCSNodes
 
       // It is (rarely) possible that a legal move is not in the tree
       // (since we truncate the maximum number of moves considered around 64)
-      return null;
+      return default;
     }
 
 
@@ -561,11 +566,11 @@ namespace Ceres.MCTS.MTCSNodes
     {
       if (NumChildrenExpanded == 0)
       {
-        return null;
+        return default;
       }
       else
       {
-        MCTSNode maxNode = null;
+        MCTSNode maxNode = default;
         float maxN = float.MinValue;
         for (int i = 0; i < NumChildrenExpanded; i++)
         {
@@ -686,7 +691,7 @@ namespace Ceres.MCTS.MTCSNodes
 
           if (!foundChild)
           {
-            return null;
+            return default;
           }
         }
 
@@ -716,7 +721,7 @@ namespace Ceres.MCTS.MTCSNodes
       float cpuct = MCTSNodeInfo.CPUCT(IsRoot, N, parms);
 
       (MCTSNode node, EncodedMove move, FP16 p) child = ChildAtIndexInfo(childIndex);
-      float n = child.node == null ? 0 : child.node.N;
+      float n = child.node.IsNull  ? 0 : child.node.N;
       float p = child.p;
 
       float denominator = parms.UCTRootDenominatorExponent == 1.0f ? (n + 1) : MathF.Pow(n + 1, parms.UCTRootDenominatorExponent);
@@ -741,7 +746,7 @@ namespace Ceres.MCTS.MTCSNodes
         for (int i = 0; i < NumPolicyMoves; i++)
         {
           (MCTSNode childNode, EncodedMove move, FP16 p) info = ChildAtIndexInfo(i);
-          if (info.Item1 != null)
+          if (!info.Item1.IsNull)
           {
             yield return info.childNode;
           }
