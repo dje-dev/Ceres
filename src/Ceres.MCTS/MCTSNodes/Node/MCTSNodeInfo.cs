@@ -54,17 +54,17 @@ namespace Ceres.MCTS.MTCSNodes
     /// <summary>
     /// Pointer directly to this structure
     /// </summary>
-    internal readonly MCTSNodeStruct* ptr;
+    internal MCTSNodeStruct* ptr { get; private set; }
 
     /// <summary>
     /// Search context within which this node exists
     /// </summary>
-    public readonly MCTSIterator Context;
+    public MCTSIterator Context { get; private set; }
 
     /// <summary>
     /// Index of this structure within the array
     /// </summary>
-    internal readonly MCTSNodeStructIndex index;
+    internal MCTSNodeStructIndex index;
 
     public enum NodeActionType : short { NotInitialized, None, MCTSApply, CacheOnly };
 
@@ -73,13 +73,27 @@ namespace Ceres.MCTS.MTCSNodes
     /// <summary>
     /// Shortcut directly to associated MCTSTree.
     /// </summary>
-    public readonly MCTSTree Tree;
+    public MCTSTree Tree { get;  private set; }
 
     /// <summary>
     /// Shortcut directly to associated MCTSNodeStore.
     /// </summary>
-    public readonly MCTSNodeStore Store;
+    public MCTSNodeStore Store { get; private set; }
 
+    internal int CacheAcquireInterlockedExchange;
+
+    /// <summary>
+    /// If the node has been initialized.
+    /// </summary>
+    public bool IsInitialized => ptr != null;
+
+    public void SetUninitialized()
+    {
+      ptr = null;
+      Context = null;
+      Tree = null;
+      Store = null;
+    }
 
 
     /// <summary>
@@ -103,6 +117,7 @@ namespace Ceres.MCTS.MTCSNodes
       ptr = (MCTSNodeStruct*)Unsafe.AsPointer(ref parentArray[index.Index]);
       this.index = index;
 
+      CacheAcquireInterlockedExchange = 0;
       startedAsCacheOnlyNode = false;
       cachedDepth = -1;
       ActionType = NodeActionType.NotInitialized;

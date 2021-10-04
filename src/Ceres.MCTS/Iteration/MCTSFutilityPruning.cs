@@ -188,9 +188,9 @@ namespace Ceres.MCTS.Iteration
       float bestQ = (float)bestQNode.Q;
 
       ManagerChooseBestMove bestMoveChoser = new(Context.Root, false, Context.ParamsSearch.MLHBonusFactor);
-      Span<MCTSNodeStructChild> children = Root.Ref.Children;
+      Span<MCTSNodeStructChild> children = Root.StructRef.Children;
       int numNewlyShutdown = 0;
-      for (int i = 0; i < Root.Ref.NumChildrenExpanded; i++)
+      for (int i = 0; i < Root.StructRef.NumChildrenExpanded; i++)
       {
         // Never shut down second best move unless the whole search is eligible to shut down
         if (nodesSortedN.Length > 1)
@@ -281,7 +281,7 @@ namespace Ceres.MCTS.Iteration
     public void DumpDiagnosticsMoveShutdown()
     {
       Manager.DumpTimeInfo();
-      Context.Root.Info.Dump(1, 1);
+      Context.Root.InfoRef.Dump(1, 1);
       Console.WriteLine();
     }
 

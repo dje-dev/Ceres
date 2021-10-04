@@ -187,7 +187,7 @@ namespace Ceres.MCTS.MTCSNodes
         throw new Exception("Implementation restriction, the sibling transposition lookup feature not yet implemented for history length > 1");
       }
 
-      ref readonly MCTSNodeStruct parentRef = ref node.Parent.Ref;
+      ref readonly MCTSNodeStruct parentRef = ref node.Parent.StructRef;
       int parentChildIndex = node.IndexInParentsChildren;
       Span<MCTSNodeStruct> nodes = node.Store.Nodes.Span;
 

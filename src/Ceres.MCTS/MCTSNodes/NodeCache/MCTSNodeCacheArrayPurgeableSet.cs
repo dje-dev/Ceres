@@ -44,7 +44,7 @@ namespace Ceres.MCTS.NodeCache
   /// and also the LRU purging becomes slightly approximate 
   /// because it is not coordinated across set members.
   /// </summary>
-  public class MCTSNodeCacheArrayPurgeableSet : IMCTSNodeCache
+  public unsafe class MCTSNodeCacheArrayPurgeableSet : IMCTSNodeCache
   {
     internal const int MAX_SETS = 256;
 
@@ -101,26 +101,11 @@ namespace Ceres.MCTS.NodeCache
     /// Adds a specified node to the cache.
     /// </summary>
     /// <param name="node"></param>
-    /// <returns>the internal index number assigned to this node</returns>
-    public int Add(MCTSNode node)
-    {
-      int subcacheIndex = node.Index % NumSubcaches;
-      int indexInSubcache = subCaches[subcacheIndex].Add(node);
-      int cacheID = 1 + subcacheIndex + (indexInSubcache * MAX_SETS);
-      node.Ref.CacheIndex = cacheID;
-      
-      Debug.Assert(cacheID != 0); // reserved for null
-      //Console.WriteLine($" assigned cacheID={cacheID} from nodeIndex={node.Index} via {subcacheIndex} {indexInSubcache} ");
-      return cacheID;
-    }
+    /// <returns>pointer to space allocated for this node</returns>
+    public void* Add(MCTSNodeStructIndex node) => subCaches[node.Index % NumSubcaches].Add(node);
 
 
-    public MCTSNode Lookup(MCTSNodeStructIndex nodeIndex)
-    {
-      int cacheIndex = nodes[nodeIndex.Index].CacheIndex;
-      return cacheIndex == 0 ? null 
-                             : LookupByCacheID(cacheIndex);
-    }
+    public void* Lookup(MCTSNodeStructIndex nodeIndex) => nodes[nodeIndex.Index].CachedInfoPtr;
 
 
     /// <summary>
@@ -130,25 +115,7 @@ namespace Ceres.MCTS.NodeCache
     /// </summary>
     /// <param name="nodeIndex"></param>
     /// <returns></returns>
-    public MCTSNode Lookup(in MCTSNodeStruct nodeRef)
-    {
-      int cacheID = nodeRef.CacheIndex;
-      return cacheID == 0 ? null : LookupByCacheID(cacheID);
-    }
-
-
-    /// <summary>
-    /// Returns the MCTSNode at a specified cache index.
-    /// </summary>
-    /// <param name="cacheID"></param>
-    /// <returns></returns>
-    public MCTSNode LookupByCacheID(int cacheID)
-    {
-      int indexInCache = Math.DivRem(cacheID - 1, MAX_SETS, out int cacheSetNum);
-      MCTSNode node = subCaches[cacheSetNum].AtIndex(indexInCache);
-      Debug.Assert(node == null || node.Ref.CacheIndex == cacheID);
-      return node;
-    }
+    public void* Lookup(in MCTSNodeStruct nodeRef) => nodeRef.CachedInfoPtr;
 
 
     /// <summary>

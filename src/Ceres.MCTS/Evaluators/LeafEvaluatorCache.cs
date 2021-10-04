@@ -73,7 +73,7 @@ namespace Ceres.MCTS.Evaluators
     protected override LeafEvaluationResult DoTryEvaluate(MCTSNode node)
     {
       PositionEvalCacheEntry cacheEntry = default;
-      bool inCache = cache.TryLookupFromHash(node.Ref.ZobristHash, ref cacheEntry);
+      bool inCache = cache.TryLookupFromHash(node.StructRef.ZobristHash, ref cacheEntry);
 
       if (inCache)
       {

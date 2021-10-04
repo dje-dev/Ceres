@@ -191,12 +191,12 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     /// <summary>
     /// Resets the CacheIndex field to all used nodes to zero.
     /// </summary>
-    public void ClearAllCacheIndices()
+    public unsafe void ClearAllCacheIndices()
     {
       for (int i = 1; i < Nodes.nextFreeIndex; i++)
       {
         ref MCTSNodeStruct nodeRef = ref Nodes.nodes[i];
-        nodeRef.CacheIndex = 0;
+        nodeRef.CachedInfoPtr = null;
       }
     }
 
@@ -212,7 +212,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     /// </summary>
     /// <param name="transpositionRoots"></param>
     /// <param name="expectCacheIndexZero"></param>
-    public void Validate(TranspositionRootsDict transpositionRoots, bool expectCacheIndexZero = false)
+    public unsafe void Validate(TranspositionRootsDict transpositionRoots, bool expectCacheIndexZero = false)
     {
       int numWarnings = 0;
 
@@ -288,7 +288,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
         }
 
         AssertNode(nodeR.Terminal != Chess.GameResult.NotInitialized, "Node not initialized", i, in nodeR);
-        AssertNode(!expectCacheIndexZero || nodeR.CacheIndex == 0, "CacheIndex zeroed", i, in nodeR);
+        AssertNode(!expectCacheIndexZero || nodeR.CachedInfoPtr == null, "CacheIndex zeroed", i, in nodeR);
 
         if (nodeR.TranspositionRootIndex == 0 && nodeR.N > 0 && !nodeR.Terminal.IsTerminal() && nodeR.NumPolicyMoves == 0)
         {
@@ -476,7 +476,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
         string annotation = annotater?.Invoke(new MCTSNodeStructIndex(i));
         Console.WriteLine($"{i,7} Depth={depth} N={node.N} {sideChar}:{moveCorrectPerspective} V={node.V,6:F3} {node.Terminal} W={node.W,10:F3} Parent={node.ParentIndex.Index} " +
                           $"InFlights={node.NInFlight}/{node.NInFlight2}" +
-                          $"ChildStartIndex={node.ChildStartIndex} NumPolicyMoves={node.NumPolicyMoves} CacheIndex={node.CacheIndex} " + annotation);
+                          $"ChildStartIndex={node.ChildStartIndex} NumPolicyMoves={node.NumPolicyMoves} Cached?={node.IsCached} " + annotation);
         if (node.IsOldGeneration)
         {
           Console.WriteLine("          OLD GENERATION");

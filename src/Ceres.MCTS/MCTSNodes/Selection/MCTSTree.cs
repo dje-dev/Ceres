@@ -113,6 +113,7 @@ namespace Ceres.MCTS.LeafExpansion
         throw new Exception($"NODE_ANNOTATION_CACHE_SIZE is below minimum size of {ANNOTATION_MIN_CACHE_SIZE}");
       }
 
+#if NOT
       if (maxNodesBound <= annotationCacheSize && !context.ParamsSearch.TreeReuseEnabled)
       {
         // We know with certainty the maximum size, and it will fit inside the cache
@@ -121,8 +122,8 @@ namespace Ceres.MCTS.LeafExpansion
       }
       else
       {
-        cache = new MCTSNodeCacheArrayPurgeableSet(this, annotationCacheSize, estimatedNumNodes);
-      }
+#endif
+      cache = new MCTSNodeCacheArrayPurgeableSet(this, annotationCacheSize, estimatedNumNodes);
 
       // Populate EncodedPriorPositions with encoded boards
       // corresponding to possible prior moves (before the root of this search)
@@ -156,7 +157,7 @@ namespace Ceres.MCTS.LeafExpansion
     public MCTSNode Root => cachedRoot is null ? (cachedRoot = GetNode(Store.RootIndex)) : cachedRoot;
 
 
-
+#if NOT
     /// <summary>
     /// Returns the MCTSNode stored in the cache 
     /// corresponding to specified MCTSNodeStruct
@@ -164,26 +165,14 @@ namespace Ceres.MCTS.LeafExpansion
     /// </summary>
     /// <param name="nodeRef"></param>
     /// <returns></returns>
-    public MCTSNode GetNode(in MCTSNodeStruct nodeRef)
+    public unsafe MCTSNode GetNode(in MCTSNodeStruct nodeRef)
     {
       MCTSNode node = cache.Lookup(in nodeRef);
       int nodeIndex = node == null ? (int)Store.Nodes.NodeOffsetFromFirst(in nodeRef) 
                                    : node.Index;
       return DoGetNode(node, new MCTSNodeStructIndex(nodeIndex), null);
     }
-
-
-    /// <summary>
-    /// Attempts to return the MCTSNode associated with an annotation in the cache, 
-    /// or null if not found
-    /// </summary>
-    /// <param name="nodeIndex"></param>
-    /// <returns></returns>
-    public MCTSNode GetNode(MCTSNodeStructIndex nodeIndex, MCTSNode parent = null, bool checkCache = true)
-    {
-      MCTSNode ret = checkCache ? cache.Lookup(nodeIndex) : null;
-      return DoGetNode(ret, nodeIndex, parent, checkCache);
-    }
+#endif
 
     /// <summary>
     /// Attempts to return the MCTSNode associated with an annotation in the cache, 
@@ -191,23 +180,25 @@ namespace Ceres.MCTS.LeafExpansion
     /// </summary>
     /// <param name="nodeIndex"></param>
     /// <returns></returns>
-    MCTSNode DoGetNode(MCTSNode node, MCTSNodeStructIndex nodeIndex, MCTSNode parent = null, bool checkCache = true)
+    public unsafe MCTSNode GetNode(MCTSNodeStructIndex nodeIndex)
     {
-      if (node is null)
+      if (nodeIndex.Index == 0)
       {
-        ref readonly MCTSNodeStruct nodeRef = ref Store.Nodes.nodes[nodeIndex.Index];
-        if (parent is null && !nodeIndex.IsRoot)
-        {
-          Debug.Assert(nodeRef.ParentIndex.Index != nodeIndex.Index);
-
-          parent = GetNode(nodeRef.ParentIndex, null);
-        }
-
-        node = new MCTSNode(Context, nodeIndex, parent);
-        cache?.Add(node);
+        return new MCTSNode(Context, default, false);
+        Console.WriteLine("Internal error, attempt to GetNode on null node");
       }
 
-      node.LastAccessedSequenceCounter = BATCH_SEQUENCE_COUNTER;
+      ref readonly MCTSNodeStruct nodeRef = ref Store.Nodes.nodes[nodeIndex.Index];
+      bool wasAdded = false;
+      if (nodeRef.CachedInfoPtr == null)
+      {
+        cache.Add(nodeIndex);
+        Debug.Assert(nodeRef.CachedInfoPtr != null);
+        wasAdded = true;
+      }
+
+      MCTSNode node = new MCTSNode(Context, nodeIndex, wasAdded);
+      node.InfoRef.LastAccessedSequenceCounter = BATCH_SEQUENCE_COUNTER;
 
       Debug.Assert(node.Index == nodeIndex.Index);
 
@@ -248,7 +239,7 @@ namespace Ceres.MCTS.LeafExpansion
         return;
       }
 
-      Debug.Assert(!node.Ref.IsOldGeneration);
+      Debug.Assert(!node.StructRef.IsOldGeneration);
       //      Debug.Assert(!node.Ref.IsTranspositionLinked);
 
       ref MCTSNodeAnnotation annotation = ref node.Annotation;
@@ -290,13 +281,13 @@ namespace Ceres.MCTS.LeafExpansion
       // Compute the actual hash
       ulong zobristHashForCaching = EncodedBoardZobrist.ZobristHash(posHistoryForCaching, node.Context.EvaluatorDef.HashMode);
 
-      node.LastAccessedSequenceCounter = node.Tree.BATCH_SEQUENCE_COUNTER;
+      node.InfoRef.LastAccessedSequenceCounter = node.Tree.BATCH_SEQUENCE_COUNTER;
       annotation.PriorMoveMG = priorMoveMG;
 
       annotation.Pos = posHistory[^1]; // this will have had its repetition count set
       annotation.PosMG = newPos;
 
-      node.Ref.ZobristHash = zobristHashForCaching;
+      node.StructRef.ZobristHash = zobristHashForCaching;
       //node.Ref.HashCrosscheck = annotation.Pos.PiecesShortHash;
 
       const bool FAST = true;
@@ -397,7 +388,7 @@ namespace Ceres.MCTS.LeafExpansion
       posSpan[0] = prependPosition;
       int count = 1;
       MCTSNode thisAnnotation = parent;
-      while (count < maxPositions && thisAnnotation != null)
+      while (count < maxPositions && !thisAnnotation.IsNull)
       {
         posSpan[count++] = thisAnnotation.Annotation.Pos;
         thisAnnotation = thisAnnotation.Parent;

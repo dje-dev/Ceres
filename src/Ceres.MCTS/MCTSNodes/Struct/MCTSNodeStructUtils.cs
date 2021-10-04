@@ -200,10 +200,10 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <param name="numNodes"></param>
     /// <param name="nodesNewlyBecomingOldGeneration"></param>
     /// <returns></returns>
-    public static BitArray BitArrayNodesInSubtree(MCTSNodeStore store, ref MCTSNodeStruct newRoot,
-                                                  bool setOldGeneration, out uint numNodes,
-                                                  BitArray nodesNewlyBecomingOldGeneration,
-                                                  int numExtraPaddingNodesAtEnd)
+    public unsafe static BitArray BitArrayNodesInSubtree(MCTSNodeStore store, ref MCTSNodeStruct newRoot,
+                                                         bool setOldGeneration, out uint numNodes,
+                                                         BitArray nodesNewlyBecomingOldGeneration,
+                                                         int numExtraPaddingNodesAtEnd)
     {
       BitArray includedNodes = new BitArray(store.Nodes.NumTotalNodes + numExtraPaddingNodesAtEnd);
 
@@ -220,7 +220,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
         if (!nodeRef.IsOldGeneration)
         {
-          nodeRef.CacheIndex = 0;
+          nodeRef.CachedInfoPtr = null;
 
           if (includedNodes.Get(nodeRef.ParentIndex.Index) || i == newRootIndex)
           {

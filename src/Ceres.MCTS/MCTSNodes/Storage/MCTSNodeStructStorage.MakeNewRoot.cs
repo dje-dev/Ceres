@@ -31,7 +31,7 @@ using Ceres.MCTS.MTCSNodes.Struct;
 
 namespace Ceres.MCTS.MTCSNodes.Storage
 {
-  public partial class MCTSNodeStructStorage
+  public unsafe partial class MCTSNodeStructStorage
   {
     internal const bool SWAP_ROOT_ENHANCED_METHOD = true;
 
@@ -382,7 +382,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
             ref MCTSNodeStruct thisNode = ref store.Nodes.nodes[i];
 
             // Reset any cache entry.
-            thisNode.CacheIndex = 0;
+            thisNode.CachedInfoPtr = null;
 
             // Remember this location if this is the new parent.
             if (i == indexOfNewRootBeforeRewrite)
@@ -494,7 +494,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       // Finally, make this as the root (no parent)
       store.Nodes.nodes[1].ParentIndex = default;
       store.Nodes.nodes[1].PriorMove = default;
-      store.Nodes.nodes[1].CacheIndex = 0;
+      store.Nodes.nodes[1].CachedInfoPtr = null;
 
       ModifyChildrensParentRef(store, store.Nodes.nodes.Span, ref store.Nodes.nodes[1], new MCTSNodeStructIndex(1));
 
@@ -514,7 +514,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       // Finally, make this as the root (no parent)
       store.Nodes.nodes[1].ParentIndex = default;
       store.Nodes.nodes[1].PriorMove = default;
-      store.Nodes.nodes[1].CacheIndex = 0;
+      store.Nodes.nodes[1].CachedInfoPtr = null;
 
       // Update the prior moves
       store.Nodes.PriorMoves = new PositionWithHistory(newPriorMoves);

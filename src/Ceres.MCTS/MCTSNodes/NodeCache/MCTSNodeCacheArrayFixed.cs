@@ -11,6 +11,8 @@
 
 #endregion
 
+#if NOT_USED
+
 #region Using directives
 
 
@@ -75,7 +77,7 @@ namespace Ceres.MCTS.LeafExpansion
       int nodeIndex = node.Index;
 
       nodes[nodeIndex] = node;
-      node.Ref.CacheIndex = nodeIndex;
+      node.StructRef.CacheIndex = nodeIndex;
       return nodeIndex;
     }
 
@@ -121,7 +123,7 @@ namespace Ceres.MCTS.LeafExpansion
         {
           if (nodes[i] != null)
           {
-            nodes[i].Ref.CacheIndex = 0;
+            nodes[i].StructRef.CacheIndex = 0;
           }
         }
       }
@@ -130,3 +132,5 @@ namespace Ceres.MCTS.LeafExpansion
     }
   }
 }
+
+#endif

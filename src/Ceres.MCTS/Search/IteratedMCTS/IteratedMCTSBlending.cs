@@ -44,7 +44,7 @@ namespace Ceres.MCTS.Search.IteratedMCTS
 
       PositionEvalCache posCache = cache ? new PositionEvalCache(true) : null;
 
-      root.Ref.TraverseSequential(root.Store, (ref MCTSNodeStruct nodeRef, MCTSNodeStructIndex index) =>
+      root.StructRef.TraverseSequential(root.Store, (ref MCTSNodeStruct nodeRef, MCTSNodeStructIndex index) =>
       {
         bool shouldBlend = nodeRef.N >= minN;
         if (shouldBlend || treeModificationType == IteratedMCTSDef.TreeModificationType.DeleteNodesMoveToCache)
@@ -70,7 +70,7 @@ namespace Ceres.MCTS.Search.IteratedMCTS
     static void ProcessNode(PositionEvalCache cache, MCTSNode node, float weightEmpirical, 
                             bool saveToCache, bool rewriteNodeInTree)
     {
-      Span<MCTSNodeStructChild> children = node.Ref.Children;
+      Span<MCTSNodeStructChild> children = node.StructRef.Children;
 
       // TODO: optimize this away if saveToCache is false
       ushort[] probabilities = new ushort[node.NumPolicyMoves];
@@ -110,7 +110,7 @@ namespace Ceres.MCTS.Search.IteratedMCTS
           }
           else
           {
-            node.Ref.ChildAtIndex(i).SetUnexpandedPolicyValues(thisChild.Move, (FP16)newValue);
+            node.StructRef.ChildAtIndex(i).SetUnexpandedPolicyValues(thisChild.Move, (FP16)newValue);
           }
         }
 
@@ -146,7 +146,7 @@ namespace Ceres.MCTS.Search.IteratedMCTS
 
         // Save back to cache
         // TODO: possibly blend in the search Q to the WinP/LossP (possibly M too?)
-        cache.Store(node.Ref.ZobristHash, node.Terminal, node.WinP, node.LossP, node.MPosition, in newPolicy);
+        cache.Store(node.StructRef.ZobristHash, node.Terminal, node.WinP, node.LossP, node.MPosition, in newPolicy);
       }
     }
 

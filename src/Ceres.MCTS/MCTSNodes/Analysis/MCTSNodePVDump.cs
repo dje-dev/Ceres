@@ -283,7 +283,7 @@ namespace Ceres.MCTS.MTCSNodes.Analysis
 
       foreach (MGMove move in moves)
       {
-        int? childIndex = node.Ref.ChildIndexWithMove(move);
+        int? childIndex = node.StructRef.ChildIndexWithMove(move);
         if (childIndex is null)
         {
           throw new Exception($"Move  {move} not found at node {node}");

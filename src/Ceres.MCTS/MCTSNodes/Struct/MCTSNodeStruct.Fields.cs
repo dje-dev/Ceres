@@ -20,6 +20,7 @@ using Ceres.Chess;
 using Ceres.Base.DataTypes;
 using Ceres.Chess.EncodedPositions.Basic;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 
 #endregion
 
@@ -33,7 +34,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
   /// </summary>
   [Serializable]
   [StructLayout(LayoutKind.Sequential, Pack = 1, Size = 64)]
-  public partial struct MCTSNodeStruct
+  public unsafe partial struct MCTSNodeStruct
   {
     /// <summary>
     /// Number of visits to children
@@ -218,18 +219,43 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// 
     /// TODO: this could be compressed into 3 bytes
     /// </summary>
-    public int CacheIndex;
+    public void* CachedInfoPtr;
+
+    /// <summary>
+    /// Returns reference to associated MCTSNodeInfo.
+    /// </summary>
+    public ref MCTSNodeInfo InfoRef => ref Unsafe.AsRef<MCTSNodeInfo>(CachedInfoPtr);
+
+    /// <summary>
+    /// If the associated MCTSNodeInfo is present in the cache.
+    /// </summary>
+    public bool IsCached => CachedInfoPtr != null;
+
 
     /// <summary>
     /// V value as returned by an optional secondary network.
     /// </summary>
-    public FP16 VSecondary;
+    public FP16 VSecondary
+    {
+      get => FP16.NaN;
+      set 
+      { 
+        if (!FP16.IsNaN(value)) throw new NotImplementedException(); 
+      }
+    }
 
-    public FP16 Uncertainty;
+    public FP16 Uncertainty
+    {
+      get => FP16.NaN;
+      set
+      {
+        if (!FP16.IsNaN(value)) throw new NotImplementedException();
+      }
+    }
 
 
-    // TODO: make compile time constant
-    internal FP16 UNCERTAINTY_PRIOR => (FP16)0.10f;
+  // TODO: make compile time constant
+  internal FP16 UNCERTAINTY_PRIOR => (FP16)0.10f;
 
     public void ResetSearchInProgressState()
     {
@@ -237,7 +263,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
       NInFlight = 0;
       NInFlight2 = 0;
-      CacheIndex = 0;
+      CachedInfoPtr = null;
     }
 
 
@@ -259,7 +285,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
       numChildrenVisited = 0;
       DrawKnownToExistAmongChildren = false;
-      CacheIndex = 0;
+      CachedInfoPtr = null;
 
 #if FEATURE_UNCERTAINTY
       Uncertainty = UNCERTAINTY_PRIOR;

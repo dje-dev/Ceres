@@ -317,7 +317,7 @@ namespace Ceres.Features.GameEngines
 
       if (VerboseMoveStats)
       {
-        result.Search.Manager.Context.Root.Info.Dump(1, 1);
+        result.Search.Manager.Context.Root.InfoRef.Dump(1, 1);
       }
 
       return result;

@@ -104,7 +104,7 @@ namespace Ceres.MCTS.Evaluators
       if (transpositionMode == TranspositionMode.SingleNodeCopy
        || transpositionRootNode.Terminal.IsTerminal())
       {
-        node.Ref.CopyUnexpandedChildrenFromOtherNode(node.Tree, transpositionRootNodeIndex);
+        node.StructRef.CopyUnexpandedChildrenFromOtherNode(node.Tree, transpositionRootNodeIndex);
       }
       else if (transpositionMode == TranspositionMode.SingleNodeDeferredCopy
             || transpositionMode == TranspositionMode.SharedSubtree)
@@ -177,7 +177,7 @@ namespace Ceres.MCTS.Evaluators
       }
 
       // Check if this position already exists in the tree
-      if (TranspositionRoots.TryGetValue(node.Ref.ZobristHash, out int transpositionNodeIndex))
+      if (TranspositionRoots.TryGetValue(node.StructRef.ZobristHash, out int transpositionNodeIndex))
       {
         // Found already existing node
         ref readonly MCTSNodeStruct transpositionNode = ref node.Store.Nodes.nodes[transpositionNodeIndex];
@@ -250,7 +250,7 @@ namespace Ceres.MCTS.Evaluators
         if (node.Index != 1)
         {
           int pendingIndex = Interlocked.Increment(ref nextIndexPendingTranspositionRoots) - 1;
-          pendingTranspositionRoots[pendingIndex] = (node.Ref.ZobristHash, node.Index);
+          pendingTranspositionRoots[pendingIndex] = (node.StructRef.ZobristHash, node.Index);
         }
 
         //        if (CeresEnvironment.MONITORING_METRICS) NumMisses++;

@@ -30,7 +30,7 @@ namespace Ceres.MCTS.NodeCache
   /// A least recently used (LRU) strategy may be used to
   /// evict nodes when the cache approaches maximum capacity.
   /// </summary>
-  public interface IMCTSNodeCache
+  public unsafe interface IMCTSNodeCache
   {
     /// <summary>
     /// Tree from which the MCTSNode objects originated.
@@ -42,8 +42,8 @@ namespace Ceres.MCTS.NodeCache
     /// Adds a specified node to the cache.
     /// </summary>
     /// <param name="node"></param>
-    /// <returns>the internal index number assigned to this node</returns>
-    int Add(MCTSNode node);
+    /// <returns>pointer to space allocated for MCTSNodeInfo</returns>
+    void* Add(MCTSNodeStructIndex node);
 
     /// <summary>
     /// Returns the MCTSNode having the specified index and stored in the cache
@@ -51,7 +51,7 @@ namespace Ceres.MCTS.NodeCache
     /// </summary>
     /// <param name="nodeIndex"></param>
     /// <returns></returns>
-    MCTSNode Lookup(MCTSNodeStructIndex nodeIndex);
+    void* Lookup(MCTSNodeStructIndex nodeIndex);
 
     /// <summary>
     /// Returns the MCTSNode stored in the cache 
@@ -60,7 +60,7 @@ namespace Ceres.MCTS.NodeCache
     /// </summary>
     /// <param name="nodeIndex"></param>
     /// <returns></returns>
-    MCTSNode Lookup(in MCTSNodeStruct nodeRef);
+    void* Lookup(in MCTSNodeStruct nodeRef);
 
     /// <summary>
     /// Possibly prunes the cache to remove some of the least recently accessed nodes.

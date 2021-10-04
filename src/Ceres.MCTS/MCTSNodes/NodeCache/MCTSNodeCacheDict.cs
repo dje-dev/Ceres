@@ -1,3 +1,4 @@
+
 #region License notice
 
 /*
@@ -11,6 +12,7 @@
 
 #endregion
 
+#if NOT_USED
 
 #region Using directives
 
@@ -90,7 +92,7 @@ namespace Ceres.MCTS.NodeCache
       {
         foreach (KeyValuePair<int, MCTSNode> kvp in nodeCache)
         {
-          kvp.Value.Ref.CacheIndex = 0;
+          kvp.Value.StructRef.CacheIndex = 0;
         }
       }
 
@@ -148,3 +150,5 @@ namespace Ceres.MCTS.NodeCache
 
 
 }
+
+#endif

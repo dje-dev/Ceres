@@ -322,7 +322,7 @@ namespace Ceres.MCTS.Iteration
 
       const int BATCH_SIZE = 256;
 
-      Root.Ref.TraverseSequential(Context.Tree.Store, (ref MCTSNodeStruct nodeRef, MCTSNodeStructIndex index) =>
+      Root.StructRef.TraverseSequential(Context.Tree.Store, (ref MCTSNodeStruct nodeRef, MCTSNodeStructIndex index) =>
       {
         if (nodeRef.N >= minN
          && nodeRef.Terminal == GameResult.Unknown
@@ -367,7 +367,7 @@ namespace Ceres.MCTS.Iteration
 
         foreach (MCTSNode node in nodes)
         {
-          ref MCTSNodeStruct nodeRef = ref node.Ref;
+          ref MCTSNodeStruct nodeRef = ref node.StructRef;
 
           //          nodeRef.VSecondary = FP16.NaN;
           //          nodeRef.VSecondary = (FP16)node.EvalResultSecondary.V;
@@ -376,7 +376,7 @@ namespace Ceres.MCTS.Iteration
           {
             ref readonly CompressedPolicyVector otherPolicy = ref node.EvalResultSecondary.PolicyRef;
 
-            node.Info.BlendPolicy(in otherPolicy, secondaryParams.UpdatePolicyFraction);
+            node.InfoRef.BlendPolicy(in otherPolicy, secondaryParams.UpdatePolicyFraction);
 
             if (secondaryParams.UpdateValueFraction > 0)
             {
@@ -403,7 +403,7 @@ namespace Ceres.MCTS.Iteration
       int numBackedOut = 0;
       if (materializeTranspositions) Root.MaterializeAllTranspositionLinks(); // TODO: can we avoid having to do this?          
 
-      Root.Ref.TraverseSequential(Context.Tree.Store, (ref MCTSNodeStruct node, MCTSNodeStructIndex index) =>
+      Root.StructRef.TraverseSequential(Context.Tree.Store, (ref MCTSNodeStruct node, MCTSNodeStructIndex index) =>
       {
         // TODO: could we improve eficiency by only doing this for the current generation (ReuseGenerationNum)?
 
@@ -460,13 +460,13 @@ namespace Ceres.MCTS.Iteration
 
           float winP = ParamsSelect.WinPForProvenWin(DISTANCE_TO_MATE);
 
-          Context.Root.Ref.W = winP;
-          Context.Root.Ref.N = 1;
-          Context.Root.Ref.WinP = (FP16)winP;
-          Context.Root.Ref.LossP = 0;
-          Context.Root.Ref.MPosition = DISTANCE_TO_MATE;
+          Context.Root.StructRef.W = winP;
+          Context.Root.StructRef.N = 1;
+          Context.Root.StructRef.WinP = (FP16)winP;
+          Context.Root.StructRef.LossP = 0;
+          Context.Root.StructRef.MPosition = DISTANCE_TO_MATE;
           Context.Root.EvalResult = new LeafEvaluationResult(GameResult.Checkmate, (FP16)winP, 0, DISTANCE_TO_MATE);
-          Context.Root.Ref.Terminal = GameResult.Checkmate;
+          Context.Root.StructRef.Terminal = GameResult.Checkmate;
         }
         else if (result == GameResult.Draw)
         {
@@ -475,12 +475,12 @@ namespace Ceres.MCTS.Iteration
           // TODO: do we have to adjust for possible contempt?
           const int DISTANCE_TO_END_OF_GAME = 1;
 
-          Context.Root.Ref.W = 0;
-          Context.Root.Ref.N = 1;
-          Context.Root.Ref.WinP = 0;
-          Context.Root.Ref.LossP = 0;
-          Context.Root.Ref.MPosition = DISTANCE_TO_END_OF_GAME;
-          Context.Root.Ref.Terminal = GameResult.Draw;
+          Context.Root.StructRef.W = 0;
+          Context.Root.StructRef.N = 1;
+          Context.Root.StructRef.WinP = 0;
+          Context.Root.StructRef.LossP = 0;
+          Context.Root.StructRef.MPosition = DISTANCE_TO_END_OF_GAME;
+          Context.Root.StructRef.Terminal = GameResult.Draw;
           Context.Root.EvalResult = new LeafEvaluationResult(GameResult.Draw, 0, 0, 1);
         }
         else if (result == GameResult.Unknown && TablebaseImmediateBestMove != default)
@@ -494,13 +494,13 @@ namespace Ceres.MCTS.Iteration
 
           float lossP = ParamsSelect.LossPForProvenLoss(DISTANCE_TO_MATE);
 
-          Context.Root.Ref.W = -lossP;
-          Context.Root.Ref.N = 1;
-          Context.Root.Ref.WinP = 0;
-          Context.Root.Ref.LossP = (FP16)lossP;
-          Context.Root.Ref.MPosition = DISTANCE_TO_MATE;
+          Context.Root.StructRef.W = -lossP;
+          Context.Root.StructRef.N = 1;
+          Context.Root.StructRef.WinP = 0;
+          Context.Root.StructRef.LossP = (FP16)lossP;
+          Context.Root.StructRef.MPosition = DISTANCE_TO_MATE;
           Context.Root.EvalResult = new LeafEvaluationResult(GameResult.Checkmate, 0, (FP16)lossP, DISTANCE_TO_MATE);
-          Context.Root.Ref.Terminal = GameResult.Checkmate;
+          Context.Root.StructRef.Terminal = GameResult.Checkmate;
         }
 
       }
@@ -682,7 +682,7 @@ namespace Ceres.MCTS.Iteration
         // First quick dump at level 1
         Console.WriteLine();
         Console.WriteLine("VERBOSE ROOT MOVE STATISTICS");
-        node.Info.Dump(1, 1, maxMoves: maxMoves);
+        node.InfoRef.Dump(1, 1, maxMoves: maxMoves);
         Console.WriteLine("-----------------------------------------------------------------------------------------------------------------\r\n");
       }
     }

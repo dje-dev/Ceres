@@ -224,7 +224,7 @@ namespace Ceres.MCTS.Search
           // Possibly use as an in-flight tranposition source
           if (IN_FLIGHT_OTHER_BATCH_LINKAGE_ENABLED && eligibleForTranspositionLinkage)
           {
-            transpositionRootsOtherBatch[nodeOther.Ref.ZobristHash] = nodeOther;
+            transpositionRootsOtherBatch[nodeOther.StructRef.ZobristHash] = nodeOther;
           }
         }
       }
@@ -270,7 +270,7 @@ namespace Ceres.MCTS.Search
       }
 
       // ....................... NOT USED ........................
-      if (node.Ref.IsTranspositionLinked && node.N > 0
+      if (node.StructRef.IsTranspositionLinked && node.N > 0
        && node.Context.ParamsSearch.Execution.TranspositionMode == TranspositionMode.MultiNodeBuffered)
       {
         throw new NotImplementedException();
@@ -311,7 +311,7 @@ namespace Ceres.MCTS.Search
 
       // Case 3  - already in flight for evaluation in the other batch
       MCTSNode inFlightLinkedNode;
-      ulong hash = node.Ref.ZobristHash;
+      ulong hash = node.StructRef.ZobristHash;
       if (IN_FLIGHT_OTHER_BATCH_LINKAGE_ENABLED &&
           NodesOtherBatch != null &&
           transpositionRootsOtherBatch.TryGetValue(hash, out inFlightLinkedNode))
@@ -340,11 +340,11 @@ namespace Ceres.MCTS.Search
         // We already full. Abort immediately.
         if (SelectorID == 0)
         {
-          node.Ref.BackupAbort0(node.NInFlight);
+          node.StructRef.BackupAbort0(node.NInFlight);
         }
         else
         {
-          node.Ref.BackupAbort1(node.NInFlight2);
+          node.StructRef.BackupAbort1(node.NInFlight2);
         }
       }
       else
@@ -365,11 +365,11 @@ namespace Ceres.MCTS.Search
       // TODO: NOTE: if this is terminal, then we could probably still keep this, multivisits allowed
       if (SelectorID == 0)
       {
-        node.Ref.BackupAbort0(node.NInFlight);
+        node.StructRef.BackupAbort0(node.NInFlight);
       }
       else
       {
-        node.Ref.BackupAbort1(node.NInFlight2);
+        node.StructRef.BackupAbort1(node.NInFlight2);
       }
 
 #if DEBUG

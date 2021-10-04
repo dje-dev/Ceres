@@ -346,7 +346,7 @@ namespace Ceres.MCTS.Search
 
     internal void DoVisitLeafNode(MCTSNode node, int numVisits, ListBounded<MCTSNode> gatheredNodes)
     {
-      ref MCTSNodeStruct nodeRef = ref node.Ref;
+      ref MCTSNodeStruct nodeRef = ref node.StructRef;
 
       int initialNInFlightValue;
       if (SelectorID == 0)
@@ -475,7 +475,7 @@ namespace Ceres.MCTS.Search
 #endif
 
       Span<float> scores = default;
-      node.Info.ComputeTopChildScores(selectorID, node.Depth,
+      node.InfoRef.ComputeTopChildScores(selectorID, node.Depth,
                                  vLossDynamicBoost, 0, numChildrenToCheck - 1, numTargetLeafs,
                                  scores, visitChildCounts, cpuctMultiplier);
 
@@ -513,7 +513,7 @@ namespace Ceres.MCTS.Search
     private void DoGatherLeafBatchlet(MCTSNode node, int numTargetLeafs, float vLossDynamicBoost,
                                       ListBounded<MCTSNode> gatheredNodes)
     {
-      ref MCTSNodeStruct nodeRef = ref node.Ref;
+      ref MCTSNodeStruct nodeRef = ref node.StructRef;
 
       Debug.Assert(numTargetLeafs > 0);
 
@@ -524,7 +524,7 @@ namespace Ceres.MCTS.Search
        && node.IsTranspositionLinked
        && (numTargetLeafs > 1  || numTargetLeafs > node.NumVisitsPendingTranspositionRootExtraction))
       {
-        node.Ref.MaterializeSubtreeFromTranspositionRoot(node.Tree);
+        node.StructRef.MaterializeSubtreeFromTranspositionRoot(node.Tree);
       }
 
       if (paramsExecution.TranspositionMode == TranspositionMode.SingleNodeDeferredCopy
@@ -589,7 +589,7 @@ namespace Ceres.MCTS.Search
               // Also we have to undo the NInFlight updates alread made to parents
               if (!node.IsRoot)
               {
-                node.Parent.Ref.BackupDecrementInFlight(SelectorID == 0 ? numTargetLeafs : 0,
+                node.Parent.StructRef.BackupDecrementInFlight(SelectorID == 0 ? numTargetLeafs : 0,
                                                   SelectorID == 1 ? numTargetLeafs : 0);
               }
               return;
@@ -604,7 +604,7 @@ namespace Ceres.MCTS.Search
               MCTSNodeStructStorage.ModifyParentsChildRef(node.Store, indexThis, indexTranspositionRoot);
 
               // Swap parents
-              MCTSNodeStructIndex saveIndexThisParent = node.Ref.ParentIndex;
+              MCTSNodeStructIndex saveIndexThisParent = node.StructRef.ParentIndex;
               nodeRef.ParentIndex = biggestTranspositionNode.ParentIndex;
               biggestTranspositionNode.ParentIndex = saveIndexThisParent;
 
@@ -673,7 +673,7 @@ namespace Ceres.MCTS.Search
                                  Span<short> childVisitCounts, Span<MCTSNodeStructChild> children,
                                  ref int numVisitsProcessed, ListBounded<MCTSNode> gatheredNodes)
     {
-      MCTSNodeStruct nodeRef = node.Ref;
+      MCTSNodeStruct nodeRef = node.StructRef;
 
 #if NOT
       if (node.Context.ParamsSearch.TestFlag)

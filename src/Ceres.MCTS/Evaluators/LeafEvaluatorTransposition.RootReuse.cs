@@ -83,7 +83,7 @@ namespace Ceres.MCTS.Evaluators
     {
       Debug.Assert(transpositionRootNodeIndex.Index != 0);
 
-      ref MCTSNodeStruct nodeRef = ref node.Ref;
+      ref MCTSNodeStruct nodeRef = ref node.StructRef;
 
       // We mark this as just extracted, but do not (yet) allocate and move over the children.
       nodeRef.NumPolicyMoves = transpositionRootNode.NumPolicyMoves;

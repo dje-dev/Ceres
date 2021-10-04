@@ -266,7 +266,7 @@ namespace Ceres.MCTS.Evaluators
         }
 
         // Save back to cache
-        if (SaveToCache) Cache.Store(node.Ref.ZobristHash,
+        if (SaveToCache) Cache.Store(node.StructRef.ZobristHash,
                                      GameResult.Unknown, rawWinP, rawLossP, rawM,
                                      in node.EvalResult.PolicyRef);
       }
@@ -310,7 +310,7 @@ namespace Ceres.MCTS.Evaluators
 
           if (hasHashes)
           {
-            Batch.PositionHashes[i] = node.Ref.ZobristHash;
+            Batch.PositionHashes[i] = node.StructRef.ZobristHash;
           }
 
           if (hasMoves)

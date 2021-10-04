@@ -374,7 +374,7 @@ namespace Ceres.MCTS.Search
       {
         Console.WriteLine($"Internal error: search ended with N={manager.Root.N} NInFlight={manager.Root.NInFlight} NInFlight2={manager.Root.NInFlight2} " + manager.Root);
         int count = 0;
-        manager.Root.Ref.TraverseSequential(manager.Root.Store, delegate (ref MCTSNodeStruct node, MCTSNodeStructIndex index)
+        manager.Root.StructRef.TraverseSequential(manager.Root.Store, delegate (ref MCTSNodeStruct node, MCTSNodeStructIndex index)
         {
           if (node.IsInFlight && node.NumChildrenVisited == 0 && count++ < 20)
             Console.WriteLine("  " + index.Index + " " + node.Terminal + " " + node.N + " " + node.IsTranspositionLinked + " " + node.NumVisitsPendingTranspositionRootExtraction);

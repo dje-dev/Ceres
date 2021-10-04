@@ -39,7 +39,7 @@ namespace Ceres.MCTS.MTCSNodes
     public static int CheckAddToCluster(MCTSNode node)
     {
       int rootIndex;
-      if (!node.Tree.TranspositionRoots.TryGetValue(node.Ref.ZobristHash, out rootIndex))
+      if (!node.Tree.TranspositionRoots.TryGetValue(node.StructRef.ZobristHash, out rootIndex))
       {
         throw new Exception("Internal error");
 #if NOT
@@ -80,11 +80,11 @@ namespace Ceres.MCTS.MTCSNodes
     public static ref MCTSNodeStruct GetNodeWithMaxNInCluster(MCTSNode node)
     {
       int rootIndex;
-      if (!node.Tree.TranspositionRoots.TryGetValue(node.Ref.ZobristHash, out rootIndex))
+      if (!node.Tree.TranspositionRoots.TryGetValue(node.StructRef.ZobristHash, out rootIndex))
         return ref node.Store.Nodes.nodes[0]; // TODO clean up 
 
       int maxN = 0;
-      ref MCTSNodeStruct bestNodeRef = ref node.Ref;
+      ref MCTSNodeStruct bestNodeRef = ref node.StructRef;
 
       ref MCTSNodeStruct traverseNodeRef = ref node.Store.Nodes.nodes[rootIndex];
       int count = 0;

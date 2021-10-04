@@ -104,12 +104,12 @@ namespace Ceres.MCTS.Evaluators
             MCTSPosTreeNodeDumper.DumpAllNodes(node.Context, ref transpositionRootNode);
         }
 
-        if (VERBOSE) Console.WriteLine("Cloning above node into " + node.Ref);
+        if (VERBOSE) Console.WriteLine("Cloning above node into " + node.StructRef);
 
         // We are almost exahusted in the trasposition subtree, 
         // so now we copy over the subtree so any subsequent visits to this node will continue descending
         int startNodes = node.Store.Nodes.NumUsedNodes;
-        node.Ref.CloneSubtree(node.Store, activeTranspositionVisitors, ref transpositionRootNode, numAlreadyLinked);
+        node.StructRef.CloneSubtree(node.Store, activeTranspositionVisitors, ref transpositionRootNode, numAlreadyLinked);
         if (VERBOSE) Console.WriteLine($"num allocated {node.Store.Nodes.NumUsedNodes - startNodes} " +
                         $"when cloning node of size {transpositionRootNode.N} with target {numAlreadyLinked} " +
                          $"total nodes now { node.Store.Nodes.NumUsedNodes}");
@@ -122,7 +122,7 @@ namespace Ceres.MCTS.Evaluators
         if (true && VERBOSE && node.N < 100)
         {
           Console.WriteLine("cloned node now looks like this:");
-          MCTSPosTreeNodeDumper.DumpAllNodes(node.Context, ref node.Ref);
+          MCTSPosTreeNodeDumper.DumpAllNodes(node.Context, ref node.StructRef);
           Console.WriteLine();
         }
 

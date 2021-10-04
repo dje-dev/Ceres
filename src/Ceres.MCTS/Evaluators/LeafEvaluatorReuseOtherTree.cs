@@ -69,7 +69,7 @@ namespace Ceres.MCTS.Evaluators
       VerifyCompatibleNetworkDefinition(node);
 
       if (OtherContext.Tree.TranspositionRoots != null && 
-          OtherContext.Tree.TranspositionRoots.TryGetValue(node.Ref.ZobristHash, out int nodeIndex))
+          OtherContext.Tree.TranspositionRoots.TryGetValue(node.StructRef.ZobristHash, out int nodeIndex))
       {
         using (new SearchContextExecutionBlock(OtherContext))
         {

@@ -58,31 +58,39 @@ namespace Ceres.MCTS.MTCSNodes
     /// </summary>
     private readonly MCTSNodeStruct* storePtr;
 
-    private MCTSNodeInfo infoPtr;
+    /// <summary>
+    /// Pointer directly to associated MCTSNodeInfo.
+    /// </summary>
+    private void* infoPtr => storePtr->CachedInfoPtr;
+
+    /// <summary>
+    /// Returns if the node is null.
+    /// </summary>
+    public bool IsNull => storePtr == default;
 
 
     /// <summary>
     /// Search context within which this node exists
     /// </summary>
-    public MCTSIterator Context => infoPtr.Context;
+    public MCTSIterator Context => InfoRef.Context;
 
     /// <summary>
     /// Index of this structure within the array
     /// </summary>
-    private MCTSNodeStructIndex index => infoPtr.index;
+    private MCTSNodeStructIndex index => InfoRef.index;
 
 
-    public ref MCTSNodeInfo.NodeActionType ActionType => ref infoPtr.ActionType;
+    public ref MCTSNodeInfo.NodeActionType ActionType => ref InfoRef.ActionType;
 
     /// <summary>
     /// Shortcut directly to associated MCTSTree.
     /// </summary>
-    public ref readonly MCTSTree Tree => ref infoPtr.Tree;
+    public MCTSTree Tree => InfoRef.Tree;
 
     /// <summary>
     /// Shortcut directly to associated MCTSNodeStore.
     /// </summary>
-    public ref readonly MCTSNodeStore Store => ref infoPtr.Store;
+    public MCTSNodeStore Store => InfoRef.Store;
 
 
     /// <summary>
@@ -91,16 +99,27 @@ namespace Ceres.MCTS.MTCSNodes
     /// <param name="context"></param>
     /// <param name="index"></param>
     /// <param name="parent">optionally the parent node</param>
-    internal MCTSNode(MCTSIterator context, MCTSNodeStructIndex index, MCTSNode parent = null)
+    internal MCTSNode(MCTSIterator context, MCTSNodeStructIndex index, bool reinitializeInfo)
     {
       Debug.Assert(context.Tree.Store.Nodes != null);
       Debug.Assert(index.Index <= context.Tree.Store.Nodes.MaxNodes);
-      Debug.Assert(index.IsRoot || parent != null);
+      //      Debug.Assert(index.IsRoot || parent != null);
 
-      Parent = parent;
-      Info = new MCTSNodeInfo(context, index, parent);
+      if (index == default)
+      {
+        storePtr = null;
+        return;
+      }
 
-      storePtr = Info.ptr;
+      storePtr = (MCTSNodeStruct *)Unsafe.AsPointer(ref context.Tree.Store.Nodes.nodes[index.Index]);
+      if (reinitializeInfo)
+      {
+        // ************** TODO: ******************
+        // Could this cause a race condition where the exchange value
+        // is briefly reset and the node could be grabbed by another thread?
+        // Possibly move interchange variable to another array (?)
+        InfoRef = new MCTSNodeInfo(context, index);
+      }     
 
 //      Console.WriteLine("nodecreate " + index + " parent " + (parent == null ? "null" : parent.index));
     }
@@ -110,15 +129,14 @@ namespace Ceres.MCTS.MTCSNodes
     /// The pending evaluation result 
     /// (cached here after evaluation but before backup)
     /// </summary>
-    public ref LeafEvaluationResult EvalResult => ref infoPtr.EvalResult;
+    public ref LeafEvaluationResult EvalResult => ref InfoRef.EvalResult;
 
-    public ref MCTSNodeInfo Info => ref infoPtr;
 
     /// <summary>
     /// If present, information relating to the evaluation a node which 
     /// is a (lower probability) sibling of a node currently in flight.
     /// </summary>
-    public ref MCTSNodeSiblingEval? SiblingEval => ref infoPtr.SiblingEval;
+    public ref MCTSNodeSiblingEval? SiblingEval => ref InfoRef.SiblingEval;
 
 
 #region Data
@@ -254,8 +272,8 @@ namespace Ceres.MCTS.MTCSNodes
     /// </summary>
     public MCTSNode InFlightLinkedNode
     {
-      get => infoPtr.InFlightLinkedNode;
-      set => infoPtr.InFlightLinkedNode = value;
+      get => InfoRef.InFlightLinkedNode;
+      set => InfoRef.InFlightLinkedNode = value;
     }
 
 #endregion
@@ -264,7 +282,7 @@ namespace Ceres.MCTS.MTCSNodes
     /// If the tree is truncated at this node and generating position
     /// values via the subtree linked to its tranposition root
     /// </summary>
-    public bool IsTranspositionLinked => (*storePtr).IsTranspositionLinked && !Ref.TranspositionUnlinkIsInProgress;
+    public bool IsTranspositionLinked => (*storePtr).IsTranspositionLinked && !StructRef.TranspositionUnlinkIsInProgress;
 
 
     /// <summary>
@@ -276,14 +294,14 @@ namespace Ceres.MCTS.MTCSNodes
 
     // Values to use for pending transposition extractions 
     // (if NumVisitsPendingTranspositionRootExtraction > 0).
-    public ref float PendingTranspositionV => ref infoPtr.PendingTranspositionV;
-    public ref float PendingTranspositionM => ref infoPtr.PendingTranspositionM;
-    public ref float PendingTranspositionD => ref infoPtr.PendingTranspositionD;
+    public ref float PendingTranspositionV => ref InfoRef.PendingTranspositionV;
+    public ref float PendingTranspositionM => ref InfoRef.PendingTranspositionM;
+    public ref float PendingTranspositionD => ref InfoRef.PendingTranspositionD;
 
     /// <summary>
     /// Returns the side to move as of this node.
     /// </summary>
-    public SideType SideToMove => infoPtr.SideToMove;
+    public SideType SideToMove => InfoRef.SideToMove;
 
 
     /// <summary>
@@ -298,15 +316,25 @@ namespace Ceres.MCTS.MTCSNodes
     /// <summary>
     /// An integral index unique to each node, which is ascending in order of node creation.
     /// </summary>
-    public int Index => infoPtr.index.Index;
+    public int Index => InfoRef.index.Index;
 
-
-    public ref MCTSNodeAnnotation Annotation => ref infoPtr.Annotation;
+    public override string ToString()
+    {
+      if (IsNull)
+      {
+        return "<MCTSNode NULL>";
+      }
+      else
+      {
+        return "<MCTSNode " + StructRef + ">";
+      }
+    }
+    public ref MCTSNodeAnnotation Annotation => ref InfoRef.Annotation;
 
     /// <summary>
     /// Returns if the associated annotation has been initialized.
     /// </summary>
-    public bool IsAnnotated => infoPtr.Annotation.IsInitialized;
+    public bool IsAnnotated => InfoRef.Annotation.IsInitialized;
 
 
     /// <summary>
@@ -322,22 +350,21 @@ namespace Ceres.MCTS.MTCSNodes
 
 
     /// <summary>
-    /// Counter used for LRU caching (keeps track of last time accessed)
+    /// Returns reference to underlying MCTSNodeStruct.
     /// </summary>
-    public long LastAccessedSequenceCounter;
+    public ref MCTSNodeStruct StructRef => ref Unsafe.AsRef<MCTSNodeStruct>(storePtr);
 
 
     /// <summary>
-    /// Returns reference to underlying MCTSNodeStruct.
+    /// Returns reference to associated MCTSNodeInfo.
     /// </summary>
-    public ref MCTSNodeStruct Ref => ref Unsafe.AsRef<MCTSNodeStruct>(storePtr);
+    public ref MCTSNodeInfo InfoRef => ref Unsafe.AsRef<MCTSNodeInfo>(infoPtr);
 
 
     /// <summary>
     /// Returns node which is the parent of this node (or null if none).
     /// </summary>
-    public readonly MCTSNode Parent;
-
+    public MCTSNode Parent => MCTSManager.ThreadSearchContext.Tree.GetNode(StructRef.ParentIndex);
 
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -346,7 +373,7 @@ namespace Ceres.MCTS.MTCSNodes
       Debug.Assert(childInfo.IsExpanded);
 
       // First look to see if already created in annotation cache
-      return Context.Tree.GetNode(childInfo.ChildIndex, this);
+      return Context.Tree.GetNode(childInfo.ChildIndex);
     }
 
 
@@ -358,7 +385,7 @@ namespace Ceres.MCTS.MTCSNodes
       MCTSNodeStructChild childInfo = Context.Tree.Store.Children.childIndices[ChildStartIndex + childIndex];
       Debug.Assert(childInfo.IsExpanded);
 
-      return Context.Tree.GetNode(childInfo.ChildIndex, this);
+      return Context.Tree.GetNode(childInfo.ChildIndex);
     }
 
 
@@ -385,7 +412,7 @@ namespace Ceres.MCTS.MTCSNodes
         ref readonly MCTSNodeStructChild childRef = ref Context.Tree.Store.Children.childIndices[ChildStartIndex + childIndex];
         if (childRef.IsExpanded)
         {
-          MCTSNode childObj = Context.Tree.GetNode(childRef.ChildIndex, this);
+          MCTSNode childObj = Context.Tree.GetNode(childRef.ChildIndex);
           return (childObj, childObj.PriorMove, childObj.P);
         }
         else
@@ -427,7 +454,7 @@ namespace Ceres.MCTS.MTCSNodes
     /// </summary>
     /// <param name="childIndex"></param>
     /// <param name="numVisits"></param>
-    public void UpdateRecordVisitsToChild(int selectorID, int childIndex, int numVisits) => infoPtr.UpdateRecordVisitsToChild(selectorID, childIndex, numVisits);
+    public void UpdateRecordVisitsToChild(int selectorID, int childIndex, int numVisits) => InfoRef.UpdateRecordVisitsToChild(selectorID, childIndex, numVisits);
 
 
     /// <summary>
@@ -438,16 +465,16 @@ namespace Ceres.MCTS.MTCSNodes
     /// <returns></returns>
     public MCTSNode CreateChild(int childIndex, bool possiblyOutOfOrder = false)
     {
-      MCTSNodeStructIndex childNodeIndex = Ref.CreateChild(Context.Tree.Store, childIndex, possiblyOutOfOrder);
+      MCTSNodeStructIndex childNodeIndex = StructRef.CreateChild(Context.Tree.Store, childIndex, possiblyOutOfOrder);
 
-      return Context.Tree.GetNode(childNodeIndex, this, false);
+      return Context.Tree.GetNode(childNodeIndex);
     }
 
 
     public void MaterializeAllTranspositionLinks()
     {
       // Sequentially traverse tree nodes and materialize any that are currently just linked.
-      Ref.Traverse(Context.Tree.Store,
+      StructRef.Traverse(Context.Tree.Store,
                    (ref MCTSNodeStruct nodeRef) =>
                    {
                      if (!nodeRef.IsOldGeneration && nodeRef.IsTranspositionLinked)
@@ -459,14 +486,14 @@ namespace Ceres.MCTS.MTCSNodes
     }
 
 
-    public double Q => infoPtr.Q;
+    public double Q => InfoRef.Q;
 
 #region Children
 
-    public bool IsRoot => infoPtr.ParentIndex.IsNull;
+    public bool IsRoot => InfoRef.ParentIndex.IsNull;
 
 
-    public bool IsOurMove => infoPtr.Depth % 2 == 0;
+    public bool IsOurMove => InfoRef.Depth % 2 == 0;
 
     /// <summary>
     /// Returns the MTSNode corresponding to a specified top-level child. 
@@ -493,7 +520,7 @@ namespace Ceres.MCTS.MTCSNodes
     /// <summary>
     /// Depth of node within tree.
     /// </summary>
-    public short Depth => infoPtr.Depth;
+    public short Depth => InfoRef.Depth;
 
 #endregion
 
@@ -585,14 +612,14 @@ namespace Ceres.MCTS.MTCSNodes
     /// <summary>
     /// Returns the index of this child within the parent's child array.
     /// </summary>
-    public int IndexInParentsChildren => infoPtr.IndexInParentsChildren;
+    public int IndexInParentsChildren => InfoRef.IndexInParentsChildren;
 
 #endregion
 
     internal bool startedAsCacheOnlyNode
     {
-      get => infoPtr.startedAsCacheOnlyNode;
-      set => infoPtr.startedAsCacheOnlyNode = value; 
+      get => InfoRef.startedAsCacheOnlyNode;
+      set => InfoRef.startedAsCacheOnlyNode = value; 
     }
 
 
@@ -601,12 +628,12 @@ namespace Ceres.MCTS.MTCSNodes
                       in CompressedPolicyVector policyVector,
                       bool returnedMovesAreInSameOrderAsMGMoveList)
     {
-      infoPtr.SetPolicy(policySoftmax, minPolicyProbability, in mgPos, moves, in policyVector, returnedMovesAreInSameOrderAsMGMoveList);
+      InfoRef.SetPolicy(policySoftmax, minPolicyProbability, in mgPos, moves, in policyVector, returnedMovesAreInSameOrderAsMGMoveList);
     }
 
 #region Secondary Evaluation
 
-    public ref LeafEvaluationResult EvalResultSecondary => ref infoPtr.EvalResultSecondary;
+    public ref LeafEvaluationResult EvalResultSecondary => ref InfoRef.EvalResultSecondary;
 
 #endregion
 
@@ -636,7 +663,7 @@ namespace Ceres.MCTS.MTCSNodes
           if (!newRoot.IsTranspositionLinked)
           {
             // Find this new root node (after these moves)
-            foreach (MCTSNodeStructChild child in newRoot.Ref.Children)
+            foreach (MCTSNodeStructChild child in newRoot.StructRef.Children)
             {
               if (child.IsExpanded)
               {
@@ -644,7 +671,7 @@ namespace Ceres.MCTS.MTCSNodes
                 if (thisChildMove == moveMade)
                 {
                   // Advance new root to reflect this move
-                  newRoot = context.Tree.GetNode(child.ChildIndex, newRoot);
+                  newRoot = context.Tree.GetNode(child.ChildIndex);
 
                   // Advance position
                   position.MakeMove(thisChildMove);

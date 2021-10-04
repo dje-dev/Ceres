@@ -114,7 +114,7 @@ namespace Ceres.Features.UCI
         stat.MoveCode = isSearchRoot ? 20 : node.Parent.ChildAtIndexInfo(node.IndexInParentsChildren).move.IndexNeuralNet;
         stat.VisitCount = node.N;
         stat.P = isSearchRoot ? 100 : (node.P * 100.0f);
-        stat.D = node.Ref.DrawP;
+        stat.D = node.StructRef.DrawP;
         stat.WL = (node.IsRoot && node.N == 0) ? node.V : (float)node.Q * multiplier;
         stat.Q = new EncodedEvalLogistic((float)node.Q * multiplier);
         stat.M = node.MPosition;

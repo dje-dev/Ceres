@@ -123,7 +123,7 @@ namespace Ceres.MCTS.MTCSNodes.Annotation
 
       // Ascend in tree copying positions from ancestors
       int nextBoardIndex = 1;
-      while (nextBoardIndex < EncodedPositionBoards.NUM_MOVES_HISTORY && priorNode != null)
+      while (nextBoardIndex < EncodedPositionBoards.NUM_MOVES_HISTORY && !priorNode.IsNull)
       {
         if (nextBoardIndex % 2 == 1)
         {

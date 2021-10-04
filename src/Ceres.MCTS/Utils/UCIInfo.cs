@@ -161,7 +161,7 @@ namespace Ceres.MCTS.Utils
     /// <returns></returns>
     static string OutputUCIInfoTablebaseImmediate(MCTSManager manager, MCTSNode searchRootNode, bool scoreAsQ)
     {
-      GameResult result = searchRootNode.Ref.Terminal;
+      GameResult result = searchRootNode.StructRef.Terminal;
 
       string scoreStr;
       if (result == GameResult.Checkmate)

@@ -428,7 +428,7 @@ namespace Ceres.MCTS.Iteration
         {
           Manager.Context.Tree.ClearNodeCache(false);
           newTranspositionRoots = Manager.Context.Tree.TranspositionRoots;
-          MCTSNodeStructStorage.DoMakeChildNewRootSwapRoot(Manager.Context.Tree, ref newRoot.Ref, newPositionAndMoves,
+          MCTSNodeStructStorage.DoMakeChildNewRootSwapRoot(Manager.Context.Tree, ref newRoot.StructRef, newPositionAndMoves,
                                                            reusePositionCache, newTranspositionRoots,
                                                            priorContext.ParamsSearch.Execution.TranspositionMaximizeRootN);
         }
@@ -442,7 +442,7 @@ namespace Ceres.MCTS.Iteration
             newTranspositionRoots = new TranspositionRootsDict(newRoot.N);
           }
 
-          MCTSNodeStructStorage.MakeChildNewRoot(Manager.Context.Tree, ref newRoot.Ref, newPositionAndMoves,
+          MCTSNodeStructStorage.MakeChildNewRoot(Manager.Context.Tree, ref newRoot.StructRef, newPositionAndMoves,
                                                  reusePositionCache, newTranspositionRoots,
                                                  priorContext.ParamsSearch.Execution.TranspositionMaximizeRootN);
         }

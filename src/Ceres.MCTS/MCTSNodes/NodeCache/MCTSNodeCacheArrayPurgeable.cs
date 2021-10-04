@@ -15,6 +15,7 @@
 
 using System;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Ceres.Base.Benchmarking;
@@ -38,7 +39,7 @@ namespace Ceres.MCTS.NodeCache
   ///     plus a fixed array of (say 300,000) MCTSNode
   ///   - pruning only has to scan over lineary array cached nodes
   /// </summary>
-  public class MCTSNodeCacheArrayPurgeable : IMCTSNodeCache
+  public unsafe class MCTSNodeCacheArrayPurgeable : IMCTSNodeCache
   {
     internal const int THRESHOLD_PCT_DO_PRUNE = 85;
     internal const int THRESHOLD_PCT_PRUNE_TO = 50;
@@ -53,7 +54,7 @@ namespace Ceres.MCTS.NodeCache
 
     #region Cache data
 
-    MCTSNode[] nodes;
+    MCTSNodeInfo[] nodes;
 
     MemoryBufferOS<MCTSNodeStruct> nodesStore;
 
@@ -77,7 +78,7 @@ namespace Ceres.MCTS.NodeCache
       ParentTree = parentTree;
       MaxCacheSize = maxCacheSize;
 
-      nodes = new MCTSNode[maxCacheSize];
+      nodes = new MCTSNodeInfo[maxCacheSize];
       nodesStore = parentTree.Store.Nodes.nodes;
       pruneSequenceNums = GC.AllocateUninitializedArray<int>(maxCacheSize);
     }
@@ -96,16 +97,16 @@ namespace Ceres.MCTS.NodeCache
     public int NumInUse => numInUse;
 
 
-    bool TryTake(MCTSNode node, int thisTryIndex)
+    bool TryTake(MCTSNodeStructIndex nodeIndex, int thisTryIndex)
     {
       // Try to make the swap, but only if prior entry was null.
-      MCTSNode exchangeTry = Interlocked.CompareExchange(ref nodes[thisTryIndex], node, null);
-      if (exchangeTry == null)
+      int exchangeTry = Interlocked.CompareExchange(ref nodes[thisTryIndex].CacheAcquireInterlockedExchange, (int)nodeIndex.Index, (int)0);
+      if (exchangeTry == 0)
       {
         // Success
         searchFreeEntryNextIndex = thisTryIndex + 1;
         Interlocked.Increment(ref numInUse);
-        node.Ref.CacheIndex = thisTryIndex;
+        //nodes[thisTryIndex].StructRef.CacheIndex = thisTryIndex;
 
         return true;
       }
@@ -120,8 +121,9 @@ namespace Ceres.MCTS.NodeCache
     /// or null if not currently cached.
     /// </summary>
     /// <param name="nodeIndex"></param>
+    /// <returns>pointer to space allocated for this node</returns>
     /// <returns></returns>
-    public int Add(MCTSNode node)
+    public void* Add(MCTSNodeStructIndex node)
     {
       int numTries = 0;
 
@@ -140,8 +142,7 @@ namespace Ceres.MCTS.NodeCache
         if (TryTake(node, thisTryIndex))
         {
           // Make cache index which contains both set index and index within this array
-          node.Ref.CacheIndex = thisTryIndex;
-          return thisTryIndex;
+          return nodesStore[node.Index].CachedInfoPtr = Unsafe.AsPointer(ref nodes[thisTryIndex]);
         }
 
         // Make sure we haven't overflowed.
@@ -205,7 +206,7 @@ namespace Ceres.MCTS.NodeCache
         for (int i = 0; i < nodes.Length; i++)
         {
           // TODO: the long is cast to int, could we possibly overflow? make long?
-          if (nodes[i] != null)
+          if (nodes[i].IsInitialized)
           {
             pruneSequenceNums[count++] = (int)nodes[i].LastAccessedSequenceCounter;
           }
@@ -225,28 +226,25 @@ namespace Ceres.MCTS.NodeCache
         int maxEntries = pruneCount == 0 ? (numInUse + 1) : nodes.Length;
         for (int i = 1; i < maxEntries; i++)
         {
-          MCTSNode node = nodes[i];
-          if (node != null && node.LastAccessedSequenceCounter < cutoff)
-            if (node != null
-             && node.LastAccessedSequenceCounter < cutoff
+          ref MCTSNodeInfo node = ref nodes[i];
+          if (node.IsInitialized && node.LastAccessedSequenceCounter < cutoff
              && !node.IsInFlight // never prune active node in flight
              )
-            {
-              MCTSNodeStructIndex nodeIndex = new MCTSNodeStructIndex(node.Index);
-              nodes[i] = null;
-              nodesStore[nodeIndex.Index].CacheIndex = 0;
+          {
+            MCTSNodeStructIndex nodeIndex = new MCTSNodeStructIndex(node.Index);
+            nodesStore[nodeIndex.Index].CachedInfoPtr = null;
+            nodes[i].CacheAcquireInterlockedExchange = 0;
+            nodes[i].SetUninitialized();
 
-              numInUse--;
-            }
+            numInUse--;
+          }
         }
         pruneCount++;
       }
 
       return startNumInUse - numInUse;
     }
-
-    public MCTSNode AtIndex(int indexInCache) => nodes[indexInCache];
-    
+   
 
     /// <summary>
     /// Returns the MCTSNode having the specified index and stored in the cache
@@ -254,14 +252,7 @@ namespace Ceres.MCTS.NodeCache
     /// </summary>
     /// <param name="nodeIndex"></param>
     /// <returns></returns>
-    public MCTSNode Lookup(MCTSNodeStructIndex nodeIndex)
-    {
-      ref readonly MCTSNodeStruct nodeRef = ref nodesStore[nodeIndex.Index];
-
-      return  (nodeRef.CacheIndex == 0) ? null 
-                                        : nodes[nodeRef.CacheIndex];
-    }
-
+    public void* Lookup(MCTSNodeStructIndex nodeIndex) => nodesStore[nodeIndex.Index].CachedInfoPtr;
 
 
     /// <summary>
@@ -271,11 +262,8 @@ namespace Ceres.MCTS.NodeCache
     /// </summary>
     /// <param name="nodeIndex"></param>
     /// <returns></returns>
-    public MCTSNode Lookup(in MCTSNodeStruct nodeRef)
-    {
-      throw new NotImplementedException(); // below works but is too slow?
-      return Lookup(nodeRef.Index);
-    }
+    public void* Lookup(in MCTSNodeStruct nodeRef) => nodeRef.CachedInfoPtr;
+
 
     /// <summary>
     /// Clears table entries and possibly resets back to null the CacheIndex for every node.
@@ -287,9 +275,9 @@ namespace Ceres.MCTS.NodeCache
       {
         for (int i = 0; i < nodes.Length; i++)
         {
-          if (nodes[i] != null)
+          if (nodes[i].IsInitialized)
           {
-            nodes[i].Ref.CacheIndex = 0;
+            nodesStore[nodes[i].index.Index].CachedInfoPtr = null;
           }
         }
       }
@@ -320,11 +308,17 @@ namespace Ceres.MCTS.NodeCache
     {
       int numUsed = 0;
       for (int i = 0; i < nodes.Length; i++)
-        if (nodes[i] != null)
+      {
+        if (nodes[i].IsInitialized)
+        {
           numUsed++;
+        }
+      }
 
       if (numUsed != numInUse)
+      {
         throw new Exception("Internal error: numInUse incorrect.");
+      }
     }
 
     #endregion

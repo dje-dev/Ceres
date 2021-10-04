@@ -435,7 +435,7 @@ namespace Ceres.Features.UCI
             if (CeresEngine?.Search != null)
               using (new SearchContextExecutionBlock(CeresEngine.Search.Manager.Context))
               {
-                TreePlot.Show(CeresEngine.Search.Manager.Context.Root.Ref);
+                TreePlot.Show(CeresEngine.Search.Manager.Context.Root.StructRef);
               }
             else
               UCIWriteLine("info string No search manager created");
@@ -450,7 +450,7 @@ namespace Ceres.Features.UCI
                 string fileName = parts[1];
                 using (new SearchContextExecutionBlock(CeresEngine.Search.Manager.Context))
                 {
-                  TreePlot.Save(CeresEngine.Search.Manager.Context.Root.Ref, fileName);
+                  TreePlot.Save(CeresEngine.Search.Manager.Context.Root.StructRef, fileName);
                 }
               }
               else if (parts.Length == 1)
@@ -820,7 +820,7 @@ namespace Ceres.Features.UCI
         }
         else
         {
-          CeresEngine.Search.Manager.Context.Root.Info.Dump(1, 1, prefixString: "info string ");
+          CeresEngine.Search.Manager.Context.Root.InfoRef.Dump(1, 1, prefixString: "info string ");
         }
       }
     }

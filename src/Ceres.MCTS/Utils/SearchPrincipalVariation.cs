@@ -199,7 +199,7 @@ namespace Ceres.MCTS.Utils
     {
       int totalChildren = node.N;
       float acc = 0;
-      foreach (MCTSNodeStructChild child in node.Ref.Children)
+      foreach (MCTSNodeStructChild child in node.StructRef.Children)
       {
         if (child.IsExpanded)
           acc += MathF.Log(child.N / node.N, 2.0f);
