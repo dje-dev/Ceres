@@ -258,7 +258,8 @@ namespace Ceres.MCTS.Evaluators
         }
         else if (resultTarget == EvalResultTarget.SecondaryEvalResult)
         {
-          node.EvalResultSecondary = evalResult;
+          // Currently primary and secondary eval results share same memory
+          node.EvalResult = evalResult;
         }
         else
         {

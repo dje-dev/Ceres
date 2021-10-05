@@ -42,7 +42,7 @@ namespace Ceres.MCTS.Search
       }
       else if (resultTarget == LeafEvaluatorNN.EvalResultTarget.SecondaryEvalResult)
       {
-        Debug.Assert(nodes[0].EvalResultSecondary.IsNull); // null evaluator indicates should have been sent here
+        //Debug.Assert(nodes[0].EvalResultSecondary.IsNull); // null evaluator indicates should have been sent here
       }
 
       Evaluator.BatchGenerate(context, nodes.AsSpan, resultTarget);

@@ -77,6 +77,8 @@ namespace Ceres.MCTS.Evaluators
 
     private static LeafEvaluationResult AddResultToResults(LeafEvaluationResult result, int numToFetch, int i, LeafEvaluationResult thisResult)
     {
+      throw new NotImplementedException();
+#if NOT
       if (i == 0)
       {
         // First (and possibly only) result is place directly in the result field
@@ -90,6 +92,7 @@ namespace Ceres.MCTS.Evaluators
       }
 
       return result;
+#endif
     }
 
     const int THRESHOLD_STOP_LINKAGE = 100_000;

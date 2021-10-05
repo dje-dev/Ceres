@@ -124,7 +124,6 @@ namespace Ceres.MCTS.MTCSNodes
       PendingTranspositionD = float.NaN;
       Annotation = new MCTSNodeAnnotation();
       EvalResult = default;
-      EvalResultSecondary = default;
       InFlightLinkedNode = default;
       LastAccessedSequenceCounter = 0;
       SiblingEval = null;
@@ -498,15 +497,6 @@ namespace Ceres.MCTS.MTCSNodes
     #endregion
 
     internal bool startedAsCacheOnlyNode;
-
-
-    #region Secondary Evaluation
-
-    // Note that this field is located toward end of class
-    // for access efficiency (rarely accessed).
-    public LeafEvaluationResult EvalResultSecondary;
-
-    #endregion
 
 
     #region Miscellaneous

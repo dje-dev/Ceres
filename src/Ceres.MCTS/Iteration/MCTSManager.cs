@@ -327,12 +327,13 @@ namespace Ceres.MCTS.Iteration
         if (nodeRef.N >= minN
          && nodeRef.Terminal == GameResult.Unknown
          && !nodeRef.IsTranspositionLinked
+         && !nodeRef.IsOldGeneration
          && nodeRef.Uncertainty == 0 // ** TODO: fix this
          /*&& FP16.IsNaN(nodeRef.VSecondary)*/)// )
         {
           MCTSNode node = Context.Tree.GetNode(index);
 
-          node.EvalResultSecondary = default;
+          node.EvalResult = default;
           nodes.Add(node);
 
           nodeRef.Uncertainty = 1; // TODO: FIX THIS
@@ -374,13 +375,13 @@ namespace Ceres.MCTS.Iteration
 
           if (node.Terminal == GameResult.Unknown)
           {
-            ref readonly CompressedPolicyVector otherPolicy = ref node.EvalResultSecondary.PolicyRef;
+            ref readonly CompressedPolicyVector otherPolicy = ref node.EvalResult.PolicyRef;
 
             node.InfoRef.BlendPolicy(in otherPolicy, secondaryParams.UpdatePolicyFraction);
 
             if (secondaryParams.UpdateValueFraction > 0)
             {
-              float diff = node.EvalResultSecondary.V - nodeRef.V;
+              float diff = node.EvalResult.V - nodeRef.V;
               nodeRef.BackupApplyWDeltaOnly(secondaryParams.UpdateValueFraction * diff); // TODO: MAYBE USE 2.0 multiplier (?)
 
               accAbsDiff += Math.Abs(diff);

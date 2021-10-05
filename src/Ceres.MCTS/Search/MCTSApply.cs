@@ -373,14 +373,6 @@ namespace Ceres.MCTS.Search
         MCTSNode node = nodes[i];
         ApplyResult(nodesSpan, selectorID, node, in node.EvalResult);
 
-        if (node.EvalResult.ExtraResults != null)
-        {
-          foreach (LeafEvaluationResult result in node.EvalResult.ExtraResults)
-          {
-            ApplyResult(nodesSpan, selectorID, node, in result);
-          }
-        }
-
         // Note that we cannot clear the EvalResult
         // because possibly the next overlapped batch
         // points back to this node and will need to copy the value for itself

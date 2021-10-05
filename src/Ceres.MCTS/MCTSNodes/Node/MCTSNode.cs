@@ -625,12 +625,6 @@ namespace Ceres.MCTS.MTCSNodes
       InfoRef.SetPolicy(policySoftmax, minPolicyProbability, in mgPos, moves, in policyVector, returnedMovesAreInSameOrderAsMGMoveList);
     }
 
-#region Secondary Evaluation
-
-    public ref LeafEvaluationResult EvalResultSecondary => ref InfoRef.EvalResultSecondary;
-
-#endregion
-
 
 #region Miscellaneous
 

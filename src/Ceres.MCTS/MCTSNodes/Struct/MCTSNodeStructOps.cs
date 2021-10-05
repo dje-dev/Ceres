@@ -196,7 +196,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
       SetNumPolicyMovesAndAllocateChildInfo(tree, otherNode.NumPolicyMoves);
 
-      if (otherNode.NumPolicyMoves > 0)
+      int otherNodeNumPolicyMoves = otherNode.NumPolicyMoves;
+      if (otherNodeNumPolicyMoves > 0)
       {
         // First, copy any expanded nodes
         // We have to descend to the expanded node to retrieve 
@@ -205,7 +206,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         Span<MCTSNodeStructChild> children = childrenStore.SpanForNode(in this);
         Span<MCTSNodeStructChild> otherChildren = childrenStore.SpanForNode(in otherNode);
 
-        for (int i = 0; i < otherNode.NumPolicyMoves; i++)
+        for (int i = 0; i < otherNodeNumPolicyMoves; i++)
         {
           // This code is robust to concurrency where
           // other threads are possibly in the process of converting 
@@ -522,6 +523,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
       Debug.Assert(maxIndex >= 0 && (maxIndex + 1) <= n.Length);
 
+      // N.B. This prefetch is critical for performance, circa +15% for CPU bound searches
       PossiblyPrefetchNodeAndChildrenInRange(store, index, 0, (maxIndex + 1));
 
       bool applyTrendBonus = context.ParamsSearch.ApplyTrendBonus;

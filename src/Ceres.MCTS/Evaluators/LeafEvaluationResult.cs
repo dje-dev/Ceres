@@ -98,15 +98,6 @@ namespace Ceres.MCTS.Evaluators
     /// </summary>
     public bool IsNull => TerminalStatus == GameResult.NotInitialized;
 
-    /// <summary>
-    /// In the case of virtual subtrees (linked to another transposition subnode)
-    /// leaf gathering descent may encounter a transposition linked node and yield that
-    /// as the pseudo-leaf. However potentially more than one nodes was still allocated
-    /// in the batch to this subtree. In that case, we probe the linked subtree
-    /// multiple times (if possible) and store these extra evaluations in the ExtraResults field
-    /// </summary>
-    public List<LeafEvaluationResult> ExtraResults;
-
 
     /// <summary>
     /// Constructor from specified values (with no policy).
@@ -125,7 +116,6 @@ namespace Ceres.MCTS.Evaluators
       M = m;
       policyArrayIndex = -1;
       policyArray = null;
-      ExtraResults = null;
     }
 
     /// <summary>
@@ -145,7 +135,6 @@ namespace Ceres.MCTS.Evaluators
       M = m;
       policyArrayIndex = -1;
       policyArray = null;
-      ExtraResults = null;
     }
 
 
@@ -169,8 +158,6 @@ namespace Ceres.MCTS.Evaluators
 
       this.policyArrayIndex = policyArrayIndex;
       this.policyArray = policyArray;
-
-      ExtraResults = null;
     }
 
 

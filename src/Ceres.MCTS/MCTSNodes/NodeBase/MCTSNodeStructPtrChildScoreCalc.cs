@@ -112,7 +112,10 @@ namespace Ceres.MCTS.MTCSNodes
                               gatherStatsNSpan, gatherStatsInFlightSpan,
                               gatherStatsPSpan, gatherStatsWSpan);
 
-      ApplyPolicyDecay(numToProcess, gatherStatsPSpan);
+      if (Context.ParamsSelect.PolicyDecayFactor > 0)
+      {
+        ApplyPolicyDecay(numToProcess, gatherStatsPSpan);
+      }
 
       // Possibly disqualify pruned moves from selection.
       if ((IsRoot && Context.RootMovesPruningStatus != null)
