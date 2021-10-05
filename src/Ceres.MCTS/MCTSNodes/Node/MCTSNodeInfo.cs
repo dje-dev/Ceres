@@ -117,6 +117,7 @@ namespace Ceres.MCTS.MTCSNodes
 
       startedAsCacheOnlyNode = false;
       cachedDepth = -1;
+      cachedIndexInParent = -1;
       ActionType = NodeActionType.NotInitialized;
       PendingTranspositionV = float.NaN;
       PendingTranspositionM = float.NaN;
@@ -461,32 +462,35 @@ namespace Ceres.MCTS.MTCSNodes
 
     #region Helpers
 
+    short cachedIndexInParent;
+
     /// <summary>
     /// Returns the index of this child within the parent's child array.
     /// </summary>
-    public int IndexInParentsChildren
+    public short IndexInParentsChildren
     {
       get
       {
-        // TODO: This is slow. We could store this index, but it is subject to shuffling and usually unneeded.
-        //       Therefore probably we should just document that this property is slow 
-        if (IsRoot) throw new Exception("Can't call IndexInParentsChildren at the root");
+        if (cachedIndexInParent != -1)
+        {
+          return cachedIndexInParent;
+        }
+
+        Debug.Assert(!IsRoot);
 
         int thisIndex = this.Index;
-        EncodedMove thisMove = this.PriorMove;
-
 
         MCTSNode parent = Parent;
 
-        for (int i = 0; i < parent.NumPolicyMoves; i++)
+        Span<MCTSNodeStructChild> childSpan = Store.Children.SpanForNode(new MCTSNodeStructIndex(parent.Index));
+        for (int i = 0; i < parent.NumChildrenExpanded; i++)
         {
-          (MCTSNode childNode, EncodedMove move, FP16 _) = parent.ChildAtIndexInfo(i);
-          if ((childNode.IsNotNull && childNode.Index == thisIndex)
-            || (childNode.IsNull && move == thisMove))
+          if (childSpan[i].ChildIndex.Index == thisIndex)
           {
-            return i;
+            return cachedIndexInParent = (short)i;
           }
         }
+      
         throw new Exception("Not found");
       }
     }
