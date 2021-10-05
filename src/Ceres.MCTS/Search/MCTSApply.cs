@@ -175,7 +175,7 @@ namespace Ceres.MCTS.Search
     /// <param name="selectorID"></param>
     /// <param name="node"></param>
     /// <param name="evalResult"></param>
-    void ApplyResult(Span<MCTSNodeStruct> nodes, int selectorID, MCTSNode node, LeafEvaluationResult evalResult)
+    void ApplyResult(Span<MCTSNodeStruct> nodes, int selectorID, MCTSNode node, in LeafEvaluationResult evalResult)
     {
       ref MCTSNodeStruct nodeRef = ref node.StructRef;
 
@@ -308,18 +308,19 @@ namespace Ceres.MCTS.Search
       Debug.Assert(!node.EvalResult.IsNull);
 
       ref MCTSNodeStruct nodeRef = ref node.StructRef;
+      ref readonly LeafEvaluationResult nodeEvalResult = ref node.EvalResult;
 
       nodeRef.Terminal = node.EvalResult.TerminalStatus;
 
       if (ParamsSelect.VIsForcedLoss(node.EvalResult.V))
       {
-        nodeRef.SetProvenLossAndPropagateToParent(node.EvalResult.LossP, node.EvalResult.M);
+        nodeRef.SetProvenLossAndPropagateToParent(nodeEvalResult.LossP, node.EvalResult.M);
       }
       else
       {
-        nodeRef.WinP = node.EvalResult.WinP;
-        nodeRef.LossP = node.EvalResult.LossP;
-        nodeRef.MPosition = (byte)MathF.Round(node.EvalResult.M, 0);
+        nodeRef.WinP = nodeEvalResult.WinP;
+        nodeRef.LossP = nodeEvalResult.LossP;
+        nodeRef.MPosition = (byte)MathF.Round(nodeEvalResult.M, 0);
       }
 
       if (!node.IsRoot && nodeRef.Terminal == GameResult.Draw)
@@ -370,13 +371,13 @@ namespace Ceres.MCTS.Search
       for (int i = 0; i < nodes.Count; i++)
       {
         MCTSNode node = nodes[i];
-        ApplyResult(nodesSpan, selectorID, node, node.EvalResult);
+        ApplyResult(nodesSpan, selectorID, node, in node.EvalResult);
 
         if (node.EvalResult.ExtraResults != null)
         {
           foreach (LeafEvaluationResult result in node.EvalResult.ExtraResults)
           {
-            ApplyResult(nodesSpan, selectorID, node, result);
+            ApplyResult(nodesSpan, selectorID, node, in result);
           }
         }
 
@@ -454,7 +455,7 @@ namespace Ceres.MCTS.Search
         {
           if (node.EvalResult.PolicyIsReleased || node.EvalResult.IsNull)
           {
-//            Console.WriteLine("Warning: lost policy " + node.Annotation.Pos.FEN + " " + node.Terminal + " " + node + " " + node.Parent?.Annotation.Pos.FEN);
+            Console.WriteLine("Warning: lost policy " + node.Annotation.Pos.FEN + " " + node.Terminal + " " + node + " " + node.Index);
             node.StructRef.Terminal = GameResult.Draw; //Best alternative
           }
           else
