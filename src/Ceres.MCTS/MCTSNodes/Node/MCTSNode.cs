@@ -764,7 +764,7 @@ namespace Ceres.MCTS.MTCSNodes
       }
       else
       {
-        return "<MCTSNode " + StructRef + ">";
+        return "<MCTSNode " + StructRef.ToString()  + ">";
       }
     }
 

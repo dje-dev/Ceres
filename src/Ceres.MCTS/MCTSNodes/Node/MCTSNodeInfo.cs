@@ -80,8 +80,6 @@ namespace Ceres.MCTS.MTCSNodes
     /// </summary>
     public MCTSNodeStore Store { get; private set; }
 
-    internal int CacheAcquireInterlockedExchange;
-
     /// <summary>
     /// If the node has been initialized.
     /// </summary>
@@ -117,7 +115,6 @@ namespace Ceres.MCTS.MTCSNodes
       ptr = (MCTSNodeStruct*)Unsafe.AsPointer(ref parentArray[index.Index]);
       this.index = index;
 
-      CacheAcquireInterlockedExchange = 0;
       startedAsCacheOnlyNode = false;
       cachedDepth = -1;
       ActionType = NodeActionType.NotInitialized;

@@ -16,6 +16,7 @@
 using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Ceres.Base.Benchmarking;
@@ -56,6 +57,13 @@ namespace Ceres.MCTS.NodeCache
 
     MCTSNodeInfo[] nodes;
 
+    // Each slot of cachedNodesIndices contains the index of the
+    // node currently occupying the slot (also corresponding slot in nodes),
+    // or 0 if empty (available).
+    // These entries are used for efficient scanning for an available entry
+    // (when adding node) in a threadsafe way (using Interlocked).   
+    int[] cachedNodesIndices;
+
     MemoryBufferOS<MCTSNodeStruct> nodesStore;
 
     readonly object lockObj = new object();
@@ -73,12 +81,27 @@ namespace Ceres.MCTS.NodeCache
     /// <param name="maxCacheSize"></param>
     public MCTSNodeCacheArrayPurgeable(MCTSTree parentTree, int maxCacheSize)
     {
-      maxCacheSize = Math.Max(3_000, maxCacheSize);
+      const int LOH_THRESHOLD_SIZE_BYTES = 110_000;
+      int minCacheSize = (LOH_THRESHOLD_SIZE_BYTES / Marshal.SizeOf<MCTSNodeInfo>());
+
+      maxCacheSize = Math.Max(minCacheSize, maxCacheSize);
 
       ParentTree = parentTree;
       MaxCacheSize = maxCacheSize;
 
+      // N.B. The elements of the nodes array must remain 
+      //      at fixed location in memory (since raw pointers refer to them).
+
+      // Using GC.AllocateArray with pinned is not possible because:
+      //   "Only value types without pointers or references are supported."
+
+      // Therefore allocate using ordinary new operator and rely upon fact that
+      // by default objects on LOH are not compacted/moved.
+      
       nodes = new MCTSNodeInfo[maxCacheSize];
+      
+      cachedNodesIndices = new int[maxCacheSize];
+
       nodesStore = parentTree.Store.Nodes.nodes;
       pruneSequenceNums = GC.AllocateUninitializedArray<int>(maxCacheSize);
     }
@@ -100,7 +123,8 @@ namespace Ceres.MCTS.NodeCache
     bool TryTake(MCTSNodeStructIndex nodeIndex, int thisTryIndex)
     {
       // Try to make the swap, but only if prior entry was null.
-      int exchangeTry = Interlocked.CompareExchange(ref nodes[thisTryIndex].CacheAcquireInterlockedExchange, (int)nodeIndex.Index, (int)0);
+      int exchangeTry = Interlocked.CompareExchange(ref cachedNodesIndices[thisTryIndex], (int)nodeIndex.Index, (int)0);
+      
       if (exchangeTry == 0)
       {
         // Success
@@ -233,7 +257,7 @@ namespace Ceres.MCTS.NodeCache
           {
             MCTSNodeStructIndex nodeIndex = new MCTSNodeStructIndex(node.Index);
             nodesStore[nodeIndex.Index].CachedInfoPtr = null;
-            nodes[i].CacheAcquireInterlockedExchange = 0;
+            cachedNodesIndices[i] = 0;
             nodes[i].SetUninitialized();
 
             numInUse--;
@@ -275,14 +299,14 @@ namespace Ceres.MCTS.NodeCache
       {
         for (int i = 0; i < nodes.Length; i++)
         {
-          if (nodes[i].IsInitialized)
+          if (cachedNodesIndices[i] != 0)
           {
             nodesStore[nodes[i].index.Index].CachedInfoPtr = null;
           }
         }
       }
 
-      Array.Clear(nodes, 0, nodes.Length);
+      Array.Clear(cachedNodesIndices, 0, nodes.Length);
       numInUse = 0;
       searchFreeEntryNextIndex = 0;
     }
