@@ -385,12 +385,18 @@ namespace Ceres.MCTS.Search
 
     public void ApplyAll()
     {
-
-      ApplyImmeditateNotYetApplied();
-      BlockApply.Apply(SelectorID, NodesNN);
-
+      // Note that the in flight nodes need to transfer
+      // their values from the ordinary nodes which are processed below.
+      // Putting these first insures the policies
+      // copied out of the evaluation results before
+      // they are released in the apply process.
       PossiblyApplyInFlightThisBatchLinked();
       PossiblyApplyInFlightOtherBatchLinked();
+
+      ApplyImmeditateNotYetApplied();
+
+      BlockApply.Apply(SelectorID, NodesNN);
+
 
       // To prevent memory usage of chaining of every set to every prior set
       // we truncate prior batch now that it has been applied
