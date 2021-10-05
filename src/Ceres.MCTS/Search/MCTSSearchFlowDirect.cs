@@ -181,7 +181,7 @@ namespace Ceres.MCTS.Search
         // Only start overlapping past 3000 nodes because
         // CPU latency will be very small at small tree sizes,
         // obviating the overlapping beneifts of hiding this latency.
-        bool overlapThisSet = overlappingAllowed && numSelected > 3000;
+        bool overlapThisSet = overlappingAllowed && numSelected > 1500;
 
         iterationCount++;
         Context.Tree.BATCH_SEQUENCE_COUNTER++;
