@@ -13,17 +13,16 @@
 
 #region Using directives
 
-using Ceres.Base.DataTypes;
-using Ceres.Chess;
-using Ceres.Chess.EncodedPositions;
-using Ceres.MCTS.LeafExpansion;
-using Ceres.MCTS.Params;
-using Pblczero;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+
+using Ceres.Base.DataTypes;
+using Ceres.Chess;
+using Ceres.Chess.EncodedPositions;
+using Ceres.MCTS.Params;
 
 #endregion
 
@@ -81,18 +80,6 @@ namespace Ceres.MCTS.Evaluators
         float v = winP - lossP;
         return ParamsSelect.VIsForcedResult(v) ? 0
                                                : 1.0f - (winP + lossP);
-#if NOT
-        float correct = ParamsSelect.VIsForcedResult(V) ? 0 : 1.0f - (WinP + LossP);
-        float tryx;
-
-        if (ParamsSelect.VIsForcedResult(V)) 
-          tryx = 0;
-        else
-          tryx = 1.0f - (WinP.ToFloatApprox + LossP.ToFloatApprox);
-        if (MathF.Abs(tryx - correct) > 0.0001)
-          throw new Exception($"BAD { tryx } correct { correct} from {WinP} {LossP}  {ToF(WinP)} {ToF(LossP)}");
-        return tryx;
-#endif
       }
     }
 
@@ -110,7 +97,6 @@ namespace Ceres.MCTS.Evaluators
     /// If the structure has been initialized.
     /// </summary>
     public bool IsNull => TerminalStatus == GameResult.NotInitialized;
-
 
     /// <summary>
     /// In the case of virtual subtrees (linked to another transposition subnode)
@@ -186,6 +172,7 @@ namespace Ceres.MCTS.Evaluators
 
       ExtraResults = null;
     }
+
 
     /// <summary>
     /// Reference to underlying policy.

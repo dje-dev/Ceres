@@ -122,14 +122,8 @@ namespace Ceres.MCTS.MTCSNodes
       structPtr = (MCTSNodeStruct *)Unsafe.AsPointer(ref nodes[index.Index]);
       if (reinitializeInfo)
       {
-        // ************** TODO: ******************
-        // Could this cause a race condition where the exchange value
-        // is briefly reset and the node could be grabbed by another thread?
-        // Possibly move interchange variable to another array (?)
         InfoRef = new MCTSNodeInfo(context, index);
       }     
-
-//      Console.WriteLine("nodecreate " + index + " parent " + (parent == null ? "null" : parent.index));
     }
 
 
