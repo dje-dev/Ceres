@@ -39,6 +39,7 @@ using Ceres.MCTS.Managers.Limits;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.Params;
+using Ceres.MCTS.NodeCache;
 
 #endregion
 
@@ -168,6 +169,7 @@ namespace Ceres.MCTS.Iteration
     public MCTSManager(MCTSNodeStore store,
                        MCTSIterator reuseOtherContextForEvaluatedNodes,
                        PositionEvalCache reusePositionCache,
+                       IMCTSNodeCache reuseNodeCache,
                        TranspositionRootsDict reuseTranspositionRoots,
                        NNEvaluatorSet nnEvaluators,
                        ParamsSearch searchParams,
@@ -211,8 +213,8 @@ namespace Ceres.MCTS.Iteration
       {
         estNumNodes = Math.Max(0, estNumNodes - RootNWhenSearchStarted);
       }
-      Context = new MCTSIterator(store, reuseOtherContextForEvaluatedNodes, reusePositionCache, reuseTranspositionRoots,
-                                  nnEvaluators, searchParams, childSelectParams, searchLimit, estNumNodes);
+      Context = new MCTSIterator(store, reuseOtherContextForEvaluatedNodes, reusePositionCache, reuseNodeCache, reuseTranspositionRoots,
+                                 nnEvaluators, searchParams, childSelectParams, searchLimit, estNumNodes);
       ThreadSearchContext = Context;
 
       TerminationManager = new MCTSFutilityPruning(this, searchLimit.SearchMoves);

@@ -57,7 +57,7 @@ namespace Ceres.MCTS.LeafExpansion
     PositionWithHistory PriorMoves => Store.Nodes.PriorMoves;
 
     MCTSIterator Context;
-    IMCTSNodeCache cache;
+    internal IMCTSNodeCache cache;
 
 
     /// <summary>
@@ -69,7 +69,6 @@ namespace Ceres.MCTS.LeafExpansion
     /// Optionally a set of evaluators that will be invoked upon each annotation.
     /// </summary>
     public List<LeafEvaluatorBase> ImmediateEvaluators { get; set; }
-
 
     /// <summary>
     /// Maintains a dictionary mapping position hash code 
@@ -86,6 +85,16 @@ namespace Ceres.MCTS.LeafExpansion
 
     MemoryBufferOS<MCTSNodeStruct> nodes;
 
+    public readonly int MaxNodesBound;
+    public readonly int EstimatedNumNodes;
+
+    /// <summary>
+    /// Set encoded board positions corresponding to positions prior to root position in history.
+    /// </summary>
+    public List<EncodedPositionBoard> EncodedPriorPositions;
+
+
+
     /// <summary>
     /// Constructor.
     /// </summary>
@@ -95,7 +104,7 @@ namespace Ceres.MCTS.LeafExpansion
     /// <param name="positionCache"></param>
     public MCTSTree(MCTSNodeStore store, MCTSIterator context,
                     int maxNodesBound, int estimatedNumNodes,
-                    PositionEvalCache positionCache)
+                    PositionEvalCache positionCache, IMCTSNodeCache reuseNodeCache)
     {
       if (context.ParamsSearch.DrawByRepetitionLookbackPlies > MAX_LENGTH_POS_HISTORY)
       {
@@ -105,17 +114,53 @@ namespace Ceres.MCTS.LeafExpansion
       Store = store;
       Context = context;
       PositionCache = positionCache;
+      MaxNodesBound = maxNodesBound;
+      EstimatedNumNodes = estimatedNumNodes;
+
       nodes = store.Nodes.nodes;
 
+      cache = reuseNodeCache ?? MakeNodeCache(reuseNodeCache);
+
+      // Populate EncodedPriorPositions with encoded boards
+      // corresponding to possible prior moves (before the root of this search)
+      EncodedPriorPositions = new List<EncodedPositionBoard>();
+      Position[] priorPositions = new Position[9];
+
+      // Get prior positions (last position has highest index)
+      priorPositions = PositionHistoryGatherer.DoGetHistoryPositions(PriorMoves, priorPositions, 0, 8, false).ToArray();
+      for (int i = priorPositions.Length - 1; i >= 0; i--)
+      {
+        EncodedPositionBoard thisBoard = EncodedPositionBoard.GetBoard(in priorPositions[i], priorPositions[i].MiscInfo.SideToMove, false);
+        EncodedPriorPositions.Add(thisBoard);
+      }
+    }
+
+    /// <summary>
+    /// Constructs and returns an IMCTSNodeCache of appropriate type and size.
+    /// </summary>
+    /// <param name="reuseNodeCache"></param>
+    /// <returns></returns>
+    IMCTSNodeCache MakeNodeCache(IMCTSNodeCache reuseNodeCache)
+    {
+      int configuredCacheSize = Context.ParamsSearch.Execution.NodeAnnotationCacheSize;
+
+      // If all nodes fit within configured cache size, use a single cache.
+      if (MaxNodesBound < configuredCacheSize)
+      {
+        return new MCTSNodeCacheArrayPurgeable(this, MaxNodesBound + 2000);
+      }
+
+      // Cache must be large enough to hold the full "working set" of nodes during leaf selection
+      // (all selected leafs and their antecedents plus anciallary nodes such as associated transposition roots).
       const int ANNOTATION_MIN_CACHE_SIZE = 50_000;
-      int annotationCacheSize = Math.Min(maxNodesBound, context.ParamsSearch.Execution.NodeAnnotationCacheSize);
-      if (annotationCacheSize < ANNOTATION_MIN_CACHE_SIZE
-       && annotationCacheSize < maxNodesBound)
+      if (configuredCacheSize < ANNOTATION_MIN_CACHE_SIZE && configuredCacheSize < MaxNodesBound)
       {
         throw new Exception($"NODE_ANNOTATION_CACHE_SIZE is below minimum size of {ANNOTATION_MIN_CACHE_SIZE}");
       }
 
 #if NOT
+      TODO: possibly restore this code, after making sure MCTSNodeCacheArrayFixed is up-to-date
+            Alternately maybe not necessary, MCTSNodeCacheArrayPurgeable may already be sufficiently or more efficient.
       if (maxNodesBound <= annotationCacheSize && !context.ParamsSearch.TreeReuseEnabled)
       {
         // We know with certainty the maximum size, and it will fit inside the cache
@@ -125,28 +170,8 @@ namespace Ceres.MCTS.LeafExpansion
       else
       {
 #endif
-      cache = new MCTSNodeCacheArrayPurgeableSet(this, annotationCacheSize, estimatedNumNodes);
-
-      // Populate EncodedPriorPositions with encoded boards
-      // corresponding to possible prior moves (before the root of this search)
-      EncodedPriorPositions = new List<EncodedPositionBoard>();
-      Position[] priorPositions = new Position[9];
-
-      // Get prior positions (last position has highest index)
-      priorPositions = PositionHistoryGatherer.DoGetHistoryPositions(PriorMoves, priorPositions, 0, 8, false).ToArray();
-
-
-      for (int i = priorPositions.Length - 1; i >= 0; i--)
-      {
-        EncodedPositionBoard thisBoard = EncodedPositionBoard.GetBoard(in priorPositions[i], priorPositions[i].MiscInfo.SideToMove, false);
-        EncodedPriorPositions.Add(thisBoard);
-      }
+      return  new MCTSNodeCacheArrayPurgeableSet(this, MaxNodesBound,  EstimatedNumNodes);
     }
-
-    /// <summary>
-    /// Set encoded board positions corresponding to positions prior to root position in history.
-    /// </summary>
-    public List<EncodedPositionBoard> EncodedPriorPositions;
 
     public void PossiblyPruneCache() => cache.PossiblyPruneCache(MCTSManager.ThreadSearchContext.Tree.Store);
 

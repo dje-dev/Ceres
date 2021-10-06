@@ -84,10 +84,7 @@ namespace Ceres.MCTS.NodeCache
 
       // Initialize the sub-caches
       subCaches = new MCTSNodeCacheArrayPurgeable[NumSubcaches];
-      for (int i = 0; i < NumSubcaches; i++)
-      {
-        subCaches[i] = new MCTSNodeCacheArrayPurgeable(parentTree, definitiveMaxCacheSize / NumSubcaches);
-      }
+      Parallel.For(0, NumSubcaches, i => subCaches[i] = new MCTSNodeCacheArrayPurgeable(parentTree, definitiveMaxCacheSize / NumSubcaches));
     }
 
 

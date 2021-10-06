@@ -35,6 +35,7 @@ using Ceres.MCTS.Managers.Limits;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.MTCSNodes.Struct;
+using Ceres.MCTS.NodeCache;
 using Ceres.MCTS.Params;
 using Ceres.MCTS.Search;
 
@@ -226,6 +227,7 @@ namespace Ceres.MCTS.Iteration
     public MCTSIterator(MCTSNodeStore store,
                          MCTSIterator reuseOtherContextForEvaluatedNodes,
                          PositionEvalCache reusePositionCache,
+                         IMCTSNodeCache reuseNodeCache,
                          TranspositionRootsDict reuseTranspositionRoots,
                          NNEvaluatorSet nnEvaluators,
                          ParamsSearch paramsSearch,
@@ -276,7 +278,7 @@ namespace Ceres.MCTS.Iteration
 
       int estimatedNodesBound = store.Nodes.NumUsedNodes + estimatedNumSearchNodes;
 
-      Tree = new MCTSTree(store, this, maxNodesBound, estimatedNodesBound, positionCache);
+      Tree = new MCTSTree(store, this, maxNodesBound, estimatedNodesBound, positionCache, reuseNodeCache);
 
       if (ParamsSearch.Execution.TranspositionMode != TranspositionMode.None)
       {

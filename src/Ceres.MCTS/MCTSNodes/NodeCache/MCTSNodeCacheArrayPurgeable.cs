@@ -42,7 +42,7 @@ namespace Ceres.MCTS.NodeCache
   /// </summary>
   public unsafe class MCTSNodeCacheArrayPurgeable : IMCTSNodeCache
   {
-    internal const int THRESHOLD_PCT_DO_PRUNE = 85;
+    internal const int THRESHOLD_PCT_DO_PRUNE = 75;
     internal const int THRESHOLD_PCT_PRUNE_TO = 50;
 
     /// <summary>

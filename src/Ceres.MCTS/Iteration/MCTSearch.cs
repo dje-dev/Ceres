@@ -32,6 +32,7 @@ using Ceres.MCTS.Params;
 using Ceres.MCTS.Environment;
 using Ceres.MCTS.Managers;
 using Ceres.Chess.UserSettings;
+using Ceres.MCTS.NodeCache;
 
 #endregion
 
@@ -176,7 +177,7 @@ namespace Ceres.MCTS.Iteration
                                                           paramsSearch, limitManager,
                                                           gameMoveHistory, isFirstMoveOfGame);
 
-      Manager = new MCTSManager(store, reuseOtherContextForEvaluatedNodes, positionEvalCache, null,
+      Manager = new MCTSManager(store, reuseOtherContextForEvaluatedNodes, positionEvalCache, null, null,
                                 nnEvaluators, paramsSearch, paramsSelect, searchLimitToUse,
                                 limitManager, startTime, gameMoveHistory, isFirstMoveOfGame);
 
@@ -390,6 +391,8 @@ namespace Ceres.MCTS.Iteration
                                           ManagerTreeReuse.Method reuseMethod,
                                           bool moveImmediateIfOnlyOneMove)
     {
+      IMCTSNodeCache reuseNodeCache = Manager.Context.Tree.cache;
+
       // Now rewrite the tree nodes and children "in situ"
       PositionEvalCache reusePositionCache = null;
       if (Manager.Context.ParamsSearch.TreeReuseRetainedPositionCacheEnabled)
@@ -447,7 +450,7 @@ namespace Ceres.MCTS.Iteration
                               + $"in {(int)(makeNewRootTimingStats.ElapsedTimeSecs / 1000.0)}ms");
 
       // Construct a new search manager reusing this modified store and modified transposition roots.
-      Manager = new MCTSManager(store, reuseOtherContextForEvaluatedNodes, reusePositionCache, newTranspositionRoots,
+      Manager = new MCTSManager(store, reuseOtherContextForEvaluatedNodes, reusePositionCache, reuseNodeCache, newTranspositionRoots,
                                 priorContext.NNEvaluators, priorContext.ParamsSearch, priorContext.ParamsSelect,
                                 searchLimitTargetAdjusted, Manager.LimitManager,
                                 startTime, gameMoveHistory, isFirstMoveOfGame: isFirstMoveOfGame);
