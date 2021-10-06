@@ -51,7 +51,7 @@ namespace Ceres.MCTS.LeafExpansion
     /// Nodes in node cache are stamped with the sequence number
     /// of the last batch in which they were accessed.
     /// </summary>
-    internal long BATCH_SEQUENCE_COUNTER = 0;
+    internal int BATCH_SEQUENCE_COUNTER = 0;
 
 
     PositionWithHistory PriorMoves => Store.Nodes.PriorMoves;
@@ -281,16 +281,12 @@ namespace Ceres.MCTS.LeafExpansion
         posHistoryForCaching = posHistory.Slice(posHistory.Length - numCacheHashPositions, numCacheHashPositions);
       }
 
-      // Compute the actual hash
-      ulong zobristHashForCaching = EncodedBoardZobrist.ZobristHash(posHistoryForCaching, node.Context.EvaluatorDef.HashMode);
-
       node.InfoRef.LastAccessedSequenceCounter = node.Tree.BATCH_SEQUENCE_COUNTER;
       annotation.PriorMoveMG = priorMoveMG;
 
       annotation.Pos = posHistory[^1]; // this will have had its repetition count set
       annotation.PosMG = newPos;
 
-      node.StructRef.ZobristHash = zobristHashForCaching;
       //node.Ref.HashCrosscheck = annotation.Pos.PiecesShortHash;
 
       const bool FAST = true;
@@ -317,6 +313,8 @@ namespace Ceres.MCTS.LeafExpansion
       }
       else
       {
+        node.StructRef.ZobristHash = EncodedBoardZobrist.ZobristHash(posHistoryForCaching, node.Context.EvaluatorDef.HashMode);
+
         if (!alreadyEvaluated && ImmediateEvaluators != null)
         {
           foreach (LeafEvaluatorBase immediateEvaluator in ImmediateEvaluators)
