@@ -70,7 +70,6 @@ namespace Ceres.MCTS.NodeCache
 
     int numInUse = 0;
     int searchFreeEntryNextIndex = 0;
-    int numCachePrunesInProgress = 0;
 
     #endregion
 
@@ -190,18 +189,13 @@ namespace Ceres.MCTS.NodeCache
     public void PossiblyPruneCache(MCTSNodeStore store)
     {
       bool almostFull = numInUse > (nodes.Length * THRESHOLD_PCT_DO_PRUNE) / 100;
-      if (numCachePrunesInProgress == 0 && almostFull)
+      if (almostFull)
       {
-        Task.Run(() =>
+        using (new TimingBlock("Prune"))
         {
-          //using (new TimingBlock("Prune"))
-          {
-            Interlocked.Increment(ref numCachePrunesInProgress);
-            int targetSize = (nodes.Length * THRESHOLD_PCT_PRUNE_TO) / 100;
-            Prune(store, targetSize);
-            Interlocked.Decrement(ref numCachePrunesInProgress);
-          };
-        });
+          int targetSize = (nodes.Length * THRESHOLD_PCT_PRUNE_TO) / 100;
+          Prune(store, targetSize);
+        }
       }
 
     }
