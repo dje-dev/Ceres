@@ -211,25 +211,37 @@ namespace Ceres.Chess
         //   - more than 98 ply, so about to be a possible draw
         //   - more than 80 ply, getting close and drawish but not yet imminent
         if (Move50Count >= 98)
+        {
           move50Part = 2;
+        }
         else if (Move50Count > 80)
+        {
           move50Part = 1;
+        }
       }
 
       int repetitionPart;
       if (includeRepetitions)
-        repetitionPart = RepetitionCount > 3 ? 3 : RepetitionCount;
+      {
+        repetitionPart = RepetitionCount >= 2 ? 2 : RepetitionCount;
+      }
       else
+      {
         repetitionPart = 0;
+      }
 
       if (SideToMove == SideType.White)
+      {
         return HashCode.Combine((BlackCanOO ? 1 : 0), (BlackCanOOO ? 1 : 0), 
                                 (WhiteCanOO ? 1 : 0), (WhiteCanOOO ? 1 : 0),
                                  move50Part, repetitionPart, SideToMove);
+      }
       else
+      {
         return HashCode.Combine((WhiteCanOO ? 1 : 0), (WhiteCanOOO ? 1 : 0),
                                 (BlackCanOO ? 1 : 0), (BlackCanOOO ? 1 : 0),
                                 move50Part, repetitionPart, SideToMove);
+      }
     }
 
 
