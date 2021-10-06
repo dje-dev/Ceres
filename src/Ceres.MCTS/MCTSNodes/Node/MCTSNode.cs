@@ -20,9 +20,15 @@ using System.Runtime.CompilerServices;
 
 using Ceres.Base.DataType.Trees;
 using Ceres.Base.DataTypes;
+using Ceres.Base.OperatingSystem;
+
 using Ceres.Chess;
 using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Chess.MoveGen;
+using Ceres.Chess.Positions;
+using Ceres.Chess.MoveGen.Converters;
+using Ceres.Chess.EncodedPositions;
+
 using Ceres.MCTS.Evaluators;
 using Ceres.MCTS.LeafExpansion;
 using Ceres.MCTS.Managers;
@@ -30,13 +36,7 @@ using Ceres.MCTS.MTCSNodes.Annotation;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.Iteration;
-using Ceres.Chess.Positions;
-using Ceres.Chess.MoveGen.Converters;
 using Ceres.MCTS.Params;
-using Ceres.Base.Math;
-using Ceres.Chess.EncodedPositions;
-using Google.Protobuf.WellKnownTypes;
-using Ceres.Base.OperatingSystem;
 
 #endregion
 
@@ -45,9 +45,8 @@ using Ceres.Base.OperatingSystem;
 namespace Ceres.MCTS.MTCSNodes
 {
   /// <summary>
-  /// Wrapper around a raw MCTSNodeStruct existing in the node store.
-  /// 
-  /// Also contains additional properties used transiently in tree operations such as search.
+  /// Wrapper around a raw MCTSNodeStruct existing in the node store
+  /// (just a pointer to struct at a fixed address).
   /// </summary>
   /// 
   [DebuggerDisplay("ToString(),nq")]
@@ -75,7 +74,6 @@ namespace Ceres.MCTS.MTCSNodes
     /// Returns if the node is not null.
     /// </summary>
     public bool IsNotNull => structPtr != default;
-
 
     /// <summary>
     /// Search context within which this node exists
@@ -122,7 +120,7 @@ namespace Ceres.MCTS.MTCSNodes
       structPtr = (MCTSNodeStruct *)Unsafe.AsPointer(ref nodes[index.Index]);
       if (reinitializeInfo)
       {
-        InfoRef = new MCTSNodeInfo(context, index);
+        Unsafe.AsRef<MCTSNodeInfo>(infoPtr) = new MCTSNodeInfo(context, index);
       }     
     }
 
@@ -350,7 +348,19 @@ namespace Ceres.MCTS.MTCSNodes
     /// <summary>
     /// Returns reference to associated MCTSNodeInfo.
     /// </summary>
+#if DEBUG
+    public ref MCTSNodeInfo InfoRef
+    {
+      get
+      {
+        ref MCTSNodeInfo refI = ref Unsafe.AsRef<MCTSNodeInfo>(infoPtr);
+        Debug.Assert(refI.index == StructRef.Index);
+        return ref refI;
+      }
+    }
+#else
     public ref MCTSNodeInfo InfoRef => ref Unsafe.AsRef<MCTSNodeInfo>(infoPtr);
+#endif
 
 
     /// <summary>
@@ -482,7 +492,7 @@ namespace Ceres.MCTS.MTCSNodes
 
     public double Q => (*structPtr).Q;
 
-    #region Children
+#region Children
 
     public bool IsRoot => (*structPtr).ParentIndex.IsNull;
 
@@ -716,9 +726,9 @@ namespace Ceres.MCTS.MTCSNodes
 
 
 
-    #endregion
+#endregion
 
-    #region ITreeNode
+#region ITreeNode
 
     ITreeNode ITreeNode.IParent => Parent;
 
@@ -739,10 +749,10 @@ namespace Ceres.MCTS.MTCSNodes
 
     ITreeNode ITreeNode.IChildAtIndex(int index) => ChildAtIndex(index);
 
-    #endregion
+#endregion
 
 
-    #region Overrides (object)
+#region Overrides (object)
 
     public override string ToString()
     {
