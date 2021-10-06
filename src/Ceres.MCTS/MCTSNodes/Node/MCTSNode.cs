@@ -480,11 +480,11 @@ namespace Ceres.MCTS.MTCSNodes
     }
 
 
-    public double Q => InfoRef.Q;
+    public double Q => (*structPtr).Q;
 
-#region Children
+    #region Children
 
-    public bool IsRoot => InfoRef.ParentIndex.IsNull;
+    public bool IsRoot => (*structPtr).ParentIndex.IsNull;
 
 
     public bool IsOurMove => InfoRef.Depth % 2 == 0;

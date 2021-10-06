@@ -178,7 +178,7 @@ namespace Ceres.MCTS.Search
       int nodesLastSecondaryNetEvaluation = 0;
       while (true)
       {
-        // Only start overlapping past 3000 nodes because
+        // Only start overlapping past 1500 nodes because
         // CPU latency will be very small at small tree sizes,
         // obviating the overlapping beneifts of hiding this latency.
         bool overlapThisSet = overlappingAllowed && numSelected > 1500;

@@ -18,22 +18,17 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
-using Ceres.Base.DataType.Trees;
 using Ceres.Base.DataTypes;
+using Ceres.Base.Math;
 using Ceres.Chess;
 using Ceres.Chess.EncodedPositions.Basic;
-using Ceres.Chess.MoveGen;
 using Ceres.MCTS.Evaluators;
 using Ceres.MCTS.LeafExpansion;
-using Ceres.MCTS.Managers;
 using Ceres.MCTS.MTCSNodes.Annotation;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.Iteration;
-using Ceres.Chess.Positions;
-using Ceres.Chess.MoveGen.Converters;
 using Ceres.MCTS.Params;
-using Ceres.Base.Math;
 
 #endregion
 
@@ -345,22 +340,9 @@ namespace Ceres.MCTS.MTCSNodes
 
 
     /// <summary>
-    /// Makes sure this node is annotated.
-    /// </summary>
-    public void Annotate()
-    {
-      if (!IsAnnotated)
-      {
-        throw new NotImplementedException();
-//        Context.Tree.Annotate(this);
-      }
-    }
-
-
-    /// <summary>
     /// Counter used for LRU caching (keeps track of last time accessed)
     /// </summary>
-    public long LastAccessedSequenceCounter;
+    public int LastAccessedSequenceCounter;
 
 
     /// <summary>
