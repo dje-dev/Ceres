@@ -6,7 +6,6 @@
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
-    <TargetFramework>net5.0</TargetFramework>
     <LangVersion>preview</LangVersion>
     <ApplicationIcon />
     <OutputType>Exe</OutputType>
