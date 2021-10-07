@@ -48,7 +48,7 @@ namespace Ceres.MCTS.NodeCache
   {
     internal const int MAX_SETS = 256;
 
-    public MCTSTree ParentTree;
+    public MCTSNodeStore ParentStore;
 
     public readonly int MaxCacheSize;
 
@@ -66,17 +66,17 @@ namespace Ceres.MCTS.NodeCache
     /// <summary>
     /// Constructor.
     /// </summary>
-    /// <param name="parentTree"></param>
-    /// <param name="definitiveMaxCacheSize"></param>
+    /// <param name="parentStore"></param>
+    /// <param name="cacheSize"></param>
     /// <param name="estimatedNumNodesInSearch"></param>
-    public MCTSNodeCacheArrayPurgeableSet(MCTSTree parentTree,
-                                          int definitiveMaxCacheSize,
+    public MCTSNodeCacheArrayPurgeableSet(MCTSNodeStore parentStore,
+                                          int cacheSize,
                                           int estimatedNumNodesInSearch)
     {
-      ParentTree = parentTree;
-      MaxCacheSize = definitiveMaxCacheSize;
+      ParentStore = parentStore;
+      MaxCacheSize = cacheSize;
 
-      nodes = parentTree.Store.Nodes.nodes;
+      nodes = parentStore.Nodes.nodes;
 
       // Compute number of subcaches, increasing as a function of estimates search size
       // (because degree of concurrency rises with size of batches and search.
@@ -84,14 +84,14 @@ namespace Ceres.MCTS.NodeCache
 
       // Initialize the sub-caches
       subCaches = new MCTSNodeCacheArrayPurgeable[NumSubcaches];
-      Parallel.For(0, NumSubcaches, i => subCaches[i] = new MCTSNodeCacheArrayPurgeable(parentTree, definitiveMaxCacheSize / NumSubcaches));
+      Parallel.For(0, NumSubcaches, i => subCaches[i] = new MCTSNodeCacheArrayPurgeable(parentStore, cacheSize / NumSubcaches));
     }
 
 
     /// <summary>
-    /// Tree from which the MCTSNode objects originated.
+    /// Store from which the MCTSNode objects originated.
     /// </summary>
-    MCTSTree IMCTSNodeCache.ParentTree => ParentTree;
+    MCTSNodeStore IMCTSNodeCache.ParentStore => ParentStore;
 
 
     /// <summary>
@@ -176,6 +176,15 @@ namespace Ceres.MCTS.NodeCache
 
         }
       }
+    }
+
+    /// <summary>
+    /// Removes a specified node from the cache, if present.
+    /// </summary>
+    /// <param name="nodeIndex"></param>
+    public void Remove(MCTSNodeStructIndex nodeIndex)
+    {
+      subCaches[nodeIndex.Index % NumSubcaches].Remove(nodeIndex);
     }
 
 

@@ -33,9 +33,9 @@ namespace Ceres.MCTS.NodeCache
   public unsafe interface IMCTSNodeCache
   {
     /// <summary>
-    /// Tree from which the MCTSNode objects originated.
+    /// Store from which the MCTSNode objects originated.
     /// </summary>
-    MCTSTree ParentTree { get; }
+    MCTSNodeStore ParentStore { get; }
 
 
     /// <summary>
@@ -67,6 +67,12 @@ namespace Ceres.MCTS.NodeCache
     /// </summary>
     /// <param name="store"></param>
     void PossiblyPruneCache(MCTSNodeStore store);
+
+    /// <summary>
+    /// Removes a specified node from the cache, if present.
+    /// </summary>
+    /// <param name="nodeIndex"></param>
+    void Remove(MCTSNodeStructIndex nodeIndex);
 
     /// <summary>
     /// Clears table entries and possibly resets back to null the CacheIndex for every node.

@@ -46,9 +46,9 @@ namespace Ceres.MCTS.NodeCache
     internal const int THRESHOLD_PCT_PRUNE_TO = 50;
 
     /// <summary>
-    /// Parent MCTSTree to which the MCTSNode belong.
+    /// Parent MCTSNodeStore to which the MCTSNode belong.
     /// </summary>
-    public MCTSTree ParentTree;
+    public MCTSNodeStore ParentStore;
 
 
     public readonly int MaxCacheSize;
@@ -71,21 +71,24 @@ namespace Ceres.MCTS.NodeCache
     int numInUse = 0;
     int searchFreeEntryNextIndex = 0;
 
+    void* ptrFirstItem;
+    int lengthItem;
+
     #endregion
 
     /// <summary>
     /// Constructor.
     /// </summary>
-    /// <param name="parentTree"></param>
+    /// <param name="parentStore"></param>
     /// <param name="maxCacheSize"></param>
-    public MCTSNodeCacheArrayPurgeable(MCTSTree parentTree, int maxCacheSize)
+    public MCTSNodeCacheArrayPurgeable(MCTSNodeStore parentStore, int maxCacheSize)
     {
       const int LOH_THRESHOLD_SIZE_BYTES = 110_000;
       int minCacheSize = (LOH_THRESHOLD_SIZE_BYTES / Marshal.SizeOf<MCTSNodeInfo>());
 
       maxCacheSize = Math.Max(minCacheSize, maxCacheSize);
 
-      ParentTree = parentTree;
+      ParentStore = parentStore;
       MaxCacheSize = maxCacheSize;
 
       // N.B. The elements of the nodes array must remain 
@@ -101,17 +104,21 @@ namespace Ceres.MCTS.NodeCache
       
       cachedNodesIndices = new int[maxCacheSize];
 
-      nodesStore = parentTree.Store.Nodes.nodes;
+      nodesStore = parentStore.Nodes.nodes;
       pruneSequenceNums = GC.AllocateUninitializedArray<int>(maxCacheSize);
+
+      ptrFirstItem = Unsafe.AsPointer(ref nodes[0]);
+      lengthItem = (int) (new IntPtr(Unsafe.AsPointer(ref nodes[1])).ToInt64() 
+                        - new IntPtr(Unsafe.AsPointer(ref nodes[0])).ToInt64());
     }
 
     public void Clear() => throw new NotImplementedException();
 
 
     /// <summary>
-    /// Tree from which the MCTSNode objects originated.
+    /// store from which the MCTSNode objects originated.
     /// </summary>
-    MCTSTree IMCTSNodeCache.ParentTree => ParentTree;
+    MCTSNodeStore IMCTSNodeCache.ParentStore => ParentStore;
 
     /// <summary>
     /// Returns the number of nodes currently present in the cache.
@@ -308,6 +315,31 @@ namespace Ceres.MCTS.NodeCache
     /// of the last batch in which they were accessed to faciltate LRU determination.
     /// </summary>
     public int NextBatchSequenceNumber { get; set; }
+
+
+    /// <summary>
+    /// Removes a specified node from the cache, if present.
+    /// </summary>
+    /// <param name="nodeIndex"></param>
+    public void Remove(MCTSNodeStructIndex nodeIndex)
+    {
+      ref MCTSNodeStruct storeItem = ref ParentStore.Nodes.nodes[nodeIndex.Index];
+      if (storeItem.CachedInfoPtr != null)
+      {
+        // Release the cache item from the nodes array
+        long bytesDiff = new IntPtr(storeItem.CachedInfoPtr).ToInt64() - new IntPtr(ptrFirstItem).ToInt64();
+        int indexItem = (int)(bytesDiff / lengthItem);
+
+        Debug.Assert(cachedNodesIndices[indexItem] == nodeIndex.Index);
+        cachedNodesIndices[indexItem] = 0;
+
+        // Clear the cache item in the node struct
+        storeItem.CachedInfoPtr = null;
+
+ 
+        numInUse--;
+      }
+    }
 
 
     /// <summary>
