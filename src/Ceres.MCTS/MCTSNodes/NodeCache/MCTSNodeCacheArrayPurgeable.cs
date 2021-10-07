@@ -191,11 +191,8 @@ namespace Ceres.MCTS.NodeCache
       bool almostFull = numInUse > (nodes.Length * THRESHOLD_PCT_DO_PRUNE) / 100;
       if (almostFull)
       {
-        using (new TimingBlock("Prune"))
-        {
-          int targetSize = (nodes.Length * THRESHOLD_PCT_PRUNE_TO) / 100;
-          Prune(store, targetSize);
-        }
+        int targetSize = (nodes.Length * THRESHOLD_PCT_PRUNE_TO) / 100;
+        Prune(store, targetSize);
       }
 
     }
