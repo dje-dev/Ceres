@@ -391,7 +391,7 @@ namespace Ceres.MCTS.Iteration
                                           ManagerTreeReuse.Method reuseMethod,
                                           bool moveImmediateIfOnlyOneMove)
     {
-      IMCTSNodeCache reuseNodeCache = Manager.Context.Tree.cache;
+      IMCTSNodeCache reuseNodeCache = Manager.Context.Tree.NodeCache;
 
       // Now rewrite the tree nodes and children "in situ"
       PositionEvalCache reusePositionCache = null;

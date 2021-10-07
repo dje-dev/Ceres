@@ -33,8 +33,6 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 {
   public unsafe partial class MCTSNodeStructStorage
   {
-    internal const bool SWAP_ROOT_ENHANCED_METHOD = true;
-
     // TODO: move this into MCTSNodeStoreClass??
 
     #region Structure modification
@@ -86,14 +84,6 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       }
       else
       {
-        if (!SWAP_ROOT_ENHANCED_METHOD)
-        {
-          if (!newRootChild.IsRoot && newRootChild.IsTranspositionRoot)
-          {
-            MakeNodeNotTranspositionRoot(tree, null, newRootChild.Index.Index, ref newRootChild);
-          }
-        }
-
         DoMakeChildNewRootRewrite(tree, policySoftmax, ref newRootChild, newPriorMoves, cacheNonRetainedNodes, transpositionRoots, tryKeepTranspositionRootsMaxN);
       }
 
@@ -190,28 +180,16 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       // integrity of the current tree nodes which reference it.
       // We also need to preserve the old root by cloning it to
       // a new node at end of store (and updating children) to preserve full tree integrity.
-      if (SWAP_ROOT_ENHANCED_METHOD)
+      MCTSNodeStructIndex rootAtEnd = CloneRootAtEnd(tree);
+
+      // this new node will be marked as old generation below because it is unreachable
+      ref MCTSNodeStruct endNode = ref nodes[rootAtEnd.Index];
+
+      if (transpositionRoots != null && endNode.IsTranspositionRoot)
       {
-        MCTSNodeStructIndex rootAtEnd = CloneRootAtEnd(tree);
-
-        // this new node will be marked as old generation below because it is unreachable
-        ref MCTSNodeStruct endNode = ref nodes[rootAtEnd.Index];
-
-        if (transpositionRoots != null && endNode.IsTranspositionRoot)
-        {
-          Debug.Assert(transpositionRoots.Remove(endNode.ZobristHash, 1));
-          Debug.Assert(transpositionRoots.TryAdd(endNode.ZobristHash, rootAtEnd.Index, rootAtEnd.Index, nodes));
-        }
+        Debug.Assert(transpositionRoots.Remove(endNode.ZobristHash, 1));
+        Debug.Assert(transpositionRoots.TryAdd(endNode.ZobristHash, rootAtEnd.Index, rootAtEnd.Index, nodes));
       }
-      else
-      {
-        if (!newRootChild.IsRoot && newRootChild.IsTranspositionRoot)
-        {
-          MakeNodeNotTranspositionRoot(tree, transpositionRoots, indexOfNewRootBeforeRewrite, ref newRootChild);
-        }
-      }
-      // ______________________________________
-
 
       // Get array of included nodes, marking others as now belonging to a prior generation.
       uint numNodesUsed;
@@ -227,20 +205,6 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       // Update BitArray to reflect this swap.
       includedNodes[indexOfNewRootBeforeRewrite] = false;
       includedNodes[1] = true;
-
-      if (!SWAP_ROOT_ENHANCED_METHOD)
-      {
-        // Traverse included nodes, and for each remap any nodes
-        // with transposition link to new root to refer to new position.
-        for (int i = 1; i < numNodes; i++)
-        {
-          if (!includedNodes[i])
-          {
-            ref MCTSNodeStruct thisNode = ref nodes[i];
-            thisNode.IsOldGeneration = true;
-          }
-        }
-      }
 
       //double elapsed = (DateTime.Now - start).TotalSeconds;
       //Console.WriteLine($"swap time: {elapsed}s  {nodesStartCount} --> {numNodesUsed} try delete: {numTryRemove} succeed: + {numSucceedRemove}");
@@ -484,10 +448,6 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     private static void CopyNodeIntoRootPosition(MCTSNodeStore store, int newIndexOfNewParent, PositionWithHistory newPriorMoves)
     {
       Debug.Assert(newIndexOfNewParent != 1);
-      if (!MCTSNodeStructStorage.SWAP_ROOT_ENHANCED_METHOD)
-      {
-        Debug.Assert(!store.Nodes.nodes[newIndexOfNewParent].IsTranspositionRoot);
-      }
 
       store.Nodes.nodes[1] = store.Nodes.nodes[newIndexOfNewParent];
 
