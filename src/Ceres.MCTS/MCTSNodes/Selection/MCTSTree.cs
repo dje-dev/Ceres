@@ -47,17 +47,10 @@ namespace Ceres.MCTS.LeafExpansion
   {
     const bool VERBOSE = false;
 
-    /// <summary>
-    /// Nodes in node cache are stamped with the sequence number
-    /// of the last batch in which they were accessed.
-    /// </summary>
-    internal int BATCH_SEQUENCE_COUNTER = 0;
-
-
     PositionWithHistory PriorMoves => Store.Nodes.PriorMoves;
 
     MCTSIterator Context;
-    internal IMCTSNodeCache cache;
+    internal IMCTSNodeCache NodeCache;
 
 
     /// <summary>
@@ -119,7 +112,7 @@ namespace Ceres.MCTS.LeafExpansion
 
       nodes = store.Nodes.nodes;
 
-      cache = reuseNodeCache ?? MakeNodeCache(reuseNodeCache);
+      NodeCache = reuseNodeCache ?? MakeNodeCache(reuseNodeCache);
 
       // Populate EncodedPriorPositions with encoded boards
       // corresponding to possible prior moves (before the root of this search)
@@ -173,7 +166,7 @@ namespace Ceres.MCTS.LeafExpansion
       return  new MCTSNodeCacheArrayPurgeableSet(this, MaxNodesBound,  EstimatedNumNodes);
     }
 
-    public void PossiblyPruneCache() => cache.PossiblyPruneCache(MCTSManager.ThreadSearchContext.Tree.Store);
+    public void PossiblyPruneCache() => NodeCache.PossiblyPruneCache(MCTSManager.ThreadSearchContext.Tree.Store);
 
 
     /// <summary>
@@ -216,13 +209,13 @@ namespace Ceres.MCTS.LeafExpansion
       bool wasAdded = false;
       if (nodeRef.CachedInfoPtr == null)
       {
-        cache.Add(nodeIndex);
+        NodeCache.Add(nodeIndex);
         Debug.Assert(nodeRef.CachedInfoPtr != null);
         wasAdded = true;
       }
 
       MCTSNode node = new MCTSNode(Context, nodes, nodeIndex, wasAdded);
-      node.InfoRef.LastAccessedSequenceCounter = BATCH_SEQUENCE_COUNTER;
+      node.InfoRef.LastAccessedSequenceCounter = NodeCache.NextBatchSequenceNumber;
 
       if (node.Index != nodeIndex.Index)
       {
@@ -306,7 +299,7 @@ namespace Ceres.MCTS.LeafExpansion
         posHistoryForCaching = posHistory.Slice(posHistory.Length - numCacheHashPositions, numCacheHashPositions);
       }
 
-      node.InfoRef.LastAccessedSequenceCounter = node.Tree.BATCH_SEQUENCE_COUNTER;
+      node.InfoRef.LastAccessedSequenceCounter = node.Tree.NodeCache.NextBatchSequenceNumber;
       annotation.PriorMoveMG = priorMoveMG;
 
       annotation.Pos = posHistory[^1]; // this will have had its repetition count set
@@ -428,7 +421,7 @@ namespace Ceres.MCTS.LeafExpansion
     /// Resets cache of nodes, optionally also resetting the CacheIndex of each node.
     /// </summary>
     /// <param name="resetNodeCacheIndex"></param>
-    public void ClearNodeCache(bool resetNodeCacheIndex) => cache.ResetCache(resetNodeCacheIndex);
+    public void ClearNodeCache(bool resetNodeCacheIndex) => NodeCache.ResetCache(resetNodeCacheIndex);
   }
 
 

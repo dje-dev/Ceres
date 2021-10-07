@@ -306,6 +306,12 @@ namespace Ceres.MCTS.NodeCache
     }
 
 
+    /// <summary>
+    /// Nodes in node cache are stamped with the sequence number
+    /// of the last batch in which they were accessed to faciltate LRU determination.
+    /// </summary>
+    public int NextBatchSequenceNumber { get; set; }
+
 
     /// <summary>
     /// Returns string summary.

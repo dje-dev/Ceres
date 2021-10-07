@@ -184,7 +184,7 @@ namespace Ceres.MCTS.Search
         bool overlapThisSet = overlappingAllowed && numSelected > 1500;
 
         iterationCount++;
-        Context.Tree.BATCH_SEQUENCE_COUNTER++;
+        Context.Tree.NodeCache.NextBatchSequenceNumber++;
 
         ILeafSelector selector = selectorID == 0 ? selector1 : selector2;
 
