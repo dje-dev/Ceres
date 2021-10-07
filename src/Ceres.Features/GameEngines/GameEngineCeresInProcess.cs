@@ -385,7 +385,10 @@ namespace Ceres.Features.GameEngines
         // before we would possibly reuse part of tree from prior search.
         // Below a certain level the tree reuse would increase memory consumption
         // (because unused nodes remain in node store) but not appreciably improve search speed.
-        int currentN = LastSearch.SearchRootNode.N;
+        using (new SearchContextExecutionBlock(LastSearch.Manager.Context))
+        {
+          int currentN = LastSearch.SearchRootNode.N;
+        }
 
         // Determine threshold to decide if tree is big enough to be reused.
         // Extraction time is about linear in number of nodes extracted (averages about 2.5mm/sec)
