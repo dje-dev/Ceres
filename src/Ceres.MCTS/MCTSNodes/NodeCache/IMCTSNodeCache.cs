@@ -37,6 +37,11 @@ namespace Ceres.MCTS.NodeCache
     /// </summary>
     MCTSNodeStore ParentStore { get; }
 
+    /// <summary>
+    /// Sets/resets the node store to which the cached items below.
+    /// </summary>
+    /// <param name="parentStore"></param>
+    void SetNodeStore(MCTSNodeStore parentStore);
 
     /// <summary>
     /// Adds a specified node to the cache.

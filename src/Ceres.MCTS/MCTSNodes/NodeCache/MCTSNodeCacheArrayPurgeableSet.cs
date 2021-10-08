@@ -14,14 +14,11 @@
 #region Using directives
 
 using System;
-using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Ceres.Base.Math;
 using Ceres.Base.OperatingSystem;
-using Ceres.MCTS.LeafExpansion;
-using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.MTCSNodes.Struct;
 
@@ -93,6 +90,21 @@ namespace Ceres.MCTS.NodeCache
     /// </summary>
     MCTSNodeStore IMCTSNodeCache.ParentStore => ParentStore;
 
+
+    /// <summary>
+    /// Sets/resets the node store to which the cached items below.
+    /// </summary>
+    /// <param name="parentStore"></param>
+    public void SetNodeStore(MCTSNodeStore parentStore)
+    {
+      ParentStore = parentStore;
+      nodes = parentStore.Nodes.nodes;
+
+      foreach (MCTSNodeCacheArrayPurgeable subCache in subCaches)
+      {
+        subCache.SetNodeStore(parentStore);
+      }
+    }
 
     /// <summary>
     /// Adds a specified node to the cache.

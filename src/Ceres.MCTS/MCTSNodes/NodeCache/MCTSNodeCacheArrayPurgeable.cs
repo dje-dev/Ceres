@@ -87,9 +87,9 @@ namespace Ceres.MCTS.NodeCache
       int minCacheSize = (LOH_THRESHOLD_SIZE_BYTES / Marshal.SizeOf<MCTSNodeInfo>());
 
       maxCacheSize = Math.Max(minCacheSize, maxCacheSize);
-
-      ParentStore = parentStore;
       MaxCacheSize = maxCacheSize;
+
+      SetNodeStore(parentStore);
 
       // N.B. The elements of the nodes array must remain 
       //      at fixed location in memory (since raw pointers refer to them).
@@ -99,17 +99,26 @@ namespace Ceres.MCTS.NodeCache
 
       // Therefore allocate using ordinary new operator and rely upon fact that
       // by default objects on LOH are not compacted/moved.
-      
+
       nodes = new MCTSNodeInfo[maxCacheSize];
       
       cachedNodesIndices = new int[maxCacheSize];
 
-      nodesStore = parentStore.Nodes.nodes;
       pruneSequenceNums = GC.AllocateUninitializedArray<int>(maxCacheSize);
 
       ptrFirstItem = Unsafe.AsPointer(ref nodes[0]);
       lengthItem = (int) (new IntPtr(Unsafe.AsPointer(ref nodes[1])).ToInt64() 
                         - new IntPtr(Unsafe.AsPointer(ref nodes[0])).ToInt64());
+    }
+
+    /// <summary>
+    /// Sets/resets the node store to which the cached items below.
+    /// </summary>
+    /// <param name="parentStore"></param>
+    public void SetNodeStore(MCTSNodeStore parentStore)
+    {
+      ParentStore = parentStore;
+      nodesStore = parentStore.Nodes.nodes;
     }
 
     public void Clear() => throw new NotImplementedException();
