@@ -259,7 +259,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       Assert(Nodes.nodes[0].N == 0, "Null node");
       Assert(Nodes.nodes[1].IsRoot, "IsRoot");
 
-      BitArray includedNodes = MCTSNodeStructUtils.BitArrayNodesInSubtree(this, ref Nodes.nodes[1], false, out _);
+      BitArray includedNodes = MCTSNodeStructUtils.BitArrayNodesInSubtree(this, ref Nodes.nodes[1], false, out _, 0, false);
 
       // Validate all nodes
       for (int i = 1; i < Nodes.nextFreeIndex; i++)

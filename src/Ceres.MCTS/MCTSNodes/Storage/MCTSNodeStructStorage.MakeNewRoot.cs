@@ -163,8 +163,13 @@ namespace Ceres.MCTS.MTCSNodes.Storage
                                                   PositionWithHistory newPriorMoves,
                                                   PositionEvalCache cacheNonRetainedNodes,
                                                   TranspositionRootsDict transpositionRoots,
-                                                  bool tryKeepTranspositionRootsMaxN)
+                                                  bool tryKeepTranspositionRootsMaxN,
+                                                  bool keepCacheItems)
     {
+      if (tryKeepTranspositionRootsMaxN)
+      {
+        throw new NotImplementedException("tryKeepTranspositionRootsMaxN");
+      }
 #if DEBUG
       tree.Store.Validate(tree.TranspositionRoots, false);
 #endif
@@ -174,6 +179,14 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       MCTSNodeStore store = tree.Store;
       Span<MCTSNodeStruct> nodes = tree.Store.Nodes.Span;
       int indexOfNewRootBeforeRewrite = newRootChild.Index.Index;
+
+      if (keepCacheItems)
+      {
+        // Remove any possible cached nodes associated with old or new root,
+        // since the move may invalidate some of their fields.
+        tree.NodeCache.Remove(new MCTSNodeStructIndex(1));
+        tree.NodeCache.Remove(newRootChild.Index);
+      }
 
       // Note that the new root is copied to the root position
       // but also left in place at its current position to maintain
@@ -193,7 +206,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 
       // Get array of included nodes, marking others as now belonging to a prior generation.
       uint numNodesUsed;
-      BitArray includedNodes = MCTSNodeStructUtils.BitArrayNodesInSubtree(store, ref newRootChild, true, out numNodesUsed, null, 0);
+      BitArray includedNodes = MCTSNodeStructUtils.BitArrayNodesInSubtree(store, ref newRootChild, true, out numNodesUsed, null, 0, !keepCacheItems);
 
       int nodesStartCount = tree.Store.Nodes.NumTotalNodes;
       int numNodes = store.Nodes.nextFreeIndex;
@@ -210,7 +223,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       //Console.WriteLine($"swap time: {elapsed}s  {nodesStartCount} --> {numNodesUsed} try delete: {numTryRemove} succeed: + {numSucceedRemove}");
 
 #if DEBUG
-      store.Validate(tree.TranspositionRoots, true);
+      store.Validate(tree.TranspositionRoots, !keepCacheItems);
 #endif
     }
 
@@ -225,7 +238,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     /// <param name="newRootChild"></param>
     /// <param name="numNodesUsed"></param>
     /// <returns></returns>
-    static BitArray IncludedNodesAfterMaterializationOfNonRetainedLinkedNodes(MCTSTree tree, ref MCTSNodeStruct newRootChild, out uint numNodesUsed)
+    static BitArray IncludedNodesAfterMaterializationOfNonRetainedLinkedNodes(MCTSTree tree, ref MCTSNodeStruct newRootChild, out uint numNodesUsed, bool clearCacheItems)
     {
       numNodesUsed = 0;
       int numNodesBeforeMaterialization = tree.Store.Nodes.NumTotalNodes;
@@ -235,7 +248,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       const float FRACTION_EXTRA_NODES = 0.07f;
       int numExtraPaddingNodesAtEnd = 1 + (int)(newRootChild.N * FRACTION_EXTRA_NODES);
 
-      BitArray includedNodes = MCTSNodeStructUtils.BitArrayNodesInSubtree(tree.Store, ref newRootChild, false, out numNodesUsed, numExtraPaddingNodesAtEnd);
+      BitArray includedNodes = MCTSNodeStructUtils.BitArrayNodesInSubtree(tree.Store, ref newRootChild, false, out numNodesUsed, numExtraPaddingNodesAtEnd, clearCacheItems);
 
       // In the rare situation where the actual number of extra nodes materialized
       // nodes exceeds our allowance of extra nodes in the BitArray,
@@ -243,7 +256,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       int numNodesAddedDuringMaterialization = MaterializeNodesWithNonRetainedTranspositionRoots(tree, includedNodes, newRootChild.Index.Index);
       if (numNodesAddedDuringMaterialization > numExtraPaddingNodesAtEnd)
       {
-        return MCTSNodeStructUtils.BitArrayNodesInSubtree(tree.Store, ref newRootChild, false, out numNodesUsed, numExtraPaddingNodesAtEnd);
+        return MCTSNodeStructUtils.BitArrayNodesInSubtree(tree.Store, ref newRootChild, false, out numNodesUsed, numExtraPaddingNodesAtEnd, false);
       }
 
       if (numNodesAddedDuringMaterialization > 0)
@@ -290,7 +303,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       int nextAvailableNodeIndex = 1;
 
       // Traverse this subtree, building a bit array of visited nodes
-      BitArray includedNodes = IncludedNodesAfterMaterializationOfNonRetainedLinkedNodes(tree, ref newRootChild, out numNodesUsed);
+      BitArray includedNodes = IncludedNodesAfterMaterializationOfNonRetainedLinkedNodes(tree, ref newRootChild, out numNodesUsed, true);
       
 
       // Possibly extract retained nodes into a cache.
@@ -442,7 +455,6 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 
       //double elapsed = (DateTime.Now - start).TotalSeconds;
       //Console.WriteLine($"rewrite time: {elapsed}s  {nodesStartCount} --> {numNodesUsed}");
-
     }
 
     private static void CopyNodeIntoRootPosition(MCTSNodeStore store, int newIndexOfNewParent, PositionWithHistory newPriorMoves)
@@ -454,8 +466,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       // Finally, make this as the root (no parent)
       store.Nodes.nodes[1].ParentIndex = default;
       store.Nodes.nodes[1].PriorMove = default;
-      store.Nodes.nodes[1].CachedInfoPtr = null;
-
+      
       ModifyChildrensParentRef(store, store.Nodes.nodes.Span, ref store.Nodes.nodes[1], new MCTSNodeStructIndex(1));
 
       // Update the prior moves
@@ -633,7 +644,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       float softmax = tree.Root.Context.ParamsSelect.PolicySoftmax;
 
       // Traverse this subtree, building a bit array of visited nodes
-      BitArray includedNodes = MCTSNodeStructUtils.BitArrayNodesInSubtree(tree.Store, ref newRootChild, false, out uint numNodesUsed);
+      BitArray includedNodes = MCTSNodeStructUtils.BitArrayNodesInSubtree(tree.Store, ref newRootChild, false, out uint numNodesUsed, 0, false);
 
       long estNumNodes = tree.Store.RootNode.N - numNodesUsed;
       const bool SUPPORT_CACHE_CONCURRENCY = false; // No need for concurrency, is read-only during play.

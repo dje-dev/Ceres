@@ -415,21 +415,31 @@ namespace Ceres.MCTS.Iteration
         //        float fracRetain = (float)newRoot.Ref.N / priorContext.Tree.Root.N;
         if (newRoot.Index == 1)
         {
-          Manager.Context.Tree.ClearNodeCache(true);
-          // Root not changing. Reuse existing store and transposition roots.
+          // Root not changing. Reuse existing store and transposition roots. No need to clear node cache.
           newTranspositionRoots = Manager.Context.Tree.TranspositionRoots;
         }
         else if (reuseMethod == ManagerTreeReuse.Method.KeepStoreSwapRoot
          && priorContext.ParamsSearch.TreeReuseSwapRootEnabled)
         {
-          Manager.Context.Tree.ClearNodeCache(false);
+          // For efficiency, keep the entries in the node cache
+          // so they may be reused in next search.
+          const bool RETAIN_NODE_CACHE = true;
+          if (!RETAIN_NODE_CACHE)
+          {
+            Manager.Context.Tree.ClearNodeCache(false);
+          }
           newTranspositionRoots = Manager.Context.Tree.TranspositionRoots;
           MCTSNodeStructStorage.DoMakeChildNewRootSwapRoot(Manager.Context.Tree, ref newRoot.StructRef, newPositionAndMoves,
                                                            reusePositionCache, newTranspositionRoots,
-                                                           priorContext.ParamsSearch.Execution.TranspositionMaximizeRootN);
+                                                           priorContext.ParamsSearch.Execution.TranspositionMaximizeRootN,
+                                                           RETAIN_NODE_CACHE);
         }
         else
         {
+          // TODO: We could add logic (similar to swap root case above)
+          //       so the node cache would not be flushed, instead
+          //       the node cache information would be updated (e.g. the field with Index).
+          //       However this might be slightly involved, and performance gain would probably be modest.
           Manager.Context.Tree.ClearNodeCache(false);
 
           // Create a new dictionary to recieve the new transposition roots
