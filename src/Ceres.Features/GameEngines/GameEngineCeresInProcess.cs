@@ -323,6 +323,19 @@ namespace Ceres.Features.GameEngines
       return result;
     }
 
+    public override void Warmup(int? knownMaxNumNodes = null)
+    { 
+      PrepareEvaluators();
+    }
+
+    void PrepareEvaluators()
+    {
+      if (evaluators == null)
+      {
+        evaluators = new NNEvaluatorSet(EvaluatorDef, SearchParams.Execution.FlowDirectOverlapped, EvaluatorDefSecondary);
+        evaluators.Warmup(false);
+      }
+    }
 
     /// <summary>
     /// Launches search, possibly as continuation from last search.
@@ -347,16 +360,11 @@ namespace Ceres.Features.GameEngines
 
       if (LastSearch == null)
       {
-        if (evaluators == null)
-        {
-          evaluators = new NNEvaluatorSet(EvaluatorDef, SearchParams.Execution.FlowDirectOverlapped, EvaluatorDefSecondary);
-          evaluators.Warmup(false);
-        }
-
+        PrepareEvaluators();
         Search.Search(evaluators, ChildSelectParams, SearchParams, GameLimitManager,
                       reuseOtherContextForEvaluatedNodes,
                       curPositionAndMoves, searchLimit, verbose, lastSearchStartTime,
-                      gameMoveHistory, callback, null, false, isFirstMoveOfGame,
+                      gameMoveHistory, callback, null, null, false, isFirstMoveOfGame,
                       MoveImmediateIfOnlyOneMove);
       }
       else
