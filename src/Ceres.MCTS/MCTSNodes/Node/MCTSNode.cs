@@ -429,7 +429,7 @@ namespace Ceres.MCTS.MTCSNodes
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public ref MCTSNodeStruct ChildNodeAtIndexRef(int childIndex)
     {
-      Debug.Assert(childIndex < NumPolicyMoves);
+      Debug.Assert(childIndex < NumChildrenExpanded);
       Debug.Assert(ChildStartIndex > 0); // child at slot 0 is reserved for null
 
       ref MCTSNodeStructChild childRef = ref ChildAtIndexRef(childIndex);
@@ -443,7 +443,7 @@ namespace Ceres.MCTS.MTCSNodes
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public ref MCTSNodeStructChild ChildAtIndexRef(int childIndex)
     {
-      Debug.Assert(childIndex < NumPolicyMoves);
+      Debug.Assert(childIndex < NumChildrenExpanded);
       Debug.Assert(ChildStartIndex > 0); // child at slot 0 is reserved for null
 
       return ref Context.Tree.Store.Children.childIndices[ChildStartIndex + childIndex];
