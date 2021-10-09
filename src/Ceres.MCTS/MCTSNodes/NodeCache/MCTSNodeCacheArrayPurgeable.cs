@@ -84,16 +84,16 @@ namespace Ceres.MCTS.NodeCache
     /// <param name="maxCacheSize"></param>
     public MCTSNodeCacheArrayPurgeable(MCTSNodeStore parentStore, int maxCacheSize)
     {
-      lengthItem = (int) (new IntPtr(Unsafe.AsPointer(ref nodes[1])).ToInt64() 
-                        - new IntPtr(Unsafe.AsPointer(ref nodes[0])).ToInt64()); 
-      const int LOH_THRESHOLD_SIZE_BYTES = 110_000;
-      int minCacheSize = (LOH_THRESHOLD_SIZE_BYTES / lengthItem);
-
-      maxCacheSize = Math.Max(minCacheSize, maxCacheSize);
       MaxCacheSize = maxCacheSize;
-
       ParentStore = parentStore;
       nodesStore = parentStore.Nodes.nodes;
+      nodes = new MCTSNodeInfo[maxCacheSize];
+      cachedNodesIndices = new int[maxCacheSize];
+      pruneSequenceNums = GC.AllocateUninitializedArray<int>(maxCacheSize);
+      ptrFirstItem = Unsafe.AsPointer(ref nodes[0]);
+
+      lengthItem = (int) (new IntPtr(Unsafe.AsPointer(ref nodes[1])).ToInt64() 
+                        - new IntPtr(Unsafe.AsPointer(ref nodes[0])).ToInt64());
 
       // N.B. The elements of the nodes array must remain 
       //      at fixed location in memory (since raw pointers refer to them).
@@ -103,14 +103,12 @@ namespace Ceres.MCTS.NodeCache
 
       // Therefore allocate using ordinary new operator and rely upon fact that
       // by default objects on LOH are not compacted/moved.
-
-      nodes = new MCTSNodeInfo[maxCacheSize];
-      
-      cachedNodesIndices = new int[maxCacheSize];
-
-      pruneSequenceNums = GC.AllocateUninitializedArray<int>(maxCacheSize);
-
-      ptrFirstItem = Unsafe.AsPointer(ref nodes[0]);
+      const int LOH_THRESHOLD_SIZE_BYTES = 110_000;
+      int minCacheSize = (LOH_THRESHOLD_SIZE_BYTES / lengthItem);
+      if (MaxCacheSize < minCacheSize)
+      {
+        throw new Exception("Node cache size too small.");
+      }
     }
 
 
