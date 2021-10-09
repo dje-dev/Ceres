@@ -254,7 +254,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       MCTSNodeStructIndex rootNodeIndex = AllocateNext();
 
       // Initialize fields
-      nodes[rootNodeIndex.Index].Initialize(default, (FP16)1.0, default);
+      nodes[rootNodeIndex.Index].Initialize(default, 0, (FP16)1.0, default);
     }
 
 

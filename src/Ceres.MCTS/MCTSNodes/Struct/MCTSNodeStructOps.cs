@@ -133,7 +133,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       ref MCTSNodeStruct childNodeRef = ref store.Nodes.nodes[childNodeIndex.Index];
 
       // Create new wrapper object and use it to initialize fields
-      childNodeRef.Initialize(new MCTSNodeStructIndex(Index.Index), thisChildRef.p, thisChildRef.Move);
+      childNodeRef.Initialize(new MCTSNodeStructIndex(Index.Index), childIndex, thisChildRef.p, thisChildRef.Move);
 
       // Modify child entry to refer to this new child
       // N.B: It is essential to only swap out the child index here
@@ -985,33 +985,13 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     }
 
 
-
     #endregion
 
     /// <summary>
     /// Returns the index of this node in the array of parent's children.
     /// </summary>
-    public int IndexInParent
-    {
-      get
-      {
-        Debug.Assert(!IsRoot);
+    public int IndexInParent => miscFields.IndexInParent;
 
-        ref readonly MCTSNodeStruct parent = ref ParentRef;
-        int ourIndex = Index.Index;
-
-        Span<MCTSNodeStructChild> children = parent.Children;
-        for (int i = 0; i < parent.NumChildrenExpanded; i++)
-        {
-          if (children[i].ChildIndex.Index == ourIndex)
-          {
-            return i;
-          }
-        }
-
-        throw new Exception("Internal error: IndexInParent not found");
-      }
-    }
 
     /// <summary>
     /// Computes the power mean over all children Q values using specified coefficient.

@@ -616,7 +616,7 @@ namespace Ceres.MCTS.MTCSNodes
     /// <summary>
     /// Returns the index of this child within the parent's child array.
     /// </summary>
-    public int IndexInParentsChildren => InfoRef.IndexInParentsChildren;
+    public int IndexInParentsChildren => StructRef.IndexInParent;
 
 #endregion
 

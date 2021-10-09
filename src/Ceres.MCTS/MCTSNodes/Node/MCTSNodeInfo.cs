@@ -129,7 +129,6 @@ namespace Ceres.MCTS.MTCSNodes
 
       startedAsCacheOnlyNode = false;
       cachedDepth = -1;
-      cachedIndexInParent = -1;
       ActionType = NodeActionType.NotInitialized;
       PendingTranspositionV = float.NaN;
       PendingTranspositionM = float.NaN;
@@ -458,42 +457,6 @@ namespace Ceres.MCTS.MTCSNodes
 
     #endregion
 
-    #region Helpers
-
-    short cachedIndexInParent;
-
-    /// <summary>
-    /// Returns the index of this child within the parent's child array.
-    /// </summary>
-    public short IndexInParentsChildren
-    {
-      get
-      {
-        if (cachedIndexInParent != -1)
-        {
-          return cachedIndexInParent;
-        }
-
-        Debug.Assert(!IsRoot);
-
-        int thisIndex = this.Index;
-
-        MCTSNode parent = Parent;
-
-        Span<MCTSNodeStructChild> childSpan = Store.Children.SpanForNode(new MCTSNodeStructIndex(parent.Index));
-        for (int i = 0; i < parent.NumChildrenExpanded; i++)
-        {
-          if (childSpan[i].ChildIndex.Index == thisIndex)
-          {
-            return cachedIndexInParent = (short)i;
-          }
-        }
-      
-        throw new Exception("Not found");
-      }
-    }
-
-    #endregion
 
     internal bool startedAsCacheOnlyNode;
 

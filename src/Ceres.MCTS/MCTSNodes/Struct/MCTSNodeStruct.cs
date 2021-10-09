@@ -190,11 +190,13 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// NOTE: Try to keep changes synchronized with MCTSNodeStructFields.ResetExpandedState.
     /// </summary>
     /// <param name="parentIndex"></param>
+    /// <param name="indexInParent"></param>
     /// <param name="p"></param>
     /// <param name="priorMove"></param>
-    public void Initialize(MCTSNodeStructIndex parentIndex, FP16 p, EncodedMove priorMove)
+    public void Initialize(MCTSNodeStructIndex parentIndex, int indexInParent,  FP16 p, EncodedMove priorMove)
     {
       ParentIndex = parentIndex;
+      miscFields.IndexInParent = (byte)indexInParent;
       P = p;
       PriorMove = priorMove;
 

@@ -36,7 +36,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     const int BIT_LENGTH_IS_OLD_GENERATION = 1;
     const int BIT_LENGTH_TRANSPOSITION_UNLINK_INPROGRESS = 1;
     const int BIT_LENGTH_IS_TRANSPOSITION_ROOT = 1;
-    const int BIT_LENGTH_UNUSED = 18;
+    const int BIT_LENGTH_INDEX_IN_PARENT = 6;
+    const int BIT_LENGTH_UNUSED = 12;
 
     const int BIT_INDEX_TERMINAL = 0;
     const int BIT_INDEX_DRAW_KNOWN_EXIST = BIT_INDEX_TERMINAL + BIT_LENGTH_TERMINAL;
@@ -44,6 +45,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     const int BIT_INDEX_IS_OLD_GENERATION = BIT_INDEX_M_POSITION + BIT_LENGTH_M_POSITION;
     const int BIT_INDEX_TRANSPOSITION_UNLINK_INPROGRESS = BIT_INDEX_IS_OLD_GENERATION + BIT_LENGTH_IS_OLD_GENERATION;
     const int BIT_INDEX_IS_TRANSPOSITION_ROOT = BIT_INDEX_TRANSPOSITION_UNLINK_INPROGRESS + BIT_LENGTH_TRANSPOSITION_UNLINK_INPROGRESS;
+    const int BIT_INDEX_INDEX_IN_PARENT = BIT_INDEX_IS_TRANSPOSITION_ROOT + BIT_INDEX_IS_TRANSPOSITION_ROOT;
 
 
     public void Clear() => bits = 0;
@@ -165,6 +167,26 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       set
       {
         BitUtils.SetRange(ref bits, BIT_INDEX_TRANSPOSITION_UNLINK_INPROGRESS, BIT_LENGTH_TRANSPOSITION_UNLINK_INPROGRESS, value ? (uint)1 : (uint)0);
+      }
+    }
+
+
+    /// <summary>
+    /// Index of the position in the child's policy array.
+    /// </summary>
+    internal byte IndexInParent
+    {
+      [MethodImpl(MethodImplOptions.AggressiveInlining)]
+      get
+      {
+        return (byte)BitUtils.ExtractRange(bits, BIT_INDEX_INDEX_IN_PARENT, BIT_LENGTH_INDEX_IN_PARENT);
+      }
+
+      [MethodImpl(MethodImplOptions.AggressiveInlining)]
+      set
+      {
+        Debug.Assert(value < 2 << BIT_LENGTH_INDEX_IN_PARENT);
+        BitUtils.SetRange(ref bits, BIT_INDEX_INDEX_IN_PARENT, BIT_LENGTH_INDEX_IN_PARENT, (uint)value);
       }
     }
 
