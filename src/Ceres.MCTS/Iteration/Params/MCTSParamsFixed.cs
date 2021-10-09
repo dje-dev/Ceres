@@ -63,9 +63,10 @@ namespace Ceres.MCTS.Params
     /// <summary>
     /// If the IMCTSNodeCache contents should be preserved and 
     /// subsequently reused after doing tree reuse with swap root method.
-    /// This seems safe, but yields only very modest speedup in search.
+    /// However the speedup is negligible, and there appears to be
+    /// correctness problem when caching of Parent MCTSNodeInfo is enabled.
     /// </summary>
-    public const bool NEW_ROOT_SWAP_RETAIN_NODE_CACHE = true;
+    public const bool NEW_ROOT_SWAP_RETAIN_NODE_CACHE = false;
 
     /// <summary>
     /// If enabled the largest possible search tree is about 2 billion nodes
