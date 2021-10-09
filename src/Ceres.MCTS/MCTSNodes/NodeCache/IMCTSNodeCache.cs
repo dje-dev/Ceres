@@ -14,6 +14,7 @@
 #region Using directives
 
 
+using Ceres.MCTS.Iteration;
 using Ceres.MCTS.LeafExpansion;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Storage;
@@ -38,10 +39,10 @@ namespace Ceres.MCTS.NodeCache
     MCTSNodeStore ParentStore { get; }
 
     /// <summary>
-    /// Sets/resets the node store to which the cached items below.
+    /// Sets/resets the node context to which the cached items belong.
     /// </summary>
-    /// <param name="parentStore"></param>
-    void SetNodeStore(MCTSNodeStore parentStore);
+    /// <param name="context"></param>
+    void SetContext(MCTSIterator context);
 
     /// <summary>
     /// Adds a specified node to the cache.

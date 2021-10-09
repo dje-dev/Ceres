@@ -278,7 +278,7 @@ namespace Ceres.MCTS.Iteration
 
       int estimatedNodesBound = store.Nodes.NumUsedNodes + estimatedNumSearchNodes;
 
-      Tree = new MCTSTree(store, this, maxNodesBound, estimatedNodesBound, positionCache, reuseNodeCache);
+      Tree = new MCTSTree(store, this, /*maxNodesBound, */estimatedNodesBound, positionCache, reuseNodeCache);
 
       if (ParamsSearch.Execution.TranspositionMode != TranspositionMode.None)
       {

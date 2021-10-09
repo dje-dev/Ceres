@@ -22,6 +22,7 @@ using System.Threading.Tasks;
 using Ceres.Base.Benchmarking;
 using Ceres.Base.DataTypes;
 using Ceres.Base.OperatingSystem;
+using Ceres.MCTS.Iteration;
 using Ceres.MCTS.LeafExpansion;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Storage;
@@ -89,7 +90,8 @@ namespace Ceres.MCTS.NodeCache
       maxCacheSize = Math.Max(minCacheSize, maxCacheSize);
       MaxCacheSize = maxCacheSize;
 
-      SetNodeStore(parentStore);
+      ParentStore = parentStore;
+      nodesStore = parentStore.Nodes.nodes;
 
       // N.B. The elements of the nodes array must remain 
       //      at fixed location in memory (since raw pointers refer to them).
@@ -111,14 +113,27 @@ namespace Ceres.MCTS.NodeCache
                         - new IntPtr(Unsafe.AsPointer(ref nodes[0])).ToInt64());
     }
 
+
     /// <summary>
-    /// Sets/resets the node store to which the cached items below.
+    /// Sets/resets the node context to which the cached items belong.
     /// </summary>
-    /// <param name="parentStore"></param>
-    public void SetNodeStore(MCTSNodeStore parentStore)
+    /// <param name="context"></param>
+    public void SetContext(MCTSIterator context)
     {
-      ParentStore = parentStore;
-      nodesStore = parentStore.Nodes.nodes;
+      ParentStore = context.Tree.Store;
+      nodesStore = ParentStore.Nodes.nodes;
+      MCTSTree tree = context.Tree;
+
+      for(int i=0; i<cachedNodesIndices.Length; i++)
+      {
+        if (cachedNodesIndices[i] != 0)
+        {
+          ref MCTSNodeInfo info = ref nodes[i];
+          info.Context = context;
+          info.Tree = tree;
+          info.Store = ParentStore;
+        }
+      }
     }
 
     public void Clear() => throw new NotImplementedException();
@@ -164,6 +179,11 @@ namespace Ceres.MCTS.NodeCache
     /// <returns></returns>
     public void* Add(MCTSNodeStructIndex node)
     {
+#if DEBUG
+      // Disabled, too slow.
+      ValidateState();
+#endif
+
       int numTries = 0;
 
       // Make local copy of the entry we are going to try
@@ -237,7 +257,7 @@ namespace Ceres.MCTS.NodeCache
         for (int i = 0; i < nodes.Length; i++)
         {
           // TODO: the long is cast to int, could we possibly overflow? make long?
-          if (nodes[i].IsInitialized)
+          if (cachedNodesIndices[i] != 0)
           {
             pruneSequenceNums[count++] = (int)nodes[i].LastAccessedSequenceCounter;
           }
@@ -258,16 +278,17 @@ namespace Ceres.MCTS.NodeCache
         for (int i = 1; i < maxEntries; i++)
         {
           ref MCTSNodeInfo node = ref nodes[i];
-          if (node.IsInitialized && node.LastAccessedSequenceCounter < cutoff
+          if (cachedNodesIndices[i] != 0 && node.LastAccessedSequenceCounter < cutoff
              && !node.IsInFlight // never prune active node in flight
              )
           {
             MCTSNodeStructIndex nodeIndex = new MCTSNodeStructIndex(node.Index);
             nodesStore[nodeIndex.Index].CachedInfoPtr = null;
-            cachedNodesIndices[i] = 0;
-            nodes[i].SetUninitialized();
 
+            nodes[i].SetUninitialized();
+            cachedNodesIndices[i] = 0;
             numInUse--;
+
           }
         }
         pruneCount++;
@@ -299,23 +320,42 @@ namespace Ceres.MCTS.NodeCache
     /// <summary>
     /// Clears table entries and possibly resets back to null the CacheIndex for every node.
     /// </summary>
-    /// <param name="resetNodeCacheIndex"></param>
-    public void ResetCache(bool resetNodeCacheIndex)
+    /// <param name="resetNodeCacheInfoPtr"></param>
+    public void ResetCache(bool resetNodeCacheInfoPtr)
     {
-      if (resetNodeCacheIndex)
+      if (resetNodeCacheInfoPtr)
       {
         for (int i = 0; i < nodes.Length; i++)
         {
           if (cachedNodesIndices[i] != 0)
           {
-            nodesStore[nodes[i].index.Index].CachedInfoPtr = null;
+            ResetItemAtIndex(i, resetNodeCacheInfoPtr);
           }
         }
       }
+      else
+      {
+        Array.Clear(cachedNodesIndices, 0, cachedNodesIndices.Length);
+      }
 
-      Array.Clear(cachedNodesIndices, 0, nodes.Length);
       numInUse = 0;
       searchFreeEntryNextIndex = 0;
+    }
+
+
+    void ResetItemAtIndex(int index, bool resetNodeCacheInfoPtr)
+    {
+      cachedNodesIndices[index] = 0;
+
+      // Clear fields with object references
+      // so those objects are not held live.
+      nodes[index].ClearObjectReferences();
+
+      if (resetNodeCacheInfoPtr)
+      {
+        // Update the node store itself not to point back to this pointer
+        nodesStore[nodes[index].index.Index].CachedInfoPtr = null;
+      }
     }
 
 
@@ -340,11 +380,8 @@ namespace Ceres.MCTS.NodeCache
         int indexItem = (int)(bytesDiff / lengthItem);
 
         Debug.Assert(cachedNodesIndices[indexItem] == nodeIndex.Index);
-        cachedNodesIndices[indexItem] = 0;
 
-        // Clear the cache item in the node struct
-        storeItem.CachedInfoPtr = null;
-
+        ResetItemAtIndex(indexItem, true);
  
         numInUse--;
       }
@@ -361,7 +398,7 @@ namespace Ceres.MCTS.NodeCache
     }
 
 
-    #region Diagnostic methods
+#region Diagnostic methods
 
     /// <summary>
     /// Verifies that the numInUse field correctly reflects the state of the cache.
@@ -371,19 +408,20 @@ namespace Ceres.MCTS.NodeCache
       int numUsed = 0;
       for (int i = 0; i < nodes.Length; i++)
       {
-        if (nodes[i].IsInitialized)
+        if (cachedNodesIndices[i] != 0)
         {
           numUsed++;
         }
       }
 
-      if (numUsed != numInUse)
+      // Due to concurrecy, the number of nodes now present may be somewhat higher.
+      if (numInUse - numUsed > 2000)
       {
         throw new Exception("Internal error: numInUse incorrect.");
       }
     }
 
-    #endregion
+#endregion
 
   }
 }

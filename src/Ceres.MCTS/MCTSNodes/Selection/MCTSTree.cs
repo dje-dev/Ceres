@@ -25,7 +25,7 @@ using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
 using Ceres.Chess.PositionEvalCaching;
 using Ceres.Chess.Positions;
-
+using Ceres.Chess.UserSettings;
 using Ceres.MCTS.Evaluators;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.MTCSNodes;
@@ -78,7 +78,6 @@ namespace Ceres.MCTS.LeafExpansion
 
     MemoryBufferOS<MCTSNodeStruct> nodes;
 
-    public readonly int MaxNodesBound;
     public readonly int EstimatedNumNodes;
 
     /// <summary>
@@ -93,10 +92,9 @@ namespace Ceres.MCTS.LeafExpansion
     /// </summary>
     /// <param name="store"></param>
     /// <param name="context"></param>
-    /// <param name="maxNodesBound"></param>
     /// <param name="positionCache"></param>
     public MCTSTree(MCTSNodeStore store, MCTSIterator context,
-                    int maxNodesBound, int estimatedNumNodes,
+                    int estimatedNumNodes,
                     PositionEvalCache positionCache, IMCTSNodeCache reuseNodeCache)
     {
       if (context.ParamsSearch.DrawByRepetitionLookbackPlies > MAX_LENGTH_POS_HISTORY)
@@ -107,7 +105,6 @@ namespace Ceres.MCTS.LeafExpansion
       Store = store;
       Context = context;
       PositionCache = positionCache;
-      MaxNodesBound = maxNodesBound;
       EstimatedNumNodes = estimatedNumNodes;
 
       nodes = store.Nodes.nodes;
@@ -137,12 +134,16 @@ namespace Ceres.MCTS.LeafExpansion
     {
       int configuredCacheSize = Context.ParamsSearch.Execution.NodeAnnotationCacheSize;
 
+#if NOT
+      TODO: restore, find some way of knowing max size
       // If all nodes fit within configured cache size, use a single cache.
       if (MaxNodesBound < configuredCacheSize)
       {
         return new MCTSNodeCacheArrayPurgeable(this, MaxNodesBound + 2000);
       }
+#endif
 
+#if NOT
       // Cache must be large enough to hold the full "working set" of nodes during leaf selection
       // (all selected leafs and their antecedents plus anciallary nodes such as associated transposition roots).
       const int ANNOTATION_MIN_CACHE_SIZE = 50_000;
@@ -150,7 +151,7 @@ namespace Ceres.MCTS.LeafExpansion
       {
         throw new Exception($"NODE_ANNOTATION_CACHE_SIZE is below minimum size of {ANNOTATION_MIN_CACHE_SIZE}");
       }
-
+#endif
 #if NOT
       TODO: possibly restore this code, after making sure MCTSNodeCacheArrayFixed is up-to-date
             Alternately maybe not necessary, MCTSNodeCacheArrayPurgeable may already be sufficiently or more efficient.
@@ -163,7 +164,13 @@ namespace Ceres.MCTS.LeafExpansion
       else
       {
 #endif
-      return  new MCTSNodeCacheArrayPurgeableSet(this, MaxNodesBound,  EstimatedNumNodes);
+      int numCachedNodes = configuredCacheSize;
+      int? maxTreeNodes = CeresUserSettingsManager.Settings.MaxTreeNodes;
+      if (maxTreeNodes.HasValue && maxTreeNodes.Value < numCachedNodes)
+      {
+        numCachedNodes = maxTreeNodes.Value;
+      }
+      return  new MCTSNodeCacheArrayPurgeableSet(Store, numCachedNodes,  EstimatedNumNodes);
     }
 
     public void PossiblyPruneCache() => NodeCache.PossiblyPruneCache(MCTSManager.ThreadSearchContext.Tree.Store);

@@ -19,6 +19,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Ceres.Base.Math;
 using Ceres.Base.OperatingSystem;
+using Ceres.MCTS.Iteration;
 using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.MTCSNodes.Struct;
 
@@ -77,7 +78,22 @@ namespace Ceres.MCTS.NodeCache
 
       // Compute number of subcaches, increasing as a function of estimates search size
       // (because degree of concurrency rises with size of batches and search.
-      NumSubcaches = (int)StatUtils.Bounded(4 * MathF.Log2((float)estimatedNumNodesInSearch / 1000), 4, 32);
+      if (cacheSize >1_000_000)
+      {
+        NumSubcaches = 32;
+      }
+      else if (cacheSize > 200_000)
+      {
+        NumSubcaches = 16;
+      }
+      else if (cacheSize > 50_000)
+      {
+        NumSubcaches = 4;
+      }
+      else
+      {
+        NumSubcaches = 2;
+      }
 
       // Initialize the sub-caches
       subCaches = new MCTSNodeCacheArrayPurgeable[NumSubcaches];
@@ -92,19 +108,17 @@ namespace Ceres.MCTS.NodeCache
 
 
     /// <summary>
-    /// Sets/resets the node store to which the cached items below.
+    /// Sets/resets the node context to which the cached items belong.
     /// </summary>
-    /// <param name="parentStore"></param>
-    public void SetNodeStore(MCTSNodeStore parentStore)
+    /// <param name="context"></param>
+    public void SetContext(MCTSIterator context)
     {
-      ParentStore = parentStore;
-      nodes = parentStore.Nodes.nodes;
+      ParentStore = context.Tree.Store;
+      nodes = ParentStore.Nodes.nodes;
 
-      foreach (MCTSNodeCacheArrayPurgeable subCache in subCaches)
-      {
-        subCache.SetNodeStore(parentStore);
-      }
+      Parallel.ForEach(subCaches, subCache => subCache.SetContext(context));
     }
+
 
     /// <summary>
     /// Adds a specified node to the cache.

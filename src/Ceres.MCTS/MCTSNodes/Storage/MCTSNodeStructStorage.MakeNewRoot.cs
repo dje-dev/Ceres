@@ -79,8 +79,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       // Nothing to do if the requested node is already currently the root
       if (newRootChild.Index == tree.Store.RootNode.Index)
       {
-        // Nothing changing in the tree, just flush the cache references
-        tree.Store.ClearAllCacheIndices();
+        // Nothing changing in the tree, nothing to do.
       }
       else
       {
@@ -180,13 +179,10 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       Span<MCTSNodeStruct> nodes = tree.Store.Nodes.Span;
       int indexOfNewRootBeforeRewrite = newRootChild.Index.Index;
 
-      if (keepCacheItems)
-      {
-        // Remove any possible cached nodes associated with old or new root,
-        // since the move may invalidate some of their fields.
-        tree.NodeCache.Remove(new MCTSNodeStructIndex(1));
-        tree.NodeCache.Remove(newRootChild.Index);
-      }
+      // Remove any possible cached nodes associated with old or new root,
+      // since they might be reused and the move may invalidate some of their fields.
+      tree.NodeCache.Remove(new MCTSNodeStructIndex(1));
+      tree.NodeCache.Remove(newRootChild.Index);
 
       // Note that the new root is copied to the root position
       // but also left in place at its current position to maintain

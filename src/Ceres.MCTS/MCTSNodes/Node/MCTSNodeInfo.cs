@@ -46,47 +46,64 @@ namespace Ceres.MCTS.MTCSNodes
       IEquatable<MCTSNodeInfo>,
       IEqualityComparer<MCTSNodeInfo>
   {
-    /// <summary>
-    /// Pointer directly to this structure
-    /// </summary>
-    internal MCTSNodeStruct* ptr { get; private set; }
-
-    /// <summary>
-    /// Search context within which this node exists
-    /// </summary>
-    public MCTSIterator Context { get; private set; }
 
     /// <summary>
     /// Index of this structure within the array
     /// </summary>
     internal MCTSNodeStructIndex index;
 
-    public enum NodeActionType : short { NotInitialized, None, MCTSApply, CacheOnly };
 
-    public NodeActionType ActionType;
+    /// <summary>
+    /// Pointer directly to this structure
+    /// </summary>
+    internal MCTSNodeStruct* ptr { get; private set; }
+
+
+    #region Object references
+
+    // N.B. These object references need special treatment.
+    //      Care needs to be taken to keep them up to date
+    //      with the active search, and clear them when done.
+    //      Additions/changes to these fields also need 
+    //      coordianted code changes in IMCTSNodeCache (SetContext).
+
+    /// <summary>
+    /// Search context within which this node exists
+    /// </summary>
+    public MCTSIterator Context { get; internal set; }
 
     /// <summary>
     /// Shortcut directly to associated MCTSTree.
     /// </summary>
-    public MCTSTree Tree { get;  private set; }
+    public MCTSTree Tree { get; internal set; }
 
     /// <summary>
     /// Shortcut directly to associated MCTSNodeStore.
     /// </summary>
-    public MCTSNodeStore Store { get; private set; }
+    public MCTSNodeStore Store { get; internal set; }
 
-    /// <summary>
-    /// If the node has been initialized.
-    /// </summary>
-    public bool IsInitialized => ptr != null;
 
-    public void SetUninitialized()
+    public void ClearObjectReferences()
     {
-      ptr = null;
       Context = null;
       Tree = null;
       Store = null;
     }
+
+    public void SetUninitialized()
+    {
+      ptr = null;
+      index = default;
+      parent = default;
+      ClearObjectReferences();
+    }
+
+    #endregion
+
+
+    public enum NodeActionType : short { NotInitialized, None, MCTSApply, CacheOnly };
+
+    public NodeActionType ActionType;
 
 
     /// <summary>

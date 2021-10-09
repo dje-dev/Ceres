@@ -125,6 +125,7 @@ namespace Ceres.MCTS.Iteration
                        List<GameMoveStat> gameMoveHistory,
                        MCTSManager.MCTSProgressCallback progressCallback = null,
                        PositionEvalCache positionEvalCache = null,
+                       IMCTSNodeCache reuseNodeCache = null,
                        bool possiblyUsePositionCache = false,
                        bool isFirstMoveOfGame = false,
                        bool moveImmediateIfOnlyOneMove = false)
@@ -177,9 +178,14 @@ namespace Ceres.MCTS.Iteration
                                                           paramsSearch, limitManager,
                                                           gameMoveHistory, isFirstMoveOfGame);
 
-      Manager = new MCTSManager(store, reuseOtherContextForEvaluatedNodes, positionEvalCache, null, null,
+      Manager = new MCTSManager(store, reuseOtherContextForEvaluatedNodes, positionEvalCache, reuseNodeCache, null,
                                 nnEvaluators, paramsSearch, paramsSelect, searchLimitToUse,
                                 limitManager, startTime, gameMoveHistory, isFirstMoveOfGame);
+      
+      MCTSIterator context = Manager.Context;
+
+      reuseNodeCache?.ResetCache(false);
+      reuseNodeCache?.SetContext(context);
 
       using (new SearchContextExecutionBlock(Manager.Context))
       {
@@ -368,6 +374,7 @@ namespace Ceres.MCTS.Iteration
             }
           }
 #endif
+          priorContext.Tree.ClearNodeCache(false);
 
           // We decided not to (or couldn't find) that path in the existing tree.
           // First immediately release the prior store to allow memory reclamation.
@@ -377,7 +384,8 @@ namespace Ceres.MCTS.Iteration
           Search(Manager.Context.NNEvaluators, Manager.Context.ParamsSelect,
                  Manager.Context.ParamsSearch, Manager.LimitManager,
                  reuseOtherContextForEvaluatedNodes, newPositionAndMoves, searchLimit, verbose,
-                 startTime, gameMoveHistory, progressCallback, positionEvalCache, possiblyUsePositionCache, 
+                 startTime, gameMoveHistory, progressCallback, positionEvalCache, 
+                 priorContext.Tree.NodeCache, possiblyUsePositionCache, 
                  isFirstMoveOfGame, moveImmediateIfOnlyOneMove);
         }
       }
@@ -423,8 +431,7 @@ namespace Ceres.MCTS.Iteration
         {
           // For efficiency, keep the entries in the node cache
           // so they may be reused in next search.
-          const bool RETAIN_NODE_CACHE = true;
-          if (!RETAIN_NODE_CACHE)
+          if (!MCTSParamsFixed.NEW_ROOT_SWAP_RETAIN_NODE_CACHE)
           {
             Manager.Context.Tree.ClearNodeCache(false);
           }
@@ -432,7 +439,7 @@ namespace Ceres.MCTS.Iteration
           MCTSNodeStructStorage.DoMakeChildNewRootSwapRoot(Manager.Context.Tree, ref newRoot.StructRef, newPositionAndMoves,
                                                            reusePositionCache, newTranspositionRoots,
                                                            priorContext.ParamsSearch.Execution.TranspositionMaximizeRootN,
-                                                           RETAIN_NODE_CACHE);
+                                                           MCTSParamsFixed.NEW_ROOT_SWAP_RETAIN_NODE_CACHE);
         }
         else
         {
@@ -465,6 +472,8 @@ namespace Ceres.MCTS.Iteration
                                 searchLimitTargetAdjusted, Manager.LimitManager,
                                 startTime, gameMoveHistory, isFirstMoveOfGame: isFirstMoveOfGame);
       Manager.Context.ContemptManager = priorContext.ContemptManager;
+
+      Manager.Context.Tree.NodeCache.SetContext(Manager.Context);
 
       (BestMove, TimingInfo) = MCTSManager.Search(Manager, verbose, progressCallback, 
                                                   possiblyUsePositionCache, moveImmediateIfOnlyOneMove);
