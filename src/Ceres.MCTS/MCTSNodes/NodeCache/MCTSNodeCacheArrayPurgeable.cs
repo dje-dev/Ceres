@@ -84,8 +84,10 @@ namespace Ceres.MCTS.NodeCache
     /// <param name="maxCacheSize"></param>
     public MCTSNodeCacheArrayPurgeable(MCTSNodeStore parentStore, int maxCacheSize)
     {
+      lengthItem = (int) (new IntPtr(Unsafe.AsPointer(ref nodes[1])).ToInt64() 
+                        - new IntPtr(Unsafe.AsPointer(ref nodes[0])).ToInt64()); 
       const int LOH_THRESHOLD_SIZE_BYTES = 110_000;
-      int minCacheSize = (LOH_THRESHOLD_SIZE_BYTES / Marshal.SizeOf<MCTSNodeInfo>());
+      int minCacheSize = (LOH_THRESHOLD_SIZE_BYTES / lengthItem);
 
       maxCacheSize = Math.Max(minCacheSize, maxCacheSize);
       MaxCacheSize = maxCacheSize;
@@ -109,8 +111,6 @@ namespace Ceres.MCTS.NodeCache
       pruneSequenceNums = GC.AllocateUninitializedArray<int>(maxCacheSize);
 
       ptrFirstItem = Unsafe.AsPointer(ref nodes[0]);
-      lengthItem = (int) (new IntPtr(Unsafe.AsPointer(ref nodes[1])).ToInt64() 
-                        - new IntPtr(Unsafe.AsPointer(ref nodes[0])).ToInt64());
     }
 
 
