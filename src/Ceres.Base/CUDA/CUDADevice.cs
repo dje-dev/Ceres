@@ -12,13 +12,13 @@
 
 #region Using directives
 
+using ManagedCuda;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Threading;
-using ManagedCuda;
 
 #endregion
 
@@ -72,9 +72,15 @@ namespace Ceres.Base.CUDA
       Context = new CudaContext(gpuID, true);
     }
 
+    [ThreadStatic] static CudaContext currentContext;
+
     public void SetCurrent()
     {
-      Context.SetCurrent();
+     if (!object.ReferenceEquals(currentContext, Context))
+      {
+        Context.SetCurrent();
+        currentContext = Context;
+      }
     }
 
     #region Kernel loading
