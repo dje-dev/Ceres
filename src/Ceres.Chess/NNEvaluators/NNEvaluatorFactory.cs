@@ -103,7 +103,8 @@ namespace Ceres.Chess.NNEvaluators
       }
     }
 
-    static NNEvaluator Singleton(NNEvaluatorNetDef netDef, NNEvaluatorDeviceDef deviceDef, NNEvaluator referenceEvaluator)
+    static NNEvaluator Singleton(NNEvaluatorNetDef netDef, NNEvaluatorDeviceDef deviceDef, 
+                                 NNEvaluator referenceEvaluator, int referenceEvaluatorIndex = 0)
     {
       NNEvaluator ret = null;
 
@@ -144,7 +145,7 @@ namespace Ceres.Chess.NNEvaluators
               }
               else if (referenceEvaluator is NNEvaluatorSplit)
               {
-                referenceEvaluatorCast = ((NNEvaluatorSplit)referenceEvaluator).Evaluators[deviceDef.DeviceIndex] as NNEvaluatorCUDA;
+                referenceEvaluatorCast = ((NNEvaluatorSplit)referenceEvaluator).Evaluators[referenceEvaluatorIndex] as NNEvaluatorCUDA;
               }
             }
 
@@ -237,7 +238,7 @@ namespace Ceres.Chess.NNEvaluators
           {
             if (def.Nets.Length == 1)
             {
-              evaluators[i] = Singleton(def.Nets[0].Net, def.Devices[i].Device, referenceEvaluator);
+              evaluators[i] = Singleton(def.Nets[0].Net, def.Devices[i].Device, referenceEvaluator, i);
             }
             else
             {
