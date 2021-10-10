@@ -124,7 +124,8 @@ namespace Ceres.MCTS.MTCSNodes
         MGMoveList priorMoveList = null;
         if (infoPtr != null)
         {
-          priorMoveList = InfoRef.Annotation.moves;
+          ref MCTSNodeInfo refI = ref Unsafe.AsRef<MCTSNodeInfo>(infoPtr);
+          priorMoveList = refI.Annotation.moves;
           if (priorMoveList != null)
           {
             priorMoveList.NumMovesUsed = -1;

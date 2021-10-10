@@ -370,7 +370,7 @@ namespace Ceres.MCTS.NodeCache
     /// <param name="nodeIndex"></param>
     public void Remove(MCTSNodeStructIndex nodeIndex)
     {
-      ref MCTSNodeStruct storeItem = ref ParentStore.Nodes.nodes[nodeIndex.Index];
+      ref MCTSNodeStruct storeItem = ref nodesStore[nodeIndex.Index];
       if (storeItem.CachedInfoPtr != null)
       {
         // Release the cache item from the nodes array
