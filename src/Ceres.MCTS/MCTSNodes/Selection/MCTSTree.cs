@@ -50,7 +50,7 @@ namespace Ceres.MCTS.LeafExpansion
     PositionWithHistory PriorMoves => Store.Nodes.PriorMoves;
 
     MCTSIterator Context;
-    internal IMCTSNodeCache NodeCache;
+    public IMCTSNodeCache NodeCache;
 
 
     /// <summary>

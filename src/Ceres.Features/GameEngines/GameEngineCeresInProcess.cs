@@ -33,6 +33,7 @@ using Ceres.MCTS.Params;
 using Ceres.MCTS.Environment;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Storage;
+using Ceres.MCTS.NodeCache;
 
 #endregion
 
@@ -109,6 +110,12 @@ namespace Ceres.Features.GameEngines
     /// </summary>
     NNEvaluatorSet evaluators = null;
 
+    /// <summary>
+    /// Attempt to retain node cache across all searches and games
+    /// because it is typically a very large data structure to allocate and initialize.
+    /// </summary>
+    IMCTSNodeCache reuseNodeCache = null;
+
     #endregion
 
 
@@ -183,6 +190,8 @@ namespace Ceres.Features.GameEngines
     /// <param name="gameID">optional game descriptive string</param>
     public override void ResetGame(string gameID = null)
     {
+      reuseNodeCache = Search?.Manager.Context.Tree.NodeCache;
+
       Search = null;
       LastSearch = null;
       isFirstMoveOfGame = true;
@@ -364,7 +373,7 @@ namespace Ceres.Features.GameEngines
         Search.Search(evaluators, ChildSelectParams, SearchParams, GameLimitManager,
                       reuseOtherContextForEvaluatedNodes,
                       curPositionAndMoves, searchLimit, verbose, lastSearchStartTime,
-                      gameMoveHistory, callback, null, null, false, isFirstMoveOfGame,
+                      gameMoveHistory, callback, null, reuseNodeCache, false, isFirstMoveOfGame,
                       MoveImmediateIfOnlyOneMove);
       }
       else
@@ -478,6 +487,7 @@ namespace Ceres.Features.GameEngines
 
       LastSearch?.Manager.Dispose();
       LastSearch = null;
+      reuseNodeCache = null;
     }
 
   }
