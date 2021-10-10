@@ -118,6 +118,22 @@ namespace Ceres.Chess.MoveGen
 
 
     /// <summary>
+    /// Copies moves from another MGMoveList.
+    /// </summary>
+    /// <param name="other"></param>
+    public void Copy(MGMoveList other)
+    {
+      if (MovesArray.Length < other.NumMovesUsed)
+      {
+        // Need an enlarged array
+        MovesArray = GC.AllocateUninitializedArray<MGMove>(other.NumMovesUsed);
+      }
+      NumMovesUsed = other.NumMovesUsed;
+      Array.Copy(other.MovesArray, MovesArray, other.NumMovesUsed);
+    }
+
+
+    /// <summary>
     /// Expands MoveArray if necessary to accomodate numMoves additional moves
     /// </summary>
     /// <param name="numMoves"></param>

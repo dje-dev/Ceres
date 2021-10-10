@@ -29,6 +29,7 @@ using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.Params;
+using Ceres.Chess.MoveGen;
 
 #endregion
 
@@ -112,7 +113,7 @@ namespace Ceres.MCTS.MTCSNodes
     /// <param name="context"></param>
     /// <param name="index"></param>
     /// <param name="parent">optionally the parent node</param>
-    internal MCTSNodeInfo(MCTSIterator context, MCTSNodeStructIndex index)
+    internal MCTSNodeInfo(MCTSIterator context, MCTSNodeStructIndex index, MGMoveList moveList)
     {
       Debug.Assert(context.Tree.Store.Nodes != null);
       Debug.Assert(index.Index <= context.Tree.Store.Nodes.MaxNodes);

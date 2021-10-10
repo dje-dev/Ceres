@@ -105,11 +105,11 @@ namespace Ceres.MCTS.MTCSNodes
     /// <param name="context"></param>
     /// <param name="index"></param>
     /// <param name="parent">optionally the parent node</param>
-    internal MCTSNode(MCTSIterator context, MemoryBufferOS<MCTSNodeStruct> nodes, MCTSNodeStructIndex index, bool reinitializeInfo)
+    internal MCTSNode(MCTSIterator context, MemoryBufferOS<MCTSNodeStruct> nodes, 
+                      MCTSNodeStructIndex index, bool reinitializeInfo)
     {
       Debug.Assert(context.Tree.Store.Nodes != null);
       Debug.Assert(index.Index <= context.Tree.Store.Nodes.MaxNodes);
-      //      Debug.Assert(index.IsRoot || parent != null);
 
       if (index == default)
       {
@@ -120,7 +120,18 @@ namespace Ceres.MCTS.MTCSNodes
       structPtr = (MCTSNodeStruct *)Unsafe.AsPointer(ref nodes[index.Index]);
       if (reinitializeInfo)
       {
-        Unsafe.AsRef<MCTSNodeInfo>(infoPtr) = new MCTSNodeInfo(context, index);
+        // Reuse the prior move list if there was one present (but mark as not initialized).
+        MGMoveList priorMoveList = null;
+        if (infoPtr != null)
+        {
+          priorMoveList = InfoRef.Annotation.moves;
+          if (priorMoveList != null)
+          {
+            priorMoveList.NumMovesUsed = -1;
+          }
+        }
+
+        Unsafe.AsRef<MCTSNodeInfo>(infoPtr) = new MCTSNodeInfo(context, index, priorMoveList);
       }     
     }
 

@@ -199,6 +199,8 @@ namespace Ceres.MCTS.LeafExpansion
     }
 #endif
 
+    static readonly MCTSNode nullNode = new MCTSNode(null, null, default, false);
+
     /// <summary>
     /// Attempts to return the MCTSNode associated with an annotation in the cache, 
     /// or null if not found
@@ -209,7 +211,7 @@ namespace Ceres.MCTS.LeafExpansion
     {
       if (nodeIndex.Index == 0)
       {
-        return new MCTSNode(Context, nodes, default, false);
+        return nullNode;
       }
 
       ref readonly MCTSNodeStruct nodeRef = ref nodes[nodeIndex.Index];

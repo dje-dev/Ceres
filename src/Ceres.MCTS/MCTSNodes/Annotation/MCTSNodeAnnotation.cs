@@ -68,6 +68,12 @@ namespace Ceres.MCTS.MTCSNodes.Annotation
       {
         if (moves == null)
         {
+          moves = new MGMoveList(128);
+          moves.NumMovesUsed = -1;
+        }
+
+        if (moves.NumMovesUsed == -1)
+        {
           // Get MGMoveList based on local temporary buffer.
           MGMoveList localMovesBuffer = movesBuffer;
           if (localMovesBuffer == null)
@@ -80,7 +86,7 @@ namespace Ceres.MCTS.MTCSNodes.Annotation
           }
 
           MGMoveGen.GenerateMoves(in PosMG, localMovesBuffer);
-          moves = new MGMoveList(localMovesBuffer); // make a copy (with exact size)
+          moves.Copy(localMovesBuffer);
         }
         return moves;
       }
@@ -89,7 +95,7 @@ namespace Ceres.MCTS.MTCSNodes.Annotation
     /// <summary>
     /// Move list
     /// </summary>
-    MGMoveList moves;
+    internal MGMoveList moves;
 
     /// <summary>
     /// For efficiency moves are generated in to a local thread static buffer
@@ -159,9 +165,13 @@ namespace Ceres.MCTS.MTCSNodes.Annotation
       while (nextBoardIndex < EncodedPositionBoards.NUM_MOVES_HISTORY)
       {
         if (historyFillIn)
+        {
           destBoards[nextBoardIndex++] = destBoards[indexBoardToRepeat];
+        }
         else
+        {
           destBoards[nextBoardIndex++] = default;
+        }
       }
 
       boardsHistory.SetMiscInfo(new EncodedTrainingPositionMiscInfo(MiscInfo, default));
