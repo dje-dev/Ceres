@@ -108,14 +108,14 @@ namespace Ceres.MCTS.MTCSNodes
     internal MCTSNode(MCTSIterator context, MemoryBufferOS<MCTSNodeStruct> nodes, 
                       MCTSNodeStructIndex index, bool reinitializeInfo)
     {
-      Debug.Assert(context.Tree.Store.Nodes != null);
-      Debug.Assert(index.Index <= context.Tree.Store.Nodes.MaxNodes);
-
       if (index == default)
       {
         structPtr = null;
         return;
       }
+
+      Debug.Assert(context.Tree.Store.Nodes != null);
+      Debug.Assert(index.Index <= context.Tree.Store.Nodes.MaxNodes);
 
       structPtr = (MCTSNodeStruct *)Unsafe.AsPointer(ref nodes[index.Index]);
       if (reinitializeInfo)
@@ -365,6 +365,7 @@ namespace Ceres.MCTS.MTCSNodes
       get
       {
         ref MCTSNodeInfo refI = ref Unsafe.AsRef<MCTSNodeInfo>(infoPtr);
+        Debug.Assert(refI.Index != 0);
         Debug.Assert(refI.index == StructRef.Index);
         return ref refI;
       }
