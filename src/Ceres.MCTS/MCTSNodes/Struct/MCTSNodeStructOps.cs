@@ -314,15 +314,11 @@ namespace Ceres.MCTS.MTCSNodes.Struct
             float sumP = transpositionRootChild.P;
             if (N == 3)
             {
-              if (transpositionRootRef.NumChildrenVisited >= 1)
+              if (transpositionRootRef.NumChildrenVisited > 1)
               {
-                // Sibling exists and possibly the 3rd visit was to a sibling
-                // (but alternately it might have been to the child of the child).
-                // For runtime performance reasons, don't bother with complex logic to determine
-                // which of the two nodes was the actual 3rd virtual visit,
-                // instead just add half the probability from the sibling.
+                // Sibling exists and possibly the 3rd visit must have been to the sibling.
                 ref readonly MCTSNodeStruct transpositionRootSibling = ref store[in transpositionRootRef, 1];
-                sumP += transpositionRootSibling.P * 0.5f;
+                sumP += transpositionRootSibling.P;
               }
             }
             return sumP;
