@@ -78,7 +78,7 @@ namespace Ceres.MCTS.Managers
         throw new Exception("Implementation restriction: MaxTreeSize must be set");
       }
 
-      if (newRootNode.IsNull)
+      if (newRootNode.IsNull || newRootNode.N <= 1)
       {
         return Method.NewStore;
       }
