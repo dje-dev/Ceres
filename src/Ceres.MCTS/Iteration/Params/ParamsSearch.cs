@@ -333,8 +333,11 @@ namespace Ceres.MCTS.Params
     /// <summary>
     /// If evaluations of siblings not yet visited (derived from transpositions)
     /// should possibly be blended into backed up evaluations.
+    /// Extensive testing suggests this feature may:
+    ///   - improve Elo by 5 to 10 with smaller networks (e.g. 20b) and short to medium size searches
+    ///   - degrade Elo by about 5 to 8 Elo with larger networks (e.g. 30b) especially at longer searches
     /// </summary>
-    public bool EnableUseSiblingEvaluations = true;
+    public bool EnableUseSiblingEvaluations = false;
 
     /// <summary>
     /// Amount of time subtracted from time allotments to 
