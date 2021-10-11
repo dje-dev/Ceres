@@ -127,10 +127,10 @@ namespace Ceres.MCTS.Iteration
 
 
     /// <summary>
-    /// The Node currently having the largest N value.
+    /// The index of the child node currently having the largest N value.
     /// </summary>
-    public MCTSNode TopNNode;
-
+    public int? TopNChildIndex;
+    public int TopNChildN;
 
     /// <summary>
     /// Number of MCTS steps actually taken so far in this search (not including initial tree).
@@ -925,9 +925,11 @@ namespace Ceres.MCTS.Iteration
     public void UpdateTopNodeInfo()
     {
       MCTSNode newBestNode = Root.ChildWithLargestN;
-      if (TopNNode.IsNull || (newBestNode != TopNNode))
+      if (TopNChildIndex is null || (newBestNode.IndexInParentsChildren != TopNChildIndex))
       {
-        TopNNode = newBestNode;
+        TopNChildIndex = newBestNode.IndexInParentsChildren;
+        TopNChildN = newBestNode.N;
+
         NumNodesWhenChoseTopNNode = Root.N;
       }
     }
