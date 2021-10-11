@@ -14,7 +14,8 @@
 #region Using directives
 
 using System;
-
+using System.Runtime.CompilerServices;
+using Ceres.Base.Threading;
 using Ceres.Chess;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
@@ -38,8 +39,7 @@ namespace Ceres.MCTS.MTCSNodes
     /// Total number of sibling evaluations blended in
     /// to backed up values at nonzero weight.
     /// </summary>
-    public static int CountSiblingEvalsUsed;
-
+    public static AccumulatorMultithreaded CountSiblingEvalsUsed;
 
     /// <summary>
     /// Maximum number of children with lower probability to
@@ -50,7 +50,7 @@ namespace Ceres.MCTS.MTCSNodes
     /// <summary>
     /// Maximum inferiority of child which will be scanned.
     /// </summary>
-    const float MAX_P_INFERIORITY = 0.10f;
+    const float MAX_P_INFERIORITY = 0.075f;
 
 
 
@@ -121,7 +121,7 @@ namespace Ceres.MCTS.MTCSNodes
       else
       {
         // Only blend in sibling if its prior probability is very close.
-        const float THRESHOLD_P_INFERIORITY_IGNORE = 0.02f * 0.5f; 
+        const float THRESHOLD_P_INFERIORITY_IGNORE = 0.02f * 0.5f;
         if (SiblingPInferiority > THRESHOLD_P_INFERIORITY_IGNORE)
         {
           return 0.0f;
@@ -157,7 +157,7 @@ namespace Ceres.MCTS.MTCSNodes
 
       if (siblingWt > 0)
       {
-        CountSiblingEvalsUsed++;
+        CountSiblingEvalsUsed.Add(1, node.Index);
         return (
                  (siblingQ * siblingWt) + (vToApplyFromChildOfNode * (1.0f - siblingWt)),
                  (siblingD * siblingWt) + (dToApplyFromChildOfNode * (1.0f - siblingWt))
@@ -255,5 +255,11 @@ namespace Ceres.MCTS.MTCSNodes
       }
     }
 
+
+    [ModuleInitializer]
+    internal static void ModuleInit()
+    {
+      CountSiblingEvalsUsed.Initialize();
+    }
   }
 }

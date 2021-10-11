@@ -15,8 +15,10 @@
 
 using System;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Threading;
-
+using Ceres.Base.Environment;
+using Ceres.Base.Threading;
 using Ceres.Chess;
 using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Chess.MoveGen.Converters;
@@ -44,10 +46,10 @@ namespace Ceres.MCTS.Evaluators
     // Disabled by default due to performance impact (especially due to false sharing).
     internal const bool TRACK_VIRTUAL_VISITS = false;
 
-    // TODO: Transposition counts temporarily disabled for performance reasons (false sharing)
-    static ulong NumHits = 0;
-    static ulong NumMisses = 0;
-    public static float HitRatePct => 100.0f * (float)NumHits / (float)(NumHits + NumMisses);
+    internal static AccumulatorMultithreaded NumHits;
+    internal static AccumulatorMultithreaded NumMisses;
+
+    public static float HitRatePct => 100.0f * (float)NumHits.Value / (float)(NumHits.Value + NumMisses.Value);
 
 
     /// <summary>
@@ -86,16 +88,16 @@ namespace Ceres.MCTS.Evaluators
 
 
 
-    /// <summary>
-    /// Called when a node pending evaluation is found to be the same position
-    /// (for the purposes of transposition equivalence classes)
-    /// as another node in the tree.
-    /// </summary>
-    /// <param name="node"></param>
-    /// <param name="transpositionRootNodeIndex"></param>
-    /// <param name="transpositionRootNode"></param>
-    /// <returns></returns>
-    LeafEvaluationResult ProcessFirstLinkage(MCTSNode node, MCTSNodeStructIndex transpositionRootNodeIndex,
+  /// <summary>
+  /// Called when a node pending evaluation is found to be the same position
+  /// (for the purposes of transposition equivalence classes)
+  /// as another node in the tree.
+  /// </summary>
+  /// <param name="node"></param>
+  /// <param name="transpositionRootNodeIndex"></param>
+  /// <param name="transpositionRootNode"></param>
+  /// <returns></returns>
+  LeafEvaluationResult ProcessFirstLinkage(MCTSNode node, MCTSNodeStructIndex transpositionRootNodeIndex,
                                              in MCTSNodeStruct transpositionRootNode)
     {
       Debug.Assert(transpositionRootNodeIndex.Index != 0);
@@ -104,11 +106,13 @@ namespace Ceres.MCTS.Evaluators
       if (transpositionMode == TranspositionMode.SingleNodeCopy
        || transpositionRootNode.Terminal.IsTerminal())
       {
+        if (CeresEnvironment.MONITORING_METRICS) NumHits.Add(1, node.Index);
         node.StructRef.CopyUnexpandedChildrenFromOtherNode(node.Tree, transpositionRootNodeIndex);
       }
       else if (transpositionMode == TranspositionMode.SingleNodeDeferredCopy
             || transpositionMode == TranspositionMode.SharedSubtree)
       {
+        // Note that no need to increment NumHits here since this happens elsewhere (when pending value is used).
         SetTranspositionRootReuseFields(node, transpositionRootNodeIndex, in transpositionRootNode);
       }
       else
@@ -116,7 +120,6 @@ namespace Ceres.MCTS.Evaluators
         throw new NotImplementedException();
       }
 
-      //      if (CeresEnvironment.MONITORING_METRICS) NumHits++;
 
       if (/*node.Context.ParamsSearch.TranspositionUseTransposedQ &&*/ transpositionMode != TranspositionMode.SharedSubtree)
       {
@@ -253,7 +256,7 @@ namespace Ceres.MCTS.Evaluators
           pendingTranspositionRoots[pendingIndex] = (node.StructRef.ZobristHash, node.Index);
         }
 
-        //        if (CeresEnvironment.MONITORING_METRICS) NumMisses++;
+        if (CeresEnvironment.MONITORING_METRICS) NumMisses.Add(1, node.Index);
 
         return default;
       }
@@ -282,6 +285,13 @@ namespace Ceres.MCTS.Evaluators
       }
     }
 
+    [ModuleInitializer]
+    internal static void ModuleInitialize()
+    {
+      NumHits.Initialize();
+      NumMisses.Initialize();
+    }
+
   }
 
-}
+  }

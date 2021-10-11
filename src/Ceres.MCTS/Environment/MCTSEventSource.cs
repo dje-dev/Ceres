@@ -183,7 +183,7 @@ namespace Ceres.MCTS.Environment
         tablebaseHitsTotal ??= new PollingCounter("tablebase-hits-total", this, () => LC0DLLSyzygyEvaluator.NumTablebaseHits);
         tablebaseHits ??= new IncrementingPollingCounter("tablebase-hits", this, () => LC0DLLSyzygyEvaluator.NumTablebaseHits);
         tablebasePly1HitsTotal ??= new PollingCounter("tablebase-ply1-hits-total", this, () => LeafEvaluatorSyzygyPly1.NumHits);
-        countSiblingEvaluationsUsed ??= new PollingCounter("sibling-evals-used", this, () => MCTSNodeSiblingEval.CountSiblingEvalsUsed);
+        countSiblingEvaluationsUsed ??= new PollingCounter("sibling-evals-used", this, () => MCTSNodeSiblingEval.CountSiblingEvalsUsed.Value);
         
         timeAllotmentOvershootMax ??= new PollingCounter("max-search-time-overshoot", this, () => MaximumTimeAllotmentOvershoot);
        

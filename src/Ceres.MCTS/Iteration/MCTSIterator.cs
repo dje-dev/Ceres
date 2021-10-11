@@ -20,7 +20,7 @@ using System.Collections.Generic;
 using Ceres.Base.Math;
 using Ceres.Base.Math.Probability;
 using Ceres.Base.Math.Random;
-
+using Ceres.Base.Threading;
 using Ceres.Chess;
 using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.NNEvaluators.LC0DLL;
@@ -99,7 +99,7 @@ namespace Ceres.MCTS.Iteration
 
     // Incremented by the depth of every node selected
     // Used to track "average depth" of search tree
-    public long CumulativeSelectedLeafDepths = 0;
+    internal AccumulatorMultithreaded CumulativeSelectedLeafDepths;
 
     /// <summary>
     /// Total number of nodes that were requested for select
@@ -136,7 +136,7 @@ namespace Ceres.MCTS.Iteration
 
     public CheckTablebaseBestNextMoveDelegate CheckTablebaseBestNextMove;
 
-    public float AvgDepth => (float)CumulativeSelectedLeafDepths / (float)Root.N;
+    public float AvgDepth => (float)CumulativeSelectedLeafDepths.Value / (float)Root.N;
     public float NodeSelectionYieldFrac => NumNodeVisitsAttempted == 0 
                                          ? 0
                                          : (float)NumNodeVisitsSucceeded / (float)NumNodeVisitsAttempted;
@@ -287,6 +287,7 @@ namespace Ceres.MCTS.Iteration
 
       LeafEvaluators = BuildPreprocessors();
       Tree.ImmediateEvaluators = LeafEvaluators;
+      CumulativeSelectedLeafDepths.Initialize();
     }
 
     public float CurrentContempt => ContemptManager.TargetContempt;

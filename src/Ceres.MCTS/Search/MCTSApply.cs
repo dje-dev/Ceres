@@ -285,7 +285,7 @@ namespace Ceres.MCTS.Search
         PossiblyUpdateFirstMoveSampler(node, indexOfChildDescendentFromRoot, numUpdateSelector1, numUpdateSelector2, wasTerminal, vToApply);
 
         // Update depth statistic
-        node.Context.CumulativeSelectedLeafDepths += node.Depth * numToApply;
+        node.Context.CumulativeSelectedLeafDepths.Add(node.Depth * numToApply, node.Depth + node.PriorMove.RawValue);
       }
       else
       {

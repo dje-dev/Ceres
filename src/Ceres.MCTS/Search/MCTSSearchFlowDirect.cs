@@ -52,15 +52,19 @@ namespace Ceres.MCTS.Search
         bool waited = false;
         if (finalizingTask.IsCompleted)
         {
-          LastNNIdleTimeSecs = (float)(DateTime.Now - timeLastNNFinished).TotalSeconds;
-          TotalNNIdleTimeSecs += LastNNIdleTimeSecs;
+          if (timeLastNNFinished != default)
+          {
+            float lastNNIdleTimeSecs = (float)(DateTime.Now - timeLastNNFinished).TotalSeconds;
+            LastNNIdleTimeSecs = lastNNIdleTimeSecs;
+            TotalNNIdleTimeSecs += lastNNIdleTimeSecs;
+          }
 
-          if (DUMP_WAITING) Console.Write($"Wait {LastNNIdleTimeSecs * 100.0f,6:F2}ms GC={GC.CollectionCount(0)} cur= {curCount} last= ");
+          if (DUMP_WAITING) Console.WriteLine($"Wait {LastNNIdleTimeSecs * 1000.0f,6:F2}ms GC={GC.CollectionCount(0)} cur= {curCount} last= ");
           waited = true;
         }
         else
         {
-          if (DUMP_WAITING) Console.Write($"Nowait ms GC={GC.CollectionCount(0)} cur= {curCount} last= ");
+          if (DUMP_WAITING) Console.WriteLine($"Nowait ms GC={GC.CollectionCount(0)} cur= {curCount} last= ");
 
           LastNNIdleTimeSecs = 0;
 

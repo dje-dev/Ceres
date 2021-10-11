@@ -16,6 +16,7 @@
 using System;
 using System.Diagnostics;
 using Ceres.Base.DataTypes;
+using Ceres.Base.Environment;
 using Ceres.Chess;
 using Ceres.Chess.EncodedPositions;
 using Ceres.MCTS.MTCSNodes;
@@ -179,6 +180,8 @@ namespace Ceres.MCTS.Evaluators
 
         }
 #endif
+
+        if (CeresEnvironment.MONITORING_METRICS) NumHits.Add(1, node.Index);
 
         node.PendingTranspositionV = FRAC_POS * subnodeRef.V * multiplier
                                    + FRAC_ROOT * qToUse * multiplier;
