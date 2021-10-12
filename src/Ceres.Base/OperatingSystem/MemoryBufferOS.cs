@@ -154,7 +154,7 @@ namespace Ceres.Base.OperatingSystem
       Debug.Assert(numBytes < int.MaxValue);
 
       // N.B. memory ranges may overlap so don't use (for example) Unsafe.CopyBlock.
-      Buffer.MemoryCopy(destPtr.ToPointer(), sourcePtr.ToPointer(), (uint)numBytes, (uint)numBytes);
+      Buffer.MemoryCopy(sourcePtr.ToPointer(), destPtr.ToPointer(), (uint)numBytes, (uint)numBytes);
     }
 
     public void Clear(long startIndex, long length)
