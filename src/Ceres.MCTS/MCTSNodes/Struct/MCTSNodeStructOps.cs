@@ -158,9 +158,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     {
       if (NumChildrenExpanded > 0)
       {
-        Span<MCTSNodeStructChild> children = ChildrenFromStore(store).Slice(0, NumChildrenExpanded);
-        Span<int> castChildren = MemoryMarshal.Cast<MCTSNodeStructChild, int>(children);
-        int index = MemoryExtensions.IndexOf(castChildren, -fromChildIndex.Index);
+        int index = store.Nodes.nodes[fromChildIndex.Index].IndexInParent;
+        Span<MCTSNodeStructChild> children = ChildrenFromStore(store);
         children[index].SetExpandedChildIndex(toChildIndex);
       }
     }
