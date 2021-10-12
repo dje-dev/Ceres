@@ -346,7 +346,7 @@ namespace Ceres.MCTS.MTCSNodes
     {
       if (!IsAnnotated)
       {
-        Context.Tree.Annotate(this);
+        Tree.Annotate(this);
       }
     }
 
@@ -379,7 +379,7 @@ namespace Ceres.MCTS.MTCSNodes
     /// <summary>
     /// Returns node which is the parent of this node (or null if none).
     /// </summary>
-    public MCTSNode Parent => MCTSManager.ThreadSearchContext.Tree.GetNode(StructRef.ParentIndex);
+    public MCTSNode Parent => Tree.GetNode(StructRef.ParentIndex);
 
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -388,7 +388,7 @@ namespace Ceres.MCTS.MTCSNodes
       Debug.Assert(childInfo.IsExpanded);
 
       // First look to see if already created in annotation cache
-      return Context.Tree.GetNode(childInfo.ChildIndex);
+      return Tree.GetNode(childInfo.ChildIndex);
     }
 
 
@@ -397,10 +397,10 @@ namespace Ceres.MCTS.MTCSNodes
     {
       Debug.Assert(childIndex < NumPolicyMoves);
 
-      MCTSNodeStructChild childInfo = Context.Tree.Store.Children.childIndices[ChildStartIndex + childIndex];
+      MCTSNodeStructChild childInfo = Store.Children.childIndices[ChildStartIndex + childIndex];
       Debug.Assert(childInfo.IsExpanded);
 
-      return Context.Tree.GetNode(childInfo.ChildIndex);
+      return Tree.GetNode(childInfo.ChildIndex);
     }
 
 
@@ -424,10 +424,10 @@ namespace Ceres.MCTS.MTCSNodes
       }
       else
       {
-        ref readonly MCTSNodeStructChild childRef = ref Context.Tree.Store.Children.childIndices[ChildStartIndex + childIndex];
+        ref readonly MCTSNodeStructChild childRef = ref Store.Children.childIndices[ChildStartIndex + childIndex];
         if (childRef.IsExpanded)
         {
-          MCTSNode childObj = Context.Tree.GetNode(childRef.ChildIndex);
+          MCTSNode childObj = Tree.GetNode(childRef.ChildIndex);
           return (childObj, childObj.PriorMove, childObj.P);
         }
         else
@@ -459,7 +459,7 @@ namespace Ceres.MCTS.MTCSNodes
       Debug.Assert(childIndex < NumChildrenExpanded);
       Debug.Assert(ChildStartIndex > 0); // child at slot 0 is reserved for null
 
-      return ref Context.Tree.Store.Children.childIndices[ChildStartIndex + childIndex];
+      return ref Store.Children.childIndices[ChildStartIndex + childIndex];
     }
 
 
@@ -480,18 +480,18 @@ namespace Ceres.MCTS.MTCSNodes
     /// <returns></returns>
     public MCTSNode CreateChild(int childIndex, bool possiblyOutOfOrder = false)
     {
-      MCTSNodeStructIndex childNodeIndex = StructRef.CreateChild(Context.Tree.Store, childIndex, possiblyOutOfOrder);
+      MCTSNodeStructIndex childNodeIndex = StructRef.CreateChild(Store, childIndex, possiblyOutOfOrder);
 
-      return Context.Tree.GetNode(childNodeIndex);
+      return Tree.GetNode(childNodeIndex);
     }
 
 
     public void MaterializeAllTranspositionLinks()
     {
-      MCTSTree tree = Context.Tree;
+      MCTSTree tree = Tree;
 
       // Sequentially traverse tree nodes and materialize any that are currently just linked.
-      StructRef.Traverse(Context.Tree.Store,
+      StructRef.Traverse(Store,
                    (ref MCTSNodeStruct nodeRef) =>
                    {
                      if (!nodeRef.IsOldGeneration && nodeRef.IsTranspositionLinked)
