@@ -73,7 +73,7 @@ namespace Ceres.MCTS.Params
     /// Size of the cache used to store miscellaneous supplemental
     /// information (such as the actual Position) relating to recently visited nodes.
     /// </summary>
-    public int NodeAnnotationCacheSize = 2 * (CeresUserSettingsManager.Settings.ReducedMemoryMode ? 250_000 : 750_000);
+    public int NodeAnnotationCacheSize = CeresUserSettingsManager.Settings.ReducedMemoryMode ? 350_000 : 1_000_000;
 
 
     internal const bool DEFAULT_USE_SMART_SIZE_BATCHES = true;
