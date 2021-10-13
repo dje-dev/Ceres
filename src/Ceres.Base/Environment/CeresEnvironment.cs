@@ -41,6 +41,12 @@ namespace Ceres.Base.Environment
     public static bool MONITORING_METRICS = true; // overhead seems very low (about 2%)
     public static bool MONITORING_EVENTS = false;  // large performance impact (circa 50%)
 
+    /// <summary>
+    /// Flag used in testing to indicate current thread is running in "test mode."
+    /// </summary>
+    [ThreadStatic]
+    public static bool TEST_MODE;
+
     static ILogger logger;
     static LoggerTypes loggers;
 
