@@ -925,12 +925,15 @@ namespace Ceres.MCTS.Iteration
     public void UpdateTopNodeInfo()
     {
       MCTSNode newBestNode = Root.ChildWithLargestN;
-      if (TopNChildIndex is null || (newBestNode.IndexInParentsChildren != TopNChildIndex))
+      if (!newBestNode.IsNull)
       {
-        TopNChildIndex = newBestNode.IndexInParentsChildren;
-        TopNChildN = newBestNode.N;
+        if (TopNChildIndex is null || (newBestNode.IndexInParentsChildren != TopNChildIndex))
+        {
+          TopNChildIndex = newBestNode.IndexInParentsChildren;
+          TopNChildN = newBestNode.N;
 
-        NumNodesWhenChoseTopNNode = Root.N;
+          NumNodesWhenChoseTopNNode = Root.N;
+        }
       }
     }
 
