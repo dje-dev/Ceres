@@ -226,11 +226,7 @@ namespace Ceres.MCTS.LeafExpansion
       MCTSNode node = new MCTSNode(Context, nodes, nodeIndex, wasAdded);
       node.InfoRef.LastAccessedSequenceCounter = NodeCache.NextBatchSequenceNumber;
 
-      if (node.Index != nodeIndex.Index)
-      {
-        throw new Exception("Internal error: node index mismatch");
-      }
-      // Eventually switch to this instead? Debug.Assert(node.Index == nodeIndex.Index);
+      Debug.Assert(node.Index == nodeIndex.Index);
 
       return node;
     }
