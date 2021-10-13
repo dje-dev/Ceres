@@ -32,7 +32,7 @@ namespace Ceres.MCTS.MTCSNodes
   /// including ToString() for a single node and Dump to dump statistics
   /// relating to moves from root.
   /// </summary>
-  public partial struct MCTSNodeInfo
+  public partial struct MCTSNode
   {
     public override string ToString()
     {
@@ -73,8 +73,11 @@ namespace Ceres.MCTS.MTCSNodes
                      TextWriter writer = null,
                      MCTSNode dumpRoot = default)
     {
-      throw new NotImplementedException();
-#if NOT
+      if (IsNull)
+      {
+        Console.WriteLine("<MCTSNode NULL>");
+      }
+
       using (new SearchContextExecutionBlock(this.Context))
       {
         if (N < minNodes)
@@ -89,16 +92,16 @@ namespace Ceres.MCTS.MTCSNodes
 
         Annotate();
 
-        dumpRoot = dumpRoot ?? this.Tree.Root;
+        dumpRoot = dumpRoot.IsNull ? Tree.Root : dumpRoot;
         writer = writer ?? Console.Out;
 
         Position cPos = MGChessPositionConverter.PositionFromMGChessPosition(in Annotation.PosMG);
 
-        float multiplerOurPerspective = dumpRoot == null || (dumpRoot.Depth % 2 == Depth % 2) ? 1.0f : -1.0f;
+        float multiplerOurPerspective = dumpRoot.IsNull || (dumpRoot.Depth % 2 == Depth % 2) ? 1.0f : -1.0f;
 
         bool minimize = true;
         float bestChildValue = minimize ? int.MaxValue : int.MinValue;
-        if (Parent != null)
+        if (Parent.IsNotNull)
         {
           MCTSNode[] sortedChildren = Parent.ChildrenSorted(n => n.V);
           bestChildValue = minimize ? sortedChildren[0].V : sortedChildren[^1].V;
@@ -106,7 +109,7 @@ namespace Ceres.MCTS.MTCSNodes
 
         // Print extra characters for nodes with special characteristics
         char extraFlag = ' ';
-        if (!IsRoot && parent.IsRoot
+        if (!IsRoot && Parent.IsRoot
           && Context.RootMovesPruningStatus != null
           && Context.RootMovesPruningStatus[IndexInParentsChildren] != Iteration.MCTSFutilityPruningStatus.NotPruned)
         {
@@ -187,7 +190,6 @@ namespace Ceres.MCTS.MTCSNodes
           }
         }
       }
-#endif
     }
   }
 

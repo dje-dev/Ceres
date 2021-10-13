@@ -835,7 +835,7 @@ namespace Ceres.Features.UCI
         }
         else
         {
-          CeresEngine.Search.Manager.Context.Root.InfoRef.Dump(1, 1, prefixString: "info string ");
+          CeresEngine.Search.Manager.Context.Root.Dump(1, 1, prefixString: "info string ");
         }
       }
     }

@@ -49,7 +49,6 @@ namespace Ceres.MCTS.MTCSNodes
   /// (just a pointer to struct at a fixed address).
   /// </summary>
   /// 
-  [DebuggerDisplay("ToString(),nq")]
   public unsafe partial struct MCTSNode
     : ITreeNode,
       IComparable<MCTSNode>,
@@ -760,18 +759,6 @@ namespace Ceres.MCTS.MTCSNodes
 
 
 #region Overrides (object)
-
-    public override string ToString()
-    {
-      if (IsNull)
-      {
-        return "<MCTSNode NULL>";
-      }
-      else
-      {
-        return "<MCTSNode " + StructRef.ToString()  + ">";
-      }
-    }
 
 
     public bool Equals(MCTSNode node) => structPtr == node.structPtr;

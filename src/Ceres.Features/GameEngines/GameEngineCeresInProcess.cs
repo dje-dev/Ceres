@@ -313,20 +313,23 @@ namespace Ceres.Features.GameEngines
                                         searchResult.Manager.RootNWhenSearchStarted, N, (int)searchResult.Manager.Context.AvgDepth,
                                         searchResult, bestMoveInfo);
 
-      // Append search result information to log file (if any).
-      StringWriter dumpInfo = new StringWriter();
-      if (SearchLogFileName != null)
+      using (new SearchContextExecutionBlock(result.Search.Manager.Context))
       {
-        result.Search.Manager.DumpFullInfo(bestMoveMG, result.Search.SearchRootNode, dumpInfo, CurrentGameID);
-        lock (logFileWriteObj)
+        // Append search result information to log file (if any).
+        StringWriter dumpInfo = new StringWriter();
+        if (SearchLogFileName != null)
         {
-          File.AppendAllText(SearchLogFileName, dumpInfo.GetStringBuilder().ToString());
+          result.Search.Manager.DumpFullInfo(bestMoveMG, result.Search.SearchRootNode, dumpInfo, CurrentGameID);
+          lock (logFileWriteObj)
+          {
+            File.AppendAllText(SearchLogFileName, dumpInfo.GetStringBuilder().ToString());
+          }
         }
-      }
 
-      if (VerboseMoveStats)
-      {
-        result.Search.Manager.Context.Root.InfoRef.Dump(1, 1);
+        if (VerboseMoveStats)
+        {
+          result.Search.Manager.Context.Root.Dump(1, 1);
+        }
       }
 
       return result;

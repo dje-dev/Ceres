@@ -685,7 +685,7 @@ namespace Ceres.MCTS.Iteration
         // First quick dump at level 1
         Console.WriteLine();
         Console.WriteLine("VERBOSE ROOT MOVE STATISTICS");
-        node.InfoRef.Dump(1, 1, maxMoves: maxMoves);
+        node.Dump(1, 1, maxMoves: maxMoves);
         Console.WriteLine("-----------------------------------------------------------------------------------------------------------------\r\n");
       }
     }
