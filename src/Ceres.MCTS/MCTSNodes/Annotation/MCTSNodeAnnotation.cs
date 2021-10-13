@@ -37,10 +37,9 @@ namespace Ceres.MCTS.MTCSNodes.Annotation
   public struct MCTSNodeAnnotation : IEquatable<MCTSNodeAnnotation>
   {
     /// <summary>
-    /// If the annotation has been completely intialized.
+    /// If the annotation has been fully intialized.
     /// </summary>
-    public bool IsInitialized;
-
+    public bool IsInitialized => Pos.PieceCount > 0;
 
     /// <summary>
     /// The move made at the parent which resulted in this position.

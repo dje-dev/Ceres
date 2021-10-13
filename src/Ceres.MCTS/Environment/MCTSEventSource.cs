@@ -92,9 +92,6 @@ namespace Ceres.MCTS.Environment
     private IncrementingPollingCounter numNodesDualSelectorDuplicate;
 #endif
 
-    private PollingCounter numNodesSelectedIntoTreeCache;
-    private PollingCounter numNodesAppliedFromTreeCache;
-
     private PollingCounter numSecondaryEvaluations;
 
 
@@ -157,9 +154,6 @@ namespace Ceres.MCTS.Environment
 #if DEBUG
         numNodesDualSelectorDuplicate ??= new IncrementingPollingCounter("selected-dual-duplicate", this, () => MCTSNodesSelectedSet.TotalNumDualSelectorDuplicates);
 #endif
-        numNodesSelectedIntoTreeCache ??= new PollingCounter("nodes-selected-into-tree-cache", this, () => MCTSNodesSelectedSet.TotalNumNodesSelectedIntoTreeCache);
-        numNodesAppliedFromTreeCache ??= new PollingCounter("nodes-appled-from-tree-cache", this, () => MCTSNodesSelectedSet.TotalNumNodesAppliedFromTreeCache);
-
 
         lastBatchYield ??= new PollingCounter("yield_pct_last_batch", this, () => 100.0f * MCTSIterator.LastBatchYieldFrac);
         batchYield ??= new PollingCounter("yield-pct-total", this, () => 100.0f * MCTSIterator.TotalYieldFrac);

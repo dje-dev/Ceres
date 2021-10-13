@@ -310,11 +310,7 @@ namespace Ceres.MCTS.LeafExpansion
 
       node.InfoRef.LastAccessedSequenceCounter = node.Tree.NodeCache.NextBatchSequenceNumber;
       annotation.PriorMoveMG = priorMoveMG;
-
-      annotation.Pos = posHistory[^1]; // this will have had its repetition count set
       annotation.PosMG = newPos;
-
-      //node.Ref.HashCrosscheck = annotation.Pos.PiecesShortHash;
 
       const bool FAST = true;
       if (!FAST)
@@ -327,11 +323,12 @@ namespace Ceres.MCTS.LeafExpansion
         annotation.MiscInfo = EncodedPositionWithHistory.GetMiscFromPosition(posHistory[^1].MiscInfo, SideType.White);
       }
 
-      bool alreadyEvaluated = !FP16.IsNaN(node.V);
+      // Consider the annotation complete at this point where we assign Pos
+      // (initialization status is considered complete when number of pieces > 0).
+      annotation.Pos = posHistory[^1]; // this will have had its repetition count set
 
-      // Consider the annotation complete at this point
-      // (code which sets the EvalResult below expects that).
-      annotation.IsInitialized = true;
+      //node.Ref.HashCrosscheck = annotation.Pos.PiecesShortHash;
+      bool alreadyEvaluated = !FP16.IsNaN(node.V);
 
       if (alreadyEvaluated)
       {

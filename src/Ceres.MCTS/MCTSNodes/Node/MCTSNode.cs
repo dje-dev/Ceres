@@ -306,9 +306,9 @@ namespace Ceres.MCTS.MTCSNodes
 
     // Values to use for pending transposition extractions 
     // (if NumVisitsPendingTranspositionRootExtraction > 0).
-    public ref float PendingTranspositionV => ref InfoRef.PendingTranspositionV;
-    public ref float PendingTranspositionM => ref InfoRef.PendingTranspositionM;
-    public ref float PendingTranspositionD => ref InfoRef.PendingTranspositionD;
+    public ref FP16 PendingTranspositionV => ref InfoRef.PendingTranspositionV;
+    public ref FP16 PendingTranspositionM => ref InfoRef.PendingTranspositionM;
+    public ref FP16 PendingTranspositionD => ref InfoRef.PendingTranspositionD;
 
     /// <summary>
     /// Returns the side to move as of this node.
@@ -632,12 +632,6 @@ namespace Ceres.MCTS.MTCSNodes
     public int IndexInParentsChildren => StructRef.IndexInParent;
 
 #endregion
-
-    internal bool startedAsCacheOnlyNode
-    {
-      get => InfoRef.startedAsCacheOnlyNode;
-      set => InfoRef.startedAsCacheOnlyNode = value; 
-    }
 
 
     public void SetPolicy(float policySoftmax, float minPolicyProbability,

@@ -231,7 +231,7 @@ namespace Ceres.MCTS.Search
         else
         {
           Debug.Assert(nodeRef.N > 0 || !float.IsNaN(node.EvalResult.V));
-          Debug.Assert(!float.IsNaN(node.PendingTranspositionV));
+          Debug.Assert(!FP16.IsNaN(node.PendingTranspositionV));
           Debug.Assert(nodeRef.TranspositionRootIndex != 0);
 
           numToApply = Math.Min(nodeRef.NumVisitsPendingTranspositionRootExtraction, numToApply);

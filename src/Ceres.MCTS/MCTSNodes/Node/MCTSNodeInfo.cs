@@ -30,6 +30,7 @@ using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.Params;
 using Ceres.Chess.MoveGen;
+using System.Runtime.InteropServices;
 
 #endregion
 
@@ -47,13 +48,6 @@ namespace Ceres.MCTS.MTCSNodes
       IEquatable<MCTSNodeInfo>,
       IEqualityComparer<MCTSNodeInfo>
   {
-
-    /// <summary>
-    /// Index of this structure within the array
-    /// </summary>
-    internal MCTSNodeStructIndex index;
-
-
     /// <summary>
     /// Pointer directly to this structure
     /// </summary>
@@ -66,7 +60,7 @@ namespace Ceres.MCTS.MTCSNodes
     //      Care needs to be taken to keep them up to date
     //      with the active search, and clear them when done.
     //      Additions/changes to these fields also need 
-    //      coordianted code changes in IMCTSNodeCache (SetContext).
+    //      coordinated code changes in IMCTSNodeCache (SetContext).
 
     /// <summary>
     /// Search context within which this node exists
@@ -82,7 +76,6 @@ namespace Ceres.MCTS.MTCSNodes
     /// Shortcut directly to associated MCTSNodeStore.
     /// </summary>
     public MCTSNodeStore Store { get; internal set; }
-
 
     public void ClearObjectReferences()
     {
@@ -100,6 +93,13 @@ namespace Ceres.MCTS.MTCSNodes
     }
 
     #endregion
+
+    MCTSNode parent;
+
+    /// <summary>
+    /// Index of this structure within the array
+    /// </summary>
+    internal MCTSNodeStructIndex index;
 
 
     public enum NodeActionType : short { NotInitialized, None, MCTSApply, CacheOnly };
@@ -128,12 +128,11 @@ namespace Ceres.MCTS.MTCSNodes
       ptr = (MCTSNodeStruct*)Unsafe.AsPointer(ref parentArray[index.Index]);
       this.index = index;
 
-      startedAsCacheOnlyNode = false;
       cachedDepth = -1;
       ActionType = NodeActionType.NotInitialized;
-      PendingTranspositionV = float.NaN;
-      PendingTranspositionM = float.NaN;
-      PendingTranspositionD = float.NaN;
+      PendingTranspositionV = FP16.NaN;
+      PendingTranspositionM = FP16.NaN;
+      PendingTranspositionD = FP16.NaN;
       Annotation = new MCTSNodeAnnotation();
       EvalResult = default;
       InFlightLinkedNode = default;
@@ -308,9 +307,9 @@ namespace Ceres.MCTS.MTCSNodes
 
     // Values to use for pending transposition extractions 
     // (if NumVisitsPendingTranspositionRootExtraction > 0).
-    public float PendingTranspositionV;
-    public float PendingTranspositionM;
-    public float PendingTranspositionD;
+    public FP16 PendingTranspositionV;
+    public FP16 PendingTranspositionM;
+    public FP16 PendingTranspositionD;
 
     /// <summary>
     /// Returns the side to move as of this node.
@@ -366,8 +365,6 @@ namespace Ceres.MCTS.MTCSNodes
     /// Returns reference to underlying MCTSNodeStruct.
     /// </summary>
     public ref MCTSNodeStruct Ref => ref Unsafe.AsRef<MCTSNodeStruct>(ptr);
-
-    MCTSNode parent;
 
 
     /// <summary>
@@ -457,9 +454,6 @@ namespace Ceres.MCTS.MTCSNodes
     }
 
     #endregion
-
-
-    internal bool startedAsCacheOnlyNode;
 
 
     #region Miscellaneous

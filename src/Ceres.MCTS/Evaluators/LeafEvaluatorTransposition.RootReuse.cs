@@ -130,7 +130,7 @@ namespace Ceres.MCTS.Evaluators
       // Possibly the value cached in PendingTranspositionV to be used for the pending
       // transposition values is not present (because the prior MCTSNode was lost from cache).
       // If so recalculate and set it here.
-      bool cachedTranspositionValuesMissing = float.IsNaN(node.PendingTranspositionV);
+      bool cachedTranspositionValuesMissing = FP16.IsNaN(node.PendingTranspositionV);
 
       //if (cachedTranspositionValuesMissing) MCTSEventSource.TestMetric1++;
 
@@ -146,7 +146,7 @@ namespace Ceres.MCTS.Evaluators
 
         ref readonly MCTSNodeStruct transpositionNode = ref node.Store.Nodes.nodes[transpositionNodeIndex];
         SetPendingTransitionValues(node, in transpositionNode);
-        Debug.Assert(!float.IsNaN(node.PendingTranspositionV));
+        Debug.Assert(!FP16.IsNaN(node.PendingTranspositionV));
       }
     }
 
@@ -183,13 +183,9 @@ namespace Ceres.MCTS.Evaluators
 
         if (CeresEnvironment.MONITORING_METRICS) NumHits.Add(1, node.Index);
 
-        node.PendingTranspositionV = FRAC_POS * subnodeRef.V * multiplier
-                                   + FRAC_ROOT * qToUse * multiplier;
-
-        node.PendingTranspositionM = FRAC_POS * subnodeRef.MPosition 
-                                   + FRAC_ROOT * subnodeRef.MAvg;
-        node.PendingTranspositionD = FRAC_POS * subnodeRef.DrawP 
-                                   + FRAC_ROOT * subnodeRef.DAvg;
+        node.PendingTranspositionV = (FP16)(FRAC_POS * subnodeRef.V * multiplier + FRAC_ROOT * qToUse * multiplier);
+        node.PendingTranspositionM = (FP16)(FRAC_POS * subnodeRef.MPosition      + FRAC_ROOT * subnodeRef.MAvg);
+        node.PendingTranspositionD = (FP16)(FRAC_POS * subnodeRef.DrawP          + FRAC_ROOT * subnodeRef.DAvg);
       }
 
       if (node.N == 0)

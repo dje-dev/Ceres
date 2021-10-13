@@ -252,16 +252,6 @@ namespace Ceres.MCTS.Search
     {
       if (node.ActionType == MCTSNodeInfo.NodeActionType.CacheOnly)
       {
-        TotalNumNodesSelectedIntoTreeCache++;
-        node.startedAsCacheOnlyNode = true;
-      }
-      else if (node.ActionType == MCTSNodeInfo.NodeActionType.MCTSApply && node.startedAsCacheOnlyNode)
-      {
-        TotalNumNodesAppliedFromTreeCache++;
-      }
-
-      if (node.ActionType == MCTSNodeInfo.NodeActionType.CacheOnly)
-      {
         NumCacheOnly++;
       }
       else if (node.ActionType == MCTSNodeInfo.NodeActionType.None)
