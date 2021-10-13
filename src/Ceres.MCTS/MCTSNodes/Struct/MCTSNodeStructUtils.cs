@@ -17,7 +17,7 @@ using System;
 using System.Collections;
 using System.Runtime.CompilerServices;
 using System.Threading;
-
+using Ceres.Base.OperatingSystem;
 using Ceres.Chess.EncodedPositions;
 using Ceres.MCTS.MTCSNodes.Storage;
 
@@ -37,11 +37,14 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       Span<float> probsBeforeNormalization = stackalloc float[CompressedPolicyVector.NUM_MOVE_SLOTS];
       Span<ushort> probabilities = stackalloc ushort[CompressedPolicyVector.NUM_MOVE_SLOTS];
 
+      Span<MCTSNodeStructChild> children = MCTSNodeStoreContext.Store.Children.SpanForNode(in nodeRef);
+      int numPolicyMoves = nodeRef.NumPolicyMoves;
+ 
       // Extract the probabilities, invert soft max, track sum.
       float accProbabilities = 0;
-      for (int i = 0; i < nodeRef.NumPolicyMoves; i++)
+      for (int i = 0; i < numPolicyMoves; i++)
       {
-        MCTSNodeStructChild child = nodeRef.ChildAtIndex(i);
+        MCTSNodeStructChild child = children[i];
         if (child.IsExpanded)
         {
           ref readonly MCTSNodeStruct childRef = ref child.ChildRef;
@@ -59,9 +62,9 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
       // Build spans of indices and probabilities (normalized and then encoded).
       float probScaling = 1.0f / accProbabilities;
-      for (int i = 0; i < nodeRef.NumPolicyMoves; i++)
+      for (int i = 0; i < numPolicyMoves; i++)
       {
-        MCTSNodeStructChild child = nodeRef.ChildAtIndex(i);
+        MCTSNodeStructChild child = children[i];
         if (child.IsExpanded)
         {
           ref readonly MCTSNodeStruct childRef = ref child.ChildRef;
