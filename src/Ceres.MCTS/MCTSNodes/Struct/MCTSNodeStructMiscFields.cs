@@ -30,6 +30,9 @@ namespace Ceres.MCTS.MTCSNodes.Struct
   {
     private uint bits;
 
+    // N.B. Changes/additions to these fields may require upate in
+    //      initialization logic in MCTSNode and also in MCTSNodeStructClone.TryCloneChild method.
+
     const int BIT_LENGTH_TERMINAL = 2;
     const int BIT_LENGTH_DRAW_KNOWN_EXIST = 1;
     const int BIT_LENGTH_M_POSITION = 8;

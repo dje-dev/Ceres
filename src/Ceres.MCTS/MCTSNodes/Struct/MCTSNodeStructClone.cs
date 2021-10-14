@@ -143,11 +143,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
                                                     bool cloneSubchildIfPossible)
     {
       Debug.Assert(!float.IsNaN(subtreeFraction));
-
-      if (sourceParentRef.NumChildrenExpanded == 0)
-      {
-        return default;
-      }
+      Debug.Assert(sourceParentRef.NumChildrenExpanded >= childIndex + 1);
 
       ref readonly MCTSNodeStruct sourceChildRef = ref sourceParentRef.ChildAtIndexRef(childIndex);
       Debug.Assert(sourceChildRef.IsValidTranspositionLinkedSource);
@@ -183,6 +179,9 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       targetChildRef.ZobristHash = sourceChildRef.ZobristHash;
       targetChildRef.VSecondary = sourceChildRef.VSecondary;
       targetChildRef.Uncertainty = sourceChildRef.Uncertainty;
+
+      targetChildRef.PriorMove = sourceChildRef.PriorMove;
+      targetChildRef.miscFields.IndexInParent = (byte)sourceChildRef.IndexInParent;
 
       //targetChildRef.HashCrosscheck = sourceChildRef.HashCrosscheck;
 
