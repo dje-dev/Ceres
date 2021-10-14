@@ -169,7 +169,7 @@ namespace Ceres.Features.GameEngines
       MoveImmediateIfOnlyOneMove = moveImmediateIfOnlyOneMove;
       VerboseMoveStats = CeresUserSettingsManager.Settings.VerboseMoveStats;
 
-      if (!string.IsNullOrEmpty(CeresUserSettingsManager.Settings.SearchLogFile))
+      if (logFileName == null && !string.IsNullOrEmpty(CeresUserSettingsManager.Settings.SearchLogFile))
       {
         SearchLogFileName = CeresUserSettingsManager.Settings.SearchLogFile;
       }
