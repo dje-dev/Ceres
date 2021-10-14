@@ -13,11 +13,10 @@
 
 #region Using directives
 
-using Google.Protobuf.WellKnownTypes;
 using System;
-using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 using System.Text;
+using Ceres.Base.Environment;
 
 #endregion
 
@@ -43,10 +42,11 @@ namespace Ceres.Chess
       BlackCanOOO = 1 << 3
     };
 
-    public enum EnPassantFileIndexEnum : byte 
-    { FileA = 0, FileB = 1, FileC = 2, FileD = 3, 
-      FileE = 4, FileF = 5, FileG = 6, FileH = 7, 
-      FileNone = 15 
+    public enum EnPassantFileIndexEnum : byte
+    {
+      FileA = 0, FileB = 1, FileC = 2, FileD = 3,
+      FileE = 4, FileF = 5, FileG = 6, FileH = 7,
+      FileNone = 15
     };
 
     #region Raw data
@@ -118,7 +118,7 @@ namespace Ceres.Chess
     /// </summary>
     public bool WhiteCanOOO => (EnPassantFileIndexAndCastlingFlags & (int)CastlingFlagsEnum.WhiteCanOOO) != 0;
 
-        /// <summary>
+    /// <summary>
     /// Returns if black can castle short.
     /// </summary>
     public bool BlackCanOO => (EnPassantFileIndexAndCastlingFlags & (int)CastlingFlagsEnum.BlackCanOO) != 0;
@@ -141,7 +141,7 @@ namespace Ceres.Chess
     /// Returns if there are any en passant rights associated with the position.
     /// </summary>
     public bool EnPassantRightsPresent => EnPassantFileIndex != EnPassantFileIndexEnum.FileNone;
-    
+
     /// <summary>
     /// Returns the index of the file on which
     /// en passant rights are present (if any).
@@ -186,7 +186,7 @@ namespace Ceres.Chess
     /// <returns></returns>
     public override int GetHashCode()
     {
-      return HashCode.Combine(EnPassantFileIndexAndCastlingFlags, SideToMove, 
+      return HashCode.Combine(EnPassantFileIndexAndCastlingFlags, SideToMove,
                               Move50Count, RepetitionCount, MoveNum);
     }
 
@@ -223,6 +223,14 @@ namespace Ceres.Chess
       int repetitionPart;
       if (includeRepetitions)
       {
+#if NOT
+        // NOTE: attempts to rework this yielded circa 
+        // -10Elo change (when tested without tablebases)
+        if (CeresEnvironment.TEST_MODE)
+          repetitionPart = RepetitionCount >= 2 ? 2 : 0; // -15 +/- 11 with no tablebases
+        //repetitionPart = RepetitionCount >= 1 ? 1 : 0; // -12+/- 9 with no tablebases, 70k
+        else
+#endif
         repetitionPart = RepetitionCount >= 2 ? 2 : RepetitionCount;
       }
       else
@@ -232,7 +240,7 @@ namespace Ceres.Chess
 
       if (SideToMove == SideType.White)
       {
-        return HashCode.Combine((BlackCanOO ? 1 : 0), (BlackCanOOO ? 1 : 0), 
+        return HashCode.Combine((BlackCanOO ? 1 : 0), (BlackCanOOO ? 1 : 0),
                                 (WhiteCanOO ? 1 : 0), (WhiteCanOOO ? 1 : 0),
                                  move50Part, repetitionPart, SideToMove);
       }
