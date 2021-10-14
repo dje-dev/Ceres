@@ -53,7 +53,7 @@ namespace Ceres.Features.Tournaments
     static Lazy<ISyzygyEvaluatorEngine> tbEvaluator = new Lazy<ISyzygyEvaluatorEngine>(() =>
     SyzygyEvaluatorPool.GetSessionForPaths(CeresUserSettingsManager.Settings.TablebaseDirectory));
 
-    internal static TournamentGameResult TryGetGameResultIfTerminal(PositionWithHistory game, 
+    public static TournamentGameResult TryGetGameResultIfTerminal(PositionWithHistory game, 
                                                                     bool playerIsWhite, bool useTablebasesForAdjudication,
                                                                     out TournamentGameResultReason reason)
     {
@@ -80,7 +80,9 @@ namespace Ceres.Features.Tournaments
             reason = TournamentGameResultReason.AdjudicateTB;
             return weArePlayerToMove ? TournamentGameResult.Loss : TournamentGameResult.Win;
           }
-          else if (score == LC0DLLSyzygyEvaluator.WDLScore.WDLDraw)
+          else if (score == LC0DLLSyzygyEvaluator.WDLScore.WDLDraw
+                || score == LC0DLLSyzygyEvaluator.WDLScore.WDLCursedWin
+                || score == LC0DLLSyzygyEvaluator.WDLScore.WDLBlessedLoss)
           {
             reason = TournamentGameResultReason.AdjudicateTB;
             return TournamentGameResult.Draw;
