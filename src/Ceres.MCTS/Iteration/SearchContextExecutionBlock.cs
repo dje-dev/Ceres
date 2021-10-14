@@ -13,6 +13,8 @@
 
 #region Using directives
 
+using Ceres.Base.Environment;
+using Ceres.Chess;
 using Ceres.MCTS.MTCSNodes.Storage;
 using System;
 using System.Threading;
@@ -47,6 +49,11 @@ namespace Ceres.MCTS.Iteration
       Context = context;
       storeContext = new MCTSNodeStoreContext(context.Tree.Store);
       MCTSManager.ThreadSearchContext = context;
+
+      // Pass the value of the test flag for this context
+      // down to the ThreadStatic variable in the Base project
+      // so code in lower levels (Base/Chess) can possibly observe it.
+      CeresEnvironment.TEST_MODE =  context.ParamsSearch.TestFlag;
     }
 
 
