@@ -310,7 +310,7 @@ namespace Ceres.Features.GameEngines
       GameEngineSearchResultCeres result =
         new GameEngineSearchResultCeres(bestMoveMG.MoveStr(MGMoveNotationStyle.LC0Coordinate),
                                         (float)bestMoveInfo.QOfBest, scoreCeresCP, searchResult.SearchRootNode.MAvg, searchResult.Manager.SearchLimit, default,
-                                        searchResult.Manager.RootNWhenSearchStarted, N, (int)searchResult.Manager.Context.AvgDepth,
+                                        searchResult.Manager.RootNWhenSearchStarted, N, (int)Math.Round(searchResult.Manager.Context.AvgDepth),
                                         searchResult, bestMoveInfo);
 
       using (new SearchContextExecutionBlock(result.Search.Manager.Context))
