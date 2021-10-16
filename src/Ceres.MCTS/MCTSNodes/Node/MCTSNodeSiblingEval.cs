@@ -237,7 +237,9 @@ namespace Ceres.MCTS.MTCSNodes
           ref readonly MCTSNodeStruct siblingTranspositionNodeRef = ref nodes[siblingTanspositionNodeIndex];
 
           // Update bestQ so far if this is an evaluated node which would look better from perspective of parent (i.e. more negative).
-          if (siblingTranspositionNodeRef.IsEvaluated)
+          if (siblingTranspositionNodeRef.IsEvaluated 
+            && !siblingTranspositionNodeRef.HasRepetitions // ignore if repetitions since might have different repetition history
+            )
           {
             if (bestQ is null || siblingTranspositionNodeRef.Q < bestQ.Value)
             {
