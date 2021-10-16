@@ -800,15 +800,12 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// </summary>
     /// <param name="vToApply"></param>
     /// <param name="mToApply"></param>
-    /// <param name="dToApply"></param>
-    /// <param name="wasTerminal"></param>
     /// <param name="numInFlight1"></param>
     /// <param name="numInFlight2"></param>
     public unsafe void BackupApply(Span<MCTSNodeStruct> nodes,
                                    int numToApply,
                                    float vToApplyFirst, float vToApplyNonFirst, float mToApply, 
                                    float dToApplyFirst, float dToApplyNonFirst,
-                                   bool wasTerminal,
                                    int numInFlight1, int numInFlight2,
                                    out MCTSNodeStructIndex indexOfChildDescendentFromRoot)
     {
@@ -850,12 +847,6 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         }
         else
         {
-          // Only terminal nodes can be multivisited (not collisions).
-          if (!wasTerminal)
-          {
-            numToApply = 1;
-          }
-
           node.N += numToApply;
           node.W += vToApply * numToApply;
           //node.VSumSquares  += vToApply * vToApply * totalInFlightToApply;

@@ -280,7 +280,7 @@ namespace Ceres.MCTS.Search
         nodeRef.BackupApply(nodes, numToApply, 
                             vToApplyFirst, vToApplyNonFirst, mToApply, 
                             dToApplyFirst, dToApplyNonFirst, 
-                            wasTerminal, numUpdateSelector1, numUpdateSelector2, out indexOfChildDescendentFromRoot);
+                            numUpdateSelector1, numUpdateSelector2, out indexOfChildDescendentFromRoot);
 
         PossiblyUpdateFirstMoveSampler(node, indexOfChildDescendentFromRoot, numUpdateSelector1, numUpdateSelector2, wasTerminal, vToApply);
 
