@@ -114,6 +114,15 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     }
 
     /// <summary>
+    /// If the position has one more repetitions in the move history.
+    /// </summary>
+    public bool HasRepetitions
+    {
+      readonly get => miscFields.HasRepetitions;
+      set => miscFields.HasRepetitions = value;
+    }
+
+    /// <summary>
     /// Index of the parent, or null if root node
     /// </summary>
     public MCTSNodeStructIndex ParentIndex;

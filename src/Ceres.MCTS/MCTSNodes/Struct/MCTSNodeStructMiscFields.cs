@@ -40,7 +40,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     const int BIT_LENGTH_TRANSPOSITION_UNLINK_INPROGRESS = 1;
     const int BIT_LENGTH_IS_TRANSPOSITION_ROOT = 1;
     const int BIT_LENGTH_INDEX_IN_PARENT = 6;
-    const int BIT_LENGTH_UNUSED = 12;
+    const int BIT_LENGTH_HAS_REPETITIONS = 1;
+    const int BIT_LENGTH_UNUSED = 11;
 
     const int BIT_INDEX_TERMINAL = 0;
     const int BIT_INDEX_DRAW_KNOWN_EXIST = BIT_INDEX_TERMINAL + BIT_LENGTH_TERMINAL;
@@ -48,7 +49,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     const int BIT_INDEX_IS_OLD_GENERATION = BIT_INDEX_M_POSITION + BIT_LENGTH_M_POSITION;
     const int BIT_INDEX_TRANSPOSITION_UNLINK_INPROGRESS = BIT_INDEX_IS_OLD_GENERATION + BIT_LENGTH_IS_OLD_GENERATION;
     const int BIT_INDEX_IS_TRANSPOSITION_ROOT = BIT_INDEX_TRANSPOSITION_UNLINK_INPROGRESS + BIT_LENGTH_TRANSPOSITION_UNLINK_INPROGRESS;
-    const int BIT_INDEX_INDEX_IN_PARENT = BIT_INDEX_IS_TRANSPOSITION_ROOT + BIT_INDEX_IS_TRANSPOSITION_ROOT;
+    const int BIT_INDEX_INDEX_IN_PARENT = BIT_INDEX_IS_TRANSPOSITION_ROOT + BIT_LENGTH_IS_TRANSPOSITION_ROOT;
+    const int BIT_INDEX_HAS_REPETITIONS = BIT_INDEX_INDEX_IN_PARENT + BIT_LENGTH_INDEX_IN_PARENT;
 
 
     public void Clear() => bits = 0;
@@ -193,6 +195,24 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       }
     }
 
+
+    /// <summary>
+    /// If the position has one more repetitions in the history.
+    /// </summary>
+    internal bool HasRepetitions
+    {
+      [MethodImpl(MethodImplOptions.AggressiveInlining)]
+      readonly get
+      {
+        return BitUtils.HasFlag(bits, BIT_INDEX_HAS_REPETITIONS);
+      }
+
+      [MethodImpl(MethodImplOptions.AggressiveInlining)]
+      set
+      {
+        BitUtils.SetFlag(ref bits, BIT_INDEX_HAS_REPETITIONS, value);
+      }
+    }
 
 
     /// <summary>

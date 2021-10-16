@@ -311,6 +311,7 @@ namespace Ceres.MCTS.Search
       ref readonly LeafEvaluationResult nodeEvalResult = ref node.EvalResult;
 
       nodeRef.Terminal = node.EvalResult.TerminalStatus;
+      nodeRef.HasRepetitions = node.Annotation.Pos.MiscInfo.RepetitionCount > 0;
 
       if (ParamsSelect.VIsForcedLoss(node.EvalResult.V))
       {

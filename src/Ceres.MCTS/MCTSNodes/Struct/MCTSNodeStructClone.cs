@@ -36,6 +36,12 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 {
   public partial struct MCTSNodeStruct
   {
+    static bool IsSuitable(in MCTSNodeStruct refNode) => 
+                      !refNode.IsTranspositionLinked 
+                   && !FP16.IsNaN(refNode.V)
+                   && !refNode.HasRepetitions; // don't use since might have different repetition count from this node
+
+
     /// <summary>
     /// Determine how many nodes could be visited from this node 
     /// if it is used as a transposition root for some other node.
@@ -56,7 +62,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       if (NumChildrenExpanded > 0)
       {
         ref readonly MCTSNodeStruct child = ref store[in this, 0];
-        if (!child.IsTranspositionLinked && !FP16.IsNaN(child.V))
+        if (IsSuitable(in child))
         {
           count++;
 
@@ -87,7 +93,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           if (child.NumChildrenExpanded > 0)
           {
             ref readonly MCTSNodeStruct subchild = ref store[in child, 0]; // TODO: make faster???
-            if (!subchild.IsTranspositionLinked && !FP16.IsNaN(subchild.V))
+            if (IsSuitable(in subchild))
             {
               count++;
             }
@@ -99,7 +105,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           if (NumChildrenExpanded > 1)
           {
             ref readonly MCTSNodeStruct sibling = ref store[in this, 1];
-            if (!sibling.IsTranspositionLinked && !FP16.IsNaN(sibling.V))
+            if (IsSuitable(in sibling))
             {
               count++;
             }
