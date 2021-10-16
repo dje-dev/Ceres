@@ -850,6 +850,12 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         }
         else
         {
+          // Only terminal nodes can be multivisited (not collisions).
+          if (!wasTerminal)
+          {
+            numToApply = 1;
+          }
+
           node.N += numToApply;
           node.W += vToApply * numToApply;
           //node.VSumSquares  += vToApply * vToApply * totalInFlightToApply;
