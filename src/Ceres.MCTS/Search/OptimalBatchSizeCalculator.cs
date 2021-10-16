@@ -45,8 +45,8 @@ namespace Ceres.MCTS.Search
     /// <param name="batchSizeMultiplier"></param>
     /// <param name="paramsSearch"></param>
     /// <returns></returns>
-    internal static int CalcOptimalBatchSize(int estimatedTotalSearchNodes, int currentTreeSize, 
-                                             bool overlapInUse, bool dualSelectorsInUse, 
+    internal static int CalcOptimalBatchSize(int estimatedTotalSearchNodes, int currentTreeSize,
+                                             bool overlapInUse, bool dualSelectorsInUse,
                                              int maxBatchSize, float batchSizeMultiplier,
                                              ParamsSearch paramsSearch)
     {
@@ -66,18 +66,27 @@ namespace Ceres.MCTS.Search
       }
 
 
-      const float MULT = 2.7f;
+      const float MULT = 3.2f;
       const float POW = 0.45f;
       int value = (int)(MULT * MathF.Pow(currentTreeSize, POW));
 
-      if (overlapInUse && !dualSelectorsInUse)
+      if (overlapInUse)
       {
-        // If we are overlapping we have to do only 1/2 the batch in each overlap,
+        // If we are overlapping we have two batches in flight at once,
         // since the total number in flight will include 2 selectors.
-        // The exception is if we are using dual selectors, 
-        // in which case we consider this to provide sufficient 
-        // collision avoidance so we don't divide in half.
-        value /= 2;
+        // Since there will be some collisions across batches,
+        // we need to adjust downward the batch size.
+        if (dualSelectorsInUse)
+        {
+          // Only modestly decrease since the dual selectors 
+          // will have different CPUCTs and therefore not totally compete.
+          value = (int)(value * 0.80f);
+        }
+        else
+        {
+          // Reduce batch size to larger degree since two overlapped selectors diretly competing.
+          value = (int)(value * 0.60f);
+        }
       }
 
       // Never allow batch size to be more than 10% of current number of nodes (or 20% for smaller trees)
