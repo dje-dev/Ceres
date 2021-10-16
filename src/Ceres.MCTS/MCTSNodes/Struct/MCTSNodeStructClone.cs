@@ -18,6 +18,10 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 
 using Ceres.Base.DataTypes;
+using Ceres.Chess;
+using Ceres.Chess.EncodedPositions.Basic;
+using Ceres.Chess.MoveGen;
+using Ceres.Chess.MoveGen.Converters;
 using Ceres.MCTS.Environment;
 using Ceres.MCTS.Evaluators;
 using Ceres.MCTS.Iteration;
@@ -43,7 +47,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// </summary>
     internal int NumUsableSubnodesForCloning(MCTSNodeStore store)
     {
-      if (IsTranspositionLinked || Terminal == Chess.GameResult.NotInitialized)
+      if (IsTranspositionLinked || Terminal == GameResult.NotInitialized)
       {
         return 0;
       }
@@ -56,10 +60,33 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         {
           count++;
 
+#if NOT
+          // Someday worry about non-equality of repetitions
+          // with transposition children.
+          if (nodeCloningTarget.Context.ParamsSearch.TestFlag)
+          {
+            Position posAfter = PosAfterMoveWithRepetitionsSet(nodeCloningTarget, child.PriorMove);
+
+            MCTSNode childNode = nodeCloningTarget.Context.Tree.GetNode(child.Index); // *** inefficient??
+            childNode.Annotate();
+            Position childNodePos = childNode.InfoRef.Annotation.Pos;
+
+            if (!posAfter.EqualAsRepetition(in childNodePos))
+            {
+              Console.WriteLine("skip different repetitions");
+              Console.WriteLine(posAfter);
+              Console.WriteLine(childNodePos);
+            }
+            else
+            {
+//              Console.WriteLine("ok to use");
+            }
+          }
+#endif
           // Check if subchild available.
           if (child.NumChildrenExpanded > 0)
           {
-            ref readonly MCTSNodeStruct subchild = ref store[in child, 0];
+            ref readonly MCTSNodeStruct subchild = ref store[in child, 0]; // TODO: make faster???
             if (!subchild.IsTranspositionLinked && !FP16.IsNaN(subchild.V))
             {
               count++;
@@ -285,6 +312,50 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       throw new NotImplementedException(); // see below
     }
 
+
+    #region Helpers
+
+    public static Position PosAfterMoveWithRepetitionsSet(MCTSNode node, EncodedMove move)
+    {
+      //      MCTSNodeStructChild child = node.ChildAtIndexRef(childIndex);
+      //      Debug.Assert(!child.IsExpanded);
+
+      MGPosition posMG = node.Annotation.PosMG;
+      posMG.MakeMove(ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(move, in posMG));
+      Position pos = posMG.ToPosition;
+
+      if (node.IsRoot || node.Parent.IsRoot)
+      {
+        return pos; // TODO: what about prior positions in store?
+      }
+
+      //      ulong thisHash = pos.CalcZobristHash(PositionMiscInfo.HashMove50Mode.ValueBoolIfAbove98, true);
+
+      MCTSNode pred = node.Parent;
+      int repCount = 0;
+      int plyUpCount = 2;
+      int maxPlies = node.Context.ParamsSearch.DrawByRepetitionLookbackPlies;
+      while (plyUpCount <= maxPlies)
+      {
+        //        if (pred.StructRef.ZobristHash == thisHash)
+        if (pred.InfoRef.Annotation.Pos.EqualAsRepetition(in pos))
+        {
+          //          Console.WriteLine("Found pred match " + pred.Depth + " " + repCount);
+          repCount++;
+        }
+        if (pred.IsRoot || pred.Parent.IsRoot)
+        {
+          break;
+        }
+        pred = pred.Parent.Parent;
+        plyUpCount += 2;
+      };
+
+      pos.MiscInfo.SetRepetitionCount(repCount);
+      return pos;
+    }
+
+    #endregion
 
   }
 

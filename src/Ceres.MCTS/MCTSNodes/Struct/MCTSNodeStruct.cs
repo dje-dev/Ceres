@@ -38,9 +38,14 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 {
   /// <summary>
   /// Raw low-level structure used to hold core MCTS tree node data.
-  /// 
   /// Note that size exactly 64 bytes to align with cache lines.
-  ///   
+  /// 
+  /// N.B. because the struct is marked as readonly, it is important to mark as many
+  ///      properties/methods as readonly as possible to avoid compiler making defensive copies:
+  ///        - improves efficiency
+  ///        - insures correctness so that the index of a node can be determined by by its address
+  ///          (insure it remains in the MCTSNodeStore)
+  /// 
   /// Notes on children layout:
   ///   - child arrays (expanded or unexpanded) are always sorted desecending by P
   ///     (with ties believed impossible due to code run at policy initialization which enforces this)
@@ -61,7 +66,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <summary>
     /// Neural network evaluation of win - loss.
     /// </summary>
-    public FP16 V => WinP - LossP;
+    public readonly FP16 V => WinP - LossP;
 
     /// <summary>
     /// Draw probability
@@ -72,7 +77,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <summary>
     /// Average M (moves left estimate) for this subtree
     /// </summary>
-    public float MAvg => mSum / N;
+    public readonly float MAvg => mSum / N;
 
     /// <summary>
     /// The starting index of entries for this node within the child info array
@@ -93,34 +98,34 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     //    public short TranspositionNumBorrowed;
 
 
-    public float QUpdatesWtdAvg { get => throw new NotImplementedException(); set { } }
+    public readonly float QUpdatesWtdAvg { get => throw new NotImplementedException(); set { } }
 
-    public float QUpdatesWtdVariance { get => throw new NotImplementedException(); set { } }
+    public readonly float QUpdatesWtdVariance { get => throw new NotImplementedException(); set { } }
 
     //    public float VVariance => W == 0 ? 0 : (VSumSquares - (float)W) / N;
 
 
-    internal float VSumSquares { get => float.NaN; set { } }
+    internal readonly float VSumSquares { get => float.NaN; set { } }
 
     /// <summary>
     /// Variance of all V values backed up from subtree
     /// </summary>
-    public float VVariance => W == 0 ? 0 : (VSumSquares - (float)W) / N;
+    public readonly float VVariance => W == 0 ? 0 : (VSumSquares - (float)W) / N;
 
     /// <summary>
     /// Average win probability of subtree
     /// </summary>
-    public float WAvg => 1.0f - DAvg - LAvg;
+    public readonly float WAvg => 1.0f - DAvg - LAvg;
 
     /// <summary>
     /// Average draw probability of subtree
     /// </summary>
-    public float DAvg => dSum / N;
+    public readonly float DAvg => dSum / N;
 
     /// <summary>
     /// Average loss probability of subbtree
     /// </summary>
-    public float LAvg => 0.5f * (1.0f - DAvg - (float)Q);
+    public readonly float LAvg => 0.5f * (1.0f - DAvg - (float)Q);
 
     public byte NumChildrenVisited
     {
@@ -162,7 +167,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// If the tree is truncated at this node and generating position
     /// values via the subtree linked to its tranposition root
     /// </summary>
-    public bool IsTranspositionLinked => childStartBlockIndex < 0;
+    public readonly bool IsTranspositionLinked => childStartBlockIndex < 0;
 
     public int TranspositionRootIndex
     {
@@ -219,7 +224,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// </summary>
     /// <param name="move"></param>
     /// <returns></returns>
-    public int? ChildIndexWithMove(MGMove move)
+    public readonly int? ChildIndexWithMove(MGMove move)
     {
       EncodedMove lzMove = ConverterMGMoveEncodedMove.MGChessMoveToEncodedMove(move);
       Span<MCTSNodeStructChild> children = this.Children;

@@ -103,7 +103,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <param name="store"></param>
     /// <param name="childNodeIndex"></param>
     /// <returns></returns>
-    public int IndexOfExpandedChildForIndex(MCTSNodeStore store, MCTSNodeStructIndex childNodeIndex)
+    public readonly int IndexOfExpandedChildForIndex(MCTSNodeStore store, MCTSNodeStructIndex childNodeIndex)
     {
       Span<MCTSNodeStructChild> children = ChildrenFromStore(store).Slice(0, NumChildrenExpanded);
       Span<int> castChildren = MemoryMarshal.Cast<MCTSNodeStructChild, int>(children);
@@ -357,7 +357,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     };
 
 
-    public void PossiblyPrefetchChild(MCTSNodeStore store, MCTSNodeStructIndex nodeIndex, int childIndex)
+    public readonly void PossiblyPrefetchChild(MCTSNodeStore store, MCTSNodeStructIndex nodeIndex, int childIndex)
     {
       PossiblyPrefetchNodeAndChildrenInRange(store, nodeIndex, childIndex, 1);
     }
@@ -427,7 +427,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     }
 
 
-    public void PossiblyPrefetchChildArray(MCTSNodeStore store, MCTSNodeStructIndex index)
+    public readonly void PossiblyPrefetchChildArray(MCTSNodeStore store, MCTSNodeStructIndex index)
     {
       PossiblyPrefetchNodeAndChildrenInRange(store, index, 0, NumChildrenExpanded);
     }
@@ -472,7 +472,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 #endif
 
 
-    public float TrendBonusToP
+    public readonly float TrendBonusToP
     {
       get
       {

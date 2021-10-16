@@ -90,7 +90,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// </summary>
     public byte MPosition
     {
-      get => miscFields.MPosition;
+      readonly get => miscFields.MPosition;
       set => miscFields.MPosition = Math.Min(MAX_M, value);
     }
 
@@ -109,7 +109,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// </summary>
     public GameResult Terminal
     {
-      get => miscFields.Terminal;
+      readonly get => miscFields.Terminal;
       set => miscFields.Terminal = value;
     }
 
@@ -177,7 +177,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// </summary>
     public bool DrawKnownToExistAmongChildren
     {
-      get => miscFields.DrawKnownToExistAmongChildren;
+      readonly get => miscFields.DrawKnownToExistAmongChildren;
       set => miscFields.DrawKnownToExistAmongChildren = value;
     }
 
@@ -191,7 +191,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// </summary>
     public bool IsOldGeneration   
     {
-      get => miscFields.IsOldGeneration;
+      readonly get => miscFields.IsOldGeneration;
       set => miscFields.IsOldGeneration = value;
     }
 
@@ -201,7 +201,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// </summary>
     public bool IsTranspositionRoot 
     {
-      get => miscFields.IsTranspositionRoot;
+      readonly get => miscFields.IsTranspositionRoot;
       set => miscFields.IsTranspositionRoot = value;
     }
 
@@ -210,7 +210,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// </summary>
     internal bool TranspositionUnlinkIsInProgress
     {
-      get => miscFields.TranspositionUnlinkIsInProgress;
+      readonly get => miscFields.TranspositionUnlinkIsInProgress;
       set => miscFields.TranspositionUnlinkIsInProgress = value;
     }
 
@@ -229,7 +229,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <summary>
     /// If the associated MCTSNodeInfo is present in the cache.
     /// </summary>
-    public bool IsCached => CachedInfoPtr != null;
+    public readonly bool IsCached => CachedInfoPtr != null;
 
 
     /// <summary>
@@ -237,7 +237,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// </summary>
     public FP16 VSecondary
     {
-      get => FP16.NaN;
+      readonly get => FP16.NaN;
       set 
       { 
         if (!FP16.IsNaN(value)) throw new NotImplementedException(); 
@@ -246,7 +246,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
     public FP16 Uncertainty
     {
-      get => FP16.NaN;
+      readonly get => FP16.NaN;
       set
       {
         if (!FP16.IsNaN(value)) throw new NotImplementedException();
@@ -296,7 +296,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
     }
 
-    public void Dump()
+    public readonly void Dump()
     {
       Console.WriteLine($"[Inferred index {Index}]  ParentIndex {ParentIndex} ReuseGenerationNum {IsOldGeneration}");
       Console.WriteLine($"PriorMove {PriorMove}");

@@ -60,7 +60,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     internal GameResult Terminal
     {
       [MethodImpl(MethodImplOptions.AggressiveInlining)]
-      get
+      readonly get
       {
         return (GameResult)BitUtils.ExtractRange(bits, BIT_INDEX_TERMINAL, BIT_LENGTH_TERMINAL);
       }
@@ -80,7 +80,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     internal bool DrawKnownToExistAmongChildren
     {
       [MethodImpl(MethodImplOptions.AggressiveInlining)]
-      get
+      readonly get
       {
         return BitUtils.HasFlag(bits, BIT_INDEX_DRAW_KNOWN_EXIST);
       }
@@ -99,7 +99,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     internal byte MPosition
     {
       [MethodImpl(MethodImplOptions.AggressiveInlining)]
-      get
+      readonly get
       {
         return (byte)BitUtils.ExtractRange(bits, BIT_INDEX_M_POSITION, BIT_LENGTH_M_POSITION);
       }
@@ -120,7 +120,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     internal bool IsOldGeneration
     {
       [MethodImpl(MethodImplOptions.AggressiveInlining)]
-      get
+      readonly get
       {
         return BitUtils.ExtractRange(bits, BIT_INDEX_IS_OLD_GENERATION, BIT_LENGTH_IS_OLD_GENERATION) > 0;
       }
@@ -140,7 +140,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     internal bool IsTranspositionRoot
     {
       [MethodImpl(MethodImplOptions.AggressiveInlining)]
-      get
+      readonly get
       {
         return BitUtils.ExtractRange(bits, BIT_INDEX_IS_TRANSPOSITION_ROOT, BIT_LENGTH_IS_TRANSPOSITION_ROOT) > 0;
       }
@@ -161,7 +161,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     internal bool TranspositionUnlinkIsInProgress
     {
       [MethodImpl(MethodImplOptions.AggressiveInlining)]
-      get
+      readonly get
       {
         return BitUtils.ExtractRange(bits, BIT_INDEX_TRANSPOSITION_UNLINK_INPROGRESS, BIT_LENGTH_TRANSPOSITION_UNLINK_INPROGRESS) > 0;
       }
@@ -180,7 +180,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     internal byte IndexInParent
     {
       [MethodImpl(MethodImplOptions.AggressiveInlining)]
-      get
+      readonly get
       {
         return (byte)BitUtils.ExtractRange(bits, BIT_INDEX_INDEX_IN_PARENT, BIT_LENGTH_INDEX_IN_PARENT);
       }
@@ -195,12 +195,11 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
 
 
-
     /// <summary>
     /// Returns string summary of record fields.
     /// </summary>
     /// <returns></returns>
-    public override string ToString()
+    public readonly override string ToString()
     {
       return $"<MCTSNodeStructMiscFields Terminal: {Terminal}, DrawExist: {DrawKnownToExistAmongChildren}, M: {MPosition}, Gen#: {IsOldGeneration}";
     }

@@ -86,14 +86,14 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ref MCTSNodeStruct ChildRefFromStore(MCTSNodeStore store)
+    public readonly ref MCTSNodeStruct ChildRefFromStore(MCTSNodeStore store)
     {
       Debug.Assert(IsExpanded);
       return ref store.Nodes.nodes[ChildIndex.Index];
     }
 
 
-    public ref MCTSNodeStruct ChildRef
+    public readonly ref MCTSNodeStruct ChildRef
     {
       [MethodImpl(MethodImplOptions.AggressiveInlining)]
       get
@@ -123,7 +123,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     }
 
 
-    public override string ToString()
+    public readonly override string ToString()
     {
       string detail;
       if (IsExpanded)
