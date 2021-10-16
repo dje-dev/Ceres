@@ -179,7 +179,7 @@ namespace Ceres.MCTS.NodeCache
     {
 #if DEBUG
       // Disabled, too slow.
-      ValidateState();
+      //ValidateState();
 #endif
 
       int numTries = 0;
