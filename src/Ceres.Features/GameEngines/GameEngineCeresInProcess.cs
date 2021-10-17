@@ -315,6 +315,15 @@ namespace Ceres.Features.GameEngines
 
       using (new SearchContextExecutionBlock(result.Search.Manager.Context))
       {
+
+#if FLAG_POSSIBLE_FALSE_DRAWS
+        if (result.Depth < 4 && Math.Abs(result.ScoreCentipawns) < 2 
+         && Math.Abs(result.Search.SearchRootNode.V) > 0.5f)
+        {
+          Console.WriteLine("RETRY " + curPositionAndMoves.FinalPosition.FEN);
+        }
+#endif
+
         // Append search result information to log file (if any).
         StringWriter dumpInfo = new StringWriter();
         if (SearchLogFileName != null)
