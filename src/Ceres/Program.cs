@@ -72,7 +72,7 @@ namespace Ceres
       //      if (CeresUserSettingsManager.Settings.DirLC0Networks != null)
       //        NNWeightsFilesLC0.RegisterDirectory(CeresUserSettingsManager.Settings.DirLC0Networks);
 
-      MCTSEngineInitialization.BaseInitialize(CeresEnvironment.MONITORING_METRICS, CommandLineWorkerSpecification.NumaNodeID);
+      MCTSEngineInitialization.BaseInitialize(CeresEnvironment.MONITORING_METRICS, 1);
 
 
       Console.WriteLine();
@@ -132,7 +132,7 @@ namespace Ceres
 | (c) 2020- David Elliott and the Ceres Authors           |
 |   With network backend code from Leela Chess Zero.      |
 |                                                         |
-|  Version {VER} Use help to list available commands.     |
+|  Version {VER} Use help to list available commands.  |
 |=========================================================|
 ";
 

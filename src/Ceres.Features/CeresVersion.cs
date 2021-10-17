@@ -20,6 +20,6 @@ namespace Ceres.Features
 {
   public static class CeresVersion
   {
-    public const string VersionString = "0.95";
+    public const string VersionString = "0.95rc1";
   }
 }
