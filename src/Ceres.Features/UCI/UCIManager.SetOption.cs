@@ -65,6 +65,11 @@ namespace Ceres.Features.UCI
     bool perPVCounters = false;
 
     /// <summary>
+    /// If the experimental sibling evaluation feature is enabled.
+    /// </summary>
+    bool enableSiblingEval = false;
+
+    /// <summary>
     /// Number of moves for which to output PVs in UCI input (multiPV mode is where numPV > 1).
     /// </summary>
     int numPV = 1;
@@ -236,6 +241,10 @@ namespace Ceres.Features.UCI
         case "perpvcounters":
           SetBool(value, ref perPVCounters);
           break;
+
+        case "enablesiblingeval":
+          SetBool(value, ref enableSiblingEval);
+          break;          
 
         case "uci_showwdl":
           SetBool(value, ref showWDL);
@@ -418,6 +427,7 @@ option name SearchLimitMultiplier type string default 1.00
 option name MaxTreeVisits type string default
 option name MaxTreeNodes type string default
 option name ReducedMemoryMode type check default false
+option name EnableSiblingEval type check default false
 ");
     /* 
 option name ConfigFile type string default lc0.config

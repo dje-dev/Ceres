@@ -204,6 +204,8 @@ namespace Ceres.Features.UCI
           parms.FutilityPruningStopSearchEnabled = false;
         }
         parms.MoveOverheadSeconds = moveOverheadSeconds;
+        parms.EnableUseSiblingEvaluations = enableSiblingEval;
+
         return parms;
       }
     }

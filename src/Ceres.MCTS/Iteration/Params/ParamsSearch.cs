@@ -387,6 +387,8 @@ namespace Ceres.MCTS.Params
         }
       }
 
+      EnableUseSiblingEvaluations = CeresUserSettingsManager.Settings.EnableSiblingEval;
+
       // Check user settings to see if tablebases are configured.
       EnableTablebases = CeresUserSettingsManager.Settings.TablebaseDirectory is not null;
 
@@ -394,6 +396,7 @@ namespace Ceres.MCTS.Params
       // but these may be updated dynamicaly during search
       // based on search state.
       Execution = new ParamsSearchExecution();
+
 
       ParamsSecondaryEvaluator = new();
     }

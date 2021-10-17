@@ -161,6 +161,8 @@ namespace Ceres.Chess.UserSettings
     public float? FPU { get; set; }
     public float? FPUAtRoot { get; set; }
 
+    public bool EnableSiblingEval { get; set; } = false;
+
     #region Tablebases
 
     public string TablebaseDirectory
