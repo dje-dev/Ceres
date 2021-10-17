@@ -119,8 +119,8 @@ namespace Ceres.APIExamples
       NET1 = "610024";
       NET2 = "610024";
 
-      //NET1 = "751675";
-      //NET2 = "751675";
+      NET1 = "751675";
+      NET2 = "751675";
       NET1 = "703810";
       NET2 = "703810";
       //      string NET1_SECONDARY1 = "j94-100";
@@ -144,25 +144,44 @@ namespace Ceres.APIExamples
         evalDef2.MakePersistent();
       }
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(20_000);
+      SearchLimit limit1 = SearchLimit.NodesPerMove(1000);
       //limit1 = SearchLimit.NodesForAllMoves(1_000_000, 10_000);
 
       // 140 good for 203 pairs, 300 good for 100 pairs
-      //      limit1 = SearchLimit.SecondsForAllMoves(900, 2) * 0.2f;
-      limit1 = SearchLimit.SecondsForAllMoves(5, 0.05f) * 3;
-      //      limit1 = SearchLimit.SecondsForAllMoves(140);
+      //      limit1 = SearchLimit.SecondsForAllMoves(90, 1f);
+      //limit1 = SearchLimit.SecondsForAllMoves(5, 0.05f) * 3;
+      //limit1 = SearchLimit.SecondsPerMove(1);
+//limit1 = SearchLimit.SecondsForAllMoves(50, 0.1f) * 1.1f;
+//ok      limit1 = SearchLimit.NodesPerMove(350_000); try test3.pgn against T75 opponent Ceres93 (in first position, 50% of time misses win near move 12
+      
       SearchLimit limit2 = limit1;
 
       // Don't output log if very small games
       // (to avoid making very large log files or slowing down play).
-      bool outputLog = limit1.EstNumNodes(500_000, false) > 10_000;
-      outputLog = false;
+      bool outputLog = false;// limit1.EstNumNodes(500_000, false) > 10_000;
       GameEngineDefCeres engineDefCeres1 = new GameEngineDefCeres("Ceres1", evalDef1, evalDefSecondary1, new ParamsSearch(), new ParamsSelect(),
                                                                   null, outputLog ? "Ceres1.log.txt" : null);
       GameEngineDefCeres engineDefCeres2 = new GameEngineDefCeres("Ceres2", evalDef2, evalDefSecondary2, new ParamsSearch(), new ParamsSelect(),
                                                                   null, outputLog ? "Ceres2.log.txt" : null);
 
-      //engineDefCeres1.SearchParams.TestFlag = true;
+      
+//      engineDefCeres1.SearchParams.EnableUseSiblingEvaluations = true;
+
+      //      engineDefCeres1.SearchParams.EnableTablebases = false;
+      //engineDefCeres1.SearchParams.Execution.FlowDirectOverlapped = false;
+      //      engineDefCeres2.SearchParams.Execution.FlowDirectOverlapped = false;
+
+      //      engineDefCeres1.SearchParams.Execution.TranspositionMode = TranspositionMode.None;
+      //      engineDefCeres1.SearchParams.Execution.InFlightThisBatchLinkageEnabled = false;
+#if NOT
+      engineDefCeres1.SearchParams.TestFlag = true;
+      engineDefCeres1.SearchParams.TranspositionRootBackupSubtreeFracs = new float[] { 1,1 };
+        engineDefCeres1.SearchParams.TranspositionCloneNodeSubtreeFracs = new float[] { 1,1,};
+      engineDefCeres2.SearchParams.TranspositionRootBackupSubtreeFracs = new float[] { 1,1 };
+      engineDefCeres2.SearchParams.TranspositionCloneNodeSubtreeFracs = new float[] { 1,1 };
+#endif
+      //      engineDefCeres1.SearchParams.TreeReuseSwapRootEnabled = false;
+      //      engineDefCeres2.SearchParams.TreeReuseSwapRootEnabled = false;
 
       if (false)
       {
@@ -170,6 +189,7 @@ namespace Ceres.APIExamples
         //engineDefCeres2.SearchParams.TreeReuseSwapRootEnabled = false;
 
         //        engineDefCeres1.SearchParams.Execution.TranspositionMode = TranspositionMode.SingleNodeDeferredCopy;
+        //engineDefCeres1.SearchParams.Execution.InFlightThisBatchLinkageEnabled = false;
         //engineDefCeres1.SearchParams.TranspositionRootBackupSubtreeFracs = new float[] { 1, 1, 1 };
         //engineDefCeres1.SearchParams.TranspositionCloneNodeSubtreeFracs = new float[] { 1, 1, 1 };
 
@@ -227,7 +247,7 @@ namespace Ceres.APIExamples
       //engineDefCeres1.SelectParams.PolicySoftmax = 1.5f;
 
       //engineDefCeres1.SelectParams.EnableExplorationGuard = true;
-      //engineDefCeres1.SearchParams.EnableTablebases = false;
+      
       //      engineDefCeres1.SearchParams.Execution.FlowDualSelectors = false;
       // TODO: support this in GameEngineDefCeresUCI
       bool forceDisableSmartPruning = limit1.IsNodesLimit;
@@ -282,9 +302,9 @@ namespace Ceres.APIExamples
                                                  //@"\\synology\dev\chess\data\epd\lichess_chad_bad.csv",
                                                  SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/epd/{BASE_NAME}.epd"
                                                                          : @$"\\synology\dev\chess\data\epd\{BASE_NAME}.epd",
-                                                playerCeres1, null, playerCeres94);
+                                                playerCeres1, null, playerCeres93);
 
-        suiteDef.MaxNumPositions = 10;
+        suiteDef.MaxNumPositions = 200;
         suiteDef.EPDLichessPuzzleFormat = suiteDef.EPDFileName.ToUpper().Contains("LICHESS");
 
         //suiteDef.EPDFilter = s => !s.Contains(".exe"); // For NICE suite, these represent positions with multiple choices
@@ -327,17 +347,20 @@ namespace Ceres.APIExamples
 #endif
       }
 
-      //TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerCeres2);
-      TournamentDef def = new TournamentDef("TOURN", playerCeres1UCI, playerLC0);
+      TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerCeres2);
+      //        TournamentDef def = new TournamentDef("TOURN", playerCeres1UCI, playerCeres93);
+      //TournamentDef def = new TournamentDef("TOURN", playerCeres93, playerCeres1);
 
 
-      def.NumGamePairs = 203;//203;// 102; 203
-      def.ShowGameMoves = true;
+      def.NumGamePairs = 250;// 203;// 500;// 203;//203;// 102; 203
+      def.ShowGameMoves = false;
 
       string baseName = "tcec1819";
-      baseName = "4mvs_+90_+99";
+//      baseName = "4mvs_+90_+99";
       baseName = "book-ply8-unifen-Q-0.25-0.40";
-      baseName = "tcec_big";
+//      baseName = "test3";
+//      baseName = "tcec_big";
+  //    baseName = "endgame-16-piece-book_Q-0.0-0.6_1";
       def.OpeningsFileName = SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/openings/{baseName}.pgn"
                                                      : @$"\\synology\dev\chess\data\openings\{baseName}.pgn";
 
