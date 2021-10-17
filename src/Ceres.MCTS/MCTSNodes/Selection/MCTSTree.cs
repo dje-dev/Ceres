@@ -33,6 +33,7 @@ using Ceres.MCTS.MTCSNodes.Annotation;
 using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.NodeCache;
+using Ceres.MCTS.Params;
 
 #endregion
 
@@ -97,7 +98,7 @@ namespace Ceres.MCTS.LeafExpansion
                     int estimatedNumNodes,
                     PositionEvalCache positionCache, IMCTSNodeCache reuseNodeCache)
     {
-      if (context.ParamsSearch.DrawByRepetitionLookbackPlies > MAX_LENGTH_POS_HISTORY)
+      if (ParamsSearch.DrawByRepetitionLookbackPlies > MAX_LENGTH_POS_HISTORY)
       {
         throw new Exception($"DrawByRepetitionLookbackPlies exceeds maximum length of {MAX_LENGTH_POS_HISTORY}");
       }
@@ -294,7 +295,7 @@ namespace Ceres.MCTS.LeafExpansion
 
       // Create history, with prepended move representing this move
       Span<Position> posHistory = GetPriorHistoryPositions(node.Parent, in newPosAsPos, PosScratchBuffer,
-                                                           node.Context.ParamsSearch.DrawByRepetitionLookbackPlies, true);
+                                                           ParamsSearch.DrawByRepetitionLookbackPlies, true);
 
       // Determine the set (possibly a subset) of positions over which to compute hash
       Span<Position> posHistoryForCaching = posHistory;
@@ -373,7 +374,7 @@ namespace Ceres.MCTS.LeafExpansion
     public Span<Position> HistoryPositionsForNode(MCTSNode node)
     {
       return GetPriorHistoryPositions(node.Parent, in node.Annotation.Pos, PosScratchBuffer,
-                                      node.Context.ParamsSearch.DrawByRepetitionLookbackPlies, true);
+                                      ParamsSearch.DrawByRepetitionLookbackPlies, true);
     }
 
 

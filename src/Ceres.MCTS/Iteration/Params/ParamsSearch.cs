@@ -223,7 +223,7 @@ namespace Ceres.MCTS.Params
     /// we need to look back over full game, but for efficiency reasons we 
     /// typically restrict lookback to a limited window.
     /// </summary>
-    public int DrawByRepetitionLookbackPlies = 22;
+    public const int DrawByRepetitionLookbackPlies = 22;
 
 
     /// <summary>

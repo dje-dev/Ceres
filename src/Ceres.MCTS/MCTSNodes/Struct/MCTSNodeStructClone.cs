@@ -340,7 +340,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       MCTSNode pred = node.Parent;
       int repCount = 0;
       int plyUpCount = 2;
-      int maxPlies = node.Context.ParamsSearch.DrawByRepetitionLookbackPlies;
+      int maxPlies = ParamsSearch.DrawByRepetitionLookbackPlies;
       while (plyUpCount <= maxPlies)
       {
         //        if (pred.StructRef.ZobristHash == thisHash)
