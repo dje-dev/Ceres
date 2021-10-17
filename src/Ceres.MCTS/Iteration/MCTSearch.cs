@@ -33,6 +33,7 @@ using Ceres.MCTS.Environment;
 using Ceres.MCTS.Managers;
 using Ceres.Chess.UserSettings;
 using Ceres.MCTS.NodeCache;
+using Ceres.Base.DataType.Trees;
 
 #endregion
 
@@ -46,10 +47,83 @@ namespace Ceres.MCTS.Iteration
   /// </summary>
   public partial class MCTSearch
   {
+
+
     /// <summary>
-    /// The underlying serach manager.
+    /// Undoes specified number of draw visits to node.
     /// </summary>
-    public MCTSManager Manager { get; private set; }
+    public void BackupRevertDrawVisits(ref MCTSNodeStruct nodeRef, int numToRevert)
+    {
+      MCTSEventSource.TestCounter1++; // ****************************
+
+      Span<MCTSNodeStruct> nodes = Manager.Context.Tree.Root.Store.Nodes.Span;
+
+      // TODO: actually evaluate this node?
+      nodeRef.Terminal = GameResult.Unknown;
+      if (!nodeRef.IsRoot && nodeRef.ParentRef.DrawKnownToExistAmongChildren)
+      {
+        nodeRef.ParentRef.DrawKnownToExistAmongChildren = false;      
+      }
+
+      ref MCTSNodeStruct node = ref nodeRef;
+      while (true)
+      {
+        node.N -= numToRevert;
+        if (nodeRef.dSum > 0)
+        {
+          nodeRef.dSum -= numToRevert;
+        }
+
+        if (node.IsRoot)
+        {
+          return;
+        }
+        else
+        {
+          node = ref nodes[node.ParentRef.Index.Index];
+        }
+      }
+
+    }
+
+
+
+    /// <summary>
+    /// Possibly some of the positions marked as draws by two or three fold repetition
+    /// are no longer repetitions if the prior moves changed with the tree reuse.
+    /// Therefore possibly back these out (similar to LC0).
+    /// </summary>
+    public void FixupDrawsInvalidatedByTreeReuse()
+    {
+      using (new SearchContextExecutionBlock(Manager.Context))
+      {
+        Manager.Context.Tree.Root.StructRef.Traverse(Manager.Context.Tree.Store,
+                         (ref MCTSNodeStruct nodeRef) =>
+                         {
+                           if (!nodeRef.IsOldGeneration && nodeRef.Terminal.IsTerminal() && nodeRef.HasRepetitions)
+                           {
+                             MCTSNode node = Manager.Context.Tree.GetNode(nodeRef.Index);
+                             node.Annotate();
+                             MCTSEventSource.TestMetric1++;
+Console.WriteLine(node.Annotation.Pos.MiscInfo.RepetitionCount);
+                             if (true || node.Annotation.Pos.MiscInfo.RepetitionCount == 0)
+                             {
+                               // Backout all but one draw
+                               BackupRevertDrawVisits(ref nodeRef, node.N - 1);
+                             }
+                           }
+                           return true;
+//                           return nodeRef.DepthInTree < 8; // *** FIX
+                       }, TreeTraversalType.Sequential);
+      }
+    }
+
+  
+
+  /// <summary>
+  /// The underlying serach manager.
+  /// </summary>
+  public MCTSManager Manager { get; private set; }
 
     /// <summary>
     /// Selected best move from last search.
@@ -474,6 +548,9 @@ namespace Ceres.MCTS.Iteration
       Manager.Context.ContemptManager = priorContext.ContemptManager;
 
       Manager.Context.Tree.NodeCache.SetContext(Manager.Context);
+
+      // NOTE: disabled, this happens in practive very rearely (and the revert code is not yet fully working)
+      //FixupDrawsInvalidatedByTreeReuse();
 
       (BestMove, TimingInfo) = MCTSManager.Search(Manager, verbose, progressCallback, 
                                                   possiblyUsePositionCache, moveImmediateIfOnlyOneMove);

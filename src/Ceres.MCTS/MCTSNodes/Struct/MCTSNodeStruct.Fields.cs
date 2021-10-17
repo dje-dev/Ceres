@@ -97,12 +97,12 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <summary>
     /// Accumulator for M (moves left) values across all visits.
     /// </summary>
-    private float mSum;
+    internal float mSum;
 
     /// <summary>
     /// Accumulator for D (draw) values across all visits.
     /// </summary>
-    private float dSum;
+    internal float dSum;
 
     /// <summary>
     /// Game terminal status

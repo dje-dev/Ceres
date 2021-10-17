@@ -64,7 +64,8 @@ namespace Ceres.MCTS.Params
     /// If the IMCTSNodeCache contents should be preserved and 
     /// subsequently reused after doing tree reuse with swap root method.
     /// However the speedup is negligible, and there appears to be
-    /// correctness problem when caching of Parent MCTSNodeInfo is enabled.
+    /// correctness problem when caching of Parent MCTSNodeInfo is enabled
+    /// (including fact that cached Annotation.Pos could have repetition count that's no longer valid).
     /// </summary>
     public const bool NEW_ROOT_SWAP_RETAIN_NODE_CACHE = false;
 
