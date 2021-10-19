@@ -164,15 +164,15 @@ namespace Ceres.MCTS.Environment
 
         makeNewRootTotalTimeSeconds ??= new PollingCounter("make-new-root-total-secs", this, () => MCTSManager.TotalTimeSecondsInMakeNewRoot); ;
 
-        totalNumMovesNoiseOverridden ??= new PollingCounter("noise_best_move_overrides_total", this, () => MCTSIterator.TotalNumMovesNoiseOverridden);
+//        totalNumMovesNoiseOverridden ??= new PollingCounter("noise_best_move_overrides_total", this, () => MCTSIterator.TotalNumMovesNoiseOverridden);
         
-        nnCacheHitRate ??= new PollingCounter("nncache-hit-rate_pct", this, () => LeafEvaluatorCache.HitRatePct);
+//        nnCacheHitRate ??= new PollingCounter("nncache-hit-rate_pct", this, () => LeafEvaluatorCache.HitRatePct);
         opponentTreeReuseHitRate ??= new PollingCounter("opponent-tree-reuse-hit-rate-pct", this, () => 100.0f * LeafEvaluatorReuseOtherTree.HitRate);
         opponentTreeReuseNumHits ??= new PollingCounter("opponent-tree-reuse-hit-count", this, () => LeafEvaluatorReuseOtherTree.NumHits);
 
         nnTranspositionsHitRate ??= new PollingCounter("transposition-hit-rate_pct", this, () => LeafEvaluatorTransposition.HitRatePct);
 
-        mlhMoveModificationFraction ??= new PollingCounter("mlh-move-modified-pct", this, () => 100.0f * ManagerChooseBestMove.MLHMoveModifiedFraction);
+//        mlhMoveModificationFraction ??= new PollingCounter("mlh-move-modified-pct", this, () => 100.0f * ManagerChooseBestMove.MLHMoveModifiedFraction);
 
         tablebaseHitsTotal ??= new PollingCounter("tablebase-hits-total", this, () => LC0DLLSyzygyEvaluator.NumTablebaseHits);
         tablebaseHits ??= new IncrementingPollingCounter("tablebase-hits", this, () => LC0DLLSyzygyEvaluator.NumTablebaseHits);
