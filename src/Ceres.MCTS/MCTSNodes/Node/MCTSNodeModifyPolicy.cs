@@ -16,6 +16,7 @@
 using System;
 using Ceres.Base.DataTypes;
 using Ceres.Chess.EncodedPositions;
+using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.Params;
 
@@ -24,7 +25,7 @@ using Ceres.MCTS.Params;
 
 namespace Ceres.MCTS.MTCSNodes
 {
-  public unsafe partial struct MCTSNodeInfo
+  public unsafe partial struct MCTSNode
   {
     /// <summary>
     /// Modifies a specified node by blending in 
@@ -37,8 +38,6 @@ namespace Ceres.MCTS.MTCSNodes
     /// </summary>
     public void BlendPolicy(in CompressedPolicyVector otherPolicy, float fracOther)
     {
-      throw new NotImplementedException();
-#if NOT
       if (IsTranspositionLinked)
       {
         // TODO: should we apply this update to the transposition root?
@@ -50,13 +49,15 @@ namespace Ceres.MCTS.MTCSNodes
         return;
       }
 
+      throw new Exception("Not yet implemented BlendPolicy, currently it can reorder non-expanded to be in front of expanded");
+
       float softmaxValue = Context.ParamsSelect.PolicySoftmax;
 
       const bool DEBUG = false;
       CompressedPolicyVector thisPolicy = default;
       if (DEBUG)
       {
-        MCTSNodeStructUtils.ExtractPolicyVector(softmaxValue, in Ref, ref thisPolicy);
+        MCTSNodeStructUtils.ExtractPolicyVector(softmaxValue, in StructRef, ref thisPolicy);
         Console.WriteLine(thisPolicy.ToString());
         Console.WriteLine(otherPolicy.ToString());
       }
@@ -64,7 +65,7 @@ namespace Ceres.MCTS.MTCSNodes
       // Process expanded nodes
       for (int i = 0; i < NumPolicyMoves; i++)
       {
-        var childInfo = ChildAtIndexInfo(i);
+        (MCTSNode node, EncodedMove move, FP16 p) childInfo = ChildAtIndexInfo(i);
         int indexOther = otherPolicy.IndexOfMove(childInfo.move);
 
         // Only try to modify policy if the move was already in the policy
@@ -76,7 +77,7 @@ namespace Ceres.MCTS.MTCSNodes
           if (i < NumChildrenExpanded)
           {
             // Directly set the new policy on the node structure
-            ChildAtIndex(i).Ref.P = newPolicy;
+            ChildAtIndex(i).StructRef.P = newPolicy;
           }
           else
           {
@@ -84,7 +85,6 @@ namespace Ceres.MCTS.MTCSNodes
             ChildAtIndexRef(i).SetUnexpandedPolicyValues(childInfo.move, newPolicy);
           }
         }
-
       }
 
       // Make sure the children are ordered by policy after the operation
@@ -95,7 +95,7 @@ namespace Ceres.MCTS.MTCSNodes
       {
         CompressedPolicyVector modifiedPolicy = default;
 
-        MCTSNodeStructUtils.ExtractPolicyVector(softmaxValue, in Ref, ref modifiedPolicy);
+        MCTSNodeStructUtils.ExtractPolicyVector(softmaxValue, in StructRef, ref modifiedPolicy);
 
         Console.WriteLine(modifiedPolicy.ToString());
 
@@ -109,7 +109,6 @@ namespace Ceres.MCTS.MTCSNodes
 
         Console.WriteLine();
       }
-#endif
     }
 
 
@@ -119,11 +118,9 @@ namespace Ceres.MCTS.MTCSNodes
     /// <param name="node"></param>
     public void EnsureChildrenOrderedByPolicy()
     {
-      throw new NotImplementedException();
-#if NOT
       bool didSwap = false;
       int numSwapped;
-      Span<MCTSNodeStructChild> childrenRaw = Ref.Children;
+      Span<MCTSNodeStructChild> childrenRaw = StructRef.Children;
       do
       {
         numSwapped = 0;
@@ -160,7 +157,6 @@ namespace Ceres.MCTS.MTCSNodes
           }
         }
       }
-#endif
     }
 
 

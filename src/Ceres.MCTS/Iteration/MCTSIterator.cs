@@ -223,8 +223,9 @@ namespace Ceres.MCTS.Iteration
      // Tree.Store = store; // TODO: ** TEMPORARY, remove this method
     }
 
+    public readonly MCTSManager Manager;
 
-    public MCTSIterator(MCTSNodeStore store,
+    public MCTSIterator(MCTSManager manager, MCTSNodeStore store,
                          MCTSIterator reuseOtherContextForEvaluatedNodes,
                          PositionEvalCache reusePositionCache,
                          IMCTSNodeCache reuseNodeCache,
@@ -235,6 +236,7 @@ namespace Ceres.MCTS.Iteration
                          SearchLimit searchLimit,
                          int estimatedNumSearchNodes)
     {
+      Manager = manager;
       // Make sure params arguments look initialized
       if (nnEvaluators == null) throw new ArgumentNullException(nameof(nnEvaluators));
 

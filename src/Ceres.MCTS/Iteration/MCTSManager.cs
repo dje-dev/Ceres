@@ -213,7 +213,7 @@ namespace Ceres.MCTS.Iteration
       {
         estNumNodes = Math.Max(0, estNumNodes - RootNWhenSearchStarted);
       }
-      Context = new MCTSIterator(store, reuseOtherContextForEvaluatedNodes, reusePositionCache, reuseNodeCache, reuseTranspositionRoots,
+      Context = new MCTSIterator(this, store, reuseOtherContextForEvaluatedNodes, reusePositionCache, reuseNodeCache, reuseTranspositionRoots,
                                  nnEvaluators, searchParams, childSelectParams, searchLimit, estNumNodes);
       ThreadSearchContext = Context;
 
@@ -330,7 +330,7 @@ namespace Ceres.MCTS.Iteration
          && nodeRef.Terminal == GameResult.Unknown
          && !nodeRef.IsTranspositionLinked
          && !nodeRef.IsOldGeneration
-         && nodeRef.Uncertainty == 0 // ** TODO: fix this
+         && nodeRef.Unused1 == 0 // ** TODO: fix this
          /*&& FP16.IsNaN(nodeRef.VSecondary)*/)// )
         {
           MCTSNode node = Context.Tree.GetNode(index);
@@ -338,7 +338,7 @@ namespace Ceres.MCTS.Iteration
           node.EvalResult = default;
           nodes.Add(node);
 
-          nodeRef.Uncertainty = 1; // TODO: FIX THIS
+          nodeRef.Unused1 = 1; // TODO: FIX THIS
 
           numNodes++;
 
@@ -379,7 +379,7 @@ namespace Ceres.MCTS.Iteration
           {
             ref readonly CompressedPolicyVector otherPolicy = ref node.EvalResult.PolicyRef;
 
-            node.InfoRef.BlendPolicy(in otherPolicy, secondaryParams.UpdatePolicyFraction);
+            node.BlendPolicy(in otherPolicy, secondaryParams.UpdatePolicyFraction);
 
             if (secondaryParams.UpdateValueFraction > 0)
             {
