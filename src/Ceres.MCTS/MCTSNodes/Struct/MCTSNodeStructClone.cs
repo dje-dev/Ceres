@@ -38,6 +38,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
   {
     static bool IsSuitable(in MCTSNodeStruct refNode) => 
                       !refNode.IsTranspositionLinked 
+                   && !refNode.TranspositionUnlinkIsInProgress
                    && !FP16.IsNaN(refNode.V)
                    && !refNode.HasRepetitions; // don't use since might have different repetition count from this node
 
