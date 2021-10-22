@@ -381,27 +381,33 @@ Console.WriteLine(node.Annotation.Pos.MiscInfo.RepetitionCount);
                             out SearchLimit searchLimitTargetAdjusted, out SearchLimit searchLimitIncremental);
 
 
-        ManagerTreeReuse.Method reuseMethod = ManagerTreeReuse.Method.NewStore;
-        if (newRoot.IsNotNull)
+        ManagerTreeReuse.Method reuseMethod;
+        bool instamove;
+        using (new SearchContextExecutionBlock(Manager.Context))
         {
-          MCTSNode candidateBestMove = newRoot.BestMove(false);
-          reuseMethod = ManagerTreeReuse.ChooseMethod(priorContext.Tree.Root, candidateBestMove, searchLimitTargetAdjusted.MaxTreeNodes);
-        }
 
-        // Check for possible instant move
-        bool instamove = CheckInstamove(Manager, searchLimitIncremental, newRoot, reuseMethod);
-        if (instamove)
-        {
-          // Modify in place to point to the new root
-          continuationSubroot = newRoot;
-          BestMove = newRoot.BestMoveInfo(false).BestMove;
-          Manager.StopStatus = MCTSManager.SearchStopStatus.Instamove;
-          TimingInfo = new TimingStats();
-          return;
-        }
-        else
-        {
-          CountSearchContinuations = 0;
+          reuseMethod = ManagerTreeReuse.Method.NewStore;
+          if (newRoot.IsNotNull)
+          {
+            MCTSNode candidateBestMove = newRoot.BestMove(false);
+            reuseMethod = ManagerTreeReuse.ChooseMethod(priorContext.Tree.Root, candidateBestMove, searchLimitTargetAdjusted.MaxTreeNodes);
+          }
+
+          // Check for possible instant move
+          instamove = CheckInstamove(Manager, searchLimitIncremental, newRoot, reuseMethod);
+          if (instamove)
+          {
+            // Modify in place to point to the new root
+            continuationSubroot = newRoot;
+            BestMove = newRoot.BestMoveInfo(false).BestMove;
+            Manager.StopStatus = MCTSManager.SearchStopStatus.Instamove;
+            TimingInfo = new TimingStats();
+            return;
+          }
+          else
+          {
+            CountSearchContinuations = 0;
+          }
         }
 
         const bool possiblyUsePositionCache = false; // TODO: could this be relaxed?
