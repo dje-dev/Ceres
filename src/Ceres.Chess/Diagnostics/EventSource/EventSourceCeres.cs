@@ -68,7 +68,8 @@ namespace Ceres.Chess.Diagnostics
         {
           FileName = "dotnet-counters",
           Arguments = $"monitor --process-id {processID} Ceres System.Runtime " + extraSourceNames,
-          UseShellExecute = true
+          UseShellExecute = true,
+          WindowStyle  = ProcessWindowStyle.Maximized           
         };
         Process.Start(ps);
       }
