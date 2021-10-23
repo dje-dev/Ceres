@@ -351,15 +351,6 @@ namespace Ceres.MCTS.LeafExpansion
         }
       }
 
-      // Possibly scan sibling and record information for
-      // possible use later in value backup.
-      if (node.N == 0
-       && node.Context.ParamsSearch.EnableUseSiblingEvaluations
-       && !node.IsRoot)
-      {
-        MCTSNodeSiblingEval.TrySetPendingSiblingValue(node, numCacheHashPositions);
-      }
-
     }
 
 

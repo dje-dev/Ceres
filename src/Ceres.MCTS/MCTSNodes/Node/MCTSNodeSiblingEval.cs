@@ -14,7 +14,9 @@
 #region Using directives
 
 using System;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using Ceres.Base.Math;
 using Ceres.Base.Threading;
 using Ceres.Chess;
 using Ceres.Chess.MoveGen;
@@ -45,28 +47,19 @@ namespace Ceres.MCTS.MTCSNodes
     /// Maximum number of children with lower probability to
     /// potentially to be scanned (at a cost of processor resources).
     /// </summary>
-    const int MAX_SCAN = 3;
+    const int MAX_SCAN = 10;
 
     /// <summary>
     /// Maximum inferiority of child which will be scanned.
     /// </summary>
-    const float MAX_P_INFERIORITY = 0.075f;
+    const float MAX_P_INFERIORITY = 0.05f;
 
-
-
+ 
     /// <summary>
-    /// Constructor.
+    /// Number of visits over which this node's Q was determined
+    /// (will be 1 if not transposition linked, otherwise N of transposition root).
     /// </summary>
-    /// <param name="siblingQ"></param>
-    /// <param name="siblingD"></param>
-    /// <param name="siblingN"></param>
-    public MCTSNodeSiblingEval(float siblingPInferiority, float siblingQ, float siblingD, short siblingN)
-    {
-      SiblingPInferiority = siblingPInferiority;
-      SiblingQ = siblingQ;
-      SiblingD = siblingD;
-      SiblingN = siblingN;
-    }
+    public readonly int SelfN;
 
     /// <summary>
     /// Magnitude by which the selected sibling had lower prior policy probability.
@@ -90,50 +83,70 @@ namespace Ceres.MCTS.MTCSNodes
 
 
     /// <summary>
+    /// Constructor.
+    /// </summary>
+    /// <param name="nSelf"></param>
+    /// <param name="siblingQ"></param>
+    /// <param name="siblingD"></param>
+    /// <param name="siblingN"></param>
+    public MCTSNodeSiblingEval(int nSelf, float siblingPInferiority, float siblingQ, float siblingD, short siblingN)
+    {
+      SelfN = nSelf;
+      SiblingPInferiority = siblingPInferiority;
+      SiblingQ = siblingQ;
+      SiblingD = siblingD;
+      SiblingN = siblingN;
+    }
+
+
+    /// <summary>
     /// Fractional weight to be used of a sibling node (rather than the node actually in flight)
     /// to be used in backup.
     /// </summary>
     public float WeightSiblingForBackup(bool hadBetterQ)
     {
-      if (hadBetterQ)
+      // The sibling had a better value (from the perspective of the node)
+      // so blend this in at a possibly considerable weight
+      // (based on a minimax perspective).
+      if (SiblingN == short.MaxValue)
       {
-        // The sibling had a better value (from the perspective of the node)
-        // so blend this in at a possibly considerable weight
-        // (based on a minimax perspective).
-        if (SiblingN == short.MaxValue)
-        {
-          // Was terminal (e.g. from tablebases).
-          return 1.0f;
-        }
-        else if (SiblingN >= 5)
-        {
-          return 0.8f;
-        }
-        else if (SiblingN >= 2)
-        {
-          return 0.6f;
-        }
-        else
-        {
-          return 0.4f;
-        }
+        // Was terminal (e.g. from tablebases).
+        return 1.0f;
       }
       else
       {
-        // Only blend in sibling if its prior probability is very close.
-        const float THRESHOLD_P_INFERIORITY_IGNORE = 0.02f * 0.5f;
-        if (SiblingPInferiority > THRESHOLD_P_INFERIORITY_IGNORE)
+        // Potentially we could give sibling eval lower weight if was not better 
+        // (minimax method) but in practice this seemed distinctly worse.
+        //float qBetterScaling = hadBetterQ ? 1.0f : 0.75f;
+        const float qBetterScaling = 1.0f;
+
+        // Give more weight to sibling the closer it is to this node's policy
+        const float SIBLING_SCALING_FACTOR = 20f;
+        float distanceScaling = SIBLING_SCALING_FACTOR * (MAX_P_INFERIORITY - SiblingPInferiority);
+
+        // The more visits were used as the basis for estimating the sibling N
+        // compared to the number of visit used to evaluate this node,
+        // the more weight we give to the sibling.
+        float CalcConfidenceAdjustment(float a, float b)
         {
-          return 0.0f;
+          Debug.Assert(a >= b);
+
+          // Naively assume uncertainty reduced with some fractional power of number of visits.
+          float relativeConfidence = MathF.Pow(a / b, 0.75f);
+
+          // We want adjustments [0..0.2] as the relative confidences runs from [1...4_or_above];
+          const float MAX_ADJ = 0.2f;
+          relativeConfidence = StatUtils.Bounded(relativeConfidence, 1, 4);
+          return (relativeConfidence - 1) * (MAX_ADJ / 3);
         }
-        else
-        {
-          // Return a weight which is larger for siblings
-          // closer in probability and having larger subtrees.
-          float multiplier = SiblingN >= 5 ? 0.25f : 0.15f;
-          return (multiplier * 0.03f) / (0.015f + SiblingPInferiority);
-        }
+
+        // Weight centered at naive default of 0.5.
+        float confidenceScaling = 0.5f + ((SiblingN > SelfN) ? CalcConfidenceAdjustment(SiblingN, SelfN)
+                                                             : -CalcConfidenceAdjustment(SelfN, SiblingN));
+
+        return confidenceScaling * distanceScaling * qBetterScaling;
       }
+
     }
 
 
@@ -149,18 +162,15 @@ namespace Ceres.MCTS.MTCSNodes
     /// <returns></returns>
     public (float, float) BackupValueForNode(MCTSNode node, float vToApplyFromChildOfNode, float dToApplyFromChildOfNode)
     {
-      float siblingQ = node.SiblingEval.Value.SiblingQ;
-      float siblingD = node.SiblingEval.Value.SiblingD;
-
-      bool siblingWasBetter = siblingQ < vToApplyFromChildOfNode;
-      float siblingWt = node.SiblingEval.Value.WeightSiblingForBackup(siblingWasBetter);
-
+      bool siblingWasBetter = SiblingQ < vToApplyFromChildOfNode;
+      float siblingWt = WeightSiblingForBackup(siblingWasBetter);
+      
       if (siblingWt > 0)
       {
         CountSiblingEvalsUsed.Add(1, node.Index);
         return (
-                 (siblingQ * siblingWt) + (vToApplyFromChildOfNode * (1.0f - siblingWt)),
-                 (siblingD * siblingWt) + (dToApplyFromChildOfNode * (1.0f - siblingWt))
+                 (SiblingQ * siblingWt) + (vToApplyFromChildOfNode * (1.0f - siblingWt)),
+                 (SiblingD * siblingWt) + (dToApplyFromChildOfNode * (1.0f - siblingWt))
                );
 
       }
@@ -253,7 +263,13 @@ namespace Ceres.MCTS.MTCSNodes
 
       if (bestQ.HasValue)
       {
-        node.SiblingEval = new MCTSNodeSiblingEval(pInferiority, bestQ.Value, bestD, bestN);
+        int nSelf = 1;
+        if (node.IsTranspositionLinked)
+        {
+          ref readonly MCTSNodeStruct transpositionRef = ref nodes[node.TranspositionRootIndex];
+          nSelf = transpositionRef.N;
+        }
+        node.SiblingEval = new MCTSNodeSiblingEval(nSelf, pInferiority, bestQ.Value, bestD, bestN);
       }
     }
 

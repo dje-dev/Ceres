@@ -377,6 +377,16 @@ namespace Ceres.MCTS.Search
         // Add to set of leafs
         gatheredNodes.Add(node);
       }
+
+      // Possibly scan not-yet visited siblings and record information for
+      // possible use later in value backup.
+      if (node.Context.ParamsSearch.EnableUseSiblingEvaluations
+       && !node.IsRoot)
+      {
+        Debug.Assert(node.Context.EvaluatorDef.NumCacheHashPositions == 1); // this hardcoded value  is assumed below
+        MCTSNodeSiblingEval.TrySetPendingSiblingValue(node, 1);
+      }
+
     }
 
 
