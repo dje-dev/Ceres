@@ -175,7 +175,7 @@ during search. At the end of search statistics relating to the top-level moves a
 a dump of the PV (principal variation) will be output. It is also possible to specify
 an opponent (such as "LC0") on the command line, causing two searches to execute
 concurrently (Ceres and the opponent). UCI status lines from both engines will be output,
-with color coding showing the moves of agreemnt or disagreement in their PVs.
+with color coding showing the moves of agreement or disagreement in their PVs.
 
 ```
 C:\dev\Ceres\artifacts\release\net5.0>ceres ANALYZE network=lc0:703810 device=gpu:0,1 opponent=lc0 limit=200000nm startpos
@@ -186,6 +186,29 @@ C:\dev\Ceres\artifacts\release\net5.0>ceres ANALYZE network=lc0:703810 device=gp
 The full detail of the output from the above command is shown here:
 [full output](command_analyze_output.txt).
 
+Each line in the output is a position.
+
+The columns in the output are:
+* Dep - the search depth
+* T - "C" for checkmate, "D" for draw
+* #M - The number of moves considered
+* FirstVisit - when was this node created during the search
+* MvWh - Move for white to get to this position
+* MvBl - Move for black to get to this position
+* N - The number of visits to this node during the search
+* Visits - The percentage number of visits to this node from the parent
+* Policy - The policy probability of this node
+* V - the node value
+* Q - the sum of values from children divided by the number of visits to children
+* WPos - the win probability of this position (without search)
+* DPos - the draw probability of this position
+* LPos - the loss probability of this position
+* WTree - the win probability of this subtree (i.e. after search)
+* DTree - the draw probability of this subtree
+* LTree - the loss probability of this subtree
+* MPos - the estimated number of moves left in the position (without search)
+* MTree - the estimated number of moves left in this subtree (after search)
+* FEN - the position for this node
 
 ### SUITE
 The SUITE command takes a set of test positions from an EPD file which also contains

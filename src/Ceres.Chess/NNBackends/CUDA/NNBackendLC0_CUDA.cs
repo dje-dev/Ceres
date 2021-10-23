@@ -239,6 +239,11 @@ namespace Ceres.Chess.NNBackends.CUDA
 
         InitNetwork(net);
       }
+      catch (Exception e) 
+      {
+            Console.WriteLine("Error when initializing CUDA. Did you install NVidia's CUDA? https://developer.nvidia.com/cuda-zone");
+            Console.WriteLine(e);
+      }
       finally
       {
         ExecContext.Device.GraphCaptureRWLock.ExitWriteLock();
