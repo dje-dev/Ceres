@@ -833,24 +833,34 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           dToApply = dToApplyFirst = 1; // TODO: is this ok even if not WDL network?
         }
 
+
+        float qDiff = vToApply - (float)Q;
+        float qDiffSquared = qDiff * qDiff;
+
         // NOTE: It is not possible to make the updates to both N and W atomic as a group.
         //       Therefore there is a very small possibility that another thread will observe one updated but not the other
         //       (e.g. thread gathering nodes which reaches over to use this as a transposition root and references Q)
         //       To mitigate the possible distortion, N is updated before W so any distortions will shrink toward 0.
         if (numToApply == 1)
         {
+          if (node.N >= VARIANCE_START_ACCUMULATE_N)
+          {
+            node.VarianceAccumulator += (FP16)qDiffSquared;
+          }
           node.N++;
           node.W += vToApply;
-          //node.VSumSquares += vToApply * vToApply;
-          node.mSum += mToApply;
+          node.mSum += (FP16)mToApply;
           node.dSum += dToApply;
         }
         else
         {
+          if (node.N >= VARIANCE_START_ACCUMULATE_N)
+          {
+            node.VarianceAccumulator += (FP16)(qDiffSquared * numToApply);
+          }
           node.N += numToApply;
           node.W += vToApply * numToApply;
-          //node.VSumSquares  += vToApply * vToApply * totalInFlightToApply;
-          node.mSum += mToApply * numToApply;
+          node.mSum += (FP16)(mToApply * numToApply);
           node.dSum += dToApply * numToApply;
         }
 

@@ -97,7 +97,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <summary>
     /// Accumulator for M (moves left) values across all visits.
     /// </summary>
-    internal float mSum;
+    internal FP16 mSum;
 
     /// <summary>
     /// Accumulator for D (draw) values across all visits.
@@ -164,6 +164,18 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     public byte NumChildrenExpanded;
 
     public byte Unused1;
+
+    /// <summary>
+    /// Only start accumulating variance statistics after a minimum number of visits
+    /// to avoid building statistics when the Q is still highly noisy.
+    /// </summary>
+    public const int VARIANCE_START_ACCUMULATE_N = 20;
+
+    /// <summary>
+    /// Accumulate the squared deviations from mean (Q) at the time of each backup
+    /// (starting after VARIANCE_START_ACCUMULATE_N visits).
+    /// </summary>
+    public FP16 VarianceAccumulator;
 
 #if NOT
 /// <summary>

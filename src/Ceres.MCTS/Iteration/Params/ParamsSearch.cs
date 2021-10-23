@@ -337,7 +337,19 @@ namespace Ceres.MCTS.Params
     ///   - improve Elo by 5 to 10 with smaller networks (e.g. 20b) and short to medium size searches
     ///   - degrade Elo by about 5 to 8 Elo with larger networks (e.g. 30b) especially at longer searches
     /// </summary>
-    public bool EnableUseSiblingEvaluations = false;
+    public bool EnableUseSiblingEvaluations = true;
+
+    /// <summary>
+    /// If the uncertainty feature should be enabled.
+    /// It adds a small uncertainty-related tweak to the leaf selection formula 
+    /// (similar ideas such as UCB-V for classical UCB has already been explored in other domains). 
+    ///  It optimistically slightly incentivizes exploration at nodes with
+    ///  high uncertainty by inserting a scaling factor in the exploration term which is 
+    ///  calibrated to have mean 1 (with outlier truncation and shrinkage) 
+    ///  and increasing in the uncertainty (standard deviation) of the backed-up nodes seen so far. 
+    /// </summary>
+    /// 
+    public bool EnableUncertaintyScaling = false;
 
     /// <summary>
     /// Amount of time subtracted from time allotments to 

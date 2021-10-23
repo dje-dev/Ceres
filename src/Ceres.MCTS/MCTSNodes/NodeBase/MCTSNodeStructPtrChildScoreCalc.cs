@@ -17,7 +17,7 @@ using System;
 using System.Diagnostics;
 using Ceres.Base.DataType;
 using Ceres.Base.Math;
-
+using Ceres.MCTS.Environment;
 using Ceres.MCTS.LeafExpansion;
 using Ceres.MCTS.MTCSNodes.Struct;
 
@@ -69,6 +69,8 @@ namespace Ceres.MCTS.MTCSNodes
     }
 
 
+//    [ThreadStatic] static float accScale;
+//    [ThreadStatic] static float countScale;
 
     /// <summary>
     /// Applies CPUCT selection to determine for each child
@@ -115,6 +117,44 @@ namespace Ceres.MCTS.MTCSNodes
       if (Context.ParamsSelect.PolicyDecayFactor > 0)
       {
         ApplyPolicyDecay(numToProcess, gatherStatsPSpan);
+      }
+
+      if (Context.ParamsSearch.EnableUncertaintyScaling)
+      {
+        for (int i=0; i < numToProcess
+                   && i < NumChildrenExpanded; i++)
+        {
+          float explorationScaling = 1.0f;
+          const int MIN_N_USE_UNCERTAINTY = 50; // only use once sufficient data to be reliable
+          if (gatherStatsNSpan[i] > MIN_N_USE_UNCERTAINTY)
+          {
+            float childStdDev = MathF.Sqrt(Ref.VarianceAccumulator / (gatherStatsNSpan[i] - MCTSNodeStruct.VARIANCE_START_ACCUMULATE_N));
+
+            // Scale to average value 1.
+            const float SQRT_2_RECIPROCAL = 1.0f / 1.41421f;
+            explorationScaling = SQRT_2_RECIPROCAL + childStdDev;
+            
+            // Possibly modulate how much the scaling is applied.
+            const float WT_SCALE = 0.75f;
+            explorationScaling = WT_SCALE * explorationScaling + (1.0f - WT_SCALE) * 1;
+
+            // Shrink toward 1.0 and bound.
+            explorationScaling = MathF.Pow(explorationScaling, 0.35f);
+            explorationScaling = StatUtils.Bounded(explorationScaling, 0.95f, 1.05f);
+
+            // The exponentiation above is not symmetric about 1.0, correct for bias
+            // introduced to maintain average value 1.0.
+            explorationScaling -= 0.03f;
+
+            //accScale += explorationScaling;
+            //countScale++;
+          }
+
+          // Scale P by this uncertainty scaling factor
+          // which is equivalent to having separate multiplicand
+          // but more convenient than creating separately.
+          gatherStatsPSpan[i] *= explorationScaling;
+        }
       }
 
       // Possibly disqualify pruned moves from selection.

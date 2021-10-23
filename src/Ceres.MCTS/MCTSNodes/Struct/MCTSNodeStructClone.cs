@@ -203,7 +203,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       targetChildRef.Terminal = sourceChildRef.Terminal;
       targetChildRef.N = 1;
       targetChildRef.W = sourceChildRef.V * NODE_FRAC            + sourceChildRef.Q    * SUBTREE_FRAC;
-      targetChildRef.mSum = sourceChildRef.MPosition * NODE_FRAC + sourceChildRef.MAvg * SUBTREE_FRAC;
+      targetChildRef.mSum = (FP16)(sourceChildRef.MPosition * NODE_FRAC + sourceChildRef.MAvg * SUBTREE_FRAC);
       targetChildRef.dSum = sourceChildRef.DrawP * NODE_FRAC     + sourceChildRef.DAvg * SUBTREE_FRAC;
 
       targetChildRef.MPosition = sourceChildRef.MPosition;
@@ -213,6 +213,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       targetChildRef.ZobristHash = sourceChildRef.ZobristHash;
       targetChildRef.VSecondary = sourceChildRef.VSecondary;
       targetChildRef.Uncertainty = sourceChildRef.Uncertainty;
+      targetChildRef.VarianceAccumulator = sourceChildRef.VarianceAccumulator;
 
       targetChildRef.PriorMove = sourceChildRef.PriorMove;
       targetChildRef.miscFields.IndexInParent = (byte)sourceChildRef.IndexInParent;
@@ -303,7 +304,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           targetChildRef.N++;
 
           targetChildRef.W += -1 * (clonedSubchild.V * NODE_FRAC + clonedSubchild.Q * SUBTREE_FRAC);
-          targetChildRef.mSum += clonedSubchild.MPosition * NODE_FRAC + clonedSubchild.MAvg * SUBTREE_FRAC;
+          targetChildRef.mSum += (FP16)(clonedSubchild.MPosition * NODE_FRAC + clonedSubchild.MAvg * SUBTREE_FRAC);
           targetChildRef.dSum += clonedSubchild.DrawP * NODE_FRAC + clonedSubchild.DAvg * SUBTREE_FRAC;
         }
       }
