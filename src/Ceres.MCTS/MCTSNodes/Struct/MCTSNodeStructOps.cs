@@ -834,7 +834,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         }
 
 
-        float qDiff = vToApply - (float)Q;
+        float qDiff = vToApply - (float)node.Q;
         float qDiffSquared = qDiff * qDiff;
 
         // NOTE: It is not possible to make the updates to both N and W atomic as a group.

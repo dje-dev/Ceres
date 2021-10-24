@@ -312,6 +312,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       Uncertainty = UNCERTAINTY_PRIOR;
 #endif
       VSumSquares = 0;
+      VarianceAccumulator = 0;
 
       QUpdatesWtdAvg = 0;
 

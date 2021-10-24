@@ -128,24 +128,22 @@ namespace Ceres.MCTS.MTCSNodes
           const int MIN_N_USE_UNCERTAINTY = 50; // only use once sufficient data to be reliable
           if (gatherStatsNSpan[i] > MIN_N_USE_UNCERTAINTY)
           {
+            // Note that technically there should be an additional term which subtracts off squared mean below,
+            // but in practice the magnitude is too small to be worth the computational effort.
             float childStdDev = MathF.Sqrt(Ref.VarianceAccumulator / (gatherStatsNSpan[i] - MCTSNodeStruct.VARIANCE_START_ACCUMULATE_N));
 
             // Scale to average value 1.
             const float SQRT_2_RECIPROCAL = 1.0f / 1.41421f;
             explorationScaling = SQRT_2_RECIPROCAL + childStdDev;
-            
+
             // Possibly modulate how much the scaling is applied.
-            const float WT_SCALE = 0.75f;
+            const float WT_SCALE = 0.5f;
             explorationScaling = WT_SCALE * explorationScaling + (1.0f - WT_SCALE) * 1;
 
             // Shrink toward 1.0 and bound.
             explorationScaling = MathF.Pow(explorationScaling, 0.35f);
-            explorationScaling = StatUtils.Bounded(explorationScaling, 0.95f, 1.05f);
-
-            // The exponentiation above is not symmetric about 1.0, correct for bias
-            // introduced to maintain average value 1.0.
-            explorationScaling -= 0.03f;
-
+            explorationScaling = StatUtils.Bounded(explorationScaling, 0.85f, 1.15f);
+    
             //accScale += explorationScaling;
             //countScale++;
           }
