@@ -5,39 +5,42 @@ Ceres ("Chess Engine for Research") is:
 *  a flexible, modular and efficient software library with an exposed API to facilitate research in computer chess
 *  a set of [integrated tools](Commands.md) for chess research (e.g for position analysis, suite testing, tournament manager)
 
-The Ceres MCTS engine is a novel implementation written in C# for the Microsoft .NET 5 framework. This system 
-comprises about 50,000 lines of source in 400 source code files, developed
+The Ceres MCTS engine is a novel implementation written in C# for the Microsoft .NET framework. This system 
+comprises about 80,000 lines of source in 500 source code files, developed
 as a way to try to make something good come of COVID confinement. The underlying
 neural networks (and backend code to execute them) and backend code are currently mostly borrowed from the 
 [LeelaChessZero project](https://lczero.org) via a "plug-in" architecture.
 
 It is important to acknowledge that this project stands "on the shoulders of giants" - the pioneers
-in the field such as DeepMind with their AlphaZero project and the ongoing Leela Chess Zero project.
+in the field such as DeepMind with their AlphaZero project and the ongoing Leela Chess Zero project. In 
+some cases significant sections of code are largely based upon (transliterated from) other open source
+projects such as Fathom (for tablebase access) or Leela Chess Zero (CUDA backend logic).
 
 Although several fine open source implementations of MCTS engines are currently available, this project
-is hoped to provide four important benefits:
-* greatly reduce the current "CPU bottleneck" which prevents engines from full utilizing modern high-end GPU hardware
-* offer a comprehensive API for chess research, rather than a narrow focus on a UCI engine
-* offer an integrated set of tools (such as suite or tournament management) which simplify and accelerate testing of new research ideas
-* utilize a modern programming language with features such as automatic garbage collections and development environments 
+is hoped to provide several important benefits:
+* enhanced search speed, particularly on computers with multiple fast GPUs 
+* a comprehensive API for chess research, rather than a narrow focus on a UCI engine
+* an integrated set of tools (such as suite or tournament management) which simplify and accelerate testing of new research ideas
+* an implementation using a modern programming language with features such as automatic garbage collections and development environments 
  that provide edit/compile/debug inner loops which are almost instantaneous
+* a convenient testbed for implemneting and evaluating potential new algorithmic innovations
 
-## Caveats
+## State of Development
 
-In its first beta release, Ceres software and hardware requirements are fairly restrictive (Windows operating system,
-processors with AVX, and NVIDIA GPUs). Currently the installation and configuration burden
-is fairly significant and only suggested for hardcore enthusiasts with substantial computer expertise.
+Ceres was first released at the end of 2020 is still relatively early in its development.
+Support for the neural network backend is current limited to CUDA-capable GPUs.
 
-Initial testing suggests Ceres play quality is already highly competitive with 
-other MCTS chess engine implementations. However these results await independent verification
-and could quite possibly be flawed and/or not representative of typical hardware or playing conditions.
+During 2020 numerous significant enhancments were made, including:
+* added support for Linux operating system
+* implemented the CUDA backend directly in C# (using transliteration and enhancement to the LC0 backend code, 
+ including of the CUDA graphs feature for reduced inference latency)
+* implemented C# tablebase probing logic (via a transliteration of the Fathom project code)
+* added numerous algorithmic enhancements such as sibling blending and uncertainty boosting
+* significantly improved CPU and memory efficiency, especially for very large searches
 
-The robustness and completeness of the ancillary API and features such as suite and tournament 
-testing are considered of approximately beta test quality. However the
-robustness and completeness of the core UCI engine is considered near or at production quality,
-having been subjected to several months of nearly continuous testing with Cutechess,
-Arena, and other tools. The primary limitation in this regard is limited customizability
-from the UCI interface (currently no support of set option commands).
+Ceres playing strength is currently competitive with top chess engines such as Leela Chess Zero and Stockfish,
+depending of course considerably upon the particular types of hardware (CPU and GPU) available
+for each engine.
 
 
 ## Ceres Software Architecture
@@ -58,9 +61,9 @@ to facilitate research, for example including:
 * integrated MCTS search engine allowing customization of parameters or introspection of computed search trees
 * high-level modules for automated suite or tournament testing
 
-The external API is not yet considered stable. Documentation and samples will
-be published in the coming weeks, and feedback is welcomed on design, usability or
-requested features.
+The external API is not yet considered stable. Future effort will result in the publication
+of documentation and more extensive code samples of the API, along with an overview
+of the underlying data structures and algorithms.
 
 As a teaser, the following [examples](APISamples.md)
 demonstrate how the API can be leveraged to perform complex tasks using 
@@ -99,10 +102,22 @@ information useful in search.
 
 * Transpositions are detected and short-circuited from needing neural network re-evaluation
 by copying the neural networks from the nodes already "in situ" in the tree 
-(thereby obviating explicit transposition tables or any limit on their size).
+(thereby obviating explicit transposition tables or any limit on their size). A "virtual subtree"
+techinque is used to avoid instantiating subtrees which are already transpositions
+until they exceed 3 nodes in size, thereby improving efficiency and reducing memory requirements.
 
 * Best move selection is often based on Q (subtree average evaluation) instead of N (number of visits).
 Among other benefits, this opens the door to search methods more tuned to BAI (best arm identification) at the root.
+
+* A "sibling blending" technique sometimes averages in information to newly visited nodes from their
+siblings which have not yet been evaluated in the subtree but have already been evaluated
+in other branches of the tree (i.e. are transpositions) thereby taking further advantage of the
+substantial information captured in the full memory-resident search tree.
+
+* An "uncertainty scaling" technique slightly incentivizes exploration at nodes 
+with high uncertainty (historical variability of backed-up node evaluations), in the spirit
+of the UCB algorithm's optimism (more variability might signal more potential upside,
+and/or indicates that the marginal information gain of further visits is higher).
 
 * Extensive use is made of fairly fine-grained parallelism to speed up many operations,
 using the .NET Thread Parallel Library (TPL) for covenience and high efficiency.
@@ -112,75 +127,22 @@ the help of tools such as Intel vTune and careful attention to processor
 details such as memory alignment, false sharing, NUMA effects, locking primitives, prefetching,
 branch prediction, and maximizing instruction-level parallelism.
 
-* The neural network evaluator framework is extensible with current implementations for
-executing using random, Leela Chess Zero, and NVIDIA Tensor RT (experimental) backends, 
-including a promising prototype 8-bit version.
-
-
-## Game Benchmarks
-
-Preliminary test results are provided below which attempt to assess the search speed
-and play quality of Ceres. However these results require independent verification,
-and could quite possibly be flawed, incomplete or not representative.
-
-The results suggest that the improvement in playing strengh is approximatly
-equally attributable to greater search speed and minor refinements in the
-search algorithm.
-
-Details:
-
-* The hardware used was dual Intel® Xeon® Gold 6142 Processor 
-an done or more NVIDIA GPUs as detailed below with each test.
-
-* LC0: version 0.26.3 configured with default settings 
-except cache size 5,000,000, and 6 man tablebases.
-
-* Ceres: default settings plus 6 man tablebases.
-
-* Openings: 50 openings from TCEC 19 (each engine plays both side)
-
-![Perf Fixed Nodes](PerfFixedNodes.png)
-
-![Perf Time1 G P U](PerfTime1GPU.png)
-                                                  
-![Perf Time2 G P U](PerfTime2GPU.png)
-
-## Scaling benchmarks
-
-Searches were run to 100,000,000 nodes from the starting position
-(with smart pruning turned off) using mulitple GPUs(A100 + A100 + Titan RTX + Titan X).
-The roundrobin backend with 5 threads was used with LC0.
-
-![Perf Scaling](PerfScaling.png)
-![Scaling703810](Scaling703810.png)
-s
-![Scaling J92 280](ScalingJ92-280.png)
-
-
-## Speculation on the implications of Ceres for high-end chess play
-
-How might Ceres impact high-end chess? The implications are unclear. On the one hand,
-we already have very strong engines in the two major styles: Stockfish with alpha beta,
-and LC0 with neural network/MCTS. When playing at the long time controls
-an big hardware the phenomenon of Elo compression is very apparent. Therefore possibly
-incremental gains will be limited.
-
-However there are other possible reasons why perhaps the impact of Ceres enhancements 
-(especially greater speed) might be more impactful than otherwise expected:
-* top tournaments are played at 20x or more longer time controls than those tested so far,
- and the speed improvements of Ceres are most apparent in longer searches
-* the speed of GPUs continues to increase at a rapid pace, making faster search more important over time
-* potentially low precision (Int8) neural networks will become practical in the near future, increasing
-nodes per second by about 70%, which can be effectively utilized with a faster engine, and
-* the tests performed so far are all against an MCTS opponent but one might speculate that
-the benefits of deeper search to avoid missing tactics will be even more important against 
-an alpha/beta style engine such as Stockfish.
+* The neural network evaluator framework is extensible with current implementations provided 
+for random, CUDA using Leela Chess Zeronetworks, and an experimental NVIDIA Tensor RT backend
+accepting ONNX network files, facilitating experimentation with alternate network architectures
+or inference precisions (8 bit).
 
 
 ## Configuration and Installation
 
 The setup [instructions](Setup.md) describe the sequence of steps
-currently needed to install and configure Ceres.
+currently needed to install and configure Ceres. Although installation procedures
+have been simplified since since first release, the process is not yet "single-click" easy
+and does require several steps and careful attention.
+
+As is typical of chess engines, no GUI is directly provided. Instead users typically
+use GUI front-ends such as Arena, or the excellent Nibbler (https://github.com/rooklift/nibbler/releases) GUI which is optimized
+for MCTS-style engine such as Ceres or Leela Chess Zero.
 
 
 ## Monitoring Tool
@@ -202,13 +164,10 @@ it is suggested that contributions would be most useful in the following areas:
 * suggestions for the most needed missing features
 
 Somewhat bigger picture, thoughts and help with the architecture and implementation of backends would be 
-especially welcomed. Some open questions/opportunities:
-* extend the LC0 backend support beyond just CUDA
-* possibly generalize the interface between LC0 backends and arbitrary clients so this large and
- complex set of backends could be more widely leveraged by other chess engines
-* even more generally, write a direct translator from LC0 weights files to ONNX files which 
-would then allow execution via TensorRT or ONNXRUNTIME across a wide variety of 
-hardware devices
+especially welcomed. In particular, it is hoped to eventually generalize the interface between 
+LC0 backends and arbitrary clients so this large and complex set of backends could be more 
+widely leveraged by other chess engines including Ceres.
+
 
 ## Acknowledgements and Thanks
 
@@ -218,6 +177,7 @@ and software developers, most notably:
 * Leela Chess Zero project for the neural networks and backends for inferencing with those networks
 * Judd Niemann for the move generator code (translated and adapted from C++) (https://github.com/jniemann66/juddperft)
 * Microsoft for the elegant C# language, performant .NET runtime, and excellent set of free software development tools such as Visual Studio
+
 
 ## License
 
