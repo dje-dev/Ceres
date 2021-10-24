@@ -114,8 +114,8 @@ siblings which have not yet been evaluated in the subtree but have already been 
 in other branches of the tree (i.e. are transpositions) thereby taking further advantage of the
 substantial information captured in the full memory-resident search tree.
 
-* An "uncertainty scaling" technique slightly incentivizes exploration at nodes 
-with high uncertainty (historical variability of backed-up node evaluations), in the spirit
+* An "uncertainty boosting" technique slightly incentivizes exploration at nodes 
+with high uncertainty (historical variability of backed-up node evaluationss), in the spirit
 of the UCB algorithm's optimism (more variability might signal more potential upside,
 and/or indicates that the marginal information gain of further visits is higher).
 

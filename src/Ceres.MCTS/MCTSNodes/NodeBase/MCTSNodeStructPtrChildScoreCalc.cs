@@ -119,7 +119,7 @@ namespace Ceres.MCTS.MTCSNodes
         ApplyPolicyDecay(numToProcess, gatherStatsPSpan);
       }
 
-      if (Context.ParamsSearch.EnableUncertaintyScaling)
+      if (Context.ParamsSearch.EnableUncertaintyBoosting)
       {
         for (int i=0; i < numToProcess
                    && i < NumChildrenExpanded; i++)

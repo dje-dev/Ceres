@@ -340,7 +340,7 @@ namespace Ceres.MCTS.Params
     public bool EnableUseSiblingEvaluations = true;
 
     /// <summary>
-    /// If the uncertainty feature should be enabled.
+    /// If the "uncertainty boosting" feature should be enabled.
     /// It adds a small uncertainty-related tweak to the leaf selection formula 
     /// (similar ideas such as UCB-V for classical UCB has already been explored in other domains). 
     ///  It optimistically slightly incentivizes exploration at nodes with
@@ -349,7 +349,7 @@ namespace Ceres.MCTS.Params
     ///  and increasing in the uncertainty (standard deviation) of the backed-up nodes seen so far. 
     /// </summary>
     /// 
-    public bool EnableUncertaintyScaling = false;
+    public bool EnableUncertaintyBoosting = true;
 
     /// <summary>
     /// Amount of time subtracted from time allotments to 
