@@ -423,43 +423,54 @@ string      baseName = "4mvs_+90_+99";
 
     public static void TestSF(int index, bool gitVersion)
     {
-      NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification("LC0:j94-100", "GPU:" + index);
-      GameEngineDefCeres engineDefCeres1 = new GameEngineDefCeres("CeresInProc", evalDef1, null,
-                                                                  new ParamsSearch(), new ParamsSelect(), null,
-                                                                  "CeresSF.log.txt");
+            // Initialize settings by loading configuration file
+            //CeresUserSettingsManager.LoadFromFile(@"c:\dev\ceres\artifacts\release\net5.0\ceres.json");
 
-      SearchLimit limitCeres = SearchLimit.SecondsForAllMoves(60, 1.25f) * 0.15f;
-      SearchLimit limitSF = limitCeres * 1.5f;
+            // Define constants for engine parameters
+            string SF14_EXE = Path.Combine(CeresUserSettingsManager.Settings.DirExternalEngines, "Stockfish14.exe");
+            const int SF_THREADS = 8;
+            const int SF_TB_SIZE_MB = 1024;
 
-      GameEngineDef engineDefCeresUCIGit = new GameEngineDefCeresUCI("CeresUCIGit", evalDef1, overrideEXE: @"C:\ceres\releases\v0.88\ceres.exe");
-      EnginePlayerDef playerCeres = new EnginePlayerDef(gitVersion ? engineDefCeresUCIGit : engineDefCeres1,
-                                                        limitCeres);
+            string CERES_NETWORK = CeresUserSettingsManager.Settings.DefaultNetworkSpecString; //"LC0:703810";
+            const string CERES_GPU = "GPU:0";
 
+            string TB_DIR = CeresUserSettingsManager.Settings.DirTablebases;
+            SearchLimit TIME_CONTROL = SearchLimit.SecondsForAllMoves(60, 0.5f); //* 0.15f;            
+            const int NUM_GAME_PAIRS = 50;
+            const string logfile = "ceres.log.txt"; //Path.Combine(CeresUserSettingsManager.Settings.DirCeresOutput, "ceres.log.txt");
 
-      EnginePlayerDef playerSF = new EnginePlayerDef(EngineDefStockfish14(), limitSF);
+            // Define Stockfish engine (via UCI) 
+            GameEngineDefUCI sf14Engine = new GameEngineDefUCI("SF14", new GameEngineUCISpec("SF14", SF14_EXE, SF_THREADS, SF_TB_SIZE_MB, TB_DIR));
 
-      TournamentDef def = new TournamentDef("TOURN", playerCeres, playerSF);
-      def.OpeningsFileName = "4mvs_+90_+99.pgn";// "TCEC1819.pgn";
-      def.NumGamePairs = 250;
-      def.ShowGameMoves = false;
+            // Define Ceres engine (in process) with associated neural network and GPU and parameter customizations
+            NNEvaluatorDef ceresNNDef = NNEvaluatorDefFactory.FromSpecification(CERES_NETWORK, CERES_GPU);
+            GameEngineDefCeres engineDefCeres1 = new GameEngineDefCeres("Ceres1", ceresNNDef, null,
+                                                                        new ParamsSearch() { /* FutilityPruningStopSearchEnabled = false, */ },
+                                                                        new ParamsSelect(),
+                                                                        logFileName: logfile);
 
-      TournamentManager runner = new TournamentManager(def, 1);
-      TournamentGameQueueManager queueManager = null;
+            // Define players using these engines and specified time control
+            EnginePlayerDef playerCeres = new EnginePlayerDef(engineDefCeres1, TIME_CONTROL);
+            EnginePlayerDef playerSF = new EnginePlayerDef(sf14Engine, TIME_CONTROL);
 
-      TournamentResultStats results;
-      TimingStats stats = new TimingStats();
+            // Create a tournament definition
+            TournamentDef tournDef = new TournamentDef("Ceres_vs_Stockfish", playerCeres, playerSF);
+            tournDef.NumGamePairs = NUM_GAME_PAIRS;
+            tournDef.OpeningsFileName = "WCEC.pgn";
+            tournDef.ShowGameMoves = false;
 
-
-      using (new TimingBlock(stats, TimingBlock.LoggingType.None))
-      {
-
-        results = runner.RunTournament(queueManager);
-      }
-
-      Console.WriteLine();
-      Console.WriteLine($"Tournament completed in {stats.ElapsedTimeSecs,8:F2} seconds.");
-      Console.WriteLine(playerCeres + " " + results.GameOutcomesString);
-    }
+            // Run the tournament
+            TimingStats stats = new TimingStats();
+            TournamentResultStats results;
+            using (new TimingBlock(stats, TimingBlock.LoggingType.None))
+            {
+                results = new TournamentManager(tournDef).RunTournament();
+            }
+            Console.WriteLine();
+            Console.WriteLine($"Tournament completed in {stats.ElapsedTimeSecs,8:F2} seconds.");
+            Console.WriteLine(playerCeres + " " + results.GameOutcomesString);
+            Console.ReadLine();
+        }
 
     static NNEvaluatorDef EvaluatorValueOnly(string netID1, string netID2, int gpuID, bool valueNet1)
     {

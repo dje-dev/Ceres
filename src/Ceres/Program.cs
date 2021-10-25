@@ -81,7 +81,7 @@ namespace Ceres
 
       if (args.Length > 0 && (args[0].ToUpper() == "CUSTOM" || args[0].StartsWith("WORKER")))
       {
-        TournamentTest.Test(); return;
+        TournamentTest.TestSF(0,true); return;
         //        SuiteTest.RunSuiteTest(); return;
       }
 
