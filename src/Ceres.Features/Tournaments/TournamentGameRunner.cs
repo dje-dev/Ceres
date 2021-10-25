@@ -13,6 +13,8 @@
 
 #region Using directives
 
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 using Ceres.Chess.GameEngines;
@@ -21,53 +23,89 @@ using Ceres.Chess.GameEngines;
 
 namespace Ceres.Features.Tournaments
 {
-  /// <summary>
-  /// Manages execution of a tournament (match between two players).
-  /// </summary>
-  public class TournamentGameRunner
-  {
     /// <summary>
-    /// Parent tournament definition.
+    /// Manages execution of a tournament (match between two players).
     /// </summary>
-    public readonly TournamentDef Def;
-
-    /// <summary>
-    /// Instance of first engine.
-    /// </summary>
-    public GameEngine Engine1;
-
-    /// <summary>
-    /// Instance of second engine.
-    /// </summary>
-    public GameEngine Engine2;
-
-    /// <summary>
-    /// Instance of optional "check" engine against which
-    /// the moves of engine 2 are compared.
-    /// </summary>
-    public GameEngine Engine2CheckEngine;
-
-    /// <summary>
-    /// Constructor from a given tournament defintion.
-    /// </summary>
-    /// <param name="def"></param>
-    public TournamentGameRunner(TournamentDef def)
+    public class TournamentGameRunner
     {
-      Def = def;
+        /// <summary>
+        /// Parent tournament definition.
+        /// </summary>
+        public readonly TournamentDef Def;
 
-      // Create and warmup both engines (in parallel)
-      Parallel.Invoke(() => { Engine1 = def.Player1Def.EngineDef.CreateEngine(); Engine1.Warmup(def.Player1Def.SearchLimit.KnownMaxNumNodes); },
-                      () => { Engine2 = def.Player2Def.EngineDef.CreateEngine(); Engine2.Warmup(def.Player2Def.SearchLimit.KnownMaxNumNodes); });
+        /// <summary>
+        /// Instance of first engine.
+        /// </summary>
+        public GameEngine Engine1;
 
-      if (def.CheckPlayer2Def != null)
-      {
-        Engine2CheckEngine = def.CheckPlayer2Def.EngineDef.CreateEngine();
-        Engine2CheckEngine.Warmup(def.CheckPlayer2Def.SearchLimit.KnownMaxNumNodes);
-      }
+        /// <summary>
+        /// Instance of second engine.
+        /// </summary>
+        public GameEngine Engine2;
 
-      Engine1.OpponentEngine = Engine2;
-      Engine2.OpponentEngine = Engine1;
-    }
+        /// <summary>
+        /// Instance of optional "check" engine against which
+        /// the moves of engine 2 are compared.
+        /// </summary>
+        public GameEngine Engine2CheckEngine;
+
+        public List<GameEngine> Engines { get; set; } = new List<GameEngine>();
+
+        /// <summary>
+        /// Constructor from a given tournament defintion.
+        /// </summary>
+        /// <param name="def"></param>
+        public TournamentGameRunner(TournamentDef def)
+        {
+            Def = def;
+            
+            foreach (var engine in Def.Engines)
+            {
+                Engines.Add(engine.EngineDef.CreateEngine());
+            }
+
+            //if (Def.Engines.Count > 0)
+            //{
+            //    var first = Def.Engines[0];
+            //    var rest = Def.Engines.Skip(1);
+            //    foreach (var engine in rest)
+            //    {
+
+            //    }                
+            //}
+
+            //// Create and warmup both engines (in parallel)
+            //Parallel.Invoke(() => { Engine1 = def.Player1Def.EngineDef.CreateEngine(); Engine1.Warmup(def.Player1Def.SearchLimit.KnownMaxNumNodes); },
+            //          () => { Engine2 = def.Player2Def.EngineDef.CreateEngine(); Engine2.Warmup(def.Player2Def.SearchLimit.KnownMaxNumNodes); });
+
+            //if (def.CheckPlayer2Def != null)
+            //{
+            //    Engine2CheckEngine = def.CheckPlayer2Def.EngineDef.CreateEngine();
+            //    Engine2CheckEngine.Warmup(def.CheckPlayer2Def.SearchLimit.KnownMaxNumNodes);
+            //}
+
+            //Engine1.OpponentEngine = Engine2;
+            //Engine2.OpponentEngine = Engine1;
+        }
+
+        public void CreateAndPrepareEngines(int gameEngine1Index, int gameEngine2Index)
+        {
+            // Create and warmup both engines (in parallel)
+            Parallel.Invoke(() => { Engine1 = Engines[gameEngine1Index]; Engine1.Warmup(Def.Engines[gameEngine1Index].SearchLimit.KnownMaxNumNodes); },
+                      () => { Engine2 = Engines[gameEngine2Index]; Engine2.Warmup(Def.Engines[gameEngine2Index].SearchLimit.KnownMaxNumNodes); });
+
+            if (Def.CheckPlayer2Def != null)
+            {
+                Engine2CheckEngine = Def.CheckPlayer2Def.EngineDef.CreateEngine();
+                Engine2CheckEngine.Warmup(Def.CheckPlayer2Def.SearchLimit.KnownMaxNumNodes);
+            }
+
+            Engine1.OpponentEngine = Engine2;
+            Engine2.OpponentEngine = Engine1;
+            Def.Player1Def = Def.Engines[gameEngine1Index];
+            Def.Player2Def = Def.Engines[gameEngine2Index];
+            
+        }
 
 #if NOT_USED
     static GameEngine GetEngine(GameEngineUCISpec engineSpec, string suffix, 
@@ -102,5 +140,5 @@ namespace Ceres.Features.Tournaments
     }
 #endif
 
-  }
+    }
 }

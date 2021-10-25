@@ -436,7 +436,7 @@ string      baseName = "4mvs_+90_+99";
 
             string TB_DIR = CeresUserSettingsManager.Settings.DirTablebases;
             SearchLimit TIME_CONTROL = SearchLimit.SecondsForAllMoves(60, 0.5f); //* 0.15f;            
-            const int NUM_GAME_PAIRS = 50;
+            const int NUM_GAME_PAIRS = 36;
             const string logfile = "ceres.log.txt"; //Path.Combine(CeresUserSettingsManager.Settings.DirCeresOutput, "ceres.log.txt");
 
             // Define Stockfish engine (via UCI) 
@@ -456,7 +456,7 @@ string      baseName = "4mvs_+90_+99";
             // Create a tournament definition
             TournamentDef tournDef = new TournamentDef("Ceres_vs_Stockfish", playerCeres, playerSF);
             tournDef.NumGamePairs = NUM_GAME_PAIRS;
-            tournDef.OpeningsFileName = "WCEC.pgn";
+            tournDef.OpeningsFileName = "WCEC_decisive.pgn";
             tournDef.ShowGameMoves = false;
 
             // Run the tournament
@@ -472,7 +472,111 @@ string      baseName = "4mvs_+90_+99";
             Console.ReadLine();
         }
 
-    static NNEvaluatorDef EvaluatorValueOnly(string netID1, string netID2, int gpuID, bool valueNet1)
+
+        public static void TestSFLeela(int index, bool gitVersion)
+        {
+            // Define constants for engine parameters  
+            string SF14_EXE = Path.Combine(CeresUserSettingsManager.Settings.DirExternalEngines, "Stockfish14.exe");
+            string leela_EXE = Path.Combine(CeresUserSettingsManager.Settings.DirExternalEngines, "lc0-v0.28.0-windows-gpu-nvidia-cuda", "LC0.exe");
+            const int SF_THREADS = 8;
+            const int SF_TB_SIZE_MB = 1024;
+            string TB_DIR = CeresUserSettingsManager.Settings.DirTablebases;            
+            string CERES_NETWORK = CeresUserSettingsManager.Settings.DefaultNetworkSpecString; //"LC0:703810";
+            const string CERES_GPU = "GPU:0";
+
+            SearchLimit TIME_CONTROL = SearchLimit.SecondsForAllMoves(60, 0.5f); // * 0.1f;            
+            const int NUM_GAME_PAIRS = 4;
+            const string logfile = "ceres.log.txt";
+
+            // Define Stockfish engine (via UCI) 
+            GameEngineDefUCI sf14Engine = new GameEngineDefUCI("SF14", new GameEngineUCISpec("SF14", SF14_EXE, SF_THREADS, SF_TB_SIZE_MB, TB_DIR));
+
+            // Define Leela engine (via UCI) with associated neural network and GPU and parameter customizations
+            NNEvaluatorDef leelaNNDef = NNEvaluatorDefFactory.FromSpecification($"LC0:{CERES_NETWORK}", CERES_GPU);
+            GameEngineDefUCI engineDefLeela1 = new GameEngineDefUCI("Leela", new GameEngineUCISpec("LC0", leela_EXE, syzygyPath: TB_DIR));
+            
+            // Define Ceres engine (in process) with associated neural network and GPU and parameter customizations
+            NNEvaluatorDef ceresNNDef = NNEvaluatorDefFactory.FromSpecification(CERES_NETWORK, CERES_GPU);
+            GameEngineDefCeres engineDefCeres1 = new GameEngineDefCeres("Ceres", ceresNNDef, null,
+                                                                        new ParamsSearch() { /* FutilityPruningStopSearchEnabled = false, */ },
+                                                                        new ParamsSelect(),
+                                                                        logFileName: logfile);
+
+            // Define players using these engines and specified time control
+            EnginePlayerDef playerCeres = new EnginePlayerDef(engineDefCeres1, TIME_CONTROL);
+            EnginePlayerDef playerLeela = new EnginePlayerDef(engineDefLeela1, TIME_CONTROL);
+            EnginePlayerDef playerSf14 = new EnginePlayerDef(sf14Engine, TIME_CONTROL);
+
+            // Create a tournament definition
+            var engines = new List<EnginePlayerDef>() { playerCeres, playerLeela, playerSf14 };
+            
+            TournamentDef tournDef = new TournamentDef("Tournament A", engines);
+            tournDef.NumGamePairs = NUM_GAME_PAIRS;
+            tournDef.OpeningsFileName = "WCEC_decisive.pgn";
+            tournDef.ShowGameMoves = false;
+
+            // Run the tournament
+            TimingStats stats = new TimingStats();
+            TournamentResultStats results;
+            using (new TimingBlock(stats, TimingBlock.LoggingType.None))
+            {
+                results = new TournamentManager(tournDef).RunTournament();
+            }
+            Console.WriteLine();
+            Console.WriteLine($"Tournament completed in {stats.ElapsedTimeSecs,8:F2} seconds.");
+            Console.WriteLine(playerCeres + " " + results.GameOutcomesString);
+            Console.ReadLine();
+        }
+
+        public static void TestLeela(int index, bool gitVersion)
+        {
+            // Initialize settings by loading configuration file
+            //CeresUserSettingsManager.LoadFromFile(@"c:\dev\ceres\artifacts\release\net5.0\ceres.json");
+
+            // Define constants for engine parameters           
+
+            string leela_EXE = Path.Combine(CeresUserSettingsManager.Settings.DirExternalEngines, "lc0-v0.28.0-windows-gpu-nvidia-cuda", "LC0.exe");
+            string CERES_NETWORK = CeresUserSettingsManager.Settings.DefaultNetworkSpecString; //"LC0:703810";
+            const string CERES_GPU = "GPU:0";
+            string TB_DIR = CeresUserSettingsManager.Settings.DirTablebases;
+            SearchLimit TIME_CONTROL = SearchLimit.SecondsForAllMoves(60, 0.5f) * 0.2f;
+            const string logfileCeres = "ceres.log.txt";
+
+            // Define Leela engine (in process) with associated neural network and GPU and parameter customizations
+            NNEvaluatorDef leelaNNDef = NNEvaluatorDefFactory.FromSpecification($"LC0:{CERES_NETWORK}", CERES_GPU);
+            GameEngineDefUCI engineDefLeela1 = new GameEngineDefUCI("Leela", new GameEngineUCISpec("LC0",leela_EXE, syzygyPath: TB_DIR));           
+
+            // Define Ceres engine (in process) with associated neural network and GPU and parameter customizations
+            NNEvaluatorDef ceresNNDef = NNEvaluatorDefFactory.FromSpecification(CERES_NETWORK, CERES_GPU);
+            GameEngineDefCeres engineDefCeres1 = new GameEngineDefCeres("Ceres", ceresNNDef, null,
+                                                                        new ParamsSearch() { /* FutilityPruningStopSearchEnabled = false, */ },
+                                                                        new ParamsSelect(),
+                                                                        logFileName: logfileCeres);
+
+            // Define players using these engines and specified time control
+            EnginePlayerDef playerCeres = new EnginePlayerDef(engineDefCeres1, TIME_CONTROL);
+            EnginePlayerDef playerLeela = new EnginePlayerDef(engineDefLeela1, TIME_CONTROL);
+
+            // Create a tournament definition
+            TournamentDef tournDef = new TournamentDef("Ceres_vs_Leela", playerCeres, playerLeela);
+            tournDef.NumGamePairs = 2;
+            tournDef.OpeningsFileName = "WCEC_decisive.pgn";
+            tournDef.ShowGameMoves = false;
+
+            // Run the tournament
+            TimingStats stats = new TimingStats();
+            TournamentResultStats results;
+            using (new TimingBlock(stats, TimingBlock.LoggingType.None))
+            {
+                results = new TournamentManager(tournDef).RunTournament();
+            }
+            Console.WriteLine();
+            Console.WriteLine($"Tournament completed in {stats.ElapsedTimeSecs,8:F2} seconds.");
+            Console.WriteLine(playerCeres + " " + results.GameOutcomesString);
+            Console.ReadLine();
+        }
+
+        static NNEvaluatorDef EvaluatorValueOnly(string netID1, string netID2, int gpuID, bool valueNet1)
     {
       string wtStr1 = valueNet1 ? "0.5;1.0;0.5" : "0.5;0.0;0.5";
       string wtStr2 = valueNet1 ? "0.5;0.0;0.5" : "0.5;1.0;0.5";
