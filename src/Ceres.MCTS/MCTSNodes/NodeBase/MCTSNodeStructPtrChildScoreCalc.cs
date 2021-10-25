@@ -36,6 +36,7 @@ namespace Ceres.MCTS.MTCSNodes
       internal SpanAligned<float> InFlight;
       internal SpanAligned<float> P;
       internal SpanAligned<float> W;
+      internal SpanAligned<float> U;
 
       internal GatheredChildStats()
       {
@@ -45,6 +46,7 @@ namespace Ceres.MCTS.MTCSNodes
         InFlight = new SpanAligned<float>(MCTSScoreCalcVector.MAX_CHILDREN, ALIGNMENT);
         P = new SpanAligned<float>(MCTSScoreCalcVector.MAX_CHILDREN, ALIGNMENT);
         W = new SpanAligned<float>(MCTSScoreCalcVector.MAX_CHILDREN, ALIGNMENT);
+        U = new SpanAligned<float>(MCTSScoreCalcVector.MAX_CHILDREN, ALIGNMENT);
       }
     }
 
@@ -69,8 +71,9 @@ namespace Ceres.MCTS.MTCSNodes
     }
 
 
-//    [ThreadStatic] static float accScale;
-//    [ThreadStatic] static float countScale;
+
+    [ThreadStatic] static float accScale;
+    [ThreadStatic] static float countScale;
 
     /// <summary>
     /// Applies CPUCT selection to determine for each child
@@ -106,52 +109,92 @@ namespace Ceres.MCTS.MTCSNodes
       Span<float> gatherStatsInFlightSpan = stats.InFlight.Span;
       Span<float> gatherStatsPSpan = stats.P.Span;
       Span<float> gatherStatsWSpan = stats.W.Span;
+      Span<float> gatherStatsUSpan = stats.U.Span;
 
       // Gather necessary fields
       // TODO: often NInFlight of parent is null (thus also children) and we could
       //       have special version of Gather which didn't bother with that
       nodeRef.GatherChildInfo(Context, new MCTSNodeStructIndex(Index), selectorID, depth, numToProcess - 1,
                               gatherStatsNSpan, gatherStatsInFlightSpan,
-                              gatherStatsPSpan, gatherStatsWSpan);
+                              gatherStatsPSpan, gatherStatsWSpan, gatherStatsUSpan);
 
       if (Context.ParamsSelect.PolicyDecayFactor > 0)
       {
         ApplyPolicyDecay(numToProcess, gatherStatsPSpan);
       }
 
-      if (Context.ParamsSearch.EnableUncertaintyBoosting)
+
+#if NOT
+      // Katago CPUCT scaling technique (TestFlag2)
+      if (nodeRef.N > MIN_N_USE_UNCERTAINTY 
+      && Context.ParamsSearch.TestFlag2)
       {
+        float var = (nodeRef.VarianceAccumulator - (float)(nodeRef.Q*nodeRef.Q))
+                  / (nodeRef.N - MCTSNodeStruct.VARIANCE_START_ACCUMULATE_N);
+        if (var > 0)
+        {
+          float sd = MathF.Sqrt(var);
+
+          const float MULT = 1.5f;
+          float diffFromAvg = sd - 0.12f;
+          cpuctMultiplier = 1 + diffFromAvg * MULT;
+          cpuctMultiplier = StatUtils.Bounded(cpuctMultiplier - 0.03f, 0.88f, 1.12f);
+//          cpuctMultiplier = 1 + -(cpuctMultiplier - 1);
+          accScale += cpuctMultiplier;
+          countScale++;
+
+          MCTSEventSource.TestCounter1++;
+
+          if (Ref.ZobristHash % 2_000 == 0)
+          {
+            MCTSEventSource.TestMetric1 = (accScale / countScale);
+          }
+        }
+      }
+#endif
+
+      const int MIN_N_USE_UNCERTAINTY = 30; // only use once sufficient data to be reliable
+
+      if (N > MIN_N_USE_UNCERTAINTY && Context.ParamsSearch.EnableUncertaintyBoosting)
+      {
+        // Note that to be precise there should be an additional term subtraced off
+        // in variance calculation below, but it is omitted because:
+        //   - in practice the magnitude is too small to be worth the computational effort.
+        //   - the mean is computed over all visits but the variance accumulated not over first VARIANCE_START_ACCUMULATE_N
+        //     therefore this subtraction could produce non-consisten results (negative variance)
+        float parentStdDev = MathF.Sqrt(nodeRef.VarianceAccumulator / (nodeRef.N - MCTSNodeStruct.VARIANCE_START_ACCUMULATE_N));
+
         for (int i=0; i < numToProcess
                    && i < NumChildrenExpanded; i++)
         {
-          float explorationScaling = 1.0f;
-          const int MIN_N_USE_UNCERTAINTY = 50; // only use once sufficient data to be reliable
           if (gatherStatsNSpan[i] > MIN_N_USE_UNCERTAINTY)
           {
-            // Note that technically there should be an additional term which subtracts off squared mean below,
-            // but in practice the magnitude is too small to be worth the computational effort.
-            float childStdDev = MathF.Sqrt(Ref.VarianceAccumulator / (gatherStatsNSpan[i] - MCTSNodeStruct.VARIANCE_START_ACCUMULATE_N));
+            float explorationScaling = 1.0f;
+            float childStdDev = MathF.Sqrt(gatherStatsUSpan[i] / (gatherStatsNSpan[i] - MCTSNodeStruct.VARIANCE_START_ACCUMULATE_N));
 
-            // Scale to average value 1.
-            const float SQRT_2_RECIPROCAL = 1.0f / 1.41421f;
-            explorationScaling = SQRT_2_RECIPROCAL + childStdDev;
+            const float UNCERTAINTY_DIFF_MULTIPLIER = 1.5f;
+            const float UNCERTAINTY_MAX_DEVIATION = 0.10f;
+            const float BIAS_ADJUST = 0.03f; // adjustment to make average value turn out to be very close to 1.0
 
-            // Possibly modulate how much the scaling is applied.
-            const float WT_SCALE = 0.5f;
-            explorationScaling = WT_SCALE * explorationScaling + (1.0f - WT_SCALE) * 1;
+            explorationScaling = 1 + BIAS_ADJUST + UNCERTAINTY_DIFF_MULTIPLIER * (childStdDev - parentStdDev);
+            explorationScaling = StatUtils.Bounded(explorationScaling, 1.0f - UNCERTAINTY_MAX_DEVIATION, 1.0f + UNCERTAINTY_MAX_DEVIATION);
 
-            // Shrink toward 1.0 and bound.
-            explorationScaling = MathF.Pow(explorationScaling, 0.35f);
-            explorationScaling = StatUtils.Bounded(explorationScaling, 0.85f, 1.15f);
-    
-            //accScale += explorationScaling;
-            //countScale++;
+            // Update statistics. TODO: Temporary
+            MCTSEventSource.TestCounter1++;
+            accScale += explorationScaling;
+            countScale++;
+            if (Ref.ZobristHash % 2_000 == 0)
+            {
+              MCTSEventSource.TestMetric1 = (accScale / countScale);
+              //Console.WriteLine((accScale / countScale) + "   " + explorationScaling);
+            }
+
+            // Scale P by this uncertainty scaling factor
+            // which is equivalent to having separate multiplicand
+            // but more convenient than creating separately.
+            gatherStatsPSpan[i] *= explorationScaling;
           }
 
-          // Scale P by this uncertainty scaling factor
-          // which is equivalent to having separate multiplicand
-          // but more convenient than creating separately.
-          gatherStatsPSpan[i] *= explorationScaling;
         }
       }
 

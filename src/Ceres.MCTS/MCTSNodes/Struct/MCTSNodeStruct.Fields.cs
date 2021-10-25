@@ -96,8 +96,19 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
     /// <summary>
     /// Accumulator for M (moves left) values across all visits.
+    /// 
+    /// NOTE: TEMPORARILY REMOVED/DISABLED to leave space for variance term
     /// </summary>
-    internal FP16 mSum;
+    internal FP16 mSum
+    {
+      readonly get => FP16.NaN;
+      set
+      {
+        //if (!FP16.IsNaN(value)) throw new NotImplementedException();
+      }
+
+    }
+
 
     /// <summary>
     /// Accumulator for D (draw) values across all visits.
@@ -169,13 +180,13 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// Only start accumulating variance statistics after a minimum number of visits
     /// to avoid building statistics when the Q is still highly noisy.
     /// </summary>
-    public const int VARIANCE_START_ACCUMULATE_N = 20;
+    public const int VARIANCE_START_ACCUMULATE_N = 10;
 
     /// <summary>
     /// Accumulate the squared deviations from mean (Q) at the time of each backup
     /// (starting after VARIANCE_START_ACCUMULATE_N visits).
     /// </summary>
-    public FP16 VarianceAccumulator;
+    public float VarianceAccumulator;
 
 #if NOT
 /// <summary>

@@ -509,9 +509,10 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <param name="nInFlight"></param>
     /// <param name="p"></param>
     /// <param name="w"></param>
+    /// <param name="u"></param>
     public void GatherChildInfo(MCTSIterator context, MCTSNodeStructIndex index,
                                 int selectorID, int depth, int maxIndex,
-                                Span<float> n, Span<float> nInFlight, Span<float> p, Span<float> w)
+                                Span<float> n, Span<float> nInFlight, Span<float> p, Span<float> w, Span<float> u)
     {
       MCTSNodeStore store = context.Tree.Store;
       Span<MCTSNodeStruct> nodes = store.Nodes.nodes.Span;
@@ -551,7 +552,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           }
 
           p[i] = childNode.P.ToFloatApprox;// * childNode.Weight;
-
+          u[i] = childNode.VarianceAccumulator;
 
           bool isOurMove = depth % 2 == 0;
 
@@ -590,6 +591,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           nInFlight[i] = 0;
           p[i] = child.P.ToFloatApprox;
           w[i] = 0;
+          u[i] = 0;
         }
       }
     }
@@ -833,9 +835,11 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           dToApply = dToApplyFirst = 1; // TODO: is this ok even if not WDL network?
         }
 
-
+        // Compute statistics used for tracking uncertainty (variance)
         float qDiff = vToApply - (float)node.Q;
         float qDiffSquared = qDiff * qDiff;
+
+        const float VARIANCE_LAMBDA = 0.0f;// 0.005f;
 
         // NOTE: It is not possible to make the updates to both N and W atomic as a group.
         //       Therefore there is a very small possibility that another thread will observe one updated but not the other
@@ -845,7 +849,14 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         {
           if (node.N >= VARIANCE_START_ACCUMULATE_N)
           {
-            node.VarianceAccumulator += (FP16)qDiffSquared;
+            if (VARIANCE_LAMBDA != 0)
+            {
+              node.VarianceAccumulator = NewEMWVarianceAcc(node.VarianceAccumulator, node.N, qDiffSquared, VARIANCE_LAMBDA);
+            }
+            else
+            {
+              node.VarianceAccumulator += qDiffSquared;
+            }
           }
           node.N++;
           node.W += vToApply;
@@ -856,7 +867,15 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         {
           if (node.N >= VARIANCE_START_ACCUMULATE_N)
           {
-            node.VarianceAccumulator += (FP16)(qDiffSquared * numToApply);
+            if (VARIANCE_LAMBDA != 0)
+            {
+              node.VarianceAccumulator = NewEMWVarianceAcc(node.VarianceAccumulator, node.N, qDiffSquared, numToApply, VARIANCE_LAMBDA);
+            }
+            else
+            {
+              node.VarianceAccumulator += (qDiffSquared * numToApply);
+            }
+
           }
           node.N += numToApply;
           node.W += vToApply * numToApply;
@@ -1049,6 +1068,45 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       //      Console.WriteLine($" {N}  PowerMean({p}) " + Q + " ==> " + ret);
       return ret;
     }
+
+
+    /// <summary>
+    /// Returns the new value for a variance accumulator with exponential weighting
+    /// that reflects an update with a specified new update.
+    /// </summary>
+    static float NewEMWVarianceAcc(float priorAcc, float priorN, float squaredDeviation, float lambda)
+    {
+      float priorVariance = priorAcc / priorN;
+
+      float newVariance = priorVariance * (1.0f - lambda)
+                        + squaredDeviation * lambda;
+
+      // Return the variance accumulator value which would now return 
+      // our new variance target after the current sample is recorded
+      return newVariance * (priorN + 1);
+    }
+
+    /// <summary>
+    /// Returns the new value for a variance accumulator with exponential weighting
+    /// that reflects an update with a specified new update (repeated thisN times).
+    /// </summary>
+    static float NewEMWVarianceAcc(float priorAcc, float priorN, float squaredDeviation, int thisN, float lambda)
+    {
+      float newAcc = priorAcc;
+      for (int i = 0; i < thisN; i++)
+      {
+        float priorVariance = newAcc / (priorN + i);
+
+        float newVariance = priorVariance * (1.0f - lambda)
+                          + squaredDeviation * lambda;
+        newAcc = newVariance * (priorN + i + 1);
+      }
+
+      // Return the variance accumulator value which would now return 
+      // our new variance target after the current sample is recorded
+      return newAcc;
+    }
+
 
   }
 
