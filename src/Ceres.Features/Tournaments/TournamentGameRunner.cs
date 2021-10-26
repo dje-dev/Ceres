@@ -58,7 +58,7 @@ namespace Ceres.Features.Tournaments
         public TournamentGameRunner(TournamentDef def)
         {
             Def = def;
-            
+
             foreach (var engine in Def.Engines)
             {
                 Engines.Add(engine.EngineDef.CreateEngine());
@@ -74,18 +74,21 @@ namespace Ceres.Features.Tournaments
             //    }                
             //}
 
-            //// Create and warmup both engines (in parallel)
-            //Parallel.Invoke(() => { Engine1 = def.Player1Def.EngineDef.CreateEngine(); Engine1.Warmup(def.Player1Def.SearchLimit.KnownMaxNumNodes); },
-            //          () => { Engine2 = def.Player2Def.EngineDef.CreateEngine(); Engine2.Warmup(def.Player2Def.SearchLimit.KnownMaxNumNodes); });
+            // Create and warmup both engines (in parallel)
+            if (Def.Engines.Count == 0)
+            {
+                Parallel.Invoke(() => { Engine1 = def.Player1Def.EngineDef.CreateEngine(); Engine1.Warmup(def.Player1Def.SearchLimit.KnownMaxNumNodes); },
+                          () => { Engine2 = def.Player2Def.EngineDef.CreateEngine(); Engine2.Warmup(def.Player2Def.SearchLimit.KnownMaxNumNodes); });
 
-            //if (def.CheckPlayer2Def != null)
-            //{
-            //    Engine2CheckEngine = def.CheckPlayer2Def.EngineDef.CreateEngine();
-            //    Engine2CheckEngine.Warmup(def.CheckPlayer2Def.SearchLimit.KnownMaxNumNodes);
-            //}
+                if (def.CheckPlayer2Def != null)
+                {
+                    Engine2CheckEngine = def.CheckPlayer2Def.EngineDef.CreateEngine();
+                    Engine2CheckEngine.Warmup(def.CheckPlayer2Def.SearchLimit.KnownMaxNumNodes);
+                }
 
-            //Engine1.OpponentEngine = Engine2;
-            //Engine2.OpponentEngine = Engine1;
+                Engine1.OpponentEngine = Engine2;
+                Engine2.OpponentEngine = Engine1;
+            }
         }
 
         public void CreateAndPrepareEngines(int gameEngine1Index, int gameEngine2Index)
@@ -104,7 +107,7 @@ namespace Ceres.Features.Tournaments
             Engine2.OpponentEngine = Engine1;
             Def.Player1Def = Def.Engines[gameEngine1Index];
             Def.Player2Def = Def.Engines[gameEngine2Index];
-            
+
         }
 
 #if NOT_USED

@@ -109,12 +109,39 @@ namespace Ceres.Features.Tournaments
             }
         }
 
+        public void UpdateRRTournamentStats(TournamentGameInfo thisResult)
+        {
+            switch (thisResult.Result)
+            {
+                case TournamentGameResult.Win:
+                    Player1Wins++;
+                    GameOutcomesString += "+";
+                    break;
+
+                case TournamentGameResult.Loss:
+                    Player1Losses++;
+                    GameOutcomesString += "-";
+                    break;
+
+                default:
+                    Draws++;
+                    GameOutcomesString += "=";
+                    break;
+            }
+        }
+
 
         /// <summary>
         /// Dumps summary to Console.
         /// </summary>
         public void Dump()
         {
+            // need to add tournament results here too
+            if (false)
+            {
+
+            }
+            
             Console.WriteLine($"Tournament Results of {Player1} versus {Player2} in {NumGames} games");
             Console.WriteLine($"  {Player1} wins {Player1Wins}");
             Console.WriteLine($"  {Player1} draws {Draws}");

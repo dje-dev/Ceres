@@ -134,11 +134,11 @@ namespace Ceres.Features.Tournaments
 
             foreach (var engine in Engines)
             {
-                if (engines.Where(e=>e != engine).Any(e => object.ReferenceEquals(engine,e)))
+                if (engines.Where(e => e != engine).Any(e => object.ReferenceEquals(engine, e)))
                 {
                     throw new Exception("playerDef must be different from each other");
                 }
-            }            
+            }
         }
 
 
@@ -157,8 +157,18 @@ namespace Ceres.Features.Tournaments
             Console.WriteLine($"  Openings  : {OpeningsDescription()}");
             Console.WriteLine($"  Adjudicate: {AdjudicationThresholdNumMoves} moves at {AdjudicationThresholdCentipawns}cp"
                            + $"{(UseTablebasesForAdjudication ? " or via tablebases" : "")}");
-            Console.WriteLine($"  Player 1  : {Player1Def} ");
-            Console.WriteLine($"  Player 2  : {Player2Def} ");
+            if (Engines.Count > 0)
+            {
+                for (int i = 0; i < Engines.Count; i++)
+                {
+                    Console.WriteLine($"Player {i + 1} : {Engines[i]}");
+                }
+            }
+            else
+            {
+                Console.WriteLine($"  Player 1  : {Player1Def} ");
+                Console.WriteLine($"  Player 2  : {Player2Def} ");
+            }
 
 
             //if (Player1Def.EngineDef is GameEngineDefCeres &&
