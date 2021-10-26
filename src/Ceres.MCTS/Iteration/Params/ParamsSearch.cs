@@ -399,7 +399,15 @@ namespace Ceres.MCTS.Params
         }
       }
 
-      EnableUseSiblingEvaluations = CeresUserSettingsManager.Settings.EnableSiblingEval;
+      if (CeresUserSettingsManager.Settings.EnableSiblingEval.HasValue)
+      {
+        EnableUseSiblingEvaluations = CeresUserSettingsManager.Settings.EnableSiblingEval.Value;
+      }
+
+      if (CeresUserSettingsManager.Settings.EnableUncertaintyBoosting.HasValue)
+      {
+        EnableUncertaintyBoosting = CeresUserSettingsManager.Settings.EnableUncertaintyBoosting.Value;
+      }
 
       // Check user settings to see if tablebases are configured.
       EnableTablebases = CeresUserSettingsManager.Settings.TablebaseDirectory is not null;

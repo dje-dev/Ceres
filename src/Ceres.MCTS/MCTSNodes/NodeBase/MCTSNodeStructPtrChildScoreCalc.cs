@@ -179,14 +179,18 @@ namespace Ceres.MCTS.MTCSNodes
             explorationScaling = 1 + BIAS_ADJUST + UNCERTAINTY_DIFF_MULTIPLIER * (childStdDev - parentStdDev);
             explorationScaling = StatUtils.Bounded(explorationScaling, 1.0f - UNCERTAINTY_MAX_DEVIATION, 1.0f + UNCERTAINTY_MAX_DEVIATION);
 
-            // Update statistics. TODO: Temporary
-            MCTSEventSource.TestCounter1++;
-            accScale += explorationScaling;
-            countScale++;
-            if (Ref.ZobristHash % 2_000 == 0)
+            const bool SHOW_UNCERTAINTY_STATS = false; // perforamnce degrading
+            if (SHOW_UNCERTAINTY_STATS)
             {
-              MCTSEventSource.TestMetric1 = (accScale / countScale);
-              //Console.WriteLine((accScale / countScale) + "   " + explorationScaling);
+              // Update statistics. TODO: Temporary
+              MCTSEventSource.TestCounter1++;
+              accScale += explorationScaling;
+              countScale++;
+              if (Ref.ZobristHash % 2_000 == 0)
+              {
+                MCTSEventSource.TestMetric1 = (accScale / countScale);
+                //Console.WriteLine((accScale / countScale) + "   " + explorationScaling);
+              }
             }
 
             // Scale P by this uncertainty scaling factor
