@@ -329,13 +329,19 @@ namespace Ceres.MCTS.Params
     /// </summary>
     public bool TranspositionUseCluster = false; // not sure if better in games
 
+    /// <summary>
+    /// If values applied during backup are potentially taken from the root
+    /// of corresponding transposition subtree (if any) in cases when
+    /// that subtree is larger than the current node's subtree.
+    /// Potentially highly beneficial for large searches (>100k and especially >1000k nodes).
+    /// </summary>
+    public bool EnableDeepTranspositionBackup = true;
 
     /// <summary>
     /// If evaluations of siblings not yet visited (derived from transpositions)
     /// should possibly be blended into backed up evaluations.
-    /// Extensive testing suggests this feature may:
-    ///   - improve Elo by 5 to 10 with smaller networks (e.g. 20b) and short to medium size searches
-    ///   - degrade Elo by about 5 to 8 Elo with larger networks (e.g. 30b) especially at longer searches
+    /// Believed to have a small positive impact, especially for longer searches
+    /// (although the benefit may be limited when deep transposition backup is also in use).
     /// </summary>
     public bool EnableUseSiblingEvaluations = true;
 

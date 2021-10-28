@@ -138,9 +138,11 @@ namespace Ceres.MCTS.MTCSNodes
       InFlightLinkedNode = default;
       LastAccessedSequenceCounter = 0;
       SiblingEval = null;
-    }
 
+      TranspositionRootNodeIndex = default;
+  }
 
+    public MCTSNodeStructIndex TranspositionRootNodeIndex;
 
     /// <summary>
     /// The pending evaluation result 

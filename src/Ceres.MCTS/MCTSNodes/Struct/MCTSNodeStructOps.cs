@@ -52,6 +52,19 @@ namespace Ceres.MCTS.MTCSNodes.Struct
   {
     public delegate float MCTSNodeStructMetricFunc(in MCTSNodeStruct node);
 
+    public void SwapFirst()
+    {
+      throw new Exception("Experimental code.");
+      Debug.Assert(NumChildrenExpanded == 0);
+
+      ref MCTSNodeStructChild child0 =  ref MCTSNodeStoreContext.Children[ChildStartIndex + 0];
+      ref MCTSNodeStructChild child1 = ref MCTSNodeStoreContext.Children[ChildStartIndex + 1];
+
+      MCTSNodeStructChild temp = child0;
+      child0 = child1;
+      child1 = temp;
+
+    }
 
     /// <summary>
     /// Returns the MGPosition corresponding to this node.
@@ -813,6 +826,10 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     {
       Debug.Assert(!float.IsNaN(vToApplyFirst));
 
+      MCTSIterator context = MCTSManager.ThreadSearchContext;
+      bool enableDeepTranspositionBackup = context.ParamsSearch.EnableDeepTranspositionBackup;
+      Span<MCTSNodeStruct> nodesSpan = context.Tree.Store.Nodes.nodes.Span;
+
       indexOfChildDescendentFromRoot = default;
       bool first = true;
       float vToApply = vToApplyFirst;
@@ -839,45 +856,69 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         float qDiff = vToApply - (float)node.Q;
         float qDiffSquared = qDiff * qDiff;
 
-        const float VARIANCE_LAMBDA = 0.0f;// 0.005f;
+        const float VARIANCE_LAMBDA = 0.0f; // Possible exponentially weighted moving average variance if nonzero
 
         // NOTE: It is not possible to make the updates to both N and W atomic as a group.
         //       Therefore there is a very small possibility that another thread will observe one updated but not the other
         //       (e.g. thread gathering nodes which reaches over to use this as a transposition root and references Q)
         //       To mitigate the possible distortion, N is updated before W so any distortions will shrink toward 0.
-        if (numToApply == 1)
+        if (node.N >= VARIANCE_START_ACCUMULATE_N)
         {
-          if (node.N >= VARIANCE_START_ACCUMULATE_N)
+          if (VARIANCE_LAMBDA != 0)
           {
-            if (VARIANCE_LAMBDA != 0)
-            {
-              node.VarianceAccumulator = NewEMWVarianceAcc(node.VarianceAccumulator, node.N, qDiffSquared, VARIANCE_LAMBDA);
-            }
-            else
-            {
-              node.VarianceAccumulator += qDiffSquared;
-            }
+            node.VarianceAccumulator = NewEMWVarianceAcc(node.VarianceAccumulator, node.N, qDiffSquared, numToApply, VARIANCE_LAMBDA);
           }
-          node.N++;
-          node.W += vToApply;
-          node.mSum += (FP16)mToApply;
-          node.dSum += dToApply;
-        }
-        else
-        {
-          if (node.N >= VARIANCE_START_ACCUMULATE_N)
+          else
           {
-            if (VARIANCE_LAMBDA != 0)
+            node.VarianceAccumulator += (qDiffSquared * numToApply);
+          }
+        }
+
+        node.N += numToApply;
+
+        bool haveApplied = false;
+
+        // Try to apply deep transposition backup (if requested).
+        if (enableDeepTranspositionBackup && node.InfoRef.TranspositionRootNodeIndex != default)
+        {
+          ref readonly MCTSNodeStruct transpositionRootNodeRef = ref nodes[node.InfoRef.TranspositionRootNodeIndex.Index];
+          //MCTSEventSource.TestMetric1++;
+
+#if DEBUG
+          //ref MCTSNodeInfo nodeInfoRef = ref Unsafe.AsRef(node.InfoRef);
+          bool found = context.Tree.TranspositionRoots.TryGetValue(node.ZobristHash, out int siblingTanspositionNodeIndex);
+          if (!found || siblingTanspositionNodeIndex != node.InfoRef.TranspositionRootNodeIndex.Index)
+          {
+            throw new Exception("Internal error: transposition root inconsistency " + siblingTanspositionNodeIndex + " " + node.InfoRef.TranspositionRootNodeIndex.Index);
+          }
+#endif
+
+          // Only apply if subtree is deeper than this subtree.
+          if (transpositionRootNodeRef.N > (node.N + (numToApply / 2) + 1))
+          {
+            const float wtSubtree = 1.0f;
+            const float wtThisNode = 1.0f - wtSubtree;
+
+            if (wtThisNode == 0)
             {
-              node.VarianceAccumulator = NewEMWVarianceAcc(node.VarianceAccumulator, node.N, qDiffSquared, numToApply, VARIANCE_LAMBDA);
+              node.W    += numToApply * transpositionRootNodeRef.Q;
+              node.mSum += (FP16)(numToApply * transpositionRootNodeRef.MAvg);
+              node.dSum += numToApply * transpositionRootNodeRef.DAvg;
             }
             else
             {
-              node.VarianceAccumulator += (qDiffSquared * numToApply);
+              node.W    +=        numToApply * (wtThisNode * vToApply + wtSubtree * transpositionRootNodeRef.Q);
+              node.mSum += (FP16)(numToApply * (wtThisNode * mToApply + wtSubtree * transpositionRootNodeRef.MAvg));
+              node.dSum +=        numToApply * (wtThisNode * dToApply + wtSubtree * transpositionRootNodeRef.DAvg);
             }
 
+            //MCTSEventSource.TestCounter1++;
+            haveApplied = true;
           }
-          node.N += numToApply;
+        }
+
+        if (!haveApplied)
+        {
           node.W += vToApply * numToApply;
           node.mSum += (FP16)(mToApply * numToApply);
           node.dSum += dToApply * numToApply;
@@ -898,7 +939,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           }
           else
           {
-            float diff = vToApply - (float)node.Q;
+            float diff = vToApply - (float)node.Q;;
             node.QUpdatesWtdAvg = LAMBDA * node.QUpdatesWtdAvg + (1.0f - LAMBDA) * diff;
             node.QUpdatesWtdVariance = LAMBDA * node.QUpdatesWtdVariance + (1.0f - LAMBDA) * diff * diff;
           }
@@ -1006,7 +1047,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     }
 
 
-    #endregion
+#endregion
 
     /// <summary>
     /// Returns the index of this node in the array of parent's children.
@@ -1067,23 +1108,6 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       float ret = inverted ? adjustedPM : -adjustedPM;
       //      Console.WriteLine($" {N}  PowerMean({p}) " + Q + " ==> " + ret);
       return ret;
-    }
-
-
-    /// <summary>
-    /// Returns the new value for a variance accumulator with exponential weighting
-    /// that reflects an update with a specified new update.
-    /// </summary>
-    static float NewEMWVarianceAcc(float priorAcc, float priorN, float squaredDeviation, float lambda)
-    {
-      float priorVariance = priorAcc / priorN;
-
-      float newVariance = priorVariance * (1.0f - lambda)
-                        + squaredDeviation * lambda;
-
-      // Return the variance accumulator value which would now return 
-      // our new variance target after the current sample is recorded
-      return newVariance * (priorN + 1);
     }
 
     /// <summary>
