@@ -58,6 +58,7 @@ namespace Ceres.Chess.NNBackends.CUDA
       ip2_val_w = WeightsDecoded(weights.Ip2ValW);
       ip2_val_b = WeightsDecoded(weights.Ip2ValB);
 
+#if ACTION_HEAD
       if (weights.Action != null)
       {
         // Experimental action head of jjosh
@@ -71,6 +72,7 @@ namespace Ceres.Chess.NNBackends.CUDA
         ip1_action_w = default;
         ip1_action_b = default;
       }
+#endif
 
       moves_left = weights.MovesLeft == null ? default : new ConvBlock(this, weights.MovesLeft);
       ip1_mov_w = WeightsDecoded(weights.Ip1MovW);
@@ -229,11 +231,12 @@ namespace Ceres.Chess.NNBackends.CUDA
     public float[] ip2_val_w;
     public float[] ip2_val_b;
 
+#if ACTION_HEAD
     // Action head (experimental)
     public ConvBlock action;
     public float[] ip1_action_w;
     public float[] ip1_action_b;
-
+#endif
 
     // Moves left head
     public ConvBlock moves_left;
