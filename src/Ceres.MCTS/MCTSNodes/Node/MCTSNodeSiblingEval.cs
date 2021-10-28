@@ -121,7 +121,7 @@ namespace Ceres.MCTS.MTCSNodes
         const float qBetterScaling = 1.0f;
 
         // Give more weight to sibling the closer it is to this node's policy
-        const float SIBLING_SCALING_FACTOR = 20f;
+        const float SIBLING_SCALING_FACTOR = 15f;
         float distanceScaling = SIBLING_SCALING_FACTOR * (MAX_P_INFERIORITY - SiblingPInferiority);
 
         // The more visits were used as the basis for estimating the sibling N
