@@ -270,7 +270,14 @@ namespace Ceres.Features.Tournaments
             Def.Logger.Write($"{Math.Round(totalMovesEngine1 / numGames, 0),4:F0}");
 
             Def.Logger.WriteLine();
-            parentTest.Dump();
+            if (Def.Engines.Count > 0)
+            {
+                parentTest.DumpRoundRobin();
+            }
+            else
+            {
+                parentTest.Dump();
+            }
             return parentTest;
         }
 

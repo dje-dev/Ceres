@@ -57,22 +57,13 @@ namespace Ceres.Features.Tournaments
         /// <param name="def"></param>
         public TournamentGameRunner(TournamentDef def)
         {
-            Def = def;
-
+            Def = def;            
             foreach (var engine in Def.Engines)
             {
                 Engines.Add(engine.EngineDef.CreateEngine());
             }
-
-            //if (Def.Engines.Count > 0)
-            //{
-            //    var first = Def.Engines[0];
-            //    var rest = Def.Engines.Skip(1);
-            //    foreach (var engine in rest)
-            //    {
-
-            //    }                
-            //}
+            
+            Parallel.Invoke(() => Engines.ForEach(e => e.Warmup()));
 
             // Create and warmup both engines (in parallel)
             if (Def.Engines.Count == 0)
@@ -94,8 +85,8 @@ namespace Ceres.Features.Tournaments
         public void CreateAndPrepareEngines(int gameEngine1Index, int gameEngine2Index)
         {
             // Create and warmup both engines (in parallel)
-            Parallel.Invoke(() => { Engine1 = Engines[gameEngine1Index]; Engine1.Warmup(Def.Engines[gameEngine1Index].SearchLimit.KnownMaxNumNodes); },
-                      () => { Engine2 = Engines[gameEngine2Index]; Engine2.Warmup(Def.Engines[gameEngine2Index].SearchLimit.KnownMaxNumNodes); });
+            Parallel.Invoke(() => { Engine1 = Engines[gameEngine1Index]; },
+                      () => { Engine2 = Engines[gameEngine2Index]; });
 
             if (Def.CheckPlayer2Def != null)
             {

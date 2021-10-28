@@ -484,8 +484,8 @@ string      baseName = "4mvs_+90_+99";
             string CERES_NETWORK = CeresUserSettingsManager.Settings.DefaultNetworkSpecString; //"LC0:703810";
             const string CERES_GPU = "GPU:0";
 
-            SearchLimit TIME_CONTROL = SearchLimit.SecondsForAllMoves(60, 0.5f); // * 0.1f;            
-            const int NUM_GAME_PAIRS = 4;
+            SearchLimit TIME_CONTROL = SearchLimit.SecondsForAllMoves(60, 0.5f) * 0.1f;            
+            const int NUM_GAME_PAIRS = 2;
             const string logfile = "ceres.log.txt";
 
             // Define Stockfish engine (via UCI) 
@@ -493,23 +493,23 @@ string      baseName = "4mvs_+90_+99";
 
             // Define Ceres engine (in process) with associated neural network and GPU and parameter customizations
             NNEvaluatorDef ceresNNDef = NNEvaluatorDefFactory.FromSpecification(CERES_NETWORK, CERES_GPU);
-            GameEngineDefCeres engineDefCeres = new GameEngineDefCeres("Ceres", ceresNNDef, null,
-                                                                        new ParamsSearch() { /* FutilityPruningStopSearchEnabled = false, */ },
-                                                                        new ParamsSelect(),
-                                                                        logFileName: logfile);
+            GameEngineDefCeres engineDefCeres1 = new GameEngineDefCeres("Ceres1", ceresNNDef, null, new ParamsSearch(), new ParamsSelect(), logFileName: logfile);
+            GameEngineDefCeres engineDefCeres2 = new GameEngineDefCeres("Ceres2", ceresNNDef, null, new ParamsSearch(), new ParamsSelect(), logFileName: "ceres2.log.txt");
 
             // Define Leela engine (in process) with associated neural network and GPU and parameter customizations
             GameEngineDefLC0 engineDefLC0 = new GameEngineDefLC0("LC0", ceresNNDef, forceDisableSmartPruning: false, null, null);
 
             // Define players using these engines and specified time control
-            EnginePlayerDef playerCeres = new EnginePlayerDef(engineDefCeres, TIME_CONTROL);
+            EnginePlayerDef playerCeres1 = new EnginePlayerDef(engineDefCeres1, TIME_CONTROL);
             EnginePlayerDef playerLeela = new EnginePlayerDef(engineDefLC0, TIME_CONTROL);
             EnginePlayerDef playerSf14 = new EnginePlayerDef(sf14Engine, TIME_CONTROL);
+            EnginePlayerDef playerCeres2 = new EnginePlayerDef(engineDefCeres2, TIME_CONTROL);
+            EnginePlayerDef playerSf14Slow = new EnginePlayerDef(sf14Engine, TIME_CONTROL * 0.5f,"SF14*0.5");
 
             // Create a tournament definition
-            var engines = new List<EnginePlayerDef>() { playerCeres, playerLeela, playerSf14 };
+            var engines = new List<EnginePlayerDef>() { playerCeres1, playerLeela, playerCeres2, playerSf14 };
             
-            TournamentDef tournDef = new TournamentDef("Tournament A", engines);
+            TournamentDef tournDef = new TournamentDef("Round Robin Test", engines);
             tournDef.NumGamePairs = NUM_GAME_PAIRS;
             tournDef.OpeningsFileName = "WCEC_decisive.pgn";
             tournDef.ShowGameMoves = false;
@@ -523,7 +523,12 @@ string      baseName = "4mvs_+90_+99";
             }
             Console.WriteLine();
             Console.WriteLine($"Tournament completed in {stats.ElapsedTimeSecs,8:F2} seconds.");
-            Console.WriteLine(playerCeres + " " + results.GameOutcomesString);
+            //foreach (var engine in engines)
+            //{
+            //    Console.WriteLine();
+            //    Console.WriteLine(engine + " " + results.GameOutcomesString);
+            //}
+            
             Console.ReadLine();
         }
 
@@ -532,13 +537,18 @@ string      baseName = "4mvs_+90_+99";
             // Initialize settings by loading configuration file
             //CeresUserSettingsManager.LoadFromFile(@"c:\dev\ceres\artifacts\release\net5.0\ceres.json");
 
+            //example code:
+            // SearchLimit TIME_CONTROL = SearchLimit.NodesPerMove(10_000);
+            // for Ceres, set: new ParamsSearch() { FutilityPruningStopSearchEnabled = false, },            
+            // for LC0 player, set in constructor: forceDisableSmartPruning:true
+
             // Define constants for engine parameters           
 
             string leela_EXE = Path.Combine(CeresUserSettingsManager.Settings.DirExternalEngines, "lc0-v0.28.0-windows-gpu-nvidia-cuda", "LC0.exe");
             string CERES_NETWORK = CeresUserSettingsManager.Settings.DefaultNetworkSpecString; //"LC0:703810";
             const string CERES_GPU = "GPU:0";
             string TB_DIR = CeresUserSettingsManager.Settings.DirTablebases;
-            SearchLimit TIME_CONTROL = SearchLimit.SecondsForAllMoves(60, 0.5f) * 0.2f;
+            SearchLimit TIME_CONTROL = SearchLimit.SecondsForAllMoves(60, 0.5f); // * 0.5f;
             const string logfileCeres = "ceres.log.txt";
 
 
@@ -559,9 +569,14 @@ string      baseName = "4mvs_+90_+99";
             EnginePlayerDef playerCeres = new EnginePlayerDef(engineDefCeres, TIME_CONTROL);
             EnginePlayerDef playerLeela = new EnginePlayerDef(engineDefLC0, TIME_CONTROL);
 
+
             // Create a tournament definition
-            TournamentDef tournDef = new TournamentDef("Ceres_vs_Leela", playerCeres, playerLeela);
-            tournDef.NumGamePairs = 20;
+            var engines = new List<EnginePlayerDef>() { playerCeres, playerLeela };
+
+            TournamentDef tournDef = new TournamentDef("Tournament A", engines);
+            // Create a tournament definition
+            //TournamentDef tournDef = new TournamentDef("Ceres_vs_Leela", playerCeres, playerLeela);
+            tournDef.NumGamePairs = 50;
             tournDef.OpeningsFileName = "WCEC_decisive.pgn";
             tournDef.ShowGameMoves = false;
 

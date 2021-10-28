@@ -152,7 +152,7 @@ namespace Ceres.Features.Tournaments
 
         public void DumpParams()
         {
-            Console.WriteLine($"TOURNAMENT    {ID}");
+            Console.WriteLine($"TOURNAMENT:  {ID}");
             Console.WriteLine($"  Game Pairs: {NumGamePairs} ");
             Console.WriteLine($"  Openings  : {OpeningsDescription()}");
             Console.WriteLine($"  Adjudicate: {AdjudicationThresholdNumMoves} moves at {AdjudicationThresholdCentipawns}cp"
@@ -161,7 +161,7 @@ namespace Ceres.Features.Tournaments
             {
                 for (int i = 0; i < Engines.Count; i++)
                 {
-                    Console.WriteLine($"Player {i + 1} : {Engines[i]}");
+                    Console.WriteLine($"  Player {i + 1} : {Engines[i]}");
                 }
             }
             else

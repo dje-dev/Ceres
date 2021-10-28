@@ -80,6 +80,7 @@ namespace Ceres.Features.Tournaments
         public float TotalTimeEngine1 = 0;
         public float TotalTimeEngine2 = 0;
         public float NumGames;
+        
 
         public TournamentGameRunner Run;
 
@@ -161,7 +162,7 @@ namespace Ceres.Features.Tournaments
                 // which could happen if multiple threads are active
                 // (possibly otherwise all first giving white to one particular side).
                 bool engine2White = (numPairsProcessed + runnerIndex) % 2 == 0;
-                
+
                 if (Run.Engines.Count > 0)
                 {
                     var list = new List<GameEngine>(Run.Engines);
@@ -170,7 +171,7 @@ namespace Ceres.Features.Tournaments
                     {
                         for (int i = 1; i < list.Count; i++)
                         {
-                            Run.CreateAndPrepareEngines(engine1Index, i+engine1Index);
+                            Run.CreateAndPrepareEngines(engine1Index, i + engine1Index);
 
                             TournamentGameInfo gameInfo = RunGame(pgnFileName, engine2White, openingIndex, gameSequenceNum, roundNumber);
                             TournamentGameInfo gameReverseInfo = RunGame(pgnFileName, !engine2White, openingIndex, gameSequenceNum + 1, roundNumber);
@@ -196,7 +197,7 @@ namespace Ceres.Features.Tournaments
             {
                 foreach (var engine in Run.Engines)
                 {
-                    engine.Dispose();                    
+                    engine.Dispose();
                     Run.Engine2CheckEngine?.Dispose();
                 }
             }
@@ -308,15 +309,31 @@ namespace Ceres.Features.Tournaments
 
         internal void UpdateStatsAndOutputSummaryFromGameResult(string pgnFileName, bool engine2White, int openingIndex, int gameSequenceNum, TournamentGameInfo thisResult)
         {
-            lock (ParentStats)
+            if (Def.Engines.Count > 0)
             {
-                ParentStats.UpdateTournamentStats(thisResult);
+                lock (ParentStats)
+                {
+                    ParentStats.UpdateRRTournamentStats(thisResult, Run.Engine1, Run.Engine2);
+                }
+            }
+
+            else
+            {
+                lock (ParentStats)
+                {
+                    ParentStats.UpdateTournamentStats(thisResult);
+                }
             }
 
             // Only show headers first time for first thread
             if (!havePrintedHeaders)
             {
                 OutputHeaders(pgnFileName);
+            }
+            if (Def.Engines.Count > 0)
+            {
+                OutputGameResultRRInfo(engine2White, openingIndex, gameSequenceNum, thisResult);
+                return;
             }
 
             OutputGameResultInfo(engine2White, openingIndex, gameSequenceNum, thisResult);
@@ -380,7 +397,92 @@ namespace Ceres.Features.Tournaments
                 if (Def.ShowGameMoves) Def.Logger.WriteLine();
                 Def.Logger.Write($" {TrimmedIfNeeded(Def.Player1Def.ID, 10),-10} {TrimmedIfNeeded(Def.Player2Def.ID, 10),-10}");
                 Def.Logger.Write($"{eloAvg,4:0} {eloSD,4:0} {100.0f * los,5:0}  ");
-                Def.Logger.Write($"{ParentStats.NumGames,5} {DateTime.Now.ToString().Split(" ")[1],10}  {gameSequenceNum,4:F0}  {openingIndex,4:F0}{openingPlayedBothWaysStr}  ");
+                Def.Logger.Write($"{NumGames,5} {DateTime.Now.ToString().Split(" ")[1],10}  {gameSequenceNum,4:F0}  {openingIndex,4:F0}{openingPlayedBothWaysStr}  ");
+                Def.Logger.Write($"{thisResult.TotalTimeEngine1,8:F2}{player1ForfeitChar}{thisResult.RemainingTimeEngine1,7:F2} ");
+                Def.Logger.Write($"{thisResult.TotalTimeEngine2,8:F2}{player2ForfeitChar}{thisResult.RemainingTimeEngine2,7:F2}  ");
+                Def.Logger.Write($"{thisResult.TotalNodesEngine1,16:N0} {thisResult.TotalNodesEngine2,16:N0}   ");
+
+                if (Def.CheckPlayer2Def != null)
+                {
+                    Def.Logger.Write($"{thisResult.PlyCount,4:F0}  {checkEnginePlyDifferent}  {TournamentUtils.ResultStr(thisResult.Result, !engine2White),4}  ");
+                }
+                else
+                {
+                    Def.Logger.Write($"{thisResult.PlyCount,4:F0}  {TournamentUtils.ResultStr(thisResult.Result, !engine2White),4}  ");
+                }
+
+                Def.Logger.Write($" {resultReasonChar}   {endingCP,5:F0}{questionableFinalCP}");
+                Def.Logger.Write($" {wdlStr}   {thisResult.FEN} ");
+                Def.Logger.WriteLine();
+            }
+
+            UpdateAggregateGameStats(thisResult);
+
+            openingsFinishedAtLeastOnce.Add(openingIndex);
+            NumGames++;
+        }
+
+        private void OutputGameResultRRInfo(bool engine2White, int openingIndex, int gameSequenceNum, TournamentGameInfo thisResult)
+        {
+            var engineStat = ParentStats.GetResultsForPlayer(Run.Engine1.ID, Run.Engine2.ID);
+            var gNumber = NumGames + 1;
+            (float eloMin, float eloAvg, float eloMax) = EloCalculator.EloConfidenceInterval(engineStat.Player1Wins, engineStat.Draws, engineStat.Player1Losses);
+            float eloSD = eloMax - eloAvg;
+            float los = EloCalculator.LikelihoodSuperiority(engineStat.Player1Wins, engineStat.Draws, engineStat.Player1Losses);
+
+            string wdlStr = $"{engineStat.Player1Wins,3} {engineStat.Draws,3} {engineStat.Player1Losses,3}";
+
+            // Show a "." after the opening index if this was the second of the pair of games played.
+            string openingPlayedBothWaysStr = openingsFinishedAtLeastOnce.Contains(openingIndex) ? "." : " ";
+
+            string player1ForfeitChar = thisResult.ShouldHaveForfeitedOnLimitsEngine1 ? "f" : " ";
+            string player2ForfeitChar = thisResult.ShouldHaveForfeitedOnLimitsEngine2 ? "f" : " ";
+
+            const string TournamentGameResultReasonCodes = "CSTMERVL";
+
+            char resultReasonChar = TournamentGameResultReasonCodes[(int)thisResult.ResultReason];
+
+            static bool EvalInconsistent(TournamentGameResult outcome, float scoreCP, int numMovesBack)
+            {
+                float mult = numMovesBack % 2 == 1 ? 1 : -1; // adjust for side to move perspective
+                float adjustedCP = mult * scoreCP;
+                return (outcome == TournamentGameResult.Win && adjustedCP < 100) ||
+                       (outcome == TournamentGameResult.Draw && MathF.Abs(adjustedCP) > 50) ||
+                       (outcome == TournamentGameResult.Loss && adjustedCP > -100);
+            }
+
+            // Possibly show one or two "?" characters if the evaluations of the final two positions
+            // are very inconsisten with the actual game outcome (as a diagnostic).
+            string questionableFinalCP = "  ";
+            float endingCP = 0;
+            if (thisResult.GameMoveHistory.Count > 0)
+            {
+                bool finalMoveIsPlayer1 = (thisResult.GameMoveHistory[^1].Side == SideType.White) != engine2White;
+                float reverseMult = finalMoveIsPlayer1 ? 1 : -1;
+                endingCP = reverseMult * thisResult.GameMoveHistory[^1].ScoreCentipawns;
+
+                if (EvalInconsistent(thisResult.Result, reverseMult * thisResult.GameMoveHistory[^1].ScoreCentipawns, 1))
+                {
+                    questionableFinalCP = "? ";
+                }
+
+                if (thisResult.GameMoveHistory.Count > 1)
+                {
+                    if (EvalInconsistent(thisResult.Result, reverseMult * thisResult.GameMoveHistory[^2].ScoreCentipawns, 2))
+                    {
+                        questionableFinalCP = questionableFinalCP[0] + "?";
+                    }
+
+                }
+            }
+
+            lock (outputLockObj)
+            {
+                string checkEnginePlyDifferent = thisResult.NumEngine2MovesDifferentFromCheckEngine == 0 ? "   " : $"{thisResult.NumEngine2MovesDifferentFromCheckEngine,3:N0}";
+                if (Def.ShowGameMoves) Def.Logger.WriteLine();
+                Def.Logger.Write($" {TrimmedIfNeeded(Def.Player1Def.ID, 10),-10} {TrimmedIfNeeded(Def.Player2Def.ID, 10),-10}");
+                Def.Logger.Write($"{eloAvg,4:0} {eloSD,4:0} {100.0f * los,5:0}  ");
+                Def.Logger.Write($"{gNumber,5} {DateTime.Now.ToString().Split(" ")[1],10}  {gameSequenceNum,4:F0}  {openingIndex,4:F0}{openingPlayedBothWaysStr}  ");
                 Def.Logger.Write($"{thisResult.TotalTimeEngine1,8:F2}{player1ForfeitChar}{thisResult.RemainingTimeEngine1,7:F2} ");
                 Def.Logger.Write($"{thisResult.TotalTimeEngine2,8:F2}{player2ForfeitChar}{thisResult.RemainingTimeEngine2,7:F2}  ");
                 Def.Logger.Write($"{thisResult.TotalNodesEngine1,16:N0} {thisResult.TotalNodesEngine2,16:N0}   ");
