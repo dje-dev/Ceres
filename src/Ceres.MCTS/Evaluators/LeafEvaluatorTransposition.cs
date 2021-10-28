@@ -108,12 +108,14 @@ namespace Ceres.MCTS.Evaluators
       {
         if (CeresEnvironment.MONITORING_METRICS) NumHits.Add(1, node.Index);
         node.StructRef.CopyUnexpandedChildrenFromOtherNode(node.Tree, transpositionRootNodeIndex);
+        node.InfoRef.TranspositionRootNodeIndex = transpositionRootNodeIndex;
       }
       else if (transpositionMode == TranspositionMode.SingleNodeDeferredCopy
             || transpositionMode == TranspositionMode.SharedSubtree)
       {
         // Note that no need to increment NumHits here since this happens elsewhere (when pending value is used).
         SetTranspositionRootReuseFields(node, transpositionRootNodeIndex, in transpositionRootNode);
+        node.InfoRef.TranspositionRootNodeIndex = transpositionRootNodeIndex;
       }
       else
       {

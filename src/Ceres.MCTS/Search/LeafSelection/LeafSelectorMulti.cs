@@ -632,6 +632,33 @@ namespace Ceres.MCTS.Search
       // Prefetch not obviously helpful
       //node.Ref.PossiblyPrefetchChildArray(node.Store, new MCTSNodeStructIndex(node.Index));
 
+#if EXPERIMENTAL
+      if (node.Context.ParamsSearch.TestFlag && node.NumChildrenExpanded == 0 && node.NumPolicyMoves > 1)
+      {
+        throw new NotImplementedException();
+        bool got = MCTSManager.ThreadSearchContext.Tree.TranspositionRoots.TryGetValue(node.StructRef.ZobristHash, out int siblingTanspositionNodeIndex);
+        if (got)
+        {
+          //              MCTSNode transpositionRootNode = MCTSManager.ThreadSearchContext.Tree.GetNode(new MCTSNodeStructIndex(siblingTanspositionNodeIndex));
+          ref readonly MCTSNodeStruct transpositionRootNode = ref MCTSManager.ThreadSearchContext.Tree.Store.Nodes.nodes[siblingTanspositionNodeIndex];
+          if (transpositionRootNode.NumChildrenExpanded > 1)
+          {
+            if (transpositionRootNode.ChildAtIndexRef(0).N * 2 < transpositionRootNode.ChildAtIndexRef(1).N)
+            {
+              node.StructRef.SwapFirst();
+              MCTSEventSource.TestMetric1++;
+//              Console.WriteLine(got + " " + transpositionRootNode.N + " " + transpositionRootNode.ChildAtIndexRef(0).N + " " + transpositionRootNode.ChildAtIndexRef(1).N);
+            }
+          }
+
+        }
+      }
+      else
+      {
+//        Console.WriteLine("nogo");
+      }
+#endif
+
       int numChildrenToCheck = NumChildrenNeededToBeChecked(node, numTargetLeafs);
       Span<short> childVisitCounts = stackalloc short[numChildrenToCheck];
 
@@ -826,9 +853,9 @@ namespace Ceres.MCTS.Search
       }
     }
 
-    #endregion
+#endregion
 
-    #region Internals
+#region Internals
 
     /// <summary>
     /// Diagnostic method that verifies internal consistency of child visit counts.
@@ -849,7 +876,7 @@ namespace Ceres.MCTS.Search
       }
     }
 
-    #endregion
+#endregion
 
   }
 }

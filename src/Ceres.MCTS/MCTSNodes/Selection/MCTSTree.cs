@@ -331,6 +331,15 @@ namespace Ceres.MCTS.LeafExpansion
       {
         // Reconstruct the eval result from value already stored
         node.EvalResult.Initialize(node.Terminal, node.WinP, node.LossP, node.MPosition);
+
+        // Re-establish linkages to transposition root node, if any.
+        if (TranspositionRoots.TryGetValue(node.StructRef.ZobristHash, out int transpositionNodeIndex))
+        {
+          if (transpositionNodeIndex != node.Index)
+          {
+            node.InfoRef.TranspositionRootNodeIndex = new MCTSNodeStructIndex(transpositionNodeIndex);
+          }
+        }
       }
       else
       {

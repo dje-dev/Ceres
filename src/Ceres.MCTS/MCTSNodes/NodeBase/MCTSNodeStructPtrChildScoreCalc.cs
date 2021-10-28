@@ -158,12 +158,13 @@ namespace Ceres.MCTS.MTCSNodes
       if (N > MIN_N_USE_UNCERTAINTY && Context.ParamsSearch.EnableUncertaintyBoosting)
       {
         // Note that to be precise there should be an additional term subtraced off
-        // in variance calculation below, but it is omitted because:
+        // (for the mean squared) in variance calculation below, but it is omitted because:
         //   - in practice the magnitude is too small to be worth the computational effort.
         //   - the mean is computed over all visits but the variance accumulated not over first VARIANCE_START_ACCUMULATE_N
-        //     therefore this subtraction could produce non-consisten results (negative variance)
+        //     therefore this subtraction could produce non-consistent results (negative variance)
         float parentStdDev = MathF.Sqrt(nodeRef.VarianceAccumulator / (nodeRef.N - MCTSNodeStruct.VARIANCE_START_ACCUMULATE_N));
 
+        // Possibly apply scaling to each child.
         for (int i=0; i < numToProcess
                    && i < NumChildrenExpanded; i++)
         {
@@ -176,20 +177,22 @@ namespace Ceres.MCTS.MTCSNodes
             const float UNCERTAINTY_MAX_DEVIATION = 0.10f;
             const float BIAS_ADJUST = 0.03f; // adjustment to make average value turn out to be very close to 1.0
 
+            // The uncertainty scaling is a number centered at 1 which is
+            // higher for children with more emprical volatility than the parent and
+            // lower for children with less volatility.
             explorationScaling = 1 + BIAS_ADJUST + UNCERTAINTY_DIFF_MULTIPLIER * (childStdDev - parentStdDev);
             explorationScaling = StatUtils.Bounded(explorationScaling, 1.0f - UNCERTAINTY_MAX_DEVIATION, 1.0f + UNCERTAINTY_MAX_DEVIATION);
 
             const bool SHOW_UNCERTAINTY_STATS = false; // perforamnce degrading
             if (SHOW_UNCERTAINTY_STATS)
             {
-              // Update statistics. TODO: Temporary
+              // Update statistics.
               MCTSEventSource.TestCounter1++;
               accScale += explorationScaling;
               countScale++;
               if (Ref.ZobristHash % 2_000 == 0)
               {
                 MCTSEventSource.TestMetric1 = (accScale / countScale);
-                //Console.WriteLine((accScale / countScale) + "   " + explorationScaling);
               }
             }
 

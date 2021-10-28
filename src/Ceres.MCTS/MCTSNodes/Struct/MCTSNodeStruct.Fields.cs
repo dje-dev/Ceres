@@ -101,6 +101,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// </summary>
     internal FP16 mSum
     {
+      // NOTE: this field probably suffers from an accumulation precision problem
       readonly get => FP16.NaN;
       set
       {
