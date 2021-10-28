@@ -73,18 +73,6 @@ namespace Pblczero
     [global::ProtoBuf.ProtoMember(5, Name = @"ip_pol_b")]
     public Layer IpPolB { get; set; }
 
-    [global::ProtoBuf.ProtoMember(17, Name = @"action1")]
-    public ConvBlock Action1 { get; set; }
-
-    [global::ProtoBuf.ProtoMember(18, Name = @"action")]
-    public ConvBlock Action { get; set; }
-
-    [global::ProtoBuf.ProtoMember(19, Name = @"ip_act_w")]
-    public Layer IpActW { get; set; }
-
-    [global::ProtoBuf.ProtoMember(20, Name = @"ip_act_b")]
-    public Layer IpActB { get; set; }
-
     [global::ProtoBuf.ProtoMember(6, Name = @"value")]
     public ConvBlock Value { get; set; }
 
@@ -343,17 +331,6 @@ namespace Pblczero
     public void ResetPolicy() => __pbn__Policy = null;
     private PolicyFormat? __pbn__Policy;
 
-    [global::ProtoBuf.ProtoMember(7, Name = @"action")]
-    [global::System.ComponentModel.DefaultValue(ActionFormat.ActionUnknown)]
-    public ActionFormat Action
-    {
-      get => __pbn__Action ?? ActionFormat.ActionUnknown;
-      set => __pbn__Action = value;
-    }
-    public bool ShouldSerializeAction() => __pbn__Action != null;
-    public void ResetAction() => __pbn__Action = null;
-    private ActionFormat? __pbn__Action;
-
     [global::ProtoBuf.ProtoMember(5, Name = @"value")]
     [global::System.ComponentModel.DefaultValue(ValueFormat.ValueUnknown)]
     public ValueFormat Value
@@ -385,6 +362,16 @@ namespace Pblczero
       InputClassical112Plane = 1,
       [global::ProtoBuf.ProtoEnum(Name = @"INPUT_112_WITH_CASTLING_PLANE")]
       Input112WithCastlingPlane = 2,
+      [global::ProtoBuf.ProtoEnum(Name = @"INPUT_112_WITH_CANONICALIZATION")]
+      Input112WithCanonicalization = 3,
+      [global::ProtoBuf.ProtoEnum(Name = @"INPUT_112_WITH_CANONICALIZATION_HECTOPLIES")]
+      Input112WithCanonicalizationHectoplies = 4,
+      [global::ProtoBuf.ProtoEnum(Name = @"INPUT_112_WITH_CANONICALIZATION_HECTOPLIES_ARMAGEDDON")]
+      Input112WithCanonicalizationHectopliesArmageddon = 132,
+      [global::ProtoBuf.ProtoEnum(Name = @"INPUT_112_WITH_CANONICALIZATION_V2")]
+      Input112WithCanonicalizationV2 = 5,
+      [global::ProtoBuf.ProtoEnum(Name = @"INPUT_112_WITH_CANONICALIZATION_V2_ARMAGEDDON")]
+      Input112WithCanonicalizationV2Armageddon = 133,
     }
 
     [global::ProtoBuf.ProtoContract()]
@@ -411,6 +398,8 @@ namespace Pblczero
       NetworkClassicalWithHeadformat = 3,
       [global::ProtoBuf.ProtoEnum(Name = @"NETWORK_SE_WITH_HEADFORMAT")]
       NetworkSeWithHeadformat = 4,
+      [global::ProtoBuf.ProtoEnum(Name = @"NETWORK_ONNX")]
+      NetworkOnnx = 5,
     }
 
     [global::ProtoBuf.ProtoContract()]
@@ -425,17 +414,6 @@ namespace Pblczero
     }
 
     [global::ProtoBuf.ProtoContract()]
-    public enum ActionFormat
-    {
-      [global::ProtoBuf.ProtoEnum(Name = @"ACTION_UNKNOWN")]
-      ActionUnknown = 0,
-      [global::ProtoBuf.ProtoEnum(Name = @"ACTION_CLASSICAL")]
-      ActionClassical = 1,
-      [global::ProtoBuf.ProtoEnum(Name = @"ACTION_CONVOLUTION")]
-      ActionConvolution = 2,
-    }
-
-    [global::ProtoBuf.ProtoContract()]
     public enum ValueFormat
     {
       [global::ProtoBuf.ProtoEnum(Name = @"VALUE_UNKNOWN")]
@@ -444,6 +422,8 @@ namespace Pblczero
       ValueClassical = 1,
       [global::ProtoBuf.ProtoEnum(Name = @"VALUE_WDL")]
       ValueWdl = 2,
+      [global::ProtoBuf.ProtoEnum(Name = @"VALUE_PARAM")]
+      ValueParam = 3,
     }
 
     [global::ProtoBuf.ProtoContract()]
@@ -490,6 +470,104 @@ namespace Pblczero
   }
 
   [global::ProtoBuf.ProtoContract()]
+  public partial class OnnxModel : global::ProtoBuf.IExtensible
+  {
+    private global::ProtoBuf.IExtension __pbn__extensionData;
+    global::ProtoBuf.IExtension global::ProtoBuf.IExtensible.GetExtensionObject(bool createIfMissing)
+        => global::ProtoBuf.Extensible.GetExtensionObject(ref __pbn__extensionData, createIfMissing);
+
+    [global::ProtoBuf.ProtoMember(1, Name = @"model")]
+    public byte[] Model
+    {
+      get => __pbn__Model;
+      set => __pbn__Model = value;
+    }
+    public bool ShouldSerializeModel() => __pbn__Model != null;
+    public void ResetModel() => __pbn__Model = null;
+    private byte[] __pbn__Model;
+
+    [global::ProtoBuf.ProtoMember(2)]
+    [global::System.ComponentModel.DefaultValue(DataType.UnknownDatatype)]
+    public DataType data_type
+    {
+      get => __pbn__data_type ?? DataType.UnknownDatatype;
+      set => __pbn__data_type = value;
+    }
+    public bool ShouldSerializedata_type() => __pbn__data_type != null;
+    public void Resetdata_type() => __pbn__data_type = null;
+    private DataType? __pbn__data_type;
+
+    [global::ProtoBuf.ProtoMember(3, Name = @"input_planes")]
+    [global::System.ComponentModel.DefaultValue("")]
+    public string InputPlanes
+    {
+      get => __pbn__InputPlanes ?? "";
+      set => __pbn__InputPlanes = value;
+    }
+    public bool ShouldSerializeInputPlanes() => __pbn__InputPlanes != null;
+    public void ResetInputPlanes() => __pbn__InputPlanes = null;
+    private string __pbn__InputPlanes;
+
+    [global::ProtoBuf.ProtoMember(4, Name = @"output_value")]
+    [global::System.ComponentModel.DefaultValue("")]
+    public string OutputValue
+    {
+      get => __pbn__OutputValue ?? "";
+      set => __pbn__OutputValue = value;
+    }
+    public bool ShouldSerializeOutputValue() => __pbn__OutputValue != null;
+    public void ResetOutputValue() => __pbn__OutputValue = null;
+    private string __pbn__OutputValue;
+
+    [global::ProtoBuf.ProtoMember(5, Name = @"output_wdl")]
+    [global::System.ComponentModel.DefaultValue("")]
+    public string OutputWdl
+    {
+      get => __pbn__OutputWdl ?? "";
+      set => __pbn__OutputWdl = value;
+    }
+    public bool ShouldSerializeOutputWdl() => __pbn__OutputWdl != null;
+    public void ResetOutputWdl() => __pbn__OutputWdl = null;
+    private string __pbn__OutputWdl;
+
+    [global::ProtoBuf.ProtoMember(6, Name = @"output_policy")]
+    [global::System.ComponentModel.DefaultValue("")]
+    public string OutputPolicy
+    {
+      get => __pbn__OutputPolicy ?? "";
+      set => __pbn__OutputPolicy = value;
+    }
+    public bool ShouldSerializeOutputPolicy() => __pbn__OutputPolicy != null;
+    public void ResetOutputPolicy() => __pbn__OutputPolicy = null;
+    private string __pbn__OutputPolicy;
+
+    [global::ProtoBuf.ProtoMember(7, Name = @"output_mlh")]
+    [global::System.ComponentModel.DefaultValue("")]
+    public string OutputMlh
+    {
+      get => __pbn__OutputMlh ?? "";
+      set => __pbn__OutputMlh = value;
+    }
+    public bool ShouldSerializeOutputMlh() => __pbn__OutputMlh != null;
+    public void ResetOutputMlh() => __pbn__OutputMlh = null;
+    private string __pbn__OutputMlh;
+
+    [global::ProtoBuf.ProtoContract()]
+    public enum DataType
+    {
+      [global::ProtoBuf.ProtoEnum(Name = @"UNKNOWN_DATATYPE")]
+      UnknownDatatype = 0,
+      [global::ProtoBuf.ProtoEnum(Name = @"FLOAT")]
+      Float = 1,
+      [global::ProtoBuf.ProtoEnum(Name = @"FLOAT16")]
+      Float16 = 10,
+      [global::ProtoBuf.ProtoEnum(Name = @"BFLOAT16")]
+      Bfloat16 = 16,
+    }
+
+  }
+
+  [global::ProtoBuf.ProtoContract()]
   public partial class Net : global::ProtoBuf.IExtensible
   {
     private global::ProtoBuf.IExtension __pbn__extensionData;
@@ -529,171 +607,8 @@ namespace Pblczero
     [global::ProtoBuf.ProtoMember(10, Name = @"weights")]
     public Weights Weights { get; set; }
 
-  }
-
-  [global::ProtoBuf.ProtoContract()]
-  public partial class State : global::ProtoBuf.IExtensible
-  {
-    private global::ProtoBuf.IExtension __pbn__extensionData;
-    global::ProtoBuf.IExtension global::ProtoBuf.IExtensible.GetExtensionObject(bool createIfMissing)
-        => global::ProtoBuf.Extensible.GetExtensionObject(ref __pbn__extensionData, createIfMissing);
-
-    [global::ProtoBuf.ProtoMember(1, Name = @"plane", DataFormat = global::ProtoBuf.DataFormat.FixedSize, IsPacked = true)]
-    public ulong[] Planes { get; set; }
-
-    [global::ProtoBuf.ProtoMember(2, Name = @"us_ooo")]
-    public uint UsOoo
-    {
-      get => __pbn__UsOoo.GetValueOrDefault();
-      set => __pbn__UsOoo = value;
-    }
-    public bool ShouldSerializeUsOoo() => __pbn__UsOoo != null;
-    public void ResetUsOoo() => __pbn__UsOoo = null;
-    private uint? __pbn__UsOoo;
-
-    [global::ProtoBuf.ProtoMember(3, Name = @"us_oo")]
-    public uint UsOo
-    {
-      get => __pbn__UsOo.GetValueOrDefault();
-      set => __pbn__UsOo = value;
-    }
-    public bool ShouldSerializeUsOo() => __pbn__UsOo != null;
-    public void ResetUsOo() => __pbn__UsOo = null;
-    private uint? __pbn__UsOo;
-
-    [global::ProtoBuf.ProtoMember(4, Name = @"them_ooo")]
-    public uint ThemOoo
-    {
-      get => __pbn__ThemOoo.GetValueOrDefault();
-      set => __pbn__ThemOoo = value;
-    }
-    public bool ShouldSerializeThemOoo() => __pbn__ThemOoo != null;
-    public void ResetThemOoo() => __pbn__ThemOoo = null;
-    private uint? __pbn__ThemOoo;
-
-    [global::ProtoBuf.ProtoMember(5, Name = @"them_oo")]
-    public uint ThemOo
-    {
-      get => __pbn__ThemOo.GetValueOrDefault();
-      set => __pbn__ThemOo = value;
-    }
-    public bool ShouldSerializeThemOo() => __pbn__ThemOo != null;
-    public void ResetThemOo() => __pbn__ThemOo = null;
-    private uint? __pbn__ThemOo;
-
-    [global::ProtoBuf.ProtoMember(6, Name = @"side_to_move")]
-    public uint SideToMove
-    {
-      get => __pbn__SideToMove.GetValueOrDefault();
-      set => __pbn__SideToMove = value;
-    }
-    public bool ShouldSerializeSideToMove() => __pbn__SideToMove != null;
-    public void ResetSideToMove() => __pbn__SideToMove = null;
-    private uint? __pbn__SideToMove;
-
-    [global::ProtoBuf.ProtoMember(7, Name = @"rule_50")]
-    public uint Rule50
-    {
-      get => __pbn__Rule50.GetValueOrDefault();
-      set => __pbn__Rule50 = value;
-    }
-    public bool ShouldSerializeRule50() => __pbn__Rule50 != null;
-    public void ResetRule50() => __pbn__Rule50 = null;
-    private uint? __pbn__Rule50;
-
-  }
-
-  [global::ProtoBuf.ProtoContract()]
-  public partial class Policy : global::ProtoBuf.IExtensible
-  {
-    private global::ProtoBuf.IExtension __pbn__extensionData;
-    global::ProtoBuf.IExtension global::ProtoBuf.IExtensible.GetExtensionObject(bool createIfMissing)
-        => global::ProtoBuf.Extensible.GetExtensionObject(ref __pbn__extensionData, createIfMissing);
-
-    [global::ProtoBuf.ProtoMember(1, Name = @"index", IsPacked = true)]
-    public uint[] Indexs { get; set; }
-
-    [global::ProtoBuf.ProtoMember(2, Name = @"prior", IsPacked = true)]
-    public float[] Priors { get; set; }
-
-  }
-
-  [global::ProtoBuf.ProtoContract()]
-  public partial class Game : global::ProtoBuf.IExtensible
-  {
-    private global::ProtoBuf.IExtension __pbn__extensionData;
-    global::ProtoBuf.IExtension global::ProtoBuf.IExtensible.GetExtensionObject(bool createIfMissing)
-        => global::ProtoBuf.Extensible.GetExtensionObject(ref __pbn__extensionData, createIfMissing);
-
-    [global::ProtoBuf.ProtoMember(1, Name = @"state")]
-    public global::System.Collections.Generic.List<State> States { get; } = new global::System.Collections.Generic.List<State>();
-
-    [global::ProtoBuf.ProtoMember(2, Name = @"policy")]
-    public global::System.Collections.Generic.List<Policy> Policies { get; } = new global::System.Collections.Generic.List<Policy>();
-
-    [global::ProtoBuf.ProtoMember(3, Name = @"value", IsPacked = true)]
-    public float[] Values { get; set; }
-
-    [global::ProtoBuf.ProtoMember(4, Name = @"move", IsPacked = true)]
-    public uint[] Moves { get; set; }
-
-    [global::ProtoBuf.ProtoMember(5)]
-    [global::System.ComponentModel.DefaultValue(Result.White)]
-    public Result result
-    {
-      get => __pbn__result ?? Result.White;
-      set => __pbn__result = value;
-    }
-    public bool ShouldSerializeresult() => __pbn__result != null;
-    public void Resetresult() => __pbn__result = null;
-    private Result? __pbn__result;
-
-    [global::ProtoBuf.ProtoContract()]
-    public enum Result
-    {
-      [global::ProtoBuf.ProtoEnum(Name = @"WHITE")]
-      White = 0,
-      [global::ProtoBuf.ProtoEnum(Name = @"BLACK")]
-      Black = 1,
-      [global::ProtoBuf.ProtoEnum(Name = @"DRAW")]
-      Draw = 2,
-    }
-
-  }
-
-  [global::ProtoBuf.ProtoContract()]
-  public partial class Chunk : global::ProtoBuf.IExtensible
-  {
-    private global::ProtoBuf.IExtension __pbn__extensionData;
-    global::ProtoBuf.IExtension global::ProtoBuf.IExtensible.GetExtensionObject(bool createIfMissing)
-        => global::ProtoBuf.Extensible.GetExtensionObject(ref __pbn__extensionData, createIfMissing);
-
-    [global::ProtoBuf.ProtoMember(1, Name = @"magic", DataFormat = global::ProtoBuf.DataFormat.FixedSize)]
-    public uint Magic
-    {
-      get => __pbn__Magic.GetValueOrDefault();
-      set => __pbn__Magic = value;
-    }
-    public bool ShouldSerializeMagic() => __pbn__Magic != null;
-    public void ResetMagic() => __pbn__Magic = null;
-    private uint? __pbn__Magic;
-
-    [global::ProtoBuf.ProtoMember(2, Name = @"license")]
-    [global::System.ComponentModel.DefaultValue("")]
-    public string License
-    {
-      get => __pbn__License ?? "";
-      set => __pbn__License = value;
-    }
-    public bool ShouldSerializeLicense() => __pbn__License != null;
-    public void ResetLicense() => __pbn__License = null;
-    private string __pbn__License;
-
-    [global::ProtoBuf.ProtoMember(3, Name = @"version")]
-    public EngineVersion Version { get; set; }
-
-    [global::ProtoBuf.ProtoMember(4, Name = @"game")]
-    public global::System.Collections.Generic.List<Game> Games { get; } = new global::System.Collections.Generic.List<Game>();
+    [global::ProtoBuf.ProtoMember(11, Name = @"onnx_model")]
+    public OnnxModel OnnxModel { get; set; }
 
   }
 
