@@ -14,6 +14,7 @@
 #region Using directives
 
 using System;
+using System.IO;
 using System.Diagnostics;
 using System.Threading.Tasks;
 
@@ -25,6 +26,8 @@ using Chess.Ceres.NNEvaluators.TensorRT;
 using Ceres.Chess.UserSettings;
 using Ceres.Chess.NNEvaluators.CUDA;
 using Ceres.Chess.LC0.NNFiles;
+using Ceres.Chess.LC0NetInference;
+using Ceres.Chess.LC0.WeightsProtobuf;
 
 #endregion
 
@@ -132,6 +135,24 @@ namespace Ceres.Chess.NNEvaluators
           if (CeresUserSettingsManager.Settings.UseLegacyLC0Evaluator)
           {
             ret = new NNEvaluatorLC0(net, deviceDef.DeviceIndex, netDef.Precision);
+          }
+          else if ((net as NNWeightsFileLC0).Format == NNWeightsFileLC0.FormatType.EmbeddedONNX)
+          {
+            NNWeightsFileLC0 netDefONNX = net as NNWeightsFileLC0;
+
+            LC0ProtobufNet pbn = LC0ProtobufNet.LoadedNet(net.FileName);
+            Debug.Assert(pbn.Net.Format.NetworkFormat.Network == Pblczero.NetworkFormat.NetworkStructure.NetworkOnnx);
+
+            string tempFN = Path.GetTempFileName() + ".onnx";
+            File.WriteAllBytes(tempFN, pbn.Net.OnnxModel.Model);
+
+            // TODO: consider if we could/should delete the temporary file when
+            //       it has been consumed by the ONNX engine constructor.
+            // TODO: consider possibility of other precisions than FP32
+            return new NNEvaluatorEngineONNX(netDef.NetworkID, tempFN, 0, ONNXRuntimeExecutor.NetTypeEnum.LC0, 1024,
+                                             NNEvaluatorPrecision.FP32, netDefONNX.IsWDL, netDefONNX.HasMovesLeft,
+                                             pbn.Net.OnnxModel.OutputValue, pbn.Net.OnnxModel.OutputWdl,
+                                             pbn.Net.OnnxModel.OutputPolicy, pbn.Net.OnnxModel.OutputMlh);
           }
           else
           {

@@ -31,6 +31,16 @@ namespace Ceres.Chess.LC0.NNFiles
   public class NNWeightsFileLC0 : INNWeightsFileInfo
   {
     /// <summary>
+    /// Type of underlying network.
+    /// </summary>
+    public enum FormatType {  LC0, EmbeddedONNX };
+
+    /// <summary>
+    /// Type of network.
+    /// </summary>
+    public FormatType Format { get; }
+
+    /// <summary>
     /// Description of generator of weights file (e.g. Leela Chess Zero).
     /// </summary>
     public string GeneratorDescription => "LC0 weights file";
@@ -162,16 +172,29 @@ namespace Ceres.Chess.LC0.NNFiles
       try
       {
         LC0ProtobufNet pbn = LC0ProtobufNet.LoadedNet(filename);
-        NumBlocks = pbn.NumBlocks;
-        NumFilters = pbn.NumFilters;
-        IsWDL = pbn.HasWDL;
-        HasMovesLeft = pbn.HasMovesLeft;
+        if (pbn.Net.Format.NetworkFormat.Network == Pblczero.NetworkFormat.NetworkStructure.NetworkOnnx)
+        {
+          Format = FormatType.EmbeddedONNX;
+          IsWDL = !string.IsNullOrEmpty(pbn.Net.OnnxModel.OutputWdl);
+          HasMovesLeft = !string.IsNullOrEmpty(pbn.Net.OnnxModel.OutputMlh);
+
+          // Not possible to determine number of blocks/filters (may be arbitrary structure).
+        }
+        else
+        {
+          Format = FormatType.LC0;
+          NumBlocks = pbn.NumBlocks;
+          NumFilters = pbn.NumFilters;
+          IsWDL = pbn.HasWDL;
+          HasMovesLeft = pbn.HasMovesLeft;
+        }
       }
       catch (Exception exc)
       {
         throw new Exception($"Failure in parsing LC0 weights file: {filename}. File possibly corrupt or more recent format than supported. {exc}");
       }
     }
+
 
     /// <summary>
     /// Information about the underlying file from the operating system.

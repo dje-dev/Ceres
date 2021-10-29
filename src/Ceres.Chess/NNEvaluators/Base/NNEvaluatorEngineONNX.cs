@@ -84,7 +84,31 @@ namespace Chess.Ceres.NNEvaluators
     readonly bool isWDL;
     readonly bool hasM;
 
-    #region Statics
+
+    /// <summary>
+    /// Name of policy output slot.
+    /// </summary>
+    public readonly string OutputPolicy;
+
+    /// <summary>
+    /// Name of value output slot (if non-WDL).
+    /// </summary>
+    public readonly string OutputValue;
+
+    /// <summary>
+    /// Name of WDL output slot (if WDL).
+    /// </summary>
+    public readonly string OutputWDL;
+
+    /// <summary>
+    /// Name of MLH output slot.
+    /// </summary>
+    public readonly string OutputMLH;
+
+
+#if NOT
+#endif
+#region Statics
 
     static string lastONNXFileName;
     static int lastBatchSize;
@@ -92,11 +116,12 @@ namespace Chess.Ceres.NNEvaluators
     static ONNXRuntimeExecutor lastExecutor;
     static ONNXRuntimeExecutor.NetTypeEnum lastType;
 
-    #endregion
+#endregion
 
     public NNEvaluatorEngineONNX(string engineID, string weightsFN, int gpuID, 
                                  ONNXRuntimeExecutor.NetTypeEnum type, int batchSize,
-                                 NNEvaluatorPrecision precision, bool isWDL, bool hasM)
+                                 NNEvaluatorPrecision precision, bool isWDL, bool hasM,
+                                 string outputValue, string outputWDL, string outputPolicy, string outputMLH)
     {
       EngineType = type == ONNXRuntimeExecutor.NetTypeEnum.Ceres ? "ONNX_DJE" : "ONNX_LZ0";
       EngineNetworkID = engineID;
@@ -105,6 +130,11 @@ namespace Chess.Ceres.NNEvaluators
       Precision = precision;
       this.isWDL = isWDL;
       this.hasM = hasM;
+
+      OutputValue = outputValue;
+      OutputWDL = outputWDL;
+      OutputPolicy = outputPolicy;
+      OutputMLH = outputMLH;
 
       if (lastONNXFileName == weightsFN && lastBatchSize == batchSize
         && lastIsWDL == isWDL && lastType == type)
@@ -160,7 +190,7 @@ namespace Chess.Ceres.NNEvaluators
     public override int MaxBatchSize => BatchSize;
 
 
-    #region Internals
+#region Internals
 
     /// <summary>
     /// Internal worker method to 
@@ -218,7 +248,7 @@ namespace Chess.Ceres.NNEvaluators
                                          PositionEvaluationBatch.PolicyType.LogProbabilities, false, stats);
     }
 
-    #endregion
+#endregion
 
     protected override void DoShutdown()
     {

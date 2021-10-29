@@ -52,9 +52,13 @@ namespace Ceres.Chess.LC0.NNFiles
           cleanedFileName = cleanedFileName.Replace(".gz", "").Replace(".pb", "");
 
           if (cleanedFileName == id.ToLower())
+          {
             return new NNWeightsFileLC0(id, fileName);
+          }
           else
+          {
             return null;
+          }
         }
       });
 
