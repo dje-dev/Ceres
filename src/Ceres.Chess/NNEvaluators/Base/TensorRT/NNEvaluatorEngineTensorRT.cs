@@ -235,10 +235,30 @@ Updated notes:
 
             Span<float> rawResultsValueSpan = new Span<float>(rawResultsValue, numToProcess * NUM_VALUE_OUTPUTS);
             Span<float> rawResultsMLHSpan = new Span<float>(rawResultsMLH, numToProcess * 1);
-            for (int i = 0; i < numToProcess; i++)
+
+            if (NUM_VALUE_OUTPUTS == 1)
             {
-              results[i] = (FP16)rawResultsValueSpan[i];
-              resultsMLH[i] = (FP16)rawResultsMLHSpan[i];
+              for (int i = 0; i < numToProcess; i++)
+              {
+                results[i] = (FP16)rawResultsValueSpan[i];
+                resultsMLH[i] = (FP16)rawResultsMLHSpan[i];
+              }
+            }
+            else if (NUM_VALUE_OUTPUTS == 3)
+            {
+              for (int i = 0; i < numToProcess; i++)
+              {
+                int vBase = i * 3;
+                results[vBase] = (FP16)rawResultsValueSpan[vBase];
+                results[vBase+1] = (FP16)rawResultsValueSpan[vBase+1];
+                results[vBase+2] = (FP16)rawResultsValueSpan[vBase+2];
+
+                resultsMLH[i] = (FP16)rawResultsMLHSpan[i];
+              }
+            }
+            else
+            {
+              throw new Exception("Internal error, unexpected value count");
             }
           }
         }
@@ -252,7 +272,7 @@ Updated notes:
           throw new Exception("WDL and/or MLH missing, TRT backend currently probably assumes they are present");
         }
 
-        const bool VALUES_ARE_LOGISTIC = true; // the values are exponentiated already in the C++ code
+        const bool VALUES_ARE_LOGISTIC = false; // the values are exponentiated already in the C++ code
         PositionEvaluationBatch retBatch = new PositionEvaluationBatch(Config.IsWDL, Config.HasM, 
                                      numToProcess, results, 
                                      NUM_TOPK_POLICY,
