@@ -152,14 +152,14 @@ namespace Ceres.Chess.LC0.Batches
     /// Adds a position to the batch.
     /// </summary>
     /// <param name="position"></param>
-    public void Add(in Position position) => Add(new PositionWithHistory(position));
+    public void Add(in Position position, bool fillInMissingPlanes) => Add(new PositionWithHistory(position), fillInMissingPlanes);
     
 
     /// <summary>
     /// Adds a position with history to the batch.
     /// </summary>
     /// <param name="moveSequence"></param>
-    public void Add(PositionWithHistory moveSequence)
+    public void Add(PositionWithHistory moveSequence, bool fillInMissingPlanes)
     {
       MGPosition finalPositionMG = moveSequence.FinalPosMG;
 
@@ -167,7 +167,7 @@ namespace Ceres.Chess.LC0.Batches
       PositionRepetitionCalc.SetRepetitionsCount(posSeq);
 
       ref EncodedPositionWithHistory posRaw = ref pendingPositions[NumPositionsAdded];
-      posRaw.SetFromSequentialPositions(posSeq, true);
+      posRaw.SetFromSequentialPositions(posSeq, fillInMissingPlanes);
 
       // Compute hash
       ulong zobristHashForCaching = EncodedBoardZobrist.ZobristHash(posSeq, PositionMiscInfo.HashMove50Mode.ValueBoolIfAbove98);

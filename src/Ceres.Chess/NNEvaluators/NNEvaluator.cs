@@ -230,11 +230,11 @@ namespace Ceres.Chess.NNEvaluators
     /// <param name="position"></param>
     /// <param name="retrieveSupplementalResults"></param>
     /// <returns></returns>
-    public NNEvaluatorResult Evaluate(PositionWithHistory position, bool retrieveSupplementalResults = false)
+    public NNEvaluatorResult Evaluate(PositionWithHistory position, bool fillInMissingPlanes, bool retrieveSupplementalResults = false)
     {
       // TODO: someday we might be able to relax the InputTypes.All below
       EncodedPositionBatchBuilder builder = new EncodedPositionBatchBuilder(1, NNEvaluator.InputTypes.All);
-      builder.Add(position);
+      builder.Add(position, fillInMissingPlanes);
 
       NNEvaluatorResult[] result = EvaluateBatch(builder.GetBatch(), retrieveSupplementalResults);
       return result[0];
@@ -247,7 +247,7 @@ namespace Ceres.Chess.NNEvaluators
     /// <param name="positions"></param>
     /// <param name="retrieveSupplementalResults"></param>
     /// <returns></returns>
-    public NNEvaluatorResult[] Evaluate(IEnumerable<PositionWithHistory> positions, bool retrieveSupplementalResults = false)
+    public NNEvaluatorResult[] Evaluate(IEnumerable<PositionWithHistory> positions, bool fillInMissingPlanes, bool retrieveSupplementalResults = false)
     {
       PositionWithHistory[] positionsAll = positions.ToArray();
 
@@ -255,7 +255,7 @@ namespace Ceres.Chess.NNEvaluators
       EncodedPositionBatchBuilder builder = new EncodedPositionBatchBuilder(positionsAll.Length, NNEvaluator.InputTypes.All);
       foreach (PositionWithHistory position in positionsAll)
       {
-        builder.Add(position);
+        builder.Add(position, fillInMissingPlanes);
       }
 
       return EvaluateBatch(builder.GetBatch(), retrieveSupplementalResults);
@@ -268,11 +268,11 @@ namespace Ceres.Chess.NNEvaluators
     /// <param name="encodedPosition"></param>
     /// <param name="retrieveSupplementalResults"></param>
     /// <returns></returns>
-    public NNEvaluatorResult Evaluate(in Position position, bool retrieveSupplementalResults = false)
+    public NNEvaluatorResult Evaluate(in Position position, bool fillInMissingPlanes, bool retrieveSupplementalResults = false)
     {
       // TODO: someday we might be able to relax the InputTypes.All below
       EncodedPositionBatchBuilder builder = new EncodedPositionBatchBuilder(1, NNEvaluator.InputTypes.All);
-      builder.Add(in position);
+      builder.Add(in position, fillInMissingPlanes);
 
       NNEvaluatorResult[] result = EvaluateBatch(builder.GetBatch(), retrieveSupplementalResults);
       return result[0];

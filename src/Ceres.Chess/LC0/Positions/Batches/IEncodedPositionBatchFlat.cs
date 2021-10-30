@@ -94,26 +94,25 @@ namespace Ceres.Chess.LC0.Batches
       return new EncodedPositionBatchFlatSlice(this, startIndex, count);
     }
 
-   
-    public EncodedPositionBatchFlat Mirrored
+
+    public EncodedPositionBatchFlat Mirrored(bool fillInMissingPlanes)
     {
-      get
+      if (Positions == null) throw new NotImplementedException("Implemenation restriction: Mirrored only implemented when Positions is not null");
+
+      EncodedPositionBatchBuilder builder = new EncodedPositionBatchBuilder(NumPos, NNEvaluator.InputTypes.Boards);
+      for (int i = 0; i < NumPos; i++)
       {
-        if (Positions == null) throw new NotImplementedException("Implemenation restriction: Mirrored only implemented when Positions is not null");
+        Position pos = MGChessPositionConverter.PositionFromMGChessPosition(in Positions[i]);
 
-        EncodedPositionBatchBuilder builder = new EncodedPositionBatchBuilder(NumPos, NNEvaluator.InputTypes.Boards);
-        for (int i = 0; i < NumPos; i++)
+        // Mirror the position if it is equivalent to do so
+        if (!pos.MiscInfo.BlackCanOO && !pos.MiscInfo.BlackCanOOO && !pos.MiscInfo.WhiteCanOO && !pos.MiscInfo.WhiteCanOOO)
         {
-          Position pos = MGChessPositionConverter.PositionFromMGChessPosition(in Positions[i]);
-
-          // Mirror the position if it is equivalent to do so
-          if (!pos.MiscInfo.BlackCanOO && !pos.MiscInfo.BlackCanOOO && !pos.MiscInfo.WhiteCanOO && !pos.MiscInfo.WhiteCanOOO)
-            pos = pos.Mirrored;
-
-          builder.Add(in pos);
+          pos = pos.Mirrored;
         }
-        return builder.GetBatch();
+
+        builder.Add(in pos, fillInMissingPlanes);
       }
+      return builder.GetBatch();
     }
 
     /// <summary>
