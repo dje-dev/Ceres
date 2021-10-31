@@ -15,10 +15,13 @@
 
 using Ceres.Base.DataTypes;
 using Ceres.Chess.EncodedPositions;
+using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
 using Ceres.Chess.NNEvaluators;
 using System;
+using System.Collections;
+using System.Collections.Generic;
 
 #endregion
 
@@ -131,6 +134,62 @@ namespace Ceres.Chess.LC0.Batches
           moves[i] = thisPosMoves;
         }
         Moves = moves;
+      }
+    }
+
+    /// <summary>
+    /// Sets all entries in a specified policy array to -1E10
+    /// if they are illegal moves for the corresponding position.
+    /// </summary>
+    /// <param name="policyValues"></param>
+    public void MaskIllegalMovesInPolicyArray(Span<float> policyValues)
+    {
+      TrySetMoves();
+
+      HashSet<int> legalIndices = new HashSet<int>(96);
+      for (int pos = 0; pos < NumPos; pos++)
+      {
+        legalIndices.Clear();
+
+        for (int i = 0; i < Moves[pos].NumMovesUsed; i++)
+        {
+          EncodedMove encodedMove = ConverterMGMoveEncodedMove.MGChessMoveToEncodedMove(Moves[pos].MovesArray[i]);
+          legalIndices.Add(encodedMove.IndexNeuralNet);
+        }
+
+        int thisOffset = 1858 * pos;
+        for (int i = 0; i < 1858; i++)
+        {
+          if (!legalIndices.Contains(i))
+          {
+            policyValues[thisOffset + i] = -1E10f;
+          }
+        }
+      }
+
+    }
+
+    /// <summary>
+    /// Returns BitArray of vaild moves for all positions and moves in batch.
+    /// </summary>
+    public BitArray ValidMovesMasks
+    {
+      get
+      {
+        TrySetMoves();
+
+        BitArray mask = new BitArray(NumPos * 1858);
+        for (int pos = 0; pos < NumPos; pos++)
+        {
+          int thisOffset = 1858 * pos;
+          for (int i = 0; i < Moves[pos].NumMovesUsed; i++)
+          {
+            EncodedMove encodedMove = ConverterMGMoveEncodedMove.MGChessMoveToEncodedMove(Moves[pos].MovesArray[i]);
+            mask[thisOffset + encodedMove.IndexNeuralNet] = true;
+          }
+        }
+
+        return mask;
       }
     }
 
