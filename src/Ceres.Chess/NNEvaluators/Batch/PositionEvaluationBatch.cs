@@ -17,7 +17,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
-
+using System.Threading.Tasks;
 using Ceres.Base.Benchmarking;
 using Ceres.Base.DataTypes;
 using Ceres.Chess.EncodedPositions;
@@ -187,65 +187,87 @@ namespace Ceres.Chess.NetEvaluation.Batch
       return retPolicies;
     }
 
-    
+
+    [ThreadStatic]
+    static float[] policyTempBuffer;
 
     static CompressedPolicyVector[] ExtractPoliciesBufferFlat(int numPos, float[] policyProbs, PolicyType probType, bool alreadySorted)
     {
       // TODO: possibly needs work.
       // Do we handle WDL correctly? Do we flip the moves if we are black (using positions) ?
 
-      if (policyProbs == null) return null;
-      if (policyProbs.Length != EncodedPolicyVector.POLICY_VECTOR_LENGTH * numPos) throw new ArgumentException("Wrong policy size");
+      if (policyProbs == null)
+      {
+        return null;
+      }
+
+      if (policyProbs.Length != EncodedPolicyVector.POLICY_VECTOR_LENGTH * numPos)
+      {
+        throw new ArgumentException("Wrong policy size");
+      }
 
       CompressedPolicyVector[] retPolicies = new CompressedPolicyVector[numPos];
-      if (policyProbs.Length != EncodedPolicyVector.POLICY_VECTOR_LENGTH * numPos) throw new ArgumentException("Wrong policy size");
+      Span<float> policyProbsSpan = policyProbs.AsSpan();
 
-      float[] buffer = new float[EncodedPolicyVector.POLICY_VECTOR_LENGTH];
-      for (int i = 0; i < numPos; i++)
+      Parallel.For(0, numPos, i =>
       {
+        if (policyTempBuffer == null)
+        {
+          policyTempBuffer = new float[EncodedPolicyVector.POLICY_VECTOR_LENGTH];
+        }
+
         int startIndex = EncodedPolicyVector.POLICY_VECTOR_LENGTH * i;
+
         if (probType == PolicyType.Probabilities)
-          Array.Copy(policyProbs, startIndex, buffer, 0, EncodedPolicyVector.POLICY_VECTOR_LENGTH);
+        {
+          throw new NotImplementedException();
+          //Array.Copy(policyProbs, startIndex, policyTempBuffer, 0, EncodedPolicyVector.POLICY_VECTOR_LENGTH);
+        }
         else
         {
           // Avoid overflow by subtracting off max
           float max = 0.0f;
-
           for (int j = 0; j < EncodedPolicyVector.POLICY_VECTOR_LENGTH; j++)
           {
             float val = policyProbs[startIndex + j];
             if (val > max) max = val;
           }
 
+          double acc = 0;
           for (int j = 0; j < EncodedPolicyVector.POLICY_VECTOR_LENGTH; j++)
           {
-            buffer[j] = (float)Math.Exp(policyProbs[startIndex + j] - max); // TODO: make faster
+            float prob = policyProbs[startIndex + j];
+            if (prob > -1E10)
+            {
+              float value = (float)Math.Exp(prob - max);
+              policyTempBuffer[j] = value;
+              acc += value;
+            }
+            else
+            {
+              policyTempBuffer[j] = 0;
+            }
           }
-        }
 
-        double acc = 0;
-        for (int j = 0; j < EncodedPolicyVector.POLICY_VECTOR_LENGTH; j++)
-        {
-          acc += buffer[j];
-        }
 
-        if (acc == 0.0)
-        {
-          throw new Exception("Sum of unnormalized probabilities was zero.");
-        }
-
-        // As performance optimization, only adjust if significantly different from 1.0
-        const float MAX_DEVIATION = 0.001f;
-        if (acc < 1.0f - MAX_DEVIATION || acc > 1.0f + MAX_DEVIATION)
-        {
-          for (int j = 0; j < EncodedPolicyVector.POLICY_VECTOR_LENGTH; j++)
+          if (acc == 0.0)
           {
-            buffer[j] = (float)(buffer[j] / acc);
+            throw new Exception("Sum of unnormalized probabilities was zero.");
           }
-        }
 
-        CompressedPolicyVector.Initialize(ref retPolicies[i], buffer, alreadySorted);
-      }
+          // As performance optimization, only adjust if significantly different from 1.0
+          const float MAX_DEVIATION = 0.001f;
+          if (acc < 1.0f - MAX_DEVIATION || acc > 1.0f + MAX_DEVIATION)
+          {
+            for (int j = 0; j < EncodedPolicyVector.POLICY_VECTOR_LENGTH; j++)
+            {
+              policyTempBuffer[j] = (float)(policyTempBuffer[j] / acc);
+            }
+          }
+
+          CompressedPolicyVector.Initialize(ref retPolicies[i], policyTempBuffer, alreadySorted);
+        }
+      });
 
       return retPolicies;
     }
