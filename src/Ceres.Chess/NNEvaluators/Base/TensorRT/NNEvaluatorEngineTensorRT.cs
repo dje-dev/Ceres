@@ -43,7 +43,7 @@ namespace Chess.Ceres.NNEvaluators.TensorRT
     const int NUM_TOPK_POLICY = 64;// set in C++ code
 
     public override bool IsWDL => Config.IsWDL;
-    public override bool HasM => false;
+    public override bool HasM => Config.HasM;
 
 
     public readonly NNEvaluatorEngineTensorRTConfig Config;
@@ -160,7 +160,7 @@ namespace Chess.Ceres.NNEvaluators.TensorRT
         float[] floatsCalib = null;// batchCalib.EncodedPosExpandedAsFloats;
         float[] lz0FloatsCalib = null;// ChessNetTFExecutor.RebuildInputsForLZ0Network(floatsCalib, numToProcess);
 
-        const bool USE_TOP_K = true;// !USE_TRT713;
+        const bool USE_TOP_K = false;// this was disabled Oct 2021 because became buggy
         Span<float> rawResultsPolicy =
           USE_TOP_K ? stackalloc float[Config.MaxBatchSize * NUM_TOPK_POLICY * 2] // one 4 byte entry for each index (as int 8), one 4 byte entry for each probability
                     : new float[numToProcessPadded * EncodedPolicyVector.POLICY_VECTOR_LENGTH]; 
@@ -263,24 +263,51 @@ Updated notes:
           }
         }
 
-        int NUM_ELEMENTS = Config.MaxBatchSize * NUM_TOPK_POLICY;
-        Span<Int32> policyIndicies = MemoryMarshal.Cast<float, Int32>(rawResultsPolicy).Slice(0, NUM_ELEMENTS);
-        Span<float> policyProbabilities = rawResultsPolicy.Slice(Config.MaxBatchSize * NUM_TOPK_POLICY, NUM_ELEMENTS);
 
         if (!Config.IsWDL || !Config.HasM)
         {
           throw new Exception("WDL and/or MLH missing, TRT backend currently probably assumes they are present");
         }
 
+        PositionEvaluationBatch retBatch;
         const bool VALUES_ARE_LOGISTIC = false; // the values are exponentiated already in the C++ code
-        PositionEvaluationBatch retBatch = new PositionEvaluationBatch(Config.IsWDL, Config.HasM, 
-                                     numToProcess, results, 
-                                     NUM_TOPK_POLICY,
-                                     policyIndicies, policyProbabilities,
-                                     resultsMLH,
-                                     null, //rawResultsConvValFlat,
-                                     VALUES_ARE_LOGISTIC,
-                                     PositionEvaluationBatch.PolicyType.Probabilities, timeStats);
+
+        if (USE_TOP_K)
+        {
+          int NUM_ELEMENTS = Config.MaxBatchSize * NUM_TOPK_POLICY;
+          Span<Int32> policyIndicies = MemoryMarshal.Cast<float, Int32>(rawResultsPolicy).Slice(0, NUM_ELEMENTS);
+          Span<float> policyProbabilities = rawResultsPolicy.Slice(Config.MaxBatchSize * NUM_TOPK_POLICY, NUM_ELEMENTS);
+
+          retBatch = new PositionEvaluationBatch(Config.IsWDL, Config.HasM,
+                                                 numToProcess, results,
+                                                 NUM_TOPK_POLICY,
+                                                 policyIndicies, policyProbabilities,
+                                                 resultsMLH,
+                                                 null, //rawResultsConvValFlat,
+                                                 VALUES_ARE_LOGISTIC,
+                                                 PositionEvaluationBatch.PolicyType.Probabilities, timeStats);
+        }
+        else
+        {
+          //          public PositionEvaluationBatch(bool isWDL, bool hasM,
+          //                                       int numPos, Span<FP16> valueEvals,
+          //                                       float[] policyProbs,
+          //                               FP16[] m,
+          //                               NNEvaluatorResultActivations[] activations,
+          //                                       bool valsAreLogistic, PolicyType probType, bool policyAlreadySorted, TimingStats stats)
+
+          // NOTE: alternative would be to pass in a mask to the GPU, the batch.ValidMovesMasks could be used to help
+          // done below instead. batch.MaskIllegalMovesInPolicyArray(rawResultsPolicy);
+
+          retBatch = new PositionEvaluationBatch(Config.IsWDL, Config.HasM,
+                                                 numToProcess, results,
+                                                 rawResultsPolicy.Slice(0, numToProcess*1858).ToArray(), // Inefficient 
+                                                 resultsMLH.ToArray(),
+                                                 null, //rawResultsConvValFlat,
+                                                 VALUES_ARE_LOGISTIC,
+                                                 PositionEvaluationBatch.PolicyType.LogProbabilities, false, batch, timeStats);
+
+        }
 
         return retBatch;
       }
@@ -292,11 +319,12 @@ Updated notes:
     public override int MaxBatchSize => Config.MaxBatchSize;
 
 
-    #region DLL interface
+#region DLL interface
 
     // TODO: remove hardcoding
-    public const string DLL = @"c:\dev\CeresOther\trt713\TRTEXEC.DLL";
-                              
+//    public const string DLL = @"c:\dev\CeresOther\trt713\TRTEXEC.DLL";
+    public const string DLL = @"c:\dev\CeresOther\trt820\TRTEXEC.DLL";
+
     [DllImport(DLL, CallingConvention = CallingConvention.Cdecl)]
     [SuppressUnmanagedCodeSecurity()]
     public unsafe static extern int TRTInit(int sessionID, int gpuID, int priorityLevel,
@@ -325,7 +353,7 @@ Updated notes:
     public unsafe static extern float FP16Convert(ushort *fp16Array);
 
     
-    #region Disposal
+#region Disposal
 
     [DllImport(DLL, CallingConvention = CallingConvention.Cdecl)]
     [SuppressUnmanagedCodeSecurity()]
@@ -455,7 +483,7 @@ Updated notes:
 
 #endregion
 
-    #endregion
+#endregion
 
   }
 

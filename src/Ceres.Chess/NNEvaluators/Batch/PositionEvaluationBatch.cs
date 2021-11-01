@@ -21,6 +21,9 @@ using System.Threading.Tasks;
 using Ceres.Base.Benchmarking;
 using Ceres.Base.DataTypes;
 using Ceres.Chess.EncodedPositions;
+using Ceres.Chess.EncodedPositions.Basic;
+using Ceres.Chess.LC0.Batches;
+using Ceres.Chess.MoveGen.Converters;
 
 #endregion
 
@@ -191,7 +194,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
     [ThreadStatic]
     static float[] policyTempBuffer;
 
-    static CompressedPolicyVector[] ExtractPoliciesBufferFlat(int numPos, float[] policyProbs, PolicyType probType, bool alreadySorted)
+    static CompressedPolicyVector[] ExtractPoliciesBufferFlat(int numPos, float[] policyProbs, PolicyType probType, bool alreadySorted, 
+                                                              IEncodedPositionBatchFlat sourceBatchWithValidMoves)
     {
       // TODO: possibly needs work.
       // Do we handle WDL correctly? Do we flip the moves if we are black (using positions) ?
@@ -211,12 +215,16 @@ namespace Ceres.Chess.NetEvaluation.Batch
 
       Parallel.For(0, numPos, i =>
       {
-        if (policyTempBuffer == null)
-        {
-          policyTempBuffer = new float[EncodedPolicyVector.POLICY_VECTOR_LENGTH];
-        }
+      if (policyTempBuffer == null)
+      {
+        policyTempBuffer = new float[EncodedPolicyVector.POLICY_VECTOR_LENGTH];
+      }
+      else
+      {
+        Array.Clear(policyTempBuffer, 0, EncodedPolicyVector.POLICY_VECTOR_LENGTH);
+      }
 
-        int startIndex = EncodedPolicyVector.POLICY_VECTOR_LENGTH * i;
+      int startIndex = EncodedPolicyVector.POLICY_VECTOR_LENGTH * i;
 
         if (probType == PolicyType.Probabilities)
         {
@@ -225,27 +233,37 @@ namespace Ceres.Chess.NetEvaluation.Batch
         }
         else
         {
+          // Compute an array if indices of valid moves.
+          Span<int> legalMoveIndices = stackalloc int[128]; // TODO: make this short not int?
+          int numLegalMoves = sourceBatchWithValidMoves.Moves[i].NumMovesUsed;
+
+          for (int im = 0; im < numLegalMoves; im++)
+          {
+            EncodedMove encodedMove = ConverterMGMoveEncodedMove.MGChessMoveToEncodedMove(sourceBatchWithValidMoves.Moves[i].MovesArray[im]);
+            legalMoveIndices[im] = encodedMove.IndexNeuralNet;
+          }
+
           // Avoid overflow by subtracting off max
           float max = 0.0f;
-          for (int j = 0; j < EncodedPolicyVector.POLICY_VECTOR_LENGTH; j++)
+          for (int j = 0; j < numLegalMoves; j++)
           {
-            float val = policyProbs[startIndex + j];
+            float val = policyProbs[startIndex + legalMoveIndices[j]];
             if (val > max) max = val;
           }
 
           double acc = 0;
-          for (int j = 0; j < EncodedPolicyVector.POLICY_VECTOR_LENGTH; j++)
+          for (int j = 0; j < numLegalMoves; j++)
           {
-            float prob = policyProbs[startIndex + j];
+            float prob = policyProbs[startIndex + legalMoveIndices[j]];
             if (prob > -1E10)
             {
               float value = (float)Math.Exp(prob - max);
-              policyTempBuffer[j] = value;
+              policyTempBuffer[legalMoveIndices[j]] = value;
               acc += value;
             }
             else
             {
-              policyTempBuffer[j] = 0;
+              policyTempBuffer[legalMoveIndices[j]] = 0;
             }
           }
 
@@ -256,12 +274,13 @@ namespace Ceres.Chess.NetEvaluation.Batch
           }
 
           // As performance optimization, only adjust if significantly different from 1.0
-          const float MAX_DEVIATION = 0.001f;
+          const float MAX_DEVIATION = 0.002f;
           if (acc < 1.0f - MAX_DEVIATION || acc > 1.0f + MAX_DEVIATION)
           {
-            for (int j = 0; j < EncodedPolicyVector.POLICY_VECTOR_LENGTH; j++)
+            for (int j = 0; j < numLegalMoves; j++)
             {
-              policyTempBuffer[j] = (float)(policyTempBuffer[j] / acc);
+              int targetIndex = legalMoveIndices[j];
+              policyTempBuffer[targetIndex] = (float)(policyTempBuffer[targetIndex] / acc);
             }
           }
 
@@ -400,10 +419,12 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <param name="stats"></param>
     public PositionEvaluationBatch(bool isWDL, bool hasM, int numPos, Span<FP16> valueEvals, float[] policyProbs, 
                                    FP16[] m, NNEvaluatorResultActivations[] activations,
-                                   bool valsAreLogistic, PolicyType probType, bool policyAlreadySorted, TimingStats stats) 
+                                   bool valsAreLogistic, PolicyType probType, bool policyAlreadySorted,
+                                   IEncodedPositionBatchFlat sourceBatchWithValidMoves,
+                                   TimingStats stats) 
       : this(isWDL, hasM, numPos, valueEvals, m, activations, valsAreLogistic, stats)
     {
-      Policies = ExtractPoliciesBufferFlat(numPos, policyProbs, probType, policyAlreadySorted);
+      Policies = ExtractPoliciesBufferFlat(numPos, policyProbs, probType, policyAlreadySorted, sourceBatchWithValidMoves);
     }
 
 
