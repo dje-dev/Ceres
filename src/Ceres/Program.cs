@@ -66,7 +66,7 @@ namespace Ceres
       LoggerTypes loggerTypes = LoggerTypes.WinDebugLogger | LoggerTypes.ConsoleLogger;
       CeresEnvironment.Initialize(loggerTypes, logLevel);
 
-      CeresEnvironment.MONITORING_METRICS = !CommandLineWorkerSpecification.IsWorker 
+      CeresEnvironment.MONITORING_METRICS = !CommandLineWorkerSpecification.IsWorker
                                            && CeresUserSettingsManager.Settings.LaunchMonitor;
 
       //      if (CeresUserSettingsManager.Settings.DirLC0Networks != null)
@@ -81,7 +81,7 @@ namespace Ceres
 
       if (args.Length > 0 && (args[0].ToUpper() == "CUSTOM" || args[0].StartsWith("WORKER")))
       {
-        TournamentTest.TestSFLeela(0,true); return;
+        //TournamentTest.TestSFLeela(0, true); return;
         //        SuiteTest.RunSuiteTest(); return;
       }
 
