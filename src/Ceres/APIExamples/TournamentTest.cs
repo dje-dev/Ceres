@@ -41,6 +41,10 @@ using System.Collections.Generic;
 using Ceres.MCTS.MTCSNodes.Struct;
 using System.Runtime.InteropServices;
 using Ceres.MCTS.Environment;
+using Chess.Ceres.NNEvaluators.TensorRT;
+using Ceres.Chess.LC0.Batches;
+using Ceres.Chess.NetEvaluation.Batch;
+using Ceres.Chess.LC0NetInference;
 
 #endregion
 
@@ -50,7 +54,7 @@ namespace Ceres.APIExamples
   {
     const bool POOLED = false;
 
-    static int CONCURRENCY = POOLED ? 16 : 4;
+    static int CONCURRENCY = POOLED ? 16 : 2;
     static bool RUN_DISTRIBUTED = false;
 
 
@@ -79,7 +83,7 @@ namespace Ceres.APIExamples
       new GameEngineDefUCI("SF14", new GameEngineUCISpec("SF14", SF14_EXE, numThreads,
                            hastableSize, TB_PATH, uciSetOptionCommands: extraUCI));
 
-    const int SF_NUM_THREADS = 8;
+    const int SF_NUM_THREADS = 4;
     static string TB_PATH => CeresUserSettingsManager.Settings.TablebaseDirectory;
     const int SF_HASH_SIZE_MB = 2048;
 
@@ -115,17 +119,39 @@ namespace Ceres.APIExamples
       string NET1_SECONDARY1 = null;// "610024";
       string NET1 = "j94-100";
       string NET2 = "j94-100";
-      NET1 = "610024";
-      NET2 = "610024";
+      //NET1 = "610024";
+      //NET2 = "610024";
+      NET1 = "66511";
+      NET2 = "66511";
 
-      NET1 = "753723";
-      NET2 = "753723";
-      NET1 = "703810";
-      NET2 = "703810";
+      NET1 = "760609";
+      NET2 = "42767";// "753723";
+      NET1 = @"ONNX_ORT:d:\weights\lczero.org\hydra_t00-attn.gz.onnx";// "apv4_t14";// apv4_t16";
+      NET2 = @"ONNX_ORT:d:\weights\lczero.org\apv4_t16.onnx";
+
+      
+      NET1 = "baseline02#8";
+      NET2 = "baseline02#16";
+
+      NET1 = "ONNX_TRT:d:\\weights\\lczero.org\\baseline02.onnx#8";
+      NET1 = "ONNX_ORT:d:\\weights\\lczero.org\\baseline02.onnx#16";
+
+      NET1 = "744204_onnx";
+      NET2 = "744204_onnx";
+
+      NET1 = "apv5_t01.ORT";
+      NET2 = "apv5_t01.ORT";
+      //      NET1 = "apv5_t01#8";
+      //      NET2 = "apv5_t01#16";
+
+      //NET1 = @"LC0:hydra_t00-attn.onnx";// "apv4_t14";// apv4_t16";
       //      string NET1_SECONDARY1 = "j94-100";
 
+      //      NET1 = "baseline02#8";
+      //      NET2 = "baseline02#16";
+
       NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification(NET1, GPUS); // j64-210 LS16 40x512-lr015-swa-167500
-      NNEvaluatorDef evalDef2 = NNEvaluatorDefFactory.FromSpecification($@"LC0:{NET2}", GPUS); ;
+      NNEvaluatorDef evalDef2 = NNEvaluatorDefFactory.FromSpecification(NET2, GPUS); ;
 
       NNEvaluatorDef evalDefSecondary1 = null;
       if (NET1_SECONDARY1 != null)
@@ -147,31 +173,36 @@ namespace Ceres.APIExamples
         evalDef2.MakePersistent();
       }
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(100_000);
+      SearchLimit limit1 = SearchLimit.NodesPerMove(1);
       //limit1 = SearchLimit.NodesForAllMoves(1_000_000, 10_000);
 
       // 140 good for 203 pairs, 300 good for 100 pairs
-      //      limit1 = SearchLimit.SecondsForAllMovess(90, 1f);
-      limit1 = SearchLimit.SecondsForAllMoves(100, 0.5f) * 0.2f;
-      //limit1 = SearchLimit.SecondsPerMove(1);
-//limit1 = SearchLimit.SecondsForAllMoves(50, 0.1f) * 1.1f;
+      //       limit1 = SearchLimit.SecondsForAllMoves(15, 0.25f);
+//      limit1 = SearchLimit.SecondsForAllMoves(120, 0.5f);
+///       limit1 = SearchLimit.SecondsPerMove(3);
+//      limit1 = SearchLimit.SecondsForAllMoves(10, 0.1f);
 //ok      limit1 = SearchLimit.NodesPerMove(350_000); try test3.pgn against T75 opponent Ceres93 (in first position, 50% of time misses win near move 12
       
       SearchLimit limit2 = limit1;
 
       // Don't output log if very small games
       // (to avoid making very large log files or slowing down play).
-      bool outputLog = false;// limit1.EstNumNodes(500_000, false) > 10_000;
+      bool outputLog = true;// limit1.EstNumNodes(500_000, false) > 10_000;
       GameEngineDefCeres engineDefCeres1 = new GameEngineDefCeres("Ceres1", evalDef1, evalDefSecondary1, new ParamsSearch(), new ParamsSelect(),
                                                                   null, outputLog ? "Ceres1.log.txt" : null);
       GameEngineDefCeres engineDefCeres2 = new GameEngineDefCeres("Ceres2", evalDef2, evalDefSecondary2, new ParamsSearch(), new ParamsSelect(),
                                                                   null, outputLog ? "Ceres2.log.txt" : null);
 
-//      engineDefCeres1.SearchParams.EnableUseSiblingEvaluations = true;
-     engineDefCeres1.SearchParams.TestFlag = true;
+      //engineDefCeres1.SearchParams.EnableUseSiblingEvaluations = true;
+//      engineDefCeres2.SearchParams.EnableDeepTranspositionBackup = false;
+//      engineDefCeres2.SearchParams.TestFlag2 = true;
+      //engineDefCeres2.SearchParams.EnableUseSiblingEvaluations = false;
 
-//      engineDefCeres1.SelectParams.CPUCT       *= 1.075f;
-//      engineDefCeres1.SelectParams.CPUCTAtRoot *= 1.075f;
+      //engineDefCeres1.SearchParams.EnableUncertaintyBoosting = false;
+      //engineDefCeres2.SearchParams.EnableUncertaintyBoosting = false;
+
+      //      engineDefCeres1.SelectParams.CPUCT       *= 1.075f;
+      //      engineDefCeres1.SelectParams.CPUCTAtRoot *= 1.075f;
 
       //      engineDefCeres1.SearchParams.EnableUseSiblingEvaluations = true;
 
@@ -184,10 +215,11 @@ namespace Ceres.APIExamples
 
 #if NOT
       
-      engineDefCeres1.SearchParams.TranspositionRootBackupSubtreeFracs = new float[] { 1,1 };
-        engineDefCeres1.SearchParams.TranspositionCloneNodeSubtreeFracs = new float[] { 1,1,};
-      engineDefCeres2.SearchParams.TranspositionRootBackupSubtreeFracs = new float[] { 1,1 };
-      engineDefCeres2.SearchParams.TranspositionCloneNodeSubtreeFracs = new float[] { 1,1 };
+      engineDefCeres1.SearchParams.TranspositionRootBackupSubtreeFracs = new float[] { 1,1,1 };
+      engineDefCeres2.SearchParams.TranspositionRootBackupSubtreeFracs = new float[] { 1,1,1 };
+
+      engineDefCeres1.SearchParams.TranspositionCloneNodeSubtreeFracs = new float[] { 1,0,0};
+      engineDefCeres2.SearchParams.TranspositionCloneNodeSubtreeFracs = new float[] { 1,1,1 };
 #endif
       //      engineDefCeres1.SearchParams.TreeReuseSwapRootEnabled = false;
       //      engineDefCeres2.SearchParams.TreeReuseSwapRootEnabled = false;
@@ -276,6 +308,10 @@ namespace Ceres.APIExamples
                                                                    overrideEXE: SoftwareManager.IsLinux ? @"/raid/dev/Ceres/artifacts/release/net5.0/Ceres.dll"
                                                                                                         : @"C:\dev\ceres\artifacts\release\net5.0\ceres.exe",
                                                                    disableFutilityStopSearch: forceDisableSmartPruning);
+      GameEngineDef engineDefCeresUCI2 = new GameEngineDefCeresUCI("CeresUCINew", evalDef2,
+                                                                   overrideEXE: SoftwareManager.IsLinux ? @"/raid/dev/Ceres/artifacts/release/net5.0/Ceres.dll"
+                                                                                                        : @"C:\dev\ceres\artifacts\release\net5.0\ceres.exe",
+                                                                   disableFutilityStopSearch: forceDisableSmartPruning);
 
       GameEngineDef engineDefCeres93 = new GameEngineDefCeresUCI("Ceres93", evalDef2, overrideEXE: SoftwareManager.IsLinux ? @"/raid/dev/Ceres93/artifacts/release/5.0/Ceres.dll"
                                                                                                                            : @"C:\ceres\releases\v0.93\ceres.exe");
@@ -283,6 +319,7 @@ namespace Ceres.APIExamples
                                                                                                                            : @"C:\ceres\releases\v0.94\ceres.exe");
 
       EnginePlayerDef playerCeres1UCI = new EnginePlayerDef(engineDefCeresUCI1, limit1);
+      EnginePlayerDef playerCeres2UCI = new EnginePlayerDef(engineDefCeresUCI2, limit2);
       EnginePlayerDef playerCeres93 = new EnginePlayerDef(engineDefCeres93, limit2);
       EnginePlayerDef playerCeres94 = new EnginePlayerDef(engineDefCeres94, limit2);
 
@@ -303,7 +340,7 @@ namespace Ceres.APIExamples
 
       if (false)
       {
-        string BASE_NAME = "Stockfish238";// nice_lcx Stockfish238 ERET_VESELY203 endgame2
+        string BASE_NAME = "ERET";// nice_lcx Stockfish238 ERET_VESELY203 endgame2
 
         // ===============================================================================
         SuiteTestDef suiteDef = new SuiteTestDef("Suite",
@@ -361,11 +398,11 @@ namespace Ceres.APIExamples
       //TournamentDef def = new TournamentDef("TOURN", playerCeres93, playerCeres1);
 
 
-      def.NumGamePairs = 203;// 500;// 203;//203;// 102; 203
+      def.NumGamePairs = 250; //203;// 500;// 203;//203;// 102; 203
       def.ShowGameMoves = false;
 
-//      string baseName = "tcec1819";
-string      baseName = "4mvs_+90_+99";
+      string baseName = "tcec1819";
+      baseName = "4mvs_+90_+99";
 //      baseName = "book-ply8-unifen-Q-0.25-0.40";
 //      baseName = "test3";
 //      baseName = "tcec_big";
