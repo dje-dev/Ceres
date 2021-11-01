@@ -223,6 +223,7 @@ namespace Chess.Ceres.NNEvaluators
         mFP16 = Array.ConvertAll<float, FP16>(result.MLH, m => (FP16)m);
       }
 
+#if DONE_BELOW_IN_NEXT_LINE
       // Set probability of illegal moves to 0.
       HashSet<int> legalIndices = new HashSet<int>(96);
       for (int pos=0; pos<numPos;pos++)
@@ -242,10 +243,12 @@ namespace Chess.Ceres.NNEvaluators
           }
         }
       }
+#endif
 
       // NOTE: inefficient, above we convert from [] (flat) to [][] and here we convert back to []
-      return new PositionEvaluationBatch(IsWDL, HasM, numPos, result.ValuesRaw, result.PolicyFlat, mFP16, null,  true,
-                                         PositionEvaluationBatch.PolicyType.LogProbabilities, false, stats);
+      const bool VALS_ARE_LOGISTIC = false;
+      return new PositionEvaluationBatch(IsWDL, HasM, numPos, result.ValuesRaw, result.PolicyFlat, mFP16, null, VALS_ARE_LOGISTIC,
+                                         PositionEvaluationBatch.PolicyType.LogProbabilities, false, batch, stats);
     }
 
 #endregion

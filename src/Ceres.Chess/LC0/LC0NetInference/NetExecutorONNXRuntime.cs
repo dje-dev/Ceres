@@ -25,12 +25,10 @@
 #region Using directives
 
 using System;
-using System.Diagnostics;
 using System.Collections.Generic;
-using Ceres.Base;
+using Ceres.Base.DataTypes;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
-using Ceres.Base.DataTypes;
 
 
 #if FEATURE_ONNX
@@ -76,13 +74,21 @@ namespace Ceres.Chess.LC0NetInference
     /// <param name="batchSize"></param>
     public NetExecutorONNXRuntime(string onnxFileName, int gpuID)
     {
+      // https://codechina.csdn.net/mirrors/microsoft/onnxruntime/-/blob/skottmckay/CreateHelperForGeneratingIdsForUseInCompilingEPs/docs/execution_providers/TensorRT-ExecutionProvider.md
+      Environment.SetEnvironmentVariable("ORT_TENSORRT_ENGINE_CACHE_ENABLE", "1");
+      Environment.SetEnvironmentVariable("ORT_TENSORRT_FP16_ENABLE", "1");
       //     if (gpuID < 0 || gpuID > 16) throw new Exception($"Invalid GPU ID { gpuID}");
 #if FEATURE_ONNX
 #if CUDA
       if (gpuID == -999) // CPU. TO DO: clean this up
+      {
         Session = new InferenceSession(onnxFileName);
+      }
       else if (gpuID == -1)
+      {
         Session = new InferenceSession(onnxFileName, SessionOptions.MakeSessionOptionWithCudaProvider(gpuID));
+        //        Session = new InferenceSession(onnxFileName, SessionOptions.MakeSessionOptionWithTensorrtProvider(gpuID));
+      }
       else
       {
 #if NOT
@@ -94,8 +100,19 @@ namespace Ceres.Chess.LC0NetInference
         Session = new InferenceSession(onnxFileName, options);
 #endif
         SessionOptions so = new SessionOptions();
-        so.GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_EXTENDED;
-        so.AppendExecutionProvider_CUDA(gpuID);
+        
+        so.GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL;
+        
+//        so.AppendExecutionProvider_CUDA(gpuID);
+//        so.AppendExecutionProvider_DML(gpuID);
+
+//        so.AppendExecutionProvider_Tensorrt(gpuID);
+
+//        so.AppendExecutionProvider_CPU(); //fails even when corresponding NuGet package is installed
+        //        ORT_TENSORRT_FP16_ENABLE
+//        so.LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_VERBOSE;
+        so.LogVerbosityLevel = 3;
+//        so.LogId = "ort.log.txt";
 
         Session = new InferenceSession(onnxFileName, so);
       }
