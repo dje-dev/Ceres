@@ -59,6 +59,16 @@ namespace Ceres.Chess.NNEvaluators.Specifications
         // Net specification "LC0:703810=0.5,66193=0.5";
         netIDs = netString.Substring(4);
       }
+      else if (netString.ToUpper().StartsWith("ONNX_TRT:"))
+      {
+        netIDs = netString.Substring(9);
+        NN_EVAL_TYPE = NNEvaluatorType.ONNXViaTRT;
+      }
+      else if (netString.ToUpper().StartsWith("ONNX_ORT:"))
+      {
+        netIDs = netString.Substring(9);
+        NN_EVAL_TYPE = NNEvaluatorType.ONNXViaORT;
+      }
       else if (netString.ToUpper().StartsWith("RANDOM_WIDE:"))
       {
         netIDs = netString.Substring(12);
@@ -79,11 +89,6 @@ namespace Ceres.Chess.NNEvaluators.Specifications
         netIDs = netString.Substring(8);
         NN_EVAL_TYPE = NNEvaluatorType.Custom2;
       }
-      else if (netString.ToUpper().StartsWith("ONNX:"))
-      {
-        netIDs = netString.Substring(5);
-        NN_EVAL_TYPE = NNEvaluatorType.ONNX;
-      }
       else
       {
         // Prefix optionally omitted
@@ -91,14 +96,12 @@ namespace Ceres.Chess.NNEvaluators.Specifications
       }
 
       // Build network definitions
-      List<(string, float, float, float)> netParts = OptionsParserHelpers.ParseCommaSeparatedWithOptionalWeights(netIDs, true);
-
-      const NNEvaluatorPrecision NN_PRECISION = NNEvaluatorPrecision.FP16;
+      List<(string, NNEvaluatorPrecision, float, float, float)> netParts = OptionsParserHelpers.ParseCommaSeparatedWithOptionalWeights(netIDs, true);
 
       NetDefs = new List<(NNEvaluatorNetDef, float, float, float)>();
       foreach (var netSegment in netParts)
       {
-        NetDefs.Add((new NNEvaluatorNetDef(netSegment.Item1, NN_EVAL_TYPE, NN_PRECISION), netSegment.Item2, netSegment.Item3, netSegment.Item4));
+        NetDefs.Add((new NNEvaluatorNetDef(netSegment.Item1, NN_EVAL_TYPE, netSegment.Item2), netSegment.Item3, netSegment.Item4, netSegment.Item5));
       }
 
       ComboType = NetDefs.Count == 1 ? NNEvaluatorNetComboType.Single : NNEvaluatorNetComboType.WtdAverage;

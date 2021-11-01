@@ -103,12 +103,19 @@ namespace Ceres.Features.GameEngines
     /// <returns></returns>
     static string ExtraArgsForEvaluator(NNEvaluatorDef evaluatorDef)
     {
-      string netSpecString = NNNetSpecificationString.ToSpecificationString(evaluatorDef.NetCombo, evaluatorDef.Nets);
-      if (!netSpecString.Contains("Network=")) throw new Exception("Unsupported network specification");
+      if (evaluatorDef.Nets[0].Net.Type != NNEvaluatorType.LC0Library)
+      {
+        throw new Exception("GameEngineCeresUCI cannot be used with network definition of type " + evaluatorDef.Nets[0].Net.Type);
+      }
+      else
+      {
+        string netSpecString = NNNetSpecificationString.ToSpecificationString(evaluatorDef.NetCombo, evaluatorDef.Nets);
+        if (!netSpecString.Contains("Network=")) throw new Exception("Unsupported network specification");
 
-      string deviceSpecString = NNDevicesSpecificationString.ToSpecificationString(evaluatorDef.DeviceCombo, evaluatorDef.Devices);
-      if (!deviceSpecString.Contains("Device=")) throw new Exception("Unsupported device specification");
-      return "UCI " + netSpecString + " " + deviceSpecString;
+        string deviceSpecString = NNDevicesSpecificationString.ToSpecificationString(evaluatorDef.DeviceCombo, evaluatorDef.Devices);
+        if (!deviceSpecString.Contains("Device=")) throw new Exception("Unsupported device specification");
+        return "UCI " + netSpecString + " " + deviceSpecString;
+      }
     }
 
 

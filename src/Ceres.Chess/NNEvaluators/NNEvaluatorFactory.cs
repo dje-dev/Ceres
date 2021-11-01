@@ -106,23 +106,39 @@ namespace Ceres.Chess.NNEvaluators
       }
     }
 
+
+    static readonly object onnxFileWriteLock = new();
+
     static NNEvaluator Singleton(NNEvaluatorNetDef netDef, NNEvaluatorDeviceDef deviceDef, 
                                  NNEvaluator referenceEvaluator, int referenceEvaluatorIndex = 0)
     {
       NNEvaluator ret = null;
 
       const bool LOW_PRIORITY = false;
-      
-      INNWeightsFileInfo net = null;
+     
+      const bool TRT_SHARED = false; // TODO: when is this needed,  when pooled?
 
-      // TODO: also do this for ONNX
-      if (netDef.Type != NNEvaluatorType.ONNX)
-      {
-        net = NNWeightsFiles.LookupNetworkFile(netDef.NetworkID);
-      }
+      // For ONNX files loaded directly, now way to really know of WDL/MLH present.
+      const bool DEFAULT_HAS_WDL = true; 
+      const bool DEFAULT_HAS_MLH = true; 
 
       switch (netDef.Type)
       {
+        case NNEvaluatorType.ONNXViaTRT:
+          ret = new NNEvaluatorEngineTensorRT(netDef.NetworkID, netDef.NetworkID, DEFAULT_HAS_WDL, DEFAULT_HAS_MLH, deviceDef.DeviceIndex,
+                                              NNEvaluatorEngineTensorRTConfig.NetTypeEnum.LC0,
+                                              1024, netDef.Precision,
+                                              NNEvaluatorEngineTensorRTConfig.TRTPriorityLevel.Medium, null, false, TRT_SHARED);
+          break;
+
+        case NNEvaluatorType.ONNXViaORT:
+          // TODO: consider possibility of other precisions than FP32
+          ret = new NNEvaluatorEngineONNX(netDef.NetworkID, netDef.NetworkID, deviceDef.DeviceIndex,
+                                          ONNXRuntimeExecutor.NetTypeEnum.LC0, 1024,
+                                          NNEvaluatorPrecision.FP32, DEFAULT_HAS_WDL, DEFAULT_HAS_MLH,
+                                          null, null, null, null);
+          break;
+
         case NNEvaluatorType.RandomWide:
           ret = new NNEvaluatorRandom(NNEvaluatorRandom.RandomType.WidePolicy, true);
           break;
@@ -132,6 +148,7 @@ namespace Ceres.Chess.NNEvaluators
           break;
 
         case NNEvaluatorType.LC0Library:
+          INNWeightsFileInfo net = NNWeightsFiles.LookupNetworkFile(netDef.NetworkID);
           if (CeresUserSettingsManager.Settings.UseLegacyLC0Evaluator)
           {
             ret = new NNEvaluatorLC0(net, deviceDef.DeviceIndex, netDef.Precision);
@@ -143,16 +160,36 @@ namespace Ceres.Chess.NNEvaluators
             LC0ProtobufNet pbn = LC0ProtobufNet.LoadedNet(net.FileName);
             Debug.Assert(pbn.Net.Format.NetworkFormat.Network == Pblczero.NetworkFormat.NetworkStructure.NetworkOnnx);
 
-            string tempFN = Path.GetTempFileName() + ".onnx";
-            File.WriteAllBytes(tempFN, pbn.Net.OnnxModel.Model);
+            // Extract the ONNX to another file.
+            string tempFN = net.FileName.Replace(".pb", "").Replace(".PB", "") + ".onnx";
+            if (!File.Exists(tempFN))
+            {
+              lock (onnxFileWriteLock)
+              {
+                // string tempFN = Path.GetTempFileName() + ".onnx";
+                File.WriteAllBytes(tempFN, pbn.Net.OnnxModel.Model);
+              }
+            }
 
-            // TODO: consider if we could/should delete the temporary file when
-            //       it has been consumed by the ONNX engine constructor.
-            // TODO: consider possibility of other precisions than FP32
-            return new NNEvaluatorEngineONNX(netDef.NetworkID, tempFN, 0, ONNXRuntimeExecutor.NetTypeEnum.LC0, 1024,
-                                             NNEvaluatorPrecision.FP32, netDefONNX.IsWDL, netDefONNX.HasMovesLeft,
-                                             pbn.Net.OnnxModel.OutputValue, pbn.Net.OnnxModel.OutputWdl,
-                                             pbn.Net.OnnxModel.OutputPolicy, pbn.Net.OnnxModel.OutputMlh);
+            bool useTRT = !tempFN.ToUpper().Contains(".ORT"); // TODO: TEMPORARY HACK - way to request using ORT
+            if (useTRT)
+            {
+              return new NNEvaluatorEngineTensorRT(netDef.NetworkID, tempFN, net.IsWDL, net.HasMovesLeft, deviceDef.DeviceIndex,
+                                                   NNEvaluatorEngineTensorRTConfig.NetTypeEnum.LC0,
+                                                   1024, netDef.Precision,
+                                                   NNEvaluatorEngineTensorRTConfig.TRTPriorityLevel.Medium, null, false, TRT_SHARED);
+            }
+            else
+            {
+              // TODO: consider if we could/should delete the temporary file when
+              //       it has been consumed by the ONNX engine constructor.
+              // TODO: consider possibility of other precisions than FP32
+              return new NNEvaluatorEngineONNX(netDef.NetworkID, tempFN, deviceDef.DeviceIndex, 
+                                               ONNXRuntimeExecutor.NetTypeEnum.LC0, 1024,
+                                               NNEvaluatorPrecision.FP32, netDefONNX.IsWDL, netDefONNX.HasMovesLeft,
+                                               pbn.Net.OnnxModel.OutputValue, pbn.Net.OnnxModel.OutputWdl,
+                                               pbn.Net.OnnxModel.OutputPolicy, pbn.Net.OnnxModel.OutputMlh);
+            }
           }
           else
           {
@@ -178,59 +215,24 @@ namespace Ceres.Chess.NNEvaluators
           }
 
           break;
-
-        case NNEvaluatorType.LC0TensorRT:
-          {
-            NNEvaluatorEngineTensorRTConfig.TRTPriorityLevel priority = LOW_PRIORITY ? NNEvaluatorEngineTensorRTConfig.TRTPriorityLevel.Medium
-                                                                                     : NNEvaluatorEngineTensorRTConfig.TRTPriorityLevel.High;
-            const int MAX_TRT_BATCH_SIZE = 1024; // TODO: move this elsewhere
-            const bool SHARED = false;
-            const bool USE_MULTI = false; // attempt to to workaround apparent bug in TRT where cannot change batch size (probably unusccessful)
-            if (USE_MULTI)
-            {
-              throw new NotImplementedException();
-              //          ret = new NNEvaluatorEngineTensorRTMultiBatchSizes(net.NetworkID, net.ONNXFileName, net.IsWDL, net.HasMovesLeft, deviceDef.DeviceIndex,
-              //                                                             NNEvaluatorEngineTensorRTConfig.NetTypeEnum.LC0,
-              //                                                             MAX_TRT_BATCH_SIZE, netDef.Precision, priority, null, shared: SHARED);
-            }
-            else
-            {
-              ret = new NNEvaluatorEngineTensorRT(net.NetworkID, net.ONNXFileName, net.IsWDL, net.HasMovesLeft, deviceDef.DeviceIndex,
-                                                  NNEvaluatorEngineTensorRTConfig.NetTypeEnum.LC0,
-                                                  MAX_TRT_BATCH_SIZE, netDef.Precision, priority, null, shared: SHARED);
-            }
-
-            break;
-          }
-
-        case NNEvaluatorType.ONNX:
-          {
-            throw new NotImplementedException();
-#if NOT
-            // TODO: fill these in properly
-            string fn = @$"d:\weights\lczero.org\{netDef.NetworkID}.onnx";
-            bool isWDL = true;
-            bool hasMLH =  false; // TODO: fix. Eventually put in netDef
-            ret = new NNEvaluatorEngineONNX(netDef.NetworkID, fn, deviceDef.DeviceIndex,
-                                            ONNXRuntimeExecutor.NetTypeEnum.LC0, 1024, netDef.Precision, isWDL, hasMLH);
-            break;
-#endif
-          }
+       
 
         case NNEvaluatorType.Custom1:
           if (Custom1Factory == null)
           {
             throw new Exception("NNEvaluatorFactory.Custom1Factory static variable must be initialized.");
           }
-          ret = Custom1Factory(net.NetworkID, deviceDef.DeviceIndex, referenceEvaluator);
+          INNWeightsFileInfo netInfoCustom1 = NNWeightsFiles.LookupNetworkFile(netDef.NetworkID);
+          ret = Custom1Factory(netInfoCustom1.NetworkID, deviceDef.DeviceIndex, referenceEvaluator);
           break;
 
         case NNEvaluatorType.Custom2:
+          INNWeightsFileInfo netInfoCustom2 = NNWeightsFiles.LookupNetworkFile(netDef.NetworkID);
           if (Custom2Factory == null)
           {
             throw new Exception("NNEvaluatorFactory.Custom2Factory static variable must be initialized.");
           }
-          ret = Custom2Factory(net.NetworkID, deviceDef.DeviceIndex, referenceEvaluator);
+          ret = Custom2Factory(netInfoCustom2.NetworkID, deviceDef.DeviceIndex, referenceEvaluator);
           break;
 
         default:

@@ -91,11 +91,15 @@ namespace Ceres.Chess.NNFiles
       // TODO: eliminate hardcoding
       get
       {
+        return NetworkID;
+#if NOT
+
         string baseName = FileName.ToLower().Replace(".pb.gz", ".onnx");
         baseName = baseName.Replace(".pb", ".onnx");
         baseName = baseName.Replace("weights_", "");
         baseName = baseName.Replace(@"d:\weights\lczero.org", @"d:\converted");
         return Path.Combine(".", baseName);
+#endif
       }
     }
   }

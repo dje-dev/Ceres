@@ -18,6 +18,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.NNEvaluators.Specifications.Iternal;
+using Chess.Ceres.NNEvaluators;
 
 #endregion
 
@@ -67,11 +68,11 @@ namespace Ceres.Chess.NNEvaluators.Specifications
         throw new Exception($"{deviceString} not valid, device specification expected to begin with 'GPU:'");
       }
 
-      List<(string, float, float, float)> deviceParts = OptionsParserHelpers.ParseCommaSeparatedWithOptionalWeights(deviceStringParts[1], false);
+      List<(string, NNEvaluatorPrecision, float, float, float)> deviceParts = OptionsParserHelpers.ParseCommaSeparatedWithOptionalWeights(deviceStringParts[1], false);
 
       foreach (var device in deviceParts)
       {
-        Devices.Add((new NNEvaluatorDeviceDef(NNDeviceType.GPU, int.Parse(device.Item1)), device.Item2));
+        Devices.Add((new NNEvaluatorDeviceDef(NNDeviceType.GPU, int.Parse(device.Item1)), device.Item3));
       }
 
       ComboType = Devices.Count == 1 ? NNEvaluatorDeviceComboType.Single

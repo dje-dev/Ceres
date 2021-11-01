@@ -554,21 +554,31 @@ namespace Ceres.Features.UCI
       UCIWriteLine();
       if (EvaluatorDef.Nets.Length == 1)
       {
-        INNWeightsFileInfo net = NNWeightsFiles.LookupNetworkFile(EvaluatorDef.Nets[0].Net.NetworkID, false);
-        string infoStr = net == null ? "(unknown)" : net.ShortStr;
-        UCIWriteLine($"Loaded network weights: { infoStr}");
+        ShowWeightsInfo(0);
       }
       else
       {
         OutStream.WriteLine();
         for (int i = 0; i < EvaluatorDef.Nets.Length; i++)
         {
-          INNWeightsFileInfo net = NNWeightsFiles.LookupNetworkFile(EvaluatorDef.Nets[i].Net.NetworkID);
-          string infoStr = net == null ? "(unknown)" : net.ShortStr;
-          UCIWriteLine($"Loaded network weights: {i} { infoStr}");
+          ShowWeightsInfo(i);
         }
       }
       UCIWriteLine();
+    }
+
+    private void ShowWeightsInfo(int i)
+    {
+      if (EvaluatorDef.Nets[i].Net.Type == NNEvaluatorType.LC0Library)
+      {
+        INNWeightsFileInfo net = NNWeightsFiles.LookupNetworkFile(EvaluatorDef.Nets[i].Net.NetworkID);
+        string infoStr = net == null ? "(unknown)" : net.ShortStr;
+        UCIWriteLine($"Loaded network weights: {i} { infoStr}");
+      }
+      else
+      {
+        UCIWriteLine($"Loaded network weights: " + EvaluatorDef.Nets[i].Net.NetworkID);
+      }
     }
 
 

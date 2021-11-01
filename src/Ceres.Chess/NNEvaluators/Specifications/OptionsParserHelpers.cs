@@ -17,6 +17,8 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 
+using Chess.Ceres.NNEvaluators;
+
 #endregion
 
 namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
@@ -38,10 +40,10 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
     const char SUB_WEIGHTS_CHAR = ';';
 
 
-    internal static List<(string netID, float wtValue, float wtPolicy, float wtMLH)> 
+    internal static List<(string netID, NNEvaluatorPrecision precision, float wtValue, float wtPolicy, float wtMLH)> 
       ParseCommaSeparatedWithOptionalWeights(string str, bool allowSubWeights)
     {
-      List<(string, float, float, float)> ret = new();
+      List<(string, NNEvaluatorPrecision precision, float, float, float)> ret = new();
 
       string[] nets = str.Split(",");
 
@@ -50,9 +52,27 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
       float sumWeightsMLH = 0.0f;
       foreach (string netStr in nets)
       {
+        const NNEvaluatorPrecision DEFAULT_PRECISION = NNEvaluatorPrecision.FP16;
+        NNEvaluatorPrecision precision = DEFAULT_PRECISION;
+
         string[] netParts = netStr.Split(WEIGHTS_CHAR);
         float weightValue, weightPolicy, weightMLH;
         string netID = netParts[0];
+
+        // Parse precision string, if any (either #8 or #16 at end of network ID)
+        if (netID.Contains("#"))
+        {
+          string[] netAndPrecision = netID.Split("#");
+          if (!int.TryParse(netAndPrecision[1], out int precisionBits)
+            || (precisionBits != 8 && precisionBits != 16))
+          {
+            throw new Exception("Network specification has invalid or unsupported precision " + netAndPrecision[1]);
+          }
+
+          netID = netAndPrecision[0];
+          precision = precisionBits == 8 ? NNEvaluatorPrecision.Int8 : NNEvaluatorPrecision.FP16;
+        }
+
         string netWts = netParts.Length == 1 ? "1" : netParts[1];
         string[] wtParts = allowSubWeights ? netWts.Split(SUB_WEIGHTS_CHAR) : new string[] { netWts };
 
@@ -83,7 +103,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
         sumWeightsMLH += weightMLH;
 
 
-        ret.Add((netID, weightValue, weightPolicy, weightMLH));
+        ret.Add((netID, precision, weightValue, weightPolicy, weightMLH));
       }
 
       if (MathF.Abs(1.0f - sumWeightsValue) > 0.001)

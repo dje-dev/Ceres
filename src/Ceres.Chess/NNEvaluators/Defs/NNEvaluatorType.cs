@@ -26,19 +26,14 @@ namespace Ceres.Chess.NNEvaluators.Defs
     LC0Library,
 
     /// <summary>
-    /// Via a Leela Zero network converted into a tensorflow UFF and then into an NVIDIA TensorRT file format
-    /// </summary>
-    LC0TensorRT,
-
-    /// <summary>
-    /// Ceres format file for use with NVIDIA Tensor RT
-    /// </summary>
-    CeresTensorRT,
-
-    /// <summary>
     /// In ONNX format to be run via ONNX runtime
     /// </summary>
-    ONNX,
+    ONNXViaORT,
+
+    /// <summary>
+    /// In ONNX format to be run via TensorRT
+    /// </summary>
+    ONNXViaTRT,
 
     /// <summary>
     /// Random policy and value, using a relatively wide policy distribution (leading to wide search trees)
