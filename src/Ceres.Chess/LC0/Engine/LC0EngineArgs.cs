@@ -33,7 +33,7 @@ namespace Ceres.Chess.LC0.Engine
     NNEvaluatorPrecision.FP16 => "cuda-fp16",
     NNEvaluatorPrecision.FP32 => "cuda",
     NNEvaluatorPrecision.Int8 => "trt-int8", // requies special build with TensorRT support
-        _ => throw new Exception("Internal error: unknown precision type")
+    _ => throw new Exception("Internal error: unknown precision type")
   };
 
 
@@ -53,7 +53,7 @@ namespace Ceres.Chess.LC0.Engine
       string multistreamOption = "--backend-opts=multi_stream=true ";
       if (gpuIDs.Length == 1)
       {
-        return $"--backend={backendName} --backend-opts=gpu={gpuIDs[0]} {multistreamOption}";
+        return $"--backend={backendName} {multistreamOption}--backend-opts=gpu={gpuIDs[0]} ";
       }
       else
       {
