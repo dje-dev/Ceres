@@ -356,8 +356,7 @@ namespace Ceres.APIExamples
 #endif
       }
 
-      var engines = new List<EnginePlayerDef>() { playerCeres1, playerCeres2 };
-      TournamentDef def = new TournamentDef("TOURN", engines);
+      TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerCeres2);
       //        TournamentDef def = new TournamentDef("TOURN", playerCeres1UCI, playerCeres93);
       //TournamentDef def = new TournamentDef("TOURN", playerCeres93, playerCeres1);
 
@@ -455,8 +454,7 @@ namespace Ceres.APIExamples
       EnginePlayerDef playerSF = new EnginePlayerDef(sf14Engine, TIME_CONTROL);
 
       // Create a tournament definition
-      var engines = new List<EnginePlayerDef>() { playerCeres, playerSF };
-      TournamentDef tournDef = new TournamentDef("Ceres_vs_Stockfish", engines);
+      TournamentDef tournDef = new TournamentDef("Ceres_vs_Stockfish", playerCeres, playerSF);
       tournDef.NumGamePairs = NUM_GAME_PAIRS;
       tournDef.OpeningsFileName = "WCEC.pgn";
       tournDef.ShowGameMoves = false;
@@ -509,9 +507,7 @@ namespace Ceres.APIExamples
       EnginePlayerDef playerSf14Slow = new EnginePlayerDef(sf14Engine, TIME_CONTROL * 0.5f, "SF14*0.5");
 
       // Create a tournament definition
-      var engines = new List<EnginePlayerDef>() { playerCeres1, playerSf14, playerLeela };
-
-      TournamentDef tournDef = new TournamentDef("Round Robin Test", engines);
+      TournamentDef tournDef = new TournamentDef("Round Robin Test", playerCeres1, playerSf14, playerLeela);
       tournDef.ReferenceEngineId = playerCeres1.ID;
       tournDef.NumGamePairs = NUM_GAME_PAIRS;
       tournDef.OpeningsFileName = "WCEC_decisive.pgn";
@@ -575,9 +571,7 @@ namespace Ceres.APIExamples
 
 
       // Create a tournament definition
-      var engines = new List<EnginePlayerDef>() { playerCeres, playerLeela, playerLeela2 };
-
-      TournamentDef tournDef = new TournamentDef("Tournament A", engines);
+      TournamentDef tournDef = new TournamentDef("Tournament A", playerCeres, playerLeela, playerLeela2);
       // Create a tournament definition
       //TournamentDef tournDef = new TournamentDef("Ceres_vs_Leela", playerCeres, playerLeela);
       tournDef.NumGamePairs = 1;

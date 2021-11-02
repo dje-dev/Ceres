@@ -64,8 +64,7 @@ namespace Ceres.Commands
     {
       (EnginePlayerDef player1, EnginePlayerDef player2) = tournParams.GetEngineDefs(true);
 
-      var engines = new List<EnginePlayerDef>() { player1, player2 };
-      TournamentDef def = new TournamentDef("Tournament", engines);
+      TournamentDef def = new TournamentDef("Tournament", player1, player2);
       def.ShowGameMoves = tournParams.ShowMoves;
 
       if (tournParams.Openings != null)

@@ -52,7 +52,7 @@ namespace Ceres.Features.Tournaments
     /// <summary>
     /// List of game engines in tournament
     /// </summary>
-    public List<GameEngine> Engines { get; set; } = new List<GameEngine>();
+    public GameEngine[] Engines { get; set; }
 
     /// <summary>
     /// Constructor from a given tournament defintion.
@@ -62,9 +62,10 @@ namespace Ceres.Features.Tournaments
     {
       Def = def;
 
-      // Create and warmup both engines (in parallel)            
-      Parallel.Invoke(() => Def.Engines.ForEach(engine => Engines.Add(engine.EngineDef.CreateEngine())));
-      Parallel.Invoke(() => Engines.ForEach(e => e.Warmup()));
+      // Create and warmup all engines (in parallel).
+      Engines = new GameEngine[Def.Engines.Length];
+      Parallel.For(0, Def.Engines.Length, i => Engines[i] = Def.Engines[i].EngineDef.CreateEngine());
+      Parallel.ForEach(Engines, e => e.Warmup());
     }
 
 

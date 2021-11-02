@@ -113,7 +113,7 @@ namespace Ceres.Features.Tournaments
 
       // Create a file name that will be common to all threads in tournament.
       string pgnFileName;
-      if (Run.Engines.Count > 2)
+      if (Run.Engines.Length > 2)
       {
         pgnFileName = Path.Combine(CeresUserSettingsManager.Settings.DirCeresOutput, "match_" + Def.ID + "_"
                                     + "MultiEngine" + "_" + Def.StartTime.Ticks + ".pgn");
@@ -165,7 +165,7 @@ namespace Ceres.Features.Tournaments
 
         if (string.IsNullOrEmpty(Def.ReferenceEngineId))
         {
-          var list = new List<GameEngine>(Run.Engines);
+          List<GameEngine> list = new List<GameEngine>(Run.Engines);
           int engine1Index = 0;
           while (list.Count > 1)
           {
@@ -185,15 +185,17 @@ namespace Ceres.Features.Tournaments
 
         else
         {
-          var refEngine = Run.Engines.FirstOrDefault(e => e.ID == Def.ReferenceEngineId);
+          GameEngine refEngine = Run.Engines.FirstOrDefault(e => e.ID == Def.ReferenceEngineId);
           if (refEngine == null)
             throw new Exception("Error in loading reference engine");
-          var index = Run.Engines.IndexOf(refEngine);
-          for (int i = 0; i < Run.Engines.Count; i++)
+          int index =  Array.IndexOf(Run.Engines, refEngine);
+          for (int i = 0; i < Run.Engines.Length; i++)
           {
             if (index == i)
+            {
               continue;
-            var engineToPair = Run.Engines[i];
+            }
+            GameEngine engineToPair = Run.Engines[i];
             Run.SetEnginePair(index, i);
             TournamentGameInfo gameInfo = RunGame(pgnFileName, engine2White, openingIndex, gameSequenceNum, roundNumber);
             TournamentGameInfo gameReverseInfo = RunGame(pgnFileName, !engine2White, openingIndex, gameSequenceNum + 1, roundNumber);
@@ -203,7 +205,7 @@ namespace Ceres.Features.Tournaments
         }
       }
 
-      foreach (var engine in Run.Engines)
+      foreach (GameEngine engine in Run.Engines)
       {
         engine.Dispose();
         Run.Engine2CheckEngine?.Dispose();
@@ -265,7 +267,7 @@ namespace Ceres.Features.Tournaments
 
       // Add some supplemental tags with round number and also
       // information about Ceres engine configuration.
-      var extraTags = GetSupplementalTags(engine2White);
+      List<(string name, string value)> extraTags = GetSupplementalTags(engine2White);
       extraTags.Add(("Round", roundNumber.ToString()));
 
       PGNWriter pgnWriter = new PGNWriter(null, engine2White ? Run.Engine2.ID : Run.Engine1.ID,
@@ -326,10 +328,10 @@ namespace Ceres.Features.Tournaments
 
     private void OutputGameResultInfo(bool engine2White, int openingIndex, int gameSequenceNum, TournamentGameInfo thisResult)
     {
-      var engineStat = engine2White ?
+      TournamentResultStats engineStat = engine2White ?
                           ParentStats.GetResultsForPlayer(Run.Engine2.ID, Run.Engine1.ID)
                           : ParentStats.GetResultsForPlayer(Run.Engine1.ID, Run.Engine2.ID);
-      var gNumber = NumGames + 1;
+      float gNumber = NumGames + 1;
       (float eloMin, float eloAvg, float eloMax) = EloCalculator.EloConfidenceInterval(engineStat.Player1Wins, engineStat.Draws, engineStat.Player1Losses);
       float eloSD = eloMax - eloAvg;
       float los = EloCalculator.LikelihoodSuperiority(engineStat.Player1Wins, engineStat.Draws, engineStat.Player1Losses);

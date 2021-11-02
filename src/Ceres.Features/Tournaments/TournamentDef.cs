@@ -56,7 +56,7 @@ namespace Ceres.Features.Tournaments
     /// <summary>
     /// List of engines in the tournament
     /// </summary>
-    public List<EnginePlayerDef> Engines { get; set; } = new List<EnginePlayerDef>();
+    public EnginePlayerDef[] Engines { get; set; }
 
     /// <summary>
     /// Definition of the first player engine.
@@ -120,18 +120,18 @@ namespace Ceres.Features.Tournaments
     /// </summary>
     public readonly DateTime StartTime;
 
-    public TournamentDef(string id, List<EnginePlayerDef> engines)
+    public TournamentDef(string id, params EnginePlayerDef[] engines)
     {
-      if (engines.Count < 2)
+      if (engines.Length < 2)
       {
         throw new ArgumentNullException("A tournament must have 2 or more players");
       }
 
       ID = id;
-      engines.ForEach(engine => Engines.Add(engine));
+      Engines = engines;
       StartTime = DateTime.Now;
 
-      foreach (var engine in Engines)
+      foreach (EnginePlayerDef engine in Engines)
       {
         if (engines.Where(e => e != engine).Any(e => object.ReferenceEquals(engine, e)))
         {
@@ -149,7 +149,7 @@ namespace Ceres.Features.Tournaments
 
     public void DumpParams()
     {
-      var refEngine = String.IsNullOrEmpty(ReferenceEngineId) ? "None" : ReferenceEngineId;
+      string refEngine = String.IsNullOrEmpty(ReferenceEngineId) ? "None" : ReferenceEngineId;
       Console.WriteLine($"TOURNAMENT:  {ID}");
       Console.WriteLine($"  Game Pairs : {NumGamePairs} ");
       Console.WriteLine($"  Openings   : {OpeningsDescription()}");
@@ -157,23 +157,23 @@ namespace Ceres.Features.Tournaments
       Console.WriteLine($"  Adjudicate : {AdjudicationThresholdNumMoves} moves at {AdjudicationThresholdCentipawns}cp"
                      + $"{(UseTablebasesForAdjudication ? " or via tablebases" : "")}");
 
-      for (int i = 0; i < Engines.Count; i++)
+      for (int i = 0; i < Engines.Length; i++)
       {
         Console.WriteLine($"  Player {i + 1} : {Engines[i]}");
       }
 
       //Check if we need to dump comparison info too
-      var ceresEngines =
+      IEnumerable<GameEngineDefCeres> ceresEngines =
           Engines
           .Where(e => e.EngineDef is GameEngineDefCeres)
           .Select(e => e.EngineDef as GameEngineDefCeres);
 
       if (ceresEngines.Count() > 1)
       {
-        var toCompare = ceresEngines.First();
+        GameEngineDefCeres toCompare = ceresEngines.First();
 
         //dump pairs here
-        foreach (var engine in ceresEngines.Skip(1))
+        foreach (GameEngineDefCeres engine in ceresEngines.Skip(1))
         {
           toCompare.DumpComparison(Console.Out, engine, true);
         }

@@ -22,6 +22,7 @@ using System.Collections.Generic;
 using Ceres.Chess.UserSettings;
 using Ceres.Features.GameEngines;
 using Ceres.Chess;
+using Ceres.Features.Players;
 
 #endregion
 
@@ -119,15 +120,25 @@ namespace Ceres.Features.Tournaments
     /// <param name="relativeDeviceIndex"></param>
     static void TrySetRelativeDeviceIDIfNotPooled(TournamentDef def, int relativeDeviceIndex)
     {
-      def.Player1Def.EngineDef.ModifyDeviceIndexIfNotPooled(relativeDeviceIndex);
-      def.Player2Def.EngineDef.ModifyDeviceIndexIfNotPooled(relativeDeviceIndex);
+      if (def.Engines != null)
+      {
+        foreach (EnginePlayerDef engine in def.Engines)
+        {
+          engine.EngineDef.ModifyDeviceIndexIfNotPooled(relativeDeviceIndex);
+        }
+      }
+      else
+      {
+        def.Player1Def.EngineDef.ModifyDeviceIndexIfNotPooled(relativeDeviceIndex);
+        def.Player2Def.EngineDef.ModifyDeviceIndexIfNotPooled(relativeDeviceIndex);
+      }
     }
 
     void VerifyEnginesCompatible()
     {
-      if (Def.Engines.Count > 0)
+      if (Def.Engines != null)
       {
-        foreach (var engine in Def.Engines)
+        foreach (EnginePlayerDef engine in Def.Engines)
         {
           if (engine.SearchLimit.Type == SearchLimitType.NodesForAllMoves
               && !engine.EngineDef.SupportsNodesPerGameMode)
@@ -161,9 +172,9 @@ namespace Ceres.Features.Tournaments
     /// <returns></returns>
     public TournamentResultStats RunTournament(TournamentGameQueueManager queueManager = null)
     {
-      if (Def.Engines.Count > 0)
+      if (Def.Engines.Length > 0)
       {
-        foreach (var engine in Def.Engines)
+        foreach (EnginePlayerDef engine in Def.Engines)
         {
           if (engine == null) throw new ArgumentNullException("engine is null)");
         }

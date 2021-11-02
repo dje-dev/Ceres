@@ -33,14 +33,6 @@ namespace Ceres.Features.Tournaments
     /// </summary>
     public Dictionary<string, (int, int, int)> Opponents { get; set; } = new Dictionary<string, (int, int, int)>();
 
-    public long Player1TotalNodes { set; get; }
-
-    public float Player1TotalTime { set; get; }
-
-    public long Player2TotalNodes { set; get; }
-
-    public float Player2TotalTime { set; get; }
-
     /// <summary>
     /// Name of player 1.
     /// </summary>
@@ -75,6 +67,27 @@ namespace Ceres.Features.Tournaments
     /// Total number of games played.
     /// </summary>
     public int NumGames => Player1Wins + Draws + Player1Losses;
+
+    /// <summary>
+    /// Total number of nodes for player 1 across all games.
+    /// </summary>
+    public long Player1TotalNodes { set; get; }
+
+    /// <summary>
+    /// Total time sepnt in seconds for player 1 across all games.
+    /// </summary>
+    public float Player1TotalTime { set; get; }
+
+    /// <summary>
+    /// Total number of nodes for player 1 across all games.
+    /// </summary>
+    public long Player2TotalNodes { set; get; }
+
+    /// <summary>
+    /// Total time sepnt in seconds for player 2 across all games.
+    /// </summary>
+    public float Player2TotalTime { set; get; }
+
 
     /// <summary>
     /// List of TournamentResultStats for every player
@@ -114,12 +127,12 @@ namespace Ceres.Features.Tournaments
     /// </summary>
     void DumpEngineTournamentSummary(string referenceId)
     {
-      var width = 180;
+      int width = 180;
       PrintLine(width);
-      var header = new List<string>() { "Player", "Rating", "Error +/-", "CFS (%)", "Points", "Played", "W-D-L", "D(%)", "Time", "Nodes" };
+      List<string> header = new List<string>() { "Player", "Rating", "Error +/-", "CFS (%)", "Points", "Played", "W-D-L", "D(%)", "Time", "Nodes" };
       PrintCenterAlignedRow(header, width);
       PrintLine(width);
-      foreach (var engine in Results)
+      foreach (TournamentResultStats engine in Results)
       {
         WriteEngineSummary(engine, width, referenceId);
       }
@@ -134,17 +147,17 @@ namespace Ceres.Features.Tournaments
     /// <param name="width"></param>
     void WriteEngineSummary(TournamentResultStats engineStat, int width, string referenceId)
     {
-      var playerInfo = engineStat.Player1 == referenceId ? engineStat.Player1 + "*" : engineStat.Player1;
-      var score = engineStat.Player1Wins + (engineStat.Draws / 2.0);
+      string playerInfo = engineStat.Player1 == referenceId ? engineStat.Player1 + "*" : engineStat.Player1;
+      double score = engineStat.Player1Wins + (engineStat.Draws / 2.0);
       //var numberOfGames = engineStat.Player1Losses + engineStat.Player1Wins + engineStat.Draws;
-      var wdl = $"{engineStat.Player1Wins}-{engineStat.Draws}-{engineStat.Player1Losses}";
-      var cfs = EloCalculator.LikelihoodSuperiority(engineStat.Player1Wins, engineStat.Draws, engineStat.Player1Losses);
+      string wdl = $"{engineStat.Player1Wins}-{engineStat.Draws}-{engineStat.Player1Losses}";
+      float cfs = EloCalculator.LikelihoodSuperiority(engineStat.Player1Wins, engineStat.Draws, engineStat.Player1Losses);
       var (min, avg, max) = EloCalculator.EloConfidenceInterval(engineStat.Player1Wins, engineStat.Draws, engineStat.Player1Losses);
-      var error = $"{(max - avg):F0}";
-      var draws = engineStat.Draws / (double)engineStat.NumGames;
-      var nodes = engineStat.Player1TotalNodes;
-      var time = engineStat.Player1TotalTime;
-      var rowItems = new List<string>()
+      string error = $"{(max - avg):F0}";
+      double draws = engineStat.Draws / (double)engineStat.NumGames;
+      long nodes = engineStat.Player1TotalNodes;
+      float time = engineStat.Player1TotalTime;
+      List<string> rowItems = new ()
                 { playerInfo, avg.ToString("F0"), error, cfs.ToString("P0"), score.ToString("F1"),
                 engineStat.NumGames.ToString(), wdl, draws.ToString("P2"), {time.ToString("F2")}, {nodes.ToString("N0")} };
       PrintEngineRow(rowItems, width);
@@ -160,19 +173,19 @@ namespace Ceres.Features.Tournaments
       {
         for (int i = 0; i < Results.Count; i++)
         {
-          var row = CreateRoundRobinRow(i);
+          IEnumerable<string> row = CreateRoundRobinRow(i);
           PrintCenterAlignedRow(row, totalWidth);
         }
       }
       else
       {
-        var id = Results.FirstOrDefault(e => e.Player1 == referenceId);
+        TournamentResultStats id = Results.FirstOrDefault(e => e.Player1 == referenceId);
         if (id == null)
         {
           throw new Exception("Reference engine not found in Result table");
         }
-        var index = Results.IndexOf(id);
-        var row = CreateRoundRobinRow(index);
+        int index = Results.IndexOf(id);
+        IEnumerable<string> row = CreateRoundRobinRow(index);
         PrintCenterAlignedRow(row, totalWidth);
       }
       PrintLine(totalWidth);
@@ -216,11 +229,11 @@ namespace Ceres.Features.Tournaments
     /// <returns></returns>
     public TournamentResultStats GetResultsForPlayer(string player1, string player2)
     {
-      var whitePlayer = Results.FirstOrDefault(e => e.Player1 == player1);
+      TournamentResultStats whitePlayer = Results.FirstOrDefault(e => e.Player1 == player1);
 
       if (whitePlayer == null)
       {
-        var entry = new TournamentResultStats(player1, player2);
+        TournamentResultStats entry = new TournamentResultStats(player1, player2);
         if (!entry.Opponents.ContainsKey(player2))
         {
           entry.Opponents.Add(player2, (0, 0, 0));
@@ -246,13 +259,13 @@ namespace Ceres.Features.Tournaments
       TournamentResultStats player1;
       player1 = GetResultsForPlayer(engine.ID, engine.OpponentEngine.ID);
       player1.UpdateGameOutcome(thisResult, engine.OpponentEngine.ID);
-      var player2 = GetResultsForPlayer(engine.OpponentEngine.ID, engine.ID);
-      var gameResultBlack =
+      TournamentResultStats player2 = GetResultsForPlayer(engine.OpponentEngine.ID, engine.ID);
+      TournamentGameResult gameResultBlack =
           thisResult.Result == TournamentGameResult.Win ? TournamentGameResult.Loss :
           thisResult.Result == TournamentGameResult.Loss ? TournamentGameResult.Win :
           TournamentGameResult.Draw;
 
-      var reverseResult = thisResult with { Result = gameResultBlack };
+      TournamentGameInfo reverseResult = thisResult with { Result = gameResultBlack };
       player2.UpdateGameOutcome(reverseResult, engine.ID);
       player1.UpdateNodeCounterAndTimeUse(thisResult, player1, player2);
     }
@@ -300,7 +313,7 @@ namespace Ceres.Features.Tournaments
 
     void PrintEngineRow(List<string> columns, int maxWidth)
     {
-      var numberOfColumns = columns.Count();
+      int numberOfColumns = columns.Count();
       int Columnwidth = (maxWidth - columns.Count()) / columns.Count();
       string row = "|";
 
@@ -366,9 +379,9 @@ namespace Ceres.Features.Tournaments
     {
       const string empty = "-----";
       int counter = 0;
-      var stat = Results[row];
+      TournamentResultStats stat = Results[row];
       yield return stat.Player1;
-      foreach (var opponent in stat.Opponents)
+      foreach (KeyValuePair<string, (int, int, int)> opponent in stat.Opponents)
       {
         if (row == counter)
         {
@@ -393,8 +406,8 @@ namespace Ceres.Features.Tournaments
 
     void DumpHeadingTable(int width)
     {
-      var players = Results.Select(e => e.Player1);
-      var header = new List<string>();
+      IEnumerable<string> players = Results.Select(e => e.Player1);
+      List<string> header = new List<string>();
       header.Add("Engine");
       header.AddRange(players);
       PrintLine(width);
