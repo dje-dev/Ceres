@@ -6,3 +6,4 @@ Judd Niemann for move generator code (translated and adapted from C++) at https:
 jkormu
 eahov
 alstrup
+lepned
