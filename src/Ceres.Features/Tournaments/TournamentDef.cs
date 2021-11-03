@@ -14,8 +14,9 @@
 #region Using directives
 
 using System;
+using System.Collections.Generic;
 using System.IO;
-
+using System.Linq;
 using Ceres.Base.Misc;
 using Ceres.Chess.GameEngines;
 using Ceres.Features.GameEngines;
@@ -37,6 +38,11 @@ namespace Ceres.Features.Tournaments
     public string ID;
 
     /// <summary>
+    /// The reference engine used in tournaments
+    /// </summary>
+    public string ReferenceEngineId = null;
+
+    /// <summary>
     /// Optional number of game pairs to run (opponents play both sides in a pair).
     /// If not specified, one game pair is run for each specified opening position.
     /// </summary>
@@ -46,6 +52,11 @@ namespace Ceres.Features.Tournaments
     /// Target for logging messages.
     /// </summary>
     [NonSerialized] public TextWriter Logger = Console.Out;
+
+    /// <summary>
+    /// List of engines in the tournament
+    /// </summary>
+    public EnginePlayerDef[] Engines { get; set; }
 
     /// <summary>
     /// Definition of the first player engine.
@@ -109,20 +120,25 @@ namespace Ceres.Features.Tournaments
     /// </summary>
     public readonly DateTime StartTime;
 
-
-    public TournamentDef(string id, EnginePlayerDef player1Def, EnginePlayerDef player2Def)
+    public TournamentDef(string id, params EnginePlayerDef[] engines)
     {
+      if (engines.Length < 2)
+      {
+        throw new ArgumentNullException("A tournament must have 2 or more players");
+      }
+
       ID = id;
-      Player1Def = player1Def ?? throw new ArgumentNullException(nameof(player1Def));
-      Player2Def = player2Def ?? throw new ArgumentNullException(nameof(player2Def));
+      Engines = engines;
       StartTime = DateTime.Now;
 
-      if (object.ReferenceEquals(player1Def, player2Def))
+      foreach (EnginePlayerDef engine in Engines)
       {
-        throw new Exception("player1Def must be different from player2Def");
+        if (engines.Where(e => e != engine).Any(e => object.ReferenceEquals(engine, e)))
+        {
+          throw new Exception("playerDef must be different from each other");
+        }
       }
     }
-
 
     public TournamentDef Clone()
     {
@@ -131,21 +147,38 @@ namespace Ceres.Features.Tournaments
       return clone;
     }
 
-
     public void DumpParams()
     {
-      Console.WriteLine($"TOURNAMENT    {ID}");
-      Console.WriteLine($"  Game Pairs: {NumGamePairs} ");
-      Console.WriteLine($"  Openings  : {OpeningsDescription()}");
-      Console.WriteLine($"  Adjudicate: {AdjudicationThresholdNumMoves} moves at {AdjudicationThresholdCentipawns}cp"
+      string refEngine = String.IsNullOrEmpty(ReferenceEngineId) ? "None" : ReferenceEngineId;
+      Console.WriteLine($"TOURNAMENT:  {ID}");
+      Console.WriteLine($"  Game Pairs : {NumGamePairs} ");
+      Console.WriteLine($"  Openings   : {OpeningsDescription()}");
+      Console.WriteLine($"  Ref engine : {refEngine}");
+      Console.WriteLine($"  Adjudicate : {AdjudicationThresholdNumMoves} moves at {AdjudicationThresholdCentipawns}cp"
                      + $"{(UseTablebasesForAdjudication ? " or via tablebases" : "")}");
-      Console.WriteLine($"  Player 1  : {Player1Def} ");
-      Console.WriteLine($"  Player 2  : {Player2Def} ");
 
+      for (int i = 0; i < Engines.Length; i++)
+      {
+        Console.WriteLine($"  Player {i + 1} : {Engines[i]}");
+      }
 
-      if (Player1Def.EngineDef is GameEngineDefCeres &&
-        Player2Def.EngineDef is GameEngineDefCeres)
-        (Player1Def.EngineDef as GameEngineDefCeres).DumpComparison(Console.Out, Player2Def.EngineDef as GameEngineDefCeres, true);
+      //Check if we need to dump comparison info too
+      IEnumerable<GameEngineDefCeres> ceresEngines =
+          Engines
+          .Where(e => e.EngineDef is GameEngineDefCeres)
+          .Select(e => e.EngineDef as GameEngineDefCeres);
+
+      if (ceresEngines.Count() > 1)
+      {
+        GameEngineDefCeres toCompare = ceresEngines.First();
+
+        //dump pairs here
+        foreach (GameEngineDefCeres engine in ceresEngines.Skip(1))
+        {
+          toCompare.DumpComparison(Console.Out, engine, true);
+        }
+      }
+
       Console.WriteLine();
 #if NOT
       ParamsDump.DumpParams(Console.Out, true,

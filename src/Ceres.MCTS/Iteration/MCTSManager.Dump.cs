@@ -37,80 +37,92 @@ namespace Ceres.MCTS.Iteration
     /// <param name="description"></param>
     public void DumpFullInfo(MGMove bestMove, MCTSNode searchRootNode = default, TextWriter writer = null, string description = null)
     {
-      using (new SearchContextExecutionBlock(this.Context))
+      try
       {
-        searchRootNode = searchRootNode.IsNotNull ? searchRootNode : Root;
-        writer = writer ?? Console.Out;
-
-        int moveIndex = searchRootNode.Tree.Store.Nodes.PriorMoves.Moves.Count;
-
-        writer.WriteLine();
-        writer.WriteLine("=================================================================================");
-        writer.Write(DateTime.Now + " SEARCH RESULT INFORMATION,  Move = " + ((1 + moveIndex / 2)));
-        writer.WriteLine($" Thread = {Thread.CurrentThread.ManagedThreadId}");
-        if (description != null)
+        using (new SearchContextExecutionBlock(this.Context))
         {
-          writer.WriteLine(description);
-        }
+          searchRootNode = searchRootNode.IsNotNull ? searchRootNode : Root;
+          writer = writer ?? Console.Out;
 
-        writer.WriteLine();
+          int moveIndex = searchRootNode.Tree.Store.Nodes.PriorMoves.Moves.Count;
 
-        writer.WriteLine("Tree root           : " + Context.Root);
-        if (searchRootNode != Root)
-        {
-          writer.WriteLine("Search root         : " + searchRootNode);
-        }
-        writer.WriteLine();
-
-        MCTSNode[] nodesSortedN = null;
-        MCTSNode[] nodesSortedQ = null;
-
-        string bestMoveInfo = "";
-        if (searchRootNode.NumChildrenExpanded > 0
-         && StopStatus != SearchStopStatus.TablebaseImmediateMove
-         && StopStatus != SearchStopStatus.OnlyOneLegalMove)
-        {
-          MCTSNode[] childrenSortedN = searchRootNode.ChildrenSorted(node => -node.N);
-          MCTSNode[] childrenSortedQ = searchRootNode.ChildrenSorted(node => (float)node.Q);
-
-          childrenSortedQ[0].Annotate();
-          childrenSortedN[0].Annotate();
-
-          bool isTopN = childrenSortedN[0].Annotation.PriorMoveMG == bestMove;
-          bool isTopQ = childrenSortedQ[0].Annotation.PriorMoveMG == bestMove;
-          if (isTopN && isTopQ)
+          writer.WriteLine();
+          writer.WriteLine("=================================================================================");
+          writer.Write(DateTime.Now + " SEARCH RESULT INFORMATION,  Move = " + ((1 + moveIndex / 2)));
+          writer.WriteLine($" Thread = {Thread.CurrentThread.ManagedThreadId}");
+          if (description != null)
           {
-            bestMoveInfo = "(TopN and TopQ)";
+            writer.WriteLine(description);
           }
-          else if (isTopN)
+
+          writer.WriteLine();
+
+          writer.WriteLine("Tree root           : " + Context.Root);
+          if (searchRootNode != Root)
           {
-            bestMoveInfo = "(TopN)";
+            writer.WriteLine("Search root         : " + searchRootNode);
           }
-          else if (isTopQ)
+          writer.WriteLine();
+
+          MCTSNode[] nodesSortedN = null;
+          MCTSNode[] nodesSortedQ = null;
+
+          string bestMoveInfo = "";
+          if (searchRootNode.NumChildrenExpanded > 0
+           && StopStatus != SearchStopStatus.TablebaseImmediateMove
+           && StopStatus != SearchStopStatus.OnlyOneLegalMove)
           {
-            bestMoveInfo = "(TopQ)";
+            MCTSNode[] childrenSortedN = searchRootNode.ChildrenSorted(node => -node.N);
+            MCTSNode[] childrenSortedQ = searchRootNode.ChildrenSorted(node => (float)node.Q);
+
+            childrenSortedQ[0].Annotate();
+            childrenSortedN[0].Annotate();
+
+            bool isTopN = childrenSortedN[0].Annotation.PriorMoveMG == bestMove;
+            bool isTopQ = childrenSortedQ[0].Annotation.PriorMoveMG == bestMove;
+            if (isTopN && isTopQ)
+            {
+              bestMoveInfo = "(TopN and TopQ)";
+            }
+            else if (isTopN)
+            {
+              bestMoveInfo = "(TopN)";
+            }
+            else if (isTopQ)
+            {
+              bestMoveInfo = "(TopQ)";
+            }
           }
+
+          // Output position (with history) information.
+          writer.WriteLine("Position            : " + searchRootNode.Annotation.Pos.FEN);
+          writer.WriteLine("Tree root position  : " + Context.Tree.Store.Nodes.PriorMoves);
+          writer.WriteLine("Search stop status  : " + StopStatus);
+          writer.WriteLine("Best move selected  : " + bestMove.MoveStr(MGMoveNotationStyle.LC0Coordinate) + " " + bestMoveInfo);
+          writer.WriteLine();
+
+          string infoUpdate = UCIInfo.UCIInfoString(this, searchRootNode);
+          writer.WriteLine(infoUpdate);
+
+          writer.WriteLine();
+          DumpTimeInfo(writer);
+
+          writer.WriteLine();
+          searchRootNode.Dump(1, 1, writer: writer);
+
+          writer.WriteLine();
+          MCTSPosTreeNodeDumper.DumpPV(searchRootNode, true, writer);
         }
-
-        // Output position (with history) information.
-        writer.WriteLine("Position            : " + searchRootNode.Annotation.Pos.FEN);
-        writer.WriteLine("Tree root position  : " + Context.Tree.Store.Nodes.PriorMoves);
-        writer.WriteLine("Search stop status  : " + StopStatus);
-        writer.WriteLine("Best move selected  : " + bestMove.MoveStr(MGMoveNotationStyle.LC0Coordinate) + " " + bestMoveInfo);
-        writer.WriteLine();
-
-        string infoUpdate = UCIInfo.UCIInfoString(this, searchRootNode);
-        writer.WriteLine(infoUpdate);
-
-        writer.WriteLine();
-        DumpTimeInfo(writer);
-
-        writer.WriteLine();
-        searchRootNode.Dump(1, 1, writer: writer);
-
-        writer.WriteLine();
-        MCTSPosTreeNodeDumper.DumpPV(searchRootNode, true, writer);
       }
+      catch (Exception e)
+      {
+        Console.WriteLine($"Dump failed with message: {e.Message}");
+        writer.Write($"Dump failed with message: {e.Message}");
+        Console.WriteLine($"Stacktrace: {e.StackTrace}");
+        writer.Write($"Stacktrace: {e.StackTrace}");
+        //throw;
+      }
+
     }
 
 

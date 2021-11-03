@@ -65,7 +65,7 @@ namespace Ceres.MCTS.MTCSNodes.Analysis
     }
 
 
-    static void DumpNodeStr(MCTSNode searchRootNode, MCTSNode node, 
+    static void DumpNodeStr(MCTSNode searchRootNode, MCTSNode node,
                             int countTimesSeen, bool fullDetail, TextWriter writer = null)
     {
       int depth = node.Depth - searchRootNode.Depth;
@@ -97,7 +97,7 @@ namespace Ceres.MCTS.MTCSNodes.Analysis
       float pctOfVisits = node.IsRoot ? 100.0f : (100.0f * node.N / node.Parent.N);
 
       MCTSNode bestMove = default;
-// TODO: someday show this too      MCTSNode nextBestMove = null;
+      // TODO: someday show this too      MCTSNode nextBestMove = null;
       if (!node.IsRoot)
       {
         MCTSNode[] parentsChildrenSortedQ = node.ChildrenSorted(innerNode => -multiplier * (float)innerNode.Q);
@@ -116,7 +116,7 @@ namespace Ceres.MCTS.MTCSNodes.Analysis
       writer.Write($"{node.Index,13:N0}");
 
       string san = node.IsRoot ? "" : MGMoveConverter.ToMove(node.Annotation.PriorMoveMG).ToSAN(in node.Parent.Annotation.Pos);
-//      string sanNextBest = node.IsRoot ? "" : MGMoveConverter.ToMove(nextBestMove.Annotation.PriorMoveMG).ToSAN(in node.Parent.Annotation.Pos);
+      //      string sanNextBest = node.IsRoot ? "" : MGMoveConverter.ToMove(nextBestMove.Annotation.PriorMoveMG).ToSAN(in node.Parent.Annotation.Pos);
       if (node.Annotation.Pos.MiscInfo.SideToMove == SideType.White)
       {
         writer.Write($"      ");
@@ -129,17 +129,17 @@ namespace Ceres.MCTS.MTCSNodes.Analysis
         writer.Write($"      ");
       }
 
-//      float diffBestNextBestQ = 0;
-//      if (nextBestMove != null) diffBestNextBestQ = (float)(bestMove.Q - nextBestMove.Q);
-//      writer.Write($"{  (nextBestMove?.Annotation == null ? "" : nextBestMove.Annotation.PriorMoveMG.ToString()),8}");
-//      writer.Write($"{diffBestNextBestQ,8:F2}");
+      //      float diffBestNextBestQ = 0;
+      //      if (nextBestMove != null) diffBestNextBestQ = (float)(bestMove.Q - nextBestMove.Q);
+      //      writer.Write($"{  (nextBestMove?.Annotation == null ? "" : nextBestMove.Annotation.PriorMoveMG.ToString()),8}");
+      //      writer.Write($"{diffBestNextBestQ,8:F2}");
 
 
       writer.Write($"{node.N,13:N0} ");
       writer.Write($" {pctOfVisits,5:F0}%");
       writer.Write($"   {100.0 * node.P,6:F2}%  ");
       DumpWithColor(multiplier * node.V, $" {multiplier * node.V,6:F3}  ", -0.2f, 0.2f, writer);
-//      DumpWithColor(multiplier * node.VSecondary, $" {multiplier * node.VSecondary,6:F3} ", -0.2f, 0.2f);
+      //      DumpWithColor(multiplier * node.VSecondary, $" {multiplier * node.VSecondary,6:F3} ", -0.2f, 0.2f);
       double q = multiplier * node.Q;
       DumpWithColor((float)q, $" {q,6:F3} ", -0.2f, 0.2f, writer);
 
@@ -164,7 +164,7 @@ namespace Ceres.MCTS.MTCSNodes.Analysis
       {
         int numPieces = node.Annotation.Pos.PieceCount;
 
-//        writer.Write($" {PosStr(node.Annotation.Pos)} ");
+        //        writer.Write($" {PosStr(node.Annotation.Pos)} ");
         writer.Write($" {node.Annotation.Pos.FEN}");
       }
 
@@ -254,8 +254,8 @@ namespace Ceres.MCTS.MTCSNodes.Analysis
     }
 
 
-    public static void DumpAllNodes(MCTSIterator context, ref MCTSNodeStruct node, 
-                                    Base.DataType.Trees.TreeTraversalType type = Base.DataType.Trees.TreeTraversalType.BreadthFirst, 
+    public static void DumpAllNodes(MCTSIterator context, ref MCTSNodeStruct node,
+                                    Base.DataType.Trees.TreeTraversalType type = Base.DataType.Trees.TreeTraversalType.BreadthFirst,
                                     bool childDetail = false)
     {
       int index = 1;
@@ -299,48 +299,61 @@ namespace Ceres.MCTS.MTCSNodes.Analysis
 
     public static void DumpPV(MCTSNode node, bool fullDetail, TextWriter writer = null)
     {
-      using (new SearchContextExecutionBlock(node.Context))
+      try
       {
-        writer = writer ?? Console.Out;
-
-        writer.WriteLine();
-        WriteHeaders(fullDetail, writer);
-
-        List<Position> seenPositions = new List<Position>();
-
-        int CountDuplicatePos(Position pos)
+        using (new SearchContextExecutionBlock(node.Context))
         {
-          int count = 0;
-          foreach (Position priorPos in seenPositions)
+          writer = writer ?? Console.Out;
+
+          writer.WriteLine();
+          WriteHeaders(fullDetail, writer);
+
+          List<Position> seenPositions = new List<Position>();
+
+          int CountDuplicatePos(Position pos)
           {
-            if (pos.EqualAsRepetition(in priorPos))
+            int count = 0;
+            foreach (Position priorPos in seenPositions)
             {
-              count++;
+              if (pos.EqualAsRepetition(in priorPos))
+              {
+                count++;
+              }
             }
+
+            return count;
           }
 
-          return count;
-        }
-
-        int depth = 0;
-        MCTSNode searchRootNode = node;
-        while (true)
-        {
-          node.Tree.Annotate(node);
-          seenPositions.Add(node.Annotation.Pos);
-          int countSeen = CountDuplicatePos(node.Annotation.Pos);
-
-          DumpNodeStr(searchRootNode, node, countSeen, fullDetail, writer);
-
-          if (node.NumChildrenVisited == 0)
+          int depth = 0;
+          MCTSNode searchRootNode = node;
+          while (true)
           {
-            return;
+            node.Tree.Annotate(node);
+            seenPositions.Add(node.Annotation.Pos);
+            int countSeen = CountDuplicatePos(node.Annotation.Pos);
+
+            DumpNodeStr(searchRootNode, node, countSeen, fullDetail, writer);
+
+            if (node.NumChildrenVisited == 0)
+            {
+              return;
+            }
+
+            node = node.BestMove(false);
+
+            depth++;
           }
-
-          node = node.BestMove(false);
-
-          depth++;
         }
+      }
+      catch (Exception e)
+      {
+        Console.WriteLine($"Dump failed with message: {e.Message}");
+        writer.Write($"Dump failed with message: {e.Message}");
+        Console.WriteLine($"Stacktrace: {e.StackTrace}");
+        writer.Write($"Stacktrace: {e.StackTrace}");
+        //Console.WriteLine($"Inner exception: {e.InnerException.Message}");
+        //writer.Write($"Inner exception: {e.InnerException.Message}");
+        //throw;
       }
     }
 

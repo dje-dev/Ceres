@@ -13,6 +13,8 @@
 
 #region Using directives
 
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 using Ceres.Chess.GameEngines;
@@ -48,6 +50,11 @@ namespace Ceres.Features.Tournaments
     public GameEngine Engine2CheckEngine;
 
     /// <summary>
+    /// List of game engines in tournament
+    /// </summary>
+    public GameEngine[] Engines { get; set; }
+
+    /// <summary>
     /// Constructor from a given tournament defintion.
     /// </summary>
     /// <param name="def"></param>
@@ -55,18 +62,34 @@ namespace Ceres.Features.Tournaments
     {
       Def = def;
 
-      // Create and warmup both engines (in parallel)
-      Parallel.Invoke(() => { Engine1 = def.Player1Def.EngineDef.CreateEngine(); Engine1.Warmup(def.Player1Def.SearchLimit.KnownMaxNumNodes); },
-                      () => { Engine2 = def.Player2Def.EngineDef.CreateEngine(); Engine2.Warmup(def.Player2Def.SearchLimit.KnownMaxNumNodes); });
+      // Create and warmup all engines (in parallel).
+      Engines = new GameEngine[Def.Engines.Length];
+      Parallel.For(0, Def.Engines.Length, i => Engines[i] = Def.Engines[i].EngineDef.CreateEngine());
+      Parallel.ForEach(Engines, e => e.Warmup());
+    }
 
-      if (def.CheckPlayer2Def != null)
+
+    /// <summary>
+    /// Pairing engines based on index in Engines list. Useful for Round Robin tournaments
+    /// </summary>
+    /// <param name="gameEngine1Index"></param>
+    /// <param name="gameEngine2Index"></param>
+    public void SetEnginePair(int gameEngine1Index, int gameEngine2Index)
+    {
+      Engine1 = Engines[gameEngine1Index];
+      Engine2 = Engines[gameEngine2Index];
+
+      if (Def.CheckPlayer2Def != null)
       {
-        Engine2CheckEngine = def.CheckPlayer2Def.EngineDef.CreateEngine();
-        Engine2CheckEngine.Warmup(def.CheckPlayer2Def.SearchLimit.KnownMaxNumNodes);
+        Engine2CheckEngine = Def.CheckPlayer2Def.EngineDef.CreateEngine();
+        Engine2CheckEngine.Warmup(Def.CheckPlayer2Def.SearchLimit.KnownMaxNumNodes);
       }
 
       Engine1.OpponentEngine = Engine2;
       Engine2.OpponentEngine = Engine1;
+      Def.Player1Def = Def.Engines[gameEngine1Index];
+      Def.Player2Def = Def.Engines[gameEngine2Index];
+
     }
 
 #if NOT_USED

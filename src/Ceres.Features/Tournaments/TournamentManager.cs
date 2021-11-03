@@ -22,6 +22,7 @@ using System.Collections.Generic;
 using Ceres.Chess.UserSettings;
 using Ceres.Features.GameEngines;
 using Ceres.Chess;
+using Ceres.Features.Players;
 
 #endregion
 
@@ -119,22 +120,47 @@ namespace Ceres.Features.Tournaments
     /// <param name="relativeDeviceIndex"></param>
     static void TrySetRelativeDeviceIDIfNotPooled(TournamentDef def, int relativeDeviceIndex)
     {
-      def.Player1Def.EngineDef.ModifyDeviceIndexIfNotPooled(relativeDeviceIndex);
-      def.Player2Def.EngineDef.ModifyDeviceIndexIfNotPooled(relativeDeviceIndex);
+      if (def.Engines != null)
+      {
+        foreach (EnginePlayerDef engine in def.Engines)
+        {
+          engine.EngineDef.ModifyDeviceIndexIfNotPooled(relativeDeviceIndex);
+        }
+      }
+      else
+      {
+        def.Player1Def.EngineDef.ModifyDeviceIndexIfNotPooled(relativeDeviceIndex);
+        def.Player2Def.EngineDef.ModifyDeviceIndexIfNotPooled(relativeDeviceIndex);
+      }
     }
 
     void VerifyEnginesCompatible()
     {
-      if (Def.Player1Def.SearchLimit.Type == SearchLimitType.NodesForAllMoves
-       && !Def.Player1Def.EngineDef.SupportsNodesPerGameMode)
+      if (Def.Engines != null)
       {
-        throw new Exception($"Requested NodesPerGame mode is not supported by engine 1: {Def.Player1Def.EngineDef.ID}");
+        foreach (EnginePlayerDef engine in Def.Engines)
+        {
+          if (engine.SearchLimit.Type == SearchLimitType.NodesForAllMoves
+              && !engine.EngineDef.SupportsNodesPerGameMode)
+          {
+            throw new Exception($"Requested NodesPerGame mode is not supported by engine: {engine.EngineDef.ID}");
+          }
+        }
       }
 
-      if (Def.Player2Def.SearchLimit.Type == SearchLimitType.NodesForAllMoves
-       && !Def.Player2Def.EngineDef.SupportsNodesPerGameMode)
+      else
       {
-        throw new Exception($"Requested NodesPerGame mode is not supported by engine 2: {Def.Player2Def.EngineDef.ID}");
+        if (Def.Player1Def.SearchLimit.Type == SearchLimitType.NodesForAllMoves
+         && !Def.Player1Def.EngineDef.SupportsNodesPerGameMode)
+        {
+          throw new Exception($"Requested NodesPerGame mode is not supported by engine 1: {Def.Player1Def.EngineDef.ID}");
+        }
+
+        if (Def.Player2Def.SearchLimit.Type == SearchLimitType.NodesForAllMoves
+         && !Def.Player2Def.EngineDef.SupportsNodesPerGameMode)
+        {
+          throw new Exception($"Requested NodesPerGame mode is not supported by engine 2: {Def.Player2Def.EngineDef.ID}");
+        }
       }
     }
 
@@ -146,14 +172,25 @@ namespace Ceres.Features.Tournaments
     /// <returns></returns>
     public TournamentResultStats RunTournament(TournamentGameQueueManager queueManager = null)
     {
-      if (Def.Player1Def == null) throw new ArgumentNullException("Def.Player1Def is null)");
-      if (Def.Player2Def == null) throw new ArgumentNullException("Def.Player2Def is null)");
+      if (Def.Engines.Length > 0)
+      {
+        foreach (EnginePlayerDef engine in Def.Engines)
+        {
+          if (engine == null) throw new ArgumentNullException("engine is null)");
+        }
+      }
+      else
+      {
+        if (Def.Player1Def == null) throw new ArgumentNullException("Def.Player1Def is null)");
+        if (Def.Player2Def == null) throw new ArgumentNullException("Def.Player2Def is null)");
+      }
+
 
       VerifyEnginesCompatible();
 
       QueueManager = queueManager;
+      TournamentResultStats parentTest = new();
 
-      TournamentResultStats parentTest = new TournamentResultStats(Def.Player1Def.ID, Def.Player2Def.ID);
 
       // Show differences between engine 1 and engine 2
       Def.DumpParams();
@@ -177,18 +214,18 @@ namespace Ceres.Features.Tournaments
           TrySetRelativeDeviceIDIfNotPooled(tournamentDefClone, i);
         }
 
-        if (Def.Player1Def is GameEngineDefCeres
-         && Def.Player2Def is GameEngineDefCeres
-         && Def.Player1Def.SearchLimit.IsNodesLimit
-         && Def.Player2Def.SearchLimit.IsNodesLimit)
-        {
-          GameEngineDefCeres thisDefCeres1 = Def.Player1Def.EngineDef as GameEngineDefCeres;
-          GameEngineDefCeres thisDefCeres2 = Def.Player2Def.EngineDef as GameEngineDefCeres;
+        //if (Def.Player1Def is GameEngineDefCeres
+        // && Def.Player2Def is GameEngineDefCeres
+        // && Def.Player1Def.SearchLimit.IsNodesLimit
+        // && Def.Player2Def.SearchLimit.IsNodesLimit)
+        //{
+        //    GameEngineDefCeres thisDefCeres1 = Def.Player1Def.EngineDef as GameEngineDefCeres;
+        //    GameEngineDefCeres thisDefCeres2 = Def.Player2Def.EngineDef as GameEngineDefCeres;
 
-          // TODO: possibly add optimization here which will share trees
-          //       with ReusePositionEvaluationsFromOtherTree.
-          //       See the suite manager for an example of how this is done.
-        }
+        //    // TODO: possibly add optimization here which will share trees
+        //    //       with ReusePositionEvaluationsFromOtherTree.
+        //    //       See the suite manager for an example of how this is done.
+        //}
 
         TournamentGameThread gameTest = new TournamentGameThread(tournamentDefClone, parentTest);
         gameThreads.Add(gameTest);
@@ -233,9 +270,9 @@ namespace Ceres.Features.Tournaments
       Def.Logger.Write($"{totalTimeEngine1,9:F2}{totalTimeEngine2,9:F2}");
       Def.Logger.Write($"{totalNodesEngine1,19:N0}{totalNodesEngine2,17:N0}   ");
       Def.Logger.Write($"{Math.Round(totalMovesEngine1 / numGames, 0),4:F0}");
-
       Def.Logger.WriteLine();
-      parentTest.Dump();
+
+      parentTest.DumpTournamentSummary(Def.ReferenceEngineId);
       return parentTest;
     }
 

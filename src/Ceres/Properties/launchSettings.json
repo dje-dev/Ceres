@@ -2,6 +2,7 @@
   "profiles": {
     "Ceres": {
       "commandName": "Project",
+      "commandLineArgs": "",
       "nativeDebugging": false
     },
     "Docker": {

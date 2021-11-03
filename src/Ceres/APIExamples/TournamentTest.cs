@@ -62,8 +62,8 @@ namespace Ceres.APIExamples
     {
       foreach (Process p in Process.GetProcesses())
       {
-         if (p.ProcessName.ToUpper().StartsWith("CERES") && p.Id != Process.GetCurrentProcess().Id)
-           p.Kill();
+        if (p.ProcessName.ToUpper().StartsWith("CERES") && p.Id != Process.GetCurrentProcess().Id)
+          p.Kill();
       }
     }
 
@@ -162,8 +162,8 @@ namespace Ceres.APIExamples
       NNEvaluatorDef evalDefSecondary2 = null;
 
 
-//      public NNEvaluatorDynamic(NNEvaluator[] evaluators,
-//                        Func<IEncodedPositionBatchFlat, int> dynamicEvaluatorIndexPredicate = null)
+      //      public NNEvaluatorDynamic(NNEvaluator[] evaluators,
+      //                        Func<IEncodedPositionBatchFlat, int> dynamicEvaluatorIndexPredicate = null)
 
       //evalDef1 = NNEvaluatorDefFactory.FromSpecification("ONNX:tfmodelc", "GPU:0");
 
@@ -177,10 +177,10 @@ namespace Ceres.APIExamples
       //limit1 = SearchLimit.NodesForAllMoves(1_000_000, 10_000);
 
       // 140 good for 203 pairs, 300 good for 100 pairs
-      //       limit1 = SearchLimit.SecondsForAllMoves(15, 0.25f);
-//      limit1 = SearchLimit.SecondsForAllMoves(120, 0.5f);
-///       limit1 = SearchLimit.SecondsPerMove(3);
-//      limit1 = SearchLimit.SecondsForAllMoves(10, 0.1f);
+      //      limit1 = SearchLimit.SecondsForAllMovess(90, 1f);
+      limit1 = SearchLimit.SecondsForAllMoves(100, 0.5f) * 0.2f;
+      //limit1 = SearchLimit.SecondsPerMove(1);
+//limit1 = SearchLimit.SecondsForAllMoves(50, 0.1f) * 1.1f;
 //ok      limit1 = SearchLimit.NodesPerMove(350_000); try test3.pgn against T75 opponent Ceres93 (in first position, 50% of time misses win near move 12
       
       SearchLimit limit2 = limit1;
@@ -193,13 +193,8 @@ namespace Ceres.APIExamples
       GameEngineDefCeres engineDefCeres2 = new GameEngineDefCeres("Ceres2", evalDef2, evalDefSecondary2, new ParamsSearch(), new ParamsSelect(),
                                                                   null, outputLog ? "Ceres2.log.txt" : null);
 
-      //engineDefCeres1.SearchParams.EnableUseSiblingEvaluations = true;
-//      engineDefCeres2.SearchParams.EnableDeepTranspositionBackup = false;
-//      engineDefCeres2.SearchParams.TestFlag2 = true;
-      //engineDefCeres2.SearchParams.EnableUseSiblingEvaluations = false;
-
-      //engineDefCeres1.SearchParams.EnableUncertaintyBoosting = false;
-      //engineDefCeres2.SearchParams.EnableUncertaintyBoosting = false;
+//      engineDefCeres1.SearchParams.EnableUseSiblingEvaluations = true;
+     engineDefCeres1.SearchParams.TestFlag = true;
 
       //      engineDefCeres1.SelectParams.CPUCT       *= 1.075f;
       //      engineDefCeres1.SelectParams.CPUCTAtRoot *= 1.075f;
@@ -288,7 +283,7 @@ namespace Ceres.APIExamples
       //engineDefCeres1.SelectParams.PolicySoftmax = 1.5f;
 
       //engineDefCeres1.SelectParams.EnableExplorationGuard = true;
-      
+
       //      engineDefCeres1.SearchParams.Execution.FlowDualSelectors = false;
       // TODO: support this in GameEngineDefCeresUCI
       bool forceDisableSmartPruning = limit1.IsNodesLimit;
@@ -350,7 +345,7 @@ namespace Ceres.APIExamples
                                                                          : @$"\\synology\dev\chess\data\epd\{BASE_NAME}.epd",
                                                 playerCeres1, playerCeres2, null);
 
-//        suiteDef.MaxNumPositions = 200;
+        //        suiteDef.MaxNumPositions = 200;
         suiteDef.EPDLichessPuzzleFormat = suiteDef.EPDFileName.ToUpper().Contains("LICHESS");
 
         //suiteDef.EPDFilter = s => !s.Contains(".exe"); // For NICE suite, these represent positions with multiple choices
@@ -401,8 +396,8 @@ namespace Ceres.APIExamples
       def.NumGamePairs = 250; //203;// 500;// 203;//203;// 102; 203
       def.ShowGameMoves = false;
 
-      string baseName = "tcec1819";
-      baseName = "4mvs_+90_+99";
+//      string baseName = "tcec1819";
+string      baseName = "4mvs_+90_+99";
 //      baseName = "book-ply8-unifen-Q-0.25-0.40";
 //      baseName = "test3";
 //      baseName = "tcec_big";
@@ -460,42 +455,172 @@ namespace Ceres.APIExamples
 
     public static void TestSF(int index, bool gitVersion)
     {
-      NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification("LC0:j94-100", "GPU:" + index);
-      GameEngineDefCeres engineDefCeres1 = new GameEngineDefCeres("CeresInProc", evalDef1, null,
-                                                                  new ParamsSearch(), new ParamsSelect(), null,
-                                                                  "CeresSF.log.txt");
+      // Initialize settings by loading configuration file
+      //CeresUserSettingsManager.LoadFromFile(@"c:\dev\ceres\artifacts\release\net5.0\ceres.json");
 
-      SearchLimit limitCeres = SearchLimit.SecondsForAllMoves(60, 1.25f) * 0.15f;
-      SearchLimit limitSF = limitCeres * 1.5f;
+      // Define constants for engine parameters
+      string SF14_EXE = Path.Combine(CeresUserSettingsManager.Settings.DirExternalEngines, "Stockfish14.1.exe");
+      const int SF_THREADS = 8;
+      const int SF_TB_SIZE_MB = 1024;
 
-      GameEngineDef engineDefCeresUCIGit = new GameEngineDefCeresUCI("CeresUCIGit", evalDef1, overrideEXE: @"C:\ceres\releases\v0.88\ceres.exe");
-      EnginePlayerDef playerCeres = new EnginePlayerDef(gitVersion ? engineDefCeresUCIGit : engineDefCeres1,
-                                                        limitCeres);
+      string CERES_NETWORK = CeresUserSettingsManager.Settings.DefaultNetworkSpecString; //"LC0:703810";
+      const string CERES_GPU = "GPU:0";
 
+      string TB_DIR = CeresUserSettingsManager.Settings.DirTablebases;
+      SearchLimit TIME_CONTROL = SearchLimit.SecondsForAllMoves(10, 0.5f); //* 0.15f;            
+      const int NUM_GAME_PAIRS = 50;
+      const string logfile = "ceres.log.txt"; //Path.Combine(CeresUserSettingsManager.Settings.DirCeresOutput, "ceres.log.txt");
 
-      EnginePlayerDef playerSF = new EnginePlayerDef(EngineDefStockfish14(), limitSF);
+      // Define Stockfish engine (via UCI) 
+      GameEngineDefUCI sf14Engine = new GameEngineDefUCI("SF14", new GameEngineUCISpec("SF14", SF14_EXE, SF_THREADS, SF_TB_SIZE_MB, TB_DIR));
 
-      TournamentDef def = new TournamentDef("TOURN", playerCeres, playerSF);
-      def.OpeningsFileName = "4mvs_+90_+99.pgn";// "TCEC1819.pgn";
-      def.NumGamePairs = 250;
-      def.ShowGameMoves = false;
+      // Define Ceres engine (in process) with associated neural network and GPU and parameter customizations
+      NNEvaluatorDef ceresNNDef = NNEvaluatorDefFactory.FromSpecification(CERES_NETWORK, CERES_GPU);
+      GameEngineDefCeres engineDefCeres1 = new GameEngineDefCeres("Ceres1", ceresNNDef, null,
+                                                                  new ParamsSearch() { /* FutilityPruningStopSearchEnabled = false, */ },
+                                                                  new ParamsSelect(),
+                                                                  logFileName: logfile);
 
-      TournamentManager runner = new TournamentManager(def, 1);
-      TournamentGameQueueManager queueManager = null;
+      // Define players using these engines and specified time control
+      EnginePlayerDef playerCeres = new EnginePlayerDef(engineDefCeres1, TIME_CONTROL);
+      EnginePlayerDef playerSF = new EnginePlayerDef(sf14Engine, TIME_CONTROL);
 
-      TournamentResultStats results;
+      // Create a tournament definition
+      TournamentDef tournDef = new TournamentDef("Ceres_vs_Stockfish", playerCeres, playerSF);
+      tournDef.NumGamePairs = NUM_GAME_PAIRS;
+      tournDef.OpeningsFileName = "WCEC.pgn";
+      tournDef.ShowGameMoves = false;
+
+      // Run the tournament
       TimingStats stats = new TimingStats();
-
-
+      TournamentResultStats results;
       using (new TimingBlock(stats, TimingBlock.LoggingType.None))
       {
-
-        results = runner.RunTournament(queueManager);
+        results = new TournamentManager(tournDef).RunTournament();
       }
-
       Console.WriteLine();
       Console.WriteLine($"Tournament completed in {stats.ElapsedTimeSecs,8:F2} seconds.");
       Console.WriteLine(playerCeres + " " + results.GameOutcomesString);
+      Console.ReadLine();
+    }
+
+
+    public static void TestSFLeela(int index, bool gitVersion)
+    {
+      // Define constants for engine parameters  
+      string SF14_EXE = Path.Combine(CeresUserSettingsManager.Settings.DirExternalEngines, "Stockfish14.1.exe");
+      //string leela_EXE = Path.Combine(CeresUserSettingsManager.Settings.DirExternalEngines, "lc0-v0.28.0-windows-gpu-nvidia-cuda", "LC0.exe");
+      const int SF_THREADS = 8;
+      const int SF_TB_SIZE_MB = 1024;
+      string TB_DIR = CeresUserSettingsManager.Settings.DirTablebases;
+      string CERES_NETWORK = CeresUserSettingsManager.Settings.DefaultNetworkSpecString; //"LC0:703810";
+      const string CERES_GPU = "GPU:0";
+
+      SearchLimit TIME_CONTROL = SearchLimit.SecondsForAllMoves(60, 0.5f) * 0.05f;
+      const int NUM_GAME_PAIRS = 1;
+      const string logfile = "CeresRR.log.txt";
+
+      // Define Stockfish engine (via UCI) 
+      GameEngineDefUCI sf14Engine = new GameEngineDefUCI("SF14.1", new GameEngineUCISpec("SF14.1", SF14_EXE, SF_THREADS, SF_TB_SIZE_MB, TB_DIR));
+
+      // Define Ceres engine (in process) with associated neural network and GPU and parameter customizations
+      NNEvaluatorDef ceresNNDef = NNEvaluatorDefFactory.FromSpecification(CERES_NETWORK, CERES_GPU);
+      GameEngineDefCeres engineDefCeres1 = new GameEngineDefCeres("Ceres1", ceresNNDef, null, new ParamsSearch(), new ParamsSelect(), logFileName: logfile);
+      GameEngineDefCeres engineDefCeres2 = new GameEngineDefCeres("Ceres2", ceresNNDef, null, new ParamsSearch(), new ParamsSelect(), logFileName: "ceres2.log.txt");
+
+      // Define Leela engine (in process) with associated neural network and GPU and parameter customizations
+      GameEngineDefLC0 engineDefLC0 = new GameEngineDefLC0("LC0", ceresNNDef, forceDisableSmartPruning: false, null, null);
+
+      // Define players using these engines and specified time control
+      EnginePlayerDef playerCeres1 = new EnginePlayerDef(engineDefCeres1, TIME_CONTROL);
+      EnginePlayerDef playerLeela = new EnginePlayerDef(engineDefLC0, TIME_CONTROL);
+      EnginePlayerDef playerSf14 = new EnginePlayerDef(sf14Engine, TIME_CONTROL);
+      EnginePlayerDef playerCeres2 = new EnginePlayerDef(engineDefCeres2, TIME_CONTROL);
+      EnginePlayerDef playerSf14Slow = new EnginePlayerDef(sf14Engine, TIME_CONTROL * 0.5f, "SF14*0.5");
+
+      // Create a tournament definition
+      TournamentDef tournDef = new TournamentDef("Round Robin Test", playerCeres1, playerSf14, playerLeela);
+      tournDef.ReferenceEngineId = playerCeres1.ID;
+      tournDef.NumGamePairs = NUM_GAME_PAIRS;
+      tournDef.OpeningsFileName = "WCEC_decisive.pgn";
+      tournDef.ShowGameMoves = false;
+
+      // Run the tournament
+      TimingStats stats = new TimingStats();
+      TournamentResultStats results;
+      using (new TimingBlock(stats, TimingBlock.LoggingType.None))
+      {
+        results = new TournamentManager(tournDef).RunTournament();
+      }
+      Console.WriteLine();
+      Console.WriteLine($"Tournament completed in {stats.ElapsedTimeSecs,8:F2} seconds.");
+      Console.ReadLine();
+    }
+
+    public static void TestLeela(int index, bool gitVersion)
+    {
+      // Initialize settings by loading configuration file
+      //CeresUserSettingsManager.LoadFromFile(@"c:\dev\ceres\artifacts\release\net5.0\ceres.json");
+
+      //example code:
+      // SearchLimit TIME_CONTROL = SearchLimit.NodesPerMove(10_000);
+      // for Ceres, set: new ParamsSearch() { FutilityPruningStopSearchEnabled = false, },            
+      // for LC0 player, set in constructor: forceDisableSmartPruning:true
+
+      // Define constants for engine parameters           
+
+      string leela_EXE = Path.Combine(CeresUserSettingsManager.Settings.DirExternalEngines, "lc0-v0.28.0-windows-gpu-nvidia-cuda", "LC0.exe");
+      string CERES_NETWORK = CeresUserSettingsManager.Settings.DefaultNetworkSpecString; //"LC0:703810";
+      const string CERES_GPU = "GPU:0";
+      string TB_DIR = CeresUserSettingsManager.Settings.DirTablebases;
+      SearchLimit TIME_CONTROL = SearchLimit.SecondsForAllMoves(30, 1f) * 0.07f;
+      const string logfileCeres = "ceres.log.txt";
+
+      // Define Ceres engine (in process) with associated neural network and GPU and parameter customizations
+      NNEvaluatorDef ceresNNDef = NNEvaluatorDefFactory.FromSpecification(CERES_NETWORK, CERES_GPU);
+      GameEngineDefCeres engineDefCeres = new GameEngineDefCeres("Ceres-1", ceresNNDef, null,
+                                                                  new ParamsSearch() { /* FutilityPruningStopSearchEnabled = false, */ },
+                                                                  new ParamsSelect(),
+                                                                  logFileName: logfileCeres);
+
+      GameEngineDefCeres engineDef1Ceres = new GameEngineDefCeres("Ceres-2", ceresNNDef, null,
+                                                      new ParamsSearch() { /* FutilityPruningStopSearchEnabled = false, */ },
+                                                      new ParamsSelect(),
+                                                      logFileName: "ceres2.log.txt");
+
+      // Define Leela engine (in process) with associated neural network and GPU and parameter customizations
+      GameEngineDefLC0 engineDefLC0 = new GameEngineDefLC0("LC0-1", ceresNNDef, forceDisableSmartPruning: false, null, null);
+      GameEngineDefLC0 engineDef1LC0 = new GameEngineDefLC0("LC0-2", ceresNNDef, forceDisableSmartPruning: true, null, null);
+
+      //NNEvaluatorDef leelaNNDef = NNEvaluatorDefFactory.FromSpecification($"LC0:{CERES_NETWORK}", CERES_GPU);
+      //GameEngineDefUCI engineDefLeela1 = new GameEngineDefUCI("Leela", new GameEngineUCISpec("LC0",leela_EXE, syzygyPath: TB_DIR));           
+
+      // Define players using these engines and specified time control
+      EnginePlayerDef playerCeres = new EnginePlayerDef(engineDefCeres, TIME_CONTROL);
+      EnginePlayerDef playerCeres2 = new EnginePlayerDef(engineDef1Ceres, TIME_CONTROL);
+      EnginePlayerDef playerLeela = new EnginePlayerDef(engineDefLC0, TIME_CONTROL);
+      EnginePlayerDef playerLeela2 = new EnginePlayerDef(engineDef1LC0, TIME_CONTROL);
+
+
+      // Create a tournament definition
+      TournamentDef tournDef = new TournamentDef("Tournament A", playerCeres, playerLeela, playerLeela2);
+      // Create a tournament definition
+      //TournamentDef tournDef = new TournamentDef("Ceres_vs_Leela", playerCeres, playerLeela);
+      tournDef.NumGamePairs = 1;
+      tournDef.OpeningsFileName = "WCEC_decisive.pgn";
+      tournDef.ShowGameMoves = false;
+
+      // Run the tournament
+      TimingStats stats = new TimingStats();
+      TournamentResultStats results;
+      using (new TimingBlock(stats, TimingBlock.LoggingType.None))
+      {
+        results = new TournamentManager(tournDef).RunTournament();
+      }
+      Console.WriteLine();
+      Console.WriteLine($"Tournament completed in {stats.ElapsedTimeSecs,8:F2} seconds.");
+      Console.WriteLine(playerCeres + " " + results.GameOutcomesString);
+      Console.ReadLine();
     }
 
     static NNEvaluatorDef EvaluatorValueOnly(string netID1, string netID2, int gpuID, bool valueNet1)

@@ -27,6 +27,7 @@ using Chess.Ceres.PlayEvaluation;
 using Ceres.Chess.GameEngines;
 using Ceres.Chess.UserSettings;
 using Ceres.MCTS.Iteration;
+using System.Linq;
 
 #endregion
 
@@ -80,6 +81,7 @@ namespace Ceres.Features.Tournaments
     public float TotalTimeEngine2 = 0;
     public float NumGames;
 
+
     public TournamentGameRunner Run;
 
     int numGamePairsLaunched = 0;
@@ -105,13 +107,22 @@ namespace Ceres.Features.Tournaments
     }
 
     public void RunGameTests(int runnerIndex, Func<int> getGamePairToProcess,
-                             Action<TournamentGameInfo, TournamentGameInfo> doneGamePairCallback = null)     
+                             Action<TournamentGameInfo, TournamentGameInfo> doneGamePairCallback = null)
     {
       Run = new TournamentGameRunner(Def);
 
       // Create a file name that will be common to all threads in tournament.
-      string pgnFileName = Path.Combine(CeresUserSettingsManager.Settings.DirCeresOutput, "match_" + Def.ID + "_"
-                                      + Run.Engine1.ID + "_" + Run.Engine2.ID + "_" + Def.StartTime.Ticks + ".pgn");
+      string pgnFileName;
+      if (Run.Engines.Length > 2)
+      {
+        pgnFileName = Path.Combine(CeresUserSettingsManager.Settings.DirCeresOutput, "match_" + Def.ID + "_"
+                                    + "MultiEngine" + "_" + Def.StartTime.Ticks + ".pgn");
+      }
+      else
+      {
+        pgnFileName = Path.Combine(CeresUserSettingsManager.Settings.DirCeresOutput, "match_" + Def.ID + "_"
+                                    + Run.Engines[0].ID + "_" + Run.Engines[1].ID + "_" + Def.StartTime.Ticks + ".pgn");
+      }
       lock (writePGNLock) File.AppendAllText(pgnFileName, "");
 
       havePrintedHeaders = false;
@@ -152,17 +163,53 @@ namespace Ceres.Features.Tournaments
         // (possibly otherwise all first giving white to one particular side).
         bool engine2White = (numPairsProcessed + runnerIndex) % 2 == 0;
 
-        TournamentGameInfo gameInfo        = RunGame(pgnFileName, engine2White, openingIndex, gameSequenceNum, roundNumber);
-        TournamentGameInfo gameReverseInfo = RunGame(pgnFileName, !engine2White, openingIndex, gameSequenceNum + 1, roundNumber);
+        if (string.IsNullOrEmpty(Def.ReferenceEngineId))
+        {
+          List<GameEngine> list = new List<GameEngine>(Run.Engines);
+          int engine1Index = 0;
+          while (list.Count > 1)
+          {
+            for (int i = 1; i < list.Count; i++)
+            {
+              Run.SetEnginePair(engine1Index, i + engine1Index);
 
-        doneGamePairCallback?.Invoke(gameInfo, gameReverseInfo);
+              TournamentGameInfo gameInfo = RunGame(pgnFileName, engine2White, openingIndex, gameSequenceNum, roundNumber);
+              TournamentGameInfo gameReverseInfo = RunGame(pgnFileName, !engine2White, openingIndex, gameSequenceNum + 1, roundNumber);
+              doneGamePairCallback?.Invoke(gameInfo, gameReverseInfo);
+            }
+            list.RemoveAt(0);
+            engine1Index++;
+          }
+          numPairsProcessed++;
+        }
 
-        numPairsProcessed++;
+        else
+        {
+          GameEngine refEngine = Run.Engines.FirstOrDefault(e => e.ID == Def.ReferenceEngineId);
+          if (refEngine == null)
+            throw new Exception("Error in loading reference engine");
+          int index =  Array.IndexOf(Run.Engines, refEngine);
+          for (int i = 0; i < Run.Engines.Length; i++)
+          {
+            if (index == i)
+            {
+              continue;
+            }
+            GameEngine engineToPair = Run.Engines[i];
+            Run.SetEnginePair(index, i);
+            TournamentGameInfo gameInfo = RunGame(pgnFileName, engine2White, openingIndex, gameSequenceNum, roundNumber);
+            TournamentGameInfo gameReverseInfo = RunGame(pgnFileName, !engine2White, openingIndex, gameSequenceNum + 1, roundNumber);
+            doneGamePairCallback?.Invoke(gameInfo, gameReverseInfo);
+          }
+          numPairsProcessed++;
+        }
       }
 
-      Run.Engine1.Dispose();
-      Run.Engine2.Dispose();
-      Run.Engine2CheckEngine?.Dispose();
+      foreach (GameEngine engine in Run.Engines)
+      {
+        engine.Dispose();
+        Run.Engine2CheckEngine?.Dispose();
+      }
     }
 
     private void SetOpeningsSource()
@@ -197,7 +244,7 @@ namespace Ceres.Features.Tournaments
       tags.Add(("CeresVersion", CeresVersion.VersionString));
       tags.Add(("CeresGIT", GitInfo.VersionString));
 
-      return tags;   
+      return tags;
     }
 
 
@@ -220,7 +267,7 @@ namespace Ceres.Features.Tournaments
 
       // Add some supplemental tags with round number and also
       // information about Ceres engine configuration.
-      var extraTags = GetSupplementalTags(engine2White);
+      List<(string name, string value)> extraTags = GetSupplementalTags(engine2White);
       extraTags.Add(("Round", roundNumber.ToString()));
 
       PGNWriter pgnWriter = new PGNWriter(null, engine2White ? Run.Engine2.ID : Run.Engine1.ID,
@@ -267,7 +314,7 @@ namespace Ceres.Features.Tournaments
     {
       lock (ParentStats)
       {
-        ParentStats.UpdateTournamentStats(thisResult);
+        ParentStats.UpdateTournamentStats(thisResult, Run.Engine1);
       }
 
       // Only show headers first time for first thread
@@ -281,14 +328,18 @@ namespace Ceres.Features.Tournaments
 
     private void OutputGameResultInfo(bool engine2White, int openingIndex, int gameSequenceNum, TournamentGameInfo thisResult)
     {
-      (float eloMin, float eloAvg, float eloMax) = EloCalculator.EloConfidenceInterval(ParentStats.Player1Wins, ParentStats.Draws, ParentStats.Player1Losses);
+      TournamentResultStats engineStat = engine2White ?
+                          ParentStats.GetResultsForPlayer(Run.Engine2.ID, Run.Engine1.ID)
+                          : ParentStats.GetResultsForPlayer(Run.Engine1.ID, Run.Engine2.ID);
+      float gNumber = NumGames + 1;
+      (float eloMin, float eloAvg, float eloMax) = EloCalculator.EloConfidenceInterval(engineStat.Player1Wins, engineStat.Draws, engineStat.Player1Losses);
       float eloSD = eloMax - eloAvg;
-      float los = EloCalculator.LikelihoodSuperiority(ParentStats.Player1Wins, ParentStats.Draws, ParentStats.Player1Losses);
+      float los = EloCalculator.LikelihoodSuperiority(engineStat.Player1Wins, engineStat.Draws, engineStat.Player1Losses);
 
-      string wdlStr = $"{ParentStats.Player1Wins,3} {ParentStats.Draws,3} {ParentStats.Player1Losses,3}";
+      string wdlStr = $"{engineStat.Player1Wins,3} {engineStat.Draws,3} {engineStat.Player1Losses,3}";
 
       // Show a "." after the opening index if this was the second of the pair of games played.
-      string openingPlayedBothWaysStr = openingsFinishedAtLeastOnce.Contains(openingIndex) ? "." : " ";
+      string openingPlayedBothWaysStr = gameSequenceNum % 2 == 1 && openingsFinishedAtLeastOnce.Contains(openingIndex) ? "." : " ";
 
       string player1ForfeitChar = thisResult.ShouldHaveForfeitedOnLimitsEngine1 ? "f" : " ";
       string player2ForfeitChar = thisResult.ShouldHaveForfeitedOnLimitsEngine2 ? "f" : " ";
@@ -335,12 +386,24 @@ namespace Ceres.Features.Tournaments
       {
         string checkEnginePlyDifferent = thisResult.NumEngine2MovesDifferentFromCheckEngine == 0 ? "   " : $"{thisResult.NumEngine2MovesDifferentFromCheckEngine,3:N0}";
         if (Def.ShowGameMoves) Def.Logger.WriteLine();
-        Def.Logger.Write($" {TrimmedIfNeeded(Def.Player1Def.ID, 10),-10} {TrimmedIfNeeded(Def.Player2Def.ID, 10),-10}");
+        if (engine2White)
+          Def.Logger.Write($" {TrimmedIfNeeded(Def.Player2Def.ID, 10),-10} {TrimmedIfNeeded(Def.Player1Def.ID, 10),-10}");
+        else
+          Def.Logger.Write($" {TrimmedIfNeeded(Def.Player1Def.ID, 10),-10} {TrimmedIfNeeded(Def.Player2Def.ID, 10),-10}");
         Def.Logger.Write($"{eloAvg,4:0} {eloSD,4:0} {100.0f * los,5:0}  ");
-        Def.Logger.Write($"{ParentStats.NumGames,5} {DateTime.Now.ToString().Split(" ")[1],10}  {gameSequenceNum,4:F0}  {openingIndex,4:F0}{openingPlayedBothWaysStr}  ");
-        Def.Logger.Write($"{thisResult.TotalTimeEngine1,8:F2}{player1ForfeitChar}{thisResult.RemainingTimeEngine1,7:F2} ");
-        Def.Logger.Write($"{thisResult.TotalTimeEngine2,8:F2}{player2ForfeitChar}{thisResult.RemainingTimeEngine2,7:F2}  ");
-        Def.Logger.Write($"{thisResult.TotalNodesEngine1,16:N0} {thisResult.TotalNodesEngine2,16:N0}   ");
+        Def.Logger.Write($"{gNumber,5} {DateTime.Now.ToString().Split(" ")[1],10}  {gameSequenceNum,4:F0}  {openingIndex,4:F0}{openingPlayedBothWaysStr}  ");
+        if (engine2White)
+        {
+          Def.Logger.Write($"{thisResult.TotalTimeEngine2,8:F2}{player2ForfeitChar}{thisResult.RemainingTimeEngine2,7:F2} ");
+          Def.Logger.Write($"{thisResult.TotalTimeEngine1,8:F2}{player1ForfeitChar}{thisResult.RemainingTimeEngine1,7:F2}  ");
+          Def.Logger.Write($"{thisResult.TotalNodesEngine2,16:N0} {thisResult.TotalNodesEngine1,16:N0}   ");
+        }
+        else
+        {
+          Def.Logger.Write($"{thisResult.TotalTimeEngine1,8:F2}{player1ForfeitChar}{thisResult.RemainingTimeEngine1,7:F2} ");
+          Def.Logger.Write($"{thisResult.TotalTimeEngine2,8:F2}{player2ForfeitChar}{thisResult.RemainingTimeEngine2,7:F2}  ");
+          Def.Logger.Write($"{thisResult.TotalNodesEngine1,16:N0} {thisResult.TotalNodesEngine2,16:N0}   ");
+        }
 
         if (Def.CheckPlayer2Def != null)
         {
@@ -597,7 +660,7 @@ namespace Ceres.Features.Tournaments
         {
           return MakeGameInfo(TournamentGameResult.Draw, TournamentGameResultReason.AdjudicateMaterial);
         }
-        else if( curPositionAndMoves.FinalPosition.CheckDrawCanBeClaimed == Position.PositionDrawStatus.DrawCanBeClaimed)
+        else if (curPositionAndMoves.FinalPosition.CheckDrawCanBeClaimed == Position.PositionDrawStatus.DrawCanBeClaimed)
         {
           return MakeGameInfo(TournamentGameResult.Draw, TournamentGameResultReason.Repetition);
         }
@@ -655,7 +718,7 @@ namespace Ceres.Features.Tournaments
             moveStat = new GameMoveStat(plyCount, SideType.White, info.WhiteScoreQ, info.WhiteScoreCentipawns, engine1.CumulativeSearchTimeSeconds, numPieces, info.WhiteMAvg, info.WhiteFinalN, info.WhiteNumNodesComputed, info.WhiteSearchLimitPre, info.WhiteMoveTimeUsed);
           }
         }
-        
+
 
         gameMoveHistory.Add(moveStat);
 
@@ -679,12 +742,12 @@ namespace Ceres.Features.Tournaments
           SearchLimitType.NodesPerMove => searchLimit,
           SearchLimitType.NodesForAllMoves => new SearchLimit(SearchLimitType.NodesForAllMoves,
                                                               Math.Max(0, searchLimit.Value - totalVisitsUsed),
-                                                              searchLimit.SearchCanBeExpanded, 
+                                                              searchLimit.SearchCanBeExpanded,
                                                               searchLimit.ValueIncrement,
                                                               searchLimit.MaxMovesToGo),
           SearchLimitType.SecondsForAllMoves => new SearchLimit(SearchLimitType.SecondsForAllMoves,
                                                                 MathF.Max(0, searchLimit.Value - totalTimeUsed),
-                                                                searchLimit.SearchCanBeExpanded, 
+                                                                searchLimit.SearchCanBeExpanded,
                                                                 searchLimit.ValueIncrement,
                                                                 searchLimit.MaxMovesToGo),
           _ => throw new Exception($"Internal error, unknown SearchLimit.LimitType {searchLimit.Type}")
