@@ -96,6 +96,12 @@ namespace Ceres.Features.Tournaments
     /// </summary>
     public List<TournamentResultStats> Results { get; set; }
 
+    /// <summary>
+    /// List of detailed information about each tournament game.
+    /// </summary>
+    public List<TournamentGameInfo> GameInfos = new List<TournamentGameInfo>();
+
+
     public TournamentResultStats()
     {
       Results = new List<TournamentResultStats>();

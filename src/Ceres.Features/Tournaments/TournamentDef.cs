@@ -120,6 +120,17 @@ namespace Ceres.Features.Tournaments
     /// </summary>
     public readonly DateTime StartTime;
 
+    /// <summary>
+    /// If the touranment has been instructed to shut down (e.g. Ctrl-C pressed).
+    /// </summary>
+    public bool ShouldShutDown = false;
+
+    /// <summary>
+    /// The parent object (if this object was created by Clone method, otherwise this);
+    /// </summary>
+    internal TournamentDef parentDef;
+
+
     public TournamentDef(string id, params EnginePlayerDef[] engines)
     {
       if (engines.Length < 2)
@@ -138,12 +149,15 @@ namespace Ceres.Features.Tournaments
           throw new Exception("playerDef must be different from each other");
         }
       }
+
+      parentDef = this;
     }
 
     public TournamentDef Clone()
     {
       TournamentDef clone = ObjUtils.DeepClone<TournamentDef>(this);
       clone.Logger = this.Logger;
+      clone.parentDef = this;
       return clone;
     }
 
