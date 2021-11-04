@@ -539,11 +539,12 @@ string      baseName = "4mvs_+90_+99";
       EnginePlayerDef playerSf14Slow = new EnginePlayerDef(sf14Engine, TIME_CONTROL * 0.5f, "SF14*0.5");
 
       // Create a tournament definition
-      TournamentDef tournDef = new TournamentDef("Round Robin Test", playerCeres1, playerSf14, playerLeela);
-      tournDef.ReferenceEngineId = playerCeres1.ID;
+      TournamentDef tournDef = new TournamentDef("Round Robin Test", playerCeres1, playerSf14, playerLeela);      
+      //tournDef.ReferenceEngineId = playerCeres1.ID;
       tournDef.NumGamePairs = NUM_GAME_PAIRS;
-      tournDef.OpeningsFileName = "WCEC_decisive.pgn";
+      tournDef.OpeningsFileName = "WCEC.pgn";
       tournDef.ShowGameMoves = false;
+
 
       // Run the tournament
       TimingStats stats = new TimingStats();

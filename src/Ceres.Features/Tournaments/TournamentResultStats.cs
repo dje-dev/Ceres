@@ -32,6 +32,8 @@ namespace Ceres.Features.Tournaments
     /// Table to store Win-Draw-Loss statistics against each opponent
     /// </summary>
     public Dictionary<string, (int, int, int)> Opponents { get; set; } = new Dictionary<string, (int, int, int)>();
+    
+    public List<float> NodesPerMoveList { get; set; } = new List<float>();
 
     /// <summary>
     /// Name of player 1.
@@ -115,10 +117,14 @@ namespace Ceres.Features.Tournaments
     /// </summary>
     public void DumpTournamentSummary(string referenceId)
     {
+      Console.WriteLine();
       Console.WriteLine("Tournament summary:");
       DumpEngineTournamentSummary(referenceId);
-      Console.WriteLine();
+      Console.WriteLine("Tournament round robin score table (W-D-L):");
       DumpRoundRobinResultTable(referenceId);
+      Console.WriteLine();
+      Console.WriteLine("Tournament round robin Elo table (W-D-L):");
+      DumpRoundRobinEloTable(referenceId);
       Console.WriteLine();
     }
 
@@ -127,16 +133,18 @@ namespace Ceres.Features.Tournaments
     /// </summary>
     void DumpEngineTournamentSummary(string referenceId)
     {
-      int width = 180;
-      PrintLine(width);
-      List<string> header = new List<string>() { "Player", "Rating", "Error +/-", "CFS (%)", "Points", "Played", "W-D-L", "D(%)", "Time", "Nodes" };
-      PrintCenterAlignedRow(header, width);
-      PrintLine(width);
+      int maxWidth = 144;
+      PrintLine(maxWidth);
+      List<(string,int)> header = new List<(string,int)>
+        { ("Player",25), ("Rating", 10), ("Err +/-",8), ("CFS(%)", 8), ("Points",8), 
+          ("Played", 8), ("W-D-L", 13), ("D(%)",8), ("Time",12), ("Nodes",18), ("NPS", 14) };
+      PrintHeaderRow(header, maxWidth);
+      PrintLine(maxWidth);
       foreach (TournamentResultStats engine in Results)
       {
-        WriteEngineSummary(engine, width, referenceId);
+        WriteEngineSummary(engine, maxWidth, referenceId);
       }
-      PrintLine(width);
+      PrintLine(maxWidth);
       Console.WriteLine();
     }
 
@@ -157,17 +165,17 @@ namespace Ceres.Features.Tournaments
       double draws = engineStat.Draws / (double)engineStat.NumGames;
       long nodes = engineStat.Player1TotalNodes;
       float time = engineStat.Player1TotalTime;
-      List<string> rowItems = new ()
-                { playerInfo, avg.ToString("F0"), error, cfs.ToString("P0"), score.ToString("F1"),
-                engineStat.NumGames.ToString(), wdl, draws.ToString("P2"), {time.ToString("F2")}, {nodes.ToString("N0")} };
+      List<(string,int)> rowItems = new ()
+                { (playerInfo,25), (avg.ToString("F0"),10), (error,8), (cfs.ToString("P0"),8), (score.ToString("F1"), 8),
+                 (engineStat.NumGames.ToString(),8), (wdl,13), (draws.ToString("P2"),8), {(time.ToString("F2"),12)}, 
+                {(nodes.ToString("N0") + " ",18)}, {((nodes/time).ToString("N0") + " ", 14) } };
       PrintEngineRow(rowItems, width);
     }
 
     public void DumpRoundRobinResultTable(string referenceId)
     {
       //decide total width for table
-      int totalWidth = 20 * Results.Count;
-      Console.WriteLine("Tournament round robin table (W-D-L):");
+      int totalWidth = 20 * Results.Count;      
       DumpHeadingTable(totalWidth);
       if (string.IsNullOrEmpty(referenceId))
       {
@@ -186,6 +194,33 @@ namespace Ceres.Features.Tournaments
         }
         int index = Results.IndexOf(id);
         IEnumerable<string> row = CreateRoundRobinRow(index);
+        PrintCenterAlignedRow(row, totalWidth);
+      }
+      PrintLine(totalWidth);
+    }
+
+    public void DumpRoundRobinEloTable(string referenceId)
+    {
+      //decide total width for table
+      int totalWidth = 25 * Results.Count;      
+      DumpHeadingTable(totalWidth);
+      if (string.IsNullOrEmpty(referenceId))
+      {
+        for (int i = 0; i < Results.Count; i++)
+        {
+          IEnumerable<string> row = CreateRoundRobinEloStats(i);
+          PrintCenterAlignedRow(row, totalWidth);
+        }
+      }
+      else
+      {
+        TournamentResultStats id = Results.FirstOrDefault(e => e.Player1 == referenceId);
+        if (id == null)
+        {
+          throw new Exception("Reference engine not found in Result table");
+        }
+        int index = Results.IndexOf(id);
+        IEnumerable<string> row = CreateRoundRobinEloStats(index);
         PrintCenterAlignedRow(row, totalWidth);
       }
       PrintLine(totalWidth);
@@ -276,6 +311,22 @@ namespace Ceres.Features.Tournaments
       player2.Player1TotalNodes += thisResult.TotalNodesEngine2;
       player1.Player1TotalTime += thisResult.TotalTimeEngine1;
       player2.Player1TotalTime += thisResult.TotalTimeEngine2;
+
+      //todo - update node and time stats for enabling median calculation of nps and time use
+      foreach (var item in thisResult.GameMoveHistory)
+      {
+        if (item.Side == Chess.SideType.Black)        
+          player2.NodesPerMoveList.Add(item.NodesPerSecond);
+        
+        else
+          player1.NodesPerMoveList.Add(item.NodesPerSecond);
+      }
+
+      //debugging
+      float avgP1 = player1.NodesPerMoveList.Average();
+      float avgP2 = player2.NodesPerMoveList.Average();
+      string msg = $"Player1 avg nps: {avgP1:N0}, Player2 avg nps: {avgP2:N0}";
+      Console.WriteLine(msg);
     }
 
     /// <summary>
@@ -298,6 +349,19 @@ namespace Ceres.Features.Tournaments
     /// <param name="columns"></param>
     /// <param name="maxWidth"></param>
 
+    void PrintHeaderRow(IEnumerable<(string,int)> columns, int maxWidth)
+    {
+      //int Columnwidth = (maxWidth - columns.Count()) / columns.Count();
+      string row = "|";
+
+      foreach ((string txt, int width) in columns)
+      {
+        row += AlignCentre(txt, width) + "|";
+      }
+
+      Console.WriteLine(row);
+    }
+
     void PrintCenterAlignedRow(IEnumerable<string> columns, int maxWidth)
     {
       int Columnwidth = (maxWidth - columns.Count()) / columns.Count();
@@ -311,7 +375,7 @@ namespace Ceres.Features.Tournaments
       Console.WriteLine(row);
     }
 
-    void PrintEngineRow(List<string> columns, int maxWidth)
+    void PrintEngineRow(List<(string,int)> columns, int maxWidth)
     {
       int numberOfColumns = columns.Count();
       int Columnwidth = (maxWidth - columns.Count()) / columns.Count();
@@ -319,10 +383,11 @@ namespace Ceres.Features.Tournaments
 
       for (int i = 0; i < numberOfColumns; i++)
       {
-        if (i == numberOfColumns - 1)
-          row += AlignRight(columns[i], Columnwidth) + "|";
+        var (txt,width) = columns[i];
+        if (i > numberOfColumns - 3)
+          row += AlignRight(txt, width) + "|";
         else
-          row += AlignCentre(columns[i], Columnwidth) + "|";
+          row += AlignCentre(txt, width) + "|";
       }
 
       Console.WriteLine(row);
@@ -390,6 +455,35 @@ namespace Ceres.Features.Tournaments
 
         var (win, draw, loss) = opponent.Value;
         yield return $"{win}-{draw}-{loss}";
+        counter++;
+      }
+
+      if (row + 1 == Results.Count)
+      {
+        yield return empty;
+      }
+    }
+
+
+    IEnumerable<string> CreateRoundRobinEloStats(int row)
+    {
+      const string empty = "-------";
+      int counter = 0;
+      TournamentResultStats stat = Results[row];
+      yield return stat.Player1;
+      foreach (KeyValuePair<string, (int, int, int)> opponent in stat.Opponents)
+      {
+        if (row == counter)
+        {
+          yield return empty;
+        }
+
+        var (win, draw, loss) = opponent.Value;
+        var eloPerf = EloCalculator.EloDiff(win,draw,loss).ToString("F0");
+        var (min,avg,max) = EloCalculator.EloConfidenceInterval(win,draw,loss);
+        var error = (max - avg).ToString("F0");
+        var msg = $"{eloPerf} +/- {error: F0}";
+        yield return msg;
         counter++;
       }
 
