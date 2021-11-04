@@ -136,7 +136,7 @@ namespace Ceres.Features.Tournaments
 
       int maxOpenings = Math.Min(Def.NumGamePairs ?? int.MaxValue, openings.Count);
 
-      while (true)
+      while (!Def.parentDef.ShouldShutDown)
       {
         int openingIndex = getGamePairToProcess();
 
@@ -328,6 +328,8 @@ namespace Ceres.Features.Tournaments
 
     private void OutputGameResultInfo(bool engine2White, int openingIndex, int gameSequenceNum, TournamentGameInfo thisResult)
     {
+      ParentStats.GameInfos.Add(thisResult);
+
       TournamentResultStats engineStat = engine2White ?
                           ParentStats.GetResultsForPlayer(Run.Engine2.ID, Run.Engine1.ID)
                           : ParentStats.GetResultsForPlayer(Run.Engine1.ID, Run.Engine2.ID);

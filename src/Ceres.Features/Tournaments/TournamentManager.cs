@@ -23,6 +23,7 @@ using Ceres.Chess.UserSettings;
 using Ceres.Features.GameEngines;
 using Ceres.Chess;
 using Ceres.Features.Players;
+using System.Threading;
 
 #endregion
 
@@ -165,6 +166,8 @@ namespace Ceres.Features.Tournaments
     }
 
 
+    internal ManualResetEvent shutdownComplete = new (false);
+
     /// <summary>
     /// 
     /// </summary>
@@ -172,6 +175,9 @@ namespace Ceres.Features.Tournaments
     /// <returns></returns>
     public TournamentResultStats RunTournament(TournamentGameQueueManager queueManager = null)
     {
+      shutdownComplete.Reset();
+      Def.ShouldShutDown = false;
+        
       if (Def.Engines.Length > 0)
       {
         foreach (EnginePlayerDef engine in Def.Engines)
@@ -187,6 +193,16 @@ namespace Ceres.Features.Tournaments
 
 
       VerifyEnginesCompatible();
+
+      // Install Ctrl-C handler to allow ad hoc clean termination of tournament (with stats).
+      ConsoleCancelEventHandler ctrlCHandler = new ConsoleCancelEventHandler((object sender, 
+        ConsoleCancelEventArgs args) => 
+        {
+          Console.WriteLine("Tournament pending shutdown....");
+          Def.parentDef.ShouldShutDown = true;
+          shutdownComplete.WaitOne();
+        }); ;
+      Console.CancelKeyPress += ctrlCHandler;
 
       QueueManager = queueManager;
       TournamentResultStats parentTest = new();
@@ -273,6 +289,9 @@ namespace Ceres.Features.Tournaments
       Def.Logger.WriteLine();
 
       parentTest.DumpTournamentSummary(Def.ReferenceEngineId);
+
+      shutdownComplete.Set();
+
       return parentTest;
     }
 

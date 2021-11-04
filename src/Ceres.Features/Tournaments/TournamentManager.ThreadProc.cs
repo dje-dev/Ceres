@@ -68,6 +68,7 @@ namespace Ceres.Features.Tournaments
           string pgnFileName = null; // TODO: collect these someday as well?
           gameTest.UpdateStatsAndOutputSummaryFromGameResult(pgnFileName, gameInfo.Engine2IsWhite, gameInfo.OpeningIndex, gameInfo.GameSequenceNum, gameInfo);
           gameTest.UpdateStatsAndOutputSummaryFromGameResult(pgnFileName, gameReverseInfo.Engine2IsWhite, gameReverseInfo.OpeningIndex, gameReverseInfo.GameSequenceNum, gameReverseInfo);
+          
 //Console.WriteLine("Count now " + gameTest.NumGames);
         }
         catch (Exception exc)
