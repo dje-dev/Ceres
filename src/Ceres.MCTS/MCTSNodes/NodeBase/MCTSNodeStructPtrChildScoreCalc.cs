@@ -153,7 +153,7 @@ namespace Ceres.MCTS.MTCSNodes
       }
 #endif
 
-      const int MIN_N_USE_UNCERTAINTY = 30; // only use once sufficient data to be reliable
+      const int MIN_N_USE_UNCERTAINTY = 50; // only use once sufficient data to be reliable
 
       if (N > MIN_N_USE_UNCERTAINTY && Context.ParamsSearch.EnableUncertaintyBoosting)
       {

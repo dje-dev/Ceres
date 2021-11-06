@@ -430,7 +430,7 @@ namespace Ceres.Features.UCI
           case "dump-move-stats":
             if (CeresEngine?.Search != null)
             {
-              OutputVerboseMoveStats(CeresEngine.Search.SearchRootNode);
+              OutputVerboseMoveStats();
             }
             else
               UCIWriteLine("info string No search manager created");
@@ -825,7 +825,7 @@ namespace Ceres.Features.UCI
         }
 
       }
-      if (verboseMoveStats && (logLiveStats || isFinalInfo)) OutputVerboseMoveStats(CeresEngine.Search.SearchRootNode);
+      if (verboseMoveStats && (logLiveStats || isFinalInfo)) OutputVerboseMoveStats();
     }
 
     /// <summary>
@@ -834,10 +834,12 @@ namespace Ceres.Features.UCI
     /// </summary>
     bool ShouldUseLC0FormatForVerboseMoves => logLiveStats;
 
-    void OutputVerboseMoveStats(MCTSNode searchRootNode)
+    void OutputVerboseMoveStats()
     {
+
       using (new SearchContextExecutionBlock(CeresEngine.Search.Manager.Context))
       {
+        MCTSNode searchRootNode = CeresEngine.Search.SearchRootNode;
         if (ShouldUseLC0FormatForVerboseMoves)
         {
           foreach (LC0VerboseMoveStat stat in LC0VerboseMoveStatsFromMCTSNode.BuildStats(searchRootNode))

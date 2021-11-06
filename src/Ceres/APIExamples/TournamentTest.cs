@@ -54,7 +54,7 @@ namespace Ceres.APIExamples
   {
     const bool POOLED = false;
 
-    static int CONCURRENCY = POOLED ? 16 : 2;
+    static int CONCURRENCY = POOLED ? 12 : 4;
     static bool RUN_DISTRIBUTED = false;
 
 
@@ -124,7 +124,7 @@ namespace Ceres.APIExamples
       NET1 = "66511";
       NET2 = "66511";
 
-      NET1 = "760609";
+      NET1 = "760751";
       NET2 = "42767";// "753723";
       NET1 = @"ONNX_ORT:d:\weights\lczero.org\hydra_t00-attn.gz.onnx";// "apv4_t14";// apv4_t16";
       NET2 = @"ONNX_ORT:d:\weights\lczero.org\apv4_t16.onnx";
@@ -147,8 +147,8 @@ namespace Ceres.APIExamples
       //NET1 = @"LC0:hydra_t00-attn.onnx";// "apv4_t14";// apv4_t16";
       //      string NET1_SECONDARY1 = "j94-100";
 
-      //      NET1 = "baseline02#8";
-      //      NET2 = "baseline02#16";
+      NET1 = "LS15";
+      NET2 = "LS15";
 
       NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification(NET1, GPUS); // j64-210 LS16 40x512-lr015-swa-167500
       NNEvaluatorDef evalDef2 = NNEvaluatorDefFactory.FromSpecification(NET2, GPUS); ;
@@ -173,14 +173,14 @@ namespace Ceres.APIExamples
         evalDef2.MakePersistent();
       }
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(1);
+      SearchLimit limit1 = SearchLimit.NodesPerMove(20_000);
       //limit1 = SearchLimit.NodesForAllMoves(1_000_000, 10_000);
 
       // 140 good for 203 pairs, 300 good for 100 pairs
       //      limit1 = SearchLimit.SecondsForAllMovess(90, 1f);
-      limit1 = SearchLimit.SecondsForAllMoves(100, 0.5f) * 0.2f;
-      //limit1 = SearchLimit.SecondsPerMove(1);
-//limit1 = SearchLimit.SecondsForAllMoves(50, 0.1f) * 1.1f;
+      //      limit1 = SearchLimit.SecondsForAllMoves(120, 0.5f);
+      //      limit1 = SearchLimit.SecondsPerMove(1f);
+      limit1 = SearchLimit.SecondsForAllMoves(2, 0.1f) * 5;
 //ok      limit1 = SearchLimit.NodesPerMove(350_000); try test3.pgn against T75 opponent Ceres93 (in first position, 50% of time misses win near move 12
       
       SearchLimit limit2 = limit1;
@@ -193,13 +193,17 @@ namespace Ceres.APIExamples
       GameEngineDefCeres engineDefCeres2 = new GameEngineDefCeres("Ceres2", evalDef2, evalDefSecondary2, new ParamsSearch(), new ParamsSelect(),
                                                                   null, outputLog ? "Ceres2.log.txt" : null);
 
-//      engineDefCeres1.SearchParams.EnableUseSiblingEvaluations = true;
-     engineDefCeres1.SearchParams.TestFlag = true;
+      //      engineDefCeres1.SearchParams.EnableUseSiblingEvaluations = true;
+      engineDefCeres1.SearchParams.TestFlag2 = true;
+      //      engineDefCeres1.SelectParams.CPUCTAtRoot *= 1.33f;
+      //      engineDefCeres2.SelectParams.CPUCTAtRoot *= 1.33f;
 
       //      engineDefCeres1.SelectParams.CPUCT       *= 1.075f;
-      //      engineDefCeres1.SelectParams.CPUCTAtRoot *= 1.075f;
 
-      //      engineDefCeres1.SearchParams.EnableUseSiblingEvaluations = true;
+      //engineDefCeres1.SearchParams.TestFlag = true;
+
+      //engineDefCeres1.SearchParams.EnableUseSiblingEvaluations = false;
+      //engineDefCeres2.SearchParams.EnableUseSiblingEvaluations = false;
 
       //      engineDefCeres1.SearchParams.EnableTablebases = false;
       //engineDefCeres1.SearchParams.Execution.FlowDirectOverlapped = false;
@@ -327,7 +331,7 @@ namespace Ceres.APIExamples
 
       EnginePlayerDef playerEthereal = new EnginePlayerDef(engineDefEthereal, limit2);
       EnginePlayerDef playerStockfish11 = new EnginePlayerDef(engineDefStockfish11, limit2);
-      EnginePlayerDef playerStockfish14 = new EnginePlayerDef(EngineDefStockfish14(), limit2);// * 350);
+      EnginePlayerDef playerStockfish14 = new EnginePlayerDef(EngineDefStockfish14(), limit2 * 0.5f);// * 350);
       EnginePlayerDef playerLC0 = ENABLE_LC0 ? new EnginePlayerDef(engineDefLC1, limit1) : null;
       EnginePlayerDef playerLC0_2 = ENABLE_LC0 ? new EnginePlayerDef(engineDefLC2, limit2) : null;
 
@@ -335,7 +339,7 @@ namespace Ceres.APIExamples
 
       if (false)
       {
-        string BASE_NAME = "ERET";// nice_lcx Stockfish238 ERET_VESELY203 endgame2
+        string BASE_NAME = "ERET_VESELY203";// nice_lcx Stockfish238 ERET_VESELY203 endgame2
 
         // ===============================================================================
         SuiteTestDef suiteDef = new SuiteTestDef("Suite",
@@ -388,19 +392,20 @@ namespace Ceres.APIExamples
 #endif
       }
 
-      TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerCeres2);
+      TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerCeres2, playerStockfish14);
+      def.ReferenceEngineId = playerStockfish14.ID;
       //        TournamentDef def = new TournamentDef("TOURN", playerCeres1UCI, playerCeres93);
       //TournamentDef def = new TournamentDef("TOURN", playerCeres93, playerCeres1);
 
 
-      def.NumGamePairs = 250; //203;// 500;// 203;//203;// 102; 203
+      def.NumGamePairs = 203;// 500;// 203;//203;// 102; 203
       def.ShowGameMoves = false;
 
 //      string baseName = "tcec1819";
 string      baseName = "4mvs_+90_+99";
 //      baseName = "book-ply8-unifen-Q-0.25-0.40";
 //      baseName = "test3";
-//      baseName = "tcec_big";
+      baseName = "tcec_big";
 //      baseName = "endgame-16-piece-book_Q-0.0-0.6_1";
       def.OpeningsFileName = SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/openings/{baseName}.pgn"
                                                      : @$"\\synology\dev\chess\data\openings\{baseName}.pgn";
