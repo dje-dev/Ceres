@@ -70,7 +70,7 @@ namespace Ceres.MCTS.Params
     public float CPUCTBase = USE_ZZTUNE ? 38739 : 18368;
 
     [CeresOption(Name = "cpuct-factor", Desc = "Constant (factor) used in node selection to weight exploration", Default = "2.82")]
-    public float CPUCTFactor = USE_ZZTUNE ? 3.894f : 2.82f;
+    public float CPUCTFactor = USE_ZZTUNE ? (0.80f * 3.894f) : 2.82f;
 
 
     [CeresOption(Name = "cpuct-at-root", Desc = "Scaling used in node selection (at root) to encourage exploration (traditional UCT)", Default = "3")]
