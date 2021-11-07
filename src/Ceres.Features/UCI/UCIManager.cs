@@ -389,7 +389,7 @@ namespace Ceres.Features.UCI
           case "dump-time":
             if (CeresEngine?.Search != null)
             {
-              CeresEngine.Search.Manager.DumpTimeInfo(OutStream);
+              CeresEngine.Search.Manager.DumpTimeInfo(OutStream, CeresEngine.Search.SearchRootNode);
             }
             else
             {

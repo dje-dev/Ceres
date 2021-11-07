@@ -105,7 +105,7 @@ namespace Ceres.MCTS.Iteration
           writer.WriteLine(infoUpdate);
 
           writer.WriteLine();
-          DumpTimeInfo(writer);
+          DumpTimeInfo(writer, searchRootNode);
 
           writer.WriteLine();
           searchRootNode.Dump(1, 1, writer: writer);
@@ -130,31 +130,35 @@ namespace Ceres.MCTS.Iteration
     /// Dumps information relating to the timing 
     /// and best moves selection from the last move made.
     /// </summary>
-    public void DumpTimeInfo(TextWriter writer = null)
+    public void DumpTimeInfo(TextWriter writer = null, MCTSNode searchRootNode = default)
     {
       writer = writer ?? Console.Out;
+      searchRootNode = searchRootNode.IsNotNull ? searchRootNode : Root;
 
-      if (StopStatus != SearchStopStatus.Instamove
-       && StopStatus != SearchStopStatus.TablebaseImmediateMove)
+      using (new SearchContextExecutionBlock(this.Context))
       {
-        writer.WriteLine();
-        writer.WriteLine($"StartTimeFirstVisit        {StartTimeFirstVisit}");
-        writer.WriteLine($"StartTimeThisSearch        {StartTimeThisSearch}");
+
+        if (StopStatus != SearchStopStatus.Instamove
+         && StopStatus != SearchStopStatus.TablebaseImmediateMove)
+        {
+          writer.WriteLine();
+          writer.WriteLine($"StartTimeFirstVisit        {StartTimeFirstVisit}");
+          writer.WriteLine($"StartTimeThisSearch        {StartTimeThisSearch}");
+        }
+
+        writer.WriteLine($"Root N                     {searchRootNode.N,14:N0}");
+        writer.WriteLine($"RootNWhenSearchStarted     {RootNWhenSearchStarted,14:N0}");
+
+        writer.WriteLine($"SearchLimit.Type           {SearchLimit.Type}");
+        writer.WriteLine($"SearchLimit.Value          {SearchLimit.Value,14:N2}");
+        writer.WriteLine($"Elapsed Search Time        {(DateTime.Now - StartTimeThisSearch).TotalSeconds,14:F2}");
+
+        writer.WriteLine($"FractionSearchRemaining    {FractionSearchRemaining,14:F3}");
+        writer.WriteLine($"Estimated NPS              {EstimatedNPS,14:N0}");
+
+        writer.WriteLine($"EstimatedNumStepsRemaining {EstimatedNumVisitsRemaining(),14:N0}");
       }
-
-      writer.WriteLine($"Root N                     {Root.N,14:N0}");
-      writer.WriteLine($"RootNWhenSearchStarted     {RootNWhenSearchStarted,14:N0}");
-
-      writer.WriteLine($"SearchLimit.Type           {SearchLimit.Type}");
-      writer.WriteLine($"SearchLimit.Value          {SearchLimit.Value,14:N2}");
-      writer.WriteLine($"Elapsed Search Time        {(DateTime.Now - StartTimeThisSearch).TotalSeconds,14:F2}");
-
-      writer.WriteLine($"FractionSearchRemaining    {FractionSearchRemaining,14:F3}");
-      writer.WriteLine($"Estimated NPS              {EstimatedNPS,14:N0}");
-
-      writer.WriteLine($"EstimatedNumStepsRemaining {EstimatedNumVisitsRemaining(),14:N0}");
     }
-
   }
 
 }
