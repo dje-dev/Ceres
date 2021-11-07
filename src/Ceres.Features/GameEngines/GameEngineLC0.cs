@@ -166,7 +166,8 @@ namespace Ceres.Features.GameEngines
       float boundedCP = StatUtils.Bounded(lc0Analysis.ScoreCentipawns, - 9999, 9999);
       float lc0Q = EncodedEvalLogistic.CentipawnToLogistic(boundedCP);
       return new GameEngineSearchResult(lc0Analysis.BestMove, lc0Q, boundedCP, float.NaN,
-                                        searchLimit, default, 0, (int)lc0Analysis.NumNodes, (int)lc0Analysis.UCIInfo.Depth);
+                                        searchLimit, default, 0, (int)lc0Analysis.NumNodes,
+                                        lc0Analysis.UCIInfo.NPS, (int)lc0Analysis.UCIInfo.Depth);
     }
 
     /// <summary>

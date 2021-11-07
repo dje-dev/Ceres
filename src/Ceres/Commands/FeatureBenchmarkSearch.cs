@@ -69,7 +69,7 @@ namespace Ceres.Commands
 
 
       NNEvaluatorDef evaluatorDef = new NNEvaluatorDef(NetworkSpec.ComboType, NetworkSpec.NetDefs,
-                                                       DeviceSpec.ComboType, DeviceSpec.Devices);
+                                                       DeviceSpec.ComboType, DeviceSpec.Devices, null);
       Benchmark(evaluatorDef, SearchLimit, withLC0);
     }
 

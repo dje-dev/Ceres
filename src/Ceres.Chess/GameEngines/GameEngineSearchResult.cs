@@ -74,6 +74,11 @@ namespace Ceres.Chess.GameEngines
     public SearchLimit Limit;
 
     /// <summary>
+    /// Engine's reported NPS (nodes per move).
+    /// </summary>
+    public int NPS;
+
+    /// <summary>
     /// Time required for search.
     /// </summary>
     public TimingStats TimingStats;
@@ -82,7 +87,7 @@ namespace Ceres.Chess.GameEngines
 
     public GameEngineSearchResult(string moveString, float scoreQ, float scoreCentipawns, float mAvg, 
                                   SearchLimit searchLimit, TimingStats timingStats, 
-                                  int startingN, int finalN, int depth)
+                                  int startingN, int finalN, int nps, int depth)
     {
       MoveString = moveString ?? throw new ArgumentNullException(nameof(moveString));
       ScoreQ = scoreQ;
@@ -92,6 +97,7 @@ namespace Ceres.Chess.GameEngines
       TimingStats = timingStats;
       StartingN = startingN;
       FinalN = finalN;
+      NPS = nps;
       Depth = depth;
     }
 

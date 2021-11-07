@@ -50,11 +50,13 @@ using Ceres.Chess.LC0NetInference;
 
 namespace Ceres.APIExamples
 {
+
+
   public static class TournamentTest
   {
     const bool POOLED = false;
 
-    static int CONCURRENCY = POOLED ? 12 : 4;
+    static int CONCURRENCY = POOLED ? 16 : 1;
     static bool RUN_DISTRIBUTED = false;
 
 
@@ -83,7 +85,7 @@ namespace Ceres.APIExamples
       new GameEngineDefUCI("SF14", new GameEngineUCISpec("SF14", SF14_EXE, numThreads,
                            hastableSize, TB_PATH, uciSetOptionCommands: extraUCI));
 
-    const int SF_NUM_THREADS = 4;
+    const int SF_NUM_THREADS = 6;
     static string TB_PATH => CeresUserSettingsManager.Settings.TablebaseDirectory;
     const int SF_HASH_SIZE_MB = 2048;
 
@@ -94,6 +96,7 @@ namespace Ceres.APIExamples
       File.Delete("Ceres1.log.txt");
       File.Delete("Ceres2.log.txt");
     }
+
 
 
     /// <summary>
@@ -121,8 +124,8 @@ namespace Ceres.APIExamples
       string NET2 = "j94-100";
       //NET1 = "610024";
       //NET2 = "610024";
-      NET1 = "66511";
-      NET2 = "66511";
+      NET1 = "610235";
+      NET2 = "610235";
 
       NET1 = "760751";
       NET2 = "42767";// "753723";
@@ -147,8 +150,10 @@ namespace Ceres.APIExamples
       //NET1 = @"LC0:hydra_t00-attn.onnx";// "apv4_t14";// apv4_t16";
       //      string NET1_SECONDARY1 = "j94-100";
 
-      NET1 = "LS15";
-      NET2 = "LS15";
+      NET1 = "753723";
+      NET2 = "753723";
+      NET1 = "69637";
+      NET2 = "69637";
 
       NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification(NET1, GPUS); // j64-210 LS16 40x512-lr015-swa-167500
       NNEvaluatorDef evalDef2 = NNEvaluatorDefFactory.FromSpecification(NET2, GPUS); ;
@@ -167,20 +172,14 @@ namespace Ceres.APIExamples
 
       //evalDef1 = NNEvaluatorDefFactory.FromSpecification("ONNX:tfmodelc", "GPU:0");
 
-      if (POOLED)
-      {
-        evalDef1.MakePersistent();
-        evalDef2.MakePersistent();
-      }
-
-      SearchLimit limit1 = SearchLimit.NodesPerMove(20_000);
+      SearchLimit limit1 = SearchLimit.NodesPerMove(5_000);
       //limit1 = SearchLimit.NodesForAllMoves(1_000_000, 10_000);
 
       // 140 good for 203 pairs, 300 good for 100 pairs
-      //      limit1 = SearchLimit.SecondsForAllMovess(90, 1f);
-      //      limit1 = SearchLimit.SecondsForAllMoves(120, 0.5f);
+//      limit1 = SearchLimit.SecondsForAllMoves(240, 0.5f) * 0.05f;
+      limit1 = SearchLimit.SecondsForAllMoves(45, 0.25f);
       //      limit1 = SearchLimit.SecondsPerMove(1f);
-      limit1 = SearchLimit.SecondsForAllMoves(2, 0.1f) * 5;
+//      limit1 = SearchLimit.SecondsForAllMoves(2, 0.1f) * 5;
 //ok      limit1 = SearchLimit.NodesPerMove(350_000); try test3.pgn against T75 opponent Ceres93 (in first position, 50% of time misses win near move 12
       
       SearchLimit limit2 = limit1;
@@ -192,73 +191,32 @@ namespace Ceres.APIExamples
                                                                   null, outputLog ? "Ceres1.log.txt" : null);
       GameEngineDefCeres engineDefCeres2 = new GameEngineDefCeres("Ceres2", evalDef2, evalDefSecondary2, new ParamsSearch(), new ParamsSelect(),
                                                                   null, outputLog ? "Ceres2.log.txt" : null);
+      GameEngineDefCeres engineDefCeres3 = new GameEngineDefCeres("Ceres2", evalDef2, evalDefSecondary2, new ParamsSearch(), new ParamsSelect(),
+                                                                  null, outputLog ? "Ceres2.log.txt" : null);
 
       //      engineDefCeres1.SearchParams.EnableUseSiblingEvaluations = true;
-      engineDefCeres1.SearchParams.TestFlag2 = true;
-      //      engineDefCeres1.SelectParams.CPUCTAtRoot *= 1.33f;
-      //      engineDefCeres2.SelectParams.CPUCTAtRoot *= 1.33f;
 
-      //      engineDefCeres1.SelectParams.CPUCT       *= 1.075f;
+//      engineDefCeres1.SearchParams.TestFlag2 = true;
+//      engineDefCeres1.SelectParams.CPUCT *= 0.9f;
+
+//      engineDefCeres1.SelectParams.CPUCTFactorAtRoot *= 1.3f;
+
+      //      engineDefCeres2.SearchParams.EnableUncertaintyBoosting = false;
+      //      engineDefCeres1.SelectParams.CPUCT *= 0.85f;
+
+      //engineDefCeres2.SelectParams.CPUCTAtRoot *= 1.33f;
+
 
       //engineDefCeres1.SearchParams.TestFlag = true;
 
-      //engineDefCeres1.SearchParams.EnableUseSiblingEvaluations = false;
-      //engineDefCeres2.SearchParams.EnableUseSiblingEvaluations = false;
 
-      //      engineDefCeres1.SearchParams.EnableTablebases = false;
-      //engineDefCeres1.SearchParams.Execution.FlowDirectOverlapped = false;
-      //      engineDefCeres2.SearchParams.Execution.FlowDirectOverlapped = false;
-
-      //      engineDefCeres1.SearchParams.Execution.TranspositionMode = TranspositionMode.None;
-      //      engineDefCeres1.SearchParams.Execution.InFlightThisBatchLinkageEnabled = false;
-
-#if NOT
-      
+#if NOT     
       engineDefCeres1.SearchParams.TranspositionRootBackupSubtreeFracs = new float[] { 1,1,1 };
       engineDefCeres2.SearchParams.TranspositionRootBackupSubtreeFracs = new float[] { 1,1,1 };
 
       engineDefCeres1.SearchParams.TranspositionCloneNodeSubtreeFracs = new float[] { 1,0,0};
       engineDefCeres2.SearchParams.TranspositionCloneNodeSubtreeFracs = new float[] { 1,1,1 };
 #endif
-      //      engineDefCeres1.SearchParams.TreeReuseSwapRootEnabled = false;
-      //      engineDefCeres2.SearchParams.TreeReuseSwapRootEnabled = false;
-
-      if (false)
-      {
-        //engineDefCeres1.SearchParams.TreeReuseSwapRootEnabled = true;
-        //engineDefCeres2.SearchParams.TreeReuseSwapRootEnabled = false;
-
-        //        engineDefCeres1.SearchParams.Execution.TranspositionMode = TranspositionMode.SingleNodeDeferredCopy;
-        //engineDefCeres1.SearchParams.Execution.InFlightThisBatchLinkageEnabled = false;
-        //engineDefCeres1.SearchParams.TranspositionRootBackupSubtreeFracs = new float[] { 1, 1, 1 };
-        //engineDefCeres1.SearchParams.TranspositionCloneNodeSubtreeFracs = new float[] { 1, 1, 1 };
-
-        //engineDefCeres2.SearchParams.EnableUseSiblingEvaluations = false;
-        //        engineDefCeres2.SearchParams.Execution.TranspositionMode = TranspositionMode.SingleNodeDeferredCopy;
-        //engineDefCeres2.SearchParams.TranspositionRootBackupSubtreeFracs = new float[] { 1, float.NaN, float.NaN };
-        //engineDefCeres2.SearchParams.TranspositionCloneNodeSubtreeFracs = new float[] { 1, float.NaN, float.NaN };
-        //engineDefCeres2.SearchParams.Execution.InFlightThisBatchLinkageEnabled = false;
-      }
-
-      //engineDefCeres1.SelectParams.UseDynamicVLoss = true;
-      //engineDefCeres1.SearchParams.GameLimitUsageAggressiveness *= 1.2f;
-      //engineDefCeres1.SearchParams.MoveFutilityPruningAggressiveness = 0.75f;
-      //engineDefCeres1.SearchParams.EnableInstamoves=false; 
-      //engineDefCeres1.SearchParams.TreeReuseEnabled = false;
-      //engineDefCeres1.SearchParams.MLHBonusFactor = 0.1f;
-
-      if (false)
-      {
-#if NOT
-        engineDefCeres1.SelectParams.CPUCT = engineDefCeres1.SelectParams.CPUCTAtRoot = 1.745f;
-        engineDefCeres1.SelectParams.CPUCTBase = engineDefCeres1.SelectParams.CPUCTBaseAtRoot = 38739;
-        engineDefCeres1.SelectParams.CPUCTFactor = engineDefCeres1.SelectParams.CPUCTFactorAtRoot = 3.894f;
-        engineDefCeres1.SelectParams.FPUValue = 0.330f;
-        engineDefCeres1.SelectParams.PolicySoftmax = 1.359f;
-#endif
-      }
-      //engineDefCeres1.SelectParams.CPUCTAtRoot *=1.5f;
-
 
       if (false)
       {
@@ -274,21 +232,13 @@ namespace Ceres.APIExamples
         // ****************************************************
       }
 
-
       if (!limit1.IsNodesLimit)
       {
         engineDefCeres1.SearchParams.ReusePositionEvaluationsFromOtherTree = false;
         engineDefCeres2.SearchParams.ReusePositionEvaluationsFromOtherTree = false;
       }
 
-      //engineDefCeres1.SelectParams.PowerMeanNExponent = 0.12f;
-      //engineDefCeres1.SelectParams.PolicyDecayFactor = 10f;
-      //engineDefCeres1.SelectParams.PolicyDecayExponent = 0.40f;
-      //engineDefCeres1.SelectParams.PolicySoftmax = 1.5f;
 
-      //engineDefCeres1.SelectParams.EnableExplorationGuard = true;
-
-      //      engineDefCeres1.SearchParams.Execution.FlowDualSelectors = false;
       // TODO: support this in GameEngineDefCeresUCI
       bool forceDisableSmartPruning = limit1.IsNodesLimit;
       forceDisableSmartPruning = false;
@@ -300,22 +250,21 @@ namespace Ceres.APIExamples
         engineDefCeres2.SearchParams.MoveFutilityPruningAggressiveness = 0;
       }
 
+      string exeCeres = SoftwareManager.IsLinux ? @"/raid/dev/Ceres/artifacts/release/net5.0/Ceres.dll"
+                                                : @"C:\dev\ceres\artifacts\release\net5.0\ceres.exe";
+      string exeCeres93 = SoftwareManager.IsLinux ? @"/raid/dev/Ceres93/Ceres.dll"
+                                                  : @"C:\ceres\releases\v0.93\ceres.exe";
+      string exeCeres94 = SoftwareManager.IsLinux ? @"/raid/dev/Ceres94/Ceres.dll"
+                                                  : @"C:\ceres\releases\v0.94\ceres.exe";
+
       //GameEngineDef engineDefCeresUCI = new GameEngineDefUCI("CeresUCI", new GameEngineUCISpec("CeresUCI", @"c:\dev\ceres\artifacts\release\net5.0\ceres.exe"));
       //      GameEngineDef engineDefCeresUCI1x = new GameEngineDefCeresUCI("CeresUCINew", evalDef1, overrideEXE: @"C:\dev\Ceres\artifacts\release\net5.0\ceres.exe");
 
-      GameEngineDef engineDefCeresUCI1 = new GameEngineDefCeresUCI("CeresUCINew", evalDef1,
-                                                                   overrideEXE: SoftwareManager.IsLinux ? @"/raid/dev/Ceres/artifacts/release/net5.0/Ceres.dll"
-                                                                                                        : @"C:\dev\ceres\artifacts\release\net5.0\ceres.exe",
-                                                                   disableFutilityStopSearch: forceDisableSmartPruning);
-      GameEngineDef engineDefCeresUCI2 = new GameEngineDefCeresUCI("CeresUCINew", evalDef2,
-                                                                   overrideEXE: SoftwareManager.IsLinux ? @"/raid/dev/Ceres/artifacts/release/net5.0/Ceres.dll"
-                                                                                                        : @"C:\dev\ceres\artifacts\release\net5.0\ceres.exe",
-                                                                   disableFutilityStopSearch: forceDisableSmartPruning);
+      GameEngineDef engineDefCeresUCI1 = new GameEngineDefCeresUCI("CeresUCINew", evalDef1, overrideEXE: exeCeres, disableFutilityStopSearch: forceDisableSmartPruning);
+      GameEngineDef engineDefCeresUCI2 = new GameEngineDefCeresUCI("CeresUCINew", evalDef2, overrideEXE: exeCeres, disableFutilityStopSearch: forceDisableSmartPruning);
 
-      GameEngineDef engineDefCeres93 = new GameEngineDefCeresUCI("Ceres93", evalDef2, overrideEXE: SoftwareManager.IsLinux ? @"/raid/dev/Ceres93/artifacts/release/5.0/Ceres.dll"
-                                                                                                                           : @"C:\ceres\releases\v0.93\ceres.exe");
-      GameEngineDef engineDefCeres94 = new GameEngineDefCeresUCI("Ceres94", evalDef2, overrideEXE: SoftwareManager.IsLinux ? @"/raid/dev/Ceres94/Ceres.dll"
-                                                                                                                           : @"C:\ceres\releases\v0.94\ceres.exe");
+      GameEngineDef engineDefCeres93 = new GameEngineDefCeresUCI("Ceres93", evalDef2, overrideEXE: exeCeres93);
+      GameEngineDef engineDefCeres94 = new GameEngineDefCeresUCI("Ceres94", evalDef2, overrideEXE: exeCeres94);
 
       EnginePlayerDef playerCeres1UCI = new EnginePlayerDef(engineDefCeresUCI1, limit1);
       EnginePlayerDef playerCeres2UCI = new EnginePlayerDef(engineDefCeresUCI2, limit2);
@@ -335,21 +284,24 @@ namespace Ceres.APIExamples
       EnginePlayerDef playerLC0 = ENABLE_LC0 ? new EnginePlayerDef(engineDefLC1, limit1) : null;
       EnginePlayerDef playerLC0_2 = ENABLE_LC0 ? new EnginePlayerDef(engineDefLC2, limit2) : null;
 
-      //(playerCeres1.EngineDef as GameEngineDefCeres).SearchParams.DrawByRepetitionLookbackPlies = 40;
 
-      if (false)
-      {
-        string BASE_NAME = "ERET_VESELY203";// nice_lcx Stockfish238 ERET_VESELY203 endgame2
+      if (true)
+      {        
+        string BASE_NAME = "Elo2500_10k";// nice_lcx Stockfish238 ERET_VESELY203 endgame2 chad_tactics-100M lichess_chad_bad.csv
+        ParamsSearch paramsNoFutility = new ParamsSearch() { FutilityPruningStopSearchEnabled = false };
 
         // ===============================================================================
-        SuiteTestDef suiteDef = new SuiteTestDef("Suite",
-                                                 //@"\\synology\dev\chess\data\epd\chad_tactics-100M.epd",
-                                                 //@"\\synology\dev\chess\data\epd\lichess_chad_bad.csv",
-                                                 SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/epd/{BASE_NAME}.epd"
-                                                                         : @$"\\synology\dev\chess\data\epd\{BASE_NAME}.epd",
-                                                playerCeres1, playerCeres2, null);
+        string suiteGPU = POOLED ? "GPU:0,1,2,3:POOLED=SHARE1" : "GPU:0";
+        SuiteTestDef suiteDef =
+          new SuiteTestDef("Suite",
+                           SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/epd/{BASE_NAME}.epd"
+                                                   : @$"\\synology\dev\chess\data\epd\{BASE_NAME}.epd",
+                           SearchLimit.NodesPerMove(10_000),
+                           GameEngineDefFactory.CeresInProcess("Ceres1", NET1, suiteGPU, paramsNoFutility),
+                           GameEngineDefFactory.CeresInProcess("Ceres2", NET1, suiteGPU, paramsNoFutility with { EnableDeepTranspositionBackup = false }),
+                           null);// playerLC0.EngineDef);
 
-        //        suiteDef.MaxNumPositions = 200;
+        suiteDef.MaxNumPositions = 1000;
         suiteDef.EPDLichessPuzzleFormat = suiteDef.EPDFileName.ToUpper().Contains("LICHESS");
 
         //suiteDef.EPDFilter = s => !s.Contains(".exe"); // For NICE suite, these represent positions with multiple choices
@@ -392,20 +344,31 @@ namespace Ceres.APIExamples
 #endif
       }
 
-      TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerCeres2, playerStockfish14);
-      def.ReferenceEngineId = playerStockfish14.ID;
+      //      EnginePlayerDef playerDef = new EnginePlayerDef(engineDefLC0, searchLimit);
+      GameEngineDef[] ceresEngines = new GameEngineDef[5];
+      for (int i = 0; i < ceresEngines.Length; i++)
+      {
+        float cpuct = 0.8f + 0.1f * i;
+        ceresEngines[i] = GameEngineDefFactory.CeresInProcess("C_" + MathF.Round(cpuct, 1), NET1, GPUS, null,
+                                                              new ParamsSelect() { CPUCT = new ParamsSelect().CPUCT * cpuct});
+      }
+
+      TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerCeres2);//, playerStockfish14);
+//      def.AddEngines(limit1, ceresEngines);
+//      def.ReferenceEngineId = ceresEngines[2].ID;
+//      def.ReferenceEngineId = playerStockfish14.ID;
       //        TournamentDef def = new TournamentDef("TOURN", playerCeres1UCI, playerCeres93);
       //TournamentDef def = new TournamentDef("TOURN", playerCeres93, playerCeres1);
 
 
-      def.NumGamePairs = 203;// 500;// 203;//203;// 102; 203
+      def.NumGamePairs = 1;//203;// 500;// 203;//203;// 102; 203
       def.ShowGameMoves = false;
 
 //      string baseName = "tcec1819";
 string      baseName = "4mvs_+90_+99";
 //      baseName = "book-ply8-unifen-Q-0.25-0.40";
 //      baseName = "test3";
-      baseName = "tcec_big";
+     baseName = "tcec_big";
 //      baseName = "endgame-16-piece-book_Q-0.0-0.6_1";
       def.OpeningsFileName = SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/openings/{baseName}.pgn"
                                                      : @$"\\synology\dev\chess\data\openings\{baseName}.pgn";

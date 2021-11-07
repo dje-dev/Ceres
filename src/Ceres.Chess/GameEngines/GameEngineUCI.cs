@@ -258,7 +258,8 @@ namespace Ceres.Chess.GameEngines
       }
 
       float q = EncodedEvalLogistic.CentipawnToLogistic(gameInfo.ScoreCentipawns);
-      return new GameEngineSearchResult(gameInfo.BestMove, q, gameInfo.ScoreCentipawns, float.NaN, searchLimit, default, 0, (int)gameInfo.Nodes, gameInfo.Depth);
+      return new GameEngineSearchResult(gameInfo.BestMove, q, gameInfo.ScoreCentipawns, float.NaN, searchLimit, default, 0, 
+                                       (int)gameInfo.Nodes, gameInfo.NPS, gameInfo.Depth);
     }
 
 
