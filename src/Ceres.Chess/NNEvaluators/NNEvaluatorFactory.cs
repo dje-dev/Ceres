@@ -73,11 +73,11 @@ namespace Ceres.Chess.NNEvaluators
     /// <returns></returns>
     public static NNEvaluator BuildEvaluator(NNEvaluatorDef def, NNEvaluator referenceEvaluator = null)
     {
-      if (def.IsPersistent)
+      if (def.IsShared)
       {
         lock (persistentEvaluators)
         {
-          if (persistentEvaluators.TryGetValue(def.persistentID, out (NNEvaluatorDef persistedEvaluatorDef, NNEvaluator persistedEvaluator) persisted))
+          if (persistentEvaluators.TryGetValue(def.SharedName, out (NNEvaluatorDef persistedEvaluatorDef, NNEvaluator persistedEvaluator) persisted))
           {
             persisted.persistedEvaluator.NumInstanceReferences++;
             return persisted.persistedEvaluator;
@@ -85,9 +85,9 @@ namespace Ceres.Chess.NNEvaluators
           else
           {
             NNEvaluator evaluator = DoBuildEvaluator(def, referenceEvaluator);
-            evaluator.PersistentID = def.persistentID;
+            evaluator.PersistentID = def.SharedName;
             evaluator.NumInstanceReferences++;
-            persistentEvaluators[def.persistentID] = (def, evaluator);
+            persistentEvaluators[def.SharedName] = (def, evaluator);
             return evaluator;
           }
         }

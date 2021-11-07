@@ -45,6 +45,12 @@ namespace Ceres.Chess.NNEvaluators.Specifications
     public readonly List<(NNEvaluatorDeviceDef, float)> Devices;
 
     /// <summary>
+    /// If evaluator is globally shared under a specified name, the name used to identify it.
+    /// </summary>
+    public readonly string SharingName;
+
+
+    /// <summary>
     /// Constructor which parses a device specification string.
     /// </summary>
     /// <param name="netString"></param>
@@ -54,7 +60,17 @@ namespace Ceres.Chess.NNEvaluators.Specifications
       
       Devices = new List<(NNEvaluatorDeviceDef, float)>();
 
-      string[] deviceStringParts = deviceString.Split(":");
+      string[] equalsParts = deviceString.Split("=");
+      if (equalsParts.Length == 2)
+      {
+        SharingName = equalsParts[1];
+      }
+      else if (equalsParts.Length > 2)
+      {
+        throw new Exception("Device specification string has too many equals parts " + deviceString);
+      }
+
+      string[] deviceStringParts = equalsParts[0].Split(":");
 
       if (deviceStringParts.Length is not (2 or 3))
       {
@@ -78,7 +94,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications
       ComboType = Devices.Count == 1 ? NNEvaluatorDeviceComboType.Single
                                      : NNEvaluatorDeviceComboType.Split;
 
-      // Possibly switch combinatin type to pooled if requested
+      // Possibly switch combination type to pooled if requested
       if (deviceStringParts.Length == 3)
       {
         if (deviceStringParts[2].ToUpper() != "POOLED")
@@ -149,7 +165,9 @@ namespace Ceres.Chess.NNEvaluators.Specifications
           count++;
         }
         if (comboType == NNEvaluatorDeviceComboType.Pooled)
+        {
           str += ":POOLED";
+        }
         return str;
       }
       else

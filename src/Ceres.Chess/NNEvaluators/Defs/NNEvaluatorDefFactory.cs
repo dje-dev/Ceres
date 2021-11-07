@@ -32,29 +32,32 @@ namespace Ceres.Chess.NNEvaluators.Defs
       NNNetSpecificationString netObj = new NNNetSpecificationString(netSpecification);
       NNDevicesSpecificationString deviceObj = new NNDevicesSpecificationString(deviceSpecification);
       
-      return new NNEvaluatorDef(netObj.ComboType, netObj.NetDefs, deviceObj.ComboType, deviceObj.Devices);
+      return new NNEvaluatorDef(netObj.ComboType, netObj.NetDefs, deviceObj.ComboType, deviceObj.Devices, deviceObj.SharingName);
     }
 
-    public static NNEvaluatorDef SingleNet(string netID, NNEvaluatorType evaluatorType, params int[] gpuIDs)
+    public static NNEvaluatorDef SingleNet(string netID, NNEvaluatorType evaluatorType, string sharedName, int[] gpuIDs)
     {
-      return SingleNet(netID, evaluatorType, NNEvaluatorPrecision.FP16, gpuIDs);
+      return SingleNet(netID, evaluatorType, NNEvaluatorPrecision.FP16, sharedName, gpuIDs);
     }
 
 
     public static NNEvaluatorDef SingleNet(string netID, NNEvaluatorType evaluatorType,
                                            NNEvaluatorPrecision precision,
+                                           string sharedName,
                                            params int[] gpuIDs)
     {
       NNEvaluatorDeviceDef[] devices = new NNEvaluatorDeviceDef[gpuIDs.Length];
       for (int i = 0; i < gpuIDs.Length; i++)
+      {
         devices[i] = new NNEvaluatorDeviceDef(NNDeviceType.GPU, gpuIDs[i]);
+      }
 
       NNEvaluatorDeviceComboType type = gpuIDs.Length == 1 ? NNEvaluatorDeviceComboType.Single 
                                                                : NNEvaluatorDeviceComboType.Split;
-      return new NNEvaluatorDef(new NNEvaluatorNetDef(netID, evaluatorType, precision), type, devices);
+      return new NNEvaluatorDef(new NNEvaluatorNetDef(netID, evaluatorType, precision), type, sharedName, devices);
     }
 
-    public static NNEvaluatorDef SingleNet(string netID, NNEvaluatorType evaluatorType, 
+    public static NNEvaluatorDef SingleNet(string netID, NNEvaluatorType evaluatorType, string sharedName, 
                                            params (int GPUID, float Fraction)[] gpuIDAndFractions)
     {
       NNEvaluatorNetDef nd = new NNEvaluatorNetDef(netID, evaluatorType);
@@ -63,7 +66,7 @@ namespace Ceres.Chess.NNEvaluators.Defs
       for (int i = 0; i < gpuIDAndFractions.Length; i++)
         deviceWithFractions[i] = (new NNEvaluatorDeviceDef(NNDeviceType.GPU, gpuIDAndFractions[i].GPUID), gpuIDAndFractions[i].Fraction);
 
-      return new NNEvaluatorDef(nd, NNEvaluatorDeviceComboType.Split, deviceWithFractions);
+      return new NNEvaluatorDef(nd, NNEvaluatorDeviceComboType.Split, sharedName, deviceWithFractions);
     }
 
 
