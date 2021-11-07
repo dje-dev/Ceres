@@ -53,6 +53,11 @@ namespace Ceres.Features.Players
     /// <param name="searchLimit"></param>
     public EnginePlayerDef(GameEngineDef engineDef, SearchLimit searchLimit, string id = null)
     {
+      if (engineDef == null)
+      {
+        throw new NullReferenceException(nameof(engineDef));
+      }
+
       ID = id ?? engineDef.ID;
       EngineDef = engineDef;
       SearchLimit = searchLimit;

@@ -17,6 +17,7 @@ using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.GameEngines;
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 
 #endregion
 
@@ -79,7 +80,7 @@ namespace Ceres.Features.GameEngines
       EvaluatorDef = evaluatorDef;
       UCISetOptionCommands = uciSetOptionCommands;
       Callback = callback;
-      OverrideEXE = overrideEXE;
+      OverrideEXE = overrideEXE ?? Assembly.GetExecutingAssembly().Location;
       DisableFutilityStopSearch = disableFutilityStopSearch;
     }
 

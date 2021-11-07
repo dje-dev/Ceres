@@ -401,6 +401,7 @@ Console.WriteLine(node.Annotation.Pos.MiscInfo.RepetitionCount);
             continuationSubroot = newRoot;
             BestMove = newRoot.BestMoveInfo(false).BestMove;
             Manager.StopStatus = MCTSManager.SearchStopStatus.Instamove;
+            Manager.RootNWhenSearchStarted = continuationSubroot.N;
             TimingInfo = new TimingStats();
             return;
           }

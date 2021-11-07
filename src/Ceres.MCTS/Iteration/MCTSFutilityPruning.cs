@@ -280,7 +280,7 @@ namespace Ceres.MCTS.Iteration
     /// </summary>
     public void DumpDiagnosticsMoveShutdown()
     {
-      Manager.DumpTimeInfo();
+      Manager.DumpTimeInfo(null /*, Search.SearchRootNode*/);
       Context.Root.Dump(1, 1);
       Console.WriteLine();
     }
@@ -292,13 +292,18 @@ namespace Ceres.MCTS.Iteration
     /// <returns></returns>
     public int NumberOfNotShutdownChildren()
     {
-      if (Context.RootMovesPruningStatus == null) return Context.Root.NumPolicyMoves;
+      if (Context.RootMovesPruningStatus == null)
+      {
+        return Context.Root.NumPolicyMoves;
+      }
 
       int count = 0;
       for (int i = 0; i < Root.NumPolicyMoves; i++)
       {
         if (Context.RootMovesPruningStatus[i] == MCTSFutilityPruningStatus.NotPruned)
+        {
           count++;
+        }
       }
 
       return count;
