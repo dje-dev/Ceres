@@ -330,15 +330,16 @@ namespace Ceres.Features.Tournaments
     {
       ParentStats.GameInfos.Add(thisResult);
 
-      TournamentResultStats engineStat = engine2White ?
-                          ParentStats.GetResultsForPlayer(Run.Engine2.ID, Run.Engine1.ID)
-                          : ParentStats.GetResultsForPlayer(Run.Engine1.ID, Run.Engine2.ID);
+      PlayerStat engineStat = engine2White ?
+        ParentStats.GetPlayer(Run.Engine2.ID, Run.Engine1.ID): 
+        ParentStats.GetPlayer(Run.Engine1.ID, Run.Engine2.ID);
+      
       float gNumber = NumGames + 1;
-      (float eloMin, float eloAvg, float eloMax) = EloCalculator.EloConfidenceInterval(engineStat.Player1Wins, engineStat.Draws, engineStat.Player1Losses);
+      (float eloMin, float eloAvg, float eloMax) = EloCalculator.EloConfidenceInterval(engineStat.PlayerWins, engineStat.Draws, engineStat.PlayerLosses);
       float eloSD = eloMax - eloAvg;
-      float los = EloCalculator.LikelihoodSuperiority(engineStat.Player1Wins, engineStat.Draws, engineStat.Player1Losses);
+      float los = EloCalculator.LikelihoodSuperiority(engineStat.PlayerWins, engineStat.Draws, engineStat.PlayerLosses);
 
-      string wdlStr = $"{engineStat.Player1Wins,3} {engineStat.Draws,3} {engineStat.Player1Losses,3}";
+      string wdlStr = $"{engineStat.PlayerWins,3} {engineStat.Draws,3} {engineStat.PlayerLosses,3}";
 
       // Show a "." after the opening index if this was the second of the pair of games played.
       string openingPlayedBothWaysStr = gameSequenceNum % 2 == 1 && openingsFinishedAtLeastOnce.Contains(openingIndex) ? "." : " ";
@@ -721,7 +722,7 @@ namespace Ceres.Features.Tournaments
           }
         }
 
-
+        
         gameMoveHistory.Add(moveStat);
 
         engine2ToMove = !engine2ToMove;
@@ -805,7 +806,7 @@ namespace Ceres.Features.Tournaments
         pgnWriter.WriteMove(newPosition.Moves[^1], curPositionAndMoves.FinalPosition, engineTime, engineMove.Depth, engineMove.ScoreCentipawns);
 
         scoresCP.Add(engineMove.ScoreCentipawns);
-
+    
         totalNodesUsed += engineMove.FinalN;
         totalVisitsUsed += engineMove.Visits;
         totalTimeUsed += engineTime;
