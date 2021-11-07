@@ -90,11 +90,17 @@ namespace Ceres.Chess.GameEngines
     /// <summary>
     /// Realized nodes per second during search for move.
     /// </summary>
-    public float NodesPerSecond => NumNodesComputed / TimeElapsed;
+    public float NodesPerSecond => nps ?? (NumNodesComputed / TimeElapsed);
 
+
+    /// <summary>
+    /// Optional nps (nodes per second) reported directly by an engine.
+    /// </summary>
+    private float? nps;
 
     public GameMoveStat(int plyNum, SideType side, float scoreQ, float scoreCP, float clockSecondsAlreadyConsumed,
-                        int numPieces, float mAvg, int finalN, int numNodesComputed, SearchLimit searchLimit, float timeElapsed)
+                        int numPieces, float mAvg, int finalN, int numNodesComputed, 
+                        SearchLimit searchLimit, float timeElapsed, float? nps = null)
     {
       PlyNum = plyNum;
       Side = side;
@@ -107,6 +113,7 @@ namespace Ceres.Chess.GameEngines
       NumNodesComputed = numNodesComputed;
       SearchLimit = searchLimit;
       TimeElapsed = timeElapsed;
+      this.nps = nps;
     }
 
 

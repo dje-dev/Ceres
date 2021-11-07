@@ -759,7 +759,7 @@ namespace Ceres.Features.UCI
                                                curPositionAndMoves.FinalPosition.PieceCount,
                                                result.MAvg, result.FinalN, result.FinalN - result.StartingN,
                                                searchLimit,
-                                               (float)result.TimingStats.ElapsedTimeSecs);
+                                               (float)result.TimingStats.ElapsedTimeSecs, result.NPS);
 
       gameMoveHistory.Add(moveStat);
 
