@@ -61,9 +61,9 @@ namespace Ceres.Features.Tournaments
     /// <summary>
     /// A list of nodes per move for all games played in tournament
     /// </summary>
-    public List<(float,float)> NodesPerMoveList { get; set; } = new List<(float,float)>();
+    //public List<(float,float)> NodesPerMoveList { get; set; } = new List<(float,float)>();
 
-    public List<float> TimeUsedPerMoveList { get; set; } = new List<float>();
+    public List<float> NPSMoveList { get; set; } = new List<float>();
 
 
     public void UpdatePlayerStat(TournamentGameResult result, string opponent)
@@ -101,43 +101,41 @@ namespace Ceres.Features.Tournaments
       }
     }
 
-    public void CalculateMedianNPS(double medianScaler)
+    public void CalculateMedianNPS(double medianScaler, float[] npsPerMove)
     {
-      var orderedArray = NodesPerMoveList.OrderBy(key => key.Item1/key.Item2).ToArray();
-      var length = orderedArray.Length;
+      var npsOrdered = npsPerMove.OrderBy(x => x).ToArray();
+      var t1 = npsPerMove.Average();     
+      NPSMoveList = npsOrdered.ToList();
+      var name = Name;
+      //var orderedArray = NodesPerMoveList.OrderBy(key => key.Item1/key.Item2).ToArray();
+      var length = npsOrdered.Length;
       var indexMedian = (int) length / 2;
-      (float nodes,float time) = orderedArray[indexMedian];      
+      float medianValue = npsOrdered[indexMedian];      
       var take = (int) (length * medianScaler);
       var upperRange = indexMedian + take;
       var LowerRange = indexMedian - take;
-      List<(float,float)> medianRangedValues = new();
+      List<float> medianRangedValues = new();
+
       for (int i = 0; i < length - 1; i++)
       {
         if (i >= LowerRange && i <= upperRange)
         {
-          (float n, float t) = orderedArray[i];
-          medianRangedValues.Add((n,t));
+          medianRangedValues.Add(npsOrdered[i]);
         }
       }
-      var totalNodes = medianRangedValues.Sum(key => key.Item1);
-      var totalTime = medianRangedValues.Sum(key => key.Item2);
-      var medianNps = totalNodes / totalTime;
-      MedianNodeValue = medianNps;
 
-      //var medianNps = orderedArray.Average(); //medianRangedValues.Average();
-      //var timeUsed = TimeUsedPerMoveList.Sum();
-      //var total = orderedArray.Sum();
-      //var avg = total / length;
-      //if (PlayerTotalTime != timeUsed)
-      //{
+      //var testMedian = medianNPS.Sum()/medianNPS.Count();
+      var testMedian = medianRangedValues.Average();
+      //var totalNodes = medianRangedValues.Sum(key => key.Item1);
+      //var totalTime = medianRangedValues.Sum(key => key.Item2);
+      //var medianNps = totalNodes / totalTime;
+      MedianNodeValue = testMedian;
 
-      //}
-      //if (total != PlayerTotalNodes)
-      //{
-
-      //}
-      //var avgSpeed = orderedArray.Average(key => key.Item1/key.Item2);
-      //var nodesPersec = PlayerTotalNodes / PlayerTotalTime;
+     
+      //var nodesPersec = NPSMoveList.Average(); // PlayerTotalTime;
+      //var test1 = medianNPS.Average();
+      //var test2 = temp.Average();
+      //var test1 = orderedArray.Average( key => key.Item1/key.Item2);
     }
   }
 }

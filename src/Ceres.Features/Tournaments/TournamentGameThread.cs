@@ -304,7 +304,9 @@ namespace Ceres.Features.Tournaments
         }
 
       }
-
+      //added two new properties to tournamentGameinfo - lepned
+      thisResult.PlayerWhite = engine2White ? Run.Engine2.ID : Run.Engine1.ID;
+      thisResult.PlayerBlack = engine2White ? Run.Engine1.ID : Run.Engine2.ID;
       UpdateStatsAndOutputSummaryFromGameResult(pgnFileName, engine2White, openingIndex, gameSequenceNum, thisResult);
 
       return thisResult;
@@ -692,7 +694,7 @@ namespace Ceres.Features.Tournaments
                         gameMoveHistory, searchLimitWithIncrementsEngine2, scoresEngine2,
                         ref nodesEngine2Tot, ref visitsEngine2Tot, ref timeEngine2Tot);
           movesEngine2++;
-
+          
           if (engine2IsWhite)
           {
             engine2ShouldHaveForfieted |= info.WhiteShouldHaveForfeitedOnLimit;
@@ -722,7 +724,8 @@ namespace Ceres.Features.Tournaments
           }
         }
 
-        
+        //added Id property to GameMoveStat - lepned
+        moveStat.Id = engine2ToMove ? engine2.ID : engine1.ID;
         gameMoveHistory.Add(moveStat);
 
         engine2ToMove = !engine2ToMove;

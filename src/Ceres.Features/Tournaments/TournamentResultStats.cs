@@ -62,11 +62,11 @@ namespace Ceres.Features.Tournaments
     /// </summary>
     void DumpEngineTournamentSummary(string referenceId)
     {
-      int maxWidth = 150;
+      int maxWidth = 165;
       PrintLine(maxWidth);
       List<(string, int)> header = new List<(string, int)>
         { ("Player",25), ("Elo", 8), ("+/-",5), ("CFS(%)", 8), ("Points",8),
-          ("Played", 8), ("W-D-L", 13), ("D(%)",5), ("Time",12), ("Nodes",18), ("NPS-avg", 14), ("NPS-median", 14)  };
+          ("Played", 8), ("W-D-L", 13), ("D(%)",5), ("Time",12), ("Nodes",18), ("Nodes/Time", 14), ("NPS-median", 14), ("NPS.Average()", 14)  };
       PrintHeaderRow(header, maxWidth);
       PrintLine(maxWidth);
       foreach (PlayerStat engine in Players)
@@ -94,6 +94,7 @@ namespace Ceres.Features.Tournaments
       double draws = (player.Draws / (double)player.NumGames) * 100;
       long nodes = player.PlayerTotalNodes;
       float time = player.PlayerTotalTime;
+      var avgMovelist = player.NPSMoveList.Average();
       List<(string, int)> rowItems = new()
       {
         (playerInfo, 25),
@@ -107,7 +108,8 @@ namespace Ceres.Features.Tournaments
         { (time.ToString("F2"), 12) },
         { (nodes.ToString("N0") + " ", 18) },
         { ((nodes / time).ToString("N0") + " ", 14) },
-        { ((player.MedianNodeValue).ToString("N0") + " ", 14) }
+        { ((player.MedianNodeValue).ToString("N0") + " ", 14) },
+        { ((avgMovelist).ToString("N0") + " ", 14) }
 
       };
       PrintEngineRow(rowItems, width);
@@ -209,68 +211,71 @@ namespace Ceres.Features.Tournaments
     /// <param name="engine"></param>
     public void UpdateTournamentStats(TournamentGameInfo thisResult, GameEngine engine)
     {
-      PlayerStat white;
-      PlayerStat opponent;
-      if (thisResult.Engine2IsWhite)
-      {
-        white = GetPlayer(engine.OpponentEngine.ID, engine.ID);
-        opponent = GetPlayer(engine.ID, engine.OpponentEngine.ID);
-      }
-      else
-      {
-        white = GetPlayer(engine.ID, engine.OpponentEngine.ID);
-        opponent = GetPlayer(engine.OpponentEngine.ID, engine.ID);
-      }
+      PlayerStat playerWhite;
+      PlayerStat playerBlack;
+      TournamentGameResult white;
+      TournamentGameResult black;
 
-      TournamentGameResult gameResultOpponent =
+      TournamentGameResult reverseResult =
           thisResult.Result == TournamentGameResult.Win ? TournamentGameResult.Loss :
           thisResult.Result == TournamentGameResult.Loss ? TournamentGameResult.Win :
           TournamentGameResult.Draw;
 
-      white.UpdatePlayerStat(thisResult.Result, opponent.Name);
-      opponent.UpdatePlayerStat(gameResultOpponent, white.Name);
-      UpdateNodeCounterAndTimeUse(thisResult, white, opponent);
-    }
-
-    void UpdateNodeCounterAndTimeUse(TournamentGameInfo thisResult, PlayerStat white, PlayerStat opponent)
-    {
       if (thisResult.Engine2IsWhite)
       {
-        white.PlayerTotalNodes += thisResult.TotalNodesEngine2;
-        opponent.PlayerTotalNodes += thisResult.TotalNodesEngine1;
-        white.PlayerTotalTime += thisResult.TotalTimeEngine2;
-        opponent.PlayerTotalTime += thisResult.TotalTimeEngine1;
+        playerWhite = GetPlayer(engine.OpponentEngine.ID, engine.ID);
+        playerBlack = GetPlayer(engine.ID, engine.OpponentEngine.ID);
+        white = reverseResult;
+        black = thisResult.Result;
       }
       else
       {
-        white.PlayerTotalNodes += thisResult.TotalNodesEngine1;
-        opponent.PlayerTotalNodes += thisResult.TotalNodesEngine2;
-        white.PlayerTotalTime += thisResult.TotalTimeEngine1;
-        opponent.PlayerTotalTime += thisResult.TotalTimeEngine2;
+        playerWhite = GetPlayer(engine.ID, engine.OpponentEngine.ID);
+        playerBlack = GetPlayer(engine.OpponentEngine.ID, engine.ID);
+        white = thisResult.Result;
+        black = reverseResult;
+      }
+
+      playerWhite.UpdatePlayerStat(white, playerBlack.Name);
+      playerBlack.UpdatePlayerStat(black, playerWhite.Name);
+      UpdateNodeCounterAndTimeUse(thisResult, playerWhite, playerBlack);
+    }
+
+    void UpdateNodeCounterAndTimeUse(TournamentGameInfo thisResult, PlayerStat playerWhite, PlayerStat playerBlack)
+    {
+      if (thisResult.Engine2IsWhite)
+      {
+        playerWhite.PlayerTotalNodes += thisResult.TotalNodesEngine2;
+        playerBlack.PlayerTotalNodes += thisResult.TotalNodesEngine1;
+        playerWhite.PlayerTotalTime += thisResult.TotalTimeEngine2;
+        playerBlack.PlayerTotalTime += thisResult.TotalTimeEngine1;
+      }
+      else
+      {
+        playerWhite.PlayerTotalNodes += thisResult.TotalNodesEngine1;
+        playerBlack.PlayerTotalNodes += thisResult.TotalNodesEngine2;
+        playerWhite.PlayerTotalTime += thisResult.TotalTimeEngine1;
+        playerBlack.PlayerTotalTime += thisResult.TotalTimeEngine2;
       }
 
       //todo - update node and time stats for enabling median calculation of nps and time use
-      foreach (var item in thisResult.GameMoveHistory)
-      {
-        if (item.Side == Chess.SideType.Black)
-        {
-          //float nps = item.FinalN / item.TimeElapsed;
-          opponent.NodesPerMoveList.Add((item.FinalN,item.TimeElapsed));
-          //opponent.TimeUsedPerMoveList.Add(item.TimeElapsed);
-        }
+      //foreach (var item in thisResult.GameMoveHistory)
+      //{
+      //  if (item.Side == Chess.SideType.Black)
+      //  {
+      //    //float nps = item.FinalN / item.TimeElapsed;
+      //    playerBlack.NodesPerMoveList.Add((item.FinalN, item.TimeElapsed));
+      //    playerBlack.NPSMoveList.Add(item.NodesPerSecond);
+      //    //opponent.TimeUsedPerMoveList.Add(item.TimeElapsed);
+      //  }
 
-        else
-        {
-          white.NodesPerMoveList.Add((item.FinalN,item.TimeElapsed));
-          //white.TimeUsedPerMoveList.Add(item.TimeElapsed);
-        }
-      }
-
-      ////debugging
-      //float avgP1 = white.NodesPerMoveList.Average();
-      //float avgP2 = opponent.NodesPerMoveList.Average();
-      //string msg = $"Player1 avg nps: {avgP1:N0}, Player2 avg nps: {avgP2:N0}";
-      ////Console.WriteLine(msg);
+      //  else
+      //  {
+      //    playerWhite.NodesPerMoveList.Add((item.FinalN, item.TimeElapsed));
+      //    playerWhite.NPSMoveList.Add(item.NodesPerSecond);
+      //    //white.TimeUsedPerMoveList.Add(item.TimeElapsed);
+      //  }
+      //}
     }
 
     /// <summary>
@@ -332,7 +337,7 @@ namespace Ceres.Features.Tournaments
       for (int i = 0; i < numberOfColumns; i++)
       {
         var (txt, width) = columns[i];
-        if (i > numberOfColumns - 3)
+        if (i > numberOfColumns - 5)
           row += AlignRight(txt, width) + "|";
         else
           row += AlignCentre(txt, width) + "|";
@@ -467,22 +472,26 @@ namespace Ceres.Features.Tournaments
     /// </summary>
     public void CalculateMedianNodes(double medianScaler)
     {
+      foreach (var player in Players)
+      {
+        var speedTStat = ExtractSpeedStat(player.Name).ToArray();
+        player.CalculateMedianNPS(medianScaler, speedTStat);
+      }
+    }
 
+    IEnumerable<float> ExtractSpeedStat(string player)
+    {
       //debugging
       foreach (var info in GameInfos)
       {
-        foreach (var move in info.GameMoveHistory)
+        if (player == info.PlayerWhite || player == info.PlayerBlack)
         {
-          if (move.FinalN < 0)
+          foreach (var move in info.GameMoveHistory)
           {
-
+            if (player == move.Id)
+              yield return move.NodesPerSecond;
           }
         }
-      }
-
-      foreach (var player in Players)
-      {
-        player.CalculateMedianNPS(medianScaler);
       }
     }
   }

@@ -94,6 +94,8 @@ namespace Ceres.Features.Tournaments
   [Serializable]
   public record TournamentGameInfo
   {
+    public string PlayerWhite { get; set; }
+    public string PlayerBlack { get; set; }
     /// <summary>
     /// Sequence number within tournament.
     /// </summary>

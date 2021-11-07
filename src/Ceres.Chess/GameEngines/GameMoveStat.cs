@@ -26,6 +26,7 @@ namespace Ceres.Chess.GameEngines
   [Serializable]
   public record GameMoveStat
   {
+    public string Id { get; set; }
     /// <summary>
     /// Ply number within game.
     /// </summary>
