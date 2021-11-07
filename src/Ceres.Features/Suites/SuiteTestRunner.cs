@@ -156,6 +156,17 @@ namespace Ceres.Features.Suites
       // TODO: add path automatically
       List<EPDEntry> epds = EPDEntry.EPDEntriesInEPDFile(Def.EPDFileName, Def.MaxNumPositions, 
                                                          Def.EPDLichessPuzzleFormat, Def.EPDFilter);
+
+      // Possiblyskip some of positions at beginning of file.
+      if (Def.SkipNumPositions > 0)
+      {
+        if (Def.SkipNumPositions >= epds.Count)
+        {
+          throw new Exception("Insufficient positions in " + Def.EPDFileName + " to skip " + Def.SkipNumPositions);
+        }
+        epds = epds.GetRange(Def.SkipNumPositions, epds.Count - Def.SkipNumPositions);
+      }
+
       if (Def.MaxNumPositions == 0)
       {
         Def.MaxNumPositions = epds.Count;

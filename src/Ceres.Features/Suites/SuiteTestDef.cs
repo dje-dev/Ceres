@@ -83,6 +83,12 @@ namespace Ceres.Features.Suites
     /// </summary>
     public int MaxNumPositions = int.MaxValue;
 
+    /// <summary>
+    /// Number of positions at beginning of file to be skipped.
+    /// </summary>
+    public int SkipNumPositions = 0;
+
+
     public bool RunCeres2Engine => CeresEngine2Def != null;
     public GameEngineDefCeres Engine1Def => CeresEngine1Def.EngineDef as GameEngineDefCeres;
     public GameEngineDefCeres Engine2Def => CeresEngine2Def?.EngineDef as GameEngineDefCeres;
