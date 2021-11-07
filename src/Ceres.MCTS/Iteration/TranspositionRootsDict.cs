@@ -94,8 +94,17 @@ namespace Ceres.MCTS.Iteration
 
     #region Helper methods
 
-#if NOT
-    public void AddOrPossiblyUpdateUsingN(Span<MCTSNodeStruct> nodes, ulong hashKey, int possibleNewValue, int possibleNewValueN)
+
+    /// <summary>
+    /// Updates the table to use an alternate root node 
+    /// if the N of the alternate root node exceeds current root's N.
+    /// </summary>
+    /// <param name="nodes"></param>
+    /// <param name="hashKey"></param>
+    /// <param name="possibleNewValue"></param>
+    /// <param name="possibleNewValueN"></param>
+    /// <returns></returns>
+    public bool PossiblyUpdateIfNBigger(Span<MCTSNodeStruct> nodes, ulong hashKey, int possibleNewValue, int possibleNewValueN)
     {
       // TODO: much more efficient version for .NET 6 and above
 #if NOT
@@ -103,6 +112,9 @@ namespace Ceres.MCTS.Iteration
       if (!exists || shouldUpdatePredicate(refValue))
       {
         refValue = possibleNewValue;
+        nodes[existingNodeIndex].IsTranspositionRoot = false;
+        nodes[possibleNewValue].IsTranspositionRoot = true;
+        return true;
       }
 #endif
 
@@ -112,18 +124,16 @@ namespace Ceres.MCTS.Iteration
         if (possibleNewValueN > existingN)
         {
           table[hashKey] = possibleNewValue;
+          nodes[existingNodeIndex].IsTranspositionRoot = false;
+          nodes[possibleNewValue].IsTranspositionRoot = true;
+          return true;
         }
       }
-      else
-      {
-        bool added = table.TryAdd(hashKey, possibleNewValue);
-        if (added)
-        {
-          nodeRef.IsTranspositionRoot = true;
-        }
-      }
+
+      return false;
     }
 
+#if NOT
     /// <summary>
     /// 
     /// </summary>

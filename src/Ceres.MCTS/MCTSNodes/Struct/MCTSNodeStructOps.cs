@@ -882,7 +882,16 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         if (enableDeepTranspositionBackup && node.InfoRef.TranspositionRootNodeIndex != default)
         {
           ref readonly MCTSNodeStruct transpositionRootNodeRef = ref nodes[node.InfoRef.TranspositionRootNodeIndex.Index];
-          //MCTSEventSource.TestMetric1++;
+
+          if (!transpositionRootNodeRef.IsTranspositionRoot)
+          {
+            // The root has changed due to refresh of roots
+            if (node.InfoRef.Tree.TranspositionRoots.TryGetValue(node.ZobristHash, out int transpositionNodeIndex))
+            {
+              node.InfoRef.TranspositionRootNodeIndex = new MCTSNodeStructIndex(transpositionNodeIndex);
+              //sMCTSEventSource.TestCounter1++;
+            }
+          }
 
 #if DEBUG
           //ref MCTSNodeInfo nodeInfoRef = ref Unsafe.AsRef(node.InfoRef);

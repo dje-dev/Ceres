@@ -33,6 +33,7 @@ using Ceres.MCTS.Iteration;
 using Ceres.MCTS.Params;
 using System.Reflection;
 using Ceres.MCTS.Environment;
+using Ceres.MCTS.LeafExpansion;
 
 #endregion
 
@@ -366,6 +367,9 @@ namespace Ceres.MCTS.Search
       if (nodes.Count == 0) return;
 
       Span<MCTSNodeStruct> nodesSpan = nodes[0].Store.Nodes.nodes.Span;
+      
+      bool refreshTranspositionRoots = nodes[0].Context.ParamsSearch.TranspositionRootMaxN;
+      MCTSTree tree = nodes[0].Tree;
 
       // Note that this is not parallelized to avoid updates
       // unsynchronized updates to fields in nodes higher up in the tree
@@ -373,6 +377,17 @@ namespace Ceres.MCTS.Search
       {
         MCTSNode node = nodes[i];
         ApplyResult(nodesSpan, selectorID, node, in node.EvalResult);
+
+        // Possibly refresh transposition table if node now has greater N than current root
+        const int MIN_N = 3; // for efficiency, don't bother if very small
+        if (refreshTranspositionRoots 
+         && node.N > MIN_N 
+         && !node.StructRef.IsTranspositionRoot)
+        {
+          //int numNodes = node.N + node.NInFlight + node.NInFlight2;
+          bool updated = tree.TranspositionRoots.PossiblyUpdateIfNBigger(nodesSpan, node.StructRef.ZobristHash, node.Index, node.N);
+          //if (updated) MCTSEventSource.TestMetric1++;          
+        }
 
         // Note that we cannot clear the EvalResult
         // because possibly the next overlapped batch
