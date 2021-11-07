@@ -19,6 +19,7 @@ using Ceres.Chess;
 using Ceres.Chess.GameEngines;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.MTCSNodes;
+using System;
 
 #endregion
 
@@ -50,14 +51,16 @@ namespace Ceres.Features.GameEngines
     /// <param name="timingStats"></param>
     /// <param name="startingN"></param>
     /// <param name="endingN"></param>
+    /// <param name="nps"></param>
     /// <param name="depth"></param>
     /// <param name="search"></param>
     /// <param name="bestMoveInfo"></param>
-    public GameEngineSearchResultCeres(string moveString, float scoreQ, float scoreCentipawns, float mAvg, 
-                                       SearchLimit searchLimit, TimingStats timingStats, 
+    public GameEngineSearchResultCeres(string moveString, float scoreQ, float scoreCentipawns, float mAvg,
+                                       SearchLimit searchLimit, TimingStats timingStats,
                                        int startingN, int endingN, int depth, MCTSearch search,
                                        BestMoveInfo bestMove)
-      : base(moveString, scoreQ, scoreCentipawns, mAvg, searchLimit, timingStats, startingN, endingN, depth)
+      : base(moveString, scoreQ, scoreCentipawns, mAvg, searchLimit, timingStats,
+             startingN, endingN, (int)MathF.Round((endingN - startingN) / (float)timingStats.ElapsedTimeSecs, 1), depth)
     {
       Search = search;
       BestMove = bestMove;
