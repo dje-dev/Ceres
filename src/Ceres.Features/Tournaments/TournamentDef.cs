@@ -18,6 +18,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Ceres.Base.Misc;
+using Ceres.Chess;
 using Ceres.Chess.GameEngines;
 using Ceres.Features.GameEngines;
 using Ceres.Features.Players;
@@ -133,11 +134,6 @@ namespace Ceres.Features.Tournaments
 
     public TournamentDef(string id, params EnginePlayerDef[] engines)
     {
-      if (engines.Length < 2)
-      {
-        throw new ArgumentNullException("A tournament must have 2 or more players");
-      }
-
       ID = id;
       Engines = engines;
       StartTime = DateTime.Now;
@@ -206,6 +202,39 @@ namespace Ceres.Features.Tournaments
                  );
 #endif
     }
+
+
+    #region Helper methods
+
+    /// <summary>
+    /// Adds a specified engine (with search limit) to set of tournament players.
+    /// </summary>
+    /// <param name="gameEngineDef"></param>
+    /// <param name="searchLimit"></param>  
+    public void AddEngine(GameEngineDef gameEngineDef, SearchLimit searchLimit)
+    {
+      EnginePlayerDef enginePlayerDef = new(gameEngineDef, searchLimit);
+      EnginePlayerDef[] newEngines = new EnginePlayerDef[Engines.Length + 1];
+      Array.Copy(Engines, newEngines, Engines.Length);
+      newEngines[Engines.Length] = enginePlayerDef;
+      Engines = newEngines;
+    }
+
+
+    /// <summary>
+    /// Adds a set of specified engines (with search limit) to set of tournament players.
+    /// </summary>
+    /// <param name="gameEngineDef"></param>
+    /// <param name="searchLimit"></param>
+    public void AddEngines(SearchLimit searchLimit, params GameEngineDef[] gameEngineDefs)
+    {
+      foreach (GameEngineDef ged in gameEngineDefs)
+      {
+        AddEngine(ged, searchLimit);
+      }
+    }
+
+#endregion
 
     /// <summary>
     /// Returns string summary.

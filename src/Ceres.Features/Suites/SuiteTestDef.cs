@@ -15,7 +15,7 @@
 
 using System;
 using System.IO;
-
+using Ceres.Chess;
 using Ceres.Chess.GameEngines;
 using Ceres.Features.GameEngines;
 using Ceres.Features.Players;
@@ -122,6 +122,30 @@ namespace Ceres.Features.Suites
       ExternalEngineDef = externalEngineDef;
     }
 
+
+    /// <summary>
+    /// Constructor, specifying at least one Ceres engine
+    /// and optionally a second Ceres engine and an 
+    /// external engine.
+    /// </summary>
+    /// <param name="id"></param>
+    /// <param name="epdFileName"></param>
+    /// <param name="ceresEngine1Def"></param>
+    /// <param name="ceresEngine2Def"></param>
+    /// <param name="externalEngineDef"></param>
+    public SuiteTestDef(string id,
+                        string epdFileName,
+                        SearchLimit searchLimit,
+                        GameEngineDef ceresEngine1Def,
+                        GameEngineDef ceresEngine2Def = null,
+                        GameEngineDef externalEngineDef = null)
+      : this(id, epdFileName,
+            new EnginePlayerDef(ceresEngine1Def, searchLimit),
+            ceresEngine2Def == null ? null : new EnginePlayerDef(ceresEngine2Def, searchLimit),
+            externalEngineDef == null ? null : new EnginePlayerDef(externalEngineDef, searchLimit))
+    {
+
+    }
 
 
     public void DumpParams()
