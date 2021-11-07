@@ -85,16 +85,12 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// If not null then all evaluators built from definitions
     /// having this same name are shared.
     /// </summary>
-    internal string persistentID;
+    public readonly string SharedName;
 
-    public void MakePersistent()
-    {
-      if (persistentID != null) throw new Exception("NNEvaluatorDef is already persistent.");
-
-      persistentID = DateTime.Now.Ticks.ToString();
-    }
-
-    public bool IsPersistent => persistentID != null;
+    /// <summary>
+    /// Returns if the evaluator is shared (under a specified name).
+    /// </summary>
+    public bool IsShared => SharedName != null;
 
 
     public enum PositionTransformType { None, Mirror };
@@ -127,7 +123,9 @@ namespace Ceres.Chess.NNEvaluators.Defs
       {
         int[] ret = new int[Devices.Length];
         for (int i = 0; i < Devices.Length; i++)
+        {
           ret[i] = Devices[i].Device.DeviceIndex;
+        }
         return ret;
       }
     }
@@ -153,22 +151,24 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// </summary>
     public PositionMiscInfo.HashMove50Mode HashMode = PositionMiscInfo.HashMove50Mode.ValueBoolIfAbove98;
 
-
     /// <summary>
     /// Constructor.
     /// </summary>
     /// <param name="devices"></param>
     /// <param name="deviceCombo"></param>
     /// <param name="netCombo"></param>
+    /// <param name="sharedName"></param>
     /// <param name="nets"></param>
     public NNEvaluatorDef(IEnumerable<(NNEvaluatorDeviceDef, float)> devices, 
-                          NNEvaluatorDeviceComboType deviceCombo, NNEvaluatorNetComboType netCombo, 
+                          NNEvaluatorDeviceComboType deviceCombo, NNEvaluatorNetComboType netCombo,
+                          string sharedName, 
                           params (NNEvaluatorNetDef net, float weightValue, float weightPolicy, float weightM)[] nets)
     {
       Devices = devices.ToArray();
       Nets = nets;
       DeviceCombo = deviceCombo;
       NetCombo = netCombo;
+      SharedName = sharedName;
     }
 
 
@@ -179,14 +179,19 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// <param name="networkID"></param>
     /// <param name="deviceType"></param>
     /// <param name="deviceIndex"></param>
+    /// <param name="sharedName"></param>
     public NNEvaluatorDef(NNEvaluatorType netType, string networkID,
-                          NNDeviceType deviceType = NNDeviceType.GPU, int deviceIndex = 0)
+                          NNDeviceType deviceType = NNDeviceType.GPU, int deviceIndex = 0, string sharedName = null)
     {
-      if (networkID == null) throw new ArgumentNullException(nameof(networkID));
+      if (networkID == null)
+      {
+        throw new ArgumentNullException(nameof(networkID));
+      }
 
       Devices = new (NNEvaluatorDeviceDef, float)[] { (new NNEvaluatorDeviceDef(deviceType, deviceIndex), 1.0f) };
       Nets = new (NNEvaluatorNetDef net, float weightValue, float weightPolicy, float weightM)[] { (new NNEvaluatorNetDef(networkID, netType, NNEvaluatorPrecision.FP16), 1.0f, 1.0f, 1.0f) };
       DeviceCombo = NNEvaluatorDeviceComboType.Single;
+      SharedName = sharedName;
     }
 
 
@@ -196,53 +201,62 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// </summary>
     /// <param name="net"></param>
     /// <param name="deviceCombo"></param>
+    /// <param name="sharedName"></param>
     /// <param name="devices"></param>
-    public NNEvaluatorDef(NNEvaluatorNetDef net, NNEvaluatorDeviceComboType deviceCombo, params NNEvaluatorDeviceDef[] devices)
+    public NNEvaluatorDef(NNEvaluatorNetDef net, NNEvaluatorDeviceComboType deviceCombo, string sharedName, params NNEvaluatorDeviceDef[] devices)
     {
       Devices = new (NNEvaluatorDeviceDef net, float fraction)[devices.Length];
       for (int i = 0; i < devices.Length; i++)
-        Devices[i] = new (devices[i], 1.0f / devices.Length);
+      {
+        Devices[i] = new(devices[i], 1.0f / devices.Length);
+      }
 
       Nets = new (NNEvaluatorNetDef net, float weightValue, float weightPolicy, float weightM)[] { (net, 1.0f, 1.0f, 1.0f) };
       DeviceCombo = deviceCombo;
+      SharedName = sharedName;
     }
 
 
-    public NNEvaluatorDef(NNEvaluatorNetDef net, params (NNEvaluatorDeviceDef deviceDef, float fraction)[] devices)
+    public NNEvaluatorDef(NNEvaluatorNetDef net, string sharedName = null, params (NNEvaluatorDeviceDef deviceDef, float fraction)[] devices)
     {
       Devices = devices.ToArray();
       Nets = new (NNEvaluatorNetDef net, float weightValue, float weightPolicy, float weightM)[] { (net, 1.0f, 1.0f, 1.0f) };
       DeviceCombo = devices.Length == 0 ? NNEvaluatorDeviceComboType.Single : NNEvaluatorDeviceComboType.Pooled;
+      SharedName = sharedName;
     }
 
 
-    public NNEvaluatorDef(NNEvaluatorNetDef net, NNEvaluatorDeviceComboType deviceCombo, params (NNEvaluatorDeviceDef deviceDef, float fraction)[] devices)
+    public NNEvaluatorDef(NNEvaluatorNetDef net, NNEvaluatorDeviceComboType deviceCombo, string sharedName, params (NNEvaluatorDeviceDef deviceDef, float fraction)[] devices)
     {
       Devices = devices.ToArray();
       DeviceCombo = deviceCombo;
 
       Nets = new (NNEvaluatorNetDef net, float weightValue, float weightPolicy, float weightM)[] { (net, 1.0f, 1.0f, 1.0f) };
       NetCombo = NNEvaluatorNetComboType.Single;
+      SharedName = sharedName;
     }
 
-    public NNEvaluatorDef(NNEvaluatorNetComboType netCombo, NNEvaluatorDeviceDef device, params (NNEvaluatorNetDef netDef, float weightValue, float weightPolicy, float weightM)[] netDefs)
+    public NNEvaluatorDef(NNEvaluatorNetComboType netCombo, NNEvaluatorDeviceDef device, string sharedName, params (NNEvaluatorNetDef netDef, float weightValue, float weightPolicy, float weightM)[] netDefs)
     {
       NetCombo = netCombo;
       Nets = netDefs;
 
       DeviceCombo = NNEvaluatorDeviceComboType.Single;
       Devices = new (NNEvaluatorDeviceDef device, float fraction)[] { (device, 1) };
+      SharedName = sharedName;
     }
 
 
     public NNEvaluatorDef(NNEvaluatorNetComboType netCombo, IEnumerable<(NNEvaluatorNetDef, float, float, float)> nets, 
-                          NNEvaluatorDeviceComboType deviceCombo, IEnumerable<(NNEvaluatorDeviceDef, float)> devices)
+                          NNEvaluatorDeviceComboType deviceCombo, IEnumerable<(NNEvaluatorDeviceDef, float)> devices,
+                          string sharedName)
     {
       Devices = devices.ToArray();
       DeviceCombo = deviceCombo;
 
       Nets = nets.ToArray();
       NetCombo = netCombo;
+      SharedName = sharedName;
     }
 
     #region Static factory methods
@@ -315,7 +329,10 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// <param name="networkID"></param>
     public void TryModifyNetworkID(string networkID)
     {
-      if (Nets.Length > 1) throw new Exception("TryModifyNetworkID only supported with single nets");
+      if (Nets.Length > 1)
+      {
+        throw new Exception("TryModifyNetworkID only supported with single nets");
+      }
 
       Nets[0].Net = Nets[0].Net with { NetworkID = networkID };
     }
@@ -334,9 +351,14 @@ namespace Ceres.Chess.NNEvaluators.Defs
       }
 
       if (DeviceCombo != NNEvaluatorDeviceComboType.Single)
+      {
         throw new Exception($"Device combo must be single, was: {DeviceCombo}");
+      }
+
       if (Devices.Length > 1)
+      {
         throw new Exception($"Must be single device, was cardinality: {Devices.Length}");
+      }
 
       Devices[0].Device.DeviceIndex = deviceID;
     }
@@ -350,7 +372,16 @@ namespace Ceres.Chess.NNEvaluators.Defs
     {
       string ret = $"<NNEvaluatorDef {NNNetSpecificationString.ToSpecificationString(NetCombo, Nets)} " +
                    $"{NNDevicesSpecificationString.ToSpecificationString(DeviceCombo, Devices) } ";
-      if (PositionTransform != PositionTransformType.None) ret += PositionTransform.ToString() + " ";
+      if (PositionTransform != PositionTransformType.None)
+      {
+        ret += PositionTransform.ToString() + " ";
+      }
+
+      if (IsShared)
+      {
+        ret += "=" + SharedName;
+      }
+
       return ret + ">";
     }
 

@@ -48,7 +48,7 @@ namespace Ceres.Commands
     internal void Execute()
     {
       NNEvaluatorDef evaluatorDef = new NNEvaluatorDef(NetworkSpec.ComboType, NetworkSpec.NetDefs,
-                                                       DeviceSpec.ComboType, DeviceSpec.Devices);
+                                                       DeviceSpec.ComboType, DeviceSpec.Devices, null);
       BackendBench(evaluatorDef);
     }
 

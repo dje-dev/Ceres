@@ -95,10 +95,9 @@ namespace Ceres.Features.BatchAnalysis
     void CreateNNEvaluators()
     {
       const bool POOLED = true;
-      string GPUS = POOLED ? "GPU:0,1,2,3:POOLED"
+      string GPUS = POOLED ? "GPU:0,1,2,3:POOLED=BATCHANALYZER"
                            : "GPU:0";
       evaluatorDef = NNEvaluatorDefFactory.FromSpecification("LC0:J64-210", GPUS); // j64-210
-      evaluatorDef.MakePersistent();
     }
 
 
