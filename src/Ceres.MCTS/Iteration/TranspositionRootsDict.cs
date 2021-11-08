@@ -172,9 +172,9 @@ namespace Ceres.MCTS.Iteration
     {
       // Note that we don't bother resetting the IsTranspositionRoot bit in the node.
       return (table as IDictionary<ulong, int>).Remove(new KeyValuePair<ulong, int>(hashKey, index));
-    }    
+    }
 
-#endregion
+    #endregion
   }
 
 }
