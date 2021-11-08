@@ -37,6 +37,7 @@ using Ceres.Base.Misc;
 using Ceres.Base.Benchmarking;
 using System.Collections.Concurrent;
 using Ceres.Features.Players;
+using Ceres.Base.Math;
 
 #endregion
 
@@ -108,6 +109,8 @@ namespace Ceres.Features.Suites
     int numSearchesBothFound = 0;
     int accCeres1 = 0, accCeres2 = 0, accWCeres1 = 0, accWCeres2 = 0, avgOther = 0;
 
+    List<float> solvedPct1MinusPct2Samples = new();
+
     float totalTimeOther = 0;
     float totalTimeCeres1 = 0;
     float totalTimeCeres2 = 0;
@@ -160,7 +163,7 @@ namespace Ceres.Features.Suites
       // Possiblyskip some of positions at beginning of file.
       if (Def.SkipNumPositions > 0)
       {
-        if (Def.SkipNumPositions >= epds.Count)
+        if (Def.SkipNumPositions <= epds.Count)
         {
           throw new Exception("Insufficient positions in " + Def.EPDFileName + " to skip " + Def.SkipNumPositions);
         }
@@ -380,6 +383,11 @@ namespace Ceres.Features.Suites
       }
 
       Def.Output.WriteLine();
+
+      float avgFaster = (float) StatUtils.Average(solvedPct1MinusPct2Samples);
+      float stdFaster = (float)StatUtils.StdDev(solvedPct1MinusPct2Samples) / MathF.Sqrt(solvedPct1MinusPct2Samples.Count);
+      Def.Output.WriteLine($"Ceres1 time required to solve vs. Ceres2 (%) {(100* avgFaster),5:F2} +/-{(100 * stdFaster),5:F2}");
+
       Def.Output.WriteLine();
     }
 
@@ -576,6 +584,7 @@ namespace Ceres.Features.Suites
           if (search2 != null)
           {
             accWCeres2 += (scoreCeres2 == 0) ? result2.N : result2.NumNodesWhenChoseTopNNode;
+            solvedPct1MinusPct2Samples.Add(result1.FractionNumNodesWhenChoseTopNNode - result2.FractionNumNodesWhenChoseTopNNode);
           }
           numSearchesBothFound++;
         }
