@@ -6,6 +6,9 @@ using System.Threading.Tasks;
 
 namespace Ceres.Features.Tournaments
 {
+  /// <summary>
+  /// Statistics related to a player in a tournament.
+  /// </summary>
   public class PlayerStat
   {
     /// <summary>
@@ -48,35 +51,22 @@ namespace Ceres.Features.Tournaments
     /// </summary>
     public float PlayerTotalTime { get; set; }
 
-    public float MedianNodeValue { get; set; }   
-
-    public float TotalTimeUsed { get; set; }
-    
+    /// <summary>
+    /// The median average for nodes per second within a specific range from median value - typically +/- 20% range for all moves in all games.
+    /// </summary>
+    public float MedianNPSAverage { get; set; }      
 
     /// <summary>
-    /// Table to store Win-Draw-Loss statistics against each opponent
+    /// Table to store Win-Draw-Loss statistics against each opponent.
     /// </summary>
     public Dictionary<string, (int, int, int)> Opponents { get; set; } = new Dictionary<string, (int, int, int)>();
-
+  
     /// <summary>
-    /// A list of nodes per move for all games played in tournament
-    /// </summary>
-    //public List<(float,float)> NodesPerMoveList { get; set; } = new List<(float,float)>();
-
-    public List<float> NPSMoveList { get; set; } = new List<float>();
-
-
-    public void UpdatePlayerStat(TournamentGameResult result, string opponent)
-    {
-      UpdateGameOutcome(result, opponent);
-    }
-
-    /// <summary>
-    /// Updates player statistics based on a game with specified result.
+    /// Update player statistics based on a game result.
     /// </summary>
     /// <param name="result"></param>
     /// <param name="opponent"></param>
-    private void UpdateGameOutcome(TournamentGameResult result, string opponent)
+    public void UpdateGameOutcome(TournamentGameResult result, string opponent)
     {
       var (win, draw, loss) = Opponents[opponent];
       switch (result)
@@ -101,41 +91,32 @@ namespace Ceres.Features.Tournaments
       }
     }
 
-    public void CalculateMedianNPS(double medianScaler, float[] npsPerMove)
+    /// <summary>
+    /// Perform median calculation for nodes per second for all moves in all games played.
+    /// A range selector is used to choose a range of values to include in the calculation.
+    /// </summary>
+    /// <param name="rangeSelector"></param>
+    /// <param name="npsPerMove"></param>
+    public void CalculateMedianNPS(double rangeSelector, IEnumerable<float> npsPerMove)
     {
-      var npsOrdered = npsPerMove.OrderBy(x => x).ToArray();
-      var t1 = npsPerMove.Average();     
-      NPSMoveList = npsOrdered.ToList();
-      var name = Name;
-      //var orderedArray = NodesPerMoveList.OrderBy(key => key.Item1/key.Item2).ToArray();
-      var length = npsOrdered.Length;
-      var indexMedian = (int) length / 2;
-      float medianValue = npsOrdered[indexMedian];      
-      var take = (int) (length * medianScaler);
-      var upperRange = indexMedian + take;
-      var LowerRange = indexMedian - take;
+      var npsOrdered = npsPerMove.OrderBy(e => e).ToArray();
+      string name = Name;
+      int length = npsOrdered.Length;
+      int indexMedian = (int) length / 2;      
+      int take = (int) (length * rangeSelector);
+      int upperRange = indexMedian + take;
+      int LowerRange = indexMedian - take;
       List<float> medianRangedValues = new();
 
       for (int i = 0; i < length - 1; i++)
       {
         if (i >= LowerRange && i <= upperRange)
         {
-          medianRangedValues.Add(npsOrdered[i]);
+          float nps = npsOrdered[i];
+          medianRangedValues.Add(nps);
         }
       }
-
-      //var testMedian = medianNPS.Sum()/medianNPS.Count();
-      var testMedian = medianRangedValues.Average();
-      //var totalNodes = medianRangedValues.Sum(key => key.Item1);
-      //var totalTime = medianRangedValues.Sum(key => key.Item2);
-      //var medianNps = totalNodes / totalTime;
-      MedianNodeValue = testMedian;
-
-     
-      //var nodesPersec = NPSMoveList.Average(); // PlayerTotalTime;
-      //var test1 = medianNPS.Average();
-      //var test2 = temp.Average();
-      //var test1 = orderedArray.Average( key => key.Item1/key.Item2);
-    }
+      MedianNPSAverage = medianRangedValues.Average();
+    }    
   }
 }

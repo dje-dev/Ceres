@@ -483,7 +483,7 @@ string      baseName = "4mvs_+90_+99";
       string CERES_NETWORK = CeresUserSettingsManager.Settings.DefaultNetworkSpecString; //"LC0:703810";
       const string CERES_GPU = "GPU:0";
 
-      SearchLimit TIME_CONTROL = SearchLimit.SecondsForAllMoves(60, 1f) * 0.02f;
+      SearchLimit TIME_CONTROL = SearchLimit.SecondsForAllMoves(60, 1f) * 0.1f;
       const int NUM_GAME_PAIRS = 1;
       const string logfile = "CeresRR.log.txt";
 
@@ -506,7 +506,7 @@ string      baseName = "4mvs_+90_+99";
       EnginePlayerDef playerSf14Slow = new EnginePlayerDef(sf14Engine, TIME_CONTROL * 0.5f, "SF14*0.5");
 
       // Create a tournament definition
-      TournamentDef tournDef = new TournamentDef("Round Robin Test", playerCeres1, playerLeela, playerSf14);      
+      TournamentDef tournDef = new TournamentDef("Round Robin Test", playerCeres1, playerLeela);      
       //tournDef.ReferenceEngineId = playerCeres1.ID;
       tournDef.NumGamePairs = NUM_GAME_PAIRS;
       tournDef.OpeningsFileName = "WCEC.pgn";

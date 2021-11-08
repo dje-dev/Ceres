@@ -29,7 +29,7 @@ namespace Ceres.Features.Tournaments
   public record TournamentResultStats
   {
     /// <summary>
-    /// List of players in the tournament
+    /// List of players in the tournament.
     /// </summary>
     public List<PlayerStat> Players { get; set; } = new List<PlayerStat>();
 
@@ -43,9 +43,10 @@ namespace Ceres.Features.Tournaments
     /// </summary>
     public void DumpTournamentSummary(string referenceId)
     {
-      //parameter for how many percent of items above and below median should be included in the average median calculation
-      double medianPercent = 0.20; //use 20% av items above and below median
-      CalculateMedianNodes(medianPercent);
+      //parameter for how many percent of items above and below median should be included in the average median calculation.
+      //Navs summary normally use 20% av items above and below median value.
+      double medianRangePercent = 0.20; 
+      CalculateMedianNodes(medianRangePercent);
       Console.WriteLine();
       Console.WriteLine("Tournament summary:");
       DumpEngineTournamentSummary(referenceId);
@@ -62,16 +63,16 @@ namespace Ceres.Features.Tournaments
     /// </summary>
     void DumpEngineTournamentSummary(string referenceId)
     {
-      int maxWidth = 165;
+      int maxWidth = 151;
       PrintLine(maxWidth);
       List<(string, int)> header = new List<(string, int)>
         { ("Player",25), ("Elo", 8), ("+/-",5), ("CFS(%)", 8), ("Points",8),
-          ("Played", 8), ("W-D-L", 13), ("D(%)",5), ("Time",12), ("Nodes",18), ("Nodes/Time", 14), ("NPS-median", 14), ("NPS.Average()", 14)  };
+          ("Played", 8), ("W-D-L", 13), ("D(%)",5), ("Time",12), ("Nodes",18), ("NPS-avg", 14), ("NPS-median", 14) };
       PrintHeaderRow(header, maxWidth);
       PrintLine(maxWidth);
       foreach (PlayerStat engine in Players)
       {
-        WriteEngineSummaryBeta(engine, maxWidth, referenceId);
+        WriteEngineSummary(engine, maxWidth, referenceId);
       }
       PrintLine(maxWidth);
       Console.WriteLine();
@@ -83,7 +84,7 @@ namespace Ceres.Features.Tournaments
     /// <param name="player"></param>
     /// <param name="width"></param>
     /// <param name="referenceId"></param>
-    void WriteEngineSummaryBeta(PlayerStat player, int width, string referenceId)
+    void WriteEngineSummary(PlayerStat player, int width, string referenceId)
     {
       string playerInfo = player.Name == referenceId ? player.Name + "*" : player.Name;
       double score = player.PlayerWins + (player.Draws / 2.0);
@@ -94,7 +95,7 @@ namespace Ceres.Features.Tournaments
       double draws = (player.Draws / (double)player.NumGames) * 100;
       long nodes = player.PlayerTotalNodes;
       float time = player.PlayerTotalTime;
-      var avgMovelist = player.NPSMoveList.Average();
+      
       List<(string, int)> rowItems = new()
       {
         (playerInfo, 25),
@@ -108,8 +109,7 @@ namespace Ceres.Features.Tournaments
         { (time.ToString("F2"), 12) },
         { (nodes.ToString("N0") + " ", 18) },
         { ((nodes / time).ToString("N0") + " ", 14) },
-        { ((player.MedianNodeValue).ToString("N0") + " ", 14) },
-        { ((avgMovelist).ToString("N0") + " ", 14) }
+        { ((player.MedianNPSAverage).ToString("N0") + " ", 14) }
 
       };
       PrintEngineRow(rowItems, width);
@@ -122,7 +122,7 @@ namespace Ceres.Features.Tournaments
     /// <exception cref="Exception"></exception>
     public void DumpRoundRobinResultTable(string referenceId)
     {
-      //decide total width for table
+      //calculate total width for table based on number of players in the tournament.
       int totalWidth = 20 * Players.Count;
       DumpHeadingTable(totalWidth);
       if (string.IsNullOrEmpty(referenceId))
@@ -154,7 +154,7 @@ namespace Ceres.Features.Tournaments
     /// <exception cref="Exception"></exception>
     public void DumpRoundRobinEloTable(string referenceId)
     {
-      //decide total width for table
+      //calculate total width for table based on number of players in the tournament.
       int totalWidth = 25 * Players.Count;
       DumpHeadingTable(totalWidth);
       if (string.IsNullOrEmpty(referenceId))
@@ -182,17 +182,17 @@ namespace Ceres.Features.Tournaments
     /// <summary>
     /// Get PlayerStat for a player with a specific opponent.
     /// </summary>
-    /// <param name="player1"></param>
+    /// <param name="playerToFind"></param>
     /// <param name="opponent"></param>
     /// <returns></returns>
 
-    public PlayerStat GetPlayer(string player1, string opponent)
+    public PlayerStat GetPlayer(string playerToFind, string opponent)
     {
-      PlayerStat player = Players.FirstOrDefault(e => e.Name == player1);
+      PlayerStat player = Players.FirstOrDefault(e => e.Name == playerToFind);
 
       if (player == null)
       {
-        player = new PlayerStat() { Name = player1 };
+        player = new PlayerStat() { Name = playerToFind };
         player.Opponents.Add(opponent, (0, 0, 0));
         Players.Add(player);
         return player;
@@ -213,8 +213,8 @@ namespace Ceres.Features.Tournaments
     {
       PlayerStat playerWhite;
       PlayerStat playerBlack;
-      TournamentGameResult white;
-      TournamentGameResult black;
+      TournamentGameResult whiteResult;
+      TournamentGameResult blackResult;
 
       TournamentGameResult reverseResult =
           thisResult.Result == TournamentGameResult.Win ? TournamentGameResult.Loss :
@@ -225,22 +225,29 @@ namespace Ceres.Features.Tournaments
       {
         playerWhite = GetPlayer(engine.OpponentEngine.ID, engine.ID);
         playerBlack = GetPlayer(engine.ID, engine.OpponentEngine.ID);
-        white = reverseResult;
-        black = thisResult.Result;
+        whiteResult = reverseResult;
+        blackResult = thisResult.Result;
       }
       else
       {
         playerWhite = GetPlayer(engine.ID, engine.OpponentEngine.ID);
         playerBlack = GetPlayer(engine.OpponentEngine.ID, engine.ID);
-        white = thisResult.Result;
-        black = reverseResult;
+        whiteResult = thisResult.Result;
+        blackResult = reverseResult;
       }
 
-      playerWhite.UpdatePlayerStat(white, playerBlack.Name);
-      playerBlack.UpdatePlayerStat(black, playerWhite.Name);
+      playerWhite.UpdateGameOutcome(whiteResult, playerBlack.Name);
+      playerBlack.UpdateGameOutcome(blackResult, playerWhite.Name);
       UpdateNodeCounterAndTimeUse(thisResult, playerWhite, playerBlack);
     }
 
+
+    /// <summary>
+    /// Update total number of nodes computed and time used in the game.
+    /// </summary>
+    /// <param name="thisResult"></param>
+    /// <param name="playerWhite"></param>
+    /// <param name="playerBlack"></param>
     void UpdateNodeCounterAndTimeUse(TournamentGameInfo thisResult, PlayerStat playerWhite, PlayerStat playerBlack)
     {
       if (thisResult.Engine2IsWhite)
@@ -256,26 +263,7 @@ namespace Ceres.Features.Tournaments
         playerBlack.PlayerTotalNodes += thisResult.TotalNodesEngine2;
         playerWhite.PlayerTotalTime += thisResult.TotalTimeEngine1;
         playerBlack.PlayerTotalTime += thisResult.TotalTimeEngine2;
-      }
-
-      //todo - update node and time stats for enabling median calculation of nps and time use
-      //foreach (var item in thisResult.GameMoveHistory)
-      //{
-      //  if (item.Side == Chess.SideType.Black)
-      //  {
-      //    //float nps = item.FinalN / item.TimeElapsed;
-      //    playerBlack.NodesPerMoveList.Add((item.FinalN, item.TimeElapsed));
-      //    playerBlack.NPSMoveList.Add(item.NodesPerSecond);
-      //    //opponent.TimeUsedPerMoveList.Add(item.TimeElapsed);
-      //  }
-
-      //  else
-      //  {
-      //    playerWhite.NodesPerMoveList.Add((item.FinalN, item.TimeElapsed));
-      //    playerWhite.NPSMoveList.Add(item.NodesPerSecond);
-      //    //white.TimeUsedPerMoveList.Add(item.TimeElapsed);
-      //  }
-      //}
+      }     
     }
 
     /// <summary>
@@ -337,7 +325,7 @@ namespace Ceres.Features.Tournaments
       for (int i = 0; i < numberOfColumns; i++)
       {
         var (txt, width) = columns[i];
-        if (i > numberOfColumns - 5)
+        if (i > numberOfColumns - 4)
           row += AlignRight(txt, width) + "|";
         else
           row += AlignCentre(txt, width) + "|";
@@ -389,7 +377,7 @@ namespace Ceres.Features.Tournaments
     }
 
     /// <summary>
-    /// Create Round Robin row for player based on index.
+    /// Create Round Robin row for player based on index in player list.
     /// </summary>
     /// <param name="row"></param>
     /// <returns></returns>
@@ -418,7 +406,7 @@ namespace Ceres.Features.Tournaments
     }
 
     /// <summary>
-    /// Create Round Robin Elo stat for player based on index row.
+    /// Create Round Robin Elo stat for player based on index row in player list.
     /// </summary>
     /// <param name="row"></param>
     /// <returns></returns>
@@ -437,10 +425,10 @@ namespace Ceres.Features.Tournaments
         }
 
         var (win, draw, loss) = opponent.Value;
-        var eloPerf = EloCalculator.EloDiff(win, draw, loss).ToString("F0");
+        string eloPerf = EloCalculator.EloDiff(win, draw, loss).ToString("F0");
         var (min, avg, max) = EloCalculator.EloConfidenceInterval(win, draw, loss);
-        var error = (max - avg).ToString("F0");
-        var msg = $"{eloPerf} +/- {error: F0}";
+        string error = (max - avg).ToString("F0");
+        string msg = $"{eloPerf} +/- {error: F0}";
         yield return msg;
         counter++;
       }
@@ -468,20 +456,25 @@ namespace Ceres.Features.Tournaments
     }
 
     /// <summary>
-    /// Calculation of median Node speed for each player in the tournament
+    /// Calculation of median node speed for each player in the tournament.
     /// </summary>
-    public void CalculateMedianNodes(double medianScaler)
+    /// <param name="rangeSelector"></param>
+    public void CalculateMedianNodes(double rangeSelector)
     {
       foreach (var player in Players)
       {
-        var speedTStat = ExtractSpeedStat(player.Name).ToArray();
-        player.CalculateMedianNPS(medianScaler, speedTStat);
+        IEnumerable<float> speedTStat = ExtractNodeSpeedStat(player.Name);
+        player.CalculateMedianNPS(rangeSelector, speedTStat);
       }
     }
 
-    IEnumerable<float> ExtractSpeedStat(string player)
+    /// <summary>
+    /// Extract a collection of nodes per second for all moves in all games played.
+    /// </summary>
+    /// <param name="player"></param>
+    /// <returns></returns>
+    IEnumerable<float> ExtractNodeSpeedStat(string player)
     {
-      //debugging
       foreach (var info in GameInfos)
       {
         if (player == info.PlayerWhite || player == info.PlayerBlack)
@@ -489,10 +482,10 @@ namespace Ceres.Features.Tournaments
           foreach (var move in info.GameMoveHistory)
           {
             if (player == move.Id)
-              yield return move.NodesPerSecond;
+              yield return (move.NodesPerSecond);
           }
         }
       }
-    }
+    }    
   }
 }

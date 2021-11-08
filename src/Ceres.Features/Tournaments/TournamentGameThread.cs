@@ -304,7 +304,7 @@ namespace Ceres.Features.Tournaments
         }
 
       }
-      //added two new properties to tournamentGameinfo - lepned
+      
       thisResult.PlayerWhite = engine2White ? Run.Engine2.ID : Run.Engine1.ID;
       thisResult.PlayerBlack = engine2White ? Run.Engine1.ID : Run.Engine2.ID;
       UpdateStatsAndOutputSummaryFromGameResult(pgnFileName, engine2White, openingIndex, gameSequenceNum, thisResult);
@@ -332,16 +332,16 @@ namespace Ceres.Features.Tournaments
     {
       ParentStats.GameInfos.Add(thisResult);
 
-      PlayerStat engineStat = engine2White ?
+      PlayerStat player = engine2White ?
         ParentStats.GetPlayer(Run.Engine2.ID, Run.Engine1.ID): 
         ParentStats.GetPlayer(Run.Engine1.ID, Run.Engine2.ID);
       
       float gNumber = NumGames + 1;
-      (float eloMin, float eloAvg, float eloMax) = EloCalculator.EloConfidenceInterval(engineStat.PlayerWins, engineStat.Draws, engineStat.PlayerLosses);
+      (float eloMin, float eloAvg, float eloMax) = EloCalculator.EloConfidenceInterval(player.PlayerWins, player.Draws, player.PlayerLosses);
       float eloSD = eloMax - eloAvg;
-      float los = EloCalculator.LikelihoodSuperiority(engineStat.PlayerWins, engineStat.Draws, engineStat.PlayerLosses);
+      float los = EloCalculator.LikelihoodSuperiority(player.PlayerWins, player.Draws, player.PlayerLosses);
 
-      string wdlStr = $"{engineStat.PlayerWins,3} {engineStat.Draws,3} {engineStat.PlayerLosses,3}";
+      string wdlStr = $"{player.PlayerWins,3} {player.Draws,3} {player.PlayerLosses,3}";
 
       // Show a "." after the opening index if this was the second of the pair of games played.
       string openingPlayedBothWaysStr = gameSequenceNum % 2 == 1 && openingsFinishedAtLeastOnce.Contains(openingIndex) ? "." : " ";
@@ -723,8 +723,7 @@ namespace Ceres.Features.Tournaments
             moveStat = new GameMoveStat(plyCount, SideType.White, info.WhiteScoreQ, info.WhiteScoreCentipawns, engine1.CumulativeSearchTimeSeconds, numPieces, info.WhiteMAvg, info.WhiteFinalN, info.WhiteNumNodesComputed, info.WhiteSearchLimitPre, info.WhiteMoveTimeUsed);
           }
         }
-
-        //added Id property to GameMoveStat - lepned
+                
         moveStat.Id = engine2ToMove ? engine2.ID : engine1.ID;
         gameMoveHistory.Add(moveStat);
 

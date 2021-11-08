@@ -26,7 +26,10 @@ namespace Ceres.Chess.GameEngines
   [Serializable]
   public record GameMoveStat
   {
-    public string Id { get; set; }
+    /// <summary>
+    /// Identifier for player/engine.
+    /// </summary>
+    public string Id;
     /// <summary>
     /// Ply number within game.
     /// </summary>
