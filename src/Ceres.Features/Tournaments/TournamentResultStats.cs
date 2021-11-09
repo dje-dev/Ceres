@@ -15,6 +15,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using Ceres.Chess.GameEngines;
 using Chess.Ceres.PlayEvaluation;
@@ -41,41 +42,41 @@ namespace Ceres.Features.Tournaments
     /// <summary>
     /// Dump full tournament summary to console.
     /// </summary>
-    public void DumpTournamentSummary(string referenceId)
+    public void DumpTournamentSummary(TextWriter writer, string referenceId)
     {
       //parameter for how many percent of items above and below median should be included in the average median calculation.
       //Navs summary normally use 20% av items above and below median value.
       double medianRangePercent = 0.20; 
       CalculateMedianNodes(medianRangePercent);
-      Console.WriteLine();
-      Console.WriteLine("Tournament summary:");
-      DumpEngineTournamentSummary(referenceId);
-      Console.WriteLine("Tournament round robin score table (W-D-L):");
-      DumpRoundRobinResultTable(referenceId);
-      Console.WriteLine();
-      Console.WriteLine("Tournament round robin Elo table (W-D-L):");
-      DumpRoundRobinEloTable(referenceId);
-      Console.WriteLine();
+      writer.WriteLine();
+      writer.WriteLine("Tournament summary:");
+      DumpEngineTournamentSummary(writer, referenceId);
+      writer.WriteLine("Tournament round robin score table (W-D-L):");
+      DumpRoundRobinResultTable(writer, referenceId);
+      writer.WriteLine();
+      writer.WriteLine("Tournament round robin Elo table (W-D-L):");
+      DumpRoundRobinEloTable(writer, referenceId);
+      writer.WriteLine();
     }
 
     /// <summary>
     /// Dumps full engine summary table to console.
     /// </summary>
-    void DumpEngineTournamentSummary(string referenceId)
+    void DumpEngineTournamentSummary(TextWriter writer, string referenceId)
     {
       int maxWidth = 151;
-      PrintLine(maxWidth);
+      PrintLine(writer, maxWidth);
       List<(string, int)> header = new List<(string, int)>
         { ("Player",25), ("Elo", 8), ("+/-",5), ("CFS(%)", 8), ("Points",8),
           ("Played", 8), ("W-D-L", 13), ("D(%)",5), ("Time",12), ("Nodes",18), ("NPS-avg", 14), ("NPS-median", 14) };
-      PrintHeaderRow(header, maxWidth);
-      PrintLine(maxWidth);
+      PrintHeaderRow(writer, header, maxWidth);
+      PrintLine(writer, maxWidth);
       foreach (PlayerStat engine in Players)
       {
-        WriteEngineSummary(engine, maxWidth, referenceId);
+        WriteEngineSummary(writer, engine, maxWidth, referenceId);
       }
-      PrintLine(maxWidth);
-      Console.WriteLine();
+      PrintLine(writer, maxWidth);
+      writer.WriteLine();
     }
 
     /// <summary>
@@ -84,7 +85,7 @@ namespace Ceres.Features.Tournaments
     /// <param name="player"></param>
     /// <param name="width"></param>
     /// <param name="referenceId"></param>
-    void WriteEngineSummary(PlayerStat player, int width, string referenceId)
+    void WriteEngineSummary(TextWriter writer, PlayerStat player, int width, string referenceId)
     {
       string playerInfo = player.Name == referenceId ? player.Name + "*" : player.Name;
       double score = player.PlayerWins + (player.Draws / 2.0);
@@ -112,7 +113,7 @@ namespace Ceres.Features.Tournaments
         { ((player.MedianNPSAverage).ToString("N0") + " ", 14) }
 
       };
-      PrintEngineRow(rowItems, width);
+      PrintEngineRow(writer, rowItems, width);
     }
 
     /// <summary>
@@ -120,17 +121,17 @@ namespace Ceres.Features.Tournaments
     /// </summary>
     /// <param name="referenceId"></param>
     /// <exception cref="Exception"></exception>
-    public void DumpRoundRobinResultTable(string referenceId)
+    public void DumpRoundRobinResultTable(TextWriter writer, string referenceId)
     {
       //calculate total width for table based on number of players in the tournament.
       int totalWidth = 20 * Players.Count;
-      DumpHeadingTable(totalWidth);
+      DumpHeadingTable(writer, totalWidth);
       if (string.IsNullOrEmpty(referenceId))
       {
         for (int i = 0; i < Players.Count; i++)
         {
           IEnumerable<string> row = CreateRoundRobinRow(i);
-          PrintCenterAlignedRow(row, totalWidth);
+          PrintCenterAlignedRow(writer, row, totalWidth);
         }
       }
       else
@@ -142,9 +143,9 @@ namespace Ceres.Features.Tournaments
         }
         int index = Players.IndexOf(id);
         IEnumerable<string> row = CreateRoundRobinRow(index);
-        PrintCenterAlignedRow(row, totalWidth);
+        PrintCenterAlignedRow(writer, row, totalWidth);
       }
-      PrintLine(totalWidth);
+      PrintLine(writer, totalWidth);
     }
 
     /// <summary>
@@ -152,17 +153,17 @@ namespace Ceres.Features.Tournaments
     /// </summary>
     /// <param name="referenceId"></param>
     /// <exception cref="Exception"></exception>
-    public void DumpRoundRobinEloTable(string referenceId)
+    public void DumpRoundRobinEloTable(TextWriter writer, string referenceId)
     {
       //calculate total width for table based on number of players in the tournament.
       int totalWidth = 25 * Players.Count;
-      DumpHeadingTable(totalWidth);
+      DumpHeadingTable(writer, totalWidth);
       if (string.IsNullOrEmpty(referenceId))
       {
         for (int i = 0; i < Players.Count; i++)
         {
           IEnumerable<string> row = CreateRoundRobinEloStats(i);
-          PrintCenterAlignedRow(row, totalWidth);
+          PrintCenterAlignedRow(writer, row, totalWidth);
         }
       }
       else
@@ -174,9 +175,9 @@ namespace Ceres.Features.Tournaments
         }
         int index = Players.IndexOf(id);
         IEnumerable<string> row = CreateRoundRobinEloStats(index);
-        PrintCenterAlignedRow(row, totalWidth);
+        PrintCenterAlignedRow(writer, row, totalWidth);
       }
-      PrintLine(totalWidth);
+      PrintLine(writer, totalWidth);
     }
 
     /// <summary>
@@ -270,9 +271,9 @@ namespace Ceres.Features.Tournaments
     /// Dump dashes to console for a certain width.
     /// </summary>
     /// <param name="width"></param>
-    void PrintLine(int width)
+    void PrintLine(TextWriter writer, int width)
     {
-      Console.WriteLine(new string('-', width));
+      writer.WriteLine(new string('-', width));
     }
 
     /// <summary>
@@ -281,7 +282,7 @@ namespace Ceres.Features.Tournaments
     /// <param name="columns"></param>
     /// <param name="maxWidth"></param>
 
-    void PrintHeaderRow(IEnumerable<(string, int)> columns, int maxWidth)
+    void PrintHeaderRow(TextWriter writer, IEnumerable<(string, int)> columns, int maxWidth)
     {
       string row = "|";
 
@@ -290,7 +291,7 @@ namespace Ceres.Features.Tournaments
         row += AlignCentre(txt, width) + "|";
       }
 
-      Console.WriteLine(row);
+      writer.WriteLine(row);
     }
 
     /// <summary>
@@ -298,7 +299,7 @@ namespace Ceres.Features.Tournaments
     /// </summary>
     /// <param name="columns"></param>
     /// <param name="maxWidth"></param>
-    void PrintCenterAlignedRow(IEnumerable<string> columns, int maxWidth)
+    void PrintCenterAlignedRow(TextWriter writer, IEnumerable<string> columns, int maxWidth)
     {
       int Columnwidth = (maxWidth - columns.Count()) / columns.Count();
       string row = "|";
@@ -308,7 +309,7 @@ namespace Ceres.Features.Tournaments
         row += AlignCentre(column, Columnwidth) + "|";
       }
 
-      Console.WriteLine(row);
+      writer.WriteLine(row);
     }
 
     /// <summary>
@@ -317,7 +318,7 @@ namespace Ceres.Features.Tournaments
     /// <param name="columns"></param>
     /// <param name="maxWidth"></param>
 
-    void PrintEngineRow(List<(string, int)> columns, int maxWidth)
+    void PrintEngineRow(TextWriter writer, List<(string, int)> columns, int maxWidth)
     {
       int numberOfColumns = columns.Count();
       string row = "|";
@@ -331,7 +332,7 @@ namespace Ceres.Features.Tournaments
           row += AlignCentre(txt, width) + "|";
       }
 
-      Console.WriteLine(row);
+      writer.WriteLine(row);
     }
 
     /// <summary>
@@ -444,15 +445,15 @@ namespace Ceres.Features.Tournaments
     /// </summary>
     /// <param name="width"></param>
 
-    void DumpHeadingTable(int width)
+    void DumpHeadingTable(TextWriter writer, int width)
     {
       IEnumerable<string> players = Players.Select(e => e.Name);
       List<string> header = new List<string>();
       header.Add("Engine");
       header.AddRange(players);
-      PrintLine(width);
-      PrintCenterAlignedRow(header, width);
-      PrintLine(width);
+      PrintLine(writer, width);
+      PrintCenterAlignedRow(writer, header, width);
+      PrintLine(writer, width);
     }
 
     /// <summary>

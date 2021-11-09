@@ -270,25 +270,7 @@ namespace Ceres.Features.Tournaments
       }
       Task.WaitAll(tasks.ToArray());
 
-      // Calculate and write summary line
-      long totalNodesEngine1 = gameThreads.Sum(g => g.TotalNodesEngine1);
-      long totalNodesEngine2 = gameThreads.Sum(g => g.TotalNodesEngine2);
-      int totalMovesEngine1 = gameThreads.Sum(g => g.TotalMovesEngine1);
-      int totalMovesEngine2 = gameThreads.Sum(g => g.TotalMovesEngine2);
-      float totalTimeEngine1 = gameThreads.Sum(g => g.TotalTimeEngine1);
-      float totalTimeEngine2 = gameThreads.Sum(g => g.TotalTimeEngine2);
-      float numGames = gameThreads.Sum(g => g.NumGames);
-
-      Def.Logger.Write("	      	                    			           ");
-      Def.Logger.WriteLine("     ------   ------     --------------   --------------   ----");
-      Def.Logger.Write("                                                ");
-      Def.Logger.Write("                     ");
-      Def.Logger.Write($"{totalTimeEngine1,9:F2}{totalTimeEngine2,9:F2}");
-      Def.Logger.Write($"{totalNodesEngine1,19:N0}{totalNodesEngine2,17:N0}   ");
-      Def.Logger.Write($"{Math.Round(totalMovesEngine1 / numGames, 0),4:F0}");
-      Def.Logger.WriteLine();
-
-      parentTest.DumpTournamentSummary(Def.ReferenceEngineId);
+      parentTest.DumpTournamentSummary(Def.Logger, Def.ReferenceEngineId);
 
       shutdownComplete.Set();
 
