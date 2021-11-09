@@ -304,7 +304,9 @@ namespace Ceres.Features.Tournaments
         }
 
       }
-
+      
+      thisResult.PlayerWhite = engine2White ? Run.Engine2.ID : Run.Engine1.ID;
+      thisResult.PlayerBlack = engine2White ? Run.Engine1.ID : Run.Engine2.ID;
       UpdateStatsAndOutputSummaryFromGameResult(pgnFileName, engine2White, openingIndex, gameSequenceNum, thisResult);
 
       return thisResult;
@@ -330,15 +332,16 @@ namespace Ceres.Features.Tournaments
     {
       ParentStats.GameInfos.Add(thisResult);
 
-      TournamentResultStats engineStat = engine2White ?
-                          ParentStats.GetResultsForPlayer(Run.Engine2.ID, Run.Engine1.ID)
-                          : ParentStats.GetResultsForPlayer(Run.Engine1.ID, Run.Engine2.ID);
+      PlayerStat player = engine2White ?
+        ParentStats.GetPlayer(Run.Engine2.ID, Run.Engine1.ID): 
+        ParentStats.GetPlayer(Run.Engine1.ID, Run.Engine2.ID);
+      
       float gNumber = NumGames + 1;
-      (float eloMin, float eloAvg, float eloMax) = EloCalculator.EloConfidenceInterval(engineStat.Player1Wins, engineStat.Draws, engineStat.Player1Losses);
+      (float eloMin, float eloAvg, float eloMax) = EloCalculator.EloConfidenceInterval(player.PlayerWins, player.Draws, player.PlayerLosses);
       float eloSD = eloMax - eloAvg;
-      float los = EloCalculator.LikelihoodSuperiority(engineStat.Player1Wins, engineStat.Draws, engineStat.Player1Losses);
+      float los = EloCalculator.LikelihoodSuperiority(player.PlayerWins, player.Draws, player.PlayerLosses);
 
-      string wdlStr = $"{engineStat.Player1Wins,3} {engineStat.Draws,3} {engineStat.Player1Losses,3}";
+      string wdlStr = $"{player.PlayerWins,3} {player.Draws,3} {player.PlayerLosses,3}";
 
       // Show a "." after the opening index if this was the second of the pair of games played.
       string openingPlayedBothWaysStr = gameSequenceNum % 2 == 1 && openingsFinishedAtLeastOnce.Contains(openingIndex) ? "." : " ";
@@ -691,7 +694,7 @@ namespace Ceres.Features.Tournaments
                         gameMoveHistory, searchLimitWithIncrementsEngine2, scoresEngine2,
                         ref nodesEngine2Tot, ref visitsEngine2Tot, ref timeEngine2Tot);
           movesEngine2++;
-
+          
           if (engine2IsWhite)
           {
             engine2ShouldHaveForfieted |= info.WhiteShouldHaveForfeitedOnLimit;
@@ -720,8 +723,8 @@ namespace Ceres.Features.Tournaments
             moveStat = new GameMoveStat(plyCount, SideType.White, info.WhiteScoreQ, info.WhiteScoreCentipawns, engine1.CumulativeSearchTimeSeconds, numPieces, info.WhiteMAvg, info.WhiteFinalN, info.WhiteNumNodesComputed, info.WhiteSearchLimitPre, info.WhiteMoveTimeUsed);
           }
         }
-
-
+                
+        moveStat.Id = engine2ToMove ? engine2.ID : engine1.ID;
         gameMoveHistory.Add(moveStat);
 
         engine2ToMove = !engine2ToMove;
@@ -805,7 +808,7 @@ namespace Ceres.Features.Tournaments
         pgnWriter.WriteMove(newPosition.Moves[^1], curPositionAndMoves.FinalPosition, engineTime, engineMove.Depth, engineMove.ScoreCentipawns);
 
         scoresCP.Add(engineMove.ScoreCentipawns);
-
+    
         totalNodesUsed += engineMove.FinalN;
         totalVisitsUsed += engineMove.Visits;
         totalTimeUsed += engineTime;

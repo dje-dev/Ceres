@@ -27,6 +27,10 @@ namespace Ceres.Chess.GameEngines
   public record GameMoveStat
   {
     /// <summary>
+    /// Identifier for player/engine.
+    /// </summary>
+    public string Id;
+    /// <summary>
     /// Ply number within game.
     /// </summary>
     public readonly int PlyNum;

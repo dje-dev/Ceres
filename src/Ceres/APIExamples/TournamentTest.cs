@@ -413,7 +413,7 @@ string      baseName = "4mvs_+90_+99";
 
       Console.WriteLine();
       Console.WriteLine($"Tournament completed in {stats.ElapsedTimeSecs,8:F2} seconds.");
-      Console.WriteLine(results.GameOutcomesString);
+      //Console.WriteLine(results.GameOutcomesString);
 
       Console.WriteLine();
       Console.WriteLine("<CRLF> to continue");
@@ -468,7 +468,6 @@ string      baseName = "4mvs_+90_+99";
       }
       Console.WriteLine();
       Console.WriteLine($"Tournament completed in {stats.ElapsedTimeSecs,8:F2} seconds.");
-      Console.WriteLine(playerCeres + " " + results.GameOutcomesString);
       Console.ReadLine();
     }
 
@@ -484,7 +483,7 @@ string      baseName = "4mvs_+90_+99";
       string CERES_NETWORK = CeresUserSettingsManager.Settings.DefaultNetworkSpecString; //"LC0:703810";
       const string CERES_GPU = "GPU:0";
 
-      SearchLimit TIME_CONTROL = SearchLimit.SecondsForAllMoves(60, 0.5f) * 0.05f;
+      SearchLimit TIME_CONTROL = SearchLimit.SecondsForAllMoves(60, 1f) * 0.1f;
       const int NUM_GAME_PAIRS = 1;
       const string logfile = "CeresRR.log.txt";
 
@@ -507,11 +506,12 @@ string      baseName = "4mvs_+90_+99";
       EnginePlayerDef playerSf14Slow = new EnginePlayerDef(sf14Engine, TIME_CONTROL * 0.5f, "SF14*0.5");
 
       // Create a tournament definition
-      TournamentDef tournDef = new TournamentDef("Round Robin Test", playerCeres1, playerSf14, playerLeela);
-      tournDef.ReferenceEngineId = playerCeres1.ID;
+      TournamentDef tournDef = new TournamentDef("Round Robin Test", playerCeres1, playerLeela);      
+      //tournDef.ReferenceEngineId = playerCeres1.ID;
       tournDef.NumGamePairs = NUM_GAME_PAIRS;
-      tournDef.OpeningsFileName = "WCEC_decisive.pgn";
+      tournDef.OpeningsFileName = "WCEC.pgn";
       tournDef.ShowGameMoves = false;
+
 
       // Run the tournament
       TimingStats stats = new TimingStats();
@@ -587,7 +587,6 @@ string      baseName = "4mvs_+90_+99";
       }
       Console.WriteLine();
       Console.WriteLine($"Tournament completed in {stats.ElapsedTimeSecs,8:F2} seconds.");
-      Console.WriteLine(playerCeres + " " + results.GameOutcomesString);
       Console.ReadLine();
     }
 
