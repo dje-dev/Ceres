@@ -854,7 +854,6 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
         // Compute statistics used for tracking uncertainty (variance)
         float qDiff = vToApply - (float)node.Q;
-        float qDiffSquared = qDiff * qDiff;
 
         const float VARIANCE_LAMBDA = 0.0f; // Possible exponentially weighted moving average variance if nonzero
 
@@ -866,11 +865,12 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         {
           if (VARIANCE_LAMBDA != 0)
           {
+            throw new NotImplementedException();
             node.VarianceAccumulator = NewEMWVarianceAcc(node.VarianceAccumulator, node.N, qDiffSquared, numToApply, VARIANCE_LAMBDA);
           }
           else
           {
-            node.VarianceAccumulator += (qDiffSquared * numToApply);
+            node.VarianceAccumulator += MathF.Abs(qDiff) * numToApply;
           }
         }
 
