@@ -93,7 +93,7 @@ namespace Ceres.MCTS.Iteration
       }
 
       MCTSNode lastSearchRoot = priorManager.Root;
-      float baselineTreeSize = lastSearchRoot.N;
+      float baselineTreeSize = newRoot.Context.ParamsSearch.TestFlag ? newRoot.N : lastSearchRoot.N;
 
       int estNewVisitsThisMove = searchLimitIncremental.EstNumNodes((int)priorManager.EstimatedNPS, true);
       float ratioNewToBaseline = ((float)newRoot.N + (float)estNewVisitsThisMove) / (float)baselineTreeSize;

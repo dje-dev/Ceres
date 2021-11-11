@@ -14,8 +14,9 @@
 #region Using directives
 
 using System;
-using Ceres.Base.DataType.Trees;
+
 using Ceres.Chess;
+
 
 #endregion
 
@@ -89,7 +90,7 @@ namespace Ceres.MCTS.Managers.Limits
       //    that it might never be gainfully used (if a loss comes first).
       float baseDivisor = 9 + MathF.Pow(inputs.StartPos.PieceCount, 0.5f);
 
-      const float BASE_MULTIPLIER = 0.85f;
+      float BASE_MULTIPLIER = inputs.TestMode ? 0.55f : 0.85f;
 
       float ret = Aggressiveness * BASE_MULTIPLIER * (1.0f / baseDivisor) * factorLargeIncrement * factorWinningness * factorFirstMove;
 
