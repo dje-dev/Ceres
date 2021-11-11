@@ -1072,14 +1072,15 @@ namespace Ceres.Chess
     #region Linqpad dump support
 
     /// <summary>
-    /// 
+    /// Dumps an HTML string with embedded SVG description of board,
+    /// suitable for rendering in a browser or Linqpad results window.
     /// </summary>
     /// <returns></returns>
     public string DumpHTML(string label)
     {
       PositionDocument pd = new PositionDocument();
       pd.WriteStartSection();
-      pd.WritePos(this, 40, viewboxSize: 130);
+      pd.WritePos(this, 18);//, viewboxSize: 130);
       pd.WriteEndSection();
       for (int i = 0; i < 4; i++)
       {
