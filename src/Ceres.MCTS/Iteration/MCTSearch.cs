@@ -308,7 +308,7 @@ Console.WriteLine(node.Annotation.Pos.MiscInfo.RepetitionCount);
                                 searchLimit.MaxTreeNodes, searchLimit.MaxTreeVisits,
                                 float.NaN, float.NaN,
                                 maxMovesToGo: searchLimit.MaxMovesToGo,
-                                isFirstMoveOfGame: isFirstMoveOfGame);
+                                isFirstMoveOfGame: isFirstMoveOfGame, testMode: searchParams.TestFlag);
 
         ManagerGameLimitOutputs timeManagerOutputs = limitManager.ComputeMoveAllocation(limitsManagerInputs);
         return timeManagerOutputs.LimitTarget;
