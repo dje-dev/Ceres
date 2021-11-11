@@ -101,6 +101,7 @@ namespace Ceres.MCTS.Environment
     private PollingCounter opponentTreeReuseHitRate;
     private PollingCounter opponentTreeReuseNumHits;
     private PollingCounter nnTranspositionsHitRate;
+    private PollingCounter nnTranspositionsHitRateOldGeneration;
     private PollingCounter countSiblingEvaluationsUsed;
 
 
@@ -171,8 +172,9 @@ namespace Ceres.MCTS.Environment
         opponentTreeReuseNumHits ??= new PollingCounter("opponent-tree-reuse-hit-count", this, () => LeafEvaluatorReuseOtherTree.NumHits);
 
         nnTranspositionsHitRate ??= new PollingCounter("transposition-hit-rate_pct", this, () => LeafEvaluatorTransposition.HitRatePct);
+        nnTranspositionsHitRateOldGeneration ??= new PollingCounter("transposition-old-gen-hit-rate_pct", this, () => LeafEvaluatorTransposition.HitRateOldGenerationPct);
 
-//        mlhMoveModificationFraction ??= new PollingCounter("mlh-move-modified-pct", this, () => 100.0f * ManagerChooseBestMove.MLHMoveModifiedFraction);
+        //        mlhMoveModificationFraction ??= new PollingCounter("mlh-move-modified-pct", this, () => 100.0f * ManagerChooseBestMove.MLHMoveModifiedFraction);
 
         tablebaseHitsTotal ??= new PollingCounter("tablebase-hits-total", this, () => LC0DLLSyzygyEvaluator.NumTablebaseHits);
         tablebaseHits ??= new IncrementingPollingCounter("tablebase-hits", this, () => LC0DLLSyzygyEvaluator.NumTablebaseHits);

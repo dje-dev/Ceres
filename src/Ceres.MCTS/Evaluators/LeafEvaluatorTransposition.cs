@@ -20,8 +20,6 @@ using System.Threading;
 using Ceres.Base.Environment;
 using Ceres.Base.Threading;
 using Ceres.Chess;
-using Ceres.Chess.EncodedPositions.Basic;
-using Ceres.Chess.MoveGen.Converters;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.LeafExpansion;
 using Ceres.MCTS.MTCSNodes;
@@ -46,11 +44,6 @@ namespace Ceres.MCTS.Evaluators
     // Disabled by default due to performance impact (especially due to false sharing).
     internal const bool TRACK_VIRTUAL_VISITS = false;
 
-    internal static AccumulatorMultithreaded NumHits;
-    internal static AccumulatorMultithreaded NumMisses;
-
-    public static float HitRatePct => 100.0f * (float)NumHits.Value / (float)(NumHits.Value + NumMisses.Value);
-
 
     /// <summary>
     /// Maintain data structure to map between position hash codes and 
@@ -70,6 +63,18 @@ namespace Ceres.MCTS.Evaluators
     static int WARN_COUNT = 0;
 
     MCTSTree tree;
+
+    #region Statistics tracking
+
+    internal static AccumulatorMultithreaded NumHits;
+    internal static AccumulatorMultithreaded NumMisses;
+    internal static AccumulatorMultithreaded NumHitsOldGeneration;
+
+    public static float HitRatePct => 100.0f * (float)NumHits.Value / (float)(NumHits.Value + NumMisses.Value);
+    public static float HitRateOldGenerationPct => 100.0f * (float)NumHitsOldGeneration.Value / (float)(NumHits.Value + NumMisses.Value);
+
+    #endregion
+
 
     /// <summary>
     /// Constructor.
@@ -204,6 +209,13 @@ namespace Ceres.MCTS.Evaluators
           return default;
         }
 
+        if (CeresEnvironment.MONITORING_METRICS)
+        {
+          if (transpositionNode.IsOldGeneration)
+          {
+            NumHitsOldGeneration.Add(1, node.Index);
+          }
+        }
 
         ref readonly MCTSNodeAnnotation annotationThisNode = ref node.Annotation;
 #if NOT
@@ -265,7 +277,10 @@ namespace Ceres.MCTS.Evaluators
           pendingTranspositionRoots[pendingIndex] = (node.StructRef.ZobristHash, node.Index);
         }
 
-        if (CeresEnvironment.MONITORING_METRICS) NumMisses.Add(1, node.Index);
+        if (CeresEnvironment.MONITORING_METRICS)
+        {
+          NumMisses.Add(1, node.Index);
+        }
 
         return default;
       }
@@ -299,6 +314,7 @@ namespace Ceres.MCTS.Evaluators
     {
       NumHits.Initialize();
       NumMisses.Initialize();
+      NumHitsOldGeneration.Initialize();
     }
 
   }
