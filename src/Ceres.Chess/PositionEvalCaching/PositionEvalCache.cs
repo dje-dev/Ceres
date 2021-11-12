@@ -61,7 +61,25 @@ namespace Ceres.Chess.PositionEvalCaching
       MemoryAndDisk 
     };
 
+
+
+    /// <summary>
+    /// If cache is not to be updated (calls to Store are no-ops),
+    /// for example in cases where a cache is just ancillary
+    /// (such as when using cache from nodes of a reused tree that were not retained).
+    /// </summary>
     public bool ReadOnly { get; set; } = false;
+
+    /// <summary>
+    /// If concurrent updates are supported.
+    /// </summary>
+    public bool SupportsConcurrency { get; private set; }
+
+    /// <summary>
+    /// Number of entries currently in cache.
+    /// </summary>
+    public int Count => positionCache.Count;
+
 
     static string PositionEvalCacheBaseFN = System.IO.Path.GetTempPath(); // TODO: make this adjustable
   
@@ -71,7 +89,6 @@ namespace Ceres.Chess.PositionEvalCaching
     const int EST_CONCURRENT_THREADS = 2;
 
 
-    //ConcurrentDictionary<ulong, PositionEvalCacheEntry> positionCache;
     IDictionary<ulong, PositionEvalCacheEntry> positionCache;
 
     public PositionEvalCache(bool supportConcurrency, int initialSize = 1024)
@@ -86,8 +103,8 @@ namespace Ceres.Chess.PositionEvalCaching
     {
       positionCache = supportConcurrency ? new ConcurrentDictionary<ulong, PositionEvalCacheEntry>(EST_CONCURRENT_THREADS, size)
                                         :  new Dictionary<ulong, PositionEvalCacheEntry>(/*EST_CONCURRENT_THREADS,*/ size);
+      SupportsConcurrency = supportConcurrency;
     }
-    public int Count => positionCache.Count;
 
 
     public bool TryLookupFromHash(ulong hash, ref PositionEvalCacheEntry entry)

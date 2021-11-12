@@ -16,8 +16,10 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using Ceres.Base.DataTypes;
 using Ceres.Base.Environment;
+using Ceres.Base.Threading;
 using Ceres.Chess.Diagnostics;
 using Ceres.Chess.PositionEvalCaching;
 using Ceres.MCTS.Environment;
@@ -33,26 +35,20 @@ namespace Ceres.MCTS.Evaluators
   /// </summary>
   public sealed class LeafEvaluatorCache : LeafEvaluatorBase
   {
-    /// <summary>
-    /// Count of successful probes.
-    /// </summary>
-    static ulong NumCacheHits = 0;
+    #region Statistics tracking
+
+    internal static AccumulatorMultithreaded NumHits;
+    internal static AccumulatorMultithreaded NumMisses;
+    internal static AccumulatorMultithreaded NumHitsOldGeneration;
+
+    public static float HitRatePct => 100.0f * (float)NumHits.Value / (float)(NumHits.Value + NumMisses.Value);
+
+    #endregion
 
     /// <summary>
-    /// Count of unsuccessful probes.
+    /// Underlying cache containing evaluation information.
     /// </summary>
-    static ulong NumCacheMisses = 0;
-
-
-    /// <summary>
-    /// Fraction of probes that were successful.
-    /// </summary>
-    public static float HitRatePct => 100.0f * (float)NumCacheHits / (float)(NumCacheHits + NumCacheMisses);
-
-    /// <summary>
-    /// Underlying cache which is consulted.
-    /// </summary>
-    PositionEvalCache cache;
+    public readonly PositionEvalCache Cache;
 
 
     /// <summary>
@@ -61,7 +57,7 @@ namespace Ceres.MCTS.Evaluators
     /// <param name="cache"></param>
     public LeafEvaluatorCache(PositionEvalCache cache)
     {
-      this.cache = cache;
+      Cache = cache;
     }
 
 
@@ -73,11 +69,14 @@ namespace Ceres.MCTS.Evaluators
     protected override LeafEvaluationResult DoTryEvaluate(MCTSNode node)
     {
       PositionEvalCacheEntry cacheEntry = default;
-      bool inCache = cache.TryLookupFromHash(node.StructRef.ZobristHash, ref cacheEntry);
+      bool inCache = Cache.TryLookupFromHash(node.StructRef.ZobristHash, ref cacheEntry);
 
       if (inCache)
       {
-        if (CeresEnvironment.MONITORING_METRICS) NumCacheHits++;
+        if (CeresEnvironment.MONITORING_METRICS)
+        {
+          NumHits.Add(1, node.Index);
+        }
 
         Debug.Assert(!float.IsNaN(cacheEntry.WinP + cacheEntry.LossP));
 
@@ -87,10 +86,21 @@ namespace Ceres.MCTS.Evaluators
       }
       else
       {
-        if (CeresEnvironment.MONITORING_METRICS) NumCacheMisses++;
+        if (CeresEnvironment.MONITORING_METRICS)
+        {
+          NumMisses.Add(1, node.Index);
+        }
 
         return default;
       }
+    }
+
+
+    [ModuleInitializer]
+    internal static void ModuleInitialize()
+    {
+      NumHits.Initialize();
+      NumMisses.Initialize();
     }
 
   }
