@@ -104,7 +104,7 @@ namespace Ceres.MCTS.MTCSNodes
     /// <param name="context"></param>
     /// <param name="index"></param>
     /// <param name="parent">optionally the parent node</param>
-    internal MCTSNode(MCTSIterator context, MemoryBufferOS<MCTSNodeStruct> nodes, 
+    internal MCTSNode(MCTSIterator context, MemoryBufferOS<MCTSNodeStruct> nodes,
                       MCTSNodeStructIndex index, bool reinitializeInfo)
     {
       if (index == default)
@@ -116,7 +116,7 @@ namespace Ceres.MCTS.MTCSNodes
       Debug.Assert(context.Tree.Store.Nodes != null);
       Debug.Assert(index.Index <= context.Tree.Store.Nodes.MaxNodes);
 
-      structPtr = (MCTSNodeStruct *)Unsafe.AsPointer(ref nodes[index.Index]);
+      structPtr = (MCTSNodeStruct*)Unsafe.AsPointer(ref nodes[index.Index]);
       if (reinitializeInfo)
       {
         // Reuse the prior move list if there was one present (but mark as not initialized).
@@ -132,7 +132,7 @@ namespace Ceres.MCTS.MTCSNodes
         }
 
         Unsafe.AsRef<MCTSNodeInfo>(infoPtr) = new MCTSNodeInfo(context, index, priorMoveList);
-      }     
+      }
     }
 
 
@@ -150,7 +150,7 @@ namespace Ceres.MCTS.MTCSNodes
     public ref MCTSNodeSiblingEval? SiblingEval => ref InfoRef.SiblingEval;
 
 
-#region Data
+    #region Data
 
     /// <summary>
     /// Number of visits to children
@@ -269,10 +269,10 @@ namespace Ceres.MCTS.MTCSNodes
     public FP16 Uncertainty => (*ptr).Uncertainty;
 #endif
 
-#endregion
+    #endregion
 
 
-#region Fields used by search
+    #region Fields used by search
 
     /// <summary>
     /// If a transposition match for this node is already 
@@ -287,7 +287,7 @@ namespace Ceres.MCTS.MTCSNodes
       set => InfoRef.InFlightLinkedNode = value;
     }
 
-#endregion
+    #endregion
 
     /// <summary>
     /// If the tree is truncated at this node and generating position
@@ -330,7 +330,17 @@ namespace Ceres.MCTS.MTCSNodes
     public int Index => InfoRef.index.Index;
 
 
-    public ref MCTSNodeAnnotation Annotation => ref InfoRef.Annotation;
+    public ref MCTSNodeAnnotation Annotation
+    {
+      get 
+      {
+        if (!IsAnnotated)
+        {
+          Tree.Annotate(this);
+        }
+        return ref InfoRef.Annotation;
+      }
+    }
 
     /// <summary>
     /// Returns if the associated annotation has been initialized.
