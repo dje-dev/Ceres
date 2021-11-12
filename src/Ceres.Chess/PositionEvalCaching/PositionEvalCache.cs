@@ -33,9 +33,6 @@ namespace Ceres.Chess.PositionEvalCaching
   /// <summary>
   /// Maintains a memory cache of NNEvaluator results
   /// (also with serialization/deserialization capability to disk).
-  /// 
-  /// TODO: consider having a two-level cache, where the history position board 0 is used for first level
-  ///       This could redue hashing burden (though hashes are about 10mm/second for each history position, so not terribly slow)
   /// </summary>
   [Serializable]
   public class PositionEvalCache
@@ -60,7 +57,6 @@ namespace Ceres.Chess.PositionEvalCaching
       /// </summary>
       MemoryAndDisk 
     };
-
 
 
     /// <summary>
@@ -91,12 +87,8 @@ namespace Ceres.Chess.PositionEvalCaching
 
     IDictionary<ulong, PositionEvalCacheEntry> positionCache;
 
-    public PositionEvalCache(bool supportConcurrency, int initialSize = 1024)
+    public PositionEvalCache()
     {
-      if (initialSize > 0)
-      {
-        InitializeWithSize(supportConcurrency, initialSize);
-      }
     }
 
     public void InitializeWithSize(bool supportConcurrency, int size)
