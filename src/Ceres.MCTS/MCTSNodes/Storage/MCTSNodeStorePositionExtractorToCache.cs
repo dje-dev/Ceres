@@ -69,7 +69,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 //      using (new TimingBlock("Extract " + store.Nodes.NumTotalNodes))
       {
         Parallel.ForEach(Partitioner.Create(1, store.Nodes.NumTotalNodes),
-//          new ParallelOptions() { MaxDegreeOfParallelism = 1},
+          ParallelUtils.ParallelOptions(store.Nodes.NumTotalNodes, 1024),
           (range) =>
           {
             using (new MCTSNodeStoreContext(store))
@@ -78,57 +78,59 @@ namespace Ceres.MCTS.MTCSNodes.Storage
               {
                 ref MCTSNodeStruct nodeRef = ref store.Nodes.nodes[nodeIndex];
 
-                if ((includedNodes[nodeIndex] == (extractMode == ExtractMode.ExtractNonRetained))
-                  /*|| nodeRef.IsOldGeneration*/
-                  )
+                if ((includedNodes[nodeIndex] == (extractMode == ExtractMode.ExtractNonRetained)))
+                /*|| nodeRef.IsOldGeneration*/
                 {
                   continue;
                 }
+
+                if (nodeRef.ZobristHash == 0)
                 {
-                  if (nodeRef.IsTranspositionLinked)
-                  {
-                    continue;
-                  }
-
-                  // TODO: someday filter out impossible positions given new root
-                  // (consider pieces on board, pawns pushed castling rights, etc.).
-                  // The idea of using MGPositionReachability fails because:
-                  //   -- probably too slow run the test, and
-                  //   -- requires a call to GetNode which overflows node cache
-
-                  // TODO: possibly try alternate method of just comparing piece counts
-                  //       (use 5 bits to store in MCTSNodeStructMiscFields)
-                  //MGPosition thisPos = tree.GetNode(new MCTSNodeStructIndex(nodeIndex)).Annotation.PosMG;
-                  bool reachable = true;// MGPositionReachability.IsProbablyReachable(in newRootPos, in thisPos);
-                  if (!reachable)
-                  {
-                    nonReachable++;
-                    continue;
-                  }
-
-                  CompressedPolicyVector policy = default;
-                  MCTSNodeStructUtils.ExtractPolicyVector(policySoftmax, in nodeRef, ref policy);
-
-                  if (nodeRef.ZobristHash == 0)
-                  {
-                    throw new Exception("Internal error: node encountered without hash");
-                  }
-                  // TODO: could the cast to FP16 below lose useful precision? Perhaps save as float instead
-
-                  if (transpositionRoots.TryGetValue(nodeRef.ZobristHash, out int transpositionRootIndex)
-                    && includedNodes[transpositionRootIndex])
-                  {
-                    // The node in in the same transposition equivalence class as a node being retained, so no need to save it.
-                    skipRootPresent++;
-                    continue;
-                  }
-
-                  if (nodeRef.Terminal == Chess.GameResult.Unknown)
-                  {
-                    cacheNodes.Store(nodeRef.ZobristHash, nodeRef.Terminal, nodeRef.WinP, nodeRef.LossP, nodeRef.MPosition, in policy);
-                    if (nodeRef.N > 1) countGT1++;
-                  }
+                  // TODO: understand why a small number of uninitialized nodes
+                  //       sometimes appear when swap root is enabled.
+                  continue;
                 }
+
+                if (nodeRef.IsTranspositionLinked)
+                {
+                  continue;
+                }
+
+                // TODO: someday filter out impossible positions given new root
+                // (consider pieces on board, pawns pushed castling rights, etc.).
+                // The idea of using MGPositionReachability fails because:
+                //   -- probably too slow run the test, and
+                //   -- requires a call to GetNode which overflows node cache
+
+                // TODO: possibly try alternate method of just comparing piece counts
+                //       (use 5 bits to store in MCTSNodeStructMiscFields)
+                //MGPosition thisPos = tree.GetNode(new MCTSNodeStructIndex(nodeIndex)).Annotation.PosMG;
+                bool reachable = true;// MGPositionReachability.IsProbablyReachable(in newRootPos, in thisPos);
+                if (!reachable)
+                {
+                  nonReachable++;
+                  continue;
+                }
+
+                CompressedPolicyVector policy = default;
+                MCTSNodeStructUtils.ExtractPolicyVector(policySoftmax, in nodeRef, ref policy);
+
+                // TODO: could the cast to FP16 below lose useful precision? Perhaps save as float instead
+
+                if (transpositionRoots.TryGetValue(nodeRef.ZobristHash, out int transpositionRootIndex)
+                  && includedNodes[transpositionRootIndex])
+                {
+                  // The node in in the same transposition equivalence class as a node being retained, so no need to save it.
+                  skipRootPresent++;
+                  continue;
+                }
+
+                if (nodeRef.Terminal == Chess.GameResult.Unknown)
+                {
+                  cacheNodes.Store(nodeRef.ZobristHash, nodeRef.Terminal, nodeRef.WinP, nodeRef.LossP, nodeRef.MPosition, in policy);
+                  if (nodeRef.N > 1) countGT1++;
+                }
+
               }
             }
           });
