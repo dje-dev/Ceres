@@ -100,6 +100,7 @@ namespace Ceres.MCTS.Managers
       //      float fracAllocatedOfAllocatable = (float)curStoreAllocated / maxStoreNodes.Value;
       //      float maxWastedOfAllocated = 0.8f - fracAllocatedOfAllocatable;
 
+      bool testMode = currentRootNode.Context.ParamsSearch.TestFlag;
 
       if (dump)
       {
@@ -136,28 +137,34 @@ namespace Ceres.MCTS.Managers
         return Method.KeepStoreRebuildTree;
       }
 
-      // If tree size is small and shrinking greatly, rebuild
-      // since time required will be small and tree will be kept compact.
-      if (newNodes < 10_000 && newNodesFractionOfOld < 0.40f)
+      float thresholdWasteRebuild = 0.65f;
+      if (testMode)
       {
-        return Method.KeepStoreRebuildTree;
+        if (fracAvailableOfAllocatable > 0.80f)
+          thresholdWasteRebuild = 0.90f;
+        else if (fracAvailableOfAllocatable > 0.70f)
+          thresholdWasteRebuild = 0.80f;
       }
 
-      if (fracWastedOfAllocated > 0.65f)
+      //Console.WriteLine(priorNodes + " --> " + newNodes + "  " + testMode + " " + fracAvailableOfAllocatable + " " + fracWastedOfAllocated);
+      bool rebuildDueToWaste = fracWastedOfAllocated > thresholdWasteRebuild;
+
+      if (rebuildDueToWaste)
       {
         // Rebuild since tree is dominated by waste,
         // which bloats memory usage and
         // also creates more fixed scanning overhead upon each rebuild/swap-root operation.
         return Method.KeepStoreRebuildTree;
       }
-      else if (fracAvailableOfAllocatable < 0.20f)
+
+      if (fracAvailableOfAllocatable < 0.15f)
       {
         // Rebuild since new search tree would have little additional room to grow.
         return Method.KeepStoreRebuildTree;
       }
 
       // Otherwise preferred method of swapping root can be used, 
-      // which is at least 5x faster per used node than rebuild.
+      // which is almost instantaneous and keeps a large cache of nodes in store.
       return Method.KeepStoreSwapRoot;
 
       // TODO: shrink committed in VirtualFree
