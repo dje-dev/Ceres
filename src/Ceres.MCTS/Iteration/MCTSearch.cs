@@ -484,9 +484,10 @@ Console.WriteLine(node.Annotation.Pos.MiscInfo.RepetitionCount);
 
       // Now rewrite the tree nodes and children "in situ"
       PositionEvalCache reusePositionCache = null;
-      if (Manager.Context.ParamsSearch.TreeReuseRetainedPositionCacheEnabled)
+      if (Manager.Context.ParamsSearch.TreeReuseRetainedPositionCacheEnabled 
+       && reuseMethod != ManagerTreeReuse.Method.KeepStoreSwapRoot) // swap root already keeps all nodes accessible
       {
-        reusePositionCache = new PositionEvalCache(false, 0);
+        reusePositionCache = new PositionEvalCache();
       }
 
       // We will either create a new transposition table (if tree rebuild) 

@@ -42,7 +42,7 @@ namespace Ceres.MCTS.Search.IteratedMCTS
     {
       bool cache = treeModificationType == IteratedMCTSDef.TreeModificationType.DeleteNodesMoveToCache;
 
-      PositionEvalCache posCache = cache ? new PositionEvalCache(true) : null;
+      PositionEvalCache posCache = cache ? new PositionEvalCache() : null;
 
       root.StructRef.TraverseSequential(root.Store, (ref MCTSNodeStruct nodeRef, MCTSNodeStructIndex index) =>
       {

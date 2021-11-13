@@ -19,8 +19,9 @@ using System.Collections;
 using System.Diagnostics;
 using System.Security.Cryptography.Xml;
 using System.Threading.Tasks;
+using Ceres.Base.Benchmarking;
 using Ceres.Base.OperatingSystem;
-using Ceres.Chess.EncodedPositions;
+using Ceres.Chess.MoveGen;
 using Ceres.Chess.PositionEvalCaching;
 using Ceres.Chess.Positions;
 using Ceres.MCTS.Iteration;
@@ -309,11 +310,16 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       // Possibly extract retained nodes into a cache.
       if (cacheNonRetainedNodes != null)
       {
-        long estNumNodes = store.RootNode.N - numNodesUsed;
-        const bool SUPPORT_CACHE_CONCURRENCY = false; // No need for concurrency, is read-only during play.
-        cacheNonRetainedNodes.InitializeWithSize(SUPPORT_CACHE_CONCURRENCY, (int)estNumNodes);
-        float softmax = tree.Root.Context.ParamsSelect.PolicySoftmax;
-        ExtractPositionCacheNodes(store, softmax, includedNodes, in newRootChild, ExtractMode.ExtractNonRetained, cacheNonRetainedNodes);
+        const bool SUPPORT_CACHE_CONCURRENCY = true; // extraction done in parallel
+        float fracNodesToVisits = (float)store.RootNode.N / store.Nodes.NumTotalNodes;
+        int estNumCacheNodes = Math.Max(1000, (int)(0.5f * (store.RootNode.N - newRootChild.N) * fracNodesToVisits));
+
+        cacheNonRetainedNodes.InitializeWithSize(SUPPORT_CACHE_CONCURRENCY, (int)estNumCacheNodes);
+
+        float softmax = tree.Root.Context.ParamsSelect.PolicySoftmax;       
+        MCTSNodeStorePositionExtractorToCache.ExtractPositionCacheNodes(store, softmax, includedNodes, in newRootChild, 
+                                                         MCTSNodeStorePositionExtractorToCache.ExtractMode.ExtractNonRetained, 
+                                                         cacheNonRetainedNodes, tree.TranspositionRoots);
       }
 
       // Constract a table indicating the starting index and length of
@@ -492,50 +498,6 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     }
 
 
-    private enum ExtractMode { ExtractNonRetained, ExtractRetained };
-
-    private static void ExtractPositionCacheNodes(MCTSNodeStore store, float policySoftmax,
-                                                  BitArray includedNodes, in MCTSNodeStruct newRoot,
-                                                  ExtractMode extractMode,
-                                                  PositionEvalCache cacheNodes)
-    {
-      for (int nodeIndex = 1; nodeIndex < store.Nodes.NumTotalNodes; nodeIndex++)
-      {
-        ref MCTSNodeStruct nodeRef = ref store.Nodes.nodes[nodeIndex];
-
-
-        if ((includedNodes[nodeIndex] != (extractMode == ExtractMode.ExtractRetained)) || nodeRef.IsOldGeneration)
-        {
-          continue;
-        }
-        {
-          if (nodeRef.IsTranspositionLinked)
-          {
-            continue;
-          }
-
-          // TODO: someday filter out impossible positions given new root
-          // (consider pieces on board, pawns pushed castling rights, etc.)
-          //bool isEligible = true;
-          //if (nodeRef.PieceCount > numPiecesNewRoot)
-          //  isEligible = false;
-
-          CompressedPolicyVector policy = default;
-          MCTSNodeStructUtils.ExtractPolicyVector(policySoftmax, in nodeRef, ref policy);
-
-          if (nodeRef.ZobristHash == 0)
-          {
-            throw new Exception("Internal error: node encountered without hash");
-          }
-          // TODO: could the cast to FP16 below lose useful precision? Perhaps save as float instead
-
-          if (nodeRef.Terminal == Chess.GameResult.Unknown)
-          {
-            cacheNodes.Store(nodeRef.ZobristHash, nodeRef.Terminal, nodeRef.WinP, nodeRef.LossP, nodeRef.MPosition, in policy);
-          }
-        }
-      }
-    }
 
 
     /// <summary>
@@ -639,6 +601,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     }
 
 
+#if NOT
     public static PositionEvalCache ExtractCacheNodesInSubtree(MCTSTree tree, ref MCTSNodeStruct newRootChild)
     {
       float softmax = tree.Root.Context.ParamsSelect.PolicySoftmax;
@@ -650,10 +613,11 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       const bool SUPPORT_CACHE_CONCURRENCY = false; // No need for concurrency, is read-only during play.
       PositionEvalCache cache = new PositionEvalCache(SUPPORT_CACHE_CONCURRENCY, (int)estNumNodes);
 
-      ExtractPositionCacheNodes(tree.Store, softmax, includedNodes, in newRootChild, ExtractMode.ExtractRetained, cache);
+      ExtractPositionCacheNodes(tree.Store, softmax, includedNodes, in newRootChild, ExtractMode.ExtractRetained, cache, tree.TranspositionRoots);
 
       return cache;
     }
+#endif
 
 #endregion
   }
