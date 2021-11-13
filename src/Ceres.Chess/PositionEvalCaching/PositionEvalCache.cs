@@ -82,7 +82,7 @@ namespace Ceres.Chess.PositionEvalCaching
 
     static string CACHE_FN(string id) => Path.Combine(PositionEvalCacheBaseFN, id + ".cache.dat");
 
-    const int EST_CONCURRENT_THREADS = 2;
+    const int EST_CONCURRENT_THREADS = 16;
 
 
     IDictionary<ulong, PositionEvalCacheEntry> positionCache;
