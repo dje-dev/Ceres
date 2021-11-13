@@ -285,6 +285,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
           return;
         }
 
+        AssertNode(nodeR.ZobristHash != 0, $"ZobristHash zero", i, in nodeR, true);
         AssertNode(nodeR.Terminal != Chess.GameResult.NotInitialized, "Node not initialized", i, in nodeR);
         AssertNode(!expectCacheIndexZero || nodeR.CachedInfoPtr == null, "CacheIndex zeroed", i, in nodeR);
 
