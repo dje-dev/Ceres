@@ -179,21 +179,37 @@ namespace Ceres.MCTS.MTCSNodes
             float explorationScaling = 1.0f;
             float childMAD = gatherStatsUSpan[i] / (gatherStatsNSpan[i] - MCTSNodeStruct.VARIANCE_START_ACCUMULATE_N);
 
-            float UNCERTAINTY_DIFF_MULTIPLIER = 1.5f;
-            float UNCERTAINTY_MAX_DEVIATION = 0.15f;
-            float BIAS_ADJUST = 0.01f; // adjustment to make average value turn out to be very close to 1.0
+#if NOT
+            if (nonlinear)
+            {
+                // The uncertainty scaling is a number centered at 1 which is
+                // higher for children with more emprical volatility than the parent and
+                // lower for children with less volatility.
+                float p = gatherStatsPSpan[i];
+                float adj = 5 * (childMAD - parentMAD);
+                explorationScaling = (1 + 15 * p + adj) / (1 + 15 * p);
+                explorationScaling += 0.04f;
+                explorationScaling = StatUtils.Bounded(explorationScaling, 0.666f, 1.5f);
+              //              Console.WriteLine(explorationScaling + " adj=" + adj + " p=" + p);
+            }
+            else
+            {
+#endif
+              float UNCERTAINTY_DIFF_MULTIPLIER = 1.5f;
+              float UNCERTAINTY_MAX_DEVIATION = 0.15f;
+              float BIAS_ADJUST = 0.01f; // adjustment to make average value turn out to be very close to 1.0
 
-            // The uncertainty scaling is a number centered at 1 which is
-            // higher for children with more emprical volatility than the parent and
-            // lower for children with less volatility.
-            explorationScaling = 1 + BIAS_ADJUST + UNCERTAINTY_DIFF_MULTIPLIER * (childMAD - parentMAD);
-            explorationScaling = StatUtils.Bounded(explorationScaling, 1.0f - UNCERTAINTY_MAX_DEVIATION, 1.0f + UNCERTAINTY_MAX_DEVIATION);
+              // The uncertainty scaling is a number centered at 1 which is
+              // higher for children with more emprical volatility than the parent and
+              // lower for children with less volatility.
+              explorationScaling = 1 + BIAS_ADJUST + UNCERTAINTY_DIFF_MULTIPLIER * (childMAD - parentMAD);
+              explorationScaling = StatUtils.Bounded(explorationScaling, 1.0f - UNCERTAINTY_MAX_DEVIATION, 1.0f + UNCERTAINTY_MAX_DEVIATION);            
 
             const bool SHOW_UNCERTAINTY_STATS = false; // perforamnce degrading
             if (SHOW_UNCERTAINTY_STATS)
             {
               // Update statistics.
-              if (MathF.Abs(explorationScaling-1) > 0.03f && Ref.ZobristHash % 1_000 == 0)
+              if (MathF.Abs(explorationScaling-1) > 0.05f)// && Ref.ZobristHash % 1_000 == 0)
               {
                 accScale += explorationScaling;
                 countScale++;
@@ -230,6 +246,15 @@ namespace Ceres.MCTS.MTCSNodes
             gatherStatsWSpan[i] = float.MaxValue;
           }
         }
+      }
+
+      // If any child is a checkmate then exploration is not appropriate,
+      // set cpuctMultiplier to 0 as an elegant means of effecting certainty propagation
+      // (no changes to algorithm are needed, all subsequent visits will go to this terminal node).
+      if (nodeRef.CheckmateKnownToExistAmongChildren)
+      {
+        cpuctMultiplier = 0;
+        numToProcess = Math.Min(numToProcess, nodeRef.NumChildrenExpanded);
       }
 
       // Compute scores of top children
