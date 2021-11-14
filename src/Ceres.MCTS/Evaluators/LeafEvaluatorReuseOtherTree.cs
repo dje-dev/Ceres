@@ -15,6 +15,8 @@
 
 using System;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
+using Ceres.Base.Threading;
 using Ceres.Chess.EncodedPositions;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.LeafExpansion;
@@ -39,20 +41,18 @@ namespace Ceres.MCTS.Evaluators
 
     bool haveVerifiedCompatible = false;
 
-    /// <summary>
-    /// Number of successful probes.
-    /// </summary>
-    public static long NumHits = 0;
+    #region Statistics
 
-    /// <summary>
-    /// Number of unsuccessful probes
-    /// </summary>
-    public static long NumMisses = 0;
+    internal static AccumulatorMultithreaded NumHits;
+    internal static AccumulatorMultithreaded NumMisses;
+    internal static AccumulatorMultithreaded NumHitsOldGeneration;
 
     /// <summary>
     /// Fraction of probes which have been successful.
     /// </summary>
-    public static float HitRate => (float)NumHits / (float)(NumHits + NumMisses);
+    public static float HitRate => (float)NumHits.Value / (float)(NumHits.Value + NumMisses.Value);
+
+    #endregion
 
 
     /// <summary>
@@ -78,20 +78,20 @@ namespace Ceres.MCTS.Evaluators
 
           if (otherNodeRef.Terminal != Chess.GameResult.Unknown)
           {
-            NumMisses++;
+            NumMisses.Add(1, node.Index);
             return default;
           }
 
           LeafEvaluationResult ret = new(otherNodeRef.Terminal, otherNodeRef.WinP, otherNodeRef.LossP, otherNodeRef.MPosition, cpvArray, 0);
           MCTSNodeStructUtils.ExtractPolicyVector(OtherContext.ParamsSelect.PolicySoftmax, in otherNodeRef, ref cpvArray[0]);
 
-          NumHits++;
+          NumHits.Add(1, node.Index);
           return ret;
         }
       }
       else
       {
-        NumMisses++;
+        NumMisses.Add(1, node.Index);
         return default;
       }
     }
@@ -124,6 +124,15 @@ namespace Ceres.MCTS.Evaluators
         haveVerifiedCompatible = true;
       }
     }
+
+
+    [ModuleInitializer]
+    internal static void ModuleInitialize()
+    {
+      NumHits.Initialize();
+      NumMisses.Initialize();
+    }
+
   }
 }
 

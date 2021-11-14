@@ -170,7 +170,7 @@ namespace Ceres.MCTS.Environment
         
 //        nnCacheHitRate ??= new PollingCounter("nncache-hit-rate_pct", this, () => LeafEvaluatorCache.HitRatePct);
         opponentTreeReuseHitRate ??= new PollingCounter("opponent-tree-reuse-hit-rate-pct", this, () => 100.0f * LeafEvaluatorReuseOtherTree.HitRate);
-        opponentTreeReuseNumHits ??= new PollingCounter("opponent-tree-reuse-hit-count", this, () => LeafEvaluatorReuseOtherTree.NumHits);
+        opponentTreeReuseNumHits ??= new PollingCounter("opponent-tree-reuse-hit-count", this, () => LeafEvaluatorReuseOtherTree.NumHits.Value);
 
         nnTranspositionsHitRate ??= new PollingCounter("transposition-store-hit-rate_pct", this, () => LeafEvaluatorTransposition.HitRatePct);
         nnTranspositionCacheHitRate ??= new PollingCounter("transposition-cache-hit-rate_pct", this, () => LeafEvaluatorCache.HitRatePct);        
