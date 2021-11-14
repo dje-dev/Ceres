@@ -27,6 +27,7 @@ using Ceres.MCTS.Environment;
 using Ceres.APIExamples;
 using Ceres.Commands;
 using Ceres.Features;
+using System.Collections.Generic;
 
 #endregion
 
@@ -132,13 +133,20 @@ namespace Ceres
 |                                                         |
 | (c) 2020- David Elliott and the Ceres Authors           |
 |   With network backend code from Leela Chess Zero.      |
+|   Use help to list available commands.                  |
 |                                                         |
-|  Version {VER} Use help to list available commands.  |
+|  Version {VER}                                       |
 |=========================================================|
 ";
 
     static void OutputBanner()
     {
+      string dotnetVersion = System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription;
+
+      bool isDotNet5 = dotnetVersion.Contains(".NET 5");
+      bool isPGO = !isDotNet5 && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DOTNET_TieredPGO"));
+      string pgoString = isPGO ? "PGO" : "";
+
       string[] bannerLines = BannerString.Split("\r\n");
       foreach (string line in bannerLines)
       {
@@ -151,12 +159,19 @@ namespace Ceres
           Console.ForegroundColor = defaultColor;
           Console.WriteLine("|");
         }
+
+        else if (line.StartsWith("|  Version"))
+        {
+          string version = $"|  Version {CeresVersion.VersionString} with {dotnetVersion} {pgoString}";
+          int spaceLeft = line.Length - version.Length;
+          string empty = new string(' ', 3 + spaceLeft - 1);
+          Console.WriteLine($"{version}{empty}|");
+        }
         else
         {
-          Console.WriteLine(line.Replace("{VER}", CeresVersion.VersionString + " "));
+          Console.WriteLine(line);
         }
       }
-
     }
 
 
