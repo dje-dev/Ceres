@@ -330,14 +330,15 @@ namespace Ceres.MCTS.MTCSNodes
     public int Index => InfoRef.index.Index;
 
 
+    /// <summary>
+    /// Returns reference to annotation associated with node.
+    /// N.B. Annotate must have been already called.
+    /// </summary>
     public ref MCTSNodeAnnotation Annotation
     {
       get 
       {
-        if (!IsAnnotated)
-        {
-          Tree.Annotate(this);
-        }
+        Debug.Assert(IsAnnotated); // too expensive to always check
         return ref InfoRef.Annotation;
       }
     }
