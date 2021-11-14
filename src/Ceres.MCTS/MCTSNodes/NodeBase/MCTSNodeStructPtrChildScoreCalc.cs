@@ -195,7 +195,7 @@ namespace Ceres.MCTS.MTCSNodes
             else
             {
 #endif
-              float UNCERTAINTY_DIFF_MULTIPLIER = 1.5f;
+              float UNCERTAINTY_DIFF_MULTIPLIER = 2.0f;
               float UNCERTAINTY_MAX_DEVIATION = 0.15f;
               float BIAS_ADJUST = 0.01f; // adjustment to make average value turn out to be very close to 1.0
 
