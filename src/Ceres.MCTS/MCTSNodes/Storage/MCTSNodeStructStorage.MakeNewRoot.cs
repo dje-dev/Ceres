@@ -218,6 +218,8 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 
       // Update BitArray to reflect this swap.
       includedNodes[indexOfNewRootBeforeRewrite] = false;
+      nodes[indexOfNewRootBeforeRewrite].IsOldGeneration = true;
+      store.Nodes.NumOldGeneration++;
       includedNodes[1] = true;
 
       //double elapsed = (DateTime.Now - start).TotalSeconds;
