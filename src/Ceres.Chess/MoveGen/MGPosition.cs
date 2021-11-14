@@ -21,6 +21,7 @@ using Ceres.Base.DataTypes;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Chess.MoveGen.Converters;
+using System.Numerics;
 
 #endregion
 
@@ -355,6 +356,27 @@ namespace Ceres.Chess.MoveGen
         }
       }
       return false;
+    }
+
+
+    /// <summary>
+    /// Returns number of pawns still on their second rank (not yet advanced).
+    /// </summary>
+    public byte NumPawnsRank2
+    {
+      get
+      {
+        ulong whitePawns = ~D & ~C & ~B & A;
+        ulong blackPawns = D & ~C & ~B & A;
+
+        const ulong BOARD_RANK_2 = 0x000000000000FF00UL;
+        const ulong BOARD_RANK_7 = 0x00FF000000000000UL;
+
+        ulong whitePawnsRank2 = whitePawns & BOARD_RANK_2;
+        ulong blackPawnsRank2 = blackPawns & BOARD_RANK_7;
+
+        return (byte)(BitOperations.PopCount(whitePawnsRank2) + BitOperations.PopCount(blackPawnsRank2));
+      }
     }
 
     #region Overrides
