@@ -14,15 +14,12 @@
 #region Using directives
 
 using System;
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using Ceres.Base.Threading;
 using Ceres.Chess.EncodedPositions;
-using Ceres.MCTS.Iteration;
-using Ceres.MCTS.LeafExpansion;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Struct;
-using Google.Protobuf.Reflection;
+using Ceres.MCTS.Iteration;
 
 #endregion
 
@@ -74,24 +71,24 @@ namespace Ceres.MCTS.Evaluators
         using (new SearchContextExecutionBlock(OtherContext))
         {
           ref MCTSNodeStruct otherNodeRef = ref OtherContext.Tree.Store.Nodes.nodes[nodeIndex];
-          CompressedPolicyVector[] cpvArray = new CompressedPolicyVector[1];
 
           if (otherNodeRef.Terminal != Chess.GameResult.Unknown)
           {
-            NumMisses.Add(1, node.Index);
+            NumMisses.Add(1, (int)(node.StructRef.ZobristHash % 65536));
             return default;
           }
 
+          CompressedPolicyVector[] cpvArray = new CompressedPolicyVector[1];
           LeafEvaluationResult ret = new(otherNodeRef.Terminal, otherNodeRef.WinP, otherNodeRef.LossP, otherNodeRef.MPosition, cpvArray, 0);
           MCTSNodeStructUtils.ExtractPolicyVector(OtherContext.ParamsSelect.PolicySoftmax, in otherNodeRef, ref cpvArray[0]);
 
-          NumHits.Add(1, node.Index);
+          NumHits.Add(1, (int)(node.StructRef.ZobristHash % 65536));
           return ret;
         }
       }
       else
       {
-        NumMisses.Add(1, node.Index);
+        NumMisses.Add(1, (int)(node.StructRef.ZobristHash % 65536));
         return default;
       }
     }
@@ -105,7 +102,10 @@ namespace Ceres.MCTS.Evaluators
     /// <returns></returns>
     public static bool ContextsCompatibleForReuse(MCTSIterator contextCopyFrom, MCTSIterator contextCopyTo)
     {
-      if (!contextCopyFrom.EvaluatorDef.NetEvaluationsIdentical(contextCopyTo.EvaluatorDef)) return false;
+      if (!contextCopyFrom.EvaluatorDef.NetEvaluationsIdentical(contextCopyTo.EvaluatorDef))
+      {
+        return false;
+      }
 
       return true;
     }
@@ -120,7 +120,9 @@ namespace Ceres.MCTS.Evaluators
       if (!haveVerifiedCompatible)
       {
         if (!ContextsCompatibleForReuse(node.Context, OtherContext))
+        {
           throw new Exception("Cannot reuse from other subtree with different parameters (such as different neural network or parameters such as MIN_POLICY_PROBABILITY)");
+        }
         haveVerifiedCompatible = true;
       }
     }
