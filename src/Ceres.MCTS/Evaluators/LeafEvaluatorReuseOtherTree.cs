@@ -68,13 +68,16 @@ namespace Ceres.MCTS.Evaluators
       if (OtherContext.Tree.TranspositionRoots != null && 
           OtherContext.Tree.TranspositionRoots.TryGetValue(node.StructRef.ZobristHash, out int nodeIndex))
       {
+        // N.B. avoid accessing properties (except directly from StructRef)
+        //      of node in the block below because we are switching into context of other tree here.
+        // 
         using (new SearchContextExecutionBlock(OtherContext))
         {
           ref MCTSNodeStruct otherNodeRef = ref OtherContext.Tree.Store.Nodes.nodes[nodeIndex];
 
           if (otherNodeRef.Terminal != Chess.GameResult.Unknown)
           {
-            NumMisses.Add(1, (int)(node.StructRef.ZobristHash % 65536));
+            NumMisses.Add(1, nodeIndex);
             return default;
           }
 
@@ -82,16 +85,17 @@ namespace Ceres.MCTS.Evaluators
           LeafEvaluationResult ret = new(otherNodeRef.Terminal, otherNodeRef.WinP, otherNodeRef.LossP, otherNodeRef.MPosition, cpvArray, 0);
           MCTSNodeStructUtils.ExtractPolicyVector(OtherContext.ParamsSelect.PolicySoftmax, in otherNodeRef, ref cpvArray[0]);
 
-          NumHits.Add(1, (int)(node.StructRef.ZobristHash % 65536));
+          NumHits.Add(1, nodeIndex);
           return ret;
         }
       }
       else
       {
-        NumMisses.Add(1, (int)(node.StructRef.ZobristHash % 65536));
+        NumMisses.Add(1, node.Index);
         return default;
       }
     }
+
 
     /// <summary>
     /// Returns if the contexts associated with two MCTSIterators are compatiable for reuse,
