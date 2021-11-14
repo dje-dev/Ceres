@@ -77,7 +77,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <summary>
     /// Average M (moves left estimate) for this subtree
     /// </summary>
-    public readonly float MAvg => mSum / N;
+    public readonly float MAvg => MSUM_ENABLED ? (mSum / N) : float.NaN;
 
     /// <summary>
     /// The starting index of entries for this node within the child info array

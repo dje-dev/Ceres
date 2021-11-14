@@ -94,10 +94,12 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       set => miscFields.MPosition = Math.Min(MAX_M, value);
     }
 
+    /// NOTE: TEMPORARILY REMOVED/DISABLED to leave space for variance term
+    const bool MSUM_ENABLED = false;
+
     /// <summary>
     /// Accumulator for M (moves left) values across all visits.
     /// 
-    /// NOTE: TEMPORARILY REMOVED/DISABLED to leave space for variance term
     /// </summary>
     internal FP16 mSum
     {
@@ -105,6 +107,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       readonly get => FP16.NaN;
       set
       {
+        Debug.Assert(!MSUM_ENABLED);
         //if (!FP16.IsNaN(value)) throw new NotImplementedException();
       }
 

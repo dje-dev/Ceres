@@ -890,14 +890,15 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         bool haveApplied = false;
 
         // Try to apply deep transposition backup (if requested).
+        int transpositionNodeIndex = node.InfoRef.TranspositionRootNodeIndex.Index;
         if (enableDeepTranspositionBackup && node.InfoRef.TranspositionRootNodeIndex != default)
         {
-          ref readonly MCTSNodeStruct transpositionRootNodeRef = ref nodes[node.InfoRef.TranspositionRootNodeIndex.Index];
+          ref readonly MCTSNodeStruct transpositionRootNodeRef = ref nodes[transpositionNodeIndex];
 
           if (!transpositionRootNodeRef.IsTranspositionRoot)
           {
             // The root has changed due to refresh of roots
-            if (node.InfoRef.Tree.TranspositionRoots.TryGetValue(node.ZobristHash, out int transpositionNodeIndex))
+            if (node.InfoRef.Tree.TranspositionRoots.TryGetValue(node.ZobristHash, out transpositionNodeIndex))
             {
               node.InfoRef.TranspositionRootNodeIndex = new MCTSNodeStructIndex(transpositionNodeIndex);
               //sMCTSEventSource.TestCounter1++;
@@ -939,9 +940,18 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
         if (!haveApplied)
         {
-          node.W += vToApply * numToApply;
-          node.mSum += (FP16)(mToApply * numToApply);
-          node.dSum += dToApply * numToApply;
+          if (numToApply == 1)
+          {
+            node.W += vToApply;
+            node.mSum += (FP16)mToApply;
+            node.dSum += dToApply;
+          }
+          else
+          {
+            node.W += vToApply * numToApply;
+            node.mSum += (FP16)(mToApply * numToApply);
+            node.dSum += dToApply * numToApply;
+          }
         }
 
 #if FEATURE_UNCERTAINTY
