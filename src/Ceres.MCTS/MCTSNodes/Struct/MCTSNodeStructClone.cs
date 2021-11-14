@@ -213,19 +213,31 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
       targetChildRef.ZobristHash = sourceChildRef.ZobristHash;
       targetChildRef.VSecondary = sourceChildRef.VSecondary;
-      targetChildRef.Uncertainty = sourceChildRef.Uncertainty;
-      targetChildRef.VarianceAccumulator = sourceChildRef.VarianceAccumulator;
+      //targetChildRef.Uncertainty = 0;// sourceChildRef.Uncertainty;
+      targetChildRef.VarianceAccumulator = 0; // variance accumulation does not begin until after VARIANCE_START_ACCUMULATE_N visits
 
       targetChildRef.PriorMove = sourceChildRef.PriorMove;
       targetChildRef.miscFields.IndexInParent = (byte)sourceChildRef.IndexInParent;
 
+      targetChildRef.miscFields.NumPieces = sourceChildRef.miscFields.NumPieces;
+      targetChildRef.miscFields.NumRank2Pawns = sourceChildRef.miscFields.NumRank2Pawns;
+
+      // TODO: HasRepetitions is not cloned here, it probably is not directly transferable
+      //       Can this be computed/improved?
+
       //targetChildRef.HashCrosscheck = sourceChildRef.HashCrosscheck;
 
-      // TODO: centralize this logic better (similar to what is in BackupApply).
-      if (targetChildRef.Terminal == Chess.GameResult.Draw)
+
+      if (targetChildRef.Terminal == GameResult.Draw)
       {
+        // TODO: centralize this logic better (similar to what is in BackupApply).
         targetParentRef.DrawKnownToExistAmongChildren = true;
       }
+      else if (targetChildRef.Terminal == GameResult.Checkmate)
+      {
+        targetParentRef.CheckmateKnownToExistAmongChildren = true;
+      }
+
 
       if (ParamsSelect.VIsForcedLoss(targetChildRef.V))
       {

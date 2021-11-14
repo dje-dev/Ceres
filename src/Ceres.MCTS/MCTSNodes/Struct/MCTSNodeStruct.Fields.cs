@@ -206,12 +206,40 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
     /// <summary>
     /// If at least one of the children has been found to 
+    /// be a checkmate (terminal node).
+    /// </summary>
+    public bool CheckmateKnownToExistAmongChildren
+    {
+      readonly get => miscFields.CheckmateKnownToExistAmongChildren;
+      set => miscFields.CheckmateKnownToExistAmongChildren = value;
+    }
+
+    /// <summary>
+    /// If at least one of the children has been found to 
     /// be a draw (terminal node).
     /// </summary>
     public bool DrawKnownToExistAmongChildren
     {
       readonly get => miscFields.DrawKnownToExistAmongChildren;
       set => miscFields.DrawKnownToExistAmongChildren = value;
+    }
+
+    /// <summary>
+    /// Number of pieces on the board.
+    /// </summary>
+    public byte NumPieces
+    {
+      readonly get => miscFields.NumPieces;
+      set => miscFields.NumPieces = value;
+    }
+
+    /// <summary>
+    /// Number of pawns still on their starting square.
+    /// </summary>
+    public byte NumRank2Pawns
+    {
+      readonly get => miscFields.NumRank2Pawns;
+      set => miscFields.NumRank2Pawns = value;
     }
 
 

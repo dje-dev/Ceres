@@ -28,6 +28,7 @@ using Ceres.MCTS.Environment;
 using Ceres.MCTS.Evaluators;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.MTCSNodes;
+using Ceres.MCTS.MTCSNodes.Annotation;
 using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.Params;
@@ -365,6 +366,11 @@ namespace Ceres.MCTS.Search
       {
         // Annotate
         InsureAnnotated(node);
+
+        ref MCTSNodeAnnotation annotationRef = ref node.Annotation;
+
+        nodeRef.NumPieces = annotationRef.Pos.PieceCount;
+        nodeRef.NumRank2Pawns = annotationRef.PosMG.NumPawnsRank2;
 
         // Verify this looks like a true non-leaf
         Debug.Assert(nodeRef.N == 0

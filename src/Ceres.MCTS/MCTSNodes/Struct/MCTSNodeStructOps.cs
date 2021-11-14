@@ -67,6 +67,17 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     }
 
     /// <summary>
+    /// If this node is possibly reachable (appears as a descendent in the full game tree)
+    /// from a specified prior node (using approximate heuristics).
+    /// </summary>
+    /// <param name="priorNode"></param>
+    /// <returns></returns>
+    public readonly bool IsPossiblyReachableFrom(in MCTSNodeStruct priorNode)
+      => NumPieces <= priorNode.NumPieces
+      && NumRank2Pawns <= priorNode.NumRank2Pawns;
+
+
+    /// <summary>
     /// Returns the MGPosition corresponding to this node.
     /// 
     /// NOTE: this is inefficient, requiring descent from root including move generation at each level.
@@ -866,7 +877,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           if (VARIANCE_LAMBDA != 0)
           {
             throw new NotImplementedException();
-            node.VarianceAccumulator = NewEMWVarianceAcc(node.VarianceAccumulator, node.N, qDiffSquared, numToApply, VARIANCE_LAMBDA);
+            //node.VarianceAccumulator = NewEMWVarianceAcc(node.VarianceAccumulator, node.N, qDiffSquared, numToApply, VARIANCE_LAMBDA);
           }
           else
           {
@@ -1036,10 +1047,10 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <param name="node"></param>
     /// <param name="lossP"></param>
     /// <param name="m"></param>
-    internal void SetProvenLossAndPropagateToParent(float lossP, float m)
+    internal void SetProvenLossAndPropagateToParent(FP16 lossP, FP16 m)
     {
       WinP = 0;
-      LossP = (FP16)lossP;
+      LossP = lossP;
       MPosition = (byte)MathF.Round(m, 0);
 
       if (!IsRoot)
@@ -1048,10 +1059,12 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         // Therefore propagate the result up to the opponent as a victory,
         // overriding such that the Q for that node reflects the certain loss
         ref MCTSNodeStruct parentRef = ref this.ParentRef;
-        parentRef.WinP = (FP16)lossP;
+        parentRef.WinP = lossP;
         parentRef.LossP = 0;
         parentRef.W = parentRef.V * parentRef.N; // Make Q come out to be same as V (which has already been set to the sure win)
         parentRef.MPosition = (byte)MathF.Round(m + 1, 0);
+
+        parentRef.CheckmateKnownToExistAmongChildren = true;
       }
     }
 
