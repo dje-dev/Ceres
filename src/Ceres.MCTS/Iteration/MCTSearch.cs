@@ -540,6 +540,8 @@ Console.WriteLine(node.Annotation.Pos.MiscInfo.RepetitionCount);
           MCTSNodeStructStorage.MakeChildNewRoot(Manager.Context.Tree, ref newRoot.StructRef, newPositionAndMoves,
                                                  reusePositionCache, newTranspositionRoots,
                                                  priorContext.ParamsSearch.Execution.TranspositionMaximizeRootN);
+          // Reload new root since now moved.
+          newRoot = Manager.Context.Tree.Root;
         }
       }
 
