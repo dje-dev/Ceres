@@ -341,9 +341,11 @@ namespace Ceres.MCTS.Params
     /// <summary>
     /// If the transposition table is maintained to enforce condition that 
     /// each node serving as root is the node with  maximal N 
-    /// among all nodes in the tree in the same equivalence class.
+    /// among all nodes in the tree in the same equivalence class
+    /// (allows deep transposition backup to always use the most informed root).
+    /// Seems beneficial (+7Elo +/-7, 83%, with T60 at 75knpm).
     /// </summary>
-    public bool TranspositionRootMaxN = false;
+    public bool TranspositionRootMaxN = true;
 
     /// <summary>
     /// If evaluations of siblings not yet visited (derived from transpositions)

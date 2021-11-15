@@ -286,7 +286,15 @@ namespace Ceres.MCTS.Search
         PossiblyUpdateFirstMoveSampler(node, indexOfChildDescendentFromRoot, numUpdateSelector1, numUpdateSelector2, wasTerminal, vToApply);
 
         // Update depth statistic
-        node.Context.CumulativeSelectedLeafDepths.Add(node.Depth * numToApply, node.Depth + node.PriorMove.RawValue);
+        int depth = node.Depth;
+        if (numToApply == 1)
+        {
+          node.Context.CumulativeSelectedLeafDepths.Add(depth, depth + node.PriorMove.RawValue);
+        }
+        else
+        {
+          node.Context.CumulativeSelectedLeafDepths.Add(depth * numToApply, depth + node.PriorMove.RawValue);
+        }
       }
       else
       {
@@ -367,7 +375,7 @@ namespace Ceres.MCTS.Search
       if (nodes.Count == 0) return;
 
       Span<MCTSNodeStruct> nodesSpan = nodes[0].Store.Nodes.nodes.Span;
-      
+
       bool refreshTranspositionRoots = nodes[0].Context.ParamsSearch.TranspositionRootMaxN;
       MCTSTree tree = nodes[0].Tree;
 
@@ -379,12 +387,11 @@ namespace Ceres.MCTS.Search
         ApplyResult(nodesSpan, selectorID, node, in node.EvalResult);
 
         // Possibly refresh transposition table if node now has greater N than current root
-        const int MIN_N = 3; // for efficiency, don't bother if very small
+        const int MIN_N = 1; // for efficiency, possibly don't bother if very small
         if (refreshTranspositionRoots 
          && node.N > MIN_N 
          && !node.StructRef.IsTranspositionRoot)
         {
-          //int numNodes = node.N + node.NInFlight + node.NInFlight2;
           bool updated = tree.TranspositionRoots.PossiblyUpdateIfNBigger(nodesSpan, node.StructRef.ZobristHash, node.Index, node.N);
           //if (updated) MCTSEventSource.TestMetric1++;          
         }
