@@ -104,6 +104,7 @@ namespace Ceres.Base.OperatingSystem
     }
 
     public void InsureAllocated(long numItems) => rawMemoryManager.InsureAllocated(numItems);
+    public void ResizeToNumItems(long numItems) => rawMemoryManager.ResizeToNumItems(numItems);
 
     public long NumItemsAllocated => rawMemoryManager.NumItemsAllocated;
 

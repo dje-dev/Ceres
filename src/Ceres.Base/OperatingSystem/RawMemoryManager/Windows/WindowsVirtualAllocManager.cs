@@ -208,7 +208,10 @@ namespace Ceres.Base.OperatingSystem
       IntPtr newBlocksStart = (IntPtr)(AllocPtr.ToInt64() + (NumBlocksCommitted * AllocBlockSizeBytes));
       long bytesAlloc = numBlocks * AllocBlockSizeBytes;
       IntPtr newBlockAdr = Win32.VirtualAlloc(newBlocksStart, (IntPtr)bytesAlloc, allocationType, Win32.PAGE_READWRITE);
-      if (newBlockAdr.ToInt64() == 0) throw new Exception($"Failure in memory incremental allocation (VirtualAlloc) of size {AllocBlockSizeBytes} with Windows error {Marshal.GetLastWin32Error()}");
+      if (newBlockAdr.ToInt64() == 0)
+      {
+        throw new Exception($"Failure in memory incremental allocation (VirtualAlloc) of size {AllocBlockSizeBytes} with Windows error {Marshal.GetLastWin32Error()}");
+      }
 
       // BAD PERFORMANCE  GC.AddMemoryPressure(bytesAlloc);
       Interlocked.Add(ref BytesCurrentlyAllocated, bytesAlloc);
@@ -227,18 +230,26 @@ namespace Ceres.Base.OperatingSystem
     {
       Debug.Assert(numBlocks <= NumBlocksCommitted);
 
+      // In order to keep a buffer of committed space above,
+      // resize to one more than requested.
+      numBlocks++;
+
       if (numBlocks < NumBlocksCommitted)
       {
-        IntPtr newBlocksStart = (IntPtr)(AllocPtr.ToInt64() + (NumBlocksCommitted * AllocBlockSizeBytes));
-        long bytesFree = (NumBlocksCommitted - numBlocks) * AllocBlockSizeBytes;
+        IntPtr newBlocksStart = (IntPtr)(AllocPtr.ToInt64() + (numBlocks * AllocBlockSizeBytes));
+        long numBlocksDecommit = NumBlocksCommitted - numBlocks;
+        long bytesFree = numBlocksDecommit * AllocBlockSizeBytes;
         bool successFree = Win32.VirtualFree(newBlocksStart, (IntPtr)bytesFree, Win32.MEM_DECOMMIT);
-        if (!successFree) throw new Exception($"Failure in memory incremental release (VirtualFree) of size {bytesFree} with Windows error {Marshal.GetLastWin32Error()}");
+        if (!successFree)
+        {
+          throw new Exception($"Failure in memory incremental release (VirtualFree) of size {bytesFree} with Windows error {Marshal.GetLastWin32Error()}");
+        }
 
         // BAD PERFORMANCE  GC.AddMemoryPressure(bytesAlloc);
         Interlocked.Add(ref BytesCurrentlyAllocated, -bytesFree);
 
-        NumItemsCommitted -= numBlocks * ItemsPerBlock;
-        NumBlocksCommitted -= numBlocks;
+        NumBlocksCommitted -= numBlocksDecommit;
+        NumItemsCommitted -= numBlocksDecommit * ItemsPerBlock;
       }
     }
 
