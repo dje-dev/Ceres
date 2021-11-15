@@ -330,7 +330,7 @@ namespace Ceres.MCTS.Iteration
          && nodeRef.Terminal == GameResult.Unknown
          && !nodeRef.IsTranspositionLinked
          && !nodeRef.IsOldGeneration
-         && nodeRef.Unused1 == 0 // ** TODO: fix this
+         && !nodeRef.TestFlag // ** TODO: fix this
          /*&& FP16.IsNaN(nodeRef.VSecondary)*/)// )
         {
           MCTSNode node = Context.Tree.GetNode(index);
@@ -338,7 +338,7 @@ namespace Ceres.MCTS.Iteration
           node.EvalResult = default;
           nodes.Add(node);
 
-          nodeRef.Unused1 = 1; // TODO: FIX THIS
+          nodeRef.TestFlag = true; // TODO: FIX THIS
 
           numNodes++;
 

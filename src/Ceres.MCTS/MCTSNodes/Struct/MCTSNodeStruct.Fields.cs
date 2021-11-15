@@ -141,6 +141,16 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     }
 
     /// <summary>
+    /// Value of test flag (miscellaneous ad hoc tests).
+    /// </summary>
+    public bool TestFlag
+    {
+      readonly get => miscFields.TestFlag;
+      set => miscFields.TestFlag = value;
+    }
+
+
+    /// <summary>
     /// Index of the parent, or null if root node
     /// </summary>
     public MCTSNodeStructIndex ParentIndex;

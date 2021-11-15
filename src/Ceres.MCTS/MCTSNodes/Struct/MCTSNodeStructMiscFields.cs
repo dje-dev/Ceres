@@ -43,7 +43,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     const int BIT_LENGTH_HAS_REPETITIONS = 1;
     const int BIT_LENGTH_NUM_PIECES = 5;
     const int BIT_LENGTH_NUM_RANK2_PAWNS = 5;
-    const int BIT_LENGTH_UNUSED = 8;
+    const int BIT_LENGTH_TEST = 1;
+    const int BIT_LENGTH_UNUSED = 7;
 
     const int BIT_INDEX_TERMINAL = 0;
     const int BIT_INDEX_DRAW_KNOWN_EXIST = BIT_INDEX_TERMINAL + BIT_LENGTH_TERMINAL;
@@ -57,6 +58,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     const int BIT_INDEX_NUM_PIECES = BIT_INDEX_HAS_REPETITIONS + BIT_LENGTH_HAS_REPETITIONS;
     const int BIT_INDEX_NUM_RANK2_PAWNS = BIT_INDEX_NUM_PIECES + BIT_LENGTH_NUM_PIECES;
 
+    const int BIT_INDEX_TEST = BIT_INDEX_NUM_RANK2_PAWNS + BIT_LENGTH_NUM_RANK2_PAWNS;
 
     public void Clear() => bits = 0;
 
@@ -257,6 +259,26 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         BitUtils.SetRange(ref bits, BIT_INDEX_NUM_RANK2_PAWNS, BIT_LENGTH_NUM_RANK2_PAWNS, (uint)value);
       }
     }
+
+
+    /// <summary>
+    /// Value of test flag (miscellaneous ad hoc tests).
+    /// </summary>
+    internal bool TestFlag
+    {
+      [MethodImpl(MethodImplOptions.AggressiveInlining)]
+      readonly get
+      {
+        return BitUtils.HasFlag(bits, BIT_INDEX_TEST);
+      }
+
+      [MethodImpl(MethodImplOptions.AggressiveInlining)]
+      set
+      {
+        BitUtils.SetFlag(ref bits, BIT_INDEX_TEST, value);
+      }
+    }
+
 
 
     /// <summary>
