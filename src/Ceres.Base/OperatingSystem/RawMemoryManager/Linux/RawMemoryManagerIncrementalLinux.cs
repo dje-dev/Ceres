@@ -62,7 +62,9 @@ namespace Ceres.Base.OperatingSystem
     }
 
 
-    static bool largePageAllocationFailed = false;
+    static bool largePageAllocationEverFailed = false;
+
+    bool usesLargePages = false;
 
     public void Reserve(string sharedMemName, bool useExistingSharedMemory, long numItems, bool useLargePages)
     {
@@ -82,7 +84,7 @@ namespace Ceres.Base.OperatingSystem
       NumBytesReserved = RoundToHugePageSize(numItems * sizeof(T) + PAGE_SIZE);
 
       int mapFlags = LinuxAPI.MAP_NORESERVE | LinuxAPI.MAP_PRIVATE | LinuxAPI.MAP_ANONYMOUS;
-      if (useLargePages && !largePageAllocationFailed)
+      if (useLargePages && !largePageAllocationEverFailed)
       {
         mapFlags |= LinuxAPI.MAP_HUGETLB;
       };
@@ -96,7 +98,7 @@ namespace Ceres.Base.OperatingSystem
           mapPtr = (IntPtr)LinuxAPI.mmap(null, NumBytesReserved, LinuxAPI.PROT_NONE, mapFlags ^= LinuxAPI.MAP_HUGETLB, -1, 0);
           if (mapPtr.ToInt64() != -1)
           {
-            largePageAllocationFailed = true;
+            largePageAllocationEverFailed = true;
             Console.WriteLine("NOTE: Attempt to allocate large page failed, falling back to non-large pages.");
           }
         }
@@ -105,10 +107,13 @@ namespace Ceres.Base.OperatingSystem
         {
           throw new Exception($"Virtual memory reservation of {NumBytesReserved} bytes failed using mmap.");
         }
-
       }
-      rawMemoryPointer = (void*)mapPtr;
+      else
+      {
+        usesLargePages = true;
+      }
 
+      rawMemoryPointer = (void*)mapPtr;
     }
 
 
@@ -166,17 +171,18 @@ namespace Ceres.Base.OperatingSystem
 
       long numBytesNeeded = numItems * sizeof(T) + PAGE_SIZE; // overallocate to avoid partial page access
       numBytesNeeded = RoundToHugePageSize(numBytesNeeded);
+      numItems = numBytesNeeded / sizeof(T);
 
       if (numBytesNeeded < numBytesAllocated)
       {
-        long freeBlocksStart = ((IntPtr)rawMemoryPointer).ToInt64() + numItems * sizeof(T);
+        long freeBlocksStart = ((IntPtr)rawMemoryPointer).ToInt64() + numBytesNeeded;
         long itemsFree = NumItemsAllocated - numItems;
         long bytesFree = itemsFree * sizeof(T);
 
-        int resultCode = LinuxAPI.munmap((void*)freeBlocksStart, bytesFree);
+        int resultCode = LinuxAPI.mprotect((void*)freeBlocksStart, bytesFree, LinuxAPI.PROT_NONE);
         if (resultCode != 0)
         {
-          throw new Exception($"Virtual memory munmap of size {bytesFree} failed with error {resultCode}");
+          throw new Exception($"Virtual memory mprotect to decommit size {bytesFree} failed with error {resultCode}");
         }
 
         Interlocked.Add(ref RawMemoryManagerIncrementalLinuxStats.BytesCurrentlyAllocated, -bytesFree);
