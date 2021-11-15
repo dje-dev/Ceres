@@ -184,6 +184,33 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     internal void InsureAllocated(int numChildren) => childIndices.InsureAllocated(numChildren);
 
 
+
+    /// <summary>
+    /// Resizes memory store to exactly fit current used space.
+    /// </summary>
+    public void ResizeToCurrent() => ResizeToNumChildren(nextFreeBlockIndex * MCTSNodeStructChildStorage.NUM_CHILDREN_PER_BLOCK);
+
+
+    /// <summary>
+    /// Resizes underlying memory block to commit only specified number of items.
+    /// </summary>
+    /// <param name="numChildren"></param>
+    /// <exception cref="Exception"></exception>
+    void ResizeToNumChildren(int numChildren)
+    {
+      if (numChildren < nextFreeBlockIndex)
+      {
+        throw new ArgumentException("Attempt to resize MCTSNodeStructChildStorage to size smaller than current number of used nodes.");
+      }
+      else if (numChildren > childIndices.NumItemsAllocated)
+      {
+        throw new ArgumentException("Attempt to resize MCTSNodeStructChildStorage to size larger than current.");
+      }
+
+      childIndices.ResizeToNumItems(numChildren);
+    }
+
+
     /// <summary>
     /// Determins number of blocks needed to hold a specified number of children.
     /// </summary>

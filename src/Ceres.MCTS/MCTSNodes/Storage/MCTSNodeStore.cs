@@ -183,6 +183,17 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       }
     }
 
+    /// <summary>
+    /// Resizes underlying memory block to commit only up to currently used space.
+    /// </summary>
+    /// <param name="numNodes"></param>
+    /// <exception cref="Exception"></exception>
+    public void ResizeToCurrent()
+    {
+      Nodes.ResizeToCurrent();
+      Children.ResizeToCurrent();
+    }
+
     #endregion
 
     #region Reorganization
@@ -285,6 +296,8 @@ namespace Ceres.MCTS.MTCSNodes.Storage
           return;
         }
 
+        AssertNode(nodeR.NumPieces >= 2 && nodeR.NumPieces <= 32, $"NumPieces not in [2,32]", i, in nodeR, true);
+        AssertNode(nodeR.NumRank2Pawns <= 16, $"NumRank2Pawns > 16", i, in nodeR, true);
         AssertNode(nodeR.ZobristHash != 0, $"ZobristHash zero", i, in nodeR, true);
         AssertNode(nodeR.Terminal != Chess.GameResult.NotInitialized, "Node not initialized", i, in nodeR);
         AssertNode(!expectCacheIndexZero || nodeR.CachedInfoPtr == null, "CacheIndex zeroed", i, in nodeR);

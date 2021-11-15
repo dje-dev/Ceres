@@ -86,6 +86,9 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       else
       {
         DoMakeChildNewRootRewrite(tree, policySoftmax, ref newRootChild, newPriorMoves, cacheNonRetainedNodes, transpositionRoots, tryKeepTranspositionRootsMaxN);
+
+        // Resized committed memory to new size.
+        tree.Store.ResizeToCurrent();
       }
 
 #if DEBUG

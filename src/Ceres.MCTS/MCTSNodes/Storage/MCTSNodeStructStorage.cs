@@ -171,6 +171,32 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 
 
     /// <summary>
+    /// Resizes memory store to exactly fit current used space.
+    /// </summary>
+    public void ResizeToCurrent() => ResizeToNumNodes(NumTotalNodes);
+
+
+    /// <summary>
+    /// Resizes underlying memory block to commit only specified number of items.
+    /// </summary>
+    /// <param name="numNodes"></param>
+    /// <exception cref="Exception"></exception>
+    void ResizeToNumNodes(int numNodes)
+    {
+      if (numNodes < NumTotalNodes)
+      {
+        throw new ArgumentException("Attempt to resize MCTSNodeStructStorage to size smaller than current number of used nodes.");
+      }
+      else if (numNodes > nodes.NumItemsAllocated)
+      {
+        throw new ArgumentException("Attempt to resize MCTSNodeStructStorage to size larger than current.");
+      }
+
+      nodes.ResizeToNumItems(numNodes);
+    }
+
+
+    /// <summary>
     /// Overallocate sufficiently to make sure allocation reaches to end of a (possibly huge) page
     /// </summary>
     static int BUFFER_NODES => (2048 * 1024) / MCTSNodeStruct.MCTSNodeStructSizeBytes;
@@ -255,6 +281,9 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 
       // Initialize fields
       nodes[rootNodeIndex.Index].Initialize(default, 0, (FP16)1.0, default);
+
+      nodes[rootNodeIndex.Index].NumPieces = priorMoves.FinalPosition.PieceCount;
+      nodes[rootNodeIndex.Index].NumRank2Pawns = priorMoves.FinalPosMG.NumPawnsRank2;
     }
 
 
