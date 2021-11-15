@@ -36,21 +36,19 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     const int BIT_LENGTH_TERMINAL = 2;
     const int BIT_LENGTH_DRAW_KNOWN_EXIST = 1;
     const int BIT_LENGTH_CHECKMATE_KNOWN_EXIST = 1;
-    const int BIT_LENGTH_M_POSITION = 8;
     const int BIT_LENGTH_IS_OLD_GENERATION = 1;
     const int BIT_LENGTH_TRANSPOSITION_UNLINK_INPROGRESS = 1;
     const int BIT_LENGTH_IS_TRANSPOSITION_ROOT = 1;
     const int BIT_LENGTH_INDEX_IN_PARENT = 6;
     const int BIT_LENGTH_HAS_REPETITIONS = 1;
     const int BIT_LENGTH_NUM_PIECES = 5;
-    const int BIT_LENGTH_NUM_RANK2_PAWNS = 4;
-    const int BIT_LENGTH_UNUSED = 1;
+    const int BIT_LENGTH_NUM_RANK2_PAWNS = 5;
+    const int BIT_LENGTH_UNUSED = 8;
 
     const int BIT_INDEX_TERMINAL = 0;
     const int BIT_INDEX_DRAW_KNOWN_EXIST = BIT_INDEX_TERMINAL + BIT_LENGTH_TERMINAL;
     const int BIT_INDEX_CHECKMATE_KNOWN_EXIST = BIT_INDEX_DRAW_KNOWN_EXIST + BIT_LENGTH_DRAW_KNOWN_EXIST;
-    const int BIT_INDEX_M_POSITION = BIT_INDEX_CHECKMATE_KNOWN_EXIST + BIT_LENGTH_CHECKMATE_KNOWN_EXIST;
-    const int BIT_INDEX_IS_OLD_GENERATION = BIT_INDEX_M_POSITION + BIT_LENGTH_M_POSITION;
+    const int BIT_INDEX_IS_OLD_GENERATION = BIT_INDEX_CHECKMATE_KNOWN_EXIST + BIT_LENGTH_CHECKMATE_KNOWN_EXIST;
     const int BIT_INDEX_TRANSPOSITION_UNLINK_INPROGRESS = BIT_INDEX_IS_OLD_GENERATION + BIT_LENGTH_IS_OLD_GENERATION;
     const int BIT_INDEX_IS_TRANSPOSITION_ROOT = BIT_INDEX_TRANSPOSITION_UNLINK_INPROGRESS + BIT_LENGTH_TRANSPOSITION_UNLINK_INPROGRESS;
     const int BIT_INDEX_INDEX_IN_PARENT = BIT_INDEX_IS_TRANSPOSITION_ROOT + BIT_LENGTH_IS_TRANSPOSITION_ROOT;
@@ -77,7 +75,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       [MethodImpl(MethodImplOptions.AggressiveInlining)]
       set
       {
-        Debug.Assert((int)value < 2 << BIT_LENGTH_TERMINAL);
+        Debug.Assert((int)value < 2 << (BIT_LENGTH_TERMINAL - 1));
         BitUtils.SetRange(ref bits, BIT_INDEX_TERMINAL, BIT_LENGTH_TERMINAL, (uint)value);
       }
     }
@@ -119,27 +117,6 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         BitUtils.SetFlag(ref bits, BIT_INDEX_DRAW_KNOWN_EXIST, value);
       }
     }
-
-
-    /// <summary>
-    /// Moves left head output for this position (rounded to a whole number).
-    /// </summary>
-    internal byte MPosition
-    {
-      [MethodImpl(MethodImplOptions.AggressiveInlining)]
-      readonly get
-      {
-        return (byte)BitUtils.ExtractRange(bits, BIT_INDEX_M_POSITION, BIT_LENGTH_M_POSITION);
-      }
-
-      [MethodImpl(MethodImplOptions.AggressiveInlining)]
-      set
-      {
-        Debug.Assert(value < 2 << BIT_LENGTH_M_POSITION);
-        BitUtils.SetRange(ref bits, BIT_INDEX_M_POSITION, BIT_LENGTH_M_POSITION, (uint)value);
-      }
-    }
-
 
     /// <summary>
     /// If the node belonged to a prior seacrh tree but is 
@@ -216,7 +193,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       [MethodImpl(MethodImplOptions.AggressiveInlining)]
       set
       {
-        Debug.Assert(value < 2 << BIT_LENGTH_INDEX_IN_PARENT);
+        Debug.Assert(value < 2 << (BIT_LENGTH_INDEX_IN_PARENT - 1));
         BitUtils.SetRange(ref bits, BIT_INDEX_INDEX_IN_PARENT, BIT_LENGTH_INDEX_IN_PARENT, (uint)value);
       }
     }
@@ -249,15 +226,14 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       [MethodImpl(MethodImplOptions.AggressiveInlining)]
       readonly get
       {
-        return (byte)BitUtils.ExtractRange(bits, BIT_INDEX_NUM_PIECES, BIT_LENGTH_NUM_PIECES);
+        return (byte)(1 + BitUtils.ExtractRange(bits, BIT_INDEX_NUM_PIECES, BIT_LENGTH_NUM_PIECES));
       }
 
       [MethodImpl(MethodImplOptions.AggressiveInlining)]
       set
       {
-//        Debug.Assert(value >=2 && value <= 32);
-        Debug.Assert(value < 2 << BIT_LENGTH_NUM_PIECES);
-        BitUtils.SetRange(ref bits, BIT_INDEX_NUM_PIECES, BIT_LENGTH_NUM_PIECES, (uint)value);
+        Debug.Assert(value >=2 && value <= 32);
+        BitUtils.SetRange(ref bits, BIT_INDEX_NUM_PIECES, BIT_LENGTH_NUM_PIECES, (uint)value - 1);
       }
     }
 
@@ -276,8 +252,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       [MethodImpl(MethodImplOptions.AggressiveInlining)]
       set
       {
-//        Debug.Assert(value <= 16);
-        Debug.Assert(value < 2 << BIT_LENGTH_NUM_RANK2_PAWNS);
+        Debug.Assert(value <= 16);
+        Debug.Assert(value < 2 << (BIT_LENGTH_NUM_RANK2_PAWNS - 1));
         BitUtils.SetRange(ref bits, BIT_INDEX_NUM_RANK2_PAWNS, BIT_LENGTH_NUM_RANK2_PAWNS, (uint)value);
       }
     }
@@ -289,7 +265,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <returns></returns>
     public readonly override string ToString()
     {
-      return $"<MCTSNodeStructMiscFields Terminal: {Terminal}, DrawExist: {DrawKnownToExistAmongChildren}, M: {MPosition}, Gen#: {IsOldGeneration}";
+      return $"<MCTSNodeStructMiscFields Terminal: {Terminal}, DrawExist: {DrawKnownToExistAmongChildren}, Gen#: {IsOldGeneration}";
     }
 
   }

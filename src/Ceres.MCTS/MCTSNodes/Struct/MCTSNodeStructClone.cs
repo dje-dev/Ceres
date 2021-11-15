@@ -209,7 +209,6 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       targetChildRef.MPosition = sourceChildRef.MPosition;
       targetChildRef.WinP = sourceChildRef.WinP;
       targetChildRef.LossP = sourceChildRef.LossP;
-      targetChildRef.Unused1 = sourceChildRef.Unused1;
 
       targetChildRef.ZobristHash = sourceChildRef.ZobristHash;
       targetChildRef.VSecondary = sourceChildRef.VSecondary;

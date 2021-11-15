@@ -85,14 +85,17 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
     const byte MAX_M = 255;
 
+    private byte mPosition;
+
     /// <summary>
     ///  Moves left estimate for this position
     /// </summary>
     public byte MPosition
     {
-      readonly get => miscFields.MPosition;
-      set => miscFields.MPosition = Math.Min(MAX_M, value);
+      readonly get => mPosition;
+      set => mPosition = Math.Min(MAX_M, value);
     }
+
 
     /// NOTE: TEMPORARILY REMOVED/DISABLED to leave space for variance term
     const bool MSUM_ENABLED = false;
@@ -177,8 +180,6 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// (a corresponding node created in the tree).
     /// </summary>
     public byte NumChildrenExpanded;
-
-    public byte Unused1;
 
     /// <summary>
     /// Only start accumulating variance statistics after a minimum number of visits
