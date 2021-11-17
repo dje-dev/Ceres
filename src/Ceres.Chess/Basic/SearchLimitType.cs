@@ -25,9 +25,15 @@ namespace Ceres.Chess
   public enum SearchLimitType
   {
     /// <summary>
-    /// Number of nodes (visits to leaf positions) for the move.
+    /// Number of nodes (visits to leaf positions) to be made per move.
     /// </summary>
     NodesPerMove,
+
+    /// <summary>
+    /// Number of final nodes in tree at end of search 
+    /// (or more, if search started with already more).
+    /// </summary>
+    NodesPerTree,
 
     /// <summary>
     /// Total number of nodes (visits to leaf positions) for all moves.

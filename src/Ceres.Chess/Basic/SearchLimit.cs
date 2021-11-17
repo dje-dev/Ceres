@@ -89,6 +89,11 @@ namespace Ceres.Chess
       return new SearchLimit(SearchLimitType.NodesPerMove, nodes, searchContinuationSupported);
     }
 
+    public static SearchLimit NodesPerTree(int nodes, bool searchContinuationSupported = true)
+    {
+      return new SearchLimit(SearchLimitType.NodesPerTree, nodes, searchContinuationSupported);
+    }
+
     public static SearchLimit SecondsPerMove(float seconds, bool searchContinuationSupported = true)
     {
       return new SearchLimit(SearchLimitType.SecondsPerMove, seconds, searchContinuationSupported);
@@ -126,9 +131,15 @@ namespace Ceres.Chess
                        int? maxTreeNodes = null,
                        int? maxTreeVisits = null)
     {
-      if (value < 0) throw new ArgumentOutOfRangeException(nameof(value), "cannot be negative");
+      if (value < 0)
+      {
+        throw new ArgumentOutOfRangeException(nameof(value), "cannot be negative");
+      }
+
       if (valueIncrement > 0 && !TypeIsPerGameLimit(type))
+      {
         throw new Exception("SearchLimit having increment not supported in NodesPerMove or SecondsPerMove");
+      }
 
       Type = type;
       Value = value;
@@ -147,9 +158,13 @@ namespace Ceres.Chess
 
     #region Predicates
 
-    public static bool TypeIsPerGameLimit(SearchLimitType type) => type == SearchLimitType.NodesForAllMoves || type == SearchLimitType.SecondsForAllMoves;
-    public static bool TypeIsNodesLimit(SearchLimitType type) => type == SearchLimitType.NodesPerMove || type == SearchLimitType.NodesForAllMoves;
-    public static bool TypeIsTimeLimit(SearchLimitType type) => type == SearchLimitType.SecondsPerMove || type == SearchLimitType.SecondsForAllMoves;
+    public static bool TypeIsPerGameLimit(SearchLimitType type) => type == SearchLimitType.NodesForAllMoves 
+                                                                || type == SearchLimitType.SecondsForAllMoves;
+    public static bool TypeIsNodesLimit(SearchLimitType type) => type == SearchLimitType.NodesPerMove 
+                                                              || type == SearchLimitType.NodesForAllMoves 
+                                                              || type == SearchLimitType.NodesPerTree;
+    public static bool TypeIsTimeLimit(SearchLimitType type) => type == SearchLimitType.SecondsPerMove 
+                                                             || type == SearchLimitType.SecondsForAllMoves;
 
     public bool IsPerGameLimit => TypeIsPerGameLimit(Type);
     public bool IsNodesLimit => TypeIsNodesLimit(Type);
@@ -201,7 +216,8 @@ namespace Ceres.Chess
     {
       get
       {
-        if (Type == SearchLimitType.NodesPerMove)
+        if (Type == SearchLimitType.NodesPerMove 
+         || Type == SearchLimitType.NodesPerTree) // upper bound
         {
           return (int)Value;
         }
@@ -213,15 +229,16 @@ namespace Ceres.Chess
     }
 
 
-    public int EstNumNodes(int estNumNodesPerSecond, bool estIsObserved)
+    public int EstNumNodes(int curNumNodes, int estNumNodesPerSecond, bool estIsObserved)
     {
       // TODO: make the estimations below smarter
       return Type switch
       {
-        SearchLimitType.NodesPerMove => (int)Value,
-        SearchLimitType.SecondsPerMove => (int)SecsToNodes(Value + ValueIncrement, estNumNodesPerSecond, estIsObserved),
-        SearchLimitType.SecondsForAllMoves => (int)((ValueIncrement + (Value / 20.0f)) * estNumNodesPerSecond),
-        SearchLimitType.NodesForAllMoves => (int)(ValueIncrement + (Value / 20.0f)),
+        SearchLimitType.NodesPerMove => (int)Value, 
+        SearchLimitType.NodesPerTree  => (int)MathF.Max(Value - curNumNodes, 1),
+        SearchLimitType.SecondsPerMove => (int)SecsToNodes(Value, estNumNodesPerSecond, estIsObserved),
+        SearchLimitType.SecondsForAllMoves => (int)((Value / 20.0f) * estNumNodesPerSecond),
+        SearchLimitType.NodesForAllMoves => (int)(Value / 20.0f),
         _ => throw new NotImplementedException()
       };
     }
@@ -234,7 +251,9 @@ namespace Ceres.Chess
         return secs * estNumNodesPerSecond * 0.3f;
       }
       else
+      {
         return secs * estNumNodesPerSecond;
+      }
     }
 
     #endregion
@@ -284,6 +303,7 @@ namespace Ceres.Chess
     {
       SearchLimitType.NodesForAllMoves => "NG",
       SearchLimitType.NodesPerMove => "NM",
+      SearchLimitType.NodesPerTree => "NT",
       SearchLimitType.SecondsForAllMoves => "SG",
       SearchLimitType.SecondsPerMove => "SM",
       _ => throw new Exception($"Internal error: unsupported SearchLimitType type {Type}")

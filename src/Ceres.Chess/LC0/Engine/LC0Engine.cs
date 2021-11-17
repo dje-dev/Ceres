@@ -86,6 +86,9 @@ namespace Ceres.Chess.LC0.Engine
         case SearchLimitType.NodesPerMove:
           searchInfo = Runner.EvalPositionToNodes(fenAndMovesString, (int)searchLimit.Value);
           break;
+        case SearchLimitType.NodesPerTree:
+          throw new NotImplementedException("NodesPerTree not currently supported for LC0 engines");
+
         default:
           throw new Exception("Unknown search limit " + searchLimit.Type);
       }
@@ -139,6 +142,11 @@ namespace Ceres.Chess.LC0.Engine
         case SearchLimitType.NodesPerMove:
           searchInfo = Runner.EvalPositionToNodes(fenAndMovesStr, (int)searchLimit.Value);
           break;
+
+        case SearchLimitType.NodesPerTree:
+          // TODO: someday this could be supported,
+          //       omit "--nodes-as-playouts" option.
+          throw new NotImplementedException("NodesPerTree not currently supported for LC0 engines");
 
         case SearchLimitType.SecondsPerMove:
           searchInfo = Runner.EvalPositionToMovetime(fenAndMovesStr, searchValueMilliseconds);

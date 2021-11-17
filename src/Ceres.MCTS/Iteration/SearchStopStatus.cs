@@ -43,7 +43,7 @@ namespace Ceres.MCTS.Iteration
       /// <summary>
       /// Panic low time limit reached.
       /// </summary>
-      TimeExpired,
+      PanicTimeTooLow,
 
       /// <summary>
       /// Search limit (e.g. max number of nodes) reached.
@@ -60,7 +60,7 @@ namespace Ceres.MCTS.Iteration
       /// The MaxTreeNodes field in the SearchLimit was set
       /// and the store backing the search tree has reached that limit.
       /// </summary>
-      MaxTreeNodesExceeded,
+      MaxTreeAllocatedNodesExceeded,
 
       /// <summary>
       /// All top-level moves were pruned.

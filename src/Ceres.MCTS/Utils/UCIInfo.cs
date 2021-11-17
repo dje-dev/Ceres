@@ -105,7 +105,7 @@ namespace Ceres.MCTS.Utils
           scoreToShow = MathF.Round(EncodedEvalLogistic.LogisticToCentipawn(thisQ), 0);
         }
 
-        float nps = manager.NumStepsTakenThisSearch / elapsedTimeSeconds;
+        float nps = manager.NumNodesVisitedThisSearch / elapsedTimeSeconds;
 
         // If somehow the nps looks unreasonable then truncate it to zero
         // to avoid making graphs in tournament managers show outlier points.

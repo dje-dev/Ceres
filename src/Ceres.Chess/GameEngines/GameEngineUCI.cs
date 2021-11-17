@@ -229,6 +229,10 @@ namespace Ceres.Chess.GameEngines
           gameInfo = UCIRunner.EvalPositionToNodes(curPositionAndMoves.FENAndMovesString, (int)(searchLimit.Value));
           break;
 
+        case SearchLimitType.NodesPerTree:
+          throw new NotImplementedException("NodesIncrementalPerMove not supported for UCI engines");
+          break;
+
         case SearchLimitType.NodesForAllMoves:
            using (new TimingBlock(new TimingStats(), TimingBlock.LoggingType.None))
           {

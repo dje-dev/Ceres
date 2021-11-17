@@ -23,7 +23,7 @@ namespace Ceres.Chess
   /// <summary>
   /// Manages parsing of SearchLimit specification strings,
   /// textual representations of SearchLimits with syntax
-  ///   <number> [+<number>] ["nm"|"ng"|"sm"|"sg"]
+  ///   <number> [+<number>] ["nm"|"ng"|"nt"|"sm"|"sg"]
   /// where the suffix indicates nodes/seconds per game/move.
   /// </summary>
   public static class SearchLimitSpecificationString
@@ -63,6 +63,8 @@ namespace Ceres.Chess
       SearchLimitType limitType;
       if (specificationString.EndsWith("nm"))
         limitType = SearchLimitType.NodesPerMove;
+      else if (specificationString.EndsWith("nt"))
+        limitType = SearchLimitType.NodesPerTree;
       else if (specificationString.EndsWith("ng"))
         limitType = SearchLimitType.NodesForAllMoves;
       else if (specificationString.EndsWith("sm"))
@@ -71,7 +73,7 @@ namespace Ceres.Chess
         limitType = SearchLimitType.SecondsForAllMoves;
       else
       {
-        errorString = "Invalid SearchLimit specification, expected to end with one of nm, ng, sm, or sg indicating nodes/seconds per game/move";
+        errorString = "Invalid SearchLimit specification, expected to end with one of nm, nim, ng, sm, or sg indicating nodes/seconds per game/move";
         return null;
       }
 

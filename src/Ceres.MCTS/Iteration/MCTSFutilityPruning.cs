@@ -131,7 +131,7 @@ namespace Ceres.MCTS.Iteration
       // Because estimates of nodes remaining are noisy for searces with time limits,
       // conservatively decline to set MinNToVisit unless we are 
       // reasonably close to the end of the search (and thus had sufficient time to get accurate statistics)
-      if (Manager.NumStepsTakenThisSearch < 100)
+      if (Manager.NumNodesVisitedThisSearch < 100)
       {
         return;
       }
@@ -162,7 +162,7 @@ namespace Ceres.MCTS.Iteration
       if (Manager.Root.NumChildrenExpanded == 0) return;
 
       float aggressiveness = Context.ParamsSearch.MoveFutilityPruningAggressiveness;
-      if (aggressiveness >= 1.5f) throw new Exception("Ceres configuration error: maximum value of EarlyStopMoveSecondaryAggressiveness is 1.5.");
+      if (aggressiveness >= 1.5f) throw new Exception("Maximum value of EarlyStopMoveSecondaryAggressiveness is 1.5.");
 
       float MIN_BEST_N_FRAC_REQUIRED = ManagerChooseBestMove.MIN_FRAC_N_REQUIRED_MIN;
 
