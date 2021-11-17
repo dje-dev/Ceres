@@ -157,7 +157,7 @@ namespace Ceres.Features.GameEngines
       // Use default limit manager if not specified.
       if (gameLimitManager == null)
       {
-        gameLimitManager = new ManagerGameLimitCeres();
+        gameLimitManager = new ManagerGameLimitCeres(searchParams.GameLimitUsageAggressiveness);
       }
 
       EvaluatorDef = evaluatorDef;
