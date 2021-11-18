@@ -15,6 +15,7 @@
 
 using System;
 using System.Collections.Generic;
+using Ceres.Base.Math;
 using Ceres.Chess.GameEngines;
 
 #endregion
@@ -210,5 +211,65 @@ namespace Ceres.Features.Tournaments
     /// </summary>
     public List<GameMoveStat> GameMoveHistory;
 
+
+    public float TimeAggressivenessRatio(bool white)
+    {
+      const int MOVES_EACH_SIZE = 5;
+      int midpointInconclusivePhase = PlyNumEndInconclusivePhase / 2;
+      float firstQuartileN = AvgFinalNAtPly(white, (int)MathF.Round(0.25f * midpointInconclusivePhase), MOVES_EACH_SIZE);
+      float thirdQuartileN = AvgFinalNAtPly(white, (int)MathF.Round(0.75f * midpointInconclusivePhase), MOVES_EACH_SIZE);
+
+      return firstQuartileN / thirdQuartileN;
+    }
+
+    public float AvgFinalNAtPly(bool white, int plyNum, int numMovesEachSide)
+    {
+      // Must do 2x as many moves because each side only plays every other ply.
+      int numPlyEachSide = numMovesEachSide * 2;
+      List<float> n = new();
+
+      for (int i=plyNum- numPlyEachSide; i<= plyNum+ numPlyEachSide; i++)
+      {
+        if (i >= 0 && i < GameMoveHistory.Count)
+        {
+          if ((GameMoveHistory[i].Side == Chess.SideType.White) == white)
+          {
+            n.Add(GameMoveHistory[i].FinalN);
+          }
+        }
+      }
+      return StatUtils.Average(n.ToArray());
+    }
+
+    /// <summary>
+    /// Returns the index of the first move which marked the beginning
+    /// of the non-decisive phase of the game 
+    /// (all subsequent moves were highly consistent with the final outcome).
+    /// </summary>
+    public int PlyNumEndInconclusivePhase
+    {
+      get
+      {
+        const float DRAW_THRESHOLD_CP = 10f;
+        const float WIN_THRESHOLD_CP = 150f;
+
+        bool wasDraw = Result == TournamentGameResult.Draw;
+
+        for (int i=GameMoveHistory.Count-1; i>= 0; i--)
+        {
+          GameMoveStat stat = GameMoveHistory[i];
+          if (wasDraw && MathF.Abs(stat.ScoreCentipawns) > DRAW_THRESHOLD_CP)
+          {
+            return i;
+          }
+          else if (!wasDraw && MathF.Abs(stat.ScoreCentipawns) < WIN_THRESHOLD_CP)
+          {
+            return i;
+          }
+        }
+
+        return 0;
+      }
+    }
   }
 }

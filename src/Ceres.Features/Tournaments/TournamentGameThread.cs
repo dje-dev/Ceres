@@ -399,14 +399,14 @@ namespace Ceres.Features.Tournaments
         Def.Logger.Write($"{gNumber,5} {DateTime.Now.ToString().Split(" ")[1],10}  {gameSequenceNum,4:F0}  {openingIndex,4:F0}{openingPlayedBothWaysStr}  ");
         if (engine2White)
         {
-          Def.Logger.Write($"{thisResult.TotalTimeEngine2,8:F2}{player2ForfeitChar}{thisResult.RemainingTimeEngine2,7:F2} ");
-          Def.Logger.Write($"{thisResult.TotalTimeEngine1,8:F2}{player1ForfeitChar}{thisResult.RemainingTimeEngine1,7:F2}  ");
+//          Def.Logger.Write($"{thisResult.TotalTimeEngine2,8:F2}{player2ForfeitChar}{thisResult.RemainingTimeEngine2,7:F2}  {thisResult.TimeAggressivenessRatio(true),5:F2} ");
+//          Def.Logger.Write($"{thisResult.TotalTimeEngine1,8:F2}{player1ForfeitChar}{thisResult.RemainingTimeEngine1,7:F2}  {thisResult.TimeAggressivenessRatio(false),5:F2}  ");
           Def.Logger.Write($"{thisResult.TotalNodesEngine2,16:N0} {thisResult.TotalNodesEngine1,16:N0}   ");
         }
         else
         {
-          Def.Logger.Write($"{thisResult.TotalTimeEngine1,8:F2}{player1ForfeitChar}{thisResult.RemainingTimeEngine1,7:F2} ");
-          Def.Logger.Write($"{thisResult.TotalTimeEngine2,8:F2}{player2ForfeitChar}{thisResult.RemainingTimeEngine2,7:F2}  ");
+//          Def.Logger.Write($"{thisResult.TotalTimeEngine1,8:F2}{player1ForfeitChar}{thisResult.RemainingTimeEngine1,7:F2}  {thisResult.TimeAggressivenessRatio(true),5:F2} ");
+//          Def.Logger.Write($"{thisResult.TotalTimeEngine2,8:F2}{player2ForfeitChar}{thisResult.RemainingTimeEngine2,7:F2}  {thisResult.TimeAggressivenessRatio(false),5:F2}  ");
           Def.Logger.Write($"{thisResult.TotalNodesEngine1,16:N0} {thisResult.TotalNodesEngine2,16:N0}   ");
         }
 
@@ -745,6 +745,7 @@ namespace Ceres.Features.Tournaments
         {
           SearchLimitType.SecondsPerMove => searchLimit,
           SearchLimitType.NodesPerMove => searchLimit,
+          SearchLimitType.NodesPerTree => searchLimit,
           SearchLimitType.NodesForAllMoves => new SearchLimit(SearchLimitType.NodesForAllMoves,
                                                               Math.Max(0, searchLimit.Value - totalVisitsUsed),
                                                               searchLimit.SearchCanBeExpanded,
