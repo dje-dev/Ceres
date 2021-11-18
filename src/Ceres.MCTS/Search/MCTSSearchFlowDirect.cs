@@ -507,16 +507,6 @@ namespace Ceres.MCTS.Search
         manager.UpdateEstimatedNPS();
       }
 
-      if (false && Context.ParamsSearch.TestFlag2)
-      {
-        SearchPrincipalVariation pv = new SearchPrincipalVariation(manager.Root, manager.Root.BestMoveInfo(false).BestMoveNode);
-        manager.Context.HighCPUCTNodes.Clear();
-        foreach (MCTSNode node in pv.Nodes)
-        {
-          manager.Context.HighCPUCTNodes.Add(node.Index);
-        }
-      }
-
       // Check if node cache needs pruning.
       Context.Tree?.PossiblyPruneCache();
     }

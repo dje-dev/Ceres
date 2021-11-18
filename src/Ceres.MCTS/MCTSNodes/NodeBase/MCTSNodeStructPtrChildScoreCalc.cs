@@ -119,11 +119,6 @@ namespace Ceres.MCTS.MTCSNodes
                               gatherStatsNSpan, gatherStatsInFlightSpan,
                               gatherStatsPSpan, gatherStatsWSpan, gatherStatsUSpan);
 
-      if (selectorID == 1 && N > 100 && Context.HighCPUCTNodes.Contains(Index))// && Context.NumNNBatches % 10 == 5)
-      {
-        cpuctMultiplier = 1.2f;
-        Interlocked.Increment(ref MCTSEventSource.TestCounter1);
-      }
 
       if (Context.ParamsSelect.PolicyDecayFactor > 0)
       {
