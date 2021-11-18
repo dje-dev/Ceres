@@ -199,7 +199,7 @@ namespace Ceres.MCTS.Iteration
           // Even if it seems unreachable with current search limits,
           // there is a possibility the search will be extended.
           float qGapTopBestN = (float)(nodesSortedQ[i].Q - nodesSortedQ[0].Q);
-          if (qGapTopBestN < 0 && Context.ParamsSearch.TestFlag2)
+          if (qGapTopBestN < 0)
           {
             continue;
           }
