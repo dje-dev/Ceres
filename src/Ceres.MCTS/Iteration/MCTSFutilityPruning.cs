@@ -195,6 +195,15 @@ namespace Ceres.MCTS.Iteration
         // Never shut down second best move unless the whole search is eligible to shut down
         if (nodesSortedN.Length > 1)
         {
+          // Do not ever shut down a node with a better Q than that of the best N.
+          // Even if it seems unreachable with current search limits,
+          // there is a possibility the search will be extended.
+          float qGapTopBestN = (float)(nodesSortedQ[i].Q - nodesSortedQ[0].Q);
+          if (qGapTopBestN < 0 && Context.ParamsSearch.TestFlag2)
+          {
+            continue;
+          }
+
           MCTSNode secondBestMove = Context.ParamsSearch.BestMoveMode == ParamsSearch.BestMoveModeEnum.TopN ? nodesSortedN[1] : nodesSortedQ[1];
           bool isSecondBestMove = children[i].Move == secondBestMove.PriorMove;
           if (isSecondBestMove 
