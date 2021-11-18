@@ -90,7 +90,7 @@ namespace Ceres.MCTS.Managers.Limits
       //    that it might never be gainfully used (if a loss comes first).
       float baseDivisor = 9 + MathF.Pow(inputs.StartPos.PieceCount, 0.5f);
 
-      float BASE_MULTIPLIER = inputs.TestMode ? 0.65f : 0.85f;
+      const float BASE_MULTIPLIER = 0.70f;
 
       float ret = Aggressiveness * BASE_MULTIPLIER * (1.0f / baseDivisor) * factorLargeIncrement * factorWinningness * factorFirstMove;
 
@@ -136,8 +136,7 @@ namespace Ceres.MCTS.Managers.Limits
         return Return(inputs.RemainingFixedSelf * 0.98f, 0);
       }
 
-      bool isNodes = inputs.TargetLimitType == SearchLimitType.NodesForAllMoves;
-      float incrementMeaningfulThreshold = isNodes ? 1 : 0.01f;
+      float incrementMeaningfulThreshold = SearchLimit.TypeIsNodesLimit(inputs.TargetLimitType) ? 1 : 0.01f;
       bool hasMeaningfulIncrement = inputs.IncrementSelf > incrementMeaningfulThreshold;
 
       if (Panic(inputs))

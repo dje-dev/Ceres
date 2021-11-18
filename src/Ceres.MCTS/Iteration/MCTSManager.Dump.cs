@@ -16,8 +16,11 @@
 using System;
 using System.IO;
 using System.Threading;
+using Ceres.Base.Benchmarking;
 using Ceres.Chess;
 using Ceres.Chess.MoveGen;
+using Ceres.MCTS.Managers;
+using Ceres.MCTS.Managers.Limits;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Analysis;
 using Ceres.MCTS.Utils;
@@ -35,7 +38,11 @@ namespace Ceres.MCTS.Iteration
     /// <param name="searchRootNode"></param>
     /// <param name="writer"></param>
     /// <param name="description"></param>
-    public void DumpFullInfo(MGMove bestMove, MCTSNode searchRootNode = default, TextWriter writer = null, string description = null)
+    public void DumpFullInfo(MGMove bestMove, MCTSNode searchRootNode, 
+                             ManagerTreeReuse.ReuseDecision reuseDecision,
+                             TimingStats makeNewRootTimingStats,
+                             ManagerGameLimitInputs limitInputs,
+                             TextWriter writer, string description)
     {
       try
       {
@@ -104,7 +111,20 @@ namespace Ceres.MCTS.Iteration
           string infoUpdate = UCIInfo.UCIInfoString(this, searchRootNode);
           writer.WriteLine(infoUpdate);
 
-          writer.WriteLine();
+          if (reuseDecision != null)
+          {
+            writer.WriteLine("\r\nTREE REUSE DECISION");
+            reuseDecision.Dump(writer);
+            if (makeNewRootTimingStats != default)
+            {
+              writer.WriteLine($"  Tree Reuse Prep Time    { makeNewRootTimingStats.ElapsedTimeSecs,12:F4}s");
+            }
+            writer.WriteLine();
+          }
+
+
+          writer.WriteLine("\r\nLIMITS MANAGER DECISION");
+          limitInputs?.Dump(writer);
           DumpTimeInfo(writer, searchRootNode);
 
           writer.WriteLine();
@@ -129,7 +149,7 @@ namespace Ceres.MCTS.Iteration
     /// <summary>
     /// Dumps information relating to the timing 
     /// and best moves selection from the last move made.
-    /// </summary>
+    /// </summary>    
     public void DumpTimeInfo(TextWriter writer = null, MCTSNode searchRootNode = default)
     {
       writer = writer ?? Console.Out;
@@ -148,9 +168,12 @@ namespace Ceres.MCTS.Iteration
 
         writer.WriteLine($"Root N                     {searchRootNode.N,14:N0}");
         writer.WriteLine($"RootNWhenSearchStarted     {RootNWhenSearchStarted,14:N0}");
+        writer.WriteLine($"Store N                    {searchRootNode.Store.Nodes.NumUsedNodes,14:N0}");
 
-        writer.WriteLine($"SearchLimit.Type           {SearchLimit.Type}");
-        writer.WriteLine($"SearchLimit.Value          {SearchLimit.Value,14:N2}");
+        writer.WriteLine($"SearchLimitInitial.Type    {SearchLimitInitial.Type}");
+        writer.WriteLine($"SearchLimitInitial.Value   {SearchLimitInitial.Value,14:N2}");
+        writer.WriteLine($"SearchLimit.FracExtensible {SearchLimit.FractionExtensibleIfNeeded,14:N2}");
+        writer.WriteLine($"FractionExtended           {searchRootNode.Context.Manager.FractionExtendedSoFar,14:F2}");
         writer.WriteLine($"Elapsed Search Time        {(DateTime.Now - StartTimeThisSearch).TotalSeconds,14:F2}");
 
         writer.WriteLine($"FractionSearchRemaining    {FractionSearchRemaining,14:F3}");

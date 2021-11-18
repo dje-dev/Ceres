@@ -15,10 +15,7 @@
 
 using System;
 
-using Ceres.Base.Benchmarking;
 using Ceres.Chess;
-using Ceres.Chess.MoveGen;
-using Ceres.MCTS.Environment;
 using Ceres.MCTS.Managers;
 using Ceres.MCTS.MTCSNodes;
 
@@ -39,7 +36,8 @@ namespace Ceres.MCTS.Iteration
     /// <param name="priorManager"></param>
     /// <param name="newRoot"></param>
     /// <returns></returns>
-    bool CheckInstamove(MCTSManager priorManager, SearchLimit searchLimitIncremental, MCTSNode newRoot, ManagerTreeReuse.Method reuseMethod)
+    bool CheckInstamove(MCTSManager priorManager, SearchLimit searchLimit, 
+                        MCTSNode newRoot, ManagerTreeReuse.Method reuseMethod)
     {
       // Do quick checks to see if instamove not possible/desirable.
       if (newRoot.IsNull
@@ -52,7 +50,7 @@ namespace Ceres.MCTS.Iteration
 
 
       if (reuseMethod == ManagerTreeReuse.Method.ForceInstamove
-       || CheckInstamoveFutility(priorManager, searchLimitIncremental, newRoot))
+       || CheckInstamoveFutility(priorManager, searchLimit, newRoot, reuseMethod))
       {
         InstamoveCount++;
         CountSearchContinuations++;
@@ -67,12 +65,15 @@ namespace Ceres.MCTS.Iteration
     }
 
 
+    const bool VERBOSE = false;
+
     bool CheckInstamoveFutility(MCTSManager priorManager,
-                                SearchLimit searchLimitIncremental,
-                                MCTSNode newRoot)
+                                SearchLimit searchLimit,
+                                MCTSNode newRoot,
+                                ManagerTreeReuse.Method reuseMethodIfNoInstamove)
     {
       if (!priorManager.Context.ParamsSearch.FutilityPruningStopSearchEnabled
-        || !priorManager.Context.ParamsSearch.EnableInstamoves)
+        ||!priorManager.Context.ParamsSearch.EnableInstamoves)
       {
         return false;
       }
@@ -92,47 +93,79 @@ namespace Ceres.MCTS.Iteration
         return false;
       }
 
-      MCTSNode lastSearchRoot = priorManager.Root;
-      float baselineTreeSize = newRoot.Context.ParamsSearch.TestFlag ? newRoot.N : lastSearchRoot.N;
-
-      int estNewVisitsThisMove = searchLimitIncremental.EstNumNodes((int)priorManager.EstimatedNPS, true);
-      float ratioNewToBaseline = ((float)newRoot.N + (float)estNewVisitsThisMove) / (float)baselineTreeSize;
-      float thresholdRatioNewToCurrent = 1.4f - (0.10f * CountSearchContinuations);
-      bool treeIsBigEnough = ratioNewToBaseline < thresholdRatioNewToCurrent;
-      if (!treeIsBigEnough)
+      float nRatioNewRootVersusLastSearchTree = (float)newRoot.N / priorManager.Root.N;
+      float nRatioThreshold;
+      if (reuseMethodIfNoInstamove == ManagerTreeReuse.Method.KeepStoreSwapRoot)
       {
+        // Swap root is inexpensive so be less inclined to instamove
+        nRatioThreshold = 0.5f;
+      }
+      else
+      {
+        nRatioThreshold = 0.3f;
+      }
+
+      if (nRatioNewRootVersusLastSearchTree < nRatioThreshold)
+      {
+        if (VERBOSE) Console.WriteLine("nRatioNewRootVersusLastSearchTree " + nRatioNewRootVersusLastSearchTree);
         return false;
       }
 
-      // Possibly veto the instamove if there is a second-best move that could
-      // catch up to best move if the planned search were conducted.
+//      float ratioNewToCurrent = ((float)newRoot.N + (float)estNewVisitsThisMove) / (float)newRoot.N;
+//      float thresholdRatioNewToCurrent = 1.4f - (0.10f * CountSearchContinuations);
+//      bool treeIsBigEnough = ratioNewToCurrent < thresholdRatioNewToCurrent;
+//      if (!treeIsBigEnough)
+//      {
+//        return false;
+//      }
+
       BestMoveInfo bestMoveInfo = newRoot.BestMoveInfo(false);
       if (bestMoveInfo.BestMove.IsNull)
       {
         return false;
       }
 
+      // Possibly veto the instamove if there is a second-best move that could
+      // catch up to best move if the planned search were conducted.
       MCTSNode[] childrenSortedQ = newRoot.ChildrenSorted(n => n.N == 0 ? float.MaxValue : (float)n.Q);
       MCTSNode[] childrenSortedN = newRoot.ChildrenSorted(n => -n.N);
 
+      // Never instamove if the visit count of most visited node was
+      // not much higher than visit count of second-best node.
+      const float THRESHOLD_MIN_N_RATIO = 0.70f;
+      if (newRoot.NumChildrenExpanded > 1)
+      {
+        float fracNBestToNSecondBest = (float)childrenSortedN[0].N / childrenSortedN[1].N;
+        if (fracNBestToNSecondBest < THRESHOLD_MIN_N_RATIO)
+        {
+          if (VERBOSE) Console.WriteLine("fracNBestToNSecondBest " + fracNBestToNSecondBest);
+          return false;
+        }
+      }
+
+      // Don't instamove if TopN and TopQ moves differ.
       if (childrenSortedN[0] != childrenSortedQ[0])
       {
-        // If no agreement between best Q and N then don't instamove.
+        if (VERBOSE) Console.WriteLine("different Q/N");
         return false;
       }
 
       float nGap = Math.Abs(childrenSortedQ[0].N - childrenSortedQ[1].N);
       float qGap = (float)(Math.Abs(childrenSortedQ[0].Q - childrenSortedQ[1].Q));
       float minNRequiredToChange = nGap / ManagerChooseBestMove.MinFractionNToUseQ(newRoot, qGap);
+      int estNewVisitsThisMove = searchLimit.EstNumNodes(newRoot.N, (int)priorManager.EstimatedNPS, true);
       bool couldCatchUp = (estNewVisitsThisMove * 0.25f) > minNRequiredToChange;
 
       // Don't instamove if the second-best move looks close to catching up.
       if (couldCatchUp)
       {
+        if (VERBOSE) Console.WriteLine("coudCatchUp " + minNRequiredToChange +  " " + estNewVisitsThisMove);
         return false;
       }
 
       // Instamove looks appropriate.
+      if (VERBOSE) Console.WriteLine($"INSTAMOVE {newRoot.N} {priorManager.Root.N}   { nGap}  { qGap}");
+      if (VERBOSE) Console.WriteLine();
       return true;
     }
 

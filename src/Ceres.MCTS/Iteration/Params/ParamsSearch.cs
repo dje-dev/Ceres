@@ -265,6 +265,13 @@ namespace Ceres.MCTS.Params
     /// </summary>
     public bool EnableInstamoves = true;
 
+    /// <summary>
+    /// If the limits (time or nodes) initially allocated for a search may
+    /// possibly be extended when multiple moves are close to equal in score (N and/or Q).
+    /// </summary>
+    public bool EnableSearchExtension = true;
+
+
     // Due to immediate nodes (cache hits, tablebase hit), or collisions or terminals the number of nodes 
     // sent to the NN will generally be less than the requested batch size.
     // The optional PADDED feature expands the batch size somewhat to compensate for this

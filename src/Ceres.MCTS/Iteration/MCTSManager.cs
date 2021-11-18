@@ -40,6 +40,7 @@ using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.Params;
 using Ceres.MCTS.NodeCache;
+using Ceres.MCTS.Environment;
 
 #endregion
 
@@ -112,7 +113,18 @@ namespace Ceres.MCTS.Iteration
     /// </summary>
     public DateTime StartTimeFirstVisit;
 
+    /// <summary>
+    /// Search limit initially allocated.
+    /// </summary>
+    public SearchLimit SearchLimitInitial;
+
+    /// <summary>
+    /// Search limit used as of last set of iterations 
+    /// (possibly multiple of search was extended).
+    /// </summary>
     public SearchLimit SearchLimit;
+
+
     public bool ExternalStopRequested;
 
     public readonly List<GameMoveStat> PriorMoveStats;
@@ -135,7 +147,7 @@ namespace Ceres.MCTS.Iteration
     /// <summary>
     /// Number of MCTS steps actually taken so far in this search (not including initial tree).
     /// </summary>
-    public int NumStepsTakenThisSearch => Root.N - RootNWhenSearchStarted;
+    public int NumNodesVisitedThisSearch => Root.N - RootNWhenSearchStarted;
 
 
     /// <summary>
@@ -165,7 +177,7 @@ namespace Ceres.MCTS.Iteration
     /// <param name="limitManager"></param>
     /// <param name="startTime"></param>
     /// <param name="gameMoveHistory"></param>
-    /// <param name="isFirstMoveOfGame"></param>
+    /// <param name="isFirstMoveOfGame"></param>s
     public MCTSManager(MCTSNodeStore store,
                        MCTSIterator reuseOtherContextForEvaluatedNodes,
                        PositionEvalCache reusePositionCache,
@@ -186,10 +198,11 @@ namespace Ceres.MCTS.Iteration
       }
 
       StartTimeThisSearch = startTime;
-      RootNWhenSearchStarted = store.Nodes.nodes[store.RootIndex.Index].N;
+      RootNWhenSearchStarted = store.RootNode.N;
 
       IsFirstMoveOfGame = isFirstMoveOfGame;
       SearchLimit = searchLimit;
+      SearchLimitInitial = searchLimit;
 
       // Make our own copy of move history.
       PriorMoveStats = new List<GameMoveStat>();
@@ -203,10 +216,10 @@ namespace Ceres.MCTS.Iteration
                                                                                     searchParams, childSelectParams, searchLimit);
 
       // TODO: technically this is overwriting the params belonging to the prior search, that's ugly (but won't actually cause a problem)
-      paramsChooser.ChooseOptimal(searchLimit.EstNumNodes(50_000, false)); // TODO: make 50_000 smarter
+      paramsChooser.ChooseOptimal(searchLimit.EstNumNodes(RootNWhenSearchStarted, 50_000, false)); // TODO: make 50_000 smarter
 
 
-      int estNumNodes = EstimatedNumSearchNodesForEvaluator(searchLimit, nnEvaluators);
+      int estNumNodes = EstimatedNumSearchNodesForEvaluator(RootNWhenSearchStarted, searchLimit, nnEvaluators);
 
       // Adjust the nodes estimate if we are continuing an existing search
       if (searchLimit.Type == SearchLimitType.NodesPerMove && RootNWhenSearchStarted > 0)
@@ -214,7 +227,7 @@ namespace Ceres.MCTS.Iteration
         estNumNodes = Math.Max(0, estNumNodes - RootNWhenSearchStarted);
       }
       Context = new MCTSIterator(this, store, reuseOtherContextForEvaluatedNodes, reusePositionCache, reuseNodeCache, reuseTranspositionRoots,
-                                 nnEvaluators, searchParams, childSelectParams, searchLimit, estNumNodes);
+                                 nnEvaluators, searchParams, childSelectParams, estNumNodes);
       ThreadSearchContext = Context;
 
       TerminationManager = new MCTSFutilityPruning(this, searchLimit.SearchMoves);
@@ -262,9 +275,13 @@ namespace Ceres.MCTS.Iteration
 
         int batchNum = 0;
 
-        int hardLimitNumNodes = -1;
+        int hardLimitNumNodesToCompute = -1;
         bool shouldProcess = true;
         if (searchLimit.Type == SearchLimitType.NodesPerMove)
+        {
+          hardLimitNumNodesToCompute = (int) searchLimit.Value;
+        }
+        else  if (searchLimit.Type == SearchLimitType.NodesPerTree)
         {
           if (Root.N >= searchLimit.Value)
           {
@@ -273,14 +290,14 @@ namespace Ceres.MCTS.Iteration
           }
           else
           {
-            hardLimitNumNodes = (int)searchLimit.Value - Root.N;
+            hardLimitNumNodesToCompute = (int)searchLimit.Value - Root.N;
           }
         }
 
         StartTimeFirstVisit = DateTime.Now;
         if (shouldProcess)
         {
-          flow.ProcessDirectOverlapped(this, hardLimitNumNodes, batchNum, null);
+          flow.ProcessDirectOverlapped(this, hardLimitNumNodesToCompute, batchNum, null);
         }
 
         batchNum++;
@@ -511,6 +528,8 @@ namespace Ceres.MCTS.Iteration
 
     readonly static object dumpToConsoleLock = new();
 
+    public float FractionExtendedSoFar = 0;
+
 
     public static (MGMove, TimingStats)
     Search(MCTSManager manager, bool verbose,
@@ -571,16 +590,16 @@ namespace Ceres.MCTS.Iteration
 
       // Do the search
       IteratedMCTSDef schedule = manager.Context.ParamsSearch.IMCTSSchedule;
-      bool useIMCTS = schedule != null & manager.SearchLimit.EstNumNodes(30_000, false) > 100;
+      bool useIMCTS = schedule != null & manager.SearchLimit.EstNumNodes(root.N, 30_000, false) > 100;
 
       TimingStats stats;
       MCTSNode selectedMove;
       BestMoveInfo bestMoveInfo;
 
-      SearchLimit thisSearchLimit = manager.SearchLimit;
+      SearchLimit thisSearchLimit = manager.SearchLimit with { };
       int numSearches = 0;
       BestMoveInfo firstTryBestMoveInfo = null;
-      SearchLimit startingSearchLimit = manager.SearchLimit;
+      SearchLimit startingSearchLimit = manager.SearchLimit with { };
       bool shouldExtendSearch;
       do
       {
@@ -609,31 +628,43 @@ namespace Ceres.MCTS.Iteration
 
         // If the chosen move is far away from the best Q node, 
         // try to extend the search unless the position is obviously won/lost.
-        const int MAX_RETRIES = 4;
+        const int MAX_RETRIES = 3;
         const float Q_THRESHOLD = 0.01f;
         const float INCREMENT_FRACTION = 0.20f;
 
-        float fractionExtendedSoFar = 0;
-        if (!shouldStopAfterOneNodeDueToOnlyOneLegalMove
-          && bestMoveInfo.BestMoveQSuboptimality > Q_THRESHOLD  // don't retry if Q is already best or nearly so
-         && Math.Abs(root.Q) < 0.75f                           // don't retry if position is already won/lost
+        if (manager.Context.ParamsSearch.EnableSearchExtension
+         &&!shouldStopAfterOneNodeDueToOnlyOneLegalMove
+         && bestMoveInfo.BestMoveQSuboptimality > Q_THRESHOLD  // don't retry if Q is already best or nearly so
+         && root.Q < 0.75f                                     // don't retry if position is already won
          && numSearches < MAX_RETRIES                          // don't retry many times to avoid using too much extra time
-         && manager.NumStepsTakenThisSearch > 100              // don't retry for very small searches to because batch sizing make this imprecise
-         && fractionExtendedSoFar <
-            startingSearchLimit.FractionExtensibleIfNeeded)    // only extend if we are limit constrained only at game level, not strictly each move
+         && manager.NumNodesVisitedThisSearch > 100            // don't retry for very small searches to because batch sizing make this imprecise
+         && manager.FractionExtendedSoFar <
+            startingSearchLimit.FractionExtensibleIfNeeded)    // only extend if we haven't already extended too much
         {
+          MCTSEventSource.TestCounter1++;
+          thisSearchLimit = manager.SearchLimitInitial * INCREMENT_FRACTION;
 
-          int incrementalNodes = (int)(manager.NumStepsTakenThisSearch * INCREMENT_FRACTION);
-          thisSearchLimit = SearchLimit.NodesPerMove(root.N + incrementalNodes);
-          fractionExtendedSoFar += INCREMENT_FRACTION;
+          // Reset starting counters
+          // TODO: clean this up.
+          // TODO: Inefficient to restart search because of repeated initialization (e.g. create selected sets, leaf evalutors, etc.)
+          manager.StartTimeThisSearch = DateTime.Now;
+          manager.RootNWhenSearchStarted = manager.Root.N;
+          
+          manager.FractionExtendedSoFar += INCREMENT_FRACTION;
 
-          //Console.WriteLine(" try " + numSearches + " Was " + bestMoveInfo.QOfBest + " " + bestMoveInfo.BestMove + "  Extending to " + thisSearchLimit + " because QSuboptimality " 
-          //                + bestMoveInfo.BestMoveQSuboptimality  + " original limit " + manager.SearchLimit);
+          if (false)
+          {
+            Console.WriteLine(" extend try " + numSearches + " Was " + bestMoveInfo.QOfBest + " " + bestMoveInfo.BestMove
+                              + "  Extending to " + thisSearchLimit + " because QSuboptimality "
+                              + bestMoveInfo.BestMoveQSuboptimality + " original limit " + manager.SearchLimit
+                              + " N was " + manager.Root.N);
+          }
           shouldExtendSearch = true;
           manager.StopStatus = SearchStopStatus.Continue;
         }
         else
         {
+          //if (numSearches > 0) Console.WriteLine("Extended finished " + manager.Root.N);
           shouldExtendSearch = false;
           manager.UpdateTopNodeInfo();
         }
@@ -754,12 +785,18 @@ namespace Ceres.MCTS.Iteration
     #region Time management
 
     // TODO: make this smarter (aware of hardware and NN)
-    public int EstimatedNumSearchNodes => EstimatedNumSearchNodesForEvaluator(SearchLimit, Context.NNEvaluators);
+    public int EstimatedNumSearchNodes => EstimatedNumSearchNodesForEvaluator(Root.N, SearchLimit, Context.NNEvaluators);
 
-    public static int EstimatedNumSearchNodesForEvaluator(SearchLimit searchLimit, NNEvaluatorSet nnEvaluators)
+    public int EstimatedNumSearchNodesForEvaluator(int curNumNodes, SearchLimit searchLimit, NNEvaluatorSet nnEvaluators)
     {
       if (searchLimit.Type == SearchLimitType.NodesPerMove)
+      {
         return (int)searchLimit.Value;
+      }
+      else if (searchLimit.Type == SearchLimitType.NodesPerTree)
+      {
+        return (int)MathF.Max(1, searchLimit.Value - curNumNodes);
+      }
       else if (searchLimit.Type == SearchLimitType.SecondsPerMove)
       {
         // TODO: someday look at the particular network and hardware to make this smarter.
@@ -770,7 +807,7 @@ namespace Ceres.MCTS.Iteration
       {
         // As a crude approximation, assume 1/20 of time spent on each move
         float estimatedSecondsPerMove = searchLimit.Value / 20.0f;
-        return EstimatedNumSearchNodesForEvaluator(new SearchLimit(SearchLimitType.SecondsPerMove, estimatedSecondsPerMove), nnEvaluators);
+        return EstimatedNumSearchNodesForEvaluator(Root.N, new SearchLimit(SearchLimitType.SecondsPerMove, estimatedSecondsPerMove), nnEvaluators);
       }
       else if (searchLimit.Type == SearchLimitType.NodesForAllMoves)
       {
@@ -785,7 +822,10 @@ namespace Ceres.MCTS.Iteration
     {
       get
       {
-        if (SearchLimit.Type != SearchLimitType.SecondsPerMove) return int.MaxValue;
+        if (SearchLimit.Type != SearchLimitType.SecondsPerMove)
+        {
+          return int.MaxValue;
+        }
 
         float elapsedTime = (float)(DateTime.Now - StartTimeThisSearch).TotalSeconds;
         float remainingTime = SearchLimit.Value - elapsedTime;
@@ -809,7 +849,8 @@ namespace Ceres.MCTS.Iteration
         return SearchLimit.Type switch
         {
           SearchLimitType.SecondsPerMove => MathHelpers.Bounded(RemainingTime / SearchLimit.Value, 0, 1),
-          SearchLimitType.NodesPerMove => MathHelpers.Bounded((SearchLimit.Value - Root.N) / SearchLimit.Value, 0, 1),
+          SearchLimitType.NodesPerMove => MathHelpers.Bounded((SearchLimit.Value - NumNodesVisitedThisSearch) / SearchLimit.Value, 0, 1),
+          SearchLimitType.NodesPerTree => MathHelpers.Bounded(1.0f - (NumNodesVisitedThisSearch / (SearchLimit.Value - RootNWhenSearchStarted)), 0, 1),
           _ => throw new NotImplementedException()
         };
       }
@@ -820,7 +861,10 @@ namespace Ceres.MCTS.Iteration
     {
       get
       {
-        if (SearchLimit.Type != SearchLimitType.SecondsPerMove) return float.MaxValue;
+        if (SearchLimit.Type != SearchLimitType.SecondsPerMove)
+        {
+          return float.MaxValue;
+        }
 
         float elapsedTime = (float)(DateTime.Now - StartTimeThisSearch).TotalSeconds;
         float remainingTime = SearchLimit.Value - elapsedTime;
@@ -850,21 +894,21 @@ namespace Ceres.MCTS.Iteration
 
       if (RemainingTime <= 0.01)
       {
-        return SearchStopStatus.TimeExpired;
+        return SearchStopStatus.PanicTimeTooLow;
       }
 
       if (SearchLimit.MaxTreeVisits != null
        && Root.N >= SearchLimit.MaxTreeVisits
-       && NumStepsTakenThisSearch > 0) // always allow a little search to insure state fully initialized
+       && NumNodesVisitedThisSearch > 0) // always allow a little search to insure state fully initialized
       {
         return SearchStopStatus.MaxTreeVisitsExceeded;
       }
 
       if (SearchLimit.MaxTreeNodes != null
        && Root.Tree.Store.Nodes.NumTotalNodes >= (SearchLimit.MaxTreeNodes - 2048)
-       && NumStepsTakenThisSearch > 0) // always allow a little search to insure state fully initialized
+       && NumNodesVisitedThisSearch > 0) // always allow a little search to insure state fully initialized
       {
-        return SearchStopStatus.MaxTreeNodesExceeded;
+        return SearchStopStatus.MaxTreeAllocatedNodesExceeded;
       }
 
       int numNotShutdowChildren = TerminationManager.NumberOfNotShutdownChildren();
@@ -894,15 +938,20 @@ namespace Ceres.MCTS.Iteration
       const float MIN_VISITS = 10;
 
       float elapsedSecs = (float)(DateTime.Now - StartTimeFirstVisit).TotalSeconds;
-      bool insufficientData = elapsedSecs < MIN_TIME || NumStepsTakenThisSearch < MIN_VISITS;
-      estimatedNPS = insufficientData ? float.NaN : NumStepsTakenThisSearch / elapsedSecs;
+      bool insufficientData = elapsedSecs < MIN_TIME || NumNodesVisitedThisSearch < MIN_VISITS;
+      estimatedNPS = insufficientData ? float.NaN : NumNodesVisitedThisSearch / elapsedSecs;
     }
 
     public int? EstimatedNumVisitsRemaining()
     {
       if (SearchLimit.Type == SearchLimitType.NodesPerMove)
       {
-        return (int)(SearchLimit.Value - Root.N);
+        int nodesProcessedAlready = Root.N - RootNWhenSearchStarted;
+        return (int)MathF.Max(0, SearchLimit.Value - nodesProcessedAlready);
+      }
+      else if (SearchLimit.Type == SearchLimitType.NodesPerTree)
+      {
+        return (int)MathF.Max(0, SearchLimit.Value - Root.N);
       }
       else if (SearchLimit.Type == SearchLimitType.SecondsPerMove)
       {

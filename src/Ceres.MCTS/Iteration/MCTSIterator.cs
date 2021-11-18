@@ -233,10 +233,10 @@ namespace Ceres.MCTS.Iteration
                          NNEvaluatorSet nnEvaluators,
                          ParamsSearch paramsSearch,
                          ParamsSelect paramsSelect,
-                         SearchLimit searchLimit,
                          int estimatedNumSearchNodes)
     {
       Manager = manager;
+
       // Make sure params arguments look initialized
       if (nnEvaluators == null) throw new ArgumentNullException(nameof(nnEvaluators));
 
@@ -270,18 +270,10 @@ namespace Ceres.MCTS.Iteration
         positionCache = new PositionEvalCache();
         positionCache.InitializeWithSize(false, estimatedNumSearchNodes / 2);
       }
-
-      const int NUM_BUFFER_NODES = 1500;
-      int maxNodesBound = int.MaxValue;
-      if (searchLimit.Type == SearchLimitType.NodesPerMove
-        || searchLimit.Type == SearchLimitType.NodesForAllMoves)         
-      {
-        maxNodesBound = (int)searchLimit.Value + store.Nodes.NumUsedNodes + NUM_BUFFER_NODES;
-      }
-
+      
       int estimatedNodesBound = store.Nodes.NumUsedNodes + estimatedNumSearchNodes;
 
-      Tree = new MCTSTree(store, this, /*maxNodesBound, */estimatedNodesBound, positionCache, reuseNodeCache);
+      Tree = new MCTSTree(store, this, estimatedNodesBound, positionCache, reuseNodeCache);
 
       if (ParamsSearch.Execution.TranspositionMode != TranspositionMode.None)
       {

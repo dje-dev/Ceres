@@ -14,7 +14,12 @@
 #region Using directives
 
 using System;
+using System.IO;
+using Ceres.Base.Benchmarking;
+using Ceres.Chess.MoveGen;
+using Ceres.MCTS.Iteration;
 using Ceres.MCTS.MTCSNodes;
+using Ceres.MCTS.MTCSNodes.Struct;
 
 #endregion
 
@@ -29,13 +34,34 @@ namespace Ceres.MCTS.Managers
   {
     public enum Method
     {
+      /// <summary>
+      /// Tree will not be rebuilt, instead an instamove from existing tree will be made.
+      /// </summary>
       ForceInstamove,
+
+      /// <summary>
+      /// Tree will not change (search root unchanged), search continues.
+      /// </summary>
+      UnchangedStore,
+
+      /// <summary>
+      /// New empty node store created.
+      /// </summary>
       NewStore,
+
+      /// <summary>
+      /// Tree is fully rebuilt, putting new root at beginning and clearing unreachable nodes.
+      /// </summary>
       KeepStoreRebuildTree,
+
+      /// <summary>
+      /// All tree nodes retained, but new root is swapped into first position.
+      /// </summary>
       KeepStoreSwapRoot
     }
 
-    static int[] counts = new int[4];
+
+    static int[] counts = new int[5];
     static int maxAllocated = 0;
 
     const bool VERBOSE = false;
@@ -48,12 +74,12 @@ namespace Ceres.MCTS.Managers
     /// <param name="newRootNode"></param>
     /// <param name="maxStoreNodes"></param>
     /// <returns></returns>
-    public static Method ChooseMethod(MCTSNode currentRootNode, MCTSNode newRootNode, int? maxStoreNodes)
+    public static ReuseDecision ChooseMethod(MCTSNode currentRootNode, MCTSNode newRootNode, int? maxStoreNodes)
     {
-      Method decision = DoChooseMethod(currentRootNode, newRootNode, maxStoreNodes, VERBOSE);
+      ReuseDecision decision = DoChooseMethod(currentRootNode, newRootNode, maxStoreNodes, VERBOSE);
 
       maxAllocated = Math.Max(maxAllocated, currentRootNode.Store.Nodes.NumTotalNodes);
-      counts[(int)decision]++;
+      counts[(int)decision.ChosenMethod]++;
 
       if (VERBOSE)
       {
@@ -61,26 +87,21 @@ namespace Ceres.MCTS.Managers
 
         Console.WriteLine("  Max                  " + maxAllocated / 1000 + "k");
         Console.WriteLine("  ForceInstamove       " + counts[0]);
-        Console.WriteLine("  NewStore             " + counts[1]);
-        Console.WriteLine("  KeepStoreRebuildTree " + counts[2]);
-        Console.WriteLine("  KeepStoreSwapRoot    " + counts[3]);
+        Console.WriteLine("  UnchangedStore       " + counts[1]);
+        Console.WriteLine("  NewStore             " + counts[2]);
+        Console.WriteLine("  KeepStoreRebuildTree " + counts[3]);
+        Console.WriteLine("  KeepStoreSwapRoot    " + counts[4]);
         Console.WriteLine();
       }
 
       return decision;
     }
 
-
-    static Method DoChooseMethod(MCTSNode currentRootNode, MCTSNode newRootNode, int? maxStoreNodes, bool dump)
+    static ReuseDecision DoChooseMethod(MCTSNode currentRootNode, MCTSNode newRootNode, int? maxStoreNodes, bool dump)
     {
       if (!maxStoreNodes.HasValue)
       {
         throw new Exception("Implementation restriction: MaxTreeSize must be set");
-      }
-
-      if (newRootNode.IsNull || newRootNode.N <= 1)
-      {
-        return Method.NewStore;
       }
 
       int curStoreAllocated = currentRootNode.Tree.Store.Nodes.NumTotalNodes;
@@ -100,7 +121,25 @@ namespace Ceres.MCTS.Managers
       //      float fracAllocatedOfAllocatable = (float)curStoreAllocated / maxStoreNodes.Value;
       //      float maxWastedOfAllocated = 0.8f - fracAllocatedOfAllocatable;
 
-      bool testMode = currentRootNode.Context.ParamsSearch.TestFlag;
+     
+      ReuseDecision Decision(Method method)
+      {
+        var dd = new ReuseDecision(method, maxStoreNodes.Value, curStoreAllocated, curStoreWasted,
+                                 currentRootNode.N, newRootNode.N,
+                                 currentRootNode.Context.Tree.TranspositionRoots == null ?0 : currentRootNode.Context.Tree.TranspositionRoots.Count,
+                                 FracReachable(currentRootNode.Context, in newRootNode.StructRef));
+        return dd;
+      }
+
+      if (currentRootNode == newRootNode)
+      {
+        return Decision(Method.UnchangedStore);
+      }
+
+      if (newRootNode.IsNull || newRootNode.N <= 1)
+      {
+        return Decision(Method.NewStore);
+      }
 
       if (dump)
       {
@@ -115,7 +154,7 @@ namespace Ceres.MCTS.Managers
       // Force instamove if new tree already huge.
       if (ShouldForceInstamove(currentRootNode, newRootNode, maxStoreNodes))
       {
-        return Method.ForceInstamove;
+        return Decision(Method.ForceInstamove);
       }
 
       // If the fraction of nodes being retained is extremely small,
@@ -129,22 +168,27 @@ namespace Ceres.MCTS.Managers
       // and memory requirements are insignificant at this level.
       if (newNodes > 10_000 && newNodesFractionOfOld < 0.05f)
       {
-        return Method.NewStore;
+        // TODO: use MCTSNodeStorePositionExtractorToCache to fill the position cache,
+        //       extracting useful nodes
+        return Decision(Method.NewStore);
       }
 
       if (!currentRootNode.Context.ParamsSearch.TreeReuseSwapRootEnabled)
       {
-        return Method.KeepStoreRebuildTree;
+        return Decision(Method.KeepStoreRebuildTree);
       }
 
-      float thresholdWasteRebuild = 0.65f;
-      if (testMode)
+      // Be less inclined to rebulid if little memory is being used so far.
+      float thresholdWasteRebuild = 0.50f;
+      if (fracAvailableOfAllocatable > 0.80f)
       {
-        if (fracAvailableOfAllocatable > 0.80f)
-          thresholdWasteRebuild = 0.90f;
-        else if (fracAvailableOfAllocatable > 0.70f)
-          thresholdWasteRebuild = 0.80f;
+        thresholdWasteRebuild = 0.80f;
       }
+      else if (fracAvailableOfAllocatable > 0.70f)
+      {
+        thresholdWasteRebuild = 0.70f;
+      }
+      
 
       //Console.WriteLine(priorNodes + " --> " + newNodes + "  " + testMode + " " + fracAvailableOfAllocatable + " " + fracWastedOfAllocated);
       bool rebuildDueToWaste = fracWastedOfAllocated > thresholdWasteRebuild;
@@ -154,18 +198,18 @@ namespace Ceres.MCTS.Managers
         // Rebuild since tree is dominated by waste,
         // which bloats memory usage and
         // also creates more fixed scanning overhead upon each rebuild/swap-root operation.
-        return Method.KeepStoreRebuildTree;
+        return Decision(Method.KeepStoreRebuildTree);
       }
 
       if (fracAvailableOfAllocatable < 0.15f)
       {
         // Rebuild since new search tree would have little additional room to grow.
-        return Method.KeepStoreRebuildTree;
+        return Decision(Method.KeepStoreRebuildTree);
       }
 
       // Otherwise preferred method of swapping root can be used, 
       // which is almost instantaneous and keeps a large cache of nodes in store.
-      return Method.KeepStoreSwapRoot;
+      return Decision(Method.KeepStoreSwapRoot);
 
       // TODO: shrink committed in VirtualFree
     }
@@ -192,7 +236,103 @@ namespace Ceres.MCTS.Managers
       // thereby avoiding all the overhead that would be required to do the swap/rebuild
       // before continuing search.
       const float MIN_FRAC_NEW_TREE_OF_ALLOCATABLE = 0.80f;
-      return estFracNewTreeOfAllocatable > MIN_FRAC_NEW_TREE_OF_ALLOCATABLE;
+      bool shouldInstamove = estFracNewTreeOfAllocatable > MIN_FRAC_NEW_TREE_OF_ALLOCATABLE;
+      return shouldInstamove;
     }
+
+    static float FracReachable(MCTSIterator context, in MCTSNodeStruct newRootNodeRef)
+    {
+      return float.NaN;
+      const int NUM_SAMPLES = 200;
+
+      int reachable = 0;
+      Random rand = new Random();
+      int totalStoreNodes = context.Tree.Store.Nodes.NumTotalNodes;
+
+      var nodeNewRoot = context.Tree.GetNode(newRootNodeRef.Index);
+      nodeNewRoot.Annotate();
+
+
+      using (new TimingBlock("Scan reachability " + totalStoreNodes))
+      {
+        using (new SearchContextExecutionBlock(context))
+        {
+          MCTSNode rootNode = context.Tree.GetNode(context.Tree.Store.RootNode.Index);
+          MGPosition newRootPos = rootNode.Annotation.PosMG;
+
+          //rootNode.StructRef.TraverseSequential(context.Tree.Store, (ref MCTSNodeStruct nodeRef, MCTSNodeStructIndex index) =>
+          for (int i = 0; i < NUM_SAMPLES; i++)
+          {
+            MCTSNodeStructIndex index = new MCTSNodeStructIndex(1 + rand.Next(totalStoreNodes - 2));
+            ref readonly MCTSNodeStruct scanNodeRef = ref context.Tree.Store.Nodes.nodes[index.Index];
+            var node = context.Tree.GetNode(index);
+            MGPosition scanPos = node.Annotation.PosMG;
+            if (MGPositionReachability.IsProbablyReachable(newRootPos, scanPos))
+            {
+              if (!scanNodeRef.IsPossiblyReachableFrom(newRootNodeRef))
+              {
+                Console.WriteLine(nodeNewRoot.Annotation.Pos.FEN);
+                Console.WriteLine(node.Annotation.Pos.FEN);
+                throw new NotImplementedException();
+              }
+              else
+                Console.WriteLine("ok32");
+              reachable++;
+            }
+          }
+        }  
+      }
+
+      return (float)reachable / NUM_SAMPLES;
+    }
+
+    #region ReuseDecision record
+
+    public record ReuseDecision
+    {
+      public readonly Method ChosenMethod;
+      public readonly int StoreMaxNodes;
+      public readonly int StoreCurNodes;
+      public readonly int TranspositionRootsCount;
+      public readonly int StoreOldGenerationNodes;
+      public float StoreFracFull => (float)StoreCurNodes / StoreMaxNodes;
+      public float StoreFracOldGeneration => (float)StoreOldGenerationNodes / StoreCurNodes;
+
+      public readonly int CurrentRootN;
+      public readonly int NewRootN;
+      public readonly float EstFracReachable;
+
+      public ReuseDecision(Method chosenMethod, int storeMaxNodes, int storeCurNodes, int storeOldGenerationNodes,
+                           int currentRootN, int newRootN, int transpositionRootsCount, float estFracReachable)
+      {
+        ChosenMethod = chosenMethod;
+        StoreMaxNodes = storeMaxNodes;
+        StoreCurNodes = storeCurNodes;
+        StoreOldGenerationNodes = storeOldGenerationNodes;
+        CurrentRootN = currentRootN;
+        NewRootN = newRootN;
+        TranspositionRootsCount = transpositionRootsCount;
+        EstFracReachable = estFracReachable;
+      }
+
+      public void Dump(TextWriter writer)
+      {
+        string rebuildTreeStr = (ChosenMethod == Method.KeepStoreRebuildTree || ChosenMethod == Method.NewStore) ? "***" : "";
+        writer.WriteLine($"  ChosenMethod            {ChosenMethod} {rebuildTreeStr}");
+        writer.WriteLine($"  CurrentRootN            {CurrentRootN,12:N0}");
+        writer.WriteLine($"  NewRootN                {NewRootN,12:N0}");
+
+        writer.WriteLine($"  StoreCurNodes           {StoreCurNodes,12:N0}  ({100 * StoreFracFull,6:F0}%)");
+        writer.WriteLine($"  StoreMaxNodes           {StoreMaxNodes,12:N0}");
+        writer.WriteLine($"  TranspositionRootsCount {TranspositionRootsCount,12:N0}");
+        writer.WriteLine($"  StoreOldGenerationNodes {StoreOldGenerationNodes,12:N0}  ({100 * StoreFracOldGeneration,6:F0}%)");
+        writer.WriteLine($"  Reachable Frac (est.)   {100.0 * EstFracReachable,6:F0}%");
+      }
+
+    }
+
+    #endregion
+
   }
+
 }

@@ -24,6 +24,7 @@ using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.Params;
+using Ceres.MCTS.Utils;
 
 #endregion
 
@@ -138,10 +139,14 @@ namespace Ceres.MCTS.Search
     //   BackupApply(priorNodesNN)
 
 
-    public void ProcessDirectOverlapped(MCTSManager manager, int hardLimitNumNodes, int startingBatchSequenceNum, int? forceBatchSize)
+    public void ProcessDirectOverlapped(MCTSManager manager, int hardLimitNumNodesToCompute, 
+                                        int startingBatchSequenceNum, int? forceBatchSize)
     {
       Debug.Assert(!manager.Root.IsInFlight);
-      if (hardLimitNumNodes == 0) hardLimitNumNodes = 1;
+      if (hardLimitNumNodesToCompute == 0)
+      {
+        hardLimitNumNodesToCompute = 1;
+      }
 
       MCTSNode rootNode = Context.Root;
 
@@ -206,15 +211,20 @@ namespace Ceres.MCTS.Search
 
         int numApplied = rootNode.N - initialRootN;
         int hardLimitNumNodesThisBatch = int.MaxValue;
-        if (hardLimitNumNodes > 0)
+        if (hardLimitNumNodesToCompute > 0)
         {
           // Subtract out number already applied or in flight
-          hardLimitNumNodesThisBatch = hardLimitNumNodes - (numApplied + numCurrentlyOverlapped);
+          hardLimitNumNodesThisBatch = hardLimitNumNodesToCompute - (numApplied + numCurrentlyOverlapped);
 
           // Stop search if we have already exceeded search limit
           // or if remaining number is very small relative to full search
           // (this avoids incurring latency with a few small batches at end of a search).
-          if (hardLimitNumNodesThisBatch <= numApplied / 1000) break;
+          if (hardLimitNumNodesThisBatch <= numApplied / 1000)
+          {
+            int numNodesComputed = rootNode.N - initialRootN;
+            Manager.StopStatus = MCTSManager.SearchStopStatus.SearchLimitExceeded;
+            break;
+          }
         }
 
         int targetThisBatch = OptimalBatchSizeCalculator.CalcOptimalBatchSize(Manager.EstimatedNumSearchNodes, rootNode.N,
@@ -495,6 +505,16 @@ namespace Ceres.MCTS.Search
       if (batchSequenceNum % 3 == 2)
       {
         manager.UpdateEstimatedNPS();
+      }
+
+      if (false && Context.ParamsSearch.TestFlag2)
+      {
+        SearchPrincipalVariation pv = new SearchPrincipalVariation(manager.Root, manager.Root.BestMoveInfo(false).BestMoveNode);
+        manager.Context.HighCPUCTNodes.Clear();
+        foreach (MCTSNode node in pv.Nodes)
+        {
+          manager.Context.HighCPUCTNodes.Add(node.Index);
+        }
       }
 
       // Check if node cache needs pruning.

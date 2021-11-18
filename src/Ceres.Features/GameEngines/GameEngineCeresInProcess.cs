@@ -329,7 +329,10 @@ namespace Ceres.Features.GameEngines
         StringWriter dumpInfo = new StringWriter();
         if (SearchLogFileName != null)
         {
-          result.Search.Manager.DumpFullInfo(bestMoveMG, result.Search.SearchRootNode, dumpInfo, CurrentGameID);
+          result.Search.Manager.DumpFullInfo(bestMoveMG, result.Search.SearchRootNode, 
+                                             result.Search.LastReuseDecision, result.Search.LastMakeNewRootTimingStats,
+                                             result.Search.LastGameLimitInputs,
+                                             dumpInfo, CurrentGameID);
           lock (logFileWriteObj)
           {
             File.AppendAllText(SearchLogFileName, dumpInfo.GetStringBuilder().ToString());

@@ -15,6 +15,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using Ceres.Base.Math;
 using Ceres.Chess;
 using Ceres.Chess.GameEngines;
@@ -45,7 +46,6 @@ namespace Ceres.MCTS.Managers.Limits
     /// <param name="timeRemainingIncrementOpponent"></param>
     /// <param name="maxMovesToGo"></param>
     /// <param name="isFirstMoveOfGame"></param>
-    /// <param name="testMode"></param>
     public ManagerGameLimitInputs(in Position startPos, ParamsSearch searchParams,
                                  List<GameMoveStat> priorMoveStats,
                                  SearchLimitType limitType,
@@ -56,8 +56,7 @@ namespace Ceres.MCTS.Managers.Limits
                                  int? maxTreeVisitsSelf,
                                  float timeRemainingFixedOpponent, float timeRemainingIncrementOpponent,
                                  int? maxMovesToGo = null,
-                                 bool isFirstMoveOfGame = false,
-                                 bool testMode = false)
+                                 bool isFirstMoveOfGame = false)
     {
       StartPos = startPos;
       SearchParams = searchParams;
@@ -73,7 +72,6 @@ namespace Ceres.MCTS.Managers.Limits
       IncrementOpponent = timeRemainingIncrementOpponent;
       MaxMovesToGo = maxMovesToGo;
       IsFirstMoveOfGame = isFirstMoveOfGame;
-      TestMode = testMode;
     }
 
 
@@ -154,6 +152,25 @@ namespace Ceres.MCTS.Managers.Limits
     public bool TestMode;
 
     #region Utility methods
+
+    /// <summary>
+    /// Dumps description of inputs to a Textwriter.
+    /// </summary>
+    /// <param name="writer"></param>
+    public void Dump(TextWriter writer)
+    {
+      writer.WriteLine($"  PieceCount                  {StartPos.PieceCount,14:N0}");
+      writer.WriteLine($"  TargetLimitType             {TargetLimitType,14}");
+      writer.WriteLine($"  RemainingFixedSelf          {RemainingFixedSelf,14:F2}");//  Opponent: {RemainingFixedOpponent,8:F2}");
+      writer.WriteLine($"  IncrementSelf               {IncrementSelf,14:F2}");//       Opponent: { IncrementOpponent,8:F2}");
+      writer.WriteLine($"  MaxMovesToGo                {MaxMovesToGo,14:F2}");
+      writer.WriteLine($"  MaxTreeNodesSelf            {MaxTreeNodesSelf,14:N0}");
+      writer.WriteLine($"  MaxTreeVisitsSelf           {MaxTreeVisitsSelf,14:N0}");
+      writer.WriteLine($"  TrailingAvgFinalNodes       {TrailingAvgFinalNodes(3, StartPos.SideToMove),14:N0}");
+      writer.WriteLine($"  TrailingAvgNPS              {TrailingAvgNPS(3, StartPos.SideToMove),14:N0}");
+      writer.WriteLine();
+    }
+
 
     /// <summary>
     /// Returns trailing average nodes per second (NPS).
