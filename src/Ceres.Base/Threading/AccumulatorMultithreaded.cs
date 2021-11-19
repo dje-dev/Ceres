@@ -68,12 +68,20 @@ namespace Ceres.Base.Threading
     {
       get
       {
-        long acc = 0;
-        for (int i = 0; i < NUM_BUCKETS; i++)
+        if (accumulators == null)
         {
-          acc += accumulators[i * NUM_PER_BUCKET];
+          // Not yet intialized.
+          return 0;
         }
-        return acc;
+        else
+        {
+          long acc = 0;
+          for (int i = 0; i < NUM_BUCKETS; i++)
+          {
+            acc += accumulators[i * NUM_PER_BUCKET];
+          }
+          return acc;
+        }
       }
     }
 
