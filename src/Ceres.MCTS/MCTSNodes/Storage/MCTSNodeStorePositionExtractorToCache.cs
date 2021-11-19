@@ -19,9 +19,11 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Threading.Tasks;
 using Ceres.Base.Benchmarking;
+using Ceres.Base.OperatingSystem;
 using Ceres.Base.Threading;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.PositionEvalCaching;
+using Ceres.MCTS.Environment;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.LeafExpansion;
 using Ceres.MCTS.MTCSNodes.Struct;
@@ -65,8 +67,13 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       int skipRootPresent = 0;
 
       MCTSTree tree = MCTSManager.ThreadSearchContext.Tree;
+      int newRootIndex = newRoot.Index.Index;
+      MemoryBufferOS<MCTSNodeStruct> nodes = store.Nodes.nodes;
 
-//      using (new TimingBlock("Extract " + store.Nodes.NumTotalNodes))
+      // TODO: can efficiency by improved? Refs can't be used in local functions.
+      bool Reachable(int nodeIndex) => nodes[nodeIndex].IsPossiblyReachableFrom(in nodes[newRootIndex]);
+
+      //using (new TimingBlock("Extract " + store.Nodes.NumTotalNodes))
       {
         Parallel.ForEach(Partitioner.Create(1, store.Nodes.NumTotalNodes),
           ParallelUtils.ParallelOptions(store.Nodes.NumTotalNodes, 1024),
@@ -76,7 +83,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
             {
               for (int nodeIndex = range.Item1; nodeIndex < range.Item2; nodeIndex++)
               {
-                ref MCTSNodeStruct nodeRef = ref store.Nodes.nodes[nodeIndex];
+                ref MCTSNodeStruct nodeRef = ref nodes[nodeIndex];
 
                 if ((includedNodes[nodeIndex] == (extractMode == ExtractMode.ExtractNonRetained)))
                 /*|| nodeRef.IsOldGeneration*/
@@ -96,39 +103,36 @@ namespace Ceres.MCTS.MTCSNodes.Storage
                   continue;
                 }
 
-                // TODO: someday filter out impossible positions given new root
-                // (consider pieces on board, pawns pushed castling rights, etc.).
-                // The idea of using MGPositionReachability fails because:
-                //   -- probably too slow run the test, and
-                //   -- requires a call to GetNode which overflows node cache
-
-                // TODO: possibly try alternate method of just comparing piece counts
-                //       (use 5 bits to store in MCTSNodeStructMiscFields)
-                //MGPosition thisPos = tree.GetNode(new MCTSNodeStructIndex(nodeIndex)).Annotation.PosMG;
-                bool reachable = true;// MGPositionReachability.IsProbablyReachable(in newRootPos, in thisPos);
-                if (!reachable)
+                // Filter out positions which are obviously impossible to be reached from new root
+                // (considering pieces on board, pawns pushed, etc.).
+                if (extractMode == ExtractMode.ExtractNonRetained 
+                && !Reachable(nodeIndex))
                 {
                   nonReachable++;
                   continue;
                 }
 
-                CompressedPolicyVector policy = default;
-                MCTSNodeStructUtils.ExtractPolicyVector(policySoftmax, in nodeRef, ref policy);
-
-                // TODO: could the cast to FP16 below lose useful precision? Perhaps save as float instead
-
-                if (transpositionRoots.TryGetValue(nodeRef.ZobristHash, out int transpositionRootIndex)
-                  && includedNodes[transpositionRootIndex])
+                // Disable check of transposition since it is not worth the time taken,
+                // only a small fraction of nodes are found and disqualified in this way.
+                const bool CHECK_TRANSPOSITIONS = false;
+                if (CHECK_TRANSPOSITIONS)
                 {
-                  // The node in in the same transposition equivalence class as a node being retained, so no need to save it.
-                  skipRootPresent++;
-                  continue;
+                  if (transpositionRoots.TryGetValue(nodeRef.ZobristHash, out int transpositionRootIndex)
+                    && includedNodes[transpositionRootIndex])
+                  {
+                    // The node in in the same transposition equivalence class as a node being retained, so no need to save it.
+                    skipRootPresent++;
+                    continue;
+                  }
                 }
 
                 if (nodeRef.Terminal == Chess.GameResult.Unknown)
                 {
+                  CompressedPolicyVector policy = default;
+                  MCTSNodeStructUtils.ExtractPolicyVector(policySoftmax, in nodeRef, ref policy);
                   cacheNodes.Store(nodeRef.ZobristHash, nodeRef.Terminal, nodeRef.WinP, nodeRef.LossP, nodeRef.MPosition, in policy);
                   if (nodeRef.N > 1) countGT1++;
+                  //MCTSEventSource.TestCounter1++;
                 }
 
               }
@@ -136,7 +140,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
           });
 
 
-//        Console.WriteLine($"ExtractPositionCacheNodes store {store.RootNode.N} extracted {cacheNodes.Count} root_present {skipRootPresent}  nonr. {nonReachable} new root {newRoot.N} count>1 {countGT1}");
+        //Console.WriteLine($"ExtractPositionCacheNodes store {store.RootNode.N} extracted {cacheNodes.Count} root_present {skipRootPresent}  nonr. {nonReachable} new root {newRoot.N} count>1 {countGT1}");
       }
 
     }

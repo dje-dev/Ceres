@@ -76,6 +76,8 @@ namespace Ceres.MCTS.Evaluators
         if (CeresEnvironment.MONITORING_METRICS)
         {
           NumHits.Add(1, node.Index);
+          //MCTSEventSource.TestMetric1++;
+
           if (node.StructRef.IsOldGeneration)
           {
             NumHitsOldGeneration.Add(1, node.Index);

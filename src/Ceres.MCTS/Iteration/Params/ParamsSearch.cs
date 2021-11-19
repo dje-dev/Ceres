@@ -144,9 +144,10 @@ namespace Ceres.MCTS.Params
     /// </summary>
     public bool TreeReuseSwapRootEnabled = !CeresUserSettingsManager.Settings.ReducedMemoryMode;
 
-    // SLOW AND BUGGY ***
-    // Also we find that only about 2% of positions saved are actually subsequently used, 
-    // so this feature is probably not useful
+    /// <summary>
+    /// If reachable nodes in search tree undergoing rebuild are retained in a separate cache.
+    /// However seemingly not useful because only about 4% of positions saved are actually subsequently used.
+    /// </summary>
     public bool TreeReuseRetainedPositionCacheEnabled = false;
 
     /// <summary>
