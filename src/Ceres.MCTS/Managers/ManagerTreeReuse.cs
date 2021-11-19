@@ -14,11 +14,13 @@
 #region Using directives
 
 using System;
+using System.Diagnostics;
 using System.IO;
 using Ceres.Base.Benchmarking;
 using Ceres.Chess.MoveGen;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.MTCSNodes;
+using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.MTCSNodes.Struct;
 
 #endregion
@@ -127,7 +129,7 @@ namespace Ceres.MCTS.Managers
         var dd = new ReuseDecision(method, maxStoreNodes.Value, curStoreAllocated, curStoreWasted,
                                  currentRootNode.N, newRootNode.N,
                                  currentRootNode.Context.Tree.TranspositionRoots == null ?0 : currentRootNode.Context.Tree.TranspositionRoots.Count,
-                                 FracReachable(currentRootNode.Context, in newRootNode.StructRef));
+                                 FractionReachableEstimate(currentRootNode.Context, in newRootNode.StructRef));
         return dd;
       }
 
@@ -240,31 +242,40 @@ namespace Ceres.MCTS.Managers
       return shouldInstamove;
     }
 
-    static float FracReachable(MCTSIterator context, in MCTSNodeStruct newRootNodeRef)
+    static float FractionReachableEstimate(MCTSIterator context, in MCTSNodeStruct newRootNodeRef)
     {
-      return float.NaN;
-      const int NUM_SAMPLES = 200;
-
       int reachable = 0;
-      Random rand = new Random();
       int totalStoreNodes = context.Tree.Store.Nodes.NumTotalNodes;
 
-      var nodeNewRoot = context.Tree.GetNode(newRootNodeRef.Index);
-      nodeNewRoot.Annotate();
+      // Only an approximation is needed, so just sample randomly.
+      const int NUM_SAMPLES_TARGET = 200;
+      int NUM_SAMPLES = (int)MathF.Min(NUM_SAMPLES_TARGET, totalStoreNodes / 2);
+      Random rand = new Random();
 
+      Base.OperatingSystem.MemoryBufferOS<MCTSNodeStruct> nodes = context.Tree.Store.Nodes.nodes;
 
-      using (new TimingBlock("Scan reachability " + totalStoreNodes))
+      using (new SearchContextExecutionBlock(context))
       {
-        using (new SearchContextExecutionBlock(context))
+        for (int i = 0; i < NUM_SAMPLES; i++)
         {
+          MCTSNodeStructIndex index = new MCTSNodeStructIndex(1 + rand.Next(totalStoreNodes - 2));
+          ref readonly MCTSNodeStruct scanNodeRef = ref nodes[index.Index];
+
+          if (scanNodeRef.IsPossiblyReachableFrom(newRootNodeRef))
+          {
+            reachable++;
+          }
+
+#if NOT
+            // Disabled: trying to generate the position corresopnding to this node
+            // and determine reachability from that is too expensive and pollutes the node cache.
+
           MCTSNode rootNode = context.Tree.GetNode(context.Tree.Store.RootNode.Index);
           MGPosition newRootPos = rootNode.Annotation.PosMG;
 
-          //rootNode.StructRef.TraverseSequential(context.Tree.Store, (ref MCTSNodeStruct nodeRef, MCTSNodeStructIndex index) =>
-          for (int i = 0; i < NUM_SAMPLES; i++)
-          {
-            MCTSNodeStructIndex index = new MCTSNodeStructIndex(1 + rand.Next(totalStoreNodes - 2));
-            ref readonly MCTSNodeStruct scanNodeRef = ref context.Tree.Store.Nodes.nodes[index.Index];
+            MCTSNode nodeNewRoot = context.Tree.GetNode(newRootNodeRef.Index);
+            nodeNewRoot.Annotate();
+
             var node = context.Tree.GetNode(index);
             MGPosition scanPos = node.Annotation.PosMG;
             if (MGPositionReachability.IsProbablyReachable(newRootPos, scanPos))
@@ -279,14 +290,14 @@ namespace Ceres.MCTS.Managers
                 Console.WriteLine("ok32");
               reachable++;
             }
-          }
-        }  
+#endif
+        }
       }
 
       return (float)reachable / NUM_SAMPLES;
     }
 
-    #region ReuseDecision record
+#region ReuseDecision record
 
     public record ReuseDecision
     {
@@ -331,7 +342,7 @@ namespace Ceres.MCTS.Managers
 
     }
 
-    #endregion
+#endregion
 
   }
 
