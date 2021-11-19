@@ -227,6 +227,13 @@ namespace Ceres.MCTS.Params
 
 
     /// <summary>
+    /// If CheckmateKnownToExist at chlid should cause 
+    /// suspension of exploration at nodes with checkmate children.
+    /// NOTE: const for efficiency reasons.
+    /// </summary>
+    public const bool CheckmateCertaintyPropagationEnabled = true;
+
+    /// <summary>
     /// If search considers positions arising twice as already a draw.
     /// Seems to slightly improve play quality due to early detection of draw by repetition subtrees.
     /// </summary>

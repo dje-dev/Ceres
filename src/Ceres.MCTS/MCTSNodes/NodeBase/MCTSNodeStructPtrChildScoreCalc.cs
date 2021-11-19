@@ -15,12 +15,13 @@
 
 using System;
 using System.Diagnostics;
-using System.Threading;
 using Ceres.Base.DataType;
 using Ceres.Base.Math;
 using Ceres.MCTS.Environment;
+using Ceres.MCTS.Iteration;
 using Ceres.MCTS.LeafExpansion;
 using Ceres.MCTS.MTCSNodes.Struct;
+using Ceres.MCTS.Params;
 
 #endregion
 
@@ -232,7 +233,7 @@ namespace Ceres.MCTS.MTCSNodes
           // Note that moves are never pruned if the do not yet have any visits
           // because otherwise the subsequent leaf selection will never 
           // be able to proceed beyond this unvisited child.
-          if (Context.RootMovesPruningStatus[i] != Iteration.MCTSFutilityPruningStatus.NotPruned
+          if (Context.RootMovesPruningStatus[i] != MCTSFutilityPruningStatus.NotPruned
            && gatherStatsNSpan[i] > 0)
           {
             // At root the search wants best Q values 
@@ -246,10 +247,21 @@ namespace Ceres.MCTS.MTCSNodes
       // If any child is a checkmate then exploration is not appropriate,
       // set cpuctMultiplier to 0 as an elegant means of effecting certainty propagation
       // (no changes to algorithm are needed, all subsequent visits will go to this terminal node).
-      if (nodeRef.CheckmateKnownToExistAmongChildren)
+      if (ParamsSearch.CheckmateCertaintyPropagationEnabled 
+       && nodeRef.CheckmateKnownToExistAmongChildren)
       {
-        cpuctMultiplier = 0;
-        numToProcess = Math.Min(numToProcess, nodeRef.NumChildrenExpanded);
+        const bool ALLOW_MINIMAL_EXPORATION = true;
+        if (ALLOW_MINIMAL_EXPORATION)
+        {
+          // Minimal exploration may allow "better mates" to be eventually found
+          // (e.g. a tablebase mate in 3 instead of mate in 30).
+          cpuctMultiplier = 0.1f;
+        }
+        else
+        {
+          cpuctMultiplier = 0f;
+          numToProcess = Math.Min(numToProcess, nodeRef.NumChildrenExpanded);
+        }
       }
 
       // Compute scores of top children
