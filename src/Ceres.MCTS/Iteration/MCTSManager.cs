@@ -641,7 +641,6 @@ namespace Ceres.MCTS.Iteration
          && manager.FractionExtendedSoFar <
             startingSearchLimit.FractionExtensibleIfNeeded)    // only extend if we haven't already extended too much
         {
-          MCTSEventSource.TestCounter1++;
           thisSearchLimit = manager.SearchLimitInitial * INCREMENT_FRACTION;
 
           // Reset starting counters
