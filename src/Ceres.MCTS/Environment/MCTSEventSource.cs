@@ -173,8 +173,17 @@ namespace Ceres.MCTS.Environment
         opponentTreeReuseNumHits ??= new PollingCounter("opponent-tree-reuse-hit-count", this, () => LeafEvaluatorReuseOtherTree.NumHits.Value);
 
         nnTranspositionsHitRate ??= new PollingCounter("transposition-store-hit-rate_pct", this, () => LeafEvaluatorTransposition.HitRatePct);
-        nnTranspositionCacheHitRate ??= new PollingCounter("transposition-cache-hit-rate_pct", this, () => LeafEvaluatorCache.HitRatePct);        
-        nnTranspositionsHitRateOldGeneration ??= new PollingCounter("transposition-old-gen-hit-rate_pct", this, () => LeafEvaluatorTransposition.HitRateOldGenerationPct);
+        nnTranspositionCacheHitRate ??= new PollingCounter("transposition-cache-hit-rate_pct", this, () => LeafEvaluatorCache.HitRatePct);
+
+        // Compute the fraction of the tranpsosition hits (from store or tree) that were old generation
+        static float PctOldGen()
+        {
+          long numHits = LeafEvaluatorCache.NumHits.Value + LeafEvaluatorTransposition.NumHits.Value;
+          long numOldGen = LeafEvaluatorCache.NumHitsOldGeneration.Value + LeafEvaluatorTransposition.NumHitsOldGeneration.Value;
+          float pctOldGen = 100.0f * ((float)numOldGen / numHits);
+          return pctOldGen;
+        }
+        nnTranspositionsHitRateOldGeneration ??= new PollingCounter("transposition-old-gen-pct", this, () => PctOldGen());
 
         //        mlhMoveModificationFraction ??= new PollingCounter("mlh-move-modified-pct", this, () => 100.0f * ManagerChooseBestMove.MLHMoveModifiedFraction);
 

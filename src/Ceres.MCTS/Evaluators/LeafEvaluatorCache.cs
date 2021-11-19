@@ -76,6 +76,10 @@ namespace Ceres.MCTS.Evaluators
         if (CeresEnvironment.MONITORING_METRICS)
         {
           NumHits.Add(1, node.Index);
+          if (node.StructRef.IsOldGeneration)
+          {
+            NumHitsOldGeneration.Add(1, node.Index);
+          }
         }
 
         Debug.Assert(!float.IsNaN(cacheEntry.WinP + cacheEntry.LossP));
