@@ -455,75 +455,139 @@ namespace Ceres.MCTS.Iteration
       }
     }
 
+    internal (GameResult result, MGMove immediateMove) TryGetTablebaseImmediateMove(MCTSNode node)
+    {
+      // Not possible to find if tablebase method is not installed (not available).
+      if (Context.CheckTablebaseBestNextMove == null)
+      {
+        return (GameResult.Unknown, default);
+      }
+
+      node.Annotate();
+      Position pos = node.Annotation.Pos;
+      MGMove immediateMove = Context.CheckTablebaseBestNextMove(in pos, out GameResult result, out List<MGMove> fullWinningMoveList);
+
+      if (result == GameResult.Checkmate)
+      {
+        Debug.Assert(pos.ToMGPosition.IsLegalMove(immediateMove));
+        Span<Position> historyPositions = node.Context.Tree.HistoryPositionsForNode(node);
+
+        bool wouldBeDrawByRepetition = WouldBeDrawByRepetition(in pos, immediateMove, historyPositions);
+        if (wouldBeDrawByRepetition)
+        {
+          if (fullWinningMoveList != null)
+          {
+            foreach (MGMove move in fullWinningMoveList)
+            {
+              if (!WouldBeDrawByRepetition(in pos, move, historyPositions))
+              {
+                immediateMove = move;
+                break;
+              }
+            }
+          }
+        }
+
+      }
+
+      return (result, immediateMove);
+    }
+
+    private static bool WouldBeDrawByRepetition(in Position pos, MGMove move, Span<Position> historyPositions)
+    {
+      MGPosition mgPos = pos.ToMGPosition;
+      mgPos.MakeMove(move);
+      Position newPos = mgPos.ToPosition;
+
+      int countRepetitions = 0;
+      for (int i = 0; i < historyPositions.Length; i++)
+      {
+        if (historyPositions[i].EqualAsRepetition(in newPos))
+        {
+          countRepetitions++;
+        }
+      }
+
+      bool wouldBeDrawByRepetition = countRepetitions >= 2;
+      return wouldBeDrawByRepetition;
+    }
+
+
     public MGMove TablebaseImmediateBestMove;
 
     /// <summary>
     /// Consults the tablebase to determine if immediate
     /// best move can be directly determined.
     /// </summary>
-    void TrySetImmediateBestMove()
+    void TrySetImmediateBestMove(MCTSNode node)
     {
-      // If using tablebases, lookup to see if we have immediate win (choosing the shortest one)
-      if (Context.CheckTablebaseBestNextMove != null)
+      TablebaseImmediateBestMove = default;
+
+      using (new SearchContextExecutionBlock(node.Context))
       {
-        GameResult result;
-        Position pos = Context.Tree.Store.Nodes.PriorMoves.FinalPosition;
-        TablebaseImmediateBestMove = Context.CheckTablebaseBestNextMove(pos, out result);
-
-        if (result == GameResult.Checkmate)
+        // If using tablebases, lookup to see if we have immediate win (choosing the shortest one)
+        if (Context.CheckTablebaseBestNextMove != null)
         {
-          Debug.Assert(pos.ToMGPosition.IsLegalMove(TablebaseImmediateBestMove));
+          (GameResult result, MGMove immediateMove) = TryGetTablebaseImmediateMove(node);
+          TablebaseImmediateBestMove = immediateMove;
 
-          // Set the evaluation of the position to be a win
-          // TODO: possibly use distance to mate to set the distance more accurately than fixed at 1
-          const int DISTANCE_TO_MATE = 1;
+          if (result == GameResult.Checkmate)
+          {
+            SetRootAsWin();
+          }
+          else if (result == GameResult.Draw)
+          {
+            // Set the evaluation of the position to be a draw
+            // TODO: possibly use distance to end of game to set the distance more accurately than fixed at 1
+            // TODO: do we have to adjust for possible contempt?
+            const int DISTANCE_TO_END_OF_GAME = 1;
 
-          float winP = ParamsSelect.WinPForProvenWin(DISTANCE_TO_MATE);
+            Context.Root.StructRef.W = 0;
+            Context.Root.StructRef.N = 1;
+            Context.Root.StructRef.WinP = 0;
+            Context.Root.StructRef.LossP = 0;
+            Context.Root.StructRef.MPosition = DISTANCE_TO_END_OF_GAME;
+            Context.Root.StructRef.Terminal = GameResult.Draw;
+            Context.Root.EvalResult = new LeafEvaluationResult(GameResult.Draw, 0, 0, 1);
+          }
+          else if (result == GameResult.Unknown && TablebaseImmediateBestMove != default)
+          {
+            // N.B. Unknown as a result actually means "Lost"
+            //      base currently the GameResult enum has no way to represent that.
+            //      TODO: Clean this up, create a new Enum to represent this more cleanly.
+            // Set the evaluation of the position to be a loss.
+            // TODO: possibly use distance to mate to set the distance more accurately than fixed at 1
+            const int DISTANCE_TO_MATE = 1;
 
-          Context.Root.StructRef.W = winP;
-          Context.Root.StructRef.N = 1;
-          Context.Root.StructRef.WinP = (FP16)winP;
-          Context.Root.StructRef.LossP = 0;
-          Context.Root.StructRef.MPosition = DISTANCE_TO_MATE;
-          Context.Root.EvalResult = new LeafEvaluationResult(GameResult.Checkmate, (FP16)winP, 0, DISTANCE_TO_MATE);
-          Context.Root.StructRef.Terminal = GameResult.Checkmate;
+            float lossP = ParamsSelect.LossPForProvenLoss(DISTANCE_TO_MATE);
+
+            Context.Root.StructRef.W = -lossP;
+            Context.Root.StructRef.N = 1;
+            Context.Root.StructRef.WinP = 0;
+            Context.Root.StructRef.LossP = (FP16)lossP;
+            Context.Root.StructRef.MPosition = DISTANCE_TO_MATE;
+            Context.Root.EvalResult = new LeafEvaluationResult(GameResult.Checkmate, 0, (FP16)lossP, DISTANCE_TO_MATE);
+            Context.Root.StructRef.Terminal = GameResult.Checkmate;
+          }
         }
-        else if (result == GameResult.Draw)
-        {
-          // Set the evaluation of the position to be a draw
-          // TODO: possibly use distance to end of game to set the distance more accurately than fixed at 1
-          // TODO: do we have to adjust for possible contempt?
-          const int DISTANCE_TO_END_OF_GAME = 1;
-
-          Context.Root.StructRef.W = 0;
-          Context.Root.StructRef.N = 1;
-          Context.Root.StructRef.WinP = 0;
-          Context.Root.StructRef.LossP = 0;
-          Context.Root.StructRef.MPosition = DISTANCE_TO_END_OF_GAME;
-          Context.Root.StructRef.Terminal = GameResult.Draw;
-          Context.Root.EvalResult = new LeafEvaluationResult(GameResult.Draw, 0, 0, 1);
-        }
-        else if (result == GameResult.Unknown && TablebaseImmediateBestMove != default)
-        {
-          // N.B. Unknown as a result actually means "Lost"
-          //      base currently the GameResult enum has no way to represent that.
-          //      TODO: Clean this up, create a new Enum to represent this more cleanly.
-          // Set the evaluation of the position to be a loss.
-          // TODO: possibly use distance to mate to set the distance more accurately than fixed at 1
-          const int DISTANCE_TO_MATE = 1;
-
-          float lossP = ParamsSelect.LossPForProvenLoss(DISTANCE_TO_MATE);
-
-          Context.Root.StructRef.W = -lossP;
-          Context.Root.StructRef.N = 1;
-          Context.Root.StructRef.WinP = 0;
-          Context.Root.StructRef.LossP = (FP16)lossP;
-          Context.Root.StructRef.MPosition = DISTANCE_TO_MATE;
-          Context.Root.EvalResult = new LeafEvaluationResult(GameResult.Checkmate, 0, (FP16)lossP, DISTANCE_TO_MATE);
-          Context.Root.StructRef.Terminal = GameResult.Checkmate;
-        }
-
       }
+    }
+
+    private void SetRootAsWin()
+    {
+      // Set the evaluation of the position to be a win
+      // TODO: possibly use distance to mate to set the distance more accurately than fixed at 1
+      const int DISTANCE_TO_MATE = 1;
+
+      float winP = ParamsSelect.WinPForProvenWin(DISTANCE_TO_MATE);
+
+      Context.Root.StructRef.W = winP;
+      Context.Root.StructRef.N = 1;
+      Context.Root.StructRef.WinP = (FP16)winP;
+      Context.Root.StructRef.LossP = 0;
+      Context.Root.StructRef.MPosition = DISTANCE_TO_MATE;
+      Context.Root.EvalResult = new LeafEvaluationResult(GameResult.Checkmate, (FP16)winP, 0, DISTANCE_TO_MATE);
+      Context.Root.StructRef.Terminal = GameResult.Checkmate;
     }
 
     readonly static object dumpToConsoleLock = new();
@@ -563,7 +627,7 @@ namespace Ceres.MCTS.Iteration
           manager.Context.Tree.PositionCache.LoadFromDisk(context.EvaluatorDef.CacheFileName);
       }
 
-      manager.TrySetImmediateBestMove();
+      manager.TrySetImmediateBestMove(manager.Root);
       if (manager.TablebaseImmediateBestMove != default(MGMove))
       {
         manager.StopStatus = SearchStopStatus.TablebaseImmediateMove;

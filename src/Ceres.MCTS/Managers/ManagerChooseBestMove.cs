@@ -112,7 +112,8 @@ namespace Ceres.MCTS.Managers
         if (Node.N <= 1 && Node.Context.CheckTablebaseBestNextMove != null)
         {
           Node.Annotate();
-          MGMove tablebaseMove = Node.Context.CheckTablebaseBestNextMove(in Node.Annotation.Pos, out GameResult result);
+          MGMove tablebaseMove = Node.Context.CheckTablebaseBestNextMove(in Node.Annotation.Pos, 
+                                                                         out GameResult result, out List<MGMove> otherWinningMoves);
           if (tablebaseMove != default)
           {
             return new BestMoveInfo(BestMoveInfo.BestMoveReason.TablebaseImmediateMove, tablebaseMove, Node.V);

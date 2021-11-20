@@ -38,7 +38,7 @@ namespace Ceres.MCTS.Iteration
     /// <returns></returns>
     bool CheckInstamove(MCTSManager priorManager, SearchLimit searchLimit, 
                         MCTSNode newRoot, ManagerTreeReuse.Method reuseMethod)
-    {
+    {    
       // Do quick checks to see if instamove not possible/desirable.
       if (newRoot.IsNull
        || priorManager == null
@@ -48,6 +48,14 @@ namespace Ceres.MCTS.Iteration
         return false;
       }
 
+      // Never instamove when tablebase available
+      // (because complex logic with contextual knowledge
+      // needed to avoid falling into draw by repetitions, etc.)
+      (GameResult result, Chess.MoveGen.MGMove immediateMove) = priorManager.TryGetTablebaseImmediateMove(newRoot);
+      if (result != GameResult.Unknown)
+      {
+        return false;
+      }
 
       if (reuseMethod == ManagerTreeReuse.Method.ForceInstamove
        || CheckInstamoveFutility(priorManager, searchLimit, newRoot, reuseMethod))

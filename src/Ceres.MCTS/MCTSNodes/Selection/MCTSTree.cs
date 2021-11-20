@@ -236,7 +236,7 @@ namespace Ceres.MCTS.LeafExpansion
     [ThreadStatic]
     static Position[] posScratchBuffer;
 
-    const int MAX_LENGTH_POS_HISTORY = 100;
+    const int MAX_LENGTH_POS_HISTORY = 255;
     static Position[] PosScratchBuffer
     {
       get
@@ -371,10 +371,10 @@ namespace Ceres.MCTS.LeafExpansion
     /// </summary>
     /// <param name="node"></param>
     /// <returns></returns>
-    public Span<Position> HistoryPositionsForNode(MCTSNode node)
+    public Span<Position> HistoryPositionsForNode(MCTSNode node, int maxLookback = MAX_LENGTH_POS_HISTORY - 1)
     {
-      return GetPriorHistoryPositions(node.Parent, in node.Annotation.Pos, PosScratchBuffer,
-                                      ParamsSearch.DrawByRepetitionLookbackPlies, true);
+      maxLookback = Math.Min(maxLookback, MAX_LENGTH_POS_HISTORY - 1);
+      return GetPriorHistoryPositions(node.Parent, in node.Annotation.Pos, PosScratchBuffer, maxLookback, true);
     }
 
 
@@ -387,7 +387,7 @@ namespace Ceres.MCTS.LeafExpansion
     {
       Console.WriteLine("\r\n" + node.ToString());
       int count = 0;
-      foreach (Position pos in HistoryPositionsForNode(node))
+      foreach (Position pos in HistoryPositionsForNode(node, ParamsSearch.DrawByRepetitionLookbackPlies))
       {
         Console.WriteLine($"  {count++,4:F0} {pos.MiscInfo.RepetitionCount,4:F0} { pos.FEN }");
       }
@@ -403,13 +403,13 @@ namespace Ceres.MCTS.LeafExpansion
     /// <param name="posSpan"></param>
     /// <param name="maxPositions"></param>
     /// <returns></returns>
-    Span<Position> GetPriorHistoryPositions(MCTSNode parent, in Position prependPosition,
+    Span<Position> GetPriorHistoryPositions(MCTSNode node, in Position prependPosition,
                                             Span<Position> posSpan, int maxPositions, bool setFinalPositionRepetitionCount)
     {
       // Gather history positions by ascending tree
       posSpan[0] = prependPosition;
       int count = 1;
-      MCTSNode thisAnnotation = parent;
+      MCTSNode thisAnnotation = node;
       while (count < maxPositions && !thisAnnotation.IsNull)
       {
         posSpan[count++] = thisAnnotation.Annotation.Pos;
