@@ -90,7 +90,7 @@ namespace Ceres.MCTS.Managers.Limits
       //    that it might never be gainfully used (if a loss comes first).
       float baseDivisor = 9 + MathF.Pow(inputs.StartPos.PieceCount, 0.5f);
 
-      const float BASE_MULTIPLIER = 0.75f;
+      const float BASE_MULTIPLIER = 0.80f;
 
       float ret = Aggressiveness * BASE_MULTIPLIER * (1.0f / baseDivisor) * factorLargeIncrement * factorWinningness * factorFirstMove;
 
