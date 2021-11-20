@@ -176,6 +176,22 @@ namespace Ceres.Chess.TBBackends.Fathom
       }
     }
 
+    /// <summary>
+    /// A possible winning move from a DTZ probe (and associated DTZ).
+    /// </summary>
+    public struct DTZMove
+    {
+      public readonly MGMove Move;
+      public int DistanceToZero;
+      public uint WDL;
+
+      public DTZMove(MGMove move, int distanceToZero, uint wdl)
+      {
+        Move = move;
+        DistanceToZero = distanceToZero;
+        WDL = wdl;
+      }
+    }
 
     /// <summary>
     /// Probes the Distance to Zero table (DTZ),
@@ -190,13 +206,8 @@ namespace Ceres.Chess.TBBackends.Fathom
     /// <param name="minDTZ">the DTZ of the move having minimum DTZ value</param>
     /// <param name="results">if not null then the set of possible moves is populated</param>
     /// <returns>the suggested move (guaranteed to preserve the WDL value </returns>
-    public static FathomProbeMove ProbeDTZ(in Position pos, out int minDTZ, List<ulong> results = null)
+    public static FathomProbeMove ProbeDTZ(in Position pos, out int minDTZ, out List<DTZMove> results)
     {
-      if (results != null)
-      {
-        throw new ArgumentException(nameof(results) + " not currently supported");
-      }
-
       minDTZ = -1;
 
       // Currently feature disabled, to enable allocate this array
@@ -204,6 +215,7 @@ namespace Ceres.Chess.TBBackends.Fathom
 
       if (!PreparePos(in pos, out FathomPos fathomPos))
       {
+        results = null;
         return new FathomProbeMove() { Result = FathomWDLResult.Failure };
       }
 
@@ -217,17 +229,29 @@ namespace Ceres.Chess.TBBackends.Fathom
 
       if (res == uint.MaxValue)
       {
+        results = null;
         return new FathomProbeMove() { Result = FathomWDLResult.Failure };
       }
 
       minDTZ = int.MaxValue;
-      foreach (var result in resultsArray)
+      results = new List<DTZMove>();
+      for (int i=0; i<resultsArray.Length;i++)
       {
+        uint result = resultsArray[i];
+        if (result == uint.MaxValue)
+        {
+          break;
+        }
+
         uint dtz = FathomProbe.TB_GET_DTZ((int)result);
         if (dtz < minDTZ)
         {
           minDTZ = (int)dtz;
         }
+
+        uint wdl = FathomProbe.TB_GET_DTZ((int)result);
+
+        results.Add(new DTZMove(ToMGMove(result, in pos), (int)dtz, wdl));
       }
       
       MGMove move = ToMGMove(res, in pos);

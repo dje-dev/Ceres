@@ -19,6 +19,7 @@ using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
 using Ceres.Chess.UserSettings;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 
 #endregion
@@ -26,7 +27,7 @@ using System.Diagnostics;
 namespace Ceres.Chess.NNEvaluators.LC0DLL
 {
 
-  public delegate MGMove CheckTablebaseBestNextMoveDelegate(in Position currentPos, out GameResult result);
+  public delegate MGMove CheckTablebaseBestNextMoveDelegate(in Position currentPos, out GameResult result, out List<MGMove> fullWinningMoveList);
 
   /// <summary>
   /// Miscellaneous helper methods related to Syzygy tablebase 
@@ -35,8 +36,10 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
   /// </summary>
   public partial class LC0DLLSyzygyEvaluator : IDisposable, ISyzygyEvaluatorEngine
   {
-    public MGMove CheckTablebaseBestNextMoveViaDTZ(in Position currentPos, out GameResult result)
+    public MGMove CheckTablebaseBestNextMoveViaDTZ(in Position currentPos, out GameResult result, out List<MGMove> fullWinningMoveList)
     {
+      fullWinningMoveList = null;
+
       ProbeWDL(in currentPos, out WDLScore score, out ProbeState probeResult);
       if (!(probeResult == ProbeState.Ok || probeResult == ProbeState.ZeroingBestMove))
       {
@@ -88,7 +91,7 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
 
     static void Check(LC0DLLSyzygyEvaluator eval, string fen, GameResult result, string moveStr)
     {
-      MGMove move = (eval as ISyzygyEvaluatorEngine).CheckTablebaseBestNextMove(Position.FromFEN(fen), out GameResult gr);
+      MGMove move = (eval as ISyzygyEvaluatorEngine).CheckTablebaseBestNextMove(Position.FromFEN(fen), out GameResult gr, out _);
       Debug.Assert(result == gr);
       if (gr != GameResult.Unknown)
       {

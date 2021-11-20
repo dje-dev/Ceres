@@ -14,6 +14,7 @@
 #region Using directives
 
 using System;
+using System.Collections.Generic;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.Positions;
 using static Ceres.Chess.NNEvaluators.LC0DLL.LC0DLLSyzygyEvaluator;
@@ -54,7 +55,7 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
     /// <param name="pos"></param>
     /// <param name="score"></param>
     /// <param name="result"></param>
-    public void ProbeWDL(in Position pos, out LC0DLLSyzygyEvaluator.WDLScore score, out LC0DLLSyzygyEvaluator.ProbeState result);
+    public void ProbeWDL(in Position pos, out WDLScore score, out ProbeState result);
 
     
     /// <summary>
@@ -63,7 +64,7 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
     /// <param name="currentPos"></param>
     /// <param name="result"></param>
     /// <returns></returns>
-    public MGMove CheckTablebaseBestNextMoveViaDTZ(in Position currentPos, out GameResult result);
+    public MGMove CheckTablebaseBestNextMoveViaDTZ(in Position currentPos, out GameResult result, out List<MGMove> fullWinningMoveList);
 
 
     /// <summary>
@@ -73,12 +74,17 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
 
 
     /// <summary>
-    /// 
+    /// Returns best winning move (if any) from a specified position
+    /// (and possibly a list of all possible winning moves, with shortest mates first).
     /// </summary>
     /// <param name="currentPos"></param>
+    /// <param name="result"></param>
+    /// <param name="fullWinningMoveList"></param>
     /// <returns></returns>
-    public MGMove CheckTablebaseBestNextMove(in Position currentPos, out GameResult result)
+    public MGMove CheckTablebaseBestNextMove(in Position currentPos, out GameResult result, out List<MGMove> fullWinningMoveList)
     {
+      fullWinningMoveList = null;
+
       // TODO: Ponder if this could be done for PieceCount == MaxCardinality + 1
       if (currentPos.PieceCount > MaxCardinality)
       {
@@ -89,7 +95,7 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
       if (DTZAvailable)
       {
         // Try to use DTZ table, which may may not work (depending on file availability).
-        MGMove dtzMove = CheckTablebaseBestNextMoveViaDTZ(in currentPos, out result);
+        MGMove dtzMove = CheckTablebaseBestNextMoveViaDTZ(in currentPos, out result, out fullWinningMoveList);
         if (result != GameResult.Unknown)
         {
           return dtzMove;

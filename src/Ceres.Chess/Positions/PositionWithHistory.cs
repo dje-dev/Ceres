@@ -333,6 +333,26 @@ namespace Ceres.Chess.Positions
       return true;
     }
 
+    /// <summary>
+    /// Returns the number of times a specified position occurred
+    /// in the move history (repetition equality).
+    /// </summary>
+    /// <param name="pos"></param>
+    /// <returns></returns>
+    public int NumOccurences(in Position pos)
+    {
+      int count = 0;
+      foreach (Position priorPos in Positions)
+      {
+        if (priorPos.EqualAsRepetition(in pos))
+        {
+          count++;
+        }
+      }
+      return count;
+    }
+
+
     #region Enumeration
 
     /// <summary>

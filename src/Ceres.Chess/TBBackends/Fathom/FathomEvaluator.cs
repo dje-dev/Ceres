@@ -14,6 +14,8 @@
 #region Using directives
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.NNEvaluators.LC0DLL;
 
@@ -94,8 +96,10 @@ so maybe this engine is not doing this optimally?
 
 #endif
 
-    public MGMove CheckTablebaseBestNextMoveViaDTZ(in Position currentPos, out GameResult result)
+    public MGMove CheckTablebaseBestNextMoveViaDTZ(in Position currentPos, out GameResult result, out List<MGMove> fullWinningMoveList)
     {
+      fullWinningMoveList = null;
+
       if (currentPos.PieceCount > MaxCardinality
        || currentPos.MiscInfo.CastlingRightsAny)
       {
@@ -103,10 +107,8 @@ so maybe this engine is not doing this optimally?
         return default;
       }
 
-      FathomProbeMove fathomResult = FathomTB.ProbeDTZ(currentPos, out int minDTZ, null);
-      // int dtz = FathomTB.ProbeDTZOnly(currentPos.FEN, out int success); does not work
+      FathomProbeMove fathomResult = FathomTB.ProbeDTZ(currentPos, out int minDTZ, out List<FathomTB.DTZMove> results);
 
-      MGMove fathomMove = default;
       if (fathomResult.Result == FathomWDLResult.Failure)
       {
         result = GameResult.Unknown;
@@ -126,6 +128,16 @@ so maybe this engine is not doing this optimally?
       }
       else if (fathomResult.Result == FathomWDLResult.Win)
       {
+        fullWinningMoveList = new List<MGMove>();
+        results = results.OrderBy(fpm => fpm.WDL).ToList();// put shortest mates at beginning
+        foreach (FathomTB.DTZMove fpm in results)
+        {
+          if (fpm.WDL > 0)
+          {
+            fullWinningMoveList.Add(fpm.Move);
+          }
+        }
+
         result = GameResult.Checkmate;
       }
       else
@@ -135,7 +147,7 @@ so maybe this engine is not doing this optimally?
 
       if (TESTING_MODE_COMPARE_RESULTS)
       {
-        MGMove compMove = compEvaluator.CheckTablebaseBestNextMoveViaDTZ(in currentPos, out GameResult compResult);
+        MGMove compMove = compEvaluator.CheckTablebaseBestNextMoveViaDTZ(in currentPos, out GameResult compResult, out _);
         if (result != compResult)
         {
           Console.WriteLine("DTZ check failure " + currentPos.FEN + " " + result + " " + fathomResult.Move + " vs. compare " + compResult + " " + compMove);
@@ -152,12 +164,6 @@ so maybe this engine is not doing this optimally?
 
 
     public void ProbeWDL(in Position pos, out LC0DLLSyzygyEvaluator.WDLScore score, out LC0DLLSyzygyEvaluator.ProbeState result)
-    {
-      DoProbeWDL(in pos, out score, out result);
-    }
-
-
-    void DoProbeWDL(in Position pos, out LC0DLLSyzygyEvaluator.WDLScore score, out LC0DLLSyzygyEvaluator.ProbeState result)
 
     {
       // Make sure sufficiently few pieces remain on board
@@ -193,7 +199,7 @@ so maybe this engine is not doing this optimally?
       if (TEST && (score == LC0DLLSyzygyEvaluator.WDLScore.WDLWin 
                 || score == LC0DLLSyzygyEvaluator.WDLScore.WDLLoss))
       {
-        FathomProbeMove fathomResult = FathomTB.ProbeDTZ(in pos, out int minDTZ, null);
+        FathomProbeMove fathomResult = FathomTB.ProbeDTZ(in pos, out int minDTZ, out _);
         int numMovesAvailable = 100 - pos.MiscInfo.Move50Count;
         if (Math.Abs(minDTZ) > numMovesAvailable)
         {

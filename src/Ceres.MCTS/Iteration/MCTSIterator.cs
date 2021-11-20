@@ -22,6 +22,7 @@ using Ceres.Base.Math.Probability;
 using Ceres.Base.Math.Random;
 using Ceres.Base.Threading;
 using Ceres.Chess;
+using Ceres.Chess.MoveGen;
 using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.NNEvaluators.LC0DLL;
 using Ceres.Chess.NNFiles;
@@ -341,7 +342,8 @@ namespace Ceres.MCTS.Iteration
       {
         LeafEvaluatorSyzygyLC0 evaluatorTB  = new (CeresUserSettingsManager.Settings.TablebaseDirectory);
         evaluators.Add(evaluatorTB);
-        CheckTablebaseBestNextMove = (in Position currentPos, out GameResult result) => evaluatorTB.Evaluator.CheckTablebaseBestNextMove(in currentPos, out result);
+        CheckTablebaseBestNextMove = (in Position currentPos, out GameResult result, out List<MGMove> otherWinningMoves)
+          => evaluatorTB.Evaluator.CheckTablebaseBestNextMove(in currentPos, out result, out otherWinningMoves);
 
         // Also add a 1-ply lookahead evaluator (for captures yielding tablebase terminal)
         evaluators.Add(new LeafEvaluatorSyzygyPly1(evaluatorTB));
