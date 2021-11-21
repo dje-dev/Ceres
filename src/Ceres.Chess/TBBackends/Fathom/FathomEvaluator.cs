@@ -129,10 +129,10 @@ so maybe this engine is not doing this optimally?
       else if (fathomResult.Result == FathomWDLResult.Win)
       {
         fullWinningMoveList = new List<MGMove>();
-        results = results.OrderBy(fpm => fpm.WDL).ToList();// put shortest mates at beginning
+        results = results.OrderBy(fpm => fpm.DistanceToZero).ToList();// put shortest mates at beginning
         foreach (FathomTB.DTZMove fpm in results)
         {
-          if (fpm.WDL > 0)
+          if (fpm.WDL == FathomWDLResult.Win)
           {
             fullWinningMoveList.Add(fpm.Move);
           }

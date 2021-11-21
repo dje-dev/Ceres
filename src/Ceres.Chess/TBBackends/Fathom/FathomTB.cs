@@ -183,9 +183,9 @@ namespace Ceres.Chess.TBBackends.Fathom
     {
       public readonly MGMove Move;
       public int DistanceToZero;
-      public uint WDL;
+      public FathomWDLResult WDL;
 
-      public DTZMove(MGMove move, int distanceToZero, uint wdl)
+      public DTZMove(MGMove move, int distanceToZero, FathomWDLResult wdl)
       {
         Move = move;
         DistanceToZero = distanceToZero;
@@ -249,7 +249,7 @@ namespace Ceres.Chess.TBBackends.Fathom
           minDTZ = (int)dtz;
         }
 
-        uint wdl = FathomProbe.TB_GET_DTZ((int)result);
+        FathomWDLResult wdl = (FathomWDLResult)FathomProbe.TB_GET_WDL((int)result);
 
         results.Add(new DTZMove(ToMGMove(result, in pos), (int)dtz, wdl));
       }
