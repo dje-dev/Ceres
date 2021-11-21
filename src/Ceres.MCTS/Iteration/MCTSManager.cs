@@ -455,6 +455,13 @@ namespace Ceres.MCTS.Iteration
       }
     }
 
+    /// <summary>
+    /// Probes the tablebases (if any) for the best move at root,
+    /// subject to verification that the possible move will not 
+    /// trigger a draw by repetition given the present move history.
+    /// </summary>
+    /// <param name="node"></param>
+    /// <returns></returns>
     internal (GameResult result, MGMove immediateMove) TryGetTablebaseImmediateMove(MCTSNode node)
     {
       // Not possible to find if tablebase method is not installed (not available).
@@ -475,7 +482,14 @@ namespace Ceres.MCTS.Iteration
         bool wouldBeDrawByRepetition = WouldBeDrawByRepetition(in pos, immediateMove, historyPositions);
         if (wouldBeDrawByRepetition)
         {
-          if (fullWinningMoveList != null)
+          if (fullWinningMoveList == null)
+          {
+            // Perhaps DTZ tablebase files not available.
+            // Do not blindly play into the draw, return no tablbase hit
+            // and allow engine to search normally as fallback.
+            return (GameResult.Unknown, default);
+          }
+          else
           {
             foreach (MGMove move in fullWinningMoveList)
             {
