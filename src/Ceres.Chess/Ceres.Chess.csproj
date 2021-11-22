@@ -17,12 +17,13 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="NNBackends\CUDA\Kernels\CU\ceres_kernels.cu" />
+     <EmbeddedResource Include="NNBackends\CUDA\Kernels\CU\ceres_kernels.cu" />
     <EmbeddedResource Include="NNBackends\CUDA\Kernels\CU\common_kernels.cu" />
     <EmbeddedResource Include="NNBackends\CUDA\Kernels\CU\fp16_kernels.cu" />
     <EmbeddedResource Include="NNBackends\CUDA\Kernels\PTX\ceres_kernels.ptx" />
     <EmbeddedResource Include="NNBackends\CUDA\Kernels\PTX\common_kernels.ptx" />
     <EmbeddedResource Include="NNBackends\CUDA\Kernels\PTX\fp16_kernels.ptx" />
+    <EmbeddedResource Include="NNBackends\CUDA\Kernels\PTX\fp16_kernels_big.ptx" />
   </ItemGroup>
 
   <ItemGroup>

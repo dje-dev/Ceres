@@ -37,7 +37,7 @@ namespace Ceres.Chess.NNBackends.CUDA
     // PERFORMANCE ANALYSIS
     // 65% of the runtime is in the two matmuls, 35% in the two kernel calls
     // Within the kernel, it is the SE calculation part that is the most expensive
-    const string resource = @"fp16_kernels.ptx";
+    string resource => (C > 384) ? @"fp16_kernels_big.ptx" :  @"fp16_kernels.ptx";
 
     string knFirstBlockInput = "_ZN6lczero13cudnn_backend21InputTransform_kernelI6__halfLb1EEEviiPKT_PS3_";
     string knInputOutputPre = "_ZN6lczero13cudnn_backend45OutputTransform_SE_relu_InputTransform_kernelI6__halfLb0ELb1ELb1ELb0EEEviiiPT_PKS3_S6_S6_S6_S6_S6_S6_";
@@ -46,7 +46,7 @@ namespace Ceres.Chess.NNBackends.CUDA
     string knLastNotSE    = "_ZN6lczero13cudnn_backend22OutputTransform_kernelI6__halfLb0ELb1ELb1ELb1ELb1ELb0EEEviiiPT_PKS3_S6_S6_S6_S6_S6_S6_";
     string knNotLastSE    = "_ZN6lczero13cudnn_backend45OutputTransform_SE_relu_InputTransform_kernelI6__halfLb1ELb1ELb1ELb1EEEviiiPT_PKS3_S6_S6_S6_S6_S6_S6_";
     string knNotLastNotSE = "_ZN6lczero13cudnn_backend45OutputTransform_SE_relu_InputTransform_kernelI6__halfLb0ELb1ELb1ELb1EEEviiiPT_PKS3_S6_S6_S6_S6_S6_S6_";
-
+    
     public override void LoadKernels()
     {
       Parent.Device.GetKernel(Parent.PTXAssembly, resource, knFirstBlockInput);
@@ -68,7 +68,7 @@ namespace Ceres.Chess.NNBackends.CUDA
     CudaDeviceVariable<FP16> biases1;
     CudaDeviceVariable<FP16> transformedWeights0;
     CudaDeviceVariable<FP16> transformedWeights1;
-
+  
 
   public ResidualBlockFusedCUDA(NNBackendExecContext parent, string name, int layerIndex, 
                                 BaseLayerCUDA inputLayer, 

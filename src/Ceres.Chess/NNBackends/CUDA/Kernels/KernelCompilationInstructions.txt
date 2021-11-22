@@ -33,3 +33,11 @@ rem TODO: someday maybe run for all possible kernels
 rem nvcc -h
 rem foreach x : ['sm_80', 'sm_75', 'sm_86', 'sm_70', 'sm_60' , 'sm_72', 'sm_62', 'sm_53']
 rem         nvcc_extra_args += '-code=' + x
+
+Other notes:
+  - it may be necessary to use "-allow-unsupported-compiler" at the end of the nvcc command lines
+  - setting the Visual Studio pathing can also be done by running the vcvars64.bat/vcvars64.cmd batch file provided by Microsoft
+  - a version "fp16_kernels_big.ptx" was made by changing the following (to 512) in winograd_helper.inc
+    (this PTX is auto-selected if C > 384)
+      #define MAX_SUPPORTED_C 384
+      #define MAX_SUPPORTED_C 512
