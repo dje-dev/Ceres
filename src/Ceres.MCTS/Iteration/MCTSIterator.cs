@@ -342,8 +342,8 @@ namespace Ceres.MCTS.Iteration
       {
         LeafEvaluatorSyzygyLC0 evaluatorTB  = new (CeresUserSettingsManager.Settings.TablebaseDirectory);
         evaluators.Add(evaluatorTB);
-        CheckTablebaseBestNextMove = (in Position currentPos, out GameResult result, out List<MGMove> otherWinningMoves)
-          => evaluatorTB.Evaluator.CheckTablebaseBestNextMove(in currentPos, out result, out otherWinningMoves);
+        CheckTablebaseBestNextMove = (in Position currentPos, out GameResult result, out List<MGMove> otherWinningMoves, out bool winningMoveListOrderedByDTM)
+          => evaluatorTB.Evaluator.CheckTablebaseBestNextMove(in currentPos, out result, out otherWinningMoves, out winningMoveListOrderedByDTM);
 
         // Also add a 1-ply lookahead evaluator (for captures yielding tablebase terminal)
         evaluators.Add(new LeafEvaluatorSyzygyPly1(evaluatorTB));

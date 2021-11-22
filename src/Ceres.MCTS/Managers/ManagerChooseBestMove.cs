@@ -15,18 +15,12 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq.Expressions;
 using System.Runtime.CompilerServices;
 using Ceres.Base.Math;
 using Ceres.Base.Math.Random;
 using Ceres.Chess;
-using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Chess.MoveGen;
-using Ceres.Chess.MoveGen.Converters;
-using Ceres.Chess.NNEvaluators.LC0DLL;
 using Ceres.MCTS.Iteration;
-using Ceres.MCTS.LeafExpansion;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.Params;
 
@@ -111,10 +105,14 @@ namespace Ceres.MCTS.Managers
       {
         if (Node.N <= 1 && Node.Context.CheckTablebaseBestNextMove != null)
         {
+          // TODO: Improve this: in some situations, the best move coming back might not be actually best
+          //       (for example, if falls into draw by repetition or if winningMoveListOrderedByDTM is false indicating search required).
           Node.Annotate();
           MGMove tablebaseMove = Node.Context.CheckTablebaseBestNextMove(in Node.Annotation.Pos, 
-                                                                         out GameResult result, out List<MGMove> otherWinningMoves);
-          if (tablebaseMove != default)
+                                                                         out GameResult result, 
+                                                                         out List<MGMove> otherWinningMoves, 
+                                                                         out bool winningMoveListOrderedByDTM);
+          if (tablebaseMove != default && winningMoveListOrderedByDTM)
           {
             return new BestMoveInfo(BestMoveInfo.BestMoveReason.TablebaseImmediateMove, tablebaseMove, Node.V);
           }
@@ -180,12 +178,22 @@ namespace Ceres.MCTS.Managers
     public BestMoveInfo DoCalcBestMove()
     {
       bool useMLH = MBonusMultiplier > 0 && !float.IsNaN(Node.MAvg);
-      if (useMLH && UpdateStatistics) countBestMovesWithMLHChosen++;
+      if (useMLH && UpdateStatistics)
+      {
+        countBestMovesWithMLHChosen++;
+      }
+
+      bool MoveAtIndexAllowed(int childIndex) => Node.ChildAtIndex(childIndex).N > 0 
+                                              && Node.Context.Manager.TerminationManager.MoveAtIndexAllowed(childIndex);
 
       // Get nodes sorted by N and Q (with most attractive move into beginning of array)
-      // Note that the sort on N is augmented with an additional term based on Q so that tied N leads to lower Q preferred
-      MCTSNode[] childrenSortedN = Node.ChildrenSorted(node => -node.N + (float)node.Q * 0.1f);
-      MCTSNode[] childrenSortedQ = Node.ChildrenSorted(n => n.N == 0 ? float.MaxValue : (float)n.Q);
+      // Note that the sort on N is augmented with an additional term based on Q so that tied N leads to lower Q preferred.
+      // Also note that if a child is not allowed (filtered out by SearchMoves) then the move goes at the end).
+      MCTSNode[] childrenSortedN = Node.ChildrenSorted(node => MoveAtIndexAllowed(node.IndexInParentsChildren) ? (-node.N + (float)node.Q * 0.1f) 
+                                                                                                               : 0);
+      MCTSNode[] childrenSortedQ = Node.ChildrenSorted(n => MoveAtIndexAllowed(n.IndexInParentsChildren) ? (float)n.Q 
+                                                                                                         : float.MaxValue);
+
 
       float mAvgOfBestQ = childrenSortedQ[0].MAvg;
       MCTSNode priorBest = childrenSortedQ[0];
@@ -226,10 +234,11 @@ namespace Ceres.MCTS.Managers
        && Node.Context.NumMovesNoiseOverridden < Node.Context.ParamsSearch.SearchNoiseBestMoveSampling.MoveSamplingMaxMoveModificationsPerGame
        )
       {
+        throw new NotImplementedException();
         // TODO: currently only supported for sorting by N
-        MCTSNode bestMoveWithNoise = BestMoveByNWithNoise(childrenSortedN);
-        return new BestMoveInfo(bestMoveWithNoise, (float)-childrenSortedQ[0].Q, childrenSortedN[0].N,
-                                BestNSecond, MLHBoostForMove(bestMoveWithNoise, mAvgOfBestQ)); // TODO: look for quickest win?
+        //MCTSNode bestMoveWithNoise = BestMoveByNWithNoise(childrenSortedN);
+        //return new BestMoveInfo(bestMoveWithNoise, (float)-childrenSortedQ[0].Q, childrenSortedN[0].N,
+        //                        BestNSecond, MLHBoostForMove(bestMoveWithNoise, mAvgOfBestQ)); // TODO: look for quickest win?
       }
       else
       {

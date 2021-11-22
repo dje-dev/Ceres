@@ -41,6 +41,7 @@ using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.Params;
 using Ceres.MCTS.NodeCache;
 using Ceres.MCTS.Environment;
+using Ceres.Chess.MoveGen.Converters;
 
 #endregion
 
@@ -93,7 +94,7 @@ namespace Ceres.MCTS.Iteration
     /// Futility pruning manager associated with this search
     /// (for determing if and when top-level moves should be not further searched).
     /// </summary>
-    public readonly MCTSFutilityPruning TerminationManager;
+    public MCTSFutilityPruning TerminationManager;
 
     /// <summary>
     /// Time manager associated with this search
@@ -456,6 +457,36 @@ namespace Ceres.MCTS.Iteration
     }
 
     /// <summary>
+    /// Sets the TerminationManager.SearchMoves to a specified new set.
+    /// </summary>
+    /// <param name="searchMoves"></param>
+    void RestrictSearchMoves(List<MGMove> searchMoves)
+    {
+      List<Move> convertedMoves = new List<Move>();
+      foreach (MGMove moveMG in searchMoves)
+      {
+        convertedMoves.Add(MGMoveConverter.ToMove(moveMG));
+      }
+
+      bool searchMovesAlreadyExisted = TerminationManager.SearchMoves != null;
+      if (TerminationManager.SearchMoves == null)
+      {
+        TerminationManager.SearchMoves = new List<Move>();
+      }
+
+      foreach (Move move in convertedMoves)
+      {
+        // Only include winning moves which are already in the restricted search moves (if already restricted).
+        if (!searchMovesAlreadyExisted 
+         || TerminationManager.SearchMoves.Contains(move))
+        {
+          TerminationManager.SearchMoves.Add(move);
+        }
+      }
+    }
+
+
+    /// <summary>
     /// Probes the tablebases (if any) for the best move at root,
     /// subject to verification that the possible move will not 
     /// trigger a draw by repetition given the present move history.
@@ -472,7 +503,21 @@ namespace Ceres.MCTS.Iteration
 
       node.Annotate();
       Position pos = node.Annotation.Pos;
-      MGMove immediateMove = Context.CheckTablebaseBestNextMove(in pos, out GameResult result, out List<MGMove> fullWinningMoveList);
+      MGMove immediateMove = Context.CheckTablebaseBestNextMove(in pos, out GameResult result, out List<MGMove> fullWinningMoveList, out bool winningMoveListOrderedByDTM);
+      
+      if (!winningMoveListOrderedByDTM)
+      {
+        // Not safe to rely upon the tablebase probe because unable (e.g. because of missing DTZ files)
+        // to indicate which moves bring us closer to checkmate.
+        // Instead return failure in lookup thus engine will do normal search.
+        // However filter search moves to only include the winning moves.
+        if (fullWinningMoveList != null && fullWinningMoveList.Count > 0)
+        {
+          RestrictSearchMoves(fullWinningMoveList);
+        }
+
+        return (GameResult.Unknown, default);
+      }
 
       if (result == GameResult.Checkmate)
       {

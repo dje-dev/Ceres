@@ -21,6 +21,7 @@ using Ceres.Base.Math;
 using Ceres.Chess;
 using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Chess.MoveGen;
+using Ceres.Chess.MoveGen.Converters;
 using Ceres.MCTS.Environment;
 using Ceres.MCTS.Managers;
 using Ceres.MCTS.MTCSNodes;
@@ -95,11 +96,11 @@ namespace Ceres.MCTS.Iteration
         foreach (Move move in SearchMoves)
         {
           bool found = false;
-          for (int i=0; i<Root.NumPolicyMoves;i++)
+          for (int i = 0; i < Root.NumPolicyMoves; i++)
           {
-            EncodedMove moveEncoded = Root.ChildAtIndexInfo(i).move;
-            EncodedMove moveCorrectPerspective = whiteToMove ? moveEncoded : moveEncoded.Flipped;
-            if (move.ToString().ToLower() == moveCorrectPerspective.AlgebraicStr)
+            MGMove moveMG = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(Root.ChildAtIndexInfo(i).move, in Root.Annotation.PosMG, true);
+            string moveSAN = MGMoveConverter.ToMove(moveMG).ToSAN(in Root.Annotation.Pos);
+            if (moveSAN.Equals(move.ToSAN(in Root.Annotation.Pos)))
             {
               Context.RootMovesPruningStatus[i] = MCTSFutilityPruningStatus.NotPruned;
               found = true;
@@ -109,7 +110,7 @@ namespace Ceres.MCTS.Iteration
 
           if (!found)
           {
-            throw new Exception($"Specified search move not found {move}");
+            Console.WriteLine($"Internal error: specified search move not found {move}");
           }
         }
       }
@@ -296,7 +297,50 @@ namespace Ceres.MCTS.Iteration
 
 
     /// <summary>
-    /// Returns the number of children at root which are not in a shutdown state.
+    /// Returns if the move at a specified index (from root)
+    /// is a valid search move (not filtered out by possible limited SearchMoves).
+    /// </summary>
+    /// <param name="childIndex"></param>
+    /// <returns></returns>
+    public bool MoveAtIndexAllowed(int childIndex)
+    {
+      if (SearchMoves == null)
+      {
+        return true;
+      }
+
+      if (childIndex >= Root.NumChildrenExpanded)
+      {
+        return false;
+      }
+
+
+      // Get this child node and extract associated Move.
+      Root.Annotate();
+      MCTSNode node = Root.ChildAtIndex(childIndex);
+      node.Annotate();
+
+      string moveSAN = MGMoveConverter.ToMove(node.Annotation.PriorMoveMG).ToSAN(in Root.Annotation.Pos);
+
+      foreach (Move testMove in SearchMoves)
+      {
+        // TODO: Comparision via SAN is ugly, clean up.
+        if (testMove.ToSAN(in Root.Annotation.Pos).Equals(moveSAN))
+        {
+          return true;        
+        }
+      }
+
+      return false;
+//      MGMove mgMove = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(node.PriorMove, node.Annotation.PosMG);
+//      Move move = MGMoveConverter.ToMove(mgMove);
+//      return SearchMoves.Contains(move);
+    }
+
+
+    /// <summary>
+    /// Returns the number of children at root which are not in a shutdown state
+    /// (and visited at least once).
     /// </summary>
     /// <returns></returns>
     public int NumberOfNotShutdownChildren()
@@ -309,7 +353,9 @@ namespace Ceres.MCTS.Iteration
       int count = 0;
       for (int i = 0; i < Root.NumPolicyMoves; i++)
       {
-        if (Context.RootMovesPruningStatus[i] == MCTSFutilityPruningStatus.NotPruned)
+        int n = i < Root.NumChildrenExpanded ? Context.Root.ChildAtIndex(i).N : 0;
+        if (Context.RootMovesPruningStatus[i] == MCTSFutilityPruningStatus.NotPruned
+         || n == 0 )
         {
           count++;
         }
