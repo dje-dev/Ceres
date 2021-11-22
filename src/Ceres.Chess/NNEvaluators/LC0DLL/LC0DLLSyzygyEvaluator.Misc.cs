@@ -27,7 +27,8 @@ using System.Diagnostics;
 namespace Ceres.Chess.NNEvaluators.LC0DLL
 {
 
-  public delegate MGMove CheckTablebaseBestNextMoveDelegate(in Position currentPos, out GameResult result, out List<MGMove> fullWinningMoveList);
+  public delegate MGMove CheckTablebaseBestNextMoveDelegate(in Position currentPos, out GameResult result, 
+                                                            out List<MGMove> fullWinningMoveList, out bool winningMoveListOrderedByDTM);
 
   /// <summary>
   /// Miscellaneous helper methods related to Syzygy tablebase 
@@ -91,7 +92,7 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
 
     static void Check(LC0DLLSyzygyEvaluator eval, string fen, GameResult result, string moveStr)
     {
-      MGMove move = (eval as ISyzygyEvaluatorEngine).CheckTablebaseBestNextMove(Position.FromFEN(fen), out GameResult gr, out _);
+      MGMove move = (eval as ISyzygyEvaluatorEngine).CheckTablebaseBestNextMove(Position.FromFEN(fen), out GameResult gr, out _, out _ );
       Debug.Assert(result == gr);
       if (gr != GameResult.Unknown)
       {

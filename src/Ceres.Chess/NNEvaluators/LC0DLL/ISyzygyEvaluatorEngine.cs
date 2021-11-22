@@ -81,7 +81,7 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
     /// <param name="result"></param>
     /// <param name="fullWinningMoveList"></param>
     /// <returns></returns>
-    public MGMove CheckTablebaseBestNextMove(in Position currentPos, out GameResult result, out List<MGMove> fullWinningMoveList)
+    public MGMove CheckTablebaseBestNextMove(in Position currentPos, out GameResult result, out List<MGMove> fullWinningMoveList, out bool winningMoveListOrderedByDTM)
     {
       fullWinningMoveList = null;
 
@@ -89,6 +89,7 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
       if (currentPos.PieceCount > MaxCardinality)
       {
         result = GameResult.Unknown;
+        winningMoveListOrderedByDTM = false;
         return default;
       }
 
@@ -96,19 +97,25 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
       {
         // Try to use DTZ table, which may may not work (depending on file availability).
         MGMove dtzMove = CheckTablebaseBestNextMoveViaDTZ(in currentPos, out result, out fullWinningMoveList);
+
         if (result != GameResult.Unknown)
         {
+          winningMoveListOrderedByDTM = true;
           return dtzMove;
         }
       }
 
       // Fall thru to use WDL
-      return CheckTablebaseBestNextMoveViaWDL(in currentPos, out result);
+      MGMove ret =  CheckTablebaseBestNextMoveViaWDL(in currentPos, out result, out fullWinningMoveList);
+      winningMoveListOrderedByDTM = false;
+      return ret;
     }
 
 
-    MGMove CheckTablebaseBestNextMoveViaWDL(in Position currentPos, out GameResult result)
+    MGMove CheckTablebaseBestNextMoveViaWDL(in Position currentPos, out GameResult result, out List<MGMove> fullWinningMoveList)
     {
+      fullWinningMoveList = new();
+
       // First check for immediate winning or drawing moves known by TB probe
       MGMove winningMove = default;
       MGMove winningCursedMove = default;
@@ -132,6 +139,7 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
             break;
 
           case WDLScore.WDLLoss: // loss for the opponent
+            fullWinningMoveList.Add(move);
             winningMove = move;
             break;
 
