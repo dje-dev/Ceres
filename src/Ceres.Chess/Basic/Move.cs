@@ -100,7 +100,7 @@ namespace Ceres.Chess
 
     public bool IsTerminal => Type >= MoveType.Draw;
 
-    string PromoStr => PromoteTo != PieceType.None ? $"{PromoteTo.ToString()[0]}" : "";
+    string PromoStr => PromoteTo != PieceType.None ? $"{(PromoteTo == PieceType.Knight ? "N" : PromoteTo.ToString()[0])}" : "";
 
     #region Conversion
 
