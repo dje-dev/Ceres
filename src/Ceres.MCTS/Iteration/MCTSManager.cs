@@ -335,13 +335,13 @@ namespace Ceres.MCTS.Iteration
     /// <param name="evaluatorSecondary"></param>
     public void RunSecondaryNetEvaluations(int minN, MCTSNNEvaluator evaluatorSecondary)
     {
-      List<MCTSNode> nodes = new List<MCTSNode>();
+      const int BATCH_SIZE = 384;
+      List<MCTSNode> nodes = new List<MCTSNode>(BATCH_SIZE);
 
       float accAbsDiff = 0;
       int numNodes = 0;
 
-      const int BATCH_SIZE = 256;
-
+//      using (new TimingBlock("Traverse " + Root.N))
       Root.StructRef.TraverseSequential(Context.Tree.Store, (ref MCTSNodeStruct nodeRef, MCTSNodeStructIndex index) =>
       {
         if (nodeRef.N >= minN

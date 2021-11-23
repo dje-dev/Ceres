@@ -37,7 +37,7 @@ namespace Ceres.MCTS.Params
     /// secondary evaluation is run over tree
     /// (as a fraction of current tree size).
     /// </summary>
-    public float UpdateFrequencyMinNodesRelative = 0.01f;
+    public float UpdateFrequencyMinNodesRelative = 0.03f;
 
     /// <summary>
     /// Minimum number of nodes a node must have to be eligible for

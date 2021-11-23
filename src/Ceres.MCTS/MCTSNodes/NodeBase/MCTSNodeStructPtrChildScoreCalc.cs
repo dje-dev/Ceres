@@ -191,21 +191,21 @@ namespace Ceres.MCTS.MTCSNodes
             else
             {
 #endif
-              float UNCERTAINTY_DIFF_MULTIPLIER = 2.0f;
-              float UNCERTAINTY_MAX_DEVIATION = 0.15f;
-              float BIAS_ADJUST = 0.01f; // adjustment to make average value turn out to be very close to 1.0
+            float UNCERTAINTY_DIFF_MULTIPLIER = 2.0f;
+            float UNCERTAINTY_MAX_DEVIATION = 0.15f;
+            float BIAS_ADJUST = 0.01f; // adjustment to make average value turn out to be very close to 1.0
 
-              // The uncertainty scaling is a number centered at 1 which is
-              // higher for children with more emprical volatility than the parent and
-              // lower for children with less volatility.
-              explorationScaling = 1 + BIAS_ADJUST + UNCERTAINTY_DIFF_MULTIPLIER * (childMAD - parentMAD);
-              explorationScaling = StatUtils.Bounded(explorationScaling, 1.0f - UNCERTAINTY_MAX_DEVIATION, 1.0f + UNCERTAINTY_MAX_DEVIATION);            
+            // The uncertainty scaling is a number centered at 1 which is
+            // higher for children with more emprical volatility than the parent and
+            // lower for children with less volatility.
+            explorationScaling = 1 + BIAS_ADJUST + UNCERTAINTY_DIFF_MULTIPLIER * (childMAD - parentMAD);
+            explorationScaling = StatUtils.Bounded(explorationScaling, 1.0f - UNCERTAINTY_MAX_DEVIATION, 1.0f + UNCERTAINTY_MAX_DEVIATION);
 
             const bool SHOW_UNCERTAINTY_STATS = false; // perforamnce degrading
             if (SHOW_UNCERTAINTY_STATS)
             {
               // Update statistics.
-              if (MathF.Abs(explorationScaling-1) > 0.05f)// && Ref.ZobristHash % 1_000 == 0)
+              if (MathF.Abs(explorationScaling - 1) > 0.05f)// && Ref.ZobristHash % 1_000 == 0)
               {
                 accScale += explorationScaling;
                 countScale++;
@@ -247,7 +247,7 @@ namespace Ceres.MCTS.MTCSNodes
       // If any child is a checkmate then exploration is not appropriate,
       // set cpuctMultiplier to 0 as an elegant means of effecting certainty propagation
       // (no changes to algorithm are needed, all subsequent visits will go to this terminal node).
-      if (ParamsSearch.CheckmateCertaintyPropagationEnabled 
+      if (ParamsSearch.CheckmateCertaintyPropagationEnabled
        && nodeRef.CheckmateKnownToExistAmongChildren)
       {
         const bool ALLOW_MINIMAL_EXPORATION = true;
@@ -272,6 +272,40 @@ namespace Ceres.MCTS.MTCSNodes
                                          gatherStatsNSpan, gatherStatsInFlightSpan,
                                          numToProcess, numVisitsToCompute,
                                          scores, childVisitCounts, cpuctMultiplier);
+
+      FillInSequentialVisitHoles(childVisitCounts, ref nodeRef, numToProcess);
+    }
+
+
+    /// <summary>
+    /// Ceres algorithms require children to be visited strictly sequentially,
+    /// so no child is visited before all of its siblings with smaller indices have already been visited.
+    /// 
+    /// This method insures this condition is always satisfied by shfting leftward
+    /// any children which otherwise be to the right of some unexpanded node.
+    /// </summary>
+    /// <param name="childVisitCounts"></param>
+    /// <param name="nodeRef"></param>
+    /// <param name="numToProcess"></param>
+    private static void FillInSequentialVisitHoles(Span<short> childVisitCounts, ref MCTSNodeStruct nodeRef, int numToProcess)
+    {
+      // Fixup any holes
+      int numExpanded = nodeRef.NumChildrenExpanded;
+      for (int i = numExpanded; i < numToProcess; i++)
+      {
+        if (childVisitCounts[i] == 0)
+        {
+          for (int j = numToProcess - 1; j > i; j--)
+          {
+            if (childVisitCounts[j] > 0)
+            {
+              childVisitCounts[i] = 1;
+              childVisitCounts[j]--;
+              break;
+            }
+          }
+        }
+      }
     }
 
 

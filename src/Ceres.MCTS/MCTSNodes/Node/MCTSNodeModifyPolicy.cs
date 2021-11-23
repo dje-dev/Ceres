@@ -14,6 +14,7 @@
 #region Using directives
 
 using System;
+using System.Diagnostics;
 using Ceres.Base.DataTypes;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.EncodedPositions.Basic;
@@ -49,7 +50,7 @@ namespace Ceres.MCTS.MTCSNodes
         return;
       }
 
-      throw new Exception("Not yet implemented BlendPolicy, currently it can reorder non-expanded to be in front of expanded");
+//      throw new Exception("Not yet implemented BlendPolicy, currently it can reorder non-expanded to be in front of expanded");
 
       float softmaxValue = Context.ParamsSelect.PolicySoftmax;
 
@@ -73,6 +74,7 @@ namespace Ceres.MCTS.MTCSNodes
         {
           float otherProbabilityRaw = otherPolicy.PolicyInfoAtIndex(indexOther).Probability;
           FP16 newPolicy = BlendedP(softmaxValue, fracOther, childInfo.p, otherProbabilityRaw, ParamsSelect.MinPolicyProbability);
+          Debug.Assert(!FP16.IsNaN(newPolicy));
 
           if (i < NumChildrenExpanded)
           {
@@ -89,7 +91,11 @@ namespace Ceres.MCTS.MTCSNodes
 
       // Make sure the children are ordered by policy after the operation
       // (this is expected by the leaf selection logic).
-      EnsureChildrenOrderedByPolicy();
+      // TODO: Consider enabling this. But it is complicated;
+      //       currently Ceres logic assumes expanded children are contiguous
+      //       so this currently will not function.
+      //       Currently the alternate workaround in method FillInSequentialVisitHoles is used.
+      //EnsureChildrenOrderedByPolicy();
 
       if (DEBUG)
       {
@@ -131,6 +137,16 @@ namespace Ceres.MCTS.MTCSNodes
           if (p2 > p1)
           {
             MCTSNodeStructChild temp = childrenRaw[i];
+
+            if (childrenRaw[i].IsExpanded)
+            {
+              childrenRaw[i].ChildRef.SetIndexInParent(i + 1);
+            }
+            if (childrenRaw[i+1].IsExpanded)
+            {
+              childrenRaw[i+1].ChildRef.SetIndexInParent(i);
+            }
+
             childrenRaw[i] = childrenRaw[i + 1];
             childrenRaw[i + 1] = temp;
             numSwapped++;

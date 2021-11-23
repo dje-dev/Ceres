@@ -1086,6 +1086,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// </summary>
     public int IndexInParent => miscFields.IndexInParent;
 
+    public void SetIndexInParent(int indexInParent) => miscFields.IndexInParent = (byte)indexInParent;
 
     /// <summary>
     /// Computes the power mean over all children Q values using specified coefficient.
