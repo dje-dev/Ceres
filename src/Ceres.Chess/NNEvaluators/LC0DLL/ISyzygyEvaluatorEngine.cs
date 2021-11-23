@@ -73,6 +73,8 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
     public void Dispose();
 
 
+    const bool VERBOSE = false;
+
     /// <summary>
     /// Returns best winning move (if any) from a specified position
     /// (and possibly a list of all possible winning moves, with shortest mates first).
@@ -100,6 +102,12 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
 
         if (result != GameResult.Unknown)
         {
+          if (VERBOSE)
+          {
+            Console.WriteLine($"\r\nCheckTablebaseBestNextMove via DTZ yields {result} {dtzMove} with winning list "
+                                       + $"size {fullWinningMoveList.Count} in position {currentPos.FEN}");
+          }
+
           winningMoveListOrderedByDTM = true;
           return dtzMove;
         }
@@ -107,6 +115,11 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
 
       // Fall thru to use WDL
       MGMove ret =  CheckTablebaseBestNextMoveViaWDL(in currentPos, out result, out fullWinningMoveList);
+      if (VERBOSE)
+      {
+        Console.WriteLine($"\r\nCheckTablebaseBestNextMove via WDL yields {result} {ret} with winning list "
+                                   + $"size {fullWinningMoveList.Count} in position {currentPos.FEN}");
+      }
       winningMoveListOrderedByDTM = false;
       return ret;
     }
