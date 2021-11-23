@@ -105,7 +105,7 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
           if (VERBOSE)
           {
             Console.WriteLine($"\r\nCheckTablebaseBestNextMove via DTZ yields {result} {dtzMove} with winning list "
-                                       + $"size {fullWinningMoveList.Count} in position {currentPos.FEN}");
+                                       + $"size {fullWinningMoveList?.Count} in position {currentPos.FEN}");
           }
 
           winningMoveListOrderedByDTM = true;
@@ -118,7 +118,7 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
       if (VERBOSE)
       {
         Console.WriteLine($"\r\nCheckTablebaseBestNextMove via WDL yields {result} {ret} with winning list "
-                                   + $"size {fullWinningMoveList.Count} in position {currentPos.FEN}");
+                                   + $"size {fullWinningMoveList?.Count} in position {currentPos.FEN}");
       }
       winningMoveListOrderedByDTM = false;
       return ret;

@@ -524,7 +524,8 @@ namespace Ceres.MCTS.Iteration
         Debug.Assert(pos.ToMGPosition.IsLegalMove(immediateMove));
         Span<Position> historyPositions = node.Context.Tree.HistoryPositionsForNode(node);
 
-        bool wouldBeDrawByRepetition = WouldBeDrawByRepetition(in pos, immediateMove, historyPositions);
+        // Try to avoid making a move which would allow opponent to claim draw.
+        bool wouldBeDrawByRepetition = PositionRepetitionCalc.DrawByRepetitionWouldBeClaimable(in pos, immediateMove, historyPositions);
         if (wouldBeDrawByRepetition)
         {
           if (fullWinningMoveList == null)
@@ -536,9 +537,10 @@ namespace Ceres.MCTS.Iteration
           }
           else
           {
+            // Check other moves to see if any of them avoids falling into the draw by repetition trap.
             foreach (MGMove move in fullWinningMoveList)
             {
-              if (!WouldBeDrawByRepetition(in pos, move, historyPositions))
+              if (!PositionRepetitionCalc.DrawByRepetitionWouldBeClaimable(in pos, move, historyPositions))
               {
                 immediateMove = move;
                 break;
@@ -551,26 +553,6 @@ namespace Ceres.MCTS.Iteration
 
       return (result, immediateMove);
     }
-
-    private static bool WouldBeDrawByRepetition(in Position pos, MGMove move, Span<Position> historyPositions)
-    {
-      MGPosition mgPos = pos.ToMGPosition;
-      mgPos.MakeMove(move);
-      Position newPos = mgPos.ToPosition;
-
-      int countRepetitions = 0;
-      for (int i = 0; i < historyPositions.Length; i++)
-      {
-        if (historyPositions[i].EqualAsRepetition(in newPos))
-        {
-          countRepetitions++;
-        }
-      }
-
-      bool wouldBeDrawByRepetition = countRepetitions >= 2;
-      return wouldBeDrawByRepetition;
-    }
-
 
     public MGMove TablebaseImmediateBestMove;
 

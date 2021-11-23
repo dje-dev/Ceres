@@ -13,7 +13,10 @@
 
 #region Using directives
 
+using Ceres.Chess.MoveGen;
+using Ceres.Chess.Positions;
 using System;
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
 #endregion
@@ -46,6 +49,7 @@ namespace Ceres.Chess
 
       finalPosition.MiscInfo.SetRepetitionCount(count);
     }
+
 
     /// <summary>
     /// Sets the reptitions count in the MiscInfo substructure of each position within specified span,
@@ -92,6 +96,65 @@ namespace Ceres.Chess
         sortedPositions[firstIndexHashSame] = thisPos;
       }
     }
+
+
+    /// <summary>
+    /// Returns if a draw by repetition would be claimable by opponent after
+    /// we make a specified move from a specified positions
+    /// (claimable either immediately or after opponent makes one of the possible moves in response).
+    /// </summary>
+    /// <param name="ourPos"></param>
+    /// <param name="ourMove"></param>
+    /// <param name="historyPositions"></param>
+    /// <returns></returns>
+    public static bool DrawByRepetitionWouldBeClaimable(in Position ourPos, MGMove ourMove, Span<Position> historyPositions)
+    {
+      // Determine position after our move.
+      MGPosition mgPos = ourPos.ToMGPosition;
+      mgPos.MakeMove(ourMove);
+      Position newPosAfterOurMove = mgPos.ToPosition;
+
+      // Check for draw by repetition which opponent could claim after our move.
+      if (NewPosWouldResultInDrawByRepetition(in newPosAfterOurMove, historyPositions.ToArray()))
+      {
+        return true;
+      }
+
+      // Build new List of Positions which includes position after our move.
+      List<Position> positionsAll = new(historyPositions.ToArray());
+      positionsAll.Add(newPosAfterOurMove);
+
+      // Loop thru all possible opponent moves.
+      foreach ((MGMove _, Position newPosAfterOpponentMove) in PositionsGenerator1Ply.GenPositions(newPosAfterOurMove))
+      {
+        // Check for draw by repetition claimable after the opponent makes the candidate move.
+        bool wouldBeDrawByRepetition = NewPosWouldResultInDrawByRepetition(in newPosAfterOpponentMove, positionsAll);
+        if (wouldBeDrawByRepetition)
+        {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+
+    private static bool NewPosWouldResultInDrawByRepetition(in Position newPos, IList<Position> positionsAll)
+    {
+      int countRepetitions = 0;
+      for (int i = 0; i < positionsAll.Count; i++)
+      {
+        if (positionsAll[i].EqualAsRepetition(in newPos))
+        {
+          countRepetitions++;
+        }
+      }
+
+      bool wouldBeDrawByRepetition = countRepetitions >= 2;
+      return wouldBeDrawByRepetition;
+    }
+
+
 
 #if NOT
     /// <summary>
