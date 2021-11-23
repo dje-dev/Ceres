@@ -28,6 +28,7 @@ using Ceres.Chess.NNEvaluators.CUDA;
 using Ceres.Chess.LC0.NNFiles;
 using Ceres.Chess.LC0NetInference;
 using Ceres.Chess.LC0.WeightsProtobuf;
+using Ceres.Chess.LC0.Batches;
 
 #endregion
 
@@ -43,6 +44,11 @@ namespace Ceres.Chess.NNEvaluators
     /// Delegate type which constructs evaluator from specified definition.
     /// </summary>
     public delegate NNEvaluator CustomDelegate(string netID, int gpuID, NNEvaluator referenceEvaluator);
+
+    /// <summary>
+    /// Custom factory method installable at runtime (COMBO_PHASED).
+    /// </summary>
+    public static CustomDelegate ComboPhasedFactory;
 
     /// <summary>
     /// Custom factory method installable at runtime (CUSTOM1).
@@ -215,7 +221,14 @@ namespace Ceres.Chess.NNEvaluators
           }
 
           break;
-       
+
+        case NNEvaluatorType.ComboPhased:
+          if (ComboPhasedFactory == null)
+          {
+            throw new Exception("NNEvaluatorFactory.ComboPhasedFactory static variable must be initialized.");
+          }
+          ret = ComboPhasedFactory(netDef.NetworkID, deviceDef.DeviceIndex, referenceEvaluator);
+          break;
 
         case NNEvaluatorType.Custom1:
           if (Custom1Factory == null)
@@ -359,7 +372,8 @@ namespace Ceres.Chess.NNEvaluators
       {
         return Singleton(def.Nets[0].Net, def.Devices[0].Device, referenceEvaluator);
       }
-
     }
+ 
+
   }
 }

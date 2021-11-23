@@ -46,6 +46,11 @@ namespace Ceres.Chess.NNEvaluators.Defs
     RandomNarrow,
 
     /// <summary>
+    /// One evaluator used in early phase of search tree, second evalutor for remainder.
+    /// </summary>
+    ComboPhased,
+
+    /// <summary>
     /// A custom evaluator installed into NNEvaluatorDefFactory.Custom1Factory.
     /// </summary>
     Custom1,

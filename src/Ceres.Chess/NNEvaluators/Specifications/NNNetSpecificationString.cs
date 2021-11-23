@@ -79,6 +79,11 @@ namespace Ceres.Chess.NNEvaluators.Specifications
         netIDs = netString.Substring(14);
         NN_EVAL_TYPE = NNEvaluatorType.RandomNarrow;
       }
+      else if (netString.ToUpper().StartsWith("COMBO_PHASED:"))
+      {
+        netIDs = netString.Substring(13);
+        NN_EVAL_TYPE = NNEvaluatorType.ComboPhased;
+      }
       else if (netString.ToUpper().StartsWith("CUSTOM1:"))
       {
         netIDs = netString.Substring(8);
