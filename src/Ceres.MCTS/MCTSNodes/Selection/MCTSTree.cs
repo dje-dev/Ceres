@@ -293,9 +293,13 @@ namespace Ceres.MCTS.LeafExpansion
       Position newPosAsPos = newPos.ToPosition;
       Debug.Assert(newPosAsPos.PieceExists(Pieces.WhiteKing) && newPosAsPos.PieceExists(Pieces.BlackKing));
 
-      // Create history, with prepended move representing this move
+      // Create history, with prepended move representing this move.
+      // Load only a limited position history for efficiency,
+      // unless near the root where draw by repetition especially critical to detect.
+      // TODO: Upon tree reuse, do we need to revisit shallow nodes with this deeper draw detection?
+      int drawLookbackPlies = node.Depth < 5 ? MAX_LENGTH_POS_HISTORY : ParamsSearch.DrawByRepetitionLookbackPlies;
       Span<Position> posHistory = GetPriorHistoryPositions(node.Parent, in newPosAsPos, PosScratchBuffer,
-                                                           ParamsSearch.DrawByRepetitionLookbackPlies, true);
+                                                           drawLookbackPlies, true);
 
       // Determine the set (possibly a subset) of positions over which to compute hash
       Span<Position> posHistoryForCaching = posHistory;

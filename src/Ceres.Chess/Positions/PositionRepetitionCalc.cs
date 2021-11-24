@@ -107,7 +107,7 @@ namespace Ceres.Chess
     /// <param name="ourMove"></param>
     /// <param name="historyPositions"></param>
     /// <returns></returns>
-    public static bool DrawByRepetitionWouldBeClaimable(in Position ourPos, MGMove ourMove, Span<Position> historyPositions)
+    public static bool DrawByRepetitionWouldBeClaimable(in Position ourPos, MGMove ourMove, IList<Position> historyPositions)
     {
       // Determine position after our move.
       MGPosition mgPos = ourPos.ToMGPosition;
@@ -115,13 +115,13 @@ namespace Ceres.Chess
       Position newPosAfterOurMove = mgPos.ToPosition;
 
       // Check for draw by repetition which opponent could claim after our move.
-      if (NewPosWouldResultInDrawByRepetition(in newPosAfterOurMove, historyPositions.ToArray()))
+      if (NewPosWouldResultInDrawByRepetition(in newPosAfterOurMove, historyPositions))
       {
         return true;
       }
 
       // Build new List of Positions which includes position after our move.
-      List<Position> positionsAll = new(historyPositions.ToArray());
+      List<Position> positionsAll = new(historyPositions);
       positionsAll.Add(newPosAfterOurMove);
 
       // Loop thru all possible opponent moves.
@@ -135,16 +135,17 @@ namespace Ceres.Chess
         }
       }
 
+
       return false;
     }
 
 
-    private static bool NewPosWouldResultInDrawByRepetition(in Position newPos, IList<Position> positionsAll)
+    private static bool NewPosWouldResultInDrawByRepetition(in Position newPos, IEnumerable<Position> positionsAll)
     {
       int countRepetitions = 0;
-      for (int i = 0; i < positionsAll.Count; i++)
+      foreach (Position position in positionsAll)
       {
-        if (positionsAll[i].EqualAsRepetition(in newPos))
+        if (position.EqualAsRepetition(in newPos))
         {
           countRepetitions++;
         }

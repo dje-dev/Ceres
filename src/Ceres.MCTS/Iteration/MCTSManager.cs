@@ -525,7 +525,7 @@ namespace Ceres.MCTS.Iteration
         Span<Position> historyPositions = node.Context.Tree.HistoryPositionsForNode(node);
 
         // Try to avoid making a move which would allow opponent to claim draw.
-        bool wouldBeDrawByRepetition = PositionRepetitionCalc.DrawByRepetitionWouldBeClaimable(in pos, immediateMove, historyPositions);
+        bool wouldBeDrawByRepetition = PositionRepetitionCalc.DrawByRepetitionWouldBeClaimable(in pos, immediateMove, historyPositions.ToArray());
         if (wouldBeDrawByRepetition)
         {
           if (fullWinningMoveList == null)
@@ -540,7 +540,7 @@ namespace Ceres.MCTS.Iteration
             // Check other moves to see if any of them avoids falling into the draw by repetition trap.
             foreach (MGMove move in fullWinningMoveList)
             {
-              if (!PositionRepetitionCalc.DrawByRepetitionWouldBeClaimable(in pos, move, historyPositions))
+              if (!PositionRepetitionCalc.DrawByRepetitionWouldBeClaimable(in pos, move, historyPositions.ToArray()))
               {
                 immediateMove = move;
                 break;
@@ -692,6 +692,8 @@ namespace Ceres.MCTS.Iteration
       }
 
       MCTSNode root = manager.Root;
+
+      //root.MarkImmediateDrawsByRepetition();
 
       // Do the search
       IteratedMCTSDef schedule = manager.Context.ParamsSearch.IMCTSSchedule;
