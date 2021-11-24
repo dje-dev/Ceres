@@ -402,6 +402,21 @@ namespace Ceres.MCTS.MTCSNodes
     }
 
 
+    /// <summary>
+    /// Enumerator over all expanded children (as MCTSNode).
+    /// </summary>
+    public IEnumerable<MCTSNode> ChildrenExpanded
+    {
+      get
+      {
+        for (int i = 0; i < NumChildrenExpanded; i++)
+        {
+          yield return ChildAtIndex(i);
+        }
+      }
+    }
+
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public MCTSNode ChildAtIndex(int childIndex)
     {
@@ -652,8 +667,8 @@ namespace Ceres.MCTS.MTCSNodes
       InfoRef.SetPolicy(policySoftmax, minPolicyProbability, in mgPos, moves, in policyVector, returnedMovesAreInSameOrderAsMGMoveList);
     }
 
-
-#region Miscellaneous
+    
+    #region Miscellaneous
 
     /// <summary>
     /// Attempts to find a subnode by following specified moves from root.
