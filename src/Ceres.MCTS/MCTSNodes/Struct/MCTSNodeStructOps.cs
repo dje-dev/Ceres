@@ -1050,6 +1050,27 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     }
 
     /// <summary>
+    /// Forcibly resets state to be that of a drawn position.
+    /// </summary>
+    internal void ResetToDraw()
+    {
+      WinP = 0;
+      LossP = 0;
+      Terminal = GameResult.Draw;
+      MPosition = 1;
+
+      W = 0;
+      dSum = DepthInTree;
+      mSum = N;
+
+      if (!IsRoot)
+      {
+        ParentRef.DrawKnownToExistAmongChildren = true;
+      }
+    }
+
+
+    /// <summary>
     /// Processes a node which has been determined to be a proven loss.
     /// Propagates this upward to the parent since parent's best move 
     /// is now obviously this one.
