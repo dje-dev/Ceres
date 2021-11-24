@@ -37,9 +37,20 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
     /// <summary>
     /// If the DTZ files supported by the engine and potentially usable
     /// (if the necessary tablebase files are found for a given piece combination).
+    /// The case of partial DTZ availability is not generally supported
+    /// (not guaranteed to produce correct play).
     /// </summary>
     public bool DTZAvailable { get;}
 
+    /// <summary>
+    /// The number of wdl tablebase files available, if known.
+    /// </summary>
+    public int? NumWDLTablebaseFiles { get; }
+
+    /// <summary>
+    /// The number of DTZ tablebase files available, if known.
+    /// </summary>
+    public int? NumDTZTablebaseFiles { get; }
 
     /// <summary>
     /// Initializes tablebases to use a specied set of paths.

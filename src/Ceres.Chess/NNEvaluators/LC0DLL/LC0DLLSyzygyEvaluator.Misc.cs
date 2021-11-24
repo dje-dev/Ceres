@@ -37,6 +37,7 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
   /// </summary>
   public partial class LC0DLLSyzygyEvaluator : IDisposable, ISyzygyEvaluatorEngine
   {
+
     public MGMove CheckTablebaseBestNextMoveViaDTZ(in Position currentPos, out GameResult result, out List<MGMove> fullWinningMoveList)
     {
       fullWinningMoveList = null;
@@ -85,7 +86,9 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
       }
     }
 
+    public int? NumWDLTablebaseFiles => null;
 
+    public int? NumDTZTablebaseFiles => null;
 
 
     #region Tests

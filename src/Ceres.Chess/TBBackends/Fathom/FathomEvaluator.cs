@@ -16,6 +16,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Ceres.Base.Misc;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.NNEvaluators.LC0DLL;
 
@@ -51,7 +52,17 @@ namespace Ceres.Chess.TBBackends.Fathom
     /// If the DTZ files supported by the engine and potentially usable
     /// (if the necessary tablebase files are found for a given piece combination).
     /// </summary>
-    public bool DTZAvailable => true;
+    public bool DTZAvailable => NumDTZTablebaseFiles > 0;
+
+    /// <summary>
+    /// The number of DTM tablebase files available, if known.
+    /// </summary>
+    public int? NumWDLTablebaseFiles => FathomProbe.numWdl;
+
+    /// <summary>
+    /// The number of DTM tablebase files available, if known.
+    /// </summary>
+    public int? NumDTZTablebaseFiles => FathomProbe.numDtz;
 
 
     /// <summary>
@@ -75,7 +86,19 @@ namespace Ceres.Chess.TBBackends.Fathom
         compEvaluator.Initialize(paths);
       }
 
-      return FathomTB.Initialize(paths);
+      bool ok = FathomTB.Initialize(paths);
+
+      if (ok)
+      {
+        Console.WriteLine($"Loading Syzygy tablebases from { paths }, found {FathomProbe.numWdl} WDL and {FathomProbe.numDtz} DTZ files.");
+        if (FathomProbe.numDtz != FathomProbe.numWdl && FathomProbe.numWdl > 0)
+        {
+          ConsoleUtils.WriteLineColored(ConsoleColor.Red, "WARNING: WDL/DTZ files appear incomplete, possibly negatively impacting engine play.");
+        }
+        Console.WriteLine();
+      }
+
+      return ok;
     }
 
 

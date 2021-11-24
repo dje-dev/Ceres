@@ -124,8 +124,6 @@ namespace Ceres.Chess.TBBackends.Fathom
         throw new Exception("Null tablebase path is not supported.");
       }
 
-      Console.WriteLine("Initialize tablebase probing in paths " + paths);
-
       if (!staticsInitialized)
       {
         init_indices();
@@ -134,7 +132,6 @@ namespace Ceres.Chess.TBBackends.Fathom
       }
 
       this.paths = paths;
-
 
 #if REINITIALIZATION_NOT_SUPPORTED
     // if pathString is set, we need to clean up first.
@@ -944,7 +941,7 @@ namespace Ceres.Chess.TBBackends.Fathom
 
 
     static int tbNumPiece, tbNumPawn;
-    static int numWdl, numDtm, numDtz;
+    internal static int numWdl, numDtm, numDtz;
 
     PieceEntry[] pieceEntry;
     PawnEntry[] pawnEntry;
