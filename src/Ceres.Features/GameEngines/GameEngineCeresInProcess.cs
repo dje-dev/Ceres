@@ -293,6 +293,13 @@ namespace Ceres.Features.GameEngines
       using (new SearchContextExecutionBlock(searchResult.Manager.Context))
       {
         bestMoveInfo = searchResult.Manager.Root.BestMoveInfo(false);
+
+#if NOT
+        bool wouldBeDrawByRepetition = PositionRepetitionCalc.DrawByRepetitionWouldBeClaimable(curPositionAndMoves.FinalPosition, bestMoveInfo.BestMove, curPositionAndMoves.GetPositions());
+        if (wouldBeDrawByRepetition)
+        {
+        }
+#endif
       }
 
       scoreCeresCP = (int)MathF.Round(EncodedEvalLogistic.WinLossToCentipawn(bestMoveInfo.QOfBest), 0);
