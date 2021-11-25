@@ -21,6 +21,9 @@ using Ceres.Base.DataTypes;
 using Ceres.MCTS.LeafExpansion;
 using System.Diagnostics;
 using Ceres.MCTS.Params;
+using Ceres.Base.Threading;
+using Ceres.Base.Environment;
+using System.Runtime.CompilerServices;
 
 #endregion
 
@@ -42,17 +45,20 @@ namespace Ceres.MCTS.Evaluators
     /// <summary>
     /// Number of probe successes.
     /// </summary>
-    public int NumHits = 0;
+    internal static AccumulatorMultithreaded NumHits;
 
     /// <summary>
     /// 
     /// </summary>
     public readonly ISyzygyEvaluatorEngine Evaluator;
 
-    public LeafEvaluatorSyzygyLC0(string paths)
+    public readonly bool MarkCheckmatesAsTerminal;
+
+    public LeafEvaluatorSyzygyLC0(string paths, bool markCheckmatesAsTerminal)
     {
       Evaluator = SyzygyEvaluatorPool.GetSessionForPaths(paths);
       MaxCardinality = Evaluator.MaxCardinality;
+      MarkCheckmatesAsTerminal = markCheckmatesAsTerminal; 
     }
 
     protected override LeafEvaluationResult DoTryEvaluate(MCTSNode node)
@@ -91,11 +97,13 @@ namespace Ceres.MCTS.Evaluators
           break;
 
         case LC0DLLSyzygyEvaluator.WDLScore.WDLWin:
-          result = new LeafEvaluationResult(GameResult.Checkmate, (FP16)ParamsSelect.WinPForProvenWin(1), 0, 1);
+          GameResult resultGame = MarkCheckmatesAsTerminal ? GameResult.Checkmate : GameResult.Unknown;
+          result = new LeafEvaluationResult(resultGame, (FP16)ParamsSelect.WinPForProvenWin(1, false), 0, 1);
           break;
 
         case LC0DLLSyzygyEvaluator.WDLScore.WDLLoss:
-          result = new LeafEvaluationResult(GameResult.Checkmate, 0, (FP16)ParamsSelect.LossPForProvenLoss(1), 1);
+          GameResult resultGame1 = MarkCheckmatesAsTerminal ? GameResult.Checkmate : GameResult.Unknown;
+          result = new LeafEvaluationResult(resultGame1, 0, (FP16)ParamsSelect.LossPForProvenLoss(1, false), 1);
           break;
 
         case LC0DLLSyzygyEvaluator.WDLScore.WDLCursedWin:
@@ -112,12 +120,19 @@ namespace Ceres.MCTS.Evaluators
           throw new Exception("Internal error: unknown Syzygy tablebase result code");
       }
 
-      NumHits++;
+      if (CeresEnvironment.MONITORING_METRICS)
+      {
+        NumHits.Add(1, pos.PiecesShortHash);
+      }
 
       return result;
     }
 
-   
+    [ModuleInitializer]
+    internal static void ModuleInitialize()
+    {
+      NumHits.Initialize();
+    }
   }
 }
 

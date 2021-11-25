@@ -42,9 +42,6 @@ namespace Ceres.MCTS.Params
     public const float MinPolicyProbability = 0.005f;
 
 
-    public bool RandomizeQ = false;
-    public const float RandomizeScale = 0.010f * 10f;
-
     public float UCTRootNumeratorExponent = 0.5f;
     public float UCTNonRootNumeratorExponent = 0.5f;
 
@@ -192,40 +189,45 @@ namespace Ceres.MCTS.Params
 
     //TODO: encapsulate all the below in a separate class
 
-    private const float V_PROVEN_WIN_LOSS_IMMEDIATE = 1.0f + V_PROVEN_DELTA;
+    // Actual checkmates (as opposed to tablebase wins)
+    // are assigned larger values to distinguish them.
+    private const float V_PROVEN_WIN_LOSS_IMMEDIATE_CHECKMATE = 1.0f + (2.0f * V_PROVEN_DELTA);
+    private const float V_PROVEN_WIN_LOSS_IMMEDIATE_NON_CHECKMATE = 1.0f + V_PROVEN_DELTA;
 
     // Distance that a proven win/loss is away from 1.0 or -1.0
     // In this way these definitive evaluations are given slightly more weight
     // than the approximations coming out of our value functions (which might also be very close to -1.0 or 1.0)
     private const float V_PROVEN_DELTA = 0.01f;
 
-    private const float MAX_PLY_AWAY = 200;
+    private const float MAX_PLY_AWAY = 255;
 
     private const float UNITS_PER_PLY = V_PROVEN_DELTA / MAX_PLY_AWAY;
 
-    static float VPenaltyForPlyToMate(int plyDistanceToMate = -1)
+    static float VPenaltyForPlyToMate(int plyDistanceToMate)
     {
       // Prefer mates fewer moves away
       if (plyDistanceToMate == -1) return 0;
       return UNITS_PER_PLY * Math.Min(plyDistanceToMate, MAX_PLY_AWAY);
     }
 
-    public static float PlyToMateFromVWithProvenWinLoss(float v)
+
+    public static float WinPForProvenWin(int plyDistanceToMate, bool isImmediateCheckmate)
     {
-      Debug.Assert(MathF.Abs(v) > 1.0f);
-      float distance = MathF.Abs(v - 1) - V_PROVEN_DELTA;
-      float UNITS_PER_PLY = V_PROVEN_DELTA / MAX_PLY_AWAY;
-      return MathF.Abs(distance) / UNITS_PER_PLY;
+      float baseValue = isImmediateCheckmate ? V_PROVEN_WIN_LOSS_IMMEDIATE_CHECKMATE : V_PROVEN_WIN_LOSS_IMMEDIATE_NON_CHECKMATE;
+      return baseValue - VPenaltyForPlyToMate(plyDistanceToMate);
     }
 
-    public static float WinPForProvenWin(int plyDistanceToMate = -1) => V_PROVEN_WIN_LOSS_IMMEDIATE - VPenaltyForPlyToMate(plyDistanceToMate);
-    public static float LossPForProvenLoss(int plyDistanceToMate = -1) => V_PROVEN_WIN_LOSS_IMMEDIATE - VPenaltyForPlyToMate(plyDistanceToMate);
+    public static float LossPForProvenLoss(int plyDistanceToMate, bool isImmediateCheckmate)
+    {
+      return WinPForProvenWin(plyDistanceToMate, isImmediateCheckmate);
+    }
 
     public static bool VIsForcedResult(float v) => MathF.Abs(v) > 1.0f;
 
     public static bool VIsForcedWin(float v) => v > 1.00f;
     public static bool VIsForcedLoss(float v) => v < -1.00f;
 
+    public static bool VIsCheckmate(float v) => v < -V_PROVEN_WIN_LOSS_IMMEDIATE_NON_CHECKMATE;
 
     #endregion
 

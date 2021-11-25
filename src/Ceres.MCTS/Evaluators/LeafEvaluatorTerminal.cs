@@ -68,7 +68,7 @@ namespace Ceres.MCTS.Evaluators
         else if (terminalStatus == GameResult.Checkmate)
         {
           // Position is checkmate (lost)
-          return new LeafEvaluationResult(GameResult.Checkmate, 0, (FP16)ParamsSelect.LossPForProvenLoss(node.Depth), node.Depth);
+          return new LeafEvaluationResult(GameResult.Checkmate, 0, (FP16)ParamsSelect.LossPForProvenLoss(node.Depth, true), node.Depth);
           
         }
         else

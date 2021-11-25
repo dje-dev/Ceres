@@ -13,10 +13,13 @@
 
 #region Using Directives
 
+using Ceres.Base.Environment;
+using Ceres.Base.Threading;
 using Ceres.Chess;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.Positions;
 using Ceres.MCTS.MTCSNodes;
+using System.Runtime.CompilerServices;
 
 #endregion
 
@@ -40,9 +43,9 @@ namespace Ceres.MCTS.Evaluators
     public readonly LeafEvaluatorSyzygyLC0 Ply0Evaluator;
 
     /// <summary>
-    /// Number of successful probes.
+    /// Number of probe successes.
     /// </summary>
-    public static long NumHits = 0;
+    internal static AccumulatorMultithreaded NumHits;
 
 
     /// <summary>
@@ -73,7 +76,10 @@ namespace Ceres.MCTS.Evaluators
 
       // Abort immediately unless this position has exactly
       // one more piece than the max cardinality of our tablebases.
-      if (pos.PieceCount != (Ply0Evaluator.MaxCardinality + 1)) return default;
+      if (pos.PieceCount != (Ply0Evaluator.MaxCardinality + 1))
+      { 
+        return default;
+      }
 
       // Iterate over the capture moves.
       foreach ((MGMove move, Position newPos) in PositionsGenerator1Ply.GenPositions(pos, move => move.Capture))
@@ -84,14 +90,29 @@ namespace Ceres.MCTS.Evaluators
         {
           // Check if loss for them (win for us)
           bool posLoses = result.V < 0;
-          if (!posLoses) return default;
+          if (!posLoses)
+          {
+            return default;
+          }
 
-          NumHits++;
-          return new LeafEvaluationResult(GameResult.Checkmate, result.LossP, result.WinP, result.M);
+          if (CeresEnvironment.MONITORING_METRICS)
+          {
+            NumHits.Add(1, pos.PiecesShortHash);
+          }
+
+          GameResult resultGame = Ply0Evaluator.MarkCheckmatesAsTerminal ? GameResult.Checkmate : GameResult.Unknown;
+          return new LeafEvaluationResult(resultGame, result.LossP, result.WinP, result.M);
         }
       }
 
       return default;
+    }
+
+
+    [ModuleInitializer]
+    internal static void ModuleInitialize()
+    {
+      NumHits.Initialize();
     }
   }
 }

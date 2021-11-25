@@ -233,7 +233,7 @@ namespace Ceres.MCTS.MTCSNodes
           bool alreadyAlmostWon = parentRef.Q > NO_TABLEBASE_PROBE_ABOVE_Q;
           if (!alreadyAlmostWon && FathomTB.ProbeWDL(in pos) == FathomWDLResult.Loss)
           {
-            bestQ = -ParamsSelect.LossPForProvenLoss(1);
+            bestQ = -ParamsSelect.LossPForProvenLoss(1, false);
             bestD = 0;
             bestN = short.MaxValue;
             break;
