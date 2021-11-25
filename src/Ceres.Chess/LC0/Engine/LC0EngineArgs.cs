@@ -50,22 +50,21 @@ namespace Ceres.Chess.LC0.Engine
       // Default GPU ID is 0 if not specified
       if (gpuIDs == null) gpuIDs = new int[] { 0 };
 
-      string multistreamOption = "--backend-opts=multi_stream=true ";
       if (gpuIDs.Length == 1)
       {
-        return $"--backend={backendName} {multistreamOption}--backend-opts=gpu={gpuIDs[0]} ";
+        return $"--backend={backendName} --backend-opts=multi_stream=true,gpu={gpuIDs[0]} ";
       }
       else
       {
         //--backend=demux --backend-opts=(backend=cudnn-fp16,gpu=0),(backend=cudnn-fp16,gpu=1),(backend=cudnn-fp16,gpu=2),(backend=cudnn-fp16,gpu=3) --nncache=0 --movetime=-1 --nodes=1000000 -t 5
         //minimum-split-size=32,
         StringBuilder arg = new StringBuilder($"--backend={(fractionsAreEqual ? "demux" : "roundrobin")} "
-                                            + $"{ multistreamOption }"
-                                            + $"--backend-opts={(fractionsAreEqual ? "minimum-split-size=32," : "")}");
+                                            + $"--backend-opts=multi_stream=true,{(fractionsAreEqual ? "minimum-split-size=32," : "")}");
         for (int gpuIndex = 0; gpuIndex < gpuIDs.Length; gpuIndex++)
         {
           arg.Append($"(backend={backendName},gpu={gpuIDs[gpuIndex]}){(gpuIndex < gpuIDs.Length - 1 ? "," : " ")}");
         }
+
         return arg.ToString();
       }
     }
