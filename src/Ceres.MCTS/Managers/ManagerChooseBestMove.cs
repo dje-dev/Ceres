@@ -224,7 +224,8 @@ namespace Ceres.MCTS.Managers
       // First see if any were forced losses for the child (i.e. wins for us)
       if (childrenSortedQ.Length == 1 || ParamsSelect.VIsForcedLoss((float)childrenSortedQ[0].Q))
       {
-        return new BestMoveInfo(childrenSortedQ[0], (float)-childrenSortedQ[0].Q, childrenSortedN[0].N, BestNSecond, 0); // TODO: look for quickest win?
+        return new BestMoveInfo(childrenSortedQ[0], (float)-childrenSortedQ[0].Q, childrenSortedN[0].N, BestNSecond, 0,
+                                childrenSortedN[0], childrenSortedQ[0]); // TODO: look for quickest win?
       }
 
       int thisMoveNum = Node.Context.StartPosAndPriorMoves.Moves.Count / 2; // convert ply to moves
@@ -249,7 +250,7 @@ namespace Ceres.MCTS.Managers
         {
           // Just return best N (note that tiebreaks are already decided with sort logic above)
           return new BestMoveInfo(childrenSortedN[0], (float)-childrenSortedQ[0].Q, childrenSortedN[0].N,
-                                  BestNSecond, 0); // TODO: look for quickest win?
+                                  BestNSecond, 0, childrenSortedN[0], childrenSortedQ[0]); // TODO: look for quickest win?
         }
         else if (Node.Context.ParamsSearch.BestMoveMode == ParamsSearch.BestMoveModeEnum.TopQIfSufficientN)
         {
@@ -284,13 +285,14 @@ namespace Ceres.MCTS.Managers
               }
 
               return new BestMoveInfo(candidate, (float)-childrenSortedQ[0].Q, childrenSortedN[0].N,
-                                      BestNSecond, MLHBoostForMove(candidate, mAvgOfBestQ)); // TODO: look for quickest win?
+                                      BestNSecond, MLHBoostForMove(candidate, mAvgOfBestQ),
+                                      childrenSortedN[0], childrenSortedQ[0]); // TODO: look for quickest win?
             }
           }
 
           // We didn't find any moves qualified by Q, fallback to move with highest N
           return new BestMoveInfo(childrenSortedN[0], (float)-childrenSortedQ[0].Q, childrenSortedN[0].N,
-                                  BestNSecond, 0);
+                                  BestNSecond, 0, childrenSortedN[0], childrenSortedQ[0]);
         }
         else
           throw new Exception("Internal error, unknown BestMoveMode");

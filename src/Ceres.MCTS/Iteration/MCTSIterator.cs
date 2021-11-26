@@ -370,6 +370,15 @@ namespace Ceres.MCTS.Iteration
       return ret;
     }
 
+    public void SetNodeNotFutilityPruned(MCTSNode node)
+    {
+      int nodeIndex = node.IndexInParentsChildren;
+      if (RootMovesPruningStatus[nodeIndex] == MCTSFutilityPruningStatus.PrunedDueToFutility)
+      {
+        RootMovesPruningStatus[nodeIndex] = MCTSFutilityPruningStatus.NotPruned;
+      }
+    }
+
 
     internal bool TablebaseDTZAvailable;
 

@@ -71,6 +71,16 @@ namespace Ceres.MCTS.MTCSNodes
     public MCTSNode BestMoveNode { get; init; }
 
     /// <summary>
+    /// Node with best Q score.
+    /// </summary>
+    public MCTSNode BestQNode { get; init; }
+
+    /// <summary>
+    /// Node with best N score.
+    /// </summary>
+    public MCTSNode BestNNode { get; init; }
+
+    /// <summary>
     /// The number of visits beneath the best node.
     /// </summary>
     public readonly int N;
@@ -104,6 +114,7 @@ namespace Ceres.MCTS.MTCSNodes
     /// </summary>
     public MGMove BestMove;
 
+
     /// <summary>
     /// Constructor.
     /// </summary>
@@ -112,7 +123,10 @@ namespace Ceres.MCTS.MTCSNodes
     /// <param name="bestN"></param>
     /// <param name="bestNSecond"></param>
     /// <param name="mlhBonusApplied"></param>
-    public BestMoveInfo(MCTSNode bestMoveNode, float qMaximal, float bestN, float bestNSecond, float mlhBonusApplied)
+    /// <param name="bestNNode"></param>
+    /// <param name="bestQNode"></param>
+    public BestMoveInfo(MCTSNode bestMoveNode, float qMaximal, float bestN, float bestNSecond, float mlhBonusApplied,
+                        MCTSNode bestNNode = default, MCTSNode bestQNode = default)
     {
       BestMoveNode = bestMoveNode;
       N = bestMoveNode.N;
@@ -123,7 +137,10 @@ namespace Ceres.MCTS.MTCSNodes
       MLHBonusApplied = mlhBonusApplied;
       BestMoveNode.Annotate();
       BestMove = bestMoveNode.Annotation.PriorMoveMG;
+      BestNNode = bestNNode;
+      BestQNode = bestQNode;
     }
+
 
     /// <summary>
     /// Constructor for case of immediate move based on policy (no search).
