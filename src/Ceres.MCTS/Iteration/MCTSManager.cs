@@ -162,6 +162,11 @@ namespace Ceres.MCTS.Iteration
 
     public readonly bool IsFirstMoveOfGame;
 
+    /// <summary>
+    /// If tablebase evaluations should not be marked as terminal
+    /// (needed when root position is a win but no DTZ files available).
+    /// </summary>
+    public readonly bool ForceNoTablebaseTerminals;
 
     /// <summary>
     /// Constructor.
@@ -191,7 +196,9 @@ namespace Ceres.MCTS.Iteration
                        IManagerGameLimit limitManager,
                        DateTime startTime,
                        List<GameMoveStat> gameMoveHistory,
-                       bool isFirstMoveOfGame)
+                       bool isFirstMoveOfGame,
+                       bool forceNoTablebaseTerminals,
+                       List<MGMove> searchMovesTablebaseRestricted)
     {
       if (searchLimit.IsPerGameLimit)
       {
@@ -202,6 +209,7 @@ namespace Ceres.MCTS.Iteration
       RootNWhenSearchStarted = store.RootNode.N;
 
       IsFirstMoveOfGame = isFirstMoveOfGame;
+      ForceNoTablebaseTerminals = forceNoTablebaseTerminals;
       SearchLimit = searchLimit;
       SearchLimitInitial = searchLimit;
 
@@ -231,7 +239,7 @@ namespace Ceres.MCTS.Iteration
                                  nnEvaluators, searchParams, childSelectParams, estNumNodes);
       ThreadSearchContext = Context;
 
-      TerminationManager = new MCTSFutilityPruning(this, searchLimit.SearchMoves);
+      TerminationManager = new MCTSFutilityPruning(this, searchLimit.SearchMoves, searchMovesTablebaseRestricted);
       LimitManager = limitManager;
 
       CeresEnvironment.LogInfo("MCTS", "Init", $"SearchManager created for store {store}", InstanceID);
@@ -456,35 +464,6 @@ namespace Ceres.MCTS.Iteration
       }
     }
 
-    /// <summary>
-    /// Sets the TerminationManager.SearchMoves to a specified new set.
-    /// </summary>
-    /// <param name="searchMoves"></param>
-    void RestrictSearchMoves(List<MGMove> searchMoves)
-    {
-      List<Move> convertedMoves = new List<Move>();
-      foreach (MGMove moveMG in searchMoves)
-      {
-        convertedMoves.Add(MGMoveConverter.ToMove(moveMG));
-      }
-
-      bool searchMovesAlreadyExisted = TerminationManager.SearchMoves != null;
-      if (TerminationManager.SearchMoves == null)
-      {
-        TerminationManager.SearchMoves = new List<Move>();
-      }
-
-      foreach (Move move in convertedMoves)
-      {
-        // Only include winning moves which are already in the restricted search moves (if already restricted).
-        if (!searchMovesAlreadyExisted 
-         || TerminationManager.SearchMoves.Contains(move))
-        {
-          TerminationManager.SearchMoves.Add(move);
-        }
-      }
-    }
-
 
     /// <summary>
     /// Probes the tablebases (if any) for the best move at root,
@@ -504,8 +483,7 @@ namespace Ceres.MCTS.Iteration
       node.Annotate();
       Position pos = node.Annotation.Pos;
       MGMove immediateMove = Context.CheckTablebaseBestNextMove(in pos, out GameResult result, out List<MGMove> fullWinningMoveList, out bool winningMoveListOrderedByDTM);
-      
-      if (!winningMoveListOrderedByDTM)
+      if (result == GameResult.Checkmate && !winningMoveListOrderedByDTM)
       {
         // Not safe to rely upon the tablebase probe because unable (e.g. because of missing DTZ files)
         // to indicate which moves bring us closer to checkmate.
@@ -513,7 +491,7 @@ namespace Ceres.MCTS.Iteration
         // However filter search moves to only include the winning moves.
         if (fullWinningMoveList != null && fullWinningMoveList.Count > 0)
         {
-          RestrictSearchMoves(fullWinningMoveList);
+          TerminationManager.SearchMovesTablebaseRestricted = fullWinningMoveList;
         }
 
         return (GameResult.Unknown, default);
@@ -600,7 +578,7 @@ namespace Ceres.MCTS.Iteration
             // TODO: possibly use distance to mate to set the distance more accurately than fixed at 1
             const int DISTANCE_TO_MATE = 1;
 
-            float lossP = ParamsSelect.LossPForProvenLoss(DISTANCE_TO_MATE);
+            float lossP = ParamsSelect.LossPForProvenLoss(DISTANCE_TO_MATE, false);
 
             Context.Root.StructRef.W = -lossP;
             Context.Root.StructRef.N = 1;
@@ -620,7 +598,7 @@ namespace Ceres.MCTS.Iteration
       // TODO: possibly use distance to mate to set the distance more accurately than fixed at 1
       const int DISTANCE_TO_MATE = 1;
 
-      float winP = ParamsSelect.WinPForProvenWin(DISTANCE_TO_MATE);
+      float winP = ParamsSelect.WinPForProvenWin(DISTANCE_TO_MATE, false);
 
       Context.Root.StructRef.W = winP;
       Context.Root.StructRef.N = 1;
@@ -1098,7 +1076,7 @@ namespace Ceres.MCTS.Iteration
       get
       {
         LeafEvaluatorSyzygyLC0 syzygyEvaluator = (LeafEvaluatorSyzygyLC0)Context.LeafEvaluators.Find(eval => eval.GetType() == typeof(LeafEvaluatorSyzygyLC0));
-        return syzygyEvaluator == null ? 0 : syzygyEvaluator.NumHits;
+        return syzygyEvaluator == null ? 0 : (int)LeafEvaluatorSyzygyLC0.NumHits.Value;
       }
     }
 

@@ -62,32 +62,34 @@ namespace Ceres.MCTS.Iteration
     /// </summary>
     public List<Move> SearchMoves;
 
+    public List<MGMove> SearchMovesTablebaseRestricted = null;
+
 
     /// <summary>
     /// Constructor.
     /// </summary>
     /// <param name="manager"></param>
-    public MCTSFutilityPruning(MCTSManager manager, List<Move> searchMoves)
+    public MCTSFutilityPruning(MCTSManager manager, List<Move> searchMoves, List<MGMove> searchMovesTablebaseRestricted)
     {
       Manager = manager;
       SearchMoves = searchMoves;
+      SearchMovesTablebaseRestricted = searchMovesTablebaseRestricted;
     }
 
 
-    bool haveAppliedSearchMoves = false;
+    public bool HaveAppliedSearchMoves { private set; get; }
 
     internal void ApplySearchMoves()
     {
-      // This is intended to be called only once, immediately after the root is evaluated.
-      Debug.Assert(Context.Root.N == 1 && !haveAppliedSearchMoves);
+      Debug.Assert(!HaveAppliedSearchMoves);
+
+      if (Context.RootMovesPruningStatus == null)
+      {
+        Context.RootMovesPruningStatus = new MCTSFutilityPruningStatus[Root.NumPolicyMoves];
+      }
 
       if (SearchMoves != null)
       {
-        if (Context.RootMovesPruningStatus == null)
-        {
-          Context.RootMovesPruningStatus = new MCTSFutilityPruningStatus[Root.NumPolicyMoves];
-        }
-
         // Start by assuming all are pruned.
         Array.Fill(Context.RootMovesPruningStatus, MCTSFutilityPruningStatus.PrunedDueToSearchMoves);
 
@@ -114,7 +116,21 @@ namespace Ceres.MCTS.Iteration
           }
         }
       }
-      haveAppliedSearchMoves = true;
+
+      if (SearchMovesTablebaseRestricted != null)
+      {
+        for (int i = 0; i < Root.NumPolicyMoves; i++)
+        {
+          MGMove moveMG = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(Root.ChildAtIndexInfo(i).move, in Root.Annotation.PosMG, true);
+          if (!SearchMovesTablebaseRestricted.Contains(moveMG))
+          {
+            Context.RootMovesPruningStatus[i] = MCTSFutilityPruningStatus.PrunedDueToTablebaseNotWinning;
+          }
+
+        }
+      }
+
+      HaveAppliedSearchMoves = true;
     }
 
 

@@ -52,13 +52,16 @@ namespace Ceres.MCTS.Evaluators
     /// </summary>
     public readonly ISyzygyEvaluatorEngine Evaluator;
 
-    public readonly bool MarkCheckmatesAsTerminal;
 
-    public LeafEvaluatorSyzygyLC0(string paths, bool markCheckmatesAsTerminal)
+    public LeafEvaluatorSyzygyLC0(string paths, bool forceNoTablebaseTerminals)
     {
       Evaluator = SyzygyEvaluatorPool.GetSessionForPaths(paths);
       MaxCardinality = Evaluator.MaxCardinality;
-      MarkCheckmatesAsTerminal = markCheckmatesAsTerminal; 
+
+      if (forceNoTablebaseTerminals)
+      {
+        Mode = LeafEvaluatorMode.SetAuxilliaryEval;
+      }
     }
 
     protected override LeafEvaluationResult DoTryEvaluate(MCTSNode node)
@@ -97,13 +100,11 @@ namespace Ceres.MCTS.Evaluators
           break;
 
         case LC0DLLSyzygyEvaluator.WDLScore.WDLWin:
-          GameResult resultGame = MarkCheckmatesAsTerminal ? GameResult.Checkmate : GameResult.Unknown;
-          result = new LeafEvaluationResult(resultGame, (FP16)ParamsSelect.WinPForProvenWin(1, false), 0, 1);
+          result = new LeafEvaluationResult(GameResult.Checkmate, (FP16)ParamsSelect.WinPForProvenWin(1, false), 0, 1);
           break;
 
         case LC0DLLSyzygyEvaluator.WDLScore.WDLLoss:
-          GameResult resultGame1 = MarkCheckmatesAsTerminal ? GameResult.Checkmate : GameResult.Unknown;
-          result = new LeafEvaluationResult(resultGame1, 0, (FP16)ParamsSelect.LossPForProvenLoss(1, false), 1);
+          result = new LeafEvaluationResult(GameResult.Checkmate, 0, (FP16)ParamsSelect.LossPForProvenLoss(1, false), 1);
           break;
 
         case LC0DLLSyzygyEvaluator.WDLScore.WDLCursedWin:

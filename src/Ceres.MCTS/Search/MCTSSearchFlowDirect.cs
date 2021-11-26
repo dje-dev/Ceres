@@ -187,6 +187,13 @@ namespace Ceres.MCTS.Search
       int nodesLastSecondaryNetEvaluation = 0;
       while (true)
       {
+        // Apply search moves as soon as possible (need the root to have been evaluated).
+        if (!manager.TerminationManager.HaveAppliedSearchMoves
+         && rootNode.N > 0)
+        {
+          manager.TerminationManager.ApplySearchMoves();
+        }
+
         // Only start overlapping past 1500 nodes because
         // CPU latency will be very small at small tree sizes,
         // obviating the overlapping beneifts of hiding this latency.
@@ -370,11 +377,6 @@ namespace Ceres.MCTS.Search
           LaunchEvaluate(manager, targetThisBatch, isPrimary, nodesSelectedSet);
           nodesSelectedSet.ApplyAll();
           //Console.WriteLine("applied " + selector.Leafs.Count + " " + rootNode);
-        }
-
-        if (rootNode.N == 1)
-        {
-          manager.TerminationManager.ApplySearchMoves();
         }
 
         RunPeriodicMaintenance(manager, batchSequenceNum, iterationCount);

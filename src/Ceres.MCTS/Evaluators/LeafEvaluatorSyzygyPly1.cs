@@ -52,9 +52,13 @@ namespace Ceres.MCTS.Evaluators
     /// Constructor.
     /// </summary>
     /// <param name="ply0Evaluator"></param>
-    public LeafEvaluatorSyzygyPly1(LeafEvaluatorSyzygyLC0 ply0Evaluator)
+    public LeafEvaluatorSyzygyPly1(LeafEvaluatorSyzygyLC0 ply0Evaluator, bool forceNoTablebaseTerminals)
     {
       Ply0Evaluator = ply0Evaluator;
+      if (forceNoTablebaseTerminals)
+      {
+        Mode = LeafEvaluatorMode.SetAuxilliaryEval;
+      }
     }
 
 
@@ -100,8 +104,7 @@ namespace Ceres.MCTS.Evaluators
             NumHits.Add(1, pos.PiecesShortHash);
           }
 
-          GameResult resultGame = Ply0Evaluator.MarkCheckmatesAsTerminal ? GameResult.Checkmate : GameResult.Unknown;
-          return new LeafEvaluationResult(resultGame, result.LossP, result.WinP, result.M);
+          return new LeafEvaluationResult(GameResult.Checkmate, result.LossP, result.WinP, result.M);
         }
       }
 

@@ -36,7 +36,13 @@ namespace Ceres.MCTS.Iteration
     /// <summary>
     /// Move is pruned because judged not to be a plausible candidate for best move.
     /// </summary>
-    PrunedDueToFutility
+    PrunedDueToFutility,
+
+    /// <summary>
+    /// Searching using only WDL tablebases and position is a win 
+    /// but move is not one of the winning moves.
+    /// </summary>
+    PrunedDueToTablebaseNotWinning
   }
 }
 

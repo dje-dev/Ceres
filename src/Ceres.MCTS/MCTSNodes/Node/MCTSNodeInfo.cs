@@ -135,6 +135,7 @@ namespace Ceres.MCTS.MTCSNodes
       PendingTranspositionD = FP16.NaN;
       Annotation = new MCTSNodeAnnotation();
       EvalResult = default;
+      EvalResultAuxilliary = FP16.NaN;
       InFlightLinkedNode = default;
       LastAccessedSequenceCounter = 0;
       SiblingEval = null;
@@ -150,7 +151,11 @@ namespace Ceres.MCTS.MTCSNodes
     /// </summary>
     public LeafEvaluationResult EvalResult;
 
-    
+    /// <summary>
+    /// Value possibly set by a LeafEvaluator to pass back auxilliary information.
+    /// </summary>
+    public FP16 EvalResultAuxilliary;
+
     /// <summary>
     /// If present, information relating to the evaluation a node which 
     /// is a (lower probability) sibling of a node currently in flight.

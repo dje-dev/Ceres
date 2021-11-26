@@ -35,6 +35,7 @@ using Ceres.Chess.UserSettings;
 using Ceres.MCTS.NodeCache;
 using Ceres.Base.DataType.Trees;
 using System.Diagnostics;
+using Ceres.MCTS.Evaluators;
 
 #endregion
 
@@ -203,7 +204,8 @@ namespace Ceres.MCTS.Iteration
                        IMCTSNodeCache reuseNodeCache = null,
                        bool possiblyUsePositionCache = false,
                        bool isFirstMoveOfGame = false,
-                       bool moveImmediateIfOnlyOneMove = false)
+                       bool moveImmediateIfOnlyOneMove = false,
+                       List<MGMove> searchMovesTablebaseRestricted = null)
     {
       if (searchLimit == null)
       {
@@ -223,6 +225,7 @@ namespace Ceres.MCTS.Iteration
         throw new Exception("SearchLimit must be NodesPerMove or NodesPerGame when STORAGE_USE_INCREMENTAL_ALLOC is false");
       }
 
+      bool forceNoTablebaseTerminals = PosIsTablebaseWinWithNoDTZAvailable(paramsSearch, priorMoves);
 
       searchLimit = AdjustedSearchLimit(searchLimit, paramsSearch);
 
@@ -255,7 +258,8 @@ namespace Ceres.MCTS.Iteration
 
       Manager = new MCTSManager(store, reuseOtherContextForEvaluatedNodes, positionEvalCache, reuseNodeCache, null,
                                 nnEvaluators, paramsSearch, paramsSelect, searchLimitToUse,
-                                limitManager, startTime, gameMoveHistory, isFirstMoveOfGame);
+                                limitManager, startTime, gameMoveHistory, isFirstMoveOfGame, 
+                                forceNoTablebaseTerminals, searchMovesTablebaseRestricted);
 
       MCTSIterator context = Manager.Context;
 
@@ -267,6 +271,32 @@ namespace Ceres.MCTS.Iteration
         (BestMove, TimingInfo) = MCTSManager.Search(Manager, verbose, progressCallback,
                                                     possiblyUsePositionCache, moveImmediateIfOnlyOneMove);
       }
+    }
+
+    internal static bool PosIsTablebaseWinWithNoDTZAvailable(ParamsSearch paramsSearch, PositionWithHistory priorMoves)
+    {
+      // Check if this is the unusual situation of a tablebase hit
+      // but only WDL and not DTZ available.
+      Position startPos = priorMoves.FinalPosition;
+      bool forceNoTablebaseTerminals = false;
+      if (startPos.PieceCount <= 7 && paramsSearch.EnableTablebases)
+      {
+        LeafEvaluatorSyzygyLC0 evaluatorTB = new LeafEvaluatorSyzygyLC0(CeresUserSettingsManager.Settings.TablebaseDirectory, false);
+        if (startPos.PieceCount <= evaluatorTB.MaxCardinality)
+        {
+          MGMove ret = evaluatorTB.Evaluator.CheckTablebaseBestNextMove(in startPos, out GameResult result,
+            out List<MGMove> fullWinningMoveList, out bool winningMoveListOrderedByDTM);
+
+          if (result == GameResult.Checkmate && !winningMoveListOrderedByDTM)
+          {
+            // No DTZ were available to guide search, must start a new tree
+            // and perform actual NN search to find the win.
+            forceNoTablebaseTerminals = true;
+          }
+        }
+      }
+
+      return forceNoTablebaseTerminals;
     }
 
 
@@ -353,6 +383,7 @@ namespace Ceres.MCTS.Iteration
       Manager = priorSearch.Manager;
       Manager.StartTimeThisSearch = startTime;
       Manager.RootNWhenSearchStarted = priorSearch.SearchRootNode.N;
+      Manager.TerminationManager.SearchMoves?.Clear();
 
       searchLimit = AdjustedSearchLimit(searchLimit, Manager.Context.ParamsSearch);
 
@@ -390,37 +421,48 @@ namespace Ceres.MCTS.Iteration
 
         LastMakeNewRootTimingStats = default;
 
-        ManagerTreeReuse.Method reuseMethod;
+        bool forceNoTablebaseTerminals = PosIsTablebaseWinWithNoDTZAvailable(priorSearch.Manager.Context.ParamsSearch, newPositionAndMoves);
+
+        ManagerTreeReuse.Method reuseMethod = ManagerTreeReuse.Method.NewStore;
+
         bool instamove;
         using (new SearchContextExecutionBlock(Manager.Context))
         {
-          reuseMethod = ManagerTreeReuse.Method.NewStore;
-          if (newRoot.IsNotNull)
+          if (forceNoTablebaseTerminals 
+          && !priorContext.Manager.ForceNoTablebaseTerminals)
           {
-            const bool VERBOSE = false;
-            LastReuseDecision = ManagerTreeReuse.ChooseMethod(priorContext.Tree.Root, newRoot, searchLimit.MaxTreeNodes);
-            reuseMethod = LastReuseDecision.ChosenMethod;
-          }
-
-          // Check for possible instant move
-          instamove = priorContext.Tree.Root == newRoot ? false
-                                                        : CheckInstamove(Manager, searchLimitPerMove, newRoot, reuseMethod);
-          if (instamove)
-          {
-            // Modify in place to point to the new root
-            continuationSubroot = newRoot;
-            BestMove = newRoot.BestMoveInfo(false).BestMove;
-            Manager.StopStatus = MCTSManager.SearchStopStatus.Instamove;
-            Manager.RootNWhenSearchStarted = continuationSubroot.N;
-            TimingInfo = new TimingStats();
-            return;
+            // Just exit with no store reuse.
+            // The prior tree was bulit allowing tablebase terminals in node evaluations,
+            // but now we need to do actual search to find the winning move sequence.
           }
           else
           {
-            CountSearchContinuations = 0;
+            if (newRoot.IsNotNull)
+            {
+              const bool VERBOSE = false;
+              LastReuseDecision = ManagerTreeReuse.ChooseMethod(priorContext.Tree.Root, newRoot, searchLimit.MaxTreeNodes);
+              reuseMethod = LastReuseDecision.ChosenMethod;
+            }
+
+            // Check for possible instant move
+            instamove = priorContext.Tree.Root == newRoot ? false
+                                                          : CheckInstamove(Manager, searchLimitPerMove, newRoot, reuseMethod);
+            if (instamove)
+            {
+              // Modify in place to point to the new root
+              continuationSubroot = newRoot;
+              BestMove = newRoot.BestMoveInfo(false).BestMove;
+              Manager.StopStatus = MCTSManager.SearchStopStatus.Instamove;
+              Manager.RootNWhenSearchStarted = continuationSubroot.N;
+              TimingInfo = new TimingStats();
+              return;
+            }
+            else
+            {
+              CountSearchContinuations = 0;
+            }
           }
         }
-
         const bool possiblyUsePositionCache = false; // TODO: could this be relaxed?
 
         PositionEvalCache positionEvalCache = null;
@@ -434,7 +476,8 @@ namespace Ceres.MCTS.Iteration
         {
           SearchContinueRetainTree(reuseOtherContextForEvaluatedNodes, newPositionAndMoves, gameMoveHistory, verbose, startTime,
                                    progressCallback, isFirstMoveOfGame, priorContext, store, numNodesInitial, newRoot,
-                                   searchLimitPerMove, possiblyUsePositionCache, reuseMethod, moveImmediateIfOnlyOneMove);
+                                   searchLimitPerMove, possiblyUsePositionCache, reuseMethod, moveImmediateIfOnlyOneMove, 
+                                   Manager.TerminationManager.SearchMovesTablebaseRestricted);
         }
         else
         {
@@ -477,7 +520,7 @@ namespace Ceres.MCTS.Iteration
                  reuseOtherContextForEvaluatedNodes, newPositionAndMoves, searchLimit, verbose,
                  startTime, gameMoveHistory, progressCallback, positionEvalCache,
                  priorContext.Tree.NodeCache, possiblyUsePositionCache,
-                 isFirstMoveOfGame, moveImmediateIfOnlyOneMove);
+                 isFirstMoveOfGame, moveImmediateIfOnlyOneMove, Manager.TerminationManager.SearchMovesTablebaseRestricted);
         }
       }
     }
@@ -515,7 +558,7 @@ namespace Ceres.MCTS.Iteration
                                           MCTSIterator priorContext, MCTSNodeStore store, int numNodesInitial, MCTSNode newRoot,
                                           SearchLimit searchLimitTargetAdjusted, bool possiblyUsePositionCache,
                                           ManagerTreeReuse.Method reuseMethod,
-                                          bool moveImmediateIfOnlyOneMove)
+                                          bool moveImmediateIfOnlyOneMove, List<MGMove> searchMovesTablebaseRestricted)
     {
       IMCTSNodeCache reuseNodeCache = Manager.Context.Tree.NodeCache;
 
@@ -658,7 +701,8 @@ namespace Ceres.MCTS.Iteration
                                 reuseNodeCache, newTranspositionRoots,
                                 priorContext.NNEvaluators, priorContext.ParamsSearch, priorContext.ParamsSelect,
                                 searchLimitTargetAdjusted, Manager.LimitManager,
-                                startTime, gameMoveHistory, isFirstMoveOfGame: isFirstMoveOfGame);
+                                startTime, gameMoveHistory, isFirstMoveOfGame: isFirstMoveOfGame, 
+                                priorContext.Manager.ForceNoTablebaseTerminals, searchMovesTablebaseRestricted);
       Manager.Context.ContemptManager = priorContext.ContemptManager;
 
       Manager.Context.Tree.NodeCache.SetContext(Manager.Context);

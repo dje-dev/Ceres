@@ -137,6 +137,8 @@ namespace Ceres.MCTS.Iteration
 
     public CheckTablebaseBestNextMoveDelegate CheckTablebaseBestNextMove;
 
+    public bool TablebasesInUse => CheckTablebaseBestNextMove != null;
+
     public float AvgDepth => (float)CumulativeSelectedLeafDepths.Value / (float)Root.N;
     public float NodeSelectionYieldFrac => NumNodeVisitsAttempted == 0 
                                          ? 0
@@ -301,6 +303,11 @@ namespace Ceres.MCTS.Iteration
       // or easier to compute (e.g. cache lookup) first
       List<LeafEvaluatorBase> evaluators = new List<LeafEvaluatorBase>();
 
+      // Put the inexpensive (no movegen needed) draw checks first.
+      // It is possibly important to detect draw by repetitions before
+      // transpositions which are less sensitive to move history.
+      evaluators.Add(new LeafEvaluatorTerminalDrawn());
+
       // First check transposition table (if enabled)
       // since this is very inexpensive (just a dictionary lookup)
       // and does not need to generate and store moves for the node.
@@ -312,7 +319,7 @@ namespace Ceres.MCTS.Iteration
       }
 
       // Next check for terminal (which will need to generate moves).
-      evaluators.Add(new LeafEvaluatorTerminal());
+      evaluators.Add(new LeafEvaluatorTerminalCheckmateStalemate());
 
       // Possibly try to levarage NN evaluations stored inside the tree from the separate search context
       if (ReuseOtherContextForEvaluatedNodes != null)
@@ -340,18 +347,31 @@ namespace Ceres.MCTS.Iteration
 
       if (ParamsSearch.EnableTablebases)
       {
-        LeafEvaluatorSyzygyLC0 evaluatorTB  = new (CeresUserSettingsManager.Settings.TablebaseDirectory);
+        evaluatorTB  = new LeafEvaluatorSyzygyLC0(CeresUserSettingsManager.Settings.TablebaseDirectory, Manager.ForceNoTablebaseTerminals);
         evaluators.Add(evaluatorTB);
         CheckTablebaseBestNextMove = (in Position currentPos, out GameResult result, out List<MGMove> otherWinningMoves, out bool winningMoveListOrderedByDTM)
-          => evaluatorTB.Evaluator.CheckTablebaseBestNextMove(in currentPos, out result, out otherWinningMoves, out winningMoveListOrderedByDTM);
+          => RootTablebaseMoveCheck(in currentPos, out result, out otherWinningMoves, out winningMoveListOrderedByDTM);
+        TablebaseDTZAvailable = evaluatorTB.Evaluator.DTZAvailable;
 
         // Also add a 1-ply lookahead evaluator (for captures yielding tablebase terminal)
-        evaluators.Add(new LeafEvaluatorSyzygyPly1(evaluatorTB));
+        evaluatorTBPly1 = new LeafEvaluatorSyzygyPly1(evaluatorTB, Manager.ForceNoTablebaseTerminals);
+        evaluators.Add(evaluatorTBPly1);
       }
 
       return evaluators;
     }
 
+    LeafEvaluatorSyzygyLC0 evaluatorTB;
+    LeafEvaluatorSyzygyPly1 evaluatorTBPly1;
+
+    MGMove RootTablebaseMoveCheck(in Position currentPos, out GameResult result, out List<MGMove> fullWinningMoveList, out bool winningMoveListOrderedByDTM)
+    {
+      MGMove ret = evaluatorTB.Evaluator.CheckTablebaseBestNextMove(in currentPos, out result, out fullWinningMoveList, out winningMoveListOrderedByDTM);
+      return ret;
+    }
+
+
+    internal bool TablebaseDTZAvailable;
 
     public int[] OptimalBatchSizesForNetDims(int gpuNum, int numFilters, int numLayers)
     {

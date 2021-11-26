@@ -26,11 +26,11 @@ using Ceres.MCTS.Params;
 namespace Ceres.MCTS.Evaluators
 {
   /// <summary>
-  /// Checks for terminal states currently on the board
-  /// (e.g. checkmate, stalemate, draw due to insufficient material).
+  /// Checks for terminal states coming from checkmate or stalemate
+  /// (which require move generation).
   /// 
   /// </summary>
-  public sealed class LeafEvaluatorTerminal : LeafEvaluatorBase
+  public sealed class LeafEvaluatorTerminalCheckmateStalemate : LeafEvaluatorBase
   {
     /// <summary>
     /// Applies some tests to try to detect terminal positions, returning the TerminalStatus.
@@ -114,8 +114,6 @@ namespace Ceres.MCTS.Evaluators
         }
       }
     }
-
-
 
   }
 }

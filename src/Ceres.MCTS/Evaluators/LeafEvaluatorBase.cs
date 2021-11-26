@@ -22,13 +22,33 @@ using Ceres.MCTS.MTCSNodes;
 #endregion
 
 namespace Ceres.MCTS.Evaluators
-{  
+{
   /// <summary>
   /// Abstract base class for objects that can evaluate nodes, i.e.
   /// compute value and policy outputs for a given encoded position.
   /// </summary>
   public abstract class LeafEvaluatorBase
   {
+    public enum LeafEvaluatorMode
+    {
+      /// <summary>
+      /// Normal mode where TryEvluator returns 
+      /// complete result as a LeafEvluationResult if found.
+      /// </summary>
+      ReturnEvaluationResult,
+
+      /// <summary>
+      /// Alternate mode where default is always returned by TryEvaluate,
+      /// but the MCTSNode.
+      /// </summary>
+      SetAuxilliaryEval
+    }
+
+    /// <summary>
+    /// Determines how result of successful leaf evaluation are returned.
+    /// </summary>
+    public LeafEvaluatorMode Mode { internal set; get; } = LeafEvaluatorMode.ReturnEvaluationResult;
+
     /// <summary>
     /// Attempts to evaluate node immediately and returns if successful (else default).
     /// </summary>
@@ -50,7 +70,19 @@ namespace Ceres.MCTS.Evaluators
     public  LeafEvaluationResult TryEvaluate(MCTSNode node)
     {
       LeafEvaluationResult result = DoTryEvaluate(node);
-      return result;
+      if (result.IsNull)
+      {
+        return default;
+      } 
+      else if (Mode == LeafEvaluatorMode.ReturnEvaluationResult)
+      {
+        return result;
+      }
+      else
+      {
+        node.InfoRef.EvalResultAuxilliary = (FP16)result.V;
+        return default;
+      }
     }
 
   }

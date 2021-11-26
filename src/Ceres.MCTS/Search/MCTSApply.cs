@@ -278,6 +278,25 @@ namespace Ceres.MCTS.Search
 
         Debug.Assert(!float.IsNaN(vToApply));
 
+        // Substitute auxilliary value if present.
+        if (!float.IsNaN(node.InfoRef.EvalResultAuxilliary))
+        {
+          if (node.InfoRef.EvalResultAuxilliary == 0)
+          {
+            vToApplyNonFirst = vToApplyFirst = 0;
+            dToApplyNonFirst = dToApplyFirst = 1;
+          }
+          else
+          {
+            // Use both the tablebase evaluation (which is correct)
+            // but also some from neural network evaluation which provides
+            // some gradient toward the actual winning sequence.
+            vToApplyNonFirst = 0.5f * (vToApplyNonFirst + node.InfoRef.EvalResultAuxilliary);
+            vToApplyFirst = 0.5f * (vToApplyFirst + node.InfoRef.EvalResultAuxilliary);
+            dToApplyNonFirst = dToApplyFirst = 0;
+          }
+        }
+
         nodeRef.BackupApply(nodes, numToApply, 
                             vToApplyFirst, vToApplyNonFirst, mToApply, 
                             dToApplyFirst, dToApplyNonFirst, 
