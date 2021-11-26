@@ -212,6 +212,14 @@ namespace Ceres.MCTS.Iteration
         // Never shut down second best move unless the whole search is eligible to shut down
         if (nodesSortedN.Length > 1)
         {
+          // Unprune any this move if its Q has become better than that of the top N move.
+          if ((nodesSortedQ[i].Q < nodesSortedN[0].Q || nodesSortedQ[i].Q < nodesSortedQ[0].Q)
+           && Context.RootMovesPruningStatus[i] == MCTSFutilityPruningStatus.PrunedDueToFutility)
+          {
+            Context.RootMovesPruningStatus[i] = MCTSFutilityPruningStatus.NotPruned;
+            continue;
+          }
+
           // Do not ever shut down a node with a better Q than that of the best N.
           // Even if it seems unreachable with current search limits,
           // there is a possibility the search will be extended.

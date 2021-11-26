@@ -728,6 +728,10 @@ namespace Ceres.MCTS.Iteration
         {
           thisSearchLimit = manager.SearchLimitInitial * INCREMENT_FRACTION;
 
+          // Make sure top N and Q are not futilty pruned because we now have more search budget.
+          manager.Context.SetNodeNotFutilityPruned(bestMoveInfo.BestNNode);
+          manager.Context.SetNodeNotFutilityPruned(bestMoveInfo.BestQNode);
+
           // Reset starting counters
           // TODO: clean this up.
           // TODO: Inefficient to restart search because of repeated initialization (e.g. create selected sets, leaf evalutors, etc.)
