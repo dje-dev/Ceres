@@ -112,9 +112,15 @@ namespace Ceres.MCTS.MTCSNodes
         char extraFlag = ' ';
         if (!IsRoot && Parent.IsRoot
           && Context.RootMovesPruningStatus != null
-          && Context.RootMovesPruningStatus[IndexInParentsChildren] != Iteration.MCTSFutilityPruningStatus.NotPruned)
+          && Context.RootMovesPruningStatus[IndexInParentsChildren] != MCTSFutilityPruningStatus.NotPruned)
         {
-          extraFlag = 'S'; // move has been shutdown from further leaf expansion due to futility pruning
+          MCTSFutilityPruningStatus status = Context.RootMovesPruningStatus[IndexInParentsChildren];
+          extraFlag = status switch
+          {
+            MCTSFutilityPruningStatus.PrunedDueToFutility => 'F',
+            MCTSFutilityPruningStatus.PrunedDueToTablebaseNotWinning => 'T',
+            MCTSFutilityPruningStatus.PrunedDueToSearchMoves => 'S',
+          };
         }
         else if (Terminal == GameResult.Draw)
         {
@@ -123,10 +129,6 @@ namespace Ceres.MCTS.MTCSNodes
         else if (Terminal == GameResult.Checkmate)
         {
           extraFlag = 'C';
-        }
-        else if (IsTranspositionLinked)
-        {
-          extraFlag = 'T';
         }
 
         double u = float.NaN;
