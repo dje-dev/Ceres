@@ -221,6 +221,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       targetChildRef.miscFields.NumPieces = sourceChildRef.miscFields.NumPieces;
       targetChildRef.miscFields.NumRank2Pawns = sourceChildRef.miscFields.NumRank2Pawns;
 
+      targetChildRef.miscFields.SecondaryNN = sourceChildRef.miscFields.SecondaryNN;
+
       // TODO: HasRepetitions is not cloned here, it probably is not directly transferable
       //       Can this be computed/improved?
 

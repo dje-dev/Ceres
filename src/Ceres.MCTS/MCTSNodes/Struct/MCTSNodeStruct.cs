@@ -208,6 +208,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       WinP = FP16.NaN;
       LossP = FP16.NaN;
       MPosition = 0;
+      SecondaryNN = false;
       IsOldGeneration = false;
       ZobristHash = 0;
       //HashCrosscheck = 0;

@@ -137,7 +137,8 @@ namespace Ceres.MCTS.MTCSNodes.Analysis
 
       writer.Write($"{node.N,13:N0} ");
       writer.Write($" {pctOfVisits,5:F0}%");
-      writer.Write($"   {100.0 * node.P,6:F2}%  ");
+      string secondaryChar = node.StructRef.SecondaryNN ? "s" : " ";
+      writer.Write($"   {100.0 * node.P,6:F2}%{secondaryChar} ");
       DumpWithColor(multiplier * node.V, $" {multiplier * node.V,6:F3}  ", -0.2f, 0.2f, writer);
       //      DumpWithColor(multiplier * node.VSecondary, $" {multiplier * node.VSecondary,6:F3} ", -0.2f, 0.2f);
       double q = multiplier * node.Q;

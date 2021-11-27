@@ -141,6 +141,15 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     }
 
     /// <summary>
+    /// If the node was evaluated by the secondary (alternate) neural network.
+    /// </summary>
+    public bool SecondaryNN
+    {
+      readonly get => miscFields.SecondaryNN;
+      set => miscFields.SecondaryNN = value;
+    }
+
+    /// <summary>
     /// Value of test flag (miscellaneous ad hoc tests).
     /// </summary>
     public bool TestFlag

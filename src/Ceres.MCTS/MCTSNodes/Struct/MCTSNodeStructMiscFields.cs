@@ -43,8 +43,9 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     const int BIT_LENGTH_HAS_REPETITIONS = 1;
     const int BIT_LENGTH_NUM_PIECES = 5;
     const int BIT_LENGTH_NUM_RANK2_PAWNS = 5;
+    const int BIT_LENGTH_SECONDARY_NN = 1;
     const int BIT_LENGTH_TEST = 1;
-    const int BIT_LENGTH_UNUSED = 7;
+    const int BIT_LENGTH_UNUSED = 6;
 
     const int BIT_INDEX_TERMINAL = 0;
     const int BIT_INDEX_DRAW_KNOWN_EXIST = BIT_INDEX_TERMINAL + BIT_LENGTH_TERMINAL;
@@ -58,7 +59,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     const int BIT_INDEX_NUM_PIECES = BIT_INDEX_HAS_REPETITIONS + BIT_LENGTH_HAS_REPETITIONS;
     const int BIT_INDEX_NUM_RANK2_PAWNS = BIT_INDEX_NUM_PIECES + BIT_LENGTH_NUM_PIECES;
 
-    const int BIT_INDEX_TEST = BIT_INDEX_NUM_RANK2_PAWNS + BIT_LENGTH_NUM_RANK2_PAWNS;
+    const int BIT_INDEX_SECONDARY_NN = BIT_INDEX_NUM_RANK2_PAWNS + BIT_LENGTH_NUM_RANK2_PAWNS;
+    const int BIT_INDEX_TEST = BIT_INDEX_SECONDARY_NN + BIT_LENGTH_SECONDARY_NN;
 
     public void Clear() => bits = 0;
 
@@ -257,6 +259,25 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         Debug.Assert(value <= 16);
         Debug.Assert(value < 2 << (BIT_LENGTH_NUM_RANK2_PAWNS - 1));
         BitUtils.SetRange(ref bits, BIT_INDEX_NUM_RANK2_PAWNS, BIT_LENGTH_NUM_RANK2_PAWNS, (uint)value);
+      }
+    }
+
+
+    /// <summary>
+    /// If the node was evaluated by the secondary (alternate) neural network.
+    /// </summary>
+    internal bool SecondaryNN
+    {
+      [MethodImpl(MethodImplOptions.AggressiveInlining)]
+      readonly get
+      {
+        return BitUtils.HasFlag(bits, BIT_INDEX_SECONDARY_NN);
+      }
+
+      [MethodImpl(MethodImplOptions.AggressiveInlining)]
+      set
+      {
+        BitUtils.SetFlag(ref bits, BIT_INDEX_SECONDARY_NN, value);
       }
     }
 
