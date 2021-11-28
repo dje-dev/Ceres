@@ -68,21 +68,19 @@ namespace Ceres.MCTS.Params
     /// <returns></returns>
     public int MinBatchSize(int currentRootN)
     {
+      bool selectMany = UpdateMinNFraction < 0.002f;
+
       if (currentRootN < 5_000)
       {
-        return 40;
+        return selectMany ? 30 : 20;
       }
-      else if (currentRootN < 20_000)
+      else if (currentRootN < 50_000)
       {
-        return 110;
+        return selectMany ? 80 : 35;
       }
-      else if (currentRootN < 300_000)
+      else 
       {
-        return 220;
-      }
-      else
-      {
-        return 380;
+        return selectMany ? 140 : 50;
       }
     }
   }

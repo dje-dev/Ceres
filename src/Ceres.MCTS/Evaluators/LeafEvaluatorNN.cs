@@ -228,6 +228,8 @@ namespace Ceres.MCTS.Evaluators
     /// <param name="results"></param>
     void RetrieveResults(Span<MCTSNode> nodes, IPositionEvaluationBatch results, EvalResultTarget resultTarget, bool markSecondaryNN)
     {
+      //if (EvaluateUsingSecondaryEvaluator) Console.WriteLine("early batch " + nodes.Length);
+
       for (int i = 0; i < nodes.Length; i++)
       {
         MCTSNode node = nodes[i];

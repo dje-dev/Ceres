@@ -406,6 +406,7 @@ namespace Ceres.MCTS.Iteration
         evaluatorSecondary.Evaluate(Context, thisBatch);
 
         ParamsSearchSecondaryEvaluator secondaryParams = Context.ParamsSearch.ParamsSecondaryEvaluator;
+        //Console.WriteLine(this.Root.N + " middle batch " + nodes.Length);
 
         // Process each node, blending in policy and/or value.
         foreach (MCTSNode node in nodes)
@@ -413,8 +414,6 @@ namespace Ceres.MCTS.Iteration
           if (node.Terminal == GameResult.Unknown)
           {
             ref MCTSNodeStruct nodeRef = ref node.StructRef;
-            node.StructRef.SecondaryNN = true;
-
             if (secondaryParams.UpdatePolicyFraction > 0)
             {
               ref readonly CompressedPolicyVector otherPolicy = ref node.EvalResult.PolicyRef;

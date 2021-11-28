@@ -344,9 +344,12 @@ namespace Ceres.MCTS.Search
         if (!node.StructRef.SecondaryNN
           && node.Terminal == GameResult.Unknown
           && nFractionOfRootN > Context.ParamsSearch.ParamsSecondaryEvaluator.UpdateMinNFraction
+          && Context.Root.N > 100 + Context.ParamsSearch.ParamsSecondaryEvaluator.InitialTreeNodesForceSecondary
           )
         {
+          // Add it to the pending list and mark as processed so not added multiple times.
           Context.PendingSecondaryNodes.Add(node);
+          node.StructRef.SecondaryNN = true;
         }
       }
     }

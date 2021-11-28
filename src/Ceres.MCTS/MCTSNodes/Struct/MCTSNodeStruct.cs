@@ -392,7 +392,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
             + $"MPos={MPosition:F3} MAvg={MAvg:F3} "
            + $"Parent={(ParentIndex.IsNull ? "none" : ParentIndex.Index.ToString())}"
            + (IsTranspositionLinked ? $" TRANSPOSITION LINKED, pending { NumVisitsPendingTranspositionRootExtraction}" : "")
-           + $" Score=(?) > with {NumPolicyMoves} policy moves";
+           + $" Score=(?) > with {NumPolicyMoves} policy moves"
+           + (SecondaryNN ? " [SECONDARY]" : "");
       //    + $" Score={score,6:F2} > with {NumPolicyMoves} policy moves"; // can't do this until/if we restore IndexWithinParentsChildren or do linear search to find
     }
 
