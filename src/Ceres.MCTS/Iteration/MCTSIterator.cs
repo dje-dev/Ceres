@@ -56,6 +56,12 @@ namespace Ceres.MCTS.Iteration
 
     public MCTSNodeChildrenStatsTracker RootMoveTracker = new MCTSNodeChildrenStatsTracker();
 
+    /// <summary>
+    /// Set of nodes which have been identified as ready
+    /// for batch evaluation by secondary evaluator.
+    /// </summary>
+    public ConcurrentBag<MCTSNode> PendingSecondaryNodes = new();
+
     internal struct TranspositionCluster
     {
       internal int ParentIndex;

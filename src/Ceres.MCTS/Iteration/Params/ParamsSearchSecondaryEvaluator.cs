@@ -40,6 +40,11 @@ namespace Ceres.MCTS.Params
     public float UpdateFrequencyMinNodesRelative = 0.03f;
 
     /// <summary>
+    /// Number of initial nodes in the tree which are forced to use the secondary evaluator.
+    /// </summary>
+    public int InitialTreeNodesForceSecondary = 0;
+
+    /// <summary>
     /// Minimum number of nodes a node must have to be eligible for
     /// secondary evaluation (expressed as a fraction of tree size).
     /// </summary>
@@ -55,5 +60,30 @@ namespace Ceres.MCTS.Params
     /// </summary>
     public float UpdatePolicyFraction = 0.5f;
 
+    /// <summary>
+    /// Returns the minimum batch size to allow to accumulate
+    /// before sending secondary nodes to evaluator.
+    /// </summary>
+    /// <param name="currentRootN"></param>
+    /// <returns></returns>
+    public int MinBatchSize(int currentRootN)
+    {
+      if (currentRootN < 5_000)
+      {
+        return 40;
+      }
+      else if (currentRootN < 20_000)
+      {
+        return 110;
+      }
+      else if (currentRootN < 300_000)
+      {
+        return 220;
+      }
+      else
+      {
+        return 380;
+      }
+    }
   }
 }

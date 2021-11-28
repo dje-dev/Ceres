@@ -62,13 +62,21 @@ namespace Ceres.MCTS.Evaluators
 
     public enum LocationType { Local, Remote };
 
+    /// <summary>
+    /// If the secondary evaluator should be used for evaluation.
+    /// </summary>
+    public bool EvaluateUsingSecondaryEvaluator = false;
+
     NNEvaluator localEvaluator;
+    NNEvaluator localEvaluatorSecondary;
+
     public readonly PositionEvalCache Cache;
 
 
     /// <summary>
     /// Optional Func that dynamically determines the index of possibly 
     /// multiple valuators which should be used for the current batch.
+    /// TODO: possibly remove this functionality, possibly subsumed.
     /// </summary>
     public readonly Func<MCTSIterator, int> BatchEvaluatorIndexDynamicSelector;
 
@@ -84,7 +92,8 @@ namespace Ceres.MCTS.Evaluators
                            bool saveToCache,
                            bool lowPriority,
                            PositionEvalCache cache,
-                           Func<MCTSIterator, int> batchEvaluatorIndexDynamicSelector)
+                           Func<MCTSIterator, int> batchEvaluatorIndexDynamicSelector,
+                           NNEvaluator evaluatorSecondary)
     {
       rawPosArray = posArrayPool.Rent(evaluator.MaxBatchSize);
 
@@ -97,6 +106,7 @@ namespace Ceres.MCTS.Evaluators
       if (evaluatorDef.Location == NNEvaluatorDef.LocationType.Local)
       {
         localEvaluator = evaluator;// isEvaluator1 ? Params.Evaluator1 : Params.Evaluator2;
+        localEvaluatorSecondary = evaluatorSecondary;
       }
       else
       {
@@ -216,11 +226,16 @@ namespace Ceres.MCTS.Evaluators
     /// </summary>
     /// <param name="nodes"></param>
     /// <param name="results"></param>
-    void RetrieveResults(Span<MCTSNode> nodes, IPositionEvaluationBatch results, EvalResultTarget resultTarget)
+    void RetrieveResults(Span<MCTSNode> nodes, IPositionEvaluationBatch results, EvalResultTarget resultTarget, bool markSecondaryNN)
     {
       for (int i = 0; i < nodes.Length; i++)
       {
         MCTSNode node = nodes[i];
+
+        if (markSecondaryNN)
+        {
+          node.StructRef.SecondaryNN = true;
+        }
 
         FP16 winP;
         FP16 lossP;
@@ -278,12 +293,14 @@ namespace Ceres.MCTS.Evaluators
     {
       const bool RETRIEVE_SUPPLEMENTAL = false;
 
+      NNEvaluator evaluator = EvaluateUsingSecondaryEvaluator ? localEvaluatorSecondary : localEvaluator; 
+
       IPositionEvaluationBatch result;
-      if (localEvaluator.InputsRequired > NNEvaluator.InputTypes.Boards)
+      if (evaluator.InputsRequired > NNEvaluator.InputTypes.Boards)
       {
-        bool hasPositions = localEvaluator.InputsRequired.HasFlag(NNEvaluator.InputTypes.Positions);
-        bool hasHashes = localEvaluator.InputsRequired.HasFlag(NNEvaluator.InputTypes.Hashes);
-        bool hasMoves = localEvaluator.InputsRequired.HasFlag(NNEvaluator.InputTypes.Moves);
+        bool hasPositions = evaluator.InputsRequired.HasFlag(NNEvaluator.InputTypes.Positions);
+        bool hasHashes = evaluator.InputsRequired.HasFlag(NNEvaluator.InputTypes.Hashes);
+        bool hasMoves = evaluator.InputsRequired.HasFlag(NNEvaluator.InputTypes.Moves);
 
         if (hasPositions && Batch.Positions == null)
         {
@@ -323,10 +340,13 @@ namespace Ceres.MCTS.Evaluators
 
       // Note that we call EvaluateBatchIntoBuffers instead of EvaluateBatch for performance reasons
       // (we immediately extract from buffers in RetrieveResults below)
-      result = localEvaluator.EvaluateIntoBuffers(Batch, RETRIEVE_SUPPLEMENTAL);
+      result = evaluator.EvaluateIntoBuffers(Batch, RETRIEVE_SUPPLEMENTAL);
       Debug.Assert(!FP16.IsNaN(result.GetWinP(0)) && !FP16.IsNaN(result.GetLossP(0)));
 
-      RetrieveResults(nodes, result, resultTarget);
+      bool markSecondaryNN = EvaluateUsingSecondaryEvaluator 
+                          || resultTarget == EvalResultTarget.SecondaryEvalResult 
+                          || Batch.PreferredEvaluatorIndex > 0;
+      RetrieveResults(nodes, result, resultTarget, markSecondaryNN);
     }
 
 

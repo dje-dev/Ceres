@@ -25,6 +25,7 @@ using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.Params;
 using Ceres.MCTS.Utils;
+using Ceres.MCTS.Environment;
 
 #endregion
 
@@ -187,6 +188,18 @@ namespace Ceres.MCTS.Search
       int nodesLastSecondaryNetEvaluation = 0;
       while (true)
       {
+        // If tree size is currently sufficiently small and requested in definition,
+        // force the NN evaluators to use the secondary network.
+        bool forceSecondaryEvaluator = false;
+        if (Context.ParamsSearch.ParamsSecondaryEvaluator != null
+          && rootNode.N < Context.ParamsSearch.ParamsSecondaryEvaluator.InitialTreeNodesForceSecondary)
+          forceSecondaryEvaluator = true;
+        BlockNNEval1.Evaluator.EvaluateUsingSecondaryEvaluator = forceSecondaryEvaluator;
+        if (BlockNNEval2 != null)
+        {
+          BlockNNEval2.Evaluator.EvaluateUsingSecondaryEvaluator = forceSecondaryEvaluator;
+        }
+
         // Apply search moves as soon as possible (need the root to have been evaluated).
         if (!manager.TerminationManager.HaveAppliedSearchMoves
          && rootNode.N > 0)
@@ -327,7 +340,13 @@ namespace Ceres.MCTS.Search
         if (Context.EvaluatorDefSecondary != null)
         {
           ParamsSearchSecondaryEvaluator secondaryParams = Context.ParamsSearch.ParamsSecondaryEvaluator;
-
+          int minBatchSize = secondaryParams.MinBatchSize(rootNode.N);
+          if (Context.PendingSecondaryNodes.Count >= minBatchSize)
+          {
+            manager.RunSecondaryNetEvaluations(0, manager.flow.BlockNNEvalSecondaryNet);
+            Context.PendingSecondaryNodes.Clear();
+          }
+#if NOT
           int numNodesElapsed = rootNode.N - nodesLastSecondaryNetEvaluation;
           bool satisfiesAbsoluteMinN = numNodesElapsed >= secondaryParams.UpdateFrequencyMinNodesAbsolute;
           bool satisfiesRelativeMinN = numNodesElapsed >= secondaryParams.UpdateFrequencyMinNodesRelative * rootNode.N;
@@ -338,6 +357,7 @@ namespace Ceres.MCTS.Search
             manager.RunSecondaryNetEvaluations(minN, manager.flow.BlockNNEvalSecondaryNet);
             nodesLastSecondaryNetEvaluation = rootNode.N;
           }
+#endif
         }
 
         // Update statistics

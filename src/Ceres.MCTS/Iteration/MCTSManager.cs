@@ -85,6 +85,11 @@ namespace Ceres.MCTS.Iteration
     public static int NumSecondaryEvaluations = 0;
 
     /// <summary>
+    /// Number of batches evaluated using a secondary evaluator.
+    /// </summary>
+    public static int NumSecondaryBatches = 0;
+
+    /// <summary>
     /// Associated searh context.
     /// </summary>
     public MCTSIterator Context { get; private set; }
@@ -343,10 +348,15 @@ namespace Ceres.MCTS.Iteration
     /// <param name="evaluatorSecondary"></param>
     public void RunSecondaryNetEvaluations(int minN, MCTSNNEvaluator evaluatorSecondary)
     {
+      float accAbsDiff = 0;
+      EvaluateSecondaryNodes(evaluatorSecondary, Context.PendingSecondaryNodes.ToArray(), ref accAbsDiff);
+      return;
+
+#if NOT
       const int BATCH_SIZE = 384;
       List<MCTSNode> nodes = new List<MCTSNode>(BATCH_SIZE);
 
-      float accAbsDiff = 0;
+      
       int numNodes = 0;
 
 //      using (new TimingBlock("Traverse " + Root.N))
@@ -356,7 +366,7 @@ namespace Ceres.MCTS.Iteration
          && nodeRef.Terminal == GameResult.Unknown
          && !nodeRef.IsTranspositionLinked
          && !nodeRef.IsOldGeneration
-         && !nodeRef.TestFlag // ** TODO: fix this
+         && !nodeRef.SecondaryNN
          /*&& FP16.IsNaN(nodeRef.VSecondary)*/)// )
         {
           MCTSNode node = Context.Tree.GetNode(index);
@@ -364,13 +374,13 @@ namespace Ceres.MCTS.Iteration
           node.EvalResult = default;
           nodes.Add(node);
 
-          nodeRef.TestFlag = true; // TODO: FIX THIS
+          nodeRef.SecondaryNN = true;
 
           numNodes++;
 
           if (nodes.Count == BATCH_SIZE)
           {
-            EvaluateSecondaryNodes(evaluatorSecondary, nodes, ref accAbsDiff);
+            EvaluateSecondaryNodes(evaluatorSecondary, nodes.ToArray(), ref accAbsDiff);
             nodes.Clear();
           }
         }
@@ -379,33 +389,37 @@ namespace Ceres.MCTS.Iteration
       });
 
       // Process any final nodes
-      EvaluateSecondaryNodes(evaluatorSecondary, nodes, ref accAbsDiff);
+      EvaluateSecondaryNodes(evaluatorSecondary, nodes.ToArray(), ref accAbsDiff);
 
       //Console.WriteLine($"V difference {numNodes} {accAbsDiff / numNodes:F2} from {Root.N}");
+#endif
+
     }
 
 
-    private void EvaluateSecondaryNodes(MCTSNNEvaluator evaluatorSecondary, List<MCTSNode> nodes, ref float accAbsDiff)
+    private void EvaluateSecondaryNodes(MCTSNNEvaluator evaluatorSecondary, MCTSNode[] nodes, ref float accAbsDiff)
     {
-      if (nodes.Count > 0)
+      if (nodes.Length > 0)
       {
-        ListBounded<MCTSNode> thisBatch = new(nodes.ToArray(), ListBounded<MCTSNode>.CopyMode.ReferencePassedMembers);
+        // Run the neural network evaluations.
+        ListBounded<MCTSNode> thisBatch = new(nodes, ListBounded<MCTSNode>.CopyMode.ReferencePassedMembers);
         evaluatorSecondary.Evaluate(Context, thisBatch);
 
         ParamsSearchSecondaryEvaluator secondaryParams = Context.ParamsSearch.ParamsSecondaryEvaluator;
 
+        // Process each node, blending in policy and/or value.
         foreach (MCTSNode node in nodes)
         {
-          ref MCTSNodeStruct nodeRef = ref node.StructRef;
-
-          //          nodeRef.VSecondary = FP16.NaN;
-          //          nodeRef.VSecondary = (FP16)node.EvalResultSecondary.V;
-
           if (node.Terminal == GameResult.Unknown)
           {
-            ref readonly CompressedPolicyVector otherPolicy = ref node.EvalResult.PolicyRef;
+            ref MCTSNodeStruct nodeRef = ref node.StructRef;
+            node.StructRef.SecondaryNN = true;
 
-            node.BlendPolicy(in otherPolicy, secondaryParams.UpdatePolicyFraction);
+            if (secondaryParams.UpdatePolicyFraction > 0)
+            {
+              ref readonly CompressedPolicyVector otherPolicy = ref node.EvalResult.PolicyRef;
+              node.BlendPolicy(in otherPolicy, secondaryParams.UpdatePolicyFraction);
+            }
 
             if (secondaryParams.UpdateValueFraction > 0)
             {
@@ -417,6 +431,7 @@ namespace Ceres.MCTS.Iteration
           }
         }
 
+        NumSecondaryBatches++;
         NumSecondaryEvaluations += thisBatch.Count;
       }
     }
@@ -825,7 +840,7 @@ namespace Ceres.MCTS.Iteration
       }
     }
 
-    #region IDisposable Support
+#region IDisposable Support
 
     public MGMove BestMoveMG
     {
@@ -868,9 +883,9 @@ namespace Ceres.MCTS.Iteration
       }
     }
 
-    #endregion
+#endregion
 
-    #region Time management
+#region Time management
 
     // TODO: make this smarter (aware of hardware and NN)
     public int EstimatedNumSearchNodes => EstimatedNumSearchNodesForEvaluator(Root.N, SearchLimit, Context.NNEvaluators);
@@ -1095,7 +1110,7 @@ namespace Ceres.MCTS.Iteration
 
     }
 
-    #endregion
+#endregion
 
 
     /// <summary>

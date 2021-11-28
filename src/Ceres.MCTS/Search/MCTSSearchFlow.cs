@@ -14,7 +14,7 @@
 #region Using directives
 
 using System;
-
+using Ceres.Chess.NNEvaluators;
 using Ceres.MCTS.Evaluators;
 using Ceres.MCTS.Iteration;
 
@@ -57,27 +57,44 @@ namespace Ceres.MCTS.Search
 
       string instanceID = "0";
 
-      //Params.Evaluator1 : Params.Evaluator2;
       const bool LOW_PRIORITY_PRIMARY = false;
+
+      LeafEvaluatorNN nodeEvaluatorSecondary = null;
+      if (context.EvaluatorDefSecondary != null)
+      {
+        const bool CACHE_SECONDARY = false; // TODO: support this someday (in its own cache)?
+        nodeEvaluatorSecondary = new LeafEvaluatorNN(context.EvaluatorDef,
+                                                     context.NNEvaluators.EvaluatorSecondary,
+                                                     CACHE_SECONDARY, false, null, null, null);
+        BlockNNEvalSecondaryNet = new MCTSNNEvaluator(nodeEvaluatorSecondary, false);
+      }
+
+      // If a secondary evaluator is configured
+      // and the definition requests early nodes in the search to use this evaluator,
+      // then create the LeafEvaluatorNN to also contain this secondary evaluator.
+      // TODO: one evaluator is shared (not overlapped), is this a significant performance drag?
+      NNEvaluator evaluatorSecondaryToUseInPrimaryEvaluators = null;
+      if (Context.ParamsSearch.ParamsSecondaryEvaluator?.InitialTreeNodesForceSecondary > 0)
+      {
+        if (nodeEvaluatorSecondary == null)
+        {
+          throw new Exception("Secondary network must be specified if ParamsSecondaryEvaluator are defined.");
+        }
+
+        evaluatorSecondaryToUseInPrimaryEvaluators = context.NNEvaluators.EvaluatorSecondary;
+      }
+
+      //Params.Evaluator1 : Params.Evaluator2;
       LeafEvaluatorNN nodeEvaluator1 = new LeafEvaluatorNN(context.EvaluatorDef, context.NNEvaluators.Evaluator1, shouldCache,
-                                                           LOW_PRIORITY_PRIMARY, context.Tree.PositionCache, null);// context.ParamsNN.DynamicNNSelectorFunc);
+                                                           LOW_PRIORITY_PRIMARY, context.Tree.PositionCache, null, evaluatorSecondaryToUseInPrimaryEvaluators);
       BlockNNEval1 = new MCTSNNEvaluator(nodeEvaluator1, true);
 
       if (context.ParamsSearch.Execution.FlowDirectOverlapped)
       {
         // Create a second evaluator (configured like the first) on which to do overlapping.
         LeafEvaluatorNN nodeEvaluator2 = new LeafEvaluatorNN(context.EvaluatorDef, context.NNEvaluators.Evaluator2, shouldCache,
-                                                             false, context.Tree.PositionCache, null);// context.ParamsNN.DynamicNNSelectorFunc);
+                                                             false, context.Tree.PositionCache, null, evaluatorSecondaryToUseInPrimaryEvaluators);
         BlockNNEval2 = new MCTSNNEvaluator(nodeEvaluator2, true);
-      }
-
-      if (context.EvaluatorDefSecondary != null)
-      {
-        const bool CACHE_SECONDARY = false; // TODO: support this someday (in its own cache)?
-        LeafEvaluatorNN nodeEvaluatorSecondary = new LeafEvaluatorNN(context.EvaluatorDef, 
-                                                                     context.NNEvaluators.EvaluatorSecondary,
-                                                                     CACHE_SECONDARY, false, null, null);          
-        BlockNNEvalSecondaryNet = new MCTSNNEvaluator(nodeEvaluatorSecondary, false);
       }
 
       BlockApply = new MCTSApply(context.FirstMoveSampler);

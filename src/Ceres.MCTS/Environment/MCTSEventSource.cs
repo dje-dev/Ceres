@@ -93,6 +93,7 @@ namespace Ceres.MCTS.Environment
 #endif
 
     private PollingCounter numSecondaryEvaluations;
+    private PollingCounter numSecondaryBatches;
 
 
     private IncrementingPollingCounter dualSelectorAverageNNEvalWaitMS;
@@ -152,6 +153,7 @@ namespace Ceres.MCTS.Environment
 
         numNodesAppliedTotal ??= new PollingCounter("applied-primary-tot", this, () => MCTSApply.TotalNumNodesApplied);
         numSecondaryEvaluations ??= new PollingCounter("applied-secondary-tot", this, () => MCTSManager.NumSecondaryEvaluations);
+        numSecondaryBatches ??= new PollingCounter("applied-secondary-batches", this, () => MCTSManager.NumSecondaryBatches);
         numNodesApplied ??= new IncrementingPollingCounter("applied", this, () => MCTSApply.TotalNumNodesApplied);
 #if DEBUG
         numNodesDualSelectorDuplicate ??= new IncrementingPollingCounter("selected-dual-duplicate", this, () => MCTSNodesSelectedSet.TotalNumDualSelectorDuplicates);

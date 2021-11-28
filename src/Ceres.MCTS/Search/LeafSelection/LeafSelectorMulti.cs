@@ -63,6 +63,8 @@ namespace Ceres.MCTS.Search
   /// </summary>
   public class LeafSelectorMulti : ILeafSelector
   {
+    // This is believed probably safe and necessary...
+    internal const bool LAX_CHILD_ORDER = true;
     // Especially with .NET 6.0 it seems that the custom thread pool
     // is no longer more efficient than the standard .NET one.
     const bool USE_CUSTOM_THREADPOOL = false;
@@ -318,6 +320,35 @@ namespace Ceres.MCTS.Search
     void DoVisitInnerNode(MCTSNode node)
     {
       InsureAnnotated(node);
+
+      // ************************************************ TEST ONLY
+      if (node.Context.EvaluatorDefSecondary != null)
+      {
+#if NOT
+        if (node.StructRef.SecondaryNN)
+        {
+          MCTSEventSource.TestMetric1++;
+        }
+        else
+        {
+          MCTSEventSource.TestCounter1++;
+        }
+#endif
+      }
+
+        if (node.N > 10 && node.Context.EvaluatorDefSecondary != null)
+      {
+        // Add this node to pending list to be evaluated by secondary evaluator
+        // if not aleady evaluated by secondary and visit fraction is sufficiently high.
+        float nFractionOfRootN = (float)node.N / node.Context.Root.N; 
+        if (!node.StructRef.SecondaryNN
+          && node.Terminal == GameResult.Unknown
+          && nFractionOfRootN > Context.ParamsSearch.ParamsSecondaryEvaluator.UpdateMinNFraction
+          )
+        {
+          Context.PendingSecondaryNodes.Add(node);
+        }
+      }
     }
 
 
@@ -396,9 +427,9 @@ namespace Ceres.MCTS.Search
     }
 
 
-    #endregion
+#endregion
 
-    #region Selection algorithm
+#region Selection algorithm
 
     static long applyCount = 0;
     static double applyCPUCTTot = 0;
@@ -742,6 +773,7 @@ namespace Ceres.MCTS.Search
 
       }
 #endif
+
       for (int childIndex = 0; childIndex < numChildrenToCheck; childIndex++)
       {
         int numThisChild = childVisitCounts[childIndex];
@@ -749,15 +781,18 @@ namespace Ceres.MCTS.Search
         {
           if (childIndex > node.NumChildrenExpanded)
           {
-            Console.WriteLine("Warning: saw (and ignoring) out of order possibly due to tie in score");
-            continue;
+            if (!LAX_CHILD_ORDER)
+            {
+              Console.WriteLine("Warning: saw (and ignoring) out of order possibly due to tie in score");
+              continue;
+            }
           }
           MCTSNode thisChild = default;
 
           MCTSNodeStructChild childInfo = children[childIndex];
           if (!childInfo.IsExpanded)
           {
-            thisChild = node.CreateChild(childIndex);
+            thisChild = node.CreateChild(childIndex, LAX_CHILD_ORDER);
           }
           else
           {
