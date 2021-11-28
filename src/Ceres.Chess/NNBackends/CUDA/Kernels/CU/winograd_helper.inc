@@ -381,10 +381,12 @@ __device__ __forceinline__ float warpReduce(float x)
     return x;
 }
 
-// max supported filter count for this fast path
-// TODO: extend it to cover bigger networks!
-// (We are limited by no of registers per thread)
-#define MAX_SUPPORTED_C 384
+// Helper fuction to do vector loads/stores
+template <typename T>
+__device__ __forceinline__ void copyAs(void *dst, const void *src)
+{
+    *((T*)(dst)) = *((const T*)(src));
+}
 
 // input is in transformed space (HWNC layout) --- output of GEMM
 // output is also in transformed space (HWNC layout) --- input to GEMM (for next layer)
@@ -392,9 +394,9 @@ __device__ __forceinline__ float warpReduce(float x)
 // 'N' blocks
 // every thread generates an entire board/plane (8x8 elements)
 template <typename T, bool use_se, bool relu, bool use_bias, bool use_skip>
-__global__ __launch_bounds__(MAX_SUPPORTED_C, 1)
+__global__ __launch_bounds__(kMaxSupportedChannelsForResBlockFusing, 1)
 void OutputTransform_SE_relu_InputTransform_kernel(int N, int C, int se_K, T* output,
-                                                              const T* input, const T* skip,
+                                                              const T* input, T* skip,
                                                               const T* bias, const T* w1, const T* b1,
                                                               const T* w2, const T* b2) {
   const bool fp16 = std::is_same<half, T>::value;
@@ -408,9 +410,9 @@ void OutputTransform_SE_relu_InputTransform_kernel(int N, int C, int se_K, T* ou
   T skipInp[8][8];
   #pragma unroll
   for (int h = 0; h < 8; h++) {
-      *((uint4*)(&skipInp[h][0])) = *((uint4*)(&skip[INDEX_NHCW(n, k, h, 0)]));
-      if (!fp16)
-        *((uint4*)(&skipInp[h][4])) = *((uint4*)(&skip[INDEX_NHCW(n, k, h, 4)]));
+    copyAs<uint4>(&skipInp[h][0], &skip[INDEX_NHCW(n, k, h, 0)]);
+    if (!fp16)
+      copyAs<uint4>(&skipInp[h][4], &skip[INDEX_NHCW(n, k, h, 4)]);
   }
 
 #pragma unroll
@@ -447,9 +449,9 @@ void OutputTransform_SE_relu_InputTransform_kernel(int N, int C, int se_K, T* ou
       if (use_bias) board[y][x] += b;
       if (use_se) S += (float)board[y][x];
     }
-
+    
   if (use_se) {
-    __shared__ float shared_data[MAX_SUPPORTED_C];
+    __shared__ float shared_data[kMaxSupportedChannelsForResBlockFusing];
     float avg = S / 64;
     shared_data[k] = avg;
 
@@ -462,7 +464,7 @@ void OutputTransform_SE_relu_InputTransform_kernel(int N, int C, int se_K, T* ou
     // As se_K << C, we want to loop over se_K instead of C
     // even if it means taking the sum across threads
 
-    __shared__ float shared_sums[MAX_SUPPORTED_C/32][MAX_SUPPORTED_C];  // per-warp sums
+    __shared__ float shared_sums[kMaxSupportedChannelsForResBlockFusing/32][kMaxSupportedSeKForResBlockFusing];  // per-warp sums
 
     for (int i = 0; i < se_K; i++) {
       float val = shared_data[k] * float(readw1(k, i));
@@ -521,9 +523,9 @@ void OutputTransform_SE_relu_InputTransform_kernel(int N, int C, int se_K, T* ou
     if (use_skip)
     {
       // Write to skip (use 128 bit writes to store one row a time)
-      *((uint4*)(&skip[INDEX_NHCW(n, k, h, 0)])) = *((uint4*)&board[h][0]);
+      copyAs<uint4>(&skip[INDEX_NHCW(n, k, h, 0)], &board[h][0]);
       if (!fp16)
-        *((uint4*)(&skip[INDEX_NHCW(n, k, h, 4)])) = *((uint4*)&board[h][4]);
+        copyAs<uint4>(&skip[INDEX_NHCW(n, k, h, 4)], &board[h][4]);
     }
   }
 
@@ -607,6 +609,7 @@ void OutputTransform_SE_relu_InputTransform_kernel(int N, int C, int se_K, T* ou
   } 
 }
 
+
 template <typename T>
 void FilterTransform(int N, int C, T* transformedFilter, const T* filter) {
   // Each thread processes entire filter block (input 3x3 elements -> output 6x6
@@ -619,7 +622,6 @@ void FilterTransform(int N, int C, T* transformedFilter, const T* filter) {
 
   ReportCUDAErrors(cudaGetLastError());
 }
-
 template <typename T, bool nhcw>
 void InputTransform(int N, int C, T* transformed_input, const T* input) {
   // Each thread processes entire chess board (input 8x8 elements -> outputs
@@ -636,16 +638,6 @@ void OutputTransform(int N, int C, int se_K, T* output, const T* input,
   // Each thread processes entire chess board
   OutputTransform_kernel<T, use_se, relu, use_bias, use_skip, skipInput_nhcw, output_nhcw>
       <<<N, C>>>(N, C, se_K, output, input, skip, bias, w1, b1, w2, b2);
-  ReportCUDAErrors(cudaGetLastError());
-}
-
-template <typename T, bool use_se, bool relu, bool use_bias, bool use_skip>
-void OutputInputTransform(int N, int C, int se_K, T* output, const T* input,
-                         const T* skip, const T* bias, const T* w1, const T* b1,
-                         const T* w2, const T* b2) {
-  // Each thread processes entire chess board
-  OutputTransform_SE_relu_InputTransform_kernel<T, use_se, relu, use_bias, use_skip>
-                    <<<N, C>>>(N, C, se_K, output, input, skip, bias, w1, b1, w2, b2);
   ReportCUDAErrors(cudaGetLastError());
 }
 
