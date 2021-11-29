@@ -350,7 +350,7 @@ namespace Ceres.MCTS.Params
     /// that subtree is larger than the current node's subtree.
     /// Potentially highly beneficial for large searches (>100k and especially >1000k nodes).
     /// </summary>
-    public bool EnableDeepTranspositionBackup = true;
+    public bool EnableDeepTranspositionBackup = false;
 
 
     /// <summary>
@@ -360,7 +360,7 @@ namespace Ceres.MCTS.Params
     /// (allows deep transposition backup to always use the most informed root).
     /// Seems beneficial (+7Elo +/-7, 83%, with T60 at 75knpm).
     /// </summary>
-    public bool TranspositionRootMaxN = true;
+    public bool TranspositionRootMaxN = false;
 
     /// <summary>
     /// If evaluations of siblings not yet visited (derived from transpositions)
@@ -368,7 +368,7 @@ namespace Ceres.MCTS.Params
     /// Believed to have a small positive impact, especially for longer searches
     /// (although the benefit may be limited when deep transposition backup is also in use).
     /// </summary>
-    public bool EnableUseSiblingEvaluations = true;
+    public bool EnableUseSiblingEvaluations = false;
 
     /// <summary>
     /// If the "uncertainty boosting" feature should be enabled.
@@ -380,7 +380,7 @@ namespace Ceres.MCTS.Params
     ///  and increasing in the uncertainty (standard deviation) of the backed-up nodes seen so far. 
     /// </summary>
     /// 
-    public bool EnableUncertaintyBoosting = true;
+    public bool EnableUncertaintyBoosting = false;
 
     /// <summary>
     /// Amount of time subtracted from time allotments to 
