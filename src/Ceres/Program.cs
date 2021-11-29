@@ -28,6 +28,9 @@ using Ceres.APIExamples;
 using Ceres.Commands;
 using Ceres.Features;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using Ceres.Base.CUDA;
+using ManagedCuda;
 
 #endregion
 
@@ -127,7 +130,7 @@ namespace Ceres
 
 
     const string BannerString =
-@"
+    @"
 |=========================================================|
 | Ceres - A Monte Carlo Tree Search Chess Engine          |
 |                                                         |
@@ -136,18 +139,20 @@ namespace Ceres
 |   Use help to list available commands.                  |
 |                                                         |
 |  Version {VER}                                       |
+|  Runtime {VER}                                       |
 |=========================================================|
 ";
 
     static void OutputBanner()
     {
-      string dotnetVersion = System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription;
-
+      string dotnetVersion = RuntimeInformation.FrameworkDescription;
+      CudaDeviceProperties deviceProperties = CUDADevice.GetContext(0).Context.GetDeviceInfo();
+      string cudaVersion = $"{deviceProperties.DriverVersion.Major}.{deviceProperties.DriverVersion.Minor}";
       bool isDotNet5 = dotnetVersion.Contains(".NET 5");
       bool isPGO = !isDotNet5 && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DOTNET_TieredPGO"));
-      string pgoString = isPGO ? "PGO" : "";
+      string pgoString = isPGO ? "PGO" : "NA";
 
-      string[] bannerLines = BannerString.Split("\r\n");
+      string[] bannerLines = BannerString.Split(Environment.NewLine);
       foreach (string line in bannerLines)
       {
         if (line.StartsWith("| Ceres"))
@@ -162,10 +167,17 @@ namespace Ceres
 
         else if (line.StartsWith("|  Version"))
         {
-          string version = $"|  Version {CeresVersion.VersionString} with {dotnetVersion} {pgoString}";
+          string version = $"|  Version {CeresVersion.VersionString} with PGO: {pgoString}";
           int spaceLeft = line.Length - version.Length;
           string empty = new string(' ', 3 + spaceLeft - 1);
           Console.WriteLine($"{version}{empty}|");
+        }
+        else if (line.StartsWith("|  Runtime"))
+        {
+          string runtime = $"|  Runtime {dotnetVersion} and Cuda {cudaVersion}";
+          int spaceLeft = line.Length - runtime.Length;
+          string empty = new string(' ', 3 + spaceLeft - 1);
+          Console.WriteLine($"{runtime}{empty}|");
         }
         else
         {
@@ -173,6 +185,7 @@ namespace Ceres
         }
       }
     }
+
 
 
     /// <summary>
