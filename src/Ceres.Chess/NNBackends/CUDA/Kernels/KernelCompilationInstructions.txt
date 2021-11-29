@@ -10,6 +10,12 @@ NOTE: The above .cu files were trivially modified in one way:
 Also one small file from Ceres
   ceres_kernels.cu
 
+NOTE: Currently 40b is not working on pre-Ampere hardware (e.g. 2070).
+      This could probably be fixed someday, but would require having two versions of the fp16_kernels (as was done before)
+      with one having the fused implementation to allow up to 512 blocks instead of 384 (see cuda_common.h),
+      and auto-selecting this alternate kernel (do not use special Ampere version) 
+      only if on pre-Ampere hardware and only if running 40b.
+
 Steps:
   1. Set the Visual Studio path via vcvars64.bat/vcvars64.cmd batch file provided by Microsoft
   2. Pull LC0 code from the LC0 project (and make the above referenced trivial changes).
