@@ -95,10 +95,8 @@ namespace Ceres.Commands
 
       // Prepare batch with test positions.
       EncodedPositionWithHistory[] positions = new EncodedPositionWithHistory[batchSize];
-      for (int j = 0; j < batchSize; j++)
-      {
-        positions[j] = EncodedPositionWithHistory.FromPosition(Position.StartPosition);
-      }
+      Array.Fill(positions, EncodedPositionWithHistory.FromPosition(Position.StartPosition));
+
       EncodedPositionBatchFlat batch = new EncodedPositionBatchFlat(positions.AsSpan(), batchSize, true);
 
       // Run warmup steps if first time.
@@ -123,10 +121,9 @@ namespace Ceres.Commands
         bestTimings.Add((float)stats.ElapsedTimeSecs);
       }
 
-      float accSeconds = bestTimings.Members.Sum(f => f);
-      float avgSecPerBatch = accSeconds / bestTimings.N;
-      float nps = batchSize / avgSecPerBatch;
-      Console.WriteLine($"Benchmark batch size {batchSize} with inference average time {1000.0f * avgSecPerBatch,7:F3}ms - throughput {nps,7:N0} nps.");
+      float bestSeconds = bestTimings.Members.Min(f => f);
+      float nps = batchSize / bestSeconds;
+      Console.WriteLine($"Benchmark batch size {batchSize} with inference time {1000.0f * bestSeconds,7:F3}ms - throughput {nps,7:N0} nps.");
     }
   }
 }
