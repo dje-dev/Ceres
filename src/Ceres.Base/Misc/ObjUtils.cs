@@ -49,29 +49,36 @@ namespace Ceres.Base.Misc
       // TODO: someday dump non public
       foreach (FieldInfo propInfo in obj.GetType().GetFields())
       {
-        if (!propInfo.FieldType.IsValueType) continue;
+        if (propInfo.FieldType.IsValueType)
+        {
+          object val = propInfo.GetValue(obj);
+          object valDefault = propInfo.GetValue(comparisonValue);
 
-        object val = propInfo.GetValue(obj);
-        object valDefault = propInfo.GetValue(comparisonValue);
-        bool different = !val.Equals(valDefault);
+          bool different = ((val == null) != (valDefault == null)) || !val.Equals(valDefault);
+          if (different)
+          {
+            countDifferent++;
+          }
 
-        if (different) countDifferent++;
-        if (!different && differentOnly) continue;
+          if (!different && differentOnly) continue;
 
-        sb.Append(different ? "* " : "  ");
-        sb.Append($"{propInfo.Name,-60}");
+          sb.Append(different ? "* " : "  ");
+          sb.Append($"{propInfo.Name,-60}");
 
-        if (propInfo.FieldType.IsArray)
-          DumpArrray(sb, (Array)val);
-        else
-          sb.AppendLine(val.ToString());
+          if (propInfo.FieldType.IsArray && val != null)
+          {
+            DumpArrray(sb, (Array)val);
+          }
+          else
+          {
+            sb.AppendLine(val == null ? "(null)" : val.ToString());
+          }
+        }
       }
 
-      if (differentOnly && countDifferent == 0)
-        return null;
-      else
-        return sb.ToString();
+      return differentOnly && countDifferent == 0 ? null : sb.ToString();
     }
+
 
     static void DumpArrray(StringBuilder sb, Array array)
     {
