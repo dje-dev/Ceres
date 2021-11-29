@@ -40,12 +40,6 @@ namespace Ceres.Base.CUDA
 
     static CUDAUtils()
     {
-//      CUmodule moduleFP16 = cudaContext.LoadModulePTX(@"fp16_kernels.ptx");
-//      cuBlas = new CudaBlas();
-//      cuBlas.MathMode = ManagedCuda.CudaBlas.Math.TensorOpMath;
-//      cuBlas.PointerMode = PointerMode.Host;
-
-
       // Hack needed to initialize half because field is private
       half[] ones = new half[1];
       unsafe

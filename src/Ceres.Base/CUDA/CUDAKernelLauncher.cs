@@ -40,14 +40,20 @@ namespace Ceres.Base.CUDA
     public readonly CudaStream Stream;
 
     /// <summary>
+    /// Number of bytes of shared memory to be used by the kernel.
+    /// </summary>
+    public readonly int SharedMemoryNumBytes;
+
+    /// <summary>
     /// 
     /// </summary>
     public readonly PinnedObjectArray Parms;
 
-    public CUDAKernelLauncher(CudaKernel kernel, CudaStream stream, params object[] parameters)
+    public CUDAKernelLauncher(CudaKernel kernel, CudaStream stream, int sharedMemoryNumBytes, params object[] parameters)
     {
       Kernel = kernel;
       Stream = stream;
+      SharedMemoryNumBytes = sharedMemoryNumBytes;
 
       Parms = new PinnedObjectArray(parameters);
     }
@@ -58,7 +64,7 @@ namespace Ceres.Base.CUDA
       CUResult res = DriverAPINativeMethods.Launch.cuLaunchKernel(Kernel.CUFunction,// _function, 
                                                                   Kernel.GridDimensions.x, Kernel.GridDimensions.y, Kernel.GridDimensions.z,
                                                                   Kernel.BlockDimensions.x, Kernel.BlockDimensions.y, Kernel.BlockDimensions.z,
-                                                                  0,/*sharedMemSize,*/ Stream.Stream, Parms.Pointers, null);
+                                                                  (uint)SharedMemoryNumBytes, Stream.Stream, Parms.Pointers, null);
       if (res != CUResult.Success)
       {
         throw new Exception($"Failure in cuLaunchKernel: {res}");
