@@ -193,6 +193,12 @@ namespace Ceres.MCTS.Params
     public float BatchSizeMultiplier = 1.0f;
 
     /// <summary>
+    /// Optional additional hard limit on size of gathered batch 
+    /// of nodes (not all of which are necessarily destined for neural network evaluation).
+    /// </summary>
+    public int? MaxBatchSize = null;
+
+    /// <summary>
     /// In the case that only a single position (without any history)
     /// is being searched (e.g. from a FEN or at the beginning of a game),
     /// this flag controls if the single position should be replicated across

@@ -254,6 +254,12 @@ namespace Ceres.MCTS.Search
                                                                               Context.ParamsSearch.BatchSizeMultiplier,
                                                                               Context.ParamsSearch);
 
+        // Apply additional hard limit on batch size if present.
+        if (Context.ParamsSearch.MaxBatchSize.HasValue)
+        {
+          hardLimitNumNodesThisBatch = Math.Min(Context.ParamsSearch.MaxBatchSize.Value, hardLimitNumNodesThisBatch);
+        }
+
         targetThisBatch = Math.Min(targetThisBatch, Manager.MaxBatchSizeDueToPossibleNearTimeExhaustion);
         if (forceBatchSize.HasValue) targetThisBatch = forceBatchSize.Value;
         if (targetThisBatch > hardLimitNumNodesThisBatch)
