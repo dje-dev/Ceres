@@ -34,28 +34,41 @@ namespace Ceres.Chess.NNBackends.CUDA
     // improving speed (slightly).
     public const bool USE_LAUNCHER = true;
 
+    bool IsBig => C > 384;
+
     // PERFORMANCE ANALYSIS
     // 65% of the runtime is in the two matmuls, 35% in the two kernel calls
     // Within the kernel, it is the SE calculation part that is the most expensive
-    string resource => (C > 384) ? @"fp16_kernels_big.ptx" :  @"fp16_kernels.ptx";
-
     string knFirstBlockInput = "_ZN6lczero13cudnn_backend21InputTransform_kernelI6__halfLb1EEEviiPKT_PS3_";
-    string knInputOutputPre = "_ZN6lczero13cudnn_backend45OutputTransform_SE_relu_InputTransform_kernelI6__halfLb0ELb1ELb1ELb0EEEviiiPT_PKS3_S4_S6_S6_S6_S6_S6_";
+
+    string knInputOutputPre   => IsBig ? "_ZN6lczero13cudnn_backend43OutputInputTransformKernel_fp16_shmem_boardILb0ELb1ELb1ELb0EEEviiiP6__halfPKS2_S3_S5_S5_S5_S5_S5_"
+                                       : "_ZN6lczero13cudnn_backend45OutputTransform_SE_relu_InputTransform_kernelI6__halfLb0ELb1ELb1ELb0EEEviiiPT_PKS3_S4_S6_S6_S6_S6_S6_";
+    string knNotLastSE => IsBig ? "_ZN6lczero13cudnn_backend43OutputInputTransformKernel_fp16_shmem_boardILb1ELb1ELb1ELb1EEEviiiP6__halfPKS2_S3_S5_S5_S5_S5_S5_"
+                                : "_ZN6lczero13cudnn_backend45OutputTransform_SE_relu_InputTransform_kernelI6__halfLb1ELb1ELb1ELb1EEEviiiPT_PKS3_S4_S6_S6_S6_S6_S6_";
+    string knNotLastNotSE  => IsBig ? "_ZN6lczero13cudnn_backend43OutputInputTransformKernel_fp16_shmem_boardILb0ELb1ELb1ELb1EEEviiiP6__halfPKS2_S3_S5_S5_S5_S5_S5_"
+                                    : "_ZN6lczero13cudnn_backend45OutputTransform_SE_relu_InputTransform_kernelI6__halfLb0ELb1ELb1ELb1EEEviiiPT_PKS3_S4_S6_S6_S6_S6_S6_";
 
     string knLastSE       = "_ZN6lczero13cudnn_backend22OutputTransform_kernelI6__halfLb1ELb1ELb1ELb1ELb1ELb0EEEviiiPT_PKS3_S6_S6_S6_S6_S6_S6_";
     string knLastNotSE    = "_ZN6lczero13cudnn_backend22OutputTransform_kernelI6__halfLb0ELb1ELb1ELb1ELb1ELb0EEEviiiPT_PKS3_S6_S6_S6_S6_S6_S6_";
-    string knNotLastSE    = "_ZN6lczero13cudnn_backend45OutputTransform_SE_relu_InputTransform_kernelI6__halfLb1ELb1ELb1ELb1EEEviiiPT_PKS3_S4_S6_S6_S6_S6_S6_";
-    string knNotLastNotSE = "_ZN6lczero13cudnn_backend45OutputTransform_SE_relu_InputTransform_kernelI6__halfLb0ELb1ELb1ELb1EEEviiiPT_PKS3_S4_S6_S6_S6_S6_S6_";
-    
+
+    int NUM_SHARED_BYTES => IsBig ? (72 * 1024) : 0;
+
     public override void LoadKernels()
     {
-      Parent.Device.GetKernel(Parent.PTXAssembly, resource, knFirstBlockInput);
-      Parent.Device.GetKernel(Parent.PTXAssembly, resource, knInputOutputPre);
+      CudaKernel kernelInputOutputPre = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, knInputOutputPre);
+      CudaKernel kernelNotLastSE = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, knNotLastSE);
+      CudaKernel kernelNotLastNotSE = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, knNotLastNotSE);
 
-      Parent.Device.GetKernel(Parent.PTXAssembly, resource, knLastSE);
-      Parent.Device.GetKernel(Parent.PTXAssembly, resource, knLastNotSE);
-      Parent.Device.GetKernel(Parent.PTXAssembly, resource, knNotLastSE);
-      Parent.Device.GetKernel(Parent.PTXAssembly, resource, knNotLastNotSE);
+      if (IsBig)
+      {
+        kernelInputOutputPre.MaxDynamicSharedSizeBytes = NUM_SHARED_BYTES;
+        kernelNotLastSE.MaxDynamicSharedSizeBytes = NUM_SHARED_BYTES;
+        kernelNotLastNotSE.MaxDynamicSharedSizeBytes = NUM_SHARED_BYTES;
+      }
+
+      Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, knFirstBlockInput);
+      Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, knLastSE);
+      Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, knLastNotSE);
     }
 
 
@@ -75,6 +88,12 @@ namespace Ceres.Chess.NNBackends.CUDA
                                 int C, bool se, int se_k, bool first, bool last)
       : base(parent, name, layerIndex, C, 8, 8, inputLayer, se, se_k)
     {
+      if (C > 512)
+      {
+        // This limit is definitive since data structures are sized to 512 max (see cuda_common.h).
+        throw new Exception("Maximum number of channels supported is 512");
+      }
+
       HasSE = se;
       SEK = se_k;
       FirstBlock = first;
@@ -155,7 +174,7 @@ namespace Ceres.Chess.NNBackends.CUDA
       if (FirstBlock)
       {
         // Possibly duplicate code as in FusedWinogradSELayerCUDA
-        CudaKernel inputTransformKernel = Parent.Device.GetKernel(Parent.PTXAssembly, resource, knFirstBlockInput);
+        CudaKernel inputTransformKernel = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, knFirstBlockInput);
 
         inputTransformKernel.GridDimensions = N;
         inputTransformKernel.BlockDimensions = C;
@@ -212,14 +231,15 @@ namespace Ceres.Chess.NNBackends.CUDA
         }
       }
 
-      // with reslu, use_bias (not use_se, not skip)
-      CudaKernel inputOutputKernelPre = Parent.Device.GetKernel(Parent.PTXAssembly, resource, knInputOutputPre);
+      // with relu, use_bias (not use_se, not skip)
+      CudaKernel inputOutputKernelPre = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, knInputOutputPre);
+
       inputOutputKernelPre.GridDimensions = N;
       inputOutputKernelPre.BlockDimensions = C;
 
       if (USE_LAUNCHER && inputOutputLauncher == null)
       {
-        inputOutputLauncher = new(inputOutputKernelPre, stream,
+        inputOutputLauncher = new(inputOutputKernelPre, stream, NUM_SHARED_BYTES,
                                   new object[] {N, C, 0,
                                   transformed_input.DevicePointer, 
                                   transformed_output.DevicePointer,
@@ -268,7 +288,14 @@ namespace Ceres.Chess.NNBackends.CUDA
       }
 
 
-      CudaKernel kernelOutputInput = Parent.Device.GetKernel(Parent.PTXAssembly, resource, outputKN);
+      CudaKernel kernelOutputInput = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, outputKN);
+
+      int numSharedBytes = 0;
+      if (!LastBlock)
+      {
+        numSharedBytes = NUM_SHARED_BYTES;
+      }
+
       kernelOutputInput.GridDimensions = N;
       kernelOutputInput.BlockDimensions = C;
 
@@ -282,7 +309,7 @@ namespace Ceres.Chess.NNBackends.CUDA
 
       if (USE_LAUNCHER && outputLauncher == null)
       {
-        outputLauncher = new(kernelOutputInput, stream,
+        outputLauncher = new(kernelOutputInput, stream, numSharedBytes,
                              new object[] {N, C, SEK,
                                            output.DevicePointer, transformed_output.DevicePointer,
                                            input.DevicePointer, biases1.DevicePointer,
@@ -297,6 +324,8 @@ namespace Ceres.Chess.NNBackends.CUDA
       }
       else
       {
+        throw new NotImplementedException("No longer support USE_LAUNCHER=false, setting of shared memory must be remediated.");
+
         // This kernel is the slowest part of this block
         // NOTE: the PTX may look like it fails to take advantage of FMA operations,
         //       but in fact a postprocessing step does this, explicit FMA was no faster.

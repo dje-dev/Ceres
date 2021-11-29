@@ -23,7 +23,6 @@
     <EmbeddedResource Include="NNBackends\CUDA\Kernels\PTX\ceres_kernels.ptx" />
     <EmbeddedResource Include="NNBackends\CUDA\Kernels\PTX\common_kernels.ptx" />
     <EmbeddedResource Include="NNBackends\CUDA\Kernels\PTX\fp16_kernels.ptx" />
-    <EmbeddedResource Include="NNBackends\CUDA\Kernels\PTX\fp16_kernels_big.ptx" />
   </ItemGroup>
 
   <ItemGroup>

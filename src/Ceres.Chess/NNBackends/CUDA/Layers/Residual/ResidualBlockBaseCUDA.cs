@@ -65,6 +65,7 @@ namespace Ceres.Chess.NNBackends.CUDA
     /// </summary>
     protected CudaDeviceVariable<FP16> Biases2;
 
+
     public abstract void LoadWeights0(CudaStream stream, float[] weights, float[] bias);
     
     public abstract void LoadWeights1(CudaStream stream, float[] weights, float[] bias);

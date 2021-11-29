@@ -152,7 +152,7 @@ namespace Ceres.Chess.NNBackends.CUDA
     public override void LoadKernels()
     {
       // Possibly same as in ResidualBlockCUDA
-      string resource = @"fp16_kernels.ptx";
+      string resource = FP16_KERNELS_PTX_NAME;
 
       const string knInputTransform = "_ZN6lczero13cudnn_backend21InputTransform_kernelI6__halfLb0EEEviiPKT_PS3_";
       kernelInputTransform = Parent.Device.GetKernel(Parent.PTXAssembly, resource, knInputTransform);

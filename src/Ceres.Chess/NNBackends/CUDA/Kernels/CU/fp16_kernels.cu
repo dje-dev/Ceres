@@ -432,7 +432,7 @@ template <typename T = half, bool use_se, bool relu, bool use_bias, bool use_ski
 void OutputInputTransform(int N, int C, int se_K, half* output,
                           const half* input, const half* skip, const half* bias,
                           const half* w1, const half* b1, const half* w2,
-                          const half* b2) {
+                          const half* b2) {                            
   // Each thread processes entire chess board
   if (C > kMaxSupportedChannelsForResBlockFusing) {
     // use special kernel with reduced register pressure - only works on Ampere,

@@ -546,6 +546,7 @@ void PolicyMap(int N, T* output, const T* input, const short* indices,
   ReportCUDAErrors(cudaGetLastError());
 }
 
+/*
 template <typename T = float, bool use_se, bool relu, bool use_bias, bool use_skip>
 void OutputInputTransform(int N, int C, int se_K, float* output,
                           const float* input, const float* skip,
@@ -565,6 +566,7 @@ void OutputInputTransform(int N, int C, int se_K, float* output,
   }
   ReportCUDAErrors(cudaGetLastError());
 }
+*/
 
 // Template instantiation.
 template void copyTypeConverted<half, float>(half* op, float* ip, int N);
@@ -625,6 +627,7 @@ template void InputTransform<float, false>(int N, int C,
                                            float* transformed_input,
                                            const float* input);
 
+/*
 template void OutputTransform<float, true, true, true, true, false, false>(
     int N, int C, int se_K, float* output, const float* input,
     const float* skip, const float* bias, const float* w1, const float* b1,
@@ -674,7 +677,7 @@ template void OutputInputTransform<float, false, true, true, false>(
     int N, int C, int se_K, float* output, const float* input,
     const float* skip, const float* bias, const float* w1, const float* b1,
     const float* w2, const float* b2);
-
+*/
 
 }  // namespace cudnn_backend
 }  // namespace lczero

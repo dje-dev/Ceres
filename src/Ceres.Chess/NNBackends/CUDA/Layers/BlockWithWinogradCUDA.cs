@@ -48,8 +48,7 @@ namespace Ceres.Chess.NNBackends.CUDA
         if (kernelFilterTransform == null)
         {
           const string kn = "_ZN6lczero13cudnn_backend22filterTransform_kernelI6__halfEEviiiPT_PKS3_";
-          const string ptxFileName = @"fp16_kernels.ptx";
-          kernelFilterTransform = Parent.Device.GetKernel(Parent.PTXAssembly, ptxFileName, kn);
+          kernelFilterTransform = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, kn);
         }
 
         // Each thread processes entire filter block (input 3x3 elements -> output 6x6 elements)

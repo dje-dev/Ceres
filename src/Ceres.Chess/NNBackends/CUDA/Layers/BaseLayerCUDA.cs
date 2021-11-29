@@ -26,31 +26,6 @@ using Ceres.Base.DataTypes;
 
 #endregion
 
-#if NOT
-
-Top compile kernels to PTX do the following:
-
-1. Launch Visual Studio 2019 Command Line Prompt (MUST be 64 bit version)
-2. Change to directory into something like:
-    C:\dev\lc0\master1\lc0\src\neural\cuda 
-3. Copy the utils subdirectory in LC0 to also appear under this directory
-4. Run  (maybe need different architectures too, last argument)
-
-  "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.1\bin\nvcc.EXE" -ptx -o common_kernels.ptx  -c common_kernels.cu -arch=sm_70
-  "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.1\bin\nvcc.EXE" -ptx -o fp16_kernels.ptx  -c fp16_kernels.cu -arch=sm_70
-  "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.1\bin\nvcc.EXE" -ptx -o ceres_kernels.ptx  -c ceres_kernels.cu -arch=sm_70
-
-  copy common_kernels.ptx C:\dev\CeresDev\src\Ceres.Samples\NNBackend\PTX
-  copy fp16_kernels.ptx C:\dev\CeresDev\src\Ceres.Samples\NNBackend\PTX
-  copy ceres_kernels.ptx C:\dev\CeresDev\src\Ceres.Samples\NNBackend\PTX
-
-5. May want to do this for different architectures:
-  rem nvcc -h
-  rem foreach x : ['sm_80', 'sm_75', 'sm_86', 'sm_70', 'sm_60' , 'sm_72', 'sm_62', 'sm_53']
-  rem         nvcc_extra_args += '-code=' + x
-
-#endif
-
 namespace Ceres.Chess.NNBackends.CUDA
 {
   /// <summary>
@@ -94,7 +69,9 @@ namespace Ceres.Chess.NNBackends.CUDA
     /// Input layer.
     /// </summary>
     protected readonly BaseLayerCUDA input_;
-    
+
+    protected const string FP16_KERNELS_PTX_NAME = @"fp16_kernels.ptx";
+
     public float Sum = 0;
     public float Min = float.MaxValue;
     public float Max = float.MinValue;

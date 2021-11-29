@@ -6,28 +6,29 @@ Needs 4 files from LC0 project
   common_kernels.cu
 NOTE: The above .cu files were trivially modified in one way: 
       all arguments accepting a stream were removed (sometimes also a template argument of 0).
+      Optionally some of the instantiated template methods with type float can be removed to save space (not used).
 Also one small file from Ceres
   ceres_kernels.cu
 
 Steps:
-  1. Pull LC0 code from the LC0 project (and make the above referenced trivial changes).
-  2. Create utils subdirectory under C:\dev\lc0\master1\lc0\src\neural\cuda and copy the LC0 utils source code files there (so CUDA compiler will find)
-  3. Launch a console session from menu bar using "x64 Native Tools  Command Propmt for Visual Studio 2019"
-  4. Change into directory where CU files are located
-  5. Run the 3 commands to generate PTX and then copy to source code tree (update directory as needed).
-  6. Also generate the extra file fp16_kernels_big.ptx using instruction below.
+  1. Set the Visual Studio path via vcvars64.bat/vcvars64.cmd batch file provided by Microsoft
+  2. Pull LC0 code from the LC0 project (and make the above referenced trivial changes).
+  3. Create utils subdirectory under C:\dev\lc0\master1\lc0\src\neural\cuda and copy the LC0 utils source code files there (so CUDA compiler will find)
+  4. Launch a console session from menu bar using "x64 Native Tools  Command Propmt for Visual Studio 2019"
+  5. Change into directory where CU files are located
+  6. Run the 3 commands to generate PTX and then copy to source code tree (update directory as needed).
   7. Rebuild C# project and test.
 
-My working directory was: C:\dev\lc0\master1\lc0\src\neural\cuda.
+Working directory was: C:\dev\lc0\master1\lc0\src\neural\cuda.
 
 NOTE: Initially "-arch=sm_70" was used but failed to run on 1080 GPUs. 
       Then switched to "-arch=sm_60" with no apparent loss of performance. But 1080 GPU does not work well (slow FP16).
       So switch back to "-arch=sm_70"
 
-Batch file (go.cmd):
-"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.1\bin\nvcc.EXE" -ptx -o common_kernels.ptx  -c common_kernels.cu -arch=sm_70
-"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.1\bin\nvcc.EXE" -ptx -o fp16_kernels.ptx  -c fp16_kernels.cu -arch=sm_70
-"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.1\bin\nvcc.EXE" -ptx -o ceres_kernels.ptx  -c ceres_kernels.cu -arch=sm_70
+Batch file (go.cmd) which contains:
+"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.4\bin\nvcc.EXE" -ptx -o common_kernels.ptx  -c common_kernels.cu -arch=sm_70 -allow-unsupported-compiler
+"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.4\bin\nvcc.EXE" -ptx -o fp16_kernels.ptx  -c fp16_kernels.cu -arch=sm_70  -allow-unsupported-compiler
+"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.4\bin\nvcc.EXE" -ptx -o ceres_kernels.ptx  -c ceres_kernels.cu -arch=sm_70 -allow-unsupported-compiler
 
 copy common_kernels.ptx C:\dev\Ceres\src\Ceres.Chess\NNBackends\CUDA\Kernels\PTX
 copy fp16_kernels.ptx C:\dev\Ceres\src\Ceres.Chess\NNBackends\CUDA\Kernels\PTX
@@ -37,10 +38,3 @@ rem TODO: someday maybe run for all possible kernels
 rem nvcc -h
 rem foreach x : ['sm_80', 'sm_75', 'sm_86', 'sm_70', 'sm_60' , 'sm_72', 'sm_62', 'sm_53']
 rem         nvcc_extra_args += '-code=' + x
-
-Other notes:
-  - it may be necessary to use "-allow-unsupported-compiler" at the end of the nvcc command lines
-  - setting the Visual Studio pathing can also be done by running the vcvars64.bat/vcvars64.cmd batch file provided by Microsoft
-  - a version "fp16_kernels_big.ptx" was made by changing the following (to 512) in cuda_common.h
-    (this PTX is auto-selected if C > 384)
-      static constexpr int kMaxSupportedChannelsForResBlockFusing      = 384;  // limit on num_filters
