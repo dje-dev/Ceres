@@ -153,8 +153,9 @@ namespace Ceres.MCTS.Search
 
       bool overlappingAllowed = Context.ParamsSearch.Execution.FlowDirectOverlapped;
       int initialRootN = rootNode.N;
+      int maxBatchSize = Math.Min(Context.NNEvaluators.MaxBatchSize, Context.ParamsSearch.Execution.MaxBatchSize);
 
-      int guessMaxNumLeaves = manager.Context.NNEvaluators.MaxBatchSize;
+      int guessMaxNumLeaves = maxBatchSize;
 
       ILeafSelector selector1;
       ILeafSelector selector2;
@@ -173,8 +174,6 @@ namespace Ceres.MCTS.Search
                                                         Context.ParamsSearch.Execution.InFlightThisBatchLinkageEnabled,
                                                         Context.ParamsSearch.Execution.InFlightOtherBatchLinkageEnabled);
       }
-
-      int maxBatchSize = Math.Min(Context.NNEvaluators.MaxBatchSize, Context.ParamsSearch.Execution.MaxBatchSize);
       
       int selectorID = 0;
       int batchSequenceNum = startingBatchSequenceNum;
@@ -254,11 +253,6 @@ namespace Ceres.MCTS.Search
                                                                               Context.ParamsSearch.BatchSizeMultiplier,
                                                                               Context.ParamsSearch);
 
-        // Apply additional hard limit on batch size if present.
-        if (Context.ParamsSearch.MaxBatchSize.HasValue)
-        {
-          hardLimitNumNodesThisBatch = Math.Min(Context.ParamsSearch.MaxBatchSize.Value, hardLimitNumNodesThisBatch);
-        }
 
         targetThisBatch = Math.Min(targetThisBatch, Manager.MaxBatchSizeDueToPossibleNearTimeExhaustion);
         if (forceBatchSize.HasValue) targetThisBatch = forceBatchSize.Value;

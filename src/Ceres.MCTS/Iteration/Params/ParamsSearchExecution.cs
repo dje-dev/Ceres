@@ -108,13 +108,11 @@ namespace Ceres.MCTS.Params
     /// </summary>
     public bool FlowSplitSelects = true;
 
-
     /// <summary>
-    /// Hard limit on maximum number of positions per gathered batch.
-    /// The actual number used in gathering may end up smaller 
-    /// due to limits placed by NNEvaluator(s) in use.
+    /// Optional additional hard limit on size of gathered batch 
+    /// of nodes (not all of which are necessarily destined for neural network evaluation).
     /// </summary>
-    public int MaxBatchSize = 1024;
+    public int MaxBatchSize = CeresUserSettingsManager.Settings.MaxBatchSize;
 
     /// <summary>
     /// If we are running dual selectors it is possible that some nodes
