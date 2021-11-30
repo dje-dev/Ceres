@@ -19,6 +19,7 @@ using System.Diagnostics;
 
 using Ceres.Base.DataTypes;
 using Ceres.Chess;
+using Ceres.MCTS.Environment;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.Params;
@@ -149,6 +150,17 @@ namespace Ceres.MCTS.Search
       defaultMaxNodesNN = maxNodesNN;
 
       BlockApply = blockApply;
+
+      if (Context.ParamsSearch.Execution.NNEvaluatorBatchSizeBreakHints != null)
+      {
+        // The process of trimming the set of NN nodes involves aborting leaf nodes already created.
+        Debug.Assert(MCTSParamsFixed.UNINITIALIZED_TREE_NODES_ALLOWED);
+
+        // Not compatible with in flight linkage, since the node might be aborted
+        // after having already been pointed to by another node.
+        Debug.Assert(!Context.ParamsSearch.Execution.InFlightThisBatchLinkageEnabled);
+      }
+
 
       this.IN_FLIGHT_THIS_BATCH_LINKAGE_ENABLED = IN_FLIGHT_THIS_BATCH_LINKAGE_ENABLED;
       this.IN_FLIGHT_OTHER_BATCH_LINKAGE_ENABLED = IN_FLIGHT_OTHER_BATCH_LINKAGE_ENABLED;
@@ -345,6 +357,49 @@ namespace Ceres.MCTS.Search
         if (IN_FLIGHT_THIS_BATCH_LINKAGE_ENABLED)
         {
           transpositionRootsThisBatch[hash] = node;
+        }
+      }
+    }
+
+    /// <summary>
+    /// Applies any NNEvaluatorBatchSizeBreakHints which may exist.
+    /// </summary>
+    public void ApplyBatchSizeBreakHints()
+    {
+      if (Context.ParamsSearch.Execution.NNEvaluatorBatchSizeBreakHints  != null)
+      {
+        foreach (int batchSize in Context.ParamsSearch.Execution.NNEvaluatorBatchSizeBreakHints)
+        {
+          ApplyBatchSizeBreakHint(batchSize);
+        }
+      }
+    }
+
+    /// <summary>
+    /// Trims the size of NodesNN if it is just slightly larger than the break hint.
+    /// </summary>
+    /// <param name="batchSizeBreakHint"></param>
+    void ApplyBatchSizeBreakHint(int batchSizeBreakHint)
+    {
+      // Truncate batch if just slightly larger than the hint
+      int maxOverage = batchSizeBreakHint / 10;
+      if (NodesNN.Count > batchSizeBreakHint && NodesNN.Count < batchSizeBreakHint + maxOverage)
+      {
+//MCTSEventSource.TestCounter1++;
+        int startCount = NodesNN.Count;
+        for (int i=startCount-1;i>= batchSizeBreakHint; i--)
+        {
+          MCTSNode node = NodesNN[i];
+          NodesNN.RemoveAt(i);
+
+          if (SelectorID == 0)
+          {
+            node.StructRef.BackupAbort0(node.NInFlight);
+          }
+          else
+          {
+            node.StructRef.BackupAbort1(node.NInFlight2);
+          }
         }
       }
     }

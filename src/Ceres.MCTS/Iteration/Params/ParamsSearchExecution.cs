@@ -57,9 +57,10 @@ namespace Ceres.MCTS.Params
     /// <summary>
     /// If transpositions are detected and copied within a single batch,
     /// thereby reducing the number of NN evaluations needed.
-    /// This is beneficial unless the NN is evaluation rate is extremely high.
+    /// However disabled by default because at most 0.5% of NN evaluations are obviated,
+    /// and incompatible with NNEvaluatorBatchSizeBreakHints.
     /// </summary>
-    public bool InFlightThisBatchLinkageEnabled = true;
+    public bool InFlightThisBatchLinkageEnabled = false;
 
     /// <summary>
     /// If transpositions are detected and copied
@@ -83,6 +84,12 @@ namespace Ceres.MCTS.Params
     /// search characateristics  (e.g. larger batches when the tree is already large).
     /// </summary>
     public bool SmartSizeBatches = DEFAULT_USE_SMART_SIZE_BATCHES;
+
+    /// <summary>
+    /// Optional a set batch sizes at which the NNEvaluator
+    /// is known to suffer a local maximum (falling off sharply in speed just above this value).
+    /// </summary>
+    public int[] NNEvaluatorBatchSizeBreakHints = null;
 
     /// <summary>
     /// If two batches should procesed used in flight simultaneously,

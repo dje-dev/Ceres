@@ -329,6 +329,8 @@ namespace Ceres.MCTS.Search
           }
         }
 
+        nodesSelectedSet.ApplyBatchSizeBreakHints();
+
 #if FEATURE_SUPPLEMENTAL
         //if (Context.ParamsSearch.TestFlag)
         {
