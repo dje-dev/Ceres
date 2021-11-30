@@ -84,6 +84,12 @@ namespace Ceres.MCTS.Params
     /// </summary>
     public const int MAX_VISITS = int.MaxValue - 1_000_000;
 
+    /// <summary>
+    /// If it is valid that nodes exist with N=0 and not in flight.
+    /// Some choices of options result in this condition 
+    /// (e.g. if a leaf node selected is aborted because NN batch becomes oversized).
+    /// </summary>
+    public const bool UNINITIALIZED_TREE_NODES_ALLOWED = true;
 
     /// <summary>
     /// 

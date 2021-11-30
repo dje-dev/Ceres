@@ -299,7 +299,10 @@ namespace Ceres.MCTS.MTCSNodes.Storage
         AssertNode(nodeR.NumPieces >= 2 && nodeR.NumPieces <= 32, $"NumPieces not in [2,32]", i, in nodeR, true);
         AssertNode(nodeR.NumRank2Pawns <= 16, $"NumRank2Pawns > 16", i, in nodeR, true);
         AssertNode(nodeR.ZobristHash != 0, $"ZobristHash zero", i, in nodeR, true);
-        AssertNode(nodeR.Terminal != Chess.GameResult.NotInitialized, "Node not initialized", i, in nodeR);
+        if (!MCTSParamsFixed.UNINITIALIZED_TREE_NODES_ALLOWED)
+        {
+          AssertNode(nodeR.Terminal != Chess.GameResult.NotInitialized, "Node not initialized", i, in nodeR);
+        }
         AssertNode(!expectCacheIndexZero || nodeR.CachedInfoPtr == null, "CacheIndex zeroed", i, in nodeR);
 
         if (nodeR.TranspositionRootIndex == 0 && nodeR.N > 0 && !nodeR.Terminal.IsTerminal() && nodeR.NumPolicyMoves == 0)
