@@ -118,13 +118,26 @@ namespace Ceres.MCTS.Utils
       return -regression.slope;
     }
 
+
     public SearchPrincipalVariation(MCTSNode searchRoot, MCTSNode overrideBestMoveNodeAtRoot = default)
     {
       Nodes = new List<MCTSNode>();
 
+      // Omit positions with low N on both absolute and relative basis (too noisy)
+      int totalN = searchRoot.N;
       MCTSNode node = searchRoot;
       do
       {
+        // 
+        float fracN = (float)node.N / totalN;
+        const float CUTOFF_FRACTION = 0.0005f;
+        if (totalN > 1
+         && node.Terminal == Chess.GameResult.Unknown 
+         && node.N < 1000 
+         && fracN < CUTOFF_FRACTION)
+        {
+          break;
+        }
         searchRoot.Tree.Annotate(node);
 
         Nodes.Add(node);
@@ -145,7 +158,6 @@ namespace Ceres.MCTS.Utils
         else
           node = default;
       } while (node.IsNotNull);
-
     }
 
 
