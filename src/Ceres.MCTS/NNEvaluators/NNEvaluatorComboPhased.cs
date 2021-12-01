@@ -75,7 +75,20 @@ namespace Ceres.MCTS.NNEvaluators
             MCTSIterator manager = MCTSManager.ThreadSearchContext;
             float thisSplitFraction = baseSplitFraction;
 
-            if (manager.Manager.RootNWhenSearchStarted > 0)
+            if (manager.Manager.RootNWhenSearchStarted == 0)
+            {
+              if (manager.Manager.FractionSearchCompleted < baseSplitFraction)
+              {
+                MCTSManager.NumSecondaryBatches++;
+                MCTSManager.NumSecondaryEvaluations += batch.NumPos;
+                return 0;
+              }
+              else
+              {
+                return 1;
+              }
+            }
+            else
             {
               
               GameMoveStat firstMove = manager.Manager.FirstMoveBySide(manager.Manager.Context.StartPosAndPriorMoves.FinalPosition.SideToMove);
@@ -98,7 +111,8 @@ namespace Ceres.MCTS.NNEvaluators
               }
               else
               {
-                throw new Exception("Internal error: NNEvaluatorComboPhased missing prior move info");
+                return 1;
+                //throw new Exception("Internal error: NNEvaluatorComboPhased missing prior move info");
               }
             }
 
