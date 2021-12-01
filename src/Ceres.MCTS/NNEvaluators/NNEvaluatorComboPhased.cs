@@ -81,7 +81,9 @@ namespace Ceres.MCTS.NNEvaluators
               GameMoveStat firstMove = manager.Manager.FirstMoveBySide(manager.Manager.Context.StartPosAndPriorMoves.FinalPosition.SideToMove);
               if (firstMove != null && firstMove.FinalN > 0)
               {
-                float fractionDone = (float)manager.Root.N / firstMove.FinalN;
+                // trees expected to grow in size due to accumulation and faster network contributing
+                const float REUSE_MULTIPLIER = 2f; 
+                float fractionDone = (float)manager.Root.N / (REUSE_MULTIPLIER * firstMove.FinalN);
                 if (fractionDone >= thisSplitFraction)
                 {
                   return 1;
