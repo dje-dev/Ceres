@@ -135,6 +135,7 @@ namespace Ceres.MCTS.Iteration
 
     public readonly List<GameMoveStat> PriorMoveStats;
 
+
     /// <summary>
     /// The N of the root node when search started
     /// (possibly nonzero due to tree reuse)
@@ -1086,6 +1087,18 @@ namespace Ceres.MCTS.Iteration
           NumNodesWhenChoseTopNNode = Root.N;
         }
       }
+    }
+
+    public GameMoveStat FirstMoveBySide(SideType side)
+    {
+      for (int i = 0; i < PriorMoveStats.Count; i++)
+      {
+        if (PriorMoveStats[i].Side == side)
+        {
+          return PriorMoveStats[i];
+        }
+      }
+      return null;
     }
 
 

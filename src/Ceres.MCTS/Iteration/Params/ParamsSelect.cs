@@ -27,7 +27,7 @@ namespace Ceres.MCTS.Params
   /// Parameters related to leaf selection (CPUCT algorithm).
   /// </summary>
   [Serializable]
-  public class ParamsSelect
+  public record ParamsSelect
   {
     /// <summary>
     ///  If the improved tuned ZZTune parameters should be used.

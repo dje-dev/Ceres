@@ -15,6 +15,7 @@
 
 using System;
 using System.Runtime.CompilerServices;
+using Ceres.Chess.GameEngines;
 using Ceres.Chess.LC0.Batches;
 using Ceres.Chess.NNEvaluators;
 using Ceres.MCTS.Environment;
@@ -76,46 +77,28 @@ namespace Ceres.MCTS.NNEvaluators
 
             if (manager.Manager.RootNWhenSearchStarted > 0)
             {
-              if (manager.Manager.PriorMoveStats.Count >= 2)
+              
+              GameMoveStat firstMove = manager.Manager.FirstMoveBySide(manager.Manager.Context.StartPosAndPriorMoves.FinalPosition.SideToMove);
+              if (firstMove != null && firstMove.FinalN > 0)
               {
-                int priorFinalN = manager.Manager.PriorMoveStats[^2].FinalN;
-                float curNFrac = (float)manager.Root.N / priorFinalN;
-                const float FRAC_THRESHOLD_REUSED_TREE = 0.25f; // TODO: parameterize this
-                thisSplitFraction = curNFrac * thisSplitFraction * FRAC_THRESHOLD_REUSED_TREE;
+                float fractionDone = (float)manager.Root.N / firstMove.FinalN;
+                if (fractionDone >= thisSplitFraction)
+                {
+                  return 1;
+                }
+                else
+                {
+                  MCTSManager.NumSecondaryBatches++;
+                  MCTSManager.NumSecondaryEvaluations += batch.NumPos;
+                  return 0;
+                }
+
               }
               else
               {
-                thisSplitFraction = 0;
+                throw new Exception("Internal error: NNEvaluatorComboPhased missing prior move info");
               }
             }
-
-            if (manager.Manager.FractionSearchCompleted >= thisSplitFraction)
-            {
-              return 1;
-            }
-            else
-            {
-              MCTSManager.NumSecondaryBatches++;
-              MCTSManager.NumSecondaryEvaluations += batch.NumPos;
-              return 0;
-            }
-#if NOT
-            if (
-                manager.Manager.PriorMoveStats != null 
-            && manager.Manager.PriorMoveStats.Count >= 2)
-            {
-              const float FRAC_THRESHOLD_REUSED_TREE = 0.25f; // TODO: parameterize this
-
-              int priorFinalN = manager.Manager.PriorMoveStats[^2].FinalN;
-              float curNFrac = (float)manager.Root.N / priorFinalN;
-              if (curNFrac < phaseSplitFraction * FRAC_THRESHOLD_REUSED_TREE)
-              {
-                MCTSEventSource.TestMetric1 += batch.NumPos;
-                return 0;
-              }
-            }
-
-#endif
 
             return 1;            
           });
