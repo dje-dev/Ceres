@@ -32,16 +32,16 @@ namespace Ceres.MCTS.MTCSNodes
     /// Modifies a specified node by blending in 
     /// fractionally another specified policy .
     /// 
-    /// TODO: Slight imperfections:
+    /// TODO: Imperfections/possible improvements:
     ///         - do we need to renormalize probabilities?
     ///         - what if the the new policy as a move not already present (currently ignored)
-    ///         - nodes which are transposition linked are ignored
+    ///         - could we detect that another node in the transposition equivalence class was blended
+    ///           and copy this blending?
     /// </summary>
     public void BlendPolicy(in CompressedPolicyVector otherPolicy, float fracOther)
     {
       if (IsTranspositionLinked)
       {
-        // TODO: should we apply this update to the transposition root?
         return;
       }
 
@@ -50,26 +50,26 @@ namespace Ceres.MCTS.MTCSNodes
         return;
       }
 
-//      throw new Exception("Not yet implemented BlendPolicy, currently it can reorder non-expanded to be in front of expanded");
-
       float softmaxValue = Context.ParamsSelect.PolicySoftmax;
 
-      const bool DEBUG = false;
-      CompressedPolicyVector thisPolicy = default;
-      if (DEBUG)
+      const bool VERBOSE = false;
+      CompressedPolicyVector thisPolicyBeforeBlend = default;
+      if (VERBOSE)
       {
-        MCTSNodeStructUtils.ExtractPolicyVector(softmaxValue, in StructRef, ref thisPolicy);
-        Console.WriteLine(thisPolicy.ToString());
-        Console.WriteLine(otherPolicy.ToString());
+        MCTSNodeStructUtils.ExtractPolicyVector(softmaxValue, in StructRef, ref thisPolicyBeforeBlend);
+        Console.WriteLine("CURRENT: " + thisPolicyBeforeBlend.DumpStrShort(0, 14));
+        Console.WriteLine("OTHER  : " + otherPolicy.DumpStrShort(0, 14));
       }
 
-      // Process expanded nodes
+      // Process all children.
       for (int i = 0; i < NumPolicyMoves; i++)
       {
         (MCTSNode node, EncodedMove move, FP16 p) childInfo = ChildAtIndexInfo(i);
         int indexOther = otherPolicy.IndexOfMove(childInfo.move);
 
         // Only try to modify policy if the move was already in the policy
+        // TODO: should we possibly replace some unexpanded move in this node
+        //       with this move if this other policy is relatively high? (but maybe this is rare)
         if (indexOther != -1)
         {
           float otherProbabilityRaw = otherPolicy.PolicyInfoAtIndex(indexOther).Probability;
@@ -78,102 +78,81 @@ namespace Ceres.MCTS.MTCSNodes
 
           if (i < NumChildrenExpanded)
           {
-            // Directly set the new policy on the node structure
+            // Directly set the new policy in the node structure.
             ChildAtIndex(i).StructRef.P = newPolicy;
           }
           else
           {
-            // Cause the new p to be set in the children list
+            // Replace the P in the (not-yet-expanded) children list.
             ChildAtIndexRef(i).SetUnexpandedPolicyValues(childInfo.move, newPolicy);
           }
         }
       }
 
-      // Make sure the children are ordered by policy after the operation
-      // (this is expected by the leaf selection logic).
-      // TODO: Consider enabling this. But it is complicated;
-      //       currently Ceres logic assumes expanded children are contiguous
-      //       so this currently will not function.
-      //       Currently the alternate workaround in method FillInSequentialVisitHoles is used.
-      //EnsureChildrenOrderedByPolicy();
+      // Generally children are laid out in ascending policy order.
+      // However the order of children may have now changed.
+      // It is not possible to fully restore this order because Ceres
+      // leaf selection logic assumes that expanded children are all contiguous at beginning of array.
 
-      if (DEBUG)
+      // However we are free to reorder the unexpanded children to be back in policy order.
+      // This is actually what is important from a leaf selection perspective, since
+      // all expanded childre are already always included for consideration in expansion
+      // and the fact that they may be out of order does not change behavior.
+      // However this method gets the most promising unexpanded children shifted to lower indices
+      // and this is important so they are the first candidate unexpanded children to be considered in future visits.
+      ReorderUnexpandedChildren();
+
+      if (VERBOSE)
       {
-        CompressedPolicyVector modifiedPolicy = default;
+        float sumPolicy = 0;
 
+        // Extract new policy of this node as a CompressedPolicyVector.
+        CompressedPolicyVector modifiedPolicy = default;
         MCTSNodeStructUtils.ExtractPolicyVector(softmaxValue, in StructRef, ref modifiedPolicy);
 
-        Console.WriteLine(modifiedPolicy.ToString());
+        Console.WriteLine("NEW    : " + modifiedPolicy.DumpStrShort(0, 14));
 
-        var p1 = modifiedPolicy.DecodedAndNormalized;
-        var p2 = thisPolicy.DecodedAndNormalized;
+        float[] p1 = modifiedPolicy.DecodedAndNormalized;
+        float[] p1Raw = modifiedPolicy.DecodedNoValidate;
+        float[] p2 = thisPolicyBeforeBlend.DecodedAndNormalized;
+        //float[] p2Raw = thisPolicy.DecodedNoValidate;
         for (int i = 0; i < 1858; i++)
+        {
+          sumPolicy += p1Raw[i];
           if (MathF.Abs(p1[i] - p2[i]) > 0.075)
           {
-            Console.WriteLine("*** BIG DISCREPANCY");
+            Console.WriteLine($"*** BIG DIFFERENCE {EncodedMove.FromNeuralNetIndex(i) }: {p1[i],6:F3} {p2[i],6:F3}");
           }
-
+        }
+        Console.WriteLine($"Sum modified policy={sumPolicy,6:F3}  N= { N}  NumExpanded= {NumChildrenExpanded}");
         Console.WriteLine();
       }
     }
 
-
-    /// <summary>
-    /// Resorts the array of children to be in descending by policy (if necessary).
-    /// </summary>
-    /// <param name="node"></param>
-    public void EnsureChildrenOrderedByPolicy()
+    public void ReorderUnexpandedChildren()
     {
-      bool didSwap = false;
-      int numSwapped;
-      Span<MCTSNodeStructChild> childrenRaw = StructRef.Children;
+      bool foundOutOfOrder;
       do
       {
-        numSwapped = 0;
-        for (int i = 0; i < NumPolicyMoves - 1; i++)
+        // Bubble sort.
+        foundOutOfOrder = false;
+        for (int i=NumChildrenExpanded;i<NumPolicyMoves  - 1; i++)
         {
-          float p1 = ChildAtIndexInfo(i).p;
-          float p2 = ChildAtIndexInfo(i + 1).p;
-          if (p2 > p1)
+          ref MCTSNodeStructChild infoLeft = ref ChildAtIndexRef(i);
+          ref MCTSNodeStructChild infoRight = ref ChildAtIndexRef(i + 1);
+
+          if (infoLeft.P < infoRight.p)
           {
-            MCTSNodeStructChild temp = childrenRaw[i];
+            MCTSNodeStructChild temp = infoLeft;
+            infoLeft = infoRight;
+            infoRight = temp;
 
-            if (childrenRaw[i].IsExpanded)
-            {
-              childrenRaw[i].ChildRef.SetIndexInParent(i + 1);
-            }
-            if (childrenRaw[i+1].IsExpanded)
-            {
-              childrenRaw[i+1].ChildRef.SetIndexInParent(i);
-            }
-
-            childrenRaw[i] = childrenRaw[i + 1];
-            childrenRaw[i + 1] = temp;
-            numSwapped++;
-            didSwap = true;
-          }
-
-        }
-      } while (numSwapped > 0);
-
-      // The leaf selection code expects the set of children which are expanded
-      // to be contiguous starting at the first child.
-      // Restore this property if necessary.
-      if (didSwap)
-      {
-        bool sawExpanded = false;
-        for (int i = NumPolicyMoves - 1; i >= 0; i--)
-        {
-          sawExpanded |= ChildAtIndexInfo(i).node != null;
-          if (sawExpanded && ChildAtIndexInfo(i).node == null)
-          {
-            //              node.Ref.NumChildrenVisited = (byte)Math.Max(node.NumChildrenVisited, i+1);
-            //              node.Ref.NumChildrenExpanded = (byte)Math.Max(node.NumChildrenVisited, i + 1);
-            CreateChild(i, true);
+            foundOutOfOrder = true;
           }
         }
-      }
+      } while (foundOutOfOrder);  
     }
+
 
 
     /// <summary>
