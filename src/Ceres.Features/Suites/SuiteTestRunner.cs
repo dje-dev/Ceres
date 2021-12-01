@@ -38,6 +38,7 @@ using Ceres.Base.Benchmarking;
 using System.Collections.Concurrent;
 using Ceres.Features.Players;
 using Ceres.Base.Math;
+using Ceres.Chess.NNEvaluators.Internals;
 
 #endregion
 
@@ -381,6 +382,12 @@ namespace Ceres.Features.Suites
       {
         Def.Output.WriteLine($"Avg Ceres2    pos/sec    {totalNodes2 / totalTimeCeres2,8:F2}");
       }
+
+      Def.Output.WriteLine();
+
+      Def.Output.WriteLine($"Num all evaluations      :   {NNEvaluatorStats.TotalPosEvaluations,12:N0}");
+      Def.Output.WriteLine($"Num secondary batches    :   {MCTSManager.NumSecondaryBatches,12:N0}");
+      Def.Output.WriteLine($"Num secondary evaluations:   {MCTSManager.NumSecondaryEvaluations,12:N0}");
 
       Def.Output.WriteLine();
 
