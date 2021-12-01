@@ -68,6 +68,7 @@ namespace Ceres.MCTS.NNEvaluators
             {
               MCTSManager.NumSecondaryBatches++;
               MCTSManager.NumSecondaryEvaluations += batch.NumPos;
+              return 0;
             }
 
             MCTSIterator manager = MCTSManager.ThreadSearchContext;
