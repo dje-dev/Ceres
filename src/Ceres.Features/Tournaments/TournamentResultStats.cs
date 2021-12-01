@@ -79,9 +79,11 @@ namespace Ceres.Features.Tournaments
       writer.WriteLine();
     }
 
+
     /// <summary>
-    /// Write summary row for player.
+    /// 
     /// </summary>
+    /// <param name="writer"></param>
     /// <param name="player"></param>
     /// <param name="width"></param>
     /// <param name="referenceId"></param>
@@ -89,20 +91,20 @@ namespace Ceres.Features.Tournaments
     {
       string playerInfo = player.Name == referenceId ? player.Name + "*" : player.Name;
       double score = player.PlayerWins + (player.Draws / 2.0);
-      string wdl = $"{player.PlayerWins}-{player.Draws}-{player.PlayerLosses}";
+      string wdl = $"+{player.PlayerWins}={player.Draws}-{player.PlayerLosses}";
       float cfs = EloCalculator.LikelihoodSuperiority(player.PlayerWins, player.Draws, player.PlayerLosses);
       var (_, avg, max) = EloCalculator.EloConfidenceInterval(player.PlayerWins, player.Draws, player.PlayerLosses);
       string error = $"{(max - avg):F0}";
       double draws = (player.Draws / (double)player.NumGames) * 100;
       long nodes = player.PlayerTotalNodes;
       float time = player.PlayerTotalTime;
-      
+
       List<(string, int)> rowItems = new()
       {
         (playerInfo, 25),
-        (avg.ToString("F0"), 8),
-        (error, 5),
-        (cfs.ToString("P0"), 8),
+        (player.Name == referenceId ? "0.0" : avg.ToString("F0"), 8),
+        (player.Name == referenceId ? "---" : error, 5),
+        (player.Name == referenceId ? "----" : cfs.ToString("P0"), 8),
         (score.ToString("F1"), 8),
         (player.NumGames.ToString(), 8),
         (wdl, 13),
@@ -115,6 +117,7 @@ namespace Ceres.Features.Tournaments
       };
       PrintEngineRow(writer, rowItems, width);
     }
+
 
     /// <summary>
     /// Dump round robin score table to console.
@@ -377,14 +380,9 @@ namespace Ceres.Features.Tournaments
       }
     }
 
-    /// <summary>
-    /// Create Round Robin row for player based on index in player list.
-    /// </summary>
-    /// <param name="row"></param>
-    /// <returns></returns>
     IEnumerable<string> CreateRoundRobinRow(int row)
     {
-      const string empty = "-----";
+      const string empty = "------";
       int counter = 0;
       PlayerStat stat = Players[row];
       yield return stat.Name;
@@ -396,7 +394,7 @@ namespace Ceres.Features.Tournaments
         }
 
         var (win, draw, loss) = opponent.Value;
-        yield return $"{win}-{draw}-{loss}";
+        yield return $"+{win}={draw}-{loss}";
         counter++;
       }
 
@@ -405,6 +403,7 @@ namespace Ceres.Features.Tournaments
         yield return empty;
       }
     }
+
 
     /// <summary>
     /// Create Round Robin Elo stat for player based on index row in player list.
