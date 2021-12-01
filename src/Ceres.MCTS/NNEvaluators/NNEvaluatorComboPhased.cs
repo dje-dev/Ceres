@@ -48,12 +48,12 @@ namespace Ceres.MCTS.NNEvaluators
           throw new NotImplementedException("COMBO_PHASED evaluators must consist of two comma separated network IDs");
         }
 
-        float phaseSplitFraction = 0.5f;
+        float baseSplitFraction = 0.5f;
         if (netIDs[0].Contains("%"))
         {
           string[] netThenFraction = netIDs[0].Split("%");
           netIDs[0] = netThenFraction[0];
-          phaseSplitFraction = float.Parse(netThenFraction[1]);
+          baseSplitFraction = float.Parse(netThenFraction[1]);
         }
 
         // Construct a compound evaluator which does both fast and slow (potentially parallel)
@@ -66,26 +66,42 @@ namespace Ceres.MCTS.NNEvaluators
             // Return 0 if not yet initialized (happens only during evaluator during warmup phase).
             if (MCTSManager.ThreadSearchContext == null)
             {
-              return 0;
+              MCTSManager.NumSecondaryBatches++;
+              MCTSManager.NumSecondaryEvaluations += batch.NumPos;
             }
 
             MCTSIterator manager = MCTSManager.ThreadSearchContext;
+            float thisSplitFraction = baseSplitFraction;
 
-            // Use second net if we are already in second phase,
-            // or if this search started with a tree already built (reuse).
-            if (manager.Manager.RootNWhenSearchStarted == 0)
+            if (manager.Manager.RootNWhenSearchStarted > 0)
             {
-              MCTSEventSource.TestMetric1 += batch.NumPos;
-              return 0;
+              if (manager.Manager.PriorMoveStats.Count >= 2)
+              {
+                int priorFinalN = manager.Manager.PriorMoveStats[^2].FinalN;
+                float curNFrac = (float)manager.Root.N / priorFinalN;
+                const float FRAC_THRESHOLD_REUSED_TREE = 0.25f; // TODO: parameterize this
+                thisSplitFraction = curNFrac * thisSplitFraction * FRAC_THRESHOLD_REUSED_TREE;
+              }
+              else
+              {
+                thisSplitFraction = 0;
+              }
             }
 
-            if (manager.Manager.FractionSearchCompleted > phaseSplitFraction)
+            if (manager.Manager.FractionSearchCompleted >= thisSplitFraction)
             {
-              MCTSEventSource.TestCounter1 += batch.NumPos;
               return 1;
             }
-
-            if (manager.Manager.PriorMoveStats != null && manager.Manager.PriorMoveStats.Count >= 2)
+            else
+            {
+              MCTSManager.NumSecondaryBatches++;
+              MCTSManager.NumSecondaryEvaluations += batch.NumPos;
+              return 0;
+            }
+#if NOT
+            if (
+                manager.Manager.PriorMoveStats != null 
+            && manager.Manager.PriorMoveStats.Count >= 2)
             {
               const float FRAC_THRESHOLD_REUSED_TREE = 0.25f; // TODO: parameterize this
 
@@ -98,12 +114,14 @@ namespace Ceres.MCTS.NNEvaluators
               }
             }
 
-            MCTSEventSource.TestCounter1 += batch.NumPos;
+#endif
+
             return 1;            
           });
 
         return dyn;
       }
+
       NNEvaluatorFactory.ComboPhasedFactory = Builder;
     }
 
