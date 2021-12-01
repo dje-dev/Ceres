@@ -30,6 +30,7 @@ using Ceres.Chess.LC0.Batches;
 
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.Iteration;
+using Ceres.MCTS.Environment;
 
 #endregion
 
@@ -295,7 +296,14 @@ namespace Ceres.MCTS.Evaluators
     {
       const bool RETRIEVE_SUPPLEMENTAL = false;
 
-      NNEvaluator evaluator = EvaluateUsingSecondaryEvaluator ? localEvaluatorSecondary : localEvaluator; 
+      NNEvaluator evaluator = localEvaluator;
+      bool useSecondary = EvaluateUsingSecondaryEvaluator;
+      if (useSecondary)
+      {
+        evaluator = localEvaluatorSecondary;
+        MCTSManager.NumSecondaryEvaluations += nodes.Length;
+        MCTSManager.NumSecondaryBatches++;
+      }
 
       IPositionEvaluationBatch result;
       if (evaluator.InputsRequired > NNEvaluator.InputTypes.Boards)

@@ -51,6 +51,21 @@ namespace Ceres.Chess.NNEvaluators.Internals
       Interlocked.Increment(ref TotalBatchesPerGPU[gpuID]);
     }
 
+    /// <summary>
+    /// Total number of positions evaluated across all GPUs.
+    /// </summary>
+    public static long TotalPosEvaluations
+    {
+      get
+      {
+        long acc = 0;
+        for (int i=0; i< MAX_GPUS; i++)
+        {
+          acc += TotalPosEvaluationsPerGPU[i];
+        }
+        return acc;
+      }
+    }
 
     #region Internals
 
