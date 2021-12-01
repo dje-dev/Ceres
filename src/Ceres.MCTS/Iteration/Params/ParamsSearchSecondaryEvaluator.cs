@@ -30,14 +30,14 @@ namespace Ceres.MCTS.Params
     /// secondary evaluation is run over tree
     /// (as an absolute tree size).
     /// </summary>
-    public int UpdateFrequencyMinNodesAbsolute = 1000;
+    public int UpdateFrequencyMinNodesAbsolute = int.MaxValue;
 
     /// <summary>
     /// Interval of tree growth in nodes between which 
     /// secondary evaluation is run over tree
     /// (as a fraction of current tree size).
     /// </summary>
-    public float UpdateFrequencyMinNodesRelative = 0.03f;
+    public float UpdateFrequencyMinNodesRelative = float.MaxValue;
 
     /// <summary>
     /// Number of initial nodes in the tree which are forced to use the secondary evaluator.
@@ -48,17 +48,17 @@ namespace Ceres.MCTS.Params
     /// Minimum number of nodes a node must have to be eligible for
     /// secondary evaluation (expressed as a fraction of tree size).
     /// </summary>
-    public float UpdateMinNFraction = 0.1f;
+    public float UpdateMinNFraction = float.MaxValue;
 
     /// <summary>
     /// Fraction at which value head output of secondary evaluator is blended in.
     /// </summary>
-    public float UpdateValueFraction = 0.5f;
+    public float UpdateValueFraction = 1;
 
     /// <summary>
     /// Fraction at which policy head output of secondary evaluator is blended in.
     /// </summary>
-    public float UpdatePolicyFraction = 0.5f;
+    public float UpdatePolicyFraction = 1;
 
     /// <summary>
     /// Returns the minimum batch size to allow to accumulate
