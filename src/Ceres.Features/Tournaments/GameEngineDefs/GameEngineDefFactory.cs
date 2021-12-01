@@ -36,16 +36,20 @@ namespace Ceres.Features.GameEngines
     /// <param name="paramsSearch"></param>
     /// <param name="paramsSelect"></param>
     /// <param name="logFileName"></param>
+    /// <param name="secondaryNetworkSpecification"></param>
     /// <returns></returns>
     public static GameEngineDef CeresInProcess(string id, string networkSpecification, string deviceSpecification,
                                                ParamsSearch paramsSearch = null, ParamsSelect paramsSelect = null,
-                                               string logFileName = null)
+                                               string logFileName = null, string secondaryNetworkSpecification = null)
     {
       paramsSearch ??= new();
       paramsSelect ??= new();
 
       NNEvaluatorDef netDef = NNEvaluatorDefFactory.FromSpecification(networkSpecification, deviceSpecification);
-      return new GameEngineDefCeres(id, netDef, null, paramsSearch, paramsSelect, null, logFileName);
+      NNEvaluatorDef netDefSecondary = secondaryNetworkSpecification == null ?
+                                                                        null : NNEvaluatorDefFactory.FromSpecification(secondaryNetworkSpecification, deviceSpecification);
+
+      return new GameEngineDefCeres(id, netDef, netDefSecondary, paramsSearch, paramsSelect, null, logFileName);
     }
 
 
