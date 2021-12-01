@@ -18,6 +18,7 @@ using System.Diagnostics;
 using System.IO;
 using Ceres.Base.Benchmarking;
 using Ceres.Chess.MoveGen;
+using Ceres.MCTS.Environment;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Storage;
@@ -123,13 +124,15 @@ namespace Ceres.MCTS.Managers
       //      float fracAllocatedOfAllocatable = (float)curStoreAllocated / maxStoreNodes.Value;
       //      float maxWastedOfAllocated = 0.8f - fracAllocatedOfAllocatable;
 
-     
+
+      (float fracReachable, float fractionSecondary) = FractionReachableAndSecondaryEstimate(currentRootNode.Context, in newRootNode.StructRef);
+//      Console.WriteLine(newRootNode.N + " " +  fracReachable + " " + fractionSecondary);
       ReuseDecision Decision(Method method)
       {
-        var dd = new ReuseDecision(method, maxStoreNodes.Value, curStoreAllocated, curStoreWasted,
-                                 currentRootNode.N, newRootNode.N,
-                                 currentRootNode.Context.Tree.TranspositionRoots == null ?0 : currentRootNode.Context.Tree.TranspositionRoots.Count,
-                                 FractionReachableEstimate(currentRootNode.Context, in newRootNode.StructRef));
+        ReuseDecision dd = new ReuseDecision(method, maxStoreNodes.Value, curStoreAllocated, curStoreWasted,
+                                             currentRootNode.N, newRootNode.N,
+                                             currentRootNode.Context.Tree.TranspositionRoots == null ?0 : currentRootNode.Context.Tree.TranspositionRoots.Count,
+                                             fracReachable, fractionSecondary);
         return dd;
       }
 
@@ -140,6 +143,13 @@ namespace Ceres.MCTS.Managers
 
       if (newRootNode.IsNull || newRootNode.N <= 1)
       {
+        return Decision(Method.NewStore);
+      }
+
+      if (newRootNode.Context.ParamsSearch.TestFlag && fractionSecondary < 0.05f)
+      {
+        MCTSEventSource.TestCounter1++;
+        //Console.WriteLine(newRootNode.N + " new store forced " + fractionSecondary);
         return Decision(Method.NewStore);
       }
 
@@ -242,13 +252,14 @@ namespace Ceres.MCTS.Managers
       return shouldInstamove;
     }
 
-    static float FractionReachableEstimate(MCTSIterator context, in MCTSNodeStruct newRootNodeRef)
+    static (float, float) FractionReachableAndSecondaryEstimate(MCTSIterator context, in MCTSNodeStruct newRootNodeRef)
     {
       int reachable = 0;
+      int secondary = 0;
       int totalStoreNodes = context.Tree.Store.Nodes.NumTotalNodes;
 
       // Only an approximation is needed, so just sample randomly.
-      const int NUM_SAMPLES_TARGET = 200;
+      const int NUM_SAMPLES_TARGET = 300;
       int NUM_SAMPLES = (int)MathF.Min(NUM_SAMPLES_TARGET, totalStoreNodes / 2);
       Random rand = new Random();
 
@@ -266,6 +277,10 @@ namespace Ceres.MCTS.Managers
             reachable++;
           }
 
+          if (scanNodeRef.SecondaryNN)
+          {
+            secondary++;
+          }
 #if NOT
             // Disabled: trying to generate the position corresopnding to this node
             // and determine reachability from that is too expensive and pollutes the node cache.
@@ -294,7 +309,8 @@ namespace Ceres.MCTS.Managers
         }
       }
 
-      return (float)reachable / NUM_SAMPLES;
+      return ((float)reachable / NUM_SAMPLES, 
+              (float)secondary / NUM_SAMPLES);
     }
 
 #region ReuseDecision record
@@ -312,9 +328,11 @@ namespace Ceres.MCTS.Managers
       public readonly int CurrentRootN;
       public readonly int NewRootN;
       public readonly float EstFracReachable;
+      public readonly float EstFracSecondary;
 
       public ReuseDecision(Method chosenMethod, int storeMaxNodes, int storeCurNodes, int storeOldGenerationNodes,
-                           int currentRootN, int newRootN, int transpositionRootsCount, float estFracReachable)
+                           int currentRootN, int newRootN, int transpositionRootsCount, 
+                           float estFracReachable, float estFracSecondary)
       {
         ChosenMethod = chosenMethod;
         StoreMaxNodes = storeMaxNodes;
@@ -324,6 +342,7 @@ namespace Ceres.MCTS.Managers
         NewRootN = newRootN;
         TranspositionRootsCount = transpositionRootsCount;
         EstFracReachable = estFracReachable;
+        EstFracSecondary = estFracSecondary;
       }
 
       public void Dump(TextWriter writer)
@@ -338,6 +357,7 @@ namespace Ceres.MCTS.Managers
         writer.WriteLine($"  TranspositionRootsCount {TranspositionRootsCount,12:N0}");
         writer.WriteLine($"  StoreOldGenerationNodes {StoreOldGenerationNodes,12:N0}  ({100 * StoreFracOldGeneration,6:F0}%)");
         writer.WriteLine($"  Reachable Frac (est.)   {100.0 * EstFracReachable,6:F0}%");
+        writer.WriteLine($"  Secondary Frac (est.)   {100.0 * EstFracSecondary,6:F0}%");
       }
 
     }

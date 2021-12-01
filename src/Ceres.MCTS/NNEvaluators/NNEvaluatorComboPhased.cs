@@ -64,11 +64,14 @@ namespace Ceres.MCTS.NNEvaluators
         NNEvaluatorDynamic dyn = new NNEvaluatorDynamic(evaluators,
           delegate (IEncodedPositionBatchFlat batch)
           {
+            batch.PositionsUseSecondaryEvaluator = false; // default assumption
+
             // Return 0 if not yet initialized (happens only during evaluator during warmup phase).
             if (MCTSManager.ThreadSearchContext == null)
             {
               MCTSManager.NumSecondaryBatches++;
               MCTSManager.NumSecondaryEvaluations += batch.NumPos;
+              batch.PositionsUseSecondaryEvaluator = true;
               return 0;
             }
 
@@ -81,6 +84,7 @@ namespace Ceres.MCTS.NNEvaluators
               {
                 MCTSManager.NumSecondaryBatches++;
                 MCTSManager.NumSecondaryEvaluations += batch.NumPos;
+                batch.PositionsUseSecondaryEvaluator = true;
                 return 0;
               }
               else
@@ -90,7 +94,8 @@ namespace Ceres.MCTS.NNEvaluators
             }
             else
             {
-              
+              return 1;
+/*
               GameMoveStat firstMove = manager.Manager.FirstMoveBySide(manager.Manager.Context.StartPosAndPriorMoves.FinalPosition.SideToMove);
               if (firstMove != null && firstMove.FinalN > 0)
               {
@@ -114,6 +119,7 @@ namespace Ceres.MCTS.NNEvaluators
                 return 1;
                 //throw new Exception("Internal error: NNEvaluatorComboPhased missing prior move info");
               }
+*/
             }
 
             return 1;            
