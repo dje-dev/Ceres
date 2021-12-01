@@ -107,11 +107,12 @@ namespace Ceres.Chess.LC0.Batches
     /// </summary>
     public short PreferredEvaluatorIndex;
 
+    public bool PositionsUseSecondaryEvaluator { get; set; }
 
     public IEncodedPositionBatchFlat GetSubBatchSlice(int startIndex, int count)
     {
       return new EncodedPositionBatchFlatSlice(this, startIndex, count);
-    }
+    }    
 
 
     /// <summary>

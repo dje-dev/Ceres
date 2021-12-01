@@ -87,6 +87,8 @@ namespace Ceres.Chess.LC0.Batches
     /// </summary>
     short PreferredEvaluatorIndex { get; }
 
+    bool PositionsUseSecondaryEvaluator { get; set; }
+
     #region Implmentation
 
     float[] ValuesFlatFromPlanes(float[] preallocatedBuffer = null);

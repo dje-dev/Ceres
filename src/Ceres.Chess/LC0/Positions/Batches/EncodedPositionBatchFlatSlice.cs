@@ -90,6 +90,12 @@ namespace Ceres.Chess.LC0.Batches
 
     public short PreferredEvaluatorIndex => Parent.PreferredEvaluatorIndex;
 
+    public bool PositionsUseSecondaryEvaluator 
+    { 
+      get {  return Parent.PositionsUseSecondaryEvaluator; } 
+      set {  throw new NotImplementedException(); } 
+    }
+
     public IEncodedPositionBatchFlat GetSubBatch(int startIndex, int count)
     {
       throw new NotImplementedException();

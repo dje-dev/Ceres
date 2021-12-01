@@ -353,9 +353,9 @@ namespace Ceres.MCTS.Evaluators
       result = evaluator.EvaluateIntoBuffers(Batch, RETRIEVE_SUPPLEMENTAL);
       Debug.Assert(!FP16.IsNaN(result.GetWinP(0)) && !FP16.IsNaN(result.GetLossP(0)));
 
-      bool markSecondaryNN = EvaluateUsingSecondaryEvaluator 
-                          || resultTarget == EvalResultTarget.SecondaryEvalResult 
-                          || Batch.PreferredEvaluatorIndex > 0;
+      bool markSecondaryNN = EvaluateUsingSecondaryEvaluator
+                          || resultTarget == EvalResultTarget.SecondaryEvalResult
+                          || Batch.PositionsUseSecondaryEvaluator;
       RetrieveResults(nodes, result, resultTarget, markSecondaryNN);
     }
 
