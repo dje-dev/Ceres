@@ -148,19 +148,23 @@ namespace Ceres.MCTS.Managers
       }
 
 
-#if NOT
-      if (newRootNode.Context.ParamsSearch.TestFlag)Console.WriteLine(curStoreAllocated + " " + newRootNode.N 
-                                                     + " reachable: " + fracReachable 
-                                                     + " secondary frac: " + fractionSecondaryOfReachable);
-
-      //      if (newRootNode.Context.ParamsSearch.TestFlag && fractionSecondaryOfReachable < 0.05f)
-      if (fractionSecondaryOfReachable > 0 && newRootNode.N <(currentRootNode.N/ 10))
+      // TODO: remove or better parameterize this.
+      if (fractionSecondaryOfReachable > 0 
+       && fractionSecondaryOfReachable < 0.10f
+       && newRootNode.N < (currentRootNode.N / 6))
       {
-        Console.WriteLine("new store forced");
-        MCTSEventSource.TestCounter1++;
+        // Secondary network is in use (for beginning of search).
+        // If very little tree reuse is available and it does not contain a lot of secondary evaluations,
+        // then restart the store so we can refresh the nodes
+        // near the new root with superior secondary evaluations.
+        // TODO: probably remove this, and/or make sure only used with phased evaluators.
+        //MCTSEventSource.TestCounter1++;
+//        Console.WriteLine(curStoreAllocated + " " + newRootNode.N
+//                        + " reachable: " + fracReachable
+//                        + " secondary frac: " + fractionSecondaryOfReachable);
+
         return Decision(Method.NewStore);
       }
-#endif
       if (dump)
       {
         float allocatedMultipleOfCurrent = (float)curStoreAllocated / curStoreUsed;
@@ -267,7 +271,7 @@ namespace Ceres.MCTS.Managers
       int totalStoreNodes = context.Tree.Store.Nodes.NumTotalNodes;
 
       // Only an approximation is needed, so just sample randomly.
-      const int NUM_SAMPLES_TARGET = 500;
+      const int NUM_SAMPLES_TARGET = 1000;
       int NUM_SAMPLES = (int)MathF.Min(NUM_SAMPLES_TARGET, totalStoreNodes / 2);
       Random rand = new Random();
 
@@ -278,6 +282,13 @@ namespace Ceres.MCTS.Managers
         for (int i = 0; i < NUM_SAMPLES; i++)
         {
           MCTSNodeStructIndex index = new MCTSNodeStructIndex(1 + rand.Next(totalStoreNodes - 2));
+          if (i == 0)
+          {
+            // First sample is always the root
+            // TODO: this can probably be removed once we have a better way of tracking if secondary evaluation is in use
+            index = new MCTSNodeStructIndex(1);
+          }
+
           ref readonly MCTSNodeStruct scanNodeRef = ref nodes[index.Index];
 
           if (scanNodeRef.IsPossiblyReachableFrom(newRootNodeRef))
