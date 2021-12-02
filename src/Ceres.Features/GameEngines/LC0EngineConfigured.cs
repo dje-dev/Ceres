@@ -18,6 +18,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics.SymbolStore;
 using System.Linq;
 using System.Text;
+using Ceres.Base.OperatingSystem;
 using Ceres.Chess;
 using Ceres.Chess.LC0.Engine;
 using Ceres.Chess.NNEvaluators.Defs;
@@ -119,7 +120,9 @@ namespace Ceres.Features.GameEngines
       }
 
       // LC0 speed generally much improved by a cache size larger than the default (200_000).
-      const int DEFAULT_CACHE_SIZE = 5_000_000;
+      const float LC0_CACHE_FRAC_MEM = 0.05f; // sufficiently small to allow multiple concurrent engines
+      const int BYTES_PER_CACHE_ITEM = 250;
+      int DEFAULT_CACHE_SIZE= (int)Math.Max(2_000_000, (HardwareManager.MemorySize  * LC0_CACHE_FRAC_MEM) / BYTES_PER_CACHE_ITEM);
       int cacheSize = overrideCacheSize ?? DEFAULT_CACHE_SIZE;
       lzOptions += $"--nncache={cacheSize} ";
 
