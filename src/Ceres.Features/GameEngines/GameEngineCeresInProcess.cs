@@ -34,6 +34,8 @@ using Ceres.MCTS.Environment;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.NodeCache;
+using Ceres.Features.UCI;
+using Ceres.Chess.LC0VerboseMoves;
 
 #endregion
 
@@ -495,6 +497,25 @@ namespace Ceres.Features.GameEngines
         }
       }
     }
+
+
+    /// <summary>
+    /// Returns list of verbose move statistics pertaining to current search root node.
+    /// </summary>
+    /// <returns></returns>
+    public List<LC0VerboseMoveStat> GetVerboseMoveStats()
+    {
+      if (Search == null)
+      {
+        throw new Exception("GetVerboseMoveStats cannot return search statistics because no search has run yet.");
+      }
+
+      using (new SearchContextExecutionBlock(Search.Manager.Context))
+      {
+        return LC0VerboseMoveStatsFromMCTSNode.BuildStats(Search.SearchRootNode);
+      }
+    }
+
 
 
     /// <summary>
