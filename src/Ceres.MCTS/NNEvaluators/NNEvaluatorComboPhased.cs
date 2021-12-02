@@ -78,9 +78,8 @@ namespace Ceres.MCTS.NNEvaluators
             MCTSIterator manager = MCTSManager.ThreadSearchContext;
             float thisSplitFraction = baseSplitFraction;
 
-            if (manager.Manager.RootNWhenSearchStarted == 0)
-            {
-              if (manager.Manager.FractionSearchCompleted < baseSplitFraction)
+            if (manager.Manager.RootNWhenSearchStarted == 0 
+             && manager.Manager.FractionSearchCompleted < baseSplitFraction)
               {
                 MCTSManager.NumSecondaryBatches++;
                 MCTSManager.NumSecondaryEvaluations += batch.NumPos;
@@ -89,40 +88,13 @@ namespace Ceres.MCTS.NNEvaluators
               }
               else
               {
+                // Note that secondary net never used when in tree reuse mode
+                // because tree is already mostly formed.
+                // However the reuse manager may be more aggressive in restarting 
+                // searches from scratch in this mode.
                 return 1;
               }
-            }
-            else
-            {
-              return 1;
-/*
-              GameMoveStat firstMove = manager.Manager.FirstMoveBySide(manager.Manager.Context.StartPosAndPriorMoves.FinalPosition.SideToMove);
-              if (firstMove != null && firstMove.FinalN > 0)
-              {
-                // trees expected to grow in size due to accumulation and faster network contributing
-                const float REUSE_MULTIPLIER = 2f; 
-                float fractionDone = (float)manager.Root.N / (REUSE_MULTIPLIER * firstMove.FinalN);
-                if (fractionDone >= thisSplitFraction)
-                {
-                  return 1;
-                }
-                else
-                {
-                  MCTSManager.NumSecondaryBatches++;
-                  MCTSManager.NumSecondaryEvaluations += batch.NumPos;
-                  return 0;
-                }
-
-              }
-              else
-              {
-                return 1;
-                //throw new Exception("Internal error: NNEvaluatorComboPhased missing prior move info");
-              }
-*/
-            }
-
-            return 1;            
+           
           });
 
         return dyn;
