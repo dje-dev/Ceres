@@ -93,7 +93,7 @@ namespace Ceres.Chess.LC0.Batches
     public bool PositionsUseSecondaryEvaluator 
     { 
       get {  return Parent.PositionsUseSecondaryEvaluator; } 
-      set { Parent.PositionsUseSecondaryEvaluator = true; } 
+      set { Parent.PositionsUseSecondaryEvaluator = value; } 
     }
 
     public IEncodedPositionBatchFlat GetSubBatch(int startIndex, int count)
