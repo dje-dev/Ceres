@@ -30,6 +30,10 @@ using Ceres.Chess.UserSettings;
 
 namespace Ceres.Commands
 {
+  /// <summary>
+  /// Implementation of "backendbench" command which tests the 
+  /// NN evaluator performance across a range of possible batch sizes.
+  /// </summary>
   public record FeatureBenchmarkBackend
   {
     NNNetSpecificationString NetworkSpec;
@@ -64,7 +68,7 @@ namespace Ceres.Commands
       Console.WriteLine($"Benchmark of neural network evaluator backend - {evaluatorDef}");
 
       NNEvaluator evaluator = evaluatorDef.ToEvaluator();
-      int maxBatchSize = Math.Min(1024, evaluator.MaxBatchSize);
+      int maxBatchSize = evaluator.MaxBatchSize;
 
       TestBatchSize(evaluator, 1);
 
