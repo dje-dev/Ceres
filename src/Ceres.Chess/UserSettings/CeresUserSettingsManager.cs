@@ -15,6 +15,7 @@
 
 using System;
 using System.IO;
+using System.Reflection;
 using System.Text.Json;
 using Ceres.Base.OperatingSystem;
 using Ceres.Chess.LC0.NNFiles;
@@ -30,21 +31,26 @@ namespace Ceres.Chess.UserSettings
   {
     /// <summary>
     /// Default name of file to which Ceres user settings are serialized (in JSON).
+    /// The file is always sourced from the same directory where the Ceres executable runs.
     /// </summary>
 
     public static string DefaultCeresConfigFileName
     {
       get
       {
+        string baseName;
         if (SoftwareManager.IsWSL2 && File.Exists(DEFAULT_SETTINGS_WSL_FN))
         {
           // Optional override for WSL
-          return DEFAULT_SETTINGS_WSL_FN;
+          baseName = DEFAULT_SETTINGS_WSL_FN;
         }
         else
         {
-          return DEFAULT_SETTINGS_FN;
+          baseName = DEFAULT_SETTINGS_FN;
         }
+
+        string directory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+        return Path.Combine(directory, baseName);
       }
 
     }
