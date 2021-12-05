@@ -20,6 +20,7 @@ using Ceres.Chess.EncodedPositions;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.Iteration;
+using Ceres.Base.OperatingSystem;
 
 #endregion
 
@@ -51,6 +52,8 @@ namespace Ceres.MCTS.Evaluators
 
     #endregion
 
+    MemoryBufferOS<MCTSNodeStruct> otherNodes;
+
 
     /// <summary>
     /// Constructor (with provided refernece to another MCTSIterator with which to share).
@@ -59,6 +62,7 @@ namespace Ceres.MCTS.Evaluators
     public LeafEvaluatorReuseOtherTree(MCTSIterator otherContext)
     {
       OtherContext = otherContext;
+      otherNodes = OtherContext.Tree.Store.Nodes.nodes;
     }
 
     protected override LeafEvaluationResult DoTryEvaluate(MCTSNode node)
@@ -73,7 +77,7 @@ namespace Ceres.MCTS.Evaluators
         // 
         using (new SearchContextExecutionBlock(OtherContext))
         {
-          ref MCTSNodeStruct otherNodeRef = ref OtherContext.Tree.Store.Nodes.nodes[nodeIndex];
+          ref MCTSNodeStruct otherNodeRef = ref otherNodes[nodeIndex];
 
           if (otherNodeRef.Terminal != Chess.GameResult.Unknown)
           {
