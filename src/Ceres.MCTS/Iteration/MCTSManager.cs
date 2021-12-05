@@ -242,7 +242,7 @@ namespace Ceres.MCTS.Iteration
         estNumNodes = Math.Max(0, estNumNodes - RootNWhenSearchStarted);
       }
       Context = new MCTSIterator(this, store, reuseOtherContextForEvaluatedNodes, reusePositionCache, reuseNodeCache, reuseTranspositionRoots,
-                                 nnEvaluators, searchParams, childSelectParams, estNumNodes);
+                                 nnEvaluators, searchParams, childSelectParams, searchLimit.MaxTreeNodes, estNumNodes);
       ThreadSearchContext = Context;
 
       TerminationManager = new MCTSFutilityPruning(this, searchLimit.SearchMoves, searchMovesTablebaseRestricted);
@@ -675,15 +675,12 @@ namespace Ceres.MCTS.Iteration
       MGMoveGen.GenerateMoves(in startPos, moves);
 
       bool shouldStopAfterOneNodeDueToOnlyOneLegalMove = false;
-      if (moveImmediateIfOnlyOneMove)
+      if (moveImmediateIfOnlyOneMove && moves.NumMovesUsed == 1)
       {
-        if (moves.NumMovesUsed == 1)
-        {
-          shouldStopAfterOneNodeDueToOnlyOneLegalMove = true;
-          manager.SearchLimit = SearchLimit.NodesPerMove(1);
-        }
+        shouldStopAfterOneNodeDueToOnlyOneLegalMove = true;
+        manager.SearchLimit = SearchLimit.NodesPerMove(1);
       }
-
+      
       MCTSNode root = manager.Root;
 
       //root.MarkImmediateDrawsByRepetition();
@@ -814,13 +811,16 @@ namespace Ceres.MCTS.Iteration
     /// <param name="maxMoves"></param>
     private static void DumpMoveStatistics(MCTSNode node, int maxMoves = int.MaxValue)
     {
-      lock (dumpToConsoleLock)
+      using (new SearchContextExecutionBlock(node.Context))
       {
-        // First quick dump at level 1
-        Console.WriteLine();
-        Console.WriteLine("VERBOSE ROOT MOVE STATISTICS");
-        node.Dump(1, 1, maxMoves: maxMoves);
-        Console.WriteLine("-----------------------------------------------------------------------------------------------------------------\r\n");
+        lock (dumpToConsoleLock)
+        {
+          // First quick dump at level 1
+          Console.WriteLine();
+          Console.WriteLine("VERBOSE ROOT MOVE STATISTICS");
+          node.Dump(1, 1, maxMoves: maxMoves);
+          Console.WriteLine("-----------------------------------------------------------------------------------------------------------------\r\n");
+        }
       }
     }
 

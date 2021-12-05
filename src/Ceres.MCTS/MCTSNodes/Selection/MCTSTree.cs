@@ -95,7 +95,7 @@ namespace Ceres.MCTS.LeafExpansion
     /// <param name="context"></param>
     /// <param name="positionCache"></param>
     public MCTSTree(MCTSNodeStore store, MCTSIterator context,
-                    int estimatedNumNodes,
+                    int? hardNodesBound, int estimatedNumNodes,
                     PositionEvalCache positionCache, IMCTSNodeCache reuseNodeCache)
     {
       if (ParamsSearch.DrawByRepetitionLookbackPlies > MAX_LENGTH_POS_HISTORY)
@@ -110,7 +110,7 @@ namespace Ceres.MCTS.LeafExpansion
 
       nodes = store.Nodes.nodes;
 
-      NodeCache = reuseNodeCache ?? MakeNodeCache(reuseNodeCache);
+      NodeCache = reuseNodeCache ?? MakeNodeCache(reuseNodeCache, hardNodesBound);
 
       // Populate EncodedPriorPositions with encoded boards
       // corresponding to possible prior moves (before the root of this search)
@@ -131,7 +131,7 @@ namespace Ceres.MCTS.LeafExpansion
     /// </summary>
     /// <param name="reuseNodeCache"></param>
     /// <returns></returns>
-    IMCTSNodeCache MakeNodeCache(IMCTSNodeCache reuseNodeCache)
+    IMCTSNodeCache MakeNodeCache(IMCTSNodeCache reuseNodeCache, int? hardNodesBound)
     {
       int configuredCacheSize = Context.ParamsSearch.Execution.NodeAnnotationCacheSize;
 
@@ -170,6 +170,11 @@ namespace Ceres.MCTS.LeafExpansion
       if (maxTreeNodes.HasValue && maxTreeNodes.Value < numCachedNodes)
       {
         numCachedNodes = maxTreeNodes.Value;
+      }
+
+      if (hardNodesBound.HasValue && hardNodesBound.Value < numCachedNodes)
+      {
+        numCachedNodes = hardNodesBound.Value;
       }
       return  new MCTSNodeCacheArrayPurgeableSet(Store, numCachedNodes,  EstimatedNumNodes);
     }

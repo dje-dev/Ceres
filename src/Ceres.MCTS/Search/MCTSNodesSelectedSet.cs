@@ -168,7 +168,11 @@ namespace Ceres.MCTS.Search
       NodesImmediateNotYetApplied = new ListBounded<MCTSNode>(maxNodes);
       NodesNN = new ListBounded<MCTSNode>(maxNodes);
       NodesTranspositionInFlightThisBatchLinked = new ListBounded<MCTSNode>(maxNodes);
-      transpositionRootsOtherBatch = new Dictionary<ulong, MCTSNode>(maxNodes);
+
+      if (IN_FLIGHT_OTHER_BATCH_LINKAGE_ENABLED)
+      {
+        transpositionRootsOtherBatch = new Dictionary<ulong, MCTSNode>(maxNodes);
+      }
 
       if (IN_FLIGHT_THIS_BATCH_LINKAGE_ENABLED)
       {

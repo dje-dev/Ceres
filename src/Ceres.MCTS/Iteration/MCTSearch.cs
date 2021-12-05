@@ -212,12 +212,9 @@ namespace Ceres.MCTS.Iteration
         throw new ArgumentNullException(nameof(searchLimit));
       }
 
-      if (searchLimit.SearchCanBeExpanded)
+      if (searchLimit.SearchCanBeExpanded && !MCTSParamsFixed.STORAGE_USE_INCREMENTAL_ALLOC)
       {
-        if (!MCTSParamsFixed.STORAGE_USE_INCREMENTAL_ALLOC)
-        {
-          throw new Exception("STORAGE_USE_INCREMENTAL_ALLOC must be true when SearchCanBeExpanded.");
-        }
+        throw new Exception("STORAGE_USE_INCREMENTAL_ALLOC must be true when SearchCanBeExpanded.");
       }
 
       if (!MCTSParamsFixed.STORAGE_USE_INCREMENTAL_ALLOC && !searchLimit.IsNodesLimit)

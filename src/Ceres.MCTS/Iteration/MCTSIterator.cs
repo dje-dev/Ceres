@@ -242,6 +242,7 @@ namespace Ceres.MCTS.Iteration
                          NNEvaluatorSet nnEvaluators,
                          ParamsSearch paramsSearch,
                          ParamsSelect paramsSelect,
+                         int? maxTreeNodes,
                          int estimatedNumSearchNodes)
     {
       Manager = manager;
@@ -282,7 +283,7 @@ namespace Ceres.MCTS.Iteration
       
       int estimatedNodesBound = store.Nodes.NumUsedNodes + estimatedNumSearchNodes;
 
-      Tree = new MCTSTree(store, this, estimatedNodesBound, positionCache, reuseNodeCache);
+      Tree = new MCTSTree(store, this, maxTreeNodes, estimatedNodesBound, positionCache, reuseNodeCache);
 
       if (ParamsSearch.Execution.TranspositionMode != TranspositionMode.None)
       {
