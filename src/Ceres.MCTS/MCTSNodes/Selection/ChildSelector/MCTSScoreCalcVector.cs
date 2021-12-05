@@ -134,16 +134,6 @@ Note: Possible optimization/inefficiency:
               parentIsRoot ? paramsSelect.UCTRootDenominatorExponent : paramsSelect.UCTNonRootDenominatorExponent);
     }
 
-    /// <summary>
-    /// Constant vector of all ones.
-    /// </summary>
-    internal static Vector256<float> vOnes;
-
-    /// <summary>
-    /// Constant vector of all zeros.
-    /// </summary>
-    internal static Vector256<float> vZeros;
-
 
     /// <summary>
     /// Worker method that coordinates looping over all the requested visits,
@@ -380,15 +370,17 @@ Note: Possible optimization/inefficiency:
       Vector256<float> vLossContrib = Avx.Multiply(vNInFlight, vVirtualLossMultiplier);
 
       // Compute U = ((p)(cpuct)(sqrt_parentN)) / (n + n_in_flight + 1)
+      // Note that Vector.Create() is used below for constants rather than referencing statics
+      // because the JIT has specific knowledge of inline Vector*.Create methods.
       Vector256<float> vCPUCTSqrtParentN = Vector256.Create(cpuctSqrtParentN);
       Vector256<float> vUNumerator = Avx.Multiply(vP, vCPUCTSqrtParentN);
-      Vector256<float> vDenominator = Avx.Add(vOnes, denominator);
+      Vector256<float> vDenominator = Avx.Add(Vector256.Create(1f), denominator);
       Vector256<float> vU = Avx.Divide(vUNumerator, vDenominator);
 
       Vector256<float> vQWithChildren = Avx.Divide(Avx.Subtract(vLossContrib, vW), vNPlusNInFlight);
       Vector256<float> vQWithoutChildren = Avx.Add(vQWhenNoChildren, vLossContrib);
 
-      Vector256<float> maskNoChildren = Avx.Compare(vNPlusNInFlight, vZeros, FloatComparisonMode.OrderedGreaterThanSignaling);
+      Vector256<float> maskNoChildren = Avx.Compare(vNPlusNInFlight, Vector256.Create(0f), FloatComparisonMode.OrderedGreaterThanSignaling);
       Vector256<float> vQ = Avx.BlendVariable(vQWithoutChildren, vQWithChildren, maskNoChildren);
 
       Vector256<float> vScore = Avx.Add(vU, vQ);
@@ -405,8 +397,6 @@ Note: Possible optimization/inefficiency:
       if (childScoresTempBuffer == null)
       {
         childScoresTempBuffer = new float[MAX_CHILDREN];
-        vOnes = Vector256.Create(1.0f);
-        vZeros = Vector256<float>.Zero;
       }
     }
 
