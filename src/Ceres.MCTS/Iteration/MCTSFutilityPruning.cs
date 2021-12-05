@@ -102,7 +102,7 @@ namespace Ceres.MCTS.Iteration
           {
             MGMove moveMG = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(Root.ChildAtIndexInfo(i).move, in Root.Annotation.PosMG, true);
             string moveSAN = MGMoveConverter.ToMove(moveMG).ToSAN(in Root.Annotation.Pos);
-            if (moveSAN.Equals(move.ToSAN(in Root.Annotation.Pos)))
+            if (MGMoveConverter.ToMove(moveMG) == move)
             {
               Context.RootMovesPruningStatus[i] = MCTSFutilityPruningStatus.NotPruned;
               found = true;
