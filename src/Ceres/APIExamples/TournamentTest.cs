@@ -36,6 +36,7 @@ using Ceres.Chess.NNEvaluators;
 using Ceres.Features;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.Environment;
+using Ceres.Features.EngineTests;
 
 #endregion
 
@@ -45,7 +46,7 @@ namespace Ceres.APIExamples
   {
     const bool POOLED = false;
 
-    static int CONCURRENCY = POOLED ? 16 : 4;
+    static int CONCURRENCY = POOLED ? 16 : 1;
     static bool RUN_DISTRIBUTED = false;
 
 
@@ -97,6 +98,8 @@ namespace Ceres.APIExamples
       //        throw new Exception("Wrong size " + Marshal.SizeOf<MCTSNodeStruct>().ToString());
       InstallCUSTOM1AsDynamicByPhase();
       PreTournamentCleanup();
+
+      RunEngineComparisons(); return;
 
       if (false)
       {
@@ -378,7 +381,7 @@ NET2 = "base_10b_800k";
       }
 
       // TODO: UCI engine should point to .NET 6 subdirectory if on .NET 6
-      TournamentDef def = new TournamentDef("TOURN", playerCeres1UCI, playerCeres93);//, playerStockfish14/*, playerCeres3,
+      TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerStockfish14);//, playerStockfish14/*, playerCeres3,
 #if NOT
       TournamentDef def = new TournamentDef("TIME_AGG");
       def.AddEngine(playerStockfish14.EngineDef, limit1 * 0.7f);
@@ -629,6 +632,29 @@ string      baseName = "4mvs_+90_+99";
 
     //      evalDef1 = EvaluatorValueOnly(NET1, NET2, 0, true);
     //      evalDef2 = EvaluatorValueOnly(NET1, NET2, 0, false);
+
+
+    public static void RunEngineComparisons()
+    {
+      Action<ParamsSearch> p = null;
+      var tests = new (string, Action<ParamsSearch>)[]
+      {
+        ("uncertainty", s=> s.EnableUncertaintyBoosting = true ),
+        ("sibling",     s=> s.EnableUseSiblingEvaluations = true ),
+        ("dtb",         s=> s.EnableDeepTranspositionBackup = true )
+      };
+
+      foreach (var a in tests)
+      {
+        //753723
+        new CompareEnginesVersusOptimal(a.Item1, 2000, "703810", SearchLimit.NodesPerMove(5100),
+          a.Item2,
+          null,
+          false
+          ).Run();
+      }
+
+    }
 
     /// <summary>
     /// Test code that installs "CUSTOM1" network type which is an NNEvaluatorDynamic

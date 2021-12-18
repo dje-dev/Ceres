@@ -800,7 +800,10 @@ namespace Ceres.MCTS.Iteration
     /// <param name="maxMoves"></param>
     public void DumpRootMoveStatistics(int maxMoves = int.MaxValue)
     {
-      DumpMoveStatistics(Root, maxMoves);
+      using (new SearchContextExecutionBlock(Context))
+      {
+        DumpMoveStatistics(Root, maxMoves);
+      }
     }
 
 
