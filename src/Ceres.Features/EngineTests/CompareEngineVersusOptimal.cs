@@ -62,7 +62,7 @@ namespace Ceres.Features.EngineTests
       Desc = desc;
       NumPositions = numPositions;
       NetworkID = networkID;
-      Limit = searchLimit;
+      Limit = searchLimit with { SearchCanBeExpanded = false };
       SearchModifier = searchModifier;
       SelectModifier = selectModifier;
       Verbose = verbose;
