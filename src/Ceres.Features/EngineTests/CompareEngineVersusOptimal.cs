@@ -30,6 +30,7 @@ using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.Params;
 using Ceres.Features.GameEngines;
+using System.IO;
 
 #endregion
 
@@ -42,12 +43,13 @@ namespace Ceres.Features.EngineTests
   /// </summary>
   public class CompareEnginesVersusOptimal
   {
+    static string PGN_PATH = CeresUserSettingsManager.Settings.DirPGN;
     readonly static string[] TEST_PGN = new string[]
     {
-     @$"Z:\chess\data\pgn\players\Korchnoi.pgn",
-     @$"Z:\chess\data\pgn\players\Karpov.pgn",
-     @$"Z:\chess\data\pgn\players\Anand.pgn",
-     @$"Z:\chess\data\pgn\players\Kasparov.pgn"
+      Path.Combine(PGN_PATH, "players", "Korchnoi.pgn"),
+      Path.Combine(PGN_PATH, "players","Karpov.pgn"),
+      Path.Combine(PGN_PATH, "players","Anand.pgn"),
+      Path.Combine(PGN_PATH, "players","Kasparov.pgn")
     };
 
 
@@ -95,21 +97,16 @@ namespace Ceres.Features.EngineTests
 
     public void Run()
     {
-      // Initialize settings by loading configuration file
-      CeresUserSettingsManager.LoadFromFile(@"\dev\ceres\artifacts\release\net5.0\ceres.json");
-
+      // Create default parameters, with smart pruning tuned off.
       ParamsSearch p1 = new ParamsSearch()
       {
         FutilityPruningStopSearchEnabled = false,
-        MoveFutilityPruningAggressiveness = 0,
       };
       ParamsSearch p2 = new ParamsSearch()
       {
         FutilityPruningStopSearchEnabled = false,
-        MoveFutilityPruningAggressiveness = 0
       };
 
-      //p2.Execution.TranspositionMode = TranspositionMode.None;
       ParamsSelect s1 = new ParamsSelect()
       {
       };
