@@ -107,14 +107,27 @@ namespace Ceres.Features.Tournaments
     /// which must be exceeded by both engines
     /// for a win to be declared by adjudication.
     /// </summary>
-    public int AdjudicationThresholdCentipawns = 350;
+    public int AdjudicateWinThresholdCentipawns = 350;
 
 
     /// <summary>
     /// Minimum number of moves for which both engines evaluations
-    /// must be more extreme than AdjudicationThresholdCentipawns.
+    /// must be more extreme than AdjudicateWinThresholdCentipawns.
     /// </summary>
-    public int AdjudicationThresholdNumMoves = 2;
+    public int AdjudicateWinThresholdNumMoves = 2;
+
+    /// <summary>
+    /// Minimum absolute absolute evaluation (in centipawns)
+    /// which must not be exceeded by both engines
+    /// for a draw to be declared by adjudication.
+    /// </summary>
+    public int AdjudicateDrawThresholdCentipawns = 20;
+
+    /// <summary>
+    /// Minimum number of moves for which both engines evaluations
+    /// must be more less extreme than AdjudicateDrawThresholdCentipawns.
+    /// </summary>
+    public int AdjudicateDrawThresholdNumMoves = 10;
 
     /// <summary>
     /// Creation time of tournament (use as a unique ID for generating PGN)
@@ -161,11 +174,12 @@ namespace Ceres.Features.Tournaments
     {
       string refEngine = String.IsNullOrEmpty(ReferenceEngineId) ? "None" : ReferenceEngineId;
       Console.WriteLine($"TOURNAMENT:  {ID}");
-      Console.WriteLine($"  Game Pairs : {NumGamePairs} ");
-      Console.WriteLine($"  Openings   : {OpeningsDescription()}");
-      Console.WriteLine($"  Ref engine : {refEngine}");
-      Console.WriteLine($"  Adjudicate : {AdjudicationThresholdNumMoves} moves at {AdjudicationThresholdCentipawns}cp"
-                     + $"{(UseTablebasesForAdjudication ? " or via tablebases" : "")}");
+      Console.WriteLine($"  Game Pairs         : {NumGamePairs} ");
+      Console.WriteLine($"  Openings           : {OpeningsDescription()}");
+      Console.WriteLine($"  Ref engine         : {refEngine}");
+      Console.WriteLine($"  Adjudicate draw    : {AdjudicateDrawThresholdNumMoves} moves < {AdjudicateDrawThresholdCentipawns}cp");
+      Console.WriteLine($"  Adjudicate win     : {AdjudicateWinThresholdNumMoves} moves at {AdjudicateWinThresholdCentipawns}cp");
+      Console.WriteLine($"  Adjudicate via TB? : {UseTablebasesForAdjudication}");
 
       for (int i = 0; i < Engines.Length; i++)
       {
@@ -246,7 +260,7 @@ namespace Ceres.Features.Tournaments
 
       return $"<TournamentDef {ID} with {NumGamePairs} game pairs from "
            + $"{openingsInfo} {(RandomizeOpenings ? " Randomized" : "")} "
-           + $" adjudicate {AdjudicationThresholdNumMoves} moves at {AdjudicationThresholdCentipawns}cp "
+           + $" adjudicate {AdjudicateWinThresholdNumMoves} moves at {AdjudicateWinThresholdCentipawns}cp "
            + $"{(UseTablebasesForAdjudication ? " or via tablebases" : "")}"
            + $"{Player1Def} vs {Player2Def}"
            + ">";

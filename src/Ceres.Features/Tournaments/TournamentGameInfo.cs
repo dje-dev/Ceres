@@ -79,7 +79,8 @@ namespace Ceres.Features.Tournaments
     Repetition,
 
     /// <summary>
-    /// Both players agree on advantage of one side of sufficient magnitude.
+    /// Both players agree on advantage of one side of sufficient magnitude,
+    /// or sustained draw-like score.
     /// </summary>
     AdjudicatedEvaluation,
 

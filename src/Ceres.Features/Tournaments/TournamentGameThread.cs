@@ -349,7 +349,7 @@ namespace Ceres.Features.Tournaments
       string player1ForfeitChar = thisResult.ShouldHaveForfeitedOnLimitsEngine1 ? "f" : " ";
       string player2ForfeitChar = thisResult.ShouldHaveForfeitedOnLimitsEngine2 ? "f" : " ";
 
-      const string TournamentGameResultReasonCodes = "CSTMERVL";
+      const string TournamentGameResultReasonCodes = "CSTMERAL";
 
       char resultReasonChar = TournamentGameResultReasonCodes[(int)thisResult.ResultReason];
 
@@ -483,7 +483,7 @@ namespace Ceres.Features.Tournaments
     {
       Def.Logger.WriteLine();
       Def.Logger.WriteLine($"Games will be incrementally written to file: {pgnFileName}");
-      Def.Logger.WriteLine("Result codes: C=checkmate S=stalemate T=tablebase M=insufficient material E=excessive moves R=draw by repetition V=evaluation agreement F=time forfeit");
+      Def.Logger.WriteLine("Result codes: C=checkmate S=stalemate T=tablebase M=insufficient material E=excessive moves R=draw by repetition A=adjudicate eval agreement F=time forfeit");
       Def.Logger.WriteLine();
 
       if (Def.CheckPlayer2Def != null)
@@ -862,6 +862,15 @@ namespace Ceres.Features.Tournaments
     }
 
 
+    static float MaxAbsLastN(List<float> vals, int count)
+    {
+      float max = float.MinValue;
+      for (int i = 1; i <= count; i++)
+        if (MathF.Abs(vals[^i]) > max)
+          max = vals[^i];
+      return max;
+    }
+
     static float MinLastN(List<float> vals, int count)
     {
       float min = float.MaxValue;
@@ -882,12 +891,14 @@ namespace Ceres.Features.Tournaments
 
     TournamentGameResult CheckResultAgreedBothEngines(List<float> scoresCPEngine1, List<float> scoresCPEngine2, TournamentGameResult result)
     {
-      int WIN_THRESHOLD = Run.Def.AdjudicationThresholdCentipawns;
-      int NUM_MOVES = Run.Def.AdjudicationThresholdNumMoves;
+      int WIN_THRESHOLD = Run.Def.AdjudicateWinThresholdCentipawns;
+      int NUM_MOVES = Run.Def.AdjudicateWinThresholdNumMoves;
 
       // Return if insufficient moves in history to make determination.
       if (scoresCPEngine2.Count < NUM_MOVES || scoresCPEngine1.Count < NUM_MOVES)
+      {
         return result;
+      }
 
       if (MinLastN(scoresCPEngine2, NUM_MOVES) > WIN_THRESHOLD && MaxLastN(scoresCPEngine1, NUM_MOVES) < -WIN_THRESHOLD)
       {
@@ -897,10 +908,15 @@ namespace Ceres.Features.Tournaments
       {
         return TournamentGameResult.Win;
       }
-      else
+      else if (scoresCPEngine1.Count > Run.Def.AdjudicateDrawThresholdNumMoves
+            && scoresCPEngine2.Count > Run.Def.AdjudicateDrawThresholdNumMoves
+            && MaxAbsLastN(scoresCPEngine1, Run.Def.AdjudicateDrawThresholdNumMoves) < Run.Def.AdjudicateDrawThresholdCentipawns
+            && MaxAbsLastN(scoresCPEngine2, Run.Def.AdjudicateDrawThresholdNumMoves) < Run.Def.AdjudicateDrawThresholdCentipawns)
       {
-        return result;
+        return TournamentGameResult.Draw;
       }
+
+      return result;
     }
 
   }
