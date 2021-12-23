@@ -21,18 +21,18 @@ using Ceres.Chess.LC0.Positions;
 
 #endregion
 
-namespace Ceres.Chess.LC0VerboseMoves
+namespace Ceres.Chess.SearchResultVerboseMoveInfo
 {
   /// <summary>
   /// Captures the parsed output corresponding to one of the moves 
-  /// from the LC0 verobse move statistics output.
+  /// from the verobse move statistics output.
   /// </summary>
-  public class LC0VerboseMoveStat
+  public class VerboseMoveStat
   {
     /// <summary>
     /// parent
     /// </summary>
-    public LC0VerboseMoveStats Parent;
+    public VerboseMoveStats Parent;
 
     /// <summary>
     /// If statistics were successfully read
@@ -102,7 +102,7 @@ namespace Ceres.Chess.LC0VerboseMoves
     /// <returns></returns>
     public override string ToString()
     {
-      return $"<LC0VerboseMoveStats  { MoveString } Visits={VisitCount} V = {V.LogisticValue} P={P} Q={Q.LogisticValue}, U={U} [{MoveCode}]";
+      return $"<VerboseMoveStats  { MoveString } Visits={VisitCount} V = {V.LogisticValue} P={P} Q={Q.LogisticValue}, U={U} [{MoveCode}]";
     }
 
 
@@ -111,7 +111,7 @@ namespace Ceres.Chess.LC0VerboseMoves
     /// </summary>
     /// <param name="parent"></param>
     /// <param name="line"></param>
-    public LC0VerboseMoveStat(LC0VerboseMoveStats parent, string line)
+    public VerboseMoveStat(VerboseMoveStats parent, string line)
     {
       Parent = parent;
 

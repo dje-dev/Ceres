@@ -18,7 +18,7 @@ using System.Collections.Generic;
 
 using Ceres.Chess.ExternalPrograms.UCI;
 using Ceres.Chess.LC0.Positions;
-using Ceres.Chess.LC0VerboseMoves;
+using Ceres.Chess.SearchResultVerboseMoveInfo;
 using Ceres.Chess.Positions;
 using Chess.Ceres.NNEvaluators;
 
@@ -74,7 +74,7 @@ namespace Ceres.Chess.LC0.Engine
     /// <returns></returns>
     public UCISearchInfo AnalyzePositionFromFEN(string fenAndMovesString, SearchLimit searchLimit)
     {
-      List<LC0VerboseMoveStat> moves = new List<LC0VerboseMoveStat>();
+      List<VerboseMoveStat> moves = new List<VerboseMoveStat>();
       Runner.EvalPositionPrepare();
 
       UCISearchInfo searchInfo;
@@ -98,13 +98,13 @@ namespace Ceres.Chess.LC0.Engine
       // no more, we now assume  win_percentages is requested     LeelaVerboseMoveStats ret = new LeelaVerboseMoveStats(positionEnd, searchInfo.BestMove, elapsed, searchInfo.Nodes, LZPositionEvalLogistic.CentipawnToLogistic2018(searchInfo.Score));
 
       PositionWithHistory pwh = PositionWithHistory.FromFENAndMovesUCI(fenAndMovesString);
-      LC0VerboseMoveStats ret = new (pwh.FinalPosition, searchInfo.BestMove, elapsed, searchInfo.Nodes, searchInfo.ScoreCentipawns, searchInfo);
+      VerboseMoveStats ret = new (pwh.FinalPosition, searchInfo.BestMove, elapsed, searchInfo.Nodes, searchInfo.ScoreCentipawns, searchInfo);
 
       foreach (string info in searchInfo.Infos)
       {
         if (info.Contains("P:"))
         {
-          moves.Add(new LC0VerboseMoveStat(ret, info));
+          moves.Add(new VerboseMoveStat(ret, info));
         }
       }
 
@@ -120,7 +120,7 @@ namespace Ceres.Chess.LC0.Engine
       return uciInfo;
     }
 
-    public LC0VerboseMoveStats LastAnalyzedPositionStats;
+    public VerboseMoveStats LastAnalyzedPositionStats;
 
 
     /// <summary>
@@ -129,9 +129,9 @@ namespace Ceres.Chess.LC0.Engine
     /// <param name="fenAndMovesStr"></param>
     /// <param name="searchLimit"></param>
     /// <returns></returns>
-    public LC0VerboseMoveStats AnalyzePositionFromFENAndMoves(string fenAndMovesStr, SearchLimit searchLimit)
+    public VerboseMoveStats AnalyzePositionFromFENAndMoves(string fenAndMovesStr, SearchLimit searchLimit)
     {
-      List<LC0VerboseMoveStat> moves = new List<LC0VerboseMoveStat>();
+      List<VerboseMoveStat> moves = new List<VerboseMoveStat>();
       PositionWithHistory pwh = PositionWithHistory.FromFENAndMovesUCI(fenAndMovesStr);
 
       UCISearchInfo searchInfo;
@@ -170,14 +170,14 @@ namespace Ceres.Chess.LC0.Engine
       }
 
       double elapsed = 0;//engine.EngineProcess.TotalProcessorTime.TotalSeconds - startTime;
-      LC0VerboseMoveStats ret = new(pwh.FinalPosition, searchInfo.BestMove, elapsed, searchInfo.Nodes, searchInfo.ScoreCentipawns, searchInfo);
+      VerboseMoveStats ret = new(pwh.FinalPosition, searchInfo.BestMove, elapsed, searchInfo.Nodes, searchInfo.ScoreCentipawns, searchInfo);
 
       searchInfo.Infos.Reverse();
       foreach (string info in searchInfo.Infos)
       {
         if (info.Contains("P:"))
         {
-          moves.Add(new LC0VerboseMoveStat(ret, info));
+          moves.Add(new VerboseMoveStat(ret, info));
         }
       }
 

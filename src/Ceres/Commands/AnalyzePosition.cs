@@ -66,7 +66,7 @@ namespace Ceres.Commands
         () => ceresEngine.Warmup(),
         () => comparisonEngine?.Warmup());
 
-      ceresEngine.VerboseMoveStats = verbose;
+      ceresEngine.OutputVerboseMoveStats = verbose;
       bool ceresDone = false;
 
       UCISearchInfo lastCeresInfo = null;

@@ -17,7 +17,7 @@ using System;
 using System.Collections.Generic;
 
 using Ceres.Chess.LC0.Positions;
-using Ceres.Chess.LC0VerboseMoves;
+using Ceres.Chess.SearchResultVerboseMoveInfo;
 
 #endregion
 
@@ -173,8 +173,8 @@ namespace Ceres.Chess.ExternalPrograms.UCI
       {
         // TODO: make more elegant via subclassing as noted above
         // TODO: consider switching to the LC0 2019 variant formula
-        return ExtraInfo is LC0VerboseMoveStats
-            ? ((LC0VerboseMoveStats)ExtraInfo).ScoreCentipawns
+        return ExtraInfo is VerboseMoveStats
+            ? ((VerboseMoveStats)ExtraInfo).ScoreCentipawns
             : EncodedEvalLogistic.CentipawnToLogistic(ScoreCentipawns);
       }
     }
@@ -186,9 +186,9 @@ namespace Ceres.Chess.ExternalPrograms.UCI
     public void Dump()
     {
       // TODO: make more elegant via subclassing as noted above
-      if (ExtraInfo is LC0VerboseMoveStats)
+      if (ExtraInfo is VerboseMoveStats)
       {
-        ((LC0VerboseMoveStats)ExtraInfo).Dump();
+        ((VerboseMoveStats)ExtraInfo).Dump();
       }
     }
   }

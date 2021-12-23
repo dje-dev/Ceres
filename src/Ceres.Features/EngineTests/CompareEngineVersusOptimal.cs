@@ -22,6 +22,7 @@ using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
 using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.Positions;
+using Ceres.Chess.SearchResultVerboseMoveInfo;
 using Ceres.Chess.UserSettings;
 using Ceres.Features.GameEngines;
 using Ceres.MCTS.Iteration;
@@ -223,11 +224,13 @@ namespace Ceres.Features.EngineTests
       {
         if (playerMode == PlayerMode.Ceres)
         {
-          return new GameEngineCeresInProcess("Ceres", evaluatorDef, null, paramsSearch, paramsSelect);
+          GameEngineCeresInProcess ge = new ("Ceres", evaluatorDef, null, paramsSearch, paramsSelect);
+          ge.GatherVerboseMoveStats = true;
+          return ge;
         }
         else if (playerMode == PlayerMode.LC0)
         {
-          return new GameEngineLC0("LC0", networkID, DISABLE_PRUNING, false, paramsSearch, paramsSelect, evaluatorDef);
+          return new GameEngineLC0("LC0", networkID, DISABLE_PRUNING, false, paramsSearch, paramsSelect, evaluatorDef, verbose:true);
         }
         else if (playerMode == PlayerMode.Stockfish14_1)
         {
@@ -245,17 +248,17 @@ namespace Ceres.Features.EngineTests
 
       GameEngine engine1 = null;
       GameEngine engine2 = null;
-      GameEngineCeresInProcess engineOptimal = null;
+      GameEngine engineOptimal = null;
 
-      if (PlayerArbiter != PlayerMode.Ceres)
+      if (PlayerArbiter != PlayerMode.Ceres && PlayerArbiter != PlayerMode.LC0)
       {
-        throw new NotImplementedException("Currently arbiter engine must be Ceres");
+        throw new NotImplementedException("Currently arbiter engine must be Ceres or LC0");
       };
 
       Parallel.Invoke(
         () => engine1 = MakeEngine(Player1, NetworkID1, evaluatorDef1, p1, s1),
         () => engine2 = MakeEngine(Player2, NetworkID2, evaluatorDef2, p2, s2),
-        () => engineOptimal = (GameEngineCeresInProcess)MakeEngine(PlayerArbiter, NetworkArbiterID, evaluatorDefOptimal, pOptimal, sOptimal));
+        () => engineOptimal = MakeEngine(PlayerArbiter, NetworkArbiterID, evaluatorDefOptimal, pOptimal, sOptimal));
 
       int threadCount = 0;
       foreach (Game game in Game.FromPGN(PGNFileName))
@@ -283,7 +286,8 @@ namespace Ceres.Features.EngineTests
           seenPositions[posHash] = true;
 
           count++;
-          if (pos.FinalPosition.CalcTerminalStatus() != GameResult.Unknown) continue;
+          if (pos.FinalPosition.CalcTerminalStatus() != GameResult.Unknown
+            || pos.FinalPosition.CheckDrawCanBeClaimed == Position.PositionDrawStatus.DrawCanBeClaimed) continue;
 
           countScored++;
           engine1.ResetGame();
@@ -315,18 +319,50 @@ namespace Ceres.Features.EngineTests
 
           // Run a long search
           engineOptimal.ResetGame();
-          GameEngineSearchResultCeres searchBaselineLong = engineOptimal.SearchCeres(pos, Limit * LONG_SEARCH_MULTIPLIER);
-          if (searchBaselineLong.FinalN <= 1) continue;
-
-          // Determine how much better engine1 was versus engine2 according to the long search
-          float scoreBestMove1;
-          float scoreBestMove2;
-          using (new SearchContextExecutionBlock(searchBaselineLong.Search.Manager.Context))
+          GameEngineSearchResult searchBaselineLong = engineOptimal.Search(pos, Limit * LONG_SEARCH_MULTIPLIER);
+          if (searchBaselineLong.FinalN <= 1)
           {
-            var bestMoveFrom1 = searchBaselineLong.Search.SearchRootNode.FollowMovesToNode(new MGMove[] { move1 });
-            var bestMoveFrom2 = searchBaselineLong.Search.SearchRootNode.FollowMovesToNode(new MGMove[] { move2 });
-            scoreBestMove1 = (float)-bestMoveFrom1.Q;
-            scoreBestMove2 = (float)-bestMoveFrom2.Q;
+            continue;
+          }
+
+          VerboseMoveStat FindMove(MGMove moveMG)
+          {
+            Move move = MGMoveConverter.ToMove(moveMG);
+            foreach (VerboseMoveStat ve in searchBaselineLong.VerboseMoveStats)
+            {
+              if (ve.MoveString != "node" && ve.Move == move)
+              {
+                return ve;
+              }
+            }
+            return default;
+          }
+
+          float scoreBestMove1 = default;
+          float scoreBestMove2 = default;
+          if (searchBaselineLong is GameEngineSearchResultCeres)
+          {
+            GameEngineSearchResultCeres searchBaselineLongCeres = searchBaselineLong as GameEngineSearchResultCeres;
+
+            // Determine how much better engine1 was versus engine2 according to the long search
+            using (new SearchContextExecutionBlock(searchBaselineLongCeres.Search.Manager.Context))
+            {
+              var bestMoveFrom1 = searchBaselineLongCeres.Search.SearchRootNode.FollowMovesToNode(new MGMove[] { move1 });
+              var bestMoveFrom2 = searchBaselineLongCeres.Search.SearchRootNode.FollowMovesToNode(new MGMove[] { move2 });
+              scoreBestMove1 = (float)-bestMoveFrom1.Q;
+              scoreBestMove2 = (float)-bestMoveFrom2.Q;
+            }
+          }
+          else
+          {
+            VerboseMoveStat statMove1 = FindMove(move1);
+            VerboseMoveStat statMove2 = FindMove(move2);
+            if (statMove1 == default || statMove2 == default)
+            {
+              continue;
+            }
+            scoreBestMove1 = (float)statMove1.Q.LogisticValue;
+            scoreBestMove2 = (float)statMove2.Q.LogisticValue;
           }
 
           float[] overlaps = new float[7];

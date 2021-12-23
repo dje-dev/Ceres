@@ -35,7 +35,7 @@ using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.NodeCache;
 using Ceres.Features.UCI;
-using Ceres.Chess.LC0VerboseMoves;
+using Ceres.Chess.SearchResultVerboseMoveInfo;
 
 #endregion
 
@@ -89,10 +89,15 @@ namespace Ceres.Features.GameEngines
     public string SearchLogFileName;
 
     /// <summary>
+    /// If the VerboseMoveStats should be populated at end of each search.
+    /// </summary>
+    public bool GatherVerboseMoveStats;
+
+    /// <summary>
     /// If detailed information relating to search status of
     /// moves at root should be output at end of a search.
     /// </summary>
-    public bool VerboseMoveStats;
+    public bool OutputVerboseMoveStats;
 
     /// <summary>
     /// Optional descriptive information for current game.
@@ -169,7 +174,7 @@ namespace Ceres.Features.GameEngines
       ChildSelectParams = childSelectParams;
       SearchLogFileName = logFileName;
       MoveImmediateIfOnlyOneMove = moveImmediateIfOnlyOneMove;
-      VerboseMoveStats = CeresUserSettingsManager.Settings.VerboseMoveStats;
+      OutputVerboseMoveStats = CeresUserSettingsManager.Settings.VerboseMoveStats;
 
       if (logFileName == null && !string.IsNullOrEmpty(CeresUserSettingsManager.Settings.SearchLogFile))
       {
@@ -292,10 +297,11 @@ namespace Ceres.Features.GameEngines
 
       int scoreCeresCP;
       BestMoveInfo bestMoveInfo = null;
+      int N;
       using (new SearchContextExecutionBlock(searchResult.Manager.Context))
       {
         bestMoveInfo = searchResult.Manager.Root.BestMoveInfo(false);
-
+        N = searchResult.SearchRootNode.N;
 #if NOT
         bool wouldBeDrawByRepetition = PositionRepetitionCalc.DrawByRepetitionWouldBeClaimable(curPositionAndMoves.FinalPosition, bestMoveInfo.BestMove, curPositionAndMoves.GetPositions());
         if (wouldBeDrawByRepetition)
@@ -308,8 +314,6 @@ namespace Ceres.Features.GameEngines
 
 
       MGMove bestMoveMG = searchResult.BestMove;
-
-      int N = searchResult.SearchRootNode.N;
 
       // Save (do not dispose) this search in case we can reuse it next time.
       LastSearch = searchResult;
@@ -348,7 +352,12 @@ namespace Ceres.Features.GameEngines
           }
         }
 
-        if (VerboseMoveStats)
+        if (GatherVerboseMoveStats)
+        {
+          result.VerboseMoveStats = GetVerboseMoveStats();
+        }
+
+        if (OutputVerboseMoveStats)
         {
           result.Search.Manager.Context.Root.Dump(1, 1);
         }
@@ -503,7 +512,7 @@ namespace Ceres.Features.GameEngines
     /// Returns list of verbose move statistics pertaining to current search root node.
     /// </summary>
     /// <returns></returns>
-    public List<LC0VerboseMoveStat> GetVerboseMoveStats()
+    public List<VerboseMoveStat> GetVerboseMoveStats()
     {
       if (Search == null)
       {
@@ -512,7 +521,7 @@ namespace Ceres.Features.GameEngines
 
       using (new SearchContextExecutionBlock(Search.Manager.Context))
       {
-        return LC0VerboseMoveStatsFromMCTSNode.BuildStats(Search.SearchRootNode);
+        return VerboseMoveStatsFromMCTSNode.BuildStats(Search.SearchRootNode);
       }
     }
 

@@ -15,7 +15,9 @@
 
 using Ceres.Base;
 using Ceres.Base.Benchmarking;
+using Ceres.Chess.SearchResultVerboseMoveInfo;
 using System;
+using System.Collections.Generic;
 
 #endregion
 
@@ -83,11 +85,17 @@ namespace Ceres.Chess.GameEngines
     /// </summary>
     public TimingStats TimingStats;
 
+    /// <summary>
+    /// Optional full detailed verbose move statistics.
+    /// </summary>
+    public List<VerboseMoveStat> VerboseMoveStats;
+
     #endregion
 
     public GameEngineSearchResult(string moveString, float scoreQ, float scoreCentipawns, float mAvg, 
                                   SearchLimit searchLimit, TimingStats timingStats, 
-                                  int startingN, int finalN, int nps, int depth)
+                                  int startingN, int finalN, int nps, int depth,
+                                  List<VerboseMoveStat> verboseMoveStats = null)
     {
       MoveString = moveString ?? throw new ArgumentNullException(nameof(moveString));
       ScoreQ = scoreQ;
@@ -99,7 +107,9 @@ namespace Ceres.Chess.GameEngines
       FinalN = finalN;
       NPS = nps;
       Depth = depth;
+      VerboseMoveStats = verboseMoveStats;
     }
+
 
     public override string ToString()
     {

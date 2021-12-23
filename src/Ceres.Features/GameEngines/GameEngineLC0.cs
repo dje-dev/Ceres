@@ -20,7 +20,7 @@ using Ceres.Chess.NNEvaluators.Defs;
 using System.Collections.Generic;
 using Ceres.Chess.LC0.Positions;
 using Ceres.Chess.LC0.Engine;
-using Ceres.Chess.LC0VerboseMoves;
+using Ceres.Chess.SearchResultVerboseMoveInfo;
 using Ceres.Chess.NNFiles;
 using Ceres.Chess.ExternalPrograms.UCI;
 using Ceres.Chess.GameEngines;
@@ -155,7 +155,7 @@ namespace Ceres.Features.GameEngines
       if (SetupAction != null) SetupAction();
 
       // Run the analysis
-      LC0VerboseMoveStats lc0Analysis = LC0Engine.AnalyzePositionFromFENAndMoves(curPositionAndMoves.FENAndMovesString, searchLimit);
+      VerboseMoveStats lc0Analysis = LC0Engine.AnalyzePositionFromFENAndMoves(curPositionAndMoves.FENAndMovesString, searchLimit);
 
       if (verbose)
       {
@@ -167,7 +167,8 @@ namespace Ceres.Features.GameEngines
       float lc0Q = EncodedEvalLogistic.CentipawnToLogistic(boundedCP);
       return new GameEngineSearchResult(lc0Analysis.BestMove, lc0Q, boundedCP, float.NaN,
                                         searchLimit, default, 0, (int)lc0Analysis.NumNodes,
-                                        lc0Analysis.UCIInfo.NPS, (int)lc0Analysis.UCIInfo.Depth);
+                                        lc0Analysis.UCIInfo.NPS, (int)lc0Analysis.UCIInfo.Depth,
+                                        lc0Analysis.Moves);
     }
 
     /// <summary>

@@ -20,16 +20,14 @@ using System.Linq;
 
 #endregion
 
-namespace Ceres.Chess.LC0VerboseMoves
+namespace Ceres.Chess.SearchResultVerboseMoveInfo
 {
-  // a aside: Leela match statistics
-  // https://script.google.com/macros/s/AKfycbxxV3fudM352z5p_kTeAHLauO3KdnUpjSZffICfWQ/exec
-
   /// <summary>
-  /// Captures the parsed output from the LC0 move summary which is output
-  /// after a search when the verbose-move-stats flag is enabled.
+  /// Detailed information related to a search result from an MCTS engine
+  /// including detail on top-level move choices and their evaluation
+  /// (such as output by LC0  with verbose-move-stats enabled).
   /// </summary>
-  public class LC0VerboseMoveStats
+  public class VerboseMoveStats
   {
     /// <summary>
     /// Position at the root of the search.
@@ -64,7 +62,7 @@ namespace Ceres.Chess.LC0VerboseMoves
     /// <summary>
     /// List of all moves in position with detailed information.
     /// </summary>
-    public List<LC0VerboseMoveStat> Moves;
+    public List<VerboseMoveStat> Moves;
 
 
     /// <summary>
@@ -76,9 +74,9 @@ namespace Ceres.Chess.LC0VerboseMoves
     /// <param name="numNodes"></param>
     /// <param name="scoreCentipawns"></param>
     /// <param name="uciSearchInfo"></param>
-    public LC0VerboseMoveStats(Position position, string bestMove, 
-                               double processorTime, ulong numNodes, float scoreCentipawns, 
-                               UCISearchInfo uciSearchInfo)
+    public VerboseMoveStats(Position position, string bestMove, 
+                           double processorTime, ulong numNodes, float scoreCentipawns, 
+                           UCISearchInfo uciSearchInfo)
     {
       Position = position;
       ElapsedTime = processorTime;
@@ -93,7 +91,7 @@ namespace Ceres.Chess.LC0VerboseMoves
     /// Sets the moves array.
     /// </summary>
     /// <param name="moves"></param>
-    internal void SetMoves(List<LC0VerboseMoveStat> moves)
+    internal void SetMoves(List<VerboseMoveStat> moves)
     {
       Moves = moves.OrderBy(o => -o.VisitCount).ToList();
     }
@@ -102,19 +100,19 @@ namespace Ceres.Chess.LC0VerboseMoves
     /// <summary>
     /// Returns the move having the largest N.
     /// </summary>
-    public LC0VerboseMoveStat MaxNMove => MaxMoveByMetric(m => m.VisitCount);
+    public VerboseMoveStat MaxNMove => MaxMoveByMetric(m => m.VisitCount);
 
 
     /// <summary>
     /// Returns the move having the largest P (policy probability).
     /// </summary>
-    public LC0VerboseMoveStat MaxPMove => MaxMoveByMetric(m => m.P);
+    public VerboseMoveStat MaxPMove => MaxMoveByMetric(m => m.P);
 
 
     /// <summary>
     /// Returns the mvoe having the largest Q.
     /// </summary>
-    public LC0VerboseMoveStat MaxQMove => MaxMoveByMetric(m => m.Q.LogisticValue);
+    public VerboseMoveStat MaxQMove => MaxMoveByMetric(m => m.Q.LogisticValue);
 
 
     /// <summary>
@@ -122,9 +120,9 @@ namespace Ceres.Chess.LC0VerboseMoves
     /// </summary>
     /// <param name="move"></param>
     /// <returns></returns>
-    public LC0VerboseMoveStat Move(Move move)
+    public VerboseMoveStat Move(Move move)
     {
-      foreach (LC0VerboseMoveStat stat in Moves)
+      foreach (VerboseMoveStat stat in Moves)
       {
         if (stat.Move == move)
         {
@@ -141,9 +139,9 @@ namespace Ceres.Chess.LC0VerboseMoves
     /// </summary>
     /// <param name="moveCode"></param>
     /// <returns></returns>
-    public LC0VerboseMoveStat MoveByCode(int moveCode)
+    public VerboseMoveStat MoveByCode(int moveCode)
     {
-      foreach (LC0VerboseMoveStat stat in Moves)
+      foreach (VerboseMoveStat stat in Moves)
       {
         if (stat.MoveCode == moveCode)
         {
@@ -160,11 +158,11 @@ namespace Ceres.Chess.LC0VerboseMoves
     /// </summary>
     /// <param name="metric"></param>
     /// <returns></returns>
-    LC0VerboseMoveStat MaxMoveByMetric(Func<LC0VerboseMoveStat, double> metric)
+    VerboseMoveStat MaxMoveByMetric(Func<VerboseMoveStat, double> metric)
     {
       double best = int.MinValue;
-      LC0VerboseMoveStat bestStat = default;
-      foreach (LC0VerboseMoveStat stat in Moves)
+      VerboseMoveStat bestStat = default;
+      foreach (VerboseMoveStat stat in Moves)
       {
         if (metric(stat) > best)
         {
@@ -173,7 +171,7 @@ namespace Ceres.Chess.LC0VerboseMoves
         }
       }
 
-      return bestStat == default(LC0VerboseMoveStat) ? throw new Exception("Internal error ,no moves?") : bestStat;
+      return bestStat == default(VerboseMoveStat) ? throw new Exception("Internal error ,no moves?") : bestStat;
     }
 
 
@@ -182,9 +180,9 @@ namespace Ceres.Chess.LC0VerboseMoves
     /// </summary>
     /// <param name="moveStr"></param>
     /// <returns></returns>
-    public LC0VerboseMoveStat MoveByString(string moveStr)
+    public VerboseMoveStat MoveByString(string moveStr)
     {
-      foreach (LC0VerboseMoveStat stat in Moves)
+      foreach (VerboseMoveStat stat in Moves)
       {
         if (stat.MoveString == moveStr)
         {
@@ -199,11 +197,11 @@ namespace Ceres.Chess.LC0VerboseMoves
     /// </summary>
     /// <param name="move"></param>
     /// <returns></returns>
-    public LC0VerboseMoveStat this[string move]
+    public VerboseMoveStat this[string move]
     {
       get
       {
-        foreach (LC0VerboseMoveStat stat in Moves)
+        foreach (VerboseMoveStat stat in Moves)
         {
           if (stat.MoveString == move)
           {
@@ -221,7 +219,7 @@ namespace Ceres.Chess.LC0VerboseMoves
     /// </summary>
     public void Dump()
     {
-      foreach (LC0VerboseMoveStat mi in Moves)
+      foreach (VerboseMoveStat mi in Moves)
       {
         Console.WriteLine(mi.ToString());
       }

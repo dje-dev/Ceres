@@ -24,6 +24,9 @@ using Ceres.Base.OperatingSystem;
 using Ceres.Base.OperatingSystem.NVML;
 
 using Ceres.Chess;
+using Ceres.Base.DataTypes;
+using Ceres.Chess.EncodedPositions.Basic;
+using Ceres.Chess.NNEvaluators.Specifications;
 using Ceres.Chess.Positions;
 using Ceres.Chess.GameEngines;
 using Ceres.Chess.MoveGen;
@@ -35,14 +38,11 @@ using Ceres.MCTS.Params;
 using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.MTCSNodes.Analysis;
 using Ceres.MCTS.Utils;
+using Ceres.MCTS.MTCSNodes;
 
 using Ceres.Features.GameEngines;
-using Ceres.MCTS.MTCSNodes;
-using Ceres.Chess.LC0VerboseMoves;
-using Ceres.Base.DataTypes;
-using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Features.Visualization.TreePlot;
-using Ceres.Chess.NNEvaluators.Specifications;
+using Ceres.Chess.SearchResultVerboseMoveInfo;
 
 #endregion
 
@@ -540,7 +540,7 @@ namespace Ceres.Features.UCI
 
         // Disable verbose move stats from the engine since 
         // this class manages the possibly dumping of verbose move stats itself.
-        CeresEngine.VerboseMoveStats = false;
+        CeresEngine.OutputVerboseMoveStats = false;
 
         // Initialize engine
         CeresEngine.Warmup();
@@ -842,7 +842,7 @@ namespace Ceres.Features.UCI
         MCTSNode searchRootNode = CeresEngine.Search.SearchRootNode;
         if (ShouldUseLC0FormatForVerboseMoves)
         {
-          foreach (LC0VerboseMoveStat stat in LC0VerboseMoveStatsFromMCTSNode.BuildStats(searchRootNode))
+          foreach (VerboseMoveStat stat in VerboseMoveStatsFromMCTSNode.BuildStats(searchRootNode))
           {
             UCIWriteLine(stat.LC0String);
           }

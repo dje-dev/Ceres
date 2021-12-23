@@ -236,7 +236,7 @@ namespace Ceres.Features.BatchAnalysis
     {
       GameEngineCeresInProcess ges = new("BatchAnalyzer", evaluatorDef, null, 
                                          new ParamsSearch() { FutilityPruningStopSearchEnabled = false}, moveImmediateIfOnlyOneMove:false);
-      ges.VerboseMoveStats = false;
+      ges.OutputVerboseMoveStats = false;
       Console.WriteLine("analyzer started " + ges);
 
 
