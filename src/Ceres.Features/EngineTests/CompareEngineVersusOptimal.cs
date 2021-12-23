@@ -13,6 +13,11 @@
 
 #region Using directives
 
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.IO;
+using System.Threading.Tasks;
 using Ceres.Base.Benchmarking;
 using Ceres.Base.DataType.Trees;
 using Ceres.Base.Math;
@@ -24,16 +29,11 @@ using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.Positions;
 using Ceres.Chess.SearchResultVerboseMoveInfo;
 using Ceres.Chess.UserSettings;
-using Ceres.Features.GameEngines;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.Params;
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.IO;
-using System.Threading.Tasks;
+using Ceres.Features.GameEngines;
 
 #endregion
 
@@ -53,9 +53,38 @@ namespace Ceres.Features.EngineTests
       Stockfish14_1
     };
 
+    /// <summary>
+    /// If smart pruning should be disabled on engines
+    /// so that searches by number of nodes are truly equivalent.
+    /// </summary>
     const bool DISABLE_PRUNING = true;
-    const int LONG_SEARCH_MULTIPLIER = 7;
 
+    /// <summary>
+    /// The multiplier applied to the search limit
+    /// as used by the arbiter engine.
+    /// </summary>
+    const int LONG_SEARCH_MULTIPLIER = 10;
+
+    /// <summary>
+    /// Constructor.
+    /// </summary>
+    /// <param name="desc"></param>
+    /// <param name="pgnFileName"></param>
+    /// <param name="numPositions"></param>
+    /// <param name="player1"></param>
+    /// <param name="networkID1"></param>
+    /// <param name="player2"></param>
+    /// <param name="networkID2"></param>
+    /// <param name="playerArbiter"></param>
+    /// <param name="networkArbiterID"></param>
+    /// <param name="searchLimit"></param>
+    /// <param name="gpuIDs"></param>
+    /// <param name="searchModifier1"></param>
+    /// <param name="selectModifier1"></param>
+    /// <param name="searchModifier2"></param>
+    /// <param name="selectModifier2"></param>
+    /// <param name="verbose"></param>
+    /// <param name="engine1LimitMultiplier"></param>
     public CompareEnginesVersusOptimal(string desc, string pgnFileName, int numPositions,
                                        PlayerMode player1, string networkID1,
                                        PlayerMode player2, string networkID2,
@@ -105,7 +134,6 @@ namespace Ceres.Features.EngineTests
 
     List<float> qDiffs = new();
 
-    int count = 0;
     int countMuchBetter = 0;
     int countMuchWorse = 0;
     int countScored = 0;
@@ -119,43 +147,12 @@ namespace Ceres.Features.EngineTests
     float timeAccumulatorEngine1 = 0;
     float timeAccumulatorEngine2 = 0;
 
-    public void Summarize()
-    {
-      float avg = StatUtils.Average(qDiffs.ToArray());
-      float sd = (float)StatUtils.StdDev(qDiffs.ToArray()) / MathF.Sqrt(qDiffs.Count);
-      float z = avg / sd;
-
-      Console.WriteLine($"CompareEngine done in {timingStats.ElapsedTimeSecs,7:F2}seconds");
-      Console.WriteLine($"{Desc,20} {NumPositions,6:N0} {ShortID1,12}  {ShortID2,12} {ShortIDArbiter,12}  {Limit.ToString(),10}  "
-                      + $"{timeAccumulatorEngine1 / countScored,6:F3}s  {timeAccumulatorEngine2 / countScored,6:F3}s  "
-                      + $" {100.0f * (float)countDifferentMoves / countScored,6:F2}% diff  {avg,6:F3} +/-{sd,5:F3} z= {z,5:F2}  "
-                      + $" {100.0f * accOverlapDepth6 / countScored,6:F2}%  {countMuchBetter,6:N0} {countMuchWorse,6:N0}");
-    }
-
     private string ShortID1 => Player1.ToString()[0] + "_" + NetworkID1;
     private string ShortID2 => Player2.ToString()[0] + "_" + NetworkID2;
     private string ShortIDArbiter => PlayerArbiter.ToString()[0] + "_" + NetworkArbiterID;
 
 
-    void WriteIntroBanner()
-    {
-      Console.WriteLine();
-      Console.WriteLine("Engine Comparision Tool - Compare two engines versus optimal engine with deeper search.");
-      Console.WriteLine($"  Description     { Desc}");
-      Console.WriteLine($"  Engine 1        { Player1 } { NetworkID1}");
-      Console.WriteLine($"  Engine 2        { Player2 } { NetworkID2}");
-      Console.WriteLine($"  Arbiter Engine  { PlayerArbiter } { NetworkArbiterID} ({LONG_SEARCH_MULTIPLIER}x)");
-      Console.WriteLine($"  Num Positions   { NumPositions}");
-      Console.WriteLine($"  Limit           { Limit}");
-
-      Console.WriteLine();
-    }
-
-    ParamsSearch p1;
-    ParamsSearch p2;
     ParamsSearch pArbiter;
-    ParamsSelect s1;
-    ParamsSelect s2;
     ParamsSelect sArbiter;
     TimingStats timingStats = new TimingStats();
 
@@ -175,11 +172,13 @@ namespace Ceres.Features.EngineTests
       // Create default parameters, with smart pruning tuned off.
       ParamsSearch p1 = new ParamsSearch()
       {
-        FutilityPruningStopSearchEnabled = !DISABLE_PRUNING
+        FutilityPruningStopSearchEnabled = !DISABLE_PRUNING,
+        MoveOverheadSeconds = 0
       };
       ParamsSearch p2 = new ParamsSearch()
       {
-        FutilityPruningStopSearchEnabled = !DISABLE_PRUNING
+        FutilityPruningStopSearchEnabled = !DISABLE_PRUNING,
+        MoveOverheadSeconds = 0
       };
 
       ParamsSelect s1 = new ParamsSelect();
@@ -199,14 +198,10 @@ namespace Ceres.Features.EngineTests
 
       using (new TimingBlock(timingStats, TimingBlock.LoggingType.None))
       {
-        Parallel.ForEach(GPUIDs,
-          delegate (int i)
-          {
-            RunCompareThread(i, p1, p2, s1, s2, pArbiter, sArbiter);
-          });
+        Parallel.ForEach(GPUIDs, i=> RunCompareThread(i, p1, p2, s1, s2, pArbiter, sArbiter));
       }
 
-      Summarize();
+      WriteSummaryInfo();
     }
 
 
@@ -214,6 +209,23 @@ namespace Ceres.Features.EngineTests
                                   ParamsSearch p1, ParamsSearch p2,
                                   ParamsSelect s1, ParamsSelect s2,
                                   ParamsSearch pOptimal, ParamsSelect sOptimal)
+    {
+      try
+      {
+        DoRunCompareThread(gpuID, p1, p2, s1, s2, pArbiter, sArbiter);
+      }
+      catch (Exception ex)
+      {
+        Console.WriteLine($"Exception in DoCompareThread on GPU {gpuID}, shutting thread down.");
+        Console.WriteLine(ex.ToString()); 
+      }
+    }
+
+
+    private void DoRunCompareThread(int gpuID,
+                                    ParamsSearch p1, ParamsSearch p2,
+                                    ParamsSelect s1, ParamsSelect s2,
+                                    ParamsSearch pOptimal, ParamsSelect sOptimal)
     {
       NNEvaluatorDef evaluatorDef1 = NetworkID1 != null ? NNEvaluatorDef.FromSpecification(NetworkID1, $"GPU:{gpuID}") : null;
       NNEvaluatorDef evaluatorDef2 = NetworkID2 != null ? NNEvaluatorDef.FromSpecification(NetworkID2, $"GPU:{gpuID}") : null;
@@ -230,7 +242,8 @@ namespace Ceres.Features.EngineTests
         }
         else if (playerMode == PlayerMode.LC0)
         {
-          return new GameEngineLC0("LC0", networkID, DISABLE_PRUNING, false, paramsSearch, paramsSelect, evaluatorDef, verbose:true);
+          return new GameEngineLC0("LC0", networkID, DISABLE_PRUNING, false, paramsSearch, paramsSelect, evaluatorDef, 
+                                   verbose:true, extraCommandLineArgs:"--move-overhead=0");
         }
         else if (playerMode == PlayerMode.Stockfish14_1)
         {
@@ -250,11 +263,13 @@ namespace Ceres.Features.EngineTests
       GameEngine engine2 = null;
       GameEngine engineOptimal = null;
 
+      // An engine that returns Q values for all moves is required.
       if (PlayerArbiter != PlayerMode.Ceres && PlayerArbiter != PlayerMode.LC0)
       {
-        throw new NotImplementedException("Currently arbiter engine must be Ceres or LC0");
+        throw new NotImplementedException("Arbiter engine must be Ceres or LC0");
       };
 
+      // Initialize all engine (in parallel for speed).
       Parallel.Invoke(
         () => engine1 = MakeEngine(Player1, NetworkID1, evaluatorDef1, p1, s1),
         () => engine2 = MakeEngine(Player2, NetworkID2, evaluatorDef2, p2, s2),
@@ -285,19 +300,24 @@ namespace Ceres.Features.EngineTests
           }
           seenPositions[posHash] = true;
 
-          count++;
           if (pos.FinalPosition.CalcTerminalStatus() != GameResult.Unknown
             || pos.FinalPosition.CheckDrawCanBeClaimed == Position.PositionDrawStatus.DrawCanBeClaimed) continue;
 
-          countScored++;
           engine1.ResetGame();
           engine2.ResetGame();
 
+          // Search with first engine.
           GameEngineSearchResult search1 = engine1.Search(pos, Limit * Engine1LimitMultiplier);
-          GameEngineSearchResult search2 = engine2.Search(pos, Limit);
 
-          timeAccumulatorEngine1 += (float)search1.TimingStats.ElapsedTimeSecs;
-          timeAccumulatorEngine2 += (float)search2.TimingStats.ElapsedTimeSecs;
+          // Skip comparison if position is totally won/lost
+          // (rarely are mistakes found here, and differences may be spurious
+          // due to distance to mate encoding).
+          if (MathF.Abs(search1.ScoreQ) > 0.85f)
+          {
+            continue;
+          }
+
+          GameEngineSearchResult search2 = engine2.Search(pos, Limit);
 
           if (search1.FinalN <= 1 || search2.FinalN <= 1) continue;
 
@@ -309,6 +329,10 @@ namespace Ceres.Features.EngineTests
           MGMove move2;
           GetBestMoveAndNode(pos, search2, out root2, out move2);
 
+          countScored++;
+          timeAccumulatorEngine1 += (float)search1.TimingStats.ElapsedTimeSecs;
+          timeAccumulatorEngine2 += (float)search2.TimingStats.ElapsedTimeSecs;
+
           if (move1 == move2)
           {
             // Move agreement, no need to compare against long search.
@@ -317,7 +341,7 @@ namespace Ceres.Features.EngineTests
 
           countDifferentMoves++;
 
-          // Run a long search
+          // Run a long search using arbiter to determine Q values associated with each possible move.
           engineOptimal.ResetGame();
           GameEngineSearchResult searchBaselineLong = engineOptimal.Search(pos, Limit * LONG_SEARCH_MULTIPLIER);
           if (searchBaselineLong.FinalN <= 1)
@@ -376,12 +400,12 @@ namespace Ceres.Features.EngineTests
           }
 
 
-          // Check if engine1 had much better move than engine2
-          bool sameMove = move1 == move2;
+          // Determine how much better (worse) engine 1 move was compared to engine2.
           float diffFromBest = scoreBestMove1 - scoreBestMove2;
           qDiffs.Add(diffFromBest);
 
-          const float THREASHOLD_DIFF = 0.015f;
+          // Suppress showing/counting difference if extremely small.
+          const float THREASHOLD_DIFF = 0.02f;
           string diffStrfromBest = MathF.Abs(diffFromBest) < THREASHOLD_DIFF ? "      " : $"{diffFromBest,6:F2}";
           if (diffFromBest > THREASHOLD_DIFF)
           {
@@ -396,12 +420,13 @@ namespace Ceres.Features.EngineTests
 
           if (Verbose)
           {
+            WriteColumnHeaders();
             string overlapst(int i) => MathF.Abs(overlaps[i]) < 0.99 ? $"{overlaps[i],6:F2}" : "      ";
-            Console.WriteLine($" {gpuID,4}  {countScored,6:N0}    {100.0f * (float)countDifferentMoves / countScored,6:F2}% diff   "
-                            + $"{ search1.TimingStats.ElapsedTimeSecs,5:F2}s  { search2.TimingStats.ElapsedTimeSecs,5:F2}s  "
-                            + $"  {countMuchBetter,5:N0} {countMuchWorse,5:N0}   {diffStrfromBest}  "
+            Console.WriteLine($" {gpuID,4}  {countScored,6:N0}    {100.0f * (float)countDifferentMoves / countScored,6:F2}%   "
+                            + $"{ search1.TimingStats.ElapsedTimeSecs,5:F2}   { search2.TimingStats.ElapsedTimeSecs,5:F2}    "
+                            + $"{ search1.FinalN,12:N0}  {search2.FinalN,12:N0}  "
+                            + $"  {countMuchBetter,5:N0} {countMuchWorse,5:N0}    {scoreBestMove1,5:F2}   {diffStrfromBest}  "
                             + $"  {move1,7}  {move2,7}  "
-                            //                            + $" {overlapst(1)}  {overlapst(2)}  {overlapst(3)}  {overlapst(4)}  {overlapst(5)}  {overlapst(6)}" 
                             + $"  {pos.FinalPosition.FEN}");
           }
 
@@ -475,6 +500,50 @@ namespace Ceres.Features.EngineTests
       return fracOverlap;
     }
 
+    #region Header/summary output
+
+    bool columnHeadersWritten = false;
+
+    void WriteColumnHeaders()
+    {
+      if (!columnHeadersWritten)
+      {
+        columnHeadersWritten = true;
+        Console.WriteLine();
+        Console.WriteLine("  GPU    Pos#      %diff    Time1   Time2      Nodes1        Nodes2        Cnt1  Cnt2      Q1     QDiff      Move1    Move2    FEN");
+        Console.WriteLine("  ---   -----     ------    -----  ------   ------------  ------------     ----  ----    -----    -----     ------   ------    ------------------------------------------------------------------");
+      }
+    }
+
+    void WriteIntroBanner()
+    {
+      Console.WriteLine();
+      Console.WriteLine("Engine Comparision Tool - Compare two engines versus optimal engine with deeper search.");
+      Console.WriteLine($"  Description     { Desc}");
+      Console.WriteLine($"  Engine 1        { Player1 } { NetworkID1}");
+      Console.WriteLine($"  Engine 2        { Player2 } { NetworkID2}");
+      Console.WriteLine($"  Arbiter Engine  { PlayerArbiter } { NetworkArbiterID} ({LONG_SEARCH_MULTIPLIER}x)");
+      Console.WriteLine($"  Num Positions   { NumPositions}");
+      Console.WriteLine($"  Limit           { Limit}");
+
+      Console.WriteLine();
+    }
+
+    void WriteSummaryInfo()
+    {
+      float avg = StatUtils.Average(qDiffs.ToArray());
+      float sd = (float)StatUtils.StdDev(qDiffs.ToArray()) / MathF.Sqrt(qDiffs.Count);
+      float z = avg / sd;
+
+      Console.WriteLine($"CompareEngine done in {timingStats.ElapsedTimeSecs,7:F2}seconds");
+      Console.WriteLine($"{Desc,20} {NumPositions,6:N0} {ShortID1,12}  {ShortID2,12} {ShortIDArbiter,12}  {Limit.ToString(),10}  "
+                      + $"{timeAccumulatorEngine1 / countScored,6:F3}s  {timeAccumulatorEngine2 / countScored,6:F3}s  "
+                      + $" {100.0f * (float)countDifferentMoves / countScored,6:F2}% diff  {avg,6:F3} +/-{sd,5:F3} z= {z,5:F2}  "
+                      + $" {100.0f * accOverlapDepth6 / countScored,6:F2}%  {countMuchBetter,6:N0} {countMuchWorse,6:N0}");
+    }
+
+
+    #endregion
   }
 
   public static class DeepEvalResults
