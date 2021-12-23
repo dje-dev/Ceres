@@ -242,6 +242,8 @@ namespace Ceres.Chess.NNEvaluators.CUDA
     const int NUM_POSITIONS_PER_THREAD_INPUT = 48;
     const int NUM_POSITIONS_PER_THREAD_OUTPUT = 32;
 
+    static bool haveWarnedMoveOverflow = false;
+
     private void PrepareInputPositions(IEncodedPositionBatchFlat batch)
     {
       int numPlanes = NNBackendInputOutput.NUM_INPUT_PLANES;
@@ -258,7 +260,6 @@ namespace Ceres.Chess.NNEvaluators.CUDA
           Span<byte> valuesSource = batch.PosPlaneValues;
           Span<float> valuesDest = Evaluator.inputOutput.InputBoardValues.AsSpan();
 
-          bool haveWarnedMoveOverflow = false;
           for (int i = range.Item1; i < range.Item2; i++)
           {
             // Determine legal move list

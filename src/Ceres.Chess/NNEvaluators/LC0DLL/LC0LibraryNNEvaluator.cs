@@ -161,6 +161,8 @@ namespace Ceres.Chess.NNEvaluators.Internals
     }
 
 
+    static bool haveWarnedMoveOverflow = false;
+
     /// <summary>
     /// Coordinates evaluation of a batch, encoding positions in
     /// data structures expected by the LC0 functions
@@ -172,7 +174,6 @@ namespace Ceres.Chess.NNEvaluators.Internals
       if (batch.NumPos > MAX_POSITIONS_PER_BATCH)
         throw new ArgumentOutOfRangeException($"batch.NumPos is too large, max {MAX_POSITIONS_PER_BATCH} versus actual {batch.NumPos}");
 
-      bool haveWarnedMoveOverflow = false;
       lock (lockObj)
       {
         ParallelOptions parallelOptions = ParallelUtils.ParallelOptions(batch.NumPos, 192);
