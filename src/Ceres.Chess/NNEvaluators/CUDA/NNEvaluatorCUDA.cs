@@ -258,6 +258,7 @@ namespace Ceres.Chess.NNEvaluators.CUDA
           Span<byte> valuesSource = batch.PosPlaneValues;
           Span<float> valuesDest = Evaluator.inputOutput.InputBoardValues.AsSpan();
 
+          bool haveWarnedMoveOverflow = false;
           for (int i = range.Item1; i < range.Item2; i++)
           {
             // Determine legal move list
@@ -266,9 +267,10 @@ namespace Ceres.Chess.NNEvaluators.CUDA
             // Note that rarely there might be more legal moves than we can fit in our buffer;
             // in this case we just silently ignore some
             // TODO: consider if this could cause missing good moves, if we could prioritize somehow
-            if (movesLegal.NumMovesUsed > NNBackendInputOutput.MAX_MOVES)
+            if (movesLegal.NumMovesUsed > NNBackendInputOutput.MAX_MOVES && !haveWarnedMoveOverflow)
             {
-              Console.WriteLine("Warning: move overflow");
+              Console.WriteLine($"Warning: moves overflow, {movesLegal.NumMovesUsed} legal moves in position exceeds Ceres max of {NNBackendInputOutput.MAX_MOVES}, truncating.");
+              haveWarnedMoveOverflow = true;
             }
 
             int numMoves = Math.Min(NNBackendInputOutput.MAX_MOVES, movesLegal.NumMovesUsed);

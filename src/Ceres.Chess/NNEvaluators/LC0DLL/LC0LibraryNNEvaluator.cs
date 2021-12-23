@@ -172,6 +172,7 @@ namespace Ceres.Chess.NNEvaluators.Internals
       if (batch.NumPos > MAX_POSITIONS_PER_BATCH)
         throw new ArgumentOutOfRangeException($"batch.NumPos is too large, max {MAX_POSITIONS_PER_BATCH} versus actual {batch.NumPos}");
 
+      bool haveWarnedMoveOverflow = false;
       lock (lockObj)
       {
         ParallelOptions parallelOptions = ParallelUtils.ParallelOptions(batch.NumPos, 192);
@@ -185,7 +186,11 @@ namespace Ceres.Chess.NNEvaluators.Internals
           // Note that rarely there might be more legal moves than we can fit in our buffer;
           // in this case we just silently ignore some
           // TODO: consider if this could cause missing good moves, if we could prioritize somehow
-          if (movesLegal.NumMovesUsed > CeresTransferBlockIn.MAX_MOVES) Console.WriteLine("Warning: move overflow");
+          if (movesLegal.NumMovesUsed > CeresTransferBlockIn.MAX_MOVES && !haveWarnedMoveOverflow)
+          {
+            Console.WriteLine($"Warning: moves overflow, {movesLegal.NumMovesUsed} legal moves in position exceeds Ceres max of {CeresTransferBlockIn.MAX_MOVES}, truncating.");
+            haveWarnedMoveOverflow = true;
+          }
 
           int numMoves = Math.Min(CeresTransferBlockIn.MAX_MOVES, movesLegal.NumMovesUsed);
 
@@ -201,13 +206,19 @@ namespace Ceres.Chess.NNEvaluators.Internals
           Span<byte> values = batch.PosPlaneValues;
           Span<ulong> masks = batch.PosPlaneBitmaps;
 
-          if (VERBOSE_DEBUG) Console.WriteLine("POSITION DUMP");
+          if (VERBOSE_DEBUG)
+          {
+            Console.WriteLine("POSITION DUMP");
+          }
           for (int j = 0; j < CeresTransferBlockIn.NUM_PLANES_PER_POSITION; j++)
           {
             int offset = baseOffset + j;
             refItem.Masks[j] = masks[offset];
             refItem.Values[j] = values[offset];
-            if (VERBOSE_DEBUG) Console.WriteLine("(" + (j + "," + masks[j]) + "," + values[j] + "),");
+            if (VERBOSE_DEBUG)
+            {
+              Console.WriteLine("(" + (j + "," + masks[j]) + "," + values[j] + "),");
+            }
           }
         });
 

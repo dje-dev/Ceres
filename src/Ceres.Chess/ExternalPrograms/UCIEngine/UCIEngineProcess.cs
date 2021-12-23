@@ -82,6 +82,7 @@ namespace Ceres.Chess.External.CEngine
     public void SendCommandLine(string command) => SendCommand(command + "\r\n");
 
     bool readyOKSeen = false;
+    bool haveWarnedWait = false;
 
     public void WaitForReadyOK(string descString)
     {
@@ -94,8 +95,11 @@ namespace Ceres.Chess.External.CEngine
 //          throw new Exception($"UCI error {lastError} ({descString})");
 
         System.Threading.Thread.Sleep(1);
-        if (waitCount == 5000)
+        if (!haveWarnedWait && waitCount == 30_000)
+        {
           Console.WriteLine($"--------------> Warn: waiting >{waitCount}ms for uciok on {descString}");
+          haveWarnedWait = true;
+        }
         waitCount++;
       }
     }
