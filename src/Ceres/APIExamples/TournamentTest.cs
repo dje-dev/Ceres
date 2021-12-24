@@ -640,18 +640,19 @@ string      baseName = "4mvs_+90_+99";
 
     public static void RunEngineComparisons()
     {
-      string pgnFileName = SoftwareManager.IsWindows ? @"c:\temp\ceres\ceres_big.pgn"
+      string pgnFileName = SoftwareManager.IsWindows ? @"\\synology\dev\chess\data\pgn\raw\ceres_big.pgn"
                                                : @"/mnt/syndev/chess/data/pgn/raw/ceres_big.pgn";
 
-      new CompareEnginesVersusOptimal("VsLC0", pgnFileName, 1000,
+      new CompareEnginesVersusOptimal("VsLC0", pgnFileName, 2000,
               null,//s => s.FinalPosition.PieceCount <= 15,
               CompareEnginesVersusOptimal.PlayerMode.Ceres, "753723", //610034
-              CompareEnginesVersusOptimal.PlayerMode.LC0, "753723",
-              CompareEnginesVersusOptimal.PlayerMode.LC0, "610034",
-              SearchLimit.SecondsPerMove(5), new int[] { 0, 1, 2, 3 },
+              CompareEnginesVersusOptimal.PlayerMode.Ceres, "753723",
+              CompareEnginesVersusOptimal.PlayerMode.Ceres, "610034",
+              SearchLimit.NodesPerMove(20_000),
+              new int[] { 0, 1, 2, 3 },
               s =>
               {
-                //s.EnableUseSiblingEvaluations = true; 
+                s.BatchSizeMultiplier = 0.75f;
               },
               null, //l => l.CPUCT = new ParamsSelect().CPUCT * 0.7f,
               null,
