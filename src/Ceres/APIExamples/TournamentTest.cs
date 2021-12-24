@@ -99,7 +99,7 @@ namespace Ceres.APIExamples
       InstallCUSTOM1AsDynamicByPhase();
       PreTournamentCleanup();
 
-      RunEngineComparisons(); return;
+//      RunEngineComparisons(); return;
 
       if (false)
       {
@@ -147,15 +147,15 @@ NET2 = "base_10b_800k";
 
 
 //      NET1 = "760998";
-//      NET1 = "753723";
-//      NET2 = "753723";
+      NET1 = "753723";
+      NET2 = "753723";
 //      NET1 = "69637";
 //      NET2 = "69637";
 
-      NET1 = "69637";
-      NET2 = "69637";
-      //NET1 = "703810";
-      //NET2 = "703810";
+//      NET1 = "69637";
+//      NET2 = "69637";
+//      NET1 = "703810";
+//      NET2 = "703810";
 
       //NET1 = "744204_onnx_int8";
 
@@ -184,10 +184,10 @@ NET2 = "base_10b_800k";
       // 140 good for 203 pairs, 300 good for 100 pairs
       //      limit1 = SearchLimit.NodesForAllMoves(200_000, 500) * 0.25f;
       //      limit1 = SearchLimit.SecondsForAllMoves(5, 0.02f) * 2;
-      //limit1 = SearchLimit.NodesPerMove(30_000);
-      limit1 = SearchLimit.SecondsForAllMoves(60, 1) * 0.5f;
-//ok      limit1 = SearchLimit.NodesPerMove(350_000); try test3.pgn against T75 opponent Ceres93 (in first position, 50% of time misses win near move 12
-      
+      limit1 = SearchLimit.NodesPerMove(10_000);
+      //limit1 = SearchLimit.SecondsForAllMoves(60, 1) * 0.5f;
+      //ok      limit1 = SearchLimit.NodesPerMove(350_000); try test3.pgn against T75 opponent Ceres93 (in first position, 50% of time misses win near move 12
+
       SearchLimit limit2 = limit1;
 
       // Don't output log if very small games
@@ -268,13 +268,12 @@ NET2 = "base_10b_800k";
 
       // TODO: support this in GameEngineDefCeresUCI
       bool forceDisableSmartPruning = limit1.IsNodesLimit;
-      forceDisableSmartPruning = false;
       if (forceDisableSmartPruning)
       {
         engineDefCeres1.SearchParams.FutilityPruningStopSearchEnabled = false;
         engineDefCeres2.SearchParams.FutilityPruningStopSearchEnabled = false;
-        engineDefCeres1.SearchParams.MoveFutilityPruningAggressiveness = 0;
-        engineDefCeres2.SearchParams.MoveFutilityPruningAggressiveness = 0;
+        //engineDefCeres1.SearchParams.MoveFutilityPruningAggressiveness = 0;
+        //engineDefCeres2.SearchParams.MoveFutilityPruningAggressiveness = 0;
       }
 
       string exeCeres = SoftwareManager.IsLinux ? @"/raid/dev/Ceres/artifacts/release/net5.0/Ceres.dll"
@@ -309,7 +308,7 @@ NET2 = "base_10b_800k";
       EnginePlayerDef playerEthereal = new EnginePlayerDef(engineDefEthereal, limit2);
       EnginePlayerDef playerStockfish11 = new EnginePlayerDef(engineDefStockfish11, limit2);
       EnginePlayerDef playerStockfish14 = new EnginePlayerDef(EngineDefStockfish14(), limit2 * 0.30f);// * 350);
-      EnginePlayerDef playerLC0 = ENABLE_LC0 ? new EnginePlayerDef(engineDefLC1, limit1) : null;
+      EnginePlayerDef playerLC0 = ENABLE_LC0 ? new EnginePlayerDef(engineDefLC1, limit2) : null;
       EnginePlayerDef playerLC0_2 = ENABLE_LC0 ? new EnginePlayerDef(engineDefLC2, limit2) : null;
 
 
@@ -382,7 +381,7 @@ NET2 = "base_10b_800k";
       }
 
       // TODO: UCI engine should point to .NET 6 subdirectory if on .NET 6
-      TournamentDef def = new TournamentDef("TOURN", playerCeres1UCI, playerLC0);//, playerStockfish14/*, playerCeres3,
+      TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerLC0);//, playerStockfish14/*, playerCeres3,
 #if NOT
       TournamentDef def = new TournamentDef("TIME_AGG");
       def.AddEngine(playerStockfish14.EngineDef, limit1 * 0.7f);
@@ -643,22 +642,24 @@ string      baseName = "4mvs_+90_+99";
       string pgnFileName = SoftwareManager.IsWindows ? @"\\synology\dev\chess\data\pgn\raw\ceres_big.pgn"
                                                : @"/mnt/syndev/chess/data/pgn/raw/ceres_big.pgn";
 
-      new CompareEnginesVersusOptimal("VsLC0", pgnFileName, 2000,
+      new CompareEnginesVersusOptimal("VsLC0", pgnFileName, 
+              2_500, // number of positions
               null,//s => s.FinalPosition.PieceCount <= 15,
-              CompareEnginesVersusOptimal.PlayerMode.Ceres, "753723", //610034
-              CompareEnginesVersusOptimal.PlayerMode.Ceres, "753723",
-              CompareEnginesVersusOptimal.PlayerMode.Ceres, "610034",
-              SearchLimit.NodesPerMove(20_000),
+              CompareEnginesVersusOptimal.PlayerMode.Ceres, "703810", //610034
+              CompareEnginesVersusOptimal.PlayerMode.LC0, "703810",
+              CompareEnginesVersusOptimal.PlayerMode.Ceres, "703810",
+              SearchLimit.NodesPerMove(100_000), // search limit
               new int[] { 0, 1, 2, 3 },
               s =>
               {
-                s.BatchSizeMultiplier = 0.75f;
+                //s.BatchSizeMultiplier = 0.5f;//
               },
-              null, //l => l.CPUCT = new ParamsSelect().CPUCT * 0.7f,
+              null, // l => l.CPUCT = 1.1f,
               null,
               null,
               true,
-              1
+              1,
+              false // Stockfish crosscheck
               ).Run();
     }
 
