@@ -99,7 +99,7 @@ namespace Ceres.APIExamples
       InstallCUSTOM1AsDynamicByPhase();
       PreTournamentCleanup();
 
-//      RunEngineComparisons(); return;
+      RunEngineComparisons(); return;
 
       if (false)
       {
@@ -642,25 +642,28 @@ string      baseName = "4mvs_+90_+99";
       string pgnFileName = SoftwareManager.IsWindows ? @"\\synology\dev\chess\data\pgn\raw\ceres_big.pgn"
                                                : @"/mnt/syndev/chess/data/pgn/raw/ceres_big.pgn";
 
-      new CompareEnginesVersusOptimal("VsLC0", pgnFileName, 
-              2_500, // number of positions
-              null,//s => s.FinalPosition.PieceCount <= 15,
-              CompareEnginesVersusOptimal.PlayerMode.Ceres, "703810", //610034
-              CompareEnginesVersusOptimal.PlayerMode.LC0, "703810",
-              CompareEnginesVersusOptimal.PlayerMode.Ceres, "703810",
-              SearchLimit.NodesPerMove(100_000), // search limit
-              new int[] { 0, 1, 2, 3 },
-              s =>
-              {
-                //s.BatchSizeMultiplier = 0.5f;//
-              },
-              null, // l => l.CPUCT = 1.1f,
-              null,
-              null,
-              true,
-              1,
-              false // Stockfish crosscheck
-              ).Run();
+      var parms = new CompareEngineParams("VsLC0", pgnFileName,
+                                              10_000, // number of positions
+                                              null,//s => s.FinalPosition.PieceCount <= 15,
+                                              CompareEnginesVersusOptimal.PlayerMode.Ceres, "610034", //610034
+                                              CompareEnginesVersusOptimal.PlayerMode.LC0, "610034",
+                                              CompareEnginesVersusOptimal.PlayerMode.Ceres, "610034",
+                                              SearchLimit.NodesPerMove(50_000), // search limit
+                                              new int[] { 0, 1, 2, 3 },
+                                              s =>
+                                              {
+                                                s.EnableUncertaintyBoosting = true;
+                                              },
+                                              null, // l => l.CPUCT = 1.1f,
+                                              null,
+                                              null,
+                                              true,
+                                              1,
+                                              true // Stockfish crosscheck
+                                             );
+
+
+      new CompareEnginesVersusOptimal(parms).Run();
     }
 
 
