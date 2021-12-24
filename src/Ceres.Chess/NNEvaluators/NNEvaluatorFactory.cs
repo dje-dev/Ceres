@@ -131,15 +131,16 @@ namespace Ceres.Chess.NNEvaluators
       switch (netDef.Type)
       {
         case NNEvaluatorType.ONNXViaTRT:
-          ret = new NNEvaluatorEngineTensorRT(netDef.NetworkID, netDef.NetworkID, DEFAULT_HAS_WDL, DEFAULT_HAS_MLH, deviceDef.DeviceIndex,
+          string fullFN = Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, netDef.NetworkID) + ".onnx";
+          ret = new NNEvaluatorEngineTensorRT(netDef.NetworkID, fullFN, DEFAULT_HAS_WDL, DEFAULT_HAS_MLH, deviceDef.DeviceIndex,
                                               NNEvaluatorEngineTensorRTConfig.NetTypeEnum.LC0,
                                               1024, netDef.Precision,
                                               NNEvaluatorEngineTensorRTConfig.TRTPriorityLevel.Medium, null, false, TRT_SHARED);
           break;
 
         case NNEvaluatorType.ONNXViaORT:
-          // TODO: consider possibility of other precisions than FP32
-          ret = new NNEvaluatorEngineONNX(netDef.NetworkID, netDef.NetworkID, deviceDef.DeviceIndex,
+          string fullFN2 = Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, netDef.NetworkID) + ".onnx";
+          ret = new NNEvaluatorEngineONNX(netDef.NetworkID, fullFN2, deviceDef.DeviceIndex,
                                           ONNXRuntimeExecutor.NetTypeEnum.LC0, 1024,
                                           NNEvaluatorPrecision.FP32, DEFAULT_HAS_WDL, DEFAULT_HAS_MLH,
                                           null, null, null, null);
