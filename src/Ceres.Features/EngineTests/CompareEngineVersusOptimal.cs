@@ -64,7 +64,7 @@ namespace Ceres.Features.EngineTests
     /// The multiplier applied to the search limit
     /// as used by the arbiter engine.
     /// </summary>
-    const int LONG_SEARCH_MULTIPLIER = 5;
+    const int LONG_SEARCH_MULTIPLIER = 7;
 
     /// <summary>
     /// Constructor.
@@ -96,7 +96,8 @@ namespace Ceres.Features.EngineTests
                                        Action<ParamsSearch> searchModifier1 = null, Action<ParamsSelect> selectModifier1 = null,
                                        Action<ParamsSearch> searchModifier2 = null, Action<ParamsSelect> selectModifier2 = null,
                                        bool verbose = true,
-                                       float engine1LimitMultiplier = 1.0f)
+                                       float engine1LimitMultiplier = 1.0f,
+                                       bool runStockfishCrosscheck = false)
     {
       Desc = desc;
       PGNFileName = pgnFileName;
@@ -116,6 +117,7 @@ namespace Ceres.Features.EngineTests
       PosFilter = posFilter == null ? (s => true) : posFilter;
       Verbose = verbose;
       Engine1LimitMultiplier = engine1LimitMultiplier;
+      RunStockfishCrosscheck = runStockfishCrosscheck;
     }
 
     public readonly string Desc;
@@ -136,6 +138,7 @@ namespace Ceres.Features.EngineTests
     public readonly Action<ParamsSelect> SelectModifier2;
     public bool Verbose;
     public float Engine1LimitMultiplier;
+    public bool RunStockfishCrosscheck;
 
     List<float> qDiffs = new();
 
@@ -280,8 +283,7 @@ namespace Ceres.Features.EngineTests
         () => engine1 = MakeEngine(Player1, NetworkID1, evaluatorDef1, p1, s1),
         () => engine2 = MakeEngine(Player2, NetworkID2, evaluatorDef2, p2, s2),
         () => engineOptimal = MakeEngine(PlayerArbiter, NetworkArbiterID, evaluatorDefOptimal, pOptimal, sOptimal),
-        () => engineSF = MakeEngine(PlayerMode.Stockfish14_1, null, null, default, default)
-        );
+        () => engineSF = RunStockfishCrosscheck ? MakeEngine(PlayerMode.Stockfish14_1, null, null, default, default) : null);
 
       int threadCount = 0;
       foreach (Game game in Game.FromPGN(PGNFileName))
@@ -429,8 +431,8 @@ namespace Ceres.Features.EngineTests
             countMuchWorse++;
           }
 
-          GameEngineSearchResult resultSF = default;
-          if (MathF.Abs(diffFromBest) > THRESHOLD_DIFF)
+          GameEngineSearchResult resultSF = null;
+          if (RunStockfishCrosscheck && MathF.Abs(diffFromBest) > THRESHOLD_DIFF)
           {
             const int SF_NODES_MULTIPLIER = 750;
             SearchLimit sfLimit = Limit * LONG_SEARCH_MULTIPLIER * (Limit.IsNodesLimit ? SF_NODES_MULTIPLIER : 1); 
