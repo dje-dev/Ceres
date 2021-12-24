@@ -34,6 +34,7 @@ using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.Params;
 using Ceres.Features.GameEngines;
+using Ceres.Base.OperatingSystem;
 
 #endregion
 
@@ -63,7 +64,7 @@ namespace Ceres.Features.EngineTests
     /// The multiplier applied to the search limit
     /// as used by the arbiter engine.
     /// </summary>
-    const int LONG_SEARCH_MULTIPLIER = 10;
+    const int LONG_SEARCH_MULTIPLIER = 5;
 
     /// <summary>
     /// Constructor.
@@ -71,6 +72,7 @@ namespace Ceres.Features.EngineTests
     /// <param name="desc"></param>
     /// <param name="pgnFileName"></param>
     /// <param name="numPositions"></param>
+    /// <param name="posFilter"></param>
     /// <param name="player1"></param>
     /// <param name="networkID1"></param>
     /// <param name="player2"></param>
@@ -86,6 +88,7 @@ namespace Ceres.Features.EngineTests
     /// <param name="verbose"></param>
     /// <param name="engine1LimitMultiplier"></param>
     public CompareEnginesVersusOptimal(string desc, string pgnFileName, int numPositions,
+                                       Predicate<PositionWithHistory> posFilter,
                                        PlayerMode player1, string networkID1,
                                        PlayerMode player2, string networkID2,
                                        PlayerMode playerArbiter, string networkArbiterID,
@@ -110,6 +113,7 @@ namespace Ceres.Features.EngineTests
       SelectModifier1 = selectModifier1;
       SearchModifier2 = searchModifier2;
       SelectModifier2 = selectModifier2;
+      PosFilter = posFilter == null ? (s => true) : posFilter;
       Verbose = verbose;
       Engine1LimitMultiplier = engine1LimitMultiplier;
     }
@@ -125,6 +129,7 @@ namespace Ceres.Features.EngineTests
     public readonly string NetworkArbiterID;
     public readonly int[] GPUIDs;
     public readonly SearchLimit Limit;
+    public readonly Predicate<PositionWithHistory> PosFilter;
     public readonly Action<ParamsSearch> SearchModifier1;
     public readonly Action<ParamsSelect> SelectModifier1;
     public readonly Action<ParamsSearch> SearchModifier2;
@@ -247,8 +252,8 @@ namespace Ceres.Features.EngineTests
         }
         else if (playerMode == PlayerMode.Stockfish14_1)
         {
-          string sf14FN = Path.Combine(CeresUserSettingsManager.Settings.DirExternalEngines, "stockfish14.1.exe");
-          GameEngineDef engineDef = new GameEngineDefUCI("SF14", new GameEngineUCISpec("SF14", sf14FN, 8,
+          string sf14FN = Path.Combine(CeresUserSettingsManager.Settings.DirExternalEngines, SoftwareManager.IsLinux ? "stockfish14.1" : "stockfish14.1.exe");
+          GameEngineDef engineDef = new GameEngineDefUCI("SF14", new GameEngineUCISpec("SF14", sf14FN, 16,
                                                          2048, CeresUserSettingsManager.Settings.TablebaseDirectory));
           return engineDef.CreateEngine();
         }
@@ -262,6 +267,7 @@ namespace Ceres.Features.EngineTests
       GameEngine engine1 = null;
       GameEngine engine2 = null;
       GameEngine engineOptimal = null;
+      GameEngine engineSF = null;
 
       // An engine that returns Q values for all moves is required.
       if (PlayerArbiter != PlayerMode.Ceres && PlayerArbiter != PlayerMode.LC0)
@@ -273,7 +279,9 @@ namespace Ceres.Features.EngineTests
       Parallel.Invoke(
         () => engine1 = MakeEngine(Player1, NetworkID1, evaluatorDef1, p1, s1),
         () => engine2 = MakeEngine(Player2, NetworkID2, evaluatorDef2, p2, s2),
-        () => engineOptimal = MakeEngine(PlayerArbiter, NetworkArbiterID, evaluatorDefOptimal, pOptimal, sOptimal));
+        () => engineOptimal = MakeEngine(PlayerArbiter, NetworkArbiterID, evaluatorDefOptimal, pOptimal, sOptimal),
+        () => engineSF = MakeEngine(PlayerMode.Stockfish14_1, null, null, default, default)
+        );
 
       int threadCount = 0;
       foreach (Game game in Game.FromPGN(PGNFileName))
@@ -283,6 +291,11 @@ namespace Ceres.Features.EngineTests
           if (shutdownRequested || countScored > NumPositions)
           {
             return;
+          }
+
+          if (!PosFilter(pos))
+          {
+            continue;
           }
 
           // Skip some positions to make more varied/independent, and also based on gpu ID to vary across threads.
@@ -405,15 +418,23 @@ namespace Ceres.Features.EngineTests
           qDiffs.Add(diffFromBest);
 
           // Suppress showing/counting difference if extremely small.
-          const float THREASHOLD_DIFF = 0.02f;
-          string diffStrfromBest = MathF.Abs(diffFromBest) < THREASHOLD_DIFF ? "      " : $"{diffFromBest,6:F2}";
-          if (diffFromBest > THREASHOLD_DIFF)
+          const float THRESHOLD_DIFF = 0.02f;
+          string diffStrfromBest = MathF.Abs(diffFromBest) < THRESHOLD_DIFF ? "      " : $"{diffFromBest,6:F2}";
+          if (diffFromBest > THRESHOLD_DIFF)
           {
             countMuchBetter++;
           }
-          else if (diffFromBest < -THREASHOLD_DIFF)
+          else if (diffFromBest < -THRESHOLD_DIFF)
           {
             countMuchWorse++;
+          }
+
+          GameEngineSearchResult resultSF = default;
+          if (MathF.Abs(diffFromBest) > THRESHOLD_DIFF)
+          {
+            const int SF_NODES_MULTIPLIER = 750;
+            SearchLimit sfLimit = Limit * LONG_SEARCH_MULTIPLIER * (Limit.IsNodesLimit ? SF_NODES_MULTIPLIER : 1); 
+            resultSF = engineSF.Search(pos, sfLimit);
           }
 
           accOverlapDepth6 += overlaps[6];
@@ -421,12 +442,23 @@ namespace Ceres.Features.EngineTests
           if (Verbose)
           {
             WriteColumnHeaders();
+
+            Move moveSF = resultSF == null ? default : Move.FromUCI(resultSF.MoveString);
+            string sfMoveStr = "";
+            if (resultSF != null)
+            {
+              sfMoveStr = moveSF.ToSAN(pos.FinalPosition);
+            }
+            Move bestMove = diffFromBest > 0 ? MGMoveConverter.ToMove(move1) : MGMoveConverter.ToMove(move2);
             string overlapst(int i) => MathF.Abs(overlaps[i]) < 0.99 ? $"{overlaps[i],6:F2}" : "      ";
+            string moveStr1 = MGMoveConverter.ToMove(move1).ToSAN(pos.FinalPosition);
+            string moveStr2 = MGMoveConverter.ToMove(move2).ToSAN(pos.FinalPosition);
+            string sfDisagreeChar = (sfMoveStr != "" && moveSF != bestMove) ? "?" : " ";
             Console.WriteLine($" {gpuID,4}  {countScored,6:N0}    {100.0f * (float)countDifferentMoves / countScored,6:F2}%   "
                             + $"{ search1.TimingStats.ElapsedTimeSecs,5:F2}   { search2.TimingStats.ElapsedTimeSecs,5:F2}    "
                             + $"{ search1.FinalN,12:N0}  {search2.FinalN,12:N0}  "
-                            + $"  {countMuchBetter,5:N0} {countMuchWorse,5:N0}    {scoreBestMove1,5:F2}   {diffStrfromBest}  "
-                            + $"  {move1,7}  {move2,7}  "
+                            + $"  {countMuchBetter,5:N0} {countMuchWorse,5:N0}    {scoreBestMove1,5:F2}   {diffStrfromBest} {sfDisagreeChar}  "
+                            + $"  {moveStr1,7}  {moveStr2,7}  {sfMoveStr,7} "
                             + $"  {pos.FinalPosition.FEN}");
           }
 
@@ -510,8 +542,8 @@ namespace Ceres.Features.EngineTests
       {
         columnHeadersWritten = true;
         Console.WriteLine();
-        Console.WriteLine("  GPU    Pos#      %diff    Time1   Time2      Nodes1        Nodes2        Cnt1  Cnt2      Q1     QDiff      Move1    Move2    FEN");
-        Console.WriteLine("  ---   -----     ------    -----  ------   ------------  ------------     ----  ----    -----    -----     ------   ------    ------------------------------------------------------------------");
+        Console.WriteLine("  GPU    Pos#      %diff    Time1   Time2      Nodes1        Nodes2        Cnt1  Cnt2      Q1     QDiff        Move1    Move2  MoveSF    FEN");
+        Console.WriteLine("  ---   -----     ------    -----  ------   ------------  ------------     ----  ----    -----    -----       ------   ------  -------   ------------------------------------------------------------------");
       }
     }
 
