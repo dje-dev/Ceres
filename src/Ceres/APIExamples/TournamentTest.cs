@@ -46,7 +46,7 @@ namespace Ceres.APIExamples
   {
     const bool POOLED = false;
 
-    static int CONCURRENCY = POOLED ? 16 : 1;
+    static int CONCURRENCY = POOLED ? 16 : 4;
     static bool RUN_DISTRIBUTED = false;
 
 
@@ -147,13 +147,13 @@ NET2 = "base_10b_800k";
 
 
 //      NET1 = "760998";
-      NET1 = "753723";
-      NET2 = "753723";
-      //NET1 = "69637";
-      //NET2 = "69637";
+//      NET1 = "753723";
+//      NET2 = "753723";
+//      NET1 = "69637";
+//      NET2 = "69637";
 
-      //      NET1 = "66511";
-      //      NET2 = "66511";
+      NET1 = "69637";
+      NET2 = "69637";
       //NET1 = "703810";
       //NET2 = "703810";
 
@@ -179,13 +179,13 @@ NET2 = "base_10b_800k";
       //evalDef1 = NNEvaluatorDefFactory.FromSpecification("ONNX:tfmodelc", "GPU:0");
 
       SearchLimit limit1 = SearchLimit.NodesForAllMoves(1_000_000);
-//      limit1 = SearchLimit.NodesPerTree(50_000);
-      
+      //      limit1 = SearchLimit.NodesPerTree(50_000);
+
       // 140 good for 203 pairs, 300 good for 100 pairs
       //      limit1 = SearchLimit.NodesForAllMoves(200_000, 500) * 0.25f;
-//      limit1 = SearchLimit.SecondsForAllMoves(5, 0.02f) * 2;
-      //limit1 = SearchLimit.SecondsForAllMoves(150f, 0.1f);
-      limit1 = SearchLimit.SecondsForAllMoves(60, 0.12f) * 0.5f;
+      //      limit1 = SearchLimit.SecondsForAllMoves(5, 0.02f) * 2;
+      //limit1 = SearchLimit.NodesPerMove(30_000);
+      limit1 = SearchLimit.SecondsForAllMoves(60, 1) * 0.5f;
 //ok      limit1 = SearchLimit.NodesPerMove(350_000); try test3.pgn against T75 opponent Ceres93 (in first position, 50% of time misses win near move 12
       
       SearchLimit limit2 = limit1;
@@ -200,6 +200,7 @@ NET2 = "base_10b_800k";
       GameEngineDefCeres engineDefCeres3 = new GameEngineDefCeres("Ceres3", evalDef2, evalDefSecondary2, new ParamsSearch(), new ParamsSelect(),
                                                                   null, outputLog ? "Ceres3.log.txt" : null);
 
+      
       //      engineDefCeres2.SearchParams.TestFlag = true;
 //      engineDefCeres2.SearchParams.EnableSearchExtension = false;
       // engineDefCeres1.SearchParams.TreeReuseRetainedPositionCacheEnabled = true;
@@ -228,7 +229,7 @@ NET2 = "base_10b_800k";
       //      engineDefCeres1.SelectParams.CPUCTFactorAtRoot *= (1.0f / 0.8f);
 
       //      engineDefCeres2.SearchParams.EnableUncertaintyBoosting = false;
-      //      engineDefCeres1.SelectParams.CPUCT *= 0.85f;
+//      engineDefCeres1.SelectParams.CPUCT *= 0.30f;
 
       //engineDefCeres2.SelectParams.CPUCTAtRoot *= 1.33f;
 
@@ -381,7 +382,7 @@ NET2 = "base_10b_800k";
       }
 
       // TODO: UCI engine should point to .NET 6 subdirectory if on .NET 6
-      TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerStockfish14);//, playerStockfish14/*, playerCeres3,
+      TournamentDef def = new TournamentDef("TOURN", playerCeres1UCI, playerLC0);//, playerStockfish14/*, playerCeres3,
 #if NOT
       TournamentDef def = new TournamentDef("TIME_AGG");
       def.AddEngine(playerStockfish14.EngineDef, limit1 * 0.7f);
@@ -407,8 +408,11 @@ string      baseName = "4mvs_+90_+99";
 
       if (false)
       {
-        def.AdjudicationThresholdCentipawns = int.MaxValue;
-        def.AdjudicationThresholdNumMoves = 3000;
+        def.AdjudicateDrawThresholdCentipawns = 0;
+        def.AdjudicateDrawThresholdNumMoves = 999;
+
+        def.AdjudicateWinThresholdCentipawns = int.MaxValue;
+        def.AdjudicateWinThresholdNumMoves = 3000;
         def.UseTablebasesForAdjudication = false;
       }
 
@@ -636,34 +640,38 @@ string      baseName = "4mvs_+90_+99";
 
     public static void RunEngineComparisons()
     {
-      Action<ParamsSearch> p = null;
-      var tests = new (string, Action<ParamsSearch>)[]
-      {
-        ("uncertainty", s=> s.EnableUncertaintyBoosting = true ),
-        ("sibling",     s=> s.EnableUseSiblingEvaluations = true ),
-        ("dtb",         s=> s.EnableDeepTranspositionBackup = true )
-      };
+      string pgnFileName = SoftwareManager.IsWindows ? @"c:\temp\ceres\ceres_big.pgn"
+                                               : @"/mnt/syndev/chess/data/pgn/raw/ceres_big.pgn";
 
-      foreach (var a in tests)
-      {
-        //753723
-        new CompareEnginesVersusOptimal(a.Item1, 2000, "703810", SearchLimit.NodesPerMove(5100),
-          a.Item2,
-          null,
-          false
-          ).Run();
-      }
-
+      new CompareEnginesVersusOptimal("VsLC0", pgnFileName, 1000,
+              null,//s => s.FinalPosition.PieceCount <= 15,
+              CompareEnginesVersusOptimal.PlayerMode.Ceres, "753723", //610034
+              CompareEnginesVersusOptimal.PlayerMode.LC0, "753723",
+              CompareEnginesVersusOptimal.PlayerMode.LC0, "610034",
+              SearchLimit.SecondsPerMove(5), new int[] { 0, 1, 2, 3 },
+              s =>
+              {
+                //s.EnableUseSiblingEvaluations = true; 
+              },
+              null, //l => l.CPUCT = new ParamsSelect().CPUCT * 0.7f,
+              null,
+              null,
+              true,
+              1
+              ).Run();
     }
 
-    /// <summary>
-    /// Test code that installs "CUSTOM1" network type which is an NNEvaluatorDynamic
-    /// and uses one network for first part of search then switches to second network.
-    /// Example usage (also customized nets and fraction below):
-    ///   NET1 = "CUSTOM1:66666";
-    /// Was -7Elo +/10 with at 60 second games (switch point 0.666).
-    /// </summary>
-    public static void InstallCUSTOM1AsDynamicByPhase()
+
+  
+
+  /// <summary>
+  /// Test code that installs "CUSTOM1" network type which is an NNEvaluatorDynamic
+  /// and uses one network for first part of search then switches to second network.
+  /// Example usage (also customized nets and fraction below):
+  ///   NET1 = "CUSTOM1:66666";
+  /// Was -7Elo +/10 with at 60 second games (switch point 0.666).
+  /// </summary>
+  public static void InstallCUSTOM1AsDynamicByPhase()
     {
       static NNEvaluator Build(string netID1, int gpuID, NNEvaluator referenceEvaluator)
       {
