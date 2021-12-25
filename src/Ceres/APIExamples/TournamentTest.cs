@@ -642,8 +642,8 @@ string      baseName = "4mvs_+90_+99";
       string pgnFileName = SoftwareManager.IsWindows ? @"\\synology\dev\chess\data\pgn\raw\ceres_big.pgn"
                                                : @"/mnt/syndev/chess/data/pgn/raw/ceres_big.pgn";
 
-      var parms = new CompareEngineParams("VsLC0", pgnFileName,
-                                              10_000, // number of positions
+      CompareEngineParams parms = new CompareEngineParams("VsLC0", pgnFileName,
+                                              2, // number of positions
                                               null,//s => s.FinalPosition.PieceCount <= 15,
                                               CompareEnginesVersusOptimal.PlayerMode.Ceres, "610034", //610034
                                               CompareEnginesVersusOptimal.PlayerMode.LC0, "610034",
@@ -658,12 +658,12 @@ string      baseName = "4mvs_+90_+99";
                                               null,
                                               null,
                                               true,
-                                              1,
+                                              1, 1,
                                               true // Stockfish crosscheck
                                              );
 
 
-      new CompareEnginesVersusOptimal(parms).Run();
+      CompareEngineResultSummary result = new CompareEnginesVersusOptimal(parms).Run();
     }
 
 
