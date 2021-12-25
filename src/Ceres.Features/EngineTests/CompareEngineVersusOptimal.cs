@@ -274,7 +274,7 @@ namespace Ceres.Features.EngineTests
 
           GameEngineSearchResult search2 = engine2.Search(pos, Limit);
 
-          if (search1.FinalN <= 1 || search2.FinalN <= 1) continue;
+          if (search1.FinalN < 1 || search2.FinalN < 1) continue;
 
           MCTSNode root1;
           MGMove move1;
@@ -287,7 +287,6 @@ namespace Ceres.Features.EngineTests
           countScored++;
           timeAccumulatorEngine1 += (float)search1.TimingStats.ElapsedTimeSecs;
           timeAccumulatorEngine2 += (float)search2.TimingStats.ElapsedTimeSecs;
-
           if (move1 == move2)
           {
             // Move agreement, no need to compare against long search.
@@ -298,8 +297,13 @@ namespace Ceres.Features.EngineTests
 
           // Run a long search using arbiter to determine Q values associated with each possible move.
           engineOptimal.ResetGame();
-          GameEngineSearchResult searchBaselineLong = engineOptimal.Search(pos, Limit * Params.Engine1LimitMultiplier);
-          if (searchBaselineLong.FinalN <= 1)
+          SearchLimit arbiterLimit = Limit * Params.EngineArbiterLimitMultiplier;
+          if (arbiterLimit.IsNodesLimit && arbiterLimit.Value < 1000)
+          {
+            throw new Exception("Arbiter engine limit must be at least 1000 nodes");
+          }
+          GameEngineSearchResult searchBaselineLong = engineOptimal.Search(pos, arbiterLimit);
+          if (searchBaselineLong.FinalN < 1)
           {
             continue;
           }
@@ -326,9 +330,10 @@ namespace Ceres.Features.EngineTests
             // Determine how much better engine1 was versus engine2 according to the long search
             using (new SearchContextExecutionBlock(searchBaselineLongCeres.Search.Manager.Context))
             {
-              var bestMoveFrom1 = searchBaselineLongCeres.Search.SearchRootNode.FollowMovesToNode(new MGMove[] { move1 });
-              var bestMoveFrom2 = searchBaselineLongCeres.Search.SearchRootNode.FollowMovesToNode(new MGMove[] { move2 });
+              MCTSNode bestMoveFrom1 = searchBaselineLongCeres.Search.SearchRootNode.FollowMovesToNode(new MGMove[] { move1 });
               scoreBestMove1 = (float)-bestMoveFrom1.Q;
+
+              MCTSNode bestMoveFrom2 = searchBaselineLongCeres.Search.SearchRootNode.FollowMovesToNode(new MGMove[] { move2 });
               scoreBestMove2 = (float)-bestMoveFrom2.Q;
             }
           }

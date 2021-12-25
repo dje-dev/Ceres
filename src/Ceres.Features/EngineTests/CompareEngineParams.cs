@@ -55,7 +55,7 @@ namespace Ceres.Features.EngineTests
                                     Action<ParamsSearch> SearchModifier1 = null, Action<ParamsSelect> SelectModifier1 = null,
                                     Action<ParamsSearch> SearchModifier2 = null, Action<ParamsSelect> SelectModifier2 = null,
                                     bool Verbose = true,
-                                    float Engine1LimitMultiplier = 1.0f, float EngineArbiterLimitMultiplier = 1.0f,
+                                    float Engine1LimitMultiplier = 1.0f, float EngineArbiterLimitMultiplier = 7f,
                                     bool RunStockfishCrosscheck = false,
                                     Action<CompareEnginePosResult> PosResultCallback = null)
   {
