@@ -16,6 +16,10 @@
 
 #endregion
 
+using Ceres.Chess.Positions;
+using Ceres.Chess.SearchResultVerboseMoveInfo;
+using System.Collections.Generic;
+
 namespace Ceres.Features.EngineTests
 {
   /// <summary>
@@ -36,15 +40,19 @@ namespace Ceres.Features.EngineTests
   /// <param name="Move1"></param>
   /// <param name="Move2"></param>
   /// <param name="MoveSF"></param>
-  /// <param name="FEN"></param>
+  /// <param name="Position"></param>
+  /// <param name="MoveStats1"></param>
+  /// <param name="MoveStats2"></param>
+  /// <param name="MoveStatsArbiter"></param>
   public record CompareEnginePosResult(int GPUID, int CountScore, float FracDifferent,
                                        float Time1Secs, float Time2Secs,
                                        int N1, int N2,
                                        int CountMuchBetter, int CountMuchWorse,
                                        float ScoreBestMove1, float Diff1From2,
                                        bool SFAgrees,
-                                       string Move1, string Move2, string MoveSF, string FEN)
+                                       string Move1, string Move2, string MoveSF, PositionWithHistory Position,
+                                       List<VerboseMoveStat> MoveStats1, List<VerboseMoveStat> MoveStats2, List<VerboseMoveStat> MoveStatsArbiter)
   {
-
+    public string FEN => Position.FinalPosition.FEN;
   }
 }

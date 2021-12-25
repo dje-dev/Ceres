@@ -43,6 +43,7 @@ namespace Ceres.Features.EngineTests
   /// <param name="SelectModifier2"></param>
   /// <param name="Verbose"></param>
   /// <param name="Engine1LimitMultiplier"></param>
+  /// <param name="EngineArbiterLimitMultiplier"></param>
   /// <param name="RunStockfishCrosscheck"></param>
   /// <param name="PosResultCallback"></param>
   public record CompareEngineParams(string Description, string PGNFileName, int NumPositions,
@@ -54,7 +55,7 @@ namespace Ceres.Features.EngineTests
                                     Action<ParamsSearch> SearchModifier1 = null, Action<ParamsSelect> SelectModifier1 = null,
                                     Action<ParamsSearch> SearchModifier2 = null, Action<ParamsSelect> SelectModifier2 = null,
                                     bool Verbose = true,
-                                    float Engine1LimitMultiplier = 1.0f,
+                                    float Engine1LimitMultiplier = 1.0f, float EngineArbiterLimitMultiplier = 1.0f,
                                     bool RunStockfishCrosscheck = false,
                                     Action<CompareEnginePosResult> PosResultCallback = null)
   {

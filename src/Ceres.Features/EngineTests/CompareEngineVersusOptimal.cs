@@ -62,12 +62,6 @@ namespace Ceres.Features.EngineTests
     /// </summary>
     const bool DISABLE_PRUNING = true;
 
-    /// <summary>
-    /// The multiplier applied to the search limit
-    /// as used by the arbiter engine.
-    /// </summary>
-    const int LONG_SEARCH_MULTIPLIER = 7;
-
     public CompareEngineParams Params;
 
     /// <summary>
@@ -107,6 +101,8 @@ namespace Ceres.Features.EngineTests
     public int[] GPUIDs => Params.GPUIDs ?? new int[] { 0 };
     public SearchLimit Limit => Params.Limit with { SearchCanBeExpanded = false };
 
+    public void RequestCancellation() => shutdownRequested = true;
+    
 
     public CompareEngineResultSummary Run()
     {
@@ -245,7 +241,7 @@ namespace Ceres.Features.EngineTests
           }
 
           // Skip some positions to make more varied/independent, and also based on gpu ID to vary across threads.
-          const int SKIP_COUNT = 17;
+          const int SKIP_COUNT = 15;
           if ((threadCount++ % GPUIDs.Length != gpuID) || (pos.FinalPosition.FEN.GetHashCode() % SKIP_COUNT != 0))
           {
             continue;
@@ -302,7 +298,7 @@ namespace Ceres.Features.EngineTests
 
           // Run a long search using arbiter to determine Q values associated with each possible move.
           engineOptimal.ResetGame();
-          GameEngineSearchResult searchBaselineLong = engineOptimal.Search(pos, Limit * LONG_SEARCH_MULTIPLIER);
+          GameEngineSearchResult searchBaselineLong = engineOptimal.Search(pos, Limit * Params.Engine1LimitMultiplier);
           if (searchBaselineLong.FinalN <= 1)
           {
             continue;
@@ -379,7 +375,7 @@ namespace Ceres.Features.EngineTests
           if (Params.RunStockfishCrosscheck && MathF.Abs(diffFromBest) > THRESHOLD_DIFF)
           {
             const int SF_NODES_MULTIPLIER = 750;
-            SearchLimit sfLimit = Limit * LONG_SEARCH_MULTIPLIER * (Limit.IsNodesLimit ? SF_NODES_MULTIPLIER : 1); 
+            SearchLimit sfLimit = Limit * Params.EngineArbiterLimitMultiplier * (Limit.IsNodesLimit ? SF_NODES_MULTIPLIER : 1); 
             resultSF = engineSF.Search(pos, sfLimit);
           }
 
@@ -406,7 +402,8 @@ namespace Ceres.Features.EngineTests
                                                    (float)search1.TimingStats.ElapsedTimeSecs, (float)search2.TimingStats.ElapsedTimeSecs, 
                                                    search1.FinalN, search2.FinalN,
                                                    countMuchBetter, countMuchWorse, scoreBestMove1, diffFromBest,
-                                                   sfAgrees, moveStr1, moveStr2, sfMoveStr, pos.FinalPosition.FEN);
+                                                   sfAgrees, moveStr1, moveStr2, sfMoveStr, pos, 
+                                                   search1.VerboseMoveStats, search2.VerboseMoveStats, searchBaselineLong.VerboseMoveStats);
             Params.PosResultCallback?.Invoke(posResult);
 
             Console.WriteLine($" {gpuID,4}  {countScored,6:N0}    {100.0f * (float)countDifferentMoves / countScored,6:F2}%   "
@@ -510,7 +507,7 @@ namespace Ceres.Features.EngineTests
       Console.WriteLine($"  Description     { Params.Description}");
       Console.WriteLine($"  Engine 1        { Params.Player1 } { Params.NetworkID1}");
       Console.WriteLine($"  Engine 2        { Params.Player2 } { Params.NetworkID2}");
-      Console.WriteLine($"  Arbiter Engine  { Params.PlayerArbiter } { Params.NetworkArbiterID} ({LONG_SEARCH_MULTIPLIER}x)");
+      Console.WriteLine($"  Arbiter Engine  { Params.PlayerArbiter } { Params.NetworkArbiterID} ({Params.EngineArbiterLimitMultiplier}x)");
       Console.WriteLine($"  Num Positions   { Params.NumPositions}");
       Console.WriteLine($"  Limit           { Limit}");
 
