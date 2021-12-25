@@ -49,42 +49,36 @@ namespace Ceres.MCTS.Utils
     {
       float bestSlope = float.MinValue;
       int? bestIndex = null;
-        
-      using (new SearchContextExecutionBlock(rootNode.Context))
+
+      float rootQ = (float)rootNode.Q;
+      for (int i = 0; i < rootNode.NumChildrenExpanded; i++)
       {
-        float rootQ = (float)rootNode.Q;
-        for (int i=0; i<rootNode.NumChildrenExpanded;i++)
+        MCTSNode node = rootNode.ChildAtIndex(i);
+        if (node.N > minN)
         {
-          MCTSNode node = rootNode.ChildAtIndex(i);
-          if (node.N > minN)
+          SearchPrincipalVariation spv = new SearchPrincipalVariation(node);
+          float pvSlope = spv.PVSlopeQ(rootQ, minFraction);
+          if (!float.IsNaN(pvSlope) && pvSlope > bestSlope)
           {
-            SearchPrincipalVariation spv = new SearchPrincipalVariation(node);
-            float pvSlope = spv.PVSlopeQ(rootQ, minFraction);
-            if (!float.IsNaN(pvSlope) && pvSlope > bestSlope)
-            {
-              bestIndex = i;
-              bestSlope = pvSlope;
-            }
+            bestIndex = i;
+            bestSlope = pvSlope;
           }
         }
-        return bestIndex;
       }
+      return bestIndex;
     }
 
     public static void DumpChildQSlopes(MCTSNode rootNode)
     {
-      using (new SearchContextExecutionBlock(rootNode.Context))
+      float rootQ = (float)rootNode.Q;
+      foreach (MCTSNode node in rootNode.ChildrenSorted(n => -n.N))
       {
-        float rootQ = (float)rootNode.Q;
-        foreach (MCTSNode node in rootNode.ChildrenSorted(n => -n.N))
+        if (node.N > 100)
         {
-          if (node.N > 100)
-          {
-            SearchPrincipalVariation spv = new SearchPrincipalVariation(node);
-            Console.WriteLine("\r\n");
-            Console.WriteLine((spv.PVSlopeQ(rootQ, 0.05f) * 100) + " " + node);
-            MCTSPosTreeNodeDumper.DumpPV(node, true);
-          }
+          SearchPrincipalVariation spv = new SearchPrincipalVariation(node);
+          Console.WriteLine("\r\n");
+          Console.WriteLine((spv.PVSlopeQ(rootQ, 0.05f) * 100) + " " + node);
+          MCTSPosTreeNodeDumper.DumpPV(node, true);
         }
       }
     }
@@ -211,12 +205,11 @@ namespace Ceres.MCTS.Utils
     {
       int totalChildren = node.N;
       float acc = 0;
-      foreach (MCTSNodeStructChild child in node.StructRef.Children)
+      foreach (MCTSNode child in node.ChildrenExpanded)
       {
-        if (child.IsExpanded)
-          acc += MathF.Log(child.N / node.N, 2.0f);
+        acc += MathF.Log(child.N / node.N, 2.0f);
       }
-      return -acc;    
+      return -acc / totalChildren; 
     }
 
 

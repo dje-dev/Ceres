@@ -574,7 +574,7 @@ namespace Ceres.MCTS.Search
        && node.IsTranspositionLinked
        && (numTargetLeafs > 1  || numTargetLeafs > node.NumVisitsPendingTranspositionRootExtraction))
       {
-        node.StructRef.MaterializeSubtreeFromTranspositionRoot(node.Tree);
+        node.StructRef.MaterializeSubtreeFromTranspositionRoot(node.Context.ParamsSearch, node.Tree);
       }
 
       if (paramsExecution.TranspositionMode == TranspositionMode.SingleNodeDeferredCopy
@@ -590,80 +590,12 @@ namespace Ceres.MCTS.Search
 
         return;
       }
-      else if (paramsExecution.TranspositionMode == TranspositionMode.SharedSubtree)
-      {
-        throw new NotImplementedException();
-        //InitializeChildrenFromDeferredTransposition(node);
-      }
 
       bool isUnvisited = node.N == 0;
       if (isUnvisited || nodeRef.Terminal.IsTerminal() || nodeRef.IsTranspositionLinked)
       {
         DoVisitLeafNode(node, numTargetLeafs, gatheredNodes);
         return;
-      }
-
-      if (paramsExecution.TranspositionMode == TranspositionMode.SharedSubtree)
-      {
-        ref MCTSNodeStruct biggestTranspositionNode = ref MCTSNodeTranspositionManager.GetNodeWithMaxNInCluster(node);
-        if (!biggestTranspositionNode.IsNull)
-        {
-          if (biggestTranspositionNode.N < node.N)
-          {
-            // We are already bigger, so ignore the transposition root
-          }
-          else if (biggestTranspositionNode.N > node.N)
-          {
-            // Borrow from the other bigger subtree
-            FP16 vToUse = (FP16)((float)(biggestTranspositionNode.W - node.W)
-                                 / (float)(biggestTranspositionNode.N - node.N));
-
-            throw new Exception("need to restore following lines, overrideV and m currently disabled since mSum is marked private");
-            //node.OverrideVToApplyFromTransposition = vToUse;
-            //FP16 mToUse = (FP16)((float)(biggestTranspositionNode.mSum - node.Ref.mSum)
-            //                     / (float)(biggestTranspositionNode.N - node.N));
-            //node.OverrideMPositionToApplyFromTransposition = mToUse;
-
-            DoVisitLeafNode(node, numTargetLeafs, gatheredNodes);
-            return;
-          }
-          else if (biggestTranspositionNode.N == node.N)
-          {
-            if (biggestTranspositionNode.Index.Index == node.Index)
-            {
-              // Biggest node is ourself! nothing to do
-            }
-            else if (biggestTranspositionNode.IsInFlight)
-            {
-              // Abandon search below this node
-              // Also we have to undo the NInFlight updates alread made to parents
-              if (!node.IsRoot)
-              {
-                node.Parent.StructRef.BackupDecrementInFlight(SelectorID == 0 ? numTargetLeafs : 0,
-                                                  SelectorID == 1 ? numTargetLeafs : 0);
-              }
-              return;
-            }
-            else
-            {
-              // We assume the role of the new master 
-              MCTSNodeStructIndex indexTranspositionRoot = biggestTranspositionNode.Index;
-              MCTSNodeStructIndex indexThis = new MCTSNodeStructIndex(node.Index);
-
-              MCTSNodeStructStorage.ModifyParentsChildRef(node.Store, indexTranspositionRoot, indexThis);
-              MCTSNodeStructStorage.ModifyParentsChildRef(node.Store, indexThis, indexTranspositionRoot);
-
-              // Swap parents
-              MCTSNodeStructIndex saveIndexThisParent = node.StructRef.ParentIndex;
-              nodeRef.ParentIndex = biggestTranspositionNode.ParentIndex;
-              biggestTranspositionNode.ParentIndex = saveIndexThisParent;
-
-              node = node.Tree.GetNode(biggestTranspositionNode.Index);
-            }
-
-          }
-
-        }
       }
 
       // Mark node as visited, make sure we get associated annotation
@@ -860,10 +792,7 @@ namespace Ceres.MCTS.Search
         {
           // Gather the nodes.
           ListBounded<MCTSNode> gatheredNodes = new(numThisChild);
-          using (new SearchContextExecutionBlock(thisContext))
-          {
-            DoGatherLeafBatchlet(thisChild, numThisChild, vLossDynamicBoost, gatheredNodes);
-          }
+          DoGatherLeafBatchlet(thisChild, numThisChild, vLossDynamicBoost, gatheredNodes);
 
           // Append nodes to node list.
           lock (leafs)

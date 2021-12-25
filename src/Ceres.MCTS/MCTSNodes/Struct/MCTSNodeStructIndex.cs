@@ -76,24 +76,6 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
     #endregion
 
-    #region As Refs
-
-    // WARNING: Visual Studio editor crashes if this line is enabled
-    //public ref readonly MCTSNode RefReadonly => throw new Exception("Not imlementable, see UCTNode.Index method for info");// ref UCTNodeStorage.nodes[index];
-
-    public ref MCTSNodeStruct Ref
-    {
-      [DebuggerStepThrough]
-      [MethodImpl(MethodImplOptions.AggressiveInlining)]
-      get
-      {
-        return ref MCTSNodeStoreContext.Nodes[index];
-      }
-    }
-
-    #endregion
-
-
     #region ToString/IEquatable
 
     public readonly override string ToString()

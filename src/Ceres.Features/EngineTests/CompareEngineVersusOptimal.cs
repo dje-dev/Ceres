@@ -328,13 +328,10 @@ namespace Ceres.Features.EngineTests
             GameEngineSearchResultCeres searchBaselineLongCeres = searchBaselineLong as GameEngineSearchResultCeres;
 
             // Determine how much better engine1 was versus engine2 according to the long search
-            using (new SearchContextExecutionBlock(searchBaselineLongCeres.Search.Manager.Context))
-            {
-              var bestMoveFrom1 = searchBaselineLongCeres.Search.SearchRootNode.FollowMovesToNode(new MGMove[] { move1 });
-              var bestMoveFrom2 = searchBaselineLongCeres.Search.SearchRootNode.FollowMovesToNode(new MGMove[] { move2 });
-              scoreBestMove1 = (float)-bestMoveFrom1.Q;
-              scoreBestMove2 = (float)-bestMoveFrom2.Q;
-            }
+            var bestMoveFrom1 = searchBaselineLongCeres.Search.SearchRootNode.FollowMovesToNode(new MGMove[] { move1 });
+            var bestMoveFrom2 = searchBaselineLongCeres.Search.SearchRootNode.FollowMovesToNode(new MGMove[] { move2 });
+            scoreBestMove1 = (float)-bestMoveFrom1.Q;
+            scoreBestMove2 = (float)-bestMoveFrom2.Q;
           }
           else
           {
@@ -428,11 +425,8 @@ namespace Ceres.Features.EngineTests
       if (search1 is GameEngineSearchResultCeres)
       {
         GameEngineSearchResultCeres searchCeres = (GameEngineSearchResultCeres)search1;
-        using (new SearchContextExecutionBlock(searchCeres.Search.Manager.Context))
-        {
-          root1 = searchCeres.Search.SearchRootNode;
-          move1 = root1.BestMoveInfo(false).BestMove;
-        }
+        root1 = searchCeres.Search.SearchRootNode;
+        move1 = root1.BestMoveInfo(false).BestMove;
       }
       else
       {
@@ -450,26 +444,21 @@ namespace Ceres.Features.EngineTests
 
       int startDepth;
 
-      using (new SearchContextExecutionBlock(node1.N > node2.N ? manager1.Context : manager2.Context))
+      startDepth = largerNode.Depth;
+      largerNode.StructRef.Traverse(largerNode.Context.Tree.Store,
+      (ref MCTSNodeStruct node) =>
       {
-        startDepth = largerNode.Depth;
-        largerNode.StructRef.Traverse(largerNode.Context.Tree.Store,
-        (ref MCTSNodeStruct node) =>
-        {
-          if (node.DepthInTree > startDepth + depth)
-            return false;
+        if (node.DepthInTree > startDepth + depth)
+          return false;
 
-          indices.Add(node.ZobristHash);
-          return true;
-        }, TreeTraversalType.DepthFirst);
-      }
+        indices.Add(node.ZobristHash);
+        return true;
+      }, TreeTraversalType.DepthFirst);
 
       int countFound = 0;
       int countNotFound = 0;
 
-      using (new SearchContextExecutionBlock(node1.N > node2.N ? manager2.Context : manager1.Context))
-      {
-        smallerNode.StructRef.Traverse(smallerNode.Context.Tree.Store,
+      smallerNode.StructRef.Traverse(smallerNode.Context.Tree.Store,
       (ref MCTSNodeStruct node) =>
       {
         if (node.DepthInTree > startDepth + depth)
@@ -482,7 +471,6 @@ namespace Ceres.Features.EngineTests
 
         return true;
       }, TreeTraversalType.DepthFirst);
-      }
 
       float fracOverlap = (float)countFound / (countNotFound + countFound);
       return fracOverlap;

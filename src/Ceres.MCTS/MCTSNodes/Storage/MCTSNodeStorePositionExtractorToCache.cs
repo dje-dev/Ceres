@@ -66,7 +66,6 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       int countGT1 = 0;
       int skipRootPresent = 0;
 
-      MCTSTree tree = MCTSManager.ThreadSearchContext.Tree;
       int newRootIndex = newRoot.Index.Index;
       MemoryBufferOS<MCTSNodeStruct> nodes = store.Nodes.nodes;
 
@@ -79,63 +78,60 @@ namespace Ceres.MCTS.MTCSNodes.Storage
           ParallelUtils.ParallelOptions(store.Nodes.NumTotalNodes, 1024),
           (range) =>
           {
-            using (new MCTSNodeStoreContext(store))
+            for (int nodeIndex = range.Item1; nodeIndex < range.Item2; nodeIndex++)
             {
-              for (int nodeIndex = range.Item1; nodeIndex < range.Item2; nodeIndex++)
+              ref MCTSNodeStruct nodeRef = ref nodes[nodeIndex];
+
+              if ((includedNodes[nodeIndex] == (extractMode == ExtractMode.ExtractNonRetained)))
+              /*|| nodeRef.IsOldGeneration*/
               {
-                ref MCTSNodeStruct nodeRef = ref nodes[nodeIndex];
-
-                if ((includedNodes[nodeIndex] == (extractMode == ExtractMode.ExtractNonRetained)))
-                /*|| nodeRef.IsOldGeneration*/
-                {
-                  continue;
-                }
-
-                if (nodeRef.ZobristHash == 0)
-                {
-                  // TODO: understand why a small number of uninitialized nodes
-                  //       sometimes appear when swap root is enabled.
-                  continue;
-                }
-
-                if (nodeRef.IsTranspositionLinked)
-                {
-                  continue;
-                }
-
-                // Filter out positions which are obviously impossible to be reached from new root
-                // (considering pieces on board, pawns pushed, etc.).
-                if (extractMode == ExtractMode.ExtractNonRetained 
-                && !Reachable(nodeIndex))
-                {
-                  nonReachable++;
-                  continue;
-                }
-
-                // Disable check of transposition since it is not worth the time taken,
-                // only a small fraction of nodes are found and disqualified in this way.
-                const bool CHECK_TRANSPOSITIONS = false;
-                if (CHECK_TRANSPOSITIONS)
-                {
-                  if (transpositionRoots.TryGetValue(nodeRef.ZobristHash, out int transpositionRootIndex)
-                    && includedNodes[transpositionRootIndex])
-                  {
-                    // The node in in the same transposition equivalence class as a node being retained, so no need to save it.
-                    skipRootPresent++;
-                    continue;
-                  }
-                }
-
-                if (nodeRef.Terminal == Chess.GameResult.Unknown)
-                {
-                  CompressedPolicyVector policy = default;
-                  MCTSNodeStructUtils.ExtractPolicyVector(policySoftmax, in nodeRef, ref policy);
-                  cacheNodes.Store(nodeRef.ZobristHash, nodeRef.Terminal, nodeRef.WinP, nodeRef.LossP, nodeRef.MPosition, in policy);
-                  if (nodeRef.N > 1) countGT1++;
-                  //MCTSEventSource.TestCounter1++;
-                }
-
+                continue;
               }
+
+              if (nodeRef.ZobristHash == 0)
+              {
+                // TODO: understand why a small number of uninitialized nodes
+                //       sometimes appear when swap root is enabled.
+                continue;
+              }
+
+              if (nodeRef.IsTranspositionLinked)
+              {
+                continue;
+              }
+
+              // Filter out positions which are obviously impossible to be reached from new root
+              // (considering pieces on board, pawns pushed, etc.).
+              if (extractMode == ExtractMode.ExtractNonRetained
+              && !Reachable(nodeIndex))
+              {
+                nonReachable++;
+                continue;
+              }
+
+              // Disable check of transposition since it is not worth the time taken,
+              // only a small fraction of nodes are found and disqualified in this way.
+              const bool CHECK_TRANSPOSITIONS = false;
+              if (CHECK_TRANSPOSITIONS)
+              {
+                if (transpositionRoots.TryGetValue(nodeRef.ZobristHash, out int transpositionRootIndex)
+                  && includedNodes[transpositionRootIndex])
+                {
+                  // The node in in the same transposition equivalence class as a node being retained, so no need to save it.
+                  skipRootPresent++;
+                  continue;
+                }
+              }
+
+              if (nodeRef.Terminal == Chess.GameResult.Unknown)
+              {
+                CompressedPolicyVector policy = default;
+                MCTSNodeStructUtils.ExtractPolicyVector(policySoftmax, in nodeRef, ref policy);
+                cacheNodes.Store(nodeRef.ZobristHash, nodeRef.Terminal, nodeRef.WinP, nodeRef.LossP, nodeRef.MPosition, in policy);
+                if (nodeRef.N > 1) countGT1++;
+                //MCTSEventSource.TestCounter1++;
+              }
+
             }
           });
 

@@ -108,7 +108,7 @@ namespace Ceres.MCTS.MTCSNodes
       Span<MCTSNodeStructChild> children = thisNode.Children;
       for (int i = 0; i < numChildren; i++)
       {
-        ref MCTSNodeStruct childNode = ref children[i].ChildRef;
+        ref MCTSNodeStruct childNode = ref children[i].ChildRef(Store);
         if (childNode.Index.Index > boundSeqNum)
         {
           if (childNode.Index.Index < bestSeq)

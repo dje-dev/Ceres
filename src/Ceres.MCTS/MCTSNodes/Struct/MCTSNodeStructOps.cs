@@ -57,8 +57,9 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       throw new Exception("Experimental code.");
       Debug.Assert(NumChildrenExpanded == 0);
 
-      ref MCTSNodeStructChild child0 =  ref MCTSNodeStoreContext.Children[ChildStartIndex + 0];
-      ref MCTSNodeStructChild child1 = ref MCTSNodeStoreContext.Children[ChildStartIndex + 1];
+      MemoryBufferOS<MCTSNodeStructChild> children = Context.Store.Children.childIndices;
+      ref MCTSNodeStructChild child0 =  ref children[ChildStartIndex + 0];
+      ref MCTSNodeStructChild child1 = ref children[ChildStartIndex + 1];
 
       MCTSNodeStructChild temp = child0;
       child0 = child1;
@@ -138,10 +139,12 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <summary>
     /// Creates a new child node at specified index.
     /// </summary>
+    /// <param name="store">underlying node store</param>
+    /// <param name="thisIndex">index of this node</param>
     /// <param name="childIndex"></param>
     /// <param name="possiblyOutOfOrder">normally children added only strictly sequentially unless true</param>
     /// <returns></returns>
-    public MCTSNodeStructIndex CreateChild(MCTSNodeStore store, int childIndex, bool possiblyOutOfOrder = false)
+    public MCTSNodeStructIndex CreateChild(MCTSNodeStore store, MCTSNodeStructIndex thisIndex, int childIndex, bool possiblyOutOfOrder = false)
     {
       // Make sure expanded children appear strictly clustered at lowest indices
       Debug.Assert(possiblyOutOfOrder || childIndex == 0 || ChildAtIndex(childIndex - 1).IsExpanded);
@@ -152,12 +155,12 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       Debug.Assert(!thisChildRef.IsExpanded); // should not already be expanded!
       Debug.Assert(!thisChildRef.IsNull);
 
-      // Allocate new node
+      // Allocate new node.
       MCTSNodeStructIndex childNodeIndex = store.Nodes.AllocateNext();
       ref MCTSNodeStruct childNodeRef = ref store.Nodes.nodes[childNodeIndex.Index];
 
-      // Create new wrapper object and use it to initialize fields
-      childNodeRef.Initialize(new MCTSNodeStructIndex(Index.Index), childIndex, thisChildRef.p, thisChildRef.Move);
+      // Create new wrapper object and use it to initialize fields.
+      childNodeRef.Initialize(store.StoreID, thisIndex, childIndex, thisChildRef.p, thisChildRef.Move);
 
       // Modify child entry to refer to this new child
       // N.B: It is essential to only swap out the child index here
@@ -330,7 +333,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           {
             Debug.Assert(N <= 3);
 
-            MCTSNodeStore store = MCTSNodeStoreContext.Store;
+            MCTSNodeStore store = Context.Store;
             ref readonly MCTSNodeStruct transpositionRootRef = ref store[TranspositionRootIndex];
             ref readonly MCTSNodeStruct transpositionRootChild = ref store[in transpositionRootRef, 0];
 
@@ -353,7 +356,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         }
 
 
-        Span<MCTSNodeStruct> nodes = MCTSNodeStoreContext.Store.Nodes.nodes.Span;
+        Span<MCTSNodeStruct> nodes = Context.Store.Nodes.nodes.Span;
 
         // Get a slice of children in a way that avoids range checking in loop.
         int numChildrenExpanded = numChildrenVisited;
@@ -763,7 +766,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// </summary>
     void BackupUpdateInFlight(int numInFlight1, int numInFlight2)
     {
-      Span<MCTSNodeStruct> nodes = MCTSNodeStoreContext.Store.Nodes.Span;
+      Span<MCTSNodeStruct> nodes = Context.Store.Nodes.Span;
 
       ref MCTSNodeStruct node = ref this;
       while (true)
@@ -783,7 +786,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// </summary>
     public void BackupAbort0(short numInFlight)
     {
-      Span<MCTSNodeStruct> nodes = MCTSNodeStoreContext.Store.Nodes.Span;
+      Span<MCTSNodeStruct> nodes = Context.Store.Nodes.Span;
 
       short updateAmount = (short)-numInFlight;
       ref MCTSNodeStruct node = ref this;
@@ -805,7 +808,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// </summary>
     public void BackupAbort1(short numInFlight)
     {
-      Span<MCTSNodeStruct> nodes = MCTSNodeStoreContext.Store.Nodes.Span;
+      Span<MCTSNodeStruct> nodes = Context.Store.Nodes.Span;
 
       short updateAmount = (short)-numInFlight;
       ref MCTSNodeStruct node = ref this;
@@ -828,7 +831,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <param name="mToApply"></param>
     /// <param name="numInFlight1"></param>
     /// <param name="numInFlight2"></param>
-    public unsafe void BackupApply(Span<MCTSNodeStruct> nodes,
+    public unsafe void BackupApply(MCTSIterator context, Span<MCTSNodeStruct> nodes,
                                    int numToApply,
                                    float vToApplyFirst, float vToApplyNonFirst, float mToApply, 
                                    float dToApplyFirst, float dToApplyNonFirst,
@@ -836,9 +839,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
                                    out MCTSNodeStructIndex indexOfChildDescendentFromRoot)
     {
       Debug.Assert(!float.IsNaN(vToApplyFirst));
-
-      MCTSIterator context = MCTSManager.ThreadSearchContext;
-      bool enableDeepTranspositionBackup = context.ParamsSearch.EnableDeepTranspositionBackup;
+      
       Span<MCTSNodeStruct> nodesSpan = context.Tree.Store.Nodes.nodes.Span;
 
       indexOfChildDescendentFromRoot = default;
@@ -890,54 +891,6 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         bool haveApplied = false;
 
         // Try to apply deep transposition backup (if requested).
-        int transpositionNodeIndex = node.InfoRef.TranspositionRootNodeIndex.Index;
-        if (enableDeepTranspositionBackup && node.InfoRef.TranspositionRootNodeIndex != default)
-        {
-          ref readonly MCTSNodeStruct transpositionRootNodeRef = ref nodes[transpositionNodeIndex];
-
-          if (!transpositionRootNodeRef.IsTranspositionRoot)
-          {
-            // The root has changed due to refresh of roots
-            if (node.InfoRef.Tree.TranspositionRoots.TryGetValue(node.ZobristHash, out transpositionNodeIndex))
-            {
-              node.InfoRef.TranspositionRootNodeIndex = new MCTSNodeStructIndex(transpositionNodeIndex);
-              //sMCTSEventSource.TestCounter1++;
-            }
-          }
-
-#if DEBUG
-          //ref MCTSNodeInfo nodeInfoRef = ref Unsafe.AsRef(node.InfoRef);
-          bool found = context.Tree.TranspositionRoots.TryGetValue(node.ZobristHash, out int siblingTanspositionNodeIndex);
-          if (!found || siblingTanspositionNodeIndex != node.InfoRef.TranspositionRootNodeIndex.Index)
-          {
-            throw new Exception("Internal error: transposition root inconsistency " + siblingTanspositionNodeIndex + " " + node.InfoRef.TranspositionRootNodeIndex.Index);
-          }
-#endif
-
-          // Only apply if subtree is deeper than this subtree.
-          if (transpositionRootNodeRef.N > (node.N + (numToApply / 2) + 1))
-          {
-            const float wtSubtree = 1.0f;
-            const float wtThisNode = 1.0f - wtSubtree;
-
-            if (wtThisNode == 0)
-            {
-              node.W    += numToApply * transpositionRootNodeRef.Q;
-              node.mSum += (FP16)(numToApply * transpositionRootNodeRef.MAvg);
-              node.dSum += numToApply * transpositionRootNodeRef.DAvg;
-            }
-            else
-            {
-              node.W    +=        numToApply * (wtThisNode * vToApply + wtSubtree * transpositionRootNodeRef.Q);
-              node.mSum += (FP16)(numToApply * (wtThisNode * mToApply + wtSubtree * transpositionRootNodeRef.MAvg));
-              node.dSum +=        numToApply * (wtThisNode * dToApply + wtSubtree * transpositionRootNodeRef.DAvg);
-            }
-
-            //MCTSEventSource.TestCounter1++;
-            haveApplied = true;
-          }
-        }
-
         if (!haveApplied)
         {
           if (numToApply == 1)
@@ -985,7 +938,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           if (parentRef.IsRoot)
           {
             indexOfChildDescendentFromRoot = node.Index;
-            MCTSManager.ThreadSearchContext.RootMoveTracker.UpdateQValue(IndexInParent, vToApply, numToApply);
+            node.Context.Info.Context.RootMoveTracker.UpdateQValue(IndexInParent, vToApply, numToApply);
           }
           else
           {
@@ -1027,7 +980,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <param name="wDelta"></param>
     public void BackupApplyWDeltaOnly(float wDelta)
     {
-      Span<MCTSNodeStruct> nodes = MCTSNodeStoreContext.Nodes.Span;
+      Span<MCTSNodeStruct> nodes = Context.Store.Nodes.Span;
 
       ref MCTSNodeStruct node = ref this;
       while (true)
@@ -1147,7 +1100,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         MCTSNodeStructChild child = ChildAtIndex(i);
         if (child.IsExpanded)
         {
-          ref MCTSNodeStruct childNode = ref child.ChildRef;
+          ref MCTSNodeStruct childNode = ref child.ChildRef(in this);
 
           if (childNode.N > 0)
           {

@@ -140,7 +140,7 @@ namespace Ceres.MCTS.Search
     //   BackupApply(priorNodesNN)
 
 
-    public void ProcessDirectOverlapped(MCTSManager manager, int hardLimitNumNodesToCompute, 
+    public void ProcessDirectOverlapped(MCTSManager manager, int hardLimitNumNodesToCompute,
                                         int startingBatchSequenceNum, int? forceBatchSize)
     {
       Debug.Assert(!manager.Root.IsInFlight);
@@ -165,16 +165,16 @@ namespace Ceres.MCTS.Search
       selector2 = overlappingAllowed ? new LeafSelectorMulti(Context, secondSelectorID, Context.StartPosAndPriorMoves, guessMaxNumLeaves) : null;
 
       MCTSNodesSelectedSet[] nodesSelectedSets = new MCTSNodesSelectedSet[overlappingAllowed ? 2 : 1];
-      for (int i = 0; i < nodesSelectedSets.Length; i++) 
+      for (int i = 0; i < nodesSelectedSets.Length; i++)
       {
-        nodesSelectedSets[i] = new MCTSNodesSelectedSet(Context, 
-                                                        i == 0 ? (LeafSelectorMulti)selector1 
+        nodesSelectedSets[i] = new MCTSNodesSelectedSet(Context,
+                                                        i == 0 ? (LeafSelectorMulti)selector1
                                                                : (LeafSelectorMulti)selector2,
                                                         guessMaxNumLeaves, guessMaxNumLeaves, BlockApply,
                                                         Context.ParamsSearch.Execution.InFlightThisBatchLinkageEnabled,
                                                         Context.ParamsSearch.Execution.InFlightOtherBatchLinkageEnabled);
       }
-      
+
       int selectorID = 0;
       int batchSequenceNum = startingBatchSequenceNum;
 
@@ -247,7 +247,7 @@ namespace Ceres.MCTS.Search
         }
 
         int targetThisBatch = OptimalBatchSizeCalculator.CalcOptimalBatchSize(Manager.EstimatedNumSearchNodes, rootNode.N,
-                                                                              overlapThisSet,                                                                    
+                                                                              overlapThisSet,
                                                                               Context.ParamsSearch.Execution.FlowDualSelectors,
                                                                               maxBatchSize,
                                                                               Context.ParamsSearch.BatchSizeMultiplier,
@@ -436,7 +436,7 @@ namespace Ceres.MCTS.Search
       // TODO: Handle this for multiple GPUs, at least the simple case when they are homogeneous.
       if (Context.ParamsSearch.Execution.SmartSizeBatches
        && Context.EvaluatorDef.NumDevices == 1
-       && Context.NNEvaluators.PerfStatsPrimary != null) 
+       && Context.NNEvaluators.PerfStatsPrimary != null)
       {
         int[] optimalBatchSizeBreaks;
         if (Context.NNEvaluators.PerfStatsPrimary.Breaks != null)
@@ -505,7 +505,7 @@ namespace Ceres.MCTS.Search
         Context.NumNodeVisitsSucceeded += nodesSet.NumNewLeafsAddedNonDuplicates;
 
         MCTSIterator.totalNumNodeVisitsAttempted += numLeafsAttempted;
-        MCTSIterator.totalNumNodeVisitsSucceeded+= nodesSet.NumNewLeafsAddedNonDuplicates;
+        MCTSIterator.totalNumNodeVisitsSucceeded += nodesSet.NumNewLeafsAddedNonDuplicates;
 
         float lastYield = (float)nodesSet.NumNewLeafsAddedNonDuplicates / (float)numLeafsAttempted;
         MCTSIterator.LastBatchYieldFrac = lastYield;
@@ -594,30 +594,26 @@ namespace Ceres.MCTS.Search
     {
       if (nodes.NodesNN.Count == 0) return null;
 
-      using (new SearchContextExecutionBlock(manager.Context))
+      if (nodes.NodesNN.Count > numNodesTargeted)
       {
-        if (nodes.NodesNN.Count > numNodesTargeted)
+        // Mark the excess nodes as "CacheOnly"
+        for (int i = numNodesTargeted; i < nodes.NodesNN.Count; i++)
         {
-          // Mark the excess nodes as "CacheOnly"
-          for (int i = numNodesTargeted; i < nodes.NodesNN.Count; i++)
-          {
-            nodes.NodesNN[i].ActionType = MCTSNodeInfo.NodeActionType.CacheOnly;
-          }
+          nodes.NodesNN[i].ActionType = MCTSNodeInfo.NodeActionType.CacheOnly;
         }
-
-        if (isPrimary)
-        {
-          BlockNNEval1.Evaluate(manager.Context, nodes.NodesNN);
-        }
-        else
-        {
-          BlockNNEval2.Evaluate(manager.Context, nodes.NodesNN);
-        }
-
-        timeLastNNFinished = DateTime.Now;
-        return nodes;
       }
 
+      if (isPrimary)
+      {
+        BlockNNEval1.Evaluate(manager.Context, nodes.NodesNN);
+      }
+      else
+      {
+        BlockNNEval2.Evaluate(manager.Context, nodes.NodesNN);
+      }
+
+      timeLastNNFinished = DateTime.Now;
+      return nodes;
     }
   }
 }

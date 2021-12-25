@@ -114,7 +114,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           MCTSNodeStructChild child = node.ChildAtIndex(i);
           if (child.IsExpanded)
           {
-            ref MCTSNodeStruct childRef = ref child.ChildRef;
+            ref MCTSNodeStruct childRef = ref child.ChildRef(store);
             childRef.DoTraverse(store, visitorFunc, traversalType);
 
             // Update statistcs and check if we can early abort

@@ -119,6 +119,7 @@ namespace Ceres.MCTS.NodeCache
     public void SetContext(MCTSIterator context)
     {
       ParentStore = context.Tree.Store;
+      Debug.Assert(ParentStore is not null);
       nodesStore = ParentStore.Nodes.nodes;
       MCTSTree tree = context.Tree;
 
@@ -199,7 +200,8 @@ namespace Ceres.MCTS.NodeCache
         if (TryTake(node, thisTryIndex))
         {
           // Make cache index which contains both set index and index within this array
-          return nodesStore[node.Index].CachedInfoPtr = Unsafe.AsPointer(ref nodes[thisTryIndex]);
+          void* nodeItemPtr = Unsafe.AsPointer(ref nodes[thisTryIndex]);
+          return nodeItemPtr;
         }
 
         // Make sure we haven't overflowed.
@@ -281,7 +283,7 @@ namespace Ceres.MCTS.NodeCache
              )
           {
             MCTSNodeStructIndex nodeIndex = new MCTSNodeStructIndex(node.Index);
-            nodesStore[nodeIndex.Index].CachedInfoPtr = null;
+            nodesStore[nodeIndex.Index].Context.SetAsStoreID(ParentStore.StoreID);
 
             nodes[i].SetUninitialized();
             cachedNodesIndices[i] = 0;
@@ -294,7 +296,7 @@ namespace Ceres.MCTS.NodeCache
 
       return startNumInUse - numInUse;
     }
-   
+
 
     /// <summary>
     /// Returns the MCTSNode having the specified index and stored in the cache
@@ -302,7 +304,7 @@ namespace Ceres.MCTS.NodeCache
     /// </summary>
     /// <param name="nodeIndex"></param>
     /// <returns></returns>
-    public void* Lookup(MCTSNodeStructIndex nodeIndex) => nodesStore[nodeIndex.Index].CachedInfoPtr;
+    public void* Lookup(MCTSNodeStructIndex nodeIndex) => nodesStore[nodeIndex.Index].Context.RawPtr;
 
 
     /// <summary>
@@ -312,7 +314,7 @@ namespace Ceres.MCTS.NodeCache
     /// </summary>
     /// <param name="nodeIndex"></param>
     /// <returns></returns>
-    public void* Lookup(in MCTSNodeStruct nodeRef) => nodeRef.CachedInfoPtr;
+    public void* Lookup(in MCTSNodeStruct nodeRef) => nodeRef.Context.RawPtr;
 
 
     /// <summary>
@@ -351,8 +353,7 @@ namespace Ceres.MCTS.NodeCache
 
       if (resetNodeCacheInfoPtr)
       {
-        // Update the node store itself not to point back to this pointer
-        nodesStore[nodes[index].index.Index].CachedInfoPtr = null;
+        nodesStore[nodes[index].index.Index].Context.SetAsStoreID(ParentStore.StoreID);
       }
     }
 
@@ -371,10 +372,10 @@ namespace Ceres.MCTS.NodeCache
     public void Remove(MCTSNodeStructIndex nodeIndex)
     {
       ref MCTSNodeStruct storeItem = ref nodesStore[nodeIndex.Index];
-      if (storeItem.CachedInfoPtr != null)
+      if (storeItem.Context.IsCached)
       {
         // Release the cache item from the nodes array
-        long bytesDiff = new IntPtr(storeItem.CachedInfoPtr).ToInt64() - new IntPtr(ptrFirstItem).ToInt64();
+        long bytesDiff = new IntPtr(storeItem.Context.RawPtr).ToInt64() - new IntPtr(ptrFirstItem).ToInt64();
         int indexItem = (int)(bytesDiff / lengthItem);
 
         Debug.Assert(cachedNodesIndices[indexItem] == nodeIndex.Index);

@@ -14,6 +14,7 @@
 #region Using directives
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime;
 using System.Runtime.CompilerServices;
@@ -198,8 +199,9 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <param name="indexInParent"></param>
     /// <param name="p"></param>
     /// <param name="priorMove"></param>
-    public void Initialize(MCTSNodeStructIndex parentIndex, int indexInParent,  FP16 p, EncodedMove priorMove)
+    public unsafe void Initialize(int storeID, MCTSNodeStructIndex parentIndex, int indexInParent,  FP16 p, EncodedMove priorMove)
     {
+      Context.SetAsStoreID(storeID);
       ParentIndex = parentIndex;
       miscFields.IndexInParent = (byte)indexInParent;
       P = p;
@@ -228,12 +230,25 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     public readonly int? ChildIndexWithMove(MGMove move)
     {
       EncodedMove lzMove = ConverterMGMoveEncodedMove.MGChessMoveToEncodedMove(move);
-      Span<MCTSNodeStructChild> children = this.Children;
+      Span<MCTSNodeStructChild> children = Children;
+      MemoryBufferOS<MCTSNodeStruct> nodes = Context.Store.Nodes.nodes;
+
       for (int i = 0; i < NumPolicyMoves; i++)
       {
-        if (children[i].Move == lzMove)
+        if (children[i].IsExpanded)
         {
-          return i;
+          ref readonly MCTSNodeStruct childRef = ref nodes[children[i].ChildIndex.Index];
+          if (childRef.PriorMove == lzMove)
+          {
+            return i;
+          }
+        }
+        else
+        {
+          if (children[i].Move == lzMove)
+          {
+            return i;
+          }
         }
       }
 
@@ -283,7 +298,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       get
       {
         Debug.Assert(!ParentIndex.IsNull);
-        return ref MCTSNodeStoreContext.Nodes[ParentIndex.Index];
+        return ref Context.Store.Nodes.nodes[ParentIndex.Index];
       }
     }
 
@@ -302,7 +317,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     public ref readonly MCTSNodeStruct ChildAtIndexRef(int childIndex)
     {
       Debug.Assert(childIndex < NumPolicyMoves);
-      return ref Children[childIndex].ChildRef;
+      int childNodeIndex = Children[childIndex].ChildIndex.Index;
+      return ref Context.Store.Nodes.nodes[childNodeIndex];
     }
 
 
@@ -315,7 +331,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     public readonly MCTSNodeStructChild ChildAtIndex(int childIndex)
     {
       Debug.Assert(childIndex < NumPolicyMoves);
-      return MCTSNodeStoreContext.Children[ChildStartIndex + childIndex];
+      return Context.Store.Children.childIndices[ChildStartIndex + childIndex];
     }
 
 
@@ -349,7 +365,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       [MethodImpl(MethodImplOptions.AggressiveInlining)]
       get
       {
-        return IndexInStore(MCTSNodeStoreContext.Store);
+        return IndexInStore(Context.Store);
       }
     }
 
@@ -386,7 +402,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     {
       string indexStr = $"#{Index.Index}";
       string oldStr = IsOldGeneration ? " OLD" : "";
-      bool isWhite = (DepthInTree % 2 == 1) == (MCTSManager.ThreadSearchContext.Tree.Store.Nodes.PriorMoves.FinalPosition.SideToMove == SideType.White);
+      bool isWhite = (DepthInTree % 2 == 1) == (Context.Store.Nodes.PriorMoves.FinalPosition.SideToMove == SideType.White);
       return $"<Node [#{indexStr}] {oldStr} Depth{DepthInTree} {Terminal} {(isWhite?PriorMove:PriorMove.Flipped)} ({N},{NInFlight},{NInFlight2})  P={P * 100.0f:F3}% "
             + $"V={V:F3}" + (VSecondary == 0 ? "" : $"VSecondary={VSecondary:F3} ") + $" W={W:F3} "
             + $"MPos={MPosition:F3} MAvg={MAvg:F3} "
@@ -409,7 +425,6 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       return store.Children.SpanForNode(in this);
     }
 
-
     /// <summary>
     /// Returns span of children structures belonging to this node.
     /// </summary>
@@ -424,7 +439,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         }
         else
         {
-          return MCTSNodeStoreContext.Store.Children.SpanForNode(in this);
+          return Context.Store.Children.SpanForNode(in this);
         }
       }
     }

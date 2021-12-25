@@ -209,6 +209,8 @@ namespace Ceres.MCTS.Iteration
       int numNewlyShutdown = 0;
       for (int i = 0; i < Root.StructRef.NumChildrenExpanded; i++)
       {
+        ref readonly MCTSNodeStruct childRef = ref Context.Tree.Store.Nodes.nodes[children[i].ChildIndex.Index];
+
         // Never shut down second best move unless the whole search is eligible to shut down
         if (nodesSortedN.Length > 1)
         {
@@ -230,7 +232,7 @@ namespace Ceres.MCTS.Iteration
           }
 
           MCTSNode secondBestMove = Context.ParamsSearch.BestMoveMode == ParamsSearch.BestMoveModeEnum.TopN ? nodesSortedN[1] : nodesSortedQ[1];
-          bool isSecondBestMove = children[i].Move == secondBestMove.PriorMove;
+          bool isSecondBestMove = childRef.PriorMove == secondBestMove.PriorMove;
           if (isSecondBestMove 
            && !Context.ParamsSearch.FutilityPruningStopSearchEnabled
            && Context.RootMovesPruningStatus[i] != MCTSFutilityPruningStatus.PrunedDueToSearchMoves)
@@ -248,12 +250,12 @@ namespace Ceres.MCTS.Iteration
         float earlyStopGapRaw;
         if (Context.ParamsSearch.BestMoveMode == ParamsSearch.BestMoveModeEnum.TopN)
         {
-          earlyStopGapRaw = nodesSortedN[0].N - children[i].N;
+          earlyStopGapRaw = nodesSortedN[0].N - childRef.N;
         }
         else
         {
           int minNRequired = (int)(bestQNode.N * MIN_BEST_N_FRAC_REQUIRED);
-          earlyStopGapRaw = minNRequired - children[i].N;
+          earlyStopGapRaw = minNRequired - childRef.N;
         }
 
         float earlyStopGapAdjusted = earlyStopGapRaw * aggressivenessMultiplier;
@@ -283,7 +285,7 @@ namespace Ceres.MCTS.Iteration
           if (MCTSDiagnostics.DumpSearchFutilityShutdown)
           {
             Console.WriteLine();
-            Console.WriteLine($"\r\nShutdown {children[i].Move} [{children[i].N}] at root N  {Context.Root.N} with remaning {numRemainingSteps}"
+            Console.WriteLine($"\r\nShutdown {childRef.PriorMove} [{childRef.N}] at root N  {Context.Root.N} with remaning {numRemainingSteps}"
                             + $" due to raw gapN {earlyStopGapRaw} adusted to {earlyStopGapAdjusted} in mode {Context.ParamsSearch.BestMoveMode} aggmult {aggressivenessMultiplier}");
             DumpDiagnosticsMoveShutdown();
           }

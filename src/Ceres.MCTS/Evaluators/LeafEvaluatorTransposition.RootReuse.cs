@@ -160,7 +160,7 @@ namespace Ceres.MCTS.Evaluators
     {
       Debug.Assert(node.N <= 2);
 
-      float FRAC_ROOT = node.Context.ParamsSearch.TranspositionRootBackupSubtreeFracs[node.N];
+      float FRAC_ROOT = ParamsSearch.TranspositionRootBackupSubtreeFracs[node.N];
       Debug.Assert(!float.IsNaN(FRAC_ROOT));
       float FRAC_POS = 1f - FRAC_ROOT;
 
@@ -195,7 +195,7 @@ namespace Ceres.MCTS.Evaluators
       }
       else
       {
-        var visit1Ref = MCTSNodeStruct.SubnodeRefVisitedAtIndex(in transpositionRootNode, 1, out bool foundV1);
+        ref readonly MCTSNodeStruct visit1Ref = ref MCTSNodeStruct.SubnodeRefVisitedAtIndex(in transpositionRootNode, 1, out bool foundV1);
         Debug.Assert(foundV1);
 
         if (node.N == 1)
@@ -204,7 +204,7 @@ namespace Ceres.MCTS.Evaluators
         }
         else if (node.N == 2)
         {
-          var visit2Ref = MCTSNodeStruct.SubnodeRefVisitedAtIndex(in transpositionRootNode, 2, out bool foundV2);
+          ref readonly MCTSNodeStruct visit2Ref = ref MCTSNodeStruct.SubnodeRefVisitedAtIndex(in transpositionRootNode, 2, out bool foundV2);
           Debug.Assert(foundV2);
           float multiplier = visit2Ref.ParentIndex == transpositionRootNode.Index ? -1 : 1;
 

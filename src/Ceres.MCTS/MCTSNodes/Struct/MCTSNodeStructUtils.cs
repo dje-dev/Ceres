@@ -37,7 +37,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       Span<float> probsBeforeNormalization = stackalloc float[CompressedPolicyVector.NUM_MOVE_SLOTS];
       Span<ushort> probabilities = stackalloc ushort[CompressedPolicyVector.NUM_MOVE_SLOTS];
 
-      Span<MCTSNodeStructChild> children = MCTSNodeStoreContext.Store.Children.SpanForNode(in nodeRef);
+      MCTSNodeStore store = nodeRef.Context.Store;
+      Span<MCTSNodeStructChild> children = store.Children.SpanForNode(in nodeRef);
       int numPolicyMoves = nodeRef.NumPolicyMoves;
  
       // Extract the probabilities, invert soft max, track sum.
@@ -47,7 +48,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         MCTSNodeStructChild child = children[i];
         if (child.IsExpanded)
         {
-          ref readonly MCTSNodeStruct childRef = ref child.ChildRef;
+          ref readonly MCTSNodeStruct childRef = ref child.ChildRef(store);
           float prob = MathF.Pow(childRef.P, softmaxValue);
           probsBeforeNormalization[i] = prob;
           accProbabilities += prob;
@@ -67,7 +68,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         MCTSNodeStructChild child = children[i];
         if (child.IsExpanded)
         {
-          ref readonly MCTSNodeStruct childRef = ref child.ChildRef;
+          ref readonly MCTSNodeStruct childRef = ref child.ChildRef(store);
           indicies[i] = (ushort)childRef.PriorMove.IndexNeuralNet;
           probabilities[i] = CompressedPolicyVector.EncodedProbability(probsBeforeNormalization[i] * probScaling);
         }
@@ -101,7 +102,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           Console.Write($"          [{node.ChildStartIndex + childIndex++,8}] ");
           if (child.IsExpanded)
           {
-            Console.WriteLine($"{child.ChildIndex} --> {child.ChildRef.ToString()}");
+            Console.WriteLine($"{child.ChildIndex} --> {child.ChildRef(in node).ToString()}");
           }
           else
           {
@@ -114,7 +115,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
     public static void VisitNodesSequentially(ref MCTSNodeStruct root, Action<MCTSNodeStructIndex> action)
     {
-      MCTSNodeStore store = MCTSNodeStoreContext.Store;
+      MCTSNodeStore store = root.Context.Store;
 
       for (int i = 1; i < store.Nodes.NumTotalNodes; i++)
       {
@@ -226,7 +227,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         {
           if (clearCacheItems)
           {
-            nodeRef.CachedInfoPtr = null;
+            nodeRef.Context.SetAsStoreID(store.StoreID);
           }
 
           if (includedNodes.Get(nodeRef.ParentIndex.Index) || i == newRootIndex)

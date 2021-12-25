@@ -26,6 +26,7 @@ using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.Iteration;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Collections.Concurrent;
 
 
 #endregion
@@ -94,6 +95,16 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     /// </summary>
     public float FractionInUse => (float)Nodes.NumTotalNodes / (float)Nodes.MaxNodes;
 
+    const int MAX_STORES = 256;
+    static ConcurrentBag<int> storeIDs;
+
+    public static MCTSNodeStore[] StoresByID = new MCTSNodeStore[MAX_STORES];  
+
+
+    /// <summary>
+    /// Unique global ID associated with this store.
+    /// </summary>
+    public readonly int StoreID;
 
     /// <summary>
     /// Constructor to create a store of specified maximum size.
@@ -102,12 +113,23 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     /// <param name="priorMoves"></param>
     public MCTSNodeStore(int maxNodes, PositionWithHistory priorMoves = null)
     {
-      if (priorMoves == null) priorMoves = PositionWithHistory.StartPosition;
+      if (priorMoves == null)
+      {
+        priorMoves = PositionWithHistory.StartPosition;
+      }
+
+      // Assign the StoreID and install in global store table.
+      if (!storeIDs.TryTake(out StoreID))
+      {
+        throw new Exception("Maximum numbrer of MCTSNodeStore exceeded");
+      }
+      Debug.Assert(StoresByID[StoreID] == null);
+      StoresByID[StoreID] = this;
 
       MaxNodes = maxNodes;
       int allocNodes = maxNodes;
 
-      Nodes = new MCTSNodeStructStorage(allocNodes, null,
+      Nodes = new MCTSNodeStructStorage(this, allocNodes, null,
                                         MCTSParamsFixed.STORAGE_USE_INCREMENTAL_ALLOC,
                                         MCTSParamsFixed.TryEnableLargePages,
                                         MCTSParamsFixed.STORAGE_USE_EXISTING_SHARED_MEM);
@@ -141,6 +163,8 @@ namespace Ceres.MCTS.MTCSNodes.Storage
           // TODO: dispose managed state (managed objects).
         }
 
+        StoresByID[StoreID] = null;
+        storeIDs.Add(StoreID);
         Nodes?.Deallocate();
         Nodes = null;
         Children?.Deallocate();
@@ -206,7 +230,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       for (int i = 1; i < Nodes.nextFreeIndex; i++)
       {
         ref MCTSNodeStruct nodeRef = ref Nodes.nodes[i];
-        nodeRef.CachedInfoPtr = null;
+        nodeRef.Context.SetAsStoreID(StoreID);
       }
     }
 
@@ -303,7 +327,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
         {
           AssertNode(nodeR.Terminal != Chess.GameResult.NotInitialized, "Node not initialized", i, in nodeR);
         }
-        AssertNode(!expectCacheIndexZero || nodeR.CachedInfoPtr == null, "CacheIndex zeroed", i, in nodeR);
+        //AssertNode(!expectCacheIndexZero || nodeR.CachedInfoPtr == null, "CacheIndex zeroed", i, in nodeR);
 
         if (nodeR.TranspositionRootIndex == 0 && nodeR.N > 0 && !nodeR.Terminal.IsTerminal() && nodeR.NumPolicyMoves == 0)
         {
@@ -368,14 +392,16 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 
           foreach (MCTSNodeStructChild child in Children.SpanForNode(in nodeR))
           {
-            sumN += child.N;
             numChildren++;
             if (child.IsExpanded)
             {
+              ref MCTSNodeStruct childRef = ref Nodes.nodes[child.ChildIndex.Index];
+              sumN += childRef.N;
+
               // Any expanded nodes should appear before all unexpanded nodes
               AssertNode(!haveSeenUnexpanded, "expanded after unexpanded", i, in nodeR);
-              AssertNode(child.ChildRef.ParentIndex == nodeR.Index, $"ParentRef is {child.ChildRef.ParentIndex}", i, in nodeR);
-              AssertNode(child.N <= nodeR.N, "child N", i, in nodeR);
+              AssertNode(child.ChildRef(in nodeR).ParentIndex == nodeR.Index, $"ParentRef is {child.ChildRef(in nodeR).ParentIndex}", i, in nodeR);
+              AssertNode(Nodes.nodes[child.ChildIndex.Index].N <= nodeR.N, "child N", i, in nodeR);
 
               numExpanded++;
             }
@@ -462,7 +488,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     {
       return Nodes == null
           ? "<MCTSNodeStore DISPOSED>"
-          : $"<MCTSNodeStore Nodes Occupied {Nodes.NumUsedNodes,-15:N0}"
+          : $"<MCTSNodeStore [{StoreID}] Nodes Occupied {Nodes.NumUsedNodes,-15:N0}"
            + $" Chldren Allocated {Children.NumAllocatedChildren,-15:N0}>";
     }
 
@@ -510,14 +536,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
             Console.Write($"          [{node.ChildStartIndex + childIndex++,8}] ");
             if (child.IsExpanded)
             {
-              if (MCTSNodeStoreContext.Store != null)
-              {
-                Console.WriteLine($"{child.ChildIndex} --> {child.ChildRefFromStore(this).ToString()}");
-              }
-              else
-              {
-                Console.WriteLine($"{child.ChildIndex}");
-              }
+              Console.WriteLine($"{child.ChildIndex} --> {child.ChildRefFromStore(this).ToString()}");
             }
             else
             {
@@ -535,7 +554,21 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       }
     }
 
-#endregion
+    #endregion
+
+
+    [ModuleInitializer]
+    internal static void ModuleInit()
+    {
+      storeIDs = new ConcurrentBag<int>();
+
+      // Initialize set of available IDs
+      // Note that value of 0 is not used for diagnostic purposes (catch if uninitialized).
+      for (int i=1; i<MAX_STORES;i++)
+      {
+        storeIDs.Add(i);  
+      }
+    }
   }
 }
 

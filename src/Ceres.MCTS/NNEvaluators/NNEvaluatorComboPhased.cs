@@ -41,6 +41,8 @@ namespace Ceres.MCTS.NNEvaluators
     /// </summary>
     static void InstallComboPhasedFactory()
     {
+      Console.WriteLine("InstallComboPhasedFactory: COMBO_PHASED is deprecated.");
+#if NOT
       static NNEvaluator Builder(string netID1, int gpuID, NNEvaluator referenceEvaluator)
       {
         string[] netIDs = netID1.Split(";");
@@ -101,6 +103,8 @@ namespace Ceres.MCTS.NNEvaluators
       }
 
       NNEvaluatorFactory.ComboPhasedFactory = Builder;
+#endif
+
     }
 
 

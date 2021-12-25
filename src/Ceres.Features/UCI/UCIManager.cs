@@ -400,10 +400,7 @@ namespace Ceres.Features.UCI
           case "dump-store":
             if (CeresEngine?.Search != null)
             {
-              using (new SearchContextExecutionBlock(CeresEngine.Search.Manager.Context))
-              {
-                CeresEngine.Search.Manager.Context.Tree.Store.Dump(true);
-              }
+              CeresEngine.Search.Manager.Context.Tree.Store.Dump(true);
             }
             else
             {
@@ -415,10 +412,7 @@ namespace Ceres.Features.UCI
           case "validate-store":
             if (CeresEngine?.Search != null)
             {
-              using (new SearchContextExecutionBlock(CeresEngine.Search.Manager.Context))
-              {
-                CeresEngine.Search.Manager.Context.Tree.Store.Validate(null);
-              }
+              CeresEngine.Search.Manager.Context.Tree.Store.Validate(null);
             }
             else
             {
@@ -450,10 +444,7 @@ namespace Ceres.Features.UCI
 
           case "show-tree-plot":
             if (CeresEngine?.Search != null)
-              using (new SearchContextExecutionBlock(CeresEngine.Search.Manager.Context))
-              {
-                TreePlot.Show(CeresEngine.Search.Manager.Context.Root.StructRef);
-              }
+              TreePlot.Show(CeresEngine.Search.Manager.Context.Root.StructRef);
             else
               UCIWriteLine("info string No search manager created");
             break;
@@ -465,10 +456,7 @@ namespace Ceres.Features.UCI
               if (parts.Length == 2)
               {
                 string fileName = parts[1];
-                using (new SearchContextExecutionBlock(CeresEngine.Search.Manager.Context))
-                {
-                  TreePlot.Save(CeresEngine.Search.Manager.Context.Root.StructRef, fileName);
-                }
+                TreePlot.Save(CeresEngine.Search.Manager.Context.Root.StructRef, fileName);
               }
               else if (parts.Length == 1)
               {
@@ -502,14 +490,12 @@ namespace Ceres.Features.UCI
     {
       if (CeresEngine?.Search != null)
       {
-        using (new SearchContextExecutionBlock(CeresEngine?.Search.Manager.Context))
-        {
-          SearchPrincipalVariation pv2 = new SearchPrincipalVariation(CeresEngine.Search.Manager.Root);
-          MCTSPosTreeNodeDumper.DumpPV(CeresEngine.Search.Manager.Context.Root, withDetail);
-        }
+        SearchPrincipalVariation pv2 = new SearchPrincipalVariation(CeresEngine.Search.Manager.Root);
       }
       else
+      {
         UCIWriteLine("info string No search manager created");
+      }
     }
 
 
@@ -766,10 +752,7 @@ namespace Ceres.Features.UCI
       if (SearchFinishedEvent != null) SearchFinishedEvent(result.Search.Manager);
 
       // Output the final UCI info line containing end of search information
-      using (new SearchContextExecutionBlock(result.Search.Manager.Context))
-      {
-        OutputUCIInfo(result.Search.Manager, result.Search.SearchRootNode, true);
-      }
+      OutputUCIInfo(result.Search.Manager, result.Search.SearchRootNode, true);
 
       // Send the best move
       UCIWriteLine("bestmove " + result.Search.BestMove.MoveStr(MGMoveNotationStyle.LC0Coordinate));
@@ -837,20 +820,17 @@ namespace Ceres.Features.UCI
     void OutputVerboseMoveStats()
     {
 
-      using (new SearchContextExecutionBlock(CeresEngine.Search.Manager.Context))
+      MCTSNode searchRootNode = CeresEngine.Search.SearchRootNode;
+      if (ShouldUseLC0FormatForVerboseMoves)
       {
-        MCTSNode searchRootNode = CeresEngine.Search.SearchRootNode;
-        if (ShouldUseLC0FormatForVerboseMoves)
+        foreach (VerboseMoveStat stat in VerboseMoveStatsFromMCTSNode.BuildStats(searchRootNode))
         {
-          foreach (VerboseMoveStat stat in VerboseMoveStatsFromMCTSNode.BuildStats(searchRootNode))
-          {
-            UCIWriteLine(stat.LC0String);
-          }
+          UCIWriteLine(stat.LC0String);
         }
-        else
-        {
-          CeresEngine.Search.Manager.Context.Root.Dump(1, 1, prefixString: "info string ");
-        }
+      }
+      else
+      {
+        CeresEngine.Search.Manager.Context.Root.Dump(1, 1, prefixString: "info string ");
       }
     }
 

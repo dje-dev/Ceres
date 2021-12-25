@@ -327,31 +327,17 @@ namespace Ceres.MCTS.Params
     /// However large values have the disadvantage of distorting the evaluations
     /// at and above the node, effectively overweighting nodes deeper in the tree.
     /// 
+    /// TODO: these made static readonly because otherwise they are difficult to 
+    ///       access from contexts where the containing MCTSTree is not handy.
+    ///       This could be fixed (using mapper class) or possibly these options could be removed.
     /// </summary>
-    public float[] TranspositionRootBackupSubtreeFracs = new float[] { 1, 1, 1 };
+    public static readonly float[] TranspositionRootBackupSubtreeFracs = new float[] { 1, 1, 1 };
 
     /// <summary>
     /// Fractional weight given to subtree averages (e.g. Q) from node being 
     /// copied (cloned) from transposition root subtree when materializing.
     /// </summary>
-    public float[] TranspositionCloneNodeSubtreeFracs = new float[] { 1, 1, 1 };
-
-
-    /// <summary>
-    /// Experiemental feature that a initializes a new leaf
-    /// with the averge V or Q across all nodes in tree which
-    /// are equivalent.
-    /// </summary>
-    public bool TranspositionUseCluster = false; // not sure if better in games
-
-    /// <summary>
-    /// If values applied during backup are potentially taken from the root
-    /// of corresponding transposition subtree (if any) in cases when
-    /// that subtree is larger than the current node's subtree.
-    /// Potentially highly beneficial for large searches (>100k and especially >1000k nodes).
-    /// </summary>
-    public bool EnableDeepTranspositionBackup = false;
-
+    public static readonly float[] TranspositionCloneNodeSubtreeFracs = new float[] { 1, 1, 1 };
 
     /// <summary>
     /// If the transposition table is maintained to enforce condition that 

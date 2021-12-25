@@ -120,7 +120,8 @@ namespace Ceres.MCTS.MTCSNodes
 
       Context = context;
       Tree = context.Tree;
-      Store = context.Tree.Store;
+      Store = Tree.Store;
+      Debug.Assert(Store is not null);
 
       this.parent = default;
       Span<MCTSNodeStruct> parentArray = context.Tree.Store.Nodes.Span;

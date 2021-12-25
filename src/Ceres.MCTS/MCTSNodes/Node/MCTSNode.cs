@@ -62,7 +62,7 @@ namespace Ceres.MCTS.MTCSNodes
     /// <summary>
     /// Pointer directly to associated MCTSNodeInfo.
     /// </summary>
-    private void* infoPtr => structPtr->CachedInfoPtr;
+    private void* infoPtr => structPtr->Context.RawPtr;
 
     /// <summary>
     /// Returns if the node is null.
@@ -105,7 +105,7 @@ namespace Ceres.MCTS.MTCSNodes
     /// <param name="index"></param>
     /// <param name="parent">optionally the parent node</param>
     internal MCTSNode(MCTSIterator context, MemoryBufferOS<MCTSNodeStruct> nodes,
-                      MCTSNodeStructIndex index, bool reinitializeInfo)
+                      MCTSNodeStructIndex index, void *infoPtrToInitialize)
     {
       if (index == default)
       {
@@ -117,21 +117,22 @@ namespace Ceres.MCTS.MTCSNodes
       Debug.Assert(index.Index <= context.Tree.Store.Nodes.MaxNodes);
 
       structPtr = (MCTSNodeStruct*)Unsafe.AsPointer(ref nodes[index.Index]);
-      if (reinitializeInfo)
+      if (infoPtrToInitialize != null)
       {
         // Reuse the prior move list if there was one present (but mark as not initialized).
         MGMoveList priorMoveList = null;
-        if (infoPtr != null)
+        ref MCTSNodeInfo refI = ref Unsafe.AsRef<MCTSNodeInfo>(infoPtrToInitialize);
+        priorMoveList = refI.Annotation.moves;
+        if (priorMoveList != null)
         {
-          ref MCTSNodeInfo refI = ref Unsafe.AsRef<MCTSNodeInfo>(infoPtr);
-          priorMoveList = refI.Annotation.moves;
-          if (priorMoveList != null)
-          {
-            priorMoveList.NumMovesUsed = -1;
-          }
+          priorMoveList.NumMovesUsed = -1;
         }
 
-        Unsafe.AsRef<MCTSNodeInfo>(infoPtr) = new MCTSNodeInfo(context, index, priorMoveList);
+
+        Unsafe.AsRef<MCTSNodeInfo>(infoPtrToInitialize) = new MCTSNodeInfo(context, index, priorMoveList);
+
+        // Only now that node is fully initialized can the node's info pointer be set.
+        StructRef.Context.SetAsCachePtr(infoPtrToInitialize);
       }
     }
 
@@ -346,7 +347,7 @@ namespace Ceres.MCTS.MTCSNodes
     /// <summary>
     /// Returns if the associated annotation has been initialized.
     /// </summary>
-    public bool IsAnnotated => InfoRef.Annotation.IsInitialized;
+    public bool IsAnnotated => StructRef.Context.IsCached && StructRef.Context.Info.IsAnnotated; // TODO: Improve efficiency
 
 
     /// <summary>
@@ -464,16 +465,6 @@ namespace Ceres.MCTS.MTCSNodes
 
 
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ref MCTSNodeStruct ChildNodeAtIndexRef(int childIndex)
-    {
-      Debug.Assert(childIndex < NumChildrenExpanded);
-      Debug.Assert(ChildStartIndex > 0); // child at slot 0 is reserved for null
-
-      ref MCTSNodeStructChild childRef = ref ChildAtIndexRef(childIndex);
-      return ref childRef.ChildRef;
-    }
-
     // TODO: someday add another method that returns MCTSNodeStructChild (not ref as below), 
     // use this in places to avoid the expensive MCTSNode creation above
 
@@ -505,7 +496,7 @@ namespace Ceres.MCTS.MTCSNodes
     /// <returns></returns>
     public MCTSNode CreateChild(int childIndex, bool possiblyOutOfOrder = false)
     {
-      MCTSNodeStructIndex childNodeIndex = StructRef.CreateChild(Store, childIndex, possiblyOutOfOrder);
+      MCTSNodeStructIndex childNodeIndex = StructRef.CreateChild(Store, new MCTSNodeStructIndex(Index),  childIndex, possiblyOutOfOrder);
 
       return Tree.GetNode(childNodeIndex);
     }
@@ -514,14 +505,14 @@ namespace Ceres.MCTS.MTCSNodes
     public void MaterializeAllTranspositionLinks()
     {
       MCTSTree tree = Tree;
-
+      ParamsSearch paramsSearch = Context.ParamsSearch;
       // Sequentially traverse tree nodes and materialize any that are currently just linked.
       StructRef.Traverse(Store,
                    (ref MCTSNodeStruct nodeRef) =>
                    {
                      if (!nodeRef.IsOldGeneration && nodeRef.IsTranspositionLinked)
                      {
-                       nodeRef.MaterializeSubtreeFromTranspositionRoot(tree);
+                       nodeRef.MaterializeSubtreeFromTranspositionRoot(paramsSearch, tree);
                      }
                      return true;
                    }, TreeTraversalType.Sequential);
@@ -667,7 +658,7 @@ namespace Ceres.MCTS.MTCSNodes
       InfoRef.SetPolicy(policySoftmax, minPolicyProbability, in mgPos, moves, in policyVector, returnedMovesAreInSameOrderAsMGMoveList);
     }
 
-    
+
     #region Miscellaneous
 
     /// <summary>
@@ -678,51 +669,49 @@ namespace Ceres.MCTS.MTCSNodes
     /// <returns></returns>
     public MCTSNode FollowMovesToNode(IEnumerable<MGMove> movesMade)
     {
-      using (new SearchContextExecutionBlock(Context))
+      PositionWithHistory startingPriorMove = Context.StartPosAndPriorMoves;
+      MGPosition position = startingPriorMove.FinalPosMG;
+      MCTSIterator context = Context;
+
+      // Advance root node and update prior moves
+      MCTSNode newRoot = this;
+      foreach (MGMove moveMade in movesMade)
       {
-        PositionWithHistory startingPriorMove = Context.StartPosAndPriorMoves;
-        MGPosition position = startingPriorMove.FinalPosMG;
-        MCTSIterator context = Context;
+        bool foundChild = false;
 
-        // Advance root node and update prior moves
-        MCTSNode newRoot = this;
-        foreach (MGMove moveMade in movesMade)
+        if (!newRoot.IsTranspositionLinked)
         {
-          bool foundChild = false;
-
-          if (!newRoot.IsTranspositionLinked)
+          // Find this new root node (after these moves)
+          foreach (MCTSNodeStructChild child in newRoot.StructRef.Children)
           {
-            // Find this new root node (after these moves)
-            foreach (MCTSNodeStructChild child in newRoot.StructRef.Children)
+            if (child.IsExpanded)
             {
-              if (child.IsExpanded)
+              ref readonly MCTSNodeStruct childRef = ref context.Tree.Store.Nodes.nodes[child.ChildIndex.Index];
+              MGMove thisChildMove = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(childRef.PriorMove, in position);
+              if (thisChildMove == moveMade)
               {
-                MGMove thisChildMove = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(child.Move, in position);
-                if (thisChildMove == moveMade)
-                {
-                  // Advance new root to reflect this move
-                  newRoot = context.Tree.GetNode(child.ChildIndex);
+                // Advance new root to reflect this move
+                newRoot = context.Tree.GetNode(child.ChildIndex);
 
-                  // Advance position
-                  position.MakeMove(thisChildMove);
+                // Advance position
+                position.MakeMove(thisChildMove);
 
-                  // Done looking for match
-                  foundChild = true;
-                  break;
-                }
+                // Done looking for match
+                foundChild = true;
+                break;
               }
             }
           }
-
-          if (!foundChild)
-          {
-            return default;
-          }
         }
 
-        // Found it
-        return newRoot;
+        if (!foundChild)
+        {
+          return default;
+        }
       }
+
+      // Found it
+      return newRoot;
     }
 
 

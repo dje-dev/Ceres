@@ -68,8 +68,11 @@ namespace Ceres.MCTS.MTCSNodes
       {
         // Reset the search state fields
         MemoryBufferOS<MCTSNodeStruct> nodes = store.Nodes.nodes;
+        int storeID = store.StoreID;
         for (int i = 1; i < store.Nodes.NumTotalNodes; i++)
-          nodes[i].ResetSearchInProgressState();
+        {
+          nodes[i].ResetSearchInProgressState(storeID);
+        }
       }
 
       return store;

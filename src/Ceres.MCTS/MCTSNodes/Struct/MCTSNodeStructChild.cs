@@ -67,11 +67,23 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <summary>
     /// The LZPositionMove (if the child is unexpanded)
     /// </summary>
-    public readonly EncodedMove Move => IsExpanded ? ChildRef.PriorMove : new EncodedMove(lc0PositionMoveRawValue);
+    public readonly EncodedMove Move
+    {
+      get
+      {
+        Debug.Assert(!IsExpanded);
+        return new EncodedMove(lc0PositionMoveRawValue);
+      }
+    }
 
-    public readonly int N => IsExpanded ? ChildRef.N : 0;
-    public readonly double W => IsExpanded ? ChildRef.W : 0.0f;
-    public readonly FP16 P => IsExpanded ? ChildRef.P : p;
+    public readonly FP16 P
+    {
+      get
+      {
+        Debug.Assert(!IsExpanded);
+        return p;
+      }
+    }
 
 
     public readonly MCTSNodeStructIndex ChildIndex
@@ -93,14 +105,18 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     }
 
 
-    public readonly ref MCTSNodeStruct ChildRef
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly ref MCTSNodeStruct ChildRef(MCTSNodeStore store)
     {
-      [MethodImpl(MethodImplOptions.AggressiveInlining)]
-      get
-      {
-        Debug.Assert(IsExpanded);
-        return ref MCTSNodeStoreContext.Nodes[ChildIndex.Index];
-      }
+      Debug.Assert(IsExpanded);
+      return ref store.Nodes.nodes[ChildIndex.Index];
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly ref MCTSNodeStruct ChildRef(in MCTSNodeStruct nodeRef)
+    {
+      Debug.Assert(IsExpanded);
+      return ref nodeRef.Context.Store.Nodes.nodes[ChildIndex.Index];
     }
 
 

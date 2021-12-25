@@ -72,6 +72,7 @@ namespace Ceres.MCTS.Iteration
     [ThreadStatic]
     public static MCTSIterator ThreadSearchContext;
 
+
     /// <summary>
     /// Statistic tracking total number of seconds spent
     /// in the operation of making a tree node the new root
@@ -328,10 +329,7 @@ namespace Ceres.MCTS.Iteration
       // Possibly validate tree integrity.
       if (MCTSDiagnostics.VerifyTreeIntegrityAtSearchEnd)
       {
-        using (new SearchContextExecutionBlock(Context))
-        {
-          Context.Tree.Store.Validate(Context.Tree.TranspositionRoots);
-        }
+        Context.Tree.Store.Validate(Context.Tree.TranspositionRoots);
       }
 
       return (stats, Root);
@@ -451,7 +449,7 @@ namespace Ceres.MCTS.Iteration
       {
         // TODO: could we improve eficiency by only doing this for the current generation (ReuseGenerationNum)?
 
-        node.ResetExpandedState();
+        node.ResetExpandedState(Context.Tree.Store.StoreID);
         numBackedOut++;
         return true;
       });
@@ -557,52 +555,49 @@ namespace Ceres.MCTS.Iteration
     {
       TablebaseImmediateBestMove = default;
 
-      using (new SearchContextExecutionBlock(node.Context))
+      // If using tablebases, lookup to see if we have immediate win (choosing the shortest one)
+      if (Context.CheckTablebaseBestNextMove != null)
       {
-        // If using tablebases, lookup to see if we have immediate win (choosing the shortest one)
-        if (Context.CheckTablebaseBestNextMove != null)
+        (GameResult result, MGMove immediateMove) = TryGetTablebaseImmediateMove(node);
+        TablebaseImmediateBestMove = immediateMove;
+
+        if (result == GameResult.Checkmate)
         {
-          (GameResult result, MGMove immediateMove) = TryGetTablebaseImmediateMove(node);
-          TablebaseImmediateBestMove = immediateMove;
+          SetRootAsWin();
+        }
+        else if (result == GameResult.Draw)
+        {
+          // Set the evaluation of the position to be a draw
+          // TODO: possibly use distance to end of game to set the distance more accurately than fixed at 1
+          // TODO: do we have to adjust for possible contempt?
+          const int DISTANCE_TO_END_OF_GAME = 1;
 
-          if (result == GameResult.Checkmate)
-          {
-            SetRootAsWin();
-          }
-          else if (result == GameResult.Draw)
-          {
-            // Set the evaluation of the position to be a draw
-            // TODO: possibly use distance to end of game to set the distance more accurately than fixed at 1
-            // TODO: do we have to adjust for possible contempt?
-            const int DISTANCE_TO_END_OF_GAME = 1;
+          Context.Root.StructRef.W = 0;
+          Context.Root.StructRef.N = 1;
+          Context.Root.StructRef.WinP = 0;
+          Context.Root.StructRef.LossP = 0;
+          Context.Root.StructRef.MPosition = DISTANCE_TO_END_OF_GAME;
+          Context.Root.StructRef.Terminal = GameResult.Draw;
+          Context.Root.EvalResult = new LeafEvaluationResult(GameResult.Draw, 0, 0, 1);
+        }
+        else if (result == GameResult.Unknown && TablebaseImmediateBestMove != default)
+        {
+          // N.B. Unknown as a result actually means "Lost"
+          //      base currently the GameResult enum has no way to represent that.
+          //      TODO: Clean this up, create a new Enum to represent this more cleanly.
+          // Set the evaluation of the position to be a loss.
+          // TODO: possibly use distance to mate to set the distance more accurately than fixed at 1
+          const int DISTANCE_TO_MATE = 1;
 
-            Context.Root.StructRef.W = 0;
-            Context.Root.StructRef.N = 1;
-            Context.Root.StructRef.WinP = 0;
-            Context.Root.StructRef.LossP = 0;
-            Context.Root.StructRef.MPosition = DISTANCE_TO_END_OF_GAME;
-            Context.Root.StructRef.Terminal = GameResult.Draw;
-            Context.Root.EvalResult = new LeafEvaluationResult(GameResult.Draw, 0, 0, 1);
-          }
-          else if (result == GameResult.Unknown && TablebaseImmediateBestMove != default)
-          {
-            // N.B. Unknown as a result actually means "Lost"
-            //      base currently the GameResult enum has no way to represent that.
-            //      TODO: Clean this up, create a new Enum to represent this more cleanly.
-            // Set the evaluation of the position to be a loss.
-            // TODO: possibly use distance to mate to set the distance more accurately than fixed at 1
-            const int DISTANCE_TO_MATE = 1;
+          float lossP = ParamsSelect.LossPForProvenLoss(DISTANCE_TO_MATE, false);
 
-            float lossP = ParamsSelect.LossPForProvenLoss(DISTANCE_TO_MATE, false);
-
-            Context.Root.StructRef.W = -lossP;
-            Context.Root.StructRef.N = 1;
-            Context.Root.StructRef.WinP = 0;
-            Context.Root.StructRef.LossP = (FP16)lossP;
-            Context.Root.StructRef.MPosition = DISTANCE_TO_MATE;
-            Context.Root.EvalResult = new LeafEvaluationResult(GameResult.Checkmate, 0, (FP16)lossP, DISTANCE_TO_MATE);
-            Context.Root.StructRef.Terminal = GameResult.Checkmate;
-          }
+          Context.Root.StructRef.W = -lossP;
+          Context.Root.StructRef.N = 1;
+          Context.Root.StructRef.WinP = 0;
+          Context.Root.StructRef.LossP = (FP16)lossP;
+          Context.Root.StructRef.MPosition = DISTANCE_TO_MATE;
+          Context.Root.EvalResult = new LeafEvaluationResult(GameResult.Checkmate, 0, (FP16)lossP, DISTANCE_TO_MATE);
+          Context.Root.StructRef.Terminal = GameResult.Checkmate;
         }
       }
     }
@@ -800,10 +795,7 @@ namespace Ceres.MCTS.Iteration
     /// <param name="maxMoves"></param>
     public void DumpRootMoveStatistics(int maxMoves = int.MaxValue)
     {
-      using (new SearchContextExecutionBlock(Context))
-      {
-        DumpMoveStatistics(Root, maxMoves);
-      }
+      DumpMoveStatistics(Root, maxMoves);
     }
 
 
@@ -814,16 +806,13 @@ namespace Ceres.MCTS.Iteration
     /// <param name="maxMoves"></param>
     private static void DumpMoveStatistics(MCTSNode node, int maxMoves = int.MaxValue)
     {
-      using (new SearchContextExecutionBlock(node.Context))
+      lock (dumpToConsoleLock)
       {
-        lock (dumpToConsoleLock)
-        {
-          // First quick dump at level 1
-          Console.WriteLine();
-          Console.WriteLine("VERBOSE ROOT MOVE STATISTICS");
-          node.Dump(1, 1, maxMoves: maxMoves);
-          Console.WriteLine("-----------------------------------------------------------------------------------------------------------------\r\n");
-        }
+        // First quick dump at level 1
+        Console.WriteLine();
+        Console.WriteLine("VERBOSE ROOT MOVE STATISTICS");
+        node.Dump(1, 1, maxMoves: maxMoves);
+        Console.WriteLine("-----------------------------------------------------------------------------------------------------------------\r\n");
       }
     }
 
@@ -850,12 +839,11 @@ namespace Ceres.MCTS.Iteration
       get
       {
         if (TablebaseImmediateBestMove != default(MGMove))
-          return TablebaseImmediateBestMove;
-
-        using (new SearchContextExecutionBlock(Context))
         {
-          return Context.Root.BestMove(false).Annotation.PriorMoveMG;
+          return TablebaseImmediateBestMove;
         }
+
+        return Context.Root.BestMove(false).Annotation.PriorMoveMG;
       }
     }
 
@@ -870,7 +858,6 @@ namespace Ceres.MCTS.Iteration
         Context.Tree.Store.Dispose();
 
         // Release references to objects
-        ThreadSearchContext = null;
         Context = null;
 
         // If the search was sufficeintly large, trigger an aynchronous full garbage collection

@@ -105,8 +105,8 @@ namespace Ceres.MCTS.Search.IteratedMCTS
           MCTSNodeStructChild thisChild = children[i];
           if (thisChild.IsExpanded)
           {
-            ref MCTSNodeStruct childNodeRef = ref thisChild.ChildRef;
-            thisChild.ChildRef.P = (FP16)newValue;
+            ref MCTSNodeStruct childNodeRef = ref thisChild.ChildRef(node.Store);
+            childNodeRef.P = (FP16)newValue;
           }
           else
           {

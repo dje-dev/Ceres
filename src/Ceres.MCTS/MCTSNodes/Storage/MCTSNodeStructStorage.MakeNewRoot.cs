@@ -116,7 +116,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       return childNodeIndex;
     }
 
-
+#if NOT_USED
     static void MakeNodeNotTranspositionRoot(MCTSTree tree, TranspositionRootsDict transpositionRoots, int indexOfNewRootBeforeRewrite, ref MCTSNodeStruct newRootChild)
     {
       if (!newRootChild.IsRoot && newRootChild.IsTranspositionRoot)
@@ -147,7 +147,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
         newRootChild.IsTranspositionRoot = false;
       }
     }
-
+#endif
 
     /// <summary>
     /// Makes an existing node in the tree the new root node
@@ -357,6 +357,9 @@ namespace Ceres.MCTS.MTCSNodes.Storage
         // Number of nodes after which the parallel presorter will be started
         int presortBegin = (int)(store.Nodes.nextFreeIndex * 0.70f);
 
+        int storeID = store.StoreID;
+        MemoryBufferOS<MCTSNodeStruct> nodes = store.Nodes.nodes;
+
         // Now scan all above nodes. 
         // If they don't belong, ignore. 
         // If they do belong, swap them down to the next available lower location
@@ -367,10 +370,10 @@ namespace Ceres.MCTS.MTCSNodes.Storage
           {
             mapOldIndicesToNewIndices[i] = ++numNodesRebuilt;
 
-            ref MCTSNodeStruct thisNode = ref store.Nodes.nodes[i];
+            ref MCTSNodeStruct thisNode = ref nodes[i];
 
             // Reset any cache entry.
-            thisNode.CachedInfoPtr = null;
+            thisNode.Context.SetAsStoreID(storeID);
 
             // Remember this location if this is the new parent.
             if (i == indexOfNewRootBeforeRewrite)
@@ -496,7 +499,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       // Finally, make this as the root (no parent)
       store.Nodes.nodes[1].ParentIndex = default;
       store.Nodes.nodes[1].PriorMove = default;
-      store.Nodes.nodes[1].CachedInfoPtr = null;
+      store.Nodes.nodes[1].Context.SetAsStoreID(store.StoreID);
 
       // Update the prior moves
       store.Nodes.PriorMoves = new PositionWithHistory(newPriorMoves);
@@ -595,7 +598,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
               // We are not retaining the transposition root, so we must 
               // unlink the node from parent and copy over all
               // children which we have already visited (virtually).
-              nodeRef.MaterializeSubtreeFromTranspositionRoot(tree);
+              nodeRef.MaterializeSubtreeFromTranspositionRoot(tree.Context.ParamsSearch, tree);
             }
           }
         }

@@ -138,7 +138,7 @@ namespace Ceres.MCTS.NodeCache
     public void* Add(MCTSNodeStructIndex node) => subCaches[node.Index % NumSubcaches].Add(node);
 
 
-    public void* Lookup(MCTSNodeStructIndex nodeIndex) => nodes[nodeIndex.Index].CachedInfoPtr;
+    public void* Lookup(MCTSNodeStructIndex nodeIndex) => nodes[nodeIndex.Index].Context.RawPtr;
 
 
     /// <summary>
@@ -148,7 +148,7 @@ namespace Ceres.MCTS.NodeCache
     /// </summary>
     /// <param name="nodeIndex"></param>
     /// <returns></returns>
-    public void* Lookup(in MCTSNodeStruct nodeRef) => nodeRef.CachedInfoPtr;
+    public void* Lookup(in MCTSNodeStruct nodeRef) => nodeRef.Context.RawPtr;
 
 
     /// <summary>
