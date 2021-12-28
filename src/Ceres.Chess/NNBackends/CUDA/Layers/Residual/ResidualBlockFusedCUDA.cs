@@ -226,7 +226,7 @@ namespace Ceres.Chess.NNBackends.CUDA
 
         if (USE_LAUNCHER && inputOutputNoSELauncher == null)
         {
-          inputOutputNoSELauncher = new(kernelSENotLast, stream, NUM_SHARED_BYTES,
+          inputOutputNoSELauncher = new(kernelSENotLast, stream, 0,
                                     new object[] {N, C, 
                                                   transformed_input.DevicePointer, transformed_output.DevicePointer,
                                                   (IntPtr)0, biases0.DevicePointer });
