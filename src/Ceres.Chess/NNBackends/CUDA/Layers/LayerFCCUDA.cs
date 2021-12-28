@@ -167,7 +167,7 @@ namespace Ceres.Chess.NNBackends.CUDA
                    num_outputs * batch_size,
                    num_outputs, 
                    num_outputs * batch_size, 
-                   UseRELU? 1:0, UseTanH?1:0, UseSigmoid?1:0);
+                   UseRELU? 1:0, UseTanH?1:0, UseSigmoid?1:0, stream.Stream.Pointer);
 
       }
     }

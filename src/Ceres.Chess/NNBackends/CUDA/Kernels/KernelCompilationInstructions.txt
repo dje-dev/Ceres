@@ -1,20 +1,22 @@
-﻿Instructions to genrerate kernels (PTX from CU).
-Needs 4 files from LC0 project 
+﻿Instructions to generate kernels (PTX from CU):
+
+Need 4 files from LC0 project 
   cuda_common.h
   winograd_helper.inc
   fp16_kernels.cu
   common_kernels.cu
-NOTE: The above .cu files were trivially modified in one way: 
-      all arguments accepting a stream were removed (sometimes also a template argument of 0).
-      Optionally some of the instantiated template methods with type float can be removed to save space (not used).
-Also one small file from Ceres
+
+NOTE: As of v0.95 these .cu/.inc files require no modification.
+      (Optionally some of the instantiated template methods with type float can be removed to save space since not used.
+
+Also one small file of Ceres-specific kernels:
   ceres_kernels.cu
 
 NOTE: Currently 40b is not working on pre-Ampere hardware (e.g. 2070).
       This could probably be fixed someday, but would require having two versions of the fp16_kernels (as was done before)
       with one having the fused implementation to allow up to 512 blocks instead of 384 (see cuda_common.h),
       and auto-selecting this alternate kernel (do not use special Ampere version) 
-      only if on pre-Ampere hardware and only if running 40b.
+      only if on pre-Ampere hardware and only if running 40b. See ResidualBlock class and comments therein.
 
 Steps:
   1. Set the Visual Studio path via vcvars64.bat/vcvars64.cmd batch file provided by Microsoft
@@ -22,7 +24,7 @@ Steps:
   3. Create utils subdirectory under C:\dev\lc0\master1\lc0\src\neural\cuda and copy the LC0 utils source code files there (so CUDA compiler will find)
   4. Launch a console session from menu bar using "x64 Native Tools  Command Propmt for Visual Studio 2019"
   5. Change into directory where CU files are located
-  6. Run the 3 commands to generate PTX and then copy to source code tree (update directory as needed).
+  6. Run the 3 commands to generate PTX and then copy to source code tree (update directory as needed, probably also with .CU/.INC files also).
   7. Rebuild C# project and test.
 
 Working directory was: C:\dev\lc0\master1\lc0\src\neural\cuda.

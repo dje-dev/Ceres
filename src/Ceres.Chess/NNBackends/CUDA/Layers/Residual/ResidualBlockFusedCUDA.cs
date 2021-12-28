@@ -48,20 +48,29 @@ namespace Ceres.Chess.NNBackends.CUDA
     string knNotLastNotSE  => IsBig ? "_ZN6lczero13cudnn_backend43OutputInputTransformKernel_fp16_shmem_boardILb0ELb1ELb1ELb1EEEviiiP6__halfPKS2_S3_S5_S5_S5_S5_S5_"
                                     : "_ZN6lczero13cudnn_backend45OutputTransform_SE_relu_InputTransform_kernelI6__halfLb0ELb1ELb1ELb1EEEviiiPT_PKS3_S4_S6_S6_S6_S6_S6_";
 
-    string knLastSE       = "_ZN6lczero13cudnn_backend22OutputTransform_kernelI6__halfLb1ELb1ELb1ELb1ELb1ELb0EEEviiiPT_PKS3_S6_S6_S6_S6_S6_S6_";
-    string knLastNotSE    = "_ZN6lczero13cudnn_backend22OutputTransform_kernelI6__halfLb0ELb1ELb1ELb1ELb1ELb0EEEviiiPT_PKS3_S6_S6_S6_S6_S6_S6_";
+    const string knLastSE    = "_ZN6lczero13cudnn_backend22OutputTransform_kernelI6__halfLb1ELb1ELb1ELb1ELb1ELb0EEEviiiPT_PKS3_S6_S6_S6_S6_S6_S6_";
+    const string knLastNotSE = "_ZN6lczero13cudnn_backend22OutputTransform_kernelI6__halfLb0ELb1ELb1ELb1ELb1ELb0EEEviiiPT_PKS3_S6_S6_S6_S6_S6_S6_";
+    const string knNoSENotLast = "_ZN6lczero13cudnn_backend42OutputTransform_relu_InputTransform_kernelI6__halfLb1ELb1ELb0EEEviiPT_PKS3_S4_S6_";
 
-    int NUM_SHARED_BYTES => IsBig ? (72 * 1024) : 0;
+    CudaKernel inputTransformKernel;
+    CudaKernel inputOutputKernelPre;
+
+    int NUM_SHARED_BYTES => IsBig ? (72 * 1024) : 0;  // SharedMemSize
 
     public override void LoadKernels()
     {
-      CudaKernel kernelInputOutputPre = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, knInputOutputPre);
       CudaKernel kernelNotLastSE = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, knNotLastSE);
       CudaKernel kernelNotLastNotSE = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, knNotLastNotSE);
+      inputTransformKernel = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, knFirstBlockInput);
+      inputOutputKernelPre = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, knInputOutputPre);
+
+      inputOutputKernelPre.BlockDimensions = C;
+
+      kernelSENotLast = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, knNoSENotLast);
 
       if (IsBig)
       {
-        kernelInputOutputPre.MaxDynamicSharedSizeBytes = NUM_SHARED_BYTES;
+        inputOutputKernelPre.MaxDynamicSharedSizeBytes = NUM_SHARED_BYTES;
         kernelNotLastSE.MaxDynamicSharedSizeBytes = NUM_SHARED_BYTES;
         kernelNotLastNotSE.MaxDynamicSharedSizeBytes = NUM_SHARED_BYTES;
       }
@@ -85,8 +94,8 @@ namespace Ceres.Chess.NNBackends.CUDA
 
   public ResidualBlockFusedCUDA(NNBackendExecContext parent, string name, int layerIndex, 
                                 BaseLayerCUDA inputLayer, 
-                                int C, bool se, int se_k, bool first, bool last)
-      : base(parent, name, layerIndex, C, 8, 8, inputLayer, se, se_k)
+                                int C, bool se, int se_k, bool first, bool last, int sharedMemSize)
+      : base(parent, name, layerIndex, C, 8, 8, inputLayer, se, se_k, sharedMemSize)
     {
       if (C > 512)
       {
@@ -148,7 +157,11 @@ namespace Ceres.Chess.NNBackends.CUDA
 #endif
 
     CUDAKernelLauncher inputOutputLauncher;
+    CUDAKernelLauncher inputOutputNoSELauncher;
     CUDAKernelLauncher outputLauncher;
+
+    CudaKernel kernelSENotLast; 
+
 
     protected override void DoEval(CudaStream stream, int N,
                                    CudaDeviceVariable<FP16> output,
@@ -174,12 +187,10 @@ namespace Ceres.Chess.NNBackends.CUDA
       if (FirstBlock)
       {
         // Possibly duplicate code as in FusedWinogradSELayerCUDA
-        CudaKernel inputTransformKernel = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, knFirstBlockInput);
-
         inputTransformKernel.GridDimensions = N;
         inputTransformKernel.BlockDimensions = C;
         // InputTransform<DataType>(N, c_input_, transformed_input, input);
-        LaunchKernel(stream, inputTransformKernel, N, C, input.DevicePointer, transformed_input.DevicePointer);
+        LaunchKernel(stream, inputTransformKernel, N, C, input.DevicePointer, transformed_input.DevicePointer, stream.Stream.Pointer);
 
         cublasRowMajorMatrixMul(transformed_input, transformedWeights0, transformed_output, N * 4, C, C, 36);
 
@@ -202,64 +213,68 @@ namespace Ceres.Chess.NNBackends.CUDA
         }
         else
         {
-          throw new NotImplementedException();
-#if NOT
-          using (new TimingBlock("10_000"))
-          {
-            for (int i = 0; i < 1000_000; i++)
-            {
-              cublasRowMajorMatrixMul(output, transformed_weights0_, transformed_output, N * 4, C, C, 36);
-
-              FP16[] correct = new FP16[384 * 1024 * 36];
-              transformed_output.CopyToHost(correct);
-
-              batchMultiplier.Execute(stream, transformed_weights0_, output, transformed_output, false);
-
-              FP16[] attempt = new FP16[384 * 1024 * 36];
-              transformed_output.CopyToHost(attempt);
-              for (int ix = 0; ix < attempt.Length; ix++)
-              {
-                if (Math.Abs(correct[ix] - attempt[ix]) > 1E-5)
-                {
-                  Console.WriteLine("bad ");
-                }
-              }
-              Console.WriteLine("ok");
-            }
-          }
-#endif
+          throw new NotImplementedException(); // see code at bottom of file
         }
       }
 
-      // with relu, use_bias (not use_se, not skip)
-      CudaKernel inputOutputKernelPre = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, knInputOutputPre);
-
-      inputOutputKernelPre.GridDimensions = N;
-      inputOutputKernelPre.BlockDimensions = C;
-
-      if (USE_LAUNCHER && inputOutputLauncher == null)
+      const bool USE_OPTIMIZED_NON_SE_IO_KERNEL = true;
+      if (USE_OPTIMIZED_NON_SE_IO_KERNEL && !LastBlock)
       {
-        inputOutputLauncher = new(inputOutputKernelPre, stream, NUM_SHARED_BYTES,
-                                  new object[] {N, C, 0,
-                                  transformed_input.DevicePointer, 
+        const int kOpInpTransformBlockSize = 64;        
+        kernelSENotLast.BlockDimensions = kOpInpTransformBlockSize;
+        kernelSENotLast.GridDimensions = new ManagedCuda.VectorTypes.dim3(CUDAUtils.DivUp(C, kOpInpTransformBlockSize), N, 1);
+
+        if (USE_LAUNCHER && inputOutputNoSELauncher == null)
+        {
+          inputOutputNoSELauncher = new(kernelSENotLast, stream, NUM_SHARED_BYTES,
+                                    new object[] {N, C, 
+                                                  transformed_input.DevicePointer, transformed_output.DevicePointer,
+                                                  (IntPtr)0, biases0.DevicePointer });
+        }
+
+        if (inputOutputNoSELauncher != null)
+        {
+          inputOutputNoSELauncher.Parms.ObjRef<int>(0) = N;
+          inputOutputNoSELauncher.LaunchAsync();
+        }
+        else
+        {
+          LaunchKernel(stream, kernelSENotLast, N, C,
+                       transformed_input.DevicePointer, transformed_output.DevicePointer,
+                       (IntPtr)0, biases0.DevicePointer);
+        }
+      }
+      else
+      {
+        inputOutputKernelPre.GridDimensions = N;
+        inputOutputKernelPre.BlockDimensions = C;
+
+        // with relu, use_bias (not use_se, not skip)
+        if (USE_LAUNCHER && inputOutputLauncher == null)
+        {
+          inputOutputLauncher = new(inputOutputKernelPre, stream, NUM_SHARED_BYTES,
+                                    new object[] {N, C, 0,
+                                  transformed_input.DevicePointer,
                                   transformed_output.DevicePointer,
                                   (IntPtr)0, biases0.DevicePointer,
                                   (IntPtr)0, (IntPtr)0,
-                                  (IntPtr)0, (IntPtr)0 });
-      }
+                                  (IntPtr)0, (IntPtr)0, stream.Stream.Pointer });
+        }
 
-      if (inputOutputLauncher != null)
-      {
-        inputOutputLauncher.Parms.ObjRef<int>(0) = N;
-        inputOutputLauncher.LaunchAsync();
-      }
-      else
-      { 
-        LaunchKernel(stream, inputOutputKernelPre, N, C, 0,
-                    transformed_input.DevicePointer, transformed_output.DevicePointer,
-                    (IntPtr)0, biases0.DevicePointer,
-                    (IntPtr)0, (IntPtr)0,
-                    (IntPtr)0, (IntPtr)0);
+        if (inputOutputLauncher != null)
+        {
+          inputOutputLauncher.Parms.ObjRef<int>(0) = N;
+          inputOutputLauncher.LaunchAsync();
+        }
+        else
+        {
+          LaunchKernel(stream, inputOutputKernelPre, N, C, 0,
+                      transformed_input.DevicePointer, transformed_output.DevicePointer,
+                      (IntPtr)0, biases0.DevicePointer,
+                      (IntPtr)0, (IntPtr)0,
+                      (IntPtr)0, (IntPtr)0, stream.Stream.Pointer);
+        }
+
       }
 
       // "transformed_input" tensor now contains transformed input for the next convolution
@@ -275,7 +290,30 @@ namespace Ceres.Chess.NNBackends.CUDA
       {
 #endif
       cublasRowMajorMatrixMul(transformed_input, transformedWeights1, transformed_output, N * 4, C, C, 36);
-      
+
+      // Verify support for this combination of network/hardware.
+      if (LastBlock && HasSE)
+      {
+        const int kMaxResBlockFusingChannels = 384;  // limit on num_filters
+        const int kMaxResBlockFusingSeKFp16Ampere = 512;  // (use a different kernel with reduced register pressure)
+        const int kMaxResBlockFusingSeFp16AmpereSmem = 72 * 1024;  // shared memory used by the special kernel
+
+        bool allowFusing = (C <= kMaxResBlockFusingChannels)
+                        || ((SharedMemSize >= kMaxResBlockFusingSeFp16AmpereSmem) &&
+                            (C <= kMaxResBlockFusingSeKFp16Ampere));
+        if (!allowFusing)
+        {
+          // TODO: support this case (for 512b networks on hardware without sufficient shared memory.
+          throw new Exception("Ceres limitation: network not supported on this hardware, see possible remediation in source.");
+#if NOT
+// Need to add translation of this code to support this case
+OutputTransform<DataType, true, true, true, true, true, true>(
+            N, C, se_k_, (DataType*)input, transformed_output, input,
+            biases1_, w1_, b1_, w2_, b2_, stream);
+        InputTransform<DataType, true>(N, C, output, (DataType*)input, stream);
+#endif
+        }
+      }
 
       string outputKN;
       if (LastBlock)
@@ -286,7 +324,6 @@ namespace Ceres.Chess.NNBackends.CUDA
       {
         outputKN = HasSE ? knNotLastSE : knNotLastNotSE;
       }
-
 
       CudaKernel kernelOutputInput = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, outputKN);
 
@@ -314,7 +351,9 @@ namespace Ceres.Chess.NNBackends.CUDA
                                            output.DevicePointer, transformed_output.DevicePointer,
                                            input.DevicePointer, biases1.DevicePointer,
                                            HasSE ? Weights1.DevicePointer : DUMMY, HasSE ? Biases1.DevicePointer : DUMMY,
-                                           HasSE ? Weights2.DevicePointer : DUMMY, HasSE ? Biases2.DevicePointer : DUMMY});
+                                           HasSE ? Weights2.DevicePointer : DUMMY, HasSE ? Biases2.DevicePointer : DUMMY,
+                             stream.Stream.Pointer}
+                             );
       }
 
       if (outputLauncher != null)
@@ -334,7 +373,7 @@ namespace Ceres.Chess.NNBackends.CUDA
                             output.DevicePointer, transformed_output.DevicePointer,
                             input.DevicePointer, biases1.DevicePointer,
                             HasSE ? Weights1.DevicePointer : DUMMY, HasSE ? Biases1.DevicePointer : DUMMY,
-                            HasSE ? Weights2.DevicePointer : DUMMY, HasSE ? Biases2.DevicePointer : DUMMY);
+                            HasSE ? Weights2.DevicePointer : DUMMY, HasSE ? Biases2.DevicePointer : DUMMY, stream.Stream.Pointer);
       }
 
       // "output" tensor now contains transformed input for the next
@@ -343,3 +382,30 @@ namespace Ceres.Chess.NNBackends.CUDA
     
   }
 }
+
+
+#if NOT
+          using (new TimingBlock("10_000"))
+          {
+            for (int i = 0; i < 1000_000; i++)
+            {
+              cublasRowMajorMatrixMul(output, transformed_weights0_, transformed_output, N * 4, C, C, 36);
+
+              FP16[] correct = new FP16[384 * 1024 * 36];
+              transformed_output.CopyToHost(correct);
+
+              batchMultiplier.Execute(stream, transformed_weights0_, output, transformed_output, false);
+
+              FP16[] attempt = new FP16[384 * 1024 * 36];
+              transformed_output.CopyToHost(attempt);
+              for (int ix = 0; ix < attempt.Length; ix++)
+              {
+                if (Math.Abs(correct[ix] - attempt[ix]) > 1E-5)
+                {
+                  Console.WriteLine("bad ");
+                }
+              }
+              Console.WriteLine("ok");
+            }
+          }
+#endif

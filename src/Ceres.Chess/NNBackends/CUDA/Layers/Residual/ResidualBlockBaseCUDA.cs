@@ -13,8 +13,9 @@
 
 #region Using directives
 
-using Ceres.Base.DataTypes;
+using System;
 using ManagedCuda;
+using Ceres.Base.DataTypes;
 
 #endregion
 
@@ -27,12 +28,18 @@ namespace Ceres.Chess.NNBackends.CUDA
   {
     public ResidualBlockBaseCUDA(NNBackendExecContext parent, string name, int layerIndex,
                                  int c, int h, int w, 
-                                 BaseLayerCUDA inputLayer, bool hasSE, int seK)
+                                 BaseLayerCUDA inputLayer, bool hasSE, int seK, int sharedMemSize)
   : base(parent, name, layerIndex, c, h, w, inputLayer)
     {
-
+      if (c % 32 != 0)
+      {
+        throw new Exception($"Incompatible neural network. Channel count is {c}, but Ceres only supports fused version of " +
+                             "Winograd convolution in residual block which requires channel count be a multiple of 32.");
+      }
+  
       HasSE = hasSE;
       SEK = seK;
+      SharedMemSize = sharedMemSize;
     }
 
     /// <summary>
@@ -44,6 +51,11 @@ namespace Ceres.Chess.NNBackends.CUDA
     /// SE channel count
     /// </summary>
     protected readonly int SEK;
+
+    /// <summary>
+    /// Size of shared memory required.
+    /// </summary>
+    protected readonly int SharedMemSize;
 
     /// <summary>
     /// SE weights 1

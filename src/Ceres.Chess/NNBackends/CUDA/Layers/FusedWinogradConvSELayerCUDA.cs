@@ -102,7 +102,7 @@ namespace Ceres.Chess.NNBackends.CUDA
 
       kernelInputTransform.GridDimensions = N;
       kernelInputTransform.BlockDimensions = NumInputChannels;
-      LaunchKernel(stream, kernelInputTransform, N, NumInputChannels, input.DevicePointer, transformed_input.DevicePointer);
+      LaunchKernel(stream, kernelInputTransform, N, NumInputChannels, input.DevicePointer, transformed_input.DevicePointer, stream.Stream.Pointer);
 
       if (transformed_output == null)
       {
@@ -140,7 +140,7 @@ namespace Ceres.Chess.NNBackends.CUDA
       LaunchKernel(stream, kernel, N, C, (int)0, output.DevicePointer,
                    transformed_output.DevicePointer,
                    (IntPtr)0, biases.DevicePointer,
-                   (IntPtr)0, (IntPtr)0, (IntPtr)0, (IntPtr)0);      
+                   (IntPtr)0, (IntPtr)0, (IntPtr)0, (IntPtr)0, stream.Stream.Pointer);      
     }
 
 

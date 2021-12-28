@@ -80,7 +80,7 @@ namespace Ceres.Chess.NNBackends.CUDA
       kernelPolicyMap.BlockDimensions = kBlockSize;
       kernelPolicyMap.GridDimensions = kBlocks;
 
-      LaunchKernel(stream, kernelPolicyMap, output.DevicePointer, input.DevicePointer, indices.DevicePointer, N, inputSize, usedSize, outputSize);
+      LaunchKernel(stream, kernelPolicyMap, output.DevicePointer, input.DevicePointer, indices.DevicePointer, N, inputSize, usedSize, outputSize, stream.Stream.Pointer);
     }
 
 

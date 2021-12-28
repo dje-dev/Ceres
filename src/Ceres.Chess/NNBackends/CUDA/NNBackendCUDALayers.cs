@@ -160,7 +160,8 @@ namespace Ceres.Chess.NNBackends.CUDA
       {
         int se_k = HasSE ? (int)weights.residual[block].se.b1.Length : 0;
 
-        ResidualBlockBaseCUDA layer = new ResidualBlockFusedCUDA(execContext, "residual_fused_" + block, Layers.Count, LastLayer, NumFilters, HasSE, se_k, block == 0, block == (NumBlocks - 1));
+        ResidualBlockBaseCUDA layer = new ResidualBlockFusedCUDA(execContext, "residual_fused_" + block, Layers.Count, LastLayer, NumFilters, HasSE, se_k, block == 0, 
+                                                                 block == (NumBlocks - 1), execContext.SharedMemPerBlock);
 
         layer.LoadWeights0(execContext.Stream, weights.residual[block].conv1.weights, weights.residual[block].conv1.biases);
         layer.LoadWeights1(execContext.Stream, weights.residual[block].conv2.weights, weights.residual[block].conv2.biases);

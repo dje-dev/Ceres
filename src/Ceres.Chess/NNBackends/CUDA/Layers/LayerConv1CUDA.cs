@@ -107,7 +107,7 @@ namespace Ceres.Chess.NNBackends.CUDA
 
         LaunchKernel(stream, kernel, output.DevicePointer, 
                      output.DevicePointer, biasesCUDA.DevicePointer,
-                     N, base.C, GetH, W, UseRELU ? 1 : 0);
+                     N, base.C, GetH, W, UseRELU ? 1 : 0, stream.Stream.Pointer);
       }
       else if (UseRELU)
       {
