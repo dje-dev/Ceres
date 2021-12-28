@@ -99,7 +99,7 @@ namespace Ceres.APIExamples
       InstallCUSTOM1AsDynamicByPhase();
       PreTournamentCleanup();
 
-      RunEngineComparisons(); return;
+//      RunEngineComparisons(); return;
 
       if (false)
       {
@@ -184,7 +184,7 @@ NET2 = "base_10b_800k";
       // 140 good for 203 pairs, 300 good for 100 pairs
       //      limit1 = SearchLimit.NodesForAllMoves(200_000, 500) * 0.25f;
       //      limit1 = SearchLimit.SecondsForAllMoves(5, 0.02f) * 2;
-      limit1 = SearchLimit.NodesPerMove(10_000);
+      limit1 = SearchLimit.NodesPerMove(2_000);
       //limit1 = SearchLimit.SecondsForAllMoves(60, 1) * 0.5f;
       //ok      limit1 = SearchLimit.NodesPerMove(350_000); try test3.pgn against T75 opponent Ceres93 (in first position, 50% of time misses win near move 12
 
@@ -289,8 +289,8 @@ NET2 = "base_10b_800k";
       GameEngineDef engineDefCeresUCI1 = new GameEngineDefCeresUCI("CeresUCINew", evalDef1, overrideEXE: exeCeres, disableFutilityStopSearch: forceDisableSmartPruning);
       GameEngineDef engineDefCeresUCI2 = new GameEngineDefCeresUCI("CeresUCINew", evalDef2, overrideEXE: exeCeres, disableFutilityStopSearch: forceDisableSmartPruning);
 
-      GameEngineDef engineDefCeres93 = new GameEngineDefCeresUCI("Ceres93", evalDef2, overrideEXE: exeCeres93);
-      GameEngineDef engineDefCeres94 = new GameEngineDefCeresUCI("Ceres94", evalDef2, overrideEXE: exeCeres94);
+      GameEngineDef engineDefCeres93 = new GameEngineDefCeresUCI("Ceres93", evalDef2, overrideEXE: exeCeres93, disableFutilityStopSearch:forceDisableSmartPruning);
+      GameEngineDef engineDefCeres94 = new GameEngineDefCeresUCI("Ceres94", evalDef2, overrideEXE: exeCeres94, disableFutilityStopSearch: forceDisableSmartPruning);
 
       EnginePlayerDef playerCeres1UCI = new EnginePlayerDef(engineDefCeresUCI1, limit1);
       EnginePlayerDef playerCeres2UCI = new EnginePlayerDef(engineDefCeresUCI2, limit2);
@@ -381,7 +381,7 @@ NET2 = "base_10b_800k";
       }
 
       // TODO: UCI engine should point to .NET 6 subdirectory if on .NET 6
-      TournamentDef def = new TournamentDef("TOURN", playerCeres1, playerLC0);//, playerStockfish14/*, playerCeres3,
+      TournamentDef def = new TournamentDef("TOURN", playerCeres1UCI, playerCeres93);//, playerStockfish14/*, playerCeres3,
 #if NOT
       TournamentDef def = new TournamentDef("TIME_AGG");
       def.AddEngine(playerStockfish14.EngineDef, limit1 * 0.7f);
@@ -643,23 +643,24 @@ string      baseName = "4mvs_+90_+99";
                                                : @"/mnt/syndev/chess/data/pgn/raw/ceres_big.pgn";
 
       CompareEngineParams parms = new CompareEngineParams("VsLC0", pgnFileName,
-                                              2, // number of positions
+                                              1000, // number of positions
                                               null,//s => s.FinalPosition.PieceCount <= 15,
-                                              CompareEnginesVersusOptimal.PlayerMode.Ceres, "610034", //610034
-                                              CompareEnginesVersusOptimal.PlayerMode.LC0, "610034",
-                                              CompareEnginesVersusOptimal.PlayerMode.Ceres, "610034",
-                                              SearchLimit.NodesPerMove(50_000), // search limit
+                                              CompareEnginesVersusOptimal.PlayerMode.Ceres, "703810", //610034
+                                              CompareEnginesVersusOptimal.PlayerMode.LC0, "703810",
+                                              CompareEnginesVersusOptimal.PlayerMode.Ceres, "703810",
+                                              SearchLimit.NodesPerMove(2_000), // search limit
                                               new int[] { 0, 1, 2, 3 },
                                               s =>
                                               {
-                                                s.EnableUncertaintyBoosting = true;
+//                                                s.EnableUncertaintyBoosting = true;
                                               },
                                               null, // l => l.CPUCT = 1.1f,
                                               null,
                                               null,
                                               true,
-                                              1, 1,
-                                              true // Stockfish crosscheck
+                                              1, 
+                                              7,
+                                              false // Stockfish crosscheck
                                              );
 
 
