@@ -596,6 +596,11 @@ namespace Ceres.Chess.NNBackends.CUDA
 
     private void PrepareInputs(int batchSize)
     {
+      if (batchSize == 0)
+      {
+        throw new ArgumentException("Invalid batch size of 0.");
+      }
+
       NNBackendInputOutput io = inputOutput; // shorter alias
 
       int threads = batchSize * 8 * 8 * 112;  // each thread writes a single element
