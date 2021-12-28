@@ -298,7 +298,7 @@ namespace Ceres.Chess.NNBackends.CUDA
         }
       }
 
-      ExecContext = new(deviceContext, stream, cuBlas, ltHandle, callingAssembly, DumpTiming);
+      ExecContext = new(deviceContext, stream, cuBlas, ltHandle, callingAssembly, DumpTiming, deviceProperties.MaxSharedMemoryPerBlockOptin);
     }
 
     void SetCUDAState()
@@ -704,18 +704,21 @@ namespace Ceres.Chess.NNBackends.CUDA
     private void CheckNetworkCompatible(Net net)
     {
       if (net.Format.NetworkFormat.Network != NetworkFormat.NetworkStructure.NetworkClassicalWithHeadformat &&
-          net.Format.NetworkFormat.Network != NetworkFormat.NetworkStructure.NetworkSeWithHeadformat)
+          net.Format.NetworkFormat.Network != NetworkFormat.NetworkStructure.NetworkSeWithHeadformat &&
+          net.Format.NetworkFormat.Network != NetworkFormat.NetworkStructure.NetworkSe)
       {
         throw new Exception($"Network format {net.Format.NetworkFormat.Network} not supported.");
       }
 
-      if (net.Format.NetworkFormat.Policy != NetworkFormat.PolicyFormat.PolicyConvolution &&
+      if (net.Format.NetworkFormat.Policy != NetworkFormat.PolicyFormat.PolicyUnknown &&  // T40
+          net.Format.NetworkFormat.Policy != NetworkFormat.PolicyFormat.PolicyConvolution &&
           net.Format.NetworkFormat.Policy != NetworkFormat.PolicyFormat.PolicyClassical)
       {
         throw new Exception($"Policy format {net.Format.NetworkFormat.Policy} not supported.");
       }
 
-      if (net.Format.NetworkFormat.Value != NetworkFormat.ValueFormat.ValueClassical &&
+      if (net.Format.NetworkFormat.Value != NetworkFormat.ValueFormat.ValueUnknown &&  // T40
+          net.Format.NetworkFormat.Value != NetworkFormat.ValueFormat.ValueClassical &&
           net.Format.NetworkFormat.Value != NetworkFormat.ValueFormat.ValueWdl)
       {
         throw new Exception($"Value format {net.Format.NetworkFormat.Value} not supported.");

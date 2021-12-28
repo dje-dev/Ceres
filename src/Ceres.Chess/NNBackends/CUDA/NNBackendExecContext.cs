@@ -68,6 +68,11 @@ namespace Ceres.Chess.NNBackends.CUDA
     /// </summary>
     internal NNBackendCUDALayers ReferenceLayers;
 
+    /// <summary>
+    /// Amoutn of shared memory per block available.
+    /// </summary>
+    public readonly int SharedMemPerBlock;
+
 
     /// <summary>
     /// Constructor.
@@ -79,7 +84,7 @@ namespace Ceres.Chess.NNBackends.CUDA
     /// <param name="ptxAssembly"></param>
     public NNBackendExecContext(CUDADevice context, CudaStream stream, 
                                 CudaBlas cuBlas, CudaBlasLTHandle cuBlasLT, 
-                                Assembly ptxAssembly, bool dumpTimings)
+                                Assembly ptxAssembly, bool dumpTimings, int sharedMemPerBlock)
     {
       Device = context ?? throw new ArgumentNullException(nameof(context));
       Stream = stream ?? throw new ArgumentNullException(nameof(stream));
@@ -87,6 +92,7 @@ namespace Ceres.Chess.NNBackends.CUDA
       CuBlasLT = cuBlasLT;
       PTXAssembly = ptxAssembly ?? throw new ArgumentNullException(nameof(ptxAssembly));
       DumpTimings = dumpTimings;
+      SharedMemPerBlock = sharedMemPerBlock;
     }
 
 
