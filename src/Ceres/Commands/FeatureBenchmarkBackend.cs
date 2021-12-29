@@ -68,7 +68,7 @@ namespace Ceres.Commands
       Console.WriteLine($"Benchmark of neural network evaluator backend - {evaluatorDef}");
 
       NNEvaluator evaluator = evaluatorDef.ToEvaluator();
-      int maxBatchSize = evaluator.MaxBatchSize;
+      int maxBatchSize = Math.Min(2048, evaluator.MaxBatchSize);
 
       TestBatchSize(evaluator, 1);
 
