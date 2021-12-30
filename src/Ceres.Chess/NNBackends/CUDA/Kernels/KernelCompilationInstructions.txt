@@ -34,6 +34,7 @@ NOTE: Initially "-arch=sm_70" was used but failed to run on 1080 GPUs.
       So switch back to "-arch=sm_70"
 
 Batch file (go.cmd) which contains:
+rem NOTE **** Do not use v11.5, not compatible on Linux box **********
 "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.4\bin\nvcc.EXE" -ptx -o common_kernels.ptx  -c common_kernels.cu -arch=sm_70 -allow-unsupported-compiler
 "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.4\bin\nvcc.EXE" -ptx -o fp16_kernels.ptx  -c fp16_kernels.cu -arch=sm_70  -allow-unsupported-compiler
 "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.4\bin\nvcc.EXE" -ptx -o ceres_kernels.ptx  -c ceres_kernels.cu -arch=sm_70 -allow-unsupported-compiler
