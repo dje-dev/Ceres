@@ -59,6 +59,11 @@ namespace Ceres.Chess.NNEvaluators
     /// </summary>
     public readonly WeightsOverrideDelegate WeightsPolicyOverrideFunc;
 
+    /// <summary>
+    /// If evaluators should be run in parallel.
+    /// </summary>
+    public bool RunParallel = true;
+
     protected IPositionEvaluationBatch[] subResults;
 
     /// <summary>
@@ -133,11 +138,18 @@ namespace Ceres.Chess.NNEvaluators
         subResults = new IPositionEvaluationBatch[Evaluators.Length];
 
         // Ask all constituent evaluators to evaluate this batch (in parallel)
-        Parallel.For(0, Evaluators.Length,
-          delegate (int i)
+        if (RunParallel)
+        {
+          Parallel.For(0, Evaluators.Length, i => Evaluators[i].EvaluateIntoBuffers(positions, retrieveSupplementalResults));           
+        }
+        else
+        {
+          for (int i=0; i<Evaluators.Length;i++)
           {
-            subResults[i] = (IPositionEvaluationBatch)Evaluators[i].EvaluateIntoBuffers(positions, retrieveSupplementalResults);
-          });
+            subResults[i] = Evaluators[i].EvaluateIntoBuffers(positions, retrieveSupplementalResults);
+
+          }
+        }
 
         if (retrieveSupplementalResults) throw new NotImplementedException();
         float[] valueHeadConvFlat = null;
