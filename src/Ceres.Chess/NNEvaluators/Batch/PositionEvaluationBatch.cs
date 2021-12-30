@@ -361,7 +361,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
       NumPos = numPos;
 
       Policies = makeCopy ? policies.ToArray() : policies;
-      Activations = activations;
+      Activations = (activations.Length != 0 && makeCopy) ? activations.ToArray() : activations;
 
       W = makeCopy ? w.ToArray() : w;
       L = (isWDL && makeCopy) ? l.ToArray() : l;
