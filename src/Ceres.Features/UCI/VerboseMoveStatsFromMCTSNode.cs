@@ -22,6 +22,7 @@ using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.Base.DataTypes;
 using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.MCTS.Iteration;
+using System;
 
 #endregion
 
@@ -121,6 +122,10 @@ namespace Ceres.Features.UCI
         stat.M = node.MPosition;
         stat.V = new EncodedEvalLogistic((float)node.V * multiplier);
         stat.U = isSearchRoot ? 0 : node.Parent.ChildU(node.IndexInParentsChildren);
+        stat.StdDev =  node.N > MCTSNodeStruct.VARIANCE_START_ACCUMULATE_N 
+                              ? MathF.Sqrt(node.StructRef.VarianceAccumulator / (node.N - MCTSNodeStruct.VARIANCE_START_ACCUMULATE_N)) 
+                              : float.NaN;
+
         return stat;
       }
     }

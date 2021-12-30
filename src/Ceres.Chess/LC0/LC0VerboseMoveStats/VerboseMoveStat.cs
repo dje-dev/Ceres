@@ -95,6 +95,11 @@ namespace Ceres.Chess.SearchResultVerboseMoveInfo
     /// </summary>
     public EncodedEvalLogistic V;
 
+    /// <summary>
+    /// Standard deviation of all backed up evaluations (if sufficient N, otherwise NaN).
+    /// </summary>
+    public float StdDev;
+
 
     /// <summary>
     /// Returns string representation.
