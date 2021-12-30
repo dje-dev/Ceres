@@ -82,11 +82,7 @@ namespace Ceres.Chess.NNBackends.CUDA
 
       // Decode in parallel for reduced runtime.
       Residual[] tempResiduals = new Residual[weights.Residuals.Count];
-      Parallel.For(0, tempResiduals.Length, new ParallelOptions() { MaxDegreeOfParallelism = 8 },
-        delegate (int i)
-        {
-          tempResiduals[i] = new Residual(this, weights.Residuals[i]);
-        });
+      Parallel.For(0, tempResiduals.Length, i => tempResiduals[i] = new Residual(this, weights.Residuals[i]));
       residual = tempResiduals;
     }
   
@@ -164,10 +160,10 @@ namespace Ceres.Chess.NNBackends.CUDA
         }
 
         // Batch norm weights are not needed anymore.
-        Array.Clear(bn_stddivs, 0, bn_stddivs.Length);
-        Array.Clear(bn_means, 0, bn_means.Length);
-        Array.Clear(bn_betas, 0, bn_betas.Length);
-        Array.Clear(bn_gammas, 0, bn_gammas.Length);
+        bn_stddivs = null;
+        bn_means = null;
+        bn_betas = null;
+        bn_gammas = null;
       }
 
     }
