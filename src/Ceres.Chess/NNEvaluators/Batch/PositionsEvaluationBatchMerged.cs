@@ -167,8 +167,14 @@ namespace Ceres.Chess.NetEvaluation.Batch
 
     public IEnumerator<NNPositionEvaluationBatchMember> GetEnumerator()
     {
-      for (int i = 0; i < ((IPositionEvaluationBatch) this).NumPos; i++)
-        yield return new NNPositionEvaluationBatchMember(this, i);
+      int index = 0;
+      for (int i = 0; i < ((IPositionEvaluationBatch)this).NumPos; i++)
+      {
+        // TODO: make more efficient by tracking batch/pos indices directly rather than use GetIndices.
+        (int, int) indicies = GetIndices(index);
+        yield return new NNPositionEvaluationBatchMember(Batches[indicies.Item1], indicies.Item2);
+        index++;
+      }
     }
 
     IEnumerator IEnumerable.GetEnumerator()
