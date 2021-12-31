@@ -25,7 +25,7 @@ namespace Ceres.Chess.LC0.Batches
   /// <summary>
   /// Represents a subset (slice) of positions from a flat batch.
   /// </summary>
-  public class EncodedPositionBatchFlatSlice : IEncodedPositionBatchFlat
+  public readonly struct EncodedPositionBatchFlatSlice : IEncodedPositionBatchFlat
   {
     /// <summary>
     /// Parent batch from which this slice was taken.
