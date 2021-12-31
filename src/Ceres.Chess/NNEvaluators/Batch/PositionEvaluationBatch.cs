@@ -360,12 +360,12 @@ namespace Ceres.Chess.NetEvaluation.Batch
       HasM = hasM;
       NumPos = numPos;
 
-      Policies = makeCopy ? policies.ToArray() : policies;
-      Activations = (activations.Length != 0 && makeCopy) ? activations.ToArray() : activations;
+      Policies = makeCopy ? policies.Slice(0, numPos).ToArray() : policies;
+      Activations = (activations.Length != 0 && makeCopy) ? activations.Slice(0, numPos).ToArray() : activations;
 
-      W = makeCopy ? w.ToArray() : w;
-      L = (isWDL && makeCopy) ? l.ToArray() : l;
-      M = (hasM && makeCopy) ? m.ToArray() : m;
+      W = makeCopy ? w.Slice(0, numPos).ToArray() : w;
+      L = (isWDL && makeCopy) ? l.Slice(0, numPos).ToArray() : l;
+      M = (hasM && makeCopy) ? m.Slice(0, numPos).ToArray() : m;
 
       Stats = stats;
     }
