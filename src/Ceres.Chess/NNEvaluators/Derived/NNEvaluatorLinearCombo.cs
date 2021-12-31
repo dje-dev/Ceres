@@ -61,6 +61,7 @@ namespace Ceres.Chess.NNEvaluators
 
     /// <summary>
     /// If evaluators should be run in parallel.
+    /// This can improve perforamance, but may not be safe if evaluators have dependencies.
     /// </summary>
     public bool RunParallel = true;
 
@@ -140,14 +141,13 @@ namespace Ceres.Chess.NNEvaluators
         // Ask all constituent evaluators to evaluate this batch (in parallel)
         if (RunParallel)
         {
-          Parallel.For(0, Evaluators.Length, i => Evaluators[i].EvaluateIntoBuffers(positions, retrieveSupplementalResults));           
+          Parallel.For(0, Evaluators.Length, i => subResults[i] = Evaluators[i].EvaluateIntoBuffers(positions, retrieveSupplementalResults));           
         }
         else
         {
           for (int i=0; i<Evaluators.Length;i++)
           {
             subResults[i] = Evaluators[i].EvaluateIntoBuffers(positions, retrieveSupplementalResults);
-
           }
         }
 
