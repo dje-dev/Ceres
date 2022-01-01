@@ -215,7 +215,13 @@ namespace Ceres.Commands
       {
         FeatureBenchmarkBackend backendBench = new FeatureBenchmarkBackend();
         backendBench.ParseFields(keyValueArgs);
-        backendBench.Execute();
+        backendBench.ExecuteBenchmark();
+      }
+      else if (featureName == "BACKENDCOMPARE")
+      {
+        FeatureBenchmarkBackend backendBench = new FeatureBenchmarkBackend();
+        backendBench.ParseFields(keyValueArgs);
+        backendBench.ExecuteComparisonTest();
       }
       else if (featureName == "BENCHMARK")
       {
@@ -224,14 +230,14 @@ namespace Ceres.Commands
       }
       else
         ShowErrorExit("Expected argument to begin with one of the features " + 
-                       "UCI, ANALYZE, SUITE, TOURN, SYSBENCH, BACKENDBENCH, BENCHMARK or SETOPT");
+                       "UCI, ANALYZE, SUITE, TOURN, SYSBENCH, BACKENDBENCH, BACKEND_COMPARE, BENCHMARK or SETOPT");
 
     }
 
     static void SetoptError()
     {
       ShowErrorExit("Expected key=value pairs with keys: { network, device, dir-pgn, dir-epd, dir-lc0networks\r\n"
-                   +"                                             dir-tablebases, launch-monitor, log-info, log-warn }");
+                   +"                                      dir-tablebases, launch-monitor, log-info, log-warn }");
     }
 
     private static void LaunchUCI(string keyValueArgs)

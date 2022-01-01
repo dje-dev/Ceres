@@ -26,7 +26,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
   /// <summary>
   /// Static helper methods to facilitate parsing of options strings.
   /// </summary>
-  internal static class OptionsParserHelpers
+  public static class OptionsParserHelpers
   {
     /// <summary>
     /// Delimiter character used to indicate beginning of a weights specification.
@@ -80,22 +80,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
 
         if (allowBatchSizeSpecification && netID.Contains("["))
         {
-          string maxBatchStr = netID.Substring(netID.IndexOf("[")+1).Replace("]", "");
-          if (maxBatchStr.Contains(".."))
-          {
-            string[] bsSplit = maxBatchStr.Split("..");
-            optimalBatchSize = int.Parse(bsSplit[0]);
-            maxBatchSize = int.Parse(bsSplit[1]);
-          }
-          else if (int.TryParse(maxBatchStr, out int maxBatchSizeValue))
-          {
-            maxBatchSize = maxBatchSizeValue;
-          }
-          else
-          {
-            // Interpret as filename of batch file configuration file.
-            batchSizesFileName = maxBatchStr;
-          }
+          ParseBatchSizeSpecification(netID, out maxBatchSize, out optimalBatchSize, out batchSizesFileName);
           netID = netID.Substring(0, netID.IndexOf("["));
         }
 
@@ -155,6 +140,31 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
 
       return ret;
     }
+
+    public static void ParseBatchSizeSpecification(string specStr, out int? maxBatchSize, out int? optimalBatchSize, out string batchSizesFileName)
+    {
+      maxBatchSize = null;
+      optimalBatchSize = null;
+      batchSizesFileName = null;
+
+      string maxBatchStr = specStr.Substring(specStr.IndexOf("[") + 1).Replace("]", "");
+      if (maxBatchStr.Contains(".."))
+      {
+        string[] bsSplit = maxBatchStr.Split("..");
+        optimalBatchSize = int.Parse(bsSplit[0]);
+        maxBatchSize = int.Parse(bsSplit[1]);
+      }
+      else if (int.TryParse(maxBatchStr, out int maxBatchSizeValue))
+      {
+        maxBatchSize = maxBatchSizeValue;
+      }
+      else
+      {
+        // Interpret as filename of batch file configuration file.
+        batchSizesFileName = maxBatchStr;
+      }
+    }
+
 
     private static float ParseWt(string wtString)
     {
