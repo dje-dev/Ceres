@@ -36,9 +36,9 @@ namespace Ceres.Chess.NetEvaluation.Batch
   public class PositionEvaluationBatch : IPositionEvaluationBatch
   {
     public enum PolicyType { Probabilities, LogProbabilities };
-    public readonly bool IsWDL;
-    public readonly bool HasM;
-    public readonly int NumPos;
+    public bool IsWDL;
+    public bool HasM;
+    public int NumPos;
 
     #region Output raw data
 
@@ -65,7 +65,6 @@ namespace Ceres.Chess.NetEvaluation.Batch
     public Memory<NNEvaluatorResultActivations> Activations;  
 
     #endregion
-
 
     /// <summary>
     /// Returns the net win probability (V) from the value head for the position at a specified index in the batch.
@@ -143,6 +142,224 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// </summary>
     int IPositionEvaluationBatch.NumPos => NumPos;
 
+    /// <summary>
+    /// Gets the value from the value head at a specified index indicating the win probabilty.
+    /// </summary>
+    /// <param name="index"></param>
+    /// <returns></returns>
+    FP16 IPositionEvaluationBatch.GetWinP(int index) => GetWinP(index);
+
+    /// <summary>
+    /// Gets the value from the value head at a specified index indicating the loss probabilty.
+    /// </summary>
+    /// <param name="index"></param>
+    /// <returns></returns>
+    FP16 IPositionEvaluationBatch.GetLossP(int index) => GetLossP(index);
+
+    /// <summary>
+    /// Returns the policy distribution for the position at a specified index.
+    /// </summary>
+    /// <param name="index"></param>
+    /// <returns></returns>
+    (Memory<CompressedPolicyVector> policies, int index)
+      IPositionEvaluationBatch.GetPolicy(int index) => (Policies, index);
+
+
+    /// <summary>
+    /// Gets the value from the MLH head at a specified index.
+    /// </summary>
+    /// <param name="index"></param>
+    /// <returns></returns>
+    FP16 IPositionEvaluationBatch.GetM(int index) => GetM(index);
+
+    NNEvaluatorResultActivations IPositionEvaluationBatch.GetActivations(int index) => GetActivations(index);
+
+
+
+    /// <summary>
+    /// Constructs from directly provided set of evaluation results
+    /// (which have already been fully decoded).
+    /// </summary>
+    /// <param name="isWDL"></param>
+    /// <param name="numPos"></param>
+    /// <param name="policies"></param>
+    /// <param name="w"></param>
+    /// <param name="d"></param>
+    /// <param name="l"></param>
+    /// <param name="m"></param>
+    /// <param name="activations"></param>
+    /// <param name="stats"></param>
+    public PositionEvaluationBatch(bool isWDL, bool hasM, int numPos, Memory<CompressedPolicyVector> policies,
+                             Memory<FP16> w, Memory<FP16> l, Memory<FP16> m,
+                             Memory<NNEvaluatorResultActivations> activations,
+                             TimingStats stats, bool makeCopy = false)
+    {
+      IsWDL = isWDL;
+      HasM = hasM;
+      NumPos = numPos;
+
+      Policies = makeCopy ? policies.Slice(0, numPos).ToArray() : policies;
+      Activations = (activations.Length != 0 && makeCopy) ? activations.Slice(0, numPos).ToArray() : activations;
+
+      W = makeCopy ? w.Slice(0, numPos).ToArray() : w;
+      L = (isWDL && makeCopy) ? l.Slice(0, numPos).ToArray() : l;
+      M = (hasM && makeCopy) ? m.Slice(0, numPos).ToArray() : m;
+
+      Stats = stats;
+    }
+
+
+    /// <summary>
+    /// Constructor (from specified value and policy valeus).
+    /// </summary>
+    /// <param name="isWDL"></param>
+    /// <param name="hasM"></param>
+    /// <param name="numPos"></param>
+    /// <param name="valueEvals"></param>
+    /// <param name="valueHeadConvFlat"></param>
+    /// <param name="valsAreLogistic"></param>
+    /// <param name="stats"></param>
+    private PositionEvaluationBatch(bool isWDL, bool hasM, int numPos,
+                                    Span<FP16> valueEvals, Span<FP16> m,
+                                    Span<NNEvaluatorResultActivations> activations,
+                                    bool valsAreLogistic, TimingStats stats)
+    {
+      IsWDL = isWDL;
+      HasM = hasM;
+
+      NumPos = numPos;
+      Activations = activations.ToArray();
+
+      InitializeValueEvals(valueEvals, valsAreLogistic);
+      if (hasM)
+      {
+        this.M = m.ToArray();
+      }
+
+      if (valueEvals != null && valueEvals.Length < numPos * (IsWDL ? 3 : 1))
+      {
+        throw new ArgumentException("Wrong value size");
+      }
+
+      Stats = stats;
+    }
+
+
+    /// <summary>
+    /// Constructor (when the policies are full arrays of 1858 each)
+    /// </summary>
+    /// <param name="isWDL"></param>
+    /// <param name="numPos"></param>
+    /// <param name="valueEvals"></param>
+    /// <param name="policyProbs"></param>
+    /// <param name="activations"></param>
+    /// <param name="probType"></param>
+    /// <param name="stats"></param>
+    public PositionEvaluationBatch(bool isWDL, bool hasM, int numPos, Span<FP16> valueEvals, float[] policyProbs,
+                                   FP16[] m, NNEvaluatorResultActivations[] activations,
+                                   bool valsAreLogistic, PolicyType probType, bool policyAlreadySorted,
+                                   IEncodedPositionBatchFlat sourceBatchWithValidMoves,
+                                   TimingStats stats)
+      : this(isWDL, hasM, numPos, valueEvals, m, activations, valsAreLogistic, stats)
+    {
+      Policies = ExtractPoliciesBufferFlat(numPos, policyProbs, probType, policyAlreadySorted, sourceBatchWithValidMoves);
+    }
+
+
+    /// <summary>
+    /// Constructor (when the policies are returned as TOP_K arrays)
+    /// </summary>
+    /// <param name="isWDL"></param>
+    /// <param name="numPos"></param>
+    /// <param name="valueEvals"></param>
+    /// <param name="policyIndices"></param>
+    /// <param name="policyProbabilties"></param>
+    /// <param name="activations"></param>
+    /// <param name="probType"></param>
+    /// <param name="stats"></param>
+    public PositionEvaluationBatch(bool isWDL, bool hasM, int numPos, Span<FP16> valueEvals,
+                             int topK, Span<int> policyIndices, Span<float> policyProbabilties,
+                             Span<FP16> m,
+                             Span<NNEvaluatorResultActivations> activations, bool valsAreLogistic,
+                             PolicyType probType, TimingStats stats)
+      : this(isWDL, hasM, numPos, valueEvals, m, activations, valsAreLogistic, stats)
+    {
+      Policies = ExtractPoliciesTopK(numPos, topK, policyIndices, policyProbabilties, probType);
+    }
+
+    /// <summary>
+    /// Constructor (for an empty batch, to be filled in later with CopyFrom method).
+    /// </summary>
+    /// <param name="maxPos"></param>
+    /// <param name="retrieveSupplementalResults"></param>
+    public PositionEvaluationBatch(bool isWDL, bool hasM, int maxPos, bool retrieveSupplementalResults)
+    {
+      Policies = new CompressedPolicyVector[maxPos];
+
+      if (retrieveSupplementalResults)
+      {
+        Activations = new NNEvaluatorResultActivations[maxPos];
+      }
+      
+      W = new FP16[maxPos];
+      
+      if (isWDL)
+      {
+        L = new FP16[maxPos];
+      }
+
+      if (hasM)
+      {
+        M = new FP16[maxPos];
+      }
+
+    }
+
+    /// <summary>
+    /// Resets values of this batch to be
+    /// copies of values taken from another specified batch.
+    /// </summary>
+    /// <param name="other"></param>
+    /// <exception cref="ArgumentException"></exception>
+    public void CopyFrom(PositionEvaluationBatch other)
+    {
+      if (other.NumPos > W.Length)
+      {
+        throw new ArgumentException($"Other batch number of positions {other.NumPos} exceeds maximum of {W.Length}");
+      }
+
+      IsWDL = other.IsWDL;
+      HasM = other.HasM;
+      NumPos = other.NumPos;
+
+      int numPos = other.NumPos;
+
+      other.Policies.Slice(0, numPos).CopyTo(Policies);
+
+      if (other.Activations.Length == 0)
+      {
+        Activations = other.Activations;
+      }
+      else
+      {
+        other.Activations.Slice(0, numPos).CopyTo(Activations);
+      }
+
+      other.W.Slice(0, numPos).CopyTo(W);
+
+      if (IsWDL)
+      {
+        other.L.Slice(0, numPos).CopyTo(L);
+      }
+
+      if (HasM)
+      {
+        other.M.Slice(0, numPos).CopyTo(M);
+      }
+
+      Stats = other.Stats;
+    }
+
 
     /// <summary>
     /// Returns a string representation of the batch (summary).
@@ -150,7 +367,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <returns></returns>
     public override string ToString()
     {
-      string timeStr = Stats != null ? $" time: {Stats.ElapsedTimeSecs:F2} secs" : "";
+      string timeStr = Stats.ElapsedTimeTicks == 0 ? "" : $" time: {Stats.ElapsedTimeSecs:F2} secs";
       return $"<PositionEvaluationBatch of {NumPos:n0}{timeStr} with first V: {GetV(0):F2}>";
     }
 
@@ -338,150 +555,6 @@ namespace Ceres.Chess.NetEvaluation.Batch
     }
 
 
-    /// <summary>
-    /// Constructs from directly provided set of evaluation results
-    /// (which have already been fully decoded).
-    /// </summary>
-    /// <param name="isWDL"></param>
-    /// <param name="numPos"></param>
-    /// <param name="policies"></param>
-    /// <param name="w"></param>
-    /// <param name="d"></param>
-    /// <param name="l"></param>
-    /// <param name="m"></param>
-    /// <param name="activations"></param>
-    /// <param name="stats"></param>
-    public PositionEvaluationBatch(bool isWDL, bool hasM, int numPos, Memory<CompressedPolicyVector> policies,
-                             Memory<FP16> w, Memory<FP16> l, Memory<FP16> m,
-                             Memory<NNEvaluatorResultActivations> activations,
-                             TimingStats stats, bool makeCopy = false)
-    {
-      IsWDL = isWDL;
-      HasM = hasM;
-      NumPos = numPos;
-
-      Policies = makeCopy ? policies.Slice(0, numPos).ToArray() : policies;
-      Activations = (activations.Length != 0 && makeCopy) ? activations.Slice(0, numPos).ToArray() : activations;
-
-      W = makeCopy ? w.Slice(0, numPos).ToArray() : w;
-      L = (isWDL && makeCopy) ? l.Slice(0, numPos).ToArray() : l;
-      M = (hasM && makeCopy) ? m.Slice(0, numPos).ToArray() : m;
-
-      Stats = stats;
-    }
-
-
-    /// <summary>
-    /// Constructor (from specified value and policy valeus).
-    /// </summary>
-    /// <param name="isWDL"></param>
-    /// <param name="hasM"></param>
-    /// <param name="numPos"></param>
-    /// <param name="valueEvals"></param>
-    /// <param name="valueHeadConvFlat"></param>
-    /// <param name="valsAreLogistic"></param>
-    /// <param name="stats"></param>
-    private PositionEvaluationBatch(bool isWDL, bool hasM, int numPos, 
-                                    Span<FP16> valueEvals, Span<FP16> m,
-                                    Span<NNEvaluatorResultActivations> activations, 
-                                    bool valsAreLogistic, TimingStats stats)
-    {
-      IsWDL = isWDL;
-      HasM = hasM;
-
-      NumPos = numPos;
-      Activations = activations.ToArray();
-
-      InitializeValueEvals(valueEvals, valsAreLogistic);
-      if (hasM)
-      {
-        this.M = m.ToArray();
-      }
-
-      if (valueEvals != null && valueEvals.Length < numPos * (IsWDL ? 3 : 1))
-      {
-        throw new ArgumentException("Wrong value size");
-      }
-
-      Stats = stats;
-    }
-
-
-    /// <summary>
-    /// Constructor (when the policies are full arrays of 1858 each)
-    /// </summary>
-    /// <param name="isWDL"></param>
-    /// <param name="numPos"></param>
-    /// <param name="valueEvals"></param>
-    /// <param name="policyProbs"></param>
-    /// <param name="activations"></param>
-    /// <param name="probType"></param>
-    /// <param name="stats"></param>
-    public PositionEvaluationBatch(bool isWDL, bool hasM, int numPos, Span<FP16> valueEvals, float[] policyProbs, 
-                                   FP16[] m, NNEvaluatorResultActivations[] activations,
-                                   bool valsAreLogistic, PolicyType probType, bool policyAlreadySorted,
-                                   IEncodedPositionBatchFlat sourceBatchWithValidMoves,
-                                   TimingStats stats) 
-      : this(isWDL, hasM, numPos, valueEvals, m, activations, valsAreLogistic, stats)
-    {
-      Policies = ExtractPoliciesBufferFlat(numPos, policyProbs, probType, policyAlreadySorted, sourceBatchWithValidMoves);
-    }
-
-
-    /// <summary>
-    /// Constructor (when the policies are returned as TOP_K arrays)
-    /// </summary>
-    /// <param name="isWDL"></param>
-    /// <param name="numPos"></param>
-    /// <param name="valueEvals"></param>
-    /// <param name="policyIndices"></param>
-    /// <param name="policyProbabilties"></param>
-    /// <param name="activations"></param>
-    /// <param name="probType"></param>
-    /// <param name="stats"></param>
-    public PositionEvaluationBatch(bool isWDL, bool hasM, int numPos, Span<FP16> valueEvals, 
-                             int topK, Span<int> policyIndices, Span<float> policyProbabilties,
-                             Span<FP16> m,
-                             Span<NNEvaluatorResultActivations> activations, bool valsAreLogistic,
-                             PolicyType probType, TimingStats stats)
-      : this(isWDL, hasM, numPos, valueEvals, m, activations, valsAreLogistic, stats)
-    {
-      Policies = ExtractPoliciesTopK(numPos, topK, policyIndices, policyProbabilties, probType);
-    }
-
-
-    /// <summary>
-    /// Gets the value from the value head at a specified index indicating the win probabilty.
-    /// </summary>
-    /// <param name="index"></param>
-    /// <returns></returns>
-    FP16 IPositionEvaluationBatch.GetWinP(int index) => GetWinP(index);
-
-    /// <summary>
-    /// Gets the value from the value head at a specified index indicating the loss probabilty.
-    /// </summary>
-    /// <param name="index"></param>
-    /// <returns></returns>
-    FP16 IPositionEvaluationBatch.GetLossP(int index) => GetLossP(index);
-
-    /// <summary>
-    /// Returns the policy distribution for the position at a specified index.
-    /// </summary>
-    /// <param name="index"></param>
-    /// <returns></returns>
-    (Memory<CompressedPolicyVector> policies, int index)
-      IPositionEvaluationBatch.GetPolicy(int index) => (Policies, index);
-
-
-    /// <summary>
-    /// Gets the value from the MLH head at a specified index.
-    /// </summary>
-    /// <param name="index"></param>
-    /// <returns></returns>
-    FP16 IPositionEvaluationBatch.GetM(int index) => GetM(index);
-
-
-    NNEvaluatorResultActivations IPositionEvaluationBatch.GetActivations(int index) => GetActivations(index);
 
     public IEnumerator<NNPositionEvaluationBatchMember> GetEnumerator()
     {
