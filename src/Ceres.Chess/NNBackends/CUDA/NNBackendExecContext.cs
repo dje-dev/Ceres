@@ -43,6 +43,11 @@ namespace Ceres.Chess.NNBackends.CUDA
     public readonly CudaStream Stream;
 
     /// <summary>
+    /// Auxilliary stream used for extracing results from GPU.
+    /// </summary>
+    public readonly CudaStream Stream2;
+
+    /// <summary>
     /// CUBLAS handle associated with this backend.
     /// </summary>
     public readonly CudaBlas CuBlas;
@@ -82,12 +87,13 @@ namespace Ceres.Chess.NNBackends.CUDA
     /// <param name="cuBlas"></param>
     /// <param name="cuBlasLT"></param>
     /// <param name="ptxAssembly"></param>
-    public NNBackendExecContext(CUDADevice context, CudaStream stream, 
+    public NNBackendExecContext(CUDADevice context, CudaStream stream, CudaStream stream2,
                                 CudaBlas cuBlas, CudaBlasLTHandle cuBlasLT, 
                                 Assembly ptxAssembly, bool dumpTimings, int sharedMemPerBlock)
     {
       Device = context ?? throw new ArgumentNullException(nameof(context));
       Stream = stream ?? throw new ArgumentNullException(nameof(stream));
+      Stream2 = stream2 ?? throw new ArgumentNullException(nameof(stream2));
       CuBlas = cuBlas;
       CuBlasLT = cuBlasLT;
       PTXAssembly = ptxAssembly ?? throw new ArgumentNullException(nameof(ptxAssembly));

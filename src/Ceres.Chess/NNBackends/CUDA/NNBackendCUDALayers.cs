@@ -143,6 +143,7 @@ namespace Ceres.Chess.NNBackends.CUDA
       else
       {
         DoBuildNetworkAndLoadWeights(execContext, weights, kNumInputPlanes);
+        execContext.Stream2.Synchronize();
       }
     }
 
@@ -153,7 +154,7 @@ namespace Ceres.Chess.NNBackends.CUDA
 
       // Input.
       FusedWinogradConvSELayerCUDA inputConv = new(execContext, "InputConv1", Layers.Count, NumFilters, 8, 8, null, kNumInputPlanes, true, true, false, false, 0, true);
-      inputConv.LoadWeights(execContext.Stream, weights.input.weights, weights.input.biases);
+      inputConv.LoadWeights(execContext.Stream2, weights.input.weights, weights.input.biases);
       Layers.Add(inputConv);
 
       for (int block = 0; block < NumBlocks; block++)
@@ -163,8 +164,8 @@ namespace Ceres.Chess.NNBackends.CUDA
         ResidualBlockBaseCUDA layer = new ResidualBlockFusedCUDA(execContext, "residual_fused_" + block, Layers.Count, LastLayer, NumFilters, HasSE, se_k, block == 0, 
                                                                  block == (NumBlocks - 1), execContext.SharedMemPerBlock);
 
-        layer.LoadWeights0(execContext.Stream, weights.residual[block].conv1.weights, weights.residual[block].conv1.biases);
-        layer.LoadWeights1(execContext.Stream, weights.residual[block].conv2.weights, weights.residual[block].conv2.biases);
+        layer.LoadWeights0(execContext.Stream2, weights.residual[block].conv1.weights, weights.residual[block].conv1.biases);
+        layer.LoadWeights1(execContext.Stream2, weights.residual[block].conv2.weights, weights.residual[block].conv2.biases);
 
         if (HasSE)
         {
@@ -189,7 +190,7 @@ namespace Ceres.Chess.NNBackends.CUDA
 
         FusedWinogradConvSELayerCUDA conv2;
         conv2 = new(execContext, "policy_conv2", Layers.Count, pol_channels, 8, 8, LastLayer, NumFilters, false, true, false, false, 0, false);
-        conv2.LoadWeights(execContext.Stream, weights.policy.weights, weights.policy.biases);
+        conv2.LoadWeights(execContext.Stream2, weights.policy.weights, weights.policy.biases);
         Layers.Add(conv2);
 
         LayerPolicyMapCUDA policymap = new(execContext, "policy_map", Layers.Count, LastLayer, 1858, 1, 1, 73 * 8 * 8);
