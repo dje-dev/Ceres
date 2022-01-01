@@ -65,7 +65,8 @@ namespace Ceres.MCTS.Search
         const bool CACHE_SECONDARY = false; // TODO: support this someday (in its own cache)?
         nodeEvaluatorSecondary = new LeafEvaluatorNN(context.EvaluatorDef,
                                                      context.NNEvaluators.EvaluatorSecondary,
-                                                     CACHE_SECONDARY, false, null, null, null);
+                                                     CACHE_SECONDARY, manager.Context.ParamsSearch.Execution.MaxBatchSize, false,
+                                                     null, null, null);
         BlockNNEvalSecondaryNet = new MCTSNNEvaluator(nodeEvaluatorSecondary, false);
       }
 
@@ -84,15 +85,15 @@ namespace Ceres.MCTS.Search
         evaluatorSecondaryToUseInPrimaryEvaluators = context.NNEvaluators.EvaluatorSecondary;
       }
 
-      //Params.Evaluator1 : Params.Evaluator2;
-      LeafEvaluatorNN nodeEvaluator1 = new LeafEvaluatorNN(context.EvaluatorDef, context.NNEvaluators.Evaluator1, shouldCache,
+      LeafEvaluatorNN nodeEvaluator1 = new LeafEvaluatorNN(context.EvaluatorDef, context.NNEvaluators.Evaluator1, shouldCache, context.ParamsSearch.Execution.MaxBatchSize,
                                                            LOW_PRIORITY_PRIMARY, context.Tree.PositionCache, null, evaluatorSecondaryToUseInPrimaryEvaluators);
       BlockNNEval1 = new MCTSNNEvaluator(nodeEvaluator1, true);
 
       if (context.ParamsSearch.Execution.FlowDirectOverlapped)
       {
         // Create a second evaluator (configured like the first) on which to do overlapping.
-        LeafEvaluatorNN nodeEvaluator2 = new LeafEvaluatorNN(context.EvaluatorDef, context.NNEvaluators.Evaluator2, shouldCache,
+        LeafEvaluatorNN nodeEvaluator2 = new LeafEvaluatorNN(context.EvaluatorDef, context.NNEvaluators.Evaluator2, shouldCache, 
+                                                             manager.Context.ParamsSearch.Execution.MaxBatchSize,
                                                              false, context.Tree.PositionCache, null, evaluatorSecondaryToUseInPrimaryEvaluators);
         BlockNNEval2 = new MCTSNNEvaluator(nodeEvaluator2, true);
       }

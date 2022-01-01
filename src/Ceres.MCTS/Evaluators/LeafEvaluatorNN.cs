@@ -30,7 +30,6 @@ using Ceres.Chess.LC0.Batches;
 
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.Iteration;
-using Ceres.MCTS.Environment;
 
 #endregion
 
@@ -91,12 +90,13 @@ namespace Ceres.MCTS.Evaluators
     /// <param name="lowPriority"></param>
     public LeafEvaluatorNN(NNEvaluatorDef evaluatorDef, NNEvaluator evaluator,
                            bool saveToCache,
+                           int maxBatchSize,
                            bool lowPriority,
                            PositionEvalCache cache,
                            Func<MCTSIterator, int> batchEvaluatorIndexDynamicSelector,
                            NNEvaluator evaluatorSecondary)
     {
-      rawPosArray = posArrayPool.Rent(evaluator.MaxBatchSize);
+      rawPosArray = posArrayPool.Rent(maxBatchSize);
 
       EvaluatorDef = evaluatorDef;
       SaveToCache = saveToCache;
