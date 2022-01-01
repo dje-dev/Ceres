@@ -17,18 +17,18 @@ using System;
 using System.IO;
 using System.Diagnostics;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 
 using Ceres.Chess.NNEvaluators.Defs;
 using Chess.Ceres.NNEvaluators;
 using Ceres.Chess.NNFiles;
-using System.Collections.Generic;
 using Chess.Ceres.NNEvaluators.TensorRT;
 using Ceres.Chess.UserSettings;
 using Ceres.Chess.NNEvaluators.CUDA;
 using Ceres.Chess.LC0.NNFiles;
 using Ceres.Chess.LC0NetInference;
 using Ceres.Chess.LC0.WeightsProtobuf;
-using Ceres.Chess.LC0.Batches;
+
 
 #endregion
 
@@ -214,11 +214,34 @@ namespace Ceres.Chess.NNEvaluators
               }
             }
 
-
-            int maxBatchSize = CeresUserSettingsManager.Settings.MaxBatchSize;
+            // Determine max batch size.
+            int maxSearchBatchSize = CeresUserSettingsManager.Settings.MaxBatchSize;
+            int maxBatchSize = maxSearchBatchSize;
+            if (deviceDef.MaxBatchSize.HasValue)
+            {
+              maxBatchSize = Math.Min(deviceDef.MaxBatchSize.Value, maxSearchBatchSize);
+            }
             bool enableCUDAGraphs = CeresUserSettingsManager.Settings.EnableCUDAGraphs;
-            return new NNEvaluatorCUDA(net as NNWeightsFileLC0, deviceDef.DeviceIndex, maxBatchSize, 
-                                       false, netDef.Precision, false, enableCUDAGraphs, 1, referenceEvaluatorCast);
+            NNEvaluatorCUDA evaluator = new (net as NNWeightsFileLC0, deviceDef.DeviceIndex, maxBatchSize, 
+                                             false, netDef.Precision, false, enableCUDAGraphs, 1, referenceEvaluatorCast);
+
+            // Possibly specialize as NNEvaluatorSubBatchedWithTarget if device batch size is set.
+            if (deviceDef.MaxBatchSize.HasValue && deviceDef.MaxBatchSize.Value < maxSearchBatchSize)
+            {
+              return new NNEvaluatorSubBatchedWithTarget(evaluator, deviceDef.MaxBatchSize.Value);
+
+#if NOT
+          NNEvaluator copySinglegon = Singleton(def.Nets[0].Net, def.Devices[0].Device, referenceEvaluator);
+          NNEvaluatorCompare compare = new NNEvaluatorCompare(subbatched, copySinglegon);
+          compare.RunParallel = false;
+          return compare;
+#endif
+            }
+            else
+            {
+              return evaluator;
+            }
+
           }
 
           break;

@@ -13,19 +13,26 @@
 
 #region Using directives
 
-using Ceres.Chess.LC0.Batches;
-using Ceres.Chess.NetEvaluation.Batch;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Threading.Tasks;
+
+using Ceres.Chess.LC0.Batches;
+using Ceres.Chess.NetEvaluation.Batch;
+using Ceres.Chess.NNBackends.CUDA;
+using Ceres.Chess.NNEvaluators.CUDA;
 
 #endregion
 
 namespace Ceres.Chess.NNEvaluators
 {
   /// <summary>
-  /// Sublcass of NNEvaluatorCompound which possibly splits batches
-  /// across multiple sequential batches to same evaluator,
-  /// targeting specific optimal batch size.
+  /// An NNEvaluator with a specified maximum batch size,
+  /// that can split up batches into multiple sequential subbatches 
+  /// sent to a specified underlying evaluator,
+  /// optionally overlapping processing on GPU with preparation of inputs and outputs
+  /// to improve throughput.
   /// </summary>
   public class NNEvaluatorSubBatchedWithTarget : NNEvaluator
   {
@@ -35,36 +42,46 @@ namespace Ceres.Chess.NNEvaluators
     public readonly NNEvaluator Evaluator;
 
     /// <summary>
-    /// Batch size at which maximum NPS is seen.
+    /// Maximum batch size sent to device at one time,
+    /// ideally a value which is a local 
+    /// nodes per second maximum for the device.
     /// </summary>
-    public int MaximumNPSSubBatchSize;
+    public int MaxSubBatchSize;
 
     /// <summary>
-    /// Batch size above which NPS suddenly degrades markedly (optional),
-    /// or batch size which is not to be exceeded for other reasons 
-    /// (e.g. to reduce GPU memory requirements).
+    /// If asynchronous processing should be attempted to improve performance
+    /// (overlap GPU processing and pre/post processing steps).
     /// </summary>
-    public int maxSubBatchSize;
+    const bool TRY_RUN_EVALUATOR_ASYNC = true;
+    const bool ASYNC_PREPARE_INPUTS = true;
+
+    bool runEvaluatorAsync;
 
 
     /// <summary>
-    /// 
+    /// Constructor.
     /// </summary>
     /// <param name="evaluator"></param>
-    /// <param name="maximumNPSSubBatchSize"></param>
-    /// <param name="maximumSubBatchSize">Batch size above which NPS suddenly degrades markedly (optional),
-    /// or batch size which is not to be exceeded for other reasons 
-    /// (e.g. to reduce GPU memory requirements)</param>
-    public NNEvaluatorSubBatchedWithTarget(NNEvaluator evaluator, int maximumNPSSubBatchSize, int? maximumSubBatchSize = null)
+    /// <param name="maxSubBatchSize"></param>
+    public NNEvaluatorSubBatchedWithTarget(NNEvaluator evaluator, int maxSubBatchSize)
     {
-      Console.WriteLine("NNEvaluatorSplitTargetBatchSize");
+//      Console.WriteLine($"NNEvaluatorSubBatchedWithTarget {maxSubBatchSize}");
+
+      Debug.Assert(evaluator is not NNEvaluatorSubBatchedWithTarget);
+
       Evaluator = evaluator;
-      MaximumNPSSubBatchSize = maximumNPSSubBatchSize;
-      maxSubBatchSize = Math.Max(maximumSubBatchSize ?? maximumNPSSubBatchSize, MaximumNPSSubBatchSize);
 
       // Make sure neither batch size exceeds capabilities of underlying evaluator.
-      maxSubBatchSize = Math.Min(maxSubBatchSize, Evaluator.MaxBatchSize);
-      MaximumNPSSubBatchSize = Math.Min(MaximumNPSSubBatchSize, Evaluator.MaxBatchSize);
+      MaxSubBatchSize = Math.Min(maxSubBatchSize, Evaluator.MaxBatchSize);
+
+      runEvaluatorAsync = TRY_RUN_EVALUATOR_ASYNC && Evaluator is NNEvaluatorCUDA;
+
+      if (runEvaluatorAsync)
+      {
+        // Optimize for the very common case of batch size exactly maximumNPSSubBatchSize.
+        NNEvaluatorCUDA evalCUDA = Evaluator as NNEvaluatorCUDA;
+        evalCUDA.Evaluator.SetCommonBatchSize(maxSubBatchSize);
+      }
     }
 
     public override bool IsWDL => Evaluator.IsWDL;
@@ -88,37 +105,72 @@ namespace Ceres.Chess.NNEvaluators
     }
 
 
-    static int NumBatchesAtSize(int numPos, int batchSize) 
-      => (numPos % batchSize == 0) ? (numPos / batchSize) : 1 + (numPos / batchSize);
-    
+      
     void BuildSizes(int numPos, List<int> subBatchSizes)
     {
-      if (NumBatchesAtSize(numPos, maxSubBatchSize)
-        < NumBatchesAtSize(numPos, MaximumNPSSubBatchSize))
+      // Put the smallest batch first so that batch at end is of full size,
+      // which is more efficient because the last batch can stay in situ
+      // in the underlying Evaluator buffers.
+      int remainder = numPos % MaxSubBatchSize;
+      if (remainder > 0)
       {
-        // At least one sub-batch must be more than MaximumNPSSubBatchSize,
-        // so go ahead and send as oversized (MaximumNPSSubBatchSize)
-        int numThisBatch = Math.Min(maxSubBatchSize, numPos);
+        subBatchSizes.Add(remainder);
+        numPos -= remainder;
+      }
 
-        subBatchSizes.Add(numThisBatch);
+      while (numPos > 0)
+      {
+        subBatchSizes.Add(MaxSubBatchSize);
+        numPos -= MaxSubBatchSize;
+      }
+    }
 
-        // Recursively continue reducing based on how many remain.
-        BuildSizes(numPos - numThisBatch, subBatchSizes);
+
+    List<PositionEvaluationBatch> subBatches;
+
+    /// <summary>
+    /// Returns (creating if necessary) a PositionEvaluationBatch to be used
+    /// to hold the evaluation results from the subbatch with specified index.
+    /// </summary>
+    /// <param name="index"></param>
+    /// <param name="retrieveSupplementalResults"></param>
+    /// <returns></returns>
+    /// <exception cref="Exception"></exception>
+    PositionEvaluationBatch GetOutputBatchBuffered(int index, bool retrieveSupplementalResults)
+    {
+      if (subBatches == null)
+      {
+         subBatches = new List<PositionEvaluationBatch>();
+      }
+
+      if (index < subBatches.Count)
+      {
+        return subBatches[index];
+      }
+      else if (index == subBatches.Count)
+      {
+        PositionEvaluationBatch batch = new PositionEvaluationBatch(IsWDL, HasM, MaxSubBatchSize, retrieveSupplementalResults);
+        subBatches.Add(batch);
+        return batch;
       }
       else
       {
-        // Just use multiples of MaximumNPSSubBatchSize,
-        // no benefit to using any larger.
-        BuildBatchSizes(numPos, subBatchSizes, MaximumNPSSubBatchSize);
+        throw new Exception("GetBatch expected batches fetched in order.");
       }
-
     }
+
+    IEncodedPositionBatchFlat priorPositions = null;
+    short[] priorMoveIndices = null;
+    short[] priorNumMoves = null;
 
     public override IPositionEvaluationBatch DoEvaluateIntoBuffers(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
     {
-      if (positions.NumPos < (MaximumNPSSubBatchSize * 165) / 100)
+      priorPositions = null;
+
+      if (positions.NumPos <= MaxSubBatchSize)
       {
-        // Too small to profitably split across multiple devices
+        // Batch size fits into one subbatch, just dispatch to underlying evaluator.
+        (Evaluator as NNEvaluatorCUDA).Evaluator.AsyncMode = false;
         return Evaluator.EvaluateIntoBuffers(positions, retrieveSupplementalResults);
       }
       else
@@ -128,7 +180,11 @@ namespace Ceres.Chess.NNEvaluators
         List<int> subBatchSizes = new();
         BuildSizes(positions.NumPos, subBatchSizes);
 
-        //Dump(positions.NumPos, subBatchSizes);
+//        Dump(positions.NumPos, subBatchSizes);
+
+        Task evaluateTask = null;
+
+        NNEvaluatorCUDA evaluatorCUDA = Evaluator as NNEvaluatorCUDA;
 
         // Evaluate all the sub-batches.
         IPositionEvaluationBatch[] results = new IPositionEvaluationBatch[subBatchSizes.Count];
@@ -137,18 +193,86 @@ namespace Ceres.Chess.NNEvaluators
         {
           int thisBatchSize = subBatchSizes[i];
 
-          IEncodedPositionBatchFlat thisSubBatch = positions.GetSubBatchSlice(numDone, thisBatchSize);
+          IEncodedPositionBatchFlat thesePositions = positions.GetSubBatchSlice(numDone, thisBatchSize);
 
-          // Extract the batch result into a copy so not overwritten by Evaluator.
-          IPositionEvaluationBatch nnBatch = Evaluator.EvaluateIntoBuffers(thisSubBatch, retrieveSupplementalResults);
-          PositionEvaluationBatch nnBatchD = nnBatch as PositionEvaluationBatch;
-          if (nnBatchD == null)
+          if (runEvaluatorAsync)
           {
-            throw new NotImplementedException("NNEvaluatorSubBatchedWithTarget requires Evaluator to return PositionEvaluationBatch");
+            (Evaluator as NNEvaluatorCUDA).Evaluator.AsyncMode = true;
+
+            // Launch the evaluator to start execution on device.
+            // Note that if not the first set of positions, then they have already been prepared
+            // on the device and we pass null to indicate this.
+            IEncodedPositionBatchFlat positionsToLaunchWith = (ASYNC_PREPARE_INPUTS && i > 0) ? null : thesePositions;
+            int numPositions = positionsToLaunchWith != null ? positionsToLaunchWith.NumPos : subBatchSizes[i];
+            evaluateTask = evaluatorCUDA.LaunchEvaluateBatchAsync(positionsToLaunchWith, numPositions, retrieveSupplementalResults);
+
+            // Process and copy results from last (if any) into a result stored here.
+            if (priorPositions != null)
+            {
+              IPositionEvaluationBatch iSourceBuffer = evaluatorCUDA.GetLastAsyncBatchResult(priorPositions, priorNumMoves, priorMoveIndices, retrieveSupplementalResults, false);
+              CopyResultsIntoLocalBuffer(retrieveSupplementalResults, results, i - 1, iSourceBuffer);
+              // results[i - 1] = evaluatorCUDA.GetLastAsyncBatchResult(priorPositions, priorNumMoves, priorMoveIndices, retrieveSupplementalResults, true);
+            }
+
+            // Prepare next set of positions, if any.
+            bool processNextInputsAsync = ASYNC_PREPARE_INPUTS && i < results.Length - 1;
+            if (processNextInputsAsync)
+            {
+              // Wait until evaluator is done using the input from the current batch being processed.
+              (Evaluator as NNEvaluatorCUDA).Evaluator.InputsCopyToDeviceFinished.Wait();
+
+              SaveCopyOfPriorBatchInputs(evaluatorCUDA, thisBatchSize, thesePositions);
+
+              // Get next subbatch and prepare.
+              IEncodedPositionBatchFlat nextPositions = positions.GetSubBatchSlice(numDone + thisBatchSize, subBatchSizes[i + 1]);
+              (Evaluator as NNEvaluatorCUDA).PrepareInputPositions(nextPositions);
+            }
+
+            // Now signal to the Evaluator that it's ok to overwrite results.
+            evaluatorCUDA.Evaluator.SetOkToFillResults();
+            evaluateTask?.Wait();
+
+            if (!processNextInputsAsync)
+            {
+              SaveCopyOfPriorBatchInputs(evaluatorCUDA, thisBatchSize, thesePositions);
+            }
           }
-          results[i] = new PositionEvaluationBatch(nnBatchD.IsWDL, nnBatchD.HasM, nnBatchD.NumPos, nnBatchD.Policies,
-                                                   nnBatchD.W, nnBatchD.L, nnBatchD.M, nnBatchD.Activations, nnBatchD.Stats, true);
+          else
+          {
+            // Extract the batch result into a copy so not overwritten by Evaluator.
+            IPositionEvaluationBatch nnBatch = Evaluator.EvaluateIntoBuffers(thesePositions, retrieveSupplementalResults);
+            if (i == results.Length - 1)
+            {
+              // No need to make copy since this is last buffer to be evaluated
+              // and we can leave the results in situ in the evaluator buffers.
+              results[i] = nnBatch;
+            }
+            else
+            {
+              CopyResultsIntoLocalBuffer(retrieveSupplementalResults, results, i, nnBatch);
+            }
+#if NOT
+            PositionEvaluationBatch nnBatchD = nnBatch as PositionEvaluationBatch;
+            if (nnBatchD == null)
+            {
+              throw new NotImplementedException("NNEvaluatorSubBatchedWithTarget requires Evaluator to return PositionEvaluationBatch");
+            }
+            results[i] = new PositionEvaluationBatch(nnBatchD.IsWDL, nnBatchD.HasM, nnBatchD.NumPos, nnBatchD.Policies,
+                                                     nnBatchD.W, nnBatchD.L, nnBatchD.M, nnBatchD.Activations, nnBatchD.Stats, true);
+#endif
+          }
           numDone += thisBatchSize;
+        }
+
+        if (runEvaluatorAsync && priorPositions != null)
+        {
+          // Do not request copy here (last argument) since for last batch
+          // we can just leave the result values in situ in the evaluator because
+          // there is no subsequent subbatch to be processed which would overwrite them.
+          results[^1] = evaluatorCUDA.GetLastAsyncBatchResult(priorPositions, priorNumMoves, priorMoveIndices, retrieveSupplementalResults, false);
+
+          // Reset evaluator back to default synchronous mode.
+          (Evaluator as NNEvaluatorCUDA).Evaluator.AsyncMode = false;
         }
 
         return new PositionsEvaluationBatchMerged(results, subBatchSizes.ToArray());
@@ -156,26 +280,29 @@ namespace Ceres.Chess.NNEvaluators
 
     }
 
-    private static void BuildBatchSizes(int numPos, List<int> subBatchSizes, int subBatchSize)
+    private void SaveCopyOfPriorBatchInputs(NNEvaluatorCUDA evaluatorCUDA, int thisBatchSize, IEncodedPositionBatchFlat thesePositions)
     {
-      int numLeft = numPos;
+      // Save copies of variables pertaining to these input positions that
+      // will be overwritten as part of subsequent evaluation
+      priorNumMoves = evaluatorCUDA.Evaluator.inputOutput.InputNumMovesUsed.AsSpan().Slice(0, thisBatchSize).ToArray();
+      priorMoveIndices = evaluatorCUDA.Evaluator.inputOutput.InputMoveIndices.AsSpan().Slice(0, thisBatchSize * NNBackendInputOutput.MAX_MOVES).ToArray();
+      priorPositions = thesePositions;
+    }
 
-      // If the last batch would be very small,
-      // redistribute some from prior batch into this one to make more similar
-      int ADJ = subBatchSize / 2;
-      while (numLeft > 0)
+    private void CopyResultsIntoLocalBuffer(bool retrieveSupplementalResults, IPositionEvaluationBatch[] results, int i, IPositionEvaluationBatch iSourceBuffer)
+    {
+      PositionEvaluationBatch batchCopyBuffer = GetOutputBatchBuffered(i, retrieveSupplementalResults);
+      if (iSourceBuffer is PositionEvaluationBatch sourceBuffer)
       {
-        if (numLeft < ADJ && subBatchSizes.Count > 0)
-        {
-          subBatchSizes[^1] -= ADJ;
-          numLeft += ADJ;
-        }
-
-        int thisBatchSize = Math.Min(subBatchSize, numLeft);
-        subBatchSizes.Add(thisBatchSize);
-        numLeft -= thisBatchSize;
+        batchCopyBuffer.CopyFrom(sourceBuffer);
+        results[i] = batchCopyBuffer;
+      }
+      else
+      {
+        throw new Exception("NNEvaluatorSubBatchedWithTarget underlying Evaluator required to return PositionEvaluationBatch");
       }
     }
+    
 
     private static void Dump(int numPos, List<int> subBatchSizes)
     {
