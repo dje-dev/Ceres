@@ -104,7 +104,7 @@ namespace Ceres.Chess.NNEvaluators.CUDA
     /// <summary>
     /// Underlying neural network evaluator used.
     /// </summary>
-    internal readonly NNBackendLC0_CUDA Evaluator;
+    public readonly NNBackendLC0_CUDA Evaluator;
 
     static int numInstancesEverCreated = 0;
 
@@ -196,32 +196,46 @@ namespace Ceres.Chess.NNEvaluators.CUDA
     public override bool IsEquivalentTo(NNEvaluator evaluator) => EngineNetworkID == evaluator.EngineNetworkID;
 
 
-    public override IPositionEvaluationBatch DoEvaluateIntoBuffers(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
+    public void StartEvaluateIntoBuffers(IEncodedPositionBatchFlat positions, int numPositions, bool retrieveSupplementalResults = false)
     {
-      if (positions.NumPos > MaxBatchSize) new ArgumentOutOfRangeException($"batch.NumPos is too large, max {MaxBatchSize} versus actual {positions.NumPos}");
-
       if (retrieveSupplementalResults && !Evaluator.SaveActivations)
       {
         throw new Exception("retrieveSupplementalResults requires that the evaluator was created with the saveActivations parameter true.");
       }
 
-      int numToPrepare = positions.NumPos;
-      //Console.WriteLine("INPUTS " + System.Threading.Thread.CurrentThread.ManagedThreadId + " " + positions.NumPos);
+      // Prepare inputs for NN evaluation (unless not provided, indincating this is already complete)
+      if (positions != null)
+      {
+        if (numPositions != positions.NumPos)
+        {
+          throw new ArgumentException(nameof(numPositions));
+        }
 
-      // Transform input information 
-      PrepareInputPositions(positions);
+        PrepareInputPositions(positions);
+      }
 
       // Actually do the NN evaluation
-      Evaluator.EvaluateNN(positions.NumPos);
+      Evaluator.EvaluateNN(numPositions);
 
-      NNEvaluatorStats.UpdateStatsForBatch(GPUID, positions.NumPos);
+      NNEvaluatorStats.UpdateStatsForBatch(GPUID, numPositions);
+    }
 
+    public override IPositionEvaluationBatch DoEvaluateIntoBuffers(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
+    {
+      StartEvaluateIntoBuffers(positions, positions.NumPos, retrieveSupplementalResults);
+      const bool COPY_RESULTS = false;
+      return GetPostprocessedBatch(positions, null, null, retrieveSupplementalResults, COPY_RESULTS);
+    }
+
+
+    IPositionEvaluationBatch GetPostprocessedBatch(IEncodedPositionBatchFlat positions, short[] numMoves, short[] moveIndices, bool retrieveSupplementalResults, bool copyResults)
+    {
       ParallelOptions parallelOptions = ParallelUtils.ParallelOptions(positions.NumPos, NUM_POSITIONS_PER_THREAD_OUTPUT);
 
       Parallel.ForEach(Partitioner.Create(0, positions.NumPos), parallelOptions,
         range =>
         {
-          PrepareOutputPositions(range.Item1, range.Item2);
+          PrepareOutputPositions(numMoves, moveIndices, range.Item1, range.Item2);
         });
 
       NNEvaluatorResultActivations[] activations = null;
@@ -235,8 +249,40 @@ namespace Ceres.Chess.NNEvaluators.CUDA
         }
       }
 
-      return new PositionEvaluationBatch(IsWDL, HasM, positions.NumPos, policies, w, l, m, activations, new TimingStats()); ;
+      return new PositionEvaluationBatch(IsWDL, HasM, positions.NumPos, policies, w, l, m, activations, new TimingStats(), copyResults);
     }
+
+
+    #region Optional Async support
+
+    protected override Task DoLaunchEvaluateBatchAsync(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
+    {
+      Evaluator.InputsCopyToDeviceFinished.Reset();
+      return Task.Run(() =>
+      {
+        try
+        {
+          int numPos = positions == null ? numPreparedPositions : positions.NumPos; 
+          StartEvaluateIntoBuffers(positions, numPos, retrieveSupplementalResults);
+        }
+        catch (Exception ex)
+        {
+          Console.WriteLine("Exception in DoLaunchEvaluateBatchAsync " + ex);
+          Console.WriteLine(ex.StackTrace);
+        }
+      });
+    }
+
+    public override IPositionEvaluationBatch GetLastAsyncBatchResult(IEncodedPositionBatchFlat positions, 
+                                                                     short[] numMoves,
+                                                                     short[] moveIndices,
+                                                                     bool retrieveSupplementalResults,
+                                                                     bool makeCopyOfResults)
+    {
+      return GetPostprocessedBatch(positions, numMoves, moveIndices, retrieveSupplementalResults, makeCopyOfResults);
+    }
+
+    #endregion
 
 
     const int NUM_POSITIONS_PER_THREAD_INPUT = 48;
@@ -244,8 +290,16 @@ namespace Ceres.Chess.NNEvaluators.CUDA
 
     static bool haveWarnedMoveOverflow = false;
 
-    private void PrepareInputPositions(IEncodedPositionBatchFlat batch)
+    int numPreparedPositions;
+    public void PrepareInputPositions(IEncodedPositionBatchFlat batch)
     {
+      if (batch.NumPos > MaxBatchSize)
+      {
+        new ArgumentOutOfRangeException($"batch.NumPos is too large, max {MaxBatchSize} versus actual {batch.NumPos}");
+      }
+
+      numPreparedPositions = batch.NumPos;
+
       int numPlanes = NNBackendInputOutput.NUM_INPUT_PLANES;
       Span<ulong> masksSource = batch.PosPlaneBitmaps.Slice(0, batch.NumPos * numPlanes);
       Span<ulong> masksDest = Evaluator.inputOutput.InputBoardMasks.AsSpan().Slice(0, batch.NumPos * numPlanes);
@@ -313,12 +367,13 @@ namespace Ceres.Chess.NNEvaluators.CUDA
 
 
     [SkipLocalsInit]
-    private void PrepareOutputPositions(int startPos, int endPos)
+    private void PrepareOutputPositions(short[] numMovesArray, short[] moveIndices, int startPos, int endPos)
     {
       NNBackendInputOutput io = Evaluator.inputOutput;
 
       Span<float> policiesMasked = io.OutputPolicyHeadMasked.AsSpan();
-      Span<short> moveIndicesSpan = io.InputMoveIndices.AsSpan();
+      Span<short> moveIndicesSpan = moveIndices != null ? moveIndices.AsSpan() : io.InputMoveIndices.AsSpan();
+      Span<short> numMovesSpan = numMovesArray != null ? numMovesArray.AsSpan() :  io.InputNumMovesUsed.AsSpan();
 
       for (int i = startPos; i < endPos; i++)
       {
@@ -344,7 +399,7 @@ namespace Ceres.Chess.NNEvaluators.CUDA
           m[i] = (FP16)io.OutputMovesLeftHead[i];
         }
 
-        int numMoves = io.InputNumMovesUsed[i];
+        int numMoves = numMovesSpan[i];
 
         if (numMoves > 0)
         {

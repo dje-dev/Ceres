@@ -16,7 +16,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-
+using System.Threading.Tasks;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.LC0.Batches;
 using Ceres.Chess.MoveGen;
@@ -150,6 +150,18 @@ namespace Ceres.Chess.NNEvaluators
     /// <returns></returns>
     public IPositionEvaluationBatch EvaluateIntoBuffers(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
     {
+      SetMovesIfNeeded(positions);
+
+      IPositionEvaluationBatch batch = DoEvaluateIntoBuffers(positions, retrieveSupplementalResults);
+
+      NumBatchesEvaluated++;
+      NumPositionsEvaluated += positions.NumPos;
+      return batch;
+    }
+
+
+    private void SetMovesIfNeeded(IEncodedPositionBatchFlat positions)
+    {
       // Compute Moves if necessary
       if (InputsRequired.HasFlag(InputTypes.Moves))
       {
@@ -160,13 +172,6 @@ namespace Ceres.Chess.NNEvaluators
           throw new Exception($"NNEvaluator requires Positions to be provided {this}");
         }
       }
-
-
-      IPositionEvaluationBatch batch = DoEvaluateIntoBuffers(positions, retrieveSupplementalResults);
-
-      NumBatchesEvaluated++;
-      NumPositionsEvaluated += positions.NumPos;
-      return batch;
     }
 
     object lockObj = new ();
@@ -374,6 +379,47 @@ namespace Ceres.Chess.NNEvaluators
         processor((i * subBatchSize, result));
       }
     }
+
+
+    #region Optional Async support
+
+    /// <summary>
+    /// Starts a task to begin evalation of specified positions on device.
+    /// </summary>
+    /// <param name="positions">positions to be evaluated, or null indicating the evaluator has already been configured with the positions</param>
+    /// <param name="numPositions"></param>
+    /// <param name="retrieveSupplementalResults"></param>
+    /// <returns></returns>
+    public Task LaunchEvaluateBatchAsync(IEncodedPositionBatchFlat positions, int numPositions, bool retrieveSupplementalResults = false)
+    {
+      if (positions != null && positions.NumPos != numPositions)
+      {
+        throw new ArgumentException("numPositions wrong size");
+      }
+
+      if (positions != null)
+      {
+        SetMovesIfNeeded(positions);
+      }
+
+      Task task = DoLaunchEvaluateBatchAsync(positions, retrieveSupplementalResults);
+
+      NumBatchesEvaluated++;
+      NumPositionsEvaluated += numPositions;
+      return task;
+    }
+
+    protected virtual Task DoLaunchEvaluateBatchAsync(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
+    {
+      throw new NotImplementedException();
+    }
+
+    public virtual IPositionEvaluationBatch GetLastAsyncBatchResult(IEncodedPositionBatchFlat positions, short[] numMoves, short[] moveIndices, bool retrieveSupplementalResults, bool returnResultsCopy)
+    {
+      throw new NotImplementedException();
+    }
+
+    #endregion
 
 
     /// <summary>

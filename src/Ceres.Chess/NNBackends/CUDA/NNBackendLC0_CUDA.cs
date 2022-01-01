@@ -25,6 +25,7 @@ using Pblczero;
 using Ceres.Base.Benchmarking;
 using Ceres.Base.CUDA;
 using Ceres.Base.DataTypes;
+using System.Threading;
 
 #endregion
 
@@ -110,6 +111,39 @@ namespace Ceres.Chess.NNBackends.CUDA
     /// which shares same parameters (from which weights can be reused).
     /// </summary>
     public readonly NNBackendLC0_CUDA ReferenceBackend;
+
+    #region Optional concurrency management for results buffer
+
+    bool asyncMode = false;
+    ManualResetEventSlim eventOkToFillResults = null;
+    public ManualResetEventSlim InputsCopyToDeviceFinished;
+
+    public bool AsyncMode
+    {
+      get => asyncMode;
+      set
+      {
+        if (value)
+        {
+          if (eventOkToFillResults == null)
+          {
+            eventOkToFillResults = new ManualResetEventSlim(false);
+            InputsCopyToDeviceFinished = new ManualResetEventSlim(false);
+          }
+
+          eventOkToFillResults.Reset();
+          asyncMode = true;
+        }
+        else
+        {
+          asyncMode = false;
+        }
+      }
+    }
+
+    public void SetOkToFillResults() => eventOkToFillResults.Set();
+
+    #endregion
 
     internal NNBackendInputOutput inputOutput;
 
@@ -256,7 +290,7 @@ namespace Ceres.Chess.NNBackends.CUDA
       }
     }
 
-
+    
     private void InitCUDAContextAndTakeWriteLock(Assembly callingAssembly)
     {
       CUDADevice deviceContext = null;
@@ -285,6 +319,7 @@ namespace Ceres.Chess.NNBackends.CUDA
       CudaBlasLTHandle ltHandle = default;
 
       CudaStream stream = new CudaStream();
+      CudaStream stream2 = new CudaStream();
 
       using (new TimingBlock("Init BLAS", DIAGNOSTIC ? TimingBlock.LoggingType.ConsoleWithMemoryTracking : TimingBlock.LoggingType.None))
       {
@@ -298,7 +333,7 @@ namespace Ceres.Chess.NNBackends.CUDA
         }
       }
 
-      ExecContext = new(deviceContext, stream, cuBlas, ltHandle, callingAssembly, DumpTiming, deviceProperties.MaxSharedMemoryPerBlockOptin);
+      ExecContext = new(deviceContext, stream, stream2, cuBlas, ltHandle, callingAssembly, DumpTiming, deviceProperties.MaxSharedMemoryPerBlockOptin);
     }
 
     void SetCUDAState()
@@ -490,6 +525,15 @@ namespace Ceres.Chess.NNBackends.CUDA
 
       PrepareInputs(batchSize);
 
+      if (AsyncMode)
+      {
+        // Complete work of copying inputs to device,
+        // making input variables subsequently safe to modify.
+        ExecContext.Stream.Synchronize();
+
+        InputsCopyToDeviceFinished.Set();
+      }
+
       int batchSizeForNetwork;
       if (batchSize < MIN_BATCH_SIZE && MIN_BATCH_SIZE < MaxBatchSize)
       {
@@ -502,6 +546,30 @@ namespace Ceres.Chess.NNBackends.CUDA
 
       RunNetwork(batchSizeForNetwork);
 
+      // Possibly wait for signal that ok to fill buffers.
+      if (AsyncMode)
+      {
+        eventOkToFillResults?.Wait();
+        eventOkToFillResults?.Reset();
+      }
+
+      RetrieveResultsFromGPU(batchSize);
+
+      // Retrieve results
+      ExecContext.Stream.Synchronize();
+
+      ExtractValueAndMLHOutputs(batchSize, io);
+
+      if (DumpTiming)
+      {
+        Console.WriteLine("CUDA DETAIL - Batch size " + batchSize);
+        Layers.DumpTimings();
+      }
+    }
+
+
+    private void RetrieveResultsFromGPU(int batchSize)
+    {
       // TODO: the use of async copies with pinned memory probably not worthwhile
       ExtractMaskedPolicies(ExecContext.Stream, networkOutputs.PolicyOut, batchSize);
       wdlTemp.CopyToHostAsync(networkOutputs.ValueOut, batchSize * (HasWDL ? 3 : 1), ExecContext.Stream);
@@ -514,20 +582,7 @@ namespace Ceres.Chess.NNBackends.CUDA
       {
         mlhTemp.CopyToHostAsync(networkOutputs.MLHOut, batchSize, ExecContext.Stream);
       }
-
-      // Retrieve results
-      ExecContext.Stream.Synchronize();
-
-      ExtractValueAndMLHOutputs(batchSize, io);
-
-
-      if (DumpTiming)
-      {
-        Console.WriteLine("CUDA DETAIL - Batch size " + batchSize);
-        Layers.DumpTimings();
-      }
     }
-
 
     private void ExtractValueAndMLHOutputs(int batchSize, NNBackendInputOutput io)
     {
@@ -622,6 +677,20 @@ namespace Ceres.Chess.NNBackends.CUDA
 
       io.InputMoveIndices.CopyToDeviceAsync(moveMasksGPU, batchSize * 96, ExecContext.Stream);
     }
+
+    /// <summary>
+    /// Gives a hint to the executor that a specified batch size
+    /// is commonly used and should possibly be optimized for.
+    /// </summary>
+    /// <param name="batchSize"></param>
+    public void SetCommonBatchSize(int? batchSize)
+    {
+      if (batchSize.HasValue && UseGraphs)
+      {
+        graphSet.EnsureGraphOfSizeCreated(ExecContext, batchSize.Value);
+      }
+    }
+
 
     private void RunNetwork(int batchSize)
     {
