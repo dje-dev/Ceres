@@ -81,9 +81,9 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
         if (allowBatchSizeSpecification && netID.Contains("["))
         {
           string maxBatchStr = netID.Substring(netID.IndexOf("[")+1).Replace("]", "");
-          if (maxBatchStr.Contains(";"))
+          if (maxBatchStr.Contains(".."))
           {
-            string[] bsSplit = maxBatchStr.Split(";");
+            string[] bsSplit = maxBatchStr.Split("..");
             optimalBatchSize = int.Parse(bsSplit[0]);
             maxBatchSize = int.Parse(bsSplit[1]);
           }

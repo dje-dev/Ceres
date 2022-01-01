@@ -171,15 +171,23 @@ namespace Ceres.Chess.NNEvaluators.Specifications
         {
           if (count > 0) str += ",";
           str += $"{device.DeviceIndex}";
-          if (weight != 1) str+= $"@{weight}";
-          if (device.PredefinedOptimalBatchPartitions != null)  
+          if (weight != 1) str += $"@{weight}";
+          if (device.PredefinedOptimalBatchPartitions != null)
           {
             str += $"[<batch_size_file>]";
           }
           if (device.MaxBatchSize.HasValue)
           {
-            str += $"[{device.MaxBatchSize.Value}]";
+            if (device.MaxBatchSize.HasValue)
+            {
+              str += $"[{device.OptimalBatchSize.Value}..{device.MaxBatchSize.Value}]";
+            }
+            else
+            {
+              str += $"[{device.MaxBatchSize.Value}]";
+            }
           }
+        
           count++;
         }
         if (comboType == NNEvaluatorDeviceComboType.Pooled)
