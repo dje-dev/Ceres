@@ -115,19 +115,39 @@ namespace Ceres.Chess.NNBackends.CUDA
 
       if (!graphs.ContainsKey(sizeToUse))
       {
-        // Create a graph for this batch size.
-        NNBackendCUDAGraph graph = new NNBackendCUDAGraph(execContext.Device, sizeToUse);
-
-        // Record CUDA operations to evaluate batch of this size.
-        graph.BeginCaptureGraph(execContext.Stream);
-        Builder(execContext.Stream, sizeToUse);
-        graph.EndCaptureGraph(execContext.Stream);
-
-        // Save graph for future use.
-        graphs[sizeToUse] = graph;
+        AddGraphOfSize(execContext, sizeToUse);
       }
 
       return graphs[sizeToUse];
+    }
+
+
+    /// <summary>
+    /// Makes sure graph of specified size is created (creates if not already extant).
+    /// </summary>
+    /// <param name="execContext"></param>
+    /// <param name="graphSize"></param>
+    public void EnsureGraphOfSizeCreated(NNBackendExecContext execContext, int graphSize)
+    {
+      if (!graphs.ContainsKey(graphSize))
+      {
+        AddGraphOfSize(execContext, graphSize);
+      }
+    }
+
+
+    private void AddGraphOfSize(NNBackendExecContext execContext, int sizeToUse)
+    {
+      // Create a graph for this batch size.
+      NNBackendCUDAGraph graph = new NNBackendCUDAGraph(execContext.Device, sizeToUse);
+
+      // Record CUDA operations to evaluate batch of this size.
+      graph.BeginCaptureGraph(execContext.Stream);
+      Builder(execContext.Stream, sizeToUse);
+      graph.EndCaptureGraph(execContext.Stream);
+
+      // Save graph for future use.
+      graphs[sizeToUse] = graph;
     }
 
 
