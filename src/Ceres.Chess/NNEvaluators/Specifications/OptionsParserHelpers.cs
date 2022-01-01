@@ -40,13 +40,14 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
     const char SUB_WEIGHTS_CHAR = ';';
 
 
-    internal static List<(string netID, NNEvaluatorPrecision precision, float wtValue, float wtPolicy, float wtMLH)> 
-      ParseCommaSeparatedWithOptionalWeights(string str, bool allowSubWeights)
+    internal static List<(string netID, NNEvaluatorPrecision precision, int? maxBatchSize, float wtValue, float wtPolicy, float wtMLH)> 
+      ParseCommaSeparatedWithOptionalWeights(string str, bool allowSubWeights, bool allowMaxBatchSize)
     {
-      List<(string, NNEvaluatorPrecision precision, float, float, float)> ret = new();
+      List<(string, NNEvaluatorPrecision precision, int?, float, float, float)> ret = new();
 
       string[] nets = str.Split(",");
 
+      int? maxBatchSize = null;
       float sumWeightsValue = 0.0f;
       float sumWeightsPolicy = 0.0f;
       float sumWeightsMLH = 0.0f;
@@ -71,6 +72,20 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
 
           netID = netAndPrecision[0];
           precision = precisionBits == 8 ? NNEvaluatorPrecision.Int8 : NNEvaluatorPrecision.FP16;
+        }
+
+        if (allowMaxBatchSize && netID.Contains("["))
+        {
+          string maxBatchStr = netID.Substring(netID.IndexOf("[")+1).Replace("]", "");
+          if (int.TryParse(maxBatchStr, out int maxBatchSizeValue))
+          {
+            maxBatchSize = maxBatchSizeValue;
+            netID = netID.Substring(0, netID.IndexOf("["));
+          }
+          else
+          {
+            throw new Exception("Device max batch size invalid, expect value such as [256]");
+          }          
         }
 
         string netWts = netParts.Length == 1 ? "1" : netParts[1];
@@ -103,7 +118,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
         sumWeightsMLH += weightMLH;
 
 
-        ret.Add((netID, precision, weightValue, weightPolicy, weightMLH));
+        ret.Add((netID, precision, maxBatchSize, weightValue, weightPolicy, weightMLH));
       }
 
       if (MathF.Abs(1.0f - sumWeightsValue) > 0.001)

@@ -43,30 +43,47 @@ namespace Ceres.Chess.NNEvaluators.Defs
     public bool LowPriority = false;
 
     /// <summary>
+    /// An optional directive indicating the maximum batch size to be sent to the device.
+    /// </summary>
+    public int? MaxBatchSize;
+
+
+    /// <summary>
     /// Constructor.
     /// </summary>
     /// <param name="type"></param>
     /// <param name="deviceNum"></param>
     /// <param name="lowPriority"></param>
-    public NNEvaluatorDeviceDef(NNDeviceType type, int deviceNum, bool lowPriority = false)
+    /// <param name="maxBatchSize"></param>
+    public NNEvaluatorDeviceDef(NNDeviceType type, int deviceNum, bool lowPriority = false, int? maxBatchSize = null)
     {
       Type = type;
       DeviceIndex = deviceNum;
       LowPriority = lowPriority;
+      MaxBatchSize = maxBatchSize; 
     }
+
 
     public static (NNEvaluatorDeviceDef, float)[] DevicesInRange(NNDeviceType type, int minDeviceIndex, int maxDeviceIndex)
     {
       int numDevices = maxDeviceIndex - minDeviceIndex + 1;
       (NNEvaluatorDeviceDef, float)[] ret = new (NNEvaluatorDeviceDef, float)[numDevices];
       for (int i = minDeviceIndex; i <= maxDeviceIndex; i++)
+      {
         ret[i - minDeviceIndex] = (new NNEvaluatorDeviceDef(type, i), 1.0f / numDevices);
+      }
       return ret;
     }
 
+
+    /// <summary>
+    /// Returns string representation.
+    /// </summary>
+    /// <returns></returns>
     public override string ToString()
     {
-      return $"<NNEvaluatorDeviceDef {Type} #{DeviceIndex} {(LowPriority ? "Low Priority" : "")}>";
+      string maxStr = MaxBatchSize.HasValue ? $" Max={MaxBatchSize}" : "";
+      return $"<NNEvaluatorDeviceDef {Type} #{DeviceIndex} {(LowPriority ? "Low Priority" : "")}{maxStr}>";
     }
 
   }
