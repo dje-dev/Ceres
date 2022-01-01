@@ -191,7 +191,7 @@ namespace Ceres.Chess.NNEvaluators
               // TODO: consider if we could/should delete the temporary file when
               //       it has been consumed by the ONNX engine constructor.
               // TODO: consider possibility of other precisions than FP32
-              return new NNEvaluatorEngineONNX(netDef.NetworkID, tempFN, deviceDef.DeviceIndex, 
+              return new NNEvaluatorEngineONNX(netDef.NetworkID, tempFN, deviceDef.DeviceIndex,
                                                ONNXRuntimeExecutor.NetTypeEnum.LC0, 1024,
                                                NNEvaluatorPrecision.FP32, netDefONNX.IsWDL, netDefONNX.HasMovesLeft,
                                                pbn.Net.OnnxModel.OutputValue, pbn.Net.OnnxModel.OutputWdl,
@@ -221,15 +221,20 @@ namespace Ceres.Chess.NNEvaluators
             {
               maxBatchSize = Math.Min(deviceDef.MaxBatchSize.Value, maxSearchBatchSize);
             }
+
             bool enableCUDAGraphs = CeresUserSettingsManager.Settings.EnableCUDAGraphs;
-            NNEvaluatorCUDA evaluator = new (net as NNWeightsFileLC0, deviceDef.DeviceIndex, maxBatchSize, 
+            NNEvaluatorCUDA evaluator = new(net as NNWeightsFileLC0, deviceDef.DeviceIndex, maxBatchSize,
                                              false, netDef.Precision, false, enableCUDAGraphs, 1, referenceEvaluatorCast);
 
             // Possibly specialize as NNEvaluatorSubBatchedWithTarget if device batch size is set.
-            if (deviceDef.MaxBatchSize.HasValue && deviceDef.MaxBatchSize.Value < maxSearchBatchSize)
+            bool useTargetedEvaluator = (deviceDef.PredefinedOptimalBatchPartitions != null
+                                      || (deviceDef.MaxBatchSize.HasValue && deviceDef.MaxBatchSize.Value < maxSearchBatchSize));
+            if (useTargetedEvaluator)
             {
-              return new NNEvaluatorSubBatchedWithTarget(evaluator, deviceDef.MaxBatchSize.Value);
-
+              return new NNEvaluatorSubBatchedWithTarget(evaluator, 
+                                                         deviceDef.MaxBatchSize.Value, 
+                                                         deviceDef.OptimalBatchSize.Value, 
+                                                         deviceDef.PredefinedOptimalBatchPartitions);
 #if NOT
           NNEvaluator copySinglegon = Singleton(def.Nets[0].Net, def.Devices[0].Device, referenceEvaluator);
           NNEvaluatorCompare compare = new NNEvaluatorCompare(subbatched, copySinglegon);

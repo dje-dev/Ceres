@@ -84,11 +84,21 @@ namespace Ceres.Chess.NNEvaluators.Specifications
         throw new Exception($"{deviceString} not valid, device specification expected to begin with 'GPU:'");
       }
 
-      List<(string, NNEvaluatorPrecision, int?, float, float, float)> deviceParts = OptionsParserHelpers.ParseCommaSeparatedWithOptionalWeights(deviceStringParts[1], false, true);
+      List<(string, NNEvaluatorPrecision, int?, int?, string, float, float, float)> deviceParts = OptionsParserHelpers.ParseCommaSeparatedWithOptionalWeights(deviceStringParts[1], false, true);
 
       foreach (var device in deviceParts)
       {
-        Devices.Add((new NNEvaluatorDeviceDef(NNDeviceType.GPU, int.Parse(device.Item1), false, device.Item3), device.Item4));
+        int? maxBatchSize = device.Item3;
+        int? optimalBatchSize = device.Item4;
+        List<(int, int[])> predefinedPartitions = null;
+        if (device.Item5 != null)
+        {
+          var parsedBatchFile = BatchSizeFileParser.ParseFromFile(device.Item5);
+          maxBatchSize = parsedBatchFile.maxBatchSize;
+          predefinedPartitions = parsedBatchFile.predefinedPartitions;    
+        }
+        Devices.Add((new NNEvaluatorDeviceDef(NNDeviceType.GPU, int.Parse(device.Item1), false,
+                                              maxBatchSize, optimalBatchSize, predefinedPartitions), device.Item6));
       }
 
       ComboType = Devices.Count == 1 ? NNEvaluatorDeviceComboType.Single
@@ -162,6 +172,10 @@ namespace Ceres.Chess.NNEvaluators.Specifications
           if (count > 0) str += ",";
           str += $"{device.DeviceIndex}";
           if (weight != 1) str+= $"@{weight}";
+          if (device.PredefinedOptimalBatchPartitions != null)  
+          {
+            str += $"[<batch_size_file>]";
+          }
           if (device.MaxBatchSize.HasValue)
           {
             str += $"[{device.MaxBatchSize.Value}]";

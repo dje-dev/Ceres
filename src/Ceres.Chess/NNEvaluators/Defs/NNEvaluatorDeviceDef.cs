@@ -14,6 +14,7 @@
 #region Using directives
 
 using System;
+using System.Collections.Generic;
 
 #endregion
 
@@ -47,6 +48,16 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// </summary>
     public int? MaxBatchSize;
 
+    /// <summary>
+    /// An optional directive indicating an optimal batch size to be sent to the device.
+    /// </summary>
+    public int? OptimalBatchSize;
+
+    /// <summary>
+    /// Optionally a list of optimal batch size partitions.
+    /// </summary>
+    public List<(int batchSize, int[] partitionBatchSizes)> PredefinedOptimalBatchPartitions;
+
 
     /// <summary>
     /// Constructor.
@@ -55,12 +66,22 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// <param name="deviceNum"></param>
     /// <param name="lowPriority"></param>
     /// <param name="maxBatchSize"></param>
-    public NNEvaluatorDeviceDef(NNDeviceType type, int deviceNum, bool lowPriority = false, int? maxBatchSize = null)
+    /// <param name="predefinedOptimalBatchPartitions"></param>
+    public NNEvaluatorDeviceDef(NNDeviceType type, int deviceNum, bool lowPriority = false,
+                                int? maxBatchSize = null, int? optimalBatchSize  = null,
+                                List<(int batchSize, int[] partitionBatchSizes)> predefinedOptimalBatchPartitions = null)
     {
       Type = type;
       DeviceIndex = deviceNum;
       LowPriority = lowPriority;
-      MaxBatchSize = maxBatchSize; 
+      MaxBatchSize = maxBatchSize;
+      OptimalBatchSize = optimalBatchSize; 
+      PredefinedOptimalBatchPartitions = predefinedOptimalBatchPartitions;
+
+      if (MaxBatchSize is not null && OptimalBatchSize is null)
+      {
+        OptimalBatchSize = maxBatchSize;
+      }
     }
 
 
@@ -83,6 +104,7 @@ namespace Ceres.Chess.NNEvaluators.Defs
     public override string ToString()
     {
       string maxStr = MaxBatchSize.HasValue ? $" Max={MaxBatchSize}" : "";
+      string optimalStr = OptimalBatchSize.HasValue ? $" Optimal={OptimalBatchSize}" : "";
       return $"<NNEvaluatorDeviceDef {Type} #{DeviceIndex} {(LowPriority ? "Low Priority" : "")}{maxStr}>";
     }
 

@@ -40,14 +40,18 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
     const char SUB_WEIGHTS_CHAR = ';';
 
 
-    internal static List<(string netID, NNEvaluatorPrecision precision, int? maxBatchSize, float wtValue, float wtPolicy, float wtMLH)> 
-      ParseCommaSeparatedWithOptionalWeights(string str, bool allowSubWeights, bool allowMaxBatchSize)
+    internal static List<(string netID, NNEvaluatorPrecision precision, 
+                          int? maxBatchSize, int? optimalBatchSize, 
+                          string batchSizesFileName, float wtValue, float wtPolicy, float wtMLH)> 
+      ParseCommaSeparatedWithOptionalWeights(string str, bool allowSubWeights, bool allowBatchSizeSpecification)
     {
-      List<(string, NNEvaluatorPrecision precision, int?, float, float, float)> ret = new();
+      List<(string, NNEvaluatorPrecision precision, int?, int?, string, float, float, float)> ret = new();
 
       string[] nets = str.Split(",");
 
       int? maxBatchSize = null;
+      int? optimalBatchSize = null;
+      string batchSizesFileName = null;
       float sumWeightsValue = 0.0f;
       float sumWeightsPolicy = 0.0f;
       float sumWeightsMLH = 0.0f;
@@ -74,18 +78,25 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
           precision = precisionBits == 8 ? NNEvaluatorPrecision.Int8 : NNEvaluatorPrecision.FP16;
         }
 
-        if (allowMaxBatchSize && netID.Contains("["))
+        if (allowBatchSizeSpecification && netID.Contains("["))
         {
           string maxBatchStr = netID.Substring(netID.IndexOf("[")+1).Replace("]", "");
-          if (int.TryParse(maxBatchStr, out int maxBatchSizeValue))
+          if (maxBatchStr.Contains(";"))
+          {
+            string[] bsSplit = maxBatchStr.Split(";");
+            optimalBatchSize = int.Parse(bsSplit[0]);
+            maxBatchSize = int.Parse(bsSplit[1]);
+          }
+          else if (int.TryParse(maxBatchStr, out int maxBatchSizeValue))
           {
             maxBatchSize = maxBatchSizeValue;
-            netID = netID.Substring(0, netID.IndexOf("["));
           }
           else
           {
-            throw new Exception("Device max batch size invalid, expect value such as [256]");
-          }          
+            // Interpret as filename of batch file configuration file.
+            batchSizesFileName = maxBatchStr;
+          }
+          netID = netID.Substring(0, netID.IndexOf("["));
         }
 
         string netWts = netParts.Length == 1 ? "1" : netParts[1];
@@ -118,7 +129,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
         sumWeightsMLH += weightMLH;
 
 
-        ret.Add((netID, precision, maxBatchSize, weightValue, weightPolicy, weightMLH));
+        ret.Add((netID, precision, maxBatchSize, optimalBatchSize, batchSizesFileName, weightValue, weightPolicy, weightMLH));
       }
 
       if (MathF.Abs(1.0f - sumWeightsValue) > 0.001)

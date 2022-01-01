@@ -27,6 +27,7 @@ using Ceres.Chess.NNEvaluators.CUDA;
 
 namespace Ceres.Chess.NNEvaluators
 {
+
   /// <summary>
   /// An NNEvaluator with a specified maximum batch size,
   /// that can split up batches into multiple sequential subbatches 
@@ -49,6 +50,13 @@ namespace Ceres.Chess.NNEvaluators
     public int MaxSubBatchSize;
 
     /// <summary>
+    /// Optimal batch size sent to device at one time,
+    /// ideally a value which is a local 
+    /// nodes per second maximum for the device.
+    /// </summary>
+    public int OptimalSubBatchSize;
+
+    /// <summary>
     /// If asynchronous processing should be attempted to improve performance
     /// (overlap GPU processing and pre/post processing steps).
     /// </summary>
@@ -57,13 +65,15 @@ namespace Ceres.Chess.NNEvaluators
 
     bool runEvaluatorAsync;
 
+    List<(int batchSize, int[] partitionBatchSizes)> optimalBatchSizePartitions;
 
     /// <summary>
     /// Constructor.
     /// </summary>
     /// <param name="evaluator"></param>
     /// <param name="maxSubBatchSize"></param>
-    public NNEvaluatorSubBatchedWithTarget(NNEvaluator evaluator, int maxSubBatchSize)
+    public NNEvaluatorSubBatchedWithTarget(NNEvaluator evaluator, int maxSubBatchSize, int optimalSubBatchSize,
+                                           List<(int batchSize, int[] partitionBatchSizes)> optimalBatchSizePartitions)
     {
 //      Console.WriteLine($"NNEvaluatorSubBatchedWithTarget {maxSubBatchSize}");
 
@@ -73,7 +83,9 @@ namespace Ceres.Chess.NNEvaluators
 
       // Make sure neither batch size exceeds capabilities of underlying evaluator.
       MaxSubBatchSize = Math.Min(maxSubBatchSize, Evaluator.MaxBatchSize);
+      OptimalSubBatchSize = optimalSubBatchSize;
 
+      this.optimalBatchSizePartitions = optimalBatchSizePartitions;
       runEvaluatorAsync = TRY_RUN_EVALUATOR_ASYNC && Evaluator is NNEvaluatorCUDA;
 
       if (runEvaluatorAsync)
@@ -105,9 +117,60 @@ namespace Ceres.Chess.NNEvaluators
     }
 
 
-      
+
     void BuildSizes(int numPos, List<int> subBatchSizes)
     {
+      if (this.optimalBatchSizePartitions != null)
+      {
+        BuildSizesWithPredefinedSizes(numPos, subBatchSizes);
+        return;
+      }
+
+      int half = MaxSubBatchSize / 2;
+
+      int left = numPos;
+      while (left > 0)
+      {
+        if (left > MaxSubBatchSize)
+        {
+          if (left < OptimalSubBatchSize * 3 && OptimalSubBatchSize <= MaxSubBatchSize / 2)
+          {
+            subBatchSizes.Add(OptimalSubBatchSize);
+            left -= OptimalSubBatchSize;
+          }
+          else
+          {
+            subBatchSizes.Add(MaxSubBatchSize);
+            left -= MaxSubBatchSize;
+          }
+        }
+        else if (left > (MaxSubBatchSize * 80) / 100)
+        {
+          // Make sure the 3 batch sizes are somewhat equal in size.
+          subBatchSizes.Add(left/2);
+          left -= left/2;
+        }
+        else
+        {
+          subBatchSizes.Add(left);
+          left = 0;
+        }
+      }
+
+
+
+      
+    }
+
+    void BuildSizesWithPredefinedSizes(int numPos, List<int> subBatchSizes)
+    {
+      List<int> predefined = CheckPredefinedPartition(numPos);
+      if (predefined != null)
+      {
+        subBatchSizes.AddRange(predefined);
+        return;
+      }
+
       // Put the smallest batch first so that batch at end is of full size,
       // which is more efficient because the last batch can stay in situ
       // in the underlying Evaluator buffers.
@@ -120,6 +183,13 @@ namespace Ceres.Chess.NNEvaluators
 
       while (numPos > 0)
       {
+        List<int> pre = CheckPredefinedPartition(numPos);
+        if (pre != null)
+        {
+          subBatchSizes.AddRange(pre);
+          return;
+        }
+
         subBatchSizes.Add(MaxSubBatchSize);
         numPos -= MaxSubBatchSize;
       }
@@ -167,7 +237,7 @@ namespace Ceres.Chess.NNEvaluators
     {
       priorPositions = null;
 
-      if (positions.NumPos <= MaxSubBatchSize)
+      if (positions.NumPos < (MaxSubBatchSize * 80) / 100)
       {
         // Batch size fits into one subbatch, just dispatch to underlying evaluator.
         (Evaluator as NNEvaluatorCUDA).Evaluator.AsyncMode = false;
@@ -302,7 +372,50 @@ namespace Ceres.Chess.NNEvaluators
         throw new Exception("NNEvaluatorSubBatchedWithTarget underlying Evaluator required to return PositionEvaluationBatch");
       }
     }
-    
+
+    static List<int> BuildPartition(params int[] b)
+    {
+      List<int> ret = new List<int>();
+      for (int i = 0; i < b.Length; i++)
+      {
+        ret.Add(b[i]);
+      }
+      return ret;
+    }
+    List<int> CheckPredefinedPartition(int bs)
+    {
+      if (optimalBatchSizePartitions != null)
+      {
+        foreach (var v in optimalBatchSizePartitions)
+        {
+          if (v.batchSize == bs)
+          {
+            return BuildPartition(v.partitionBatchSizes);
+          }
+        }
+      }
+
+      return null;
+#if not
+      if (bs == 160) return BuildPartition(64, 96);
+      if (bs == 176) return BuildPartition(84, 92);
+      if (bs == 192) return BuildPartition(96, 96);
+      if (bs == 208) return BuildPartition(100, 108);
+      if (bs == 224) return BuildPartition(96, 128);
+      if (bs == 240) return BuildPartition(92, 148);
+      if (bs == 256) return BuildPartition(108, 148);
+      if (bs == 272) return BuildPartition(92, 180);
+      if (bs == 288) return BuildPartition(96, 192);
+      if (bs == 304) return BuildPartition(148, 156);
+      if (bs == 320) return BuildPartition(128, 192);
+      if (bs == 336) return BuildPartition(148, 188);
+      if (bs == 352) return BuildPartition(160, 192);
+      if (bs == 368) return BuildPartition(180, 188);
+      if (bs == 384) return BuildPartition(192, 192);
+      return null;
+#endif
+    }
+
 
     private static void Dump(int numPos, List<int> subBatchSizes)
     {

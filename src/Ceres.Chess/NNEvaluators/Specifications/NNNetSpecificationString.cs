@@ -101,12 +101,12 @@ namespace Ceres.Chess.NNEvaluators.Specifications
       }
 
       // Build network definitions
-      List<(string, NNEvaluatorPrecision, int?, float, float, float)> netParts = OptionsParserHelpers.ParseCommaSeparatedWithOptionalWeights(netIDs, true, false);
+      List<(string, NNEvaluatorPrecision, int?, int?, string, float, float, float)> netParts = OptionsParserHelpers.ParseCommaSeparatedWithOptionalWeights(netIDs, true, false);
 
       NetDefs = new List<(NNEvaluatorNetDef, float, float, float)>();
       foreach (var netSegment in netParts)
       {
-        NetDefs.Add((new NNEvaluatorNetDef(netSegment.Item1, NN_EVAL_TYPE, netSegment.Item2), netSegment.Item4, netSegment.Item5, netSegment.Item6));
+        NetDefs.Add((new NNEvaluatorNetDef(netSegment.Item1, NN_EVAL_TYPE, netSegment.Item2), netSegment.Item6, netSegment.Item7, netSegment.Item8));
       }
 
       ComboType = NetDefs.Count == 1 ? NNEvaluatorNetComboType.Single : NNEvaluatorNetComboType.WtdAverage;
