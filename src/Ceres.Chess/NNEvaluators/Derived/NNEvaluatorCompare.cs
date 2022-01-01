@@ -148,7 +148,7 @@ namespace Ceres.Chess.NNEvaluators
             NNEvaluatorResult[] refResult = ReferenceEvaluator.EvaluateBatch(positions.GetSubBatchSlice(i, 1));
             refString = ErrMagnitudes(v0, v1, refResult[0].V, ref sumValue0Err, ref sumValue1Err, ref countValueErr);
           }
-          Console.WriteLine($"NNEvaluatorCompare V discrepancy at POS: {i,6:F0}  {v0,7:F3} {v1,7:F3} {refString}");
+          Console.WriteLine($"NNEvaluatorCompare [{positions.NumPos}]  V discrepancy at POS: {i,6:F0}  {v0,7:F3} {v1,7:F3} {refString}");
         }
         else
         {
@@ -180,7 +180,7 @@ namespace Ceres.Chess.NNEvaluators
                                         ref sumPolicy0Err, ref sumPolicy1Err, ref countPolicyErr);
             }
 
-            if (maxDiff == 0) Console.WriteLine("NNEvaluatorCompare policy discrepancies ");
+            if (maxDiff == 0) Console.WriteLine($"NNEvaluatorCompare policy discrepancies [{positions.NumPos}] ");
             maxDiff = policies0[p] - policies1[p];
             Console.WriteLine($"  POS: {i,6:F0}   {p,6} {policies0[p], 6:F3} { policies1[p], 6:F3} {refString}");
           }
