@@ -13,15 +13,18 @@
 
 #region Using directives
 
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+
 using Ceres.Base.DataTypes;
+using Ceres.Base.Threading;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
 using Ceres.Chess.NNEvaluators;
-using System;
-using System.Collections;
-using System.Collections.Generic;
 
 #endregion
 
@@ -129,12 +132,14 @@ namespace Ceres.Chess.LC0.Batches
       if (Moves == null && Positions.Length == NumPos)
       {
         MGMoveList[] moves = new MGMoveList[NumPos];
-        for (int i = 0; i < moves.Length; i++)
-        {
-          MGMoveList thisPosMoves = new MGMoveList();
-          MGMoveGen.GenerateMoves(in Positions[i], thisPosMoves);
-          moves[i] = thisPosMoves;
-        }
+        ParallelOptions parallelOptions = ParallelUtils.ParallelOptions(NumPos, 96);
+        Parallel.For(0, moves.Length, parallelOptions,
+          delegate (int i)
+          {
+            MGMoveList thisPosMoves = new MGMoveList();
+            MGMoveGen.GenerateMoves(in Positions[i], thisPosMoves);
+            moves[i] = thisPosMoves;
+          });
         Moves = moves;
       }
     }
