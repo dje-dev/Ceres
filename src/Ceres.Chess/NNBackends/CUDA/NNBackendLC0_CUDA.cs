@@ -664,18 +664,19 @@ namespace Ceres.Chess.NNBackends.CUDA
       Layers.expandPlanesKernel.GridDimensions = blocks;
       Layers.expandPlanesKernel.BlockDimensions = blockSize;
 
-      // TODO: Use cudaHostAllocWriteCombined for 40% faster transfer ****
+      // TODO: Use cudaHostAllocWriteCombined for 40% faster transfer? ****
+
+      // Copy move indices.
+      io.InputMoveIndices.CopyToDeviceAsync(moveMasksGPU, batchSize * 96, ExecContext.Stream);
 
       // Expand packed planes to full planes.
       // TODO: someday use more encoded masks, encode only squares with pieces for about 2x improvement
       io.InputBoardMasks.CopyToDeviceAsync(io.input_masks_gpu_, 112 * batchSize, ExecContext.Stream);
       io.InputBoardValues.CopyToDeviceAsync(io.input_val_gpu_, 112 * batchSize, ExecContext.Stream);
       Layers.expandPlanesKernel.RunAsync(ExecContext.Stream.Stream, networkInputs.Tensors[0].DevicePointer,
-                                  io.input_masks_gpu_.DevicePointer,
-                                  io.input_val_gpu_.DevicePointer,
-                                  batchSize * 112);
-
-      io.InputMoveIndices.CopyToDeviceAsync(moveMasksGPU, batchSize * 96, ExecContext.Stream);
+                                         io.input_masks_gpu_.DevicePointer,
+                                         io.input_val_gpu_.DevicePointer,
+                                         batchSize * 112);
     }
 
     /// <summary>
