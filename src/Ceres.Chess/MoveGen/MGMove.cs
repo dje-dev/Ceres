@@ -172,7 +172,18 @@ namespace Ceres.Chess.MoveGen
     /// <returns></returns>
     internal static byte FlipSquare(byte b) => (byte)(b ^ 0b111_000 | b & 0b111);// equivalent to: (byte)((7 - b / 8) * 8 + b % 8);
 
-    public MGMove Reversed => new MGMove(FlipSquare(FromSquareIndex), FlipSquare(ToSquareIndex), Flags ^= MGChessMoveFlags.BlackToMove);
+
+    /// <summary>
+    /// Returns the MGMove which represents this move but reversed (from other side's perspective).
+    /// </summary>
+    public MGMove Reversed
+    {
+      [MethodImpl(MethodImplOptions.AggressiveInlining)]
+      get
+      {
+        return new MGMove(FlipSquare(FromSquareIndex), FlipSquare(ToSquareIndex), Flags ^= MGChessMoveFlags.BlackToMove);
+      }
+    }
 
     /// <summary>
     /// Returns if the move is null (uninitialized).
