@@ -33,7 +33,10 @@ namespace Ceres.Chess.External.CEngine
 
     static UCIEngineProcess()
     {
-      if (VERBOSE) Console.WriteLine("UCIEngineProcess.VERBOSE is true");
+      if (VERBOSE)
+      {
+        Console.WriteLine("UCIEngineProcess.VERBOSE is true");
+      }
     }
 
     public event ReadEvent ReadEvent;
@@ -74,7 +77,10 @@ namespace Ceres.Chess.External.CEngine
       if (!String.IsNullOrEmpty(command))
       {
         lastCommandSent = command;
-        if (VERBOSE) Console.WriteLine(EngineID + " SEND: " + command);
+        if (VERBOSE)
+        {
+          Console.WriteLine(EngineID + " SEND: " + command);
+        }
         EngineInput.Write(command);
       }
     }
@@ -90,7 +96,13 @@ namespace Ceres.Chess.External.CEngine
       while (!readyOKSeen)
       {
         if (EngineProcess.HasExited)
+        {
+          Console.WriteLine("\r\n");
+          Console.WriteLine("EXE         : " + EngineProcess.StartInfo.FileName);
+          Console.WriteLine("Args        : " + EngineProcess.StartInfo.Arguments);
+          Console.WriteLine("Working Dir : " + EngineProcess.StartInfo.WorkingDirectory);
           throw new Exception($"Error: the engine process has exited ({descString}) last command was {lastCommandSent}");
+        }
 //        else if (lastError != null)
 //          throw new Exception($"UCI error {lastError} ({descString})");
 
@@ -169,15 +181,24 @@ namespace Ceres.Chess.External.CEngine
       if (EnvironmentVariables != null)
       {
         foreach (KeyValuePair<string, string> environmentVariable in EnvironmentVariables)
+        {
           EngineProcess.StartInfo.EnvironmentVariables.Add(environmentVariable.Key, environmentVariable.Value);
+        }
       }
 
       if (WorkingDir != null)
+      {
         EngineProcess.StartInfo.WorkingDirectory = WorkingDir;
+      }
       else
-        EngineProcess.StartInfo.WorkingDirectory = new FileInfo(EngineName).DirectoryName;
+      {
+        EngineProcess.StartInfo.WorkingDirectory = new FileInfo(EngineProcess.StartInfo.FileName).DirectoryName;
+      }
 
-      if (!VERBOSE) EngineProcess.StartInfo.CreateNoWindow = true;
+      if (!VERBOSE)
+      {
+        EngineProcess.StartInfo.CreateNoWindow = true;
+      }
 
       EngineProcess.OutputDataReceived += new DataReceivedEventHandler(ReceviedEvent);
       EngineProcess.ErrorDataReceived += new DataReceivedEventHandler(ErrorReceviedEvent);
