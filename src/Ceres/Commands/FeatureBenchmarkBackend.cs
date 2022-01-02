@@ -160,7 +160,7 @@ namespace Ceres.Commands
                                                                 int firstBatchSize = 1, int maxBatchSize = 4096, bool show = true)
     {
       List<(int, float)> ret = new();
-      positions = new EncodedPositionWithHistory[maxBatchSize];
+      InitPositionsBuffer(maxBatchSize);
 
       if (show)
       {
@@ -180,7 +180,7 @@ namespace Ceres.Commands
         int skip = extraSkipMultiplier * (lastBatchSize < 512 ? 4 : 8);
         lastBatchSize += skip;
         lastBatchSize = (lastBatchSize / 4) * 4;
-
+        lastBatchSize = 4096;
         if (lastBatchSize > maxBatchSize)
         {
           break;
@@ -204,19 +204,24 @@ namespace Ceres.Commands
 
     static EncodedPositionBatchFlat testBatch;
 
+    static void InitPositionsBuffer(int maxPositions)
+    {
+      positions = new EncodedPositionWithHistory[maxPositions];
+
+      // Create test batch (a mix of two different positions, to assist in diagnostics).
+      EncodedPositionWithHistory pos1 = EncodedPositionWithHistory.FromPosition(Position.StartPosition);
+      EncodedPositionWithHistory pos2 = EncodedPositionWithHistory.FromFEN("1k1r2r1/1p3p2/p2pbb2/2q4p/1PP1P3/5N1P/P2QB1P1/3R1R1K b - - 0 30");
+      for (int i = 0; i < maxPositions; i++)
+      {
+        positions[i] = i % 7 == 1 ? pos2 : pos1;
+      }
+    }
+
     private static float TestBatchSize(NNEvaluator evaluator, int batchSize, int numRunsPerBatchSize = 5, bool show = false)
     {
       // Prepare batch with test positions.
       if (testBatch == null || testBatch.NumPos != batchSize)
       {
-        // Create test batch (a mix of two different positions, to assist in diagnostics).
-        EncodedPositionWithHistory pos1 = EncodedPositionWithHistory.FromPosition(Position.StartPosition);
-        EncodedPositionWithHistory pos2 = EncodedPositionWithHistory.FromFEN("1k1r2r1/1p3p2/p2pbb2/2q4p/1PP1P3/5N1P/P2QB1P1/3R1R1K b - - 0 30");
-        for (int i = 0; i < batchSize; i++)
-        {
-          positions[i] = i % 7 == 1 ? pos2 : pos1;
-        }
-
         testBatch = new EncodedPositionBatchFlat(positions.AsSpan().Slice(0, batchSize), batchSize, true);
       }
 
