@@ -157,9 +157,10 @@ namespace Ceres.Commands
     /// <param name="netSpec"></param>
     /// <param name="gpuSpec"></param>
     public static (NNEvaluator, List<(int,float)>) BackendBench(NNEvaluatorDef evaluatorDef, int extraSkipMultiplier = 1, int numRunsPerBatchSize = 5, 
-                                                                int firstBatchSize = 1, int maxBatchSize = 2048, bool show = true)
+                                                                int firstBatchSize = 1, int maxBatchSize = 4096, bool show = true)
     {
       List<(int, float)> ret = new();
+      positions = new EncodedPositionWithHistory[maxBatchSize];
 
       if (show)
       {
@@ -199,6 +200,8 @@ namespace Ceres.Commands
       return (evaluator, ret);
     }
 
+    static EncodedPositionWithHistory[] positions;
+
     static EncodedPositionBatchFlat testBatch;
 
     private static float TestBatchSize(NNEvaluator evaluator, int batchSize, int numRunsPerBatchSize = 5, bool show = false)
@@ -207,7 +210,6 @@ namespace Ceres.Commands
       if (testBatch == null || testBatch.NumPos != batchSize)
       {
         // Create test batch (a mix of two different positions, to assist in diagnostics).
-        EncodedPositionWithHistory[] positions = new EncodedPositionWithHistory[batchSize];
         EncodedPositionWithHistory pos1 = EncodedPositionWithHistory.FromPosition(Position.StartPosition);
         EncodedPositionWithHistory pos2 = EncodedPositionWithHistory.FromFEN("1k1r2r1/1p3p2/p2pbb2/2q4p/1PP1P3/5N1P/P2QB1P1/3R1R1K b - - 0 30");
         for (int i = 0; i < batchSize; i++)
@@ -215,7 +217,7 @@ namespace Ceres.Commands
           positions[i] = i % 7 == 1 ? pos2 : pos1;
         }
 
-        testBatch = new EncodedPositionBatchFlat(positions.AsSpan(), batchSize, true);
+        testBatch = new EncodedPositionBatchFlat(positions.AsSpan().Slice(0, batchSize), batchSize, true);
       }
 
       // Run warmup steps if first time.
