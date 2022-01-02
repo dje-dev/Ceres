@@ -35,6 +35,7 @@ using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.Params;
 using Ceres.Features.GameEngines;
 using Ceres.Base.OperatingSystem;
+using Ceres.Features.Players;
 
 #endregion
 
@@ -53,14 +54,15 @@ namespace Ceres.Features.EngineTests
     {
       Ceres,
       LC0,
-      Stockfish14_1
+      Stockfish14_1,
+      UCI
     };
 
     /// <summary>
     /// If smart pruning should be disabled on engines
     /// so that searches by number of nodes are truly equivalent.
     /// </summary>
-    const bool DISABLE_PRUNING = true;
+    bool DisablePruning => Params.Limit.IsNodesLimit;
 
     public CompareEngineParams Params;
 
@@ -120,12 +122,12 @@ namespace Ceres.Features.EngineTests
       // Create default parameters, with smart pruning tuned off.
       ParamsSearch p1 = new ParamsSearch()
       {
-        FutilityPruningStopSearchEnabled = !DISABLE_PRUNING,
+        FutilityPruningStopSearchEnabled = !DisablePruning,
         MoveOverheadSeconds = 0
       };
       ParamsSearch p2 = new ParamsSearch()
       {
-        FutilityPruningStopSearchEnabled = !DISABLE_PRUNING,
+        FutilityPruningStopSearchEnabled = !DisablePruning,
         MoveOverheadSeconds = 0
       };
 
@@ -179,8 +181,8 @@ namespace Ceres.Features.EngineTests
       NNEvaluatorDef evaluatorDef2 = Params.NetworkID2 != null ? NNEvaluatorDef.FromSpecification(Params.NetworkID2, $"GPU:{gpuID}") : null;
       NNEvaluatorDef evaluatorDefOptimal = Params.NetworkArbiterID != null ? NNEvaluatorDef.FromSpecification(Params.NetworkArbiterID, $"GPU:{gpuID}") : null;
 
-      static GameEngine MakeEngine(PlayerMode playerMode, string networkID, NNEvaluatorDef evaluatorDef,
-                                   ParamsSearch paramsSearch, ParamsSelect paramsSelect)
+      GameEngine MakeEngine(PlayerMode playerMode, string networkID, NNEvaluatorDef evaluatorDef,
+                            ParamsSearch paramsSearch, ParamsSelect paramsSelect)
       {
         if (playerMode == PlayerMode.Ceres)
         {
@@ -190,7 +192,7 @@ namespace Ceres.Features.EngineTests
         }
         else if (playerMode == PlayerMode.LC0)
         {
-          return new GameEngineLC0("LC0", networkID, DISABLE_PRUNING, false, paramsSearch, paramsSelect, evaluatorDef, 
+          return new GameEngineLC0("LC0", networkID, DisablePruning, false, paramsSearch, paramsSelect, evaluatorDef, 
                                    verbose:true, extraCommandLineArgs:"--move-overhead=0");
         }
         else if (playerMode == PlayerMode.Stockfish14_1)
@@ -199,6 +201,16 @@ namespace Ceres.Features.EngineTests
           GameEngineDef engineDef = new GameEngineDefUCI("SF14", new GameEngineUCISpec("SF14", sf14FN, 16,
                                                          2048, CeresUserSettingsManager.Settings.TablebaseDirectory));
           return engineDef.CreateEngine();
+        }
+        else if (playerMode == PlayerMode.UCI)
+        {
+          if (Params.EngineUCIFileNameEXE == null)
+          {
+            throw new Exception("EngineUCIFileNameEXE must be set when using PlayerMode.UCI");
+          }
+
+          GameEngineDefCeresUCI engineDefUCI = new ("CeresPreNC", evaluatorDef, overrideEXE: Params.EngineUCIFileNameEXE, disableFutilityStopSearch: DisablePruning);
+          return engineDefUCI.CreateEngine();
         }
         else
         {
