@@ -230,7 +230,7 @@ namespace Ceres.Commands
       }
       else
         ShowErrorExit("Expected argument to begin with one of the features " + 
-                       "UCI, ANALYZE, SUITE, TOURN, SYSBENCH, BACKENDBENCH, BACKEND_COMPARE, BENCHMARK or SETOPT");
+                       "UCI, ANALYZE, SUITE, TOURN, SYSBENCH, BACKENDBENCH, BACKENDCOMPARE, BENCHMARK or SETOPT");
 
     }
 

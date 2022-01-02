@@ -17,9 +17,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+
 using Ceres.Base.Benchmarking;
 using Ceres.Base.DataTypes;
-using Ceres.Base.Math;
 using Ceres.Chess;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.LC0.Batches;
@@ -36,6 +36,10 @@ namespace Ceres.Commands
   /// <summary>
   /// Implementation of "backendbench" command which tests the 
   /// NN evaluator performance across a range of possible batch sizes.
+  /// 
+  /// Sample usages:
+  ///   Ceres backendbench device=gpu:0,1,2,3
+  ///   Ceres backendcompare network=mg-40b-swa-1595000 batchspec=[96..192]
   /// </summary>
   public record FeatureBenchmarkBackend
   {
@@ -74,11 +78,11 @@ namespace Ceres.Commands
 
       Console.WriteLine($"\r\nTESTING WITH BASELINE DEVICE SPECIFICTATION {NNDevicesSpecificationString.ToSpecificationString(DeviceSpec.ComboType, DeviceSpec.Devices)}");
 
-      const int MAX_BATCH = 512;
+      const int MAX_BATCH = 4096;
 
       // Run base evaluator.
-      var (evaluator1, _) = BackendBench(evaluatorDef, 16, maxBatchSize:512, show:false); // warmup
-      var (evaluator2, before) = BackendBench(evaluatorDef, SKIP, TRIES, maxBatchSize: 512);
+      var (evaluator1, _) = BackendBench(evaluatorDef, 16, maxBatchSize: MAX_BATCH, show:false); // warmup
+      var (evaluator2, before) = BackendBench(evaluatorDef, SKIP, TRIES, maxBatchSize: MAX_BATCH);
 
       Thread.Sleep(3_000); // cooloff
 
@@ -112,13 +116,13 @@ namespace Ceres.Commands
                                                         DeviceSpec.ComboType, DeviceSpec.Devices, null);
 
       // Run modified evaluator.
-      var (evaluator3, _) = BackendBench(evaluatorDef1, 16, TRIES, maxBatchSize: 512, show: false); // warmup
-      var (evaluator4, after) = BackendBench(evaluatorDef1, SKIP, TRIES, maxBatchSize: 512);
+      var (evaluator3, _) = BackendBench(evaluatorDef1, 16, TRIES, maxBatchSize: MAX_BATCH, show: false); // warmup
+      var (evaluator4, after) = BackendBench(evaluatorDef1, SKIP, TRIES, maxBatchSize: MAX_BATCH);
 
       // Output summary statistics.
       static float PctDiff(float v1, float v2) => 100.0f * ((v1 - v2) / v2);
       float sum = 0;
-      for (int i = 0; i < before.Count; i++)
+      for (int i = 0; i < Math.Min(before.Count, after.Count); i++)
       {
         float pctDiff = PctDiff(after[i].Item2, before[i].Item2);
         sum += pctDiff;
@@ -153,7 +157,7 @@ namespace Ceres.Commands
     /// <param name="netSpec"></param>
     /// <param name="gpuSpec"></param>
     public static (NNEvaluator, List<(int,float)>) BackendBench(NNEvaluatorDef evaluatorDef, int extraSkipMultiplier = 1, int numRunsPerBatchSize = 5, 
-                                                                int firstBatchSize = 1, int maxBatchSize = 1024, bool show = true)
+                                                                int firstBatchSize = 1, int maxBatchSize = 2048, bool show = true)
     {
       List<(int, float)> ret = new();
 
