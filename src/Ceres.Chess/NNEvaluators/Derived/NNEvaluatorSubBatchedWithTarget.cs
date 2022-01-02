@@ -126,8 +126,6 @@ namespace Ceres.Chess.NNEvaluators
         return;
       }
 
-      int half = MaxSubBatchSize / 2;
-
       int left = numPos;
       while (left > 0)
       {
@@ -144,7 +142,7 @@ namespace Ceres.Chess.NNEvaluators
             left -= MaxSubBatchSize;
           }
         }
-        else if (left > (MaxSubBatchSize * 80) / 100)
+        else if (left < (MaxSubBatchSize - 16) && left > (MaxSubBatchSize * 80) / 100)
         {
           // Make sure the 3 batch sizes are somewhat equal in size.
           subBatchSizes.Add(left/2);
@@ -321,15 +319,7 @@ namespace Ceres.Chess.NNEvaluators
             {
               CopyResultsIntoLocalBuffer(retrieveSupplementalResults, results, i, nnBatch);
             }
-#if NOT
-            PositionEvaluationBatch nnBatchD = nnBatch as PositionEvaluationBatch;
-            if (nnBatchD == null)
-            {
-              throw new NotImplementedException("NNEvaluatorSubBatchedWithTarget requires Evaluator to return PositionEvaluationBatch");
-            }
-            results[i] = new PositionEvaluationBatch(nnBatchD.IsWDL, nnBatchD.HasM, nnBatchD.NumPos, nnBatchD.Policies,
-                                                     nnBatchD.W, nnBatchD.L, nnBatchD.M, nnBatchD.Activations, nnBatchD.Stats, true);
-#endif
+
           }
           numDone += thisBatchSize;
         }
@@ -396,24 +386,7 @@ namespace Ceres.Chess.NNEvaluators
       }
 
       return null;
-#if not
-      if (bs == 160) return BuildPartition(64, 96);
-      if (bs == 176) return BuildPartition(84, 92);
-      if (bs == 192) return BuildPartition(96, 96);
-      if (bs == 208) return BuildPartition(100, 108);
-      if (bs == 224) return BuildPartition(96, 128);
-      if (bs == 240) return BuildPartition(92, 148);
-      if (bs == 256) return BuildPartition(108, 148);
-      if (bs == 272) return BuildPartition(92, 180);
-      if (bs == 288) return BuildPartition(96, 192);
-      if (bs == 304) return BuildPartition(148, 156);
-      if (bs == 320) return BuildPartition(128, 192);
-      if (bs == 336) return BuildPartition(148, 188);
-      if (bs == 352) return BuildPartition(160, 192);
-      if (bs == 368) return BuildPartition(180, 188);
-      if (bs == 384) return BuildPartition(192, 192);
-      return null;
-#endif
+
     }
 
 
