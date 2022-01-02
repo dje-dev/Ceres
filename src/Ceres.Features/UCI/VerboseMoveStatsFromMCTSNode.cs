@@ -13,6 +13,7 @@
 
 #region Using directives
 
+using System;
 using System.Collections.Generic;
 using Ceres.Chess.MoveGen;
 using Ceres.MCTS.MTCSNodes;
@@ -21,8 +22,6 @@ using Ceres.Chess.LC0.Positions;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.Base.DataTypes;
 using Ceres.Chess.EncodedPositions.Basic;
-using Ceres.MCTS.Iteration;
-using System;
 
 #endregion
 
@@ -108,26 +107,23 @@ namespace Ceres.Features.UCI
       VerboseMoveStat stat = new VerboseMoveStat(null, null);
       float multiplier = isSearchRoot ? 1 : -1;
 
-      using (new SearchContextExecutionBlock(node.Context))
-      {
-        node.Annotate();
+      node.Annotate();
 
-        stat.MoveString = isSearchRoot ? "node" : node.Annotation.PriorMoveMG.MoveStr(MGMoveNotationStyle.LC0Coordinate);
-        stat.MoveCode = isSearchRoot ? 20 : node.Parent.ChildAtIndexInfo(node.IndexInParentsChildren).move.IndexNeuralNet;
-        stat.VisitCount = node.N;
-        stat.P = isSearchRoot ? 100 : (node.P * 100.0f);
-        stat.D = node.StructRef.DrawP;
-        stat.WL = (node.IsRoot && node.N == 0) ? node.V : (float)node.Q * multiplier;
-        stat.Q = new EncodedEvalLogistic((float)node.Q * multiplier);
-        stat.M = node.MPosition;
-        stat.V = new EncodedEvalLogistic((float)node.V * multiplier);
-        stat.U = isSearchRoot ? 0 : node.Parent.ChildU(node.IndexInParentsChildren);
-        stat.StdDev =  node.N > MCTSNodeStruct.VARIANCE_START_ACCUMULATE_N 
-                              ? MathF.Sqrt(node.StructRef.VarianceAccumulator / (node.N - MCTSNodeStruct.VARIANCE_START_ACCUMULATE_N)) 
-                              : float.NaN;
+      stat.MoveString = isSearchRoot ? "node" : node.Annotation.PriorMoveMG.MoveStr(MGMoveNotationStyle.LC0Coordinate);
+      stat.MoveCode = isSearchRoot ? 20 : node.Parent.ChildAtIndexInfo(node.IndexInParentsChildren).move.IndexNeuralNet;
+      stat.VisitCount = node.N;
+      stat.P = isSearchRoot ? 100 : (node.P * 100.0f);
+      stat.D = node.StructRef.DrawP;
+      stat.WL = (node.IsRoot && node.N == 0) ? node.V : (float)node.Q * multiplier;
+      stat.Q = new EncodedEvalLogistic((float)node.Q * multiplier);
+      stat.M = node.MPosition;
+      stat.V = new EncodedEvalLogistic((float)node.V * multiplier);
+      stat.U = isSearchRoot ? 0 : node.Parent.ChildU(node.IndexInParentsChildren);
+      stat.StdDev = node.N > MCTSNodeStruct.VARIANCE_START_ACCUMULATE_N
+                            ? MathF.Sqrt(node.StructRef.VarianceAccumulator / (node.N - MCTSNodeStruct.VARIANCE_START_ACCUMULATE_N))
+                            : float.NaN;
 
-        return stat;
-      }
+      return stat;
     }
 
   }

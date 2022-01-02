@@ -46,11 +46,6 @@ namespace Ceres.MCTS.Params
     SingleNodeDeferredCopy, 
     
     /// <summary>
-    /// Experimental sharing of single longest subtree
-    /// </summary>
-    SharedSubtree,
-
-    /// <summary>
     /// Experimental (not yet fully working) 
     /// mode that attaches to transposition root and does not replicate
     /// the subtree, but instead sequentially visits all the nodes in the 

@@ -46,7 +46,7 @@ namespace Ceres.APIExamples
   {
     const bool POOLED = false;
 
-    static int CONCURRENCY = POOLED ? 16 : 4;
+    static int CONCURRENCY = POOLED ? 16 : 1;
     static bool RUN_DISTRIBUTED = false;
 
 
@@ -152,10 +152,10 @@ NET2 = "base_10b_800k";
 //      NET1 = "69637";
 //      NET2 = "69637";
 
-//      NET1 = "69637";
-//      NET2 = "69637";
-//      NET1 = "703810";
-//      NET2 = "703810";
+      NET1 = "703810";
+      NET2 = "703810";
+//      NET1 = "badgyal-3";
+//      NET2 = "badgyal-3";
 
       //NET1 = "744204_onnx_int8";
 
@@ -200,9 +200,9 @@ NET2 = "base_10b_800k";
       GameEngineDefCeres engineDefCeres3 = new GameEngineDefCeres("Ceres3", evalDef2, evalDefSecondary2, new ParamsSearch(), new ParamsSelect(),
                                                                   null, outputLog ? "Ceres3.log.txt" : null);
 
-      
+      //engineDefCeres1.OverrideLimitManager = new  Ceres.MCTS.Managers.Limits.ManagerGameLimitSimple(20);
       //      engineDefCeres2.SearchParams.TestFlag = true;
-//      engineDefCeres2.SearchParams.EnableSearchExtension = false;
+      //      engineDefCeres2.SearchParams.EnableSearchExtension = false;
       // engineDefCeres1.SearchParams.TreeReuseRetainedPositionCacheEnabled = true;
       //engineDefCeres2.SearchParams.TreeReuseRetainedPositionCacheEnabled = true;
 
@@ -229,7 +229,7 @@ NET2 = "base_10b_800k";
       //      engineDefCeres1.SelectParams.CPUCTFactorAtRoot *= (1.0f / 0.8f);
 
       //      engineDefCeres2.SearchParams.EnableUncertaintyBoosting = false;
-//      engineDefCeres1.SelectParams.CPUCT *= 0.30f;
+      //      engineDefCeres1.SelectParams.CPUCT *= 0.30f;
 
       //engineDefCeres2.SelectParams.CPUCTAtRoot *= 1.33f;
 
@@ -282,6 +282,8 @@ NET2 = "base_10b_800k";
                                                   : @"C:\ceres\releases\v0.93\ceres.exe";
       string exeCeres94 = SoftwareManager.IsLinux ? @"/raid/dev/Ceres94/Ceres.dll"
                                                   : @"\ceres\releases\v0.95rc4\ceres.exe";
+      string exeCeresPreNC = SoftwareManager.IsLinux ? @"/raid/dev/Ceres_PreNC/artifacts/release/5.0/Ceres.dll"
+                                                  : @"c:\ceres\releases\v0.95_PreNC\ceres.exe";
 
       //GameEngineDef engineDefCeresUCI = new GameEngineDefUCI("CeresUCI", new GameEngineUCISpec("CeresUCI", @"c:\dev\ceres\artifacts\release\net5.0\ceres.exe"));
       //      GameEngineDef engineDefCeresUCI1x = new GameEngineDefCeresUCI("CeresUCINew", evalDef1, overrideEXE: @"C:\dev\Ceres\artifacts\release\net5.0\ceres.exe");
@@ -291,11 +293,13 @@ NET2 = "base_10b_800k";
 
       GameEngineDef engineDefCeres93 = new GameEngineDefCeresUCI("Ceres93", evalDef2, overrideEXE: exeCeres93, disableFutilityStopSearch:forceDisableSmartPruning);
       GameEngineDef engineDefCeres94 = new GameEngineDefCeresUCI("Ceres94", evalDef2, overrideEXE: exeCeres94, disableFutilityStopSearch: forceDisableSmartPruning);
+      GameEngineDef engineDefCeresPreNC = new GameEngineDefCeresUCI("CeresPreNC", evalDef2, overrideEXE: exeCeresPreNC, disableFutilityStopSearch: forceDisableSmartPruning);
 
       EnginePlayerDef playerCeres1UCI = new EnginePlayerDef(engineDefCeresUCI1, limit1);
       EnginePlayerDef playerCeres2UCI = new EnginePlayerDef(engineDefCeresUCI2, limit2);
       EnginePlayerDef playerCeres93 = new EnginePlayerDef(engineDefCeres93, limit2);
       EnginePlayerDef playerCeres94 = new EnginePlayerDef(engineDefCeres94, limit2);
+      EnginePlayerDef playerCeresPreNC = new EnginePlayerDef(engineDefCeresPreNC, limit2);
 
       EnginePlayerDef playerCeres1 = new EnginePlayerDef(engineDefCeres1, limit1);
       EnginePlayerDef playerCeres2 = new EnginePlayerDef(engineDefCeres2, limit1);
@@ -381,7 +385,7 @@ NET2 = "base_10b_800k";
       }
 
       // TODO: UCI engine should point to .NET 6 subdirectory if on .NET 6
-      TournamentDef def = new TournamentDef("TOURN", playerCeres1UCI, playerCeres93);//, playerStockfish14/*, playerCeres3,
+      TournamentDef def = new TournamentDef("TOURN", playerCeres1UCI, playerCeresPreNC);//, playerStockfish14/*, playerCeres3,
 #if NOT
       TournamentDef def = new TournamentDef("TIME_AGG");
       def.AddEngine(playerStockfish14.EngineDef, limit1 * 0.7f);
@@ -686,9 +690,10 @@ string      baseName = "4mvs_+90_+99";
                                                       NNEvaluator.FromSpecification("66511", $"GPU:{gpuID}")};
 
         const float FRACTION_SWITCH_ALTERNATE_NET = 0.75f;
-        NNEvaluatorDynamic dyn = new NNEvaluatorDynamic(evaluators, (batch)
-          => MCTSManager.ThreadSearchContext != null ? (MCTSManager.ThreadSearchContext.Manager.FractionSearchCompleted < FRACTION_SWITCH_ALTERNATE_NET ? 0 : 1) : 0);
-        return dyn;
+throw new NotImplementedException("COMBO_PHASED deprecated");
+//        NNEvaluatorDynamic dyn = new NNEvaluatorDynamic(evaluators, (batch)
+//          => MCTSManager.ThreadSearchContext != null ? (MCTSManager.ThreadSearchContext.Manager.FractionSearchCompleted < FRACTION_SWITCH_ALTERNATE_NET ? 0 : 1) : 0);
+//        return dyn;
       }
       NNEvaluatorFactory.Custom1Factory = Build;
     }

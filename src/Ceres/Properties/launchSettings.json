@@ -2,6 +2,10 @@
   "profiles": {
     "Ceres": {
       "commandName": "Project",
+      "commandLineArgs": "custom"
+    },
+    "CeresPGO": {
+      "commandName": "Project",
       "commandLineArgs": "",
       "environmentVariables": {
         "DOTNET_TieredPGO": "1",
@@ -20,10 +24,6 @@
         "DOTNET_TC_QuickJitForLoops=1": "1",
         "DOTNET_ReadyToRun": "0"
       }
-    },
-    "CeresNoPGO": {
-      "commandName": "Project",
-      "commandLineArgs": ""
     },
     "Docker": {
       "commandName": "Docker"

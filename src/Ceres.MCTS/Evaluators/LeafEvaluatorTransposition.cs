@@ -115,8 +115,7 @@ namespace Ceres.MCTS.Evaluators
         node.StructRef.CopyUnexpandedChildrenFromOtherNode(node.Tree, transpositionRootNodeIndex);
         node.InfoRef.TranspositionRootNodeIndex = transpositionRootNodeIndex;
       }
-      else if (transpositionMode == TranspositionMode.SingleNodeDeferredCopy
-            || transpositionMode == TranspositionMode.SharedSubtree)
+      else if (transpositionMode == TranspositionMode.SingleNodeDeferredCopy)
       {
         // Note that no need to increment NumHits here since this happens elsewhere (when pending value is used).
         SetTranspositionRootReuseFields(node, transpositionRootNodeIndex, in transpositionRootNode);
@@ -125,29 +124,6 @@ namespace Ceres.MCTS.Evaluators
       else
       {
         throw new NotImplementedException();
-      }
-
-
-      if (/*node.Context.ParamsSearch.TranspositionUseTransposedQ &&*/ transpositionMode != TranspositionMode.SharedSubtree)
-      {
-#if NOT
-        // We deviate from pure MCTS and 
-        // set the backed up node for this leaf node to be the 
-        // overall score (Q) from the complete linked tranposition subtree
-        if (node.Context.ParamsSearch.TranspositionUseCluster)
-        {
-          // Take the Q from the largest subtree (presumably the most accurate value)
-          ref MCTSNodeStruct biggestTranspositionClusterNode = ref MCTSNodeTranspositionManager.GetNodeWithMaxNInCluster(node);
-          node.OverrideVToApplyFromTransposition = (FP16)biggestTranspositionClusterNode.Q;
-          node.OverrideMPositionToApplyFromTransposition = (FP16)biggestTranspositionClusterNode.MPosition;
-        }
-        else
-        {
-          node.OverrideVToApplyFromTransposition = (FP16)transpositionRootNode.Q;
-          node.OverrideMPositionToApplyFromTransposition = (FP16)transpositionRootNode.MPosition;
-        }
-
-#endif
       }
 
       return new LeafEvaluationResult(transpositionRootNode.Terminal, transpositionRootNode.WinP,
@@ -177,20 +153,6 @@ namespace Ceres.MCTS.Evaluators
       {
         // Node is already being used for transpositions.
         return default;
-      }
-
-      if (node.Context.ParamsSearch.Execution.TranspositionMode == TranspositionMode.SharedSubtree)
-      //&& node.Context.ParamsSearch.Execution.TRANSPOSITION_SINGLE_TREE
-      //       && !float.IsNaN(node.OverrideVToApplyFromTransposition))
-      {
-        throw new NotImplementedException();
-
-        // If the selector already stopped descent here 
-        // due to a tranpsosition cluster virtual visit,
-        // return a NodeEvaluationResult to 
-        // indicate this can be processed without NN
-        // (and use an NodeEvaluationResult which leaves unchanged)
-        //return new LeafEvaluationResult(node.Terminal, node.WinP, node.LossP, node.MPosition);
       }
 
       // Check if this position already exists in the tree
@@ -259,12 +221,6 @@ namespace Ceres.MCTS.Evaluators
           }
         }
 #endif        
-
-
-        if (node.Context.ParamsSearch.TranspositionUseCluster)
-        {
-          MCTSNodeTranspositionManager.CheckAddToCluster(node);
-        }
 
         return ProcessFirstLinkage(node, new MCTSNodeStructIndex(transpositionNodeIndex), in transpositionNode);
       }

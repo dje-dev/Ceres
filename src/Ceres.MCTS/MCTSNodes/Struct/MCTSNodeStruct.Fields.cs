@@ -299,21 +299,19 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     }
 
     /// <summary>
-    /// If nonzero represents the index of the node an associated IMCTSNodeCache.
-    /// 
-    /// TODO: this could be compressed into 3 bytes
+    /// Context structure allowing access to associated MCTSNodeStore or MCTSNodeInfo.
     /// </summary>
-    public void* CachedInfoPtr;
+    public MCTSNodeStructContextPtr Context;
 
     /// <summary>
     /// Returns reference to associated MCTSNodeInfo.
     /// </summary>
-    public ref MCTSNodeInfo InfoRef => ref Unsafe.AsRef<MCTSNodeInfo>(CachedInfoPtr);
+    public ref MCTSNodeInfo InfoRef => ref Unsafe.AsRef<MCTSNodeInfo>(Context.RawPtr);
 
     /// <summary>
     /// If the associated MCTSNodeInfo is present in the cache.
     /// </summary>
-    public readonly bool IsCached => CachedInfoPtr != null;
+    public readonly bool IsCached => Context.IsCached;
 
 
     /// <summary>
@@ -341,13 +339,13 @@ namespace Ceres.MCTS.MTCSNodes.Struct
   // TODO: make compile time constant
   internal FP16 UNCERTAINTY_PRIOR => (FP16)0.10f;
 
-    public void ResetSearchInProgressState()
+    public void ResetSearchInProgressState(int storeID)
     {
       Debug.Assert(!IsTranspositionLinked);
 
       NInFlight = 0;
       NInFlight2 = 0;
-      CachedInfoPtr = null;
+      Context.SetAsStoreID(storeID);
     }
 
 
@@ -355,7 +353,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// 
     /// NOTE: try to keep changes in sync with MCTSNodeStruct.Initialize.
     /// </summary>
-    public void ResetExpandedState()
+    public void ResetExpandedState(int storeID)
     {
       Debug.Assert(!IsTranspositionLinked);
 
@@ -369,7 +367,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
       numChildrenVisited = 0;
       DrawKnownToExistAmongChildren = false;
-      CachedInfoPtr = null;
+      Context.SetAsStoreID(storeID);
 
 #if FEATURE_UNCERTAINTY
       Uncertainty = UNCERTAINTY_PRIOR;

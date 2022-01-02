@@ -298,8 +298,6 @@ namespace Ceres.Features.GameEngines
       int scoreCeresCP;
       BestMoveInfo bestMoveInfo = null;
       int N;
-      using (new SearchContextExecutionBlock(searchResult.Manager.Context))
-      {
         bestMoveInfo = searchResult.Manager.Root.BestMoveInfo(false);
         N = searchResult.SearchRootNode.N;
 #if NOT
@@ -308,7 +306,6 @@ namespace Ceres.Features.GameEngines
         {
         }
 #endif
-      }
 
       scoreCeresCP = (int)MathF.Round(EncodedEvalLogistic.WinLossToCentipawn(bestMoveInfo.QOfBest), 0);
 
@@ -322,13 +319,11 @@ namespace Ceres.Features.GameEngines
       // TODO is the RootNWhenSearchStarted correct because we may be following a continuation (BestMoveRoot)
       GameEngineSearchResultCeres result =
         new GameEngineSearchResultCeres(bestMoveMG.MoveStr(MGMoveNotationStyle.LC0Coordinate),
-                                        (float)bestMoveInfo.QOfBest, scoreCeresCP, searchResult.SearchRootNode.MAvg, searchResult.Manager.SearchLimit, 
+                                        (float)bestMoveInfo.QOfBest, scoreCeresCP, searchResult.SearchRootNode.MAvg, searchResult.Manager.SearchLimit,
                                         this.LastSearch.TimingInfo,
                                         searchResult.Manager.RootNWhenSearchStarted, N, (int)Math.Round(searchResult.Manager.Context.AvgDepth),
                                         searchResult, bestMoveInfo);
 
-      using (new SearchContextExecutionBlock(result.Search.Manager.Context))
-      {
 
 #if FLAG_POSSIBLE_FALSE_DRAWS
         if (result.Depth < 4 && Math.Abs(result.ScoreCentipawns) < 2 
@@ -338,29 +333,28 @@ namespace Ceres.Features.GameEngines
         }
 #endif
 
-        // Append search result information to log file (if any).
-        StringWriter dumpInfo = new StringWriter();
-        if (SearchLogFileName != null)
+      // Append search result information to log file (if any).
+      StringWriter dumpInfo = new StringWriter();
+      if (SearchLogFileName != null)
+      {
+        result.Search.Manager.DumpFullInfo(bestMoveMG, result.Search.SearchRootNode,
+                                           result.Search.LastReuseDecision, result.Search.LastMakeNewRootTimingStats,
+                                           result.Search.LastGameLimitInputs,
+                                           dumpInfo, CurrentGameID);
+        lock (logFileWriteObj)
         {
-          result.Search.Manager.DumpFullInfo(bestMoveMG, result.Search.SearchRootNode, 
-                                             result.Search.LastReuseDecision, result.Search.LastMakeNewRootTimingStats,
-                                             result.Search.LastGameLimitInputs,
-                                             dumpInfo, CurrentGameID);
-          lock (logFileWriteObj)
-          {
-            File.AppendAllText(SearchLogFileName, dumpInfo.GetStringBuilder().ToString());
-          }
+          File.AppendAllText(SearchLogFileName, dumpInfo.GetStringBuilder().ToString());
         }
+      }
 
-        if (GatherVerboseMoveStats)
-        {
-          result.VerboseMoveStats = GetVerboseMoveStats();
-        }
+      if (GatherVerboseMoveStats)
+      {
+        result.VerboseMoveStats = GetVerboseMoveStats();
+      }
 
-        if (OutputVerboseMoveStats)
-        {
-          result.Search.Manager.Context.Root.Dump(1, 1);
-        }
+      if (OutputVerboseMoveStats)
+      {
+        result.Search.Manager.Context.Root.Dump(1, 1);
       }
 
       return result;
@@ -436,10 +430,7 @@ namespace Ceres.Features.GameEngines
         // before we would possibly reuse part of tree from prior search.
         // Below a certain level the tree reuse would increase memory consumption
         // (because unused nodes remain in node store) but not appreciably improve search speed.
-        using (new SearchContextExecutionBlock(LastSearch.Manager.Context))
-        {
-          int currentN = LastSearch.SearchRootNode.N;
-        }
+        int currentN = LastSearch.SearchRootNode.N;
 
         // Determine threshold to decide if tree is big enough to be reused.
         // Extraction time is about linear in number of nodes extracted (averages about 2.5mm/sec)
@@ -519,10 +510,7 @@ namespace Ceres.Features.GameEngines
         throw new Exception("GetVerboseMoveStats cannot return search statistics because no search has run yet.");
       }
 
-      using (new SearchContextExecutionBlock(Search.Manager.Context))
-      {
-        return VerboseMoveStatsFromMCTSNode.BuildStats(Search.SearchRootNode);
-      }
+      return VerboseMoveStatsFromMCTSNode.BuildStats(Search.SearchRootNode);
     }
 
 

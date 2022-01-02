@@ -17,6 +17,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using Ceres.Base.Benchmarking;
+using Ceres.Base.OperatingSystem;
 using Ceres.Chess.MoveGen;
 using Ceres.MCTS.Environment;
 using Ceres.MCTS.Iteration;
@@ -275,31 +276,29 @@ namespace Ceres.MCTS.Managers
       int NUM_SAMPLES = (int)MathF.Min(NUM_SAMPLES_TARGET, totalStoreNodes / 2);
       Random rand = new Random();
 
-      Base.OperatingSystem.MemoryBufferOS<MCTSNodeStruct> nodes = context.Tree.Store.Nodes.nodes;
+      MemoryBufferOS<MCTSNodeStruct> nodes = context.Tree.Store.Nodes.nodes;
 
-      using (new SearchContextExecutionBlock(context))
+      for (int i = 0; i < NUM_SAMPLES; i++)
       {
-        for (int i = 0; i < NUM_SAMPLES; i++)
+        MCTSNodeStructIndex index = new MCTSNodeStructIndex(1 + rand.Next(totalStoreNodes - 2));
+        if (i == 0)
         {
-          MCTSNodeStructIndex index = new MCTSNodeStructIndex(1 + rand.Next(totalStoreNodes - 2));
-          if (i == 0)
+          // First sample is always the root
+          // TODO: this can probably be removed once we have a better way of tracking if secondary evaluation is in use
+          index = new MCTSNodeStructIndex(1);
+        }
+
+        ref readonly MCTSNodeStruct scanNodeRef = ref nodes[index.Index];
+
+        if (scanNodeRef.IsPossiblyReachableFrom(newRootNodeRef))
+        {
+          reachable++;
+
+          if (scanNodeRef.SecondaryNN)
           {
-            // First sample is always the root
-            // TODO: this can probably be removed once we have a better way of tracking if secondary evaluation is in use
-            index = new MCTSNodeStructIndex(1);
+            secondaryAndReachable++;
           }
-
-          ref readonly MCTSNodeStruct scanNodeRef = ref nodes[index.Index];
-
-          if (scanNodeRef.IsPossiblyReachableFrom(newRootNodeRef))
-          {
-            reachable++;
-
-            if (scanNodeRef.SecondaryNN)
-            {
-              secondaryAndReachable++;
-            }
-          }
+        }
 
 #if NOT
             // Disabled: trying to generate the position corresopnding to this node
@@ -326,10 +325,10 @@ namespace Ceres.MCTS.Managers
               reachable++;
             }
 #endif
-        }
       }
 
-      return ((float)reachable / NUM_SAMPLES, 
+
+      return ((float)reachable / NUM_SAMPLES,
               (float)secondaryAndReachable / reachable);
     }
 

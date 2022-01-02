@@ -125,15 +125,14 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// by clearing TranspositionRootIndex and NumVisitsPendingTranspositionRootExtraction.
     /// </summary>
     /// <param name="tree"></param>
-    internal void MaterializeSubtreeFromTranspositionRoot(MCTSTree tree)
+    internal void MaterializeSubtreeFromTranspositionRoot(ParamsSearch paramsSearch, MCTSTree tree)
     {      
       Debug.Assert(N >= 1 && N <= 3);
       Debug.Assert(IsTranspositionLinked);
       Debug.Assert(NumChildrenExpanded == 0);
 
-      ParamsSearch paramsSearch = MCTSManager.ThreadSearchContext.ParamsSearch;
-      if (paramsSearch.TranspositionRootBackupSubtreeFracs[0] 
-       != paramsSearch.TranspositionCloneNodeSubtreeFracs[0])
+      if (ParamsSearch.TranspositionRootBackupSubtreeFracs[0] 
+       != ParamsSearch.TranspositionCloneNodeSubtreeFracs[0])
       {
         throw new Exception("First element of TranspositionRootBackupSubtreeFracs and TranspositionRootCloneSubtreeFracs must be same");
       }
@@ -148,7 +147,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       // (except that the accumulator values may be different if TranspositionCloneNodeSubtreeFracs are nonzero).
       if (N > 1)
       {
-        float subtreeFrac = paramsSearch.TranspositionCloneNodeSubtreeFracs[1];
+        float subtreeFrac = ParamsSearch.TranspositionCloneNodeSubtreeFracs[1];
         ref readonly MCTSNodeStruct transpositionRootRef = ref tree.Store.Nodes.nodes[startingTranspositionRootIndex.Index];
         bool cloneSubchild = N == 3;
         TryCloneChild(tree, in transpositionRootRef, ref this, 0, subtreeFrac, cloneSubchild);
@@ -179,14 +178,16 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       Debug.Assert(!float.IsNaN(subtreeFraction));
       Debug.Assert(sourceParentRef.NumChildrenExpanded >= childIndex + 1);
 
+      MCTSNodeStore store = tree.Store;
+
       ref readonly MCTSNodeStruct sourceChildRef = ref sourceParentRef.ChildAtIndexRef(childIndex);
       Debug.Assert(sourceChildRef.IsValidTranspositionLinkedSource);
-      MCTSNodeStructIndex targetChildIndex = targetParentRef.CreateChild(tree.Store, childIndex);
-      ref MCTSNodeStruct targetChildRef = ref tree.Store.Nodes.nodes[targetChildIndex.Index];
+      MCTSNodeStructIndex targetChildIndex = targetParentRef.CreateChild(tree.Store, targetParentRef.IndexInStore(store), childIndex);
+      ref MCTSNodeStruct targetChildRef = ref store.Nodes.nodes[targetChildIndex.Index];
       targetParentRef.NumChildrenVisited = (byte)(childIndex + 1);
 
       // TODO: avoid ChildAtIndex to avoid dictionary lookup?
-      targetChildRef.CopyUnexpandedChildrenFromOtherNode(tree, new MCTSNodeStructIndex(sourceChildRef.Index.Index));
+      targetChildRef.CopyUnexpandedChildrenFromOtherNode(tree, new MCTSNodeStructIndex(sourceChildRef.IndexInStore(store).Index));
 
       if (LeafEvaluatorTransposition.TRACK_VIRTUAL_VISITS)
       {
@@ -222,6 +223,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       targetChildRef.miscFields.NumRank2Pawns = sourceChildRef.miscFields.NumRank2Pawns;
 
       targetChildRef.miscFields.SecondaryNN = sourceChildRef.miscFields.SecondaryNN;
+      targetChildRef.Context.SetAsStoreID(sourceChildRef.Context.StoreID);
 
       // TODO: HasRepetitions is not cloned here, it probably is not directly transferable
       //       Can this be computed/improved?
@@ -284,7 +286,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           }
         }
 
-        float subchildSubtreeFraction = MCTSManager.ThreadSearchContext.ParamsSearch.TranspositionCloneNodeSubtreeFracs[2];
+        float subchildSubtreeFraction = ParamsSearch.TranspositionCloneNodeSubtreeFracs[2];
         
         // Do the clone from the transpose child.
         MCTSNodeStructIndex clonedSubchildIndex = default;

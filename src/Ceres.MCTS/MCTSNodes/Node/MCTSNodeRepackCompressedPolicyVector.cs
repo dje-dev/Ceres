@@ -40,12 +40,22 @@ namespace Ceres.MCTS.MTCSNodes.Node
     {
       Span<ushort> indicies = stackalloc ushort[node.NumPolicyMoves];
       Span<ushort> probabilities = stackalloc ushort[node.NumPolicyMoves];
+      Base.OperatingSystem.MemoryBufferOS<MCTSNodeStruct> nodes = node.Store.Nodes.nodes;
 
       for (int i = 0; i < node.NumPolicyMoves; i++)
       {
         ref MCTSNodeStructChild childRef = ref node.ChildAtIndexRef(i);
-        indicies[i] = (ushort)childRef.Move.IndexNeuralNet;
-        probabilities[i] = CompressedPolicyVector.EncodedProbability(childRef.P);
+        if (childRef.IsExpanded)
+        {
+          ref readonly MCTSNodeStruct childNodeRef = ref nodes[childRef.ChildIndex.Index];
+          indicies[i] = (ushort)childNodeRef.PriorMove.IndexNeuralNet;
+          probabilities[i] = CompressedPolicyVector.EncodedProbability(childNodeRef.P);
+        }
+        else
+        {
+          indicies[i] = (ushort)childRef.Move.IndexNeuralNet;
+          probabilities[i] = CompressedPolicyVector.EncodedProbability(childRef.P);
+        }
       }
 
       CompressedPolicyVector.Initialize(ref policy, indicies, probabilities);

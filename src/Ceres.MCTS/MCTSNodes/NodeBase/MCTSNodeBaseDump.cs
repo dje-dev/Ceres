@@ -45,13 +45,13 @@ namespace Ceres.MCTS.MTCSNodes
 
       string priorMoveStr = Annotation.PriorMoveMG.ToString();
 
-      return $"<MCTSNode [#{Index}] Depth {Depth} {priorMoveStr} [{ActionType}]  ({N},{NInFlight},{NInFlight2})  [{P*100:F3}%] {Q:F3} "
+      return $"<MCTSNode [#{Index}] Depth {Depth} {priorMoveStr} [{ActionType}]  ({N},{NInFlight},{NInFlight2})  [{P * 100:F3}%] {Q:F3} "
            + $"Parent={(ParentIndex.IsNull ? "none" : ParentIndex.Index.ToString())}"
            + $" V={V:F3} " + (VSecondary == 0 ? "" : $"VSecondary={VSecondary:F3} ")
            + pendingWDL
            + $" MPos={MPosition:F3} MAvg={MAvg:F3} "
-//           + $" Score0={(IsRoot ? float.NaN : Parent.ChildScore(0, Depth, IndexInParentsChildren)),6:F3} "
-//           + $" Score1={(IsRoot ? float.NaN : Parent.ChildScore(1, Depth, IndexInParentsChildren)),6:F3} "
+           //           + $" Score0={(IsRoot ? float.NaN : Parent.ChildScore(0, Depth, IndexInParentsChildren)),6:F3} "
+           //           + $" Score1={(IsRoot ? float.NaN : Parent.ChildScore(1, Depth, IndexInParentsChildren)),6:F3} "
            + $" with {NumPolicyMoves} policy moves>";
     }
 
@@ -79,121 +79,118 @@ namespace Ceres.MCTS.MTCSNodes
         Console.WriteLine("<MCTSNode NULL>");
       }
 
-      using (new SearchContextExecutionBlock(this.Context))
+      if (N < minNodes)
       {
-        if (N < minNodes)
+        return;
+      }
+
+      if (shouldAbort != null && shouldAbort(this))
+      {
+        return;
+      }
+
+      Annotate();
+
+      dumpRoot = dumpRoot.IsNull ? Tree.Root : dumpRoot;
+      writer = writer ?? Console.Out;
+
+      Position cPos = MGChessPositionConverter.PositionFromMGChessPosition(in Annotation.PosMG);
+
+      float multiplerOurPerspective = dumpRoot.IsNull || (dumpRoot.Depth % 2 == Depth % 2) ? 1.0f : -1.0f;
+
+      bool minimize = true;
+      float bestChildValue = minimize ? int.MaxValue : int.MinValue;
+      if (Parent.IsNotNull)
+      {
+        MCTSNode[] sortedChildren = Parent.ChildrenSorted(n => n.V);
+        bestChildValue = minimize ? sortedChildren[0].V : sortedChildren[^1].V;
+      }
+
+      // Print extra characters for nodes with special characteristics
+      char extraFlag = ' ';
+      if (!IsRoot && Parent.IsRoot
+        && Context.RootMovesPruningStatus != null
+        && Context.RootMovesPruningStatus[IndexInParentsChildren] != MCTSFutilityPruningStatus.NotPruned)
+      {
+        MCTSFutilityPruningStatus status = Context.RootMovesPruningStatus[IndexInParentsChildren];
+        extraFlag = status switch
         {
-          return;
+          MCTSFutilityPruningStatus.PrunedDueToFutility => 'F',
+          MCTSFutilityPruningStatus.PrunedDueToTablebaseNotWinning => 'T',
+          MCTSFutilityPruningStatus.PrunedDueToSearchMoves => 'S',
+        };
+      }
+      else if (Terminal == GameResult.Draw)
+      {
+        extraFlag = 'D';
+      }
+      else if (Terminal == GameResult.Checkmate)
+      {
+        extraFlag = 'C';
+      }
+
+      double u = float.NaN;
+      // not yet implemented      if (!IsRoot) u = Parent.U(Context.ParamsSearch.Execution.FLOW_DUAL_SELECTORS, Context.ParamsSelect, 0, this.IndexInParentsChildren);
+      string extraInfo = prefixString;
+
+      string fracVisitStr = "   ";
+      if (Depth == 1 && Context?.RootMoveTracker.RunningFractionVisits != null)
+      {
+        float runningAvg = Context.RootMoveTracker.RunningFractionVisits[IndexInParentsChildren];
+        fracVisitStr = $"{Math.Round(runningAvg * 100, 0),3:F0}";
+      }
+
+      string recentQAvgStr = "     ";
+      if (Depth == 1 && Context?.RootMoveTracker.RunningVValues != null)
+      {
+        float runningQ = Context.RootMoveTracker.RunningVValues[IndexInParentsChildren];
+        recentQAvgStr = $"{multiplerOurPerspective * runningQ,5:F2}";
+
+      }
+
+      float qStdDev = MathF.Sqrt(StructRef.VarianceAccumulator / (N - MCTSNodeStruct.VARIANCE_START_ACCUMULATE_N));
+      //qStdDev = StructRef.VarianceAccumulator;
+      bool invert = multiplerOurPerspective == -1;
+      extraInfo = $" N={N,9:F0} ({fracVisitStr}%{recentQAvgStr})  Q= {multiplerOurPerspective * Q,5:F2}  ";
+      extraInfo += $"+/- {qStdDev,4:F2}  V= {  multiplerOurPerspective * V,5:F2} ";
+      extraInfo += $" WDL= {(invert ? LossP : WinP),4:F2} {DrawP,4:F2} {(invert ? WinP : LossP),4:F2} ";
+      extraInfo += $" WDL Avg= {(invert ? LAvg : WAvg),4:F2} {DAvg,4:F2} {(invert ? WAvg : LAvg),4:F2}  ";
+      extraInfo += $"M = {MPosition,4:F0} {MAvg,4:F0}  ";
+
+      MGMove move = Annotation.PriorMoveMG;
+      writer.WriteLine($"{extraFlag} {Depth,4:F0} {move.MoveStr(MGMoveNotationStyle.ShortAlgebraic),-6} {100 * P,8:F2}% " +
+                       extraInfo);
+
+      if (Depth < lastLevel && ExpandedChildrenList.Count > 0)
+      {
+        if (Depth >= firstLevelStartPVOnly)
+        {
+          MCTSNode[] sortedChildren2 = ChildrenSorted(n => -n.N);
+          sortedChildren2[0].Dump(firstLevelStartPVOnly, lastLevel, minNodes, maxMoves: maxMoves,
+                                  writer: writer, dumpRoot: dumpRoot);
         }
-
-        if (shouldAbort != null && shouldAbort(this))
+        else
         {
-          return;
-        }
-
-        Annotate();
-
-        dumpRoot = dumpRoot.IsNull ? Tree.Root : dumpRoot;
-        writer = writer ?? Console.Out;
-
-        Position cPos = MGChessPositionConverter.PositionFromMGChessPosition(in Annotation.PosMG);
-
-        float multiplerOurPerspective = dumpRoot.IsNull || (dumpRoot.Depth % 2 == Depth % 2) ? 1.0f : -1.0f;
-
-        bool minimize = true;
-        float bestChildValue = minimize ? int.MaxValue : int.MinValue;
-        if (Parent.IsNotNull)
-        {
-          MCTSNode[] sortedChildren = Parent.ChildrenSorted(n => n.V);
-          bestChildValue = minimize ? sortedChildren[0].V : sortedChildren[^1].V;
-        }
-
-        // Print extra characters for nodes with special characteristics
-        char extraFlag = ' ';
-        if (!IsRoot && Parent.IsRoot
-          && Context.RootMovesPruningStatus != null
-          && Context.RootMovesPruningStatus[IndexInParentsChildren] != MCTSFutilityPruningStatus.NotPruned)
-        {
-          MCTSFutilityPruningStatus status = Context.RootMovesPruningStatus[IndexInParentsChildren];
-          extraFlag = status switch
+          // Make a copy of children and sort as desired 
+          MCTSNode[] sortedChildren1 = ChildrenSorted(n => -n.N);
+          string otherNodesMessage = null;
+          if (sortedChildren1.Length > maxMoves)
           {
-            MCTSFutilityPruningStatus.PrunedDueToFutility => 'F',
-            MCTSFutilityPruningStatus.PrunedDueToTablebaseNotWinning => 'T',
-            MCTSFutilityPruningStatus.PrunedDueToSearchMoves => 'S',
-          };
-        }
-        else if (Terminal == GameResult.Draw)
-        {
-          extraFlag = 'D';
-        }
-        else if (Terminal == GameResult.Checkmate)
-        {
-          extraFlag = 'C';
-        }
-
-        double u = float.NaN;
-        // not yet implemented      if (!IsRoot) u = Parent.U(Context.ParamsSearch.Execution.FLOW_DUAL_SELECTORS, Context.ParamsSelect, 0, this.IndexInParentsChildren);
-        string extraInfo = prefixString;
-
-        string fracVisitStr = "   ";
-        if (Depth == 1 && Context?.RootMoveTracker.RunningFractionVisits != null)
-        {
-          float runningAvg = Context.RootMoveTracker.RunningFractionVisits[IndexInParentsChildren];
-          fracVisitStr = $"{Math.Round(runningAvg * 100, 0),3:F0}";
-        }
-
-        string recentQAvgStr = "     ";
-        if (Depth == 1 && Context?.RootMoveTracker.RunningVValues != null)
-        {
-          float runningQ = Context.RootMoveTracker.RunningVValues[IndexInParentsChildren];
-          recentQAvgStr = $"{multiplerOurPerspective * runningQ,5:F2}";
-
-        }
-
-        float qStdDev = MathF.Sqrt(StructRef.VarianceAccumulator / (N - MCTSNodeStruct.VARIANCE_START_ACCUMULATE_N));
-        //qStdDev = StructRef.VarianceAccumulator;
-        bool invert = multiplerOurPerspective == -1;
-        extraInfo = $" N={N,9:F0} ({fracVisitStr}%{recentQAvgStr})  Q= {multiplerOurPerspective * Q,5:F2}  ";
-        extraInfo += $"+/- {qStdDev, 4:F2}  V= {  multiplerOurPerspective * V,5:F2} ";
-        extraInfo += $" WDL= {(invert ? LossP : WinP),4:F2} {DrawP,4:F2} {(invert ? WinP : LossP),4:F2} ";
-        extraInfo += $" WDL Avg= {(invert ? LAvg : WAvg),4:F2} {DAvg,4:F2} {(invert ? WAvg : LAvg),4:F2}  ";
-        extraInfo += $"M = {MPosition,4:F0} {MAvg,4:F0}  ";
-
-        MGMove move = Annotation.PriorMoveMG;
-        writer.WriteLine($"{extraFlag} {Depth,4:F0} {move.MoveStr(MGMoveNotationStyle.ShortAlgebraic),-6} {100 * P,8:F2}% " +
-                         extraInfo);
-
-        if (Depth < lastLevel && ExpandedChildrenList.Count > 0)
-        {
-          if (Depth >= firstLevelStartPVOnly)
-          {
-            MCTSNode[] sortedChildren2 = ChildrenSorted(n => -n.N);
-            sortedChildren2[0].Dump(firstLevelStartPVOnly, lastLevel, minNodes, maxMoves: maxMoves,
-                                    writer: writer, dumpRoot: dumpRoot);
+            otherNodesMessage = $"  (followed by {sortedChildren1.Length - maxMoves} additional moves not shown...)";
+            Array.Resize(ref sortedChildren1, maxMoves);
           }
-          else
+
+          foreach (MCTSNode child in sortedChildren1)
           {
-            // Make a copy of children and sort as desired 
-            MCTSNode[] sortedChildren1 = ChildrenSorted(n => -n.N);
-            string otherNodesMessage = null;
-            if (sortedChildren1.Length > maxMoves)
-            {
-              otherNodesMessage = $"  (followed by {sortedChildren1.Length - maxMoves} additional moves not shown...)";
-              Array.Resize(ref sortedChildren1, maxMoves);
-            }
-
-            foreach (MCTSNode child in sortedChildren1)
-            {
-              child.Dump(lastLevel, firstLevelStartPVOnly, minNodes, maxMoves: maxMoves, writer: writer, dumpRoot: dumpRoot);
-            }
-
-            if (otherNodesMessage != null)
-            {
-              writer.WriteLine(otherNodesMessage);
-            }
-
-            writer.WriteLine();
+            child.Dump(lastLevel, firstLevelStartPVOnly, minNodes, maxMoves: maxMoves, writer: writer, dumpRoot: dumpRoot);
           }
+
+          if (otherNodesMessage != null)
+          {
+            writer.WriteLine(otherNodesMessage);
+          }
+
+          writer.WriteLine();
         }
       }
     }

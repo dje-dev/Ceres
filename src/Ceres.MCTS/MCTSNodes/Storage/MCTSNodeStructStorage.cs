@@ -106,18 +106,24 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     /// </summary>
     public int NumOldGeneration;
 
+    /// <summary>
+    /// Parent store to which this nodes store belongs.
+    /// </summary>
+    public readonly MCTSNodeStore ParentStore;
 
     /// <summary>
     /// Constructor.
     /// </summary>
+    /// <param name="storeID"></param>
     /// <param name="numNodes"></param>
     /// <param name="priorMoves"></param>
     /// <param name="useIncrementalAlloc"></param>
     /// <param name="largePages"></param>
     /// <param name="useExistingSharedMem"></param>
-    public MCTSNodeStructStorage(int numNodes, PositionWithHistory priorMoves, bool useIncrementalAlloc,
+    public MCTSNodeStructStorage(MCTSNodeStore parentStore, int numNodes, PositionWithHistory priorMoves, bool useIncrementalAlloc,
                                  bool largePages, bool useExistingSharedMem)
     {
+      ParentStore = parentStore;
       MaxNodes = numNodes;
 
 #if SPAN
@@ -280,7 +286,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       MCTSNodeStructIndex rootNodeIndex = AllocateNext();
 
       // Initialize fields
-      nodes[rootNodeIndex.Index].Initialize(default, 0, (FP16)1.0, default);
+      nodes[rootNodeIndex.Index].Initialize(ParentStore.StoreID, default, 0, (FP16)1.0, default);
 
       nodes[rootNodeIndex.Index].NumPieces = priorMoves.FinalPosition.PieceCount;
       nodes[rootNodeIndex.Index].NumRank2Pawns = priorMoves.FinalPosMG.NumPawnsRank2;
@@ -311,7 +317,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
         {
           if (child.IsExpanded)
           {
-            childStr += $"[child={child.ChildIndex.Index} parent={child.ChildRef.ParentIndex.Index}] ";
+            childStr += $"[child={child.ChildIndex.Index} parent={child.ChildRef(ParentStore).ParentIndex.Index}] ";
           }
         }
 

@@ -211,19 +211,19 @@ namespace Ceres.MCTS.MTCSNodes
       float pInferiority = 0;
       for (int childIndex = parentChildIndex + 1; childIndex <= maxChildIndex; childIndex++)
       {
-        MCTSNodeStructChild childInfo = parentRef.ChildAtIndex(childIndex);
+        ref readonly MCTSNodeStruct childRef = ref nodes[parentRef.ChildAtIndex(childIndex).ChildIndex.Index];
 
         // Stop scanning if we see a child that has P much lower than child being evaluated.
-        if (childInfo.P < minChildP)
+        if (childRef.P < minChildP)
         {
           break;
         }
 
-        pInferiority = node.P - childInfo.P;
+        pInferiority = node.P - childRef.P;
 
         // Determine the position arrived at after following this sibling.
         MGPosition posMG = node.Parent.Annotation.PosMG;
-        posMG.MakeMove(ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(childInfo.Move, in posMG));
+        posMG.MakeMove(ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(childRef.PriorMove, in posMG));
         Position pos = posMG.ToPosition;
 
         // Possibly probe tablebases for proven loss.

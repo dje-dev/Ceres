@@ -50,7 +50,7 @@ namespace Ceres.MCTS.LeafExpansion
 
     PositionWithHistory PriorMoves => Store.Nodes.PriorMoves;
 
-    MCTSIterator Context;
+    public readonly MCTSIterator Context;
     public IMCTSNodeCache NodeCache;
 
 
@@ -87,7 +87,6 @@ namespace Ceres.MCTS.LeafExpansion
     public List<EncodedPositionBoard> EncodedPriorPositions;
 
 
-
     /// <summary>
     /// Constructor.
     /// </summary>
@@ -102,6 +101,7 @@ namespace Ceres.MCTS.LeafExpansion
       {
         throw new Exception($"DrawByRepetitionLookbackPlies exceeds maximum length of {MAX_LENGTH_POS_HISTORY}");
       }
+
 
       Store = store;
       Context = context;
@@ -179,7 +179,7 @@ namespace Ceres.MCTS.LeafExpansion
       return  new MCTSNodeCacheArrayPurgeableSet(Store, numCachedNodes,  EstimatedNumNodes);
     }
 
-    public void PossiblyPruneCache() => NodeCache.PossiblyPruneCache(MCTSManager.ThreadSearchContext.Tree.Store);
+    public void PossiblyPruneCache() => NodeCache.PossiblyPruneCache(Store);
 
 
     /// <summary>
@@ -205,7 +205,7 @@ namespace Ceres.MCTS.LeafExpansion
     }
 #endif
 
-    static readonly MCTSNode nullNode = new MCTSNode(null, null, default, false);
+    static unsafe readonly MCTSNode nullNode = new MCTSNode(null, null, default, null);
 
     /// <summary>
     /// Attempts to return the MCTSNode associated with an annotation in the cache, 
@@ -221,15 +221,16 @@ namespace Ceres.MCTS.LeafExpansion
       }
 
       ref readonly MCTSNodeStruct nodeRef = ref nodes[nodeIndex.Index];
-      bool wasAdded = false;
-      if (nodeRef.CachedInfoPtr == null)
+      void* infoPtr = null;
+      if (!nodeRef.IsCached)
       {
-        NodeCache.Add(nodeIndex);
-        Debug.Assert(nodeRef.CachedInfoPtr != null);
-        wasAdded = true;
+        infoPtr = NodeCache.Add(nodeIndex);
       }
 
-      MCTSNode node = new MCTSNode(Context, nodes, nodeIndex, wasAdded);
+      MCTSNode node = new MCTSNode(Context, nodes, nodeIndex, infoPtr);
+
+      Debug.Assert(nodeRef.Context.IsCached);
+
       node.InfoRef.LastAccessedSequenceCounter = NodeCache.NextBatchSequenceNumber;
 
       Debug.Assert(node.Index == nodeIndex.Index);

@@ -40,8 +40,6 @@ namespace Ceres.Features.Suites
 
     public SearchResultInfo(MCTSManager manager, BestMoveInfo bestMove)
     {
-      using (new SearchContextExecutionBlock(manager.Context))
-      {
         Q = manager.Root.Q;
         //UCIInfoString = manager.UCIInfoString();
         // SearchPrincipalVariation pv1 = new SearchPrincipalVariation(worker1.Root);
@@ -57,9 +55,7 @@ namespace Ceres.Features.Suites
         MAvg = manager.Context.Root.MAvg;
         NodeSelectionYieldFrac = manager.Context.NodeSelectionYieldFrac;
 
-        PickedNonTopNMoveStr = bestMove.BestMoveWasTopN ? " " : "!";
-
-      }
+        PickedNonTopNMoveStr = bestMove.BestMoveWasTopN ? " " : "!";      
     }
   }
 

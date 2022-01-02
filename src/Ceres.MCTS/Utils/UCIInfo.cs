@@ -44,113 +44,107 @@ namespace Ceres.MCTS.Utils
                                        bool showWDL = false,
                                        bool scoreAsQ = false)
     {
-      using (new SearchContextExecutionBlock(manager.Context))
+      if (manager.TablebaseImmediateBestMove != default)
       {
-        if (manager.TablebaseImmediateBestMove != default)
+        if (multiPVIndex.HasValue && multiPVIndex != 1)
         {
-          if (multiPVIndex.HasValue && multiPVIndex != 1)
-          {
-            return null;
-          }
-          else
-          {
-            return OutputUCIInfoTablebaseImmediate(manager, overrideRootMove.IsNotNull ? overrideRootMove : manager.Root, scoreAsQ);
-          }
-        }
-
-        bool wasInstamove = manager.StopStatus == MCTSManager.SearchStopStatus.Instamove;
-
-        // If no override bestMoveRoot was specified
-        // then it is assumed the move chosen was from the root (not an instamove)
-        MCTSNode thisRootNode = overrideRootMove.IsNotNull ? overrideRootMove : manager.Root;
-
-        if (thisRootNode.NumPolicyMoves == 0)
-        {
-          // Terminal position, nothing to output
           return null;
         }
-
-        float elapsedTimeSeconds = wasInstamove ? 0 : (float)(DateTime.Now - manager.StartTimeThisSearch).TotalSeconds;
-
-        // Get the principal variation (the first move of which will be the best move)
-        SearchPrincipalVariation pv;
-        BestMoveInfo bestMoveInfo;
-        using (new SearchContextExecutionBlock(manager.Context))
-        {
-          bestMoveInfo = thisRootNode.BestMoveInfo(false);
-          pv = new SearchPrincipalVariation(thisRootNode, overrideBestMoveNodeAtRoot);
-        }
-
-        MCTSNode bestMoveNode = pv.Nodes.Count > 1 ? pv.Nodes[1] : pv.Nodes[0];
-
-        float thisQ;
-        if (overrideBestMoveNodeAtRoot.IsNotNull)
-        {
-          thisQ = (float)-overrideBestMoveNodeAtRoot.Q;
-        }
         else
         {
-          thisQ = bestMoveInfo.QOfBest;
+          return OutputUCIInfoTablebaseImmediate(manager, overrideRootMove.IsNotNull ? overrideRootMove : manager.Root, scoreAsQ);
         }
+      }
 
-        // The score displayed corresponds to
-        // the Q (average visit value) of the move to be made.
-        float scoreToShow;
-        if (scoreAsQ)
-        {
-          scoreToShow = MathF.Round(thisQ * 1000, 0);
-        }
-        else
-        {
-          scoreToShow = MathF.Round(EncodedEvalLogistic.LogisticToCentipawn(thisQ), 0);
-        }
+      bool wasInstamove = manager.StopStatus == MCTSManager.SearchStopStatus.Instamove;
 
-        float nps = manager.NumNodesVisitedThisSearch / elapsedTimeSeconds;
+      // If no override bestMoveRoot was specified
+      // then it is assumed the move chosen was from the root (not an instamove)
+      MCTSNode thisRootNode = overrideRootMove.IsNotNull ? overrideRootMove : manager.Root;
 
-        // If somehow the nps looks unreasonable then truncate it to zero
-        // to avoid making graphs in tournament managers show outlier points.
-        const float MAX_NPS = 3_000_000;
-        if (nps > MAX_NPS)
-        {
-          nps = 0;
-        }
+      if (thisRootNode.NumPolicyMoves == 0)
+      {
+        // Terminal position, nothing to output
+        return null;
+      }
 
-        //info depth 12 seldepth 27 time 30440 nodes 51100 score cp 105 hashfull 241 nps 1678 tbhits 0 pv e6c6 c5b4 d5e4 d1e1 
-        int selectiveDepth = pv.Nodes.Count;
-        int depthOfBestMoveInTree = wasInstamove ? thisRootNode.Depth : 0;
-        int depth = 1 + (int)MathF.Round(manager.Context.AvgDepth - depthOfBestMoveInTree, 0);
+      float elapsedTimeSeconds = wasInstamove ? 0 : (float)(DateTime.Now - manager.StartTimeThisSearch).TotalSeconds;
 
-        string pvString = multiPVIndex.HasValue ? $"multipv {multiPVIndex} pv {pv.ShortStr()}"
-                                                : $"pv {pv.ShortStr()}";
+      // Get the principal variation (the first move of which will be the best move)
+      SearchPrincipalVariation pv;
+      BestMoveInfo bestMoveInfo;
+      bestMoveInfo = thisRootNode.BestMoveInfo(false);
+      pv = new SearchPrincipalVariation(thisRootNode, overrideBestMoveNodeAtRoot);
 
-        int n = thisRootNode.N;
-        if (!useParentN && overrideBestMoveNodeAtRoot.IsNotNull) n = overrideBestMoveNodeAtRoot.N;
+      MCTSNode bestMoveNode = pv.Nodes.Count > 1 ? pv.Nodes[1] : pv.Nodes[0];
 
-        //score cp 27 wdl 384 326 290
-        string strWDL = "";
-        if (showWDL)
-        {
-          // Note that win and loss inverted to reverse perspective.
-          // (except if only one node evaluated so we only have the root and not actual moves).
-          bool isRoot = bestMoveNode.IsRoot;
-          strWDL = $" wdl {Math.Round((isRoot ? bestMoveNode.WinP : bestMoveNode.LAvg) * 1000)} "
-                 + $"{Math.Round((isRoot ? bestMoveNode.DrawP : bestMoveNode.DAvg) * 1000)} "
-                 + $"{Math.Round((isRoot ? bestMoveNode.LossP : bestMoveNode.WAvg) * 1000)}";
-        }
+      float thisQ;
+      if (overrideBestMoveNodeAtRoot.IsNotNull)
+      {
+        thisQ = (float)-overrideBestMoveNodeAtRoot.Q;
+      }
+      else
+      {
+        thisQ = bestMoveInfo.QOfBest;
+      }
 
-        if (wasInstamove)
-        {
-          // Note that the correct tablebase hits cannot be easily calculated and reported
-          return $"info depth {depth} seldepth {selectiveDepth} time 0 "
-               + $"nodes {n:F0} score cp {scoreToShow}{strWDL} tbhits {manager.CountTablebaseHits} nps 0 "
-               + $"{pvString} string M= {thisRootNode.MAvg:F0} ";
-        }
-        else
-        {
-          return $"info depth {depth} seldepth {selectiveDepth} time {elapsedTimeSeconds * 1000.0f:F0} "
-               + $"nodes {n:F0} score cp {scoreToShow}{strWDL} tbhits {manager.CountTablebaseHits} nps {nps:F0} "
-               + $"{pvString} string M= {thisRootNode.MAvg:F0}";
-        }
+      // The score displayed corresponds to
+      // the Q (average visit value) of the move to be made.
+      float scoreToShow;
+      if (scoreAsQ)
+      {
+        scoreToShow = MathF.Round(thisQ * 1000, 0);
+      }
+      else
+      {
+        scoreToShow = MathF.Round(EncodedEvalLogistic.LogisticToCentipawn(thisQ), 0);
+      }
+
+      float nps = manager.NumNodesVisitedThisSearch / elapsedTimeSeconds;
+
+      // If somehow the nps looks unreasonable then truncate it to zero
+      // to avoid making graphs in tournament managers show outlier points.
+      const float MAX_NPS = 3_000_000;
+      if (nps > MAX_NPS)
+      {
+        nps = 0;
+      }
+
+      //info depth 12 seldepth 27 time 30440 nodes 51100 score cp 105 hashfull 241 nps 1678 tbhits 0 pv e6c6 c5b4 d5e4 d1e1 
+      int selectiveDepth = pv.Nodes.Count;
+      int depthOfBestMoveInTree = wasInstamove ? thisRootNode.Depth : 0;
+      int depth = 1 + (int)MathF.Round(manager.Context.AvgDepth - depthOfBestMoveInTree, 0);
+
+      string pvString = multiPVIndex.HasValue ? $"multipv {multiPVIndex} pv {pv.ShortStr()}"
+                                              : $"pv {pv.ShortStr()}";
+
+      int n = thisRootNode.N;
+      if (!useParentN && overrideBestMoveNodeAtRoot.IsNotNull) n = overrideBestMoveNodeAtRoot.N;
+
+      //score cp 27 wdl 384 326 290
+      string strWDL = "";
+      if (showWDL)
+      {
+        // Note that win and loss inverted to reverse perspective.
+        // (except if only one node evaluated so we only have the root and not actual moves).
+        bool isRoot = bestMoveNode.IsRoot;
+        strWDL = $" wdl {Math.Round((isRoot ? bestMoveNode.WinP : bestMoveNode.LAvg) * 1000)} "
+               + $"{Math.Round((isRoot ? bestMoveNode.DrawP : bestMoveNode.DAvg) * 1000)} "
+               + $"{Math.Round((isRoot ? bestMoveNode.LossP : bestMoveNode.WAvg) * 1000)}";
+      }
+
+      if (wasInstamove)
+      {
+        // Note that the correct tablebase hits cannot be easily calculated and reported
+        return $"info depth {depth} seldepth {selectiveDepth} time 0 "
+             + $"nodes {n:F0} score cp {scoreToShow}{strWDL} tbhits {manager.CountTablebaseHits} nps 0 "
+             + $"{pvString} string M= {thisRootNode.MAvg:F0} ";
+      }
+      else
+      {
+        return $"info depth {depth} seldepth {selectiveDepth} time {elapsedTimeSeconds * 1000.0f:F0} "
+             + $"nodes {n:F0} score cp {scoreToShow}{strWDL} tbhits {manager.CountTablebaseHits} nps {nps:F0} "
+             + $"{pvString} string M= {thisRootNode.MAvg:F0}";
       }
     }
 

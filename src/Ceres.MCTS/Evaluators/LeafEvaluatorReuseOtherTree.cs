@@ -69,29 +69,24 @@ namespace Ceres.MCTS.Evaluators
     {
       VerifyCompatibleNetworkDefinition(node);
 
-      if (OtherContext.Tree.TranspositionRoots != null && 
+      if (OtherContext.Tree.TranspositionRoots != null &&
           OtherContext.Tree.TranspositionRoots.TryGetValue(node.StructRef.ZobristHash, out int nodeIndex))
       {
-        // N.B. avoid accessing properties (except directly from StructRef)
-        //      of node in the block below because we are switching into context of other tree here.
-        // 
-        using (new SearchContextExecutionBlock(OtherContext))
+        ref MCTSNodeStruct otherNodeRef = ref otherNodes[nodeIndex];
+
+        if (otherNodeRef.Terminal != Chess.GameResult.Unknown)
         {
-          ref MCTSNodeStruct otherNodeRef = ref otherNodes[nodeIndex];
-
-          if (otherNodeRef.Terminal != Chess.GameResult.Unknown)
-          {
-            NumMisses.Add(1, nodeIndex);
-            return default;
-          }
-
-          CompressedPolicyVector[] cpvArray = new CompressedPolicyVector[1];
-          LeafEvaluationResult ret = new(otherNodeRef.Terminal, otherNodeRef.WinP, otherNodeRef.LossP, otherNodeRef.MPosition, cpvArray, 0);
-          MCTSNodeStructUtils.ExtractPolicyVector(OtherContext.ParamsSelect.PolicySoftmax, in otherNodeRef, ref cpvArray[0]);
-
-          NumHits.Add(1, nodeIndex);
-          return ret;
+          NumMisses.Add(1, nodeIndex);
+          return default;
         }
+
+        CompressedPolicyVector[] cpvArray = new CompressedPolicyVector[1];
+        LeafEvaluationResult ret = new(otherNodeRef.Terminal, otherNodeRef.WinP, otherNodeRef.LossP, otherNodeRef.MPosition, cpvArray, 0);
+        MCTSNodeStructUtils.ExtractPolicyVector(OtherContext.ParamsSelect.PolicySoftmax, in otherNodeRef, ref cpvArray[0]);
+
+        NumHits.Add(1, nodeIndex);
+        return ret;
+
       }
       else
       {

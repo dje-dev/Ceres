@@ -97,27 +97,24 @@ namespace Ceres.MCTS.Iteration
     /// </summary>
     public void FixupDrawsInvalidatedByTreeReuse()
     {
-      using (new SearchContextExecutionBlock(Manager.Context))
-      {
-        Manager.Context.Tree.Root.StructRef.Traverse(Manager.Context.Tree.Store,
-                         (ref MCTSNodeStruct nodeRef) =>
+      Manager.Context.Tree.Root.StructRef.Traverse(Manager.Context.Tree.Store,
+                       (ref MCTSNodeStruct nodeRef) =>
+                       {
+                         if (!nodeRef.IsOldGeneration && nodeRef.Terminal.IsTerminal() && nodeRef.HasRepetitions)
                          {
-                           if (!nodeRef.IsOldGeneration && nodeRef.Terminal.IsTerminal() && nodeRef.HasRepetitions)
+                           MCTSNode node = Manager.Context.Tree.GetNode(nodeRef.Index);
+                           node.Annotate();
+                           MCTSEventSource.TestMetric1++;
+                           Console.WriteLine(node.Annotation.Pos.MiscInfo.RepetitionCount);
+                           if (true || node.Annotation.Pos.MiscInfo.RepetitionCount == 0)
                            {
-                             MCTSNode node = Manager.Context.Tree.GetNode(nodeRef.Index);
-                             node.Annotate();
-                             MCTSEventSource.TestMetric1++;
-                             Console.WriteLine(node.Annotation.Pos.MiscInfo.RepetitionCount);
-                             if (true || node.Annotation.Pos.MiscInfo.RepetitionCount == 0)
-                             {
                                // Backout all but one draw
                                BackupRevertDrawVisits(ref nodeRef, node.N - 1);
-                             }
                            }
-                           return true;
+                         }
+                         return true;
                            //                           return nodeRef.DepthInTree < 8; // *** FIX
                          }, TreeTraversalType.Sequential);
-      }
     }
 
 
@@ -263,11 +260,8 @@ namespace Ceres.MCTS.Iteration
       reuseNodeCache?.ResetCache(false);
       reuseNodeCache?.SetContext(context);
 
-      using (new SearchContextExecutionBlock(Manager.Context))
-      {
-        (BestMove, TimingInfo) = MCTSManager.Search(Manager, verbose, progressCallback,
-                                                    possiblyUsePositionCache, moveImmediateIfOnlyOneMove);
-      }
+      (BestMove, TimingInfo) = MCTSManager.Search(Manager, verbose, progressCallback,
+                                                  possiblyUsePositionCache, moveImmediateIfOnlyOneMove);
     }
 
     internal static bool PosIsTablebaseWinWithNoDTZAvailable(ParamsSearch paramsSearch, PositionWithHistory priorMoves)
@@ -389,95 +383,90 @@ namespace Ceres.MCTS.Iteration
       int numNodesInitial = Manager == null ? 0 : Manager.Root.N;
 
       MCTSNodeStructIndex newRootIndex;
-      using (new SearchContextExecutionBlock(priorContext))
+      MCTSNode newRoot = default;
+      if (Manager.TablebaseImmediateBestMove.IsNull)
       {
-        MCTSNode newRoot = default;
-        if (Manager.TablebaseImmediateBestMove.IsNull)
+        newRoot = Manager.Root.FollowMovesToNode(moves);
+      }
+
+      // New root is not useful if contained no search
+      // (for example if it was resolved via tablebase)
+      // thus in that case we pretend as if we didn't find it
+      if (newRoot.IsNotNull && (newRoot.N == 0 || newRoot.NumPolicyMoves == 0))
+      {
+        newRoot = default;
+      }
+
+      // Update contempt manager (if any) based opponent's prior move
+      UpdateContemptManager(newRoot);
+
+      // Compute search limit forced to per move type.
+      SearchLimit searchLimitPerMove = SearchLimitPerMove(newPositionAndMoves.FinalPosition, searchLimit,
+                                                          newRoot.IsNull ? 0 : newRoot.N,
+                                                          newRoot.IsNull ? 0 : (float)newRoot.Q,
+                                                          priorContext.ParamsSearch, Manager.LimitManager,
+                                                          gameMoveHistory, isFirstMoveOfGame);
+      Debug.Assert(!searchLimitPerMove.IsPerGameLimit);
+
+      LastMakeNewRootTimingStats = default;
+
+      bool forceNoTablebaseTerminals = PosIsTablebaseWinWithNoDTZAvailable(priorSearch.Manager.Context.ParamsSearch, newPositionAndMoves);
+
+      ManagerTreeReuse.Method reuseMethod = ManagerTreeReuse.Method.NewStore;
+
+      bool instamove;
+      if (forceNoTablebaseTerminals
+      && !priorContext.Manager.ForceNoTablebaseTerminals)
+      {
+        // Just exit with no store reuse.
+        // The prior tree was bulit allowing tablebase terminals in node evaluations,
+        // but now we need to do actual search to find the winning move sequence.
+      }
+      else
+      {
+        if (newRoot.IsNotNull)
         {
-          newRoot = Manager.Root.FollowMovesToNode(moves);
+          const bool VERBOSE = false;
+          LastReuseDecision = ManagerTreeReuse.ChooseMethod(priorContext.Tree.Root, newRoot, searchLimit.MaxTreeNodes);
+          reuseMethod = LastReuseDecision.ChosenMethod;
         }
 
-        // New root is not useful if contained no search
-        // (for example if it was resolved via tablebase)
-        // thus in that case we pretend as if we didn't find it
-        if (newRoot.IsNotNull && (newRoot.N == 0 || newRoot.NumPolicyMoves == 0))
+        // Check for possible instant move
+        instamove = priorContext.Tree.Root == newRoot ? false
+                                                      : CheckInstamove(Manager, searchLimitPerMove, newRoot, reuseMethod);
+        if (instamove)
         {
-          newRoot = default;
-        }
-
-        // Update contempt manager (if any) based opponent's prior move
-        UpdateContemptManager(newRoot);
-
-        // Compute search limit forced to per move type.
-        SearchLimit searchLimitPerMove = SearchLimitPerMove(newPositionAndMoves.FinalPosition, searchLimit,
-                                                            newRoot.IsNull ? 0 : newRoot.N,
-                                                            newRoot.IsNull ? 0 : (float)newRoot.Q,
-                                                            priorContext.ParamsSearch, Manager.LimitManager,
-                                                            gameMoveHistory, isFirstMoveOfGame);
-        Debug.Assert(!searchLimitPerMove.IsPerGameLimit);
-
-        LastMakeNewRootTimingStats = default;
-
-        bool forceNoTablebaseTerminals = PosIsTablebaseWinWithNoDTZAvailable(priorSearch.Manager.Context.ParamsSearch, newPositionAndMoves);
-
-        ManagerTreeReuse.Method reuseMethod = ManagerTreeReuse.Method.NewStore;
-
-        bool instamove;
-        using (new SearchContextExecutionBlock(Manager.Context))
-        {
-          if (forceNoTablebaseTerminals 
-          && !priorContext.Manager.ForceNoTablebaseTerminals)
-          {
-            // Just exit with no store reuse.
-            // The prior tree was bulit allowing tablebase terminals in node evaluations,
-            // but now we need to do actual search to find the winning move sequence.
-          }
-          else
-          {
-            if (newRoot.IsNotNull)
-            {
-              const bool VERBOSE = false;
-              LastReuseDecision = ManagerTreeReuse.ChooseMethod(priorContext.Tree.Root, newRoot, searchLimit.MaxTreeNodes);
-              reuseMethod = LastReuseDecision.ChosenMethod;
-            }
-
-            // Check for possible instant move
-            instamove = priorContext.Tree.Root == newRoot ? false
-                                                          : CheckInstamove(Manager, searchLimitPerMove, newRoot, reuseMethod);
-            if (instamove)
-            {
-              // Modify in place to point to the new root
-              continuationSubroot = newRoot;
-              BestMove = newRoot.BestMoveInfo(false).BestMove;
-              Manager.StopStatus = MCTSManager.SearchStopStatus.Instamove;
-              Manager.RootNWhenSearchStarted = continuationSubroot.N;
-              TimingInfo = new TimingStats();
-              return;
-            }
-            else
-            {
-              CountSearchContinuations = 0;
-            }
-          }
-        }
-        const bool possiblyUsePositionCache = false; // TODO: could this be relaxed?
-
-        PositionEvalCache positionEvalCache = null;
-
-        //        bool storeIsAlmostFull = priorContext.Tree.Store.FractionInUse > 0.9f;
-        //        bool newRootIsBigEnoughForReuse = newRoot != null && newRoot.N >= (priorContext.Root.N * thresholdMinFractionNodesRetained);
-        if (priorContext.ParamsSearch.TreeReuseEnabled
-          && (reuseMethod == ManagerTreeReuse.Method.KeepStoreRebuildTree || reuseMethod == ManagerTreeReuse.Method.KeepStoreSwapRoot))
-        //         && newRootIsBigEnoughForReuse
-        //         && !storeIsAlmostFull//         
-        {
-          SearchContinueRetainTree(reuseOtherContextForEvaluatedNodes, newPositionAndMoves, gameMoveHistory, verbose, startTime,
-                                   progressCallback, isFirstMoveOfGame, priorContext, store, numNodesInitial, newRoot,
-                                   searchLimitPerMove, possiblyUsePositionCache, reuseMethod, moveImmediateIfOnlyOneMove, 
-                                   Manager.TerminationManager.SearchMovesTablebaseRestricted);
+          // Modify in place to point to the new root
+          continuationSubroot = newRoot;
+          BestMove = newRoot.BestMoveInfo(false).BestMove;
+          Manager.StopStatus = MCTSManager.SearchStopStatus.Instamove;
+          Manager.RootNWhenSearchStarted = continuationSubroot.N;
+          TimingInfo = new TimingStats();
+          return;
         }
         else
         {
+          CountSearchContinuations = 0;
+        }
+      }
+      const bool possiblyUsePositionCache = false; // TODO: could this be relaxed?
+
+      PositionEvalCache positionEvalCache = null;
+
+      //        bool storeIsAlmostFull = priorContext.Tree.Store.FractionInUse > 0.9f;
+      //        bool newRootIsBigEnoughForReuse = newRoot != null && newRoot.N >= (priorContext.Root.N * thresholdMinFractionNodesRetained);
+      if (priorContext.ParamsSearch.TreeReuseEnabled
+        && (reuseMethod == ManagerTreeReuse.Method.KeepStoreRebuildTree || reuseMethod == ManagerTreeReuse.Method.KeepStoreSwapRoot))
+      //         && newRootIsBigEnoughForReuse
+      //         && !storeIsAlmostFull//         
+      {
+        SearchContinueRetainTree(reuseOtherContextForEvaluatedNodes, newPositionAndMoves, gameMoveHistory, verbose, startTime,
+                                 progressCallback, isFirstMoveOfGame, priorContext, store, numNodesInitial, newRoot,
+                                 searchLimitPerMove, possiblyUsePositionCache, reuseMethod, moveImmediateIfOnlyOneMove,
+                                 Manager.TerminationManager.SearchMovesTablebaseRestricted);
+      }
+      else
+      {
 #if NOT
           // Although it works, there actually seems no benefit to this idea.
           // The time spent on tree rebuild is proportional to benefit (nodes extracted)
@@ -505,46 +494,42 @@ namespace Ceres.MCTS.Iteration
             }
           }
 #endif
-          priorContext.Tree.ClearNodeCache(false);
+        priorContext.Tree.ClearNodeCache(false);
 
-          // We decided not to (or couldn't find) that path in the existing tree.
-          // First immediately release the prior store to allow memory reclamation.
-          priorContext.Tree.Store.Dispose();
+        // We decided not to (or couldn't find) that path in the existing tree.
+        // First immediately release the prior store to allow memory reclamation.
+        priorContext.Tree.Store.Dispose();
 
-          // Now just run the search from a new tree.
-          Search(Manager.Context.NNEvaluators, Manager.Context.ParamsSelect,
-                 Manager.Context.ParamsSearch, Manager.LimitManager,
-                 reuseOtherContextForEvaluatedNodes, newPositionAndMoves, searchLimit, verbose,
-                 startTime, gameMoveHistory, progressCallback, positionEvalCache,
-                 priorContext.Tree.NodeCache, possiblyUsePositionCache,
-                 isFirstMoveOfGame, moveImmediateIfOnlyOneMove, Manager.TerminationManager.SearchMovesTablebaseRestricted);
-        }
+        // Now just run the search from a new tree.
+        Search(Manager.Context.NNEvaluators, Manager.Context.ParamsSelect,
+               Manager.Context.ParamsSearch, Manager.LimitManager,
+               reuseOtherContextForEvaluatedNodes, newPositionAndMoves, searchLimit, verbose,
+               startTime, gameMoveHistory, progressCallback, positionEvalCache,
+               priorContext.Tree.NodeCache, possiblyUsePositionCache,
+               isFirstMoveOfGame, moveImmediateIfOnlyOneMove, Manager.TerminationManager.SearchMovesTablebaseRestricted);
       }
     }
 
     void MarkUnreachable(MGPosition newRootPos, MCTSNode node, string desc)
     {
-      using (new SearchContextExecutionBlock(node.Context))
+      int countReachable = 0;
+      int countUnreachable = 0;
+      foreach (var child1 in node.ChildrenSorted((MCTSNode v) => 0))
       {
-        int countReachable = 0;
-        int countUnreachable = 0;
-        foreach (var child1 in node.ChildrenSorted((MCTSNode v) => 0))
+        child1.Annotate();
+        bool reachable1 = MGPositionReachability.IsProbablyReachable(newRootPos, child1.Annotation.PosMG);
+        if (!reachable1)
         {
-          child1.Annotate();
-          bool reachable1 = MGPositionReachability.IsProbablyReachable(newRootPos, child1.Annotation.PosMG);
-          if (!reachable1)
-          {
-            Console.WriteLine(desc + " Invalidate " + child1.N);
-            countUnreachable += child1.N;
-          }
-          else
-          {
-            Console.WriteLine(desc + " Keep " + child1.N);
-            countReachable += child1.N;
-          }
+          Console.WriteLine(desc + " Invalidate " + child1.N);
+          countUnreachable += child1.N;
         }
-        Console.WriteLine("reachable/unreachable " + countReachable + " " + countUnreachable);
+        else
+        {
+          Console.WriteLine(desc + " Keep " + child1.N);
+          countReachable += child1.N;
+        }
       }
+      Console.WriteLine("reachable/unreachable " + countReachable + " " + countUnreachable);
     }
 
     public TimingStats LastMakeNewRootTimingStats;

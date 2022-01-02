@@ -139,7 +139,7 @@ namespace Ceres.MCTS.Search
       {
         Parallel.Invoke(
           () => { DoApplySetPolicies(batchlet); },
-          () => { using (new SearchContextExecutionBlock(context)) DoApplyBackup(selectorID, batchlet); });
+          () => { DoApplyBackup(selectorID, batchlet); });
       }
       else
       {
@@ -297,7 +297,7 @@ namespace Ceres.MCTS.Search
           }
         }
 
-        nodeRef.BackupApply(nodes, numToApply, 
+        nodeRef.BackupApply(node.Context, nodes, numToApply, 
                             vToApplyFirst, vToApplyNonFirst, mToApply, 
                             dToApplyFirst, dToApplyNonFirst, 
                             numUpdateSelector1, numUpdateSelector2, out indexOfChildDescendentFromRoot);
@@ -442,12 +442,9 @@ namespace Ceres.MCTS.Search
         Parallel.ForEach(Partitioner.Create(0, nodes.Count), ParallelUtils.ParallelOptions(nodes.Count, context.ParamsSearch.Execution.SetPoliciesNumPoliciesPerThread),
         (range) =>
         {
-          using (new SearchContextExecutionBlock(context))
+          for (int i = range.Item1; i < range.Item2; i++)
           {
-            for (int i = range.Item1; i < range.Item2; i++)
-            {
-              SetPolicy(nodes[i], policySoftmax, cachingInUse, movesSameOrderMoveList);
-            }
+            SetPolicy(nodes[i], policySoftmax, cachingInUse, movesSameOrderMoveList);
           }
         });
       }

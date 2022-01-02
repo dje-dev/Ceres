@@ -302,49 +302,47 @@ namespace Ceres.MCTS.MTCSNodes.Analysis
     {
       try
       {
-        using (new SearchContextExecutionBlock(node.Context))
+        writer = writer ?? Console.Out;
+
+        writer.WriteLine();
+        WriteHeaders(fullDetail, writer);
+
+        List<Position> seenPositions = new List<Position>();
+
+        int CountDuplicatePos(Position pos)
         {
-          writer = writer ?? Console.Out;
-
-          writer.WriteLine();
-          WriteHeaders(fullDetail, writer);
-
-          List<Position> seenPositions = new List<Position>();
-
-          int CountDuplicatePos(Position pos)
+          int count = 0;
+          foreach (Position priorPos in seenPositions)
           {
-            int count = 0;
-            foreach (Position priorPos in seenPositions)
+            if (pos.EqualAsRepetition(in priorPos))
             {
-              if (pos.EqualAsRepetition(in priorPos))
-              {
-                count++;
-              }
+              count++;
             }
-
-            return count;
           }
 
-          int depth = 0;
-          MCTSNode searchRootNode = node;
-          while (true)
-          {
-            node.Tree.Annotate(node);
-            seenPositions.Add(node.Annotation.Pos);
-            int countSeen = CountDuplicatePos(node.Annotation.Pos);
-
-            DumpNodeStr(searchRootNode, node, countSeen, fullDetail, writer);
-
-            if (node.NumChildrenVisited == 0)
-            {
-              return;
-            }
-
-            node = node.BestMove(false);
-
-            depth++;
-          }
+          return count;
         }
+
+        int depth = 0;
+        MCTSNode searchRootNode = node;
+        while (true)
+        {
+          node.Tree.Annotate(node);
+          seenPositions.Add(node.Annotation.Pos);
+          int countSeen = CountDuplicatePos(node.Annotation.Pos);
+
+          DumpNodeStr(searchRootNode, node, countSeen, fullDetail, writer);
+
+          if (node.NumChildrenVisited == 0)
+          {
+            return;
+          }
+
+          node = node.BestMove(false);
+
+          depth++;
+        }
+
       }
       catch (Exception e)
       {
