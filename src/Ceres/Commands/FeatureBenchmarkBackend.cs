@@ -180,7 +180,7 @@ namespace Ceres.Commands
         int skip = extraSkipMultiplier * (lastBatchSize < 512 ? 4 : 8);
         lastBatchSize += skip;
         lastBatchSize = (lastBatchSize / 4) * 4;
-        lastBatchSize = 4096;
+
         if (lastBatchSize > maxBatchSize)
         {
           break;
@@ -202,7 +202,7 @@ namespace Ceres.Commands
 
     static EncodedPositionWithHistory[] positions;
 
-    static EncodedPositionBatchFlat testBatch;
+    static EncodedPositionBatchFlat testBatchBuffer;
 
     static void InitPositionsBuffer(int maxPositions)
     {
@@ -215,15 +215,15 @@ namespace Ceres.Commands
       {
         positions[i] = i % 7 == 1 ? pos2 : pos1;
       }
+
+      testBatchBuffer = new EncodedPositionBatchFlat(positions.AsSpan().Slice(0, maxPositions), maxPositions, true);
+      (testBatchBuffer as IEncodedPositionBatchFlat).TrySetMoves();
     }
 
     private static float TestBatchSize(NNEvaluator evaluator, int batchSize, int numRunsPerBatchSize = 5, bool show = false)
     {
       // Prepare batch with test positions.
-      if (testBatch == null || testBatch.NumPos != batchSize)
-      {
-        testBatch = new EncodedPositionBatchFlat(positions.AsSpan().Slice(0, batchSize), batchSize, true);
-      }
+      IEncodedPositionBatchFlat testBatch = testBatchBuffer.GetSubBatchSlice(0, batchSize);
 
       // Run warmup steps if first time.
       if (batchSize == 1)
