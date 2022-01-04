@@ -78,18 +78,18 @@ namespace Ceres.Commands
 
       Console.WriteLine($"\r\nTESTING WITH BASELINE DEVICE SPECIFICTATION {NNDevicesSpecificationString.ToSpecificationString(DeviceSpec.ComboType, DeviceSpec.Devices)}");
 
-      const int MAX_BATCH = 4096;
+      int maxBatchSize = Math.Min(CeresUserSettingsManager.Settings.MaxBatchSize, 2048);
 
       // Run base evaluator.
-      var (evaluator1, _) = BackendBench(evaluatorDef, 16, maxBatchSize: MAX_BATCH, show:false); // warmup
-      var (evaluator2, before) = BackendBench(evaluatorDef, SKIP, TRIES, maxBatchSize: MAX_BATCH);
+      var (evaluator1, _) = BackendBench(evaluatorDef, 16, maxBatchSize: maxBatchSize, show:false); // warmup
+      var (evaluator2, before) = BackendBench(evaluatorDef, SKIP, TRIES, maxBatchSize: maxBatchSize);
 
       Thread.Sleep(3_000); // cooloff
 
       // Bulid modified evaluator.
       NNEvaluatorDeviceDef deviceDev = DeviceSpec.Devices[0].Item1;
 
-      OptionsParserHelpers.ParseBatchSizeSpecification(batchSpec, out int ? maxBatchSize, out int ? optimalBatchSize, out string batchSizesFileName);
+      OptionsParserHelpers.ParseBatchSizeSpecification(batchSpec, out int ? maxTestBatchSize, out int ? optimalTestBatchSize, out string batchSizesFileName);
       if (batchSizesFileName != null)
       {
         throw new NotImplementedException("Use of batch file configuration file not yet supported.");
@@ -97,8 +97,8 @@ namespace Ceres.Commands
 
       for (int i=0; i< DeviceSpec.Devices.Count;i++)
       {
-        DeviceSpec.Devices[i].Item1.MaxBatchSize = maxBatchSize;
-        DeviceSpec.Devices[i].Item1.OptimalBatchSize = optimalBatchSize;
+        DeviceSpec.Devices[i].Item1.MaxBatchSize = maxTestBatchSize;
+        DeviceSpec.Devices[i].Item1.OptimalBatchSize = optimalTestBatchSize;
       }
 #if NOT
       string deviceSpecString = NNDevicesSpecificationString.ToSpecificationString(DeviceSpec.ComboType, DeviceSpec.Devices);
@@ -116,8 +116,8 @@ namespace Ceres.Commands
                                                         DeviceSpec.ComboType, DeviceSpec.Devices, null);
 
       // Run modified evaluator.
-      var (evaluator3, _) = BackendBench(evaluatorDef1, 16, TRIES, maxBatchSize: MAX_BATCH, show: false); // warmup
-      var (evaluator4, after) = BackendBench(evaluatorDef1, SKIP, TRIES, maxBatchSize: MAX_BATCH);
+      var (evaluator3, _) = BackendBench(evaluatorDef1, 16, TRIES, maxBatchSize: maxBatchSize, show: false); // warmup
+      var (evaluator4, after) = BackendBench(evaluatorDef1, SKIP, TRIES, maxBatchSize: maxBatchSize);
 
       // Output summary statistics.
       static float PctDiff(float v1, float v2) => 100.0f * ((v1 - v2) / v2);
