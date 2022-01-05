@@ -30,12 +30,10 @@ using System.Runtime.CompilerServices;
 namespace Ceres.MCTS.Evaluators
 {
   /// <summary>
-  /// Leaf evaluator which consults Syzygy tablebases 
-  /// on disk via Leela Chess Zero DLL.
-  /// 
-  /// NOTE: Currently only simple WDL support (no DTZ).
+  /// Leaf evaluator which probes Syzygy tablebases 
+  /// and returns optimal WDL evaluation if found.
   /// </summary>
-  public sealed class LeafEvaluatorSyzygyLC0 : LeafEvaluatorBase
+  public sealed class LeafEvaluatorSyzygy : LeafEvaluatorBase
   {
     /// <summary>
     /// Maximum cardinality (number of pieces) supported by tablebases.
@@ -53,7 +51,12 @@ namespace Ceres.MCTS.Evaluators
     public readonly ISyzygyEvaluatorEngine Evaluator;
 
 
-    public LeafEvaluatorSyzygyLC0(string paths, bool forceNoTablebaseTerminals)
+    /// <summary>
+    /// Constructor.
+    /// </summary>
+    /// <param name="paths">Set of paths in which tablebase are found; if null then Ceres.json settings used.</param>
+    /// <param name="forceNoTablebaseTerminals"></param>
+    public LeafEvaluatorSyzygy(string paths = null, bool forceNoTablebaseTerminals = false)
     {
       Evaluator = SyzygyEvaluatorPool.GetSessionForPaths(paths);
       MaxCardinality = Evaluator.MaxCardinality;
@@ -72,7 +75,10 @@ namespace Ceres.MCTS.Evaluators
       //
       // TODO: when implement DTZ access then we would know which move to make immediate
       //       then this would not be needed
-      if (node.IsRoot) return default;
+      if (node.IsRoot)
+      {
+        return default;
+      }
 
       ref readonly Position pos = ref node.Annotation.Pos;
 

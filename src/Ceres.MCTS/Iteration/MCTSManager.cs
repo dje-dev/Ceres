@@ -1086,8 +1086,8 @@ namespace Ceres.MCTS.Iteration
     {
       get
       {
-        LeafEvaluatorSyzygyLC0 syzygyEvaluator = (LeafEvaluatorSyzygyLC0)Context.LeafEvaluators.Find(eval => eval.GetType() == typeof(LeafEvaluatorSyzygyLC0));
-        return syzygyEvaluator == null ? 0 : (int)LeafEvaluatorSyzygyLC0.NumHits.Value;
+        LeafEvaluatorSyzygy syzygyEvaluator = (LeafEvaluatorSyzygy)Context.LeafEvaluators.Find(eval => eval.GetType() == typeof(LeafEvaluatorSyzygy));
+        return syzygyEvaluator == null ? 0 : (int)LeafEvaluatorSyzygy.NumHits.Value;
       }
     }
 

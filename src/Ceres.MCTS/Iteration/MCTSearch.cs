@@ -272,7 +272,7 @@ namespace Ceres.MCTS.Iteration
       bool forceNoTablebaseTerminals = false;
       if (startPos.PieceCount <= 7 && paramsSearch.EnableTablebases)
       {
-        LeafEvaluatorSyzygyLC0 evaluatorTB = new LeafEvaluatorSyzygyLC0(CeresUserSettingsManager.Settings.TablebaseDirectory, false);
+        LeafEvaluatorSyzygy evaluatorTB = new LeafEvaluatorSyzygy(CeresUserSettingsManager.Settings.TablebaseDirectory, false);
         if (startPos.PieceCount <= evaluatorTB.MaxCardinality)
         {
           MGMove ret = evaluatorTB.Evaluator.CheckTablebaseBestNextMove(in startPos, out GameResult result,

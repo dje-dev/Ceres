@@ -354,7 +354,7 @@ namespace Ceres.MCTS.Iteration
 
       if (ParamsSearch.EnableTablebases)
       {
-        evaluatorTB  = new LeafEvaluatorSyzygyLC0(CeresUserSettingsManager.Settings.TablebaseDirectory, Manager.ForceNoTablebaseTerminals);
+        evaluatorTB  = new LeafEvaluatorSyzygy(CeresUserSettingsManager.Settings.TablebaseDirectory, Manager.ForceNoTablebaseTerminals);
         evaluators.Add(evaluatorTB);
         CheckTablebaseBestNextMove = (in Position currentPos, out GameResult result, out List<MGMove> otherWinningMoves, out bool winningMoveListOrderedByDTM)
           => RootTablebaseMoveCheck(in currentPos, out result, out otherWinningMoves, out winningMoveListOrderedByDTM);
@@ -368,7 +368,7 @@ namespace Ceres.MCTS.Iteration
       return evaluators;
     }
 
-    LeafEvaluatorSyzygyLC0 evaluatorTB;
+    LeafEvaluatorSyzygy evaluatorTB;
     LeafEvaluatorSyzygyPly1 evaluatorTBPly1;
 
     MGMove RootTablebaseMoveCheck(in Position currentPos, out GameResult result, out List<MGMove> fullWinningMoveList, out bool winningMoveListOrderedByDTM)

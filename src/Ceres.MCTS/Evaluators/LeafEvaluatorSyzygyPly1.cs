@@ -40,7 +40,7 @@ namespace Ceres.MCTS.Evaluators
     /// <summary>
     /// Supporting tablebase evaluator.
     /// </summary>
-    public readonly LeafEvaluatorSyzygyLC0 Ply0Evaluator;
+    public readonly LeafEvaluatorSyzygy Ply0Evaluator;
 
     /// <summary>
     /// Number of probe successes.
@@ -52,7 +52,7 @@ namespace Ceres.MCTS.Evaluators
     /// Constructor.
     /// </summary>
     /// <param name="ply0Evaluator"></param>
-    public LeafEvaluatorSyzygyPly1(LeafEvaluatorSyzygyLC0 ply0Evaluator, bool forceNoTablebaseTerminals)
+    public LeafEvaluatorSyzygyPly1(LeafEvaluatorSyzygy ply0Evaluator, bool forceNoTablebaseTerminals)
     {
       Ply0Evaluator = ply0Evaluator;
       if (forceNoTablebaseTerminals)
