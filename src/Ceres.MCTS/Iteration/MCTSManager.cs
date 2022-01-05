@@ -854,21 +854,11 @@ namespace Ceres.MCTS.Iteration
     {
       if (!disposed)
       {
-        //      MCTSPosTreeNodeDumper.DumpAllNodes(Context, ref Context.Store.RootNode);
         Context.Tree.Store.Dispose();
 
         // Release references to objects
         Context = null;
 
-        // If the search was sufficeintly large, trigger an aynchronous full garbage collection
-        // We do this now for two reasons:
-        //   - we have just released references to potentially large objects, and
-        //   - possibly this search will result in a move being played followed by waiting time
-        //     during which we can do the GC "for free"
-        //int finalN = Context.Root.N;      
-        //    const int THRESHOLD_N_TRIGGER_GC = 2_000;
-        //    if (finalN >= THRESHOLD_N_TRIGGER_GC)
-        //      ThreadPool.QueueUserWorkItem((obj) => System.GC.Collect(1, GCCollectionMode.Optimized));
         disposed = true;
       }
     }

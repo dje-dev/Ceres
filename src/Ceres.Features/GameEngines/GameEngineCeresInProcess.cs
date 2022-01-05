@@ -199,8 +199,12 @@ namespace Ceres.Features.GameEngines
     {
       reuseNodeCache = Search?.Manager.Context.Tree.NodeCache;
 
+      LastSearch?.Manager.Dispose();
+      Search?.Manager.Dispose();
+
       Search = null;
       LastSearch = null;
+
       isFirstMoveOfGame = true;
       CurrentGameID = gameID;
     }

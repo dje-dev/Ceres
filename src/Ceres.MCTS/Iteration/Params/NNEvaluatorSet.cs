@@ -124,7 +124,12 @@ namespace Ceres.MCTS.Params
     }
 
 
-    public void Warmup(bool alsoCalcStatistics)
+    /// <summary>
+    /// Initializes the evaluators and performs some 
+    /// minimal evaluation to insure any startup overhead is completed.
+    /// </summary>
+    /// <param name="alsoCalcStatistics"></param>
+    public void Warmup(bool alsoCalcStatistics = false)
     {
       if (alsoCalcStatistics)
       {
@@ -194,6 +199,8 @@ namespace Ceres.MCTS.Params
           {
             if (evaluator2 == null)
             {
+              // Pass the first evaluator as the "reference" evaluator
+              // from which the already loaded network weights can be reused.
               Debug.Assert(Evaluator1 != null);
               evaluator2 = NNEvaluatorFactory.BuildEvaluator(EvaluatorDef, Evaluator1);
             }
@@ -232,21 +239,35 @@ namespace Ceres.MCTS.Params
       }
     }
 
+    #region Dispose
 
-    /// <summary>
-    /// Disposes of underlying evaluators.
-    /// </summary>
-    public void Dispose()
+    private bool disposedValue;
+
+    protected virtual void Dispose(bool disposing)
     {
-      evaluator1?.Dispose();
-      evaluator2?.Dispose();
-      evaluatorSecondary?.Dispose();
+      if (!disposedValue)
+      {
+        if (disposing)
+        {
+          evaluator1?.Dispose();
+          evaluator2?.Dispose();
+          evaluatorSecondary?.Dispose();
 
-      evaluator1 = null;
-      evaluator2 = null;
-      evaluatorSecondary = null;
+          evaluator1 = null;
+          evaluator2 = null;
+          evaluatorSecondary = null;
+        }
+
+        disposedValue = true;
+      }
     }
 
+    public void Dispose()
+    {
+      Dispose(disposing: true);
+    }
+
+   #endregion
   }
 
 }

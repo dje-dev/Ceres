@@ -95,7 +95,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     /// </summary>
     public float FractionInUse => (float)Nodes.NumTotalNodes / (float)Nodes.MaxNodes;
 
-    const int MAX_STORES = 256;
+    const int MAX_STORES = 255;
     static ConcurrentBag<int> storeIDs;
 
     public static MCTSNodeStore[] StoresByID = new MCTSNodeStore[MAX_STORES];  
@@ -160,15 +160,17 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       {
         if (disposing)
         {
-          // TODO: dispose managed state (managed objects).
+          // Release from store table.
+          StoresByID[StoreID] = null;
+          storeIDs.Add(StoreID);
+
+          // Release nodes and children.
+          Nodes?.Deallocate();
+          Nodes = null;
+          Children?.Deallocate();
+          Children = null;
         }
 
-        StoresByID[StoreID] = null;
-        storeIDs.Add(StoreID);
-        Nodes?.Deallocate();
-        Nodes = null;
-        Children?.Deallocate();
-        Children = null;
 
         disposedValue = true;
       }
