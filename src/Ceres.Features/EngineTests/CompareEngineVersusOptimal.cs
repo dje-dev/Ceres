@@ -36,6 +36,7 @@ using Ceres.MCTS.Params;
 using Ceres.Features.GameEngines;
 using Ceres.Base.OperatingSystem;
 using Ceres.Features.Players;
+using Ceres.Chess.NNEvaluators.LC0DLL;
 
 #endregion
 
@@ -100,6 +101,8 @@ namespace Ceres.Features.EngineTests
     ParamsSelect sArbiter;
     TimingStats timingStats = new TimingStats();
 
+    ISyzygyEvaluatorEngine tbEngine = null;
+
     public int[] GPUIDs => Params.GPUIDs ?? new int[] { 0 };
     public SearchLimit Limit => Params.Limit with { SearchCanBeExpanded = false };
 
@@ -118,6 +121,11 @@ namespace Ceres.Features.EngineTests
         shutdownRequested = true;
       }); ;
       Console.CancelKeyPress += ctrlCHandler;
+
+      if (CeresUserSettingsManager.Settings.TablebaseDirectory != null)
+      {
+        tbEngine = SyzygyEvaluatorPool.GetSessionForPaths(CeresUserSettingsManager.Settings.TablebaseDirectory);
+      }
 
       // Create default parameters, with smart pruning tuned off.
       ParamsSearch p1 = new ParamsSearch()
@@ -259,6 +267,17 @@ namespace Ceres.Features.EngineTests
             continue;
           }
 
+          // Avoid tablebase positions, if possible
+          // TODO: possibly this should be made an option, and enhance logic to verify engine moves if in TB
+          if (tbEngine != null)
+          {
+            tbEngine.ProbeWDL(pos.FinalPosition, out LC0DLLSyzygyEvaluator.WDLScore score, out LC0DLLSyzygyEvaluator.ProbeState result);
+            if (result == LC0DLLSyzygyEvaluator.ProbeState.Ok)
+            {
+              continue;
+            }
+          }
+
           // Do not allow repeate positions to be processed.
           ulong posHash = pos.FinalPosition.CalcZobristHash(PositionMiscInfo.HashMove50Mode.ValueBoolIfAbove98);
           if (seenPositions.ContainsKey(posHash))
@@ -339,11 +358,22 @@ namespace Ceres.Features.EngineTests
           {
             GameEngineSearchResultCeres searchBaselineLongCeres = searchBaselineLong as GameEngineSearchResultCeres;
 
-            // Determine how much better engine1 was versus engine2 according to the long search
-            var bestMoveFrom1 = searchBaselineLongCeres.Search.SearchRootNode.FollowMovesToNode(new MGMove[] { move1 });
-            var bestMoveFrom2 = searchBaselineLongCeres.Search.SearchRootNode.FollowMovesToNode(new MGMove[] { move2 });
-            scoreBestMove1 = (float)-bestMoveFrom1.Q;
-            scoreBestMove2 = (float)-bestMoveFrom2.Q;
+            if (searchBaselineLongCeres.BestMove.Reason == BestMoveInfo.BestMoveReason.TablebaseImmediateMove)
+            {
+              // Tablebase result, no search. 
+              // TODO: eventually do lookup in tablebase and make sure the two chosen moves
+              //       by the engines are equivalent (same result).
+              scoreBestMove1 = 0;
+              scoreBestMove2 = 0;
+            }
+            else
+            {
+              // Determine how much better engine1 was versus engine2 according to the long search
+              var bestMoveFrom1 = searchBaselineLongCeres.Search.SearchRootNode.FollowMovesToNode(new MGMove[] { move1 });
+              var bestMoveFrom2 = searchBaselineLongCeres.Search.SearchRootNode.FollowMovesToNode(new MGMove[] { move2 });
+              scoreBestMove1 = (float)-bestMoveFrom1.Q;
+              scoreBestMove2 = (float)-bestMoveFrom2.Q;
+            }
           }
           else
           {
