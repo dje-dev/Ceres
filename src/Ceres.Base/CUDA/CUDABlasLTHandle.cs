@@ -24,10 +24,12 @@ namespace Ceres.Base.CUDA
   /// </summary>
   public struct CudaBlasLTHandle
   {
+    public readonly IntPtr Handle;
+    public bool IsNull => Handle == default;
+
     public CudaBlasLTHandle(CudaBlasHandle handle)
     {
       Handle = handle.Pointer;
     }
-    public readonly IntPtr Handle;
   }
 }

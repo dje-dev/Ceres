@@ -45,6 +45,7 @@ namespace Ceres.Chess.NNBackends.CUDA
     /// </summary>
     public CudaDeviceVariable<FP16>[] Tensors;
 
+
     /// <summary>
     /// Constructor.
     /// </summary>
@@ -64,26 +65,35 @@ namespace Ceres.Chess.NNBackends.CUDA
       }
     }
 
-    
-    bool disposed = false;
 
-    /// <summary>
-    /// Disposes of associated CUDA memory objects.
-    /// </summary>
-    public void Dispose()
+    #region Dispose
+
+    private bool disposedValue;
+
+    protected virtual void Dispose(bool disposing)
     {
-      if (!disposed)
+      if (!disposedValue)
       {
-        Scratch.Dispose();
-        ScratchSecondHalf.Dispose();
-        for (int i=0; i<Tensors.Length;i++)
+        if (disposing)
         {
-          Tensors[i].Dispose();
+          Scratch.Dispose();
+          ScratchSecondHalf.Dispose();
+          for (int i = 0; i < Tensors.Length; i++)
+          {
+            Tensors[i].Dispose();
+          }
         }
 
-        disposed = true;
+        disposedValue = true;
       }
     }
+
+    public void Dispose()
+    {
+      Dispose(disposing: true);
+    }
+
+    #endregion
   }
 
 }

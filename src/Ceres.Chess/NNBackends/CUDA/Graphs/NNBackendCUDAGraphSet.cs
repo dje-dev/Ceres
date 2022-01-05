@@ -153,23 +153,27 @@ namespace Ceres.Chess.NNBackends.CUDA
 
     #region Disposal
 
-    ~NNBackendCUDAGraphSet()
+    private bool disposedValue;
+
+    protected virtual void Dispose(bool disposing)
     {
-      Dispose();
+      if (!disposedValue)
+      {
+        if (disposing)
+        {
+          foreach (NNBackendCUDAGraph graph in graphs.Values)
+          {
+            graph.Dispose();
+          }
+        }
+
+        disposedValue = true;
+      }
     }
 
-
-    bool disposed = true;
     public void Dispose()
     {
-      if (!disposed)
-      {
-        foreach (NNBackendCUDAGraph graph in graphs.Values)
-        {
-          graph.Dispose();
-        }
-        disposed = true;
-      }
+      Dispose(disposing: true);
     }
 
     #endregion

@@ -29,7 +29,7 @@ namespace Ceres.Chess.NNBackends.CUDA
   /// <summary>
   /// Set of variables used to exchange data with GPU.
   /// </summary>
-  public class NNBackendInputOutput
+  public class NNBackendInputOutput : IDisposable
   {
     public const int NUM_OUTPUT_POLICY = EncodedPolicyVector.POLICY_VECTOR_LENGTH;
     public const int NUM_INPUT_PLANES = 112;
@@ -58,6 +58,7 @@ namespace Ceres.Chess.NNBackends.CUDA
     // GPU
     internal CudaDeviceVariable<ulong> input_masks_gpu_;
     internal CudaDeviceVariable<float> input_val_gpu_;
+    private bool disposedValue;
 
     internal NNBackendInputOutput(int maxBatchSize, bool wdl, bool moves_left)
     {
@@ -84,6 +85,37 @@ namespace Ceres.Chess.NNBackends.CUDA
       }
     }
 
-  };
 
+    #region Disposal
+
+    protected virtual void Dispose(bool disposing)
+    {
+      if (!disposedValue)
+      {
+        if (disposing)
+        {
+          input_masks_gpu_.Dispose();
+          input_val_gpu_.Dispose();
+          InputBoardMasks.Dispose();
+          InputBoardValues.Dispose();
+          InputMoveIndices.Dispose();
+          OutputPolicyHeadMasked.Dispose();
+        }
+
+        InputNumMovesUsed = null;
+        OutputMovesLeftHead = null;
+        OutputValueHead = null;
+
+        // TODO: set large fields to null
+        disposedValue = true;
+      }
+    }
+
+    public void Dispose()
+    {
+      Dispose(disposing: true);
+    }
+
+    #endregion
+  }
 }

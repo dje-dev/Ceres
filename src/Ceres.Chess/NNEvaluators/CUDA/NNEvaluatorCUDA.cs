@@ -432,8 +432,7 @@ namespace Ceres.Chess.NNEvaluators.CUDA
 
     protected override void DoShutdown()
     {
-      // Release layers, but only if no ReferenceEvaluator
-      //       Evaluator.Dispose(); // **** TBD
+      Evaluator.Dispose();
     }
 
 

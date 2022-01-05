@@ -30,7 +30,7 @@ namespace Ceres.Chess.NNBackends.CUDA
   /// Captures all the state variables related to CUDA
   /// as used by a specific instance of an NN backend.
   /// </summary>
-  public record NNBackendExecContext
+  public record NNBackendExecContext : IDisposable
   {
     /// <summary>
     /// Underlying CUDA on device on which operations execute.
@@ -107,6 +107,41 @@ namespace Ceres.Chess.NNBackends.CUDA
       return $"<NNBackendExecContext on GPU {Device.GPUID} {(ReferenceLayers == null ? "without" : "with")} reference layer>";
     }
 
+
+    #region Dispose
+
+    private bool disposedValue;
+
+    protected virtual void Dispose(bool disposing)
+    {
+      if (!disposedValue)
+      {
+        if (disposing)
+        {
+          CuBlas.Dispose();
+          Stream.Dispose();
+          Stream2?.Dispose();
+          if (!CuBlasLT.IsNull)
+          {
+            throw new NotImplementedException("CuBlasLT disposal not yet implemented");
+          }
+
+         // NOTE: the DeviceContext should not be disposed,
+         //       they are retained and shared in a static Dictionary
+         //       for the life of the session.
+        }
+
+        ReferenceLayers = null;
+        disposedValue = true;
+      }
+    }
+
+    public void Dispose()
+    {
+      Dispose(disposing: true);
+    }
+
+    #endregion
   }
 
 }

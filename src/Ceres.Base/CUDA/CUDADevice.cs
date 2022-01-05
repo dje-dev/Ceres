@@ -29,7 +29,7 @@ namespace Ceres.Base.CUDA
   /// including the underlying CudaContext and various sychronization objects,
   /// and facilitating kernel loading.
   /// </summary>
-  public class CUDADevice
+  public class CUDADevice : IDisposable
   {
     /// <summary>
     /// Index of underlying GPU device.
@@ -120,6 +120,7 @@ namespace Ceres.Base.CUDA
     #region Statics
 
     public static ConcurrentDictionary<int, CUDADevice> contexts = new();
+    private bool disposedValue;
 
     public static CUDADevice GetContext(int gpuID)
     {
@@ -144,11 +145,32 @@ namespace Ceres.Base.CUDA
 
     #endregion
 
+    #region Dispose
 
     public override string ToString()
     {
       return $"<CUDADevice GPU {GPUID} on CUDA context {Context.Context.Pointer}>";
     }
 
+    protected virtual void Dispose(bool disposing)
+    {
+      if (!disposedValue)
+      {
+        if (disposing)
+        {
+          Context.Dispose();
+        }
+
+        disposedValue = true;
+      }
+    }
+
+    public void Dispose()
+    {
+      Dispose(disposing: true);
+      GC.SuppressFinalize(this);
+    }
+
+    #endregion
   }
 }

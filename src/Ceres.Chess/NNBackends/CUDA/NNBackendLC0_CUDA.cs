@@ -57,7 +57,7 @@ namespace Ceres.Chess.NNBackends.CUDA
   /// Neural network backend for LC0 weights files 
   /// (via CUDA directly in C#).
   /// </summary>
-  public partial class NNBackendLC0_CUDA
+  public partial class NNBackendLC0_CUDA : IDisposable
   {
     #region Internal options
 
@@ -110,7 +110,7 @@ namespace Ceres.Chess.NNBackends.CUDA
     /// Optionally another NNBackendCUDA already initialized
     /// which shares same parameters (from which weights can be reused).
     /// </summary>
-    public readonly NNBackendLC0_CUDA ReferenceBackend;
+    NNBackendLC0_CUDA ReferenceBackend;
 
     #region Optional concurrency management for results buffer
 
@@ -251,7 +251,7 @@ namespace Ceres.Chess.NNBackends.CUDA
     /// <param name="enableCUDAGraphs"></param>
     /// <param name="graphBatchSizeDivisor"></param>
     /// <param name="referenceBackend"></param>
-    public NNBackendLC0_CUDA(int gpuID, Net net, bool saveActivations, 
+    public NNBackendLC0_CUDA(int gpuID, Net net, bool saveActivations = false, 
                              int maxBatchSize = DEFAULT_MAX_BATCH_SIZE,
                              bool dumpTiming = false,
                              bool enableCUDAGraphs = true,
@@ -267,7 +267,7 @@ namespace Ceres.Chess.NNBackends.CUDA
 
       try
       {
-        InitCUDAContextAndTakeWriteLock(Assembly.GetCallingAssembly());
+        InitCUDAContextAndTakeWriteLock();
 
         InitGPUVars();
 
@@ -291,7 +291,7 @@ namespace Ceres.Chess.NNBackends.CUDA
     }
 
     
-    private void InitCUDAContextAndTakeWriteLock(Assembly callingAssembly)
+    private void InitCUDAContextAndTakeWriteLock()
     {
       CUDADevice deviceContext = null;
       using (new TimingBlock("InitCUDA", DIAGNOSTIC ? TimingBlock.LoggingType.ConsoleWithMemoryTracking : TimingBlock.LoggingType.None))
@@ -333,7 +333,7 @@ namespace Ceres.Chess.NNBackends.CUDA
         }
       }
 
-      ExecContext = new(deviceContext, stream, stream2, cuBlas, ltHandle, callingAssembly, DumpTiming, deviceProperties.MaxSharedMemoryPerBlockOptin);
+      ExecContext = new (deviceContext, stream, stream2, cuBlas, ltHandle, GetType().Assembly, DumpTiming, deviceProperties.MaxSharedMemoryPerBlockOptin);
     }
 
     void SetCUDAState()
@@ -460,7 +460,7 @@ namespace Ceres.Chess.NNBackends.CUDA
 
     CudaDeviceVariable<short> moveMasksGPU;
     CudaDeviceVariable<float> outputMaskedPoliciesGPU;
-
+    private bool disposedValue;
 
     public void ExtractMaskedPolicies(CudaStream stream, CudaDeviceVariable<FP16> policiesRaw, int batchSize)
     {
@@ -805,6 +805,45 @@ namespace Ceres.Chess.NNBackends.CUDA
         throw new Exception($"Moves left head format {net.Format.NetworkFormat.MovesLeft} not supported.");
       }
     }
+
+    #region Disposal
+
+    protected virtual void Dispose(bool disposing)
+    {
+      if (!disposedValue)
+      {
+        if (disposing)
+        {
+// may be reused?  Layers = new NNBackendCUDALayers(ExecContext, net, weights, SaveActivations, ReferenceBackend?.Layers);
+
+          inputOutput?.Dispose();
+          mlhTemp?.Dispose();
+          wdlTemp?.Dispose();
+          valueHeadFC2Temp?.Dispose();
+
+          networkInputs?.Dispose();
+          networkOutputs?.Dispose();
+
+          graphSet?.Dispose();
+
+          moveMasksGPU?.Dispose();
+          outputMaskedPoliciesGPU?.Dispose();
+
+          ExecContext.Dispose();
+        }
+
+
+        ReferenceBackend = null;
+        disposedValue = true;
+      }
+    }
+
+    public void Dispose()
+    {
+      Dispose(disposing: true);
+    }
+
+    #endregion
   }
 
 

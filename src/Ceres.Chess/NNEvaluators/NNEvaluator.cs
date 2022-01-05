@@ -31,24 +31,20 @@ namespace Ceres.Chess.NNEvaluators
   /// <summary>
   /// Abstract base class for objects which can evaluate positions via neural network.
   /// </summary>
-  public abstract class NNEvaluator : IDisposable
+  public abstract class NNEvaluator
   {
-    internal object PersistentID { set; get; }
-    public bool IsPersistent => PersistentID != null;
-    public int NumInstanceReferences { internal set; get; }
-    public bool IsShutdown { private set; get; } = false;
-
     [Flags]
-    public enum InputTypes 
-    { 
-      Undefined = 0, 
-      Boards = 1, 
-      Hashes = 2, 
-      Moves = 4, 
-      Positions = 8, 
+    public enum InputTypes
+    {
+      Undefined = 0,
+      Boards = 1,
+      Hashes = 2,
+      Moves = 4,
+      Positions = 8,
 
-      All =  Boards | Hashes | Moves | Positions
+      All = Boards | Hashes | Moves | Positions
     };
+
 
     /// <summary>
     /// String description of underlying engine type.
@@ -72,19 +68,17 @@ namespace Ceres.Chess.NNEvaluators
     public virtual bool PolicyReturnedSameOrderMoveList => false;
 
 
+
+    internal object PersistentID { set; get; }
+    public bool IsPersistent => PersistentID != null;
+    public int NumInstanceReferences { internal set; get; }
+    public bool IsShutdown { private set; get; } = false;
+
     /// <summary>
-    /// Performs quick benchmarks on evaluator to determine performance
-    /// includng single positions and batchs and optionally estimated 
-    /// batch size breaks (cut points beyond which speed drops due to batching effects).
+    /// If the underlying execution engine is threadsafe, 
+    /// i.e. can support concurrent execution from 
     /// </summary>
-    /// <param name="computeBreaks"></param>
-    /// <param name="maxSeconds"></param>
-    public virtual void CalcStatistics(bool computeBreaks, float maxSeconds = 1.0f)
-    {
-      (float npsSingletons, float npsBigBatch, int[] breaks) = NNEvaluatorBenchmark.EstNPS(this, computeBreaks);
-      PerformanceStats = new NNEvaluatorPerformanceStats() { EvaluatorType = GetType(), SingletonNPS = npsSingletons, 
-                                                             BigBatchNPS = npsBigBatch, Breaks = breaks };
-    }
+    public virtual bool SupportsParallelExecution => true; 
 
     public virtual float EstNPSBatch => PerformanceStats == null ? 30_000 : PerformanceStats.BigBatchNPS;
     public virtual float EstNPSSingleton => PerformanceStats == null ? 500 : PerformanceStats.SingletonNPS;
@@ -378,6 +372,26 @@ namespace Ceres.Chess.NNEvaluators
         // Passs sub-batch to delegate.
         processor((i * subBatchSize, result));
       }
+    }
+
+
+    /// <summary>
+    /// Performs quick benchmarks on evaluator to determine performance
+    /// includng single positions and batchs and optionally estimated 
+    /// batch size breaks (cut points beyond which speed drops due to batching effects).
+    /// </summary>
+    /// <param name="computeBreaks"></param>
+    /// <param name="maxSeconds"></param>
+    public virtual void CalcStatistics(bool computeBreaks, float maxSeconds = 1.0f)
+    {
+      (float npsSingletons, float npsBigBatch, int[] breaks) = NNEvaluatorBenchmark.EstNPS(this, computeBreaks);
+      PerformanceStats = new NNEvaluatorPerformanceStats()
+      {
+        EvaluatorType = GetType(),
+        SingletonNPS = npsSingletons,
+        BigBatchNPS = npsBigBatch,
+        Breaks = breaks
+      };
     }
 
 

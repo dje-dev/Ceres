@@ -47,6 +47,11 @@ namespace Ceres.Chess.LC0.WeightsProtobuf
   public class LC0ProtobufNet
   {
     /// <summary>
+    /// Name of file from which the net originated.
+    /// </summary>
+    public readonly string FileName;
+
+    /// <summary>
     /// Underling machine generated protobuf definition.
     /// </summary>
     public readonly Net Net;
@@ -135,6 +140,8 @@ namespace Ceres.Chess.LC0.WeightsProtobuf
         throw new ArgumentException($"No such protobuf file found {fn}");
       }
 
+      FileName = fn;
+
       // Read data from file, decompressing if necessary.
       byte[] data = FileUtils.IsZippedFile(fn) ? CompressionUtils.GetDecompressedBytes(fn) 
                                                : File.ReadAllBytes(fn);
@@ -153,6 +160,15 @@ namespace Ceres.Chess.LC0.WeightsProtobuf
       }
     }
 
+    /// <summary>
+    /// Returns string summary.
+    /// </summary>
+    /// <returns></returns>
+    public override string ToString()
+    {
+      return $"<LC0NetProtobuf {NumFilters}x{NumBlocks} from {FileName}>";
+    }
+
 
     /// <summary>
     /// Dumps summay of network characteristics to Console.
@@ -161,7 +177,7 @@ namespace Ceres.Chess.LC0.WeightsProtobuf
     {
       Console.WriteLine(this);
 
-      Console.WriteLine("Filters         : " + Net.Weights.Residuals[0].Conv1.BnMeans.Params.Length / 2);
+      Console.WriteLine("Filters         : " + NumFilters);
       Console.WriteLine("Blocks          : " + Net.Weights.Residuals.Count);
 
       Console.WriteLine("SE Ratio        : " + SERatio);

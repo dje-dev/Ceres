@@ -65,23 +65,32 @@ namespace Ceres.Chess.NNBackends.CUDA
       }
     }
 
-    bool disposed = false;
+    #region Disposal
 
-    /// <summary>
-    /// Disposes of associated CUDA memory objects.
-    /// </summary>
-    public void Dispose()
+    private bool disposedValue;
+
+    protected virtual void Dispose(bool disposing)
     {
-      if (!disposed)
+      if (!disposedValue)
       {
-        PolicyOut.Dispose();
-        ValueOut.Dispose();
-        MLHOut?.Dispose();
-        ValueHeadFC2Out.Dispose();
+        if (disposing)
+        {
+          PolicyOut.Dispose();
+          ValueOut.Dispose();
+          MLHOut?.Dispose();
+          ValueHeadFC2Out.Dispose();
+        }
 
-        disposed = true;
+        disposedValue = true;
       }
     }
+
+    public void Dispose()
+    {
+      Dispose(disposing: true);
+    }
+
+    #endregion
   }
 
 }
