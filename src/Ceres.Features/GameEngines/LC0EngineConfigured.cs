@@ -217,6 +217,7 @@ namespace Ceres.Features.GameEngines
                                          ParamsSelect paramsSelect,
                                          NNEvaluatorDef evaluatorDef,
                                          INNWeightsFileInfo network,
+                                         int processorGroupID,
                                          bool resetStateAndCachesBeforeMoves,
                                          bool emulateCeresOptions,
                                          bool verboseOutput,
@@ -231,8 +232,11 @@ namespace Ceres.Features.GameEngines
                                                            emulateCeresOptions, verboseOutput, overrideEXE, 
                                                            forceDisableSmartPruning, alwaysFillHistory, 
                                                            overrideBatchSize, overrideCacheSize);
-      if (extraCommandLineArgs != null) lzOptions += " " + extraCommandLineArgs;
-      return new LC0Engine(EXE, lzOptions, resetStateAndCachesBeforeMoves);
+      if (extraCommandLineArgs != null)
+      {
+        lzOptions += " " + extraCommandLineArgs;
+      }
+      return new LC0Engine(EXE, processorGroupID,  lzOptions, resetStateAndCachesBeforeMoves);
     }
 
 

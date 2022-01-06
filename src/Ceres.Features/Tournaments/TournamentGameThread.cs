@@ -16,6 +16,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 using Ceres.Base.Benchmarking;
 using Ceres.Base.Environment;
@@ -27,7 +28,6 @@ using Chess.Ceres.PlayEvaluation;
 using Ceres.Chess.GameEngines;
 using Ceres.Chess.UserSettings;
 using Ceres.MCTS.Iteration;
-using System.Linq;
 
 #endregion
 
@@ -66,6 +66,10 @@ namespace Ceres.Features.Tournaments
     {
       Def = def;
       ParentStats = parentTestResults;
+      for (int i = 0; i < def.Engines.Length; i++)
+      {
+        def.Engines[i].EngineDef.ProcessorGroupID = def.ProcessGroupIndex;
+      }
     }
 
 
@@ -187,7 +191,10 @@ namespace Ceres.Features.Tournaments
         {
           GameEngine refEngine = Run.Engines.FirstOrDefault(e => e.ID == Def.ReferenceEngineId);
           if (refEngine == null)
+          {
             throw new Exception("Error in loading reference engine");
+          }
+
           int index =  Array.IndexOf(Run.Engines, refEngine);
           for (int i = 0; i < Run.Engines.Length; i++)
           {
@@ -205,6 +212,7 @@ namespace Ceres.Features.Tournaments
         }
       }
 
+      // Dispose of all engines.
       foreach (GameEngine engine in Run.Engines)
       {
         engine.Dispose();
@@ -249,17 +257,6 @@ namespace Ceres.Features.Tournaments
 
 
     HashSet<int> openingsFinishedAtLeastOnce = new();
-
-#if NOT
-    public record TournamentGameRunRequest
-    {
-      public string PGNFileName;
-      public bool Engine2White;
-      public int OpeningIndex;
-      public int GameSequenceNum;
-      public int RoundNumber;
-    }
-#endif
 
     private TournamentGameInfo RunGame(string pgnFileName, bool engine2White, int openingIndex, int gameSequenceNum, int roundNumber)
     {

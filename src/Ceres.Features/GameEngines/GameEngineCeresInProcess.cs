@@ -136,6 +136,8 @@ namespace Ceres.Features.GameEngines
     /// <param name="childSelectParams">optional non-default child selection parameters </param>
     /// <param name="gameLimitManager">optional override manager for search limits</param>
     /// <param name="logFileName">optional name of file to which to write detailed log</param>
+    /// <param name="moveImmediateIfOnlyOneMove">if engine should chose best move immediately without search if only one legal move</param>
+    /// <param name="processorGroupID">id of processor group on which engine should execute</param>
     public GameEngineCeresInProcess(string id,
                                     NNEvaluatorDef evaluatorDef,
                                     NNEvaluatorDef evaluatorDefSecondary = null,
@@ -143,7 +145,8 @@ namespace Ceres.Features.GameEngines
                                     ParamsSelect childSelectParams = null,
                                     IManagerGameLimit gameLimitManager = null,
                                     string logFileName = null,
-                                    bool moveImmediateIfOnlyOneMove = true) : base(id)
+                                    bool moveImmediateIfOnlyOneMove = true,
+                                    int processorGroupID = 0) : base(id, processorGroupID)
     {
       if (evaluatorDef == null)
       {

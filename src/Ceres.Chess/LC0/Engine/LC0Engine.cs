@@ -49,7 +49,7 @@ namespace Ceres.Chess.LC0.Engine
     /// <param name="exePath"></param>
     /// <param name="options"></param>
     /// <param name="resetStateAndCachesBeforeMoves"></param>
-    public LC0Engine(string exePath, string options, bool resetStateAndCachesBeforeMoves)
+    public LC0Engine(string exePath, int processorGroupID, string options, bool resetStateAndCachesBeforeMoves)
     {
       Runner = new UCIGameRunner(exePath, resetStateAndCachesBeforeMoves, options, null);
     }

@@ -244,7 +244,11 @@ namespace Ceres.Features.Suites
       }
 
       bool leelaVerboseMovesStats = true;//xxx Def.NumTestPos == 1;
-      Func<object> makeExternalEngine = null;
+      Func<int, object> makeExternalEngine = null;
+
+      // TODO: eventually create clones of engine definitions
+      //       then set each one to a different processorGroupID
+      const int processorGroupID = 0;
 
       if (Def.ExternalEngineDef != null)
       {
@@ -253,11 +257,11 @@ namespace Ceres.Features.Suites
           GameEngineDefLC0 lc0EngineDef = Def.ExternalEngineDef.EngineDef as GameEngineDefLC0;
           bool forceDisableSmartPruning = lc0EngineDef.ForceDisableSmartPruning;
           const bool FILL_HISTORY = true;
-          makeExternalEngine = () =>
+          makeExternalEngine = (int processorGroupID) =>
           {
             LC0Engine engine = LC0EngineConfigured.GetLC0Engine(null, null, Def.Engine1Def.EvaluatorDef,
                                                                 NNWeightsFiles.LookupNetworkFile(Def.Engine1Def.EvaluatorDef.Nets[0].Net.NetworkID),
-                                                                true,
+                                                                processorGroupID, true,
                                                                 false, leelaVerboseMovesStats, forceDisableSmartPruning,
                                                                 lc0EngineDef.OverrideEXE, FILL_HISTORY, lc0EngineDef.ExtraCommandLineArgs);
             // WARMUP
@@ -271,13 +275,21 @@ namespace Ceres.Features.Suites
           //bool enableTranpsositions = Def.Engine2Def.SearchParams.Execution.TranspositionMode != TranspositionMode.None;
           //bool enableTablebases = Def.Engine2Def.SearchParams.EnableTablebases;
 
-          makeExternalEngine = () => Def.ExternalEngineDef.EngineDef.CreateEngine();
+          makeExternalEngine = delegate (int processorGroupID)
+          {
+            if (processorGroupID != 0)
+            {
+              // See above; would need to clone EngineDefs for each thread
+              throw new NotImplementedException();
+            }
+            return Def.ExternalEngineDef.EngineDef.CreateEngine();
+          };
         }
       }
 
       // Don't create too many non_Ceres threads since each one will consume seaprate GPU memory or threads
       int maxLeelaThreads = Math.Min(numExternalGameProcesses, numConcurrentSuiteThreads);
-      ObjectPool<object> externalEnginePool = new ObjectPool<object>(makeExternalEngine, maxLeelaThreads);
+      ObjectPool<object> externalEnginePool = new ObjectPool<object>(() => makeExternalEngine(processorGroupID), maxLeelaThreads);
 
       using (new TimingBlock("EPDS"))
       {

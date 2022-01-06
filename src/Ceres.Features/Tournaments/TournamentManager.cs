@@ -227,21 +227,11 @@ namespace Ceres.Features.Tournaments
         // Make sure the threads will use either different or pooled evaluators
         if (NumConcurrent > 1)
         {
+          // Spread instances across different devices and
+          // and processor groups to distribute computation.
+          tournamentDefClone.ProcessGroupIndex = i;
           TrySetRelativeDeviceIDIfNotPooled(tournamentDefClone, i);
         }
-
-        //if (Def.Player1Def is GameEngineDefCeres
-        // && Def.Player2Def is GameEngineDefCeres
-        // && Def.Player1Def.SearchLimit.IsNodesLimit
-        // && Def.Player2Def.SearchLimit.IsNodesLimit)
-        //{
-        //    GameEngineDefCeres thisDefCeres1 = Def.Player1Def.EngineDef as GameEngineDefCeres;
-        //    GameEngineDefCeres thisDefCeres2 = Def.Player2Def.EngineDef as GameEngineDefCeres;
-
-        //    // TODO: possibly add optimization here which will share trees
-        //    //       with ReusePositionEvaluationsFromOtherTree.
-        //    //       See the suite manager for an example of how this is done.
-        //}
 
         TournamentGameThread gameTest = new TournamentGameThread(tournamentDefClone, parentTest);
         gameThreads.Add(gameTest);

@@ -36,6 +36,11 @@ namespace Ceres.Chess.GameEngines
     public readonly string ID;
 
     /// <summary>
+    /// Processor group on which engine will execute.
+    /// </summary>
+    public int ProcessorGroupID;
+
+    /// <summary>
     /// Delegate type that may be called (potentially many times) during search,
     /// allowing updates to progress or other actions.
     /// </summary>
@@ -65,9 +70,11 @@ namespace Ceres.Chess.GameEngines
     /// Constructor.
     /// </summary>
     /// <param name="id"></param>
-    public GameEngine(string id)
+    /// <param name="processorGroupID"></param>
+    public GameEngine(string id, int processorGroupID)
     {
       ID = id;
+      ProcessorGroupID = processorGroupID;
     }
 
 

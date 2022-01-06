@@ -113,7 +113,8 @@ namespace Ceres.Chess.GameEngines
                          List<string> uciSetOptionCommands = null,
                          ProgressCallback callback = null,
                          bool resetGameBetweenMoves = false,
-                         string extraArgs = null) : base(name)
+                         string extraArgs = null,
+                         int processorGroupID = 0) : base(name, processorGroupID)
     {
       if (callback is not null) throw new NotImplementedException("Internal error: Callbacks not currently supported");
       if (!File.Exists(executablePath)) throw new Exception($"UCI executable file not found {executablePath}");

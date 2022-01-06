@@ -54,6 +54,7 @@ namespace Ceres.Features.Tournaments
     /// </summary>
     public GameEngine[] Engines { get; set; }
 
+
     /// <summary>
     /// Constructor from a given tournament defintion.
     /// </summary>
@@ -64,8 +65,12 @@ namespace Ceres.Features.Tournaments
 
       // Create and warmup all engines (in parallel).
       Engines = new GameEngine[Def.Engines.Length];
-      Parallel.For(0, Def.Engines.Length, i => Engines[i] = Def.Engines[i].EngineDef.CreateEngine());
-      Parallel.ForEach(Engines, e => e.Warmup());
+      Parallel.For(0, Def.Engines.Length,
+        delegate (int i)
+        {
+          Engines[i] = Def.Engines[i].EngineDef.CreateEngine();
+          Engines[i].Warmup();
+        });
     }
 
 
@@ -91,39 +96,6 @@ namespace Ceres.Features.Tournaments
       Def.Player2Def = Def.Engines[gameEngine2Index];
 
     }
-
-#if NOT_USED
-    static GameEngine GetEngine(GameEngineUCISpec engineSpec, string suffix, 
-                                NNEvaluatorDef evaluatorDef,
-                                ParamsSearch paramsSearch, ParamsSelect paramsSelect, IManagerGameLimit timeManager)
-    {
-      bool resetMovesBetweenMoves = !paramsSearch.TreeReuseEnabled;
-      bool enableTranpsositions = paramsSearch.Execution.TranspositionMode != TranspositionMode.None;
-
-      // Create requested type of engine
-      if (engineSpec == null)
-      {
-        return new GameEngineCeresInProcess("Ceres_" + suffix, evaluatorDef, paramsSearch, paramsSelect, timeManager, null);
-      }
-      else if (engineSpec.Name == "LC0")
-      {
-        if (evaluatorDef == null) 
-          throw new Exception("EvaluatorDef must be specified when running LC0 engine");
-
-        // TODO: do we really want to emulate always here? probably not
-        // WARNING: above.
-        bool forceDisableSmartPruning = false;
-        return new GameEngineLC0("LZ0_" + suffix, evaluatorDef.Nets[0].Net.NetworkID, 
-                                 forceDisableSmartPruning, false, 
-                                 paramsSearch, paramsSelect, evaluatorDef,                             
-                                 null, CeresUserSettingsManager.GetLC0ExecutableFileName());
-      }
-      else
-      {
-        return engineSpec.CreateEngine();
-      }
-    }
-#endif
 
   }
 }

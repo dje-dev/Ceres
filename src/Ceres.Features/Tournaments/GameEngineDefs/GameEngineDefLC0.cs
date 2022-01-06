@@ -132,7 +132,8 @@ namespace Ceres.Features.GameEngines
         return new GameEngineLC0(ID, EvaluatorDef.Nets[0].Net.NetworkID, 
                                  ForceDisableSmartPruning, emulate,
                                  SearchParamsEmulate, SelectParamsEmulate, EvaluatorDef,                               
-                                 null, OverrideEXE, extraCommandLineArgs:ExtraCommandLineArgs);   
+                                 null, OverrideEXE, extraCommandLineArgs:ExtraCommandLineArgs,
+                                 processorGroupID:ProcessorGroupID);   
     }
 
 

@@ -74,7 +74,8 @@ namespace Ceres.Features.GameEngines
                                  List<string> uciSetOptionCommands = null,
                                  GameEngine.ProgressCallback callback = null,
                                  string overrideEXE = null,
-                                 bool disableFutilityStopSearch = false) 
+                                 bool disableFutilityStopSearch = false,
+                                 int processorGroupID = 0) 
       : base(id)
     {
       EvaluatorDef = evaluatorDef;
@@ -82,6 +83,7 @@ namespace Ceres.Features.GameEngines
       Callback = callback;
       OverrideEXE = overrideEXE ?? Assembly.GetExecutingAssembly().Location;
       DisableFutilityStopSearch = disableFutilityStopSearch;
+      ProcessorGroupID = processorGroupID;
     }
 
 

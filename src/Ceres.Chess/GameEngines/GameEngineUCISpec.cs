@@ -70,6 +70,11 @@ namespace Ceres.Chess.GameEngines
     /// </summary>
     public bool ResetGameBetweenMoves;
 
+    /// <summary>
+    /// Index of processor group on which engine should run.
+    /// </summary>
+    public int ProcessorGroupID;
+
 
     /// <summary>
     /// Constructor.
@@ -87,9 +92,13 @@ namespace Ceres.Chess.GameEngines
                              string syzygyPath = null,
                              GameEngine.ProgressCallback callback = null,
                              bool resetGameBetweenMoves = false,
-                             List<string> uciSetOptionCommands = null)
+                             List<string> uciSetOptionCommands = null,
+                             int processorGroupID = 0)
     {
-      if (exePath is null) throw new ArgumentNullException(nameof(exePath));
+      if (exePath is null)
+      {
+        throw new ArgumentNullException(nameof(exePath));
+      }
 
       Name = name;
       EXEPath = exePath;
@@ -99,6 +108,7 @@ namespace Ceres.Chess.GameEngines
       UCISetOptionCommands = uciSetOptionCommands;
       Callback = callback;
       ResetGameBetweenMoves = resetGameBetweenMoves;
+      ProcessorGroupID = processorGroupID;
     }
 
 
@@ -113,7 +123,8 @@ namespace Ceres.Chess.GameEngines
                                HashSizeMB,
                                SyzygyPath,
                                UCISetOptionCommands,
-                               Callback, ResetGameBetweenMoves);
+                               Callback, ResetGameBetweenMoves, 
+                               processorGroupID:ProcessorGroupID);
     }
 
 

@@ -72,6 +72,7 @@ namespace Ceres.Features.GameEngines
     /// <param name="overrideBatchSize"></param>
     /// <param name="overrideCacheSize"></param>
     /// <param name="extraCommandLineArgs"></param>
+    /// <param name="processorGroupID"></param>
     public GameEngineLC0(string id, string networkID, bool forceDisableSmartPruning = false,
                          bool emulateCeresSettings = false, 
                          ParamsSearch searchParams = null, ParamsSelect selectParams = null, 
@@ -82,7 +83,8 @@ namespace Ceres.Features.GameEngines
                          bool alwaysFillHistory = true,
                          int? overrideBatchSize = null,
                          int? overrideCacheSize = null,
-                         string extraCommandLineArgs = null) : base(id)
+                         string extraCommandLineArgs = null,
+                         int processorGroupID = 0) : base(id, processorGroupID)
     {
       SetupAction = setupAction;
       if (SetupAction != null)
@@ -93,9 +95,10 @@ namespace Ceres.Features.GameEngines
       bool resetStateAndCachesBeforeMoves = searchParams != null && !searchParams.TreeReuseEnabled;
 
       LC0Engine = LC0EngineConfigured.GetLC0Engine(searchParams, selectParams, paramsNN, 
-                                                   NNWeightsFiles.LookupNetworkFile(networkID), emulateCeresSettings,
+                                                   NNWeightsFiles.LookupNetworkFile(networkID),
+                                                   processorGroupID, emulateCeresSettings,
                                                    resetStateAndCachesBeforeMoves, verbose,
-                                                   forceDisableSmartPruning, overrideEXE,
+                                                   forceDisableSmartPruning,  overrideEXE,
                                                    alwaysFillHistory, extraCommandLineArgs,
                                                    overrideBatchSize, overrideCacheSize);
     }

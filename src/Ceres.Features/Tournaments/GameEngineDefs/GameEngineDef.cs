@@ -33,6 +33,11 @@ namespace Ceres.Features.GameEngines
     public readonly string ID;
 
     /// <summary>
+    /// Index of processor group on which engine should execute.
+    /// </summary>
+    public int ProcessorGroupID;
+
+    /// <summary>
     /// Constructor.
     /// </summary>
     /// <param name="id"></param>

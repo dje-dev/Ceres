@@ -130,6 +130,11 @@ namespace Ceres.Features.Tournaments
     public int AdjudicateDrawThresholdNumMoves = 10;
 
     /// <summary>
+    /// The index of the processor group to which the engines should be affinitized. 
+    /// </summary>
+    public int ProcessGroupIndex = 0;
+
+    /// <summary>
     /// Creation time of tournament (use as a unique ID for generating PGN)
     /// </summary>
     public readonly DateTime StartTime;
