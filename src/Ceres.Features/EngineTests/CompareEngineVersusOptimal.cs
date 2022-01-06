@@ -37,6 +37,7 @@ using Ceres.Features.GameEngines;
 using Ceres.Base.OperatingSystem;
 using Ceres.Features.Players;
 using Ceres.Chess.NNEvaluators.LC0DLL;
+using Ceres.MCTS.MTCSNodes.Analysis;
 
 #endregion
 
@@ -474,6 +475,10 @@ namespace Ceres.Features.EngineTests
       {
         Console.WriteLine(desc);
         (search as GameEngineSearchResultCeres).Search.Manager.DumpRootMoveStatistics();
+
+        Console.WriteLine(desc);
+        MCTSPosTreeNodeDumper.DumpPV((search as GameEngineSearchResultCeres).Search.SearchRootNode, true, Console.Out);
+
       }
     }
 
