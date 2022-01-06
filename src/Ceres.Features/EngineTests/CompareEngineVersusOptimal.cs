@@ -455,12 +455,29 @@ namespace Ceres.Features.EngineTests
                             + $"  {countMuchBetter,5:N0} {countMuchWorse,5:N0}    {scoreBestMove1,5:F2}   {diffStrfromBest} {sfDisagreeChar}  "
                             + $"  {moveStr1,7}  {moveStr2,7}  {sfMoveStr,7} "
                             + $"  {pos.FinalPosition.FEN}");
+
+            // Write full detail on any huge errors.
+            if (MathF.Abs(diffFromBest) > Params.QDiffThresholdDumpVerboseMoveStats)
+            {
+              DumpEngineVerboseMoveStats("Engine 1 Move Stats", search1);
+              DumpEngineVerboseMoveStats("Engine 2 Move Stats", search2);
+              DumpEngineVerboseMoveStats("Arbiter Move Stats", searchBaselineLong);
+              Console.WriteLine();
+            }
           }
 
         }
       }
     }
 
+    private static void DumpEngineVerboseMoveStats(string desc, GameEngineSearchResult search)
+    {
+      if (search is GameEngineSearchResultCeres)
+      {
+        Console.WriteLine(desc);
+        (search as GameEngineSearchResultCeres).Search.Manager.DumpRootMoveStatistics();
+      }
+    }
 
     private static void GetBestMoveAndNode(PositionWithHistory pos, GameEngineSearchResult search1, out MCTSNode root1, out MGMove move1)
     {

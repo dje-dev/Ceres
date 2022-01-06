@@ -47,6 +47,7 @@ namespace Ceres.Features.EngineTests
   /// <param name="RunStockfishCrosscheck"></param>
   /// <param name="PosResultCallback"></param>
   /// <param name="EngineUCIFileNameEXE"></param>
+  /// <param name="QDiffThresholdDumpVerboseMoveStats"></param>
   public record CompareEngineParams(string Description, string PGNFileName, int NumPositions,
                                     Predicate<PositionWithHistory> PosFilter,
                                     CompareEnginesVersusOptimal.PlayerMode Player1, string NetworkID1,
@@ -59,7 +60,8 @@ namespace Ceres.Features.EngineTests
                                     float Engine1LimitMultiplier = 1.0f, float EngineArbiterLimitMultiplier = 7f,
                                     bool RunStockfishCrosscheck = false,
                                     Action<CompareEnginePosResult> PosResultCallback = null,
-                                    string EngineUCIFileNameEXE = null)
+                                    string EngineUCIFileNameEXE = null,
+                                    float QDiffThresholdDumpVerboseMoveStats = float.MaxValue)
   {
   }
 }
