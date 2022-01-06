@@ -189,44 +189,6 @@ namespace Ceres.Features.EngineTests
       NNEvaluatorDef evaluatorDef2 = Params.NetworkID2 != null ? NNEvaluatorDef.FromSpecification(Params.NetworkID2, $"GPU:{gpuID}") : null;
       NNEvaluatorDef evaluatorDefOptimal = Params.NetworkArbiterID != null ? NNEvaluatorDef.FromSpecification(Params.NetworkArbiterID, $"GPU:{gpuID}") : null;
 
-      GameEngine MakeEngine(PlayerMode playerMode, string networkID, NNEvaluatorDef evaluatorDef,
-                            ParamsSearch paramsSearch, ParamsSelect paramsSelect)
-      {
-        if (playerMode == PlayerMode.Ceres)
-        {
-          GameEngineCeresInProcess ge = new ("Ceres", evaluatorDef, null, paramsSearch, paramsSelect);
-          ge.GatherVerboseMoveStats = true;
-          return ge;
-        }
-        else if (playerMode == PlayerMode.LC0)
-        {
-          return new GameEngineLC0("LC0", networkID, DisablePruning, false, paramsSearch, paramsSelect, evaluatorDef, 
-                                   verbose:true, extraCommandLineArgs:"--move-overhead=0");
-        }
-        else if (playerMode == PlayerMode.Stockfish14_1)
-        {
-          string sf14FN = Path.Combine(CeresUserSettingsManager.Settings.DirExternalEngines, SoftwareManager.IsLinux ? "stockfish14.1" : "stockfish14.1.exe");
-          GameEngineDef engineDef = new GameEngineDefUCI("SF14", new GameEngineUCISpec("SF14", sf14FN, 16,
-                                                         2048, CeresUserSettingsManager.Settings.TablebaseDirectory));
-          return engineDef.CreateEngine();
-        }
-        else if (playerMode == PlayerMode.UCI)
-        {
-          if (Params.EngineUCIFileNameEXE == null)
-          {
-            throw new Exception("EngineUCIFileNameEXE must be set when using PlayerMode.UCI");
-          }
-
-          GameEngineDefCeresUCI engineDefUCI = new ("CeresPreNC", evaluatorDef, overrideEXE: Params.EngineUCIFileNameEXE, disableFutilityStopSearch: DisablePruning);
-          return engineDefUCI.CreateEngine();
-        }
-        else
-        {
-          throw new NotImplementedException("Unsupported opponent mode " + playerMode);
-        }
-      }
-
-
       GameEngine engine1 = null;
       GameEngine engine2 = null;
       GameEngine engineOptimal = null;
@@ -417,7 +379,7 @@ namespace Ceres.Features.EngineTests
           GameEngineSearchResult resultSF = null;
           if (Params.RunStockfishCrosscheck && MathF.Abs(diffFromBest) > THRESHOLD_DIFF)
           {
-            const int SF_NODES_MULTIPLIER = 750;
+            const long SF_NODES_MULTIPLIER = 750;
             SearchLimit sfLimit = Limit * Params.EngineArbiterLimitMultiplier * (Limit.IsNodesLimit ? SF_NODES_MULTIPLIER : 1); 
             resultSF = engineSF.Search(pos, sfLimit);
           }
@@ -467,6 +429,42 @@ namespace Ceres.Features.EngineTests
           }
 
         }
+      }
+    }
+
+    private GameEngine MakeEngine(PlayerMode playerMode, string networkID, NNEvaluatorDef evaluatorDef, ParamsSearch paramsSearch, ParamsSelect paramsSelect)
+    {
+      if (playerMode == PlayerMode.Ceres)
+      {
+        GameEngineCeresInProcess ge = new("Ceres", evaluatorDef, null, paramsSearch, paramsSelect);
+        ge.GatherVerboseMoveStats = true;
+        return ge;
+      }
+      else if (playerMode == PlayerMode.LC0)
+      {
+        return new GameEngineLC0("LC0", networkID, DisablePruning, false, paramsSearch, paramsSelect, evaluatorDef,
+                                 verbose: true, extraCommandLineArgs: "--move-overhead=0");
+      }
+      else if (playerMode == PlayerMode.Stockfish14_1)
+      {
+        string sf14FN = Path.Combine(CeresUserSettingsManager.Settings.DirExternalEngines, SoftwareManager.IsLinux ? "stockfish14.1" : "stockfish14.1.exe");
+        GameEngineDef engineDef = new GameEngineDefUCI("SF14", new GameEngineUCISpec("SF14", sf14FN, 16,
+                                                       2048, CeresUserSettingsManager.Settings.TablebaseDirectory));
+        return engineDef.CreateEngine();
+      }
+      else if (playerMode == PlayerMode.UCI)
+      {
+        if (Params.EngineUCIFileNameEXE == null)
+        {
+          throw new Exception("EngineUCIFileNameEXE must be set when using PlayerMode.UCI");
+        }
+
+        GameEngineDefCeresUCI engineDefUCI = new("CeresPreNC", evaluatorDef, overrideEXE: Params.EngineUCIFileNameEXE, disableFutilityStopSearch: DisablePruning);
+        return engineDefUCI.CreateEngine();
+      }
+      else
+      {
+        throw new NotImplementedException("Unsupported opponent mode " + playerMode);
       }
     }
 
