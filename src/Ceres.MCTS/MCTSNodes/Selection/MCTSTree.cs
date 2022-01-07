@@ -343,11 +343,14 @@ namespace Ceres.MCTS.LeafExpansion
         node.EvalResult.Initialize(node.Terminal, node.WinP, node.LossP, node.MPosition);
 
         // Re-establish linkages to transposition root node, if any.
-        if (TranspositionRoots.TryGetValue(node.StructRef.ZobristHash, out int transpositionNodeIndex))
+        if (TranspositionRoots != null)
         {
-          if (transpositionNodeIndex != node.Index)
+          if (TranspositionRoots.TryGetValue(node.StructRef.ZobristHash, out int transpositionNodeIndex))
           {
-            node.InfoRef.TranspositionRootNodeIndex = new MCTSNodeStructIndex(transpositionNodeIndex);
+            if (transpositionNodeIndex != node.Index)
+            {
+              node.InfoRef.TranspositionRootNodeIndex = new MCTSNodeStructIndex(transpositionNodeIndex);
+            }
           }
         }
       }
