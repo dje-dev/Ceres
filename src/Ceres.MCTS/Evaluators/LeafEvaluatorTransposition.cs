@@ -86,9 +86,7 @@ namespace Ceres.MCTS.Evaluators
       TranspositionRoots = transpositionRoots;
       this.tree = tree;
 
-      // TODO: currently hardcoded at 2048, potentially
-      // dynamically detemrine possibly smaller necessary value
-      pendingTranspositionRoots = new (ulong, int)[2048];
+      pendingTranspositionRoots = new (ulong, int)[tree.Context.ParamsSearch.Execution.MaxBatchSize];
     }
 
 
@@ -227,7 +225,9 @@ namespace Ceres.MCTS.Evaluators
       else
       {
         // Never allow root to be transposition root.
-        if (node.Index != 1)
+        // Also never record draws, since they might be draw by repetition which is history dependent
+        // (and other draw types are trivial to detect if subsequently encountered.
+        if (node.Index != 1 && node.Terminal != GameResult.Draw)
         {
           int pendingIndex = Interlocked.Increment(ref nextIndexPendingTranspositionRoots) - 1;
           pendingTranspositionRoots[pendingIndex] = (node.StructRef.ZobristHash, node.Index);
