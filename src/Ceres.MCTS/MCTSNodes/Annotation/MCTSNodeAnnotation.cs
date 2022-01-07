@@ -14,6 +14,7 @@
 #region Using directives
 
 using System;
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
 using Ceres.Chess;
@@ -146,15 +147,17 @@ namespace Ceres.MCTS.MTCSNodes.Annotation
 
       // Boards from prior history
       int priorPositionsIndex = 0;
-      while (nextBoardIndex < EncodedPositionBoards.NUM_MOVES_HISTORY && priorPositionsIndex < node.Tree.EncodedPriorPositions.Count)
+      List<EncodedPositionBoard> encodedPriorPositions = node.Tree.EncodedPriorPositions;
+      while (nextBoardIndex < EncodedPositionBoards.NUM_MOVES_HISTORY 
+          && priorPositionsIndex < encodedPriorPositions.Count)
       {
         if (nextBoardIndex % 2 == 1)
         {
-          destBoards[nextBoardIndex++] = node.Tree.EncodedPriorPositions[priorPositionsIndex].ReversedAndFlipped;
+          destBoards[nextBoardIndex++] = encodedPriorPositions[priorPositionsIndex].ReversedAndFlipped;
         }
         else
         {
-          destBoards[nextBoardIndex++] = node.Tree.EncodedPriorPositions[priorPositionsIndex];
+          destBoards[nextBoardIndex++] = encodedPriorPositions[priorPositionsIndex];
         }
 
         priorPositionsIndex++;

@@ -16,6 +16,7 @@
 using System;
 using System.Diagnostics;
 using System.Buffers;
+using System.Threading.Tasks;
 
 using Ceres.Base.DataTypes;
 
@@ -30,6 +31,7 @@ using Ceres.Chess.LC0.Batches;
 
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.Iteration;
+using Ceres.Base.Threading;
 
 #endregion
 
@@ -186,13 +188,16 @@ namespace Ceres.MCTS.Evaluators
     /// <param name="context"></param>
     /// <param name="nodes"></param>
     /// <returns></returns>
-    int SetBatch(MCTSIterator context, Span<MCTSNode> nodes)
+    int SetBatch(MCTSIterator context, ListBounded<MCTSNode> nodes)
     {
-      if (nodes.Length > 0)
+      if (nodes.Count > 0)
       {
-        VerifyBatchAllocated(nodes.Length);
+        VerifyBatchAllocated(nodes.Count);
 
-        for (int i = 0; i < nodes.Length; i++)
+        const int NUM_ITEMS_PER_THREAD = 64;
+        ParallelOptions parallelOptions = ParallelUtils.ParallelOptions(nodes.Count, NUM_ITEMS_PER_THREAD);
+        Parallel.For(0, nodes.Count, parallelOptions, 
+          delegate (int i)
         {
           nodes[i].Annotate();
           Debug.Assert(nodes[i].Annotation.Moves.NumMovesUsed > 0);
@@ -202,12 +207,12 @@ namespace Ceres.MCTS.Evaluators
           {
             rawPosArray[i] = rawPosArray[i].Mirrored;
           }
-        }
+        });
 
         if (EvaluatorDef.Location == NNEvaluatorDef.LocationType.Local)
         {
           const bool SET_POSITIONS = false; // we assume this is already done (if needed)
-          Batch.Set(rawPosArray, nodes.Length, SET_POSITIONS);
+          Batch.Set(rawPosArray, nodes.Count, SET_POSITIONS);
         }
 
         if (BatchEvaluatorIndexDynamicSelector != null)
@@ -216,7 +221,7 @@ namespace Ceres.MCTS.Evaluators
         }
       }
 
-      return nodes.Length;
+      return nodes.Count;
     }
 
     public enum EvalResultTarget { PrimaryEvalResult, SecondaryEvalResult };
@@ -228,11 +233,11 @@ namespace Ceres.MCTS.Evaluators
     /// </summary>
     /// <param name="nodes"></param>
     /// <param name="results"></param>
-    void RetrieveResults(Span<MCTSNode> nodes, IPositionEvaluationBatch results, EvalResultTarget resultTarget, bool markSecondaryNN)
+    void RetrieveResults(ListBounded<MCTSNode> nodes, IPositionEvaluationBatch results, EvalResultTarget resultTarget, bool markSecondaryNN)
     {
       //if (EvaluateUsingSecondaryEvaluator) Console.WriteLine("early batch " + nodes.Length);
 
-      for (int i = 0; i < nodes.Length; i++)
+      for (int i = 0; i < nodes.Count; i++)
       {
         MCTSNode node = nodes[i];
 
@@ -293,7 +298,7 @@ namespace Ceres.MCTS.Evaluators
     }
 
 
-    void RunLocal(Span<MCTSNode> nodes, EvalResultTarget resultTarget)
+    void RunLocal(ListBounded<MCTSNode> nodes, EvalResultTarget resultTarget)
     {
       const bool RETRIEVE_SUPPLEMENTAL = false;
 
@@ -302,7 +307,7 @@ namespace Ceres.MCTS.Evaluators
       if (useSecondary)
       {
         evaluator = localEvaluatorSecondary;
-        MCTSManager.NumSecondaryEvaluations += nodes.Length;
+        MCTSManager.NumSecondaryEvaluations += nodes.Count;
         MCTSManager.NumSecondaryBatches++;
       }
 
@@ -328,7 +333,7 @@ namespace Ceres.MCTS.Evaluators
           Batch.Moves = new MGMoveList[Batch.MaxBatchSize];
         }
 
-        for (int i = 0; i < nodes.Length; i++)
+        for (int i = 0; i < nodes.Count; i++)
         {
           MCTSNode node = nodes[i];
 
@@ -361,7 +366,7 @@ namespace Ceres.MCTS.Evaluators
     }
 
 
-    public void BatchGenerate(MCTSIterator context, Span<MCTSNode> nodes, EvalResultTarget resultTarget)
+    public void BatchGenerate(MCTSIterator context, ListBounded<MCTSNode> nodes, EvalResultTarget resultTarget)
     {
       try
       {

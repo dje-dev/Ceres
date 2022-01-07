@@ -45,7 +45,7 @@ namespace Ceres.MCTS.Search
         //Debug.Assert(nodes[0].EvalResultSecondary.IsNull); // null evaluator indicates should have been sent here
       }
 
-      Evaluator.BatchGenerate(context, nodes.AsSpan, resultTarget);
+      Evaluator.BatchGenerate(context, nodes, resultTarget);
 
       return nodes;
     }
