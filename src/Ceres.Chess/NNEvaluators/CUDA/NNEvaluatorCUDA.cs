@@ -230,8 +230,9 @@ namespace Ceres.Chess.NNEvaluators.CUDA
 
     IPositionEvaluationBatch GetPostprocessedBatch(IEncodedPositionBatchFlat positions, short[] numMoves, short[] moveIndices, bool retrieveSupplementalResults, bool copyResults)
     {
-      ParallelOptions parallelOptions = ParallelUtils.ParallelOptions(positions.NumPos, NUM_POSITIONS_PER_THREAD_OUTPUT);
+      Evaluator.ExtractActivations(positions.NumPos);
 
+      ParallelOptions parallelOptions = ParallelUtils.ParallelOptions(positions.NumPos, NUM_POSITIONS_PER_THREAD_OUTPUT);
       Parallel.ForEach(Partitioner.Create(0, positions.NumPos), parallelOptions,
         range =>
         {
@@ -241,19 +242,22 @@ namespace Ceres.Chess.NNEvaluators.CUDA
       NNEvaluatorResultActivations[] activations = null;
       if (retrieveSupplementalResults)
       {
+        throw new NotImplementedException();
+#if NOT
         float[,] rawActivations = Evaluator.inputOutput.OutputValueHeadFC2;
         activations = new NNEvaluatorResultActivations[positions.NumPos];
         for (int i = 0; i < activations.Length; i++)
         {
           activations[i] = new NNEvaluatorResultActivations(i, null, rawActivations);
         }
+#endif
       }
 
       return new PositionEvaluationBatch(IsWDL, HasM, positions.NumPos, policies, w, l, m, activations, new TimingStats(), copyResults);
     }
 
 
-    #region Optional Async support
+#region Optional Async support
 
     protected override Task DoLaunchEvaluateBatchAsync(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
     {
@@ -282,7 +286,7 @@ namespace Ceres.Chess.NNEvaluators.CUDA
       return GetPostprocessedBatch(positions, numMoves, moveIndices, retrieveSupplementalResults, makeCopyOfResults);
     }
 
-    #endregion
+#endregion
 
 
     const int NUM_POSITIONS_PER_THREAD_INPUT = 48;
@@ -366,37 +370,59 @@ namespace Ceres.Chess.NNEvaluators.CUDA
     }
 
 
+
     [SkipLocalsInit]
     private void PrepareOutputPositions(short[] numMovesArray, short[] moveIndices, int startPos, int endPos)
     {
+      // TODO: Improve performance of softmax.
+      //       Or use AVX (https://github.com/reyoung/avx_mathfun)
+
       NNBackendInputOutput io = Evaluator.inputOutput;
 
       Span<float> policiesMasked = io.OutputPolicyHeadMasked.AsSpan();
       Span<short> moveIndicesSpan = moveIndices != null ? moveIndices.AsSpan() : io.InputMoveIndices.AsSpan();
       Span<short> numMovesSpan = numMovesArray != null ? numMovesArray.AsSpan() :  io.InputNumMovesUsed.AsSpan();
 
+      Span<FP16> mlhSpan = Evaluator.mlhOutputBuffer.AsSpan();
+      Span<FP16> wdlOutputBuffer = Evaluator.wdlOutputBuffer.AsSpan();
+
       for (int i = startPos; i < endPos; i++)
       {
-        int valueOffset = i * (IsWDL ? 3 : 1);
-
         if (IsWDL)
         {
-          w[i] = (FP16)io.OutputValueHead[i, 0];
-          if (float.IsNaN(w[i]))
+          int valueOffset = i * (IsWDL ? 3 : 1);
+
+          // ...........................................................................
+          float win = wdlOutputBuffer[valueOffset + 0];
+          float draw = wdlOutputBuffer[valueOffset + 1];
+          float loss = wdlOutputBuffer[valueOffset + 2];
+
+          float max = MathF.Max(MathF.Max(win, draw), loss);
+
+          win = MathF.Exp(win - max);
+          draw = MathF.Exp(draw - max);
+          loss = MathF.Exp(loss - max);
+
+          float sum = win + draw + loss;
+          if (float.IsNaN(sum))
           {
             throw new Exception($"Neural network backend returned NaN value head from evaluator {this}");
           }
 
-          l[i] = (FP16)io.OutputValueHead[i, 2];
+          win /= sum;
+          loss /= sum;
+
+          w[i] = (FP16)win;
+          l[i] = (FP16)loss;
         }
         else
         {
-          w[i] = (FP16)io.OutputValueHead[i, 0];
+          w[i] = wdlOutputBuffer[i];
         }
 
         if (HasM)
         {
-          m[i] = (FP16)io.OutputMovesLeftHead[i];
+          m[i] = mlhSpan[i];
         }
 
         int numMoves = numMovesSpan[i];

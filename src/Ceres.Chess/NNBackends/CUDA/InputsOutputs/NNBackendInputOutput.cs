@@ -48,13 +48,6 @@ namespace Ceres.Chess.NNBackends.CUDA
     // Outputs
     internal CUDAPinnedMemory<float> OutputPolicyHeadMasked;
 
-    static public float[,] OutputValueHeadRaw; // before exponentiation and normalization. EXPERIMENTAL STATIC
-
-    internal float[,] OutputValueHead;
-    internal float[,] OutputValueHeadFC2;
-
-    internal float[] OutputMovesLeftHead;
-
     // GPU
     internal CudaDeviceVariable<ulong> input_masks_gpu_;
     internal CudaDeviceVariable<float> input_val_gpu_;
@@ -73,16 +66,6 @@ namespace Ceres.Chess.NNBackends.CUDA
       InputNumMovesUsed = new short[maxBatchSize];
 
       OutputPolicyHeadMasked = new CUDAPinnedMemory<float>(maxBatchSize * MAX_MOVES);
-      OutputValueHead = new float[maxBatchSize, (wdl ? 3 : 1)];
-
-      if (moves_left)
-      {
-        OutputMovesLeftHead = new float[maxBatchSize];
-      }
-      else
-      {
-        OutputMovesLeftHead = null;
-      }
     }
 
 
@@ -103,8 +86,6 @@ namespace Ceres.Chess.NNBackends.CUDA
         }
 
         InputNumMovesUsed = null;
-        OutputMovesLeftHead = null;
-        OutputValueHead = null;
 
         // TODO: set large fields to null
         disposedValue = true;

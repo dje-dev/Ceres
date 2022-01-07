@@ -194,9 +194,9 @@ namespace Ceres.Chess.NNBackends.CUDA
 
     long scratchSizeBytes;
 
-    CUDAPinnedMemory<FP16> mlhTemp;
-    CUDAPinnedMemory<FP16> wdlTemp;
-    CUDAPinnedMemory<FP16> valueHeadFC2Temp;
+    internal CUDAPinnedMemory<FP16> mlhOutputBuffer;
+    internal CUDAPinnedMemory<FP16> wdlOutputBuffer;
+    internal CUDAPinnedMemory<FP16> valueHeadFC2OutputBuffer;
 
     #endregion
 
@@ -439,14 +439,14 @@ namespace Ceres.Chess.NNBackends.CUDA
       networkOutputs = new NNOutputCudaVariables(MaxBatchSize, HasWDL, HasMLH);
 
 
-      if (mlhTemp == null)
+      if (mlhOutputBuffer == null)
       {
-        mlhTemp = new CUDAPinnedMemory<FP16>(MaxBatchSize);
-        wdlTemp = new CUDAPinnedMemory<FP16>(MaxBatchSize * (HasWDL ? 3 : 1));
+        mlhOutputBuffer = new CUDAPinnedMemory<FP16>(MaxBatchSize);
+        wdlOutputBuffer = new CUDAPinnedMemory<FP16>(MaxBatchSize * (HasWDL ? 3 : 1));
 
         if (SaveActivations)
         {
-          valueHeadFC2Temp = new CUDAPinnedMemory<FP16>(MaxBatchSize * 128);
+          valueHeadFC2OutputBuffer = new CUDAPinnedMemory<FP16>(MaxBatchSize * 128);
         }
       }
     }
@@ -558,8 +558,6 @@ namespace Ceres.Chess.NNBackends.CUDA
       // Retrieve results
       ExecContext.Stream.Synchronize();
 
-      ExtractValueAndMLHOutputs(batchSize, io);
-
       if (DumpTiming)
       {
         Console.WriteLine("CUDA DETAIL - Batch size " + batchSize);
@@ -572,79 +570,47 @@ namespace Ceres.Chess.NNBackends.CUDA
     {
       // TODO: the use of async copies with pinned memory probably not worthwhile
       ExtractMaskedPolicies(ExecContext.Stream, networkOutputs.PolicyOut, batchSize);
-      wdlTemp.CopyToHostAsync(networkOutputs.ValueOut, batchSize * (HasWDL ? 3 : 1), ExecContext.Stream);
+      wdlOutputBuffer.CopyToHostAsync(networkOutputs.ValueOut, batchSize * (HasWDL ? 3 : 1), ExecContext.Stream);
       if (SaveActivations)
       {
-        valueHeadFC2Temp.CopyToHostAsync(networkOutputs.ValueHeadFC2Out, batchSize * 128, ExecContext.Stream);
+        valueHeadFC2OutputBuffer.CopyToHostAsync(networkOutputs.ValueHeadFC2Out, batchSize * 128, ExecContext.Stream);
       }
 
       if (HasMLH)
       {
-        mlhTemp.CopyToHostAsync(networkOutputs.MLHOut, batchSize, ExecContext.Stream);
+        mlhOutputBuffer.CopyToHostAsync(networkOutputs.MLHOut, batchSize, ExecContext.Stream);
       }
     }
 
-    private void ExtractValueAndMLHOutputs(int batchSize, NNBackendInputOutput io)
+    internal void ExtractActivations(int batchSize)
     {
       // Improve speed here.
-      // Better (vectorized) FP32 here: https://gist.github.com/rygorous/2156668
+      // Better (vectorized) FP32 to FP16 here: https://gist.github.com/rygorous/2156668
       // Alternate or in addition,the versions in ILGPU seems much faster (non-vectorized)
 
       unsafe
       {
-        FP16.ToFloat(wdlTemp.AsSpan(), io.OutputValueHead, batchSize, HasWDL ? 3 : 1);
-
         // TODO: Experimental only, eventually remove
         if (SaveActivations)
         {
-          if (NNBackendInputOutput.OutputValueHeadRaw == null) NNBackendInputOutput.OutputValueHeadRaw = new float[io.OutputValueHead.GetLength(0), io.OutputValueHead.GetLength(1)];
-          Array.Copy(io.OutputValueHead, NNBackendInputOutput.OutputValueHeadRaw, batchSize * 3);
-        }
-
-        // TODO: Improve performance of softmax.
-        // Currently 0.030ms for 1000. Or use AVX (https://github.com/reyoung/avx_mathfun)
-        if (HasWDL)
-        {
-          // Value softmax done cpu side.
-          for (int i = 0; i < batchSize; i++)
+          throw new NotImplementedException();
+#if NOT
+          if (NNBackendInputOutput.OutputValueHeadRaw == null)
           {
-            float win = io.OutputValueHead[i, 0];
-            float draw = io.OutputValueHead[i, 1];
-            float loss = io.OutputValueHead[i, 2];
-
-            float max = MathF.Max(MathF.Max(win, draw), loss);
-
-            win = MathF.Exp(win - max);
-            draw = MathF.Exp(draw - max);
-            loss = MathF.Exp(loss - max);
-
-            float sum = win + draw + loss;
-
-            if (float.IsNaN(sum))
-            {
-              throw new Exception("NaN in value head");
-            }
-
-            win /= sum;
-            loss /= sum;
-            draw = 1.0f - win - loss;
-
-            io.OutputValueHead[i, 0] = win;
-            io.OutputValueHead[i, 1] = draw;
-            io.OutputValueHead[i, 2] = loss;
+            NNBackendInputOutput.OutputValueHeadRaw = new float[inputOutput.OutputValueHead.GetLength(0), inputOutput.OutputValueHead.GetLength(1)];
           }
+          Array.Copy(inputOutput.OutputValueHead, NNBackendInputOutput.OutputValueHeadRaw, batchSize * 3);
+#endif
         }
 
         if (SaveActivations)
         {
-          Span<FP16> valueFC2Activations = valueHeadFC2Temp.AsSpan();
+          throw new NotImplementedException();
+#if NOT
+          Span<FP16> valueFC2Activations = valueHeadOutputBuffer.AsSpan();
           int layerWidth = valueFC2Activations.Length / MaxBatchSize;
-          io.OutputValueHeadFC2 = FP16.ToFloat(valueFC2Activations, batchSize, layerWidth);
-        }
-
-        if (HasMLH)
-        {
-          FP16.ToFloat(mlhTemp.AsSpan(), io.OutputMovesLeftHead, batchSize);
+          inputOutput.OutputValueHeadFC2 = FP16.ToFloat(valueFC2Activations, batchSize, layerWidth);
+#endif
         }
       }
     }
@@ -806,7 +772,7 @@ namespace Ceres.Chess.NNBackends.CUDA
       }
     }
 
-    #region Disposal
+#region Disposal
 
     protected virtual void Dispose(bool disposing)
     {
@@ -817,9 +783,9 @@ namespace Ceres.Chess.NNBackends.CUDA
 // may be reused?  Layers = new NNBackendCUDALayers(ExecContext, net, weights, SaveActivations, ReferenceBackend?.Layers);
 
           inputOutput?.Dispose();
-          mlhTemp?.Dispose();
-          wdlTemp?.Dispose();
-          valueHeadFC2Temp?.Dispose();
+          mlhOutputBuffer?.Dispose();
+          wdlOutputBuffer?.Dispose();
+          valueHeadFC2OutputBuffer?.Dispose();
 
           networkInputs?.Dispose();
           networkOutputs?.Dispose();
@@ -843,7 +809,7 @@ namespace Ceres.Chess.NNBackends.CUDA
       Dispose(disposing: true);
     }
 
-    #endregion
+#endregion
   }
 
 
