@@ -156,7 +156,7 @@ namespace Ceres.MCTS.Params
     /// <summary>
     /// Target number of policies to be initialized by each thread.
     /// </summary>
-    public int SetPoliciesNumPoliciesPerThread = 32 * ParallelMultiplier;
+    public int SetPoliciesNumPoliciesPerThread = 48 * ParallelMultiplier;
 
 
   }
