@@ -67,13 +67,6 @@ namespace Ceres.MCTS.Iteration
     public MCTSNode Root => Context.Root;
 
     /// <summary>
-    /// Ambient context of the current MCTS worker thread
-    /// </summary>
-    [ThreadStatic]
-    public static MCTSIterator ThreadSearchContext;
-
-
-    /// <summary>
     /// Statistic tracking total number of seconds spent
     /// in the operation of making a tree node the new root
     /// (used for tree reuse).
@@ -244,7 +237,6 @@ namespace Ceres.MCTS.Iteration
       }
       Context = new MCTSIterator(this, store, reuseOtherContextForEvaluatedNodes, reusePositionCache, reuseNodeCache, reuseTranspositionRoots,
                                  nnEvaluators, searchParams, childSelectParams, searchLimit.MaxTreeNodes, estNumNodes);
-      ThreadSearchContext = Context;
 
       TerminationManager = new MCTSFutilityPruning(this, searchLimit.SearchMoves, searchMovesTablebaseRestricted);
       LimitManager = limitManager;
@@ -262,7 +254,6 @@ namespace Ceres.MCTS.Iteration
     public void SaveCache(string cacheFileName)
     {
       Context.Tree.PositionCache.SaveToDisk(cacheFileName);
-
     }
 
 
@@ -278,8 +269,6 @@ namespace Ceres.MCTS.Iteration
       SearchLimit = searchLimit;
 
       CheckMemoryExhaustion();
-
-      ThreadSearchContext = this.Context;
 
       Context.ProgressCallback = progressCallback;
 

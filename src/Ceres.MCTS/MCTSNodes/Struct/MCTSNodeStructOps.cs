@@ -537,14 +537,20 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <param name="p"></param>
     /// <param name="w"></param>
     /// <param name="u"></param>
-    public void GatherChildInfo(MCTSIterator context, MCTSNodeStructIndex index,
+    internal void GatherChildInfo(MCTSIterator context, MCTSNodeStructIndex index,
                                 int selectorID, int depth, int maxIndex,
-                                Span<float> n, Span<float> nInFlight, Span<float> p, Span<float> w, Span<float> u)
+                                GatheredChildStats stats)
     {
       MCTSNodeStore store = context.Tree.Store;
       Span<MCTSNodeStruct> nodes = store.Nodes.nodes.Span;
 
-      Debug.Assert(maxIndex >= 0 && (maxIndex + 1) <= n.Length);
+//      Debug.Assert(maxIndex >= 0 && (maxIndex + 1) <= n.Length);
+
+      Span<float> n = stats.N.Span;
+      Span<float> nInFlight = stats.InFlight.Span;
+      Span<float> p = stats.P.Span;
+      Span<float> w = stats.W.Span;
+      Span<float> u = stats.U.Span;
 
       // N.B. This prefetch is critical for performance, circa +15% for CPU bound searches
       PossiblyPrefetchNodeAndChildrenInRange(store, index, 0, (maxIndex + 1));

@@ -15,7 +15,6 @@
 
 using System;
 using System.Diagnostics;
-using Ceres.Base.DataType;
 using Ceres.Base.Math;
 using Ceres.MCTS.Environment;
 using Ceres.MCTS.Iteration;
@@ -32,26 +31,6 @@ namespace Ceres.MCTS.MTCSNodes
     /// <summary>
     /// Internal class that holds the spans in which the child statistcs are gathered.
     /// </summary>
-    private class GatheredChildStats
-    {
-      internal SpanAligned<float> N;
-      internal SpanAligned<float> InFlight;
-      internal SpanAligned<float> P;
-      internal SpanAligned<float> W;
-      internal SpanAligned<float> U;
-
-      internal GatheredChildStats()
-      {
-        const int ALIGNMENT = 64; // For AVX efficiency
-
-        N = new SpanAligned<float>(MCTSScoreCalcVector.MAX_CHILDREN, ALIGNMENT);
-        InFlight = new SpanAligned<float>(MCTSScoreCalcVector.MAX_CHILDREN, ALIGNMENT);
-        P = new SpanAligned<float>(MCTSScoreCalcVector.MAX_CHILDREN, ALIGNMENT);
-        W = new SpanAligned<float>(MCTSScoreCalcVector.MAX_CHILDREN, ALIGNMENT);
-        U = new SpanAligned<float>(MCTSScoreCalcVector.MAX_CHILDREN, ALIGNMENT);
-      }
-    }
-
     [ThreadStatic] static GatheredChildStats gatherStats;
 
 
@@ -116,9 +95,7 @@ namespace Ceres.MCTS.MTCSNodes
       // Gather necessary fields
       // TODO: often NInFlight of parent is null (thus also children) and we could
       //       have special version of Gather which didn't bother with that
-      nodeRef.GatherChildInfo(Context, new MCTSNodeStructIndex(Index), selectorID, depth, numToProcess - 1,
-                              gatherStatsNSpan, gatherStatsInFlightSpan,
-                              gatherStatsPSpan, gatherStatsWSpan, gatherStatsUSpan);
+      nodeRef.GatherChildInfo(Context, new MCTSNodeStructIndex(Index), selectorID, depth, numToProcess - 1, gatherStats);
 
 
       if (Context.ParamsSelect.PolicyDecayFactor > 0)
@@ -268,8 +245,7 @@ namespace Ceres.MCTS.MTCSNodes
       MCTSScoreCalcVector.ScoreCalcMulti(Context.ParamsSearch.Execution.FlowDualSelectors, Context.ParamsSelect, selectorID, dynamicVLossBoost,
                                          nodeRef.IsRoot, nodeRef.N, selectorID == 0 ? nodeRef.NInFlight : nodeRef.NInFlight2,
                                          (float)nodeRef.Q, nodeRef.SumPVisited,
-                                         gatherStatsPSpan, gatherStatsWSpan,
-                                         gatherStatsNSpan, gatherStatsInFlightSpan,
+                                         stats,
                                          numToProcess, numVisitsToCompute,
                                          scores, childVisitCounts, cpuctMultiplier);
 

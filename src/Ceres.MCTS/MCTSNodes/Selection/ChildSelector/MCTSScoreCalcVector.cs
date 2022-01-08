@@ -20,6 +20,7 @@ using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 
 using Ceres.Base.DataType;
+using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.Params;
 
 #endregion
@@ -67,11 +68,11 @@ namespace Ceres.MCTS.LeafExpansion
     /// <param name="numVisitsToCompute"></param>
     /// <param name="outputScores"></param>
     /// <param name="outputChildVisitCounts"></param>
-    public static void ScoreCalcMulti(bool dualSelectorMode, ParamsSelect paramsSelect,
+    internal static void ScoreCalcMulti(bool dualSelectorMode, ParamsSelect paramsSelect,
                                       int selectorID, float dynamicVLossBoost,
                                       bool parentIsRoot, float parentN, float parentNInFlight,
                                       float qParent, float parentSumPVisited,
-                                      Span<float> p, Span<float> w, Span<float> n, Span<float> nInFlight,
+                                      GatheredChildStats childStats,
                                       int numChildren, int numVisitsToCompute,
                                       Span<float> outputScores, Span<short> outputChildVisitCounts,
                                       float cpuctMultiplier)
@@ -92,11 +93,6 @@ Note: Possible optimization/inefficiency:
 
       // Saving output scores only makes sense when a single visit being computed
       Debug.Assert(!(outputScores != default && numVisitsToCompute > 1));
-
-      Debug.Assert(p.Length == MAX_CHILDREN);
-      Debug.Assert(w.Length == MAX_CHILDREN);
-      Debug.Assert(n.Length == MAX_CHILDREN);
-      Debug.Assert(nInFlight.Length == MAX_CHILDREN);
       Debug.Assert(numChildren <= MAX_CHILDREN);
 
       Debug.Assert(outputScores == default || outputScores.Length >= numChildren);
@@ -106,9 +102,13 @@ Note: Possible optimization/inefficiency:
 
       float virtualLossMultiplier;
       if (ParamsSelect.VLossRelative)
+      {
         virtualLossMultiplier = (qParent + paramsSelect.VirtualLossDefaultRelative + dynamicVLossBoost);
+      }
       else
+      {
         virtualLossMultiplier = paramsSelect.VirtualLossDefaultAbsolute;
+      }
 
       float cpuctValue = cpuctMultiplier * paramsSelect.CalcCPUCT(parentIsRoot, dualSelectorMode, selectorID, parentN);
 
@@ -127,7 +127,7 @@ Note: Possible optimization/inefficiency:
                                 paramsSelect.RootCPUCTExtraMultiplierExponent);
       }
 
-      Compute(parentN, parentNInFlight, p, w, n, nInFlight, numChildren, numVisitsToCompute, outputScores,
+      Compute(parentN, parentNInFlight, childStats, numChildren, numVisitsToCompute, outputScores,
               outputChildVisitCounts, numBlocks, virtualLossMultiplier, 
               parentIsRoot ? paramsSelect.UCTRootNumeratorExponent : paramsSelect.UCTNonRootNumeratorExponent, 
               cpuctValue, qWhenNoChildren, 
@@ -157,7 +157,7 @@ Note: Possible optimization/inefficiency:
     /// <param name="qWhenNoChildren"></param>
     /// <param name="uctDenominatorPower"></param>
     private static void Compute(float parentN, float parentNInFlight,
-                                Span<float> p, Span<float> w, Span<float> n, Span<float> nInFlight,
+                                GatheredChildStats childStats,
                                 int numChildren, int numVisitsToCompute,
                                 Span<float> outputScores, Span<short> outputChildVisitCounts,
                                 int numBlocks, float virtualLossMultiplier, float uctParentPower,
@@ -166,6 +166,8 @@ Note: Possible optimization/inefficiency:
       // Load the vectors that do not change
       Vector256<float> vVirtualLossMultiplier = Vector256.Create(virtualLossMultiplier);
 
+      Span<float> nInFlight = childStats.InFlight.Span;
+        
       // Make sure ThreadStatics are initialized, and get local copies for efficient access
       float[] localResultAVXScratch = childScoresTempBuffer;
       if (localResultAVXScratch == null)
@@ -182,9 +184,8 @@ Note: Possible optimization/inefficiency:
         // Get constant term handy
         float numVisitsByParentToChildren = parentNInFlight + ((parentN < 2) ? 1 : parentN - 1);
         float cpuctSqrtParentN = cpuctValue * ParamsSelect.UCTParentMultiplier(numVisitsByParentToChildren, uctParentPower);
-        ComputeChildScores(p, w, n, nInFlight, numBlocks, qWhenNoChildren, vVirtualLossMultiplier,
-                           localResultAVXScratch,
-                           cpuctSqrtParentN, uctDenominatorPower);
+        ComputeChildScores(childStats, numBlocks, qWhenNoChildren, vVirtualLossMultiplier,
+                           localResultAVXScratch, cpuctSqrtParentN, uctDenominatorPower);
 
         // Save back to output scores (if these were requested)
         if (outputScores != default)
@@ -228,7 +229,7 @@ Note: Possible optimization/inefficiency:
             // Compute new child scores
             numVisitsByParentToChildren = newNInFlight + parentNInFlight + ((parentN < 2) ? 1 : parentN - 1);
             cpuctSqrtParentN = cpuctValue * ParamsSelect.UCTParentMultiplier(numVisitsByParentToChildren, uctParentPower);
-            ComputeChildScores(p, w, n, nInFlight, numBlocks, qWhenNoChildren, vVirtualLossMultiplier,
+            ComputeChildScores(childStats, numBlocks, qWhenNoChildren, vVirtualLossMultiplier,
                                  localResultAVXScratch, cpuctSqrtParentN, uctDenominatorPower);
 
             // Check if the best child was still the same
@@ -277,16 +278,20 @@ Note: Possible optimization/inefficiency:
     /// <param name="cpuctSqrtParentN"></param>
     /// <param name="uctDenominatorPower"></param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void ComputeChildScores(Span<float> p, Span<float> w, Span<float> n, Span<float> nInFlight,
+    private static void ComputeChildScores(GatheredChildStats childStats,
                                            int numBlocks, float qWhenNoChildren, 
                                            Vector256<float> vVirtualLossMultiplier, float[] computedChildScores, 
                                            float cpuctSqrtParentN, float uctDenominatorPower)
     {
+      Span<float> p = childStats.P.Span;
+      Span<float> w = childStats.W.Span;
+      Span<float> n = childStats.N.Span;
+      Span<float> nInFlight = childStats.InFlight.Span;
+
       // Process in AVX blocks of 8 at a time
       int blockCount = 0;
       while (blockCount < numBlocks)
       {
-
         int startOffset = blockCount * 8;
 
         fixed (float* pNInFlight = &nInFlight[startOffset],
