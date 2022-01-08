@@ -43,6 +43,7 @@ using Ceres.MCTS.MTCSNodes;
 using Ceres.Features.GameEngines;
 using Ceres.Features.Visualization.TreePlot;
 using Ceres.Chess.SearchResultVerboseMoveInfo;
+using System.Text;
 
 #endregion
 
@@ -362,6 +363,19 @@ namespace Ceres.Features.UCI
 
             break;
 
+          case "dump-info":
+            if (CeresEngine?.Search != null)
+            {
+              MCTSearch search = CeresEngine.Search;
+              CeresEngine.Search.Manager.DumpFullInfo(search.BestMove, search.SearchRootNode,
+                                                      search.LastReuseDecision, search.LastMakeNewRootTimingStats,
+                                                      search.LastGameLimitInputs, Console.Out, "UCI");
+            }
+            else
+              UCIWriteLine("info string No search manager created");
+            break;
+
+
           case "dump-params":
             if (CeresEngine?.Search != null)
             {
@@ -418,6 +432,7 @@ namespace Ceres.Features.UCI
             {
               UCIWriteLine("info string No search manager created");
             }
+        
 
             break;
 
