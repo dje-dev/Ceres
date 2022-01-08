@@ -106,11 +106,11 @@ namespace Ceres.MCTS.Iteration
       if (reuseMethodIfNoInstamove == ManagerTreeReuse.Method.KeepStoreSwapRoot)
       {
         // Swap root is inexpensive so be less inclined to instamove
-        nRatioThreshold = 0.5f;
+        nRatioThreshold = 0.85f;
       }
       else
       {
-        nRatioThreshold = 0.3f;
+        nRatioThreshold = 0.7f;
       }
 
       if (nRatioNewRootVersusLastSearchTree < nRatioThreshold)

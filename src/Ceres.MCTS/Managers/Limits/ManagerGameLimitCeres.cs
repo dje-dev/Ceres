@@ -49,22 +49,6 @@ namespace Ceres.MCTS.Managers.Limits
     /// <returns></returns>
     float FractionOfBasePerMoveToUse(ManagerGameLimitInputs inputs)
     {
-      float factorLargeIncrement = 1.0f;
-      const float MAX_LARGE_INCREMENT_MULTIPLIER = 1.5f;
-
-      if (inputs.IncrementSelf > 0)
-      {
-        float estBasePerMove = inputs.RemainingFixedSelf / 27;
-        float incrementRelativeToBasePerMove = inputs.IncrementSelf / estBasePerMove;
-
-        // The more increment relative to base time, the more aggressively the base time is used up
-        // (because we don't have to worry about running out of time if game runs to many moves).
-        factorLargeIncrement = 1.0f + incrementRelativeToBasePerMove;
-
-        // Don't allow multiplier to be too large, since it ultimately has an exponentially increasing impact.
-        factorLargeIncrement = MathF.Min(MAX_LARGE_INCREMENT_MULTIPLIER, factorLargeIncrement);
-      }
-
       // When we are behind then it's worth taking a gamble and using more time
       // but when we are ahead, take a little less time to be sure we don't err in time pressure.
       float factorWinningness = inputs.RootQ switch
@@ -90,9 +74,18 @@ namespace Ceres.MCTS.Managers.Limits
       //    that it might never be gainfully used (if a loss comes first).
       float baseDivisor = 9 + MathF.Pow(inputs.StartPos.PieceCount, 0.5f);
 
-      const float BASE_MULTIPLIER = 0.80f;
+      if (inputs.IncrementSelf > 0)
+      {
+        const float MULTIPLIER = 200f;
+        float fractionIncrementOfRemaining = inputs.IncrementSelf / inputs.RemainingFixedSelf;
+        float adj = fractionIncrementOfRemaining * MULTIPLIER;
+        adj = MathF.Min(8, adj);
+        baseDivisor -= adj;
+      }
 
-      float ret = Aggressiveness * BASE_MULTIPLIER * (1.0f / baseDivisor) * factorLargeIncrement * factorWinningness * factorFirstMove;
+      const float BASE_MULTIPLIER = 0.60f;
+
+      float ret = Aggressiveness * BASE_MULTIPLIER * (1.0f / baseDivisor) * factorWinningness * factorFirstMove;
 
       return ret;
     }
@@ -153,8 +146,15 @@ namespace Ceres.MCTS.Managers.Limits
 
       float baseTimeToUse = inputs.RemainingFixedSelf * FractionOfBasePerMoveToUse(inputs);
 
+      float fractionOfIncrementToUse = 0;
+      if (inputs.IncrementSelf > 0)
+      {
+        float numIncrementsAvailableTime = inputs.RemainingFixedSelf / inputs.IncrementSelf;
+        fractionOfIncrementToUse = numIncrementsAvailableTime > 3 ? 0.95f : 0.80f;
+      }
+
       // Try to use almost all of the increment plus part of base time remaining.
-      float totalTimeToUse = baseTimeToUse + inputs.IncrementSelf * 0.95f;
+      float totalTimeToUse = baseTimeToUse + inputs.IncrementSelf * fractionOfIncrementToUse;
 
       // But never spend more than 35% of fixed time remaining
       // (since the increment is not earned until after the move is made).
