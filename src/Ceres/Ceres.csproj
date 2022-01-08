@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net5.0</TargetFramework>
+    <TargetFramework>net6.0</TargetFramework>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
@@ -10,7 +10,7 @@
     <ApplicationIcon />
     <OutputType>Exe</OutputType>
     <StartupObject />
-    <TieredCompilation>true</TieredCompilation>
+    <TieredCompilation>false</TieredCompilation>
     <GCLargePages>false</GCLargePages>
     <ServerGarbageCollection>true</ServerGarbageCollection>
     <GCLOHThreshold>100000</GCLOHThreshold>
