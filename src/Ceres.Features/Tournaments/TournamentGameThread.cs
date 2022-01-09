@@ -304,6 +304,9 @@ namespace Ceres.Features.Tournaments
       
       thisResult.PlayerWhite = engine2White ? Run.Engine2.ID : Run.Engine1.ID;
       thisResult.PlayerBlack = engine2White ? Run.Engine1.ID : Run.Engine2.ID;
+      thisResult.SearchLimitWhite = engine2White ? Def.Player2Def.SearchLimit : Def.Player1Def.SearchLimit;
+      thisResult.SearchLimitBlack = engine2White ? Def.Player1Def.SearchLimit : Def.Player2Def.SearchLimit;
+
       UpdateStatsAndOutputSummaryFromGameResult(pgnFileName, engine2White, openingIndex, gameSequenceNum, thisResult);
 
       return thisResult;

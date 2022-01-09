@@ -15,7 +15,11 @@
 
 using System;
 using System.Collections.Generic;
+using XPlot.Plotly;
+
 using Ceres.Base.Math;
+using Ceres.Chess;
+using Ceres.Chess.Charts;
 using Ceres.Chess.GameEngines;
 
 #endregion
@@ -105,6 +109,17 @@ namespace Ceres.Features.Tournaments
     /// Engine with black pieces.
     /// </summary>
     public string PlayerBlack;
+
+    /// <summary>
+    /// Search limit used by white player.
+    /// </summary>
+    public SearchLimit SearchLimitWhite;
+
+    /// <summary>
+    /// Search limit used by black player.
+    /// </summary>
+    public SearchLimit SearchLimitBlack;
+
     /// <summary>
     /// Sequence number within tournament.
     /// </summary>
@@ -212,6 +227,7 @@ namespace Ceres.Features.Tournaments
     /// </summary>
     public List<GameMoveStat> GameMoveHistory;
 
+    #region Limits aggressiveness
 
     public float TimeAggressivenessRatio(bool white)
     {
@@ -272,5 +288,60 @@ namespace Ceres.Features.Tournaments
         return 0;
       }
     }
+
+    #endregion
+
+
+    #region Charts
+
+    public enum LimitsUsageChartType { Bar, Line };
+
+    /// <summary>
+    /// Returns a chart of the limits usage of two players throughout the game.
+    /// </summary>
+    /// <param name="chartType"></param>
+    /// <returns></returns>
+    /// <exception cref="NotImplementedException"></exception>
+    public PlotlyChart LimitsUsageChart(LimitsUsageChartType chartType)
+    {
+      string title = Result.ToString();
+
+      // Populate the search limits (if available and per move).
+      float? limitBase = null;
+      float? limitIncrement = null;
+      if (SearchLimitWhite.Equals(SearchLimitBlack) && SearchLimitWhite.IsPerGameLimit)
+      {
+        limitBase = SearchLimitWhite.Value;
+        limitIncrement = SearchLimitWhite.ValueIncrement;
+      };
+
+      // Build lists of used search values.
+      bool isTime = SearchLimitWhite.IsTimeLimit;
+      List<float> limitsWhite = new();
+      List<float> limitsBlack = new();
+      foreach (GameMoveStat moveStat in GameMoveHistory)
+      {
+        if (moveStat.Side == Chess.SideType.White)
+        {
+          limitsWhite.Add(isTime ? moveStat.TimeElapsed : moveStat.NumNodesComputed);
+        }
+        else
+        {
+          limitsBlack.Add(isTime ? moveStat.TimeElapsed : moveStat.NumNodesComputed);
+        }
+      }
+
+      return chartType switch
+      {
+        LimitsUsageChartType.Bar => PlayerLimitsUsageCharts.BarChart(title, PlayerWhite, PlayerBlack, limitsWhite.ToArray(), limitsBlack.ToArray()),
+        LimitsUsageChartType.Line => PlayerLimitsUsageCharts.LineChart(title, PlayerWhite, PlayerBlack, limitsWhite.ToArray(), limitsBlack.ToArray(), limitBase, limitIncrement),
+        _ => throw new NotImplementedException(chartType.ToString())
+      };
+
+    }
+
+    #endregion
+
+
   }
 }
