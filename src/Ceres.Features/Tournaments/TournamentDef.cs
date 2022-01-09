@@ -145,6 +145,11 @@ namespace Ceres.Features.Tournaments
     public bool ShouldShutDown = false;
 
     /// <summary>
+    /// If this instance is the coordinator in a distributed tournament.
+    /// </summary>
+    public bool IsDistributedCoordinator = false;
+
+    /// <summary>
     /// The parent object (if this object was created by Clone method, otherwise this);
     /// </summary>
     internal TournamentDef parentDef;

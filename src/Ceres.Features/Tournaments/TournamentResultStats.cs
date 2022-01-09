@@ -213,7 +213,7 @@ namespace Ceres.Features.Tournaments
     /// </summary>
     /// <param name="thisResult"></param>
     /// <param name="engine"></param>
-    public void UpdateTournamentStats(TournamentGameInfo thisResult, GameEngine engine)
+    public void UpdateTournamentStats(TournamentGameInfo thisResult, string playerID, string opponentID)
     {
       PlayerStat playerWhite;
       PlayerStat playerBlack;
@@ -227,15 +227,15 @@ namespace Ceres.Features.Tournaments
 
       if (thisResult.Engine2IsWhite)
       {
-        playerWhite = GetPlayer(engine.OpponentEngine.ID, engine.ID);
-        playerBlack = GetPlayer(engine.ID, engine.OpponentEngine.ID);
+        playerWhite = GetPlayer(opponentID, playerID);
+        playerBlack = GetPlayer(playerID, opponentID);
         whiteResult = reverseResult;
         blackResult = thisResult.Result;
       }
       else
       {
-        playerWhite = GetPlayer(engine.ID, engine.OpponentEngine.ID);
-        playerBlack = GetPlayer(engine.OpponentEngine.ID, engine.ID);
+        playerWhite = GetPlayer(playerID, opponentID);
+        playerBlack = GetPlayer(opponentID, playerID);
         whiteResult = thisResult.Result;
         blackResult = reverseResult;
       }

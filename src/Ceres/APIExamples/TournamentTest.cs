@@ -37,6 +37,11 @@ using Ceres.Features;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.Environment;
 using Ceres.Features.EngineTests;
+using Ceres.Chess.NNBackends.CUDA;
+using Ceres.Chess.LC0.WeightsProtobuf;
+using Ceres.Chess.LC0.NNFiles;
+using Ceres.Chess.Positions;
+using Ceres.Chess.NetEvaluation.Batch;
 
 #endregion
 
@@ -47,7 +52,7 @@ namespace Ceres.APIExamples
     const bool POOLED = false;
 
     static int CONCURRENCY = POOLED ? 16 : 1;
-    static bool RUN_DISTRIBUTED = false;
+    static bool RUN_DISTRIBUTED = true;
 
 
     private static void KillCERES()
@@ -59,6 +64,15 @@ namespace Ceres.APIExamples
       }
     }
 
+
+    static string exeCeres() => SoftwareManager.IsLinux ? @"/raid/dev/Ceres/artifacts/release/net5.0/Ceres.dll"
+                                          : @"C:\dev\ceres\artifacts\release\net5.0\ceres.exe";
+    static string exeCeres93() => SoftwareManager.IsLinux ? @"/raid/dev/Ceres93/artifacts/release/5.0/Ceres.dll"
+                                                : @"C:\ceres\releases\v0.93\ceres.exe";
+    static string exeCeres94() => SoftwareManager.IsLinux ? @"/raid/dev/Ceres94/Ceres.dll"
+                                                : @"\ceres\releases\v0.95rc4\ceres.exe";
+    static string exeCeresPreNC() => SoftwareManager.IsLinux ? @"/raid/dev/Ceres_PreNC/artifacts/release/5.0/Ceres.dll"
+                                                : @"c:\ceres\releases\v0.95_PreNC\ceres.exe";
 
     const string ETHERAL_EXE = @"\\synology\dev\chess\engines\Ethereal12.75-x64-popcnt-avx2.exe";
     const string SF11_EXE = @"\\synology\dev\chess\engines\stockfish_11_x64_bmi2.exe";
@@ -81,10 +95,13 @@ namespace Ceres.APIExamples
 
     public static void PreTournamentCleanup()
     {
-      KillCERES();
+      if (!RUN_DISTRIBUTED)
+      {
+        KillCERES();
 
-      File.Delete("Ceres1.log.txt");
-      File.Delete("Ceres2.log.txt");
+        File.Delete("Ceres1.log.txt");
+        File.Delete("Ceres2.log.txt");
+      }
     }
 
 
@@ -94,12 +111,13 @@ namespace Ceres.APIExamples
     /// </summary>
     public static void Test()
     {
+//      DisposeTest(); System.Environment.Exit(3);
       //      if (Marshal.SizeOf<MCTSNodeStruct>() != 64)
       //        throw new Exception("Wrong size " + Marshal.SizeOf<MCTSNodeStruct>().ToString());
       InstallCUSTOM1AsDynamicByPhase();
       PreTournamentCleanup();
 
-//      RunEngineComparisons(); return;
+//      RunEngineComparisons(); return;s
 
       if (false)
       {
@@ -107,8 +125,10 @@ namespace Ceres.APIExamples
         System.Environment.Exit(3);
       }
 
-      string GPUS = POOLED ? "GPU:0,1,2,3:POOLED"
-                           : "GPU:0";
+      string GPUS_1 = POOLED ? "GPU:0,1,2,3:POOLED"
+                             : "GPU:0";
+      string GPUS_2 = POOLED ? "GPU:0,1,2,3:POOLED"
+                             : "GPU:0";
 
 
       string NET1_SECONDARY1 = null;// "610024";
@@ -124,7 +144,7 @@ namespace Ceres.APIExamples
       NET1 = @"ONNX_ORT:d:\weights\lczero.org\hydra_t00-attn.gz.onnx";// "apv4_t14";// apv4_t16";
       NET2 = @"ONNX_ORT:d:\weights\lczero.org\apv4_t16.onnx";
 
-      
+
       NET1 = "baseline02#8";
       NET2 = "baseline02#16";
 
@@ -135,39 +155,40 @@ namespace Ceres.APIExamples
       NET2 = "744204_onnx";
 
       NET1 = "apv5_t01.ORT";
-      NET2 = "apv5_t01.ORT";
+      NET2 = "42767";
       //      NET1 = "apv5_t01#8";
       //      NET2 = "apv5_t01#16";
 
       //NET1 = @"LC0:hydra_t00-attn.onnx";// "apv4_t14";// apv4_t16";
       //      string NET1_SECONDARY1 = "j94-100";
 
-NET1 = "attn_10b_800k";
-NET2 = "base_10b_800k";
+      NET2 = "attn_10b_800k";
+      NET1 = "base_10b_800k";
 
 
-//      NET1 = "760998";
+      //      NET1 = "760998";
       NET1 = "753723";
       NET2 = "753723";
-//      NET1 = "69637";
-//      NET2 = "69637";
+//       NET1 = "69637";
+//       NET2 = "69637";
 
       NET1 = "703810";
       NET2 = "703810";
-//      NET1 = "badgyal-3";
-//      NET2 = "badgyal-3";
+      //NET2 = "256x20-T75-32MGames-2120K";
+     // NET1 = "tinker_15b";
+     // NET2 = "753723";
 
       //NET1 = "744204_onnx_int8";
 
       //r1kb4/3r1p2/8/7R/p3R3/P1B5/KP6/8 w - - 3 49
 
-      NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification(NET1, GPUS); // j64-210 LS16 40x512-lr015-swa-167500
-      NNEvaluatorDef evalDef2 = NNEvaluatorDefFactory.FromSpecification(NET2, GPUS); ;
+      NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification(NET1, GPUS_1); // j64-210 LS16 40x512-lr015-swa-167500
+      NNEvaluatorDef evalDef2 = NNEvaluatorDefFactory.FromSpecification(NET2, GPUS_2);
 
       NNEvaluatorDef evalDefSecondary1 = null;
       if (NET1_SECONDARY1 != null)
       {
-        evalDefSecondary1 = NNEvaluatorDefFactory.FromSpecification($@"LC0:{NET1_SECONDARY1}", GPUS);
+        evalDefSecondary1 = NNEvaluatorDefFactory.FromSpecification($@"LC0:{NET1_SECONDARY1}", GPUS_1);
       }
 
       NNEvaluatorDef evalDefSecondary2 = null;
@@ -178,14 +199,14 @@ NET2 = "base_10b_800k";
 
       //evalDef1 = NNEvaluatorDefFactory.FromSpecification("ONNX:tfmodelc", "GPU:0");
 
-      SearchLimit limit1 = SearchLimit.NodesForAllMoves(1_000_000);
+      SearchLimit limit1 = SearchLimit.NodesForAllMoves(7_000_000);
       //      limit1 = SearchLimit.NodesPerTree(50_000);
 
       // 140 good for 203 pairs, 300 good for 100 pairs
       //      limit1 = SearchLimit.NodesForAllMoves(200_000, 500) * 0.25f;
-      //      limit1 = SearchLimit.SecondsForAllMoves(5, 0.02f) * 2;
-      limit1 = SearchLimit.NodesPerMove(2_000);
-      //limit1 = SearchLimit.SecondsForAllMoves(60, 1) * 0.5f;
+      limit1 = SearchLimit.SecondsForAllMoves(30, 0.3f) * 0.1f;
+//      limit1 = SearchLimit.NodesPerMove(5_000_000);
+//      limit1 = SearchLimit.SecondsForAllMoves(150, 3);//s
       //ok      limit1 = SearchLimit.NodesPerMove(350_000); try test3.pgn against T75 opponent Ceres93 (in first position, 50% of time misses win near move 12
 
       SearchLimit limit2 = limit1;
@@ -200,8 +221,9 @@ NET2 = "base_10b_800k";
       GameEngineDefCeres engineDefCeres3 = new GameEngineDefCeres("Ceres3", evalDef2, evalDefSecondary2, new ParamsSearch(), new ParamsSelect(),
                                                                   null, outputLog ? "Ceres3.log.txt" : null);
 
-      //engineDefCeres1.OverrideLimitManager = new  Ceres.MCTS.Managers.Limits.ManagerGameLimitSimple(20);
-      //      engineDefCeres2.SearchParams.TestFlag = true;
+//      engineDefCeres1.OverrideLimitManager = new  Ceres.MCTS.Managers.Limits.ManagerGameLimitSimple(20);
+//      engineDefCeres1.SearchParams.TestFlag = true;
+ //     engineDefCeres1.SearchParams.Execution.TranspositionMode = TranspositionMode.None;
       //      engineDefCeres2.SearchParams.EnableSearchExtension = false;
       // engineDefCeres1.SearchParams.TreeReuseRetainedPositionCacheEnabled = true;
       //engineDefCeres2.SearchParams.TreeReuseRetainedPositionCacheEnabled = true;
@@ -218,7 +240,7 @@ NET2 = "base_10b_800k";
 
       //      engineDefCeres1.SearchParams.TestFlag = true;
 
-      //      engineDefCeres1.SearchParams.GameLimitUsageAggressiveness = 1.5f;
+      //      engineDefCeres1.SearchParams.GameLimitUsageAggressiveness = 1.3f;
       //      engineDefCeres2.SearchParams.TestFlag2 = true;
 
       //      engineDefCeres1.SearchParams.TreeReuseRetainedPositionCacheEnabled = true;
@@ -276,24 +298,15 @@ NET2 = "base_10b_800k";
         //engineDefCeres2.SearchParams.MoveFutilityPruningAggressiveness = 0;
       }
 
-      string exeCeres = SoftwareManager.IsLinux ? @"/raid/dev/Ceres/artifacts/release/net5.0/Ceres.dll"
-                                                : @"C:\dev\ceres\artifacts\release\net5.0\ceres.exe";
-      string exeCeres93 = SoftwareManager.IsLinux ? @"/raid/dev/Ceres93/artifacts/release/5.0/Ceres.dll"
-                                                  : @"C:\ceres\releases\v0.93\ceres.exe";
-      string exeCeres94 = SoftwareManager.IsLinux ? @"/raid/dev/Ceres94/Ceres.dll"
-                                                  : @"\ceres\releases\v0.95rc4\ceres.exe";
-      string exeCeresPreNC = SoftwareManager.IsLinux ? @"/raid/dev/Ceres_PreNC/artifacts/release/5.0/Ceres.dll"
-                                                  : @"c:\ceres\releases\v0.95_PreNC\ceres.exe";
-
       //GameEngineDef engineDefCeresUCI = new GameEngineDefUCI("CeresUCI", new GameEngineUCISpec("CeresUCI", @"c:\dev\ceres\artifacts\release\net5.0\ceres.exe"));
       //      GameEngineDef engineDefCeresUCI1x = new GameEngineDefCeresUCI("CeresUCINew", evalDef1, overrideEXE: @"C:\dev\Ceres\artifacts\release\net5.0\ceres.exe");
 
-      GameEngineDef engineDefCeresUCI1 = new GameEngineDefCeresUCI("CeresUCINew", evalDef1, overrideEXE: exeCeres, disableFutilityStopSearch: forceDisableSmartPruning);
-      GameEngineDef engineDefCeresUCI2 = new GameEngineDefCeresUCI("CeresUCINew", evalDef2, overrideEXE: exeCeres, disableFutilityStopSearch: forceDisableSmartPruning);
+      GameEngineDef engineDefCeresUCI1 = new GameEngineDefCeresUCI("CeresUCINew", evalDef1, overrideEXE: exeCeres(), disableFutilityStopSearch: forceDisableSmartPruning);
+      GameEngineDef engineDefCeresUCI2 = new GameEngineDefCeresUCI("CeresUCINew", evalDef2, overrideEXE: exeCeres(), disableFutilityStopSearch: forceDisableSmartPruning);
 
-      GameEngineDef engineDefCeres93 = new GameEngineDefCeresUCI("Ceres93", evalDef2, overrideEXE: exeCeres93, disableFutilityStopSearch:forceDisableSmartPruning);
-      GameEngineDef engineDefCeres94 = new GameEngineDefCeresUCI("Ceres94", evalDef2, overrideEXE: exeCeres94, disableFutilityStopSearch: forceDisableSmartPruning);
-      GameEngineDef engineDefCeresPreNC = new GameEngineDefCeresUCI("CeresPreNC", evalDef2, overrideEXE: exeCeresPreNC, disableFutilityStopSearch: forceDisableSmartPruning);
+      GameEngineDef engineDefCeres93 = new GameEngineDefCeresUCI("Ceres93", evalDef2, overrideEXE: exeCeres93(), disableFutilityStopSearch: forceDisableSmartPruning);
+      GameEngineDef engineDefCeres94 = new GameEngineDefCeresUCI("Ceres94", evalDef2, overrideEXE: exeCeres94(), disableFutilityStopSearch: forceDisableSmartPruning);
+      GameEngineDef engineDefCeresPreNC = new GameEngineDefCeresUCI("CeresPreNC", evalDef2, overrideEXE: exeCeresPreNC(), disableFutilityStopSearch: forceDisableSmartPruning);
 
       EnginePlayerDef playerCeres1UCI = new EnginePlayerDef(engineDefCeresUCI1, limit1);
       EnginePlayerDef playerCeres2UCI = new EnginePlayerDef(engineDefCeresUCI2, limit2);
@@ -302,7 +315,7 @@ NET2 = "base_10b_800k";
       EnginePlayerDef playerCeresPreNC = new EnginePlayerDef(engineDefCeresPreNC, limit2);
 
       EnginePlayerDef playerCeres1 = new EnginePlayerDef(engineDefCeres1, limit1);
-      EnginePlayerDef playerCeres2 = new EnginePlayerDef(engineDefCeres2, limit1);
+      EnginePlayerDef playerCeres2 = new EnginePlayerDef(engineDefCeres2, limit2);
       EnginePlayerDef playerCeres3 = new EnginePlayerDef(engineDefCeres3, limit1);
 
       bool ENABLE_LC0 = evalDef1.Nets[0].Net.Type == NNEvaluatorType.LC0Library && (evalDef1.Nets[0].WeightValue == 1 && evalDef1.Nets[0].WeightPolicy == 1 && evalDef1.Nets[0].WeightM == 1);
@@ -317,7 +330,7 @@ NET2 = "base_10b_800k";
 
 
       if (false)
-      {        
+      {
         string BASE_NAME = "Elo2500_10k";// nice_lcx Stockfish238 ERET_VESELY203 endgame2 chad_tactics-100M lichess_chad_bad.csv
         ParamsSearch paramsNoFutility = new ParamsSearch() { FutilityPruningStopSearchEnabled = false };
 
@@ -329,7 +342,7 @@ NET2 = "base_10b_800k";
                                                    : @$"\\synology\dev\chess\data\epd\{BASE_NAME}.epd",
                            SearchLimit.NodesPerMove(125_000),
                            GameEngineDefFactory.CeresInProcess("Ceres1", NET1, suiteGPU, paramsNoFutility with { TestFlag = true }),
-                           GameEngineDefFactory.CeresInProcess("Ceres2", NET1, suiteGPU, paramsNoFutility with {  }),
+                           GameEngineDefFactory.CeresInProcess("Ceres2", NET1, suiteGPU, paramsNoFutility with { }),
                            null);// playerLC0.EngineDef);
 
         suiteDef.MaxNumPositions = 15_000;
@@ -375,17 +388,48 @@ NET2 = "base_10b_800k";
 #endif
       }
 
+#if NOT
       //    EnginePlayerDef playerDef = new EnginePlayerDef(engineDefLC0, searchLimit);
-      GameEngineDef[] ceresEngines = new GameEngineDef[3+1];
+      GameEngineDef[] ceresEngines = new GameEngineDef[3 + 1];
       for (int i = 0; i < ceresEngines.Length; i++)
       {
         float value = 0.80f + 0.15f * i;
-        ceresEngines[i] = GameEngineDefFactory.CeresInProcess("C_" + 100*MathF.Round(value, 1), NET1, GPUS,
-                                                              engineDefCeres1.SearchParams with { GameLimitUsageAggressiveness = value}, null);
+        ceresEngines[i] = GameEngineDefFactory.CeresInProcess("C_" + 100 * MathF.Round(value, 1), NET1, GPUS_1,
+                                                              engineDefCeres1.SearchParams with { GameLimitUsageAggressiveness = value }, null);
+      }
+#endif
+
+      // **************************************************
+      EnginePlayerDef player1 = playerCeres1;
+      EnginePlayerDef player2 = playerCeres2;
+      // **************************************************
+
+      TournamentGameQueueManager queueManager = null;
+      bool isDistributed = false;
+      if (CommandLineWorkerSpecification.IsWorker)
+      {
+        queueManager = new TournamentGameQueueManager(Environment.GetCommandLineArgs()[2]);
+        int gpuID = CommandLineWorkerSpecification.GPUID;
+        Console.WriteLine($"\r\n***** Running in DISTRIBUTED mode as WORKER on gpu {gpuID} (queue directory {queueManager.QueueDirectory})\r\n");
+
+        player1.EngineDef.ModifyDeviceIndexIfNotPooled(gpuID);
+        player2.EngineDef.ModifyDeviceIndexIfNotPooled(gpuID);
+      }
+      else if (RUN_DISTRIBUTED)
+      {
+        isDistributed = true;
+        queueManager = new TournamentGameQueueManager(null);
+        Console.WriteLine($"\r\n***** Running in DISTRIBUTED mode as COORDINATOR (queue directory {queueManager.QueueDirectory})\r\n");
       }
 
+
       // TODO: UCI engine should point to .NET 6 subdirectory if on .NET 6
-      TournamentDef def = new TournamentDef("TOURN", playerCeres1UCI, playerCeresPreNC);//, playerStockfish14/*, playerCeres3,
+      TournamentDef def = new TournamentDef("TOURN", player1, player2);// PreNC);//, playerStockfish14/*, playerCeres3,
+      if (isDistributed)
+      {
+        def.IsDistributedCoordinator = true;
+      }
+      if (queueManager != null)
 #if NOT
       TournamentDef def = new TournamentDef("TIME_AGG");
       def.AddEngine(playerStockfish14.EngineDef, limit1 * 0.7f);
@@ -400,12 +444,12 @@ NET2 = "base_10b_800k";
       def.NumGamePairs = 500;// 203;//1000;//203;//203;// 500;// 203;//203;// 102; 203
       def.ShowGameMoves = false;
 
-//      string baseName = "tcec1819";
-string      baseName = "4mvs_+90_+99";
-//      baseName = "book-ply8-unifen-Q-0.25-0.40";
-//      baseName = "test3";
-//     baseName = "tcec_big";
-//      baseName = "endgame-16-piece-book_Q-0.0-0.6_1";
+      //      string baseName = "tcec1819";
+      string baseName = "4mvs_+90_+99";
+      //      baseName = "book-ply8-unifen-Q-0.25-0.40";
+      //      baseName = "test3";
+      //     baseName = "tcec_big";
+      //      baseName = "endgame-16-piece-book_Q-0.0-0.6_1";
       def.OpeningsFileName = SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/openings/{baseName}.pgn"
                                                      : @$"\\synology\dev\chess\data\openings\{baseName}.pgn";
 
@@ -420,25 +464,6 @@ string      baseName = "4mvs_+90_+99";
       }
 
       TournamentManager runner = new TournamentManager(def, CONCURRENCY);
-      TournamentGameQueueManager queueManager = null;
-
-      if (CommandLineWorkerSpecification.IsWorker)
-      {
-        queueManager = new TournamentGameQueueManager(Environment.GetCommandLineArgs()[2]);
-        int gpuID = CommandLineWorkerSpecification.GPUID;
-        Console.WriteLine($"\r\n***** Running in DISTRIBUTED mode as WORKER on gpu {gpuID} (queue directory {queueManager.QueueDirectory})\r\n");
-
-        def.Player1Def.EngineDef.ModifyDeviceIndexIfNotPooled(gpuID);
-        def.Player2Def.EngineDef.ModifyDeviceIndexIfNotPooled(gpuID);
-      }
-      else
-      {
-        if (RUN_DISTRIBUTED)
-        {
-          queueManager = new TournamentGameQueueManager(null);
-          Console.WriteLine($"\r\n***** Running in DISTRIBUTED mode as COORDINATOR (queue directory {queueManager.QueueDirectory})\r\n");
-        }
-      }
 
       TournamentResultStats results;
 
@@ -545,7 +570,7 @@ string      baseName = "4mvs_+90_+99";
       EnginePlayerDef playerSf14Slow = new EnginePlayerDef(sf14Engine, TIME_CONTROL * 0.5f, "SF14*0.5");
 
       // Create a tournament definition
-      TournamentDef tournDef = new TournamentDef("Round Robin Test", playerCeres1, playerLeela);      
+      TournamentDef tournDef = new TournamentDef("Round Robin Test", playerCeres1, playerLeela);
       //tournDef.ReferenceEngineId = playerCeres1.ID;
       tournDef.NumGamePairs = NUM_GAME_PAIRS;
       tournDef.OpeningsFileName = "WCEC.pgn";
@@ -645,26 +670,29 @@ string      baseName = "4mvs_+90_+99";
     {
       string pgnFileName = SoftwareManager.IsWindows ? @"\\synology\dev\chess\data\pgn\raw\ceres_big.pgn"
                                                : @"/mnt/syndev/chess/data/pgn/raw/ceres_big.pgn";
-
-      CompareEngineParams parms = new CompareEngineParams("VsLC0", pgnFileName,
-                                              1000, // number of positions
+      
+      CompareEngineParams parms = new CompareEngineParams("VsPreNC", pgnFileName,
+                                              3_000, // number of positions
                                               null,//s => s.FinalPosition.PieceCount <= 15,
-                                              CompareEnginesVersusOptimal.PlayerMode.Ceres, "703810", //610034
-                                              CompareEnginesVersusOptimal.PlayerMode.LC0, "703810",
-                                              CompareEnginesVersusOptimal.PlayerMode.Ceres, "703810",
-                                              SearchLimit.NodesPerMove(2_000), // search limit
-                                              new int[] { 0, 1, 2, 3 },
+                                              CompareEnginesVersusOptimal.PlayerMode.Ceres, "badgyal-3", //610034
+                                              CompareEnginesVersusOptimal.PlayerMode.UCI, "badgyal-3",
+                                              CompareEnginesVersusOptimal.PlayerMode.LC0, "LS15",
+                                              SearchLimit.NodesPerMove(250_000), // search limit
+                                              new int[] { 0,1,2,3 },
                                               s =>
                                               {
-//                                                s.EnableUncertaintyBoosting = true;
+                                                //     s.EnableUncertaintyBoosting = true;
                                               },
                                               null, // l => l.CPUCT = 1.1f,
                                               null,
                                               null,
                                               true,
-                                              1, 
+                                              1,
                                               7,
-                                              false // Stockfish crosscheck
+                                              false, // Stockfish crosscheck
+                                              null,
+                                              exeCeresPreNC(),
+                                              0.25f
                                              );
 
 
@@ -672,16 +700,16 @@ string      baseName = "4mvs_+90_+99";
     }
 
 
-  
 
-  /// <summary>
-  /// Test code that installs "CUSTOM1" network type which is an NNEvaluatorDynamic
-  /// and uses one network for first part of search then switches to second network.
-  /// Example usage (also customized nets and fraction below):
-  ///   NET1 = "CUSTOM1:66666";
-  /// Was -7Elo +/10 with at 60 second games (switch point 0.666).
-  /// </summary>
-  public static void InstallCUSTOM1AsDynamicByPhase()
+
+    /// <summary>
+    /// Test code that installs "CUSTOM1" network type which is an NNEvaluatorDynamic
+    /// and uses one network for first part of search then switches to second network.
+    /// Example usage (also customized nets and fraction below):
+    ///   NET1 = "CUSTOM1:66666";
+    /// Was -7Elo +/10 with at 60 second games (switch point 0.666).
+    /// </summary>
+    public static void InstallCUSTOM1AsDynamicByPhase()
     {
       static NNEvaluator Build(string netID1, int gpuID, NNEvaluator referenceEvaluator)
       {
@@ -690,14 +718,95 @@ string      baseName = "4mvs_+90_+99";
                                                       NNEvaluator.FromSpecification("66511", $"GPU:{gpuID}")};
 
         const float FRACTION_SWITCH_ALTERNATE_NET = 0.75f;
-throw new NotImplementedException("COMBO_PHASED deprecated");
-//        NNEvaluatorDynamic dyn = new NNEvaluatorDynamic(evaluators, (batch)
-//          => MCTSManager.ThreadSearchContext != null ? (MCTSManager.ThreadSearchContext.Manager.FractionSearchCompleted < FRACTION_SWITCH_ALTERNATE_NET ? 0 : 1) : 0);
-//        return dyn;
+        throw new NotImplementedException("COMBO_PHASED deprecated");
+        //        NNEvaluatorDynamic dyn = new NNEvaluatorDynamic(evaluators, (batch)
+        //          => MCTSManager.ThreadSearchContext != null ? (MCTSManager.ThreadSearchContext.Manager.FractionSearchCompleted < FRACTION_SWITCH_ALTERNATE_NET ? 0 : 1) : 0);
+        //        return dyn;
       }
       NNEvaluatorFactory.Custom1Factory = Build;
     }
 
+
+    static void DisposeTest()
+    {
+      const string NET_ID = "703810";
+      // TODO: repeated execution does not release all memory
+      while (false)
+      {
+        using (new TimingBlock("CUDA create/dispose", TimingBlock.LoggingType.ConsoleWithMemoryTracking))
+        {
+          for (int i = 0; i < 10; i++)
+          {
+            Console.WriteLine("create " + i);
+            NNWeightsFileLC0 netWeightsFile = NNWeightsFileLC0.LookupOrDownload(NET_ID);
+            LC0ProtobufNet net = LC0ProtobufNet.LoadedNet(netWeightsFile.FileName);
+            NNBackendLC0_CUDA backend = new NNBackendLC0_CUDA(0, net.Net);
+            Console.WriteLine("dispose " + i);
+            backend.Dispose();
+          }
+          GC.Collect(3);
+          GC.WaitForFullGCComplete();
+        }
+        Console.WriteLine("<CR> to continue....");
+        Console.ReadLine();
+      }
+
+      NNEvaluatorDef nd = NNEvaluatorDefFactory.FromSpecification(NET_ID, "GPU:0");
+      NNEvaluator referenceEvaluator = NNEvaluatorFactory.BuildEvaluator(nd);
+
+      if (true)
+      {
+        using (new TimingBlock("GameEngineCeresInProcess create/evaluate pos", TimingBlock.LoggingType.ConsoleWithMemoryTracking))
+        {
+          for (int i = 0; i < 10; i++)
+          {
+            if (true)
+            {
+              GameEngineCeresInProcess engineCeres = new("Ceres", nd, null);
+              GameEngineSearchResult searchResult = engineCeres.Search(PositionWithHistory.StartPosition, SearchLimit.NodesPerMove(1));
+              Console.WriteLine("evaluated " + searchResult);
+              engineCeres.Dispose();
+            }
+          }
+        }
+      }
+
+      if (false)
+      {
+        using (new TimingBlock("NNEvaluator create/evaluate pos", TimingBlock.LoggingType.ConsoleWithMemoryTracking))
+        {
+          for (int i = 0; i < 10; i++)
+          {
+            NNEvaluator evaluator = NNEvaluatorFactory.BuildEvaluator(nd, referenceEvaluator);
+            NNEvaluatorResult posEval = evaluator.Evaluate(PositionWithHistory.StartPosition.FinalPosition, true);
+            Console.WriteLine(posEval);
+            evaluator.Shutdown();
+          }
+          GC.Collect(3);
+          GC.WaitForFullGCComplete();
+        }
+        Console.WriteLine("<CR> to continue....");
+        Console.ReadLine();
+      }
+
+      if (false)
+      {
+        using (new TimingBlock("NNEvaluatorSet create/evaluate pos", TimingBlock.LoggingType.ConsoleWithMemoryTracking))
+        {
+          for (int i = 0; i < 10; i++)
+          {
+            Console.WriteLine("Create NNEvaluatorSet");
+            NNEvaluatorSet nevaluatorSet = new NNEvaluatorSet(nd, true);
+            nevaluatorSet.Warmup(false);
+            nevaluatorSet.Dispose();
+            Console.WriteLine("Dispose NNEvaluatorSet");
+          }
+        }
+      }
+
+      Console.WriteLine("final shutdown");
+      referenceEvaluator.Shutdown();
+    }
 
   }
 }
