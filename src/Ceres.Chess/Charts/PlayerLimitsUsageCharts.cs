@@ -145,7 +145,7 @@ namespace Ceres.Chess.Charts
       PlotlyChart chart = Chart.Plot(new[] { Player1Line, Player2Line });
       Layout.Layout layout = new Layout.Layout() { barmode = "group", title = $"Per Move Usage by Player, {title}" };
       chart.WithLayout(layout);
-      chart.WithXTitle("Ply");
+      chart.WithXTitle("Move");
       chart.WithYTitle("Used");
       chart.WithLegend(true);
       chart.Width = 700;
