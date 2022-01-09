@@ -46,7 +46,7 @@ namespace Ceres.Features.Tournaments
     /// <param name="gameTest"></param>
     private void ThreadProcCoordinator(int threadIndex, TournamentGameThread gameTest)
     {
-      while (true)
+      while (!gameTest.Def.ShouldShutDown)
       {
         try
         {
@@ -73,7 +73,7 @@ namespace Ceres.Features.Tournaments
         }
         catch (Exception exc)
         {
-          //Console.WriteLine("Exception in TournamentManager thread: " + exc.ToString());
+          Console.WriteLine("Exception in TournamentManager thread: " + exc.ToString());
         }
       }
     }

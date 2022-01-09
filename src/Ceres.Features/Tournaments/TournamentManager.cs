@@ -192,19 +192,15 @@ namespace Ceres.Features.Tournaments
 
       VerifyEnginesCompatible();
 
-      // TODO: someday support cancellation of distributed tournaments.
-      if (!Def.IsDistributedCoordinator)
-      {
-        // Install Ctrl-C handler to allow ad hoc clean termination of tournament (with stats).
-        ConsoleCancelEventHandler ctrlCHandler = new ConsoleCancelEventHandler((object sender,
-          ConsoleCancelEventArgs args) =>
-          {
-            Console.WriteLine("Tournament pending shutdown....");
-            Def.parentDef.ShouldShutDown = true;
-            shutdownComplete.WaitOne();
-          }); ;
-        Console.CancelKeyPress += ctrlCHandler;
-      }
+      // Install Ctrl-C handler to allow ad hoc clean termination of tournament (with stats).
+      ConsoleCancelEventHandler ctrlCHandler = new ConsoleCancelEventHandler((object sender,
+        ConsoleCancelEventArgs args) =>
+        {
+          Console.WriteLine("Tournament pending shutdown....");
+          Def.parentDef.ShouldShutDown = true;
+          shutdownComplete.WaitOne();
+        }); ;
+      Console.CancelKeyPress += ctrlCHandler;
 
       QueueManager = queueManager;
       TournamentResultStats parentTest = new();
@@ -255,8 +251,7 @@ namespace Ceres.Features.Tournaments
           action = () => ThreadProcDistributedWorker(i, gameTest);
         }
 
-
-        Task thisTask = new Task(action);
+        Task thisTask = new Task(action, default, TaskCreationOptions.LongRunning);
         tasks.Add(thisTask);
         thisTask.Start();
       }
