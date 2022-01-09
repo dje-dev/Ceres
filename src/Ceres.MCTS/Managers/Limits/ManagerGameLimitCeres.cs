@@ -83,7 +83,7 @@ namespace Ceres.MCTS.Managers.Limits
         baseDivisor -= adj;
       }
 
-      const float BASE_MULTIPLIER = 0.60f;
+      const float BASE_MULTIPLIER = 0.65f;
 
       float ret = Aggressiveness * BASE_MULTIPLIER * (1.0f / baseDivisor) * factorWinningness * factorFirstMove;
 
