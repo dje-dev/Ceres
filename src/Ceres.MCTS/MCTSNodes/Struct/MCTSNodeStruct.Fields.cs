@@ -326,18 +326,6 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       }
     }
 
-    public FP16 Uncertainty
-    {
-      readonly get => FP16.NaN;
-      set
-      {
-        if (!FP16.IsNaN(value)) throw new NotImplementedException();
-      }
-    }
-
-
-  // TODO: make compile time constant
-  internal FP16 UNCERTAINTY_PRIOR => (FP16)0.10f;
 
     public void ResetSearchInProgressState(int storeID)
     {
