@@ -214,7 +214,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       targetChildRef.ZobristHash = sourceChildRef.ZobristHash;
       targetChildRef.VSecondary = sourceChildRef.VSecondary;
       //targetChildRef.Uncertainty = 0;// sourceChildRef.Uncertainty;
-      targetChildRef.VarianceAccumulator = 0; // variance accumulation does not begin until after VARIANCE_START_ACCUMULATE_N visits
+      targetChildRef.Uncertainty.Clear();// variance accumulation does not begin until after MIN_N_UPDATE visits
 
       targetChildRef.PriorMove = sourceChildRef.PriorMove;
       targetChildRef.miscFields.IndexInParent = (byte)sourceChildRef.IndexInParent;

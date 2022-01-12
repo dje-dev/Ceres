@@ -148,11 +148,10 @@ namespace Ceres.MCTS.MTCSNodes
 
       }
 
-      float qStdDev = MathF.Sqrt(StructRef.VarianceAccumulator / (N - MCTSNodeStruct.VARIANCE_START_ACCUMULATE_N));
-      //qStdDev = StructRef.VarianceAccumulator;
+      float qUncertainty = StructRef.Uncertainty.UncertaintyAtN(N, 0);
       bool invert = multiplerOurPerspective == -1;
       extraInfo = $" N={N,9:F0} ({fracVisitStr}%{recentQAvgStr})  Q= {multiplerOurPerspective * Q,5:F2}  ";
-      extraInfo += $"+/- {qStdDev,4:F2}  V= {  multiplerOurPerspective * V,5:F2} ";
+      extraInfo += $"+/- {qUncertainty,4:F2}  V= {  multiplerOurPerspective * V,5:F2} ";
       extraInfo += $" WDL= {(invert ? LossP : WinP),4:F2} {DrawP,4:F2} {(invert ? WinP : LossP),4:F2} ";
       extraInfo += $" WDL Avg= {(invert ? LAvg : WAvg),4:F2} {DAvg,4:F2} {(invert ? WAvg : LAvg),4:F2}  ";
       extraInfo += $"M = {MPosition,4:F0} {MAvg,4:F0}  ";

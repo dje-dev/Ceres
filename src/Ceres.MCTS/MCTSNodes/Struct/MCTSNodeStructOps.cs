@@ -585,7 +585,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           }
 
           p[i] = childNode.P.ToFloatApprox;// * childNode.Weight;
-          u[i] = childNode.VarianceAccumulator;
+          u[i] = childNode.Uncertainty.Uncertainty;
 
           bool isOurMove = depth % 2 == 0;
 
@@ -873,23 +873,13 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         // Compute statistics used for tracking uncertainty (variance)
         float qDiff = vToApply - (float)node.Q;
 
-        const float VARIANCE_LAMBDA = 0.0f; // Possible exponentially weighted moving average variance if nonzero
-
         // NOTE: It is not possible to make the updates to both N and W atomic as a group.
         //       Therefore there is a very small possibility that another thread will observe one updated but not the other
         //       (e.g. thread gathering nodes which reaches over to use this as a transposition root and references Q)
         //       To mitigate the possible distortion, N is updated before W so any distortions will shrink toward 0.
-        if (node.N >= VARIANCE_START_ACCUMULATE_N)
+        if (node.N >= MCTSNodeUncertaintyAccumulator.MIN_N_UPDATE)
         {
-          if (VARIANCE_LAMBDA != 0)
-          {
-            throw new NotImplementedException();
-            //node.VarianceAccumulator = NewEMWVarianceAcc(node.VarianceAccumulator, node.N, qDiffSquared, numToApply, VARIANCE_LAMBDA);
-          }
-          else
-          {
-            node.VarianceAccumulator += MathF.Abs(qDiff) * numToApply;
-          }
+          node.Uncertainty.UpdateUncertainty(qDiff, numToApply, node.N);
         }
 
         node.N += numToApply;

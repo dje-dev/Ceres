@@ -200,17 +200,12 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// </summary>
     public byte NumChildrenExpanded;
 
-    /// <summary>
-    /// Only start accumulating variance statistics after a minimum number of visits
-    /// to avoid building statistics when the Q is still highly noisy.
-    /// </summary>
-    public const int VARIANCE_START_ACCUMULATE_N = 10;
 
     /// <summary>
-    /// Accumulate the squared deviations from mean (Q) at the time of each backup
-    /// (starting after VARIANCE_START_ACCUMULATE_N visits).
+    /// Measure of the uncertainty (variability) of evaluations
+    /// relative to their average value.
     /// </summary>
-    public float VarianceAccumulator;
+    public MCTSNodeUncertaintyAccumulator Uncertainty;
 
 #if NOT
 /// <summary>
@@ -361,7 +356,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       Uncertainty = UNCERTAINTY_PRIOR;
 #endif
       VSumSquares = 0;
-      VarianceAccumulator = 0;
+      Uncertainty.Clear();
 
       QUpdatesWtdAvg = 0;
 

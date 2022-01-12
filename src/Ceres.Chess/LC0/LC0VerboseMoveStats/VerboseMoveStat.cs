@@ -96,9 +96,9 @@ namespace Ceres.Chess.SearchResultVerboseMoveInfo
     public EncodedEvalLogistic V;
 
     /// <summary>
-    /// Standard deviation of all backed up evaluations (if sufficient N, otherwise NaN).
+    /// Measure of uncertainty of backed up evaluations (such as MAD over some window).
     /// </summary>
-    public float StdDev;
+    public float Uncertainty;
 
 
     /// <summary>
