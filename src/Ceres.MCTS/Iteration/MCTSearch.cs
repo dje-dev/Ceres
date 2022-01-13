@@ -330,7 +330,7 @@ namespace Ceres.MCTS.Iteration
                                   searchLimit.MaxTreeNodes, searchLimit.MaxTreeVisits,
                                   float.NaN, float.NaN,
                                   maxMovesToGo: searchLimit.MaxMovesToGo,
-                                  isFirstMoveOfGame: isFirstMoveOfGame);
+                                  isFirstMoveOfGame: isFirstMoveOfGame, searchParams.TestFlag);
 
         LastGameLimitOutputs = limitManager.ComputeMoveAllocation(LastGameLimitInputs);
         return LastGameLimitOutputs.LimitTarget;

@@ -480,7 +480,9 @@ namespace Ceres.Features.GameEngines
                                                 LastSearch.Manager.Context.ParamsSearch,
                                                 gameMoveHistory, SearchLimitType.SecondsPerMove,
                                                 LastSearch.Manager.Root.N, (float)LastSearch.Manager.Root.Q,
-                                                LastSearch.Manager.SearchLimit.Value, 0, null, null, 0, 0);
+                                                LastSearch.Manager.SearchLimit.Value, 0, null, null, 0, 0,
+                                                null, gameMoveHistory.Count == 0,
+                                                LastSearch.Manager.Context.ParamsSearch.TestFlag);
       timeManagerInputs.Dump(side);
     }
 

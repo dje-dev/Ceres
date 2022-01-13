@@ -46,6 +46,7 @@ namespace Ceres.MCTS.Managers.Limits
     /// <param name="timeRemainingIncrementOpponent"></param>
     /// <param name="maxMovesToGo"></param>
     /// <param name="isFirstMoveOfGame"></param>
+    /// <param name="testFlag"></param>
     public ManagerGameLimitInputs(in Position startPos, ParamsSearch searchParams,
                                  List<GameMoveStat> priorMoveStats,
                                  SearchLimitType limitType,
@@ -56,7 +57,8 @@ namespace Ceres.MCTS.Managers.Limits
                                  int? maxTreeVisitsSelf,
                                  float timeRemainingFixedOpponent, float timeRemainingIncrementOpponent,
                                  int? maxMovesToGo = null,
-                                 bool isFirstMoveOfGame = false)
+                                 bool isFirstMoveOfGame = false,
+                                 bool testFlag = false)
     {
       StartPos = startPos;
       SearchParams = searchParams;
@@ -72,6 +74,7 @@ namespace Ceres.MCTS.Managers.Limits
       IncrementOpponent = timeRemainingIncrementOpponent;
       MaxMovesToGo = maxMovesToGo;
       IsFirstMoveOfGame = isFirstMoveOfGame;
+      TestFlag = testFlag;
     }
 
 
@@ -149,7 +152,8 @@ namespace Ceres.MCTS.Managers.Limits
     /// <summary>
     /// Flag for testing/diagnostic purposes to indicate use of test mode.
     /// </summary>
-    public bool TestMode;
+    public bool TestFlag;
+
 
     #region Utility methods
 
