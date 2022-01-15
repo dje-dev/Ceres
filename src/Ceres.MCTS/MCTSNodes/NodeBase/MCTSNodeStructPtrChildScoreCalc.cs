@@ -348,7 +348,7 @@ namespace Ceres.MCTS.MTCSNodes
     /// </summary>
     private static class UncertaintyScalingCalculator
     {
-      const float UNCERTAINTY_DIFF_MULTIPLIER = 3.0f;
+      const float UNCERTAINTY_DIFF_MULTIPLIER = 1.5f;
       const float UNCERTAINTY_MAX_DEVIATION = 0.20f;
 
       public static float CalcAdj(float childMAD, float parentMAD)

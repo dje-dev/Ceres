@@ -40,7 +40,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// after node has reached enough visits and therefore 
     /// enough samples have been seen.
     /// </summary>
-    public const int MIN_N_ESTIMATE = 15;
+    public const int MIN_N_ESTIMATE = 50;
 
     /// <summary>
     /// Uncertainty estimates are computed with some maximum 
@@ -48,7 +48,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     ///   - provides an exponential moving window behavior, and
     ///   - prevents "saturation" 
     /// </summary>
-    const int NUM_TRAILING_VALUES = 100_000;
+    const int NUM_TRAILING_VALUES = 20_000;
 
     /// <summary>
     /// The current MAD estimate.
