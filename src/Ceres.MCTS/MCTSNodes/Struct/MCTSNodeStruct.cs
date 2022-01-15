@@ -199,7 +199,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <param name="indexInParent"></param>
     /// <param name="p"></param>
     /// <param name="priorMove"></param>
-    public unsafe void Initialize(int storeID, MCTSNodeStructIndex parentIndex, int indexInParent,  FP16 p, EncodedMove priorMove)
+    public unsafe void Initialize(int storeID, MCTSNodeStructIndex parentIndex, int indexInParent,  
+                                  FP16 p, EncodedMove priorMove, bool isWhite)
     {
       Context.SetAsStoreID(storeID);
       ParentIndex = parentIndex;
@@ -213,6 +214,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       SecondaryNN = false;
       IsOldGeneration = false;
       ZobristHash = 0;
+      miscFields.IsWhite = isWhite;
       //HashCrosscheck = 0;
 
 #if FEATURE_UNCERTAINTY

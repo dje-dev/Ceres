@@ -221,6 +221,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
       targetChildRef.miscFields.NumPieces = sourceChildRef.miscFields.NumPieces;
       targetChildRef.miscFields.NumRank2Pawns = sourceChildRef.miscFields.NumRank2Pawns;
+      targetChildRef.miscFields.IsWhite = sourceChildRef.miscFields.IsWhite;
 
       targetChildRef.miscFields.SecondaryNN = sourceChildRef.miscFields.SecondaryNN;
       targetChildRef.Context.SetAsStoreID(sourceChildRef.Context.StoreID);

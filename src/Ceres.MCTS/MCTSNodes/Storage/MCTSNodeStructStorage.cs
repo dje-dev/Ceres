@@ -286,7 +286,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       MCTSNodeStructIndex rootNodeIndex = AllocateNext();
 
       // Initialize fields
-      nodes[rootNodeIndex.Index].Initialize(ParentStore.StoreID, default, 0, (FP16)1.0, default);
+      nodes[rootNodeIndex.Index].Initialize(ParentStore.StoreID, default, 0, (FP16)1.0, default, default);
 
       nodes[rootNodeIndex.Index].NumPieces = priorMoves.FinalPosition.PieceCount;
       nodes[rootNodeIndex.Index].NumRank2Pawns = priorMoves.FinalPosMG.NumPawnsRank2;

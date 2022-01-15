@@ -62,24 +62,6 @@ namespace Ceres.MCTS.Iteration
     /// </summary>
     public ConcurrentBag<MCTSNode> PendingSecondaryNodes = new();
 
-    internal struct TranspositionCluster
-    {
-      internal int ParentIndex;
-      internal List<int> LinkedIndices;
-
-      internal TranspositionCluster(int parentIndex)
-      { 
-        ParentIndex = parentIndex;
-        LinkedIndices = null;
-      }
-
-      internal void AddLinkedNode(int nodeIndex)
-      {
-        if (LinkedIndices == null) LinkedIndices = new List<int>(4);
-        LinkedIndices.Add(nodeIndex);
-      }
-    }
-
    
     public readonly List<LeafEvaluatorBase> LeafEvaluators;
 

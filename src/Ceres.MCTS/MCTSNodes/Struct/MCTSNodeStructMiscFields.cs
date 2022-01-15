@@ -44,8 +44,9 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     const int BIT_LENGTH_NUM_PIECES = 5;
     const int BIT_LENGTH_NUM_RANK2_PAWNS = 5;
     const int BIT_LENGTH_SECONDARY_NN = 1;
+    const int BIT_LENGTH_IS_WHITE = 1;
     const int BIT_LENGTH_TEST = 1;
-    const int BIT_LENGTH_UNUSED = 6;
+    const int BIT_LENGTH_UNUSED = 5;
 
     const int BIT_INDEX_TERMINAL = 0;
     const int BIT_INDEX_DRAW_KNOWN_EXIST = BIT_INDEX_TERMINAL + BIT_LENGTH_TERMINAL;
@@ -60,7 +61,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     const int BIT_INDEX_NUM_RANK2_PAWNS = BIT_INDEX_NUM_PIECES + BIT_LENGTH_NUM_PIECES;
 
     const int BIT_INDEX_SECONDARY_NN = BIT_INDEX_NUM_RANK2_PAWNS + BIT_LENGTH_NUM_RANK2_PAWNS;
-    const int BIT_INDEX_TEST = BIT_INDEX_SECONDARY_NN + BIT_LENGTH_SECONDARY_NN;
+    const int BIT_INDEX_IS_WHITE = BIT_INDEX_SECONDARY_NN + BIT_LENGTH_SECONDARY_NN;
+    const int BIT_INDEX_TEST = BIT_INDEX_IS_WHITE + BIT_LENGTH_IS_WHITE;
 
     public void Clear() => bits = 0;
 
@@ -278,6 +280,24 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       set
       {
         BitUtils.SetFlag(ref bits, BIT_INDEX_SECONDARY_NN, value);
+      }
+    }
+
+    /// <summary>
+    /// If the node corresponds to a position with white to play.
+    /// </summary>
+    internal bool IsWhite
+    {
+      [MethodImpl(MethodImplOptions.AggressiveInlining)]
+      readonly get
+      {
+        return BitUtils.HasFlag(bits, BIT_INDEX_IS_WHITE);
+      }
+
+      [MethodImpl(MethodImplOptions.AggressiveInlining)]
+      set
+      {
+        BitUtils.SetFlag(ref bits, BIT_INDEX_IS_WHITE, value);
       }
     }
 
