@@ -44,19 +44,5 @@ namespace Ceres.MCTS.Params
     /// This saves both computational expense and memory (typically about 10% less children allocated).
     /// </summary>
     SingleNodeDeferredCopy, 
-    
-    /// <summary>
-    /// Experimental (not yet fully working) 
-    /// mode that attaches to transposition root and does not replicate
-    /// the subtree, but instead sequentially visits all the nodes in the 
-    /// transposition root's subtree.
-    /// 
-    /// This mode should possibly be abandoned because:
-    ///   - the software complexity is high
-    ///   - related, the code is still buggy
-    ///   - the above mode of SingleNodeDeferredCopy already captures much of the benefits of transpositions
-    ///   - tricky issues would have to be dealt with such as multiple visits
-    /// </summary>
-    MultiNodeBuffered  
   };
 }

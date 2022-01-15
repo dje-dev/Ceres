@@ -275,15 +275,6 @@ namespace Ceres.MCTS.Search
         NumNotApply++;
       }
 
-      // ....................... NOT USED ........................
-      if (node.StructRef.IsTranspositionLinked && node.N > 0
-       && node.Context.ParamsSearch.Execution.TranspositionMode == TranspositionMode.MultiNodeBuffered)
-      {
-        throw new NotImplementedException();
-        //ExtractTransposition(node);
-      }
-      // ........................................................
-
       // Case 1 - this is a duplicate of an a node already in flight in the other batch - will be ignored
       //          (when the other batch applies its nodes it will also backout the NInFlight from this batch)
       if (NodesOtherBatch != null)
