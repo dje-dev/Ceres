@@ -32,13 +32,24 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     public delegate bool VisitorSequentialFunc(ref MCTSNodeStruct node, MCTSNodeStructIndex index);
 
 
+    /// <summary>
+    /// Traverses all nodes rooted at this node, calling specified delegate for each,
+    /// using a specified sequencing.
+    /// </summary>
+    /// <param name="store"></param>
+    /// <param name="visitorFunc"></param>
+    /// <param name="traversalType"></param>
     public void Traverse(MCTSNodeStore store, VisitorFunc visitorFunc, TreeTraversalType traversalType)
     {
       if (traversalType == TreeTraversalType.Unspecified
        || traversalType == TreeTraversalType.Sequential)
+      {
         DoTraverseSequential(store, visitorFunc);
+      }
       else
+      {
         DoTraverse(store, visitorFunc, traversalType);
+      }
     }
 
 
@@ -61,17 +72,17 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         if (!thisNodeRef.Detached)
         {
           if (!visitorFunc(ref thisNodeRef, new MCTSNodeStructIndex(i)))
+          {
             return;
+          }
         }
       }
-
     }
 
 
     /// <summary>
     /// Traverses node sequentially in order of creation.
     /// This traversal will typically be much faster because it is cache friendly.
-    /// 
     /// </summary>
     /// <param name="visitorFunc"></param>
     void DoTraverseSequential(MCTSNodeStore store, VisitorFunc visitorFunc)
@@ -87,7 +98,9 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         if (!thisNodeRef.Detached)
         {
           if (!visitorFunc(ref store.Nodes.nodes[i]))
+          {
             return;
+          }
         }
       }
     }
@@ -98,35 +111,29 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       ref MCTSNodeStruct node = ref this;
 
       if (traversalType == TreeTraversalType.BreadthFirst)
+      {
         if (!visitorFunc(ref node))
+        {
           return false;
+        }
+      }
 
       if (!node.IsTranspositionLinked)
       {
-        // For efficiency, we track number of children already visited and 
-        // abort visiting children when we know there are no more unvisited
-        int numChildrenVisited = 0;
-        int numChildren = node.N - 1;
-        int numPolicyMoves = node.NumPolicyMoves;
-
-        for (int i = 0; i < numPolicyMoves; i++)
+        int numExpanded = node.NumChildrenExpanded;
+        for (int i = 0; i < numExpanded; i++)
         {
-          MCTSNodeStructChild child = node.ChildAtIndex(i);
-          if (child.IsExpanded)
-          {
-            ref MCTSNodeStruct childRef = ref child.ChildRef(store);
-            childRef.DoTraverse(store, visitorFunc, traversalType);
-
-            // Update statistcs and check if we can early abort
-            numChildrenVisited += childRef.N;
-            if (numChildrenVisited == numChildren) break;
-          }
+          node.ChildAtIndex(i).ChildRef(store).DoTraverse(store, visitorFunc, traversalType);
         }
       }
 
       if (traversalType == TreeTraversalType.DepthFirst)
+      {
         if (!visitorFunc(ref node))
+        {
           return false;
+        }
+      }
 
       return true;
     }
