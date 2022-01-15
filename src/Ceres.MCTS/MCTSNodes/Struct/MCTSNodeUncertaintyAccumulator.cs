@@ -15,6 +15,7 @@
 
 using System;
 using System.Runtime.InteropServices;
+using Ceres.Base.DataType.Trees;
 
 #endregion
 
@@ -39,7 +40,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// after node has reached enough visits and therefore 
     /// enough samples have been seen.
     /// </summary>
-    public const int MIN_N_ESTIMATE = 30;
+    public const int MIN_N_ESTIMATE = 15;
 
     /// <summary>
     /// Uncertainty estimates are computed with some maximum 
@@ -47,7 +48,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     ///   - provides an exponential moving window behavior, and
     ///   - prevents "saturation" 
     /// </summary>
-    const int NUM_TRAILING_VALUES = 50_000;
+    const int NUM_TRAILING_VALUES = 100_000;
 
     /// <summary>
     /// The current MAD estimate.
@@ -82,7 +83,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <param name="visitDeviation"></param>
     /// <param name="visitCount"></param>
     /// <param name="nodeN"></param>
-    public void UpdateUncertainty(float visitDeviation, float visitCount, int nodeN)
+    public void UpdateUncertainty(ref MCTSNodeStruct nodeRef, float visitDeviation, float visitCount, int nodeN)
     {
       // Only update in the range 
       if (nodeN < MIN_N_UPDATE)
@@ -91,21 +92,51 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       }
       else if (nodeN == MIN_N_UPDATE)
       {
-        // TO DO: could convert by traversing tree to get prior values
+        // Traverse tree to get prior values
+        CalcInitialMADEstimate(ref nodeRef);
       }
       else // (nodeN > MIN_N_UPDATE)
       {
+        if (currentMADEstimate == 0)
+        {
+          CalcInitialMADEstimate(ref nodeRef);
+        }
         int numPriorEsts = nodeN > NUM_TRAILING_VALUES ? NUM_TRAILING_VALUES : nodeN;
         double numerator = (double)currentMADEstimate * numPriorEsts
                          + (double)MathF.Abs(visitDeviation) * visitCount;
         double denominator = (numPriorEsts + visitCount);
         currentMADEstimate = (float)(numerator / denominator);
-//        Console.WriteLine(visitEvaluation + visitCount + " " + nodeN + " nowxx3 " + est);
       }
-
     }
 
     #region Static helpers
+
+    /// <summary>
+    /// Traverses the subtree below this node to compute an initial MAD estimate.
+    /// </summary>
+    /// <param name="nodeRef"></param>
+    private void CalcInitialMADEstimate(ref MCTSNodeStruct nodeRef)
+    {
+      float rootQ = (float)nodeRef.Q;
+      int depthRoot = nodeRef.DepthInTree;
+      bool rootWhite = nodeRef.IsWhite;
+
+      int n = 0;
+      float acc = 0;
+      nodeRef.Traverse(nodeRef.Context.Store,
+                   (ref MCTSNodeStruct innerNode) =>
+                   {
+                     if (!float.IsNaN(innerNode.V))
+                     {
+                       float mult = rootWhite == innerNode.IsWhite ? 1 : -1;
+                       acc += MathF.Abs((mult * innerNode.V) - rootQ);
+                       n++;
+                     }
+                     return true;
+                   }, TreeTraversalType.BreadthFirst);
+      currentMADEstimate = acc / n;
+    }
+
 
     /// <summary>
     /// Static helper that returns the uncertainty value to be used

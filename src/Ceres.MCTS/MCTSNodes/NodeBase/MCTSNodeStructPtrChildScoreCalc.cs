@@ -133,7 +133,7 @@ namespace Ceres.MCTS.MTCSNodes
       // Now if they are applicable (feature turned on, enough samples)
       // compute the appropriate scaling factor
       // and update gatherStatsPSpan via multiplication to have this applied.
-      if (N >= MCTSNodeUncertaintyAccumulator.MIN_N_ESTIMATE 
+      if (N >= MCTSNodeUncertaintyAccumulator.MIN_N_ESTIMATE
        && Context.ParamsSearch.EnableUncertaintyBoosting)
       {
         // Note that to be precise there should be an additional term subtraced off
@@ -144,13 +144,18 @@ namespace Ceres.MCTS.MTCSNodes
         float parentMAD = nodeRef.Uncertainty.Uncertainty;
 
         // Possibly apply scaling to each child.
+        float accUncertaintyMultiplier = 0;
+        float nUsed = 0;
         for (int i = 0; i < numToProcess
-                     && i < NumChildrenExpanded; i++)
+          && i < NumChildrenExpanded; i++)
         {
           if (gatherStatsNSpan[i] >= MCTSNodeUncertaintyAccumulator.MIN_N_ESTIMATE)
           {
             float childMAD = gatherStatsUSpan[i];
             float explorationScaling = UncertaintyScalingCalculator.CalcAdj(childMAD, parentMAD);
+
+            accUncertaintyMultiplier += explorationScaling * gatherStatsNSpan[i];
+            nUsed += gatherStatsNSpan[i];
 
             // Scale P by this uncertainty scaling factor
             // which is equivalent to having separate multiplicand
@@ -158,6 +163,21 @@ namespace Ceres.MCTS.MTCSNodes
             gatherStatsPSpan[i] *= explorationScaling;
           }
         }
+
+        // Adjust all the modified multipliers 
+        // such that the weighted (by N) average adjustment is 1.0
+        // to avoid unintended change in average CPUCT.
+        float avgScale = accUncertaintyMultiplier /= nUsed;
+        float adj = 1.0f / avgScale;
+        for (int i = 0; i < numToProcess
+                     && i < NumChildrenExpanded; i++)
+        {
+          if (gatherStatsNSpan[i] >= MCTSNodeUncertaintyAccumulator.MIN_N_ESTIMATE)
+          {
+            gatherStatsPSpan[i] *= adj;
+          }
+        }
+
       }
 
       // Possibly disqualify pruned moves from selection.
@@ -321,6 +341,7 @@ namespace Ceres.MCTS.MTCSNodes
       return scores.ToArray();
     }
 
+
     /// <summary>
     /// Manages calculation of possible scaling factor to be applied to
     /// CPUCT based on uncertain of node relative to parent.
@@ -328,56 +349,18 @@ namespace Ceres.MCTS.MTCSNodes
     private static class UncertaintyScalingCalculator
     {
       const float UNCERTAINTY_DIFF_MULTIPLIER = 3.0f;
-      const float UNCERTAINTY_MAX_DEVIATION = 0.25f;
-      const float BIAS_ADJUST = 0.01f; // adjustment to make average value turn out to be very close to 1.0
-
-     [ThreadStatic] static double accScale;
-     [ThreadStatic] static int countScale;
+      const float UNCERTAINTY_MAX_DEVIATION = 0.20f;
 
       public static float CalcAdj(float childMAD, float parentMAD)
-      { 
-      // The uncertainty scaling is a number centered at 1 which is
-      // higher for children with more emprical volatility than the parent and
-      // lower for children with less volatility.
-      float explorationScaling = 1 + BIAS_ADJUST + UNCERTAINTY_DIFF_MULTIPLIER * (childMAD - parentMAD);
-      explorationScaling = StatUtils.Bounded(explorationScaling, 1.0f - UNCERTAINTY_MAX_DEVIATION, 1.0f + UNCERTAINTY_MAX_DEVIATION);
+      {
+        // The uncertainty scaling is a number centered at 1 which is
+        // higher for children with more emprical volatility than the parent and
+        // lower for children with less volatility.
+        float explorationScaling = 1 + UNCERTAINTY_DIFF_MULTIPLIER * (childMAD - parentMAD);
+        return StatUtils.Bounded(explorationScaling, 1.0f - UNCERTAINTY_MAX_DEVIATION, 1.0f + UNCERTAINTY_MAX_DEVIATION);
+      }
 
-#if NOT
-            if (nonlinear)
-            {
-                // The uncertainty scaling is a number centered at 1 which is
-                // higher for children with more emprical volatility than the parent and
-                // lower for children with less volatility.
-                float p = gatherStatsPSpan[i];
-                float adj = 5 * (childMAD - parentMAD);
-                explorationScaling = (1 + 15 * p + adj) / (1 + 15 * p);
-                explorationScaling += 0.04f;
-                explorationScaling = StatUtils.Bounded(explorationScaling, 0.666f, 1.5f);
-              //              Console.WriteLine(explorationScaling + " adj=" + adj + " p=" + p);
-            }
-            else
-            {
-#endif
-
-        const bool SHOW_UNCERTAINTY_STATS = true; // perforamnce degrading
-        if (SHOW_UNCERTAINTY_STATS)
-        {
-          // Update statistics.
-          accScale += explorationScaling;
-          countScale++;
-          if (MathF.Abs(explorationScaling - 1) > 0.1f)// && Ref.ZobristHash % 1_000 == 0)
-          {
-            MCTSEventSource.TestCounter1++;
-            MCTSEventSource.TestMetric1 = (accScale / countScale);
-            //                if (Math.Abs(MCTSEventSource.TestMetric1) > 2) 
-          }
-          //              if (N % 13833 == 122)
-          //                Console.WriteLine(explorationScaling + " esx");
-        }
-        return explorationScaling;
-  }
-
-}
+    }
 
   }
 }
