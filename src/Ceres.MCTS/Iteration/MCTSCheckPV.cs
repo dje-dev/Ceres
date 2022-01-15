@@ -40,9 +40,21 @@ namespace Ceres.MCTS.Iteration
   {
     const bool VERBOSE = true;
 
-    public static PVCheckResult Check(MCTSearch Search, IMCTSNodeCache reuseNodeCache, int pvDepth)
+    public static List<PVCheckResult> CheckMultipleDepths(MCTSearch search, IMCTSNodeCache reuseNodeCache, int maxDepth)
     {
-      SearchPrincipalVariation pv = new SearchPrincipalVariation(Search.Manager.Root);
+      List<PVCheckResult> ret = new();
+      for (int i=1; i<maxDepth; i++)
+      {
+        ret.Add(Check(search, reuseNodeCache, i));  
+      }
+      return ret;
+    }
+
+    public static PVCheckResult Check(MCTSearch search, IMCTSNodeCache reuseNodeCache, int pvDepth)
+    {
+      reuseNodeCache = null; // ************************ DISABLE, causes strange crash in debug mode
+
+      SearchPrincipalVariation pv = new SearchPrincipalVariation(search.Manager.Root);
       if (pv.Nodes.Count <= pvDepth)
       {
         return null;
@@ -57,7 +69,7 @@ namespace Ceres.MCTS.Iteration
       }
 
       // Build the position history leading down the PV to this node.
-      PositionWithHistory pwh = new PositionWithHistory(Search.Manager.Context.StartPosAndPriorMoves);
+      PositionWithHistory pwh = new PositionWithHistory(search.Manager.Context.StartPosAndPriorMoves);
       for (int history = 1; history <= pvDepth; history++)
       {
         pwh.AppendMove(pv.Nodes[history].Annotation.PriorMoveMG);
@@ -72,12 +84,12 @@ namespace Ceres.MCTS.Iteration
       MCTSNode pvRootBestMove;
       int pvRootN;
 
-      topRootN = Search.Manager.Context.Root.N;
+      topRootN = search.Manager.Context.Root.N;
       pvRootN = pvRoot.N;
       pvRoot.Annotate();
       pvRootBestMove = pvRoot.ChildrenSorted(s => (float)s.Q)[0];
 
-      if (pvRootN < 10 || pvRootN < Search.Manager.Root.N / 1000)
+      if (pvRootN < 10 || pvRootN < search.Manager.Root.N / 1000)
       {
         //Console.WriteLine($"stop {pvRoot.N} vs {Search.Manager.Root.N}");
         return null;
@@ -91,7 +103,7 @@ namespace Ceres.MCTS.Iteration
         child.Annotate();
 
         // Add to search moves if has received few visits so far.
-        const float MAX_N_FRAC = 0.03f;
+        const float MAX_N_FRAC = 0.05f;
         if (child.N < pvRoot.N * MAX_N_FRAC)
         {
           newSearchMoves.Add(MGMoveConverter.ToMove(child.Annotation.PriorMoveMG));
@@ -107,11 +119,11 @@ namespace Ceres.MCTS.Iteration
       MCTSearch search1 = new MCTSearch();
 
       // Determine how many additional nodes to use in this search.
-      const float N_MULTIPLIER = 2f;
+      const float N_MULTIPLIER = 3f;
       int maxNewNodes = (int)(MathF.Max(30, totalNInSearchable * N_MULTIPLIER));
 
       MCTSEventSource.TestCounter1 += maxNewNodes;
-      SearchLimit newLimit = Search.Manager.SearchLimit with
+      SearchLimit newLimit = search.Manager.SearchLimit with
       {
         Type = SearchLimitType.NodesPerMove,
         Value = maxNewNodes,
@@ -153,23 +165,30 @@ namespace Ceres.MCTS.Iteration
       TimingStats timingStats = new TimingStats();
       using (new TimingBlock(timingStats, TimingBlock.LoggingType.None))
       {
-        search1.Search(Search.Manager.Context.NNEvaluators,
-                     Search.Manager.Context.ParamsSelect with { CPUCTAtRoot = Search.Manager.Context.ParamsSelect.CPUCTAtRoot * 100 },
-                     Search.Manager.Context.ParamsSearch with { FutilityPruningStopSearchEnabled = false, MoveFutilityPruningAggressiveness = 0 }, null,
-                     Search.Manager.Context, /*reuseOtherContextForEvaluatedNodes,*/
+        search1.Search(search.Manager.Context.NNEvaluators,
+                     search.Manager.Context.ParamsSelect with { CPUCTAtRoot = search.Manager.Context.ParamsSelect.CPUCTAtRoot * 100 },
+                     search.Manager.Context.ParamsSearch with { FutilityPruningStopSearchEnabled = false, MoveFutilityPruningAggressiveness = 0 }, null,
+                     search.Manager.Context, /*reuseOtherContextForEvaluatedNodes,*/
                      pwh, newLimit, false, DateTime.Now,
                      null, Callback, null, reuseNodeCache, false, false,
                      true);
+
+        if (VERBOSE)
+        {
+//          Console.WriteLine("\r\nPV CHECK Depth: " + pvDepth + " " + pwh);
+//          search1.Manager.DumpRootMoveStatistics();
+//          Console.WriteLine();
+        }
       }
 
 
-      PVCheckResult checkResult = new(Search, pvRoot, priorBestMoveMG, (int)newLimit.Value, (float)timingStats.ElapsedTimeSecs);
+      PVCheckResult checkResult = new(search, pvRoot, priorBestMoveMG, (int)newLimit.Value, (float)timingStats.ElapsedTimeSecs);
 
       MCTSNode newBestMove = search1.Manager.Root.ChildrenSorted(s => search1.Manager.Context.RootMovesPruningStatus[s.IndexInParentsChildren] == MCTSFutilityPruningStatus.PrunedDueToSearchMoves ? float.MaxValue : (float)s.Q)[0];
       priorBestQ *= -1f;
 
       // Only report moves which appear much better than prior best Q.
-      const float THRESHOLD = 0.05f;
+      const float THRESHOLD = 0.03f;
       float newBestQ = -(float)newBestMove.Q;
       float pessimisticNewBestQ = newBestQ - THRESHOLD;
       if (pessimisticNewBestQ > priorBestQ)
@@ -186,6 +205,10 @@ namespace Ceres.MCTS.Iteration
           Console.WriteLine("  Position: " + pwh);
           Console.WriteLine("  Prior best: " + priorBestQ + " " + priorBestN + " " + priorBestMoveMG);
           Console.WriteLine("  New best: " + newBestQ + " " + newBestMove.N + " " + newBestMove.Annotation.PriorMoveMG + " with policy " + newBestMove.P);
+
+          Console.WriteLine();
+          search1.Manager.DumpRootMoveStatistics();
+          Console.WriteLine();
         }
 
         //newBestMove.Parent.InfoRef.BoostNodeIndex = new MCTSNodeStructIndex(newBestMove.Parent.Index);
