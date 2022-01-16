@@ -37,6 +37,20 @@ namespace Ceres.Chess
     public static void SetFinalPositionRepetitionCount(Span<Position> posSpan)
     {
       ref readonly Position finalPosition = ref posSpan[^1];
+      finalPosition.MiscInfo.SetRepetitionCount(GetFinalPositionRepetitionCount(posSpan));
+    }
+
+
+    /// <summary>
+
+    /// <summary>
+    /// Returns the number of repetitions of the final position
+    /// over a specified set of positions.
+    /// </summary>
+    /// <param name="posSpan"></param>
+    public static int GetFinalPositionRepetitionCount(Span<Position> posSpan)
+    {
+      ref readonly Position finalPosition = ref posSpan[^1];
 
       // Only need to check positions with same side to play
       int count = 0;
@@ -44,10 +58,12 @@ namespace Ceres.Chess
       {
         ref readonly Position thisPosition = ref posSpan[i];
         if (thisPosition.EqualAsRepetition(in finalPosition))
+        {
           count++;
+        }
       }
 
-      finalPosition.MiscInfo.SetRepetitionCount(count);
+      return count;
     }
 
 
