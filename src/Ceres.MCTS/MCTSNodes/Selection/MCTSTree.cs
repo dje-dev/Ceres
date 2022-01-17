@@ -117,9 +117,16 @@ namespace Ceres.MCTS.LeafExpansion
       EncodedPriorPositions = new List<EncodedPositionBoard>();
       Position[] priorPositions = new Position[9];
 
+      // Initialize priorPositions with the search root position (expected by DoGetHistoryPositions)
+      priorPositions[0] = PriorMoves.FinalPosition;
+
       // Get prior positions (last position has highest index)
-      priorPositions = PositionHistoryGatherer.DoGetHistoryPositions(PriorMoves, priorPositions, 0, 8, false).ToArray();
-      for (int i = priorPositions.Length - 1; i >= 0; i--)
+      priorPositions = PositionHistoryGatherer.DoGetHistoryPositions(0, PriorMoves, priorPositions, 1, 8, true, false).ToArray();
+
+      // Save the encoded boards for all history positions
+      // (but not including lastboard since it is the search root position
+      // and will already be in the tree for all positions)
+      for (int i = priorPositions.Length - 2; i >= 0; i--)
       {
         EncodedPositionBoard thisBoard = EncodedPositionBoard.GetBoard(in priorPositions[i], priorPositions[i].MiscInfo.SideToMove, false);
         EncodedPriorPositions.Add(thisBoard);
@@ -300,12 +307,12 @@ namespace Ceres.MCTS.LeafExpansion
       Debug.Assert(newPosAsPos.PieceExists(Pieces.WhiteKing) && newPosAsPos.PieceExists(Pieces.BlackKing));
 
       // Create history, with prepended move representing this move.
-      // Load only a limited position history for efficiency,
-      // unless near the root where draw by repetition especially critical to detect.
       // TODO: Upon tree reuse, do we need to revisit shallow nodes with this deeper draw detection?
-      int drawLookbackPlies = node.Depth < 5 ? MAX_LENGTH_POS_HISTORY : ParamsSearch.DrawByRepetitionLookbackPlies;
-      Span<Position> posHistory = GetPriorHistoryPositions(node.Parent, in newPosAsPos, PosScratchBuffer,
-                                                           drawLookbackPlies, true);
+
+      const bool TRUNCATE_HISTORY_50_MOVE_RULE = true; // more efficient and preserves correctness
+      Span<Position> posHistory = GetPriorHistoryPositions(node, in newPosAsPos, PosScratchBuffer,
+                                                           ParamsSearch.DrawByRepetitionLookbackPlies, 
+                                                           TRUNCATE_HISTORY_50_MOVE_RULE, true);
 
       // Determine the set (possibly a subset) of positions over which to compute hash
       Span<Position> posHistoryForCaching = posHistory;
@@ -384,10 +391,13 @@ namespace Ceres.MCTS.LeafExpansion
     /// </summary>
     /// <param name="node"></param>
     /// <returns></returns>
-    public Span<Position> HistoryPositionsForNode(MCTSNode node, int maxLookback = MAX_LENGTH_POS_HISTORY - 1)
+    public Span<Position> HistoryPositionsForNode(MCTSNode node, 
+                                                  int maxLookback = MAX_LENGTH_POS_HISTORY - 1,
+                                                  bool stop50MoveRuleReset = true)
     {
       maxLookback = Math.Min(maxLookback, MAX_LENGTH_POS_HISTORY - 1);
-      return GetPriorHistoryPositions(node.Parent, in node.Annotation.Pos, PosScratchBuffer, maxLookback, true);
+
+      return GetPriorHistoryPositions(node, in node.Annotation.Pos, PosScratchBuffer, maxLookback, stop50MoveRuleReset, true);
     }
 
 
@@ -398,9 +408,10 @@ namespace Ceres.MCTS.LeafExpansion
     /// <param name="node"></param>
     public void DumpNodePositionHistory(MCTSNode node)
     {
-      Console.WriteLine("\r\n" + node.ToString());
+      Console.WriteLine("\r\n" + node.StructRef.ToString());
       int count = 0;
-      foreach (Position pos in HistoryPositionsForNode(node, ParamsSearch.DrawByRepetitionLookbackPlies))
+      const int MAX_LOOKBACK = 254;
+      foreach (Position pos in HistoryPositionsForNode(node, MAX_LOOKBACK, false))
       {
         Console.WriteLine($"  {count++,4:F0} {pos.MiscInfo.RepetitionCount,4:F0} { pos.FEN }");
       }
@@ -413,25 +424,87 @@ namespace Ceres.MCTS.LeafExpansion
     /// Note that we expect the positions stored in each node already include the repetition counts (if any)
     /// thus this does not need to be recomputed here.
     /// </summary>
+    /// <param name="deepestNode"></param>
+    /// <param name="deepestNodePos"></param>
     /// <param name="posSpan"></param>
     /// <param name="maxPositions"></param>
+    /// <param name="stop50MoveRuleReset">if position retrieval should stop upon seeing 50 move</param>
+    /// <param name="setFinalPositionRepetitionCount"></param>
     /// <returns></returns>
-    Span<Position> GetPriorHistoryPositions(MCTSNode node, in Position prependPosition,
-                                            Span<Position> posSpan, int maxPositions, bool setFinalPositionRepetitionCount)
+    Span<Position> GetPriorHistoryPositions(MCTSNode deepestNode, in Position deepestNodePos,
+                                            Span<Position> posSpan, int maxPositions, bool stop50MoveRuleReset,
+                                            bool setFinalPositionRepetitionCount)
     {
+      int depthOfLastNodeAdded = deepestNode.Depth; // so far only deepestNodePos has been added
+
       // Gather history positions by ascending tree
-      posSpan[0] = prependPosition;
+      posSpan[0] = deepestNodePos;
       int count = 1;
-      MCTSNode thisAnnotation = node;
-      while (count < maxPositions && !thisAnnotation.IsNull)
+      int priorMove50 = deepestNodePos.MiscInfo.Move50Count;
+
+      // Ascend in tree until no more nodes or we have extracted as many positinos as requested.
+      MCTSNode thisNode = deepestNode.Parent;
+      while (count < maxPositions && !thisNode.IsNull)
       {
-        posSpan[count++] = thisAnnotation.Annotation.Pos;
-        thisAnnotation = thisAnnotation.Parent;
+        int thisMove50Count = thisNode.Annotation.Pos.MiscInfo.Move50Count;
+
+        // If 50 move rule counter was seen to not go up
+        // then it must have reset indicating some move
+        // was made that makes repetitions not possible.
+        if (stop50MoveRuleReset && priorMove50 <= thisMove50Count)
+        {
+          break;
+        }
+
+        priorMove50 = thisMove50Count;
+        posSpan[count++] = thisNode.Annotation.Pos;
+        thisNode = thisNode.Parent;
+        depthOfLastNodeAdded--;
       }
 
+      // No need to prefill en passant positions if 50 move rule reset (since would have been pawn move).
+      bool doEnPassantPrefill = !stop50MoveRuleReset;
+
       // Gather positions from this path (possibly also reaching back into the start sequence)
-      return PositionHistoryGatherer.DoGetHistoryPositions(PriorMoves, posSpan, count, maxPositions, setFinalPositionRepetitionCount);
+      return PositionHistoryGatherer.DoGetHistoryPositions(depthOfLastNodeAdded, PriorMoves, posSpan, count, maxPositions, 
+                                                           doEnPassantPrefill, setFinalPositionRepetitionCount);
     }
+
+
+    public int NumEqualAsRepetitionInHistory(MCTSNode node, in Position position, int maxLookbackPly, bool verbose)
+    {
+      // TODO: possibly skip "other color" positions for efficiency
+      int countLookback = 0;
+      int countEqual = 0;
+      MCTSNode thisNode = node;
+      while (countLookback < maxLookbackPly && !thisNode.IsNull)
+      {
+        countLookback++;
+        if (thisNode.Annotation.Pos.EqualAsRepetition(in position))
+        {
+          countEqual++;
+          if (verbose) Console.WriteLine($"{countEqual} match tree {position.FEN} {thisNode.Annotation.Pos.FEN} on node: {thisNode}");
+        }
+        thisNode = thisNode.Parent;
+      }
+
+      Position[] priorPositions = PriorMoves.GetPositions();
+      int priorPositionsIndex = priorPositions.Length - 2; // skip last position at ^1 because it correponds to root in tree
+      while (countLookback < maxLookbackPly && priorPositionsIndex >= 0)
+      {
+        if (priorPositions[priorPositionsIndex].EqualAsRepetition(in position))
+        {
+          countEqual++;
+          if (verbose) Console.WriteLine($"{countEqual} match prior {position.FEN} {priorPositions[priorPositionsIndex].FEN} {priorPositionsIndex}");
+        }
+
+        priorPositionsIndex--;
+        countLookback++;
+      }
+
+      return countEqual;
+    }
+
 
     /// <summary>
     /// Resets cache of nodes, optionally also resetting the CacheIndex of each node.

@@ -221,10 +221,10 @@ namespace Ceres.MCTS.Params
     /// a node should be draw by repetition.
     /// 
     /// To detect draws by 3-fold repetition, according to the rules of chess
-    /// we need to look back over full game, but for efficiency reasons we 
-    /// typically restrict lookback to a limited window.
+    /// we need to look back over full game, but for efficiency reasons  
+    /// lookback can be restricted to a limited window by this setting.
     /// </summary>
-    public const int DrawByRepetitionLookbackPlies = 22;
+    public const int DrawByRepetitionLookbackPlies = 254;
 
 
     /// <summary>

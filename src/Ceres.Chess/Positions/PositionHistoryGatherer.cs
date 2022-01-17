@@ -28,55 +28,62 @@ namespace Ceres.Chess.Positions
   {
     /// <summary>
     /// Returns sequence of positions, with the last move at the last position in the Span.
-    /// 
     /// </summary>
+    /// <param name="depthOfLastNodeAdded"></param>
+    /// <param name="priorMoves"></param>
     /// <param name="posSpan"></param>
+    /// <param name="numPositionsFilled"></param>
+    /// <param name="maxPositions"></param>
+    /// <param name="doEnPassantPrefill"></param>
+    /// <param name="setFinalPositionRepetitionCount"></param>
     /// <returns></returns>
-    public static Span<Position> DoGetHistoryPositions(PositionWithHistory priorMoves, Span<Position> posSpan,
-                                                       int numPositionsFilled, int maxPositions, bool setFinalPositionRepetitionCount)
+    public static Span<Position> DoGetHistoryPositions(int depthOfLastNodeAdded, 
+                                                       PositionWithHistory priorMoves, Span<Position> posSpan,
+                                                       int numPositionsFilled, int maxPositions, 
+                                                       bool doEnPassantPrefill,
+                                                       bool setFinalPositionRepetitionCount)
     {
+      Debug.Assert(priorMoves != null);
+      Debug.Assert(numPositionsFilled > 0); // expect at least root search node to have been populated
+
       // Try to do fill in of history from moves prior to the root node of the search, if available
-      if (numPositionsFilled < maxPositions && priorMoves != null && priorMoves.Moves.Count > 0)
+      if (depthOfLastNodeAdded == 0 && priorMoves.Moves.Count > 0)
       {
         VerifyBeginningOfHistoryOverlapsWithPriorMoves(priorMoves, posSpan, numPositionsFilled);
 
         Position[] priorPositions = priorMoves.GetPositions();
         int numTaken = 0;
-        while (numPositionsFilled < maxPositions && numTaken < priorPositions.Length - 1)
+        int lastPriorPositionIndex = priorPositions.Length - 2; // do not take last position (^1), this is root (already in tree)
+        while (numPositionsFilled < maxPositions && numTaken <= lastPriorPositionIndex)
         {
           posSpan[numPositionsFilled++] = priorPositions[priorPositions.Length - 2 - numTaken];
           numTaken++;
         }
       }
 
-      if (numPositionsFilled < maxPositions)
+      // Do final fill in of implied prior position if the first position was en-passant 
+      // and we have room for another position before this one insert the en-passant prior position
+      if (doEnPassantPrefill && numPositionsFilled < maxPositions && posSpan[numPositionsFilled - 1].MiscInfo.EnPassantRightsPresent)
       {
-        // Do final fill in of implied prior position if the first position was en-passant 
-        // and we have room for another position before this one insert the en-passant prior position
-        if (numPositionsFilled == 0)
-        {
-          if (priorMoves.FinalPosition.MiscInfo.EnPassantFileIndex != PositionMiscInfo.EnPassantFileIndexEnum.FileNone)
-          {
-            posSpan[numPositionsFilled++] = priorMoves.FinalPosition.PosWithEnPassantUndone();
-          }
-        }
-        else
-        {
-          // Check end of already existing positions
-          bool hasEnPassantRights = posSpan[numPositionsFilled - 1].MiscInfo.EnPassantFileIndex != PositionMiscInfo.EnPassantFileIndexEnum.FileNone;
-          if (hasEnPassantRights)
-          {
-            Position priorPos = posSpan[numPositionsFilled - 1];
-            posSpan[numPositionsFilled++] = priorPos.PosWithEnPassantUndone();
-          }
-        }
+        posSpan[numPositionsFilled] = posSpan[numPositionsFilled - 1].PosWithEnPassantUndone();
+        numPositionsFilled++;
       }
 
-      if (numPositionsFilled != posSpan.Length) posSpan = posSpan.Slice(0, numPositionsFilled);
+      // Trim span to actual size
+      if (numPositionsFilled != posSpan.Length)
+      {
+        posSpan = posSpan.Slice(0, numPositionsFilled);
+      }
 
+      // Reverse span
+      // TODO: could this inefficiencybe avoided?
       posSpan.Reverse();
 
-      if (setFinalPositionRepetitionCount) PositionRepetitionCalc.SetFinalPositionRepetitionCount(posSpan);
+      // Set repetition count if requested.
+      if (setFinalPositionRepetitionCount)
+      {
+        PositionRepetitionCalc.SetFinalPositionRepetitionCount(posSpan);
+      }
 
       return posSpan;
     }
