@@ -471,7 +471,7 @@ namespace Ceres.MCTS.LeafExpansion
     }
 
 
-    public int NumEqualAsRepetitionInHistory(MCTSNode node, in Position position, int maxLookbackPly, bool verbose)
+    public int NumEqualAsRepetitionInHistory(MCTSNode node, in Position position, int maxLookbackPly)
     {
       // TODO: possibly skip "other color" positions for efficiency
       int countLookback = 0;
@@ -483,7 +483,7 @@ namespace Ceres.MCTS.LeafExpansion
         if (thisNode.Annotation.Pos.EqualAsRepetition(in position))
         {
           countEqual++;
-          if (verbose) Console.WriteLine($"{countEqual} match tree {position.FEN} {thisNode.Annotation.Pos.FEN} on node: {thisNode}");
+          //if (verbose) Console.WriteLine($"{countEqual} match tree {position.FEN} {thisNode.Annotation.Pos.FEN} on node: {thisNode}");
         }
         thisNode = thisNode.Parent;
       }
@@ -495,7 +495,7 @@ namespace Ceres.MCTS.LeafExpansion
         if (priorPositions[priorPositionsIndex].EqualAsRepetition(in position))
         {
           countEqual++;
-          if (verbose) Console.WriteLine($"{countEqual} match prior {position.FEN} {priorPositions[priorPositionsIndex].FEN} {priorPositionsIndex}");
+          //if (verbose) Console.WriteLine($"{countEqual} match prior {position.FEN} {priorPositions[priorPositionsIndex].FEN} {priorPositionsIndex}");
         }
 
         priorPositionsIndex--;
