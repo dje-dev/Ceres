@@ -122,7 +122,8 @@ namespace Ceres.Features.GameEngines
       // LC0 speed generally much improved by a cache size larger than the default (200_000).
       const float LC0_CACHE_FRAC_MEM = 0.05f; // sufficiently small to allow multiple concurrent engines
       const int BYTES_PER_CACHE_ITEM = 250;
-      int DEFAULT_CACHE_SIZE= (int)Math.Max(2_000_000, (HardwareManager.MemorySize  * LC0_CACHE_FRAC_MEM) / BYTES_PER_CACHE_ITEM);
+      long memorySize = Math.Min(HardwareManager.MemorySize, 196_000_000_000);
+      int DEFAULT_CACHE_SIZE= (int)Math.Max(2_000_000, (memorySize  * LC0_CACHE_FRAC_MEM) / BYTES_PER_CACHE_ITEM);
       int cacheSize = overrideCacheSize ?? DEFAULT_CACHE_SIZE;
       lzOptions += $"--nncache={cacheSize} ";
 
