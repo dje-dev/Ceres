@@ -203,9 +203,9 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
       targetChildRef.Terminal = sourceChildRef.Terminal;
       targetChildRef.N = 1;
-      targetChildRef.W = sourceChildRef.V * NODE_FRAC            + sourceChildRef.Q    * SUBTREE_FRAC;
+      targetChildRef.W = sourceChildRef.V * NODE_FRAC + sourceChildRef.Q * SUBTREE_FRAC;
       targetChildRef.mSum = (FP16)(sourceChildRef.MPosition * NODE_FRAC + sourceChildRef.MAvg * SUBTREE_FRAC);
-      targetChildRef.dSum = sourceChildRef.DrawP * NODE_FRAC     + sourceChildRef.DAvg * SUBTREE_FRAC;
+      targetChildRef.dSum = sourceChildRef.DrawP * NODE_FRAC + sourceChildRef.DAvg * SUBTREE_FRAC;
 
       targetChildRef.MPosition = sourceChildRef.MPosition;
       targetChildRef.WinP = sourceChildRef.WinP;
@@ -231,6 +231,18 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
       //targetChildRef.HashCrosscheck = sourceChildRef.HashCrosscheck;
 
+      // TODO: experimental, remove
+      if (tree.Context.ParamsSearch.TestFlag2)
+      {
+        // Using the history for this node, check if the materialized position
+        // would actually be a draw by repetition.
+        // TODO: Ideally this would have happened earlier
+        bool childIsDrawByRepetition = CheckIsDrawByRepetition(tree, in targetParentRef, targetChildRef.PriorMove, default);
+        if (childIsDrawByRepetition)
+        {
+          targetChildRef.ResetToDraw();
+        }
+      }
 
       if (targetChildRef.Terminal == GameResult.Draw)
       {
@@ -251,12 +263,12 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       // Possibly move over a second sub-child in the clone.
       // The second descendent (if it exists and is usable)
       // must be either the child of the child, or its sibling.
-      if (cloneSubchildIfPossible)
+      if (cloneSubchildIfPossible && !targetChildRef.Terminal.IsTerminal())
       {
         Debug.Assert(childIndex == 0);
 
         ref MCTSNodeStruct dummyRef = ref tree.Store.Nodes.nodes[0];
-        
+
         ref readonly MCTSNodeStruct candidateSourceChildChild = ref dummyRef;
         bool candidateSourceChildChildValid = false;
         if (sourceChildRef.NumChildrenVisited > 0)
@@ -265,7 +277,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           candidateSourceChildChildValid = candidateSourceChildChild.IsValidTranspositionLinkedSource;
         }
 
-        ref readonly MCTSNodeStruct candidateSourceChildSibling =  ref dummyRef;
+        ref readonly MCTSNodeStruct candidateSourceChildSibling = ref dummyRef;
         bool candidateSourceChildSiblingValid = false;
         if (sourceParentRef.NumChildrenVisited > 1)
         {
@@ -288,7 +300,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         }
 
         float subchildSubtreeFraction = ParamsSearch.TranspositionCloneNodeSubtreeFracs[2];
-        
+
         // Do the clone from the transpose child.
         MCTSNodeStructIndex clonedSubchildIndex = default;
         if (candidateSourceChildChildValid)
@@ -297,7 +309,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         }
         else if (candidateSourceChildSiblingValid)
         {
-          clonedSubchildIndex = TryCloneChild(tree, in sourceParentRef, ref  targetParentRef, 1, subchildSubtreeFraction,  false);
+          clonedSubchildIndex = TryCloneChild(tree, in sourceParentRef, ref targetParentRef, 1, subchildSubtreeFraction, false);
         }
 
         // In the case of child of the child, the parent statistics
@@ -326,8 +338,37 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         }
       }
 
-      return targetChildIndex;    
-  }
+      return targetChildIndex;
+    }
+
+    internal static bool CheckIsDrawByRepetition(MCTSTree tree, in MCTSNodeStruct targetParentRef, 
+                                                 EncodedMove movePly1FromParent, EncodedMove movePly2FromParent)
+    {
+      MCTSNode targetParentNode = tree.GetNode(targetParentRef.Index);
+      targetParentNode.Annotate();
+
+      // Make first move.
+      MGPosition posMG = targetParentNode.Annotation.PosMG;
+      posMG.MakeMove(ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(movePly1FromParent, in posMG));
+
+      // Make second move if present.
+      if (movePly2FromParent != default)
+      {
+        posMG.MakeMove(ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(movePly2FromParent, in posMG));
+      }
+
+      Position posAfterChildMove = posMG.ToPosition;
+
+      int MAX_PLY = ParamsSearch.DrawByRepetitionLookbackPlies;
+      int numEqualRepetitions = tree.NumEqualAsRepetitionInHistory(targetParentNode, in posAfterChildMove, MAX_PLY);
+      if (numEqualRepetitions > 0)
+      {
+        MCTSEventSource.TestCounter1++;
+        return true;
+      }
+
+      return false; 
+    }
 
 
     public void CloneSubtree(MCTSNodeStore store,

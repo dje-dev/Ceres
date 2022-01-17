@@ -19,6 +19,7 @@ using Ceres.Base.DataTypes;
 using Ceres.Base.Environment;
 using Ceres.Chess;
 using Ceres.Chess.EncodedPositions;
+using Ceres.MCTS.Environment;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.MTCSNodes.Struct;
@@ -166,7 +167,7 @@ namespace Ceres.MCTS.Evaluators
 
 
       // Helper method to set the PendingTransposition values from specified subnode.
-      void SetNodePendingValues(in MCTSNodeStruct transpositionRootRef, float multiplier, in MCTSNodeStruct subnodeRef, bool subnodeRefIsValid)
+      void SetNodePendingValues(float multiplier, in MCTSNodeStruct subnodeRef, bool subnodeRefIsValid)
       {
         Debug.Assert(subnodeRefIsValid);
 
@@ -191,7 +192,7 @@ namespace Ceres.MCTS.Evaluators
       if (node.N == 0)
       {
         // less efficient var visit0Ref = MCTSNodeStruct.SubnodeRefVisitedAtIndex(in transpositionRootNode, 0, out bool foundV0);
-        SetNodePendingValues(in transpositionRootNode, 1, in transpositionRootNode, true);
+        SetNodePendingValues(1, in transpositionRootNode, true);
       }
       else
       {
@@ -200,7 +201,24 @@ namespace Ceres.MCTS.Evaluators
 
         if (node.N == 1)
         {
-          SetNodePendingValues(in transpositionRootNode, -1, in visit1Ref, foundV1);
+          SetNodePendingValues(-1, in visit1Ref, foundV1);
+
+          // TODO: experimental, remove
+          if (node.Context.ParamsSearch.TestFlag2)
+          {
+
+            bool isDraw = MCTSNodeStruct.CheckIsDrawByRepetition(node.Tree, in node.StructRef, visit1Ref.PriorMove, default);
+            if (isDraw)
+            {
+              node.PendingTranspositionV = 0;
+              node.PendingTranspositionM = 0;
+              node.PendingTranspositionD = 1;
+
+              // Reset number of pending roots such that no further extraction will happen.
+              node.StructRef.NumVisitsPendingTranspositionRootExtraction = 1;
+              MCTSEventSource.TestMetric1++;
+            }
+          }
         }
         else if (node.N == 2)
         {
@@ -208,7 +226,21 @@ namespace Ceres.MCTS.Evaluators
           Debug.Assert(foundV2);
           float multiplier = visit2Ref.ParentIndex == transpositionRootNode.Index ? -1 : 1;
 
-          SetNodePendingValues(in transpositionRootNode, multiplier, in visit2Ref, foundV2);
+          SetNodePendingValues(multiplier, in visit2Ref, foundV2);
+
+          // TODO: experimental, remove
+          if (node.Context.ParamsSearch.TestFlag2)
+          {
+            bool isDraw = MCTSNodeStruct.CheckIsDrawByRepetition(node.Tree, in node.StructRef, visit1Ref.PriorMove, visit2Ref.PriorMove);
+            if (isDraw)
+            {
+              node.PendingTranspositionV = 0;
+              node.PendingTranspositionM = 0;
+              node.PendingTranspositionD = 1;
+
+              MCTSEventSource.TestMetric1++;
+            }
+          }
         }
         else
         {
