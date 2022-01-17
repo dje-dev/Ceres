@@ -139,13 +139,15 @@ namespace Ceres.MCTS.Evaluators
     {
       Debug.Assert(float.IsNaN(node.V));
 
+#if NOT
+// Tests strongly suggest this code not needed
       if (node.StructRef.HasRepetitions)
       {
         // Avoid linking if node already has transpositions
         // because of possibility linked node will differ in history of tranpositions
         return default;
       }
-
+#endif
       if (node.Context.ParamsSearch.Execution.TranspositionMode == TranspositionMode.SingleNodeDeferredCopy
        && node.IsTranspositionLinked)
       {
