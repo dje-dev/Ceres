@@ -26,27 +26,27 @@ using Ceres.Chess.GameEngines;
 
 namespace Ceres.Features.Tournaments
 {
-  public enum TournamentGameResult 
-  { 
+  public enum TournamentGameResult
+  {
     /// <summary>
     /// Game not completed.
     /// </summary>
-    None, 
+    None,
 
     /// <summary>
     /// Win.
     /// </summary>
-    Win, 
+    Win,
 
     /// <summary>
     /// Loss.
     /// </summary>
-    Loss, 
+    Loss,
 
     /// <summary>
     /// Draw.
     /// </summary>
-    Draw 
+    Draw
   };
 
 
@@ -144,6 +144,28 @@ namespace Ceres.Features.Tournaments
     /// Result of game.
     /// </summary>
     public TournamentGameResult Result;
+
+    /// <summary>
+    /// Result of game as 1-0, 0-1 and draw.
+    /// </summary>
+    public string ResultString;
+
+    public string Time;
+
+    public float EndCP;
+
+    public int WhiteNumberOfInstaMoves; // < 0.05
+    public int BlackNumberOfInstaMoves; // < 0.05
+    public int WhiteNumberOfInstaMovesLessThan10;
+    public int BlackNumberOfInstaMovesLessThan10;
+    public int WhiteNumberOfInstaMovesLessThan25;
+    public int BlackNumberOfInstaMovesLessThan25;
+    public int WhiteNumberOfInstaMovesLessThan50;
+    public int BlackNumberOfInstaMovesLessThan50;
+    public int BlackNumberOfInstaMovesLessThan1Sec;
+    public int WhiteNumberOfInstaMovesLessThan1Sec;
+    public int BlackNumberOfInstaMovesLessThan3Sec;
+    public int WhiteNumberOfInstaMovesLessThan3Sec;
 
     /// <summary>
     /// Reason for game termination.
@@ -245,7 +267,7 @@ namespace Ceres.Features.Tournaments
       int numPlyEachSide = numMovesEachSide * 2;
       List<float> n = new();
 
-      for (int i=plyNum- numPlyEachSide; i<= plyNum+ numPlyEachSide; i++)
+      for (int i = plyNum - numPlyEachSide; i <= plyNum + numPlyEachSide; i++)
       {
         if (i >= 0 && i < GameMoveHistory.Count)
         {
@@ -272,7 +294,7 @@ namespace Ceres.Features.Tournaments
 
         bool wasDraw = Result == TournamentGameResult.Draw;
 
-        for (int i=GameMoveHistory.Count-1; i>= 0; i--)
+        for (int i = GameMoveHistory.Count - 1; i >= 0; i--)
         {
           GameMoveStat stat = GameMoveHistory[i];
           if (wasDraw && MathF.Abs(stat.ScoreCentipawns) > DRAW_THRESHOLD_CP)
@@ -335,6 +357,44 @@ namespace Ceres.Features.Tournaments
       {
         LimitsUsageChartType.Bar => PlayerLimitsUsageCharts.BarChart(title, PlayerWhite, PlayerBlack, limitsWhite.ToArray(), limitsBlack.ToArray()),
         LimitsUsageChartType.Line => PlayerLimitsUsageCharts.LineChart(title, PlayerWhite, PlayerBlack, limitsWhite.ToArray(), limitsBlack.ToArray(), limitBase, limitIncrement),
+        _ => throw new NotImplementedException(chartType.ToString())
+      };
+
+    }
+
+    public PlotData LimitsUsageChartData(LimitsUsageChartType chartType)
+    {
+      string title = Result.ToString();
+
+      // Populate the search limits (if available and per move).
+      float? limitBase = null;
+      float? limitIncrement = null;
+      if (SearchLimitWhite.Equals(SearchLimitBlack) && SearchLimitWhite.IsPerGameLimit)
+      {
+        limitBase = SearchLimitWhite.Value;
+        limitIncrement = SearchLimitWhite.ValueIncrement;
+      };
+
+      // Build lists of used search values.
+      bool isTime = SearchLimitWhite.IsTimeLimit;
+      List<double> limitsWhite = new();
+      List<double> limitsBlack = new();
+      foreach (GameMoveStat moveStat in GameMoveHistory)
+      {
+        if (moveStat.Side == Chess.SideType.White)
+        {
+          limitsWhite.Add(isTime ? moveStat.TimeElapsed : moveStat.NumNodesComputed);
+        }
+        else
+        {
+          limitsBlack.Add(isTime ? moveStat.TimeElapsed : moveStat.NumNodesComputed);
+        }
+      }
+
+      return chartType switch
+      {
+        LimitsUsageChartType.Bar => PlayerLimitsUsageCharts.BarChartData(title, PlayerWhite, PlayerBlack, limitsWhite.ToArray(), limitsBlack.ToArray()),
+        LimitsUsageChartType.Line => PlayerLimitsUsageCharts.LineChartData(title, PlayerWhite, PlayerBlack, limitsWhite.ToArray(), limitsBlack.ToArray(), limitBase, limitIncrement),
         _ => throw new NotImplementedException(chartType.ToString())
       };
 
