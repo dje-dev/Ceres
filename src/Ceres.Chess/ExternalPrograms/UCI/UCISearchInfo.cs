@@ -15,8 +15,10 @@
 
 using System;
 using System.Collections.Generic;
-
+using System.Text;
 using Ceres.Chess.LC0.Positions;
+using Ceres.Chess.MoveGen;
+using Ceres.Chess.MoveGen.Converters;
 using Ceres.Chess.SearchResultVerboseMoveInfo;
 
 #endregion
@@ -90,22 +92,6 @@ namespace Ceres.Chess.ExternalPrograms.UCI
     /// </summary>
     public object ExtraInfo;
 
-    /// <summary>
-    /// Returns the principal variation, if any.
-    /// </summary>
-    public string PVString
-    {
-      get
-      {
-        if (RawString == null) return null;
-        int indexPV = RawString.IndexOf(" pv ");
-        string stripped = RawString[(indexPV + 4)..];
-        if (stripped.Contains(" string "))
-          stripped = stripped.Substring(0, stripped.IndexOf(" string"));
-        return stripped;
-        
-      }
-    }
 
 
     /// <summary>
@@ -128,8 +114,14 @@ namespace Ceres.Chess.ExternalPrograms.UCI
       {
         string[] parts = bestMove.Split(' ');
 
-        if (parts.Length >= 2) BestMove = parts[1];
-        if (parts.Length >= 4) Ponder = parts[3];
+        if (parts.Length >= 2)
+        {
+          BestMove = parts[1];
+        }
+        if (parts.Length >= 4)
+        {
+          Ponder = parts[3];
+        }
       }
 
       Depth = -1;
@@ -164,6 +156,47 @@ namespace Ceres.Chess.ExternalPrograms.UCI
     }
 
 
+
+    /// <summary>
+    /// Returns the principal variation, if any.
+    /// </summary>
+    public string PVString
+    {
+      get
+      {
+        if (RawString == null) return null;
+        int indexPV = RawString.IndexOf(" pv ");
+        string stripped = RawString[(indexPV + 4)..];
+        if (stripped.Contains(" string "))
+        {
+          stripped = stripped.Substring(0, stripped.IndexOf(" string"));
+        }
+        return stripped;
+        
+      }
+    }
+
+    /// <summary>
+    /// Returns a string with sequence of moves in the principal variation in SAN format.
+    /// </summary>
+    /// <param name="position"></param>
+    /// <returns></returns>
+    public string PVMovesSAN(Position position)
+    {
+      return ParsedPVString(position, PVString).pvStringSAN;
+    }
+
+    /// <summary>
+    /// Returns a List of Move containing the principal variation moves.
+    /// </summary>
+    /// <param name="position"></param>
+    /// <returns></returns>
+    public List<Move> PVMoves(Position position)
+    {
+      return ParsedPVString(position, PVString).moves;
+    }
+
+
     /// <summary>
     /// Returns the score as a logistic (winning percentage).
     /// </summary>
@@ -191,7 +224,48 @@ namespace Ceres.Chess.ExternalPrograms.UCI
         ((VerboseMoveStats)ExtraInfo).Dump();
       }
     }
-  }
 
+    #region Static helpers
+
+    /// <summary>
+    /// Parses the moves in principal variation in an UCI move output line.
+    /// TODO: handle multipv lines?
+    /// </summary>
+    static (List<Move> moves, string pvStringSAN) ParsedPVString(Position position, string pvString)
+    {
+      // Split off starting at the PV moves.
+      string[] movesSplit = pvString.Split(" ");
+
+      int count = 0;
+      MGPosition curPos = position.ToMGPosition;
+      List<Move> movesList = new();
+      StringBuilder allMovesStr = new();
+
+      foreach (string thisMoveStr in movesSplit)
+      {
+        try
+        {
+          MGMove mgMove = MGMoveFromString.ParseMove(curPos, thisMoveStr);
+          string moveNumStr = curPos.BlackToMove ? (count == 0 ? " .. " : " ") : $" {1 + curPos.MoveNumber / 2}. ";
+          Move move = MGMoveConverter.ToMove(mgMove);
+          movesList.Add(move);
+          string moveSAN = move.ToSAN(curPos.ToPosition);
+          string moveStr = moveNumStr + moveSAN;
+          allMovesStr.Append(moveStr);
+          curPos.MakeMove(mgMove);
+          count++;
+        }
+        catch (Exception e)
+        {
+          // Silently ignore errors in parsing
+          break;
+        }
+      }
+
+      return (movesList, allMovesStr.ToString());
+    }
+
+    #endregion
+  }
 
 }

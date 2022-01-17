@@ -379,15 +379,19 @@ namespace Ceres.Chess
       short moveNum = (short)(MiscInfo.MoveNum > 0 ? MiscInfo.MoveNum - 1 : 0);
       PositionMiscInfo newMiscInfo;
       if (MiscInfo.SideToMove == SideType.White)
-         newMiscInfo = new PositionMiscInfo(MiscInfo.WhiteCanOO, MiscInfo.WhiteCanOOO, MiscInfo.BlackCanOO, MiscInfo.BlackCanOOO,
-                                            MiscInfo.SideToMove.Reversed(), MiscInfo.Move50Count, MiscInfo.RepetitionCount, moveNum,
-                                            PositionMiscInfo.EnPassantFileIndexEnum.FileNone);
+      {
+        newMiscInfo = new PositionMiscInfo(MiscInfo.WhiteCanOO, MiscInfo.WhiteCanOOO, MiscInfo.BlackCanOO, MiscInfo.BlackCanOOO,
+                                           MiscInfo.SideToMove.Reversed(), MiscInfo.Move50Count, MiscInfo.RepetitionCount, moveNum,
+                                           PositionMiscInfo.EnPassantFileIndexEnum.FileNone);
+      }
       else
+      {
         newMiscInfo = new PositionMiscInfo(MiscInfo.BlackCanOO, MiscInfo.BlackCanOOO, MiscInfo.WhiteCanOO, MiscInfo.WhiteCanOOO,
                                            MiscInfo.SideToMove.Reversed(), MiscInfo.Move50Count, MiscInfo.RepetitionCount, moveNum,
                                            PositionMiscInfo.EnPassantFileIndexEnum.FileNone);
+      }
 
-
+      // TODO: for efficiency, make a [ThreadStatic] PieceOnSquare[] for the temporary here
       List<PieceOnSquare> pieces = new List<PieceOnSquare>(32);
       bool found = false;
       int expectedPawnRank = MiscInfo.SideToMove == SideType.Black ? 3 : 4;
