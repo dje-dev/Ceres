@@ -160,9 +160,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       ref MCTSNodeStruct childNodeRef = ref store.Nodes.nodes[childNodeIndex.Index];
 
       // Create new wrapper object and use it to initialize fields.
-      bool isWhite = IsRoot ? store.Nodes.PriorMoves.FinalPosition.MiscInfo.SideToMove == SideType.White
-                            : !ParentRef.IsWhite;
-      childNodeRef.Initialize(store.StoreID, thisIndex, childIndex, thisChildRef.p, thisChildRef.Move, isWhite);
+      childNodeRef.Initialize(store.StoreID, thisIndex, childIndex, thisChildRef.p, thisChildRef.Move, !IsWhite);
 
       // Modify child entry to refer to this new child
       // N.B: It is essential to only swap out the child index here
@@ -1061,7 +1059,17 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <summary>
     /// Returns if node corresponds to a position with white to move.
     /// </summary>
-    public bool IsWhite => miscFields.IsWhite;
+    public bool IsWhite
+    {
+      get
+      {
+        return miscFields.IsWhite;
+      }
+      internal set
+      {
+
+      }
+    }
 
 
     public void SetIndexInParent(int indexInParent) => miscFields.IndexInParent = (byte)indexInParent;
