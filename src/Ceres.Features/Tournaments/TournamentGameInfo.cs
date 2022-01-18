@@ -150,8 +150,14 @@ namespace Ceres.Features.Tournaments
     /// </summary>
     public string ResultString;
 
+    /// <summary>
+    /// Game start time string.
+    /// </summary>
     public string Time;
 
+    /// <summary>
+    /// Ending evaluation in centipawns.
+    /// </summary>
     public float EndCP;
 
     public int WhiteNumberOfInstaMoves; // < 0.05
