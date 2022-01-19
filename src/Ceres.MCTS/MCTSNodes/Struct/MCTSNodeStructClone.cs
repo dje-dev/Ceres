@@ -231,8 +231,15 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       // TODO: HasRepetitions is not cloned here, it probably is not directly transferable
       //       Can this be computed/improved?
 
-      //targetChildRef.HashCrosscheck = sourceChildRef.HashCrosscheck;
+//targetChildRef.HashCrosscheck = sourceChildRef.HashCrosscheck;
 
+#if NOT
+      // NOTE: this logic disabled becasuse:
+      //         - it should not be needed often or at all since 
+      //           these draw checks made at time of transposition link formation
+      //         - for unknown reasons the call to CheckIsDrawByRepeition seems to cause
+      //           occasional crashes (every few GPU hours of running) 
+      //           maybe due to GetNode/Annotation in arbitrary parts of the search tree
       // Using the history for this node, check if the materialized position
       // would actually be a draw by repetition.
       bool childIsDrawByRepetition = CheckIsDrawByRepetition(tree, in targetParentRef, targetChildRef.PriorMove, default);
@@ -240,7 +247,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       {
         targetChildRef.ResetToDraw();
       }
-      
+#endif      
 
       if (targetChildRef.Terminal == GameResult.Draw)
       {
@@ -387,7 +394,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     }
 
 
-    #region Helpers
+#region Helpers
 
     public static Position PosAfterMoveWithRepetitionsSet(MCTSNode node, EncodedMove move)
     {
@@ -429,7 +436,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       return pos;
     }
 
-    #endregion
+#endregion
 
   }
 
