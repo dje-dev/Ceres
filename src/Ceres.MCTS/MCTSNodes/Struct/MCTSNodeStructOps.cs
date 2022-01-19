@@ -1067,7 +1067,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       }
       internal set
       {
-
+        miscFields.IsWhite = value; 
       }
     }
 
