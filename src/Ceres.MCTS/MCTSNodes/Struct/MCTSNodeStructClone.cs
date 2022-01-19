@@ -38,6 +38,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
   {
     static bool IsSuitable(in MCTSNodeStruct refNode) => 
                       !refNode.IsTranspositionLinked 
+                   && !refNode.Terminal.IsTerminal()
                    && !refNode.TranspositionUnlinkIsInProgress
                    && !FP16.IsNaN(refNode.V)
                    && !refNode.HasRepetitions; // don't use since might have different repetition count from this node
@@ -157,6 +158,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
     static bool IsValidTranspositionLinkedSourceNode(MCTSNode testNode) => testNode.IsNotNull && testNode.StructRef.IsValidTranspositionLinkedSource;
     public readonly bool IsValidTranspositionLinkedSource => !IsTranspositionLinked
+                                                          && !Terminal.IsTerminal()                                                        
                                                           && !FP16.IsNaN(V)
                                                           && Terminal != Chess.GameResult.NotInitialized;
 
