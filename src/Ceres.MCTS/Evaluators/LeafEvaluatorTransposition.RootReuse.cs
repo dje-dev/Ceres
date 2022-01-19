@@ -203,21 +203,16 @@ namespace Ceres.MCTS.Evaluators
         {
           SetNodePendingValues(-1, in visit1Ref, foundV1);
 
-          // TODO: experimental, remove
-          if (node.Context.ParamsSearch.TestFlag2)
+          // Check for draw by repetition.
+          bool isDraw = MCTSNodeStruct.CheckIsDrawByRepetition(node.Tree, in node.StructRef, visit1Ref.PriorMove, default);
+          if (isDraw)
           {
+            node.PendingTranspositionV = 0;
+            node.PendingTranspositionM = 0;
+            node.PendingTranspositionD = 1;
 
-            bool isDraw = MCTSNodeStruct.CheckIsDrawByRepetition(node.Tree, in node.StructRef, visit1Ref.PriorMove, default);
-            if (isDraw)
-            {
-              node.PendingTranspositionV = 0;
-              node.PendingTranspositionM = 0;
-              node.PendingTranspositionD = 1;
-
-              // Reset number of pending roots such that no further extraction will happen.
-              node.StructRef.NumVisitsPendingTranspositionRootExtraction = 1;
-              MCTSEventSource.TestMetric1++;
-            }
+            // Reset number of pending roots such that no further extraction will happen.
+            node.StructRef.NumVisitsPendingTranspositionRootExtraction = 1;
           }
         }
         else if (node.N == 2)
@@ -230,19 +225,16 @@ namespace Ceres.MCTS.Evaluators
 
           SetNodePendingValues(multiplier, in visit2Ref, foundV2);
 
-          // TODO: experimental, remove
-          if (node.Context.ParamsSearch.TestFlag2)
+          // Check for draw by repetition.
+          bool isDraw = isChildOfChild ? MCTSNodeStruct.CheckIsDrawByRepetition(node.Tree, in node.StructRef, visit1Ref.PriorMove, visit2Ref.PriorMove)
+                                       : MCTSNodeStruct.CheckIsDrawByRepetition(node.Tree, in node.StructRef, visit2Ref.PriorMove, default);
+          if (isDraw)
           {
-            bool isDraw = isChildOfChild ? MCTSNodeStruct.CheckIsDrawByRepetition(node.Tree, in node.StructRef, visit1Ref.PriorMove, visit2Ref.PriorMove)
-                                         : MCTSNodeStruct.CheckIsDrawByRepetition(node.Tree, in node.StructRef, visit2Ref.PriorMove, default);
-            if (isDraw)
-            {
-              node.PendingTranspositionV = 0;
-              node.PendingTranspositionM = 0;
-              node.PendingTranspositionD = 1;
+            node.PendingTranspositionV = 0;
+            node.PendingTranspositionM = 0;
+            node.PendingTranspositionD = 1;
 
-              MCTSEventSource.TestMetric1++;
-            }
+            MCTSEventSource.TestMetric1++;
           }
         }
         else

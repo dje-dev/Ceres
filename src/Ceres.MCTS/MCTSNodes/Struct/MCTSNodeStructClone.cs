@@ -233,18 +233,14 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
       //targetChildRef.HashCrosscheck = sourceChildRef.HashCrosscheck;
 
-      // TODO: experimental, remove
-      if (tree.Context.ParamsSearch.TestFlag2)
+      // Using the history for this node, check if the materialized position
+      // would actually be a draw by repetition.
+      bool childIsDrawByRepetition = CheckIsDrawByRepetition(tree, in targetParentRef, targetChildRef.PriorMove, default);
+      if (childIsDrawByRepetition)
       {
-        // Using the history for this node, check if the materialized position
-        // would actually be a draw by repetition.
-        // TODO: Ideally this would have happened earlier
-        bool childIsDrawByRepetition = CheckIsDrawByRepetition(tree, in targetParentRef, targetChildRef.PriorMove, default);
-        if (childIsDrawByRepetition)
-        {
-          targetChildRef.ResetToDraw();
-        }
+        targetChildRef.ResetToDraw();
       }
+      
 
       if (targetChildRef.Terminal == GameResult.Draw)
       {
