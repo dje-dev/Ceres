@@ -224,14 +224,17 @@ namespace Ceres.MCTS.Evaluators
         {
           ref readonly MCTSNodeStruct visit2Ref = ref MCTSNodeStruct.SubnodeRefVisitedAtIndex(in transpositionRootNode, 2, out bool foundV2);
           Debug.Assert(foundV2);
-          float multiplier = visit2Ref.ParentIndex == transpositionRootNode.Index ? -1 : 1;
+
+          bool isChildOfChild = visit2Ref.IsWhite == transpositionRootNode.IsWhite;
+          float multiplier = isChildOfChild ? 1 : -1;
 
           SetNodePendingValues(multiplier, in visit2Ref, foundV2);
 
           // TODO: experimental, remove
           if (node.Context.ParamsSearch.TestFlag2)
           {
-            bool isDraw = MCTSNodeStruct.CheckIsDrawByRepetition(node.Tree, in node.StructRef, visit1Ref.PriorMove, visit2Ref.PriorMove);
+            bool isDraw = isChildOfChild ? MCTSNodeStruct.CheckIsDrawByRepetition(node.Tree, in node.StructRef, visit1Ref.PriorMove, visit2Ref.PriorMove)
+                                         : MCTSNodeStruct.CheckIsDrawByRepetition(node.Tree, in node.StructRef, visit2Ref.PriorMove, default);
             if (isDraw)
             {
               node.PendingTranspositionV = 0;
