@@ -263,7 +263,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       // Possibly move over a second sub-child in the clone.
       // The second descendent (if it exists and is usable)
       // must be either the child of the child, or its sibling.
-      if (cloneSubchildIfPossible && !targetChildRef.Terminal.IsTerminal())
+      if (cloneSubchildIfPossible)
       {
         Debug.Assert(childIndex == 0);
 
@@ -341,6 +341,16 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       return targetChildIndex;
     }
 
+
+    /// <summary>
+    /// Determines if the position arising after one (or possibly two) 
+    /// additional moves from specified node would be a 
+    /// </summary>
+    /// <param name="tree"></param>
+    /// <param name="targetParentRef"></param>
+    /// <param name="movePly1FromParent"></param>
+    /// <param name="movePly2FromParent"></param>
+    /// <returns></returns>
     internal static bool CheckIsDrawByRepetition(MCTSTree tree, in MCTSNodeStruct targetParentRef, 
                                                  EncodedMove movePly1FromParent, EncodedMove movePly2FromParent)
     {
