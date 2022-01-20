@@ -118,7 +118,6 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     private void CalcInitialMADEstimate(ref MCTSNodeStruct nodeRef)
     {
       float rootQ = (float)nodeRef.Q;
-      int depthRoot = nodeRef.DepthInTree;
       bool rootWhite = nodeRef.IsWhite;
 
       int n = 0;
