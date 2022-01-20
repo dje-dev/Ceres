@@ -378,7 +378,6 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       int numEqualRepetitions = tree.NumEqualAsRepetitionInHistory(targetParentNode, in posAfterChildMove, MAX_PLY);
       if (numEqualRepetitions > 0)
       {
-        MCTSEventSource.TestCounter1++;
         return true;
       }
 
