@@ -848,6 +848,9 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       
       Span<MCTSNodeStruct> nodesSpan = context.Tree.Store.Nodes.nodes.Span;
 
+      // Tracking uncertainty boosting somewhat expensive, so only do if requested.
+      bool updateUncertainty = context.ParamsSearch.EnableUncertaintyBoosting;
+
       indexOfChildDescendentFromRoot = default;
       bool first = true;
       float vToApply = vToApplyFirst;
@@ -877,7 +880,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         //       Therefore there is a very small possibility that another thread will observe one updated but not the other
         //       (e.g. thread gathering nodes which reaches over to use this as a transposition root and references Q)
         //       To mitigate the possible distortion, N is updated before W so any distortions will shrink toward 0.
-        if (node.N >= MCTSNodeUncertaintyAccumulator.MIN_N_UPDATE)
+        if (updateUncertainty && node.N >= MCTSNodeUncertaintyAccumulator.MIN_N_UPDATE)
         {
           node.Uncertainty.UpdateUncertainty(ref node, qDiff, numToApply, node.N);
         }
