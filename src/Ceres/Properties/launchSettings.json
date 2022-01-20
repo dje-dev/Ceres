@@ -2,7 +2,7 @@
   "profiles": {
     "Ceres": {
       "commandName": "Project",
-      "commandLineArgs": "custom"
+      "commandLineArgs": ""
     },
     "CeresPGO": {
       "commandName": "Project",
