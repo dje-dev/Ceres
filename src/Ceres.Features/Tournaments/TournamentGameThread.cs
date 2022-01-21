@@ -641,7 +641,7 @@ namespace Ceres.Features.Tournaments
         }
 
         // Check for very bad evaluation for one side (agreed by both sides)
-        if (scoresEngine1.Count > 5)
+        if (scoresEngine1.Count >= Def.AdjudicateMinNumMoves)
         {
           result = CheckResultAgreedBothEngines(scoresEngine1, scoresEngine2, result);
           if (result != TournamentGameResult.None)
@@ -895,7 +895,7 @@ namespace Ceres.Features.Tournaments
     TournamentGameResult CheckResultAgreedBothEngines(List<float> scoresCPEngine1, List<float> scoresCPEngine2, TournamentGameResult result)
     {
       int WIN_THRESHOLD = Run.Def.AdjudicateWinThresholdCentipawns;
-      int NUM_MOVES = Run.Def.AdjudicateWinThresholdNumMoves;
+      int NUM_MOVES = Run.Def.AdjudicateWinThresholdNumMovesDecisive;
 
       // Return if insufficient moves in history to make determination.
       if (scoresCPEngine2.Count < NUM_MOVES || scoresCPEngine1.Count < NUM_MOVES)

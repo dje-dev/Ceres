@@ -103,6 +103,12 @@ namespace Ceres.Features.Tournaments
     public bool UseTablebasesForAdjudication = true;
 
     /// <summary>
+    /// Minimum number of moves before any adjudication (except tablebase) 
+    /// will be allowed.
+    /// </summary>
+    public int AdjudicateMinNumMoves = int.MaxValue;
+
+    /// <summary>
     /// Minimum absolute evaluation (in centipawns)
     /// which must be exceeded by both engines
     /// for a win to be declared by adjudication.
@@ -114,7 +120,7 @@ namespace Ceres.Features.Tournaments
     /// Minimum number of moves for which both engines evaluations
     /// must be more extreme than AdjudicateWinThresholdCentipawns.
     /// </summary>
-    public int AdjudicateWinThresholdNumMoves = 2;
+    public int AdjudicateWinThresholdNumMovesDecisive = 2;
 
     /// <summary>
     /// Minimum absolute absolute evaluation (in centipawns)
@@ -188,7 +194,7 @@ namespace Ceres.Features.Tournaments
       Console.WriteLine($"  Openings           : {OpeningsDescription()}");
       Console.WriteLine($"  Ref engine         : {refEngine}");
       Console.WriteLine($"  Adjudicate draw    : {AdjudicateDrawThresholdNumMoves} moves < {AdjudicateDrawThresholdCentipawns}cp");
-      Console.WriteLine($"  Adjudicate win     : {AdjudicateWinThresholdNumMoves} moves at {AdjudicateWinThresholdCentipawns}cp");
+      Console.WriteLine($"  Adjudicate win     : {AdjudicateWinThresholdNumMovesDecisive} moves at {AdjudicateWinThresholdCentipawns}cp");
       Console.WriteLine($"  Adjudicate via TB? : {UseTablebasesForAdjudication}");
 
       for (int i = 0; i < Engines.Length; i++)
@@ -270,7 +276,7 @@ namespace Ceres.Features.Tournaments
 
       return $"<TournamentDef {ID} with {NumGamePairs} game pairs from "
            + $"{openingsInfo} {(RandomizeOpenings ? " Randomized" : "")} "
-           + $" adjudicate {AdjudicateWinThresholdNumMoves} moves at {AdjudicateWinThresholdCentipawns}cp "
+           + $" adjudicate {AdjudicateWinThresholdNumMovesDecisive} moves at {AdjudicateWinThresholdCentipawns}cp "
            + $"{(UseTablebasesForAdjudication ? " or via tablebases" : "")}"
            + $"{Player1Def} vs {Player2Def}"
            + ">";
