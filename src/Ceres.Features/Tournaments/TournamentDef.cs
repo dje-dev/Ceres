@@ -106,7 +106,7 @@ namespace Ceres.Features.Tournaments
     /// Minimum number of moves before any adjudication (except tablebase) 
     /// will be allowed.
     /// </summary>
-    public int AdjudicateMinNumMoves = int.MaxValue;
+    public int AdjudicateMinNumMoves = 5;
 
     /// <summary>
     /// Minimum absolute evaluation (in centipawns)
