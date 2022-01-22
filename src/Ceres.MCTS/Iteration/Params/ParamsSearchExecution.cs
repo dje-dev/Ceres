@@ -134,12 +134,12 @@ namespace Ceres.MCTS.Params
     /// </summary>
     public float DualSelectorAlternateCollisionFraction = 0.25f;
 
-    
+
     /// <summary>
     /// If MCTS leaf selection is (potentially) conducted by parallel threads
     /// (over non-overlapping subtrees).
     /// </summary>
-    public bool SelectParallelEnabled = true;
+    public bool SelectParallelEnabled = System.Environment.ProcessorCount > 2;
 
     /// <summary>
     /// Minimum number of targeted leaf visits which must be present
@@ -151,7 +151,7 @@ namespace Ceres.MCTS.Params
     /// If the initialization of poliices in tree nodes (after retrieval from NN)
     /// is (potentially) done in parallel.
     /// </summary>
-    public bool SetPoliciesParallelEnabled = true;
+    public bool SetPoliciesParallelEnabled = System.Environment.ProcessorCount > 2;
 
     /// <summary>
     /// Target number of policies to be initialized by each thread.
