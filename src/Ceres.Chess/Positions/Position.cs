@@ -479,7 +479,8 @@ namespace Ceres.Chess
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly bool EqualAsRepetition(in Position otherPos)
     {
-      if (PiecesShortHash != otherPos.PiecesShortHash)
+      if (PiecesShortHash != otherPos.PiecesShortHash 
+       || SideToMove != otherPos.SideToMove)
       {
         // Fast path check.
         return false;
