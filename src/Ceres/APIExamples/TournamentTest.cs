@@ -459,7 +459,7 @@ namespace Ceres.APIExamples
         def.AdjudicateDrawThresholdNumMoves = 999;
 
         def.AdjudicateWinThresholdCentipawns = int.MaxValue;
-        def.AdjudicateWinThresholdNumMoves = 3000;
+        def.AdjudicateWinThresholdNumMovesDecisive = 3000;
         def.UseTablebasesForAdjudication = false;
       }
 
