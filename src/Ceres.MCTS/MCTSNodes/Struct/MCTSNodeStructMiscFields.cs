@@ -45,8 +45,10 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     const int BIT_LENGTH_NUM_RANK2_PAWNS = 5;
     const int BIT_LENGTH_SECONDARY_NN = 1;
     const int BIT_LENGTH_IS_WHITE = 1;
+    const int BIT_LENGTH_TRANS_DRAW_1 = 1;
+    const int BIT_LENGTH_TRANS_DRAW_2 = 1;
     const int BIT_LENGTH_TEST = 1;
-    const int BIT_LENGTH_UNUSED = 5;
+    const int BIT_LENGTH_UNUSED = 3;
 
     const int BIT_INDEX_TERMINAL = 0;
     const int BIT_INDEX_DRAW_KNOWN_EXIST = BIT_INDEX_TERMINAL + BIT_LENGTH_TERMINAL;
@@ -62,7 +64,9 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
     const int BIT_INDEX_SECONDARY_NN = BIT_INDEX_NUM_RANK2_PAWNS + BIT_LENGTH_NUM_RANK2_PAWNS;
     const int BIT_INDEX_IS_WHITE = BIT_INDEX_SECONDARY_NN + BIT_LENGTH_SECONDARY_NN;
-    const int BIT_INDEX_TEST = BIT_INDEX_IS_WHITE + BIT_LENGTH_IS_WHITE;
+    const int BIT_INDEX_TRANS_DRAW_1 = BIT_INDEX_IS_WHITE + BIT_LENGTH_IS_WHITE;
+    const int BIT_INDEX_TRANS_DRAW_2 = BIT_INDEX_TRANS_DRAW_1 + BIT_LENGTH_TRANS_DRAW_1;
+    const int BIT_INDEX_TEST = BIT_INDEX_TRANS_DRAW_2 + BIT_LENGTH_TRANS_DRAW_2;
 
     public void Clear() => bits = 0;
 
@@ -303,6 +307,46 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
 
     /// <summary>
+    /// Indicator if the first node in the virtual transposition subtree 
+    /// has been identified as a draw by repetition.
+    /// </summary>
+    internal bool IsDrawVirtualTranspositionNode1
+    {
+      [MethodImpl(MethodImplOptions.AggressiveInlining)]
+      readonly get
+      {
+        return BitUtils.HasFlag(bits, BIT_INDEX_TRANS_DRAW_1);
+      }
+
+      [MethodImpl(MethodImplOptions.AggressiveInlining)]
+      set
+      {
+        BitUtils.SetFlag(ref bits, BIT_INDEX_TRANS_DRAW_1, value);
+      }
+    }
+
+
+    /// <summary>
+    /// Indicator if the second node in the virtual transposition subtree 
+    /// has been identified as a draw by repetition.
+    /// </summary>
+    internal bool IsDrawVirtualTranspositionNode2
+    {
+      [MethodImpl(MethodImplOptions.AggressiveInlining)]
+      readonly get
+      {
+        return BitUtils.HasFlag(bits, BIT_INDEX_TRANS_DRAW_2);
+      }
+
+      [MethodImpl(MethodImplOptions.AggressiveInlining)]
+      set
+      {
+        BitUtils.SetFlag(ref bits, BIT_INDEX_TRANS_DRAW_2, value);
+      }
+    }
+
+
+    /// <summary>
     /// Value of test flag (miscellaneous ad hoc tests).
     /// </summary>
     internal bool TestFlag
@@ -319,7 +363,6 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         BitUtils.SetFlag(ref bits, BIT_INDEX_TEST, value);
       }
     }
-
 
 
     /// <summary>

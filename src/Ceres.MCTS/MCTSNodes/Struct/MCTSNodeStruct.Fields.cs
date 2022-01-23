@@ -55,7 +55,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <summary>
     /// Set of packed miscellaneous fields.
     /// </summary>
-    MCTSNodeStructMiscFields miscFields;
+    internal MCTSNodeStructMiscFields miscFields;
     
     /// <summary>
     /// Policy probability
