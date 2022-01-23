@@ -200,7 +200,16 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <param name="otherNodeIndex"></param>
     public void CopyUnexpandedChildrenFromOtherNode(MCTSTree tree, MCTSNodeStructIndex otherNodeIndex)
     {
-      DoCopyUnexpandedChildrenFromOtherNode(tree, otherNodeIndex);
+      ref readonly MCTSNodeStruct otherNode = ref tree.Store.Nodes.nodes[otherNodeIndex.Index];
+      if (otherNode.IsTranspositionLinked)
+      {
+        // Follow children to transposition root
+        CopyUnexpandedChildrenFromOtherNode(tree, new MCTSNodeStructIndex(otherNode.TranspositionRootIndex));
+      }
+      else
+      {
+        DoCopyUnexpandedChildrenFromOtherNode(tree, in otherNode);
+      }
     }
 
 
@@ -209,9 +218,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// </summary>
     /// <param name="tree"></param>
     /// <param name="otherNodeIndex"></param>
-    public void DoCopyUnexpandedChildrenFromOtherNode(MCTSTree tree, MCTSNodeStructIndex otherNodeIndex)
+    public void DoCopyUnexpandedChildrenFromOtherNode(MCTSTree tree, in MCTSNodeStruct otherNode)
     {
-      ref readonly MCTSNodeStruct otherNode = ref tree.Store.Nodes.nodes[otherNodeIndex.Index];
       Debug.Assert(!otherNode.IsTranspositionLinked);
 
       TranspositionUnlinkIsInProgress = true;
@@ -1012,8 +1020,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       MPosition = 1;
 
       W = 0;
-      dSum = DepthInTree;
-      mSum = N;
+      dSum = N;
+      mSum = 1;
 
       if (!IsRoot)
       {
