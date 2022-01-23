@@ -43,7 +43,7 @@ namespace Ceres.Chess
   /// </summary>
   [Serializable]
   [StructLayout(LayoutKind.Sequential, Pack = 1)]
-  [DebuggerDisplay("<Position {FEN} {FEN.GetHashCode()}>")]
+  [DebuggerDisplay("<Position {FEN} {CalcZobristHash(PositionMiscInfo.HashMove50Mode.ValueBoolIfAbove98)}>")]
   public readonly struct Position : IEquatable<Position>
   {
     #region Raw squares data
