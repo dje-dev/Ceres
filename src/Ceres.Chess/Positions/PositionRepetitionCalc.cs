@@ -34,10 +34,12 @@ namespace Ceres.Chess
     /// on the last position in a sequence of positions
     /// </summary>
     /// <param name="posSpan"></param>
-    public static void SetFinalPositionRepetitionCount(Span<Position> posSpan)
+    public static int SetFinalPositionRepetitionCount(Span<Position> posSpan)
     {
       ref readonly Position finalPosition = ref posSpan[^1];
-      finalPosition.MiscInfo.SetRepetitionCount(GetFinalPositionRepetitionCount(posSpan));
+      int repCount = GetFinalPositionRepetitionCount(posSpan);
+      finalPosition.MiscInfo.SetRepetitionCount(repCount);
+      return repCount;
     }
 
 
