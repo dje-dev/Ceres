@@ -106,7 +106,8 @@ namespace Ceres.MCTS.Evaluators
       Debug.Assert(transpositionRootNodeIndex.Index != 0);
 
       TranspositionMode transpositionMode = node.Context.ParamsSearch.Execution.TranspositionMode;
-      if (transpositionMode == TranspositionMode.SingleNodeCopy)
+      if (transpositionMode == TranspositionMode.SingleNodeCopy
+      || (transpositionMode == TranspositionMode.SingleNodeDeferredCopy && node.NInFlight+node.NInFlight2 > 1))
       {
         if (CeresEnvironment.MONITORING_METRICS) NumHits.Add(1, node.Index);
         node.StructRef.CopyUnexpandedChildrenFromOtherNode(node.Tree, transpositionRootNodeIndex);
