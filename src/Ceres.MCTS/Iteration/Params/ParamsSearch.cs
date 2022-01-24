@@ -331,13 +331,13 @@ namespace Ceres.MCTS.Params
     ///       access from contexts where the containing MCTSTree is not handy.
     ///       This could be fixed (using mapper class) or possibly these options could be removed.
     /// </summary>
-    public static readonly float[] TranspositionRootBackupSubtreeFracs = new float[] { 1, 1, 1 };
+    public static readonly float[] TranspositionRootBackupSubtreeFracs = new float[] { 1, 1, float.NaN };
 
     /// <summary>
     /// Fractional weight given to subtree averages (e.g. Q) from node being 
     /// copied (cloned) from transposition root subtree when materializing.
     /// </summary>
-    public static readonly float[] TranspositionCloneNodeSubtreeFracs = new float[] { 1, 1, 1 };
+    public static readonly float[] TranspositionCloneNodeSubtreeFracs = new float[] { 1, 1, float.NaN };
 
     /// <summary>
     /// If the transposition table is maintained to enforce condition that 
