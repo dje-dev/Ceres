@@ -575,6 +575,9 @@ namespace Ceres.MCTS.Search
        && (numTargetLeafs > 1  || numTargetLeafs > node.NumVisitsPendingTranspositionRootExtraction))
       {
         node.StructRef.MaterializeSubtreeFromTranspositionRoot(node.Context.ParamsSearch, node.Tree);
+#if DEBUG
+        node = DebugCheckUndetectedMaterializedDraws(node);
+#endif
       }
 
       if (paramsExecution.TranspositionMode == TranspositionMode.SingleNodeDeferredCopy
@@ -582,7 +585,8 @@ namespace Ceres.MCTS.Search
       {
         Debug.Assert(node.NumVisitsPendingTranspositionRootExtraction > 0);
         Debug.Assert(node.TranspositionRootIndex != 0);
-        LeafEvaluatorTransposition.EnsurePendingTranspositionValuesSet(node, true);
+        Debug.Assert(node.N > 0);
+        LeafEvaluatorTransposition.EnsurePendingTranspositionValuesSet(node, true, node.N);
         Debug.Assert(!FP16.IsNaN(node.PendingTranspositionV));
 
         // Treat this as if it were a leaf node (i.e. do not descend further yet).
@@ -675,6 +679,67 @@ namespace Ceres.MCTS.Search
         ProcessSelectedChildren(node, numTargetLeafs, vLossDynamicBoost, numChildrenToCheck,
                                 1, false, childVisitCounts, children, ref numVisitsProcessed, gatheredNodes);
       }
+
+    }
+
+    /// <summary>
+    /// Diagnostic method which checks if a node is in an error state
+    /// being not marked as a draw despite the move history indicating a draw by repetition.
+    /// TODO: move this into a helper class, or MCTSNode?
+    /// </summary>
+    /// <param name="node"></param>
+    /// <returns></returns>
+    /// <exception cref="Exception"></exception>
+    private static MCTSNode DebugCheckUndetectedMaterializedDraws(MCTSNode node)
+    {
+      if (node.N > 1)
+      {
+        static MCTSNode CheckUndetectedDraw(MCTSNode node, MCTSNode childNode1, MCTSNode childNode2)
+        {
+          if (childNode2.IsNotNull)
+          {
+            childNode2.Annotate();
+          }
+          if (childNode1.IsNotNull)
+          {
+            childNode1.Annotate();
+          }
+          int reps = node.Tree.NumEqualAsRepetitionInHistory(node, childNode1.Annotation.Pos, 
+                                                             childNode2.IsNotNull ? childNode2.Annotation.Pos : default, 254);
+          MCTSNode terminalNode = childNode2.IsNotNull ? childNode2 : childNode1;
+          int minRepsForDraw = node.Context.ParamsSearch.TwofoldDrawEnabled ? 1 : 2;
+          if (reps >= minRepsForDraw && terminalNode.Terminal != GameResult.Draw)
+          {
+            Console.WriteLine("Node materialized from transposition undetected draw error");
+          }
+
+          return node;
+        }
+
+        MCTSNode childNode = node.ChildAtIndex(0);
+        CheckUndetectedDraw(node, childNode, default);
+
+        if (node.N == 3)
+        {
+          if (node.ChildAtIndex(0).NumChildrenExpanded > 0
+          && (node.NumChildrenExpanded == 1 || childNode.ChildAtIndex(0).Index < node.ChildAtIndex(1).Index))
+          {
+            // Is child of child.
+            CheckUndetectedDraw(node, childNode, childNode.ChildAtIndex(0));
+          }
+          else if (node.NumChildrenExpanded == 2)
+          {
+            // Is sibling of child.
+            CheckUndetectedDraw(node, node.ChildAtIndex(1), default);
+          }
+          else
+          {
+            throw new Exception("Unexpected materialization shape");
+          }
+        }
+      }
+
+      return node;
     }
 
     void ProcessSelectedChildren(MCTSNode node, int numTargetLeafs, float vLossDynamicBoost, int numChildrenToCheck,
