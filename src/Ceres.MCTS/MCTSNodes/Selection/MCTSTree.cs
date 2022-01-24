@@ -310,7 +310,7 @@ namespace Ceres.MCTS.LeafExpansion
       // TODO: Upon tree reuse, do we need to revisit shallow nodes with this deeper draw detection?
 
       const bool TRUNCATE_HISTORY_50_MOVE_RULE = true; // more efficient and preserves correctness
-      Span<Position> posHistory = GetPriorHistoryPositions(node, in newPosAsPos, PosScratchBuffer,
+      Span<Position> posHistory = GetPriorHistoryPositions(node.Parent, in newPosAsPos, default, PosScratchBuffer,
                                                            ParamsSearch.DrawByRepetitionLookbackPlies, 
                                                            TRUNCATE_HISTORY_50_MOVE_RULE, true);
 
@@ -397,7 +397,8 @@ namespace Ceres.MCTS.LeafExpansion
     {
       maxLookback = Math.Min(maxLookback, MAX_LENGTH_POS_HISTORY - 1);
 
-      return GetPriorHistoryPositions(node, in node.Annotation.Pos, PosScratchBuffer, maxLookback, stop50MoveRuleReset, true);
+      return GetPriorHistoryPositions(node.Parent, in node.Annotation.Pos, default, 
+                                      PosScratchBuffer, maxLookback, stop50MoveRuleReset, true);
     }
 
 
@@ -418,65 +419,105 @@ namespace Ceres.MCTS.LeafExpansion
     }
 
 
+
     /// <summary>
     /// Returns Span of prior positions form specified node.
     /// 
     /// Note that we expect the positions stored in each node already include the repetition counts (if any)
     /// thus this does not need to be recomputed here.
     /// </summary>
-    /// <param name="deepestNode"></param>
-    /// <param name="deepestNodePos"></param>
+    /// <param name="node"></param>
+    /// <param name="extraPos1"></param>
+    /// <param name="extraPos2"></param>
     /// <param name="posSpan"></param>
     /// <param name="maxPositions"></param>
-    /// <param name="stop50MoveRuleReset">if position retrieval should stop upon seeing 50 move</param>
+    /// <param name="stop50MoveRuleReset"></param>
     /// <param name="setFinalPositionRepetitionCount"></param>
     /// <returns></returns>
-    Span<Position> GetPriorHistoryPositions(MCTSNode deepestNode, in Position deepestNodePos,
+    Span<Position> GetPriorHistoryPositions(MCTSNode node, in Position extraPos1, in Position extraPos2,
                                             Span<Position> posSpan, int maxPositions, bool stop50MoveRuleReset,
                                             bool setFinalPositionRepetitionCount)
     {
-      int depthOfLastNodeAdded = deepestNode.Depth; // so far only deepestNodePos has been added
+      int depthOfLastNodeAdded = node.IsNull ? -1 : node.Depth; 
 
-      // Gather history positions by ascending tree
-      posSpan[0] = deepestNodePos;
-      int count = 1;
-      int priorMove50 = deepestNodePos.MiscInfo.Move50Count;
+      int count = 0;
+      bool sawMove50CounterReset = false;
+
+      // Add in extra positions (from deepest first)
+      if (extraPos2.PieceCount > 0)
+      {
+        Debug.Assert(extraPos2.MiscInfo.SideToMove != extraPos1.MiscInfo.SideToMove);
+
+        posSpan[count++] = extraPos2;
+        depthOfLastNodeAdded++;
+
+        if (stop50MoveRuleReset && extraPos1.MiscInfo.Move50Count > extraPos2.MiscInfo.Move50Count)
+        {
+          sawMove50CounterReset = true;
+        }
+      }
+
+      if (extraPos1.PieceCount > 0)
+      {
+        posSpan[count++] = extraPos1;
+        depthOfLastNodeAdded++;
+      }
+
+      Debug.Assert(node.IsNull || posSpan[count - 1].MiscInfo.SideToMove != node.Annotation.Pos.SideToMove);
+
+      int nextMove50 = posSpan[count - 1].MiscInfo.Move50Count;
 
       // Ascend in tree until no more nodes or we have extracted as many positinos as requested.
-      MCTSNode thisNode = deepestNode.Parent;
-      while (count < maxPositions && !thisNode.IsNull)
+      while (count < maxPositions && !node.IsNull && !sawMove50CounterReset)
       {
-        int thisMove50Count = thisNode.Annotation.Pos.MiscInfo.Move50Count;
+        int thisMove50Count = node.Annotation.Pos.MiscInfo.Move50Count;
 
         // If 50 move rule counter was seen to not go up
         // then it must have reset indicating some move
         // was made that makes repetitions not possible.
-        if (stop50MoveRuleReset && priorMove50 <= thisMove50Count)
+        if (stop50MoveRuleReset && nextMove50 <= thisMove50Count)
         {
-          break;
+          sawMove50CounterReset = true;
         }
-
-        priorMove50 = thisMove50Count;
-        posSpan[count++] = thisNode.Annotation.Pos;
-        thisNode = thisNode.Parent;
-        depthOfLastNodeAdded--;
+        else
+        {
+          nextMove50 = thisMove50Count;
+          posSpan[count++] = node.Annotation.Pos;
+          node = node.Parent;
+          depthOfLastNodeAdded--;
+        }
       }
 
       // No need to prefill en passant positions if 50 move rule reset (since would have been pawn move).
       bool doEnPassantPrefill = !stop50MoveRuleReset;
 
       // Gather positions from this path (possibly also reaching back into the start sequence)
+      // TODO: someday the lookback below into history positions (before root)
+      //       could be enhanced to also stop when see move 50 reset (if stop50MoveRuleReset is true)
       return PositionHistoryGatherer.DoGetHistoryPositions(depthOfLastNodeAdded, PriorMoves, posSpan, count, maxPositions, 
                                                            doEnPassantPrefill, setFinalPositionRepetitionCount);
     }
 
 
-    public int NumEqualAsRepetitionInHistory(MCTSNode node, in Position position, int maxLookbackPly)
+    public int NumEqualAsRepetitionInHistory(MCTSNode node, in Position position1, in Position position2, int maxLookbackPly)
     {
+// ******************************************
+      // TODO: this could be made more efficient by just counting numbrer equal
+      //       as we ascend instead of actually building out the Span of all positions.
+      //       (also, only every other position)
+      const bool TRUNCATE_HISTORY_50_MOVE_RULE = true; // more efficient and preserves correctness
+      Span<Position> posHistory = GetPriorHistoryPositions(node, in position1, in position2, PosScratchBuffer,
+                                                           maxLookbackPly, 
+                                                           TRUNCATE_HISTORY_50_MOVE_RULE, false);
+
+      return PositionRepetitionCalc.GetFinalPositionRepetitionCount(posHistory);
+#if NOT
+      PositionHistoryGatherer.DoGetHistoryPositions(0, PriorMoves, posScratchBuffer, 1, ParamsSearch.DrawByRepetitionLookbackPlies, true, false)
+
       // TODO: possibly skip "other color" positions for efficiency
       int countLookback = 0;
       int countEqual = 0;
-      MCTSNode thisNode = node;
+      MCTSNode thisNode = node;x
       while (countLookback < maxLookbackPly && !thisNode.IsNull)
       {
         countLookback++;
@@ -503,6 +544,7 @@ namespace Ceres.MCTS.LeafExpansion
       }
 
       return countEqual;
+#endif
     }
 
 

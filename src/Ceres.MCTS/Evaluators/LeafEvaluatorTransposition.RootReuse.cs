@@ -109,7 +109,7 @@ namespace Ceres.MCTS.Evaluators
       Debug.Assert(applyTarget > 0);
       nodeRef.NumVisitsPendingTranspositionRootExtraction = applyTarget;
 
-      EnsurePendingTranspositionValuesSet(node, false);
+      EnsurePendingTranspositionValuesSet(node, false, 0);
     }
 
 
@@ -124,9 +124,9 @@ namespace Ceres.MCTS.Evaluators
     /// </summary>
     /// <param name="node"></param>
     /// <param name="transpositionRootNode"></param>
-    public static void EnsurePendingTranspositionValuesSet(MCTSNode node, bool possiblyRefresh)
+    public static void EnsurePendingTranspositionValuesSet(MCTSNode node, bool possiblyRefresh, int subfracIndex)
     {
-      Debug.Assert(node.N <= 2);
+      Debug.Assert(node.N <= 3);
 
       // Possibly the value cached in PendingTranspositionV to be used for the pending
       // transposition values is not present (because the prior MCTSNode was lost from cache).
@@ -146,7 +146,7 @@ namespace Ceres.MCTS.Evaluators
         Debug.Assert(transpositionNodeIndex != 0);
 
         ref readonly MCTSNodeStruct transpositionNode = ref node.Store.Nodes.nodes[transpositionNodeIndex];
-        SetPendingTransitionValues(node, in transpositionNode);
+        SetPendingTransitionValues(node, in transpositionNode, subfracIndex);
         Debug.Assert(!FP16.IsNaN(node.PendingTranspositionV));
       }
     }
@@ -157,11 +157,11 @@ namespace Ceres.MCTS.Evaluators
     /// </summary>
     /// <param name="node"></param>
     /// <param name="transpositionRootNode"></param>
-    static void SetPendingTransitionValues(MCTSNode node, in MCTSNodeStruct transpositionRootNode)
+    static void SetPendingTransitionValues(MCTSNode node, in MCTSNodeStruct transpositionRootNode, int subfracIndex)
     {
-      Debug.Assert(node.N <= 2);
+      Debug.Assert(node.N <= 3);
 
-      float FRAC_ROOT = ParamsSearch.TranspositionRootBackupSubtreeFracs[node.N];
+      float FRAC_ROOT = ParamsSearch.TranspositionRootBackupSubtreeFracs[subfracIndex];
       Debug.Assert(!float.IsNaN(FRAC_ROOT));
       float FRAC_POS = 1f - FRAC_ROOT;
 
@@ -189,8 +189,10 @@ namespace Ceres.MCTS.Evaluators
         node.PendingTranspositionD = (FP16)(FRAC_POS * subnodeRef.DrawP          + FRAC_ROOT * subnodeRef.DAvg);
       }
 
-      if (node.N == 0)
+      if (subfracIndex == 0)
       {
+        // Note that no need to check for draw by repetition,
+        // this would have already been detected during annotation of the node.
         // less efficient var visit0Ref = MCTSNodeStruct.SubnodeRefVisitedAtIndex(in transpositionRootNode, 0, out bool foundV0);
         SetNodePendingValues(1, in transpositionRootNode, true);
       }
@@ -199,7 +201,7 @@ namespace Ceres.MCTS.Evaluators
         ref readonly MCTSNodeStruct visit1Ref = ref MCTSNodeStruct.SubnodeRefVisitedAtIndex(in transpositionRootNode, 1, out bool foundV1);
         Debug.Assert(foundV1);
 
-        if (node.N == 1)
+        if (subfracIndex == 1)
         {
           SetNodePendingValues(-1, in visit1Ref, foundV1);
 
@@ -208,14 +210,15 @@ namespace Ceres.MCTS.Evaluators
           if (isDraw)
           {
             node.PendingTranspositionV = 0;
-            node.PendingTranspositionM = 0;
+            node.PendingTranspositionM = 1;
             node.PendingTranspositionD = 1;
+            node.StructRef.miscFields.IsDrawVirtualTranspositionNode1 = true;
 
             // Reset number of pending roots such that no further extraction will happen.
             node.StructRef.NumVisitsPendingTranspositionRootExtraction = 1;
           }
         }
-        else if (node.N == 2)
+        else if (subfracIndex == 2)
         {
           ref readonly MCTSNodeStruct visit2Ref = ref MCTSNodeStruct.SubnodeRefVisitedAtIndex(in transpositionRootNode, 2, out bool foundV2);
           Debug.Assert(foundV2);
@@ -231,10 +234,9 @@ namespace Ceres.MCTS.Evaluators
           if (isDraw)
           {
             node.PendingTranspositionV = 0;
-            node.PendingTranspositionM = 0;
+            node.PendingTranspositionM = 1;
             node.PendingTranspositionD = 1;
-
-            MCTSEventSource.TestMetric1++;
+            node.StructRef.miscFields.IsDrawVirtualTranspositionNode2 = true;
           }
         }
         else
