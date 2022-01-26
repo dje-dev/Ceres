@@ -113,13 +113,17 @@ namespace Ceres.MCTS.Utils
     }
 
 
-    public SearchPrincipalVariation(MCTSNode searchRoot, MCTSNode overrideBestMoveNodeAtRoot = default)
+    public SearchPrincipalVariation(MCTSNode searchRoot, 
+                                    MCTSNode overrideBestMoveNodeAtRoot = default, 
+                                    bool startFromRoot = false)
     {
+      HashSet<int> useNodes = startFromRoot ? MCTSPosTreeNodeDumper.NodesToRootSet(searchRoot) : null;
+
       Nodes = new List<MCTSNode>();
 
       // Omit positions with low N on both absolute and relative basis (too noisy)
       int totalN = searchRoot.N;
-      MCTSNode node = searchRoot;
+      MCTSNode node = startFromRoot ? searchRoot.Context.Tree.Root : searchRoot;
       do
       {
         // 
@@ -145,8 +149,20 @@ namespace Ceres.MCTS.Utils
           }
           else
           {
+            MCTSNode mustVisitChild = default;
+            if (useNodes != null)
+            {
+              foreach (MCTSNode nodeChild in node.ChildrenExpanded)
+              {
+                if (useNodes.Contains(nodeChild.Index))
+                {
+                  mustVisitChild = nodeChild;
+                }
+              }
+            }
+
             // Non-root nodes follow visits with maximum number of visits.
-            node = node.ChildWithLargestValue(n => n.N);
+            node = mustVisitChild.IsNotNull ? mustVisitChild : node.BestMove(false);
           }
         }
         else

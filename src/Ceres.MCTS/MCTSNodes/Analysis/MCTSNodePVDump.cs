@@ -22,6 +22,7 @@ using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
 using Ceres.Chess.Positions;
 using Ceres.MCTS.Iteration;
+using Ceres.MCTS.LeafExpansion;
 using Ceres.MCTS.MTCSNodes.Struct;
 
 #endregion
@@ -297,8 +298,27 @@ namespace Ceres.MCTS.MTCSNodes.Analysis
       return node;
     }
 
+    public static void DumpPVFromRoot(MCTSTree tree, MCTSNode node, bool fullDetail, TextWriter writer = null)
+    {
+      HashSet<int> visitNodes = NodesToRootSet(node);
 
-    public static void DumpPV(MCTSNode node, bool fullDetail, TextWriter writer = null)
+      DumpPV(tree.Root, fullDetail, writer, visitNodes);
+    }
+
+    public static HashSet<int> NodesToRootSet(MCTSNode node)
+    {
+      // Build set of nodes ascending to root to be followed.
+      HashSet<int> visitNodes = new HashSet<int>();
+      while (!node.IsNull)
+      {
+        visitNodes.Add(node.Index);
+        node = node.Parent;
+      }
+
+      return visitNodes;
+    }
+
+    public static void DumpPV(MCTSNode node, bool fullDetail, TextWriter writer = null, HashSet<int> mustVisitNodes = null)
     {
       try
       {
@@ -333,12 +353,25 @@ namespace Ceres.MCTS.MTCSNodes.Analysis
 
           DumpNodeStr(searchRootNode, node, countSeen, fullDetail, writer);
 
-          if (node.NumChildrenVisited == 0)
+          if (node.NumChildrenExpanded == 0)
           {
             return;
           }
 
-          node = node.BestMove(false);
+          MCTSNode mustVisitChild = default;
+          if (mustVisitNodes != null)
+          {
+            foreach (MCTSNode nodeChild in node.ChildrenExpanded)
+            {
+              if (mustVisitNodes.Contains(nodeChild.Index))
+              {
+                mustVisitChild = nodeChild;
+              }
+            }
+          }
+
+          // Advance to next child. Use "must visit" child if found, otherwise best move.
+          node = mustVisitChild.IsNotNull ? mustVisitChild : node.BestMove(false);
 
           depth++;
         }
