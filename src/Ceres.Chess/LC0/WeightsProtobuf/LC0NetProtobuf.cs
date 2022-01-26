@@ -111,20 +111,30 @@ namespace Ceres.Chess.LC0.WeightsProtobuf
     {
       LC0ProtobufNet net = null;
 
+      // Another thread might already be trying to load this net.
+      // Wait for that one to finish.
       while (loadingNets.ContainsKey(fn))
       {
-        // Already being loaded.
         Thread.Sleep(50);
       }
 
       // TODO: consider having a bounded size of the cache to avoid excess memory use.
-      loadingNets.TryAdd(fn, fn);
-      if (!cachedNets.TryGetValue(fn, out net))
+      try
       {
-        net = cachedNets[fn] = new LC0ProtobufNet(fn);
+        loadingNets.TryAdd(fn, fn);
+        if (!cachedNets.TryGetValue(fn, out net))
+        {
+          net = cachedNets[fn] = new LC0ProtobufNet(fn);
+        }
       }
-      loadingNets.TryRemove(new KeyValuePair<string, string>(fn, fn));
-
+      catch (Exception ex)
+      {
+        throw ex;
+      }
+      finally
+      {
+        loadingNets.TryRemove(new KeyValuePair<string, string>(fn, fn));
+      }
       return net;
     }
 
