@@ -16,10 +16,11 @@
 using System;
 using System.Runtime.InteropServices;
 using Ceres.Base.DataType.Trees;
+using Ceres.MCTS.MTCSNodes.Struct;
 
 #endregion
 
-namespace Ceres.MCTS.MTCSNodes.Struct
+namespace Ceres.MCTS.Managers.Uncertainty
 {
   /// <summary>
   /// Structure that tracks the rolling uncertainty (mean absolute deviation)
@@ -27,7 +28,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
   /// </summary>
   [Serializable]
   [StructLayout(LayoutKind.Sequential, Pack = 1, Size = 4)]
-  public struct MCTSNodeUncertaintyAccumulator
+  public unsafe struct MCTSNodeUncertaintyAccumulator
   {
     /// <summary>
     /// The first few visits are ignored because the average evaluation

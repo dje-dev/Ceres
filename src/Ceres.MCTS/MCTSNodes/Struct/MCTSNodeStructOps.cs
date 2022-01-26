@@ -26,6 +26,7 @@ using Ceres.MCTS.Environment;
 using Ceres.MCTS.Evaluators;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.LeafExpansion;
+using Ceres.MCTS.Managers.Uncertainty;
 using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.Params;
 using Ceres.MCTS.Search;

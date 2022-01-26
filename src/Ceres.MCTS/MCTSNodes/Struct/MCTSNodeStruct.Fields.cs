@@ -21,6 +21,7 @@ using Ceres.Base.DataTypes;
 using Ceres.Chess.EncodedPositions.Basic;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using Ceres.MCTS.Managers.Uncertainty;
 
 #endregion
 

@@ -15,10 +15,10 @@
 
 using System;
 using System.Diagnostics;
-using Ceres.Base.Math;
 using Ceres.MCTS.Environment;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.LeafExpansion;
+using Ceres.MCTS.Managers.Uncertainty;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.Params;
 
@@ -152,7 +152,7 @@ namespace Ceres.MCTS.MTCSNodes
           if (gatherStatsNSpan[i] >= MCTSNodeUncertaintyAccumulator.MIN_N_ESTIMATE)
           {
             float childMAD = gatherStatsUSpan[i];
-            float explorationScaling = UncertaintyScalingCalculator.CalcAdj(childMAD, parentMAD);
+            float explorationScaling = UncertaintyScalingCalculator.ExplorationMultiplier(childMAD, parentMAD);
 
             accUncertaintyMultiplier += explorationScaling * gatherStatsNSpan[i];
             nUsed += gatherStatsNSpan[i];
@@ -339,27 +339,6 @@ namespace Ceres.MCTS.MTCSNodes
 
       ComputeTopChildScores(selectorID, depth, dynamicVLossBoost, 0, NumPolicyMoves - 1, 0, scores, childVisitCounts, cpuctMultiplier);
       return scores.ToArray();
-    }
-
-
-    /// <summary>
-    /// Manages calculation of possible scaling factor to be applied to
-    /// CPUCT based on uncertain of node relative to parent.
-    /// </summary>
-    private static class UncertaintyScalingCalculator
-    {
-      const float UNCERTAINTY_DIFF_MULTIPLIER = 2f;
-      const float UNCERTAINTY_MAX_DEVIATION = 0.20f;
-
-      public static float CalcAdj(float childMAD, float parentMAD)
-      {
-        // The uncertainty scaling is a number centered at 1 which is
-        // higher for children with more emprical volatility than the parent and
-        // lower for children with less volatility.
-        float explorationScaling = 1 + UNCERTAINTY_DIFF_MULTIPLIER * (childMAD - parentMAD);
-        return StatUtils.Bounded(explorationScaling, 1.0f - UNCERTAINTY_MAX_DEVIATION, 1.0f + UNCERTAINTY_MAX_DEVIATION);
-      }
-
     }
 
   }

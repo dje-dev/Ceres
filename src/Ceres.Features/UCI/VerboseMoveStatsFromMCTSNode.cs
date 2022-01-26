@@ -22,6 +22,7 @@ using Ceres.Chess.LC0.Positions;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.Base.DataTypes;
 using Ceres.Chess.EncodedPositions.Basic;
+using Ceres.MCTS.Managers.Uncertainty;
 
 #endregion
 
