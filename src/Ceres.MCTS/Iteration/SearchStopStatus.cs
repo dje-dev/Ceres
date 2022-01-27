@@ -51,6 +51,11 @@ namespace Ceres.MCTS.Iteration
       SearchLimitExceeded,
 
       /// <summary>
+      /// The LimitsManager requested a stop given current search state.
+      /// </summary>
+      LimitsManagerRequestedStop,
+
+      /// <summary>
       /// The MaxTreeVisits field in the SearchLimit was set
       /// and the search tree has reached that limit.
       /// </summary>

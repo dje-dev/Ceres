@@ -17,6 +17,7 @@ using System;
 
 using Ceres.Chess;
 using Ceres.MCTS.Managers;
+using Ceres.MCTS.Managers.Limits;
 using Ceres.MCTS.MTCSNodes;
 
 #endregion
@@ -57,19 +58,32 @@ namespace Ceres.MCTS.Iteration
         return false;
       }
 
-      if (reuseMethod == ManagerTreeReuse.Method.ForceInstamove
-       || CheckInstamoveFutility(priorManager, searchLimit, newRoot, reuseMethod))
-      {
-        InstamoveCount++;
-        CountSearchContinuations++;
-
-        return true;
-      }
-      else
+      // Give the limits manager the opportunity to possibly make the decision.
+      LimitsManagerInstamoveDecision limitsManagerDecision = priorManager.LimitManager.CheckInstamove(this, LastGameLimitInputs);
+      if (limitsManagerDecision == LimitsManagerInstamoveDecision.DoNotInstamove)
       {
         return false;
       }
 
+      bool shouldInstamove = false;
+      if (limitsManagerDecision == LimitsManagerInstamoveDecision.Instamove)
+      {
+        shouldInstamove = true;
+      }
+
+      if (reuseMethod == ManagerTreeReuse.Method.ForceInstamove
+       || CheckInstamoveFutility(priorManager, searchLimit, newRoot, reuseMethod))
+      {
+        shouldInstamove = true;
+      }
+
+      if (shouldInstamove)
+      {
+        InstamoveCount++;
+        CountSearchContinuations++;
+      }
+
+      return shouldInstamove;
     }
 
 

@@ -16,8 +16,15 @@
 
 #endregion
 
+using Ceres.MCTS.Iteration;
+
 namespace Ceres.MCTS.Managers.Limits
 {
+  /// <summary>
+  /// Interface implemented by classes which manage the
+  /// determination of move limits (nodes or time) for single moves
+  /// within the context of a whole game and associated time allotments.
+  /// </summary>
   public interface IManagerGameLimit
   {
     /// <summary>
@@ -29,5 +36,26 @@ namespace Ceres.MCTS.Managers.Limits
     /// <param name="inputs"></param>
     /// <returns></returns>
     public ManagerGameLimitOutputs ComputeMoveAllocation(ManagerGameLimitInputs inputs);
+
+
+    /// <summary>
+    /// Method called periodically to determine if an instamove would be
+    /// acceptable given the current state.
+    /// </summary>
+    /// <param name="search"></param>
+    /// <param name="inputs"></param>
+    /// <returns></returns>
+    public LimitsManagerInstamoveDecision CheckInstamove(MCTSearch search, ManagerGameLimitInputs inputs)
+      => LimitsManagerInstamoveDecision.NoDecision;
+
+
+    /// <summary>
+    /// Method called periodically to determine if the limits manager
+    /// requests the search be terminated soon or immediately.
+    /// </summary>
+    /// <param name="search"></param>
+    /// <param name="inputs"></param>
+    /// <returns></returns>
+    public bool CheckStopSearch(MCTSearch search, ManagerGameLimitInputs inputs) => false;
   }
 }

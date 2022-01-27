@@ -250,7 +250,7 @@ namespace Ceres.MCTS.Iteration
                                                           paramsSearch, limitManager,
                                                           gameMoveHistory, isFirstMoveOfGame);
 
-      Manager = new MCTSManager(store, reuseOtherContextForEvaluatedNodes, positionEvalCache, reuseNodeCache, null,
+      Manager = new MCTSManager(this, store, reuseOtherContextForEvaluatedNodes, positionEvalCache, reuseNodeCache, null,
                                 nnEvaluators, paramsSearch, paramsSelect, searchLimitToUse,
                                 limitManager, startTime, gameMoveHistory, isFirstMoveOfGame, 
                                 forceNoTablebaseTerminals, searchMovesTablebaseRestricted);
@@ -260,7 +260,7 @@ namespace Ceres.MCTS.Iteration
       reuseNodeCache?.ResetCache(false);
       reuseNodeCache?.SetContext(context);
 
-      (BestMove, TimingInfo) = MCTSManager.Search(Manager, verbose, progressCallback,
+      (BestMove, TimingInfo) = MCTSManager.DoSearch(Manager, verbose, progressCallback,
                                                   possiblyUsePositionCache, moveImmediateIfOnlyOneMove);
     }
 
@@ -679,7 +679,7 @@ namespace Ceres.MCTS.Iteration
                               + $"in {(int)(LastMakeNewRootTimingStats.ElapsedTimeSecs / 1000.0)}ms");
 
       // Construct a new search manager reusing this modified store and modified transposition roots.
-      Manager = new MCTSManager(store, reuseOtherContextForEvaluatedNodes, reusePositionCache,
+      Manager = new MCTSManager(this, store, reuseOtherContextForEvaluatedNodes, reusePositionCache,
                                 reuseNodeCache, newTranspositionRoots,
                                 priorContext.NNEvaluators, priorContext.ParamsSearch, priorContext.ParamsSelect,
                                 searchLimitTargetAdjusted, Manager.LimitManager,
@@ -692,7 +692,7 @@ namespace Ceres.MCTS.Iteration
       // NOTE: disabled, this happens in practive very rearely (and the revert code is not yet fully working)
       //FixupDrawsInvalidatedByTreeReuse();
 
-      (BestMove, TimingInfo) = MCTSManager.Search(Manager, verbose, progressCallback,
+      (BestMove, TimingInfo) = MCTSManager.DoSearch(Manager, verbose, progressCallback,
                                                   possiblyUsePositionCache, moveImmediateIfOnlyOneMove);
     }
 

@@ -57,6 +57,11 @@ namespace Ceres.MCTS.Iteration
     public delegate void MCTSProgressCallback(MCTSManager manager);
 
     /// <summary>
+    /// Parent search object.
+    /// </summary>
+    public MCTSearch Search;
+
+    /// <summary>
     /// Current status of search.
     /// </summary>
     public SearchStopStatus StopStatus = SearchStopStatus.Continue;
@@ -100,7 +105,6 @@ namespace Ceres.MCTS.Iteration
     /// (for allocating time or nodes searched to each node).
     /// </summary>
     public readonly IManagerGameLimit LimitManager;
-
 
     /// <summary>
     /// Time when search method was first invoked.
@@ -184,7 +188,8 @@ namespace Ceres.MCTS.Iteration
     /// <param name="startTime"></param>
     /// <param name="gameMoveHistory"></param>
     /// <param name="isFirstMoveOfGame"></param>s
-    public MCTSManager(MCTSNodeStore store,
+    public MCTSManager(MCTSearch search,
+                       MCTSNodeStore store,
                        MCTSIterator reuseOtherContextForEvaluatedNodes,
                        PositionEvalCache reusePositionCache,
                        IMCTSNodeCache reuseNodeCache,
@@ -205,6 +210,7 @@ namespace Ceres.MCTS.Iteration
         throw new Exception("Per game search limits not supported");
       }
 
+      Search = search;
       StartTimeThisSearch = startTime;
       RootNWhenSearchStarted = store.RootNode.N;
 
@@ -614,10 +620,10 @@ namespace Ceres.MCTS.Iteration
 
 
     public static (MGMove, TimingStats)
-    Search(MCTSManager manager, bool verbose,
-           MCTSProgressCallback progressCallback = null,
-           bool possiblyUsePositionCache = false,
-           bool moveImmediateIfOnlyOneMove = false)
+    DoSearch(MCTSManager manager, bool verbose,
+             MCTSProgressCallback progressCallback = null,
+             bool possiblyUsePositionCache = false,
+             bool moveImmediateIfOnlyOneMove = false)
     {
       MCTSearch.SearchCount++;
       manager.StartTimeThisSearch = DateTime.Now;
@@ -959,7 +965,12 @@ namespace Ceres.MCTS.Iteration
 
       UpdateTopNodeInfo();
 
-      if (ExternalStopRequested)
+      if (LimitManager.CheckStopSearch(Search, Search.LastGameLimitInputs))
+      {
+        return SearchStopStatus.LimitsManagerRequestedStop;
+      }
+
+        if (ExternalStopRequested)
       {
         return SearchStopStatus.ExternalStopRequested;
       }
