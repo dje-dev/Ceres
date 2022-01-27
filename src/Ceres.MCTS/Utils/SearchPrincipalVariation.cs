@@ -162,7 +162,10 @@ namespace Ceres.MCTS.Utils
             }
 
             // Non-root nodes follow visits with maximum number of visits.
-            node = mustVisitChild.IsNotNull ? mustVisitChild : node.BestMove(false);
+            // N.B. Use simple max N node because BestMove
+            // can trigger CreateNode which is problematic in some contexts.
+            // TODO: improve this, remove CreateNode logic there?
+            node = mustVisitChild.IsNotNull ? mustVisitChild : node.ChildWithLargestValue(n => n.N);
           }
         }
         else
