@@ -202,10 +202,21 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     public void CopyUnexpandedChildrenFromOtherNode(MCTSTree tree, MCTSNodeStructIndex otherNodeIndex)
     {
       ref readonly MCTSNodeStruct otherNode = ref tree.Store.Nodes.nodes[otherNodeIndex.Index];
-      if (otherNode.IsTranspositionLinked)
+      CopyUnexpandedChildrenFromOtherNode(tree, in otherNode);
+    }
+
+    /// <summary>
+    /// Copy over all the child information from another node
+    /// which is in the same transposition equivalence class.
+    /// </summary>
+    /// <param name="tree"></param>
+    /// <param name="otherNodeIndex"></param>
+    public void CopyUnexpandedChildrenFromOtherNode(MCTSTree tree, in MCTSNodeStruct otherNode)
+    {
+      if (otherNode.TryGetTranspositionRootIndex(out MCTSNodeStructIndex trIndex))
       {
         // Follow children to transposition root
-        CopyUnexpandedChildrenFromOtherNode(tree, new MCTSNodeStructIndex(otherNode.TranspositionRootIndex));
+        CopyUnexpandedChildrenFromOtherNode(tree, trIndex);
       }
       else
       {
@@ -338,12 +349,12 @@ namespace Ceres.MCTS.MTCSNodes.Struct
             return 1.0f;
 
           }
-          else if (IsTranspositionLinked)
+          else if (TryGetTranspositionRootIndex(out MCTSNodeStructIndex transpositionRootIndex))
           {
             Debug.Assert(N <= 3);
 
             MCTSNodeStore store = Context.Store;
-            ref readonly MCTSNodeStruct transpositionRootRef = ref store[TranspositionRootIndex];
+            ref readonly MCTSNodeStruct transpositionRootRef = ref store[transpositionRootIndex];
             ref readonly MCTSNodeStruct transpositionRootChild = ref store[in transpositionRootRef, 0];
 
             float sumP = transpositionRootChild.P;

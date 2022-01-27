@@ -170,15 +170,42 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// </summary>
     public readonly bool IsTranspositionLinked => childStartBlockIndex < 0;
 
+
+    /// <summary>
+    /// Determines if node was transposition linked and returns index of referenced node if true.
+    /// This is done atomically such that a valid root index will always be captured if true is true is returned.
+    /// </summary>
+    /// <param name="transpositionRootIndex"></param>
+    /// <returns></returns>
+    internal readonly bool TryGetTranspositionRootIndex(out MCTSNodeStructIndex transpositionRootIndex)
+    {
+      int captureChildStartBlockIndex = childStartBlockIndex;
+      if (captureChildStartBlockIndex >= 0)
+      {
+        transpositionRootIndex = default;
+        return false;
+      }
+      else
+      {
+        transpositionRootIndex = new MCTSNodeStructIndex(-captureChildStartBlockIndex);
+        return true;
+      }
+    }
+
+
     public int TranspositionRootIndex
     {
       // Note: we make use of ChildStartIndex as a place to store this value
       readonly get
       {
         if (childStartBlockIndex >= 0)
+        {
           return 0;
+        }
         else
+        {
           return -childStartBlockIndex;
+        }
       }
       set
       {

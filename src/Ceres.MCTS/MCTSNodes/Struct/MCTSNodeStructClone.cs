@@ -191,7 +191,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       targetParentRef.NumChildrenVisited = (byte)(childIndex + 1);
 
       // TODO: avoid ChildAtIndex to avoid dictionary lookup?
-      targetChildRef.CopyUnexpandedChildrenFromOtherNode(tree, new MCTSNodeStructIndex(sourceChildRef.IndexInStore(store).Index));
+      targetChildRef.CopyUnexpandedChildrenFromOtherNode(tree, in sourceChildRef);
 
       if (LeafEvaluatorTransposition.TRACK_VIRTUAL_VISITS)
       {
