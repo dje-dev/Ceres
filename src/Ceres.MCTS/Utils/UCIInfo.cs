@@ -71,10 +71,17 @@ namespace Ceres.MCTS.Utils
       float elapsedTimeSeconds = wasInstamove ? 0 : (float)(DateTime.Now - manager.StartTimeThisSearch).TotalSeconds;
 
       // Get the principal variation (the first move of which will be the best move)
-      SearchPrincipalVariation pv;
+      SearchPrincipalVariation pv = null;
       BestMoveInfo bestMoveInfo;
       bestMoveInfo = thisRootNode.BestMoveInfo(false);
-      pv = new SearchPrincipalVariation(thisRootNode, overrideBestMoveNodeAtRoot);
+      try
+      {
+        pv = new SearchPrincipalVariation(thisRootNode, overrideBestMoveNodeAtRoot);
+      }
+      catch (Exception ex)
+      {
+        return "UCI Error " + ex.Message;
+      }
 
       MCTSNode bestMoveNode = pv.Nodes.Count > 1 ? pv.Nodes[1] : pv.Nodes[0];
 
