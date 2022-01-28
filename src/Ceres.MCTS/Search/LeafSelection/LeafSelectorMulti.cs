@@ -531,6 +531,10 @@ namespace Ceres.MCTS.Search
       if (!node.StructRef.IsTranspositionRoot)
       {
         empiricalDistrib = tempEmpiricalDistrib;
+        if (empiricalDistrib == null)
+        {
+          empiricalDistrib = tempEmpiricalDistrib = new float[64];
+        }
         PossiblySetEmpiricalPolicyDistribution(ref node, numChildrenToCheck, empiricalDistrib, ref empiricalWeight);
       }
 
@@ -966,11 +970,5 @@ namespace Ceres.MCTS.Search
     }
 
 #endregion
-
-    [ModuleInitializer]
-    internal static void ModuleInit()
-    {
-      tempEmpiricalDistrib = new float[64];
-    }
   }
 }
