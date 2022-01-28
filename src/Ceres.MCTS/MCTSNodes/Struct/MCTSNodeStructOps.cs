@@ -162,7 +162,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
       // Create new wrapper object and use it to initialize fields.
       childNodeRef.Initialize(store.StoreID, thisIndex, childIndex, thisChildRef.p, thisChildRef.Move, !IsWhite);
-
+      Thread.MemoryBarrier();
       // Modify child entry to refer to this new child
       // N.B: It is essential to only swap out the child index here
       //      after the new child node has been fully initialized (above)
