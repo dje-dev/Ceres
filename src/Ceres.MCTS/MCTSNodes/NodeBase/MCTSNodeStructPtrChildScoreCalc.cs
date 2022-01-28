@@ -68,7 +68,8 @@ namespace Ceres.MCTS.MTCSNodes
     /// <param name="cpuctMultiplier"></param>
     public void ComputeTopChildScores(int selectorID, int depth, float dynamicVLossBoost,
                                       int minChildIndex, int maxChildIndex, int numVisitsToCompute,
-                                      Span<float> scores, Span<short> childVisitCounts, float cpuctMultiplier)
+                                      Span<float> scores, Span<short> childVisitCounts, float cpuctMultiplier,
+                                      float[] empiricalDistrib, float empiricalWeight)
     {
       GatheredChildStats stats = CheckInitThreadStatics();
 
@@ -93,6 +94,14 @@ namespace Ceres.MCTS.MTCSNodes
       //       have special version of Gather which didn't bother with that
       nodeRef.GatherChildInfo(Context, new MCTSNodeStructIndex(Index), selectorID, depth, numToProcess - 1, gatherStats);
 
+      if (empiricalWeight > 0)
+      {
+        for (int i=0; i<numToProcess; i++)
+        {
+          gatherStatsPSpan[i] = gatherStatsPSpan[i] * (1.0f - empiricalWeight)
+                              + empiricalDistrib[i] * empiricalWeight;
+        }
+      }
 
       if (Context.ParamsSelect.PolicyDecayFactor > 0)
       {
@@ -337,7 +346,7 @@ namespace Ceres.MCTS.MTCSNodes
       Span<float> scores = new float[NumPolicyMoves];
       Span<short> childVisitCounts = new short[NumPolicyMoves];
 
-      ComputeTopChildScores(selectorID, depth, dynamicVLossBoost, 0, NumPolicyMoves - 1, 0, scores, childVisitCounts, cpuctMultiplier);
+      ComputeTopChildScores(selectorID, depth, dynamicVLossBoost, 0, NumPolicyMoves - 1, 0, scores, childVisitCounts, cpuctMultiplier, default, 0);
       return scores.ToArray();
     }
 

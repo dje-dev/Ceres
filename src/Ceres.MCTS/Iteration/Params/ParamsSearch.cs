@@ -357,6 +357,12 @@ namespace Ceres.MCTS.Params
     public bool EnableUseSiblingEvaluations = false;
 
     /// <summary>
+    /// Fraction (such as 0.666) that should be used to blend in empirical policy from
+    /// a node's transposition root (if any) during PUCT leaf selection.
+    /// </summary>
+    public float TranspositionRootPolicyBlendingFraction = 0.0f;
+
+    /// <summary>
     /// If the "uncertainty boosting" feature should be enabled.
     /// It adds a small uncertainty-related tweak to the leaf selection formula 
     /// (similar ideas such as UCB-V for classical UCB has already been explored in other domains). 

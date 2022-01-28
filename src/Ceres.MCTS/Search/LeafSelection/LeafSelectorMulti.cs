@@ -15,6 +15,7 @@
 
 using System;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Threading;
 
 using Ceres.Base.DataTypes;
@@ -524,10 +525,19 @@ namespace Ceres.MCTS.Search
       const float cpuctMultiplier = 1;
 #endif
 
+      // Calculate emprical distribution (if to be used).
+      float empiricalWeight = 0;
+      float[] empiricalDistrib = null;
+      if (!node.StructRef.IsTranspositionRoot)
+      {
+        empiricalDistrib = tempEmpiricalDistrib;
+        PossiblySetEmpiricalPolicyDistribution(ref node, numChildrenToCheck, empiricalDistrib, ref empiricalWeight);
+      }
+
       Span<float> scores = default;
       node.InfoRef.ComputeTopChildScores(selectorID, node.Depth,
-                                 vLossDynamicBoost, 0, numChildrenToCheck - 1, numTargetLeafs,
-                                 scores, visitChildCounts, cpuctMultiplier);
+                                         vLossDynamicBoost, 0, numChildrenToCheck - 1, numTargetLeafs,
+                                         scores, visitChildCounts, cpuctMultiplier, empiricalDistrib, empiricalWeight);
 
       if (node.Depth == 0)
       {
@@ -535,6 +545,47 @@ namespace Ceres.MCTS.Search
       }
     }
 
+    [ThreadStatic]
+    static float[] tempEmpiricalDistrib;
+
+
+    private static void PossiblySetEmpiricalPolicyDistribution(ref MCTSNode node, int numChildrenToCheck, Span<float> empiricalDistrib, ref float empiricalWeight)
+    {
+      bool gotRoot = node.Tree.TranspositionRoots.TryGetValue(node.StructRef.ZobristHash, out int transpositionRootIndex);
+      if (gotRoot)
+      {
+        ref readonly MCTSNodeStruct rootNode = ref node.InfoRef.Tree.Store.Nodes.nodes[transpositionRootIndex];
+        if (rootNode.N > 10 // was 5
+         && rootNode.N > 3 * node.N // was 2
+         && rootNode.NumChildrenExpanded >= numChildrenToCheck)
+        {
+          float fractionBlendTranspositionRoot = node.Context.ParamsSearch.TranspositionRootPolicyBlendingFraction;
+          if (fractionBlendTranspositionRoot > 0)
+          {
+            // The weight applied to the empirical probability adjusted by:
+            //   - giving more weight if the transposition root has many more visits, and
+            //   - always scaling downward because the neural network policy weight
+            //     should always retain some lasting influence (just as it does in the normal case)
+            float nonEmpiricalWeight = (float)node.N / rootNode.N;
+            empiricalWeight = fractionBlendTranspositionRoot * (1.0f - nonEmpiricalWeight);
+            int count = 0;
+            float sumP = 0;
+            for (int i = 0; i < numChildrenToCheck; i++)
+            {
+              ref readonly MCTSNodeStruct child = ref rootNode.ChildAtIndexRef(i);
+              empiricalDistrib[i] = (float)child.N;
+              sumP += child.P;
+              count += child.N;
+            }
+            float adj = sumP * (1.0f / count);
+            for (int i = 0; i < numChildrenToCheck; i++)
+            {
+              empiricalDistrib[i] /= count;
+            }
+          }
+        }
+      }
+    }
 
     float TopNFractionToTopQMove
     {
@@ -916,5 +967,10 @@ namespace Ceres.MCTS.Search
 
 #endregion
 
+    [ModuleInitializer]
+    internal static void ModuleInit()
+    {
+      tempEmpiricalDistrib = new float[64];
+    }
   }
 }
