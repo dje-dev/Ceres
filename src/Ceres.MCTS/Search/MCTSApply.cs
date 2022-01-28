@@ -406,9 +406,9 @@ namespace Ceres.MCTS.Search
         ApplyResult(nodesSpan, selectorID, node, in node.EvalResult);
 
         // Possibly refresh transposition table if node now has greater N than current root
-        const int MIN_N = 1; // for efficiency, possibly don't bother if very small
+        const int MIN_N = 3; // for efficiency, possibly don't bother if very small
         if (refreshTranspositionRoots 
-         && node.N > MIN_N 
+         && node.N >= MIN_N 
          && !node.StructRef.IsTranspositionRoot)
         {
           bool updated = tree.TranspositionRoots.PossiblyUpdateIfNBigger(nodesSpan, node.StructRef.ZobristHash, node.Index, node.N);

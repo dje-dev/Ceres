@@ -120,12 +120,16 @@ namespace Ceres.MCTS.Iteration
 
       if (table.TryGetValue(hashKey, out int existingNodeIndex))
       {
-        int existingN = nodes[existingNodeIndex].N;
-        if (possibleNewValueN > existingN)
+        ref readonly MCTSNodeStruct existingRoot = ref nodes[existingNodeIndex];
+        int existingN = existingRoot.N;
+        const int THRESHOLD_EXTRA_N_MODIFY = 2; // for efficiency only update if considerably bigger
+        if (possibleNewValueN >= existingN  + THRESHOLD_EXTRA_N_MODIFY)
         {
           table[hashKey] = possibleNewValue;
           nodes[existingNodeIndex].IsTranspositionRoot = false;
           nodes[possibleNewValue].IsTranspositionRoot = true;
+          table.Remove(hashKey);
+          table[hashKey] = possibleNewValue;
           return true;
         }
       }
