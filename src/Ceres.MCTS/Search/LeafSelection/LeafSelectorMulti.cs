@@ -544,7 +544,7 @@ namespace Ceres.MCTS.Search
                                          vLossDynamicBoost, 0, numChildrenToCheck - 1, numTargetLeafs,
                                          scores, visitChildCounts, cpuctMultiplier, empiricalDistrib, empiricalWeight);
 
-      if (node.Depth == 0)
+      if (node.IsRoot)
       {
         Context.RootMoveTracker?.UpdateVisitCounts(visitChildCounts, numChildrenToCheck, numTargetLeafs);
       }
