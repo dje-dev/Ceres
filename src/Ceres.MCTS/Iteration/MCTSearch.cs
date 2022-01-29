@@ -456,7 +456,9 @@ namespace Ceres.MCTS.Iteration
       //        bool storeIsAlmostFull = priorContext.Tree.Store.FractionInUse > 0.9f;
       //        bool newRootIsBigEnoughForReuse = newRoot != null && newRoot.N >= (priorContext.Root.N * thresholdMinFractionNodesRetained);
       if (priorContext.ParamsSearch.TreeReuseEnabled
-        && (reuseMethod == ManagerTreeReuse.Method.KeepStoreRebuildTree || reuseMethod == ManagerTreeReuse.Method.KeepStoreSwapRoot))
+        && (reuseMethod == ManagerTreeReuse.Method.KeepStoreRebuildTree 
+         || reuseMethod == ManagerTreeReuse.Method.UnchangedStore
+         || reuseMethod == ManagerTreeReuse.Method.KeepStoreSwapRoot))
       //         && newRootIsBigEnoughForReuse
       //         && !storeIsAlmostFull//         
       {
