@@ -584,7 +584,7 @@ namespace Ceres.MCTS.Search
             float adj = sumP * (1.0f / count);
             for (int i = 0; i < numChildrenToCheck; i++)
             {
-              empiricalDistrib[i] /= count;
+              empiricalDistrib[i] *= adj;
             }
           }
         }
