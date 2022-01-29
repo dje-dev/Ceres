@@ -39,16 +39,16 @@ namespace Ceres.Chess.NNBackends.CUDA
     // PERFORMANCE ANALYSIS
     // 65% of the runtime is in the two matmuls, 35% in the two kernel calls
     // Within the kernel, it is the SE calculation part that is the most expensive
-    string knFirstBlockInput = "_ZN6lczero13cudnn_backend21InputTransform_kernelI6__halfLb1EEEviiPKT_PS3_";
+    const string knFirstBlockInput = "_ZN6lczero13cudnn_backend21InputTransform_kernelI6__halfLb1EEEviiPKT_PS3_";
 
-    string knInputOutputPre   => IsBig ? "_ZN6lczero13cudnn_backend43OutputInputTransformKernel_fp16_shmem_boardILb0ELb1ELb1ELb0EEEviiiP6__halfPKS2_S3_S5_S5_S5_S5_S5_"
+    string knInputOutputPre => IsBig ? "_ZN6lczero13cudnn_backend43OutputInputTransformKernel_fp16_shmem_boardILb0ELb1ELb1ELb0EEEviiiP6__halfPKS2_S3_S5_S5_S5_S5_S5_"
                                        : "_ZN6lczero13cudnn_backend45OutputTransform_SE_relu_InputTransform_kernelI6__halfLb0ELb1ELb1ELb0EEEviiiPT_PKS3_S4_S6_S6_S6_S6_S6_";
     string knNotLastSE => IsBig ? "_ZN6lczero13cudnn_backend43OutputInputTransformKernel_fp16_shmem_boardILb1ELb1ELb1ELb1EEEviiiP6__halfPKS2_S3_S5_S5_S5_S5_S5_"
                                 : "_ZN6lczero13cudnn_backend45OutputTransform_SE_relu_InputTransform_kernelI6__halfLb1ELb1ELb1ELb1EEEviiiPT_PKS3_S4_S6_S6_S6_S6_S6_";
-    string knNotLastNotSE  => IsBig ? "_ZN6lczero13cudnn_backend43OutputInputTransformKernel_fp16_shmem_boardILb0ELb1ELb1ELb1EEEviiiP6__halfPKS2_S3_S5_S5_S5_S5_S5_"
+    string knNotLastNotSE => IsBig ? "_ZN6lczero13cudnn_backend43OutputInputTransformKernel_fp16_shmem_boardILb0ELb1ELb1ELb1EEEviiiP6__halfPKS2_S3_S5_S5_S5_S5_S5_"
                                     : "_ZN6lczero13cudnn_backend45OutputTransform_SE_relu_InputTransform_kernelI6__halfLb0ELb1ELb1ELb1EEEviiiPT_PKS3_S4_S6_S6_S6_S6_S6_";
 
-    const string knLastSE    = "_ZN6lczero13cudnn_backend22OutputTransform_kernelI6__halfLb1ELb1ELb1ELb1ELb1ELb0EEEviiiPT_PKS3_S6_S6_S6_S6_S6_S6_";
+    const string knLastSE = "_ZN6lczero13cudnn_backend22OutputTransform_kernelI6__halfLb1ELb1ELb1ELb1ELb1ELb0EEEviiiPT_PKS3_S6_S6_S6_S6_S6_S6_";
     const string knLastNotSE = "_ZN6lczero13cudnn_backend22OutputTransform_kernelI6__halfLb0ELb1ELb1ELb1ELb1ELb0EEEviiiPT_PKS3_S6_S6_S6_S6_S6_S6_";
     const string knNoSENotLast = "_ZN6lczero13cudnn_backend42OutputTransform_relu_InputTransform_kernelI6__halfLb1ELb1ELb0EEEviiPT_PKS3_S4_S6_";
 
@@ -90,11 +90,17 @@ namespace Ceres.Chess.NNBackends.CUDA
     CudaDeviceVariable<FP16> biases1;
     CudaDeviceVariable<FP16> transformedWeights0;
     CudaDeviceVariable<FP16> transformedWeights1;
-  
 
-  public ResidualBlockFusedCUDA(NNBackendExecContext parent, string name, int layerIndex, 
-                                BaseLayerCUDA inputLayer, 
-                                int C, bool se, int se_k, bool first, bool last, int sharedMemSize)
+    CudaKernel kernelLastSE;
+    CudaKernel kernelLastNotSE;
+    CudaKernel kernelNotLastSE;
+    CudaKernel kernelNotLastNotSE;
+
+
+
+    public ResidualBlockFusedCUDA(NNBackendExecContext parent, string name, int layerIndex,
+                                  BaseLayerCUDA inputLayer,
+                                  int C, bool se, int se_k, bool first, bool last, int sharedMemSize)
       : base(parent, name, layerIndex, C, 8, 8, inputLayer, se, se_k, sharedMemSize)
     {
       if (C > 512)
@@ -107,6 +113,11 @@ namespace Ceres.Chess.NNBackends.CUDA
       SEK = se_k;
       FirstBlock = first;
       LastBlock = last;
+
+      kernelLastSE = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, knLastSE);
+      kernelLastNotSE = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, knLastNotSE);
+      kernelNotLastSE = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, knNotLastSE);
+      kernelNotLastNotSE = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, knNotLastNotSE);
 
       if (NNBackendLC0_CUDA.BLASLT && NNBackendLC0_CUDA.BLASLT_N > 0)
       {
@@ -160,7 +171,7 @@ namespace Ceres.Chess.NNBackends.CUDA
     CUDAKernelLauncher inputOutputNoSELauncher;
     CUDAKernelLauncher outputLauncher;
 
-    CudaKernel kernelSENotLast; 
+    CudaKernel kernelSENotLast;
 
 
     protected override void DoEval(CudaStream stream, int N,
@@ -220,14 +231,14 @@ namespace Ceres.Chess.NNBackends.CUDA
       const bool USE_OPTIMIZED_NON_SE_IO_KERNEL = true;
       if (USE_OPTIMIZED_NON_SE_IO_KERNEL && !LastBlock)
       {
-        const int kOpInpTransformBlockSize = 64;        
+        const int kOpInpTransformBlockSize = 64;
         kernelSENotLast.BlockDimensions = kOpInpTransformBlockSize;
         kernelSENotLast.GridDimensions = new ManagedCuda.VectorTypes.dim3(CUDAUtils.DivUp(C, kOpInpTransformBlockSize), N, 1);
 
         if (USE_LAUNCHER && inputOutputNoSELauncher == null)
         {
           inputOutputNoSELauncher = new(kernelSENotLast, stream, 0,
-                                    new object[] {N, C, 
+                                    new object[] {N, C,
                                                   transformed_input.DevicePointer, transformed_output.DevicePointer,
                                                   (IntPtr)0, biases0.DevicePointer });
         }
@@ -315,17 +326,16 @@ OutputTransform<DataType, true, true, true, true, true, true>(
         }
       }
 
-      string outputKN;
+
+      CudaKernel kernelOutputInput;
       if (LastBlock)
       {
-        outputKN = HasSE ? knLastSE : knLastNotSE;
+        kernelOutputInput = HasSE ? kernelLastSE : kernelLastNotSE;
       }
       else
       {
-        outputKN = HasSE ? knNotLastSE : knNotLastNotSE;
+        kernelOutputInput = HasSE ? kernelNotLastSE : kernelNotLastNotSE;
       }
-
-      CudaKernel kernelOutputInput = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, outputKN);
 
       int numSharedBytes = 0;
       if (!LastBlock)
@@ -341,7 +351,7 @@ OutputTransform<DataType, true, true, true, true, true, true>(
       {
         // Although not actually used in non-SE mode,
         // we have to pass some valid address to the kernel to prevent error.
-        DUMMY = scratch.DevicePointer; 
+        DUMMY = scratch.DevicePointer;
       }
 
       if (USE_LAUNCHER && outputLauncher == null)
@@ -379,7 +389,7 @@ OutputTransform<DataType, true, true, true, true, true, true>(
       // "output" tensor now contains transformed input for the next
       // convolution
     }
-    
+
   }
 }
 
