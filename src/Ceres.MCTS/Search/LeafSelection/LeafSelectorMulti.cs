@@ -522,7 +522,7 @@ namespace Ceres.MCTS.Search
         }
       }
 #else
-      const float cpuctMultiplier = 1;
+      float cpuctMultiplier = 1;
 #endif
 
       // Calculate emprical distribution (if to be used).
@@ -535,7 +535,8 @@ namespace Ceres.MCTS.Search
         {
           empiricalDistrib = tempEmpiricalDistrib = new float[64];
         }
-        PossiblySetEmpiricalPolicyDistribution(ref node, numChildrenToCheck, empiricalDistrib, ref empiricalWeight);
+        PossiblySetEmpiricalPolicyDistribution(ref node, numChildrenToCheck, empiricalDistrib, 
+                                               ref empiricalWeight, ref cpuctMultiplier);
       }
 
       Span<float> scores = default;
@@ -553,7 +554,8 @@ namespace Ceres.MCTS.Search
     static float[] tempEmpiricalDistrib;
 
 
-    private static void PossiblySetEmpiricalPolicyDistribution(ref MCTSNode node, int numChildrenToCheck, Span<float> empiricalDistrib, ref float empiricalWeight)
+    private static void PossiblySetEmpiricalPolicyDistribution(ref MCTSNode node, int numChildrenToCheck, Span<float> empiricalDistrib, 
+                                                               ref float empiricalWeight, ref float cpuctMultiplier)
     {
       bool gotRoot = node.Tree.TranspositionRoots.TryGetValue(node.StructRef.ZobristHash, out int transpositionRootIndex);
       if (gotRoot)
@@ -572,19 +574,35 @@ namespace Ceres.MCTS.Search
             //     should always retain some lasting influence (just as it does in the normal case)
             float nonEmpiricalWeight = (float)node.N / rootNode.N;
             empiricalWeight = fractionBlendTranspositionRoot * (1.0f - nonEmpiricalWeight);
-            int count = 0;
+            float count = 0;
+            float countFromVisitedChildren = 0;
             float sumP = 0;
+            int numExpandedChildren = node.NumChildrenExpanded;
             for (int i = 0; i < numChildrenToCheck; i++)
             {
               ref readonly MCTSNodeStruct child = ref rootNode.ChildAtIndexRef(i);
-              empiricalDistrib[i] = (float)child.N;
+              empiricalDistrib[i] = child.N;
               sumP += child.P;
               count += child.N;
+              if (i < numExpandedChildren)
+              {
+                countFromVisitedChildren += child.N;
+              }
             }
             float adj = sumP * (1.0f / count);
             for (int i = 0; i < numChildrenToCheck; i++)
             {
               empiricalDistrib[i] *= adj;
+            }
+
+            // Give exploration boost if large fraction of transposition root visits
+            // are to children which have not yet been explored.
+            float fracSeen = countFromVisitedChildren / rootNode.N;
+            const float THRESHOLD_BOOST_EXPLORATION = 0.5f;
+            if (fracSeen < THRESHOLD_BOOST_EXPLORATION)
+            {
+              const float HIGH_EXPLORATION_MULTIPLIER = 2.0f;
+              cpuctMultiplier *= HIGH_EXPLORATION_MULTIPLIER;
             }
           }
         }
