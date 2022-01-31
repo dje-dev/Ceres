@@ -165,8 +165,8 @@ namespace Ceres.MCTS.Managers.Limits
     {
       writer.WriteLine($"  PieceCount                  {StartPos.PieceCount,14:N0}");
       writer.WriteLine($"  TargetLimitType             {TargetLimitType,14}");
-      writer.WriteLine($"  RemainingFixedSelf          {RemainingFixedSelf,14:F2}");//  Opponent: {RemainingFixedOpponent,8:F2}");
-      writer.WriteLine($"  IncrementSelf               {IncrementSelf,14:F2}");//       Opponent: { IncrementOpponent,8:F2}");
+      writer.WriteLine($"  RemainingFixedSelf          {RemainingFixedSelf,14:F2}  Opponent: { RemainingFixedOpponent,8:F2}");
+      writer.WriteLine($"  IncrementSelf               {IncrementSelf,14:F2}  Opponent: { IncrementOpponent,8:F2}");
       writer.WriteLine($"  MaxMovesToGo                {MaxMovesToGo,14:F2}");
       writer.WriteLine($"  MaxTreeNodesSelf            {MaxTreeNodesSelf,14:N0}");
       writer.WriteLine($"  MaxTreeVisitsSelf           {MaxTreeVisitsSelf,14:N0}");
