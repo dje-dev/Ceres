@@ -55,14 +55,14 @@ namespace Ceres.MCTS.Managers.Limits
       {
         < -0.65f => 1.10f,
         < -0.55f => 1.05f,
-        > 0.65f => 1.10f,
+        > 0.65f => 0.90f,
         > 0.55f => 0.95f,
         _ => 1.0f
       };
 
 
-      // Spend 35% more on first move of game (definitely no tree reuse, etc.)
-      float factorFirstMove = inputs.IsFirstMoveOfGame ? 1.35f : 1.0f;
+      // Spend 50% more on first move of game (definitely no tree reuse, etc.)
+      float factorFirstMove = inputs.IsFirstMoveOfGame ? 1.50f : 1.0f;
 
       // Make a divisor which is between about 11 and 17
       // and a incresing function of the piece count.
