@@ -235,8 +235,12 @@ namespace Ceres.MCTS.Iteration
         // Therefore it is safe to reserve a very large block.
         if (searchLimit.MaxTreeNodes != null)
         {
-          long max = Math.Min(MCTSNodeStore.MAX_NODES, searchLimit.MaxTreeNodes.Value + 100_000);
-          maxNodes = (int)max;
+          // Reseve somewhat more storage than the maximum requested tree nodes
+          // if the search can be expenaded because during tree rewrite
+          // a preparatory step (MaterializeNodesWithNonRetainedTranspositionRoots) 
+          // will initially make the store larger (before it is subsequently compacted).
+          double NODES_BUFFER_MULTIPLIER = searchLimit.SearchCanBeExpanded ? 1.2 : 1.0;
+          maxNodes = (int)(NODES_BUFFER_MULTIPLIER * searchLimit.MaxTreeNodes.Value) + 100_000;
         }
         else
         {
