@@ -17,6 +17,7 @@
 #endregion
 
 using Ceres.MCTS.Iteration;
+using Ceres.MCTS.MTCSNodes;
 
 namespace Ceres.MCTS.Managers.Limits
 {
@@ -43,9 +44,10 @@ namespace Ceres.MCTS.Managers.Limits
     /// acceptable given the current state.
     /// </summary>
     /// <param name="search"></param>
+    /// <param name="newRoot"></param>
     /// <param name="inputs"></param>
     /// <returns></returns>
-    public LimitsManagerInstamoveDecision CheckInstamove(MCTSearch search, ManagerGameLimitInputs inputs)
+    public LimitsManagerInstamoveDecision CheckInstamove(MCTSearch search, MCTSNode newRoot, ManagerGameLimitInputs inputs)
       => LimitsManagerInstamoveDecision.NoDecision;
 
 

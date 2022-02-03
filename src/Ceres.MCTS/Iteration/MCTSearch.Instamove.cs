@@ -16,6 +16,7 @@
 using System;
 
 using Ceres.Chess;
+using Ceres.MCTS.Environment;
 using Ceres.MCTS.Managers;
 using Ceres.MCTS.Managers.Limits;
 using Ceres.MCTS.MTCSNodes;
@@ -59,22 +60,32 @@ namespace Ceres.MCTS.Iteration
       }
 
       // Give the limits manager the opportunity to possibly make the decision.
-      LimitsManagerInstamoveDecision limitsManagerDecision = priorManager.LimitManager.CheckInstamove(this, LastGameLimitInputs);
-      if (limitsManagerDecision == LimitsManagerInstamoveDecision.DoNotInstamove)
-      {
-        return false;
-      }
+      LimitsManagerInstamoveDecision limitsManagerDecision = priorManager.LimitManager.CheckInstamove(this,  newRoot, LastGameLimitInputs);
 
       bool shouldInstamove = false;
       if (limitsManagerDecision == LimitsManagerInstamoveDecision.Instamove)
       {
         shouldInstamove = true;
       }
-
-      if (reuseMethod == ManagerTreeReuse.Method.ForceInstamove
-       || CheckInstamoveFutility(priorManager, searchLimit, newRoot, reuseMethod))
+      else
       {
-        shouldInstamove = true;
+        if (reuseMethod == ManagerTreeReuse.Method.ForceInstamove
+         || CheckInstamoveFutility(priorManager, searchLimit, newRoot, reuseMethod))
+        {
+          shouldInstamove = true;
+        }
+      }
+
+      // Check if limits manager requested a veto of an instamove decision.
+      if (shouldInstamove && limitsManagerDecision == LimitsManagerInstamoveDecision.DoNotInstamove)
+      {
+#if NOT
+        MCTSEventSource.TestCounter1++;
+        const int FINAL_N_LOOKBACK_PLY = 5;
+        float avgPriorFinalN = LastGameLimitInputs.TrailingAvgFinalNodes(FINAL_N_LOOKBACK_PLY, newRoot.SideToMove);
+        Console.WriteLine((newRoot.N / avgPriorFinalN) + " Veto instamove " + avgPriorFinalN + " " + newRoot.N + " " + LastGameLimitInputs.PriorMoveStats.Count);
+#endif
+        return false;
       }
 
       if (shouldInstamove)
