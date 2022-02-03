@@ -241,7 +241,7 @@ namespace Ceres.MCTS.Search
           if (hardLimitNumNodesThisBatch <= numApplied / 1000)
           {
             int numNodesComputed = rootNode.N - initialRootN;
-            Manager.StopStatus = MCTSManager.SearchStopStatus.SearchLimitExceeded;
+            Manager.StopStatus = MCTSManager.SearchStopStatus.NodeLimitReached;
             break;
           }
         }

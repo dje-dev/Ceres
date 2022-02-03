@@ -41,14 +41,14 @@ namespace Ceres.MCTS.Iteration
       ExternalStopRequested,
 
       /// <summary>
-      /// Panic low time limit reached.
+      /// Time limit reached.
       /// </summary>
-      PanicTimeTooLow,
+      TimeLimitReached,
 
       /// <summary>
       /// Search limit (e.g. max number of nodes) reached.
       /// </summary>
-      SearchLimitExceeded,
+      NodeLimitReached,
 
       /// <summary>
       /// The LimitsManager requested a stop given current search state.

@@ -297,7 +297,7 @@ namespace Ceres.MCTS.Iteration
           if (Root.N >= searchLimit.Value)
           {
             shouldProcess = false;
-            StopStatus = SearchStopStatus.SearchLimitExceeded;
+            StopStatus = SearchStopStatus.NodeLimitReached;
           }
           else
           {
@@ -977,7 +977,7 @@ namespace Ceres.MCTS.Iteration
 
       if (RemainingTime <= 0.01)
       {
-        return SearchStopStatus.PanicTimeTooLow;
+        return SearchStopStatus.TimeLimitReached;
       }
 
       if (SearchLimit.MaxTreeVisits != null
