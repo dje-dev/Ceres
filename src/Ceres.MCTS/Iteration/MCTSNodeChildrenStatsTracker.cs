@@ -58,20 +58,31 @@ namespace Ceres.MCTS.Iteration
     /// Running average of V values applied to update Q.
     /// </summary>
     public float[] RunningVValues;
-    
+
+    /// <summary>
+    /// The N of root node at time of last visit.
+    /// </summary>
+    public int[] LastRootN;
+
+
+    const int NUM_TRACK = 64;
 
     /// <summary>
     /// Updates internal statistics related to Q.
     /// </summary>
+    /// <param name="rootN"></param>
     /// <param name="index"></param>
     /// <param name="vValue"></param>
     /// <param name="numVisits"></param>
-    internal void UpdateQValue(int index, float vValue, int numVisits)
+    internal void UpdateQValue(int rootN, int index, float vValue, int numVisits)
     {
       if (RunningVValues == null)
       {
-        RunningVValues = new float[64];
+        RunningVValues = new float[NUM_TRACK];
+        LastRootN = new int[NUM_TRACK];
       }
+
+      LastRootN[index] = rootN;
 
       for (int i=0; i<numVisits;i++)
       {
