@@ -198,6 +198,7 @@ namespace Ceres.MCTS.Managers.Limits
       return TrailingAvg(numPrior, sideToMove, m => m.FinalN > 0, m => m.FinalN);
     }
 
+
     /// <summary>
     /// Returns the average of some statistic over some trailing window.
     /// </summary>
@@ -207,14 +208,25 @@ namespace Ceres.MCTS.Managers.Limits
     /// <param name="metricFunc"></param>
     /// <returns></returns>
     float TrailingAvg(int numPrior, SideType sideToMove, Predicate<GameMoveStat> filterFunc, Func<GameMoveStat, float> metricFunc)
+      => TrailingAvg(PriorMoveStats, numPrior, sideToMove, filterFunc, metricFunc);
+
+    /// <summary>
+    /// Returns the average of some statistic over some trailing window.
+    /// </summary>
+    /// <param name="numPrior"></param>
+    /// <param name="sideToMove"></param>
+    /// <param name="filterFunc"></param>
+    /// <param name="metricFunc"></param>
+    /// <returns></returns>
+    public static float TrailingAvg(List<GameMoveStat> priorMoveStats, int numPrior, SideType sideToMove, Predicate<GameMoveStat> filterFunc, Func<GameMoveStat, float> metricFunc)
     {
-      if (PriorMoveStats == null) return float.NaN;
+      if (priorMoveStats == null) return float.NaN;
 
       int count = 0;
       float acc = 0;
-      for (int i = PriorMoveStats.Count - 1; i >= 0; i--)
+      for (int i = priorMoveStats.Count - 1; i >= 0; i--)
       {
-        GameMoveStat stat = PriorMoveStats[i];
+        GameMoveStat stat = priorMoveStats[i];
         if (stat.Side == sideToMove)
         {
           if (filterFunc(stat))
