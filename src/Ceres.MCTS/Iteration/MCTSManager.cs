@@ -230,19 +230,27 @@ namespace Ceres.MCTS.Iteration
       ParamsSearchExecutionChooser paramsChooser = new ParamsSearchExecutionChooser(nnEvaluators.EvaluatorDef,
                                                                                     searchParams, childSelectParams, searchLimit);
 
+     
+      float estNPS = ManagerGameLimitInputs.TrailingAvg(PriorMoveStats, 5, store.Nodes.PriorMoves.FinalPosition.MiscInfo.SideToMove, 
+                                                        m => m.NumNodesComputed > 10, m => m.NodesPerSecond);
+      if (float.IsNaN(estNPS))
+      {
+        estNPS = SearchLimit.DEFAULT_NPS; 
+      }
+
+      int estNumFinalTreeNodes = searchLimit.EstNumFinalNodes(RootNWhenSearchStarted, (int)estNPS, false);
+      int estNumSearchNodes = searchLimit.EstNumSearchNodes(RootNWhenSearchStarted, (int)estNPS, false);
+
       // TODO: technically this is overwriting the params belonging to the prior search, that's ugly (but won't actually cause a problem)
-      paramsChooser.ChooseOptimal(searchLimit.EstNumNodes(RootNWhenSearchStarted, 50_000, false)); // TODO: make 50_000 smarter
-
-
-      int estNumNodes = EstimatedNumSearchNodesForEvaluator(RootNWhenSearchStarted, searchLimit, nnEvaluators);
+      paramsChooser.ChooseOptimal(estNumFinalTreeNodes);
 
       // Adjust the nodes estimate if we are continuing an existing search
       if (searchLimit.Type == SearchLimitType.NodesPerMove && RootNWhenSearchStarted > 0)
       {
-        estNumNodes = Math.Max(0, estNumNodes - RootNWhenSearchStarted);
+        estNumSearchNodes = Math.Max(0, estNumSearchNodes - RootNWhenSearchStarted);
       }
       Context = new MCTSIterator(this, store, reuseOtherContextForEvaluatedNodes, reusePositionCache, reuseNodeCache, reuseTranspositionRoots,
-                                 nnEvaluators, searchParams, childSelectParams, searchLimit.MaxTreeNodes, estNumNodes);
+                                 nnEvaluators, searchParams, childSelectParams, searchLimit.MaxTreeNodes, estNumSearchNodes);
 
       TerminationManager = new MCTSFutilityPruning(this, searchLimit.SearchMoves, searchMovesTablebaseRestricted);
       LimitManager = limitManager;
@@ -677,7 +685,7 @@ namespace Ceres.MCTS.Iteration
 
       // Do the search
       IteratedMCTSDef schedule = manager.Context.ParamsSearch.IMCTSSchedule;
-      bool useIMCTS = schedule != null & manager.SearchLimit.EstNumNodes(root.N, 30_000, false) > 100;
+      bool useIMCTS = schedule != null & manager.SearchLimit.EstNumSearchNodes(root.N, 30_000, false) > 100;
 
       TimingStats stats;
       MCTSNode selectedMove;
@@ -861,40 +869,6 @@ namespace Ceres.MCTS.Iteration
 #endregion
 
 #region Time management
-
-    // TODO: make this smarter (aware of hardware and NN)
-    public int EstimatedNumSearchNodes => EstimatedNumSearchNodesForEvaluator(Root.N, SearchLimit, Context.NNEvaluators);
-
-    public int EstimatedNumSearchNodesForEvaluator(int curNumNodes, SearchLimit searchLimit, NNEvaluatorSet nnEvaluators)
-    {
-      if (searchLimit.Type == SearchLimitType.NodesPerMove)
-      {
-        return (int)searchLimit.Value;
-      }
-      else if (searchLimit.Type == SearchLimitType.NodesPerTree)
-      {
-        return (int)MathF.Max(1, searchLimit.Value - curNumNodes);
-      }
-      else if (searchLimit.Type == SearchLimitType.SecondsPerMove)
-      {
-        // TODO: someday look at the particular network and hardware to make this smarter.
-        const int EST_AVG_NPS = 20_000;
-        return (int)(searchLimit.Value * EST_AVG_NPS);
-      }
-      else if (searchLimit.Type == SearchLimitType.SecondsForAllMoves)
-      {
-        // As a crude approximation, assume 1/20 of time spent on each move
-        float estimatedSecondsPerMove = searchLimit.Value / 20.0f;
-        return EstimatedNumSearchNodesForEvaluator(Root.N, new SearchLimit(SearchLimitType.SecondsPerMove, estimatedSecondsPerMove), nnEvaluators);
-      }
-      else if (searchLimit.Type == SearchLimitType.NodesForAllMoves)
-      {
-        // As a crude approximation, assume 1/20 of nodes spent on each move
-        return (int)(searchLimit.Value / 20.0f);
-      }
-      else
-        throw new NotImplementedException();
-    }
 
     public int MaxBatchSizeDueToPossibleNearTimeExhaustion
     {
