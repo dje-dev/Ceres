@@ -129,8 +129,6 @@ namespace Ceres.MCTS.MTCSNodes
         extraFlag = 'C';
       }
 
-      double u = float.NaN;
-      // not yet implemented      if (!IsRoot) u = Parent.U(Context.ParamsSearch.Execution.FLOW_DUAL_SELECTORS, Context.ParamsSelect, 0, this.IndexInParentsChildren);
       string extraInfo = prefixString;
 
       string fracVisitStr = "   ";
@@ -148,10 +146,21 @@ namespace Ceres.MCTS.MTCSNodes
 
       }
 
+      int lastN = 0;
+      if (Depth == 1 && Context?.RootMoveTracker.LastRootN != null)
+      {
+        lastN = Context.RootMoveTracker.LastRootN[IndexInParentsChildren];
+      }
+
+      float[] childScores0 = Depth == 1 ? Parent.InfoRef.CalcChildScores(0, 0, 0, 1.0f) : null;
+      float[] childScores1 = Depth == 1 && Tree.Context.ParamsSearch.Execution.FlowDualSelectors ? Parent.InfoRef.CalcChildScores(1, 0, 0, 1.0f) : null;
+
       float qUncertainty = StructRef.Uncertainty.UncertaintyAtN(N, 0);
       bool invert = multiplerOurPerspective == -1;
-      extraInfo = $" N={N,9:F0} ({fracVisitStr}%{recentQAvgStr})  Q= {multiplerOurPerspective * Q,5:F2}  ";
-      extraInfo += $"+/- {qUncertainty,4:F2}  V= {  multiplerOurPerspective * V,5:F2} ";
+      float u0 = childScores0 != null ? childScores0[IndexInParentsChildren] : 0;
+      float u1 = childScores1 != null ? childScores1[IndexInParentsChildren] : 0;
+      extraInfo = $" N={N,11:F0} ({fracVisitStr}% {recentQAvgStr}{lastN,11:F0})  Q= {multiplerOurPerspective * Q,6:F3}  ";
+      extraInfo += $"+/- {qUncertainty,4:F2}  V= {  multiplerOurPerspective * V,5:F2}  U0={u0,5:F4}   U1={u1,5:F4} ";
       extraInfo += $" WDL= {(invert ? LossP : WinP),4:F2} {DrawP,4:F2} {(invert ? WinP : LossP),4:F2} ";
       extraInfo += $" WDL Avg= {(invert ? LAvg : WAvg),4:F2} {DAvg,4:F2} {(invert ? WAvg : LAvg),4:F2}  ";
       extraInfo += $"M = {MPosition,4:F0} {MAvg,4:F0}  ";
