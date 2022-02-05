@@ -28,6 +28,12 @@ namespace Ceres.Chess
   public record SearchLimit
   {
     /// <summary>
+    /// Default fill-in value for nodes per second calculations 
+    /// when no empirical estimate is available.
+    /// </summary>
+    public const int DEFAULT_NPS = 30_000;
+
+    /// <summary>
     /// Type of search limit (time or nodes)
     /// </summary>
     public SearchLimitType Type { init; get; }
@@ -229,19 +235,35 @@ namespace Ceres.Chess
     }
 
 
-    public int EstNumNodes(int curNumNodes, int estNumNodesPerSecond, bool estIsObserved)
+    /// <summary>
+    /// Estimated number of final nodes (N) for the search tree
+    /// which starts with specified number of initial nodes and then
+    /// searches for this limit.
+    /// </summary>
+    /// <param name="initialNumNodes"></param>
+    /// <param name="estNumNodesPerSecond"></param>
+    /// <param name="estIsObserved"></param>
+    /// <returns></returns>
+    public int EstNumFinalNodes(int initialNumNodes, int estNumNodesPerSecond, bool estIsObserved) 
+      => initialNumNodes + EstNumSearchNodes(initialNumNodes, estNumNodesPerSecond, estIsObserved);
+
+    /// Estimated number of incremental search nodes (N) for the search tree
+    /// which starts with specified number of initial nodes and then
+    /// searches for this limit.
+    public int EstNumSearchNodes(int initialNumNodes, int estNumNodesPerSecond, bool estIsObserved)
     {
       // TODO: make the estimations below smarter
       return Type switch
       {
         SearchLimitType.NodesPerMove => (int)Value, 
-        SearchLimitType.NodesPerTree  => (int)MathF.Max(Value - curNumNodes, 1),
+        SearchLimitType.NodesPerTree  => (int)MathF.Max(Value - initialNumNodes, 1),
         SearchLimitType.SecondsPerMove => (int)SecsToNodes(Value, estNumNodesPerSecond, estIsObserved),
         SearchLimitType.SecondsForAllMoves => (int)((Value / 20.0f) * estNumNodesPerSecond),
         SearchLimitType.NodesForAllMoves => (int)(Value / 20.0f),
         _ => throw new NotImplementedException()
       };
     }
+
 
     static float SecsToNodes(float secs, int estNumNodesPerSecond, bool estNodesIsObserved)
     {
@@ -256,7 +278,7 @@ namespace Ceres.Chess
       }
     }
 
-    #endregion
+#endregion
 
     /// <summary>
     /// Converts SearchLimit to from a per-game limit to a per-move limit, if applicable.
