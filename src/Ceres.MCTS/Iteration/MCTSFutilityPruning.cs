@@ -16,6 +16,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Runtime.Versioning;
 using Ceres.Base.Math;
 using Ceres.Chess;
@@ -178,6 +179,15 @@ namespace Ceres.MCTS.Iteration
     {
       if (Manager.Root.NumChildrenExpanded == 0) return;
 
+      // Don't prune any more if we disallow stop search from pruning
+      // and we are already down to 2 remaining unpruned moves.
+      bool okToPrune = true;
+      int numNotPruned = Context.RootMovesPruningStatus.Sum(p => p == MCTSFutilityPruningStatus.NotPruned ? 1 : 0);
+      if (!Context.ParamsSearch.FutilityPruningStopSearchEnabled && numNotPruned <= 2)
+      {
+        okToPrune  = false;
+      }
+
       float aggressiveness = Context.ParamsSearch.MoveFutilityPruningAggressiveness;
       if (aggressiveness >= 1.5f) throw new Exception("Maximum value of EarlyStopMoveSecondaryAggressiveness is 1.5.");
 
@@ -198,11 +208,11 @@ namespace Ceres.MCTS.Iteration
       MCTSNode[] nodesSortedN = Root.ChildrenSorted(n => -n.N);
       MCTSNode bestNNode = nodesSortedN[0];
 
-      int minN = Root.N / 5;// (int)(bestQNode.N * MIN_BEST_N_FRAC_REQUIRED);
-      MCTSNode[] nodesSortedQ = Root.ChildrenSorted(n => n.N < minN ? int.MaxValue : (float)n.Q);
+      MCTSNode[] nodesSortedQ = Root.ChildrenSorted(n => (float)n.Q);
       MCTSNode bestQNode = nodesSortedQ[0];
 
       float bestQ = (float)bestQNode.Q;
+      float qOfBestN = (float)nodesSortedN[0].Q;  
 
       ManagerChooseBestMove bestMoveChoser = new(Context.Root, false, Context.ParamsSearch.MLHBonusFactor);
       Span<MCTSNodeStructChild> children = Root.StructRef.Children;
@@ -214,8 +224,10 @@ namespace Ceres.MCTS.Iteration
         // Never shut down second best move unless the whole search is eligible to shut down
         if (nodesSortedN.Length > 1)
         {
+          double thisQ = childRef.Q;
+
           // Unprune any this move if its Q has become better than that of the top N move.
-          if ((nodesSortedQ[i].Q < nodesSortedN[0].Q || nodesSortedQ[i].Q < nodesSortedQ[0].Q)
+          if ((thisQ <= qOfBestN || thisQ <= bestQ)
            && Context.RootMovesPruningStatus[i] == MCTSFutilityPruningStatus.PrunedDueToFutility)
           {
             Context.RootMovesPruningStatus[i] = MCTSFutilityPruningStatus.NotPruned;
@@ -225,19 +237,8 @@ namespace Ceres.MCTS.Iteration
           // Do not ever shut down a node with a better Q than that of the best N.
           // Even if it seems unreachable with current search limits,
           // there is a possibility the search will be extended.
-          float qGapTopBestN = (float)(nodesSortedQ[i].Q - nodesSortedQ[0].Q);
-          if (qGapTopBestN < 0)
+          if (thisQ <= qOfBestN)
           {
-            continue;
-          }
-
-          MCTSNode secondBestMove = Context.ParamsSearch.BestMoveMode == ParamsSearch.BestMoveModeEnum.TopN ? nodesSortedN[1] : nodesSortedQ[1];
-          bool isSecondBestMove = childRef.PriorMove == secondBestMove.PriorMove;
-          if (isSecondBestMove 
-           && !Context.ParamsSearch.FutilityPruningStopSearchEnabled
-           && Context.RootMovesPruningStatus[i] != MCTSFutilityPruningStatus.PrunedDueToSearchMoves)
-          {
-            Context.RootMovesPruningStatus[i] = MCTSFutilityPruningStatus.NotPruned;
             continue;
           }
         }
@@ -261,7 +262,16 @@ namespace Ceres.MCTS.Iteration
         float earlyStopGapAdjusted = earlyStopGapRaw * aggressivenessMultiplier;
         bool earlyStop = earlyStopGapAdjusted > numRemainingSteps;
 
-        if (Context.RootMovesPruningStatus[i] == MCTSFutilityPruningStatus.NotPruned && earlyStop)
+        // Do not shutdown nodes which have Q close to best Q
+        // because they may still have a chance to get best Q (or close, triggering a search extension)
+        // and also because the extra visits may not be wasted if the opponent 
+        // happens to choose this move which seems to us near as good.
+        const float SHUTDOWN_Q_MIN_SUBOPTIMALTIY = 0.02f;
+
+        bool nearlyBestQ = Math.Abs(childRef.Q - nodesSortedQ[0].Q) < SHUTDOWN_Q_MIN_SUBOPTIMALTIY;
+        if (okToPrune 
+         && !nearlyBestQ
+         && earlyStop)
         {
 #if NOT_HELPFUL
           // Never shutdown nodes getting large fraction of all visits
@@ -280,15 +290,16 @@ namespace Ceres.MCTS.Iteration
           }
           else
 #endif
-          Context.RootMovesPruningStatus[i] = MCTSFutilityPruningStatus.PrunedDueToFutility;
+          bool shouldDump = MCTSDiagnostics.DumpSearchFutilityShutdown && Context.RootMovesPruningStatus[i] == MCTSFutilityPruningStatus.NotPruned;
           numNewlyShutdown++;
-          if (MCTSDiagnostics.DumpSearchFutilityShutdown)
+          if (shouldDump)
           {
             Console.WriteLine();
             Console.WriteLine($"\r\nShutdown {childRef.PriorMove} [{childRef.N}] at root N  {Context.Root.N} with remaning {numRemainingSteps}"
                             + $" due to raw gapN {earlyStopGapRaw} adusted to {earlyStopGapAdjusted} in mode {Context.ParamsSearch.BestMoveMode} aggmult {aggressivenessMultiplier}");
             DumpDiagnosticsMoveShutdown();
           }
+          Context.RootMovesPruningStatus[i] = MCTSFutilityPruningStatus.PrunedDueToFutility;
         }
         // Console.WriteLine(i + $" EarlyStopMoveSecondary(simple) gap={gapToBest} adjustedGap={inflatedGap} remaining={numRemainingSteps} ");
       }

@@ -186,7 +186,7 @@ namespace Ceres.MCTS.Iteration
       float nGap = Math.Abs(childrenSortedQ[0].N - childrenSortedQ[1].N);
       float qGap = (float)(Math.Abs(childrenSortedQ[0].Q - childrenSortedQ[1].Q));
       float minNRequiredToChange = nGap / ManagerChooseBestMove.MinFractionNToUseQ(newRoot, qGap);
-      int estNewVisitsThisMove = searchLimit.EstNumNodes(newRoot.N, (int)priorManager.EstimatedNPS, true);
+      int estNewVisitsThisMove = searchLimit.EstNumSearchNodes(newRoot.N, (int)priorManager.EstimatedNPS, true);
       bool couldCatchUp = (estNewVisitsThisMove * 0.25f) > minNRequiredToChange;
 
       // Don't instamove if the second-best move looks close to catching up.
