@@ -111,7 +111,9 @@ namespace Ceres.MCTS.NNEvaluators
     [ModuleInitializer]
     public static void Install()
     {
-      InstallComboPhasedFactory();
+      // Disabled, design changes make this
+      // difficult or possible to support.
+      //InstallComboPhasedFactory();
     }
   }
 }
