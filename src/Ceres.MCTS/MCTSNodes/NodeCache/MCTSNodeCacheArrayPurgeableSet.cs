@@ -48,7 +48,7 @@ namespace Ceres.MCTS.NodeCache
 
     public MCTSNodeStore ParentStore;
 
-    public readonly int CacheSize;
+    int cacheSize;
 
     #region Private data
 
@@ -56,7 +56,7 @@ namespace Ceres.MCTS.NodeCache
 
     MCTSNodeCacheArrayPurgeable[] subCaches;
 
-
+    readonly int? HardMaxNumFinalTreeNodes;
     MemoryBufferOS<MCTSNodeStruct> nodes;
 
     #endregion
@@ -66,10 +66,18 @@ namespace Ceres.MCTS.NodeCache
     /// </summary>
     /// <param name="parentStore"></param>
     /// <param name="cacheSize"></param>
-    public MCTSNodeCacheArrayPurgeableSet(MCTSNodeStore parentStore, int cacheSize)
+    /// <param name="hardMaxNumFinalTreeNodes"></param>
+    public MCTSNodeCacheArrayPurgeableSet(MCTSNodeStore parentStore, int cacheSize, int? hardMaxNumFinalTreeNodes)
     {
+      HardMaxNumFinalTreeNodes = hardMaxNumFinalTreeNodes;
+
+      // Don't allow cache size too small, in case specified cache size
+      // turned out to be less than the working set of the search (causing overflow).
+      const int MIN_CACHE_SIZE = 20_000;
+      cacheSize = Math.Max(MIN_CACHE_SIZE, cacheSize);
+
       ParentStore = parentStore;
-      CacheSize = cacheSize;
+      this.cacheSize = cacheSize;
 
       nodes = parentStore.Nodes.nodes;
 
@@ -241,6 +249,36 @@ namespace Ceres.MCTS.NodeCache
     public override string ToString()
     {
       return $"<MCTSNodeCacheArrayPurgeableSet MaxSize={CacheSize} NumInUse={NumInUse}>";
+    }
+
+
+    /// <summary>
+    /// Size of cache (number of cache slots).
+    /// </summary>
+    public int CacheSize => cacheSize;
+
+    /// <summary>
+    /// If the cache is large enough to accomodate another search 
+    /// with specified hard maximum number of nodes.
+    /// </summary>
+    /// <param name="maxNumNodes"></param>
+    /// <returns></returns>
+    public bool IsLargeEnough(int? maxNumNodes)
+    {
+      if (HardMaxNumFinalTreeNodes == null)
+      {
+        // Already max sized.
+        return true;
+      }
+      else if (maxNumNodes == null)
+      {
+        // Requesting max sized, but not created as such.
+        return false;
+      }
+      else 
+      {
+        return maxNumNodes <= HardMaxNumFinalTreeNodes;
+      }
     }
 
   }

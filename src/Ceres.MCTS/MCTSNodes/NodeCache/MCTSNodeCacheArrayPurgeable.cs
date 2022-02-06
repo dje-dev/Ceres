@@ -420,7 +420,28 @@ namespace Ceres.MCTS.NodeCache
       }
     }
 
-#endregion
+    /// <summary>
+    /// Size of cache (number of cache slots).
+    /// </summary>
+    public int CacheSize => MaxCacheSize;
+
+
+    /// <summary>
+    /// If the cache is large enough to accomodate another search 
+    /// with specified hard maximum number of nodes.
+    /// </summary>
+    /// <param name="maxNumNodes"></param>
+    /// <returns></returns>
+    public bool IsLargeEnough(int? maxNumNodes)
+    {
+      if (maxNumNodes == null)
+      {
+        throw new NotImplementedException();
+      }
+      return maxNumNodes <= MaxCacheSize;
+    }
+
+    #endregion
 
   }
 }

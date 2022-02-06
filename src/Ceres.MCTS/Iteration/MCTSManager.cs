@@ -250,6 +250,14 @@ namespace Ceres.MCTS.Iteration
       {
         estNumSearchNodes = Math.Max(0, estNumSearchNodes - RootNWhenSearchStarted);
       }
+
+      // Possibly the node cache was created for a prior search with a smaller fixed max nodes.
+      // Do not reuse it if undersized.
+      if (reuseNodeCache != null && !reuseNodeCache.IsLargeEnough(hardMaxNumFinalTreeNodes))
+      {
+        reusePositionCache = null;
+      }
+
       Context = new MCTSIterator(this, store, reuseOtherContextForEvaluatedNodes, reusePositionCache, reuseNodeCache, reuseTranspositionRoots,
                                  nnEvaluators, searchParams, childSelectParams, hardMaxNumFinalTreeNodes, estNumSearchNodes);
 

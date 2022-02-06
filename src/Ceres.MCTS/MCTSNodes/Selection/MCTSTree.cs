@@ -173,17 +173,19 @@ namespace Ceres.MCTS.LeafExpansion
       {
 #endif
       int numCachedNodes = configuredCacheSize;
+      int? hardMaxTreeNodes = null;
       int? maxTreeNodes = CeresUserSettingsManager.Settings.MaxTreeNodes;
       if (maxTreeNodes.HasValue && maxTreeNodes.Value < numCachedNodes)
       {
-        numCachedNodes = maxTreeNodes.Value;
+        hardMaxTreeNodes = numCachedNodes = maxTreeNodes.Value;
       }
 
       if (hardNodesBound.HasValue && hardNodesBound.Value < numCachedNodes)
       {
-        numCachedNodes = hardNodesBound.Value;
+        hardMaxTreeNodes = numCachedNodes = hardNodesBound.Value;
       }
-      return  new MCTSNodeCacheArrayPurgeableSet(Store, numCachedNodes);
+
+      return  new MCTSNodeCacheArrayPurgeableSet(Store, numCachedNodes, hardMaxTreeNodes);
     }
 
     public void PossiblyPruneCache() => NodeCache.PossiblyPruneCache(Store);

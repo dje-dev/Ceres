@@ -34,6 +34,19 @@ namespace Ceres.MCTS.NodeCache
   public unsafe interface IMCTSNodeCache
   {
     /// <summary>
+    /// Size of cache (number of cache slots).
+    /// </summary>
+    int CacheSize { get; }
+
+    /// <summary>
+    /// If the cache is large enough to accomodate another search 
+    /// with specified hard maximum number of nodes.
+    /// </summary>
+    /// <param name="maxNumNodes"></param>
+    /// <returns></returns>
+    bool IsLargeEnough(int? maxNumNodes);
+
+    /// <summary>
     /// Store from which the MCTSNode objects originated.
     /// </summary>
     MCTSNodeStore ParentStore { get; }
