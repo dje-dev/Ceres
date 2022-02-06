@@ -190,6 +190,8 @@ namespace Ceres.Features.Tournaments
     {
       string refEngine = String.IsNullOrEmpty(ReferenceEngineId) ? "None" : ReferenceEngineId;
       Console.WriteLine($"TOURNAMENT:  {ID}");
+      Console.WriteLine($"  Machine Name       : {Environment.MachineName} ");
+      Console.WriteLine($"  Date/Time          : {DateTime.Now} ");
       Console.WriteLine($"  Game Pairs         : {NumGamePairs} ");
       Console.WriteLine($"  Openings           : {OpeningsDescription()}");
       Console.WriteLine($"  Ref engine         : {refEngine}");
