@@ -428,6 +428,7 @@ option name MaxTreeVisits type string default
 option name MaxTreeNodes type string default
 option name ReducedMemoryMode type check default false
 option name EnableSiblingEval type check default false
+option name EnableUncertaintyBoosting type check default false
 ");
     /* 
 option name ConfigFile type string default lc0.config
