@@ -26,6 +26,7 @@ using Ceres.MCTS.Iteration;
 using Ceres.MCTS.Params;
 using Ceres.MCTS.Utils;
 using Ceres.MCTS.Environment;
+using Ceres.Chess;
 
 #endregion
 
@@ -246,7 +247,9 @@ namespace Ceres.MCTS.Search
           }
         }
 
-        int targetThisBatch = OptimalBatchSizeCalculator.CalcOptimalBatchSize(Manager.EstimatedNumSearchNodes, rootNode.N,
+        float estNPS = float.IsNaN(Manager.EstimatedNPS) ? SearchLimit.DEFAULT_NPS : Manager.EstimatedNPS;
+        int estFinalTreeNodes = Manager.SearchLimit.EstNumFinalNodes(rootNode.N, (int)estNPS, true);
+        int targetThisBatch = OptimalBatchSizeCalculator.CalcOptimalBatchSize(estFinalTreeNodes, rootNode.N,
                                                                               overlapThisSet,
                                                                               Context.ParamsSearch.Execution.FlowDualSelectors,
                                                                               maxBatchSize,
