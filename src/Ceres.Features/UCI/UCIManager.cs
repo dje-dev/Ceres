@@ -271,9 +271,8 @@ namespace Ceres.Features.UCI
                 taskSearchCurrentlyExecuting = null;
               }
 
+              stopIsPending = false;
             }
-
-            stopIsPending = false;
 
             break;
 
