@@ -51,24 +51,27 @@ namespace Ceres.MCTS.Managers.Limits
     /// <returns></returns>
     public LimitsManagerInstamoveDecision CheckInstamove(MCTSearch search, MCTSNode newRoot, ManagerGameLimitInputs inputs)
     {
-      // Veto any possible instamove if the tree from the new root would be 
-      // small relative to the average over a trailing few moves, 
-      // to make sure any move decision is based sufficiently large tree.
-      // Never veto if only very little time remains because
-      // instamoves may be particularly helpful to avoid fixed overhead.
-      const float LOW_TIME_THRESHOLD_SECS = 3;
-      const int FINAL_N_LOOKBACK_MOVES = 5;
-      const float MIN_RELATIVE_TREE_SIZE = 0.6f;
-      bool isLowTime = SearchLimit.TypeIsTimeLimit(inputs.TargetLimitType) && inputs.RemainingFixedSelf < LOW_TIME_THRESHOLD_SECS;
-      float THRESHOLD_VETO_INSTAMOVE = isLowTime ? (0.5f * MIN_RELATIVE_TREE_SIZE) : MIN_RELATIVE_TREE_SIZE;
-
-      if (search.Manager.PriorMoveStats.Count >= FINAL_N_LOOKBACK_MOVES * 2)
+      if (inputs != null)
       {
-        float avgPriorFinalN = inputs.TrailingAvgFinalNodes(FINAL_N_LOOKBACK_MOVES, newRoot.SideToMove);
+        // Veto any possible instamove if the tree from the new root would be 
+        // small relative to the average over a trailing few moves, 
+        // to make sure any move decision is based sufficiently large tree.
+        // Never veto if only very little time remains because
+        // instamoves may be particularly helpful to avoid fixed overhead.
+        const float LOW_TIME_THRESHOLD_SECS = 3;
+        const int FINAL_N_LOOKBACK_MOVES = 5;
+        const float MIN_RELATIVE_TREE_SIZE = 0.6f;
+        bool isLowTime = SearchLimit.TypeIsTimeLimit(inputs.TargetLimitType) && inputs.RemainingFixedSelf < LOW_TIME_THRESHOLD_SECS;
+        float THRESHOLD_VETO_INSTAMOVE = isLowTime ? (0.5f * MIN_RELATIVE_TREE_SIZE) : MIN_RELATIVE_TREE_SIZE;
 
-        if (newRoot.N < avgPriorFinalN * THRESHOLD_VETO_INSTAMOVE)
+        if (search.Manager.PriorMoveStats.Count >= FINAL_N_LOOKBACK_MOVES * 2)
         {
-          return LimitsManagerInstamoveDecision.DoNotInstamove;
+          float avgPriorFinalN = inputs.TrailingAvgFinalNodes(FINAL_N_LOOKBACK_MOVES, newRoot.SideToMove);
+
+          if (newRoot.N < avgPriorFinalN * THRESHOLD_VETO_INSTAMOVE)
+          {
+            return LimitsManagerInstamoveDecision.DoNotInstamove;
+          }
         }
       }
 
