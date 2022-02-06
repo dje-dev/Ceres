@@ -77,7 +77,9 @@ namespace Ceres.MCTS.Iteration
       }
 
       // Check if limits manager requested a veto of an instamove decision.
-      if (shouldInstamove && limitsManagerDecision == LimitsManagerInstamoveDecision.DoNotInstamove)
+      if (shouldInstamove 
+       && reuseMethod != ManagerTreeReuse.Method.ForceInstamove
+       && limitsManagerDecision == LimitsManagerInstamoveDecision.DoNotInstamove)
       {
 #if NOT
         MCTSEventSource.TestCounter1++;
