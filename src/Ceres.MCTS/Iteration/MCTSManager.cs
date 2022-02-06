@@ -239,6 +239,7 @@ namespace Ceres.MCTS.Iteration
       }
 
       int estNumFinalTreeNodes = searchLimit.EstNumFinalNodes(RootNWhenSearchStarted, (int)estNPS, false);
+      int? hardMaxNumFinalTreeNodes = searchLimit.HardMaxNumFinalNodes(RootNWhenSearchStarted, (int)estNPS, false);
       int estNumSearchNodes = searchLimit.EstNumSearchNodes(RootNWhenSearchStarted, (int)estNPS, false);
 
       // TODO: technically this is overwriting the params belonging to the prior search, that's ugly (but won't actually cause a problem)
@@ -250,7 +251,7 @@ namespace Ceres.MCTS.Iteration
         estNumSearchNodes = Math.Max(0, estNumSearchNodes - RootNWhenSearchStarted);
       }
       Context = new MCTSIterator(this, store, reuseOtherContextForEvaluatedNodes, reusePositionCache, reuseNodeCache, reuseTranspositionRoots,
-                                 nnEvaluators, searchParams, childSelectParams, searchLimit.MaxTreeNodes, estNumSearchNodes);
+                                 nnEvaluators, searchParams, childSelectParams, hardMaxNumFinalTreeNodes, estNumSearchNodes);
 
       TerminationManager = new MCTSFutilityPruning(this, searchLimit.SearchMoves, searchMovesTablebaseRestricted);
       LimitManager = limitManager;

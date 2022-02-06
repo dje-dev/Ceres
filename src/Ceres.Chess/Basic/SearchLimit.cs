@@ -235,6 +235,36 @@ namespace Ceres.Chess
     }
 
 
+
+    /// <summary>
+    /// Hard max number of final nodes (N) for the search tree
+    /// which starts with specified number of initial nodes and then
+    /// searches for this limit.
+    /// </summary>
+    /// <param name="initialNumNodes"></param>
+    /// <param name="estNumNodesPerSecond"></param>
+    /// <param name="estIsObserved"></param>
+    /// <returns></returns>
+    public int? HardMaxNumFinalNodes(int initialNumNodes, int estNumNodesPerSecond, bool estIsObserved)
+      => initialNumNodes + HardMaxNumSearchNodes(initialNumNodes, estNumNodesPerSecond, estIsObserved);
+
+    /// Hard max number of incremental search nodes (N) for the search tree
+    /// which starts with specified number of initial nodes and then
+    /// searches for this limit.
+    public int? HardMaxNumSearchNodes(int initialNumNodes, int estNumNodesPerSecond, bool estIsObserved)
+    {
+      return Type switch
+      {
+        SearchLimitType.NodesPerMove => (int)Value,
+        SearchLimitType.NodesPerTree => (int)MathF.Max(Value - initialNumNodes, 1),
+        SearchLimitType.SecondsPerMove => null,
+        SearchLimitType.SecondsForAllMoves => null,
+        SearchLimitType.NodesForAllMoves => (int)Value,
+        _ => throw new NotImplementedException()
+      };
+    }
+
+
     /// <summary>
     /// Estimated number of final nodes (N) for the search tree
     /// which starts with specified number of initial nodes and then

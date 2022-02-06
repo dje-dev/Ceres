@@ -48,7 +48,7 @@ namespace Ceres.MCTS.NodeCache
 
     public MCTSNodeStore ParentStore;
 
-    public readonly int MaxCacheSize;
+    public readonly int CacheSize;
 
     #region Private data
 
@@ -66,27 +66,24 @@ namespace Ceres.MCTS.NodeCache
     /// </summary>
     /// <param name="parentStore"></param>
     /// <param name="cacheSize"></param>
-    /// <param name="estimatedNumNodesInSearch"></param>
-    public MCTSNodeCacheArrayPurgeableSet(MCTSNodeStore parentStore,
-                                          int cacheSize,
-                                          int estimatedNumNodesInSearch)
+    public MCTSNodeCacheArrayPurgeableSet(MCTSNodeStore parentStore, int cacheSize)
     {
       ParentStore = parentStore;
-      MaxCacheSize = cacheSize;
+      CacheSize = cacheSize;
 
       nodes = parentStore.Nodes.nodes;
 
       // Compute number of subcaches, increasing as a function of estimates search size
       // (because degree of concurrency rises with size of batches and search.
-      if (cacheSize >1_000_000)
+      if (CacheSize > 1_000_000)
       {
         NumSubcaches = 32;
       }
-      else if (cacheSize > 200_000)
+      else if (CacheSize > 200_000)
       {
         NumSubcaches = 16;
       }
-      else if (cacheSize > 50_000)
+      else if (CacheSize > 50_000)
       {
         NumSubcaches = 4;
       }
@@ -97,15 +94,15 @@ namespace Ceres.MCTS.NodeCache
 
       // Initialize the sub-caches
       subCaches = new MCTSNodeCacheArrayPurgeable[NumSubcaches];
-      if (NumSubcaches >= 4 && cacheSize > 100_000)
+      if (NumSubcaches >= 4 && CacheSize > 100_000)
       {
-        Parallel.For(0, NumSubcaches, i => subCaches[i] = new MCTSNodeCacheArrayPurgeable(parentStore, cacheSize / NumSubcaches));
+        Parallel.For(0, NumSubcaches, i => subCaches[i] = new MCTSNodeCacheArrayPurgeable(parentStore, CacheSize / NumSubcaches));
       }
       else
       {
         for (int i=0; i<NumSubcaches; i++)
         {
-          subCaches[i] = new MCTSNodeCacheArrayPurgeable(parentStore, cacheSize / NumSubcaches);
+          subCaches[i] = new MCTSNodeCacheArrayPurgeable(parentStore, CacheSize / NumSubcaches);
         }
       }
     }
@@ -200,7 +197,7 @@ namespace Ceres.MCTS.NodeCache
     public void PossiblyPruneCache(MCTSNodeStore store)
     {
       // Determine if any of the subcaches is nearly full.
-      int numItemsPerSubcache = MaxCacheSize / NumSubcaches;
+      int numItemsPerSubcache = CacheSize / NumSubcaches;
       bool almostFull = MaxNumInUse > (numItemsPerSubcache * MCTSNodeCacheArrayPurgeable.THRESHOLD_PCT_DO_PRUNE) / 100;
       if (almostFull)
       {
@@ -243,7 +240,7 @@ namespace Ceres.MCTS.NodeCache
 
     public override string ToString()
     {
-      return $"<MCTSNodeCacheArrayPurgeableSet MaxSize={MaxCacheSize} NumInUse={NumInUse}>";
+      return $"<MCTSNodeCacheArrayPurgeableSet MaxSize={CacheSize} NumInUse={NumInUse}>";
     }
 
   }

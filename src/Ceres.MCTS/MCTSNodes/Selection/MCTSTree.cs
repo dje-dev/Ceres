@@ -79,7 +79,7 @@ namespace Ceres.MCTS.LeafExpansion
 
     MemoryBufferOS<MCTSNodeStruct> nodes;
 
-    public readonly int EstimatedNumNodes;
+    public readonly int EstimatedNumFinalTreeNodes;
 
     /// <summary>
     /// Set encoded board positions corresponding to positions prior to root position in history.
@@ -94,7 +94,7 @@ namespace Ceres.MCTS.LeafExpansion
     /// <param name="context"></param>
     /// <param name="positionCache"></param>
     public MCTSTree(MCTSNodeStore store, MCTSIterator context,
-                    int? hardNodesBound, int estimatedNumNodes,
+                    int? hardNodesBound, int estimatedNumFinalTreeNodes,
                     PositionEvalCache positionCache, IMCTSNodeCache reuseNodeCache)
     {
       if (ParamsSearch.DrawByRepetitionLookbackPlies > MAX_LENGTH_POS_HISTORY)
@@ -106,7 +106,7 @@ namespace Ceres.MCTS.LeafExpansion
       Store = store;
       Context = context;
       PositionCache = positionCache;
-      EstimatedNumNodes = estimatedNumNodes;
+      EstimatedNumFinalTreeNodes = estimatedNumFinalTreeNodes;
 
       nodes = store.Nodes.nodes;
 
@@ -183,7 +183,7 @@ namespace Ceres.MCTS.LeafExpansion
       {
         numCachedNodes = hardNodesBound.Value;
       }
-      return  new MCTSNodeCacheArrayPurgeableSet(Store, numCachedNodes,  EstimatedNumNodes);
+      return  new MCTSNodeCacheArrayPurgeableSet(Store, numCachedNodes);
     }
 
     public void PossiblyPruneCache() => NodeCache.PossiblyPruneCache(Store);
