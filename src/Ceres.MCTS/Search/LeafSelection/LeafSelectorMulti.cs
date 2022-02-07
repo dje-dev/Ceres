@@ -554,19 +554,19 @@ namespace Ceres.MCTS.Search
     static float[] tempEmpiricalDistrib;
 
 
-    private static void PossiblySetEmpiricalPolicyDistribution(ref MCTSNode node, int numChildrenToCheck, Span<float> empiricalDistrib, 
+    private static void PossiblySetEmpiricalPolicyDistribution(ref MCTSNode node, int numChildrenToCheck, Span<float> empiricalDistrib,
                                                                ref float empiricalWeight, ref float cpuctMultiplier)
     {
-      bool gotRoot = node.Tree.TranspositionRoots.TryGetValue(node.StructRef.ZobristHash, out int transpositionRootIndex);
-      if (gotRoot)
+      float fractionBlendTranspositionRoot = node.Context.ParamsSearch.TranspositionRootPolicyBlendingFraction;
+      if (fractionBlendTranspositionRoot > 0)
       {
-        ref readonly MCTSNodeStruct rootNode = ref node.InfoRef.Tree.Store.Nodes.nodes[transpositionRootIndex];
-        if (rootNode.N > 10 // was 5
-         && rootNode.N > 3 * node.N // was 2
-         && rootNode.NumChildrenExpanded >= numChildrenToCheck)
+        bool gotRoot = node.Tree.TranspositionRoots.TryGetValue(node.StructRef.ZobristHash, out int transpositionRootIndex);
+        if (gotRoot)
         {
-          float fractionBlendTranspositionRoot = node.Context.ParamsSearch.TranspositionRootPolicyBlendingFraction;
-          if (fractionBlendTranspositionRoot > 0)
+          ref readonly MCTSNodeStruct rootNode = ref node.InfoRef.Tree.Store.Nodes.nodes[transpositionRootIndex];
+          if (rootNode.N > 30
+           && rootNode.N > 3 * node.N
+           && rootNode.NumChildrenExpanded >= numChildrenToCheck)
           {
             // The weight applied to the empirical probability adjusted by:
             //   - giving more weight if the transposition root has many more visits, and
@@ -599,14 +599,14 @@ namespace Ceres.MCTS.Search
             // are to children which have not yet been explored.
             float fracSeen = countFromVisitedChildren / rootNode.N;
             const float THRESHOLD_BOOST_EXPLORATION = 0.5f;
-            if (fracSeen < THRESHOLD_BOOST_EXPLORATION)
+            if (false && fracSeen < THRESHOLD_BOOST_EXPLORATION)
             {
               const float HIGH_EXPLORATION_MULTIPLIER = 2.0f;
               cpuctMultiplier *= HIGH_EXPLORATION_MULTIPLIER;
             }
           }
         }
-      }
+      }     
     }
 
     float TopNFractionToTopQMove
