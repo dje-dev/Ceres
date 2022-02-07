@@ -175,14 +175,27 @@ namespace Ceres.MCTS.LeafExpansion
       int numCachedNodes = configuredCacheSize;
       int? hardMaxTreeNodes = null;
       int? maxTreeNodes = CeresUserSettingsManager.Settings.MaxTreeNodes;
+
+      // TODO: the 2 assignments to numCachedNodes are not yet enabled.
+      //       This downsizing improves initialization time when tree known small,
+      //       and it is intended that the subsequent call to IsLargeEnough 
+      //       upon further search would result in it being re-initialized if 
+      //       subsequent searches are large. However for unknowns reasons
+      //       this is not yet working (try "go nodes 1" then "go nodes 20000000").
+      //       If using GameEngineCeresInProcess there is no performance problem
+      //       since the one (large) cache is created only once and then reused.
+      //       Only in the case of recreating searches (e.g. in SuiteTests)
+      //       will the lack of optimization be seen (circa 0.15 second initialization on every position).
       if (maxTreeNodes.HasValue && maxTreeNodes.Value < numCachedNodes)
       {
-        hardMaxTreeNodes = numCachedNodes = maxTreeNodes.Value;
+        hardMaxTreeNodes = maxTreeNodes.Value;
+        //hardMaxTreeNodes = numCachedNodes = maxTreeNodes.Value;
       }
 
       if (hardNodesBound.HasValue && hardNodesBound.Value < numCachedNodes)
       {
-        hardMaxTreeNodes = numCachedNodes = hardNodesBound.Value;
+        hardMaxTreeNodes = hardNodesBound.Value;
+        //hardMaxTreeNodes = numCachedNodes = hardNodesBound.Value;
       }
 
       return  new MCTSNodeCacheArrayPurgeableSet(Store, numCachedNodes, hardMaxTreeNodes);
