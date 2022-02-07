@@ -38,6 +38,11 @@ namespace Ceres.Chess
     public string Description { get; init; }
 
     /// <summary>
+    /// Internal identification number for game.
+    /// </summary>
+    public int GameID { get; init;}
+
+    /// <summary>
     /// Name of player with white pieces.
     /// </summary>
     public string PlayerWhite { get; init; }
@@ -101,13 +106,15 @@ namespace Ceres.Chess
         throw new ArgumentException($"Requested pgn file does not exist {pgnFileName}");
 
       PgnStreamReader pgnReader = new PgnStreamReader();
+      int gameID = 1;
       foreach (GameInfo game in pgnReader.Read(pgnFileName))
       {
-        Game gameS = new Game(game);
+        Game gameS = new Game(game, gameID);
 
         // Skip null games
         if (gameS.Moves.Count > 0)
         {
+          gameID++;
           yield return gameS;
         }
       }
@@ -146,9 +153,11 @@ namespace Ceres.Chess
     /// TODO: Capture more or all fields from header and moves.
     /// </summary>
     /// <param name="pgnGame"></param>
-    private Game(GameInfo pgnGame)
+    /// <param name="gameID"></param>
+    private Game(GameInfo pgnGame, int gameID)
     {
       Description = pgnGame.Comment;
+      GameID = gameID;
 
       pgnGame.Headers.TryGetValue("FEN", out string startFEN);
       InitialPosition = startFEN == null ? Position.StartPosition : Position.FromFEN(startFEN);
