@@ -106,6 +106,7 @@ namespace Ceres.MCTS.Managers.Limits
       {
         AlphaZeroFraction = 1f / 18f;
         InstaMoveLimit = 0.9f;
+        TrendMultiplierLimit = 0.15f;
       }
       //allocate normal time usage
       float totalTimeToUse = inputs.IncrementSelf + (inputs.RemainingFixedSelf * AlphaZeroFraction);
