@@ -163,6 +163,7 @@ namespace Ceres.Chess.UserSettings
 
     public bool? EnableSiblingEval { get; set; }
     public bool? EnableUncertaintyBoosting { get; set; }
+    public string LimitsManagerName { get; set; }
 
     #region Tablebases
 

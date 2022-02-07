@@ -14,10 +14,12 @@
 #region Using directives
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Ceres.Chess;
 using Ceres.Chess.GameEngines;
 using Ceres.MCTS.Iteration;
+using Ceres.MCTS.MTCSNodes;
 
 
 #endregion
@@ -32,6 +34,13 @@ namespace Ceres.MCTS.Managers.Limits
   public class ManagerGameLimitTest : IManagerGameLimit
   {
     public readonly float Aggressiveness;
+    public float InstaMoveLimit { get; set; } = 0.3f;
+    public float TrendMultiplier { get; set; } = 10f;
+    public float TrendMultiplierLimit { get; set; } = 0.25f;
+    public float QValueMultiplier { get; set; } = 0.12f;
+    public float AlphaZeroFraction { get; set; } = 1f / 16;
+    public float MaxAttentionLevel { get; set; } = 1.6f;
+
 
     /// <summary>
     /// Constructor.
@@ -42,18 +51,45 @@ namespace Ceres.MCTS.Managers.Limits
       Aggressiveness = aggressiveness;
     }
 
-    public LimitsManagerInstamoveDecision CheckInstamove(MCTSearch search, ManagerGameLimitInputs inputs)
+    public LimitsManagerInstamoveDecision CheckInstamove(MCTSearch search, MCTSNode node, ManagerGameLimitInputs inputs)
     {
+      if (inputs.PriorMoveStats.Count == 0)
+      {
+        return LimitsManagerInstamoveDecision.NoDecision;
+      }
+
+      //don't instamove when Q-value is above InstamoveLimit
+      if (Math.Abs(inputs.RootQ) > InstaMoveLimit)
+      {
+        return LimitsManagerInstamoveDecision.DoNotInstamove;
+      }
+
+      //No need to instamove if we have 20% or more time
+      GameMoveStat oppLastMove = inputs.PriorMoveStats[^1];
+      GameMoveStat firstMove = inputs.PriorMoveStats[0];
+      bool isAMoveBehind = firstMove.Side == oppLastMove.Side;
+      (float restTimeOpp, float usedLastMoveOpp) = (oppLastMove.SearchLimit.Value, oppLastMove.TimeElapsed);
+
+      //Check if we have more time than the opponent
+      float estMoveTime = inputs.RemainingFixedSelf * AlphaZeroFraction + inputs.IncrementSelf;
+      float remainingTime = inputs.RemainingFixedSelf + inputs.IncrementSelf;
+      float diffTime = isAMoveBehind ?
+        (remainingTime - estMoveTime) / restTimeOpp :
+        remainingTime / restTimeOpp;
+
+      //do not instamove when we have much more time
+      if (diffTime > 1.2f)
+      {
+        return LimitsManagerInstamoveDecision.DoNotInstamove;
+      }
+
       return LimitsManagerInstamoveDecision.NoDecision;
     }
 
     public bool CheckStopSearch(MCTSearch search, ManagerGameLimitInputs inputs)
     {
-      //var s = search;
       return false;
     }
-
-
 
     public ManagerGameLimitOutputs ComputeMoveAllocation(ManagerGameLimitInputs inputs)
     {
@@ -65,115 +101,24 @@ namespace Ceres.MCTS.Managers.Limits
                                                        maxTreeVisits: inputs.MaxTreeVisitsSelf));
       }
 
-      //no meaningful increment
-      if (inputs.IncrementSelf < 0.01)
+      //games without meaningful increment reduces the fixed time allocation to 1/18 and enable instamoves
+      if (inputs.IncrementSelf < 0.1f)
       {
-        (float time, float ext) = CalcNoIncrementTimeUse(inputs);
-        return Return(time, ext);
+        AlphaZeroFraction = 1f / 18f;
+        InstaMoveLimit = 0.9f;
       }
-
-      else
-      {
-        (float time, float ext) = CalcWithIncrementTimeUse(inputs);
-        return Return(time, ext);
-      }
-    }
-
-    //todo - work on no increment time control
-    private (float, float) CalcNoIncrementTimeUse(ManagerGameLimitInputs inputs)
-    {
-      //fixed time is increased when enableInstamove = true
-      float alphaZeroFractionFixed = inputs.SearchParams.EnableInstamoves ? 1f / 15f : 1f / 22f;
-      float scheduledTime = inputs.IncrementSelf + (inputs.RemainingFixedSelf * alphaZeroFractionFixed);
-      float totalTimeToUse = scheduledTime;
+      //allocate normal time usage
+      float totalTimeToUse = inputs.IncrementSelf + (inputs.RemainingFixedSelf * AlphaZeroFraction);
       float remainingTime = inputs.RemainingFixedSelf + inputs.IncrementSelf;
-
-      //never use more than 20% of time in one move
-      float upperTimeCut = remainingTime * 0.1f;
-
-      //add some extra time for the first move
-      if (inputs.IsFirstMoveOfGame)
-      {
-        return (totalTimeToUse * 1.5f, 0.6f);
-      }
-
-      //just boost alpha-zero time control when time is very low
-      if (remainingTime < 2.0f)
-      {
-        return (totalTimeToUse * 1.3f, 0.0f);
-      }
-
-      //look at time usage for opponent - especially useful for AB engines
-      GameMoveStat oppLastMove = inputs.PriorMoveStats[^1];
-      (float restTimeOpp, float usedLastMoveOpp) = (oppLastMove.SearchLimit.Value, oppLastMove.TimeElapsed);
-
-      //do we have more or less time than opponent
-      float diffTime = remainingTime / restTimeOpp;
-
-      //check if opponent used a lot of time on his last move
-      float fractionLastMove = usedLastMoveOpp / restTimeOpp;
-      if (fractionLastMove >= 0.125f)
-      {
-        var time = Math.Min(totalTimeToUse * 2 * diffTime, upperTimeCut);
-        //Console.WriteLine($"Opponent did think > 15%: {fractionLastMove:f2} Diff until now: {diffTime:f2} Ceres rem: {remainingTime:f2} - Time given: {time:f2} ");    
-        return (time, 0.6f);
-      }
-
-      //var moves = inputs.PriorMoveStats.Count;
-      //Console.WriteLine($"Time advantage fraction for Ceres on move {moves}: {diffTime:f2} Ceres: {remainingTime:f2} Opp: {rest:f2} ");    
-
-      float qAbs = Math.Abs(inputs.RootQ);
-
-      (float qFactor, float extension) = qAbs switch
-      {
-        > 0.32f => (0.2f, 0.4f),
-        > 0.22f => (0.15f, 0.4f),
-        > 0.10f => (0.1f, 0.2f),
-        _ => (0.0f, 0.0f)
-      };
-
-      totalTimeToUse *= (1 + qFactor);
-
-      //do not stay too far from opponents time control - correction based on previous focus
-      if (diffTime < 0.7f)
-      {
-        if (qFactor < 0.4f)
-        {
-          totalTimeToUse *= diffTime;
-          //Console.WriteLine($"Less time now:  {diffTime:f2} Ceres rem: {remainingTime:f2} Time given: {totalTimeToUse:f2}");
-        }
-      }
-
-      if (diffTime > 1.35f)
-      {
-        totalTimeToUse *= diffTime;
-        //Console.WriteLine($"More time now:  {diffTime:f2} Ceres rem: {remainingTime:f2} Time given: {totalTimeToUse:f2}");       
-      }
-
-      return (Math.Min(totalTimeToUse, upperTimeCut), extension);
-    }
-
-
-
-
-    private (float, float) CalcWithIncrementTimeUse(ManagerGameLimitInputs inputs)
-    {
-      //fixed time is increased when enableInstamove = true
-      float alphaZeroFractionFixed = inputs.SearchParams.EnableInstamoves ? 1f / 20f : 1f / 25f;
-      float scheduledTime = inputs.IncrementSelf + (inputs.RemainingFixedSelf * alphaZeroFractionFixed);
-      float totalTimeToUse = scheduledTime;
-      float remainingTime = inputs.RemainingFixedSelf + inputs.IncrementSelf;
-      float fixedAllot = alphaZeroFractionFixed * inputs.RemainingFixedSelf;
-      float fixedRatio = inputs.RemainingFixedSelf / inputs.IncrementSelf;
 
       //never use more than 20% of fixed time in one move
-      float upperTimeCut = inputs.RemainingFixedSelf * 0.2f + inputs.RemainingFixedSelf * 0.95f;
+      float upperTimeCut = inputs.RemainingFixedSelf * 0.2f + inputs.IncrementSelf * 0.95f;
 
       //add some extra time for the first move
       if (inputs.IsFirstMoveOfGame)
       {
-        float extraTime = remainingTime > 45f ? 1.7f : 1 + (0.015f * remainingTime);
-        return (totalTimeToUse * extraTime, 0.6f);
+        float extraTime = remainingTime > 45f ? 1.45f : 1 + (0.01f * remainingTime);
+        return Return(totalTimeToUse * extraTime, 0.6f);
       }
 
       //from legacy time control
@@ -193,60 +138,86 @@ namespace Ceres.MCTS.Managers.Limits
       if (Panic(inputs))
       {
         float multiplier = hasMeaningfulIncrement ? 0.50f : 0.01f;
-        return (inputs.RemainingFixedSelf * multiplier, 0.0f);
+        return Return(inputs.RemainingFixedSelf * multiplier, 0.0f);
       }
 
       else if (NearExhaustion(inputs))
       {
         float multiplier = hasMeaningfulIncrement ? 0.70f : 0.03f;
-        return (inputs.RemainingFixedSelf * multiplier, 0.2f);
+        return Return(inputs.RemainingFixedSelf * multiplier, 0.2f);
       }
 
       //look at time usage for opponent - especially useful for AB engines
       GameMoveStat oppLastMove = inputs.PriorMoveStats[^1];
-      bool isWhite = oppLastMove.Side == SideType.Black;
+      GameMoveStat firstMove = inputs.PriorMoveStats[0];
+      bool isAMoveBehind = firstMove.Side == oppLastMove.Side;
       (float restTimeOpp, float usedLastMoveOpp) = (oppLastMove.SearchLimit.Value, oppLastMove.TimeElapsed);
 
       //do we have more or less time than opponent
-      float diffTime = isWhite ?
-        remainingTime / restTimeOpp :
-        (remainingTime - totalTimeToUse) / restTimeOpp;
+      float diffTime = isAMoveBehind ?
+        (remainingTime - totalTimeToUse) / restTimeOpp :
+        remainingTime / restTimeOpp;
 
-      //check if opponent used a lot of time on his last move
+      //against AB engines we look for a long think and increase our own time usage when it occurs
+      //check if opponent used more than 20% of his time on the last move
       float fractionLastMove = usedLastMoveOpp / restTimeOpp;
-      if (fractionLastMove >= 0.125f)
+      if (restTimeOpp > 10f && fractionLastMove >= 0.2f)
       {
-        float time = Math.Min(totalTimeToUse * 2 * diffTime, upperTimeCut);
-        //Console.WriteLine($"Opponent did think > 15%: {fractionLastMove:f2} Diff until now: {diffTime:f2} Ceres rem: {remainingTime:f2} - Time given: {time:f2} ");    
-        return (time, 0.6f);
+        float allocatedTime = Math.Min(totalTimeToUse * 2 * diffTime, upperTimeCut);
+        //Console.WriteLine($"Opponent did think > 20%: {fractionLastMove:f2} Diff: {diffTime:f2} Ceres rem: {remainingTime:f2} - Time given: {allocatedTime:f2} ");
+        return Return(allocatedTime, 0.6f);
       }
 
-      //calculate how difficult the position has been (on average) until now.
-      int moves = inputs.PriorMoveStats.Count(e => e.Side != oppLastMove.Side);
-      float qDifficultLevel = 0.33f;
-      int numberOfHighQmoves = inputs.PriorMoveStats.Count(e => Math.Abs(e.ScoreQ) > qDifficultLevel && e.Side != oppLastMove.Side);
-      float fractionDifficultMoves = numberOfHighQmoves / (float)moves;
-      float q = Math.Abs(inputs.RootQ);
+      float qValue = Math.Abs(inputs.RootQ);
+      var attentionLevel = CalcExtraTime(qValue, inputs.PriorMoveStats, diffTime) * Aggressiveness;
 
-      //tracks number of moves with high difficult level and reduces the extra time based on this fraction
-      //if a high fraction of all moves are above qdifficult level we need to adjust to the situation and give less time alotted to every move.
-      float difficultLevel = 0.5f * fractionDifficultMoves;
-      //a function based on q-value that tells the TM how much more time should be used
-      float attentionLevel = q < 0.6 ? 1.6f * q : 0.6f;
+      //add or reduce time based on relative time usage - these could be improved on
+      if (diffTime < 0.9f && attentionLevel < 1.05f)
+      {
+        attentionLevel *= 0.9f;
+      }
+      else if (diffTime > 1.05f && attentionLevel > 1.05f)
+      {
+        attentionLevel *= 1.05f;
+      }
+      else if (diffTime > 1.2f)
+      {
+        attentionLevel *= 1.1f;
+      }
 
-      float extension = q < 0.6 ? 0.6f : 1.0f; //1 or above indicates no instamoves - not sure how important it is yet...
+      //add extra time based on calculation but never more than MaxAttentionLevel
+      totalTimeToUse *= Math.Min(MaxAttentionLevel, attentionLevel);
+      return Return(Math.Min(totalTimeToUse, upperTimeCut), 0.6f);
+    }
 
-      //Important to reduce attention level based on how often you had to use extra time until now (difficult level) and never allow the calculation to be negative
-      float extraTimeFactor = Math.Max(0f, attentionLevel - difficultLevel) * Aggressiveness;
+    private float CalcExtraTime(float qValue, List<GameMoveStat> priorMoves, float diffTime)
+    {
+      float trendScore = FindTrend(priorMoves, qValue);
+      float adjustedQ = 1 + (qValue * QValueMultiplier) + trendScore;
+      //Console.WriteLine($"Time on move {priorMoves.Count} is {diffTime:f2} Q-value: {qValue:f2} Attention: {adjustedQ:f2} Trend: {trendScore:f2}");
+      return adjustedQ;
+    }
 
-      //Console.WriteLine($"Time advantage on move {moves} is {diffTime:f2} (Ceres: {remainingTime:f2} Opp: {restTimeOpp:f2}) Extra time factor: {extraTimeFactor:f2} " +
-      //                  $"Fract difficult moves: {fractionDifficultMoves:f2} Qvalue: {inputs.RootQ:f2} Att: {attentionLevel:f2} Difficult: {difficultLevel:f2}");
+    private float FindTrend(List<GameMoveStat> priorMoves, float qValue)
+    {
+      //game just started
+      if (priorMoves.Count < 4)
+      {
+        return 0.05f;
+      }
 
-      //adjust the time calculation with extraTimeFactor and relative time usage (diffTime)      
-      totalTimeToUse = moves < 5 ? totalTimeToUse * (1 + attentionLevel) : totalTimeToUse * (1 + extraTimeFactor) * diffTime;
-      //totalTimeToUse = totalTimeToUse * (1 + qFactor - factor) * diffTime;
+      //do not bother with further calculation when q-value is too low or too high
+      if (qValue < 0.15f || qValue > 0.7)
+      {
+        return 0.0f;
+      }
 
-      return (Math.Min(totalTimeToUse, upperTimeCut), (difficultLevel > 0.7f ? 0.2f : extension));
+      var nextLastQ = priorMoves[^4].ScoreQ;
+      var lastQ = priorMoves[^2].ScoreQ;
+      float trend = Math.Abs(lastQ) - Math.Abs(nextLastQ);
+      float delta = Math.Abs(trend);
+      float trendScore = Math.Min(TrendMultiplierLimit, delta * TrendMultiplier);
+      return trendScore;
     }
   }
 }

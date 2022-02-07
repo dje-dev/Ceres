@@ -167,7 +167,23 @@ namespace Ceres.Features.GameEngines
       // Use default limit manager if not specified.
       if (gameLimitManager == null)
       {
-        gameLimitManager = new ManagerGameLimitCeres(searchParams.GameLimitUsageAggressiveness);
+        // Check for alternate limits manager specified in Ceres settings.
+        string altManager = CeresUserSettingsManager.Settings.LimitsManagerName;
+        if (altManager == null)
+        {
+          gameLimitManager = new ManagerGameLimitCeres(searchParams.GameLimitUsageAggressiveness);
+        }
+        else
+        {
+          if (altManager.ToUpper() == "TEST")
+          {
+            gameLimitManager = new ManagerGameLimitTest(searchParams.GameLimitUsageAggressiveness);
+          }
+          else
+          {
+            throw new NotImplementedException(altManager + " not supported for setting AlternateLimitsManagerName");
+          }
+        }
       }
 
       EvaluatorDef = evaluatorDef;
