@@ -240,7 +240,8 @@ namespace Ceres.MCTS.Iteration
           // a preparatory step (MaterializeNodesWithNonRetainedTranspositionRoots) 
           // will initially make the store larger (before it is subsequently compacted).
           double NODES_BUFFER_MULTIPLIER = searchLimit.SearchCanBeExpanded ? 1.2 : 1.0;
-          maxNodes = (int)(NODES_BUFFER_MULTIPLIER * searchLimit.MaxTreeNodes.Value) + 100_000;
+          long maxNodesLong = (long)(NODES_BUFFER_MULTIPLIER * searchLimit.MaxTreeNodes.Value) + 100_000;
+          maxNodes = (int)Math.Min(maxNodesLong, int.MaxValue - 100_000);
         }
         else
         {
