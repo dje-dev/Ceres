@@ -98,7 +98,7 @@ namespace Ceres.MCTS.Iteration
     public void FixupDrawsInvalidatedByTreeReuse()
     {
       Manager.Context.Tree.Root.StructRef.Traverse(Manager.Context.Tree.Store,
-                       (ref MCTSNodeStruct nodeRef) =>
+                       (ref MCTSNodeStruct nodeRef, int depth) =>
                        {
                          if (!nodeRef.IsOldGeneration && nodeRef.Terminal.IsTerminal() && nodeRef.HasRepetitions)
                          {

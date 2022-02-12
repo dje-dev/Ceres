@@ -28,7 +28,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
   /// </summary>
   public partial struct MCTSNodeStruct
   {
-    public delegate bool VisitorFunc(ref MCTSNodeStruct node);
+    public delegate bool VisitorFunc(ref MCTSNodeStruct node, int depth);
     public delegate bool VisitorSequentialFunc(ref MCTSNodeStruct node, MCTSNodeStructIndex index);
 
 
@@ -48,7 +48,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       }
       else
       {
-        DoTraverse(store, visitorFunc, traversalType);
+        DoTraverse(store, visitorFunc, traversalType, 0);
       }
     }
 
@@ -97,7 +97,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         ref MCTSNodeStruct thisNodeRef = ref store.Nodes.nodes[i];
         if (!thisNodeRef.Detached)
         {
-          if (!visitorFunc(ref store.Nodes.nodes[i]))
+          // Depth is not available
+          if (!visitorFunc(ref store.Nodes.nodes[i], -1))
           {
             return;
           }
@@ -106,13 +107,13 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     }
 
 
-    bool DoTraverse(MCTSNodeStore store, VisitorFunc visitorFunc, TreeTraversalType traversalType)
+    bool DoTraverse(MCTSNodeStore store, VisitorFunc visitorFunc, TreeTraversalType traversalType, int depth)
     {
       ref MCTSNodeStruct node = ref this;
 
       if (traversalType == TreeTraversalType.BreadthFirst)
       {
-        if (!visitorFunc(ref node))
+        if (!visitorFunc(ref node, depth))
         {
           return false;
         }
@@ -123,13 +124,13 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         int numExpanded = node.NumChildrenExpanded;
         for (int i = 0; i < numExpanded; i++)
         {
-          node.ChildAtIndex(i).ChildRef(store).DoTraverse(store, visitorFunc, traversalType);
+          node.ChildAtIndex(i).ChildRef(store).DoTraverse(store, visitorFunc, traversalType, depth +1);
         }
       }
 
       if (traversalType == TreeTraversalType.DepthFirst)
       {
-        if (!visitorFunc(ref node))
+        if (!visitorFunc(ref node, depth))
         {
           return false;
         }

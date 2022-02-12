@@ -508,7 +508,7 @@ namespace Ceres.MCTS.MTCSNodes
       ParamsSearch paramsSearch = Context.ParamsSearch;
       // Sequentially traverse tree nodes and materialize any that are currently just linked.
       StructRef.Traverse(Store,
-                   (ref MCTSNodeStruct nodeRef) =>
+                   (ref MCTSNodeStruct nodeRef, int depth) =>
                    {
                      if (!nodeRef.IsOldGeneration && nodeRef.IsTranspositionLinked)
                      {

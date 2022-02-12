@@ -124,7 +124,7 @@ namespace Ceres.MCTS.Managers.Uncertainty
       int n = 0;
       float acc = 0;
       nodeRef.Traverse(nodeRef.Context.Store,
-                   (ref MCTSNodeStruct innerNode) =>
+                   (ref MCTSNodeStruct innerNode, int depth) =>
                    {
                      if (!float.IsNaN(innerNode.V))
                      {

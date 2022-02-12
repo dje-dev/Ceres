@@ -509,10 +509,12 @@ namespace Ceres.Features.EngineTests
 
       startDepth = largerNode.Depth;
       largerNode.StructRef.Traverse(largerNode.Context.Tree.Store,
-      (ref MCTSNodeStruct node) =>
+      (ref MCTSNodeStruct node, int nodeDepth) =>
       {
-        if (node.DepthInTree > startDepth + depth)
+        if (nodeDepth > startDepth + depth)
+        {
           return false;
+        }
 
         indices.Add(node.ZobristHash);
         return true;
@@ -522,10 +524,12 @@ namespace Ceres.Features.EngineTests
       int countNotFound = 0;
 
       smallerNode.StructRef.Traverse(smallerNode.Context.Tree.Store,
-      (ref MCTSNodeStruct node) =>
+      (ref MCTSNodeStruct node, int nodeDepth) =>
       {
-        if (node.DepthInTree > startDepth + depth)
+        if (nodeDepth > startDepth + depth)
+        {
           return false;
+        }
 
         if (indices.Contains(node.ZobristHash))
           countFound++;

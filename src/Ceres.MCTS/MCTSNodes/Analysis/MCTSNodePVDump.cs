@@ -264,7 +264,7 @@ namespace Ceres.MCTS.MTCSNodes.Analysis
 
       // Visit all nodes and verify various conditions are true
       node.Traverse(context.Tree.Store,
-                          (ref MCTSNodeStruct node) =>
+                          (ref MCTSNodeStruct node, int depth) =>
                           {
                             Console.WriteLine(index + " " + node);
                             if (childDetail)
