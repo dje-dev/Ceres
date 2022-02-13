@@ -72,7 +72,8 @@ namespace Ceres.MCTS.MTCSNodes
                      Predicate<MCTSNode> shouldAbort = null,
                      int maxMoves = int.MaxValue,
                      TextWriter writer = null,
-                     MCTSNode dumpRoot = default)
+                     MCTSNode dumpRoot = default,
+                     bool shortForm = false)
     {
       if (IsNull)
       {
@@ -159,11 +160,22 @@ namespace Ceres.MCTS.MTCSNodes
       bool invert = multiplerOurPerspective == -1;
       float u0 = childScores0 != null ? childScores0[IndexInParentsChildren] : 0;
       float u1 = childScores1 != null ? childScores1[IndexInParentsChildren] : 0;
-      extraInfo = $" N={N,11:F0} ({fracVisitStr}% {recentQAvgStr}{lastN,11:F0})  Q= {multiplerOurPerspective * Q,6:F3}  ";
-      extraInfo += $"+/- {qUncertainty,4:F2}  V= {  multiplerOurPerspective * V,5:F2}  U0={u0,5:F4}   U1={u1,5:F4} ";
+      string uStr = "";
+      if (!shortForm)
+      {
+        uStr = $"  U0={u0,5:F4}   U1={u1,5:F4} ";
+      }
+
+      extraInfo = $" N={N,11:F0}";
+      if (!shortForm)
+      {
+        extraInfo += $"({fracVisitStr}% {recentQAvgStr}{lastN,11:F0})";
+      }
+      extraInfo += $" Q= {multiplerOurPerspective * Q,6:F3}  ";
+      extraInfo += $"+/- {qUncertainty,4:F2}  V= {  multiplerOurPerspective * V,5:F2} {uStr} "; 
       extraInfo += $" WDL= {(invert ? LossP : WinP),4:F2} {DrawP,4:F2} {(invert ? WinP : LossP),4:F2} ";
-      extraInfo += $" WDL Avg= {(invert ? LAvg : WAvg),4:F2} {DAvg,4:F2} {(invert ? WAvg : LAvg),4:F2}  ";
-      extraInfo += $"M = {MPosition,4:F0} {MAvg,4:F0}  ";
+      extraInfo += $" WDLA= {(invert ? LAvg : WAvg),4:F2} {DAvg,4:F2} {(invert ? WAvg : LAvg),4:F2}  ";
+      extraInfo += $"M= {MPosition,4:F0} {MAvg,4:F0}  ";
 
       MGMove move = Annotation.PriorMoveMG;
       writer.WriteLine($"{extraFlag} {Depth,4:F0} {move.MoveStr(MGMoveNotationStyle.ShortAlgebraic),-6} {100 * P,8:F2}% " +
@@ -175,7 +187,7 @@ namespace Ceres.MCTS.MTCSNodes
         {
           MCTSNode[] sortedChildren2 = ChildrenSorted(n => -n.N);
           sortedChildren2[0].Dump(firstLevelStartPVOnly, lastLevel, minNodes, maxMoves: maxMoves,
-                                  writer: writer, dumpRoot: dumpRoot);
+                                  writer: writer, dumpRoot: dumpRoot, shortForm:shortForm);
         }
         else
         {
@@ -190,7 +202,7 @@ namespace Ceres.MCTS.MTCSNodes
 
           foreach (MCTSNode child in sortedChildren1)
           {
-            child.Dump(lastLevel, firstLevelStartPVOnly, minNodes, maxMoves: maxMoves, writer: writer, dumpRoot: dumpRoot);
+            child.Dump(lastLevel, firstLevelStartPVOnly, minNodes, maxMoves: maxMoves, writer: writer, dumpRoot: dumpRoot, shortForm: shortForm);
           }
 
           if (otherNodesMessage != null)
