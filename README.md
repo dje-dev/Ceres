@@ -5,7 +5,7 @@ Ceres ("Chess Engine for Research") is:
 *  a flexible, modular and efficient software library with an exposed API to facilitate research in computer chess
 *  a set of [integrated tools](Commands.md) for chess research (e.g for position analysis, suite testing, tournament manager)
 *  ancillary features and applications to facilitate human analysis of chess positions, for example an integrated
-[graphing](graph.md) feature which generates on-the-fly visualizations of Ceres search results within a web browser
+[graphing](Graph.md) feature which generates on-the-fly visualizations of Ceres search results within a web browser
 
 The Ceres MCTS engine is a novel implementation written in C# for the Microsoft .NET framework. This system 
 comprises about 80,000 lines of source in 500 source code files, developed
