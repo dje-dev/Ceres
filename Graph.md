@@ -33,10 +33,10 @@ graph 7
 ## Graph Output Examples
 
 **Graph at lowest level of detail (0):**
-![](graph_0_example.png)
+![](graph_0_example.PNG)
 
 **Graph at highest level of detail (partial) (9):**
-![](graph_9_example.png)
+![](graph_9_example.PNG)
 
 ## Tips on Interpreting the Graph
 - the root position appears on the left followed by one or more "top moves" from this position (each as a boxed subgraph) with the "best move" shown in a slight green background color
@@ -46,7 +46,7 @@ graph 7
 - the piece being moved is shown using yellow for the origin square and green for the destination square
 
 - hovering over a board with the mouse will show a tooltiop with additional details about the main possible continuation moves from that position, for example:
-![](graph_tooltip.png)
+![](graph_tooltip.PNG)
 
 - clicking on a board will launch the position in lichess.com to facilitate sharing, further analysis, or extracting the corresponding FEN
 
@@ -63,8 +63,8 @@ This will use interprocess communication to send a signal to the other Ceres ins
 
 Most GUIs also provide shortcuts for issuing UCI commands to engines without leaving the GUI application. Examples for Nibbler and Arena are shown here.
 
-![](graph_nibbler.png)
-![](graph_arena.png)
+![](graph_nibbler.PNG)
+![](graph_arena.PNG)
 
 
 ## Method of Operation
