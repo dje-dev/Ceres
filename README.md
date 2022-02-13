@@ -42,6 +42,10 @@ Ceres playing strength is currently competitive with top chess engines such as L
 depending of course considerably upon the particular types of hardware (CPU and GPU) available
 for each engine.
 
+Ceres is also hoped to serve as a foundation for ancillary features and applications which leverage the 
+efficient, flexible search engine to provide value to human chess players. One example is an integrated
+[graphing](graph.md) feature which generates on-the-fly visualizations of Ceres search results within a web browser.
+
 
 ## Ceres Software Architecture
 
@@ -131,7 +135,6 @@ branch prediction, and maximizing instruction-level parallelism.
 for random, CUDA using Leela Chess Zeronetworks, and an experimental NVIDIA Tensor RT backend
 accepting ONNX network files, facilitating experimentation with alternate network architectures
 or inference precisions (8 bit).
-
 
 ## Configuration and Installation
 
