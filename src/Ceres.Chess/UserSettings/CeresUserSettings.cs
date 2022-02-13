@@ -62,6 +62,11 @@ namespace Ceres.Chess.UserSettings
     public string DefaultNetworkSpecString { get; set; }
 
     /// <summary>
+    /// Directory containing Graphviz binaries (executables).
+    /// </summary>
+    public string DirGraphvizBinaries { get; set; } = null;
+
+    /// <summary>
     /// Defalut value for Ceres device specification string (for network evaluation).
     /// </summary>
     public string DefaultDeviceSpecString { get; set; }

@@ -22,7 +22,7 @@ namespace Ceres.Commands
 {
   internal static class HelpCommands
   {
-    internal const string VALID_COMMANDS = "HELP, UCI, ANALYZE, SUITE, TOURN, SYSBENCH, BACKENDBENCH, BENCHMARK, SETOPT or SETUP";
+    internal const string VALID_COMMANDS = "HELP, UCI, ANALYZE, SUITE, TOURN, SYSBENCH, BACKENDBENCH, BENCHMARK, GRAPH, SETOPT or SETUP";
 
     internal static void ProcessHelpCommand(string cmd)
     {
@@ -53,6 +53,8 @@ namespace Ceres.Commands
         DumpHelpText(CERES_HELP_BACKENDBENCH);
       else if (parts[1] == "BENCHMARK")
         DumpHelpText(CERES_HELP_BENCHMARK);
+      else if (parts[1] == "GRAPH")
+        DumpHelpText(CERES_HELP_GRAPH);
       else
         DispatchCommands.ShowErrorExit($"Unrecognized command {parts[1]}, try " + HelpCommands.VALID_COMMANDS);
       System.Environment.Exit(0);
@@ -113,7 +115,6 @@ namespace Ceres.Commands
     @"  BACKENDBENCH - Runs neural network backend benchmark.
     Optional key/values   : { network, device }
     Example               : Ceres BACKENDBENCH network=LC0:73810 device=GPU:0
-
 ";
 
     const string CERES_HELP_BENCHMARK =
@@ -122,6 +123,11 @@ namespace Ceres.Commands
     Example               : Ceres BENCHMARK limit=30sm network=LC0:73810 device=GPU:0 opponent=lc0
 ";
 
+    const string CERES_HELP_GRAPH =
+@"  GRAPH - Issues request for other process running Ceres search to compute and show analysis graph.
+    Optional key/values   : { options }
+    Example               : Ceres GRAPH options=0
+";
 
     static void DumpAllHelp()
     {
@@ -132,6 +138,7 @@ namespace Ceres.Commands
       DumpHelpText(CERES_HELP_SYSBENCH);
       DumpHelpText(CERES_HELP_BACKENDBENCH);
       DumpHelpText(CERES_HELP_BENCHMARK);
+      DumpHelpText(CERES_HELP_GRAPH);
       DumpHelpText(CERES_HELP_SETOPT);
       DumpHelpText(CERES_HELP_SETUP);
     }

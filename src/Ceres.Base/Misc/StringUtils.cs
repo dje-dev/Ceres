@@ -13,6 +13,8 @@
 
 #region Using directives
 
+using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 
 #endregion
@@ -61,5 +63,37 @@ namespace Ceres.Base.Misc
       while (s.Length < len) s = s + " ";
       return s;
     }
+
+
+    /// <summary>
+    /// Launches browser on a specified URL in a platform-appropriate way.
+    /// 
+    /// With thanks to Brock Allen
+    /// (https://brockallen.com/2016/09/24/process-start-for-urls-on-net-core/).
+    /// </summary>
+    /// <param name="url"></param>
+    public static void LaunchBrowserWithURL(string url)
+    {
+      // hack because of this: https://github.com/dotnet/corefx/issues/10361
+      if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+      {
+        url = url.Replace("&", "^&");
+        Process.Start(new ProcessStartInfo("cmd", $"/c start {url}") { CreateNoWindow = true });
+      }
+      else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+      {
+        Process.Start("xdg-open", url);
+      }
+      else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+      {
+        Process.Start("open", url);
+      }
+      else
+      {
+        // Probably wont' work....
+        Process.Start(url);
+      }
+    }
+
   }
 }

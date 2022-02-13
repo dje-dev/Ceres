@@ -32,6 +32,7 @@ using Ceres.Chess.GameEngines;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.NNFiles;
+using Ceres.Chess.SearchResultVerboseMoveInfo;
 
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.Params;
@@ -42,8 +43,7 @@ using Ceres.MCTS.MTCSNodes;
 
 using Ceres.Features.GameEngines;
 using Ceres.Features.Visualization.TreePlot;
-using Ceres.Chess.SearchResultVerboseMoveInfo;
-using System.Text;
+using Ceres.Features.Visualization.AnalysisGraph;
 
 #endregion
 
@@ -374,6 +374,18 @@ namespace Ceres.Features.UCI
               UCIWriteLine("info string No search manager created");
             break;
 
+          case string c when c.StartsWith("graph"):
+            if (CeresEngine?.Search != null)
+            {
+              string[] parts = c.Split(" ");
+              string optionsStr = parts.Length > 1 ? parts[1] : null;
+              AnalysisGraphOptions options = AnalysisGraphOptions.FromString(optionsStr);
+              AnalysisGraphGenerator graphGenerator = new AnalysisGraphGenerator(CeresEngine.Search, options);
+              graphGenerator.Write(true);
+            }
+            else
+              UCIWriteLine("info string No search manager created");
+            break;
 
           case "dump-params":
             if (CeresEngine?.Search != null)

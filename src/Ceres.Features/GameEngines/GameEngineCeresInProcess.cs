@@ -36,6 +36,9 @@ using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.NodeCache;
 using Ceres.Features.UCI;
 using Ceres.Chess.SearchResultVerboseMoveInfo;
+using Ceres.Features.Visualization.AnalysisGraph;
+using System.Threading;
+using Ceres.Features.Commands;
 
 #endregion
 
@@ -256,15 +259,16 @@ namespace Ceres.Features.GameEngines
       return Search(curPositionAndMoves, searchLimit, gameMoveHistory, callback, verbose) as GameEngineSearchResultCeres;
     }
 
-    /// <summary>
-    /// Overriden virtual method which executes search.
-    /// </summary>
-    /// <param name="curPositionAndMoves"></param>
-    /// <param name="searchLimit"></param>
-    /// <param name="gameMoveHistory"></param>
-    /// <param name="callback"></param>
-    /// <returns></returns>
-    protected override GameEngineSearchResult DoSearch(PositionWithHistory curPositionAndMoves,
+
+  /// <summary>
+  /// Overridden virtual method which executes search.
+  /// </summary>
+  /// <param name="curPositionAndMoves"></param>
+  /// <param name="searchLimit"></param>
+  /// <param name="gameMoveHistory"></param>
+  /// <param name="callback"></param>
+  /// <returns></returns>
+  protected override GameEngineSearchResult DoSearch(PositionWithHistory curPositionAndMoves,
                                                        SearchLimit searchLimit,
                                                        List<GameMoveStat> gameMoveHistory,
                                                        ProgressCallback callback,
@@ -309,8 +313,18 @@ namespace Ceres.Features.GameEngines
         }
       }
 
-      void InnerCallback(MCTSManager manager)
+
+    void InnerCallback(MCTSManager manager)
       {
+        // Check for possible externally enqueued command.
+        (string command, string options) = InterprocessCommandManager.TryDequeuePendingCommand();
+        if (command != default)
+        {
+          AnalysisGraphOptions optionsObj = AnalysisGraphOptions.FromString(options);
+          Console.WriteLine($"Writing Analysis Graph (detail level {optionsObj.DetailLevel})");
+          AnalysisGraphGenerator graphGenerator = new AnalysisGraphGenerator(Search, optionsObj);
+          graphGenerator.Write(true);
+        }
         callbackMCTS?.Invoke(manager);
       }
 

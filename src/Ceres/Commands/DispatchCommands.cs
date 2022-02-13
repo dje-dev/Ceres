@@ -19,6 +19,7 @@ using Ceres.Base.DataTypes;
 using Ceres.Base.Misc;
 using Ceres.Chess;
 using Ceres.Chess.UserSettings;
+using Ceres.Features.Commands;
 using Ceres.Features.UCI;
 
 #endregion
@@ -228,10 +229,17 @@ namespace Ceres.Commands
         FeatureBenchmarkSearch analyzeParams = FeatureBenchmarkSearch.ParseBenchmarkCommand(keyValueArgs);
         analyzeParams.Execute();
       }
+      else if (featureName == "GRAPH")
+      {
+        KeyValueSetParsed keys = new KeyValueSetParsed(args, null);
+        string options = keys.GetValue("Options");
+        InterprocessCommandManager.EnqueueCommand("graph", options);
+      }
       else
-        ShowErrorExit("Expected argument to begin with one of the features " + 
-                       "UCI, ANALYZE, SUITE, TOURN, SYSBENCH, BACKENDBENCH, BACKENDCOMPARE, BENCHMARK or SETOPT");
-
+      {
+        ShowErrorExit("Expected argument to begin with one of the features " +
+                       "UCI, ANALYZE, SUITE, TOURN, SYSBENCH, BACKENDBENCH, BACKENDCOMPARE, BENCHMARK, GRAPH or SETOPT");
+      }
     }
 
     static void SetoptError()
