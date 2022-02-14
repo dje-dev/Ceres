@@ -89,7 +89,7 @@ namespace Ceres.Chess.Games.Utils
     /// Constructor from a GameInfo object.
     /// </summary>
     /// <param name="gi"></param>
-    public PGNGame(GameInfo gi)
+    public PGNGame(GameInfo gi, int gameIndex)
     {
       string dateStr = gi.Headers.ContainsKey("Date") ? gi.Headers["Date"] : null;
       if (dateStr != null) int.TryParse(dateStr.Substring(0, 4), out Year);
@@ -116,6 +116,10 @@ namespace Ceres.Chess.Games.Utils
 
       foreach (Textual.PgnFileTools.Move move in gi.Moves)
       {
+        if (move.HasError)
+        {
+          throw new Exception($"Encountered error in game { gameIndex + 1}, ply {Moves.Moves.Count + 1} parsing PGN: {move.ErrorMessage}");
+        }
         Move m1 = Move.FromSAN(Moves.FinalPosition, move.ToAlgebraicString());
         Moves.AppendMove(m1.ToString());
       }

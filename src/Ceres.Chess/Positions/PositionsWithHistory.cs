@@ -246,10 +246,12 @@ namespace Ceres.Chess.Positions
       
       pgnFileName = GetFullFilename(pgnFileName);
 
+      int gameIndex = 0;
       PgnStreamReader pgnReader = new PgnStreamReader();
       foreach (GameInfo game in pgnReader.Read(pgnFileName))
       {
-        openings.Add(new PGNGame(game));
+        openings.Add(new PGNGame(game, gameIndex));
+        gameIndex++;
       }
     }
 
