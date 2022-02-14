@@ -17,6 +17,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using Ceres.Base.Math;
+using Ceres.MCTS.Environment;
 using Ceres.MCTS.MTCSNodes.Struct;
 
 #endregion
@@ -122,7 +123,7 @@ namespace Ceres.MCTS.Iteration
       {
         ref readonly MCTSNodeStruct existingRoot = ref nodes[existingNodeIndex];
         int existingN = existingRoot.N;
-        const int THRESHOLD_EXTRA_N_MODIFY = 2; // for efficiency only update if considerably bigger
+        const int THRESHOLD_EXTRA_N_MODIFY = 5; // for efficiency only update if considerably bigger
         if (possibleNewValueN >= existingN  + THRESHOLD_EXTRA_N_MODIFY)
         {
           table[hashKey] = possibleNewValue;
