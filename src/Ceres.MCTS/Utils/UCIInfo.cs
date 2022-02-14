@@ -107,6 +107,13 @@ namespace Ceres.MCTS.Utils
         scoreToShow = MathF.Round(EncodedEvalLogistic.LogisticToCentipawn(thisQ), 0);
       }
 
+      if (float.IsNaN(scoreToShow))
+      {
+        // Make sure not to emit NaN for NPS because this might crash
+        // some GUIs or tournament managers.
+        scoreToShow = 0;
+      }
+
       float nps = manager.NumNodesVisitedThisSearch / elapsedTimeSeconds;
 
       // If somehow the nps looks unreasonable then truncate it to zero
