@@ -48,6 +48,8 @@ namespace Ceres.Chess.Textual.PgnFileTools
     public Row SourceRow { get; set; }
     public string Variation { get; set; }
 
+    public override string ToString() => ToAlgebraicString();
+
     public string ToAlgebraicString()
     {
       var result = new StringBuilder();
