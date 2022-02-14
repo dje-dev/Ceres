@@ -121,7 +121,8 @@ namespace Ceres.MCTS.MTCSNodes
           MCTSFutilityPruningStatus.PrunedDueToSearchMoves => 'S',
         };
       }
-      else if (Terminal == GameResult.Draw)
+
+      if (Terminal == GameResult.Draw)
       {
         extraFlag = 'D';
       }
