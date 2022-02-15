@@ -126,7 +126,7 @@ namespace Ceres.MCTS.Iteration
         DumpTimeInfo(writer, searchRootNode);
 
         writer.WriteLine();
-        searchRootNode.Dump(1, 1, writer: writer);
+        searchRootNode.Dump(searchRootNode.Depth+1, searchRootNode.Depth + 1, writer: writer);
 
         writer.WriteLine();
         MCTSPosTreeNodeDumper.DumpPV(searchRootNode, true, writer);
