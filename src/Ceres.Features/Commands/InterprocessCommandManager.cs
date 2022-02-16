@@ -13,6 +13,7 @@
 
 #region Using directives
 
+using Ceres.Base.OperatingSystem;
 using System;
 using System.IO;
 using System.Threading;
@@ -49,6 +50,14 @@ namespace Ceres.Features.Commands
     /// <param name="options"></param>
     public static void EnqueueCommand(string command, string options)
     {
+      if (!SoftwareManager.IsWindows)
+      {
+        // Ignore requests, since the named version of events not available on Linux.
+        // TODO: workaround this.
+        Console.WriteLine($"Feature available only on Windows, ignoring EnqueueCommand {command} {options}");
+        return;
+      }
+
       EventWaitHandle ewh = new(false, EventResetMode.AutoReset, IPC_EVENT_NAME, out bool createdNew);
       if (createdNew)
       {
@@ -73,6 +82,13 @@ namespace Ceres.Features.Commands
     /// <returns></returns>
     public static (string command, string options) TryDequeuePendingCommand()
     {
+      if (!SoftwareManager.IsWindows)
+      {
+        // Ignore requests, since the named version of events not available on Linux.
+        // TODO: workaround this.
+        return default;
+      }
+
       // Create event if not already extant (possibly from some other process).
       if (ewh == null)
       {
