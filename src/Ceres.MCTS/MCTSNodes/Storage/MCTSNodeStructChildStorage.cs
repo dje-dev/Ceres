@@ -11,8 +11,6 @@
 
 #endregion
 
-#define SPAN
-
 #region Using directives
 
 using System;
@@ -73,7 +71,6 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     /// </summary>
     internal int nextFreeBlockIndex = 1; // never allocate index 0 (null node)
 
-#if SPAN
     const string SharedMemChildrenName = MCTSParamsFixed.STORAGE_USE_EXISTING_SHARED_MEM
                                           ? "CeresSharedChildren"
                                           : null;
@@ -95,19 +92,6 @@ namespace Ceres.MCTS.MTCSNodes.Storage
                                    (long)destinationBlockIndex * (long)NUM_CHILDREN_PER_BLOCK, 
                                    numChildren);
 
-#else
-    internal MCTSNodeStructChild[] childIndices;
-    internal Span<MCTSNodeStructChild> Span => childIndices.AsSpan();
-    internal void CopyEntries(int sourceBlockIndex, int destinationBlockIndex, int numChildren)
-    {
-      Array.Copy(childIndices, 
-                 sourceBlockIndex  * NUM_CHILDREN_PER_BLOCK, 
-                 childIndices, 
-                 destinationBlockIndex * NUM_CHILDREN_PER_BLOCK, 
-                 numChildren);
-    }
-
-#endif
 
     /// <summary>
     /// Maximum number of children which this child store is configured to hold.
@@ -125,16 +109,12 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     {
       ParentStore = parentStore;
       nodes = parentStore.Nodes.nodes;
-#if SPAN
+
       MaxChildren = 1 + maxChildren;
       childIndices = new MemoryBufferOS<MCTSNodeStructChild>(MaxChildren,
                                                              MCTSParamsFixed.TryEnableLargePages,
                                                              SharedMemChildrenName, MCTSParamsFixed.STORAGE_USE_EXISTING_SHARED_MEM,
                                                              MCTSParamsFixed.STORAGE_USE_INCREMENTAL_ALLOC);
-#else
-    throw new NotImplementedException("Currently only SPAN mode is supported because otherwise GC may relocate nodes violating assumption");
-    childIndices = new MCTSNodeStructChild[1 + numChildren];
-#endif
     }
 
     /// <summary>
@@ -148,10 +128,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     /// </summary>
     public void Deallocate()
     {
-#if SPAN
       childIndices.Dispose();
-#endif
-      childIndices = null;
     }
 
     /// <summary>
@@ -288,11 +265,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       if (nodeRef.NumPolicyMoves == 0) return Span<MCTSNodeStructChild>.Empty;
 
       Debug.Assert(nodeRef.childStartBlockIndex > 0);
-#if SPAN
       return childIndices.Slice(nodeRef.ChildStartIndex, nodeRef.NumPolicyMoves);
-#else
-      return new Span<MCTSNodeStructChild>(childIndices, node.ChildStartIndex, node.NumPolicyMoves);
-#endif
     }
 
 
@@ -307,11 +280,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       if (node.NumPolicyMoves == 0) return Span<MCTSNodeStructChild>.Empty;
 
       Debug.Assert(node.childStartBlockIndex > 0);
-#if SPAN
       return childIndices.Slice(node.ChildStartIndex, node.NumPolicyMoves);
-#else
-      return new Span<MCTSNodeStructChild>(childIndices, node.ChildStartIndex, node.NumPolicyMoves);
-#endif
     }
 
 

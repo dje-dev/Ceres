@@ -11,8 +11,6 @@
 
 #endregion
 
-#define SPAN
-
 #region Using directives
 
 using System;
@@ -33,8 +31,7 @@ using Ceres.MCTS.MTCSNodes.Struct;
 namespace Ceres.MCTS.MTCSNodes.Storage
 {
   /// <summary>
-  /// Manages raw storage of tree nodes in a single contighous
-  /// array of structures. 
+  /// Manages raw storage of tree nodes in a single contiguous array of structures. 
   /// 
   /// This approach has mostly benefits over using .NET objects for each node, with advantages:
   ///   1) eliminates allocation/garbage collector overhead since no managed objects are created
@@ -48,12 +45,13 @@ namespace Ceres.MCTS.MTCSNodes.Storage
   ///      or distributing tree across a memory hierarchy with different performance characteristics 
   ///      (e.g. DRAM vs. Intel Optane)
   ///   6) "pointers" from one node occupy less memory (4 bytes instead of 8),
-  ///      saving perhaps 8 (2 * 4) bytes per node, no average
+  ///      saving perhaps 8 (2 * 4) bytes per node, on average. This is critical because about 2/3
+  ///      of the total memory consumed is used by the child/parent linkages.
   /// but disadvantages:
   ///   1) the code is somewhat more complex (using refs) and possibly error prone
   ///   2) there is some overhead with using array indexing instead of direct memory pointers
   ///   3) changing the root of the tree and releasing unused nodes is no longer 
-  ///      as trivial as just changing the root pointer (the tree must be rewritten).
+  ///      as trivial as just changing the root pointer (the tree somes must be repacked with full rewrite).
   public partial class MCTSNodeStructStorage
   {
     /// <summary>
@@ -68,18 +66,10 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     public readonly int MaxNodes;
 
     /// <summary>
-#if SPAN
-    public const bool SPAN = true;
-
     public MemoryBufferOS<MCTSNodeStruct> nodes;
 
     [DebuggerBrowsable(DebuggerBrowsableState.Never)]
     public Span<MCTSNodeStruct> Span => nodes.Span;
-#else
-    public const bool SPAN = false;
-    public MCTSNodeStruct[] nodes;
-    public Span<MCTSNodeStruct> Span => nodes.AsSpan();
-#endif
 
     internal const int FIRST_ALLOCATED_INDEX = 1;
 
@@ -126,18 +116,11 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       ParentStore = parentStore;
       MaxNodes = numNodes;
 
-#if SPAN
       string memorySegmentName = useExistingSharedMem ? "CeresSharedNodes" : null;
 
       nodes = new MemoryBufferOS<MCTSNodeStruct>(numNodes + BUFFER_NODES, largePages, memorySegmentName,
                                                  useExistingSharedMem,
                                                  useIncrementalAlloc);
-#else
-    throw new NotImplementedException("Currently only SPAN mode is supported because otherwise GC may relocate nodes violating assumption");
-      const bool ALIGN_64 = false;// not working for some reason
-      nodes = AllocateCache(numNodes, ALIGN_64);
-#endif
-
       Reset(priorMoves, false);
     }
 
@@ -147,10 +130,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     /// </summary>
     public void Deallocate()
     {
-#if SPAN
       nodes.Dispose();
-#endif
-      nodes = null;
     }
 
     /// <summary>
@@ -271,11 +251,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
         // Clear underlying memory in store
         // Note that MCTSNodeStructChildStorage does not need to be cleared, 
         // since we always fully fill in any newly allocated child array fields
-#if SPAN
         nodes.Clear(0, nextFreeIndex);
-#else
-      Array.Clear(nodes, 0, nextFreeIndex);
-#endif
       }
 
       nextFreeIndex = 1;
