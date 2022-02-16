@@ -736,6 +736,7 @@ namespace Ceres.Features.UCI
     /// <returns></returns>
     private GameEngineSearchResultCeres RunSearch(SearchLimit searchLimit)
     {
+      DateTime firstInfoUpdate = DateTime.Now;
       DateTime lastInfoUpdate = DateTime.Now;
 
       int numUpdatesSent = 0;
@@ -743,11 +744,29 @@ namespace Ceres.Features.UCI
       MCTSManager.MCTSProgressCallback callback =
         (manager) =>
         {
+          // Choose an appropriate update interval, less frequent for longer searches.
           DateTime now = DateTime.Now;
+          float timeSinceFirstUpdate = (float)(now - firstInfoUpdate).TotalSeconds;
           float timeSinceLastUpdate = (float)(now - lastInfoUpdate).TotalSeconds;
-
           bool isFirstUpdate = numUpdatesSent == 0;
-          float UPDATE_INTERVAL_SECONDS = isFirstUpdate ? 0.1f : 0.5f;
+          float UPDATE_INTERVAL_SECONDS = 0;
+          if (isFirstUpdate)
+          {
+            UPDATE_INTERVAL_SECONDS = 0.1f;
+          }
+          else if (timeSinceFirstUpdate < 5)
+          {
+            UPDATE_INTERVAL_SECONDS = 0.5f;
+          }
+          else if (timeSinceFirstUpdate < 30)
+          {
+            UPDATE_INTERVAL_SECONDS = 1f;
+          }
+          else
+          {
+            UPDATE_INTERVAL_SECONDS = 3;
+          }
+
           if (manager != null && timeSinceLastUpdate > UPDATE_INTERVAL_SECONDS && manager.Root.N > 0)
           {
             OutputUCIInfo(CeresEngine.Search.Manager, CeresEngine.Search.SearchRootNode);
