@@ -189,7 +189,14 @@ namespace Ceres.MCTS.Iteration
       float qGap = (float)(Math.Abs(childrenSortedQ[0].Q - childrenSortedQ[1].Q));
       float minNRequiredToChange = nGap / ManagerChooseBestMove.MinFractionNToUseQ(newRoot, qGap);
       int estNewVisitsThisMove = searchLimit.EstNumSearchNodes(newRoot.N, (int)priorManager.EstimatedNPS, true);
-      bool couldCatchUp = (estNewVisitsThisMove * 0.25f) > minNRequiredToChange;
+
+      // Assume up to 75% of future visits could go to some other node in extension.
+      // This may seem optimistic, but:
+      //  - once a move starts to break away into a better variation it may suddenly attract most visits
+      //  - the move does not actually have to catch up to top N to be chosen for best move (if Q is better)
+      //  - it may be sufficient for the move just to get close to best, because a search extension might then be triggered.
+      const float MAX_FRAC_VISITS_OTHER_NODE = 0.75f;
+      bool couldCatchUp = (estNewVisitsThisMove * MAX_FRAC_VISITS_OTHER_NODE) > minNRequiredToChange;
 
       // Don't instamove if the second-best move looks close to catching up.
       if (couldCatchUp)
