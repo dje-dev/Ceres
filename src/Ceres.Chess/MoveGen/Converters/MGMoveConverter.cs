@@ -33,23 +33,36 @@ namespace Ceres.Chess.MoveGen.Converters
     /// <returns></returns>
     public static Move ToMove(MGMove mgMove)
     {
-      if (mgMove.CastleShort) return new Move(Move.MoveType.MoveCastleShort);
-      if (mgMove.CastleLong) return new Move(Move.MoveType.MoveCastleLong);
+      if (mgMove.IsNull)
+      {
+        return default;
+      }
 
-      PieceType promoPiece = PieceType.None;
-      if (mgMove.PromoteQueen)
-        promoPiece = PieceType.Queen;
-      else if (mgMove.PromoteRook)
-        promoPiece = PieceType.Rook;
-      else if (mgMove.PromoteBishop)
-        promoPiece = PieceType.Bishop;
-      else if (mgMove.PromoteKnight)
-        promoPiece = PieceType.Knight;
+      if (mgMove.CastleShort)
+      {
+        return new Move(Move.MoveType.MoveCastleShort);
+      }
+      else if (mgMove.CastleLong)
+      {
+        return new Move(Move.MoveType.MoveCastleLong);
+      }
+      else
+      {
+        PieceType promoPiece = PieceType.None;
+        if (mgMove.PromoteQueen)
+          promoPiece = PieceType.Queen;
+        else if (mgMove.PromoteRook)
+          promoPiece = PieceType.Rook;
+        else if (mgMove.PromoteBishop)
+          promoPiece = PieceType.Bishop;
+        else if (mgMove.PromoteKnight)
+          promoPiece = PieceType.Knight;
 
-      Square fromSquare = new Square((int)mgMove.FromSquareIndex, Square.SquareIndexType.BottomToTopRightToLeft);
-      Square toSquare = new Square((int)mgMove.ToSquareIndex, Square.SquareIndexType.BottomToTopRightToLeft);
+        Square fromSquare = new Square((int)mgMove.FromSquareIndex, Square.SquareIndexType.BottomToTopRightToLeft);
+        Square toSquare = new Square((int)mgMove.ToSquareIndex, Square.SquareIndexType.BottomToTopRightToLeft);
 
-      return new Move(fromSquare, toSquare, promoPiece);
+        return new Move(fromSquare, toSquare, promoPiece);
+      }
     }
 
 
