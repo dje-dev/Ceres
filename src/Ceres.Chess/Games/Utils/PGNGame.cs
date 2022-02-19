@@ -36,6 +36,11 @@ namespace Ceres.Chess.Games.Utils
     public enum GameResult { WhiteWins, Draw, BlackWins, Unknown };
 
     /// <summary>
+    /// Index of game within file (starting with 0).
+    /// </summary>
+    public readonly int GameIndex;
+
+    /// <summary>
     /// Year in which game was played.
     /// </summary>
     public readonly int Year;
@@ -94,6 +99,7 @@ namespace Ceres.Chess.Games.Utils
       string dateStr = gi.Headers.ContainsKey("Date") ? gi.Headers["Date"] : null;
       if (dateStr != null) int.TryParse(dateStr.Substring(0, 4), out Year);
 
+      GameIndex = gameIndex;
       WhitePlayer = gi.Headers.ContainsKey("White") ? gi.Headers["White"] : "?";
       BlackPlayer = gi.Headers.ContainsKey("Black") ? gi.Headers["Black"] : "?";
       StartFEN = gi.Headers.ContainsKey("FEN") ? gi.Headers["FEN"] : null;

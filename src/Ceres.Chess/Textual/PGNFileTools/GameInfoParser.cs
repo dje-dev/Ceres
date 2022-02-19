@@ -43,6 +43,8 @@ namespace Ceres.Chess.Textual.PgnFileTools
     private int _moveNumber;
     private StringBuilder _partial;
 
+    private int numGamesRead = 0;
+
     public GameInfoParser()
     {
       _partial = new StringBuilder();
@@ -296,11 +298,12 @@ namespace Ceres.Chess.Textual.PgnFileTools
 
     public GameInfo Parse(TextReader source)
     {
+
       _partial.Length = 0;
       _handle = HandleHeaderStart;
       _moveVariations.Clear();
 
-      var gameInfo = new GameInfo();
+      GameInfo gameInfo = new GameInfo(numGamesRead++);
       foreach (var ch in source.GenerateFrom())
       {
         var success = _handle(ch, gameInfo);
@@ -320,6 +323,7 @@ namespace Ceres.Chess.Textual.PgnFileTools
         gameInfo.HasError = true;
         gameInfo.ErrorMessage = "Unexpected end of game info text.";
       }
+
       return gameInfo;
     }
   }

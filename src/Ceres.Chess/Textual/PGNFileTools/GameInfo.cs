@@ -17,8 +17,11 @@ namespace Ceres.Chess.Textual.PgnFileTools
 {
   public class GameInfo
   {
-    public GameInfo()
+    public readonly int GameIndex;
+
+    public GameInfo(int gameIndex)
     {
+      GameIndex = gameIndex;
       Headers = new Dictionary<string, string>(16);
       Moves = new List<Move>(128);
     }
