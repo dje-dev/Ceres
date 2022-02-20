@@ -108,14 +108,22 @@ namespace Ceres.Chess.Games.Utils
       {
         string result = gi.Headers["Result"];
         if (result.Contains("1/2-1/2"))
+        {
           Result = GameResult.Draw;
+        }
         else if (result.Contains("1-0"))
+        {
           Result = GameResult.WhiteWins;
+        }
         else if (result.Contains("0-1"))
+        {
           Result = GameResult.BlackWins;
+        }
       }
       else
+      {
         Result = GameResult.Unknown;
+      }
 
       StartFEN = StartFEN ?? Position.StartPosition.FEN;
       Moves = new PositionWithHistory(Position.FromFEN(StartFEN));
@@ -130,5 +138,31 @@ namespace Ceres.Chess.Games.Utils
         Moves.AppendMove(m1.ToString());
       }
     }
+
+
+    #region Static helpers
+
+    /// <summary>
+    /// Converts a GameResult into a corresponding short string (e.g. "1-0").
+    /// </summary>
+    /// <param name="result"></param>
+    /// <returns></returns>
+    public static string ResultToString(GameResult result)
+    {
+      switch (result)
+      {
+        case GameResult.WhiteWins:
+          return "1-0";
+        case GameResult.BlackWins:
+          return "0-1";
+        case GameResult.Draw:
+          return "=";
+        default:
+          return "?";
+      }
+    }
+
+    #endregion
+
   }
 }
