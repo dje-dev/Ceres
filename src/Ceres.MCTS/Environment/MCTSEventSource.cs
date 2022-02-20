@@ -13,19 +13,14 @@
 
 #region Using directives
 
-using Ceres.Chess.MoveGen.Converters;
-using Ceres.MCTS.Evaluators;
-using Ceres.MCTS.LeafExpansion;
-using Ceres.MCTS.Search;
 using System.Diagnostics.Tracing;
-using Ceres.MCTS.MTCSNodes;
 using Ceres.Base.OperatingSystem;
-using Chess.Ceres.NNEvaluators;
 using Ceres.Chess.NNEvaluators.LC0DLL;
 using Ceres.Chess.NNEvaluators.Internals;
-using Ceres.MCTS.Managers;
+using Ceres.MCTS.Evaluators;
+using Ceres.MCTS.Search;
+using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.Iteration;
-using Ceres.MCTS.MTCSNodes.Struct;
 
 #endregion
 
@@ -80,12 +75,6 @@ namespace Ceres.MCTS.Environment
     private PollingCounter totalUnutilizedNNEvaluationTimeMS;
     private PollingCounter totalNNWaitingTimeMS;
 
-    private PollingCounter totalNumMovesNoiseOverridden;
-
-    private IncrementingPollingCounter searchNumBatches;
-    private IncrementingPollingCounter searchNumApply;
-    private IncrementingPollingCounter searchNumCache;
-
     private IncrementingPollingCounter numNodesApplied;
     private PollingCounter numNodesAppliedTotal;
 #if DEBUG
@@ -96,9 +85,6 @@ namespace Ceres.MCTS.Environment
     private PollingCounter numSecondaryBatches;
 
 
-    private IncrementingPollingCounter dualSelectorAverageNNEvalWaitMS;
-
-    private PollingCounter nnCacheHitRate;
     private PollingCounter opponentTreeReuseHitRate;
     private PollingCounter opponentTreeReuseNumHits;
     private PollingCounter nnTranspositionsHitRate;
@@ -106,8 +92,6 @@ namespace Ceres.MCTS.Environment
     private PollingCounter nnTranspositionsHitRateOldGeneration;
     private PollingCounter countSiblingEvaluationsUsed;
 
-
-    private PollingCounter mlhMoveModificationFraction;
 
     static bool initialized = false;
     public static void Initialize()
