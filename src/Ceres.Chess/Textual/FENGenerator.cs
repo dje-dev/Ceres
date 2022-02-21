@@ -30,28 +30,51 @@ namespace Ceres.Chess.Textual
       // KQkq - 0 1
       bool weAreWhite = pos.MiscInfo.SideToMove == 0;
 
-      string fen = GetFENPieces(pos);
+      StringBuilder fen = new ();
+      fen.Append(GetFENPieces(pos));
 
-      fen = fen + (weAreWhite ? " w" : " b");
-      fen = fen + " ";
+      fen.Append(weAreWhite ? " w" : " b");
+      fen.Append(" ");
 
-      string castling = "";
-      if (pos.MiscInfo.WhiteCanOO) castling += "K";
-      if (pos.MiscInfo.WhiteCanOOO) castling += "Q";
-      if (pos.MiscInfo.BlackCanOO) castling += "k";
-      if (pos.MiscInfo.BlackCanOOO) castling += "q";
-      if (castling == "") castling = "-";
+      StringBuilder castlingSB = new ();
+      if (pos.MiscInfo.WhiteCanOO)
+      {
+        castlingSB.Append("K");
+      }
+      if (pos.MiscInfo.WhiteCanOOO)
+      {
+        castlingSB.Append("Q");
+      }
+      if (pos.MiscInfo.BlackCanOO)
+      {
+        castlingSB.Append("k");
+      }
+      if (pos.MiscInfo.BlackCanOOO)
+      {
+        castlingSB.Append("q");
+      }
+
+      string castling = castlingSB.ToString();
+      if (castling == "")
+      {
+        castling = "-";
+      }
 
       //rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1
       string epTarget = "-";
       if (pos.MiscInfo.EnPassantFileIndex != PositionMiscInfo.EnPassantFileIndexEnum.FileNone)
-        epTarget =  pos.MiscInfo.EnPassantFileChar + (weAreWhite ? "6" : "3");
+      {
+        epTarget = pos.MiscInfo.EnPassantFileChar + (weAreWhite ? "6" : "3");
+      }
 
-      fen = fen + castling + " " + epTarget + " " + pos.MiscInfo.Move50Count + " " + pos.MiscInfo.MoveNum; // Sometimes 2 dashes?
+      int moveNumToShow = (1 + pos.MiscInfo.MoveNum) / 2; // move counter incremented only after each black move
+      fen.Append(castling + " ");
+      fen.Append(epTarget + " ");
+      fen.Append(pos.MiscInfo.Move50Count + " ");
+      fen.Append(moveNumToShow);
 
-      return fen;
+      return fen.ToString();
     }
-
 
 
     private static string GetFENPieces(Position pos)
@@ -60,24 +83,33 @@ namespace Ceres.Chess.Textual
 
       for (int r = 7; r >= 0; r--)
       {
-        if (r != 7) fen.Append("/");
+        if (r != 7)
+        {
+          fen.Append("/");
+        }
         int numBlank = 0;
-        int startIndex = r * 8;
         for (int c = 7; c >= 0; c--)
         {
           char thisChar = pos[Square.FromFileAndRank(7-c, r)].Char;
           if (thisChar == Piece.EMPTY_SQUARE_CHAR)
+          {
             numBlank++;
+          }
           else
           {
             if (numBlank > 0)
+            {
               fen.Append(numBlank);
+            }
             numBlank = 0;
             fen.Append(thisChar);
           }
         }
 
-        if (numBlank > 0) fen.Append(numBlank);
+        if (numBlank > 0)
+        {
+          fen.Append(numBlank);
+        }
       }
 
       return fen.ToString();
