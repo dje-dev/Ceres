@@ -102,20 +102,23 @@ namespace Ceres.Chess.Games
     public void WriteResultBlackWins() => WriteResult(RESULT_BLACK_WINS);
 
 
-    public void WriteMove(MGMove move, Position pos, float? moveTimeSeconds = null, 
+    public void WriteMove(MGMove move, in Position pos, float? moveTimeSeconds = null, 
                           int? depth = null, float? scoreCentipawns = null)
     {
       bool isFirstMoveWritten = numPlyWritten == 0;
 
       // Write only two ply (one full move) per line.
-      if (numPlyWritten++ % 2 == 0) WriteBodyLine("");
+      if (numPlyWritten++ % 2 == 0)
+      {
+        WriteBodyLine("");
+      }
 
       int fullMoveNum = (startingPos.MiscInfo.MoveNum + numPlyWritten) / 2;
 
       string comment = "";
       if (moveTimeSeconds.HasValue || scoreCentipawns.HasValue)
       {
-        // Example:  {-0.04 3.8s}
+        // Example (similar to Cutechess format):  {-0.04 3.8s}
         string scoreStr = scoreCentipawns.HasValue ? $"{scoreCentipawns / 100.0f:F2}" : "";
         string depthStr = depth.HasValue ? $"/{depth}" : "";
         string timeStr = moveTimeSeconds.HasValue ? $" {moveTimeSeconds.Value:F2}s" : "";
@@ -142,20 +145,30 @@ namespace Ceres.Chess.Games
     public void WriteMoveSequence(PositionWithHistory moves)
     {
       if (moves.InitialPosMG != MGPosition.FromPosition(Position.StartPosition))
+      {
         WriteTag("FEN", moves.InitialPosMG.ToPosition.FEN);
+      }
 
       Position[] positions = moves.GetPositions();
       for (int i = 0; i < moves.Moves.Count; i++)
+      {
         WriteMove(moves.Moves[i], positions[i]);
+      }
 
       Position finalPos = moves.FinalPosition;
       GameResult terminal = finalPos.CalcTerminalStatus();
       if (terminal == GameResult.Checkmate && finalPos.MiscInfo.SideToMove == SideType.Black)
+      {
         WriteResultWhiteWins();
+      }
       else if (terminal == GameResult.Checkmate && finalPos.MiscInfo.SideToMove == SideType.White)
+      {
         WriteResultBlackWins();
+      }
       else if (terminal == GameResult.Draw || finalPos.CheckDrawCanBeClaimed != Position.PositionDrawStatus.NotDraw)
+      {
         WriteResultDraw();
+      }
     }
 
 

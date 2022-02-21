@@ -28,6 +28,7 @@ using Chess.Ceres.PlayEvaluation;
 using Ceres.Chess.GameEngines;
 using Ceres.Chess.UserSettings;
 using Ceres.MCTS.Iteration;
+using Ceres.Chess.MoveGen.Converters;
 
 #endregion
 
@@ -545,8 +546,11 @@ namespace Ceres.Features.Tournaments
         }
       }
 
-      pgnWriter.WriteStartPosition(startFEN);
-
+      pgnWriter.WriteStartPosition(curPositionAndMoves.InitialPosition.FEN);
+      foreach (PositionWithMove move in curPositionAndMoves.PositionsWithMoves)
+      {
+        pgnWriter.WriteMove(MGMoveConverter.MGMoveFromPosAndMove(in move.Position, move.Move), in move.Position);
+      }
 
       GameMoveConsoleInfo info = new GameMoveConsoleInfo();
 
