@@ -535,7 +535,7 @@ namespace Ceres.MCTS.Search
         {
           empiricalDistrib = tempEmpiricalDistrib = new float[64];
         }
-        PossiblySetEmpiricalPolicyDistribution(ref node, numChildrenToCheck, empiricalDistrib, 
+        PossiblySetEmpiricalPolicyDistribution(node, numChildrenToCheck, empiricalDistrib, 
                                                ref empiricalWeight, ref cpuctMultiplier);
       }
 
@@ -554,7 +554,7 @@ namespace Ceres.MCTS.Search
     static float[] tempEmpiricalDistrib;
 
 
-    private static void PossiblySetEmpiricalPolicyDistribution(ref MCTSNode node, int numChildrenToCheck, Span<float> empiricalDistrib,
+    private static void PossiblySetEmpiricalPolicyDistribution(MCTSNode node, int numChildrenToCheck, Span<float> empiricalDistrib,
                                                                ref float empiricalWeight, ref float cpuctMultiplier)
     {
       float fractionBlendTranspositionRoot = node.Context.ParamsSearch.TranspositionRootPolicyBlendingFraction;
