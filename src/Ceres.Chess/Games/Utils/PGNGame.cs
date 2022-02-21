@@ -15,6 +15,8 @@
 
 using System;
 using System.Collections.Generic;
+using Ceres.Base.DataTypes;
+using Ceres.Base.Math;
 using Ceres.Chess.Positions;
 using Ceres.Chess.Textual.PgnFileTools;
 
@@ -33,12 +35,18 @@ namespace Ceres.Chess.Games.Utils
   /// </summary>
   public record PGNGame
   {
+   
     public enum GameResult { WhiteWins, Draw, BlackWins, Unknown };
 
     /// <summary>
     /// Index of game within file (starting with 0).
     /// </summary>
     public readonly int GameIndex;
+
+    /// <summary>
+    /// Round of game within file.
+    /// </summary>
+    public readonly int Round;
 
     /// <summary>
     /// Year in which game was played.
@@ -70,10 +78,30 @@ namespace Ceres.Chess.Games.Utils
     /// </summary>
     public readonly string StartFEN;
 
+    /// <summary>
+    /// Players evaluation in centipawns after each move.
+    /// </summary>
+    public float MovePlayerEvalCP(int moveIndex) => moveTimeSeconds == null ? float.NaN : movePlayerEvalCP[moveIndex];
+
+    /// <summary>
+    /// Number of nodes in search tree at end of each move.
+    /// </summary>
+    public ulong MoveNodes(int moveIndex) => moveNodes == null ? 0: moveNodes[moveIndex];
+
+    /// <summary>
+    /// Time spent by player on move (in seconds).
+    /// </summary>
+    public float MoveTimeSeconds(int moveIndex) => moveTimeSeconds == null ? float.NaN : moveTimeSeconds[moveIndex];
+
 
     public float MoveTimeTotalWhite => MoveTimeTotal(true);
 
     public float MoveTimeTotalBlack => MoveTimeTotal(false);
+
+
+    short[] movePlayerEvalCP;
+    ulong[] moveNodes;
+    FP16[] moveTimeSeconds;
 
     float MoveTimeTotal(bool oddMoves)
     {
@@ -103,6 +131,7 @@ namespace Ceres.Chess.Games.Utils
       WhitePlayer = gi.Headers.ContainsKey("White") ? gi.Headers["White"] : "?";
       BlackPlayer = gi.Headers.ContainsKey("Black") ? gi.Headers["Black"] : "?";
       StartFEN = gi.Headers.ContainsKey("FEN") ? gi.Headers["FEN"] : null;
+      Round = gi.Headers.ContainsKey("Round") ? int.Parse(gi.Headers["Round"]) : 0;
 
       if (gi.Headers.ContainsKey("Result"))
       {
@@ -128,6 +157,37 @@ namespace Ceres.Chess.Games.Utils
       StartFEN = StartFEN ?? Position.StartPosition.FEN;
       Moves = new PositionWithHistory(Position.FromFEN(StartFEN));
 
+      int numMoves = gi.Moves.Count;
+
+      int moveIndex = 0;
+
+      void AddMoveEval(short cp)
+      {
+        if (movePlayerEvalCP == null)
+        {
+          movePlayerEvalCP = new short[numMoves];
+        }
+        movePlayerEvalCP[moveIndex] = cp;
+      }
+
+      void AddMoveTime(float time)
+      {
+        if (moveTimeSeconds == null)
+        {
+          moveTimeSeconds = new FP16[numMoves];
+        }
+        moveTimeSeconds[moveIndex] = (FP16)time;
+      }
+
+      void AddMoveNodes(ulong nodes)
+      {
+        if (moveNodes == null)
+        {
+          moveNodes = new ulong[numMoves];
+        }
+        moveNodes[moveIndex] = nodes;
+      }
+
       foreach (Textual.PgnFileTools.Move move in gi.Moves)
       {
         if (move.HasError)
@@ -136,11 +196,125 @@ namespace Ceres.Chess.Games.Utils
         }
         Move m1 = Move.FromSAN(Moves.FinalPosition, move.ToAlgebraicString());
         Moves.AppendMove(m1.ToString());
+
+        if (move.Comment != null)
+        {
+          try
+          {
+            string comment = move.Comment;
+            //Console.WriteLine("COMMENT: " + move.Comment.Replace("\r","").Replace("\n",""));
+
+            if (comment.Contains('='))
+            {
+              // example: 15.Bg1 {t=113460 e=219 nps=108329844 n=12291104138 d=42 sd=70}
+              comment = ParseOctagonStyleComment(numMoves, moveIndex, comment);
+            }
+            else
+            {
+              // example: 5. Be3 {0.12/5 0.03s} 
+              string[] parts = comment.Split(" ");
+              if (parts.Length == 2)
+              {
+                ParseCutechessStyleComment(numMoves, moveIndex, parts);
+              }
+            }
+
+          }
+          catch (Exception ex)
+          {
+          }
+        }
+        moveIndex++;
+      }
+
+      FillInMissingEvals(numMoves);
+
+      string ParseOctagonStyleComment(int numMoves, int moveIndex, string comment)
+      {
+        comment = comment.Substring(comment.IndexOf("{") + 1);
+        comment = comment.Replace("{", "");
+        comment = comment.Replace("\r", " ");
+        comment = comment.Replace("\n", " ");
+        foreach (string part in comment.Split(' '))
+        {
+          if (part.StartsWith("t="))
+          {
+            if (float.TryParse(part.Substring(2), out float value))
+            {
+              AddMoveTime(value / 1000.0f);
+            }
+          }
+          else if (part.StartsWith("e="))
+          {
+            if (int.TryParse(part.Substring(2), out int value))
+            {
+              AddMoveEval((short)StatUtils.Bounded(value, short.MinValue, short.MaxValue));
+            }
+          }
+          else if (part.StartsWith("n="))
+          {
+            if (ulong.TryParse(part.Substring(2), out ulong value))
+            {
+              AddMoveNodes(value);
+            }
+
+          }
+        }
+
+        return comment;
+      }
+
+      void ParseCutechessStyleComment(int numMoves, int moveIndex, string[] parts)
+      {
+        if (parts[0].Contains('/'))
+        {
+          if (float.TryParse(parts[0].Split("/")[0], out float eval))
+          {
+            eval = StatUtils.Bounded(MathF.Round(eval * 100), short.MinValue, short.MaxValue);
+            AddMoveEval((short)eval);
+          }
+        }
+        if (parts[1].EndsWith('s'))
+        {
+          if (float.TryParse(parts[1].Substring(0, parts[1].Length - 1), out float timeSeconds))
+          {
+            AddMoveTime(timeSeconds);
+          }
+        }
+      }
+    }
+
+    /// <summary>
+    /// Some engines may omit a centipawn evaluation upon instamove.
+    /// Try to fill-in these evals by carrying forward last eval by that player.
+    /// </summary>
+    /// <param name="numMoves"></param>
+    private void FillInMissingEvals(int numMoves)
+    {
+      if (movePlayerEvalCP != null && MoveTimeSeconds != null)
+      {
+        for (int i = 2; i < numMoves; i++)
+        {
+          if (moveTimeSeconds[i] == 0 && movePlayerEvalCP[i] == 0)
+          {
+            movePlayerEvalCP[i] = movePlayerEvalCP[i - 2];
+          }
+        }
       }
     }
 
 
-    #region Static helpers
+    /// <summary>
+    /// Returns string summary representation.
+    /// </summary>
+    /// <returns></returns>
+    public override string ToString()
+    {
+      return $"<PGNGame {Round}({GameIndex}): {WhitePlayer} vs {BlackPlayer} {ResultToString(Result)}, {Moves.Moves.Count} moves>";
+    }
+
+
+#region Static helpers
 
     /// <summary>
     /// Converts a GameResult into a corresponding short string (e.g. "1-0").
@@ -162,7 +336,7 @@ namespace Ceres.Chess.Games.Utils
       }
     }
 
-    #endregion
+#endregion
 
   }
 }
