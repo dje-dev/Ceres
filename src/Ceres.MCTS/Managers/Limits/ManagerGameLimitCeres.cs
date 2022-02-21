@@ -91,8 +91,8 @@ namespace Ceres.MCTS.Managers.Limits
       // but when we are ahead, take a little less time to be sure we don't err in time pressure.
       float factorWinningness = inputs.RootQ switch
       {
-        < -0.65f => 1.10f,
-        < -0.55f => 1.05f,
+        < -0.65f => 1.08f,
+        < -0.55f => 1.04f,
         > 0.65f => 0.90f,
         > 0.55f => 0.95f,
         _ => 1.0f
@@ -121,7 +121,12 @@ namespace Ceres.MCTS.Managers.Limits
         baseDivisor -= adj;
       }
 
-      const float BASE_MULTIPLIER = 0.65f;
+      // This is a key scaling factor controlling aggressiveness.
+      // Small changes can induce significant differences because they compound over time.
+      // Values of 0.75 or even higher may perform well for short games and/or weak nets
+      // because games are often decided early on missed tactics. 
+      // But for longer games (e.g. 3 to 5 minutes) somewhat lower values seem better.
+      const float BASE_MULTIPLIER = 0.70f;
 
       float ret = Aggressiveness * BASE_MULTIPLIER * (1.0f / baseDivisor) * factorWinningness * factorFirstMove;
 
