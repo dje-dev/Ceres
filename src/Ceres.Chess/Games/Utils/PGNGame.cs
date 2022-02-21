@@ -131,7 +131,13 @@ namespace Ceres.Chess.Games.Utils
       WhitePlayer = gi.Headers.ContainsKey("White") ? gi.Headers["White"] : "?";
       BlackPlayer = gi.Headers.ContainsKey("Black") ? gi.Headers["Black"] : "?";
       StartFEN = gi.Headers.ContainsKey("FEN") ? gi.Headers["FEN"] : null;
-      Round = gi.Headers.ContainsKey("Round") ? int.Parse(gi.Headers["Round"]) : 0;
+      if (gi.Headers.ContainsKey("Round"))
+      {
+        if (float.TryParse(gi.Headers["Round"], out float round))
+        {
+          Round = (int)Round;
+        }
+      }
 
       if (gi.Headers.ContainsKey("Result"))
       {
