@@ -135,7 +135,7 @@ namespace Ceres.Chess.Games.Utils
       {
         if (float.TryParse(gi.Headers["Round"], out float round))
         {
-          Round = (int)Round;
+          Round = (int)round;
         }
       }
 
