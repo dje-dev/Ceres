@@ -127,7 +127,7 @@ namespace Ceres.Features.Tournaments
     /// which must not be exceeded by both engines
     /// for a draw to be declared by adjudication.
     /// </summary>
-    public int AdjudicateDrawThresholdCentipawns = 20;
+    public int AdjudicateDrawThresholdCentipawns = 10;
 
     /// <summary>
     /// Minimum number of moves for which both engines evaluations
