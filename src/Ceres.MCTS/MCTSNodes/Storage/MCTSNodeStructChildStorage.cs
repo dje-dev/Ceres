@@ -158,7 +158,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     /// Insures a specified number of children are allocated.
     /// </summary>
     /// <param name="numChildren"></param>
-    internal void InsureAllocated(int numChildren) => childIndices.InsureAllocated(numChildren);
+    internal void InsureAllocated(long numChildren) => childIndices.InsureAllocated(numChildren);
 
 
 
