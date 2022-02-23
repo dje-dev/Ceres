@@ -262,6 +262,7 @@ namespace Ceres.MCTS.Iteration
         float earlyStopGapAdjusted = earlyStopGapRaw * aggressivenessMultiplier;
         bool earlyStop = earlyStopGapAdjusted > numRemainingSteps;
 
+#if FEATURE_NO_SHUTDOWN
         // Do not shutdown nodes which have Q close to best Q
         // because they may still have a chance to get best Q (or close, triggering a search extension)
         // and also because the extra visits may not be wasted if the opponent 
@@ -269,8 +270,21 @@ namespace Ceres.MCTS.Iteration
         const float SHUTDOWN_Q_MIN_SUBOPTIMALTIY = 0.02f;
 
         bool nearlyBestQ = Math.Abs(childRef.Q - nodesSortedQ[0].Q) < SHUTDOWN_Q_MIN_SUBOPTIMALTIY;
+
+        if (okToPrune && childRef.N > 100 && Context.ParamsSearch.TestFlag2 && Context.RootMoveTracker.RunningVValues != null)
+        {
+          float runningQ = Context.RootMoveTracker.RunningVValues[childRef.IndexInParent];
+          if (runningQ < bestQ)
+          {
+//            Console.WriteLine(Context.Manager.Search.SearchRootNode.N + " " + childRef.N + " [" + childRef.IndexInParent 
+//                              + "] disable prune " + runningQ + " " + bestQ);
+            earlyStop = false;
+          }
+        }
+
+#endif
+
         if (okToPrune 
-         && !nearlyBestQ
          && earlyStop)
         {
 #if NOT_HELPFUL
