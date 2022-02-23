@@ -18,6 +18,7 @@ using System.IO;
 
 using Ceres.Base;
 using Ceres.Base.DataType;
+using Ceres.Base.Math;
 using Ceres.Base.OperatingSystem;
 using Ceres.Chess;
 using Ceres.Chess.MoveGen;
@@ -54,15 +55,17 @@ namespace Ceres.MCTS.MTCSNodes
       }
       store.Nodes.Reset(miscInfo.PriorMoves, true);
 
-      long numNodes = SysMisc.ReadFileIntoSpan<MCTSNodeStruct>(Path.Combine(directory, id + FN_POSTFIX_NODES), store.Nodes.Span);
+      long numNodes = SysMisc.ReadFileIntoSpan(Path.Combine(directory, id + FN_POSTFIX_NODES), store.Nodes.Span);
       //store.Nodes.InsureAllocated((int)numNodes);
       store.Nodes.nextFreeIndex = (int)numNodes;
 
       store.Children.InsureAllocated((int)miscInfo.NumChildrenAllocated);
-      long numChildren = SysMisc.ReadFileIntoSpan<MCTSNodeStructChild>(Path.Combine(directory, id + FN_POSTFIX_CHILDREN), store.Children.Span);
+      long numChildren = SysMisc.ReadFileIntoSpan(Path.Combine(directory, id + FN_POSTFIX_CHILDREN), store.Children.Span);
       if (numChildren > int.MaxValue)
+      {
         throw new NotImplementedException("Implementation restriction: cannot read stores with number of children exceeding int.MaxValue.");
-      store.Children.nextFreeBlockIndex = (int)numChildren / MCTSNodeStructChildStorage.NUM_CHILDREN_PER_BLOCK;
+      }
+      store.Children.nextFreeBlockIndex = (int)MathUtils.RoundedUp(numChildren / MCTSNodeStructChildStorage.NUM_CHILDREN_PER_BLOCK, MCTSNodeStructChildStorage.NUM_CHILDREN_PER_BLOCK);
 
       if (clearSearchInProgressState)
       {
@@ -87,7 +90,9 @@ namespace Ceres.MCTS.MTCSNodes
     public static void Save(MCTSNodeStore store, string directory, string id)
     {
       if (store.Children.NumAllocatedChildren >= int.MaxValue)
+      {
         throw new NotImplementedException("Implementation restriction: cannot write stores with number of children exceeding int.MaxValue.");
+      }
 
       SysMisc.WriteSpanToFile(GetPath(directory, id, FN_POSTFIX_NODES), store.Nodes.Span.Slice(0, store.Nodes.NumTotalNodes));
       SysMisc.WriteSpanToFile(GetPath(directory, id, FN_POSTFIX_CHILDREN), store.Children.Span.Slice(0, (int)store.Children.NumAllocatedChildren));
@@ -106,10 +111,7 @@ namespace Ceres.MCTS.MTCSNodes
       SysMisc.WriteObj(GetPath(directory, id, FN_POSTFIX_MISC_INFO), miscInfo);
     }
 
-
   }
 }
-
-
 
 
