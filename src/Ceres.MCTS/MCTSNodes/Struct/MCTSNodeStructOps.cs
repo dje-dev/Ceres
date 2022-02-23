@@ -957,7 +957,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           if (parentRef.IsRoot)
           {
             indexOfChildDescendentFromRoot = node.Index;
-            node.Context.Info.Context.RootMoveTracker.UpdateQValue(context.Tree.Root.N, node.IndexInParent, vToApply, numToApply);
+            node.Context.Info.Context.RootMoveTracker.UpdateQValue(context.Tree.Root.N, node.N, node.IndexInParent, vToApply, numToApply);
           }
           else
           {

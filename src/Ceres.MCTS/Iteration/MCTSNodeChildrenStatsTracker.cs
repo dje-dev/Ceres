@@ -40,13 +40,6 @@ namespace Ceres.MCTS.Iteration
     /// </summary>
     const float COUNTS_FRACTION_MOST_RECENT = 0.10f;
 
-    /// <summary>
-    /// The explnential decay factor applied (per visit) when
-    /// updating statistics related to visit V values.
-    /// </summary>
-    const float V_FRACTION_MOST_RECENT = 0.005f;
-
-
     QueueFixedSize<short[]> history = HISTORY_LENGTH > 0 ? new(HISTORY_LENGTH) : null;
 
     /// <summary>
@@ -65,16 +58,36 @@ namespace Ceres.MCTS.Iteration
     public int[] LastRootN;
 
 
+    #region Exponential decay scaling calculation
+
+    const float LN_2 = 0.6931472f; // MathF.Log(2)
+    static float LambdaForHalflife(float halflife) => LN_2 / halflife;
+
+    // Calibrate exponential decay such that the EMWA value
+    // has a halflife approximately equal to 5% of the current search length.
+    const float HALFLIFE_SEARCH_FRAC = 0.10f;
+
+    /// <summary>
+    /// Computes the exponential decay factor applied (per visit) when
+    /// updating statistics related to visit V values.
+    /// </summary>
+    /// <param name="N"></param>
+    /// <returns></returns>
+    public static float LambdaForN(int N) => LambdaForHalflife(N * HALFLIFE_SEARCH_FRAC);
+
+    #endregion
+
     const int NUM_TRACK = 64;
 
     /// <summary>
     /// Updates internal statistics related to Q.
     /// </summary>
     /// <param name="rootN"></param>
+    /// <param name="thisN"></param>
     /// <param name="index"></param>
     /// <param name="vValue"></param>
     /// <param name="numVisits"></param>
-    internal void UpdateQValue(int rootN, int index, float vValue, int numVisits)
+    internal void UpdateQValue(int rootN, int thisN, int index, float vValue, int numVisits)
     {
       if (RunningVValues == null)
       {
@@ -92,8 +105,9 @@ namespace Ceres.MCTS.Iteration
         }
         else
         {
-          RunningVValues[index] = (vValue * V_FRACTION_MOST_RECENT)
-                                 + RunningVValues[index] * (1.0f - V_FRACTION_MOST_RECENT);
+          float lambda = LambdaForN(thisN);
+          RunningVValues[index] = (vValue * lambda)
+                                 + RunningVValues[index] * (1.0f - lambda);
         }
 
       }
@@ -137,6 +151,5 @@ namespace Ceres.MCTS.Iteration
 
       history?.Enqueue(historyValues);
     }
-
   }
 }
