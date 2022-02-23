@@ -483,6 +483,8 @@ namespace Ceres.Chess
        || SideToMove != otherPos.SideToMove)
       {
         // Fast path check.
+        // NOTE: FIDE rules (9.2.1.2) state "Positions are considered the same if and only if the same player has the move."
+        //       however some software (e.g. Arena) fail to implement this correctly.
         return false;
       }
       else
@@ -502,6 +504,8 @@ namespace Ceres.Chess
     {
       if (!PiecesEqual(in otherPos)) return false;
 
+      // NOTE: FIDE rules (9.2.1.2) state "Positions are considered the same if and only if the same player has the move."
+      //       however some software (e.g. Arena) fail to implement this correctly.
       if (MiscInfo.SideToMove != otherPos.MiscInfo.SideToMove
        || MiscInfo.WhiteCanOOO != otherPos.MiscInfo.WhiteCanOOO
        || MiscInfo.WhiteCanOO != otherPos.MiscInfo.WhiteCanOO
