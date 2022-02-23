@@ -33,18 +33,22 @@ namespace Ceres.Base.Math.Random
     /// <param name="densities"></param>
     /// <param name="temperature"></param>
     /// <returns></returns>
-    public static int Draw(float[] densities, float temperature)
+    public static int Draw(float[] densities, int numDensities, float temperature)
     {
       float sum = StatUtils.Sum(densities);
       float adjust = 1.0f / sum;
 
-      float[] fractionsWithTemperature = new float[densities.Length];
-      for (int i = 0; i < densities.Length; i++)
+      float[] fractionsWithTemperature = new float[numDensities];
+      for (int i = 0; i < numDensities; i++)
+      {
         fractionsWithTemperature[i] = MathF.Pow((adjust * densities[i]), temperature);
+      }
 
       sum = StatUtils.Sum(fractionsWithTemperature);
       for (int i = 0; i < fractionsWithTemperature.Length; i++)
+      {
         fractionsWithTemperature[i] /= sum;
+      }
 
       return Draw(fractionsWithTemperature);
     }
