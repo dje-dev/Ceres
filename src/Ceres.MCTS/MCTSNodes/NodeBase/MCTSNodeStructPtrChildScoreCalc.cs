@@ -94,6 +94,19 @@ namespace Ceres.MCTS.MTCSNodes
       //       have special version of Gather which didn't bother with that
       nodeRef.GatherChildInfo(Context, new MCTSNodeStructIndex(Index), selectorID, depth, numToProcess - 1, gatherStats);
 
+      if (nodeRef.IsRoot 
+        && nodeRef.N > 500 // sufficient number of samples
+        && nodeRef.Context.Info.Context.ParamsSelect.FracWeightUseRunningQ > 0)
+      {
+        float frac = nodeRef.Context.Info.Context.ParamsSelect.FracWeightUseRunningQ;
+        for (int i = 0; i <= maxChildIndex; i++)
+        {
+          float runningQ = nodeRef.Context.Info.Context.RootMoveTracker.RunningVValues[i];
+          gatherStatsWSpan[i] = (1.0f - frac) * gatherStatsWSpan[i] 
+                              + frac          * (float)runningQ * gatherStatsNSpan[i];
+        }
+      }
+
       if (empiricalWeight > 0)
       {
         for (int i=0; i<numToProcess; i++)

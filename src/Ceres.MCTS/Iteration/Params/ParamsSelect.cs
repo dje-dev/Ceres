@@ -105,6 +105,11 @@ namespace Ceres.MCTS.Params
 
     public bool UseDynamicVLoss = false;
 
+    /// <summary>
+    /// If nonzero, the Q used for leaf selection at root
+    /// averages in a selected fraction coming from the EMWA running Q.
+    /// </summary>
+    public float FracWeightUseRunningQ = 0.0f;
 
     /// <summary>
     /// For values > 0, the power mean of the children Q is used in PUCT instead of just Q.
