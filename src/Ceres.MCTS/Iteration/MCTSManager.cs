@@ -642,6 +642,47 @@ namespace Ceres.MCTS.Iteration
              bool possiblyUsePositionCache = false,
              bool moveImmediateIfOnlyOneMove = false)
     {
+      #if NOT
+
+      if (manager.Root.N > 0)
+      {
+        for(int i=0;i<manager.Root.NumChildrenExpanded;i++)
+        {
+          var child = manager.Root.ChildAtIndex(i);
+          child.Annotate();
+          if (child.Annotation.Pos.PieceCount > 7)
+          {
+            if (child.Terminal.IsTerminal())
+            {
+              var pmm = manager.Root.Tree.Store.Nodes.PriorMoves;
+
+              int equalCount = 0;
+              Console.WriteLine("ROOT " + child.Annotation.Pos.FEN);
+              int index = 0;
+              foreach (var move in pmm.PositionsWithMoves)
+              {
+                if (child.Annotation.Pos.EqualAsRepetition(move.Position))
+                {
+                  Console.WriteLine(index + " " + move.Position.FEN);
+                  equalCount++;
+                }
+                index++;
+//                Console.WriteLine(move.Position + "  " + move.Position.MiscInfo.RepetitionCount);
+              }
+
+              Console.WriteLine($"Num equal {equalCount}");
+              if (equalCount == 0)
+              {
+                Console.WriteLine("found top level terminal " + child.NumChildrenExpanded + " " + child.Annotation.Pos.CalcTerminalStatus()
+                                 + " " + child.Annotation.Pos.FEN);
+                DumpMoveStatistics(manager.Root);
+              }
+            }
+          }
+        }
+      }
+#endif
+
       MCTSearch.SearchCount++;
       manager.StartTimeThisSearch = DateTime.Now;
       manager.RootNWhenSearchStarted = manager.Root.N;
@@ -730,15 +771,45 @@ namespace Ceres.MCTS.Iteration
           }
         }
 
+#if FEATURE_RAPIDLY_IMPROVING
+        bool foundRapidlyImprovingQ = false;
+        if (false && root.Context.ParamsSearch.TestFlag2)
+        {
+          for (int i = 0; i < root.NumChildrenExpanded; i++)
+          {
+            if (root.Context.RootMoveTracker.RunningVValues != null)
+            {
+              MCTSNode child = root.ChildAtIndex(i);
+              float fracNOfParent = (float)child.N / root.N;
+              float runningQ = root.Context.RootMoveTracker.RunningVValues[i];
+              float runningQBetterThanBestQ = -runningQ - bestMoveInfo.QOfBest;
+
+              if (child.N > 200
+                && root.Context.RootMoveTracker.LastRootN[i] > 0
+                && ((fracNOfParent > 0.10f && runningQBetterThanBestQ > 0.10f)
+                  || (fracNOfParent > 0.20f && runningQBetterThanBestQ > 0.05f))
+                && (i != bestMoveInfo.BestMoveNode.IndexInParentsChildren))
+              {
+                foundRapidlyImprovingQ = true;
+                throw new Exception("Need to pass this true flag down to if statement below");
+                MCTSEventSource.TestCounter1++;
+                if (bestMoveInfo.BestMoveQSuboptimality <= 0.01) /// TEMPORARY redundant below
+                  Console.WriteLine(root.N + "  " +  child.N + " found extra extension " + (float)child.N / root.N + "  " + runningQBetterThanBestQ);
+//root.Context.Manager.DumpRootMoveStatistics();
+              }
+            }
+          }
+        }
+#endif
         // If the chosen move is far away from the best Q node, 
         // try to extend the search unless the position is obviously won/lost.
-        const int MAX_RETRIES = 3;
         const float Q_THRESHOLD = 0.01f;
+        const int MAX_RETRIES = 3;
         const float INCREMENT_FRACTION = 0.20f;
-
+        bool possiblyExtend = bestMoveInfo.BestMoveQSuboptimality > Q_THRESHOLD; // other move has much better Q already
         if (manager.Context.ParamsSearch.EnableSearchExtension
          &&!shouldStopAfterOneNodeDueToOnlyOneLegalMove
-         && bestMoveInfo.BestMoveQSuboptimality > Q_THRESHOLD  // don't retry if Q is already best or nearly so
+         && possiblyExtend
          && root.Q < 0.75f                                     // don't retry if position is already won
          && numSearches < MAX_RETRIES                          // don't retry many times to avoid using too much extra time
          && manager.NumNodesVisitedThisSearch > 100            // don't retry for very small searches to because batch sizing make this imprecise
