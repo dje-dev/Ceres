@@ -165,7 +165,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     /// <summary>
     /// Resizes memory store to exactly fit current used space.
     /// </summary>
-    public void ResizeToCurrent() => ResizeToNumChildren(nextFreeBlockIndex * MCTSNodeStructChildStorage.NUM_CHILDREN_PER_BLOCK);
+    public void ResizeToCurrent() => ResizeToNumChildren((long)nextFreeBlockIndex * NUM_CHILDREN_PER_BLOCK);
 
 
     /// <summary>
@@ -173,7 +173,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     /// </summary>
     /// <param name="numChildren"></param>
     /// <exception cref="Exception"></exception>
-    void ResizeToNumChildren(int numChildren)
+    void ResizeToNumChildren(long numChildren)
     {
       if (numChildren < nextFreeBlockIndex)
       {
