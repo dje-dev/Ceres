@@ -67,7 +67,7 @@ namespace Ceres.Chess.Textual
         epTarget = pos.MiscInfo.EnPassantFileChar + (weAreWhite ? "6" : "3");
       }
 
-      int moveNumToShow = (1 + pos.MiscInfo.MoveNum) / 2; // move counter incremented only after each black move
+      int moveNumToShow  =  pos.MiscInfo.MoveNum / 2; // move counter incremented only after each black move
       fen.Append(castling + " ");
       fen.Append(epTarget + " ");
       fen.Append(pos.MiscInfo.Move50Count + " ");

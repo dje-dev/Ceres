@@ -199,23 +199,42 @@ namespace Ceres.Chess.Textual
       {
         char thisChar = fen[charIndex++];
         if (!char.IsDigit(thisChar))
+        {
           break;
+        }
         else
+        {
           fullmoveCount = fullmoveCount * 10 + (thisChar - '0');
+        }
       }
 
-      // Fill in move count with 1 if none found
+      int plyCount;
       if (fullmoveCount == 0)
-        fullmoveCount = 1;
+      {
+        // Fill in move count with 1 if none found
+        plyCount = 1;
+      }
+      else
+      {
+        // Convert from moves to ply
+        plyCount = fullmoveCount * 2;
+      }
+
+      if (sideToMove == SideType.Black)
+      {
+        plyCount++;
+      }
 
       if (charIndex < fen.Length - 1)
       {
         string remainder = fen.Substring(charIndex);
         if (StringUtils.WhitespaceRemoved(remainder) != "")
+        {
           throw new Exception($"Unexpected characters after FEN {remainder} ");
+        }
       }
 
-      PositionMiscInfo miscInfo = new PositionMiscInfo(whiteCanOO, whiteCanOOO, blackCanOO, blackCanOOO, sideToMove, move50Count, 0, fullmoveCount, epColIndex);
+      PositionMiscInfo miscInfo = new PositionMiscInfo(whiteCanOO, whiteCanOOO, blackCanOO, blackCanOOO, sideToMove, move50Count, 0, plyCount, epColIndex);
 
       return new FENParseResult(pieces, miscInfo);
     }
