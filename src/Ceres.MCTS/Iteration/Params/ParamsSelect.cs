@@ -90,12 +90,13 @@ namespace Ceres.MCTS.Params
     /// <summary>
     /// Amount of relative virtual loss to apply in leaf selection to discourage collisions.
     /// Values closer to zero yield less distortion in choosing leafes (thus higher quality play)
-    /// but slow down search speed because of excess collisions. Values of -0.10 or -0.15 work well.
+    /// but slow down search speed because of excess collisions. 
+    /// Values of -0.10 or -0.15 seem to work well; -0.03 clearly worse, -0.20 mixed/unclear.
     /// </summary>
     // Smaller values yield higher fidelity leaf selection 
     // (but possibly slightly slower due to increased collisions, especially at smaller node counts)      
     [CeresOption(Name = "vloss-relative", Desc = "Virtual loss (relative) to be applied when collisions encountered", Default = "-0.15")]
-    public float VirtualLossDefaultRelative = -0.10f;
+    public float VirtualLossDefaultRelative = -0.12f;
 
     /// <summary>
     /// Virtual loss to be used if VLossRelative is false.
