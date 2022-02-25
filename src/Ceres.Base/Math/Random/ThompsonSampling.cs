@@ -24,8 +24,14 @@ namespace Ceres.Base.Math.Random
   /// </summary>
   public static class ThompsonSampling
   {
-    static System.Random rand = new System.Random((int)DateTime.Now.Ticks);
+    [ThreadStatic]
+    static System.Random rand;
 
+    [ThreadStatic]
+    static float[] fractionsScratch = null;
+
+    [ThreadStatic]
+    static float[] densitiesScratch = null;
 
     /// <summary>
     /// Returns a draw according to specified Thompson sampling parameters (with temperature applied).
@@ -35,22 +41,33 @@ namespace Ceres.Base.Math.Random
     /// <returns></returns>
     public static int Draw(float[] densities, int numDensities, float temperature)
     {
-      float sum = StatUtils.Sum(densities);
-      float adjust = 1.0f / sum;
+      if (fractionsScratch == null)
+      {
+        fractionsScratch = new float[64];
+      }
 
-      float[] fractionsWithTemperature = new float[numDensities];
+      float sum = 0;
       for (int i = 0; i < numDensities; i++)
       {
-        fractionsWithTemperature[i] = MathF.Pow((adjust * densities[i]), temperature);
+        sum += densities[i];
       }
 
-      sum = StatUtils.Sum(fractionsWithTemperature);
-      for (int i = 0; i < fractionsWithTemperature.Length; i++)
+      float adjust = 1.0f / sum;
+
+      float sumNew = 0;
+      for (int i = 0; i < numDensities; i++)
       {
-        fractionsWithTemperature[i] /= sum;
+        float value = MathF.Pow((adjust * densities[i]), temperature);
+        fractionsScratch[i] = value;
+        sumNew += value;
       }
 
-      return Draw(fractionsWithTemperature);
+      for (int i = 0; i < numDensities; i++)
+      {
+        fractionsScratch[i] /= sumNew;
+      }
+
+      return Draw(fractionsScratch, numDensities);
     }
 
 
@@ -59,24 +76,31 @@ namespace Ceres.Base.Math.Random
     /// </summary>
     /// <param name="densities"></param>
     /// <returns></returns>
-    public static int Draw(float[] densities)
+    public static int Draw(float[] densities, int numDensities)
     {
-      Debug.Assert(MathF.Abs(1.0f - StatUtils.Sum(densities)) < 0.001f);
-
-      float[] cums = new float[densities.Length];
-      float cum = 0;
-      for (int i = 0; i < densities.Length; i++)
+      if (densitiesScratch == null)
       {
-        cums[i] = cum + densities[i];
+        rand = new System.Random((int)DateTime.Now.Ticks);
+        densitiesScratch = new float[64];
+      }
+
+      float cum = 0;
+      for (int i = 0; i < numDensities; i++)
+      {
+        densitiesScratch[i] = cum + densities[i];
         cum += densities[i];
       }
 
       float draw = (float)rand.NextDouble();
-      for (int i = 0; i < densities.Length; i++)
-        if (cums[i] >= draw)
+      for (int i = 0; i < numDensities; i++)
+      {
+        if (densitiesScratch[i] >= draw)
+        {
           return i;
+        }
+      }
 
-      return densities.Length - 1;
+      return numDensities - 1;
     }
   }
 
