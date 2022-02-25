@@ -64,10 +64,10 @@ namespace Ceres.Chess.TBBackends.Fathom
     public byte rule50;
     public byte ep;
     public bool turn;
-    public short move;
+    //public short move;
     public int castling;
 
-    internal FathomPos(ulong white, ulong black, ulong kings, ulong queens, ulong rooks, ulong bishops, ulong knights, ulong pawns, byte rule50, byte ep, bool turn, short move, int castling)
+    internal FathomPos(ulong white, ulong black, ulong kings, ulong queens, ulong rooks, ulong bishops, ulong knights, ulong pawns, byte rule50, byte ep, bool turn, int castling)
     {
       this.white = white;
       this.black = black;
@@ -80,7 +80,6 @@ namespace Ceres.Chess.TBBackends.Fathom
       this.rule50 = rule50;
       this.ep = ep;
       this.turn = turn;
-      this.move = move;
       this.castling = castling;
     }
 
@@ -119,7 +118,7 @@ namespace Ceres.Chess.TBBackends.Fathom
 
       fp2.rule50 = pos.MiscInfo.Move50Count;
       fp2.turn = pos.MiscInfo.SideToMove == SideType.White;
-      fp2.move = Math.Min((byte)255, pos.MiscInfo.MoveNum);
+      //fp2.move = Math.Min((byte)255, pos.MiscInfo.MoveNum);
 
       
       if (pos.MiscInfo.WhiteCanOO) fp2.castling |= FathomFENParsing.TB_CASTLING_K;

@@ -269,9 +269,8 @@ namespace Ceres.Chess.TBBackends.Fathom
       }
 
       rule50 = byte.Parse(clk);
-      int intMove = int.Parse(fen.Substring(fenIndex));
-
-      move = (byte)System.Math.Min(byte.MaxValue, intMove);
+      //int intMove = int.Parse(fen.Substring(fenIndex));
+      //move = (byte)System.Math.Min(byte.MaxValue, intMove * 2 + (turn ? 1 : 0));
 
       pos.white = white;
       pos.black = black;
@@ -286,7 +285,6 @@ namespace Ceres.Chess.TBBackends.Fathom
       pos.rule50 = (byte)rule50;
       pos.ep = (byte)ep;
       pos.turn = turn;
-      pos.move = (byte)move;
       return true;
 
       fen_parse_error:

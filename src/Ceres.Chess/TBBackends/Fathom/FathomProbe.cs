@@ -1006,7 +1006,7 @@ namespace Ceres.Chess.TBBackends.Fathom
 
     uint tb_probe_wdl(ulong white, ulong black, ulong kings, ulong queens, ulong rooks, ulong bishops, ulong knights, ulong pawns, uint ep, bool turn)
     {
-      FathomPos pos = new FathomPos(white, black, kings, queens, rooks, bishops, knights, pawns, 0, (byte)ep, turn, 0, 0);
+      FathomPos pos = new FathomPos(white, black, kings, queens, rooks, bishops, knights, pawns, 0, (byte)ep, turn, 0);
       int success;
       int v = probe_wdl(in pos, out success);
       if (success == 0)
@@ -1039,7 +1039,7 @@ namespace Ceres.Chess.TBBackends.Fathom
       }
 
 
-      FathomPos pos = new FathomPos(white, black, kings, queens, rooks, bishops, knights, pawns, (byte)rule50, (byte)ep, turn, 0, 0);
+      FathomPos pos = new FathomPos(white, black, kings, queens, rooks, bishops, knights, pawns, (byte)rule50, (byte)ep, turn, 0);
 
 
       if (!FathomMoveGen.is_valid(in pos))
@@ -1078,7 +1078,7 @@ namespace Ceres.Chess.TBBackends.Fathom
     int tb_probe_root_dtz(ulong white, ulong black, ulong kings, ulong queens, ulong rooks, ulong bishops, ulong knights, ulong pawns,
                           ulong rule50, ulong castling, ulong ep, bool turn, bool hasRepeated, bool useRule50, List<TbRootMove> results)
     {
-      FathomPos pos = new(white, black, kings, queens, rooks, bishops, knights, pawns, (byte)rule50, (byte)ep, turn, 0, 0);
+      FathomPos pos = new(white, black, kings, queens, rooks, bishops, knights, pawns, (byte)rule50, (byte)ep, turn, 0);
 
       if (castling != 0)
       {
@@ -1092,7 +1092,7 @@ namespace Ceres.Chess.TBBackends.Fathom
     int tb_probe_root_wdl(ulong white, ulong black, ulong kings, ulong queens, ulong rooks, ulong bishops, ulong knights, ulong pawns,
                           int rule50, int castling, int ep, bool turn, bool useRule50, List<TbRootMove> results)
     {
-      FathomPos pos = new(white, black, kings, queens, rooks, bishops, knights, pawns, (byte)rule50, (byte)ep, turn, 0, 0);
+      FathomPos pos = new(white, black, kings, queens, rooks, bishops, knights, pawns, (byte)rule50, (byte)ep, turn, 0);
       if (castling != 0)
       {
         results = default;
