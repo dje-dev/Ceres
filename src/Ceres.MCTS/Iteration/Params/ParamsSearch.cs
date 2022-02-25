@@ -374,6 +374,19 @@ namespace Ceres.MCTS.Params
     /// 
     public bool EnableUncertaintyBoosting = false;
 
+
+    /// <summary>
+    /// Fraction weight given to the Q determined by resampling children subtrees at root
+    /// instead of standard child Q (accmulated subtree average).
+    /// </summary>
+    public float ResamplingMoveSelectionFractionMove = 0.0f;
+
+    /// <summary>
+    /// Temperature applied to empirical policy if/when doing move selection resampling.
+    /// </summary>
+    public float ResamplingMoveSelectionTemperature = 1.5f;
+
+
     /// <summary>
     /// Amount of time subtracted from time allotments to 
     /// compensate for lag or various unpredictable latencies.

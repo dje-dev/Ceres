@@ -521,7 +521,33 @@ namespace Ceres.MCTS.MTCSNodes
 
     public double Q => (*structPtr).Q;
 
-#region Children
+
+    /// <summary>
+    /// Determines the Q value to be used when performing best move selection
+    /// (either standard Q with subtree average, or possibly resampled Q).
+    /// </summary>
+    public float QForBestMoveSelection
+    {
+      get
+      {
+        if (IsRoot 
+         || !Parent.IsRoot 
+         || N < 1_000 
+         || Context.ParamsSearch.ResamplingMoveSelectionFractionMove == 0)
+        {
+          return (float)Q;
+        }
+
+        // Make sure stats are up to date
+        Parent.Context.RootMoveTracker.CheckUpdateResamples(Parent);
+
+        // Return corresponding value.
+        return Context.RootMoveTracker.Resamples[IndexInParentsChildren];
+      }
+    }
+
+
+    #region Children
 
     public bool IsRoot => (*structPtr).ParentIndex.IsNull;
 

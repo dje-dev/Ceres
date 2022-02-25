@@ -15,6 +15,7 @@
 
 using System;
 using Ceres.Base.DataTypes;
+using Ceres.MCTS.MTCSNodes;
 
 #endregion
 
@@ -151,5 +152,52 @@ namespace Ceres.MCTS.Iteration
 
       history?.Enqueue(historyValues);
     }
+
+
+    public float[] Resamples;
+
+    int resampleLastUpdateRootN = 0;
+
+    /// <summary>
+    /// Updates the resampled Q values at root if they are not current.
+    /// </summary>
+    /// <param name="root"></param>
+    /// <exception cref="Exception"></exception>
+    public void CheckUpdateResamples(MCTSNode root)
+    {
+      if (!root.IsRoot)
+      {
+        throw new Exception("Internal error; expected root");
+      }
+
+      if (Resamples == null)
+      {
+        Resamples = new float[64];
+      }
+
+      if (resampleLastUpdateRootN < root.N)
+      {
+        for (int i=0;i<root.NumChildrenExpanded;i++)
+        {
+          MCTSNode child = root.ChildAtIndex(i);
+          if (child.N > 1000)
+          {
+            const int NUM_SAMPLES = 1024;
+            float temp = root.Context.ParamsSearch.ResamplingMoveSelectionTemperature;
+            float fracResample = root.Context.ParamsSearch.ResamplingMoveSelectionFractionMove;
+            (float avg, float sd) = MCTSNodeResampling.GetResampledStats(child, NUM_SAMPLES, 1, temp);
+            float qAvg = fracResample * avg + (1.0f - fracResample) * (float)child.Q;
+            if (MathF.Abs((float)child.Q-avg) >  0.15f)
+            {
+              //  Console.WriteLine("resample big diff " + child.N + " " + child.Q + " " + avg);
+            }
+            Resamples[i] = qAvg;
+          }
+        }
+
+        resampleLastUpdateRootN = root.N;
+      }
+    }
   }
 }
+s

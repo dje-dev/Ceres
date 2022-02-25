@@ -73,7 +73,7 @@ namespace Ceres.MCTS.Managers
       }
 
       const float Q_BOUND = 0.5f;
-      float boundedRootQ = StatUtils.Bounded(MathF.Abs((float)Node.Context.Root.Q), -Q_BOUND, Q_BOUND);
+      float boundedRootQ = StatUtils.Bounded(MathF.Abs((float)Node.Context.Root.QForBestMoveSelection), -Q_BOUND, Q_BOUND);
 
       // Produce bonus which is more negative if the game will be longer and we are winning 
       float bonusMagnitude = mHigherBy * -boundedRootQ;
@@ -86,9 +86,9 @@ namespace Ceres.MCTS.Managers
       return MBonusMultiplier * mHigherBy * boundedRootQ;
 
       float scaledDelta = mHigherBy * boundedRootQ * MBonusMultiplier;
-      if (Node.Context.Root.Q > 0.10f) // we are winning
+      if (Node.Context.Root.QForBestMoveSelection > 0.10f) // we are winning
         return -scaledDelta; // We are winning therefore don't prefer moves leading to longer games
-      else if (Node.Context.Root.Q < -0.10f) // we are losing
+      else if (Node.Context.Root.QForBestMoveSelection < -0.10f) // we are losing
         return scaledDelta; // We are losing therefore we 
       else
         return 0;
@@ -135,7 +135,7 @@ namespace Ceres.MCTS.Managers
         else if (Node.NumPolicyMoves == 1)
         {
           MCTSNode onlyChild = Node.NumChildrenExpanded == 0 ? Node.CreateChild(0) : Node.ChildAtIndex(0);
-          return new BestMoveInfo(onlyChild, (float)-onlyChild.Q, onlyChild.N, 1, 0);
+          return new BestMoveInfo(onlyChild, (float)-onlyChild.QForBestMoveSelection, onlyChild.N, 1, 0);
         }
         else if (Node.NumChildrenExpanded == 0)
         {
@@ -145,7 +145,7 @@ namespace Ceres.MCTS.Managers
         else if (Node.NumChildrenExpanded == 1)
         {
           MCTSNode onlyChild = Node.ChildAtIndex(0);
-          return new BestMoveInfo(onlyChild, (float)-onlyChild.Q, onlyChild.N, BestNSecond, 0);
+          return new BestMoveInfo(onlyChild, (float)-onlyChild.QForBestMoveSelection, onlyChild.N, BestNSecond, 0);
         }
 
         return DoCalcBestMove();
@@ -189,9 +189,9 @@ namespace Ceres.MCTS.Managers
       // Get nodes sorted by N and Q (with most attractive move into beginning of array)
       // Note that the sort on N is augmented with an additional term based on Q so that tied N leads to lower Q preferred.
       // Also note that if a child is not allowed (filtered out by SearchMoves) then the move goes at the end).
-      MCTSNode[] childrenSortedN = Node.ChildrenSorted(node => MoveAtIndexAllowed(node.IndexInParentsChildren) ? (-node.N + (float)node.Q * 0.1f) 
+      MCTSNode[] childrenSortedN = Node.ChildrenSorted(node => MoveAtIndexAllowed(node.IndexInParentsChildren) ? (-node.N + (float)node.QForBestMoveSelection * 0.1f) 
                                                                                                                : 0);
-      MCTSNode[] childrenSortedQ = Node.ChildrenSorted(n => MoveAtIndexAllowed(n.IndexInParentsChildren) ? (float)n.Q 
+      MCTSNode[] childrenSortedQ = Node.ChildrenSorted(n => MoveAtIndexAllowed(n.IndexInParentsChildren) ? (float)n.QForBestMoveSelection
                                                                                                          : float.MaxValue);
 
 
@@ -201,30 +201,30 @@ namespace Ceres.MCTS.Managers
       if (useMLH)
       {
         // Note that more attractive moves have more negative Q, hence we invert MLHBoostForMove value
-        childrenSortedQ = Node.ChildrenSorted(n => (float)n.Q + -MLHBoostForMove(n, mAvgOfBestQ));
+        childrenSortedQ = Node.ChildrenSorted(n => (float)n.QForBestMoveSelection + -MLHBoostForMove(n, mAvgOfBestQ));
       }
 
       const bool VERBOSE = false;
       if (VERBOSE
         && useMLH
-        && Math.Abs(Node.Context.Root.Q) > 0.05f
+        && Math.Abs(Node.Context.Root.QForBestMoveSelection) > 0.05f
         && childrenSortedQ[0] != priorBest)
       {
-        Console.WriteLine("\r\n" + Node.Context.Root.Q + " " + Node.Context.Root.MPosition + " " + Node.Context.Root.MAvg);
+        Console.WriteLine("\r\n" + Node.Context.Root.QForBestMoveSelection + " " + Node.Context.Root.MPosition + " " + Node.Context.Root.MAvg);
         Console.WriteLine(priorBest + "  ==> " + childrenSortedQ[0]);
         for (int i = 0; i < Node.Context.Root.NumChildrenExpanded; i++)
         {
           MCTSNode nodeInner = Node.Context.Root.ChildAtIndex(i);
-          Console.WriteLine($" {nodeInner.Q,6:F3} [MAvg= {nodeInner.MAvg,6:F3}] ==> {MLHBoostForMove(nodeInner, mAvgOfBestQ),6:F3} {nodeInner}");
+          Console.WriteLine($" {nodeInner.QForBestMoveSelection,6:F3} [MAvg= {nodeInner.MAvg,6:F3}] ==> {MLHBoostForMove(nodeInner, mAvgOfBestQ),6:F3} {nodeInner}");
         }
         Console.ReadKey();
       }
 
 
       // First see if any were forced losses for the child (i.e. wins for us)
-      if (childrenSortedQ.Length == 1 || ParamsSelect.VIsForcedLoss((float)childrenSortedQ[0].Q))
+      if (childrenSortedQ.Length == 1 || ParamsSelect.VIsForcedLoss((float)childrenSortedQ[0].QForBestMoveSelection))
       {
-        return new BestMoveInfo(childrenSortedQ[0], (float)-childrenSortedQ[0].Q, childrenSortedN[0].N, BestNSecond, 0,
+        return new BestMoveInfo(childrenSortedQ[0], (float)-childrenSortedQ[0].QForBestMoveSelection, childrenSortedN[0].N, BestNSecond, 0,
                                 childrenSortedN[0], childrenSortedQ[0]); // TODO: look for quickest win?
       }
 
@@ -238,7 +238,7 @@ namespace Ceres.MCTS.Managers
         throw new NotImplementedException();
         // TODO: currently only supported for sorting by N
         //MCTSNode bestMoveWithNoise = BestMoveByNWithNoise(childrenSortedN);
-        //return new BestMoveInfo(bestMoveWithNoise, (float)-childrenSortedQ[0].Q, childrenSortedN[0].N,
+        //return new BestMoveInfo(bestMoveWithNoise, (float)-childrenSortedQ[0].QForBestMoveSelection, childrenSortedN[0].N,
         //                        BestNSecond, MLHBoostForMove(bestMoveWithNoise, mAvgOfBestQ)); // TODO: look for quickest win?
       }
       else
@@ -249,12 +249,12 @@ namespace Ceres.MCTS.Managers
           || Node.N < MIN_N_USE_TOP_Q)
         {
           // Just return best N (note that tiebreaks are already decided with sort logic above)
-          return new BestMoveInfo(childrenSortedN[0], (float)-childrenSortedQ[0].Q, childrenSortedN[0].N,
+          return new BestMoveInfo(childrenSortedN[0], (float)-childrenSortedQ[0].QForBestMoveSelection, childrenSortedN[0].N,
                                   BestNSecond, 0, childrenSortedN[0], childrenSortedQ[0]); // TODO: look for quickest win?
         }
         else if (Node.Context.ParamsSearch.BestMoveMode == ParamsSearch.BestMoveModeEnum.TopQIfSufficientN)
         {
-          float qOfBestNMove = (float)childrenSortedN[0].Q;
+          float qOfBestNMove = (float)childrenSortedN[0].QForBestMoveSelection;
 
           // Only consider moves having number of visits which is some minimum fraction of visits to most visisted move
           int nOfChildWithHighestN = childrenSortedN[0].N;
@@ -265,12 +265,12 @@ namespace Ceres.MCTS.Managers
             MCTSNode candidate = childrenSortedQ[i];
 
             // Return if this has a worse Q (for the opponent) and meets minimum move threshold
-            if ((float)candidate.Q > qOfBestNMove)
+            if ((float)candidate.QForBestMoveSelection > qOfBestNMove)
             {
               break;
             }
 
-            float differenceFromQOfBestN = MathF.Abs((float)candidate.Q - (float)childrenSortedN[0].Q);
+            float differenceFromQOfBestN = MathF.Abs((float)candidate.QForBestMoveSelection - (float)childrenSortedN[0].QForBestMoveSelection);
 
             float minFrac = MinFractionNToUseQ(Node, differenceFromQOfBestN);
 
@@ -279,19 +279,19 @@ namespace Ceres.MCTS.Managers
             {
               if (useMLH && UpdateStatistics)
               {
-                ManagerChooseBestMove bestMoveChooserWithoutMLH = new ManagerChooseBestMove(this.Node, false, 0);
+                ManagerChooseBestMove bestMoveChooserWithoutMLH = new ManagerChooseBestMove(Node, false, 0);
                 if (bestMoveChooserWithoutMLH.BestMoveCalc.BestMoveNode != candidate)
                   countBestMovesWithMLHChosenWithModification++;
               }
 
-              return new BestMoveInfo(candidate, (float)-childrenSortedQ[0].Q, childrenSortedN[0].N,
+              return new BestMoveInfo(candidate, (float)-childrenSortedQ[0].QForBestMoveSelection, childrenSortedN[0].N,
                                       BestNSecond, MLHBoostForMove(candidate, mAvgOfBestQ),
                                       childrenSortedN[0], childrenSortedQ[0]); // TODO: look for quickest win?
             }
           }
 
           // We didn't find any moves qualified by Q, fallback to move with highest N
-          return new BestMoveInfo(childrenSortedN[0], (float)-childrenSortedQ[0].Q, childrenSortedN[0].N,
+          return new BestMoveInfo(childrenSortedN[0], (float)-childrenSortedQ[0].QForBestMoveSelection, childrenSortedN[0].N,
                                   BestNSecond, 0, childrenSortedN[0], childrenSortedQ[0]);
         }
         else

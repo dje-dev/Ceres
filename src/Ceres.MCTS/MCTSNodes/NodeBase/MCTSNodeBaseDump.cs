@@ -148,6 +148,14 @@ namespace Ceres.MCTS.MTCSNodes
 
       }
 
+      float resampleAvg = float.NaN;
+      float resampleSD = float.NaN;
+      if (Context.ParamsSearch.ResamplingMoveSelectionFractionMove > 0)
+      { 
+        const int NUM_SAMPLES = 1024;
+        (resampleAvg, resampleSD) = MCTSNodeResampling.GetResampledStats(this, NUM_SAMPLES, 1, Context.ParamsSearch.ResamplingMoveSelectionTemperature);
+      }
+
       int lastN = 0;
       if (Depth == 1 && Context?.RootMoveTracker.LastRootN != null)
       {
@@ -172,8 +180,15 @@ namespace Ceres.MCTS.MTCSNodes
       {
         extraInfo += $"({fracVisitStr}% {recentQAvgStr}{lastN,11:F0})";
       }
+
       extraInfo += $" Q= {multiplerOurPerspective * Q,6:F3}  ";
-      extraInfo += $"+/- {qUncertainty,4:F2}  V= {  multiplerOurPerspective * V,5:F2} {uStr} "; 
+      extraInfo += $"+/- {qUncertainty,4:F2}  V= {  multiplerOurPerspective * V,5:F2} {uStr} ";
+
+      extraInfo += $" RSA= {resampleAvg,6:F3}  ";
+      extraInfo += $" RSS= {resampleSD,6:F3}  ";
+
+      extraInfo += $" RS= {resampleAvg,6:F3}  ";
+
       extraInfo += $" WDL= {(invert ? LossP : WinP),4:F2} {DrawP,4:F2} {(invert ? WinP : LossP),4:F2} ";
       extraInfo += $" WDLA= {(invert ? LAvg : WAvg),4:F2} {DAvg,4:F2} {(invert ? WAvg : LAvg),4:F2}  ";
       extraInfo += $"M= {MPosition,4:F0} {MAvg,4:F0}  ";
