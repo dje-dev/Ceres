@@ -135,6 +135,11 @@ namespace Ceres.Chess
     /// </summary>
     public SideType SideToMove => MiscInfo.SideToMove;
 
+    /// <summary>
+    /// If the white player is to move.
+    /// </summary>
+    public bool IsWhite => SideToMove == SideType.White;
+
 
     /// <summary>
     /// Calculates to draw status for this position.

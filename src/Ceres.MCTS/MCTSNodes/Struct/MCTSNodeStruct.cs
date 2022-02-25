@@ -14,22 +14,16 @@
 #region Using directives
 
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-using Ceres.Base;
 using Ceres.Base.DataTypes;
 using Ceres.Base.OperatingSystem;
-using Ceres.Chess;
 using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
-using Ceres.MCTS.Iteration;
-using Ceres.MCTS.LeafExpansion;
-using Ceres.MCTS.MTCSNodes.Annotation;
 using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.Params;
 
@@ -44,7 +38,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
   /// N.B. because the struct is marked as readonly, it is important to mark as many
   ///      properties/methods as readonly as possible to avoid compiler making defensive copies:
   ///        - improves efficiency
-  ///        - insures correctness so that the index of a node can be determined by by its address
+  ///        - insures correctness so that the index of a node can be determined by its address
   ///          (insure it remains in the MCTSNodeStore)
   /// 
   /// Notes on children layout:
@@ -431,7 +425,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     {
       string indexStr = $"#{Index.Index}";
       string oldStr = IsOldGeneration ? " OLD" : "";
-      bool isWhite = (DepthInTree % 2 == 1) == (Context.Store.Nodes.PriorMoves.FinalPosition.SideToMove == SideType.White);
+      bool isWhite = (DepthInTree % 2 == 1) == (Context.Store.Nodes.PriorMoves.FinalPosition.IsWhite);
       return $"<Node [#{indexStr}] {oldStr} Depth{DepthInTree} {Terminal} {(isWhite?PriorMove:PriorMove.Flipped)} ({N},{NInFlight},{NInFlight2})  P={P * 100.0f:F3}% "
             + $"V={V:F3}" + (VSecondary == 0 ? "" : $"VSecondary={VSecondary:F3} ") + $" W={W:F3} "
             + $"MPos={MPosition:F3} MAvg={MAvg:F3} "

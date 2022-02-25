@@ -512,7 +512,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
       {
         ref MCTSNodeStruct node = ref Nodes.nodes[i];
         int depth = node.DepthInTree;
-        bool isWhite = Nodes.PriorMoves.FinalPosition.SideToMove == SideType.White == (depth % 2 == 1);
+        bool isWhite = Nodes.PriorMoves.FinalPosition.IsWhite == (depth % 2 == 1);
         string sideChar = isWhite ? "w" : "b";
         EncodedMove moveCorrectPerspective = isWhite ? node.PriorMove : node.PriorMove.Flipped;
 
