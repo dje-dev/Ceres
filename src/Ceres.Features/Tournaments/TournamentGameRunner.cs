@@ -34,12 +34,12 @@ namespace Ceres.Features.Tournaments
     public readonly TournamentDef Def;
 
     /// <summary>
-    /// Instance of first engine.
+    /// Instance of first engine that is currently active.
     /// </summary>
     public GameEngine Engine1;
 
     /// <summary>
-    /// Instance of second engine.
+    /// Instance of second engine that is currently active.
     /// </summary>
     public GameEngine Engine2;
 
@@ -50,7 +50,9 @@ namespace Ceres.Features.Tournaments
     public GameEngine Engine2CheckEngine;
 
     /// <summary>
-    /// List of game engines in tournament
+    /// List of game engines in tournament.
+    /// During any individual game being run, the two currently
+    /// active engines will be copied into Engine1 and Engine2 properties 
     /// </summary>
     public GameEngine[] Engines { get; set; }
 
