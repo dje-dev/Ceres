@@ -20,6 +20,7 @@ using Ceres.Base.Math;
 using Ceres.Base.Math.Random;
 using Ceres.Chess;
 using Ceres.Chess.MoveGen;
+using Ceres.MCTS.Environment;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.Params;
@@ -148,7 +149,27 @@ namespace Ceres.MCTS.Managers
           return new BestMoveInfo(onlyChild, (float)-onlyChild.QForBestMoveSelection, onlyChild.N, BestNSecond, 0);
         }
 
-        return DoCalcBestMove();
+        
+        var org =  DoCalcBestMove();
+        if (Node.Context.ParamsSearch.ResamplingMoveSelectionFractionMove > 0)
+        {
+          var save = Node.Context.ParamsSearch.ResamplingMoveSelectionFractionMove;
+          Node.Context.ParamsSearch.ResamplingMoveSelectionFractionMove = 0;
+          var nx = DoCalcBestMove();
+          Node.Context.ParamsSearch.ResamplingMoveSelectionFractionMove = save;
+
+          if (org.BestMove != nx.BestMove)
+          {
+/* TEMPORARY */ MCTSEventSource.TestCounter1++;           
+//            Console.WriteLine("BESTMOVE DIFF " + nx.BestMove + " --> " + org.BestMove);
+//            Node.Context.Manager.DumpRootMoveStatistics();
+          }
+          else
+          {
+/* TEMPORARY */ MCTSEventSource.TestMetric1++;
+          }
+        }
+        return org;
       }
     }
 

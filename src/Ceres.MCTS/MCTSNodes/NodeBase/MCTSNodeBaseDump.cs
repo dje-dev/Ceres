@@ -182,12 +182,10 @@ namespace Ceres.MCTS.MTCSNodes
       }
 
       extraInfo += $" Q= {multiplerOurPerspective * Q,6:F3}  ";
+      extraInfo += $" RSA= {-resampleAvg,6:F3}  ";
+      extraInfo += $" RSS= {resampleSD,6:F3}  ";
       extraInfo += $"+/- {qUncertainty,4:F2}  V= {  multiplerOurPerspective * V,5:F2} {uStr} ";
 
-      extraInfo += $" RSA= {resampleAvg,6:F3}  ";
-      extraInfo += $" RSS= {resampleSD,6:F3}  ";
-
-      extraInfo += $" RS= {resampleAvg,6:F3}  ";
 
       extraInfo += $" WDL= {(invert ? LossP : WinP),4:F2} {DrawP,4:F2} {(invert ? WinP : LossP),4:F2} ";
       extraInfo += $" WDLA= {(invert ? LAvg : WAvg),4:F2} {DAvg,4:F2} {(invert ? WAvg : LAvg),4:F2}  ";

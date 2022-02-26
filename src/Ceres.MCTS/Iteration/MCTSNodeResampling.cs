@@ -33,7 +33,7 @@ namespace Ceres.MCTS.Iteration
   {
     #region Internal data structures
 
-    const int MAX_SAMPLES = 1024;
+    const int MAX_SAMPLES = 4096;
 
     [ThreadStatic]
     static float[] empiricalDistribScratch;
@@ -82,16 +82,17 @@ namespace Ceres.MCTS.Iteration
         // Save sample (adjusted to be from perspective of this node)
         bool isSamePerspective = depth % 2 == thisDepth % 2;
         float sampleToUse = isSamePerspective ? sample : -sample;
+        float sampleSq = MathF.Pow(sampleToUse, 2);
         lock (lockObj)
         {
           sum += sampleToUse;
-          sumSq += sum * sum;
+          sumSq += sampleSq;
         }
       });
 
       // Compute summary statistics.
       float avg = sum / numSamples;
-      float sd = MathF.Sqrt(sumSq - avg * avg);
+      float sd = MathF.Sqrt((sumSq - avg * avg * numSamples) / numSamples);
 
       return (avg, sd);
     }

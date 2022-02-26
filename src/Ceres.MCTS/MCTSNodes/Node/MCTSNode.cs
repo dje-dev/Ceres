@@ -530,9 +530,10 @@ namespace Ceres.MCTS.MTCSNodes
     {
       get
       {
-        if (IsRoot 
-         || !Parent.IsRoot 
-         || N < 1_000 
+        if (IsRoot
+         || !Parent.IsRoot
+         || N < 1_000
+         || ((float)this.N / this.Parent.N < 0.25f) // TODO: centralize
          || Context.ParamsSearch.ResamplingMoveSelectionFractionMove == 0)
         {
           return (float)Q;
@@ -542,7 +543,15 @@ namespace Ceres.MCTS.MTCSNodes
         Parent.Context.RootMoveTracker.CheckUpdateResamples(Parent);
 
         // Return corresponding value.
-        return Context.RootMoveTracker.Resamples[IndexInParentsChildren];
+        float value = Context.RootMoveTracker.Resamples[IndexInParentsChildren];
+        if (float.IsNaN(value))
+        {
+          return (float)Q;
+        }
+        else
+        {
+          return Context.RootMoveTracker.Resamples[IndexInParentsChildren];
+        }
       }
     }
 

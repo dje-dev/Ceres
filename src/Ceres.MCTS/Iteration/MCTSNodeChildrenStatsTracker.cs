@@ -180,9 +180,10 @@ namespace Ceres.MCTS.Iteration
         for (int i=0;i<root.NumChildrenExpanded;i++)
         {
           MCTSNode child = root.ChildAtIndex(i);
-          if (child.N > 1000)
+          float fracOfRoot = (float)child.N / root.N;
+          if (child.N > 1000 && fracOfRoot > 0.25f)
           {
-            const int NUM_SAMPLES = 1024;
+            const int NUM_SAMPLES = 2048;
             float temp = root.Context.ParamsSearch.ResamplingMoveSelectionTemperature;
             float fracResample = root.Context.ParamsSearch.ResamplingMoveSelectionFractionMove;
             (float avg, float sd) = MCTSNodeResampling.GetResampledStats(child, NUM_SAMPLES, 1, temp);
@@ -192,6 +193,10 @@ namespace Ceres.MCTS.Iteration
               //  Console.WriteLine("resample big diff " + child.N + " " + child.Q + " " + avg);
             }
             Resamples[i] = qAvg;
+          }
+          else
+          {
+            Resamples[i] = float.NaN;
           }
         }
 
