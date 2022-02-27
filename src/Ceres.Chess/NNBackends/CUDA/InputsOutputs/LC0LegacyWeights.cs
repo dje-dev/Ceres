@@ -51,6 +51,14 @@ namespace Ceres.Chess.NNBackends.CUDA
       policy = weights.Policy == null ? default : new ConvBlock(this, weights.Policy);
       ip_pol_w = WeightsDecoded(weights.IpPolW);
       ip_pol_b = WeightsDecoded(weights.IpPolB);
+      ip2_pol_w = WeightsDecoded(weights.IpPolW);
+      ip2_pol_b = WeightsDecoded(weights.IpPolB);
+      ip3_pol_w = WeightsDecoded(weights.IpPolW);
+      ip3_pol_b = WeightsDecoded(weights.IpPolB);
+      ip4_pol_w = WeightsDecoded(weights.IpPolW);
+      ip4_pol_b = WeightsDecoded(weights.IpPolB);
+      numPolicyEncoderHeads = (int)weights.PolHeadcount;
+
 
       value = new ConvBlock(this, weights.Value);
       ip1_val_w = WeightsDecoded(weights.Ip1ValW);
@@ -219,6 +227,15 @@ namespace Ceres.Chess.NNBackends.CUDA
     public ConvBlock policy;
     public float[] ip_pol_w;
     public float[] ip_pol_b;
+    public float[] ip2_pol_w;
+    public float[] ip2_pol_b;
+    public float[] ip3_pol_w;
+    public float[] ip3_pol_b;
+    public float[] ip4_pol_w;
+    public float[] ip4_pol_b;
+
+    public int numPolicyEncoderHeads; // pol_encoder_head_count;
+    //std::vector<EncoderLayer> pol_encoder;
 
     // Value head
     public ConvBlock value;

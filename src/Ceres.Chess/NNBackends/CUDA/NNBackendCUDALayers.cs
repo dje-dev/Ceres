@@ -65,6 +65,11 @@ namespace Ceres.Chess.NNBackends.CUDA
     public readonly bool PolicyIsConvolutional;
 
     /// <summary>
+    /// If the policy head uses attentino mechanism.
+    /// </summary>
+    public readonly bool PolicyIsAttention;
+
+    /// <summary>
     /// If some of the output activation should be captured and returned.
     /// </summary>
     public readonly bool SaveActivations;
@@ -106,6 +111,7 @@ namespace Ceres.Chess.NNBackends.CUDA
         HasWDL = net.Format.NetworkFormat.Value == NetworkFormat.ValueFormat.ValueWdl;
         HasMLH = net.Format.NetworkFormat.MovesLeft == NetworkFormat.MovesLeftFormat.MovesLeftV1;
         PolicyIsConvolutional = net.Format.NetworkFormat.Policy == NetworkFormat.PolicyFormat.PolicyConvolution;
+        PolicyIsAttention =net.Format.NetworkFormat.Policy == NetworkFormat.PolicyFormat.PolicyAttention;
       }
 
       InitKernels(context);
@@ -179,7 +185,53 @@ namespace Ceres.Chess.NNBackends.CUDA
       BaseLayerCUDA resi_last_ = LastLayer;
 
       // Policy head.
-      if (PolicyIsConvolutional)
+      if (PolicyIsAttention)
+      {
+
+        int embeddingOpSize = weights.ip_pol_b.Length;
+        int wqOpSize = weights.ip2_pol_b.Length;
+        int wkOptSize = weights.ip3_pol_b.Length;
+        int numEncoderHeads = weights.numPolicyEncoderHeads;
+
+        if (numEncoderHeads > 0)
+        {
+          throw new NotImplementedException("Policy encoder heads not yet supported.");
+        }
+
+        // for debug!
+        Console.WriteLine("size of weight ip_pol_b/w: " + (int)weights.ip_pol_b.Length + " " + (int)weights.ip_pol_w.Length);
+        Console.WriteLine("size of weight ip_pol2_b/w: " + (int)weights.ip2_pol_b.Length + " " + (int)weights.ip2_pol_w.Length);
+        Console.WriteLine("size of weight ip_pol3_b/w: " + (int)weights.ip3_pol_b.Length + " " + (int)weights.ip3_pol_w.Length);
+        Console.WriteLine("size of weight ip_pol4_b/w: " + (int)weights.ip4_pol_b.Length + " " + (int)weights.ip4_pol_w.Length);
+
+//        AttentionPolicyHead attentionPolicy = new AttentionPolicyHead(execContext, "attention_policy", )
+//        Layers.Add(attentionPolicy);
+
+#if NOT
+        auto AttentionPolicy = std::make_unique<AttentionPolicyHead<DataType>>(
+    getLastLayer(), weights, scratch_mem_);
+#endif
+        LayerPolicyMapCUDA policymap = new(execContext, "policy_map", Layers.Count, LastLayer, 1858, 1, 1, 64 * 64 + 8 * 24, true);
+        policymap.LoadWeights(PolicyMap.AttentionPolicyMap);
+        Layers.Add(policymap);
+
+#if NOT
+        auto policymap = std::make_unique<PolicyMapLayer<DataType>>(
+            getLastLayer(), kNumOutputPolicy, 1, 1, 64 * 64 + 8 * 24, true);
+        policymap->LoadWeights(kAttnPolicyMap, scratch_mem_);
+        network_.emplace_back(std::move(policymap));
+
+
+        auto policymap = std::make_unique<PolicyMapLayer<DataType>>(
+            getLastLayer(), kNumOutputPolicy, 1, 1, 73 * 8 * 8, false);
+        policymap->LoadWeights(kConvPolicyMap, scratch_mem_);
+        network_.emplace_back(std::move(policymap));
+#endif
+
+        // more code here
+        throw new NotImplementedException();
+      }
+      else if (PolicyIsConvolutional)
       {
         FusedWinogradConvSELayerCUDA conv1;
         conv1 = new(execContext, "policy_conv1", Layers.Count, NumFilters, 8, 8, resi_last_, NumFilters, true, true, false, false, 0, false);
@@ -193,7 +245,7 @@ namespace Ceres.Chess.NNBackends.CUDA
         conv2.LoadWeights(execContext.Stream2, weights.policy.weights, weights.policy.biases);
         Layers.Add(conv2);
 
-        LayerPolicyMapCUDA policymap = new(execContext, "policy_map", Layers.Count, LastLayer, 1858, 1, 1, 73 * 8 * 8);
+        LayerPolicyMapCUDA policymap = new(execContext, "policy_map", Layers.Count, LastLayer, 1858, 1, 1, 73 * 8 * 8, false);
         policymap.LoadWeights(PolicyMap.ConvolutionPolicyMap);
         Layers.Add(policymap);
       }

@@ -31,13 +31,17 @@ namespace Ceres.Chess.NNBackends.CUDA
   public class LayerPolicyMapCUDA : BaseLayerCUDA
   {
     int usedSize;
+    bool attention;
     CudaDeviceVariable<short> indices;
 
     public LayerPolicyMapCUDA(NNBackendExecContext parent, string name, int layerIndex,
-                              BaseLayerCUDA ip, int c, int h, int w, int usedSize)
+                              BaseLayerCUDA ip, int c, int h, int w, int usedSize, bool attention)
       : base(parent, name, layerIndex, c, h, w, ip)
     {
       this.usedSize = usedSize;
+      this.attention = attention;
+      
+//      if (attention) weight_size = sizeof(short) * usedSize;
     }
 
     CudaKernel kernelPolicyMap;

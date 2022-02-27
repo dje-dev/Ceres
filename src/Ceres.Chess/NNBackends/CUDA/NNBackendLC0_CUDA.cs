@@ -753,6 +753,7 @@ namespace Ceres.Chess.NNBackends.CUDA
 
       if (net.Format.NetworkFormat.Policy != NetworkFormat.PolicyFormat.PolicyUnknown &&  // T40
           net.Format.NetworkFormat.Policy != NetworkFormat.PolicyFormat.PolicyConvolution &&
+          net.Format.NetworkFormat.Policy != NetworkFormat.PolicyFormat.PolicyAttention &&
           net.Format.NetworkFormat.Policy != NetworkFormat.PolicyFormat.PolicyClassical)
       {
         throw new Exception($"Policy format {net.Format.NetworkFormat.Policy} not supported.");
