@@ -296,7 +296,7 @@ namespace Ceres.MCTS.Managers
             float minFrac = MinFractionNToUseQ(Node, differenceFromQOfBestN);
 
             int minNToBeConsideredForBestQ = (int)(nOfChildWithHighestN * minFrac);
-            if (candidate.N >= minNToBeConsideredForBestQ)
+            if (candidate.N > minNToBeConsideredForBestQ)
             {
               if (useMLH && UpdateStatistics)
               {
@@ -406,7 +406,14 @@ namespace Ceres.MCTS.Managers
 
       // Compute fraction required which decreases slowly below 1.0
       // as the Q difference increases (using a power function).
-      const float POWER = 20f;
+      // Value of 25 yields these minimum fractions for various sample levels of Q difference:
+      //    0.005 --> 88%
+      //    0.010 --> 78%
+      //    0.020 --> 60%
+      // Tests (using matches) suggest play quality is not highly sensitive to this POWER,
+      // with a value of 30 possibly very slighlty better than 20.
+      const float POWER = 25;
+      
       float minFrac = MathF.Pow(1.0f - qDifferenceFromBestQ, POWER);
 
       // Impose absolute minimum fraction.
