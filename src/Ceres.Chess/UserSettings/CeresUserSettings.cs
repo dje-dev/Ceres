@@ -146,6 +146,14 @@ namespace Ceres.Chess.UserSettings
     /// </summary>
     public bool ReducedMemoryMode { get; set; } = false;
 
+    /// <summary>
+    /// Processor NUMA node to which engine should be affinitized.
+    /// Generally a single node (socket or possibly chiplet) should be 
+    /// selected to improve performance.
+    /// Value of -1 indicates that affinitization should be disabled.
+    /// </summary>
+    public int NUMANode { get; set; } = 0;
+
 
     #endregion
 

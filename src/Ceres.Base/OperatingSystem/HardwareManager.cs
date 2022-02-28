@@ -42,11 +42,11 @@ namespace Ceres.Base.OperatingSystem
     /// </summary>
     public static int MaxAvailableProcessors { private set; get; } = System.Environment.ProcessorCount;
 
-    public static void Initialize(int? numaNode)
+    public static void Initialize(int numaNode)
     {
-      if (numaNode.HasValue)
+      if (numaNode != -1)
       {
-        AffinitizeSingleNUMANode(numaNode.Value);
+        AffinitizeSingleNUMANode(numaNode);
       }
     }
 

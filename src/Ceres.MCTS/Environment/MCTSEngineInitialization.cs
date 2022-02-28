@@ -29,7 +29,7 @@ namespace Ceres.MCTS.Environment
   /// </summary>
   public static class MCTSEngineInitialization
   {
-    public static void BaseInitialize(bool launchMonitor, int? numaNode)
+    public static void BaseInitialize(bool launchMonitor, int numaNode)
     {
       HardwareManager.VerifyHardwareSoftwareCompatability();
 
