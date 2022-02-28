@@ -33,38 +33,19 @@ namespace Ceres.Chess.NNBackends.CUDA
   public class LayerFCCUDA : BaseLayerCUDA
   {
     /// <summary>
-    /// If RELU acivtion used.
-    /// </summary>
-    bool UseRELU;
-
-    /// <summary>
     /// If bias weights used.
     /// </summary>
     bool UseBias;
-
-    /// <summary>
-    /// If hyperbolic tangent activation used.
-    /// </summary>
-    bool UseTanH;
-
-    /// <summary>
-    /// If sigmoid activation used.
-    /// </summary>
-    bool UseSigmoid;
 
     CudaDeviceVariable<FP16> biases;
     CudaDeviceVariable<FP16> weights;
 
 
    public LayerFCCUDA(NNBackendExecContext parent, string name, int layerIndex, 
-                      BaseLayerCUDA ip, int c, int h, int w,
-                      bool relu = false, bool bias = false, bool tanh = false, bool sigmoid = false)
-      : base(parent, name, layerIndex, c, h, w, ip)
+                      BaseLayerCUDA ip, int c, int h, int w, bool bias, ActivationFunction activation)
+      : base(parent, name, layerIndex, c, h, w, ip, activation)
     {
-      UseRELU = relu;
       UseBias = bias;
-      UseTanH = tanh;
-      UseSigmoid = sigmoid;
     }
 
     CudaKernel kernelAddVectors;
@@ -101,14 +82,13 @@ namespace Ceres.Chess.NNBackends.CUDA
     {
       int num_outputs = C * GetH * W;
       int num_inputs = input_.C * input_.GetH * input_.W;
-      Forward1D(stream, N, num_inputs, num_outputs, input, weights, biases, UseRELU, UseTanH, output);
+      Forward1D(stream, N, num_inputs, num_outputs, input, weights, biases, output);
     }
 
     internal void Forward1D(CudaStream stream, int batch_size, int input_size, int output_size,
                                CudaDeviceVariable<FP16> inputs, 
                                CudaDeviceVariable<FP16> weights,
-                               CudaDeviceVariable<FP16> biases,
-                               bool apply_relu, bool apply_tanh, 
+                               CudaDeviceVariable<FP16> biases,                               
                                CudaDeviceVariable<FP16> outputs)
     {
       CublasStatus err = CudaBlasNativeMethods.cublasHgemm(
@@ -153,7 +133,7 @@ namespace Ceres.Chess.NNBackends.CUDA
                              DataType.CUDA_R_16F,
                              (int)output_size);     // ldc, leading rank of C
 #endif
-      if (UseBias || UseRELU || UseTanH || UseSigmoid)
+      if (UseBias || Activation != ActivationFunction.NONE)
       {
         int num_outputs = C * GetH * W;
         int num_inputs = input_.C * input_.GetH * input_.W;
@@ -162,13 +142,12 @@ namespace Ceres.Chess.NNBackends.CUDA
         kernelAddVectors.BlockDimensions = BLOCK_DIM;
         kernelAddVectors.GridDimensions = CUDAUtils.DivUp(num_outputs * batch_size, BLOCK_DIM);
 
-        // Adds two vectors (possibly of different sizes), also do optional activation (relu, tanh or sigmoid).
+        // Adds two vectors (possibly of different sizes), also do optional activation
         LaunchKernel(stream, kernelAddVectors, outputs.DevicePointer, biases.DevicePointer, outputs.DevicePointer, 
                    num_outputs * batch_size,
                    num_outputs, 
                    num_outputs * batch_size, 
-                   UseRELU? 1:0, UseTanH?1:0, UseSigmoid?1:0, stream.Stream.Pointer);
-
+                   Activation, stream.Stream.Pointer);
       }
     }
 

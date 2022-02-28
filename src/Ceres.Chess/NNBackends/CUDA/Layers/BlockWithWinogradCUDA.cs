@@ -30,8 +30,8 @@ namespace Ceres.Chess.NNBackends.CUDA
 
     public BlockWithWinogradCUDA(NNBackendExecContext parent, string name, int layerIndex,
                                  int c, int h, int w, 
-                                 BaseLayerCUDA inputLayer)
-      : base(parent, name, layerIndex, c, h, w, inputLayer)
+                                 BaseLayerCUDA inputLayer, ActivationFunction activation)
+      : base(parent, name, layerIndex, c, h, w, inputLayer, activation)
       {
       }
 

@@ -34,11 +34,6 @@ namespace Ceres.Chess.NNBackends.CUDA
     public readonly int C;
 
     /// <summary>
-    /// If RELU activations used.
-    /// </summary>
-    bool UseRELU;
-
-    /// <summary>
     /// If bias weights included.
     /// </summary>
     bool UseBias;
@@ -53,12 +48,10 @@ namespace Ceres.Chess.NNBackends.CUDA
     
     public LayerConv1CUDA(NNBackendExecContext parent, string name, int layerIndex, 
                           BaseLayerCUDA ip, int c, int h, int w, 
-                          int Cin,
-                          bool relu = false, bool bias = false)
-      : base(parent, name, layerIndex, c, h, w, ip)
+                          int Cin, bool bias, ActivationFunction activation)
+      : base(parent, name, layerIndex, c, h, w, ip, activation)
     {
       C = Cin;
-      UseRELU = relu;
       UseBias = bias;
 
       halfOne = new CudaDeviceVariable<FP16>(1);
@@ -98,6 +91,12 @@ namespace Ceres.Chess.NNBackends.CUDA
     {
       cublasRowMajorMatrixMul(weightsCUDA, input, output, base.C, GetH * W, C, N, true);
 
+#if NOT
+if (use_bias_)
+    addBias_NCHW(output, output, biases_, N, C, H, W, act_, stream);
+  else if (act_ != NONE)
+    addVectors(output, output, (DataType*)nullptr, N * C * H * W, N * C * H * W, 0, act_, stream);
+#endif
       if (UseBias)
       {
         const int kBlockDimension = 256;
@@ -107,14 +106,15 @@ namespace Ceres.Chess.NNBackends.CUDA
 
         LaunchKernel(stream, kernel, output.DevicePointer, 
                      output.DevicePointer, biasesCUDA.DevicePointer,
-                     N, base.C, GetH, W, UseRELU ? 1 : 0, stream.Stream.Pointer);
+                     N, base.C, GetH, W, Activation, stream.Stream.Pointer);
       }
-      else if (UseRELU)
+      else if (Activation != ActivationFunction.NONE)
       {
-        // Not currently used. If it were, look in LayerFCCUDA for exampe of calling the addVectors kernel.
+        // Not currently used. If it were, look in LayerFCCUDA for example of calling the addVectors kernel.
         throw new Exception("Unimplemented.");
-        //addVectors(output, output, (DataType*)nullptr, N * C * H * W, N * C * H * W, 0, use_relu_, false, false);
+        //addVectors(output, output, (DataType*)nullptr, N * C * H * W, N * C * H * W, 0, act_, stream);
       }
+
     }
 
   }

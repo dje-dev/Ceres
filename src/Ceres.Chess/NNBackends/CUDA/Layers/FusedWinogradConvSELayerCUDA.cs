@@ -31,7 +31,6 @@ namespace Ceres.Chess.NNBackends.CUDA
     CudaDeviceVariable<FP16> transformedWeights;  // After winograd transform.
 
     public readonly int NumInputChannels;
-    public readonly bool UseRELU;
     public readonly bool UseBias;
     public readonly bool WithSkipConnection;
     public readonly bool UseSE;
@@ -41,9 +40,9 @@ namespace Ceres.Chess.NNBackends.CUDA
     public FusedWinogradConvSELayerCUDA(NNBackendExecContext parent, string name, int layerIndex, 
                                         int c, int h, int w, 
                                         BaseLayerCUDA inputLayer,
-                                        int Cin, bool relu, bool bias, bool skip_add, bool se, int se_k,
-                                        bool opNHCW)
-      : base(parent, name, layerIndex, c, h, w, inputLayer)
+                                        int Cin, bool bias, bool skip_add, bool se, int se_k,
+                                        bool opNHCW, ActivationFunction activation)
+      : base(parent, name, layerIndex, c, h, w, inputLayer, activation)
     {
       if (se & !skip_add)
       {
@@ -51,12 +50,18 @@ namespace Ceres.Chess.NNBackends.CUDA
       }
 
       NumInputChannels = Cin;
-      UseRELU = relu;
       UseBias = bias;
       WithSkipConnection = skip_add;
       UseSE = se;
       SEChannelCount = se_k;
       OpNCHW = opNHCW;
+
+      if (activation != ActivationFunction.RELU
+       && activation != ActivationFunction.MISH
+       && activation != ActivationFunction.NONE)
+      {
+        throw new Exception("Unsupported activation for fused winograd conv SE layer.");
+      }
     }
 
     public void LoadWeights(CudaStream stream, float[] weights, float[] biases)
@@ -98,6 +103,16 @@ namespace Ceres.Chess.NNBackends.CUDA
                               CudaDeviceVariable<FP16> scratchSecondHalf)
     {
 
+      if (Activation == ActivationFunction.NONE)
+      {
+        throw new NotImplementedException();
+        // Not yet ported to C#:
+        //if (!has_se_ && use_bias_ && !skip_add_)
+        //  OutputTransform < DataType, false, NONE, true, false, false, false > (
+        //        N, C, 0, output, transformed_output, nullptr, biases_, nullptr,
+        //        nullptr, nullptr, nullptr, stream);
+      }
+
       CudaDeviceVariable<FP16> transformed_input = scratch;
 
       kernelInputTransform.GridDimensions = N;
@@ -119,15 +134,18 @@ namespace Ceres.Chess.NNBackends.CUDA
       Debug.Assert(UseBias);
       Debug.Assert(!WithSkipConnection);
 
-      if (UseRELU && OpNCHW)
+      throw new NotImplementedException();
+
+      bool hasActivation = Activation != ActivationFunction.NONE;
+      if (hasActivation && OpNCHW)
       {
         kernel = kernelOutputReluNHCW;
       }
-      else if (UseRELU && !OpNCHW)
+      else if (hasActivation && !OpNCHW)
       {
         kernel = kernelOutputReluNotNHCW;
       }
-      else if (!UseRELU && !OpNCHW)
+      else if (!hasActivation && !OpNCHW)
       {
         kernel = kernelOutputNotReluNotNHCW;
       }
@@ -141,13 +159,16 @@ namespace Ceres.Chess.NNBackends.CUDA
                    transformed_output.DevicePointer,
                    (IntPtr)0, biases.DevicePointer,
                    (IntPtr)0, (IntPtr)0, (IntPtr)0, (IntPtr)0, stream.Stream.Pointer);      
+
     }
 
 
-    CudaKernel kernelInputTransform;
+    CudaKernel kernelInputTransform; // not dependent on activation
+
+    CudaKernel kernelOutputNotReluNotNHCW; //  OutputTransform<DataType, false, NONE, true, false, false, false>(
     CudaKernel kernelOutputReluNHCW;
     CudaKernel kernelOutputReluNotNHCW;
-    CudaKernel kernelOutputNotReluNotNHCW;
+
 
     public override void LoadKernels()
     {
@@ -157,13 +178,14 @@ namespace Ceres.Chess.NNBackends.CUDA
       const string knInputTransform = "_ZN6lczero13cudnn_backend21InputTransform_kernelI6__halfLb0EEEviiPKT_PS3_";
       kernelInputTransform = Parent.Device.GetKernel(Parent.PTXAssembly, resource, knInputTransform);
 
-      const string BASE_KN = "_ZN6lczero13cudnn_backend22OutputTransform_kernelI6__halfLb0ELb__RELU__ELb1ELb0ELb0ELb__NHCW__EEEviiiPT_PKS3_S6_S6_S6_S6_S6_S6_";
-      string MakeName(bool relu, bool nhcw) => BASE_KN.Replace("__RELU__", relu ? "1" : "0")
-                                                      .Replace("__NHCW__", nhcw ? "1" : "0");
+      const string BASE_KN = "_ZN6lczero13cudnn_backend22OutputTransform_kernelI6__halfLb0ELb__ACTIVATION>__ELb1ELb0ELb0ELb__NHCW__EEEviiiPT_PKS3_S6_S6_S6_S6_S6_S6_";
+      string MakeName(bool nhcw) 
+        => BASE_KN.Replace("__<ACTIVATION>__", Activation.ToString())
+                  .Replace("__NHCW__", nhcw ? "1" : "0");
 
-      kernelOutputReluNHCW       = Parent.Device.GetKernel(Parent.PTXAssembly, resource, MakeName(true, true));
-      kernelOutputReluNotNHCW    = Parent.Device.GetKernel(Parent.PTXAssembly, resource, MakeName(true, false));
-      kernelOutputNotReluNotNHCW = Parent.Device.GetKernel(Parent.PTXAssembly, resource, MakeName(false, false));
+      kernelOutputReluNHCW       = Parent.Device.GetKernel(Parent.PTXAssembly, resource, MakeName(true));
+      kernelOutputReluNotNHCW    = Parent.Device.GetKernel(Parent.PTXAssembly, resource, MakeName(false));
+      kernelOutputNotReluNotNHCW = Parent.Device.GetKernel(Parent.PTXAssembly, resource, MakeName(false));
     }
   }
 

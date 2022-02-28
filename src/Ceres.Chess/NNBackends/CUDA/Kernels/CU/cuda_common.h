@@ -24,6 +24,7 @@
   terms of the respective license agreement, the licensors of this
   Program grant you additional permission to convey the resulting work.
 */
+#pragma once
 
 #include <cublas_v2.h>
 #include <cuda_fp16.h>
@@ -37,27 +38,29 @@
 typedef void* cudnnHandle_t;
 #endif
 
+#if CUBLAS_VER_MAJOR < 11
+#define CUBLAS_PEDANTIC_MATH CUBLAS_DEFAULT_MATH
+#endif
+
 namespace lczero {
-namespace cudnn_backend {
+  namespace cudnn_backend {
 
-static constexpr int kNumOutputPolicy = 1858;
+    static constexpr int kNumOutputPolicy = 1858;
 
-// max supported filter count for fast path
-// TODO: extend it to cover bigger networks!
-// (We are limited by no of registers per thread)
-static constexpr int kMaxResBlockFusingChannels = 384;  // limit on num_filters
-static constexpr int kMaxResBlockFusingSeKFp16Ampere =
-    512;  // (use a different kernel with reduced register pressure)
-static constexpr int kMaxResBlockFusingSeK =
-    128;  // limit on (num_filters / se_ratio)
-static constexpr int kMaxResBlockFusingSeFp16AmpereSmem =
-    72 * 1024;  // shared memory used by the special kernel
+    // max supported filter count for fast path
+    // TODO: extend it to cover bigger networks!
+    // (We are limited by no of registers per thread)
+    static constexpr int kMaxResBlockFusingChannels = 384;  // limit on num_filters
+    static constexpr int kMaxResBlockFusingSeKFp16Ampere =
+      512;  // (use a different kernel with reduced register pressure)
+    static constexpr int kMaxResBlockFusingSeK =
+      128;  // limit on (num_filters / se_ratio)
 
 #ifdef USE_CUDNN
-void CudnnError(cudnnStatus_t status, const char* file, const int& line);
+    void CudnnError(cudnnStatus_t status, const char* file, const int& line);
 #endif
-void CublasError(cublasStatus_t status, const char* file, const int& line);
-void CudaError(cudaError_t status, const char* file, const int& line);
+    void CublasError(cublasStatus_t status, const char* file, const int& line);
+    void CudaError(cudaError_t status, const char* file, const int& line);
 
 #ifdef USE_CUDNN
 #define ReportCUDNNErrors(status) CudnnError(status, __FILE__, __LINE__)
@@ -65,7 +68,9 @@ void CudaError(cudaError_t status, const char* file, const int& line);
 #define ReportCUBLASErrors(status) CublasError(status, __FILE__, __LINE__)
 #define ReportCUDAErrors(status) CudaError(status, __FILE__, __LINE__)
 
-inline int DivUp(int a, int b) { return (a + b - 1) / b; }
+    inline int DivUp(int a, int b) { return (a + b - 1) / b; }
 
-}  // namespace cudnn_backend
+    enum ActivationFunction { NONE, RELU, TANH, SIGMOID, SELU, MISH };
+
+  }  // namespace cudnn_backend
 }  // namespace lczero

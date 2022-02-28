@@ -158,8 +158,13 @@ namespace Ceres.Chess.NNBackends.CUDA
     {
       // Build the network, and copy the weights to GPU memory.
 
+      throw new Exception("next line");
+      BaseLayerCUDA.ActivationFunction activation = BaseLayerCUDA.ActivationFunction.NONE;
+
+
       // Input.
-      FusedWinogradConvSELayerCUDA inputConv = new(execContext, "InputConv1", Layers.Count, NumFilters, 8, 8, null, kNumInputPlanes, true, true, false, false, 0, true);
+      FusedWinogradConvSELayerCUDA inputConv = new (execContext, "InputConv1", Layers.Count, NumFilters, 8, 8, 
+                                                    null, kNumInputPlanes, true, false, false, 0, true, activation);
       inputConv.LoadWeights(execContext.Stream2, weights.input.weights, weights.input.biases);
       Layers.Add(inputConv);
 
@@ -167,8 +172,9 @@ namespace Ceres.Chess.NNBackends.CUDA
       {
         int se_k = HasSE ? (int)weights.residual[block].se.b1.Length : 0;
 
-        ResidualBlockBaseCUDA layer = new ResidualBlockFusedCUDA(execContext, "residual_fused_" + block, Layers.Count, LastLayer, NumFilters, HasSE, se_k, block == 0, 
-                                                                 block == (NumBlocks - 1), execContext.SharedMemPerBlock);
+        ResidualBlockBaseCUDA layer = new ResidualBlockFusedCUDA(execContext, "residual_fused_" + block, Layers.Count, LastLayer, 
+                                                                 NumFilters, HasSE, se_k, block == 0, 
+                                                                 block == (NumBlocks - 1), execContext.SharedMemPerBlock, activation);
 
         layer.LoadWeights0(execContext.Stream2, weights.residual[block].conv1.weights, weights.residual[block].conv1.biases);
         layer.LoadWeights1(execContext.Stream2, weights.residual[block].conv2.weights, weights.residual[block].conv2.biases);
@@ -234,14 +240,14 @@ namespace Ceres.Chess.NNBackends.CUDA
       else if (PolicyIsConvolutional)
       {
         FusedWinogradConvSELayerCUDA conv1;
-        conv1 = new(execContext, "policy_conv1", Layers.Count, NumFilters, 8, 8, resi_last_, NumFilters, true, true, false, false, 0, false);
+        conv1 = new(execContext, "policy_conv1", Layers.Count, NumFilters, 8, 8, resi_last_, NumFilters, true, false, false, 0, false, activation);
         conv1.LoadWeights(execContext.Stream, weights.policy1.weights, weights.policy1.biases);
         Layers.Add(conv1);
 
         int pol_channels = weights.policy.biases.Length;
 
         FusedWinogradConvSELayerCUDA conv2;
-        conv2 = new(execContext, "policy_conv2", Layers.Count, pol_channels, 8, 8, LastLayer, NumFilters, false, true, false, false, 0, false);
+        conv2 = new(execContext, "policy_conv2", Layers.Count, pol_channels, 8, 8, LastLayer, NumFilters,  true, false, false, 0, false, activation);
         conv2.LoadWeights(execContext.Stream2, weights.policy.weights, weights.policy.biases);
         Layers.Add(conv2);
 
@@ -251,11 +257,11 @@ namespace Ceres.Chess.NNBackends.CUDA
       }
       else
       {
-        LayerConv1CUDA convPol = new(execContext, "policy_conv", Layers.Count, resi_last_, weights.policy.biases.Length, 8, 8, NumFilters, true, true);
+        LayerConv1CUDA convPol = new(execContext, "policy_conv", Layers.Count, resi_last_, weights.policy.biases.Length, 8, 8, NumFilters, true, activation);
         convPol.LoadWeights(weights.policy.weights, weights.policy.biases);
         Layers.Add(convPol);
 
-        LayerFCCUDA FCPol = new(execContext, "policy_fc", Layers.Count, LastLayer, weights.ip_pol_b.Length, 1, 1, false, true);
+        LayerFCCUDA FCPol = new(execContext, "policy_fc", Layers.Count, LastLayer, weights.ip_pol_b.Length, 1, 1, true, activation);
         FCPol.LoadWeights(weights.ip_pol_w, weights.ip_pol_b);
         Layers.Add(FCPol);
       }
@@ -263,17 +269,17 @@ namespace Ceres.Chess.NNBackends.CUDA
       BaseLayerCUDA policy_out_ = LastLayer;
 
       // Value head.
-      LayerConv1CUDA convVal = new(execContext, "value_conv", Layers.Count, resi_last_, weights.value.biases.Length, 8, 8, NumFilters, true, true);
+      LayerConv1CUDA convVal = new(execContext, "value_conv", Layers.Count, resi_last_, weights.value.biases.Length, 8, 8, NumFilters, true, activation);
       convVal.LoadWeights(weights.value.weights, weights.value.biases);
       Layers.Add(convVal);
 
-      LayerFCCUDA FCVal1 = new(execContext, "value_fc1", Layers.Count, LastLayer, weights.ip1_val_b.Length, 1, 1, true, true);
+      LayerFCCUDA FCVal1 = new(execContext, "value_fc1", Layers.Count, LastLayer, weights.ip1_val_b.Length, 1, 1, true, activation);
       FCVal1.LoadWeights(weights.ip1_val_w, weights.ip1_val_b);
       Layers.Add(FCVal1);
 
       bool fc2_tanh = !HasWDL;
-
-      LayerFCCUDA FCVal2 = new(execContext, "value_fc2", Layers.Count, LastLayer, weights.ip2_val_b.Length, 1, 1, false, true, fc2_tanh);
+      BaseLayerCUDA.ActivationFunction activationValue2 = fc2_tanh ? BaseLayerCUDA.ActivationFunction.TANH : BaseLayerCUDA.ActivationFunction.NONE;
+      LayerFCCUDA FCVal2 = new(execContext, "value_fc2", Layers.Count, LastLayer, weights.ip2_val_b.Length, 1, 1, true, activationValue2);
       FCVal2.LoadWeights(weights.ip2_val_w, weights.ip2_val_b);
       Layers.Add(FCVal2);
 
@@ -283,15 +289,15 @@ namespace Ceres.Chess.NNBackends.CUDA
       BaseLayerCUDA moves_left_out_ = null;
       if (HasMLH)
       {
-        LayerConv1CUDA convMov = new(execContext, "mlh_conv", Layers.Count, resi_last_, weights.moves_left.biases.Length, 8, 8, NumFilters, true, true);
+        LayerConv1CUDA convMov = new(execContext, "mlh_conv", Layers.Count, resi_last_, weights.moves_left.biases.Length, 8, 8, NumFilters, true, activation);
         convMov.LoadWeights(weights.moves_left.weights, weights.moves_left.biases);
         Layers.Add(convMov);
 
-        LayerFCCUDA FCMov1 = new(execContext, "mlh_fc1", Layers.Count, LastLayer, weights.ip1_mov_b.Length, 1, 1, true, true);
+        LayerFCCUDA FCMov1 = new(execContext, "mlh_fc1", Layers.Count, LastLayer, weights.ip1_mov_b.Length, 1, 1, true, activation);
         FCMov1.LoadWeights(weights.ip1_mov_w, weights.ip1_mov_b);
         Layers.Add(FCMov1);
 
-        LayerFCCUDA FCMov2 = new(execContext, "mlh_fc2", Layers.Count, LastLayer, 1, 1, 1, true, true);
+        LayerFCCUDA FCMov2 = new(execContext, "mlh_fc2", Layers.Count, LastLayer, 1, 1, 1, true, activation);
         FCMov2.LoadWeights(weights.ip2_mov_w, weights.ip2_mov_b);
         Layers.Add(FCMov2);
 

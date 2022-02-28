@@ -50,10 +50,10 @@ namespace Ceres.Chess.NNBackends.CUDA
 
     const string knLastSE = "_ZN6lczero13cudnn_backend22OutputTransform_kernelI6__halfLb1ELb1ELb1ELb1ELb1ELb0EEEviiiPT_PKS3_S6_S6_S6_S6_S6_S6_";
     const string knLastNotSE = "_ZN6lczero13cudnn_backend22OutputTransform_kernelI6__halfLb0ELb1ELb1ELb1ELb1ELb0EEEviiiPT_PKS3_S6_S6_S6_S6_S6_S6_";
+
     const string knNoSENotLast = "_ZN6lczero13cudnn_backend42OutputTransform_relu_InputTransform_kernelI6__halfLb1ELb1ELb0EEEviiPT_PKS3_S4_S6_";
 
-    CudaKernel inputTransformKernel;
-    CudaKernel inputOutputKernelPre;
+    string Activated(string baseName) => baseName.Replace("<ACTIVATION>", Activation == ActivationFunction.MISH ? "MISH" : "RELU");
 
     int NUM_SHARED_BYTES => IsBig ? (72 * 1024) : 0;  // SharedMemSize
 
@@ -62,11 +62,11 @@ namespace Ceres.Chess.NNBackends.CUDA
       CudaKernel kernelNotLastSE = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, knNotLastSE);
       CudaKernel kernelNotLastNotSE = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, knNotLastNotSE);
       inputTransformKernel = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, knFirstBlockInput);
-      inputOutputKernelPre = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, knInputOutputPre);
+      inputOutputKernelPre = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, Activated(knInputOutputPre));
 
       inputOutputKernelPre.BlockDimensions = C;
 
-      kernelSENotLast = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, knNoSENotLast);
+      kernelSENotLast = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, Activated(knNoSENotLast));
 
       if (IsBig)
       {
@@ -91,17 +91,22 @@ namespace Ceres.Chess.NNBackends.CUDA
     CudaDeviceVariable<FP16> transformedWeights0;
     CudaDeviceVariable<FP16> transformedWeights1;
 
+    CudaKernel inputTransformKernel; // does not depend on activation
+
+
     CudaKernel kernelLastSE;
     CudaKernel kernelLastNotSE;
     CudaKernel kernelNotLastSE;
     CudaKernel kernelNotLastNotSE;
 
+    CudaKernel inputOutputKernelPre;
+    CudaKernel kernelSENotLast;
 
 
     public ResidualBlockFusedCUDA(NNBackendExecContext parent, string name, int layerIndex,
                                   BaseLayerCUDA inputLayer,
-                                  int C, bool se, int se_k, bool first, bool last, int sharedMemSize)
-      : base(parent, name, layerIndex, C, 8, 8, inputLayer, se, se_k, sharedMemSize)
+                                  int C, bool se, int se_k, bool first, bool last, int sharedMemSize, ActivationFunction activation)
+      : base(parent, name, layerIndex, C, 8, 8, inputLayer, se, se_k, sharedMemSize, activation)
     {
       if (C > 512)
       {
@@ -114,10 +119,10 @@ namespace Ceres.Chess.NNBackends.CUDA
       FirstBlock = first;
       LastBlock = last;
 
-      kernelLastSE = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, knLastSE);
-      kernelLastNotSE = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, knLastNotSE);
-      kernelNotLastSE = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, knNotLastSE);
-      kernelNotLastNotSE = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, knNotLastNotSE);
+      kernelLastSE = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, Activated(knLastSE));
+      kernelLastNotSE = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, Activated(knLastNotSE));
+      kernelNotLastSE = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, Activated(knNotLastSE));
+      kernelNotLastNotSE = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, Activated(knNotLastNotSE));
 
       if (NNBackendLC0_CUDA.BLASLT && NNBackendLC0_CUDA.BLASLT_N > 0)
       {
@@ -171,8 +176,6 @@ namespace Ceres.Chess.NNBackends.CUDA
     CUDAKernelLauncher inputOutputNoSELauncher;
     CUDAKernelLauncher outputLauncher;
 
-    CudaKernel kernelSENotLast;
-
 
     protected override void DoEval(CudaStream stream, int N,
                                    CudaDeviceVariable<FP16> output,
@@ -195,6 +198,8 @@ namespace Ceres.Chess.NNBackends.CUDA
       CudaDeviceVariable<FP16> transformed_input = scratch;
       CudaDeviceVariable<FP16> transformed_output = scratchSecondHalf;
 
+      #region Preparatory
+
       if (FirstBlock)
       {
         // Possibly duplicate code as in FusedWinogradSELayerCUDA
@@ -204,7 +209,6 @@ namespace Ceres.Chess.NNBackends.CUDA
         LaunchKernel(stream, inputTransformKernel, N, C, input.DevicePointer, transformed_input.DevicePointer, stream.Stream.Pointer);
 
         cublasRowMajorMatrixMul(transformed_input, transformedWeights0, transformed_output, N * 4, C, C, 36);
-
       }
       else
       {
@@ -227,6 +231,10 @@ namespace Ceres.Chess.NNBackends.CUDA
           throw new NotImplementedException(); // see code at bottom of file
         }
       }
+
+      #endregion
+
+      #region InputOutput
 
       const bool USE_OPTIMIZED_NON_SE_IO_KERNEL = true;
       if (USE_OPTIMIZED_NON_SE_IO_KERNEL && !LastBlock)
@@ -285,8 +293,9 @@ namespace Ceres.Chess.NNBackends.CUDA
                       (IntPtr)0, (IntPtr)0,
                       (IntPtr)0, (IntPtr)0, stream.Stream.Pointer);
         }
-
       }
+
+      #endregion
 
       // "transformed_input" tensor now contains transformed input for the next convolution
 

@@ -34,6 +34,16 @@ namespace Ceres.Chess.NNBackends.CUDA
   /// </summary>
   public abstract class BaseLayerCUDA
   {
+    public enum ActivationFunction 
+    { 
+      NONE = 0,
+      RELU = 1, 
+      TANH = 2, 
+      SIGMOID = 3, 
+      SELU = 4, 
+      MISH = 5
+    };
+
     public readonly NNBackendExecContext Parent;
 
     public TimeSpan LastExecutionTime;
@@ -66,6 +76,12 @@ namespace Ceres.Chess.NNBackends.CUDA
     public int GetH { get; }
 
     /// <summary>
+    /// Type of activation function.
+    /// </summary>
+    public ActivationFunction Activation { get; }
+
+
+    /// <summary>
     /// Input layer.
     /// </summary>
     protected readonly BaseLayerCUDA input_;
@@ -89,7 +105,8 @@ namespace Ceres.Chess.NNBackends.CUDA
     /// <param name="h"></param>
     /// <param name="w"></param>
     /// <param name="inputLayer"></param>
-    public BaseLayerCUDA(NNBackendExecContext parent, string name, int layerIndex, int c, int h, int w, BaseLayerCUDA inputLayer)
+    /// <param name="activation"></param>
+    public BaseLayerCUDA(NNBackendExecContext parent, string name, int layerIndex, int c, int h, int w, BaseLayerCUDA inputLayer, ActivationFunction activation)
     {
       Parent = parent;
       Name = name;
@@ -98,6 +115,7 @@ namespace Ceres.Chess.NNBackends.CUDA
       GetH = h;
       input_ = inputLayer;
       LayerIndex = layerIndex;
+      Activation = activation;
 
       LoadKernels();
     }

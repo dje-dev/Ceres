@@ -28,8 +28,8 @@ namespace Ceres.Chess.NNBackends.CUDA
   public class AttentionPolicyHead : BaseLayerCUDA
   {
     public AttentionPolicyHead(NNBackendExecContext parent, string name, int layerIndex,
-                               int c, int h, int w, BaseLayerCUDA inputLayer)//, CudaDeviceVariable<FP16> scratch) 
-      : base(parent, name, layerIndex, c, h, w, inputLayer)
+                               int c, int h, int w, BaseLayerCUDA inputLayer, ActivationFunction activation)//, CudaDeviceVariable<FP16> scratch) 
+      : base(parent, name, layerIndex, c, h, w, inputLayer, activation)
     {
     }
 
