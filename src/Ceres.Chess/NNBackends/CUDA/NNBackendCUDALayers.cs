@@ -18,6 +18,7 @@ using System.Collections.Generic;
 using ManagedCuda;
 using Pblczero;
 using Ceres.Base.Math;
+using System.Diagnostics;
 
 #endregion
 
@@ -70,6 +71,11 @@ namespace Ceres.Chess.NNBackends.CUDA
     public readonly bool PolicyIsAttention;
 
     /// <summary>
+    /// Default activation function.
+    /// </summary>
+    public readonly BaseLayerCUDA.ActivationFunction DefaultActivation;
+
+    /// <summary>
     /// If some of the output activation should be captured and returned.
     /// </summary>
     public readonly bool SaveActivations;
@@ -111,11 +117,24 @@ namespace Ceres.Chess.NNBackends.CUDA
         HasWDL = net.Format.NetworkFormat.Value == NetworkFormat.ValueFormat.ValueWdl;
         HasMLH = net.Format.NetworkFormat.MovesLeft == NetworkFormat.MovesLeftFormat.MovesLeftV1;
         PolicyIsConvolutional = net.Format.NetworkFormat.Policy == NetworkFormat.PolicyFormat.PolicyConvolution;
-        PolicyIsAttention =net.Format.NetworkFormat.Policy == NetworkFormat.PolicyFormat.PolicyAttention;
+        PolicyIsAttention = net.Format.NetworkFormat.Policy == NetworkFormat.PolicyFormat.PolicyAttention;
+        if (net.Format.NetworkFormat.default_activation == NetworkFormat.DefaultActivation.DefaultActivationRelu)
+        {
+          DefaultActivation = BaseLayerCUDA.ActivationFunction.RELU;
+        }
+        else if (net.Format.NetworkFormat.default_activation == NetworkFormat.DefaultActivation.DefaultActivationMish)
+        {
+          DefaultActivation = BaseLayerCUDA.ActivationFunction.MISH;
+        }
+        else
+        {
+          throw new Exception("Unsupported activation function " + net.Format.NetworkFormat.default_activation);
+        }
       }
 
       InitKernels(context);
     }
+
 
 
     void InitKernels(NNBackendExecContext context)
@@ -156,11 +175,9 @@ namespace Ceres.Chess.NNBackends.CUDA
 
     internal void DoBuildNetworkAndLoadWeights(NNBackendExecContext execContext, LC0LegacyWeights weights, int kNumInputPlanes)
     {
+      BaseLayerCUDA.ActivationFunction activation = DefaultActivation;
+
       // Build the network, and copy the weights to GPU memory.
-
-      throw new Exception("next line");
-      BaseLayerCUDA.ActivationFunction activation = BaseLayerCUDA.ActivationFunction.NONE;
-
 
       // Input.
       FusedWinogradConvSELayerCUDA inputConv = new (execContext, "InputConv1", Layers.Count, NumFilters, 8, 8, 
