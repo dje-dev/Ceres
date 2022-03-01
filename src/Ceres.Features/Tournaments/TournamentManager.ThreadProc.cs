@@ -46,7 +46,7 @@ namespace Ceres.Features.Tournaments
     /// <param name="gameTest"></param>
     private void ThreadProcCoordinator(int threadIndex, TournamentGameThread gameTest)
     {
-      while (!gameTest.Def.ShouldShutDown)
+      while (!gameTest.Def.parentDef.ShouldShutDown)
       {
         try
         {

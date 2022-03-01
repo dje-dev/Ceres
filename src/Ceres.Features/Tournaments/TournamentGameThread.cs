@@ -315,9 +315,12 @@ namespace Ceres.Features.Tournaments
 
     internal void UpdateStatsAndOutputSummaryFromGameResult(string pgnFileName, bool engine2White, int openingIndex, int gameSequenceNum, TournamentGameInfo thisResult)
     {
+      string engine1ID = engine2White ? thisResult.PlayerBlack : thisResult.PlayerWhite;
+      string engine2ID = engine2White ? thisResult.PlayerWhite : thisResult.PlayerBlack;
+
       lock (ParentStats)
       {
-        ParentStats.UpdateTournamentStats(thisResult, Run.Engine1.ID, Run.Engine2.ID);
+        ParentStats.UpdateTournamentStats(thisResult, engine1ID, engine2ID);
       }
 
       // Only show headers first time for first thread
@@ -326,13 +329,16 @@ namespace Ceres.Features.Tournaments
         OutputHeaders(pgnFileName);
       }
 
-      OutputGameResultInfo(engine2White, openingIndex, gameSequenceNum, Run.Engine1.ID, Run.Engine2.ID, thisResult);
+      OutputGameResultInfo(engine2White, openingIndex, gameSequenceNum, engine1ID, engine2ID, thisResult);
     }
 
     private void OutputGameResultInfo(bool engine2White, int openingIndex, int gameSequenceNum, 
                                       string engineID, string opponentID,
                                       TournamentGameInfo thisResult)
     {
+      string engine1ID = engine2White ? thisResult.PlayerBlack : thisResult.PlayerWhite;
+      string engine2ID = engine2White ? thisResult.PlayerWhite : thisResult.PlayerBlack;
+
       ParentStats.GameInfos.Add(thisResult);
 
       PlayerStat player = engine2White ?
@@ -395,9 +401,9 @@ namespace Ceres.Features.Tournaments
         string checkEnginePlyDifferent = thisResult.NumEngine2MovesDifferentFromCheckEngine == 0 ? "   " : $"{thisResult.NumEngine2MovesDifferentFromCheckEngine,3:N0}";
         if (Def.ShowGameMoves) Def.Logger.WriteLine();
         if (engine2White)
-          Def.Logger.Write($" {TrimmedIfNeeded(Run.Engine2.ID, 10),-10} {TrimmedIfNeeded(Run.Engine1.ID, 10),-10}");
+          Def.Logger.Write($" {TrimmedIfNeeded(engine2ID, 10),-10} {TrimmedIfNeeded(engine1ID, 10),-10}");
         else
-          Def.Logger.Write($" {TrimmedIfNeeded(Run.Engine1.ID, 10),-10} {TrimmedIfNeeded(Run.Engine2.ID, 10),-10}");
+          Def.Logger.Write($" {TrimmedIfNeeded(engine1ID, 10),-10} {TrimmedIfNeeded(engine2ID, 10),-10}");
         Def.Logger.Write($"{eloAvg,4:0} {eloSD,4:0} {100.0f * los,5:0}  ");
         Def.Logger.Write($"{gNumber,5} {DateTime.Now.ToString().Split(" ")[1],10}  {gameSequenceNum,4:F0}  {openingIndex,4:F0}{openingPlayedBothWaysStr}  ");
 
