@@ -44,6 +44,8 @@ using Ceres.MCTS.MTCSNodes;
 using Ceres.Features.GameEngines;
 using Ceres.Features.Visualization.TreePlot;
 using Ceres.Features.Visualization.AnalysisGraph;
+using Ceres.Chess.Textual.PgnFileTools;
+using Ceres.Chess.Games.Utils;
 
 #endregion
 
@@ -214,7 +216,7 @@ namespace Ceres.Features.UCI
 
     void ResetGame()
     {
-      curPositionAndMoves = PositionWithHistory.FromFENAndMovesUCI(Position.StartPosition.FEN);
+      curPositionAndMoves = PositionWithHistory.FromFENAndMovesUCI(Chess.Position.StartPosition.FEN);
       gameMoveHistory = new List<GameMoveStat>();
       CeresEngine?.ResetGame();
     }
@@ -377,14 +379,18 @@ namespace Ceres.Features.UCI
           case string c when c.StartsWith("graph"):
             if (CeresEngine?.Search != null)
             {
-              string[] parts = c.Split(" ");
-              string optionsStr = parts.Length > 1 ? parts[1] : null;
+              string[] partsGraph = c.Split(" ");
+              string optionsStr = partsGraph.Length > 1 ? partsGraph[1] : null;
               AnalysisGraphOptions options = AnalysisGraphOptions.FromString(optionsStr);
               AnalysisGraphGenerator graphGenerator = new AnalysisGraphGenerator(CeresEngine.Search, options);
               graphGenerator.Write(true);
             }
             else
               UCIWriteLine("info string No search manager created");
+            break;
+
+          case String c when c.StartsWith("gamecomp"):
+            ProcessGameComp(c);
             break;
 
           case "dump-params":
@@ -478,13 +484,13 @@ namespace Ceres.Features.UCI
           case string c when c.StartsWith("save-tree-plot"):
             if (CeresEngine?.Search != null)
             {
-              string[] parts = command.Split(" ");
-              if (parts.Length == 2)
+              string[] partsPlot = command.Split(" ");
+              if (partsPlot.Length == 2)
               {
-                string fileName = parts[1];
+                string fileName = partsPlot[1];
                 TreePlot.Save(CeresEngine.Search.Manager.Context.Root.StructRef, fileName);
               }
-              else if (parts.Length == 1)
+              else if (partsPlot.Length == 1)
               {
                 UCIWriteLine("Filename was not provided");
               }
@@ -521,6 +527,57 @@ namespace Ceres.Features.UCI
       else
       {
         UCIWriteLine("info string No search manager created");
+      }
+    }
+
+
+    /// <summary>
+    /// Parses and process the game comparison feature command.
+    /// </summary>
+    /// <param name="c"></param>
+    void ProcessGameComp(string c)
+    {
+      string[] parts = c.TrimEnd().Split(" ");
+      if (parts.Length < 2)
+      {
+        UCIWriteLine("Expected name of PGN file possibly followed by list of games (e.g. \"1,2\") or a round number \"e.g. r1\")");
+        return;
+      }
+      string fn = parts[1];
+      if (!System.IO.File.Exists(fn))
+      {
+        UCIWriteLine($"Specified file not found {fn}");
+        return;
+      }
+
+      List<PGNGame> games = PgnStreamReader.ReadGames(fn);
+      if (parts.Length == 3)
+      {
+        string gamesList = parts[2].ToUpper();
+
+        if (gamesList.StartsWith("R"))
+        {
+          // One round with specified index.
+          int round = int.Parse(gamesList.Substring(1));
+          UCIWriteLine($"Generating game comparison graph of round {round} from {fn}");
+          GameCompareGraphGenerator comp = new(games, s => s.Round == round, s => s.Round);
+          comp.Write(launchWithBrowser: true);
+        }
+        else
+        {
+          // List of games by index.
+          string[] gameIndices = gamesList.Split(",");
+          UCIWriteLine($"Generating game comparison graph of games {gamesList} from {fn}");
+          GameCompareGraphGenerator comp = new(games, s => Array.IndexOf(gameIndices, s.GameIndex.ToString()) != -1, s => 1);
+          comp.Write(launchWithBrowser: true);
+        }
+      }
+      else
+      {
+        // All games by round.
+        UCIWriteLine($"Generating game comparison graph of all rounds from {fn}");
+        GameCompareGraphGenerator comp = new(games, s => true, s => s.Round);
+        comp.Write(launchWithBrowser: true);
       }
     }
 
