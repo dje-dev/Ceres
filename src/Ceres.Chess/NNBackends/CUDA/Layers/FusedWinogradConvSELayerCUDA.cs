@@ -62,6 +62,8 @@ namespace Ceres.Chess.NNBackends.CUDA
       {
         throw new Exception("Unsupported activation for fused winograd conv SE layer.");
       }
+
+      DoLoadKernels();
     }
 
     public void LoadWeights(CudaStream stream, float[] weights, float[] biases)
@@ -119,6 +121,7 @@ namespace Ceres.Chess.NNBackends.CUDA
       kernelInputTransform.BlockDimensions = NumInputChannels;
       LaunchKernel(stream, kernelInputTransform, N, NumInputChannels, input.DevicePointer, transformed_input.DevicePointer, stream.Stream.Pointer);
 
+
       if (transformed_output == null)
       {
         transformed_output = new CudaDeviceVariable<FP16>(scratch.DevicePointer + scratchSizeBytes / 2, false);
@@ -126,36 +129,16 @@ namespace Ceres.Chess.NNBackends.CUDA
 
       cublasRowMajorMatrixMul(transformed_input, transformedWeights, transformed_output, N * 4, C, NumInputChannels, 36);
 
-      CudaKernel kernel;
-
       // Only a small subset of the possible combinations of flags
       // are actually used, support only the required subset.
       Debug.Assert(!UseSE);
       Debug.Assert(UseBias);
-      Debug.Assert(!WithSkipConnection);
+      Debug.Assert(!WithSkipConnection); // to support this would have to pass in w1, b1 and w2, b2
 
-      throw new NotImplementedException();
+      outputTransformKernel.GridDimensions = N;
+      outputTransformKernel.BlockDimensions = C;
 
-      bool hasActivation = Activation != ActivationFunction.NONE;
-      if (hasActivation && OpNCHW)
-      {
-        kernel = kernelOutputReluNHCW;
-      }
-      else if (hasActivation && !OpNCHW)
-      {
-        kernel = kernelOutputReluNotNHCW;
-      }
-      else if (!hasActivation && !OpNCHW)
-      {
-        kernel = kernelOutputNotReluNotNHCW;
-      }
-      else
-        throw new NotImplementedException();
-
-      kernel.GridDimensions = N;
-      kernel.BlockDimensions = C;
-
-      LaunchKernel(stream, kernel, N, C, (int)0, output.DevicePointer,
+      LaunchKernel(stream, outputTransformKernel, N, C, (int)0, output.DevicePointer,
                    transformed_output.DevicePointer,
                    (IntPtr)0, biases.DevicePointer,
                    (IntPtr)0, (IntPtr)0, (IntPtr)0, (IntPtr)0, stream.Stream.Pointer);      
@@ -165,12 +148,17 @@ namespace Ceres.Chess.NNBackends.CUDA
 
     CudaKernel kernelInputTransform; // not dependent on activation
 
-    CudaKernel kernelOutputNotReluNotNHCW; //  OutputTransform<DataType, false, NONE, true, false, false, false>(
-    CudaKernel kernelOutputReluNHCW;
-    CudaKernel kernelOutputReluNotNHCW;
+    CudaKernel outputTransformKernel;
 
 
     public override void LoadKernels()
+    {
+      // No loading here, since we need to have the object fully initialized
+      // to determine which kernel to load.
+      // DoLoadKernels is called instead later.
+    }
+
+    public void DoLoadKernels()
     {
       // Possibly same as in ResidualBlockCUDA
       string resource = FP16_KERNELS_PTX_NAME;
@@ -178,14 +166,38 @@ namespace Ceres.Chess.NNBackends.CUDA
       const string knInputTransform = "_ZN6lczero13cudnn_backend21InputTransform_kernelI6__halfLb0EEEviiPKT_PS3_";
       kernelInputTransform = Parent.Device.GetKernel(Parent.PTXAssembly, resource, knInputTransform);
 
-      const string BASE_KN = "_ZN6lczero13cudnn_backend22OutputTransform_kernelI6__halfLb0ELb__ACTIVATION>__ELb1ELb0ELb0ELb__NHCW__EEEviiiPT_PKS3_S6_S6_S6_S6_S6_S6_";
-      string MakeName(bool nhcw) 
-        => BASE_KN.Replace("__<ACTIVATION>__", Activation.ToString())
-                  .Replace("__NHCW__", nhcw ? "1" : "0");
+      string outputTransformKernelName = GetOutputTransformKernelName(UseSE, Activation, UseBias, WithSkipConnection, false, OpNCHW);
+      outputTransformKernel = Parent.Device.GetKernel(Parent.PTXAssembly, resource, outputTransformKernelName);
+    }
 
-      kernelOutputReluNHCW       = Parent.Device.GetKernel(Parent.PTXAssembly, resource, MakeName(true));
-      kernelOutputReluNotNHCW    = Parent.Device.GetKernel(Parent.PTXAssembly, resource, MakeName(false));
-      kernelOutputNotReluNotNHCW = Parent.Device.GetKernel(Parent.PTXAssembly, resource, MakeName(false));
+    static string BoolStr(bool b) => b ? "1" : "0";
+
+
+#if NOT
+template void OutputTransform<float, true, RELU, true, true, false, false>(
+    int N, int C, int se_K, float* output, const float* input,
+    const float* skip, const float* bias, const float* w1, const float* b1,
+    const float* w2, const float* b2, cudaStream_t stream);
+
+
+exists:_ZN6lczero13cudnn_backend22OutputTransform_kernelI6__halfLb1ELNS0_18ActivationFunctionE1ELb1ELb1ELb0ELb0EEEviiiPT_PKS4_S7_S7_S7_S7_S7_S7_(
+seek:  _ZN6lczero13cudnn_backend22OutputTransform_kernelI6__halfLb0ELNS0_18ActivationFunctionE1ELb0ELb0ELb0ELb0EEEviiiPT_PKS4_S7_S7_S7_S7_S7_S7_("
+SAMPLE _ZN6lczero13cudnn_backend22OutputTransform_kernelI6__halfLb0ELNS0_18ActivationFunctionE0ELb1ELb0ELb0ELb0EEEviiiPT_PKS4_S7_S7_S7_S7_S7_S7_(
+                                                                 ^1                          ^2  ^3  ^4  ^5  ^6
+SAMPLE _ZN6lczero13cudnn_backend22OutputTransform_kernelI6__halfLb!1ELNS0_18ActivationFunctionE!2ELb!3ELb!4ELb!5ELb!6EEEviiiPT_PKS4_S7_S7_S7_S7_S7_S7_(
+
+template <typename T, bool use_se, ActivationFunction activation, bool use_bias, bool use_skip, bool skipInput_nhcw, bool output_nhcw>
+                           ^1                         ^2               ^3             ^4             ^5                   ^6
+#endif
+    static string GetOutputTransformKernelName(bool useSE, ActivationFunction activation, bool useBias, bool useSkip, bool skipInputNHCW, bool outputNHCW)
+    {
+      const string CALL = "_ZN6lczero13cudnn_backend22OutputTransform_kernelI6__halfLb!1ELNS0_18ActivationFunctionE!2ELb!3ELb!4ELb!5ELb!6EEEviiiPT_PKS4_S7_S7_S7_S7_S7_S7_";
+      return CALL.Replace("!1", BoolStr(useSE))
+                 .Replace("!2", ((int)activation).ToString())
+                 .Replace("!3", BoolStr(useBias))
+                 .Replace("!4", BoolStr(useSkip))
+                 .Replace("!5", BoolStr(skipInputNHCW))
+                 .Replace("!6", BoolStr(outputNHCW));
     }
   }
 

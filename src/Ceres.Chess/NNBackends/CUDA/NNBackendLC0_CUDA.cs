@@ -393,7 +393,7 @@ namespace Ceres.Chess.NNBackends.CUDA
     {
       int embedding_op_size = weights.ip_pol_b == null ? 0 : weights.ip_pol_b.Length;
       int policy_d_model = weights.ip2_pol_b == null ? 0 : weights.ip2_pol_b.Length;
-      Debug.Assert(policy_d_model == weights.ip3_pol_b.Length);
+      Debug.Assert(policy_d_model == (weights.ip3_pol_b == null ? 0 : weights.ip3_pol_b.Length));
 
       int encoder_d_model = 0;
       int encoder_dff = 0;
