@@ -64,7 +64,7 @@ namespace Ceres.Chess.NNBackends.CUDA
     CudaKernel kernel;
     public override void LoadKernels()
     {
-      const string knAddBias = "_ZN6lczero13cudnn_backend19addBias_NCHW_kernelI6__halfEEvPT_S4_S4_iiiib";
+      const string knAddBias = "_ZN6lczero13cudnn_backend19addBias_NCHW_kernelI6__halfEEvPT_S4_S4_iiiiNS0_18ActivationFunctionE";
       kernel = Parent.Device.GetKernel(Parent.PTXAssembly, @"common_kernels.ptx", knAddBias);
     }
 
@@ -106,7 +106,7 @@ if (use_bias_)
 
         LaunchKernel(stream, kernel, output.DevicePointer, 
                      output.DevicePointer, biasesCUDA.DevicePointer,
-                     N, base.C, GetH, W, Activation, stream.Stream.Pointer);
+                     N, base.C, GetH, W, (int)Activation, stream.Stream.Pointer);
       }
       else if (Activation != ActivationFunction.NONE)
       {
