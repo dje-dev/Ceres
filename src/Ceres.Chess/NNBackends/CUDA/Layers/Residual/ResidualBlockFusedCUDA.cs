@@ -136,6 +136,7 @@ namespace Ceres.Chess.NNBackends.CUDA
       kernelOutputInputPre.BlockDimensions = C;
       if (IsBig)
       {
+        kernelOutputInput.MaxDynamicSharedSizeBytes = NUM_SHARED_BYTES;
         kernelOutputInputPre.MaxDynamicSharedSizeBytes = NUM_SHARED_BYTES;
       }
 
