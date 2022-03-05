@@ -19,6 +19,9 @@ using ManagedCuda.BasicTypes;
 
 using Ceres.Base.CUDA;
 using Ceres.Base.DataTypes;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+using Ceres.Base.Math;
 
 #endregion
 
@@ -33,6 +36,12 @@ namespace Ceres.Chess.NNBackends.CUDA
     // reducing memory allocations (considerably) and 
     // improving speed (slightly).
     public const bool USE_LAUNCHER = true;
+
+    const int kOpInpTransformBlockSize = 64;
+    const int kMaxResBlockFusingChannels = 384;  // limit on num_filters
+    const int kMaxResBlockFusingSeKFp16Ampere = 512;  // (use a different kernel with reduced register pressure)
+    const int kMaxResBlockFusingSeK = 128;  // limit on (num_filters / se_ratio)
+    const int kMaxResBlockFusingSeFp16AmpereSmem = 72 * kMaxResBlockFusingSeKFp16Ampere * 2; // Marshal.SizeOf<FP16>();  // shared memory used by the special kernel
 
     bool IsBig => C > 384;
 
@@ -57,37 +66,12 @@ namespace Ceres.Chess.NNBackends.CUDA
                  .Replace("!6", BoolStr(outputNHCW));
     }
 
-    string GetOutputInputTransformKernelName(bool useSE, ActivationFunction activation, bool useBias, bool useSkip)
-    {
-      if(IsBig)
-      {
-        //template <bool use_se, ActivationFunction activation, bool use_bias, bool use_skip>
-        //fp16_kernels.ptx:.visible .entry _ZN6lczero13cudnn_backend43OutputInputTransformKernel_fp16_shmem_boardILb1ELNS0_18ActivationFunctionE1ELb1ELb1EEEviiiP6__halfPKS3_S4_S6_S6_S6_S6_S6_(
-
-        const string CALL = "_ZN6lczero13cudnn_backend43OutputInputTransformKernel_fp16_shmem_boardILb!1ELNS0_18ActivationFunctionE!2ELb!3ELb!4EEEviiiP6__halfPKS3_S4_S6_S6_S6_S6_S6_";
-        return CALL.Replace("!1", BoolStr(useSE))
-                   .Replace("!2", ((int)activation).ToString())
-                   .Replace("!3", BoolStr(useBias))
-                   .Replace("!4", BoolStr(useSkip));
-      }
-      else
-      {
-        //fp16_kernels.ptx:.visible .entry _ZN6lczero13cudnn_backend45OutputTransform_SE_relu_InputTransform_kernelI6__halfLb1ELNS0_18ActivationFunctionE1ELb1ELb1EEEviiiPT_PKS4_S5_S7_S7_S7_S7_S7_
-
-        const string CALL = "_ZN6lczero13cudnn_backend45OutputTransform_SE_relu_InputTransform_kernelI6__halfLb!1ELNS0_18ActivationFunctionE!2ELb!3ELb!4EEEviiiPT_PKS4_S5_S7_S7_S7_S7_S7_";
-        return CALL.Replace("!1", BoolStr(useSE))
-                   .Replace("!2", ((int)activation).ToString())
-                   .Replace("!3", BoolStr(useBias))
-                   .Replace("!4", BoolStr(useSkip));
-      }
-    }
-
+    bool OutputInputUseNonSEKernel => false; // ************ TO BE ENABLED   !IsBig && !HasSE;
 
     int NUM_SHARED_BYTES => IsBig ? (72 * 1024) : 0;  // SharedMemSize
 
     public override void LoadKernels()
     {
-      inputTransformKernel = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, knInput);
     }
 
 
@@ -101,7 +85,7 @@ namespace Ceres.Chess.NNBackends.CUDA
     CudaDeviceVariable<FP16> transformedWeights0;
     CudaDeviceVariable<FP16> transformedWeights1;
 
-    CudaKernel inputTransformKernel; // does not depend on activation
+    CudaKernel kernelInput; // does not depend on activation
 
 
     CudaKernel kernelOutputInputPre;
@@ -109,7 +93,6 @@ namespace Ceres.Chess.NNBackends.CUDA
     CudaKernel kernelOutput;
     CudaKernel kernelOutputInput;
 
-    CUDAKernelLauncher preLauncher;
     CUDAKernelLauncher postLauncher;
 
     public ResidualBlockFusedCUDA(NNBackendExecContext parent, string name, int layerIndex,
@@ -128,17 +111,8 @@ namespace Ceres.Chess.NNBackends.CUDA
       FirstBlock = first;
       LastBlock = last;
 
-      kernelOutputInputPre = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, GetOutputInputTransformKernelName(false, Activation, true, false));
-
-      kernelOutputInput = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, GetOutputInputTransformKernelName(HasSE, Activation, true, true));
+      kernelInput = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, knInput);
       kernelOutput = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, GetOutputTransformKernelName(HasSE, Activation, true, true, true, false));
-
-      kernelOutputInputPre.BlockDimensions = C;
-      if (IsBig)
-      {
-        kernelOutputInput.MaxDynamicSharedSizeBytes = NUM_SHARED_BYTES;
-        kernelOutputInputPre.MaxDynamicSharedSizeBytes = NUM_SHARED_BYTES;
-      }
 
       if (NNBackendLC0_CUDA.BLASLT && NNBackendLC0_CUDA.BLASLT_N > 0)
       {
@@ -216,10 +190,10 @@ namespace Ceres.Chess.NNBackends.CUDA
       if (FirstBlock)
       {
         // Possibly duplicate code as in FusedWinogradSELayerCUDA
-        inputTransformKernel.GridDimensions = N;
-        inputTransformKernel.BlockDimensions = C;
+        kernelInput.GridDimensions = N;
+        kernelInput.BlockDimensions = C;
         // InputTransform<DataType>(N, c_input_, transformed_input, input);
-        LaunchKernel(stream, inputTransformKernel, N, C, input.DevicePointer, transformed_input.DevicePointer, stream.Stream.Pointer);
+        LaunchKernel(stream, kernelInput, N, C, input.DevicePointer, transformed_input.DevicePointer, stream.Stream.Pointer);
         cublasRowMajorMatrixMul(transformed_input, transformedWeights0, transformed_output, N * 4, C, C, 36);
       }
       else
@@ -247,149 +221,196 @@ namespace Ceres.Chess.NNBackends.CUDA
       #endregion
 
       #region InputOutput
+      OutputInputTransform(false, Activation, true, false, N, C, 0,
+                           transformed_input, transformed_output,
+                           null, biases0, null, null, null, null, stream);
+      #endregion
 
-#if NOT
-  if (act_ == RELU) 
-  {
-    OutputInputTransform<DataType, false, RELU, true, false>(
-        N, C, 0, transformed_input, transformed_output, nullptr, biases0_,
-        nullptr, nullptr, nullptr, nullptr, stream);
-  }
-  else if (act_ == MISH) 
-  {
-    OutputInputTransform<DataType, false, MISH, true, false>(
-        N, C, 0, transformed_input, transformed_output, nullptr, biases0_,
-        nullptr, nullptr, nullptr, nullptr, stream);
-  }
-#endif
-        kernelOutputInputPre.GridDimensions = N;
-        kernelOutputInputPre.BlockDimensions = C;
+      cublasRowMajorMatrixMul(transformed_input, transformedWeights1, transformed_output, N * 4, C, C, 36);
 
-        // with relu, use_bias (not use_se, not skip)
-        if (USE_LAUNCHER && preLauncher == null)
+ 
+      bool allowFusing = (C <= kMaxResBlockFusingChannels) 
+                      || ((this.SharedMemSize >= kMaxResBlockFusingSeFp16AmpereSmem) && (C <= kMaxResBlockFusingSeKFp16Ampere));
+    if (LastBlock) 
+    {
+      if (HasSE)
+      {
+//        OutputTransform<DataType, true, RELU, true, true, true, false>(
+//            N, C, se_k_, output, transformed_output, input, biases1_, w1_, b1_, w2_, b2_, stream);
+      }
+      else
+      {
+//        OutputTransform<DataType, false, RELU, true, true, true, false>(
+//            N, C, se_k_, output, transformed_output, input, biases1_, w1_, b1_, w2_, b2_, stream);
+      }
+    } 
+    else 
+    {
+      if (HasSE) 
+      {
+        if (allowFusing) 
         {
-          preLauncher = new(kernelOutputInputPre, stream, NUM_SHARED_BYTES,
-                                    new object[] {N, C, 0,
-                                  transformed_input.DevicePointer,
-                                  transformed_output.DevicePointer,
-                                  (IntPtr)0, biases0.DevicePointer,
-                                  (IntPtr)0, (IntPtr)0,
-                                  (IntPtr)0, (IntPtr)0, stream.Stream.Pointer });
+//          OutputInputTransform<DataType, true, RELU, true, true>(
+//              N, C, se_k_, output, transformed_output, input, biases1_, w1_, b1_, w2_, b2_, stream);
+        } 
+        else 
+        {
+//          OutputTransform<DataType, true, RELU, true, true, true, true>(
+//              N, C, se_k_, (DataType*)input, transformed_output, input, biases1_, w1_, b1_, w2_, b2_, stream);
+//          InputTransform<DataType, true>(N, C, output, (DataType*)input, stream);
         }
+      } 
+      else      
+      {
+//        OutputInputTransform<DataType, false, RELU, true, true>(
+//            N, C, se_k_, output, transformed_output, input, biases1_, w1_, b1_, w2_, b2_, stream);
+      }
+    }
 
-        if (preLauncher != null)
+
+
+    }
+
+
+    //  public template<typename T = half, bool use_se, ActivationFunction activation, bool use_bias, bool use_skip>
+    void OutputInputTransform(bool useSE, ActivationFunction activation, bool useBias, bool useSkip,
+                              int N, int C, int sek,
+                              CudaDeviceVariable<FP16> output, CudaDeviceVariable<FP16> input,
+                              CudaDeviceVariable<FP16> skip, CudaDeviceVariable<FP16> bias, 
+                              CudaDeviceVariable<FP16> w1, CudaDeviceVariable<FP16> b1, 
+                              CudaDeviceVariable<FP16> w2, CudaDeviceVariable<FP16> b2,
+                              CudaStream stream)
+    {
+      // Each thread processes entire chess board.
+      if (!useSE)
+      {
+        CudaKernel kernelRELU = GetKernel(GetOIKernelRELU(Activation, useBias, useSkip));
+//        throw new Exception("set <<grid_dim, kOpInpTransformBlockSize, 0, stream>>>  ");
+        kernelRELU.BlockDimensions = (int)MathUtils.RoundedUp(C, kOpInpTransformBlockSize);
+        kernelRELU.GridDimensions = N;
+        LaunchKernel(stream, kernelRELU, N, C, 
+                     output.DevicePointer, input.DevicePointer,
+                     CUPtr(skip), CUPtr(bias));
+#if NOT
+          dim3 grid_dim(DivUp(C, kOpInpTransformBlockSize), N, 1);
+          OutputTransform_relu_InputTransform_kernel
+            <half, activation, use_bias, use_skip>
+            <<<grid_dim, kOpInpTransformBlockSize, 0, stream>>> 
+            (N, C, output, input, (half*)skip, bias);
+#endif
+      }
+      else if (C > 384) //kMaxResBlockFusingChannels
+      {
+        // Use special kernel with reduced register pressure - only works on Ampere
+        if (C <= 512) // kMaxResBlockFusingSeKFp16Ampere
         {
-          preLauncher.Parms.ObjRef<int>(0) = N;
-          preLauncher.LaunchAsync();
+          // max supported filter count for fast path
+
+          CudaKernel kernelSHMEM = GetKernel(GetOIKernelNameShmem(useSE, Activation, useBias, useSkip));
+
+          CUdeviceptr DUMMY = default;
+          if (!base.HasSE)
+          {
+            // Although not actually used in non-SE mode,
+            // we have to pass some valid address to the kernel to prevent error.
+            DUMMY = default;// scratch.DevicePointer;
+          }
+
+          kernelSHMEM.GridDimensions = N;
+          kernelSHMEM.BlockDimensions = C;
+
+          int numSharedBytes = 0;
+          if (!LastBlock)
+          {
+            numSharedBytes = NUM_SHARED_BYTES;
+            kernelSHMEM.MaxDynamicSharedSizeBytes = NUM_SHARED_BYTES;
+          }
+
+          CUDAKernelLauncher launcher;
+            launcher = new(kernelSHMEM, stream, numSharedBytes,
+                           new object[] {N, C, sek,
+                                         output.DevicePointer, input.DevicePointer,
+                                         skip.DevicePointer, biases1.DevicePointer,
+                                         HasSE ? Weights1.DevicePointer : DUMMY, HasSE ? Biases1.DevicePointer : DUMMY,
+                                         HasSE ? Weights2.DevicePointer : DUMMY, HasSE ? Biases2.DevicePointer : DUMMY,
+                                         stream.Stream.Pointer});
+
+          launcher.Parms.ObjRef<int>(0) = N;
+          launcher.LaunchAsync();
+#if NOT
+            cudaFuncSetAttribute(OutputInputTransformKernel_fp16_shmem_board<activation, use_bias, use_skip>,
+                                 cudaFuncAttributeMaxDynamicSharedMemorySize, 72 * C * sizeof(half));
+            OutputInputTransformKernel_fp16_shmem_board
+              <activation,use_bias, use_skip>
+              <<<N, C, kMaxResBlockFusingSeFp16AmpereSmem, stream >>> 
+              (N, C, se_K, (half*)output, (const half*)input, (half*)skip,
+              (half*)bias, (half*)w1, (half*)b1, (half*)w2, (half*)b2);
+#endif
         }
         else
         {
-          LaunchKernel(stream, kernelOutputInputPre, N, C, 0,
-                      transformed_input.DevicePointer, transformed_output.DevicePointer,
-                      (IntPtr)0, biases0.DevicePointer,
-                      (IntPtr)0, (IntPtr)0,
-                      (IntPtr)0, (IntPtr)0, stream.Stream.Pointer);
+          throw new Exception("Residual block fusing opt not supported for the given data type and no of filters");
         }
-
-
-
-      #endregion
-
-      // "transformed_input" tensor now contains transformed input for the next convolution
-
-#if FEATURE_BLASLT
-      if (batchMultiplier != null)
-      {
-        if (N != NNBackendLC0_CUDA.BLASLT_N) throw new Exception("wrong N");
-
-        batchMultiplier.Execute(stream, transformedWeights1, transformed_input, transformed_output, false);
       }
       else
       {
-#endif
-      cublasRowMajorMatrixMul(transformed_input, transformedWeights1, transformed_output, N * 4, C, C, 36);
-
-      // Verify support for this combination of network/hardware.
-      if (LastBlock && HasSE)
-      {
-        const int kMaxResBlockFusingChannels = 384;  // limit on num_filters
-        const int kMaxResBlockFusingSeKFp16Ampere = 512;  // (use a different kernel with reduced register pressure)
-        const int kMaxResBlockFusingSeFp16AmpereSmem = 72 * 1024;  // shared memory used by the special kernel
-
-        bool allowFusing = (C <= kMaxResBlockFusingChannels)
-                        || ((SharedMemSize >= kMaxResBlockFusingSeFp16AmpereSmem) &&
-                            (C <= kMaxResBlockFusingSeKFp16Ampere));
-        if (!allowFusing)
-        {
-          // TODO: support this case (for 512b networks on hardware without sufficient shared memory.
-          throw new Exception("Ceres limitation: network not supported on this hardware, see possible remediation in source.");
+        CudaKernel kernelSE_RELU = GetKernel(GetOIKernelSE_RELU(Activation, useBias, useSkip));
+        kernelSE_RELU.BlockDimensions = N;
+        kernelSE_RELU.GridDimensions = C;
+        throw new Exception("set <<<N, C, 0, stream>>> ");
+        LaunchKernel(stream, kernelSE_RELU, N, C, sek,
+                     output.DevicePointer, input.DevicePointer,
+                     CUPtr(skip), CUPtr(bias), CUPtr(w1), CUPtr(b1), CUPtr(w2), CUPtr(b2),
+                     stream.Stream.Pointer);
 #if NOT
-// Need to add translation of this code to support this case
-OutputTransform<DataType, true, true, true, true, true, true>(
-            N, C, se_k_, (DataType*)input, transformed_output, input,
-            biases1_, w1_, b1_, w2_, b2_, stream);
-        InputTransform<DataType, true>(N, C, output, (DataType*)input, stream);
+        CudaKernel kernel = 
+        OutputTransform_SE_relu_InputTransform_kernel
+            <half, activation, use_bias, use_skip>
+            <<<N, C, 0, stream>>> 
+            (N, C, se_K, output, input, (half*)skip, bias, w1, b1, w2, b2);
 #endif
-        }
       }
 
 
-      CudaKernel kernelPost = LastBlock ? kernelOutput : kernelOutputInput;
 
-      int numSharedBytes = 0;
-      if (!LastBlock)
-      {
-        numSharedBytes = NUM_SHARED_BYTES;
-      }
-
-      kernelPost.GridDimensions = N;
-      kernelPost.BlockDimensions = C;
-
-      CUdeviceptr DUMMY = default;
-      if (!base.HasSE)
-      {
-        // Although not actually used in non-SE mode,
-        // we have to pass some valid address to the kernel to prevent error.
-        DUMMY = scratch.DevicePointer;
-      }
-
-      if (USE_LAUNCHER && postLauncher == null)
-      {
-        postLauncher = new(kernelPost, stream, numSharedBytes,
-                             new object[] {N, C, SEK,
-                                           output.DevicePointer, transformed_output.DevicePointer,
-                                           input.DevicePointer, biases1.DevicePointer,
-                                           HasSE ? Weights1.DevicePointer : DUMMY, HasSE ? Biases1.DevicePointer : DUMMY,
-                                           HasSE ? Weights2.DevicePointer : DUMMY, HasSE ? Biases2.DevicePointer : DUMMY,
-                             stream.Stream.Pointer}
-                             );
-      }
-
-      if (postLauncher != null)
-      {
-        postLauncher.Parms.ObjRef<int>(0) = N;
-        postLauncher.LaunchAsync();
-      }
-      else
-      {
-        throw new NotImplementedException("No longer support USE_LAUNCHER=false, setting of shared memory must be remediated.");
-
-        // This kernel is the slowest part of this block
-        // NOTE: the PTX may look like it fails to take advantage of FMA operations,
-        //       but in fact a postprocessing step does this, explicit FMA was no faster.
-        //      using (new TimingBlockCUDA("residual block kernelOutputInput", stream))
-        LaunchKernel(stream, kernelPost, N, C, SEK,
-                            output.DevicePointer, transformed_output.DevicePointer,
-                            input.DevicePointer, biases1.DevicePointer,
-                            HasSE ? Weights1.DevicePointer : DUMMY, HasSE ? Biases1.DevicePointer : DUMMY,
-                            HasSE ? Weights2.DevicePointer : DUMMY, HasSE ? Biases2.DevicePointer : DUMMY, stream.Stream.Pointer);
-      }
-
-      // "output" tensor now contains transformed input for the next
-      // convolution
     }
 
+
+#region Kernel name helpers
+
+    static object CUPtr(CudaDeviceVariable<FP16> var) => var == null ? (IntPtr)0 : var.DevicePointer;
+
+    CudaKernel GetKernel(string kernelName) => Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, kernelName);
+
+    static string GetOIKernelNameShmem(bool useSE, ActivationFunction activation, bool useBias, bool useSkip)
+    {
+      const string CALL = "_ZN6lczero13cudnn_backend43OutputInputTransformKernel_fp16_shmem_boardILb!1ELNS0_18ActivationFunctionE!2ELb!3ELb!4EEEviiiP6__halfPKS3_S4_S6_S6_S6_S6_S6_";
+      return CALL.Replace("!1", BoolStr(useSE))
+                 .Replace("!2", ((int)activation).ToString())
+                 .Replace("!3", BoolStr(useBias))
+                 .Replace("!4", BoolStr(useSkip));
+    }
+
+    static string GetOIKernelRELU(ActivationFunction activation, bool useBias, bool useSkip)
+    {
+      const string CALL = "_ZN6lczero13cudnn_backend42OutputTransform_relu_InputTransform_kernelI6__halfLNS0_18ActivationFunctionE!1ELb!2ELb!3EEEviiPT_PKS4_S5_S7_";
+      return CALL.Replace("!1", ((int)activation).ToString())
+                 .Replace("!2", BoolStr(useBias))
+                 .Replace("!3", BoolStr(useSkip));
+    }
+
+    static string GetOIKernelSE_RELU(ActivationFunction activation, bool useBias, bool useSkip)
+    {
+      const string CALL = "_ZN6lczero13cudnn_backend45OutputTransform_SE_relu_InputTransform_kernelI6__halfLNS0_18ActivationFunctionE!1ELb!2ELb!3EEEviiiPT_PKS4_S5_S7_S7_S7_S7_S7_";
+      return CALL.Replace("!1", ((int)activation).ToString())
+                  .Replace("!2", BoolStr(useBias))
+                  .Replace("!3", BoolStr(useSkip));
+    }
+
+#endregion
   }
+
+
 }
 
 
