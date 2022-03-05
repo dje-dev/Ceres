@@ -70,8 +70,8 @@ namespace Ceres.APIExamples
                                           : @"C:\dev\ceres\artifacts\release\net5.0\ceres.exe";
     static string exeCeres93() => SoftwareManager.IsLinux ? @"/raid/dev/Ceres93/artifacts/release/5.0/Ceres.dll"
                                                 : @"C:\ceres\releases\v0.93\ceres.exe";
-    static string exeCeres95_8() => SoftwareManager.IsLinux ? @"/raid/dev/Ceres94/Ceres.dll"
-                                                : @"C:\ceres\releases\v0.95_RC8\ceres.exe";
+    static string exeCeres96() => SoftwareManager.IsLinux ? @"/raid/dev/Ceres96/Ceres.dll"
+                                                : @"C:\ceres\releases\v0.96\ceres.exe";
     static string exeCeresPreNC() => SoftwareManager.IsLinux ? @"/raid/dev/Ceres_PreNC/artifacts/release/5.0/Ceres.dll"
                                                 : @"c:\ceres\releases\v0.95_PreNC\ceres.exe";
 
@@ -183,7 +183,7 @@ namespace Ceres.APIExamples
       //NET1 = "781451";
       //NET2 = "mg-40b-swa-1670000";
       //NET2 = "256x20-T75-32MGames-2120K";
-      //NET1 = "mg-40b-swa-1670000";
+      //NET1 = "781734";
       //NET2 = "mg-40b-swa-1670000";
       //NET1 = "tinker_20b";
       //NET2 = "tinker_20b";
@@ -219,8 +219,8 @@ namespace Ceres.APIExamples
       //limit1 = SearchLimit.SecondsForAllMoves(40);
       //limit1 = SearchLimit.NodesForAllMoves(1_000_000, 10_000);
       //limit1 = SearchLimit.SecondsForAllMoves(15);
-      //limit1 = SearchLimit.NodesPerMove(15_000);
-      limit1 = SearchLimit.SecondsForAllMoves(300, 5) * 1.0f;
+      //limit1 = SearchLimit.NodesPerMove(1000);
+      limit1 = SearchLimit.SecondsForAllMoves(30, 0.3f);
       //ok      limit1 = SearchLimit.NodesPerMove(350_000); try test3.pgn against T75 opponent Ceres93 (in first position, 50% of time misses win near move 12
 
       SearchLimit limit2 = limit1;
@@ -366,13 +366,13 @@ namespace Ceres.APIExamples
       GameEngineDef engineDefCeresUCI2 = new GameEngineDefCeresUCI("CeresUCINew", evalDef2, overrideEXE: exeCeres(), disableFutilityStopSearch: forceDisableSmartPruning);
 
       GameEngineDef engineDefCeres93 = new GameEngineDefCeresUCI("Ceres93", evalDef2, overrideEXE: exeCeres93(), disableFutilityStopSearch: forceDisableSmartPruning);
-      GameEngineDef engineDefCeres95RC8 = new GameEngineDefCeresUCI("Ceres95RC8", evalDef2, overrideEXE: exeCeres95_8(), disableFutilityStopSearch: forceDisableSmartPruning);
+      GameEngineDef engineDefCeres96 = new GameEngineDefCeresUCI("Ceres96", evalDef2, overrideEXE: exeCeres96(), disableFutilityStopSearch: forceDisableSmartPruning);
       GameEngineDef engineDefCeresPreNC = new GameEngineDefCeresUCI("CeresPreNC", evalDef2, overrideEXE: exeCeresPreNC(), disableFutilityStopSearch: forceDisableSmartPruning);
 
       EnginePlayerDef playerCeres1UCI = new EnginePlayerDef(engineDefCeresUCI1, limit1);
       EnginePlayerDef playerCeres2UCI = new EnginePlayerDef(engineDefCeresUCI2, limit2);
       EnginePlayerDef playerCeres93 = new EnginePlayerDef(engineDefCeres93, limit2);
-      EnginePlayerDef playerCeres95_RC8 = new EnginePlayerDef(engineDefCeres95RC8, limit2);
+      EnginePlayerDef playerCeres96 = new EnginePlayerDef(engineDefCeres96, limit2);
       EnginePlayerDef playerCeresPreNC = new EnginePlayerDef(engineDefCeresPreNC, limit2);
 
       EnginePlayerDef playerCeres1 = new EnginePlayerDef(engineDefCeres1, limit1);
@@ -404,7 +404,7 @@ namespace Ceres.APIExamples
                            SearchLimit.NodesPerMove(1_500_000),
                            GameEngineDefFactory.CeresInProcess("Ceres1", NET1, suiteGPU, paramsNoFutility with {EnableUncertaintyBoosting = true }),
                            null,//GameEngineDefFactory.CeresInProcess("Ceres2", NET1, suiteGPU, paramsNoFutility with { }),
-                           engineDefCeres95RC8);// playerLC0.EngineDef);
+                           engineDefCeres96);// playerLC0.EngineDef);
 
         suiteDef.MaxNumPositions = 100;
         suiteDef.EPDLichessPuzzleFormat = suiteDef.EPDFileName.ToUpper().Contains("LICHESS");
@@ -423,7 +423,7 @@ namespace Ceres.APIExamples
 
       // **************************************************
       EnginePlayerDef player1 = playerCeres1;
-      EnginePlayerDef player2 = playerCeres2;
+      EnginePlayerDef player2 = playerCeres96;
       // **************************************************
 
       TournamentGameQueueManager queueManager = null;
@@ -445,7 +445,7 @@ namespace Ceres.APIExamples
       }
 
       TournamentDef def;
-      bool roundRobin = true;
+      bool roundRobin = false;
       if (roundRobin)
       {
         def = new TournamentDef("RR");
