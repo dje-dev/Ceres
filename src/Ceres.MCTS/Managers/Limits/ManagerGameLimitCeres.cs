@@ -126,7 +126,8 @@ namespace Ceres.MCTS.Managers.Limits
       // Values of 0.75 or even higher may perform well for short games and/or weak nets
       // because games are often decided early on missed tactics. 
       // But for longer games (e.g. 3 to 5 minutes) somewhat lower values seem better.
-      const float BASE_MULTIPLIER = 0.70f;
+      // Extensive tests at (300 + 5) suggested perhaps 0.70 optimal against LC0, 0.67 against Stockfish.
+      const float BASE_MULTIPLIER = 0.68f;
 
       float ret = Aggressiveness * BASE_MULTIPLIER * (1.0f / baseDivisor) * factorWinningness * factorFirstMove;
 
