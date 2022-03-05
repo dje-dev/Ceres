@@ -220,7 +220,7 @@ namespace Ceres.APIExamples
       //limit1 = SearchLimit.NodesForAllMoves(1_000_000, 10_000);
       //limit1 = SearchLimit.SecondsForAllMoves(15);
       //limit1 = SearchLimit.NodesPerMove(1000);
-      limit1 = SearchLimit.SecondsForAllMoves(30, 0.3f);
+      limit1 = SearchLimit.SecondsForAllMoves(120, 1f);
       //ok      limit1 = SearchLimit.NodesPerMove(350_000); try test3.pgn against T75 opponent Ceres93 (in first position, 50% of time misses win near move 12
 
       SearchLimit limit2 = limit1;
@@ -422,7 +422,7 @@ namespace Ceres.APIExamples
 
 
       // **************************************************
-      EnginePlayerDef player1 = playerCeres1;
+      EnginePlayerDef player1 = playerCeres1UCI;
       EnginePlayerDef player2 = playerCeres96;
       // **************************************************
 
