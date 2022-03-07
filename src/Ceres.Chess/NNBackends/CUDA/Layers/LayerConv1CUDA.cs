@@ -87,7 +87,7 @@ namespace Ceres.Chess.NNBackends.CUDA
 
     protected override void DoEval(CudaStream stream, int N, CudaDeviceVariable<FP16> output, CudaDeviceVariable<FP16> input,
                                    CudaDeviceVariable<FP16> scratch, long scratch_size,
-                                   CudaDeviceVariable<FP16> scratchSecondHalf)
+                                   CudaDeviceVariable<FP16> scratchSecondHalf, CudaDeviceVariable<FP16> input2 = null)
     {
       cublasRowMajorMatrixMul(weightsCUDA, input, output, base.C, GetH * W, C, N, true);
 

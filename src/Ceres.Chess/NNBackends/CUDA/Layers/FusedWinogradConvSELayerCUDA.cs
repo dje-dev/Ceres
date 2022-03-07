@@ -102,25 +102,13 @@ namespace Ceres.Chess.NNBackends.CUDA
     protected override void DoEval(CudaStream stream, int N, CudaDeviceVariable<FP16> output, 
                               CudaDeviceVariable<FP16> input,
                               CudaDeviceVariable<FP16> scratch, long scratchSizeBytes,
-                              CudaDeviceVariable<FP16> scratchSecondHalf)
+                              CudaDeviceVariable<FP16> scratchSecondHalf, CudaDeviceVariable<FP16> input2 = null)
     {
-
-      if (Activation == ActivationFunction.NONE)
-      {
-        throw new NotImplementedException();
-        // Not yet ported to C#:
-        //if (!has_se_ && use_bias_ && !skip_add_)
-        //  OutputTransform < DataType, false, NONE, true, false, false, false > (
-        //        N, C, 0, output, transformed_output, nullptr, biases_, nullptr,
-        //        nullptr, nullptr, nullptr, stream);
-      }
-
       CudaDeviceVariable<FP16> transformed_input = scratch;
 
       kernelInputTransform.GridDimensions = N;
       kernelInputTransform.BlockDimensions = NumInputChannels;
       LaunchKernel(stream, kernelInputTransform, N, NumInputChannels, input.DevicePointer, transformed_input.DevicePointer, stream.Stream.Pointer);
-
 
       if (transformed_output == null)
       {

@@ -164,23 +164,25 @@ namespace Ceres.Chess.NNBackends.CUDA
     /// <param name="scratchSizeBytes"></param>
 
     protected abstract void DoEval(CudaStream stream, int N,
-                                   CudaDeviceVariable<FP16> output, CudaDeviceVariable<FP16> input,
+                                   CudaDeviceVariable<FP16> output, 
+                                   CudaDeviceVariable<FP16> input,
                                    CudaDeviceVariable<FP16> scratch, long scratchSizeBytes,
-                                   CudaDeviceVariable<FP16> scratchSecondHalf = null);
+                                   CudaDeviceVariable<FP16> scratchSecondHalf = null, 
+                                   CudaDeviceVariable<FP16> input2 = null);
 
-    public void Eval(CudaStream stream, int N, CudaDeviceVariable<FP16> output, CudaDeviceVariable<FP16> input,
+   public void Eval(CudaStream stream, int N, CudaDeviceVariable<FP16> output, CudaDeviceVariable<FP16> input,
                      CudaDeviceVariable<FP16> scratch, long scratchSizeBytes,
-                     CudaDeviceVariable<FP16> scratchSecondHalf)
+                     CudaDeviceVariable<FP16> scratchSecondHalf, CudaDeviceVariable<FP16> input2 = null)
     {
       if (Parent.DumpTimings)
       {
         DateTime start = DateTime.Now;
-        DoEval(stream, N, output, input, scratch, scratchSizeBytes, scratchSecondHalf);
+        DoEval(stream, N, output, input, scratch, scratchSizeBytes, scratchSecondHalf, input2);
         LastExecutionTime = DateTime.Now - start;
       }
       else
       {
-        DoEval(stream, N, output, input, scratch, scratchSizeBytes, scratchSecondHalf);
+        DoEval(stream, N, output, input, scratch, scratchSizeBytes, scratchSecondHalf, input2);
       }
 
       if (Parent.DumpTimings)

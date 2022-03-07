@@ -210,7 +210,6 @@ namespace Ceres.Chess.NNBackends.CUDA
       // Policy head.
       if (PolicyIsAttention)
       {
-
         int embeddingOpSize = weights.ip_pol_b.Length;
         int wqOpSize = weights.ip2_pol_b.Length;
         int wkOptSize = weights.ip3_pol_b.Length;
@@ -221,19 +220,10 @@ namespace Ceres.Chess.NNBackends.CUDA
           throw new NotImplementedException("Policy encoder heads not yet supported.");
         }
 
-        // for debug!
-        Console.WriteLine("size of weight ip_pol_b/w: " + (int)weights.ip_pol_b.Length + " " + (int)weights.ip_pol_w.Length);
-        Console.WriteLine("size of weight ip_pol2_b/w: " + (int)weights.ip2_pol_b.Length + " " + (int)weights.ip2_pol_w.Length);
-        Console.WriteLine("size of weight ip_pol3_b/w: " + (int)weights.ip3_pol_b.Length + " " + (int)weights.ip3_pol_w.Length);
-        Console.WriteLine("size of weight ip_pol4_b/w: " + (int)weights.ip4_pol_b.Length + " " + (int)weights.ip4_pol_w.Length);
+        AttentionPolicyHead attentionPolicy = null;
+        attentionPolicy = new (execContext, "policy_conv1", Layers.Count, weights, 64 * 64 + 24 * 8, 1, 1, LastLayer, DefaultActivation);
+        Layers.Add(attentionPolicy);
 
-//        AttentionPolicyHead attentionPolicy = new AttentionPolicyHead(execContext, "attention_policy", )
-//        Layers.Add(attentionPolicy);
-
-#if NOT
-        auto AttentionPolicy = std::make_unique<AttentionPolicyHead<DataType>>(
-    getLastLayer(), weights, scratch_mem_);
-#endif
         LayerPolicyMapCUDA policymap = new(execContext, "policy_map", Layers.Count, LastLayer, 1858, 1, 1, 64 * 64 + 8 * 24, true);
         policymap.LoadWeights(PolicyMap.AttentionPolicyMap);
         Layers.Add(policymap);
@@ -250,9 +240,6 @@ namespace Ceres.Chess.NNBackends.CUDA
         policymap->LoadWeights(kConvPolicyMap, scratch_mem_);
         network_.emplace_back(std::move(policymap));
 #endif
-
-        // more code here
-        throw new NotImplementedException();
       }
       else if (PolicyIsConvolutional)
       {
@@ -264,7 +251,7 @@ namespace Ceres.Chess.NNBackends.CUDA
         int pol_channels = weights.policy.biases.Length;
 
         FusedWinogradConvSELayerCUDA conv2;
-        conv2 = new(execContext, "policy_conv2", Layers.Count, pol_channels, 8, 8, LastLayer, NumFilters,  true, false, false, 0, false, activation);
+        conv2 = new(execContext, "policy_conv2", Layers.Count, pol_channels, 8, 8, LastLayer, NumFilters,  true, false, false, 0, false, BaseLayerCUDA.ActivationFunction.NONE);
         conv2.LoadWeights(execContext.Stream2, weights.policy.weights, weights.policy.biases);
         Layers.Add(conv2);
 
@@ -278,7 +265,7 @@ namespace Ceres.Chess.NNBackends.CUDA
         convPol.LoadWeights(weights.policy.weights, weights.policy.biases);
         Layers.Add(convPol);
 
-        LayerFCCUDA FCPol = new(execContext, "policy_fc", Layers.Count, LastLayer, weights.ip_pol_b.Length, 1, 1, true, activation);
+        LayerFCCUDA FCPol = new(execContext, "policy_fc", Layers.Count, LastLayer, weights.ip_pol_b.Length, 1, 1, true, BaseLayerCUDA.ActivationFunction.NONE);
         FCPol.LoadWeights(weights.ip_pol_w, weights.ip_pol_b);
         Layers.Add(FCPol);
       }
@@ -341,8 +328,24 @@ namespace Ceres.Chess.NNBackends.CUDA
       }
 
       // Policy head.
-      if (PolicyIsConvolutional)
+      if (PolicyIsAttention)
       {
+#if NOT
+      network_[l++]->Eval(batchSize, tensor_mem[0], tensor_mem[2], tensor_mem[1], scratch_mem, scratch_size_, nullptr, cublas, stream);  // Entire Attention policy head except for the policy map
+      network_[l++]->Eval(batchSize, tensor_mem[1], tensor_mem[0], nullptr, scratch_mem, scratch_size_, nullptr, cublas, stream);  // policy map layer
+      copyTypeConverted(opPol, (half*)(tensor_mem[1]), batchSize * kNumOutputPolicy, stream);  // POLICY output
+#endif
+        Layers[l++].Eval(stream, batchSize, inputs.Tensors[0], inputs.Tensors[2], inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf, inputs.Tensors[1]);// Entire Attention policy head except for the policy map
+        Layers[l++].Eval(stream, batchSize, inputs.Tensors[1], inputs.Tensors[0], inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf); // policy map layer
+      }
+      else if (PolicyIsConvolutional)
+      {
+#if NOT
+      network_[l++]->Eval(batchSize, tensor_mem[0], tensor_mem[2], nullptr, scratch_mem, scratch_size_, nullptr, cublas, stream);  // policy conv1
+      network_[l++]->Eval(batchSize, tensor_mem[1], tensor_mem[0], nullptr, scratch_mem, scratch_size_, nullptr, cublas, stream);  // policy conv2
+      network_[l++]->Eval(batchSize, tensor_mem[0], tensor_mem[1], nullptr, scratch_mem, scratch_size_, nullptr, cublas, stream);  // policy map layer
+      copyTypeConverted(opPol, (half*)(tensor_mem[0]), batchSize * kNumOutputPolicy, stream);  // POLICY output
+#endif
         Layers[l++].Eval(stream, batchSize, inputs.Tensors[0], inputs.Tensors[2], inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // policy conv1
         Layers[l++].Eval(stream, batchSize, inputs.Tensors[1], inputs.Tensors[0], inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // policy conv2
         Layers[l++].Eval(stream, batchSize, outputs.PolicyOut, inputs.Tensors[1], inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // policy map layer
