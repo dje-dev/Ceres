@@ -12,12 +12,14 @@
 
 #region Using directives
 
+using Ceres.Base.DataTypes;
 using ManagedCuda;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Threading;
 
 #endregion
@@ -117,6 +119,55 @@ namespace Ceres.Base.CUDA
 
     #endregion
 
+
+    /// <summary>
+    /// Debugging diagnostic helper that outputs checksum and first element from a CudaDeviceVariable<FP16>.
+    /// </summary>
+    /// <param name="description"></param>
+    /// <param name="data"></param>
+    public void DumpVariableChecksum(string description, CudaDeviceVariable<FP16> data, int numItems)
+    {
+      // Make sure asynchronous computation finishes.
+      Context.Synchronize();
+
+      // Retrieve raw data from GPU.
+      if (data.Size < numItems)
+      {
+        numItems = data.Size; 
+      }
+
+      FP16[] raw = new FP16[numItems];
+      data.CopyToHost(raw, 0, 0, numItems * Marshal.SizeOf<FP16>());
+
+      // Compute a checksum, giving odd and even elements different multipliers
+      // to make values at least somewhat position dependent.
+      float acc = 0;
+      for (int i = 0; i <numItems; i++)
+      {
+        acc += (i % 2 == 0 ? 1 : 3) * raw[i];
+      }
+
+      Console.WriteLine("CHECKSUM: " + description + " " + acc + " first=" + raw[0]);
+    }
+
+#if EQUIVALENT_CPP
+  void Dump(cudaStream_t stream, char* desc, const half* data, int numElements) 
+  { 
+    cudaStreamSynchronize(stream);
+  
+    half* raw = new half[numElements];
+    cudaMemcpy((half*)(&raw[0]), data, numElements * 2, cudaMemcpyDeviceToHost);
+
+    float acc = 0;
+    for (int i = 0; i < numElements; i++) {
+      acc += (i % 2 == 0 ? 1 : 3) * (float)raw[i];
+    }
+
+    float first = (float)raw[0];
+    printf("CHECKSUM: %s %f first= %f\r\n", desc, acc, first);
+  }
+#endif
+
     #region Statics
 
     public static ConcurrentDictionary<int, CUDADevice> contexts = new();
@@ -143,9 +194,9 @@ namespace Ceres.Base.CUDA
       return device;
     }
 
-    #endregion
+#endregion
 
-    #region Dispose
+#region Dispose
 
     public override string ToString()
     {
@@ -171,6 +222,6 @@ namespace Ceres.Base.CUDA
       GC.SuppressFinalize(this);
     }
 
-    #endregion
+#endregion
   }
 }
