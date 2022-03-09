@@ -78,7 +78,7 @@ namespace Ceres.Base.CUDA
 
     public void SetCurrent()
     {
-     if (!object.ReferenceEquals(currentContext, Context))
+      if (!object.ReferenceEquals(currentContext, Context))
       {
         Context.SetCurrent();
         currentContext = Context;
@@ -86,7 +86,7 @@ namespace Ceres.Base.CUDA
     }
 
     #region Kernel loading
-  
+
     ConcurrentDictionary<string, CudaKernel> cachedKernels = new();
     public CudaKernel GetKernel(Assembly assembly, string resource, string kernelName)
     {
@@ -133,7 +133,7 @@ namespace Ceres.Base.CUDA
       // Retrieve raw data from GPU.
       if (data.Size < numItems)
       {
-        numItems = data.Size; 
+        numItems = data.Size;
       }
 
       FP16[] raw = new FP16[numItems];
@@ -142,13 +142,20 @@ namespace Ceres.Base.CUDA
       // Compute a checksum, giving odd and even elements different multipliers
       // to make values at least somewhat position dependent.
       float acc = 0;
-      for (int i = 0; i <numItems; i++)
+      for (int i = 0; i < numItems; i++)
       {
+        float val = raw[i];
+        if (!haveWarnedNaN && float.IsNaN(val))
+        {
+          Console.WriteLine("NaN at " + i + " in " + description);
+          haveWarnedNaN = true;
+        }
         acc += (i % 2 == 0 ? 1 : 3) * raw[i];
       }
 
       Console.WriteLine("CHECKSUM: " + description + " " + acc + " first=" + raw[0]);
     }
+    bool haveWarnedNaN = false;
 
 #if EQUIVALENT_CPP
   void Dump(cudaStream_t stream, char* desc, const half* data, int numElements) 
@@ -194,9 +201,9 @@ namespace Ceres.Base.CUDA
       return device;
     }
 
-#endregion
+    #endregion
 
-#region Dispose
+    #region Dispose
 
     public override string ToString()
     {
@@ -222,6 +229,6 @@ namespace Ceres.Base.CUDA
       GC.SuppressFinalize(this);
     }
 
-#endregion
+    #endregion
   }
 }
