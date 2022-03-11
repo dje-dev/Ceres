@@ -32,6 +32,8 @@ namespace Ceres.Chess.NNBackends.CUDA
 {
   public class ResidualBlockFusedCUDA : ResidualBlockBaseCUDA
   {
+    const bool DUMP = false;
+
     // The launcher preallocates and pins the parameters to pass
     // reducing memory allocations (considerably) and 
     // improving speed (slightly).
@@ -66,10 +68,63 @@ namespace Ceres.Chess.NNBackends.CUDA
 
     int NUM_SHARED_BYTES => IsBig ? (72 * 1024) : 0;  // SharedMemSize
 
+    CudaKernel kernelIOBiasNoSkip;
+    CudaKernel kernelIOBiasSkip;
+
+
     public override void LoadKernels()
     {
+      kernelIOBiasNoSkip = GetKernel(GetOIKernelRELU(Activation, true, false));
+      kernelIOBiasSkip = GetKernel(GetOIKernelRELU(Activation, true, true));
+      kernelOIShmemBiasSkip = GetKernel(GetOIKernelNameShmem(true, true));
+
+      kernelOutputSEInputKernelBiasNoSkip = GetKernel(GetOIKernelSE_RELU(Activation, true, false));
+      kernelOutputSEInputKernelBiasSkip = GetKernel(GetOIKernelSE_RELU(Activation, true, true));
     }
 
+    CudaKernel GetOutputSEInputKernel(bool useBias, bool useSkip)
+    {
+      if (useBias && useSkip)
+      {
+        return kernelOutputSEInputKernelBiasSkip;
+      }
+      else if (useBias && !useSkip)
+      {
+        return kernelOutputSEInputKernelBiasNoSkip;
+      }
+      else
+      {
+        throw new NotImplementedException("Internal error: unsupported backend feature useBias/useSkip");
+      }
+    }
+
+    CudaKernel GetOIShmemKernel(bool useBias, bool useSkip)
+    {
+      if (useBias && useSkip)
+      {
+        return kernelOIShmemBiasSkip;
+      }
+      else
+      {
+        throw new NotImplementedException("Internal error GetOIShmemKernel: unsupported backend feature useBias/useSkip");
+      }
+    }
+
+    CudaKernel GetOIKernel(bool useBias, bool useSkip)
+    {
+      if (useBias && useSkip)
+      {
+        return kernelIOBiasSkip;
+      }
+      else if (useBias && !useSkip)
+      {
+        return kernelIOBiasNoSkip;
+      }
+      else
+      {
+        throw new NotImplementedException("Internal error: unsupported backend feature useBias/useSkip");
+      }
+    }
 
     public readonly bool HasSE;
     public readonly int SEK;
@@ -83,7 +138,7 @@ namespace Ceres.Chess.NNBackends.CUDA
 
     CudaKernel kernelInput; // does not depend on activation
     CudaKernel kernelOutput;
-
+    CudaKernel kernelOutputNotNCHW;
 
     public ResidualBlockFusedCUDA(NNBackendExecContext parent, string name, int layerIndex,
                                   BaseLayerCUDA inputLayer,
@@ -103,6 +158,7 @@ namespace Ceres.Chess.NNBackends.CUDA
 
       kernelInput = GetKernel(knInput);
       kernelOutput = GetKernel(GetOutputTransformKernelName(HasSE, Activation, true, true, true, false));
+      kernelOutputNotNCHW = GetKernel(GetOutputTransformKernelName(HasSE, Activation, true, true, true, true));
 
       if (NNBackendLC0_CUDA.BLASLT && NNBackendLC0_CUDA.BLASLT_N > 0)
       {
@@ -161,17 +217,6 @@ namespace Ceres.Chess.NNBackends.CUDA
                                    long scratch_size,
                                    CudaDeviceVariable<FP16> scratchSecondHalf)
     {
-      // normally:
-      // - "output" initially contains the transformed input, 
-      //    and after this layer, it contains the transformed input for next layer
-      // - "input" contains the original/untransformed input
-      // special cases:
-      //   - for first_block_, input is real input (untransformed)
-      //   - for last_block_, output is the final output of this block (untransformed)
-
-      // Split the scratch space into two parts - use first part for holding
-      // transformed input and second part for transformed output.
-
       CudaDeviceVariable<FP16> transformed_input = scratch;
       CudaDeviceVariable<FP16> transformed_output = scratchSecondHalf;
 
@@ -221,7 +266,7 @@ namespace Ceres.Chess.NNBackends.CUDA
       bool allowFusing = (C <= kMaxResBlockFusingChannels)
                       || ((SharedMemSize >= kMaxResBlockFusingSeFp16AmpereSmem)
                           && (C <= kMaxResBlockFusingSeKFp16Ampere));
-      
+
       if (LastBlock)
       {
         CUdeviceptr DUMMY = transformed_input.DevicePointer;// needs to point to something valid
@@ -249,7 +294,6 @@ namespace Ceres.Chess.NNBackends.CUDA
           {
             // OutputTransform<DataType, true, RELU, true, true, true, true>(
             //   N, C, se_k_, (DataType*)input, transformed_output, input, biases1_, w1_, b1_, w2_, b2_, stream);
-            CudaKernel kernelOutputNotNCHW = GetKernel(GetOutputTransformKernelName(true, Activation, true, true, true, true));
             kernelOutputNotNCHW.GridDimensions = N;
             kernelOutputNotNCHW.BlockDimensions = C;
             LaunchKernel(stream, kernelOutputNotNCHW, N, C, SEK, input.DevicePointer, transformed_output.DevicePointer, input.DevicePointer,
@@ -257,11 +301,14 @@ namespace Ceres.Chess.NNBackends.CUDA
                          Weights1.DevicePointer, Biases1.DevicePointer,
                          Weights2.DevicePointer, Biases2.DevicePointer,
                          stream.Stream.Pointer);
+            if (DUMP) Console.WriteLine("Residual inner-output " + LastKernelExecutionTimeMS);
 
             // InputTransform<DataType, true>(N, C, output, (DataType*)input, stream);
             kernelInput.GridDimensions = N;
             kernelInput.BlockDimensions = C;
             LaunchKernel(stream, kernelInput, N, C, input.DevicePointer, output.DevicePointer, stream.Stream.Pointer);
+            if (DUMP) Console.WriteLine("Residual inner-output " + LastKernelExecutionTimeMS);
+
           }
         }
         else
@@ -276,7 +323,7 @@ namespace Ceres.Chess.NNBackends.CUDA
 
     }
 
-    const bool AVOID_GetOIKernelSE_RELU = false;
+    const bool AVOID_GetOIKernelSE_RELU = false; // just for testing
 
     //  public template<typename T = half, bool use_se, ActivationFunction activation, bool use_bias, bool use_skip>
     void OutputInputTransform(bool useSE, ActivationFunction activation, bool useBias, bool useSkip,
@@ -288,14 +335,15 @@ namespace Ceres.Chess.NNBackends.CUDA
       // Each thread processes entire chess board.
       if (!useSE)
       {
-        CudaKernel kernelRELU = GetKernel(GetOIKernelRELU(Activation, useBias, useSkip));
+        CudaKernel kernelIO = GetOIKernel(useBias, useSkip);
         //        throw new Exception("set <<grid_dim, kOpInpTransformBlockSize, 0, stream>>>  ");
-// ???????? Are GridDimensions/BlockDimensions swapped?
-        kernelRELU.GridDimensions =  new ManagedCuda.VectorTypes.dim3((int)MathUtils.RoundedUp(C, kOpInpTransformBlockSize), N, 1);
-        kernelRELU.BlockDimensions = kOpInpTransformBlockSize;
-        LaunchKernel(stream, kernelRELU, N, C, 
+        // ???????? Are GridDimensions/BlockDimensions swapped?
+        kernelIO.GridDimensions =  new ManagedCuda.VectorTypes.dim3((int)MathUtils.RoundedUp(C, kOpInpTransformBlockSize), N, 1);
+        kernelIO.BlockDimensions = kOpInpTransformBlockSize;
+        LaunchKernel(stream, kernelIO, N, C, 
                      output.DevicePointer, input.DevicePointer,
                      CUPtr(skip, dummy), CUPtr(bias, dummy));
+        if (DUMP) Console.WriteLine("Residual !useSE " + LastKernelExecutionTimeMS);
 #if NOT
           dim3 grid_dim(DivUp(C, kOpInpTransformBlockSize), N, 1);
           OutputTransform_relu_InputTransform_kernel
@@ -307,12 +355,14 @@ namespace Ceres.Chess.NNBackends.CUDA
       else if (AVOID_GetOIKernelSE_RELU || C > 384) //kMaxResBlockFusingChannels
       {
         // Use special kernel with reduced register pressure - only works on Ampere
-        if (C <= 512) // kMaxResBlockFusingSeKFp16Ampere
+        if (C > 512) // kMaxResBlockFusingSeKFp16Ampere
+        {
+          throw new Exception("Residual block fusing opt not supported for the given data type and no of filters");
+        }
+        else
         {
           // max supported filter count for fast path
-
-          CudaKernel kernelSHMEM = GetKernel(GetOIKernelNameShmem(Activation, useBias, useSkip));
-
+          CudaKernel kernelSHMEM = GetOIShmemKernel(useBias, useSkip);
           CUdeviceptr DUMMY = default;
           if (!base.HasSE)
           {
@@ -349,10 +399,9 @@ namespace Ceres.Chess.NNBackends.CUDA
                                         HasSE ? Weights2.DevicePointer : DUMMY, HasSE ? Biases2.DevicePointer : DUMMY,
                                         stream.Stream.Pointer});
 
-//          launcher.Parms.ObjRef<int>(0) = N;
+          launcher.Parms.ObjRef<int>(0) = N;
 //          launcher.Parms.ObjRef<int>(1) = C;
           launcher.LaunchAsync();
-//stream.Synchronize();
 
 #if NOT
             cudaFuncSetAttribute(OutputInputTransformKernel_fp16_shmem_board<activation, use_bias, use_skip>,
@@ -364,23 +413,21 @@ namespace Ceres.Chess.NNBackends.CUDA
               (half*)bias, (half*)w1, (half*)b1, (half*)w2, (half*)b2);
 #endif
         }
-        else
-        {
-          throw new Exception("Residual block fusing opt not supported for the given data type and no of filters");
-        }
       }
       else
       {
-        CudaKernel kernelSE_RELU = GetKernel(GetOIKernelSE_RELU(Activation, useBias, useSkip));
+//        throw new Exception("Needs remediation, shared size set by above code path for this kernel but here we try to launch with shared size 0");
+        CudaKernel kernelSE_RELU = GetOutputSEInputKernel(useBias, useSkip);
         kernelSE_RELU.GridDimensions = N;
         kernelSE_RELU.BlockDimensions = C;
-//        throw new Exception("set <<<N, C, 0, stream>>> ");
+
         LaunchKernel(stream, kernelSE_RELU, N, C, sek,
                      output.DevicePointer, input.DevicePointer,
                      skip.DevicePointer, biases1.DevicePointer,
                      Weights1.DevicePointer, Biases1.DevicePointer, Weights2.DevicePointer, Biases2.DevicePointer,
                      stream.Stream.Pointer);
-//stream.Synchronize();
+        if (DUMP) Console.WriteLine("Residual OutputSEInput " + LastKernelExecutionTimeMS);
+
 #if NOT
         CudaKernel kernel = 
         OutputTransform_SE_relu_InputTransform_kernel
@@ -402,10 +449,14 @@ namespace Ceres.Chess.NNBackends.CUDA
       => var == null ? dummy.DevicePointer : var.DevicePointer;
     CudaKernel GetKernel(string kernelName) => Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, kernelName);
 
-    static string GetOIKernelNameShmem(ActivationFunction activation, bool useBias, bool useSkip)
+    CudaKernel kernelOIShmemBiasSkip;
+    CudaKernel kernelOutputSEInputKernelBiasNoSkip;
+    CudaKernel kernelOutputSEInputKernelBiasSkip;
+
+    string GetOIKernelNameShmem(bool useBias, bool useSkip)
     {
-      const string CALL = "_ZN6lczero13cudnn_backend43OutputInputTransformKernel_fp16_shmem_boardILNS0_18ActivationFunctionE!1ELb!2ELb!3EEEviiiP6__halfPKS3_S4_S6_S6_S6_S6_S6_";
-      return CALL.Replace("!1", ((int)activation).ToString())
+      const string kernelNameOIShmem = "_ZN6lczero13cudnn_backend43OutputInputTransformKernel_fp16_shmem_boardILNS0_18ActivationFunctionE!1ELb!2ELb!3EEEviiiP6__halfPKS3_S4_S6_S6_S6_S6_S6_";
+      return kernelNameOIShmem.Replace("!1", ((int)Activation).ToString())
                  .Replace("!2", BoolStr(useBias))
                  .Replace("!3", BoolStr(useSkip));
     }
