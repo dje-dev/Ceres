@@ -76,9 +76,10 @@ namespace Ceres.Chess.NNBackends.CUDA
       }
     }
 
-    protected override void DoEval(CudaStream stream, int N, CudaDeviceVariable<FP16> output, CudaDeviceVariable<FP16> input,
+    protected override void DoEval(CudaStream stream, int N, CudaDeviceVariable<FP16> output, 
+                                   CudaDeviceVariable<FP16> input, CudaDeviceVariable<FP16> input2,
                                    CudaDeviceVariable<FP16> scratch, long scratch_size,
-                                   CudaDeviceVariable<FP16> scratchSecondHalf, CudaDeviceVariable<FP16> input2 = null)
+                                   CudaDeviceVariable<FP16> scratchSecondHalf)
     {
       int num_outputs = C * GetH * W;
       int num_inputs = input_.C * input_.GetH * input_.W;
@@ -105,7 +106,6 @@ namespace Ceres.Chess.NNBackends.CUDA
                            ref CUDAUtils.halfZero,// beta
                            outputs.DevicePointer, // C
                            (int)output_size);     // ldc, leading rank of C
-
       if (err != CublasStatus.Success)
       {
         throw new Exception("LayerFCCUDA failure " + err);

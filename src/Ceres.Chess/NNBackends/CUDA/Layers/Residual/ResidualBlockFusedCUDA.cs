@@ -156,11 +156,10 @@ namespace Ceres.Chess.NNBackends.CUDA
 
     protected override void DoEval(CudaStream stream, int N,
                                    CudaDeviceVariable<FP16> output,
-                                   CudaDeviceVariable<FP16> input,
+                                   CudaDeviceVariable<FP16> input, CudaDeviceVariable<FP16> input2,
                                    CudaDeviceVariable<FP16> scratch,
                                    long scratch_size,
-                                   CudaDeviceVariable<FP16> scratchSecondHalf,
-                                   CudaDeviceVariable<FP16> input2 = null)
+                                   CudaDeviceVariable<FP16> scratchSecondHalf)
     {
       // normally:
       // - "output" initially contains the transformed input, 
@@ -176,7 +175,7 @@ namespace Ceres.Chess.NNBackends.CUDA
       CudaDeviceVariable<FP16> transformed_input = scratch;
       CudaDeviceVariable<FP16> transformed_output = scratchSecondHalf;
 
-#region Preparatory
+      #region Preparatory
 
       if (FirstBlock)
       {
@@ -219,13 +218,12 @@ namespace Ceres.Chess.NNBackends.CUDA
 
       cublasRowMajorMatrixMul(transformed_input, transformedWeights1, transformed_output, N * 4, C, C, 36);
 
-      Dump(stream, "after pre: transformed_input", transformed_input);
-      Dump(stream, "after pre: transformed_output", transformed_output);
-
-      bool allowFusing = (C <= kMaxResBlockFusingChannels) 
-                      || ((this.SharedMemSize >= kMaxResBlockFusingSeFp16AmpereSmem) && (C <= kMaxResBlockFusingSeKFp16Ampere));
-    if (LastBlock) 
-    {
+      bool allowFusing = (C <= kMaxResBlockFusingChannels)
+                      || ((SharedMemSize >= kMaxResBlockFusingSeFp16AmpereSmem)
+                          && (C <= kMaxResBlockFusingSeKFp16Ampere));
+      
+      if (LastBlock)
+      {
         CUdeviceptr DUMMY = transformed_input.DevicePointer;// needs to point to something valid
         kernelOutput.GridDimensions = N;
         kernelOutput.BlockDimensions = C;
@@ -234,63 +232,48 @@ namespace Ceres.Chess.NNBackends.CUDA
                     input.DevicePointer, biases1.DevicePointer,
                     HasSE ? Weights1.DevicePointer : DUMMY, HasSE ? Biases1.DevicePointer : DUMMY,
                     HasSE ? Weights2.DevicePointer : DUMMY, HasSE ? Biases2.DevicePointer : DUMMY, stream.Stream.Pointer);
-    } 
-    else 
-    {
-      if (HasSE) 
+      }
+      else
       {
-        if (allowFusing) 
+        if (HasSE)
         {
-          // OutputInputTransform<DataType, true, RELU, true, true>(
-          //   N, C, se_k_, output, transformed_output, input, biases1_, w1_, b1_, w2_, b2_, stream);
-          OutputInputTransform(true, Activation, true, true, 
-                               N, C, SEK, output, transformed_output, input, biases1, 
-                               stream, scratch);
-        } 
-        else 
-        {
-          // OutputTransform<DataType, true, RELU, true, true, true, true>(
-          //   N, C, se_k_, (DataType*)input, transformed_output, input, biases1_, w1_, b1_, w2_, b2_, stream);
-          CudaKernel kernelOutputNotNCHW = GetKernel(GetOutputTransformKernelName(true, Activation, true, true, true, true));
-          kernelOutputNotNCHW.GridDimensions = N;
-          kernelOutputNotNCHW.BlockDimensions = C;
-          LaunchKernel(stream, kernelOutputNotNCHW, N, C, SEK, input.DevicePointer, transformed_output.DevicePointer, input.DevicePointer, 
-                       biases1.DevicePointer,
-                       Weights1.DevicePointer, Biases1.DevicePointer, 
-                       Weights2.DevicePointer, Biases2.DevicePointer, 
-                       stream.Stream.Pointer);
-
-          // InputTransform<DataType, true>(N, C, output, (DataType*)input, stream);
-          kernelInput.GridDimensions = N;
-          kernelInput.BlockDimensions = C;
-          LaunchKernel(stream, kernelInput, N, C, input.DevicePointer, output.DevicePointer, stream.Stream.Pointer);
+          if (allowFusing)
+          {
+            // OutputInputTransform<DataType, true, RELU, true, true>(
+            //   N, C, se_k_, output, transformed_output, input, biases1_, w1_, b1_, w2_, b2_, stream);
+            OutputInputTransform(true, Activation, true, true,
+                                 N, C, SEK, output, transformed_output, input, biases1,
+                                 stream, scratch);
           }
-        } 
-      else      
-      {
-        OutputInputTransform(false, Activation, true, true,
-                             N, C, SEK, output, transformed_output, input, biases1, 
-                             stream, scratch);
+          else
+          {
+            // OutputTransform<DataType, true, RELU, true, true, true, true>(
+            //   N, C, se_k_, (DataType*)input, transformed_output, input, biases1_, w1_, b1_, w2_, b2_, stream);
+            CudaKernel kernelOutputNotNCHW = GetKernel(GetOutputTransformKernelName(true, Activation, true, true, true, true));
+            kernelOutputNotNCHW.GridDimensions = N;
+            kernelOutputNotNCHW.BlockDimensions = C;
+            LaunchKernel(stream, kernelOutputNotNCHW, N, C, SEK, input.DevicePointer, transformed_output.DevicePointer, input.DevicePointer,
+                         biases1.DevicePointer,
+                         Weights1.DevicePointer, Biases1.DevicePointer,
+                         Weights2.DevicePointer, Biases2.DevicePointer,
+                         stream.Stream.Pointer);
+
+            // InputTransform<DataType, true>(N, C, output, (DataType*)input, stream);
+            kernelInput.GridDimensions = N;
+            kernelInput.BlockDimensions = C;
+            LaunchKernel(stream, kernelInput, N, C, input.DevicePointer, output.DevicePointer, stream.Stream.Pointer);
+          }
+        }
+        else
+        {
+          OutputInputTransform(false, Activation, true, true,
+                               N, C, SEK, output, transformed_output, input, biases1,
+                               stream, scratch);
+        }
+
       }
 
-      Dump(stream, "after post: input", input);
-      Dump(stream, "after post: output", output);
-      }
 
-
-    }
-
-    static void Dump(CudaStream stream, string desc, CudaDeviceVariable<FP16> data)
-    {
-      return;
-      stream.Synchronize();
-      float sum = 0;
-      FP16[] dd = data;
-      for (int i=0; i<8192;i++)
-      {
-        sum += dd[i];
-      }
-      Console.WriteLine(desc + " " + sum);
     }
 
     const bool AVOID_GetOIKernelSE_RELU = false;

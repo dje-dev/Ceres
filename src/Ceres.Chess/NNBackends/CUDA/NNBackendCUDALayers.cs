@@ -91,10 +91,12 @@ namespace Ceres.Chess.NNBackends.CUDA
     /// </summary>
     float valueLayer1BiasSum;
 
-   
+    public readonly NNBackendExecContext Context;
+
     public NNBackendCUDALayers(NNBackendExecContext context, Net net, LC0LegacyWeights weights, 
                                bool saveActivations, NNBackendCUDALayers referenceLayers)
     {
+      Context = context;
       SaveActivations = saveActivations;
       NumFilters = (int)weights.input.biases.Length;
       NumBlocks = (int)weights.residual.Length;
@@ -319,12 +321,12 @@ namespace Ceres.Chess.NNBackends.CUDA
       int l = 0;
 
       // Input.
-      Layers[l++].Eval(stream, batchSize, inputs.Tensors[1], inputs.Tensors[0], inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // input conv
+      Layers[l++].Eval(stream, batchSize, inputs.Tensors[1], inputs.Tensors[0], null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // input conv
 
       // Residual blocks
       for (int block = 0; block < NumBlocks; block++)
       {
-        Layers[l++].Eval(stream, batchSize, inputs.Tensors[2], inputs.Tensors[1], inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);
+        Layers[l++].Eval(stream, batchSize, inputs.Tensors[2], inputs.Tensors[1], null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);
       }
 
       // Policy head.
@@ -335,8 +337,8 @@ namespace Ceres.Chess.NNBackends.CUDA
       network_[l++]->Eval(batchSize, tensor_mem[1], tensor_mem[0], nullptr, scratch_mem, scratch_size_, nullptr, cublas, stream);  // policy map layer
       copyTypeConverted(opPol, (half*)(tensor_mem[1]), batchSize * kNumOutputPolicy, stream);  // POLICY output
 #endif
-        Layers[l++].Eval(stream, batchSize, inputs.Tensors[0], inputs.Tensors[2], inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf, inputs.Tensors[1]);// Entire Attention policy head except for the policy map
-        Layers[l++].Eval(stream, batchSize, inputs.Tensors[1], inputs.Tensors[0], inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf); // policy map layer
+        Layers[l++].Eval(stream, batchSize, inputs.Tensors[0], inputs.Tensors[2], inputs.Tensors[1], inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);// Entire Attention policy head except for the policy map
+        Layers[l++].Eval(stream, batchSize, outputs.PolicyOut, inputs.Tensors[0], null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf); // policy map layer
       }
       else if (PolicyIsConvolutional)
       {
@@ -346,33 +348,33 @@ namespace Ceres.Chess.NNBackends.CUDA
       network_[l++]->Eval(batchSize, tensor_mem[0], tensor_mem[1], nullptr, scratch_mem, scratch_size_, nullptr, cublas, stream);  // policy map layer
       copyTypeConverted(opPol, (half*)(tensor_mem[0]), batchSize * kNumOutputPolicy, stream);  // POLICY output
 #endif
-        Layers[l++].Eval(stream, batchSize, inputs.Tensors[0], inputs.Tensors[2], inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // policy conv1
-        Layers[l++].Eval(stream, batchSize, inputs.Tensors[1], inputs.Tensors[0], inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // policy conv2
-        Layers[l++].Eval(stream, batchSize, outputs.PolicyOut, inputs.Tensors[1], inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // policy map layer
+        Layers[l++].Eval(stream, batchSize, inputs.Tensors[0], inputs.Tensors[2], null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // policy conv1
+        Layers[l++].Eval(stream, batchSize, inputs.Tensors[1], inputs.Tensors[0], null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // policy conv2
+        Layers[l++].Eval(stream, batchSize, outputs.PolicyOut, inputs.Tensors[1], null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // policy map layer
       }
       else
       {
-        Layers[l++].Eval(stream, batchSize, inputs.Tensors[0], inputs.Tensors[2], inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // pol conv
-        Layers[l++].Eval(stream, batchSize, outputs.PolicyOut, inputs.Tensors[0], inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // pol FC
+        Layers[l++].Eval(stream, batchSize, inputs.Tensors[0], inputs.Tensors[2], null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // pol conv
+        Layers[l++].Eval(stream, batchSize, outputs.PolicyOut, inputs.Tensors[0], null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // pol FC
       }
 
 
       // value head
-      Layers[l++].Eval(stream, batchSize, inputs.Tensors[0], inputs.Tensors[2], inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // value conv
-      Layers[l++].Eval(stream, batchSize, outputs.ValueHeadFC2Out, inputs.Tensors[0], inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // value FC1
+      Layers[l++].Eval(stream, batchSize, inputs.Tensors[0], inputs.Tensors[2], null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // value conv
+      Layers[l++].Eval(stream, batchSize, outputs.ValueHeadFC2Out, inputs.Tensors[0], null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // value FC1
 
 
-      Layers[l++].Eval(stream, batchSize, outputs.ValueOut, outputs.ValueHeadFC2Out, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // value FC2    
+      Layers[l++].Eval(stream, batchSize, outputs.ValueOut, outputs.ValueHeadFC2Out, null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // value FC2    
 
       if (HasMLH)
       {
         // Moves left head
-        Layers[l++].Eval(stream, batchSize, inputs.Tensors[0], inputs.Tensors[2], inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // moves conv
-        Layers[l++].Eval(stream, batchSize, inputs.Tensors[1], inputs.Tensors[0], inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // moves FC1
+        Layers[l++].Eval(stream, batchSize, inputs.Tensors[0], inputs.Tensors[2], null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // moves conv
+        Layers[l++].Eval(stream, batchSize, inputs.Tensors[1], inputs.Tensors[0], null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // moves FC1
 
         // Moves left FC2
         // TODO: consider fusing the bias-add of FC2 with format conversion.
-        Layers[l++].Eval(stream, batchSize, outputs.MLHOut, inputs.Tensors[1], inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);
+        Layers[l++].Eval(stream, batchSize, outputs.MLHOut, inputs.Tensors[1], null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);
       }
     }
 

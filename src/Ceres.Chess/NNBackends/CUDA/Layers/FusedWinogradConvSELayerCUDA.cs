@@ -100,9 +100,9 @@ namespace Ceres.Chess.NNBackends.CUDA
 
     CudaDeviceVariable<FP16> transformed_output;
     protected override void DoEval(CudaStream stream, int N, CudaDeviceVariable<FP16> output, 
-                              CudaDeviceVariable<FP16> input,
+                              CudaDeviceVariable<FP16> input, CudaDeviceVariable<FP16> input2,
                               CudaDeviceVariable<FP16> scratch, long scratchSizeBytes,
-                              CudaDeviceVariable<FP16> scratchSecondHalf, CudaDeviceVariable<FP16> input2 = null)
+                              CudaDeviceVariable<FP16> scratchSecondHalf)
     {
       CudaDeviceVariable<FP16> transformed_input = scratch;
 
@@ -129,7 +129,7 @@ namespace Ceres.Chess.NNBackends.CUDA
       LaunchKernel(stream, outputTransformKernel, N, C, (int)0, output.DevicePointer,
                    transformed_output.DevicePointer,
                    (IntPtr)0, biases.DevicePointer,
-                   (IntPtr)0, (IntPtr)0, (IntPtr)0, (IntPtr)0, stream.Stream.Pointer);      
+                   (IntPtr)0, (IntPtr)0, (IntPtr)0, (IntPtr)0, stream.Stream.Pointer);
 
     }
 
@@ -151,6 +151,11 @@ namespace Ceres.Chess.NNBackends.CUDA
       // Possibly same as in ResidualBlockCUDA
       string resource = FP16_KERNELS_PTX_NAME;
 
+#if NOT
+template <typename T, bool nhcw>
+void InputTransform(int N, int C, T* transformedInput, const T* input);
+
+#endif
       const string knInputTransform = "_ZN6lczero13cudnn_backend21InputTransform_kernelI6__halfLb0EEEviiPKT_PS3_";
       kernelInputTransform = Parent.Device.GetKernel(Parent.PTXAssembly, resource, knInputTransform);
 
