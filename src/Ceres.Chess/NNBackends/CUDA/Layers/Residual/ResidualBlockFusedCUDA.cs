@@ -80,7 +80,12 @@ namespace Ceres.Chess.NNBackends.CUDA
 
       kernelOutputSEInputKernelBiasNoSkip = GetKernel(GetOIKernelSE_RELU(Activation, true, false));
       kernelOutputSEInputKernelBiasSkip = GetKernel(GetOIKernelSE_RELU(Activation, true, true));
+
+      kernelSENotLast = Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, GetOIKernelRELU(Activation, true, false));
+
     }
+
+    CudaKernel kernelSENotLast;
 
     CudaKernel GetOutputSEInputKernel(bool useBias, bool useSkip)
     {
@@ -209,6 +214,7 @@ namespace Ceres.Chess.NNBackends.CUDA
 #endif
 
 
+    CUDAKernelLauncher inputOutputNoSELauncher;
 
     protected override void DoEval(CudaStream stream, int N,
                                    CudaDeviceVariable<FP16> output,
@@ -256,9 +262,32 @@ namespace Ceres.Chess.NNBackends.CUDA
       #endregion
 
       #region InputOutput
-      OutputInputTransform(false, Activation, true, false, N, C, 0,
-                           transformed_input, transformed_output,
-                           null, biases0, stream, scratch);
+
+      const bool USE_OPTIMIZED_NON_SE_IO_KERNEL = true;
+      if (USE_OPTIMIZED_NON_SE_IO_KERNEL && !LastBlock)
+      {
+        const int kOpInpTransformBlockSize = 64;
+        kernelSENotLast.BlockDimensions = kOpInpTransformBlockSize;
+        kernelSENotLast.GridDimensions = new ManagedCuda.VectorTypes.dim3(CUDAUtils.DivUp(C, kOpInpTransformBlockSize), N, 1);
+
+        if (inputOutputNoSELauncher == null)
+        {
+          inputOutputNoSELauncher = new(kernelSENotLast, stream, 0,
+                                    new object[] {N, C,
+                                                  transformed_input.DevicePointer, transformed_output.DevicePointer,
+                                                  (IntPtr)0, biases0.DevicePointer });
+        }
+
+        inputOutputNoSELauncher.Parms.ObjRef<int>(0) = N;
+        inputOutputNoSELauncher.LaunchAsync();
+      }
+
+      else
+      {
+        OutputInputTransform(false, Activation, true, false, N, C, 0,
+                             transformed_input, transformed_output,
+                             null, biases0, stream, scratch);
+      }
       #endregion
 
       cublasRowMajorMatrixMul(transformed_input, transformedWeights1, transformed_output, N * 4, C, C, 36);
@@ -336,11 +365,9 @@ namespace Ceres.Chess.NNBackends.CUDA
       if (!useSE)
       {
         CudaKernel kernelIO = GetOIKernel(useBias, useSkip);
-        //        throw new Exception("set <<grid_dim, kOpInpTransformBlockSize, 0, stream>>>  ");
-        // ???????? Are GridDimensions/BlockDimensions swapped?
-        kernelIO.GridDimensions =  new ManagedCuda.VectorTypes.dim3((int)MathUtils.RoundedUp(C, kOpInpTransformBlockSize), N, 1);
+        kernelIO.GridDimensions = new ManagedCuda.VectorTypes.dim3((int)MathUtils.RoundedUp(C, kOpInpTransformBlockSize), N, 1);
         kernelIO.BlockDimensions = kOpInpTransformBlockSize;
-        LaunchKernel(stream, kernelIO, N, C, 
+        LaunchKernel(stream, kernelIO, N, C,
                      output.DevicePointer, input.DevicePointer,
                      CUPtr(skip, dummy), CUPtr(bias, dummy));
         if (DUMP) Console.WriteLine("Residual !useSE " + LastKernelExecutionTimeMS);
@@ -400,7 +427,6 @@ namespace Ceres.Chess.NNBackends.CUDA
                                         stream.Stream.Pointer});
 
           launcher.Parms.ObjRef<int>(0) = N;
-//          launcher.Parms.ObjRef<int>(1) = C;
           launcher.LaunchAsync();
 
 #if NOT
@@ -416,17 +442,42 @@ namespace Ceres.Chess.NNBackends.CUDA
       }
       else
       {
-//        throw new Exception("Needs remediation, shared size set by above code path for this kernel but here we try to launch with shared size 0");
-        CudaKernel kernelSE_RELU = GetOutputSEInputKernel(useBias, useSkip);
-        kernelSE_RELU.GridDimensions = N;
-        kernelSE_RELU.BlockDimensions = C;
+        if (launcherOutputSEInputKernel == null)
+        {
+          launcherOutputSEInputKernelUseBias = useBias;
+          launcherOutputSEInputKernelUseSkip = useSkip;
 
+          CudaKernel kernelSE_RELU = GetOutputSEInputKernel(useBias, useSkip);
+          launcherOutputSEInputKernel = new(kernelSE_RELU, stream, 0,
+                                            new object[] { N, C, sek,
+                                                           output.DevicePointer, input.DevicePointer,
+                                                           skip.DevicePointer, biases1.DevicePointer,
+                                                           Weights1.DevicePointer, Biases1.DevicePointer, Weights2.DevicePointer, Biases2.DevicePointer,
+                                                           stream.Stream.Pointer });
+        }
+        else
+        {
+          if (launcherOutputSEInputKernelUseBias != useBias
+           || launcherOutputSEInputKernelUseSkip != useSkip)
+          {
+            throw new Exception("Internal error. Currently launcherOutputSEInputKernelUseBias does not support changing useBias/useSkip arguments. ");
+          }
+
+        }
+
+        launcherOutputSEInputKernel.Kernel.GridDimensions = N;
+        launcherOutputSEInputKernel.Kernel.BlockDimensions = C;
+        launcherOutputSEInputKernel.Parms.ObjRef<int>(0) = N;
+        launcherOutputSEInputKernel.LaunchAsync();
+
+#if NO_LAUNCHER
         LaunchKernel(stream, kernelSE_RELU, N, C, sek,
                      output.DevicePointer, input.DevicePointer,
                      skip.DevicePointer, biases1.DevicePointer,
                      Weights1.DevicePointer, Biases1.DevicePointer, Weights2.DevicePointer, Biases2.DevicePointer,
                      stream.Stream.Pointer);
         if (DUMP) Console.WriteLine("Residual OutputSEInput " + LastKernelExecutionTimeMS);
+#endif
 
 #if NOT
         CudaKernel kernel = 
@@ -437,12 +488,14 @@ namespace Ceres.Chess.NNBackends.CUDA
 #endif
       }
 
-
-
     }
 
+    CUDAKernelLauncher launcherOutputSEInputKernel;
+    bool launcherOutputSEInputKernelUseBias;
+    bool launcherOutputSEInputKernelUseSkip;
 
-#region Kernel name helpers
+
+    #region Kernel name helpers
 
     static object CUPtr(CudaDeviceVariable<FP16> var) => var == null ? (IntPtr)0 : var.DevicePointer;
     static object CUPtr(CudaDeviceVariable<FP16> var, CudaDeviceVariable<FP16> dummy) 
