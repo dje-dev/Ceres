@@ -53,7 +53,7 @@ namespace Ceres.Chess.NNBackends.CUDA
     public override void LoadKernels()
     {
       const string kn = "_ZN6lczero13cudnn_backend17addVectors_kernelI6__halfEEvPT_S4_S4_iiiNS0_18ActivationFunctionE";
-      kernelAddVectors = Parent.Device.GetKernel(Parent.PTXAssembly, @"common_kernels.ptx", kn);
+      kernelAddVectors = Parent.Device.GetKernel(Parent.PTXAssembly, COMMON_KERNELS_PTX_NAME, kn);
     }
 
 

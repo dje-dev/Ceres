@@ -50,7 +50,7 @@ namespace Ceres.Chess.NNBackends.CUDA
     public override void LoadKernels()
     {
       string kn = "_ZN6lczero13cudnn_backend16policyMap_kernelI6__halfEEvPT_PKS3_PKsiiii";
-      kernelPolicyMap = Parent.Device.GetKernel(Parent.PTXAssembly, @"common_kernels.ptx", kn);
+      kernelPolicyMap = Parent.Device.GetKernel(Parent.PTXAssembly, COMMON_KERNELS_PTX_NAME, kn);
     }
 
 

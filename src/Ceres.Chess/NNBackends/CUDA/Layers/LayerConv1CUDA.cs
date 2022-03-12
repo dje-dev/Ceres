@@ -65,7 +65,7 @@ namespace Ceres.Chess.NNBackends.CUDA
     public override void LoadKernels()
     {
       const string knAddBias = "_ZN6lczero13cudnn_backend19addBias_NCHW_kernelI6__halfEEvPT_S4_S4_iiiiNS0_18ActivationFunctionE";
-      kernel = Parent.Device.GetKernel(Parent.PTXAssembly, @"common_kernels.ptx", knAddBias);
+      kernel = Parent.Device.GetKernel(Parent.PTXAssembly, COMMON_KERNELS_PTX_NAME, knAddBias);
     }
 
 

@@ -20,6 +20,7 @@ using Ceres.Base.DataTypes;
 using ManagedCuda.CudaBlas;
 using ManagedCuda.BasicTypes;
 using System.Runtime.InteropServices;
+using System.Diagnostics;
 
 #endregion
 
@@ -44,6 +45,9 @@ namespace Ceres.Chess.NNBackends.CUDA
     CudaDeviceVariable<FP16> ip3_pol_b_;
     CudaDeviceVariable<FP16> ip4_pol_w_;
 
+    CudaDeviceVariable<FP16> wqk_w;
+    CudaDeviceVariable<FP16> wqk_b;
+
 
     public AttentionPolicyHead(NNBackendExecContext parent, string name, int layerIndex,
                                LC0LegacyWeights weights,
@@ -65,26 +69,39 @@ namespace Ceres.Chess.NNBackends.CUDA
       ip3_pol_w_ = LoadedWeights(weights.ip3_pol_w);
       ip3_pol_b_ = LoadedWeights(weights.ip3_pol_b);
       ip4_pol_w_ = LoadedWeights(weights.ip4_pol_w);
+
+      // big allocation to hold wq and wk weights one after the other
+      int elements = weights.ip2_pol_w.Length;
+      int size = elements * Marshal.SizeOf<FP16>() * 2;
+      wqk_w = new CudaDeviceVariable<FP16>(elements * 2);
+      wqk_w.CopyToDevice(ip2_pol_w_, 0, 0,      size / 2);
+      wqk_w.CopyToDevice(ip3_pol_w_, 0, size/2, size/2);
+
+      elements = weights.ip2_pol_b.Length;
+      size = elements * Marshal.SizeOf<FP16>() * 2;
+      wqk_b = new CudaDeviceVariable<FP16>(elements * 2);
+      wqk_b.CopyToDevice(ip2_pol_b_, 0, 0, size / 2);
+      wqk_b.CopyToDevice(ip3_pol_b_, 0, size / 2, size / 2);
     }
 
 
     CudaKernel kernelAddVectors;
     CudaKernel kernelPromotionLogits;
     CudaKernel kernelNCHWtoNHWC;
+    CudaKernel kernelAddBiasBatched;
 
     public override void LoadKernels()
     {
       const string kn = "_ZN6lczero13cudnn_backend17addVectors_kernelI6__halfEEvPT_S4_S4_iiiNS0_18ActivationFunctionE";
-      kernelAddVectors = Parent.Device.GetKernel(Parent.PTXAssembly, @"common_kernels.ptx", kn);
+      kernelAddVectors = Parent.Device.GetKernel(Parent.PTXAssembly, COMMON_KERNELS_PTX_NAME, kn);
 
       const string knPromotion = "_ZN6lczero13cudnn_backend23promotion_logits_kernelI6__halfEEviPT_PKS3_S6_S6_";
-      kernelPromotionLogits = Parent.Device.GetKernel(Parent.PTXAssembly, @"common_kernels.ptx", knPromotion);
+      kernelPromotionLogits = Parent.Device.GetKernel(Parent.PTXAssembly, COMMON_KERNELS_PTX_NAME, knPromotion);
 
-      // _ZN6lczero13cudnn_backend17NCHWtoNHWC_kernelIffEEvPT_PKT0_iiiiii
-      // _ZN6lczero13cudnn_backend17NCHWtoNHWC_kernelI6__halffEEvPT_PKT0_iiiiii
-      // _ZN6lczero13cudnn_backend17NCHWtoNHWC_kernelI6__halfS2_EEvPT_PKT0_iiiiii
-      const string knNCHWtoNHWC = "_ZN6lczero13cudnn_backend17NCHWtoNHWC_kernelI6__halfS2_EEvPT_PKT0_iiiiii";
-      kernelNCHWtoNHWC = Parent.Device.GetKernel(Parent.PTXAssembly, @"common_kernels.ptx", knNCHWtoNHWC);
+        const string knNCHWtoNHWC = "_ZN6lczero13cudnn_backend17NCHWtoNHWC_kernelI6__halfS2_EEvPT_PKT0_iiiiii";
+      kernelNCHWtoNHWC = Parent.Device.GetKernel(Parent.PTXAssembly, COMMON_KERNELS_PTX_NAME, knNCHWtoNHWC);
+
+      kernelAddBiasBatched = GetAddBiasBatchedKernel(ActivationFunction.NONE);
     }
 
 
@@ -94,29 +111,17 @@ namespace Ceres.Chess.NNBackends.CUDA
                                    CudaDeviceVariable<FP16> scratch, long scratchSizeBytes,
                                    CudaDeviceVariable<FP16> scratchSecondHalf = null)
     {
-#if NOT
-  void AttentionPolicyHead<DataType>::Eval(int N, DataType* output, const DataType* input, const DataType* input2,
-                                           void* scratch, size_t scratch_size, cudnnHandle_t /*cudnn*/,
-                                           cublasHandle_t cublas, cudaStream_t stream) 
-  DataType* scratch0 = (DataType*)scratch;
-  DataType* scratch1 = (DataType*)scratch + scratch_size / (2 * sizeof(DataType));
-  DataType* scratch2 = (DataType*)input2;
-  DataType* scratch3 = (DataType*)input2 + scratch_size / (2 * sizeof(DataType));
-  DataType* scratch4 = output + scratch_size / (2 * sizeof(DataType));
-#endif
-
       CudaDeviceVariable<FP16> scratch0 = scratch;
-      CudaDeviceVariable<FP16> scratch1 = new CudaDeviceVariable<FP16>(scratch.DevicePointer + scratchSizeBytes / (2 * Marshal.SizeOf<FP16>()));
-      CudaDeviceVariable<FP16> scratch2 = input2;
-      CudaDeviceVariable<FP16> scratch3 = new CudaDeviceVariable<FP16>(input2.DevicePointer + scratchSizeBytes / (2 * Marshal.SizeOf<FP16>()));
-      CudaDeviceVariable<FP16> scratch4 = new CudaDeviceVariable<FP16>(output.DevicePointer + scratchSizeBytes / (2 * Marshal.SizeOf<FP16>()));
+      CudaDeviceVariable<FP16> scratch1 = input2;
+      CudaDeviceVariable<FP16> scratch2 = new CudaDeviceVariable<FP16>(output.DevicePointer + scratchSizeBytes / (2 * Marshal.SizeOf<FP16>()));
+      CudaDeviceVariable<FP16> scratch3 = new CudaDeviceVariable<FP16>(scratch1.DevicePointer + scratchSizeBytes / (2 * Marshal.SizeOf<FP16>()));
 
       int inputC = input_.C;
       int numElements = N * inputC * 8 * 8;
       const int BLOCK_DIM_NCHW = 256;
       kernelNCHWtoNHWC.GridDimensions = CUDAUtils.DivUp(numElements, BLOCK_DIM_NCHW);
       kernelNCHWtoNHWC.BlockDimensions = BLOCK_DIM_NCHW;
-      LaunchKernel(stream, kernelNCHWtoNHWC, scratch1.DevicePointer, input.DevicePointer, N, inputC, N, inputC, 8, 8, stream.Stream.Pointer);
+      LaunchKernel(stream, kernelNCHWtoNHWC, scratch0.DevicePointer, input.DevicePointer, N, inputC, N, inputC, 8, 8, stream.Stream.Pointer);
 
 #if NOT
 template void convertNCHWtoNHWC<half, half>(half* output_tensor,
@@ -152,9 +157,62 @@ void convertNCHWtoNHWC(DstType* output_tensor, const SrcType* input_tensor, int 
       addVectors(scratch0, (DataType*)ip_pol_b_, scratch0, num_outputs * batch,
                  num_outputs, num_outputs * batch, SELU, stream);
 #endif
-    FCLayer(stream, embeddingOpSize, N * 64, input_.C,           ip_pol_w_,  ip_pol_b_, scratch1, scratch0, ActivationFunction.SELU);
-    FCLayer(stream, policy_d_model_, N * 64, embeddingOpSize,  ip2_pol_w_, ip2_pol_b_, scratch0, scratch1, ActivationFunction.NONE);
-    FCLayer(stream, policy_d_model_, N * 64, embeddingOpSize,  ip3_pol_w_, ip3_pol_b_, scratch0, scratch2, ActivationFunction.NONE);
+    CudaDeviceVariable<FP16> pol_embedding = scratch1;
+    FCLayer(stream, embeddingOpSize, N * 64, input_.C,           ip_pol_w_,  ip_pol_b_, scratch0, pol_embedding, ActivationFunction.SELU);
+
+      //    FCLayer(stream, policy_d_model_, N * 64, embeddingOpSize,  ip2_pol_w_, ip2_pol_b_, scratch0, scratch1, ActivationFunction.NONE);
+      //    FCLayer(stream, policy_d_model_, N * 64, embeddingOpSize,  ip3_pol_w_, ip3_pol_b_, scratch0, scratch2, ActivationFunction.NONE);
+
+      CudaDeviceVariable<FP16> wq;
+      CudaDeviceVariable<FP16> wk;
+      unsafe
+      {
+        half halfZero = new half(0);
+        void* ptrHalfZero = &halfZero;
+        IntPtr ipHalfZero = (IntPtr)ptrHalfZero;
+        half halfOne = new half(1);
+        void* ptrHalfOne = &halfOne;
+        IntPtr ipHalfOne = (IntPtr)ptrHalfOne;
+
+        int num_inputs = embeddingOpSize;
+        int num_outputs = policy_d_model_;
+        int batch = N * 64;
+        wq = scratch0;
+        wk = new CudaDeviceVariable<FP16>(wq.DevicePointer + Marshal.SizeOf<FP16>() * num_outputs * batch);
+#if NOT
+        CudaBlasNativeMethods.cublasGemmStridedBatchedEx(Parent.CuBlas.CublasHandle, Operation.Transpose, Operation.NonTranspose,
+                                                         (int)64, (int)64, policy_d_model_,
+                                                         ipHalfFactor,
+                                                        scratch2.DevicePointer, cudaDataType.CUDA_R_16F, policy_d_model_, 64 * policy_d_model_,
+                                                         scratch1.DevicePointer, cudaDataType.CUDA_R_16F, policy_d_model_, 64 * policy_d_model_,
+                                                         ipHalfZero,
+                                                         output.DevicePointer, cudaDataType.CUDA_R_16F, 64, 64 * 64 + 8 * 24,
+                                                         N, cudaDataType.CUDA_R_16F, GemmAlgo.Default);
+#endif
+        CudaBlasNativeMethods.cublasGemmStridedBatchedEx(Parent.CuBlas.CublasHandle, Operation.Transpose, Operation.NonTranspose,
+                                                 num_outputs, batch, num_inputs,
+                                                 ipHalfOne,
+                                                 wqk_w.DevicePointer, cudaDataType.CUDA_R_16F, num_inputs, num_inputs * num_outputs,
+                                                 scratch1.DevicePointer, cudaDataType.CUDA_R_16F, num_inputs, 0,
+                                                 ipHalfZero,
+                                                 wq.DevicePointer, cudaDataType.CUDA_R_16F, num_outputs, num_outputs*batch,
+                                                 2, cudaDataType.CUDA_R_16F, GemmAlgo.Default);
+#if NOT
+        cublasXGemmStridedBatched<DataType>(
+            cublas, CUBLAS_OP_T, CUBLAS_OP_N, 
+            num_outputs, batch, num_inputs, 
+            1.0f,
+            wqk_w_, num_inputs, num_inputs * num_outputs, 
+            scratch1, num_inputs, 0,
+            0.0f, 
+            wq, num_outputs, num_outputs * batch, 
+            2);
+#endif
+        AddBiasBatched(kernelAddBiasBatched, wq, wq, wqk_b, 2, batch, num_outputs, stream);
+//        addBiasBatched<DataType>(wq, wq, wqk_b_, 2, batch, num_outputs, NONE, stream);
+      }
+
+
 
       float factor = 1.0f / MathF.Sqrt((float)policy_d_model_);
 
@@ -173,14 +231,6 @@ void convertNCHWtoNHWC(DstType* output_tensor, const SrcType* input_tensor, int 
         0.0f, output /*C*/,   // output (policy_attn_logits)
         64 /*LDC*/, 64 * 64 + 8 * 24 /*strideC*/, N);
 #endif
-
-
-      //      unsigned short alpha_h = FP32toFP16(alpha);
-      //      unsigned short beta_h = FP32toFP16(beta);
-
-      //int m, int n, int k, CUdeviceptr alpha, CUdeviceptr A, cudaDataType Atype, int lda, long strideA, CUdeviceptr B, cudaDataType Btype, int ldb, long strideB, CUdeviceptr beta, CUdeviceptr C, cudaDataType Ctype, int ldc, long strideC, int batchCount, ComputeType computeType, GemmAlgo algo);
-      //int m, int n, int k, IntPtr alpha,      CUdeviceptr A, cudaDataType Atype, int lda, long strideA, CUdeviceptr B, cudaDataType Btype, int ldb, long strideB, IntPtr beta,      CUdeviceptr C, cudaDataType Ctype, int ldc, long strideC, int batchCount, cudaDataType computeType, GemmAlgo algo);
-
 
 #if NOT
       public static extern CublasStatus cublasGemmStridedBatchedEx(CudaBlasHandle handle, Operation transa, Operation transb, 
@@ -231,12 +281,11 @@ cublasXGemmStridedBatched<DataType>(
         CudaBlasNativeMethods.cublasGemmStridedBatchedEx(Parent.CuBlas.CublasHandle, Operation.Transpose, Operation.NonTranspose,
                                                          (int)64, (int)64, policy_d_model_,
                                                          ipHalfFactor,
-                                                        scratch2.DevicePointer, cudaDataType.CUDA_R_16F, policy_d_model_, 64 * policy_d_model_,
-                                                         scratch1.DevicePointer, cudaDataType.CUDA_R_16F, policy_d_model_, 64 * policy_d_model_,
+                                                         wk.DevicePointer, cudaDataType.CUDA_R_16F, policy_d_model_, 64 * policy_d_model_,
+                                                         wq.DevicePointer, cudaDataType.CUDA_R_16F, policy_d_model_, 64 * policy_d_model_,
                                                          ipHalfZero, 
                                                          output.DevicePointer, cudaDataType.CUDA_R_16F, 64, 64 * 64 + 8 * 24,
                                                          N, cudaDataType.CUDA_R_16F, GemmAlgo.Default);
-
       }
       //      ReportCUBLASErrors(cublasGemmStridedBatchedEx(
       //          handle, transa, transb, m, n, k, &alpha_h, A, CUDA_R_16F, lda, strideA,
@@ -251,18 +300,8 @@ cublasXGemmStridedBatched<DataType>(
 void ComputePromotionLogits(int N, int C, 
                             T* output, const T* keys, const T* ppo, const T* policy_attn_logits,
                             cudaStream_t stream) 
-  // N blocks
-  // 8 * 24 threads
-  // Each thread computes a single output element
   dim3 blockDim(24, 8, 1);
   promotion_logits_kernel<T><<<N, blockDim, 0, stream>>>(C, output, keys, ppo, policy_attn_logits);
-
-  call kernel with 5 arguments:
-    - C                   policy_d_model
-    - output              promotion_logits
-    - keys                scratch2
-    - ppo                 ip4_pol_w_
-    - policy_attn_logits  output
 }
 
 .entry _ZN6lczero13cudnn_backend23promotion_logits_kernelI6__halfEEviPT_PKS3_S6_S6_(
@@ -276,7 +315,7 @@ void ComputePromotionLogits(int N, int C,
       CudaDeviceVariable<FP16> promotion_logits = new CudaDeviceVariable<FP16>(output.DevicePointer + promotionsOffsetInBytes);
       LaunchKernel(stream, kernelPromotionLogits, policy_d_model_,
                    promotion_logits.DevicePointer, 
-                   scratch2.DevicePointer, 
+                   wk.DevicePointer, 
                    ip4_pol_w_.DevicePointer, 
                    output.DevicePointer,
                    stream.Stream.Pointer);
@@ -316,7 +355,6 @@ void ComputePromotionLogits(int N, int C,
                  num_outputs * batch,
                  (int)activation, stream.Stream.Pointer);
     }
-
 
   }
 }

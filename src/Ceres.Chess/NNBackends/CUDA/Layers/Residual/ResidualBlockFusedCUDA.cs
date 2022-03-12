@@ -263,7 +263,7 @@ namespace Ceres.Chess.NNBackends.CUDA
 
       #region InputOutput
 
-      const bool USE_OPTIMIZED_NON_SE_IO_KERNEL = true;
+      const bool USE_OPTIMIZED_NON_SE_IO_KERNEL = true; // just same kernel but with a launcher
       if (USE_OPTIMIZED_NON_SE_IO_KERNEL && !LastBlock)
       {
         const int kOpInpTransformBlockSize = 64;
