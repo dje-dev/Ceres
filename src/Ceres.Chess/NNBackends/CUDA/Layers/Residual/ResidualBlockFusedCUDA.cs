@@ -145,7 +145,11 @@ namespace Ceres.Chess.NNBackends.CUDA
     CudaKernel kernelOutput;
     CudaKernel kernelOutputNotNCHW;
 
-    public ResidualBlockFusedCUDA(NNBackendExecContext parent, string name, int layerIndex,
+    public readonly int DeviceComputeCapabilityMajor;
+      
+
+    public ResidualBlockFusedCUDA(NNBackendExecContext parent, int deviceComputeCapabilityMajor,
+                                  string name, int layerIndex,
                                   BaseLayerCUDA inputLayer,
                                   int C, bool se, int se_k, bool first, bool last, int sharedMemSize, ActivationFunction activation)
       : base(parent, name, layerIndex, C, 8, 8, inputLayer, se, se_k, sharedMemSize, activation)
@@ -156,6 +160,7 @@ namespace Ceres.Chess.NNBackends.CUDA
         throw new Exception("Maximum number of channels supported is 512");
       }
 
+      DeviceComputeCapabilityMajor = deviceComputeCapabilityMajor;
       HasSE = se;
       SEK = se_k;
       FirstBlock = first;
@@ -295,6 +300,15 @@ namespace Ceres.Chess.NNBackends.CUDA
       bool allowFusing = (C <= kMaxResBlockFusingChannels)
                       || ((SharedMemSize >= kMaxResBlockFusingSeFp16AmpereSmem)
                           && (C <= kMaxResBlockFusingSeKFp16Ampere));
+//      allowFusing = false;
+      if (DeviceComputeCapabilityMajor < 8 && SharedMemSize <= 65536)
+      {
+        // For unknown reasons NaNs appeared in output on 2070 with T79
+        // However since fusing makes all network sizes (10b, 15b, 30b, attention)
+        // about 4% slower, fusing is always turned off for devices such as 2070
+        // which are pre-Ampere with low shared memory size.
+        allowFusing = false;
+      }
 
       if (LastBlock)
       {

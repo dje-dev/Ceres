@@ -292,6 +292,7 @@ namespace Ceres.Chess.NNBackends.CUDA
       }
     }
 
+    public int DeviceComputeCapabilityMajor => deviceProperties.ComputeCapability.Major;
     
     private void InitCUDAContextAndTakeWriteLock()
     {
@@ -313,7 +314,9 @@ namespace Ceres.Chess.NNBackends.CUDA
       }
       else
       {
-        Console.WriteLine($"CUDA device {GPUID}: { deviceProperties.DeviceName} SMs: { deviceProperties.MultiProcessorCount } Mem: { deviceProperties.TotalGlobalMemory / (1024 * 1024 * 1024) }gb");
+        Console.WriteLine($"CUDA device {GPUID}:  { deviceProperties.DeviceName}" 
+                        + $" Compute: {deviceProperties.ComputeCapability.Major}.{deviceProperties.ComputeCapability.Minor}" 
+                        + $" SMs: { deviceProperties.MultiProcessorCount } Mem: { deviceProperties.TotalGlobalMemory / (1024 * 1024 * 1024) }gb");
       }
       // showInfo();
 
@@ -351,7 +354,8 @@ namespace Ceres.Chess.NNBackends.CUDA
       LargestLayerWeightsScale = weights.LargestScaleSeen;
 
       ExecContext.ReferenceLayers = ReferenceBackend?.Layers;
-      Layers = new NNBackendCUDALayers(ExecContext, net, weights, SaveActivations, ReferenceBackend?.Layers);
+      Layers = new NNBackendCUDALayers(ExecContext, DeviceComputeCapabilityMajor, 
+                                       net, weights, SaveActivations, ReferenceBackend?.Layers);
 
       CheckNetworkCompatible(net);
 

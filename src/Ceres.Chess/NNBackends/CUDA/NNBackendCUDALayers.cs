@@ -93,10 +93,14 @@ namespace Ceres.Chess.NNBackends.CUDA
 
     public readonly NNBackendExecContext Context;
 
-    public NNBackendCUDALayers(NNBackendExecContext context, Net net, LC0LegacyWeights weights, 
+    public readonly int DeviceComputeCapabilityMajor;
+
+    public NNBackendCUDALayers(NNBackendExecContext context, int deviceComputeCapabilityMajor,
+                               Net net, LC0LegacyWeights weights, 
                                bool saveActivations, NNBackendCUDALayers referenceLayers)
     {
       Context = context;
+      DeviceComputeCapabilityMajor = deviceComputeCapabilityMajor;
       SaveActivations = saveActivations;
       NumFilters = (int)weights.input.biases.Length;
       NumBlocks = (int)weights.residual.Length;
@@ -191,7 +195,8 @@ namespace Ceres.Chess.NNBackends.CUDA
       {
         int se_k = HasSE ? (int)weights.residual[block].se.b1.Length : 0;
 
-        ResidualBlockBaseCUDA layer = new ResidualBlockFusedCUDA(execContext, "residual_fused_" + block, Layers.Count, LastLayer, 
+        ResidualBlockBaseCUDA layer = new ResidualBlockFusedCUDA(execContext, DeviceComputeCapabilityMajor,
+                                                                 "residual_fused_" + block, Layers.Count, LastLayer, 
                                                                  NumFilters, HasSE, se_k, block == 0, 
                                                                  block == (NumBlocks - 1), execContext.SharedMemPerBlock, activation);
 
