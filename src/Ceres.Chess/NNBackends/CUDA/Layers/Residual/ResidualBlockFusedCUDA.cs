@@ -300,13 +300,20 @@ namespace Ceres.Chess.NNBackends.CUDA
       bool allowFusing = (C <= kMaxResBlockFusingChannels)
                       || ((SharedMemSize >= kMaxResBlockFusingSeFp16AmpereSmem)
                           && (C <= kMaxResBlockFusingSeKFp16Ampere));
-//      allowFusing = false;
       if (DeviceComputeCapabilityMajor < 8 && SharedMemSize <= 65536)
       {
         // For unknown reasons NaNs appeared in output on 2070 with T79
         // However since fusing makes all network sizes (10b, 15b, 30b, attention)
         // about 4% slower, fusing is always turned off for devices such as 2070
         // which are pre-Ampere with low shared memory size.
+        allowFusing = false;
+      }
+
+      if (DeviceComputeCapabilityMajor < 8 && C >=512)
+      {
+        // On Titan V some positions (about 1 per 1000) produce NaN with 512 filter nets.
+        // This can be avoided by disabling fusing (with only a circa 3% performance loss).
+        // TODO: remove this when the underlying CUDA bug is fixed and/or update LC0 kernels mitigate.
         allowFusing = false;
       }
 
