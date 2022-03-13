@@ -152,7 +152,7 @@ namespace Ceres.Chess.LC0.Batches
     /// Adds a position to the batch.
     /// </summary>
     /// <param name="position"></param>
-    public void Add(in Position position, bool fillInMissingPlanes) => Add(new PositionWithHistory(position), fillInMissingPlanes);
+    public void Add(in Position position, bool fillInMissingPlanes) => Add(new PositionWithHistory(in position), fillInMissingPlanes);
     
 
     /// <summary>

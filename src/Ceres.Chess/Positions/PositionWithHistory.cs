@@ -69,14 +69,14 @@ namespace Ceres.Chess.Positions
     }
 
 
-    public PositionWithHistory(Position initialPos, List<MGMove> moves = null)
+    public PositionWithHistory(in Position initialPos, List<MGMove> moves = null)
     {
       InitialPosMG = MGChessPositionConverter.MCChessPositionFromPosition(in initialPos);
       Moves = moves ?? new List<MGMove>();
     }
 
 
-    public PositionWithHistory(MGPosition initialPosMG, List<MGMove> moves = null)
+    public PositionWithHistory(in MGPosition initialPosMG, List<MGMove> moves = null)
     {
       InitialPosMG = initialPosMG;
       Moves = moves ?? new List<MGMove>();
@@ -134,7 +134,7 @@ namespace Ceres.Chess.Positions
     public static PositionWithHistory FromFENAndMovesSAN(string fen, params string[] sanMoves)
     {
       Position pos = Position.FromFEN(fen);
-      PositionWithHistory ret = new PositionWithHistory(pos);
+      PositionWithHistory ret = new PositionWithHistory(in pos);
       if (sanMoves != null)
       {
         foreach (string sanMoveString in sanMoves)
@@ -163,7 +163,7 @@ namespace Ceres.Chess.Positions
     /// </summary>
     /// <param name="pos"></param>
     /// <returns></returns>
-    public static PositionWithHistory FromPosition(in Position pos) => new PositionWithHistory(pos);
+    public static PositionWithHistory FromPosition(in Position pos) => new PositionWithHistory(in pos);
 
 
     /// <summary>
