@@ -34,6 +34,16 @@ namespace Ceres.Chess.NNBackends.CUDA
   /// </summary>
   public abstract class BaseLayerCUDA
   {
+    public enum ActivationFunction 
+    { 
+      NONE = 0,
+      RELU = 1, 
+      TANH = 2, 
+      SIGMOID = 3, 
+      SELU = 4, 
+      MISH = 5
+    };
+
     public readonly NNBackendExecContext Parent;
 
     public TimeSpan LastExecutionTime;
@@ -66,11 +76,18 @@ namespace Ceres.Chess.NNBackends.CUDA
     public int GetH { get; }
 
     /// <summary>
+    /// Type of activation function.
+    /// </summary>
+    public ActivationFunction Activation { get; }
+
+
+    /// <summary>
     /// Input layer.
     /// </summary>
     protected readonly BaseLayerCUDA input_;
 
-    protected const string FP16_KERNELS_PTX_NAME = @"fp16_kernels.ptx";
+    protected const string COMMON_KERNELS_PTX_NAME = @"common_kernels.ptx";
+    protected const string FP16_KERNELS_PTX_NAME   = @"fp16_kernels.ptx";
 
     public float Sum = 0;
     public float Min = float.MaxValue;
@@ -89,7 +106,8 @@ namespace Ceres.Chess.NNBackends.CUDA
     /// <param name="h"></param>
     /// <param name="w"></param>
     /// <param name="inputLayer"></param>
-    public BaseLayerCUDA(NNBackendExecContext parent, string name, int layerIndex, int c, int h, int w, BaseLayerCUDA inputLayer)
+    /// <param name="activation"></param>
+    public BaseLayerCUDA(NNBackendExecContext parent, string name, int layerIndex, int c, int h, int w, BaseLayerCUDA inputLayer, ActivationFunction activation)
     {
       Parent = parent;
       Name = name;
@@ -98,6 +116,7 @@ namespace Ceres.Chess.NNBackends.CUDA
       GetH = h;
       input_ = inputLayer;
       LayerIndex = layerIndex;
+      Activation = activation;
 
       LoadKernels();
     }
@@ -146,23 +165,25 @@ namespace Ceres.Chess.NNBackends.CUDA
     /// <param name="scratchSizeBytes"></param>
 
     protected abstract void DoEval(CudaStream stream, int N,
-                                   CudaDeviceVariable<FP16> output, CudaDeviceVariable<FP16> input,
+                                   CudaDeviceVariable<FP16> output, 
+                                   CudaDeviceVariable<FP16> input,                                   
+                                   CudaDeviceVariable<FP16> input2,
                                    CudaDeviceVariable<FP16> scratch, long scratchSizeBytes,
                                    CudaDeviceVariable<FP16> scratchSecondHalf = null);
 
-    public void Eval(CudaStream stream, int N, CudaDeviceVariable<FP16> output, CudaDeviceVariable<FP16> input,
-                     CudaDeviceVariable<FP16> scratch, long scratchSizeBytes,
-                     CudaDeviceVariable<FP16> scratchSecondHalf)
+   public void Eval(CudaStream stream, int N, CudaDeviceVariable<FP16> output, CudaDeviceVariable<FP16> input,
+                    CudaDeviceVariable<FP16> input2, CudaDeviceVariable < FP16> scratch, long scratchSizeBytes,
+                    CudaDeviceVariable<FP16> scratchSecondHalf)
     {
       if (Parent.DumpTimings)
       {
         DateTime start = DateTime.Now;
-        DoEval(stream, N, output, input, scratch, scratchSizeBytes, scratchSecondHalf);
+        DoEval(stream, N, output, input, input2, scratch, scratchSizeBytes, scratchSecondHalf);
         LastExecutionTime = DateTime.Now - start;
       }
       else
       {
-        DoEval(stream, N, output, input, scratch, scratchSizeBytes, scratchSecondHalf);
+        DoEval(stream, N, output, input, input2, scratch, scratchSizeBytes, scratchSecondHalf);
       }
 
       if (Parent.DumpTimings)
@@ -349,7 +370,49 @@ namespace Ceres.Chess.NNBackends.CUDA
 
     }
 
-#endregion
+
+    CudaKernel GetKernel(string kernelName) => Parent.Device.GetKernel(Parent.PTXAssembly, FP16_KERNELS_PTX_NAME, kernelName);
+    CudaKernel GetKernelCommon(string kernelName) => Parent.Device.GetKernel(Parent.PTXAssembly, COMMON_KERNELS_PTX_NAME, kernelName);
+
+
+    protected CudaKernel GetAddBiasBatchedKernel(ActivationFunction activation)
+    {
+      if (activation != ActivationFunction.NONE && activation != ActivationFunction.SELU)
+      {
+        throw new NotImplementedException("Unsupported Activation in AddBiasBatched.");
+      }
+      return GetKernelCommon(GetAddBiasBatchedKernelName(activation));
+    }
+
+    static string GetAddBiasBatchedKernelName(ActivationFunction activation)
+    {
+      const string kernelName =    "_ZN6lczero13cudnn_backend21addBiasBatched_kernelI6__halfLNS0_18ActivationFunctionE!1EEEvPT_PKS4_S7_ii";
+      return kernelName.Replace("!1", ((int)activation).ToString());
+    }
+
+    // Input/output tensors are Batch * N * C
+    // bias tensor is N * C (i.e, different bias for each Batch dimension)
+    protected void AddBiasBatched(CudaKernel kernelAddBatched,
+                                  CudaDeviceVariable<FP16> output,
+                                  CudaDeviceVariable<FP16> input,
+                                  CudaDeviceVariable<FP16> bias,
+                                  int batch, int N, int C, CudaStream stream)
+    {
+      if (C % 4 != 0)
+      {
+        throw new NotImplementedException("Unsupported filter size");
+      }
+
+      if (C > 4096)
+      {
+        throw new NotImplementedException("Unsupported filter size");
+      }
+
+      kernelAddBatched.BlockDimensions = new ManagedCuda.VectorTypes.dim3((uint)C / 4, System.Math.Min(System.Math.Max(512 / (uint)C/4, 1u), (uint) N), 1);
+      kernelAddBatched.GridDimensions = new ManagedCuda.VectorTypes.dim3(CUDAUtils.DivUp(N, (int)kernelAddBatched.BlockDimensions.y), batch, 1);
+      LaunchKernel(stream, kernelAddBatched, output.DevicePointer, input.DevicePointer, bias.DevicePointer, N, C, stream.Stream.Pointer);
+    }
+    #endregion
 
     public override string ToString()
     {

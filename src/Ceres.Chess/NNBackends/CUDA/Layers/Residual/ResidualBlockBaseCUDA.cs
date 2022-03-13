@@ -27,19 +27,25 @@ namespace Ceres.Chess.NNBackends.CUDA
   public abstract class ResidualBlockBaseCUDA : BlockWithWinogradCUDA
   {
     public ResidualBlockBaseCUDA(NNBackendExecContext parent, string name, int layerIndex,
-                                 int c, int h, int w, 
-                                 BaseLayerCUDA inputLayer, bool hasSE, int seK, int sharedMemSize)
-  : base(parent, name, layerIndex, c, h, w, inputLayer)
+                                 int c, int h, int w,
+                                 BaseLayerCUDA inputLayer, bool hasSE, int seK, int sharedMemSize,
+                                 ActivationFunction activation)
+  : base(parent, name, layerIndex, c, h, w, inputLayer, activation)
     {
       if (c % 32 != 0)
       {
         throw new Exception($"Incompatible neural network. Channel count is {c}, but Ceres only supports fused version of " +
                              "Winograd convolution in residual block which requires channel count be a multiple of 32.");
       }
-  
+
       HasSE = hasSE;
       SEK = seK;
       SharedMemSize = sharedMemSize;
+
+      if (activation != ActivationFunction.RELU && activation != ActivationFunction.MISH)
+      {
+        throw new Exception("Unsupported activation for residual block.");
+      }
     }
 
     /// <summary>

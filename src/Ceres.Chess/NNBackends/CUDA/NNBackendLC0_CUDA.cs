@@ -26,6 +26,8 @@ using Ceres.Base.Benchmarking;
 using Ceres.Base.CUDA;
 using Ceres.Base.DataTypes;
 using System.Threading;
+using System.Diagnostics;
+using Math = System.Math;
 
 #endregion
 
@@ -290,6 +292,7 @@ namespace Ceres.Chess.NNBackends.CUDA
       }
     }
 
+    public int DeviceComputeCapabilityMajor => deviceProperties.ComputeCapability.Major;
     
     private void InitCUDAContextAndTakeWriteLock()
     {
@@ -311,7 +314,9 @@ namespace Ceres.Chess.NNBackends.CUDA
       }
       else
       {
-        Console.WriteLine($"CUDA device {GPUID}: { deviceProperties.DeviceName} SMs: { deviceProperties.MultiProcessorCount } Mem: { deviceProperties.TotalGlobalMemory / (1024 * 1024 * 1024) }gb");
+        Console.WriteLine($"CUDA device {GPUID}:  { deviceProperties.DeviceName}" 
+                        + $" Compute: {deviceProperties.ComputeCapability.Major}.{deviceProperties.ComputeCapability.Minor}" 
+                        + $" SMs: { deviceProperties.MultiProcessorCount } Mem: { deviceProperties.TotalGlobalMemory / (1024 * 1024 * 1024) }gb");
       }
       // showInfo();
 
@@ -349,7 +354,8 @@ namespace Ceres.Chess.NNBackends.CUDA
       LargestLayerWeightsScale = weights.LargestScaleSeen;
 
       ExecContext.ReferenceLayers = ReferenceBackend?.Layers;
-      Layers = new NNBackendCUDALayers(ExecContext, net, weights, SaveActivations, ReferenceBackend?.Layers);
+      Layers = new NNBackendCUDALayers(ExecContext, DeviceComputeCapabilityMajor, 
+                                       net, weights, SaveActivations, ReferenceBackend?.Layers);
 
       CheckNetworkCompatible(net);
 
@@ -357,9 +363,9 @@ namespace Ceres.Chess.NNBackends.CUDA
 
       inputOutput = new NNBackendInputOutput(MaxBatchSize, HasWDL, HasMLH);
 
-      Layers.BuildNetworkAndLoadWeights(ExecContext, weights, NNBackendInputOutput.NUM_INPUT_PLANES);
+      AllocateGPUMemory(net, weights);
 
-      AllocateGPUMemory(weights);
+      Layers.BuildNetworkAndLoadWeights(ExecContext, weights, NNBackendInputOutput.NUM_INPUT_PLANES);
 
       if (!SaveActivations)
       {
@@ -387,7 +393,46 @@ namespace Ceres.Chess.NNBackends.CUDA
     }
 
 
-    private void AllocateGPUMemory(LC0LegacyWeights weights)
+    static int MaxAttentionSize(Net net, LC0LegacyWeights weights, int n)
+    {
+      int embedding_op_size = weights.ip_pol_b == null ? 0 : weights.ip_pol_b.Length;
+      int policy_d_model = weights.ip2_pol_b == null ? 0 : weights.ip2_pol_b.Length;
+      Debug.Assert(policy_d_model == (weights.ip3_pol_b == null ? 0 : weights.ip3_pol_b.Length));
+
+      int encoder_d_model = 0;
+      int encoder_dff = 0;
+
+      int encoder_heads = weights.numPolicyEncoderHeads;// weights.pol_encoder_head_count;
+
+      //  if (weights.pol_encoder.size() > 0) {
+      if (encoder_heads > 0)
+      {
+        throw new NotImplementedException("Encoders not yet supported");
+#if NOT
+        encoder_d_model = weights.pol_encoder[0].mha.q_b.size();
+          encoder_dff = weights.pol_encoder[0].ffn.dense1_b.size();
+
+          Debug.Assert(encoder_d_model ==  weights.pol_encoder[0].mha.k_b.size());
+          Debug.Assert(encoder_d_model == weights.pol_encoder[0].mha.v_b.size());
+          Debug.Assert(embedding_op_size == weights.pol_encoder[0].ffn.dense2_b.size());
+#endif
+      }
+
+
+      int size = n * 64 * Math.Max(Math.Max(embedding_op_size, encoder_dff),
+                                   Math.Max(policy_d_model, encoder_d_model));
+
+      // size of matmul_qk matrix = encoder_heads_ * Batch * 64 * 64
+      int matmul_qk_size = encoder_heads * n * 64 * 64;
+      int output_size = n * (64 * 64 + 8 * 24);
+
+      size = Math.Max(size, Math.Max(matmul_qk_size, output_size));
+      return size;
+    }
+
+
+
+    private void AllocateGPUMemory(Net net, LC0LegacyWeights weights)
     {
       // The original implementation turned off custom Winograd algorithm if device memory was low.
       // But this implmenetation always requries custon Winograd.
@@ -414,6 +459,12 @@ namespace Ceres.Chess.NNBackends.CUDA
       // These scratch sizes are not huge (e.g. about 225MB for a 384x30 network).
       long transformed_tensor_size = (long)(MaxBatchSize * NumFilters * 64 * (36.0 / 16.0) * Marshal.SizeOf<FP16>());
       scratchSizeBytes = System.Math.Max(scratchSizeBytes, 2 * transformed_tensor_size);
+
+      // Attention policy head may need more memory
+      // (We also split the allocations into two parts, so need 2x)
+      int attentionSize = MaxAttentionSize(net, weights, MaxBatchSize);
+      scratchSizeBytes = System.Math.Max(scratchSizeBytes, 2 * attentionSize);
+
       long scratchSizeElements = scratchSizeBytes / Marshal.SizeOf<FP16>();
 
       // =========================================================================
@@ -753,6 +804,7 @@ namespace Ceres.Chess.NNBackends.CUDA
 
       if (net.Format.NetworkFormat.Policy != NetworkFormat.PolicyFormat.PolicyUnknown &&  // T40
           net.Format.NetworkFormat.Policy != NetworkFormat.PolicyFormat.PolicyConvolution &&
+          net.Format.NetworkFormat.Policy != NetworkFormat.PolicyFormat.PolicyAttention &&
           net.Format.NetworkFormat.Policy != NetworkFormat.PolicyFormat.PolicyClassical)
       {
         throw new Exception($"Policy format {net.Format.NetworkFormat.Policy} not supported.");

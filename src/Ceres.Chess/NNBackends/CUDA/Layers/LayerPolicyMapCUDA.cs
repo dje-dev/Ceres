@@ -31,13 +31,17 @@ namespace Ceres.Chess.NNBackends.CUDA
   public class LayerPolicyMapCUDA : BaseLayerCUDA
   {
     int usedSize;
+    bool attention;
     CudaDeviceVariable<short> indices;
 
     public LayerPolicyMapCUDA(NNBackendExecContext parent, string name, int layerIndex,
-                              BaseLayerCUDA ip, int c, int h, int w, int usedSize)
-      : base(parent, name, layerIndex, c, h, w, ip)
+                              BaseLayerCUDA ip, int c, int h, int w, int usedSize, bool attention)
+      : base(parent, name, layerIndex, c, h, w, ip, ActivationFunction.NONE)
     {
       this.usedSize = usedSize;
+      this.attention = attention;
+      
+//      if (attention) weight_size = sizeof(short) * usedSize;
     }
 
     CudaKernel kernelPolicyMap;
@@ -46,7 +50,7 @@ namespace Ceres.Chess.NNBackends.CUDA
     public override void LoadKernels()
     {
       string kn = "_ZN6lczero13cudnn_backend16policyMap_kernelI6__halfEEvPT_PKS3_PKsiiii";
-      kernelPolicyMap = Parent.Device.GetKernel(Parent.PTXAssembly, @"common_kernels.ptx", kn);
+      kernelPolicyMap = Parent.Device.GetKernel(Parent.PTXAssembly, COMMON_KERNELS_PTX_NAME, kn);
     }
 
 
@@ -64,14 +68,17 @@ namespace Ceres.Chess.NNBackends.CUDA
     }
 
 
-    protected override void DoEval(CudaStream stream, int N, CudaDeviceVariable<FP16> output, CudaDeviceVariable<FP16> input, 
+    protected override void DoEval(CudaStream stream, int N, CudaDeviceVariable<FP16> output, 
+                                   CudaDeviceVariable<FP16> input, CudaDeviceVariable<FP16> input2,
                                    CudaDeviceVariable<FP16> scratch, long scratch_size, CudaDeviceVariable<FP16> scratchSecondHalf)
     {
       int inputSize = input_.C * input_.GetH * input_.W;
-      int outputSize = C * GetH * W;
+      if (attention)
+      {
+        inputSize = usedSize;
+      }
 
-      string kn = "_ZN6lczero13cudnn_backend16policyMap_kernelI6__halfEEvPT_PKS3_PKsiiii";
-      CudaKernel kernelPolicyMap = Parent.Device.GetKernel(Parent.PTXAssembly, @"common_kernels.ptx", kn);
+      int outputSize = C * GetH * W;
 
       // Each thread processes one input element
       // Only some of the threads (with valid mapping) write output

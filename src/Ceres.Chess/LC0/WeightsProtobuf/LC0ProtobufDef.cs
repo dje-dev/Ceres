@@ -61,6 +61,19 @@ namespace Pblczero
     [global::ProtoBuf.ProtoMember(2, Name = @"residual")]
     public global::System.Collections.Generic.List<Residual> Residuals { get; } = new global::System.Collections.Generic.List<Residual>();
 
+    [global::ProtoBuf.ProtoMember(21, Name = @"pol_encoder")]
+    public global::System.Collections.Generic.List<EncoderLayer> PolEncoders { get; } = new global::System.Collections.Generic.List<EncoderLayer>();
+
+    [global::ProtoBuf.ProtoMember(24, Name = @"pol_headcount")]
+    public uint PolHeadcount
+    {
+      get => __pbn__PolHeadcount.GetValueOrDefault();
+      set => __pbn__PolHeadcount = value;
+    }
+    public bool ShouldSerializePolHeadcount() => __pbn__PolHeadcount != null;
+    public void ResetPolHeadcount() => __pbn__PolHeadcount = null;
+    private uint? __pbn__PolHeadcount;
+
     [global::ProtoBuf.ProtoMember(11, Name = @"policy1")]
     public ConvBlock Policy1 { get; set; }
 
@@ -72,6 +85,21 @@ namespace Pblczero
 
     [global::ProtoBuf.ProtoMember(5, Name = @"ip_pol_b")]
     public Layer IpPolB { get; set; }
+
+    [global::ProtoBuf.ProtoMember(17, Name = @"ip2_pol_w")]
+    public Layer Ip2PolW { get; set; }
+
+    [global::ProtoBuf.ProtoMember(18, Name = @"ip2_pol_b")]
+    public Layer Ip2PolB { get; set; }
+
+    [global::ProtoBuf.ProtoMember(19, Name = @"ip3_pol_w")]
+    public Layer Ip3PolW { get; set; }
+
+    [global::ProtoBuf.ProtoMember(20, Name = @"ip3_pol_b")]
+    public Layer Ip3PolB { get; set; }
+
+    [global::ProtoBuf.ProtoMember(22, Name = @"ip4_pol_w")]
+    public Layer Ip4PolW { get; set; }
 
     [global::ProtoBuf.ProtoMember(6, Name = @"value")]
     public ConvBlock Value { get; set; }
@@ -205,6 +233,87 @@ namespace Pblczero
 
       [global::ProtoBuf.ProtoMember(3, Name = @"se")]
       public Weights.SEunit Se { get; set; }
+
+    }
+
+    [global::ProtoBuf.ProtoContract(Name = @"MHA")]
+    public partial class Mha : global::ProtoBuf.IExtensible
+    {
+      private global::ProtoBuf.IExtension __pbn__extensionData;
+      global::ProtoBuf.IExtension global::ProtoBuf.IExtensible.GetExtensionObject(bool createIfMissing)
+          => global::ProtoBuf.Extensible.GetExtensionObject(ref __pbn__extensionData, createIfMissing);
+
+      [global::ProtoBuf.ProtoMember(1, Name = @"q_w")]
+      public Weights.Layer QW { get; set; }
+
+      [global::ProtoBuf.ProtoMember(2, Name = @"q_b")]
+      public Weights.Layer QB { get; set; }
+
+      [global::ProtoBuf.ProtoMember(3, Name = @"k_w")]
+      public Weights.Layer KW { get; set; }
+
+      [global::ProtoBuf.ProtoMember(4, Name = @"k_b")]
+      public Weights.Layer KB { get; set; }
+
+      [global::ProtoBuf.ProtoMember(5, Name = @"v_w")]
+      public Weights.Layer VW { get; set; }
+
+      [global::ProtoBuf.ProtoMember(6, Name = @"v_b")]
+      public Weights.Layer VB { get; set; }
+
+      [global::ProtoBuf.ProtoMember(7, Name = @"dense_w")]
+      public Weights.Layer DenseW { get; set; }
+
+      [global::ProtoBuf.ProtoMember(8, Name = @"dense_b")]
+      public Weights.Layer DenseB { get; set; }
+
+    }
+
+    [global::ProtoBuf.ProtoContract(Name = @"FFN")]
+    public partial class Ffn : global::ProtoBuf.IExtensible
+    {
+      private global::ProtoBuf.IExtension __pbn__extensionData;
+      global::ProtoBuf.IExtension global::ProtoBuf.IExtensible.GetExtensionObject(bool createIfMissing)
+          => global::ProtoBuf.Extensible.GetExtensionObject(ref __pbn__extensionData, createIfMissing);
+
+      [global::ProtoBuf.ProtoMember(1, Name = @"dense1_w")]
+      public Weights.Layer Dense1W { get; set; }
+
+      [global::ProtoBuf.ProtoMember(2, Name = @"dense1_b")]
+      public Weights.Layer Dense1B { get; set; }
+
+      [global::ProtoBuf.ProtoMember(3, Name = @"dense2_w")]
+      public Weights.Layer Dense2W { get; set; }
+
+      [global::ProtoBuf.ProtoMember(4, Name = @"dense2_b")]
+      public Weights.Layer Dense2B { get; set; }
+
+    }
+
+    [global::ProtoBuf.ProtoContract()]
+    public partial class EncoderLayer : global::ProtoBuf.IExtensible
+    {
+      private global::ProtoBuf.IExtension __pbn__extensionData;
+      global::ProtoBuf.IExtension global::ProtoBuf.IExtensible.GetExtensionObject(bool createIfMissing)
+          => global::ProtoBuf.Extensible.GetExtensionObject(ref __pbn__extensionData, createIfMissing);
+
+      [global::ProtoBuf.ProtoMember(1, Name = @"mha")]
+      public Weights.Mha Mha { get; set; }
+
+      [global::ProtoBuf.ProtoMember(2, Name = @"ln1_gammas")]
+      public Weights.Layer Ln1Gammas { get; set; }
+
+      [global::ProtoBuf.ProtoMember(3, Name = @"ln1_betas")]
+      public Weights.Layer Ln1Betas { get; set; }
+
+      [global::ProtoBuf.ProtoMember(4, Name = @"ffn")]
+      public Weights.Ffn Ffn { get; set; }
+
+      [global::ProtoBuf.ProtoMember(5, Name = @"ln2_gammas")]
+      public Weights.Layer Ln2Gammas { get; set; }
+
+      [global::ProtoBuf.ProtoMember(6, Name = @"ln2_betas")]
+      public Weights.Layer Ln2Betas { get; set; }
 
     }
 
@@ -353,6 +462,17 @@ namespace Pblczero
     public void ResetMovesLeft() => __pbn__MovesLeft = null;
     private MovesLeftFormat? __pbn__MovesLeft;
 
+    [global::ProtoBuf.ProtoMember(7)]
+    [global::System.ComponentModel.DefaultValue(DefaultActivation.DefaultActivationRelu)]
+    public DefaultActivation default_activation
+    {
+      get => __pbn__default_activation ?? DefaultActivation.DefaultActivationRelu;
+      set => __pbn__default_activation = value;
+    }
+    public bool ShouldSerializedefault_activation() => __pbn__default_activation != null;
+    public void Resetdefault_activation() => __pbn__default_activation = null;
+    private DefaultActivation? __pbn__default_activation;
+
     [global::ProtoBuf.ProtoContract()]
     public enum InputFormat
     {
@@ -411,6 +531,8 @@ namespace Pblczero
       PolicyClassical = 1,
       [global::ProtoBuf.ProtoEnum(Name = @"POLICY_CONVOLUTION")]
       PolicyConvolution = 2,
+      [global::ProtoBuf.ProtoEnum(Name = @"POLICY_ATTENTION")]
+      PolicyAttention = 3,
     }
 
     [global::ProtoBuf.ProtoContract()]
@@ -433,6 +555,15 @@ namespace Pblczero
       MovesLeftNone = 0,
       [global::ProtoBuf.ProtoEnum(Name = @"MOVES_LEFT_V1")]
       MovesLeftV1 = 1,
+    }
+
+    [global::ProtoBuf.ProtoContract()]
+    public enum DefaultActivation
+    {
+      [global::ProtoBuf.ProtoEnum(Name = @"DEFAULT_ACTIVATION_RELU")]
+      DefaultActivationRelu = 0,
+      [global::ProtoBuf.ProtoEnum(Name = @"DEFAULT_ACTIVATION_MISH")]
+      DefaultActivationMish = 1,
     }
 
   }
