@@ -636,11 +636,10 @@ namespace Ceres.MCTS.Iteration
     public float FractionExtendedSoFar = 0;
 
 
-    public static (MGMove, TimingStats)
-    DoSearch(MCTSManager manager, bool verbose,
-             MCTSProgressCallback progressCallback = null,
-             bool possiblyUsePositionCache = false,
-             bool moveImmediateIfOnlyOneMove = false)
+    public static MGMove DoSearch(MCTSManager manager, bool verbose,
+                                  MCTSProgressCallback progressCallback = null,
+                                  bool possiblyUsePositionCache = false,
+                                  bool moveImmediateIfOnlyOneMove = false)
     {
       #if NOT
 
@@ -713,7 +712,7 @@ namespace Ceres.MCTS.Iteration
       if (manager.TablebaseImmediateBestMove != default(MGMove))
       {
         manager.StopStatus = SearchStopStatus.TablebaseImmediateMove;
-        return (manager.TablebaseImmediateBestMove, new TimingStats());
+        return manager.TablebaseImmediateBestMove;
       }
 
       // If only one legal move then force the search to run only one node
@@ -737,7 +736,6 @@ namespace Ceres.MCTS.Iteration
       IteratedMCTSDef schedule = manager.Context.ParamsSearch.IMCTSSchedule;
       bool useIMCTS = schedule != null & manager.SearchLimit.EstNumSearchNodes(root.N, 30_000, false) > 100;
 
-      TimingStats stats;
       MCTSNode selectedMove;
       BestMoveInfo bestMoveInfo;
 
@@ -750,8 +748,8 @@ namespace Ceres.MCTS.Iteration
       {
         shouldExtendSearch = false;
 
-        (stats, selectedMove) = useIMCTS ? new IteratedMCTSSearchManager().IteratedSearch(manager, progressCallback, schedule)
-                                         : manager.DoSearch(thisSearchLimit, progressCallback);
+        selectedMove = useIMCTS ? new IteratedMCTSSearchManager().IteratedSearch(manager, progressCallback, schedule).Item2
+                                : manager.DoSearch(thisSearchLimit, progressCallback).Item2;
 
         // Get best child 
         // TODO: technically the "updateStats" should only be true if we end up acccepting this move
@@ -863,11 +861,11 @@ namespace Ceres.MCTS.Iteration
       if (shouldStopAfterOneNodeDueToOnlyOneLegalMove)
       {
         manager.StopStatus = SearchStopStatus.OnlyOneLegalMove;
-        return (moves.MovesArray[0], stats);
+        return moves.MovesArray[0];
       }
       else
       {
-        return (bestMoveInfo.BestMove, stats);
+        return bestMoveInfo.BestMove;
       }
     }
 

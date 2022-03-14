@@ -132,7 +132,7 @@ namespace Ceres.MCTS.Iteration
     /// <summary>
     /// Time statistics of last search.
     /// </summary>
-    public TimingStats TimingInfo { get; private set; }
+    public TimingStats TimingInfo { get; private set; } = new TimingStats();
 
 
     /// <summary>
@@ -265,8 +265,11 @@ namespace Ceres.MCTS.Iteration
       reuseNodeCache?.ResetCache(false);
       reuseNodeCache?.SetContext(context);
 
-      (BestMove, TimingInfo) = MCTSManager.DoSearch(Manager, verbose, progressCallback,
-                                                  possiblyUsePositionCache, moveImmediateIfOnlyOneMove);
+      using (new TimingBlock(TimingInfo))
+      {
+        BestMove = MCTSManager.DoSearch(Manager, verbose, progressCallback,
+                                        possiblyUsePositionCache, moveImmediateIfOnlyOneMove);
+      }
     }
 
     internal static bool PosIsTablebaseWinWithNoDTZAvailable(ParamsSearch paramsSearch, PositionWithHistory priorMoves)
@@ -699,8 +702,11 @@ namespace Ceres.MCTS.Iteration
       // NOTE: disabled, this happens in practive very rearely (and the revert code is not yet fully working)
       //FixupDrawsInvalidatedByTreeReuse();
 
-      (BestMove, TimingInfo) = MCTSManager.DoSearch(Manager, verbose, progressCallback,
-                                                  possiblyUsePositionCache, moveImmediateIfOnlyOneMove);
+      using (new TimingBlock(TimingInfo))
+      {
+        BestMove = MCTSManager.DoSearch(Manager, verbose, progressCallback,
+                                        possiblyUsePositionCache, moveImmediateIfOnlyOneMove);
+      }
     }
 
 
