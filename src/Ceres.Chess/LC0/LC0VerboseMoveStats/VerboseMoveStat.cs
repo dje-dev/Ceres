@@ -118,6 +118,11 @@ namespace Ceres.Chess.SearchResultVerboseMoveInfo
     /// <param name="line"></param>
     public VerboseMoveStat(VerboseMoveStats parent, string line)
     {
+      if (parent == null)
+      {
+        throw new ArgumentNullException(nameof(parent));
+      }
+
       Parent = parent;
 
       if (line != null)
@@ -134,7 +139,7 @@ namespace Ceres.Chess.SearchResultVerboseMoveInfo
     /// <summary>
     /// Returns the move described by this line.
     /// </summary>
-    public Move Move => Move.FromUCI(MoveString);
+    public Move Move => MoveString == "node" ? default : Move.FromUCI(in Parent .Position, MoveString);
 
 
     /// <summary>

@@ -377,10 +377,11 @@ namespace Ceres.Features.UCI
             break;
 
           case string c when c.StartsWith("graph"):
+            // Command of the form such as "graph" or "graph 7" or "graph 3 ref 0.5"
             if (CeresEngine?.Search != null)
             {
-              string[] partsGraph = c.Split(" ");
-              string optionsStr = partsGraph.Length > 1 ? partsGraph[1] : null;
+              string[] partsGraph = c.TrimEnd().Split(" ");
+              string optionsStr = partsGraph.Length > 1 ? c.Substring(6) : null;
               AnalysisGraphOptions options = AnalysisGraphOptions.FromString(optionsStr);
               AnalysisGraphGenerator graphGenerator = new AnalysisGraphGenerator(CeresEngine.Search, options);
               graphGenerator.Write(true);
@@ -739,8 +740,7 @@ namespace Ceres.Features.UCI
     private SearchLimit GetSearchLimit(string command)
     {
       SearchLimit searchLimit;
-      bool weAreWhite = curPositionAndMoves.FinalPosition.MiscInfo.SideToMove == SideType.White;
-      UCIGoCommandParsed goInfo = new UCIGoCommandParsed(command, weAreWhite);
+      UCIGoCommandParsed goInfo = new UCIGoCommandParsed(command, curPositionAndMoves.FinalPosition);
       if (!goInfo.IsValid) return null;
 
       if (goInfo.Nodes.HasValue)

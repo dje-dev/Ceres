@@ -273,7 +273,7 @@ namespace Ceres.Chess.Games.Utils
       try
       {
         Move epdMove = MovesFormat == MovesFormatEnum.SAN ? SANParser.FromSAN(moveStr, in position).Move
-                                                          : Move.FromUCI(moveStr);
+                                                          : Move.FromUCI(in position, moveStr);
         errString = null;
         return true;
       }
@@ -323,7 +323,7 @@ namespace Ceres.Chess.Games.Utils
       {
         // avoid move
         Move avoidMoveEPD = MovesFormat == MovesFormatEnum.SAN ? SANParser.FromSAN(AMMoves[0], Position).Move
-                                                               : Move.FromUCI(AMMoves[0]);
+                                                               : Move.FromUCI(Position, AMMoves[0]);
         correct = move != avoidMoveEPD;
         if (correct) value = valueOfBestMove;
       }
@@ -337,7 +337,7 @@ namespace Ceres.Chess.Games.Utils
             if (bmMove != "")
             {
               Move bmMoveDecoded = MovesFormat == MovesFormatEnum.SAN ? SANParser.FromSAN(BMMoves[0], Position).Move
-                                                                      : Move.FromUCI(BMMoves[0]);
+                                                                      : Move.FromUCI(Position, BMMoves[0]);
 
               if (bmMoveDecoded == move)
               {

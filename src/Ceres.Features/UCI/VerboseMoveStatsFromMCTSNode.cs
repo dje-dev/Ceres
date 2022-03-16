@@ -36,6 +36,9 @@ namespace Ceres.Features.UCI
   {
     public static List<VerboseMoveStat> BuildStats(MCTSNode searchRootNode)
     {
+      // Create dummy parent stats.
+      VerboseMoveStats statsParent = new VerboseMoveStats(searchRootNode.Annotation.Pos, null, 0, 0, 0, null);
+
       List<VerboseMoveStat> stats = new List<VerboseMoveStat>();
 
       BestMoveInfo best = searchRootNode.BestMoveInfo(false);
@@ -47,7 +50,7 @@ namespace Ceres.Features.UCI
         (MCTSNode node, EncodedMove move, FP16 p) info = searchRootNode.ChildAtIndexInfo(i);
         if (info.node.IsNull)
         {
-          VerboseMoveStat stat = BuildStatNotExpanded(searchRootNode, i);
+          VerboseMoveStat stat = BuildStatNotExpanded(statsParent, searchRootNode, i);
           stats.Add(stat);
         }
       }
@@ -58,30 +61,30 @@ namespace Ceres.Features.UCI
       {
         if (node != best.BestMoveNode)
         {
-          stats.Add(BuildStatExpanded(node, false));
+          stats.Add(BuildStatExpanded(statsParent, node, false));
         }
       }
 
       // Save the best move for last.
       if (best.BestMoveNode.IsNull)
       {
-        stats.Add(BuildStatNoSearch(searchRootNode, best));
+        stats.Add(BuildStatNoSearch(statsParent, searchRootNode, best));
       }
       else
       {
-        stats.Add(BuildStatExpanded(best.BestMoveNode, false));
+        stats.Add(BuildStatExpanded(statsParent, best.BestMoveNode, false));
       }
 
       // Finally, output the search root node.
-      stats.Add(BuildStatExpanded(searchRootNode, true));
+      stats.Add(BuildStatExpanded(statsParent, searchRootNode, true));
 
       return stats;
     }
 
 
-    static VerboseMoveStat BuildStatNoSearch(MCTSNode parent, BestMoveInfo info)
+    static VerboseMoveStat BuildStatNoSearch(VerboseMoveStats statsParent, MCTSNode parent, BestMoveInfo info)
     {
-      VerboseMoveStat stat = new VerboseMoveStat(null, null);
+      VerboseMoveStat stat = new VerboseMoveStat(statsParent, null);
       stat.MoveString = info.BestMove.MoveStr(MGMoveNotationStyle.LC0Coordinate);
       float v = parent.V;
       stat.WL = v;
@@ -91,10 +94,10 @@ namespace Ceres.Features.UCI
       return stat;
     }
 
-    static VerboseMoveStat BuildStatNotExpanded(MCTSNode node, int childIndex)
+    static VerboseMoveStat BuildStatNotExpanded(VerboseMoveStats statsParent, MCTSNode node, int childIndex)
     {
       MCTSNodeStructChild child = node.ChildAtIndexRef(childIndex);
-      VerboseMoveStat stat = new VerboseMoveStat(null, null);
+      VerboseMoveStat stat = new VerboseMoveStat(statsParent, null);
       stat.MoveString = child.Move.ToString();
       stat.MoveCode = child.Move.IndexNeuralNet;
       stat.P = child.P * 100.0f;
@@ -103,9 +106,9 @@ namespace Ceres.Features.UCI
     }
 
 
-    static VerboseMoveStat BuildStatExpanded(MCTSNode node, bool isSearchRoot)
+    static VerboseMoveStat BuildStatExpanded(VerboseMoveStats parent, MCTSNode node, bool isSearchRoot)
     {
-      VerboseMoveStat stat = new VerboseMoveStat(null, null);
+      VerboseMoveStat stat = new VerboseMoveStat(parent, null);
       float multiplier = isSearchRoot ? 1 : -1;
 
       node.Annotate();

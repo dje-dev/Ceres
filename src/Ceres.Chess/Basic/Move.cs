@@ -109,11 +109,40 @@ namespace Ceres.Chess
     /// Converts a move string in UCI format (long algebraic notation) into a Move.
     /// Examples: e2e4, e1g1 (possible castling), a7a8r (promotion to rook)
     /// </summary>
+    /// <param name="pos"></param>
     /// <param name="uciMoveStr"></param>
     /// <returns></returns>
-    public static Move FromUCI(string uciMoveStr)
+    public static Move FromUCI(in Position pos, string uciMoveStr)
     {
-      if (uciMoveStr.Length < 4 || uciMoveStr.Length > 5) throw new Exception("Invalid move " + uciMoveStr);
+      string uciUpper = uciMoveStr.ToUpper();
+      Square startSquare = uciMoveStr.Substring(0, 2);
+      PieceType movePiece = pos.PieceOnSquare(startSquare).Type;
+      if (movePiece == PieceType.King)
+      {
+        if (uciUpper == "E1G1" || uciUpper == "E8G8")
+        {
+          return new Move(MoveType.MoveCastleShort);
+        }
+        else if (uciUpper == "E1C1" || uciUpper == "E8C8")
+        {
+          return new Move(MoveType.MoveCastleLong);
+        }
+      }
+
+      return FromUCINonCastle(uciMoveStr);
+    }
+
+    /// <summary>
+    /// Converts a move string in UCI format (long algebraic notation) into a Move.
+    /// </summary>
+    /// <param name="uciMoveStr"></param>
+    /// <returns></returns>
+    static Move FromUCINonCastle(string uciMoveStr)
+    {
+      if (uciMoveStr.Length < 4 || uciMoveStr.Length > 5)
+      {
+        throw new Exception("Invalid move " + uciMoveStr);
+      }
 
       Square startSquare = uciMoveStr.Substring(0, 2);
       Square destSquare = uciMoveStr.Substring(2, 2);

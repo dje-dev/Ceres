@@ -813,7 +813,8 @@ namespace Ceres.Features.Tournaments
         // Verify the engine's move was legal by trying to make it.
         try
         {
-          Position positionAfterMoveTest = curPositionAndMoves.FinalPosition.AfterMove(Move.FromUCI(engineMove.MoveString));
+          Position priorFinalPosition = curPositionAndMoves.FinalPosition;
+          Position positionAfterMoveTest = priorFinalPosition.AfterMove(Move.FromUCI(in priorFinalPosition, engineMove.MoveString));
         }
         catch (Exception exc)
         {

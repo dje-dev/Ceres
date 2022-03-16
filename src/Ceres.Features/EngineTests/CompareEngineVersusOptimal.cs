@@ -391,7 +391,7 @@ namespace Ceres.Features.EngineTests
           {
             WriteColumnHeaders();
 
-            Move moveSF = resultSF == null ? default : Move.FromUCI(resultSF.MoveString);
+            Move moveSF = resultSF == null ? default : Move.FromUCI(pos.FinalPosition, resultSF.MoveString);
             string sfMoveStr = "";
             if (resultSF != null)
             {
@@ -493,7 +493,7 @@ namespace Ceres.Features.EngineTests
       }
       else
       {
-        Move move = Move.FromUCI(search1.MoveString);
+        Move move = Move.FromUCI(pos.FinalPosition, search1.MoveString);
         move1 = MGMoveConverter.MGMoveFromPosAndMove(pos.FinalPosition, move);
       }
     }

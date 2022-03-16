@@ -265,7 +265,7 @@ namespace Ceres.MCTS.Iteration
       reuseNodeCache?.ResetCache(false);
       reuseNodeCache?.SetContext(context);
 
-      using (new TimingBlock(TimingInfo))
+      using (new TimingBlock(TimingInfo, TimingBlock.LoggingType.None))
       {
         BestMove = MCTSManager.DoSearch(Manager, verbose, progressCallback,
                                         possiblyUsePositionCache, moveImmediateIfOnlyOneMove);

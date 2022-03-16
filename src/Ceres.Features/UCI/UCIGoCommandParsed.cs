@@ -93,8 +93,9 @@ namespace Ceres.Features.UCI
     /// </summary>
     /// <param name="goCommand"></param>
     /// <param name="weAreWhite"></param>
-    public UCIGoCommandParsed(string goCommand, bool weAreWhite)
+    public UCIGoCommandParsed(string goCommand, Position position)
     {
+      bool weAreWhite = position.MiscInfo.SideToMove == SideType.White;
       bool weAreBlack = !weAreWhite;
 
       // Remove any extraneous whitespaces
@@ -222,7 +223,7 @@ namespace Ceres.Features.UCI
             SearchMoves = new List<Move>();
             for (int i=partIndex; i<strParts.Length;i++)
             {
-              SearchMoves.Add(Move.FromUCI(strParts[i]));
+              SearchMoves.Add(Move.FromUCI(in position, strParts[i]));
               partIndex++;
             }
             break;

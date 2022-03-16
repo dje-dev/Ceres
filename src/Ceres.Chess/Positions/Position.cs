@@ -1177,7 +1177,7 @@ namespace Ceres.Chess
     /// </summary>
     /// <param name="ucImoveString"></param>
     /// <returns></returns>
-    public Move MoveUCI(string ucImoveString) => Move.FromUCI(ucImoveString);
+    public Move MoveUCI(string ucImoveString) => Move.FromUCI(in this, ucImoveString);
 
 
     /// <summary>
