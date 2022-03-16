@@ -73,6 +73,10 @@ namespace Ceres.Features.GameEngines
     /// </summary>
     public readonly string ExtraCommandLineArgs;
 
+    /// <summary>
+    /// If verobse move statistics should be emitted.
+    /// </summary>
+    public readonly bool Verbose;
 
     /// <summary>
     /// Constructor.
@@ -90,7 +94,8 @@ namespace Ceres.Features.GameEngines
                             ParamsSearch searchParamsEmulate = null, 
                             ParamsSelect selectParamsEmulate = null, 
                             string overrideEXE = null,
-                            string extraCommandLineArgs = null)
+                            string extraCommandLineArgs = null,
+                            bool verbose = false)
       : base(id)
     {
       if ((SearchParamsEmulate == null) != (SelectParamsEmulate == null))
@@ -113,6 +118,7 @@ namespace Ceres.Features.GameEngines
       SelectParamsEmulate = selectParamsEmulate;
       OverrideEXE = overrideEXE;
       ExtraCommandLineArgs = extraCommandLineArgs;
+      Verbose = verbose;
     }
 
 
@@ -133,6 +139,7 @@ namespace Ceres.Features.GameEngines
                                  ForceDisableSmartPruning, emulate,
                                  SearchParamsEmulate, SelectParamsEmulate, EvaluatorDef,                               
                                  null, OverrideEXE, extraCommandLineArgs:ExtraCommandLineArgs,
+                                 verbose:Verbose,
                                  processorGroupID:ProcessorGroupID);   
     }
 
