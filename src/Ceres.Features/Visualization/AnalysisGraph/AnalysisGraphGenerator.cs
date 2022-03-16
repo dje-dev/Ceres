@@ -16,22 +16,30 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using System.Text;
 
 using Ceres.Base.Benchmarking;
 using Ceres.Base.DataType.Trees;
 using Ceres.Base.Misc;
+using Ceres.Base.OperatingSystem;
 using Ceres.Chess;
+using Ceres.Chess.GameEngines;
 using Ceres.Chess.LC0.Positions;
+using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
 using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.NNEvaluators.Specifications;
 using Ceres.Chess.Positions;
-
+using Ceres.Chess.SearchResultVerboseMoveInfo;
+using Ceres.Chess.UserSettings;
+using Ceres.Features.GameEngines;
+using Ceres.Features.UCI;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.LeafExpansion;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Struct;
+using Ceres.MCTS.Params;
 using Ceres.MCTS.Utils;
 
 #endregion
@@ -70,6 +78,12 @@ namespace Ceres.Features.Visualization.AnalysisGraph
       spv = new SearchPrincipalVariation(search.SearchRootNode);
       tree = search.Manager.Context.Tree;
 
+      if (options.RelativeTimeReferenceEngine > 0 && referenceEngine == null)
+      {
+        TryStartReferenceEngine();
+      }
+
+
       // These parameters tuned to give good user experience,
       // with level 0 very simple and level 9 showing much detail.
       float SCALE = 3 * (10 - Options.DetailLevel);
@@ -86,6 +100,76 @@ namespace Ceres.Features.Visualization.AnalysisGraph
       tree.PossiblyPruneCache();
 
       TempDir = GraphvizUtils.CreateUniqueTempDirectory("Ceres_Graph_");
+    }
+
+    static bool IsMCTSReferenceEngine =>
+      CeresUserSettingsManager.Settings.RefEngineEXE?.ToUpper() == "CERES" ||
+      CeresUserSettingsManager.Settings.RefEngineEXE?.ToUpper() == "LC0";
+
+    private void TryStartReferenceEngine()
+    {
+      if (referenceEngine == null)
+      {
+        bool isLC0 = CeresUserSettingsManager.Settings.RefEngineEXE?.ToUpper() == "LC0";
+        bool isCeres = CeresUserSettingsManager.Settings.RefEngineEXE?.ToUpper() == "CERES";
+
+        if (CeresUserSettingsManager.Settings.RefEngineEXE == null)
+        {
+          Console.WriteLine("Required entry for RefEngineEXE missing in Ceres.json.");
+        }
+        else if ((!isLC0 && !isCeres) && !File.Exists(CeresUserSettingsManager.Settings.RefEngineEXE))
+        {
+          Console.WriteLine($"Specified file for RefEngineEXE of { CeresUserSettingsManager.Settings.RefEngineEXE} does not eixst.");
+        }
+        else
+        {
+          Console.Write($"Starting reference engine {CeresUserSettingsManager.Settings.RefEngineEXE} ");
+          if (!isLC0 && !isCeres)
+          {
+            Console.WriteLine($"with {CeresUserSettingsManager.Settings.RefEngineThreads} threads "
+                            + $"and {CeresUserSettingsManager.Settings.RefEngineHashMB}mb hash...");
+          }
+          else
+          {
+            Console.WriteLine();
+          }
+
+          NNEvaluatorDef GetNNDef()
+          {
+            NNEvaluatorDef nnDef = search.Manager.Context.NNEvaluators.EvaluatorDef;
+            if (CeresUserSettingsManager.Settings.RefEngineNetworkFile != null)
+            {
+              string deviceString = NNDevicesSpecificationString.ToSpecificationString(nnDef.DeviceCombo, nnDef.Devices);
+              deviceString = deviceString.Replace("Device=", "");
+              nnDef = NNEvaluatorDef.FromSpecification(CeresUserSettingsManager.Settings.RefEngineNetworkFile, deviceString);
+            }
+            return nnDef;
+          }
+
+          ParamsSearch ps = new ParamsSearch();
+          ps.FutilityPruningStopSearchEnabled = false;
+
+          if (isLC0)
+          {
+            referenceEngine = new GameEngineDefLC0("LC0", GetNNDef(), true, ps, verbose:true).CreateEngine();
+//            referenceEngine = new GameEngineLC0("LC0", null, paramsNN: GetNNDef());
+          }
+          else if (isCeres)
+          {
+            //string executable = Assembly.GetEntryAssembly().Location;
+            referenceEngine = new GameEngineDefCeres("Ceres", GetNNDef(), null, ps).CreateEngine();
+          }
+          else
+          {
+            GameEngineUCISpec spec = new("Ref",
+                                         CeresUserSettingsManager.Settings.RefEngineEXE,
+                                         CeresUserSettingsManager.Settings.RefEngineThreads,
+                                         CeresUserSettingsManager.Settings.RefEngineHashMB,
+                                         CeresUserSettingsManager.Settings.TablebaseDirectory);
+            referenceEngine = spec.CreateEngine();
+          }
+        }
+      }
     }
 
     float minFractionRoot;
@@ -210,7 +294,27 @@ namespace Ceres.Features.Visualization.AnalysisGraph
       string specString = NNNetSpecificationString.ToSpecificationString(specNet.NetCombo, specNet.Nets);
       string posString = analysisPosition.FENAndMovesString.Replace(Position.StartPosition.FEN, "startpos");
       string searchNodesString = $" ({tree.Root.N:N0} visits)";
-      string title = $"Ceres ({CeresVersion.VersionString}) Search Visualization\r\n{specString}{searchNodesString}\r\n{posString}\r\n ";
+      string title = $"Ceres ({CeresVersion.VersionString}) Search Visualization\r\n";
+      title += $"{specString}";
+      if (Options.RelativeTimeReferenceEngine > 0)
+      {
+        string netDesc = "";
+        if (IsMCTSReferenceEngine && CeresUserSettingsManager.Settings.RefEngineNetworkFile != null)
+        {
+          netDesc += " with " + CeresUserSettingsManager.Settings.RefEngineNetworkFile ?? "";
+        }
+        if (File.Exists(CeresUserSettingsManager.Settings.RefEngineEXE))
+        {
+          title += " (ref engine " + new FileInfo(CeresUserSettingsManager.Settings.RefEngineEXE).Name + netDesc + ")\r\n";
+        }
+        else
+        {
+          title += " (ref engine " + CeresUserSettingsManager.Settings.RefEngineEXE + netDesc + ")\r\n";
+        }
+      }
+      title+= $"{searchNodesString}\r\n{posString}";
+
+      title += "\r\n";
 
       sb.AppendLine("digraph \"title\" ");
       //      sb.AppendLine("{ nodesep=2 ranksep=1 "); //compound=false;
@@ -229,6 +333,10 @@ namespace Ceres.Features.Visualization.AnalysisGraph
       int count = 0;
       int rootN = search.Manager.Root.N;
 
+      // Collect all the nodes intended for processing.
+      List<MCTSNode> theseNodes = new();
+      long sumNAllSelectedNodes = 0; 
+
       rootNodeRef.Traverse(
       search.SearchRootNode.Context.Tree.Store,
       (ref MCTSNodeStruct nodeRef, int depth) =>
@@ -245,8 +353,6 @@ namespace Ceres.Features.Visualization.AnalysisGraph
         MCTSNode node = tree.GetNode(nodeRef.Index);
         node.Annotate();
 
-        bool isOnPV = spv.Nodes.Contains(node);
-
         float nFractionParent = node.IsRoot ? 1 : (float)node.N / node.Parent.N;
         float nFractionRoot = (float)node.N / rootN;
         bool isTopN = IsTopN(node);
@@ -255,9 +361,10 @@ namespace Ceres.Features.Visualization.AnalysisGraph
         if (nFractionRoot > minFractionRoot
         && (isTopN || nFractionParent > minFractionParent))
         {
-          AddNode(outSB, node, isOnPV, TempDir);
           count++;
+          theseNodes.Add(node); 
           addedNodes.Add(node.Index);
+          sumNAllSelectedNodes += node.N;
           if (VERBOSE)
           {
             Console.WriteLine("add " + node.Index + " depth " + node.Depth);
@@ -266,6 +373,42 @@ namespace Ceres.Features.Visualization.AnalysisGraph
         }
         return false;
       }, TreeTraversalType.BreadthFirst);
+
+      // The root node will itself apepar take up 50% of time, then sum of children the other 50%.
+      const float RELATIVE_FRAC_REF_ENGINE = 0.5f;
+
+      // Now process nodes.
+      float fracThisParent = (float)rootNodeRef.N / rootN;
+      foreach (MCTSNode node in theseNodes)
+      {
+        bool isOnPV = spv.Nodes.Contains(node);
+
+        
+        SearchLimit limit = null;
+        if (Options.RelativeTimeReferenceEngine > 0)
+        {
+          if (IsMCTSReferenceEngine)
+          {
+            // For MCTS engines match the N exactly (subjec to scaling factor)
+            int numNodes = (int)(Options.RelativeTimeReferenceEngine * node.N);
+            //Console.WriteLine($"Search {numNodes} because fraction {Options.RelativeTimeReferenceEngine} and primary search N = {node.N}");
+            limit = SearchLimit.NodesPerMove(numNodes);
+          }
+          else
+          {
+            // For non-MCTS engines use a time which is fractionally appropriate based on the N of this node
+            // relative to the root and the target fraction.
+            float fracOfTheseNodes = (float)node.N / sumNAllSelectedNodes;
+            float thisFrac = RELATIVE_FRAC_REF_ENGINE * fracOfTheseNodes * fracThisParent;
+            float timeRootSearch = (float)node.Context.Manager.Search.TimingInfo.ElapsedTimeSecs;
+            float refEngineSearchTime = timeRootSearch * thisFrac;
+            //Console.WriteLine($"{fracThisParent} {fracOfTheseNodes} {RELATIVE_FRAC_REF_ENGINE} ==> {refEngineSearchTime} relative to total {timeRootSearch}sec total");
+            limit = SearchLimit.SecondsPerMove(refEngineSearchTime * Options.RelativeTimeReferenceEngine);
+          }
+        }
+
+        AddNode(outSB, node, isOnPV, TempDir, limit);
+      }
 
       return count;
     }
@@ -297,6 +440,8 @@ namespace Ceres.Features.Visualization.AnalysisGraph
 
     #region Static helpers
 
+    static GameEngine referenceEngine = null;
+
     /// <summary>
     /// Adds a node to the graph.
     /// </summary>
@@ -304,7 +449,7 @@ namespace Ceres.Features.Visualization.AnalysisGraph
     /// <param name="node"></param>
     /// <param name="isOnPV"></param>
     /// <param name="tempDir"></param>
-    static void AddNode(StringBuilder sb, MCTSNode node, bool isOnPV, string tempDir)
+    void AddNode(StringBuilder sb, MCTSNode node, bool isOnPV, string tempDir, SearchLimit searchLimit)
     {
       node.Annotate();
 
@@ -326,9 +471,8 @@ namespace Ceres.Features.Visualization.AnalysisGraph
       sb.AppendLine($"href=\"https://lichess.org/editor/{node.Annotation.Pos.FEN}\"");
       sb.AppendLine($"tooltip=\"{tooltip}]\"");
       float scoreCP = EncodedEvalLogistic.LogisticToCentipawn((float)node.Q);
+      float posEvalCP = EncodedEvalLogistic.LogisticToCentipawn((float)node.V);
       string wdlStr = $"{100 * node.StructRef.WAvg:F0}/{100 * node.DAvg:F0}/{100 * node.LAvg:F0})";
-
-      //  sb.AppendLine($"xlabel=\"{scoreCP,5:F0}\"");
 
       sb.Append($" fontsize=\"18\"");
 
@@ -336,15 +480,99 @@ namespace Ceres.Features.Visualization.AnalysisGraph
       string colorAttr = node.Annotation.Pos.MiscInfo.SideToMove == SideType.White ? "bgcolor=\"white\"" : "bgcolor=\"silver\"";
       sb.AppendLine("label= <<TABLE cellspacing=\"0\">");
       sb.AppendLine($"<TR><TD border=\"0\" {colorAttr} ><IMG SRC=\"{posFN}\"/></TD></TR>");
+
       string bgColorScore = GraphvizUtils.ColorStr((float)node.Q);
+      sb.AppendLine($"<TR><TD bgcolor=\"{bgColorScore}\" border=\"0\" >{scoreCP,5:N0}cp   ({wdlStr}  {posEvalCP:N0}cp</TD></TR>");
+      sb.AppendLine($"<TR><TD bgcolor=\"linen\" border=\"0\" >{node.N:N0}  {node.P * 100,5:F2}%</TD></TR>");
 
-      sb.AppendLine($"<TR><TD bgcolor=\"linen\" border=\"0\" >{scoreCP,5:F0}cp   ({wdlStr}</TD></TR>");
-      sb.AppendLine($"<TR><TD bgcolor=\"linen\" border=\"0\" >N= {node.N:N0}  P={node.P * 100,5:F2}</TD></TR>");
+//      double qDiffRoot = node.Tree.Root.Q - (node.Depth % 2 == 0 ? 1 : -1) * node.Q;
+//      sb.AppendLine($"<TR><TD bgcolor=\"{bgColorScore}\" border=\"0\" >Q= {node.Q,6:F3} ({ qDiffRoot,4:F2})  V= {node.V,6:F3}</TD></TR>");
 
-      double qDiffRoot = node.Tree.Root.Q - (node.Depth % 2 == 0 ? 1 : -1) * node.Q;
-      sb.AppendLine($"<TR><TD bgcolor=\"{bgColorScore}\" border=\"0\" >Q= {node.Q,6:F3} ({ qDiffRoot,4:F2})  V= {node.V,6:F3}</TD></TR>");
+      if (searchLimit != null)
+      {
+        TryStartReferenceEngine();
+        if (referenceEngine != null)
+        {
+          referenceEngine.ResetGame();
+          GameEngineSearchResult refEngineResult = referenceEngine.Search(new PositionWithHistory(in node.Annotation.Pos), searchLimit);
+          
+          float refEngineEvalCP = refEngineResult.ScoreCentipawns;
+          float refEngineEvalNodes = refEngineResult.FinalN;
+          string refEngineEvalSF = refEngineResult.MoveString;
+          Move refEngineMoveMove = Move.FromUCI(in node.Annotation.Pos, refEngineEvalSF);
+          string refEngineMoveSAN = refEngineMoveMove.ToSAN(in node.Annotation.Pos);
+
+          string refEngineScoreStr = $"{refEngineEvalCP,5:N0}cp";
+          string evalDiffStr = "";
+          bool movesSame = true;
+          if (node.BestMove(false).IsNotNull)
+          {
+            MCTSNode bestMoveNode = node.BestMove(false);
+            bestMoveNode.Annotate();
+
+            MGMove mgMovePrimary = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(node.BestMove(false).PriorMove, in node.Annotation.PosMG);
+            Move movePrimary = MGMoveConverter.ToMove(mgMovePrimary);
+            if (refEngineMoveMove != movePrimary)
+            {
+              movesSame = false;
+              if (IsMCTSReferenceEngine)
+              {
+                evalDiffStr = GetEvalDiffStrMCTS(node, refEngineResult, refEngineMoveMove, evalDiffStr, movePrimary);
+              }
+              else
+              {
+                PositionWithHistory pwh = new PositionWithHistory(in node.BestMove(false).Annotation.Pos);
+                GameEngineSearchResult searchResultReferenceOfPrimaryBestMove = referenceEngine.Search(pwh, searchLimit);
+                float diff = searchResultReferenceOfPrimaryBestMove.ScoreCentipawns - (-1 * refEngineResult.ScoreCentipawns);
+
+                // If the difference in resulting score was non-negligibly
+                // different then show that difference.
+                if (Math.Abs(diff) > 10)
+                {
+                  string signStr = diff > 0 ? "+" : "-";
+                  evalDiffStr = $"({signStr}{Math.Round(MathF.Abs(diff))}cp)";
+
+                  // Due to non-determinism and/or the second search being focused only on the other move
+                  // it might rarely happen that the primary engine move is found to be better this time.
+                  // If so, show this by appending a "?" characcter.
+                  if (diff < 0)
+                  {
+                    evalDiffStr += "?";
+                  }
+                }
+              }
+            }
+          }
+          string colorRefEval = movesSame ? "lightyellow3" : "orangered";
+          sb.AppendLine($"<TR><TD bgcolor=\"{colorRefEval}\" border=\"0\" >{refEngineScoreStr}  {refEngineEvalNodes:N0}  {refEngineMoveSAN} {evalDiffStr}</TD></TR>");
+        }
+      }
+
       //sb.AppendLine($"<TR><TD>V= {node.V,6:F3}</TD></TR>");
       sb.AppendLine("</TABLE>>]");
+    }
+
+    private static string GetEvalDiffStrMCTS(MCTSNode node, GameEngineSearchResult refEngineResult, Move refEngineMoveMove, string evalDiffStr, Move movePrimary)
+    {
+      // Try to get verbose move stats.
+      List<VerboseMoveStat> stats = refEngineResult is GameEngineSearchResultCeres ? VerboseMoveStatsFromMCTSNode.BuildStats(node)
+                                                                                   : refEngineResult.VerboseMoveStats;
+      if (stats != null && stats.Count > 0)
+      {
+        VerboseMoveStat statPrimaryBestMove = stats.Find(s => s.Move == movePrimary);
+        VerboseMoveStat statRefBestMove = stats.Find(s => s.Move == refEngineMoveMove);
+        if (statRefBestMove != null && statPrimaryBestMove != null)
+        {
+          float evalCPPrimary = EncodedEvalLogistic.LogisticToCentipawn(statPrimaryBestMove.Q.LogisticValue);
+          float evalCPRef = EncodedEvalLogistic.LogisticToCentipawn(statRefBestMove.Q.LogisticValue);
+
+          float diff = evalCPPrimary - evalCPRef;
+          string signStr = diff > 0 ? "+" : "-";
+          evalDiffStr = $"({signStr}{Math.Round(MathF.Abs(diff))}cp)";
+        }
+      }
+
+      return evalDiffStr;
     }
 
 

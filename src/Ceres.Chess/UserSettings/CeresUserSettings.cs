@@ -83,6 +83,31 @@ namespace Ceres.Chess.UserSettings
     /// </summary>
     public bool DebugAllowed { get; set; } = false;
 
+    #region Reference engine
+
+    /// <summary>
+    /// Full path and name of executable used as a "reference" engine (if any).
+    /// </summary>
+    public string RefEngineEXE { get; set; } = "stockfish.exe";
+
+    /// <summary>
+    /// Size of hash table allocated for reference engine (in megabytes).
+    /// </summary>
+    public int RefEngineHashMB { get; set; } = 2048;
+
+    /// <summary>
+    /// Number of threads allocated to reference engine.
+    /// </summary>
+    public int RefEngineThreads { get; set; } = 8;
+
+    /// <summary>
+    /// Full path to neural network file to be used with reference engine
+    /// (if it happens to be LC0 or Ceres).
+    /// </summary>
+    public string RefEngineNetworkFile { get; set; } = null;
+
+    #endregion
+
     #region Metrics and Logging
 
     /// <summary>
