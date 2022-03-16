@@ -702,7 +702,7 @@ namespace Ceres.MCTS.Iteration
       // NOTE: disabled, this happens in practive very rearely (and the revert code is not yet fully working)
       //FixupDrawsInvalidatedByTreeReuse();
 
-      using (new TimingBlock(TimingInfo))
+      using (new TimingBlock(TimingInfo, TimingBlock.LoggingType.None))
       {
         BestMove = MCTSManager.DoSearch(Manager, verbose, progressCallback,
                                         possiblyUsePositionCache, moveImmediateIfOnlyOneMove);
