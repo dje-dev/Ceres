@@ -66,6 +66,63 @@ Most GUIs also provide shortcuts for issuing UCI commands to engines without lea
 ![](graph_nibbler.PNG)
 ![](graph_arena.PNG)
 
+## Adding Reference Engine Analysis
+Often it can be helful to evaluate chess positions using more than one engine to get alternative
+opinions of the position and associated best move. For example:
+ -  analysis comparing two neural networks (both using Ceres) two undertand different styles and strenghts of various networks, or
+ -  analysis comparing Ceres and LC0 to understand the differences between the two MCTS engines, or
+ -  analysis comparing Ceres with an alphabeta engine such as Stockfish using a fudamentally different algorithm (minimax)
+
+The graphing feature supports specifying an additional reference engine in the Ceres.json 
+which will be called to evaluate every position in the diagram and then show the output of this analysis (score and best move) in an additional
+line below the assoicated position. For example, in the example below Stockfish is configured as the reference engine
+and a supplemental line appears at the bottom of the position with the corresponding analysis:
+![](graph_reference_engine.PNG)
+
+In this case we see the Stockfish evaluation is much better than Ceres (280cp vs 81cp). We see Stockfish
+suggested best move (Bg5) differs from the Ceres recommended best move (b4), and for this reason 
+the line is shown with a red background. The "(+72 cp)" at the end appears because the best moves differed, 
+and indicates that the Stockfish evaluates its best move to be superior to Ceres best move by 72 centipawns.
+
+This graphing feature is activated at the UCI command prompt by specifying the 
+string "ref" followed by a numerical multiplier after the graph command. For example:
+```
+graph 5 ref 2
+```
+requests a graph at detail level 5 with the reference engine also included and assigned a search time 2x that
+of what was spent by the primary engine (Ceres) on each of the positions appearing in the graph.
+
+Three different types of reference engines are supported. The first type is general UCI engine (such as Stockfish)
+which is specified in Ceres.json along with optional number of threads and hash size in megabytes. The tablebase
+are also set if standard Syzygy setting in Ceres is specified. For example:
+```
+"RefEngineEXE": "c:/engines/stockfish_14.1_win_x64_avx2.exe",
+"RefEngineThreads": 32,
+"RefEngineHashMB": 8192,
+"SyzygyPath": "c:/sygyzy/5and6man",
+```
+
+The second type specifies the LC0 engine. The DirLC0Binaries directory will be
+used to find the LC0.EXE, and LC0 will be configured with standard settings to match the Ceres configuration
+(for example, the same neural network and GPUs).
+```
+"RefEngineEXE": "lc0",
+"DirLC0Binaries":"c/engines/lc0",
+```
+
+The third type specifies the "Ceres" engine, which will simply run another search using Ceres but optionally
+using a specified alternate neural network. For example:
+```
+"RefEngineEXE": "ceres",
+"RefEngineNetworkFile":"c:/weights/lczero.org/weights_run2_790564.pb",
+```
+
+The reference engine multiplier behaves different depending on the type:
+- for general UCI engine, the search time on each position is calibrated to be 
+approximately a multiple of the search effort spent on by the primary Ceres engine. For example, if 20% 
+of the nodes were spent on the position by Ceres, then 20% of the search time would be spent with the reference engine.
+- for MCTS engines (LC0 or Ceres) the number of target search visits will be set to exactly match 
+some multiple of the number of visits achieved by the primary Ceres engine
 
 ## Method of Operation
 
