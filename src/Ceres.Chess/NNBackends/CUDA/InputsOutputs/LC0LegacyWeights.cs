@@ -91,8 +91,14 @@ namespace Ceres.Chess.NNBackends.CUDA
       Residual[] tempResiduals = new Residual[weights.Residuals.Count];
       Parallel.For(0, tempResiduals.Length, i => tempResiduals[i] = new Residual(this, weights.Residuals[i]));
       residual = tempResiduals;
+
+      if (weights.PolEncoders != null)
+      {
+        policyEncoders = new EncoderLayer[weights.PolEncoders.Count];
+        Parallel.For(0, policyEncoders.Length, i => policyEncoders[i] = new EncoderLayer(this, weights.PolEncoders[i]));
+      }
     }
-  
+
 
     public record ConvBlock
     {
@@ -191,6 +197,67 @@ namespace Ceres.Chess.NNBackends.CUDA
       public float[] b2;
     }
 
+    public struct MHA
+    {
+      public MHA(LC0LegacyWeights parent, Pblczero.Weights.Mha mha)
+      {
+        q_w = parent.WeightsDecoded(mha.QW);
+        q_b = parent.WeightsDecoded(mha.QB);
+        k_w = parent.WeightsDecoded(mha.KW);
+        k_b = parent.WeightsDecoded(mha.KB);
+        v_w = parent.WeightsDecoded(mha.VW);
+        v_b = parent.WeightsDecoded(mha.VB);
+        dense_w = parent.WeightsDecoded(mha.DenseW);
+        dense_b = parent.WeightsDecoded(mha.DenseB);
+      }
+
+      public float[] q_w;
+      public float[] q_b;
+      public float[] k_w;
+      public float[] k_b;
+      public float[] v_w;
+      public float[] v_b;
+      public float[] dense_w;
+      public float[] dense_b;
+    }
+
+    public struct FFN
+    {
+      public FFN(LC0LegacyWeights parent, Pblczero.Weights.Ffn ffn)
+      {
+        dense1_w = parent.WeightsDecoded(ffn.Dense1B);
+        dense1_b = parent.WeightsDecoded(ffn.Dense1B);
+        dense2_w = parent.WeightsDecoded(ffn.Dense2W);
+        dense2_b = parent.WeightsDecoded(ffn.Dense2B);
+      }
+
+      public float[] dense1_w;
+      public float[] dense1_b;
+      public float[] dense2_w;
+      public float[] dense2_b;
+    }
+
+    public struct EncoderLayer
+    {
+      public EncoderLayer(LC0LegacyWeights parent, Pblczero.Weights.EncoderLayer encoder)
+      {
+        mha = new MHA(parent, encoder.Mha);
+        ln1_gammas = parent.WeightsDecoded(encoder.Ln1Gammas);
+        ln1_betas = parent.WeightsDecoded(encoder.Ln1Betas);
+        ffn = new FFN(parent, encoder.Ffn);
+        ln2_gammas = parent.WeightsDecoded(encoder.Ln2Gammas);
+        ln2_betas = parent.WeightsDecoded(encoder.Ln2Betas);
+      }
+
+      public MHA mha;
+      public float[] ln1_gammas;
+      public float[] ln1_betas;
+      public FFN ffn;
+      public float[] ln2_gammas;
+      public float[] ln2_betas;
+    }
+
+
     public struct Residual
     {
       public Residual(LC0LegacyWeights parent, Pblczero.Weights.Residual residual)
@@ -233,7 +300,7 @@ namespace Ceres.Chess.NNBackends.CUDA
     public float[] ip4_pol_w;
 
     public int numPolicyEncoderHeads; // pol_encoder_head_count;
-    //std::vector<EncoderLayer> pol_encoder;
+    public EncoderLayer[] policyEncoders;
 
     // Value head
     public ConvBlock value;

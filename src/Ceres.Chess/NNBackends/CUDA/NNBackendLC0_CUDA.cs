@@ -407,29 +407,25 @@ namespace Ceres.Chess.NNBackends.CUDA
       //  if (weights.pol_encoder.size() > 0) {
       if (encoder_heads > 0)
       {
-        throw new NotImplementedException("Encoders not yet supported");
-#if NOT
-        encoder_d_model = weights.pol_encoder[0].mha.q_b.size();
-          encoder_dff = weights.pol_encoder[0].ffn.dense1_b.size();
-
-          Debug.Assert(encoder_d_model ==  weights.pol_encoder[0].mha.k_b.size());
-          Debug.Assert(encoder_d_model == weights.pol_encoder[0].mha.v_b.size());
-          Debug.Assert(embedding_op_size == weights.pol_encoder[0].ffn.dense2_b.size());
-#endif
+        encoder_d_model = weights.policyEncoders[0].mha.q_b.Length;
+        encoder_dff = weights.policyEncoders[0].ffn.dense1_b.Length;
       }
 
-
-      int size = n * 64 * Math.Max(Math.Max(embedding_op_size, encoder_dff),
-                                   Math.Max(policy_d_model, encoder_d_model));
+      int size = n * 64 * Math.Max(Math.Max(embedding_op_size, encoder_dff), policy_d_model);
 
       // size of matmul_qk matrix = encoder_heads_ * Batch * 64 * 64
       int matmul_qk_size = encoder_heads * n * 64 * 64;
       int output_size = n * (64 * 64 + 8 * 24);
 
       size = Math.Max(size, Math.Max(matmul_qk_size, output_size));
+
+      int qkv_size = n * 64 * encoder_d_model;
+      // We store qkv in single allocation, and other intermediate tensors are
+      // sometimes stored by splitting an allocation into two halves.
+      size = Math.Max(2 * size, 3 * qkv_size);
+
       return size;
     }
-
 
 
     private void AllocateGPUMemory(Net net, LC0LegacyWeights weights)

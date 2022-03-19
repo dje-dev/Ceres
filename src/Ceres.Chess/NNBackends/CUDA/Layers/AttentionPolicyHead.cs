@@ -29,6 +29,49 @@ using System.Diagnostics;
 
 namespace Ceres.Chess.NNBackends.CUDA
 {
+  public class AttentionPolicyEncoderWeights
+  {
+    CudaDeviceVariable<FP16> mha_q_w;
+    CudaDeviceVariable<FP16> mha_q_b;
+    CudaDeviceVariable<FP16> mha_k_w;
+    CudaDeviceVariable<FP16> mha_k_b;
+    CudaDeviceVariable<FP16> mha_v_w;
+    CudaDeviceVariable<FP16> mha_v_b;
+    CudaDeviceVariable<FP16> mha_dense_w;
+    CudaDeviceVariable<FP16> mha_dense_b;
+
+    CudaDeviceVariable<FP16> mha_qkv_w;
+    CudaDeviceVariable<FP16> mha_qkv_b;
+
+    public AttentionPolicyEncoderWeights(AttentionPolicyHead parent, in LC0LegacyWeights.EncoderLayer weights)
+    {
+      mha_q_w = BaseLayerCUDA.LoadedWeights(weights.mha.q_w);
+      mha_q_b = BaseLayerCUDA.LoadedWeights(weights.mha.q_b);
+      mha_k_w = BaseLayerCUDA.LoadedWeights(weights.mha.k_w);
+      mha_k_b = BaseLayerCUDA.LoadedWeights(weights.mha.k_b);
+      mha_v_w = BaseLayerCUDA.LoadedWeights(weights.mha.v_w);
+      mha_v_b = BaseLayerCUDA.LoadedWeights(weights.mha.v_b);
+      mha_dense_w = BaseLayerCUDA.LoadedWeights(weights.mha.dense_w);
+      mha_dense_b = BaseLayerCUDA.LoadedWeights(weights.mha.dense_b);
+
+      // big allocation to hold qkv weights one after the other
+      int elements = weights.mha.q_w.Length;
+      int size = elements * Marshal.SizeOf<FP16>() * 3;
+      mha_qkv_w = new CudaDeviceVariable<FP16>(elements * 3);
+      mha_qkv_w.CopyToDevice(mha_q_w, 0, 0,          size/3);
+      mha_qkv_w.CopyToDevice(mha_k_w, 0, 1 * size/3, size/3);
+      mha_qkv_w.CopyToDevice(mha_v_w, 0, 2 * size/3, size/3);
+
+      elements = weights.mha.q_b.Length;
+      size = elements * Marshal.SizeOf<FP16>() * 3;
+      mha_qkv_b = new CudaDeviceVariable<FP16>(elements * 3);
+      mha_qkv_b.CopyToDevice(mha_q_b, 0, 0, size / 3);
+      mha_qkv_b.CopyToDevice(mha_k_b, 0, 1 * size / 3, size / 3);
+      mha_qkv_b.CopyToDevice(mha_v_b, 0, 2 * size / 3, size / 3);
+
+    }
+  }
+
   public class AttentionPolicyHead : BaseLayerCUDA
   {
     int embeddingOpSize;
@@ -47,6 +90,8 @@ namespace Ceres.Chess.NNBackends.CUDA
 
     CudaDeviceVariable<FP16> wqk_w;
     CudaDeviceVariable<FP16> wqk_b;
+
+    AttentionPolicyEncoderWeights[] encoderWeights;
 
 
     public AttentionPolicyHead(NNBackendExecContext parent, string name, int layerIndex,
@@ -82,8 +127,19 @@ namespace Ceres.Chess.NNBackends.CUDA
       wqk_b = new CudaDeviceVariable<FP16>(elements * 2);
       wqk_b.CopyToDevice(ip2_pol_b_, 0, 0, size / 2);
       wqk_b.CopyToDevice(ip3_pol_b_, 0, size / 2, size / 2);
+
+      if (numEncoderHeads > 0)
+      {
+        encoderWeights = new AttentionPolicyEncoderWeights[numEncoderHeads];
+        for (int i = 0; i < numEncoderHeads; i++)
+        {
+          encoderWeights[i] = new AttentionPolicyEncoderWeights(this, in weights.policyEncoders[i]);
+        }
+      }
+
     }
 
+    
 
     CudaKernel kernelAddVectors;
     CudaKernel kernelPromotionLogits;
@@ -212,6 +268,10 @@ void convertNCHWtoNHWC(DstType* output_tensor, const SrcType* input_tensor, int 
 //        addBiasBatched<DataType>(wq, wq, wqk_b_, 2, batch, num_outputs, NONE, stream);
       }
 
+      for (int i = 0; i < numEncoderHeads; i++)
+      {
+        throw new NotImplementedException("Encoder heads not yet supported");
+      }
 
 
       float factor = 1.0f / MathF.Sqrt((float)policy_d_model_);

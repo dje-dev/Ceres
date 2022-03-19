@@ -34,13 +34,13 @@ namespace Ceres.Chess.NNBackends.CUDA
   /// </summary>
   public abstract class BaseLayerCUDA
   {
-    public enum ActivationFunction 
-    { 
+    public enum ActivationFunction
+    {
       NONE = 0,
-      RELU = 1, 
-      TANH = 2, 
-      SIGMOID = 3, 
-      SELU = 4, 
+      RELU = 1,
+      TANH = 2,
+      SIGMOID = 3,
+      SELU = 4,
       MISH = 5
     };
 
@@ -87,7 +87,7 @@ namespace Ceres.Chess.NNBackends.CUDA
     protected readonly BaseLayerCUDA input_;
 
     protected const string COMMON_KERNELS_PTX_NAME = @"common_kernels.ptx";
-    protected const string FP16_KERNELS_PTX_NAME   = @"fp16_kernels.ptx";
+    protected const string FP16_KERNELS_PTX_NAME = @"fp16_kernels.ptx";
 
     public float Sum = 0;
     public float Min = float.MaxValue;
@@ -165,15 +165,15 @@ namespace Ceres.Chess.NNBackends.CUDA
     /// <param name="scratchSizeBytes"></param>
 
     protected abstract void DoEval(CudaStream stream, int N,
-                                   CudaDeviceVariable<FP16> output, 
-                                   CudaDeviceVariable<FP16> input,                                   
+                                   CudaDeviceVariable<FP16> output,
+                                   CudaDeviceVariable<FP16> input,
                                    CudaDeviceVariable<FP16> input2,
                                    CudaDeviceVariable<FP16> scratch, long scratchSizeBytes,
                                    CudaDeviceVariable<FP16> scratchSecondHalf = null);
 
-   public void Eval(CudaStream stream, int N, CudaDeviceVariable<FP16> output, CudaDeviceVariable<FP16> input,
-                    CudaDeviceVariable<FP16> input2, CudaDeviceVariable < FP16> scratch, long scratchSizeBytes,
-                    CudaDeviceVariable<FP16> scratchSecondHalf)
+    public void Eval(CudaStream stream, int N, CudaDeviceVariable<FP16> output, CudaDeviceVariable<FP16> input,
+                     CudaDeviceVariable<FP16> input2, CudaDeviceVariable<FP16> scratch, long scratchSizeBytes,
+                     CudaDeviceVariable<FP16> scratchSecondHalf)
     {
       if (Parent.DumpTimings)
       {
@@ -212,7 +212,7 @@ namespace Ceres.Chess.NNBackends.CUDA
         Max = float.MinValue;
         Sum = 0;
 
-        for (int i=0; i<data.Length;i++)
+        for (int i = 0; i < data.Length; i++)
         {
           float val = data[i];
           Sum += val;
@@ -231,7 +231,7 @@ namespace Ceres.Chess.NNBackends.CUDA
 
 
     #region Helpers
-    protected static CudaDeviceVariable<FP16> LoadedWeights(float[] weights, int? checkSize = default)
+    internal static CudaDeviceVariable<FP16> LoadedWeights(float[] weights, int? checkSize = default)
     {
       Debug.Assert(!checkSize.HasValue || checkSize.Value == weights.Length);
 
@@ -299,9 +299,9 @@ namespace Ceres.Chess.NNBackends.CUDA
       }
       else
       {
-//        CudaEvent start = new CudaEvent();
-//        CudaEvent stop = new CudaEvent();
-//        start.Record();
+        //        CudaEvent start = new CudaEvent();
+        //        CudaEvent stop = new CudaEvent();
+        //        start.Record();
 
         // About 40% of total runtime is in this call
         CublasStatus err = CudaBlasNativeMethods.cublasHgemmStridedBatched
@@ -314,11 +314,11 @@ namespace Ceres.Chess.NNBackends.CUDA
                             Out.DevicePointer, N, N * M, batchSize);
 
 
-//        stop.Record();
-//        stop.Synchronize();
+        //        stop.Record();
+        //        stop.Synchronize();
 
-//        float cudaElapsedTime = CudaEvent.ElapsedTime(start, stop);
-//        Console.WriteLine("elapsed " + cudaElapsedTime + "ms");
+        //        float cudaElapsedTime = CudaEvent.ElapsedTime(start, stop);
+        //        Console.WriteLine("elapsed " + cudaElapsedTime + "ms");
 
         if (err != CublasStatus.Success)
         {
@@ -386,12 +386,10 @@ namespace Ceres.Chess.NNBackends.CUDA
 
     static string GetAddBiasBatchedKernelName(ActivationFunction activation)
     {
-      const string kernelName =    "_ZN6lczero13cudnn_backend21addBiasBatched_kernelI6__halfLNS0_18ActivationFunctionE!1EEEvPT_PKS4_S7_ii";
+      const string kernelName = "_ZN6lczero13cudnn_backend21addBiasBatched_kernelI6__halfLNS0_18ActivationFunctionE!1EEEvPT_PKS4_S7_ii";
       return kernelName.Replace("!1", ((int)activation).ToString());
     }
 
-    // Input/output tensors are Batch * N * C
-    // bias tensor is N * C (i.e, different bias for each Batch dimension)
     protected void AddBiasBatched(CudaKernel kernelAddBatched,
                                   CudaDeviceVariable<FP16> output,
                                   CudaDeviceVariable<FP16> input,
@@ -408,11 +406,83 @@ namespace Ceres.Chess.NNBackends.CUDA
         throw new NotImplementedException("Unsupported filter size");
       }
 
-      kernelAddBatched.BlockDimensions = new ManagedCuda.VectorTypes.dim3((uint)C / 4, System.Math.Min(System.Math.Max(512 / (uint)C/4, 1u), (uint) N), 1);
+      kernelAddBatched.BlockDimensions = new ManagedCuda.VectorTypes.dim3((uint)C / 4, System.Math.Min(System.Math.Max(512 / (uint)C / 4, 1u), (uint)N), 1);
       kernelAddBatched.GridDimensions = new ManagedCuda.VectorTypes.dim3(CUDAUtils.DivUp(N, (int)kernelAddBatched.BlockDimensions.y), batch, 1);
       LaunchKernel(stream, kernelAddBatched, output.DevicePointer, input.DevicePointer, bias.DevicePointer, N, C, stream.Stream.Pointer);
     }
     #endregion
+
+
+    #region Softmax
+    CudaKernel kernelSoftmax = null;
+    CudaKernel kernelSoftmax64 = null;
+
+    public void Softmax(int N, int C, CudaDeviceVariable<FP16> output, CudaDeviceVariable<FP16> input, CudaStream stream)
+    {
+      if (kernelSoftmax == null)
+      {
+        kernelSoftmax = GetKernelCommon("_ZN6lczero13cudnn_backend14softmax_kernelI6__halfEEvPT_PKS3_");
+        kernelSoftmax64 = GetKernelCommon("_ZN6lczero13cudnn_backend21softmax_opt_64_kernelI6__halfEEvPT_PKS3_i");
+      }
+
+      if (C == 64)
+      {
+        int size = N * 32;
+        const int kBlockSize = 256;
+        int blocks = CUDAUtils.DivUp(size, kBlockSize);
+        kernelSoftmax64.GridDimensions = blocks;
+        kernelSoftmax64.BlockDimensions = kBlockSize;
+        LaunchKernel(stream, kernelSoftmax64, output, input, size, stream.Stream.Pointer);
+        // softmax_opt_64_kernel < T ><<< blocks, kBlockSize, 0, stream >>> (output, input, size);
+      }
+      else
+      {
+        kernelSoftmax64.GridDimensions = N;
+        kernelSoftmax64.BlockDimensions = C;
+        LaunchKernel(stream, kernelSoftmax, output, input, stream.Stream.Pointer);
+        // softmax_kernel < T ><<< N, C, 0, stream >>> (output, input);
+      }
+    }
+
+    #endregion
+
+
+    #region LayerNorm
+
+    CudaKernel kernelLayerNorm = null;
+
+    public void LayerNorm(int N, int C,
+                          CudaDeviceVariable<FP16> output, CudaDeviceVariable<FP16> input,
+                          CudaDeviceVariable<FP16> bias, CudaDeviceVariable<FP16> skip,
+                          CudaDeviceVariable<FP16> gammas, CudaDeviceVariable<FP16> betas,
+                          float ep, CudaStream stream)
+    {
+      if (C % 4 != 0 || C > 4096)
+      { 
+        throw new Exception("unsupported filter size");
+      }
+
+      if (kernelLayerNorm == null)
+      {
+        const string KN = "_ZN6lczero13cudnn_backend17layer_norm_kernelI6__halfEEviiPT_PKS3_S6_S6_S6_S6_f";
+        kernelLayerNorm = GetKernelCommon(KN);
+      }
+
+      int blockDimX = 32;
+      int blockDimY = CUDAUtils.DivUp(C / 4, 32);
+      int blockDimZ = System.Math.Min(System.Math.Max(512 / (blockDimX * blockDimY), 1), N);
+      kernelLayerNorm.BlockDimensions = new ManagedCuda.VectorTypes.dim3(blockDimX, blockDimY, blockDimZ);
+
+      int gridDimX = CUDAUtils.DivUp(N, blockDimZ);
+      int gridDimY = 1;
+      int gridDimZ = 1;
+      kernelLayerNorm.GridDimensions = new ManagedCuda.VectorTypes.dim3(gridDimX, gridDimY, gridDimZ);
+
+      LaunchKernel(stream, kernelLayerNorm, N, C, output, input, bias, skip,gammas, betas, ep, stream.Stream.Pointer);
+    }
+
+    
+#endregion
 
     public override string ToString()
     {
