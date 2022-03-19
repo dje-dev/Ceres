@@ -84,31 +84,26 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
           netID = netID.Substring(0, netID.IndexOf("["));
         }
 
-        string netWts = netParts.Length == 1 ? "1" : netParts[1];
-        string[] wtParts = allowSubWeights ? netWts.Split(SUB_WEIGHTS_CHAR) : new string[] { netWts };
+        string[] wtParts = allowSubWeights && netParts[0].Contains(SUB_WEIGHTS_CHAR) ? netParts[0].Split(SUB_WEIGHTS_CHAR)
+                                                                                     : null;
 
-        if (netParts.Length == 2)
+        if (wtParts == null)
         {
-          if (wtParts.Length == 1)
-          { 
-            weightValue = weightPolicy = weightMLH = ParseWt(wtParts[0]);
-          }
-          else if (wtParts.Length == 3)
-          {
-            weightValue = ParseWt(wtParts[0]);
-            weightPolicy = ParseWt(wtParts[1]);
-            weightMLH = ParseWt(wtParts[2]);
-          }
-          else
-          {
-            throw new Exception("Weight string must be of form value_wt;policy_wt;mlh_wt");
-          }
+          weightValue = weightPolicy = weightMLH = 1;
+        }
+        else if (wtParts.Length == 4)
+        {
+          netID = wtParts[0];
+          weightValue = ParseWt(wtParts[1]);
+          weightPolicy = ParseWt(wtParts[2]);
+          weightMLH = ParseWt(wtParts[3]);
         }
         else
         {
-          // Default is equally weighted
-          weightValue = weightPolicy = weightMLH = 1.0f / nets.Length;
+          throw new Exception("Weight string must be of form value_wt;policy_wt;mlh_wt");
         }
+        
+
         sumWeightsValue += weightValue;
         sumWeightsPolicy += weightPolicy;
         sumWeightsMLH += weightMLH;
