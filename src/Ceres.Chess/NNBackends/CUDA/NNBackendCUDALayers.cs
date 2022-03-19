@@ -222,11 +222,6 @@ namespace Ceres.Chess.NNBackends.CUDA
         int wkOptSize = weights.ip3_pol_b.Length;
         int numEncoderHeads = weights.numPolicyEncoderHeads;
 
-        if (numEncoderHeads > 0)
-        {
-          throw new NotImplementedException("Policy encoder heads not yet supported.");
-        }
-
         AttentionPolicyHead attentionPolicy = null;
         attentionPolicy = new (execContext, "policy_conv1", Layers.Count, weights, 64 * 64 + 24 * 8, 1, 1, LastLayer, DefaultActivation);
         Layers.Add(attentionPolicy);
