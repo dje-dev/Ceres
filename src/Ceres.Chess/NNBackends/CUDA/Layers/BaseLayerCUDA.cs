@@ -417,14 +417,14 @@ namespace Ceres.Chess.NNBackends.CUDA
     CudaKernel kernelSoftmax = null;
     CudaKernel kernelSoftmax64 = null;
 
+    protected void LoadSoftmaxKernels()
+    {
+      kernelSoftmax = GetKernelCommon("_ZN6lczero13cudnn_backend14softmax_kernelI6__halfEEvPT_PKS3_");
+      kernelSoftmax64 = GetKernelCommon("_ZN6lczero13cudnn_backend21softmax_opt_64_kernelI6__halfEEvPT_PKS3_i");
+    }
+
     public void Softmax(int N, int C, CudaDeviceVariable<FP16> output, CudaDeviceVariable<FP16> input, CudaStream stream)
     {
-      if (kernelSoftmax == null)
-      {
-        kernelSoftmax = GetKernelCommon("_ZN6lczero13cudnn_backend14softmax_kernelI6__halfEEvPT_PKS3_");
-        kernelSoftmax64 = GetKernelCommon("_ZN6lczero13cudnn_backend21softmax_opt_64_kernelI6__halfEEvPT_PKS3_i");
-      }
-
       if (C == 64)
       {
         int size = N * 32;
@@ -432,14 +432,14 @@ namespace Ceres.Chess.NNBackends.CUDA
         int blocks = CUDAUtils.DivUp(size, kBlockSize);
         kernelSoftmax64.GridDimensions = blocks;
         kernelSoftmax64.BlockDimensions = kBlockSize;
-        LaunchKernel(stream, kernelSoftmax64, output, input, size, stream.Stream.Pointer);
+        LaunchKernel(stream, kernelSoftmax64, output.DevicePointer, input.DevicePointer, size, stream.Stream.Pointer);
         // softmax_opt_64_kernel < T ><<< blocks, kBlockSize, 0, stream >>> (output, input, size);
       }
       else
       {
         kernelSoftmax64.GridDimensions = N;
         kernelSoftmax64.BlockDimensions = C;
-        LaunchKernel(stream, kernelSoftmax, output, input, stream.Stream.Pointer);
+        LaunchKernel(stream, kernelSoftmax, output.DevicePointer, input.DevicePointer, stream.Stream.Pointer);
         // softmax_kernel < T ><<< N, C, 0, stream >>> (output, input);
       }
     }
@@ -450,6 +450,12 @@ namespace Ceres.Chess.NNBackends.CUDA
     #region LayerNorm
 
     CudaKernel kernelLayerNorm = null;
+
+    protected void LoadLayerNormKernel()
+    {
+      const string KN = "_ZN6lczero13cudnn_backend17layer_norm_kernelI6__halfEEviiPT_PKS3_S6_S6_S6_S6_f";
+      kernelLayerNorm = GetKernelCommon(KN);
+    }
 
     public void LayerNorm(int N, int C,
                           CudaDeviceVariable<FP16> output, CudaDeviceVariable<FP16> input,
@@ -462,12 +468,6 @@ namespace Ceres.Chess.NNBackends.CUDA
         throw new Exception("unsupported filter size");
       }
 
-      if (kernelLayerNorm == null)
-      {
-        const string KN = "_ZN6lczero13cudnn_backend17layer_norm_kernelI6__halfEEviiPT_PKS3_S6_S6_S6_S6_f";
-        kernelLayerNorm = GetKernelCommon(KN);
-      }
-
       int blockDimX = 32;
       int blockDimY = CUDAUtils.DivUp(C / 4, 32);
       int blockDimZ = System.Math.Min(System.Math.Max(512 / (blockDimX * blockDimY), 1), N);
@@ -478,7 +478,8 @@ namespace Ceres.Chess.NNBackends.CUDA
       int gridDimZ = 1;
       kernelLayerNorm.GridDimensions = new ManagedCuda.VectorTypes.dim3(gridDimX, gridDimY, gridDimZ);
 
-      LaunchKernel(stream, kernelLayerNorm, N, C, output, input, bias, skip,gammas, betas, ep, stream.Stream.Pointer);
+      LaunchKernel(stream, kernelLayerNorm, N, C, output.DevicePointer, input.DevicePointer, bias.DevicePointer, 
+                   skip.DevicePointer, gammas.DevicePointer, betas.DevicePointer, ep, stream.Stream.Pointer);
     }
 
     

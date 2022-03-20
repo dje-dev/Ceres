@@ -225,7 +225,7 @@ namespace Ceres.Chess.NNBackends.CUDA
     {
       public FFN(LC0LegacyWeights parent, Pblczero.Weights.Ffn ffn)
       {
-        dense1_w = parent.WeightsDecoded(ffn.Dense1B);
+        dense1_w = parent.WeightsDecoded(ffn.Dense1W);
         dense1_b = parent.WeightsDecoded(ffn.Dense1B);
         dense2_w = parent.WeightsDecoded(ffn.Dense2W);
         dense2_b = parent.WeightsDecoded(ffn.Dense2B);
