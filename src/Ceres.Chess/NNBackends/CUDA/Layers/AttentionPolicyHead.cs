@@ -244,7 +244,8 @@ namespace Ceres.Chess.NNBackends.CUDA
       }
 
       // 2. Encoder layers
-      for (int encoderHeadIndex = 0; encoderHeadIndex < encoderWeights.Length; encoderHeadIndex++)
+      int numEncoderHeads = encoderWeights == null ? 0 : encoderWeights.Length;
+      for (int encoderHeadIndex = 0; encoderHeadIndex < numEncoderHeads; encoderHeadIndex++)
       {
         AttentionPolicyEncoderWeights enc = encoderWeights[encoderHeadIndex];
         int d_model = enc.mha_q_size;
