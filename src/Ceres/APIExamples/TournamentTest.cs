@@ -119,7 +119,7 @@ namespace Ceres.APIExamples
       throw new Exception("Wrong size " + Marshal.SizeOf<MCTS.MTCSNodes.Struct.MCTSNodeStruct>().ToString());
       PreTournamentCleanup();
 
-      //RunEngineComparisons(); return;
+//      RunEngineComparisons(); return;
 
       if (false)
       {
@@ -171,11 +171,21 @@ namespace Ceres.APIExamples
 
 
       //      NET1 = "760998";
-      NET1 = "753723";
-      NET2 = "753723";
-      NET1 = "69637";
-      NET2 = "69637";
+      //      NET1 = "790734;1;0;0,753723;0;1;1"; --> 0 +/-10 (new value head)
+      //NET1 = "790734;0;1;1,753723;1;0;0"; // 8 +/-8 (new policy head)
+      NET1 = "790748";
+      NET2 = "790737";
+      NET1 = @"d:\weights\lczero.org\ap-mish-20b-swa-1760000.pb.gz";
+      NET2 = "mg-40b-swa-1670000";
+      //NET2 = @"d:\weights\lczero.org\ap-mish-20b-swa-1760000.pb.gz";
+      //      NET2 = "610889";
+      //      NET2 = @"d:\weights\lczero.org\ap-mish-20b-swa-1650000.pb.gz";
+      // 1000: 10+/-16
+      //      NET1 = "771700";
+      //      NET2 = "771257";
 
+      //NET1 = "790550";
+      //NET2 = "790515";
       //NET1 = "703810";
       //NET2 = "703810";
       //NET1 = "badgyal-3";
@@ -184,7 +194,6 @@ namespace Ceres.APIExamples
       //NET2 = "mg-40b-swa-1670000";
       //NET2 = "256x20-T75-32MGames-2120K";
       //NET1 = "781734";
-      //NET2 = "mg-40b-swa-1670000";
       //NET1 = "tinker_20b";
       //NET2 = "tinker_20b";
 
@@ -215,12 +224,12 @@ namespace Ceres.APIExamples
       // 140 good for 203 pairs, 300 good for 100 pairs
       //      limit1 = SearchLimit.NodesForAllMoves(200_000, 500) * 0.25f;
       //    limit1 = SearchLimit.SecondsForAllMoves(12, 0.12f);
-      //     limit1 = SearchLimit.NodesPerMove(10_000);
+      //limit1 = SearchLimit.NodesPerMove(10_000);
       //limit1 = SearchLimit.SecondsForAllMoves(40);
       //limit1 = SearchLimit.NodesForAllMoves(1_000_000, 10_000);
-      //limit1 = SearchLimit.SecondsForAllMoves(15);
-      //limit1 = SearchLimit.NodesPerMove(1000);
-      limit1 = SearchLimit.SecondsForAllMoves(120, 1f);
+      limit1 = SearchLimit.SecondsForAllMoves(30, 0.3f);
+      //limit1 = SearchLimit.NodesPerMove(1);
+      //limit1 = SearchLimit.SecondsForAllMoves(60, 0.6f) * 3;
       //ok      limit1 = SearchLimit.NodesPerMove(350_000); try test3.pgn against T75 opponent Ceres93 (in first position, 50% of time misses win near move 12
 
       SearchLimit limit2 = limit1;
@@ -422,8 +431,8 @@ namespace Ceres.APIExamples
 
 
       // **************************************************
-      EnginePlayerDef player1 = playerCeres1UCI;
-      EnginePlayerDef player2 = playerCeres96;
+      EnginePlayerDef player1 = playerCeres1;
+      EnginePlayerDef player2 = playerCeres2;
       // **************************************************
 
       TournamentGameQueueManager queueManager = null;
@@ -468,7 +477,7 @@ namespace Ceres.APIExamples
       }
 
 
-      def.NumGamePairs = 500;// 203;//1000;//203;//203;// 500;// 203;//203;// 102; 203
+      def.NumGamePairs = 1500;// 203;//1000;//203;//203;// 500;// 203;//203;// 102; 203
       def.ShowGameMoves = false;
 
       //string baseName = "tcec1819";
@@ -700,18 +709,18 @@ namespace Ceres.APIExamples
                                                : @"/mnt/syndev/chess/data/pgn/raw/ceres_big.pgn";
 
       CompareEngineParams parms = new CompareEngineParams("Resapling", pgnFileName,
-                                              2_000, // number of positions
+                                              5_000, // number of positions
                                               null,//s => s.FinalPosition.PieceCount <= 15,
-                                              CompareEnginesVersusOptimal.PlayerMode.Ceres, "753723", //610034
-                                              CompareEnginesVersusOptimal.PlayerMode.Ceres, "753723",
+                                              CompareEnginesVersusOptimal.PlayerMode.Ceres, "790550", //610034
+                                              CompareEnginesVersusOptimal.PlayerMode.Ceres, "790500",
                                               CompareEnginesVersusOptimal.PlayerMode.Ceres, "69637",
-                                              SearchLimit.NodesPerMove(20_000), // search limit
+                                              SearchLimit.NodesPerMove(2_000), // search limit
                                               new int[] { 0, 1, 2, 3 },
                                               s =>
                                               {
                                                 //     s.EnableUncertaintyBoosting = true;
-                                                s.ResamplingMoveSelectionFractionMove = 1f;
-                                                s.ResamplingMoveSelectionTemperature = 1.5f;
+                                                //s.ResamplingMoveSelectionFractionMove = 1f;
+                                                //s.ResamplingMoveSelectionTemperature = 1.5f;
                                                 //s.TranspositionRootPolicyBlendingFraction = 0.25f;
                                                 //                                                s.TranspositionRootPolicyBlendingFraction = 0.333f;
                                                 //s.EnableUncertaintyBoosting = true;
@@ -725,7 +734,7 @@ namespace Ceres.APIExamples
                                               true,
                                               1,
                                               7,
-                                              true, // Stockfish crosscheck
+                                              false, // Stockfish crosscheck
                                               null,
                                               exeCeresPreNC(),
                                               0.25f
