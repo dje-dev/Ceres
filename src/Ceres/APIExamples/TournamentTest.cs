@@ -136,8 +136,7 @@ namespace Ceres.APIExamples
       string NET1_SECONDARY1 = null;// "610024";
       string NET1 = "j94-100";
       string NET2 = "j94-100";
-      //NET1 = "610024";
-      //NET2 = "610024";
+
       NET1 = "610235";
       NET2 = "610235";
 
@@ -146,37 +145,21 @@ namespace Ceres.APIExamples
       NET1 = @"ONNX_ORT:d:\weights\lczero.org\hydra_t00-attn.gz.onnx";// "apv4_t14";// apv4_t16";
       NET2 = @"ONNX_ORT:d:\weights\lczero.org\apv4_t16.onnx";
 
-
       NET1 = "baseline02#8";
       NET2 = "baseline02#16";
 
       NET1 = "ONNX_TRT:d:\\weights\\lczero.org\\baseline02.onnx#8";
       NET1 = "ONNX_ORT:d:\\weights\\lczero.org\\baseline02.onnx#16";
 
-      NET1 = "744204_onnx";
-      NET2 = "744204_onnx";
-
-      NET1 = "apv5_t01.ORT";
-      NET2 = "42767";
-      //      NET1 = "apv5_t01#8";
-      //      NET2 = "apv5_t01#16";
-
-      //NET1 = @"LC0:hydra_t00-attn.onnx";// "apv4_t14";// apv4_t16";
-      //      string NET1_SECONDARY1 = "j94-100";
-
-      NET2 = "attn_10b_800k";
-      NET1 = "base_10b_800k";
-      NET1 = "20b_13_2m";
-      NET2 = "20b_10_2m";
-
-
       //      NET1 = "760998";
       //      NET1 = "790734;1;0;0,753723;0;1;1"; --> 0 +/-10 (new value head)
       //NET1 = "790734;0;1;1,753723;1;0;0"; // 8 +/-8 (new policy head)
       NET1 = "790748";
       NET2 = "790737";
-      NET1 = @"d:\weights\lczero.org\ap-mish-20b-swa-1760000.pb.gz";
-      NET2 = "mg-40b-swa-1670000";
+      NET1 = "ap-mish-20b-swa-1760000";// ;0.5;0.5;0.5,781561;0.5;0.5;0.5";
+      //NET2 = NET1;
+      NET2 = "781561";
+      //NET2 = "mg-40b-swa-1670000";
       //NET2 = @"d:\weights\lczero.org\ap-mish-20b-swa-1760000.pb.gz";
       //      NET2 = "610889";
       //      NET2 = @"d:\weights\lczero.org\ap-mish-20b-swa-1650000.pb.gz";
@@ -184,22 +167,12 @@ namespace Ceres.APIExamples
       //      NET1 = "771700";
       //      NET2 = "771257";
 
-      //NET1 = "790550";
-      //NET2 = "790515";
+      NET1 = "790795";
+      NET2 = "753723";
       //NET1 = "703810";
       //NET2 = "703810";
-      //NET1 = "badgyal-3";
-      //NET2 = "badgyal-3";
-      //NET1 = "781451";
-      //NET2 = "mg-40b-swa-1670000";
-      //NET2 = "256x20-T75-32MGames-2120K";
-      //NET1 = "781734";
       //NET1 = "tinker_20b";
       //NET2 = "tinker_20b";
-
-      //NET1 = "744204_onnx_int8";
-
-      //r1kb4/3r1p2/8/7R/p3R3/P1B5/KP6/8 w - - 3 49
 
       NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification(NET1, GPUS_1); // j64-210 LS16 40x512-lr015-swa-167500
       NNEvaluatorDef evalDef2 = NNEvaluatorDefFactory.FromSpecification(NET2, GPUS_2);
@@ -224,12 +197,12 @@ namespace Ceres.APIExamples
       // 140 good for 203 pairs, 300 good for 100 pairs
       //      limit1 = SearchLimit.NodesForAllMoves(200_000, 500) * 0.25f;
       //    limit1 = SearchLimit.SecondsForAllMoves(12, 0.12f);
-      //limit1 = SearchLimit.NodesPerMove(10_000);
+      limit1 = SearchLimit.NodesPerMove(1);
       //limit1 = SearchLimit.SecondsForAllMoves(40);
       //limit1 = SearchLimit.NodesForAllMoves(1_000_000, 10_000);
-      limit1 = SearchLimit.SecondsForAllMoves(30, 0.3f);
+      //limit1 = SearchLimit.SecondsForAllMoves(30, 0.3f);
       //limit1 = SearchLimit.NodesPerMove(1);
-      //limit1 = SearchLimit.SecondsForAllMoves(60, 0.6f) * 3;
+      //limit1 = SearchLimit.SecondsForAllMoves(60, 0.6f) * 3f;
       //ok      limit1 = SearchLimit.NodesPerMove(350_000); try test3.pgn against T75 opponent Ceres93 (in first position, 50% of time misses win near move 12
 
       SearchLimit limit2 = limit1;
@@ -401,7 +374,7 @@ namespace Ceres.APIExamples
 
       if (false)
       {
-        string BASE_NAME = "Elo2500_10k";// nice_lcx Stockfish238 ERET_VESELY203 endgame2 chad_tactics-100M lichess_chad_bad.csv
+        string BASE_NAME = "ERET";// nice_lcx Stockfish238 ERET_VESELY203 endgame2 chad_tactics-100M lichess_chad_bad.csv
         ParamsSearch paramsNoFutility = new ParamsSearch() { FutilityPruningStopSearchEnabled = false };
 
         // ===============================================================================
@@ -410,12 +383,12 @@ namespace Ceres.APIExamples
           new SuiteTestDef("Suite",
                            SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/epd/{BASE_NAME}.epd"
                                                    : @$"\\synology\dev\chess\data\epd\{BASE_NAME}.epd",
-                           SearchLimit.NodesPerMove(1_500_000),
-                           GameEngineDefFactory.CeresInProcess("Ceres1", NET1, suiteGPU, paramsNoFutility with {EnableUncertaintyBoosting = true }),
-                           null,//GameEngineDefFactory.CeresInProcess("Ceres2", NET1, suiteGPU, paramsNoFutility with { }),
-                           engineDefCeres96);// playerLC0.EngineDef);
+                           SearchLimit.NodesPerMove(100_000),
+                           GameEngineDefFactory.CeresInProcess("Ceres1", NET1, suiteGPU, paramsNoFutility with { }),
+                           GameEngineDefFactory.CeresInProcess("Ceres2", NET2, suiteGPU, paramsNoFutility with { }),
+                           null);// engineDefCeres96);// playerLC0.EngineDef);
 
-        suiteDef.MaxNumPositions = 100;
+        suiteDef.MaxNumPositions = 500;
         suiteDef.EPDLichessPuzzleFormat = suiteDef.EPDFileName.ToUpper().Contains("LICHESS");
 
         //suiteDef.EPDFilter = s => !s.Contains(".exe"); // For NICE suite, these represent positions with multiple choices
