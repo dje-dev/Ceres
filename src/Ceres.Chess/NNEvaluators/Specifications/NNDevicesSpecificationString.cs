@@ -52,6 +52,12 @@ namespace Ceres.Chess.NNEvaluators.Specifications
 
     /// <summary>
     /// Constructor which parses a device specification string.
+    /// 
+    /// Examples:
+    ///  "gpu:0"
+    ///  "gpu:0,1"
+    ///  "gpu:0,1:POOLED",
+    ///  "GPU:0@0.66,1@0.34"
     /// </summary>
     /// <param name="netString"></param>
     public NNDevicesSpecificationString(string deviceString)
@@ -84,21 +90,21 @@ namespace Ceres.Chess.NNEvaluators.Specifications
         throw new Exception($"{deviceString} not valid, device specification expected to begin with 'GPU:'");
       }
 
-      List<(string, NNEvaluatorPrecision, int?, int?, string, float, float, float)> deviceParts = OptionsParserHelpers.ParseCommaSeparatedWithOptionalWeights(deviceStringParts[1], false, true);
+      var deviceParts = OptionsParserHelpers.ParseDeviceOptions(deviceStringParts[1]);
 
       foreach (var device in deviceParts)
       {
-        int? maxBatchSize = device.Item3;
-        int? optimalBatchSize = device.Item4;
+        int? maxBatchSize = device.maxBatchSize;
+        int? optimalBatchSize = device.optimalBatchSize;
         List<(int, int[])> predefinedPartitions = null;
-        if (device.Item5 != null)
+        if (device.batchSizesFileName != null)
         {
-          var parsedBatchFile = BatchSizeFileParser.ParseFromFile(device.Item5);
+          var parsedBatchFile = BatchSizeFileParser.ParseFromFile(device.batchSizesFileName);
           maxBatchSize = parsedBatchFile.maxBatchSize;
           predefinedPartitions = parsedBatchFile.predefinedPartitions;    
         }
-        Devices.Add((new NNEvaluatorDeviceDef(NNDeviceType.GPU, int.Parse(device.Item1), false,
-                                              maxBatchSize, optimalBatchSize, predefinedPartitions), device.Item6));
+        Devices.Add((new NNEvaluatorDeviceDef(NNDeviceType.GPU, int.Parse(device.netID), false,
+                                              maxBatchSize, optimalBatchSize, predefinedPartitions), device.weight));
       }
 
       ComboType = Devices.Count == 1 ? NNEvaluatorDeviceComboType.Single

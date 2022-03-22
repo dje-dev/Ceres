@@ -30,7 +30,11 @@ namespace Ceres.Chess.NNEvaluators.Specifications
   /// 
   /// Examples: 
   ///   "LC0:42767"
+  ///   "703810#8", 
+  ///   "703810#16",
   ///   "LC0:703810=0.5,66193=0.5"
+  ///   "LC0:703810,427667"
+  ///   "LS15;0.25;0.25;0.25,66666;0.75;0.75;0.75"
   /// </summary>
   public record NNNetSpecificationString
   {
@@ -101,12 +105,12 @@ namespace Ceres.Chess.NNEvaluators.Specifications
       }
 
       // Build network definitions
-      List<(string, NNEvaluatorPrecision, int?, int?, string, float, float, float)> netParts = OptionsParserHelpers.ParseCommaSeparatedWithOptionalWeights(netIDs, true, false);
+      List<(string, NNEvaluatorPrecision, float, float, float)> netParts = OptionsParserHelpers.ParseNetworkOptions(netIDs);
 
       NetDefs = new List<(NNEvaluatorNetDef, float, float, float)>();
       foreach (var netSegment in netParts)
       {
-        NetDefs.Add((new NNEvaluatorNetDef(netSegment.Item1, NN_EVAL_TYPE, netSegment.Item2), netSegment.Item6, netSegment.Item7, netSegment.Item8));
+        NetDefs.Add((new NNEvaluatorNetDef(netSegment.Item1, NN_EVAL_TYPE, netSegment.Item2), netSegment.Item3, netSegment.Item4, netSegment.Item5));
       }
 
       ComboType = NetDefs.Count == 1 ? NNEvaluatorNetComboType.Single : NNEvaluatorNetComboType.WtdAverage;
