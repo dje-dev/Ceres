@@ -818,7 +818,9 @@ namespace Ceres.Features.Tournaments
         }
         catch (Exception exc)
         {
-          throw new Exception($"Engine {engine.ID} made illegal move {engineMove.MoveString} in position {curPositionAndMoves.FinalPosition.FEN}");
+          throw new Exception($"Engine {engine.ID} made illegal move {engineMove.MoveString} " 
+                           + $"in position {curPositionAndMoves.FinalPosition.FEN} "
+                           + $"with limit {thisMoveSearchLimit}");
         }
 
         PositionWithHistory newPosition = new PositionWithHistory(curPositionAndMoves);
