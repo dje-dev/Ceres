@@ -15,6 +15,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -38,11 +39,34 @@ namespace Ceres.Chess.NNEvaluators
   /// </summary>
   public class NNEvaluatorLinearCombo :  NNEvaluatorCompound
   {
+    const PolicyAveragingType DEFAULT_POLICY_AVERAGING_TYPE = PolicyAveragingType.Arithmetic;
+
+    /// <summary>
+    /// Method used for averaging policy probabilities.
+    /// </summary>
+    public enum PolicyAveragingType
+    {
+      /// <summary>
+      /// Simple arithmetic averaging.
+      /// </summary>
+      Arithmetic,
+
+      /// <summary>
+      /// Geometric averaging.
+      /// </summary>
+      Geometric
+    }
+
     public delegate float[] WeightsOverrideDelegate(in Position pos);
 
     public readonly float[] WeightsValue;
     public readonly float[] WeightsPolicy;
     public readonly float[] WeightsM;
+
+    /// <summary>
+    /// Method to be used for combining policy values.
+    /// </summary>
+    public PolicyAveragingType PolicyAveragingMethod;
 
     /// <summary>
     /// Optional delegate called for each position to determine weights to use for value head for that position.
@@ -72,7 +96,11 @@ namespace Ceres.Chess.NNEvaluators
     /// </summary>
     /// <param name="evaluators"></param>
     /// <param name="weights"></param>
-    public NNEvaluatorLinearCombo(NNEvaluator[] evaluators, IList<float> weights = null) : base(evaluators)
+    /// <param name="policyAveragingMethod"></param>
+    public NNEvaluatorLinearCombo(NNEvaluator[] evaluators, 
+                                  IList<float> weights = null, 
+                                  PolicyAveragingType policyAveragingMethod = DEFAULT_POLICY_AVERAGING_TYPE) 
+      : base(evaluators)
     {
       float[] weightsArray;
       if (weights == null)
@@ -87,7 +115,9 @@ namespace Ceres.Chess.NNEvaluators
       }
 
       WeightsValue = WeightsPolicy = WeightsM = weightsArray;
+      PolicyAveragingMethod = policyAveragingMethod;
     }
+
 
     /// <summary>
     /// Constructor (for case where weights are different across the output heads).
@@ -99,22 +129,27 @@ namespace Ceres.Chess.NNEvaluators
     /// <param name="weightsValueOverrideFunc"></param>
     /// <param name="weightsMOverrideFunc"></param>
     /// <param name="weightsPolicyOverrideFunc"></param>
+    /// <param name="policyAveragingMethod"></param>
     public NNEvaluatorLinearCombo(NNEvaluator[] evaluators, 
                                 IList<float> weightsValue, 
                                 IList<float> weightsPolicy, 
                                 IList<float> weightsM,
                                 WeightsOverrideDelegate weightsValueOverrideFunc = null,
                                 WeightsOverrideDelegate weightsMOverrideFunc = null,
-                                WeightsOverrideDelegate weightsPolicyOverrideFunc = null) : base(evaluators)
+                                WeightsOverrideDelegate weightsPolicyOverrideFunc = null,
+                                PolicyAveragingType policyAveragingMethod = DEFAULT_POLICY_AVERAGING_TYPE) 
+      : base(evaluators)
     {
-      WeightsValue  = weightsValue  != null ? weightsValue.ToArray()  : MathUtils.Uniform(evaluators.Length);
+      WeightsValue = weightsValue  != null ? weightsValue.ToArray()  : MathUtils.Uniform(evaluators.Length);
       WeightsPolicy = weightsPolicy != null ? weightsPolicy.ToArray() : MathUtils.Uniform(evaluators.Length);
       WeightsM      = weightsM      != null ? weightsM.ToArray()      : MathUtils.Uniform(evaluators.Length);
 
       WeightsValueOverrideFunc = weightsValueOverrideFunc;
       WeightsMOverrideFunc = weightsMOverrideFunc;
       WeightsPolicyOverrideFunc = weightsPolicyOverrideFunc;
+      PolicyAveragingMethod = policyAveragingMethod;
     }
+
 
     /// <summary>
     /// The maximum number of positions that can be evaluated in a single batch.
@@ -211,8 +246,33 @@ namespace Ceres.Chess.NNEvaluators
               throw new NotImplementedException("Mixing NNEvaluatorLinearCombo and random evaluator probably not yet supported");
             }
 
-            float thisContribution = weights[evaluatorIndex] * moveInfo.probability;
-            policyAverages[moveInfo.move.IndexNeuralNet] += thisContribution;
+            switch (PolicyAveragingMethod)
+            {
+              case PolicyAveragingType.Arithmetic:
+                policyAverages[moveInfo.move.IndexNeuralNet] += moveInfo.probability * weights[evaluatorIndex];
+                break;
+              case PolicyAveragingType.Geometric:
+                float rawContrib = MathF.Pow(moveInfo.probability, Evaluators.Length);
+                float thisContribution = rawContrib * weights[evaluatorIndex];
+                if (evaluatorIndex == 0)
+                {
+                  policyAverages[moveInfo.move.IndexNeuralNet] = thisContribution;
+                }
+                else
+                {
+                  policyAverages[moveInfo.move.IndexNeuralNet] *= thisContribution;
+                }
+                break;
+              default:
+                throw new NotImplementedException("Unknown policy averaging method " + PolicyAveragingMethod);
+            }
+
+          }
+
+          // Finalize geometric averaging if in use.
+          if (PolicyAveragingMethod == PolicyAveragingType.Geometric)
+          {
+            FinalizeGeometricAverages(policyAverages);
           }
         }
 
@@ -220,6 +280,29 @@ namespace Ceres.Chess.NNEvaluators
       }
 
       return policies;
+    }
+
+
+    private void FinalizeGeometricAverages(Span<float> policyAverages)
+    {
+      float sum = 0;
+      for (int i = 0; i < policyAverages.Length; i++)
+      {
+        if (policyAverages[i] > 0)
+        {
+          float adjusted = MathF.Pow(policyAverages[i], 1.0f / Evaluators.Length);
+          policyAverages[i] = adjusted;
+          sum += adjusted;
+        }
+      }
+
+      Debug.Assert(sum > 0);
+
+      // Normalize to sum to 1.0;
+      for (int i = 0; i < policyAverages.Length; i++)
+      {
+        policyAverages[i] /= sum;
+      }
     }
 
     #region Utility methods
