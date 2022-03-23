@@ -29,84 +29,7 @@ using System.Diagnostics;
 
 namespace Ceres.Chess.NNBackends.CUDA
 {
-  public class AttentionPolicyEncoderWeights
-  {
-    public CudaDeviceVariable<FP16> mha_q_w;
-    public CudaDeviceVariable<FP16> mha_q_b;
-    public CudaDeviceVariable<FP16> mha_k_w;
-    public CudaDeviceVariable<FP16> mha_k_b;
-    public CudaDeviceVariable<FP16> mha_v_w;
-    public CudaDeviceVariable<FP16> mha_v_b;
-    public CudaDeviceVariable<FP16> mha_dense_w;
-    public CudaDeviceVariable<FP16> mha_dense_b;
-
-    public CudaDeviceVariable<FP16> mha_qkv_w;
-    public CudaDeviceVariable<FP16> mha_qkv_b;
-
-    public CudaDeviceVariable<FP16> ln1_betas;
-    public CudaDeviceVariable<FP16> ln1_gammas;
-    public CudaDeviceVariable<FP16> ln2_betas;
-    public CudaDeviceVariable<FP16> ln2_gammas;
-
-    public CudaDeviceVariable<FP16> ffn_dense1_w;
-    public CudaDeviceVariable<FP16> ffn_dense1_b;
-    public CudaDeviceVariable<FP16> ffn_dense2_w;
-    public CudaDeviceVariable<FP16> ffn_dense2_b;
-
-
-    public int mha_q_size;
-    public int mha_k_size;
-    public int mha_v_size;
-    public int mha_dense_size;
-    public int ffn_dense1_size;
-    public int ffn_dense2_size;
-
-    public AttentionPolicyEncoderWeights(AttentionPolicyHead parent, in LC0LegacyWeights.EncoderLayer weights)
-    {
-      mha_q_size = weights.mha.q_b.Length;
-      mha_k_size = weights.mha.k_b.Length;
-      mha_v_size = weights.mha.v_b.Length;
-      mha_dense_size = weights.mha.dense_b.Length;
-      ffn_dense1_size = weights.ffn.dense1_b.Length;
-      ffn_dense2_size = weights.ffn.dense2_b.Length;
-
-      mha_q_w = BaseLayerCUDA.LoadedWeights(weights.mha.q_w);
-      mha_q_b = BaseLayerCUDA.LoadedWeights(weights.mha.q_b);
-      mha_k_w = BaseLayerCUDA.LoadedWeights(weights.mha.k_w);
-      mha_k_b = BaseLayerCUDA.LoadedWeights(weights.mha.k_b);
-      mha_v_w = BaseLayerCUDA.LoadedWeights(weights.mha.v_w);
-      mha_v_b = BaseLayerCUDA.LoadedWeights(weights.mha.v_b);
-      mha_dense_w = BaseLayerCUDA.LoadedWeights(weights.mha.dense_w);
-      mha_dense_b = BaseLayerCUDA.LoadedWeights(weights.mha.dense_b);
-
-      // big allocation to hold qkv weights one after the other
-      int elements = weights.mha.q_w.Length;
-      int size = elements * Marshal.SizeOf<FP16>() * 3;
-      mha_qkv_w = new CudaDeviceVariable<FP16>(elements * 3);
-      mha_qkv_w.CopyToDevice(mha_q_w, 0, 0,          size/3);
-      mha_qkv_w.CopyToDevice(mha_k_w, 0, 1 * size/3, size/3);
-      mha_qkv_w.CopyToDevice(mha_v_w, 0, 2 * size/3, size/3);
-
-      elements = weights.mha.q_b.Length;
-      size = elements * Marshal.SizeOf<FP16>() * 3;
-      mha_qkv_b = new CudaDeviceVariable<FP16>(elements * 3);
-      mha_qkv_b.CopyToDevice(mha_q_b, 0, 0, size / 3);
-      mha_qkv_b.CopyToDevice(mha_k_b, 0, 1 * size / 3, size / 3);
-      mha_qkv_b.CopyToDevice(mha_v_b, 0, 2 * size / 3, size / 3);
-
-      ln1_betas = BaseLayerCUDA.LoadedWeights(weights.ln1_betas);
-      ln1_gammas = BaseLayerCUDA.LoadedWeights(weights.ln1_gammas);
-      ln2_betas = BaseLayerCUDA.LoadedWeights(weights.ln2_betas);
-      ln2_gammas = BaseLayerCUDA.LoadedWeights(weights.ln2_gammas);
-
-      ffn_dense1_w = BaseLayerCUDA.LoadedWeights(weights.ffn.dense1_w);
-      ffn_dense1_b = BaseLayerCUDA.LoadedWeights(weights.ffn.dense1_b);
-      ffn_dense2_w = BaseLayerCUDA.LoadedWeights(weights.ffn.dense2_w);
-      ffn_dense2_b = BaseLayerCUDA.LoadedWeights(weights.ffn.dense2_b);
-    }
-  }
-
-  public class AttentionPolicyHead : BaseLayerCUDA
+  public class AttentionPolicyHead : BaseLayerCUDA, IDisposable
   {
     int embeddingOpSize;
     int wqOpSize;
@@ -129,9 +52,9 @@ namespace Ceres.Chess.NNBackends.CUDA
 
 
     public AttentionPolicyHead(NNBackendExecContext parent, string name, int layerIndex,
-                               LC0LegacyWeights weights,
-                               int c, int h, int w, 
-                               BaseLayerCUDA inputLayer, ActivationFunction activation)
+                              LC0LegacyWeights weights,
+                              int c, int h, int w, 
+                              BaseLayerCUDA inputLayer, ActivationFunction activation)
       : base(parent, name, layerIndex, c, h, w, inputLayer, activation)
     {
       embeddingOpSize = weights.ip_pol_b.Length;
@@ -503,6 +426,27 @@ namespace Ceres.Chess.NNBackends.CUDA
                  num_outputs,
                  num_outputs * batch,
                  (int)activation, stream.Stream.Pointer);
+    }
+
+    public override void Dispose()
+    {
+      ip_pol_w_?.Dispose();
+      ip_pol_b_?.Dispose();
+      ip2_pol_w_?.Dispose();
+      ip2_pol_b_?.Dispose();
+      ip3_pol_w_?.Dispose();
+      ip3_pol_b_?.Dispose();
+
+      wqk_w?.Dispose();
+      wqk_b?.Dispose();
+
+      if (encoderWeights != null)
+      {
+        for (int i = 0; i < encoderWeights.Length; i++)
+        {
+          encoderWeights[i].Dispose();
+        }
+      }
     }
 
   }

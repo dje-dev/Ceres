@@ -45,7 +45,7 @@ namespace Ceres.Chess.NNBackends.CUDA
     CudaDeviceVariable<FP16> biasesCUDA;
     CudaDeviceVariable<FP16> weightsCUDA;
 
-    
+
     public LayerConv1CUDA(NNBackendExecContext parent, string name, int layerIndex, 
                           BaseLayerCUDA ip, int c, int h, int w, 
                           int Cin, bool bias, ActivationFunction activation)
@@ -116,6 +116,14 @@ if (use_bias_)
         //addVectors(output, output, (DataType*)nullptr, N * C * H * W, N * C * H * W, 0, act_, stream);
       }
 
+    }
+
+    public override void Dispose()
+    {
+      halfOne?.Dispose();
+      halfZero?.Dispose();
+      biasesCUDA?.Dispose();
+      weightsCUDA?.Dispose();
     }
 
   }

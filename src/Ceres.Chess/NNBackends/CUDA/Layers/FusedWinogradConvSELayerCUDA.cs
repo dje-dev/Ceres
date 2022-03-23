@@ -192,6 +192,13 @@ template <typename T, bool use_se, ActivationFunction activation, bool use_bias,
                  .Replace("!5", BoolStr(skipInputNHCW))
                  .Replace("!6", BoolStr(outputNHCW));
     }
+
+    public override void Dispose()
+    {
+      biases?.Dispose();
+      transformedWeights?.Dispose();
+    }
+
   }
 
 }

@@ -556,7 +556,16 @@ namespace Ceres.Chess.NNBackends.CUDA
                   .Replace("!3", BoolStr(useSkip));
     }
 
-#endregion
+    #endregion
+
+    public override void Dispose()
+    {
+      biases0?.Dispose();
+      biases1?.Dispose();
+      transformedWeights0?.Dispose();
+      transformedWeights1?.Dispose();
+    }
+
   }
 
 

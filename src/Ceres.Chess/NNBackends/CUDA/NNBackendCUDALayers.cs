@@ -27,7 +27,7 @@ using System.Diagnostics;
 
 namespace Ceres.Chess.NNBackends.CUDA
 {
-  internal class NNBackendCUDALayers
+  internal class NNBackendCUDALayers : IDisposable
   {
     /// <summary>
     /// List of underlying layers.
@@ -388,6 +388,14 @@ namespace Ceres.Chess.NNBackends.CUDA
       {
         BaseLayerCUDA layer = Layers[i];
         Console.WriteLine(layer.ToString());
+      }
+    }
+
+    public void Dispose()
+    {
+      foreach (BaseLayerCUDA layer in Layers)
+      {
+        layer.Dispose();
       }
     }
   }

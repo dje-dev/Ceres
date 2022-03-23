@@ -32,7 +32,7 @@ namespace Ceres.Chess.NNBackends.CUDA
   /// The Layer objects only hold memory for weights, biases, etc
   /// memory for input and output tensors is provided by caller of Eval.
   /// </summary>
-  public abstract class BaseLayerCUDA
+  public abstract class BaseLayerCUDA : IDisposable
   {
     public enum ActivationFunction
     {
@@ -490,6 +490,10 @@ namespace Ceres.Chess.NNBackends.CUDA
       return $"{Name,12}  {LastExecutionTime.TotalMilliseconds,6:F3}  {LastKernelExecutionTimeMS,6:F3}   OutSize: {GetOutputSize(1),8:F0}  Sum: {Sum,10:F4}  First {First,10:F4} Last: {Last,10:F4}  Min: {Min,10:F4}  Max: {Max,10:F4}  {(IdenticalForAllPositions?"SAME" : "DIFF")}";
     }
 
+    public virtual void Dispose()
+    {
+      throw new NotImplementedException();
+    }
   }
 
 }

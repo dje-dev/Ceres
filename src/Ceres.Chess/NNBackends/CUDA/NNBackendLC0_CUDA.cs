@@ -843,6 +843,8 @@ namespace Ceres.Chess.NNBackends.CUDA
           moveMasksGPU?.Dispose();
           outputMaskedPoliciesGPU?.Dispose();
 
+          Layers.Dispose();
+
           ExecContext.Dispose();
         }
 

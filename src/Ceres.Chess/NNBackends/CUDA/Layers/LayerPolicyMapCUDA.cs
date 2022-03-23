@@ -91,5 +91,10 @@ namespace Ceres.Chess.NNBackends.CUDA
     }
 
 
+    public override void Dispose()
+    {
+      indices?.Dispose();
+    }
+
   }
 }

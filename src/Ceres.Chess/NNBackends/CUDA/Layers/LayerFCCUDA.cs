@@ -41,7 +41,7 @@ namespace Ceres.Chess.NNBackends.CUDA
     CudaDeviceVariable<FP16> weights;
 
 
-   public LayerFCCUDA(NNBackendExecContext parent, string name, int layerIndex, 
+    public LayerFCCUDA(NNBackendExecContext parent, string name, int layerIndex, 
                       BaseLayerCUDA ip, int c, int h, int w, bool bias, ActivationFunction activation)
       : base(parent, name, layerIndex, c, h, w, ip, activation)
     {
@@ -149,6 +149,12 @@ namespace Ceres.Chess.NNBackends.CUDA
                    num_outputs * batch_size,
                    (int)Activation, stream.Stream.Pointer);
       }
+    }
+
+    public override void Dispose()
+    {
+      biases?.Dispose();
+      weights?.Dispose();
     }
 
   }
