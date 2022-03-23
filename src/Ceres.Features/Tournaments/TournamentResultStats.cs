@@ -46,11 +46,13 @@ namespace Ceres.Features.Tournaments
     {
       //parameter for how many percent of items above and below median should be included in the average median calculation.
       //Navs summary normally use 20% av items above and below median value.
-      double medianRangePercent = 0.20; 
+      double medianRangePercent = 0.20;
       CalculateMedianNodes(medianRangePercent);
       writer.WriteLine();
       writer.WriteLine("Tournament summary:");
       DumpEngineTournamentSummary(writer, referenceId);
+      writer.WriteLine("Simple summary:");
+      DumpSimpleEngineTournamentSummary(writer, referenceId);
       writer.WriteLine("Tournament round robin score table (W-D-L):");
       DumpRoundRobinResultTable(writer, referenceId);
       writer.WriteLine();
@@ -64,16 +66,41 @@ namespace Ceres.Features.Tournaments
     /// </summary>
     void DumpEngineTournamentSummary(TextWriter writer, string referenceId)
     {
-      int maxWidth = 151;
+      int maxWidth = 140;
+      PrintLine(writer, maxWidth - 1);
+      List<(string, int)> header = new List<(string, int)>
+        { ("Player",25), ("Elo", 8), ("+/-",5), ("CFS(%)", 8),
+          ("Played", 8), ("W-D-L", 13), ("D(%)",5), ("Time",12), ("Nodes",18), ("NPS-avg", 14), ("NPS-med", 11) };
+      PrintHeaderRow(writer, header, maxWidth);
+      PrintLine(writer, maxWidth - 1);
+      bool twoPlayers = Players.Count == 2 && string.IsNullOrEmpty(referenceId);
+      var sorted = Players.OrderByDescending(e => e.Name == referenceId ? 10000 : 0 + e.PlayerWins + (e.Draws * 0.5));
+      foreach (PlayerStat engine in sorted)
+      {
+        var refEng = twoPlayers ? engine.Name : referenceId;
+        WriteEngineSummary(writer, engine, maxWidth, refEng);
+        twoPlayers = false;
+      }
+      PrintLine(writer, maxWidth - 1);
+      writer.WriteLine();
+    }
+
+    void DumpSimpleEngineTournamentSummary(TextWriter writer, string referenceId)
+    {
+      int maxWidth = 93;
       PrintLine(writer, maxWidth);
       List<(string, int)> header = new List<(string, int)>
-        { ("Player",25), ("Elo", 8), ("+/-",5), ("CFS(%)", 8), ("Points",8),
-          ("Played", 8), ("W-D-L", 13), ("D(%)",5), ("Time",12), ("Nodes",18), ("NPS-avg", 14), ("NPS-median", 14) };
+        { ("Player",25), ("Elo", 8), ("+/-",5), ("CFS(%)", 8),
+           ("W-D-L", 13), ("Time",12), ("NPS-avg", 14) };
       PrintHeaderRow(writer, header, maxWidth);
       PrintLine(writer, maxWidth);
-      foreach (PlayerStat engine in Players)
+      bool twoPlayers = Players.Count == 2 && string.IsNullOrEmpty(referenceId);
+      var sorted = Players.OrderByDescending(e => e.Name == referenceId ? 10000 : 0 + e.PlayerWins + (e.Draws * 0.5));
+      foreach (PlayerStat engine in sorted)
       {
-        WriteEngineSummary(writer, engine, maxWidth, referenceId);
+        var refEng = twoPlayers ? engine.Name : referenceId;
+        WriteSimpleEngineSummary(writer, engine, maxWidth, refEng);
+        twoPlayers = false;
       }
       PrintLine(writer, maxWidth);
       writer.WriteLine();
@@ -90,7 +117,7 @@ namespace Ceres.Features.Tournaments
     void WriteEngineSummary(TextWriter writer, PlayerStat player, int width, string referenceId)
     {
       string playerInfo = player.Name == referenceId ? player.Name + "*" : player.Name;
-      double score = player.PlayerWins + (player.Draws / 2.0);
+      //double score = player.PlayerWins + (player.Draws / 2.0);
       string wdl = $"+{player.PlayerWins}={player.Draws}-{player.PlayerLosses}";
       float cfs = EloCalculator.LikelihoodSuperiority(player.PlayerWins, player.Draws, player.PlayerLosses);
       var (_, avg, max) = EloCalculator.EloConfidenceInterval(player.PlayerWins, player.Draws, player.PlayerLosses);
@@ -105,17 +132,39 @@ namespace Ceres.Features.Tournaments
         (player.Name == referenceId ? "0.0" : avg.ToString("F0"), 8),
         (player.Name == referenceId ? "---" : error, 5),
         (player.Name == referenceId ? "----" : cfs.ToString("P0"), 8),
-        (score.ToString("F1"), 8),
         (player.NumGames.ToString(), 8),
         (wdl, 13),
         (draws.ToString("N0"), 5),
         { (time.ToString("F2"), 12) },
         { (nodes.ToString("N0") + " ", 18) },
         { ((nodes / time).ToString("N0") + " ", 14) },
-        { ((player.MedianNPSAverage).ToString("N0") + " ", 14) }
+        { ((player.MedianNPSAverage).ToString("N0") + " ", 11) }
 
       };
       PrintEngineRow(writer, rowItems, width);
+    }
+
+    void WriteSimpleEngineSummary(TextWriter writer, PlayerStat player, int width, string referenceId)
+    {
+      string playerInfo = player.Name == referenceId ? player.Name + "*" : player.Name;
+      string wdl = $"+{player.PlayerWins}={player.Draws}-{player.PlayerLosses}";
+      float cfs = EloCalculator.LikelihoodSuperiority(player.PlayerWins, player.Draws, player.PlayerLosses);
+      var (_, avg, max) = EloCalculator.EloConfidenceInterval(player.PlayerWins, player.Draws, player.PlayerLosses);
+      string error = $"{(max - avg):F0}";
+      long nodes = player.PlayerTotalNodes;
+      float time = player.PlayerTotalTime;
+
+      List<(string, int)> rowItems = new()
+      {
+        (playerInfo, 25),
+        (player.Name == referenceId ? "0.0" : avg.ToString("F0"), 8),
+        (player.Name == referenceId ? "---" : error, 5),
+        (player.Name == referenceId ? "----" : cfs.ToString("P0"), 8),
+        (wdl, 13),
+        { (time.ToString("F2"), 12) },
+        { ((nodes / time).ToString("N0") + " ", 14) },
+      };
+      PrintSimpleEngineRow(writer, rowItems, width);
     }
 
 
@@ -159,7 +208,7 @@ namespace Ceres.Features.Tournaments
     public void DumpRoundRobinEloTable(TextWriter writer, string referenceId)
     {
       //calculate total width for table based on number of players in the tournament.
-      int totalWidth = 25 * Players.Count;
+      int totalWidth = 20 * (Players.Count + 1);
       DumpHeadingTable(writer, totalWidth);
       if (string.IsNullOrEmpty(referenceId))
       {
@@ -267,7 +316,7 @@ namespace Ceres.Features.Tournaments
         playerBlack.PlayerTotalNodes += thisResult.TotalNodesEngine2;
         playerWhite.PlayerTotalTime += thisResult.TotalTimeEngine1;
         playerBlack.PlayerTotalTime += thisResult.TotalTimeEngine2;
-      }     
+      }
     }
 
     /// <summary>
@@ -320,6 +369,23 @@ namespace Ceres.Features.Tournaments
     /// </summary>
     /// <param name="columns"></param>
     /// <param name="maxWidth"></param>
+
+    void PrintSimpleEngineRow(TextWriter writer, List<(string, int)> columns, int maxWidth)
+    {
+      int numberOfColumns = columns.Count();
+      string row = "|";
+
+      for (int i = 0; i < numberOfColumns; i++)
+      {
+        var (txt, width) = columns[i];
+        if (i > numberOfColumns - 2)
+          row += AlignRight(txt, width) + "|";
+        else
+          row += AlignCentre(txt, width) + "|";
+      }
+
+      writer.WriteLine(row);
+    }
 
     void PrintEngineRow(TextWriter writer, List<(string, int)> columns, int maxWidth)
     {
@@ -486,6 +552,6 @@ namespace Ceres.Features.Tournaments
           }
         }
       }
-    }    
+    }
   }
 }
