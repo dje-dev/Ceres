@@ -416,7 +416,7 @@ namespace Ceres.Features.EngineTests
                             + $"{ search1.TimingStats.ElapsedTimeSecs,5:F2}   { search2.TimingStats.ElapsedTimeSecs,5:F2}    "
                             + $"{ search1.FinalN,12:N0}  {search2.FinalN,12:N0}  "
                             + $"  {countMuchBetter,5:N0} {countMuchWorse,5:N0}    {scoreBestMove1,5:F2}   {diffStrfromBest} {sfDisagreeChar}  "
-                            + $"  {moveStr1,7}  {moveStr2,7}  {sfMoveStr,7} "
+                            + $"  {moveStr1,7}  {moveStr2,7}  {sfMoveStr,7}  {pos.FinalPosition.PieceCount,3:N0} "
                             + $"  {pos.FinalPosition.FEN}");
 
             // Write full detail on any huge errors.
@@ -553,8 +553,8 @@ namespace Ceres.Features.EngineTests
       {
         columnHeadersWritten = true;
         Console.WriteLine();
-        Console.WriteLine("  GPU    Pos#      %diff    Time1   Time2      Nodes1        Nodes2        Cnt1  Cnt2      Q1     QDiff        Move1    Move2  MoveSF    FEN");
-        Console.WriteLine("  ---   -----     ------    -----  ------   ------------  ------------     ----  ----    -----    -----       ------   ------  -------   ------------------------------------------------------------------");
+        Console.WriteLine("  GPU    Pos#      %diff    Time1   Time2      Nodes1        Nodes2        Cnt1  Cnt2      Q1     QDiff        Move1    Move2  MoveSF    #PC  FEN");
+        Console.WriteLine("  ---   -----     ------    -----  ------   ------------  ------------     ----  ----    -----    -----       ------   ------  -------   ---  ------------------------------------------------------------------");
       }
     }
 
