@@ -485,10 +485,11 @@ namespace Ceres.Features.Visualization.AnalysisGraph
       sb.AppendLine($"<TR><TD bgcolor=\"{bgColorScore}\" border=\"0\" >{scoreCP,5:N0}cp   ({wdlStr}  {posEvalCP:N0}cp</TD></TR>");
       sb.AppendLine($"<TR><TD bgcolor=\"linen\" border=\"0\" >{node.N:N0}  {node.P * 100,5:F2}%</TD></TR>");
 
-//      double qDiffRoot = node.Tree.Root.Q - (node.Depth % 2 == 0 ? 1 : -1) * node.Q;
-//      sb.AppendLine($"<TR><TD bgcolor=\"{bgColorScore}\" border=\"0\" >Q= {node.Q,6:F3} ({ qDiffRoot,4:F2})  V= {node.V,6:F3}</TD></TR>");
+      //      double qDiffRoot = node.Tree.Root.Q - (node.Depth % 2 == 0 ? 1 : -1) * node.Q;
+      //      sb.AppendLine($"<TR><TD bgcolor=\"{bgColorScore}\" border=\"0\" >Q= {node.Q,6:F3} ({ qDiffRoot,4:F2})  V= {node.V,6:F3}</TD></TR>");
 
-      if (searchLimit != null)
+      bool posIsTerminal = node.Annotation.Pos.CalcTerminalStatus().IsTerminal();
+      if (searchLimit != null && !posIsTerminal)
       {
         TryStartReferenceEngine();
         if (referenceEngine != null)
