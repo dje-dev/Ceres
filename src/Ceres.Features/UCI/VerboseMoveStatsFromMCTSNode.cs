@@ -98,7 +98,7 @@ namespace Ceres.Features.UCI
     {
       MCTSNodeStructChild child = node.ChildAtIndexRef(childIndex);
       VerboseMoveStat stat = new VerboseMoveStat(statsParent, null);
-      stat.MoveString = child.Move.ToString();
+      stat.MoveString = node.Annotation.Pos.MiscInfo.SideToMove == Chess.SideType.White ? child.Move.ToString() : child.Move.Flipped.ToString();
       stat.MoveCode = child.Move.IndexNeuralNet;
       stat.P = child.P * 100.0f;
       stat.U = node.ChildU(childIndex);
