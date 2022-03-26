@@ -44,6 +44,7 @@ namespace Ceres.Chess.GameEngines
     public int WhiteFinalN;
     public float WhiteMAvg;
     public bool WhiteShouldHaveForfeitedOnLimit;
+    public int WhiteDepth;
 
     public float BlackNodesAllMoves;
     public float BlackTimeAllMoves;
@@ -58,6 +59,7 @@ namespace Ceres.Chess.GameEngines
     public int BlackFinalN;
     public float BlackMAvg;
     public bool BlackShouldHaveForfeitedOnLimit;
+    public int BlackDepth;
 
     public int WhiteNumNodesComputed => WhiteFinalN - WhiteStartN;
     public int BlackNumNodesComputed => BlackFinalN - BlackStartN;

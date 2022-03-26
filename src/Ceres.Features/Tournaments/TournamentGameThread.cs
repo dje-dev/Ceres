@@ -511,6 +511,8 @@ namespace Ceres.Features.Tournaments
 
     static readonly object outputLockObj = new();
 
+    Dictionary<Position, GameMoveConsoleInfo> referenceEngineMoveHistory = new();
+
     /// <summary>
     /// 
     /// </summary>
@@ -570,7 +572,7 @@ namespace Ceres.Features.Tournaments
       int movesEngine2 = 0;
       bool engine1ShouldHaveForfieted = false;
       bool engine2ShouldHaveForfieted = false;
-
+      int numNodesForcedDeterministic = 0;
       int numEngine2MovesDifferentFromCheckEngine = 0;
 
       List<float> scoresEngine1 = new List<float>();
@@ -606,6 +608,7 @@ namespace Ceres.Features.Tournaments
           TotalTimeEngine2 = timeEngine2Tot,
           TotalNodesEngine1 = nodesEngine1Tot,
           TotalNodesEngine2 = nodesEngine2Tot,
+          NumMovesForcedDeterministic = numNodesForcedDeterministic,
           RemainingTimeEngine1 = RemainingTime(searchLimitEngine1, movesEngine1, timeEngine1Tot),
           RemainingTimeEngine2 = RemainingTime(searchLimitEngine2, movesEngine2, timeEngine2Tot),
           ShouldHaveForfeitedOnLimitsEngine1 = engine1ShouldHaveForfieted,
@@ -710,7 +713,7 @@ namespace Ceres.Features.Tournaments
         {
           info = DoMove(engine2, engineCheckAgainstEngine2,
                         gameMoveHistory, searchLimitWithIncrementsEngine2, scoresEngine2,
-                        ref nodesEngine2Tot, ref visitsEngine2Tot, ref timeEngine2Tot);
+                        ref nodesEngine2Tot, ref visitsEngine2Tot, ref timeEngine2Tot, ref numNodesForcedDeterministic);
           movesEngine2++;
           
           if (engine2IsWhite)
@@ -728,7 +731,7 @@ namespace Ceres.Features.Tournaments
         {
           info = DoMove(engine1, null,
                         gameMoveHistory, searchLimitWithIncrementsEngine1, scoresEngine1,
-                        ref nodesEngine1Tot, ref visitsEngine1Tot, ref timeEngine1Tot);
+                        ref nodesEngine1Tot, ref visitsEngine1Tot, ref timeEngine1Tot, ref numNodesForcedDeterministic);
           movesEngine1++;
           if (engine2IsWhite)
           {
@@ -754,10 +757,12 @@ namespace Ceres.Features.Tournaments
       }
 
 
+
       GameMoveConsoleInfo DoMove(GameEngine engine, GameEngine checkMoveEngine,
                                  List<GameMoveStat> gameMoveHistory,
                                  SearchLimit searchLimit, List<float> scoresCP,
-                                  ref long totalNodesUsed, ref long totalVisitsUsed, ref float totalTimeUsed)
+                                 ref long totalNodesUsed, ref long totalVisitsUsed, ref float totalTimeUsed, 
+                                 ref int numNodesForcedDeterministic)
       {
         SearchLimit thisMoveSearchLimit = searchLimit.Type switch
         {
@@ -803,6 +808,7 @@ namespace Ceres.Features.Tournaments
         if (checkMoveEngine != null)
         {
           checkSearch = checkMoveEngine.Search(curPositionAndMoves, searchLimit);
+
           checkMove = checkSearch.MoveString;
           if (engineMove.MoveString != checkMove)
           {
@@ -823,51 +829,90 @@ namespace Ceres.Features.Tournaments
                            + $"with limit {thisMoveSearchLimit}");
         }
 
+        bool isWhite = curPositionAndMoves.FinalPosition.MiscInfo.SideToMove == SideType.White;
+
+        // Possibly discard this move and replace with prior moved played by engine in this same position.
+        GameMoveConsoleInfo overrideMoveToUse = null;
+        if (Def.ForceReferenceEngineDeterministic && engine.ID == Def.ReferenceEngineId)
+        {
+          if (referenceEngineMoveHistory.ContainsKey(curPositionAndMoves.FinalPosition))
+          {
+            GameMoveConsoleInfo priorMove = referenceEngineMoveHistory[curPositionAndMoves.FinalPosition];
+            string priorMoveStr = isWhite ? priorMove.WhiteMoveStr : priorMove.BlackMoveStr;
+            if (priorMoveStr != engineMove.MoveString)
+            {
+              overrideMoveToUse = priorMove;
+              numNodesForcedDeterministic++;
+              //Console.WriteLine("See different move, was " + priorMoveStr + " now " + engineMove.MoveString + " in " + curPositionAndMoves.FinalPosition + "nps " + engineMove.NPS);
+            }
+          }
+          else
+          {
+            // Save this move from reference engine to
+            // make sure same moved always played in future games.
+            referenceEngineMoveHistory[curPositionAndMoves.FinalPosition] = info;
+          }
+        }
+
+        // Not currently trying to replace the statistics realting to N and time
+        // so it doesn't look like the engine falsely violated the limits (at game level).
+        string moveStr              = overrideMoveToUse != null ? (isWhite ? overrideMoveToUse.WhiteMoveStr         : overrideMoveToUse.BlackMoveStr) : engineMove.MoveString;
+        float moveScoreQ            = overrideMoveToUse != null ? (isWhite ? overrideMoveToUse.WhiteScoreQ          : overrideMoveToUse.BlackScoreQ) : engineMove.ScoreQ;
+        float moveScoreCentipawns   = overrideMoveToUse != null ? (isWhite ? overrideMoveToUse.WhiteScoreCentipawns : overrideMoveToUse.BlackScoreCentipawns) : engineMove.ScoreCentipawns;
+        float moveMAvg              = overrideMoveToUse != null ? (isWhite ? overrideMoveToUse.WhiteMAvg            : overrideMoveToUse.BlackMAvg) : engineMove.MAvg;
+        SearchLimit searchLimitPost = overrideMoveToUse != null ? (isWhite ? overrideMoveToUse.WhiteSearchLimitPost : overrideMoveToUse.BlackSearchLimitPost) : engineMove.Limit;
+        int moveDepth               = overrideMoveToUse != null ? (isWhite ? overrideMoveToUse.WhiteDepth           : overrideMoveToUse.BlackDepth) : engineMove.Depth;
+
         PositionWithHistory newPosition = new PositionWithHistory(curPositionAndMoves);
-        newPosition.AppendMove(engineMove.MoveString);
+        newPosition.AppendMove(moveStr);
 
         // Output position to PGN
-        pgnWriter.WriteMove(newPosition.Moves[^1], curPositionAndMoves.FinalPosition, engineTime, engineMove.Depth, engineMove.ScoreCentipawns);
+        pgnWriter.WriteMove(newPosition.Moves[^1], curPositionAndMoves.FinalPosition, engineTime, moveDepth, moveScoreCentipawns);
 
-        scoresCP.Add(engineMove.ScoreCentipawns);
+        scoresCP.Add(moveScoreCentipawns);
     
         totalNodesUsed += engineMove.FinalN;
         totalVisitsUsed += engineMove.Visits;
         totalTimeUsed += engineTime;
-        if (curPositionAndMoves.FinalPosition.MiscInfo.SideToMove == SideType.White)
+        if (isWhite)
         {
-          info.WhiteMoveStr = engineMove.MoveString;
-          info.WhiteScoreQ = engineMove.ScoreQ;
-          info.WhiteScoreCentipawns = engineMove.ScoreCentipawns;
+          info.WhiteMoveStr = moveStr;
+          info.WhiteScoreQ = moveScoreQ;
+          info.WhiteScoreCentipawns = moveScoreCentipawns;
           info.WhiteSearchLimitPre = thisMoveSearchLimit;
-          info.WhiteSearchLimitPost = engineMove.Limit;
+          info.WhiteSearchLimitPost = searchLimitPost;
           info.WhiteMoveTimeUsed = engineTime;
           info.WhiteTimeAllMoves = totalTimeUsed;
           info.WhiteNodesAllMoves = totalNodesUsed;
           info.WhiteStartN = engineMove.StartingN;
           info.WhiteFinalN = engineMove.FinalN;
-          info.WhiteMAvg = engineMove.MAvg;
+          info.WhiteMAvg = moveMAvg;
           info.WhiteCheckMoveStr = checkMove;
           info.WhiteShouldHaveForfeitedOnLimit = shouldHaveForfeited;
+          info.WhiteDepth = moveDepth;
         }
         else
         {
-          info.BlackMoveStr = engineMove.MoveString;
-          info.BlackScoreQ = engineMove.ScoreQ;
-          info.BlackScoreCentipawns = engineMove.ScoreCentipawns;
+          info.BlackMoveStr = moveStr;
+          info.BlackScoreQ = moveScoreQ;
+          info.BlackScoreCentipawns = moveScoreCentipawns;
           info.BlackSearchLimitPre = thisMoveSearchLimit;
-          info.BlackSearchLimitPost = engineMove.Limit;
+          info.BlackSearchLimitPost = searchLimitPost;
           info.BlackMoveTimeUsed = engineTime;
           info.BlackTimeAllMoves = totalTimeUsed;
           info.BlackNodesAllMoves = totalNodesUsed;
           info.BlackStartN = engineMove.StartingN;
           info.BlackFinalN = engineMove.FinalN;
-          info.BlackMAvg = engineMove.MAvg;
+          info.BlackMAvg = moveMAvg;
           info.BlackCheckMoveStr = checkMove;
           info.BlackShouldHaveForfeitedOnLimit = shouldHaveForfeited;
+          info.BlackDepth = moveDepth;
         }
-
-        if (showMoves) info.PutStr();
+      
+        if (showMoves)
+        {
+          info.PutStr();
+        }
 
         // Advance to next move
         curPositionAndMoves = newPosition;

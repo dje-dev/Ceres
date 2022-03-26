@@ -42,30 +42,43 @@ namespace Ceres.Features.Tournaments
     /// <summary>
     /// Dump full tournament summary to console.
     /// </summary>
-    public void DumpTournamentSummary(TextWriter writer, string referenceId)
+    public void DumpTournamentSummary(TournamentDef def)
     {
+      TextWriter writer = def.Logger;
+      string referenceId = def.ReferenceEngineId;
+
       //parameter for how many percent of items above and below median should be included in the average median calculation.
       //Navs summary normally use 20% av items above and below median value.
       double medianRangePercent = 0.20;
       CalculateMedianNodes(medianRangePercent);
       writer.WriteLine();
       writer.WriteLine("Tournament summary:");
-      DumpEngineTournamentSummary(writer, referenceId);
+      DumpEngineTournamentSummary(def);
       writer.WriteLine("Simple summary:");
-      DumpSimpleEngineTournamentSummary(writer, referenceId);
+      DumpSimpleEngineTournamentSummary(def);
       writer.WriteLine("Tournament round robin score table (W-D-L):");
       DumpRoundRobinResultTable(writer, referenceId);
       writer.WriteLine();
       writer.WriteLine("Tournament round robin Elo table (W-D-L):");
       DumpRoundRobinEloTable(writer, referenceId);
       writer.WriteLine();
+
+      Console.WriteLine();
+      if (def.ForceReferenceEngineDeterministic)
+      {
+        int totalForced = GameInfos.Sum(g => g.NumMovesForcedDeterministic);
+        Console.WriteLine($"Number of reference engine moves overridden to force deterministic: {totalForced:N0}");
+      }
     }
 
     /// <summary>
     /// Dumps full engine summary table to console.
     /// </summary>
-    void DumpEngineTournamentSummary(TextWriter writer, string referenceId)
+    void DumpEngineTournamentSummary(TournamentDef def)
     {
+      TextWriter writer = def.Logger;
+      string referenceId = def.ReferenceEngineId;
+
       int maxWidth = 140;
       PrintLine(writer, maxWidth - 1);
       List<(string, int)> header = new List<(string, int)>
@@ -85,8 +98,11 @@ namespace Ceres.Features.Tournaments
       writer.WriteLine();
     }
 
-    void DumpSimpleEngineTournamentSummary(TextWriter writer, string referenceId)
+    void DumpSimpleEngineTournamentSummary(TournamentDef def)
     {
+      TextWriter writer = def.Logger;
+      string referenceId = def.ReferenceEngineId;
+
       int maxWidth = 93;
       PrintLine(writer, maxWidth);
       List<(string, int)> header = new List<(string, int)>

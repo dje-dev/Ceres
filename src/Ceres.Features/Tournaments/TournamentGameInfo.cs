@@ -229,6 +229,13 @@ namespace Ceres.Features.Tournaments
     public long TotalNodesEngine2;
 
     /// <summary>
+    /// If this is a reference engine and ForceReferenceEngineDeterministic is true,
+    /// the number of times the bestmove was changed to force it to be deterministic.
+    /// </summary>
+    public int NumMovesForcedDeterministic;
+
+
+    /// <summary>
     /// Average score (in centipawns) across all moves.
     /// </summary>
     public float AvgScoreCentipawnsEngine1

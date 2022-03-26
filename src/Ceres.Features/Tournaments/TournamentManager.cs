@@ -257,7 +257,7 @@ namespace Ceres.Features.Tournaments
       }
       Task.WaitAll(tasks.ToArray());
 
-      parentTest.DumpTournamentSummary(Def.Logger, Def.ReferenceEngineId);
+      parentTest.DumpTournamentSummary(Def);
 
       shutdownComplete.Set();
 

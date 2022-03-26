@@ -80,6 +80,14 @@ namespace Ceres.Features.Tournaments
     public bool ShowGameMoves = true;
 
     /// <summary>
+    /// If moves played by reference engine are forced to be same (for same position)
+    /// across all games. This reduces test variance by removing non-determinism of
+    /// some engines (e.g. Stockfish when multithreaded), insuring that each opponent
+    /// encounters the same moves by Stockfish.
+    /// </summary>
+    public bool ForceReferenceEngineDeterministic = true;
+
+    /// <summary>
     /// Name PGN or EPD file containing set of starting positions to be used.
     /// If null then chess start position is used for every game.
     /// The user setting "DirPGN" is consulted to determine the source directory.
