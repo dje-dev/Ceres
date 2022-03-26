@@ -43,6 +43,11 @@ namespace Ceres.Chess
     public int GameID { get; init;}
 
     /// <summary>
+    /// Round within match of game.
+    /// </summary>
+    public int Round { get; init; }
+
+    /// <summary>
     /// Name of player with white pieces.
     /// </summary>
     public string PlayerWhite { get; init; }
@@ -158,6 +163,7 @@ namespace Ceres.Chess
     {
       Description = pgnGame.Comment;
       GameID = gameID;
+      Round = pgnGame.Headers.ContainsKey("Round") ? int.Parse(pgnGame.Headers["Round"]) : 0;
 
       pgnGame.Headers.TryGetValue("FEN", out string startFEN);
       InitialPosition = startFEN == null ? Position.StartPosition : Position.FromFEN(startFEN);
@@ -184,15 +190,23 @@ namespace Ceres.Chess
       {
         string result = pgnGame.Headers["Result"];
         if (result.Contains("1/2-1/2"))
+        {
           Result = GameResult.Draw;
+        }
         else if (result.Contains("1-0"))
+        {
           Result = GameResult.WhiteWins;
+        }
         else if (result.Contains("0-1"))
+        {
           Result = GameResult.BlackWins;
+        }
       }
       else
+      {
         Result = GameResult.Unterminated;
-      
+      }
+
       Moves = new List<Move>(pgnGame.Moves.Count);
       Position pos = InitialPosition;
       foreach (Textual.PgnFileTools.Move movePGN in pgnGame.Moves)
