@@ -153,7 +153,7 @@ namespace Ceres.Features.Visualization.AnalysisGraph
 
       ProcessStartInfo startInfo = new ProcessStartInfo();
 
-      string args = $"-Tsvg {FN_DOT} -o {FN_SVG}";
+      string args = $"-Tsvg \"{FN_DOT}\" -o \"{FN_SVG}\"";
       startInfo.FileName = GraphvizUtils.DOT_EXE;
       startInfo.WorkingDirectory = workDirectory;
       startInfo.Arguments = args;
