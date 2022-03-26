@@ -68,7 +68,10 @@ namespace Ceres.Features.UCI
       // Save the best move for last.
       if (best.BestMoveNode.IsNull)
       {
-        stats.Add(BuildStatNoSearch(statsParent, searchRootNode, best));
+        if (searchRootNode.N > 1) // otherwise unexpanded and will have been output above
+        {
+          stats.Add(BuildStatNoSearch(statsParent, searchRootNode, best));
+        }
       }
       else
       {
