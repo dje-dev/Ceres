@@ -43,6 +43,7 @@ using Ceres.Chess.LC0.NNFiles;
 using Ceres.Chess.Positions;
 using Ceres.Chess.NetEvaluation.Batch;
 using System.Runtime.InteropServices;
+using Ceres.Chess.NNEvaluators.Specifications;
 
 #endregion
 
@@ -75,15 +76,13 @@ namespace Ceres.APIExamples
     static string exeCeresPreNC() => SoftwareManager.IsLinux ? @"/raid/dev/Ceres_PreNC/artifacts/release/5.0/Ceres.dll"
                                                 : @"c:\ceres\releases\v0.95_PreNC\ceres.exe";
 
-    const string ETHERAL_EXE = @"\\synology\dev\chess\engines\Ethereal12.75-x64-popcnt-avx2.exe";
     const string SF11_EXE = @"\\synology\dev\chess\engines\stockfish_11_x64_bmi2.exe";
     const string SF12_EXE = @"\\synology\dev\chess\engines\stockfish_20090216_x64_avx2.exe";
-    static string SF14_EXE => SoftwareManager.IsLinux ? @"/raid/dev/SF14/stockfish_14_linux_x64_avx2"
-                                                      : @"\\synology\dev\chess\engines\stockfish_14_x64_avx2.exe";
+    static string SF14_EXE => SoftwareManager.IsLinux ? @"/raid/dev/SF14.1/stockfish14.1"
+                                                      : @"\\synology\dev\chess\engines\stockfish_14.1_win_x64_avx2.exe";
 
 
     static List<string> extraUCI = null;// new string[] {"setoption name Contempt value 5000" };
-    static GameEngineDef engineDefEthereal = new GameEngineDefUCI("Etheral", new GameEngineUCISpec("Etheral", ETHERAL_EXE, SF_NUM_THREADS, SF_HASH_SIZE_MB(), TB_PATH, uciSetOptionCommands: extraUCI));
     static GameEngineDef engineDefStockfish11 = new GameEngineDefUCI("SF11", new GameEngineUCISpec("SF11", SF11_EXE, SF_NUM_THREADS, SF_HASH_SIZE_MB(), TB_PATH, uciSetOptionCommands: extraUCI));
 
     public static GameEngineDef EngineDefStockfish14(int numThreads = SF_NUM_THREADS, int hashtableSize = -1) =>
@@ -116,7 +115,7 @@ namespace Ceres.APIExamples
       //      if (Marshal.SizeOf<MCTSNodeStruct>() != 64)
       //        throw new Exception("Wrong size " + Marshal.SizeOf<MCTSNodeStruct>().ToString());
       if (Marshal.SizeOf<MCTS.MTCSNodes.Struct.MCTSNodeStruct>() != 64)
-      throw new Exception("Wrong size " + Marshal.SizeOf<MCTS.MTCSNodes.Struct.MCTSNodeStruct>().ToString());
+        throw new Exception("Wrong size " + Marshal.SizeOf<MCTS.MTCSNodes.Struct.MCTSNodeStruct>().ToString());
       PreTournamentCleanup();
 
 //      RunEngineComparisons(); return;
@@ -154,23 +153,20 @@ namespace Ceres.APIExamples
       //      NET1 = "760998";
       //      NET1 = "790734;1;0;0,753723;0;1;1"; --> 0 +/-10 (new value head)
       //NET1 = "790734;0;1;1,753723;1;0;0"; // 8 +/-8 (new policy head)
-      NET1 = "790748";
-      NET2 = "790737";
-      NET1 = "ap-mish-20b-swa-1760000";// ;0.5;0.5;0.5,781561;0.5;0.5;0.5";
-      //NET2 = NET1;
-      NET2 = "781561";
+      // No obvious progress with T79, 790940 vs 790855 tests at +2 Elo (+/-7) using 1000 nodes/move
+      //      NET1 = NET2 = @"d:\weights\lczero.org\T12_1M.pb";
+      //NET1 = "ap-mish-20b-swa-2225000";
+      //NET2 = "ap-mish-20b-swa-2000000";
+      //      NET2 = "781561";
       //NET2 = "mg-40b-swa-1670000";
       //NET2 = @"d:\weights\lczero.org\ap-mish-20b-swa-1760000.pb.gz";
-      //      NET2 = "610889";
+      //NET1 =      NET2 = "610889";
       //      NET2 = @"d:\weights\lczero.org\ap-mish-20b-swa-1650000.pb.gz";
-      // 1000: 10+/-16
-      //      NET1 = "771700";
-      //      NET2 = "771257";
 
-      NET1 = "790795";
-      NET2 = "753723";
-      //NET1 = "703810";
-      //NET2 = "703810";
+      NET1 = "790993";
+      NET2 = "790994";
+      //      NET1 = "753723";
+      //      NET2 = "753723";
       //NET1 = "tinker_20b";
       //NET2 = "tinker_20b";
 
@@ -191,17 +187,17 @@ namespace Ceres.APIExamples
 
       //evalDef1 = NNEvaluatorDefFactory.FromSpecification("ONNX:tfmodelc", "GPU:0");
 
-     SearchLimit limit1 = SearchLimit.NodesForAllMoves(100_000, 1000) * 2;
+      SearchLimit limit1 = SearchLimit.NodesForAllMoves(100_000, 1000) * 2;
       //      limit1 = SearchLimit.NodesPerMove(150_000);
 
       // 140 good for 203 pairs, 300 good for 100 pairs
       //      limit1 = SearchLimit.NodesForAllMoves(200_000, 500) * 0.25f;
       //    limit1 = SearchLimit.SecondsForAllMoves(12, 0.12f);
-      limit1 = SearchLimit.NodesPerMove(1);
-      //limit1 = SearchLimit.SecondsForAllMoves(40);
+      //limit1 = SearchLimit.NodesPerMove(20_000);
+      limit1 = SearchLimit.SecondsForAllMoves(1);
       //limit1 = SearchLimit.NodesForAllMoves(1_000_000, 10_000);
-      //limit1 = SearchLimit.SecondsForAllMoves(30, 0.3f);
-      //limit1 = SearchLimit.NodesPerMove(1);
+      //limit1 = SearchLimit.SecondsForAllMoves(30, 0.3f) * 0.2f;
+      //limit1 = SearchLimit.NodesPerMove(30_000);
       //limit1 = SearchLimit.SecondsForAllMoves(60, 0.6f) * 3f;
       //ok      limit1 = SearchLimit.NodesPerMove(350_000); try test3.pgn against T75 opponent Ceres93 (in first position, 50% of time misses win near move 12
 
@@ -226,21 +222,29 @@ namespace Ceres.APIExamples
       }
 
 
-      //AdjustSelectParamsNewTune(engineDefCeres1.SelectParams);
-      //AdjustSelectParamsNewTune(engineDefCeres2.SelectParams);
+      //AdjustSelectParamsNewTuneBR(engineDefCeres1.SelectParams);
+      //AdjustSelectParamsNewTuneBR(engineDefCeres2.SelectParams);
+      //engineDefCeres1.SelectParams.UCTNonRootDenominatorExponent = 0.95f;
+      //engineDefCeres1.SelectParams.UCTRootDenominatorExponent = 0.90f;
+
+      //engineDefCeres1.SelectParams.CPUCTFactorAtRoot *= 1.5f;
+
+      // This was +2 Elo (+/-13) in 100 seconds games with late T60 *********************************
+      //engineDefCeres1.SelectParams.UCTRootNumeratorExponent = 0.52f;
+      //engineDefCeres1.SelectParams.UCTNonRootNumeratorExponent = 0.48f;
 
       //      engineDefCeres1.SearchParams.MoveFutilityPruningAggressiveness *= 0.5f;
       //      engineDefCeres2.SearchParams.MoveFutilityPruningAggressiveness *= 0;// 0.5f;
 
 
-     //       engineDefCeres1.SearchParams.TestFlag2 = true;
+      //       engineDefCeres1.SearchParams.TestFlag2 = true;
 
-//      engineDefCeres1.SearchParams.ResamplingMoveSelectionFractionMove = 1f;
-//      engineDefCeres1.SearchParams.ResamplingMoveSelectionTemperature = 1.5f;
-//      engineDefCeres1.SearchParams.EnableSearchExtension = false;
-//      engineDefCeres2.SearchParams.EnableSearchExtension = false;
+      //      engineDefCeres1.SearchParams.ResamplingMoveSelectionFractionMove = 1f;
+      //      engineDefCeres1.SearchParams.ResamplingMoveSelectionTemperature = 1.5f;
+      //      engineDefCeres1.SearchParams.EnableSearchExtension = false;
+      //      engineDefCeres2.SearchParams.EnableSearchExtension = false;
 
-//            engineDefCeres1.SearchParams.TestFlag2 = true;
+      //            engineDefCeres1.SearchParams.TestFlag2 = true;
       //      engineDefCeres1.SearchParams.Execution.FlowDualSelectors = false;
       //      engineDefCeres1.SearchParams.TranspositionRootPolicyBlendingFraction = 0.5f;
 
@@ -291,7 +295,6 @@ namespace Ceres.APIExamples
       //engineDefCeres2.SearchParams.TestFlag = true;
       //      engineDefCeres1.SelectParams.CPUCT *= 0.9f;
 
-      //      engineDefCeres1.SelectParams.CPUCTFactorAtRoot *= (1.0f / 0.8f);
 
       //      engineDefCeres2.SearchParams.EnableUncertaintyBoosting = false;
       //      engineDefCeres1.SelectParams.CPUCT *= 0.30f;
@@ -365,7 +368,7 @@ namespace Ceres.APIExamples
       GameEngineDefLC0 engineDefLC1 = ENABLE_LC0 ? new GameEngineDefLC0("LC0_0", evalDef1, forceDisableSmartPruning, null, null) : null;
       GameEngineDefLC0 engineDefLC2 = ENABLE_LC0 ? new GameEngineDefLC0("LC0_2", evalDef2, forceDisableSmartPruning, null, null) : null;
 
-      EnginePlayerDef playerEthereal = new EnginePlayerDef(engineDefEthereal, limit2);
+
       EnginePlayerDef playerStockfish11 = new EnginePlayerDef(engineDefStockfish11, limit2);
       EnginePlayerDef playerStockfish14 = new EnginePlayerDef(EngineDefStockfish14(), limit2 * 0.30f);// * 350);
       EnginePlayerDef playerLC0 = ENABLE_LC0 ? new EnginePlayerDef(engineDefLC1, limit2) : null;
@@ -402,10 +405,15 @@ namespace Ceres.APIExamples
         return;
       }
 
-
+#if NOT
+      EnginePlayerDef playerDefCSNoNN = new EnginePlayerDef(engineDefCSNoNN, limit2);
+      EnginePlayerDef playerDefCSNN1 = new EnginePlayerDef(engineDefCSNN1, limit2);
+      EnginePlayerDef playerDefCSNN50 = new EnginePlayerDef(engineDefCSNN50, limit2);
+#endif
       // **************************************************
-      EnginePlayerDef player1 = playerCeres1;
-      EnginePlayerDef player2 = playerCeres2;
+      EnginePlayerDef player1 = playerCeres1;// new EnginePlayerDef(engineDefCSNN1, SearchLimit.NodesPerMove(30));
+      EnginePlayerDef player2 = playerCeres2;// new EnginePlayerDef(EngineDefStockfish14(), SearchLimit.NodesPerMove(300 * 10_000));
+      //new EnginePlayerDef(engineDefCSNoNN, SearchLimit.NodesPerMove(300 * 10_000));
       // **************************************************
 
       TournamentGameQueueManager queueManager = null;
@@ -435,7 +443,7 @@ namespace Ceres.APIExamples
         def.AddEngine(playerStockfish14.EngineDef, limit1 * SF_TIME_SCALE);
         def.ReferenceEngineId = def.Engines[0].ID;
 
-        def.AddEngines(limit1, engineDefCeresUCI1);
+        def.AddEngines(limit1, engineDefCeres1);
         def.AddEngines(limit1, engineDefLC1);
       }
       else
@@ -450,16 +458,16 @@ namespace Ceres.APIExamples
       }
 
 
-      def.NumGamePairs = 1500;// 203;//1000;//203;//203;// 500;// 203;//203;// 102; 203
+      def.NumGamePairs = 2000;// 10_000;// 203;//1000;//203;//203;// 500;// 203;//203;// 102; 203
       def.ShowGameMoves = false;
 
       //string baseName = "tcec1819";
-      string baseName = "4mvs_+90_+99";
-      //baseName = "book-ply8-unifen-Q-0.25-0.40";
+      //string baseName = "4mvs_+90_+99";
+      string baseName = "book-ply8-unifen-Q-0.25-0.40";
       // baseName = "book-ply8-unifen-Q-0.25-0.40";
-//           baseName = "tcec_big";
-            //baseName = "endgame-16-piece-book_Q-0.0-0.6_1";
-//      baseName = "endgame-16-piece-book_Q-0.0-0.6_1";
+      //           baseName = "tcec_big";
+      //baseName = "endgame-16-piece-book_Q-0.0-0.6_1";
+      //      baseName = "endgame-16-piece-book_Q-0.0-0.6_1";
       def.OpeningsFileName = SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/openings/{baseName}.pgn"
                                                      : @$"\\synology\dev\chess\data\openings\{baseName}.pgn";
 
@@ -682,13 +690,13 @@ namespace Ceres.APIExamples
                                                : @"/mnt/syndev/chess/data/pgn/raw/ceres_big.pgn";
 
       CompareEngineParams parms = new CompareEngineParams("Resapling", pgnFileName,
-                                              5_000, // number of positions
-                                              null,//s => s.FinalPosition.PieceCount <= 15,
-                                              CompareEnginesVersusOptimal.PlayerMode.Ceres, "790550", //610034
-                                              CompareEnginesVersusOptimal.PlayerMode.Ceres, "790500",
-                                              CompareEnginesVersusOptimal.PlayerMode.Ceres, "69637",
-                                              SearchLimit.NodesPerMove(2_000), // search limit
-                                              new int[] { 0, 1, 2, 3 },
+                                              3_000, // number of positions
+                                              s => s.FinalPosition.PieceCount > 15,
+                                              CompareEnginesVersusOptimal.PlayerMode.Ceres, "ap-mish-20b-swa-2000000", //610034
+                                              CompareEnginesVersusOptimal.PlayerMode.Ceres, "781561",
+                                              CompareEnginesVersusOptimal.PlayerMode.Ceres, "610889",
+                                              SearchLimit.NodesPerMove(1000), // search limit
+                                              new int[] { 0, 1,2, 3 },
                                               s =>
                                               {
                                                 //     s.EnableUncertaintyBoosting = true;
@@ -706,7 +714,7 @@ namespace Ceres.APIExamples
                                               null,
                                               true,
                                               1,
-                                              7,
+                                              20,
                                               false, // Stockfish crosscheck
                                               null,
                                               exeCeresPreNC(),
@@ -717,8 +725,21 @@ namespace Ceres.APIExamples
       CompareEngineResultSummary result = new CompareEnginesVersusOptimal(parms).Run();
     }
 
+    static void AdjustSelectParamsNewTuneBR(ParamsSelect p)
+    {
+      p.CPUCT = 1.88f;
+      p.CPUCTAtRoot = 1.88f;
+      p.CPUCTFactor = 3.973f;
+      p.CPUCTFactorAtRoot = 3.973f;
+      p.CPUCTBase = 45669;
+      p.CPUCTBaseAtRoot = 45669;
+      p.FPUValue = 0.286f;
+      p.PolicySoftmax = 1.16f;
+    }
 
-    static void AdjustSelectParamsNewTune(ParamsSelect p)
+
+
+    static void AdjustSelectParamsNewTuneT60(ParamsSelect p)
     {
       p.CPUCT = 1.473f;
       p.CPUCTAtRoot = 1.473f;
@@ -729,7 +750,7 @@ namespace Ceres.APIExamples
       p.FPUValue = 0.2790f;
       p.PolicySoftmax = 1.3f;
     }
-    
+
 
     static void DisposeTest()
     {
