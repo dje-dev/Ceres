@@ -223,7 +223,7 @@ namespace Ceres.Chess.NNBackends.CUDA
         int numEncoderHeads = weights.numPolicyEncoderHeads;
 
         AttentionPolicyHead attentionPolicy = null;
-        attentionPolicy = new (execContext, "policy_conv1", Layers.Count, weights, 64 * 64 + 24 * 8, 1, 1, LastLayer, DefaultActivation);
+        attentionPolicy = new (execContext, "policy_conv1", Layers.Count, weights, 64 * 64 + 24 * 8, 1, 1, LastLayer, weights.encoder != null, DefaultActivation);
         Layers.Add(attentionPolicy);
 
         LayerPolicyMapCUDA policymap = new(execContext, "policy_map", Layers.Count, LastLayer, 1858, 1, 1, 64 * 64 + 8 * 24, true);

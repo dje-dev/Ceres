@@ -31,6 +31,7 @@ namespace Ceres.Chess.NNBackends.CUDA
 {
   public class AttentionPolicyHead : BaseLayerCUDA, IDisposable
   {
+    bool attentionBody;
     int embeddingOpSize;
     int wqOpSize;
     int wkOptSize;
@@ -48,15 +49,20 @@ namespace Ceres.Chess.NNBackends.CUDA
     CudaDeviceVariable<FP16> wqk_w;
     CudaDeviceVariable<FP16> wqk_b;
 
-    AttentionPolicyEncoderWeights[] encoderWeights;
+//    AttentionPolicyEncoderWeights[] encoderWeights;
+
+    LayerEncoder[] encoderWeights;
 
 
     public AttentionPolicyHead(NNBackendExecContext parent, string name, int layerIndex,
                               LC0LegacyWeights weights,
                               int c, int h, int w, 
-                              BaseLayerCUDA inputLayer, ActivationFunction activation)
-      : base(parent, name, layerIndex, c, h, w, inputLayer, activation)
+                              BaseLayerCUDA inputLayer, bool attentionBody, ActivationFunction activation)
+      : base(parent, name, layerIndex, c, h, w, inputLayer, 
+             attentionBody ? activation : ActivationFunction.SELU //// HACK : old networks without attention body (e.g: T79 use hardcoded SELU activations)
+            )
     {
+      this.attentionBody = attentionBody;
       embeddingOpSize = weights.ip_pol_b.Length;
       wqOpSize = weights.ip2_pol_b.Length;
       wkOptSize = weights.ip3_pol_b.Length;
