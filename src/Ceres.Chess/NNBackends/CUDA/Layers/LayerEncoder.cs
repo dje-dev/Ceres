@@ -25,18 +25,24 @@ namespace Ceres.Chess.NNBackends.CUDA
 {
   public class LayerEncoder : BaseLayerCUDA
   {
+    internal EncoderWeights encoderWeights;
+
     float encoder_heads;
     float embedding_op_size_;
     float alpha;
 
-    public LayerEncoder(NNBackendExecContext parent, string name, LC0LegacyWeights weights, int layerIndex,
+    public LayerEncoder(NNBackendExecContext parent, EncoderWeights encoderWeights,
+                        string name, LC0LegacyWeights weights, int layerIndex,
                         BaseLayerCUDA ip, int heads, int size, float alpha)
        : base(parent, name, layerIndex, 0, 0, 0, ip, ActivationFunction.NONE)
     {
       encoder_heads = heads;
       embedding_op_size_ = size;
       this.alpha = alpha;
+
+      this.encoderWeights = encoderWeights;
     }
+
 
     public override void LoadKernels()
     {

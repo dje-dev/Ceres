@@ -25,7 +25,7 @@ using System;
 
 namespace Ceres.Chess.NNBackends.CUDA
 {
-  public class AttentionPolicyEncoderWeights : IDisposable
+  public class EncoderWeights : IDisposable
   {
     public CudaDeviceVariable<FP16> mha_q_w;
     public CudaDeviceVariable<FP16> mha_q_b;
@@ -57,7 +57,7 @@ namespace Ceres.Chess.NNBackends.CUDA
     public int ffn_dense1_size;
     public int ffn_dense2_size;
 
-  public AttentionPolicyEncoderWeights(AttentionPolicyHead parent, in LC0LegacyWeights.EncoderLayer weights)
+  public EncoderWeights(AttentionPolicyHead parent, in LC0LegacyWeights.EncoderLayer weights)
     {
       mha_q_size = weights.mha.q_b.Length;
       mha_k_size = weights.mha.k_b.Length;

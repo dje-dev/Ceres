@@ -51,7 +51,7 @@ namespace Ceres.Chess.NNBackends.CUDA
 
 //    AttentionPolicyEncoderWeights[] encoderWeights;
 
-    LayerEncoder[] encoderWeights;
+    LayerEncoder[] encoderLayers;
 
 
     public AttentionPolicyHead(NNBackendExecContext parent, string name, int layerIndex,
@@ -96,10 +96,13 @@ namespace Ceres.Chess.NNBackends.CUDA
         LoadSoftmaxKernels();
         LoadLayerNormKernel();
 
-        encoderWeights = new AttentionPolicyEncoderWeights[weights.policyEncoders.Length];
-        for (int i = 0; i < encoderWeights.Length; i++)
+        encoderLayers = new LayerEncoder[weights.policyEncoders.Length];
+        for (int i = 0; i < encoderLayers.Length; i++)
         {
-          encoderWeights[i] = new AttentionPolicyEncoderWeights(this, in weights.policyEncoders[i]);
+          EncoderWeights encoderWeights = new EncoderWeights(this, in weights.policyEncoders[i]);
+          const int LAYER_INDEX = 0; // ???
+          encoderLayers[i] = new LayerEncoder(parent, encoderWeights, "PolAttnEnc" + i, weights, LAYER_INDEX, 
+                                              null, numEncoderHeads, embeddingOpSize, 1.0f);
         }
       }
     }
@@ -173,9 +176,10 @@ namespace Ceres.Chess.NNBackends.CUDA
       }
 
       // 2. Encoder layers
-      for (int encoderHeadIndex = 0; encoderWeights != null && encoderHeadIndex < encoderWeights.Length; encoderHeadIndex++)
+      for (int encoderHeadIndex = 0; encoderLayers != null && encoderHeadIndex < encoderLayers.Length; encoderHeadIndex++)
       {
-        AttentionPolicyEncoderWeights enc = encoderWeights[encoderHeadIndex];
+        EncoderWeights enc = encoderLayers[encoderHeadIndex].encoderWeights;
+
         int d_model = enc.mha_q_size;
         int depth = d_model / numEncoderHeads;
 
@@ -446,11 +450,11 @@ namespace Ceres.Chess.NNBackends.CUDA
       wqk_w?.Dispose();
       wqk_b?.Dispose();
 
-      if (encoderWeights != null)
+      if (encoderLayers != null)
       {
-        for (int i = 0; i < encoderWeights.Length; i++)
+        for (int i = 0; i < encoderLayers.Length; i++)
         {
-          encoderWeights[i].Dispose();
+          encoderLayers[i].Dispose();
         }
       }
     }
