@@ -61,6 +61,25 @@ namespace Pblczero
     [global::ProtoBuf.ProtoMember(2, Name = @"residual")]
     public global::System.Collections.Generic.List<Residual> Residuals { get; } = new global::System.Collections.Generic.List<Residual>();
 
+    [global::ProtoBuf.ProtoMember(25, Name = @"ip_emb_w")]
+    public Layer IpEmbW { get; set; }
+
+    [global::ProtoBuf.ProtoMember(26, Name = @"ip_emb_b")]
+    public Layer IpEmbB { get; set; }
+
+    [global::ProtoBuf.ProtoMember(27, Name = @"encoder")]
+    public global::System.Collections.Generic.List<EncoderLayer> Encoders { get; } = new global::System.Collections.Generic.List<EncoderLayer>();
+
+    [global::ProtoBuf.ProtoMember(28, Name = @"headcount")]
+    public uint Headcount
+    {
+      get => __pbn__Headcount.GetValueOrDefault();
+      set => __pbn__Headcount = value;
+    }
+    public bool ShouldSerializeHeadcount() => __pbn__Headcount != null;
+    public void ResetHeadcount() => __pbn__Headcount = null;
+    private uint? __pbn__Headcount;
+
     [global::ProtoBuf.ProtoMember(21, Name = @"pol_encoder")]
     public global::System.Collections.Generic.List<EncoderLayer> PolEncoders { get; } = new global::System.Collections.Generic.List<EncoderLayer>();
 
@@ -104,6 +123,12 @@ namespace Pblczero
     [global::ProtoBuf.ProtoMember(6, Name = @"value")]
     public ConvBlock Value { get; set; }
 
+    [global::ProtoBuf.ProtoMember(29, Name = @"ip_val_w")]
+    public Layer IpValW { get; set; }
+
+    [global::ProtoBuf.ProtoMember(30, Name = @"ip_val_b")]
+    public Layer IpValB { get; set; }
+
     [global::ProtoBuf.ProtoMember(7, Name = @"ip1_val_w")]
     public Layer Ip1ValW { get; set; }
 
@@ -118,6 +143,12 @@ namespace Pblczero
 
     [global::ProtoBuf.ProtoMember(12, Name = @"moves_left")]
     public ConvBlock MovesLeft { get; set; }
+
+    [global::ProtoBuf.ProtoMember(31, Name = @"ip_mov_w")]
+    public Layer IpMovW { get; set; }
+
+    [global::ProtoBuf.ProtoMember(32, Name = @"ip_mov_b")]
+    public Layer IpMovB { get; set; }
 
     [global::ProtoBuf.ProtoMember(13, Name = @"ip1_mov_w")]
     public Layer Ip1MovW { get; set; }

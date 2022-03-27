@@ -58,8 +58,20 @@ namespace Ceres.Chess.NNBackends.CUDA
       ip4_pol_w = WeightsDecoded(weights.Ip4PolW);
       numPolicyEncoderHeads = (int)weights.PolHeadcount;
 
+      ip_emb_w = WeightsDecoded(weights.IpEmbW);
+      ip_emb_b = WeightsDecoded(weights.IpEmbB);
+
+      encoder_head_count = (int)weights.Headcount;
+      if (encoder_head_count > 0)
+      {
+        EncoderLayer[] tempEncoders = new EncoderLayer[encoder_head_count];
+        Parallel.For(0, encoder_head_count, i => tempEncoders[i] = new EncoderLayer(this, weights.Encoders[i]));
+        encoder = tempEncoders;
+      }
 
       value = new ConvBlock(this, weights.Value);
+      ip_val_w = WeightsDecoded(weights.IpValW);
+      ip_val_b = WeightsDecoded(weights.IpValB);
       ip1_val_w = WeightsDecoded(weights.Ip1ValW);
       ip1_val_b = WeightsDecoded(weights.Ip1ValB);
       ip2_val_w = WeightsDecoded(weights.Ip2ValW);
@@ -82,6 +94,8 @@ namespace Ceres.Chess.NNBackends.CUDA
 #endif
 
       moves_left = weights.MovesLeft == null ? default : new ConvBlock(this, weights.MovesLeft);
+      ip_mov_w = WeightsDecoded(weights.IpMovW);
+      ip_mov_b = WeightsDecoded(weights.IpMovB);
       ip1_mov_w = WeightsDecoded(weights.Ip1MovW);
       ip1_mov_b = WeightsDecoded(weights.Ip1MovB);
       ip2_mov_w = WeightsDecoded(weights.Ip2MovW);
@@ -284,6 +298,15 @@ namespace Ceres.Chess.NNBackends.CUDA
     // Input convnet.
     public ConvBlock input;
 
+    // Embedding layer
+    public float[] ip_emb_w;
+    public float[] ip_emb_b;
+
+    // Encoder stack.
+    public EncoderLayer[] encoder;
+    public int encoder_head_count;
+
+
     // Residual tower.
     public Residual[] residual;
 
@@ -304,6 +327,8 @@ namespace Ceres.Chess.NNBackends.CUDA
 
     // Value head
     public ConvBlock value;
+    public float[] ip_val_w;
+    public float[] ip_val_b;
     public float[] ip1_val_w;
     public float[] ip1_val_b;
     public float[] ip2_val_w;
@@ -318,6 +343,8 @@ namespace Ceres.Chess.NNBackends.CUDA
 
     // Moves left head
     public ConvBlock moves_left;
+    public float[] ip_mov_w;
+    public float[] ip_mov_b;
     public float[] ip1_mov_w;
     public float[] ip1_mov_b;
     public float[] ip2_mov_w;
