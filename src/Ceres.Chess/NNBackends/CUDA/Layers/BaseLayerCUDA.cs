@@ -446,6 +446,25 @@ namespace Ceres.Chess.NNBackends.CUDA
 
     #endregion
 
+    #region AttentionPreprocess
+    CudaKernel kernelAttentionPreprocess = null;
+
+    protected void LoadAttentionPreprocess()
+    {
+      const string KN = "_ZN6lczero13cudnn_backend36preprocess_for_attention_body_kernelI6__halfEEvPT_PKS3_";
+      kernelAttentionPreprocess = GetKernelCommon(KN);
+    }
+    public void AttentionPreprocess(int N, CudaDeviceVariable<FP16> output, CudaDeviceVariable<FP16> input, CudaStream stream)
+    {
+      const int kInputPlanes = 112;
+      const int kNumPosEncodingChannels = 6;
+      kernelAttentionPreprocess.GridDimensions = new ManagedCuda.VectorTypes.dim3(N, 64, 1);
+      kernelAttentionPreprocess.BlockDimensions = new ManagedCuda.VectorTypes.dim3(kInputPlanes + kNumPosEncodingChannels, 1, 1);
+
+      LaunchKernel(stream, kernelAttentionPreprocess, N, output.DevicePointer, input.DevicePointer, stream.Stream.Pointer);
+    }
+
+    #endregion
 
     #region LayerNorm
 
@@ -453,7 +472,7 @@ namespace Ceres.Chess.NNBackends.CUDA
 
     protected void LoadLayerNormKernel()
     {
-      const string KN = "_ZN6lczero13cudnn_backend17layer_norm_kernelI6__halfEEviiPT_PKS3_S6_S6_S6_S6_f";
+      const string KN = "_ZN6lczero13cudnn_backend17layer_norm_kernelI6__halfEEviiPT_PKS3_S6_S6_S6_S6_ff";
       kernelLayerNorm = GetKernelCommon(KN);
     }
 
@@ -461,7 +480,7 @@ namespace Ceres.Chess.NNBackends.CUDA
                           CudaDeviceVariable<FP16> output, CudaDeviceVariable<FP16> input,
                           CudaDeviceVariable<FP16> bias, CudaDeviceVariable<FP16> skip,
                           CudaDeviceVariable<FP16> gammas, CudaDeviceVariable<FP16> betas,
-                          float ep, CudaStream stream)
+                          float ep, float alpha, CudaStream stream)
     {
       if (C % 4 != 0 || C > 4096)
       { 
@@ -479,7 +498,7 @@ namespace Ceres.Chess.NNBackends.CUDA
       kernelLayerNorm.GridDimensions = new ManagedCuda.VectorTypes.dim3(gridDimX, gridDimY, gridDimZ);
 
       LaunchKernel(stream, kernelLayerNorm, N, C, output.DevicePointer, input.DevicePointer, bias.DevicePointer, 
-                   skip.DevicePointer, gammas.DevicePointer, betas.DevicePointer, ep, stream.Stream.Pointer);
+                   skip.DevicePointer, gammas.DevicePointer, betas.DevicePointer, ep, alpha, stream.Stream.Pointer);
     }
 
     

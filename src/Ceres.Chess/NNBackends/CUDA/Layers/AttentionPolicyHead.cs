@@ -274,7 +274,7 @@ namespace Ceres.Chess.NNBackends.CUDA
           // scratch2/scratch1 -> scratch0
           LayerNorm(N * 64, embeddingOpSize, scratch0, scratch2,
                           enc.mha_dense_b, scratch1, enc.ln1_gammas,
-                          enc.ln1_betas, 1e-6f, stream);
+                          enc.ln1_betas, 1e-6f, 1.0f, stream);
 
           // #FFN dense 1, scratch0 -> scratch1
           num_inputs = embeddingOpSize;
@@ -306,7 +306,7 @@ namespace Ceres.Chess.NNBackends.CUDA
 
           LayerNorm(N * 64, embeddingOpSize, scratch1, scratch2,
                       enc.ffn_dense2_b, scratch0, enc.ln2_gammas,
-                      enc.ln2_betas, 1e-6f, stream);
+                      enc.ln2_betas, 1e-6f, 1.0f, stream);
         }
       }
 

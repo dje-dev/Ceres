@@ -30,6 +30,8 @@
 #include "cuda_common.h"
 #include "winograd_helper.inc"
 
+#include "neural/shared/attention_policy_map.h"
+
 namespace lczero {
 namespace cudnn_backend {
 namespace {
@@ -145,6 +147,14 @@ void addBiasBatched(T* output, const T* input, const T* bias, int Batch, int N,
     case SELU:
       addBiasBatched_kernel<T, SELU><<<gridDim, blockDim, 0, stream>>>(
           output, input, bias, N, C);
+      break;
+    case MISH:
+      addBiasBatched_kernel<T, MISH>
+          <<<gridDim, blockDim, 0, stream>>>(output, input, bias, N, C);
+      break;
+    case RELU:
+      addBiasBatched_kernel<T, RELU>
+          <<<gridDim, blockDim, 0, stream>>>(output, input, bias, N, C);
       break;
     default:
       throw Exception(
@@ -784,7 +794,7 @@ __device__ __forceinline__ float shared_sum_for_layer_norm(float x) {
 template <typename T>
 __global__ void layer_norm_kernel(int N, int C, T* output, const T* input, const T* bias,
                                   const T* skip, const T* gammas,
-                                  const T* betas, float ep) {
+                                  const T* betas, float ep, float alpha) {
   int n = blockIdx.x * blockDim.z + threadIdx.z;
   if (n >= N) return;
   int c = (threadIdx.y * 32 + threadIdx.x) * 4;
@@ -827,7 +837,7 @@ __global__ void layer_norm_kernel(int N, int C, T* output, const T* input, const
   float s = 0;
   if (!oobThread)
     for (int i = 0; i < 4; i++) {
-      val[i] += b[i] + sk[i];
+      val[i] += b[i] + sk[i] * alpha;
       s += val[i];
     }
   
@@ -869,7 +879,7 @@ __global__ void layer_norm_kernel(int N, int C, T* output, const T* input, const
 // normalization is done across C dimension (i.e, sums and std deviations taken over elements in C dim)
 template <typename T>
 void LayerNorm(int N, int C, T* output, const T* input, const T* bias,
-               const T* skip, const T* gammas, const T* betas, float ep,
+               const T* skip, const T* gammas, const T* betas, float ep, float alpha,
                cudaStream_t stream) {
   // process 4 elements per thread to achieve close to peak memory bandwidth
   if (C % 4 != 0) throw Exception("unsupported filter size");
@@ -885,7 +895,7 @@ void LayerNorm(int N, int C, T* output, const T* input, const T* bias,
   gridDim.z = 1;
 
   layer_norm_kernel<T><<<gridDim, blockDim, 0, stream>>>(
-      N, C, output, input, bias, skip, gammas, betas, ep);
+      N, C, output, input, bias, skip, gammas, betas, ep, alpha);
 
   ReportCUDAErrors(cudaGetLastError());
 }
@@ -983,6 +993,41 @@ void ComputePromotionLogits(int N, int C, T* output, const T* keys,
   promotion_logits_kernel<T>
       <<<N, blockDim, 0, stream>>>(C, output, keys, ppo, policy_attn_logits);
 }
+
+template <typename T>
+__global__ void preprocess_for_attention_body_kernel(T* output, const T* input) {
+  int n = blockIdx.x;
+  int hw = blockIdx.y;
+  int c = threadIdx.x;
+
+  T op;
+  if (c >= kInputPlanes) 
+  {
+    // concatenate from fixed pos encoding array
+    op = (T) (kPosEncoding[hw][c - kInputPlanes]);
+  } else {
+
+    op = input[n * 64 * kInputPlanes + c * 64 + hw];    // nchw
+  }
+
+  constexpr int outputC = kInputPlanes + kNumPosEncodingChannels;
+
+  // convert to nhwc
+  output[n * 64 * outputC + hw * outputC + c] = op;
+}
+
+template <typename T>
+void inputPreprocessForAttentionBody(T* output, const T* input, int N,
+                                     cudaStream_t stream) {
+  // N * 64 blocks
+  // (kInputPlanes + 6) threads
+  // Each thread computes a single output element
+  dim3 gridSize = dim3(N, 64);
+  int blockSize = kInputPlanes + kNumPosEncodingChannels;
+  preprocess_for_attention_body_kernel<T>
+      <<<gridSize, blockSize, 0, stream>>>(output, input);
+}
+
 
 // Template instantiation.
 template void copyTypeConverted<half, float>(half* op, float* ip, int N,
@@ -1178,11 +1223,11 @@ template void Softmax<float>(int N, int C, float* output, const float* input,
 template void LayerNorm<half>(int N, int C, half* output, const half* input,
                               const half* bias, const half* skip,
                               const half* gammas, const half* betas, float ep,
-                              cudaStream_t stream);
+                              float alpha, cudaStream_t stream);
 template void LayerNorm<float>(int N, int C, float* output, const float* input,
                                const float* bias, const float* skip,
                                const float* gammas, const float* betas,
-                               float ep, cudaStream_t stream);
+                               float ep, float alpha, cudaStream_t stream);
 
 template void ComputePromotionLogits<half>(int N, int C, half* output,
                                            const half* keys, const half* ppo,
@@ -1205,5 +1250,13 @@ template void convertNCHWtoNHWC<half, half>(half* output_tensor,
                                             const half* input_tensor, int Nin,
                                             int Cin, int Nout, int Cout, int H,
                                             int W);
+
+template void inputPreprocessForAttentionBody<half>(half* output,
+                                                    const half* input,
+                                                    int N, cudaStream_t stream);
+
+template void inputPreprocessForAttentionBody<float>(float* output,
+                                                     const float* input, int N,
+                                                     cudaStream_t stream);
 }  // namespace cudnn_backend
 }  // namespace lczero
