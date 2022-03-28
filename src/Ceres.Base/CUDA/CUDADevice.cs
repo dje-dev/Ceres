@@ -94,6 +94,11 @@ namespace Ceres.Base.CUDA
       if (!cachedKernels.TryGetValue(resource + kernelName, out ret))
       {
         ret = cachedKernels[resource + kernelName] = DoLoadKernel(assembly, Context, resource, kernelName);
+
+        if (ret == null)
+        {
+          throw new Exception($"CUDA kernel {kernelName} not found in resource {resource}");
+        }
       }
       return ret;
     }

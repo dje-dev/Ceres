@@ -112,8 +112,6 @@ namespace Ceres.Chess.NNBackends.CUDA
     CudaKernel kernelAddVectors;
     CudaKernel kernelPromotionLogits;
     CudaKernel kernelNCHWtoNHWC;
-    CudaKernel kernelAddBiasBatchedNone;
-    CudaKernel kernelAddBiasBatchedSELU;
 
     public override void LoadKernels()
     {
@@ -123,11 +121,10 @@ namespace Ceres.Chess.NNBackends.CUDA
       const string knPromotion = "_ZN6lczero13cudnn_backend23promotion_logits_kernelI6__halfEEviPT_PKS3_S6_S6_";
       kernelPromotionLogits = Parent.Device.GetKernel(Parent.PTXAssembly, COMMON_KERNELS_PTX_NAME, knPromotion);
 
-        const string knNCHWtoNHWC = "_ZN6lczero13cudnn_backend17NCHWtoNHWC_kernelI6__halfS2_EEvPT_PKT0_iiiiii";
+      const string knNCHWtoNHWC = "_ZN6lczero13cudnn_backend17NCHWtoNHWC_kernelI6__halfS2_EEvPT_PKT0_iiiiii";
       kernelNCHWtoNHWC = Parent.Device.GetKernel(Parent.PTXAssembly, COMMON_KERNELS_PTX_NAME, knNCHWtoNHWC);
 
-      kernelAddBiasBatchedNone = GetAddBiasBatchedKernel(ActivationFunction.NONE);
-      kernelAddBiasBatchedSELU = GetAddBiasBatchedKernel(ActivationFunction.SELU);
+      LoadAddBiasBatchedKernels();
     }
 
 
@@ -178,146 +175,14 @@ namespace Ceres.Chess.NNBackends.CUDA
       // 2. Encoder layers
       for (int encoderHeadIndex = 0; encoderLayers != null && encoderHeadIndex < encoderLayers.Length; encoderHeadIndex++)
       {
-        EncoderWeights enc = encoderLayers[encoderHeadIndex].encoderWeights;
-
-        int d_model = enc.mha_q_size;
-        int depth = d_model / numEncoderHeads;
-
-        CudaDeviceVariable<FP16> mha_q;
-        CudaDeviceVariable<FP16> mha_k;
-        CudaDeviceVariable<FP16> mha_v;
-
-        unsafe
-        {
-          int num_inputs = embeddingOpSize;
-          int num_outputs = d_model;
-          int batch = N * 64;
-
-          mha_q = scratch0;
-          mha_k = new CudaDeviceVariable<FP16>(mha_q.DevicePointer + num_outputs * batch * Marshal.SizeOf<FP16>()); // mha_q + num_outputs * batch;
-          mha_v = new CudaDeviceVariable<FP16>(mha_k.DevicePointer + num_outputs * batch * Marshal.SizeOf<FP16>());// mha_k + num_outputs * batch;
-          half halfZero = new half(0);
-          half halfOne = new half(1);
-          void* ptrHalfZero = &halfZero;
-          void* ptrHalfOne = &halfOne;
-          IntPtr ipHalfZero = (IntPtr)ptrHalfZero;
-          IntPtr ipHalfOne = (IntPtr)ptrHalfOne;
-
-          CudaBlasNativeMethods.cublasGemmStridedBatchedEx(Parent.CuBlas.CublasHandle, Operation.Transpose, Operation.NonTranspose,
-                                                           num_outputs, batch, num_inputs,
-                                                           ipHalfOne, enc.mha_qkv_w.DevicePointer, cudaDataType.CUDA_R_16F,
-                                                           num_inputs, num_inputs * num_outputs,
-                                                           pol_embedding.DevicePointer, cudaDataType.CUDA_R_16F, num_inputs, 0,
-                                                           ipHalfZero, mha_q.DevicePointer, cudaDataType.CUDA_R_16F, num_outputs, num_outputs * batch, 3,
-                                                           cudaDataType.CUDA_R_16F, GemmAlgo.Default);
-
-          AddBiasBatched(kernelAddBiasBatchedNone, mha_q, mha_q, enc.mha_qkv_b, 3, batch, num_outputs, stream);
-
-          int encoder_dff = enc.ffn_dense1_size;
-
-          // shape(k)[-1] = depth
-          float factor = 1.0f / MathF.Sqrt((float)depth);
-
-          // matmul_qk = tf.matmul(q, k, transpose_b=True)
-          for (int i=0; i<numEncoderHeads;i++)
-          {
-            unsafe
-            {
-              half halfFactor = new half(factor);
-              void* ptrHalfFactor = &halfFactor;
-              IntPtr ipHalfFactor = (IntPtr)ptrHalfFactor;
-
-              int offset = i * depth;
-              // layout of the output: encoder_heads_ * Batch * 64 * 64
-              int outOffset = i * N * 64 * 64;
-
-              CudaDeviceVariable<FP16> ptr1 = new CudaDeviceVariable<FP16>(mha_k.DevicePointer + offset * Marshal.SizeOf<FP16>());
-              CudaDeviceVariable<FP16> ptr2 = new CudaDeviceVariable<FP16>(mha_q.DevicePointer + offset * Marshal.SizeOf<FP16>());
-              CudaDeviceVariable<FP16> ptr3 = new CudaDeviceVariable<FP16>(scratch2.DevicePointer + outOffset * Marshal.SizeOf<FP16>());
-              CudaBlasNativeMethods.cublasGemmStridedBatchedEx(Parent.CuBlas.CublasHandle, Operation.Transpose, Operation.NonTranspose,
-                                                   64, 64, depth,
-                                                   ipHalfFactor,
-                                                   ptr1.DevicePointer, cudaDataType.CUDA_R_16F, policy_d_model_, 64 * policy_d_model_,
-                                                   ptr2.DevicePointer, cudaDataType.CUDA_R_16F, policy_d_model_, 64 * policy_d_model_,
-                                                   ipHalfZero,
-                                                   ptr3.DevicePointer, cudaDataType.CUDA_R_16F, 64, 64 * 64, N,
-                                                   cudaDataType.CUDA_R_16F, GemmAlgo.Default);
-            }
-          }
-
-
-          // attention_weights = tf.nn.softmax(scaled_attention_logits, axis = -1)
-          // attention_weights -> scratch2
-          Softmax(numEncoderHeads * N * 64, 64, scratch2, scratch2, stream);
-
-          // output = tf.matmul(attention_weights, v)
-          for (int i = 0; i < numEncoderHeads; i++)
-          {
-            int offset = i * depth;  // for output and "v" matrix
-            // layout: encoder_heads_ * Batch*64*64
-            int weightsOffset = i * N * 64 * 64;
-            CudaDeviceVariable<FP16> ptr1 = new CudaDeviceVariable<FP16>(mha_v.DevicePointer + offset * Marshal.SizeOf<FP16>());
-            CudaDeviceVariable<FP16> ptr2 = new CudaDeviceVariable<FP16>(scratch2.DevicePointer + weightsOffset * Marshal.SizeOf<FP16>());
-            CudaDeviceVariable<FP16> ptr3 = new CudaDeviceVariable<FP16>(scratch3.DevicePointer + offset * Marshal.SizeOf<FP16>());
-            CudaBlasNativeMethods.cublasGemmStridedBatchedEx(Parent.CuBlas.CublasHandle, Operation.NonTranspose, Operation.NonTranspose,
-                                                 depth, 64, 64,
-                                                 ipHalfOne, 
-                                                 ptr1.DevicePointer, cudaDataType.CUDA_R_16F, policy_d_model_, 64 * policy_d_model_,
-                                                 ptr2.DevicePointer, cudaDataType.CUDA_R_16F, 64,              64 * 64,
-                                                 ipHalfZero, 
-                                                 ptr3.DevicePointer, cudaDataType.CUDA_R_16F, d_model, 64*d_model,
-                                                 N, cudaDataType.CUDA_R_16F, GemmAlgo.Default);
-          }
-
-          // #final dense layer (mha_dense), scratch3 -> scratch2
-          num_inputs = d_model;
-          num_outputs = embeddingOpSize;
-          batch = N * 64;
-          CudaBlasNativeMethods.cublasGemmEx(Parent.CuBlas.CublasHandle, Operation.Transpose, Operation.NonTranspose,
-                                             num_outputs, batch, num_inputs,
-                                             ipHalfOne, enc.mha_dense_w.DevicePointer, cudaDataType.CUDA_R_16F, num_inputs,
-                                             scratch3.DevicePointer, cudaDataType.CUDA_R_16F, num_inputs,
-                                             ipHalfZero, scratch2.DevicePointer, cudaDataType.CUDA_R_16F, num_outputs,
-                                             ComputeType.Compute16F, GemmAlgo.Default);
-
-          // LN1: skip connection and layer normalization (also bias add of prev gemm)
-          // scratch2/scratch1 -> scratch0
-          LayerNorm(N * 64, embeddingOpSize, scratch0, scratch2,
-                          enc.mha_dense_b, scratch1, enc.ln1_gammas,
-                          enc.ln1_betas, 1e-6f, 1.0f, stream);
-
-          // #FFN dense 1, scratch0 -> scratch1
-          num_inputs = embeddingOpSize;
-          num_outputs = encoder_dff;
-          batch = N * 64;
-          CudaBlasNativeMethods.cublasGemmEx(Parent.CuBlas.CublasHandle, Operation.Transpose, Operation.NonTranspose,
-                                             num_outputs, batch, num_inputs,
-                                             ipHalfOne, 
-                                             enc.ffn_dense1_w.DevicePointer, cudaDataType.CUDA_R_16F, num_inputs,
-                                             scratch0.DevicePointer, cudaDataType.CUDA_R_16F, num_inputs,
-                                             ipHalfZero, 
-                                             scratch1.DevicePointer, cudaDataType.CUDA_R_16F, num_outputs,
-                                             ComputeType.Compute16F, GemmAlgo.Default);
-
-          AddBiasBatched(kernelAddBiasBatchedSELU, scratch1, scratch1, enc.ffn_dense1_b, 1, batch, num_outputs, stream);
-
-          // #FFN dense 2, scratch1 -> scratch2
-          num_inputs = encoder_dff;
-          num_outputs = embeddingOpSize;
-          batch = N * 64;
-          CudaBlasNativeMethods.cublasGemmEx(Parent.CuBlas.CublasHandle, Operation.Transpose, Operation.NonTranspose,
-                                             num_outputs, batch, num_inputs,
-                                             ipHalfOne, 
-                                             enc.ffn_dense2_w.DevicePointer, cudaDataType.CUDA_R_16F, num_inputs,
-                                             scratch1.DevicePointer, cudaDataType.CUDA_R_16F, num_inputs,
-                                             ipHalfZero, 
-                                             scratch2.DevicePointer, cudaDataType.CUDA_R_16F, num_outputs,
-                                             ComputeType.Compute16F, GemmAlgo.Default);
-
-          LayerNorm(N * 64, embeddingOpSize, scratch1, scratch2,
-                      enc.ffn_dense2_b, scratch0, enc.ln2_gammas,
-                      enc.ln2_betas, 1e-6f, 1.0f, stream);
-        }
+#if NOT
+    protected override void DoEval(CudaStream stream, int N, 
+                                   CudaDeviceVariable<FP16> scratch1, CudaDeviceVariable<FP16> scratch0, 
+                                   CudaDeviceVariable<FP16> scratch2,
+                                   CudaDeviceVariable<FP16> scratch3, long scratch_size, 
+                                   CudaDeviceVariable<FP16> scratchSecondHalf)
+#endif
+        encoderLayers[encoderHeadIndex].Eval(stream, N, scratch1, scratch0, scratch2, scratch3, 0, null);
       }
 
       CudaDeviceVariable<FP16> wq;

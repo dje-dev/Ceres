@@ -446,7 +446,21 @@ namespace Ceres.Chess.NNBackends.CUDA
 
     #endregion
 
+    #region AddBiasBatched
+
+    protected CudaKernel kernelAddBiasBatchedNone;
+    protected CudaKernel kernelAddBiasBatchedSELU;
+
+    protected void LoadAddBiasBatchedKernels()
+    {
+      kernelAddBiasBatchedNone = GetAddBiasBatchedKernel(ActivationFunction.NONE);
+      kernelAddBiasBatchedSELU = GetAddBiasBatchedKernel(ActivationFunction.SELU);
+    }
+
+    #endregion
+
     #region AttentionPreprocess
+
     CudaKernel kernelAttentionPreprocess = null;
 
     protected void LoadAttentionPreprocess()
