@@ -19,6 +19,7 @@ using ManagedCuda;
 using Pblczero;
 using Ceres.Base.Math;
 using System.Diagnostics;
+using Ceres.Base.DataTypes;
 
 #endregion
 
@@ -70,6 +71,9 @@ namespace Ceres.Chess.NNBackends.CUDA
     /// </summary>
     public readonly bool PolicyIsAttention;
 
+    public readonly bool attn_body_;
+    public readonly int  num_encoder_blocks_;
+
     /// <summary>
     /// Default activation function.
     /// </summary>
@@ -104,7 +108,17 @@ namespace Ceres.Chess.NNBackends.CUDA
       SaveActivations = saveActivations;
       NumFilters = (int)weights.input.biases.Length;
       NumBlocks = (int)weights.residual.Length;
-      HasSE = weights.residual[0].has_se;
+      HasSE = NumBlocks > 0 && weights.residual[0].has_se;
+
+
+      num_encoder_blocks_ = weights.encoder == null ? 0 :weights.encoder.Length;
+      attn_body_ = (num_encoder_blocks_ > 0);
+      if (attn_body_)
+      {
+        Debug.Assert(weights.ip_emb_b.Length > 0);
+Console.WriteLine($"\nNum encoder blocks: {num_encoder_blocks_}, num policy encoder blocks: {weights.policyEncoders.Length}\n");
+      }
+
 
       this.referenceLayers = referenceLayers;
 
@@ -185,34 +199,51 @@ namespace Ceres.Chess.NNBackends.CUDA
 
       // Build the network, and copy the weights to GPU memory.
 
-      // Input.
-      FusedWinogradConvSELayerCUDA inputConv = new (execContext, "InputConv1", Layers.Count, NumFilters, 8, 8, 
-                                                    null, kNumInputPlanes, true, false, false, 0, true, activation);
-      inputConv.LoadWeights(execContext.Stream2, weights.input.weights, weights.input.biases);
-      Layers.Add(inputConv);
 
-      for (int block = 0; block < NumBlocks; block++)
+      BaseLayerCUDA resi_last_ = null;
+      BaseLayerCUDA encoder_last_ = null;
+
+      if (NumBlocks > 0)
       {
-        int se_k = HasSE ? (int)weights.residual[block].se.b1.Length : 0;
+        // Input.
+        FusedWinogradConvSELayerCUDA inputConv = new(execContext, "InputConv1", Layers.Count, NumFilters, 8, 8,
+                                                      null, kNumInputPlanes, true, false, false, 0, true, activation);
+        inputConv.LoadWeights(execContext.Stream2, weights.input.weights, weights.input.biases);
+        Layers.Add(inputConv);
 
-        ResidualBlockBaseCUDA layer = new ResidualBlockFusedCUDA(execContext, DeviceComputeCapabilityMajor,
-                                                                 "residual_fused_" + block, Layers.Count, LastLayer, 
-                                                                 NumFilters, HasSE, se_k, block == 0, 
-                                                                 block == (NumBlocks - 1), execContext.SharedMemPerBlock, activation);
-
-        layer.LoadWeights0(execContext.Stream2, weights.residual[block].conv1.weights, weights.residual[block].conv1.biases);
-        layer.LoadWeights1(execContext.Stream2, weights.residual[block].conv2.weights, weights.residual[block].conv2.biases);
-
-        if (HasSE)
+        for (int block = 0; block < NumBlocks; block++)
         {
-          layer.LoadSEWeights(weights.residual[block].se.w1, weights.residual[block].se.b1,
-                              weights.residual[block].se.w2, weights.residual[block].se.b2);
+          int se_k = HasSE ? (int)weights.residual[block].se.b1.Length : 0;
+
+          ResidualBlockBaseCUDA layer = new ResidualBlockFusedCUDA(execContext, DeviceComputeCapabilityMajor,
+                                                                   "residual_fused_" + block, Layers.Count, LastLayer,
+                                                                   NumFilters, HasSE, se_k, block == 0,
+                                                                   block == (NumBlocks - 1), execContext.SharedMemPerBlock, activation);
+
+          layer.LoadWeights0(execContext.Stream2, weights.residual[block].conv1.weights, weights.residual[block].conv1.biases);
+          layer.LoadWeights1(execContext.Stream2, weights.residual[block].conv2.weights, weights.residual[block].conv2.biases);
+
+          if (HasSE)
+          {
+            layer.LoadSEWeights(weights.residual[block].se.w1, weights.residual[block].se.b1,
+                                weights.residual[block].se.w2, weights.residual[block].se.b2);
+          }
+
+          Layers.Add(layer);
         }
 
-        Layers.Add(layer);
+        resi_last_ = LastLayer;
       }
 
-      BaseLayerCUDA resi_last_ = LastLayer;
+      if (attn_body_)
+      {
+        throw new NotImplementedException();
+        BaseLayerCUDA attention_body = default;// new AttentionBody(weights, scratch_mem_, act, numBlocks_,
+                                               //                   numBlocks_ > 0 ? kNumFilters : kInputPlanes);
+        Layers.Add(attention_body);
+
+        encoder_last_ = LastLayer;
+      }
 
       // Policy head.
       if (PolicyIsAttention)
@@ -223,7 +254,7 @@ namespace Ceres.Chess.NNBackends.CUDA
         int numEncoderHeads = weights.numPolicyEncoderHeads;
 
         AttentionPolicyHead attentionPolicy = null;
-        attentionPolicy = new (execContext, "policy_conv1", Layers.Count, weights, 64 * 64 + 24 * 8, 1, 1, LastLayer, weights.encoder != null, DefaultActivation);
+        attentionPolicy = new (execContext, "policy_conv1", Layers.Count, weights, 64 * 64 + 24 * 8, 1, 1, LastLayer, attn_body_, DefaultActivation);
         Layers.Add(attentionPolicy);
 
         LayerPolicyMapCUDA policymap = new(execContext, "policy_map", Layers.Count, LastLayer, 1858, 1, 1, 64 * 64 + 8 * 24, true);
@@ -245,6 +276,8 @@ namespace Ceres.Chess.NNBackends.CUDA
       }
       else if (PolicyIsConvolutional)
       {
+        Debug.Assert(!attn_body_);  // not supported with attention body
+
         FusedWinogradConvSELayerCUDA conv1;
         conv1 = new(execContext, "policy_conv1", Layers.Count, NumFilters, 8, 8, resi_last_, NumFilters, true, false, false, 0, false, activation);
         conv1.LoadWeights(execContext.Stream, weights.policy1.weights, weights.policy1.biases);
@@ -263,6 +296,8 @@ namespace Ceres.Chess.NNBackends.CUDA
       }
       else
       {
+        Debug.Assert(!attn_body_);  // not supported with attention body
+
         LayerConv1CUDA convPol = new(execContext, "policy_conv", Layers.Count, resi_last_, weights.policy.biases.Length, 8, 8, NumFilters, true, activation);
         convPol.LoadWeights(weights.policy.weights, weights.policy.biases);
         Layers.Add(convPol);
@@ -272,44 +307,56 @@ namespace Ceres.Chess.NNBackends.CUDA
         Layers.Add(FCPol);
       }
 
-      BaseLayerCUDA policy_out_ = LastLayer;
-
       // Value head.
-      LayerConv1CUDA convVal = new(execContext, "value_conv", Layers.Count, resi_last_, weights.value.biases.Length, 8, 8, NumFilters, true, activation);
-      convVal.LoadWeights(weights.value.weights, weights.value.biases);
-      Layers.Add(convVal);
+      if (attn_body_)
+      {
+        throw new NotImplementedException();
+        BaseLayerCUDA valueEmbedding = default;// new LayerEmbedding(encoder_last_, weights.ip_val_w, weights.ip_val_b, scratch_mem_, act);
+        Layers.Add(valueEmbedding);
+      }
+      else
+      {
+        LayerConv1CUDA convVal = new(execContext, "value_conv", Layers.Count, resi_last_, weights.value.biases.Length, 8, 8, NumFilters, true, activation);
+        convVal.LoadWeights(weights.value.weights, weights.value.biases);
+        Layers.Add(convVal);
 
-      LayerFCCUDA FCVal1 = new(execContext, "value_fc1", Layers.Count, LastLayer, weights.ip1_val_b.Length, 1, 1, true, activation);
-      FCVal1.LoadWeights(weights.ip1_val_w, weights.ip1_val_b);
-      Layers.Add(FCVal1);
+        LayerFCCUDA FCVal1 = new(execContext, "value_fc1", Layers.Count, LastLayer, weights.ip1_val_b.Length, 1, 1, true, activation);
+        FCVal1.LoadWeights(weights.ip1_val_w, weights.ip1_val_b);
+        Layers.Add(FCVal1);
 
-      bool fc2_tanh = !HasWDL;
-      BaseLayerCUDA.ActivationFunction activationValue2 = fc2_tanh ? BaseLayerCUDA.ActivationFunction.TANH : BaseLayerCUDA.ActivationFunction.NONE;
-      LayerFCCUDA FCVal2 = new(execContext, "value_fc2", Layers.Count, LastLayer, weights.ip2_val_b.Length, 1, 1, true, activationValue2);
-      FCVal2.LoadWeights(weights.ip2_val_w, weights.ip2_val_b);
-      Layers.Add(FCVal2);
+        bool fc2_tanh = !HasWDL;
+        BaseLayerCUDA.ActivationFunction activationValue2 = fc2_tanh ? BaseLayerCUDA.ActivationFunction.TANH : BaseLayerCUDA.ActivationFunction.NONE;
+        LayerFCCUDA FCVal2 = new(execContext, "value_fc2", Layers.Count, LastLayer, weights.ip2_val_b.Length, 1, 1, true, activationValue2);
+        FCVal2.LoadWeights(weights.ip2_val_w, weights.ip2_val_b);
+        Layers.Add(FCVal2);
+      }
 
-      var value_out_ = LastLayer;
 
       // Moves left head
-      BaseLayerCUDA moves_left_out_ = null;
       if (HasMLH)
       {
-        LayerConv1CUDA convMov = new(execContext, "mlh_conv", Layers.Count, resi_last_, weights.moves_left.biases.Length, 8, 8, NumFilters, true, activation);
-        convMov.LoadWeights(weights.moves_left.weights, weights.moves_left.biases);
-        Layers.Add(convMov);
+        if (attn_body_)
+        {
+          throw new NotImplementedException();
+          BaseLayerCUDA mlhEmbedding = default;// new EmbeddingLayer( encoder_last_, weights.ip_mov_w, weights.ip_mov_b, scratch_mem_, act);
+          Layers.Add(mlhEmbedding);
+        }
+        else
+        {
+          LayerConv1CUDA convMov = new(execContext, "mlh_conv", Layers.Count, resi_last_, weights.moves_left.biases.Length, 8, 8, NumFilters, true, activation);
+          convMov.LoadWeights(weights.moves_left.weights, weights.moves_left.biases);
+          Layers.Add(convMov);
 
-        LayerFCCUDA FCMov1 = new(execContext, "mlh_fc1", Layers.Count, LastLayer, weights.ip1_mov_b.Length, 1, 1, true, activation);
-        FCMov1.LoadWeights(weights.ip1_mov_w, weights.ip1_mov_b);
-        Layers.Add(FCMov1);
+          LayerFCCUDA FCMov1 = new(execContext, "mlh_fc1", Layers.Count, LastLayer, weights.ip1_mov_b.Length, 1, 1, true, activation);
+          FCMov1.LoadWeights(weights.ip1_mov_w, weights.ip1_mov_b);
+          Layers.Add(FCMov1);
 
-        LayerFCCUDA FCMov2 = new(execContext, "mlh_fc2", Layers.Count, LastLayer, 1, 1, 1, true, activation);
-        FCMov2.LoadWeights(weights.ip2_mov_w, weights.ip2_mov_b);
-        Layers.Add(FCMov2);
+          LayerFCCUDA FCMov2 = new(execContext, "mlh_fc2", Layers.Count, LastLayer, 1, 1, 1, true, activation);
+          FCMov2.LoadWeights(weights.ip2_mov_w, weights.ip2_mov_b);
+          Layers.Add(FCMov2);
+        }
+      }     
 
-        moves_left_out_ = LastLayer;
-      }
-      
       weightsAlreadyLoaded = true;
     }
 
@@ -320,15 +367,41 @@ namespace Ceres.Chess.NNBackends.CUDA
     {
       int l = 0;
 
-      // Input.
-      Layers[l++].Eval(stream, batchSize, inputs.Tensors[1], inputs.Tensors[0], null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // input conv
+      CudaDeviceVariable<FP16> flow = inputs.Tensors[0];
+      CudaDeviceVariable<FP16> spare1 = inputs.Tensors[1];
+      CudaDeviceVariable<FP16> spare2 = inputs.Tensors[2];
 
-      // Residual blocks
-      for (int block = 0; block < NumBlocks; block++)
+      if (NumBlocks > 0)
       {
-        Layers[l++].Eval(stream, batchSize, inputs.Tensors[2], inputs.Tensors[1], null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);
+        // Input.
+        Layers[l++].Eval(stream, batchSize, inputs.Tensors[1], inputs.Tensors[0], null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // input conv
+
+        // Residual blocks
+        for (int block = 0; block < NumBlocks; block++)
+        {
+          Layers[l++].Eval(stream, batchSize, inputs.Tensors[2], inputs.Tensors[1], null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);
+        }
+
+
+        flow = inputs.Tensors[2];
+        spare1 = inputs.Tensors[0];
+        spare2 = inputs.Tensors[1];
       }
 
+      if (attn_body_)
+      {
+        throw new NotImplementedException();
+#if not
+        network_[l++]->Eval(batchSize, tensor_mem[1],
+                            (numBlocks_ > 0) ? tensor_mem[2] : tensor_mem[0],
+                            (numBlocks_ > 0) ? tensor_mem[0] : tensor_mem[2],
+                            scratch_mem, scratch_size_, nullptr,
+                            cublas, stream);  // Entire attention body of the network
+#endif
+        flow = inputs.Tensors[1];
+        spare1 = inputs.Tensors[0];
+        spare2 = inputs.Tensors[2];
+      }
       // Policy head.
       if (PolicyIsAttention)
       {
@@ -337,8 +410,8 @@ namespace Ceres.Chess.NNBackends.CUDA
       network_[l++]->Eval(batchSize, tensor_mem[1], tensor_mem[0], nullptr, scratch_mem, scratch_size_, nullptr, cublas, stream);  // policy map layer
       copyTypeConverted(opPol, (half*)(tensor_mem[1]), batchSize * kNumOutputPolicy, stream);  // POLICY output
 #endif
-        Layers[l++].Eval(stream, batchSize, inputs.Tensors[0], inputs.Tensors[2], inputs.Tensors[1], inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);// Entire Attention policy head except for the policy map
-        Layers[l++].Eval(stream, batchSize, outputs.PolicyOut, inputs.Tensors[0], null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf); // policy map layer
+        Layers[l++].Eval(stream, batchSize, spare1, flow, spare2, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);// Entire Attention policy head except for the policy map
+        Layers[l++].Eval(stream, batchSize, outputs.PolicyOut, spare1, null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf); // policy map layer
       }
       else if (PolicyIsConvolutional)
       {
@@ -348,33 +421,32 @@ namespace Ceres.Chess.NNBackends.CUDA
       network_[l++]->Eval(batchSize, tensor_mem[0], tensor_mem[1], nullptr, scratch_mem, scratch_size_, nullptr, cublas, stream);  // policy map layer
       copyTypeConverted(opPol, (half*)(tensor_mem[0]), batchSize * kNumOutputPolicy, stream);  // POLICY output
 #endif
-        Layers[l++].Eval(stream, batchSize, inputs.Tensors[0], inputs.Tensors[2], null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // policy conv1
-        Layers[l++].Eval(stream, batchSize, inputs.Tensors[1], inputs.Tensors[0], null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // policy conv2
-        Layers[l++].Eval(stream, batchSize, outputs.PolicyOut, inputs.Tensors[1], null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // policy map layer
+        Layers[l++].Eval(stream, batchSize, spare1, flow, null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // policy conv1
+        Layers[l++].Eval(stream, batchSize, spare2, spare1, null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // policy conv2
+        Layers[l++].Eval(stream, batchSize, outputs.PolicyOut, spare2, null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // policy map layer
       }
       else
       {
-        Layers[l++].Eval(stream, batchSize, inputs.Tensors[0], inputs.Tensors[2], null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // pol conv
-        Layers[l++].Eval(stream, batchSize, outputs.PolicyOut, inputs.Tensors[0], null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // pol FC
+        Layers[l++].Eval(stream, batchSize, spare1, flow, null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // pol conv
+        Layers[l++].Eval(stream, batchSize, outputs.PolicyOut, spare1, null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // pol FC
       }
 
 
       // value head
-      Layers[l++].Eval(stream, batchSize, inputs.Tensors[0], inputs.Tensors[2], null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // value conv
-      Layers[l++].Eval(stream, batchSize, outputs.ValueHeadFC2Out, inputs.Tensors[0], null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // value FC1
-
+      Layers[l++].Eval(stream, batchSize, spare1, flow, null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // value conv
+      Layers[l++].Eval(stream, batchSize, outputs.ValueHeadFC2Out, spare1, null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // value FC1
 
       Layers[l++].Eval(stream, batchSize, outputs.ValueOut, outputs.ValueHeadFC2Out, null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // value FC2    
 
       if (HasMLH)
       {
         // Moves left head
-        Layers[l++].Eval(stream, batchSize, inputs.Tensors[0], inputs.Tensors[2], null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // moves conv
-        Layers[l++].Eval(stream, batchSize, inputs.Tensors[1], inputs.Tensors[0], null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // moves FC1
+        Layers[l++].Eval(stream, batchSize, spare1, flow, null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // moves conv
+        Layers[l++].Eval(stream, batchSize, spare2, spare1, null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // moves FC1
 
         // Moves left FC2
         // TODO: consider fusing the bias-add of FC2 with format conversion.
-        Layers[l++].Eval(stream, batchSize, outputs.MLHOut, inputs.Tensors[1], null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);
+        Layers[l++].Eval(stream, batchSize, outputs.MLHOut, spare2, null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);
       }
     }
 
