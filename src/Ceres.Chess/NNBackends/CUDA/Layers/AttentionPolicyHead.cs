@@ -99,10 +99,10 @@ namespace Ceres.Chess.NNBackends.CUDA
         encoderLayers = new LayerEncoder[weights.policyEncoders.Length];
         for (int i = 0; i < encoderLayers.Length; i++)
         {
-          EncoderWeights encoderWeights = new EncoderWeights(this, in weights.policyEncoders[i]);
+          EncoderWeights encoderWeights = new EncoderWeights(in weights.policyEncoders[i]);
           const int LAYER_INDEX = 0; // ???
           encoderLayers[i] = new LayerEncoder(parent, encoderWeights, "PolAttnEnc" + i, weights, LAYER_INDEX, 
-                                              null, numEncoderHeads, embeddingOpSize, 1.0f);
+                                              null, numEncoderHeads, embeddingOpSize, 1.0f, Activation);
         }
       }
     }
@@ -140,14 +140,16 @@ namespace Ceres.Chess.NNBackends.CUDA
       CudaDeviceVariable<FP16> scratch3 = new CudaDeviceVariable<FP16>(scratch1.DevicePointer + scratchSizeBytes / (2 * Marshal.SizeOf<FP16>()));
 
       int inputC = input_.C;
-      int numElements = N * inputC * 8 * 8;
-      const int BLOCK_DIM_NCHW = 256;
-      kernelNCHWtoNHWC.GridDimensions = CUDAUtils.DivUp(numElements, BLOCK_DIM_NCHW);
-      kernelNCHWtoNHWC.BlockDimensions = BLOCK_DIM_NCHW;
-      LaunchKernel(stream, kernelNCHWtoNHWC, scratch0.DevicePointer, input.DevicePointer, N, inputC, N, inputC, 8, 8, stream.Stream.Pointer);
+      if (!attentionBody)
+      {
+        int numElements = N * inputC * 8 * 8;
+        const int BLOCK_DIM_NCHW = 256;
+        kernelNCHWtoNHWC.GridDimensions = CUDAUtils.DivUp(numElements, BLOCK_DIM_NCHW);
+        kernelNCHWtoNHWC.BlockDimensions = BLOCK_DIM_NCHW;
+        LaunchKernel(stream, kernelNCHWtoNHWC, scratch0.DevicePointer, input.DevicePointer, N, inputC, N, inputC, 8, 8, stream.Stream.Pointer);
+      }
 
       CudaDeviceVariable<FP16> pol_embedding = scratch1;
-//      FCLayer(stream, embeddingOpSize, N * 64, input_.C, ip_pol_w_,  ip_pol_b_, scratch0, pol_embedding, ActivationFunction.SELU);
 
       unsafe
       {
@@ -164,11 +166,11 @@ namespace Ceres.Chess.NNBackends.CUDA
         CudaBlasNativeMethods.cublasGemmEx(Parent.CuBlas.CublasHandle, Operation.Transpose, Operation.NonTranspose,
                                    num_outputs, batch, num_inputs,
                                    ipHalfOne, ip_pol_w_.DevicePointer, cudaDataType.CUDA_R_16F, num_inputs,
-                                   scratch0.DevicePointer, cudaDataType.CUDA_R_16F, num_inputs,
+                                   attentionBody ? input.DevicePointer : scratch0.DevicePointer, cudaDataType.CUDA_R_16F, num_inputs,
                                    ipHalfZero, 
                                    pol_embedding.DevicePointer, cudaDataType.CUDA_R_16F, num_outputs,
                                    ComputeType.Compute16F, GemmAlgo.Default);
-        AddBiasBatched(kernelAddBiasBatchedSELU, pol_embedding, pol_embedding, ip_pol_b_, 1, batch, num_outputs, stream);
+        AddBiasBatched(GetAddBiasBatchedKernel(Activation), pol_embedding, pol_embedding, ip_pol_b_, 1, batch, num_outputs, stream);
 
       }
 

@@ -1009,7 +1009,7 @@ __global__ void preprocess_for_attention_body_kernel(T* output, const T* input) 
 
     op = input[n * 64 * kInputPlanes + c * 64 + hw];    // nchw
   }
-
+  if (c == 109) op = (T) (float(op) / 99.0f);    // Ankan - hack to match bug in training side!
   constexpr int outputC = kInputPlanes + kNumPosEncodingChannels;
 
   // convert to nhwc

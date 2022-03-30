@@ -59,7 +59,7 @@ namespace Ceres.Chess.LC0.WeightsProtobuf
     /// <summary>
     /// Number of convolutional filters.
     /// </summary>
-    public int NumFilters => Net.Weights.Residuals[0].Conv1.BnMeans.Params.Length / 2;
+    public int NumFilters => NumBlocks == 0 ? 0 : Net.Weights.Residuals[0].Conv1.BnMeans.Params.Length / 2;
 
     /// <summary>
     /// Number of SE blocks (layers).

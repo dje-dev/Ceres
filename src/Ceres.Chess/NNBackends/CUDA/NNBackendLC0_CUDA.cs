@@ -377,7 +377,7 @@ namespace Ceres.Chess.NNBackends.CUDA
 
     private void PrepareForNetwork(Net net, LC0LegacyWeights weights)
     {
-      NumFilters = weights.input.biases.Length;
+      NumFilters = weights.input == null ? 0 : weights.input.biases.Length;
       NumBlocks = weights.residual.Length;
 
       if (net.Format.NetworkFormat == null)

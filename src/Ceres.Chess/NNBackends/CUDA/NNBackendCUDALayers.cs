@@ -106,7 +106,7 @@ namespace Ceres.Chess.NNBackends.CUDA
       Context = context;
       DeviceComputeCapabilityMajor = deviceComputeCapabilityMajor;
       SaveActivations = saveActivations;
-      NumFilters = (int)weights.input.biases.Length;
+      NumFilters = weights.input == null ? 0 : weights.input.biases.Length;
       NumBlocks = (int)weights.residual.Length;
       HasSE = NumBlocks > 0 && weights.residual[0].has_se;
 
@@ -116,7 +116,7 @@ namespace Ceres.Chess.NNBackends.CUDA
       if (attn_body_)
       {
         Debug.Assert(weights.ip_emb_b.Length > 0);
-Console.WriteLine($"\nNum encoder blocks: {num_encoder_blocks_}, num policy encoder blocks: {weights.policyEncoders.Length}\n");
+        //Console.WriteLine($"\nNum encoder blocks: {num_encoder_blocks_}, num policy encoder blocks: {weights.policyEncoders.Length}\n");
       }
 
 
@@ -237,9 +237,8 @@ Console.WriteLine($"\nNum encoder blocks: {num_encoder_blocks_}, num policy enco
 
       if (attn_body_)
       {
-        throw new NotImplementedException();
-        BaseLayerCUDA attention_body = default;// new AttentionBody(weights, scratch_mem_, act, numBlocks_,
-                                               //                   numBlocks_ > 0 ? kNumFilters : kInputPlanes);
+        LayerAttentionBody attention_body = new(execContext, "attn_body", weights, Layers.Count, null,  
+                                                NumBlocks, NumBlocks > 0 ? NumFilters : BaseLayerCUDA.kInputPlanes, activation);
         Layers.Add(attention_body);
 
         encoder_last_ = LastLayer;
@@ -248,11 +247,6 @@ Console.WriteLine($"\nNum encoder blocks: {num_encoder_blocks_}, num policy enco
       // Policy head.
       if (PolicyIsAttention)
       {
-        int embeddingOpSize = weights.ip_pol_b.Length;
-        int wqOpSize = weights.ip2_pol_b.Length;
-        int wkOptSize = weights.ip3_pol_b.Length;
-        int numEncoderHeads = weights.numPolicyEncoderHeads;
-
         AttentionPolicyHead attentionPolicy = null;
         attentionPolicy = new (execContext, "policy_conv1", Layers.Count, weights, 64 * 64 + 24 * 8, 1, 1, LastLayer, attn_body_, DefaultActivation);
         Layers.Add(attentionPolicy);
@@ -310,8 +304,7 @@ Console.WriteLine($"\nNum encoder blocks: {num_encoder_blocks_}, num policy enco
       // Value head.
       if (attn_body_)
       {
-        throw new NotImplementedException();
-        BaseLayerCUDA valueEmbedding = default;// new LayerEmbedding(encoder_last_, weights.ip_val_w, weights.ip_val_b, scratch_mem_, act);
+        LayerEmbedding valueEmbedding = new(execContext, "value_embed", Layers.Count, LastLayer, weights.ip_val_w, weights.ip_val_b, activation, encoder_last_.C);
         Layers.Add(valueEmbedding);
       }
       else
@@ -319,26 +312,25 @@ Console.WriteLine($"\nNum encoder blocks: {num_encoder_blocks_}, num policy enco
         LayerConv1CUDA convVal = new(execContext, "value_conv", Layers.Count, resi_last_, weights.value.biases.Length, 8, 8, NumFilters, true, activation);
         convVal.LoadWeights(weights.value.weights, weights.value.biases);
         Layers.Add(convVal);
-
-        LayerFCCUDA FCVal1 = new(execContext, "value_fc1", Layers.Count, LastLayer, weights.ip1_val_b.Length, 1, 1, true, activation);
-        FCVal1.LoadWeights(weights.ip1_val_w, weights.ip1_val_b);
-        Layers.Add(FCVal1);
-
-        bool fc2_tanh = !HasWDL;
-        BaseLayerCUDA.ActivationFunction activationValue2 = fc2_tanh ? BaseLayerCUDA.ActivationFunction.TANH : BaseLayerCUDA.ActivationFunction.NONE;
-        LayerFCCUDA FCVal2 = new(execContext, "value_fc2", Layers.Count, LastLayer, weights.ip2_val_b.Length, 1, 1, true, activationValue2);
-        FCVal2.LoadWeights(weights.ip2_val_w, weights.ip2_val_b);
-        Layers.Add(FCVal2);
       }
 
+      LayerFCCUDA FCVal1 = new(execContext, "value_fc1", Layers.Count, LastLayer, weights.ip1_val_b.Length, 1, 1, true, activation);
+      FCVal1.LoadWeights(weights.ip1_val_w, weights.ip1_val_b);
+      Layers.Add(FCVal1);
+
+      bool fc2_tanh = !HasWDL;
+      BaseLayerCUDA.ActivationFunction activationValue2 = fc2_tanh ? BaseLayerCUDA.ActivationFunction.TANH : BaseLayerCUDA.ActivationFunction.NONE;
+      LayerFCCUDA FCVal2 = new(execContext, "value_fc2", Layers.Count, LastLayer, weights.ip2_val_b.Length, 1, 1, true, activationValue2);
+      FCVal2.LoadWeights(weights.ip2_val_w, weights.ip2_val_b);
+      Layers.Add(FCVal2);
+      
 
       // Moves left head
       if (HasMLH)
       {
         if (attn_body_)
         {
-          throw new NotImplementedException();
-          BaseLayerCUDA mlhEmbedding = default;// new EmbeddingLayer( encoder_last_, weights.ip_mov_w, weights.ip_mov_b, scratch_mem_, act);
+          LayerEmbedding mlhEmbedding = new(execContext, "mlh_embed", Layers.Count, LastLayer, weights.ip_mov_w, weights.ip_mov_b, activation, encoder_last_.C);
           Layers.Add(mlhEmbedding);
         }
         else
@@ -346,15 +338,15 @@ Console.WriteLine($"\nNum encoder blocks: {num_encoder_blocks_}, num policy enco
           LayerConv1CUDA convMov = new(execContext, "mlh_conv", Layers.Count, resi_last_, weights.moves_left.biases.Length, 8, 8, NumFilters, true, activation);
           convMov.LoadWeights(weights.moves_left.weights, weights.moves_left.biases);
           Layers.Add(convMov);
-
-          LayerFCCUDA FCMov1 = new(execContext, "mlh_fc1", Layers.Count, LastLayer, weights.ip1_mov_b.Length, 1, 1, true, activation);
-          FCMov1.LoadWeights(weights.ip1_mov_w, weights.ip1_mov_b);
-          Layers.Add(FCMov1);
-
-          LayerFCCUDA FCMov2 = new(execContext, "mlh_fc2", Layers.Count, LastLayer, 1, 1, 1, true, activation);
-          FCMov2.LoadWeights(weights.ip2_mov_w, weights.ip2_mov_b);
-          Layers.Add(FCMov2);
         }
+
+        LayerFCCUDA FCMov1 = new(execContext, "mlh_fc1", Layers.Count, LastLayer, weights.ip1_mov_b.Length, 1, 1, true, activation);
+        FCMov1.LoadWeights(weights.ip1_mov_w, weights.ip1_mov_b);
+        Layers.Add(FCMov1);
+
+        LayerFCCUDA FCMov2 = new(execContext, "mlh_fc2", Layers.Count, LastLayer, 1, 1, 1, true, activation);
+        FCMov2.LoadWeights(weights.ip2_mov_w, weights.ip2_mov_b);
+        Layers.Add(FCMov2);        
       }     
 
       weightsAlreadyLoaded = true;
@@ -390,14 +382,11 @@ Console.WriteLine($"\nNum encoder blocks: {num_encoder_blocks_}, num policy enco
 
       if (attn_body_)
       {
-        throw new NotImplementedException();
-#if not
-        network_[l++]->Eval(batchSize, tensor_mem[1],
-                            (numBlocks_ > 0) ? tensor_mem[2] : tensor_mem[0],
-                            (numBlocks_ > 0) ? tensor_mem[0] : tensor_mem[2],
-                            scratch_mem, scratch_size_, nullptr,
-                            cublas, stream);  // Entire attention body of the network
-#endif
+        // Entire attention body of the network
+        Layers[l++].Eval(stream, batchSize, inputs.Tensors[1],
+                         (NumBlocks > 0) ? inputs.Tensors[2] : inputs.Tensors[0],
+                         (NumBlocks > 0) ? inputs.Tensors[0] : inputs.Tensors[2], inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);// Entire Attention policy head except for the policy map
+
         flow = inputs.Tensors[1];
         spare1 = inputs.Tensors[0];
         spare2 = inputs.Tensors[2];
@@ -434,9 +423,11 @@ Console.WriteLine($"\nNum encoder blocks: {num_encoder_blocks_}, num policy enco
 
       // value head
       Layers[l++].Eval(stream, batchSize, spare1, flow, null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // value conv
-      Layers[l++].Eval(stream, batchSize, outputs.ValueHeadFC2Out, spare1, null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // value FC1
 
-      Layers[l++].Eval(stream, batchSize, outputs.ValueOut, outputs.ValueHeadFC2Out, null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // value FC2    
+      // TODO: restore capture of ValueHeadFC2Out in what goes into spare2 in next line
+      Layers[l++].Eval(stream, batchSize, spare2, spare1, null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // value FC1
+      Layers[l++].Eval(stream, batchSize, outputs.ValueOut, spare2, null, inputs.Scratch, inputs.ScratchSizeBytes, inputs.ScratchSecondHalf);  // value FC2    
+      
 
       if (HasMLH)
       {

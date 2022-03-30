@@ -27,7 +27,7 @@ using ManagedCuda.BasicTypes;
 
 namespace Ceres.Chess.NNBackends.CUDA
 {
-  public class LayerEncoder : BaseLayerCUDA
+  public class LayerEncoder : BaseLayerCUDA, IDisposable
   {
     internal EncoderWeights encoderWeights;
 
@@ -37,8 +37,9 @@ namespace Ceres.Chess.NNBackends.CUDA
 
     public LayerEncoder(NNBackendExecContext parent, EncoderWeights encoderWeights,
                         string name, LC0LegacyWeights weights, int layerIndex,
-                        BaseLayerCUDA ip, int heads, int size, float alpha)
-       : base(parent, name, layerIndex, 0, 0, 0, ip, ActivationFunction.NONE)
+                        BaseLayerCUDA ip, int heads, int size, float alpha,
+                        ActivationFunction activation)
+       : base(parent, name, layerIndex, 0, 0, 0, ip, activation)
     {
       encoder_heads = heads;
       embedding_op_size_ = size;
@@ -60,6 +61,11 @@ namespace Ceres.Chess.NNBackends.CUDA
 
     public void LoadWeights(short[] cpuWeight)
     {
+    }
+
+    public override void Dispose()
+    {
+
     }
 
     protected override void DoEval(CudaStream stream, int N, 
@@ -189,7 +195,8 @@ namespace Ceres.Chess.NNBackends.CUDA
                                            scratch1.DevicePointer, cudaDataType.CUDA_R_16F, num_outputs,
                                            ComputeType.Compute16F, GemmAlgo.Default);
 
-        AddBiasBatched(kernelAddBiasBatchedSELU, scratch1, scratch1, enc.ffn_dense1_b, 1, batch, num_outputs, stream);
+        AddBiasBatched(GetAddBiasBatchedKernel(Activation), scratch1, scratch1, enc.ffn_dense1_b, 1, batch, num_outputs, stream);
+
 
         // #FFN dense 2, scratch1 -> scratch2
         num_inputs = encoder_dff;
@@ -205,8 +212,8 @@ namespace Ceres.Chess.NNBackends.CUDA
                                            ComputeType.Compute16F, GemmAlgo.Default);
 
         LayerNorm(N * 64, embedding_op_size_, scratch1, scratch2,
-                    enc.ffn_dense2_b, scratch0, enc.ln2_gammas,
-                    enc.ln2_betas, 1e-6f, alpha, stream);
+                  enc.ffn_dense2_b, scratch0, enc.ln2_gammas,
+                  enc.ln2_betas, 1e-6f, alpha, stream);
       }
     }
   }

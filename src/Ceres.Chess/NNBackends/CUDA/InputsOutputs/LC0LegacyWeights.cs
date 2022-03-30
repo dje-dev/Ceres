@@ -46,7 +46,7 @@ namespace Ceres.Chess.NNBackends.CUDA
     {
       LargestScaleSeen = float.MinValue;
 
-      input = new ConvBlock(this, weights.Input);
+      input = weights.Input == null ? null : new ConvBlock(this, weights.Input);
       policy1 = weights.Policy1 == null ? default : new ConvBlock(this, weights.Policy1);
       policy = weights.Policy == null ? default : new ConvBlock(this, weights.Policy);
       ip_pol_w = WeightsDecoded(weights.IpPolW);
@@ -62,14 +62,16 @@ namespace Ceres.Chess.NNBackends.CUDA
       ip_emb_b = WeightsDecoded(weights.IpEmbB);
 
       encoder_head_count = (int)weights.Headcount;
-      if (encoder_head_count > 0)
+      int num_encoders = weights.Encoders.Count;
+
+      if (num_encoders > 0)
       {
-        EncoderLayer[] tempEncoders = new EncoderLayer[encoder_head_count];
-        Parallel.For(0, encoder_head_count, i => tempEncoders[i] = new EncoderLayer(this, weights.Encoders[i]));
+        EncoderWeights[] tempEncoders = new EncoderWeights[num_encoders];
+        Parallel.For(0, num_encoders, i => tempEncoders[i] = new EncoderWeights(this, weights.Encoders[i]));
         encoder = tempEncoders;
       }
 
-      value = new ConvBlock(this, weights.Value);
+      value = weights.Value == null ? null : new ConvBlock(this, weights.Value);
       ip_val_w = WeightsDecoded(weights.IpValW);
       ip_val_b = WeightsDecoded(weights.IpValB);
       ip1_val_w = WeightsDecoded(weights.Ip1ValW);
@@ -108,8 +110,8 @@ namespace Ceres.Chess.NNBackends.CUDA
 
       if (weights.PolEncoders != null)
       {
-        policyEncoders = new EncoderLayer[weights.PolEncoders.Count];
-        Parallel.For(0, policyEncoders.Length, i => policyEncoders[i] = new EncoderLayer(this, weights.PolEncoders[i]));
+        policyEncoders = new EncoderWeights[weights.PolEncoders.Count];
+        Parallel.For(0, policyEncoders.Length, i => policyEncoders[i] = new EncoderWeights(this, weights.PolEncoders[i]));
       }
     }
 
@@ -251,9 +253,9 @@ namespace Ceres.Chess.NNBackends.CUDA
       public float[] dense2_b;
     }
 
-    public struct EncoderLayer
+    public struct EncoderWeights
     {
-      public EncoderLayer(LC0LegacyWeights parent, Pblczero.Weights.EncoderLayer encoder)
+      public EncoderWeights(LC0LegacyWeights parent, Pblczero.Weights.EncoderLayer encoder)
       {
         mha = new MHA(parent, encoder.Mha);
         ln1_gammas = parent.WeightsDecoded(encoder.Ln1Gammas);
@@ -303,7 +305,7 @@ namespace Ceres.Chess.NNBackends.CUDA
     public float[] ip_emb_b;
 
     // Encoder stack.
-    public EncoderLayer[] encoder;
+    public EncoderWeights[] encoder;
     public int encoder_head_count;
 
 
@@ -323,7 +325,7 @@ namespace Ceres.Chess.NNBackends.CUDA
     public float[] ip4_pol_w;
 
     public int numPolicyEncoderHeads; // pol_encoder_head_count;
-    public EncoderLayer[] policyEncoders;
+    public EncoderWeights[] policyEncoders;
 
     // Value head
     public ConvBlock value;

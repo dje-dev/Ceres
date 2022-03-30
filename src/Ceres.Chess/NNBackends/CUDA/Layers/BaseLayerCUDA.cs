@@ -44,6 +44,9 @@ namespace Ceres.Chess.NNBackends.CUDA
       MISH = 5
     };
 
+    internal const int kInputPlanes = 112;
+    protected const int kNumPosEncodingChannels = 64;
+
     public readonly NNBackendExecContext Parent;
 
     public TimeSpan LastExecutionTime;
@@ -375,22 +378,24 @@ namespace Ceres.Chess.NNBackends.CUDA
     CudaKernel GetKernelCommon(string kernelName) => Parent.Device.GetKernel(Parent.PTXAssembly, COMMON_KERNELS_PTX_NAME, kernelName);
 
 
-    protected CudaKernel GetAddBiasBatchedKernel(ActivationFunction activation)
+    internal CudaKernel GetAddBiasBatchedKernel(ActivationFunction activation)
     {
-      if (activation != ActivationFunction.NONE && activation != ActivationFunction.SELU)
+      CudaKernel kernel = GetKernelCommon(GetAddBiasBatchedKernelName(activation));
+      if (kernel == null)
       {
-        throw new NotImplementedException("Unsupported Activation in AddBiasBatched.");
+        throw new NotImplementedException($"Unsupported Activation in AddBiasBatched - {activation}");
       }
-      return GetKernelCommon(GetAddBiasBatchedKernelName(activation));
+
+      return kernel;
     }
 
-    static string GetAddBiasBatchedKernelName(ActivationFunction activation)
+    internal static string GetAddBiasBatchedKernelName(ActivationFunction activation)
     {
       const string kernelName = "_ZN6lczero13cudnn_backend21addBiasBatched_kernelI6__halfLNS0_18ActivationFunctionE!1EEEvPT_PKS4_S7_ii";
       return kernelName.Replace("!1", ((int)activation).ToString());
     }
 
-    protected void AddBiasBatched(CudaKernel kernelAddBatched,
+    internal void AddBiasBatched(CudaKernel kernelAddBatched,
                                   CudaDeviceVariable<FP16> output,
                                   CudaDeviceVariable<FP16> input,
                                   CudaDeviceVariable<FP16> bias,
@@ -414,6 +419,7 @@ namespace Ceres.Chess.NNBackends.CUDA
 
 
     #region Softmax
+
     CudaKernel kernelSoftmax = null;
     CudaKernel kernelSoftmax64 = null;
 
@@ -449,12 +455,16 @@ namespace Ceres.Chess.NNBackends.CUDA
     #region AddBiasBatched
 
     protected CudaKernel kernelAddBiasBatchedNone;
+    protected CudaKernel kernelAddBiasBatchedRELU;
     protected CudaKernel kernelAddBiasBatchedSELU;
+    protected CudaKernel kernelAddBiasBatchedMISH;
 
     protected void LoadAddBiasBatchedKernels()
     {
       kernelAddBiasBatchedNone = GetAddBiasBatchedKernel(ActivationFunction.NONE);
+      kernelAddBiasBatchedRELU = GetAddBiasBatchedKernel(ActivationFunction.RELU);
       kernelAddBiasBatchedSELU = GetAddBiasBatchedKernel(ActivationFunction.SELU);
+      kernelAddBiasBatchedMISH = GetAddBiasBatchedKernel(ActivationFunction.MISH);
     }
 
     #endregion
@@ -470,12 +480,10 @@ namespace Ceres.Chess.NNBackends.CUDA
     }
     public void AttentionPreprocess(int N, CudaDeviceVariable<FP16> output, CudaDeviceVariable<FP16> input, CudaStream stream)
     {
-      const int kInputPlanes = 112;
-      const int kNumPosEncodingChannels = 6;
       kernelAttentionPreprocess.GridDimensions = new ManagedCuda.VectorTypes.dim3(N, 64, 1);
       kernelAttentionPreprocess.BlockDimensions = new ManagedCuda.VectorTypes.dim3(kInputPlanes + kNumPosEncodingChannels, 1, 1);
 
-      LaunchKernel(stream, kernelAttentionPreprocess, N, output.DevicePointer, input.DevicePointer, stream.Stream.Pointer);
+      LaunchKernel(stream, kernelAttentionPreprocess, output.DevicePointer, input.DevicePointer, stream.Stream.Pointer);
     }
 
     #endregion

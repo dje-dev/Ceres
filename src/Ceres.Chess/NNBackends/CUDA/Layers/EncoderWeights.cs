@@ -57,7 +57,7 @@ namespace Ceres.Chess.NNBackends.CUDA
     public int ffn_dense1_size;
     public int ffn_dense2_size;
 
-  public EncoderWeights(AttentionPolicyHead parent, in LC0LegacyWeights.EncoderLayer weights)
+  public EncoderWeights(in LC0LegacyWeights.EncoderWeights weights)
     {
       mha_q_size = weights.mha.q_b.Length;
       mha_k_size = weights.mha.k_b.Length;
