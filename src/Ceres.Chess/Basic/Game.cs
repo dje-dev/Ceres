@@ -163,7 +163,11 @@ namespace Ceres.Chess
     {
       Description = pgnGame.Comment;
       GameID = gameID;
-      Round = pgnGame.Headers.ContainsKey("Round") ? int.Parse(pgnGame.Headers["Round"]) : 0;
+      if (pgnGame.Headers.ContainsKey("Round"))
+      {
+        bool ok = int.TryParse(pgnGame.Headers["Round"], out int round);
+        Round = ok ? round : 0;
+      }
 
       pgnGame.Headers.TryGetValue("FEN", out string startFEN);
       InitialPosition = startFEN == null ? Position.StartPosition : Position.FromFEN(startFEN);
