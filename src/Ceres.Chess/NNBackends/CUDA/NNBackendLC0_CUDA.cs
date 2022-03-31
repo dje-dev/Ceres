@@ -460,7 +460,11 @@ namespace Ceres.Chess.NNBackends.CUDA
       // (We also split the allocations into two parts, so need 2x)
       int attentionSize = MaxAttentionSize(net, weights, MaxBatchSize);
       scratchSizeBytes = System.Math.Max(scratchSizeBytes, 2 * attentionSize);
-
+      if (weights.encoder != null && weights.encoder.Length > 0) // is attention body?
+      {
+        // HACK: workaround for insufficient scratch size with attention body
+        scratchSizeBytes = (int)(scratchSizeBytes * 1.5f);
+      }
       long scratchSizeElements = scratchSizeBytes / Marshal.SizeOf<FP16>();
 
       // =========================================================================
