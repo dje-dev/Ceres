@@ -68,15 +68,21 @@ namespace Ceres.Base.DataTypes
     /// <param name="defaultValue"></param>
     /// <param name="defaultMustExist"></param>
     /// <param name="converterFunc"></param>
+    /// <param name="extraMissingMessage"></param>
     /// <returns></returns>
-    public T GetValueOrDefaultMapped<T>(string key, string defaultValue, bool defaultMustExist, Func<string, T> converterFunc)
+    public T GetValueOrDefaultMapped<T>(string key, string defaultValue, bool defaultMustExist, 
+                                        Func<string, T> converterFunc, string extraMissingMessage = null)
     {
-      string strValue = GetValueOrDefault(key, defaultValue, defaultMustExist);
+      string strValue = GetValueOrDefault(key, defaultValue, defaultMustExist, extraMissingMessage);
 
       if (strValue == null)
+      {
         return default(T);
+      }
       else
+      {
         return converterFunc(strValue);
+      }
     }
 
 
@@ -88,20 +94,21 @@ namespace Ceres.Base.DataTypes
     /// <param name="defaultValue"></param>
     /// <param name="defaultMustExist"></param>
     /// <returns></returns>
-    public string GetValueOrDefault(string key, string defaultValue, bool defaultMustExist)
+    public string GetValueOrDefault(string key, string defaultValue, bool defaultMustExist, string extraMissingMessage = null)
     {
       string value = GetValue(key);
       if (value == null)
       {
         if (defaultValue != null)
+        {
           return defaultValue;
-        else if (defaultMustExist)
-          throw new Exception($"Error: {key} required but not present nor in user settings");
-        else
-          return null;
+        }
+        else return defaultMustExist ? throw new Exception($"Error: {key} required but not present nor in user settings{extraMissingMessage}") : null;
       }
       else
+      {
         return value;
+      }
     }
 
 

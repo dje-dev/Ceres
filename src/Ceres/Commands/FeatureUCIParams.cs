@@ -33,8 +33,10 @@ namespace Ceres.Commands
 
       return new FeatureUCIParams()
       {
-        NetworkSpec = keys.GetValueOrDefaultMapped<NNNetSpecificationString>("Network", CeresUserSettingsManager.Settings.DefaultNetworkSpecString, true, spec => new NNNetSpecificationString(spec)),
-        DeviceSpec = keys.GetValueOrDefaultMapped("Device", CeresUserSettingsManager.Settings.DefaultDeviceSpecString, true, spec => new NNDevicesSpecificationString(spec)),
+        NetworkSpec = keys.GetValueOrDefaultMapped<NNNetSpecificationString>("Network", CeresUserSettingsManager.Settings.DefaultNetworkSpecString, true, 
+                                                                             spec => new NNNetSpecificationString(spec), ", set DefaultNetworkSpecString in Ceres.json"),
+        DeviceSpec = keys.GetValueOrDefaultMapped("Device", CeresUserSettingsManager.Settings.DefaultDeviceSpecString, true, 
+                                                                              spec => new NNDevicesSpecificationString(spec), ", set DefaultDeviceSpecString in Ceres.json"),
         Pruning = keys.GetValueOrDefaultMapped<bool>("Pruning", "true", false, str => bool.Parse(str))
       };
     }
