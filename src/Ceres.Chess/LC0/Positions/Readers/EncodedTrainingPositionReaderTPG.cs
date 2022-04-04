@@ -14,11 +14,13 @@
 #region Using directives
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 
 #endregion
 
@@ -85,7 +87,6 @@ namespace Ceres.Chess.EncodedPositions
           yield break;
         }
       }
-
     }
 
 
@@ -94,20 +95,27 @@ namespace Ceres.Chess.EncodedPositions
     /// </summary>
     public ReadOnlySpan<EncodedTrainingPosition> Read(int numPositions)
     {
-      if (buffer == null || buffer.Length < numPositions)
+      int totalBytesToTryRead = numPositions * EncodedTrainingPosition.V6_LEN;
+      if (buffer == null || buffer.Length < totalBytesToTryRead)
       {
         buffer = new byte[numPositions * Marshal.SizeOf<EncodedTrainingPosition>()];
       }
 
-      int numBytes;
+      int totalBytesRead = 0;
       checked
       {
-        numBytes = numPositions * EncodedTrainingPosition.V6_LEN;
+        while (totalBytesRead < totalBytesToTryRead)
+        {
+          int numBytesRead = gu.Read(buffer, totalBytesRead, totalBytesToTryRead - totalBytesRead);
+          if (numBytesRead == 0)
+          {
+            break;
+          }
+          totalBytesRead += numBytesRead;
+        }
       }
-      int numBytesRead = gu.Read(buffer, 0, numBytes);
-      if (numBytesRead == 0) return null;
 
-      Span<byte> bufferSpan = buffer.AsSpan().Slice(0, numBytesRead);
+      Span<byte> bufferSpan = buffer.AsSpan().Slice(0, totalBytesRead);
       ReadOnlySpan<EncodedTrainingPosition> bufferAsPositions = MemoryMarshal.Cast<byte, EncodedTrainingPosition>(bufferSpan);
       return bufferAsPositions;
     }
