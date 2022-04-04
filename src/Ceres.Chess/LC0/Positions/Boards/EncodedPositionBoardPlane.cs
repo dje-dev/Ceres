@@ -51,24 +51,18 @@ namespace Ceres.Chess.LC0.Boards
     public ulong Data => (ulong)Bits.Data;
 
 
-    
+
     /// <summary>
     /// Constructor from long.
     /// </summary>
     /// <param name="data"></param>
-    public EncodedPositionBoardPlane(long data)  
-    {
-      Bits = data;
-    }
+    public EncodedPositionBoardPlane(long data) => Bits = data;
 
     /// <summary>
     /// Constructor from bitvector.
     /// </summary>
     /// <param name="bits"></param>
-    public EncodedPositionBoardPlane(BitVector64 bits)
-    {
-      Bits = bits;
-    }
+    public EncodedPositionBoardPlane(BitVector64 bits) => Bits = bits;
 
     /// <summary>
     /// Returns mirrored board.
@@ -90,21 +84,26 @@ namespace Ceres.Chess.LC0.Boards
     public override string ToString()
     {
       if (Bits.Data == 0)
-        return "<LZBoardPlane [EMPTY]>";
-      else
-      return $"<LZBoardPlane {Bits.Data} { Bits.ToString() }>";
-    }
-
-
-    public void SetBytesRepresentation(byte[] bytes, int floatsStartIndex)
-    {
-      if (Bits.Data == 0)
       {
-        Array.Clear(bytes, floatsStartIndex, 64);
+        return "<EncodedPositionBoardPlane [EMPTY]>";
       }
       else
       {
-        int c = floatsStartIndex;
+        return $"<EncodedPositionBoardPlane {Bits.Data} { Bits.ToString() }>";
+      }
+    }
+
+
+    public void SetBytesRepresentation(byte[] bytes, int bytesStartIndex)
+    {
+      if (Bits.Data == 0)
+      {
+        // Performance optimization for this common case.
+        Array.Clear(bytes, bytesStartIndex, 64);
+      }
+      else
+      {
+        int c = bytesStartIndex;
         for (int i = 0; i < 64; i++)
         {
           bytes[c++] = Bits.BitIsSet(i) ? (byte)1 : (byte)0;
@@ -137,7 +136,6 @@ namespace Ceres.Chess.LC0.Boards
     }
 
     #endregion
-
   }
 
 }

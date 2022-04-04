@@ -118,7 +118,9 @@ namespace Ceres.Base.DataTypes // TO DO: get rid of this in favor of BitVector64
     public override bool Equals(object o)
     {
       if (!(o is BitVector64))
+      {
         return false;
+      }
 
       return data == ((BitVector64)o).data;
     }
@@ -129,6 +131,32 @@ namespace Ceres.Base.DataTypes // TO DO: get rid of this in favor of BitVector64
     {
       return ToString(this);
     }
+
+
+    /// <summary>
+    /// Expands the 64 bits into 64 bytes within a specified array
+    /// starting at specified index.
+    /// </summary>
+    /// <param name="bytes"></param>
+    /// <param name="startIndex"></param>
+    /// <returns></returns>
+    public void SetExpandedBytes(byte[] bytes, int startIndex)
+    {
+      if (data == 0)
+      {
+        // Optimization for common case of all zeros.
+        Array.Clear(bytes, startIndex, 64);
+      }
+      else
+      {
+        BitVector64 bits = new BitVector64(data);
+        for (int i = 0; i < 64; i++)
+        {
+          bytes[i + startIndex] = bits.BitIsSet(i) ? (byte)1 : (byte)0;
+        }
+      }
+    }
+
 
     /// <summary>
     /// Returns a BitVector64 assembled from an array of bytes
@@ -141,8 +169,12 @@ namespace Ceres.Base.DataTypes // TO DO: get rid of this in favor of BitVector64
     {
       BitVector64 bits = new BitVector64();
       for (int i = startIndex; i < startIndex + 64; i++)
+      {
         if (bytes[i] == 1)
+        {
           bits.SetBit(i - startIndex);
+        }
+      }
       return bits;
     }
 
@@ -181,7 +213,9 @@ namespace Ceres.Base.DataTypes // TO DO: get rid of this in favor of BitVector64
         if (BitIsSet(bit))
         {
           if (count >= maxBitsToReturn)
+          {
             return count;
+          }
           indices[startIndexOffset + count] = (byte)bit;
           count++;
         }
