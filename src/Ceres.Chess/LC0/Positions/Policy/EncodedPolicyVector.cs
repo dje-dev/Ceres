@@ -1899,7 +1899,7 @@ namespace Ceres.Chess.EncodedPositions
     /// <summary>
     /// Returns pointer to begining of array of probabilities.
     /// </summary>
-    internal float* ProbabilitiesPtr
+    public float* ProbabilitiesPtr
     {
       get
       {
