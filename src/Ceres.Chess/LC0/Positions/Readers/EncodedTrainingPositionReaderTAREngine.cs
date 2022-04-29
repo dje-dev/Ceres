@@ -23,6 +23,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Reflection;
 using Ceres.Base.DataType;
+using SharpCompress.Readers.Tar;
 
 #endregion
 
@@ -54,7 +55,7 @@ namespace Ceres.Chess.EncodedPositions
       int numPositionsProcessed = 0;
       using (Stream stream = System.IO.File.OpenRead(trainingTARFileName))
       {
-        IReader reader = ReaderFactory.Open(stream);
+        IReader reader = TarReader.Open(stream);
         while (reader.MoveToNextEntry())
         {
           if (numPositionsProcessed >= maxPositions)
@@ -114,7 +115,13 @@ namespace Ceres.Chess.EncodedPositions
     public static int ReadFromStream(Stream stream, byte[] rawBuffer, ref EncodedTrainingPosition[] buffer)
     {
       // Read decompressed bytes
-      int bytesRead = stream.Read(rawBuffer, 0, rawBuffer.Length);
+      int bytesRead = 0;
+      int thisBytes = 0;
+      do
+      {
+        thisBytes = stream.Read(rawBuffer, bytesRead, rawBuffer.Length - bytesRead);
+        bytesRead += thisBytes;
+      } while (thisBytes > 0);
 
       return bytesRead == 0
           ? throw new Exception(" trying to read " + rawBuffer.Length)
