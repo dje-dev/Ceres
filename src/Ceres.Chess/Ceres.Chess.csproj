@@ -43,7 +43,7 @@
     <PackageReference Include="LINQPad.Runtime" Version="6.7.5" />
     <PackageReference Include="Microsoft.ML.OnnxRuntime.DirectML" Version="1.9.0" />
     <PackageReference Include="protobuf-net" Version="3.0.29" />
-    <PackageReference Include="SharpCompress" Version="0.26.0" />
+    <PackageReference Include="SharpCompress" Version="0.31.0" />
     <PackageReference Include="XPlot.Plotly" Version="4.0.6" />
   </ItemGroup>
 
