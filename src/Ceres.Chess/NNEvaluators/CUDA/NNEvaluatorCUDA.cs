@@ -322,6 +322,18 @@ namespace Ceres.Chess.NNEvaluators.CUDA
           {
             // Determine legal move list
             MGMoveList movesLegal = movesSpan[i];
+#if NOT
+            MGMoveList movesLegal;
+            if (movesSpan.Length <= i)
+            {
+              movesLegal = new MGMoveList();
+              MGMoveGen.GenerateMoves(in batch.Positions[i], movesLegal);
+            }
+            else
+            {
+              movesLegal = movesSpan[i];
+            }
+#endif
 
             // Note that rarely there might be more legal moves than we can fit in our buffer;
             // in this case we just silently ignore some
