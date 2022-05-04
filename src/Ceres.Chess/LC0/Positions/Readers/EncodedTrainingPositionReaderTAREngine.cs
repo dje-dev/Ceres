@@ -24,6 +24,7 @@ using System.IO.Compression;
 using System.Reflection;
 using Ceres.Base.DataType;
 using SharpCompress.Readers.Tar;
+using Zstandard.Net;
 
 #endregion
 
@@ -63,21 +64,29 @@ namespace Ceres.Chess.EncodedPositions
             yield break;
           }
 
-          if (!reader.Entry.IsDirectory && reader.Entry.Key.ToLower().EndsWith("gz"))
+          if (reader.Entry.IsDirectory)
           {
-            // Skip if this file does not match our filter
-            if (processFilePredicate != null && !processFilePredicate(reader.Entry.Key.ToUpper()))
-            {
-              continue;
-            }
+            continue; 
+          }
 
+          // Skip if this file does not match our filter
+          if (processFilePredicate != null && !processFilePredicate(reader.Entry.Key.ToUpper()))
+          {
+            continue;
+          }
+
+          string fileName = reader.Entry.Key.ToLower();
+          if (fileName.EndsWith("gz") || fileName.EndsWith("zst"))
+          {
             using (EntryStream es = reader.OpenEntryStream())
             {
               numGamesProcessed++;
               //if (numGamesProcessed % 1000 == 0) Console.WriteLine("  games read " + numGamesProcessed + " " + (bytesWritten / 1_000_000_000.0) + " GB");
 
               // Process all GZIP files within
-              using (GZipStream decompressionStream = new GZipStream(es, CompressionMode.Decompress))
+              Stream decompressionStream = fileName.EndsWith("gz") ? new GZipStream(es, CompressionMode.Decompress)
+                                                             : new ZstandardStream(es, CompressionMode.Decompress);
+              using (decompressionStream)
               {
                 if (numGamesProcessed >= maxGames) yield break;
 
