@@ -124,7 +124,14 @@ namespace Ceres.Chess
     }
 
     /// <summary>
-    /// Returns position mirrored about the vertical divide of the board.
+    /// Returns position reversed about the vertical  divide of the board.
+    /// </summary>
+    /// <param name="sq"></param>
+    /// <returns></returns>
+    public Square Reversed => Square.FromFileAndRank(File, 7 - Rank);
+
+    /// <summary>
+    /// Returns position mirrored about the horizontal divide of the board.
     /// </summary>
     /// <param name="sq"></param>
     /// <returns></returns>
