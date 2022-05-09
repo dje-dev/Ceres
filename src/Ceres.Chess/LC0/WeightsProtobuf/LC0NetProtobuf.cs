@@ -81,13 +81,14 @@ namespace Ceres.Chess.LC0.WeightsProtobuf
     /// <summary>
     /// Squeeze and Excitation ratio.
     /// </summary>
-    public int? SERatio => (Net.Weights.Residuals[0].Se?.B2.Params.Length
+    public int? SERatio => Net.Weights.Residuals.Count == 0 ? 0 :
+                             (Net.Weights.Residuals[0].Se?.B2.Params.Length
                           / Net.Weights.Residuals[0].Se?.B1.Params.Length) / 2;
 
     /// <summary>
     /// Number of policy channels.
     /// </summary>
-    public int? NumPolicyChannels => Net.Weights.Policy.BnBetas?.Params.Length / 2;
+    public int? NumPolicyChannels => Net.Weights.Policy?.BnBetas?.Params.Length / 2;
 
     /// <summary>
     /// Statistics about min/max values within weights layers.
