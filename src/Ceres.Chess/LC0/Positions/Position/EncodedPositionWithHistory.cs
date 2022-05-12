@@ -447,7 +447,7 @@ namespace Ceres.Chess.EncodedPositions
       {
         PositionMiscInfo miscInfo = new PositionMiscInfo(sourceMiscInfo.Castling_US_OO == 1 ? true : false, sourceMiscInfo.Castling_US_OOO == 1 ? true : false,
                                                          sourceMiscInfo.Castling_Them_OO == 1 ? true : false, sourceMiscInfo.Castling_Them_OOO == 1 ? true : false,
-                                                         sourceMiscInfo.SideToMove == EncodedPositionMiscInfo.SideToMoveEnum.White ? SideType.White : SideType.Black,
+                                                         SideType.White,
                                                          sourceMiscInfo.Rule50Count, (int)board0.Repetitions.Data, 0, epColIndex);
 
         return new Position(board0.OurKing.Data, board0.OurQueens.Data, board0.OurRooks.Data, board0.OurBishops.Data, board0.OurKnights.Data, board0.OurPawns.Data,
@@ -458,7 +458,7 @@ namespace Ceres.Chess.EncodedPositions
       {
         PositionMiscInfo miscInfo = new PositionMiscInfo(sourceMiscInfo.Castling_Them_OO == 1 ? true : false, sourceMiscInfo.Castling_Them_OOO == 1 ? true : false,
                                                          sourceMiscInfo.Castling_US_OO == 1 ? true : false, sourceMiscInfo.Castling_US_OOO == 1 ? true : false,
-                                                         sourceMiscInfo.SideToMove == EncodedPositionMiscInfo.SideToMoveEnum.White ? SideType.White : SideType.Black,
+                                                         SideType.Black,
                                                          sourceMiscInfo.Rule50Count, (int)board0.Repetitions.Data, 0, epColIndex);
         board0 = board0.Reversed;
         return new Position(board0.TheirKing.Data, board0.TheirQueens.Data, board0.TheirRooks.Data, board0.TheirBishops.Data, board0.TheirKnights.Data, board0.TheirPawns.Data,
