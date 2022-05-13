@@ -484,20 +484,22 @@ namespace Ceres.Chess.NetEvaluation.Batch
             }
           }
 
-
-          if (acc == 0.0)
+          if (numLegalMoves > 0)
           {
-            throw new Exception("Sum of unnormalized probabilities was zero.");
-          }
-
-          // As performance optimization, only adjust if significantly different from 1.0
-          const float MAX_DEVIATION = 0.002f;
-          if (acc < 1.0f - MAX_DEVIATION || acc > 1.0f + MAX_DEVIATION)
-          {
-            for (int j = 0; j < numLegalMoves; j++)
+            if (acc == 0.0)
             {
-              int targetIndex = legalMoveIndices[j];
-              policyTempBuffer[targetIndex] = (float)(policyTempBuffer[targetIndex] / acc);
+              throw new Exception("Sum of unnormalized probabilities was zero.");
+            }
+
+            // As performance optimization, only adjust if significantly different from 1.0
+            const float MAX_DEVIATION = 0.002f;
+            if (acc < 1.0f - MAX_DEVIATION || acc > 1.0f + MAX_DEVIATION)
+            {
+              for (int j = 0; j < numLegalMoves; j++)
+              {
+                int targetIndex = legalMoveIndices[j];
+                policyTempBuffer[targetIndex] = (float)(policyTempBuffer[targetIndex] / acc);
+              }
             }
           }
 
