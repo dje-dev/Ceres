@@ -26,6 +26,9 @@ using Ceres.Base.DataTypes;
 using System.Collections.Generic;
 using Ceres.Chess.MoveGen.Converters;
 using Ceres.Chess.EncodedPositions.Basic;
+using Ceres.Chess.MoveGen;
+using Ceres.Chess;
+using System.Diagnostics;
 
 #endregion
 
@@ -68,7 +71,7 @@ namespace Chess.Ceres.NNEvaluators
     /// <summary>
     /// Types of input(s) required by the evaluator.
     /// </summary>
-    public override InputTypes InputsRequired => InputTypes.Boards | InputTypes.Moves;
+    public override InputTypes InputsRequired => InputTypes.Positions | InputTypes.Boards | InputTypes.Moves;
 
 
     /// <summary>
@@ -105,6 +108,10 @@ namespace Chess.Ceres.NNEvaluators
     /// </summary>
     public readonly string OutputMLH;
 
+    /// <summary>
+    /// If the output of the value head are logistic values (otherwise straight probabilities).
+    /// </summary>
+    public readonly bool ValueHeadLogistic;
 
 #if NOT
 #endif
@@ -121,7 +128,8 @@ namespace Chess.Ceres.NNEvaluators
     public NNEvaluatorEngineONNX(string engineID, string weightsFN, int gpuID, 
                                  ONNXRuntimeExecutor.NetTypeEnum type, int batchSize,
                                  NNEvaluatorPrecision precision, bool isWDL, bool hasM,
-                                 string outputValue, string outputWDL, string outputPolicy, string outputMLH)
+                                 string outputValue, string outputWDL, string outputPolicy, string outputMLH, 
+                                 bool valueHeadLogistic)
     {
       EngineType = type == ONNXRuntimeExecutor.NetTypeEnum.Ceres ? "ONNX_DJE" : "ONNX_LZ0";
       EngineNetworkID = engineID;
@@ -135,6 +143,7 @@ namespace Chess.Ceres.NNEvaluators
       OutputWDL = outputWDL;
       OutputPolicy = outputPolicy;
       OutputMLH = outputMLH;
+      ValueHeadLogistic = valueHeadLogistic;
 
       if (lastONNXFileName == weightsFN && lastBatchSize == batchSize
         && lastIsWDL == isWDL && lastType == type)
@@ -155,6 +164,9 @@ namespace Chess.Ceres.NNEvaluators
     }
 
 
+
+    public static Action<IEncodedPositionBatchFlat, float[]> ConverterToFlat = null;    
+
     /// <summary>
     /// Overrides worker method to evaluate a specified batch into internal buffers.
     /// </summary>
@@ -163,14 +175,33 @@ namespace Chess.Ceres.NNEvaluators
     /// <returns></returns>
     public override IPositionEvaluationBatch DoEvaluateIntoBuffers(IEncodedPositionBatchFlat batch, bool retrieveSupplementalResults = false)
     {
-      int bufferLength = 112 * batch.NumPos * 64;
-      float[] flatValues = ArrayPool<float>.Shared.Rent(bufferLength);
-        
-      batch.ValuesFlatFromPlanes(flatValues);
-      PositionEvaluationBatch ret = DoEvaluateBatch(batch, flatValues, batch.NumPos, retrieveSupplementalResults);
+      if (Executor.NetType == ONNXRuntimeExecutor.NetTypeEnum.TPG)
+      {
+        if (ConverterToFlat == null)
+        {
+          throw new Exception("ConverterToFlat must be provided");
+        }
 
-      ArrayPool<float>.Shared.Return(flatValues);
-      return ret;
+        int bufferLength = batch.NumPos * 96 * 38;
+        float[] flatValues = ArrayPool<float>.Shared.Rent(bufferLength);
+
+        ConverterToFlat(batch, flatValues);
+
+        PositionEvaluationBatch ret = DoEvaluateBatch(batch, flatValues, batch.NumPos, retrieveSupplementalResults);
+        Debug.Assert(!retrieveSupplementalResults);
+        return ret;
+      }
+      else
+      {
+        int bufferLength = 112 * batch.NumPos * 64;
+        float[] flatValues = ArrayPool<float>.Shared.Rent(bufferLength);
+
+        batch.ValuesFlatFromPlanes(flatValues);
+        PositionEvaluationBatch ret = DoEvaluateBatch(batch, flatValues, batch.NumPos, retrieveSupplementalResults);
+
+        ArrayPool<float>.Shared.Return(flatValues);
+        return ret;
+      }
     }
 
     /// <summary>
@@ -205,11 +236,16 @@ namespace Chess.Ceres.NNEvaluators
 
       ONNXRuntimeExecutorResultBatch result;
       TimingStats stats = new TimingStats();
-      using (new TimingBlock(stats, TimingBlock.LoggingType.None))
+//      using (new TimingBlock(stats, TimingBlock.LoggingType.None))
       {
         lock (Executor)
         {
           result = Executor.Execute(IsWDL, flatValues, numPos, alreadyConvertedToLZ0: true);
+
+          if (Executor.NetType == ONNXRuntimeExecutor.NetTypeEnum.TPG)
+          {
+            ConvertTPGPolicyToExpanded(batch, result);
+          }
         }
       }
 
@@ -246,12 +282,54 @@ namespace Chess.Ceres.NNEvaluators
 #endif
 
       // NOTE: inefficient, above we convert from [] (flat) to [][] and here we convert back to []
-      const bool VALS_ARE_LOGISTIC = false;
-      return new PositionEvaluationBatch(IsWDL, HasM, numPos, result.ValuesRaw, result.PolicyFlat, mFP16, null, VALS_ARE_LOGISTIC,
+      return new PositionEvaluationBatch(IsWDL, HasM, numPos, result.ValuesRaw, result.PolicyFlat, mFP16, null, ValueHeadLogistic,
                                          PositionEvaluationBatch.PolicyType.LogProbabilities, false, batch, stats);
     }
 
-#endregion
+    #endregion
+
+
+#if NOT
+if ((transform & FlipTransform) != 0) {
+    sq.set(sq.row(), 7 - sq.col());
+  }
+  if ((transform & MirrorTransform) != 0) {
+    sq.set(7 - sq.row(), sq.col());
+  }
+  if ((transform & TransposeTransform) != 0) {
+    sq.set(7 - sq.col(), 7 - sq.row());
+  }
+  return sq;
+}
+#endif
+    void ConvertTPGPolicyToExpanded(IEncodedPositionBatchFlat batch, ONNXRuntimeExecutorResultBatch result)
+    {
+      Span<MGMoveList> allMoves = batch.Moves;
+      for (int i=0; i<batch.NumPos;i++)
+      {
+        // TODO: Very inefficient - create many arrays
+        float[] policyVectorSource = result.PolicyVectors[i];
+        float[] policyVectorTarget = new float[1858];
+
+        MGMoveList moves = allMoves[i];
+        for (int m=0; m<moves.NumMovesUsed;m++)
+        {
+//          Console.WriteLine(moves.MovesArray[m] + " " + moves.MovesArray[m].Reversed);
+          EncodedMove move = ConverterMGMoveEncodedMove.MGChessMoveToEncodedMove(moves.MovesArray[m]);
+          
+//          move = new EncodedMove(move.FromSquare.Flipped, move.ToSquare.Flipped, move.Promotion, move.IsCastling);
+          
+          //EncodedMove moveOther = new EncodedMove(1857 - move.RawValue);
+//          Console.WriteLine(moveOther);
+//          if (batch.Positions[i].SideToMove == SideType.Black)  move = move.Mirrored.Flipped;
+          int index = move.IndexNeuralNet;
+          policyVectorTarget[index] = policyVectorSource[m];
+        }
+
+        // Rewrite with expanded policy vector just created
+        result.PolicyVectors[i] = policyVectorTarget;
+      }
+    }
 
     protected override void DoShutdown()
     {

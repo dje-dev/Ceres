@@ -143,7 +143,7 @@ namespace Ceres.Chess.NNEvaluators
           ret = new NNEvaluatorEngineONNX(netDef.NetworkID, fullFN2, deviceDef.DeviceIndex,
                                           ONNXRuntimeExecutor.NetTypeEnum.LC0, 1024,
                                           NNEvaluatorPrecision.FP32, DEFAULT_HAS_WDL, DEFAULT_HAS_MLH,
-                                          null, null, null, null);
+                                          null, null, null, null, false);
           break;
 
         case NNEvaluatorType.RandomWide:
@@ -195,7 +195,7 @@ namespace Ceres.Chess.NNEvaluators
                                                ONNXRuntimeExecutor.NetTypeEnum.LC0, 1024,
                                                NNEvaluatorPrecision.FP32, netDefONNX.IsWDL, netDefONNX.HasMovesLeft,
                                                pbn.Net.OnnxModel.OutputValue, pbn.Net.OnnxModel.OutputWdl,
-                                               pbn.Net.OnnxModel.OutputPolicy, pbn.Net.OnnxModel.OutputMlh);
+                                               pbn.Net.OnnxModel.OutputPolicy, pbn.Net.OnnxModel.OutputMlh, false);
             }
           }
           else

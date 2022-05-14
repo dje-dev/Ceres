@@ -49,7 +49,7 @@ namespace Ceres.Chess.LC0NetInference
     /// <summary>
     /// Type of neural network (Leela Chess Zero or Ceres).
     /// </summary>
-    public enum NetTypeEnum { Ceres, LC0 };
+    public enum NetTypeEnum { Ceres, LC0, TPG };
 
     public readonly NetTypeEnum NetType;
 
@@ -110,6 +110,9 @@ namespace Ceres.Chess.LC0NetInference
         {
           positionEncoding = ONNXRuntimeExecutorResultBatch.RebuildInputsForLC0Network(positionEncoding, BatchSize); // Centralize this
         }
+        else if (NetType == NetTypeEnum.TPG)
+        {
+        }
         else
         {
           throw new NotImplementedException();
@@ -118,9 +121,21 @@ namespace Ceres.Chess.LC0NetInference
 
 
       // ** NICE DEBUGGING!
-      if (debuggingDump) EncodedPositionBatchFlat.DumpDecoded(positionEncoding, 112);
+      if (debuggingDump && NetType != NetTypeEnum.TPG)
+      {
+        EncodedPositionBatchFlat.DumpDecoded(positionEncoding, 112);
+      }
 
-      float[][] eval = executor.Run(positionEncoding, new int[] { numPositionsUsed, 112, 8, 8 }, Precision == NNEvaluatorPrecision.FP16);
+      float[][] eval;
+
+      if (NetType == NetTypeEnum.TPG)
+      {
+        eval = executor.Run(positionEncoding, new int[] { numPositionsUsed, 96, 38 }, Precision == NNEvaluatorPrecision.FP16);
+      }
+      else
+      {
+        eval = executor.Run(positionEncoding, new int[] { numPositionsUsed, 112, 8, 8 }, Precision == NNEvaluatorPrecision.FP16);
+      }
 
       const int VALUE_FC_SIZE = 32 * 64;
 
@@ -166,7 +181,7 @@ namespace Ceres.Chess.LC0NetInference
           throw new Exception("Implmentation restriction, ONNX runtime nets expected to have  both WDL and MLH heads.");
         }
 
-        int INDEX_POLICIES = FindIndex(1858);
+        int INDEX_POLICIES = FindIndex(NetType == NetTypeEnum.Ceres ? 1858 : 96);
         int INDEX_MLH = FindIndex(1);
         int INDEX_WDL = FindIndex(3);
 
@@ -177,8 +192,9 @@ namespace Ceres.Chess.LC0NetInference
         Debug.Assert(values.Length == (isWDL ? 3 : 1) * numPositionsUsed);
 
         float[] value_fc_activations = null;// eval.Length < 3 ? null : eval[2];
-
-        ONNXRuntimeExecutorResultBatch result = new ONNXRuntimeExecutorResultBatch(isWDL, values, policiesLogistics, mlh, value_fc_activations, numPositionsUsed);
+        int? overridePolicyLen = NetType == NetTypeEnum.TPG ? 96 : 0;
+        ONNXRuntimeExecutorResultBatch result = new ONNXRuntimeExecutorResultBatch(isWDL, values, policiesLogistics, mlh, value_fc_activations, 
+                                                                                   numPositionsUsed, overridePolicyLen);
         return result;
 
       }

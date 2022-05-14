@@ -501,9 +501,9 @@ namespace Ceres.Chess.NetEvaluation.Batch
                 policyTempBuffer[targetIndex] = (float)(policyTempBuffer[targetIndex] / acc);
               }
             }
-          }
 
-          CompressedPolicyVector.Initialize(ref retPolicies[i], policyTempBuffer, alreadySorted);
+            CompressedPolicyVector.Initialize(ref retPolicies[i], policyTempBuffer, alreadySorted);
+          }
         }
       });
 

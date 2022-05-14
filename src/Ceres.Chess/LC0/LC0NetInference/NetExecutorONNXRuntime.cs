@@ -26,6 +26,7 @@
 
 using System;
 using System.Collections.Generic;
+using Ceres.Base.Benchmarking;
 using Ceres.Base.DataTypes;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
@@ -80,11 +81,11 @@ namespace Ceres.Chess.LC0NetInference
       //     if (gpuID < 0 || gpuID > 16) throw new Exception($"Invalid GPU ID { gpuID}");
 #if FEATURE_ONNX
 #if CUDA
-      if (gpuID == -999) // CPU. TO DO: clean this up
+      if (gpuID < 0) // CPU. TO DO: clean this up
       {
         Session = new InferenceSession(onnxFileName);
       }
-      else if (gpuID == -1)
+      else if (gpuID == 0)
       {
         Session = new InferenceSession(onnxFileName, SessionOptions.MakeSessionOptionWithCudaProvider(gpuID));
         //        Session = new InferenceSession(onnxFileName, SessionOptions.MakeSessionOptionWithTensorrtProvider(gpuID));
@@ -111,7 +112,7 @@ namespace Ceres.Chess.LC0NetInference
 //        so.AppendExecutionProvider_CPU(); //fails even when corresponding NuGet package is installed
         //        ORT_TENSORRT_FP16_ENABLE
 //        so.LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_VERBOSE;
-        so.LogVerbosityLevel = 3;
+//        so.LogVerbosityLevel = 3;
 //        so.LogId = "ort.log.txt";
 
         Session = new InferenceSession(onnxFileName, so);
@@ -214,12 +215,12 @@ namespace Ceres.Chess.LC0NetInference
       DenseTensor<float> inputTensor = new DenseTensor<float>(input.Slice(0, numElements), shape);
       List<NamedOnnxValue> inputs = new List<NamedOnnxValue>() { NamedOnnxValue.CreateFromTensor(inputName, inputTensor) };
 
-      IDisposableReadOnlyCollection<DisposableNamedOnnxValue> runResult;
+      IDisposableReadOnlyCollection<DisposableNamedOnnxValue> runResult = default;
 
-      lock (lockObject)
-      {
-        runResult = Session.Run(inputs);
-      }
+        lock (lockObject)
+        {
+          runResult = Session.Run(inputs);
+        }
 
       float[][] resultArrays = new float[Session.OutputMetadata.Count][];
       int i = 0;
