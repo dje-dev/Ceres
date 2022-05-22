@@ -163,6 +163,20 @@ namespace Ceres.Chess.EncodedPositions
 
 
     /// <summary>
+    /// Overwrites the value of Unused1.
+    /// WARNING: is unsafe.
+    /// </summary>
+    /// <param name="miscInfo"></param>
+    public unsafe void SetUnused1(float value)
+    {
+      fixed (float* p = &Unused1)
+      {
+        *p = value;
+      }
+    }
+
+
+    /// <summary>
     /// Returns if the played move was not the best move (noise induced alternate chosen).
     /// </summary>
     public bool NotBestMove => PlayedIndex != BestIndex;
