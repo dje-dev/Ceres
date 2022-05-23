@@ -177,11 +177,18 @@ namespace Ceres.Chess.EncodedPositions
       EncodedPositionBoard planes = GetPlanesForHistoryBoard(historyIndex);
 
       // KQkq - 0 1
-      bool weAreWhite = MiscInfo.InfoPosition.SideToMove == 0;
+      bool weAreWhite = (MiscInfo.InfoPosition.SideToMove == 0) == (historyIndex % 2 == 0);
       string fen = MiscInfo.InfoPosition.SideToMove == 0 ? planes.GetFEN(weAreWhite) : planes.Reversed.GetFEN(weAreWhite);
-      if (historyIndex != 0) return fen;
 
       fen = fen + (weAreWhite ? " w" : " b");
+      if (historyIndex != 0)
+      {
+        // Other values such as 50-move rule value, etc. are not easy to determine
+        // so don't attempt.
+        // TODO: improve.
+        return fen;
+      }
+
       fen = fen + " ";
 
       string castling = "";
@@ -426,6 +433,66 @@ namespace Ceres.Chess.EncodedPositions
     {
       return PositionFromEncodedPosition(pos.PositionWithBoardsMirrored.Mirrored);
     }
+
+    static bool CheckMovedTheirPiece(in EncodedPositionBoardPlane planeAfter, in EncodedPositionBoardPlane planeBefore, ref Square destSquare)
+    {
+      int theirMovedPlane = System.Numerics.BitOperations.LeadingZeroCount((ulong)(planeAfter.Bits.Data & ~planeBefore.Bits.Data));
+      if (theirMovedPlane < 64)
+      {
+        destSquare = new Square(63 - theirMovedPlane, Square.SquareIndexType.BottomToTopRightToLeft);
+        return true;
+      }
+      return false;
+    }
+
+    public readonly (PieceType pieceType, Square fromSquare, Square toSquare, bool wasCastle) LastMoveInfoFromSideToMovePerspective()
+    {
+      EncodedPositionBoard board0 = BoardsHistory.History_0;
+      EncodedPositionBoard board1 = BoardsHistory.History_1;
+
+      Square sourceSquare = default;
+      Square destSquare = default;
+
+      // Check King first (before rook) to check for possible castling
+      if (CheckMovedTheirPiece(in board0.TheirKing, in board1.TheirKing, ref destSquare))
+      {
+        Square destSquareRook = default;
+        bool wasCastle = CheckMovedTheirPiece(in board0.TheirRooks, in board1.TheirRooks, ref destSquareRook);
+
+        CheckMovedTheirPiece(in board1.TheirKing, in board0.TheirKing, ref sourceSquare);
+        return (PieceType.King, sourceSquare, destSquare, wasCastle);
+      }
+
+      if (CheckMovedTheirPiece(in board0.TheirQueens, in board1.TheirQueens, ref destSquare))
+      {
+        CheckMovedTheirPiece(in board1.TheirQueens, in board0.TheirQueens, ref sourceSquare);
+        return (PieceType.Queen, sourceSquare, destSquare, false);
+      }
+
+      if (CheckMovedTheirPiece(in board0.TheirRooks, in board1.TheirRooks, ref destSquare))
+      {
+        CheckMovedTheirPiece(in board1.TheirRooks, in board0.TheirRooks, ref sourceSquare);
+        return (PieceType.Rook, sourceSquare, destSquare, false);
+      }
+      if (CheckMovedTheirPiece(in board0.TheirBishops, in board1.TheirBishops, ref destSquare))
+      {
+        CheckMovedTheirPiece(in board1.TheirBishops, in board0.TheirBishops, ref sourceSquare);
+        return (PieceType.Bishop, sourceSquare, destSquare, false);
+      }
+      if (CheckMovedTheirPiece(in board0.TheirKnights, in board1.TheirKnights, ref destSquare))
+      {
+        CheckMovedTheirPiece(in board1.TheirKnights, in board0.TheirKnights, ref sourceSquare);
+        return (PieceType.Knight, sourceSquare, destSquare, false);
+      }
+      if (CheckMovedTheirPiece(in board0.TheirPawns, in board1.TheirPawns, ref destSquare))
+      {
+        CheckMovedTheirPiece(in board1.TheirPawns, in board0.TheirPawns, ref sourceSquare);
+        return (PieceType.Pawn, sourceSquare, destSquare, false);
+      }
+
+      return default;
+    }
+
 
 
     /// <summary>
