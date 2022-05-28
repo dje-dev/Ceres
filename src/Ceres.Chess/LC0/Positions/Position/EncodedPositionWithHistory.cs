@@ -447,9 +447,12 @@ namespace Ceres.Chess.EncodedPositions
 
     public readonly (PieceType pieceType, Square fromSquare, Square toSquare, bool wasCastle) LastMoveInfoFromSideToMovePerspective()
     {
-      EncodedPositionBoard board0 = BoardsHistory.History_0;
-      EncodedPositionBoard board1 = BoardsHistory.History_1;
+      return LastMoveInfoFromSideToMovePerspective(in BoardsHistory.History_0, in BoardsHistory.History_1);
+    }
 
+
+    public static (PieceType pieceType, Square fromSquare, Square toSquare, bool wasCastle) LastMoveInfoFromSideToMovePerspective(in EncodedPositionBoard board0, in EncodedPositionBoard board1)
+    {
       Square sourceSquare = default;
       Square destSquare = default;
 
