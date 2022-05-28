@@ -208,7 +208,7 @@ namespace Ceres.Chess.NNEvaluators
     /// <param name="result"></param>
     /// <param name="batch"></param>
     /// <param name="batchIndex"></param>
-    private void ExtractToNNEvaluatorResult(out NNEvaluatorResult result, 
+    public void ExtractToNNEvaluatorResult(out NNEvaluatorResult result, 
                                             IPositionEvaluationBatch batch, int batchIndex)
     {
       float w = batch.GetWinP(batchIndex);
