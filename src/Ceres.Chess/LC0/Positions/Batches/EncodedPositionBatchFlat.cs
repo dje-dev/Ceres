@@ -107,6 +107,12 @@ namespace Ceres.Chess.LC0.Batches
     /// </summary>
     public short PreferredEvaluatorIndex;
 
+    /// <summary>
+    /// If originated from EncodedPositionWithHistory then
+    /// this field optionally holds the origin data array.
+    /// </summary>
+    public EncodedPositionWithHistory[] PositionsBuffer;
+
     public bool PositionsUseSecondaryEvaluator { get; set; }
 
     public IEncodedPositionBatchFlat GetSubBatchSlice(int startIndex, int count)
