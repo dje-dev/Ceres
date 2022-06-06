@@ -150,16 +150,30 @@ namespace Ceres.Chess.EncodedPositions
           ResultD,
           0.5f * (1.0f - ResultD - ResultQ)
          );
-    
+
 
     /// <summary>
     /// Neural network WDL distribution at best move node after search.
     /// </summary>
-    public (float w, float d, float l) BestWDL =>
-         (0.5f * (1.0f - BestD + BestQ),
-          BestD,
-          0.5f * (1.0f - BestD - BestQ)
-         );
+    public (float w, float d, float l) BestWDL
+    {
+      get
+      {
+        float sum = BestQ + BestD;
+        if (float.IsNaN(sum) || sum == 0)
+        {
+          // BestWDL was not available, fall back to ResultWDL.
+          return ResultWDL;
+        }
+        else
+        {
+          return (0.5f * (1.0f - BestD + BestQ),
+            BestD,
+            0.5f * (1.0f - BestD - BestQ)
+           );
+        }
+      }
+    }
 
 
     /// <summary>
