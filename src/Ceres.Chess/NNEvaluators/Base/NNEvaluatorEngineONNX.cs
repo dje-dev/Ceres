@@ -165,7 +165,7 @@ namespace Chess.Ceres.NNEvaluators
 
 
 
-    public static Action<IEncodedPositionBatchFlat, float[]> ConverterToFlat = null;    
+    public static Action<IEncodedPositionBatchFlat, float[], float[]> ConverterToFlat = null;    
 
     /// <summary>
     /// Overrides worker method to evaluate a specified batch into internal buffers.
@@ -182,12 +182,13 @@ namespace Chess.Ceres.NNEvaluators
           throw new Exception("ConverterToFlat must be provided");
         }
 
-        int bufferLength = batch.NumPos * 96 * 38;
-        float[] flatValues = ArrayPool<float>.Shared.Rent(bufferLength);
+        float[] flatValuesAttention = ArrayPool<float>.Shared.Rent(batch.NumPos * 96 * 38);
+        float[] flatValuesBoard = ArrayPool<float>.Shared.Rent(batch.NumPos * 782);
 
-        ConverterToFlat(batch, flatValues);
+        ConverterToFlat(batch, flatValuesAttention, flatValuesBoard);
 
-        PositionEvaluationBatch ret = DoEvaluateBatch(batch, flatValues, batch.NumPos, retrieveSupplementalResults);
+        PositionEvaluationBatch ret = DoEvaluateBatch(batch, flatValuesAttention, flatValuesBoard, 
+                                                      batch.NumPos, retrieveSupplementalResults);
         Debug.Assert(!retrieveSupplementalResults);
         return ret;
       }
@@ -197,7 +198,7 @@ namespace Chess.Ceres.NNEvaluators
         float[] flatValues = ArrayPool<float>.Shared.Rent(bufferLength);
 
         batch.ValuesFlatFromPlanes(flatValues);
-        PositionEvaluationBatch ret = DoEvaluateBatch(batch, flatValues, batch.NumPos, retrieveSupplementalResults);
+        PositionEvaluationBatch ret = DoEvaluateBatch(batch, flatValues, null, batch.NumPos, retrieveSupplementalResults);
 
         ArrayPool<float>.Shared.Return(flatValues);
         return ret;
@@ -226,11 +227,12 @@ namespace Chess.Ceres.NNEvaluators
     /// <summary>
     /// Internal worker method to 
     /// </summary>
-    /// <param name="flatValues"></param>
+    /// <param name="flatValuesPrimary"></param>
     /// <param name="numPos"></param>
     /// <param name="retrieveSupplementalResults"></param>
     /// <returns></returns>
-    PositionEvaluationBatch DoEvaluateBatch(IEncodedPositionBatchFlat batch, float[] flatValues, int numPos, bool retrieveSupplementalResults)
+    PositionEvaluationBatch DoEvaluateBatch(IEncodedPositionBatchFlat batch, float[] flatValuesPrimary, float[] flatValuesSecondary,
+                                            int numPos, bool retrieveSupplementalResults)
     {
       if (retrieveSupplementalResults) throw new Exception("retrieveSupplementalResults not supported");
 
@@ -240,7 +242,7 @@ namespace Chess.Ceres.NNEvaluators
       {
         lock (Executor)
         {
-          result = Executor.Execute(IsWDL, flatValues, numPos, alreadyConvertedToLZ0: true);
+          result = Executor.Execute(IsWDL, flatValuesPrimary, flatValuesSecondary, numPos, alreadyConvertedToLZ0: true);
 
           if (Executor.NetType == ONNXRuntimeExecutor.NetTypeEnum.TPG)
           {
