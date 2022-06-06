@@ -96,19 +96,20 @@ namespace Ceres.Chess.LC0NetInference
     /// <param name="debuggingDump"></param>
     /// <param name="alreadyConvertedToLZ0"></param>
     /// <returns></returns>
-    public ONNXRuntimeExecutorResultBatch Execute(bool isWDL, float[] positionEncoding, int numPositionsUsed, 
-                                                 bool debuggingDump = false, bool alreadyConvertedToLZ0 = false)
+    public ONNXRuntimeExecutorResultBatch Execute(bool isWDL, 
+                                                  float[] flatValuesPrimary, float[] flatValuesSecondary, int numPositionsUsed, 
+                                                  bool debuggingDump = false, bool alreadyConvertedToLZ0 = false)
     {
       if (!alreadyConvertedToLZ0)
       {
-        if (positionEncoding.Length / BatchSize != (64 * EncodedPositionBatchFlat.TOTAL_NUM_PLANES_ALL_HISTORIES))
+        if (flatValuesPrimary.Length / BatchSize != (64 * EncodedPositionBatchFlat.TOTAL_NUM_PLANES_ALL_HISTORIES))
         {
           throw new Exception("Internal error: incorrect number of planes.");
         }
 
         if (NetType == NetTypeEnum.LC0)
         {
-          positionEncoding = ONNXRuntimeExecutorResultBatch.RebuildInputsForLC0Network(positionEncoding, BatchSize); // Centralize this
+          flatValuesPrimary = ONNXRuntimeExecutorResultBatch.RebuildInputsForLC0Network(flatValuesPrimary, BatchSize); // Centralize this
         }
         else if (NetType == NetTypeEnum.TPG)
         {
@@ -123,18 +124,26 @@ namespace Ceres.Chess.LC0NetInference
       // ** NICE DEBUGGING!
       if (debuggingDump && NetType != NetTypeEnum.TPG)
       {
-        EncodedPositionBatchFlat.DumpDecoded(positionEncoding, 112);
+        EncodedPositionBatchFlat.DumpDecoded(flatValuesPrimary, 112);
       }
 
       float[][] eval;
 
       if (NetType == NetTypeEnum.TPG)
       {
-        eval = executor.Run(positionEncoding, new int[] { numPositionsUsed, 96, 38 }, Precision == NNEvaluatorPrecision.FP16);
+        var inputs = new (Memory<float> input, int[] shape)[flatValuesSecondary == null ? 1 : 2];
+        inputs[0] = (flatValuesPrimary, new int[] { numPositionsUsed, 96, 38 });
+        if (flatValuesSecondary != null)
+        {
+          inputs[1] = (flatValuesSecondary, new int[] { numPositionsUsed, 782 });
+        }
+
+        eval = executor.Run(inputs, Precision == NNEvaluatorPrecision.FP16);
       }
       else
       {
-        eval = executor.Run(positionEncoding, new int[] { numPositionsUsed, 112, 8, 8 }, Precision == NNEvaluatorPrecision.FP16);
+        var input = (flatValuesPrimary, new int[] { numPositionsUsed, 112, 8, 8 });
+        eval = executor.Run(new (Memory<float> input, int[] shape)[] { input }, Precision == NNEvaluatorPrecision.FP16);
       }
 
       const int VALUE_FC_SIZE = 32 * 64;

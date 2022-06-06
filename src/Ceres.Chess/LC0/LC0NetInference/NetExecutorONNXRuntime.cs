@@ -133,33 +133,54 @@ namespace Ceres.Chess.LC0NetInference
     /// <param name="input"></param>
     /// <param name="shape"></param>
     /// <returns></returns>
-    public float[][] Run(Memory<float> input, int[] shape, bool float16)
+    public float[][] Run((Memory<float> input, int[] shape)[] inputs, bool float16)
     {
 #if FEATURE_ONNX
       // Determine input name
       // NOTE: experienced strange lowlevel crash when tried to break out this into name retrieval into a separate method
       string inputName = null;
       IReadOnlyDictionary<string, NodeMetadata> inputsMetadata = Session.InputMetadata;
-      if (inputsMetadata.Count > 1) throw new ArgumentException("Expected only one input, found " + inputsMetadata.Count);
+      if (inputsMetadata.Count != inputs.Length)
+      {
+        throw new ArgumentException($"Expected {inputsMetadata.Count} inputs, received " + inputs.Length);
+      }
+
+      var inputsONNX = new (Memory<float> input, int[] shape, string inputName, int numElements)[inputsMetadata.Count];
+
+      int inputIndex = 0;
       foreach (KeyValuePair<string, NodeMetadata> iv in inputsMetadata)
       {
+        (Memory<float> input, int[] shape) = inputs[inputIndex];
         inputName = iv.Key;
-        break; // get only first
-      }
-      if (inputName == null) throw new Exception("Unable to retrieve name of input");
+        if (inputName == null)
+        {
+          throw new Exception("Unable to retrieve name of input");
+        }
 
-      int numElements = 1;
-      foreach (int dimSize in shape) numElements *= dimSize;
-      if (input.Length < numElements) throw new Exception($"Unexpected number of elements {numElements} {input.Length} {shape.ToString()}");
+        int numElements = 1;
+        foreach (int dimSize in shape)
+        {
+          numElements *= dimSize;
+        }
+
+        if (input.Length < numElements)
+        {
+          throw new Exception($"Unexpected number of elements {numElements} {input.Length} {shape.ToString()}");
+        }
+
+        inputsONNX[inputIndex] = (input, shape, inputName, numElements);
+        inputIndex++;
+      }
 
       if (float16)
       {
-        return RunFloat16(input, shape, inputName, numElements);
+        return RunFloat16(inputsONNX);
       }
       else
       {
-        return RunFloat(input, shape, inputName, numElements);
+        return RunFloat(inputsONNX);
       }
+
 #else
       return default;
 #endif
@@ -177,42 +198,72 @@ namespace Ceres.Chess.LC0NetInference
     /// <param name="inputName"></param>
     /// <param name="numElements"></param>
     /// <returns></returns>
-    private float[][] RunFloat16(Memory<float> input, int[] shape, string inputName, int numElements)
+    private float[][] RunFloat16((Memory<float> input, int[] shape, string inputName, int numElements)[] inputs)
     {
-      Span<float> inputSpan = input.Span;
-      Float16[] inputFloat16 = new Float16[numElements];
-      for (int ix = 0; ix < numElements; ix++)
+      List<NamedOnnxValue> inputsONNX = new(inputs.Length);
+
+      for (int i = 0; i < inputs.Length; i++)
       {
-        inputFloat16[ix] = (Float16)inputSpan[ix];
+        (Memory<float> input, int[] shape, string inputName, int numElements) = inputs[i];
+        Span<float> inputSpan = input.Span;
+        Float16[] inputFloat16 = new Float16[numElements];
+        for (int ix = 0; ix < numElements; ix++)
+        {
+          inputFloat16[ix] = (Float16)inputSpan[ix];
+        }
+
+        DenseTensor<Float16> inputTensor = new DenseTensor<Float16>(inputFloat16, shape);
+        inputsONNX.Add(NamedOnnxValue.CreateFromTensor(inputName, inputTensor));
       }
 
-      DenseTensor<Float16> inputTensor = new DenseTensor<Float16>(inputFloat16, shape);
-      List<NamedOnnxValue> inputs = new List<NamedOnnxValue>() { NamedOnnxValue.CreateFromTensor(inputName, inputTensor) };
-
       IDisposableReadOnlyCollection<DisposableNamedOnnxValue> runResult;
-
       lock (lockObject)
       {
-        runResult = Session.Run(inputs);
+        runResult = Session.Run(inputsONNX);
       }
 
       float[][] resultArrays = new float[Session.OutputMetadata.Count][];
-      int i = 0;
+      int iResult = 0;
       foreach (DisposableNamedOnnxValue resultValue in runResult)
       {
         DenseTensor<Float16> tensor = (DenseTensor<Float16>)resultValue.AsTensor<Float16>();
         Float16[] valuesFP16 = tensor.Buffer.ToArray();
-        resultArrays[i++] = Array.ConvertAll<Float16, float>(valuesFP16, f => FP16.FromRaw((ushort)f));
+        resultArrays[iResult++] = Array.ConvertAll<Float16, float>(valuesFP16, f => FP16.FromRaw((ushort)f));
       }
       return resultArrays;
     }
 
 
-
-    private float[][] RunFloat(Memory<float> input, int[] shape, string inputName, int numElements)
+    private float[][] RunFloat((Memory<float> input, int[] shape, string inputName, int numElements)[] inputs)
     {
-      //System.Memory Memory<float> inputAsMemory = (Memory<float>)input;
-      DenseTensor<float> inputTensor = new DenseTensor<float>(input.Slice(0, numElements), shape);
+      List<NamedOnnxValue> inputsONNX = new(inputs.Length);
+
+      for (int i = 0; i < inputs.Length; i++)
+      {
+        (Memory<float> input, int[] shape, string inputName, int numElements) = inputs[i];
+        DenseTensor<float> inputTensor = new DenseTensor<float>(input.Slice(0, numElements), shape);
+        inputsONNX.Add(NamedOnnxValue.CreateFromTensor(inputName, inputTensor));
+      }
+
+      IDisposableReadOnlyCollection<DisposableNamedOnnxValue> runResult;
+      lock (lockObject)
+      {
+        runResult = Session.Run(inputsONNX);
+      }
+
+      float[][] resultArrays = new float[Session.OutputMetadata.Count][];
+      int ix = 0;
+      foreach (DisposableNamedOnnxValue resultValue in runResult)
+      {
+        DenseTensor<float> tensor = (DenseTensor<float>)resultValue.AsTensor<float>();
+        float[] values = tensor.Buffer.ToArray(); // TO DO: Avoid reallocation ?
+        resultArrays[ix] = values;
+        ix++;
+      }
+      return resultArrays;
+    }
+#if NOT
+    DenseTensor<float> inputTensor = new DenseTensor<float>(input.Slice(0, numElements), shape);
       List<NamedOnnxValue> inputs = new List<NamedOnnxValue>() { NamedOnnxValue.CreateFromTensor(inputName, inputTensor) };
 
       IDisposableReadOnlyCollection<DisposableNamedOnnxValue> runResult = default;
@@ -233,6 +284,7 @@ namespace Ceres.Chess.LC0NetInference
       }
       return resultArrays;
     }
+#endif
 
     public void Dispose()
     {
