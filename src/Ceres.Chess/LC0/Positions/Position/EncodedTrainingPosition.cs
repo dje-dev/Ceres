@@ -106,6 +106,8 @@ namespace Ceres.Chess.EncodedPositions
       }
     }
 
+    static bool haveWarnedBestQ = false;
+
     /// <summary>
     /// Validates that key fields (game result, best Q, policies, etc.) are all valid.
     /// 
@@ -137,7 +139,11 @@ namespace Ceres.Chess.EncodedPositions
 
       if (float.IsNaN(refTraining.BestD + refTraining.BestQ))
       {
-        throw new Exception("BestD or BestQ is NaN");
+        if (!haveWarnedBestQ)
+        {
+          Console.WriteLine("WARNING: BestD or BestQ is NaN. Omit subsequent warnings of this type.");
+          haveWarnedBestQ = true;
+        }
       }
 
       if (float.IsNaN(refTraining.ResultD + refTraining.ResultQ))
