@@ -98,8 +98,6 @@ Note: Possible optimization/inefficiency:
       Debug.Assert(outputScores == default || outputScores.Length >= numChildren);
       Debug.Assert(numVisitsToCompute == 0 || outputChildVisitCounts.Length >= numChildren);
 
-      int numBlocks = (numChildren / 8) + ((numChildren % 8 == 0) ? 0 : 1);
-
       float virtualLossMultiplier;
       if (ParamsSelect.VLossRelative)
       {
@@ -128,7 +126,7 @@ Note: Possible optimization/inefficiency:
       }
 
       Compute(parentN, parentNInFlight, childStats, numChildren, numVisitsToCompute, outputScores,
-              outputChildVisitCounts, numBlocks, virtualLossMultiplier,
+              outputChildVisitCounts, numChildren, virtualLossMultiplier,
               parentIsRoot ? paramsSelect.UCTRootNumeratorExponent : paramsSelect.UCTNonRootNumeratorExponent,
               cpuctValue, qWhenNoChildren,
               parentIsRoot ? paramsSelect.UCTRootDenominatorExponent : paramsSelect.UCTNonRootDenominatorExponent);
@@ -182,7 +180,7 @@ Note: Possible optimization/inefficiency:
         // Get constant term handy
         float numVisitsByParentToChildren = parentNInFlight + ((parentN < 2) ? 1 : parentN - 1);
         float cpuctSqrtParentN = cpuctValue * ParamsSelect.UCTParentMultiplier(numVisitsByParentToChildren, uctParentPower);
-        ComputeChildScores(childStats, numBlocks, qWhenNoChildren, virtualLossMultiplier,
+        ComputeChildScores(childStats, numChildren, qWhenNoChildren, virtualLossMultiplier,
                            localResultAVXScratch, cpuctSqrtParentN, uctDenominatorPower);
 
         // Save back to output scores (if these were requested)
@@ -227,7 +225,7 @@ Note: Possible optimization/inefficiency:
             // Compute new child scores
             numVisitsByParentToChildren = newNInFlight + parentNInFlight + ((parentN < 2) ? 1 : parentN - 1);
             cpuctSqrtParentN = cpuctValue * ParamsSelect.UCTParentMultiplier(numVisitsByParentToChildren, uctParentPower);
-            ComputeChildScores(childStats, numBlocks, qWhenNoChildren, virtualLossMultiplier,
+            ComputeChildScores(childStats, numChildren, qWhenNoChildren, virtualLossMultiplier,
                                  localResultAVXScratch, cpuctSqrtParentN, uctDenominatorPower);
 
             // Check if the best child was still the same
@@ -269,7 +267,7 @@ Note: Possible optimization/inefficiency:
     /// <param name="w"></param>
     /// <param name="n"></param>
     /// <param name="nInFlight"></param>
-    /// <param name="numBlocks"></param>
+    /// <param name="numChildren"></param>
     /// <param name="qWhenNoChildren"></param>
     /// <param name="virtualLossMultiplier"></param>
     /// <param name="computedChildScores"></param>
@@ -277,10 +275,12 @@ Note: Possible optimization/inefficiency:
     /// <param name="uctDenominatorPower"></param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void ComputeChildScores(GatheredChildStats childStats,
-                                           int numBlocks, float qWhenNoChildren,
+                                           int numChildren, float qWhenNoChildren,
                                            float virtualLossMultiplier, float[] computedChildScores,
                                            float cpuctSqrtParentN, float uctDenominatorPower)
     {
+      int numBlocks = (numChildren / 8) + ((numChildren % 8 == 0) ? 0 : 1);
+
       Span<float> p = childStats.P.Span;
       Span<float> w = childStats.W.Span;
       Span<float> n = childStats.N.Span;
