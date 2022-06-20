@@ -25,7 +25,10 @@ namespace Ceres.Base.OperatingSystem.Linux
 {
   public unsafe static class LinuxAPI
   {
-    public const string LIBC = "libc.so.6";
+    // Note: for Mac OSX constants, see:
+    // https://github.com/nneonneo/osx-10.9-opensource/blob/master/xnu-2422.1.72/bsd/sys/mman.h
+
+    public const string LIBC = "libc.so.6"; // TODO: libSystem.dylib on macOS
 
     public const int PROT_NONE = 0;
     public const int PROT_READ = 1;
@@ -36,8 +39,8 @@ namespace Ceres.Base.OperatingSystem.Linux
     public const int MAP_SHARED_VALIDATE = 3;
     public const int MAP_TYPE = 0;
     public const int MAP_FIXED = 0x10;
-    public const int MAP_ANONYMOUS = 0x20;
-    public const int MAP_NORESERVE = 0x4000;
+    public static int MAP_ANONYMOUS => SoftwareManager.IsMacOSX ? 0x1000 : 0x20;
+    public static int MAP_NORESERVE => SoftwareManager.IsMacOSX ? 0x0040 : 0x4000;
     public const int MAP_HUGETLB = 0x40000;
     public const int MAP_FILE = 0;
 

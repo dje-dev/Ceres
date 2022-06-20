@@ -39,6 +39,12 @@ namespace Ceres.Base.OperatingSystem
 
 
     /// <summary>
+    /// Returns if running under Mac OSX operating system.
+    /// </summary>
+    public static bool IsMacOSX => RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
+
+
+    /// <summary>
     /// Returns if running under WSL2 (Windows subsystem for Linux).
     /// </summary>
     public static bool IsWSL2

@@ -97,7 +97,7 @@ namespace Ceres.Base.OperatingSystem
     {
       get
       {
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        if (SoftwareManager.IsLinux)
         {
           return LinuxAPI.PhysicalMemorySize;
         }
