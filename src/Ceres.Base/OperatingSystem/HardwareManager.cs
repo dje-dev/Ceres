@@ -56,7 +56,15 @@ namespace Ceres.Base.OperatingSystem
       string errorString = null;
       bool isWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
       bool isLinux = RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
-      if (!isWindows && !isLinux)
+      if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+      {
+        errorString = "Mac OSX not currently supported.";
+        errorString += "\r\nExperimental support with random NN backend is possible by";
+        errorString += "\r\n  (1) set project to .NET 7, (2) change LinuxAPI DllImport";
+        errorString += "\r\n  (3) disable prefetch, (4) switch IsLinux to also include MacOS";
+        errorString += "\r\n  (5) disable CUDA/AVX checks at initialization.";
+      }
+      else if (!isWindows && !isLinux)
       {
         errorString = "Currently only Windows or Linux operating systems is supported.";
       }
