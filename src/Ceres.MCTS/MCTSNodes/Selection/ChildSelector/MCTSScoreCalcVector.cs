@@ -273,11 +273,26 @@ Note: Possible optimization/inefficiency:
     /// <param name="computedChildScores"></param>
     /// <param name="cpuctSqrtParentN"></param>
     /// <param name="uctDenominatorPower"></param>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void ComputeChildScores(GatheredChildStats childStats,
-                                           int numChildren, float qWhenNoChildren,
-                                           float virtualLossMultiplier, float[] computedChildScores,
-                                           float cpuctSqrtParentN, float uctDenominatorPower)
+                                       int numChildren, float qWhenNoChildren,
+                                       float virtualLossMultiplier, float[] computedChildScores,
+                                       float cpuctSqrtParentN, float uctDenominatorPower)
+    {
+      if (Avx.IsSupported)
+      {
+        ComputeChildScoresSIMD(childStats, numChildren, qWhenNoChildren, virtualLossMultiplier, computedChildScores, cpuctSqrtParentN, uctDenominatorPower);
+      }
+      else
+      {
+        ComputeChildScoresNonSIMD(childStats, numChildren, qWhenNoChildren, virtualLossMultiplier, computedChildScores, cpuctSqrtParentN, uctDenominatorPower);
+      }
+    }
+
+
+    private static void ComputeChildScoresSIMD(GatheredChildStats childStats,
+                                               int numChildren, float qWhenNoChildren,
+                                               float virtualLossMultiplier, float[] computedChildScores,
+                                               float cpuctSqrtParentN, float uctDenominatorPower)
     {
       int numBlocks = (numChildren / 8) + ((numChildren % 8 == 0) ? 0 : 1);
 
@@ -392,11 +407,73 @@ Note: Possible optimization/inefficiency:
     }
 
 
+    #region Non-SIMD versions
+
     /// <summary>
-    /// Initialization code that should be called once for each tread 
-    /// executing score calculations.
+    /// Direct C# version of ComputeChildScores without use of SIMD.
+    /// About 60% as fast as the AVX version.
     /// </summary>
-    private static void InitializedForThread()
+    private unsafe static void ComputeChildScoresNonSIMD(GatheredChildStats childStats,
+                                                         int numChildren, float qWhenNoChildren,
+                                                         float virtualLossMultiplier, float[] computedChildScores,
+                                                         float cpuctSqrtParentN, float uctDenominatorPower)
+    {
+      ComputeScoresNonSIMD(numChildren, childStats.W.Span, childStats.N.Span, childStats.P.Span, virtualLossMultiplier, cpuctSqrtParentN, uctDenominatorPower,
+                           qWhenNoChildren, childStats.InFlight.Span, computedChildScores);
+    }
+
+
+    private static void ComputeScoresNonSIMD(int numScores, Span<float> vW, Span<float> vN, Span<float> vP,
+                                             float virtualLossMultiplier,
+                                             float cpuctSqrtParentN, float uctDenominatorPower,
+                                             float qWhenNoChildren, Span<float> vNInFlight,
+                                             Span<float> outputVScore)
+    {
+      for (int i = 0; i < numScores; i++)
+      {
+        float nPlusNInFlight = vN[i] + vNInFlight[i];
+        float _denominator;
+        if (uctDenominatorPower == 1.0f)
+        {
+          _denominator = nPlusNInFlight;
+        }
+        else if (uctDenominatorPower == 0.5f)
+        {
+          _denominator = MathF.Sqrt(nPlusNInFlight);
+        }
+        else
+        {
+          _denominator = MathF.Pow(nPlusNInFlight, uctDenominatorPower);
+        }
+
+        float _vQ;
+        float _vLossContrib = vNInFlight[i] * virtualLossMultiplier;
+        if (nPlusNInFlight > 0)
+        {
+          _vQ = (_vLossContrib - vW[i]) / nPlusNInFlight;
+        }
+        else
+        {
+          _vQ = qWhenNoChildren + _vLossContrib;
+        }
+
+        // U
+        float _vUNumerator = vP[i] * cpuctSqrtParentN;
+        float _vDenominator = 1 + _denominator;
+        float _vU = _vUNumerator / _vDenominator;
+
+        outputVScore[i] = _vU + _vQ;
+      }
+    }
+
+    #endregion
+
+
+      /// <summary>
+      /// Initialization code that should be called once for each tread 
+      /// executing score calculations.
+      /// </summary>
+      private static void InitializedForThread()
     {
       if (childScoresTempBuffer == null)
       {
