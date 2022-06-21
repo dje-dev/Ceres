@@ -196,16 +196,19 @@ namespace Ceres.Features.Tournaments
 
     public void DumpParams()
     {
-      string refEngine = String.IsNullOrEmpty(ReferenceEngineId) ? "None" : ReferenceEngineId;
       Console.WriteLine($"TOURNAMENT:  {ID}");
-      Console.WriteLine($"  Machine Name       : {Environment.MachineName} ");
-      Console.WriteLine($"  Date/Time          : {DateTime.Now} ");
-      Console.WriteLine($"  Game Pairs         : {NumGamePairs} ");
-      Console.WriteLine($"  Openings           : {OpeningsDescription()}");
-      Console.WriteLine($"  Ref engine         : {refEngine}");
-      Console.WriteLine($"  Adjudicate draw    : {AdjudicateDrawThresholdNumMoves} moves < {AdjudicateDrawThresholdCentipawns}cp");
-      Console.WriteLine($"  Adjudicate win     : {AdjudicateWinThresholdNumMovesDecisive} moves at {AdjudicateWinThresholdCentipawns}cp");
-      Console.WriteLine($"  Adjudicate via TB? : {UseTablebasesForAdjudication}");
+      Console.WriteLine($"  Machine Name        : {Environment.MachineName} ");
+      Console.WriteLine($"  Date/Time           : {DateTime.Now} ");
+      Console.WriteLine($"  Game Pairs          : {NumGamePairs} ");
+      Console.WriteLine($"  Openings            : {OpeningsDescription()}");
+      if (ReferenceEngineId != null)
+      {
+        Console.WriteLine($"  Ref engine          : {ReferenceEngineId}");
+        Console.WriteLine($"  Force deterministic : {ForceReferenceEngineDeterministic}");
+      }
+      Console.WriteLine($"  Adjudicate draw     : {AdjudicateDrawThresholdNumMoves} moves < {AdjudicateDrawThresholdCentipawns}cp");
+      Console.WriteLine($"  Adjudicate win      : {AdjudicateWinThresholdNumMovesDecisive} moves at {AdjudicateWinThresholdCentipawns}cp");
+      Console.WriteLine($"  Adjudicate via TB?  : {UseTablebasesForAdjudication}");
 
       for (int i = 0; i < Engines.Length; i++)
       {
