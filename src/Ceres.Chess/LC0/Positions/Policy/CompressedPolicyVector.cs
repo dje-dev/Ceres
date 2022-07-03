@@ -797,9 +797,17 @@ namespace Ceres.Chess.EncodedPositions
       {
         fixed (ushort* moveProbabilitiesEncoded = &MoveProbEncoded_0)
         {
-          EncodedMove move = EncodedMove.FromNeuralNetIndex(moveIndices[index]);
-          float prob = DecodedProbability(moveProbabilitiesEncoded[index]);
-          return (move, prob);
+          int moveIndex = moveIndices[index];
+          if (moveIndex == SPECIAL_VALUE_SENTINEL_TERMINATOR)
+          {
+            return (default, 0);
+          }
+          else
+          {
+            EncodedMove move = EncodedMove.FromNeuralNetIndex(moveIndices[index]);
+            float prob = DecodedProbability(moveProbabilitiesEncoded[index]);
+            return (move, prob);
+          }
         }
       }
     }
