@@ -145,11 +145,11 @@ namespace Ceres.Chess.MoveGen.Converters
       MCChessPositionPieceEnum rawPieceAtToSquare = position.PieceCapturingRaw(thisMove);
 
       bool blackToMove = position.BlackToMove;
-      MCChessPositionPieceEnum pieceMG = blackToMove ? blackPieceToMGPieceCode[(int)pieceMoving] : whitePieceToMGPieceCode[(int)pieceMoving];
+      MCChessPositionPieceEnum pieceMG = PieceToMGPiece(pieceMoving, blackToMove);
       int pieceMGFlags = (int)pieceMG << MGMove.PIECE_SHIFT;
       int captureFlag = 0;
       if (pieceCapture != PieceType.None)
-        {
+      {
         captureFlag = (int)MGMove.MGChessMoveFlags.Capture;
       }
       else if (pieceMoving == PieceType.Pawn && (rawPieceAtToSquare == MCChessPositionPieceEnum.WhiteEnPassant || rawPieceAtToSquare == MCChessPositionPieceEnum.BlackEnPassant))
@@ -215,6 +215,11 @@ namespace Ceres.Chess.MoveGen.Converters
       }
     }
 
+    public static MCChessPositionPieceEnum PieceToMGPiece(PieceType pieceMoving, bool blackToMove)
+    {
+      return blackToMove ? blackPieceToMGPieceCode[(int)pieceMoving] 
+                         : whitePieceToMGPieceCode[(int)pieceMoving];
+    }
 
     static Square[] squareMap;
 
