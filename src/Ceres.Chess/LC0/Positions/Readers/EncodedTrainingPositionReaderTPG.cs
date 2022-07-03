@@ -21,6 +21,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
+using Zstandard.Net;
 
 #endregion
 
@@ -61,7 +62,14 @@ namespace Ceres.Chess.EncodedPositions
       FileName = fileName;
 
       rf = new FileStream(FileName, FileMode.Open, FileAccess.Read);
-      gu = new GZipStream(rf, CompressionMode.Decompress);
+      if (fileName.ToLower().Contains("zst"))
+      {
+        gu = new ZstandardStream(rf, CompressionMode.Decompress);
+      }
+      else
+      {
+        gu = new GZipStream(rf, CompressionMode.Decompress);
+      }
 
       buffer = new byte[BUFFER_POSITIONS_PER_BUFFER * EncodedTrainingPosition.V6_LEN];
     }
