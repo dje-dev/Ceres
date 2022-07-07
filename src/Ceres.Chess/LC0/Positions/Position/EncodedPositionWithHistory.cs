@@ -210,6 +210,7 @@ namespace Ceres.Chess.EncodedPositions
         epTarget = PositionMiscInfo.EPFileChars[(int)enPassant] + (weAreWhite ? "6" : "3");
 
       fen = fen + castling + " " + epTarget + " " + MiscInfo.InfoPosition.Rule50Count;// + " " + (1 + MiscInfo.InfoPosition.MoveCount); // Sometimes 2 dashes?
+      fen = fen + " 1"; // put some valid full move number
 
       return fen;
     }
