@@ -34,10 +34,34 @@ namespace Ceres.Chess.EncodedPositions
       InsertionSort(probs, 0, numMoves - 1);
       // QuickSort(probs, 0, numMoves - 1);
 
+      int numToProcess = Math.Min(numMoves, numMovesToSave);
+
+      Span<float> probsA = stackalloc float[numMoves];
+      Span<int> indicesA = stackalloc int[numMoves];
+
+      for (int j = 0; j < numToProcess; j++)
+      {
+        probsA[j] = probs[j].P;
+        indicesA[j] = probs[j].Index;
+      }
+
+      CompressedPolicyVector.Initialize(ref policyRef, indicesA.Slice(0, numToProcess), probsA.Slice(0, numToProcess));
+    }
+
+
+    [SkipLocalsInit]
+    public static void InitializeFromLogitProbsArray(ref CompressedPolicyVector policyRef, int numMoves, int numMovesToSave, Span<ProbEntry> probs)
+    {
+      // Due to small size insertion sort seems faster
+      InsertionSort(probs, 0, numMoves - 1);
+      // QuickSort(probs, 0, numMoves - 1);
+
+      int numToProcess = Math.Min(numMoves, numMovesToSave);
+
       // Compute max probability so we can then
       // avoid overflow during exponentation by subtracting off
       float max = 0.0f;
-      for (int j = 0; j < numMovesToSave; j++)
+      for (int j = 0; j < numToProcess; j++)
       {
         if (probs[j].P > max)
           max = probs[j].P;
@@ -46,13 +70,47 @@ namespace Ceres.Chess.EncodedPositions
       Span<float> probsA = stackalloc float[numMoves];
       Span<int> indicesA = stackalloc int[numMoves];
 
-      for (int j = 0; j < numMovesToSave; j++)
+      for (int j = 0; j < numToProcess; j++)
       {
         probsA[j] = MathF.Exp(probs[j].P - max);
         indicesA[j] = probs[j].Index;
       }
 
-      CompressedPolicyVector.Initialize(ref policyRef, indicesA.Slice(0, numMovesToSave), probsA.Slice(0, numMovesToSave));
+      CompressedPolicyVector.Initialize(ref policyRef, indicesA.Slice(0, numToProcess), probsA.Slice(0, numToProcess));
+    }
+
+
+    [SkipLocalsInit]
+    public static void InitializeFromProbsArray(ref CompressedPolicyVector policyRef, bool areLogits, int numMoves, int numMovesToSave, Span<float> probs, 
+                                               float cutoffMinValue = float.MinValue)
+    {
+      // Create array of ProbEntry.
+      Span<ProbEntry> probsA = stackalloc ProbEntry[numMoves];
+      int numFound = 0;
+      for (short i=0; i< EncodedPolicyVector.POLICY_VECTOR_LENGTH;i++)
+      {
+        float value = probs[i];
+        if (value >= cutoffMinValue)
+        {
+          probsA[numFound++] = new ProbEntry(i, value);
+        }
+      }
+
+      if (numFound == 0)
+      {
+        policyRef = default;
+      }
+      else
+      {
+        if (areLogits)
+        {
+          InitializeFromLogitProbsArray(ref policyRef, numFound, numMovesToSave, probsA.Slice(0, numFound));
+        }
+        else
+        {
+          InitializeFromProbsArray(ref policyRef, numFound, numMovesToSave, probsA.Slice(0, numFound));
+        }
+      }
     }
 
 
