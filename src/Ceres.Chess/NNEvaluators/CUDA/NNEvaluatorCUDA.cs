@@ -463,7 +463,7 @@ namespace Ceres.Chess.NNEvaluators.CUDA
             }
           }
 
-          PolicyVectorCompressedInitializerFromProbs.InitializeFromProbsArray(ref policies[i], numMoves, numMovesToSave, probs);
+          PolicyVectorCompressedInitializerFromProbs.InitializeFromLogitProbsArray(ref policies[i], numMoves, numMovesToSave, probs);
         }
       }
     }

@@ -168,7 +168,7 @@ namespace Ceres.Chess.NNEvaluators
             probs[j] = new PolicyVectorCompressedInitializerFromProbs.ProbEntry(refItem.Moves[j], thisItemsOut.P[j]);
         }
 
-        PolicyVectorCompressedInitializerFromProbs.InitializeFromProbsArray(ref policies[i], numMoves, numMovesToSave, probs);
+        PolicyVectorCompressedInitializerFromProbs.InitializeFromLogitProbsArray(ref policies[i], numMoves, numMovesToSave, probs);
       }
     }
 
