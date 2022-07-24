@@ -178,7 +178,7 @@ namespace Ceres.Chess.EncodedPositions
 
       // KQkq - 0 1
       bool weAreWhite = (MiscInfo.InfoPosition.SideToMove == 0) == (historyIndex % 2 == 0);
-      string fen = MiscInfo.InfoPosition.SideToMove == 0 ? planes.GetFEN(weAreWhite) : planes.Reversed.GetFEN(weAreWhite);
+      string fen = MiscInfo.InfoPosition.SideToMove == 0 ? planes.GetFENWithoutEnPassant(weAreWhite) : planes.Reversed.GetFENWithoutEnPassant(weAreWhite);
 
       fen = fen + (weAreWhite ? " w" : " b");
       if (historyIndex != 0)
@@ -202,7 +202,7 @@ namespace Ceres.Chess.EncodedPositions
       if (historyIndex < 7)
       {
         EncodedPositionBoard planesPriorBoard = GetPlanesForHistoryBoard(historyIndex + 1);
-        enPassant = EncodedPositionBoards.EnPassantOpportunityBetweenBoards(planes, planesPriorBoard);
+        enPassant = EncodedPositionBoards.EnPassantOpportunityBetweenBoards(in planes, in planesPriorBoard);
       }
 
       string epTarget = "-";
@@ -511,7 +511,7 @@ namespace Ceres.Chess.EncodedPositions
       EncodedPositionMiscInfo sourceMiscInfo = pos.MiscInfo.InfoPosition;
 
       EncodedPositionBoard board1 = pos.BoardsHistory.History_1;
-      PositionMiscInfo.EnPassantFileIndexEnum epColIndex = EncodedPositionBoards.EnPassantOpportunityBetweenBoards(board0, board1);
+      PositionMiscInfo.EnPassantFileIndexEnum epColIndex = EncodedPositionBoards.EnPassantOpportunityBetweenBoards(in board0, in board1);
 
       Position pc;
       if (sourceMiscInfo.SideToMove == EncodedPositionMiscInfo.SideToMoveEnum.White)

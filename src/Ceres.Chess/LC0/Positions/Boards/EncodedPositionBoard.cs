@@ -396,7 +396,7 @@ namespace Ceres.Chess.LC0.Boards
     /// </summary>
     /// <param name="weAreWhite"></param>
     /// <returns></returns>
-    public string GetFEN(bool weAreWhite)
+    public string GetFENWithoutEnPassant(bool weAreWhite)
     {
       string fen = "";
 
