@@ -65,8 +65,9 @@ namespace Ceres.Features.GameEngines
     /// <summary>
     /// Constructor.
     /// </summary>
-    public GameEngineDefCeres(string id, NNEvaluatorDef evaluatorDef,
-                              NNEvaluatorDef evaluatorDefSecondary,
+    public GameEngineDefCeres(string id, 
+                              NNEvaluatorDef evaluatorDef,
+                              NNEvaluatorDef evaluatorDefSecondary = null,
                               ParamsSearch searchParams= null,
                               ParamsSelect selectParams = null, 
                               IManagerGameLimit overrideLimitManager = null,

@@ -59,6 +59,12 @@ namespace Ceres.Features.Tournaments
     /// <param name="separateGPUs"></param>
     public TournamentManager(TournamentDef def, int numParallel = 1)
     {
+      if  (  (def.Engines == null || def.Engines.Length == 0)
+          && (def.Player1Def == null || def.Player2Def == null))
+      { 
+        throw new Exception("Missing engine(s). Assign to def.Player1Def and def.Player2Def or call def.AddEngine multiple times."); 
+      }
+
       Def = def;
       NumConcurrent = Math.Min(numParallel, def.NumGamePairs ?? int.MaxValue);
 
@@ -180,15 +186,28 @@ namespace Ceres.Features.Tournaments
       {
         foreach (EnginePlayerDef engine in Def.Engines)
         {
-          if (engine == null) throw new ArgumentNullException("engine is null)");
+          if (engine == null)
+          {
+            throw new ArgumentNullException("engine is null)");
+          }
         }
       }
       else
       {
-        if (Def.Player1Def == null) throw new ArgumentNullException("Def.Player1Def is null)");
-        if (Def.Player2Def == null) throw new ArgumentNullException("Def.Player2Def is null)");
+        if (Def.Player1Def == null)
+        {
+          throw new ArgumentNullException("Def.Player1Def is null)");
+        }
+        if (Def.Player2Def == null)
+        {
+          throw new ArgumentNullException("Def.Player2Def is null)");
+        }
       }
 
+      if (Def.OpeningsFileName == null)
+      {
+        Def.NumGamePairs = 1;
+      }
 
       VerifyEnginesCompatible();
 

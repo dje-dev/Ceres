@@ -79,7 +79,15 @@ namespace Ceres.Chess.GameEngines
         BlackCheckMoveStr = "";
       }
 
-      Console.SetCursorPosition(0, Console.CursorTop);
+
+      try
+      {
+        Console.SetCursorPosition(0, Console.CursorTop);
+      }
+      catch 
+      {
+        // Silently ignore. The SetCursorPosition may fail if running from environments such as Linqpad.
+      }
 
       ConsoleColor colorDefault = Console.ForegroundColor;
 
