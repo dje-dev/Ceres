@@ -38,7 +38,7 @@ namespace Ceres.Features.Tournaments
   /// Manage execution of a single thread of a tournament,
   /// running the main move loop which alternates between players.
   /// </summary>
-  public class TournamentGameThread
+  internal class TournamentGameThread
   {
     public delegate TournamentGameInfo GamePairRunnerDelegate(string pgnFileName, int gameSequenceNum, int openingIndex, int roundNumber, bool engine2White);
 

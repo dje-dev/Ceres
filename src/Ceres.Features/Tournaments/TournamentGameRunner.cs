@@ -26,7 +26,7 @@ namespace Ceres.Features.Tournaments
   /// <summary>
   /// Manages execution of a tournament (match between two players).
   /// </summary>
-  public class TournamentGameRunner
+  internal class TournamentGameRunner
   {
     /// <summary>
     /// Parent tournament definition.
