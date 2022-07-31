@@ -110,12 +110,9 @@ namespace Ceres.Chess.LC0.Boards
     /// <param name="currentBoard"></param>
     /// <param name="priorBoard"></param>
     /// <returns></returns>
-    public static PositionMiscInfo.EnPassantFileIndexEnum EnPassantOpportunityBetweenBoards(EncodedPositionBoard currentBoard, 
-                                                                                           EncodedPositionBoard priorBoard)
+    public static PositionMiscInfo.EnPassantFileIndexEnum EnPassantOpportunityBetweenBoards(in EncodedPositionBoard currentBoard, 
+                                                                                           in EncodedPositionBoard priorBoard)
     {
-      EncodedPositionBoardPlane pawnsPrior = priorBoard.OurPawns;
-      EncodedPositionBoardPlane pawnsCurrent = currentBoard.TheirPawns;
-
       // We look for the boards differing only because a pawn moved from rank 7 to rank 5 (from our perspective)
       for (int i = 8; i <16; i++)
       {
