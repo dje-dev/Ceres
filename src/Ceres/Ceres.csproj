@@ -16,7 +16,7 @@
     <GCLOHThreshold>100000</GCLOHThreshold>
     <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
     <RunAnalyzersDuringBuild>true</RunAnalyzersDuringBuild>
-    <AnalysisLevel>preview</AnalysisLevel>
+    <AnalysisLevel>latest</AnalysisLevel>
     <OutputPath>..\..\artifacts\release</OutputPath>
 
   </PropertyGroup>
