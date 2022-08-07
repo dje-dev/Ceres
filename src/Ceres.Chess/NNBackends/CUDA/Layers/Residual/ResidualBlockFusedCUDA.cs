@@ -19,8 +19,6 @@ using ManagedCuda.BasicTypes;
 
 using Ceres.Base.CUDA;
 using Ceres.Base.DataTypes;
-using System.Diagnostics;
-using System.Runtime.InteropServices;
 using Ceres.Base.Math;
 
 #endregion
@@ -70,6 +68,10 @@ namespace Ceres.Chess.NNBackends.CUDA
 
     CudaKernel kernelIOBiasNoSkip;
     CudaKernel kernelIOBiasSkip;
+
+    CUDAKernelLauncher launcherOutputInputTransform;
+    CUDAKernelLauncher inputOutputNoSELauncher;
+    CUDAKernelLauncher launcherOutputSEInputKernel;
 
 
     public override void LoadKernels()
@@ -219,7 +221,6 @@ namespace Ceres.Chess.NNBackends.CUDA
 #endif
 
 
-    CUDAKernelLauncher inputOutputNoSELauncher;
 
     protected override void DoEval(CudaStream stream, int N,
                                    CudaDeviceVariable<FP16> output,
@@ -438,17 +439,18 @@ namespace Ceres.Chess.NNBackends.CUDA
 
           // Necessary to use a launcher because only in that way
           // is opportunity to set shared memory available.
-          CUDAKernelLauncher launcher;
-          launcher = new(kernelSHMEM, stream, numSharedBytes,
-                          new object[] {N, C, sek,
+          if (launcherOutputInputTransform == null)
+          {
+            launcherOutputInputTransform = new(kernelSHMEM, stream, numSharedBytes,
+                            new object[] {N, C, sek,
                                         output.DevicePointer, input.DevicePointer,
                                         skip.DevicePointer, biases1.DevicePointer,
                                         HasSE ? Weights1.DevicePointer : DUMMY, HasSE ? Biases1.DevicePointer : DUMMY,
                                         HasSE ? Weights2.DevicePointer : DUMMY, HasSE ? Biases2.DevicePointer : DUMMY,
                                         stream.Stream.Pointer});
-
-          launcher.Parms.ObjRef<int>(0) = N;
-          launcher.LaunchAsync();
+          }
+          launcherOutputInputTransform.Parms.ObjRef<int>(0) = N;
+          launcherOutputInputTransform.LaunchAsync();
 
 #if NOT
             cudaFuncSetAttribute(OutputInputTransformKernel_fp16_shmem_board<activation, use_bias, use_skip>,
@@ -511,7 +513,6 @@ namespace Ceres.Chess.NNBackends.CUDA
 
     }
 
-    CUDAKernelLauncher launcherOutputSEInputKernel;
     bool launcherOutputSEInputKernelUseBias;
     bool launcherOutputSEInputKernelUseSkip;
 
@@ -560,6 +561,9 @@ namespace Ceres.Chess.NNBackends.CUDA
 
     public override void Dispose()
     {
+      launcherOutputInputTransform?.Dispose();
+      inputOutputNoSELauncher?.Dispose();
+      launcherOutputSEInputKernel?.Dispose();
       biases0?.Dispose();
       biases1?.Dispose();
       transformedWeights0?.Dispose();
