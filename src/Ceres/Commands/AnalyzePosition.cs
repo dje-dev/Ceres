@@ -101,6 +101,15 @@ namespace Ceres.Commands
         });
       };
 
+      // Install Ctrl-C handler to allow ad hoc clean termination (with stats).
+      ConsoleCancelEventHandler ctrlCHandler = new ConsoleCancelEventHandler((object sender, ConsoleCancelEventArgs args) =>
+      {
+        Console.WriteLine("Analyze pending shutdown....");
+        ceresEngine.Search.Manager.ExternalStopRequested = true;
+        args.Cancel = true;
+      }); ;
+      Console.CancelKeyPress += ctrlCHandler;
+
       while (!searchCeres.IsCompleted || (searchComparison != null && !searchComparison.IsCompleted))
       {
         Thread.Sleep(1000);
