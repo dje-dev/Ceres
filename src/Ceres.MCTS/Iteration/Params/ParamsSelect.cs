@@ -165,10 +165,10 @@ namespace Ceres.MCTS.Params
     /// <summary>
     /// If using dual selectors, we perturb CPUCT by this fraction (one is perturbed up, one down)
     /// Among other beneifts, this reduces collisions in building batches because we get diversity from the two selectors.
-    /// Tests were not definitive regarding the optimal value. Therefore we use a conservative value of circa 0.15 to 0.25
-    /// which stays fairly close to standard UCT but still gets the job done in terms of producing diversity in batch collection.
+    /// Smaller value (0.05) are found markedly (e.g. +20 Elo) better than larger values (0.20) 
+    /// for certain larger nets (T60) at longer time controls (90+0.9).
     /// </summary>
-    public const float CPUCTDualSelectorDiffFraction = 0.20f;
+    public const float CPUCTDualSelectorDiffFraction = 0.05f;
 
     const float DUAL_SELECTOR_0_CPUCT_MULTIPLIER = 1.0f + (CPUCTDualSelectorDiffFraction * 0.5f);
     const float DUAL_SELECTOR_1_CPUCT_MULTIPLIER = 1.0f - (CPUCTDualSelectorDiffFraction * 0.5f);
