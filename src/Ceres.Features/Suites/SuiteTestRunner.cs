@@ -155,6 +155,16 @@ namespace Ceres.Features.Suites
 
       Init();
 
+      // Install Ctrl-C handler to allow ad hoc clean termination (with stats).
+      bool stopRequested = false;
+      ConsoleCancelEventHandler ctrlCHandler = new ConsoleCancelEventHandler((object sender, ConsoleCancelEventArgs args) =>
+      {
+        Console.WriteLine("Suite pending shutdown....");
+        stopRequested = true;
+        args.Cancel = true;
+      }); ;
+      Console.CancelKeyPress += ctrlCHandler;
+
       int timerFiredCount = 0;
 
       // TODO: add path automatically
@@ -297,6 +307,11 @@ namespace Ceres.Features.Suites
                      new ParallelOptions() { MaxDegreeOfParallelism = numConcurrentSuiteThreads },
                      delegate (int gameNum)
                      {
+                       if (stopRequested)
+                       {
+                         return;
+                       }
+
                        try
                        {
                          EPDEntry epd = epds[gameNum];
