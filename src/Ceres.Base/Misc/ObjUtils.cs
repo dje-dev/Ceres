@@ -14,9 +14,7 @@
 #region Using directives
 
 using System;
-using System.IO;
 using System.Reflection;
-using System.Runtime.Serialization.Formatters.Binary;
 using System.Text;
 
 #endregion
@@ -24,19 +22,24 @@ using System.Text;
 namespace Ceres.Base.Misc
 {
   /// <summary>
-  /// Static helper methods for working with strings.
+  /// Static helper methods for working with objects.
   /// </summary>
   public static class ObjUtils
   {
-    public static T DeepClone<T>(T a)
-    {
-      using (MemoryStream stream = new MemoryStream())
+
+  public static T DeepClone<T>(T a)
+  {
+    return (T)ObjUtilsCopy.Copy(a);
+
+#if DEPRECATED_MICROSOFT
+    using (MemoryStream stream = new MemoryStream())
       {
         BinaryFormatter formatter = new BinaryFormatter();
         formatter.Serialize(stream, a);
         stream.Position = 0;
         return (T)formatter.Deserialize(stream);
       }
+#endif
     }
 
 
@@ -67,7 +70,7 @@ namespace Ceres.Base.Misc
 
           if (propInfo.FieldType.IsArray && val != null)
           {
-            DumpArrray(sb, (Array)val);
+            DumpArray(sb, (Array)val);
           }
           else
           {
@@ -80,7 +83,7 @@ namespace Ceres.Base.Misc
     }
 
 
-    static void DumpArrray(StringBuilder sb, Array array)
+    static void DumpArray(StringBuilder sb, Array array)
     {
       sb.Append("{");
       for (int i = 0; i < array.Length; i++)
