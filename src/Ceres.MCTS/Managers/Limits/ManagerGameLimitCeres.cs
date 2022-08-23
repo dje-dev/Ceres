@@ -60,7 +60,7 @@ namespace Ceres.MCTS.Managers.Limits
         // instamoves may be particularly helpful to avoid fixed overhead.
         const float LOW_TIME_THRESHOLD_SECS = 3;
         const int FINAL_N_LOOKBACK_MOVES = 5;
-        const float MIN_RELATIVE_TREE_SIZE = 0.6f;
+        const float MIN_RELATIVE_TREE_SIZE = 0.70f;
         bool isLowTime = SearchLimit.TypeIsTimeLimit(inputs.TargetLimitType) && inputs.RemainingFixedSelf < LOW_TIME_THRESHOLD_SECS;
         float THRESHOLD_VETO_INSTAMOVE = isLowTime ? (0.5f * MIN_RELATIVE_TREE_SIZE) : MIN_RELATIVE_TREE_SIZE;
 
