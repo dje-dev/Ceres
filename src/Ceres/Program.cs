@@ -146,8 +146,13 @@ namespace Ceres
     static void OutputBanner()
     {
       string dotnetVersion = RuntimeInformation.FrameworkDescription;
-      CudaDeviceProperties deviceProperties = CUDADevice.GetContext(0).Context.GetDeviceInfo();
-      string cudaVersion = $"{deviceProperties.DriverVersion.Major}.{deviceProperties.DriverVersion.Minor}";
+      string cudaVersion;
+      using (CUDADevice context = CUDADevice.GetContext(0))
+      {
+        CudaDeviceProperties deviceProperties = context.Context.GetDeviceInfo();
+        cudaVersion = $"{deviceProperties.DriverVersion.Major}.{deviceProperties.DriverVersion.Minor}";
+      }
+      
       bool isDotNet5 = dotnetVersion.Contains(".NET 5");
       bool isPGO = !isDotNet5 && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DOTNET_TieredPGO"));
       string pgoString = isPGO ? "PGO" : "NA";
