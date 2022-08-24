@@ -222,6 +222,7 @@ namespace Ceres.Base.CUDA
         if (disposing)
         {
           Context.Dispose();
+          contexts.Remove(GPUID, out _);
         }
 
         disposedValue = true;
