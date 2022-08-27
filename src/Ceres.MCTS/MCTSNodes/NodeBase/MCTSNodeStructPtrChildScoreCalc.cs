@@ -344,7 +344,7 @@ namespace Ceres.MCTS.MTCSNodes
     /// <param name="depth"></param>
     /// <param name="childIndex"></param>
     /// <returns></returns>
-    public float ChildScore(int selectorID, int depth, int childIndex) => CalcChildScores(selectorID, depth, 0, 0)[childIndex];
+    public float ChildScore(int selectorID, int depth, int childIndex) => CalcChildScores(selectorID, depth)[childIndex];
 
 
     /// <summary>
@@ -354,7 +354,7 @@ namespace Ceres.MCTS.MTCSNodes
     /// <param name="depth"></param>
     /// <param name="dynamicVLossBoost"></param>
     /// <returns></returns>
-    public float[] CalcChildScores(int selectorID, int depth, float dynamicVLossBoost, float cpuctMultiplier)
+    public float[] CalcChildScores(int selectorID, int depth, float dynamicVLossBoost = 0, float cpuctMultiplier = 1)
     {
       Span<float> scores = new float[NumPolicyMoves];
       Span<short> childVisitCounts = new short[NumPolicyMoves];
