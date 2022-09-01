@@ -17,6 +17,7 @@ using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.Arm;
 using System.Runtime.Intrinsics.X86;
 
 using Ceres.Base.DataType;
@@ -280,7 +281,12 @@ Note: Possible optimization/inefficiency:
     {
       if (Avx.IsSupported)
       {
-        ComputeChildScoresSIMD(childStats, numChildren, qWhenNoChildren, virtualLossMultiplier, computedChildScores, cpuctSqrtParentN, uctDenominatorPower);
+        ComputeChildScoresAVX(childStats, numChildren, qWhenNoChildren, virtualLossMultiplier, computedChildScores, cpuctSqrtParentN, uctDenominatorPower);
+      }
+      else if (AdvSimd.IsSupported)
+      {
+        // The SIMD version is about 3x as fast as non-SIMD.
+        ComputeChildScoresARM(childStats, numChildren, qWhenNoChildren, virtualLossMultiplier, computedChildScores, cpuctSqrtParentN, uctDenominatorPower);
       }
       else
       {
@@ -289,10 +295,10 @@ Note: Possible optimization/inefficiency:
     }
 
 
-    private static void ComputeChildScoresSIMD(GatheredChildStats childStats,
-                                               int numChildren, float qWhenNoChildren,
-                                               float virtualLossMultiplier, float[] computedChildScores,
-                                               float cpuctSqrtParentN, float uctDenominatorPower)
+    private static void ComputeChildScoresAVX(GatheredChildStats childStats,
+                                              int numChildren, float qWhenNoChildren,
+                                              float virtualLossMultiplier, float[] computedChildScores,
+                                              float cpuctSqrtParentN, float uctDenominatorPower)
     {
       int numBlocks = (numChildren / 8) + ((numChildren % 8 == 0) ? 0 : 1);
 
@@ -323,6 +329,46 @@ Note: Possible optimization/inefficiency:
           Vector256<float> vNInFlight = Avx.LoadAlignedVector256(pNInFlight);
           Vector256<float> vScore = ComputeScores(vW, vN, vP, virtualLossMultiplier, cpuctSqrtParentN, uctDenominatorPower, vQWhenNoChildren, vNInFlight);
           Avx.Store(pComputedChildScores, vScore);
+        }
+
+        blockCount++;
+      }
+    }
+
+    private static void ComputeChildScoresARM(GatheredChildStats childStats,
+                                          int numChildren, float qWhenNoChildren,
+                                          float virtualLossMultiplier, float[] computedChildScores,
+                                          float cpuctSqrtParentN, float uctDenominatorPower)
+    {
+      int numBlocks = (numChildren / 4) + ((numChildren % 4 == 0) ? 0 : 1);
+
+      Span<float> p = childStats.P.Span;
+      Span<float> w = childStats.W.Span;
+      Span<float> n = childStats.N.Span;
+      Span<float> nInFlight = childStats.InFlight.Span;
+
+      // Process in blocks of 4 at a time
+      int blockCount = 0;
+      while (blockCount < numBlocks)
+      {
+        int startOffset = blockCount * 4;
+
+        fixed (float* pNInFlight = &nInFlight[startOffset],
+                      pP = &p[startOffset],
+                      pW = &w[startOffset],
+                      pN = &n[startOffset],
+                      pComputedChildScores = &computedChildScores[startOffset])
+        {
+          // Load vector registers
+          Vector128<float> vW = AdvSimd.LoadVector128(pW);
+          Vector128<float> vN = AdvSimd.LoadVector128(pN);
+          Vector128<float> vP = AdvSimd.LoadVector128(pP);
+          Vector128<float> vQWhenNoChildren = Vector128.Create(qWhenNoChildren);
+
+          // Do computation
+          Vector128<float> vNInFlight = AdvSimd.LoadVector128(pNInFlight);
+          Vector128<float> vScore = ComputeScoresARM(vW, vN, vP, virtualLossMultiplier, cpuctSqrtParentN, uctDenominatorPower, vQWhenNoChildren, vNInFlight);
+          AdvSimd.Store(pComputedChildScores, vScore);
         }
 
         blockCount++;
@@ -407,6 +453,58 @@ Note: Possible optimization/inefficiency:
     }
 
 
+    /// <summary>
+    /// Low-level ARM SIMD worker method that implements the CPUCT math.
+    /// </summary>
+    /// <param name="vW"></param>
+    /// <param name="vN"></param>
+    /// <param name="vP"></param>
+    /// <param name="virtualLossMultiplier"></param>
+    /// <param name="cpuctSqrtParentN"></param>
+    /// <param name="uctDenominatorPower"></param>
+    /// <param name="vQWhenNoChildren"></param>
+    /// <param name="vNInFlight"></param>
+    /// <returns></returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static Vector128<float> ComputeScoresARM(Vector128<float> vW, Vector128<float> vN, Vector128<float> vP,
+                                                     float virtualLossMultiplier,
+                                                     float cpuctSqrtParentN, float uctDenominatorPower,
+                                                     Vector128<float> vQWhenNoChildren, Vector128<float> vNInFlight)
+    {
+      Vector128<float> vNPlusNInFlight = AdvSimd.Add(vN, vNInFlight);
+      Vector128<float> vVirtualLossMultiplier = Vector128.Create(virtualLossMultiplier);
+      Vector128<float> denominator = uctDenominatorPower switch
+      {
+        1.0f => vNPlusNInFlight,
+        0.5f => AdvSimd.Arm64.Sqrt(vNPlusNInFlight),
+        _ => throw new NotImplementedException()// ToPower(vNPlusNInFlight, uctDenominatorPower)
+      };
+
+      Vector128<float> vLossContrib = AdvSimd.Multiply(vNInFlight, vVirtualLossMultiplier);
+
+      // Compute U = ((p)(cpuct)(sqrt_parentN)) / (n + n_in_flight + 1)
+      // Note that Vector.Create() is used below for constants rather than referencing statics
+      // because the JIT has specific knowledge of inline Vector*.Create methods.
+      Vector128<float> vCPUCTSqrtParentN = Vector128.Create(cpuctSqrtParentN);
+      Vector128<float> vUNumerator = AdvSimd.Multiply(vP, vCPUCTSqrtParentN);
+      Vector128<float> vDenominator = AdvSimd.Add(Vector128.Create(1f), denominator);
+      Vector128<float> vU = AdvSimd.Arm64.Divide(vUNumerator, vDenominator);
+
+      Vector128<float> vQWithChildren = AdvSimd.Arm64.Divide(AdvSimd.Subtract(vLossContrib, vW), vNPlusNInFlight);
+      Vector128<float> vQWithoutChildren = AdvSimd.Add(vQWhenNoChildren, vLossContrib);
+
+      Vector128<float> maskNoChildren = AdvSimd.CompareGreaterThan(vNPlusNInFlight, Vector128.Create(0f));
+      //Vector128<float> maskNoChildren = Avx.Compare(vNPlusNInFlight, Vector128.Create(0f), FloatComparisonMode.OrderedGreaterThanSignaling);
+
+      Vector128<float> vQ = AdvSimd.BitwiseSelect(maskNoChildren, vQWithChildren, vQWithoutChildren);
+      //Vector128<float> vQ = Avx.BlendVariable(vQWithoutChildren, vQWithChildren, maskNoChildren);
+
+      Vector128<float> vScore = AdvSimd.Add(vU, vQ);
+
+      return vScore;
+    }
+
+
     #region Non-SIMD versions
 
     /// <summary>
@@ -469,11 +567,11 @@ Note: Possible optimization/inefficiency:
     #endregion
 
 
-      /// <summary>
-      /// Initialization code that should be called once for each tread 
-      /// executing score calculations.
-      /// </summary>
-      private static void InitializedForThread()
+    /// <summary>
+    /// Initialization code that should be called once for each tread 
+    /// executing score calculations.
+    /// </summary>
+    private static void InitializedForThread()
     {
       if (childScoresTempBuffer == null)
       {
