@@ -15,17 +15,19 @@
 
 using System;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 
 using Ceres.Chess;
 using Ceres.Base.DataTypes;
+using Ceres.Base.DataType;
+using Ceres.Base.OperatingSystem;
 
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.MoveGen.Converters;
-using Ceres.Base.OperatingSystem;
 using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.MCTS.MTCSNodes.Struct;
-using System.Runtime.CompilerServices;
+
 
 #endregion
 
@@ -248,7 +250,9 @@ namespace Ceres.MCTS.MTCSNodes
             {
               float priorProbability = probabilitiesTemp[policyMoveIndex - 1];
               if (replacementProbability > priorProbability)
+              {
                 replacementProbability = priorProbability;
+              }
             }
 
             float probabilityToAdd = replacementProbability - thisProbability;
@@ -290,17 +294,16 @@ namespace Ceres.MCTS.MTCSNodes
       // Allocate children
       Ref.SetNumPolicyMovesAndAllocateChildInfo(Tree, numUsedPolicyMoves);
 
+      // Finally, set these in the child policy vector
       if (numUsedPolicyMoves > 0)
       {
         Span<MCTSNodeStructChild> children = Tree.Store.Children.SpanForNode(in this.Ref);
-
-        // Finally, set these in the child policy vector
         for (int i = 0; i < numUsedPolicyMoves; i++)
         {
-          children[i].SetUnexpandedPolicyValues(validLZMovesUsed[i], childrenProbabilites[i]);
+          children[i].SetUnexpandedPolicyValues(ArrayUtils.GetItem(validLZMovesUsed, i), ArrayUtils.GetItem(childrenProbabilites, i));
         }
       }
-    }
+    }  
 
     #region Nonstandard initialization
 
@@ -329,10 +332,7 @@ namespace Ceres.MCTS.MTCSNodes
         validLZMovesUsed[i] = ConverterMGMoveEncodedMove.MGChessMoveToEncodedMove(shuffledMoves[i]);
 
         // Set probabilities in some reasonable range, here unnormalized values are uniformly integers over [0, 20]
-        if (prob < 0.001)
-          childrenProbabilites[i] = 0;
-        else
-          childrenProbabilites[i] = new FP16(prob);
+        childrenProbabilites[i] = prob < 0.001 ? 0 : (FP16)prob;
         sumProb += prob;
 
         prob *= DECAY_MULTIPLIER;
@@ -340,7 +340,9 @@ namespace Ceres.MCTS.MTCSNodes
 
       // Normalize to sum to 1.0
       for (int i = 0; i < numMoves; i++)
-        childrenProbabilites[i] = new FP16(childrenProbabilites[i] / sumProb);
+      {
+        childrenProbabilites[i] = (FP16)(childrenProbabilites[i] / sumProb);
+      }
 
       return numMoves;
     }
@@ -365,7 +367,9 @@ namespace Ceres.MCTS.MTCSNodes
         childrenProbabilites[i] = uniformProbability;
 
         if (validLZMovesUsed != null)
+        {
           validLZMovesUsed[i] = ConverterMGMoveEncodedMove.MGChessMoveToEncodedMove(movesMG.MovesArray[i]);
+        }
       }
       return numMovesToSave;
     }

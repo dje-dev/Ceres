@@ -16,14 +16,59 @@
 using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 #endregion
 
 namespace Ceres.Base.DataType
 {
-
+  /// <summary>
+  /// Various static helper methods fordealing with arrays and Spans.
+  /// </summary
   public static class ArrayUtils
   {
+
+    #region Fast indexers (unsafe)
+
+    /// <summary>
+    /// Returns item within a span at given index.
+    /// WARNING: No checks made for validity of specified index.
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    /// <param name="span"></param>
+    /// <param name="index"></param>
+    /// <returns></returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static T GetItem<T>(Span<T> span, int index)
+    {
+#if DEBUG
+        return span[index];
+#else
+      return Unsafe.Add(ref MemoryMarshal.GetReference(span), index);
+#endif
+    }
+
+
+    /// <summary>
+    /// Returns reference to structure within a span at given index.
+    /// WARNING: No checks made for validity of specified index.
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    /// <param name="span"></param>
+    /// <param name="index"></param>
+    /// <returns></returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static ref T GetItemRef<T>(Span<T> span, int index) where T : struct
+    {
+#if DEBUG
+        return ref span[index];
+#else
+      return ref Unsafe.Add(ref MemoryMarshal.GetReference(span), index);
+#endif
+    }
+
+    #endregion
+
     #region Change shape
 
     public static T[] To1D<T>(T[][] raw)
@@ -56,6 +101,7 @@ namespace Ceres.Base.DataType
       values[index1] = values[index2];
       values[index2] = temp;
     }
+
 
     /// <summary>
     /// 
