@@ -127,7 +127,7 @@ Note: Possible optimization/inefficiency:
       }
 
       Compute(parentN, parentNInFlight, childStats, numChildren, numVisitsToCompute, outputScores,
-              outputChildVisitCounts, numChildren, virtualLossMultiplier,
+              outputChildVisitCounts, virtualLossMultiplier,
               parentIsRoot ? paramsSelect.UCTRootNumeratorExponent : paramsSelect.UCTNonRootNumeratorExponent,
               cpuctValue, qWhenNoChildren,
               parentIsRoot ? paramsSelect.UCTRootDenominatorExponent : paramsSelect.UCTNonRootDenominatorExponent);
@@ -159,7 +159,7 @@ Note: Possible optimization/inefficiency:
                                 GatheredChildStats childStats,
                                 int numChildren, int numVisitsToCompute,
                                 Span<float> outputScores, Span<short> outputChildVisitCounts,
-                                int numBlocks, float virtualLossMultiplier, float uctParentPower,
+                                float virtualLossMultiplier, float uctParentPower,
                                 float cpuctValue, float qWhenNoChildren, float uctDenominatorPower)
     {
       // Load the vectors that do not change
