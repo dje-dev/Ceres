@@ -413,7 +413,7 @@ Note: Possible optimization/inefficiency:
     /// <param name="virtualLossMultiplier"></param>
     /// <param name="cpuctSqrtParentN"></param>
     /// <param name="uctDenominatorPower"></param>
-    /// <param name="vQWhenNoChildren"></param>
+    /// <param name="vQWhenNoChildren">fill-in value for Q for children having N=0 (larger values are better)</param>
     /// <param name="vNInFlight"></param>
     /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -442,10 +442,13 @@ Note: Possible optimization/inefficiency:
       Vector256<float> vDenominator = Avx.Add(Vector256.Create(1f), denominator);
       Vector256<float> vU = Avx.Divide(vUNumerator, vDenominator);
 
+      // Compute Q where the number of visits is not zero.
+      // Note that subtraction here has effect of inverting, such that bigger Q are now "better".
       Vector256<float> vQWithChildren = Avx.Divide(Avx.Subtract(vLossContrib, vW), vNPlusNInFlight);
-      Vector256<float> vQWithoutChildren = Avx.Add(vQWhenNoChildren, vLossContrib);
 
+      Vector256<float> vQWithoutChildren = Avx.Add(vQWhenNoChildren, vLossContrib);
       Vector256<float> maskNoChildren = Avx.Compare(vNPlusNInFlight, Vector256.Create(0f), FloatComparisonMode.OrderedGreaterThanSignaling);
+
       Vector256<float> vQ = Avx.BlendVariable(vQWithoutChildren, vQWithChildren, maskNoChildren);
 
       Vector256<float> vScore = Avx.Add(vU, vQ);
@@ -462,7 +465,7 @@ Note: Possible optimization/inefficiency:
     /// <param name="virtualLossMultiplier"></param>
     /// <param name="cpuctSqrtParentN"></param>
     /// <param name="uctDenominatorPower"></param>
-    /// <param name="vQWhenNoChildren"></param>
+    /// <param name="vQWhenNoChildren">fill-in value for Q for children having N=0 (larger values are better)</param>
     /// <param name="vNInFlight"></param>
     /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -490,14 +493,15 @@ Note: Possible optimization/inefficiency:
       Vector128<float> vDenominator = AdvSimd.Add(Vector128.Create(1f), denominator);
       Vector128<float> vU = AdvSimd.Arm64.Divide(vUNumerator, vDenominator);
 
+      // Compute Q where the number of visits is not zero.
+      // Note that subtraction here has effect of inverting, such that bigger Q are now "better".
       Vector128<float> vQWithChildren = AdvSimd.Arm64.Divide(AdvSimd.Subtract(vLossContrib, vW), vNPlusNInFlight);
-      Vector128<float> vQWithoutChildren = AdvSimd.Add(vQWhenNoChildren, vLossContrib);
 
+      Vector128<float> vQWithoutChildren = AdvSimd.Add(vQWhenNoChildren, vLossContrib);
       Vector128<float> maskNoChildren = AdvSimd.CompareGreaterThan(vNPlusNInFlight, Vector128.Create(0f));
       //Vector128<float> maskNoChildren = Avx.Compare(vNPlusNInFlight, Vector128.Create(0f), FloatComparisonMode.OrderedGreaterThanSignaling);
 
       Vector128<float> vQ = AdvSimd.BitwiseSelect(maskNoChildren, vQWithChildren, vQWithoutChildren);
-      //Vector128<float> vQ = Avx.BlendVariable(vQWithoutChildren, vQWithChildren, maskNoChildren);
 
       Vector128<float> vScore = AdvSimd.Add(vU, vQ);
 
