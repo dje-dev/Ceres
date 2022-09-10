@@ -177,7 +177,8 @@ __global__ void filterTransform_kernel(int K, int C, int elements,
 // every thread transforms an entire board/plane (8x8 elements)
 // - producing 4 x 6x6 elements
 template <typename T, bool nhcw>
-__global__ void InputTransform_kernel(int N, int C, const T* input, T* output) {
+// DJE: on newer NVIDIA drivers, necessary to specify launch bounds of 512 to avoid "ErrorLaunchOutOfResources" failures
+__global__ __launch_bounds__(512) void InputTransform_kernel(int N, int C, const T* input, T* output) {
   int c = threadIdx.x;
   int n = blockIdx.x;
 
