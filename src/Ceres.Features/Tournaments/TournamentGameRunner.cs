@@ -13,8 +13,6 @@
 
 #region Using directives
 
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 
 using Ceres.Chess.GameEngines;
@@ -86,7 +84,7 @@ namespace Ceres.Features.Tournaments
       Engine1 = Engines[gameEngine1Index];
       Engine2 = Engines[gameEngine2Index];
 
-      if (Def.CheckPlayer2Def != null)
+      if (Def.CheckPlayer2Def != null && Engine2CheckEngine == null)
       {
         Engine2CheckEngine = Def.CheckPlayer2Def.EngineDef.CreateEngine();
         Engine2CheckEngine.Warmup(Def.CheckPlayer2Def.SearchLimit.KnownMaxNumNodes);
@@ -96,7 +94,6 @@ namespace Ceres.Features.Tournaments
       Engine2.OpponentEngine = Engine1;
       Def.Player1Def = Def.Engines[gameEngine1Index];
       Def.Player2Def = Def.Engines[gameEngine2Index];
-
     }
 
   }
