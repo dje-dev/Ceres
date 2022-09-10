@@ -133,11 +133,6 @@ namespace Ceres.MCTS.Managers
         {
           return new BestMoveInfo(BestMoveInfo.BestMoveReason.NoLegalMoves, default, Node.V);
         }
-        else if (Node.NumPolicyMoves == 1)
-        {
-          MCTSNode onlyChild = Node.NumChildrenExpanded == 0 ? Node.CreateChild(0) : Node.ChildAtIndex(0);
-          return new BestMoveInfo(onlyChild, (float)-onlyChild.QForBestMoveSelection, onlyChild.N, 1, 0);
-        }
         else if (Node.NumChildrenExpanded == 0)
         {
           // No visits, create a node for the first child (which will be move with highest prior)
@@ -160,18 +155,19 @@ namespace Ceres.MCTS.Managers
 
           if (org.BestMove != nx.BestMove)
           {
-/* TEMPORARY */ MCTSEventSource.TestCounter1++;           
-//            Console.WriteLine("BESTMOVE DIFF " + nx.BestMove + " --> " + org.BestMove);
-//            Node.Context.Manager.DumpRootMoveStatistics();
+//          MCTSEventSource.TestCounter1++;           
+//          Console.WriteLine("BESTMOVE DIFF " + nx.BestMove + " --> " + org.BestMove);
+//          Node.Context.Manager.DumpRootMoveStatistics();
           }
           else
           {
-/* TEMPORARY */ MCTSEventSource.TestMetric1++;
+//          MCTSEventSource.TestMetric1++;
           }
         }
         return org;
       }
     }
+
 
     /// <summary>
     /// N of the move having second best N.
