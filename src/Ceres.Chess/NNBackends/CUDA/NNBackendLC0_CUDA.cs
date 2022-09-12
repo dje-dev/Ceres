@@ -393,7 +393,7 @@ namespace Ceres.Chess.NNBackends.CUDA
     }
 
 
-    static int MaxAttentionSize(Net net, LC0LegacyWeights weights, int n)
+    static int MaxAttentionHeadSize(Net net, LC0LegacyWeights weights, int n)
     {
       int embedding_op_size = weights.ip_pol_b == null ? 0 : weights.ip_pol_b.Length;
       int policy_d_model = weights.ip2_pol_b == null ? 0 : weights.ip2_pol_b.Length;
@@ -427,6 +427,43 @@ namespace Ceres.Chess.NNBackends.CUDA
       return size;
     }
 
+    static int MaxAttentionBodySize(Net net, LC0LegacyWeights weights, int n)
+    {
+      if (weights.encoder == null)
+      {
+        return 0;
+      }
+
+      int embedding_op_size = weights.ip_emb_b == null ? 0 : weights.ip_emb_b.Length;
+
+      int encoder_d_model = 0;
+      int encoder_dff = 0;
+
+      //  if (weights.pol_encoder.size() > 0) {
+      if (weights.encoder.Length > 0)
+      {
+        encoder_d_model = weights.encoder[0].mha.q_b.Length;
+        encoder_dff = weights.encoder[0].ffn.dense1_b.Length;
+      }
+
+      int encoder_heads = weights.encoder_head_count;
+
+      int size = n * 64 * Math.Max(embedding_op_size, encoder_d_model);
+
+      // size of matmul_qk matrix = encoder_heads_ * Batch * 64 * 64
+      int matmul_qk_size = encoder_heads * n * 64 * 64;
+      int output_size = n * (64 * 64 + 8 * 24);
+      size = Math.Max(size, Math.Max(matmul_qk_size, output_size));
+
+      int qkv_size = n * 64 * encoder_d_model;
+
+      // We store qkv in single allocation, and other intermediate tensors are
+      // sometimes stored by splitting an allocation into two halves.
+      size = Math.Max(2 * size, 3 * qkv_size);
+
+      return size;
+    }
+
 
     private void AllocateGPUMemory(Net net, LC0LegacyWeights weights)
     {
@@ -453,18 +490,22 @@ namespace Ceres.Chess.NNBackends.CUDA
       // Need additional space for transformed input/outputs which are 36/16
       // times size (4x4 block transformed into 6x6).
       // These scratch sizes are not huge (e.g. about 225MB for a 384x30 network).
-      long transformed_tensor_size = (long)(MaxBatchSize * NumFilters * 64 * (36.0 / 16.0) * Marshal.SizeOf<FP16>());
-      scratchSizeBytes = System.Math.Max(scratchSizeBytes, 2 * transformed_tensor_size);
+      if (NumBlocks > 0)
+      {
+        long transformed_tensor_size = (long)(MaxBatchSize * NumFilters * 64 * (36.0 / 16.0) * Marshal.SizeOf<FP16>());
+        scratchSizeBytes = System.Math.Max(scratchSizeBytes, 2 * transformed_tensor_size);
+      }
 
       // Attention policy head may need more memory
       // (We also split the allocations into two parts, so need 2x)
-      int attentionSize = MaxAttentionSize(net, weights, MaxBatchSize);
+      int attentionSize = MaxAttentionHeadSize(net, weights, MaxBatchSize);
       scratchSizeBytes = System.Math.Max(scratchSizeBytes, 2 * attentionSize);
-      if (weights.encoder != null && weights.encoder.Length > 0) // is attention body?
-      {
-        // HACK: workaround for insufficient scratch size with attention body
-        scratchSizeBytes = (int)(scratchSizeBytes * 1.5f);
-      }
+
+      // Attention policy head or body may need more memory
+      int attentionPolicySize = MaxAttentionHeadSize(net, weights, MaxBatchSize) * Marshal.SizeOf<FP16>();
+      int attentionBodySize = MaxAttentionBodySize(net, weights, MaxBatchSize) * Marshal.SizeOf<FP16>();
+      scratchSizeBytes = Math.Max(scratchSizeBytes, Math.Max(attentionPolicySize, attentionBodySize));
+
       long scratchSizeElements = scratchSizeBytes / Marshal.SizeOf<FP16>();
 
       // =========================================================================
