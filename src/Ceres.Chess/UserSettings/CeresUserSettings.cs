@@ -140,8 +140,10 @@ namespace Ceres.Chess.UserSettings
     public int? MaxTreeNodes { get; set; } = null;
 
     /// <summary>
-    /// The maximum number of position in each batch sent to the neural network.
-    /// Smaller values reduce GPU memory usage somewhat.
+    /// The maximum number of positions generated per leaf selection batch.
+    /// Higher values improve CPU througput by allowing more parallelism.
+    /// Lower values improve the purity of selected nodes, which can
+    /// significantly improve play quality especially for larger, accurate networks.
     /// </summary>
     public int MaxBatchSize { get; set; } = 1024;
 
