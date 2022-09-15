@@ -249,8 +249,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         // We have to descend to the expanded node to retrieve 
         // the move and policy needed for the new child (which will be not yet expanded)
         MCTSNodeStructChildStorage childrenStore = tree.Store.Children;
-        Span<MCTSNodeStructChild> children = childrenStore.SpanForNode(in this);
-        Span<MCTSNodeStructChild> otherChildren = childrenStore.SpanForNode(in otherNode);
+        Span<MCTSNodeStructChild> children = childrenStore.SpanForNode(ChildStartIndex, NumPolicyMoves);
+        Span<MCTSNodeStructChild> otherChildren = childrenStore.SpanForNode(otherNode.ChildStartIndex, otherNode.NumPolicyMoves);
 
         for (int i = 0; i < otherNodeNumPolicyMoves; i++)
         {
@@ -426,7 +426,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           if (numChildren == 0) return;
 
           // Prefetch each of the expanded child nodes
-          Span<MCTSNodeStructChild> childSpan = store.Children.SpanForNode(in nodes[nodeIndex.Index]);
+          ref readonly MCTSNodeStruct node = ref nodes[nodeIndex.Index];
+          Span<MCTSNodeStructChild> childSpan = store.Children.SpanForNode(node.ChildStartIndex, node.NumPolicyMoves);
           for (int i = firstChildIndex; i < (firstChildIndex + numChildren); i++)
           {
             MCTSNodeStructChild child = childSpan[i];
@@ -586,7 +587,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
                                                       MathF.Pow(MIN_POWER_MEAN_COEFF, 1.0f / powerMeanNExponent);
 
       float dualCollisionFraction = context.ParamsSearch.Execution.DualSelectorAlternateCollisionFraction;
-      Span<MCTSNodeStructChild> children = store.Children.SpanForNode(in this);
+      Span<MCTSNodeStructChild> children = store.Children.SpanForNode(ChildStartIndex, NumPolicyMoves);
       for (int i = 0; i <= maxIndex; i++)
       {
         MCTSNodeStructChild child = children[i];

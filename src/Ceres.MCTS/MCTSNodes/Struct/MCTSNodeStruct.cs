@@ -444,8 +444,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly Span<MCTSNodeStructChild> ChildrenFromStore(MCTSNodeStore store)
-    {
-      return store.Children.SpanForNode(in this);
+    {      
+      return store.Children.SpanForNode(ChildStartIndex, NumPolicyMoves);
     }
 
     /// <summary>
@@ -462,7 +462,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         }
         else
         {
-          return Context.Store.Children.SpanForNode(in this);
+          return Context.Store.Children.SpanForNode(ChildStartIndex, NumPolicyMoves);
         }
       }
     }

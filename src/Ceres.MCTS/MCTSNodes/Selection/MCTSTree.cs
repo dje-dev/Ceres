@@ -401,6 +401,8 @@ namespace Ceres.MCTS.LeafExpansion
 
 
 
+    static readonly Position NULL_POS;
+
     /// <summary>
     /// Returns a partial set of history positions from the antecedents of this node (possibly also including initial move sequence).
     /// </summary>
@@ -411,8 +413,7 @@ namespace Ceres.MCTS.LeafExpansion
                                                   bool stop50MoveRuleReset = true)
     {
       maxLookback = Math.Min(maxLookback, MAX_LENGTH_POS_HISTORY - 1);
-
-      return GetPriorHistoryPositions(node.Parent, in node.Annotation.Pos, default, 
+      return GetPriorHistoryPositions(node.Parent, node.Annotation.Pos, NULL_POS, 
                                       PosScratchBuffer, maxLookback, stop50MoveRuleReset, true);
     }
 

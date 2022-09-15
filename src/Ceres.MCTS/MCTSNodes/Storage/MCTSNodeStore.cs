@@ -392,7 +392,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
           bool haveSeenUnexpanded = false;
           int sumN = 1;
 
-          foreach (MCTSNodeStructChild child in Children.SpanForNode(in nodeR))
+          foreach (MCTSNodeStructChild child in Children.SpanForNode(nodeR.ChildStartIndex, nodeR.NumPolicyMoves))
           {
             numChildren++;
             if (child.IsExpanded)

@@ -93,6 +93,7 @@ namespace Ceres.Base.DataType
     {
       FileStream stream = File.Create(FN);
       BinaryFormatter formatter = new BinaryFormatter();
+#pragma warning disable SYSLIB0011 // TODO: remove use of Binary serialization
       formatter.Serialize(stream, obj);
       stream.Close();
     }
@@ -102,6 +103,7 @@ namespace Ceres.Base.DataType
     {
       byte[] allBytes = File.ReadAllBytes(FN);
       BinaryFormatter formatter = new BinaryFormatter();
+#pragma warning disable SYSLIB0011 // TODO: remove use of Binary serialization
       object obj = formatter.Deserialize(new FileStream(FN, FileMode.Open, FileAccess.Read));
       return (T)obj;
     }

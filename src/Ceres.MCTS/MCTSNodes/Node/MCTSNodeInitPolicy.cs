@@ -297,7 +297,8 @@ namespace Ceres.MCTS.MTCSNodes
       // Finally, set these in the child policy vector
       if (numUsedPolicyMoves > 0)
       {
-        Span<MCTSNodeStructChild> children = Tree.Store.Children.SpanForNode(in this.Ref);
+        ref readonly MCTSNodeStruct thisRef = ref Ref;
+        Span<MCTSNodeStructChild> children = Tree.Store.Children.SpanForNode(thisRef.ChildStartIndex, thisRef.NumPolicyMoves);
         for (int i = 0; i < numUsedPolicyMoves; i++)
         {
           children[i].SetUnexpandedPolicyValues(ArrayUtils.GetItem(validLZMovesUsed, i), ArrayUtils.GetItem(childrenProbabilites, i));

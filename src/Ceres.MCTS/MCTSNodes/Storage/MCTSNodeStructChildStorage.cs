@@ -245,7 +245,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     /// <param name="moveIndex"></param>
     public void SetNodeChildAsPAndMove(in MCTSNodeStruct node, int childIndex, FP16 p, EncodedMove moveIndex)
     {
-      Span<MCTSNodeStructChild> overflows = SpanForNode(in node);
+      Span<MCTSNodeStructChild> overflows = SpanForNode(node.ChildStartIndex, node.NumPolicyMoves);
       overflows[childIndex].p = p;
       overflows[childIndex].lc0PositionMoveRawValue = (ushort)moveIndex.IndexNeuralNet;
     }
@@ -275,12 +275,11 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     /// <param name="node"></param>
     /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    public Span<MCTSNodeStructChild> SpanForNode(in MCTSNodeStruct node)
+    public Span<MCTSNodeStructChild> SpanForNode(long childStartIndex, byte numPolicyMoves)
     {
-      if (node.NumPolicyMoves == 0) return Span<MCTSNodeStructChild>.Empty;
+      if (numPolicyMoves == 0) return Span<MCTSNodeStructChild>.Empty;
 
-      Debug.Assert(node.childStartBlockIndex > 0);
-      return childIndices.Slice(node.ChildStartIndex, node.NumPolicyMoves);
+      return childIndices.Slice(childStartIndex, numPolicyMoves);
     }
 
 

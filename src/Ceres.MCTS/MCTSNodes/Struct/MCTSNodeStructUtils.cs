@@ -17,6 +17,7 @@ using System;
 using System.Collections;
 using System.Runtime.CompilerServices;
 using System.Threading;
+using System.Xml.Linq;
 using Ceres.Base.OperatingSystem;
 using Ceres.Chess.EncodedPositions;
 using Ceres.MCTS.MTCSNodes.Storage;
@@ -38,9 +39,9 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       Span<ushort> probabilities = stackalloc ushort[CompressedPolicyVector.NUM_MOVE_SLOTS];
 
       MCTSNodeStore store = nodeRef.Context.Store;
-      Span<MCTSNodeStructChild> children = store.Children.SpanForNode(in nodeRef);
+      Span<MCTSNodeStructChild> children = store.Children.SpanForNode(nodeRef.ChildStartIndex, nodeRef.NumPolicyMoves);
       int numPolicyMoves = nodeRef.NumPolicyMoves;
- 
+
       // Extract the probabilities, invert soft max, track sum.
       float accProbabilities = 0;
       for (int i = 0; i < numPolicyMoves; i++)
@@ -127,7 +128,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     {
       action(nodeIndex);
 
-      foreach (MCTSNodeStructChild child in store.Children.SpanForNode(in store.Nodes.nodes[nodeIndex.Index]))
+      ref readonly MCTSNodeStruct node = ref store.Nodes.nodes[nodeIndex.Index];
+      foreach (MCTSNodeStructChild child in store.Children.SpanForNode(node.ChildStartIndex, node.NumPolicyMoves))
       {
         if (child.IsExpanded)
           VisitSubtreeBreadthFirst(store, child.ChildIndex, action);
@@ -152,7 +154,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
       action(nodeIndex);
 
-      Span<MCTSNodeStructChild> span = store.Children.SpanForNode(in store.Nodes.nodes[nodeIndex.Index]);
+      ref readonly MCTSNodeStruct node = ref store.Nodes.nodes[nodeIndex.Index];
+      Span<MCTSNodeStructChild> span = store.Children.SpanForNode(node.ChildStartIndex, node.NumPolicyMoves);
 
       // Only spawn another thread if we have a chlid which is
       //   - not too big (otherwise we should do it inline to avoid recursively repeated forks)
