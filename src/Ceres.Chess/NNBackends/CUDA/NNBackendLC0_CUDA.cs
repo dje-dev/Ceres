@@ -576,6 +576,9 @@ namespace Ceres.Chess.NNBackends.CUDA
 
     public void EvaluateNN(int batchSize)
     {
+      // NOTE: This lock prevents parallelism on the device.
+      //       In theory it is possible to run multiple streams concurrently.
+      //       In practice this does not yield improved performance, probably due to device is already saturated.
       lock (ExecContext.Device.ExecLockObj)
       {
         bool needWriterLock = UseGraphs && graphSet.GraphForBatchSizeNeedsConstruction(batchSize);
