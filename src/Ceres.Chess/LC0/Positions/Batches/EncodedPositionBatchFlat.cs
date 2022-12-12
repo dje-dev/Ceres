@@ -37,6 +37,12 @@ namespace Ceres.Chess.LC0.Batches
   [Serializable]
   public class EncodedPositionBatchFlat : IEncodedPositionBatchFlat
   {
+    /// <summary>
+    /// Retains some additional data structures related to positions,
+    /// consumes a lot of memory but may be needed for some formats (TPG?).
+    /// </summary>
+    public const bool RETAIN_POSITION_INTERNALS = false;
+
     // These constants probably belong elsewhere
     public const int NUM_PIECE_PLANES_PER_POS = 13;
     public const int NUM_MISC_PLANES_PER_POS = 8; // constants holding miscellaneous values
@@ -259,6 +265,10 @@ namespace Ceres.Chess.LC0.Batches
     {
       NumPos = numToProcess;
       TrainingType = EncodedPositionType.PositionOnly;
+      if (EncodedPositionBatchFlat)
+      {
+        PositionsBuffer = positions.ToArray();
+      }
 
       int nextOutPlaneIndex = 0;
 
@@ -619,7 +629,7 @@ namespace Ceres.Chess.LC0.Batches
           }
 
           // Apply the necessary scaling of this is the move counter (50 move rule)
-          bool isMoves50Plane = outer % 112 == 109;
+          bool isMoves50Plane = false;// outer % 112 == 109;
           float multiplier = isMoves50Plane ? (1.0f / 99.0f) : 1.0f;
           float targetValue = multiplier * thisValues[outer];
 

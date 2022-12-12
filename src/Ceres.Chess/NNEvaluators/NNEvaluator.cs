@@ -314,6 +314,11 @@ namespace Ceres.Chess.NNEvaluators
         batch = new EncodedPositionBatchFlat(encodedPositions, numPositions, setPositions);
       }
 
+      if (EncodedPositionBatchFlat.RETAIN_POSITION_INTERNALS)
+      {
+        batch.PositionsBuffer = encodedPositions;
+      }
+
       return EvaluateIntoBuffers(batch, retrieveSupplementalResults);
     }
 
