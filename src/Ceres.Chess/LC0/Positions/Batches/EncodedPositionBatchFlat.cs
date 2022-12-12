@@ -265,7 +265,7 @@ namespace Ceres.Chess.LC0.Batches
     {
       NumPos = numToProcess;
       TrainingType = EncodedPositionType.PositionOnly;
-      if (EncodedPositionBatchFlat)
+      if (RETAIN_POSITION_INTERNALS)
       {
         PositionsBuffer = positions.ToArray();
       }
