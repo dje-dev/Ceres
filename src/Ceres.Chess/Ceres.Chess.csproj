@@ -40,9 +40,7 @@
     <PackageReference Include="Google.ProtocolBuffers" Version="2.4.1.555" />
     <PackageReference Include="HtmlAgilityPack" Version="1.11.28" />
     <PackageReference Include="LINQPad.Runtime" Version="6.7.5" />
-    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.7.0" />
-    <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu" Version="1.7.1" />
-    <PackageReference Include="Microsoft.ML.OnnxRuntime.Managed" Version="1.7.1" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu" Version="1.13.1" />
     <PackageReference Include="protobuf-net" Version="3.0.29" />
     <PackageReference Include="SharpCompress" Version="0.31.0" />
     <PackageReference Include="XPlot.Plotly" Version="4.0.6" />

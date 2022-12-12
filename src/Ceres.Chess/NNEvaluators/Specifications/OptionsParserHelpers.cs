@@ -56,13 +56,13 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
         {
           string[] netAndPrecision = netStrWithPrecision.Split("#");
           if (!int.TryParse(netAndPrecision[1], out int precisionBits)
-            || (precisionBits != 8 && precisionBits != 16))
+            || (precisionBits != 8 && precisionBits != 16 && precisionBits != 32))
           {
             throw new Exception("Network specification has invalid or unsupported precision " + netAndPrecision[1]);
           }
 
           netStr = netAndPrecision[0];
-          precision = precisionBits == 8 ? NNEvaluatorPrecision.Int8 : NNEvaluatorPrecision.FP16;
+          precision = precisionBits == 8 ? NNEvaluatorPrecision.Int8 : (precisionBits == 16 ? NNEvaluatorPrecision.FP16 : NNEvaluatorPrecision.FP32);
         }
         else
         {

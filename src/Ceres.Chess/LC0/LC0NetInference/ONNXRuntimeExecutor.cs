@@ -18,6 +18,7 @@ using System.Diagnostics;
 using System.Text;
 using Ceres.Base.DataTypes;
 using Ceres.Chess.LC0.Batches;
+using Ceres.Chess.NNEvaluators.Defs;
 using Chess.Ceres.NNEvaluators;
 using Microsoft.ML.OnnxRuntime.Tensors;
 
@@ -53,6 +54,8 @@ namespace Ceres.Chess.LC0NetInference
 
     public readonly NetTypeEnum NetType;
 
+    public readonly NNDeviceType DeviceType;
+
     /// <summary>
     /// Underlying ONNX executor object.
     /// </summary>
@@ -64,9 +67,10 @@ namespace Ceres.Chess.LC0NetInference
     /// <param name="onnxFileName"></param>
     /// <param name="batchSize"></param>
     /// <param name="netType"></param>
+    /// <param name="deviceType"></param>
     /// <param name="gpuNum"></param>
     public ONNXRuntimeExecutor(string onnxFileName, int batchSize, NetTypeEnum netType, 
-                               NNEvaluatorPrecision precision, int gpuNum = -1)
+                               NNEvaluatorPrecision precision, NNDeviceType deviceType, int gpuNum, bool useTRT)
     {
       if (!onnxFileName.ToUpper().EndsWith(".ONNX"))
       {
@@ -80,10 +84,25 @@ namespace Ceres.Chess.LC0NetInference
 
       ONNXFileName = onnxFileName;
       NetType = netType;
+      DeviceType = deviceType;
       BatchSize = batchSize;
       Precision = precision;
 
-      executor = new NetExecutorONNXRuntime(onnxFileName, gpuNum);
+      int deviceIndex;
+      if (deviceType == NNDeviceType.GPU)
+      {
+        deviceIndex = gpuNum;
+      }
+      else if (deviceType == NNDeviceType.CPU)
+      {
+        deviceIndex = -1; // by convention this indicates CPU
+      }
+      else
+      {
+        throw new NotImplementedException("Unsupported ONNX type " + deviceType);
+      }
+
+      executor = new NetExecutorONNXRuntime(onnxFileName, precision, deviceIndex, useTRT);
     }
 
 
@@ -190,7 +209,7 @@ namespace Ceres.Chess.LC0NetInference
           throw new Exception("Implmentation restriction, ONNX runtime nets expected to have  both WDL and MLH heads.");
         }
 
-        int INDEX_POLICIES = FindIndex(NetType == NetTypeEnum.Ceres ? 1858 : 96);
+        int INDEX_POLICIES = FindIndex(1858);// FIX NetType == NetTypeEnum.Ceres ? 1858 : 96);
         int INDEX_MLH = FindIndex(1);
         int INDEX_WDL = FindIndex(3);
 
@@ -201,7 +220,7 @@ namespace Ceres.Chess.LC0NetInference
         Debug.Assert(values.Length == (isWDL ? 3 : 1) * numPositionsUsed);
 
         float[] value_fc_activations = null;// eval.Length < 3 ? null : eval[2];
-        int? overridePolicyLen = NetType == NetTypeEnum.TPG ? 96 : 0;
+        int? overridePolicyLen = NetType == NetTypeEnum.TPG ? 96 : null;
         ONNXRuntimeExecutorResultBatch result = new ONNXRuntimeExecutorResultBatch(isWDL, values, policiesLogistics, mlh, value_fc_activations, 
                                                                                    numPositionsUsed, overridePolicyLen);
         return result;

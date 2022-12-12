@@ -28,9 +28,9 @@ using System;
 using System.Collections.Generic;
 using Ceres.Base.Benchmarking;
 using Ceres.Base.DataTypes;
+using Chess.Ceres.NNEvaluators;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
-
 
 #if FEATURE_ONNX
 #endif
@@ -66,6 +66,10 @@ namespace Ceres.Chess.LC0NetInference
     readonly object lockObject = new object();
     bool disposed;
 
+    /// <summary>
+    /// Session data type precision to use.
+    /// </summary>
+    public readonly NNEvaluatorPrecision Precision;
 
     /// <summary>
     /// Constructor.
@@ -73,57 +77,89 @@ namespace Ceres.Chess.LC0NetInference
     /// <param name="onnxFileName"></param>
     /// <param name="gpuID"></param>
     /// <param name="batchSize"></param>
-    public NetExecutorONNXRuntime(string onnxFileName, int gpuID)
+    public NetExecutorONNXRuntime(string onnxFileName, NNEvaluatorPrecision precision, int gpuID, bool useTRT)
     {
       // https://codechina.csdn.net/mirrors/microsoft/onnxruntime/-/blob/skottmckay/CreateHelperForGeneratingIdsForUseInCompilingEPs/docs/execution_providers/TensorRT-ExecutionProvider.md
-      Environment.SetEnvironmentVariable("ORT_TENSORRT_ENGINE_CACHE_ENABLE", "1");
-      Environment.SetEnvironmentVariable("ORT_TENSORRT_FP16_ENABLE", "1");
       //     if (gpuID < 0 || gpuID > 16) throw new Exception($"Invalid GPU ID { gpuID}");
 #if FEATURE_ONNX
-#if CUDA
+      GPUID = gpuID;
+      Precision = precision;
+
+      SessionOptions so = default;
+
+      //        so.AppendExecutionProvider_DML();
+      //        so.AppendExecutionProvider_CoreML();
+
+
       if (gpuID < 0) // CPU. TO DO: clean this up
       {
-        Session = new InferenceSession(onnxFileName);
+        so = new SessionOptions();
       }
-      else if (gpuID == 0)
+      else if (useTRT)
       {
-        Session = new InferenceSession(onnxFileName, SessionOptions.MakeSessionOptionWithCudaProvider(gpuID));
-        //        Session = new InferenceSession(onnxFileName, SessionOptions.MakeSessionOptionWithTensorrtProvider(gpuID));
+        OrtTensorRTProviderOptions trtProviderOptions = new OrtTensorRTProviderOptions();
+
+        // TODO: this code has no effect for unknown reasons.
+        var providerOptionsDict = new Dictionary<string, string>();
+        providerOptionsDict["device_id"] = gpuID.ToString(); ;
+        providerOptionsDict["trt_engine_cache_enable"] = "1";
+        providerOptionsDict["trt_fp16_enable"] = Precision == NNEvaluatorPrecision.FP16 ? "1" : "0";
+        trtProviderOptions.UpdateOptions(providerOptionsDict);
+        //trt_cache_path="/path/to/cache"
+        //        providerOptionsDict["enable_cuda_graph"] = "1"; // NOTE: this requires entire graph to map onto ONNX nodes
+
+        // TODO: Someday remove this. In theory, the above two assignments should work (but seems to be ignored).
+        // WARNING: This makes a global change that could impact other threads. ****************
+        Environment.SetEnvironmentVariable("ORT_TENSORRT_ENGINE_CACHE_ENABLE", "1");
+        Environment.SetEnvironmentVariable("ORT_TENSORRT_FP16_ENABLE", Precision == NNEvaluatorPrecision.FP16 ? "1" : "0");
+
+
+//        so = SessionOptions.MakeSessionOptionWithTensorrtProvider(gpuID);
+        so = SessionOptions.MakeSessionOptionWithTensorrtProvider(trtProviderOptions);
       }
       else
       {
-#if NOT
-//Yields error: Unable to find an entry point named 'OrtSessionOptionsAppendExecutionProvider_Tensorrt' in DLL 'onnxruntime'.
+        OrtCUDAProviderOptions cudaProviderOptions = new ();
 
-        SessionOptions options = new SessionOptions();
-        options.AppendExecutionProvider_Tensorrt(gpuID);
-//        options.AppendExecutionProvider_CUDA();
-        Session = new InferenceSession(onnxFileName, options);
-#endif
-        SessionOptions so = new SessionOptions();
+        var providerOptionsDict = new Dictionary<string, string>();
+        providerOptionsDict["device_id"] = gpuID.ToString();
+        //        providerOptionsDict["gpu_mem_limit"] = "2147483648";
+        //        providerOptionsDict["arena_extend_strategy"] = "kSameAsRequested";
+        //        providerOptionsDict["cudnn_conv_algo_search"] = "DEFAULT";
+        //        providerOptionsDict["do_copy_in_default_stream"] = "1";
+        //        providerOptionsDict["cudnn_conv_use_max_workspace"] = "1";
+        //        providerOptionsDict["cudnn_conv1d_pad_to_nc1d"] = "1";
+//        providerOptionsDict["enable_cuda_graph"] = "1"; // NOTE: this requires entire graph to map onto ONNX nodes
         
-        so.GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL;
-        
-//        so.AppendExecutionProvider_CUDA(gpuID);
-//        so.AppendExecutionProvider_DML(gpuID);
+        cudaProviderOptions.UpdateOptions(providerOptionsDict);
+        so = SessionOptions.MakeSessionOptionWithCudaProvider(cudaProviderOptions);
 
-//        so.AppendExecutionProvider_Tensorrt(gpuID);
-
-//        so.AppendExecutionProvider_CPU(); //fails even when corresponding NuGet package is installed
-        //        ORT_TENSORRT_FP16_ENABLE
-//        so.LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_VERBOSE;
-//        so.LogVerbosityLevel = 3;
-//        so.LogId = "ort.log.txt";
-
-        Session = new InferenceSession(onnxFileName, so);
+        //Session = new InferenceSession(onnxFileName, SessionOptions.MakeSessionOptionWithTensorrtProvider(gpuID));
       }
+
+      const bool VERBOSE = false;
+      if (VERBOSE)
+      {
+        so.LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_VERBOSE;
+        so.LogVerbosityLevel = 3;
+        so.LogId = "ort.log.txt";
+      }
+
+      so.GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL;
+      
+//      so.AppendExecutionProvider_Tensorrt(gpuID);
+      //        so.AppendExecutionProvider_CPU(); //fails even when corresponding NuGet package is installed
+      //        ORT_TENSORRT_FP16_ENABLE
+      //        so.LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_VERBOSE;
+      //        so.LogVerbosityLevel = 3;
+      //        so.LogId = "ort.log.txt";
+
+      Session = new InferenceSession(onnxFileName, so);
+
 #else
-        Session = new InferenceSession(onnxFileName);
+        throw new Exception("NetExecutorONNXRuntine feature is not enabled.");
 #endif
-#else
-      throw new Exception("NetExecutorONNXRuntine feature is not enabled.");
-#endif
-      GPUID = gpuID;
+
     }
 
 
@@ -174,10 +210,12 @@ namespace Ceres.Chess.LC0NetInference
 
       if (float16)
       {
+//        Console.WriteLine("exec16");
         return RunFloat16(inputsONNX);
       }
       else
       {
+//        Console.WriteLine("exec32");
         return RunFloat(inputsONNX);
       }
 
@@ -207,9 +245,10 @@ namespace Ceres.Chess.LC0NetInference
         (Memory<float> input, int[] shape, string inputName, int numElements) = inputs[i];
         Span<float> inputSpan = input.Span;
         Float16[] inputFloat16 = new Float16[numElements];
+
         for (int ix = 0; ix < numElements; ix++)
         {
-          inputFloat16[ix] = (Float16)inputSpan[ix];
+          inputFloat16[ix] = new FP16(inputSpan[ix]).Value;
         }
 
         DenseTensor<Float16> inputTensor = new DenseTensor<Float16>(inputFloat16, shape);

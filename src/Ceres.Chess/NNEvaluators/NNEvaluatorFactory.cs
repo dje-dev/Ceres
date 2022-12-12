@@ -126,23 +126,33 @@ namespace Ceres.Chess.NNEvaluators
 
       // For ONNX files loaded directly, now way to really know of WDL/MLH present.
       const bool DEFAULT_HAS_WDL = true; 
-      const bool DEFAULT_HAS_MLH = true; 
+      const bool DEFAULT_HAS_MLH = true;
+
+      const int DEFAULT_MAX_BATCH_SIZE = 1024;
 
       switch (netDef.Type)
       {
         case NNEvaluatorType.ONNXViaTRT:
           string fullFN = Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, netDef.NetworkID) + ".onnx";
+//          NNEvaluatorPrecision precision = netDef.NetworkID.EndsWith(".16") ? NNEvaluatorPrecision.FP16 : NNEvaluatorPrecision.FP32;
+          ret = new NNEvaluatorEngineONNX(netDef.NetworkID, fullFN, deviceDef.Type, deviceDef.DeviceIndex, useTRT:true,
+                                          ONNXRuntimeExecutor.NetTypeEnum.LC0, deviceDef.MaxBatchSize ?? DEFAULT_MAX_BATCH_SIZE,
+                                          netDef.Precision, DEFAULT_HAS_WDL, DEFAULT_HAS_MLH,
+                                          null, null, null, null, false);
+#if OLD
           ret = new NNEvaluatorEngineTensorRT(netDef.NetworkID, fullFN, DEFAULT_HAS_WDL, DEFAULT_HAS_MLH, deviceDef.DeviceIndex,
                                               NNEvaluatorEngineTensorRTConfig.NetTypeEnum.LC0,
-                                              1024, netDef.Precision,
+                                              deviceDef.MaxBatchSize ?? DEFAULT_MAX_BATCH_SIZE, netDef.Precision,
                                               NNEvaluatorEngineTensorRTConfig.TRTPriorityLevel.Medium, null, false, TRT_SHARED);
+#endif
           break;
 
         case NNEvaluatorType.ONNXViaORT:
           string fullFN2 = Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, netDef.NetworkID) + ".onnx";
-          ret = new NNEvaluatorEngineONNX(netDef.NetworkID, fullFN2, deviceDef.DeviceIndex,
-                                          ONNXRuntimeExecutor.NetTypeEnum.LC0, 1024,
-                                          NNEvaluatorPrecision.FP32, DEFAULT_HAS_WDL, DEFAULT_HAS_MLH,
+          // NNEvaluatorPrecision precision = netDef.NetworkID.Contains(".16") ? NNEvaluatorPrecision.FP16 : NNEvaluatorPrecision.FP32;
+          ret = new NNEvaluatorEngineONNX(netDef.NetworkID, fullFN2, deviceDef.Type, deviceDef.DeviceIndex, useTRT:false,
+                                          ONNXRuntimeExecutor.NetTypeEnum.LC0, deviceDef.MaxBatchSize ?? DEFAULT_MAX_BATCH_SIZE,
+                                          netDef.Precision, DEFAULT_HAS_WDL, DEFAULT_HAS_MLH,
                                           null, null, null, null, false);
           break;
 
@@ -174,16 +184,17 @@ namespace Ceres.Chess.NNEvaluators
               lock (onnxFileWriteLock)
               {
                 // string tempFN = Path.GetTempFileName() + ".onnx";
+                Console.WriteLine($"The ONNX protobuf from the LC0 PB file is extracted to {tempFN}");
                 File.WriteAllBytes(tempFN, pbn.Net.OnnxModel.Model);
               }
             }
 
-            bool useTRT = !tempFN.ToUpper().Contains(".ORT"); // TODO: TEMPORARY HACK - way to request using ORT
+            bool useTRT = tempFN.ToUpper().Contains(".TRT"); // TODO: TEMPORARY HACK - way to request using TRT
             if (useTRT)
             {
               return new NNEvaluatorEngineTensorRT(netDef.NetworkID, tempFN, net.IsWDL, net.HasMovesLeft, deviceDef.DeviceIndex,
                                                    NNEvaluatorEngineTensorRTConfig.NetTypeEnum.LC0,
-                                                   1024, netDef.Precision,
+                                                   1024,netDef.Precision, //netDef.Precision,
                                                    NNEvaluatorEngineTensorRTConfig.TRTPriorityLevel.Medium, null, false, TRT_SHARED);
             }
             else
@@ -191,9 +202,10 @@ namespace Ceres.Chess.NNEvaluators
               // TODO: consider if we could/should delete the temporary file when
               //       it has been consumed by the ONNX engine constructor.
               // TODO: consider possibility of other precisions than FP32
-              return new NNEvaluatorEngineONNX(netDef.NetworkID, tempFN, deviceDef.DeviceIndex,
+              const bool USE_TRT = false;
+              return new NNEvaluatorEngineONNX(netDef.NetworkID, tempFN, deviceDef.Type, deviceDef.DeviceIndex, USE_TRT,
                                                ONNXRuntimeExecutor.NetTypeEnum.LC0, 1024,
-                                               NNEvaluatorPrecision.FP32, netDefONNX.IsWDL, netDefONNX.HasMovesLeft,
+                                               netDef.Precision, netDefONNX.IsWDL, netDefONNX.HasMovesLeft,
                                                pbn.Net.OnnxModel.OutputValue, pbn.Net.OnnxModel.OutputWdl,
                                                pbn.Net.OnnxModel.OutputPolicy, pbn.Net.OnnxModel.OutputMlh, false);
             }

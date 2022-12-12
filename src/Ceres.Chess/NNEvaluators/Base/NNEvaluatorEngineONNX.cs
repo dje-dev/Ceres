@@ -29,6 +29,7 @@ using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess;
 using System.Diagnostics;
+using Ceres.Chess.NNEvaluators.Defs;
 
 #endregion
 
@@ -61,6 +62,10 @@ namespace Chess.Ceres.NNEvaluators
     /// </summary>
     public readonly NNEvaluatorPrecision Precision;
 
+    /// <summary>
+    /// Type of hardware device.
+    /// </summary>
+    public readonly NNDeviceType DeviceType;
 
     /// <summary>
     /// Executor object to run ONNX network evaluation.
@@ -117,15 +122,17 @@ namespace Chess.Ceres.NNEvaluators
 #endif
 #region Statics
 
+    // TODO: clean up this lookaside buffering
     static string lastONNXFileName;
     static int lastBatchSize;
+    static NNDeviceType lastDeviceType;
     static bool lastIsWDL;
     static ONNXRuntimeExecutor lastExecutor;
     static ONNXRuntimeExecutor.NetTypeEnum lastType;
 
 #endregion
 
-    public NNEvaluatorEngineONNX(string engineID, string weightsFN, int gpuID, 
+    public NNEvaluatorEngineONNX(string engineID, string weightsFN, NNDeviceType deviceType, int gpuID, bool useTRT,
                                  ONNXRuntimeExecutor.NetTypeEnum type, int batchSize,
                                  NNEvaluatorPrecision precision, bool isWDL, bool hasM,
                                  string outputValue, string outputWDL, string outputPolicy, string outputMLH, 
@@ -138,6 +145,7 @@ namespace Chess.Ceres.NNEvaluators
       Precision = precision;
       this.isWDL = isWDL;
       this.hasM = hasM;
+      DeviceType = deviceType;
 
       OutputValue = outputValue;
       OutputWDL = outputWDL;
@@ -146,7 +154,7 @@ namespace Chess.Ceres.NNEvaluators
       ValueHeadLogistic = valueHeadLogistic;
 
       if (lastONNXFileName == weightsFN && lastBatchSize == batchSize
-        && lastIsWDL == isWDL && lastType == type)
+        && lastIsWDL == isWDL && lastType == type && deviceType == lastDeviceType)
       {
         Executor = lastExecutor;
       }
@@ -154,8 +162,9 @@ namespace Chess.Ceres.NNEvaluators
       {
         Console.WriteLine("Starting ONNX runtime against " + engineID + " from " + weightsFN + " with GPU " + gpuID);
 
-        Executor = new ONNXRuntimeExecutor(weightsFN, batchSize, type, precision, gpuID);
+        Executor = new ONNXRuntimeExecutor(weightsFN, batchSize, type, precision, deviceType, gpuID, useTRT);
         lastONNXFileName = weightsFN;
+        lastDeviceType = deviceType;
         lastBatchSize = batchSize;
         lastIsWDL = isWDL;
         lastType = type;

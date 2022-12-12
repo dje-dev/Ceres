@@ -78,6 +78,13 @@ namespace Ceres.Chess.NNEvaluators.Specifications
 
       string[] deviceStringParts = equalsParts[0].Split(":");
 
+      if (deviceStringParts.Length == 1 && deviceStringParts[0].ToUpper() == "CPU")
+      {
+        Devices.Add((new NNEvaluatorDeviceDef(NNDeviceType.CPU, 0, false, null, null, null), 1));
+        ComboType = NNEvaluatorDeviceComboType.Single;
+        return;
+      }
+
       if (deviceStringParts.Length is not (2 or 3))
       {
         throw new Exception($"{deviceString} not valid device specification string { exampleString}");
