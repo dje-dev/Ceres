@@ -12,8 +12,6 @@
 
 #region Using directives
 
-using Ceres.Base.DataTypes;
-using ManagedCuda;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -21,6 +19,9 @@ using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading;
+
+using ManagedCuda;
+using Ceres.Base.DataTypes;
 
 #endregion
 
@@ -61,15 +62,12 @@ namespace Ceres.Base.CUDA
     public ReaderWriterLockSlim GraphCaptureRWLock => graphCaptureRWLock;
 
 
-
     /// <summary>
     /// Constructor for a context for a specified device.
     /// </summary>
     /// <param name="gpuID"></param>
-    public CUDADevice(int gpuID)
+    internal CUDADevice(int gpuID)
     {
-      //int deviceCount = CudaContext.GetDeviceCount();
-
       GPUID = gpuID;
       Context = new CudaContext(gpuID, true);
     }
@@ -187,6 +185,8 @@ namespace Ceres.Base.CUDA
 
     public static CUDADevice GetContext(int gpuID)
     {
+      SetLazyLoading();
+
       CUDADevice device = null;
       if (!contexts.TryGetValue(gpuID, out device))
       {
@@ -204,6 +204,31 @@ namespace Ceres.Base.CUDA
         }
       }
       return device;
+    }
+
+
+    static bool haveSetLazyLoading = false;
+
+    /// <summary>
+    /// Setting CUDA_MODULE_LOADING = LAZY is supposed to reduce load time and
+    /// memory usage(starting with 11.7, and even more so with 11.8).
+
+    /// With 11.7 on Linux using Ceres.Indeed, loading 2 networks(T70, T80)
+    /// on all 4 GPUs takes 8.98sec and 4903k without but only 7.53sec and 4477k.
+
+    /// However setting the environment variable programmatically at initialization(before call to cudaInit())
+    /// surprisingly doesn't work for me; one has to set it from shell before launch.
+    /// </summary>
+    static void SetLazyLoading()
+    {
+      if (!haveSetLazyLoading)
+      {
+        // TODO: this does not actualy seem to have any effect; see above.
+        System.Environment.SetEnvironmentVariable("CUDA_MODULE_LOADING", "LAZY");
+
+        haveSetLazyLoading = true;
+      }
+
     }
 
     #endregion
