@@ -26,14 +26,29 @@ namespace Ceres.Chess.NNEvaluators.Defs
     LC0Library,
 
     /// <summary>
-    /// In ONNX format to be run via ONNX runtime
+    /// Leela Zero network, run via embedded ONNX file and ONNX runtime with CUDA execution provider
+    /// </summary>
+    LC0ViaONNXViaORT,
+
+    /// <summary>
+    /// Leela Zero network, run via embedded ONNX file and ONNX runtime with TensorRT execution provider
+    /// </summary>
+    LC0ViaONNXViaTRT,
+
+    /// <summary>
+    /// In ONNX format to be run via ONNX runtime via CUDA execution provider
     /// </summary>
     ONNXViaORT,
 
     /// <summary>
-    /// In ONNX format to be run via TensorRT
+    /// In ONNX format to be run via ONNX runtime with TensorRT execution provider
     /// </summary>
     ONNXViaTRT,
+
+    /// <summary>
+    /// TensorRT from ONNX format to be run via custom Ceres C++ DLL/library file
+    /// </summary>
+    TRT,
 
     /// <summary>
     /// Random policy and value, using a relatively wide policy distribution (leading to wide search trees)

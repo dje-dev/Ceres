@@ -63,6 +63,16 @@ namespace Ceres.Chess.NNEvaluators.Specifications
         // Net specification "LC0:703810=0.5,66193=0.5";
         netIDs = netString.Substring(4);
       }
+      else if (netString.ToUpper().StartsWith("LC0_ONNX_ORT:"))
+      {
+        netIDs = netString.Substring(13);
+        NN_EVAL_TYPE = NNEvaluatorType.LC0ViaONNXViaORT;
+      }
+      else if (netString.ToUpper().StartsWith("LC0_ONNX_TRT:"))
+      {
+        netIDs = netString.Substring(13);
+        NN_EVAL_TYPE = NNEvaluatorType.LC0ViaONNXViaTRT;
+      }
       else if (netString.ToUpper().StartsWith("ONNX_TRT:"))
       {
         netIDs = netString.Substring(9);
@@ -72,6 +82,11 @@ namespace Ceres.Chess.NNEvaluators.Specifications
       {
         netIDs = netString.Substring(9);
         NN_EVAL_TYPE = NNEvaluatorType.ONNXViaORT;
+      }
+      else if (netString.ToUpper().StartsWith("TRT:"))
+      {
+        netIDs = netString.Substring(4);
+        NN_EVAL_TYPE = NNEvaluatorType.TRT;
       }
       else if (netString.ToUpper().StartsWith("RANDOM_WIDE:"))
       {

@@ -129,31 +129,26 @@ namespace Ceres.Chess.NNEvaluators
       const bool DEFAULT_HAS_MLH = true;
 
       const int DEFAULT_MAX_BATCH_SIZE = 1024;
+      const bool ONNX_SCALE_50_MOVE_COUNTER = false; // BT2 already inserts own node to adjust
 
+      string fullFN = Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, netDef.NetworkID) + ".onnx";
       switch (netDef.Type)
       {
         case NNEvaluatorType.ONNXViaTRT:
-          string fullFN = Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, netDef.NetworkID) + ".onnx";
-//          NNEvaluatorPrecision precision = netDef.NetworkID.EndsWith(".16") ? NNEvaluatorPrecision.FP16 : NNEvaluatorPrecision.FP32;
-          ret = new NNEvaluatorEngineONNX(netDef.NetworkID, fullFN, deviceDef.Type, deviceDef.DeviceIndex, useTRT:true,
-                                          ONNXRuntimeExecutor.NetTypeEnum.LC0, deviceDef.MaxBatchSize ?? DEFAULT_MAX_BATCH_SIZE,
-                                          netDef.Precision, DEFAULT_HAS_WDL, DEFAULT_HAS_MLH,
-                                          null, null, null, null, false);
-#if OLD
-          ret = new NNEvaluatorEngineTensorRT(netDef.NetworkID, fullFN, DEFAULT_HAS_WDL, DEFAULT_HAS_MLH, deviceDef.DeviceIndex,
-                                              NNEvaluatorEngineTensorRTConfig.NetTypeEnum.LC0,
-                                              deviceDef.MaxBatchSize ?? DEFAULT_MAX_BATCH_SIZE, netDef.Precision,
-                                              NNEvaluatorEngineTensorRTConfig.TRTPriorityLevel.Medium, null, false, TRT_SHARED);
-#endif
+        case NNEvaluatorType.ONNXViaORT:
+          bool viaTRT = netDef.Type == NNEvaluatorType.ONNXViaTRT;
+          //          NNEvaluatorPrecision precision = netDef.NetworkID.EndsWith(".16") ? NNEvaluatorPrecision.FP16 : NNEvaluatorPrecision.FP32;
+          ret = new NNEvaluatorEngineONNX(netDef.NetworkID, fullFN, deviceDef.Type, deviceDef.DeviceIndex, useTRT: viaTRT,
+                                            ONNXRuntimeExecutor.NetTypeEnum.LC0, deviceDef.MaxBatchSize ?? DEFAULT_MAX_BATCH_SIZE,
+                                            netDef.Precision, DEFAULT_HAS_WDL, DEFAULT_HAS_MLH,
+                                            null, null, null, null, false, ONNX_SCALE_50_MOVE_COUNTER);
           break;
 
-        case NNEvaluatorType.ONNXViaORT:
-          string fullFN2 = Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, netDef.NetworkID) + ".onnx";
-          // NNEvaluatorPrecision precision = netDef.NetworkID.Contains(".16") ? NNEvaluatorPrecision.FP16 : NNEvaluatorPrecision.FP32;
-          ret = new NNEvaluatorEngineONNX(netDef.NetworkID, fullFN2, deviceDef.Type, deviceDef.DeviceIndex, useTRT:false,
-                                          ONNXRuntimeExecutor.NetTypeEnum.LC0, deviceDef.MaxBatchSize ?? DEFAULT_MAX_BATCH_SIZE,
-                                          netDef.Precision, DEFAULT_HAS_WDL, DEFAULT_HAS_MLH,
-                                          null, null, null, null, false);
+        case NNEvaluatorType.TRT:
+          ret = new NNEvaluatorEngineTensorRT(netDef.NetworkID, fullFN, DEFAULT_HAS_WDL, DEFAULT_HAS_MLH, deviceDef.DeviceIndex,
+                                            NNEvaluatorEngineTensorRTConfig.NetTypeEnum.LC0,
+                                            deviceDef.MaxBatchSize ?? DEFAULT_MAX_BATCH_SIZE, netDef.Precision,
+                                            NNEvaluatorEngineTensorRTConfig.TRTPriorityLevel.Medium, null, false, TRT_SHARED);
           break;
 
         case NNEvaluatorType.RandomWide:
@@ -163,6 +158,12 @@ namespace Ceres.Chess.NNEvaluators
         case NNEvaluatorType.RandomNarrow:
           ret = new NNEvaluatorRandom(NNEvaluatorRandom.RandomType.NarrowPolicy, true);
           break;
+
+        case NNEvaluatorType.LC0ViaONNXViaORT:
+          throw new NotImplementedException();
+
+        case NNEvaluatorType.LC0ViaONNXViaTRT:
+          throw new NotImplementedException();
 
         case NNEvaluatorType.LC0Library:
           INNWeightsFileInfo net = NNWeightsFiles.LookupNetworkFile(netDef.NetworkID);
@@ -203,11 +204,12 @@ namespace Ceres.Chess.NNEvaluators
               //       it has been consumed by the ONNX engine constructor.
               // TODO: consider possibility of other precisions than FP32
               const bool USE_TRT = false;
+//               NNEvaluatorPrecision precision = netDef.NetworkID.Contains(".16") ? NNEvaluatorPrecision.FP16 : NNEvaluatorPrecision.FP32;
               return new NNEvaluatorEngineONNX(netDef.NetworkID, tempFN, deviceDef.Type, deviceDef.DeviceIndex, USE_TRT,
                                                ONNXRuntimeExecutor.NetTypeEnum.LC0, 1024,
                                                netDef.Precision, netDefONNX.IsWDL, netDefONNX.HasMovesLeft,
                                                pbn.Net.OnnxModel.OutputValue, pbn.Net.OnnxModel.OutputWdl,
-                                               pbn.Net.OnnxModel.OutputPolicy, pbn.Net.OnnxModel.OutputMlh, false);
+                                               pbn.Net.OnnxModel.OutputPolicy, pbn.Net.OnnxModel.OutputMlh, false, ONNX_SCALE_50_MOVE_COUNTER);
             }
           }
           else

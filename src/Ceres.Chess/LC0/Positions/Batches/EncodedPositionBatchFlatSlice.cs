@@ -101,7 +101,7 @@ namespace Ceres.Chess.LC0.Batches
       throw new NotImplementedException();
     }
 
-    public float[] ValuesFlatFromPlanes(float[] preallocatedBuffer = null)
+    public float[] ValuesFlatFromPlanes(float[] preallocatedBuffer, bool nhwc, bool scale50MoveCounters)
     {
       throw new NotImplementedException();
     }

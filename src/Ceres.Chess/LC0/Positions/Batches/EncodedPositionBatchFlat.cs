@@ -542,15 +542,17 @@ namespace Ceres.Chess.LC0.Batches
     }
 
 
-    public float[] ValuesFlatFromPlanesSubsetHistoryPositions(int numHistoryPositions, bool convertToNHWC = false)
+    public float[] ValuesFlatFromPlanesSubsetHistoryPositions(int numHistoryPositions, bool convertToNHWC = false, bool scale50MoveCounter = true)
     {
+      throw new NotImplementedException("Please verify correctness of arguemnt scale50MoveCounter");
+
       int numChannels = 8 + 13 * numHistoryPositions;
 
       float[] ret;
 
       if (numHistoryPositions == NUM_HISTORY_POSITIONS)
       {
-        ret = ValuesFlatFromPlanes();
+        ret = ValuesFlatFromPlanes(null, convertToNHWC, scale50MoveCounter);
       }
       else
       {
@@ -591,8 +593,10 @@ namespace Ceres.Chess.LC0.Batches
       return convertToNHWC ? ToNHWC(ret, numChannels) : ret;
     }
 
-    public float[] ValuesFlatFromPlanes(float[] preallocatedBuffer = null)
+    public float[] ValuesFlatFromPlanes(float[] preallocatedBuffer, bool nwhc, bool scale50MoveCounter)
     {
+      Debug.Assert(!nwhc); // not implemented
+
       float[] ret;
 
       int length = TOTAL_NUM_PLANES_ALL_HISTORIES * NumPos * 64;
@@ -607,13 +611,14 @@ namespace Ceres.Chess.LC0.Batches
         ret = new float[length];
       }
 
-      ConvertToFlat(ret);
+      ConvertToFlat(ret, scale50MoveCounter);
       return ret;
     }
 
 
     unsafe static void BitmapRepresentationExpand(ulong[] thisLongs, byte[] thisValues,
-                                                  float[] targetArray, int numToConvert)
+                                                  float[] targetArray, int numToConvert,
+                                                  bool scale50MoveCounter)
     {
       int targetOffset = 0;
 
@@ -629,8 +634,8 @@ namespace Ceres.Chess.LC0.Batches
           }
 
           // Apply the necessary scaling of this is the move counter (50 move rule)
-          bool isMoves50Plane = false;// outer % 112 == 109;
-          float multiplier = isMoves50Plane ? (1.0f / 99.0f) : 1.0f;
+          bool isMoves50Plane = outer % 112 == 109;
+          float multiplier = (scale50MoveCounter && isMoves50Plane) ? (1.0f / 99.0f) : 1.0f;
           float targetValue = multiplier * thisValues[outer];
 
           byte* bytes = (byte*)&longs[outer];
@@ -662,30 +667,27 @@ namespace Ceres.Chess.LC0.Batches
     /// </summary>
     /// <param name="outBuffer">buffer to receive values. NOTE! This is assumed to start out cleared (all zeros)</param>
     /// <param name="encodingType"></param>
-    void ConvertToFlat(float[] outBuffer)
+    void ConvertToFlat(float[] outBuffer, bool scale50MoveCounter)
     {
       //return ConvertToFlatSlow(outBuffer, encodingType); old slow version
       int numToConvert = NumPos * TOTAL_NUM_PLANES_ALL_HISTORIES;
-      BitmapRepresentationExpand(PosPlaneBitmaps, PosPlaneValues, outBuffer, numToConvert);
+      BitmapRepresentationExpand(PosPlaneBitmaps, PosPlaneValues, outBuffer, numToConvert, scale50MoveCounter);
     }
 
 
     #region Dump diagostics
 
-    // --------------------------------------------------------------------------------------------
     public void DumpDecoded()
     {
-      DumpDecoded(this.ValuesFlatFromPlanes(), TOTAL_NUM_PLANES_ALL_HISTORIES);
+      DumpDecoded(this.ValuesFlatFromPlanes(null, false, false), TOTAL_NUM_PLANES_ALL_HISTORIES);
     }
 
-    // --------------------------------------------------------------------------------------------
     public static void DumpDecoded(Memory<float> encodedPos, int numPlanes)
     {
       ulong[] decoded = DecodedBits(encodedPos);
       DumpDecoded(decoded, numPlanes);
     }
 
-    // --------------------------------------------------------------------------------------------
     public static void DumpDecoded(ulong[] decodedPos, int numPlanes)
     {
       Console.WriteLine("\r\nRaw value of a planes of first position (can compare agaist values seen in debugger within encoder.cc");
@@ -697,7 +699,6 @@ namespace Ceres.Chess.LC0.Batches
     }
 
 
-    // --------------------------------------------------------------------------------------------
     public static ulong[] DecodedBits(Memory<float> rawMem)
     {
       Span<float> raw = rawMem.Span;
@@ -728,7 +729,7 @@ namespace Ceres.Chess.LC0.Batches
       return ret;
     }
 
-    // --------------------------------------------------------------------------------------------
+
     public static ulong[] DecodedBits(byte[] raw)
     {
       ulong[] ret = new ulong[raw.Length / 64];
@@ -817,7 +818,7 @@ namespace Ceres.Chess.LC0.Batches
     Span<ulong> IEncodedPositionBatchFlat.PositionHashes { get => PositionHashes.AsSpan(); set => PositionHashes = value.ToArray(); }
     Span<MGMoveList> IEncodedPositionBatchFlat.Moves { get => Moves.AsSpan(); set => Moves = value.ToArray(); }
 
-    float[] IEncodedPositionBatchFlat.ValuesFlatFromPlanes(float[] preallocatedBuffer = null) => ValuesFlatFromPlanes(preallocatedBuffer);
+    float[] IEncodedPositionBatchFlat.ValuesFlatFromPlanes(float[] preallocatedBuffer, bool nwhc, bool scaleMove50Counter) => ValuesFlatFromPlanes(preallocatedBuffer, nwhc, scaleMove50Counter);
 
     #endregion
 

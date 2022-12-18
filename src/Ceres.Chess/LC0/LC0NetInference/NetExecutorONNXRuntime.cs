@@ -26,6 +26,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using Ceres.Base.Benchmarking;
 using Ceres.Base.DataTypes;
 using Chess.Ceres.NNEvaluators;
@@ -103,14 +104,26 @@ namespace Ceres.Chess.LC0NetInference
         var providerOptionsDict = new Dictionary<string, string>();
         providerOptionsDict["device_id"] = gpuID.ToString(); ;
         providerOptionsDict["trt_engine_cache_enable"] = "1";
+        providerOptionsDict["trt_engine_cache_path"] = new FileInfo(onnxFileName).DirectoryName;
         providerOptionsDict["trt_fp16_enable"] = Precision == NNEvaluatorPrecision.FP16 ? "1" : "0";
         trtProviderOptions.UpdateOptions(providerOptionsDict);
         //trt_cache_path="/path/to/cache"
         //        providerOptionsDict["enable_cuda_graph"] = "1"; // NOTE: this requires entire graph to map onto ONNX nodes
 
+#if NOT
+('TensorrtExecutionProvider', {
+'device_id': 0,
+'trt_max_workspace_size': 2147483648,
+'trt_fp16_enable': True,
+'trt_dla_enable': False,
+'trt_engine_cache_enable': False,
+'trt_engine_cache_path':'./trtcache',
+}),
+#endif
         // TODO: Someday remove this. In theory, the above two assignments should work (but seems to be ignored).
         // WARNING: This makes a global change that could impact other threads. ****************
         Environment.SetEnvironmentVariable("ORT_TENSORRT_ENGINE_CACHE_ENABLE", "1");
+        Environment.SetEnvironmentVariable("ORT_TENSORRT_CACHE_PATH", new FileInfo(onnxFileName).DirectoryName);
         Environment.SetEnvironmentVariable("ORT_TENSORRT_FP16_ENABLE", Precision == NNEvaluatorPrecision.FP16 ? "1" : "0");
 
 
@@ -137,12 +150,12 @@ namespace Ceres.Chess.LC0NetInference
         //Session = new InferenceSession(onnxFileName, SessionOptions.MakeSessionOptionWithTensorrtProvider(gpuID));
       }
 
-      const bool VERBOSE = false;
+      bool VERBOSE = false;
       if (VERBOSE)
       {
         so.LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_VERBOSE;
-        so.LogVerbosityLevel = 3;
-        so.LogId = "ort.log.txt";
+        so.LogVerbosityLevel = 999;
+//        so.LogId = "ort.log.txt";
       }
 
       so.GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL;
@@ -183,6 +196,13 @@ namespace Ceres.Chess.LC0NetInference
 
       var inputsONNX = new (Memory<float> input, int[] shape, string inputName, int numElements)[inputsMetadata.Count];
 
+      bool inputIsFloat = true;
+      if (inputsMetadata.Count != 1)
+      {
+        // data type check below is only on first element
+        throw new Exception("Currently only single input ONNX files supported."); 
+      }
+
       int inputIndex = 0;
       foreach (KeyValuePair<string, NodeMetadata> iv in inputsMetadata)
       {
@@ -204,19 +224,19 @@ namespace Ceres.Chess.LC0NetInference
           throw new Exception($"Unexpected number of elements {numElements} {input.Length} {shape.ToString()}");
         }
 
+        inputIsFloat = iv.Value.ElementType == typeof(float);
+
         inputsONNX[inputIndex] = (input, shape, inputName, numElements);
         inputIndex++;
       }
 
-      if (float16)
+      if (inputIsFloat)
       {
-//        Console.WriteLine("exec16");
-        return RunFloat16(inputsONNX);
+        return RunFloat(inputsONNX);
       }
       else
       {
-//        Console.WriteLine("exec32");
-        return RunFloat(inputsONNX);
+        return RunFloat16(inputsONNX);
       }
 
 #else

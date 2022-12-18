@@ -118,6 +118,11 @@ namespace Chess.Ceres.NNEvaluators
     /// </summary>
     public readonly bool ValueHeadLogistic;
 
+    /// <summary>
+    /// If the 50 move plane should be scaled down by 99.
+    /// </summary>
+    public readonly bool Scale50MoveCounter;
+
 #if NOT
 #endif
 #region Statics
@@ -127,16 +132,18 @@ namespace Chess.Ceres.NNEvaluators
     static int lastBatchSize;
     static NNDeviceType lastDeviceType;
     static bool lastIsWDL;
+    static bool lastUseTRT;
+    static NNEvaluatorPrecision lastPrecision;
     static ONNXRuntimeExecutor lastExecutor;
     static ONNXRuntimeExecutor.NetTypeEnum lastType;
 
-#endregion
+    #endregion
 
     public NNEvaluatorEngineONNX(string engineID, string weightsFN, NNDeviceType deviceType, int gpuID, bool useTRT,
                                  ONNXRuntimeExecutor.NetTypeEnum type, int batchSize,
                                  NNEvaluatorPrecision precision, bool isWDL, bool hasM,
                                  string outputValue, string outputWDL, string outputPolicy, string outputMLH, 
-                                 bool valueHeadLogistic)
+                                 bool valueHeadLogistic, bool scale50MoveCounter)
     {
       EngineType = type == ONNXRuntimeExecutor.NetTypeEnum.Ceres ? "ONNX_DJE" : "ONNX_LZ0";
       EngineNetworkID = engineID;
@@ -146,15 +153,16 @@ namespace Chess.Ceres.NNEvaluators
       this.isWDL = isWDL;
       this.hasM = hasM;
       DeviceType = deviceType;
-
       OutputValue = outputValue;
       OutputWDL = outputWDL;
       OutputPolicy = outputPolicy;
       OutputMLH = outputMLH;
       ValueHeadLogistic = valueHeadLogistic;
+      Scale50MoveCounter = scale50MoveCounter;
 
-      if (lastONNXFileName == weightsFN && lastBatchSize == batchSize
-        && lastIsWDL == isWDL && lastType == type && deviceType == lastDeviceType)
+      const bool TRY_REUSE = false; // TODO: remove this completely, it is unsafe (?)
+      if (TRY_REUSE && lastONNXFileName == weightsFN && lastBatchSize == batchSize && precision == lastPrecision
+        && lastIsWDL == isWDL && lastType == type && deviceType == lastDeviceType && lastUseTRT == useTRT)
       {
         Executor = lastExecutor;
       }
@@ -168,6 +176,8 @@ namespace Chess.Ceres.NNEvaluators
         lastBatchSize = batchSize;
         lastIsWDL = isWDL;
         lastType = type;
+        lastPrecision = precision;
+        lastUseTRT = useTRT;
         lastExecutor = Executor;
       }
     }
@@ -206,7 +216,7 @@ namespace Chess.Ceres.NNEvaluators
         int bufferLength = 112 * batch.NumPos * 64;
         float[] flatValues = ArrayPool<float>.Shared.Rent(bufferLength);
 
-        batch.ValuesFlatFromPlanes(flatValues);
+        batch.ValuesFlatFromPlanes(flatValues, false, Scale50MoveCounter);
         PositionEvaluationBatch ret = DoEvaluateBatch(batch, flatValues, null, batch.NumPos, retrieveSupplementalResults);
 
         ArrayPool<float>.Shared.Return(flatValues);

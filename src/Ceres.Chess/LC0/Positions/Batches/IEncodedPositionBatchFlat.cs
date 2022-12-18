@@ -94,7 +94,7 @@ namespace Ceres.Chess.LC0.Batches
 
     #region Implmentation
 
-    float[] ValuesFlatFromPlanes(float[] preallocatedBuffer = null);
+    float[] ValuesFlatFromPlanes(float[] preallocatedBuffer, bool nhwc, bool scale50MoveCounter);
 
     
     public IEncodedPositionBatchFlat GetSubBatchSlice(int startIndex, int count)
