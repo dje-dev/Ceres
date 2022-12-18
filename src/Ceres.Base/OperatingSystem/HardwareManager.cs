@@ -62,7 +62,7 @@ namespace Ceres.Base.OperatingSystem
         errorString += "\r\nExperimental support with random NN backend is possible by";
         errorString += "\r\n  (1) set project to .NET 7, (2) change LinuxAPI DllImport";
         errorString += "\r\n  (3) disable prefetch, (4) switch IsLinux to also include MacOS";
-        errorString += "\r\n  (5) disable CUDA/AVX checks at initialization.";
+        errorString += "\r\n  (5) disable CUDA checks at initialization.";
       }
       else if (!isWindows && !isLinux)
       {
@@ -71,10 +71,6 @@ namespace Ceres.Base.OperatingSystem
       else if (isWindows && System.Environment.OSVersion.Version.Major < 6) // Note that Windows 7 is version 6
       {
         errorString = "Windows Version 7 or above required.";
-      }
-      else if (!Avx.IsSupported)
-      {
-        errorString = "AVX hardware support is required but not available on this processor.";
       }
 
       if (errorString != null)

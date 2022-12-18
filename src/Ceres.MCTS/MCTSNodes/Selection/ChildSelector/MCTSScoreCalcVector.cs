@@ -327,7 +327,7 @@ Note: Possible optimization/inefficiency:
 
           // Do computation
           Vector256<float> vNInFlight = Avx.LoadAlignedVector256(pNInFlight);
-          Vector256<float> vScore = ComputeScores(vW, vN, vP, virtualLossMultiplier, cpuctSqrtParentN, uctDenominatorPower, vQWhenNoChildren, vNInFlight);
+          Vector256<float> vScore = ComputeScoresAVX(vW, vN, vP, virtualLossMultiplier, cpuctSqrtParentN, uctDenominatorPower, vQWhenNoChildren, vNInFlight);
           Avx.Store(pComputedChildScores, vScore);
         }
 
@@ -383,7 +383,7 @@ Note: Possible optimization/inefficiency:
     /// <param name="values"></param>
     /// <param name="power"></param>
     /// <returns></returns>
-    static Vector256<float> ToPower(Vector256<float> values, float power)
+    static Vector256<float> ToPowerAVX(Vector256<float> values, float power)
     {
       Span<float> valuesSource = stackalloc float[8];
       Span<float> valuesDest = stackalloc float[8];
@@ -417,10 +417,10 @@ Note: Possible optimization/inefficiency:
     /// <param name="vNInFlight"></param>
     /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static Vector256<float> ComputeScores(Vector256<float> vW, Vector256<float> vN, Vector256<float> vP,
-                                                  float virtualLossMultiplier,
-                                                  float cpuctSqrtParentN, float uctDenominatorPower,
-                                                  Vector256<float> vQWhenNoChildren, Vector256<float> vNInFlight)
+    private static Vector256<float> ComputeScoresAVX(Vector256<float> vW, Vector256<float> vN, Vector256<float> vP,
+                                                     float virtualLossMultiplier,
+                                                     float cpuctSqrtParentN, float uctDenominatorPower,
+                                                     Vector256<float> vQWhenNoChildren, Vector256<float> vNInFlight)
     {
       Vector256<float> vNPlusNInFlight = Avx.Add(vN, vNInFlight);
       Vector256<float> vVirtualLossMultiplier = Vector256.Create(virtualLossMultiplier);
@@ -429,7 +429,7 @@ Note: Possible optimization/inefficiency:
       {
         1.0f => vNPlusNInFlight,
         0.5f => Avx.Sqrt(vNPlusNInFlight),
-        _ => ToPower(vNPlusNInFlight, uctDenominatorPower)
+        _ => ToPowerAVX(vNPlusNInFlight, uctDenominatorPower)
       };
 
       Vector256<float> vLossContrib = Avx.Multiply(vNInFlight, vVirtualLossMultiplier);
