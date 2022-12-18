@@ -14,7 +14,9 @@
 #region Using directives
 
 using System;
+using System.IO;
 using System.Reflection;
+using System.Runtime.Serialization.Formatters.Binary;
 using System.Text;
 
 #endregion
@@ -29,10 +31,11 @@ namespace Ceres.Base.Misc
 
   public static T DeepClone<T>(T a)
   {
+#if AVOID_BINARY_SERIALIZATION
+    throw new Exception("WARNING: Not yet working, causes strange errors on Linux in TournamentManager with AccessDenied on Console.Out");
     return (T)ObjUtilsCopy.Copy(a);
-
-#if DEPRECATED_MICROSOFT
-    using (MemoryStream stream = new MemoryStream())
+#else
+      using (MemoryStream stream = new MemoryStream())
       {
         BinaryFormatter formatter = new BinaryFormatter();
         formatter.Serialize(stream, a);
