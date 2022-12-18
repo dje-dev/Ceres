@@ -455,23 +455,26 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
     private static unsafe void PrefetchDataAt(void* nodePtr)
     {
-      if (MCTSParamsFixed.PrefetchCacheLevel == CacheLevel.Level0)
+      if (Avx.IsSupported)
       {
-        Sse.Prefetch0(nodePtr);
+        if (MCTSParamsFixed.PrefetchCacheLevel == CacheLevel.Level0)
+        {
+          Sse.Prefetch0(nodePtr);
+        }
+        else if (MCTSParamsFixed.PrefetchCacheLevel == CacheLevel.Level1)
+        {
+          Sse.Prefetch1(nodePtr);
+        }
+        else if (MCTSParamsFixed.PrefetchCacheLevel == CacheLevel.Level2)
+        {
+          Sse.Prefetch2(nodePtr);
+        }
+        else if (MCTSParamsFixed.PrefetchCacheLevel == CacheLevel.None)
+        {
+        }
+        else
+          throw new Exception("Internal error: unsupported cache level");
       }
-      else if (MCTSParamsFixed.PrefetchCacheLevel == CacheLevel.Level1)
-      {
-        Sse.Prefetch1(nodePtr);
-      }
-      else if (MCTSParamsFixed.PrefetchCacheLevel == CacheLevel.Level2)
-      {
-        Sse.Prefetch2(nodePtr);
-      }
-      else if (MCTSParamsFixed.PrefetchCacheLevel == CacheLevel.None)
-      {
-      }
-      else
-        throw new Exception("Internal error: unsupported cache level");
     }
 
 
