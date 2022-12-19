@@ -86,6 +86,11 @@ namespace Ceres.Chess.LC0NetInference
       GPUID = gpuID;
       Precision = precision;
 
+      // On Linux it was found necessary to touch the instance before any of the operations below
+      // to prevent error about a session object not being created.
+      // https://github.com/microsoft/onnxruntime/issues/11572
+      OrtEnv ortInstance = OrtEnv.Instance();
+      
       SessionOptions so = default;
 
       //        so.AppendExecutionProvider_DML();
@@ -155,17 +160,11 @@ namespace Ceres.Chess.LC0NetInference
       {
         so.LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_VERBOSE;
         so.LogVerbosityLevel = 999;
-//        so.LogId = "ort.log.txt";
+        so.LogId = "ort.log.txt";
       }
 
       so.GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL;
-      
-//      so.AppendExecutionProvider_Tensorrt(gpuID);
-      //        so.AppendExecutionProvider_CPU(); //fails even when corresponding NuGet package is installed
-      //        ORT_TENSORRT_FP16_ENABLE
-      //        so.LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_VERBOSE;
-      //        so.LogVerbosityLevel = 3;
-      //        so.LogId = "ort.log.txt";
+    
 
       Session = new InferenceSession(onnxFileName, so);
 
