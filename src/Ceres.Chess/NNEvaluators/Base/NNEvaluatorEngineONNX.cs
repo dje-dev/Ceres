@@ -138,6 +138,7 @@ namespace Chess.Ceres.NNEvaluators
     static ONNXRuntimeExecutor.NetTypeEnum lastType;
 
     #endregion
+    public const int TPG_MODE_TOTAL_BYTES_ASSUMED  = 4060 + 782; // see DoEvaluateIntoBuffers
 
     public NNEvaluatorEngineONNX(string engineID, string weightsFN, NNDeviceType deviceType, int gpuID, bool useTRT,
                                  ONNXRuntimeExecutor.NetTypeEnum type, int batchSize,
@@ -201,9 +202,10 @@ namespace Chess.Ceres.NNEvaluators
           throw new Exception("ConverterToFlat must be provided");
         }
 
+        // TODO: eliminate or warn about hardcoding here, including expectation raw boards are enabled in the TPG
         float[] flatValuesAttention = ArrayPool<float>.Shared.Rent(batch.NumPos * 96 * 38);
         float[] flatValuesBoard = ArrayPool<float>.Shared.Rent(batch.NumPos * 782);
-
+        
         ConverterToFlat(batch, flatValuesAttention, flatValuesBoard);
 
         PositionEvaluationBatch ret = DoEvaluateBatch(batch, flatValuesAttention, flatValuesBoard, 
