@@ -60,7 +60,7 @@ namespace Ceres.Chess.EncodedPositions
 
       // Compute max probability so we can then
       // avoid overflow during exponentation by subtracting off
-      float max = 0.0f;
+      float max = float.MinValue;
       for (int j = 0; j < numToProcess; j++)
       {
         if (probs[j].P > max)

@@ -191,7 +191,7 @@ namespace Ceres.Chess.EncodedPositions
     {
       float[] probs = Policies.ProbabilitiesWithNegativeOneZeroed;
       float sumPolicy = 0;
-      for (int i = 0; i < 1858; i++)
+      for (int i = 0; i < EncodedPolicyVector.POLICY_VECTOR_LENGTH; i++)
       {
         float policy = probs[i];
         if (policy == -1)
