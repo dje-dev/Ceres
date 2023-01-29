@@ -67,8 +67,8 @@ namespace Ceres.Chess.EncodedPositions
           max = probs[j].P;
       }
 
-      Span<float> probsA = stackalloc float[numMoves];
-      Span<int> indicesA = stackalloc int[numMoves];
+      Span<float> probsA = stackalloc float[numToProcess];
+      Span<int> indicesA = stackalloc int[numToProcess];
 
       for (int j = 0; j < numToProcess; j++)
       {
@@ -76,7 +76,7 @@ namespace Ceres.Chess.EncodedPositions
         indicesA[j] = probs[j].Index;
       }
 
-      CompressedPolicyVector.Initialize(ref policyRef, indicesA.Slice(0, numToProcess), probsA.Slice(0, numToProcess));
+      CompressedPolicyVector.Initialize(ref policyRef, indicesA, probsA);
     }
 
 
