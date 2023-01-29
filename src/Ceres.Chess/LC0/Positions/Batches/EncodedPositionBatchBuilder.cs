@@ -152,8 +152,15 @@ namespace Ceres.Chess.LC0.Batches
     /// Adds a position to the batch.
     /// </summary>
     /// <param name="position"></param>
-    public void Add(in Position position, bool fillInMissingPlanes) => Add(new PositionWithHistory(in position), fillInMissingPlanes);
-    
+    public void Add(in Position position, bool fillInMissingPlanes)
+    {
+      // NOTE: important to using SetFromPosition which will
+      //       properly set up extra en passant plane if needed.
+      EncodedPositionWithHistory posRaw = new EncodedPositionWithHistory();
+      posRaw.SetFromPosition(in position, fillInMissingPlanes, position.MiscInfo.SideToMove);
+      Add(posRaw);
+  }
+
 
     /// <summary>
     /// Adds a position with history to the batch.
