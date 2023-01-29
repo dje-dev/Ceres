@@ -431,6 +431,19 @@ namespace Ceres.Chess.MoveGen
       return false;
     }
 
+
+    /// <summary>
+    /// Move corresponding to O-O-O for white.
+    /// </summary>
+    public static MGMove MoveCastleLongWhite => new MGMove((byte)(new Square("E1").SquareIndexStartA1), (byte)(new Square("A1").SquareIndexStartA1), MGMove.MGChessMoveFlags.CastleLong);// 97
+
+
+    /// <summary>
+    /// Move corresponding to O-O for white.
+    /// </summary>
+    public static MGMove MoveCastleShortWhite => new MGMove((byte)(new Square("E1").SquareIndexStartA1), (byte)(new Square("H1").SquareIndexStartA1), MGMove.MGChessMoveFlags.CastleShort);// 103
+
+
     /// <summary>
     /// Returns if two MGMoves are equal or not.
     /// 
