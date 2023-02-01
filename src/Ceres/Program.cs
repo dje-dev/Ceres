@@ -36,7 +36,7 @@ using ManagedCuda;
 
 namespace Ceres
 {
-  static class Program
+  public static class Program
   {
     /// <summary>
     /// Startup method for Ceres UCI chess engine and supplemental features.
@@ -44,6 +44,15 @@ namespace Ceres
     /// <param name="args"></param>
     static void Main(string[] args)
     {
+      LaunchUCI(args);
+    }
+
+    /// <summary>
+    /// Perform engine initialization and enters into UCI processing loop.
+    /// </summary>
+    /// <param name="args"></param>
+    public static void LaunchUCI(string[] args)
+    {    
 #if DEBUG
       Console.WriteLine();
       ConsoleUtils.WriteLineColored(ConsoleColor.Red, "*** WARNING: Ceres binaries built in Debug mode and will run much more slowly than Release");
@@ -83,7 +92,7 @@ namespace Ceres
 
       //Features.BatchAnalysis.BatchAnalyzer.Test();      return;
 
-      if (args.Length > 0 && (args[0].ToUpper() == "CUSTOM" || args[0].StartsWith("WORKER")))
+      if (args != null && args.Length > 0 && (args[0].ToUpper() == "CUSTOM" || args[0].StartsWith("WORKER")))
       {
         TournamentTest.Test();
         //TournamentTest.TestSFLeela(0, true); return;
@@ -95,9 +104,12 @@ namespace Ceres
 #endif
 
       StringBuilder allArgs = new StringBuilder();
-      for (int i = 0; i < args.Length; i++)
+      if (args != null)
       {
-        allArgs.Append(args[i] + " ");
+        for (int i = 0; i < args.Length; i++)
+        {
+          allArgs.Append(args[i] + " ");
+        }
       }
 
       string allArgsString = allArgs.ToString();
