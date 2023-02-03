@@ -1275,7 +1275,30 @@ namespace Ceres.Chess
     /// <returns></returns>
     public static bool operator !=(Position ths, Position other) => !ths.Equals(other);
 
+    /// <summary>
+    /// Returns new Position being the reverse of this.
+    /// </summary>
+    public Position Reversed
+    {
+      get
+      {
+        PositionMiscInfo infoReversed = new(MiscInfo.BlackCanOO, MiscInfo.BlackCanOOO,
+                                            MiscInfo.WhiteCanOO, MiscInfo.WhiteCanOOO,
+                                            MiscInfo.SideToMove.Reversed(), MiscInfo.Move50Count,
+                                            MiscInfo.RepetitionCount, MiscInfo.MoveNum, MiscInfo.EnPassantFileIndex);
 
+        // Build list of all pieces, but reversed
+        List<PieceOnSquare> pieces = new List<PieceOnSquare>(32);
+        foreach (PieceOnSquare piece in PiecesEnumeration)
+        {
+          pieces.Add(new PieceOnSquare(piece.Square.Reversed, new Piece(piece.Piece.Side.Reversed(), piece.Piece.Type)));
+        }
+
+        return new Position(pieces.ToArray(), in infoReversed);
+      }
+    }
+
+    
     /// <summary>
     ///  Returns if two positions are equal (in all respects).
     /// </summary>
