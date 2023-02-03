@@ -169,22 +169,33 @@ namespace Ceres.Chess.EncodedPositions
       ValidateWDL(desc, "BestWDL", refTraining.BestWDL);
       ValidateWDL(desc, "ResultWDL", refTraining.ResultWDL);
 
-      float[] probs = CheckPolicyValidity(desc);
+#if DEBUG
+      const bool validate = true;
+#else
+      // Computationally expensive, randomly validate only a few in non-debug mode.
+      const int VALIDATE_PCT = 1;
+      bool validate = (refTraining.NumVisits % 100) < VALIDATE_PCT;
+#endif
+      if (validate)
+      {
+        float[] probs = CheckPolicyValidity(desc);
+
+        if (probs[refTraining.BestIndex] <= 0)
+        {
+          throw new Exception("Best policy index not positive: (" + probs[refTraining.BestIndex] + ") " + desc);
+        }
+
+        if (probs[refTraining.PlayedIndex] <= 0)
+        {
+          throw new Exception("Played policy index not positive: (" + probs[refTraining.PlayedIndex] + ") " + desc);
+        }
+      }
 
       if (refTraining.PliesLeft < 0)
       {
         throw new Exception("Plies left < 0 (" + refTraining.PliesLeft + ") " + desc);
       }
 
-      if (probs[refTraining.BestIndex] <= 0)
-      {
-        throw new Exception("Best policy index not positive: (" + probs[refTraining.BestIndex] + ") " + desc);
-      }
-
-      if (probs[refTraining.PlayedIndex] <= 0)
-      {
-        throw new Exception("Played policy index not positive: (" + probs[refTraining.PlayedIndex] + ") " + desc);
-      }
     }
 
     private float[] CheckPolicyValidity(string desc)
