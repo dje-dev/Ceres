@@ -306,7 +306,7 @@ namespace Ceres.MCTS.LeafExpansion
         // Apply move for this node to the prior position
         node.Parent.Annotate();
         newPos = node.Parent.Annotation.PosMG;
-        newPos.MakeMove(ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(node.PriorMove, in newPos, true));
+        newPos.MakeMove(ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(node.PriorMove, in newPos));
       }
       else
       {
@@ -314,7 +314,7 @@ namespace Ceres.MCTS.LeafExpansion
       }
 
       MGMove priorMoveMG = default;
-      if (!node.IsRoot) priorMoveMG = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(node.PriorMove, in node.Parent.Annotation.PosMG, true);
+      if (!node.IsRoot) priorMoveMG = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(node.PriorMove, in node.Parent.Annotation.PosMG);
 
       bool isRoot = node.IsRoot;
 

@@ -101,7 +101,7 @@ namespace Ceres.MCTS.Iteration
           bool found = false;
           for (int i = 0; i < Root.NumPolicyMoves; i++)
           {
-            MGMove moveMG = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(Root.ChildAtIndexInfo(i).move, in Root.Annotation.PosMG, true);
+            MGMove moveMG = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(Root.ChildAtIndexInfo(i).move, in Root.Annotation.PosMG);
             string moveSAN = MGMoveConverter.ToMove(moveMG).ToSAN(in Root.Annotation.Pos);
             if (MGMoveConverter.ToMove(moveMG) == move)
             {
@@ -122,7 +122,7 @@ namespace Ceres.MCTS.Iteration
       {
         for (int i = 0; i < Root.NumPolicyMoves; i++)
         {
-          MGMove moveMG = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(Root.ChildAtIndexInfo(i).move, in Root.Annotation.PosMG, true);
+          MGMove moveMG = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(Root.ChildAtIndexInfo(i).move, in Root.Annotation.PosMG);
           if (!SearchMovesTablebaseRestricted.Contains(moveMG))
           {
             Context.RootMovesPruningStatus[i] = MCTSFutilityPruningStatus.PrunedDueToTablebaseNotWinning;

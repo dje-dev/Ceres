@@ -105,10 +105,9 @@ namespace Ceres.Chess.MoveGen.Converters
     }
 
 
-    public static MGMove EncodedMoveToMGChessMove(EncodedMove thisMove, in MGPosition position, 
-                                                      bool setFlags = true)
-    {
-      MGMove moveMG = DoEncodedMoveToMGChessMove(thisMove, in position, setFlags);
+    public static MGMove EncodedMoveToMGChessMove(EncodedMove thisMove, in MGPosition position)
+   {
+      MGMove moveMG = DoEncodedMoveToMGChessMove(thisMove, in position);
       if (position.SideToMove == SideType.Black)
       {
         moveMG = moveMG.Reversed;
@@ -123,21 +122,14 @@ namespace Ceres.Chess.MoveGen.Converters
     /// </summary>
     /// <param name="thisMove"></param>
     /// <param name="position"></param>
-    /// <param name="setFlags">if the flags should be computed and stored (this is expensive)</param>
     /// <returns></returns>
-    static MGMove DoEncodedMoveToMGChessMove(EncodedMove thisMove, in MGPosition position, bool setFlags = true)
+    static MGMove DoEncodedMoveToMGChessMove(EncodedMove thisMove, in MGPosition position)
     {
       Debug.Assert(position != default);
 
       FromTo fromTo = CalcFromTo(thisMove.RawValue & (16384 - 1));
       byte fromSquare = fromTo.From;
       byte toSquare = fromTo.To;
-
-      // All done if we don't have to set the flags
-      if (!setFlags)
-      {
-        return new MGMove(fromSquare, toSquare, MGMove.MGChessMoveFlags.None);
-      }
 
       PieceType pieceMoving = position.PieceMoving(thisMove);
       PieceType pieceCapture = position.PieceCapturing(thisMove);
