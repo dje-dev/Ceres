@@ -1217,6 +1217,43 @@ namespace Ceres.Chess
     /// </summary>
     public MGPosition ToMGPosition => MGPosition.FromPosition(in this);
 
+
+    /// <summary>
+    /// Returns if this Position likely arises from a Fischer Random Chess position
+    /// (due to castling rights and positioning of Rook and King.
+    /// </summary>
+    public readonly bool LooksLikeFRCPosition
+    {
+      get
+      {
+        bool whiteKingOnStart = PieceOnSquare(SquareNames.E1) == new Piece(SideType.White, PieceType.King);
+        bool whiteRookOnA1 = PieceOnSquare(SquareNames.A1) == new Piece(SideType.White, PieceType.Rook);
+        bool whiteRookOnH1 = PieceOnSquare(SquareNames.H1) == new Piece(SideType.White, PieceType.Rook);
+        bool whiteCastleLongPiecesOK = whiteKingOnStart && whiteRookOnA1;
+        bool whiteCastleShortPiecesOK = whiteKingOnStart && whiteRookOnH1;
+        bool whiteLooksFRCCastleShort = MiscInfo.WhiteCanOO && !whiteCastleShortPiecesOK;
+        bool whiteLooksFRCCastleLong = MiscInfo.WhiteCanOOO && !whiteCastleLongPiecesOK;
+        if (whiteLooksFRCCastleLong || whiteLooksFRCCastleShort)
+        {
+          return true;
+        }
+
+        bool blackKingOnStart = PieceOnSquare(SquareNames.E8) == new Piece(SideType.Black, PieceType.King);
+        bool blackRookOnA1 = PieceOnSquare(SquareNames.A8) == new Piece(SideType.Black, PieceType.Rook);
+        bool blackRookOnH1 = PieceOnSquare(SquareNames.H8) == new Piece(SideType.Black, PieceType.Rook);
+        bool blackCastleLongPiecesOK = blackKingOnStart && blackRookOnA1;
+        bool blackCastleShortPiecesOK = blackKingOnStart && blackRookOnH1;
+        bool blackLooksFRCCastleShort = MiscInfo.BlackCanOO && !blackCastleShortPiecesOK;
+        bool blackLooksFRCCastleLong = MiscInfo.BlackCanOOO && !blackCastleLongPiecesOK;
+        if (blackLooksFRCCastleLong || blackLooksFRCCastleShort)
+        {
+          return true;
+        }
+
+        return false;
+      }
+    }
+
     #endregion
 
     #region Equality 
