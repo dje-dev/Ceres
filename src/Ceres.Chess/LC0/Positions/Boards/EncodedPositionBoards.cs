@@ -114,7 +114,7 @@ namespace Ceres.Chess.LC0.Boards
                                                                                            in EncodedPositionBoard priorBoard)
     {
       // We look for the boards differing only because a pawn moved from rank 7 to rank 5 (from our perspective)
-      for (int i = 8; i <16; i++)
+      for (int i = 9; i <=16; i++)
       {
         if (
             priorBoard.TheirPawns.BitIsSet(64 - i)  &&
