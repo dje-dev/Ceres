@@ -203,6 +203,15 @@ namespace Ceres.Chess.MoveGen
     }
 
 
+    /// <summary>
+    /// Returns if specified move exists in the MGMoveList.
+    /// </summary>
+    /// <param name="move"></param>
+    /// <returns></returns>
+    public bool MoveExists(MGMove move) => FindIndex(move, 0) != -1;    
+      
+    
+
     public IEnumerator<MGMove> GetEnumerator()
     {
 #if SMALL
