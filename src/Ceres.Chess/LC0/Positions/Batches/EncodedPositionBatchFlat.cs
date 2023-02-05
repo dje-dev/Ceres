@@ -41,7 +41,7 @@ namespace Ceres.Chess.LC0.Batches
     /// Retains some additional data structures related to positions,
     /// consumes a lot of memory but may be needed for some formats (TPG?).
     /// </summary>
-    public const bool RETAIN_POSITION_INTERNALS = false;
+    public static bool RETAIN_POSITION_INTERNALS = false;
 
     // These constants probably belong elsewhere
     public const int NUM_PIECE_PLANES_PER_POS = 13;
