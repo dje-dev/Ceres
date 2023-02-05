@@ -448,7 +448,7 @@ namespace Ceres.Chess.EncodedPositions
 
     public readonly (PieceType pieceType, Square fromSquare, Square toSquare, bool wasCastle) LastMoveInfoFromSideToMovePerspective()
     {
-      return LastMoveInfoFromSideToMovePerspective(in BoardsHistory.History_0, in BoardsHistory.History_1);
+      return LastMoveInfoFromSideToMovePerspective(BoardsHistory.History_0.Mirrored, BoardsHistory.History_1.Mirrored);
     }
 
 
