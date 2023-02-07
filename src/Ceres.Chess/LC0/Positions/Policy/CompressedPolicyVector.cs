@@ -483,7 +483,8 @@ namespace Ceres.Chess.EncodedPositions
     /// <param name="policy"></param>
     /// <param name="probabilities"></param>
     /// <param name="alreadySorted"></param>
-    public static void Initialize(ref CompressedPolicyVector policy, float* probabilities, bool alreadySorted)
+    public static void Initialize(ref CompressedPolicyVector policy, float* probabilities, 
+                                  bool alreadySorted, bool convertNegativeOneToZero = false)
     {
       float probabilityAcc = 0.0f;
       int numSlotsUsed = 0;
@@ -495,6 +496,10 @@ namespace Ceres.Chess.EncodedPositions
           for (int i = 0; i < EncodedPolicyVector.POLICY_VECTOR_LENGTH; i++)
           {
             float thisProb = probabilities[i];
+            if (convertNegativeOneToZero && thisProb == -1)
+            {
+              thisProb = 0;
+            }
             probabilityAcc += thisProb;
 
             if (probabilities[i] > HALF_INCREMENT)
