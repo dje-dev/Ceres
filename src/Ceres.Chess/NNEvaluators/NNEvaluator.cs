@@ -99,6 +99,11 @@ namespace Ceres.Chess.NNEvaluators
     public abstract bool HasM { get; }
 
     /// <summary>
+    /// If the evaluator has an UV (uncertainty of V) head.
+    /// </summary>
+    public abstract bool HasUncertaintyV { get; }
+
+    /// <summary>
     /// The maximum number of positions that can be evaluated in a single batch.
     /// </summary>
     public abstract int MaxBatchSize { get; }
@@ -202,21 +207,22 @@ namespace Ceres.Chess.NNEvaluators
       }
     }
 
+
     /// <summary>
     /// Internal worker to extract a single NNEvaluatorResult from an IPositionEvaluationBatch.
     /// </summary>
     /// <param name="result"></param>
     /// <param name="batch"></param>
     /// <param name="batchIndex"></param>
-    public void ExtractToNNEvaluatorResult(out NNEvaluatorResult result, 
-                                            IPositionEvaluationBatch batch, int batchIndex)
+    public void ExtractToNNEvaluatorResult(out NNEvaluatorResult result, IPositionEvaluationBatch batch, int batchIndex)
     {
       float w = batch.GetWinP(batchIndex);
       float l = IsWDL ? batch.GetLossP(batchIndex) : float.NaN;
       float m = HasM ? batch.GetM(batchIndex) : float.NaN;
+      float uncertaintyV = HasUncertaintyV ? batch.GetUncertaintyV(batchIndex) : float.NaN;
       NNEvaluatorResultActivations activations = batch.GetActivations(batchIndex);
       (Memory<CompressedPolicyVector> policies, int index) policyRef = batch.GetPolicy(batchIndex);
-      result = new NNEvaluatorResult(w, l, m, policyRef.policies.Span[policyRef.index], activations);
+      result = new NNEvaluatorResult(w, l, m, uncertaintyV, policyRef.policies.Span[policyRef.index], activations);
     }
 
     #endregion

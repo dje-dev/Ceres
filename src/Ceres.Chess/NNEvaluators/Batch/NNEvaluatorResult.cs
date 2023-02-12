@@ -38,6 +38,11 @@ namespace Ceres.Chess.NetEvaluation.Batch
     public readonly float M;
 
     /// <summary>
+    /// Uncertainty of V head output.
+    /// </summary>
+    public readonly float UncertaintyV;
+
+    /// <summary>
     /// Policy head output.
     /// </summary>
     public readonly CompressedPolicyVector Policy;
@@ -54,15 +59,17 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <param name="winP"></param>
     /// <param name="lossP"></param>
     /// <param name="m"></param>
+    /// <param name="uncertaintyV"></param>
     /// <param name="policy"></param>
     /// <param name="activations"></param>
-    public NNEvaluatorResult(float winP, float lossP, float m, 
+    public NNEvaluatorResult(float winP, float lossP, float m, float uncertaintyV,
                              CompressedPolicyVector policy, 
                              NNEvaluatorResultActivations activations)
     {
       this.winP = winP;
       this.lossP = lossP;
       M = m;
+      UncertaintyV = uncertaintyV;
       Policy = policy;
       Activations = activations;
     }
@@ -98,7 +105,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <returns></returns>
     public override string ToString()
     {
-      return $"<NNPositionEvaluation V={V,6:F2} Policy={Policy}>";
+      return $"<NNPositionEvaluation V={V,6:F2} MLH={V,6:F2} UV={UncertaintyV,6:F2} Policy={Policy}>";
     }
   }
 }

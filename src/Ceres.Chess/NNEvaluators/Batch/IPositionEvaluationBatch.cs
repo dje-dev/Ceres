@@ -33,9 +33,11 @@ namespace Ceres.Chess.NetEvaluation.Batch
     int NumPos { get; }
     bool IsWDL { get; }
     bool HasM { get; }
+    bool HasUncertaintyV { get; }
     FP16 GetWinP(int index);
     FP16 GetLossP(int index);
     FP16 GetM(int index);
+    FP16 GetUncertaintyV(int index);
 
     (Memory<CompressedPolicyVector> policies, int index) GetPolicy(int index);
    

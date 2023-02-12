@@ -44,6 +44,7 @@ namespace Chess.Ceres.NNEvaluators.TensorRT
 
     public override bool IsWDL => Config.IsWDL;
     public override bool HasM => Config.HasM;
+    public override bool HasUncertaintyV => Config.HasUncertaintyV;
 
 
     public readonly NNEvaluatorEngineTensorRTConfig Config;
@@ -80,7 +81,7 @@ namespace Chess.Ceres.NNEvaluators.TensorRT
     /// <param name="calibPositions"></param>
     /// <param name="retrieveValueFCActivations"></param>
     /// <param name="shared"></param>
-    public NNEvaluatorEngineTensorRT(string engineID, string uffFN, bool isWDL, bool hasM, int gpuID, 
+    public NNEvaluatorEngineTensorRT(string engineID, string uffFN, bool isWDL, bool hasM, bool hasUncertaintyV, int gpuID, 
                                      NNEvaluatorEngineTensorRTConfig.NetTypeEnum type,
                                     int batchSize, NNEvaluatorPrecision precision,
                                     NNEvaluatorEngineTensorRTConfig.TRTPriorityLevel priorityLevel = NNEvaluatorEngineTensorRTConfig.TRTPriorityLevel.High,
@@ -88,7 +89,7 @@ namespace Chess.Ceres.NNEvaluators.TensorRT
                                     bool shared = true)
     {
       Config = new NNEvaluatorEngineTensorRTConfig(uffFN, type == NNEvaluatorEngineTensorRTConfig.NetTypeEnum.Ceres ? "TRT_DJE" : "TRT_LZ0", 
-                                           batchSize, precision, gpuID, isWDL, hasM, priorityLevel, retrieveValueFCActivations);
+                                           batchSize, precision, gpuID, isWDL, hasM, hasUncertaintyV, priorityLevel, retrieveValueFCActivations);
 
       SessionID = GetSessionToAttachTo(Config, shared);
       UFFFN = uffFN;
@@ -167,6 +168,7 @@ namespace Chess.Ceres.NNEvaluators.TensorRT
         int NUM_VALUE_OUTPUTS = (Config.IsWDL ? 3 : 1);
         Span<FP16> results = stackalloc FP16[numToProcessPadded * NUM_VALUE_OUTPUTS];
         Span<FP16> resultsMLH = stackalloc FP16[numToProcessPadded * 1];
+        Span<FP16> resultsUncertaintyV = stackalloc FP16[numToProcessPadded * 1];
 
         if (retrieveValueFCActivations) throw new Exception("The ONNX version of our TensorRT library does not expose inner layers");
         float[] rawResultsConvValFlat = retrieveValueFCActivations ? new float[numToProcessPadded * NUM_VALUE_OUTPUTS * 32 * 64] : new float[1]; // Note: can't be null or empty, since we use in fixed statement below
@@ -196,6 +198,11 @@ Updated notes:
 
         //if (batch.PosPlaneValues.Length < )
         //Console.WriteLine("MBS_IS " + MaxBatchSize);
+
+        if (HasUncertaintyV)
+        {
+          throw new NotImplementedException("need transfer below?");
+        }
 
         unsafe
         {
@@ -278,11 +285,11 @@ Updated notes:
           Span<Int32> policyIndicies = MemoryMarshal.Cast<float, Int32>(rawResultsPolicy).Slice(0, NUM_ELEMENTS);
           Span<float> policyProbabilities = rawResultsPolicy.Slice(Config.MaxBatchSize * NUM_TOPK_POLICY, NUM_ELEMENTS);
 
-          retBatch = new PositionEvaluationBatch(Config.IsWDL, Config.HasM,
+          retBatch = new PositionEvaluationBatch(Config.IsWDL, Config.HasM, Config.HasUncertaintyV,
                                                  numToProcess, results,
                                                  NUM_TOPK_POLICY,
                                                  policyIndicies, policyProbabilities,
-                                                 resultsMLH,
+                                                 resultsMLH, resultsUncertaintyV,
                                                  null, //rawResultsConvValFlat,
                                                  VALUES_ARE_LOGISTIC,
                                                  PositionEvaluationBatch.PolicyType.Probabilities, timeStats);
@@ -299,10 +306,10 @@ Updated notes:
           // NOTE: alternative would be to pass in a mask to the GPU, the batch.ValidMovesMasks could be used to help
           // done below instead. batch.MaskIllegalMovesInPolicyArray(rawResultsPolicy);
 
-          retBatch = new PositionEvaluationBatch(Config.IsWDL, Config.HasM,
+          retBatch = new PositionEvaluationBatch(Config.IsWDL, Config.HasM, Config.HasUncertaintyV,
                                                  numToProcess, results,
                                                  rawResultsPolicy.Slice(0, numToProcess*1858).ToArray(), // Inefficient 
-                                                 resultsMLH.ToArray(),
+                                                 resultsMLH.ToArray(), resultsUncertaintyV.ToArray(),
                                                  null, //rawResultsConvValFlat,
                                                  VALUES_ARE_LOGISTIC,
                                                  PositionEvaluationBatch.PolicyType.LogProbabilities, false, batch, timeStats);

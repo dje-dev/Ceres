@@ -73,6 +73,11 @@ namespace Ceres.Chess.LC0.WeightsProtobuf
                                 Net.Format.NetworkFormat?.MovesLeft != NetworkFormat.MovesLeftFormat.MovesLeftNone;
 
     /// <summary>
+    /// If the network supports the Uncertainty of V head.
+    /// </summary>
+    public bool HasUncertaintyV => false;
+
+    /// <summary>
     /// If the network supports the WDL (win/draw/loss) head.
     /// </summary>
     public bool HasWDL => Net.Format.NetworkFormat?.Output == NetworkFormat.OutputFormat.OutputWdl;

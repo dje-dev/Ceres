@@ -75,6 +75,10 @@ namespace Ceres.Chess.LC0.NNFiles
     /// </summary>
     public bool HasMovesLeft { get; }
 
+    /// <summary>
+    /// If the network contains an uncertainty of V head.
+    /// </summary>
+    public bool HasUncertaintyV { get; }
 
     /// <summary>
     /// Information about the underlying file from the operating system.
@@ -90,7 +94,7 @@ namespace Ceres.Chess.LC0.NNFiles
     /// <param name="numFilters"></param>
     /// <param name="isWDL"></param>
     /// <param name="hasMovesLeft"></param>
-    public NNWeightsFileLC0(string id, string filename, int numBlocks, int numFilters, bool isWDL, bool hasMovesLeft)
+    public NNWeightsFileLC0(string id, string filename, int numBlocks, int numFilters, bool isWDL, bool hasMovesLeft, bool hasUncertaintyV)
     {
       if (!System.IO.File.Exists(filename)) throw new ArgumentException($"NNWeightsFileLC0 file {id} not found with name {filename}");
 
@@ -100,6 +104,7 @@ namespace Ceres.Chess.LC0.NNFiles
       NumFilters = numFilters;
       IsWDL = isWDL;
       HasMovesLeft = hasMovesLeft;
+      HasUncertaintyV = hasUncertaintyV;
 
       fileInfo = new FileInfo(filename);
     }
@@ -138,8 +143,7 @@ namespace Ceres.Chess.LC0.NNFiles
 
       // Download the file.
       string baseURL = CeresUserSettingsManager.URLLC0NetworksValidated;
-      NNWeightsFileLC0Downloader downloader = new NNWeightsFileLC0Downloader(baseURL,
-                                                                             CeresUserSettingsManager.Settings.DirLC0Networks);
+      NNWeightsFileLC0Downloader downloader = new NNWeightsFileLC0Downloader(baseURL, CeresUserSettingsManager.Settings.DirLC0Networks);
       string fn = downloader.Download(networkID);
       if (fn == null)
       {
@@ -177,6 +181,7 @@ namespace Ceres.Chess.LC0.NNFiles
           Format = FormatType.EmbeddedONNX;
           IsWDL = !string.IsNullOrEmpty(pbn.Net.OnnxModel.OutputWdl);
           HasMovesLeft = !string.IsNullOrEmpty(pbn.Net.OnnxModel.OutputMlh);
+          HasUncertaintyV = false;
 
           // Not possible to determine number of blocks/filters (may be arbitrary structure).
         }
@@ -187,6 +192,7 @@ namespace Ceres.Chess.LC0.NNFiles
           NumFilters = pbn.NumFilters;
           IsWDL = pbn.HasWDL;
           HasMovesLeft = pbn.HasMovesLeft;
+          HasUncertaintyV = false;
         }
       }
       catch (Exception exc)

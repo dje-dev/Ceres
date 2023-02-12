@@ -167,7 +167,8 @@ namespace Ceres.Chess.NNEvaluators
       Span<FP16> fullW = fullBatchResult.W.Span;
 
       Span<FP16> fullL = fullBatchResult.IsWDL ? fullBatchResult.L.Span : default;
-      Span<FP16> fullM = fullBatchResult.IsWDL ? fullBatchResult.M.Span : default;
+      Span<FP16> fullM = fullBatchResult.HasM ? fullBatchResult.M.Span : default;
+      Span<FP16> fullUncertaintyV = fullBatchResult.HasUncertaintyV ? fullBatchResult.UncertaintyV.Span : default;
       Span<NNEvaluatorResultActivations> fullActivations = fullBatchResult.Activations.IsEmpty ? null : fullBatchResult.Activations.Span;
 
       // Finally, disaggregate the big batch back into a set of individual subbatch results
@@ -181,13 +182,15 @@ namespace Ceres.Chess.NNEvaluators
 
         int numPos = thisBatch.NumPos;
         PositionEvaluationBatch thisResultSubBatch =
-          new PositionEvaluationBatch(fullBatchResult.IsWDL, fullBatchResult.HasM, thisBatch.NumPos,
-                                fullPolicyValues.Slice(nextPosIndex, numPos).ToArray(),
-                                fullW.Slice(nextPosIndex, numPos).ToArray(),
-                                fullBatchResult.IsWDL ? fullL.Slice(nextPosIndex, numPos).ToArray() : null,
-                                fullBatchResult.IsWDL ? fullM.Slice(nextPosIndex, numPos).ToArray() : null,
-                                fullBatchResult.Activations.IsEmpty ? null : fullActivations.Slice(nextPosIndex, numPos).ToArray(),
-                                fullBatchResult.Stats);
+          new PositionEvaluationBatch(fullBatchResult.IsWDL, fullBatchResult.HasM, fullBatchResult.HasUncertaintyV, 
+                                      thisBatch.NumPos,
+                                      fullPolicyValues.Slice(nextPosIndex, numPos).ToArray(),
+                                      fullW.Slice(nextPosIndex, numPos).ToArray(),
+                                      fullBatchResult.IsWDL ? fullL.Slice(nextPosIndex, numPos).ToArray() : null,
+                                      fullBatchResult.HasM ? fullM.Slice(nextPosIndex, numPos).ToArray() : null,
+                                      fullBatchResult.HasUncertaintyV ? fullUncertaintyV.Slice(nextPosIndex, numPos).ToArray() : null,
+                                      fullBatchResult.Activations.IsEmpty ? null : fullActivations.Slice(nextPosIndex, numPos).ToArray(),
+                                      fullBatchResult.Stats);
 
         nextPosIndex += numPos;
         completedBatches[subBatchIndex++] = thisResultSubBatch;

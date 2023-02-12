@@ -75,6 +75,10 @@ namespace Ceres.Chess.NNEvaluators.CUDA
     /// </summary>
     public override bool HasM => hasM;
 
+    /// <summary>
+    /// If Uncertainty of V  head is present in the network.
+    /// </summary>
+    public override bool HasUncertaintyV => false;
 
     /// <summary>
     /// If the network returns policy moves in the same order
@@ -253,7 +257,7 @@ namespace Ceres.Chess.NNEvaluators.CUDA
 #endif
       }
 
-      return new PositionEvaluationBatch(IsWDL, HasM, positions.NumPos, policies, w, l, m, activations, new TimingStats(), copyResults);
+      return new PositionEvaluationBatch(IsWDL, HasM, HasUncertaintyV, positions.NumPos, policies, w, l, m, default, activations, new TimingStats(), copyResults);
     }
 
 

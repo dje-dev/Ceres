@@ -99,6 +99,7 @@ namespace Ceres.Chess.NNEvaluators
     public override bool IsWDL => Evaluator.IsWDL;
 
     public override bool HasM => Evaluator.HasM;
+    public override bool HasUncertaintyV => Evaluator.HasUncertaintyV;
 
     public override int MaxBatchSize => int.MaxValue;
 

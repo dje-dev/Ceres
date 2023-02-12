@@ -44,12 +44,13 @@ namespace Chess.Ceres.NNEvaluators.TensorRT
     public readonly int GPUID;
     public readonly bool IsWDL;
     public readonly bool HasM;
+    public readonly bool HasUncertaintyV;
     public readonly TRTPriorityLevel PriorityLevel = 0;
     public readonly bool RetrieveValueFCActivations;
 
 
     public NNEvaluatorEngineTensorRTConfig(string uFFFileName, string engineType, int batchSize, NNEvaluatorPrecision precision, int gPUID,
-                                           bool isWDL, bool hasM,
+                                           bool isWDL, bool hasM, bool hasUncertaintyV,
                                           TRTPriorityLevel priorityLevel, bool retrieveValueFCActivations)
     {
       UFFFileName = uFFFileName;
@@ -59,6 +60,7 @@ namespace Chess.Ceres.NNEvaluators.TensorRT
       GPUID = gPUID;
       IsWDL = isWDL;
       HasM = hasM;
+      HasUncertaintyV = hasUncertaintyV;
       PriorityLevel = priorityLevel;
       RetrieveValueFCActivations = retrieveValueFCActivations;
     }
@@ -71,6 +73,8 @@ namespace Chess.Ceres.NNEvaluators.TensorRT
              Precision == other.Precision &&
              GPUID == other.GPUID &&
              IsWDL == other.IsWDL &&
+             HasM == other.HasM &&
+             HasUncertaintyV == other.HasUncertaintyV &&
              PriorityLevel == other.PriorityLevel &&
              RetrieveValueFCActivations == other.RetrieveValueFCActivations;
     }

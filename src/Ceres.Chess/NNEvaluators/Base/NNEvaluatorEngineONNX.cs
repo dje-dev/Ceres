@@ -89,8 +89,14 @@ namespace Chess.Ceres.NNEvaluators
     /// </summary>
     public override bool HasM => hasM;
 
+    /// <summary>
+    /// If the network contains an uncertanity of V head.
+    /// </summary>
+    public override bool HasUncertaintyV => hasUncertaintyV;
+
     readonly bool isWDL;
     readonly bool hasM;
+    readonly bool hasUncertaintyV;
 
 
     /// <summary>
@@ -142,7 +148,7 @@ namespace Chess.Ceres.NNEvaluators
 
     public NNEvaluatorEngineONNX(string engineID, string weightsFN, NNDeviceType deviceType, int gpuID, bool useTRT,
                                  ONNXRuntimeExecutor.NetTypeEnum type, int batchSize,
-                                 NNEvaluatorPrecision precision, bool isWDL, bool hasM,
+                                 NNEvaluatorPrecision precision, bool isWDL, bool hasM, bool hasUncertaintyV,
                                  string outputValue, string outputWDL, string outputPolicy, string outputMLH, 
                                  bool valueHeadLogistic, bool scale50MoveCounter)
     {
@@ -153,6 +159,7 @@ namespace Chess.Ceres.NNEvaluators
       Precision = precision;
       this.isWDL = isWDL;
       this.hasM = hasM;
+      this.hasUncertaintyV = hasUncertaintyV;
       DeviceType = deviceType;
       OutputValue = outputValue;
       OutputWDL = outputWDL;
@@ -282,6 +289,16 @@ namespace Chess.Ceres.NNEvaluators
         mFP16 = Array.ConvertAll<float, FP16>(result.MLH, m => (FP16)m);
       }
 
+      FP16[] uncertaintyVFP16 = null;
+      if (HasM)
+      {
+        if (result.UncertaintyV == null)
+        {
+          throw new Exception("ONNX evaluator was created with UV argument true but network does not appear to contain uncertainty of V head: " + EngineNetworkID);
+        }
+        uncertaintyVFP16 = Array.ConvertAll<float, FP16>(result.UncertaintyV, uv => (FP16)uv);
+      }
+
 #if DONE_BELOW_IN_NEXT_LINE
       // Set probability of illegal moves to 0.
       HashSet<int> legalIndices = new HashSet<int>(96);
@@ -305,7 +322,8 @@ namespace Chess.Ceres.NNEvaluators
 #endif
 
       // NOTE: inefficient, above we convert from [] (flat) to [][] and here we convert back to []
-      return new PositionEvaluationBatch(IsWDL, HasM, numPos, result.ValuesRaw, result.PolicyFlat, mFP16, null, ValueHeadLogistic,
+      return new PositionEvaluationBatch(IsWDL, HasM, HasUncertaintyV, numPos, result.ValuesRaw, result.PolicyFlat, 
+                                         mFP16, uncertaintyVFP16, null, ValueHeadLogistic,
                                          PositionEvaluationBatch.PolicyType.LogProbabilities, false, batch, stats);
     }
 

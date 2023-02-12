@@ -32,6 +32,7 @@ namespace Ceres.Chess.NNEvaluators
 
     readonly bool isWDL;
     readonly bool hasM;
+    readonly bool hasUncertaintyV;
     readonly bool policyReturnedSameOrderMoveList;
 
     #endregion
@@ -54,6 +55,12 @@ namespace Ceres.Chess.NNEvaluators
     public override bool HasM => hasM;
 
     /// <summary>
+    /// If Uncertainty of V head is present in the network.
+    /// </summary>
+    public override bool HasUncertaintyV => hasUncertaintyV;
+
+
+    /// <summary>
     /// If the network returns policy moves in the same order
     /// as the legal MGMoveList.
     /// </summary>
@@ -69,6 +76,7 @@ namespace Ceres.Chess.NNEvaluators
       // until possibly prove false below
       isWDL = true; 
       hasM = true;
+      hasUncertaintyV = true;
       policyReturnedSameOrderMoveList = true;
 
       // We must track additional position information if required by any of the evaluators
@@ -78,6 +86,7 @@ namespace Ceres.Chess.NNEvaluators
 
         if (!evaluator.IsWDL) isWDL = false;
         if (!evaluator.HasM) hasM = false;
+        if (!evaluator.HasUncertaintyV) hasUncertaintyV = false;
         if (!evaluator.PolicyReturnedSameOrderMoveList) policyReturnedSameOrderMoveList = false;
       }
     }

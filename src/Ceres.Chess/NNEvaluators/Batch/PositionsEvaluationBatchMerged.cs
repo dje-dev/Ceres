@@ -51,7 +51,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
 
     bool isWDL;
     bool hasM;
-
+    bool hasUncertaintyV;
 
     /// <summary>
     /// Constructor.
@@ -64,11 +64,15 @@ namespace Ceres.Chess.NetEvaluation.Batch
       BatchSizes = batchSizes;
       isWDL = batches[0].IsWDL;
       hasM  = batches[0].HasM;
+      hasUncertaintyV = batches[0].HasUncertaintyV;
     }
 
     bool IPositionEvaluationBatch.IsWDL => isWDL;
 
     bool IPositionEvaluationBatch.HasM => hasM;
+
+    bool IPositionEvaluationBatch.HasUncertaintyV => hasUncertaintyV;
+
 
 
     /// <summary>
@@ -156,6 +160,12 @@ namespace Ceres.Chess.NetEvaluation.Batch
     {
       (int, int) indicies = GetIndices(index);
       return Batches[indicies.Item1].GetWinP(indicies.Item2);
+    }
+
+    FP16 IPositionEvaluationBatch.GetUncertaintyV(int index)
+    {
+      (int, int) indicies = GetIndices(index);
+      return Batches[indicies.Item1].GetUncertaintyV(indicies.Item2);
     }
 
     public NNEvaluatorResultActivations GetActivations(int index)

@@ -160,13 +160,16 @@ namespace Ceres.Chess.NNEvaluators
         }
         else
         {
+          bool isWDL = results[0].IsWDL;
+          bool hasM = results[0].HasM;
+          bool hasUncertaintyV = results[0].HasUncertaintyV;
+
           CompressedPolicyVector[] policies = new CompressedPolicyVector[positions.NumPos];
           FP16[] w = new FP16[positions.NumPos];
           FP16[] l = new FP16[positions.NumPos];
-          FP16[] m = new FP16[positions.NumPos];
+          FP16[] m = hasM ? new FP16[positions.NumPos] : null;
+          FP16[] uncertaintyV = hasUncertaintyV ? new FP16[positions.NumPos] : null;
 
-          bool isWDL = results[0].IsWDL;
-          bool hasM = results[0].HasM;
 
           int nextPosIndex = 0;
           for (int i = 0; i < Evaluators.Length; i++)
@@ -180,14 +183,23 @@ namespace Ceres.Chess.NNEvaluators
             if (isWDL)
             {
               resultI.L.CopyTo(new Memory<FP16>(l).Slice(nextPosIndex, thisNumPos));
+            }
+
+            if (hasM)
+            {
               resultI.M.CopyTo(new Memory<FP16>(m).Slice(nextPosIndex, thisNumPos));
+            }
+
+            if (HasUncertaintyV)
+            {
+              resultI.UncertaintyV.CopyTo(new Memory<FP16>(uncertaintyV).Slice(nextPosIndex, thisNumPos));
             }
 
             nextPosIndex += thisNumPos;
           }
 
           TimingStats stats = new TimingStats();
-          return new PositionEvaluationBatch(isWDL, hasM, positions.NumPos, policies, w, l, m, null, stats);
+          return new PositionEvaluationBatch(isWDL, hasM, hasUncertaintyV, positions.NumPos, policies, w, l, m, uncertaintyV, null, stats);
         }
 
       }

@@ -61,6 +61,11 @@ namespace Ceres.Chess.NNFiles
     public bool HasMovesLeft { get; }
 
     /// <summary>
+    /// If network contains an uncertainty of V head.
+    /// </summary>
+    public bool HasUncertaintyV { get; }
+
+    /// <summary>
     /// Information about the underlying file from the operating system.
     /// </summary>
     public FileInfo FileInfo { get; }

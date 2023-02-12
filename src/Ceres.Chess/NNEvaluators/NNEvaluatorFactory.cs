@@ -127,6 +127,7 @@ namespace Ceres.Chess.NNEvaluators
       // For ONNX files loaded directly, now way to really know of WDL/MLH present.
       const bool DEFAULT_HAS_WDL = true; 
       const bool DEFAULT_HAS_MLH = true;
+      const bool DEFAULT_HAS_UNCERTAINTYV = false;
 
       const int DEFAULT_MAX_BATCH_SIZE = 1024;
       const bool ONNX_SCALE_50_MOVE_COUNTER = false; // BT2 already inserts own node to adjust
@@ -140,12 +141,12 @@ namespace Ceres.Chess.NNEvaluators
           //          NNEvaluatorPrecision precision = netDef.NetworkID.EndsWith(".16") ? NNEvaluatorPrecision.FP16 : NNEvaluatorPrecision.FP32;
           ret = new NNEvaluatorEngineONNX(netDef.NetworkID, fullFN, deviceDef.Type, deviceDef.DeviceIndex, useTRT: viaTRT,
                                             ONNXRuntimeExecutor.NetTypeEnum.LC0, deviceDef.MaxBatchSize ?? DEFAULT_MAX_BATCH_SIZE,
-                                            netDef.Precision, DEFAULT_HAS_WDL, DEFAULT_HAS_MLH,
+                                            netDef.Precision, DEFAULT_HAS_WDL, DEFAULT_HAS_MLH, DEFAULT_HAS_UNCERTAINTYV,
                                             null, null, null, null, false, ONNX_SCALE_50_MOVE_COUNTER);
           break;
 
         case NNEvaluatorType.TRT:
-          ret = new NNEvaluatorEngineTensorRT(netDef.NetworkID, fullFN, DEFAULT_HAS_WDL, DEFAULT_HAS_MLH, deviceDef.DeviceIndex,
+          ret = new NNEvaluatorEngineTensorRT(netDef.NetworkID, fullFN, DEFAULT_HAS_WDL, DEFAULT_HAS_MLH, DEFAULT_HAS_UNCERTAINTYV, deviceDef.DeviceIndex,
                                             NNEvaluatorEngineTensorRTConfig.NetTypeEnum.LC0,
                                             deviceDef.MaxBatchSize ?? DEFAULT_MAX_BATCH_SIZE, netDef.Precision,
                                             NNEvaluatorEngineTensorRTConfig.TRTPriorityLevel.Medium, null, false, TRT_SHARED);
@@ -193,7 +194,7 @@ namespace Ceres.Chess.NNEvaluators
             bool useTRT = tempFN.ToUpper().Contains(".TRT"); // TODO: TEMPORARY HACK - way to request using TRT
             if (useTRT)
             {
-              return new NNEvaluatorEngineTensorRT(netDef.NetworkID, tempFN, net.IsWDL, net.HasMovesLeft, deviceDef.DeviceIndex,
+              return new NNEvaluatorEngineTensorRT(netDef.NetworkID, tempFN, net.IsWDL, net.HasMovesLeft, net.HasUncertaintyV, deviceDef.DeviceIndex,
                                                    NNEvaluatorEngineTensorRTConfig.NetTypeEnum.LC0,
                                                    1024,netDef.Precision, //netDef.Precision,
                                                    NNEvaluatorEngineTensorRTConfig.TRTPriorityLevel.Medium, null, false, TRT_SHARED);
@@ -207,7 +208,7 @@ namespace Ceres.Chess.NNEvaluators
 //               NNEvaluatorPrecision precision = netDef.NetworkID.Contains(".16") ? NNEvaluatorPrecision.FP16 : NNEvaluatorPrecision.FP32;
               return new NNEvaluatorEngineONNX(netDef.NetworkID, tempFN, deviceDef.Type, deviceDef.DeviceIndex, USE_TRT,
                                                ONNXRuntimeExecutor.NetTypeEnum.LC0, 1024,
-                                               netDef.Precision, netDefONNX.IsWDL, netDefONNX.HasMovesLeft,
+                                               netDef.Precision, netDefONNX.IsWDL, netDefONNX.HasMovesLeft, netDefONNX.HasUncertaintyV,
                                                pbn.Net.OnnxModel.OutputValue, pbn.Net.OnnxModel.OutputWdl,
                                                pbn.Net.OnnxModel.OutputPolicy, pbn.Net.OnnxModel.OutputMlh, false, ONNX_SCALE_50_MOVE_COUNTER);
             }

@@ -214,6 +214,7 @@ namespace Ceres.Chess.LC0NetInference
         int INDEX_WDL = FindIndex(3);
 
         float[] mlh = hasMLH ? eval[INDEX_MLH] : null;
+        float[] uncertantiesV = null;
         float[] policiesLogistics = eval[INDEX_POLICIES];
 
         FP16[] values = FP16.ToFP16(eval[INDEX_WDL]);
@@ -221,7 +222,8 @@ namespace Ceres.Chess.LC0NetInference
 
         float[] value_fc_activations = null;// eval.Length < 3 ? null : eval[2];
         int? overridePolicyLen = NetType == NetTypeEnum.TPG ? 96 : null;
-        ONNXRuntimeExecutorResultBatch result = new ONNXRuntimeExecutorResultBatch(isWDL, values, policiesLogistics, mlh, value_fc_activations, 
+        ONNXRuntimeExecutorResultBatch result = new ONNXRuntimeExecutorResultBatch(isWDL, values, policiesLogistics, mlh, 
+                                                                                   uncertantiesV, value_fc_activations, 
                                                                                    numPositionsUsed, overridePolicyLen);
         return result;
 

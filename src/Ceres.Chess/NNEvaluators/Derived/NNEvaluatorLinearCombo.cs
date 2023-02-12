@@ -62,6 +62,7 @@ namespace Ceres.Chess.NNEvaluators
     public readonly float[] WeightsValue;
     public readonly float[] WeightsPolicy;
     public readonly float[] WeightsM;
+    public readonly float[] WeightsUncertaintyV;
 
     /// <summary>
     /// Method to be used for combining policy values.
@@ -78,6 +79,11 @@ namespace Ceres.Chess.NNEvaluators
     /// </summary>
     public readonly WeightsOverrideDelegate WeightsMOverrideFunc;
 
+    /// <summary>
+    /// Optional delegate called for each position to determine weights to use for uncertainty of V head for that position.
+    /// </summary>
+    public readonly WeightsOverrideDelegate WeightsUncertaintyVOverrideFunc;
+    
     /// <summary>
     /// Optional delegate called for each position to determine weights to use for policy head for that position.
     /// </summary>
@@ -114,7 +120,7 @@ namespace Ceres.Chess.NNEvaluators
         weightsArray = weights.ToArray();
       }
 
-      WeightsValue = WeightsPolicy = WeightsM = weightsArray;
+      WeightsValue = WeightsPolicy = WeightsM = WeightsUncertaintyV = weightsArray;
       PolicyAveragingMethod = policyAveragingMethod;
     }
 
@@ -134,19 +140,24 @@ namespace Ceres.Chess.NNEvaluators
                                 IList<float> weightsValue, 
                                 IList<float> weightsPolicy, 
                                 IList<float> weightsM,
+                                IList<float> weightsUncertaintyV,
                                 WeightsOverrideDelegate weightsValueOverrideFunc = null,
                                 WeightsOverrideDelegate weightsMOverrideFunc = null,
                                 WeightsOverrideDelegate weightsPolicyOverrideFunc = null,
+                                WeightsOverrideDelegate weightsUncertaintyVOverrideFunc = null,
                                 PolicyAveragingType policyAveragingMethod = DEFAULT_POLICY_AVERAGING_TYPE) 
       : base(evaluators)
     {
       WeightsValue = weightsValue  != null ? weightsValue.ToArray()  : MathUtils.Uniform(evaluators.Length);
       WeightsPolicy = weightsPolicy != null ? weightsPolicy.ToArray() : MathUtils.Uniform(evaluators.Length);
       WeightsM      = weightsM      != null ? weightsM.ToArray()      : MathUtils.Uniform(evaluators.Length);
+      WeightsUncertaintyV = weightsUncertaintyV != null ? weightsUncertaintyV.ToArray() : MathUtils.Uniform(evaluators.Length);
 
       WeightsValueOverrideFunc = weightsValueOverrideFunc;
       WeightsMOverrideFunc = weightsMOverrideFunc;
       WeightsPolicyOverrideFunc = weightsPolicyOverrideFunc;
+      WeightsUncertaintyVOverrideFunc = weightsUncertaintyVOverrideFunc;
+
       PolicyAveragingMethod = policyAveragingMethod;
     }
 
@@ -196,6 +207,7 @@ namespace Ceres.Chess.NNEvaluators
         FP16[] w = null;
         FP16[] l = null;
         FP16[] m = null;
+        FP16[] uncertaintyV = null;
 
         // TODO: also compute and pass on the averaged Activations
         Memory<NNEvaluatorResultActivations> activations = new Memory<NNEvaluatorResultActivations>();
@@ -211,12 +223,18 @@ namespace Ceres.Chess.NNEvaluators
 
         if (HasM)
         { 
-          m = WeightsValueOverrideFunc == null ? AverageFP16(positions.NumPos, subResults, (e, i) => e.GetM(i), WeightsM)
+          m = WeightsMOverrideFunc == null ? AverageFP16(positions.NumPos, subResults, (e, i) => e.GetM(i), WeightsM)
                                                : AverageFP16(positions.NumPos, subResults, (e, i) => e.GetM(i), WeightsMOverrideFunc, positions);
         }
 
+        if (HasUncertaintyV)
+        {
+          uncertaintyV = WeightsUncertaintyVOverrideFunc == null ? AverageFP16(positions.NumPos, subResults, (e, i) => e.GetUncertaintyV(i), WeightsUncertaintyV)
+                                                                : AverageFP16(positions.NumPos, subResults, (e, i) => e.GetUncertaintyV(i), WeightsUncertaintyVOverrideFunc, positions);
+        }
+
         TimingStats stats = new TimingStats();
-        return new PositionEvaluationBatch(IsWDL, HasM, positions.NumPos, policies, w, l, m, activations, stats);
+        return new PositionEvaluationBatch(IsWDL, HasM, HasUncertaintyV, positions.NumPos, policies, w, l, m, uncertaintyV, activations, stats);
       }
     }
 
