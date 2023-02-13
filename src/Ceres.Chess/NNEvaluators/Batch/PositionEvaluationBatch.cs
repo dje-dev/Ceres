@@ -113,7 +113,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// </summary>
     /// <param name="index"></param>
     /// <returns></returns>
-    public FP16 GetUncertaintyV(int index) => HasM ? UncertaintyV.Span[index] : FP16.NaN;
+    public FP16 GetUncertaintyV(int index) => HasUncertaintyV ? UncertaintyV.Span[index] : FP16.NaN;
 
 
     /// <summary>
