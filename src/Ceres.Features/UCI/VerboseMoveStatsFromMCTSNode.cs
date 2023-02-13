@@ -126,7 +126,11 @@ namespace Ceres.Features.UCI
       stat.M = node.MPosition;
       stat.V = new EncodedEvalLogistic((float)node.V * multiplier);
       stat.U = isSearchRoot ? 0 : node.Parent.ChildU(node.IndexInParentsChildren);
+#if LEGACY_UNCERTAINTY
       stat.Uncertainty = MCTSNodeUncertaintyAccumulator.GetUncertainty(node.N, float.NaN);
+#else
+      stat.Uncertainty = node.UncertaintyVPosition;
+#endif
 
       return stat;
     }

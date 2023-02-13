@@ -240,6 +240,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
 #if FEATURE_UNCERTAINTY
       Uncertainty = UNCERTAINTY_PRIOR;
+#else
+      UncertaintyVPosition = 0;
 #endif
       //Weight = 1.0f;
     }

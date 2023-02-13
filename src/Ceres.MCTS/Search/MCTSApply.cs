@@ -212,7 +212,7 @@ namespace Ceres.MCTS.Search
         if (nodeRef.N > 0 && node.EvalResult.IsNull)
         {
           Debug.Assert(wasTerminal || node.NumVisitsPendingTranspositionRootExtraction > 0);
-          node.EvalResult = new LeafEvaluationResult(nodeRef.Terminal, nodeRef.WinP, nodeRef.LossP, nodeRef.MPosition);
+          node.EvalResult = new LeafEvaluationResult(nodeRef.Terminal, nodeRef.WinP, nodeRef.LossP, nodeRef.MPosition, nodeRef.UncertaintyVPosition);
         }
 
         // First visit by any selector, set evaluation result and backup in tree
@@ -350,6 +350,7 @@ namespace Ceres.MCTS.Search
         nodeRef.WinP = nodeEvalResult.WinP;
         nodeRef.LossP = nodeEvalResult.LossP;
         nodeRef.MPosition = (byte)MathF.Round(nodeEvalResult.M, 0);
+        nodeRef.UncertaintyVPosition = nodeEvalResult.UncertaintyV;
       }
 
       if (!node.IsRoot && nodeRef.Terminal == GameResult.Draw)

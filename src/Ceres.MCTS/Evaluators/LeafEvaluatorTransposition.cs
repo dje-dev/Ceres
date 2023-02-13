@@ -125,7 +125,8 @@ namespace Ceres.MCTS.Evaluators
       }
 
       return new LeafEvaluationResult(transpositionRootNode.Terminal, transpositionRootNode.WinP,
-                                      transpositionRootNode.LossP, transpositionRootNode.MPosition);
+                                      transpositionRootNode.LossP, transpositionRootNode.MPosition,
+                                      transpositionRootNode.UncertaintyVPosition);
     }
 
 

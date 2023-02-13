@@ -151,6 +151,39 @@ namespace Ceres.MCTS.MTCSNodes
       }
 #endif
 
+      if (false && Context.ParamsSearch.TestFlag)
+      {
+        bool beRisky = Context.Root.Q < -0.2f && nodeRef.DepthInTree % 2 == 0;
+//        if (beRisky)
+        {
+          float sumU = 0;
+          int sumCount = 0;
+          for (int i = 0; i < numToProcess && i < NumChildrenExpanded; i++)
+          {
+            sumU += gatherStatsUSpan[i];
+            sumCount++;
+          }
+          float avgU = sumU / sumCount;
+          for (int i = 0; i < numToProcess && i < NumChildrenExpanded; i++)
+          {
+            float diffFromAvg = Math.Min(7, gatherStatsUSpan[i] - avgU);
+
+            if (diffFromAvg > 0)
+            {
+              float boostBase = (diffFromAvg * 0.01f) * 1f;
+              float boostDiv = MathF.Pow(gatherStatsNSpan[i], 0.2f);
+              float boost = boostBase / boostDiv;
+              //gatherStatsWSpan[i] -= boost * gatherStatsNSpan[i]; // smaller becomes more attractive
+//              gatherStatsPSpan[i] += 0.01f * diffFromAvg;// good (only -3 Elo)
+              
+              float add = 1 *  0.2f * 0.01f * diffFromAvg;
+              gatherStatsPSpan[i] *= Math.Min(gatherStatsPSpan[i] + 0.10f, 1.0f + (0.02f * diffFromAvg));
+              gatherStatsPSpan[i] += add;
+            }
+          }
+        }
+      }
+#if LEGACY_UNCERTAINTY
       // We've gathered all the uncertainty statistics into U.
       // Now if they are applicable (feature turned on, enough samples)
       // compute the appropriate scaling factor
@@ -168,8 +201,7 @@ namespace Ceres.MCTS.MTCSNodes
         // Possibly apply scaling to each child.
         float accUncertaintyMultiplier = 0;
         float nUsed = 0;
-        for (int i = 0; i < numToProcess
-          && i < NumChildrenExpanded; i++)
+        for (int i = 0; i < numToProcess && i < NumChildrenExpanded; i++)
         {
           if (gatherStatsNSpan[i] >= MCTSNodeUncertaintyAccumulator.MIN_N_ESTIMATE)
           {
@@ -199,11 +231,11 @@ namespace Ceres.MCTS.MTCSNodes
             gatherStatsPSpan[i] *= adj;
           }
         }
-
       }
+#endif
 
-      // Possibly disqualify pruned moves from selection.
-      if ((IsRoot && Context.RootMovesPruningStatus != null)
+        // Possibly disqualify pruned moves from selection.
+        if ((IsRoot && Context.RootMovesPruningStatus != null)
        && (numVisitsToCompute != 0) // do not skip any if only querying all scores 
          )
       {

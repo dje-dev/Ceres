@@ -32,6 +32,7 @@ using Ceres.Chess.LC0.Batches;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.Iteration;
 using Ceres.Base.Threading;
+using Ceres.MCTS.MTCSNodes.Struct;
 
 #endregion
 
@@ -249,6 +250,7 @@ namespace Ceres.MCTS.Evaluators
         FP16 winP;
         FP16 lossP;
         FP16 rawM = results.GetM(i);
+        FP16 rawUncertaintyV = results.GetUncertaintyV(i);
 
         // Copy WinP
         FP16 rawWinP = results.GetWinP(i);
@@ -272,7 +274,8 @@ namespace Ceres.MCTS.Evaluators
           lossP = rawLossP;
         }
 
-        LeafEvaluationResult evalResult = new LeafEvaluationResult(GameResult.Unknown, winP, lossP, rawM);
+        byte scaledUncertainty = (byte)Math.Round(MCTSNodeStruct.UNCERTAINTY_SCALE * rawUncertaintyV, 0);
+        LeafEvaluationResult evalResult = new LeafEvaluationResult(GameResult.Unknown, winP, lossP, rawM, scaledUncertainty);
         evalResult.PolicyInArray = results.GetPolicy(i);
 
         // Copy policy
@@ -292,7 +295,7 @@ namespace Ceres.MCTS.Evaluators
 
         // Save back to cache
         if (SaveToCache) Cache.Store(node.StructRef.ZobristHash,
-                                     GameResult.Unknown, rawWinP, rawLossP, rawM,
+                                     GameResult.Unknown, rawWinP, rawLossP, rawM, scaledUncertainty,
                                      in node.EvalResult.PolicyRef);
       }
     }

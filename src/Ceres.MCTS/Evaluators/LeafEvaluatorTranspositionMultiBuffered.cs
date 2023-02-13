@@ -62,7 +62,8 @@ namespace Ceres.MCTS.Evaluators
         // Prepare the result to return
         ref MCTSNodeStruct transpositionSubnode = ref node.Store.Nodes.nodes[transpositionSubnodeIndex.Index];
         LeafEvaluationResult thisResult = new LeafEvaluationResult(transpositionSubnode.Terminal, transpositionRootNode.WinP, 
-                                                                   transpositionRootNode.LossP, transpositionRootNode.MPosition);
+                                                                   transpositionRootNode.LossP, transpositionRootNode.MPosition,
+                                                                   transpositionRootNode.UncertaintyVPosition);
 
         // Update our result node to include this node
         result = AddResultToResults(result, numToFetch, i, thisResult);

@@ -609,7 +609,11 @@ namespace Ceres.MCTS.MTCSNodes.Struct
           }
 
           p[i] = childNode.P.ToFloatApprox;// * childNode.Weight;
+#if LEGACY_UNCERTAINTY
           u[i] = childNode.Uncertainty.Uncertainty;
+#else
+          u[i] = childNode.UncertaintyVPosition;
+#endif
 
           bool isOurMove = depth % 2 == 0;
 
@@ -744,7 +748,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       
     }
 #endif
-    #endregion
+#endregion
 
     #region Updates
 
@@ -900,6 +904,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         // Compute statistics used for tracking uncertainty (variance)
         float qDiff = vToApply - (float)node.Q;
 
+#if LEGACY_UNCERTAINTY
         // NOTE: It is not possible to make the updates to both N and W atomic as a group.
         //       Therefore there is a very small possibility that another thread will observe one updated but not the other
         //       (e.g. thread gathering nodes which reaches over to use this as a transposition root and references Q)
@@ -908,6 +913,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         {
           node.Uncertainty.UpdateUncertainty(ref node, qDiff, numToApply, node.N);
         }
+#endif
 
         node.N += numToApply;
 
@@ -1034,6 +1040,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       LossP = 0;
       Terminal = GameResult.Draw;
       MPosition = 1;
+      UncertaintyVPosition = 0;
 
       W = 0;
       dSum = N;
@@ -1059,6 +1066,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       WinP = 0;
       LossP = lossP;
       MPosition = (byte)MathF.Round(m, 0);
+      UncertaintyVPosition = 0;
 
       if (!IsRoot)
       {
@@ -1068,6 +1076,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         ref MCTSNodeStruct parentRef = ref this.ParentRef;
         parentRef.WinP = lossP;
         parentRef.LossP = 0;
+        parentRef.UncertaintyVPosition = 0;
         parentRef.W = parentRef.V * parentRef.N; // Make Q come out to be same as V (which has already been set to the sure win)
         parentRef.MPosition = (byte)MathF.Round(m + 1, 0);
 

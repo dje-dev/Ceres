@@ -127,7 +127,8 @@ namespace Ceres.MCTS.MTCSNodes.Storage
               {
                 CompressedPolicyVector policy = default;
                 MCTSNodeStructUtils.ExtractPolicyVector(policySoftmax, in nodeRef, ref policy);
-                cacheNodes.Store(nodeRef.ZobristHash, nodeRef.Terminal, nodeRef.WinP, nodeRef.LossP, nodeRef.MPosition, in policy);
+                cacheNodes.Store(nodeRef.ZobristHash, nodeRef.Terminal, nodeRef.WinP, nodeRef.LossP, 
+                                 nodeRef.MPosition, nodeRef.UncertaintyVPosition, in policy);
                 if (nodeRef.N > 1) countGT1++;
                 //MCTSEventSource.TestCounter1++;
               }

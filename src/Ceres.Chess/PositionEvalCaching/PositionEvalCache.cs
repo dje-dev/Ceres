@@ -118,13 +118,13 @@ namespace Ceres.Chess.PositionEvalCaching
     /// <param name="hash"></param>
     /// <param name="value"></param>
     /// <param name="policy"></param>
-    public void Store(ulong hash, GameResult terminalStatus, FP16 winP, FP16 lossP, FP16 m, in CompressedPolicyVector policy)
+    public void Store(ulong hash, GameResult terminalStatus, FP16 winP, FP16 lossP, FP16 m, byte uncertaintyV, in CompressedPolicyVector policy)
     {
       if (!ReadOnly)
       {
         Debug.Assert(!float.IsNaN(winP + lossP));
 
-        positionCache[hash] = new PositionEvalCacheEntry(terminalStatus, winP, lossP, m, in policy);
+        positionCache[hash] = new PositionEvalCacheEntry(terminalStatus, winP, lossP, m, uncertaintyV, in policy);
       }
     }
 

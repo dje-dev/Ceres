@@ -212,14 +212,17 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       targetChildRef.dSum = sourceChildRef.DrawP * NODE_FRAC + sourceChildRef.DAvg * SUBTREE_FRAC;
 
       targetChildRef.MPosition = sourceChildRef.MPosition;
+      targetChildRef.UncertaintyVPosition = sourceChildRef.UncertaintyVPosition;
       targetChildRef.WinP = sourceChildRef.WinP;
       targetChildRef.LossP = sourceChildRef.LossP;
 
       targetChildRef.ZobristHash = sourceChildRef.ZobristHash;
       targetChildRef.VSecondary = sourceChildRef.VSecondary;
+
+#if LEGACY_UNCERTAINTY
       //targetChildRef.Uncertainty = 0;// sourceChildRef.Uncertainty;
       targetChildRef.Uncertainty.Clear();// variance accumulation does not begin until after MIN_N_UPDATE visits
-
+#endif
       targetChildRef.PriorMove = sourceChildRef.PriorMove;
       targetChildRef.miscFields.IndexInParent = (byte)sourceChildRef.IndexInParent;
 

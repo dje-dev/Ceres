@@ -1,4 +1,6 @@
-﻿#region License notice
+﻿#if LEGACY_UNCERTAINTY
+
+#region License notice
 
 /*
   This file is part of the Ceres project at https://github.com/dje-dev/ceres.
@@ -27,7 +29,7 @@ namespace Ceres.MCTS.Managers.Uncertainty
   /// of backed up evaluations to a node.
   /// </summary>
   [Serializable]
-  [StructLayout(LayoutKind.Sequential, Pack = 1, Size = 4)]
+  [StructLayout(LayoutKind.Sequential, Pack = 1, Size = 0)]
   public unsafe struct MCTSNodeUncertaintyAccumulator
   {
     /// <summary>
@@ -54,7 +56,7 @@ namespace Ceres.MCTS.Managers.Uncertainty
     /// <summary>
     /// The current MAD estimate.
     /// </summary>
-    float currentMADEstimate;
+    float currentMADEstimate; 
 
     /// <summary>
     /// Clears value of uncertainty estimate.
@@ -155,3 +157,4 @@ namespace Ceres.MCTS.Managers.Uncertainty
   }
 
 }
+#endif

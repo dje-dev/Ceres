@@ -201,12 +201,22 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// </summary>
     public byte NumChildrenExpanded;
 
-
+#if LEGACY_UNCERTAINTY
     /// <summary>
     /// Measure of the uncertainty (variability) of evaluations
     /// relative to their average value.
     /// </summary>
     public MCTSNodeUncertaintyAccumulator Uncertainty;
+#else
+    /// <summary>
+    /// Raw values from engine are scaled up by this amount to fit into byte (as a whole number).
+    /// </summary>
+    public const float UNCERTAINTY_SCALE = 100f;
+
+    public byte UncertaintyVPosition;
+    public byte Unused;
+    public FP16 UncertaintyVSubtree; // NOT CURRENTLY USED
+#endif
 
 #if NOT
 /// <summary>
@@ -355,9 +365,9 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
 #if FEATURE_UNCERTAINTY
       Uncertainty = UNCERTAINTY_PRIOR;
+      Uncertainty.Clear();
 #endif
       VSumSquares = 0;
-      Uncertainty.Clear();
 
       QUpdatesWtdAvg = 0;
 

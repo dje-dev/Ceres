@@ -52,6 +52,11 @@ namespace Ceres.MCTS.Evaluators
     public FP16 M;
 
     /// <summary>
+    /// Uncertainty of V (scaled).
+    /// </summary>
+    public byte UncertaintyV;
+
+    /// <summary>
     /// Transiently holds policy array within which the policy resides
     /// (but will be released after the policy is applied by being copied into a search node)
     /// </summary>
@@ -106,7 +111,7 @@ namespace Ceres.MCTS.Evaluators
     /// <param name="winP"></param>
     /// <param name="lossP"></param>
     /// <param name="m"></param>
-    public LeafEvaluationResult(GameResult terminalStatus, FP16 winP, FP16 lossP, FP16 m)
+    public LeafEvaluationResult(GameResult terminalStatus, FP16 winP, FP16 lossP, FP16 m, byte uncertaintyV)
     {
       Debug.Assert(terminalStatus != GameResult.NotInitialized);
 
@@ -114,6 +119,7 @@ namespace Ceres.MCTS.Evaluators
       WinP = winP;
       LossP = lossP;
       M = m;
+      UncertaintyV = uncertaintyV;
       policyArrayIndex = -1;
       policyArray = null;
     }
@@ -125,7 +131,7 @@ namespace Ceres.MCTS.Evaluators
     /// <param name="winP"></param>
     /// <param name="lossP"></param>
     /// <param name="m"></param>
-    public void Initialize(GameResult terminalStatus, FP16 winP, FP16 lossP, FP16 m)
+    public void Initialize(GameResult terminalStatus, FP16 winP, FP16 lossP, FP16 m, byte uncertaintyV)
     {
       Debug.Assert(terminalStatus != GameResult.NotInitialized);
 
@@ -133,6 +139,7 @@ namespace Ceres.MCTS.Evaluators
       WinP = winP;
       LossP = lossP;
       M = m;
+      UncertaintyV = uncertaintyV;
       policyArrayIndex = -1;
       policyArray = null;
     }
@@ -147,7 +154,8 @@ namespace Ceres.MCTS.Evaluators
     /// <param name="m"></param>
     /// <param name="policyArray"></param>
     /// <param name="policyArrayIndex"></param>
-    public LeafEvaluationResult(GameResult terminalStatus, FP16 winP, FP16 lossP, FP16 m, Memory<CompressedPolicyVector> policyArray, short policyArrayIndex)
+    public LeafEvaluationResult(GameResult terminalStatus, FP16 winP, FP16 lossP, FP16 m, byte uncertaintyV, 
+                                Memory<CompressedPolicyVector> policyArray, short policyArrayIndex)
     {
       Debug.Assert(terminalStatus != GameResult.NotInitialized);
 
@@ -155,6 +163,7 @@ namespace Ceres.MCTS.Evaluators
       WinP = winP;
       LossP = lossP;
       M = m;
+      UncertaintyV = uncertaintyV;
 
       this.policyArrayIndex = policyArrayIndex;
       this.policyArray = policyArray;

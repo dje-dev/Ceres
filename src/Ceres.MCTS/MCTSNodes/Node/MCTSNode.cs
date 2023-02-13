@@ -37,6 +37,7 @@ using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.Params;
+using Ceres.MCTS.Environment;
 
 #endregion
 
@@ -168,6 +169,11 @@ namespace Ceres.MCTS.MTCSNodes
     /// Moves left estimate for this position
     /// </summary>
     public FP16 MPosition => (*structPtr).MPosition;
+
+    /// <summary>
+    /// Uncertainty of V for the position.
+    /// </summary>
+    public byte UncertaintyVPosition => (*structPtr).UncertaintyVPosition;
 
     /// <summary>
     /// Moves left estimate for this subtree
@@ -530,13 +536,24 @@ namespace Ceres.MCTS.MTCSNodes
     {
       get
       {
+        float adj = 0;
+//        Console.WriteLine(Context.ParamsSearch.TestFlag + " " + Parent.IsRoot + " " + Parent.Q + " " +  UncertaintyVPosition);
+        if (false && Context.ParamsSearch.TestFlag &&  Parent.IsRoot && Parent.Q < -0.15f)
+        {
+          float boost = 5f * (UncertaintyVPosition * 0.01f);
+          float adjDiv = MathF.Pow(Parent.N, 0.2f);
+          adj = boost / adjDiv;
+          if (Parent.Q < -0.35f) adj *= 2;
+          MCTSEventSource.TestCounter1++;
+//          Console.WriteLine(Q + " boost by " + boost);
+        }
         if (IsRoot
          || !Parent.IsRoot
          || N < 1_000
          || ((float)this.N / this.Parent.N < 0.25f) // TODO: centralize
          || Context.ParamsSearch.ResamplingMoveSelectionFractionMove == 0)
         {
-          return (float)Q;
+          return (float)Q - adj;
         }
 
         // Make sure stats are up to date

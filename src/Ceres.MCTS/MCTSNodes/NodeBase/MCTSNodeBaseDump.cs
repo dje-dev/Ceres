@@ -165,7 +165,11 @@ namespace Ceres.MCTS.MTCSNodes
       float[] childScores0 = Depth == 1 ? Parent.InfoRef.CalcChildScores(0, 0, 0, 1.0f) : null;
       float[] childScores1 = Depth == 1 && Tree.Context.ParamsSearch.Execution.FlowDualSelectors ? Parent.InfoRef.CalcChildScores(1, 0, 0, 1.0f) : null;
 
+#if LEGACY_UNCERTAINTY
       float qUncertainty = StructRef.Uncertainty.UncertaintyAtN(N, 0);
+#else
+      float qUncertainty = StructRef.UncertaintyVPosition;
+#endif
       bool invert = multiplerOurPerspective == -1;
       float u0 = childScores0 != null ? childScores0[IndexInParentsChildren] : 0;
       float u1 = childScores1 != null ? childScores1[IndexInParentsChildren] : 0;
@@ -184,7 +188,7 @@ namespace Ceres.MCTS.MTCSNodes
       extraInfo += $" Q= {multiplerOurPerspective * Q,6:F3}  ";
       extraInfo += $" RSA= {-resampleAvg,6:F3}  ";
       extraInfo += $" RSS= {resampleSD,6:F3}  ";
-      extraInfo += $"+/- {qUncertainty,4:F2}  V= {  multiplerOurPerspective * V,5:F2} {uStr} ";
+      extraInfo += $"U= {qUncertainty,3:N0}  V= {  multiplerOurPerspective * V,5:F2} {uStr} ";
 
 
       extraInfo += $" WDL= {(invert ? LossP : WinP),4:F2} {DrawP,4:F2} {(invert ? WinP : LossP),4:F2} ";
