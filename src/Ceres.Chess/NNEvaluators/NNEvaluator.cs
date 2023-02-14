@@ -368,27 +368,33 @@ namespace Ceres.Chess.NNEvaluators
     /// <param name="processor"></param>
     public void EvaluateOversizedBatch(EncodedPositionBatchFlat bigBatch, Action<(int, NNEvaluatorResult[])> processor)
     {
-      int subBatchSize = MaxBatchSize;
-      if (bigBatch.NumPos % subBatchSize != 0) throw new Exception("Size not divisible by " + subBatchSize);
+      int numProcessed = 0;
+      int numToProcess = bigBatch.NumPos;
 
-      // Process each sub-batch.
-      for (int i = 0; i < bigBatch.NumPos / subBatchSize; i++)
+      // Repeatedly process sub-batches no larger than the MaxBatchSize.
+      while (numProcessed < numToProcess)
       {
+        int numRemaining = numToProcess - numProcessed;
+        int numThisBatch = Math.Min(MaxBatchSize, numRemaining);
+
         // Extract a slice of manageable size.
-        EncodedPositionBatchFlatSlice slice = new EncodedPositionBatchFlatSlice(bigBatch, i * subBatchSize, subBatchSize);
+        EncodedPositionBatchFlatSlice slice = new EncodedPositionBatchFlatSlice(bigBatch, numProcessed, numThisBatch);
 
         // Evaluate with the neural network.
+        // TODO: for efficiency reasons could we use EvaluateBatchIntoBuffers instead?
         NNEvaluatorResult[] result = EvaluateBatch(slice);
 
-        // Passs sub-batch to delegate.
-        processor((i * subBatchSize, result));
+        // Pass sub-batch to delegate.
+        processor((numProcessed, result));
+
+        numProcessed += numThisBatch;
       }
     }
 
 
     /// <summary>
     /// Performs quick benchmarks on evaluator to determine performance
-    /// includng single positions and batchs and optionally estimated 
+    /// includng single positions and batches and optionally estimated 
     /// batch size breaks (cut points beyond which speed drops due to batching effects).
     /// </summary>
     /// <param name="computeBreaks"></param>
