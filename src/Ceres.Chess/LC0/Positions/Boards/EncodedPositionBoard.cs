@@ -19,6 +19,7 @@ using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
 using System;
+using System.Collections.Specialized;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -151,6 +152,18 @@ namespace Ceres.Chess.LC0.Boards
 
       Repetitions = repetitions ? new EncodedPositionBoardPlane(ALL_ONES_LONG) : default;
     }
+
+
+    public EncodedPositionBoard(Span<ulong> bitVectors) 
+      : this(new BitVector64(bitVectors[0]), new BitVector64(bitVectors[1]), new BitVector64(bitVectors[2]),
+             new BitVector64(bitVectors[3]), new BitVector64(bitVectors[4]), new BitVector64(bitVectors[5]),
+             new BitVector64(bitVectors[6]), new BitVector64(bitVectors[7]), new BitVector64(bitVectors[8]),
+             new BitVector64(bitVectors[9]), new BitVector64(bitVectors[10]), new BitVector64(bitVectors[11]),
+             bitVectors[12] > 0)
+    {
+     
+    }
+
 
     public EncodedPositionBoard(BitVector64 ourPawns, BitVector64 ourKnights,
                    BitVector64 ourBishops, BitVector64 ourRooks,
