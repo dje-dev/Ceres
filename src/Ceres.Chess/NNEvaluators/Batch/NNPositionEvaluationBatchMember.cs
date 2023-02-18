@@ -41,6 +41,17 @@ namespace Ceres.Chess.NetEvaluation.Batch
     public float M => batch.GetM(index);
 
     /// <summary>
+    /// Uncertainty of V value.
+    /// </summary>
+    public float UncertaintyV => batch.GetUncertaintyV(index);
+
+    /// <summary>
+    /// Position value head output.
+    /// </summary>
+    public float V => batch.GetV(index);
+
+
+    /// <summary>
     /// Policy vector.
     /// </summary>
     public CompressedPolicyVector Policy
@@ -52,10 +63,6 @@ namespace Ceres.Chess.NetEvaluation.Batch
       }
     }
 
-    /// <summary>
-    /// Position value head output.
-    /// </summary>
-    public float V => batch.GetV(index);
 
     IPositionEvaluationBatch batch;
     int index;
