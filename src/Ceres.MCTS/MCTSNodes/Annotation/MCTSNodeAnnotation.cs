@@ -15,8 +15,8 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
-
 using Ceres.Chess;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.LC0.Boards;
@@ -107,6 +107,12 @@ namespace Ceres.MCTS.MTCSNodes.Annotation
 
     #endregion
 
+    /// <summary>
+    /// Optional structure for tracking state of last move plies:
+    /// the number of ply since each square has seen a move (to/from).
+    /// </summary>
+    public LastMovePliesTracker LastMovePliesTracker;
+    
 
     /// <summary>
     /// Initializes a specified EncodedPosition to reflect the a specified node's position.
@@ -148,7 +154,7 @@ namespace Ceres.MCTS.MTCSNodes.Annotation
       // Boards from prior history
       int priorPositionsIndex = 0;
       List<EncodedPositionBoard> encodedPriorPositions = node.Tree.EncodedPriorPositions;
-      while (nextBoardIndex < EncodedPositionBoards.NUM_MOVES_HISTORY 
+      while (nextBoardIndex < EncodedPositionBoards.NUM_MOVES_HISTORY
           && priorPositionsIndex < encodedPriorPositions.Count)
       {
         if (nextBoardIndex % 2 == 1)

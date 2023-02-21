@@ -34,6 +34,7 @@ using Ceres.MCTS.Iteration;
 using Ceres.Base.Threading;
 using Ceres.MCTS.MTCSNodes.Struct;
 
+
 #endregion
 
 namespace Ceres.MCTS.Evaluators
@@ -320,6 +321,7 @@ namespace Ceres.MCTS.Evaluators
         bool hasPositions = evaluator.InputsRequired.HasFlag(NNEvaluator.InputTypes.Positions);
         bool hasHashes = evaluator.InputsRequired.HasFlag(NNEvaluator.InputTypes.Hashes);
         bool hasMoves = evaluator.InputsRequired.HasFlag(NNEvaluator.InputTypes.Moves);
+        bool hasLastMovePlies = evaluator.InputsRequired.HasFlag(NNEvaluator.InputTypes.LastMovePlies);
 
         if (hasPositions && Batch.Positions == null)
         {
@@ -329,6 +331,11 @@ namespace Ceres.MCTS.Evaluators
         if (hasHashes && Batch.PositionHashes == null)
         {
           Batch.PositionHashes = new ulong[Batch.MaxBatchSize];
+        }
+
+        if (hasLastMovePlies && Batch.LastMovePlies == null)
+        {
+          Batch.LastMovePlies = new byte[Batch.MaxBatchSize * 64];
         }
 
         if (hasMoves && Batch.Moves == null)
@@ -353,6 +360,12 @@ namespace Ceres.MCTS.Evaluators
           if (hasMoves)
           {
             Batch.Moves[i] = node.Annotation.Moves;
+          }
+
+          if (hasLastMovePlies)
+          {
+            Span<byte> targetSlice = new Span<byte>(Batch.LastMovePlies).Slice(i * 64, 64);
+            node.Annotation.LastMovePliesTracker.LastMovePlies.CopyTo(targetSlice);
           }
         }
       }

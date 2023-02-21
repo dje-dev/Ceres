@@ -356,6 +356,9 @@ namespace Ceres.MCTS.LeafExpansion
       // (initialization status is considered complete when number of pieces > 0).
       annotation.Pos = posHistory[^1]; // this will have had its repetition count set
 
+      // Update the last ply move statistics.
+      annotation.LastMovePliesTracker.UpdateLastMovePlyTracking(node, posHistory, Root.SideToMove == SideType.White, in annotation.Pos, priorMoveMG);
+      
       //node.Ref.HashCrosscheck = annotation.Pos.PiecesShortHash;
       bool alreadyEvaluated = !FP16.IsNaN(node.V);
 

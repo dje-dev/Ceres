@@ -97,9 +97,12 @@ namespace Ceres.Chess.NNEvaluators
       bool hasPositions = pendingBatches[0].Positions != null;
       bool hasMoves = pendingBatches[0].Moves != null;
       bool hasHashes = pendingBatches[0].PositionHashes != null;
+      bool hasPliesSincePerSquare = pendingBatches[0].LastMovePlies != null;
 
       MGPosition[] positions = hasPositions ? new MGPosition[numPositions] : null;
       ulong[] positionHashes = hasHashes ? new ulong[numPositions] : null;
+      byte[] pliesSinceLastSquare = hasPliesSincePerSquare ? new byte[numPositions * 64] : null;
+
       MGMoveList[] moves = hasMoves ? new MGMoveList[numPositions] : null;
 
       int nextSourceBitmapIndex = 0;
@@ -123,6 +126,11 @@ namespace Ceres.Chess.NNEvaluators
           Array.Copy(thisBatch.PositionHashes, 0, positionHashes, nextPositionIndex, thisBatch.NumPos);
         }
 
+        if (hasPliesSincePerSquare)
+        {
+          Array.Copy(thisBatch.LastMovePlies, 0, pliesSinceLastSquare, nextPositionIndex * 64, thisBatch.NumPos * 64);
+        }
+
         if (hasMoves)
         {
           Array.Copy(thisBatch.Moves, 0, moves, nextPositionIndex, thisBatch.NumPos);
@@ -141,6 +149,11 @@ namespace Ceres.Chess.NNEvaluators
       if (hasHashes)
       {
         fullBatch.PositionHashes = positionHashes;
+      }
+
+      if (hasPliesSincePerSquare)
+      {
+        fullBatch.LastMovePlies = pliesSinceLastSquare;
       }
 
       if (hasMoves)

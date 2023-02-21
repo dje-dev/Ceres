@@ -17,6 +17,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Ceres.Base.DataType;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.LC0.Batches;
 using Ceres.Chess.MoveGen;
@@ -41,8 +42,10 @@ namespace Ceres.Chess.NNEvaluators
       Hashes = 2,
       Moves = 4,
       Positions = 8,
+      LastMovePlies = 16,
 
-      All = Boards | Hashes | Moves | Positions
+      All = Boards | Hashes | Moves | Positions,
+      AllWithLastMovePlies = Boards | Hashes | Moves | Positions | LastMovePlies
     };
 
 
@@ -254,6 +257,14 @@ namespace Ceres.Chess.NNEvaluators
     /// <returns></returns>
     public NNEvaluatorResult[] Evaluate(IEnumerable<PositionWithHistory> positions, bool fillInMissingPlanes, bool retrieveSupplementalResults = false)
     {
+      if (InputsRequired.HasFlag(InputTypes.LastMovePlies))
+      {
+        // TODO: it should be possible to extract some of the history
+        //       from the positions into the LastMovePlies to support this case.
+        //       Probably leverage existing method SetMoveSinceFromPositions to do this.
+        throw new NotImplementedException();
+      }
+
       PositionWithHistory[] positionsAll = positions.ToArray();
 
       // TODO: someday we might be able to relax the InputTypes.All below
@@ -304,6 +315,14 @@ namespace Ceres.Chess.NNEvaluators
     /// <returns></returns>
     public IPositionEvaluationBatch Evaluate(EncodedPositionWithHistory[] encodedPositions, int numPositions, bool retrieveSupplementalResults = false)
     {
+      if (InputsRequired.HasFlag(InputTypes.LastMovePlies))
+      {
+        // TODO: it should be possible to extract some of the history
+        //       from the encodedPositions into the LastMovePlies to support this case.
+        //       Probably leverage existing method SetMoveSinceFromPositions to do this.
+        throw new NotImplementedException();
+      }
+
       EncodedPositionBatchFlat batch;
       if (InputsRequired > InputTypes.Boards)
       {
@@ -338,7 +357,16 @@ namespace Ceres.Chess.NNEvaluators
     /// <returns></returns>
     public IPositionEvaluationBatch Evaluate(Span<EncodedTrainingPosition> encodedPositions, int numPositions, bool retrieveSupplementalResults = false)
     {
+      if (InputsRequired.HasFlag(InputTypes.LastMovePlies))
+      {
+        // TODO: it should be possible to extract some of the history
+        //       from the encodedPositions into the LastMovePlies to support this case.
+        //       Probably leverage existing method SetMoveSinceFromPositions to do this.
+        throw new NotImplementedException();
+      }
+
       EncodedPositionBatchFlat batch;
+
       if (InputsRequired > InputTypes.Boards)
       {
         EncodedPositionBatchBuilder builder = new EncodedPositionBatchBuilder(numPositions, InputsRequired);

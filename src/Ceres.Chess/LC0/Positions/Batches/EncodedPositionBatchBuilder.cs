@@ -85,6 +85,7 @@ namespace Ceres.Chess.LC0.Batches
       if (InputsRequired.HasFlag(NNEvaluator.InputTypes.Positions)) batch.Positions = new MGPosition[MaxPositions];
       if (InputsRequired.HasFlag(NNEvaluator.InputTypes.Hashes)) batch.PositionHashes = new ulong[MaxPositions];
       if (InputsRequired.HasFlag(NNEvaluator.InputTypes.Moves)) batch.Moves = new MGMoveList[MaxPositions];
+      if (InputsRequired.HasFlag(NNEvaluator.InputTypes.LastMovePlies)) batch.LastMovePlies = new byte[MaxPositions * 64];      
     }
 
 
@@ -117,7 +118,7 @@ namespace Ceres.Chess.LC0.Batches
         MGMoveGen.GenerateMoves(in positionMG, moves);
       }
 
-      Add(in positionEncoded, in positionMG, zobristHashForCaching, moves);
+      Add(in positionEncoded, in positionMG, zobristHashForCaching, moves, null); // TOFIX
     }
 
     /// <summary>
@@ -127,7 +128,8 @@ namespace Ceres.Chess.LC0.Batches
     /// <param name="position"></param>
     /// <param name="positionHash"></param>
     /// <param name="moves"></param>
-    public void Add(in EncodedPositionWithHistory positionEncoded, in MGPosition position, ulong positionHash, MGMoveList moves)
+    public void Add(in EncodedPositionWithHistory positionEncoded, in MGPosition position, 
+                    ulong positionHash, MGMoveList moves, byte[] lastMovePlies)
     {
       if (batch.Positions == null) throw new Exception("AddPosition requires that constructor argument hashesAndMovesRequired be true");
 
@@ -140,6 +142,10 @@ namespace Ceres.Chess.LC0.Batches
         batch.Positions[NumPositionsAdded] = position;
         if (InputsRequired.HasFlag(NNEvaluator.InputTypes.Hashes)) batch.PositionHashes[NumPositionsAdded] = positionHash;
         if (InputsRequired.HasFlag(NNEvaluator.InputTypes.Moves)) batch.Moves[NumPositionsAdded] = moves;
+        if (InputsRequired.HasFlag(NNEvaluator.InputTypes.LastMovePlies) && lastMovePlies != null)
+        {
+          Array.Copy(lastMovePlies, 0, batch.LastMovePlies, NumPositionsAdded * 64, 64);
+        }
 
         pendingPositions[NumPositionsAdded] = positionEncoded;
 
@@ -183,7 +189,7 @@ namespace Ceres.Chess.LC0.Batches
       MGMoveList moves = new MGMoveList();
       MGMoveGen.GenerateMoves(in finalPositionMG, moves);
 
-      Add(in posRaw, in finalPositionMG, zobristHashForCaching, moves);
+      Add(in posRaw, in finalPositionMG, zobristHashForCaching, moves, null); // TOFIX
     }
 
     /// <summary>

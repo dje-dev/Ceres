@@ -52,6 +52,11 @@ namespace Ceres.Chess.Positions
     /// </summary>
     public Move NextMove { set; get; }
 
+    /// <summary>
+    /// Total number of positions in history.
+    /// </summary>
+    public int Count => positions.Length;
+
     #endregion
 
     #region Constructor and update methods
@@ -93,7 +98,9 @@ namespace Ceres.Chess.Positions
       MGMoveList moves = new MGMoveList();
       MGMoveGen.GenerateMoves(in mgPos, moves);
       if (Array.IndexOf(moves.MovesArray, thisMove) == -1)
+      {
         throw new Exception($"The move {moveStr} is not legal from position {FinalPosition.FEN}");
+      }
 
       Moves.Add(MGMoveFromString.ParseMove(mgPos, moveStr));
       if (haveFinalized) InitPositionsAndFinalPosMG();
@@ -103,7 +110,10 @@ namespace Ceres.Chess.Positions
     public void AppendMove(MGMove move)
     {
       Moves.Add(move);
-      if (haveFinalized) InitPositionsAndFinalPosMG();
+      if (haveFinalized)
+      {
+        InitPositionsAndFinalPosMG();
+      }
     }
 
     /// <summary>
@@ -119,7 +129,9 @@ namespace Ceres.Chess.Positions
       {
         Position thisPos = currentPositionsHistory[i];
         if (findPosition.Equals(thisPos))
+        {
           return i;
+        }
       }
       return -1;
     }
@@ -182,9 +194,13 @@ namespace Ceres.Chess.Positions
       string[] parts = fenAndMovesStr.Split(" moves");
 
       if (parts.Length == 1)
+      {
         return FromFENAndMovesUCI(parts[0], ""); // nothing after the moves token
+      }
       else
+      {
         return FromFENAndMovesUCI(parts[0], parts[1]);
+      }
     }
 
     /// <summary>
@@ -195,7 +211,10 @@ namespace Ceres.Chess.Positions
       get
       {
         string ret = InitialPosition.FEN;
-        if (Moves != null && Moves.Count > 0) ret += " moves " + MovesStr;
+        if (Moves != null && Moves.Count > 0)
+        {
+          ret += " moves " + MovesStr;
+        }
         return ret;
       }
     }
@@ -320,15 +339,25 @@ namespace Ceres.Chess.Positions
     public bool IsIdenticalToPriorToLastMove(PositionWithHistory otherMoves)
     {
       // Verify starting position same
-      if (InitialPosMG != otherMoves.InitialPosMG) return false;
+      if (InitialPosMG != otherMoves.InitialPosMG)
+      {
+        return false;
+      }
 
       // Verify we are not shorter
-      if (Moves.Count < otherMoves.Moves.Count) return false;
+      if (Moves.Count < otherMoves.Moves.Count)
+      {
+        return false;
+      }
 
       // Verify all moves in other are same
       for (int i = 0; i < otherMoves.Moves.Count; i++)
+      {
         if (Moves[i] != otherMoves.Moves[i])
+        {
           return false;
+        }
+      }
 
       return true;
     }

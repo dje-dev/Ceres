@@ -78,6 +78,14 @@ namespace Ceres.Chess.LC0.Batches
       set => value.CopyTo(Parent.Moves);
     }
 
+    public Span<byte> LastMovePlies
+    {
+      get => Parent.LastMovePlies == default ? default : Parent.LastMovePlies.Slice(StartIndex, Length * 64);
+      set => value.CopyTo(Parent.LastMovePlies);
+    }
+
+
+
     public Span<float> W => Parent.W.Slice(StartIndex, Length);
 
     public Span<float> L => Parent.L.Slice(StartIndex, Length);

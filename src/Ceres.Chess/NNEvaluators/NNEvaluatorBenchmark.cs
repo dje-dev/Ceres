@@ -59,6 +59,13 @@ namespace Ceres.Chess.NNEvaluators
       bool hasMoves = evaluator.InputsRequired.HasFlag(NNEvaluator.InputTypes.Moves);
       bool hasHashes = evaluator.InputsRequired.HasFlag(NNEvaluator.InputTypes.Hashes);
       bool hasBoards = evaluator.InputsRequired.HasFlag(NNEvaluator.InputTypes.Boards);
+      bool hasLastMovePlies = evaluator.InputsRequired.HasFlag(NNEvaluator.InputTypes.LastMovePlies);
+
+      // TODO: handle the case of having LastMovePlies
+//      if (hasLastMovePlies)
+//      {
+//        throw new NotImplementedException();
+//      }
 
       batch = new EncodedPositionBatchFlat(positions, count, hasPositions);
 

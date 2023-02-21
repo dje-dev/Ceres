@@ -78,6 +78,11 @@ namespace Ceres.Chess.LC0.Batches
     public ulong[] PositionHashes;
 
     /// <summary>
+    /// Optionally the arrays of "plies since last move on square."
+    /// </summary>
+    public byte[] LastMovePlies;
+
+    /// <summary>
     /// Optionally the set of moves from this position
     /// </summary>
     public MGMoveList[] Moves;
@@ -170,6 +175,13 @@ namespace Ceres.Chess.LC0.Batches
         ret.PositionHashes = hashes;
         ret.Positions = positionsMG;
         ret.Moves = moves;
+      }
+
+      if (LastMovePlies != null)
+      {
+        byte[] lastPlies = new byte[count * 64];
+        Array.Copy(LastMovePlies, startIndex * 64, lastPlies, 0, count * 64);
+        ret.LastMovePlies = lastPlies;
       }
 
       return ret;
@@ -816,6 +828,7 @@ namespace Ceres.Chess.LC0.Batches
 
     Span<MGPosition> IEncodedPositionBatchFlat.Positions { get => Positions.AsSpan(); set => Positions = value.ToArray(); }
     Span<ulong> IEncodedPositionBatchFlat.PositionHashes { get => PositionHashes.AsSpan(); set => PositionHashes = value.ToArray(); }
+    Span<byte> IEncodedPositionBatchFlat.LastMovePlies { get => LastMovePlies.AsSpan(); set => LastMovePlies = value.ToArray(); }
     Span<MGMoveList> IEncodedPositionBatchFlat.Moves { get => Moves.AsSpan(); set => Moves = value.ToArray(); }
 
     float[] IEncodedPositionBatchFlat.ValuesFlatFromPlanes(float[] preallocatedBuffer, bool nwhc, bool scaleMove50Counter) => ValuesFlatFromPlanes(preallocatedBuffer, nwhc, scaleMove50Counter);

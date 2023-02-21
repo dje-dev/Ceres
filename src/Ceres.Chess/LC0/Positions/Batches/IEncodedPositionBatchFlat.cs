@@ -58,6 +58,11 @@ namespace Ceres.Chess.LC0.Batches
     Span<ulong> PositionHashes { get; set; }
 
     /// <summary>
+    /// Optionally the arrays of "plies since last move on square."
+    /// </summary>
+    Span<byte> LastMovePlies{ get; set; }
+
+    /// <summary>
     /// Optionally the set of moves from this position
     /// </summary>
     Span<MGMoveList> Moves { get; set; }
