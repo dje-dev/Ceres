@@ -14,6 +14,8 @@
 #region Using directives
 
 using System.IO;
+using Ceres.Base.DataType;
+using System.Runtime.InteropServices;
 using Ceres.Base.OperatingSystem;
 
 #endregion
@@ -66,6 +68,31 @@ namespace Ceres.Base.Misc
                    && file.ReadByte() == ZIP_MAGIC_BYTE_1;
       file.Close();
       return isZipped;
+    }
+
+
+    /// <summary>
+    /// Reads a specified number of structs from a file with a specified name.
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    /// <param name="stream"></param>
+    /// <param name="rawBuffer"></param>
+    /// <param name="buffer"></param>
+    /// <param name="numStructsToRead"></param>
+    /// <returns></returns>
+    public static int ReadFromStream<T>(Stream stream, byte[] rawBuffer, ref T[] buffer, int numStructsToRead) where T : unmanaged
+    {
+      // Read bytes until we have as many as requested (or end of stream).
+      int bytesRead = 0;
+      int bytesToRead = numStructsToRead * Marshal.SizeOf<T>();
+      int thisBytes;
+      do
+      {
+        thisBytes = stream.Read(rawBuffer, 0, bytesToRead);
+        bytesRead += thisBytes;
+      } while (thisBytes > 0 && bytesRead < bytesToRead);
+
+      return bytesRead == 0 ? 0 : SerializationUtils.DeSerializeArrayIntoBuffer(rawBuffer, bytesRead, ref buffer);
     }
 
   }
