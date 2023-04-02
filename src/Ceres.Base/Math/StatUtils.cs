@@ -16,6 +16,7 @@
 using Ceres.Base.DataTypes;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading.Tasks;
 
 #endregion
@@ -570,7 +571,7 @@ namespace Ceres.Base.Math
 
 
     /// <summary>
-    /// Equivalent to Tensorflow softmax_cross_entropy_with_logits.
+    /// Equivalent to Pytorch CrossEntropy function.
     /// </summary>
     public static float SoftmaxCrossEntropyWithLogits(float[] labels, float[] logits)
     {
@@ -580,15 +581,26 @@ namespace Ceres.Base.Math
 
 
     /// <summary>
-    /// Equivalent to Tensorflow softmax_cross_entropy_with_logits.
+    /// Computes cross entropy, where the labels are targets in probability space
+    /// and are compared against logit values.
     /// </summary>
-    public static float SoftmaxCrossEntropy(float[] labels, float[] values)
+    public static float SoftmaxCrossEntropy(float[] labels, float[] logits)
     {
       float acc = 0;
+      float sumLabels = 0;
       for (int i = 0; i < labels.Length; i++)
       {
-        acc += labels[i] * MathF.Log(values[i] + 0.0000001f);
+        sumLabels += labels[i];
+        acc += labels[i] * MathF.Log(logits[i] + 0.0000001f);
       }
+
+#if DEBUG
+      if (sumLabels < 0.98f || sumLabels > 1.02f)
+      {
+        Console.WriteLine($"WARNING: SoftmaxCrossEntropy passed labels which sum to {sumLabels} rather than add to 1 as expected.");
+      }
+#endif
+
       return -acc;
     }
 
