@@ -132,6 +132,7 @@ namespace Ceres.Base.OperatingSystem.NVML
     {
       if (!haveInitialized)
       {
+        System.Environment.SetEnvironmentVariable("CUDA_MODULE_LOADING", "LAZY");
         NVMLMethods.nvmlInit();
         haveInitialized = true;
         NVMLMethods.nvmlDeviceGetCount(out deviceCount);
