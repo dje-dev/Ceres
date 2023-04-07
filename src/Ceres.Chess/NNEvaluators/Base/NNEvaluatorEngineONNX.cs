@@ -209,14 +209,12 @@ namespace Chess.Ceres.NNEvaluators
           throw new Exception("ConverterToFlat must be provided");
         }
 
-        // TODO: eliminate or warn about hardcoding here, including expectation raw boards are enabled in the TPG
-        float[] flatValuesAttention = ArrayPool<float>.Shared.Rent(batch.NumPos * 96 * 38);
-        float[] flatValuesBoard = ArrayPool<float>.Shared.Rent(batch.NumPos * 782);
-        
-        ConverterToFlat(batch, flatValuesAttention, flatValuesBoard);
+        float[] flatValuesAttention = ArrayPool<float>.Shared.Rent(batch.NumPos * 64 * ONNXRuntimeExecutor.TPG_BYTES_PER_SQUARE_RECORD);
+        float[] flatValuesMoves = null;// ArrayPool<float>.Shared.Rent(batch.NumPos * 782);
 
-        PositionEvaluationBatch ret = DoEvaluateBatch(batch, flatValuesAttention, flatValuesBoard, 
-                                                      batch.NumPos, retrieveSupplementalResults);
+        ConverterToFlat(batch, flatValuesAttention, flatValuesMoves);
+
+        PositionEvaluationBatch ret = DoEvaluateBatch(batch, flatValuesAttention, flatValuesMoves, batch.NumPos, retrieveSupplementalResults);
         Debug.Assert(!retrieveSupplementalResults);
         return ret;
       }
@@ -259,7 +257,8 @@ namespace Chess.Ceres.NNEvaluators
     /// <param name="numPos"></param>
     /// <param name="retrieveSupplementalResults"></param>
     /// <returns></returns>
-    PositionEvaluationBatch DoEvaluateBatch(IEncodedPositionBatchFlat batch, float[] flatValuesPrimary, float[] flatValuesSecondary,
+    PositionEvaluationBatch DoEvaluateBatch(IEncodedPositionBatchFlat batch, 
+                                            float[] flatValuesPrimary, float[] flatValuesSecondary,
                                             int numPos, bool retrieveSupplementalResults)
     {
       if (retrieveSupplementalResults) throw new Exception("retrieveSupplementalResults not supported");
@@ -271,11 +270,12 @@ namespace Chess.Ceres.NNEvaluators
         lock (Executor)
         {
           result = Executor.Execute(IsWDL, flatValuesPrimary, flatValuesSecondary, numPos, alreadyConvertedToLZ0: true);
-
+#if NO_LONGER_NEEDED_NOT_USING_96_FORMAT
           if (Executor.NetType == ONNXRuntimeExecutor.NetTypeEnum.TPG)
           {
             ConvertTPGPolicyToExpanded(batch, result);
           }
+#endif
         }
       }
 
@@ -327,7 +327,7 @@ namespace Chess.Ceres.NNEvaluators
                                          PositionEvaluationBatch.PolicyType.LogProbabilities, false, batch, stats);
     }
 
-    #endregion
+#endregion
 
 
 #if NOT

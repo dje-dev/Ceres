@@ -227,16 +227,17 @@ namespace Ceres.Chess.LC0NetInference
 
         inputsONNX[inputIndex] = (input, shape, inputName, numElements);
         inputIndex++;
-      }
+      }      
 
-      if (inputIsFloat)
-      {
-        return RunFloat(inputsONNX);
-      }
-      else
-      {
-        return RunFloat16(inputsONNX);
-      }
+        if (float16)
+        {
+          // TODO: Make more efficient, avoid conversion to FP16 which happens in RunFloat16
+          return RunFloat16(inputsONNX);
+        }
+        else
+        {
+          return RunFloat(inputsONNX);
+        }      
 
 #else
       return default;

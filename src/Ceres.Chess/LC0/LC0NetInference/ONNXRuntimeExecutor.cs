@@ -32,6 +32,10 @@ namespace Ceres.Chess.LC0NetInference
   /// </summary>
   public class ONNXRuntimeExecutor : IDisposable
   {
+    public const int TPG_BYTES_PER_SQUARE_RECORD = 20; // TODO: should be referenced from TPGRecord
+    public const int TPG_BYTES_PER_MOVE_RECORD = 20; // TODO: should be referenced from TPGRecord
+    public const int TPG_MAX_MOVES = 64; //  // TODO: should be referenced from TPGRecord
+
     /// <summary>
     /// File name of source ONNX file
     /// </summary>
@@ -151,10 +155,10 @@ namespace Ceres.Chess.LC0NetInference
       if (NetType == NetTypeEnum.TPG)
       {
         var inputs = new (Memory<float> input, int[] shape)[flatValuesSecondary == null ? 1 : 2];
-        inputs[0] = (flatValuesPrimary, new int[] { numPositionsUsed, 96, 38 });
+        inputs[0] = (flatValuesPrimary, new int[] { numPositionsUsed, 64, TPG_BYTES_PER_SQUARE_RECORD });
         if (flatValuesSecondary != null)
         {
-          inputs[1] = (flatValuesSecondary, new int[] { numPositionsUsed, 782 });
+          inputs[1] = (flatValuesSecondary, new int[] { numPositionsUsed, TPG_MAX_MOVES, TPG_BYTES_PER_MOVE_RECORD });
         }
 
         eval = executor.Run(inputs, Precision == NNEvaluatorPrecision.FP16);
@@ -177,7 +181,7 @@ namespace Ceres.Chess.LC0NetInference
       else
       {
         bool hasMLH = eval.Length >= 3;
-
+        bool hasUNC = eval.Length >= 4;
 #if NOT
         Session.InputMetadata
         [0] input_1
@@ -188,12 +192,12 @@ namespace Ceres.Chess.LC0NetInference
         [2] tf.math.truediv [OMITTED IF NOT ATTENTION]
         [3] value/dense2
 #endif
-        int FindIndex(int expectedPerPosition)
+        int FindIndex(int expectedPerPosition, int indexToIgnore = -1)
         {
           int expectedLength = numPositionsUsed * expectedPerPosition;
           for (int i=0;i<eval.Length;i++)
           {
-            if (eval[i].Length == expectedLength)
+            if (eval[i].Length == expectedLength && i != indexToIgnore)
             {
               return i;
             }
@@ -210,18 +214,19 @@ namespace Ceres.Chess.LC0NetInference
         }
 
         int INDEX_POLICIES = FindIndex(1858);// FIX NetType == NetTypeEnum.Ceres ? 1858 : 96);
-        int INDEX_MLH = FindIndex(1);
         int INDEX_WDL = FindIndex(3);
+        int INDEX_MLH = FindIndex(1);
+        int INDEX_UNC = hasUNC ? FindIndex(1, INDEX_MLH) : -1;
 
         float[] mlh = hasMLH ? eval[INDEX_MLH] : null;
-        float[] uncertantiesV = null;
+        float[] uncertantiesV = hasUNC ? eval[INDEX_UNC] : null;
         float[] policiesLogistics = eval[INDEX_POLICIES];
 
         FP16[] values = FP16.ToFP16(eval[INDEX_WDL]);
         Debug.Assert(values.Length == (isWDL ? 3 : 1) * numPositionsUsed);
 
         float[] value_fc_activations = null;// eval.Length < 3 ? null : eval[2];
-        int? overridePolicyLen = NetType == NetTypeEnum.TPG ? 96 : null;
+        int? overridePolicyLen = null;// NetType == NetTypeEnum.TPG ? 96 : null;
         ONNXRuntimeExecutorResultBatch result = new ONNXRuntimeExecutorResultBatch(isWDL, values, policiesLogistics, mlh, 
                                                                                    uncertantiesV, value_fc_activations, 
                                                                                    numPositionsUsed, overridePolicyLen);

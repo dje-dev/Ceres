@@ -38,6 +38,7 @@ using Ceres.Base.OperatingSystem;
 using Ceres.Features.Players;
 using Ceres.Chess.NNEvaluators.LC0DLL;
 using Ceres.MCTS.MTCSNodes.Analysis;
+using ManagedCuda.BasicTypes;
 
 #endregion
 
@@ -57,7 +58,9 @@ namespace Ceres.Features.EngineTests
       Ceres,
       LC0,
       Stockfish14_1,
-      UCI
+      UCI,
+      CeresCustom1,
+      CeresCustom2
     };
 
     /// <summary>
@@ -181,14 +184,35 @@ namespace Ceres.Features.EngineTests
     }
 
 
+    static NNEvaluatorDef MakeEvaluator(PlayerMode mode, string networkID, int gpuID)
+    {
+      if (networkID == null)
+      {
+        return null;
+      }
+
+      if (mode == PlayerMode.CeresCustom1)
+      {
+        return new NNEvaluatorDef(NNEvaluatorType.Custom1, networkID, deviceIndex:gpuID);
+      }
+      else if (mode == PlayerMode.CeresCustom2)
+      {
+        return new NNEvaluatorDef(NNEvaluatorType.Custom2, networkID, deviceIndex: gpuID);
+      }
+      else
+      {
+        return NNEvaluatorDef.FromSpecification(networkID, $"GPU:{gpuID}");
+      }
+    }
+
     private void DoRunCompareThread(int gpuID,
                                     ParamsSearch p1, ParamsSearch p2,
                                     ParamsSelect s1, ParamsSelect s2,
                                     ParamsSearch pOptimal, ParamsSelect sOptimal)
     {
-      NNEvaluatorDef evaluatorDef1 = Params.NetworkID1 != null ? NNEvaluatorDef.FromSpecification(Params.NetworkID1, $"GPU:{gpuID}") : null;
-      NNEvaluatorDef evaluatorDef2 = Params.NetworkID2 != null ? NNEvaluatorDef.FromSpecification(Params.NetworkID2, $"GPU:{gpuID}") : null;
-      NNEvaluatorDef evaluatorDefOptimal = Params.NetworkArbiterID != null ? NNEvaluatorDef.FromSpecification(Params.NetworkArbiterID, $"GPU:{gpuID}") : null;
+      NNEvaluatorDef evaluatorDef1 = MakeEvaluator(Params.Player1, Params.NetworkID1, gpuID);
+      NNEvaluatorDef evaluatorDef2 = MakeEvaluator(Params.Player2, Params.NetworkID2, gpuID);
+      NNEvaluatorDef evaluatorDefOptimal = MakeEvaluator(Params.PlayerArbiter, Params.NetworkArbiterID, gpuID); 
 
       GameEngine engine1 = null;
       GameEngine engine2 = null;
@@ -435,7 +459,7 @@ namespace Ceres.Features.EngineTests
 
     private GameEngine MakeEngine(PlayerMode playerMode, string networkID, NNEvaluatorDef evaluatorDef, ParamsSearch paramsSearch, ParamsSelect paramsSelect)
     {
-      if (playerMode == PlayerMode.Ceres)
+      if (playerMode == PlayerMode.Ceres || playerMode == PlayerMode.CeresCustom1 || playerMode == PlayerMode.CeresCustom2)
       {
         GameEngineCeresInProcess ge = new("Ceres", evaluatorDef, null, paramsSearch, paramsSelect);
         ge.GatherVerboseMoveStats = true;
