@@ -132,12 +132,12 @@ namespace Ceres.Chess.NNEvaluators
       const int DEFAULT_MAX_BATCH_SIZE = 1024;
       const bool ONNX_SCALE_50_MOVE_COUNTER = false; // BT2 already inserts own node to adjust
 
-      string fullFN = Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, netDef.NetworkID) + ".onnx";
       switch (netDef.Type)
       {
         case NNEvaluatorType.ONNXViaTRT:
         case NNEvaluatorType.ONNXViaORT:
           bool viaTRT = netDef.Type == NNEvaluatorType.ONNXViaTRT;
+          string fullFN = Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, netDef.NetworkID) + ".onnx";
           //          NNEvaluatorPrecision precision = netDef.NetworkID.EndsWith(".16") ? NNEvaluatorPrecision.FP16 : NNEvaluatorPrecision.FP32;
           ret = new NNEvaluatorEngineONNX(netDef.NetworkID, fullFN, deviceDef.Type, deviceDef.DeviceIndex, useTRT: viaTRT,
                                             ONNXRuntimeExecutor.NetTypeEnum.LC0, deviceDef.MaxBatchSize ?? DEFAULT_MAX_BATCH_SIZE,
@@ -146,7 +146,8 @@ namespace Ceres.Chess.NNEvaluators
           break;
 
         case NNEvaluatorType.TRT:
-          ret = new NNEvaluatorEngineTensorRT(netDef.NetworkID, fullFN, DEFAULT_HAS_WDL, DEFAULT_HAS_MLH, DEFAULT_HAS_UNCERTAINTYV, deviceDef.DeviceIndex,
+          string fullFNTRT = Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, netDef.NetworkID) + ".onnx";
+          ret = new NNEvaluatorEngineTensorRT(netDef.NetworkID, fullFNTRT, DEFAULT_HAS_WDL, DEFAULT_HAS_MLH, DEFAULT_HAS_UNCERTAINTYV, deviceDef.DeviceIndex,
                                             NNEvaluatorEngineTensorRTConfig.NetTypeEnum.LC0,
                                             deviceDef.MaxBatchSize ?? DEFAULT_MAX_BATCH_SIZE, netDef.Precision,
                                             NNEvaluatorEngineTensorRTConfig.TRTPriorityLevel.Medium, null, false, TRT_SHARED);
