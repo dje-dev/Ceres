@@ -39,6 +39,9 @@ namespace Ceres.Base.DataTypes
   /// TODO: consider using emerging .NET support, possibly with hardware intrinsics:
   ///   - System.Numerics.Experimental.Half (but where is the NuGet package?)
   ///   - AVX2 access to vcvtph2ps/vcvtps2ph (?)
+  ///   - Issue 81632 "Optimized conversions between Half and Single" introduces vector optimized versions about 2.3x faster.
+  ///     Likely to be folded into Half type in .NET 8 or beyond.
+  ///     Therefore best plan is probably to eventually remove FP16 classes in Ceres and switch all to Half type for standardization and speed.
   /// </remarks>
   [Serializable]
   public readonly struct FP16 : IComparable, IFormattable, IConvertible, IComparable<FP16>, IEquatable<FP16>
