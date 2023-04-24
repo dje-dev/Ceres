@@ -146,18 +146,21 @@ namespace Ceres.MCTS.Managers
 
         
         var org =  DoCalcBestMove();
-        if (Node.Context.ParamsSearch.ResamplingMoveSelectionFractionMove > 0)
+        if (MCTSParamsFixed.UNCERTAINTY_TESTS_ENABLED && Node.Context.ParamsSearch.TestFlag2)
         {
           var save = Node.Context.ParamsSearch.ResamplingMoveSelectionFractionMove;
           Node.Context.ParamsSearch.ResamplingMoveSelectionFractionMove = 0;
+          Node.Context.ParamsSearch.TestFlag = true;
           var nx = DoCalcBestMove();
+          Node.Context.ParamsSearch.TestFlag = false;
           Node.Context.ParamsSearch.ResamplingMoveSelectionFractionMove = save;
 
           if (org.BestMove != nx.BestMove)
           {
-//          MCTSEventSource.TestCounter1++;           
-//          Console.WriteLine("BESTMOVE DIFF " + nx.BestMove + " --> " + org.BestMove);
-//          Node.Context.Manager.DumpRootMoveStatistics();
+            MCTSEventSource.TestCounter1++;           
+            Console.WriteLine("BESTMOVE DIFF " + org.BestMove + " --> " + nx.BestMove + " " + Node.Context.Root.Annotation.Pos.FEN);
+            Node.Context.Manager.DumpRootMoveStatistics();
+            return nx;
           }
           else
           {

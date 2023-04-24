@@ -883,11 +883,30 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       bool first = true;
       float vToApply = vToApplyFirst;
       float dToApply = dToApplyFirst;
-
       ref MCTSNodeStruct node = ref this;
+      float lastUncertaintyVAdj = float.NaN;
+
       while (true)
       {
         ref MCTSNodeStruct parentRef = ref nodes[node.ParentIndex.Index];
+
+        // ** TODO:Make this conditional on the UncertaintyV adjustment feature being enabled.
+        if (MCTSParamsFixed.UNCERTAINTY_TESTS_ENABLED && !first)
+        {
+          const float THRESHOLD = 0.08f;
+          if (MathF.Pow(lastUncertaintyVAdj, 1) > THRESHOLD)
+          {
+            if (vToApply < ((float)node.Q - 0.10f)) // if much worse
+            {
+              float FRACTION_PARENT = 0.666f;
+              float vPrior = vToApply;
+              vToApply = FRACTION_PARENT * (float)node.Q
+                       + (1.0f - FRACTION_PARENT) * vToApply;
+              //            Console.WriteLine(vPrior + " --> " + vToApply + " because of adjustment " + lastUncertaintyVAdj + " at depth " + node.DepthInTree + " curQ:" + node.Q);
+            }
+          }
+        }
+        lastUncertaintyVAdj = node.InfoRef.Annotation.LastUncertaintyVAdj;
 
         node.UpdateNInFlight(-numInFlight1, -numInFlight2);
 

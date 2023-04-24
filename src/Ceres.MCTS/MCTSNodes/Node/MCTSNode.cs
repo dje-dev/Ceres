@@ -537,15 +537,18 @@ namespace Ceres.MCTS.MTCSNodes
       get
       {
         float adj = 0;
-//        Console.WriteLine(Context.ParamsSearch.TestFlag + " " + Parent.IsRoot + " " + Parent.Q + " " +  UncertaintyVPosition);
-        if (false && Context.ParamsSearch.TestFlag &&  Parent.IsRoot && Parent.Q < -0.15f)
+        //        Console.WriteLine(Context.ParamsSearch.TestFlag + " " + Parent.IsRoot + " " + Parent.Q + " " +  UncertaintyVPosition);
+        const bool EQ = true;
+        if (MCTSParamsFixed.UNCERTAINTY_TESTS_ENABLED && Context.ParamsSearch.TestFlag &&  Parent.IsRoot && Parent.Q < (EQ ? -0.20f : 0.10f))
         {
-          float boost = 5f * (UncertaintyVPosition * 0.01f);
-          float adjDiv = MathF.Pow(Parent.N, 0.2f);
-          adj = boost / adjDiv;
-          if (Parent.Q < -0.35f) adj *= 2;
-          MCTSEventSource.TestCounter1++;
-//          Console.WriteLine(Q + " boost by " + boost);
+          float boost = (EQ ? -1f : -3f) * (UncertaintyVPosition * 0.01f);
+          if (Parent.Q < (EQ ? -0.4f: -0.25f)) adj *= 2;
+//          float adjDiv = MathF.Pow(Parent.N, 0.2f);
+//          adj = boost / adjDiv;
+//          if (Parent.Q < -0.25f) adj *= 2;
+//          MCTSEventSource.TestCounter1++;
+//          Console.WriteLine(Q + " boost by " + boost + " due to uncertainty " + UncertaintyVPosition + " when root at " + Parent.Q);
+          return (float)(Q + boost);
         }
         if (IsRoot
          || !Parent.IsRoot

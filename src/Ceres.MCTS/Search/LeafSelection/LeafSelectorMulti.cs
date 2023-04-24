@@ -544,6 +544,25 @@ namespace Ceres.MCTS.Search
                                          vLossDynamicBoost, 0, numChildrenToCheck - 1, numTargetLeafs,
                                          scores, visitChildCounts, cpuctMultiplier, empiricalDistrib, empiricalWeight);
 
+      if (MCTSParamsFixed.UNCERTAINTY_TESTS_ENABLED && node.Context.ParamsSearch.TestFlag2)
+      {
+        // Store the just used adjustment to score from UncertaintyV into Annotation for future use.
+        // Note that we only check children already visited because:
+        //   - unvisited will not yet have had an UncertaintyV thus no adjustment would have been applied, and
+        //   - no MCTSNode yet exists, so there would be no place to store this value
+        Span<float> uSpan = MCTSNodeInfo.CheckInitThreadStatics().U.Span;
+        for (int i=0; i<node.NumChildrenVisited; i++)
+        {
+          if (visitChildCounts[i] > 0)
+          {
+            MCTSNode childNode = node.ChildAtIndex(i);
+            childNode.Annotate();
+            childNode.Annotation.LastUncertaintyVAdj = uSpan[i];
+//            Console.WriteLine("sex834 " + uSpan[i]);
+          }
+        }
+      }
+
       if (node.IsRoot)
       {
         Context.RootMoveTracker?.UpdateVisitCounts(visitChildCounts, numChildrenToCheck, numTargetLeafs);

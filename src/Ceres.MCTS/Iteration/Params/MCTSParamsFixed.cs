@@ -29,6 +29,7 @@ namespace Ceres.MCTS.Params
 
     public const bool LARGE_HARDWARE_CONFIG = true;
 
+    public const bool UNCERTAINTY_TESTS_ENABLED = false;
 
     /// <summary>
     /// If operating system large pages (2MB each under Windows) 

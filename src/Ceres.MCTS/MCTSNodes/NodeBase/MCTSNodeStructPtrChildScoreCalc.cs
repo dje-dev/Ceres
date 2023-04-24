@@ -15,7 +15,7 @@
 
 using System;
 using System.Diagnostics;
-using Ceres.MCTS.Environment;
+using Ceres.Base.Math;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.LeafExpansion;
 using Ceres.MCTS.Managers.Uncertainty;
@@ -38,7 +38,7 @@ namespace Ceres.MCTS.MTCSNodes
     /// Returns the thread static variables, intializaing if first time accessed by this thread.
     /// </summary>
     /// <returns></returns>
-    static GatheredChildStats CheckInitThreadStatics()
+    internal static GatheredChildStats CheckInitThreadStatics()
     {
       GatheredChildStats stats = gatherStats;
       if (stats == null)
@@ -150,8 +150,39 @@ namespace Ceres.MCTS.MTCSNodes
         }
       }
 #endif
+      if (MCTSParamsFixed.UNCERTAINTY_TESTS_ENABLED && Context.ParamsSearch.TestFlag2)
+      {
+        float uTotal = 0;
+        int uCount = 0;
+        for (int i = 0; i < NumChildrenVisited; i++)
+        {
+          uTotal += gatherStatsUSpan[i];
+          uCount++;
+        }
 
-      if (false && Context.ParamsSearch.TestFlag)
+        float uAvg = uTotal / uCount;
+        for (int i = 0; i < NumChildrenVisited; i++)
+        {
+          if (/*gatherStatsNSpan[i] > 0 && */gatherStatsInFlightSpan[i] == 0)
+          {
+            //            int iToUse = (i + 1) % NumChildrenExpanded; // ******** RANDOMIZE TEST ONLY ********8
+            float boostBase = (gatherStatsUSpan[i] - uAvg) / MathF.Sqrt(gatherStatsNSpan[i]);
+            const float MAX = 0.08f;
+            boostBase = StatUtils.Bounded(2 * 0.01f * boostBase, -MAX, MAX);
+            //Console.WriteLine(boostBase);
+            gatherStatsWSpan[i] -= boostBase * gatherStatsNSpan[i]; // smaller becomes more attractive
+            gatherStatsUSpan[i] = boostBase; // store back as boost for later use
+//              Console.WriteLine("set to " + boostBase);
+          }
+          else
+          {
+            gatherStatsUSpan[i] = 0;
+          }
+        }
+
+      }
+      
+      if (false && Context.ParamsSearch.TestFlag2)
       {
         bool beRisky = Context.Root.Q < -0.2f && nodeRef.DepthInTree % 2 == 0;
 //        if (beRisky)
@@ -171,7 +202,7 @@ namespace Ceres.MCTS.MTCSNodes
             if (diffFromAvg > 0)
             {
               float boostBase = (diffFromAvg * 0.01f) * 1f;
-              float boostDiv = MathF.Pow(gatherStatsNSpan[i], 0.2f);
+              float boostDiv = MathF.Pow(gatherStatsNSpan[i],  0.2f);
               float boost = boostBase / boostDiv;
               //gatherStatsWSpan[i] -= boost * gatherStatsNSpan[i]; // smaller becomes more attractive
 //              gatherStatsPSpan[i] += 0.01f * diffFromAvg;// good (only -3 Elo)

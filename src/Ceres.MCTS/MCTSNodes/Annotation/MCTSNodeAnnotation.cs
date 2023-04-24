@@ -200,6 +200,12 @@ namespace Ceres.MCTS.MTCSNodes.Annotation
     /// </summary>
     internal EncodedPositionMiscInfo MiscInfo;
 
+    /// <summary>
+    /// Last adjustment made during child selection based on UncertaintyV (if any).
+    /// TODO: remove this uncertainty not used (if MCTSParamsFixed.UNCERTAINTY_TESTS_ENABLED is false).
+    /// </summary>
+    public float LastUncertaintyVAdj;
+
     #endregion
 
     #region Overrides
