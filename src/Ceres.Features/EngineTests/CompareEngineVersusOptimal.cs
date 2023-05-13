@@ -390,7 +390,7 @@ namespace Ceres.Features.EngineTests
           qDiffs.Add(diffFromBest);
 
           // Suppress showing/counting difference if extremely small.
-          const float THRESHOLD_DIFF = 0.02f;
+          const float THRESHOLD_DIFF = 0.03f;
           string diffStrfromBest = MathF.Abs(diffFromBest) < THRESHOLD_DIFF ? "      " : $"{diffFromBest,6:F2}";
           if (diffFromBest > THRESHOLD_DIFF)
           {
@@ -577,7 +577,12 @@ namespace Ceres.Features.EngineTests
       {
         columnHeadersWritten = true;
         Console.WriteLine();
-        Console.WriteLine("  GPU    Pos#      %diff    Time1   Time2      Nodes1        Nodes2        Cnt1  Cnt2      Q1     QDiff        Move1    Move2  MoveSF    #PC  FEN");
+        Console.WriteLine("  %diff shows percentage of positions where Engine 1 move differed from Engine 2 move");
+        Console.WriteLine("  %bet shows # of positions where Engine 1 was meaningfully (THRESHOLD_DIFF=0.03) better");
+        Console.WriteLine("  %wrs shows # of positions where Engine 1 was meaningfully (THRESHOLD_DIFF=0.03) worse");
+
+        Console.WriteLine();
+        Console.WriteLine("  GPU    Pos#      %diff    Time1   Time2      Nodes1        Nodes2        #bet  #wrs      Q1     QDiff        Move1    Move2  MoveSF    #PC  FEN");
         Console.WriteLine("  ---   -----     ------    -----  ------   ------------  ------------     ----  ----    -----    -----       ------   ------  -------   ---  ------------------------------------------------------------------");
       }
     }
