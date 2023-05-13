@@ -129,6 +129,11 @@ namespace Chess.Ceres.NNEvaluators
     /// </summary>
     public readonly bool Scale50MoveCounter;
 
+    /// <summary>
+    /// If MoveRecord should be initialized.
+    /// </summary>
+    public readonly bool MovesEnabled;
+
 #if NOT
 #endif
 #region Statics
@@ -150,7 +155,7 @@ namespace Chess.Ceres.NNEvaluators
                                  ONNXRuntimeExecutor.NetTypeEnum type, int batchSize,
                                  NNEvaluatorPrecision precision, bool isWDL, bool hasM, bool hasUncertaintyV,
                                  string outputValue, string outputWDL, string outputPolicy, string outputMLH, 
-                                 bool valueHeadLogistic, bool scale50MoveCounter)
+                                 bool valueHeadLogistic, bool scale50MoveCounter, bool movesEnabled = false)
     {
       EngineType = type == ONNXRuntimeExecutor.NetTypeEnum.Ceres ? "ONNX_DJE" : "ONNX_LZ0";
       EngineNetworkID = engineID;
@@ -167,6 +172,7 @@ namespace Chess.Ceres.NNEvaluators
       OutputMLH = outputMLH;
       ValueHeadLogistic = valueHeadLogistic;
       Scale50MoveCounter = scale50MoveCounter;
+      MovesEnabled = movesEnabled;
 
       const bool TRY_REUSE = false; // TODO: remove this completely, it is unsafe (?)
       if (TRY_REUSE && lastONNXFileName == weightsFN && lastBatchSize == batchSize && precision == lastPrecision
@@ -192,7 +198,7 @@ namespace Chess.Ceres.NNEvaluators
 
 
 
-    public static Action<IEncodedPositionBatchFlat, float[], float[]> ConverterToFlat = null;    
+    public static Action<IEncodedPositionBatchFlat, bool, float[], float[]> ConverterToFlat = null;    
 
     /// <summary>
     /// Overrides worker method to evaluate a specified batch into internal buffers.
@@ -209,12 +215,17 @@ namespace Chess.Ceres.NNEvaluators
           throw new Exception("ConverterToFlat must be provided");
         }
 
-        float[] flatValuesAttention = ArrayPool<float>.Shared.Rent(batch.NumPos * 64 * ONNXRuntimeExecutor.TPG_BYTES_PER_SQUARE_RECORD);
+        int inputSizeAttention = batch.NumPos * 64 * ONNXRuntimeExecutor.TPG_BYTES_PER_SQUARE_RECORD;
+        float[] flatValuesAttention = ArrayPool<float>.Shared.Rent(inputSizeAttention);
+
+        int inputSizeMoves = 0; // batch.NumPos * 782;
         float[] flatValuesMoves = null;// ArrayPool<float>.Shared.Rent(batch.NumPos * 782);
 
-        ConverterToFlat(batch, flatValuesAttention, flatValuesMoves);
+        Memory<float> flatValuesAttentionM = flatValuesAttention.AsMemory().Slice(0, inputSizeAttention);
+        Memory<float> flatValuesMovesM = flatValuesMoves == null ? default : flatValuesMoves.AsMemory().Slice(0, inputSizeMoves);
 
-        PositionEvaluationBatch ret = DoEvaluateBatch(batch, flatValuesAttention, flatValuesMoves, batch.NumPos, retrieveSupplementalResults);
+        ConverterToFlat(batch, MovesEnabled, flatValuesAttention, flatValuesMoves);
+        PositionEvaluationBatch ret = DoEvaluateBatch(batch, flatValuesAttentionM, flatValuesMoves, batch.NumPos, retrieveSupplementalResults);
         Debug.Assert(!retrieveSupplementalResults);
         return ret;
       }
@@ -258,7 +269,7 @@ namespace Chess.Ceres.NNEvaluators
     /// <param name="retrieveSupplementalResults"></param>
     /// <returns></returns>
     PositionEvaluationBatch DoEvaluateBatch(IEncodedPositionBatchFlat batch, 
-                                            float[] flatValuesPrimary, float[] flatValuesSecondary,
+                                            Memory<float> flatValuesPrimary, Memory<float> flatValuesSecondary,
                                             int numPos, bool retrieveSupplementalResults)
     {
       if (retrieveSupplementalResults) throw new Exception("retrieveSupplementalResults not supported");

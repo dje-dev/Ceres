@@ -127,7 +127,7 @@ namespace Ceres.Chess.LC0NetInference
     /// <param name="floats"></param>
     /// <param name="batchSize"></param>
     /// <returns></returns>
-    public static float[] RebuildInputsForLC0Network(float[] floats, int batchSize)
+    public static float[] RebuildInputsForLC0Network(Memory<float> floats, int batchSize)
     {
       int numFillPlanesPerInput = 112 - EncodedPositionBatchFlat.TOTAL_NUM_PLANES_ALL_HISTORIES;
 
@@ -147,12 +147,15 @@ namespace Ceres.Chess.LC0NetInference
           }
           else if (divideValue != 1)
           {
+            Span<float> floatsS = floats.Span;
             for (int j = 0; j < numPlanesCopy * 64; j++)
-              expandedFloats[baseDstThisBatchItem + j] = floats[newSrce + j] / divideValue;
+              expandedFloats[baseDstThisBatchItem + j] = floatsS[newSrce + j] / divideValue;
           }
           else
           {
-            Array.Copy(floats, newSrce, expandedFloats, baseDstThisBatchItem, numPlanesCopy * 64);
+            int size = numPlanesCopy * 64;
+            floats.Slice(newSrce, size).CopyTo(expandedFloats.AsMemory<float>().Slice(baseDstThisBatchItem, size));
+//            Array.Copy(floats, newSrce, expandedFloats, baseDstThisBatchItem, numPlanesCopy * 64);
           }
           baseDstThisBatchItem += numPlanesCopy * 64;
         }

@@ -16,11 +16,12 @@
 using System;
 using System.Diagnostics;
 using System.Text;
+using Ceres.Base.DataType;
 using Ceres.Base.DataTypes;
+using Ceres.Base.Math;
 using Ceres.Chess.LC0.Batches;
 using Ceres.Chess.NNEvaluators.Defs;
 using Chess.Ceres.NNEvaluators;
-using Microsoft.ML.OnnxRuntime.Tensors;
 
 #endregion
 
@@ -120,7 +121,7 @@ namespace Ceres.Chess.LC0NetInference
     /// <param name="alreadyConvertedToLZ0"></param>
     /// <returns></returns>
     public ONNXRuntimeExecutorResultBatch Execute(bool isWDL, 
-                                                  float[] flatValuesPrimary, float[] flatValuesSecondary, int numPositionsUsed, 
+                                                  Memory<float> flatValuesPrimary, Memory<float> flatValuesSecondary, int numPositionsUsed, 
                                                   bool debuggingDump = false, bool alreadyConvertedToLZ0 = false)
     {
       if (!alreadyConvertedToLZ0)
@@ -154,11 +155,17 @@ namespace Ceres.Chess.LC0NetInference
 
       if (NetType == NetTypeEnum.TPG)
       {
-        var inputs = new (Memory<float> input, int[] shape)[flatValuesSecondary == null ? 1 : 2];
-        inputs[0] = (flatValuesPrimary, new int[] { numPositionsUsed, 64, TPG_BYTES_PER_SQUARE_RECORD });
-        if (flatValuesSecondary != null)
+        var inputs = new (Memory<float> input, int[] shape)[flatValuesSecondary.Length == 0 ? 1 : 2];
+
+        Span<float> flatValuesPrimaryS = flatValuesPrimary.Span;
+        for (int i = 0; i < flatValuesPrimary.Length; i++) flatValuesPrimaryS[i] /= 100f;
+        inputs[0] = (new Memory<float>(flatValuesPrimaryS.ToArray()), new int[] { numPositionsUsed, 64, TPG_BYTES_PER_SQUARE_RECORD });
+
+        if (flatValuesSecondary.Length > 0)
         {
-          inputs[1] = (flatValuesSecondary, new int[] { numPositionsUsed, TPG_MAX_MOVES, TPG_BYTES_PER_MOVE_RECORD });
+          Span<float> flatValuesSecondaryS = flatValuesSecondary.Span;
+          for (int i = 0; i < flatValuesSecondary.Length; i++) flatValuesSecondaryS[i] /= 100f;
+          inputs[1] = (new Memory<float>(flatValuesSecondaryS.ToArray()), new int[] { numPositionsUsed, TPG_MAX_MOVES, TPG_BYTES_PER_MOVE_RECORD });
         }
 
         eval = executor.Run(inputs, Precision == NNEvaluatorPrecision.FP16);

@@ -218,7 +218,7 @@ namespace Ceres.Chess.LC0NetInference
           numElements *= dimSize;
         }
 
-        if (input.Length < numElements)
+        if (input.Length != numElements)
         {
           throw new Exception($"Unexpected number of elements {numElements} {input.Length} {shape.ToString()}");
         }
