@@ -195,7 +195,6 @@ namespace Ceres.Chess.LC0NetInference
 
       var inputsONNX = new (Memory<float> input, int[] shape, string inputName, int numElements)[inputsMetadata.Count];
 
-      bool inputIsFloat = true;
       if (inputsMetadata.Count != 1)
       {
         // data type check below is only on first element
@@ -203,6 +202,7 @@ namespace Ceres.Chess.LC0NetInference
       }
 
       int inputIndex = 0;
+      bool inputIsFloat = true;
       foreach (KeyValuePair<string, NodeMetadata> iv in inputsMetadata)
       {
         (Memory<float> input, int[] shape) = inputs[inputIndex];
@@ -229,15 +229,19 @@ namespace Ceres.Chess.LC0NetInference
         inputIndex++;
       }      
 
-        if (float16)
-        {
-          // TODO: Make more efficient, avoid conversion to FP16 which happens in RunFloat16
-          return RunFloat16(inputsONNX);
-        }
-        else
-        {
-          return RunFloat(inputsONNX);
-        }      
+      // TODO: Actually the precision of the network is defined by the net itself.
+      //       So the variableIsFloat above should be used to determine this, and
+      //       the caller should not be offered the chance to set the precision here
+      //       (unless we decided to support auto-conversion of ONNX files here).
+      if (float16 || !inputIsFloat)
+      {
+        // TODO: Make more efficient, avoid conversion to FP16 which happens in RunFloat16
+        return RunFloat16(inputsONNX);
+      }
+      else
+      {
+        return RunFloat(inputsONNX);
+      }      
 
 #else
       return default;
