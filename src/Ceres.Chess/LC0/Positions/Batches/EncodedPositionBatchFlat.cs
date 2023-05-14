@@ -485,7 +485,7 @@ namespace Ceres.Chess.LC0.Batches
       Console.WriteLine();
       for (int i = 0; i < 112; i++)
       {
-        Console.WriteLine($"({i},{PosPlaneBitmaps[baseOffset + i] }, {PosPlaneValues[baseOffset + i]}),");
+        Console.WriteLine($"({i},{PosPlaneBitmaps[baseOffset + i]}, {PosPlaneValues[baseOffset + i]}),");
       }
     }
 
@@ -832,6 +832,8 @@ namespace Ceres.Chess.LC0.Batches
     Span<MGMoveList> IEncodedPositionBatchFlat.Moves { get => Moves.AsSpan(); set => Moves = value.ToArray(); }
 
     float[] IEncodedPositionBatchFlat.ValuesFlatFromPlanes(float[] preallocatedBuffer, bool nwhc, bool scaleMove50Counter) => ValuesFlatFromPlanes(preallocatedBuffer, nwhc, scaleMove50Counter);
+
+    Span<EncodedPositionWithHistory> IEncodedPositionBatchFlat.PositionsBuffer { get => PositionsBuffer; }
 
     #endregion
 

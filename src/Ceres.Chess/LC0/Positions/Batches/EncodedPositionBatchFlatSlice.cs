@@ -113,6 +113,15 @@ namespace Ceres.Chess.LC0.Batches
     {
       throw new NotImplementedException();
     }
+
+    public Span<EncodedPositionWithHistory> PositionsBuffer
+    {
+      get
+      {
+        return Parent.PositionsBuffer.Slice(StartIndex, Length);
+      }
+    }
+
   }
 
 }

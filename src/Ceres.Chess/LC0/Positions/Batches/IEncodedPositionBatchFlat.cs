@@ -83,6 +83,18 @@ namespace Ceres.Chess.LC0.Batches
     Span<FP16> Policy { get; }
 
     /// <summary>
+    /// If originated from EncodedPositionWithHistory then
+    /// this field optionally holds the origin data array.
+    /// </summary>
+    Span<EncodedPositionWithHistory> PositionsBuffer 
+    {
+      get
+      {
+        return default;
+      }
+    }
+
+    /// <summary>
     /// Number of positions actually used within the batch
     /// </summary>
     int NumPos { get; }
