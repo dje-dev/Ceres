@@ -252,10 +252,18 @@ namespace Ceres.Commands
     {
       FeatureUCIParams uciParams = FeatureUCIParams.ParseUCICommand(keyValueArgs);
 
+      Action backendBenchEvaluator = delegate ()
+      {
+        FeatureBenchmarkBackend backendBench = new FeatureBenchmarkBackend();
+        backendBench.ParseFields(keyValueArgs);
+        backendBench.ExecuteBenchmark();
+      };
+
       UCIManager ux = new UCIManager(uciParams.NetworkSpec, uciParams.DeviceSpec, null, null, null,
                                      uciParams.Pruning == false,
                                      CeresUserSettingsManager.Settings.UCILogFile,
-                                     CeresUserSettingsManager.Settings.SearchLogFile);
+                                     CeresUserSettingsManager.Settings.SearchLogFile,
+                                     backendBenchEvaluator);
 
 
       Console.WriteLine();

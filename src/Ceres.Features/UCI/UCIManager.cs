@@ -46,6 +46,7 @@ using Ceres.Features.Visualization.TreePlot;
 using Ceres.Features.Visualization.AnalysisGraph;
 using Ceres.Chess.Textual.PgnFileTools;
 using Ceres.Chess.Games.Utils;
+using LINQPad.Controls;
 
 #endregion
 
@@ -82,6 +83,11 @@ namespace Ceres.Features.UCI
     volatile Task<GameEngineSearchResultCeres> taskSearchCurrentlyExecuting;
 
     bool haveInitializedEngine;
+
+    /// <summary>
+    /// Optional evaluator to call to benchmark neural network backend.
+    /// </summary>
+    Action BackendBenchEvaluator;
 
     /// <summary>
     /// The position and history associated with the current evaluation.
@@ -132,7 +138,8 @@ namespace Ceres.Features.UCI
                       Action<MCTSManager> searchFinishedEvent = null,
                       bool disablePruning = false,
                       string uciLogFileName = null,
-                      string searchLogFileName = null)
+                      string searchLogFileName = null,
+                      Action backendBenchEvaluator = null)
     {
       InStream = inStream ?? Console.In;
       OutStream = outStream ?? Console.Out;
@@ -140,6 +147,7 @@ namespace Ceres.Features.UCI
 
       NetworkSpec = networkSpec;
       DeviceSpec = deviceSpec;
+      BackendBenchEvaluator = backendBenchEvaluator;
       CreateEvaluator();
 
       if (disablePruning) futilityPruningDisabled = true;
@@ -405,6 +413,17 @@ namespace Ceres.Features.UCI
 
           case "dump-processor":
             HardwareManager.DumpProcessorInfo();
+            break;
+
+          case "backendbench":
+            if (BackendBenchEvaluator == null)
+            {
+              Console.WriteLine("No BackendBenchEvaluator installed, cannot benchmark.");
+            }
+            else
+            {
+              BackendBenchEvaluator();
+            }
             break;
 
           case "dump-fen":
