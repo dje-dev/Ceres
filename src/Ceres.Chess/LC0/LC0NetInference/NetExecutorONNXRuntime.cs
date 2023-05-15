@@ -220,7 +220,8 @@ namespace Ceres.Chess.LC0NetInference
 
         if (input.Length != numElements)
         {
-          throw new Exception($"Unexpected number of elements {numElements} {input.Length} {shape.ToString()}");
+          // Resize the input (the caller may have passed an oversized buffer for efficiency).
+          input = input.Slice(0, numElements);
         }
 
         inputIsFloat = iv.Value.ElementType == typeof(float);
