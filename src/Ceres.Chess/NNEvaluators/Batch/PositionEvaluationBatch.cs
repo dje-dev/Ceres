@@ -467,21 +467,32 @@ namespace Ceres.Chess.NetEvaluation.Batch
 
       Parallel.For(0, numPos, i =>
       {
-      if (policyTempBuffer == null)
-      {
-        policyTempBuffer = new float[EncodedPolicyVector.POLICY_VECTOR_LENGTH];
-      }
-      else
-      {
-        Array.Clear(policyTempBuffer, 0, EncodedPolicyVector.POLICY_VECTOR_LENGTH);
-      }
+        if (policyTempBuffer == null)
+        {
+          policyTempBuffer = new float[EncodedPolicyVector.POLICY_VECTOR_LENGTH];
+        }
+        else
+        {
+          Array.Clear(policyTempBuffer, 0, EncodedPolicyVector.POLICY_VECTOR_LENGTH);
+        }
 
-      int startIndex = EncodedPolicyVector.POLICY_VECTOR_LENGTH * i;
+        int startIndex = EncodedPolicyVector.POLICY_VECTOR_LENGTH * i;
 
         if (probType == PolicyType.Probabilities)
         {
           throw new NotImplementedException();
-          //Array.Copy(policyProbs, startIndex, policyTempBuffer, 0, EncodedPolicyVector.POLICY_VECTOR_LENGTH);
+        }
+        else if (sourceBatchWithValidMoves == default)
+        {
+          // N.B. It is not possible to apply move masking here, 
+          //      so it is assumed this is already done by the caller.
+          Array.Copy(policyProbs, startIndex, policyTempBuffer, 0, EncodedPolicyVector.POLICY_VECTOR_LENGTH);
+
+          const float MIN_PROB = -100;
+          CompressedPolicyVector ret = default;
+          PolicyVectorCompressedInitializerFromProbs.InitializeFromProbsArray(ref ret, true, EncodedPolicyVector.POLICY_VECTOR_LENGTH, 96,
+                                                                              policyTempBuffer, MIN_PROB);
+          retPolicies[i] = ret;
         }
         else
         {
@@ -496,7 +507,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
           }
 
           // Avoid overflow by subtracting off max
-          float max = 0.0f;
+          float max = float.MinValue;
           for (int j = 0; j < numLegalMoves; j++)
           {
             float val = policyProbs[startIndex + legalMoveIndices[j]];
