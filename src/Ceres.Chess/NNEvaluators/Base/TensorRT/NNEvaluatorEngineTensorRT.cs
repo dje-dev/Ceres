@@ -305,14 +305,14 @@ Updated notes:
 
           // NOTE: alternative would be to pass in a mask to the GPU, the batch.ValidMovesMasks could be used to help
           // done below instead. batch.MaskIllegalMovesInPolicyArray(rawResultsPolicy);
-
           retBatch = new PositionEvaluationBatch(Config.IsWDL, Config.HasM, Config.HasUncertaintyV,
                                                  numToProcess, results,
                                                  rawResultsPolicy.Slice(0, numToProcess*1858).ToArray(), // Inefficient 
                                                  resultsMLH.ToArray(), resultsUncertaintyV.ToArray(),
                                                  null, //rawResultsConvValFlat,
                                                  VALUES_ARE_LOGISTIC,
-                                                 PositionEvaluationBatch.PolicyType.LogProbabilities, false, batch, timeStats);
+                                                 PositionEvaluationBatch.PolicyType.LogProbabilities, false,
+                                                 batch, timeStats);
 
         }
 

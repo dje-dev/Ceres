@@ -135,6 +135,23 @@ namespace Ceres.Chess.NNEvaluators
     public abstract IPositionEvaluationBatch DoEvaluateIntoBuffers(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false);
 
 
+    /// <summary>
+    /// Optional worker method which evaluates batch of positions which are already converted into native format needed by evaluator.
+    /// TODO: Reconsider this design, it is not very flexible because it requires network encoding specific logic in the evaluator.
+    /// </summary>
+    /// <param name="positionsNativeInput"></param>
+    /// <param name="usesSecondaryInputs"></param>
+    /// <param name="numPositions"></param>
+    /// <param name="retrieveSupplementalResults"></param>?
+    /// <returns></returns>
+    /// <exception cref="NotImplementedException"></exception>
+    public virtual IPositionEvaluationBatch DoEvaluateNativeIntoBuffers(object positionsNativeInput, bool usesSecondaryInputs,
+                                                                        int numPositions, Func<int, int, bool> posMoveIsLegal,
+                                                                        bool retrieveSupplementalResults = false)
+    {
+      throw new NotImplementedException();
+    }
+
     public long NumBatchesEvaluated { private set; get; }
 
     public long NumPositionsEvaluated { private set; get; }

@@ -198,7 +198,50 @@ namespace Chess.Ceres.NNEvaluators
 
 
 
-    public static Action<IEncodedPositionBatchFlat, bool, float[], float[]> ConverterToFlat = null;    
+    public static Action<IEncodedPositionBatchFlat, bool, float[], float[]> ConverterToFlat = null;
+    public static Action<object, float[], float[]> ConverterToFlatFromTPG = null;
+
+    [ThreadStatic] static float[] inputsPrimaryNative;
+    [ThreadStatic] static float[] inputsSecondaryNative;
+
+    /// <summary>
+    /// Optional worker method which evaluates batch of positions which are already converted into native format needed by evaluator.
+    /// </summary>
+    /// <param name="positionsNativeInput"></param>
+    /// <param name="usesSecondaryInputs"></param>
+    /// <param name="retrieveSupplementalResults"></param>
+    /// <returns></returns>
+    /// <exception cref="NotImplementedException"></exception>
+    public override IPositionEvaluationBatch DoEvaluateNativeIntoBuffers(object positionsNativeInput, bool usesSecondaryInputs, 
+                                                                         int numPositions, Func<int, int, bool> posMoveIsLegal,
+                                                                         bool retrieveSupplementalResults = false)
+    {
+      Debug.Assert(!retrieveSupplementalResults);
+
+      if (Executor.NetType != ONNXRuntimeExecutor.NetTypeEnum.TPG)
+      {
+        throw new Exception("DoEvaluateNativeIntoBuffers only supported for TPG net type.");
+      }
+
+      if (ConverterToFlatFromTPG == null)
+      {
+        throw new Exception("ConverterToFlatFromTPG must be provided");
+      }
+
+      if (inputsPrimaryNative == null)
+      {
+        // TO DO: Make smarter, check numPositions argument to smart size if possible (instead we make some guesses here on size, assume batch size 
+        const int INPUT_SIZE_FLOATS = 2048 * 100 * 128; 
+        inputsPrimaryNative = new float[INPUT_SIZE_FLOATS];
+        inputsSecondaryNative = new float[INPUT_SIZE_FLOATS];
+      }
+
+      ConverterToFlatFromTPG(positionsNativeInput, inputsPrimaryNative, usesSecondaryInputs ? inputsSecondaryNative : null);
+      PositionEvaluationBatch ret = DoEvaluateBatch(default, inputsPrimaryNative, usesSecondaryInputs ? inputsSecondaryNative : null, 
+                                                    numPositions, retrieveSupplementalResults, posMoveIsLegal);
+      return ret;
+    }
+
 
     /// <summary>
     /// Overrides worker method to evaluate a specified batch into internal buffers.
@@ -270,7 +313,8 @@ namespace Chess.Ceres.NNEvaluators
     /// <returns></returns>
     PositionEvaluationBatch DoEvaluateBatch(IEncodedPositionBatchFlat batch, 
                                             Memory<float> flatValuesPrimary, Memory<float> flatValuesSecondary,
-                                            int numPos, bool retrieveSupplementalResults)
+                                            int numPos, bool retrieveSupplementalResults, 
+                                            Func<int,int, bool> posMoveIsLegal = null)
     {
       if (retrieveSupplementalResults) throw new Exception("retrieveSupplementalResults not supported");
 
@@ -281,6 +325,21 @@ namespace Chess.Ceres.NNEvaluators
         lock (Executor)
         {
           result = Executor.Execute(IsWDL, flatValuesPrimary, flatValuesSecondary, numPos, alreadyConvertedToLZ0: true);
+
+          // Apply move masking
+          if (posMoveIsLegal != null) 
+          {
+            for (int i = 0; i < numPos; i++)
+            {
+              for (int j = 0; j < 1858; j++)
+              {
+                if (!posMoveIsLegal(i,j))
+                {
+                  result.PolicyVectors[i][j] = -100f;
+                }
+              }
+            }
+          }
 #if NO_LONGER_NEEDED_NOT_USING_96_FORMAT
           if (Executor.NetType == ONNXRuntimeExecutor.NetTypeEnum.TPG)
           {
