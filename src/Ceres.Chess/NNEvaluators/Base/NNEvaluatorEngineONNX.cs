@@ -360,7 +360,7 @@ namespace Chess.Ceres.NNEvaluators
       }
 
       FP16[] uncertaintyVFP16 = null;
-      if (HasM)
+      if (HasUncertaintyV)
       {
         if (result.UncertaintyV == null)
         {
