@@ -34,9 +34,10 @@ namespace Ceres.MCTS.Managers.Limits
     /// a limit on total numbrer of time or nodes over 
     /// some number of moves (or possibly all moves).
     /// </summary>
+    /// <param name="search"></param>
     /// <param name="inputs"></param>
     /// <returns></returns>
-    public ManagerGameLimitOutputs ComputeMoveAllocation(ManagerGameLimitInputs inputs);
+    public ManagerGameLimitOutputs ComputeMoveAllocation(MCTSearch search, ManagerGameLimitInputs inputs);
 
 
     /// <summary>

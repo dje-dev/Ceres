@@ -91,7 +91,7 @@ namespace Ceres.MCTS.Managers.Limits
       return false;
     }
 
-    public ManagerGameLimitOutputs ComputeMoveAllocation(ManagerGameLimitInputs inputs)
+    public ManagerGameLimitOutputs ComputeMoveAllocation(MCTSearch search, ManagerGameLimitInputs inputs)
     {
       ManagerGameLimitOutputs Return(float value, float extensionFraction)
       {

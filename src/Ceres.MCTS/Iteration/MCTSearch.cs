@@ -49,6 +49,12 @@ namespace Ceres.MCTS.Iteration
   /// </summary>
   public partial class MCTSearch
   {
+    /// <summary>
+    /// Optional delegate that registers to receive informational messages that should be logged.
+    /// </summary>
+    /// <param name="search"></param>
+    /// <param name="infoMessage"></param>
+    public delegate void MCTSInfoLogger(MCTSearch search, string infoMessage);
 
 
     /// <summary>
@@ -168,7 +174,25 @@ namespace Ceres.MCTS.Iteration
     /// </summary>
     public int CountSearchContinuations { get; private set; }
 
+
+    /// <summary>
+    /// Optional delegate that registers to receive informational messages that should be logged.
+    /// </summary>
+    /// <param name="search"></param>
+    /// <param name="infoMessage"></param>
+    public readonly MCTSInfoLogger InfoLogger;
+
     #endregion
+
+
+    /// <summary>
+    /// Constructor.
+    /// </summary>
+    /// <param name="infoLogger"></param>
+    public MCTSearch(MCTSInfoLogger infoLogger = null)
+    {
+      InfoLogger = infoLogger;
+    }
 
 
     /// <summary>
@@ -340,7 +364,7 @@ namespace Ceres.MCTS.Iteration
                                   maxMovesToGo: searchLimit.MaxMovesToGo,
                                   isFirstMoveOfGame: isFirstMoveOfGame, searchParams.TestFlag);
 
-        LastGameLimitOutputs = limitManager.ComputeMoveAllocation(LastGameLimitInputs);
+        LastGameLimitOutputs = limitManager.ComputeMoveAllocation(this, LastGameLimitInputs);
         return LastGameLimitOutputs.LimitTarget;
       }
     }

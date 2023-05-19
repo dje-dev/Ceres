@@ -15,6 +15,7 @@
 
 using System;
 using Ceres.Chess;
+using Ceres.MCTS.Iteration;
 
 #endregion
 
@@ -43,7 +44,7 @@ namespace Ceres.MCTS.Managers.Limits
     /// allocate to the the current move in a game subject to
     /// a limit on total numbrer of time or nodes over 
     /// some number of moves (or possibly all moves).
-    public ManagerGameLimitOutputs ComputeMoveAllocation(ManagerGameLimitInputs inputs)
+    public ManagerGameLimitOutputs ComputeMoveAllocation(MCTSearch search, ManagerGameLimitInputs inputs)
     {
       ManagerGameLimitOutputs Return(float value) => new ManagerGameLimitOutputs(new SearchLimit(inputs.TargetLimitType, value,
                                                                                                  maxTreeNodes: inputs.MaxTreeNodesSelf,

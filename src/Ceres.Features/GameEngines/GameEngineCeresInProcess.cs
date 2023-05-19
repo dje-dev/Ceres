@@ -32,12 +32,10 @@ using Ceres.MCTS.Managers.Limits;
 using Ceres.MCTS.Params;
 using Ceres.MCTS.Environment;
 using Ceres.MCTS.MTCSNodes;
-using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.NodeCache;
 using Ceres.Features.UCI;
 using Ceres.Chess.SearchResultVerboseMoveInfo;
 using Ceres.Features.Visualization.AnalysisGraph;
-using System.Threading;
 using Ceres.Features.Commands;
 
 #endregion
@@ -128,6 +126,7 @@ namespace Ceres.Features.GameEngines
 
     #endregion
 
+    Action<MCTSearch, string> InfoLogger = null;
 
     /// <summary>
     /// Constructor.
@@ -149,7 +148,8 @@ namespace Ceres.Features.GameEngines
                                     IManagerGameLimit gameLimitManager = null,
                                     string logFileName = null,
                                     bool moveImmediateIfOnlyOneMove = true,
-                                    int processorGroupID = 0) : base(id, processorGroupID)
+                                    int processorGroupID = 0,
+                                    Action<MCTSearch, string> infoLogger = null) : base(id, processorGroupID)
     {
       if (evaluatorDef == null)
       {
@@ -197,6 +197,7 @@ namespace Ceres.Features.GameEngines
       SearchLogFileName = logFileName;
       MoveImmediateIfOnlyOneMove = moveImmediateIfOnlyOneMove;
       OutputVerboseMoveStats = CeresUserSettingsManager.Settings.VerboseMoveStats;
+      InfoLogger = infoLogger;
 
       if (logFileName == null && !string.IsNullOrEmpty(CeresUserSettingsManager.Settings.SearchLogFile))
       {
@@ -330,7 +331,9 @@ namespace Ceres.Features.GameEngines
 
       // Run the search
       searchResult = RunSearchPossiblyTreeReuse(shareContext, curPositionAndMoves, gameMoveHistory,
-                                                searchLimit, InnerCallback, verbose);
+                                                searchLimit, InnerCallback, 
+                                                (MCTSearch search, string infoMsg) => InfoLogger?.Invoke(search, infoMsg), 
+                                                verbose);
 
       int scoreCeresCP;
       BestMoveInfo bestMoveInfo = null;
@@ -426,11 +429,12 @@ namespace Ceres.Features.GameEngines
                                                  List<GameMoveStat> gameMoveHistory,
                                                  SearchLimit searchLimit,
                                                  MCTSManager.MCTSProgressCallback callback,
+                                                 MCTSearch.MCTSInfoLogger infoLogger,
                                                  bool verbose)
     {
       PositionEvalCache positionCacheOpponent = null;
 
-      Search = new MCTSearch();
+      Search = new MCTSearch(infoLogger);
 
       if (LastSearch == null)
       {
