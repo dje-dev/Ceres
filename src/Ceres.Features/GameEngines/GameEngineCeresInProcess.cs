@@ -126,7 +126,7 @@ namespace Ceres.Features.GameEngines
 
     #endregion
 
-    Action<MCTSearch, string> InfoLogger = null;
+    Action<string> InfoLogger = null;
 
     /// <summary>
     /// Constructor.
@@ -149,7 +149,7 @@ namespace Ceres.Features.GameEngines
                                     string logFileName = null,
                                     bool moveImmediateIfOnlyOneMove = true,
                                     int processorGroupID = 0,
-                                    Action<MCTSearch, string> infoLogger = null) : base(id, processorGroupID)
+                                    Action<string> infoLogger = null) : base(id, processorGroupID)
     {
       if (evaluatorDef == null)
       {
@@ -332,7 +332,7 @@ namespace Ceres.Features.GameEngines
       // Run the search
       searchResult = RunSearchPossiblyTreeReuse(shareContext, curPositionAndMoves, gameMoveHistory,
                                                 searchLimit, InnerCallback, 
-                                                (MCTSearch search, string infoMsg) => InfoLogger?.Invoke(search, infoMsg), 
+                                                (string infoMsg) => InfoLogger?.Invoke(infoMsg), 
                                                 verbose);
 
       int scoreCeresCP;

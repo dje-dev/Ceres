@@ -73,6 +73,12 @@ namespace Ceres.Features.UCI
     /// </summary>
     public Action<MCTSManager> SearchFinishedEvent;
 
+    /// <summary>
+    /// Action to be called upon receipt of a request to log a message during search.
+    /// </summary>
+    public Action<(MCTSearch, string)> LogSearchInfoMessageEvent;
+
+
     public NNEvaluatorDef EvaluatorDef;
 
     /// <summary>
@@ -618,6 +624,11 @@ namespace Ceres.Features.UCI
     }
 
 
+    void InfoLogger(string infoMessage)
+    {
+      UCIWriteLine("info engine " + infoMessage);
+    }
+
     private void InitializeEngineIfNeeded()
     {
       if (!haveInitializedEngine)
@@ -625,7 +636,8 @@ namespace Ceres.Features.UCI
         ShowWeightsFileInfo();
 
         // Create the engine (to be subsequently reused).
-        CeresEngine = new GameEngineCeresInProcess("Ceres", EvaluatorDef, null, ParamsSearch, ParamsSelect, logFileName: searchLogFileName);
+        CeresEngine = new GameEngineCeresInProcess("Ceres", EvaluatorDef, null, ParamsSearch, ParamsSelect, 
+                                                   logFileName: searchLogFileName, infoLogger:InfoLogger);
 
         // Disable verbose move stats from the engine since 
         // this class manages the possibly dumping of verbose move stats itself.

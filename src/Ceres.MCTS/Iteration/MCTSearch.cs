@@ -52,9 +52,8 @@ namespace Ceres.MCTS.Iteration
     /// <summary>
     /// Optional delegate that registers to receive informational messages that should be logged.
     /// </summary>
-    /// <param name="search"></param>
     /// <param name="infoMessage"></param>
-    public delegate void MCTSInfoLogger(MCTSearch search, string infoMessage);
+    public delegate void MCTSInfoLogger(string infoMessage);
 
 
     /// <summary>
