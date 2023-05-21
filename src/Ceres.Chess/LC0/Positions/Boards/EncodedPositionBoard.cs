@@ -257,6 +257,12 @@ namespace Ceres.Chess.LC0.Boards
 
 
     /// <summary>
+    /// Returns if the board is empty.
+    /// </summary>
+    public readonly bool IsEmpty => OurKing.Bits.Data == 0;
+
+
+    /// <summary>
     /// Resets all planes to zero values.
     /// </summary>
     public void Clear()

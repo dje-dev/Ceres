@@ -16,6 +16,7 @@
 using System;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography.X509Certificates;
+using Ceres.Chess.Positions;
 using Google.Protobuf.Reflection;
 
 #endregion
@@ -228,6 +229,42 @@ namespace Ceres.Chess.EncodedPositions
     }
 
     #endregion
+
+
+    /// <summary>
+    /// Converts to a PositionWithHistory object.
+    /// </summary>
+    /// <param name="maxHistoryPositions"></param>
+    /// <returns></returns>
+    /// <exception cref="NotImplementedException"></exception>
+    public readonly PositionWithHistory ToPositionWithHistory(int maxHistoryPositions)
+    {
+      EncodedPositionWithHistory thisEncPosUnmirrored = PositionWithBoardsMirrored.Mirrored;
+
+      if (maxHistoryPositions == 2)
+      {
+        if (PositionWithBoardsMirrored.BoardsHistory.History_1.IsEmpty)
+        {
+          return new PositionWithHistory(new Position[]
+          {
+            Position.FromFEN(thisEncPosUnmirrored.FENForHistoryBoard(0))
+          }, false);
+
+        }
+        else
+        {
+          return new PositionWithHistory(new Position[]
+          {
+            Position.FromFEN(thisEncPosUnmirrored.FENForHistoryBoard(1)),
+            Position.FromFEN(thisEncPosUnmirrored.FENForHistoryBoard(0))
+          }, true);
+        }
+      }
+      else
+      {
+        throw new NotImplementedException(); // TODO: straightforward generalization of above needed
+      }
+    }
 
     #region Overrides
 

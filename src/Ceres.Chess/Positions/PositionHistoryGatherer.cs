@@ -47,9 +47,12 @@ namespace Ceres.Chess.Positions
       Debug.Assert(numPositionsFilled > 0); // expect at least root search node to have been populated
 
       // Try to do fill in of history from moves prior to the root node of the search, if available
-      if (depthOfLastNodeAdded == 0 && priorMoves.Moves.Count > 0)
+      if (depthOfLastNodeAdded == 0)
       {
-        VerifyBeginningOfHistoryOverlapsWithPriorMoves(priorMoves, posSpan, numPositionsFilled);
+        if (priorMoves.Moves != null && priorMoves.Moves.Count > 0)
+        {
+          VerifyBeginningOfHistoryOverlapsWithPriorMoves(priorMoves, posSpan, numPositionsFilled);
+        }
 
         Position[] priorPositions = priorMoves.GetPositions();
         int numTaken = 0;

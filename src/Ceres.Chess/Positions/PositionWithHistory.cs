@@ -15,7 +15,7 @@
 
 using System;
 using System.Collections.Generic;
-
+using System.Linq;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
 
@@ -25,21 +25,25 @@ namespace Ceres.Chess.Positions
 {
   /// <summary>
   /// Represents a position position possibly also with history
-  /// (set of prior moves that preceeded to this position).
+  /// (set of prior moves that preceded to this position).
   /// 
   /// TODO: The "finalization" of setting the repetition count
-  ///       is probably done inconsistenly below.
+  ///       is probably done inconsistently below.
   ///       Perhaps make this done only upon explicit call.
   ///       Note that in search (Annotate) we do not want this class
-  ///       to do the calculation of reptition counts since it is 
+  ///       to do the calculation of repetition counts since it is 
   ///       already done there efficiently.
+  ///       
+  /// TODO: More generally than the above, probably this class should be
+  ///       split into two. Currently it combines the function of a builder 
+  ///       and a final representation of a sequence of positions.
   /// </summary>
   [Serializable]
   public class PositionWithHistory : ICloneable
   {
     #region Private data
 
-    public readonly MGPosition InitialPosMG;
+    public MGPosition InitialPosMG { get; private set; }
     public List<MGMove> Moves;
 
     bool haveFinalized = false;
@@ -64,7 +68,10 @@ namespace Ceres.Chess.Positions
     public PositionWithHistory(PositionWithHistory copy)
     {
       InitialPosMG = copy.InitialPosMG;
-      Moves = new List<MGMove>(copy.Moves);
+      if (copy.Moves != null)
+      {
+        Moves = new List<MGMove>(copy.Moves);
+      }
       haveFinalized = copy.haveFinalized;
       finalPosMG = copy.FinalPosMG;
       NextMove = copy.NextMove;
@@ -79,6 +86,9 @@ namespace Ceres.Chess.Positions
       InitialPosMG = MGChessPositionConverter.MCChessPositionFromPosition(in initialPos);
       Moves = moves ?? new List<MGMove>();
     }
+
+    public PositionWithHistory(IEnumerable<Position> positions, bool castlingInfoMayBeIncomplete = false)
+      => SetFromPositions(positions, castlingInfoMayBeIncomplete);
 
 
     public PositionWithHistory(in MGPosition initialPosMG, List<MGMove> moves = null)
@@ -118,7 +128,7 @@ namespace Ceres.Chess.Positions
 
     /// <summary>
     /// Searches the position list for a given position, or -1 if not present.
-    /// If the position exists more than once, the index of the last occurence is returned.
+    /// If the position exists more than once, the index of the last occurrence is returned.
     /// </summary>
     /// <param name="findPosition"></param>
     /// <returns></returns>
@@ -180,7 +190,7 @@ namespace Ceres.Chess.Positions
 
     /// <summary>
     /// Constructs a new MGMoveSequence given a starting position (as a FEN) 
-    /// followed by an optional string containing a sequence of subsequent moves (in coordiante notation).
+    /// followed by an optional string containing a sequence of subsequent moves (in coordinate notation).
     /// </summary>
     /// <param name="fenAndMovesStr"></param>
     /// <returns></returns>
@@ -222,7 +232,7 @@ namespace Ceres.Chess.Positions
 
     /// <summary>
     /// Constructs a new MGMoveSequence given a starting position (as a FEN) 
-    /// and an optional string containing a sequence of subsequent moves (in coordiante notation).
+    /// and an optional string containing a sequence of subsequent moves (in coordinate notation).
     /// </summary>
     /// <param name="fen"></param>
     /// <param name="movesStr"></param>
@@ -310,6 +320,69 @@ namespace Ceres.Chess.Positions
         haveFinalized = true;
       }
     }
+
+    private void SetFromPositions(IEnumerable<Position> fromPositions, bool castlingInfoMayBeIncomplete = false)
+    {
+      positions = fromPositions.ToArray();
+      if (positions.Length > 2)
+      {
+        throw new NotImplementedException("SetFromPositions not yet tested with fromPositions.Length > 2, need to confirm Moves are created in non-reversed order.");
+      }
+
+      InitialPosMG = positions[0].ToMGPosition;
+//      Array.Reverse(positions);
+      finalPosMG = positions[^1].ToMGPosition;
+
+      PositionRepetitionCalc.SetRepetitionsCount(positions);
+
+      haveFinalized = true;
+
+      // Reconstruct the sequence of moves from the positions.
+      Moves = new(positions.Length - 1);
+      for (int i = 0; i< positions.Count() - 1; i++)
+      {
+        MGPosition posCurrent = positions[i].ToMGPosition;
+
+        if (castlingInfoMayBeIncomplete)
+        {
+          // Start with most permissive position so that any possible castling move would be in eligible list.
+          posCurrent.WhiteCanCastle = true;
+          posCurrent.WhiteCanCastleLong = true;
+          posCurrent.BlackCanCastle = true;
+          posCurrent.BlackCanCastleLong = true;
+
+          posCurrent.SetAllEnPassantAllowed();
+        }
+
+        // Generate moves and iterate over all positions resulting from those moves to look for a match.
+        MGMoveList movesList = new MGMoveList();
+        MGMoveGen.GenerateMoves(posCurrent, movesList);
+
+        bool foundContinuation = false;
+        for (int j=0; j<movesList.NumMovesUsed;j++)
+        {
+          MGPosition nextPos = posCurrent;
+          nextPos.MakeMove(movesList.MovesArray[j]);
+          if (nextPos.EqualPiecePositions(positions[i + 1].ToMGPosition))
+          {
+            Moves.Add(movesList.MovesArray[j]);
+            foundContinuation = true;
+            break;
+          }
+        }
+
+        if (!foundContinuation)
+        {
+#if DEBUG
+          string errMsg = "Position sequence illegal, saw " + positions[i + 1].ToMGPosition.ToPosition.FEN 
+                        + " then " + positions[i].ToMGPosition.ToPosition.FEN
+                        + ". This could possibly arise due to FRC position in training data and not be an error.";
+          Console.WriteLine(errMsg);
+#endif
+        }
+      }
+    }
+
 
     private void InitPositionsAndFinalPosMG()
     {
@@ -466,11 +539,16 @@ namespace Ceres.Chess.Positions
     /// <returns></returns>
     public override string ToString()
     {
-      if (Moves.Count == 0)
-        return $"<PositionWithHistory {InitialPosMG.ToPosition.FEN} (no history)>";
+      if (Moves == null || Moves.Count == 0)
+      {
+        return $"<PositionWithHistory ({positions.Length}) {InitialPosMG.ToPosition.FEN} --> final position {FinalPosition.FEN} (no moves list)>";
+      }
       else
-        return $"<PositionWithHistory {InitialPosMG.ToPosition.FEN} moves {MovesStr} --> final position {FinalPosition.FEN}>";
+      {
+        return $"<PositionWithHistory ({positions.Length}) {InitialPosMG.ToPosition.FEN} moves {MovesStr} --> final position {FinalPosition.FEN}>";
+      }
     }
+
 
     /// <summary>
     /// Returns a deep clone of the object.

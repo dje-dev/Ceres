@@ -175,6 +175,10 @@ namespace Ceres.Chess.EncodedPositions
     public string FENForHistoryBoard(int historyIndex)
     {
       EncodedPositionBoard planes = GetPlanesForHistoryBoard(historyIndex);
+      if (historyIndex % 2 == 1)
+      {
+        planes = planes.Flipped;
+      }
 
       // KQkq - 0 1
       bool weAreWhite = (MiscInfo.InfoPosition.SideToMove == 0) == (historyIndex % 2 == 0);

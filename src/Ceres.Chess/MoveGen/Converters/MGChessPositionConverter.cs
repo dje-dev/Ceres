@@ -60,8 +60,8 @@ namespace Ceres.Chess.MoveGen.Converters
     static readonly int[] PieceMapWhite = { 0, 1, 5, 2, 4, 6, 7 };
     static readonly int[] PieceMapBlack = { 0, 9, 13, 10, 12, 14, 15 };
 
-    const int EnPassantWhite = 3;
-    const int EnPassantBlack = 11;
+    internal const int EnPassantWhite = 3;
+    internal const int EnPassantBlack = 11;
 
 
     /// <summary>

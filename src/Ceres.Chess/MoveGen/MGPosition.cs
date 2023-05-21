@@ -317,6 +317,39 @@ namespace Ceres.Chess.MoveGen
     }
 
 
+    /// <summary>
+    /// Modifies position so that en passant is assumed allowable in every file.
+    /// </summary>
+    public void SetAllEnPassantAllowed()
+    {
+      bool whiteToMove = SideToMove == SideType.White;
+      int rank = whiteToMove ? 5 : 2;
+      int rankPriorFrom = whiteToMove ? 6 : 1;
+      int rankPriorTo = whiteToMove ? 4 : 3;
+
+      // Check en passant square on every file for empty.
+      for (int file = 0; file < 8; file++)
+      {
+        Square square = Square.FromFileAndRank(file, rank);
+        if (GetPieceAtSquare(square).Type == PieceType.None)
+        {
+          var priorFrom = GetPieceAtSquare(Square.FromFileAndRank(file, rankPriorFrom));
+          var priorTo = GetPieceAtSquare(Square.FromFileAndRank(file, rankPriorTo));
+
+          if (priorFrom.Type == PieceType.None
+           && priorTo.Type == PieceType.Pawn
+           && priorTo.Side == (whiteToMove ? SideType.Black : SideType.White)
+           )
+          {
+
+            // TODO: Could be more selective and only switch to en passant if the pawn is in expected position.
+            SetPieceAtBitboardSquare((ulong)(whiteToMove ? MGChessPositionConverter.EnPassantBlack : MGChessPositionConverter.EnPassantWhite), MGBitBoardFromSquare(square));
+          }
+        }
+      }
+    }
+
+
     // TO DO: see if this is duplicated elsewhere
     static PieceType[] MGPieceCodeToPieceType;
 
@@ -389,6 +422,21 @@ namespace Ceres.Chess.MoveGen
     public override bool Equals(object obj) => obj is MGPosition && Equals(obj);
 
     /// <summary>
+    /// Returns if equal to another position with respect to location and position of all pieces
+    /// (ignores miscellaneous flags like castling, Move50Count, etc.).
+    /// </summary>
+    /// <param name="other"></param>
+    /// <returns></returns>
+    public readonly bool EqualPiecePositions(in MGPosition other)
+    {
+      return A == other.A &&
+             B == other.B &&
+             C == other.C &&
+             D == other.D;
+    }
+
+
+    /// <summary>
     /// Tests for equality with another MGChessMove
     /// (using chess semantics which implies that the MoveNum is irrelevant).
     /// </summary>
@@ -396,10 +444,7 @@ namespace Ceres.Chess.MoveGen
     /// <returns></returns>
     public readonly bool Equals(MGPosition other)
     {
-      return A == other.A &&
-             B == other.B &&
-             C == other.C &&
-             D == other.D &&
+      return EqualPiecePositions(in other) &&
              Flags == other.Flags &&
              Rule50Count == other.Rule50Count;
     }
