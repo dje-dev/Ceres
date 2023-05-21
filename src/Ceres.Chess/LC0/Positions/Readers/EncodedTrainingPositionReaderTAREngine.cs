@@ -43,7 +43,8 @@ namespace Ceres.Chess.EncodedPositions
                                                                               Predicate<string> processFilePredicate = null,
                                                                               ReaderOptions options = ReaderOptions.None,
                                                                               int maxGames = int.MaxValue,
-                                                                              int maxPositions = int.MaxValue)
+                                                                              int maxPositions = int.MaxValue,
+                                                                              bool filterOutFRCGames = true)
     {
       if (!trainingTARFileName.ToUpper().EndsWith("TAR")) throw new Exception("expected TAR");
 
@@ -110,8 +111,16 @@ namespace Ceres.Chess.EncodedPositions
                   }
                 }
 
-                numPositionsProcessed += numRead;
+                if (filterOutFRCGames)
+                {
+                  Position firstGamePosition = EncodedPositionWithHistory.PositionFromEncodedTrainingPosition(in rawPosBuffer[0]);
+                  if (firstGamePosition.LooksLikeFRCPosition)
+                  {
+                    continue;
+                  }
+                }
 
+                numPositionsProcessed += numRead;
                 yield return (rawPosBuffer, numRead);
               }
             }
