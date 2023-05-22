@@ -49,6 +49,12 @@ namespace Ceres.Chess.EncodedPositions
     /// For space efficiency, we cap this at a number of moves that is very rarely exceeded
     /// </summary>
     public const int NUM_MOVE_SLOTS = 64;
+    
+    /// <summary>
+    /// In most contexts it is desirable to always use nonzero probabilities for legal moves,
+    /// both to insure they are not masked out and because exactly zero probability is implausible.
+    /// </summary>
+    public const float DEFAULT_MIN_PROBABILITY_LEGAL_MOVE  = 0.01f * 0.05f; // 0.05%
 
     #region Raw data
 
