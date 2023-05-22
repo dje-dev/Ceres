@@ -264,6 +264,25 @@ namespace Ceres.Features.UCI
             UCIWriteLine("uciok");
             break;
 
+          case "commands":
+            UCIWriteLine("backendbench    - run backend benchmark to test nps speed of network evaluation");
+            UCIWriteLine("dump-fen        - shows FEN of most recently searched position");
+            UCIWriteLine("dump-move-stats - dumps information top level candidate moves");
+            UCIWriteLine("dump-pv         - dumps principal variation information from last search");
+            UCIWriteLine("dump-pv-detail  - dumps principal variation information from last search (detailed)");
+            UCIWriteLine("dump-info       - dump information about last search (top level candidate moves, principal variation, etc.)");
+            UCIWriteLine("dump-time       - dump information about time manager's last decision");
+            UCIWriteLine("dump-processor  - dump information about CPUs in this system");
+            UCIWriteLine("dump-params     - dump configuration parameters currently in use for Ceres");
+            UCIWriteLine("dump-store      - dumps full node store for tree from last search");
+            UCIWriteLine("dump-nvidia     - dumps informatino about NVIDIA CUDA devices detected in the system");
+            UCIWriteLine("lc0-config      - shows the command line arguments which would be used for LC0 for comparison searches");
+            UCIWriteLine("show-tree-plot  - shows a graphical representation of full search tree");
+            UCIWriteLine("graph [1-10]    - invokes graph feature to show the principal variations from last search (requires configuration), e.g. graph 7");
+            UCIWriteLine("gamecomp        - invokes the game comparison feature to graph the divergence points in one or more games (requires configuration)");
+            UCIWriteLine("");
+            break;
+
           case string c when c.StartsWith("setoption"):
             ProcessSetOption(command);
             break;
