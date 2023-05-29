@@ -14,6 +14,7 @@
 #region Using directives
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Runtime.Serialization.Formatters.Binary;
@@ -96,5 +97,22 @@ namespace Ceres.Base.Misc
       }
       sb.Append("}");
     }
+
+    public static void Shuffle<T>(IList<T> list)
+    {
+      Random rand = new(System.Environment.TickCount);
+
+      int n = list.Count;
+      while (n > 1)
+      {
+        n--;
+        int k = rand.Next(n + 1);
+        T value = list[k];
+        list[k] = list[n];
+        list[n] = value;
+      }
+    }
+
+
   }
 }
