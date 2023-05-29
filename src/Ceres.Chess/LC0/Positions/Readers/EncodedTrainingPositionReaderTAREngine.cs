@@ -14,14 +14,12 @@
 #region Using directives
 // TODO: restore this class
 
-using Ceres.Chess;
 using SharpCompress.Common;
 using SharpCompress.Readers;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
-using System.Reflection;
 using Ceres.Base.DataType;
 using SharpCompress.Readers.Tar;
 using Zstandard.Net;
@@ -38,6 +36,49 @@ namespace Ceres.Chess.EncodedPositions
   {
     [Flags]
     public enum ReaderOptions {  None, FillInMoveNum };
+
+    public static IEnumerable<(EncodedTrainingPosition[] gamePositions, int indexInGame)> 
+      EnumeratedPositions(string trainingTARFileName,
+                          Predicate<string> processFilePredicate = null,
+                          ReaderOptions options = ReaderOptions.None,
+                          int maxGames = int.MaxValue,
+                          int maxPositions = int.MaxValue,
+                          bool filterOutFRCGames = true,
+                          int skipCount = 1, 
+                          int maxPosToEvaluate = int.MaxValue)
+    {
+      var reader = EnumerateRawPos(trainingTARFileName, processFilePredicate, options, maxGames, maxPositions, filterOutFRCGames);
+
+      int numSeen = 0;
+      int numUsed = 0;
+      int skipCountBase = Environment.TickCount % skipCount; // for randomization
+
+      // For ever game in TAR....
+      foreach ((EncodedTrainingPosition[] gamePositionsBuffer, int numPosThisBuffer) in reader)
+      {
+        if (numUsed >= maxPosToEvaluate)
+        {
+          break;
+        }
+
+        // For every position.....
+        for (int i = 0; i < numPosThisBuffer; i++)
+        {
+          // Skip most positions so we get sampling across many games.
+          if ((skipCountBase + numSeen++) % skipCount != skipCount - 1)
+          {
+            continue;
+          }
+          else if (numUsed >= maxPosToEvaluate)
+          {
+            break;
+          }
+
+          yield return (gamePositionsBuffer, i); // TODO: could we return a ref instead of struct itself? Or use a static buffer.
+          numUsed++;
+        }
+      }
+    }
 
     public static IEnumerable<(EncodedTrainingPosition[], int)> EnumerateRawPos(string trainingTARFileName,
                                                                               Predicate<string> processFilePredicate = null,
