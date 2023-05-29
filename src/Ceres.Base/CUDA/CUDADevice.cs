@@ -64,15 +64,20 @@ namespace Ceres.Base.CUDA
 
     /// <summary>
     /// Constructor for a context for a specified device.
+    /// 
+    /// N.B. The argument createNew is set to false in CudaContext constructor.
+    ///      This avoids initialization Exception if the context was already created elsewhere
+    ///      (for example, the ONNX runtime might have been loaded in-process and initialized CUDA).
     /// </summary>
     /// <param name="gpuID"></param>
     internal CUDADevice(int gpuID)
     {
       GPUID = gpuID;
-      Context = new CudaContext(gpuID, true);
+      Context = new CudaContext(gpuID, false);
     }
 
     [ThreadStatic] static CudaContext currentContext;
+
 
     public void SetCurrent()
     {
@@ -82,6 +87,7 @@ namespace Ceres.Base.CUDA
         currentContext = Context;
       }
     }
+
 
     #region Kernel loading
 
@@ -228,7 +234,6 @@ namespace Ceres.Base.CUDA
 
         haveSetLazyLoading = true;
       }
-
     }
 
     #endregion
