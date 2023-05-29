@@ -26,6 +26,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using Ceres.Base.Benchmarking;
 using Ceres.Base.DataTypes;
@@ -192,6 +193,20 @@ namespace Ceres.Chess.LC0NetInference
       {
         throw new ArgumentException($"Expected {inputsMetadata.Count} inputs, received " + inputs.Length);
       }
+
+#if NOT
+// see: great code here https://gist.github.com/pranavsharma/f3c3ced552cada00fb556734c6967711
+//      var inputMeta = session.InputMetadata;
+//      float[] inputData = LoadTensorFromFile("C:\\Users\\prs\\source\\repos\\GH8332\\bench.in");
+      var input_tensor = new DenseTensor<float>(inputData, inputMeta["data_0"].Dimensions);
+      var output_mem_info = new OrtMemoryInfo("Cuda", OrtAllocatorType.DeviceAllocator, 0, OrtMemType.Default);
+
+      var io_binding = session.CreateIoBinding();
+      io_binding.BindInput("data_0", FixedBufferOnnxValue.CreateFromTensor(input_tensor));
+      io_binding.BindOutputToDevice("softmaxout_1", output_mem_info);
+
+      session.RunWithBinding(run_options, io_binding);
+#endif
 
       var inputsONNX = new (Memory<float> input, int[] shape, string inputName, int numElements)[inputsMetadata.Count];
 
