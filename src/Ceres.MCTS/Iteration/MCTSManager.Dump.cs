@@ -35,7 +35,27 @@ namespace Ceres.MCTS.Iteration
     /// Writes extensive descriptive information to a specified TextWriter,
     /// including verbose move statistics, principal variation, and move timing information.
     /// </summary>
+    /// <param name="writer"></param>
+    /// <param name="description"></param>
+    public void DumpFullInfo(TextWriter writer, string description)
+    {
+      DumpFullInfo(Search.BestMove, Search.SearchRootNode,
+                   Search.LastReuseDecision, Search.LastMakeNewRootTimingStats,
+                   Search.LastGameLimitInputs, writer, description);
+    }
+
+
+    /// <summary>
+    /// <summary>
+    /// Writes extensive descriptive information to a specified TextWriter,
+    /// including verbose move statistics, principal variation, and move timing information.
+    /// </summary>
+    /// </summary>
+    /// <param name="bestMove"></param>
     /// <param name="searchRootNode"></param>
+    /// <param name="reuseDecision"></param>
+    /// <param name="makeNewRootTimingStats"></param>
+    /// <param name="limitInputs"></param>
     /// <param name="writer"></param>
     /// <param name="description"></param>
     public void DumpFullInfo(MGMove bestMove, MCTSNode searchRootNode,
