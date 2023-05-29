@@ -18,8 +18,10 @@ using System.Collections;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Xml.Linq;
+using Ceres.Base.DataTypes;
 using Ceres.Base.OperatingSystem;
 using Ceres.Chess.EncodedPositions;
+using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.MCTS.MTCSNodes.Storage;
 
 #endregion
@@ -31,12 +33,68 @@ namespace Ceres.MCTS.MTCSNodes.Struct
   /// </summary>
   public static class MCTSNodeStructUtils
   {
+    /// <summary>
+    /// Modify values so that they sum to 1.0.
+    /// </summary>
+    /// <param name="values"></param>
+    static void Normalize(Span<float> values)
+    {
+      float sum = 0;
+      for (int i = 0; i < values.Length; i++)
+      {
+        sum += values[i];
+      }
+      for (int i = 0; i < values.Length; i++)
+      {
+        values[i] /= sum;
+      }
+    }
+
+    /// <summary>
+    /// Extracts a policy vector reflecting the empirical distribution of visits to the node.
+    /// </summary>
+    /// <param name="nodeRef"></param>
+    /// <param name="policy"></param>
+    public static void ExtractPolicyVectorFromVisitDistribution(in MCTSNodeStruct nodeRef, ref CompressedPolicyVector policy)
+    {
+      Span<float> probabilities = stackalloc float[nodeRef.NumPolicyMoves];
+      Span<int> indices = stackalloc int[nodeRef.NumPolicyMoves];
+
+      for (int i = 0; i < nodeRef.NumPolicyMoves; i++)
+      {
+        if (i < nodeRef.NumChildrenExpanded)
+        {
+          ref readonly MCTSNodeStruct childNode = ref nodeRef.ChildAtIndexRef(i);
+          float rawProb = (float)childNode.N / nodeRef.N;
+          probabilities[i] = Math.Max(CompressedPolicyVector.DEFAULT_MIN_PROBABILITY_LEGAL_MOVE, rawProb);
+          indices[i] = (ushort)nodeRef.ChildAtIndexRef(i).PriorMove.IndexNeuralNet;
+        }
+        else
+        {
+          probabilities[i] = CompressedPolicyVector.DEFAULT_MIN_PROBABILITY_LEGAL_MOVE;
+          indices[i] = (ushort)nodeRef.Children[i].Move.IndexNeuralNet;
+        }
+      }
+
+      // Normalize probabilities and encode.
+      Normalize(probabilities);
+
+      CompressedPolicyVector.Initialize(ref policy, indices, probabilities, false);
+    }
+  
+
+    /// <summary>
+    /// Extracts the policy vector output by network when a specified node was evaluated (without temperature).
+    /// </summary>
+    /// <param name="softmaxValue"></param>
+    /// <param name="nodeRef"></param>
+    /// <param name="policy"></param>
     [SkipLocalsInit]
     public static void ExtractPolicyVector(float softmaxValue, in MCTSNodeStruct nodeRef, ref CompressedPolicyVector policy)
     {
-      Span<ushort> indicies = stackalloc ushort[CompressedPolicyVector.NUM_MOVE_SLOTS];
-      Span<float> probsBeforeNormalization = stackalloc float[CompressedPolicyVector.NUM_MOVE_SLOTS];
-      Span<ushort> probabilities = stackalloc ushort[CompressedPolicyVector.NUM_MOVE_SLOTS];
+      Span<ushort> indicies = stackalloc ushort[nodeRef.NumPolicyMoves];
+      Span<float> probsBeforeNormalization = stackalloc float[nodeRef.NumPolicyMoves];
+      Span<ushort> probabilities = stackalloc ushort[nodeRef.NumPolicyMoves];
 
       MCTSNodeStore store = nodeRef.Context.Store;
       Span<MCTSNodeStructChild> children = store.Children.SpanForNode(nodeRef.ChildStartIndex, nodeRef.NumPolicyMoves);
