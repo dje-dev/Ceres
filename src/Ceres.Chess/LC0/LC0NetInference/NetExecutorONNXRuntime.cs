@@ -29,6 +29,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using Ceres.Base.Benchmarking;
+using Ceres.Base.CUDA;
 using Ceres.Base.DataTypes;
 using Chess.Ceres.NNEvaluators;
 using Microsoft.ML.OnnxRuntime;
@@ -73,17 +74,36 @@ namespace Ceres.Chess.LC0NetInference
     /// </summary>
     public readonly NNEvaluatorPrecision Precision;
 
+
     /// <summary>
     /// Constructor.
     /// </summary>
     /// <param name="onnxFileName"></param>
+    /// <param name="onnxModelBytes"></param>
     /// <param name="gpuID"></param>
-    /// <param name="batchSize"></param>
-    public NetExecutorONNXRuntime(string onnxFileName, NNEvaluatorPrecision precision, int gpuID, bool useTRT)
+    /// <param name="useTRT"></param>
+    /// <param name="enableProfiling"></param>
+    public NetExecutorONNXRuntime(string onnxFileName, byte[] onnxModelBytes, 
+                                  NNEvaluatorPrecision precision, int gpuID, 
+                                  bool useTRT, bool enableProfiling)
     {
       // https://codechina.csdn.net/mirrors/microsoft/onnxruntime/-/blob/skottmckay/CreateHelperForGeneratingIdsForUseInCompilingEPs/docs/execution_providers/TensorRT-ExecutionProvider.md
       //     if (gpuID < 0 || gpuID > 16) throw new Exception($"Invalid GPU ID { gpuID}");
 #if FEATURE_ONNX
+
+      if (onnxFileName == null && onnxModelBytes == null)
+      {
+        throw new Exception("Must specify either onnxFileName or onnxModelBytes");
+      }
+
+      string directoryName = onnxFileName == null ? Path.GetTempPath() : new FileInfo(onnxFileName).DirectoryName;
+
+      if (onnxModelBytes == null)
+      {
+        onnxModelBytes = File.ReadAllBytes(onnxFileName);
+      }
+
+
       GPUID = gpuID;
       Precision = precision;
 
@@ -105,12 +125,11 @@ namespace Ceres.Chess.LC0NetInference
       else if (useTRT)
       {
         OrtTensorRTProviderOptions trtProviderOptions = new OrtTensorRTProviderOptions();
-
         // TODO: this code has no effect for unknown reasons.
         var providerOptionsDict = new Dictionary<string, string>();
         providerOptionsDict["device_id"] = gpuID.ToString(); ;
         providerOptionsDict["trt_engine_cache_enable"] = "1";
-        providerOptionsDict["trt_engine_cache_path"] = new FileInfo(onnxFileName).DirectoryName;
+        providerOptionsDict["trt_engine_cache_path"] = directoryName;
         providerOptionsDict["trt_fp16_enable"] = Precision == NNEvaluatorPrecision.FP16 ? "1" : "0";
         trtProviderOptions.UpdateOptions(providerOptionsDict);
         //trt_cache_path="/path/to/cache"
@@ -129,7 +148,7 @@ namespace Ceres.Chess.LC0NetInference
         // TODO: Someday remove this. In theory, the above two assignments should work (but seems to be ignored).
         // WARNING: This makes a global change that could impact other threads. ****************
         Environment.SetEnvironmentVariable("ORT_TENSORRT_ENGINE_CACHE_ENABLE", "1");
-        Environment.SetEnvironmentVariable("ORT_TENSORRT_CACHE_PATH", new FileInfo(onnxFileName).DirectoryName);
+        Environment.SetEnvironmentVariable("ORT_TENSORRT_CACHE_PATH", directoryName);
         Environment.SetEnvironmentVariable("ORT_TENSORRT_FP16_ENABLE", Precision == NNEvaluatorPrecision.FP16 ? "1" : "0");
 
 
@@ -142,14 +161,16 @@ namespace Ceres.Chess.LC0NetInference
 
         var providerOptionsDict = new Dictionary<string, string>();
         providerOptionsDict["device_id"] = gpuID.ToString();
+
+
         //        providerOptionsDict["gpu_mem_limit"] = "2147483648";
         //        providerOptionsDict["arena_extend_strategy"] = "kSameAsRequested";
         //        providerOptionsDict["cudnn_conv_algo_search"] = "DEFAULT";
         //        providerOptionsDict["do_copy_in_default_stream"] = "1";
         //        providerOptionsDict["cudnn_conv_use_max_workspace"] = "1";
         //        providerOptionsDict["cudnn_conv1d_pad_to_nc1d"] = "1";
-//        providerOptionsDict["enable_cuda_graph"] = "1"; // NOTE: this requires entire graph to map onto ONNX nodes
-        
+        //        providerOptionsDict["enable_cuda_graph"] = "1"; // NOTE: this requires entire graph to map onto ONNX nodes
+
         cudaProviderOptions.UpdateOptions(providerOptionsDict);
         so = SessionOptions.MakeSessionOptionWithCudaProvider(cudaProviderOptions);
 
@@ -164,10 +185,20 @@ namespace Ceres.Chess.LC0NetInference
         so.LogId = "ort.log.txt";
       }
 
-      so.GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL;
-    
+      if (enableProfiling)
+      {
+        Console.WriteLine("****************   NetExecutorONNXRuntime is profiling....   ****************");
+        so.EnableProfiling = true;
+        //so.ProfileOutputPathPrefix = @"d:\temp";
+      }
 
-      Session = new InferenceSession(onnxFileName, so);
+      so.GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL;
+
+
+      lock (CUDADevice.InitializingCUDAContextLockObj)
+      {
+        Session = new InferenceSession(onnxModelBytes, so);
+      }
 
 #else
         throw new Exception("NetExecutorONNXRuntine feature is not enabled.");
@@ -364,6 +395,11 @@ namespace Ceres.Chess.LC0NetInference
       return resultArrays;
     }
 #endif
+
+    public void EndProfiling()
+    {
+      Session.EndProfiling();
+    }
 
     public void Dispose()
     {

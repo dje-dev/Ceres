@@ -70,14 +70,17 @@ namespace Ceres.Chess.LC0NetInference
     /// Constructor.
     /// </summary>
     /// <param name="onnxFileName"></param>
+    /// <param name="onnxModelBytes"></param>
     /// <param name="batchSize"></param>
     /// <param name="netType"></param>
     /// <param name="deviceType"></param>
     /// <param name="gpuNum"></param>
-    public ONNXRuntimeExecutor(string onnxFileName, int batchSize, NetTypeEnum netType, 
-                               NNEvaluatorPrecision precision, NNDeviceType deviceType, int gpuNum, bool useTRT)
+    /// <param name="enableProfiling"></param>
+    public ONNXRuntimeExecutor(string onnxFileName, byte[] onnxModelBytes, int batchSize, NetTypeEnum netType, 
+                               NNEvaluatorPrecision precision, NNDeviceType deviceType, int gpuNum, 
+                               bool useTRT, bool enableProfiling)
     {
-      if (!onnxFileName.ToUpper().EndsWith(".ONNX"))
+      if (onnxFileName != null && !onnxFileName.ToUpper().EndsWith(".ONNX"))
       {
         throw new Exception("Expected file with ONNX extension.");
       }
@@ -107,7 +110,7 @@ namespace Ceres.Chess.LC0NetInference
         throw new NotImplementedException("Unsupported ONNX type " + deviceType);
       }
 
-      executor = new NetExecutorONNXRuntime(onnxFileName, precision, deviceIndex, useTRT);
+      executor = new NetExecutorONNXRuntime(onnxFileName, onnxModelBytes, precision, deviceIndex, useTRT, enableProfiling);
     }
 
 
@@ -241,6 +244,10 @@ namespace Ceres.Chess.LC0NetInference
 
       }
     }
+
+
+    public void EndProfiling() => executor.EndProfiling();
+
 
     public void Dispose()
     {

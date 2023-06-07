@@ -140,6 +140,7 @@ namespace Chess.Ceres.NNEvaluators
 
     // TODO: clean up this lookaside buffering
     static string lastONNXFileName;
+    static long lastONNXBytesHash;
     static int lastBatchSize;
     static NNDeviceType lastDeviceType;
     static bool lastIsWDL;
@@ -149,17 +150,35 @@ namespace Chess.Ceres.NNEvaluators
     static ONNXRuntimeExecutor.NetTypeEnum lastType;
 
     #endregion
+
+    private static long ByteArrayHash(byte[] byteArray)
+
+    {
+      long hash = 0;
+      for (int i = 0; i < byteArray.Length; i++)
+      {
+        hash = (hash << 8) + byteArray[i];
+        long g = hash & 0xF0000000L;
+        if (g != 0)
+        {
+          hash ^= g >> 24;
+          hash ^= g;
+        }
+      }
+      return hash;
+    } 
+
     public const int TPG_MODE_TOTAL_BYTES_ASSUMED  = 4060 + 782; // see DoEvaluateIntoBuffers
 
-    public NNEvaluatorEngineONNX(string engineID, string weightsFN, NNDeviceType deviceType, int gpuID, bool useTRT,
+    public NNEvaluatorEngineONNX(string engineID, string onnxModelFileName, byte[] onnxModelBytes, NNDeviceType deviceType, int gpuID, bool useTRT,
                                  ONNXRuntimeExecutor.NetTypeEnum type, int batchSize,
                                  NNEvaluatorPrecision precision, bool isWDL, bool hasM, bool hasUncertaintyV,
                                  string outputValue, string outputWDL, string outputPolicy, string outputMLH, 
-                                 bool valueHeadLogistic, bool scale50MoveCounter, bool movesEnabled = false)
+                                 bool valueHeadLogistic, bool scale50MoveCounter, bool movesEnabled = false, bool enableProfiling = false)
     {
       EngineType = type == ONNXRuntimeExecutor.NetTypeEnum.Ceres ? "ONNX_DJE" : "ONNX_LZ0";
       EngineNetworkID = engineID;
-      ONNXFileName = weightsFN;
+      ONNXFileName = onnxModelFileName;
       BatchSize = batchSize;
       Precision = precision;
       this.isWDL = isWDL;
@@ -174,18 +193,22 @@ namespace Chess.Ceres.NNEvaluators
       Scale50MoveCounter = scale50MoveCounter;
       MovesEnabled = movesEnabled;
 
+      bool filesMatch = lastONNXFileName != null && lastONNXFileName == onnxModelFileName;
+      bool bytesMatch = onnxModelBytes != null && ByteArrayHash(onnxModelBytes) == lastONNXBytesHash;
+
       const bool TRY_REUSE = false; // TODO: remove this completely, it is unsafe (?)
-      if (TRY_REUSE && lastONNXFileName == weightsFN && lastBatchSize == batchSize && precision == lastPrecision
+      if (TRY_REUSE && (filesMatch || bytesMatch) && lastBatchSize == batchSize && precision == lastPrecision
         && lastIsWDL == isWDL && lastType == type && deviceType == lastDeviceType && lastUseTRT == useTRT)
       {
         Executor = lastExecutor;
       }
       else
       {
-        Console.WriteLine("Starting ONNX runtime against " + engineID + " from " + weightsFN + " with GPU " + gpuID);
+        Console.WriteLine("Starting ONNX runtime against " + engineID + " from " + onnxModelFileName + " with GPU " + gpuID);
 
-        Executor = new ONNXRuntimeExecutor(weightsFN, batchSize, type, precision, deviceType, gpuID, useTRT);
-        lastONNXFileName = weightsFN;
+        Executor = new ONNXRuntimeExecutor(onnxModelFileName, onnxModelBytes, batchSize, type, precision, deviceType, gpuID, useTRT, enableProfiling);
+        lastONNXFileName = onnxModelFileName;
+        lastONNXBytesHash = onnxModelBytes == null ? 0 : ByteArrayHash(onnxModelBytes);
         lastDeviceType = deviceType;
         lastBatchSize = batchSize;
         lastIsWDL = isWDL;
@@ -441,6 +464,12 @@ if ((transform & FlipTransform) != 0) {
         result.PolicyVectors[i] = policyVectorTarget;
       }
     }
+
+    public void EndProfiling()
+    {
+      Executor.EndProfiling();
+    }
+
 
     protected override void DoShutdown()
     {
