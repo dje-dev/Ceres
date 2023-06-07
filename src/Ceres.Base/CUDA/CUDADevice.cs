@@ -63,6 +63,14 @@ namespace Ceres.Base.CUDA
 
 
     /// <summary>
+    /// Object on which a lock should be taken during the time in which the CUDA context is being initialized.
+    /// This includes the situations where user code is initializing the context, or where the context is being
+    /// initialized on another thread by external libraries invoked by user code (for example ONNXRuntime).
+    /// </summary>
+    public static readonly object InitializingCUDAContextLockObj = new object();
+
+
+    /// <summary>
     /// Constructor for a context for a specified device.
     /// 
     /// N.B. The argument createNew is set to false in CudaContext constructor.
@@ -72,8 +80,12 @@ namespace Ceres.Base.CUDA
     /// <param name="gpuID"></param>
     internal CUDADevice(int gpuID)
     {
-      GPUID = gpuID;
-      Context = new CudaContext(gpuID, false);
+      lock (InitializingCUDAContextLockObj)
+      {
+        GPUID = gpuID;
+        Context = new CudaContext(gpuID, false);
+      }
+
     }
 
     [ThreadStatic] static CudaContext currentContext;

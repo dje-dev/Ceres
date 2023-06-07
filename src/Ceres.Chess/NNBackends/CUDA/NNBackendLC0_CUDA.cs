@@ -253,7 +253,7 @@ namespace Ceres.Chess.NNBackends.CUDA
     /// <param name="enableCUDAGraphs"></param>
     /// <param name="graphBatchSizeDivisor"></param>
     /// <param name="referenceBackend"></param>
-    public NNBackendLC0_CUDA(int gpuID, Net net, bool saveActivations = false, 
+    public NNBackendLC0_CUDA(int gpuID, Net net, bool saveActivations = false,
                              int maxBatchSize = DEFAULT_MAX_BATCH_SIZE,
                              bool dumpTiming = false,
                              bool enableCUDAGraphs = true,
@@ -267,30 +267,34 @@ namespace Ceres.Chess.NNBackends.CUDA
       DumpTiming = dumpTiming;
       EnableCUDAGraphs = enableCUDAGraphs;
 
-      try
+      lock (CUDADevice.InitializingCUDAContextLockObj)
       {
-        InitCUDAContextAndTakeWriteLock();
+        try
+        {
+          InitCUDAContextAndTakeWriteLock();
 
-        InitGPUVars();
+          InitGPUVars();
 
-        InitNetwork(net);
-      }
-      catch (Exception e) 
-      {
-        Console.WriteLine("Error when initializing CUDA. Did you install NVidia's CUDA? https://developer.nvidia.com/cuda-zone");
-        Console.WriteLine(e);
-        Console.WriteLine(e.StackTrace);
-      }
-      finally
-      {
-        ExecContext.Device.GraphCaptureRWLock.ExitWriteLock();
-      }
+          InitNetwork(net);
 
+        }
+        catch (Exception e)
+        {
+          Console.WriteLine("Error when initializing CUDA. Did you install NVidia's CUDA? https://developer.nvidia.com/cuda-zone");
+          Console.WriteLine(e);
+          Console.WriteLine(e.StackTrace);
+        }
+        finally
+        {
+          ExecContext.Device.GraphCaptureRWLock.ExitWriteLock();
+        }
+      }
       if (UseGraphs)
       {
         BuildGraphSet(graphBatchSizeDivisor);
       }
     }
+
 
     public int DeviceComputeCapabilityMajor => deviceProperties.ComputeCapability.Major;
     
