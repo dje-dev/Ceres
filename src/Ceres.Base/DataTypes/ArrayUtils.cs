@@ -218,8 +218,80 @@ namespace Ceres.Base.DataType
       return ret;
     }
 
+    #endregion
+
+
+    #region Extracting subarrays
+
+    /// <summary>
+    /// Extracts a 1D subarray from a 3D array based on specified indices of the first two dimensions.
+    /// </summary>
+    /// <param name="tensor"></param>
+    /// <param name="firstIndex"></param>
+    /// <param name="secondIndex"></param>
+    /// <returns></returns>
+    public static float[] ExtractSubArray1D(float[,,] tensor, int firstIndex, int secondIndex)
+    {
+      float[] result = new float[tensor.GetLength(2)];
+      Buffer.BlockCopy(tensor,
+                              (firstIndex * tensor.GetLength(1) * tensor.GetLength(2) + secondIndex * tensor.GetLength(2)) * sizeof(float),
+                               result, 0, sizeof(float) * tensor.GetLength(2));
+      return result;
+    }
+
+
+    /// <summary>
+    /// Extracts a 2D subarray from a 3D array based on specified index of the first dimension.
+    /// </summary>
+    /// <param name="tensor"></param>
+    /// <param name="firstIndex"></param>
+    /// <returns></returns>
+    public static float[,] ExtractSubArray2D(float[,,] tensor, int firstIndex)
+    {
+      float[,] result = new float[tensor.GetLength(1), tensor.GetLength(2)];
+      Buffer.BlockCopy(tensor,
+                       firstIndex * sizeof(float) * tensor.GetLength(1) * tensor.GetLength(2),
+                       result, 0, sizeof(float) * tensor.GetLength(1) * tensor.GetLength(2));
+      return result;
+    }
+
+
+
+    /// <summary>
+    /// Constructs a 3D array from a span of raw data and specified dimensions.
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    /// <param name="raw"></param>
+    /// <param name="dim2"></param>
+    /// <param name="dim3"></param>
+    /// <returns></returns>
+    /// <exception cref="ArgumentException"></exception>
+    public static T[,,] SpanTo3DArray<T>(Span<T> raw, int dim2, int dim3)
+    {
+      int dim1 = raw.Length / (dim2 * dim3);
+      if (raw.Length != dim1 * dim2 * dim3)
+      {
+        throw new ArgumentException("The dimensions do not match the length of the span");
+      }
+
+      T[,,] result = new T[dim1, dim2, dim3];
+
+      for (int i = 0; i < dim1; i++)
+      {
+        for (int j = 0; j < dim2; j++)
+        {
+          for (int k = 0; k < dim3; k++)
+          {
+            result[i, j, k] = raw[i * dim2 * dim3 + j * dim3 + k];
+          }
+        }
+      }
+
+      return result;
+    }
 
     #endregion
+
 
     /// <summary>
     /// Returns the index of the element having minimal value.
