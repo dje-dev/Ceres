@@ -23,6 +23,8 @@ using System.IO.Compression;
 using Ceres.Base.DataType;
 using SharpCompress.Readers.Tar;
 using Zstandard.Net;
+using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
 
 #endregion
 
@@ -171,9 +173,9 @@ namespace Ceres.Chess.EncodedPositions
     }
 
 
-    public static int ReadFromStream(Stream stream, byte[] rawBuffer, ref EncodedTrainingPosition[] buffer)
+    public static unsafe int ReadFromStream(Stream stream, byte[] rawBuffer, ref EncodedTrainingPosition[] buffer)
     {
-      // Read decompressed bytes
+      // Read decompressed bytes.
       int bytesRead = 0;
       int thisBytes = 0;
       do
@@ -182,11 +184,30 @@ namespace Ceres.Chess.EncodedPositions
         bytesRead += thisBytes;
       } while (thisBytes > 0);
 
-      return bytesRead == 0
-          ? throw new Exception(" trying to read " + rawBuffer.Length)
-          : SerializationUtils.DeSerializeArrayIntoBuffer(rawBuffer, bytesRead, ref buffer);
-    }
+      int itemSize = Marshal.SizeOf(typeof(EncodedTrainingPosition));
+      if (bytesRead == 0 || bytesRead % itemSize != 0)
+      {
+        throw new Exception($"ReadFromStream returned {bytesRead} which is not a multiple of intended structure size");
+      }
 
+      // Determine and validate number of items.
+      int numItems = bytesRead / itemSize;
+      if (numItems > buffer.Length)
+      {
+        throw new NotImplementedException($"buffer sized {buffer.Length} too small for required {numItems}");
+      }
+
+      // Copy items into target buffer.
+      fixed (byte* source = &rawBuffer[0])
+      {
+        fixed (EncodedTrainingPosition* target = &buffer[0])
+        {
+          Unsafe.CopyBlock(target, source, (uint)bytesRead);
+        }
+      }
+
+      return numItems;
+    }
 
   }
 }

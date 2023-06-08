@@ -415,7 +415,7 @@ namespace Ceres.Chess.LC0.Boards
     /// </summary>
     /// <param name="weAreWhite"></param>
     /// <returns></returns>
-    public string GetFENWithoutEnPassant(bool weAreWhite)
+    public string GetFENWithoutEnPassant(bool weAreWhite, bool mirrored = false)
     {
       string fen = "";
 
@@ -426,7 +426,7 @@ namespace Ceres.Chess.LC0.Boards
         int startIndex = r * 8;
         for (int c = 7; c >= 0; c--)
         {
-          string thisChar = EncodedPositionWithHistory.FENCharAt(this, startIndex + (7 - c), weAreWhite, " ");
+          string thisChar = EncodedPositionWithHistory.FENCharAt(this, mirrored ? startIndex + c : (startIndex + (7 - c)), weAreWhite, " ");
           if (thisChar == " ")
             numBlank++;
           else

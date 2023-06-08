@@ -168,11 +168,18 @@ namespace Ceres.Chess.EncodedPositions
 
 
     /// <summary>
+    /// Returns the Position correspondong to the final board (mirrored).
+    /// </summary>
+    public Position FinalPositionMirrored => Position.FromFEN(FENForHistoryBoard(0, true));
+
+
+    /// <summary>
     /// Returns the FEN string correpsonding to the position at specified history board.
     /// </summary>
     /// <param name="historyIndex"></param>
+    /// <param name="mirrored"></param>
     /// <returns></returns>
-    public string FENForHistoryBoard(int historyIndex)
+    public string FENForHistoryBoard(int historyIndex, bool mirrored = false)
     {
       EncodedPositionBoard planes = GetPlanesForHistoryBoard(historyIndex);
       if (historyIndex % 2 == 1)
@@ -182,7 +189,8 @@ namespace Ceres.Chess.EncodedPositions
 
       // KQkq - 0 1
       bool weAreWhite = (MiscInfo.InfoPosition.SideToMove == 0) == (historyIndex % 2 == 0);
-      string fen = MiscInfo.InfoPosition.SideToMove == 0 ? planes.GetFENWithoutEnPassant(weAreWhite) : planes.Reversed.GetFENWithoutEnPassant(weAreWhite);
+      string fen = MiscInfo.InfoPosition.SideToMove == 0 ? planes.GetFENWithoutEnPassant(weAreWhite, mirrored) 
+                                                         : planes.Reversed.GetFENWithoutEnPassant(weAreWhite, mirrored);
 
       fen = fen + (weAreWhite ? " w" : " b");
       if (historyIndex != 0)
@@ -211,7 +219,13 @@ namespace Ceres.Chess.EncodedPositions
 
       string epTarget = "-";
       if (enPassant != PositionMiscInfo.EnPassantFileIndexEnum.FileNone)
+      {
+        if (mirrored)
+        {
+          enPassant = 7 - enPassant;
+        }
         epTarget = PositionMiscInfo.EPFileChars[(int)enPassant] + (weAreWhite ? "6" : "3");
+      }
 
       fen = fen + castling + " " + epTarget + " " + MiscInfo.InfoPosition.Rule50Count;// + " " + (1 + MiscInfo.InfoPosition.MoveCount); // Sometimes 2 dashes?
       fen = fen + " 1"; // put some valid full move number
