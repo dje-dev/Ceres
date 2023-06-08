@@ -86,14 +86,19 @@ namespace Ceres.Chess
     {
       get
       {
+#if NOT
+// We no longer perform this check, instead assuming that the mirror request is only
+// with respect to the position of the pieces, not the castling rights.
         if (CastlingRightsAny)
           throw new Exception("Cannot mirror position with castling rights due to non-equivalence.");
-
+#endif
         EnPassantFileIndexEnum mirroredEnPassant = EnPassantFileIndexEnum.FileNone;
         if (EnPassantFileIndex != EnPassantFileIndexEnum.FileNone)
+        {
           mirroredEnPassant = (EnPassantFileIndexEnum)(7 - EnPassantFileIndex);
+        }
 
-        return new PositionMiscInfo(false, false, false, false, SideToMove, Move50Count, RepetitionCount, MoveNum, mirroredEnPassant);
+        return new PositionMiscInfo(WhiteCanOO, WhiteCanOOO, BlackCanOO, BlackCanOOO, SideToMove, Move50Count, RepetitionCount, MoveNum, mirroredEnPassant);
       }
     }
 
