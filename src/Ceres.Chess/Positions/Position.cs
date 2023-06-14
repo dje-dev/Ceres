@@ -20,7 +20,6 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 using System.Text;
-
 using Ceres.Base.DataTypes;
 
 using Ceres.Chess.EncodedPositions;
@@ -272,23 +271,41 @@ namespace Ceres.Chess
     #region Constructors
 
     /// <summary>
-    /// Computes the short hash for this position.
+    /// Constructs a position from another Position, optionally reversing.
+    /// 
+    /// TODO: The semantics of "reverse" are unclear. Should it include castling rights, and side to move?
+    ///       Fortunately most callers of this care only about the pieces being reversed, which is unambiguous.
     /// </summary>
-    /// <returns></returns>
-    unsafe readonly byte CalcShortHash()
+    /// <param name="copyPosition"></param>
+    /// <param name="reversed"></param>
+    public Position(in Position copyPosition, bool reversed = false)
     {
-      // For efficiency we iterate over 4 longs (32 bytes)
-      // instead of 32 byte fields.
-      long hash = 0;
-      fixed (void* pieceSquares = &Square_0_1)
+      PieceCount = 0;
+      MiscInfo = reversed ? new(copyPosition.MiscInfo.BlackCanOO, copyPosition.MiscInfo.BlackCanOOO,
+                                copyPosition.MiscInfo.WhiteCanOO, copyPosition.MiscInfo.WhiteCanOOO,
+                                copyPosition.MiscInfo.SideToMove.Reversed(), copyPosition.MiscInfo.Move50Count,
+                                copyPosition.MiscInfo.RepetitionCount, copyPosition.MiscInfo.MoveNum, copyPosition.MiscInfo.EnPassantFileIndex)
+                          : copyPosition.MiscInfo;
+
+      for (int i = 0; i < 64; i++)
       {
-        long* pieceSquaresUint = (long*)pieceSquares;
-        for (int i = 0; i < 4; i++)
+        Square sq = new Square(i);
+        Piece piece = copyPosition[sq];
+        if (piece.Type != PieceType.None)
         {
-          hash = (long)hash * -1521134295L + pieceSquaresUint[i];
+          if (reversed)
+          {
+            sq = sq.Reversed;
+            piece = new Piece(piece.Side.Reversed(), piece.Type);
+          }
+
+          int pieceCount = (byte)SetPieceOnSquare(sq.SquareIndexStartA1, piece);
+
+          PieceCount += (byte)pieceCount;
         }
       }
-      return (byte)(hash.GetHashCode());
+
+      PiecesShortHash = CalcShortHash();
     }
 
 
@@ -338,19 +355,18 @@ namespace Ceres.Chess
       PiecesShortHash = CalcShortHash();
     }
 
-    
+
     /// <summary>
     /// Initializes from IEnumerable of pieces.
     /// 
     /// Note that processing of the IEnumerable stops immediately if a PieceType.None is seen.
+    /// 
+    /// TODO: Some callers may construct an array as the first Span argument, these probably could be made more efficient.
     /// </summary>
     /// <param name="pieces"></param>
     /// <param name="miscInfo"></param>
     public unsafe Position(Span<PieceOnSquare> pieces, in PositionMiscInfo miscInfo)
     {
-      // Workaround to suppress definite assigment rules (TODO: pending .NET enhancmements may provide a cleaner/faster way)
-      fixed (void* ptr = &this) { }
-
       PieceCount = 0;
       MiscInfo = miscInfo;
 
@@ -368,6 +384,29 @@ namespace Ceres.Chess
 
       PiecesShortHash = CalcShortHash();
     }
+
+
+    /// <summary>
+    /// Computes the short hash for this position.
+    /// </summary>
+    /// <returns></returns>
+    unsafe readonly byte CalcShortHash()
+    {
+      // For efficiency we iterate over 4 longs (32 bytes)
+      // instead of 32 byte fields.
+      long hash = 0;
+      fixed (void* pieceSquares = &Square_0_1)
+      {
+        long* pieceSquaresUint = (long*)pieceSquares;
+        for (int i = 0; i < 4; i++)
+        {
+          hash = (long)hash * -1521134295L + pieceSquaresUint[i];
+        }
+      }
+      return (byte)(hash.GetHashCode());
+    }
+
+
 
 
     /// <summary>
@@ -474,6 +513,7 @@ namespace Ceres.Chess
         return newPos;
       }
     }
+
 
     /// <summary>
     /// Returns if this position is equivalent to another position
@@ -1278,25 +1318,7 @@ namespace Ceres.Chess
     /// <summary>
     /// Returns new Position being the reverse of this.
     /// </summary>
-    public Position Reversed
-    {
-      get
-      {
-        PositionMiscInfo infoReversed = new(MiscInfo.BlackCanOO, MiscInfo.BlackCanOOO,
-                                            MiscInfo.WhiteCanOO, MiscInfo.WhiteCanOOO,
-                                            MiscInfo.SideToMove.Reversed(), MiscInfo.Move50Count,
-                                            MiscInfo.RepetitionCount, MiscInfo.MoveNum, MiscInfo.EnPassantFileIndex);
-
-        // Build list of all pieces, but reversed
-        List<PieceOnSquare> pieces = new List<PieceOnSquare>(32);
-        foreach (PieceOnSquare piece in PiecesEnumeration)
-        {
-          pieces.Add(new PieceOnSquare(piece.Square.Reversed, new Piece(piece.Piece.Side.Reversed(), piece.Piece.Type)));
-        }
-
-        return new Position(pieces.ToArray(), in infoReversed);
-      }
-    }
+    public Position Reversed => new Position(this, true);
 
     
     /// <summary>
