@@ -14,17 +14,21 @@
 #region Using directives
 // TODO: restore this class
 
-using SharpCompress.Common;
-using SharpCompress.Readers;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
-using Ceres.Base.DataType;
-using SharpCompress.Readers.Tar;
-using Zstandard.Net;
+
 using System.Runtime.InteropServices;
-using System.Runtime.CompilerServices;
+using System.Threading;
+
+using SharpCompress.Common;
+using SharpCompress.Readers;
+using SharpCompress.Readers.Tar;
+
+using Zstandard.Net;
+
+using Ceres.Base.Misc;
 
 #endregion
 
@@ -33,6 +37,9 @@ namespace Ceres.Chess.EncodedPositions
   /// <summary>
   /// Static internal helper class for enumerating all the raw positions
   /// contained in a Leela Chess Zero raw training file (packed with TAR).
+  /// 
+  /// Alternately, any entries compressed with Zstandard are assumed to have been
+  /// compressed to EncodedTrainingPositionCompressed format, and are decompressed and returned.
   /// </summary>
   public static class EncodedTrainingPositionReaderTAREngine
   {
@@ -122,6 +129,11 @@ namespace Ceres.Chess.EncodedPositions
           string fileName = reader.Entry.Key.ToLower();
           if (fileName.EndsWith("gz") || fileName.EndsWith("zst"))
           {
+            // We assume that any files compressed with ZStandard (ZST) are also compressed as EncodedTrainingPositionCompressed
+            // so we need to first decompress using ZStandard, then convert the format of the positions
+            // to the full EncodedTrainingPosition (uncompressed) structures.
+            bool areCompressedPositions = fileName.EndsWith("zst");
+
             using (EntryStream es = reader.OpenEntryStream())
             {
               numGamesProcessed++;
@@ -135,7 +147,7 @@ namespace Ceres.Chess.EncodedPositions
                 if (numGamesProcessed >= maxGames) yield break;
 
                 // Uncompressed read
-                int numRead = ReadFromStream(decompressionStream, buffer, ref rawPosBuffer);
+                int numRead = ReadFromStream(decompressionStream, buffer, ref rawPosBuffer, areCompressedPositions);
 
                 if (options.HasFlag(ReaderOptions.FillInMoveNum))
                 {
@@ -173,41 +185,66 @@ namespace Ceres.Chess.EncodedPositions
     }
 
 
-    public static unsafe int ReadFromStream(Stream stream, byte[] rawBuffer, ref EncodedTrainingPosition[] buffer)
+    static long totalBytesRead = 0;
+    public static unsafe int ReadFromStream(Stream stream, byte[] rawBuffer, ref EncodedTrainingPosition[] buffer, bool sourceAreEncodedTrainingPositionCompressed)
     {
-      // Read decompressed bytes.
       int bytesRead = 0;
-      int thisBytes = 0;
-      do
+      if (false) // slower (?)
       {
-        thisBytes = stream.Read(rawBuffer, bytesRead, rawBuffer.Length - bytesRead);
-        bytesRead += thisBytes;
-      } while (thisBytes > 0);
-
-      int itemSize = Marshal.SizeOf(typeof(EncodedTrainingPosition));
-      if (bytesRead == 0 || bytesRead % itemSize != 0)
-      {
-        throw new Exception($"ReadFromStream returned {bytesRead} which is not a multiple of intended structure size");
-      }
-
-      // Determine and validate number of items.
-      int numItems = bytesRead / itemSize;
-      if (numItems > buffer.Length)
-      {
-        throw new NotImplementedException($"buffer sized {buffer.Length} too small for required {numItems}");
-      }
-
-      // Copy items into target buffer.
-      fixed (byte* source = &rawBuffer[0])
-      {
-        fixed (EncodedTrainingPosition* target = &buffer[0])
+        int numBytes = buffer.Length * sizeof(EncodedTrainingPosition);
+        int thisBytes = 0;
+        fixed (EncodedTrainingPosition* bufferPtr = buffer)
         {
-          Unsafe.CopyBlock(target, source, (uint)bytesRead);
+          do
+          {
+            Span<byte> byteSpan = new Span<byte>(bufferPtr, numBytes);
+            thisBytes = stream.Read(byteSpan);
+            if (thisBytes > 0 && bytesRead > 0) throw new NotImplementedException();
+            bytesRead += thisBytes;
+          } while (thisBytes > 0);
         }
       }
+      else
+      {
+        // Read decompressed bytes.
+        int thisBytes = 0;
+        do
+        {
+          thisBytes = stream.Read(rawBuffer, bytesRead, rawBuffer.Length - bytesRead);
+          bytesRead += thisBytes;
+        } while (thisBytes > 0);
+      }
 
-      return numItems;
+      Interlocked.Add(ref totalBytesRead, bytesRead);
+
+      if (sourceAreEncodedTrainingPositionCompressed)
+      {
+        int numItems = bytesRead / Marshal.SizeOf(typeof(EncodedTrainingPositionCompressed));
+        int leftover = bytesRead % Marshal.SizeOf(typeof(EncodedTrainingPositionCompressed));
+        if (leftover != 0)
+        {
+          throw new Exception("Number of bytes read not a multiple of EncodedPolicyVectorCompressed size");
+        }
+
+        if (compressedBufferPreallocated == null || compressedBufferPreallocated.Length < numItems)
+        {
+          const int MAX_POSITIONS_PER_STREAM = 200 * 10; // assume 10 games, worst case 200 ply on average
+          compressedBufferPreallocated = new EncodedTrainingPositionCompressed[Math.Max(numItems, MAX_POSITIONS_PER_STREAM)];
+        }
+        ObjUtils.CopyBytesIntoStructArray(rawBuffer, compressedBufferPreallocated, bytesRead); 
+        EncodedTrainingPositionCompressedConverter.Decompress(compressedBufferPreallocated, buffer, numItems);
+
+        return numItems;
+      }
+      else
+      {
+        return ObjUtils.CopyBytesIntoStructArray(rawBuffer, buffer, bytesRead);
+      }
     }
+
+    [ThreadStatic]
+    static EncodedTrainingPositionCompressed[] compressedBufferPreallocated = null;
+
 
   }
 }
