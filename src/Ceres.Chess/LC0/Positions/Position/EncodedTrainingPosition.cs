@@ -15,9 +15,8 @@
 
 using System;
 using System.Runtime.InteropServices;
-using System.Security.Cryptography.X509Certificates;
+
 using Ceres.Chess.Positions;
-using Google.Protobuf.Reflection;
 
 #endregion
 
@@ -63,6 +62,15 @@ namespace Ceres.Chess.EncodedPositions
     /// compared to what needs to be fed to the neural network.
     /// </summary>
     public readonly EncodedPositionWithHistory PositionWithBoardsMirrored;
+
+    #endregion
+
+    #region Setters
+
+    internal unsafe void SetVersion(int version) { fixed (int* pVersion = &Version) { *pVersion = version;  }  }
+    internal unsafe void SetInputFormat(int inputFormat) { fixed (int* pInputFormat = &InputFormat) { *pInputFormat = inputFormat; } }
+    internal unsafe void SetPositionWithBoardsMirrored(in EncodedPositionWithHistory pos) { fixed (EncodedPositionWithHistory* pPos = &PositionWithBoardsMirrored) { *pPos = pos; } }
+    internal unsafe void SetPolicies(in EncodedPolicyVector policies) { fixed (EncodedPolicyVector* pPolicies = &Policies) { *pPolicies = policies; } }
 
     #endregion
 
