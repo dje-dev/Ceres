@@ -17,6 +17,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.Text;
 
@@ -44,6 +46,43 @@ namespace Ceres.Base.Misc
         return (T)formatter.Deserialize(stream);
       }
 #endif
+    }
+
+    /// <summary>
+    /// Interprets the given byte array as an array of structures of type T and copies into a specified output buffer of type T.
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    /// <param name="rawBuffer"></param>
+    /// <param name="buffer"></param>
+    /// <param name="bytesRead"></param>
+    /// <returns></returns>
+    /// <exception cref="Exception"></exception>
+    /// <exception cref="NotImplementedException"></exception>
+    public static unsafe int CopyBytesIntoStructArray<T>(byte[] rawBuffer, T[] buffer, int bytesRead) where T : unmanaged
+    {
+      int itemSize = Marshal.SizeOf(typeof(T));
+      if (bytesRead == 0 || bytesRead % itemSize != 0)
+      {
+        throw new Exception($"ReadFromStream returned {bytesRead} which is not a multiple of intended structure size");
+      }
+
+      // Determine and validate number of items.
+      int numItems = bytesRead / itemSize;
+      if (numItems > buffer.Length)
+      {
+        throw new NotImplementedException($"buffer sized {buffer.Length} too small for required {numItems}");
+      }
+
+      // Copy items into target buffer.
+      fixed (byte* source = &rawBuffer[0])
+      {
+        fixed (T* target = &buffer[0])
+        {
+          Unsafe.CopyBlock(target, source, (uint)bytesRead);
+        }
+      }
+
+      return numItems;
     }
 
 
