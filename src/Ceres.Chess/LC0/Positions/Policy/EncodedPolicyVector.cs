@@ -1913,6 +1913,11 @@ namespace Ceres.Chess.EncodedPositions
       }
     }
 
+    /// <summary>
+    /// Returns a view 
+    /// </summary>
+    internal unsafe Span<float> ProbabilitiesSpan => MemoryMarshal.CreateSpan(ref ProbabilitiesPtr[0], POLICY_VECTOR_LENGTH);
+
 
     /// <summary>
     /// Returns the Encoded move and associated policy for the move at a specified index.
