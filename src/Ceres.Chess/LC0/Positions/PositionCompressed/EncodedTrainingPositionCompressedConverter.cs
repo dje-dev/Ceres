@@ -28,6 +28,10 @@ namespace Ceres.Chess.EncodedPositions
   /// </summary>
   public static class EncodedTrainingPositionCompressedConverter
   {
+    // For files written using chunking, we mark the first position of a game
+    // with a sentinel value so the can be unchunked.
+    public const float SENTINEL_MARK_FIRST_MOVE_IN_GAME_IN_UNUSED1 = 999;
+
     /// <summary>
     /// Decompresses array of compressed training positions to uncompressed training positions.
     /// </summary>
@@ -45,6 +49,11 @@ namespace Ceres.Chess.EncodedPositions
         dst.SetInputFormat(src.InputFormat);
         DecompressPolicy(in src.Policies, ref Unsafe.AsRef(dst.Policies));
         dst.SetPositionWithBoardsMirrored(in src.PositionWithBoardsMirrored);
+
+        if (dst.PositionWithBoardsMirrored.MiscInfo.InfoTraining.Unused1 == EncodedTrainingPositionCompressedConverter.SENTINEL_MARK_FIRST_MOVE_IN_GAME_IN_UNUSED1)
+        {
+//          Console.WriteLine("sentinel at " + i);
+        }
       }
     }
 
@@ -81,6 +90,19 @@ namespace Ceres.Chess.EncodedPositions
     {
       EncodedPolicyVectorCompressed dest = default;
 
+      // Check a few slots to see if the filler value for illegal moves seems to be -1.
+      bool sawNegativeOne = false;
+      for (int i = 0; i < 10; i++)
+      {
+        if (source.ProbabilitiesPtr[i] == -1.0f)
+        {
+          sawNegativeOne = true;
+          break;
+        }
+      }
+
+      dest.FillValue = sawNegativeOne ? -1 : 0;
+
       // Fill indices with sentinel value.
       dest.IndicesSpan.Fill(ushort.MaxValue);
 
@@ -89,7 +111,7 @@ namespace Ceres.Chess.EncodedPositions
       for (int i=0;i<EncodedPolicyVector.POLICY_VECTOR_LENGTH;i++)
       {
         float value = source.ProbabilitiesPtr[i];
-        if (value > 0.0f)
+        if (value != dest.FillValue)
         {
           dest.IndicesSpan[nextSlot] = (ushort)i;
           dest.ProbabilitiesSpan[nextSlot] = value;
@@ -102,18 +124,6 @@ namespace Ceres.Chess.EncodedPositions
         }
       }
 
-      // Check a few slots to see if the filler value for illegal moves seems to be -1.
-      bool sawNegativeOne = false;
-      for (int i=0; i<10;i++)
-      {
-        if (source.ProbabilitiesPtr[i] == -1.0f)
-        {
-          sawNegativeOne = true;
-          break;
-        }
-      }
-
-      dest.FillValue = sawNegativeOne ? -1 : 0;
       return dest;
     }
 
