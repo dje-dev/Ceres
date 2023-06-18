@@ -1916,7 +1916,7 @@ namespace Ceres.Chess.EncodedPositions
     /// <summary>
     /// Returns a view 
     /// </summary>
-    internal unsafe Span<float> ProbabilitiesSpan => MemoryMarshal.CreateSpan(ref ProbabilitiesPtr[0], POLICY_VECTOR_LENGTH);
+    public unsafe Span<float> ProbabilitiesSpan => MemoryMarshal.CreateSpan(ref ProbabilitiesPtr[0], POLICY_VECTOR_LENGTH);
 
 
     /// <summary>
