@@ -26,7 +26,7 @@ namespace Ceres.Chess.EncodedPositions
   /// (binary compatible with LZ training files).
   /// </summary>
   [StructLayout(LayoutKind.Sequential, Pack = 1)]
-  public readonly struct EncodedPositionEvalMiscInfoV6: IEquatable<EncodedPositionEvalMiscInfoV6>
+  public readonly record struct EncodedPositionEvalMiscInfoV6: IEquatable<EncodedPositionEvalMiscInfoV6>
   {
     // Bitfield with the following allocation:
     //  bit 7: side to move (input type 3)
@@ -214,31 +214,6 @@ namespace Ceres.Chess.EncodedPositions
     /// </summary>
     public float Uncertainty => float.IsNaN(OriginalQ) ? FILL_IN_UNCERTAINTY : MathF.Pow(OriginalQ - BestQ, 2);
 
-
-    public override int GetHashCode()
-    {
-      throw new NotImplementedException();
-      //int part1 = ResultFromOurPerspective.GetHashCode();
-      //int part2 = HashCode.Combine(BestD, BestQ, RootD, BestD);
-
-      //return HashCode.Combine(part1, part2);
-    }
-
-
-    public override bool Equals(object obj)
-    {
-      if (obj is EncodedPositionEvalMiscInfoV6)
-        return Equals((EncodedPositionEvalMiscInfoV6)obj);
-      else
-        return false;
-    }
-
-
-    public bool Equals(EncodedPositionEvalMiscInfoV6 other)
-    {
-      throw new NotImplementedException();
-    }
-
-#endregion
+    #endregion
   }
 }

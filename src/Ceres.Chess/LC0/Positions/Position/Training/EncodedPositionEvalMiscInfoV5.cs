@@ -26,7 +26,7 @@ namespace Ceres.Chess.EncodedPositions
   /// (binary compatible with LZ training files).
   /// </summary>
   [StructLayout(LayoutKind.Sequential, Pack = 1)]
-  public readonly struct EncodedPositionEvalMiscInfoV5 : IEquatable<EncodedPositionEvalMiscInfoV5>
+  public readonly record struct EncodedPositionEvalMiscInfoV5 : IEquatable<EncodedPositionEvalMiscInfoV5>
   {
     /// <summary>
     /// Unused.
@@ -73,34 +73,5 @@ namespace Ceres.Chess.EncodedPositions
     public readonly float BestM;
 
     public readonly float PliesLeft;
-
-
-    public override int GetHashCode()
-    {
-      int part1 = ResultFromOurPerspective.GetHashCode();
-      int part2 = HashCode.Combine(BestD, BestQ, RootD, BestD);
-
-      return HashCode.Combine(part1, part2);
-    }
-
-
-    public override bool Equals(object obj)
-    {
-      if (obj is EncodedPositionEvalMiscInfoV5)
-        return Equals((EncodedPositionEvalMiscInfoV5)obj);
-      else
-        return false;
-    }
-
-
-    public bool Equals(EncodedPositionEvalMiscInfoV5 other)
-    {
-      return  this.ResultFromOurPerspective == other.ResultFromOurPerspective
-           && this.RootQ == other.RootQ
-           && this.BestQ == other.BestQ
-           && this.RootD == other.RootD
-           && this.BestD == other.BestD;
-    }
-
   }
 }

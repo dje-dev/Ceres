@@ -26,14 +26,13 @@ namespace Ceres.Chess.EncodedPositions
   /// (binary compatible with LZ training files).
   /// </summary>
   [StructLayout(LayoutKind.Sequential, Pack = 1)]
-  public readonly struct EncodedPositionEvalMiscInfoV4 : IEquatable<EncodedPositionEvalMiscInfoV4>
+  public readonly record struct EncodedPositionEvalMiscInfoV4 : IEquatable<EncodedPositionEvalMiscInfoV4>
   {
     // **********************************************************************
     // NOTE:
     //   The field InputFormat in EncodedTrainingPosition would have to be deleted
     //   if we wanted to support V4 since it is not present in that format.
     // ***********************************************************************
-
 
     //
     /// <summary>
@@ -64,35 +63,6 @@ namespace Ceres.Chess.EncodedPositions
     /// Available only for V4 and later training data
     /// </summary>
     public readonly float BestD;
-
-    // --------------------------------------------------------------------------------------------
-    public override int GetHashCode()
-    {
-      int part1 = ResultFromOurPerspective.GetHashCode();
-      int part2 = HashCode.Combine(BestD, BestQ, RootD, BestD);
-
-      return HashCode.Combine(part1, part2);
-    }
-
-
-    // --------------------------------------------------------------------------------------------
-    public override bool Equals(object obj)
-    {
-      if (obj is EncodedPositionEvalMiscInfoV4)
-        return Equals((EncodedPositionEvalMiscInfoV4)obj);
-      else
-        return false;
-    }
-
-    // --------------------------------------------------------------------------------------------
-    public bool Equals(EncodedPositionEvalMiscInfoV4 other)
-    {
-      return this.ResultFromOurPerspective == other.ResultFromOurPerspective
-           && this.RootQ == other.RootQ
-           && this.BestQ == other.BestQ
-           && this.RootD == other.RootD
-           && this.BestD == other.BestD;
-    }
 
   }
 }
