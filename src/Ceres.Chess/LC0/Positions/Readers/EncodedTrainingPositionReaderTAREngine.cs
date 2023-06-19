@@ -32,6 +32,7 @@ using Ceres.Base.Misc;
 
 #endregion
 
+
 namespace Ceres.Chess.EncodedPositions
 {
   /// <summary>
@@ -43,10 +44,25 @@ namespace Ceres.Chess.EncodedPositions
   /// </summary>
   public static class EncodedTrainingPositionReaderTAREngine
   {
+    public const int MAX_POSITIONS_PER_STREAM = 100 * 300; // assume 100 games, worst case 300 ply on average
+
     [Flags]
     public enum ReaderOptions {  None, FillInMoveNum };
 
-    public static IEnumerable<(EncodedTrainingPosition[] gamePositions, int indexInGame)> 
+
+    /// <summary>
+    /// Enumerate all the games in a TAR file.
+    /// </summary>
+    /// <param name="trainingTARFileName"></param>
+    /// <param name="processFilePredicate"></param>
+    /// <param name="options"></param>
+    /// <param name="maxGames"></param>
+    /// <param name="maxPositions"></param>
+    /// <param name="filterOutFRCGames"></param>
+    /// <param name="skipCount"></param>
+    /// <param name="maxPosToEvaluate"></param>
+    /// <returns></returns>
+    public static IEnumerable<(Memory<EncodedTrainingPosition> gamePositions, int indexInGame)> 
       EnumeratedPositions(string trainingTARFileName,
                           Predicate<string> processFilePredicate = null,
                           ReaderOptions options = ReaderOptions.None,
@@ -56,14 +72,14 @@ namespace Ceres.Chess.EncodedPositions
                           int skipCount = 1, 
                           int maxPosToEvaluate = int.MaxValue)
     {
-      var reader = EnumerateRawPos(trainingTARFileName, processFilePredicate, options, maxGames, maxPositions, filterOutFRCGames);
+      var reader = EnumerateGames(trainingTARFileName, processFilePredicate, options, maxGames, maxPositions, filterOutFRCGames);
 
       int numSeen = 0;
       int numUsed = 0;
       int skipCountBase = Environment.TickCount % skipCount; // for randomization
 
       // For ever game in TAR....
-      foreach ((EncodedTrainingPosition[] gamePositionsBuffer, int numPosThisBuffer) in reader)
+      foreach (Memory<EncodedTrainingPosition> gamePositionsBuffer in reader)
       {
         if (numUsed >= maxPosToEvaluate)
         {
@@ -71,7 +87,7 @@ namespace Ceres.Chess.EncodedPositions
         }
 
         // For every position.....
-        for (int i = 0; i < numPosThisBuffer; i++)
+        for (int i = 0; i < gamePositionsBuffer.Length; i++)
         {
           // Skip most positions so we get sampling across many games.
           if ((skipCountBase + numSeen++) % skipCount != skipCount - 1)
@@ -89,38 +105,98 @@ namespace Ceres.Chess.EncodedPositions
       }
     }
 
-    public static IEnumerable<(EncodedTrainingPosition[], int)> EnumerateRawPos(string trainingTARFileName,
-                                                                              Predicate<string> processFilePredicate = null,
-                                                                              ReaderOptions options = ReaderOptions.None,
-                                                                              int maxGames = int.MaxValue,
-                                                                              int maxPositions = int.MaxValue,
-                                                                              bool filterOutFRCGames = true)
+    public static IEnumerable<Memory<EncodedTrainingPosition>> EnumerateGames(string trainingTARFileName,
+                                                                          Predicate<string> processFilePredicate = null,
+                                                                          ReaderOptions options = ReaderOptions.None,
+                                                                          int maxGames = int.MaxValue,
+                                                                          int maxPositions = int.MaxValue,
+                                                                          bool filterOutFRCGames = true)
     {
-      if (!trainingTARFileName.ToUpper().EndsWith("TAR")) throw new Exception("expected TAR");
-
-      byte[] buffer = new byte[10 * 1000 * 1000];
-
-      const int MAX_POS_PER_GAME = 2000;
-      EncodedTrainingPosition[] rawPosBuffer = new EncodedTrainingPosition[MAX_POS_PER_GAME];
-
       int numGamesProcessed = 0;
       int numPositionsProcessed = 0;
-      using (Stream stream = System.IO.File.OpenRead(trainingTARFileName))
+
+      foreach (Memory<EncodedTrainingPosition> gamePositions in EnumerateGamesCore(trainingTARFileName, processFilePredicate))
+      {
+        string fen = gamePositions.Span[0].PositionWithBoardsMirrored.FinalPosition.FEN;
+        bool isPossiblyStart = fen.Contains(@"/pppppppp/8/8/8/8/");
+        if (!isPossiblyStart)
+        {
+          Console.WriteLine(fen);
+        }
+
+        // Possibly stop early if reached max positions or games.
+        if (numPositionsProcessed >= maxPositions
+          || numGamesProcessed >= maxGames)
+        {
+          yield break;
+        }
+
+        if (options.HasFlag(ReaderOptions.FillInMoveNum))
+        {
+          for (int moveNum = 0; moveNum < gamePositions.Length; moveNum++)
+          {
+            // TO DO: Find a more elegant way of setting value; this reflection does not work due to copies being made
+            // FieldInfo fieldMoveCount = typeof(LZPositionMiscInfo).GetField("MoveCount");
+            //fieldMoveCount.SetValue(rawPosBuffer[moveNum].MiscInfo, moveCountValue);
+
+            // We start counting at 1, and truncate at 255 due to size being byte
+            // WARNING: this potential truncation causes these values to be not always correct
+            //byte moveCountValue = moveNum >= 254 ? (byte)255 : (byte)(moveNum + 1);
+            //SetMoveNum(rawPosBuffer, moveNum, moveCountValue);
+
+            throw new NotImplementedException();
+          }
+        }
+
+        if (filterOutFRCGames)
+        {
+          Position firstGamePosition = EncodedPositionWithHistory.PositionFromEncodedTrainingPosition(in gamePositions.Span[0]);
+          if (firstGamePosition.LooksLikeFRCPosition)
+          {
+            continue;
+          }
+        }
+
+        yield return gamePositions;
+
+        numGamesProcessed++;
+        numPositionsProcessed += gamePositions.Length;
+      }
+    }
+
+
+    /// <summary>
+    /// Core enumerator which opens TAR file and iterates over all entries matching specified name filter.
+    /// </summary>
+    /// <param name="trainingTARFileName"></param>
+    /// <param name="processFilePredicate"></param>
+    /// <returns></returns>
+    /// <exception cref="Exception"></exception>
+    static IEnumerable<Memory<EncodedTrainingPosition>> EnumerateGamesCore(string trainingTARFileName,
+                                                                           Predicate<string> processFilePredicate = null)
+    {      
+      EncodedTrainingPosition[] positionsBuffer = new EncodedTrainingPosition[MAX_POSITIONS_PER_STREAM];
+      byte[] streamByteBuffer = new byte[Marshal.SizeOf<EncodedTrainingPositionCompressed>() * MAX_POSITIONS_PER_STREAM];
+
+
+      CheckBuffersAllocated();
+      if (!trainingTARFileName.ToUpper().EndsWith("TAR"))
+      {
+        throw new Exception("expected TAR");
+      }
+
+
+      using (Stream stream = File.OpenRead(trainingTARFileName))
       {
         IReader reader = TarReader.Open(stream);
         while (reader.MoveToNextEntry())
         {
-          if (numPositionsProcessed >= maxPositions)
-          {
-            yield break;
-          }
-
           if (reader.Entry.IsDirectory)
           {
             continue; 
           }
 
-          // Skip if this file does not match our filter
+          // Skip if this file does not match our filter.
           if (processFilePredicate != null && !processFilePredicate(reader.Entry.Key.ToUpper()))
           {
             continue;
@@ -136,47 +212,55 @@ namespace Ceres.Chess.EncodedPositions
 
             using (EntryStream es = reader.OpenEntryStream())
             {
-              numGamesProcessed++;
-              //if (numGamesProcessed % 1000 == 0) Console.WriteLine("  games read " + numGamesProcessed + " " + (bytesWritten / 1_000_000_000.0) + " GB");
+              // Process all files within
+              bool isZST = fileName.ToUpper().EndsWith(".ZST");
+              bool isGZ = fileName.ToUpper().EndsWith(".GZ");
 
-              // Process all GZIP files within
-              Stream decompressionStream = fileName.EndsWith("gz") ? new GZipStream(es, CompressionMode.Decompress)
-                                                             : new ZstandardStream(es, CompressionMode.Decompress);
+              if (!isZST && !isGZ)
+              {
+                throw new Exception("TAR entry name was expected to be a ZST or GZ file, saw instead " + fileName);
+              }
+
+              Stream decompressionStream = isGZ ? new GZipStream(es, CompressionMode.Decompress)
+                                                : new ZstandardStream(es, CompressionMode.Decompress);
               using (decompressionStream)
               {
-                if (numGamesProcessed >= maxGames) yield break;
-
                 // Uncompressed read
-                int numRead = ReadFromStream(decompressionStream, buffer, ref rawPosBuffer, areCompressedPositions);
-
-                if (options.HasFlag(ReaderOptions.FillInMoveNum))
+                int numRead = ReadFromStream(decompressionStream, streamByteBuffer, ref positionsBuffer, areCompressedPositions);
+                
+                if (numRead == 0)
                 {
-                  for (int moveNum = 0; moveNum < numRead; moveNum++)
-                  {
-                    // TO DO: Find a more elegant way of setting value; this reflection does not work due to copies being made
-                    // FieldInfo fieldMoveCount = typeof(LZPositionMiscInfo).GetField("MoveCount");
-                    //fieldMoveCount.SetValue(rawPosBuffer[moveNum].MiscInfo, moveCountValue);
-
-                    // We start counting at 1, and truncate at 255 due to size being byte
-                    // WARNING: this potential truncation causes these values to be not always correct
-                    //byte moveCountValue = moveNum >= 254 ? (byte)255 : (byte)(moveNum + 1);
-                    //SetMoveNum(rawPosBuffer, moveNum, moveCountValue);
-
-                    throw new NotImplementedException();
-                  }
+                  throw new Exception("Stream contained no data, expected EncodedTrainingPosition");
                 }
 
-                if (filterOutFRCGames)
+                bool isPackedGames = positionsBuffer[0].PositionWithBoardsMirrored.MiscInfo.InfoTraining.Unused1 == EncodedTrainingPositionCompressedConverter.SENTINEL_MARK_FIRST_MOVE_IN_GAME_IN_UNUSED1;
+                if (!isPackedGames)
                 {
-                  Position firstGamePosition = EncodedPositionWithHistory.PositionFromEncodedTrainingPosition(in rawPosBuffer[0]);
-                  if (firstGamePosition.LooksLikeFRCPosition)
+                  // Single game, not packed with multiple.
+                  yield return positionsBuffer.AsMemory(0, numRead);
+                }
+                else
+                {
+                  // Set of packed games.
+                  int curIndex = 0;
+                  while (curIndex < numRead)
                   {
-                    continue;
+                    // Find the start of the next game to know how long this game is.
+                    int nextStartIndex = curIndex + 1;
+                    while (nextStartIndex < numRead 
+                        && positionsBuffer[nextStartIndex].PositionWithBoardsMirrored.MiscInfo.InfoTraining.Unused1 != EncodedTrainingPositionCompressedConverter.SENTINEL_MARK_FIRST_MOVE_IN_GAME_IN_UNUSED1)
+                    {
+                      nextStartIndex++;
+                    }
+
+                    int lengthThisGame = nextStartIndex - curIndex;
+                    Memory<EncodedTrainingPosition> thisGame = new Memory<EncodedTrainingPosition>(positionsBuffer, curIndex, lengthThisGame);
+                    thisGame.Span[0].PositionWithBoardsMirrored.MiscInfo.InfoTraining.SetUnused1(0); // reset the sentinel
+                    yield return thisGame;
+
+                    curIndex = nextStartIndex;
                   }
                 }
-
-                numPositionsProcessed += numRead;
-                yield return (rawPosBuffer, numRead);
               }
             }
           }
@@ -185,9 +269,23 @@ namespace Ceres.Chess.EncodedPositions
     }
 
 
-    static long totalBytesRead = 0;
-    public static unsafe int ReadFromStream(Stream stream, byte[] rawBuffer, ref EncodedTrainingPosition[] buffer, bool sourceAreEncodedTrainingPositionCompressed)
+
+    [ThreadStatic]
+    static EncodedTrainingPositionCompressed[] compressedPositionBuffer;
+
+    static void CheckBuffersAllocated()
     {
+      if (compressedPositionBuffer == null)
+      {
+        compressedPositionBuffer = new EncodedTrainingPositionCompressed[MAX_POSITIONS_PER_STREAM];
+      }
+    }
+
+    static long totalBytesRead = 0;
+    static unsafe int ReadFromStream(Stream stream, byte[] rawBuffer, ref EncodedTrainingPosition[] buffer, bool sourceAreEncodedTrainingPositionCompressed)
+    {
+      CheckBuffersAllocated();
+
       int bytesRead = 0;
       if (false) // slower (?)
       {
@@ -226,13 +324,8 @@ namespace Ceres.Chess.EncodedPositions
           throw new Exception("Number of bytes read not a multiple of EncodedPolicyVectorCompressed size");
         }
 
-        if (compressedBufferPreallocated == null || compressedBufferPreallocated.Length < numItems)
-        {
-          const int MAX_POSITIONS_PER_STREAM = 200 * 10; // assume 10 games, worst case 200 ply on average
-          compressedBufferPreallocated = new EncodedTrainingPositionCompressed[Math.Max(numItems, MAX_POSITIONS_PER_STREAM)];
-        }
-        ObjUtils.CopyBytesIntoStructArray(rawBuffer, compressedBufferPreallocated, bytesRead); 
-        EncodedTrainingPositionCompressedConverter.Decompress(compressedBufferPreallocated, buffer, numItems);
+        ObjUtils.CopyBytesIntoStructArray(rawBuffer, compressedPositionBuffer, bytesRead); 
+        EncodedTrainingPositionCompressedConverter.Decompress(compressedPositionBuffer, buffer, numItems);
 
         return numItems;
       }
@@ -241,9 +334,6 @@ namespace Ceres.Chess.EncodedPositions
         return ObjUtils.CopyBytesIntoStructArray(rawBuffer, buffer, bytesRead);
       }
     }
-
-    [ThreadStatic]
-    static EncodedTrainingPositionCompressed[] compressedBufferPreallocated = null;
 
 
   }

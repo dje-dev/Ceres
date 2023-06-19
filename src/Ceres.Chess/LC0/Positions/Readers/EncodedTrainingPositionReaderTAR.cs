@@ -45,11 +45,11 @@ namespace Ceres.Chess.EncodedPositions
     /// </summary>
     public IEnumerable<Memory<EncodedTrainingPosition>> EnumerateGames()
     {
-      var reader = EncodedTrainingPositionReaderTAREngine.EnumerateRawPos(FileName, s => true, default);
+      var reader = EncodedTrainingPositionReaderTAREngine.EnumerateGames(FileName, s => true, default);
 
-      foreach ((EncodedTrainingPosition[] gamePositionsBuffer, int numPosThisBuffer) in reader)
+      foreach (Memory<EncodedTrainingPosition> games in reader)
       {
-        yield return new Memory<EncodedTrainingPosition>(gamePositionsBuffer).Slice(0, numPosThisBuffer);
+        yield return games;
       }
     }
 
@@ -59,13 +59,13 @@ namespace Ceres.Chess.EncodedPositions
     /// </summary>
     public IEnumerable<EncodedTrainingPosition> EnumeratePositions()
     {
-      var reader = EncodedTrainingPositionReaderTAREngine.EnumerateRawPos(FileName, s => true, default);
+      var reader = EncodedTrainingPositionReaderTAREngine.EnumerateGames(FileName, s => true, default);
 
-      foreach ((EncodedTrainingPosition[] gamePositionsBuffer, int numPosThisBuffer) in reader)
+      foreach (Memory<EncodedTrainingPosition> gamePositionsBuffer in reader)
       {
-        for (int i = 0; i < numPosThisBuffer; i++)
+        for (int i = 0; i < gamePositionsBuffer.Length; i++)
         {
-          yield return gamePositionsBuffer[i];
+          yield return gamePositionsBuffer.Span[i];
         }
       }
     }
