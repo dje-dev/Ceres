@@ -14,6 +14,7 @@
 #region Using directives
 
 using System;
+using System.Text;
 
 #endregion
 
@@ -36,5 +37,44 @@ namespace Ceres.Base.Misc
       Console.WriteLine(str);
       Console.ForegroundColor = priorColor;
     }
+
+
+    /// <summary>
+    /// Prompts for and returns a string from the Console, without echoing the input.
+    /// </summary>
+    /// <param name="prompt"></param>
+    /// <returns></returns>
+    public static string ConsoleReadStringHidden(string prompt)
+    {
+      Console.Write(prompt + ": ");
+      StringBuilder inputStr = new StringBuilder();
+      while (true)
+      {
+        ConsoleKeyInfo keyInfo = Console.ReadKey(intercept: true);
+        if (keyInfo.Key == ConsoleKey.Enter)
+        {
+          Console.WriteLine();
+          return inputStr.ToString();
+        }
+        else if (keyInfo.Key == ConsoleKey.Backspace)
+        {
+          if (inputStr.Length > 0)
+          {
+            inputStr.Remove(inputStr.Length - 1, 1);
+
+            // Move cursor one step back, write a space to erase the last dot, and then move one step back again.
+            Console.SetCursorPosition(Console.CursorLeft - 1, Console.CursorTop);
+            Console.Write(" ");
+            Console.SetCursorPosition(Console.CursorLeft - 1, Console.CursorTop);
+          }
+        }
+        else
+        {
+          inputStr.Append(keyInfo.KeyChar);
+          Console.Write(".");
+        }
+      }
+    }
+
   }
 }
