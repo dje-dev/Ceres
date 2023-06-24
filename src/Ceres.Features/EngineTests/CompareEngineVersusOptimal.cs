@@ -39,6 +39,7 @@ using Ceres.Features.Players;
 using Ceres.Chess.NNEvaluators.LC0DLL;
 using Ceres.MCTS.MTCSNodes.Analysis;
 using ManagedCuda.BasicTypes;
+using Ceres.Features.UCI;
 
 #endregion
 
@@ -495,16 +496,23 @@ namespace Ceres.Features.EngineTests
 
     private static void DumpEngineVerboseMoveStats(string desc, GameEngineSearchResult search)
     {
+      Console.WriteLine(desc);
       if (search is GameEngineSearchResultCeres)
       {
-        Console.WriteLine(desc);
         (search as GameEngineSearchResultCeres).Search.Manager.DumpRootMoveStatistics();
 
         Console.WriteLine(desc);
         MCTSPosTreeNodeDumper.DumpPV((search as GameEngineSearchResultCeres).Search.SearchRootNode, true, Console.Out);
-
+      }
+      else if (search.VerboseMoveStats != null)
+      {
+        foreach (VerboseMoveStat stat in search.VerboseMoveStats)
+        {
+          Console.WriteLine("  " + stat.ToString());
+        }
       }
     }
+
 
     private static void GetBestMoveAndNode(PositionWithHistory pos, GameEngineSearchResult search1, out MCTSNode root1, out MGMove move1)
     {
