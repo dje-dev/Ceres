@@ -41,8 +41,10 @@ namespace Ceres.Chess.LC0.WeightsProtobuf
     /// <returns></returns>
     public static float[] GetLayerLinear16(Weights.Layer layer, out float scaleUsed)
     {
-      float[] ret = new float[layer.Params.Length / 2];
-
+      // For efficiency, allocate without initialization which is safe because 
+      // all array elements are set below.
+      float[] ret = GC.AllocateUninitializedArray<float>(layer.Params.Length / 2);
+            
       float minVal = layer.MinVal;
       float maxVal = layer.MaxVal;
       scaleUsed = (maxVal - minVal) / 65535.0f;
