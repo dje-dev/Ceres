@@ -234,8 +234,24 @@ namespace Ceres.Base.DataType
     {
       float[] result = new float[tensor.GetLength(2)];
       Buffer.BlockCopy(tensor,
-                              (firstIndex * tensor.GetLength(1) * tensor.GetLength(2) + secondIndex * tensor.GetLength(2)) * sizeof(float),
-                               result, 0, sizeof(float) * tensor.GetLength(2));
+                       (firstIndex * tensor.GetLength(1) * tensor.GetLength(2) + secondIndex * tensor.GetLength(2)) * sizeof(float),
+                       result, 0, sizeof(float) * tensor.GetLength(2));
+      return result;
+    }
+
+    /// <summary>
+    /// Extracts a 1D subarray from a 2D array based on specified index of the first dimension.
+    /// </summary>
+    /// <param name="tensor"></param>
+    /// <param name="firstIndex"></param>
+    /// <returns></returns>
+    public static float[] ExtractSubArray1D(float[,] tensor, int firstIndex)
+    {
+      // extract
+      float[] result = new float[tensor.GetLength(1)];
+      Buffer.BlockCopy(tensor,
+                       (firstIndex * tensor.GetLength(1)) * sizeof(float),
+                       result, 0, sizeof(float) * tensor.GetLength(1));
       return result;
     }
 
