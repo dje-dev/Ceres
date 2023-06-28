@@ -88,6 +88,30 @@ namespace Ceres.Base.DataType
 
 
     /// <summary>
+    /// Converts a #D array to a 1D array.
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    /// <param name="raw"></param>
+    /// <returns></returns>
+    public static T[] To1D<T>(T[,,] raw)
+    { 
+      if (raw.Length == 0) return Array.Empty<T>();
+
+      int countRight = raw.GetLength(2);
+      int countMiddle = raw.GetLength(1);
+      int totalCount = countRight * countMiddle * raw.GetLength(0);
+      T[] ret = new T[totalCount];
+      int offset = 0;
+      for (int i = 0; i < raw.GetLength(0); i++)
+        for (int j = 0; j < countMiddle; j++)
+          for (int k = 0; k < countRight; k++)
+            ret[offset++] = raw[i, j, k];
+
+      return ret;    
+    }
+
+
+    /// <summary>
     /// 
     /// </summary>
     /// <typeparam name="T"></typeparam>
