@@ -47,6 +47,7 @@ using Ceres.Features.Visualization.AnalysisGraph;
 using Ceres.Chess.Textual.PgnFileTools;
 using Ceres.Chess.Games.Utils;
 using LINQPad.Controls;
+using Ceres.Features.Suites;
 
 #endregion
 
@@ -567,7 +568,15 @@ namespace Ceres.Features.UCI
     {
       if (CeresEngine?.Search != null)
       {
-        SearchPrincipalVariation pv2 = new SearchPrincipalVariation(CeresEngine.Search.Manager.Root);
+        if (withDetail)
+        {
+          MCTSPosTreeNodeDumper.DumpPV(CeresEngine.Search.SearchRootNode, true, this.OutStream);
+        }
+        else
+        {
+          SearchPrincipalVariation pv2 = new SearchPrincipalVariation(CeresEngine.Search.Manager.Root);
+          UCIWriteLine(pv2.ShortStr());
+        }
       }
       else
       {
