@@ -291,22 +291,70 @@ namespace Chess.Ceres.NNEvaluators
         Memory<float> flatValuesMovesM = flatValuesMoves == null ? default : flatValuesMoves.AsMemory().Slice(0, inputSizeMoves);
 
         ConverterToFlat(batch, MovesEnabled, flatValuesAttention, flatValuesMoves);
-        PositionEvaluationBatch ret = DoEvaluateBatch(batch, flatValuesAttentionM, flatValuesMoves, batch.NumPos, retrieveSupplementalResults);
+
+        bool xPosMoveIsLegal(int posNum, int nnIndexNum)
+        {
+          if (batch.Moves == null)
+          {
+            return true; // unable to disqualify
+          }
+          else
+          {
+            bool shouldFlip = batch.Positions[posNum].SideToMove == SideType.Black;
+            EncodedMove em = EncodedMove.FromNeuralNetIndex(nnIndexNum);
+            
+            ConverterMGMoveEncodedMove.FromTo mm = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMoveFromTo(em, shouldFlip);
+            foreach (MGMove legalMove in batch.Moves[posNum]) // TO DO: improve effiiency
+            {
+              if (legalMove.FromSquare.SquareIndexStartH1 == mm.From 
+               && legalMove.ToSquare.SquareIndexStartH1 == mm.To)
+              {
+                return true;
+              }
+            }
+            return false;
+          }
+          
+          //return tpgRecordBuffer[(numBatchesDone * SUBBATCH_SIZE) + posNum].Policy[nnIndexNum] > 0;
+        }
+
+        bool PosMoveIsLegal(int posNum, int nnIndexNum)
+        {
+          return true;
+
+          // TODO: The code below doesn't quite work, fix someday
+          //       though masking may be unnecessary.
+          var ret = xPosMoveIsLegal(posNum, nnIndexNum);
+          //Console.WriteLine(ret);
+          return ret;
+        }
+
+        Func<int, int, bool> posMoveIsLegal = null; // PosMoveIsLegal
+        PositionEvaluationBatch ret = DoEvaluateBatch(batch, flatValuesAttentionM, flatValuesMoves, batch.NumPos, 
+                                                      retrieveSupplementalResults, posMoveIsLegal);
         Debug.Assert(!retrieveSupplementalResults);
         return ret;
       }
       else
       {
+        Func<int, int, bool> posMoveIsLegal = null; // PosMoveIsLegal
+        bool PosMoveIsLegal(int posNum, int nnIndexNum)
+        {
+          return true; // ** TO DO? Maybe unnecessary?
+          //return tpgRecordBuffer[(numBatchesDone * SUBBATCH_SIZE) + posNum].Policy[nnIndexNum] > 0;
+        }
+
         int bufferLength = 112 * batch.NumPos * 64;
         float[] flatValues = ArrayPool<float>.Shared.Rent(bufferLength);
 
         batch.ValuesFlatFromPlanes(flatValues, false, Scale50MoveCounter);
-        PositionEvaluationBatch ret = DoEvaluateBatch(batch, flatValues, null, batch.NumPos, retrieveSupplementalResults);
+        PositionEvaluationBatch ret = DoEvaluateBatch(batch, flatValues, null, batch.NumPos, retrieveSupplementalResults, posMoveIsLegal);
 
         ArrayPool<float>.Shared.Return(flatValues);
         return ret;
       }
     }
+
 
     /// <summary>
     /// If this evaluator produces the same output as another specified evaluator.
@@ -337,7 +385,7 @@ namespace Chess.Ceres.NNEvaluators
     PositionEvaluationBatch DoEvaluateBatch(IEncodedPositionBatchFlat batch, 
                                             Memory<float> flatValuesPrimary, Memory<float> flatValuesSecondary,
                                             int numPos, bool retrieveSupplementalResults, 
-                                            Func<int,int, bool> posMoveIsLegal = null)
+                                            Func<int,int, bool> posMoveIsLegal)
     {
       if (retrieveSupplementalResults) throw new Exception("retrieveSupplementalResults not supported");
 
