@@ -323,22 +323,26 @@ namespace Ceres.MCTS.NodeCache
     /// <param name="resetNodeCacheInfoPtr"></param>
     public void ResetCache(bool resetNodeCacheInfoPtr)
     {
-      if (resetNodeCacheInfoPtr)
+      if (numInUse > 0)
       {
-        for (int i = 0; i < nodes.Length; i++)
+        if (resetNodeCacheInfoPtr)
         {
-          if (cachedNodesIndices[i] != 0)
+          for (int i = 0; i < nodes.Length; i++)
           {
-            ResetItemAtIndex(i, resetNodeCacheInfoPtr);
+            if (cachedNodesIndices[i] != 0)
+            {
+              ResetItemAtIndex(i, resetNodeCacheInfoPtr);
+            }
           }
         }
-      }
-      else
-      {
-        Array.Clear(cachedNodesIndices, 0, cachedNodesIndices.Length);
+        else
+        {
+          Array.Clear(cachedNodesIndices, 0, cachedNodesIndices.Length);
+        }
+
+        numInUse = 0;
       }
 
-      numInUse = 0;
       searchFreeEntryNextIndex = 0;
     }
 
