@@ -42,18 +42,26 @@ namespace Ceres.Chess.NNEvaluators
     /// <param name="count"></param>
     /// <param name="fen"></param>
     /// <returns></returns>
-    public static EncodedPositionBatchFlat MakeTestBatch(NNEvaluator evaluator, int count, string fen = null)
+    public static EncodedPositionBatchFlat MakeTestBatch(NNEvaluator evaluator, int count)
     {
       EncodedPositionBatchFlat batch;
 
-      if (fen == null) fen = Position.StartPosition.FEN;
-      Position rawPos = Position.FromFEN(fen);
-      MGPosition mgPos = MGPosition.FromPosition(rawPos);
+      // Even batch index positions will contain the start position.
+      Position rawPos0 = Position.StartPosition;
+      EncodedPositionWithHistory position0 = EncodedPositionWithHistory.FromPosition(rawPos0);
 
-      EncodedPositionWithHistory position = EncodedPositionWithHistory.FromFEN(fen);
+      // Odd batch index positions will contain the position after e4.
+      const string fenAfterE4 = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1";
+      Position rawPos1 = Position.FromFEN(fenAfterE4);
+      EncodedPositionWithHistory position1 = new EncodedPositionWithHistory();
+      position1.SetFromSequentialPositions(new[] { rawPos1, rawPos0 }, true);
+
+      // Alternate between two positions.
       EncodedPositionWithHistory[] positions = new EncodedPositionWithHistory[count];
-      Array.Fill(positions, position);
-
+      for (int i=0; i<count; i++)
+      {
+        positions[i] = (i % 2 == 0) ? position0 : position1;
+      }
 
       bool hasPositions = evaluator.InputsRequired.HasFlag(NNEvaluator.InputTypes.Positions);
       bool hasMoves = evaluator.InputsRequired.HasFlag(NNEvaluator.InputTypes.Moves);
@@ -69,31 +77,31 @@ namespace Ceres.Chess.NNEvaluators
 
       batch = new EncodedPositionBatchFlat(positions, count, hasPositions);
 
-      if (fen != null)
-      {
         if (hasPositions) batch.Positions = new MGPosition[count];
         if (hasHashes) batch.PositionHashes = new ulong[count];
         if (hasMoves) batch.Moves = new MGMoveList[count];
 
-        for (int i = 0; i < count; i++)
+      for (int i = 0; i < count; i++)
+      {
+        MGPosition thisPos = (i % 2 == 0) ? rawPos0.ToMGPosition : rawPos1.ToMGPosition;
+
+        if (hasPositions) batch.Positions[i] = thisPos;
+        if (hasHashes) batch.PositionHashes[i] = (ulong)i + (ulong)batch.Positions[i].GetHashCode();
+        if (hasMoves)
         {
-          if (hasPositions) batch.Positions[i] = MGChessPositionConverter.MGChessPositionFromFEN(fen);
-          if (hasHashes) batch.PositionHashes[i] = (ulong)i + (ulong)batch.Positions[i].GetHashCode();
-          if (hasMoves)
-          {
-            MGMoveList moves = new MGMoveList();
-            MGMoveGen.GenerateMoves(in mgPos, moves);
-            batch.Moves[i] = moves;
-          }
+          MGMoveList moves = new MGMoveList();
+          MGMoveGen.GenerateMoves(in thisPos, moves);
+          batch.Moves[i] = moves;
         }
       }
+
       return batch;
     }
 
 
     public static void Warmup(NNEvaluator evaluator)
     {
-      evaluator.EvaluateIntoBuffers(MakeTestBatch(evaluator, 1), false);
+      NNEvaluatorResult[] results = evaluator.EvaluateBatch(MakeTestBatch(evaluator, 2), false);
     }
 
     static EncodedPositionBatchFlat batch1;
