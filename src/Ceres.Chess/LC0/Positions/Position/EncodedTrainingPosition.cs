@@ -32,8 +32,8 @@ namespace Ceres.Chess.EncodedPositions
   {
     // Only v6 data using input format 1 is supported.
     // This keeps the code simple and allows unrestricted use of advanced v6 features.
-    const int SUPPORTED_VERSION = 6;
-    const int SUPPORTED_INPUT_FORMAT = 1;
+    public const int SUPPORTED_VERSION = 6;
+    public const int SUPPORTED_INPUT_FORMAT = 1;
 
     public const int V4_LEN = 8276 + 16;
     public const int V5_LEN = 8308;
