@@ -25,6 +25,7 @@ using Ceres.Base.Math;
 using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
+using Ceres.Base.DataTypes;
 
 #endregion
 
@@ -820,6 +821,31 @@ namespace Ceres.Chess.EncodedPositions
             return (move, prob);
           }
         }
+      }
+    }
+
+
+    /// <summary>
+    /// Returns the number of moves in the policy.
+    /// </summary>
+    public readonly int Count
+    {
+      get
+      {
+        int count = 0;
+        fixed (ushort* moveIndices = &MoveIndex_0)
+        {
+          for (int i = 0; i < NUM_MOVE_SLOTS; i++)
+          {
+            if (MoveIsSentinel(moveIndices[i]))
+            {
+              return count;
+            }
+
+            count++;
+          }
+        }
+        return count;
       }
     }
 
