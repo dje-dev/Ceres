@@ -315,13 +315,17 @@ namespace Ceres.Chess.EncodedPositions
           // Move all the probabilities into our array
           for (int i = 0; i < indices.Length && i < NUM_MOVE_SLOTS; i++)
           {
+            // Save index
+            int moveIndex = indices[i];
+            if (moveIndex == SPECIAL_VALUE_SENTINEL_TERMINATOR)
+            {
+              break;
+            }
+            moveIndices[i] = (ushort)moveIndex;
+
             // Get this probability and make sure is in expected sorted order
             float thisProb = probs[i];
             Debug.Assert(!alreadySorted || thisProb <= priorProb);
-
-            // Save index
-            int moveIndex = indices[i];
-            moveIndices[i] = (ushort)moveIndex;
 
             // Save compressed probability (unless rounds to zero)
             ushort encoded = EncodedProbability(thisProb);

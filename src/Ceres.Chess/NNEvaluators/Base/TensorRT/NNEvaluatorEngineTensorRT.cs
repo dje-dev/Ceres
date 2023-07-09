@@ -292,7 +292,7 @@ Updated notes:
                                                  resultsMLH, resultsUncertaintyV,
                                                  null, //rawResultsConvValFlat,
                                                  VALUES_ARE_LOGISTIC,
-                                                 PositionEvaluationBatch.PolicyType.Probabilities, timeStats);
+                                                 PositionEvaluationBatch.PolicyType.Probabilities, timeStats, false);
         }
         else
         {

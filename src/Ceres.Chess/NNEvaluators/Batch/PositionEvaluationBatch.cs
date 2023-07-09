@@ -316,10 +316,10 @@ namespace Ceres.Chess.NetEvaluation.Batch
                              int topK, Span<int> policyIndices, Span<float> policyProbabilties,
                              Span<FP16> m, Span<FP16> uncertaintyV,
                              Span<NNEvaluatorResultActivations> activations, bool valsAreLogistic,
-                             PolicyType probType, TimingStats stats)
+                             PolicyType probType, TimingStats stats, bool alreadySorted)
       : this(isWDL, hasM, hasUncertaintyV, numPos, valueEvals, m, uncertaintyV, activations, valsAreLogistic, stats)
     {
-      Policies = ExtractPoliciesTopK(numPos, topK, policyIndices, policyProbabilties, probType);
+      Policies = ExtractPoliciesTopK(numPos, topK, policyIndices, policyProbabilties, probType, alreadySorted);
     }
 
     /// <summary>
@@ -418,17 +418,25 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <param name="probabilities"></param>
     /// <param name="probType"></param>
     /// <returns></returns>
-    static CompressedPolicyVector[] ExtractPoliciesTopK(int numPos, int topK, Span<int> indices, Span<float> probabilities, PolicyType probType)
+    static CompressedPolicyVector[] ExtractPoliciesTopK(int numPos, int topK, Span<int> indices, Span<float> probabilities, PolicyType probType, bool alreadySorted)
     {
       if (probType == PolicyType.LogProbabilities)
       {
         throw new NotImplementedException();
         for (int i = 0; i < indices.Length; i++)
+        {
           probabilities[i] = MathF.Exp(probabilities[i]);
+        }
       }
 
-      if (indices == null && probabilities == null) return null;
-      if (probabilities.Length != indices.Length) throw new ArgumentException("Indices and probabilties expected to be same length");
+      if (indices == null && probabilities == null)
+      {
+        return null;
+      }
+      if (probabilities.Length != indices.Length)
+      {
+        throw new ArgumentException("Indices and probabilties expected to be same length");
+      }
 
       CompressedPolicyVector[] retPolicies = new CompressedPolicyVector[numPos];
     

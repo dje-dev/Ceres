@@ -200,10 +200,7 @@ namespace Ceres.Chess.EncodedPositions
         P = p;
       }
 
-      public override string ToString()
-      {
-        return $"<ProbEntry {Index} {P,6:F2}>";
-      }
+      public override string ToString() => $"<ProbEntry {Index} {P,8:F4}>";      
     }
 
   }
