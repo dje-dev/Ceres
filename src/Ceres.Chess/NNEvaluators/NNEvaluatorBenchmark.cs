@@ -121,7 +121,7 @@ namespace Ceres.Chess.NNEvaluators
                                                                                 int bigBatchSize = 256, bool estimateSingletons = true,
                                                                                 int numWarmups = 1)
     {
-      if (batch1 == null)
+      if (batch1 == null || batchBig.NumPos != bigBatchSize)
       {
         batchBig = MakeTestBatch(evaluator, bigBatchSize);
         batch1 = MakeTestBatch(evaluator, 1);
@@ -132,27 +132,29 @@ namespace Ceres.Chess.NNEvaluators
       // Run numerous batches to "warm up" the GPU (make sure in full power state).
       for (int i = 0; i < numWarmups; i++)
       {
-        for (int j=0;j<50;j++) evaluator.EvaluateIntoBuffers(batch1, false);
+        for (int j = 0; j < 20; j++)
+        {
+          evaluator.EvaluateIntoBuffers(batch1, false);
+        }
         result = evaluator.EvaluateIntoBuffers(batchBig, false);
-        for (int j = 0; j < 50; j++) evaluator.EvaluateIntoBuffers(batch1, false);
       }
 
       float npsSingletons = float.NaN;
       if (estimateSingletons)
       {
         // Singletons
-        const int NUM_SINGLETONS = 20;
+        const int NUM_SINGLETONS = 50;
         TimingStats statsSingletons = new TimingStats();
-        float accumulatedTimeSingletons = 0;
+        float bestTimeSeconds = float.MaxValue;
         for (int i = 0; i < NUM_SINGLETONS; i++)
         {
           using (new TimingBlock(statsSingletons, TimingBlock.LoggingType.None))
           {
             result = evaluator.EvaluateIntoBuffers(batch1, false);
-            accumulatedTimeSingletons += (float)statsSingletons.ElapsedTimeSecs;
           }
+          bestTimeSeconds = Math.Min(bestTimeSeconds, (float)statsSingletons.ElapsedTimeSecs);
         }
-        npsSingletons = NUM_SINGLETONS / accumulatedTimeSingletons;
+        npsSingletons = 1 / bestTimeSeconds;
       }
 
       // Big batch
