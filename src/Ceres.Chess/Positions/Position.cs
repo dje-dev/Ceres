@@ -110,8 +110,9 @@ namespace Ceres.Chess
     /// Returns a Position corresponding to specified FEN string.
     /// </summary>
     /// <param name="fen"></param>
+    /// <param name="repetitionCount"></param>
     /// <returns></returns>
-    public static Position FromFEN(string fen) => FENParser.ParseFEN(fen).AsPosition;
+    public static Position FromFEN(string fen, int repetitionCount = 0) => FENParser.ParseFEN(fen, repetitionCount).AsPosition;
 
     /// <summary>
     /// Returns FEN string corresponding to this position.

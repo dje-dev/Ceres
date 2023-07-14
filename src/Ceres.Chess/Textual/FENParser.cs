@@ -42,12 +42,13 @@ namespace Ceres.Chess.Textual
     /// NOTE: performance could be improved by passing in the Piece[] preallocated
     /// </summary>
     /// <param name="fen"></param>
+    /// <param name="repetitionCount"></param>
     /// <returns></returns>
-    public static FENParseResult ParseFEN(string fen)
+    public static FENParseResult ParseFEN(string fen, int repetitionCount = 0)
     {
       try
       {
-        return DoParseFEN(fen);
+        return DoParseFEN(fen, repetitionCount);
       }
       catch (Exception exc)
       {
@@ -60,8 +61,9 @@ namespace Ceres.Chess.Textual
     /// NOTE: performance could be improved by passing in the Piece[] preallocated
     /// </summary>
     /// <param name="fen"></param>
+    /// <param name="repetitionCount"></param>
     /// <returns></returns>
-    static FENParseResult DoParseFEN(string fen)
+    static FENParseResult DoParseFEN(string fen, int repetitionCount = 0)
     {
       int charIndex = 0;
 
@@ -194,7 +196,7 @@ namespace Ceres.Chess.Textual
       SkipAnySpaces();
 
       // Fullmove number
-      int fullmoveCount = 0; 
+      int fullmoveCount = 0;
       while (charIndex < fen.Length && charIndex < fen.Length)
       {
         char thisChar = fen[charIndex++];
@@ -234,7 +236,8 @@ namespace Ceres.Chess.Textual
         }
       }
 
-      PositionMiscInfo miscInfo = new PositionMiscInfo(whiteCanOO, whiteCanOOO, blackCanOO, blackCanOOO, sideToMove, move50Count, 0, plyCount, epColIndex);
+      PositionMiscInfo miscInfo = new PositionMiscInfo(whiteCanOO, whiteCanOOO, blackCanOO, blackCanOOO,
+                                                        sideToMove, move50Count, repetitionCount, plyCount, epColIndex);
 
       return new FENParseResult(pieces, miscInfo);
     }
@@ -243,7 +246,7 @@ namespace Ceres.Chess.Textual
 
     static Piece[] byteToPieces;
 
-        /// <summary>
+    /// <summary>
     /// Static initializer to initialize bytesToPieces array.
     /// </summary>
     static FENParser()
