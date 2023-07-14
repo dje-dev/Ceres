@@ -324,13 +324,8 @@ namespace Ceres.Chess.Positions
     private void SetFromPositions(IEnumerable<Position> fromPositions, bool castlingInfoMayBeIncomplete = false)
     {
       positions = fromPositions.ToArray();
-      if (positions.Length > 2)
-      {
-        throw new NotImplementedException("SetFromPositions not yet tested with fromPositions.Length > 2, need to confirm Moves are created in non-reversed order.");
-      }
 
       InitialPosMG = positions[0].ToMGPosition;
-//      Array.Reverse(positions);
       finalPosMG = positions[^1].ToMGPosition;
 
       PositionRepetitionCalc.SetRepetitionsCount(positions);
