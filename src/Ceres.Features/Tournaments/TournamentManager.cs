@@ -39,6 +39,12 @@ namespace Ceres.Features.Tournaments
     public readonly int NumConcurrent = 1;
 
     /// <summary>
+    ///  Optinally a sequence of device IDs over which possible concurrent games are allocated,
+    ///  allocated in order listed (repeating if NumConcurrent is larger than specified sequence).
+    /// </summary>
+    public int[] DeviceIDs = null;
+
+    /// <summary>
     /// Definition of parameters of the tournament.
     /// </summary>
     public TournamentDef Def;
@@ -55,9 +61,9 @@ namespace Ceres.Features.Tournaments
     /// Constructor.
     /// </summary>
     /// <param name="def"></param>
-    /// <param name="numParallel"></param>
-    /// <param name="separateGPUs"></param>
-    public TournamentManager(TournamentDef def, int numParallel = 1)
+    /// <param name="numConcurrent"></param>
+    /// <param name="deviceIDs"></param>
+    public TournamentManager(TournamentDef def, int numConcurrent = 1, int [] deviceIDs = null)
     {
       if  (  (def.Engines == null || def.Engines.Length == 0)
           && (def.Player1Def == null || def.Player2Def == null))
@@ -66,11 +72,12 @@ namespace Ceres.Features.Tournaments
       }
 
       Def = def;
-      NumConcurrent = Math.Min(numParallel, def.NumGamePairs ?? int.MaxValue);
+      NumConcurrent = Math.Min(numConcurrent, def.NumGamePairs ?? int.MaxValue);
+      DeviceIDs = deviceIDs;
 
       // Turn off showing game moves if running parallel,
       // since the moves of various games would be intermixed.
-      if (numParallel > 1)
+      if (numConcurrent > 1)
       {
         def.ShowGameMoves = false;
       }
@@ -242,12 +249,14 @@ namespace Ceres.Features.Tournaments
         TournamentDef tournamentDefClone = Def.Clone();
 
         // Make sure the threads will use either different or pooled evaluators
-        if (NumConcurrent > 1)
+        if (NumConcurrent > 1 || DeviceIDs != null)
         {
+          int deviceID = DeviceIDs == null ? i : DeviceIDs[i % DeviceIDs.Length];
+          TrySetRelativeDeviceIDIfNotPooled(tournamentDefClone, deviceID);
+
           // Spread instances across different devices and
           // and processor groups to distribute computation.
           tournamentDefClone.ProcessGroupIndex = i;
-          TrySetRelativeDeviceIDIfNotPooled(tournamentDefClone, i);
         }
 
         TournamentGameThread gameTest = new TournamentGameThread(tournamentDefClone, parentTest);
