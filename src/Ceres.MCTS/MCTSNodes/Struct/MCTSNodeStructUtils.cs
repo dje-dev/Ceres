@@ -92,9 +92,10 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     [SkipLocalsInit]
     public static void ExtractPolicyVector(float softmaxValue, in MCTSNodeStruct nodeRef, ref CompressedPolicyVector policy)
     {
-      Span<ushort> indicies = stackalloc ushort[nodeRef.NumPolicyMoves];
-      Span<float> probsBeforeNormalization = stackalloc float[nodeRef.NumPolicyMoves];
-      Span<ushort> probabilities = stackalloc ushort[nodeRef.NumPolicyMoves];
+      // Note: no benefit to sizing these spans smaller when possible, since no initialization cost (due to SkipLocalsInits).
+      Span<ushort> indicies = stackalloc ushort[CompressedPolicyVector.NUM_MOVE_SLOTS];
+      Span<float> probsBeforeNormalization = stackalloc float[CompressedPolicyVector.NUM_MOVE_SLOTS];
+      Span<ushort> probabilities = stackalloc ushort[CompressedPolicyVector.NUM_MOVE_SLOTS];
 
       MCTSNodeStore store = nodeRef.Context.Store;
       Span<MCTSNodeStructChild> children = store.Children.SpanForNode(nodeRef.ChildStartIndex, nodeRef.NumPolicyMoves);
