@@ -42,7 +42,6 @@ namespace Ceres.Chess
   /// </summary>
   [Serializable]
   [StructLayout(LayoutKind.Sequential, Pack = 1)]
-  [DebuggerDisplay("<Position {FEN} {CalcZobristHash(PositionMiscInfo.HashMove50Mode.ValueBoolIfAbove98)}>")]
   public readonly struct Position : IEquatable<Position>
   {
     #region Raw squares data
@@ -1121,7 +1120,7 @@ namespace Ceres.Chess
     /// Returns string representation (via FEN).
     /// </summary>
     /// <returns></returns>
-    public override readonly string ToString() => $"<Position {FEN}>";
+    public override readonly string ToString() => $"<Position {FEN} REP={MiscInfo.RepetitionCount} {CalcZobristHash(PositionMiscInfo.HashMove50Mode.ValueBoolIfAbove98)}>";
 
 
     #region Linqpad dump support
