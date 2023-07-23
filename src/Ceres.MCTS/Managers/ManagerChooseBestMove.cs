@@ -104,6 +104,11 @@ namespace Ceres.MCTS.Managers
     {
       get
       {
+        if (Node.Context.TopVForcedMove != default)
+        {
+          return new BestMoveInfo(BestMoveInfo.BestMoveReason.TopVMove, Node.Context.TopVForcedMove, (float)Node.Q);
+        }
+
         if (Node.N <= 1 && Node.Context.CheckTablebaseBestNextMove != null)
         {
           // TODO: Improve this: in some situations, the best move coming back might not be actually best

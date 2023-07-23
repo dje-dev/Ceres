@@ -42,6 +42,9 @@ using Ceres.MCTS.Params;
 using Ceres.MCTS.NodeCache;
 using Ceres.MCTS.Environment;
 using Ceres.Chess.MoveGen.Converters;
+using Ceres.Chess.LC0.Batches;
+using Ceres.Chess.NetEvaluation.Batch;
+using System.Linq;
 
 #endregion
 
@@ -636,6 +639,55 @@ namespace Ceres.MCTS.Iteration
     public float FractionExtendedSoFar = 0;
 
 
+    private static (MGMove, float) BestValueMove(MCTSManager manager, MGMoveList moves, PositionWithHistory priorMoves)
+    {
+      // Prepare a batch builder in which to enqueue the positions to be evaluated.
+      EncodedPositionBatchBuilder batchBuilder = new (128,
+                                                      manager.Context.NNEvaluators.Evaluator1.InputsRequired  
+                                                    | Chess.NNEvaluators.NNEvaluator.InputTypes.Positions);
+
+      // Prepare array of prior positions initialized from prior positions,
+      // with extra last slot to be for new position after each move to be evaluated.
+      Position[] positions = new Position[priorMoves.Count + 1];
+      Array.Copy(priorMoves.Positions.ToArray(), positions, priorMoves.Positions.Count());
+
+      // Loop over all moves, find new resulting position, and add to batch.
+      for(int i=0;i<moves.NumMovesUsed;i++)
+      {
+        MGPosition pos = priorMoves.FinalPosition.ToMGPosition;
+        pos.MakeMove(moves.MovesArray[i]);
+        positions[^1] = pos.ToPosition;
+
+        EncodedPositionWithHistory eph = new EncodedPositionWithHistory();
+        eph.SetFromSequentialPositions(positions, true);
+
+        batchBuilder.Add(in eph);
+      }
+
+      // Build the batch and evaluate it.
+      EncodedPositionBatchFlat thisBatch = batchBuilder.GetBatch();
+      NNEvaluatorResult[] batchEvals = manager.Context.NNEvaluators.Evaluator1.EvaluateBatch(thisBatch);
+
+      // Determine which move had position yielding best value evaluation.
+      int moveIndex = 0;
+      int bestMoveIndex = 0;
+      float bestV = float.MinValue;
+      foreach (NNEvaluatorResult v in batchEvals)
+      {
+        if (-v.V > bestV)
+        {
+          bestV = -v.V;
+          bestMoveIndex = moveIndex;
+        }
+        moveIndex++;
+      }
+
+      // Return the best move.
+      MGMove bestMove = moves.MovesArray[bestMoveIndex];
+      return (bestMove, bestV);
+    }
+
+
     public static MGMove DoSearch(MCTSManager manager, bool verbose,
                                   MCTSProgressCallback progressCallback = null,
                                   bool possiblyUsePositionCache = false,
@@ -720,6 +772,21 @@ namespace Ceres.MCTS.Iteration
       MGPosition startPos = priorMoves.FinalPosMG;
       MGMoveList moves = new MGMoveList();
       MGMoveGen.GenerateMoves(in startPos, moves);
+
+      // Check if playing using only value head (TopV).
+      if (manager.SearchLimit.Type == SearchLimitType.BestValueMove)
+      {
+        if (manager.SearchLimit.Value != 1)
+        {
+          throw new Exception("BestValueMove only supported for NodesPerMove == 1.");
+        }
+
+        (MGMove bestMove, float bestV)  = BestValueMove(manager, moves, priorMoves);
+
+        context.Root.StructRef.W = bestV;
+        context.Root.StructRef.N = 1;
+        return context.TopVForcedMove = bestMove;
+      }
 
       bool shouldStopAfterOneNodeDueToOnlyOneLegalMove = false;
       if (moveImmediateIfOnlyOneMove && moves.NumMovesUsed == 1)
@@ -981,6 +1048,7 @@ namespace Ceres.MCTS.Iteration
           SearchLimitType.SecondsPerMove => MathHelpers.Bounded(RemainingTime / SearchLimit.Value, 0, 1),
           SearchLimitType.NodesPerMove => MathHelpers.Bounded((SearchLimit.Value - NumNodesVisitedThisSearch) / SearchLimit.Value, 0, 1),
           SearchLimitType.NodesPerTree => MathHelpers.Bounded(1.0f - (NumNodesVisitedThisSearch / (SearchLimit.Value - RootNWhenSearchStarted)), 0, 1),
+          SearchLimitType.BestValueMove => MathHelpers.Bounded(1.0f - (NumNodesVisitedThisSearch / (SearchLimit.Value - RootNWhenSearchStarted)), 0, 1),
           _ => throw new NotImplementedException()
         };
       }
@@ -1085,6 +1153,10 @@ namespace Ceres.MCTS.Iteration
         return (int)MathF.Max(0, SearchLimit.Value - nodesProcessedAlready);
       }
       else if (SearchLimit.Type == SearchLimitType.NodesPerTree)
+      {
+        return (int)MathF.Max(0, SearchLimit.Value - Root.N);
+      }
+      else if (SearchLimit.Type == SearchLimitType.BestValueMove)
       {
         return (int)MathF.Max(0, SearchLimit.Value - Root.N);
       }

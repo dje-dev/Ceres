@@ -48,6 +48,11 @@ namespace Ceres.Chess
     /// <summary>
     /// Total number of seconds for all moves.
     /// </summary>
-    SecondsForAllMoves
+    SecondsForAllMoves,
+
+    /// <summary>
+    /// Evaluate all positions possible after one move and play one having best value score.
+    /// </summary>
+    BestValueMove,
   };
 }

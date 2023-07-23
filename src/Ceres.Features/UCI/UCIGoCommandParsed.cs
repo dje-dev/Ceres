@@ -39,9 +39,14 @@ namespace Ceres.Features.UCI
     public readonly int? Nodes;
 
     /// <summary>
-    /// If inifinite analysis was requested
+    /// If infinite analysis was requested
     /// </summary>
     public readonly bool Infinite = false;
+
+    /// <summary>
+    /// If requested to make move yielding best value score (depth 0).
+    /// </summary>
+    public readonly bool BestValueMove = false;
 
     /// <summary>
     /// Requested move time (in milliseconds)
@@ -138,6 +143,10 @@ namespace Ceres.Features.UCI
         {
           case "infinite":
             Infinite = true;
+            break;
+
+          case "value":
+            BestValueMove = true;
             break;
 
           case "nodes":

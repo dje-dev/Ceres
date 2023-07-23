@@ -30,6 +30,21 @@ namespace Ceres.MCTS.Utils
   /// </summary>
   public static class UCIInfo
   {
+    static float ScoreToShow(bool scoreAsQ, float thisQ)
+    {
+      // The score displayed corresponds to
+      // the Q (average visit value) of the move to be made.
+      float scoreToShow = scoreAsQ ? MathF.Round(thisQ * 1000, 0) : MathF.Round(EncodedEvalLogistic.LogisticToCentipawn(thisQ), 0);
+
+      if (float.IsNaN(scoreToShow))
+      {
+        // Make sure not to emit NaN for NPS because this might crash
+        // some GUIs or tournament managers.
+        scoreToShow = 0;
+      }
+      return scoreToShow;
+    }
+
     /// <summary>
     /// Returns an UCI info string appropriate for a given search state.
     /// </summary>
@@ -54,6 +69,15 @@ namespace Ceres.MCTS.Utils
         {
           return OutputUCIInfoTablebaseImmediate(manager, overrideRootMove.IsNotNull ? overrideRootMove : manager.Root, scoreAsQ);
         }
+      }
+      else if (manager.Context.TopVForcedMove != default)
+      {
+
+        MCTSNode root = overrideRootMove.IsNotNull ? overrideRootMove : manager.Root;
+        float topVScoreToShow = ScoreToShow(scoreAsQ, (float)root.Q);
+        string moveStr = manager.Context.TopVForcedMove.MoveStr(MGMoveNotationStyle.LC0Coordinate);
+        string str = $"info depth 1 seldepth 1 time 0 nodes 1 score cp {topVScoreToShow} pv {moveStr}";
+        return str;
       }
 
       bool wasInstamove = manager.StopStatus == MCTSManager.SearchStopStatus.Instamove;
@@ -90,6 +114,10 @@ namespace Ceres.MCTS.Utils
       {
         thisQ = (float)-overrideBestMoveNodeAtRoot.Q;
       }
+      else if (manager.Context.TopVForcedMove != default)
+      {
+        thisQ = (float)manager.Context.Root.Q;
+      }
       else
       {
         thisQ = bestMoveInfo.QOfBest;
@@ -97,15 +125,7 @@ namespace Ceres.MCTS.Utils
 
       // The score displayed corresponds to
       // the Q (average visit value) of the move to be made.
-      float scoreToShow;
-      if (scoreAsQ)
-      {
-        scoreToShow = MathF.Round(thisQ * 1000, 0);
-      }
-      else
-      {
-        scoreToShow = MathF.Round(EncodedEvalLogistic.LogisticToCentipawn(thisQ), 0);
-      }
+      float scoreToShow = ScoreToShow(scoreAsQ, thisQ);
 
       if (float.IsNaN(scoreToShow))
       {

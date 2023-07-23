@@ -82,6 +82,7 @@ namespace Ceres.Features.GameEngines
     /// </summary>
     public override string OverrideLaunchExecutable => SoftwareManager.IsLinux ? "dotnet" : null;
 
+    public override bool SupportsBestValueMoveMode => true;
 
 
     #region Internal helper methods

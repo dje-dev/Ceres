@@ -814,6 +814,10 @@ namespace Ceres.Features.UCI
       {
         searchLimit = SearchLimit.NodesPerMove(MCTSNodeStore.MAX_NODES);
       }
+      else if (goInfo.BestValueMove)
+      {
+        searchLimit = SearchLimit.BestValueMove;
+      }
       else if (goInfo.TimeOurs.HasValue)
       {
         float increment = 0;

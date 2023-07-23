@@ -93,6 +93,11 @@ namespace Ceres.Chess.GameEngines
     /// </summary>
     public virtual string OverrideLaunchExecutable => null;
 
+    /// <summary>
+    /// If this engine supports playing best value move.
+    /// </summary>
+    public virtual bool SupportsBestValueMoveMode => false;
+
 
     /// <summary>
     /// Constructor.
@@ -233,6 +238,18 @@ namespace Ceres.Chess.GameEngines
         case SearchLimitType.NodesPerTree:
           throw new NotImplementedException("NodesIncrementalPerMove not supported for UCI engines");
           break;
+
+        case SearchLimitType.BestValueMove:
+          if (SupportsBestValueMoveMode)
+          {
+            gameInfo = UCIRunner.EvalPosition(curPositionAndMoves.FENAndMovesString, "value", 1, "go value");
+            break;
+          }
+          else
+          {
+            throw new NotImplementedException($"UCI engine {this} does not support BestValueMove.");
+          }
+
 
         case SearchLimitType.NodesForAllMoves:
            using (new TimingBlock(new TimingStats(), TimingBlock.LoggingType.None))

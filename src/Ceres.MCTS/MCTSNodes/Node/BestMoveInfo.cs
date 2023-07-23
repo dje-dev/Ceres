@@ -55,7 +55,12 @@ namespace Ceres.MCTS.MTCSNodes
       /// <summary>
       /// The search determined the best move.
       /// </summary>
-      SearchResult
+      SearchResult,
+
+      /// <summary>
+      /// BestMoveModeEnum is set to TopV (play best move based on value head).
+      /// </summary>
+      TopVMove
      };
 
 

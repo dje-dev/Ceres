@@ -67,7 +67,7 @@ namespace Ceres.Chess
     public int? MaxTreeVisits { init; get; } = null;
 
     /// <summary>
-    /// If true then sufficent node storage is reserved so that
+    /// If true then sufficient node storage is reserved so that
     /// the search can subsequently be expanded (without any practical bound).
     /// 
     /// Typically this is false only for specialized situations, such
@@ -87,6 +87,7 @@ namespace Ceres.Chess
     /// Optionally a list of moves to which the search is restricted.
     /// </summary>
     public List<Move> SearchMoves;
+
 
     #region Static Factory methods
 
@@ -114,6 +115,8 @@ namespace Ceres.Chess
     {
       return new SearchLimit(SearchLimitType.NodesForAllMoves, nodes, searchContinuationSupported, nodesIncrement, maxMovesToGo);
     }
+
+    public static SearchLimit BestValueMove => new SearchLimit(SearchLimitType.BestValueMove, 1, false);
 
     #endregion
 
@@ -168,7 +171,8 @@ namespace Ceres.Chess
                                                                 || type == SearchLimitType.SecondsForAllMoves;
     public static bool TypeIsNodesLimit(SearchLimitType type) => type == SearchLimitType.NodesPerMove 
                                                               || type == SearchLimitType.NodesForAllMoves 
-                                                              || type == SearchLimitType.NodesPerTree;
+                                                              || type == SearchLimitType.NodesPerTree
+                                                              || type == SearchLimitType.BestValueMove;
     public static bool TypeIsTimeLimit(SearchLimitType type) => type == SearchLimitType.SecondsPerMove 
                                                              || type == SearchLimitType.SecondsForAllMoves;
 
@@ -223,7 +227,8 @@ namespace Ceres.Chess
       get
       {
         if (Type == SearchLimitType.NodesPerMove 
-         || Type == SearchLimitType.NodesPerTree) // upper bound
+         || Type == SearchLimitType.NodesPerTree
+         || Type == SearchLimitType.BestValueMove) // upper bound
         {
           return (int)Value;
         }
@@ -260,6 +265,7 @@ namespace Ceres.Chess
         SearchLimitType.SecondsPerMove => null,
         SearchLimitType.SecondsForAllMoves => null,
         SearchLimitType.NodesForAllMoves => (int)Value,
+        SearchLimitType.BestValueMove => 1,
         _ => throw new NotImplementedException()
       };
     }
@@ -290,6 +296,7 @@ namespace Ceres.Chess
         SearchLimitType.SecondsPerMove => (int)SecsToNodes(Value, estNumNodesPerSecond, estIsObserved),
         SearchLimitType.SecondsForAllMoves => (int)((Value / 20.0f) * estNumNodesPerSecond),
         SearchLimitType.NodesForAllMoves => (int)(Value / 20.0f),
+        SearchLimitType.BestValueMove => 1,
         _ => throw new NotImplementedException()
       };
     }
@@ -358,6 +365,7 @@ namespace Ceres.Chess
       SearchLimitType.NodesPerTree => "NT",
       SearchLimitType.SecondsForAllMoves => "SG",
       SearchLimitType.SecondsPerMove => "SM",
+      SearchLimitType.BestValueMove => "V",
       _ => throw new Exception($"Internal error: unsupported SearchLimitType type {Type}")
     };
 

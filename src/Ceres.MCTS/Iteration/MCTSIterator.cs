@@ -123,6 +123,11 @@ namespace Ceres.MCTS.Iteration
 
     public int NumNNNodes = 0;
 
+    /// <summary>
+    /// If playing in TopV mode (best value move) then this is set.
+    /// </summary>
+    public MGMove TopVForcedMove;
+
     public CheckTablebaseBestNextMoveDelegate CheckTablebaseBestNextMove;
 
     public bool TablebasesInUse => CheckTablebaseBestNextMove != null;
