@@ -20,6 +20,7 @@ using static System.FormattableString;
 using Ceres.Chess.NNEvaluators.Specifications;
 using Ceres.Chess.UserSettings;
 using Ceres.MCTS.Params;
+using Ceres.MCTS.Managers.Limits;
 
 
 #endregion
@@ -230,6 +231,14 @@ namespace Ceres.Features.UCI
             scoreAsQ = true;
           else
             OutStream.Write("Invalid value for ScoreType, allowable values are Centipawn, Q or W-L");
+          break;
+
+        case "limitsmanagername":
+          CeresUserSettingsManager.Settings.LimitsManagerName = value;
+          if (CeresEngine != null)
+          {
+            CeresEngine.GameLimitManager = new ManagerGameLimitTest(CeresEngine.SearchParams.GameLimitUsageAggressiveness);
+          }
           break;
 
         //option name ScoreType type combo default centipawn var centipawn var Q var W-L
