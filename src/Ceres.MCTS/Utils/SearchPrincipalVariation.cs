@@ -180,6 +180,13 @@ namespace Ceres.MCTS.Utils
     /// <returns></returns>
     public string ShortStr()
     {
+      if (Nodes.Count == 1)
+      {
+        // In the special case of only root evaluated, show the best policy move so the pv is not completely empty.
+        // Otherwise, we choose not to show the best policy move at the terminal node.
+        return Nodes[0].BestMoveInfo(false).BestMove.MoveStr(MGMoveNotationStyle.LC0Coordinate);
+      }
+
       StringBuilder sb = new StringBuilder();
 
       bool haveSkippedSearchRoot = false;
