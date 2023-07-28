@@ -451,11 +451,11 @@ namespace Ceres.MCTS.LeafExpansion
     /// <param name="posSpan"></param>
     /// <param name="maxPositions"></param>
     /// <param name="stop50MoveRuleReset"></param>
-    /// <param name="setFinalPositionRepetitionCount"></param>
+    /// <param name="setRepetitionCounts"></param>
     /// <returns></returns>
     Span<Position> GetPriorHistoryPositions(MCTSNode node, in Position extraPos1, in Position extraPos2,
                                             Span<Position> posSpan, int maxPositions, bool stop50MoveRuleReset,
-                                            bool setFinalPositionRepetitionCount)
+                                            bool setRepetitionCounts)
     {
       int depthOfLastNodeAdded = node.IsNull ? -1 : node.Depth; 
 
@@ -514,7 +514,7 @@ namespace Ceres.MCTS.LeafExpansion
       // TODO: someday the lookback below into history positions (before root)
       //       could be enhanced to also stop when see move 50 reset (if stop50MoveRuleReset is true)
       return PositionHistoryGatherer.DoGetHistoryPositions(depthOfLastNodeAdded, PriorMoves, posSpan, count, maxPositions, 
-                                                           doEnPassantPrefill, setFinalPositionRepetitionCount);
+                                                           doEnPassantPrefill, setRepetitionCounts);
     }
 
 
