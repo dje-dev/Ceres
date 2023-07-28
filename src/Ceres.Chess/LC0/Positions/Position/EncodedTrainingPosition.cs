@@ -14,9 +14,11 @@
 #region Using directives
 
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
-
+using Ceres.Chess.LC0.Boards;
 using Ceres.Chess.Positions;
+
 
 #endregion
 
@@ -249,29 +251,17 @@ namespace Ceres.Chess.EncodedPositions
     {
       EncodedPositionWithHistory thisEncPosUnmirrored = PositionWithBoardsMirrored.Mirrored;
 
-      if (maxHistoryPositions == 2)
+      List<Position> positions = new(maxHistoryPositions);
+      for (int i = maxHistoryPositions - 1; i >= 0; i--)
       {
-        if (PositionWithBoardsMirrored.BoardsHistory.History_1.IsEmpty)
+        if (!thisEncPosUnmirrored.GetPlanesForHistoryBoard(i).IsEmpty)
         {
-          return new PositionWithHistory(new Position[]
-          {
-            Position.FromFEN(thisEncPosUnmirrored.FENForHistoryBoard(0))
-          }, false);
+          positions.Add(Position.FromFEN(thisEncPosUnmirrored.FENForHistoryBoard(i)));
+        }
+      }
 
-        }
-        else
-        {
-          return new PositionWithHistory(new Position[]
-          {
-            Position.FromFEN(thisEncPosUnmirrored.FENForHistoryBoard(1)),
-            Position.FromFEN(thisEncPosUnmirrored.FENForHistoryBoard(0))
-          }, true);
-        }
-      }
-      else
-      {
-        throw new NotImplementedException(); // TODO: straightforward generalization of above needed
-      }
+      bool somePositionsIncompleteCastlingInfo = maxHistoryPositions > 1;
+      return new PositionWithHistory(positions, somePositionsIncompleteCastlingInfo);
     }
 
     #region Overrides

@@ -186,7 +186,7 @@ namespace Ceres.Chess.NNEvaluators
       {
         positions.TrySetMoves();
 
-        if (positions.Moves == null)
+        if (positions.Moves.IsEmpty)
         {
           throw new Exception($"NNEvaluator requires Positions to be provided {this}");
         }

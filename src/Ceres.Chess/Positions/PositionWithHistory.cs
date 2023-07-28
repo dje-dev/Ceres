@@ -366,7 +366,7 @@ namespace Ceres.Chess.Positions
           }
         }
 
-        if (!foundContinuation)
+        if (!foundContinuation && !castlingInfoMayBeIncomplete)
         {
 #if DEBUG
           string errMsg = "Position sequence illegal, saw " + positions[i + 1].ToMGPosition.ToPosition.FEN 
