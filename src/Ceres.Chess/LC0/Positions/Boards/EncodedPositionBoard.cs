@@ -540,11 +540,13 @@ namespace Ceres.Chess.LC0.Boards
     }
 
     #endregion
-
+   
     const bool CONVERT_VIA_MG_POSITION = false; // performance better when this is false, equivalent behavior
 
-    public static EncodedPositionBoard GetBoard(in Position pos, SideType desiredFromSidePerspective, bool isRepetition)
+    public static EncodedPositionBoard GetBoard(in Position pos, SideType desiredFromSidePerspective)
     {
+      bool isRepetition = pos.MiscInfo.RepetitionCount > 0;
+
       if (CONVERT_VIA_MG_POSITION)
       {
         MGPosition mgPos = MGChessPositionConverter.MGChessPositionFromFEN(pos.FEN);

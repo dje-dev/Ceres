@@ -356,10 +356,9 @@ namespace Ceres.Chess.EncodedPositions
       SetMiscFromPosition(sequentialPositions[LAST_POSITION_INDEX].MiscInfo, sideToMove);
 
       // Cache the first position in sequence from our perspective (which would be used for fill)
-      bool firstBoardHadRepetition = sequentialPositions[0].MiscInfo.RepetitionCount > 0;
-      EncodedPositionBoard fillBoardFromOurPerspective = EncodedPositionBoard.GetBoard(in sequentialPositions[0], sideToMove, firstBoardHadRepetition);
+      EncodedPositionBoard fillBoardFromOurPerspective = EncodedPositionBoard.GetBoard(in sequentialPositions[0], sideToMove);
 
-      Span<EncodedPositionBoard> boards = ScratchBoards();// stackalloc LZBoard[LZBoardsHistory.NUM_MOVES_HISTORY];
+      Span<EncodedPositionBoard> boards = ScratchBoards();
 
       SideType lastPosSide = default; // not used first time through the the loop
       for (int i = 0; i < EncodedPositionBoards.NUM_MOVES_HISTORY; i++)
@@ -368,16 +367,20 @@ namespace Ceres.Chess.EncodedPositions
         {
           // We are past the number of boards supplied. Fill in board (only if requested)
           if (fillInMissingPlanes)
+          {
             boards[i] = fillBoardFromOurPerspective;
+          }
           else
+          {
             boards[i].Clear(); // must clear the bits since we are reusing a scratch area which may have remnants from prior position
+          }
         }
         else
         {
           // Put last positions first in board array
           ref Position thisPos = ref sequentialPositions[LAST_POSITION_INDEX - i];
 
-          boards[i] = EncodedPositionBoard.GetBoard(in thisPos, sideToMove, thisPos.MiscInfo.RepetitionCount > 0);
+          boards[i] = EncodedPositionBoard.GetBoard(in thisPos, sideToMove);
 
 #if DEBUG
           // Make sure the sides alternates between moves
@@ -602,7 +605,7 @@ namespace Ceres.Chess.EncodedPositions
 
       SetMiscFromPosition(pos.MiscInfo, desiredFromSidePerspective);
 
-      EncodedPositionBoard planes = EncodedPositionBoard.GetBoard(in pos, desiredFromSidePerspective, pos.MiscInfo.RepetitionCount > 0);
+      EncodedPositionBoard planes = EncodedPositionBoard.GetBoard(in pos, desiredFromSidePerspective);
 
       bool hasEnPassant = pos.MiscInfo.EnPassantFileIndex != PositionMiscInfo.EnPassantFileIndexEnum.FileNone;
       if (hasEnPassant)
@@ -611,7 +614,7 @@ namespace Ceres.Chess.EncodedPositions
         Position priorPosWithEnPassantUndone = pos.PosWithEnPassantUndone();
 
         // Get corresopnding board, flipped so it is from perspective of our side.
-        EncodedPositionBoard planesPreEnPassant = EncodedPositionBoard.GetBoard(in priorPosWithEnPassantUndone, desiredFromSidePerspective, pos.MiscInfo.RepetitionCount > 1);
+        EncodedPositionBoard planesPreEnPassant = EncodedPositionBoard.GetBoard(in priorPosWithEnPassantUndone, desiredFromSidePerspective);
 
         if (fillInHistoryPlanes)
         {

@@ -128,7 +128,7 @@ namespace Ceres.MCTS.LeafExpansion
       // and will already be in the tree for all positions)
       for (int i = priorPositions.Length - 2; i >= 0; i--)
       {
-        EncodedPositionBoard thisBoard = EncodedPositionBoard.GetBoard(in priorPositions[i], priorPositions[i].MiscInfo.SideToMove, false);
+        EncodedPositionBoard thisBoard = EncodedPositionBoard.GetBoard(in priorPositions[i], priorPositions[i].MiscInfo.SideToMove);
         EncodedPriorPositions.Add(thisBoard);
       }
     }
@@ -344,7 +344,7 @@ namespace Ceres.MCTS.LeafExpansion
       const bool FAST = true;
       if (!FAST)
       {
-        annotation.LC0BoardPosition = EncodedPositionBoard.GetBoard(in posHistory[^1], annotation.PosMG.SideToMove, posHistory[^1].MiscInfo.RepetitionCount > 0);
+        annotation.LC0BoardPosition = EncodedPositionBoard.GetBoard(in posHistory[^1], annotation.PosMG.SideToMove);
       }
       else
       {
