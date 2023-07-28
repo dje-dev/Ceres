@@ -68,10 +68,10 @@ namespace Ceres.Features.GameEngines
     public readonly ParamsSelect ChildSelectParams;
 
     /// <summary>
-    /// Manager used for approprtioning node or time limits at the game
+    /// Manager used for apportioning node or time limits at the game
     /// level to individual moves.
     /// </summary>
-    public readonly IManagerGameLimit GameLimitManager;
+    public IManagerGameLimit GameLimitManager;
 
     /// <summary>
     /// Current or most recently executed search.
