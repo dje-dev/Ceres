@@ -35,13 +35,13 @@ namespace Ceres.Chess.Positions
     /// <param name="numPositionsFilled"></param>
     /// <param name="maxPositions"></param>
     /// <param name="doEnPassantPrefill"></param>
-    /// <param name="setFinalPositionRepetitionCount"></param>
+    /// <param name="setRepetitionCounts"></param>
     /// <returns></returns>
     public static Span<Position> DoGetHistoryPositions(int depthOfLastNodeAdded, 
                                                        PositionWithHistory priorMoves, Span<Position> posSpan,
                                                        int numPositionsFilled, int maxPositions, 
                                                        bool doEnPassantPrefill,
-                                                       bool setFinalPositionRepetitionCount)
+                                                       bool setRepetitionCounts)
     {
       Debug.Assert(priorMoves != null);
       Debug.Assert(numPositionsFilled > 0); // expect at least root search node to have been populated
@@ -79,13 +79,13 @@ namespace Ceres.Chess.Positions
       }
 
       // Reverse span
-      // TODO: could this inefficiencybe avoided?
+      // TODO: could this inefficiency be avoided?
       posSpan.Reverse();
 
-      // Set repetition count if requested.
-      if (setFinalPositionRepetitionCount)
+      // Set repetition counts if requested.
+      if (setRepetitionCounts)
       {
-        PositionRepetitionCalc.SetFinalPositionRepetitionCount(posSpan);
+        PositionRepetitionCalc.SetRepetitionsCount(posSpan);
       }
 
       return posSpan;
