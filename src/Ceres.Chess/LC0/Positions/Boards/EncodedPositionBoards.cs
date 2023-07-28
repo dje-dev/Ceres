@@ -95,6 +95,20 @@ namespace Ceres.Chess.LC0.Boards
       {
         return boards[index];
       }
+    }
+
+    /// <summary>
+    /// If the board at specified index has repetitions.  
+    /// </summary>
+    /// <param name="index"></param>
+    /// <returns></returns>
+    public readonly bool BoardAtIndexHasRepetitions(int index)
+    {
+      Debug.Assert(index >= 0 && index < NUM_MOVES_HISTORY);
+      fixed (EncodedPositionBoard* boards = &History_0)
+      {
+        return boards[index].Repetitions.Bits.Data != 0;
+      }
     } 
 
     /// <summary>
