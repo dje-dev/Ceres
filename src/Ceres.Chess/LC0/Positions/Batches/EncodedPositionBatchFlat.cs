@@ -810,15 +810,15 @@ namespace Ceres.Chess.LC0.Batches
 
     #region Interface
 
-    Span<ulong> IEncodedPositionBatchFlat.PosPlaneBitmaps => PosPlaneBitmaps.AsSpan();
+    Memory<ulong> IEncodedPositionBatchFlat.PosPlaneBitmaps => PosPlaneBitmaps.AsMemory();
 
-    Span<byte> IEncodedPositionBatchFlat.PosPlaneValues => PosPlaneValues.AsSpan();
+    Memory<byte> IEncodedPositionBatchFlat.PosPlaneValues => PosPlaneValues.AsMemory();
 
-    Span<float> IEncodedPositionBatchFlat.W => W.AsSpan();
+    Memory<float> IEncodedPositionBatchFlat.W => W.AsMemory();
 
-    Span<float> IEncodedPositionBatchFlat.L => L.AsSpan();
+    Memory<float> IEncodedPositionBatchFlat.L => L.AsMemory();
 
-    Span<FP16> IEncodedPositionBatchFlat.Policy => Policy.AsSpan();
+    Memory<FP16> IEncodedPositionBatchFlat.Policy => Policy.AsMemory();
 
     int IEncodedPositionBatchFlat.NumPos => NumPos;
 
@@ -826,14 +826,14 @@ namespace Ceres.Chess.LC0.Batches
 
     short IEncodedPositionBatchFlat.PreferredEvaluatorIndex => PreferredEvaluatorIndex;
 
-    Span<MGPosition> IEncodedPositionBatchFlat.Positions { get => Positions.AsSpan(); set => Positions = value.ToArray(); }
-    Span<ulong> IEncodedPositionBatchFlat.PositionHashes { get => PositionHashes.AsSpan(); set => PositionHashes = value.ToArray(); }
-    Span<byte> IEncodedPositionBatchFlat.LastMovePlies { get => LastMovePlies.AsSpan(); set => LastMovePlies = value.ToArray(); }
-    Span<MGMoveList> IEncodedPositionBatchFlat.Moves { get => Moves.AsSpan(); set => Moves = value.ToArray(); }
+    Memory<MGPosition> IEncodedPositionBatchFlat.Positions { get => Positions.AsMemory(); set => Positions = value.ToArray(); }
+    Memory<ulong> IEncodedPositionBatchFlat.PositionHashes { get => PositionHashes.AsMemory(); set => PositionHashes = value.ToArray(); }
+    Memory<byte> IEncodedPositionBatchFlat.LastMovePlies { get => LastMovePlies.AsMemory(); set => LastMovePlies = value.ToArray(); }
+    Memory<MGMoveList> IEncodedPositionBatchFlat.Moves { get => Moves.AsMemory(); set => Moves = value.ToArray(); }
 
     float[] IEncodedPositionBatchFlat.ValuesFlatFromPlanes(float[] preallocatedBuffer, bool nwhc, bool scaleMove50Counter) => ValuesFlatFromPlanes(preallocatedBuffer, nwhc, scaleMove50Counter);
 
-    Span<EncodedPositionWithHistory> IEncodedPositionBatchFlat.PositionsBuffer { get => PositionsBuffer; }
+    Memory<EncodedPositionWithHistory> IEncodedPositionBatchFlat.PositionsBuffer { get => PositionsBuffer; }
 
     #endregion
 

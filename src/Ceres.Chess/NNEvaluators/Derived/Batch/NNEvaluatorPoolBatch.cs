@@ -94,10 +94,10 @@ namespace Ceres.Chess.NNEvaluators
       ulong[] posPlaneBitmaps = new ulong[numPositions * EncodedPositionWithHistory.NUM_PLANES_TOTAL];
       byte[] posPlaneValuesEncoded = new byte[numPositions * EncodedPositionWithHistory.NUM_PLANES_TOTAL];
 
-      bool hasPositions = pendingBatches[0].Positions != null;
-      bool hasMoves = pendingBatches[0].Moves != null;
-      bool hasHashes = pendingBatches[0].PositionHashes != null;
-      bool hasPliesSincePerSquare = pendingBatches[0].LastMovePlies != null;
+      bool hasPositions = !pendingBatches[0].Positions.IsEmpty;
+      bool hasMoves = !pendingBatches[0].Moves.IsEmpty;
+      bool hasHashes = !pendingBatches[0].PositionHashes.IsEmpty;
+      bool hasPliesSincePerSquare = !pendingBatches[0].LastMovePlies.IsEmpty;
 
       MGPosition[] positions = hasPositions ? new MGPosition[numPositions] : null;
       ulong[] positionHashes = hasHashes ? new ulong[numPositions] : null;

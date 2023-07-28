@@ -122,7 +122,7 @@ namespace Ceres.Chess.NNEvaluators
     {
       if (retrieveSupplementalResults) throw new NotImplementedException("retrieveSupplementalResults not supported");
 
-      Evaluator.EvaluateNN(positions, positions.Positions);
+      Evaluator.EvaluateNN(positions, positions.Positions.Span);
 
       const int NUM_POSITIONS_PER_THREAD = 40;
       ParallelOptions parallelOptions = ParallelUtils.ParallelOptions(positions.NumPos, NUM_POSITIONS_PER_THREAD);

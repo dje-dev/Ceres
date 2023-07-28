@@ -294,17 +294,17 @@ namespace Chess.Ceres.NNEvaluators
 
         bool xPosMoveIsLegal(int posNum, int nnIndexNum)
         {
-          if (batch.Moves == null)
+          if (batch.Moves.IsEmpty)
           {
             return true; // unable to disqualify
           }
           else
           {
-            bool shouldFlip = batch.Positions[posNum].SideToMove == SideType.Black;
+            bool shouldFlip = batch.Positions.Span[posNum].SideToMove == SideType.Black;
             EncodedMove em = EncodedMove.FromNeuralNetIndex(nnIndexNum);
             
             ConverterMGMoveEncodedMove.FromTo mm = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMoveFromTo(em, shouldFlip);
-            foreach (MGMove legalMove in batch.Moves[posNum]) // TO DO: improve effiiency
+            foreach (MGMove legalMove in batch.Moves.Span[posNum]) // TO DO: improve effiiency
             {
               if (legalMove.FromSquare.SquareIndexStartH1 == mm.From 
                && legalMove.ToSquare.SquareIndexStartH1 == mm.To)
@@ -486,7 +486,7 @@ if ((transform & FlipTransform) != 0) {
 #endif
     void ConvertTPGPolicyToExpanded(IEncodedPositionBatchFlat batch, ONNXRuntimeExecutorResultBatch result)
     {
-      Span<MGMoveList> allMoves = batch.Moves;
+      Span<MGMoveList> allMoves = batch.Moves.Span;
       for (int i=0; i<batch.NumPos;i++)
       {
         // TODO: Very inefficient - create many arrays

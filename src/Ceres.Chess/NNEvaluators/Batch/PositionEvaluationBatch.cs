@@ -23,6 +23,7 @@ using Ceres.Base.DataTypes;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Chess.LC0.Batches;
+using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
 
 #endregion
@@ -471,8 +472,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
       }
 
       CompressedPolicyVector[] retPolicies = new CompressedPolicyVector[numPos];
+      Memory<MGMoveList> moves = sourceBatchWithValidMoves.Moves;
       Span<float> policyProbsSpan = policyProbs.AsSpan();
-
       Parallel.For(0, numPos, i =>
       {
         if (policyTempBuffer == null)
@@ -506,11 +507,11 @@ namespace Ceres.Chess.NetEvaluation.Batch
         {
           // Compute an array if indices of valid moves.
           Span<int> legalMoveIndices = stackalloc int[128]; // TODO: make this short not int?
-          int numLegalMoves = sourceBatchWithValidMoves.Moves[i].NumMovesUsed;
-
+          MGMoveList movesThis = moves.Span[i];
+          int numLegalMoves = movesThis.NumMovesUsed;
           for (int im = 0; im < numLegalMoves; im++)
           {
-            EncodedMove encodedMove = ConverterMGMoveEncodedMove.MGChessMoveToEncodedMove(sourceBatchWithValidMoves.Moves[i].MovesArray[im]);
+            EncodedMove encodedMove = ConverterMGMoveEncodedMove.MGChessMoveToEncodedMove(movesThis.MovesArray[im]);
             legalMoveIndices[im] = encodedMove.IndexNeuralNet;
           }
 

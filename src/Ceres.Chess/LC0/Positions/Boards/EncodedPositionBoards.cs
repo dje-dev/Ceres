@@ -88,6 +88,15 @@ namespace Ceres.Chess.LC0.Boards
       History_7.MirrorPlanesInPlace();
     }
 
+    public readonly EncodedPositionBoard BoardAtIndex(int index)
+    {
+      Debug.Assert(index >= 0 && index < NUM_MOVES_HISTORY);
+      fixed (EncodedPositionBoard* boards = &History_0)
+      {
+        return boards[index];
+      }
+    } 
+
     /// <summary>
     /// Set a speciifed history board to a specified value.
     /// </summary>

@@ -57,40 +57,40 @@ namespace Ceres.Chess.LC0.Batches
 
     }
 
-    public Span<ulong> PosPlaneBitmaps => Parent.PosPlaneBitmaps.Slice(StartIndex * EncodedPositionWithHistory.NUM_PLANES_TOTAL, Length * EncodedPositionWithHistory.NUM_PLANES_TOTAL);
+    public Memory<ulong> PosPlaneBitmaps => Parent.PosPlaneBitmaps.Slice(StartIndex * EncodedPositionWithHistory.NUM_PLANES_TOTAL, Length * EncodedPositionWithHistory.NUM_PLANES_TOTAL);
 
-    public Span<byte> PosPlaneValues => Parent.PosPlaneValues.Slice(StartIndex * EncodedPositionWithHistory.NUM_PLANES_TOTAL, Length * EncodedPositionWithHistory.NUM_PLANES_TOTAL);
+    public Memory<byte> PosPlaneValues => Parent.PosPlaneValues.Slice(StartIndex * EncodedPositionWithHistory.NUM_PLANES_TOTAL, Length * EncodedPositionWithHistory.NUM_PLANES_TOTAL);
 
-    public Span<MGPosition> Positions
+    public Memory<MGPosition> Positions
     {
-      get => Parent.Positions == default ? default : Parent.Positions.Slice(StartIndex, Length);
+      get => Parent.Positions.IsEmpty ? default : Parent.Positions.Slice(StartIndex, Length);
       set => value.CopyTo(Parent.Positions);
     }
 
-    public Span<ulong> PositionHashes
+    public Memory<ulong> PositionHashes
     {
-      get => Parent.PositionHashes == default ? default : Parent.PositionHashes.Slice(StartIndex, Length);
+      get => Parent.PositionHashes.IsEmpty ? default : Parent.PositionHashes.Slice(StartIndex, Length);
       set => value.CopyTo(Parent.PositionHashes);
     }
-    public Span<MGMoveList> Moves
+    public Memory<MGMoveList> Moves
     {
-      get => Parent.Moves == default ? default : Parent.Moves.Slice(StartIndex, Length);
+      get => Parent.Moves.IsEmpty ? default : Parent.Moves.Slice(StartIndex, Length);
       set => value.CopyTo(Parent.Moves);
     }
 
-    public Span<byte> LastMovePlies
+    public Memory<byte> LastMovePlies
     {
-      get => Parent.LastMovePlies == default ? default : Parent.LastMovePlies.Slice(StartIndex, Length * 64);
+      get => Parent.LastMovePlies.IsEmpty ? default : Parent.LastMovePlies.Slice(StartIndex, Length * 64);
       set => value.CopyTo(Parent.LastMovePlies);
     }
 
 
 
-    public Span<float> W => Parent.W.Slice(StartIndex, Length);
+    public Memory<float> W => Parent.W.Slice(StartIndex, Length);
 
-    public Span<float> L => Parent.L.Slice(StartIndex, Length);
+    public Memory<float> L => Parent.L.Slice(StartIndex, Length);
 
-    public Span<FP16> Policy => Parent.Policy.Slice(StartIndex, Length);
+    public Memory<FP16> Policy => Parent.Policy.Slice(StartIndex, Length);
 
     public int NumPos => Length;
 
@@ -114,7 +114,7 @@ namespace Ceres.Chess.LC0.Batches
       throw new NotImplementedException();
     }
 
-    public Span<EncodedPositionWithHistory> PositionsBuffer
+    public Memory<EncodedPositionWithHistory> PositionsBuffer
     {
       get
       {

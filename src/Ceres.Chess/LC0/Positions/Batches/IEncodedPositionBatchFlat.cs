@@ -38,55 +38,55 @@ namespace Ceres.Chess.LC0.Batches
     /// <summary>
     // Bitmaps for the multiple board planes.
     /// </summary>
-    Span<ulong> PosPlaneBitmaps { get;  }
+    Memory<ulong> PosPlaneBitmaps { get;  }
 
     /// <summary>
     /// One byte for each bitmap with corresopnding value.
     /// These values are generally 0 or 1, 
     /// except for Move50 plane which can be any integer from 0 to 99.
     /// </summary>
-    Span<byte> PosPlaneValues { get; }
+    Memory<byte> PosPlaneValues { get; }
 
     /// <summary>
     /// Optionally the associated MGPositions
     /// </summary>
-    Span<MGPosition> Positions { get; set; }
+    Memory<MGPosition> Positions { get; set; }
 
     /// <summary>
     /// Optionally the associated hashes of the positions
     /// </summary>
-    Span<ulong> PositionHashes { get; set; }
+    Memory<ulong> PositionHashes { get; set; }
 
     /// <summary>
     /// Optionally the arrays of "plies since last move on square."
     /// </summary>
-    Span<byte> LastMovePlies{ get; set; }
+    Memory<byte> LastMovePlies{ get; set; }
 
     /// <summary>
     /// Optionally the set of moves from this position
     /// </summary>
-    Span<MGMoveList> Moves { get; set; }
+    Memory<MGMoveList> Moves { get; set; }
 
     /// <summary>
-    /// Span of W (winning probability forecasts)
+    /// Memory of W (winning probability forecasts)
     /// </summary>
-    Span<float> W { get; }
+    Memory<float> W { get; }
 
     /// <summary>
-    /// Span of L (loss probability forecasts)
+    /// Memory of L (loss probability forecasts)
     /// </summary>
-    Span<float> L { get; }
+    Memory<float> L { get; }
 
     /// <summary>
-    /// Span of policy probabilities, e.g. 0.1 for 10% probability of a move being chosen
+    /// Memory of policy probabilities, e.g. 0.1 for 10% probability of a move being chosen
     /// </summary>
-    Span<FP16> Policy { get; }
+    Memory<FP16> Policy { get; }
 
     /// <summary>
     /// If originated from EncodedPositionWithHistory then
     /// this field optionally holds the origin data array.
     /// </summary>
-    Span<EncodedPositionWithHistory> PositionsBuffer 
+    Memory<EncodedPositionWithHistory> PositionsBuffer 
     {
       get
       {
@@ -122,12 +122,12 @@ namespace Ceres.Chess.LC0.Batches
 
     public EncodedPositionBatchFlat Mirrored(bool fillInMissingPlanes)
     {
-      if (Positions == null) throw new NotImplementedException("Implemenation restriction: Mirrored only implemented when Positions is not null");
+      if (Positions.IsEmpty) throw new NotImplementedException("Implementation restriction: Mirrored only implemented when Positions is not null");
 
       EncodedPositionBatchBuilder builder = new EncodedPositionBatchBuilder(NumPos, NNEvaluator.InputTypes.Boards);
       for (int i = 0; i < NumPos; i++)
       {
-        Position pos = MGChessPositionConverter.PositionFromMGChessPosition(in Positions[i]);
+        Position pos = MGChessPositionConverter.PositionFromMGChessPosition(in Positions.Span[i]);
 
         // Mirror the position if it is equivalent to do so
         if (!pos.MiscInfo.BlackCanOO && !pos.MiscInfo.BlackCanOOO && !pos.MiscInfo.WhiteCanOO && !pos.MiscInfo.WhiteCanOOO)
@@ -146,7 +146,7 @@ namespace Ceres.Chess.LC0.Batches
     /// </summary>
     public void TrySetMoves()
     {
-      if (Moves == null && Positions.Length == NumPos)
+      if (Moves.IsEmpty && Positions.Length == NumPos)
       {
         MGMoveList[] moves = new MGMoveList[NumPos];
         ParallelOptions parallelOptions = ParallelUtils.ParallelOptions(NumPos, 96);
@@ -154,7 +154,7 @@ namespace Ceres.Chess.LC0.Batches
           delegate (int i)
           {
             MGMoveList thisPosMoves = new MGMoveList();
-            MGMoveGen.GenerateMoves(in Positions[i], thisPosMoves);
+            MGMoveGen.GenerateMoves(in Positions.Span[i], thisPosMoves);
             moves[i] = thisPosMoves;
           });
         Moves = moves;
@@ -175,9 +175,10 @@ namespace Ceres.Chess.LC0.Batches
       {
         legalIndices.Clear();
 
-        for (int i = 0; i < Moves[pos].NumMovesUsed; i++)
+        Span<MGMoveList> moves = Moves.Span;
+        for (int i = 0; i < moves[pos].NumMovesUsed; i++)
         {
-          EncodedMove encodedMove = ConverterMGMoveEncodedMove.MGChessMoveToEncodedMove(Moves[pos].MovesArray[i]);
+          EncodedMove encodedMove = ConverterMGMoveEncodedMove.MGChessMoveToEncodedMove(moves[pos].MovesArray[i]);
           legalIndices.Add(encodedMove.IndexNeuralNet);
         }
 
@@ -202,13 +203,14 @@ namespace Ceres.Chess.LC0.Batches
       {
         TrySetMoves();
 
+        Span<MGMoveList> moves = Moves.Span;
         BitArray mask = new BitArray(NumPos * 1858);
         for (int pos = 0; pos < NumPos; pos++)
         {
           int thisOffset = 1858 * pos;
-          for (int i = 0; i < Moves[pos].NumMovesUsed; i++)
+          for (int i = 0; i < moves[pos].NumMovesUsed; i++)
           {
-            EncodedMove encodedMove = ConverterMGMoveEncodedMove.MGChessMoveToEncodedMove(Moves[pos].MovesArray[i]);
+            EncodedMove encodedMove = ConverterMGMoveEncodedMove.MGChessMoveToEncodedMove(moves[pos].MovesArray[i]);
             mask[thisOffset + encodedMove.IndexNeuralNet] = true;
           }
         }

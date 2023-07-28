@@ -182,7 +182,7 @@ namespace Ceres.Chess.NNEvaluators.Internals
           ref CeresTransferBlockInItem refItem = ref ItemsIn[i];
 
           // Determine legal move list
-          MGMoveList movesLegal = batch.Moves[i];
+          MGMoveList movesLegal = batch.Moves.Span[i];
 
           // Note that rarely there might be more legal moves than we can fit in our buffer;
           // in this case we just silently ignore some
@@ -204,8 +204,8 @@ namespace Ceres.Chess.NNEvaluators.Internals
 
           int baseOffset = i * CeresTransferBlockIn.NUM_PLANES_PER_POSITION;
 
-          Span<byte> values = batch.PosPlaneValues;
-          Span<ulong> masks = batch.PosPlaneBitmaps;
+          Span<byte> values = batch.PosPlaneValues.Span;
+          Span<ulong> masks = batch.PosPlaneBitmaps.Span;
 
           if (VERBOSE_DEBUG)
           {

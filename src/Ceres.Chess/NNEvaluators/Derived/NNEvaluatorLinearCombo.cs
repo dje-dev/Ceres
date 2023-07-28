@@ -26,6 +26,7 @@ using Ceres.Base.Math;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Chess.LC0.Batches;
+using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
 using Ceres.Chess.NetEvaluation.Batch;
 
@@ -250,7 +251,7 @@ namespace Ceres.Chess.NNEvaluators
         policyAverages.Clear();
 
         float[] weights = WeightsPolicyOverrideFunc == null ? WeightsPolicy 
-                                                            : WeightsPolicyOverrideFunc(MGChessPositionConverter.PositionFromMGChessPosition(in positions.Positions[posIndex]));
+                                                            : WeightsPolicyOverrideFunc(MGChessPositionConverter.PositionFromMGChessPosition(in positions.Positions.Span[posIndex]));
 
         for (int evaluatorIndex = 0; evaluatorIndex < Evaluators.Length; evaluatorIndex++)
         {
@@ -326,7 +327,7 @@ namespace Ceres.Chess.NNEvaluators
     #region Utility methods
 
 
-    // --------------------------------------------------------------------------------------------
+    
     static FP16[] AverageFP16(int numPos, IPositionEvaluationBatch[] batches,
                               Func<IPositionEvaluationBatch, int, float> getValueFunc, float[] weights)
     {
@@ -342,17 +343,18 @@ namespace Ceres.Chess.NNEvaluators
       return ret;
     }
 
-    // --------------------------------------------------------------------------------------------
-    static FP16[] AverageFP16(int numPos, IPositionEvaluationBatch[] batches,
+    
+static FP16[] AverageFP16(int numPos, IPositionEvaluationBatch[] batches,
                               Func<IPositionEvaluationBatch, int, float> getValueFunc, 
                               WeightsOverrideDelegate weightFunc, IEncodedPositionBatchFlat positions)
     {
       FP16[] ret = new FP16[numPos];
       for (int i = 0; i < numPos; i++)
       {
+        MGPosition thisPosition = positions.Positions.Span[i];
         for (int evaluatorIndex = 0; evaluatorIndex < batches.Length; evaluatorIndex++)
         {
-          float[] weight = weightFunc(MGChessPositionConverter.PositionFromMGChessPosition(in positions.Positions[i]));
+          float[] weight = weightFunc(MGChessPositionConverter.PositionFromMGChessPosition(in thisPosition));
           ret[i] += (FP16)(weight[evaluatorIndex] * getValueFunc(batches[evaluatorIndex], i));
         }
       }

@@ -309,7 +309,7 @@ namespace Ceres.Chess.NNEvaluators.CUDA
       numPreparedPositions = batch.NumPos;
 
       int numPlanes = NNBackendInputOutput.NUM_INPUT_PLANES;
-      Span<ulong> masksSource = batch.PosPlaneBitmaps.Slice(0, batch.NumPos * numPlanes);
+      Span<ulong> masksSource = batch.PosPlaneBitmaps.Span.Slice(0, batch.NumPos * numPlanes);
       Span<ulong> masksDest = Evaluator.inputOutput.InputBoardMasks.AsSpan().Slice(0, batch.NumPos * numPlanes);
       masksSource.CopyTo(masksDest);
 
@@ -318,8 +318,8 @@ namespace Ceres.Chess.NNEvaluators.CUDA
       Parallel.ForEach(Partitioner.Create(0, batch.NumPos), parallelOptions,
         range =>
         {
-          Span<MGMoveList> movesSpan = batch.Moves;
-          Span<byte> valuesSource = batch.PosPlaneValues;
+          Span<MGMoveList> movesSpan = batch.Moves.Span;
+          Span<byte> valuesSource = batch.PosPlaneValues.Span;
           Span<float> valuesDest = Evaluator.inputOutput.InputBoardValues.AsSpan();
 
           for (int i = range.Item1; i < range.Item2; i++)

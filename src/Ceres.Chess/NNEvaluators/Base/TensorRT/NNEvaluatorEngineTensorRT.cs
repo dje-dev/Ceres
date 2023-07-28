@@ -209,8 +209,8 @@ Updated notes:
           float* rawResultsValue = stackalloc float[numToProcessPadded * NUM_VALUE_OUTPUTS];
           float* rawResultsMLH = stackalloc float[numToProcessPadded * 1];
 
-          fixed (byte* inputPlaneValuesF = &batch.PosPlaneValues[0])
-          fixed (ulong* inputPlaneBitmapsF = &batch.PosPlaneBitmaps[0])
+          fixed (byte* inputPlaneValuesF = &batch.PosPlaneValues.Span[0])
+          fixed (ulong* inputPlaneBitmapsF = &batch.PosPlaneBitmaps.Span[0])
 
           fixed (float* resultsPolicyPtr = &rawResultsPolicy[0])
           fixed (float* resultsValueFC2Ptr = &rawResultsConvValFlat[0])

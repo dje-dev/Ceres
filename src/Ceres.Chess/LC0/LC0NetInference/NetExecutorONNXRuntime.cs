@@ -98,6 +98,10 @@ namespace Ceres.Chess.LC0NetInference
 
       string directoryName = onnxFileName == null ? Path.GetTempPath() : new FileInfo(onnxFileName).DirectoryName;
 
+      if (!File.Exists(onnxFileName))
+      {
+        throw new Exception("ONNX file not found: " + onnxFileName);
+      }
       if (onnxModelBytes == null)
       {
         onnxModelBytes = File.ReadAllBytes(onnxFileName);

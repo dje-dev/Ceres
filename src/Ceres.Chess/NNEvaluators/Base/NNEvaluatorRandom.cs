@@ -93,7 +93,7 @@ namespace Ceres.Chess.NNEvaluators
 
         for (int i = 0; i < positions.NumPos; i++)
         {
-          int hashPos = HashInRange(positions.PosPlaneBitmaps, i * EncodedPositionWithHistory.NUM_PLANES_TOTAL, EncodedPositionWithHistory.NUM_PLANES_TOTAL);
+          int hashPos = HashInRange(positions.PosPlaneBitmaps.Span, i * EncodedPositionWithHistory.NUM_PLANES_TOTAL, EncodedPositionWithHistory.NUM_PLANES_TOTAL);
           if (hashPos < 0) hashPos *= -1;
           //hashPos = Math.Abs(hashPos) ^ 172854;
 
