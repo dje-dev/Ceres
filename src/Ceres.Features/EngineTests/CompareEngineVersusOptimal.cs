@@ -58,7 +58,7 @@ namespace Ceres.Features.EngineTests
     {
       Ceres,
       LC0,
-      Stockfish14_1,
+      Stockfish16,
       UCI,
       CeresCustom1,
       CeresCustom2
@@ -231,7 +231,7 @@ namespace Ceres.Features.EngineTests
         () => engine1 = MakeEngine(Params.Player1, Params.NetworkID1, evaluatorDef1, p1, s1),
         () => engine2 = MakeEngine(Params.Player2, Params.NetworkID2, evaluatorDef2, p2, s2),
         () => engineOptimal = MakeEngine(Params.PlayerArbiter, Params.NetworkArbiterID, evaluatorDefOptimal, pOptimal, sOptimal),
-        () => engineSF = Params.RunStockfishCrosscheck ? MakeEngine(PlayerMode.Stockfish14_1, null, null, default, default) : null);
+        () => engineSF = Params.RunStockfishCrosscheck ? MakeEngine(PlayerMode.Stockfish16, null, null, default, default) : null);
 
       int threadCount = 0;
       foreach (Game game in Game.FromPGN(Params.PGNFileName))
@@ -471,10 +471,11 @@ namespace Ceres.Features.EngineTests
         return new GameEngineLC0("LC0", networkID, DisablePruning, false, paramsSearch, paramsSelect, evaluatorDef,
                                  verbose: true, extraCommandLineArgs: "--move-overhead=0");
       }
-      else if (playerMode == PlayerMode.Stockfish14_1)
+      else if (playerMode == PlayerMode.Stockfish16)
       {
-        string sf14FN = Path.Combine(CeresUserSettingsManager.Settings.DirExternalEngines, SoftwareManager.IsLinux ? "stockfish14.1" : "stockfish14.1.exe");
-        GameEngineDef engineDef = new GameEngineDefUCI("SF14", new GameEngineUCISpec("SF14", sf14FN, 16,
+        // TODO: fix hardcoding
+        string sf16FN = Path.Combine(CeresUserSettingsManager.Settings.DirExternalEngines, SoftwareManager.IsLinux ? "stockfish_20090216_x64_avx2" : "stockfish_20090216_x64_avx2.exe");
+        GameEngineDef engineDef = new GameEngineDefUCI("SF16", new GameEngineUCISpec("SF16", sf16FN, 16,
                                                        2048, CeresUserSettingsManager.Settings.TablebaseDirectory));
         return engineDef.CreateEngine();
       }
