@@ -16,8 +16,6 @@
 using Ceres.Base.DataTypes;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Threading.Tasks;
 
 #endregion
 
@@ -188,14 +186,36 @@ namespace Ceres.Base.Math
     /// <returns></returns>
     public static double StdDev(IList<float> vals)
     {
-      double sum = 0;
-      for (int i = 0; i < vals.Count; i++) sum += vals[i];
-      double avg = sum / vals.Count;
+      double avg = Average(vals);
 
       double ss = 0;
       for (int i = 0; i < vals.Count; i++) ss += (vals[i] - avg) * (vals[i] - avg);
 
       return System.Math.Sqrt(ss / vals.Count);
+    }
+
+    /// <summary>
+    /// Returns the kurtosis of an IList of floats.
+    /// </summary>
+    /// <param name="vals"></param>
+    /// <returns></returns>
+    public static double Kurtosis(IList<float> vals)
+    {
+      double avg = Average(vals);
+
+      double sum2 = 0;
+      double sum4 = 0;
+      for (int i = 0; i < vals.Count; i++)
+      {
+        float diff = (float)(vals[i] - avg);
+        sum2 += MathF.Pow(diff, 2);
+        sum4 += MathF.Pow(diff, 4);
+      }
+
+      float variance = (float)sum2 / vals.Count;
+      float avgPower4 = (float)sum4 / vals.Count;
+
+      return avgPower4 / (variance * variance);
     }
 
     /// <summary>
