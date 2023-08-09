@@ -158,7 +158,8 @@ namespace Ceres.Chess.LC0.Batches
     /// Adds a position to the batch.
     /// </summary>
     /// <param name="position"></param>
-    public void Add(in Position position, bool fillInMissingPlanes)
+    /// <param name="fillInMissingPlanes">if history planes should be filled in if incomplete (typically necessary)</param>
+    public void Add(in Position position, bool fillInMissingPlanes = true)
     {
       // NOTE: important to using SetFromPosition which will
       //       properly set up extra en passant plane if needed.
@@ -171,8 +172,8 @@ namespace Ceres.Chess.LC0.Batches
     /// <summary>
     /// Adds a position with history to the batch.
     /// </summary>
-    /// <param name="moveSequence"></param>
-    public void Add(PositionWithHistory moveSequence, bool fillInMissingPlanes)
+    /// <param name="moveSequence">if history planes should be filled in if incomplete (typically necessary)</param>
+    public void Add(PositionWithHistory moveSequence, bool fillInMissingPlanes = true)
     {
       MGPosition finalPositionMG = moveSequence.FinalPosMG;
 

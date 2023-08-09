@@ -253,9 +253,10 @@ namespace Ceres.Chess.NNEvaluators
     /// Helper method to evaluates a single position.
     /// </summary>
     /// <param name="position"></param>
+    /// <param name="fillInMissingPlanes">if history planes should be filled in if incomplete (typically necessary)</param>
     /// <param name="retrieveSupplementalResults"></param>
     /// <returns></returns>
-    public NNEvaluatorResult Evaluate(PositionWithHistory position, bool fillInMissingPlanes, bool retrieveSupplementalResults = false)
+    public NNEvaluatorResult Evaluate(PositionWithHistory position, bool fillInMissingPlanes = true, bool retrieveSupplementalResults = false)
     {
       // TODO: someday we might be able to relax the InputTypes.All below
       EncodedPositionBatchBuilder builder = new EncodedPositionBatchBuilder(1, NNEvaluator.InputTypes.All);
@@ -270,9 +271,10 @@ namespace Ceres.Chess.NNEvaluators
     /// Helper method to evaluates set of PositionWithHistory.
     /// </summary>
     /// <param name="positions"></param>
+    /// <param name="fillInMissingPlanes">if history planes should be filled in if incomplete (typically necessary)</param>
     /// <param name="retrieveSupplementalResults"></param>
     /// <returns></returns>
-    public NNEvaluatorResult[] Evaluate(IEnumerable<PositionWithHistory> positions, bool fillInMissingPlanes, bool retrieveSupplementalResults = false)
+    public NNEvaluatorResult[] Evaluate(IEnumerable<PositionWithHistory> positions, bool fillInMissingPlanes = true, bool retrieveSupplementalResults = false)
     {
       if (InputsRequired.HasFlag(InputTypes.LastMovePlies))
       {
@@ -298,10 +300,11 @@ namespace Ceres.Chess.NNEvaluators
     /// <summary>
     /// Helper method to evaluates a single position.
     /// </summary>
-    /// <param name="encodedPosition"></param>
+    /// <param name="position"></param>
+    /// <param name="fillInMissingPlanes">if history planes should be filled in if incomplete (typically necessary)</param>
     /// <param name="retrieveSupplementalResults"></param>
     /// <returns></returns>
-    public NNEvaluatorResult Evaluate(in Position position, bool fillInMissingPlanes, bool retrieveSupplementalResults = false)
+    public NNEvaluatorResult Evaluate(in Position position, bool fillInMissingPlanes = true, bool retrieveSupplementalResults = false)
     {
       // TODO: someday we might be able to relax the InputTypes.All below
       EncodedPositionBatchBuilder builder = new EncodedPositionBatchBuilder(1, NNEvaluator.InputTypes.All);
@@ -310,6 +313,7 @@ namespace Ceres.Chess.NNEvaluators
       NNEvaluatorResult[] result = EvaluateBatch(builder.GetBatch(), retrieveSupplementalResults);
       return result[0];
     }
+
 
     /// <summary>
     /// Helper method to evaluates a single position.

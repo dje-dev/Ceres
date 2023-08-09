@@ -344,8 +344,8 @@ namespace Ceres.Chess.EncodedPositions
     /// Sets the boards from a Span of Position indicating full history.
     /// </summary>
     /// <param name="sequentialPositions">sequence of positions, with the last entry being the latest move in the sequence</param>
-    /// <param name="fillInMissingPlanes"></param>
-    public void SetFromSequentialPositions(Span<Position> sequentialPositions, bool fillInMissingPlanes)
+    /// <param name="fillInMissingPlanes">if history planes should be filled in if incomplete (typically necessary)</param>
+    public void SetFromSequentialPositions(Span<Position> sequentialPositions, bool fillInMissingPlanes = true)
     {
       int LAST_POSITION_INDEX = sequentialPositions.Length - 1;
 
@@ -565,7 +565,7 @@ namespace Ceres.Chess.EncodedPositions
     /// Returns an instance equivalent to a specified Position (possibly with history fill in).
     /// </summary>
     /// <param name="pos"></param>
-    /// <param name="fillInHistoryPlanes"></param>
+    /// <param name="fillInHistoryPlanes">if history planes should be filled in if incomplete (typically necessary)</param>
     /// <returns></returns>
     public static EncodedPositionWithHistory FromPosition(in Position pos, bool fillInHistoryPlanes = true)
     {
@@ -579,7 +579,7 @@ namespace Ceres.Chess.EncodedPositions
     /// Returns an instance equivalent to a specified position represented as a FEN (possibly with history fill in).
     /// </summary>
     /// <param name="fen"></param>
-    /// <param name="fillInHistoryPlanes"></param>
+    /// <param name="fillInHistoryPlanes">if history planes should be filled in if incomplete (typically necessary)</param>
     /// <returns></returns>
     public static EncodedPositionWithHistory FromFEN(string fen, bool fillInHistoryPlanes = true)
     {
@@ -595,7 +595,7 @@ namespace Ceres.Chess.EncodedPositions
     /// Initializes from a specified Position, possibly with history fill in.
     /// </summary>
     /// <param name="pos"></param>
-    /// <param name="fillInHistoryPlanes"></param>
+    /// <param name="fillInHistoryPlanes">if history planes should be filled in if incomplete (typically necessary)</param>
     /// <param name="desiredFromSidePerspective"></param>
     public void SetFromPosition(in Position pos, bool fillInHistoryPlanes, SideType desiredFromSidePerspective)
     {
