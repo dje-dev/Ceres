@@ -16,6 +16,7 @@
 using Ceres.Base.DataTypes;
 using System;
 using System.Collections.Generic;
+using System.Numerics;
 
 #endregion
 
@@ -178,6 +179,51 @@ namespace Ceres.Base.Math
       else
         return System.Math.Exp(totLogs / xs.Count);
     }
+
+
+    /// <summary>
+    /// Returns the L2 norm of an IList of floats.
+    /// </summary>
+    /// <param name="vals"></param>
+    /// <returns></returns>
+    /// <summary>
+    /// Computes the L2 norm of a vector.
+    /// </summary>
+    /// <param name="vals"></param>
+    /// <returns></returns>
+    public static float NormL2(ReadOnlySpan<float> vals)
+    {
+      int vectorSize = Vector<float>.Count;
+
+      Vector<float> sum = Vector<float>.Zero;
+
+      int i = 0;
+      int lastBlockIndex = vals.Length - (vals.Length % Vector<float>.Count);
+
+      // Process a vector at a time.
+      while (i < lastBlockIndex)
+      {
+        Vector<float> thisSlice = new Vector<float>(vals.Slice(i, vectorSize));
+        sum += thisSlice * thisSlice;
+        i += vectorSize;
+      }
+
+      // Leftover that didn't fit into a vector.
+      float totalSum = 0;
+      for (; i < vals.Length; i++)
+      {
+        totalSum += vals[i] * vals[i];
+      }
+
+      // Horizontal sum.
+      for (int j = 0; j < vectorSize; j++)
+      {
+        totalSum += sum[j];
+      }
+
+      return MathF.Sqrt(totalSum);
+    }
+
 
     /// <summary>
     /// Returns the standard deviation of an IList of floats.
