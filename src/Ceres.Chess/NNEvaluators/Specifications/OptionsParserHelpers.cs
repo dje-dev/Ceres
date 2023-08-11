@@ -16,7 +16,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-
+using Ceres.Chess.NNEvaluators.Defs;
 using Chess.Ceres.NNEvaluators;
 
 #endregion
@@ -28,7 +28,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
   /// </summary>
   public static class OptionsParserHelpers
   {
-    internal static List<(string netID, NNEvaluatorPrecision precision, float wtValue, float wtPolicy, float wtMLH)>
+    internal static List<(string netID, NNEvaluatorType type, NNEvaluatorPrecision precision, float wtValue, float wtPolicy, float wtMLH)>
       ParseNetworkOptions(string netSpecStr)
     {
       /// <summary>
@@ -37,7 +37,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
       /// </summary>
       const char SUB_WEIGHTS_CHAR = ';';
 
-      List<(string, NNEvaluatorPrecision precision, float, float, float)> ret = new();
+      List<(string, NNEvaluatorType type, NNEvaluatorPrecision precision, float, float, float)> ret = new();
 
       string[] nets = netSpecStr.Split(",");
 
@@ -49,24 +49,26 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
         const NNEvaluatorPrecision DEFAULT_PRECISION = NNEvaluatorPrecision.FP16;
         NNEvaluatorPrecision precision = DEFAULT_PRECISION;
 
+        (NNEvaluatorType NN_EVAL_TYPE, string thisNetID) = ExtractEvaluatorTypeAndNetID(netStrWithPrecision);
+
         string netStr; // without any possible precision indicator
 
         // Parse precision string, if any (either #8 or #16 at end of network ID)
-        if (netStrWithPrecision.Contains("#"))
+        if (thisNetID.Contains("#"))
         {
-          string[] netAndPrecision = netStrWithPrecision.Split("#");
-          if (!int.TryParse(netAndPrecision[1], out int precisionBits)
+          string[] netIDs = thisNetID.Split("#");
+          if (!int.TryParse(netIDs[1], out int precisionBits)
             || (precisionBits != 8 && precisionBits != 16 && precisionBits != 32))
           {
-            throw new Exception("Network specification has invalid or unsupported precision " + netAndPrecision[1]);
+            throw new Exception("Network specification has invalid or unsupported precision " + netIDs[1]);
           }
 
-          netStr = netAndPrecision[0];
+          netStr = netIDs[0];
           precision = precisionBits == 8 ? NNEvaluatorPrecision.Int8 : (precisionBits == 16 ? NNEvaluatorPrecision.FP16 : NNEvaluatorPrecision.FP32);
         }
         else
         {
-          netStr = netStrWithPrecision;
+          netStr = thisNetID;
         }
 
         // Default to equal weight
@@ -78,7 +80,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
         if (netStr.Contains(SUB_WEIGHTS_CHAR))
         {
           string[] netParts = netStr.Split(SUB_WEIGHTS_CHAR);
-          netID = netParts[0];
+          thisNetID = netParts[0];
 
           if (netParts.Length == 4)
           {
@@ -94,7 +96,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
         else if (netStr.Contains("="))
         {
           string[] netParts = netStr.Split("=");
-          netID = netParts[0];
+          thisNetID = netParts[0];
 
           if (netParts.Length == 2)
           {
@@ -108,14 +110,14 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
         }
         else
         {
-          netID = netStr;
+          thisNetID = netStr;
         }
 
         sumWeightsValue += weightValue;
         sumWeightsPolicy += weightPolicy;
         sumWeightsMLH += weightMLH;
 
-        ret.Add((netID, precision, weightValue, weightPolicy, weightMLH));
+        ret.Add((thisNetID, NN_EVAL_TYPE, precision, weightValue, weightPolicy, weightMLH));
       }
 
       if (MathF.Abs(1.0f - sumWeightsValue) > 0.001)
@@ -143,10 +145,78 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
     }
 
 
-    internal static List<(string netID, 
-                          int? maxBatchSize, int? optimalBatchSize, 
-                          string batchSizesFileName, float weight)> 
-      ParseDeviceOptions(string str)
+    internal static (NNEvaluatorType NN_EVAL_TYPE, string thisNetID) ExtractEvaluatorTypeAndNetID(string netStrWithPrecision)
+    {
+      NNEvaluatorType NN_EVAL_TYPE;
+      string thisNetID;
+
+      if (netStrWithPrecision.ToUpper().StartsWith("LC0:"))
+      {
+        // Net specification "LC0:703810=0.5,66193=0.5";
+        thisNetID = netStrWithPrecision.Substring(4);
+        NN_EVAL_TYPE = NNEvaluatorType.LC0Library;
+      }
+      else if (netStrWithPrecision.ToUpper().StartsWith("LC0_ONNX_ORT:"))
+      {
+        thisNetID = netStrWithPrecision.Substring(13);
+        NN_EVAL_TYPE = NNEvaluatorType.LC0ViaONNXViaORT;
+      }
+      else if (netStrWithPrecision.ToUpper().StartsWith("LC0_ONNX_TRT:"))
+      {
+        thisNetID = netStrWithPrecision.Substring(13);
+        NN_EVAL_TYPE = NNEvaluatorType.LC0ViaONNXViaTRT;
+      }
+      else if (netStrWithPrecision.ToUpper().StartsWith("ONNX_TRT:"))
+      {
+        thisNetID = netStrWithPrecision.Substring(9);
+        NN_EVAL_TYPE = NNEvaluatorType.ONNXViaTRT;
+      }
+      else if (netStrWithPrecision.ToUpper().StartsWith("ONNX_ORT:"))
+      {
+        thisNetID = netStrWithPrecision.Substring(9);
+        NN_EVAL_TYPE = NNEvaluatorType.ONNXViaORT;
+      }
+      else if (netStrWithPrecision.ToUpper().StartsWith("TRT:"))
+      {
+        thisNetID = netStrWithPrecision.Substring(4);
+        NN_EVAL_TYPE = NNEvaluatorType.TRT;
+      }
+      else if (netStrWithPrecision.ToUpper().StartsWith("RANDOM_WIDE:"))
+      {
+        thisNetID = netStrWithPrecision.Substring(12);
+        NN_EVAL_TYPE = NNEvaluatorType.RandomWide;
+      }
+      else if (netStrWithPrecision.ToUpper().StartsWith("RANDOM_NARROW:"))
+      {
+        thisNetID = netStrWithPrecision.Substring(14);
+        NN_EVAL_TYPE = NNEvaluatorType.RandomNarrow;
+      }
+      else if (netStrWithPrecision.ToUpper().StartsWith("COMBO_PHASED:"))
+      {
+        thisNetID = netStrWithPrecision.Substring(13);
+        NN_EVAL_TYPE = NNEvaluatorType.ComboPhased;
+      }
+      else if (netStrWithPrecision.ToUpper().StartsWith("CUSTOM1:"))
+      {
+        thisNetID = netStrWithPrecision.Substring(8);
+        NN_EVAL_TYPE = NNEvaluatorType.Custom1;
+      }
+      else if (netStrWithPrecision.ToUpper().StartsWith("CUSTOM2:"))
+      {
+        thisNetID = netStrWithPrecision.Substring(8);
+        NN_EVAL_TYPE = NNEvaluatorType.Custom2;
+      }
+      else
+      {
+        // Prefix optionally omitted
+        thisNetID = netStrWithPrecision;
+        NN_EVAL_TYPE = NNEvaluatorType.LC0Library;
+      }
+
+      return (NN_EVAL_TYPE, thisNetID);
+    }
+
+    internal static List<(string netID, int? maxBatchSize, int? optimalBatchSize, string batchSizesFileName, float weight)>  ParseDeviceOptions(string str)
     {
       /// <summary>
       /// Delimiter character used to indicate beginning of a weights specification.
@@ -185,6 +255,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
 
       return ret;
     }
+
 
     public static void ParseBatchSizeSpecification(string specStr, out int? maxBatchSize, out int? optimalBatchSize, out string batchSizesFileName)
     {

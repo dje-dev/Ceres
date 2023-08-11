@@ -55,77 +55,13 @@ namespace Ceres.Chess.NNEvaluators.Specifications
     /// <param name="netString"></param>
     public NNNetSpecificationString(string netString)
     {
-      NNEvaluatorType NN_EVAL_TYPE = NNEvaluatorType.LC0Library;
-
-      string netIDs;
-      if (netString.ToUpper().StartsWith("LC0:"))
-      {
-        // Net specification "LC0:703810=0.5,66193=0.5";
-        netIDs = netString.Substring(4);
-      }
-      else if (netString.ToUpper().StartsWith("LC0_ONNX_ORT:"))
-      {
-        netIDs = netString.Substring(13);
-        NN_EVAL_TYPE = NNEvaluatorType.LC0ViaONNXViaORT;
-      }
-      else if (netString.ToUpper().StartsWith("LC0_ONNX_TRT:"))
-      {
-        netIDs = netString.Substring(13);
-        NN_EVAL_TYPE = NNEvaluatorType.LC0ViaONNXViaTRT;
-      }
-      else if (netString.ToUpper().StartsWith("ONNX_TRT:"))
-      {
-        netIDs = netString.Substring(9);
-        NN_EVAL_TYPE = NNEvaluatorType.ONNXViaTRT;
-      }
-      else if (netString.ToUpper().StartsWith("ONNX_ORT:"))
-      {
-        netIDs = netString.Substring(9);
-        NN_EVAL_TYPE = NNEvaluatorType.ONNXViaORT;
-      }
-      else if (netString.ToUpper().StartsWith("TRT:"))
-      {
-        netIDs = netString.Substring(4);
-        NN_EVAL_TYPE = NNEvaluatorType.TRT;
-      }
-      else if (netString.ToUpper().StartsWith("RANDOM_WIDE:"))
-      {
-        netIDs = netString.Substring(12);
-        NN_EVAL_TYPE = NNEvaluatorType.RandomWide;
-      }
-      else if (netString.ToUpper().StartsWith("RANDOM_NARROW:"))
-      {
-        netIDs = netString.Substring(14);
-        NN_EVAL_TYPE = NNEvaluatorType.RandomNarrow;
-      }
-      else if (netString.ToUpper().StartsWith("COMBO_PHASED:"))
-      {
-        netIDs = netString.Substring(13);
-        NN_EVAL_TYPE = NNEvaluatorType.ComboPhased;
-      }
-      else if (netString.ToUpper().StartsWith("CUSTOM1:"))
-      {
-        netIDs = netString.Substring(8);
-        NN_EVAL_TYPE = NNEvaluatorType.Custom1;
-      }
-      else if (netString.ToUpper().StartsWith("CUSTOM2:"))
-      {
-        netIDs = netString.Substring(8);
-        NN_EVAL_TYPE = NNEvaluatorType.Custom2;
-      }
-      else
-      {
-        // Prefix optionally omitted
-        netIDs = netString;
-      }
-
       // Build network definitions
-      List<(string, NNEvaluatorPrecision, float, float, float)> netParts = OptionsParserHelpers.ParseNetworkOptions(netIDs);
+      List<(string, NNEvaluatorType, NNEvaluatorPrecision, float, float, float)> netParts = OptionsParserHelpers.ParseNetworkOptions(netString);
 
       NetDefs = new List<(NNEvaluatorNetDef, float, float, float)>();
       foreach (var netSegment in netParts)
       {
-        NetDefs.Add((new NNEvaluatorNetDef(netSegment.Item1, NN_EVAL_TYPE, netSegment.Item2), netSegment.Item3, netSegment.Item4, netSegment.Item5));
+        NetDefs.Add((new NNEvaluatorNetDef(netSegment.Item1, netSegment.Item2, netSegment.Item3), netSegment.Item4, netSegment.Item5, netSegment.Item6));
       }
 
       ComboType = NetDefs.Count == 1 ? NNEvaluatorNetComboType.Single : NNEvaluatorNetComboType.WtdAverage;
