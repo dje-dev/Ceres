@@ -182,6 +182,8 @@ namespace Ceres.Chess.NNEvaluators
       Span<FP16> fullL = fullBatchResult.IsWDL ? fullBatchResult.L.Span : default;
       Span<FP16> fullM = fullBatchResult.HasM ? fullBatchResult.M.Span : default;
       Span<FP16> fullUncertaintyV = fullBatchResult.HasUncertaintyV ? fullBatchResult.UncertaintyV.Span : default;
+      Span<FP16> fullExtraStat0 = fullBatchResult.ExtraStat0.Span;
+      Span<FP16> fullExtraStat1 = fullBatchResult.ExtraStat1.Span;
       Span<NNEvaluatorResultActivations> fullActivations = fullBatchResult.Activations.IsEmpty ? null : fullBatchResult.Activations.Span;
 
       // Finally, disaggregate the big batch back into a set of individual subbatch results
@@ -203,7 +205,9 @@ namespace Ceres.Chess.NNEvaluators
                                       fullBatchResult.HasM ? fullM.Slice(nextPosIndex, numPos).ToArray() : null,
                                       fullBatchResult.HasUncertaintyV ? fullUncertaintyV.Slice(nextPosIndex, numPos).ToArray() : null,
                                       fullBatchResult.Activations.IsEmpty ? null : fullActivations.Slice(nextPosIndex, numPos).ToArray(),
-                                      fullBatchResult.Stats);
+                                      fullBatchResult.Stats, 
+                                      fullExtraStat0.IsEmpty ? default : fullExtraStat0.Slice(nextPosIndex, numPos).ToArray(),
+                                      fullExtraStat1.IsEmpty ? default : fullExtraStat1.Slice(nextPosIndex, numPos).ToArray());
 
         nextPosIndex += numPos;
         completedBatches[subBatchIndex++] = thisResultSubBatch;

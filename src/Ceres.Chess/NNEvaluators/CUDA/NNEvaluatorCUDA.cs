@@ -257,7 +257,8 @@ namespace Ceres.Chess.NNEvaluators.CUDA
 #endif
       }
 
-      return new PositionEvaluationBatch(IsWDL, HasM, HasUncertaintyV, positions.NumPos, policies, w, l, m, default, activations, new TimingStats(), copyResults);
+      return new PositionEvaluationBatch(IsWDL, HasM, HasUncertaintyV, positions.NumPos, policies, w, l, m, default, 
+                                         activations, new TimingStats(), default, default, copyResults);
     }
 
 

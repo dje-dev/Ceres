@@ -38,6 +38,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
     FP16 GetLossP(int index);
     FP16 GetM(int index);
     FP16 GetUncertaintyV(int index);
+    FP16 GetExtraStat0(int index);
+    FP16 GetExtraStat1(int index);
 
     (Memory<CompressedPolicyVector> policies, int index) GetPolicy(int index);
    

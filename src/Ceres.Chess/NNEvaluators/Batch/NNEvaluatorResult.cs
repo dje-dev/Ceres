@@ -13,6 +13,7 @@
 
 #region Using directives
 
+using Ceres.Base.DataTypes;
 using Ceres.Chess.EncodedPositions;
 
 #endregion
@@ -52,6 +53,16 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// </summary>
     public readonly NNEvaluatorResultActivations Activations;
 
+    /// <summary>
+    ///  Optional extra evaluation statistic 0.
+    /// </summary>
+    public readonly FP16 ExtraStat0;
+
+    /// <summary>
+    ///  Optional extra evaluation statistic 1.
+    /// </summary>
+    public readonly FP16 ExtraStat1;
+
 
     /// <summary>
     /// Constructor.
@@ -64,7 +75,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <param name="activations"></param>
     public NNEvaluatorResult(float winP, float lossP, float m, float uncertaintyV,
                              CompressedPolicyVector policy, 
-                             NNEvaluatorResultActivations activations)
+                             NNEvaluatorResultActivations activations,
+                             FP16 extraStat0 = default, FP16 extraStat1 = default)
     {
       this.winP = winP;
       this.lossP = lossP;
@@ -72,6 +84,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
       UncertaintyV = uncertaintyV;
       Policy = policy;
       Activations = activations;
+      ExtraStat0 = extraStat0;
+      ExtraStat1 = extraStat1;
     }
 
 

@@ -92,7 +92,7 @@ namespace Ceres.Chess.NNEvaluators
       FP16[] l = new FP16[numPos];
       FP16[] m = HasM ? new FP16[numPos] : null;
       FP16[] uncertaintyV = HasUncertaintyV ? new FP16[numPos] : null;
-      
+
       // For each position call the supplied delegate to choose the preferred evaluator.
       NNPositionEvaluationBatchMember[] values = new NNPositionEvaluationBatchMember[Evaluators.Length];
       for (int posNum = 0; posNum < numPos; posNum++)
@@ -136,12 +136,14 @@ namespace Ceres.Chess.NNEvaluators
           uncertaintyV[posNum] = batches[index].GetUncertaintyV(posNum);
         }
 
-        var policyInfo = batches[index].GetPolicy(posNum);
+        // TODO: The ExtraStat0 and ExtraStat1 are not copied over here. Consider doing this if feasible.
+
+        (Memory<CompressedPolicyVector> policies, int index) policyInfo = batches[index].GetPolicy(posNum);
         policies[posNum] = policyInfo.policies.Span[policyInfo.index];
       }
 
       // Construct an output batch, choosing desired evaluator for each position
-      PositionEvaluationBatch batch = new(IsWDL, HasM, HasUncertaintyV, positions.NumPos, policies, w, l, m, uncertaintyV, null, default, false);
+      PositionEvaluationBatch batch = new(IsWDL, HasM, HasUncertaintyV, positions.NumPos, policies, w, l, m, uncertaintyV, null, default, default, default, false);
 
       return batch;
     }

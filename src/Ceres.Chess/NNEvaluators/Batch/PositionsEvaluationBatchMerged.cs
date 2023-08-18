@@ -84,14 +84,16 @@ namespace Ceres.Chess.NetEvaluation.Batch
       {
         int count = 0;
         for (int i = 0; i < Batches.Length; i++)
+        {
           count += BatchSizes[i];
+        }
         return count;
       }
     }
 
 
     /// <summary>
-    /// Next availalbe set of indices.
+    /// Next available set of indices.
     /// </summary>
     /// <param name="index"></param>
     /// <returns></returns>
@@ -102,10 +104,13 @@ namespace Ceres.Chess.NetEvaluation.Batch
       return nextIndices;
     }
 
+
     (int, int) DoGetIndices(int index)
     {
       if (index == lastIndex)
+      {
         return (lastEvaluatorIndex, lastEvaluatorInnerIndex);
+      }
       else if (index == 0)
       {
         // Support restart from beginning
@@ -174,6 +179,19 @@ namespace Ceres.Chess.NetEvaluation.Batch
       return Batches[indicies.Item1].GetActivations(indicies.Item2);
     }
 
+    public FP16 GetExtraStat0(int index)
+    {
+      (int, int) indicies = GetIndices(index);
+
+      return Batches[indicies.Item1].GetExtraStat0(indicies.Item2);
+    }
+
+    public FP16 GetExtraStat1(int index)
+    {
+      (int, int) indicies = GetIndices(index);
+
+      return Batches[indicies.Item1].GetExtraStat1(indicies.Item2);
+    }
 
     public IEnumerator<NNPositionEvaluationBatchMember> GetEnumerator()
     {

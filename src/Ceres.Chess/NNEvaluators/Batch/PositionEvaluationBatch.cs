@@ -69,7 +69,17 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <summary>
     /// Activations of inner layers.
     /// </summary>
-    public Memory<NNEvaluatorResultActivations> Activations;  
+    public Memory<NNEvaluatorResultActivations> Activations;
+
+    /// <summary>
+    /// Optional additional statistic 0.
+    /// </summary>
+    public Memory<FP16> ExtraStat0;
+    
+    /// <summary>
+    /// Optional additional statistic 1.
+    /// </summary>
+    public Memory<FP16> ExtraStat1;
 
     #endregion
 
@@ -116,13 +126,30 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <returns></returns>
     public FP16 GetUncertaintyV(int index) => HasUncertaintyV ? UncertaintyV.Span[index] : FP16.NaN;
 
-
     /// <summary>
     /// Returns inner layer activations.
     /// </summary>
     /// <param name="index"></param>
     /// <returns></returns>
     NNEvaluatorResultActivations GetActivations(int index) => Activations.IsEmpty ? null : Activations.Span[index];
+
+    /// <summary>
+    /// Returns extra statistic 0 for specified position.
+    /// </summary>
+    /// <param name="index"></param>
+    /// <param name="statIndex"></param>
+    /// <returns></returns>
+    public FP16 GetExtraStat0(int index) => ExtraStat0.Span[index];
+
+
+    /// <summary>
+    /// Returns extra statistic 1 index for specified position.
+    /// </summary>
+    /// <param name="index"></param>
+    /// <param name="statIndex"></param>
+    /// <returns></returns>
+    public FP16 GetExtraStat1(int index) => ExtraStat1.Span[index];
+
 
     /// <summary>
     /// Returns string representation of the WDL values for position at a specified index.
@@ -199,6 +226,20 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <returns></returns>
     FP16 IPositionEvaluationBatch.GetUncertaintyV(int index) => GetUncertaintyV(index);
 
+    /// <summary>
+    /// Returns optional extra statistic for specified position.
+    /// </summary>
+    /// <param name="index"></param>
+    /// <returns></returns>
+    FP16 IPositionEvaluationBatch.GetExtraStat0(int index) => ExtraStat0.IsEmpty ? FP16.NaN : GetExtraStat0(index);
+
+    /// <summary>
+    /// Returns optional extra statistic for specified position.
+    /// </summary>
+    /// <param name="index"></param>
+    /// <returns></returns>
+    FP16 IPositionEvaluationBatch.GetExtraStat1(int index) => ExtraStat1.IsEmpty ? FP16.NaN : GetExtraStat1(index);
+
 
     NNEvaluatorResultActivations IPositionEvaluationBatch.GetActivations(int index) => GetActivations(index);
 
@@ -220,7 +261,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     public PositionEvaluationBatch(bool isWDL, bool hasM, bool hasUncertaintyV, int numPos, Memory<CompressedPolicyVector> policies,
                              Memory<FP16> w, Memory<FP16> l, Memory<FP16> m, Memory<FP16> uncertaintyV,
                              Memory<NNEvaluatorResultActivations> activations,
-                             TimingStats stats, bool makeCopy = false)
+                             TimingStats stats, Memory<FP16> extraStat0 = default, Memory<FP16> extraStat1 = default, bool makeCopy = false)
     {
       IsWDL = isWDL;
       HasM = hasM;
@@ -234,6 +275,16 @@ namespace Ceres.Chess.NetEvaluation.Batch
       L = (isWDL && makeCopy) ? l.Slice(0, numPos).ToArray() : l;
       M = (hasM && makeCopy) ? m.Slice(0, numPos).ToArray() : m;
       UncertaintyV = (HasUncertaintyV && makeCopy) ? uncertaintyV.Slice(0, numPos).ToArray() : uncertaintyV;
+
+      if (!extraStat0.IsEmpty)
+      {
+        ExtraStat0 = makeCopy ? extraStat0.Slice(0, numPos).ToArray() : extraStat0;
+      }
+
+      if (!extraStat1.IsEmpty)
+      {
+        ExtraStat1 = makeCopy ? extraStat1.Slice(0, numPos).ToArray() : extraStat1;
+      }
 
       Stats = stats;
     }

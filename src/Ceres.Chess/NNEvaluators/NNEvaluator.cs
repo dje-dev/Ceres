@@ -18,6 +18,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Ceres.Base.DataType;
+using Ceres.Base.DataTypes;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.LC0.Batches;
 using Ceres.Chess.MoveGen;
@@ -242,7 +243,10 @@ namespace Ceres.Chess.NNEvaluators
       float uncertaintyV = HasUncertaintyV ? batch.GetUncertaintyV(batchIndex) : float.NaN;
       NNEvaluatorResultActivations activations = batch.GetActivations(batchIndex);
       (Memory<CompressedPolicyVector> policies, int index) policyRef = batch.GetPolicy(batchIndex);
-      result = new NNEvaluatorResult(w, l, m, uncertaintyV, policyRef.policies.Span[policyRef.index], activations);
+      FP16 extraStat0 = batch.GetExtraStat0(batchIndex);
+      FP16 extraStat1 = batch.GetExtraStat1(batchIndex);
+
+      result = new NNEvaluatorResult(w, l, m, uncertaintyV, policyRef.policies.Span[policyRef.index], activations, extraStat0, extraStat1);
     }
 
     #endregion
