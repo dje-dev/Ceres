@@ -196,6 +196,7 @@ namespace Ceres.Chess.LC0NetInference
         //so.ProfileOutputPathPrefix = @"d:\temp";
       }
 
+      // See: https://onnxruntime.ai/docs/performance/model-optimizations/graph-optimizations.html
       so.GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL;
 
 

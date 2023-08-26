@@ -129,9 +129,7 @@ namespace Ceres.Chess.LC0NetInference
     /// <returns></returns>
     public static float[] RebuildInputsForLC0Network(Memory<float> floats, int batchSize)
     {
-      int numFillPlanesPerInput = 112 - EncodedPositionBatchFlat.TOTAL_NUM_PLANES_ALL_HISTORIES;
-
-      float[] expandedFloats = new float[floats.Length + (batchSize * numFillPlanesPerInput * 64)];
+      float[] expandedFloats = new float[batchSize * 64 * EncodedPositionBatchFlat.TOTAL_NUM_PLANES_ALL_HISTORIES];
       for (int i = 0; i < batchSize; i++)
       {
         int baseSrcThisBatchItem = i * EncodedPositionBatchFlat.TOTAL_NUM_PLANES_ALL_HISTORIES * 64;
