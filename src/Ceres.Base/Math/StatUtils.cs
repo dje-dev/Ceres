@@ -114,6 +114,27 @@ namespace Ceres.Base.Math
 
 
     /// <summary>
+    /// Returns the index of the element with the maximum value in an array of floats.
+    /// </summary>
+    /// <param name="f"></param>
+    /// <returns></returns>
+    public static int IndexOfMax(Span<float> f)
+    {
+      int bestIndex = 0;
+      float bestValue = float.MinValue;
+      for (int i = 0; i < f.Length; i++)
+      {
+        if (f[i] > bestValue)
+        {
+          bestIndex = i;
+          bestValue = f[i];
+        }
+      }
+      return bestIndex;
+    }
+
+
+    /// <summary>
     /// Returns the average value in an IList of floats.
     /// </summary>
     /// <param name="xs"></param>
