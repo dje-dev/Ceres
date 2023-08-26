@@ -169,7 +169,7 @@ namespace Ceres.Base.DataType
 
 
     /// <summary>
-    /// Unpacks 1D float array into array of arrays of floats.
+    /// Unpacks 1D float Span into array of arrays of floats.
     /// </summary>
     /// <param name="raw"></param>
     /// <param name="numOuter"></param>
@@ -192,9 +192,59 @@ namespace Ceres.Base.DataType
       return ret;
     }
 
-
     /// <summary>
     /// Unpacks 1D array into 2D array.
+    /// </summary>
+    /// <param name="raw"></param>
+    /// <param name="numOuter"></param>
+    /// <returns></returns>
+    public static T[,] To2D<T>(T[] raw, int numInner)
+    {
+      if (raw == null) return null;
+
+      if (raw.Length % numInner != 0)
+      {
+        throw new Exception("does not evenly divide");
+      }
+
+      int dimFirst = raw.Length / numInner;
+      T[,] ret = new T[dimFirst, numInner];
+      Buffer.BlockCopy(raw, 0, ret, 0, raw.Length * Marshal.SizeOf<T>());
+      return ret;
+    }
+
+
+    /// <summary>
+    /// Unpacks 1D array into 3D array.
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    /// <param name="raw"></param>
+    /// <param name="dimSecond"></param>
+    /// <param name="dimThird"></param>
+    /// <returns></returns>
+    /// <exception cref="Exception"></exception>
+    public static T[,,] To3D<T>(T[] raw, int dimSecond, int dimThird)
+    {
+      if (raw == null)
+      {
+        return null;
+      }
+
+      if (raw.Length % (dimSecond * dimThird) != 0)
+      {
+        throw new Exception("does not evenly divide");
+      }
+
+      int dimFirst = raw.Length / (dimSecond * dimThird);
+      T[,,] ret = new T[dimFirst, dimSecond, dimThird];
+      Buffer.BlockCopy(raw, 0, ret, 0, raw.Length * Marshal.SizeOf<T>());
+
+      return ret;
+    }
+
+
+    /// <summary>
+    /// Unpacks 1D Span into 2D array.
     /// </summary>
     /// <param name="raw"></param>
     /// <param name="numOuter"></param>
@@ -203,20 +253,45 @@ namespace Ceres.Base.DataType
     {
       if (raw == null) return null;
 
-      if (raw.Length % numInner != 0) throw new Exception("does not evenly divide");
-      int numOuter = raw.Length / numInner;
-
-      // TO DO: make faster with memory copy
-      T[,] ret = new T[numOuter, numInner];
-      int count = 0;
-      for (int i = 0; i < numOuter; i++)
+      if (raw.Length % numInner != 0)
       {
-        for (int j = 0; j < numInner; j++)
-          ret[i, j] = raw[count++];
+        throw new Exception("does not evenly divide");
       }
+
+      int dimFirst = raw.Length / numInner;
+      T[,] ret = new T[dimFirst, numInner];
+      Buffer.BlockCopy(raw.ToArray(), 0, ret, 0, raw.Length * Marshal.SizeOf<T>());
       return ret;
     }
 
+
+    /// <summary>
+    /// Unpacks 1D Span into 3D array.
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    /// <param name="raw"></param>
+    /// <param name="dimSecond"></param>
+    /// <param name="dimThird"></param>
+    /// <returns></returns>
+    /// <exception cref="Exception"></exception>
+    public static T[,,] To3D<T>(Span<T> raw, int dimSecond, int dimThird)
+    {
+      if (raw == null)
+      {
+        return null;
+      }
+
+      if (raw.Length % (dimSecond * dimThird) != 0)
+      {
+        throw new Exception("does not evenly divide");
+      }
+
+      int dimFirst = raw.Length / (dimSecond * dimThird);
+      T[,,] ret = new T[dimFirst, dimSecond, dimThird];
+      Buffer.BlockCopy(raw.ToArray(), 0, ret, 0, raw.Length * Marshal.SizeOf<T>());
+
+      return ret;
+    }
 
     /// <summary>
     /// Unpacks 1D array into 2D array (shuffle/transposed).
@@ -295,6 +370,24 @@ namespace Ceres.Base.DataType
       return result;
     }
 
+    /// <summary>
+    /// Extracts a 2D subarray from a 3D array based on specified index of the first dimension.
+    /// </summary>
+    /// <param name="tensor"></param>
+    /// <param name="firstIndex"></param>
+    /// <returns></returns>
+    public static double[,] ExtractSubArrayDouble2D(float[,,] tensor, int firstIndex)
+    {
+      double[,] result = new double[tensor.GetLength(1), tensor.GetLength(2)];
+      for (int j = 0; j < tensor.GetLength(1); j++)
+      {
+        for (int k = 0; k < tensor.GetLength(2); k++)
+        {
+          result[j, k] = tensor[firstIndex, j, k];
+        }
+      }
+      return result;
+    }
 
 
     /// <summary>
