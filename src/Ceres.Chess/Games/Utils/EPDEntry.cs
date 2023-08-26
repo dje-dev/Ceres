@@ -50,6 +50,8 @@ namespace Ceres.Chess.Games.Utils
 
     /// <summary>
     /// Optional set of benchmark (good) moves.
+    /// NOTE: For Lichess positions, we set this to the first in the sequence of BMMovesSequence
+    ///       but the true answer requires all moves to be correctly played.
     /// </summary>
     public readonly string[] BMMoves; 
 
@@ -59,9 +61,19 @@ namespace Ceres.Chess.Games.Utils
     public readonly string[] AMMoves;
 
     /// <summary>
-    /// Optional descriptio of position.
+    /// Sequence of benchmark (good) moves.
+    /// </summary>
+    public string[] BMMovesSequence => bmMovesSequenceStr.Split(" ");
+
+    /// <summary>
+    /// Optional description of position.
     /// </summary>
     public readonly string ID;
+
+    /// <summary>
+    /// Optional set of themes.
+    /// </summary>
+    public readonly string Themes;
 
     /// <summary>
     /// Notation used to express any associated moves.
@@ -81,6 +93,10 @@ namespace Ceres.Chess.Games.Utils
     /// <param name="newFEN"></param>
     /// <returns></returns>
     public EPDEntry WithChangedFEN(string newFEN) => new EPDEntry(newFEN, BMMoves, ID, ScoredMoves);
+
+
+    string bmMovesSequenceStr;
+
 
     /// <summary>
     /// Internal constructor.
@@ -145,17 +161,28 @@ namespace Ceres.Chess.Games.Utils
 
         epdLine = epdLine.Substring(indexFirstComma + 1);
         string[] parts = epdLine.Split(",");
+
         string fen = parts[0];
-        string[] moveParts = parts[1].Split(" ");
-        string movePre = moveParts[0];
-        string moveCorrect = moveParts[1];
+        string movesCorrect = parts[1];
+        string themes = parts.Length > 6 ? parts[6] : null;
+#if NOT_USED
+        string rating = parts[2];
+        string ratingDeviation = parts[3];
+        string popularity = parts[4];
+        string nbPlays = parts[5];
+        string gameURL = parts.Length > 7 ? parts[7] : null;
+        string openingTags = parts.Length > 8 ? parts[8] : null;
+#endif
+
 
         FEN = fen;
-        StartMoves = movePre;
-        BMMoves = new string[] { moveCorrect };
-        List<EPDScoredMove> moves = new List<EPDScoredMove>(1);
-        moves.Add(new EPDScoredMove(moveCorrect, 1));
+//        StartMoves = movePre;
+        bmMovesSequenceStr = movesCorrect;
+        int firstSpace = movesCorrect.IndexOf(" ");
+        BMMoves = new string[] { firstSpace == -1 ? movesCorrect : movesCorrect.Substring(0, firstSpace) };
         MovesFormat = MovesFormatEnum.UCI;
+        Themes = themes;
+        
         return;
       }
 
@@ -395,13 +422,22 @@ namespace Ceres.Chess.Games.Utils
           continue;
         }
 
-        // Skip emtpy line
+        // Skip empty line
         if (line.Trim().Length == 0)
         {
           continue;
         }
 
-        ret.Add(new EPDEntry(line, skipFirstColumn));
+        EPDEntry entry = new EPDEntry(line, skipFirstColumn);
+        if (entry.ID == "PuzzleId")
+        {
+          // Skip header line if Lichess file
+          continue;
+        }
+        else
+        {
+          ret.Add(entry);
+        }
       }
 
       return ret;
