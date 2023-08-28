@@ -141,7 +141,10 @@ namespace Ceres.Features.Suites
     }
 
 
-    public SuiteTestResult Run(int numConcurrentSuiteThreads = 1, bool outputDetail = true, bool saveCacheWhenDone = true)
+    public SuiteTestResult Run(int numConcurrentSuiteThreads = 1, 
+                               bool outputDetail = true, 
+                               bool saveCacheWhenDone = true,
+                               bool enableCancelVialCtrlC = true)
     {
       // Tree reuse is no help, indicate that we won't need it
       Def.Engine1Def.SearchParams.TreeReuseEnabled = false;
@@ -157,13 +160,16 @@ namespace Ceres.Features.Suites
 
       // Install Ctrl-C handler to allow ad hoc clean termination (with stats).
       bool stopRequested = false;
-      ConsoleCancelEventHandler ctrlCHandler = new ConsoleCancelEventHandler((object sender, ConsoleCancelEventArgs args) =>
+      if (enableCancelVialCtrlC)
       {
-        Console.WriteLine("Suite pending shutdown....");
-        stopRequested = true;
-        args.Cancel = true;
-      }); ;
-      Console.CancelKeyPress += ctrlCHandler;
+        ConsoleCancelEventHandler ctrlCHandler = new ConsoleCancelEventHandler((object sender, ConsoleCancelEventArgs args) =>
+        {
+          Console.WriteLine("Suite pending shutdown....");
+          stopRequested = true;
+          args.Cancel = true;
+        });
+        Console.CancelKeyPress += ctrlCHandler;
+      }
 
       int timerFiredCount = 0;
 
@@ -297,11 +303,11 @@ namespace Ceres.Features.Suites
         }
       }
 
-      // Don't create too many non_Ceres threads since each one will consume seaprate GPU memory or threads
+      // Don't create too many non_Ceres threads since each one will consume separate GPU memory or threads.
       int maxLeelaThreads = Math.Min(numExternalGameProcesses, numConcurrentSuiteThreads);
       ObjectPool<object> externalEnginePool = new ObjectPool<object>(() => makeExternalEngine(processorGroupID), maxLeelaThreads);
 
-      using (new TimingBlock("EPDS"))
+      using (new TimingBlock("EPDS", Def.Output == Console.Out ? TimingBlock.LoggingType.Console : TimingBlock.LoggingType.None))
       {
         Parallel.For(0, epds.Count,
                      new ParallelOptions() { MaxDegreeOfParallelism = numConcurrentSuiteThreads },
@@ -603,6 +609,9 @@ namespace Ceres.Features.Suites
       SearchResultInfo result1 = new SearchResultInfo(search1.Search.Manager, search1.BestMove);
       SearchResultInfo result2 = search2 == null ? null : new SearchResultInfo(search2.Search.Manager, search2.BestMove);
 
+      // Possibly invoke callback method.
+      Def.Callback?.Invoke(epdToUse, scoreCeres1, result1);
+
       float otherEngineTime = otherEngineAnalysis2 == null ? 0 : (float)otherEngineAnalysis2.EngineReportedSearchTime / 1000.0f;
 
       lock (lockObj)
@@ -797,7 +806,11 @@ namespace Ceres.Features.Suites
         writer.Add("TBase2", $"{(search2.Search.CountSearchContinuations > 0 ? 0 : search2.Search.Manager.CountTablebaseHits),8:N0}", 10);
       }
 
-      //      writer.Add("EPD", $"{epdToUse.ID,-30}", 32);
+      if (Def.DumpEPDInfo)
+      {
+        writer.Add("Themes", epdToUse.Themes, -1);
+        writer.Add("FEN", epdToUse.FEN, -1);
+      }
 
       if (outputDetail)
       {
@@ -842,22 +855,24 @@ namespace Ceres.Features.Suites
     {
       if (WithHeader)
       {
-        if (id.Length > width)
+        if (width != -1 && id.Length > width)
         {
           id = id.Substring(width);
         }
 
-        ids.Append(Center(id, width));
+        ids.Append(width == -1 ? id : Center(id, width));
 
-        for (int i = 0; i < width - 2; i++)
+        if (width != -1)
         {
-          dividers.Append("-");
+          for (int i = 0; i < width - 2; i++)
+          {
+            dividers.Append("-");
+          }
         }
-
         dividers.Append("  ");
       }
 
-      text.Append(StringUtils.Sized(value, width));
+      text.Append(width == -1 ? value : StringUtils.Sized(value, width));
     }
 
     static string Center(string str, int width)

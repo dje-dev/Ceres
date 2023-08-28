@@ -17,6 +17,7 @@ using System;
 using System.IO;
 using Ceres.Chess;
 using Ceres.Chess.GameEngines;
+using Ceres.Chess.Games.Utils;
 using Ceres.Features.GameEngines;
 using Ceres.Features.Players;
 
@@ -24,6 +25,8 @@ using Ceres.Features.Players;
 
 namespace Ceres.Features.Suites
 {
+  public delegate void EvaluatedPosCallback(EPDEntry epd, float correctnessScore, SearchResultInfo searchResult);
+
   /// <summary>
   /// Defines the parameters of a suite test.
   /// </summary>
@@ -38,6 +41,16 @@ namespace Ceres.Features.Suites
     /// Target for logging messages.
     /// </summary>
     [NonSerialized] public TextWriter Output = Console.Out;
+
+    /// <summary>
+    /// Delegate to be called after each EPD has been evaluated.
+    /// </summary>
+    public EvaluatedPosCallback Callback;
+
+    /// <summary>
+    /// If extra EPD info should be dumped to Console at end of each position line (such as FEN).
+    /// </summary>
+    public bool DumpEPDInfo = false;
 
     /// <summary>
     /// Definition of the player engine for an external (UCI) engine (optional).
