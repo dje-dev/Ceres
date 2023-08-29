@@ -18,6 +18,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Ceres.Chess.GameEngines;
+using Ceres.Chess.Textual.PgnFileTools;
 using Chess.Ceres.PlayEvaluation;
 
 #endregion
@@ -67,7 +68,7 @@ namespace Ceres.Features.Tournaments
       if (def.ForceReferenceEngineDeterministic)
       {
         int totalForced = GameInfos.Sum(g => g.NumMovesForcedDeterministic);
-        Console.WriteLine($"Number of reference engine moves overridden to force deterministic: {totalForced:N0}");
+        writer.WriteLine($"Number of reference engine moves overridden to force deterministic: {totalForced:N0}");
       }
     }
 
@@ -506,11 +507,7 @@ namespace Ceres.Features.Tournaments
           yield return empty;
         }
 
-        var (win, draw, loss) = opponent.Value;
-        string eloPerf = EloCalculator.EloDiff(win, draw, loss).ToString("F0");
-        var (min, avg, max) = EloCalculator.EloConfidenceInterval(win, draw, loss);
-        string error = (max - avg).ToString("F0");
-        string msg = $"{eloPerf} +/- {error: F0}";
+        string msg = ShortEloStrForOpponent(opponent);
         yield return msg;
         counter++;
       }
@@ -520,6 +517,19 @@ namespace Ceres.Features.Tournaments
         yield return empty;
       }
     }
+
+    private static string ShortEloStrForOpponent(KeyValuePair<string, (int, int, int)> opponent)
+    {
+      var (win, draw, loss) = opponent.Value;
+      string eloPerf = EloCalculator.EloDiff(win, draw, loss).ToString("F0");
+      var (min, avg, max) = EloCalculator.EloConfidenceInterval(win, draw, loss);
+      string error = (max - avg).ToString("F0");
+      string msg = $"{eloPerf} +/- {error: F0}";
+      return msg;
+    }
+
+    public string ShortEloSummaryStr => ShortEloStrForOpponent(Players[0].Opponents.First());
+
 
     /// <summary>
     /// Dump Round Robin table header to console.

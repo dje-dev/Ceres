@@ -194,25 +194,25 @@ namespace Ceres.Features.Tournaments
       return clone;
     }
 
-    public void DumpParams()
+    public void DumpParams(TextWriter logger)
     {
-      Console.WriteLine($"TOURNAMENT:  {ID}");
-      Console.WriteLine($"  Machine Name        : {Environment.MachineName} ");
-      Console.WriteLine($"  Date/Time           : {DateTime.Now} ");
-      Console.WriteLine($"  Game Pairs          : {NumGamePairs} ");
-      Console.WriteLine($"  Openings            : {OpeningsDescription()}");
+      logger.WriteLine($"TOURNAMENT:  {ID}");
+      logger.WriteLine($"  Machine Name        : {Environment.MachineName} ");
+      logger.WriteLine($"  Date/Time           : {DateTime.Now} ");
+      logger.WriteLine($"  Game Pairs          : {NumGamePairs} ");
+      logger.WriteLine($"  Openings            : {OpeningsDescription()}");
       if (ReferenceEngineId != null)
       {
-        Console.WriteLine($"  Ref engine          : {ReferenceEngineId}");
-        Console.WriteLine($"  Force deterministic : {ForceReferenceEngineDeterministic}");
+        logger.WriteLine($"  Ref engine          : {ReferenceEngineId}");
+        logger.WriteLine($"  Force deterministic : {ForceReferenceEngineDeterministic}");
       }
-      Console.WriteLine($"  Adjudicate draw     : {AdjudicateDrawThresholdNumMoves} moves < {AdjudicateDrawThresholdCentipawns}cp");
-      Console.WriteLine($"  Adjudicate win      : {AdjudicateWinThresholdNumMovesDecisive} moves at {AdjudicateWinThresholdCentipawns}cp");
-      Console.WriteLine($"  Adjudicate via TB?  : {UseTablebasesForAdjudication}");
+      logger.WriteLine($"  Adjudicate draw     : {AdjudicateDrawThresholdNumMoves} moves < {AdjudicateDrawThresholdCentipawns}cp");
+      logger.WriteLine($"  Adjudicate win      : {AdjudicateWinThresholdNumMovesDecisive} moves at {AdjudicateWinThresholdCentipawns}cp");
+      logger.WriteLine($"  Adjudicate via TB?  : {UseTablebasesForAdjudication}");
 
       for (int i = 0; i < Engines.Length; i++)
       {
-        Console.WriteLine($"  Player {i + 1} : {Engines[i]}");
+        logger.WriteLine($"  Player {i + 1} : {Engines[i]}");
       }
 
       //Check if we need to dump comparison info too
@@ -228,11 +228,11 @@ namespace Ceres.Features.Tournaments
         //dump pairs here
         foreach (GameEngineDefCeres engine in ceresEngines.Skip(1))
         {
-          toCompare.DumpComparison(Console.Out, engine, true);
+          toCompare.DumpComparison(logger, engine, true);
         }
       }
 
-      Console.WriteLine();
+      logger.WriteLine();
 #if NOT
       ParamsDump.DumpParams(Console.Out, true,
                  UCIEngine1Spec, UCIEngine2Spec,

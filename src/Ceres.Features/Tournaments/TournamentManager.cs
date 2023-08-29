@@ -184,7 +184,8 @@ namespace Ceres.Features.Tournaments
     /// </summary>
     /// <param name="queueManager">optional associated queue manager if running in distributed mode</param>
     /// <returns></returns>
-    public TournamentResultStats RunTournament(TournamentGameQueueManager queueManager = null)
+    public TournamentResultStats RunTournament(TournamentGameQueueManager queueManager = null, 
+                                               bool enableCancelVialCtrlC = true)
     {
       shutdownComplete.Reset();
       Def.ShouldShutDown = false;
@@ -218,22 +219,25 @@ namespace Ceres.Features.Tournaments
 
       VerifyEnginesCompatible();
 
-      // Install Ctrl-C handler to allow ad hoc clean termination of tournament (with stats).
-      ConsoleCancelEventHandler ctrlCHandler = new ConsoleCancelEventHandler((object sender,
-        ConsoleCancelEventArgs args) =>
-        {
-          Console.WriteLine("Tournament pending shutdown....");
-          Def.parentDef.ShouldShutDown = true;
-          shutdownComplete.WaitOne();
-        }); ;
-      Console.CancelKeyPress += ctrlCHandler;
+      if (enableCancelVialCtrlC)
+      {
+        // Install Ctrl-C handler to allow ad hoc clean termination of tournament (with stats).
+        ConsoleCancelEventHandler ctrlCHandler = new ConsoleCancelEventHandler((object sender,
+          ConsoleCancelEventArgs args) =>
+          {
+            Console.WriteLine("Tournament pending shutdown....");
+            Def.parentDef.ShouldShutDown = true;
+            shutdownComplete.WaitOne();
+          }); ;
+        Console.CancelKeyPress += ctrlCHandler;
+      }
 
       QueueManager = queueManager;
       TournamentResultStats parentTest = new();
 
 
       // Show differences between engine 1 and engine 2
-      Def.DumpParams();
+      Def.DumpParams(Def.Logger);
 
       // Prepare to create a set of task threads to run games
       List<Task> tasks = new List<Task>();
