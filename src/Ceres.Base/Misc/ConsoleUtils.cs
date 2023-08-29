@@ -14,6 +14,7 @@
 #region Using directives
 
 using System;
+using System.IO;
 using System.Text;
 
 #endregion
@@ -76,5 +77,22 @@ namespace Ceres.Base.Misc
       }
     }
 
+    /// <summary>
+    /// Invokes the specified action, suppressing all Console output.
+    /// </summary>
+    /// <param name="action"></param>
+    public static void InvokeNoConsoleOutput(Action action)
+    {
+      TextWriter originalConsoleOut = Console.Out;
+      Console.SetOut(TextWriter.Null);
+      try
+      {
+        action();
+      }
+      finally
+      {
+        Console.SetOut(originalConsoleOut);
+      }
+    }
   }
 }
