@@ -151,6 +151,24 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// </summary>
     public PositionMiscInfo.HashMove50Mode HashMode = PositionMiscInfo.HashMove50Mode.ValueBoolIfAbove98;
 
+
+
+    /// <summary>
+    /// Constructor for simple case of one net and one device.
+    /// </summary>
+    /// <param name="netDef"></param>
+    /// <param name="deviceDef"></param>
+    /// <param name="sharedName"></param>
+    public NNEvaluatorDef(NNEvaluatorNetDef netDef, NNEvaluatorDeviceDef deviceDef, string sharedName = null)
+    {
+      Nets = new (NNEvaluatorNetDef, float, float, float)[] { (netDef, 1, 1, 1) };
+      Devices = new (NNEvaluatorDeviceDef, float)[] { (deviceDef, 1) };
+      SharedName = sharedName;
+      NetCombo = NNEvaluatorNetComboType.Single;
+      DeviceCombo = NNEvaluatorDeviceComboType.Single;
+    }
+
+
     /// <summary>
     /// Constructor.
     /// </summary>
