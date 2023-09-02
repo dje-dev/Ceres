@@ -212,7 +212,7 @@ namespace Ceres.Chess.EncodedPositions
     ///  Uncertainty is a measure of how incorrect the position evaluation (V)
     ///  turned out to be relative to the search evaluation (Q).
     /// </summary>
-    public float Uncertainty => float.IsNaN(OriginalQ) ? FILL_IN_UNCERTAINTY : MathF.Pow(OriginalQ - BestQ, 2);
+    public float Uncertainty => float.IsNaN(OriginalQ + BestQ) ? FILL_IN_UNCERTAINTY : MathF.Abs(OriginalQ - BestQ);
 
     #endregion
   }
