@@ -109,6 +109,24 @@ namespace Ceres.Base.Math
 
 
     /// <summary>
+    /// Combines two values into a single hash code (without randomization).
+    /// </summary>
+    /// <param name="hash1"></param>
+    /// <param name="hash2"></param>
+    /// <returns></returns>
+    public static long HashCombineStable(long hash1, long hash2)
+    {
+      const int prime = 31;
+      long result = 17;
+
+      result = result * prime + hash1;
+      result = result * prime + hash2;
+
+      return result;
+    }
+
+
+    /// <summary>
     /// Returns maximum of two positive integers
     /// in a branchless way (using a bit hack).
     /// </summary>
