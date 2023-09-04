@@ -250,6 +250,13 @@ namespace Ceres.Chess.Positions
       PgnStreamReader pgnReader = new PgnStreamReader();
       foreach (GameInfo game in pgnReader.Read(pgnFileName))
       {
+#if NOT
+// Have to disable this, this error always happens on the last game ("unexpected end")
+        if (game.ErrorMessage != null)
+        {
+          throw new Exception($"Error reading game number {gameIndex + 1} from {pgnFileName} with error: {game.ErrorMessage}");
+        }
+#endif
         openings.Add(new PGNGame(game, gameIndex));
         gameIndex++;
       }
