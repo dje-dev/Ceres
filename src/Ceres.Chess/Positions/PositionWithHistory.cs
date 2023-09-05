@@ -44,7 +44,21 @@ namespace Ceres.Chess.Positions
     #region Private data
 
     public MGPosition InitialPosMG { get; private set; }
-    public List<MGMove> Moves;
+
+    List<MGMove> moves;
+
+    public List<MGMove> Moves
+    {
+      private set => moves = value;
+      get
+      {
+        if (movesIncomplete)
+        {
+//          throw new Exception("Moves are incomplete for these positions");
+        }
+        return moves;
+      }
+    }
 
     bool haveFinalized = false;
     MGPosition finalPosMG;
@@ -60,6 +74,13 @@ namespace Ceres.Chess.Positions
     /// Total number of positions in history.
     /// </summary>
     public int Count => positions.Length;
+
+    /// <summary>
+    /// If set from positions (possibly from encoded game history)
+    /// then some of the positions could be incomplete (e.g. castling, en passant)
+    /// and therefore the Moves may not be complete and should not be relied upon.
+    /// </summary>
+    bool movesIncomplete = false;
 
     #endregion
 
@@ -114,6 +135,19 @@ namespace Ceres.Chess.Positions
 
       Moves.Add(MGMoveFromString.ParseMove(mgPos, moveStr));
       if (haveFinalized) InitPositionsAndFinalPosMG();
+    }
+
+    public void AppendPosition(MGPosition position, MGMove move)
+    {
+      Position[] newPositions = new Position[positions.Length + 1];
+      Array.Copy(Positions, newPositions, positions.Length);
+      newPositions[^1] = position.ToPosition;
+      positions = newPositions;
+
+      Moves.Add(move);
+
+      PositionRepetitionCalc.SetRepetitionsCount(positions);
+      finalPosMG = position;
     }
 
 
@@ -321,8 +355,10 @@ namespace Ceres.Chess.Positions
       }
     }
 
-    private void SetFromPositions(IEnumerable<Position> fromPositions, bool castlingInfoMayBeIncomplete = false)
+    private void SetFromPositions(IEnumerable<Position> fromPositions, bool positionInfoMayBeIncomplete = false)
     {
+      movesIncomplete = positionInfoMayBeIncomplete;
+
       positions = fromPositions.ToArray();
 
       InitialPosMG = positions[0].ToMGPosition;
@@ -338,7 +374,7 @@ namespace Ceres.Chess.Positions
       {
         MGPosition posCurrent = positions[i].ToMGPosition;
 
-        if (castlingInfoMayBeIncomplete)
+        if (positionInfoMayBeIncomplete)
         {
           // Start with most permissive position so that any possible castling move would be in eligible list.
           posCurrent.WhiteCanCastle = true;
@@ -366,8 +402,9 @@ namespace Ceres.Chess.Positions
           }
         }
 
-        if (!foundContinuation && !castlingInfoMayBeIncomplete)
+        if (!foundContinuation && !positionInfoMayBeIncomplete)
         {
+          movesIncomplete = true;
 #if DEBUG
           string errMsg = "Position sequence illegal, saw " + positions[i + 1].ToMGPosition.ToPosition.FEN 
                         + " then " + positions[i].ToMGPosition.ToPosition.FEN
@@ -495,19 +532,7 @@ namespace Ceres.Chess.Positions
     /// <summary>
     /// Enumerates all the positions in the history.
     /// </summary>
-    public IEnumerable<Position> Positions
-    {
-      get
-      {
-        yield return InitialPosMG.ToPosition;
-        MGPosition pos = InitialPosMG;
-        foreach (MGMove move in Moves)
-        {
-          pos.MakeMove(move);
-          yield return pos.ToPosition;
-        }
-      }
-    }
+    public Position[] Positions => positions;
 
     #endregion
 
