@@ -67,6 +67,21 @@ namespace Ceres.Chess.EncodedPositions
 
     #endregion
 
+    /// <summary>
+    /// Constructor.
+    /// </summary>
+    /// <param name="version"></param>
+    /// <param name="inputFormat"></param>
+    /// <param name="pos"></param>
+    /// <param name="policy"></param>
+    public EncodedTrainingPosition(int version, int inputFormat, in EncodedPositionWithHistory pos, in EncodedPolicyVector policy)
+    {
+      Version = version;
+      InputFormat = inputFormat;
+      PositionWithBoardsMirrored = pos;
+      Policies = policy;
+    }
+
     #region Setters
 
     internal unsafe void SetVersion(int version) { fixed (int* pVersion = &Version) { *pVersion = version;  }  }
@@ -256,7 +271,16 @@ namespace Ceres.Chess.EncodedPositions
       {
         if (!thisEncPosUnmirrored.GetPlanesForHistoryBoard(i).IsEmpty)
         {
-          positions.Add(Position.FromFEN(thisEncPosUnmirrored.FENForHistoryBoard(i)));
+          if (i == 0)
+          {
+            // The first position is special. We have valid castling, en passant info for sure. 
+            // Call FinalPosition which is able to decode this.
+            positions.Add(thisEncPosUnmirrored.FinalPosition);
+          }
+          else
+          {
+            positions.Add(Position.FromFEN(thisEncPosUnmirrored.FENForHistoryBoard(i)));
+          }
         }
       }
 
