@@ -16,6 +16,7 @@
 
 using System;
 using System.Runtime.InteropServices;
+using Ceres.Chess.EncodedPositions.Basic;
 
 #endregion
 
@@ -177,6 +178,12 @@ namespace Ceres.Chess.EncodedPositions
 
 
     /// <summary>
+    /// Returns the move actually played.
+    /// </summary>
+    public readonly EncodedMove PlayedMove => EncodedMove.FromNeuralNetIndex(PlayedIndex);
+
+
+    /// <summary>
     /// Overwrites the value of Unused1.
     /// WARNING: is unsafe.
     /// </summary>
@@ -206,6 +213,39 @@ namespace Ceres.Chess.EncodedPositions
     /// with missing (NaN) OriginalQ data.
     /// </summary>
     public const float FILL_IN_UNCERTAINTY = 0.15f;
+
+    public EncodedPositionEvalMiscInfoV6(byte invarianceInfo, byte depResult, float rootQ, float bestQ, float rootD, 
+                                         float bestD, float rootM, float bestM, 
+                                         float pliesLeft, 
+                                         float resultQ, float resultD,
+                                         float playedQ, float playedD, float playedM, 
+                                         float originalQ, float originalD, float originalM, 
+                                         int numVisits, short playedIndex, short bestIndex, 
+                                         float unused1, float unused2)
+    {
+      InvarianceInfo = invarianceInfo;
+      DepResult = depResult;
+      RootQ = rootQ;
+      BestQ = bestQ;
+      RootD = rootD;
+      BestD = bestD;
+      RootM = rootM;
+      BestM = bestM;
+      PliesLeft = pliesLeft;
+      ResultQ = resultQ;
+      ResultD = resultD;
+      PlayedQ = playedQ;
+      PlayedD = playedD;
+      PlayedM = playedM;
+      OriginalQ = originalQ;
+      OriginalD = originalD;
+      OriginalM = originalM;
+      NumVisits = numVisits;
+      PlayedIndex = playedIndex;
+      BestIndex = bestIndex;
+      Unused1 = unused1;
+      Unused2 = unused2;
+    }
 
 
     /// <summary>
