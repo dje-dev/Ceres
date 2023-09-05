@@ -268,6 +268,34 @@ namespace Ceres.Base.Math
       return aOut.ToArray();
     }
 
+    /// <summary>
+    /// Returns maximum absolute difference between elements of two arrays.
+    /// </summary>
+    /// <param name="v1"></param>
+    /// <param name="v2"></param>
+    /// <returns></returns>
+    /// <exception cref="ArgumentException"></exception>
+    public static float MaxAbsoluteDifference(float[] v1, float[] v2)
+    {
+      if (v1.Length != v2.Length)
+      {
+        throw new ArgumentException("Input arrays must be the same length.");
+      }
+
+      float maxDiff = 0f;
+
+      for (int i = 0; i < v1.Length; i++)
+      {
+        float diff = MathF.Abs(v1[i] - v2[i]);
+
+        if (diff > maxDiff)
+        {
+          maxDiff = diff;
+        }
+      }
+
+      return maxDiff;
+    }
 
     /// <summary>
     /// Computes the exponential function in very efficient
