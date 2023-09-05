@@ -1929,6 +1929,15 @@ namespace Ceres.Chess.EncodedPositions
 
 
     /// <summary>
+    /// Initializes all entries to a value of -1.
+    /// </summary>
+    public void InitilializeAllNegativeOne()
+    {
+      ProbabilitiesSpan.Fill(-1);
+    }
+
+
+    /// <summary>
     /// Returns the sum of all probabilities.
     /// </summary>
     internal float SumProbabilites
