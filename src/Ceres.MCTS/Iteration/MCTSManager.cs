@@ -45,6 +45,7 @@ using Ceres.Chess.MoveGen.Converters;
 using Ceres.Chess.LC0.Batches;
 using Ceres.Chess.NetEvaluation.Batch;
 using System.Linq;
+using Ceres.Chess.NNEvaluators;
 
 #endregion
 
@@ -639,12 +640,20 @@ namespace Ceres.MCTS.Iteration
     public float FractionExtendedSoFar = 0;
 
 
-    private static (MGMove, float) BestValueMove(MCTSManager manager, MGMoveList moves, PositionWithHistory priorMoves)
+    public static (MGMove, float) BestValueMove(NNEvaluator nnEvaluator, 
+                                                PositionWithHistory priorMoves, 
+                                                MGMoveList moves = null,
+                                                bool dumpInfo = false)
     {
+      // Compute move list if not already provided.
+      if (moves == null)
+      {
+        moves = new MGMoveList();
+        MGMoveGen.GenerateMoves(priorMoves.FinalPosMG, moves);
+      }
+
       // Prepare a batch builder in which to enqueue the positions to be evaluated.
-      EncodedPositionBatchBuilder batchBuilder = new (128,
-                                                      manager.Context.NNEvaluators.Evaluator1.InputsRequired  
-                                                    | Chess.NNEvaluators.NNEvaluator.InputTypes.Positions);
+      EncodedPositionBatchBuilder batchBuilder = new (128, nnEvaluator.InputsRequired | NNEvaluator.InputTypes.Positions);
 
       // Prepare array of prior positions initialized from prior positions,
       // with extra last slot to be for new position after each move to be evaluated.
@@ -666,7 +675,7 @@ namespace Ceres.MCTS.Iteration
 
       // Build the batch and evaluate it.
       EncodedPositionBatchFlat thisBatch = batchBuilder.GetBatch();
-      NNEvaluatorResult[] batchEvals = manager.Context.NNEvaluators.Evaluator1.EvaluateBatch(thisBatch);
+      NNEvaluatorResult[] batchEvals = nnEvaluator.EvaluateBatch(thisBatch);
 
       // Determine which move had position yielding best value evaluation.
       int moveIndex = 0;
@@ -680,6 +689,17 @@ namespace Ceres.MCTS.Iteration
           bestMoveIndex = moveIndex;
         }
         moveIndex++;
+      }
+
+
+      if (dumpInfo)
+      {
+        Console.WriteLine($"BestValueMove detail using {nnEvaluator} from {priorMoves}");
+        for (int i = 0; i < moves.Count(); i++)
+        {
+          Console.Write(i == bestMoveIndex ? "** " : "  ");
+          Console.WriteLine(moves.MovesArray[i] + " " + -batchEvals[i].V);
+        }
       }
 
       // Return the best move.
@@ -781,7 +801,7 @@ namespace Ceres.MCTS.Iteration
           throw new Exception("BestValueMove only supported for NodesPerMove == 1.");
         }
 
-        (MGMove bestMove, float bestV)  = BestValueMove(manager, moves, priorMoves);
+        (MGMove bestMove, float bestV)  = BestValueMove(manager.Context.NNEvaluators.Evaluator1, priorMoves, moves);
 
         context.Root.StructRef.W = bestV;
         context.Root.StructRef.N = 1;
