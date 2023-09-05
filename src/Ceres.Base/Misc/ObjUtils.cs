@@ -126,6 +126,26 @@ namespace Ceres.Base.Misc
     }
 
 
+    /// <summary>
+    /// Dumps the fields of two objects side by side.
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    /// <param name="struct1"></param>
+    /// <param name="struct2"></param>
+    public static void CompareAndPrintObjectFields<T>(T struct1, T struct2)
+    {
+      Console.WriteLine("\r\nCOMPARE OBJECTS " + typeof(T).Name);
+      foreach (FieldInfo field in typeof(T).GetFields(BindingFlags.Public | BindingFlags.Instance))
+      {
+        string fieldName = field.Name;
+        object value1 = field.GetValue(struct1);
+        object value2 = field.GetValue(struct2);
+
+        Console.WriteLine($"{fieldName,20}:  {value1} vs {value2}");
+      }
+    }
+
+
     static void DumpArray(StringBuilder sb, Array array)
     {
       sb.Append("{");
