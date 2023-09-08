@@ -134,6 +134,38 @@ namespace Ceres.Features.Visualization.AnalysisGraph
     }
 
 
+    public static string WritePositionsToSVGFile(params (Position pos, string label)[] positions)
+    {
+      string tempDir = Directory.CreateTempSubdirectory().FullName;
+
+     const string HEADER_CORE =
+@"<svg width=!500! height=!500! version = !1.1! id=!Capa_1! xmlns=!http://www.w3.org/2000/svg! xmlns:xlink=!http://www.w3.org/1999/xlink! x=!0px! y=!0px!
+	 viewBox=!0 0 400 400! style=!enable-background:new 0 0 400 400;! xml:space=!preserve!>
+";
+
+    string svg = @"<html>
+<body>
+";
+
+      foreach (var pos in positions)
+      {
+        svg += HEADER_CORE;// PositionToSVG.HEADER_CORE;
+        svg += PositionToSVG.PosSVGString(pos.pos, default, false);
+        svg += PositionToSVG.FOOTER;
+      }
+
+      svg = svg.Replace("!", "\"");
+      svg+= "</body></html>";
+//      svg = svg.Replace("0 0 400 400", "0 0 1900 1900");
+
+      string posFN = Path.Combine(tempDir, "_pos" + 0 + ".svg");
+      File.Delete(posFN);
+      File.WriteAllText(posFN, svg);
+      Console.WriteLine(posFN);
+      return posFN;
+    }
+
+
     /// <summary>
     /// Converts text containing DOT graphviz language specification
     /// into an SVG representation using the DOT executable (part of graphviz).

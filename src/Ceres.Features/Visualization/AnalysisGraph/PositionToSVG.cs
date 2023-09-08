@@ -28,9 +28,9 @@ namespace Ceres.Features.Visualization.AnalysisGraph
   public static class PositionToSVG
   {
     // Returns an SVG representation of a specified text position.
-    public static string PosSVGString(Position pos, Move move = default)
+    public static string PosSVGString(Position pos, Move move = default, bool includeHeaderFooter = true)
     {
-      string str = BOARD;
+      string str = includeHeaderFooter ? BOARD : BODY;
 
       for (int rank = 7; rank >= 0; --rank)
       {
@@ -142,14 +142,17 @@ namespace Ceres.Features.Visualization.AnalysisGraph
     /// </summary>
     /// <param name="pos"></param>
     /// <returns></returns>
-    public static string GetPositionSVGInHTML(Position pos)
+    public static string GetPositionSVGInHTML(params Position[] positions)
     {
-      string svg = PosSVGString(pos);
-      svg =
+      string svg =
     @"<!DOCTYPE html>
  <html>
- <body>" + svg + "</html>";
-
+ <body>";
+      foreach (Position pos in positions)
+      {
+        svg += PosSVGString(pos);
+      }
+      svg+= "</html>";
       return svg;
     }
 
@@ -157,13 +160,21 @@ namespace Ceres.Features.Visualization.AnalysisGraph
     // was:<svg version=!1.1! viewBox=!0 0 400 400! xmlns=!http://www.w3.org/2000/svg! xmlns:xlink=!http://www.w3.org/1999/xlink!>
 
     // Works when embedded wit graphviz.dot
-    const string HEADER =
+    public const string HEADER_XML =
     @"<?xml version=!1.0! encoding=!iso-8859-1!?>
-<svg version = !1.1! id=!Capa_1! xmlns=!http://www.w3.org/2000/svg! xmlns:xlink=!http://www.w3.org/1999/xlink! x=!0px! y=!0px!
+";
+    public const string HEADER = HEADER_XML + HEADER_CORE;
+
+    public const string HEADER_CORE =
+@"<svg version = !1.1! id=!Capa_1! xmlns=!http://www.w3.org/2000/svg! xmlns:xlink=!http://www.w3.org/1999/xlink! x=!0px! y=!0px!
 	 viewBox=!0 0 400 400! style=!enable-background:new 0 0 400 400;! xml:space=!preserve!>
 ";
 
-    const string BOARD = HEADER +
+    public const string FOOTER = @"</svg>";
+
+    public const string BOARD = HEADER + BODY + FOOTER;
+
+    public const string BODY = 
     @"
   <style>
     .check {
@@ -266,9 +277,7 @@ namespace Ceres.Features.Visualization.AnalysisGraph
   <text alignment-baseline=!middle! font-size=!14! text-anchor=!middle! x=!10! y=!87!>7</text>
   <text alignment-baseline=!middle! font-size=!14! text-anchor=!middle! x=!390! y=!87!>7</text>
   <text alignment-baseline=!middle! font-size=!14! text-anchor=!middle! x=!10! y=!42!>8</text>
-  <text alignment-baseline=!middle! font-size=!14! text-anchor=!middle! x=!390! y=!42!>8</text>
-</svg>
-";
+  <text alignment-baseline=!middle! font-size=!14! text-anchor=!middle! x=!390! y=!42!>8</text>";
 
 
   }
