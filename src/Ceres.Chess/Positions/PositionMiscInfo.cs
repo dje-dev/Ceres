@@ -14,6 +14,7 @@
 #region Using directives
 
 using System;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 using Ceres.Base.Environment;
@@ -272,8 +273,11 @@ namespace Ceres.Chess
     /// <param name="enPassantColIndex"></param>
     public PositionMiscInfo(bool whiteCanCastleOO, bool whiteCanCastleOOO,
                             bool blackCanCastleOO, bool blackCanCastleOOO,
-                            SideType sideToMove, int move50Count, int repetitionCount, int moveNum, EnPassantFileIndexEnum enPassantColIndex)
+                            SideType sideToMove, int move50Count, int repetitionCount, 
+                            int moveNum, EnPassantFileIndexEnum enPassantColIndex)
     {
+      Debug.Assert(repetitionCount >= 0 && move50Count >= 0);
+
       int epc = 0;
       if (whiteCanCastleOO) epc |= (int)CastlingFlagsEnum.WhiteCanOO;
       if (whiteCanCastleOOO) epc |= (int)CastlingFlagsEnum.WhiteCanOOO;
