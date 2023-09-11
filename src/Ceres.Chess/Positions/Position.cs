@@ -277,11 +277,12 @@ namespace Ceres.Chess
     ///       Fortunately most callers of this care only about the pieces being reversed, which is unambiguous.
     /// </summary>
     /// <param name="copyPosition"></param>
-    /// <param name="reversed"></param>
-    public Position(in Position copyPosition, bool reversed = false)
+    /// <param name="reversedPieces"></param>
+    /// <param name="reversedSide"></param>
+    public Position(in Position copyPosition, bool reversedPieces = false, bool reversedSide = false)
     {
       PieceCount = 0;
-      MiscInfo = reversed ? new(copyPosition.MiscInfo.BlackCanOO, copyPosition.MiscInfo.BlackCanOOO,
+      MiscInfo = reversedSide ? new(copyPosition.MiscInfo.BlackCanOO, copyPosition.MiscInfo.BlackCanOOO,
                                 copyPosition.MiscInfo.WhiteCanOO, copyPosition.MiscInfo.WhiteCanOOO,
                                 copyPosition.MiscInfo.SideToMove.Reversed(), copyPosition.MiscInfo.Move50Count,
                                 copyPosition.MiscInfo.RepetitionCount, copyPosition.MiscInfo.MoveNum, copyPosition.MiscInfo.EnPassantFileIndex)
@@ -293,10 +294,10 @@ namespace Ceres.Chess
         Piece piece = copyPosition[sq];
         if (piece.Type != PieceType.None)
         {
-          if (reversed)
+          if (reversedPieces)
           {
             sq = sq.Reversed;
-            piece = new Piece(piece.Side.Reversed(), piece.Type);
+            piece = new Piece(reversedSide ? piece.Side.Reversed() : piece.Side, piece.Type);
           }
 
           int pieceCount = (byte)SetPieceOnSquare(sq.SquareIndexStartA1, piece);
@@ -1065,7 +1066,7 @@ namespace Ceres.Chess
 
 
     /// <summary>
-    /// Returns the number of pieces of a speciifed type that exist in the position.
+    /// Returns the number of pieces of a specified type that exist in the position.
     /// </summary>
     /// <param name="piece"></param>
     /// <returns></returns>
@@ -1175,7 +1176,9 @@ namespace Ceres.Chess
           (E7, Black,Pawn), (F7, Black,Pawn), (G7, Black,Pawn), (H7, Black,Pawn),
       };
 
-      PositionMiscInfo miscInfo = new PositionMiscInfo(true, true, true, true, SideType.White, 0, 0, 1, PositionMiscInfo.EnPassantFileIndexEnum.FileNone);
+      // NOTE: use 2 for ply number so translates to 1 for move number
+      PositionMiscInfo miscInfo = new PositionMiscInfo(true, true, true, true, SideType.White, 
+                                                       0, 0, 2, PositionMiscInfo.EnPassantFileIndexEnum.FileNone);
       return new Position(pieces,in miscInfo);
     }
 
@@ -1256,43 +1259,6 @@ namespace Ceres.Chess
     /// Returns MGPosition equivalen to this Position.
     /// </summary>
     public MGPosition ToMGPosition => MGPosition.FromPosition(in this);
-
-
-    /// <summary>
-    /// Returns if this Position likely arises from a Fischer Random Chess position
-    /// (due to castling rights and positioning of Rook and King.
-    /// </summary>
-    public readonly bool LooksLikeFRCPosition
-    {
-      get
-      {
-        bool whiteKingOnStart = PieceOnSquare(SquareNames.E1) == new Piece(SideType.White, PieceType.King);
-        bool whiteRookOnA1 = PieceOnSquare(SquareNames.A1) == new Piece(SideType.White, PieceType.Rook);
-        bool whiteRookOnH1 = PieceOnSquare(SquareNames.H1) == new Piece(SideType.White, PieceType.Rook);
-        bool whiteCastleLongPiecesOK = whiteKingOnStart && whiteRookOnA1;
-        bool whiteCastleShortPiecesOK = whiteKingOnStart && whiteRookOnH1;
-        bool whiteLooksFRCCastleShort = MiscInfo.WhiteCanOO && !whiteCastleShortPiecesOK;
-        bool whiteLooksFRCCastleLong = MiscInfo.WhiteCanOOO && !whiteCastleLongPiecesOK;
-        if (whiteLooksFRCCastleLong || whiteLooksFRCCastleShort)
-        {
-          return true;
-        }
-
-        bool blackKingOnStart = PieceOnSquare(SquareNames.E8) == new Piece(SideType.Black, PieceType.King);
-        bool blackRookOnA1 = PieceOnSquare(SquareNames.A8) == new Piece(SideType.Black, PieceType.Rook);
-        bool blackRookOnH1 = PieceOnSquare(SquareNames.H8) == new Piece(SideType.Black, PieceType.Rook);
-        bool blackCastleLongPiecesOK = blackKingOnStart && blackRookOnA1;
-        bool blackCastleShortPiecesOK = blackKingOnStart && blackRookOnH1;
-        bool blackLooksFRCCastleShort = MiscInfo.BlackCanOO && !blackCastleShortPiecesOK;
-        bool blackLooksFRCCastleLong = MiscInfo.BlackCanOOO && !blackCastleLongPiecesOK;
-        if (blackLooksFRCCastleLong || blackLooksFRCCastleShort)
-        {
-          return true;
-        }
-
-        return false;
-      }
-    }
 
     #endregion
 
