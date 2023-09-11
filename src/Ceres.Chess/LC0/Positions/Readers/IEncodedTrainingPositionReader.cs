@@ -27,10 +27,11 @@ namespace Ceres.Chess.EncodedPositions
   public interface IEncodedTrainingPositionReader
   {
     /// <summary>
-    /// Enumerates all positions sequentiall.
+    /// Enumerates all positions sequentially.
     /// </summary>
+    /// <param name="filterOutFRCGames"></param>
     /// <returns></returns>
-    IEnumerable<EncodedTrainingPosition> EnumeratePositions();
+    IEnumerable<EncodedTrainingPosition> EnumeratePositions(bool filterOutFRCGames = true);
 
 
     /// <summary>
@@ -39,16 +40,18 @@ namespace Ceres.Chess.EncodedPositions
     /// <param name="maxPositionsPerBatch"></param>
     /// <param name="positionSkipCount">difference in sequential position index between selected positions, 1 for all positions</param>
     /// <param name="returnFinalPartialBatch">if any final batch which would be less than requested batch size should be returned</param>
+    /// <param name="filterOutFRCGames"></param>
     /// <returns></returns>
     IEnumerable<Memory<EncodedTrainingPosition>> EnumerateBatches(int maxPositionsPerBatch, 
                                                                   int positionSkipCount = 1, 
-                                                                  bool returnFinalPartialBatch = true)
+                                                                  bool returnFinalPartialBatch = true,
+                                                                  bool filterOutFRCGames = true)
     {
       EncodedTrainingPosition[] buffer = new EncodedTrainingPosition[maxPositionsPerBatch];
 
       int countRead = 0;
       int countWrittenThisBatch = 0;
-      foreach (EncodedTrainingPosition pos in EnumeratePositions())
+      foreach (EncodedTrainingPosition pos in EnumeratePositions(filterOutFRCGames))
       {
         if (countRead++ % positionSkipCount != 0)
         {

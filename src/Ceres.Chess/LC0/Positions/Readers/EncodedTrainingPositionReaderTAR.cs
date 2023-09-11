@@ -43,9 +43,11 @@ namespace Ceres.Chess.EncodedPositions
     /// <summary>
     /// Enumerates all games in the TAR.
     /// </summary>
-    public IEnumerable<Memory<EncodedTrainingPosition>> EnumerateGames()
+    /// <param name="filterOutFRCGames"></param>
+    /// <returns></returns>
+    public IEnumerable<Memory<EncodedTrainingPosition>> EnumerateGames(bool filterOutFRCGames = true)
     {
-      var reader = EncodedTrainingPositionReaderTAREngine.EnumerateGames(FileName, s => true, default);
+      var reader = EncodedTrainingPositionReaderTAREngine.EnumerateGames(FileName, s => true, default, filterOutFRCGames:filterOutFRCGames);
 
       foreach (Memory<EncodedTrainingPosition> games in reader)
       {
@@ -55,11 +57,13 @@ namespace Ceres.Chess.EncodedPositions
 
 
     /// <summary>
-    /// Enumerates all positions across all games in the TAR.
+    /// Enumerates all positions across all games in the TAR (optionally excluding those from FRC games).
     /// </summary>
-    public IEnumerable<EncodedTrainingPosition> EnumeratePositions()
+    /// <param name="filterOutFRCGames"></param>
+    /// <returns></returns>
+    public IEnumerable<EncodedTrainingPosition> EnumeratePositions(bool filterOutFRCGames = true)
     {
-      var reader = EncodedTrainingPositionReaderTAREngine.EnumerateGames(FileName, s => true, default);
+      var reader = EncodedTrainingPositionReaderTAREngine.EnumerateGames(FileName, s => true, default, filterOutFRCGames : filterOutFRCGames);
 
       foreach (Memory<EncodedTrainingPosition> gamePositionsBuffer in reader)
       {

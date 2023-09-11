@@ -77,9 +77,14 @@ namespace Ceres.Chess.EncodedPositions
 
     /// <summary>
     /// Enumerates over all positions.
+    /// 
+    /// NOTE: TPG are never written with FRC games, so the argument is ignored.
     /// </summary>
-    public IEnumerable<EncodedTrainingPosition> EnumeratePositions()
+    /// <param name="filterOutFRCGames"></param>
+    /// <returns></returns>
+    public IEnumerable<EncodedTrainingPosition> EnumeratePositions(bool filterOutFRCGames = true)
     {
+
       while (true)
       {
         EncodedTrainingPosition[] block = Read(BUFFER_POSITIONS_PER_BUFFER).ToArray();
