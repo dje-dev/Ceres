@@ -13,13 +13,13 @@
 
 #region Using directives
 
-using Ceres.Base;
-using Ceres.Chess.LC0.Boards;
-using Ceres.Chess.Textual;
 using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
+
+using Ceres.Chess.LC0.Boards;
+using Ceres.Chess.Textual;
 
 #endregion
 
@@ -53,26 +53,6 @@ namespace Ceres.Chess.EncodedPositions
       MiscInfo = miscInfo;
 
       // if (Marshal.SizeOf<LZBoard>() != LZBoardSizeInBytes) throw new Exception("Internal error, incorrect board size");
-    }
-
-
-    /// <summary>
-    /// Returns another EncodedPositionWithHistory contianing this position mirrored.
-    /// </summary>
-    public EncodedPositionWithHistory Mirrored
-    {
-      get
-      {
-        return new EncodedPositionWithHistory(new EncodedPositionBoards(BoardsHistory.History_0.Mirrored,
-                                                     BoardsHistory.History_1.Mirrored,
-                                                     BoardsHistory.History_2.Mirrored,
-                                                     BoardsHistory.History_3.Mirrored,
-                                                     BoardsHistory.History_4.Mirrored,
-                                                     BoardsHistory.History_5.Mirrored,
-                                                     BoardsHistory.History_6.Mirrored,
-                                                     BoardsHistory.History_7.Mirrored),
-                                                     MiscInfo);
-      }
     }
 
 
@@ -161,77 +141,6 @@ namespace Ceres.Chess.EncodedPositions
       return allLines.ToString();
     }
 
-    /// <summary>
-    /// Returns the Position correspondong to the final board.
-    /// </summary>
-    public Position FinalPosition => Position.FromFEN(FENForHistoryBoard(0));
-
-
-    /// <summary>
-    /// Returns the Position correspondong to the final board (mirrored).
-    /// </summary>
-    public Position FinalPositionMirrored => Position.FromFEN(FENForHistoryBoard(0, true));
-
-
-    /// <summary>
-    /// Returns the FEN string correpsonding to the position at specified history board.
-    /// </summary>
-    /// <param name="historyIndex"></param>
-    /// <param name="mirrored"></param>
-    /// <returns></returns>
-    public string FENForHistoryBoard(int historyIndex, bool mirrored = false)
-    {
-      EncodedPositionBoard planes = GetPlanesForHistoryBoard(historyIndex);
-      if (historyIndex % 2 == 1)
-      {
-        planes = planes.Flipped;
-      }
-
-      // KQkq - 0 1
-      bool weAreWhite = (MiscInfo.InfoPosition.SideToMove == 0) == (historyIndex % 2 == 0);
-      string fen = MiscInfo.InfoPosition.SideToMove == 0 ? planes.GetFENWithoutEnPassant(weAreWhite, mirrored) 
-                                                         : planes.Reversed.GetFENWithoutEnPassant(weAreWhite, mirrored);
-
-      fen = fen + (weAreWhite ? " w" : " b");
-      if (historyIndex != 0)
-      {
-        // Other values such as 50-move rule value, etc. are not easy to determine
-        // so don't attempt.
-        // TODO: improve.
-        return fen;
-      }
-
-      fen = fen + " ";
-
-      string castling = "";
-      if ((weAreWhite ? MiscInfo.InfoPosition.Castling_US_OO : MiscInfo.InfoPosition.Castling_Them_OO) > 0) castling += "K";
-      if ((weAreWhite ? MiscInfo.InfoPosition.Castling_US_OOO : MiscInfo.InfoPosition.Castling_Them_OOO) > 0) castling += "Q";
-      if ((weAreWhite ? MiscInfo.InfoPosition.Castling_Them_OO : MiscInfo.InfoPosition.Castling_US_OO) > 0) castling += "k";
-      if ((weAreWhite ? MiscInfo.InfoPosition.Castling_Them_OOO : MiscInfo.InfoPosition.Castling_US_OOO) > 0) castling += "q";
-      if (castling == "") castling = "-";
-
-      PositionMiscInfo.EnPassantFileIndexEnum enPassant = PositionMiscInfo.EnPassantFileIndexEnum.FileNone;
-      if (historyIndex < 7)
-      {
-        EncodedPositionBoard planesPriorBoard = GetPlanesForHistoryBoard(historyIndex + 1);
-        enPassant = EncodedPositionBoards.EnPassantOpportunityBetweenBoards(in planes, in planesPriorBoard);
-      }
-
-      string epTarget = "-";
-      if (enPassant != PositionMiscInfo.EnPassantFileIndexEnum.FileNone)
-      {
-        if (mirrored)
-        {
-          enPassant = 7 - enPassant;
-        }
-        epTarget = PositionMiscInfo.EPFileChars[(int)enPassant] + (weAreWhite ? "6" : "3");
-      }
-
-      fen = fen + castling + " " + epTarget + " " + MiscInfo.InfoPosition.Rule50Count;// + " " + (1 + MiscInfo.InfoPosition.MoveCount); // Sometimes 2 dashes?
-      fen = fen + " 1"; // put some valid full move number
-
-      return fen;
-    }
 
     /// <summary>
     /// Overwrites the MiscInfo with a specified value.
@@ -249,13 +158,18 @@ namespace Ceres.Chess.EncodedPositions
     public void SetHistoryPlanes(in EncodedPositionBoard plane, int firstBoardIndex, int numBoards)
     {
       int lastBoardIndex = firstBoardIndex + numBoards - 1;
-      if (lastBoardIndex >= EncodedPositionBoards.NUM_MOVES_HISTORY) throw new ArgumentOutOfRangeException("Incorrect number of history positions");
+      if (lastBoardIndex >= EncodedPositionBoards.NUM_MOVES_HISTORY)
+      {
+        throw new ArgumentOutOfRangeException("Incorrect number of history positions");
+      }
 
       fixed (EncodedPositionBoard* p = &BoardsHistory.History_0)
       {
         // TODO: memory copy for speed?
         for (int i = firstBoardIndex; i <= lastBoardIndex; i++)
+        {
           p[i] = plane;
+        }
       }
 
     }
@@ -356,7 +270,7 @@ namespace Ceres.Chess.EncodedPositions
       SetMiscFromPosition(sequentialPositions[LAST_POSITION_INDEX].MiscInfo, sideToMove);
 
       // Cache the first position in sequence from our perspective (which would be used for fill)
-      EncodedPositionBoard fillBoardFromOurPerspective = EncodedPositionBoard.GetBoard(in sequentialPositions[0], sideToMove);
+      EncodedPositionBoard fillBoardFromOurPerspective = EncodedPositionBoard.FromPosition(in sequentialPositions[0], sideToMove);
 
       Span<EncodedPositionBoard> boards = ScratchBoards();
 
@@ -380,7 +294,7 @@ namespace Ceres.Chess.EncodedPositions
           // Put last positions first in board array
           ref Position thisPos = ref sequentialPositions[LAST_POSITION_INDEX - i];
 
-          boards[i] = EncodedPositionBoard.GetBoard(in thisPos, sideToMove);
+          boards[i] = EncodedPositionBoard.FromPosition(in thisPos, sideToMove);
 
 #if DEBUG
           // Make sure the sides alternates between moves
@@ -394,6 +308,35 @@ namespace Ceres.Chess.EncodedPositions
       SetHistoryPlanes(boards);
     }
 
+    /// <summary>
+    /// Scans all history positions and if any found, fills in all subsequent 
+    /// with last populated history position
+    /// </summary>
+    public void FillInEmptyPlanes()
+    {
+      for (int b = 1; b < EncodedPositionBoards.NUM_MOVES_HISTORY; b++)
+      {
+        if (GetPlanesForHistoryBoard(b).IsEmpty)
+        {
+          FillStartingAtPlane(b);
+          return;
+        }
+      }
+    }
+
+
+    /// <summary>
+    /// Replicates the position prior to specified index into all subsequent history boards.
+    /// </summary>
+    /// <param name="firstEmptyBoardIndex"></param>
+    void FillStartingAtPlane(int firstEmptyBoardIndex)
+    {
+      EncodedPositionBoard lastBoard = GetPlanesForHistoryBoard(firstEmptyBoardIndex - 1);
+      for (int b = firstEmptyBoardIndex; b < EncodedPositionBoards.NUM_MOVES_HISTORY; b++)
+      {
+        BoardsHistory.SetBoard(b, lastBoard);
+      }
+    }
 
 
     /// <summary>
@@ -446,15 +389,6 @@ namespace Ceres.Chess.EncodedPositions
     }
 
     
-    /// <summary>
-    /// Converts an EncodedTrainingPosition into a Position.
-    /// </summary>
-    /// <param name="pos"></param>
-    /// <returns></returns>
-    public static Position PositionFromEncodedTrainingPosition(in EncodedTrainingPosition pos)
-    {
-      return PositionFromEncodedPosition(pos.PositionWithBoardsMirrored.Mirrored);
-    }
 
     static bool CheckMovedTheirPiece(in EncodedPositionBoardPlane planeAfter, in EncodedPositionBoardPlane planeBefore, ref Square destSquare)
     {
@@ -469,12 +403,19 @@ namespace Ceres.Chess.EncodedPositions
 
     public readonly (PieceType pieceType, Square fromSquare, Square toSquare, bool wasCastle) LastMoveInfoFromSideToMovePerspective()
     {
-      return LastMoveInfoFromSideToMovePerspective(BoardsHistory.History_0.Mirrored, BoardsHistory.History_1.Mirrored);
+      return LastMoveInfoFromSideToMovePerspective(BoardsHistory.History_0, BoardsHistory.History_1);
     }
 
 
+    static bool HAVE_WARNED = false;
     public static (PieceType pieceType, Square fromSquare, Square toSquare, bool wasCastle) LastMoveInfoFromSideToMovePerspective(in EncodedPositionBoard board0, in EncodedPositionBoard board1)
     {
+      if (!HAVE_WARNED)
+      {
+        Console.WriteLine("LastMoveInfoFromSideToMovePerspective Method needs to be retested *after changes to mirroring policy)");
+        HAVE_WARNED = true;
+      }
+
       Square sourceSquare = default;
       Square destSquare = default;
 
@@ -519,46 +460,111 @@ namespace Ceres.Chess.EncodedPositions
     }
 
 
+    /// <summary>
+    /// Returns if the history position at specified inde is empty.
+    /// </summary>
+    /// <param name="historyIndex"></param>
+    /// <returns></returns>
+    public bool HistoryPositionIsEmpty(int historyIndex) => BoardsHistory.BoardAtIndex(historyIndex).IsEmpty;
 
     /// <summary>
     /// Returns a Position which is equivalent to a specified EncodedPositionWithHistory.
     /// </summary>
     /// <param name="pos"></param>
     /// <returns></returns>
-    public static Position PositionFromEncodedPosition(in EncodedPositionWithHistory pos)
+    public Position HistoryPosition(int historyIndex)
     {
-      EncodedPositionBoard board0 = pos.BoardsHistory.History_0;
+      bool history0IsWhite = MiscInfo.WhiteToMove;
+      bool thisHistoryPositionIsWhite = (historyIndex % 2 == 0) == history0IsWhite;
 
-      EncodedPositionMiscInfo sourceMiscInfo = pos.MiscInfo.InfoPosition;
-
-      EncodedPositionBoard board1 = pos.BoardsHistory.History_1;
-      PositionMiscInfo.EnPassantFileIndexEnum epColIndex = EncodedPositionBoards.EnPassantOpportunityBetweenBoards(in board0, in board1);
-
-      Position pc;
-      if (sourceMiscInfo.SideToMove == EncodedPositionMiscInfo.SideToMoveEnum.White)
+      EncodedPositionBoard board = BoardsHistory.BoardAtIndex(historyIndex);
+      if (board.IsEmpty)
       {
-        PositionMiscInfo miscInfo = new PositionMiscInfo(sourceMiscInfo.Castling_US_OO == 1 ? true : false, sourceMiscInfo.Castling_US_OOO == 1 ? true : false,
-                                                         sourceMiscInfo.Castling_Them_OO == 1 ? true : false, sourceMiscInfo.Castling_Them_OOO == 1 ? true : false,
-                                                         SideType.White,
-                                                         sourceMiscInfo.Rule50Count, (int)board0.Repetitions.Data, 0, epColIndex);
+        throw new ArgumentException($"The history position {historyIndex} is empty.");
+      }
 
-        return new Position(board0.OurKing.Data, board0.OurQueens.Data, board0.OurRooks.Data, board0.OurBishops.Data, board0.OurKnights.Data, board0.OurPawns.Data,
-                            board0.TheirKing.Data, board0.TheirQueens.Data, board0.TheirRooks.Data, board0.TheirBishops.Data, board0.TheirKnights.Data, board0.TheirPawns.Data,
-                            in miscInfo);
-      }
-      else
+      if (!history0IsWhite)
       {
-        PositionMiscInfo miscInfo = new PositionMiscInfo(sourceMiscInfo.Castling_Them_OO == 1 ? true : false, sourceMiscInfo.Castling_Them_OOO == 1 ? true : false,
-                                                         sourceMiscInfo.Castling_US_OO == 1 ? true : false, sourceMiscInfo.Castling_US_OOO == 1 ? true : false,
-                                                         SideType.Black,
-                                                         sourceMiscInfo.Rule50Count, (int)board0.Repetitions.Data, 0, epColIndex);
-        board0 = board0.Reversed;
-        return new Position(board0.TheirKing.Data, board0.TheirQueens.Data, board0.TheirRooks.Data, board0.TheirBishops.Data, board0.TheirKnights.Data, board0.TheirPawns.Data,
-                            board0.OurKing.Data, board0.OurQueens.Data, board0.OurRooks.Data, board0.OurBishops.Data, board0.OurKnights.Data, board0.OurPawns.Data,
-                            in miscInfo);
+        board = board.ReversedAndFlipped;
       }
+
+      // First determine en passant.
+      PositionMiscInfo.EnPassantFileIndexEnum enPassant = PositionMiscInfo.EnPassantFileIndexEnum.FileNone;
+      if (historyIndex < 7)
+      {
+        // Read the encoded boards directly, will always be from same perspective (ours).
+        EncodedPositionBoard planesPriorBoard = GetPlanesForHistoryBoard(historyIndex + 1);
+        EncodedPositionBoard planesCurBoard = GetPlanesForHistoryBoard(historyIndex);
+
+        if (!planesPriorBoard.IsEmpty)
+        {
+          if ((historyIndex % 2 == 1))
+          {
+            planesPriorBoard = planesPriorBoard.ReversedAndFlipped;
+            planesCurBoard = planesCurBoard.ReversedAndFlipped;
+
+          }
+
+#if NOT
+          if (planesCurBoard.NumDifferentPiecePlacements(in planesPriorBoard) > 4)
+          {
+            Console.Write("bad " + planesCurBoard.NumDifferentPiecePlacements(in planesPriorBoard));
+          }
+#endif
+          enPassant = EncodedPositionBoards.EnPassantOpportunityBetweenBoards(planesCurBoard, in planesPriorBoard);
+        }
+      }
+
+      int repetitionCount = board.Repetitions.Data > 0 ? 1 : 0;
+
+      bool whiteCanCastleOO = true;
+      bool blackCanCastleOO = true;
+      bool whiteCanCastleOOO = true;
+      bool blackCanCastleOOO = true;
+      int rule50 = 0;
+
+      if (historyIndex == 0) // The Rule50 and castling can only be definitively determined for the first position.
+      {
+        rule50 = MiscInfo.InfoPosition.Rule50Count;
+
+        if (MiscInfo.WhiteToMove)
+        {
+          whiteCanCastleOO = MiscInfo.InfoPosition.Castling_US_OO == 1;
+          whiteCanCastleOOO = MiscInfo.InfoPosition.Castling_US_OOO == 1;
+          blackCanCastleOO = MiscInfo.InfoPosition.Castling_Them_OO == 1;
+          blackCanCastleOOO = MiscInfo.InfoPosition.Castling_Them_OOO == 1;
+        }
+        else
+        {
+          whiteCanCastleOO = MiscInfo.InfoPosition.Castling_Them_OO == 1;
+          whiteCanCastleOOO = MiscInfo.InfoPosition.Castling_Them_OOO == 1;
+          blackCanCastleOO = MiscInfo.InfoPosition.Castling_US_OO == 1;
+          blackCanCastleOOO = MiscInfo.InfoPosition.Castling_US_OOO == 1;
+        }
+      }
+
+      // Some miscellaneous info cannot be (easily) reconstructed.
+      // For now we assume all castling rights present, and decode en passant
+      // when possible (all positions except the last).
+      // TODO: disqualify castling if pieces not on original squares
+      // NOTE: move number cannot be determined, set value to 2 (which will translate to 1 ply in FEN) since 0 is considered invalid.
+      PositionMiscInfo miscInfo = new PositionMiscInfo(whiteCanCastleOO, whiteCanCastleOOO, blackCanCastleOO, blackCanCastleOOO,
+                                                       thisHistoryPositionIsWhite ? SideType.White : SideType.Black,
+                                                       rule50, repetitionCount, 2, enPassant);
+
+
+      return new Position(board.OurKing.Data, board.OurQueens.Data, board.OurRooks.Data, board.OurBishops.Data, board.OurKnights.Data, board.OurPawns.Data,
+                          board.TheirKing.Data, board.TheirQueens.Data, board.TheirRooks.Data, board.TheirBishops.Data, board.TheirKnights.Data, board.TheirPawns.Data,
+                          in miscInfo);
     }
 
+
+    /// <summary>
+    /// Returns a Position which for the current move (last history position).
+    /// </summary>
+    /// <param name="pos"></param>
+    /// <returns></returns>
+    public readonly Position FinalPosition => HistoryPosition(0);
 
 
     /// <summary>
@@ -605,7 +611,7 @@ namespace Ceres.Chess.EncodedPositions
 
       SetMiscFromPosition(pos.MiscInfo, desiredFromSidePerspective);
 
-      EncodedPositionBoard planes = EncodedPositionBoard.GetBoard(in pos, desiredFromSidePerspective);
+      EncodedPositionBoard planes = EncodedPositionBoard.FromPosition(in pos, desiredFromSidePerspective);
 
       bool hasEnPassant = pos.MiscInfo.EnPassantFileIndex != PositionMiscInfo.EnPassantFileIndexEnum.FileNone;
       if (hasEnPassant)
@@ -613,8 +619,8 @@ namespace Ceres.Chess.EncodedPositions
         // Determine the prior position, before the move that created en passant rights.
         Position priorPosWithEnPassantUndone = pos.PosWithEnPassantUndone();
 
-        // Get corresopnding board, flipped so it is from perspective of our side.
-        EncodedPositionBoard planesPreEnPassant = EncodedPositionBoard.GetBoard(in priorPosWithEnPassantUndone, desiredFromSidePerspective);
+        // Get corresponding board, flipped so it is from perspective of our side.
+        EncodedPositionBoard planesPreEnPassant = EncodedPositionBoard.FromPosition(in priorPosWithEnPassantUndone, desiredFromSidePerspective);
 
         if (fillInHistoryPlanes)
         {
@@ -640,24 +646,8 @@ namespace Ceres.Chess.EncodedPositions
           ClearFillHistoryPlanes(1);
         }
       }
-
-#if NOT
-      if (fillInHistoryPlanes)
-        SetHistoryPlanes(planes, 0, LZBoardsHistory.NUM_MOVES_HISTORY);
-      else
-      {
-        LZBoard emptyPlanes = new LZBoard();
-        SetHistoryPlanes(planes, 0,  1);
-        SetHistoryPlanes(emptyPlanes, 1, LZBoardsHistory.NUM_MOVES_HISTORY - 1); // TO DO: possibly unnneeded if initialized empty?
-      }
-
-#endif
-      // TO DO: en passant (?)
-#if NOT
-      ss.Append(st.epSquare == SquareS.SQ_NONE ? " - " : " " + Types.square_to_string(st.epSquare) + " ");
-      ss.Append(st.rule50).Append(" ").Append(1 + (gamePly - (sideToMove == ColorS.BLACK ? 1 : 0)) / 2);
-#endif
     }
+
 
     private void ClearFillHistoryPlanes(int startIndex)
     {

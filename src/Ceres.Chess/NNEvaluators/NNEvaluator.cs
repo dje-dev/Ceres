@@ -398,7 +398,7 @@ namespace Ceres.Chess.NNEvaluators
         for (int i = 0; i < numPositions; i++)
         {
           // Unmirror before adding.
-          builder.Add(encodedPositions[i].PositionWithBoardsMirrored.Mirrored);
+          builder.Add(encodedPositions[i].PositionWithBoards);
         }
 
         batch = builder.GetBatch();

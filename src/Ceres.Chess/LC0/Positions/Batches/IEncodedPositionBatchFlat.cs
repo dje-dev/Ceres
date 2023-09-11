@@ -120,26 +120,6 @@ namespace Ceres.Chess.LC0.Batches
     }
 
 
-    public EncodedPositionBatchFlat Mirrored(bool fillInMissingPlanes)
-    {
-      if (Positions.IsEmpty) throw new NotImplementedException("Implementation restriction: Mirrored only implemented when Positions is not null");
-
-      EncodedPositionBatchBuilder builder = new EncodedPositionBatchBuilder(NumPos, NNEvaluator.InputTypes.Boards);
-      for (int i = 0; i < NumPos; i++)
-      {
-        Position pos = MGChessPositionConverter.PositionFromMGChessPosition(in Positions.Span[i]);
-
-        // Mirror the position if it is equivalent to do so
-        if (!pos.MiscInfo.BlackCanOO && !pos.MiscInfo.BlackCanOOO && !pos.MiscInfo.WhiteCanOO && !pos.MiscInfo.WhiteCanOOO)
-        {
-          pos = pos.Mirrored;
-        }
-
-        builder.Add(in pos, fillInMissingPlanes);
-      }
-      return builder.GetBatch();
-    }
-
     /// <summary>
     /// If possible, generates moves for this position and assigns to Moves field
     /// if the Moves field is not already initialized.

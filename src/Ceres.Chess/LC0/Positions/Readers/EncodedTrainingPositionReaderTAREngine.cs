@@ -29,6 +29,7 @@ using SharpCompress.Readers.Tar;
 using Zstandard.Net;
 
 using Ceres.Base.Misc;
+using Ceres.Base.Benchmarking;
 
 #endregion
 
@@ -117,13 +118,6 @@ namespace Ceres.Chess.EncodedPositions
 
       foreach (Memory<EncodedTrainingPosition> gamePositions in EnumerateGamesCore(trainingTARFileName, processFilePredicate))
       {
-        string fen = gamePositions.Span[0].PositionWithBoardsMirrored.FinalPosition.FEN;
-        bool isPossiblyStart = fen.Contains(@"/pppppppp/8/8/8/8/");
-        if (!isPossiblyStart)
-        {
-          Console.WriteLine(fen);
-        }
-
         // Possibly stop early if reached max positions or games.
         if (numPositionsProcessed >= maxPositions
           || numGamesProcessed >= maxGames)
@@ -150,8 +144,8 @@ namespace Ceres.Chess.EncodedPositions
 
         if (filterOutFRCGames)
         {
-          Position firstGamePosition = EncodedPositionWithHistory.PositionFromEncodedTrainingPosition(in gamePositions.Span[0]);
-          if (firstGamePosition.LooksLikeFRCPosition)
+          Position firstGamePosition = gamePositions.Span[0].FinalPosition;
+          if (firstGamePosition != Position.StartPosition)
           {
             continue;
           }
@@ -233,7 +227,7 @@ namespace Ceres.Chess.EncodedPositions
                   throw new Exception("Stream contained no data, expected EncodedTrainingPosition");
                 }
 
-                bool isPackedGames = positionsBuffer[0].PositionWithBoardsMirrored.MiscInfo.InfoTraining.Unused1 == EncodedTrainingPositionCompressedConverter.SENTINEL_MARK_FIRST_MOVE_IN_GAME_IN_UNUSED1;
+                bool isPackedGames = positionsBuffer[0].PositionWithBoards.MiscInfo.InfoTraining.Unused1 == EncodedTrainingPositionCompressedConverter.SENTINEL_MARK_FIRST_MOVE_IN_GAME_IN_UNUSED1;
                 if (!isPackedGames)
                 {
                   // Single game, not packed with multiple.
@@ -248,14 +242,14 @@ namespace Ceres.Chess.EncodedPositions
                     // Find the start of the next game to know how long this game is.
                     int nextStartIndex = curIndex + 1;
                     while (nextStartIndex < numRead 
-                        && positionsBuffer[nextStartIndex].PositionWithBoardsMirrored.MiscInfo.InfoTraining.Unused1 != EncodedTrainingPositionCompressedConverter.SENTINEL_MARK_FIRST_MOVE_IN_GAME_IN_UNUSED1)
+                        && positionsBuffer[nextStartIndex].PositionWithBoards.MiscInfo.InfoTraining.Unused1 != EncodedTrainingPositionCompressedConverter.SENTINEL_MARK_FIRST_MOVE_IN_GAME_IN_UNUSED1)
                     {
                       nextStartIndex++;
                     }
 
                     int lengthThisGame = nextStartIndex - curIndex;
                     Memory<EncodedTrainingPosition> thisGame = new Memory<EncodedTrainingPosition>(positionsBuffer, curIndex, lengthThisGame);
-                    thisGame.Span[0].PositionWithBoardsMirrored.MiscInfo.InfoTraining.SetUnused1(0); // reset the sentinel
+                    thisGame.Span[0].PositionWithBoards.MiscInfo.InfoTraining.SetUnused1(0); // reset the sentinel
                     yield return thisGame;
 
                     curIndex = nextStartIndex;
@@ -326,15 +320,30 @@ namespace Ceres.Chess.EncodedPositions
 
         ObjUtils.CopyBytesIntoStructArray(rawBuffer, compressedPositionBuffer, bytesRead); 
         EncodedTrainingPositionCompressedConverter.Decompress(compressedPositionBuffer, buffer, numItems);
-
+        UndoMirroringOfBoards(buffer, numItems);
         return numItems;
       }
       else
       {
-        return ObjUtils.CopyBytesIntoStructArray(rawBuffer, buffer, bytesRead);
+        int numItems = ObjUtils.CopyBytesIntoStructArray(rawBuffer, buffer, bytesRead);
+        UndoMirroringOfBoards(buffer, numItems);
+        return numItems;
       }
     }
 
-
+    /// <summary>
+    /// LC0 training files (TAR) contain mirrored boards. We want to hide this implementation detail/annoyance.
+    /// This method mirrors all the boards (to put them into the natural representation)
+    /// and should be called immediately after read from disk.
+    /// </summary>
+    /// <param name="boards"></param>
+    /// <param name="numItems"></param>
+    private static void UndoMirroringOfBoards(EncodedTrainingPosition[] boards, int numItems)
+    {
+      for (int i=0;i<numItems;i++)
+      {
+        boards[i].PositionWithBoards.BoardsHistory.MirrorBoardsInPlace();
+      }
+    }
   }
 }

@@ -189,11 +189,6 @@ namespace Ceres.Chess.LC0.Boards
       Repetitions = repetitions ? new EncodedPositionBoardPlane(ALL_ONES_LONG) : default;
     }
 
-    public EncodedPositionBoard Mirrored => new EncodedPositionBoard(this, true, false);
-    public EncodedPositionBoard Reversed => new EncodedPositionBoard(this, false, true);
-
-    public EncodedPositionBoard ReversedAndMirrored => new EncodedPositionBoard(this, true, true);
-
 
     /// <summary>
     /// Copy constructor (with optional mirror and/or reverse applied).
@@ -201,57 +196,21 @@ namespace Ceres.Chess.LC0.Boards
     /// <param name="other"></param>
     /// <param name="mirror"></param>
     /// <param name="reverse"></param>
-    private EncodedPositionBoard(EncodedPositionBoard other, bool mirror, bool reverse)
+    private EncodedPositionBoard(EncodedPositionBoard other)
     {
-      if (reverse & mirror)
-      {
-        OurPawns = other.OurPawns.Reversed.Mirrored;
-        OurKnights = other.OurKnights.Reversed.Mirrored;
-        OurBishops = other.OurBishops.Reversed.Mirrored;
-        OurRooks = other.OurRooks.Reversed.Mirrored;
-        OurQueens = other.OurQueens.Reversed.Mirrored;
-        OurKing = other.OurKing.Reversed.Mirrored;
+      OurPawns = other.OurPawns;
+      OurKnights = other.OurKnights;
+      OurBishops = other.OurBishops;
+      OurRooks = other.OurRooks;
+      OurQueens = other.OurQueens;
+      OurKing = other.OurKing;
 
-        TheirPawns = other.TheirPawns.Reversed.Mirrored;
-        TheirKnights = other.TheirKnights.Reversed.Mirrored;
-        TheirBishops = other.TheirBishops.Reversed.Mirrored;
-        TheirRooks = other.TheirRooks.Reversed.Mirrored;
-        TheirQueens = other.TheirQueens.Reversed.Mirrored;
-        TheirKing = other.TheirKing.Reversed.Mirrored;
-      }
-      else
-      if (reverse)
-      {
-        OurPawns = other.OurPawns.Reversed;
-        OurKnights = other.OurKnights.Reversed;
-        OurBishops = other.OurBishops.Reversed;
-        OurRooks = other.OurRooks.Reversed;
-        OurQueens = other.OurQueens.Reversed;
-        OurKing = other.OurKing.Reversed;
-
-        TheirPawns = other.TheirPawns.Reversed;
-        TheirKnights = other.TheirKnights.Reversed;
-        TheirBishops = other.TheirBishops.Reversed;
-        TheirRooks = other.TheirRooks.Reversed;
-        TheirQueens = other.TheirQueens.Reversed;
-        TheirKing = other.TheirKing.Reversed;
-      }
-      else
-      {
-        OurPawns = mirror ? other.OurPawns.Mirrored : other.OurPawns;
-        OurKnights = mirror ? other.OurKnights.Mirrored : other.OurKnights;
-        OurBishops = mirror ? other.OurBishops.Mirrored : other.OurBishops;
-        OurRooks = mirror ? other.OurRooks.Mirrored : other.OurRooks;
-        OurQueens = mirror ? other.OurQueens.Mirrored : other.OurQueens;
-        OurKing = mirror ? other.OurKing.Mirrored : other.OurKing;
-
-        TheirPawns = mirror ? other.TheirPawns.Mirrored : other.TheirPawns;
-        TheirKnights = mirror ? other.TheirKnights.Mirrored : other.TheirKnights;
-        TheirBishops = mirror ? other.TheirBishops.Mirrored : other.TheirBishops;
-        TheirRooks = mirror ? other.TheirRooks.Mirrored : other.TheirRooks;
-        TheirQueens = mirror ? other.TheirQueens.Mirrored : other.TheirQueens;
-        TheirKing = mirror ? other.TheirKing.Mirrored : other.TheirKing;
-      }
+      TheirPawns = other.TheirPawns;
+      TheirKnights = other.TheirKnights;
+      TheirBishops = other.TheirBishops;
+      TheirRooks = other.TheirRooks;
+      TheirQueens = other.TheirQueens;
+      TheirKing = other.TheirKing;
       Repetitions = other.Repetitions;
     }
 
@@ -297,6 +256,36 @@ namespace Ceres.Chess.LC0.Boards
       TheirQueens.SetBytesRepresentation(buffer, 64 * 10 + startIndex);
       TheirKing.SetBytesRepresentation(buffer, 64 * 11 + startIndex);
       Repetitions.SetBytesRepresentation(buffer, 64 * 12 + startIndex);
+    }
+
+
+    /// <summary>
+    /// Returns number of different instances where a piece is placed differently from this board compared to another.
+    /// </summary>
+    /// <param name="otherBoard"></param>
+    /// <returns></returns>
+    public int NumDifferentPiecePlacements(in EncodedPositionBoard otherBoard)
+    {
+      // TODO: This is inefficient.
+      byte[] pieces1 = new byte[64 * 13];
+      byte[] pieces2 = new byte[64 * 13];
+
+      SetExpandedBytes(pieces1, 0);
+      otherBoard.SetExpandedBytes(pieces2, 0);
+
+      // Have to ignore the repetitios plane
+      int firstSkip = PlaneStartIndex(EncodedPositionBoardPlane.PlanesType.Repetitions);
+      int lastSkip = firstSkip + 63;
+
+      int numDifferent = 0;
+      for (int i=0;i<pieces1.Length;i++)
+      {
+        if (pieces1[i] != pieces2[i] && (i < firstSkip || i > lastSkip))
+        {
+          numDifferent++;
+        }
+      }
+      return numDifferent;
     }
 
 
@@ -411,40 +400,6 @@ namespace Ceres.Chess.LC0.Boards
 
 
     /// <summary>
-    /// Decodes board into corresponding FEN.
-    /// </summary>
-    /// <param name="weAreWhite"></param>
-    /// <returns></returns>
-    public string GetFENWithoutEnPassant(bool weAreWhite, bool mirrored = false)
-    {
-      string fen = "";
-
-      for (int r = 7; r >= 0; r--)
-      {
-        if (r != 7) fen += "/";
-        int numBlank = 0;
-        int startIndex = r * 8;
-        for (int c = 7; c >= 0; c--)
-        {
-          string thisChar = EncodedPositionWithHistory.FENCharAt(this, mirrored ? startIndex + c : (startIndex + (7 - c)), weAreWhite, " ");
-          if (thisChar == " ")
-            numBlank++;
-          else
-          {
-            if (numBlank > 0)
-              fen += numBlank;
-            numBlank = 0;
-            fen += thisChar;
-          }
-        }
-
-        if (numBlank > 0) fen += numBlank;
-      }
-
-      return fen;
-    }
-
-    /// <summary>
     /// Returns ASCII representation of board.
     /// </summary>
     /// <param name="weAreWhite"></param>
@@ -543,7 +498,7 @@ namespace Ceres.Chess.LC0.Boards
    
     const bool CONVERT_VIA_MG_POSITION = false; // performance better when this is false, equivalent behavior
 
-    public static EncodedPositionBoard GetBoard(in Position pos, SideType desiredFromSidePerspective)
+    public static EncodedPositionBoard FromPosition(in Position pos, SideType desiredFromSidePerspective)
     {
       bool isRepetition = pos.MiscInfo.RepetitionCount > 0;
 
@@ -564,15 +519,19 @@ namespace Ceres.Chess.LC0.Boards
       }
     }
 
+
     public unsafe void MirrorPlanesInPlace()
     {
       fixed (void* bitmapsR = &this.OurPawns)
       {
         ulong* bitmaps = (ulong*)bitmapsR;
-        for (int i=0; i< NUM_PIECE_PLANES_PER_BOARD; i++)
+        for (int i = 0; i < NUM_PIECE_PLANES_PER_BOARD; i++)
+        {
           bitmaps[i] = BitVector64.Mirror(bitmaps[i]);
+        }
       }
     }
+
 
     public unsafe static void SetBoard(ref EncodedPositionBoard board, in MGPosition mgPos, SideType desiredFromSidePerspective, bool isRepetition)
     {
@@ -646,7 +605,7 @@ namespace Ceres.Chess.LC0.Boards
       // PositionCompressed are always stored from perspective of white
       bool alreadyFromCorrectPerspective = desiredFromSidePerspective == SideType.White;
 
-      Span<BitVector64> bitmaps = stackalloc BitVector64[16];
+     Span<BitVector64> bitmaps = stackalloc BitVector64[16];
 
       ulong A = alreadyFromCorrectPerspective ? BitVector64.Mirror(mgPos.A) : BitVector64.Mirror(BitVector64.Reverse(mgPos.A));
       ulong B = alreadyFromCorrectPerspective ? BitVector64.Mirror(mgPos.B) : BitVector64.Mirror(BitVector64.Reverse(mgPos.B));

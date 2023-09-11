@@ -50,7 +50,7 @@ namespace Ceres.Chess.EncodedPositions
     /// Note that the actual board planes are stored in a mirrored representation
     /// compared to what needs to be fed to the neural network.
     /// </summary>
-    public readonly EncodedPositionWithHistory PositionWithBoardsMirrored;
+    public readonly EncodedPositionWithHistory PositionWithBoards;
 
     #endregion
 
@@ -59,7 +59,7 @@ namespace Ceres.Chess.EncodedPositions
 
     internal unsafe void SetVersion(int version) { fixed (int* pVersion = &Version) { *pVersion = version; } }
     internal unsafe void SetInputFormat(int inputFormat) { fixed (int* pInputFormat = &InputFormat) { *pInputFormat = inputFormat; } }
-    internal unsafe void SetPositionWithBoardsMirrored(in EncodedPositionWithHistory pos) { fixed (EncodedPositionWithHistory* pPos = &PositionWithBoardsMirrored) { *pPos = pos; } }
+    internal unsafe void SetPositionWithBoards(in EncodedPositionWithHistory pos) { fixed (EncodedPositionWithHistory* pPos = &PositionWithBoards) { *pPos = pos; } }
     internal unsafe void SetPolicies(in EncodedPolicyVectorCompressed policies) { fixed (EncodedPolicyVectorCompressed* pPolicies = &Policies) { *pPolicies = policies; } }
 
     #endregion

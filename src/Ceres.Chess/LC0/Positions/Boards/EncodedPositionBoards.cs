@@ -69,14 +69,14 @@ namespace Ceres.Chess.LC0.Boards
       History_5 = history5;
       History_6 = history6;
       History_7 = history7;
-
     }
+
 
 
     /// <summary>
     /// Mirrors all board planes in place.
     /// </summary>
-    public unsafe void MirrorBoardsInPlace()
+    public void MirrorBoardsInPlace()
     {
       History_0.MirrorPlanesInPlace();
       History_1.MirrorPlanesInPlace();
@@ -146,7 +146,7 @@ namespace Ceres.Chess.LC0.Boards
             currentBoard.TheirPawns.BitIsSet(64 - i - 16)  
            )
         {
-          return (PositionMiscInfo.EnPassantFileIndexEnum)new Square(16 - i).File;
+            return (PositionMiscInfo.EnPassantFileIndexEnum)new Square(16 - i).File;
         }
       }
 

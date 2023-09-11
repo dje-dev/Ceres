@@ -204,7 +204,7 @@ namespace Ceres.Chess.LC0.Batches
       Positions = new MGPosition[NumPos];
       for (int i = 0; i < Positions.Length; i++)
       {
-        Positions[i] = positions[i].PositionWithBoardsMirrored.FinalPosition.ToMGPosition;
+        Positions[i] = positions[i].FinalPosition.ToMGPosition;
       }
     }
 
@@ -347,14 +347,10 @@ namespace Ceres.Chess.LC0.Batches
         SetPositions(positions.Slice(0, numToProcess));
       }
 
-      // The position data is stored with the board bitmaps mirrored.
-      // Therefore unmirror them here (making a copy so we don't disturb original data).
-      // TODO: make this more efficient by eliminating copy and doing the BitVector64.Mirror only when setting target value.
       EncodedTrainingPosition[] positionsCopy = positions.Slice(0, numToProcess).ToArray();
       for (int i = 0; i < NumPos; i++)
       {
         positionsCopy[i] = positions[i];
-        positionsCopy[i].PositionWithBoardsMirrored.BoardsHistory.MirrorBoardsInPlace();
       }
       positions = default; // Make sure the original is not subsequently used.
 
@@ -385,7 +381,7 @@ namespace Ceres.Chess.LC0.Batches
       for (int i = 0; i < numToProcess; i++)
       {
         // Set planes (NOTE: we move all 8 history planes)
-        positionsCopy[i].PositionWithBoardsMirrored.ExtractPlanesValuesIntoArray(EncodedPositionBoards.NUM_MOVES_HISTORY, PosPlaneBitmaps, nextOutPlaneIndex);
+        positionsCopy[i].PositionWithBoards.ExtractPlanesValuesIntoArray(EncodedPositionBoards.NUM_MOVES_HISTORY, PosPlaneBitmaps, nextOutPlaneIndex);
         const int PLANES_WRITTEN = EncodedPositionBoard.NUM_PLANES_PER_BOARD * EncodedPositionBoards.NUM_MOVES_HISTORY;
 
         // Set all values to 1.0f
@@ -395,7 +391,7 @@ namespace Ceres.Chess.LC0.Batches
         nextOutPlaneIndex += PLANES_WRITTEN;
 
         // Copy in special plane values
-        EncodedPositionMiscInfo miscInfo = positionsCopy[i].PositionWithBoardsMirrored.MiscInfo.InfoPosition;
+        EncodedPositionMiscInfo miscInfo = positionsCopy[i].PositionWithBoards.MiscInfo.InfoPosition;
         WritePairWithValue1(miscInfo.Castling_US_OOO > 0 ? ulong.MaxValue : 0);
         WritePairWithValue1(miscInfo.Castling_US_OO > 0 ? ulong.MaxValue : 0);
         WritePairWithValue1(miscInfo.Castling_Them_OOO > 0 ? ulong.MaxValue : 0);

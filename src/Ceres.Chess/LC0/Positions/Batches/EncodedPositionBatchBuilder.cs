@@ -102,7 +102,7 @@ namespace Ceres.Chess.LC0.Batches
       if (InputsRequired > NNEvaluator.InputTypes.Boards)
       {
         // Decode main position from encoded board
-        Position position = EncodedPositionWithHistory.PositionFromEncodedPosition(in positionEncoded);
+        Position position = positionEncoded.FinalPosition;
         positionMG = MGPosition.FromPosition(in position);
 
         // Compute hash

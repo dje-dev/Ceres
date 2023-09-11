@@ -58,12 +58,15 @@ namespace Ceres.Chess.EncodedPositions
     /// </summary>
     public readonly EncodedPolicyVector Policies;
 
+
     /// <summary>
     /// Board position (including history planes).
-    /// Note that the actual board planes are stored in a mirrored representation
-    /// compared to what needs to be fed to the neural network.
+    /// Note that these LC0 training data files (TARs) contain mirrored positions
+    /// (compared to the representation that must be fed to the LC0 neural network).
+    /// However this mirroring is undone immediately after reading from disk and
+    /// this field in memory is always in the natural representation.
     /// </summary>
-    public readonly EncodedPositionWithHistory PositionWithBoardsMirrored;
+    public readonly EncodedPositionWithHistory PositionWithBoards;
 
     #endregion
 
@@ -78,7 +81,7 @@ namespace Ceres.Chess.EncodedPositions
     {
       Version = version;
       InputFormat = inputFormat;
-      PositionWithBoardsMirrored = pos;
+      PositionWithBoards = pos;
       Policies = policy;
     }
 
@@ -86,16 +89,33 @@ namespace Ceres.Chess.EncodedPositions
 
     internal unsafe void SetVersion(int version) { fixed (int* pVersion = &Version) { *pVersion = version;  }  }
     internal unsafe void SetInputFormat(int inputFormat) { fixed (int* pInputFormat = &InputFormat) { *pInputFormat = inputFormat; } }
-    internal unsafe void SetPositionWithBoardsMirrored(in EncodedPositionWithHistory pos) { fixed (EncodedPositionWithHistory* pPos = &PositionWithBoardsMirrored) { *pPos = pos; } }
+    internal unsafe void SetPositionWithBoards(in EncodedPositionWithHistory pos) { fixed (EncodedPositionWithHistory* pPos = &PositionWithBoards) { *pPos = pos; } }
     internal unsafe void SetPolicies(in EncodedPolicyVector policies) { fixed (EncodedPolicyVector* pPolicies = &Policies) { *pPolicies = policies; } }
 
     #endregion
 
-    #region Validity checking
 
+    #region Access helpers
 
     /// <summary>
-    /// Validates that a givne value is a valid probability.
+    /// Returns position at specified position index.
+    /// </summary>
+    /// <param name="historyIndex"></param>
+    /// <returns></returns>
+    public readonly Position HistoryPosition(int historyIndex) => PositionWithBoards.HistoryPosition(historyIndex);
+
+    /// <summary>
+    /// Returns the final position in the history.
+    /// </summary>
+    public readonly Position FinalPosition => HistoryPosition(0);
+
+    #endregion
+
+
+    #region Validity checking
+
+    /// <summary>
+    /// Validates that a given value is a valid probability.
     /// </summary>
     /// <param name="desc1"></param>
     /// <param name="desc2"></param>
@@ -141,7 +161,7 @@ namespace Ceres.Chess.EncodedPositions
     ///   https://github.com/Tilps/lc0/blob/rescore_tb/src/selfplay/loop.cc#L204
     /// </summary>
     /// <param name="desc"></param>
-    public void ValidateIntegrity(string desc)
+    public readonly void ValidateIntegrity(string desc)
     {
       // Make sure this is the supported version and input format of training data
       if (InputFormat != SUPPORTED_INPUT_FORMAT)
@@ -155,13 +175,13 @@ namespace Ceres.Chess.EncodedPositions
       }
 
 
-      int countPieces = PositionWithBoardsMirrored.BoardsHistory.History_0.CountPieces;
+      int countPieces = PositionWithBoards.BoardsHistory.History_0.CountPieces;
       if (countPieces == 0 || countPieces > 32)
       {
         throw new Exception("History board 0 has count pieces " + countPieces + ") " + desc);
       }
 
-      ref readonly EncodedPositionEvalMiscInfoV6 refTraining = ref PositionWithBoardsMirrored.MiscInfo.InfoTraining;
+      ref readonly EncodedPositionEvalMiscInfoV6 refTraining = ref PositionWithBoards.MiscInfo.InfoTraining;
 
       if (float.IsNaN(refTraining.BestD + refTraining.BestQ))
       {
@@ -224,7 +244,7 @@ namespace Ceres.Chess.EncodedPositions
 
     }
 
-    private float[] CheckPolicyValidity(string desc)
+    private readonly float[] CheckPolicyValidity(string desc)
     {
       float[] probs = Policies.ProbabilitiesWithNegativeOneZeroed;
       float sumPolicy = 0;
@@ -264,28 +284,20 @@ namespace Ceres.Chess.EncodedPositions
     /// <exception cref="NotImplementedException"></exception>
     public readonly PositionWithHistory ToPositionWithHistory(int maxHistoryPositions)
     {
-      EncodedPositionWithHistory thisEncPosUnmirrored = PositionWithBoardsMirrored.Mirrored;
-
       List<Position> positions = new(maxHistoryPositions);
       for (int i = maxHistoryPositions - 1; i >= 0; i--)
       {
-        if (!thisEncPosUnmirrored.GetPlanesForHistoryBoard(i).IsEmpty)
+        if (!PositionWithBoards.GetPlanesForHistoryBoard(i).IsEmpty)
         {
-          if (i == 0)
-          {
-            // The first position is special. We have valid castling, en passant info for sure. 
-            // Call FinalPosition which is able to decode this.
-            positions.Add(thisEncPosUnmirrored.FinalPosition);
-          }
-          else
-          {
-            positions.Add(Position.FromFEN(thisEncPosUnmirrored.FENForHistoryBoard(i)));
-          }
+          positions.Add(PositionWithBoards.HistoryPosition(i));
         }
       }
 
-      bool somePositionsIncompleteCastlingInfo = maxHistoryPositions > 1;
-      return new PositionWithHistory(positions, somePositionsIncompleteCastlingInfo);
+      // First position may be incorrect (missing en passant)
+      // since the prior history move not available to detect.
+      // TODO: Try to infer this from the move actually played.
+      const bool FIRST_POSITION_MAY_BE_MISSING_EN_PASSANT = true; 
+      return new PositionWithHistory(positions, FIRST_POSITION_MAY_BE_MISSING_EN_PASSANT, false);
     }
 
     #region Overrides
@@ -300,13 +312,13 @@ namespace Ceres.Chess.EncodedPositions
 
     public bool Equals(EncodedTrainingPosition other)
     {
-      return PositionWithBoardsMirrored.BoardsHistory.Equals(other.PositionWithBoardsMirrored.BoardsHistory)
+      return PositionWithBoards.BoardsHistory.Equals(other.PositionWithBoards.BoardsHistory)
           && Version == other.Version
           && Policies.Equals(other.Policies)
-          && PositionWithBoardsMirrored.MiscInfo.Equals(other.PositionWithBoardsMirrored.MiscInfo);          
+          && PositionWithBoards.MiscInfo.Equals(other.PositionWithBoards.MiscInfo);          
     }
 
-    public override int GetHashCode() => HashCode.Combine(Version, Policies, PositionWithBoardsMirrored.BoardsHistory, PositionWithBoardsMirrored.MiscInfo);
+    public override int GetHashCode() => HashCode.Combine(Version, Policies, PositionWithBoards.BoardsHistory, PositionWithBoards.MiscInfo);
     
 
     #endregion

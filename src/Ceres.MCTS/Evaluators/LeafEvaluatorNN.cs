@@ -207,7 +207,8 @@ namespace Ceres.MCTS.Evaluators
 
           if (EvaluatorDef.PositionTransform == NNEvaluatorDef.PositionTransformType.Mirror)
           {
-            rawPosArray[i] = rawPosArray[i].Mirrored;
+            throw new NotImplementedException("Mirroring temporarily disabled.");
+            //rawPosArray[i] = rawPosArray[i].Mirrored;
           }
         });
 

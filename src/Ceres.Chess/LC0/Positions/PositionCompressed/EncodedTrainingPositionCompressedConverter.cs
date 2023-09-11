@@ -48,9 +48,9 @@ namespace Ceres.Chess.EncodedPositions
         dst.SetVersion(src.Version);
         dst.SetInputFormat(src.InputFormat);
         DecompressPolicy(in src.Policies, ref Unsafe.AsRef(dst.Policies));
-        dst.SetPositionWithBoardsMirrored(in src.PositionWithBoardsMirrored);
+        dst.SetPositionWithBoards(in src.PositionWithBoards);
 
-        if (dst.PositionWithBoardsMirrored.MiscInfo.InfoTraining.Unused1 == EncodedTrainingPositionCompressedConverter.SENTINEL_MARK_FIRST_MOVE_IN_GAME_IN_UNUSED1)
+        if (dst.PositionWithBoards.MiscInfo.InfoTraining.Unused1 == EncodedTrainingPositionCompressedConverter.SENTINEL_MARK_FIRST_MOVE_IN_GAME_IN_UNUSED1)
         {
 //          Console.WriteLine("sentinel at " + i);
         }
@@ -73,7 +73,7 @@ namespace Ceres.Chess.EncodedPositions
         dst.SetVersion(src.Version);
         dst.SetInputFormat(src.InputFormat);
         dst.SetPolicies(CompressPolicy(in src.Policies));
-        dst.SetPositionWithBoardsMirrored(in src.PositionWithBoardsMirrored);
+        dst.SetPositionWithBoards(in src.PositionWithBoards);
       }
 
     }

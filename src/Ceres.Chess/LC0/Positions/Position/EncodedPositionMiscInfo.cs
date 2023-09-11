@@ -139,29 +139,7 @@ namespace Ceres.Chess.EncodedPositions
            && Rule50Count == other.Rule50Count;
     }
 
-    public bool MirrorEquivalent => Castling_US_OOO   == 0 && Castling_US_OO == 0 
-                                 && Castling_Them_OOO == 0 && Castling_Them_OO == 0;
-
   }
 }
-
-
-
-#if NOT
-  SelfPlayGame::SelfPlayGame(PlayerOptions player1, PlayerOptions player2,
-                           bool shared_tree)
-    : options_{player1, player2} {
-  tree_[0] = std::make_shared<NodeTree>();
-  tree_[0]->ResetToPosition(ChessBoard::kStartingFen, {});
-
-  if (shared_tree) {
-    tree_[1] = tree_[0];
-  } else {
-    tree_[1] = std::make_shared<NodeTree>();
-    tree_[1]->ResetToPosition(ChessBoard::kStartingFen, {});
-  }
-}
-
-#endif
 
 

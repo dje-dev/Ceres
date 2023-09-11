@@ -67,7 +67,7 @@ namespace Ceres.Chess.LC0.Boards
     /// <summary>
     /// Returns mirrored board.
     /// </summary>
-    public EncodedPositionBoardPlane Mirrored => new EncodedPositionBoardPlane((long)BitVector64.Mirror((ulong)this.Bits.Data));
+    internal EncodedPositionBoardPlane Mirrored => new EncodedPositionBoardPlane((long)BitVector64.Mirror((ulong)this.Bits.Data));
 
     /// <summary>
     /// Returns reversed board.
