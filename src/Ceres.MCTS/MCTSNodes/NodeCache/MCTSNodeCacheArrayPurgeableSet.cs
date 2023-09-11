@@ -71,6 +71,11 @@ namespace Ceres.MCTS.NodeCache
     {
       HardMaxNumFinalTreeNodes = hardMaxNumFinalTreeNodes;
 
+      if (hardMaxNumFinalTreeNodes.HasValue)
+      {
+        cacheSize = hardMaxNumFinalTreeNodes.Value;
+      }
+
       // Don't allow cache size too small, in case specified cache size
       // turned out to be less than the working set of the search (causing overflow).
       const int MIN_CACHE_SIZE = 20_000;
