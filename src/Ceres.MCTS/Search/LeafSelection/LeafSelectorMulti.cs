@@ -480,20 +480,31 @@ namespace Ceres.MCTS.Search
       }
 #endif
 #if EXPERIMENTAL
-      if (node.Context.ParamsSearch.TEST_FLAG && node.N > 2)
+      if (node.Context.ParamsSearch.TestFlag 
+       && node.N < 30
+       && numTargetLeafs == 1 // don't use above one leaf because implementation doesn't yet take the visit counts into account
+       )
       {
+        MCTSEventSource.TestCounter1++;
+
+        // Is temperature ok to ignore here?
         const bool VERBOSE = false;
-        short[] counts = LeafSelectorRegularizedPolicyOptimization.GetVisitCountsPOI(node, numTargetLeafs, numChildrenToCheck, node.NumChildrenVisited, VERBOSE);
+        const bool GREEDY = true;
+        short[] counts = GetVisitCountsPOI(node, numTargetLeafs, numChildrenToCheck, node.NumChildrenVisited, VERBOSE, GREEDY);
 
         for (int i = 0; i < visitChildCounts.Length; i++)
+        {
           visitChildCounts[i] = counts[i];
+        }
 
+#if DEBUG
         // Validated count (debugging only)
         int totalCount = 0;
-        for (int i = 0; i < numChildrenToCheck; i++)
+        for (int i = 0; i < numChildrenToCheck; i++)        
           totalCount += visitChildCounts[i];
         if (totalCount != numTargetLeafs)
           throw new Exception("wrong");
+#endif
       }
       else
       {
@@ -931,7 +942,6 @@ namespace Ceres.MCTS.Search
         }
       }
     }
-
 
 
     private void LaunchGatherLeafBatchletParallel(MCTSNode node, int numThisChild, MCTSNode thisChild, float vLossDynamicBoost)
