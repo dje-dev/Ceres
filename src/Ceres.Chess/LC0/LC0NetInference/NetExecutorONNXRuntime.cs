@@ -54,6 +54,11 @@ namespace Ceres.Chess.LC0NetInference
 {
   public class NetExecutorONNXRuntime : IDisposable
   {
+    /// <summary>
+    /// Name of underlying ONNX file;
+    /// </summary>
+    public readonly String ONNXFileName;
+
 #if FEATURE_ONNX
     /// <summary>
     /// Underlying ONNX runtime session
@@ -90,7 +95,7 @@ namespace Ceres.Chess.LC0NetInference
       // https://codechina.csdn.net/mirrors/microsoft/onnxruntime/-/blob/skottmckay/CreateHelperForGeneratingIdsForUseInCompilingEPs/docs/execution_providers/TensorRT-ExecutionProvider.md
       //     if (gpuID < 0 || gpuID > 16) throw new Exception($"Invalid GPU ID { gpuID}");
 #if FEATURE_ONNX
-
+      ONNXFileName = onnxFileName;
       if (onnxFileName == null && onnxModelBytes == null)
       {
         throw new Exception("Must specify either onnxFileName or onnxModelBytes");
@@ -218,7 +223,7 @@ namespace Ceres.Chess.LC0NetInference
     /// <param name="input"></param>
     /// <param name="shape"></param>
     /// <returns></returns>
-    public float[][] Run((Memory<float> input, int[] shape)[] inputs, bool float16)
+    public List<(string, float[])> Run((Memory<float> input, int[] shape)[] inputs, bool float16)
     {
 #if FEATURE_ONNX
       // Determine input name
@@ -312,7 +317,7 @@ namespace Ceres.Chess.LC0NetInference
     /// <param name="inputName"></param>
     /// <param name="numElements"></param>
     /// <returns></returns>
-    private float[][] RunFloat16((Memory<float> input, int[] shape, string inputName, int numElements)[] inputs)
+    private List<(string, float[])> RunFloat16((Memory<float> input, int[] shape, string inputName, int numElements)[] inputs)
     {
       List<NamedOnnxValue> inputsONNX = new(inputs.Length);
 
@@ -337,19 +342,19 @@ namespace Ceres.Chess.LC0NetInference
         runResult = Session.Run(inputsONNX);
       }
 
-      float[][] resultArrays = new float[Session.OutputMetadata.Count][];
+      List<(string, float[])> resultArrays = new(Session.OutputMetadata.Count);
       int iResult = 0;
       foreach (DisposableNamedOnnxValue resultValue in runResult)
       {
         DenseTensor<Float16> tensor = (DenseTensor<Float16>)resultValue.AsTensor<Float16>();
         Float16[] valuesFP16 = tensor.Buffer.ToArray();
-        resultArrays[iResult++] = Array.ConvertAll<Float16, float>(valuesFP16, f => FP16.FromRaw((ushort)f));
+        resultArrays[iResult++] = (resultValue.Name, Array.ConvertAll<Float16, float>(valuesFP16, f => FP16.FromRaw((ushort)f)));
       }
       return resultArrays;
     }
 
 
-    private float[][] RunFloat((Memory<float> input, int[] shape, string inputName, int numElements)[] inputs)
+    private List<(string, float[])> RunFloat((Memory<float> input, int[] shape, string inputName, int numElements)[] inputs)
     {
       List<NamedOnnxValue> inputsONNX = new(inputs.Length);
 
@@ -366,14 +371,12 @@ namespace Ceres.Chess.LC0NetInference
         runResult = Session.Run(inputsONNX);
       }
 
-      float[][] resultArrays = new float[Session.OutputMetadata.Count][];
-      int ix = 0;
+      List<(string, float[])> resultArrays = new(Session.OutputMetadata.Count);
       foreach (DisposableNamedOnnxValue resultValue in runResult)
       {
         DenseTensor<float> tensor = (DenseTensor<float>)resultValue.AsTensor<float>();
         float[] values = tensor.Buffer.ToArray(); // TO DO: Avoid reallocation ?
-        resultArrays[ix] = values;
-        ix++;
+        resultArrays.Add((resultValue.Name, values));
       }
       return resultArrays;
     }

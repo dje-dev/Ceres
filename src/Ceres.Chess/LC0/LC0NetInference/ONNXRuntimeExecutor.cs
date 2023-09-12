@@ -14,6 +14,7 @@
 #region Using directives
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
 using Ceres.Base.DataType;
@@ -154,7 +155,7 @@ namespace Ceres.Chess.LC0NetInference
         EncodedPositionBatchFlat.DumpDecoded(flatValuesPrimary, 112);
       }
 
-      float[][] eval;
+      List<(string, float[])> eval;
 
       if (NetType == NetTypeEnum.TPG)
       {
@@ -190,8 +191,8 @@ namespace Ceres.Chess.LC0NetInference
       }
       else
       {
-        bool hasMLH = eval.Length >= 3;
-        bool hasUNC = eval.Length >= 4;
+        bool hasMLH = eval.Count >= 3;
+        bool hasUNC = eval.Count >= 4;
 #if NOT
         Session.InputMetadata
         [0] input_1
@@ -205,10 +206,24 @@ namespace Ceres.Chess.LC0NetInference
         int FindIndex(int expectedPerPosition, int indexToIgnore = -1)
         {
           int expectedLength = numPositionsUsed * expectedPerPosition;
-          for (int i=0;i<eval.Length;i++)
+          for (int i = 0; i < eval.Count; i++)
           {
-            if (eval[i].Length == expectedLength && i != indexToIgnore)
+            if (eval[i].Item2.Length == expectedLength && i != indexToIgnore)
             {
+              // TODO: find a better way to do this
+              // HACK: If the filename contains "optimistic",
+              //       then accept policy vector only if contains string "optimistic"
+              if (expectedPerPosition == 1858)
+              {
+                if (
+                   (ONNXFileName.ToLower().Contains("policy_optimistic") && !eval[i].Item1.ToLower().Contains("optimistic"))
+                || (ONNXFileName.ToLower().Contains("policy_vanilla") && !eval[i].Item1.ToLower().Contains("vanilla"))
+                   )
+                {
+                  continue;
+                }
+              }
+
               return i;
             }
           }
@@ -220,7 +235,7 @@ namespace Ceres.Chess.LC0NetInference
         // TODO: currently limited to assuming MLH and WDL true, can this be improved?
         if (!isWDL || !hasMLH)
         {
-          throw new Exception("Implmentation restriction, ONNX runtime nets expected to have  both WDL and MLH heads.");
+          throw new Exception("Implementation restriction, ONNX runtime nets expected to have both WDL and MLH heads.");
         }
 
         int INDEX_POLICIES = FindIndex(1858);// FIX NetType == NetTypeEnum.Ceres ? 1858 : 96);
@@ -228,11 +243,11 @@ namespace Ceres.Chess.LC0NetInference
         int INDEX_MLH = FindIndex(1);
         int INDEX_UNC = hasUNC ? FindIndex(1, INDEX_MLH) : -1;
 
-        float[] mlh = hasMLH ? eval[INDEX_MLH] : null;
-        float[] uncertantiesV = hasUNC ? eval[INDEX_UNC] : null;
-        float[] policiesLogistics = eval[INDEX_POLICIES];
+        float[] mlh = hasMLH ? eval[INDEX_MLH].Item2 : null;
+        float[] uncertantiesV = hasUNC ? eval[INDEX_UNC].Item2 : null;
+        float[] policiesLogistics = eval[INDEX_POLICIES].Item2;
 
-        FP16[] values = FP16.ToFP16(eval[INDEX_WDL]);
+        FP16[] values = FP16.ToFP16(eval[INDEX_WDL].Item2);
         Debug.Assert(values.Length == (isWDL ? 3 : 1) * numPositionsUsed);
 
         float[] value_fc_activations = null;// eval.Length < 3 ? null : eval[2];
