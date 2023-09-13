@@ -1105,7 +1105,7 @@ namespace Ceres.MCTS.Iteration
 
       UpdateTopNodeInfo();
 
-      if (LimitManager.CheckStopSearch(Search, Search.LastGameLimitInputs))
+      if (Search.LastGameLimitInputs != null && LimitManager.CheckStopSearch(Search, Search.LastGameLimitInputs))
       {
         return SearchStopStatus.LimitsManagerRequestedStop;
       }
