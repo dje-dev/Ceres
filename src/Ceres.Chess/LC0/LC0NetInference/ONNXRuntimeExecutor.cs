@@ -203,12 +203,14 @@ namespace Ceres.Chess.LC0NetInference
         [2] tf.math.truediv [OMITTED IF NOT ATTENTION]
         [3] value/dense2
 #endif
-        int FindIndex(int expectedPerPosition, int indexToIgnore = -1)
+        int FindIndex(int expectedPerPosition, int indexToIgnore = -1, string mustContainString = null)
         {
           int expectedLength = numPositionsUsed * expectedPerPosition;
           for (int i = 0; i < eval.Count; i++)
           {
-            if (eval[i].Item2.Length == expectedLength && i != indexToIgnore)
+            if (eval[i].Item2.Length == expectedLength 
+              && i != indexToIgnore
+              && (mustContainString == null || eval[i].Item1.Contains(mustContainString)))
             {
               // TODO: find a better way to do this
               // HACK: If the filename contains "optimistic",
@@ -223,6 +225,20 @@ namespace Ceres.Chess.LC0NetInference
                   continue;
                 }
               }
+                if (expectedPerPosition == 3)
+                {
+                  if (
+                     (ONNXFileName.ToLower().Contains("value_winner") && !eval[i].Item1.ToLower().Contains("value/winner"))
+                  || (ONNXFileName.ToLower().Contains("value_q") && !eval[i].Item1.ToLower().Contains("value/q"))
+                     )
+                  {
+                    continue;
+                  }
+                }
+                  //+		[25]	("value/q/dense2", {float[3]})	(string, float[])
+                  //                +[26]("value/q/dense_error", { float[1]})	(string, float[])
+                  //               + [29]("value/winner/dense2", { float[3]})	(string, float[])
+               
 
               return i;
             }
@@ -238,10 +254,23 @@ namespace Ceres.Chess.LC0NetInference
           throw new Exception("Implementation restriction, ONNX runtime nets expected to have both WDL and MLH heads.");
         }
 
+        // TODO: remove hack fo rBT3
+        bool looksLikeBT3 = eval.Count > 10;
+        string uncMustContainString = looksLikeBT3 ? "value/q/dense_error" : null;
+
         int INDEX_POLICIES = FindIndex(1858);// FIX NetType == NetTypeEnum.Ceres ? 1858 : 96);
         int INDEX_WDL = FindIndex(3);
         int INDEX_MLH = FindIndex(1);
         int INDEX_UNC = hasUNC ? FindIndex(1, INDEX_MLH) : -1;
+
+        if (looksLikeBT3)
+        {
+          Console.WriteLine("ONNX head mappings for " + ONNXFileName);
+          Console.WriteLine("value       --> " + eval[INDEX_WDL].Item1);
+          Console.WriteLine("policy      --> " + eval[INDEX_POLICIES].Item1);
+          Console.WriteLine("mlh         --> " + eval[INDEX_MLH].Item1);
+          Console.WriteLine("uncertainty --> " + eval[INDEX_UNC].Item1);
+        }
 
         float[] mlh = hasMLH ? eval[INDEX_MLH].Item2 : null;
         float[] uncertantiesV = hasUNC ? eval[INDEX_UNC].Item2 : null;
