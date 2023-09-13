@@ -149,11 +149,9 @@ namespace Ceres.Features.Visualization.AnalysisGraph
 
       foreach ((Position pos, string label) pos in positions)
       {
-        Position thisPos = showFromPerspectiveOfPlayerOnMove && pos.pos.IsWhite != positions[0].pos.IsWhite ?
-                           pos.pos.Reversed.Mirrored : pos.pos;
-
         svg += HEADER_CORE;// PositionToSVG.HEADER_CORE;
-        svg += PositionToSVG.PosSVGString(thisPos, default, false);
+        bool shouldReverse = showFromPerspectiveOfPlayerOnMove &&  !positions[0].pos.IsWhite;
+        svg += PositionToSVG.PosSVGString(shouldReverse ? pos.pos.Reversed : pos.pos, default, false);
         svg += PositionToSVG.FOOTER;
       }
 
