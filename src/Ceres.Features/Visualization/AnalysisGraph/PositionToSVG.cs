@@ -36,7 +36,8 @@ namespace Ceres.Features.Visualization.AnalysisGraph
       {
         for (int file = 0; file <= 7; file++)
         {
-          char pChar = pos.PieceOnSquare(Square.FromFileAndRank(file, rank)).Char;//  SFPosition.PieceToChar[pos.piece_on(Types.make_square(f, r))];
+          Square thisSquare = pos.IsWhite ? Square.FromFileAndRank(file, rank) : Square.FromFileAndRank(file, rank).Reversed;
+          char pChar = pos.PieceOnSquare(thisSquare).Char;
 
           string square = "" + ("abcdefgh")[file] + "" + ("12345678")[rank];
 

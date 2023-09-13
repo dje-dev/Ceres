@@ -134,7 +134,7 @@ namespace Ceres.Features.Visualization.AnalysisGraph
     }
 
 
-    public static string WritePositionsToSVGFile(params (Position pos, string label)[] positions)
+    public static string WritePositionsToSVGFile(bool showFromPerspectiveOfPlayerOnMove = true, params (Position pos, string label)[] positions)
     {
       string tempDir = Directory.CreateTempSubdirectory().FullName;
 
@@ -147,10 +147,13 @@ namespace Ceres.Features.Visualization.AnalysisGraph
 <body>
 ";
 
-      foreach (var pos in positions)
+      foreach ((Position pos, string label) pos in positions)
       {
+        Position thisPos = showFromPerspectiveOfPlayerOnMove && pos.pos.IsWhite != positions[0].pos.IsWhite ?
+                           pos.pos.Reversed.Mirrored : pos.pos;
+
         svg += HEADER_CORE;// PositionToSVG.HEADER_CORE;
-        svg += PositionToSVG.PosSVGString(pos.pos, default, false);
+        svg += PositionToSVG.PosSVGString(thisPos, default, false);
         svg += PositionToSVG.FOOTER;
       }
 
