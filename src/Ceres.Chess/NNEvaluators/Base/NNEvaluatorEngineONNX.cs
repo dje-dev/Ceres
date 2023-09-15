@@ -222,10 +222,13 @@ namespace Chess.Ceres.NNEvaluators
 
 
     public static Action<IEncodedPositionBatchFlat, bool, float[], float[]> ConverterToFlat = null;
-    public static Action<object, float[], float[]> ConverterToFlatFromTPG = null;
+    public static Func<object, byte[], byte[], int> ConverterToFlatFromTPG = null;
 
-    [ThreadStatic] static float[] inputsPrimaryNative;
-    [ThreadStatic] static float[] inputsSecondaryNative;
+    [ThreadStatic] static byte[] inputsPrimaryNative;
+    [ThreadStatic] static byte[] inputsSecondaryNative;
+    [ThreadStatic] static float[] inputsPrimaryNativeF;
+    [ThreadStatic] static float[] inputsSecondaryNativeF;
+
 
     /// <summary>
     /// Optional worker method which evaluates batch of positions which are already converted into native format needed by evaluator.
@@ -255,12 +258,21 @@ namespace Chess.Ceres.NNEvaluators
       {
         // TO DO: Make smarter, check numPositions argument to smart size if possible (instead we make some guesses here on size, assume batch size 
         const int INPUT_SIZE_FLOATS = 2048 * 100 * 128; 
-        inputsPrimaryNative = new float[INPUT_SIZE_FLOATS];
-        inputsSecondaryNative = new float[INPUT_SIZE_FLOATS];
+        inputsPrimaryNative = new byte[INPUT_SIZE_FLOATS];
+        inputsSecondaryNative = new byte[INPUT_SIZE_FLOATS];
       }
 
-      ConverterToFlatFromTPG(positionsNativeInput, inputsPrimaryNative, usesSecondaryInputs ? inputsSecondaryNative : null);
-      PositionEvaluationBatch ret = DoEvaluateBatch(default, inputsPrimaryNative, usesSecondaryInputs ? inputsSecondaryNative : null, 
+      int numConverted = ConverterToFlatFromTPG(positionsNativeInput, inputsPrimaryNative, usesSecondaryInputs ? inputsSecondaryNative : null);
+
+      // Convert bytes to float      
+      for (int i=0;i<numConverted;i++)
+      {
+        // TODO: Consider improving performance (though this may not be an often used mode of executing TPG files).
+        //       To speed up, consider vectorize this, or call a built-in function, or partly unroll loop.
+        inputsPrimaryNativeF[i] = inputsPrimaryNative[i];
+        inputsSecondaryNativeF[i] = inputsSecondaryNative[i];
+      }
+      PositionEvaluationBatch ret = DoEvaluateBatch(default, inputsPrimaryNativeF, usesSecondaryInputs ? inputsSecondaryNativeF : null, 
                                                     numPositions, retrieveSupplementalResults, posMoveIsLegal);
       return ret;
     }
