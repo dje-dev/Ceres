@@ -204,17 +204,14 @@ namespace Ceres.Base.DataTypes // TO DO: get rid of this in favor of BitVector64
       //return b.ToString();
     }
 
-    public int GetSetBitIndices(Span<byte> indices, int startIndexOffset, int maxBitsToReturn)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int GetSetBitIndices(Span<byte> indices, int startIndexOffset)
     {
       int count = 0;
       for (int bit = 0; bit < 64; bit++)
       {
         if (BitIsSet(bit))
         {
-          if (count >= maxBitsToReturn)
-          {
-            return count;
-          }
           indices[startIndexOffset + count] = (byte)bit;
           count++;
         }

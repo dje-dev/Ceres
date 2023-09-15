@@ -337,21 +337,19 @@ namespace Ceres.Chess
 
       MiscInfo = miscInfo;
 
-      Span<byte> indices = stackalloc byte[64];
+      PieceCount += SetFromBitmap(whiteKingBitmap, (White, King));
+      PieceCount += SetFromBitmap(whiteQueenBitmap, (White, Queen));
+      PieceCount += SetFromBitmap(whiteRookBitmap, (White, Rook));
+      PieceCount += SetFromBitmap(whiteBishopBitmap, (White, Bishop));
+      PieceCount += SetFromBitmap(whiteKnightBitmap, (White, Knight));
+      PieceCount += SetFromBitmap(whitePawnBitmap, (White, Pawn));
 
-      PieceCount += SetFromBitmap(whiteKingBitmap, (White, King), indices);
-      PieceCount += SetFromBitmap(whiteQueenBitmap, (White, Queen), indices);
-      PieceCount += SetFromBitmap(whiteRookBitmap, (White, Rook), indices);
-      PieceCount += SetFromBitmap(whiteBishopBitmap, (White, Bishop), indices);
-      PieceCount += SetFromBitmap(whiteKnightBitmap, (White, Knight), indices);
-      PieceCount += SetFromBitmap(whitePawnBitmap, (White, Pawn), indices);
-
-      PieceCount += SetFromBitmap(blackKingBitmap, (Black, King), indices);
-      PieceCount += SetFromBitmap(blackQueenBitmap, (Black, Queen), indices);
-      PieceCount += SetFromBitmap(blackRookBitmap, (Black, Rook), indices);
-      PieceCount += SetFromBitmap(blackBishopBitmap, (Black, Bishop), indices);
-      PieceCount += SetFromBitmap(blackKnightBitmap, (Black, Knight), indices);
-      PieceCount += SetFromBitmap(blackPawnBitmap, (Black, Pawn), indices);
+      PieceCount += SetFromBitmap(blackKingBitmap, (Black, King));
+      PieceCount += SetFromBitmap(blackQueenBitmap, (Black, Queen));
+      PieceCount += SetFromBitmap(blackRookBitmap, (Black, Rook));
+      PieceCount += SetFromBitmap(blackBishopBitmap, (Black, Bishop));
+      PieceCount += SetFromBitmap(blackKnightBitmap, (Black, Knight));
+      PieceCount += SetFromBitmap(blackPawnBitmap, (Black, Pawn));
 
       PiecesShortHash = CalcShortHash();
     }
@@ -1092,7 +1090,7 @@ namespace Ceres.Chess
       return count;
     }
 
-    
+
     /// <summary>
     /// Updates the board from a bitmap indicating locations of a specified piece.
     /// </summary>
@@ -1100,21 +1098,26 @@ namespace Ceres.Chess
     /// <param name="piece"></param>
     /// <param name="scratchIndices"></param>
     /// <returns></returns>
-    byte SetFromBitmap(ulong bits, Piece piece, Span<byte> scratchIndices)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    byte SetFromBitmap(ulong bits, Piece piece)
     {
       byte numPieces = 0;
-      BitVector64 bitmap = new BitVector64(bits);
-      if (bitmap.Data != 0)
+      byte thisSquare;
+      while (true)
       {
-        int numBits = bitmap.GetSetBitIndices(scratchIndices, 0, 64);
-
-        for (int i = 0; i < numBits; i++)
+        thisSquare = (byte)System.Numerics.BitOperations.TrailingZeroCount(bits);
+        if (thisSquare < 64)
         {
-          numPieces += (byte)SetPieceOnSquare(scratchIndices[i],  piece);
+          numPieces += (byte)SetPieceOnSquare(thisSquare, piece);
+          bits ^= 1UL << thisSquare;
+        }
+        else
+        {
+          return numPieces;
         }
       }
-      return numPieces;
     }
+    
 
 
     /// <summary>
