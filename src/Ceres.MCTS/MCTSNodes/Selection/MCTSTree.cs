@@ -415,6 +415,7 @@ namespace Ceres.MCTS.LeafExpansion
                                                   int maxLookback = MAX_LENGTH_POS_HISTORY - 1,
                                                   bool stop50MoveRuleReset = true)
     {
+      node.Annotate();
       maxLookback = Math.Min(maxLookback, MAX_LENGTH_POS_HISTORY - 1);
       return GetPriorHistoryPositions(node.Parent, node.Annotation.Pos, NULL_POS, 
                                       PosScratchBuffer, maxLookback, stop50MoveRuleReset, true);
