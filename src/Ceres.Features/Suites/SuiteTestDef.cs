@@ -86,6 +86,11 @@ namespace Ceres.Features.Suites
     public Predicate<string> EPDFilter;
 
     /// <summary>
+    /// If specified position should be accepted as part of the suite test.
+    /// </summary>
+    public Predicate<Position> AcceptPosPredicate;
+
+    /// <summary>
     /// The number of first position in file to test (zero-based, defaults to first position).
     /// </summary>
     public int FirstTestPosition;

@@ -39,6 +39,7 @@ using System.Collections.Concurrent;
 using Ceres.Features.Players;
 using Ceres.Base.Math;
 using Ceres.Chess.NNEvaluators.Internals;
+using System.Linq;
 
 #endregion
 
@@ -177,7 +178,7 @@ namespace Ceres.Features.Suites
       List<EPDEntry> epds = EPDEntry.EPDEntriesInEPDFile(Def.EPDFileName, Def.MaxNumPositions, 
                                                          Def.EPDLichessPuzzleFormat, Def.EPDFilter);
 
-      // Possiblyskip some of positions at beginning of file.
+      // Possibly skip some of positions at beginning of file.
       if (Def.SkipNumPositions > 0)
       {
         if (Def.SkipNumPositions <= epds.Count)
@@ -185,6 +186,12 @@ namespace Ceres.Features.Suites
           throw new Exception("Insufficient positions in " + Def.EPDFileName + " to skip " + Def.SkipNumPositions);
         }
         epds = epds.GetRange(Def.SkipNumPositions, epds.Count - Def.SkipNumPositions);
+      }
+
+      // Position filter EPDs based on the starting position.
+      if (Def.AcceptPosPredicate != null)
+      {
+        epds = epds.Where(s => Def.AcceptPosPredicate(s.Position)).ToList();
       }
 
       if (Def.MaxNumPositions == 0)
