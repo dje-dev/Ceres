@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net7.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
@@ -10,11 +10,9 @@
     <ApplicationIcon />
     <OutputType>Exe</OutputType>
     <StartupObject />
-    <TieredCompilation>false</TieredCompilation>
     <GCLargePages>false</GCLargePages>
     <ServerGarbageCollection>true</ServerGarbageCollection>
     <GCLOHThreshold>100000</GCLOHThreshold>
-    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
     <RunAnalyzersDuringBuild>true</RunAnalyzersDuringBuild>
     <AnalysisLevel>latest</AnalysisLevel>
     <OutputPath>..\..\artifacts\release</OutputPath>
