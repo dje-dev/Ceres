@@ -33,7 +33,7 @@ namespace Ceres.Chess.NNEvaluators
     /// A supplied function which is called for each position
     /// and passed the evaluations from each sub-evaluator,
     /// and returns index of the preferred evaluator for that position.
-    public delegate int DynamicEvaluatorIndexPredicate(NNPositionEvaluationBatchMember[] batchResults);
+    public delegate int DynamicEvaluatorIndexPredicate(Position pos, NNPositionEvaluationBatchMember[] batchResults);
 
     /// </summary>
     public readonly DynamicEvaluatorIndexPredicate DynamicEvaluatorChooser;
@@ -104,7 +104,7 @@ namespace Ceres.Chess.NNEvaluators
         }
 
         // Decide which evaluator to use.
-        int index = DynamicEvaluatorChooser(values);
+        int index = DynamicEvaluatorChooser(positions.Positions.IsEmpty ? default :positions.Positions.Span[posNum].ToPosition, values);
         if (index < 0 || index > Evaluators.Length)
         {
           throw new Exception($"Returned index {index} out of range");
