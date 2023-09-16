@@ -89,7 +89,7 @@ namespace Ceres.APIExamples
   {
     const bool POOLED = false;
 
-    static int CONCURRENCY = POOLED ? 16 : 4;
+    static int CONCURRENCY = POOLED ? 16 : 5;
     static int[] OVERRIDE_DEVICE_IDs = POOLED ? null : new int[] { 0 };
     static bool RUN_DISTRIBUTED = false;
 
@@ -240,12 +240,18 @@ namespace Ceres.APIExamples
       NET2 = "CUSTOM2:703810";
 
       //      NET1 = ReferenceNetIDs.T2_768_15_T82_4832;
-      //      NET2 = ReferenceNetIDs.BT2;
+      NET2 = ReferenceNetIDs.BEST_T60;
+      //NET2 = ReferenceNetIDs.BEST_T60;
+
 
       //NET2 = ReferenceNetIDs.T1_DISTILL_256_10_FP16;
-      NET1 = ReferenceNetIDs.BEST_T75;
-      NET2 = ReferenceNetIDs.BEST_T75;
-//NET2 = ReferenceNetIDs.T1_DISTILL_256_10_FP16;
+      //NET1 = "ONNX_ORT:BT3_750_optimistic#32,BT3_750#32,";
+
+      //NET1 = "ONNX_ORT:BT3_750_policy_vanilla#32,ONNX_ORT:BT3_750_policy_optimistic#32";
+      //NET2 = "ONNX_ORT:BT3_750_policy_vanilla#32";
+
+      // NET2 = ReferenceNetIDs.BEST_T78;
+      //NET2 = ReferenceNetIDs.T1_DISTILL_256_10_FP16;
       if (false)
       {
         var evaluator = NNEvaluator.FromSpecification(NET1, "GPU:0");
@@ -266,7 +272,7 @@ namespace Ceres.APIExamples
       //NET2 = @"ONNX_ORT:d:\cnets\ckpt_NENC_768_15_16_NOS_1331200000#32";
       //NET2 = ReferenceNetIDs.BEST_T60;
 
-      //      NET1 = NET2 = ReferenceNetIDs.BEST_T60;
+      //NET1 = NET2 = ReferenceNetIDs.BEST_T75;
 
       //NET1 = "753723";
       //NET2 = "803420";
@@ -291,8 +297,8 @@ namespace Ceres.APIExamples
 
       //      NET2 = ReferenceNetIDs.BT2;
 
-      SearchLimit limit1 = SearchLimit.NodesForAllMoves(100_000, 1000) * 5;
-      limit1 = SearchLimit.NodesPerMove(10000); // was 10_000
+      SearchLimit limit1 = SearchLimit.NodesForAllMoves(100_000, 1000) * 3;
+      limit1 = SearchLimit.NodesPerMove(200); // was 10_000
       //limit1 = SearchLimit.BestValueMove;
 
       //      limit1 = SearchLimit.SecondsForAllMoves(60, 0.6f);
@@ -435,6 +441,7 @@ namespace Ceres.APIExamples
       NNEvaluatorDef? evalDefSecondary2 = null;
 
 
+
       //      public NNEvaluatorDynamic(NNEvaluator[] evaluators,
       //                        Func<IEncodedPositionBatchFlat, int> dynamicEvaluatorIndexPredicate = null)
 
@@ -467,6 +474,8 @@ namespace Ceres.APIExamples
       GameEngineDefCeres engineDefCeres3 = new GameEngineDefCeres("Ceres3", evalDef2, evalDefSecondary2, new ParamsSearch(), new ParamsSelect(),
                                                                   null, outputLog ? "Ceres3.log.txt" : null);
 
+//engineDefCeres1.SearchParams.TestFlag = true;
+
       //engineDefCeres1.OverrideLimitManager = new  Ceres.MCTS.Managers.Limits.ManagerGameLimitTest();
       if (false)
       {
@@ -478,7 +487,6 @@ namespace Ceres.APIExamples
       //engineDefCeres1.SelectParams.CPUCT *= 0.85f;
       //engineDefCeres2.SelectParams.CPUCT *= 0.85f;
 
-//engineDefCeres1.SearchParams.TestFlag = true;
 //      engineDefCeres1.SearchParams.BestMoveMode = ParamsSearch.BestMoveModeEnum.TopV;
 //      engineDefCeres2.SearchParams.BestMoveMode = ParamsSearch.BestMoveModeEnum.TopV;
 
@@ -672,8 +680,8 @@ namespace Ceres.APIExamples
       EnginePlayerDef playerDefCSNN50 = new EnginePlayerDef(engineDefCSNN50, limit2);
 #endif
       // **************************************************
-      EnginePlayerDef player1 = playerCeres1UCI;// playerCeres1UCI;// new EnginePlayerDef(engineDefCSNN1, SearchLimit.NodesPerMove(30));
-      EnginePlayerDef player2 = playerCeresPreNC;// playerCeres96;// new EnginePlayerDef(EngineDefStockfish14(), SearchLimit.NodesPerMove(300 * 10_000));
+      EnginePlayerDef player1 = playerCeres1;// playerCeres1UCI;// new EnginePlayerDef(engineDefCSNN1, SearchLimit.NodesPerMove(30));
+      EnginePlayerDef player2 = playerCeres2UCI;// playerCeres96;// new EnginePlayerDef(EngineDefStockfish14(), SearchLimit.NodesPerMove(300 * 10_000));
       //new EnginePlayerDef(engineDefCSNoNN, SearchLimit.NodesPerMove(300 * 10_000));
       // **************************************************
 
