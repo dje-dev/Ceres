@@ -13,6 +13,7 @@
 
 #region Using directives
 
+using Ceres.Base.Misc;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -69,9 +70,18 @@ namespace Ceres.Chess.Diagnostics
           FileName = "dotnet-counters",
           Arguments = $"monitor --process-id {processID} Ceres System.Runtime " + extraSourceNames,
           UseShellExecute = true,
-          WindowStyle  = ProcessWindowStyle.Minimized
+          WindowStyle = ProcessWindowStyle.Minimized
         };
-        Process.Start(ps);
+
+        try
+        {
+          Process.Start(ps);
+        }
+        catch (Exception exc)
+        {
+          ConsoleUtils.WriteLineColored(ConsoleColor.Red, "Error launching dotnet-counters with argument " + ps.Arguments);
+          Console.WriteLine(exc);
+        }
       }
     }
 
