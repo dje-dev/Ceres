@@ -73,7 +73,8 @@ namespace Ceres.MCTS.NodeCache
 
       if (hardMaxNumFinalTreeNodes.HasValue)
       {
-        cacheSize = hardMaxNumFinalTreeNodes.Value;
+        // TODO: enabling this greatly speeds up small games, but causes Exceptions with large searches - resolve.
+        // cacheSize = hardMaxNumFinalTreeNodes.Value;
       }
 
       // Don't allow cache size too small, in case specified cache size
