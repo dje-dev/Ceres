@@ -187,6 +187,8 @@ namespace Ceres.Features.Tournaments
       ID = id;
       Engines = engines;
       StartTime = DateTime.Now;
+      
+      HashSet<string> engineIDs = new();
 
       foreach (EnginePlayerDef engine in Engines)
       {
@@ -194,6 +196,13 @@ namespace Ceres.Features.Tournaments
         {
           throw new Exception("playerDef must be different from each other");
         }
+
+        if (engineIDs.Contains(engine.ID))
+        {
+          throw new Exception("Engine ID appears more than once: " + engine.ID);
+        }
+
+        engineIDs.Add(engine.ID); 
       }
 
       parentDef = this;
