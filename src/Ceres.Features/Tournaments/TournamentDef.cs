@@ -94,6 +94,19 @@ namespace Ceres.Features.Tournaments
     /// </summary>
     public string OpeningsFileName;
 
+    [NonSerialized]
+    Predicate<Position> acceptPosPredicate;
+
+    /// <summary>
+    /// Optional predicate which can be used to specify filter on which positions are accepted.
+    /// </summary>    
+    public Predicate<Position> AcceptPosPredicate { get => acceptPosPredicate; set => throw new Exception("Not implemented, serialization of delegate not possible."); }
+
+    /// <summary>
+    /// Optional list of PieceType which define positions that should be excluded if they contain any of those pieces.
+    /// </summary>
+    public List<PieceType> AcceptPosExcludeIfContainsPieceTypeList;
+
     /// <summary>
     /// Starting position for the games (unless OpeningsFileName is specified).
     /// Defaults to the chess start position is used for every game.

@@ -235,6 +235,19 @@ namespace Ceres.Features.Tournaments
       {
         openings = PositionsWithHistory.FromFEN(Position.StartPosition.FEN, Def.NumGamePairs ?? 1);
       }
+
+      if (Def.AcceptPosExcludeIfContainsPieceTypeList != null)
+      {
+        openings = PositionsWithHistory.FromMoveSequencess(
+          openings.Where(pos => !Def.AcceptPosExcludeIfContainsPieceTypeList
+                                       .Exists(piece => pos.FinalPosition.PieceExists(new Piece(SideType.White, piece))
+                                                     || pos.FinalPosition.PieceExists(new Piece(SideType.Black, piece)))).ToArray());
+      }
+
+      if (Def.AcceptPosPredicate != null)
+      {
+        openings = PositionsWithHistory.FromMoveSequencess(openings.Where(s => Def.AcceptPosPredicate(s.FinalPosition)).ToArray());
+      }
     }
 
 
