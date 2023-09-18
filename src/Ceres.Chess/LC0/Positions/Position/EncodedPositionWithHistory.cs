@@ -130,13 +130,17 @@ namespace Ceres.Chess.EncodedPositions
 
 
         for (int line = 0; line < parsed.Length; line++)
+        {
           rows[line] += parsed[line] + "  ";
+        }
       }
 
       // Concatenate the lines across all boards
       StringBuilder allLines = new StringBuilder();
       for (int i = 0; i < rows.Length; i++)
+      {
         allLines.AppendLine(rows[i]);
+      }
 
       return allLines.ToString();
     }
@@ -192,7 +196,6 @@ namespace Ceres.Chess.EncodedPositions
         int LEN = numHistoryPos * EncodedPositionBoard.NUM_PLANES_PER_BOARD * sizeof(ulong);
         Buffer.MemoryCopy(boardPlanes, destPlanes, LEN, LEN);
       }
-
     }
 
 
@@ -253,7 +256,6 @@ namespace Ceres.Chess.EncodedPositions
     }
 
 
-
     /// <summary>
     /// Sets the boards from a Span of Position indicating full history.
     /// </summary>
@@ -269,12 +271,11 @@ namespace Ceres.Chess.EncodedPositions
       // Setting miscellaneous planes is easy; take from last position
       SetMiscFromPosition(sequentialPositions[LAST_POSITION_INDEX].MiscInfo, sideToMove);
 
-      // Cache the first position in sequence from our perspective (which would be used for fill)
+      // Cache the first position in sequence from our perspective (which would be used for any possible fill)
       EncodedPositionBoard fillBoardFromOurPerspective = EncodedPositionBoard.FromPosition(in sequentialPositions[0], sideToMove);
 
       Span<EncodedPositionBoard> boards = ScratchBoards();
 
-      SideType lastPosSide = default; // not used first time through the the loop
       for (int i = 0; i < EncodedPositionBoards.NUM_MOVES_HISTORY; i++)
       {
         if (i >= sequentialPositions.Length)
@@ -301,7 +302,6 @@ namespace Ceres.Chess.EncodedPositions
           if (i > 0 && lastPosSide == thisPos.MiscInfo.SideToMove)
             throw new Exception("Sequential positions are expected to be on alternating sides");
 #endif
-          lastPosSide = thisPos.MiscInfo.SideToMove;
         }
       }
 
