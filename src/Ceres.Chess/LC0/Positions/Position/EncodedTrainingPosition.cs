@@ -16,7 +16,10 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Chess.LC0.Boards;
+using Ceres.Chess.MoveGen;
+using Ceres.Chess.MoveGen.Converters;
 using Ceres.Chess.Positions;
 
 
@@ -109,8 +112,73 @@ namespace Ceres.Chess.EncodedPositions
     /// </summary>
     public readonly Position FinalPosition => HistoryPosition(0);
 
+    readonly MGMove ToMGMove(EncodedMove move)
+    {
+      MGPosition lastPosMG = FinalPosition.ToMGPosition;
+      MGMove playedMoveMG = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(move.Mirrored, in lastPosMG);
+      return playedMoveMG;
+    }
+
+    /// <summary>
+    /// Returns the best move according to the training search.
+    /// </summary>
+    public readonly MGMove BestMove => ToMGMove(PositionWithBoards.MiscInfo.InfoTraining.BestMove);
+
+    /// <summary>
+    /// Returns the played move in the training game.
+    /// </summary>
+    public readonly MGMove PlayedMove => ToMGMove(PositionWithBoards.MiscInfo.InfoTraining.PlayedMove);
+
+
     #endregion
 
+    #region Mirroring
+
+    /// <summary>
+    /// LC0 training files (TAR) contain mirrored boards. We want to hide this implementation detail/annoyance.
+    /// This method mirrors all the boards (to put them into the natural representation)
+    /// and should be called immediately after either:
+    ///   - we read from disk, or
+    ///   - we are about to write back to disk.
+    ///
+    /// Note that the method is marked as readonly (to prevent defensive copies), but this is not true.
+    /// 
+    /// N.B.: The policy vector is stored mirrored, and unlike the move indices and board handled here,
+    ///       we currently do not undo this mirroring. 
+    ///       TODO: Someday improve this, and unmirror/mirror upon load/save from disk only 
+    ///             for consistency and efficiency and clarity.
+    ///             However this requires extensive retesting, and CompressedPolicyVector likely needs related changes.f
+    /// </summary>
+    /// <param name="boards"></param>
+    /// <param name="numItems"></param>
+    public readonly void MirrorInPlace()
+    {
+      // Mirror the boards themselves.
+      PositionWithBoards.BoardsHistory.MirrorBoardsInPlace();
+
+//#if WRONG
+      // Any recorded move indices have to be mirrored as well.
+      short playedIndexMirrored = (short)PositionWithBoards.MiscInfo.InfoTraining.PlayedMove.Mirrored.IndexNeuralNet;
+      short bestIndexMirrored = (short)PositionWithBoards.MiscInfo.InfoTraining.BestMove.Mirrored.IndexNeuralNet;
+      PositionWithBoards.MiscInfo.InfoTraining.SetPlayedAndBestIndex(playedIndexMirrored, bestIndexMirrored);
+//#endif
+    }
+
+
+    /// <summary>
+    /// Mirrors all positions (in place) within a span of EncodedTrainingPosition objects, up to specified number of items.
+    /// </summary>
+    /// <param name="positions"></param>
+    /// <param name="numItems"></param>
+    public static void MirrorPositions(Span<EncodedTrainingPosition> positions, int numItems)
+    {
+      for (int i = 0; i < numItems; i++)
+      {
+        positions[i].MirrorInPlace();
+      }
+    }
+
+#endregion
 
     #region Validity checking
 
@@ -226,12 +294,12 @@ namespace Ceres.Chess.EncodedPositions
       {
         float[] probs = CheckPolicyValidity(desc);
 
-        if (probs[refTraining.BestIndex] <= 0)
+        if (probs[refTraining.BestMove.Mirrored.IndexNeuralNet] <= 0)
         {
           throw new Exception("Best policy index not positive: (" + probs[refTraining.BestIndex] + ") " + desc);
         }
 
-        if (probs[refTraining.PlayedIndex] <= 0)
+        if (probs[refTraining.PlayedMove.Mirrored.IndexNeuralNet] <= 0)
         {
           throw new Exception("Played policy index not positive: (" + probs[refTraining.PlayedIndex] + ") " + desc);
         }
@@ -253,7 +321,7 @@ namespace Ceres.Chess.EncodedPositions
         float policy = probs[i];
         if (policy == -1)
         {
-          // Invalid policiies may be represented as -1
+          // Invalid policies may be represented as -1
           policy = 0;
         }
 

@@ -179,8 +179,38 @@ namespace Ceres.Chess.EncodedPositions
 
     /// <summary>
     /// Returns the move actually played.
+    /// 
+    /// NOTE: It is recommended to use PlayedMove property at the parent structure (EncodedTrainingPosition.PlayedMove)
+    ///       to avoid having deal with the internal details of the encoding (e.g .mirroring status).
     /// </summary>
-    public readonly EncodedMove PlayedMove => EncodedMove.FromNeuralNetIndex(PlayedIndex);
+    internal readonly EncodedMove PlayedMove => EncodedMove.FromNeuralNetIndex(PlayedIndex);
+
+
+    /// <summary>
+    /// Returns the best move according to search.
+    /// 
+    /// NOTE: It is recommended to use BestMove property at the parent structure (EncodedTrainingPosition.BestMove)
+    ///       to avoid having to deal with the internal details of the encoding (e.g .mirroring status).
+    /// </summary>
+    internal readonly EncodedMove BestMove => EncodedMove.FromNeuralNetIndex(BestIndex);
+
+
+    /// <summary>
+    /// Overwrites the value of PlayedIndex and BestIndex.
+    /// WARNING: is unsafe.
+    /// </summary>
+    /// <param name="miscInfo"></param>
+    public readonly unsafe void SetPlayedAndBestIndex(short playedIndex, short bestIndex)
+    {
+      fixed (short* p = &PlayedIndex)
+      {
+        *p = playedIndex;
+      }
+      fixed (short* p = &BestIndex)
+      {
+        *p = bestIndex;
+      }
+    }
 
 
     /// <summary>

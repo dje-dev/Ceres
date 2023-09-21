@@ -520,7 +520,7 @@ namespace Ceres.Chess.LC0.Boards
     }
 
 
-    public unsafe void MirrorPlanesInPlace()
+    public readonly unsafe void MirrorPlanesInPlace()
     {
       fixed (void* bitmapsR = &this.OurPawns)
       {

@@ -309,9 +309,10 @@ namespace Ceres.Chess.EncodedPositions
 
       Interlocked.Add(ref totalBytesRead, bytesRead);
 
+      int numItems;
       if (sourceAreEncodedTrainingPositionCompressed)
       {
-        int numItems = bytesRead / Marshal.SizeOf(typeof(EncodedTrainingPositionCompressed));
+        numItems = bytesRead / Marshal.SizeOf(typeof(EncodedTrainingPositionCompressed));
         int leftover = bytesRead % Marshal.SizeOf(typeof(EncodedTrainingPositionCompressed));
         if (leftover != 0)
         {
@@ -320,30 +321,17 @@ namespace Ceres.Chess.EncodedPositions
 
         ObjUtils.CopyBytesIntoStructArray(rawBuffer, compressedPositionBuffer, bytesRead); 
         EncodedTrainingPositionCompressedConverter.Decompress(compressedPositionBuffer, buffer, numItems);
-        UndoMirroringOfBoards(buffer, numItems);
-        return numItems;
       }
       else
       {
-        int numItems = ObjUtils.CopyBytesIntoStructArray(rawBuffer, buffer, bytesRead);
-        UndoMirroringOfBoards(buffer, numItems);
-        return numItems;
+        numItems = ObjUtils.CopyBytesIntoStructArray(rawBuffer, buffer, bytesRead);
       }
+
+      // Immediately unmirror positions, which are stored in TAR files in mirrored form.
+      EncodedTrainingPosition.MirrorPositions(buffer, numItems);
+      return numItems;
+
     }
 
-    /// <summary>
-    /// LC0 training files (TAR) contain mirrored boards. We want to hide this implementation detail/annoyance.
-    /// This method mirrors all the boards (to put them into the natural representation)
-    /// and should be called immediately after read from disk.
-    /// </summary>
-    /// <param name="boards"></param>
-    /// <param name="numItems"></param>
-    private static void UndoMirroringOfBoards(EncodedTrainingPosition[] boards, int numItems)
-    {
-      for (int i=0;i<numItems;i++)
-      {
-        boards[i].PositionWithBoards.BoardsHistory.MirrorBoardsInPlace();
-      }
-    }
   }
 }

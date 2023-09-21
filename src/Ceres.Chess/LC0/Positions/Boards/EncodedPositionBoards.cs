@@ -75,8 +75,9 @@ namespace Ceres.Chess.LC0.Boards
 
     /// <summary>
     /// Mirrors all board planes in place.
+    /// 
     /// </summary>
-    public void MirrorBoardsInPlace()
+    public readonly void MirrorBoardsInPlace()
     {
       History_0.MirrorPlanesInPlace();
       History_1.MirrorPlanesInPlace();

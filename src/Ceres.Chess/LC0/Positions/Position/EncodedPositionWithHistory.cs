@@ -276,6 +276,7 @@ namespace Ceres.Chess.EncodedPositions
 
       Span<EncodedPositionBoard> boards = ScratchBoards();
 
+      SideType lastPosSide = default; // not used first time through the the loop
       for (int i = 0; i < EncodedPositionBoards.NUM_MOVES_HISTORY; i++)
       {
         if (i >= sequentialPositions.Length)
@@ -302,6 +303,7 @@ namespace Ceres.Chess.EncodedPositions
           if (i > 0 && lastPosSide == thisPos.MiscInfo.SideToMove)
             throw new Exception("Sequential positions are expected to be on alternating sides");
 #endif
+          lastPosSide = thisPos.MiscInfo.SideToMove;
         }
       }
 

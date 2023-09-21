@@ -132,6 +132,10 @@ namespace Ceres.Chess.MoveGen.Converters
       byte toSquare = fromTo.To;
 
       PieceType pieceMoving = position.PieceMoving(thisMove);
+      if (pieceMoving == PieceType.None)
+      {
+        throw new Exception("Illegal move " + thisMove + " in position " + position);
+      }
       PieceType pieceCapture = position.PieceCapturing(thisMove);
 
       MCChessPositionPieceEnum rawPieceAtToSquare = position.PieceCapturingRaw(thisMove);
