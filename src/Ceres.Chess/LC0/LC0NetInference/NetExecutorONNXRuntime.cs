@@ -343,12 +343,11 @@ namespace Ceres.Chess.LC0NetInference
       }
 
       List<(string, float[])> resultArrays = new(Session.OutputMetadata.Count);
-      int iResult = 0;
       foreach (DisposableNamedOnnxValue resultValue in runResult)
       {
         DenseTensor<Float16> tensor = (DenseTensor<Float16>)resultValue.AsTensor<Float16>();
         Float16[] valuesFP16 = tensor.Buffer.ToArray();
-        resultArrays[iResult++] = (resultValue.Name, Array.ConvertAll<Float16, float>(valuesFP16, f => FP16.FromRaw((ushort)f)));
+        resultArrays.Add((resultValue.Name, Array.ConvertAll<Float16, float>(valuesFP16, f => FP16.FromRaw((ushort)f))));
       }
       return resultArrays;
     }
