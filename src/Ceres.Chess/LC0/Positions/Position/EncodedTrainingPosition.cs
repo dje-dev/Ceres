@@ -156,12 +156,10 @@ namespace Ceres.Chess.EncodedPositions
       // Mirror the boards themselves.
       PositionWithBoards.BoardsHistory.MirrorBoardsInPlace();
 
-//#if WRONG
       // Any recorded move indices have to be mirrored as well.
       short playedIndexMirrored = (short)PositionWithBoards.MiscInfo.InfoTraining.PlayedMove.Mirrored.IndexNeuralNet;
       short bestIndexMirrored = (short)PositionWithBoards.MiscInfo.InfoTraining.BestMove.Mirrored.IndexNeuralNet;
       PositionWithBoards.MiscInfo.InfoTraining.SetPlayedAndBestIndex(playedIndexMirrored, bestIndexMirrored);
-//#endif
     }
 
 
