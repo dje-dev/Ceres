@@ -178,8 +178,7 @@ namespace Ceres.Chess.LC0.Batches
       MGPosition finalPositionMG = moveSequence.FinalPosMG;
 
       Position[] posSeq = moveSequence.GetPositions();
-      PositionRepetitionCalc.SetRepetitionsCount(posSeq);
-
+     
       ref EncodedPositionWithHistory posRaw = ref pendingPositions[NumPositionsAdded];
       posRaw.SetFromSequentialPositions(posSeq, fillInMissingPlanes);
 
@@ -187,10 +186,15 @@ namespace Ceres.Chess.LC0.Batches
       ulong zobristHashForCaching = EncodedBoardZobrist.ZobristHash(posSeq, PositionMiscInfo.HashMove50Mode.ValueBoolIfAbove98);
 
       // Generate moves
-      MGMoveList moves = new MGMoveList();
-      MGMoveGen.GenerateMoves(in finalPositionMG, moves);
+      MGMoveList moves = null;
 
-      Add(in posRaw, in finalPositionMG, zobristHashForCaching, moves, null); // TOFIX
+      if (InputsRequired.HasFlag(NNEvaluator.InputTypes.Moves))
+      {
+        moves = new MGMoveList();
+        MGMoveGen.GenerateMoves(in finalPositionMG, moves);
+      }
+
+      Add(in posRaw, in finalPositionMG, zobristHashForCaching, moves, null);
     }
 
     /// <summary>
