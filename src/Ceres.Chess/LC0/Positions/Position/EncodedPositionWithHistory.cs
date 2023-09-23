@@ -51,8 +51,6 @@ namespace Ceres.Chess.EncodedPositions
     {
       BoardsHistory = boardHistory;
       MiscInfo = miscInfo;
-
-      // if (Marshal.SizeOf<LZBoard>() != LZBoardSizeInBytes) throw new Exception("Internal error, incorrect board size");
     }
 
 
@@ -239,6 +237,26 @@ namespace Ceres.Chess.EncodedPositions
 
     }
 
+    /// <summary>
+    /// Performs basic validation checks on integrity of the history positions.
+    /// </summary>
+    public void Validate()
+    {
+      if (GetPlanesForHistoryBoard(0).IsEmpty)
+      {
+        throw new Exception("First position is empty");
+      }
+
+      for (int i = 1; i < NUM_MISC_PLANES; i++)
+      {
+        if (!GetPlanesForHistoryBoard(i).IsEmpty && GetPlanesForHistoryBoard(i - 1).NumDifferentPiecePlacements(GetPlanesForHistoryBoard(i)) > 4)
+        {
+          int numDifferent = GetPlanesForHistoryBoard(i - 1).NumDifferentPiecePlacements(GetPlanesForHistoryBoard(i));
+          Console.WriteLine("History planes do not look sufficiently similar, num piece placements different : " + numDifferent);
+        }
+      }
+    }
+
 
 
     [ThreadStatic]
@@ -267,7 +285,7 @@ namespace Ceres.Chess.EncodedPositions
 
       // All the positions must be from the perspective of the side to move (last position)
       SideType sideToMove = sequentialPositions[LAST_POSITION_INDEX].MiscInfo.SideToMove;
-
+      
       // Setting miscellaneous planes is easy; take from last position
       SetMiscFromPosition(sequentialPositions[LAST_POSITION_INDEX].MiscInfo, sideToMove);
 

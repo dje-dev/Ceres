@@ -174,6 +174,16 @@ namespace Ceres.Chess.NNEvaluators
 
       IPositionEvaluationBatch batch = DoEvaluateIntoBuffers(positions, retrieveSupplementalResults);
 
+#if DEBUG
+      if (!positions.PositionsBuffer.IsEmpty)
+      {
+        foreach (var pos in positions.PositionsBuffer.Span)
+        {
+          pos.Validate();
+        }
+      }
+#endif
+
       NumBatchesEvaluated++;
       NumPositionsEvaluated += positions.NumPos;
       return batch;
@@ -249,7 +259,7 @@ namespace Ceres.Chess.NNEvaluators
       result = new NNEvaluatorResult(w, l, m, uncertaintyV, policyRef.policies.Span[policyRef.index], activations, extraStat0, extraStat1);
     }
 
-    #endregion
+#endregion
 
     #region Helper methods
 
