@@ -262,8 +262,7 @@ namespace Ceres.Chess.NNEvaluators
     /// <returns></returns>
     public NNEvaluatorResult Evaluate(PositionWithHistory position, bool fillInMissingPlanes = true, bool retrieveSupplementalResults = false)
     {
-      // TODO: someday we might be able to relax the InputTypes.All below
-      EncodedPositionBatchBuilder builder = new EncodedPositionBatchBuilder(1, NNEvaluator.InputTypes.All);
+      EncodedPositionBatchBuilder builder = new EncodedPositionBatchBuilder(1, InputsRequired);
       builder.Add(position, fillInMissingPlanes);
 
       NNEvaluatorResult[] result = EvaluateBatch(builder.GetBatch(), retrieveSupplementalResults);
@@ -288,11 +287,8 @@ namespace Ceres.Chess.NNEvaluators
         throw new NotImplementedException();
       }
 
-      PositionWithHistory[] positionsAll = positions.ToArray();
-
-      // TODO: someday we might be able to relax the InputTypes.All below
-      EncodedPositionBatchBuilder builder = new EncodedPositionBatchBuilder(positionsAll.Length, NNEvaluator.InputTypes.All);
-      foreach (PositionWithHistory position in positionsAll)
+      EncodedPositionBatchBuilder builder = new EncodedPositionBatchBuilder(positions.Count(), InputsRequired);
+      foreach (PositionWithHistory position in positions)
       {
         builder.Add(position, fillInMissingPlanes);
       }
@@ -310,8 +306,7 @@ namespace Ceres.Chess.NNEvaluators
     /// <returns></returns>
     public NNEvaluatorResult Evaluate(in Position position, bool fillInMissingPlanes = true, bool retrieveSupplementalResults = false)
     {
-      // TODO: someday we might be able to relax the InputTypes.All below
-      EncodedPositionBatchBuilder builder = new EncodedPositionBatchBuilder(1, NNEvaluator.InputTypes.All);
+      EncodedPositionBatchBuilder builder = new EncodedPositionBatchBuilder(1, InputsRequired);
       builder.Add(in position, fillInMissingPlanes);
 
       NNEvaluatorResult[] result = EvaluateBatch(builder.GetBatch(), retrieveSupplementalResults);
