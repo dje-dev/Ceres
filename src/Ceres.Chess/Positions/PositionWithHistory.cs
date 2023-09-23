@@ -95,6 +95,9 @@ namespace Ceres.Chess.Positions
     public PositionWithHistory(IEnumerable<Position> positions, bool firstPositionMayBeMissingEnPassant, bool recalcRepetitions = false)
       => SetFromPositions(positions, firstPositionMayBeMissingEnPassant, recalcRepetitions);
 
+    public PositionWithHistory(Span<Position> positions, bool firstPositionMayBeMissingEnPassant, bool recalcRepetitions = false)
+      => SetFromPositions(positions, firstPositionMayBeMissingEnPassant, recalcRepetitions);
+
 
     public PositionWithHistory(in MGPosition initialPosMG, List<MGMove> moves = null)
     {
@@ -340,12 +343,18 @@ namespace Ceres.Chess.Positions
       }
     }
 
-    private void SetFromPositions(IEnumerable<Position> fromPositions, 
-                                  bool firstPositionMayBeMissingEnPassant, 
+    private void SetFromPositions(IEnumerable<Position> fromPositions,
+                                  bool firstPositionMayBeMissingEnPassant,
                                   bool recalcRepetitions = false)
     {
-      positions = fromPositions.ToArray();
+      SetFromPositions(fromPositions.ToArray().AsSpan(), firstPositionMayBeMissingEnPassant, recalcRepetitions);
+    }
 
+
+    public void SetFromPositions(Span<Position> positions,
+                                  bool firstPositionMayBeMissingEnPassant,
+                                  bool recalcRepetitions = false)
+    {
       InitialPosMG = positions[0].ToMGPosition;
       finalPosMG = positions[^1].ToMGPosition;
 
@@ -364,7 +373,7 @@ namespace Ceres.Chess.Positions
 
       // Reconstruct the sequence of moves from the positions.
       moves = new(positions.Length - 1);
-      for (int i = 0; i< positions.Count() - 1; i++)
+      for (int i = 0; i< positions.Length - 1; i++)
       {
         MGPosition posCurrent = positions[i].ToMGPosition;
 
@@ -404,6 +413,8 @@ namespace Ceres.Chess.Positions
           }
         }
       }
+      
+      InitPositionsAndFinalPosMG();
     }
 
 

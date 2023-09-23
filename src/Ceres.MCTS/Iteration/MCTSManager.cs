@@ -658,7 +658,7 @@ namespace Ceres.MCTS.Iteration
       // Prepare array of prior positions initialized from prior positions,
       // with extra last slot to be for new position after each move to be evaluated.
       Position[] positions = new Position[priorMoves.Count + 1];
-      Array.Copy(priorMoves.Positions.ToArray(), positions, priorMoves.Positions.Count());
+      Array.Copy(priorMoves.Positions.ToArray(), positions, priorMoves.Positions.Length);
 
       // Loop over all moves, find new resulting position, and add to batch.
       for(int i=0;i<moves.NumMovesUsed;i++)

@@ -17,6 +17,7 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using Ceres.Chess.EncodedPositions.Basic;
+using Ceres.Chess.LC0.Batches;
 using Ceres.Chess.LC0.Boards;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
@@ -350,20 +351,21 @@ namespace Ceres.Chess.EncodedPositions
     /// <exception cref="NotImplementedException"></exception>
     public readonly PositionWithHistory ToPositionWithHistory(int maxHistoryPositions)
     {
-      List<Position> positions = new(maxHistoryPositions);
+      int numAdded = 0;
+      Span<Position> positions = stackalloc Position[maxHistoryPositions];
       for (int i = maxHistoryPositions - 1; i >= 0; i--)
       {
         if (!PositionWithBoards.GetPlanesForHistoryBoard(i).IsEmpty)
         {
-          positions.Add(PositionWithBoards.HistoryPosition(i));
+          positions[numAdded++] = PositionWithBoards.HistoryPosition(i);
         }
       }
 
       // First position may be incorrect (missing en passant)
       // since the prior history move not available to detect.
       // TODO: Try to infer this from the move actually played.
-      const bool FIRST_POSITION_MAY_BE_MISSING_EN_PASSANT = true; 
-      return new PositionWithHistory(positions, FIRST_POSITION_MAY_BE_MISSING_EN_PASSANT, false);
+      const bool FIRST_POSITION_MAY_BE_MISSING_EN_PASSANT = true;
+      return new PositionWithHistory(positions.Slice(0, numAdded), FIRST_POSITION_MAY_BE_MISSING_EN_PASSANT, false); ;
     }
 
     #region Overrides
