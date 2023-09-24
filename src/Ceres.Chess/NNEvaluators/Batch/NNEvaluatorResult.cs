@@ -119,7 +119,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <returns></returns>
     public override string ToString()
     {
-      return $"<NNPositionEvaluation V={V,6:F2} MLH={V,6:F2} UV={UncertaintyV,6:F2} Policy={Policy}>";
+      return $"<NNPositionEvaluation V={V,6:F2} MLH={M,6:F2} UV={UncertaintyV,6:F2} Policy={Policy}>";
     }
   }
 }
