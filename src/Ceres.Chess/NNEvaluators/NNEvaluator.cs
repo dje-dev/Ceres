@@ -177,7 +177,7 @@ namespace Ceres.Chess.NNEvaluators
 #if DEBUG
       if (!positions.PositionsBuffer.IsEmpty)
       {
-        foreach (var pos in positions.PositionsBuffer.Span)
+        foreach (var pos in positions.PositionsBuffer.Span.Slice(0, positions.NumPos))
         {
           pos.Validate();
         }
