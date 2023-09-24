@@ -642,7 +642,8 @@ namespace Ceres.MCTS.Iteration
 
     public static (MGMove, float) BestValueMove(NNEvaluator nnEvaluator, 
                                                 PositionWithHistory priorMoves, 
-                                                MGMoveList moves = null,
+                                                ref MGMoveList moves,
+                                                ref NNEvaluatorResult[] evalResults,
                                                 bool dumpInfo = false)
     {
       // Compute move list if not already provided.
@@ -667,6 +668,9 @@ namespace Ceres.MCTS.Iteration
         pos.MakeMove(moves.MovesArray[i]);
         positions[^1] = pos.ToPosition;
 
+        // Need to calc repetition count for position of this move in the context of all prior moves
+        PositionRepetitionCalc.SetFinalPositionRepetitionCount(positions);
+
         EncodedPositionWithHistory eph = new EncodedPositionWithHistory();
         eph.SetFromSequentialPositions(positions, true);
 
@@ -675,13 +679,13 @@ namespace Ceres.MCTS.Iteration
 
       // Build the batch and evaluate it.
       EncodedPositionBatchFlat thisBatch = batchBuilder.GetBatch();
-      NNEvaluatorResult[] batchEvals = nnEvaluator.EvaluateBatch(thisBatch);
+      evalResults = nnEvaluator.EvaluateBatch(thisBatch);
 
       // Determine which move had position yielding best value evaluation.
       int moveIndex = 0;
       int bestMoveIndex = 0;
       float bestV = float.MinValue;
-      foreach (NNEvaluatorResult v in batchEvals)
+      foreach (NNEvaluatorResult v in evalResults)
       {
         if (-v.V > bestV)
         {
@@ -698,7 +702,7 @@ namespace Ceres.MCTS.Iteration
         for (int i = 0; i < moves.Count(); i++)
         {
           Console.Write(i == bestMoveIndex ? "** " : "  ");
-          Console.WriteLine(moves.MovesArray[i] + " " + -batchEvals[i].V);
+          Console.WriteLine(moves.MovesArray[i] + " " + -evalResults[i].V);
         }
       }
 
@@ -711,7 +715,8 @@ namespace Ceres.MCTS.Iteration
     public static MGMove DoSearch(MCTSManager manager, bool verbose,
                                   MCTSProgressCallback progressCallback = null,
                                   bool possiblyUsePositionCache = false,
-                                  bool moveImmediateIfOnlyOneMove = false)
+                                  bool moveImmediateIfOnlyOneMove = false,
+                                  MGMove forceMove = default)
     {
       #if NOT
 
@@ -801,11 +806,12 @@ namespace Ceres.MCTS.Iteration
           throw new Exception("BestValueMove only supported for NodesPerMove == 1.");
         }
 
-        (MGMove bestMove, float bestV)  = BestValueMove(manager.Context.NNEvaluators.Evaluator1, priorMoves, moves);
+        NNEvaluatorResult[] valueEvalResults = null;
+        (MGMove bestMove, float bestV)  = BestValueMove(manager.Context.NNEvaluators.Evaluator1, priorMoves, ref moves, ref valueEvalResults);
 
         context.Root.StructRef.W = bestV;
         context.Root.StructRef.N = 1;
-        return context.TopVForcedMove = bestMove;
+        return context.TopVForcedMove = bestMove;        
       }
 
       bool shouldStopAfterOneNodeDueToOnlyOneLegalMove = false;
@@ -839,8 +845,16 @@ namespace Ceres.MCTS.Iteration
                                 : manager.DoSearch(thisSearchLimit, progressCallback).Item2;
 
         // Get best child 
-        // TODO: technically the "updateStats" should only be true if we end up acccepting this move
-        bestMoveInfo = root.BestMoveInfo(true);
+        // TODO: technically the "updateStats" should only be true if we end up accepting this move
+        if (forceMove != default)
+        {
+          if (!moves.Contains(forceMove))
+          {
+            throw new Exception($"Specified forced move {forceMove} is not legal in position {priorMoves.FinalPosition.FEN}");
+          }
+        }
+
+        bestMoveInfo = root.BestMoveInfo(true, forceMove);
 
         if (numSearches == 0)
         {

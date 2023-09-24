@@ -44,6 +44,8 @@ namespace Ceres.MCTS.Managers
     public readonly MCTSNode Node;
     public readonly bool UpdateStatistics;
     public readonly float MBonusMultiplier;
+    public readonly MGMove ForcedMove;
+
 
     /// <summary>
     /// Constructor.
@@ -51,12 +53,15 @@ namespace Ceres.MCTS.Managers
     /// <param name="node"></param>
     /// <param name="updateStatistics"></param>
     /// <param name="mBonusMultiplier"></param>
-    public ManagerChooseBestMove(MCTSNode node, bool updateStatistics, float mBonusMultiplier)
+    /// <param name="forcedMove"></param>
+    public ManagerChooseBestMove(MCTSNode node, bool updateStatistics, float mBonusMultiplier, MGMove forcedMove)
     {
       Node = node;
       UpdateStatistics = updateStatistics;
       MBonusMultiplier = mBonusMultiplier;
+      ForcedMove = forcedMove;
     }
+
 
     /// <summary>
     /// 
@@ -104,6 +109,11 @@ namespace Ceres.MCTS.Managers
     {
       get
       {
+        if (ForcedMove != default)
+        {
+          return new BestMoveInfo(BestMoveInfo.BestMoveReason.UserForcedMove, ForcedMove, (float)Node.Q);
+        }
+
         if (Node.Context.TopVForcedMove != default)
         {
           return new BestMoveInfo(BestMoveInfo.BestMoveReason.TopVMove, Node.Context.TopVForcedMove, (float)Node.Q);
@@ -304,7 +314,7 @@ namespace Ceres.MCTS.Managers
             {
               if (useMLH && UpdateStatistics)
               {
-                ManagerChooseBestMove bestMoveChooserWithoutMLH = new ManagerChooseBestMove(Node, false, 0);
+                ManagerChooseBestMove bestMoveChooserWithoutMLH = new ManagerChooseBestMove(Node, false, 0, default);
                 if (bestMoveChooserWithoutMLH.BestMoveCalc.BestMoveNode != candidate)
                   countBestMovesWithMLHChosenWithModification++;
               }

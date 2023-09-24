@@ -287,7 +287,7 @@ namespace Ceres.Chess.EncodedPositions
       SideType sideToMove = sequentialPositions[LAST_POSITION_INDEX].MiscInfo.SideToMove;
       
       // Setting miscellaneous planes is easy; take from last position
-      SetMiscFromPosition(sequentialPositions[LAST_POSITION_INDEX].MiscInfo, sideToMove);
+      SetMiscFromPosition(sequentialPositions[LAST_POSITION_INDEX].MiscInfo);
 
       // Cache the first position in sequence from our perspective (which would be used for any possible fill)
       EncodedPositionBoard fillBoardFromOurPerspective = EncodedPositionBoard.FromPosition(in sequentialPositions[0], sideToMove);
@@ -363,10 +363,9 @@ namespace Ceres.Chess.EncodedPositions
     /// Sets the MiscInfo substructure based on specified PositionMiscInfo.
     /// </summary>
     /// <param name="posMiscInfo"></param>
-    /// <param name="desiredFromSidePerspective"></param>
-    public void SetMiscFromPosition(PositionMiscInfo posMiscInfo, SideType desiredFromSidePerspective)
+    public void SetMiscFromPosition(PositionMiscInfo posMiscInfo)
     {
-      EncodedPositionMiscInfo miscInfo = GetMiscFromPosition(posMiscInfo, desiredFromSidePerspective);
+      EncodedPositionMiscInfo miscInfo = GetMiscFromPosition(posMiscInfo);
       MiscInfo.SetMisc(miscInfo.Castling_US_OOO, miscInfo.Castling_US_OO,
                        miscInfo.Castling_Them_OOO, miscInfo.Castling_Them_OO,
                        (byte)miscInfo.SideToMove, miscInfo.Rule50Count);
@@ -379,9 +378,8 @@ namespace Ceres.Chess.EncodedPositions
     /// from a specified perspective.
     /// </summary>
     /// <param name="posMiscInfo"></param>
-    /// <param name="desiredFromSidePerspective"></param>
     /// <returns></returns>
-    public static EncodedPositionMiscInfo GetMiscFromPosition(PositionMiscInfo posMiscInfo, SideType desiredFromSidePerspective)
+    public static EncodedPositionMiscInfo GetMiscFromPosition(PositionMiscInfo posMiscInfo)
     {
       bool weAreWhite = posMiscInfo.SideToMove != SideType.Black;
 
@@ -629,7 +627,7 @@ namespace Ceres.Chess.EncodedPositions
       // Although training inputs may or may not be sensitive to his value, we still reject as invalid
       Debug.Assert(pos.MiscInfo.MoveNum > 0);
 
-      SetMiscFromPosition(pos.MiscInfo, desiredFromSidePerspective);
+      SetMiscFromPosition(pos.MiscInfo);
 
       EncodedPositionBoard planes = EncodedPositionBoard.FromPosition(in pos, desiredFromSidePerspective);
 

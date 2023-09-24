@@ -634,9 +634,9 @@ namespace Ceres.MCTS.MTCSNodes
 
     public MCTSNode BestMove(bool updateStatistics) => BestMoveInfo(updateStatistics).BestMoveNode;
 
-    public BestMoveInfo BestMoveInfo(bool updateStatistics)
+    public BestMoveInfo BestMoveInfo(bool updateStatistics, MGMove forcedMove = default)
     {
-      return new ManagerChooseBestMove(this, updateStatistics, Context.ParamsSearch.MLHBonusFactor).BestMoveCalc;
+      return new ManagerChooseBestMove(this, updateStatistics, Context.ParamsSearch.MLHBonusFactor, forcedMove).BestMoveCalc;
     }
 
 

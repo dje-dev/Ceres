@@ -154,7 +154,7 @@ namespace Ceres.MCTS.Iteration
 //        return false;
 //      }
 
-      BestMoveInfo bestMoveInfo = newRoot.BestMoveInfo(false);
+      BestMoveInfo bestMoveInfo = newRoot.BestMoveInfo(false, default);
       if (bestMoveInfo.BestMove.IsNull)
       {
         return false;

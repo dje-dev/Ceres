@@ -60,7 +60,12 @@ namespace Ceres.MCTS.MTCSNodes
       /// <summary>
       /// BestMoveModeEnum is set to TopV (play best move based on value head).
       /// </summary>
-      TopVMove
+      TopVMove,
+
+      /// <summary>
+      /// Search was called with a specified forced move to be made.
+      /// </summary>
+      UserForcedMove
      };
 
 

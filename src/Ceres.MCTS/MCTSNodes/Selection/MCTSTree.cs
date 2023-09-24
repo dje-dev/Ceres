@@ -349,7 +349,7 @@ namespace Ceres.MCTS.LeafExpansion
       else
       {
         EncodedPositionBoard.SetBoard(ref annotation.LC0BoardPosition, in annotation.PosMG, annotation.PosMG.SideToMove, posHistory[^1].MiscInfo.RepetitionCount > 0);
-        annotation.MiscInfo = EncodedPositionWithHistory.GetMiscFromPosition(posHistory[^1].MiscInfo, SideType.White);
+        annotation.MiscInfo = EncodedPositionWithHistory.GetMiscFromPosition(posHistory[^1].MiscInfo);
       }
 
       // Consider the annotation complete at this point where we assign Pos

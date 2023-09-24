@@ -110,6 +110,11 @@ namespace Ceres.Features.GameEngines
     /// </summary>
     public bool MoveImmediateIfOnlyOneMove;
 
+    /// <summary>
+    /// Optional list of moves to be forced to be made at each ply.
+    /// </summary>
+    public List<MGMove> ForcedMoves = null;
+
 
     #region Internal data
 
@@ -149,7 +154,8 @@ namespace Ceres.Features.GameEngines
                                     string logFileName = null,
                                     bool moveImmediateIfOnlyOneMove = true,
                                     int processorGroupID = 0,
-                                    Action<string> infoLogger = null) : base(id, processorGroupID)
+                                    Action<string> infoLogger = null,
+                                    List<MGMove> forcedMoves = null) : base(id, processorGroupID)
     {
       if (evaluatorDef == null)
       {
@@ -198,6 +204,7 @@ namespace Ceres.Features.GameEngines
       MoveImmediateIfOnlyOneMove = moveImmediateIfOnlyOneMove;
       OutputVerboseMoveStats = CeresUserSettingsManager.Settings.VerboseMoveStats;
       InfoLogger = infoLogger;
+      ForcedMoves = forcedMoves;
 
       if (logFileName == null && !string.IsNullOrEmpty(CeresUserSettingsManager.Settings.SearchLogFile))
       {
@@ -280,6 +287,11 @@ namespace Ceres.Features.GameEngines
         throw new Exception("ResetGame must be called if not continuing same line");
       }
 
+      // Possibly set a forced move if a list of such moves was provided and is not yet exhausted.
+      MGMove forcedMove = (ForcedMoves == null || ForcedMoves.Count < curPositionAndMoves.Count) 
+                            ? default 
+                            : ForcedMoves[curPositionAndMoves.Count - 1];
+
       // Set max tree nodes to maximum value based on memory (unless explicitly overridden in passed SearchLimit)
       searchLimit = searchLimit with
       {
@@ -333,13 +345,13 @@ namespace Ceres.Features.GameEngines
       searchResult = RunSearchPossiblyTreeReuse(shareContext, curPositionAndMoves, gameMoveHistory,
                                                 searchLimit, InnerCallback, 
                                                 (string infoMsg) => InfoLogger?.Invoke(infoMsg), 
-                                                verbose);
+                                                verbose, forcedMove);
 
       int scoreCeresCP;
       BestMoveInfo bestMoveInfo = null;
       int N;
-        bestMoveInfo = searchResult.Manager.Root.BestMoveInfo(false);
-        N = searchResult.SearchRootNode.N;
+      bestMoveInfo = searchResult.Manager.Root.BestMoveInfo(false, forcedMove);
+      N = searchResult.SearchRootNode.N;
 #if NOT
         bool wouldBeDrawByRepetition = PositionRepetitionCalc.DrawByRepetitionWouldBeClaimable(curPositionAndMoves.FinalPosition, bestMoveInfo.BestMove, curPositionAndMoves.GetPositions());
         if (wouldBeDrawByRepetition)
@@ -430,7 +442,8 @@ namespace Ceres.Features.GameEngines
                                                  SearchLimit searchLimit,
                                                  MCTSManager.MCTSProgressCallback callback,
                                                  MCTSearch.MCTSInfoLogger infoLogger,
-                                                 bool verbose)
+                                                 bool verbose,
+                                                 MGMove forcedMove)
     {
       PositionEvalCache positionCacheOpponent = null;
 
@@ -443,7 +456,7 @@ namespace Ceres.Features.GameEngines
                       reuseOtherContextForEvaluatedNodes,
                       curPositionAndMoves, searchLimit, verbose, lastSearchStartTime,
                       gameMoveHistory, callback, null, reuseNodeCache, false, isFirstMoveOfGame,
-                      MoveImmediateIfOnlyOneMove);
+                      MoveImmediateIfOnlyOneMove, forcedMove:forcedMove);
       }
       else
       {
@@ -483,7 +496,7 @@ namespace Ceres.Features.GameEngines
                                      forwardMoves, curPositionAndMoves,
                                      gameMoveHistory, searchLimit, verbose, lastSearchStartTime,
                                      callback, THRESHOLD_FRACTION_NODES_REUSABLE,
-                                     isFirstMoveOfGame, MoveImmediateIfOnlyOneMove);
+                                     isFirstMoveOfGame, MoveImmediateIfOnlyOneMove, forcedMove);
       }
 
       // Update the statistic on possible overshoot of internally alloted time and actual

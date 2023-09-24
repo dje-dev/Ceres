@@ -225,7 +225,8 @@ namespace Ceres.MCTS.Iteration
                        bool possiblyUsePositionCache = false,
                        bool isFirstMoveOfGame = false,
                        bool moveImmediateIfOnlyOneMove = false,
-                       List<MGMove> searchMovesTablebaseRestricted = null)
+                       List<MGMove> searchMovesTablebaseRestricted = null,
+                       MGMove forcedMove = default)
     {
       if (searchLimit == null)
       {
@@ -291,7 +292,7 @@ namespace Ceres.MCTS.Iteration
       using (new TimingBlock(TimingInfo, TimingBlock.LoggingType.None))
       {
         BestMove = MCTSManager.DoSearch(Manager, verbose, progressCallback,
-                                        possiblyUsePositionCache, moveImmediateIfOnlyOneMove);
+                                        possiblyUsePositionCache, moveImmediateIfOnlyOneMove, forcedMove);
       }
     }
 
@@ -399,7 +400,8 @@ namespace Ceres.MCTS.Iteration
                                MCTSManager.MCTSProgressCallback progressCallback,
                                float thresholdMinFractionNodesRetained,
                                bool isFirstMoveOfGame = false,
-                               bool moveImmediateIfOnlyOneMove = false)
+                               bool moveImmediateIfOnlyOneMove = false,
+                               MGMove forcedMove = default)
     {
       CountSearchContinuations = priorSearch.CountSearchContinuations;
       Manager = priorSearch.Manager;
@@ -496,7 +498,7 @@ namespace Ceres.MCTS.Iteration
         SearchContinueRetainTree(reuseOtherContextForEvaluatedNodes, newPositionAndMoves, gameMoveHistory, verbose, startTime,
                                  progressCallback, isFirstMoveOfGame, priorContext, store, numNodesInitial, newRoot,
                                  searchLimitPerMove, possiblyUsePositionCache, reuseMethod, moveImmediateIfOnlyOneMove,
-                                 Manager.TerminationManager.SearchMovesTablebaseRestricted);
+                                 Manager.TerminationManager.SearchMovesTablebaseRestricted, forcedMove);
       }
       else
       {
@@ -539,7 +541,7 @@ namespace Ceres.MCTS.Iteration
                reuseOtherContextForEvaluatedNodes, newPositionAndMoves, searchLimit, verbose,
                startTime, gameMoveHistory, progressCallback, positionEvalCache,
                priorContext.Tree.NodeCache, possiblyUsePositionCache,
-               isFirstMoveOfGame, moveImmediateIfOnlyOneMove, Manager.TerminationManager.SearchMovesTablebaseRestricted);
+               isFirstMoveOfGame, moveImmediateIfOnlyOneMove, Manager.TerminationManager.SearchMovesTablebaseRestricted, forcedMove);
       }
     }
 
@@ -573,7 +575,8 @@ namespace Ceres.MCTS.Iteration
                                           MCTSIterator priorContext, MCTSNodeStore store, int numNodesInitial, MCTSNode newRoot,
                                           SearchLimit searchLimitTargetAdjusted, bool possiblyUsePositionCache,
                                           ManagerTreeReuse.Method reuseMethod,
-                                          bool moveImmediateIfOnlyOneMove, List<MGMove> searchMovesTablebaseRestricted)
+                                          bool moveImmediateIfOnlyOneMove, List<MGMove> searchMovesTablebaseRestricted,
+                                          MGMove forceMove = default)
     {
       IMCTSNodeCache reuseNodeCache = Manager.Context.Tree.NodeCache;
 
@@ -728,7 +731,7 @@ namespace Ceres.MCTS.Iteration
       using (new TimingBlock(TimingInfo, TimingBlock.LoggingType.None))
       {
         BestMove = MCTSManager.DoSearch(Manager, verbose, progressCallback,
-                                        possiblyUsePositionCache, moveImmediateIfOnlyOneMove);
+                                        possiblyUsePositionCache, moveImmediateIfOnlyOneMove, forceMove);
       }
     }
 
