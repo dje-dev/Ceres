@@ -413,8 +413,12 @@ namespace Ceres.Chess.Positions
           }
         }
       }
-      
-      InitPositionsAndFinalPosMG();
+
+      // N.B. We do not call InitPositionsAndFinalPosMG because
+      //      the positions passed in may not be exact (if coming from training data may lack castling info, etc)
+      //      the the rebuilding of positions in this method may not be exact.
+      //      Instead just directly use positions.
+      this.positions = positions.ToArray();
     }
 
 
