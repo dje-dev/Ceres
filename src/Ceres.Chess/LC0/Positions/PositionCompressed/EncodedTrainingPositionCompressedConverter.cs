@@ -106,6 +106,9 @@ namespace Ceres.Chess.EncodedPositions
       // Fill indices with sentinel value.
       dest.IndicesSpan.Fill(ushort.MaxValue);
 
+      Span<ushort> destIndicesSpan = dest.IndicesSpan;
+      Span<float> destProbabilitiesSpan = dest.ProbabilitiesSpan;
+
       // Copy in all nonzero policies.
       int nextSlot = 0;
       for (int i=0;i<EncodedPolicyVector.POLICY_VECTOR_LENGTH;i++)
@@ -113,8 +116,8 @@ namespace Ceres.Chess.EncodedPositions
         float value = source.ProbabilitiesPtr[i];
         if (value != dest.FillValue)
         {
-          dest.IndicesSpan[nextSlot] = (ushort)i;
-          dest.ProbabilitiesSpan[nextSlot] = value;
+          destIndicesSpan[nextSlot] = (ushort)i;
+          destProbabilitiesSpan[nextSlot] = value;
           nextSlot++;
           if (nextSlot >= EncodedPolicyVectorCompressed.MAX_MOVES)
           {
@@ -136,18 +139,21 @@ namespace Ceres.Chess.EncodedPositions
     static unsafe void DecompressPolicy(in EncodedPolicyVectorCompressed source, ref EncodedPolicyVector dest)
     {
       // Start by filling all slots with the fill value.
-      // TODO: about 30% of TAR conversion time is spent here, try to improve (use FP16?).
       dest.ProbabilitiesSpan.Fill(source.FillValue);
 
+      Span<ushort> sourceIndicesSpan = source.IndicesSpan;
+      Span<float> sourceProbabilitiesSpan = source.ProbabilitiesSpan;
       float* probs = dest.ProbabilitiesPtr;
+
       for (int i = 0; i < EncodedPolicyVectorCompressed.MAX_MOVES; i++)
       {
-        if (source.IndicesSpan[i] == ushort.MaxValue)
+        ushort index = sourceIndicesSpan[i];
+        if (index == ushort.MaxValue)
         {
           break;
         }
 
-        probs[source.IndicesSpan[i]] = source.ProbabilitiesSpan[i];
+        probs[index] = sourceProbabilitiesSpan[i];
       }
     }
 
