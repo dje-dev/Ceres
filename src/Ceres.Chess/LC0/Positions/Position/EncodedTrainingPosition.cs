@@ -91,10 +91,10 @@ namespace Ceres.Chess.EncodedPositions
 
     #region Setters
 
-    internal unsafe void SetVersion(int version) { fixed (int* pVersion = &Version) { *pVersion = version;  }  }
-    internal unsafe void SetInputFormat(int inputFormat) { fixed (int* pInputFormat = &InputFormat) { *pInputFormat = inputFormat; } }
-    internal unsafe void SetPositionWithBoards(in EncodedPositionWithHistory pos) { fixed (EncodedPositionWithHistory* pPos = &PositionWithBoards) { *pPos = pos; } }
-    internal unsafe void SetPolicies(in EncodedPolicyVector policies) { fixed (EncodedPolicyVector* pPolicies = &Policies) { *pPolicies = policies; } }
+    internal unsafe readonly void SetVersion(int version) { fixed (int* pVersion = &Version) { *pVersion = version;  }  }
+    internal unsafe readonly void SetInputFormat(int inputFormat) { fixed (int* pInputFormat = &InputFormat) { *pInputFormat = inputFormat; } }
+    internal unsafe readonly void SetPositionWithBoards(in EncodedPositionWithHistory pos) { fixed (EncodedPositionWithHistory* pPos = &PositionWithBoards) { *pPos = pos; } }
+    internal unsafe readonly void SetPolicies(in EncodedPolicyVector policies) { fixed (EncodedPolicyVector* pPolicies = &Policies) { *pPolicies = policies; } }
 
     #endregion
 
@@ -364,13 +364,13 @@ namespace Ceres.Chess.EncodedPositions
       // First position may be incorrect (missing en passant)
       // since the prior history move not available to detect.
       // TODO: Try to infer this from the move actually played.
-      const bool FIRST_POSITION_MAY_BE_MISSING_EN_PASSANT = true;
-      return new PositionWithHistory(positions.Slice(0, numAdded), FIRST_POSITION_MAY_BE_MISSING_EN_PASSANT, false); ;
+      const bool EARLIEST_POSITION_MAY_BE_MISSING_EN_PASSANT = true;
+      return new PositionWithHistory(positions.Slice(0, numAdded), EARLIEST_POSITION_MAY_BE_MISSING_EN_PASSANT, false); ;
     }
 
     #region Overrides
 
-    public override bool Equals(object obj)
+    public readonly override bool Equals(object obj)
     {
       if (obj is EncodedTrainingPosition)
         return Equals((EncodedTrainingPosition)obj);
@@ -378,7 +378,7 @@ namespace Ceres.Chess.EncodedPositions
         return false;
     }
 
-    public bool Equals(EncodedTrainingPosition other)
+    public readonly bool Equals(EncodedTrainingPosition other)
     {
       return PositionWithBoards.BoardsHistory.Equals(other.PositionWithBoards.BoardsHistory)
           && Version == other.Version
@@ -386,7 +386,7 @@ namespace Ceres.Chess.EncodedPositions
           && PositionWithBoards.MiscInfo.Equals(other.PositionWithBoards.MiscInfo);          
     }
 
-    public override int GetHashCode() => HashCode.Combine(Version, Policies, PositionWithBoards.BoardsHistory, PositionWithBoards.MiscInfo);
+    public readonly override int GetHashCode() => HashCode.Combine(Version, Policies, PositionWithBoards.BoardsHistory, PositionWithBoards.MiscInfo);
     
 
     #endregion
