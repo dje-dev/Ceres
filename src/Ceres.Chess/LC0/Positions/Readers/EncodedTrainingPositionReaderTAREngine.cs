@@ -144,12 +144,17 @@ namespace Ceres.Chess.EncodedPositions
 
         if (filterOutFRCGames)
         {
-          Position firstGamePosition = gamePositions.Span[0].FinalPosition;
-          if (firstGamePosition != Position.StartPosition)
+          EncodedTrainingPosition firstPos = gamePositions.Span[0];
+          firstPos.MirrorInPlace();
+
+          if (firstPos.FinalPosition != Position.StartPosition)
           {
             continue;
           }
         }
+
+        // Immediately unmirror positions, which are stored in TAR files in mirrored form.
+        EncodedTrainingPosition.MirrorPositions(gamePositions.Span, gamePositions.Length);
 
         yield return gamePositions;
 
@@ -221,7 +226,7 @@ namespace Ceres.Chess.EncodedPositions
               {
                 // Uncompressed read
                 int numRead = ReadFromStream(decompressionStream, streamByteBuffer, ref positionsBuffer, areCompressedPositions);
-                
+
                 if (numRead == 0)
                 {
                   throw new Exception("Stream contained no data, expected EncodedTrainingPosition");
@@ -327,10 +332,7 @@ namespace Ceres.Chess.EncodedPositions
         numItems = ObjUtils.CopyBytesIntoStructArray(rawBuffer, buffer, bytesRead);
       }
 
-      // Immediately unmirror positions, which are stored in TAR files in mirrored form.
-      EncodedTrainingPosition.MirrorPositions(buffer, numItems);
       return numItems;
-
     }
 
   }
