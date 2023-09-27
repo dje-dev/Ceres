@@ -102,9 +102,10 @@ namespace Ceres.Chess.LC0.Positions
     /// <returns></returns>
     public static float CentipawnToLogistic(float centipawnValue)
     {
+      centipawnValue = StatUtils.Bounded(centipawnValue, -3000, 3000); // Truncate extreme values to numeric overflow
       float raw = CentipawnToLogisticUnbounded(centipawnValue);
 
-      // Set bound (values convered from another program's centipawn evaluation could sometimes fall outside [-1.0, 1.0]
+      // Set bound (values converted from another program's centipawn evaluation could sometimes fall outside [-1.0, 1.0]
       if (raw < -1)
       {
         return -1;
