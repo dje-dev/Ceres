@@ -17,8 +17,6 @@ using System;
 using System.Runtime.CompilerServices;
 using BitBoard = System.UInt64;
 
-using Ceres.Base.DataTypes;
-using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Chess.MoveGen.Converters;
 using System.Numerics;
@@ -427,12 +425,29 @@ namespace Ceres.Chess.MoveGen
     /// </summary>
     /// <param name="other"></param>
     /// <returns></returns>
-    public readonly bool EqualPiecePositions(in MGPosition other)
+    public readonly bool EqualPiecePositionsIncludingEnPassant(in MGPosition other)
     {
       return A == other.A &&
              B == other.B &&
              C == other.C &&
              D == other.D;
+    }
+
+    /// <summary>
+    /// Returns if equal to another position with respect to location and position of all pieces
+    /// (ignores miscellaneous flags like castling, Move50Count, etc.).
+    /// </summary>
+    /// <param name="other"></param>
+    /// <returns></returns>
+    public readonly bool EqualPiecePositionsExcludingEnPassant(in MGPosition other)
+    {
+      // Make copies of position with en passant allowed on all files.
+      MGPosition posThis = this;
+      posThis.SetAllEnPassantAllowed();
+      MGPosition posOther = other;
+      posOther.SetAllEnPassantAllowed();
+
+      return posThis.EqualPiecePositionsIncludingEnPassant(in posOther);
     }
 
 
@@ -444,7 +459,7 @@ namespace Ceres.Chess.MoveGen
     /// <returns></returns>
     public readonly bool Equals(MGPosition other)
     {
-      return EqualPiecePositions(in other) &&
+      return EqualPiecePositionsIncludingEnPassant(in other) &&
              Flags == other.Flags &&
              Rule50Count == other.Rule50Count;
     }

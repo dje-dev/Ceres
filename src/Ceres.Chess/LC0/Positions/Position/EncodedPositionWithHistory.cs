@@ -15,6 +15,7 @@
 
 using System;
 using System.Diagnostics;
+using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -535,6 +536,13 @@ namespace Ceres.Chess.EncodedPositions
 
       int repetitionCount = board.Repetitions.Data > 0 ? 1 : 0;
 
+      // First create the position without the miscellaneous info set.
+      PositionMiscInfo miscInfo = default;
+
+      Position pos = new Position(board.OurKing.Data, board.OurQueens.Data, board.OurRooks.Data, board.OurBishops.Data, board.OurKnights.Data, board.OurPawns.Data,
+                                  board.TheirKing.Data, board.TheirQueens.Data, board.TheirRooks.Data, board.TheirBishops.Data, board.TheirKnights.Data, board.TheirPawns.Data,
+                                  in miscInfo);
+
       bool whiteCanCastleOO = true;
       bool blackCanCastleOO = true;
       bool whiteCanCastleOOO = true;
@@ -545,7 +553,7 @@ namespace Ceres.Chess.EncodedPositions
       {
         rule50 = MiscInfo.InfoPosition.Rule50Count;
 
-        if (MiscInfo.WhiteToMove)
+        if (thisHistoryPositionIsWhite)
         {
           whiteCanCastleOO = MiscInfo.InfoPosition.Castling_US_OO == 1;
           whiteCanCastleOOO = MiscInfo.InfoPosition.Castling_US_OOO == 1;
@@ -560,21 +568,58 @@ namespace Ceres.Chess.EncodedPositions
           blackCanCastleOOO = MiscInfo.InfoPosition.Castling_US_OOO == 1;
         }
       }
+      else
+      {
+        // Some calculations are necessary to compute plausible en passant and castling rights.
+        // TODO: the PieceOnSquare calculations below could be made more efficient with direct bitmap operations.
 
-      // Some miscellaneous info cannot be (easily) reconstructed.
-      // For now we assume all castling rights present, and decode en passant
-      // when possible (all positions except the last).
-      // TODO: disqualify castling if pieces not on original squares
+        // Best we can do is assume castling rights exist if the king and rook are in their initial positions.
+        if (pos.PieceOnSquare(SquareNames.E1) != new Piece(SideType.White, PieceType.King))
+        {
+          whiteCanCastleOO = false;
+          whiteCanCastleOOO = false;
+        }
+        else
+        {
+          if (pos.PieceOnSquare(SquareNames.A1) != new Piece(SideType.White, PieceType.Rook))
+          {
+            whiteCanCastleOOO = false;
+          }
+
+          if (pos.PieceOnSquare(SquareNames.H1) != new Piece(SideType.White, PieceType.Rook))
+          {
+            whiteCanCastleOO = false;
+          }
+        }
+
+        if (pos.PieceOnSquare(SquareNames.E8) != new Piece(SideType.Black, PieceType.King))
+        {
+          blackCanCastleOO = false;
+          blackCanCastleOOO = false;
+        }
+        else
+        {
+          if (pos.PieceOnSquare(SquareNames.A8) != new Piece(SideType.Black, PieceType.Rook))
+          {
+            blackCanCastleOOO = false;
+          }
+
+          if (pos.PieceOnSquare(SquareNames.H8) != new Piece(SideType.Black, PieceType.Rook))
+          {
+            blackCanCastleOO = false;
+          }
+        }
+      }
+
       // NOTE: move number cannot be determined, set value to 2 (which will translate to 1 ply in FEN) since 0 is considered invalid.
-      PositionMiscInfo miscInfo = new PositionMiscInfo(whiteCanCastleOO, whiteCanCastleOOO, blackCanCastleOO, blackCanCastleOOO,
-                                                       thisHistoryPositionIsWhite ? SideType.White : SideType.Black,
-                                                       rule50, repetitionCount, 2, enPassant);
+      miscInfo = new PositionMiscInfo(whiteCanCastleOO, whiteCanCastleOOO, blackCanCastleOO, blackCanCastleOOO,
+                                    thisHistoryPositionIsWhite ? SideType.White : SideType.Black,
+                                    rule50, repetitionCount, 2, enPassant);
+      pos.SetMiscInfo(miscInfo);
 
-
-      return new Position(board.OurKing.Data, board.OurQueens.Data, board.OurRooks.Data, board.OurBishops.Data, board.OurKnights.Data, board.OurPawns.Data,
-                          board.TheirKing.Data, board.TheirQueens.Data, board.TheirRooks.Data, board.TheirBishops.Data, board.TheirKnights.Data, board.TheirPawns.Data,
-                          in miscInfo);
+      return pos;
     }
+
 
 
     /// <summary>

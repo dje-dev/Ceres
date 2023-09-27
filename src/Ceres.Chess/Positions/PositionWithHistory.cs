@@ -376,6 +376,7 @@ namespace Ceres.Chess.Positions
       for (int i = 0; i< positions.Length - 1; i++)
       {
         MGPosition posCurrent = positions[i].ToMGPosition;
+        MGPosition posNext = positions[i + 1].ToMGPosition;
 
         if (i == 0 && firstPositionMayBeMissingEnPassant)
         {
@@ -394,7 +395,7 @@ namespace Ceres.Chess.Positions
           MGPosition tryNextPos = posCurrent;
           tryNextPos.MakeMove(movesList.MovesArray[j]);
 
-          if (tryNextPos.EqualPiecePositions(positions[i + 1].ToMGPosition))
+          if (tryNextPos.EqualPiecePositionsExcludingEnPassant(posNext))
           {
             Moves.Add(movesList.MovesArray[j]);
             foundContinuation = true;
