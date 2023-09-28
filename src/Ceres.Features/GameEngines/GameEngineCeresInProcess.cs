@@ -121,7 +121,7 @@ namespace Ceres.Features.GameEngines
     /// <summary>
     /// Once created the NN evaluator pair is reused (until Dispose is called).
     /// </summary>
-    NNEvaluatorSet evaluators = null;
+    public readonly NNEvaluatorSet Evaluators = null;
 
     /// <summary>
     /// Attempt to retain node cache across all searches and games
@@ -419,10 +419,10 @@ namespace Ceres.Features.GameEngines
 
     void PrepareEvaluators()
     {
-      if (evaluators == null)
+      if (Evaluators == null)
       {
         evaluators = new NNEvaluatorSet(EvaluatorDef, SearchParams.Execution.FlowDirectOverlapped, EvaluatorDefSecondary);
-        evaluators.Warmup(false);
+        Evaluators.Warmup(false);
       }
     }
 
@@ -452,7 +452,7 @@ namespace Ceres.Features.GameEngines
       if (LastSearch == null)
       {
         PrepareEvaluators();
-        Search.Search(evaluators, ChildSelectParams, SearchParams, GameLimitManager,
+        Search.Search(Evaluators, ChildSelectParams, SearchParams, GameLimitManager,
                       reuseOtherContextForEvaluatedNodes,
                       curPositionAndMoves, searchLimit, verbose, lastSearchStartTime,
                       gameMoveHistory, callback, null, reuseNodeCache, false, isFirstMoveOfGame,
@@ -576,7 +576,7 @@ namespace Ceres.Features.GameEngines
     /// </summary>
     public override void Dispose()
     {
-      evaluators?.Dispose();
+      Evaluators?.Dispose();
       evaluators = null;
 
       Search?.Manager.Dispose();
