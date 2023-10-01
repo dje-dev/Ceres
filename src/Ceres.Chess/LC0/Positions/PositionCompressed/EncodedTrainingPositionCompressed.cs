@@ -22,7 +22,8 @@ namespace Ceres.Chess.EncodedPositions
 {
   /// <summary>
   /// Structure just like EncodedTrainingPosition except that 
-  /// only 4 history positions (instead of 8) are kept (to save space).
+  /// only policy is not the very sparse array of length 1858 
+  /// but instead an EncodedPolicyVectorCompressed.
   /// </summary>
   [StructLayout(LayoutKind.Sequential, Pack = 1)]
   [Serializable]

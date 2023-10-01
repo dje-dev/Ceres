@@ -79,7 +79,7 @@ namespace Ceres.Chess.EncodedPositions
       int numUsed = 0;
       int skipCountBase = Environment.TickCount % skipCount; // for randomization
 
-      // For ever game in TAR....
+      // For every game in TAR....
       foreach (Memory<EncodedTrainingPosition> gamePositionsBuffer in reader)
       {
         if (numUsed >= maxPosToEvaluate)
@@ -286,31 +286,15 @@ namespace Ceres.Chess.EncodedPositions
       CheckBuffersAllocated();
 
       int bytesRead = 0;
-      if (false) // slower (?)
+      
+      // Read decompressed bytes.
+      int thisBytes = 0;
+      do
       {
-        int numBytes = buffer.Length * sizeof(EncodedTrainingPosition);
-        int thisBytes = 0;
-        fixed (EncodedTrainingPosition* bufferPtr = buffer)
-        {
-          do
-          {
-            Span<byte> byteSpan = new Span<byte>(bufferPtr, numBytes);
-            thisBytes = stream.Read(byteSpan);
-            if (thisBytes > 0 && bytesRead > 0) throw new NotImplementedException();
-            bytesRead += thisBytes;
-          } while (thisBytes > 0);
-        }
-      }
-      else
-      {
-        // Read decompressed bytes.
-        int thisBytes = 0;
-        do
-        {
-          thisBytes = stream.Read(rawBuffer, bytesRead, rawBuffer.Length - bytesRead);
-          bytesRead += thisBytes;
-        } while (thisBytes > 0);
-      }
+        thisBytes = stream.Read(rawBuffer, bytesRead, rawBuffer.Length - bytesRead);
+        bytesRead += thisBytes;
+      } while (thisBytes > 0);
+      
 
       Interlocked.Add(ref totalBytesRead, bytesRead);
 

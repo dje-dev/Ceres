@@ -13,10 +13,11 @@
 
 #region Using directives
 
-using Google.Protobuf.WellKnownTypes;
 using System;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
+
+using Ceres.Base.Benchmarking;
 
 #endregion
 
@@ -136,7 +137,7 @@ namespace Ceres.Chess.EncodedPositions
     /// </summary>
     /// <param name="source"></param>
     /// <param name="dest"></param>
-    static unsafe void DecompressPolicy(in EncodedPolicyVectorCompressed source, ref EncodedPolicyVector dest)
+    internal static unsafe void DecompressPolicy(in EncodedPolicyVectorCompressed source, ref EncodedPolicyVector dest)
     {
       // Start by filling all slots with the fill value.
       dest.ProbabilitiesSpan.Fill(source.FillValue);
