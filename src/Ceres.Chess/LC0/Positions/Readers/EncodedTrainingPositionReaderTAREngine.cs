@@ -29,10 +29,8 @@ using SharpCompress.Readers.Tar;
 using Zstandard.Net;
 
 using Ceres.Base.Misc;
-using Ceres.Base.Benchmarking;
 
 #endregion
-
 
 namespace Ceres.Chess.EncodedPositions
 {
@@ -42,6 +40,9 @@ namespace Ceres.Chess.EncodedPositions
   /// 
   /// Alternately, any entries compressed with Zstandard are assumed to have been
   /// compressed to EncodedTrainingPositionCompressed format, and are decompressed and returned.
+  /// 
+  /// NOTE: This is a deprecated class. It is recommended to use EncodedTrainingPositionGameReader instead
+  ///       because it is potentially more efficient (does not always require unpacking/unmirroring of data).
   /// </summary>
   public static class EncodedTrainingPositionReaderTAREngine
   {
@@ -164,6 +165,8 @@ namespace Ceres.Chess.EncodedPositions
     }
 
 
+    static bool haveWarned = false;
+
     /// <summary>
     /// Core enumerator which opens TAR file and iterates over all entries matching specified name filter.
     /// </summary>
@@ -171,9 +174,15 @@ namespace Ceres.Chess.EncodedPositions
     /// <param name="processFilePredicate"></param>
     /// <returns></returns>
     /// <exception cref="Exception"></exception>
-    static IEnumerable<Memory<EncodedTrainingPosition>> EnumerateGamesCore(string trainingTARFileName,
+    public static IEnumerable<Memory<EncodedTrainingPosition>> EnumerateGamesCore(string trainingTARFileName,
                                                                            Predicate<string> processFilePredicate = null)
     {      
+      if (!haveWarned)
+      {
+        haveWarned = true;
+        ConsoleUtils.WriteLineColored(ConsoleColor.Red, "NOTE: EncodedTrainingPositionReaderTAREngine is deprecated, suggest to use EncodedTrainingPositionGameReader instead.");
+      }
+
       EncodedTrainingPosition[] positionsBuffer = new EncodedTrainingPosition[MAX_POSITIONS_PER_STREAM];
       byte[] streamByteBuffer = new byte[Marshal.SizeOf<EncodedTrainingPositionCompressed>() * MAX_POSITIONS_PER_STREAM];
 
