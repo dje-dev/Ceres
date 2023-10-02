@@ -55,17 +55,17 @@ namespace Ceres.Chess.EncodedPositions
     /// </summary>
     /// <param name="trainingTARFileName"></param>
     /// <param name="processFilePredicate"></param>
+    /// <param name="filterOutFRCGames"></param>
     /// <returns></returns>
     /// <exception cref="Exception"></exception>
-    public static IEnumerable<EncodedTrainingPositionGameBase> EnumerateGamesCoreNew(string trainingTARFileName,
-                                                                           Predicate<string> processFilePredicate = null)
+    public static IEnumerable<EncodedTrainingPositionGameBase> EnumerateGames(string trainingTARFileName,
+                                                                              Predicate<string> processFilePredicate = null,
+                                                                              bool filterOutFRCGames = true)
     {
       EncodedTrainingPosition[] positionsBuffer = new EncodedTrainingPosition[MAX_POSITIONS_PER_STREAM];
       EncodedTrainingPositionCompressed[] positionsBufferCompressed = new EncodedTrainingPositionCompressed[MAX_POSITIONS_PER_STREAM];
       byte[] streamByteBuffer = new byte[Marshal.SizeOf<EncodedTrainingPositionCompressed>() * MAX_POSITIONS_PER_STREAM];
 
-
-//DJE      CheckBuffersAllocated();
       if (!trainingTARFileName.ToUpper().EndsWith("TAR"))
       {
         throw new Exception("expected TAR");
@@ -123,7 +123,11 @@ namespace Ceres.Chess.EncodedPositions
                   }
 
                   // Single game, not packed with multiple.
-                  yield return new EncodedTrainingPositionGameDirect(positionsBuffer.AsMemory(0, numRead));
+                  EncodedTrainingPositionGameDirect ret = new (positionsBuffer.AsMemory(0, numRead));
+                  if (!filterOutFRCGames || !ret.IsFRCGame)
+                  {
+                    yield return ret;
+                  }
                 }
                 else
                 {
@@ -152,10 +156,15 @@ namespace Ceres.Chess.EncodedPositions
                       throw new Exception("Unexpected zero length game");
                     }
 
-                    Memory<EncodedTrainingPositionCompressed> thisGame = new Memory<EncodedTrainingPositionCompressed>(positionsBufferCompressed, curIndex, lengthThisGame);
-                    thisGame.Span[0].PositionWithBoards.MiscInfo.InfoTraining.SetUnused1(0); // reset the sentinel
-                    yield return new EncodedTrainingPositionGameCompressed(thisGame);
+                    Memory<EncodedTrainingPositionCompressed> gamePositions = new Memory<EncodedTrainingPositionCompressed>(positionsBufferCompressed, curIndex, lengthThisGame);
+                    EncodedTrainingPositionGameCompressed ret = new EncodedTrainingPositionGameCompressed(gamePositions);
 
+                    if (!filterOutFRCGames || !ret.IsFRCGame)
+                    {
+                      gamePositions.Span[0].PositionWithBoards.MiscInfo.InfoTraining.SetUnused1(0); // reset the sentinel
+                      yield return ret;
+
+                    }
                     curIndex = nextStartIndex;
                   }
                 }

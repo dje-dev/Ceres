@@ -69,6 +69,11 @@ namespace Ceres.Chess.EncodedPositions
       return pos;
     }
 
+    /// <summary>
+    /// Returns if the game appears to be a FRC (Fischer random chess) game (does not start with classical starting position).
+    /// </summary>
+    public bool IsFRCGame => PositionAtIndex(0).FinalPosition != Position.StartPosition;
+
     public EncodedPositionMiscInfo PositionMiscInfoAtIndex(int index) => PositionRawMirroredRefAtIndex(index).MiscInfo.InfoPosition;
 
     public EncodedPositionEvalMiscInfoV6 PositionTrainingInfoAtIndex(int index) => PositionRawMirroredRefAtIndex(index).MiscInfo.InfoTraining;
