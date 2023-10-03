@@ -99,39 +99,13 @@ namespace Ceres.Chess.EncodedPositions
     #endregion
 
 
-    #region Access helpers
 
     /// <summary>
-    /// Returns position at specified position index.
+    /// Returns a Position which for the current move (last history position).
     /// </summary>
-    /// <param name="historyIndex"></param>
     /// <returns></returns>
-    public readonly Position HistoryPosition(int historyIndex) => PositionWithBoards.HistoryPosition(historyIndex);
+    public readonly Position FinalPosition =>PositionWithBoards.HistoryPosition(0);
 
-    /// <summary>
-    /// Returns the final position in the history.
-    /// </summary>
-    public readonly Position FinalPosition => HistoryPosition(0);
-
-    readonly MGMove ToMGMove(EncodedMove move)
-    {
-      MGPosition lastPosMG = FinalPosition.ToMGPosition;
-      MGMove playedMoveMG = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(move.Mirrored, in lastPosMG);
-      return playedMoveMG;
-    }
-
-    /// <summary>
-    /// Returns the best move according to the training search.
-    /// </summary>
-    public readonly MGMove BestMove => ToMGMove(PositionWithBoards.MiscInfo.InfoTraining.BestMove);
-
-    /// <summary>
-    /// Returns the played move in the training game.
-    /// </summary>
-    public readonly MGMove PlayedMove => ToMGMove(PositionWithBoards.MiscInfo.InfoTraining.PlayedMove);
-
-
-    #endregion
 
     #region Mirroring
 

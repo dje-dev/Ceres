@@ -18,6 +18,7 @@
 #endregion
 
 using Ceres.Chess.LC0.Boards;
+using Ceres.Chess.MoveGen;
 using System;
 
 namespace Ceres.Chess.EncodedPositions
@@ -69,6 +70,29 @@ namespace Ceres.Chess.EncodedPositions
       return pos;
     }
 
+
+    /// <summary>
+    /// Returns a Memory<EncodedPositionWithHistory>
+    /// </summary>
+    /// <param name="positionsBuffer"></param>
+    /// <returns></returns>
+    /// <exception cref="Exception"></exception>
+    public Memory<EncodedPositionWithHistory> PositionsAll(EncodedPositionWithHistory[] positionsBuffer)
+    {
+      if (positionsBuffer.Length < NumPositions)
+      {
+        throw new Exception("positionsBuffer.Length < NumPositions");
+      }
+      
+      for (int i=0;i<NumPositions;i++)
+      {
+        positionsBuffer[i] = PositionRawMirroredRefAtIndex(i);
+        positionsBuffer[i].BoardsHistory.MirrorBoardsInPlace();  // Undo mirroring  
+      }
+
+      return new Memory<EncodedPositionWithHistory>(positionsBuffer, 0, NumPositions);
+    }
+
     /// <summary>
     /// Returns if the game appears to be a FRC (Fischer random chess) game (does not start with classical starting position).
     /// </summary>
@@ -91,6 +115,11 @@ namespace Ceres.Chess.EncodedPositions
         }
       }
       return false;
+    }
+
+    public void ExtractPositionsWithHistory(EncodedPositionWithHistory[] positionsBuffer)
+    {
+      throw new NotImplementedException();
     }
     #endregion
   }

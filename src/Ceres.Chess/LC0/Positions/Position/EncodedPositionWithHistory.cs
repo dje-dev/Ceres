@@ -15,12 +15,14 @@
 
 using System;
 using System.Diagnostics;
-using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Text;
 
 using Ceres.Chess.LC0.Boards;
+using Ceres.Chess.MoveGen.Converters;
+using Ceres.Chess.MoveGen;
 using Ceres.Chess.Textual;
+using Ceres.Chess.EncodedPositions.Basic;
 
 #endregion
 
@@ -54,6 +56,26 @@ namespace Ceres.Chess.EncodedPositions
       MiscInfo = miscInfo;
     }
 
+    #region Access helpers
+
+    readonly MGMove ToMGMove(EncodedMove move)
+    {
+      MGPosition lastPosMG = FinalPosition.ToMGPosition;
+      MGMove playedMoveMG = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(move.Mirrored, in lastPosMG);
+      return playedMoveMG;
+    }
+
+    /// <summary>
+    /// Returns the best move according to the training search.
+    /// </summary>
+    public readonly MGMove BestMove => ToMGMove(MiscInfo.InfoTraining.BestMove);
+
+    /// <summary>
+    /// Returns the played move in the training game.
+    /// </summary>
+    public readonly MGMove PlayedMove => ToMGMove(MiscInfo.InfoTraining.PlayedMove);
+
+    #endregion
 
     /// <summary>
     /// Returns the piece character for a FEN corresponding to specified square.
