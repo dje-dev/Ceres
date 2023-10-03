@@ -195,34 +195,47 @@ namespace Ceres.Chess.EncodedPositions
 
     static bool haveWarnedBestQ = false;
 
+
     /// <summary>
     /// Validates that key fields (game result, best Q, policies, etc.) are all valid.
+    /// <param name="desc"></param>
+    public readonly void ValidateIntegrity(string desc)
+    {
+      ValidateIntegrity(InputFormat, Version, in PositionWithBoards, in Policies, desc);
+    }
+
+
+    /// <summary>
+    /// Validates that specified key fields (game result, best Q, policies, etc.) are all valid.
     /// 
     /// Mostly taken from:
     ///   https://github.com/Tilps/lc0/blob/rescore_tb/src/selfplay/loop.cc#L204
     /// </summary>
     /// <param name="desc"></param>
-    public readonly void ValidateIntegrity(string desc)
+    public static void ValidateIntegrity(int inputFormat, int version,
+                                         in EncodedPositionWithHistory boardsHistory, 
+                                         in EncodedPolicyVector policyVector, 
+                                         string desc)
     {
       // Make sure this is the supported version and input format of training data
-      if (InputFormat != SUPPORTED_INPUT_FORMAT)
+      if (inputFormat != SUPPORTED_INPUT_FORMAT)
       {
-        throw new Exception($"Found unsupported input format { InputFormat }, required is {SUPPORTED_INPUT_FORMAT}, {desc}.");
+        throw new Exception($"Found unsupported input format { inputFormat }, required is {SUPPORTED_INPUT_FORMAT}, {desc}.");
       }
 
-      if (Version != SUPPORTED_VERSION)
+      if (version != SUPPORTED_VERSION)
       {
-        throw new Exception($"Found unsupported version { Version }, required is {SUPPORTED_VERSION}, {desc}.");
+        throw new Exception($"Found unsupported version { version }, required is {SUPPORTED_VERSION}, {desc}.");
       }
 
 
-      int countPieces = PositionWithBoards.BoardsHistory.History_0.CountPieces;
+      int countPieces = boardsHistory.BoardsHistory.History_0.CountPieces;
       if (countPieces == 0 || countPieces > 32)
       {
         throw new Exception("History board 0 has count pieces " + countPieces + ") " + desc);
       }
 
-      ref readonly EncodedPositionEvalMiscInfoV6 refTraining = ref PositionWithBoards.MiscInfo.InfoTraining;
+      ref readonly EncodedPositionEvalMiscInfoV6 refTraining = ref boardsHistory.MiscInfo.InfoTraining;
 
       if (float.IsNaN(refTraining.BestD + refTraining.BestQ))
       {
@@ -265,7 +278,7 @@ namespace Ceres.Chess.EncodedPositions
 #endif
       if (validate)
       {
-        float[] probs = CheckPolicyValidity(desc);
+        float[] probs = policyVector.CheckPolicyValidity(desc);
 
         if (probs[refTraining.BestMove.Mirrored.IndexNeuralNet] <= 0)
         {
@@ -283,35 +296,6 @@ namespace Ceres.Chess.EncodedPositions
         throw new Exception("Plies left < 0 (" + refTraining.PliesLeft + ") " + desc);
       }
 
-    }
-
-    private readonly float[] CheckPolicyValidity(string desc)
-    {
-      float[] probs = Policies.ProbabilitiesWithNegativeOneZeroed;
-      float sumPolicy = 0;
-      for (int i = 0; i < EncodedPolicyVector.POLICY_VECTOR_LENGTH; i++)
-      {
-        float policy = probs[i];
-        if (policy == -1)
-        {
-          // Invalid policies may be represented as -1
-          policy = 0;
-        }
-
-        sumPolicy += policy;
-
-        if (float.IsNaN(policy) || policy > 1.01 || policy < 0)
-        {
-          throw new Exception("Policy invalid " + policy + " " + desc);
-        }
-      }
-
-      if (sumPolicy < 0.99f || sumPolicy > 1.01f)
-      {
-        throw new Exception("Sum policy not 1 (" + sumPolicy + ") " + desc);
-      }
-
-      return probs;
     }
 
     #endregion

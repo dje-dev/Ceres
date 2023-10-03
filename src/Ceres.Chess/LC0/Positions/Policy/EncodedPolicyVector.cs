@@ -2058,6 +2058,45 @@ namespace Ceres.Chess.EncodedPositions
 
     #endregion
 
+
+    #region Validation
+
+    /// <summary>
+    /// Checks policy vector for validity, returning a copy of the probabilities with -1 values zeroed.
+    /// </summary>
+    /// <param name="desc"></param>
+    /// <returns></returns>
+    /// <exception cref="Exception"></exception>
+    internal readonly float[] CheckPolicyValidity(string desc)
+    {
+      float[] probs = ProbabilitiesWithNegativeOneZeroed;
+      float sumPolicy = 0;
+      for (int i = 0; i < POLICY_VECTOR_LENGTH; i++)
+      {
+        float policy = probs[i];
+        if (policy == -1)
+        {
+          // Invalid policies may be represented as -1
+          policy = 0;
+        }
+
+        sumPolicy += policy;
+
+        if (float.IsNaN(policy) || policy > 1.01 || policy < 0)
+        {
+          throw new Exception("Policy invalid " + policy + " " + desc);
+        }
+      }
+
+      if (sumPolicy < 0.99f || sumPolicy > 1.01f)
+      {
+        throw new Exception("Sum policy not 1 (" + sumPolicy + ") " + desc);
+      }
+
+      return probs;
+    }
+
+    #endregion
   }
 }
 
