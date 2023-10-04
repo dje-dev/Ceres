@@ -21,7 +21,7 @@ using System;
 namespace Ceres.Chess.EncodedPositions
 {
   /// <summary>
-  /// Wraps an array of EncodedTrainingPosition objects as an EncodedTrainingPositionGameBase.
+  /// Wraps an array of EncodedTrainingPositionCompressed objects as an EncodedTrainingPositionGameBase.
   /// </summary>
   public class EncodedTrainingPositionGameCompressed : EncodedTrainingPositionGameBase
   {

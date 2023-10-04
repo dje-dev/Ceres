@@ -13,18 +13,27 @@
 
 #region Using directives
 
-
+using System;
+using Ceres.Chess.LC0.Boards;
 
 #endregion
 
-using Ceres.Chess.LC0.Boards;
-using Ceres.Chess.MoveGen;
-using System;
 
 namespace Ceres.Chess.EncodedPositions
 {
   /// <summary>
-  /// Base class to encapsulate a sequence of EncodedTrainingPosition struct
+  /// Base class to encapsulate a game consisting of a sequence of structures 
+  /// implementing EncodedTrainingPosition functionality, providing 
+  /// history boards, policy, and ancillary training information (e.g. targets).
+  /// 
+  /// Two subclasses are available:
+  ///  - EncodedTrainingPositionGamDirect (positions in original LC0 binary V6 format)
+  ///  - EncodedTrainingPositionGameCompressed (in a Ceres packed version of original LC0 binary V6 format)
+  ///  
+  /// Use of this wrapper allows consumers of training data to be somewhat abstracted away from data representation.
+  /// For example, the EncodedTrainingPositionGameCompressed implements policy vectors which are compressed,
+  /// reducing memory consumption. Callers will incur the cost of expanding this packed representation
+  /// only if and when they actually need to access the policy vector.
   /// </summary>
   public abstract class EncodedTrainingPositionGameBase
   {
@@ -93,10 +102,24 @@ namespace Ceres.Chess.EncodedPositions
       return new Memory<EncodedPositionWithHistory>(positionsBuffer, 0, NumPositions);
     }
 
+
+    static readonly EncodedPositionBoard boardStartPos = EncodedPositionBoard.FromPosition(Position.StartPosition, SideType.White);
+
     /// <summary>
     /// Returns if the game appears to be a FRC (Fischer random chess) game (does not start with classical starting position).
     /// </summary>
-    public bool IsFRCGame => PositionAtIndex(0).FinalPosition != Position.StartPosition;
+    public bool IsFRCGame
+    {
+      get
+      {
+        // Efficient check requiring unmirroring of only first history board.
+        EncodedPositionBoard finalBoard = PositionRawMirroredRefAtIndex(0).BoardsHistory.History_0;
+        finalBoard.MirrorPlanesInPlace();
+
+        return !finalBoard.Equals(boardStartPos);
+      }
+    }
+
 
     public EncodedPositionMiscInfo PositionMiscInfoAtIndex(int index) => PositionRawMirroredRefAtIndex(index).MiscInfo.InfoPosition;
 
