@@ -58,7 +58,7 @@ namespace Ceres.Chess.EncodedPositions
     /// <param name="filterOutFRCGames"></param>
     /// <returns></returns>
     /// <exception cref="Exception"></exception>
-    public static IEnumerable<EncodedTrainingPositionGameBase> EnumerateGames(string trainingTARFileName,
+    public static IEnumerable<EncodedTrainingPositionGame> EnumerateGames(string trainingTARFileName,
                                                                               Predicate<string> processFilePredicate = null,
                                                                               bool filterOutFRCGames = true)
     {

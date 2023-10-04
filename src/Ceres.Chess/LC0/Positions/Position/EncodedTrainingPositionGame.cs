@@ -22,7 +22,7 @@ using Ceres.Chess.LC0.Boards;
 namespace Ceres.Chess.EncodedPositions
 {
   /// <summary>
-  /// Base class to encapsulate a game consisting of a sequence of structures 
+  /// Abstract b ase class to encapsulate a game consisting of a sequence of structures 
   /// implementing EncodedTrainingPosition functionality, providing 
   /// history boards, policy, and ancillary training information (e.g. targets).
   /// 
@@ -35,7 +35,7 @@ namespace Ceres.Chess.EncodedPositions
   /// reducing memory consumption. Callers will incur the cost of expanding this packed representation
   /// only if and when they actually need to access the policy vector.
   /// </summary>
-  public abstract class EncodedTrainingPositionGameBase
+  public abstract class EncodedTrainingPositionGame
   {
     /// <summary>
     /// Number of positions in sequence.
@@ -140,10 +140,18 @@ namespace Ceres.Chess.EncodedPositions
       return false;
     }
 
-    public void ExtractPositionsWithHistory(EncodedPositionWithHistory[] positionsBuffer)
+
+    /// <summary>
+    /// Validates integrity of position at specified index.
+    /// </summary>
+    /// <param name="index"></param>
+    public void ValidateIntegrityAtIndex(int index)
     {
-      throw new NotImplementedException();
+      // Must materialize full EncodedTrainingPosition for this test.
+      EncodedTrainingPosition etp = new EncodedTrainingPosition(Version, InputFormat, PositionAtIndex(index), PolicyAtIndex(index));
+      etp.ValidateIntegrity("ValidatePositionAtIndex");
     }
+
     #endregion
   }
 }

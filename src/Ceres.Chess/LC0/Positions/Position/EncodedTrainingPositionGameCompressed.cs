@@ -23,7 +23,7 @@ namespace Ceres.Chess.EncodedPositions
   /// <summary>
   /// Wraps an array of EncodedTrainingPositionCompressed objects as an EncodedTrainingPositionGameBase.
   /// </summary>
-  public class EncodedTrainingPositionGameCompressed : EncodedTrainingPositionGameBase
+  public class EncodedTrainingPositionGameCompressed : EncodedTrainingPositionGame
   {
     Memory<EncodedTrainingPositionCompressed> positions;
 
