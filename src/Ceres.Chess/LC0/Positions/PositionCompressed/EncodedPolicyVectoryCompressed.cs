@@ -31,7 +31,7 @@ namespace Ceres.Chess.EncodedPositions
     /// To save space, only support up to MAX_MOVES moves.
     /// Instances of positions with more moves are vanishing infrequent and will be discarded.
     /// </summary>
-    public const int MAX_MOVES = 80;
+    public const int MAX_MOVES = 92;
 
 
     #region Raw structure data
