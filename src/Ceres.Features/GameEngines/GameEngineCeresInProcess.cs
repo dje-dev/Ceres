@@ -121,7 +121,7 @@ namespace Ceres.Features.GameEngines
     /// <summary>
     /// Once created the NN evaluator pair is reused (until Dispose is called).
     /// </summary>
-    public readonly NNEvaluatorSet Evaluators = null;
+    public NNEvaluatorSet Evaluators { get; private set; }
 
     /// <summary>
     /// Attempt to retain node cache across all searches and games
@@ -421,7 +421,7 @@ namespace Ceres.Features.GameEngines
     {
       if (Evaluators == null)
       {
-        evaluators = new NNEvaluatorSet(EvaluatorDef, SearchParams.Execution.FlowDirectOverlapped, EvaluatorDefSecondary);
+        Evaluators = new NNEvaluatorSet(EvaluatorDef, SearchParams.Execution.FlowDirectOverlapped, EvaluatorDefSecondary);
         Evaluators.Warmup(false);
       }
     }
@@ -577,7 +577,7 @@ namespace Ceres.Features.GameEngines
     public override void Dispose()
     {
       Evaluators?.Dispose();
-      evaluators = null;
+      Evaluators = null;
 
       Search?.Manager.Dispose();
       Search = null;
