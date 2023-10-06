@@ -131,10 +131,12 @@ namespace Ceres.Chess.EncodedPositions
       // Mirror the boards themselves.
       PositionWithBoards.BoardsHistory.MirrorBoardsInPlace();
 
+#if NOT_NEEDED
       // Any recorded move indices have to be mirrored as well.
       short playedIndexMirrored = (short)PositionWithBoards.MiscInfo.InfoTraining.PlayedMove.Mirrored.IndexNeuralNet;
       short bestIndexMirrored = (short)PositionWithBoards.MiscInfo.InfoTraining.BestMove.Mirrored.IndexNeuralNet;
       PositionWithBoards.MiscInfo.InfoTraining.SetPlayedAndBestIndex(playedIndexMirrored, bestIndexMirrored);
+#endif
     }
 
 
@@ -280,12 +282,12 @@ namespace Ceres.Chess.EncodedPositions
       {
         float[] probs = policyVector.CheckPolicyValidity(desc);
 
-        if (probs[refTraining.BestMove.Mirrored.IndexNeuralNet] <= 0)
+        if (probs[refTraining.BestMove.IndexNeuralNet] <= 0)
         {
           throw new Exception("Best policy index not positive: (" + probs[refTraining.BestIndex] + ") " + desc);
         }
 
-        if (probs[refTraining.PlayedMove.Mirrored.IndexNeuralNet] <= 0)
+        if (probs[refTraining.PlayedMove.IndexNeuralNet] <= 0)
         {
           throw new Exception("Played policy index not positive: (" + probs[refTraining.PlayedIndex] + ") " + desc);
         }
@@ -307,24 +309,8 @@ namespace Ceres.Chess.EncodedPositions
     /// <param name="maxHistoryPositions"></param>
     /// <returns></returns>
     /// <exception cref="NotImplementedException"></exception>
-    public readonly PositionWithHistory ToPositionWithHistory(int maxHistoryPositions)
-    {
-      int numAdded = 0;
-      Span<Position> positions = stackalloc Position[maxHistoryPositions];
-      for (int i = maxHistoryPositions - 1; i >= 0; i--)
-      {
-        if (!PositionWithBoards.GetPlanesForHistoryBoard(i).IsEmpty)
-        {
-          positions[numAdded++] = PositionWithBoards.HistoryPosition(i);
-        }
-      }
+    public readonly PositionWithHistory ToPositionWithHistory(int maxHistoryPositions) => PositionWithBoards.ToPositionWithHistory(maxHistoryPositions);
 
-      // First position may be incorrect (missing en passant)
-      // since the prior history move not available to detect.
-      // TODO: Try to infer this from the move actually played.
-      const bool EARLIEST_POSITION_MAY_BE_MISSING_EN_PASSANT = true;
-      return new PositionWithHistory(positions.Slice(0, numAdded), EARLIEST_POSITION_MAY_BE_MISSING_EN_PASSANT, false); ;
-    }
 
     #region Overrides
 

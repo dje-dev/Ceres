@@ -23,6 +23,7 @@ using Ceres.Chess.MoveGen.Converters;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.Textual;
 using Ceres.Chess.EncodedPositions.Basic;
+using Ceres.Chess.Positions;
 
 #endregion
 
@@ -58,12 +59,39 @@ namespace Ceres.Chess.EncodedPositions
 
     #region Access helpers
 
+    /// <summary>
+    /// Converts to a PositionWithHistory object.
+    /// </summary>
+    /// <param name="maxHistoryPositions"></param>
+    /// <returns></returns>
+    /// <exception cref="NotImplementedException"></exception>
+    public readonly PositionWithHistory ToPositionWithHistory(int maxHistoryPositions)
+    {
+      int numAdded = 0;
+      Span<Position> positions = stackalloc Position[maxHistoryPositions];
+      for (int i = maxHistoryPositions - 1; i >= 0; i--)
+      {
+        if (!GetPlanesForHistoryBoard(i).IsEmpty)
+        {
+          positions[numAdded++] = HistoryPosition(i);
+        }
+      }
+
+      // First position may be incorrect (missing en passant)
+      // since the prior history move not available to detect.
+      // TODO: Try to infer this from the move actually played.
+      const bool EARLIEST_POSITION_MAY_BE_MISSING_EN_PASSANT = true;
+      return new PositionWithHistory(positions.Slice(0, numAdded), EARLIEST_POSITION_MAY_BE_MISSING_EN_PASSANT, false);
+    }
+
+
     readonly MGMove ToMGMove(EncodedMove move)
     {
       MGPosition lastPosMG = FinalPosition.ToMGPosition;
-      MGMove playedMoveMG = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(move.Mirrored, in lastPosMG);
+      MGMove playedMoveMG = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(move, in lastPosMG);
       return playedMoveMG;
     }
+
 
     /// <summary>
     /// Returns the best move according to the training search.
