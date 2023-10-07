@@ -41,7 +41,6 @@ namespace Ceres.Chess.TBBackends.Fathom
     {
     }
 
-
     /// <summary>
     /// Maximum number of pieces of available tablebase positions.
     /// </summary>
@@ -74,7 +73,7 @@ namespace Ceres.Chess.TBBackends.Fathom
     }
 
     /// <summary>
-    /// Initializes tablebases to use a specied set of paths.
+    /// Initializes tablebases to use a specified set of paths.
     /// </summary>
     /// <param name="paths"></param>
     /// <returns></returns>
@@ -138,7 +137,7 @@ so maybe this engine is not doing this optimally?
       }
       else if (fathomResult.Result == FathomWDLResult.Loss)
       {
-        // TODO: Due to limitation of expressivness of GameResult we have to return Unknown
+        // TODO: Due to limitation of expressiveness of GameResult we have to return Unknown
         //       See also code in MCTSManager which is affected.
         //       (This is not a problem of correctness, but just ugly).
         result = GameResult.Unknown;
@@ -240,10 +239,19 @@ so maybe this engine is not doing this optimally?
         {
           throw new Exception($"DoProbeWDL disagrees with comparison on {pos.FEN}  yields {result},{ score } versus compare {compResult},{compScore}");
         }
-
       }
-
     }
+
+    /// <summary>
+    /// Returns short descriptive string.
+    /// </summary>
+    /// <returns></returns>
+    public override string ToString()
+    {
+      return $"<FathomEvaluator MaxPieces={MaxCardinality} DTZAvailable={DTZAvailable} " 
+           + $"NumWDLTablebaseFiles {NumDTZTablebaseFiles} NumDTZTablebaseFiles {NumDTZTablebaseFiles}"; 
+    }
+
   }
 
 }
