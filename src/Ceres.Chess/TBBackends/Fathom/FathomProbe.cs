@@ -1031,7 +1031,7 @@ namespace Ceres.Chess.TBBackends.Fathom
     }
 
     public uint tb_probe_root(ulong white, ulong black, ulong kings, ulong queens, ulong rooks, ulong bishops,
-                              ulong knights, ulong pawns, uint rule50, int castling, ulong ep, bool turn, uint[] results)
+                              ulong knights, ulong pawns, uint rule50, int castling, ulong ep, bool turn, Span<uint> results)
     {
       if (castling != 0)
       {
@@ -2364,7 +2364,7 @@ namespace Ceres.Chess.TBBackends.Fathom
     }
 
     // This supports the original Fathom root probe API
-    ushort probe_root(in FathomPos pos, out int score, uint[] results)
+    ushort probe_root(in FathomPos pos, out int score, Span<uint> results)
     {
       score = default;
 
@@ -2374,7 +2374,6 @@ namespace Ceres.Chess.TBBackends.Fathom
       {
         return 0;
       }
-
 
       Span<short> scores = stackalloc short[MAX_MOVES];
       TBMoveList moves0 = gen_moves(in pos);
