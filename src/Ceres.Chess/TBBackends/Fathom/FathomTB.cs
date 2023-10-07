@@ -210,14 +210,14 @@ namespace Ceres.Chess.TBBackends.Fathom
     {
       minDTZ = -1;
 
-      // Currently feature disabled, to enable allocate this array
-      uint[] resultsArray = new uint[FathomMoveGen.TB_MAX_MOVES];
-
       if (!PreparePos(in pos, out FathomPos fathomPos))
       {
         results = null;
         return new FathomProbeMove() { Result = FathomWDLResult.Failure };
       }
+
+      // Currently feature disabled, to enable allocate this array
+      Span<uint> resultsArray = stackalloc uint[FathomMoveGen.TB_MAX_MOVES];
 
       uint res;
       lock (dtzLockObj)
