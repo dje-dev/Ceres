@@ -213,7 +213,7 @@ namespace Ceres.Chess.UserSettings
       // for legacy compatability.
       get
       {
-        bool hasDirTablebases = DirTablebases != null & DirTablebases != "";
+        bool hasDirTablebases = dirTablebases != null & dirTablebases != "";
         bool hasSyzygyPath = SyzygyPath != null & SyzygyPath != "";
         if (hasDirTablebases && hasSyzygyPath)
         {
@@ -229,11 +229,14 @@ namespace Ceres.Chess.UserSettings
       }
     }
 
+    string dirTablebases;
+
     /// <summary>
     /// Directory in which Syzygy tablebases are located, or null if none
     /// (synonym for SyzygyPath).
     /// </summary>
-    public string DirTablebases { get; set; }
+    public string DirTablebases { get { return dirTablebases ?? SyzygyPath; }  set { dirTablebases = value; } }
+
 
     /// <summary>
     /// Directory in which Syzygy tablebases are located, or null if none
