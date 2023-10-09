@@ -131,6 +131,18 @@ namespace Ceres.Chess.TBBackends.Fathom
         staticsInitialized = true;
       }
 
+      foreach (string path in paths.Split(SEP_CHAR))
+      {
+        if (!Directory.Exists(path))
+        {
+          throw new Exception("Directory in tablebase path does not exist: {path}.");
+        }
+        else if (Directory.GetFiles(path).Length == 0)
+        {
+          throw new Exception("Directory in tablebase path contains no files: {path}.");
+        }
+      }
+      
       this.paths = paths;
 
 #if REINITIALIZATION_NOT_SUPPORTED
