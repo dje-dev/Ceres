@@ -15,6 +15,7 @@
 
 using System;
 using System.Collections.Generic;
+using Ceres.Chess.GameEngines;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.Positions;
 using static Ceres.Chess.NNEvaluators.LC0DLL.LC0DLLSyzygyEvaluator;
@@ -68,14 +69,19 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
     /// <param name="result"></param>
     public void ProbeWDL(in Position pos, out WDLScore score, out ProbeState result);
 
-    
+
     /// <summary>
     /// Probes the distance to zero tables to find the suggested move to play.
     /// </summary>
     /// <param name="currentPos"></param>
     /// <param name="result"></param>
+    /// <param name="moveList"></param>
+    /// <param name="dtz"></param>
+    /// <param name="returnOnlyWinningMoves"></param>
     /// <returns></returns>
-    public MGMove CheckTablebaseBestNextMoveViaDTZ(in Position currentPos, out GameResult result, out List<MGMove> fullWinningMoveList);
+    public MGMove CheckTablebaseBestNextMoveViaDTZ(in Position currentPos, out GameResult result, 
+                                                   out List<(MGMove, short)> moveList, 
+                                                   out short dtz, bool returnOnlyWinningMoves = true);
 
 
     /// <summary>
@@ -94,7 +100,7 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
     /// <param name="result"></param>
     /// <param name="fullWinningMoveList"></param>
     /// <returns></returns>
-    public MGMove CheckTablebaseBestNextMove(in Position currentPos, out GameResult result, out List<MGMove> fullWinningMoveList, out bool winningMoveListOrderedByDTM)
+    public MGMove CheckTablebaseBestNextMove(in Position currentPos, out GameResult result, out List<(MGMove, short)> fullWinningMoveList, out bool winningMoveListOrderedByDTM)
     {
       fullWinningMoveList = null;
 
@@ -109,7 +115,7 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
       if (DTZAvailable)
       {
         // Try to use DTZ table, which may may not work (depending on file availability).
-        MGMove dtzMove = CheckTablebaseBestNextMoveViaDTZ(in currentPos, out result, out fullWinningMoveList);
+        MGMove dtzMove = CheckTablebaseBestNextMoveViaDTZ(in currentPos, out result, out fullWinningMoveList, out _);
 
         if (result != GameResult.Unknown)
         {
@@ -125,7 +131,15 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
       }
 
       // Fall thru to use WDL
-      MGMove ret =  CheckTablebaseBestNextMoveViaWDL(in currentPos, out result, out fullWinningMoveList);
+      MGMove ret =  CheckTablebaseBestNextMoveViaWDL(in currentPos, out result, out List<MGMove> winningMoves);
+      if (result != GameResult.Unknown && fullWinningMoveList != null)
+      {
+        foreach (MGMove move in winningMoves)
+        {
+          fullWinningMoveList.Add((move, 1));
+        }
+      }
+
       if (VERBOSE)
       {
         Console.WriteLine($"\r\nCheckTablebaseBestNextMove via WDL yields {result} {ret} with winning list "

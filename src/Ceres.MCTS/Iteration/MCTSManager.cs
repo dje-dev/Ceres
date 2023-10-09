@@ -511,7 +511,7 @@ namespace Ceres.MCTS.Iteration
 
       node.Annotate();
       Position pos = node.Annotation.Pos;
-      MGMove immediateMove = Context.CheckTablebaseBestNextMove(in pos, out GameResult result, out List<MGMove> fullWinningMoveList, out bool winningMoveListOrderedByDTM);
+      MGMove immediateMove = Context.CheckTablebaseBestNextMove(in pos, out GameResult result, out List<(MGMove, short)> fullWinningMoveList, out bool winningMoveListOrderedByDTM);
       if (result == GameResult.Checkmate && !winningMoveListOrderedByDTM)
       {
         // Not safe to rely upon the tablebase probe because unable (e.g. because of missing DTZ files)
@@ -520,7 +520,12 @@ namespace Ceres.MCTS.Iteration
         // However filter search moves to only include the winning moves.
         if (fullWinningMoveList != null && fullWinningMoveList.Count > 0)
         {
-          TerminationManager.SearchMovesTablebaseRestricted = fullWinningMoveList;
+          List<MGMove> moveList = new List<MGMove>(fullWinningMoveList.Count);
+          foreach ((MGMove, short) move in fullWinningMoveList)
+          {
+            moveList.Add(move.Item1);
+          }
+          TerminationManager.SearchMovesTablebaseRestricted = moveList;
         }
 
         return (GameResult.Unknown, default);
@@ -545,11 +550,11 @@ namespace Ceres.MCTS.Iteration
           else
           {
             // Check other moves to see if any of them avoids falling into the draw by repetition trap.
-            foreach (MGMove move in fullWinningMoveList)
+            foreach ((MGMove, short) move in fullWinningMoveList)
             {
-              if (!PositionRepetitionCalc.DrawByRepetitionWouldBeClaimable(in pos, move, historyPositions.ToArray()))
+              if (!PositionRepetitionCalc.DrawByRepetitionWouldBeClaimable(in pos, move.Item1, historyPositions.ToArray()))
               {
-                immediateMove = move;
+                immediateMove = move.Item1;
                 break;
               }
             }

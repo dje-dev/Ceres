@@ -343,7 +343,7 @@ namespace Ceres.MCTS.Iteration
       {
         evaluatorTB  = new LeafEvaluatorSyzygy(CeresUserSettingsManager.Settings.TablebaseDirectory, Manager.ForceNoTablebaseTerminals);
         evaluators.Add(evaluatorTB);
-        CheckTablebaseBestNextMove = (in Position currentPos, out GameResult result, out List<MGMove> otherWinningMoves, out bool winningMoveListOrderedByDTM)
+        CheckTablebaseBestNextMove = (in Position currentPos, out GameResult result, out List<(MGMove, short)> otherWinningMoves, out bool winningMoveListOrderedByDTM)
           => RootTablebaseMoveCheck(in currentPos, out result, out otherWinningMoves, out winningMoveListOrderedByDTM);
         TablebaseDTZAvailable = evaluatorTB.Evaluator.DTZAvailable;
 
@@ -358,7 +358,7 @@ namespace Ceres.MCTS.Iteration
     LeafEvaluatorSyzygy evaluatorTB;
     LeafEvaluatorSyzygyPly1 evaluatorTBPly1;
 
-    MGMove RootTablebaseMoveCheck(in Position currentPos, out GameResult result, out List<MGMove> fullWinningMoveList, out bool winningMoveListOrderedByDTM)
+    MGMove RootTablebaseMoveCheck(in Position currentPos, out GameResult result, out List<(MGMove, short)> fullWinningMoveList, out bool winningMoveListOrderedByDTM)
     {
       MGMove ret = evaluatorTB.Evaluator.CheckTablebaseBestNextMove(in currentPos, out result, out fullWinningMoveList, out winningMoveListOrderedByDTM);
       return ret;

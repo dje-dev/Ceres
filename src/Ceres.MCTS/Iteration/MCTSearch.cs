@@ -308,7 +308,7 @@ namespace Ceres.MCTS.Iteration
         if (startPos.PieceCount <= evaluatorTB.MaxCardinality)
         {
           MGMove ret = evaluatorTB.Evaluator.CheckTablebaseBestNextMove(in startPos, out GameResult result,
-            out List<MGMove> fullWinningMoveList, out bool winningMoveListOrderedByDTM);
+            out List<(MGMove, short)> fullWinningMoveList, out bool winningMoveListOrderedByDTM);
 
           if (result == GameResult.Checkmate && !winningMoveListOrderedByDTM)
           {

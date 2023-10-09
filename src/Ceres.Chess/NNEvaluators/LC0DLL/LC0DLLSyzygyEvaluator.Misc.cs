@@ -28,7 +28,8 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
 {
 
   public delegate MGMove CheckTablebaseBestNextMoveDelegate(in Position currentPos, out GameResult result, 
-                                                            out List<MGMove> fullWinningMoveList, out bool winningMoveListOrderedByDTM);
+                                                            out List<(MGMove, short)> fullWinningMoveList, 
+                                                            out bool winningMoveListOrderedByDTM);
 
   /// <summary>
   /// Miscellaneous helper methods related to Syzygy tablebase 
@@ -38,14 +39,19 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
   public partial class LC0DLLSyzygyEvaluator : IDisposable, ISyzygyEvaluatorEngine
   {
 
-    public MGMove CheckTablebaseBestNextMoveViaDTZ(in Position currentPos, out GameResult result, out List<MGMove> fullWinningMoveList)
+    public MGMove CheckTablebaseBestNextMoveViaDTZ(in Position currentPos,
+                                                   out GameResult result, 
+                                                   out List<(MGMove, short)> moveList, 
+                                                   out short dtz,
+                                                   bool returnOnlyWinningMoves = true)
     {
-      fullWinningMoveList = null;
+      moveList = null;
 
       ProbeWDL(in currentPos, out WDLScore score, out ProbeState probeResult);
       if (!(probeResult == ProbeState.Ok || probeResult == ProbeState.ZeroingBestMove))
       {
         result = GameResult.Unknown;
+        dtz = 0;
         return default(MGMove);
       }
 
@@ -76,12 +82,14 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
       if (dtzMove < 0)
       {
         result = GameResult.Unknown;
+        dtz = 0;
         return default(MGMove);
       }
       else
       {
         EncodedMove encodedMove = new EncodedMove((ushort)dtzMove);
         MGMove mgMove = MGMoveConverter.ToMGMove(in currentPos, encodedMove);
+        dtz = -1; // not supported
         return mgMove;
       }
     }

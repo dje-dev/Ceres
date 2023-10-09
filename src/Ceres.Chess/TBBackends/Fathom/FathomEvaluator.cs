@@ -118,9 +118,14 @@ so maybe this engine is not doing this optimally?
 
 #endif
 
-    public MGMove CheckTablebaseBestNextMoveViaDTZ(in Position currentPos, out GameResult result, out List<MGMove> fullWinningMoveList)
+    public MGMove CheckTablebaseBestNextMoveViaDTZ(in Position currentPos,                                                    
+                                                   out GameResult result, 
+                                                   out List<(MGMove, short)> moveList, 
+                                                   out short dtz,
+                                                   bool returnOnlyWinningMoves = true)
     {
-      fullWinningMoveList = null;
+      moveList = null;
+      dtz = -1;
 
       if (currentPos.PieceCount > MaxCardinality
        || currentPos.MiscInfo.CastlingRightsAny)
@@ -130,6 +135,7 @@ so maybe this engine is not doing this optimally?
       }
 
       FathomProbeMove fathomResult = FathomTB.ProbeDTZ(currentPos, out int minDTZ, out List<FathomTB.DTZMove> results);
+      MGMove bestMove = fathomResult.Move;
 
       if (fathomResult.Result == FathomWDLResult.Failure)
       {
@@ -150,13 +156,21 @@ so maybe this engine is not doing this optimally?
       }
       else if (fathomResult.Result == FathomWDLResult.Win)
       {
-        fullWinningMoveList = new List<MGMove>();
-        results = results.OrderBy(fpm => fpm.DistanceToZero).ToList();// put shortest mates at beginning
+        // Sort to put best moves first.
+        results = results.OrderBy(fpm => fpm.SortKey).ToList();
+
+        dtz = (short)results[0].DistanceToZero;
+        if (results[0].WDL == FathomWDLResult.Win)
+        {
+          bestMove = results[0].Move;
+        }
+
+        moveList = new List<(MGMove, short)>();
         foreach (FathomTB.DTZMove fpm in results)
         {
           if (fpm.WDL == FathomWDLResult.Win)
           {
-            fullWinningMoveList.Add(fpm.Move);
+            moveList.Add((fpm.Move, (short)fpm.DistanceToZero));
           }
         }
 
@@ -167,9 +181,26 @@ so maybe this engine is not doing this optimally?
         throw new Exception($"Internal error: unexpected Fathom game result {fathomResult.Result} in lookup of {currentPos.FEN}");
       }
 
+      // Add in the non-winning moves if requeted.
+      if (!returnOnlyWinningMoves)
+      {
+        if (moveList == null)
+        {
+          moveList = new List<(MGMove, short)>();
+        }
+        float dtzMultiplier = fathomResult.Result == FathomWDLResult.Win ? -1 : 1;
+        foreach (FathomTB.DTZMove fpm in results)
+        {
+          if (fpm.WDL != FathomWDLResult.Win)
+          {
+            moveList.Add((fpm.Move, (short)(dtzMultiplier * fpm.DistanceToZero)));
+          }
+        }
+      }
+
       if (TESTING_MODE_COMPARE_RESULTS)
       {
-        MGMove compMove = compEvaluator.CheckTablebaseBestNextMoveViaDTZ(in currentPos, out GameResult compResult, out _);
+        MGMove compMove = compEvaluator.CheckTablebaseBestNextMoveViaDTZ(in currentPos, out GameResult compResult, out _, out _);
         if (result != compResult)
         {
           Console.WriteLine("DTZ check failure " + currentPos.FEN + " " + result + " " + fathomResult.Move + " vs. compare " + compResult + " " + compMove);

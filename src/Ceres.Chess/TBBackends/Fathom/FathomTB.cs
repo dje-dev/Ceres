@@ -179,11 +179,11 @@ namespace Ceres.Chess.TBBackends.Fathom
     /// <summary>
     /// A possible winning move from a DTZ probe (and associated DTZ).
     /// </summary>
-    public struct DTZMove
+    public readonly record struct DTZMove
     {
+      public readonly FathomWDLResult WDL;
       public readonly MGMove Move;
-      public int DistanceToZero;
-      public FathomWDLResult WDL;
+      public readonly int DistanceToZero;
 
       public DTZMove(MGMove move, int distanceToZero, FathomWDLResult wdl)
       {
@@ -191,7 +191,21 @@ namespace Ceres.Chess.TBBackends.Fathom
         DistanceToZero = distanceToZero;
         WDL = wdl;
       }
+
+
+      static readonly int[] WDL_KEY_VALUES = new int[] { 1_000_000, 100_000, 100_000, 100_000, 0 }; // L, BL, D, CW, W
+
+      /// <summary>
+      /// Returns sort key such that low DTZ is preferred, and
+      /// within same DTZ prefer high promotions the most, followed captures.
+      /// </summary>
+      public int SortKey => WDL == FathomWDLResult.Win ?
+                                                          (DistanceToZero * 1000
+                                                        - Move.PromotionValue * 10
+                                                        - (Move.Capture ? 1 : 0)) 
+                                                      : WDL_KEY_VALUES[(int)WDL];
     }
+
 
     /// <summary>
     /// Probes the Distance to Zero table (DTZ),
@@ -234,7 +248,7 @@ namespace Ceres.Chess.TBBackends.Fathom
       }
 
       minDTZ = int.MaxValue;
-      results = new List<DTZMove>();
+      results = new List<DTZMove>(resultsArray.Length);
       for (int i=0; i<resultsArray.Length;i++)
       {
         uint result = resultsArray[i];
@@ -328,7 +342,7 @@ namespace Ceres.Chess.TBBackends.Fathom
   };
 
 
-    static object dtzLockObj = new ();
+    static readonly object dtzLockObj = new ();
 
 #if NOT
 
