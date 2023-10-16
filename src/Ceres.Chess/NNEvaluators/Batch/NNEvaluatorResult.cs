@@ -15,6 +15,7 @@
 
 using Ceres.Base.DataTypes;
 using Ceres.Chess.EncodedPositions;
+using System;
 
 #endregion
 
@@ -80,7 +81,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     {
       this.winP = winP;
       this.lossP = lossP;
-      M = m;
+      M = Math.Max(0, m);
       UncertaintyV = uncertaintyV;
       Policy = policy;
       Activations = activations;
