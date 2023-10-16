@@ -1917,9 +1917,14 @@ namespace Ceres.Chess.TBBackends.Fathom
       return probe_table(pos, won, ref success, (int)WDL.DTM);
     }
 
+    static readonly object dtzLockObj = new ();
+
     int probe_dtz_table(in FathomPos pos, int wdl, ref int success)
     {
-      return probe_table(pos, wdl, ref success, (int)WDL.DTZ);
+      lock (dtzLockObj) // see comments for FathomTB.ProbeDTZ
+      {
+        return probe_table(pos, wdl, ref success, (int)WDL.DTZ);
+      }
     }
 
 

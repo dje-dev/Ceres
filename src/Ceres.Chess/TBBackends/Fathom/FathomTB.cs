@@ -213,8 +213,9 @@ namespace Ceres.Chess.TBBackends.Fathom
     /// 
     /// The Fathom documentation describes this as not thread safe,
     /// therefore the implementation is protected with a lock.
+    /// However the lock is placed at a lower level to limit the scope
+    /// to what is believed the most limited necessary to preserve thread safety.
     /// 
-    /// TODO: verify if this is true or the restriction can be lifted.
     /// </summary>
     /// <param name="fen"></param>
     /// <param name="minDTZ">the DTZ of the move having minimum DTZ value</param>
@@ -233,13 +234,9 @@ namespace Ceres.Chess.TBBackends.Fathom
       // Currently feature disabled, to enable allocate this array
       Span<uint> resultsArray = stackalloc uint[FathomMoveGen.TB_MAX_MOVES];
 
-      uint res;
-      lock (dtzLockObj)
-      {
-        res = probe.tb_probe_root(fathomPos.white, fathomPos.black, fathomPos.kings,
-                                  fathomPos.queens, fathomPos.rooks, fathomPos.bishops, fathomPos.knights, fathomPos.pawns,
-                                  fathomPos.rule50, fathomPos.castling, fathomPos.ep, fathomPos.turn, resultsArray);
-      }
+      uint res = probe.tb_probe_root(fathomPos.white, fathomPos.black, fathomPos.kings,
+                                     fathomPos.queens, fathomPos.rooks, fathomPos.bishops, fathomPos.knights, fathomPos.pawns,
+                                     fathomPos.rule50, fathomPos.castling, fathomPos.ep, fathomPos.turn, resultsArray);      
 
       if (res == uint.MaxValue)
       {
@@ -342,7 +339,6 @@ namespace Ceres.Chess.TBBackends.Fathom
   };
 
 
-    static readonly object dtzLockObj = new ();
 
 #if NOT
 
