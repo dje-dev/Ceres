@@ -17,6 +17,7 @@ using System;
 using System.IO;
 using System.Reflection;
 using System.Text.Json;
+using Ceres.Base.Misc;
 using Ceres.Base.OperatingSystem;
 using Ceres.Chess.LC0.NNFiles;
 
@@ -137,7 +138,7 @@ namespace Ceres.Chess.UserSettings
         NNWeightsFilesLC0.RegisterDirectory(settings.DirLC0Networks);
       }
 
-      Console.WriteLine($"Ceres user settings loaded from file {settingsFileName}");
+      ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"Ceres user settings loaded from {settingsFileName}");
     }
 
 
