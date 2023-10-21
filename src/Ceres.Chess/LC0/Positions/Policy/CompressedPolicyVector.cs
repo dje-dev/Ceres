@@ -762,6 +762,26 @@ namespace Ceres.Chess.EncodedPositions
       return max;
     }
 
+    /// <summary>
+    /// Enumerates over policy moves meeting specified criteria,
+    /// returning the values as Moves.
+    /// </summary>
+    /// <param name="startPosition"></param>
+    /// <param name="minProbability"></param>
+    /// <param name="topN"></param>
+    /// <returns></returns>
+    public IEnumerable<(MGMove Move, float Probability)>
+      MGMovesAndProbabilities(Position startPosition,
+                            float minProbability = 0.0f, int topN = int.MaxValue)
+    {
+      MGPosition mgPos = MGPosition.FromPosition(in startPosition);
+      foreach ((EncodedMove move, float probability) in ProbabilitySummary(minProbability, topN))
+      {
+        MGMove mgMove = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(move, in mgPos);
+        yield return (mgMove, probability);
+      }
+    }
+
 
     /// <summary>
     /// Enumerates over policy moves meeting specified criteria,
@@ -783,6 +803,7 @@ namespace Ceres.Chess.EncodedPositions
         yield return (moveRet, probability);
       }
     }
+
 
     /// <summary>
     /// Returns an IEnumerable over topls of moves and associated probabilites.
