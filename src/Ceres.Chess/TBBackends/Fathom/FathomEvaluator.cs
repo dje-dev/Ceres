@@ -186,13 +186,13 @@ so maybe this engine is not doing this optimally?
       {
         if (moveList == null)
         {
-          moveList = new List<(MGMove, short)>();
+          moveList = new List<(MGMove, short)>(results.Count);
         }
-        float dtzMultiplier = fathomResult.Result == FathomWDLResult.Win ? -1 : 1;
         foreach (FathomTB.DTZMove fpm in results)
         {
           if (fpm.WDL != FathomWDLResult.Win)
           {
+            float dtzMultiplier = fpm.WDL == FathomWDLResult.Win ? 1 : -1;
             moveList.Add((fpm.Move, (short)(dtzMultiplier * fpm.DistanceToZero)));
           }
         }
