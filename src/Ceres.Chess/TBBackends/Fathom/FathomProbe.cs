@@ -135,11 +135,11 @@ namespace Ceres.Chess.TBBackends.Fathom
       {
         if (!Directory.Exists(path))
         {
-          throw new Exception("Directory in tablebase path does not exist: {path}.");
+          throw new Exception($"Directory in tablebase path does not exist: {path}.");
         }
         else if (Directory.GetFiles(path).Length == 0)
         {
-          throw new Exception("Directory in tablebase path contains no files: {path}.");
+          throw new Exception($"Directory in tablebase path contains no files: {path}.");
         }
       }
       
