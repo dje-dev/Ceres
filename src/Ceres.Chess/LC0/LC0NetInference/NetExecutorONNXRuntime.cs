@@ -329,7 +329,7 @@ namespace Ceres.Chess.LC0NetInference
 
         for (int ix = 0; ix < numElements; ix++)
         {
-          inputFloat16[ix] = new FP16(inputSpan[ix]).Value;
+          inputFloat16[ix] = (Float16)( new FP16(inputSpan[ix]).Value);
         }
 
         DenseTensor<Float16> inputTensor = new DenseTensor<Float16>(inputFloat16, shape);
