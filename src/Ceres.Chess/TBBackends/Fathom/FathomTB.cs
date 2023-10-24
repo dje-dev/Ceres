@@ -145,10 +145,21 @@ namespace Ceres.Chess.TBBackends.Fathom
 
 #if DEBUG
       FathomPos fp2 = default;
-      Debug.Assert(FathomFENParsing.parse_FEN(ref fp2, pos.FEN) && fp2.Equals(fathomPos));
+      Debug.Assert(FathomFENParsing.parse_FEN(ref fp2, pos.FEN));
+
+      // Fathom will clear an en passant rights which are not applicable.
+      // Therefore the equality comparison has to take account of this.
+      if (fp2.EnPassant == 0)
+      {
+        Debug.Assert((fp2 with { EnPassant = 0 }).Equals(fathomPos with { EnPassant = 0 }));
+      }
+      else
+      {
+        Debug.Assert(fp2.Equals(fathomPos));
+      }
 #endif
 
-      if (fathomPos.castling != 0)
+      if (fathomPos.Castling != 0)
       {
         return false;
       }
@@ -234,9 +245,9 @@ namespace Ceres.Chess.TBBackends.Fathom
       // Currently feature disabled, to enable allocate this array
       Span<uint> resultsArray = stackalloc uint[FathomMoveGen.TB_MAX_MOVES];
 
-      uint res = probe.tb_probe_root(fathomPos.white, fathomPos.black, fathomPos.kings,
-                                     fathomPos.queens, fathomPos.rooks, fathomPos.bishops, fathomPos.knights, fathomPos.pawns,
-                                     fathomPos.rule50, fathomPos.castling, fathomPos.ep, fathomPos.turn, resultsArray);      
+      uint res = probe.tb_probe_root(fathomPos.White, fathomPos.Black, fathomPos.Kings,
+                                     fathomPos.Queens, fathomPos.Rooks, fathomPos.Bishops, fathomPos.Knights, fathomPos.Pawns,
+                                     fathomPos.Rule50, fathomPos.Castling, fathomPos.EnPassant, fathomPos.Turn, resultsArray);      
 
       if (res == uint.MaxValue)
       {

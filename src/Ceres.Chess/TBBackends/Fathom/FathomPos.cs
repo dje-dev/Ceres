@@ -51,36 +51,37 @@ namespace Ceres.Chess.TBBackends.Fathom
   /// <summary>
   /// Represents a board position for use internally with Fathom methods.
   /// </summary>
-  internal struct FathomPos
+  internal record struct FathomPos
   {
-    public ulong white;
-    public ulong black;
-    public ulong kings;
-    public ulong queens;
-    public ulong rooks;
-    public ulong bishops;
-    public ulong knights;
-    public ulong pawns;
-    public byte rule50;
-    public byte ep;
-    public bool turn;
+    public ulong White;
+    public ulong Black;
+    public ulong Kings;
+    public ulong Queens;
+    public ulong Rooks;
+    public ulong Bishops;
+    public ulong Knights;
+    public ulong Pawns;
+    public byte Rule50;
+    public byte EnPassant;
+    public bool Turn;
     //public short move;
-    public int castling;
+    public int Castling;
 
-    internal FathomPos(ulong white, ulong black, ulong kings, ulong queens, ulong rooks, ulong bishops, ulong knights, ulong pawns, byte rule50, byte ep, bool turn, int castling)
+    internal FathomPos(ulong white, ulong black, ulong kings, ulong queens, ulong rooks, ulong bishops, 
+                       ulong knights, ulong pawns, byte rule50, byte ep, bool turn, int castling)
     {
-      this.white = white;
-      this.black = black;
-      this.kings = kings;
-      this.queens = queens;
-      this.rooks = rooks;
-      this.bishops = bishops;
-      this.knights = knights;
-      this.pawns = pawns;
-      this.rule50 = rule50;
-      this.ep = ep;
-      this.turn = turn;
-      this.castling = castling;
+      White = white;
+      Black = black;
+      Kings = kings;
+      Queens = queens;
+      Rooks = rooks;
+      Bishops = bishops;
+      Knights = knights;
+      Pawns = pawns;
+      Rule50 = rule50;
+      EnPassant = ep;
+      Turn = turn;
+      Castling = castling;
     }
 
 
@@ -95,6 +96,7 @@ namespace Ceres.Chess.TBBackends.Fathom
       {
         // The Fathom logic removes the ep indicator if
         // the move list is not changed by it.
+#if NOT
         // To avoid complexity of checking this
         // in the infrequent occurrence of en passant rights in tablebase probes.
         // we fallback to the original implementation in this case.
@@ -106,35 +108,34 @@ namespace Ceres.Chess.TBBackends.Fathom
         //       is not completely correct due to possible pins,
         //       therefore a full movegen would be necessary
         //       in cases where an opponent pawn is on a possible move square.
-
-        //static int square(int r, int f) => (8 * (r) + (f));
-        //    int rank = pos.MiscInfo.SideToMove == SideType.White ? 2 : 5;
-        //    int file = (int)pos.MiscInfo.EnPassantFileIndex;
-        //    fp2.ep = (byte)square(rank, file);
+#endif
+        int rank = pos.MiscInfo.SideToMove == SideType.White ? 5 : 2;
+        int file = (int)pos.MiscInfo.EnPassantFileIndex;
+        fp2.EnPassant = (byte)FathomMoveGen.square(rank, file);
       }
 
       Span<BitVector64> bv = stackalloc BitVector64[16];
       pos.InitializeBitmaps(bv, false);
 
-      fp2.rule50 = pos.MiscInfo.Move50Count;
-      fp2.turn = pos.MiscInfo.SideToMove == SideType.White;
+      fp2.Rule50 = pos.MiscInfo.Move50Count;
+      fp2.Turn = pos.MiscInfo.SideToMove == SideType.White;
       //fp2.move = Math.Min((byte)255, pos.MiscInfo.MoveNum);
 
       
-      if (pos.MiscInfo.WhiteCanOO) fp2.castling |= FathomFENParsing.TB_CASTLING_K;
-      if (pos.MiscInfo.WhiteCanOOO) fp2.castling |= FathomFENParsing.TB_CASTLING_Q;
-      if (pos.MiscInfo.BlackCanOO) fp2.castling |= FathomFENParsing.TB_CASTLING_k;
-      if (pos.MiscInfo.BlackCanOOO) fp2.castling |= FathomFENParsing.TB_CASTLING_q;
+      if (pos.MiscInfo.WhiteCanOO) fp2.Castling |= FathomFENParsing.TB_CASTLING_K;
+      if (pos.MiscInfo.WhiteCanOOO) fp2.Castling |= FathomFENParsing.TB_CASTLING_Q;
+      if (pos.MiscInfo.BlackCanOO) fp2.Castling |= FathomFENParsing.TB_CASTLING_k;
+      if (pos.MiscInfo.BlackCanOOO) fp2.Castling |= FathomFENParsing.TB_CASTLING_q;
 
-      fp2.white = (ulong)(bv[1].Data | bv[2].Data | bv[3].Data | bv[4].Data | bv[5].Data | bv[6].Data);
-      fp2.black = (ulong)(bv[9].Data | bv[10].Data | bv[11].Data | bv[12].Data | bv[13].Data | bv[14].Data);
+      fp2.White = (ulong)(bv[1].Data | bv[2].Data | bv[3].Data | bv[4].Data | bv[5].Data | bv[6].Data);
+      fp2.Black = (ulong)(bv[9].Data | bv[10].Data | bv[11].Data | bv[12].Data | bv[13].Data | bv[14].Data);
 
-      fp2.pawns = (ulong)(bv[1].Data | bv[9].Data);
-      fp2.knights = (ulong)(bv[2].Data | bv[10].Data);
-      fp2.bishops = (ulong)(bv[3].Data | bv[11].Data);
-      fp2.rooks = (ulong)(bv[4].Data | bv[12].Data);
-      fp2.queens = (ulong)(bv[5].Data | bv[13].Data);
-      fp2.kings = (ulong)(bv[6].Data | bv[14].Data);
+      fp2.Pawns = (ulong)(bv[1].Data | bv[9].Data);
+      fp2.Knights = (ulong)(bv[2].Data | bv[10].Data);
+      fp2.Bishops = (ulong)(bv[3].Data | bv[11].Data);
+      fp2.Rooks = (ulong)(bv[4].Data | bv[12].Data);
+      fp2.Queens = (ulong)(bv[5].Data | bv[13].Data);
+      fp2.Kings = (ulong)(bv[6].Data | bv[14].Data);
 
       return fp2;
     }

@@ -1797,7 +1797,7 @@ namespace Ceres.Chess.TBBackends.Fathom
       if (!be.symmetric)
       {
         flip = key != be.key;
-        bside = (BoolInt(pos.turn) == (int)FathomColor.WHITE) == flip;
+        bside = (BoolInt(pos.Turn) == (int)FathomColor.WHITE) == flip;
         if (type == (int)WDL.DTM && be.hasPawns && (be as PawnEntry).dtmSwitched)
         {
           flip = !flip;
@@ -1806,7 +1806,7 @@ namespace Ceres.Chess.TBBackends.Fathom
       }
       else
       {
-        flip = pos.turn != IntBool((int)FathomColor.WHITE);
+        flip = pos.Turn != IntBool((int)FathomColor.WHITE);
         bside = false;
       }
 
@@ -1931,7 +1931,7 @@ namespace Ceres.Chess.TBBackends.Fathom
     // probe_ab() is not called for positions with en passant captures.
     int probe_ab(in FathomPos pos, int alpha, int beta, ref int success)
     {
-      Debug.Assert(pos.ep == 0);
+      Debug.Assert(pos.EnPassant == 0);
 
 
       // Generate (at least) all legal captures including (under)promotions.
@@ -2065,9 +2065,9 @@ namespace Ceres.Chess.TBBackends.Fathom
 
         // Check for stalemate in the position with ep captures.
         bool foundMove = false;
-        for (int i = 0; i < moves.NumMoves; i++)
+        for (int i = 0; i < moves1.NumMoves; i++)
         {
-          ushort move = moves.Moves[i];
+          ushort move = moves1.Moves[i];
 
           if (!is_en_passant(pos, move) && legal_move(pos, move))
           {
@@ -2294,7 +2294,7 @@ namespace Ceres.Chess.TBBackends.Fathom
       int v, success;
 
       // Obtain 50-move counter for the root position.
-      int cnt50 = pos.rule50;
+      int cnt50 = pos.Rule50;
 
       // The border between draw and win lies at rank 1 or rank 900, depending
       // on whether the 50-move rule is used.
@@ -2310,7 +2310,7 @@ namespace Ceres.Chess.TBBackends.Fathom
         do_move(ref pos1, in pos, m.move);
 
         // Calculate dtz for the current move counting from the root position.
-        if (pos1.rule50 == 0)
+        if (pos1.Rule50 == 0)
         {
           // If the move resets the 50-move counter, dtz is -101/-1/0/1/101.
           v = -probe_wdl(in pos1, out success);
@@ -2412,7 +2412,7 @@ namespace Ceres.Chess.TBBackends.Fathom
         }
         else
         {
-          if (pos1.rule50 != 0)
+          if (pos1.Rule50 != 0)
           {
             v = -probe_dtz(in pos1, out success);
             if (v > 0)
@@ -2440,7 +2440,7 @@ namespace Ceres.Chess.TBBackends.Fathom
         if (results != null)
         {
           uint res = 0;
-          res = TB_SET_WDL(res, (int)dtz_to_wdl(pos.rule50, v));
+          res = TB_SET_WDL(res, (int)dtz_to_wdl(pos.Rule50, v));
           res = TB_SET_FROM(res, move_from(moves0.Moves[i]));
           res = TB_SET_TO(res, move_to(moves0.Moves[i]));
           res = TB_SET_PROMOTES(res, move_promotes(moves0.Moves[i]));
@@ -2506,7 +2506,7 @@ namespace Ceres.Chess.TBBackends.Fathom
         // Select a "random" move that preserves the draw.
         // Uses calc_key as the PRNG.
         //int count = (int)calc_key(pos, !pos.turn) % num_draw;
-        ulong count = (ulong)(calc_key(pos, !pos.turn) % (ulong)num_draw);
+        ulong count = (ulong)(calc_key(pos, !pos.Turn) % (ulong)num_draw);
 
         for (int i = 0; i < moves0.NumMoves; i++)
         {

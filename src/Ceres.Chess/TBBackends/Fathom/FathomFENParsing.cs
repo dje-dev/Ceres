@@ -272,19 +272,19 @@ namespace Ceres.Chess.TBBackends.Fathom
       //int intMove = int.Parse(fen.Substring(fenIndex));
       //move = (byte)System.Math.Min(byte.MaxValue, intMove * 2 + (turn ? 1 : 0));
 
-      pos.white = white;
-      pos.black = black;
-      pos.kings = kings;
-      pos.queens = queens;
-      pos.rooks = rooks;
-      pos.bishops = bishops;
-      pos.knights = knights;
-      pos.pawns = pawns;
+      pos.White = white;
+      pos.Black = black;
+      pos.Kings = kings;
+      pos.Queens = queens;
+      pos.Rooks = rooks;
+      pos.Bishops = bishops;
+      pos.Knights = knights;
+      pos.Pawns = pawns;
 
-      pos.castling = castling;
-      pos.rule50 = (byte)rule50;
-      pos.ep = (byte)ep;
-      pos.turn = turn;
+      pos.Castling = castling;
+      pos.Rule50 = (byte)rule50;
+      pos.EnPassant = (byte)ep;
+      pos.Turn = turn;
       return true;
 
       fen_parse_error:

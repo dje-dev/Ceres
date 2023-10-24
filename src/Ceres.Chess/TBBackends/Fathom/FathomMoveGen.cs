@@ -147,21 +147,21 @@ namespace Ceres.Chess.TBBackends.Fathom
     internal static ulong pieces_by_type(in FathomPos pos, FathomColor c, FathomPieceType p)
     {
 
-      ulong mask = (c == FathomColor.WHITE) ? pos.white : pos.black;
+      ulong mask = (c == FathomColor.WHITE) ? pos.White : pos.Black;
       switch (p)
       {
         case FathomPieceType.PAWN:
-          return pos.pawns & mask;
+          return pos.Pawns & mask;
         case FathomPieceType.KNIGHT:
-          return pos.knights & mask;
+          return pos.Knights & mask;
         case FathomPieceType.BISHOP:
-          return pos.bishops & mask;
+          return pos.Bishops & mask;
         case FathomPieceType.ROOK:
-          return pos.rooks & mask;
+          return pos.Rooks & mask;
         case FathomPieceType.QUEEN:
-          return pos.queens & mask;
+          return pos.Queens & mask;
         case FathomPieceType.KING:
-          return pos.kings & mask;
+          return pos.Kings & mask;
         default:
           throw new Exception("fathom.pieces_by_type: internal error, unknown piece type " + p);
       }
@@ -571,23 +571,23 @@ namespace Ceres.Chess.TBBackends.Fathom
      */
     internal static ulong calc_key(in FathomPos pos, bool mirror)
     {
-      ulong white = pos.white, black = pos.black;
+      ulong white = pos.White, black = pos.Black;
       if (mirror)
       {
         ulong tmp = white;
         white = black;
         black = tmp;
       }
-      return (ulong)popcount(white & pos.queens) * PRIME_WHITE_QUEEN +
-             (ulong)popcount(white & pos.rooks) * PRIME_WHITE_ROOK +
-             (ulong)popcount(white & pos.bishops) * PRIME_WHITE_BISHOP +
-             (ulong)popcount(white & pos.knights) * PRIME_WHITE_KNIGHT +
-             (ulong)popcount(white & pos.pawns) * PRIME_WHITE_PAWN +
-             (ulong)popcount(black & pos.queens) * PRIME_BLACK_QUEEN +
-             (ulong)popcount(black & pos.rooks) * PRIME_BLACK_ROOK +
-             (ulong)popcount(black & pos.bishops) * PRIME_BLACK_BISHOP +
-             (ulong)popcount(black & pos.knights) * PRIME_BLACK_KNIGHT +
-             (ulong)popcount(black & pos.pawns) * PRIME_BLACK_PAWN;
+      return (ulong)popcount(white & pos.Queens) * PRIME_WHITE_QUEEN +
+             (ulong)popcount(white & pos.Rooks) * PRIME_WHITE_ROOK +
+             (ulong)popcount(white & pos.Bishops) * PRIME_WHITE_BISHOP +
+             (ulong)popcount(white & pos.Knights) * PRIME_WHITE_KNIGHT +
+             (ulong)popcount(white & pos.Pawns) * PRIME_WHITE_PAWN +
+             (ulong)popcount(black & pos.Queens) * PRIME_BLACK_QUEEN +
+             (ulong)popcount(black & pos.Rooks) * PRIME_BLACK_ROOK +
+             (ulong)popcount(black & pos.Bishops) * PRIME_BLACK_BISHOP +
+             (ulong)popcount(black & pos.Knights) * PRIME_BLACK_KNIGHT +
+             (ulong)popcount(black & pos.Pawns) * PRIME_BLACK_PAWN;
     }
 
     // Produce a 64-bit material key corresponding to the material combination
@@ -640,7 +640,7 @@ namespace Ceres.Chess.TBBackends.Fathom
     {
       for (int i = (int)FathomPieceType.PAWN; i <= (int)FathomPieceType.KING; i++)
       {
-        if ((pieces_by_type(pos, ((pos.turn ? 1 : 0) == (int)FathomColor.WHITE) ? FathomColor.WHITE : FathomColor.BLACK, (FathomPieceType)i) & board(move_from(move))) != 0)
+        if ((pieces_by_type(pos, ((pos.Turn ? 1 : 0) == (int)FathomColor.WHITE) ? FathomColor.WHITE : FathomColor.BLACK, (FathomPieceType)i) & board(move_from(move))) != 0)
         {
           return i;
         }
@@ -674,12 +674,12 @@ namespace Ceres.Chess.TBBackends.Fathom
     {
       TBMoveList moves = new TBMoveList();
 
-      ulong occ = pos.white | pos.black;
-      ulong us = (pos.turn ? pos.white : pos.black),
-           them = (pos.turn ? pos.black : pos.white);
+      ulong occ = pos.White | pos.Black;
+      ulong us = (pos.Turn ? pos.White : pos.Black),
+           them = (pos.Turn ? pos.Black : pos.White);
       ulong b, att;
       {
-        int from = lsb(pos.kings & us);
+        int from = lsb(pos.Kings & us);
         Debug.Assert(from < 64);
         for (att = king_attacks(from) & them; att != 0; att = poplsb(att))
         {
@@ -687,7 +687,7 @@ namespace Ceres.Chess.TBBackends.Fathom
           add_move(moves, false, from, to);
         }
       }
-      for (b = us & pos.queens; b != 0; b = poplsb(b))
+      for (b = us & pos.Queens; b != 0; b = poplsb(b))
       {
         int from = lsb(b);
         for (att = queen_attacks(from, occ) & them; att != 0; att = poplsb(att))
@@ -696,7 +696,7 @@ namespace Ceres.Chess.TBBackends.Fathom
           add_move(moves, false, from, to);
         }
       }
-      for (b = us & pos.rooks; b != 0; b = poplsb(b))
+      for (b = us & pos.Rooks; b != 0; b = poplsb(b))
       {
         int from = lsb(b);
         for (att = rook_attacks(from, occ) & them; att != 0; att = poplsb(att))
@@ -705,7 +705,7 @@ namespace Ceres.Chess.TBBackends.Fathom
           add_move(moves, false, from, to);
         }
       }
-      for (b = us & pos.bishops; b != 0; b = poplsb(b))
+      for (b = us & pos.Bishops; b != 0; b = poplsb(b))
       {
         int from = lsb(b);
         for (att = bishop_attacks(from, occ) & them; att != 0; att = poplsb(att))
@@ -714,7 +714,7 @@ namespace Ceres.Chess.TBBackends.Fathom
           add_move(moves, false, from, to);
         }
       }
-      for (b = us & pos.knights; b != 0; b = poplsb(b))
+      for (b = us & pos.Knights; b != 0; b = poplsb(b))
       {
         int from = lsb(b);
         for (att = knight_attacks(from) & them; att != 0; att = poplsb(att))
@@ -723,13 +723,13 @@ namespace Ceres.Chess.TBBackends.Fathom
           add_move(moves, false, from, to);
         }
       }
-      for (b = us & pos.pawns; b != 0; b = poplsb(b))
+      for (b = us & pos.Pawns; b != 0; b = poplsb(b))
       {
         int from = lsb(b);
-        att = pawn_attacks(from, pos.turn ? 1 : 0);
-        if (pos.ep != 0 && ((att & board(pos.ep)) != 0))
+        att = pawn_attacks(from, pos.Turn ? 1 : 0);
+        if (pos.EnPassant != 0 && ((att & board(pos.EnPassant)) != 0))
         {
-          int to = pos.ep;
+          int to = pos.EnPassant;
           add_move(moves, false, from, to);
         }
         for (att = att & them; att != 0; att = poplsb(att))
@@ -747,20 +747,20 @@ namespace Ceres.Chess.TBBackends.Fathom
     static internal TBMoveList gen_moves(in FathomPos pos)
     {
       TBMoveList moves = new();
-      ulong occ = pos.white | pos.black;
-      ulong us = (pos.turn ? pos.white : pos.black),
-               them = (pos.turn ? pos.black : pos.white);
+      ulong occ = pos.White | pos.Black;
+      ulong us = (pos.Turn ? pos.White : pos.Black),
+               them = (pos.Turn ? pos.Black : pos.White);
       ulong b, att;
 
       {
-        int from = lsb(pos.kings & us);
+        int from = lsb(pos.Kings & us);
         for (att = king_attacks(from) & ~us; att != 0; att = poplsb(att))
         {
           int to = lsb(att);
           add_move(moves, false, from, to);
         }
       }
-      for (b = us & pos.queens; b != 0; b = poplsb(b))
+      for (b = us & pos.Queens; b != 0; b = poplsb(b))
       {
         int from = lsb(b);
         for (att = queen_attacks(from, occ) & ~us; att != 0; att = poplsb(att))
@@ -769,7 +769,7 @@ namespace Ceres.Chess.TBBackends.Fathom
           add_move(moves, false, from, to);
         }
       }
-      for (b = us & pos.rooks; b != 0; b = poplsb(b))
+      for (b = us & pos.Rooks; b != 0; b = poplsb(b))
       {
         int from = lsb(b);
         for (att = rook_attacks(from, occ) & ~us; att != 0; att = poplsb(att))
@@ -778,7 +778,7 @@ namespace Ceres.Chess.TBBackends.Fathom
           add_move(moves, false, from, to);
         }
       }
-      for (b = us & pos.bishops; b != 0; b = poplsb(b))
+      for (b = us & pos.Bishops; b != 0; b = poplsb(b))
       {
         int from = lsb(b);
         for (att = bishop_attacks(from, occ) & ~us; att != 0; att = poplsb(att))
@@ -787,7 +787,7 @@ namespace Ceres.Chess.TBBackends.Fathom
           add_move(moves, false, from, to);
         }
       }
-      for (b = us & pos.knights; b != 0; b = poplsb(b))
+      for (b = us & pos.Knights; b != 0; b = poplsb(b))
       {
         int from = lsb(b);
         for (att = knight_attacks(from) & ~us; att != 0; att = poplsb(att))
@@ -796,22 +796,22 @@ namespace Ceres.Chess.TBBackends.Fathom
           add_move(moves, false, from, to);
         }
       }
-      for (b = us & pos.pawns; b != 0; b = poplsb(b))
+      for (b = us & pos.Pawns; b != 0; b = poplsb(b))
       {
         int from = lsb(b);
-        int next = from + (pos.turn ? 8 : -8);
-        att = pawn_attacks(from, pos.turn ? 1 : 0);
-        if (pos.ep != 0 && ((att & board(pos.ep)) != 0))
+        int next = from + (pos.Turn ? 8 : -8);
+        att = pawn_attacks(from, pos.Turn ? 1 : 0);
+        if (pos.EnPassant != 0 && ((att & board(pos.EnPassant)) != 0))
         {
-          int to = pos.ep;
+          int to = pos.EnPassant;
           add_move(moves, false, from, to);
         }
         att &= them;
         if ((board(next) & occ) == 0)
         {
           att |= board(next);
-          int next2 = from + (pos.turn ? 16 : -16);
-          if ((pos.turn ? rank(from) == 1 : rank(from) == 6) &&
+          int next2 = from + (pos.Turn ? 16 : -16);
+          if ((pos.Turn ? rank(from) == 1 : rank(from) == 6) &&
                   ((board(next2) & occ) == 0))
             att |= board(next2);
         }
@@ -831,12 +831,12 @@ namespace Ceres.Chess.TBBackends.Fathom
     {
       ushort from = move_from(move);
       ushort to = move_to(move);
-      ulong us = (pos.turn ? pos.white : pos.black);
-      if (pos.ep == 0)
+      ulong us = (pos.Turn ? pos.White : pos.Black);
+      if (pos.EnPassant == 0)
         return false;
-      if (to != pos.ep)
+      if (to != pos.EnPassant)
         return false;
-      if ((board(from) & us & pos.pawns) == 0)
+      if ((board(from) & us & pos.Pawns) == 0)
         return false;
       return true;
     }
@@ -848,7 +848,7 @@ namespace Ceres.Chess.TBBackends.Fathom
     internal static bool is_capture(in FathomPos pos, ushort move)
     {
       ushort to = move_to(move);
-      ulong them = (pos.turn ? pos.black : pos.white);
+      ulong them = (pos.Turn ? pos.Black : pos.White);
       return (them & board(to)) != 0 || is_en_passant(pos, move);
     }
 
@@ -859,26 +859,26 @@ namespace Ceres.Chess.TBBackends.Fathom
      */
     static bool is_legal(in FathomPos pos)
     {
-      ulong occ = pos.white | pos.black;
-      ulong us = (pos.turn ? pos.black : pos.white),
-               them = (pos.turn ? pos.white : pos.black);
-      ulong king = pos.kings & us;
+      ulong occ = pos.White | pos.Black;
+      ulong us = (pos.Turn ? pos.Black : pos.White),
+               them = (pos.Turn ? pos.White : pos.Black);
+      ulong king = pos.Kings & us;
       if (king == 0)
         return false;
       int sq = lsb(king);
-      if ((king_attacks(sq) & (pos.kings & them)) != 0)
+      if ((king_attacks(sq) & (pos.Kings & them)) != 0)
         return false;
       ulong ratt = rook_attacks(sq, occ);
       ulong batt = bishop_attacks(sq, occ);
-      if ((ratt & (pos.rooks & them)) != 0)
+      if ((ratt & (pos.Rooks & them)) != 0)
         return false;
-      if ((batt & (pos.bishops & them)) != 0)
+      if ((batt & (pos.Bishops & them)) != 0)
         return false;
-      if (((ratt | batt) & (pos.queens & them)) != 0)
+      if (((ratt | batt) & (pos.Queens & them)) != 0)
         return false;
-      if ((knight_attacks(sq) & (pos.knights & them)) != 0)
+      if ((knight_attacks(sq) & (pos.Knights & them)) != 0)
         return false;
-      if ((pawn_attacks(sq, pos.turn ? 0 : 1) & (pos.pawns & them)) != 0)
+      if ((pawn_attacks(sq, pos.Turn ? 0 : 1) & (pos.Pawns & them)) != 0)
         return false;
       return true;
     }
@@ -931,24 +931,24 @@ namespace Ceres.Chess.TBBackends.Fathom
      */
     internal static bool is_check(in FathomPos pos)
     {
-      ulong occ = pos.white | pos.black;
-      ulong us = (pos.turn ? pos.white : pos.black),
-               them = (pos.turn ? pos.black : pos.white);
-      ulong king = pos.kings & us;
+      ulong occ = pos.White | pos.Black;
+      ulong us = (pos.Turn ? pos.White : pos.Black),
+               them = (pos.Turn ? pos.Black : pos.White);
+      ulong king = pos.Kings & us;
 
       Debug.Assert(king != 0);
       int sq = lsb(king);
       ulong ratt = rook_attacks(sq, occ);
       ulong batt = bishop_attacks(sq, occ);
-      if ((ratt & (pos.rooks & them)) != 0)
+      if ((ratt & (pos.Rooks & them)) != 0)
         return true;
-      if ((batt & (pos.bishops & them)) != 0)
+      if ((batt & (pos.Bishops & them)) != 0)
         return true;
-      if (((ratt | batt) & (pos.queens & them)) != 0)
+      if (((ratt | batt) & (pos.Queens & them)) != 0)
         return true;
-      if ((knight_attacks(sq) & (pos.knights & them)) != 0)
+      if ((knight_attacks(sq) & (pos.Knights & them)) != 0)
         return true;
-      if ((pawn_attacks(sq, pos.turn ? 1 : 0) & (pos.pawns & them)) != 0)
+      if ((pawn_attacks(sq, pos.Turn ? 1 : 0) & (pos.Pawns & them)) != 0)
         return true;
       return false;
     }
@@ -958,49 +958,49 @@ namespace Ceres.Chess.TBBackends.Fathom
      */
     internal static bool is_valid(in FathomPos pos)
     {
-      if (popcount(pos.kings) != 2)
+      if (popcount(pos.Kings) != 2)
         return false;
-      if (popcount(pos.kings & pos.white) != 1)
+      if (popcount(pos.Kings & pos.White) != 1)
         return false;
-      if (popcount(pos.kings & pos.black) != 1)
+      if (popcount(pos.Kings & pos.Black) != 1)
         return false;
-      if ((pos.white & pos.black) != 0)
+      if ((pos.White & pos.Black) != 0)
         return false;
-      if ((pos.kings & pos.queens) != 0)
+      if ((pos.Kings & pos.Queens) != 0)
         return false;
-      if ((pos.kings & pos.rooks) != 0)
+      if ((pos.Kings & pos.Rooks) != 0)
         return false;
-      if ((pos.kings & pos.bishops) != 0)
+      if ((pos.Kings & pos.Bishops) != 0)
         return false;
-      if ((pos.kings & pos.knights) != 0)
+      if ((pos.Kings & pos.Knights) != 0)
         return false;
-      if ((pos.kings & pos.pawns) != 0)
+      if ((pos.Kings & pos.Pawns) != 0)
         return false;
-      if ((pos.queens & pos.rooks) != 0)
+      if ((pos.Queens & pos.Rooks) != 0)
         return false;
-      if ((pos.queens & pos.bishops) != 0)
+      if ((pos.Queens & pos.Bishops) != 0)
         return false;
-      if ((pos.queens & pos.knights) != 0)
+      if ((pos.Queens & pos.Knights) != 0)
         return false;
-      if ((pos.queens & pos.pawns) != 0)
+      if ((pos.Queens & pos.Pawns) != 0)
         return false;
-      if ((pos.rooks & pos.bishops) != 0)
+      if ((pos.Rooks & pos.Bishops) != 0)
         return false;
-      if ((pos.rooks & pos.knights) != 0)
+      if ((pos.Rooks & pos.Knights) != 0)
         return false;
-      if ((pos.rooks & pos.pawns) != 0)
+      if ((pos.Rooks & pos.Pawns) != 0)
         return false;
-      if ((pos.bishops & pos.knights) != 0)
+      if ((pos.Bishops & pos.Knights) != 0)
         return false;
-      if ((pos.bishops & pos.pawns) != 0)
+      if ((pos.Bishops & pos.Pawns) != 0)
         return false;
-      if ((pos.knights & pos.pawns) != 0)
+      if ((pos.Knights & pos.Pawns) != 0)
         return false;
-      if ((pos.pawns & BOARD_FILE_EDGE) > 0)
+      if ((pos.Pawns & BOARD_FILE_EDGE) > 0)
         return false;
-      if ((pos.white | pos.black) !=
-          (pos.kings | pos.queens | pos.rooks | pos.bishops | pos.knights |
-           pos.pawns))
+      if ((pos.White | pos.Black) !=
+          (pos.Kings | pos.Queens | pos.Rooks | pos.Bishops | pos.Knights |
+           pos.Pawns))
         return false;
 
       return is_legal(pos);
@@ -1015,54 +1015,54 @@ namespace Ceres.Chess.TBBackends.Fathom
       int from = move_from(move);
       int to = move_to(move);
       int promotes = move_promotes(move);
-      pos.turn = !pos0.turn;
-      pos.white = do_bb_move(pos0.white, from, to);
-      pos.black = do_bb_move(pos0.black, from, to);
-      pos.kings = do_bb_move(pos0.kings, from, to);
-      pos.queens = do_bb_move(pos0.queens, from, to);
-      pos.rooks = do_bb_move(pos0.rooks, from, to);
-      pos.bishops = do_bb_move(pos0.bishops, from, to);
-      pos.knights = do_bb_move(pos0.knights, from, to);
-      pos.pawns = do_bb_move(pos0.pawns, from, to);
-      pos.ep = 0;
+      pos.Turn = !pos0.Turn;
+      pos.White = do_bb_move(pos0.White, from, to);
+      pos.Black = do_bb_move(pos0.Black, from, to);
+      pos.Kings = do_bb_move(pos0.Kings, from, to);
+      pos.Queens = do_bb_move(pos0.Queens, from, to);
+      pos.Rooks = do_bb_move(pos0.Rooks, from, to);
+      pos.Bishops = do_bb_move(pos0.Bishops, from, to);
+      pos.Knights = do_bb_move(pos0.Knights, from, to);
+      pos.Pawns = do_bb_move(pos0.Pawns, from, to);
+      pos.EnPassant = 0;
       if (promotes != TB_PROMOTES_NONE)
       {
-        pos.pawns &= ~board(to);       // Promotion
+        pos.Pawns &= ~board(to);       // Promotion
         switch (promotes)
         {
           case TB_PROMOTES_QUEEN:
-            pos.queens |= board(to); break;
+            pos.Queens |= board(to); break;
           case TB_PROMOTES_ROOK:
-            pos.rooks |= board(to); break;
+            pos.Rooks |= board(to); break;
           case TB_PROMOTES_BISHOP:
-            pos.bishops |= board(to); break;
+            pos.Bishops |= board(to); break;
           case TB_PROMOTES_KNIGHT:
-            pos.knights |= board(to); break;
+            pos.Knights |= board(to); break;
         }
-        pos.rule50 = 0;
+        pos.Rule50 = 0;
       }
-      else if ((board(from) & pos0.pawns) != 0)
+      else if ((board(from) & pos0.Pawns) != 0)
       {
-        pos.rule50 = 0;                // Pawn move
+        pos.Rule50 = 0;                // Pawn move
         if (rank(from) == 1 && rank(to) == 3 &&
-            (pawn_attacks(from + 8, 1) & pos0.pawns & pos0.black) != 0)
-          pos.ep = (byte)(from + 8);
+            (pawn_attacks(from + 8, 1) & pos0.Pawns & pos0.Black) != 0)
+          pos.EnPassant = (byte)(from + 8);
         else if (rank(from) == 6 && rank(to) == 4 &&
-            (pawn_attacks(from - 8, 0) & pos0.pawns & pos0.white) != 0)
-          pos.ep = (byte)(from - 8);
-        else if (to == pos0.ep)
+            (pawn_attacks(from - 8, 0) & pos0.Pawns & pos0.White) != 0)
+          pos.EnPassant = (byte)(from - 8);
+        else if (to == pos0.EnPassant)
         {
-          int ep_to = (pos0.turn ? to - 8 : to + 8);
+          int ep_to = (pos0.Turn ? to - 8 : to + 8);
           ulong ep_mask = ~board(ep_to);
-          pos.white &= ep_mask;
-          pos.black &= ep_mask;
-          pos.pawns &= ep_mask;
+          pos.White &= ep_mask;
+          pos.Black &= ep_mask;
+          pos.Pawns &= ep_mask;
         }
       }
-      else if ((board(to) & (pos0.white | pos0.black)) != 0)
-        pos.rule50 = 0;                // Capture
+      else if ((board(to) & (pos0.White | pos0.Black)) != 0)
+        pos.Rule50 = 0;                // Capture
       else
-        pos.rule50 = (byte)(pos0.rule50 + 1); // Normal move
+        pos.Rule50 = (byte)(pos0.Rule50 + 1); // Normal move
       if (!is_legal(pos))
         return false;
       return true;
