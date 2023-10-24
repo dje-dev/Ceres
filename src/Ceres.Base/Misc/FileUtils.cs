@@ -17,6 +17,8 @@ using System.IO;
 using Ceres.Base.DataType;
 using System.Runtime.InteropServices;
 using Ceres.Base.OperatingSystem;
+using System.Collections.Generic;
+using System.Linq;
 
 #endregion
 
@@ -27,6 +29,21 @@ namespace Ceres.Base.Misc
   /// </summary>
   public static class FileUtils
   {
+    /// <summary>
+    /// Returns if a specified filename is valid on this platform.
+    /// </summary>
+    /// <param name="filename"></param>
+    /// <returns></returns>
+    public static bool IsValidFilename(string filename)
+    {
+      if (string.IsNullOrEmpty(filename))
+        return false;
+
+      HashSet<char> invalidChars = new HashSet<char>(Path.GetInvalidFileNameChars());
+      return !filename.Any(c => invalidChars.Contains(c));
+    }
+
+
     /// <summary>
     /// Returns if all of the semicolon/colon separated paths exist.
     /// </summary>
