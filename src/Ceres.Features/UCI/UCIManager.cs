@@ -958,7 +958,7 @@ namespace Ceres.Features.UCI
         // Finally show moves that had no visits
         float elapsedTimeSeconds = (float)(DateTime.Now - manager.StartTimeThisSearch).TotalSeconds;
         string timeStr = $"{ elapsedTimeSeconds * 1000.0f:F0}";
-        for (int i = multiPVIndex - 1; i < searchRootNode.NumPolicyMoves; i++)
+        for (int i = multiPVIndex - 1; i < numPV; i++)
         {
           (MCTSNode node, EncodedMove move, FP16 p) info = searchRootNode.ChildAtIndexInfo(i);
           if (info.node.IsNull)
