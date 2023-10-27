@@ -17,7 +17,6 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using Ceres.Chess.EncodedPositions.Basic;
-
 #endregion
 
 namespace Ceres.Chess.EncodedPositions
@@ -2042,17 +2041,21 @@ namespace Ceres.Chess.EncodedPositions
     {
       get
       {
-        EncodedMove bestMove = default;
         float bestProb = 0;
-        foreach (var entry in Enumerator())
+        int bestMoveIndex = 0;
+        Span<float> probabilities = ProbabilitiesSpan;
+        for (int i = 0; i < POLICY_VECTOR_LENGTH; i++)
         {
-          if (entry.probability > bestProb)
+          float probability = probabilities[i];
+
+          if (probability > bestProb && !float.IsNaN(probability))
           {
-            bestProb = entry.probability;
-            bestMove = entry.move;
+            bestProb = probability;
+            bestMoveIndex = i;
           }
         }
-        return bestMove;
+
+        return EncodedMove.FromNeuralNetIndex(bestMoveIndex);
       }
     }
 
