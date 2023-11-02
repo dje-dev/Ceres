@@ -34,9 +34,8 @@ namespace Ceres.Chess.LC0NetInference
   /// </summary>
   public class ONNXRuntimeExecutor : IDisposable
   {
-    public const int TPG_BYTES_PER_SQUARE_RECORD = 39 + (3 * 13); // TODO: should be referenced from TPGRecord
-    public const int TPG_BYTES_PER_MOVE_RECORD = 44; // TODO: should be referenced from TPGRecord
-    public const int TPG_MAX_MOVES = 64; //  // TODO: should be referenced from TPGRecord
+    public const int TPG_BYTES_PER_SQUARE_RECORD = 135; // TODO: should be referenced from TPGRecord
+    public const int TPG_MAX_MOVES = 92; //  // TODO: should be referenced from TPGRecord
 
     /// <summary>
     /// File name of source ONNX file
@@ -165,12 +164,14 @@ namespace Ceres.Chess.LC0NetInference
         for (int i = 0; i < flatValuesPrimary.Length; i++) flatValuesPrimaryS[i] /= 100f;
         inputs[0] = (new Memory<float>(flatValuesPrimaryS.ToArray()), new int[] { numPositionsUsed, 64, TPG_BYTES_PER_SQUARE_RECORD });
 
+#if NOT
         if (flatValuesSecondary.Length > 0)
         {
           Span<float> flatValuesSecondaryS = flatValuesSecondary.Span;
           for (int i = 0; i < flatValuesSecondary.Length; i++) flatValuesSecondaryS[i] /= 100f;
           inputs[1] = (new Memory<float>(flatValuesSecondaryS.ToArray()), new int[] { numPositionsUsed, TPG_MAX_MOVES, TPG_BYTES_PER_MOVE_RECORD });
         }
+#endif
 
         eval = executor.Run(inputs, Precision == NNEvaluatorPrecision.FP16);
       }

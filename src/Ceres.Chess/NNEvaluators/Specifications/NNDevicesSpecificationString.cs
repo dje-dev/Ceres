@@ -63,7 +63,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications
     public NNDevicesSpecificationString(string deviceString)
     {
       const string exampleString = ", valid examples: GPU:0 or GPU:0,1 or GPU:0@0.75,1@0.25:POOLED";
-      
+
       Devices = new List<(NNEvaluatorDeviceDef, float)>();
 
       string[] equalsParts = deviceString.Split("=");
@@ -78,7 +78,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications
 
       string[] deviceStringParts = equalsParts[0].Split(":");
 
-      if (deviceStringParts.Length == 1 && deviceStringParts[0].ToUpper() == "CPU")
+      if (deviceStringParts[0].ToUpper() == "CPU")
       {
         Devices.Add((new NNEvaluatorDeviceDef(NNDeviceType.CPU, 0, false, null, null, null), 1));
         ComboType = NNEvaluatorDeviceComboType.Single;
@@ -87,13 +87,13 @@ namespace Ceres.Chess.NNEvaluators.Specifications
 
       if (deviceStringParts.Length is not (2 or 3))
       {
-        throw new Exception($"{deviceString} not valid device specification string { exampleString}");
+        throw new Exception($"{deviceString} not valid device specification string {exampleString}");
       }
 
       // Device specification such as "GPU:0,1" or "GPU:0,1:POOLED"
       string deviceTypeStr = deviceStringParts[0].ToUpper();
       if (deviceTypeStr != "GPU")
-      { 
+      {
         throw new Exception($"{deviceString} not valid, device specification expected to begin with 'GPU:'");
       }
 
@@ -108,7 +108,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications
         {
           var parsedBatchFile = BatchSizeFileParser.ParseFromFile(device.batchSizesFileName);
           maxBatchSize = parsedBatchFile.maxBatchSize;
-          predefinedPartitions = parsedBatchFile.predefinedPartitions;    
+          predefinedPartitions = parsedBatchFile.predefinedPartitions;
         }
         Devices.Add((new NNEvaluatorDeviceDef(NNDeviceType.GPU, int.Parse(device.netID), false,
                                               maxBatchSize, optimalBatchSize, predefinedPartitions), device.weight));
@@ -125,7 +125,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications
           throw new Exception("Unexpected third part, expected POOLED");
         }
 
-        ComboType = NNEvaluatorDeviceComboType.Pooled;        
+        ComboType = NNEvaluatorDeviceComboType.Pooled;
       }
     }
 
@@ -200,7 +200,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications
               str += $"[{device.MaxBatchSize.Value}]";
             }
           }
-        
+
           count++;
         }
         if (comboType == NNEvaluatorDeviceComboType.Pooled)
@@ -212,7 +212,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications
       else
       {
         return ToSpecificationStringComplex(comboType, devices);
-      }      
+      }
     }
 
   }

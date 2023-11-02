@@ -26,9 +26,8 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
-using Ceres.Base.Benchmarking;
+using System.Runtime.InteropServices;
 using Ceres.Base.CUDA;
 using Ceres.Base.DataTypes;
 using Chess.Ceres.NNEvaluators;
@@ -88,8 +87,8 @@ namespace Ceres.Chess.LC0NetInference
     /// <param name="gpuID"></param>
     /// <param name="useTRT"></param>
     /// <param name="enableProfiling"></param>
-    public NetExecutorONNXRuntime(string onnxFileName, byte[] onnxModelBytes, 
-                                  NNEvaluatorPrecision precision, int gpuID, 
+    public NetExecutorONNXRuntime(string onnxFileName, byte[] onnxModelBytes,
+                                  NNEvaluatorPrecision precision, int gpuID,
                                   bool useTRT, bool enableProfiling)
     {
       // https://codechina.csdn.net/mirrors/microsoft/onnxruntime/-/blob/skottmckay/CreateHelperForGeneratingIdsForUseInCompilingEPs/docs/execution_providers/TensorRT-ExecutionProvider.md
@@ -120,7 +119,7 @@ namespace Ceres.Chess.LC0NetInference
       // to prevent error about a session object not being created.
       // https://github.com/microsoft/onnxruntime/issues/11572
       OrtEnv ortInstance = OrtEnv.Instance();
-      
+
       SessionOptions so = default;
 
       //        so.AppendExecutionProvider_DML();
@@ -161,12 +160,12 @@ namespace Ceres.Chess.LC0NetInference
         Environment.SetEnvironmentVariable("ORT_TENSORRT_FP16_ENABLE", Precision == NNEvaluatorPrecision.FP16 ? "1" : "0");
 
 
-//        so = SessionOptions.MakeSessionOptionWithTensorrtProvider(gpuID);
+        //        so = SessionOptions.MakeSessionOptionWithTensorrtProvider(gpuID);
         so = SessionOptions.MakeSessionOptionWithTensorrtProvider(trtProviderOptions);
       }
       else
       {
-        OrtCUDAProviderOptions cudaProviderOptions = new ();
+        OrtCUDAProviderOptions cudaProviderOptions = new();
 
         var providerOptionsDict = new Dictionary<string, string>();
         providerOptionsDict["device_id"] = gpuID.ToString();
@@ -254,7 +253,7 @@ namespace Ceres.Chess.LC0NetInference
       if (inputsMetadata.Count != 1)
       {
         // data type check below is only on first element
-        throw new Exception("Currently only single input ONNX files supported."); 
+        throw new Exception("Currently only single input ONNX files supported.");
       }
 
       int inputIndex = 0;
@@ -284,7 +283,7 @@ namespace Ceres.Chess.LC0NetInference
 
         inputsONNX[inputIndex] = (input, shape, inputName, numElements);
         inputIndex++;
-      }      
+      }
 
       // TODO: Actually the precision of the network is defined by the net itself.
       //       So the variableIsFloat above should be used to determine this, and
@@ -298,7 +297,7 @@ namespace Ceres.Chess.LC0NetInference
       else
       {
         return RunFloat(inputsONNX);
-      }      
+      }
 
 #else
       return default;
@@ -327,13 +326,16 @@ namespace Ceres.Chess.LC0NetInference
         Span<float> inputSpan = input.Span;
         Float16[] inputFloat16 = new Float16[numElements];
 
+        // TODO: conversion of float to Float16 is extremely slow
+        //       seek to eliminate the hack below of using Cast and the FP16 class
+        Span<ushort> spanInputFloat16 = MemoryMarshal.Cast<Float16, ushort>(inputFloat16);
         for (int ix = 0; ix < numElements; ix++)
         {
-          inputFloat16[ix] = (Float16)( new FP16(inputSpan[ix]).Value);
+          spanInputFloat16[ix] = ((FP16)inputSpan[ix]).Value;
         }
 
         DenseTensor<Float16> inputTensor = new DenseTensor<Float16>(inputFloat16, shape);
-        inputsONNX.Add(NamedOnnxValue.CreateFromTensor(inputName, inputTensor));
+        inputsONNX.Add(NamedOnnxValue.CreateFromTensor<Float16>(inputName, inputTensor));
       }
 
       IDisposableReadOnlyCollection<DisposableNamedOnnxValue> runResult;
@@ -346,8 +348,17 @@ namespace Ceres.Chess.LC0NetInference
       foreach (DisposableNamedOnnxValue resultValue in runResult)
       {
         DenseTensor<Float16> tensor = (DenseTensor<Float16>)resultValue.AsTensor<Float16>();
-        Float16[] valuesFP16 = tensor.Buffer.ToArray();
-        resultArrays.Add((resultValue.Name, Array.ConvertAll<Float16, float>(valuesFP16, f => FP16.FromRaw((ushort)f))));
+        Span<Float16> valuesFloat16 = tensor.Buffer.Span;
+
+        // TODO: conversion of float to Float16 is extremely slow
+        //       seek to eliminate the hack below of using Cast and the FP16 class
+        Span<ushort> valuesFP16Raw = MemoryMarshal.Cast<Float16, ushort>(valuesFloat16);
+        float[] resultArray = new float[valuesFloat16.Length];
+        for (int i = 0; i < resultArray.Length; i++)
+        {
+          resultArray[i] = FP16.FromRaw(valuesFP16Raw[i]);
+        }
+        resultArrays.Add((resultValue.Name, resultArray));
       }
       return resultArrays;
     }

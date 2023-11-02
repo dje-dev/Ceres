@@ -42,7 +42,7 @@ namespace Chess.Ceres.NNEvaluators
   public class NNEvaluatorEngineONNX : NNEvaluator
   {
     /// <summary>
-    /// Name of file containing ONNX network defition.
+    /// Name of file containing ONNX network definition.
     /// </summary>
     public readonly string ONNXFileName;
 
@@ -204,7 +204,7 @@ namespace Chess.Ceres.NNEvaluators
       }
       else
       {
-        Console.WriteLine("Starting ONNX runtime against " + engineID + " from " + onnxModelFileName + " with GPU " + gpuID);
+        Console.WriteLine("Starting ONNX runtime against " + engineID + " from " + onnxModelFileName + " with " + deviceType + " " + gpuID);
 
         Executor = new ONNXRuntimeExecutor(onnxModelFileName, onnxModelBytes, batchSize, type, precision, deviceType, gpuID, useTRT, enableProfiling);
         lastONNXFileName = onnxModelFileName;
