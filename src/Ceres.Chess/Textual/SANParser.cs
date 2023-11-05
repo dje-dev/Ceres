@@ -168,7 +168,7 @@ namespace Ceres.Chess.Textual
         if (ParsePieceThenSquare(str[0], str.Substring(3), pos, str.Substring(1, 2), false, promoPiece, out Move retMove)) return retMove;
       }
 
-      throw new Exception($"Invalid SAN move {orgStr}");
+      throw new Exception($"Invalid SAN move {orgStr} from position {pos.FEN}");
 
     }
 
