@@ -479,17 +479,18 @@ namespace Ceres.Chess
     /// </summary>
     internal Position Modified(Func<PieceOnSquare, Piece> modifyFunc, PositionMiscInfo miscInfo)
     {
-      List<PieceOnSquare> ps = new List<PieceOnSquare>();
+      Span<PieceOnSquare> ps = stackalloc PieceOnSquare[PieceCount];
+      int count = 0;
       foreach (Square square in Square.AllSquares)
       {
         Piece newPiece = modifyFunc(new PieceOnSquare(square, this[square]));
         if (newPiece.Type != PieceType.None)
         {
-          ps.Add(new PieceOnSquare(square, newPiece));
+          ps[count++] = new PieceOnSquare(square, newPiece);
         }
       }
 
-      Position newPos = new Position(ps.ToArray(), miscInfo);
+      Position newPos = new Position(ps, miscInfo);
       return newPos;
     }
 
@@ -501,13 +502,12 @@ namespace Ceres.Chess
     {
       get
       {
-        PieceOnSquare[] ps = new PieceOnSquare[PieceCount];
+        Span<PieceOnSquare> ps = stackalloc PieceOnSquare[PieceCount];
         int count = 0;
         foreach (PieceOnSquare pieceOnSquare in PiecesEnumeration)
         {
           ps[count++] = new PieceOnSquare(pieceOnSquare.Square.Mirrored, pieceOnSquare.Piece);
         }
-
         Position newPos = new Position(ps, MiscInfo.Mirrored);
         return newPos;
       }
