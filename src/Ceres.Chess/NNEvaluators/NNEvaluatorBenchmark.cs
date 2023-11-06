@@ -54,7 +54,7 @@ namespace Ceres.Chess.NNEvaluators
       const string fenAfterE4 = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1";
       Position rawPos1 = Position.FromFEN(fenAfterE4);
       EncodedPositionWithHistory position1 = new EncodedPositionWithHistory();
-      position1.SetFromSequentialPositions(new[] { rawPos1, rawPos0 }, true);
+      position1.SetFromSequentialPositions(new[] { rawPos0, rawPos1, }, true);
 
       // Alternate between two positions.
       EncodedPositionWithHistory[] positions = new EncodedPositionWithHistory[count];
