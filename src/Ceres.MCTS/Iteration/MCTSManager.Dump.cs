@@ -102,8 +102,9 @@ namespace Ceres.MCTS.Iteration
 
           childrenSortedQ[0].Annotate();
           childrenSortedN[0].Annotate();
+          MCTSNode bestMoveNode = Root.NodeForMove(bestMove);
 
-          bool isTopN = childrenSortedN[0].Annotation.PriorMoveMG == bestMove;
+          bool isTopN = childrenSortedN[0].N == bestMoveNode.N; // could be ties
           bool isTopQ = childrenSortedQ[0].Annotation.PriorMoveMG == bestMove;
           if (isTopN && isTopQ)
           {
