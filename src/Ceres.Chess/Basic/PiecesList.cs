@@ -48,6 +48,44 @@ namespace Ceres.Chess
       Pieces = FromPieces(pieceListString);
     }
 
+    /// <summary>
+    /// Converts to a predicate over Position that returns true if the position matches the piece list.
+    /// </summary>
+    public Predicate<Position> ToPredicate => pos => PositionMatches(in pos);
+
+
+    /// <summary>
+    /// Returns if specified position exactly matches the piece list.
+    /// </summary>
+    /// <param name="position"></param>
+    /// <returns></returns>
+    public bool PositionMatches(in Position position)
+    {
+      string pieceMask = PiecesStr;
+
+      if (position.PieceCount != pieceMask.Length)
+      {
+        return false;
+      }
+
+      foreach (PieceOnSquare pieceSquare in position.PiecesEnumeration)
+      {
+        Piece piece = pieceSquare.Piece;
+        string pieceChar = piece.Char.ToString();
+        int index = pieceMask.IndexOf(pieceChar);
+        if (index == -1)
+        {
+          return false;
+        }
+
+        pieceMask = pieceMask.Remove(index, 1);
+      }
+
+      return true;
+    }
+
+    #region Internal helpers
+
 
     /// <summary>
     /// Returns array of Piece based on string (such as "KRPkrp").
@@ -129,35 +167,7 @@ namespace Ceres.Chess
     }
 
 
-    /// <summary>
-    /// Returns if specified position exactly matches the piece list.
-    /// </summary>
-    /// <param name="position"></param>
-    /// <returns></returns>
-    public bool PositionMatches(in Position position)
-    {
-      string pieceMask = PiecesStr;
-
-      if (position.PieceCount != pieceMask.Length)
-      {
-        return false;
-      }
-
-      foreach (PieceOnSquare pieceSquare in position.PiecesEnumeration)
-      {
-        Piece piece = pieceSquare.Piece;
-        string pieceChar = piece.Char.ToString();
-        int index = pieceMask.IndexOf(pieceChar);
-        if (index == -1)
-        {
-          return false;
-        }
-
-        pieceMask = pieceMask.Remove(index, 1);
-      }
-
-      return true;
-    }
+    #endregion
   }
 
 }
