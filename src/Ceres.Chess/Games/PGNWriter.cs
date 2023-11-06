@@ -100,6 +100,7 @@ namespace Ceres.Chess.Games
     public void WriteResultDraw() => WriteResult(RESULT_DRAW);
     public void WriteResultWhiteWins() => WriteResult(RESULT_WHITE_WINS);
     public void WriteResultBlackWins() => WriteResult(RESULT_BLACK_WINS);
+    public void WriteResultUnknown() => WriteResult("*");
 
 
     public void WriteMove(MGMove move, in Position pos, float? moveTimeSeconds = null, 

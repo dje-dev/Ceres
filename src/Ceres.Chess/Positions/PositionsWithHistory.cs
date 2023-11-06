@@ -57,9 +57,11 @@ namespace Ceres.Chess.Positions
     public static PositionsWithHistory FromMoveSequencess(params PositionWithHistory[] moveSequences)
     {
       PositionsWithHistory source = new PositionsWithHistory();
-      source.moveSequences = new List<PositionWithHistory>();
+      source.moveSequences = new List<PositionWithHistory>(moveSequences.Length);
       foreach (PositionWithHistory moveSequence in moveSequences)
+      {
         source.moveSequences.Add(moveSequence);
+      }
       return source;
     }
 
@@ -71,9 +73,11 @@ namespace Ceres.Chess.Positions
     public static PositionsWithHistory FromFENs(params string[] fens)
     {
       PositionsWithHistory source = new PositionsWithHistory();
-      source.fensAndMoves = new List<string>();
+      source.fensAndMoves = new List<string>(fens.Length);
       foreach (string fen in fens)
+      {
         source.fensAndMoves.Add(fen);
+      }
       return source;
     }
 
@@ -87,17 +91,26 @@ namespace Ceres.Chess.Positions
       if (repeatCount > 1_000_000) throw new ArgumentOutOfRangeException(nameof(repeatCount), "is too large, maximum 1_000_000");
 
       PositionsWithHistory source = new PositionsWithHistory();
-      source.fensAndMoves = new List<string>();
-      for (int i=0; i<repeatCount;i++)
+      source.fensAndMoves = new List<string>(repeatCount);
+      for (int i = 0; i < repeatCount; i++)
+      {
         source.fensAndMoves.Add(fen);
+      }
       return source;
     }
 
 
-    public static PositionsWithHistory FromEPDOrPGNFile(string fileName)
+    /// <summary>
+    /// Loads positions from a PGN or EPD file.
+    /// </summary>
+    /// <param name="fileName"></param>
+    /// <param name="maxOpenings"></param>
+    /// <param name="firstPositionWithPieceList"></param>
+    /// <returns></returns>
+    public static PositionsWithHistory FromEPDOrPGNFile(string fileName, int maxOpenings = int.MaxValue, Predicate<Position> firstPositionFilter = null)
     {
       PositionsWithHistory source = new PositionsWithHistory();
-      source.LoadOpenings(fileName);
+      source.LoadOpenings(fileName, maxOpenings, firstPositionFilter);
       return source;
     }
 
@@ -112,15 +125,25 @@ namespace Ceres.Chess.Positions
       get
       {
         if (epds != null)
+        {
           return epds.Count;
+        }
         else if (fensAndMoves != null)
+        {
           return fensAndMoves.Count;
+        }
         else if (openings != null)
+        {
           return openings.Count;
+        }
         else if (moveSequences != null)
+        {
           return moveSequences.Count;
+        }
         else
+        {
           throw new NotImplementedException();
+        }
       }
     }
 
@@ -225,31 +248,52 @@ namespace Ceres.Chess.Positions
     /// which must be either an EPD or PGN file.
     /// </summary>
     /// <param name="fileName"></param>
-    void LoadOpenings(string fileName)
+    /// <param name="maxOpenings"></param>
+    /// <param name="firstPositionFilter"></param>
+    /// <exception cref="Exception"></exception>
+    void LoadOpenings(string fileName, int maxOpenings = int.MaxValue, Predicate<Position> firstPositionFilter = null)
     {
       if (fileName.ToUpper().EndsWith(".PGN"))
-        LoadOpeningsPGN(fileName);
+      {
+        if (firstPositionFilter != null)
+        {
+          LoadOpeningsPGNFiltered(fileName, firstPositionFilter, maxOpenings);
+        }
+        else
+        {
+          LoadOpeningsPGN(fileName, maxOpenings);
+        }
+      }
       else if (fileName.ToUpper().EndsWith(".EPD"))
+      {
+        if (maxOpenings < int.MaxValue || firstPositionFilter != null)
+        {
+          throw new NotImplementedException("maxOpenings/firstPositionWithPieceList not yet implemented for EPD files.");
+        }
+
         epds = EPDEntry.EPDEntriesInEPDFile(GetFullFilename(fileName));
+      }
       else
+      {
         throw new Exception($"PositionsWithHistory expected a file name with extension PGN or EPD ({fileName}).");
+      }
     }
 
-
-    /// <summary>
-    /// Sets the opening source from a specified PGN file.
-    /// </summary>
-    /// <param name="pgnFileName"></param>
-    private void LoadOpeningsPGN(string pgnFileName)
+    private void LoadOpeningsPGN(string pgnFileName, int maxOpenings)
     {
       openings = new List<PGNGame>();
-      
+
       pgnFileName = GetFullFilename(pgnFileName);
 
       int gameIndex = 0;
       PgnStreamReader pgnReader = new PgnStreamReader();
       foreach (GameInfo game in pgnReader.Read(pgnFileName))
       {
+        if (openings.Count >= maxOpenings)
+        {
+          break;
+        }
+
 #if NOT
 // Have to disable this, this error always happens on the last game ("unexpected end")
         if (game.ErrorMessage != null)
@@ -261,6 +305,34 @@ namespace Ceres.Chess.Positions
         gameIndex++;
       }
     }
+
+
+    /// <summary>
+    /// Sets the opening source from a specified PGN file.
+    /// </summary>
+    /// <param name="pgnFileName"></param>
+    /// <param name="firstPositionWithPieceList"></param>
+    /// <param name="maxOpenings"></param>
+    private void LoadOpeningsPGNFiltered(string pgnFileName, Predicate<Position> firstPositionFilter, int maxOpenings = int.MaxValue)
+    {
+      pgnFileName = GetFullFilename(pgnFileName);
+
+      moveSequences = new List<PositionWithHistory>();
+      foreach (Game game in Game.FromPGN(pgnFileName))
+      {
+        if (moveSequences.Count >= maxOpenings)
+        {
+          break;
+        }
+
+        Position finalPos = game.FirstMatchingPosition(p => firstPositionFilter(p), out int moveIndex);
+        if (moveIndex != -1)
+        {
+          moveSequences.Add(game.TruncatedAtMove(moveIndex).FinalPositionWithHistory);
+        }
+      }
+    }
+
 
     /// <summary>
     /// Returns enumerator to iterate over the constituent PositionWithHistory.

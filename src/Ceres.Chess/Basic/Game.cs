@@ -17,6 +17,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
+using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
 using Ceres.Chess.Positions;
 using Ceres.Chess.Textual.PgnFileTools;
@@ -40,7 +41,7 @@ namespace Ceres.Chess
     /// <summary>
     /// Internal identification number for game.
     /// </summary>
-    public int GameID { get; init;}
+    public int GameID { get; init; }
 
     /// <summary>
     /// Round within match of game.
@@ -78,7 +79,6 @@ namespace Ceres.Chess
     /// </summary>
     public List<Move> Moves { get; init; }
 
-
     /// <summary>
     /// Returns string consisting of sequence of 
     /// all moves made in game (in UCI format).
@@ -101,14 +101,24 @@ namespace Ceres.Chess
 
 
     /// <summary>
+    /// Returns new game like this one but truncated at specified move index.
+    /// </summary>
+    /// <param name="moveIndex"></param>
+    /// <returns></returns>
+    public Game TruncatedAtMove(int moveIndex) => this with { Moves = Moves.GetRange(0, moveIndex) };
+
+
+    /// <summary>
     /// Returns a List of Games from a PGN file with specified name.
     /// </summary>
     /// <param name="pgnFileName"></param>
     /// <returns></returns>
     public static IEnumerable<Game> FromPGN(string pgnFileName)
     {
-      if (!System.IO.File.Exists(pgnFileName)) 
+      if (!System.IO.File.Exists(pgnFileName))
+      {
         throw new ArgumentException($"Requested pgn file does not exist {pgnFileName}");
+      }
 
       PgnStreamReader pgnReader = new PgnStreamReader();
       int gameID = 1;
@@ -266,9 +276,77 @@ namespace Ceres.Chess
 
     #endregion
 
+    /// <summary>
+    /// Returns first position in game matching specified predicate.
+    /// </summary>
+    /// <param name="pos"></param>
+    /// <param name="moveIndex">index of first move </param>
+    /// <returns></returns>
+    public Position FirstMatchingPosition(Predicate<Position> pos, out int moveIndex)
+    {
+      MGPosition thisPosMG = InitialPosition.ToMGPosition;
+      moveIndex = 0;
+
+      foreach (Move move in Moves)
+      {
+        Position thisPos = thisPosMG.ToPosition;
+        if (pos(thisPos))
+        {
+          return thisPos;
+        }
+
+        thisPosMG.MakeMove(MGMoveConverter.MGMoveFromPosAndMove(in thisPos, move));
+        moveIndex++;
+      }
+
+      if (pos(thisPosMG.ToPosition))
+      {
+        return thisPosMG.ToPosition;
+      }
+
+      moveIndex = -1;
+      return default;
+    }
 
     /// <summary>
-    /// Returns if the either of the game players's last name
+    /// Returns final position in game.
+    /// </summary>
+    public Position FinalPosition
+    {
+      get
+      {
+        MGPosition finalPos = InitialPosition.ToMGPosition;
+        foreach (Move move in Moves)
+        {
+          finalPos.MakeMove(MGMoveConverter.MGMoveFromPosAndMove(finalPos.ToPosition, move));
+        }
+        return finalPos.ToPosition;
+      }
+    }
+
+    /// <summary>
+    /// Returns final position (with history) in game.
+    /// </summary>
+    public PositionWithHistory FinalPositionWithHistory
+    {
+      get
+      {
+        List<MGMove> moves = new List<MGMove>(Moves.Count);
+
+        MGPosition curPos = InitialPosition.ToMGPosition;
+        foreach (Move move in Moves)
+        {
+          moves.Add(MGMoveConverter.MGMoveFromPosAndMove(curPos.ToPosition, move));
+          curPos.MakeMove(MGMoveConverter.MGMoveFromPosAndMove(curPos.ToPosition, move));
+        }
+
+        return new PositionWithHistory(InitialPosition.ToMGPosition, moves);
+      }
+    }
+
+
+    /// <summary>
+    /// Returns if the either of the game player's last name
     /// contains a specified string.
     /// </summary>
     /// <param name="lastName"></param>
