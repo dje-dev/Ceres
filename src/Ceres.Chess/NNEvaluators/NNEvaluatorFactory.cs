@@ -283,17 +283,25 @@ namespace Ceres.Chess.NNEvaluators
           {
             throw new Exception("NNEvaluatorFactory.Custom1Factory static variable must be initialized.");
           }
-          INNWeightsFileInfo netInfoCustom1 = NNWeightsFiles.LookupNetworkFile(netDef.NetworkID);
-          ret = Custom1Factory(netInfoCustom1.NetworkID, deviceDef.DeviceIndex, referenceEvaluator);
+          string networkID1 = null;
+          if (netDef.NetworkID != null)
+          {
+            networkID1 = NNWeightsFiles.LookupNetworkFile(netDef.NetworkID).NetworkID;
+          }
+          ret = Custom1Factory(networkID1, deviceDef.DeviceIndex, referenceEvaluator);
           break;
 
         case NNEvaluatorType.Custom2:
-          INNWeightsFileInfo netInfoCustom2 = NNWeightsFiles.LookupNetworkFile(netDef.NetworkID);
           if (Custom2Factory == null)
           {
             throw new Exception("NNEvaluatorFactory.Custom2Factory static variable must be initialized.");
           }
-          ret = Custom2Factory(netInfoCustom2.NetworkID, deviceDef.DeviceIndex, referenceEvaluator);
+          string networkID2 = null;
+          if (netDef.NetworkID != null)
+          {
+            networkID2 = NNWeightsFiles.LookupNetworkFile(netDef.NetworkID).NetworkID;
+          }
+          ret = Custom2Factory(networkID2, deviceDef.DeviceIndex, referenceEvaluator);
           break;
 
         default:

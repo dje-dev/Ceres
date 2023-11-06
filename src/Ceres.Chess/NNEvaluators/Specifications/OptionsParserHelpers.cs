@@ -54,7 +54,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
         string netStr; // without any possible precision indicator
 
         // Parse precision string, if any (either #8 or #16 at end of network ID)
-        if (thisNetID.Contains("#"))
+        if (thisNetID != null && thisNetID.Contains("#"))
         {
           string[] netIDs = thisNetID.Split("#");
           if (!int.TryParse(netIDs[1], out int precisionBits)
@@ -76,41 +76,44 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
         float weightPolicy = 1.0f / nets.Length;
         float weightMLH = 1.0f / nets.Length;
 
-        string netID;
-        if (netStr.Contains(SUB_WEIGHTS_CHAR))
+        string netID = null;
+        if (netStr != null)
         {
-          string[] netParts = netStr.Split(SUB_WEIGHTS_CHAR);
-          thisNetID = netParts[0];
-
-          if (netParts.Length == 4)
+          if (netStr.Contains(SUB_WEIGHTS_CHAR))
           {
-            weightValue = ParseWt(netParts[1]);
-            weightPolicy = ParseWt(netParts[2]);
-            weightMLH = ParseWt(netParts[3]);
+            string[] netParts = netStr.Split(SUB_WEIGHTS_CHAR);
+            thisNetID = netParts[0];
+
+            if (netParts.Length == 4)
+            {
+              weightValue = ParseWt(netParts[1]);
+              weightPolicy = ParseWt(netParts[2]);
+              weightMLH = ParseWt(netParts[3]);
+            }
+            else
+            {
+              throw new Exception("Weight string must be of form value_wt;policy_wt;mlh_wt");
+            }
+          }
+          else if (netStr.Contains("="))
+          {
+            string[] netParts = netStr.Split("=");
+            thisNetID = netParts[0];
+
+            if (netParts.Length == 2)
+            {
+              float wt = float.Parse(netParts[1]);
+              weightValue = weightPolicy = weightMLH = wt;
+            }
+            else
+            {
+              throw new Exception("Weight string must be of form net=weight such as 703810=0.5");
+            }
           }
           else
           {
-            throw new Exception("Weight string must be of form value_wt;policy_wt;mlh_wt");
+            thisNetID = netStr;
           }
-        }
-        else if (netStr.Contains("="))
-        {
-          string[] netParts = netStr.Split("=");
-          thisNetID = netParts[0];
-
-          if (netParts.Length == 2)
-          {
-            float wt = float.Parse(netParts[1]);
-            weightValue = weightPolicy = weightMLH = wt;
-          }
-          else
-          {
-            throw new Exception("Weight string must be of form net=weight such as 703810=0.5");
-          }
-        }
-        else
-        {
-          thisNetID = netStr;
         }
 
         sumWeightsValue += weightValue;
@@ -148,7 +151,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
     internal static (NNEvaluatorType NN_EVAL_TYPE, string thisNetID) ExtractEvaluatorTypeAndNetID(string netStrWithPrecision)
     {
       NNEvaluatorType NN_EVAL_TYPE;
-      string thisNetID;
+      string thisNetID = null;
 
       if (netStrWithPrecision.ToUpper().StartsWith("LC0:"))
       {
@@ -196,14 +199,20 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
         thisNetID = netStrWithPrecision.Substring(13);
         NN_EVAL_TYPE = NNEvaluatorType.ComboPhased;
       }
-      else if (netStrWithPrecision.ToUpper().StartsWith("CUSTOM1:"))
+      else if (netStrWithPrecision.ToUpper().StartsWith("CUSTOM1"))
       {
-        thisNetID = netStrWithPrecision.Substring(8);
+        if (netStrWithPrecision.Contains(":"))
+        {
+          thisNetID = netStrWithPrecision.Split(":")[1];
+        }
         NN_EVAL_TYPE = NNEvaluatorType.Custom1;
       }
-      else if (netStrWithPrecision.ToUpper().StartsWith("CUSTOM2:"))
+      else if (netStrWithPrecision.ToUpper().StartsWith("CUSTOM2"))
       {
-        thisNetID = netStrWithPrecision.Substring(8);
+        if (netStrWithPrecision.Contains(":"))
+        {
+          thisNetID = netStrWithPrecision.Split(":")[1];
+        }
         NN_EVAL_TYPE = NNEvaluatorType.Custom2;
       }
       else
