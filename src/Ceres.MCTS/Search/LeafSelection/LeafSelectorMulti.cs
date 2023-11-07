@@ -405,7 +405,7 @@ namespace Ceres.MCTS.Search
         ref MCTSNodeAnnotation annotationRef = ref node.Annotation;
 
         nodeRef.NumPieces = annotationRef.Pos.PieceCount;
-        nodeRef.NumRank2Pawns = annotationRef.PosMG.NumPawnsRank2;
+        nodeRef.NumRank2Pawns = (byte)annotationRef.PosMG.NumPawnsRank2;
 
         // Verify this looks like a true non-leaf
         Debug.Assert(nodeRef.N == 0
