@@ -389,6 +389,7 @@ namespace Ceres.Features.GameEngines
       StringWriter dumpInfo = new StringWriter();
       if (SearchLogFileName != null)
       {
+        result.Search.SearchRootNode.Annotate();
         result.Search.Manager.DumpFullInfo(bestMoveMG, result.Search.SearchRootNode,
                                            result.Search.LastReuseDecision, result.Search.LastMakeNewRootTimingStats,
                                            result.Search.LastGameLimitInputs,
