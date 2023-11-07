@@ -300,10 +300,22 @@ namespace Ceres.Chess.EncodedPositions
 
       for (int i = 1; i < NUM_MISC_PLANES; i++)
       {
-        if (!GetPlanesForHistoryBoard(i).IsEmpty && GetPlanesForHistoryBoard(i - 1).NumDifferentPiecePlacements(GetPlanesForHistoryBoard(i)) > 4)
-        {
-          int numDifferent = GetPlanesForHistoryBoard(i - 1).NumDifferentPiecePlacements(GetPlanesForHistoryBoard(i));
-          Console.WriteLine("History planes do not look sufficiently similar, num piece placements different : " + numDifferent);
+        if (!GetPlanesForHistoryBoard(i).IsEmpty)
+        { 
+          // Considering castling, maximum of 4 different piece placements could change in a single move.
+          if (GetPlanesForHistoryBoard(i - 1).NumDifferentPiecePlacements(GetPlanesForHistoryBoard(i)) > 4)
+          {
+            int numDifferent = GetPlanesForHistoryBoard(i - 1).NumDifferentPiecePlacements(GetPlanesForHistoryBoard(i));
+            throw new Exception("History planes do not look sufficiently similar, num piece placements different : " + numDifferent);
+          }
+
+          // Check for reachability
+          Position posCur = HistoryPosition(i-1);
+          Position posPrior = HistoryPosition(i);
+          if (!MGPositionReachability.IsProbablyReachable(posPrior.ToMGPosition, posCur.ToMGPosition))
+          {
+            throw new Exception("FinalPosition does not appear reachable from prior position " + posPrior.FEN + " --> " + posCur.FEN);
+          }
         }
       }
     }
