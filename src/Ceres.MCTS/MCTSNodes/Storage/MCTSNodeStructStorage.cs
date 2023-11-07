@@ -266,7 +266,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
 
       nodes[rootNodeIndex.Index].IsWhite = priorMoves.FinalPosition.MiscInfo.SideToMove == SideType.White;
       nodes[rootNodeIndex.Index].NumPieces = priorMoves.FinalPosition.PieceCount;
-      nodes[rootNodeIndex.Index].NumRank2Pawns = priorMoves.FinalPosMG.NumPawnsRank2;
+      nodes[rootNodeIndex.Index].NumRank2Pawns = (byte)priorMoves.FinalPosMG.NumPawnsRank2;
     }
 
 
