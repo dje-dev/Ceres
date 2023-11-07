@@ -212,79 +212,87 @@ namespace Ceres.Chess.MoveGen
     /// Returns if for any piece type the count has decreased.
     /// </summary>
     /// <param name="posCur"></param>
-    /// <param name="posOther"></param>
+    /// <param name="posFuture"></param>
     /// <returns></returns>
-    static bool AnyPieceCountLessThan(in MGPosition posCur, in MGPosition posOther)
+    static bool AnyPieceCountLessThan(in MGPosition posCur, in MGPosition posFuture)
     {
       // White pawn
-      if (BitOperations.PopCount(~posOther.D & ~posOther.C & ~posOther.B & posOther.A)
+      if (BitOperations.PopCount(~posFuture.D & ~posFuture.C & ~posFuture.B & posFuture.A)
         > BitOperations.PopCount(~posCur.D & ~posCur.C & ~posCur.B & posCur.A))
       {
         return true;
       }
 
-      // White bishop
-      if (BitOperations.PopCount(~posOther.D & ~posOther.C & posOther.B & ~posOther.A)
-        > BitOperations.PopCount(~posCur.D & ~posCur.C & posCur.B & ~posCur.A))
+      // Check for increase of number of pieces (except allowed if pawn(s) were on 7th rank).
+      if (posCur.NumPawnsRank7(true) == 0)
       {
-        return true;
-      }
+        // White bishop
+        if (BitOperations.PopCount(~posFuture.D & ~posFuture.C & posFuture.B & ~posFuture.A)
+          > BitOperations.PopCount(~posCur.D & ~posCur.C & posCur.B & ~posCur.A))
+        {
+          return true;
+        }
 
-      // White rook
-      if (BitOperations.PopCount(~posOther.D & posOther.C & ~posOther.B & ~posOther.A)
-        > BitOperations.PopCount(~posCur.D & posCur.C & ~posCur.B & ~posCur.A))
-      {
-        return true;
-      }
+        // White rook
+        if (BitOperations.PopCount(~posFuture.D & posFuture.C & ~posFuture.B & ~posFuture.A)
+          > BitOperations.PopCount(~posCur.D & posCur.C & ~posCur.B & ~posCur.A))
+        {
+          return true;
+        }
 
-      // White knight
-      if (BitOperations.PopCount(~posOther.D & posOther.C & ~posOther.B & posOther.A)
-        > BitOperations.PopCount(~posCur.D & posCur.C & ~posCur.B & posCur.A))
-      {
-        return true;
-      }
+        // White knight
+        if (BitOperations.PopCount(~posFuture.D & posFuture.C & ~posFuture.B & posFuture.A)
+          > BitOperations.PopCount(~posCur.D & posCur.C & ~posCur.B & posCur.A))
+        {
+          return true;
+        }
 
-      // White queen
-      if (BitOperations.PopCount(~posOther.D & posOther.C & posOther.B & ~posOther.A)
-        > BitOperations.PopCount(~posCur.D & posCur.C & posCur.B & ~posCur.A))
-      {
-        return true;
+        // White queen
+        if (BitOperations.PopCount(~posFuture.D & posFuture.C & posFuture.B & ~posFuture.A)
+          > BitOperations.PopCount(~posCur.D & posCur.C & posCur.B & ~posCur.A))
+        {
+          return true;
+        }
       }
 
 
       // Black pawn
-      if (BitOperations.PopCount(posOther.D & ~posOther.C & ~posOther.B & posOther.A)
+      if (BitOperations.PopCount(posFuture.D & ~posFuture.C & ~posFuture.B & posFuture.A)
         > BitOperations.PopCount(posCur.D & ~posCur.C & ~posCur.B & posCur.A))
       {
         return true;
       }
 
-      // Black bishop
-      if (BitOperations.PopCount(posOther.D & ~posOther.C & posOther.B & ~posOther.A)
-        > BitOperations.PopCount(posCur.D & ~posCur.C & posCur.B & ~posCur.A))
+      // Check for increase of number of pieces (except allowed if pawn(s) were on 7th rank).
+      if (posCur.NumPawnsRank7(false) == 0)
       {
-        return true;
-      }
+        // Black bishop
+        if (BitOperations.PopCount(posFuture.D & ~posFuture.C & posFuture.B & ~posFuture.A)
+          > BitOperations.PopCount(posCur.D & ~posCur.C & posCur.B & ~posCur.A))
+        {
+          return true;
+        }
 
-      // Black rook
-      if (BitOperations.PopCount(posOther.D & posOther.C & ~posOther.B & ~posOther.A)
+        // Black rook
+        if (BitOperations.PopCount(posFuture.D & posFuture.C & ~posFuture.B & ~posFuture.A)
         > BitOperations.PopCount(posCur.D & posCur.C & ~posCur.B & ~posCur.A))
-      {
-        return true;
-      }
+        {
+          return true;
+        }
 
-      // Black knight
-      if (BitOperations.PopCount(posOther.D & posOther.C & ~posOther.B & posOther.A)
-        > BitOperations.PopCount(posCur.D & posCur.C & ~posCur.B & posCur.A))
-      {
-        return true;
-      }
+        // Black knight
+        if (BitOperations.PopCount(posFuture.D & posFuture.C & ~posFuture.B & posFuture.A)
+          > BitOperations.PopCount(posCur.D & posCur.C & ~posCur.B & posCur.A))
+        {
+          return true;
+        }
 
-      // Black queen
-      if (BitOperations.PopCount(posOther.D & posOther.C & posOther.B & ~posOther.A)
-        > BitOperations.PopCount(posCur.D & posCur.C & posCur.B & ~posCur.A))
-      {
-        return true;
+        // Black queen
+        if (BitOperations.PopCount(posFuture.D & posFuture.C & posFuture.B & ~posFuture.A)
+          > BitOperations.PopCount(posCur.D & posCur.C & posCur.B & ~posCur.A))
+        {
+          return true;
+        }
       }
 
       return false;
