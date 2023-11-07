@@ -389,11 +389,29 @@ namespace Ceres.Chess.MoveGen
       return false;
     }
 
+    /// <summary>
+    /// Returns number of white pawns on 7th rank.
+    /// </summary>
+    public int NumPawnsRank7(bool white)
+    {
+      ulong whitePawns = ~D & ~C & ~B & A;
+      ulong blackPawns = D & ~C & ~B & A;
 
+      const ulong BOARD_RANK_2 = 0x000000000000FF00UL;
+      const ulong BOARD_RANK_7 = 0x00FF000000000000UL;
+
+      ulong whitePawnsRank7 = whitePawns & BOARD_RANK_7;
+      ulong blackPawnsRank7 = blackPawns & BOARD_RANK_2;
+
+      return  white ? BitOperations.PopCount(whitePawnsRank7)
+                    : BitOperations.PopCount(blackPawnsRank7);      
+    }
+
+    
     /// <summary>
     /// Returns number of pawns still on their second rank (not yet advanced).
     /// </summary>
-    public byte NumPawnsRank2
+    public int NumPawnsRank2
     {
       get
       {
@@ -406,7 +424,7 @@ namespace Ceres.Chess.MoveGen
         ulong whitePawnsRank2 = whitePawns & BOARD_RANK_2;
         ulong blackPawnsRank2 = blackPawns & BOARD_RANK_7;
 
-        return (byte)(BitOperations.PopCount(whitePawnsRank2) + BitOperations.PopCount(blackPawnsRank2));
+        return BitOperations.PopCount(whitePawnsRank2) + BitOperations.PopCount(blackPawnsRank2);
       }
     }
 
