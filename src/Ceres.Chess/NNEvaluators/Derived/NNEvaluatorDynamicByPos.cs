@@ -77,6 +77,7 @@ namespace Ceres.Chess.NNEvaluators
       }
 
       // Run all of the evaluators and get resulting batch results.
+      // TODO: split the input positions into two batches, each including only matching positions
       // TODO: consider making this parallel
       IPositionEvaluationBatch[] batches = new IPositionEvaluationBatch[this.Evaluators.Length];
       for (int i = 0; i < batches.Length; i++)
