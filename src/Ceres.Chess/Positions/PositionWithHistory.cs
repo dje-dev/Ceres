@@ -87,7 +87,7 @@ namespace Ceres.Chess.Positions
 
     public PositionWithHistory(in Position initialPos, List<MGMove> moves = null)
     {
-      InitialPosMG = MGChessPositionConverter.MCChessPositionFromPosition(in initialPos);
+      InitialPosMG = MGChessPositionConverter.MGChessPositionFromPosition(in initialPos);
       this.moves = moves ?? new List<MGMove>();
       InitPositionsAndFinalPosMG();
     }
