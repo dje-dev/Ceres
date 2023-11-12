@@ -117,6 +117,24 @@ namespace Ceres.Chess.TBBackends.Fathom
       allocatedPairsData.Clear();
     }
 
+    static readonly object initStaticsObj = new();
+
+    internal static void CheckStaticInitialized()
+    {
+      if (!staticsInitialized)
+      {
+        lock (initStaticsObj)
+        {
+          if (!staticsInitialized)
+          {
+            init_indices();
+            FathomMoveGen.Init();
+            staticsInitialized = true;
+          }
+        }
+      }
+    }
+
     internal unsafe bool tb_init(string paths)
     {
       if (paths == null)
@@ -124,12 +142,7 @@ namespace Ceres.Chess.TBBackends.Fathom
         throw new Exception("Null tablebase path is not supported.");
       }
 
-      if (!staticsInitialized)
-      {
-        init_indices();
-        FathomMoveGen.Init();
-        staticsInitialized = true;
-      }
+      CheckStaticInitialized();
 
       foreach (string path in paths.Split(SEP_CHAR))
       {
@@ -924,7 +937,7 @@ namespace Ceres.Chess.TBBackends.Fathom
       b = temp;
     }
 
-    bool staticsInitialized = false;
+    static volatile bool staticsInitialized = false;
 
     // map upper-case characters to piece types
     static FathomPieceType char_to_piece_type(char c)

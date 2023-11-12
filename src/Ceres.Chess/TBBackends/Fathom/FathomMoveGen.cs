@@ -185,7 +185,7 @@ namespace Ceres.Chess.TBBackends.Fathom
     static ulong board(int s) => ((ulong)1 << (s));
     internal static int square(int r, int f) => (8 * (r) + (f));
 
-    static ulong[] king_attacks_table = new ulong[64];
+    static readonly ulong[] king_attacks_table = new ulong[64];
 
     internal static ulong king_attacks(int square) => king_attacks_table[(square)];
 
@@ -219,7 +219,7 @@ namespace Ceres.Chess.TBBackends.Fathom
 
 
 
-    static ulong[] knight_attacks_table = new ulong[64];
+    static readonly ulong[] knight_attacks_table = new ulong[64];
 
     internal static ulong knight_attacks(int square) => knight_attacks_table[(square)];
 
@@ -265,11 +265,12 @@ namespace Ceres.Chess.TBBackends.Fathom
         ret[i] = new ulong[dim2];
       return ret;
     }
-    static ulong[][] diag_attacks_table = MakeAOA(64, 64);
-    static ulong[][] anti_attacks_table = MakeAOA(64, 64);
+
+    static readonly ulong[][] diag_attacks_table = MakeAOA(64, 64);
+    static readonly ulong[][] anti_attacks_table = MakeAOA(64, 64);
 
 
-    static int[] square2diag_table = new[]
+    static readonly int[] square2diag_table = new[]
     {
     0,  1,  2,  3,  4,  5,  6,  7,
     14, 0,  1,  2,  3,  4,  5,  6,
@@ -281,7 +282,7 @@ namespace Ceres.Chess.TBBackends.Fathom
     8,  9,  10, 11, 12, 13, 14, 0
 };
 
-    static int[] square2anti_table = new[]
+    static readonly int[] square2anti_table = new[]
     {
     8,  9,  10, 11, 12, 13, 14, 0,
     9,  10, 11, 12, 13, 14, 0,  1,
@@ -293,7 +294,7 @@ namespace Ceres.Chess.TBBackends.Fathom
     0,  1,  2,  3,  4,  5,  6,  7
 };
 
-    static ulong[] diag2board_table = new[]
+    static readonly ulong[] diag2board_table = new[]
     {
     0x8040201008040201UL,
     0x0080402010080402UL,
@@ -312,7 +313,7 @@ namespace Ceres.Chess.TBBackends.Fathom
     0x4020100804020100UL,
 };
 
-    static ulong[] anti2board_table = new[]
+    static readonly ulong[] anti2board_table = new[]
     {
     0x0102040810204080UL,
     0x0204081020408000UL,
@@ -418,8 +419,8 @@ namespace Ceres.Chess.TBBackends.Fathom
     }
 
 
-    static ulong[][] rank_attacks_table = MakeAOA(64, 64);
-    static ulong[][] file_attacks_table = MakeAOA(64, 64);
+    static readonly ulong[][] rank_attacks_table = MakeAOA(64, 64);
+    static readonly ulong[][] file_attacks_table = MakeAOA(64, 64);
 
     static ulong rank2index(ulong b, int r)
     {
@@ -901,7 +902,7 @@ namespace Ceres.Chess.TBBackends.Fathom
      * @return index 0..63
      * @param bb a 64-bit word to bitscan, should not be zero
      */
-    static int[] foldedTable = {
+    static readonly int[] foldedTable = {
      63,30, 3,32,59,14,11,33,
      60,24,50, 9,55,19,21,34,
      61,29, 2,53,51,23,41,18,

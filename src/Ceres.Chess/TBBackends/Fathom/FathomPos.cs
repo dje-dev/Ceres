@@ -51,7 +51,7 @@ namespace Ceres.Chess.TBBackends.Fathom
   /// <summary>
   /// Represents a board position for use internally with Fathom methods.
   /// </summary>
-  internal record struct FathomPos
+  public record struct FathomPos
   {
     public ulong White;
     public ulong Black;
@@ -67,8 +67,8 @@ namespace Ceres.Chess.TBBackends.Fathom
     //public short move;
     public int Castling;
 
-    internal FathomPos(ulong white, ulong black, ulong kings, ulong queens, ulong rooks, ulong bishops, 
-                       ulong knights, ulong pawns, byte rule50, byte ep, bool turn, int castling)
+    public FathomPos(ulong white, ulong black, ulong kings, ulong queens, ulong rooks, ulong bishops, 
+                     ulong knights, ulong pawns, byte rule50, byte ep, bool turn, int castling)
     {
       White = white;
       Black = black;

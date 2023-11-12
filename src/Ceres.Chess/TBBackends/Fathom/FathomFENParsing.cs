@@ -46,7 +46,7 @@ namespace Ceres.Chess.TBBackends.Fathom
   /// <summary>
   /// Manages parsing of string FENs into FathomPos.
   /// </summary>
-  internal static class FathomFENParsing
+  public static class FathomFENParsing
   {
     internal const int TB_CASTLING_K = 0x1;     /* White king-side. */
     internal const int TB_CASTLING_Q = 0x2;     /* White queen-side. */
@@ -55,8 +55,10 @@ namespace Ceres.Chess.TBBackends.Fathom
 
     static ulong board(int s) => ((ulong)1 << (s));
 
-    internal static bool parse_FEN(ref FathomPos pos, string fen)
+    public static bool parse_FEN(ref FathomPos pos, string fen)
     {
+      FathomProbe.CheckStaticInitialized();
+
       ulong white = 0, black = 0;
       ulong kings, queens, rooks, bishops, knights, pawns;
       kings = queens = rooks = bishops = knights = pawns = 0;
