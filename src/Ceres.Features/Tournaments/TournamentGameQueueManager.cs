@@ -17,6 +17,7 @@ using System;
 using System.IO;
 using System.Threading;
 using Ceres.Base.DataType;
+using Ceres.Base.Misc;
 
 #endregion
 
@@ -146,8 +147,8 @@ namespace Ceres.Features.Tournaments
       string processingFN = Path.Combine(QueueDirectory, gameInfo.OpeningIndex + "_processing");
       string renameFile = processingFN.Replace("_processing", "_done");
 
-      SysMisc.WriteObj(renameFile + ".1", gameInfo);
-      SysMisc.WriteObj(renameFile + ".2", gameReverseInfo);
+      FileUtils.WriteObj(renameFile + ".1", gameInfo);
+      FileUtils.WriteObj(renameFile + ".2", gameReverseInfo);
 //Dump();
 //Console.WriteLine("replace: " + processingFN + " to  " + renameFile);
       File.Move(processingFN, renameFile);
@@ -176,8 +177,8 @@ namespace Ceres.Features.Tournaments
               reportedFN = fileName.Replace("_done", "_reported");
               if (!File.Exists(reportedFN))
               {
-                g1 = SysMisc.ReadObj<TournamentGameInfo>(fileName + ".1");
-                g2 = SysMisc.ReadObj<TournamentGameInfo>(fileName + ".2");
+                g1 = FileUtils.ReadObj<TournamentGameInfo>(fileName + ".1");
+                g2 = FileUtils.ReadObj<TournamentGameInfo>(fileName + ".2");
               }
             }
             if (g1 != null)

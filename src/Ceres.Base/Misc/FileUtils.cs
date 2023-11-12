@@ -19,6 +19,7 @@ using System.Runtime.InteropServices;
 using Ceres.Base.OperatingSystem;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.Serialization.Formatters.Binary;
 
 #endregion
 
@@ -87,30 +88,23 @@ namespace Ceres.Base.Misc
       return isZipped;
     }
 
-
-    /// <summary>
-    /// Reads a specified number of structs from a file with a specified name.
-    /// </summary>
-    /// <typeparam name="T"></typeparam>
-    /// <param name="stream"></param>
-    /// <param name="rawBuffer"></param>
-    /// <param name="buffer"></param>
-    /// <param name="numStructsToRead"></param>
-    /// <returns></returns>
-    public static int ReadFromStream<T>(Stream stream, byte[] rawBuffer, ref T[] buffer, int numStructsToRead) where T : unmanaged
+    public static void WriteObj(string FN, object obj)
     {
-      // Read bytes until we have as many as requested (or end of stream).
-      int bytesRead = 0;
-      int bytesToRead = numStructsToRead * Marshal.SizeOf<T>();
-      int thisBytes;
-      do
-      {
-        thisBytes = stream.Read(rawBuffer, 0, bytesToRead);
-        bytesRead += thisBytes;
-      } while (thisBytes > 0 && bytesRead < bytesToRead);
-
-      return bytesRead == 0 ? 0 : SerializationUtils.DeSerializeArrayIntoBuffer(rawBuffer, bytesRead, ref buffer);
+      FileStream stream = File.Create(FN);
+      BinaryFormatter formatter = new BinaryFormatter();
+#pragma warning disable SYSLIB0011 // TODO: remove use of Binary serialization
+      formatter.Serialize(stream, obj);
+      stream.Close();
     }
 
+
+    public static T ReadObj<T>(string FN)
+    {
+      byte[] allBytes = File.ReadAllBytes(FN);
+      BinaryFormatter formatter = new BinaryFormatter();
+#pragma warning disable SYSLIB0011 // TODO: remove use of Binary serialization
+      object obj = formatter.Deserialize(new FileStream(FN, FileMode.Open, FileAccess.Read));
+      return (T)obj;
+    }
   }
 }
