@@ -1287,7 +1287,7 @@ namespace Ceres.Chess
     /// <summary>
     /// Returns new Position being the reverse of this.
     /// </summary>
-    public Position Reversed => new Position(this, true);
+    public Position Reversed => new Position(this, true, true);
 
     
     /// <summary>
