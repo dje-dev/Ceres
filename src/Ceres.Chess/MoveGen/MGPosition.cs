@@ -121,7 +121,7 @@ namespace Ceres.Chess.MoveGen
     /// </summary>
     /// <param name="pos"></param>
     /// <returns></returns>
-    public static MGPosition FromPosition(in Position pos) => MGChessPositionConverter.MCChessPositionFromPosition(in pos);
+    public static MGPosition FromPosition(in Position pos) => MGChessPositionConverter.MGChessPositionFromPosition(in pos);
 
 
     /// <summary>
@@ -287,24 +287,32 @@ namespace Ceres.Chess.MoveGen
     }
 
 
-    public void SetPieceAtBitboardSquare(ulong piece, BitBoard square)
+    /// <summary>
+    /// Set a specified square to have a specified piece.
+    /// </summary>
+    /// <param name="piece"></param>
+    /// <param name="square"></param>
+    internal void SetPieceAtBitboardSquare(ulong piece, BitBoard square)
     {
-      // clear the square
+      // Clear each square and install new piece.
       A &= ~square;
-      B &= ~square;
-      C &= ~square;
-      D &= ~square;
-
-      // 'install' the piece
       if ((piece & 1) != 0) A |= square;
+      B &= ~square;
       if ((piece & 2) != 0) B |= square;
+      C &= ~square;
       if ((piece & 4) != 0) C |= square;
+      D &= ~square;
       if ((piece & 8) != 0) D |= square;
     }
 
 
+    /// <summary>
+    /// Returns piece on specified square.
+    /// </summary>
+    /// <param name="square"></param>
+    /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly int GetPieceAtBitboardSquare(BitBoard square)
+    internal readonly int GetPieceAtBitboardSquare(BitBoard square)
     {
       int V;
       V = (D & square) != 0 ? 8 : 0;

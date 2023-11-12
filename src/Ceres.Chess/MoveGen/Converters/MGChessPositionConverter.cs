@@ -69,7 +69,7 @@ namespace Ceres.Chess.MoveGen.Converters
     /// </summary>
     /// <param name="position"></param>
     /// <returns></returns>
-    internal static MGPosition MCChessPositionFromPosition(in Position position)
+    internal static MGPosition MGChessPositionFromPosition(in Position position)
     {
       // TO DO: someday a custom low-level converter directly between the two board representations
       //        could be written to improve performance (currently about 400,000 per second)
@@ -82,6 +82,7 @@ namespace Ceres.Chess.MoveGen.Converters
       {
         pos.SetPieceAtBitboardSquare((ulong)MGPieceFromPiece(ps.Item1), MGPosition.MGBitBoardFromSquare(ps.Item2));
       }
+
       pos.Rule50Count = position.MiscInfo.Move50Count;
       pos.MoveNumber = position.MiscInfo.MoveNum;
       pos.BlackToMove = position.MiscInfo.SideToMove == SideType.Black;
