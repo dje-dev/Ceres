@@ -82,7 +82,11 @@ namespace Ceres.APIExamples
     public static string T2_768_15_T82_4832 { get { return @"ONNX_ORT:" + Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, "768x15x24h-t82-2-swa-4832500_fp16#16"); } }
 
     public static string BT2 { get { return @"ONNX_ORT:" + Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, "BT2-768x15smolgen-12h-do-01-swa-onnx-2350000-rule50.gz#32"); } }
-    //606512
+    public static string BT4 { get { return @"ONNX_ORT:" + Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, "BT4-1024x15x32h-swa-365000#32"); } }
+
+    public static string T2 { get { return @"ONNX_ORT:" + Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, "t2-768x15x24h-swa-5230000.pb.gz_fp16#16"); } }
+
+    //)
   }
 
   public static class TournamentTest
