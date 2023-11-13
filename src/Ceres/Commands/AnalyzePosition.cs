@@ -43,6 +43,7 @@ namespace Ceres.Commands
                                bool forceDisablePruning,
                                LC0Engine lc0Engine = null,
                                GameEngine comparisonEngine = null,
+                               Action<ParamsSearch> searchParamsModifier = null,
                                bool verbose = false)
     {
       Console.WriteLine("=============================================================================");
@@ -56,6 +57,8 @@ namespace Ceres.Commands
 
       ParamsSearch searchParams = new ParamsSearch();
       searchParams.FutilityPruningStopSearchEnabled = !forceDisablePruning;
+
+      searchParamsModifier?.Invoke(searchParams);
 
       GameEngineCeresInProcess ceresEngine = new GameEngineCeresInProcess("Ceres", evaluatorDef, null, searchParams,
                                                                           moveImmediateIfOnlyOneMove: false);

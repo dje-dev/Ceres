@@ -123,7 +123,7 @@ namespace Ceres.Commands
       comparisonEngine?.Warmup();
 
       const bool VERBOSE = true;
-      AnalyzePosition.Analyze(fen, SearchLimit, evaluatorDef, !Pruning, lc0?.LC0Engine, comparisonEngine, VERBOSE);
+      AnalyzePosition.Analyze(fen, SearchLimit, evaluatorDef, !Pruning, lc0?.LC0Engine, comparisonEngine, null, VERBOSE);
 
       if (lc0 != null)
       {
