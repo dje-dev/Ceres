@@ -90,7 +90,52 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
     public void Dispose();
 
 
+    #region Helper interface  methods
+
     const bool VERBOSE = false;
+
+
+    /// <summary>
+    /// Probes tablebase for WDL and returns as an integer for V (-1 = loss, 0 = draw, 1 = win).
+    /// </summary>
+    /// <param name="pos"></param>
+    /// <param name="score"></param>
+    /// <param name="result"></param>
+    /// <returns></returns>
+    /// <exception cref="Exception"></exception>
+    public int ProbeWDLAsV(in Position pos)
+    {
+      ProbeWDL(in pos, out SyzygyWDLScore score, out SyzygyProbeState result);
+      if (result == SyzygyProbeState.Fail)
+      {
+        throw new Exception("Failure on tablebase WDL probe of position " + pos.FEN);
+      }
+
+      return score switch
+      {
+        SyzygyWDLScore.WDLLoss => -1,
+        SyzygyWDLScore.WDLWin => 1,
+        _ => 0
+      };
+    }
+
+
+    /// <summary>
+    /// Returns if the specified move is optimal in a given position, 
+    /// in the sense that it preserves the best possible outcome in the position (win, draw, or loss).
+    /// </summary>
+    /// <param name="pos"></param>
+    /// <param name="move"></param>
+    /// <returns></returns>
+    public bool MoveIsInOptimalCategoryForPosition(in Position pos, MGMove move)
+    {
+      MGMove topMoveTB = CheckTablebaseBestNextMoveViaDTZ(in pos, out GameResult result, out List<(MGMove, short)> moves, out _, false);
+      int moveResult = Math.Sign(moves.Find(m => m.Item1 == move).Item2);
+      int bestWDLResult = ProbeWDLAsV(in pos);
+
+      return bestWDLResult == moveResult;
+    }
+
 
     /// <summary>
     /// Returns best winning move (if any) from a specified position
@@ -216,6 +261,7 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
       return bestMove;
     }
 
+    #endregion
   }
 
 }
