@@ -806,7 +806,7 @@ namespace Ceres.Chess.EncodedPositions
 
 
     /// <summary>
-    /// Returns an IEnumerable over topls of moves and associated probabilites.
+    /// Returns an IEnumerable over tuples of moves and associated probabilities.
     /// </summary>
     /// <param name="minProbability"></param>
     /// <param name="topN"></param>
@@ -821,6 +821,14 @@ namespace Ceres.Chess.EncodedPositions
         yield return moves[i];
       }
     }
+
+
+    /// <summary>
+    /// returns the move with the highest probability.
+    /// </summary>
+    /// <param name="position"></param>
+    /// <returns></returns>
+    public MGMove TopMove(in Position position) => Count == 0 ? default : MGMovesAndProbabilities(position).ToArray()[0].Move;
 
 
     /// <summary>
@@ -883,7 +891,10 @@ namespace Ceres.Chess.EncodedPositions
     public int ProbabilitySummaryList((EncodedMove, float)[] moves,
                                       float minProbability = 0.0f, int topN = int.MaxValue)
     {
-      if (topN > NUM_MOVE_SLOTS) topN = NUM_MOVE_SLOTS;
+      if (topN > NUM_MOVE_SLOTS)
+      {
+        topN = NUM_MOVE_SLOTS;
+      }
 
       int count = 0;
       fixed (ushort* moveIndices = &MoveIndex_0)
