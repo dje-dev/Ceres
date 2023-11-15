@@ -67,7 +67,7 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
     /// <param name="pos"></param>
     /// <param name="score"></param>
     /// <param name="result"></param>
-    public void ProbeWDL(in Position pos, out WDLScore score, out ProbeState result);
+    public void ProbeWDL(in Position pos, out SyzygyWDLScore score, out SyzygyProbeState result);
 
 
     /// <summary>
@@ -163,8 +163,8 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
       // Generate all possible next moves and look up in tablebase
       foreach ((MGMove move, Position nextPos) in PositionsGenerator1Ply.GenPositions(currentPos))
       {
-        ProbeWDL(in nextPos, out WDLScore score, out ProbeState probeResult);
-        if (!(probeResult == ProbeState.Ok || probeResult == ProbeState.ZeroingBestMove))
+        ProbeWDL(in nextPos, out SyzygyWDLScore score, out SyzygyProbeState probeResult);
+        if (!(probeResult == SyzygyProbeState.Ok || probeResult == SyzygyProbeState.ZeroingBestMove))
         {
           allNextPositionsInTablebase = false;
           continue;
@@ -172,16 +172,16 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
 
         switch (score)
         {
-          case WDLScore.WDLBlessedLoss: // blessed loss for the opponent
+          case SyzygyWDLScore.WDLBlessedLoss: // blessed loss for the opponent
             winningCursedMove = move;
             break;
 
-          case WDLScore.WDLLoss: // loss for the opponent
+          case SyzygyWDLScore.WDLLoss: // loss for the opponent
             fullWinningMoveList.Add(move);
             winningMove = move;
             break;
 
-          case WDLScore.WDLDraw:
+          case SyzygyWDLScore.WDLDraw:
             drawingMove = move;
             break;
 

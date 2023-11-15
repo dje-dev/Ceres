@@ -29,57 +29,6 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
   /// </summary>
   public partial class LC0DLLSyzygyEvaluator : IDisposable, ISyzygyEvaluatorEngine
   {
-    public enum WDLScore
-    {
-      /// <summary>
-      /// Loss
-      /// </summary>
-      WDLLoss = -2,
-
-      /// <summary>
-      /// Loss, but draw under 50-move rule
-      /// </summary>
-      WDLBlessedLoss = -1,
-
-      /// <summary>
-      /// Draw
-      /// </summary>
-      WDLDraw = 0,
-
-      /// <summary>
-      /// Win, but draw under 50-move rule
-      /// </summary>
-      WDLCursedWin = 1,
-
-      /// <summary>
-      /// Win
-      /// </summary>
-      WDLWin = 2
-    }
-    public enum ProbeState
-    {
-      /// <summary>
-      /// DTZ should check other side
-      /// </summary>
-      ChangeSTM = -1,
-
-      /// <summary>
-      /// Fail
-      /// </summary>
-      Fail = 0,
-
-      /// <summary>
-      /// Ok
-      /// </summary>
-      Ok = 1,
-
-      /// <summary>
-      /// Best move zeros DTZ
-      /// </summary>
-      ZeroingBestMove = 2
-    }
-
-
     /// <summary>
     /// Static counter of succesful tablebase probes.
     /// </summary>
@@ -140,14 +89,14 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
     /// Probes WDL tables for the given position to determine a WDLScore.
     /// Result is only strictly valid for positions with 0 ply 50 move counter.
     ///</ summary>
-    public void ProbeWDL(in Position pos, out WDLScore score, out ProbeState result)
+    public void ProbeWDL(in Position pos, out SyzygyWDLScore score, out SyzygyProbeState result)
     {
       // Make sure sufficiently few pieces remain on board
       // and not castling rights
       if (pos.PieceCount > MaxCardinality || pos.MiscInfo.CastlingRightsAny)
       {
         score = default;
-        result = ProbeState.Fail;
+        result = SyzygyProbeState.Fail;
         return;
       }
 
@@ -155,10 +104,10 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
       int resultCode = LCO_Interop.ProbeWDL(sessionID, pos.FEN);
 
       // Unpack the encoded result code
-      result = (ProbeState)(resultCode / 256 - 10);
-      score = (WDLScore)(resultCode % 256 - 10);
+      result = (SyzygyProbeState)(resultCode / 256 - 10);
+      score = (SyzygyWDLScore)(resultCode % 256 - 10);
 
-      if (result == ProbeState.Ok || result == ProbeState.ZeroingBestMove)
+      if (result == SyzygyProbeState.Ok || result == SyzygyProbeState.ZeroingBestMove)
       {
         NumTablebaseHits++;
       }
@@ -211,7 +160,7 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
       return false;
     }
 
-#region Disposal
+    #region Disposal
 
     bool isDisposed = false;
 

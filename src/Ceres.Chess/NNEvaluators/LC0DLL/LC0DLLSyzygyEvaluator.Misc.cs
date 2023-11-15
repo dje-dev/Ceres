@@ -47,8 +47,8 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
     {
       moveList = null;
 
-      ProbeWDL(in currentPos, out WDLScore score, out ProbeState probeResult);
-      if (!(probeResult == ProbeState.Ok || probeResult == ProbeState.ZeroingBestMove))
+      ProbeWDL(in currentPos, out SyzygyWDLScore score, out SyzygyProbeState probeResult);
+      if (!(probeResult == SyzygyProbeState.Ok || probeResult == SyzygyProbeState.ZeroingBestMove))
       {
         result = GameResult.Unknown;
         dtz = 0;
@@ -57,19 +57,19 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
 
       switch (score)
       {
-        case WDLScore.WDLLoss:
-        case WDLScore.WDLBlessedLoss:
+        case SyzygyWDLScore.WDLLoss:
+        case SyzygyWDLScore.WDLBlessedLoss:
           // This is probably actually a loss, but not way to represent that with this enum.
           // TODO: Clean this up.
           result = GameResult.Unknown;
           break;
 
-        case WDLScore.WDLWin:
-        case WDLScore.WDLCursedWin:
+        case SyzygyWDLScore.WDLWin:
+        case SyzygyWDLScore.WDLCursedWin:
           result = GameResult.Checkmate;
           break;
 
-        case WDLScore.WDLDraw:
+        case SyzygyWDLScore.WDLDraw:
           result = GameResult.Draw;
           break;
 

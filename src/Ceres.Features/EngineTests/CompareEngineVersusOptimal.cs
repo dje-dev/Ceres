@@ -259,8 +259,8 @@ namespace Ceres.Features.EngineTests
           // TODO: possibly this should be made an option, and enhance logic to verify engine moves if in TB
           if (tbEngine != null)
           {
-            tbEngine.ProbeWDL(pos.FinalPosition, out LC0DLLSyzygyEvaluator.WDLScore score, out LC0DLLSyzygyEvaluator.ProbeState result);
-            if (result == LC0DLLSyzygyEvaluator.ProbeState.Ok)
+            tbEngine.ProbeWDL(pos.FinalPosition, out SyzygyWDLScore score, out SyzygyProbeState result);
+            if (result == SyzygyProbeState.Ok)
             {
               continue;
             }

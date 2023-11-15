@@ -65,24 +65,24 @@ namespace Ceres.Features.Tournaments
       if (useTablebasesForAdjudication)
       {
         // Probe endgame tablebase
-        tbEvaluator.Value.ProbeWDL(in pos, out LC0DLLSyzygyEvaluator.WDLScore score,
-                                           out LC0DLLSyzygyEvaluator.ProbeState result);
+        tbEvaluator.Value.ProbeWDL(in pos, out SyzygyWDLScore score,
+                                           out SyzygyProbeState result);
 
-        if (result == LC0DLLSyzygyEvaluator.ProbeState.Ok)
+        if (result == SyzygyProbeState.Ok)
         {
-          if (score == LC0DLLSyzygyEvaluator.WDLScore.WDLWin)
+          if (score == SyzygyWDLScore.WDLWin)
           {
             reason = TournamentGameResultReason.AdjudicateTB;
             return weArePlayerToMove ? TournamentGameResult.Win : TournamentGameResult.Loss;
           }
-          else if (score == LC0DLLSyzygyEvaluator.WDLScore.WDLLoss)
+          else if (score == SyzygyWDLScore.WDLLoss)
           {
             reason = TournamentGameResultReason.AdjudicateTB;
             return weArePlayerToMove ? TournamentGameResult.Loss : TournamentGameResult.Win;
           }
-          else if (score == LC0DLLSyzygyEvaluator.WDLScore.WDLDraw
-                || score == LC0DLLSyzygyEvaluator.WDLScore.WDLCursedWin
-                || score == LC0DLLSyzygyEvaluator.WDLScore.WDLBlessedLoss)
+          else if (score == SyzygyWDLScore.WDLDraw
+                || score == SyzygyWDLScore.WDLCursedWin
+                || score == SyzygyWDLScore.WDLBlessedLoss)
           {
             reason = TournamentGameResultReason.AdjudicateTB;
             return TournamentGameResult.Draw;

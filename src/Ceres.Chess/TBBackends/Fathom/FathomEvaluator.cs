@@ -181,7 +181,7 @@ so maybe this engine is not doing this optimally?
         throw new Exception($"Internal error: unexpected Fathom game result {fathomResult.Result} in lookup of {currentPos.FEN}");
       }
 
-      // Add in the non-winning moves if requeted.
+      // Add in the non-winning moves if requested.
       if (!returnOnlyWinningMoves)
       {
         if (moveList == null)
@@ -216,15 +216,15 @@ so maybe this engine is not doing this optimally?
     }
 
 
-    public void ProbeWDL(in Position pos, out LC0DLLSyzygyEvaluator.WDLScore score, out LC0DLLSyzygyEvaluator.ProbeState result)
+    public void ProbeWDL(in Position pos, out SyzygyWDLScore score, out SyzygyProbeState result)
 
     {
       // Make sure sufficiently few pieces remain on board
       // and not castling rights
       if (pos.PieceCount > MaxCardinality || pos.MiscInfo.CastlingRightsAny)
       {
-        result = LC0DLLSyzygyEvaluator.ProbeState.Fail;
-        score = LC0DLLSyzygyEvaluator.WDLScore.WDLDraw; // actually, unknown
+        result = SyzygyProbeState.Fail;
+        score = SyzygyWDLScore.WDLDraw; // actually, unknown
         return;
       }
 
@@ -232,15 +232,15 @@ so maybe this engine is not doing this optimally?
 
       if (probeResult == FathomWDLResult.Failure)
       {
-        result = LC0DLLSyzygyEvaluator.ProbeState.Fail;
-        score = LC0DLLSyzygyEvaluator.WDLScore.WDLDraw; // actually, unknown
+        result = SyzygyProbeState.Fail;
+        score = SyzygyWDLScore.WDLDraw; // actually, unknown
         return;
       }
 
       LC0DLLSyzygyEvaluator.NumTablebaseHits++;
 
-      result = LC0DLLSyzygyEvaluator.ProbeState.Ok;
-      score = (LC0DLLSyzygyEvaluator.WDLScore)((int)probeResult) - 2;
+      result = SyzygyProbeState.Ok;
+      score = (SyzygyWDLScore)((int)probeResult) - 2;
 
       // TODO: The original Fathom interface has a wrapper which
       //       will reject positions with the 50 move counter nonzero.
@@ -249,8 +249,8 @@ so maybe this engine is not doing this optimally?
       //       However the ProbeDTZOnly is possibly not working, a
       //       and calling ProveDTZ is probably too expensive.
       const bool TEST = false;
-      if (TEST && (score == LC0DLLSyzygyEvaluator.WDLScore.WDLWin 
-                || score == LC0DLLSyzygyEvaluator.WDLScore.WDLLoss))
+      if (TEST && (score == SyzygyWDLScore.WDLWin 
+                || score == SyzygyWDLScore.WDLLoss))
       {
         FathomProbeMove fathomResult = FathomTB.ProbeDTZ(in pos, out int minDTZ, out _);
         int numMovesAvailable = 100 - pos.MiscInfo.Move50Count;
@@ -263,8 +263,8 @@ so maybe this engine is not doing this optimally?
 
       if (TESTING_MODE_COMPARE_RESULTS)
       {
-        compEvaluator.ProbeWDL(in pos, out LC0DLLSyzygyEvaluator.WDLScore compScore, out LC0DLLSyzygyEvaluator.ProbeState compResult);
-        if (compResult == LC0DLLSyzygyEvaluator.ProbeState.ZeroingBestMove) compResult = LC0DLLSyzygyEvaluator.ProbeState.Ok;
+        compEvaluator.ProbeWDL(in pos, out SyzygyWDLScore compScore, out SyzygyProbeState compResult);
+        if (compResult == SyzygyProbeState.ZeroingBestMove) compResult = SyzygyProbeState.Ok;
 
         if (compScore != score || compResult != result)
         {

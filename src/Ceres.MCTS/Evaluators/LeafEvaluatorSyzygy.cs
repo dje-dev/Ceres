@@ -89,10 +89,10 @@ namespace Ceres.MCTS.Evaluators
 
     internal LeafEvaluationResult Lookup(in Position pos)
     {
-      Evaluator.ProbeWDL(in pos, out LC0DLLSyzygyEvaluator.WDLScore score, 
-                                 out LC0DLLSyzygyEvaluator.ProbeState resultCode);
-      if (resultCode == LC0DLLSyzygyEvaluator.ProbeState.Fail ||
-          resultCode == LC0DLLSyzygyEvaluator.ProbeState.ChangeSTM)
+      Evaluator.ProbeWDL(in pos, out SyzygyWDLScore score, 
+                                 out SyzygyProbeState resultCode);
+      if (resultCode == SyzygyProbeState.Fail ||
+          resultCode == SyzygyProbeState.ChangeSTM)
       {
         return default;
       }   
@@ -101,24 +101,24 @@ namespace Ceres.MCTS.Evaluators
       switch (score)
       {
         // TODO: use information about distance to draw/mate to fill in the M and also argumet to WinPForProvenWin/WinPForProvenLoss
-        case LC0DLLSyzygyEvaluator.WDLScore.WDLDraw:
+        case SyzygyWDLScore.WDLDraw:
           result = new LeafEvaluationResult(GameResult.Draw, 0, 0, -1, 0);
           break;
 
-        case LC0DLLSyzygyEvaluator.WDLScore.WDLWin:
+        case SyzygyWDLScore.WDLWin:
           result = new LeafEvaluationResult(GameResult.Checkmate, (FP16)ParamsSelect.WinPForProvenWin(1, false), 0, 1, 0);
           break;
 
-        case LC0DLLSyzygyEvaluator.WDLScore.WDLLoss:
+        case SyzygyWDLScore.WDLLoss:
           result = new LeafEvaluationResult(GameResult.Checkmate, 0, (FP16)ParamsSelect.LossPForProvenLoss(1, false), 1, 0);
           break;
 
-        case LC0DLLSyzygyEvaluator.WDLScore.WDLCursedWin:
+        case SyzygyWDLScore.WDLCursedWin:
           // Score as almost draw, just slightly positive (since opponent might err in obtaining draw)
           result = new LeafEvaluationResult(GameResult.Draw, (FP16)0.05f, 0, 100, 0);
           break;
 
-        case LC0DLLSyzygyEvaluator.WDLScore.WDLBlessedLoss:
+        case SyzygyWDLScore.WDLBlessedLoss:
           // Score as almost draw, just slightly negative (since we might err in obtaining draw)
           result = new LeafEvaluationResult(GameResult.Draw, 0, (FP16)0.05f, 100, 0);
           break;
