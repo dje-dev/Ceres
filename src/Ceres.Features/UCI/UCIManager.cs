@@ -33,6 +33,8 @@ using Ceres.Chess.MoveGen;
 using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.NNFiles;
 using Ceres.Chess.SearchResultVerboseMoveInfo;
+using Ceres.Chess.Textual.PgnFileTools;
+using Ceres.Chess.Games.Utils;
 
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.Params;
@@ -44,10 +46,6 @@ using Ceres.MCTS.MTCSNodes;
 using Ceres.Features.GameEngines;
 using Ceres.Features.Visualization.TreePlot;
 using Ceres.Features.Visualization.AnalysisGraph;
-using Ceres.Chess.Textual.PgnFileTools;
-using Ceres.Chess.Games.Utils;
-using LINQPad.Controls;
-using Ceres.Features.Suites;
 
 #endregion
 
@@ -122,6 +120,16 @@ namespace Ceres.Features.UCI
     /// </summary>
     NNDevicesSpecificationString DeviceSpec;
 
+    /// <summary>
+    /// Optional delegate that can modify search parameters.
+    /// </summary>
+    public readonly Action<ParamsSearch> SearchModifier;
+
+    /// <summary>
+    /// Optional delegate that can modify select parameters.
+    /// </summary>
+    public readonly Action<ParamsSelect> SelectModifier;
+
 
     void CreateEvaluator()
     {
@@ -141,6 +149,8 @@ namespace Ceres.Features.UCI
     /// <param name="searchFinishedEvent"></param>
     public UCIManager(NNNetSpecificationString networkSpec,
                       NNDevicesSpecificationString deviceSpec,
+                      Action<ParamsSearch> searchModifier = null,
+                      Action<ParamsSelect> selectModifier = null,
                       TextReader inStream = null, TextWriter outStream = null,
                       Action<MCTSManager> searchFinishedEvent = null,
                       bool disablePruning = false,
@@ -154,6 +164,9 @@ namespace Ceres.Features.UCI
 
       NetworkSpec = networkSpec;
       DeviceSpec = deviceSpec;
+      SearchModifier = searchModifier;
+      SelectModifier = selectModifier;
+      
       BackendBenchEvaluator = backendBenchEvaluator;
       CreateEvaluator();
 
@@ -208,6 +221,7 @@ namespace Ceres.Features.UCI
         parms.FPUValue = fpu;
         parms.FPUValueAtRoot = fpuAtRoot;
 
+        SelectModifier?.Invoke(parms);
         return parms;
       }
     }
@@ -224,6 +238,7 @@ namespace Ceres.Features.UCI
         parms.MoveOverheadSeconds = moveOverheadSeconds;
         parms.EnableUseSiblingEvaluations = enableSiblingEval;
 
+        SearchModifier?.Invoke(parms);
         return parms;
       }
     }

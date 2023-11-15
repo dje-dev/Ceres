@@ -14,22 +14,23 @@
 #region Using directives 
 
 using System;
-using System.Diagnostics;
 using System.Text;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
 
 using Microsoft.Extensions.Logging;
 
 using Ceres.Base.Misc;
 using Ceres.Base.Environment;
 using Ceres.Base.OperatingSystem;
+using Ceres.Base.CUDA;
 using Ceres.Chess.UserSettings;
+using Ceres.MCTS.Params;
 using Ceres.MCTS.Environment;
+
 using Ceres.APIExamples;
 using Ceres.Commands;
 using Ceres.Features;
-using System.Collections.Generic;
-using System.Runtime.InteropServices;
-using Ceres.Base.CUDA;
 using ManagedCuda;
 
 #endregion
@@ -47,11 +48,14 @@ namespace Ceres
       LaunchUCI(args);
     }
 
+
     /// <summary>
     /// Perform engine initialization and enters into UCI processing loop.
     /// </summary>
     /// <param name="args"></param>
-    public static void LaunchUCI(string[] args)
+    /// <param name="searchModifier"></param>
+    /// <param name="selectModifier"></param>
+    public static void LaunchUCI(string[] args, Action<ParamsSearch> searchModifier = null, Action<ParamsSelect> selectModifier = null)
     {    
 #if DEBUG
       Console.WriteLine();
@@ -114,7 +118,7 @@ namespace Ceres
 
       string allArgsString = allArgs.ToString();
 
-      DispatchCommands.ProcessCommand(allArgsString);
+      DispatchCommands.ProcessCommand(allArgsString, searchModifier, selectModifier);
 
 
       //  Win32.WriteCrashdumpFile(@"d:\temp\dump.dmp");
@@ -226,7 +230,6 @@ namespace Ceres
         System.Environment.Exit(3);
       }
     }
-
 
   }
 }
