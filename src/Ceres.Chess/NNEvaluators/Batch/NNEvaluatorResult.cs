@@ -115,6 +115,12 @@ namespace Ceres.Chess.NetEvaluation.Batch
 
 
     /// <summary>
+    /// Returns most probably game result (win, draw, loss) as an integer (-1, 0, 1).
+    /// </summary>
+    public readonly int MostProbableGameResult => W > 0.3333f ? 1 : (L > 0.3333f ? -1 : 0); 
+
+
+    /// <summary>
     /// Returns string description.
     /// </summary>
     /// <returns></returns>
