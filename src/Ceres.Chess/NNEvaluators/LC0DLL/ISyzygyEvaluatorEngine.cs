@@ -18,6 +18,7 @@ using System.Collections.Generic;
 using Ceres.Chess.GameEngines;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.Positions;
+using Ceres.Chess.UserSettings;
 using static Ceres.Chess.NNEvaluators.LC0DLL.LC0DLLSyzygyEvaluator;
 
 #endregion
@@ -93,6 +94,11 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
     #region Helper interface  methods
 
     const bool VERBOSE = false;
+
+    /// <summary>
+    /// Returns the default Syzygy evaluator engine.
+    /// </summary>
+    public static ISyzygyEvaluatorEngine DefaultEngine => SyzygyEvaluatorPool.GetSessionForPaths(CeresUserSettingsManager.Settings.SyzygyPath);
 
 
     /// <summary>
