@@ -21,6 +21,7 @@ using Ceres.Chess;
 using Ceres.Chess.UserSettings;
 using Ceres.Features.Commands;
 using Ceres.Features.UCI;
+using Ceres.MCTS.Params;
 
 #endregion
 
@@ -63,7 +64,7 @@ namespace Ceres.Commands
     }
 
 
-    public static void ProcessCommand(string cmd)
+    public static void ProcessCommand(string cmd, Action<ParamsSearch> searchModifier, Action<ParamsSelect> selectModifier)
     {
       cmd = StringUtils.WhitespaceRemoved(cmd).TrimEnd();
       string[] parts = cmd.Split(" ");
@@ -71,19 +72,19 @@ namespace Ceres.Commands
       if (cmd == "")
       {
         // No arguments at all
-        LaunchUCI("");
+        LaunchUCI("", searchModifier, selectModifier);
         Environment.Exit(0);
       }
       else if (parts.Length > 0 && parts[0].ToUpper() == "UCI")
       {
         // First argument explicit UCI
-        LaunchUCI(cmd.Substring(cmd.IndexOf("UCI ") + 4));
+        LaunchUCI(cmd.Substring(cmd.IndexOf("UCI ") + 4), searchModifier, selectModifier);
         Environment.Exit(0);
       }
       else if (parts.Length > 0 && parts[0].Contains("="))
       {
         // No command, just some immediate key-value pairs
-        LaunchUCI(cmd);
+        LaunchUCI(cmd, searchModifier, selectModifier);
         Environment.Exit(0);
       }
 
@@ -248,7 +249,8 @@ namespace Ceres.Commands
                    +"                                      dir-tablebases, launch-monitor, log-info, log-warn }");
     }
 
-    private static void LaunchUCI(string keyValueArgs)
+
+    private static void LaunchUCI(string keyValueArgs, Action<ParamsSearch> searchModifier, Action<ParamsSelect> selectModifier)
     {
       FeatureUCIParams uciParams = FeatureUCIParams.ParseUCICommand(keyValueArgs);
 
@@ -259,7 +261,8 @@ namespace Ceres.Commands
         backendBench.ExecuteBenchmark();
       };
 
-      UCIManager ux = new UCIManager(uciParams.NetworkSpec, uciParams.DeviceSpec, null, null, null,
+      UCIManager ux = new UCIManager(uciParams.NetworkSpec, uciParams.DeviceSpec,
+                                     searchModifier, selectModifier, null, null, null,
                                      uciParams.Pruning == false,
                                      CeresUserSettingsManager.Settings.UCILogFile,
                                      CeresUserSettingsManager.Settings.SearchLogFile,
