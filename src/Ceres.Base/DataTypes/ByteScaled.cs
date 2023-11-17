@@ -48,6 +48,11 @@ namespace Ceres.Base.DataType
     /// <param name="value"></param>
     public ByteScaled(int value) => Value = value;
 
+    /// <summary>
+    /// Returns raw underlying value, before scaling.
+    /// </summary>
+    public byte RawValue => value;
+
 
     /// <summary>
     /// Accessor to underlying value (in its true scale).
