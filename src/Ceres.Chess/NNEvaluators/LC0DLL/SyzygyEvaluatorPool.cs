@@ -36,8 +36,15 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
 
     public static Func<ISyzygyEvaluatorEngine> OverrideEvaluatorFactory;
 
+    /// <summary>
+    /// Returns a session for the specified paths using default settings (from Ceres.json).
+    /// </summary>
+    /// <param name="paths"></param>
+    /// <returns></returns>
     public static ISyzygyEvaluatorEngine GetSessionForPaths(string paths)
     {
+      ArgumentNullException.ThrowIfNull(paths);
+
       lock (sessionIDPool)
       {
         ISyzygyEvaluatorEngine evaluator;
