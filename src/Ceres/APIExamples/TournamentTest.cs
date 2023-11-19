@@ -47,6 +47,7 @@ using Ceres.Chess.NNEvaluators.Specifications;
 using Ceres.Commands;
 using Ceres.Chess.Games.Utils;
 using Chess.Ceres.PlayEvaluation;
+using Ceres.Base.Misc;
 
 #endregion
 
@@ -54,7 +55,7 @@ namespace Ceres.APIExamples
 {
   public static class ReferenceNetIDs
   {
-    public static void CheckDownloaded(string netName)
+   public static void CheckDownloaded(string netName)
     {
       NNWeightsFileLC0.LookupOrDownload(netName);
     }
@@ -68,7 +69,6 @@ namespace Ceres.APIExamples
     public const string BEST_T78 = "784984";
     public const string BEST_T80 = "809942"; // 801307
     public const string BEST_T81 = "811971"; //Training restarted after surgery after 811971
-
 //    public static string T1_DISTILL_256_10 { get { return @"ONNX_ORT:" + Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, "t1-256x10-distilled-swa-2432500#32"); } }
 //    public static string T1_768 { get { return @"ONNX_ORT:" + Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, "t1-768x15x24h-swa-4000000#32"); } }
 
@@ -78,8 +78,6 @@ namespace Ceres.APIExamples
 
     public static string T1_DISTILL_512_10_FP32 { get { return @"ONNX_ORT:" + Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, "t1-512x15x8h-distilled-swa-3395000#32"); } }
     public static string T1_DISTILL_512_10_FP16 { get { return @"ONNX_ORT:" + Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, "t1-512x15x8h-distilled-swa-3395000_fp16#16"); } }
-
-    public static string T2_768_15_T82_4832 { get { return @"ONNX_ORT:" + Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, "768x15x24h-t82-2-swa-4832500_fp16#16"); } }
 
     public static string BT2 { get { return @"ONNX_ORT:" + Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, "BT2-768x15smolgen-12h-do-01-swa-onnx-2350000-rule50.gz#32"); } }
     public static string BT4 { get { return @"ONNX_ORT:" + Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, "BT4-1024x15x32h-swa-365000#32"); } }
@@ -93,7 +91,7 @@ namespace Ceres.APIExamples
   {
     const bool POOLED = false;
 
-    static int CONCURRENCY = POOLED ? 16 : 5;
+    static int CONCURRENCY = POOLED ? 16 : 4;
     static int[] OVERRIDE_DEVICE_IDs = POOLED ? null : new int[] { 0 };
     static bool RUN_DISTRIBUTED = false;
 
@@ -240,12 +238,12 @@ namespace Ceres.APIExamples
       //      NET1 = @"ONNX_TRT:d:\weights\lczero.org\BT2-768x15smolgen-3326000#16";
 
 //      NET1 = "CUSTOM1:703810,CUSTOM1:703810";
-      NET1 = "CUSTOM1:703810";
-      NET2 = "CUSTOM2:703810";
+      NET1 = "CUSTOM1:753723";
+      //      NET2 = "CUSTOM2:753723";
 
       //      NET1 = ReferenceNetIDs.T2_768_15_T82_4832;
       NET2 = ReferenceNetIDs.BEST_T60;
-      //NET2 = ReferenceNetIDs.BEST_T60;
+//NET1 = NET2 = ReferenceNetIDs.BEST_T80;
 
 
       //NET2 = ReferenceNetIDs.T1_DISTILL_256_10_FP16;
@@ -302,7 +300,7 @@ namespace Ceres.APIExamples
       //      NET2 = ReferenceNetIDs.BT2;
 
       SearchLimit limit1 = SearchLimit.NodesForAllMoves(100_000, 1000) * 3;
-      limit1 = SearchLimit.NodesPerMove(200); // was 10_000
+      limit1 = SearchLimit.NodesPerMove(100);
       //limit1 = SearchLimit.BestValueMove;
 
       //      limit1 = SearchLimit.SecondsForAllMoves(60, 0.6f);
@@ -667,7 +665,7 @@ namespace Ceres.APIExamples
         suiteDef.MaxNumPositions = 500;
         suiteDef.EPDLichessPuzzleFormat = suiteDef.EPDFileName.ToUpper().Contains("LICHESS");
 
-        //suiteDef.EPDFilter = s => !s.Contains(".exe"); // For NICE suite, these represent positions with multiple choices
+        suiteDef.AcceptPosPredicate = null;// p => IsKRP(p);
 
         SuiteTestRunner suiteRunner = new SuiteTestRunner(suiteDef);
 
@@ -748,11 +746,21 @@ namespace Ceres.APIExamples
       //      baseName = "book-ply8-unifen-Q-0.0-0.25.pgn";
 //                  baseName = "openings-6ply-1000";
 //      baseName = "book-ply8-unifen-Q-0.25-0.40";
-      //string baseName = "endingbook-10man-3181";
+      const bool KRP =false;
+      if (KRP)
+      {
+        throw new NotImplementedException();
+//        baseName = "endingbook-16man-9609.pgn";
+//        def.AcceptPosExcludeIfContainsPieceTypeList = [PieceType.Queen, PieceType.Bishop, PieceType.Knight];
+      }
 //       baseName = "tcec_big";
       string postfix = (baseName.ToUpper().EndsWith(".EPD") || baseName.ToUpper().EndsWith(".PGN")) ? "" : ".pgn";
       def.OpeningsFileName = SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/openings/{baseName}{postfix}"
                                                      : @$"\\synology\dev\chess\data\openings\{baseName}{postfix}";
+      // not functioning def.AcceptPosPredicate = p => IsKRP(p);  
+
+//ConsoleUtils.WriteLineColored(ConsoleColor.Red, "WARNING TB ADJUDICATION OFF");
+//def.UseTablebasesForAdjudication = false;
 
       if (false)
       {
@@ -1118,6 +1126,19 @@ namespace Ceres.APIExamples
 
       Console.WriteLine("final shutdown");
       referenceEvaluator.Shutdown();
+    }
+
+    static bool IsKRP(in Position position)
+    {
+      if (position.PieceCountOfType(new Piece(SideType.White, PieceType.Queen)) > 0) return false;
+      if (position.PieceCountOfType(new Piece(SideType.Black, PieceType.Queen)) > 0) return false;
+      if (position.PieceCountOfType(new Piece(SideType.White, PieceType.Bishop)) > 0) return false;
+      if (position.PieceCountOfType(new Piece(SideType.Black, PieceType.Bishop)) > 0) return false;
+      if (position.PieceCountOfType(new Piece(SideType.White, PieceType.Knight)) > 0) return false;
+      if (position.PieceCountOfType(new Piece(SideType.Black, PieceType.Knight)) > 0) return false;
+
+      return true;
+
     }
 
   }
