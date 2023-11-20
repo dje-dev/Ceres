@@ -31,7 +31,6 @@ using Ceres.MCTS.Environment;
 using Ceres.APIExamples;
 using Ceres.Commands;
 using Ceres.Features;
-using ManagedCuda;
 
 #endregion
 
@@ -162,16 +161,9 @@ namespace Ceres
     static void OutputBanner()
     {
       string dotnetVersion = RuntimeInformation.FrameworkDescription;
-      string cudaVersion;
-      using (CUDADevice context = CUDADevice.GetContext(0))
-      {
-        CudaDeviceProperties deviceProperties = context.Context.GetDeviceInfo();
-        cudaVersion = $"{deviceProperties.DriverVersion.Major}.{deviceProperties.DriverVersion.Minor}";
-      }
-      
-      bool isDotNet5 = dotnetVersion.Contains(".NET 5");
-      bool isPGO = !isDotNet5 && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DOTNET_TieredPGO"));
-      string pgoString = isPGO ? "PGO" : "NA";
+      (int majorCUDAVersion, int minorCUDAVersion) = CUDADevice.GetCUDAVersion();
+
+      string cudaVersion = $"{majorCUDAVersion}.{minorCUDAVersion}";     
 
       string[] bannerLines = BannerString.Split(Environment.NewLine);
       foreach (string line in bannerLines)
@@ -188,14 +180,14 @@ namespace Ceres
 
         else if (line.StartsWith("|  Version"))
         {
-          string version = $"|  Version {CeresVersion.VersionString} with PGO: {pgoString}";
+          string version = $"|  Version {CeresVersion.VersionString}";
           int spaceLeft = line.Length - version.Length;
           string empty = new string(' ', 3 + spaceLeft - 1);
           Console.WriteLine($"{version}{empty}|");
         }
         else if (line.StartsWith("|  Runtime"))
         {
-          string runtime = $"|  Runtime {dotnetVersion} and Cuda {cudaVersion}";
+          string runtime = $"|  Runtime {dotnetVersion} and CUDA {cudaVersion}";
           int spaceLeft = line.Length - runtime.Length;
           string empty = new string(' ', 3 + spaceLeft - 1);
           Console.WriteLine($"{runtime}{empty}|");

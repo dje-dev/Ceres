@@ -20,8 +20,9 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading;
 
-using ManagedCuda;
 using Ceres.Base.DataTypes;
+
+using ManagedCuda;
 
 #endregion
 
@@ -29,7 +30,7 @@ namespace Ceres.Base.CUDA
 {
   /// <summary>
   /// Manages the state of a single CUDA device
-  /// including the underlying CudaContext and various sychronization objects,
+  /// including the underlying CudaContext and various synchronization objects,
   /// and facilitating kernel loading.
   /// </summary>
   public class CUDADevice : IDisposable
@@ -84,9 +85,33 @@ namespace Ceres.Base.CUDA
       {
         GPUID = gpuID;
         Context = new CudaContext(gpuID, false);
+
+        CudaDeviceProperties deviceProperties = Context.GetDeviceInfo();
+        driverVersionMajor = deviceProperties.DriverVersion.Major;
+        driverVersionMinor = deviceProperties.DriverVersion.Minor;
+      }
+    }
+
+    static int driverVersionMajor = -1;
+    static int driverVersionMinor = -1;
+
+    /// <summary>
+    /// Returns the major and minor version of CUDA installed.
+    /// </summary>
+    /// <returns></returns>
+    public static (int majorVersion, int minorVersion) GetCUDAVersion()
+    {
+      if (driverVersionMajor == -1)
+      {
+        // No device ever initialized; force this now (then release).
+        using (CUDADevice context = CUDADevice.GetContext(0))
+        {
+        }
       }
 
+      return (driverVersionMajor, driverVersionMinor);
     }
+
 
     [ThreadStatic] static CudaContext currentContext;
 
