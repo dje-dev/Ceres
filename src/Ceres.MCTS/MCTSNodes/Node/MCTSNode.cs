@@ -590,9 +590,10 @@ namespace Ceres.MCTS.MTCSNodes
     /// <returns></returns>
     public MCTSNode NodeForMove(MGMove move)
     {
-      for (int i = 0; i < NumPolicyMoves; i++)
+      for (int i = 0; i < NumChildrenExpanded; i++)
       {
         MCTSNode child = this.ChildAtIndex(i);
+        child.Annotate();
         if (child.Annotation.PriorMoveMG == move)
         {
           return child;
