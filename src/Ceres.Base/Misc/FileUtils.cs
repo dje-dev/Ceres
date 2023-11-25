@@ -46,6 +46,19 @@ namespace Ceres.Base.Misc
 
 
     /// <summary>
+    /// Returns a filename with invalid characters removed.
+    /// </summary>
+    /// <param name="input"></param>
+    /// <returns></returns>
+    public static string FileNameSanitized(string input)
+    {
+      char[] invalidChars = Path.GetInvalidFileNameChars();
+      return new string(input
+          .Where(c => !invalidChars.Contains(c))
+          .ToArray());
+    }
+
+    /// <summary>
     /// Returns if all of the semicolon/colon separated paths exist.
     /// </summary>
     /// <param name="paths"></param>
