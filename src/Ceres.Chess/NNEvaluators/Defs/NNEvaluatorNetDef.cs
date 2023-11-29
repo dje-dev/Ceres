@@ -15,6 +15,7 @@
 
 using Chess.Ceres.NNEvaluators;
 using System;
+using System.Text.Json.Serialization;
 
 #endregion
 
@@ -50,6 +51,13 @@ namespace Ceres.Chess.NNEvaluators.Defs
       Precision = precision;
     }
 
+    /// <summary>
+    /// Default constructor for deserialization.
+    /// </summary>
+    [JsonConstructorAttribute]
+    NNEvaluatorNetDef()
+    {
+    }
 
     public override string ToString()
     {

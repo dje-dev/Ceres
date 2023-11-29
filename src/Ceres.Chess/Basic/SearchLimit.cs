@@ -15,6 +15,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 #endregion
 
@@ -86,6 +87,7 @@ namespace Ceres.Chess
     /// <summary>
     /// Optionally a list of moves to which the search is restricted.
     /// </summary>
+    [JsonIgnore]
     public List<Move> SearchMoves;
 
 
@@ -165,6 +167,15 @@ namespace Ceres.Chess
       FractionExtensibleIfNeeded = fractionExtensibleIfNeeded;
     }
 
+    /// <summary>
+    /// Default constructor for deserialization.
+    /// </summary>
+    [JsonConstructorAttribute]
+    public SearchLimit()
+    {
+    }
+
+
     #region Predicates
 
     public static bool TypeIsPerGameLimit(SearchLimitType type) => type == SearchLimitType.NodesForAllMoves 
@@ -176,8 +187,11 @@ namespace Ceres.Chess
     public static bool TypeIsTimeLimit(SearchLimitType type) => type == SearchLimitType.SecondsPerMove 
                                                              || type == SearchLimitType.SecondsForAllMoves;
 
+    [JsonIgnore]
     public bool IsPerGameLimit => TypeIsPerGameLimit(Type);
+    [JsonIgnore]
     public bool IsNodesLimit => TypeIsNodesLimit(Type);
+    [JsonIgnore]
     public bool IsTimeLimit => TypeIsTimeLimit(Type);
 
     #endregion
@@ -222,6 +236,7 @@ namespace Ceres.Chess
     /// Returns the maximum number of nodes possible for this search
     /// if this can be determined, otherwise null.
     /// </summary>
+    [JsonIgnore]
     public int? KnownMaxNumNodes
     {
       get
@@ -315,11 +330,12 @@ namespace Ceres.Chess
       }
     }
 
-#endregion
+    #endregion
 
     /// <summary>
     /// Converts SearchLimit to from a per-game limit to a per-move limit, if applicable.
     /// </summary>
+    [JsonIgnore]
     public SearchLimit ConvertedGameToMoveLimit
     {
       get
@@ -358,6 +374,7 @@ namespace Ceres.Chess
     /// <summary>
     /// Returns a short code string indicating the type of limit.
     /// </summary>
+    [JsonIgnore]
     public string TypeShortStr => Type switch
     {
       SearchLimitType.NodesForAllMoves => "NG",

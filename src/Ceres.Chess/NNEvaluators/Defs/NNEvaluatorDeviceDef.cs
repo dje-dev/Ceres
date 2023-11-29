@@ -15,6 +15,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 #endregion
 
@@ -82,6 +83,14 @@ namespace Ceres.Chess.NNEvaluators.Defs
       {
         OptimalBatchSize = maxBatchSize;
       }
+    }
+
+    /// <summary>
+    /// Default constructor for deserialization.
+    /// </summary>
+    [JsonConstructorAttribute]
+    NNEvaluatorDeviceDef()
+    {
     }
 
 
