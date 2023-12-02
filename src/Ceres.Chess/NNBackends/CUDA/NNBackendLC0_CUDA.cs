@@ -14,8 +14,10 @@
 #region Using directives
 
 using System;
+using Math = System.Math;
 using System.Collections.Generic;
-using System.Reflection;
+using System.Threading;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 using ManagedCuda;
@@ -25,9 +27,7 @@ using Pblczero;
 using Ceres.Base.Benchmarking;
 using Ceres.Base.CUDA;
 using Ceres.Base.DataTypes;
-using System.Threading;
-using System.Diagnostics;
-using Math = System.Math;
+using Ceres.Chess.LC0.NNFiles;
 
 #endregion
 
@@ -79,6 +79,11 @@ namespace Ceres.Chess.NNBackends.CUDA
 
     #endregion
 
+
+    /// <summary>
+    /// Underlying weights file.
+    /// </summary>
+    public readonly NNWeightsFileLC0 Net;
 
     /// <summary>
     /// If the layer-wise characteristics and timing statistics
@@ -253,13 +258,14 @@ namespace Ceres.Chess.NNBackends.CUDA
     /// <param name="enableCUDAGraphs"></param>
     /// <param name="graphBatchSizeDivisor"></param>
     /// <param name="referenceBackend"></param>
-    public NNBackendLC0_CUDA(int gpuID, Net net, bool saveActivations = false,
+    public NNBackendLC0_CUDA(int gpuID, NNWeightsFileLC0 net, bool saveActivations = false,
                              int maxBatchSize = DEFAULT_MAX_BATCH_SIZE,
                              bool dumpTiming = false,
                              bool enableCUDAGraphs = true,
                              int graphBatchSizeDivisor = 1,
                              NNBackendLC0_CUDA referenceBackend = null)
     {
+      Net = net;
       GPUID = gpuID;
       SaveActivations = saveActivations;
       MaxBatchSize = maxBatchSize;
@@ -272,15 +278,12 @@ namespace Ceres.Chess.NNBackends.CUDA
         try
         {
           InitCUDAContextAndTakeWriteLock();
-
           InitGPUVars();
-
-          InitNetwork(net);
-
+          InitNetwork(net.Info.Net);
         }
         catch (Exception e)
         {
-          Console.WriteLine("Error when initializing CUDA. Did you install NVidia's CUDA? https://developer.nvidia.com/cuda-zone");
+          Console.WriteLine("Error when initializing CUDA. Did you install NVIDIA's CUDA? https://developer.nvidia.com/cuda-zone");
           Console.WriteLine(e);
           Console.WriteLine(e.StackTrace);
         }
@@ -911,7 +914,9 @@ namespace Ceres.Chess.NNBackends.CUDA
       Dispose(disposing: true);
     }
 
-#endregion
+    #endregion
+
+    public override string ToString() => $"<NNBackendLC0_CUDA> {Net.FileInfo.Name} on GPU {GPUID}";
   }
 
 

@@ -152,7 +152,7 @@ namespace Ceres.Chess.NNEvaluators.CUDA
       l = isWDL ? new FP16[maxBatchSize] : null;
       m = isWDL ? new FP16[maxBatchSize] : null;
 
-      Evaluator = new NNBackendLC0_CUDA(gpuID, net.Info.Net, saveActivations, maxBatchSize,
+      Evaluator = new NNBackendLC0_CUDA(gpuID, net, saveActivations, maxBatchSize,
                                         dumpTimings, enableCUDAGraphs, graphBatchSizeDivisor,
                                         TRY_SHARE_EVALUATORS ? ReferenceEvaluator?.Evaluator : null);
     }
