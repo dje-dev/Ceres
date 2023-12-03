@@ -316,7 +316,7 @@ namespace Ceres.Chess.NNEvaluators
     /// <returns></returns>
     public NNEvaluatorResult Evaluate(in Position position, bool fillInMissingPlanes = true, bool retrieveSupplementalResults = false)
     {
-      EncodedPositionBatchBuilder builder = new EncodedPositionBatchBuilder(1, InputsRequired);
+      EncodedPositionBatchBuilder builder = new EncodedPositionBatchBuilder(1, InputsRequired | InputTypes.Positions);
       builder.Add(in position, fillInMissingPlanes);
 
       NNEvaluatorResult[] result = EvaluateBatch(builder.GetBatch(), retrieveSupplementalResults);
