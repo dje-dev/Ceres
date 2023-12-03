@@ -1060,7 +1060,7 @@ namespace Ceres.APIExamples
             Console.WriteLine("create " + i);
             NNWeightsFileLC0 netWeightsFile = NNWeightsFileLC0.LookupOrDownload(NET_ID);
             LC0ProtobufNet net = LC0ProtobufNet.LoadedNet(netWeightsFile.FileName);
-            NNBackendLC0_CUDA backend = new NNBackendLC0_CUDA(0, net.Net);
+            NNBackendLC0_CUDA backend = new NNBackendLC0_CUDA(0, netWeightsFile);
             Console.WriteLine("dispose " + i);
             backend.Dispose();
           }
