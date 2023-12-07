@@ -15,6 +15,8 @@
 
 using System;
 using System.IO;
+using System.Collections.Generic;
+using System.Linq;
 
 #endregion
 
@@ -77,5 +79,69 @@ namespace Ceres.Train
         Console.WriteLine(line);
       }
     }
+
+
+    #region Info string loading
+
+    /// <summary>
+    /// Log files may contain info lines (starting with INFO:) 
+    /// that contain key/value pairs intended for extraction.
+    /// </summary>
+    Dictionary<string, string> logLinesStartingWithINFO;
+
+
+    /// <summary>
+    /// Builds a dictionary of INFO lines from the log file.
+    /// </summary>
+    public void LoadInfoDictionary()
+    {
+      // Lines of the form: date time INFO: key value
+      string[] logLines = File.ReadAllLines(LiveLogFileName);
+      logLinesStartingWithINFO = logLines.Where(line => line.Contains("INFO:"))
+        .ToDictionary(line => line.Split(" ")[4], line => line.Split(" ")[^1]);
+    }
+
+
+    /// <summary>
+    /// Gets an int value from the INFO lines of the log file.
+    /// </summary>
+    /// <param name="key"></param>
+    /// <returns></returns>
+    /// <exception cref="Exception"></exception>
+    public long GetInfoLong(string key)
+    {
+      if (!logLinesStartingWithINFO.ContainsKey(key))
+      {
+        throw new Exception(key + " not found in log file");
+      }
+
+      if (!long.TryParse(logLinesStartingWithINFO[key], out long intValue))
+      {
+        throw new Exception($"Could not parse int value from {logLinesStartingWithINFO[key]} for " + key);
+      }
+
+      return intValue;
+    }
+
+
+    /// <summary>
+    /// Gets a string value from the INFO lines of the log file.
+    /// </summary>
+    /// <param name="key"></param>
+    /// <returns></returns>
+    /// <exception cref="Exception"></exception>
+    public string GetInfoStr(string key)
+    {
+      if (!logLinesStartingWithINFO.ContainsKey(key))
+      {
+        throw new Exception(key + " not found in log file");
+      }
+
+
+      return logLinesStartingWithINFO[key];
+    }
+
+    #endregion
+
   }
 }
