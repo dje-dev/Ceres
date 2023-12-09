@@ -134,9 +134,8 @@ namespace Ceres.Train
     {
       if (!logLinesStartingWithINFO.ContainsKey(key))
       {
-        throw new Exception(key + " not found in log file");
+        return null;
       }
-
 
       return logLinesStartingWithINFO[key];
     }
