@@ -181,8 +181,8 @@ so maybe this engine is not doing this optimally?
         throw new Exception($"Internal error: unexpected Fathom game result {fathomResult.Result} in lookup of {currentPos.FEN}");
       }
 
-      // Add in the non-winning moves if requested.
-      if (!returnOnlyWinningMoves)
+      // Add in the non-winning moves if requested (and available.
+      if (!returnOnlyWinningMoves && result != GameResult.Unknown)
       {
         if (moveList == null)
         {
