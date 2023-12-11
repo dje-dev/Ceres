@@ -27,7 +27,7 @@ using System.Diagnostics;
 namespace Ceres.Chess.NNEvaluators.LC0DLL
 {
 
-  public delegate MGMove CheckTablebaseBestNextMoveDelegate(in Position currentPos, out GameResult result, 
+  public delegate MGMove CheckTablebaseBestNextMoveDelegate(in Position currentPos, out WDLResult result, 
                                                             out List<(MGMove, short)> fullWinningMoveList, 
                                                             out bool winningMoveListOrderedByDTM);
 
@@ -40,7 +40,7 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
   {
 
     public MGMove CheckTablebaseBestNextMoveViaDTZ(in Position currentPos,
-                                                   out GameResult result, 
+                                                   out WDLResult result, 
                                                    out List<(MGMove, short)> moveList, 
                                                    out short dtz,
                                                    bool returnOnlyWinningMoves = true)
@@ -50,7 +50,7 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
       ProbeWDL(in currentPos, out SyzygyWDLScore score, out SyzygyProbeState probeResult);
       if (!(probeResult == SyzygyProbeState.Ok || probeResult == SyzygyProbeState.ZeroingBestMove))
       {
-        result = GameResult.Unknown;
+        result = WDLResult.Unknown;
         dtz = 0;
         return default(MGMove);
       }
@@ -61,16 +61,16 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
         case SyzygyWDLScore.WDLBlessedLoss:
           // This is probably actually a loss, but not way to represent that with this enum.
           // TODO: Clean this up.
-          result = GameResult.Unknown;
+          result = WDLResult.Unknown;
           break;
 
         case SyzygyWDLScore.WDLWin:
         case SyzygyWDLScore.WDLCursedWin:
-          result = GameResult.Checkmate;
+          result = WDLResult.Win;
           break;
 
         case SyzygyWDLScore.WDLDraw:
-          result = GameResult.Draw;
+          result = WDLResult.Draw;
           break;
 
         default:
@@ -81,7 +81,7 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
       int dtzMove = ProbeDTZ(in currentPos);
       if (dtzMove < 0)
       {
-        result = GameResult.Unknown;
+        result = WDLResult.Loss;
         dtz = 0;
         return default(MGMove);
       }
@@ -101,11 +101,11 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
 
     #region Tests
 
-    static void Check(LC0DLLSyzygyEvaluator eval, string fen, GameResult result, string moveStr)
+    static void Check(LC0DLLSyzygyEvaluator eval, string fen, WDLResult result, string moveStr)
     {
-      MGMove move = (eval as ISyzygyEvaluatorEngine).CheckTablebaseBestNextMove(Position.FromFEN(fen), out GameResult gr, out _, out _ );
+      MGMove move = (eval as ISyzygyEvaluatorEngine).CheckTablebaseBestNextMove(Position.FromFEN(fen), out WDLResult gr, out _, out _ );
       Debug.Assert(result == gr);
-      if (gr != GameResult.Unknown)
+      if (gr != WDLResult.Unknown)
       {
         Debug.Assert(moveStr == move.ToString());
       }
@@ -119,10 +119,11 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
       LC0DLLSyzygyEvaluator eval = new(0);
       eval.Initialize(CeresUserSettingsManager.Settings.TablebaseDirectory);
       //Check(eval, "8/8/6R1/8/7k/8/6K1/8 w - - 0 1", GameResult.Checkmate, "Rg6-g3");
-      Check(eval, "k7/P6R/2K5/8/7P/1r6/8/8 w - -", GameResult.Checkmate, "Rh7-h8"); // DTM 46
-      Check(eval, "8/8/8/8/5kp1/P7/8/1K1N4 w - -", GameResult.Checkmate, "Kb1-c2"); // DTM 50
-      Check(eval, "8/1k6/1p1r4/5K2/8/8/8/2R5 w - -", GameResult.Draw, "Kf5-e4");
-      Check(eval, "4kq2/8/8/8/8/8/8/4K3 w - - 0 1", GameResult.Unknown, null);
+      Check(eval, "k7/P6R/2K5/8/7P/1r6/8/8 w - -", WDLResult.Win, "Rh7-h8"); // DTM 46
+      Check(eval, "8/8/8/8/5kp1/P7/8/1K1N4 w - -", WDLResult.Win, "Kb1-c2"); // DTM 50
+      Check(eval, "8/1k6/1p1r4/5K2/8/8/8/2R5 w - -", WDLResult.Draw, "Kf5-e4");
+      Check(eval, "4kq2/8/8/8/8/8/8/4K3 w - - 0 1", WDLResult.Loss, null);
+      Check(eval, Position.StartPosition.FEN, WDLResult.Unknown, null);
     }
 
     #endregion

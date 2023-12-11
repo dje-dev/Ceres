@@ -15,6 +15,8 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading;
+using Ceres.Base.OperatingSystem.Windows;
 using Ceres.Chess.GameEngines;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.Positions;
@@ -25,6 +27,16 @@ using static Ceres.Chess.NNEvaluators.LC0DLL.LC0DLLSyzygyEvaluator;
 
 namespace Ceres.Chess.NNEvaluators.LC0DLL
 {
+  public enum WDLResult
+  {
+    Uninitialized,
+    Unknown,
+    Loss,
+    Draw,
+    Win
+  }
+
+
   /// <summary>
   /// Interface shared by all Syzygy evaluators (and some shared logic).
   /// </summary>
@@ -80,7 +92,7 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
     /// <param name="dtz"></param>
     /// <param name="returnOnlyWinningMoves"></param>
     /// <returns></returns>
-    public MGMove CheckTablebaseBestNextMoveViaDTZ(in Position currentPos, out GameResult result, 
+    public MGMove CheckTablebaseBestNextMoveViaDTZ(in Position currentPos, out WDLResult result, 
                                                    out List<(MGMove, short)> moveList, 
                                                    out short dtz, bool returnOnlyWinningMoves = true);
 
@@ -135,11 +147,13 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
     /// <returns></returns>
     public bool MoveIsInOptimalCategoryForPosition(in Position pos, MGMove move)
     {
-      MGMove topMoveTB = CheckTablebaseBestNextMoveViaDTZ(in pos, out GameResult result, out List<(MGMove, short)> moves, out _, false);
-      int moveResult = Math.Sign(moves.Find(m => m.Item1 == move).Item2);
-      int bestWDLResult = ProbeWDLAsV(in pos);
+      // Compute new position.
+      MGPosition mgPos = pos.ToMGPosition;
+      mgPos.MakeMove(move);
+      Position newPos = mgPos.ToPosition;
 
-      return bestWDLResult == moveResult;
+      // Check if WDL status for current and new position is same (after negation to adjust for perspective change).
+      return ProbeWDLAsV(in pos) == -ProbeWDLAsV(in newPos);
     }
 
 
@@ -151,14 +165,15 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
     /// <param name="result"></param>
     /// <param name="fullWinningMoveList"></param>
     /// <returns></returns>
-    public MGMove CheckTablebaseBestNextMove(in Position currentPos, out GameResult result, out List<(MGMove, short)> fullWinningMoveList, out bool winningMoveListOrderedByDTM)
+    public MGMove CheckTablebaseBestNextMove(in Position currentPos, out WDLResult result, out List<(MGMove, short)> fullWinningMoveList, out bool winningMoveListOrderedByDTM)
     {
       fullWinningMoveList = null;
+      winningMoveListOrderedByDTM = false;
 
       // TODO: Ponder if this could be done for PieceCount == MaxCardinality + 1
       if (currentPos.PieceCount > MaxCardinality)
       {
-        result = GameResult.Unknown;
+        result = WDLResult.Unknown;
         winningMoveListOrderedByDTM = false;
         return default;
       }
@@ -168,7 +183,7 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
         // Try to use DTZ table, which may may not work (depending on file availability).
         MGMove dtzMove = CheckTablebaseBestNextMoveViaDTZ(in currentPos, out result, out fullWinningMoveList, out _);
 
-        if (result != GameResult.Unknown)
+        if (result != WDLResult.Unknown)
         {
           if (VERBOSE)
           {
@@ -183,7 +198,12 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
 
       // Fall thru to use WDL
       MGMove ret =  CheckTablebaseBestNextMoveViaWDL(in currentPos, out result, out List<MGMove> winningMoves);
-      if (result != GameResult.Unknown && fullWinningMoveList != null)
+      if (result == WDLResult.Unknown)
+      {
+        return default;
+      } 
+
+      if (fullWinningMoveList != null)
       {
         foreach (MGMove move in winningMoves)
         {
@@ -196,12 +216,12 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
         Console.WriteLine($"\r\nCheckTablebaseBestNextMove via WDL yields {result} {ret} with winning list "
                                    + $"size {fullWinningMoveList?.Count} in position {currentPos.FEN}");
       }
-      winningMoveListOrderedByDTM = false;
+
       return ret;
     }
 
 
-    MGMove CheckTablebaseBestNextMoveViaWDL(in Position currentPos, out GameResult result, out List<MGMove> fullWinningMoveList)
+    MGMove CheckTablebaseBestNextMoveViaWDL(in Position currentPos, out WDLResult result, out List<MGMove> fullWinningMoveList)
     {
       fullWinningMoveList = new();
 
@@ -246,28 +266,36 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
       {
         // If we found a winning move, definitely make it 
         bestMove = winningMove;
-        result = GameResult.Checkmate;
+        result = WDLResult.Win;
       }
       else if (winningCursedMove != default(MGMove))
       {
         // If we found a cursed winning move, we might as well try making it
         bestMove = winningCursedMove;
-        result = GameResult.Draw;
+        result = WDLResult.Draw;
       }
-      else if (allNextPositionsInTablebase && drawingMove != default(MGMove))
+      else if (!allNextPositionsInTablebase)
+      {
+        // Unable to determine result because not all possible next positions were found in tablebase.
+        result = WDLResult.Unknown;
+      }
+      else if (drawingMove != default(MGMove))
       {
         // If we were able to find all next positions and none are winning, 
         // then take (any) drawing move if we found it
         bestMove = drawingMove;
-        result = GameResult.Draw;
+        result = WDLResult.Draw;
       }
-      else
-        result = GameResult.Unknown;
+      else 
+      {
+        bestMove = default; // all moves lose, we don't know which is least bad
+        result = WDLResult.Loss;
+      }
 
       return bestMove;
     }
 
-    #endregion
+#endregion
   }
 
 }

@@ -46,6 +46,7 @@ using Ceres.Chess.LC0.Batches;
 using Ceres.Chess.NetEvaluation.Batch;
 using System.Linq;
 using Ceres.Chess.NNEvaluators;
+using Ceres.Chess.NNEvaluators.LC0DLL;
 
 #endregion
 
@@ -501,18 +502,18 @@ namespace Ceres.MCTS.Iteration
     /// </summary>
     /// <param name="node"></param>
     /// <returns></returns>
-    internal (GameResult result, MGMove immediateMove) TryGetTablebaseImmediateMove(MCTSNode node)
+    internal (WDLResult result, MGMove immediateMove) TryGetTablebaseImmediateMove(MCTSNode node)
     {
       // Not possible to find if tablebase method is not installed (not available).
       if (Context.CheckTablebaseBestNextMove == null)
       {
-        return (GameResult.Unknown, default);
+        return (WDLResult.Unknown, default);
       }
 
       node.Annotate();
       Position pos = node.Annotation.Pos;
-      MGMove immediateMove = Context.CheckTablebaseBestNextMove(in pos, out GameResult result, out List<(MGMove, short)> fullWinningMoveList, out bool winningMoveListOrderedByDTM);
-      if (result == GameResult.Checkmate && !winningMoveListOrderedByDTM)
+      MGMove immediateMove = Context.CheckTablebaseBestNextMove(in pos, out WDLResult result, out List<(MGMove, short)> fullWinningMoveList, out bool winningMoveListOrderedByDTM);
+      if (result == WDLResult.Win && !winningMoveListOrderedByDTM)
       {
         // Not safe to rely upon the tablebase probe because unable (e.g. because of missing DTZ files)
         // to indicate which moves bring us closer to checkmate.
@@ -528,10 +529,10 @@ namespace Ceres.MCTS.Iteration
           TerminationManager.SearchMovesTablebaseRestricted = moveList;
         }
 
-        return (GameResult.Unknown, default);
+        return (WDLResult.Unknown, default);
       }
 
-      if (result == GameResult.Checkmate)
+      if (result == WDLResult.Win)
       {
         Debug.Assert(pos.ToMGPosition.IsLegalMove(immediateMove));
         Span<Position> historyPositions = node.Context.Tree.HistoryPositionsForNode(node);
@@ -545,7 +546,7 @@ namespace Ceres.MCTS.Iteration
             // Perhaps DTZ tablebase files not available.
             // Do not blindly play into the draw, return no tablbase hit
             // and allow engine to search normally as fallback.
-            return (GameResult.Unknown, default);
+            return (WDLResult.Unknown, default);
           }
           else
           {
@@ -579,14 +580,14 @@ namespace Ceres.MCTS.Iteration
       // If using tablebases, lookup to see if we have immediate win (choosing the shortest one)
       if (Context.CheckTablebaseBestNextMove != null)
       {
-        (GameResult result, MGMove immediateMove) = TryGetTablebaseImmediateMove(node);
+        (WDLResult result, MGMove immediateMove) = TryGetTablebaseImmediateMove(node);
         TablebaseImmediateBestMove = immediateMove;
 
-        if (result == GameResult.Checkmate)
+        if (result == WDLResult.Win)
         {
           SetRootAsWin();
         }
-        else if (result == GameResult.Draw)
+        else if (result == WDLResult.Draw)
         {
           // Set the evaluation of the position to be a draw
           // TODO: possibly use distance to end of game to set the distance more accurately than fixed at 1
@@ -601,11 +602,8 @@ namespace Ceres.MCTS.Iteration
           Context.Root.StructRef.Terminal = GameResult.Draw;
           Context.Root.EvalResult = new LeafEvaluationResult(GameResult.Draw, 0, 0, 1, 0);
         }
-        else if (result == GameResult.Unknown && TablebaseImmediateBestMove != default)
+        else if (result == WDLResult.Loss && TablebaseImmediateBestMove != default)
         {
-          // N.B. Unknown as a result actually means "Lost"
-          //      base currently the GameResult enum has no way to represent that.
-          //      TODO: Clean this up, create a new Enum to represent this more cleanly.
           // Set the evaluation of the position to be a loss.
           // TODO: possibly use distance to mate to set the distance more accurately than fixed at 1
           const int DISTANCE_TO_MATE = 1;

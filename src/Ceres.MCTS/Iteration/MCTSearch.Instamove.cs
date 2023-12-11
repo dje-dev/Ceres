@@ -16,6 +16,7 @@
 using System;
 
 using Ceres.Chess;
+using Ceres.Chess.NNEvaluators.LC0DLL;
 using Ceres.MCTS.Environment;
 using Ceres.MCTS.Managers;
 using Ceres.MCTS.Managers.Limits;
@@ -53,8 +54,8 @@ namespace Ceres.MCTS.Iteration
       // Never instamove when tablebase available
       // (because complex logic with contextual knowledge
       // needed to avoid falling into draw by repetitions, etc.)
-      (GameResult result, Chess.MoveGen.MGMove immediateMove) = priorManager.TryGetTablebaseImmediateMove(newRoot);
-      if (result != GameResult.Unknown)
+      (WDLResult result, Chess.MoveGen.MGMove immediateMove) = priorManager.TryGetTablebaseImmediateMove(newRoot);
+      if (result != WDLResult.Unknown)
       {
         return false;
       }

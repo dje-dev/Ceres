@@ -36,6 +36,7 @@ using Ceres.MCTS.NodeCache;
 using Ceres.Base.DataType.Trees;
 using System.Diagnostics;
 using Ceres.MCTS.Evaluators;
+using Ceres.Chess.NNEvaluators.LC0DLL;
 
 #endregion
 
@@ -307,10 +308,10 @@ namespace Ceres.MCTS.Iteration
         LeafEvaluatorSyzygy evaluatorTB = new LeafEvaluatorSyzygy(CeresUserSettingsManager.Settings.TablebaseDirectory, false);
         if (startPos.PieceCount <= evaluatorTB.MaxCardinality)
         {
-          MGMove ret = evaluatorTB.Evaluator.CheckTablebaseBestNextMove(in startPos, out GameResult result,
+          MGMove ret = evaluatorTB.Evaluator.CheckTablebaseBestNextMove(in startPos, out WDLResult result,
             out List<(MGMove, short)> fullWinningMoveList, out bool winningMoveListOrderedByDTM);
 
-          if (result == GameResult.Checkmate && !winningMoveListOrderedByDTM)
+          if (result == WDLResult.Win && !winningMoveListOrderedByDTM)
           {
             // No DTZ were available to guide search, must start a new tree
             // and perform actual NN search to find the win.

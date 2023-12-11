@@ -119,7 +119,7 @@ so maybe this engine is not doing this optimally?
 #endif
 
     public MGMove CheckTablebaseBestNextMoveViaDTZ(in Position currentPos,                                                    
-                                                   out GameResult result, 
+                                                   out WDLResult result, 
                                                    out List<(MGMove, short)> moveList, 
                                                    out short dtz,
                                                    bool returnOnlyWinningMoves = true)
@@ -130,7 +130,7 @@ so maybe this engine is not doing this optimally?
       if (currentPos.PieceCount > MaxCardinality
        || currentPos.MiscInfo.CastlingRightsAny)
       {
-        result = GameResult.Unknown;
+        result = WDLResult.Unknown;
         return default;
       }
 
@@ -139,20 +139,17 @@ so maybe this engine is not doing this optimally?
 
       if (fathomResult.Result == FathomWDLResult.Failure)
       {
-        result = GameResult.Unknown;
+        result = WDLResult.Unknown;
       }
       else if (fathomResult.Result == FathomWDLResult.Loss)
       {
-        // TODO: Due to limitation of expressiveness of GameResult we have to return Unknown
-        //       See also code in MCTSManager which is affected.
-        //       (This is not a problem of correctness, but just ugly).
-        result = GameResult.Unknown;
+        result = WDLResult.Loss;
       }
       else if (fathomResult.Result == FathomWDLResult.Draw
             || fathomResult.Result == FathomWDLResult.CursedWin
             || fathomResult.Result == FathomWDLResult.BlessedLoss)
       {
-        result = GameResult.Draw;
+        result = WDLResult.Draw;
       }
       else if (fathomResult.Result == FathomWDLResult.Win)
       {
@@ -174,7 +171,7 @@ so maybe this engine is not doing this optimally?
           }
         }
 
-        result = GameResult.Checkmate;
+        result = WDLResult.Win;
       }
       else
       {
@@ -182,7 +179,7 @@ so maybe this engine is not doing this optimally?
       }
 
       // Add in the non-winning moves if requested (and available.
-      if (!returnOnlyWinningMoves && result != GameResult.Unknown)
+      if (!returnOnlyWinningMoves && result != WDLResult.Unknown)
       {
         if (moveList == null)
         {
@@ -200,14 +197,14 @@ so maybe this engine is not doing this optimally?
 
       if (TESTING_MODE_COMPARE_RESULTS)
       {
-        MGMove compMove = compEvaluator.CheckTablebaseBestNextMoveViaDTZ(in currentPos, out GameResult compResult, out _, out _);
+        MGMove compMove = compEvaluator.CheckTablebaseBestNextMoveViaDTZ(in currentPos, out WDLResult compResult, out _, out _);
         if (result != compResult)
         {
           Console.WriteLine("DTZ check failure " + currentPos.FEN + " " + result + " " + fathomResult.Move + " vs. compare " + compResult + " " + compMove);
         }
       }
 
-      if (result != GameResult.Unknown)
+      if (result != WDLResult.Unknown)
       {
         LC0DLLSyzygyEvaluator.NumTablebaseHits++;
       }

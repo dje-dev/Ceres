@@ -20,6 +20,7 @@ using Ceres.Base.Math;
 using Ceres.Base.Math.Random;
 using Ceres.Chess;
 using Ceres.Chess.MoveGen;
+using Ceres.Chess.NNEvaluators.LC0DLL;
 using Ceres.MCTS.Environment;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.MTCSNodes;
@@ -125,7 +126,7 @@ namespace Ceres.MCTS.Managers
           //       (for example, if falls into draw by repetition or if winningMoveListOrderedByDTM is false indicating search required).
           Node.Annotate();
           MGMove tablebaseMove = Node.Context.CheckTablebaseBestNextMove(in Node.Annotation.Pos, 
-                                                                         out GameResult result, 
+                                                                         out WDLResult result, 
                                                                          out List<(MGMove, short)> otherWinningMoves, 
                                                                          out bool winningMoveListOrderedByDTM);
           if (tablebaseMove != default && winningMoveListOrderedByDTM)
