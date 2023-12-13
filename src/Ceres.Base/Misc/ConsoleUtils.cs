@@ -31,12 +31,18 @@ namespace Ceres.Base.Misc
     /// </summary>
     /// <param name="str"></param>
     /// <param name="color"></param>
-    public static void WriteLineColored(ConsoleColor color, string str)
+    /// <param name="endLine"></param>
+    public static void WriteLineColored(ConsoleColor color, string str, bool endLine = true)
     {
       ConsoleColor priorColor = Console.ForegroundColor;
       Console.ForegroundColor = color;
-      Console.WriteLine(str);
+      Console.Write(str);
       Console.ForegroundColor = priorColor;
+
+      if (endLine)
+      {
+        Console.WriteLine();
+      }
     }
 
 
