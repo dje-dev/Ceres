@@ -17,7 +17,9 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
+
 using Ceres.Base.Math;
+using Ceres.Base.Misc;
 using Ceres.Chess;
 using Ceres.Chess.UserSettings;
 
@@ -33,8 +35,11 @@ namespace Ceres.Features.Visualization.AnalysisGraph
     public static string Quoted(string str) => "\"" + str + "\"";
     public static string Bracketed(string str) => "{" + str + "}";
 
+    static bool haveWarnedNoConfigEntry = false;
+
+
     /// <summary>
-    /// Returns full path to DOT exeuctable (part of graphviz that converts .DOT to .SVG).
+    /// Returns full path to DOT execuctable (part of graphviz that converts .DOT to .SVG).
     /// </summary>
     public static string DOT_EXE
     {
@@ -43,7 +48,13 @@ namespace Ceres.Features.Visualization.AnalysisGraph
         string graphvizBinariesDir = CeresUserSettingsManager.Settings.DirGraphvizBinaries;
         if (graphvizBinariesDir == null)
         {
-          throw new Exception("Required entry of DirGraphvizBinaries on Ceres.json");
+          if (!haveWarnedNoConfigEntry)
+          {
+            ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, "WARNING: DirGraphvizBinaries is not set in CeresUserSettings.json." 
+                                                             + "Assuming GraphViz has been installed and dot.exe is on the system path.");
+            haveWarnedNoConfigEntry = true;
+          }
+          return "dot.exe"; // assume will be found because it is on the system path
         }
         else if (!Directory.Exists(graphvizBinariesDir))
         {
