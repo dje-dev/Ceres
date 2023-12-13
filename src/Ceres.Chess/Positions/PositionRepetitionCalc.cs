@@ -30,7 +30,7 @@ namespace Ceres.Chess
   public static class PositionRepetitionCalc
   {
     /// <summary>
-    /// Calculates and sets the reptition count field 
+    /// Calculates and sets the repetition count field 
     /// on the last position in a sequence of positions
     /// </summary>
     /// <param name="posSpan"></param>
@@ -70,7 +70,7 @@ namespace Ceres.Chess
 
 
     /// <summary>
-    /// Sets the reptitions count in the MiscInfo substructure of each position within specified span,
+    /// Sets the repetitions count in the MiscInfo substructure of each position within specified span,
     /// based on number of times it has already appeared in the sequence.
     /// </summary>
     /// <param name="posSpan"></param>

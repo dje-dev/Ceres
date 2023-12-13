@@ -112,6 +112,14 @@ namespace Ceres.Chess.NNEvaluators
     /// </summary>
     public abstract int MaxBatchSize { get; }
 
+    /// <summary>
+    /// When true and playing using SearchLimit of BestValueMove, engine using this evaluator 
+    /// will slightly adjust evaluation when repetitions are nonzero to prefer repetitions/draws
+    /// when seemingly losing and disfavor when seemingly winning.
+    /// This feature can compensate for lack of history consideration by the neural network.
+    /// </summary>
+    public virtual bool UseBestValueMoveUseRepetitionHeuristic { get; set; } = false;
+
 
     #region Static helpers
 

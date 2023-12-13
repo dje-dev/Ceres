@@ -664,15 +664,23 @@ namespace Ceres.MCTS.Iteration
       Position[] positions = new Position[priorMoves.Count + 1];
       Array.Copy(priorMoves.Positions.ToArray(), positions, priorMoves.Positions.Length);
 
+      Span<short> repetitionCounts = stackalloc short[moves.NumMovesUsed];
+
       // Loop over all moves, find new resulting position, and add to batch.
-      for(int i=0;i<moves.NumMovesUsed;i++)
+      int indexOfDrawByRepetition = -1;
+      for (int i=0;i<moves.NumMovesUsed;i++)
       {
         MGPosition pos = priorMoves.FinalPosition.ToMGPosition;
         pos.MakeMove(moves.MovesArray[i]);
         positions[^1] = pos.ToPosition;
 
         // Need to calc repetition count for position of this move in the context of all prior moves
-        PositionRepetitionCalc.SetFinalPositionRepetitionCount(positions);
+        int finalRepetitionCount = PositionRepetitionCalc.SetFinalPositionRepetitionCount(positions);
+        repetitionCounts[i] = (short)finalRepetitionCount;
+        if (finalRepetitionCount >= 2)
+        {
+          indexOfDrawByRepetition = i;
+        }
 
         EncodedPositionWithHistory eph = new EncodedPositionWithHistory();
         eph.SetFromSequentialPositions(positions, true);
@@ -684,20 +692,48 @@ namespace Ceres.MCTS.Iteration
       EncodedPositionBatchFlat thisBatch = batchBuilder.GetBatch();
       evalResults = nnEvaluator.EvaluateBatch(thisBatch);
 
+      float bestVRaw = evalResults.Max(v => -v.V);
+
+
       // Determine which move had position yielding best value evaluation.
       int moveIndex = 0;
       int bestMoveIndex = 0;
-      float bestV = float.MinValue;
+      float bestV = bestVRaw;
       foreach (NNEvaluatorResult v in evalResults)
       {
-        if (-v.V > bestV)
+        float vOurPerspective = -v.V;
+
+        if (nnEvaluator.UseBestValueMoveUseRepetitionHeuristic)
         {
-          bestV = -v.V;
+          if (repetitionCounts[moveIndex] == 1) // on the way to draw by repetition
+          {
+            if (bestVRaw >= 0) // probably winning
+            {
+              // Disfavor positions where repetition count is nonzero.
+              vOurPerspective = vOurPerspective - 0.01f;
+            }
+            else if (bestVRaw <= 0) // probably losing
+            {
+              // Favor positions where repetition count is nonzero.
+              vOurPerspective = vOurPerspective + 0.01f;
+            }
+          }
+        }
+
+        if (vOurPerspective > bestV)
+        {
+          bestV = vOurPerspective;
           bestMoveIndex = moveIndex;
         }
         moveIndex++;
       }
 
+      if (nnEvaluator.UseBestValueMoveUseRepetitionHeuristic && indexOfDrawByRepetition != -1 && bestV < 0)
+      {
+        // If we appear worse, choose the draw by repetition at hand.
+        bestV = 0;
+        bestMoveIndex = indexOfDrawByRepetition;
+      }
 
       if (dumpInfo)
       {

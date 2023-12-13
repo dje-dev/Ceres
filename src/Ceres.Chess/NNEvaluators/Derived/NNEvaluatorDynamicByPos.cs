@@ -53,6 +53,15 @@ namespace Ceres.Chess.NNEvaluators
       }
 
       DynamicEvaluatorChooser = dynamicEvaluatorIndexPredicate;
+
+      // If any of the evaluators use the repetition heuristic, then this evaluator must also.
+      foreach (NNEvaluator evaluator in evaluators)
+      {
+        if (evaluator.UseBestValueMoveUseRepetitionHeuristic)
+        {
+          UseBestValueMoveUseRepetitionHeuristic = true;
+        }
+      }
     }
 
 
