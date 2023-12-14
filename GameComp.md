@@ -14,7 +14,7 @@ and the ancillary information such as game outcome and state of engine analysis 
 ## Prerequsites
 There are two preparatory steps required to use this feature:
 - install the Graphviz software from https://graphviz.org/download/ (typically using the linked "graphviz-2.50.0 (64-bit) EXE installer"). When prompted, it is suggested to set the PATH for all users.
-- add a new line to Ceres.json referencing the location of these binaries. For example:
+- optionally add a new line to Ceres.json referencing the location of these binaries (necessary if not added to system path). For example:
 ```
 "DirGraphvizBinaries":"C:\Program Files (x86)\Graphviz\bin"
 ```
