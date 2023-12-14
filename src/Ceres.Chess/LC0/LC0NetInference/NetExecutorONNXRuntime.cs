@@ -185,6 +185,12 @@ namespace Ceres.Chess.LC0NetInference
         //Session = new InferenceSession(onnxFileName, SessionOptions.MakeSessionOptionWithTensorrtProvider(gpuID));
       }
 
+#if DEBUG
+      so.LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_WARNING;
+#else
+      so.LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_ERROR;
+#endif
+
       bool VERBOSE = false;
       if (VERBOSE)
       {
@@ -192,6 +198,7 @@ namespace Ceres.Chess.LC0NetInference
         so.LogVerbosityLevel = 999;
         so.LogId = "ort.log.txt";
       }
+
 
       if (enableProfiling)
       {
@@ -210,7 +217,7 @@ namespace Ceres.Chess.LC0NetInference
       }
 
 #else
-        throw new Exception("NetExecutorONNXRuntine feature is not enabled.");
+      throw new Exception("NetExecutorONNXRuntine feature is not enabled.");
 #endif
 
     }
@@ -418,6 +425,17 @@ namespace Ceres.Chess.LC0NetInference
     {
       Session.EndProfiling();
     }
+
+
+    /// <summary>
+    /// Returns a string description of this object.
+    /// </summary>
+    /// <returns></returns>
+    public override string ToString()
+    {
+      return "<NetExecutorONNXRuntime " + ONNXFileName + ">"; 
+    }
+
 
     public void Dispose()
     {

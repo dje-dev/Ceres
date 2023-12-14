@@ -30,6 +30,7 @@ using Ceres.Chess.MoveGen;
 using Ceres.Chess;
 using System.Diagnostics;
 using Ceres.Chess.NNEvaluators.Defs;
+using Ceres.Base.DataType;
 
 #endregion
 
@@ -134,8 +135,6 @@ namespace Chess.Ceres.NNEvaluators
     /// </summary>
     public readonly bool MovesEnabled;
 
-#if NOT
-#endif
 #region Statics
 
     // TODO: clean up this lookaside buffering
@@ -151,22 +150,6 @@ namespace Chess.Ceres.NNEvaluators
 
     #endregion
 
-    private static long ByteArrayHash(byte[] byteArray)
-
-    {
-      long hash = 0;
-      for (int i = 0; i < byteArray.Length; i++)
-      {
-        hash = (hash << 8) + byteArray[i];
-        long g = hash & 0xF0000000L;
-        if (g != 0)
-        {
-          hash ^= g >> 24;
-          hash ^= g;
-        }
-      }
-      return hash;
-    } 
 
     public const int TPG_MODE_TOTAL_BYTES_ASSUMED  = 4060 + 782; // see DoEvaluateIntoBuffers
 
@@ -194,7 +177,7 @@ namespace Chess.Ceres.NNEvaluators
       MovesEnabled = movesEnabled;
 
       bool filesMatch = lastONNXFileName != null && lastONNXFileName == onnxModelFileName;
-      bool bytesMatch = onnxModelBytes != null && ByteArrayHash(onnxModelBytes) == lastONNXBytesHash;
+      bool bytesMatch = onnxModelBytes != null && ArrayUtils.ByteArrayStableHash(onnxModelBytes) == lastONNXBytesHash;
 
       const bool TRY_REUSE = false; // TODO: remove this completely, it is unsafe (?)
       if (TRY_REUSE && (filesMatch || bytesMatch) && lastBatchSize == batchSize && precision == lastPrecision
@@ -208,7 +191,7 @@ namespace Chess.Ceres.NNEvaluators
 
         Executor = new ONNXRuntimeExecutor(onnxModelFileName, onnxModelBytes, batchSize, type, precision, deviceType, gpuID, useTRT, enableProfiling);
         lastONNXFileName = onnxModelFileName;
-        lastONNXBytesHash = onnxModelBytes == null ? 0 : ByteArrayHash(onnxModelBytes);
+        lastONNXBytesHash = onnxModelBytes == null ? 0 : ArrayUtils.ByteArrayStableHash(onnxModelBytes);
         lastDeviceType = deviceType;
         lastBatchSize = batchSize;
         lastIsWDL = isWDL;
@@ -326,8 +309,7 @@ namespace Chess.Ceres.NNEvaluators
             }
             return false;
           }
-          
-          //return tpgRecordBuffer[(numBatchesDone * SUBBATCH_SIZE) + posNum].Policy[nnIndexNum] > 0;
+         
         }
 
         bool PosMoveIsLegal(int posNum, int nnIndexNum)
@@ -483,19 +465,6 @@ namespace Chess.Ceres.NNEvaluators
 #endregion
 
 
-#if NOT
-if ((transform & FlipTransform) != 0) {
-    sq.set(sq.row(), 7 - sq.col());
-  }
-  if ((transform & MirrorTransform) != 0) {
-    sq.set(7 - sq.row(), sq.col());
-  }
-  if ((transform & TransposeTransform) != 0) {
-    sq.set(7 - sq.col(), 7 - sq.row());
-  }
-  return sq;
-}
-#endif
     void ConvertTPGPolicyToExpanded(IEncodedPositionBatchFlat batch, ONNXRuntimeExecutorResultBatch result)
     {
       Span<MGMoveList> allMoves = batch.Moves.Span;
@@ -508,14 +477,8 @@ if ((transform & FlipTransform) != 0) {
         MGMoveList moves = allMoves[i];
         for (int m=0; m<moves.NumMovesUsed;m++)
         {
-//          Console.WriteLine(moves.MovesArray[m] + " " + moves.MovesArray[m].Reversed);
           EncodedMove move = ConverterMGMoveEncodedMove.MGChessMoveToEncodedMove(moves.MovesArray[m]);
-          
-//          move = new EncodedMove(move.FromSquare.Flipped, move.ToSquare.Flipped, move.Promotion, move.IsCastling);
-          
-          //EncodedMove moveOther = new EncodedMove(1857 - move.RawValue);
-//          Console.WriteLine(moveOther);
-//          if (batch.Positions[i].SideToMove == SideType.Black)  move = move.Mirrored.Flipped;
+         
           int index = move.IndexNeuralNet;
           policyVectorTarget[index] = policyVectorSource[m];
         }
@@ -525,9 +488,20 @@ if ((transform & FlipTransform) != 0) {
       }
     }
 
+
     public void EndProfiling()
     {
       Executor.EndProfiling();
+    }
+
+
+    /// <summary>
+    /// Returns string description of this evaluator.
+    /// </summary>
+    /// <returns></returns>
+    public override string ToString()
+    {
+      return "<NNEvaluatorEngineONNX " + ONNXFileName + ">";
     }
 
 

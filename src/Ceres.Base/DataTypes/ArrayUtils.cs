@@ -425,6 +425,28 @@ namespace Ceres.Base.DataType
 
     #endregion
 
+    /// <summary>
+    /// A simple and stable hash function on an array of bytes.
+    /// </summary>
+    /// <param name="byteArray"></param>
+    /// <returns></returns>
+    public static long ByteArrayStableHash(byte[] byteArray)
+
+    {
+      long hash = 0;
+      for (int i = 0; i < byteArray.Length; i++)
+      {
+        hash = (hash << 8) + byteArray[i];
+        long g = hash & 0xF0000000L;
+        if (g != 0)
+        {
+          hash ^= g >> 24;
+          hash ^= g;
+        }
+      }
+      return hash;
+    }
+
 
     /// <summary>
     /// Returns the index of the element having minimal value.
