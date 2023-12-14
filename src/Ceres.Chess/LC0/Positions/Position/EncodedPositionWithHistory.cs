@@ -57,6 +57,18 @@ namespace Ceres.Chess.EncodedPositions
       MiscInfo = miscInfo;
     }
 
+
+    /// <summary>
+    /// Initializes from a specified single Position (without history).
+    /// </summary>
+    /// <param name="pos"></param>
+    public EncodedPositionWithHistory(in Position pos)
+    {
+      SetFromPosition(in pos);
+    }
+
+
+
     #region Access helpers
 
     /// <summary>
@@ -390,6 +402,14 @@ namespace Ceres.Chess.EncodedPositions
 
       SetHistoryPlanes(boards);
     }
+
+
+    /// <summary>
+    /// Initializes from a specified single Position (without history).
+    /// </summary>
+    /// <param name="pos"></param>
+    public void SetFromPosition(in Position pos) => SetFromSequentialPositions([pos], true);
+
 
     /// <summary>
     /// Scans all history positions and if any found, fills in all subsequent 
