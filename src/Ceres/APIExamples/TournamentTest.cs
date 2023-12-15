@@ -48,50 +48,17 @@ using Ceres.Commands;
 using Ceres.Chess.Games.Utils;
 using Chess.Ceres.PlayEvaluation;
 using Ceres.Base.Misc;
+using Ceres.Chess.Data.Nets;
 
 #endregion
 
 namespace Ceres.APIExamples
 {
-  public static class ReferenceNetIDs
-  {
-   public static void CheckDownloaded(string netName)
-    {
-      NNWeightsFileLC0.LookupOrDownload(netName);
-    }
-
-
-    public const string BEST_T30 = "32930";
-    public const string BEST_T40 = "42850";
-    public const string BEST_T60 = "606512";
-    public const string BEST_T70 = "703810";
-    public const string BEST_T75 = "753723";
-    public const string BEST_T78 = "784984";
-    public const string BEST_T80 = "809942"; // 801307
-    public const string BEST_T81 = "811971"; //Training restarted after surgery after 811971
-//    public static string T1_DISTILL_256_10 { get { return @"ONNX_ORT:" + Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, "t1-256x10-distilled-swa-2432500#32"); } }
-//    public static string T1_768 { get { return @"ONNX_ORT:" + Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, "t1-768x15x24h-swa-4000000#32"); } }
-
-
-    public static string T1_DISTILL_256_10_FP16 { get { return @"ONNX_ORT:" + Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, "t1-256x10-distilled-swa-2432500_fp16#16"); } }
-    public static string T1_768_PF16 { get { return @"ONNX_ORT:" + Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, "t1-768x15x24h-swa-4000000_fp16#16"); } }
-
-    public static string T1_DISTILL_512_10_FP32 { get { return @"ONNX_ORT:" + Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, "t1-512x15x8h-distilled-swa-3395000#32"); } }
-    public static string T1_DISTILL_512_10_FP16 { get { return @"ONNX_ORT:" + Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, "t1-512x15x8h-distilled-swa-3395000_fp16#16"); } }
-
-    public static string BT2 { get { return @"ONNX_ORT:" + Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, "BT2-768x15smolgen-12h-do-01-swa-onnx-2350000-rule50.gz#32"); } }
-    public static string BT4 { get { return @"ONNX_ORT:" + Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, "BT4-1024x15x32h-swa-365000#32"); } }
-
-    public static string T2 { get { return @"ONNX_ORT:" + Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, "t2-768x15x24h-swa-5230000.pb.gz_fp16#16"); } }
-
-    //)
-  }
-
   public static class TournamentTest
   {
     const bool POOLED = false;
 
-    static int CONCURRENCY = POOLED ? 16 : 4;
+    static int CONCURRENCY = POOLED ? 16 : 1;
     static int[] OVERRIDE_DEVICE_IDs = POOLED ? null : new int[] { 0 };
     static bool RUN_DISTRIBUTED = false;
 
@@ -113,8 +80,8 @@ namespace Ceres.APIExamples
                                                 : @"C:\ceres\releases\v0.93\ceres.exe";
     static string exeCeres96() => SoftwareManager.IsLinux ? @"/raid/dev/Ceres96/Ceres.dll"
                                                 : @"C:\ceres\releases\v0.96\ceres.exe";
-    static string exeCeresPreNC() => SoftwareManager.IsLinux ? @"/raid/dev/Ceres_PreNC/artifacts/release/5.0/Ceres.dll"
-                                                : @"c:\ceres\releases\v0.95_PreNC\ceres.exe";
+    static string exeCeresPreNC() => SoftwareManager.IsLinux ? @"/raid/dev/v0.97RC3/artifacts/release/5.0/Ceres.dll"
+                                                : @"c:\ceres\releases\v0.97RC3\ceres.exe";
 
     const string SF11_EXE = @"\\synology\dev\chess\engines\stockfish_11_x64_bmi2.exe";
     const string SF12_EXE = @"\\synology\dev\chess\engines\stockfish_20090216_x64_avx2.exe";
@@ -242,9 +209,9 @@ namespace Ceres.APIExamples
       //      NET2 = "CUSTOM2:753723";
 
       //      NET1 = ReferenceNetIDs.T2_768_15_T82_4832;
-      NET2 = ReferenceNetIDs.BEST_T60;
-//NET1 = NET2 = ReferenceNetIDs.BEST_T80;
-
+      NET2 = ReferenceNets.Baselines["T60"].NetSpecificationString;
+      //NET1 = NET2 = ReferenceNetIDs.BEST_T80;
+      NET1 = NET2 = ReferenceNets.Baselines["T81"].NetSpecificationString;
 
       //NET2 = ReferenceNetIDs.T1_DISTILL_256_10_FP16;
       //NET1 = "ONNX_ORT:BT3_750_optimistic#32,BT3_750#32,";
@@ -300,7 +267,7 @@ namespace Ceres.APIExamples
       //      NET2 = ReferenceNetIDs.BT2;
 
       SearchLimit limit1 = SearchLimit.NodesForAllMoves(100_000, 1000) * 3;
-      limit1 = SearchLimit.NodesPerMove(100);
+      limit1 = SearchLimit.NodesPerMove(200);
       //limit1 = SearchLimit.BestValueMove;
 
       //      limit1 = SearchLimit.SecondsForAllMoves(60, 0.6f);
@@ -683,7 +650,7 @@ namespace Ceres.APIExamples
 #endif
       // **************************************************
       EnginePlayerDef player1 = playerCeres1;// playerCeres1UCI;// new EnginePlayerDef(engineDefCSNN1, SearchLimit.NodesPerMove(30));
-      EnginePlayerDef player2 = playerCeres2UCI;// playerCeres96;// new EnginePlayerDef(EngineDefStockfish14(), SearchLimit.NodesPerMove(300 * 10_000));
+      EnginePlayerDef player2 = playerCeresPreNC;// playerCeres96;// new EnginePlayerDef(EngineDefStockfish14(), SearchLimit.NodesPerMove(300 * 10_000));
       //new EnginePlayerDef(engineDefCSNoNN, SearchLimit.NodesPerMove(300 * 10_000));
       // **************************************************
 
@@ -740,7 +707,7 @@ namespace Ceres.APIExamples
 
       string baseName = "book-ply8-unifen-Q-0.25-0.40";
       baseName = "book-ply8-unifen-Q-0.25-0.40";
-//      baseName = "endgame-16-piece-book_Q-0.0-0.6_1";
+      baseName = "endgame-16-piece-book_Q-0.0-0.6_1";
 //            baseName = "Noomen 2-move Testsuite.pgn";
       //      baseName = "book-ply8-unifen-Q-0.40-1.0";
       //      baseName = "book-ply8-unifen-Q-0.0-0.25.pgn";
@@ -979,13 +946,13 @@ namespace Ceres.APIExamples
     {
       string pgnFileName = SoftwareManager.IsWindows ? @"\\synology\dev\chess\data\pgn\raw\ceres_big.pgn"
                                                : @"/mnt/syndev/chess/data/pgn/raw/ceres_big.pgn";
-      const string NET_ID = ReferenceNetIDs.BEST_T78;// "753723";// "610889";// "803907";
+      string NET_ID = ReferenceNets.Baselines["T78"].NetSpecificationString;// "753723";// "610889";// "803907";
       CompareEngineParams parms = new CompareEngineParams("Resapling", pgnFileName,
                                               10_000, // number of positions
                                               s => true,//s.FinalPosition.PieceCount > 15,
                                               CompareEnginesVersusOptimal.PlayerMode.CeresCustom1, "703810", //610034
                                               CompareEnginesVersusOptimal.PlayerMode.UCI, NET_ID,
-                                              CompareEnginesVersusOptimal.PlayerMode.LC0, ReferenceNetIDs.BEST_T80,
+                                              CompareEnginesVersusOptimal.PlayerMode.LC0, ReferenceNets.Baselines["T80"].NetSpecificationString,
                                               SearchLimit.NodesPerMove(50), // search limit
                                               new int[] { 0 },//new int[] { 0, 1, 2, 3 },
                                               s =>
