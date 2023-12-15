@@ -14,6 +14,7 @@
 #region Using directives
 
 using System;
+using System.Linq;
 using Ceres.Base.DataTypes;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.LC0.Batches;
@@ -157,6 +158,18 @@ namespace Ceres.Chess.NNEvaluators
 
       return batch;
     }
+
+
+    /// <summary>
+    /// Returns string description of evaluator.
+    /// </summary>
+    /// <returns></returns>
+    public override string ToString()
+    {
+      string evaluators = string.Join(", ", Evaluators.Select(e => e.ToString()));
+      return "<NNEvaluatorDynamicByPos: " + evaluators + ">";
+    }
+
 
   }
 }
