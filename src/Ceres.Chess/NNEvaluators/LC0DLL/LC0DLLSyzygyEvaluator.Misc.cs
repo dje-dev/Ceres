@@ -43,8 +43,14 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
                                                    out WDLResult result, 
                                                    out List<(MGMove, short)> moveList, 
                                                    out short dtz,
-                                                   bool returnOnlyWinningMoves = true)
+                                                   bool returnOnlyWinningMoves = true,
+                                                   bool succeedIfIncompleteDTZInfo = false)
     {
+      if (succeedIfIncompleteDTZInfo)
+      {
+        throw new NotImplementedException();
+      }  
+
       moveList = null;
 
       ProbeWDL(in currentPos, out SyzygyWDLScore score, out SyzygyProbeState probeResult);

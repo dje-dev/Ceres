@@ -15,6 +15,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using Ceres.Base.Misc;
 using Ceres.Chess.MoveGen;
@@ -122,7 +123,8 @@ so maybe this engine is not doing this optimally?
                                                    out WDLResult result, 
                                                    out List<(MGMove, short)> moveList, 
                                                    out short dtz,
-                                                   bool returnOnlyWinningMoves = true)
+                                                   bool returnOnlyWinningMoves = true,
+                                                   bool succeedIfIncompleteDTZInfo = false)
     {
       moveList = null;
       dtz = -1;
@@ -134,7 +136,7 @@ so maybe this engine is not doing this optimally?
         return default;
       }
 
-      FathomProbeMove fathomResult = FathomTB.ProbeDTZ(currentPos, out int minDTZ, out List<FathomTB.DTZMove> results);
+      FathomProbeMove fathomResult = FathomTB.ProbeDTZ(currentPos, out int minDTZ, out List<FathomTB.DTZMove> results, succeedIfIncompleteDTZInfo);
       MGMove bestMove = fathomResult.Move;
 
       if (fathomResult.Result == FathomWDLResult.Failure)
@@ -178,7 +180,7 @@ so maybe this engine is not doing this optimally?
         throw new Exception($"Internal error: unexpected Fathom game result {fathomResult.Result} in lookup of {currentPos.FEN}");
       }
 
-      // Add in the non-winning moves if requested (and available.
+      // Add in the non-winning moves if requested (and available).
       if (!returnOnlyWinningMoves && result != WDLResult.Unknown)
       {
         if (moveList == null)
@@ -190,6 +192,13 @@ so maybe this engine is not doing this optimally?
           if (fpm.WDL != FathomWDLResult.Win)
           {
             float dtzMultiplier = fpm.WDL == FathomWDLResult.Win ? 1 : -1;
+            if (succeedIfIncompleteDTZInfo 
+              &&   (fpm.DistanceToZero == ISyzygyEvaluatorEngine.DTZ_IF_DTZ_INDETERMINATE_WDL_UNKNOWN)
+                || (fpm.DistanceToZero == ISyzygyEvaluatorEngine.DTZ_IF_DTZ_INDETERMINATE_WDL_KNOWN))
+            {
+              // Always directly return special value indicating DTZ is unknown.
+              dtzMultiplier = 1.0f;
+            }
             moveList.Add((fpm.Move, (short)(dtzMultiplier * fpm.DistanceToZero)));
           }
         }
@@ -211,7 +220,6 @@ so maybe this engine is not doing this optimally?
 
       return fathomResult.Move;
     }
-
 
     public void ProbeWDL(in Position pos, out SyzygyWDLScore score, out SyzygyProbeState result)
 

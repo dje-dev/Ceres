@@ -16,6 +16,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using Ceres.Chess.MoveGen;
+using Ceres.Chess.NNEvaluators.LC0DLL;
 
 #endregion
 
@@ -198,6 +199,8 @@ namespace Ceres.Chess.TBBackends.Fathom
 
       public DTZMove(MGMove move, int distanceToZero, FathomWDLResult wdl)
       {
+        Debug.Assert(wdl <=FathomWDLResult.Win);
+
         Move = move;
         DistanceToZero = distanceToZero;
         WDL = wdl;
@@ -232,7 +235,7 @@ namespace Ceres.Chess.TBBackends.Fathom
     /// <param name="minDTZ">the DTZ of the move having minimum DTZ value</param>
     /// <param name="results">if not null then the set of possible moves is populated</param>
     /// <returns>the suggested move (guaranteed to preserve the WDL value </returns>
-    public static FathomProbeMove ProbeDTZ(in Position pos, out int minDTZ, out List<DTZMove> results)
+    public static FathomProbeMove ProbeDTZ(in Position pos, out int minDTZ, out List<DTZMove> results, bool succeedIfIncompleteDTZInfo = false)
     {
       minDTZ = -1;
 
@@ -247,7 +250,8 @@ namespace Ceres.Chess.TBBackends.Fathom
 
       uint res = probe.tb_probe_root(fathomPos.White, fathomPos.Black, fathomPos.Kings,
                                      fathomPos.Queens, fathomPos.Rooks, fathomPos.Bishops, fathomPos.Knights, fathomPos.Pawns,
-                                     fathomPos.Rule50, fathomPos.Castling, fathomPos.EnPassant, fathomPos.Turn, resultsArray);      
+                                     fathomPos.Rule50, fathomPos.Castling, fathomPos.EnPassant, fathomPos.Turn, resultsArray,
+                                     succeedIfIncompleteDTZInfo);      
 
       if (res == uint.MaxValue)
       {
@@ -255,8 +259,11 @@ namespace Ceres.Chess.TBBackends.Fathom
         return new FathomProbeMove() { Result = FathomWDLResult.Failure };
       }
 
+      FathomWDLResult wdlResult = (FathomWDLResult)FathomProbe.TB_GET_WDL((int)res);
+
       minDTZ = int.MaxValue;
       results = new List<DTZMove>(resultsArray.Length);
+      bool exactlyOneMove = resultsArray[0] != uint.MaxValue && resultsArray[1] == uint.MaxValue;
       for (int i=0; i<resultsArray.Length;i++)
       {
         uint result = resultsArray[i];
@@ -271,15 +278,36 @@ namespace Ceres.Chess.TBBackends.Fathom
           minDTZ = (int)dtz;
         }
 
-        FathomWDLResult wdl = (FathomWDLResult)FathomProbe.TB_GET_WDL((int)result);
+        FathomWDLResult wdlMove = (FathomWDLResult)FathomProbe.TB_GET_WDL((int)result);
+        if (succeedIfIncompleteDTZInfo && dtz == ISyzygyEvaluatorEngine.DTZ_IF_DTZ_INDETERMINATE_WDL_UNKNOWN)
+        {
+          if (wdlResult == FathomWDLResult.Loss)
+          {
+            // Every move must be a loss since the position is a loss.
+            wdlMove = FathomWDLResult.Loss;
+            dtz = ISyzygyEvaluatorEngine.DTZ_IF_DTZ_INDETERMINATE_WDL_KNOWN;
+          }
+          else if (wdlResult == FathomWDLResult.Win && exactlyOneMove)
+          {
+            // The position is a win and there is only one move, so this must be the winning move.
+            wdlMove = FathomWDLResult.Win;
+            dtz = ISyzygyEvaluatorEngine.DTZ_IF_DTZ_INDETERMINATE_WDL_KNOWN;
+          }
+          else
+          {
+            // Unknown, set as draw.
+            wdlMove = FathomWDLResult.Draw;
+          }
+        }
 
-        results.Add(new DTZMove(ToMGMove(result, in pos), (int)dtz, wdl));
+        results.Add(new DTZMove(ToMGMove(result, in pos, false), (int)dtz, wdlMove));
       }
-      
-      MGMove move = ToMGMove(res, in pos);
+
+
+      MGMove move = ToMGMove(res, in pos, succeedIfIncompleteDTZInfo);
       return new FathomProbeMove()
       {
-        Result = (FathomWDLResult)FathomProbe.TB_GET_WDL((int)res),
+        Result = wdlResult,
         Move = move
       };
     }
@@ -291,9 +319,9 @@ namespace Ceres.Chess.TBBackends.Fathom
     /// <param name="fathomResult"></param>
     /// <param name="position"></param>
     /// <returns></returns>
-    private static MGMove ToMGMove(uint fathomResult, in Position position)
+    private static MGMove ToMGMove(uint fathomResult, in Position position, bool nullMoveAllowed)
     {
-      if (fathomResult == FathomProbe.TB_RESULT_STALEMATE 
+      if (fathomResult == FathomProbe.TB_RESULT_STALEMATE
        || fathomResult == FathomProbe.TB_RESULT_CHECKMATE)
       {
         return default;
@@ -333,21 +361,27 @@ namespace Ceres.Chess.TBBackends.Fathom
         pieceEnum = (MGPositionConstants.MCChessPositionPieceEnum)(8 + offsets[(int)piece.Type]);
       }
 
-      MGMove move = new MGMove((byte)fromSquare.SquareIndexStartH1,
-                               (byte)toSquare.SquareIndexStartH1,
-                              pieceEnum,
-                              flags);
+      MGMove move;
+      if (nullMoveAllowed && fromSquare.SquareIndexStartH1 == toSquare.SquareIndexStartH1)
+      {
+        move = default;
+      }
+      else
+      {
+        move = new MGMove((byte)fromSquare.SquareIndexStartH1, (byte)toSquare.SquareIndexStartH1, pieceEnum, flags);
+      }
+
       return move;
     }
 
-    static readonly MGMove.MGChessMoveFlags[] FLAGS_MAP = new MGMove.MGChessMoveFlags[]
-  {
-          MGMove.MGChessMoveFlags.None,
-          MGMove.MGChessMoveFlags.PromoteQueen,
-          MGMove.MGChessMoveFlags.PromoteRook,
-          MGMove.MGChessMoveFlags.PromoteBishop,
-          MGMove.MGChessMoveFlags.PromoteKnight
-  };
+    static readonly MGMove.MGChessMoveFlags[] FLAGS_MAP =
+      [
+        MGMove.MGChessMoveFlags.None,
+        MGMove.MGChessMoveFlags.PromoteQueen,
+        MGMove.MGChessMoveFlags.PromoteRook,
+        MGMove.MGChessMoveFlags.PromoteBishop,
+        MGMove.MGChessMoveFlags.PromoteKnight
+      ];
 
 
 

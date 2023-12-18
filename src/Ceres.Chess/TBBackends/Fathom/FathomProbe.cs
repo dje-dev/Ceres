@@ -40,12 +40,13 @@ SOFTWARE.
 using System;
 
 using System.Collections.Generic;
+using System.Data;
 using System.Diagnostics;
 using System.IO;
 using System.IO.MemoryMappedFiles;
 using System.Text;
 using Ceres.Base.OperatingSystem;
-
+using Ceres.Chess.NNEvaluators.LC0DLL;
 using static Ceres.Chess.TBBackends.Fathom.FathomMoveGen;
 
 #endregion
@@ -1056,7 +1057,8 @@ namespace Ceres.Chess.TBBackends.Fathom
     }
 
     public uint tb_probe_root(ulong white, ulong black, ulong kings, ulong queens, ulong rooks, ulong bishops,
-                              ulong knights, ulong pawns, uint rule50, int castling, ulong ep, bool turn, Span<uint> results)
+                              ulong knights, ulong pawns, uint rule50, int castling, ulong ep, bool turn, Span<uint> results,
+                              bool succeedIfIncompleteDTZInfo = false)
     {
       if (castling != 0)
       {
@@ -1073,10 +1075,10 @@ namespace Ceres.Chess.TBBackends.Fathom
       }
 
       int dtz;
-      ushort move = probe_root(in pos, out dtz, results);
+      ushort move = probe_root(in pos, out dtz, results, succeedIfIncompleteDTZInfo);
 
 
-      if (move == 0)
+      if (move == 0 && !succeedIfIncompleteDTZInfo)
       {
         return TB_RESULT_FAILED;
       }
@@ -2394,7 +2396,7 @@ namespace Ceres.Chess.TBBackends.Fathom
     }
 
     // This supports the original Fathom root probe API
-    ushort probe_root(in FathomPos pos, out int score, Span<uint> results)
+    ushort probe_root(in FathomPos pos, out int score, Span<uint> results, bool succeedWithIncompleteDTZInfo = false)
     {
       score = default;
 
@@ -2402,7 +2404,23 @@ namespace Ceres.Chess.TBBackends.Fathom
       int dtz = probe_dtz(pos, out success);
       if (success == 0)
       {
-        return 0;
+        if (!succeedWithIncompleteDTZInfo)
+        {
+          return 0;
+        }
+        else
+        {
+          int wdlProbe = -probe_wdl(in pos, out success);
+          if (success == 0)
+          {
+            return 0; // total failure, also not available in WDL
+          }
+          else
+          {
+            score = wdl_to_dtz[wdlProbe + 2];
+            score *= ISyzygyEvaluatorEngine.DTZ_IF_DTZ_INDETERMINATE_WDL_KNOWN;
+          }
+        }
       }
 
       Span<short> scores = stackalloc short[MAX_MOVES];
@@ -2444,7 +2462,7 @@ namespace Ceres.Chess.TBBackends.Fathom
           }
         }
         num_draw += (v == 0) ? 1 : 0;
-        if (success == 0)
+        if (success == 0 && !succeedWithIncompleteDTZInfo)
         {
           return 0;
         }
@@ -2453,12 +2471,36 @@ namespace Ceres.Chess.TBBackends.Fathom
         if (results != null)
         {
           uint res = 0;
-          res = TB_SET_WDL(res, (int)dtz_to_wdl(pos.Rule50, v));
+          if (success == 0)
+          {
+            Debug.Assert(succeedWithIncompleteDTZInfo);
+
+            // DTZ failed, we can't definitively determine (because we don't know if 50 move rule will cause draw).
+            // But since requested to return incomplete information, use a WDL probe as best guess for WDL status.
+            v = -probe_wdl(in pos1, out success);
+            if (success == 0)
+            {
+              res = TB_SET_DTZ(res, ISyzygyEvaluatorEngine.DTZ_IF_DTZ_INDETERMINATE_WDL_UNKNOWN);
+              res = TB_SET_WDL(res, 0); // set as draw, WDL actually unknown as indicated by the DTZ code above
+            }
+            else
+            {
+              scores[i] = (short)v;
+              res = TB_SET_DTZ(res, ISyzygyEvaluatorEngine.DTZ_IF_DTZ_INDETERMINATE_WDL_KNOWN);
+              res = TB_SET_WDL(res, v + 2);
+            }
+
+          }
+          else
+          {
+            res = TB_SET_WDL(res, (int)dtz_to_wdl(pos.Rule50, v));
+            res = TB_SET_DTZ(res, (uint)(v < 0 ? -v : v));
+          }
+
           res = TB_SET_FROM(res, move_from(moves0.Moves[i]));
           res = TB_SET_TO(res, move_to(moves0.Moves[i]));
           res = TB_SET_PROMOTES(res, move_promotes(moves0.Moves[i]));
           res = TB_SET_EP(res, is_en_passant(pos, moves0.Moves[i]) ? (uint)1 : 0);
-          res = TB_SET_DTZ(res, (uint)(v < 0 ? -v : v));
           results[j++] = (uint)res;
         }
       }

@@ -15,13 +15,9 @@
 
 using System;
 using System.Collections.Generic;
-using System.Threading;
-using Ceres.Base.OperatingSystem.Windows;
-using Ceres.Chess.GameEngines;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.Positions;
 using Ceres.Chess.UserSettings;
-using static Ceres.Chess.NNEvaluators.LC0DLL.LC0DLLSyzygyEvaluator;
 
 #endregion
 
@@ -42,6 +38,19 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
   /// </summary>
   public interface ISyzygyEvaluatorEngine
   {
+    // DTZ value returned in situations where succeedIfIncompleteDTZInfo was set true
+    // and the DTZ probe failed (but WDL probe succeeded). In this case:
+    //   - the true DTZ is unknown
+    //   - the WDL status probably known, except Rule50 draw conversions cannot be considered
+    public const int DTZ_IF_DTZ_INDETERMINATE_WDL_KNOWN = 998;
+
+    // DTZ value returned in situations where succeedIfIncompleteDTZInfo was set true
+    // and the DTZ probe failed and the WDL probe failed.
+    //   - the true DTZ is unknown
+    //   - the WDL is also fully unknown
+    public const int DTZ_IF_DTZ_INDETERMINATE_WDL_UNKNOWN = 999;
+
+
     /// <summary>
     /// Maximum number of pieces of available tablebase positions.
     /// </summary>
@@ -91,10 +100,12 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
     /// <param name="moveList"></param>
     /// <param name="dtz"></param>
     /// <param name="returnOnlyWinningMoves"></param>
+    /// <param name="succeedIfIncompleteDTZInfo">If true, succeeds even if some DTZ probes failed, with incomplete partial moveList (unknown DTZ filled in as 9999.</param>
     /// <returns></returns>
     public MGMove CheckTablebaseBestNextMoveViaDTZ(in Position currentPos, out WDLResult result, 
                                                    out List<(MGMove, short)> moveList, 
-                                                   out short dtz, bool returnOnlyWinningMoves = true);
+                                                   out short dtz, bool returnOnlyWinningMoves = true,
+                                                   bool succeedIfIncompleteDTZInfo = false);
 
 
     /// <summary>

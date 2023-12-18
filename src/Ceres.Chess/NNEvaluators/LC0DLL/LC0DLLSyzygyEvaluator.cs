@@ -140,7 +140,7 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
     /// performing optimal play moves since the last 50 move counter reset.
     /// has_repeated should be whether there are any repeats since last 50 move
     /// counter reset.
-    /// Safe moves are added to the safe_moves output paramater.
+    /// Safe moves are added to the safe_moves output parameter.
 
     public bool RootProbe(string position, bool hasRepeated, List<MGMove> moves)
     {
@@ -152,7 +152,7 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
     /// Probes WDL tables to determine which moves might be on the optimal play
     /// path. If 50 move ply counter is non-zero some (or maybe even all) of the
     /// returned safe moves in a 'winning' position, may actually be draws.
-    /// Safe moves are added to the safe_moves output paramater.
+    /// Safe moves are added to the safe_moves output parameter.
     /// </summary>
     public bool RootProbeWDL(string position, List<MGMove> moves)
     {
