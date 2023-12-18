@@ -128,16 +128,22 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
     /// Probes tablebase for WDL and returns as an integer for V (-1 = loss, 0 = draw, 1 = win).
     /// </summary>
     /// <param name="pos"></param>
-    /// <param name="score"></param>
-    /// <param name="result"></param>
+    /// <param name="returnNegative999IfUnknown">if true missing tablebase data cause -999 to be returned instead of throwing Exception</param>
     /// <returns></returns>
     /// <exception cref="Exception"></exception>
-    public int ProbeWDLAsV(in Position pos)
+    public int ProbeWDLAsV(in Position pos, bool returnNegative999IfUnknown = false)
     {
       ProbeWDL(in pos, out SyzygyWDLScore score, out SyzygyProbeState result);
       if (result == SyzygyProbeState.Fail)
       {
-        throw new Exception("Failure on tablebase WDL probe of position " + pos.FEN);
+        if (returnNegative999IfUnknown)
+        {
+          return -999;
+        }
+        else
+        {
+          throw new Exception("Failure on tablebase WDL probe of position " + pos.FEN);
+        }
       }
 
       return score switch
@@ -155,16 +161,23 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
     /// </summary>
     /// <param name="pos"></param>
     /// <param name="move"></param>
+    /// <param name="returnFalseIfUnknown">if true missing tablebase data cause false to be returned instead of throwing Exception</param>
     /// <returns></returns>
-    public bool MoveIsInOptimalCategoryForPosition(in Position pos, MGMove move)
+    public bool MoveIsInOptimalCategoryForPosition(in Position pos, MGMove move, bool returnFalseIfUnknown)
     {
       // Compute new position.
       MGPosition mgPos = pos.ToMGPosition;
       mgPos.MakeMove(move);
       Position newPos = mgPos.ToPosition;
+      int newPosEval = -ProbeWDLAsV(in newPos, returnFalseIfUnknown);
+      if (newPosEval == -999)
+      {
+        // If we don't know the WDL status of the new position, then we don't know the move is optimal.
+        return false;
+      } 
 
       // Check if WDL status for current and new position is same (after negation to adjust for perspective change).
-      return ProbeWDLAsV(in pos) == -ProbeWDLAsV(in newPos);
+      return ProbeWDLAsV(in pos) == -newPosEval;
     }
 
 
