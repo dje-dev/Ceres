@@ -15,6 +15,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 #endregion
 
@@ -85,6 +86,12 @@ namespace Ceres.Chess
     }
 
     #region Internal helpers
+
+    /// <summary>
+    /// Returns new PiecesList with pieces reversed.
+    /// </summary>
+    public PieceList Reversed => new PieceList(new string (PiecesStr.Select(c => char.IsLower(c) ? char.ToUpper(c) 
+                                                                                                 : char.ToLower(c)).ToArray()));
 
 
     /// <summary>
@@ -166,6 +173,15 @@ namespace Ceres.Chess
       return pieces.ToArray();
     }
 
+
+    /// <summary>
+    /// Returns string description of this PiecesList.
+    /// </summary>
+    /// <returns></returns>
+    public override string ToString()
+    {
+      return "<PiecesList " + PiecesStr + ">";
+    }
 
     #endregion
   }
