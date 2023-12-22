@@ -169,7 +169,7 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
       MGPosition mgPos = pos.ToMGPosition;
       mgPos.MakeMove(move);
       Position newPos = mgPos.ToPosition;
-      int newPosEval = -ProbeWDLAsV(in newPos, returnFalseIfUnknown);
+      int newPosEval = ProbeWDLAsV(in newPos, returnFalseIfUnknown);
       if (newPosEval == -999)
       {
         // If we don't know the WDL status of the new position, then we don't know the move is optimal.
