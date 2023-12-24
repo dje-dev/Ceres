@@ -46,7 +46,7 @@ namespace Ceres.Chess.Data.Nets
 
         {"T1_768_PF16", ONNXNet16LC0("t1-768x15x24h-swa-4000000_fp16")},
         {"T2", ONNXNet16LC0("t2-768x15x24h-swa-5230000.pb.gz_fp16")},
-      //        {"T3", ONNXNet32LC0("t3-512x15x16h-swa-2815000") }
+        {"T3", ONNXNet32LC0("t3-512x15x16h-swa-2815000") }
       //        {"BT4", ONNXNet32LC0("BT4-1024x15x32h-swa-365000#32")},
     };
 
