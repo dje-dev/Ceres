@@ -20,7 +20,7 @@ using System.Linq;
 
 #endregion
 
-namespace Ceres.Train
+namespace Ceres.Base.Misc
 {
   /// <summary>
   /// Manages logging of output to a file and/or console.
