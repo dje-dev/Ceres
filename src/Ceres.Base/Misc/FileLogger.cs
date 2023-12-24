@@ -55,7 +55,7 @@ namespace Ceres.Base.Misc
 
       if (fileHeaderString != null)
       {
-        AddLine(liveLogFileName + Environment.NewLine + Environment.NewLine, true);
+        AddLine(liveLogFileName + System.Environment.NewLine + System.Environment.NewLine, true);
       }
     }
 
@@ -67,7 +67,7 @@ namespace Ceres.Base.Misc
     public void AddLine(string line, bool isPrefix = false)
     {
       string outLine = DateTime.Now + " " + line;
-      File.AppendAllText(LiveLogFileName, outLine + Environment.NewLine);
+      File.AppendAllText(LiveLogFileName, outLine + System.Environment.NewLine);
 
       if (!isPrefix)
       {
