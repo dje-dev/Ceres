@@ -81,6 +81,21 @@ namespace Ceres.Base.Misc
     }
 
 
+    /// <summary>
+    /// Scans log file for any lines containing ERROR: and prints them to the console.
+    /// </summary>
+    public void DumpErrorLines()
+    {
+      string[] logLines = File.ReadAllLines(LiveLogFileName);
+      foreach (string line in logLines)
+      {
+        if (line.Contains("ERROR:"))
+        {
+          ConsoleUtils.WriteLineColored(ConsoleColor.Red, "  " + line);
+        }
+      }
+    } 
+
     #region Info string loading
 
     /// <summary>
