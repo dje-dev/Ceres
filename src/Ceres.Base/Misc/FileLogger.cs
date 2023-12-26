@@ -112,9 +112,22 @@ namespace Ceres.Base.Misc
     {
       // Lines of the form: date time INFO: key value
       string[] logLines = File.ReadAllLines(LiveLogFileName);
-      logLinesStartingWithINFO = logLines.Where(line => line.Contains("INFO:") 
-                                            && !line.Contains("print")) // ignore lines that may come from stack trace dump from Python of code rather than actually emitted
-        .ToDictionary(line => line.Split(" ")[4], line => line.Split(" ")[^1]);
+
+      logLinesStartingWithINFO = new();
+
+      // ignore lines that may come from stack trace dump from Python of code rather than actually emitted
+      IEnumerable<string> infoLines = logLines.Where(line => line.Contains("INFO:") && !line.Contains("print"));
+      foreach (string line in infoLines)
+      {
+        string[] lineSplit = line.Split(" ");
+        if (lineSplit.Length > 4)
+        {
+          string key = line.Split(" ")[4];
+          string value = line.Split(" ")[^1];
+
+          logLinesStartingWithINFO[key] = value;
+        } 
+      }
     }
 
 
