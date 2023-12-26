@@ -39,7 +39,7 @@ namespace Ceres.Chess
       if (limit == null)
       {
         throw new Exception($"Error parsing SearchLimit specification string {specificationString}. "
-                           + "Expecting a number followed by NM, NG, SM or SG (nodes/seconds per move/game).");
+                           + "Expecting a number followed by NM, NG, SM or SG (nodes/seconds per move/game) or BV (best value).");
       }
       else
         return limit;     
@@ -50,10 +50,12 @@ namespace Ceres.Chess
     /// </summary>
     public static SearchLimit TryParse(string specificationString, out string errorString)
     {
+      errorString = null;
+
       if (specificationString == null) throw new ArgumentNullException(nameof(specificationString));
       specificationString = specificationString.Replace(" ", "").Replace("_", "").ToLower();
 
-      const string ERROR_STRING = "Missing SearchLimit specification string, expect <number>[+<number>] followed by one of nm, ng, sm, or sg indicating nodes/seconds per game/move";
+      const string ERROR_STRING = "Missing SearchLimit specification string, expect <number>[+<number>] followed by one of nm, ng, sm, or sg indicating nodes/seconds per game/move (or bv for best value move)";
       if (specificationString == "")
       {
         errorString = ERROR_STRING;
@@ -62,18 +64,32 @@ namespace Ceres.Chess
 
       SearchLimitType limitType;
       if (specificationString.EndsWith("nm"))
+      {
         limitType = SearchLimitType.NodesPerMove;
+      }
+      else if (specificationString.EndsWith("bv"))
+      {
+        return new SearchLimit(SearchLimitType.BestValueMove, 1);
+      }
       else if (specificationString.EndsWith("nt"))
+      {
         limitType = SearchLimitType.NodesPerTree;
+      }
       else if (specificationString.EndsWith("ng"))
+      {
         limitType = SearchLimitType.NodesForAllMoves;
+      }
       else if (specificationString.EndsWith("sm"))
+      {
         limitType = SearchLimitType.SecondsPerMove;
+      }
       else if (specificationString.EndsWith("sg"))
+      {
         limitType = SearchLimitType.SecondsForAllMoves;
+      }
       else
       {
-        errorString = "Invalid SearchLimit specification, expected to end with one of nm, nim, ng, sm, or sg indicating nodes/seconds per game/move";
+        errorString = "Invalid SearchLimit specification, expected to end with one of nm, nim, ng, sm, or sg indicating best value or nodes/seconds per game/move (or bv for best value move)";
         return null;
       }
 
@@ -82,7 +98,7 @@ namespace Ceres.Chess
       float partBase;
       if (!float.TryParse(plusParts[0], NumberStyles.Any, CultureInfo.InvariantCulture, out partBase))
       {
-        errorString = "Invalid SearchLimit specification, exected number of nodes/seconds at beginning of specification";
+        errorString = "Invalid SearchLimit specification, expected number of nodes/seconds at beginning of specification";
         return null;
       }
 
@@ -95,7 +111,7 @@ namespace Ceres.Chess
         }
         if (!float.TryParse(plusParts[1], NumberStyles.Any, CultureInfo.InvariantCulture, out partIncrement))
         {
-          errorString = "Invalid SearchLimit specification, exected + to be followed by a number indicating incremental nodes/seconds per move";
+          errorString = "Invalid SearchLimit specification, expected + to be followed by a number indicating incremental nodes/seconds per move";
           return null;
         }
       }
