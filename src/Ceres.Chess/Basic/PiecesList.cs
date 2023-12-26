@@ -102,9 +102,15 @@ namespace Ceres.Chess
     /// <exception cref="ArgumentException"></exception>
     static Piece[] FromPieces(string piecesString)
     {
-      if (!piecesString.Contains("K") || !piecesString.Contains("k"))
+      int countWhiteKing = piecesString.Count(c => c == 'K');
+      int countBlackKing = piecesString.Count(c => c == 'k');
+      if (countWhiteKing > 1 || countBlackKing > 1)
       {
-        throw new ArgumentException("String must contain white and black kings (K and k).", nameof(piecesString));
+        throw new Exception("PositionGeneratorRandomFromPieces: only one king of each color allowed.");
+      }
+      else if (countWhiteKing == 0 && countBlackKing == 0)
+      {
+        throw new Exception("PositionGeneratorRandomFromPieces: at least one king required from each side.");
       }
 
       List<Piece> pieces = new(piecesString.Length);
