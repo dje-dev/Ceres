@@ -24,9 +24,9 @@ namespace Ceres.Chess.Data.Nets
   }
 
   /// <summary>
-  /// Describes a reference network.
+  /// Describes a registered network.
   /// </summary>
-  public readonly record struct ReferenceNetInfo
+  public readonly record struct RegisteredNetInfo
   {
     /// <summary>
     /// Short descriptive net ID.
@@ -49,7 +49,7 @@ namespace Ceres.Chess.Data.Nets
     /// <param name="id"></param>
     /// <param name="netType"></param>
     /// <param name="netSpecificationString"></param>
-    public ReferenceNetInfo(string id, ReferenceNetType netType, string netSpecificationString)
+    public RegisteredNetInfo(string id, ReferenceNetType netType, string netSpecificationString)
     {
       ID = id;
       NetType = netType;

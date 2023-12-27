@@ -16,6 +16,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using Ceres.Chess.Data.Nets;
 using Ceres.Chess.NNEvaluators.Defs;
 using Chess.Ceres.NNEvaluators;
 
@@ -152,6 +153,22 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
     {
       NNEvaluatorType NN_EVAL_TYPE;
       string thisNetID = null;
+
+      // Check for a reference net marked by "!" followed by an alias.
+      if (netStrWithPrecision.StartsWith("!"))
+      {
+        string netID = netStrWithPrecision.Substring(1);
+        if (RegisteredNets.Aliased.TryGetValue(netID, out RegisteredNetInfo baseline))
+        {
+          // Resolve to underlying network specification, call recursively.
+          return ExtractEvaluatorTypeAndNetID(baseline.NetSpecificationString);
+        }
+        else
+        {
+          throw new Exception($"Network specification begins with ! but the no such reference net {netID}" 
+                            + $" is registered in ReferenceNets.Common");
+        }
+      }
 
       if (netStrWithPrecision.ToUpper().StartsWith("LC0:"))
       {

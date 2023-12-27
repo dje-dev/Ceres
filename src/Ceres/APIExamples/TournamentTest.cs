@@ -209,9 +209,9 @@ namespace Ceres.APIExamples
       //      NET2 = "CUSTOM2:753723";
 
       //      NET1 = ReferenceNetIDs.T2_768_15_T82_4832;
-      NET2 = ReferenceNets.Baselines["T60"].NetSpecificationString;
+      NET2 = RegisteredNets.Aliased["T60"].NetSpecificationString;
       //NET1 = NET2 = ReferenceNetIDs.BEST_T80;
-      NET1 = NET2 = ReferenceNets.Baselines["T81"].NetSpecificationString;
+      NET1 = NET2 = RegisteredNets.Aliased["T81"].NetSpecificationString;
 
       //NET2 = ReferenceNetIDs.T1_DISTILL_256_10_FP16;
       //NET1 = "ONNX_ORT:BT3_750_optimistic#32,BT3_750#32,";
@@ -946,13 +946,13 @@ namespace Ceres.APIExamples
     {
       string pgnFileName = SoftwareManager.IsWindows ? @"\\synology\dev\chess\data\pgn\raw\ceres_big.pgn"
                                                : @"/mnt/syndev/chess/data/pgn/raw/ceres_big.pgn";
-      string NET_ID = ReferenceNets.Baselines["T78"].NetSpecificationString;// "753723";// "610889";// "803907";
+      string NET_ID = RegisteredNets.Aliased["T78"].NetSpecificationString;// "753723";// "610889";// "803907";
       CompareEngineParams parms = new CompareEngineParams("Resapling", pgnFileName,
                                               10_000, // number of positions
                                               s => true,//s.FinalPosition.PieceCount > 15,
                                               CompareEnginesVersusOptimal.PlayerMode.CeresCustom1, "703810", //610034
                                               CompareEnginesVersusOptimal.PlayerMode.UCI, NET_ID,
-                                              CompareEnginesVersusOptimal.PlayerMode.LC0, ReferenceNets.Baselines["T80"].NetSpecificationString,
+                                              CompareEnginesVersusOptimal.PlayerMode.LC0, RegisteredNets.Aliased["T80"].NetSpecificationString,
                                               SearchLimit.NodesPerMove(50), // search limit
                                               new int[] { 0 },//new int[] { 0, 1, 2, 3 },
                                               s =>
