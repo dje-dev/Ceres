@@ -134,7 +134,7 @@ namespace Ceres.Chess.MoveGen.Converters
       PieceType pieceMoving = position.PieceMoving(thisMove);
       if (pieceMoving == PieceType.None)
       {
-        throw new Exception("Illegal move " + thisMove + " in position " + position);
+        throw new Exception("Illegal move " + thisMove + " in position " + position.ToPosition.FEN);
       }
       PieceType pieceCapture = position.PieceCapturing(thisMove);
 
