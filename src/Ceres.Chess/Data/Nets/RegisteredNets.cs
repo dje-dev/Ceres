@@ -36,7 +36,7 @@ namespace Ceres.Chess.Data.Nets
     public static Dictionary<string, RegisteredNetInfo> Aliased = new()
       {
 //        { "32930", SimpleLC0Net("32930") },
-        { "T40", SimpleLC0Net("42850") },
+//        { "T40", SimpleLC0Net("42850") },
         { "T70", SimpleLC0Net("703810") },
         { "T75", SimpleLC0Net("753723") },
         { "T60", SimpleLC0Net("606512") },
@@ -45,16 +45,16 @@ namespace Ceres.Chess.Data.Nets
         { "T81", SimpleLC0Net("811971") }, //Training restarted after surgery after 811971
 
         {"BT2", ONNXNet32LC0("BT2-768x15smolgen-12h-do-01-swa-onnx-2350000-rule50.gz")},
-        {"BT3", ONNXNet32LC0("BT3-768x15x24h-swa-2350000#32")},
-        {"BT4", ONNXNet32LC0("BT4-1024x15x32h-swa-365000#32")},
+//        {"BT3", ONNXNet32LC0("BT3-768x15x24h-swa-2350000#32")},
+//        {"BT4", ONNXNet32LC0("BT4-1024x15x32h-swa-365000#32")},
 
         {"T1_DISTILL_256", ONNXNet16LC0("t1-256x10-distilled-swa-2432500_fp16")},
-        {"T1_DISTILL_512_10_FP32", ONNXNet32LC0("t1-512x15x8h-distilled-swa-3395000")},
-        {"T1_DISTILL_512_10_FP16", ONNXNet16LC0("t1-512x15x8h-distilled-swa-3395000_fp16")},
+        {"T1_DISTILL_512_10", ONNXNet32LC0("t1-512x15x8h-distilled-swa-3395000")},
+//        {"T1_DISTILL_512_10_FP16", ONNXNet16LC0("t1-512x15x8h-distilled-swa-3395000_fp16")},
 
         {"T1_768_PF16", ONNXNet16LC0("t1-768x15x24h-swa-4000000_fp16")},
         {"T2", ONNXNet16LC0("t2-768x15x24h-swa-5230000.pb.gz_fp16")},
-        {"T3", ONNXNet32LC0("t3-512x15x16h-swa-2815000") },
+//        {"T3", ONNXNet32LC0("t3-512x15x16h-swa-2815000") },
     };
 
 
