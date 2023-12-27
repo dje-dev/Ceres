@@ -267,7 +267,7 @@ namespace Ceres.Chess.NNEvaluators
       result = new NNEvaluatorResult(w, l, m, uncertaintyV, policyRef.policies.Span[policyRef.index], activations, extraStat0, extraStat1);
     }
 
-#endregion
+    #endregion
 
     #region Helper methods
 
@@ -277,10 +277,14 @@ namespace Ceres.Chess.NNEvaluators
     /// <param name="position"></param>
     /// <param name="fillInMissingPlanes">if history planes should be filled in if incomplete (typically necessary)</param>
     /// <param name="retrieveSupplementalResults"></param>
+    /// <param name="extraInputs">optional set of additional inputs to be set within the encoded batch</param>
     /// <returns></returns>
-    public NNEvaluatorResult Evaluate(PositionWithHistory position, bool fillInMissingPlanes = true, bool retrieveSupplementalResults = false)
+    public NNEvaluatorResult Evaluate(PositionWithHistory position, 
+                                      bool fillInMissingPlanes = true, 
+                                      bool retrieveSupplementalResults = false,
+                                      InputTypes extraInputs = InputTypes.Undefined)
     {
-      EncodedPositionBatchBuilder builder = new EncodedPositionBatchBuilder(1, InputsRequired);
+      EncodedPositionBatchBuilder builder = new EncodedPositionBatchBuilder(1, InputsRequired | extraInputs);
       builder.Add(position, fillInMissingPlanes);
 
       NNEvaluatorResult[] result = EvaluateBatch(builder.GetBatch(), retrieveSupplementalResults);
