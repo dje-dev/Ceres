@@ -429,7 +429,7 @@ namespace Ceres.Chess.Games.Utils
         }
 
         EPDEntry entry = new EPDEntry(line, skipFirstColumn);
-        if (entry.ID == "PuzzleId")
+        if (entry.ID == "PuzzleId" || Position.FromFEN(entry.FEN).CalcTerminalStatus() != GameResult.Unknown)
         {
           // Skip header line if Lichess file
           continue;

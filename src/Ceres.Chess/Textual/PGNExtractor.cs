@@ -62,15 +62,19 @@ namespace Ceres.Chess.Textual
       foreach (PositionWithHistory thisPos in allPos)
       {
         PGNWriter pgnWriter = outputPGN ? new PGNWriter(idString ?? "Extracted", "Player1", "Player2") : null;
-        if (outputPGN)
+
+        if (thisPos.FinalPosition.CalcTerminalStatus() == GameResult.Unknown) // Do not output terminal positions
         {
-          pgnWriter.WriteMoveSequence(thisPos);
-          pgnWriter.WriteResultUnknown();
-          textWriter.WriteLine(pgnWriter.GetText());
-        }
-        else
-        {
-          textWriter.WriteLine(thisPos.FinalPosition.FEN);
+          if (outputPGN)
+          {
+            pgnWriter.WriteMoveSequence(thisPos);
+            pgnWriter.WriteResultUnknown();
+            textWriter.WriteLine(pgnWriter.GetText());
+          }
+          else
+          {
+            textWriter.WriteLine(thisPos.FinalPosition.FEN);
+          }
         }
       }
     }

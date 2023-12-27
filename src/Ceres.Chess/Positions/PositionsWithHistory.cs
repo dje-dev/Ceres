@@ -194,7 +194,10 @@ namespace Ceres.Chess.Positions
           moves = fenAndMoves.Substring(indexMoves + 6);
         }
         else
+        {
           fen = fenAndMoves;
+        }
+
         return PositionWithHistory.FromFENAndMovesUCI(fen, moves);
       }
       else if (openings != null)
@@ -207,7 +210,9 @@ namespace Ceres.Chess.Positions
         return new PositionWithHistory(MGPosition.FromFEN(epds[index].FEN));
       }
       else
+      {
         throw new Exception("PositionsWithHistory exhausted set of game start positions.");
+      }
     }
 
   
@@ -226,20 +231,32 @@ namespace Ceres.Chess.Positions
     {
       // Accept the base name exactly as it is if it already exists
       if (System.IO.File.Exists(baseName))
+      {
         return baseName;
+      }
 
       string fullName;
       if (baseName.ToUpper().EndsWith("EPD"))
+      {
         fullName = Path.Combine(CeresUserSettingsManager.Settings.DirEPD, baseName);
+      }
       else if (baseName.ToUpper().EndsWith("PGN"))
+      {
         fullName = Path.Combine(CeresUserSettingsManager.Settings.DirPGN, baseName);
+      }
       else
+      {
         fullName = baseName;
+      }
 
       if (!System.IO.File.Exists(fullName))
+      {
         throw new Exception($"The source file {fullName} does not exist.");
+      }
       else
+      {
         return fullName;
+      }
     }
 
 
@@ -326,7 +343,7 @@ namespace Ceres.Chess.Positions
         }
 
         Position finalPos = game.FirstMatchingPosition(p => firstPositionFilter(p), out int moveIndex);
-        if (moveIndex != -1)
+        if (moveIndex != -1 && finalPos.CalcTerminalStatus() == GameResult.Unknown)
         {
           moveSequences.Add(game.TruncatedAtMove(moveIndex).FinalPositionWithHistory);
         }
