@@ -124,14 +124,23 @@ namespace Ceres.Chess
       int gameID = 1;
       foreach (GameInfo game in pgnReader.Read(pgnFileName))
       {
-        Game gameS = new Game(game, gameID);
+        Game gameS = null;
+        try
+        {
+          gameS = new Game(game, gameID);
+        }
+        catch (Exception e)
+        {
+          Console.WriteLine($"Error reading game {gameID} from {pgnFileName}: {e.Message}");
+        }
 
         // Skip null games
-        if (gameS.Moves.Count > 0)
+        if (gameS != null && gameS.Moves.Count > 0)
         {
           gameID++;
           yield return gameS;
         }
+
       }
     }
 
