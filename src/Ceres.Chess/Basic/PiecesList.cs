@@ -108,7 +108,7 @@ namespace Ceres.Chess
       {
         throw new Exception("PositionGeneratorRandomFromPieces: only one king of each color allowed.");
       }
-      else if (countWhiteKing == 0 && countBlackKing == 0)
+      else if (countWhiteKing == 0 || countBlackKing == 0)
       {
         throw new Exception("PositionGeneratorRandomFromPieces: at least one king required from each side.");
       }
