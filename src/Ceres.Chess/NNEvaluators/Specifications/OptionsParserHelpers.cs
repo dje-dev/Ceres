@@ -154,8 +154,9 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
       NNEvaluatorType NN_EVAL_TYPE;
       string thisNetID = null;
 
-      // Check for a reference net marked by "!" followed by an alias.
-      if (netStrWithPrecision.StartsWith("!"))
+      // Check for a reference net marked by "~" followed by an alias.
+      // This character chosen because it is one of the few that does not have a special meaning in Linux.
+      if (netStrWithPrecision.StartsWith("~"))
       {
         string netID = netStrWithPrecision.Substring(1);
         if (RegisteredNets.Aliased.TryGetValue(netID, out RegisteredNetInfo baseline))
