@@ -16,9 +16,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+
+using Chess.Ceres.NNEvaluators;
 using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.NNEvaluators.Specifications.Iternal;
-using Chess.Ceres.NNEvaluators;
 
 #endregion
 
@@ -55,6 +56,8 @@ namespace Ceres.Chess.NNEvaluators.Specifications
     /// <param name="netString"></param>
     public NNNetSpecificationString(string netString)
     {
+      ArgumentException.ThrowIfNullOrEmpty(netString, nameof(netString)); 
+
       // Build network definitions
       List<(string, NNEvaluatorType, NNEvaluatorPrecision, float, float, float)> netParts = OptionsParserHelpers.ParseNetworkOptions(netString);
 
@@ -87,6 +90,11 @@ namespace Ceres.Chess.NNEvaluators.Specifications
     }
 
 
+    /// <summary>
+    /// Returns a readable string representation of the network specification.
+    /// </summary>
+    /// <param name="net"></param>
+    /// <returns></returns>
     static string NetInfoStr((NNEvaluatorNetDef def, float wtValue, float wtPolicy, float wtMLH) net)
     {
       if (net.wtValue == 1)
@@ -96,6 +104,12 @@ namespace Ceres.Chess.NNEvaluators.Specifications
     }
 
 
+    /// <summary>
+    /// Returns a readable string representation of the network specification (for the case of multiple networks or non LC0 networks).
+    /// </summary>
+    /// <param name="comboType"></param>
+    /// <param name="nets"></param>
+    /// <returns></returns>
     static string ToSpecificationStringComplex(NNEvaluatorNetComboType comboType, IEnumerable<(NNEvaluatorNetDef, float, float, float)> nets)
     {
       string ret = $"Nets: {comboType} ";
@@ -107,6 +121,12 @@ namespace Ceres.Chess.NNEvaluators.Specifications
     }
 
 
+    /// <summary>
+    /// Returns a readable string representation of the network specification (for the general case).
+    /// </summary>
+    /// <param name="comboType"></param>
+    /// <param name="nets"></param>
+    /// <returns></returns>
     public static string ToSpecificationString(NNEvaluatorNetComboType comboType, IEnumerable<(NNEvaluatorNetDef, float, float, float)> nets)
     {
       // TODO: Currently support conversion back to original specification string only for simple cases
