@@ -436,7 +436,7 @@ namespace Ceres.Chess.NNEvaluators
     /// </summary>
     /// <param name="bigBatch"></param>
     /// <param name="processor"></param>
-    public void EvaluateOversizedBatch(EncodedPositionBatchFlat bigBatch, Action<(int, NNEvaluatorResult[])> processor)
+    public void EvaluateOversizedBatch(EncodedPositionBatchFlat bigBatch, Action<int, NNEvaluatorResult[]> processor)
     {
       int numProcessed = 0;
       int numToProcess = bigBatch.NumPos;
