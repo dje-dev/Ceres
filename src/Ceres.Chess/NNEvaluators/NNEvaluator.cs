@@ -455,7 +455,7 @@ namespace Ceres.Chess.NNEvaluators
         NNEvaluatorResult[] result = EvaluateBatch(slice);
 
         // Pass sub-batch to delegate.
-        processor((numProcessed, result));
+        processor(numProcessed, result);
 
         numProcessed += numThisBatch;
       }
