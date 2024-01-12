@@ -49,7 +49,7 @@ namespace Ceres.Chess.Data.Nets
 //        {"BT4", ONNXNet32LC0("BT4-1024x15x32h-swa-365000#32")},
 
         {"T1_DISTILL_256", ONNXNet16LC0("t1-256x10-distilled-swa-2432500_fp16")},
-        {"T1_DISTILL_512_10", ONNXNet32LC0("t1-512x15x8h-distilled-swa-3395000")},
+        {"T1_DISTILL_512_15", ONNXNet32LC0("t1-512x15x8h-distilled-swa-3395000")},
 //        {"T1_DISTILL_512_10_FP16", ONNXNet16LC0("t1-512x15x8h-distilled-swa-3395000_fp16")},
 
         {"T1_768_PF16", ONNXNet16LC0("t1-768x15x24h-swa-4000000_fp16")},
