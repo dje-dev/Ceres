@@ -142,14 +142,21 @@ namespace Ceres.Chess.EncodedPositions
 
 
     /// <summary>
+    /// Returns EncodedTrainingPosition at specified index.
+    /// </summary>
+    public EncodedTrainingPosition TrainingPosition(int index)
+    {
+      return new EncodedTrainingPosition(Version, InputFormat, PositionAtIndex(index), PolicyAtIndex(index));
+    }
+
+
+    /// <summary>
     /// Validates integrity of position at specified index.
     /// </summary>
     /// <param name="index"></param>
     public void ValidateIntegrityAtIndex(int index)
     {
-      // Must materialize full EncodedTrainingPosition for this test.
-      EncodedTrainingPosition etp = new EncodedTrainingPosition(Version, InputFormat, PositionAtIndex(index), PolicyAtIndex(index));
-      etp.ValidateIntegrity("ValidatePositionAtIndex");
+      TrainingPosition(index).ValidateIntegrity("ValidatePositionAtIndex");
     }
 
     #endregion
