@@ -523,7 +523,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
       }
 
       CompressedPolicyVector[] retPolicies = new CompressedPolicyVector[numPos];
-      Memory<MGMoveList> moves = sourceBatchWithValidMoves.Moves;
+      Memory<MGMoveList> moves = sourceBatchWithValidMoves == null ? default : sourceBatchWithValidMoves.Moves;
       Span<float> policyProbsSpan = policyProbs.AsSpan();
       Parallel.For(0, numPos, i =>
       {
