@@ -156,19 +156,21 @@ namespace Ceres.Chess.LC0NetInference
 
       List<(string, float[])> eval;
 
+      const float TPG_DIVISOR = 100f;
+
       if (NetType == NetTypeEnum.TPG)
       {
-        var inputs = new (Memory<float> input, int[] shape)[flatValuesSecondary.Length == 0 ? 1 : 2];
+        (Memory<float> input, int[] shape)[] inputs = new (Memory<float> input, int[] shape)[flatValuesSecondary.Length == 0 ? 1 : 2];
 
         Span<float> flatValuesPrimaryS = flatValuesPrimary.Span;
-        for (int i = 0; i < flatValuesPrimary.Length; i++) flatValuesPrimaryS[i] /= 100f;
+        for (int i = 0; i < flatValuesPrimary.Length; i++) flatValuesPrimaryS[i] /= TPG_DIVISOR;
         inputs[0] = (new Memory<float>(flatValuesPrimaryS.ToArray()), new int[] { numPositionsUsed, 64, TPG_BYTES_PER_SQUARE_RECORD });
 
 #if NOT
         if (flatValuesSecondary.Length > 0)
         {
           Span<float> flatValuesSecondaryS = flatValuesSecondary.Span;
-          for (int i = 0; i < flatValuesSecondary.Length; i++) flatValuesSecondaryS[i] /= 100f;
+          for (int i = 0; i < flatValuesSecondary.Length; i++) flatValuesSecondaryS[i] /= DIVISOR;
           inputs[1] = (new Memory<float>(flatValuesSecondaryS.ToArray()), new int[] { numPositionsUsed, TPG_MAX_MOVES, TPG_BYTES_PER_MOVE_RECORD });
         }
 #endif

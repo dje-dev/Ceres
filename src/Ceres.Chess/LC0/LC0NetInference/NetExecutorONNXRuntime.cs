@@ -323,7 +323,7 @@ namespace Ceres.Chess.LC0NetInference
     /// <param name="inputName"></param>
     /// <param name="numElements"></param>
     /// <returns></returns>
-    private List<(string, float[])> RunFloat16((Memory<float> input, int[] shape, string inputName, int numElements)[] inputs)
+    internal List<(string, float[])> RunFloat16((Memory<float> input, int[] shape, string inputName, int numElements)[] inputs)
     {
       List<NamedOnnxValue> inputsONNX = new(inputs.Length);
 

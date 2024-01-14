@@ -135,7 +135,12 @@ namespace Chess.Ceres.NNEvaluators
     /// </summary>
     public readonly bool MovesEnabled;
 
-#region Statics
+    /// <summary>
+    /// If move history should be sent to ONNX network.
+    /// </summary>
+    public readonly bool UseHistory;
+
+    #region Statics
 
     // TODO: clean up this lookaside buffering
     static string lastONNXFileName;
@@ -157,7 +162,8 @@ namespace Chess.Ceres.NNEvaluators
                                  ONNXRuntimeExecutor.NetTypeEnum type, int batchSize,
                                  NNEvaluatorPrecision precision, bool isWDL, bool hasM, bool hasUncertaintyV,
                                  string outputValue, string outputWDL, string outputPolicy, string outputMLH, 
-                                 bool valueHeadLogistic, bool scale50MoveCounter, bool movesEnabled = false, bool enableProfiling = false)
+                                 bool valueHeadLogistic, bool scale50MoveCounter, 
+                                 bool movesEnabled = false, bool enableProfiling = false, bool useHistory)
     {
       EngineType = type == ONNXRuntimeExecutor.NetTypeEnum.Ceres ? "ONNX_DJE" : "ONNX_LZ0";
       EngineNetworkID = engineID;
@@ -175,6 +181,7 @@ namespace Chess.Ceres.NNEvaluators
       ValueHeadLogistic = valueHeadLogistic;
       Scale50MoveCounter = scale50MoveCounter;
       MovesEnabled = movesEnabled;
+      UseHistory = useHistory;
 
       bool filesMatch = lastONNXFileName != null && lastONNXFileName == onnxModelFileName;
       bool bytesMatch = onnxModelBytes != null && ArrayUtils.ByteArrayStableHash(onnxModelBytes) == lastONNXBytesHash;
@@ -287,7 +294,7 @@ namespace Chess.Ceres.NNEvaluators
         Memory<float> flatValuesAttentionM = flatValuesAttention.AsMemory().Slice(0, inputSizeAttention);
         Memory<float> flatValuesMovesM = flatValuesMoves == null ? default : flatValuesMoves.AsMemory().Slice(0, inputSizeMoves);
 
-        ConverterToFlat(batch, MovesEnabled, flatValuesAttention, flatValuesMoves);
+        ConverterToFlat(batch, UseHistory, flatValuesAttention, flatValuesMoves);
 
         bool xPosMoveIsLegal(int posNum, int nnIndexNum)
         {
@@ -301,7 +308,7 @@ namespace Chess.Ceres.NNEvaluators
             EncodedMove em = EncodedMove.FromNeuralNetIndex(nnIndexNum);
             
             ConverterMGMoveEncodedMove.FromTo mm = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMoveFromTo(em, shouldFlip);
-            foreach (MGMove legalMove in batch.Moves.Span[posNum]) // TO DO: improve effiiency
+            foreach (MGMove legalMove in batch.Moves.Span[posNum]) // TO DO: improve efficiency
             {
               if (legalMove.FromSquare.SquareIndexStartH1 == mm.From 
                && legalMove.ToSquare.SquareIndexStartH1 == mm.To)
