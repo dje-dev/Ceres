@@ -243,6 +243,8 @@ namespace Chess.Ceres.NNEvaluators
         const int INPUT_SIZE_FLOATS = 2048 * 100 * 128; 
         inputsPrimaryNative = new byte[INPUT_SIZE_FLOATS];
         inputsSecondaryNative = new byte[INPUT_SIZE_FLOATS];
+        inputsPrimaryNativeF = new float[INPUT_SIZE_FLOATS];
+        inputsSecondaryNativeF = new float[INPUT_SIZE_FLOATS];
       }
 
       int numConverted = ConverterToFlatFromTPG(positionsNativeInput, inputsPrimaryNative, usesSecondaryInputs ? inputsSecondaryNative : null);
