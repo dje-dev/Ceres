@@ -57,6 +57,27 @@ namespace Ceres.Chess.EncodedPositions
     /// <param name="processFilePredicate"></param>
     /// <param name="filterOutFRCGames"></param>
     /// <returns></returns>
+    public static IEnumerable<EncodedTrainingPosition> EnumerateTrainingPositions(string trainingTARFileName,
+                                                                                  Predicate<string> processFilePredicate = null,
+                                                                                  bool filterOutFRCGames = true)
+    {
+      foreach (EncodedTrainingPositionGame game in EnumerateGames(trainingTARFileName, processFilePredicate, filterOutFRCGames))
+      {
+        for (int i = 0; i < game.NumPositions; i++)
+        {
+          yield return game.TrainingPosition(i);
+        }
+      }
+    }
+
+
+    /// <summary>
+    /// Sequential enumerator for all positions within specified TAR file (matching optional filter).
+    /// </summary>
+    /// <param name="trainingTARFileName"></param>
+    /// <param name="processFilePredicate"></param>
+    /// <param name="filterOutFRCGames"></param>
+    /// <returns></returns>
     public static IEnumerable<EncodedPositionWithHistory> EnumeratePositions(string trainingTARFileName,
                                                                              Predicate<string> processFilePredicate = null,
                                                                              bool filterOutFRCGames = true)
