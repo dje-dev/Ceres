@@ -163,7 +163,7 @@ namespace Chess.Ceres.NNEvaluators
                                  NNEvaluatorPrecision precision, bool isWDL, bool hasM, bool hasUncertaintyV,
                                  string outputValue, string outputWDL, string outputPolicy, string outputMLH, 
                                  bool valueHeadLogistic, bool scale50MoveCounter, 
-                                 bool movesEnabled = false, bool enableProfiling = false, bool useHistory)
+                                 bool movesEnabled = false, bool enableProfiling = false, bool useHistory = true)
     {
       EngineType = type == ONNXRuntimeExecutor.NetTypeEnum.Ceres ? "ONNX_DJE" : "ONNX_LZ0";
       EngineNetworkID = engineID;
