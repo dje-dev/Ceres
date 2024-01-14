@@ -432,11 +432,9 @@ namespace Ceres.Chess.NNEvaluators
 
     /// <summary>
     /// Evaluates all positions in an oversized batch (that cannot be evaluated all at once).
-    /// The batch is broken into sub-batches, evaluated, and each sub-batch is passed to a provided delete.
+    /// The batch is broken into sub-batches, evaluated, and each item in the sub-batch is passed to a provided delegate.
     /// </summary>
-    /// <param name="bigBatch"></param>
-    /// <param name="processor"></param>
-    public void EvaluateOversizedBatch(EncodedPositionBatchFlat bigBatch, Action<int, NNEvaluatorResult[]> processor)
+    public void EvaluateOversizedBatch(EncodedPositionBatchFlat bigBatch, Action<int, Memory<NNEvaluatorResult>> processor)
     {
       int numProcessed = 0;
       int numToProcess = bigBatch.NumPos;
@@ -455,10 +453,30 @@ namespace Ceres.Chess.NNEvaluators
         NNEvaluatorResult[] result = EvaluateBatch(slice);
 
         // Pass sub-batch to delegate.
-        processor(numProcessed, result);
+        processor(numProcessed, new Memory<NNEvaluatorResult>(result, 0, numThisBatch));
 
         numProcessed += numThisBatch;
       }
+    }
+
+
+    /// <summary>
+    /// Evaluates all positions in an oversized batch (that cannot be evaluated all at once).
+    /// The batch is broken into sub-batches, evaluated, and each sub-batch is passed to a provided delegate.
+    /// </summary>
+    /// <param name="bigBatch"></param>
+    /// <param name="processor"></param>
+    public void EvaluateOversizedBatch(EncodedPositionBatchFlat bigBatch, Action<int, NNEvaluatorResult> processor)
+    {
+      int numProcessed = 0;
+      EvaluateOversizedBatch(bigBatch, (int index, Memory<NNEvaluatorResult> results) =>
+      {
+        Span<NNEvaluatorResult> resultsSpan = results.Span;
+        for (int i = 0; i < results.Length; i++)
+        {
+          processor(numProcessed++, resultsSpan[i]);
+        }
+      });
     }
 
 
