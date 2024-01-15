@@ -80,8 +80,8 @@ namespace Ceres.MCTS.Evaluators
       [MethodImpl(MethodImplOptions.AggressiveInlining)]
       get
       {
-        float winP = WinP.ToFloatApprox;
-        float lossP = LossP.ToFloatApprox;
+        float winP = WinP.ToFloat;
+        float lossP = LossP.ToFloat;
         float v = winP - lossP;
         return ParamsSelect.VIsForcedResult(v) ? 0
                                                : 1.0f - (winP + lossP);
@@ -91,7 +91,7 @@ namespace Ceres.MCTS.Evaluators
     /// <summary>
     /// Value estimate (logistic).
     /// </summary>
-    public float V => WinP.ToFloatApprox - LossP.ToFloatApprox;
+    public float V => WinP.ToFloat - LossP.ToFloat;
 
     /// <summary>
     /// If the underlying policy has been released.

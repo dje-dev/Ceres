@@ -39,6 +39,22 @@ namespace Ceres.Base.DataTypes
     private static ushort[] baseTable;
     private static sbyte[] shiftTable;
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+    internal static unsafe float HalfToSingle(FP16 floatHalfPrecision)
+    {
+      uint result = mantissaTable[offsetTable[floatHalfPrecision.Value >> 10] + (floatHalfPrecision.Value & 0x3ff)] + exponentTable[floatHalfPrecision.Value >> 10];
+      return *((float*)&result);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+    internal static unsafe FP16 SingleToHalf(float single)
+    {
+      uint value = *((uint*)&single);
+
+      ushort result = (ushort)(baseTable[(value >> 23) & 0x1ff] + ((value & 0x007fffff) >> shiftTable[value >> 23]));
+      return FP16.ToHalf(result);
+    }
+
     // Transforms the subnormal representation to a normalized one. 
     private static uint ConvertMantissa(int i)
     {
@@ -179,60 +195,6 @@ namespace Ceres.Base.DataTypes
       return shiftTable;
     }
 
-    // Lookup table from raw values (ushort) to float
-    static float[] LOOKUP;
-
-    static void InitializeLookup()
-    {
-      LOOKUP = new float[ushort.MaxValue + 1];
-      for (int i = 0; i <= ushort.MaxValue; i++)
-      {
-        FP16 fp16 = new FP16((ushort)i, true);
-        LOOKUP[i] = CalcHalfToSingle(fp16);
-      }
-    }
-
-    /// <summary>
-    /// 
-    /// Warning: it is not clear this is faster, and results in memory cache pollution.
-    /// </summary>
-    /// <param name="floatHalfPrecision"></param>
-    /// <returns></returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    internal static unsafe float HalfToSingleLookup(FP16 floatHalfPrecision)
-    {
-      return LOOKUP[floatHalfPrecision.Value];
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    static unsafe float CalcHalfToSingle(FP16 floatHalfPrecision)
-    {
-      uint result = mantissaTable[offsetTable[floatHalfPrecision.Value >> 10] + (floatHalfPrecision.Value & 0x3ff)] + exponentTable[floatHalfPrecision.Value >> 10];
-      float v1 = *((float*)&result);
-      return v1;
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    internal static unsafe float HalfToSingle(FP16 floatHalfPrecision)
-    {
-#if NOT
-        // slower
-        CheckLOOKUPInitialized();
-        return LOOKUP[floatHalfPrecision.Value];
-#endif
-
-        uint result = mantissaTable[offsetTable[floatHalfPrecision.Value >> 10] + (floatHalfPrecision.Value & 0x3ff)] + exponentTable[floatHalfPrecision.Value >> 10];
-        return *((float*)&result);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    internal static unsafe FP16 SingleToHalf(float single)
-    {
-      uint value = *((uint*)&single);
-
-      ushort result = (ushort)(baseTable[(value >> 23) & 0x1ff] + ((value & 0x007fffff) >> shiftTable[value >> 23]));
-      return FP16.ToHalf(result);
-    }
 
     internal static FP16 Negate(FP16 floatHalfPrecision) => FP16.ToHalf((ushort)(floatHalfPrecision.Value ^ 0x8000));
     
@@ -255,8 +217,6 @@ namespace Ceres.Base.DataTypes
       offsetTable = GenerateOffsetTable();
       baseTable = GenerateBaseTable();
       shiftTable = GenerateShiftTable();
-
-      InitializeLookup();
     }
 
   }

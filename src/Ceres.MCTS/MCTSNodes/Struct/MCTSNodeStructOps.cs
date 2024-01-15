@@ -385,7 +385,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         float sumPVisited = 0;
         for (int i = 0; i < numChildrenExpanded; i++)
         {
-          sumPVisited += nodes[theseChildren[i].ChildIndex.Index].P.ToFloatApprox;
+          sumPVisited += nodes[theseChildren[i].ChildIndex.Index].P.ToFloat;
         }
 
         return sumPVisited;
@@ -608,7 +608,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
             nInFlight[i] = childNode.NInFlight2 + dualCollisionFraction * childNode.NInFlight;
           }
 
-          p[i] = childNode.P.ToFloatApprox;// * childNode.Weight;
+          p[i] = childNode.P.ToFloat;// * childNode.Weight;
 #if LEGACY_UNCERTAINTY
           u[i] = childNode.Uncertainty.Uncertainty;
 #else
@@ -650,7 +650,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         {
           n[i] = 0;
           nInFlight[i] = 0;
-          p[i] = child.P.ToFloatApprox;
+          p[i] = child.P.ToFloat;
           w[i] = 0;
           u[i] = 0;
         }

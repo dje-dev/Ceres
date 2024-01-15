@@ -72,114 +72,12 @@ namespace Ceres.Base.DataTypes
       return ret;
     }
 
-    public static FP16[] ToFP16Approx(float[] data)
-    {
-      if (DISABLE_APPROX_FP16_CONVERSIONS)
-      {
-        return ToFP16(data);
-      }
-      else
-      {
-        FP16[] ret = new FP16[data.Length];
-        for (int i = 0; i < ret.Length; i++)
-        {
-          ret[i] = FP16.FromFloatApprox(data[i]);
-        }
 
-        return ret;
-      }
-    }
-
-    public static float[,] ToFloat(FP16[,] data)
-    {
-      float[,] ret = new float[data.GetLength(0), data.GetLength(1)];
-      for (int i = 0; i < ret.GetLength(0); i++)
-      {
-        for (int j = 0; j < ret.GetLength(1); j++)
-        {
-          ret[i, j] = data[i, j];
-        }
-      }
-
-      return ret;
-    }
-
-    public unsafe static float[,] ToFloat(FP16* data, int numRows, int numColumns)
-    {
-      int sourceOffset = 0;
-      float[,] ret = new float[numRows, numColumns];
-      for (int i = 0; i < numRows; i++)
-      {
-        for (int j = 0; j < numColumns; j++)
-        {
-          ret[i, j] = data[sourceOffset++];
-        }
-      }
-      return ret;
-    }
-
-    public unsafe static void ToFloat(Span<FP16> source, float[,] dest, int numRows, int numColumns)
-    {
-      int sourceOffset = 0;
-      for (int i = 0; i < numRows; i++)
-      {
-        for (int j = 0; j < numColumns; j++)
-        {
-          dest[i, j] = source[sourceOffset++];
-        }
-      }
-    }
-
-    public unsafe static float[,] ToFloat(Span<FP16> data, int numRows, int numColumns)
-    {
-      float[,] ret = new float[numRows, numColumns];
-      ToFloat(data, ret, numRows, numColumns);
-      return ret;
-    }
-
-    public static unsafe float[] ToFloat(FP16* data, int numElements)
-    {
-      float[] ret = new float[numElements];
-      for (int i = 0; i < ret.Length; i++)
-      {
-        ret[i] = data[i];
-      }
-
-      return ret;
-    }
-
-
-    public static unsafe void ToFloat(Span<FP16> data, float[] dest, int numElements)
-    {
-      for (int i = 0; i < data.Length; i++)
-      {
-        dest[i] = data[i];
-      }
-    }
-
-    public static unsafe float[] ToFloat(Span<FP16> data, int numElements)
-    {
-      float[] ret = new float[numElements];
-      ToFloat(data, ret, numElements);
-      return ret;
-    }
-
-    public static float[] ToFloat(FP16[] data)
-    {
-      float[] ret = new float[data.Length];
-      for (int i = 0; i < ret.Length; i++)
-        ret[i] = data[i];
-      return ret;
-    }
-
-    public static float[] ToFloat(Span<FP16> data)
-    {
-      float[] ret = new float[data.Length];
-      for (int i = 0; i < ret.Length; i++)
-        ret[i] = data[i];
-      return ret;
-    }
-
+    /// <summary>
+    /// Converts to float.
+    /// </summary>
+    public float ToFloat => (float)this;
+  
     /// <summary>
     /// Internal representation of the FP16-precision floating-point number.
     /// </summary>
@@ -263,76 +161,6 @@ namespace Ceres.Base.DataTypes
     /// <returns></returns>
     public static FP16 FromRaw(ushort value) => new FP16(value, true);
 
-    /// <summary>
-    /// 
-    /// Warning: it is not clear this is faster, and results in memory cache pollution.    
-    /// </summary>    
-    public float ToSingleViaLookup => FP16Helper.HalfToSingleLookup(this);
-
-    // WARNING: Do not enable these approximations.
-    //          They seem sufficiently imprecise that
-    //          they negatively impact qualitY (e.g. play quality at 3 nodes/move).
-    const bool DISABLE_APPROX_FP16_CONVERSIONS = true;
-
-    /// <summary>
-    /// Fast approximate conversion from FP16 to float.
-    /// Note that this does not support all FP16, for example NaNs.
-    /// </summary>
-    /// <param name="fp16"></param>
-    /// <returns></returns>
-    public float ToFloatApprox
-    {
-      [MethodImpl(MethodImplOptions.AggressiveInlining)]
-      get
-      {
-        if (DISABLE_APPROX_FP16_CONVERSIONS)
-        {
-          return (FP16)this;
-        }
-
-        if (Value == Zero.Value)
-        {
-          return 0.0f;
-        }
-        else
-        {
-          int conv = (((Value & 0x8000) << 16) | (((Value & 0x7c00) + 0x1C000) << 13) | ((Value & 0x03FF) << 13));
-          float ret = Unsafe.As<int, float>(ref conv);
-          Debug.Assert(MathF.Abs(ret - (FP16)this) < 0.01f); // TO DO: be more precise in testing expected precision
-          return ret;
-        }
-      }
-    }
-
-    /// <summary>
-    /// Fast approximate conversion from float to FP16.
-    /// Note that this does not support all FP16, for example NaNs.
-    /// </summary>
-    /// <param name="f"></param>
-    /// <returns></returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static FP16 FromFloatApprox(float f)
-    {
-      if (DISABLE_APPROX_FP16_CONVERSIONS)
-      {
-        return (FP16)f;
-      }
-
-      const float MIN_FP16 = 0.0000610352f; // 0.00006103515625f;
-      if (MathF.Abs(f) < MIN_FP16)
-      {
-        return FP16.Zero;
-      }
-      else
-      {
-        int x = Unsafe.As<float, int>(ref f);
-        short xx = (short)(((x >> 16) & 0x8000) | ((((x & 0x7f800000) - 0x38000000) >> 13) & 0x7c00) | ((x >> 13) & 0x03ff));
-
-        FP16 ret = Unsafe.As<short, FP16>(ref xx);
-        Debug.Assert(MathF.Abs((float)ret - f) < 0.01f); // TO DO: be more precise in testing expected precision
-        return ret;
-      }
-    }
 
 #endregion
 

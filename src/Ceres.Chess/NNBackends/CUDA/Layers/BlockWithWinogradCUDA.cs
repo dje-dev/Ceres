@@ -42,7 +42,7 @@ namespace Ceres.Chess.NNBackends.CUDA
       int filteredSize = 4 * c_input_ * C * 3 * 3;
       CudaDeviceVariable<FP16> filteredWeights = new CudaDeviceVariable<FP16>(filteredSize);
 
-      using (CudaDeviceVariable<FP16> weightsGPU = FP16.ToFP16Approx(weights))
+      using (CudaDeviceVariable<FP16> weightsGPU = FP16.ToFP16(weights))
       {
         // Run winograd transform kernel for the filter
         if (kernelFilterTransform == null)
