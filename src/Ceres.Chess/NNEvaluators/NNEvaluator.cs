@@ -436,6 +436,8 @@ namespace Ceres.Chess.NNEvaluators
     /// </summary>
     public void EvaluateOversizedBatch(EncodedPositionBatchFlat bigBatch, Action<int, Memory<NNEvaluatorResult>> processor)
     {
+      bool needsToBeSplit = bigBatch.NumPos > MaxBatchSize;
+
       int numProcessed = 0;
       int numToProcess = bigBatch.NumPos;
 
@@ -446,7 +448,8 @@ namespace Ceres.Chess.NNEvaluators
         int numThisBatch = Math.Min(MaxBatchSize, numRemaining);
 
         // Extract a slice of manageable size.
-        EncodedPositionBatchFlatSlice slice = new EncodedPositionBatchFlatSlice(bigBatch, numProcessed, numThisBatch);
+        IEncodedPositionBatchFlat slice = needsToBeSplit ? new EncodedPositionBatchFlatSlice(bigBatch, numProcessed, numThisBatch)
+                                                         : bigBatch;
 
         // Evaluate with the neural network.
         // TODO: for efficiency reasons could we use EvaluateBatchIntoBuffers instead?
