@@ -29,13 +29,12 @@ using System.Collections.Generic;
 using System.IO;
 using System.Numerics.Tensors;
 using System.Runtime.InteropServices;
-using Ceres.Base.CUDA;
-using Ceres.Base.DataType;
-using Ceres.Base.DataTypes;
-using Ceres.Base.Math;
-using Chess.Ceres.NNEvaluators;
+
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
+
+using Ceres.Base.CUDA;
+using Chess.Ceres.NNEvaluators;
 
 #if FEATURE_ONNX
 #endif
@@ -125,7 +124,6 @@ namespace Ceres.Chess.LC0NetInference
 
       SessionOptions so = default;
 
-      //        so.AppendExecutionProvider_DML();
       //        so.AppendExecutionProvider_CoreML();
 
 
@@ -135,37 +133,37 @@ namespace Ceres.Chess.LC0NetInference
       }
       else if (useTRT)
       {
-        OrtTensorRTProviderOptions trtProviderOptions = new OrtTensorRTProviderOptions();
-        // TODO: this code has no effect for unknown reasons.
-        var providerOptionsDict = new Dictionary<string, string>();
-        providerOptionsDict["device_id"] = gpuID.ToString(); ;
-        providerOptionsDict["trt_engine_cache_enable"] = "1";
-        providerOptionsDict["trt_engine_cache_path"] = directoryName;
-        providerOptionsDict["trt_fp16_enable"] = Precision == NNEvaluatorPrecision.FP16 ? "1" : "0";
+        const bool USE_DML = false; // NOTE: this is not working for unknown reasons
+        if (USE_DML)
+        {
+          so = new SessionOptions();
+          so.AppendExecutionProvider_DML(gpuID);
+          so.GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL;
+        }
+        else
+        {
+          OrtTensorRTProviderOptions trtProviderOptions = new OrtTensorRTProviderOptions();
+          // TODO: this code has no effect for unknown reasons.
+          var providerOptionsDict = new Dictionary<string, string>();
+          providerOptionsDict["device_id"] = gpuID.ToString(); ;
+          providerOptionsDict["trt_engine_cache_enable"] = "1";
+          providerOptionsDict["trt_engine_cache_path"] = directoryName;
+          providerOptionsDict["trt_fp16_enable"] = Precision == NNEvaluatorPrecision.FP16 ? "1" : "0";
+          providerOptionsDict["trt_dla_enable"] = "1";
 
-        trtProviderOptions.UpdateOptions(providerOptionsDict);
-        //trt_cache_path="/path/to/cache"
-        //        providerOptionsDict["enable_cuda_graph"] = "1"; // NOTE: this requires entire graph to map onto ONNX nodes
+          trtProviderOptions.UpdateOptions(providerOptionsDict);
 
-#if NOT
-('TensorrtExecutionProvider', {
-'device_id': 0,
-'trt_max_workspace_size': 2147483648,
-'trt_fp16_enable': True,
-'trt_dla_enable': False,
-'trt_engine_cache_enable': False,
-'trt_engine_cache_path':'./trtcache',
-}),
-#endif
-        // TODO: Someday remove this. In theory, the above two assignments should work (but seems to be ignored).
-        // WARNING: This makes a global change that could impact other threads. ****************
-        Environment.SetEnvironmentVariable("ORT_TENSORRT_ENGINE_CACHE_ENABLE", "1");
-        Environment.SetEnvironmentVariable("ORT_TENSORRT_CACHE_PATH", directoryName);
-        Environment.SetEnvironmentVariable("ORT_TENSORRT_FP16_ENABLE", Precision == NNEvaluatorPrecision.FP16 ? "1" : "0");
+          so = SessionOptions.MakeSessionOptionWithTensorrtProvider(trtProviderOptions);
 
+//'trt_max_workspace_size': 2147483648,
+//'trt_dla_enable': False,
 
-        //        so = SessionOptions.MakeSessionOptionWithTensorrtProvider(gpuID);
-        so = SessionOptions.MakeSessionOptionWithTensorrtProvider(trtProviderOptions);
+          // TODO: Someday remove this. In theory, the above two assignments should work (but seems to be ignored).
+          // WARNING: This makes a global change that could impact other threads. ****************
+          Environment.SetEnvironmentVariable("ORT_TENSORRT_ENGINE_CACHE_ENABLE", "1");
+          Environment.SetEnvironmentVariable("ORT_TENSORRT_CACHE_PATH", directoryName);
+          Environment.SetEnvironmentVariable("ORT_TENSORRT_FP16_ENABLE", Precision == NNEvaluatorPrecision.FP16 ? "1" : "0");
+        }
       }
       else
       {
