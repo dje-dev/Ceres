@@ -125,7 +125,8 @@ namespace Ceres.Chess.LC0NetInference
     /// <returns></returns>
     public ONNXRuntimeExecutorResultBatch Execute(bool isWDL, 
                                                   Memory<float> flatValuesPrimary, Memory<float> flatValuesSecondary, int numPositionsUsed, 
-                                                  bool debuggingDump = false, bool alreadyConvertedToLZ0 = false)
+                                                  bool debuggingDump = false, bool alreadyConvertedToLZ0 = false,
+                                                  float tpgDivisor = 1)
     {
       if (!alreadyConvertedToLZ0)
       {
@@ -156,15 +157,17 @@ namespace Ceres.Chess.LC0NetInference
 
       List<(string, float[])> eval;
 
-      const float TPG_DIVISOR = 100f; // TODO: somehow install this value in constructor instead of hardcoding.
-
       if (NetType == NetTypeEnum.TPG)
       {
         (Memory<float> input, int[] shape)[] inputs = new (Memory<float> input, int[] shape)[flatValuesSecondary.Length == 0 ? 1 : 2];
-
-        Span<float> flatValuesPrimaryS = flatValuesPrimary.Span;
-        for (int i = 0; i < flatValuesPrimary.Length; i++) flatValuesPrimaryS[i] /= TPG_DIVISOR;
-
+        if (tpgDivisor != 1.0f)
+        {
+          Span<float> flatValuesPrimarySpan = flatValuesPrimary.Span;
+          for (int i=0;i<flatValuesPrimarySpan.Length;i++)
+          {
+            flatValuesPrimarySpan[i] /= tpgDivisor;
+          }
+        }
         inputs[0] = (flatValuesPrimary, new int[] { numPositionsUsed, 64, TPG_BYTES_PER_SQUARE_RECORD });
 
 #if NOT

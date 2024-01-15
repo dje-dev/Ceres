@@ -264,8 +264,11 @@ namespace Chess.Ceres.NNEvaluators
         inputsPrimaryNativeF[i] = inputsPrimaryNative[i];
         inputsSecondaryNativeF[i] = inputsSecondaryNative[i];
       }
+
+      const float TPG_DIVISOR = 100f; // TODO: receive this in constructor instead. Should refer to TPGSquareRecord.SQUARE_BYTES_DIVISOR.
       PositionEvaluationBatch ret = DoEvaluateBatch(default, inputsPrimaryNativeF, usesSecondaryInputs ? inputsSecondaryNativeF : null, 
-                                                    numPositions, retrieveSupplementalResults, posMoveIsLegal);
+                                                    numPositions, retrieveSupplementalResults, posMoveIsLegal,
+                                                    TPG_DIVISOR);
       return ret;
     }
 
@@ -334,7 +337,7 @@ namespace Chess.Ceres.NNEvaluators
 
         Func<int, int, bool> posMoveIsLegal = null; // PosMoveIsLegal
         PositionEvaluationBatch ret = DoEvaluateBatch(batch, flatValuesAttentionM, flatValuesMoves, batch.NumPos, 
-                                                      retrieveSupplementalResults, posMoveIsLegal);
+                                                      retrieveSupplementalResults, posMoveIsLegal, tpgDivisor:1);
         Debug.Assert(!retrieveSupplementalResults);
         return ret;
       }
@@ -351,7 +354,7 @@ namespace Chess.Ceres.NNEvaluators
         float[] flatValues = ArrayPool<float>.Shared.Rent(bufferLength);
 
         batch.ValuesFlatFromPlanes(flatValues, false, Scale50MoveCounter);
-        PositionEvaluationBatch ret = DoEvaluateBatch(batch, flatValues, null, batch.NumPos, retrieveSupplementalResults, posMoveIsLegal);
+        PositionEvaluationBatch ret = DoEvaluateBatch(batch, flatValues, null, batch.NumPos, retrieveSupplementalResults, posMoveIsLegal, tpgDivisor:1);
 
         ArrayPool<float>.Shared.Return(flatValues);
         return ret;
@@ -388,7 +391,8 @@ namespace Chess.Ceres.NNEvaluators
     PositionEvaluationBatch DoEvaluateBatch(IEncodedPositionBatchFlat batch, 
                                             Memory<float> flatValuesPrimary, Memory<float> flatValuesSecondary,
                                             int numPos, bool retrieveSupplementalResults, 
-                                            Func<int,int, bool> posMoveIsLegal)
+                                            Func<int,int, bool> posMoveIsLegal,
+                                            float tpgDivisor)
     {
       if (retrieveSupplementalResults) throw new Exception("retrieveSupplementalResults not supported");
 
@@ -398,7 +402,7 @@ namespace Chess.Ceres.NNEvaluators
       {
         lock (Executor)
         {
-          result = Executor.Execute(IsWDL, flatValuesPrimary, flatValuesSecondary, numPos, alreadyConvertedToLZ0: true);
+          result = Executor.Execute(IsWDL, flatValuesPrimary, flatValuesSecondary, numPos, alreadyConvertedToLZ0: true, tpgDivisor:tpgDivisor);
 
           // Apply move masking
           if (posMoveIsLegal != null) 
