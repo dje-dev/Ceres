@@ -42,7 +42,7 @@ namespace Ceres.Chess.LC0NetInference
     /// <summary>
     /// Policy head
     /// </summary>
-    public readonly float[][] PolicyVectors;
+    public readonly float[] PolicyVectors;
 
     /// <summary>
     /// Moves left head.
@@ -73,22 +73,6 @@ namespace Ceres.Chess.LC0NetInference
     public FP16[] ValuesLogistics => EncodedEvalLogistic.ToLogisticsArray(Values);
 
 
-    /// <summary>
-    /// Constructor (from flattened policy vector)
-    /// </summary>
-    /// <param name="values"></param>
-    /// <param name="policyLogisticVectorsFlatAs"></param>
-    /// <param name="draws"></param>
-    public ONNXRuntimeExecutorResultBatch(bool isWDL, FP16[] values, float[] policyLogisticVectorsFlatAs, 
-                                          float[] mlh, float[] uncertaintyV,
-                                          float[] valueFCActiviationsFlat, 
-                                          int numPositionsUsed, int? overridePolicyVectorLength = null) 
-      : this (isWDL, values, ArrayUtils.ToArrayOfArray<float>(policyLogisticVectorsFlatAs, 
-              overridePolicyVectorLength ?? EncodedPolicyVector.POLICY_VECTOR_LENGTH), 
-              mlh, uncertaintyV, ArrayUtils.ToArrayOfArray<float>(valueFCActiviationsFlat, 32 * 64), numPositionsUsed)
-    {
-    }
-
 
     /// <summary>
     /// Constructor
@@ -96,7 +80,7 @@ namespace Ceres.Chess.LC0NetInference
     /// <param name="values"></param>
     /// <param name="policyLogisticVectors"></param>
     /// <param name="draws"></param>
-    public ONNXRuntimeExecutorResultBatch(bool isWDL, FP16[] values, float[][] policyLogisticVectors, 
+    public ONNXRuntimeExecutorResultBatch(bool isWDL, FP16[] values, float[] policyLogisticVectors, 
                                           float[] mlh, float[] uncertaintyV, float[][] valueFCActiviations, int numPositionsUsed)
     {
       ValuesRaw = values;
@@ -114,8 +98,6 @@ namespace Ceres.Chess.LC0NetInference
 
     #region Helpers
 
-
-    public float[] PolicyFlat => ArrayUtils.To1D(PolicyVectors);
 
 
     /// <summary>

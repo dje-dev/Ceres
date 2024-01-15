@@ -409,7 +409,7 @@ namespace Chess.Ceres.NNEvaluators
               {
                 if (!posMoveIsLegal(i,j))
                 {
-                  result.PolicyVectors[i][j] = -100f;
+                  result.PolicyVectors[i * 1858 + j] = -100f;
                 }
               }
             }
@@ -430,6 +430,7 @@ namespace Chess.Ceres.NNEvaluators
         {
           throw new Exception("ONNX evaluator was created with MLH argument true but network does not appear to contain MLH head: " + EngineNetworkID);
         }
+        // TODO: Use TensorPrimitives
         mFP16 = Array.ConvertAll<float, FP16>(result.MLH, m => (FP16)m);
       }
 
@@ -440,6 +441,7 @@ namespace Chess.Ceres.NNEvaluators
         {
           throw new Exception("ONNX evaluator was created with UV argument true but network does not appear to contain uncertainty of V head: " + EngineNetworkID);
         }
+        // TODO: use TensorPrimitives
         uncertaintyVFP16 = Array.ConvertAll<float, FP16>(result.UncertaintyV, uv => (FP16)uv);
       }
 
@@ -466,7 +468,8 @@ namespace Chess.Ceres.NNEvaluators
 #endif
 
       // NOTE: inefficient, above we convert from [] (flat) to [][] and here we convert back to []
-      return new PositionEvaluationBatch(IsWDL, HasM, HasUncertaintyV, numPos, result.ValuesRaw, result.PolicyFlat, 
+      return new PositionEvaluationBatch(IsWDL, HasM, HasUncertaintyV, numPos, result.ValuesRaw,
+                                         result.PolicyVectors,//*/result.PolicyFlat, 
                                          mFP16, uncertaintyVFP16, null, ValueHeadLogistic,
                                          PositionEvaluationBatch.PolicyType.LogProbabilities, false, batch, stats);
     }
@@ -476,6 +479,8 @@ namespace Chess.Ceres.NNEvaluators
 
     void ConvertTPGPolicyToExpanded(IEncodedPositionBatchFlat batch, ONNXRuntimeExecutorResultBatch result)
     {
+      throw new NotImplementedException();
+#if NOT
       Span<MGMoveList> allMoves = batch.Moves.Span;
       for (int i=0; i<batch.NumPos;i++)
       {
@@ -495,6 +500,7 @@ namespace Chess.Ceres.NNEvaluators
         // Rewrite with expanded policy vector just created
         result.PolicyVectors[i] = policyVectorTarget;
       }
+#endif
     }
 
 

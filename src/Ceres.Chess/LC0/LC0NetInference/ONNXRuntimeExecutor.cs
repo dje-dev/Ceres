@@ -156,7 +156,7 @@ namespace Ceres.Chess.LC0NetInference
 
       List<(string, float[])> eval;
 
-      const float TPG_DIVISOR = 100f;
+      const float TPG_DIVISOR = 100f; // TODO: somehow install this value in constructor instead of hardcoding.
 
       if (NetType == NetTypeEnum.TPG)
       {
@@ -164,7 +164,8 @@ namespace Ceres.Chess.LC0NetInference
 
         Span<float> flatValuesPrimaryS = flatValuesPrimary.Span;
         for (int i = 0; i < flatValuesPrimary.Length; i++) flatValuesPrimaryS[i] /= TPG_DIVISOR;
-        inputs[0] = (new Memory<float>(flatValuesPrimaryS.ToArray()), new int[] { numPositionsUsed, 64, TPG_BYTES_PER_SQUARE_RECORD });
+
+        inputs[0] = (flatValuesPrimary, new int[] { numPositionsUsed, 64, TPG_BYTES_PER_SQUARE_RECORD });
 
 #if NOT
         if (flatValuesSecondary.Length > 0)
@@ -282,11 +283,10 @@ namespace Ceres.Chess.LC0NetInference
         FP16[] values = FP16.ToFP16(eval[INDEX_WDL].Item2);
         Debug.Assert(values.Length == (isWDL ? 3 : 1) * numPositionsUsed);
 
-        float[] value_fc_activations = null;// eval.Length < 3 ? null : eval[2];
-        int? overridePolicyLen = null;// NetType == NetTypeEnum.TPG ? 96 : null;
+        float[][] value_fc_activations = null;// eval.Length < 3 ? null : eval[2];
         ONNXRuntimeExecutorResultBatch result = new ONNXRuntimeExecutorResultBatch(isWDL, values, policiesLogistics, mlh, 
                                                                                    uncertantiesV, value_fc_activations, 
-                                                                                   numPositionsUsed, overridePolicyLen);
+                                                                                   numPositionsUsed);
         return result;
 
       }

@@ -27,9 +27,12 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Numerics.Tensors;
 using System.Runtime.InteropServices;
 using Ceres.Base.CUDA;
+using Ceres.Base.DataType;
 using Ceres.Base.DataTypes;
+using Ceres.Base.Math;
 using Chess.Ceres.NNEvaluators;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
@@ -139,6 +142,7 @@ namespace Ceres.Chess.LC0NetInference
         providerOptionsDict["trt_engine_cache_enable"] = "1";
         providerOptionsDict["trt_engine_cache_path"] = directoryName;
         providerOptionsDict["trt_fp16_enable"] = Precision == NNEvaluatorPrecision.FP16 ? "1" : "0";
+
         trtProviderOptions.UpdateOptions(providerOptionsDict);
         //trt_cache_path="/path/to/cache"
         //        providerOptionsDict["enable_cuda_graph"] = "1"; // NOTE: this requires entire graph to map onto ONNX nodes
@@ -333,13 +337,7 @@ namespace Ceres.Chess.LC0NetInference
         Span<float> inputSpan = input.Span;
         Float16[] inputFloat16 = new Float16[numElements];
 
-        // TODO: conversion of float to Float16 is extremely slow
-        //       seek to eliminate the hack below of using Cast and the FP16 class
-        Span<ushort> spanInputFloat16 = MemoryMarshal.Cast<Float16, ushort>(inputFloat16);
-        for (int ix = 0; ix < numElements; ix++)
-        {
-          spanInputFloat16[ix] = ((FP16)inputSpan[ix]).Value;
-        }
+        TensorPrimitives.ConvertToHalf(inputSpan, MemoryMarshal.Cast<Float16, Half>(inputFloat16));
 
         DenseTensor<Float16> inputTensor = new DenseTensor<Float16>(inputFloat16, shape);
         inputsONNX.Add(NamedOnnxValue.CreateFromTensor<Float16>(inputName, inputTensor));
@@ -357,14 +355,9 @@ namespace Ceres.Chess.LC0NetInference
         DenseTensor<Float16> tensor = (DenseTensor<Float16>)resultValue.AsTensor<Float16>();
         Span<Float16> valuesFloat16 = tensor.Buffer.Span;
 
-        // TODO: conversion of float to Float16 is extremely slow
-        //       seek to eliminate the hack below of using Cast and the FP16 class
-        Span<ushort> valuesFP16Raw = MemoryMarshal.Cast<Float16, ushort>(valuesFloat16);
         float[] resultArray = new float[valuesFloat16.Length];
-        for (int i = 0; i < resultArray.Length; i++)
-        {
-          resultArray[i] = FP16.FromRaw(valuesFP16Raw[i]);
-        }
+        TensorPrimitives.ConvertToSingle(MemoryMarshal.Cast<Float16, Half>(valuesFloat16), resultArray);
+
         resultArrays.Add((resultValue.Name, resultArray));
       }
       return resultArrays;
