@@ -17,6 +17,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Reflection;
 using System.Threading.Tasks;
 using Ceres.Base.Benchmarking;
 using Ceres.Base.DataTypes;
@@ -342,7 +343,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <param name="activations"></param>
     /// <param name="probType"></param>
     /// <param name="stats"></param>
-    public PositionEvaluationBatch(bool isWDL, bool hasM, bool hasUncertaintyV, int numPos, Span<FP16> valueEvals, float[] policyProbs,
+    public PositionEvaluationBatch(bool isWDL, bool hasM, bool hasUncertaintyV, int numPos, 
+                                   Span<FP16> valueEvals, Memory<float> policyProbs,
                                    FP16[] m, FP16[] uncertaintyV, NNEvaluatorResultActivations[] activations,
                                    bool valsAreLogistic, PolicyType probType, bool policyAlreadySorted,
                                    IEncodedPositionBatchFlat sourceBatchWithValidMoves,
@@ -506,13 +508,13 @@ namespace Ceres.Chess.NetEvaluation.Batch
     [ThreadStatic]
     static float[] policyTempBuffer;
 
-    static CompressedPolicyVector[] ExtractPoliciesBufferFlat(int numPos, float[] policyProbs, PolicyType probType, bool alreadySorted, 
+    static CompressedPolicyVector[] ExtractPoliciesBufferFlat(int numPos, Memory<float> policyProbs, PolicyType probType, bool alreadySorted, 
                                                               IEncodedPositionBatchFlat sourceBatchWithValidMoves)
     {
       // TODO: possibly needs work.
       // Do we handle WDL correctly? Do we flip the moves if we are black (using positions) ?
 
-      if (policyProbs == null)
+      if (policyProbs.IsEmpty)
       {
         return null;
       }
@@ -524,9 +526,10 @@ namespace Ceres.Chess.NetEvaluation.Batch
 
       CompressedPolicyVector[] retPolicies = new CompressedPolicyVector[numPos];
       Memory<MGMoveList> moves = sourceBatchWithValidMoves == null ? default : sourceBatchWithValidMoves.Moves;
-      Span<float> policyProbsSpan = policyProbs.AsSpan();
       Parallel.For(0, numPos, i =>
       {
+        Span<float> policyProbsSpan = policyProbs.Span;
+
         if (policyTempBuffer == null)
         {
           policyTempBuffer = new float[EncodedPolicyVector.POLICY_VECTOR_LENGTH];
@@ -546,7 +549,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
         {
           // N.B. It is not possible to apply move masking here, 
           //      so it is assumed this is already done by the caller.
-          Array.Copy(policyProbs, startIndex, policyTempBuffer, 0, EncodedPolicyVector.POLICY_VECTOR_LENGTH);
+          //Array.Copy(policyProbsSpan, startIndex, policyTempBuffer, 0, EncodedPolicyVector.POLICY_VECTOR_LENGTH);
+          policyProbsSpan.Slice(startIndex, EncodedPolicyVector.POLICY_VECTOR_LENGTH).CopyTo(policyTempBuffer.AsSpan().Slice(0, EncodedPolicyVector.POLICY_VECTOR_LENGTH));
 
           const float MIN_PROB = -100;
           CompressedPolicyVector ret = default;
@@ -570,14 +574,14 @@ namespace Ceres.Chess.NetEvaluation.Batch
           float max = float.MinValue;
           for (int j = 0; j < numLegalMoves; j++)
           {
-            float val = policyProbs[startIndex + legalMoveIndices[j]];
+            float val = policyProbsSpan[startIndex + legalMoveIndices[j]];
             if (val > max) max = val;
           }
 
           double acc = 0;
           for (int j = 0; j < numLegalMoves; j++)
           {
-            float prob = policyProbs[startIndex + legalMoveIndices[j]];
+            float prob = policyProbsSpan[startIndex + legalMoveIndices[j]];
             if (prob > -1E10)
             {
               float value = (float)Math.Exp(prob - max);
