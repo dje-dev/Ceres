@@ -34,7 +34,6 @@ using Ceres.Features.GameEngines;
 using Ceres.MCTS.Params;
 using Ceres.Chess.NNEvaluators;
 using Ceres.Features;
-using Ceres.MCTS.Iteration;
 using Ceres.MCTS.Environment;
 using Ceres.Features.EngineTests;
 using Ceres.Chess.NNBackends.CUDA;
@@ -43,11 +42,7 @@ using Ceres.Chess.LC0.NNFiles;
 using Ceres.Chess.Positions;
 using Ceres.Chess.NetEvaluation.Batch;
 using System.Runtime.InteropServices;
-using Ceres.Chess.NNEvaluators.Specifications;
-using Ceres.Commands;
 using Ceres.Chess.Games.Utils;
-using Chess.Ceres.PlayEvaluation;
-using Ceres.Base.Misc;
 using Ceres.Chess.Data.Nets;
 
 #endregion
@@ -58,8 +53,15 @@ namespace Ceres.APIExamples
   {
     const bool POOLED = false;
 
-    static int CONCURRENCY = POOLED ? 16 : 1;
-    static int[] OVERRIDE_DEVICE_IDs = POOLED ? null : new int[] { 0 };
+    static int CONCURRENCY = POOLED ? 16 : Environment.MachineName.ToUpper().Contains("DEV") ? 4 : 8;
+    static int[] OVERRIDE_DEVICE_IDs = POOLED ? null
+      : (Environment.MachineName.ToUpper() switch
+      {
+        var name when name.Contains("DGX") => new int[] { 0, 1, 2, 3 },
+        var name when name.Contains("HOP") => new int[] { 0, 1 },
+        _ => new int[] { 0 }
+      });
+
     static bool RUN_DISTRIBUTED = false;
 
 
@@ -74,8 +76,8 @@ namespace Ceres.APIExamples
       }
     }
 
-    static string exeCeres() => SoftwareManager.IsLinux ? @"/raid/dev/Ceres/artifacts/release/net7.0/Ceres.dll"
-                                          : @"C:\dev\ceres\artifacts\release\net7.0\ceres.exe";
+    static string exeCeres() => SoftwareManager.IsLinux ? @"/raid/dev/Ceres/artifacts/release/net8.0/Ceres.dll"
+                                          : @"C:\dev\ceres\artifacts\release\net8.0\ceres.exe";
     static string exeCeres93() => SoftwareManager.IsLinux ? @"/raid/dev/Ceres93/artifacts/release/5.0/Ceres.dll"
                                                 : @"C:\ceres\releases\v0.93\ceres.exe";
     static string exeCeres96() => SoftwareManager.IsLinux ? @"/raid/dev/Ceres96/Ceres.dll"
@@ -157,12 +159,6 @@ namespace Ceres.APIExamples
       NET1 = @"ONNX_ORT:d:\weights\lczero.org\hydra_t00-attn.gz.onnx";// "apv4_t14";// apv4_t16";
       NET2 = @"ONNX_ORT:d:\weights\lczero.org\apv4_t16.onnx";
 
-      NET1 = "baseline02#8";
-      NET2 = "baseline02#16";
-
-      NET1 = "ONNX_TRT:d:\\weights\\lczero.org\\baseline02.onnx#8";
-      NET1 = "ONNX_ORT:d:\\weights\\lczero.org\\baseline02.onnx#16";
-
       //      NET1 = "760998";
       //      NET1 = "790734;1;0;0,753723;0;1;1"; --> 0 +/-10 (new value head)
       //NET1 = "790734;0;1;1,753723;1;0;0"; // 8 +/-8 (new policy head)
@@ -205,13 +201,14 @@ namespace Ceres.APIExamples
       //      NET1 = @"ONNX_TRT:d:\weights\lczero.org\BT2-768x15smolgen-3326000#16";
 
 //      NET1 = "CUSTOM1:703810,CUSTOM1:703810";
-      NET1 = "CUSTOM1:753723";
-      //      NET2 = "CUSTOM2:753723";
+      NET1= "CUSTOM1:753723";
+      NET2 = "CUSTOM2:753723";
+      //NET1 = "703810";
 
       //      NET1 = ReferenceNetIDs.T2_768_15_T82_4832;
-      NET2 = RegisteredNets.Aliased["T60"].NetSpecificationString;
+      //NET2 = RegisteredNets.Aliased["T60"].NetSpecificationString;
       //NET1 = NET2 = ReferenceNetIDs.BEST_T80;
-      NET1 = NET2 = RegisteredNets.Aliased["T81"].NetSpecificationString;
+      //NET2 = RegisteredNets.Aliased["T60"].NetSpecificationString;
 
       //NET2 = ReferenceNetIDs.T1_DISTILL_256_10_FP16;
       //NET1 = "ONNX_ORT:BT3_750_optimistic#32,BT3_750#32,";
@@ -267,7 +264,7 @@ namespace Ceres.APIExamples
       //      NET2 = ReferenceNetIDs.BT2;
 
       SearchLimit limit1 = SearchLimit.NodesForAllMoves(100_000, 1000) * 3;
-      limit1 = SearchLimit.NodesPerMove(200);
+      limit1 = SearchLimit.NodesPerMove(1000 + ((int)DateTime.Now.Millisecond % 999));
       //limit1 = SearchLimit.BestValueMove;
 
       //      limit1 = SearchLimit.SecondsForAllMoves(60, 0.6f);
@@ -650,7 +647,7 @@ namespace Ceres.APIExamples
 #endif
       // **************************************************
       EnginePlayerDef player1 = playerCeres1;// playerCeres1UCI;// new EnginePlayerDef(engineDefCSNN1, SearchLimit.NodesPerMove(30));
-      EnginePlayerDef player2 = playerCeresPreNC;// playerCeres96;// new EnginePlayerDef(EngineDefStockfish14(), SearchLimit.NodesPerMove(300 * 10_000));
+      EnginePlayerDef player2 = playerCeres2;// playerCeres96;// new EnginePlayerDef(EnginDefStockfish14(), SearchLimit.NodesPerMove(300 * 10_000));
       //new EnginePlayerDef(engineDefCSNoNN, SearchLimit.NodesPerMove(300 * 10_000));
       // **************************************************
 
@@ -707,7 +704,7 @@ namespace Ceres.APIExamples
 
       string baseName = "book-ply8-unifen-Q-0.25-0.40";
       baseName = "book-ply8-unifen-Q-0.25-0.40";
-      baseName = "endgame-16-piece-book_Q-0.0-0.6_1";
+//      baseName = "endingbook-10man-3181.pgn";
 //            baseName = "Noomen 2-move Testsuite.pgn";
       //      baseName = "book-ply8-unifen-Q-0.40-1.0";
       //      baseName = "book-ply8-unifen-Q-0.0-0.25.pgn";
