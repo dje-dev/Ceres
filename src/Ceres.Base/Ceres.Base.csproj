@@ -39,6 +39,9 @@
 
 
     <PackageReference Include="protobuf-net" Version="3.0.29" />
+
+
+    <PackageReference Include="System.Numerics.Tensors" Version="8.0.0" />
   </ItemGroup>
 
 </Project>
