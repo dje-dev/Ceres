@@ -692,7 +692,7 @@ namespace Ceres.MCTS.Iteration
       EncodedPositionBatchFlat thisBatch = batchBuilder.GetBatch();
       evalResults = nnEvaluator.EvaluateBatch(thisBatch);
 
-      float bestVRaw = evalResults.Max(v => -v.V);
+      float bestVRaw = evalResults.Min(v => -v.V);
 
 
       // Determine which move had position yielding best value evaluation.
