@@ -360,10 +360,10 @@ namespace Ceres.Chess.Positions
 
       // Verify that the final position is not the start position (unless it is the only position).
       // If it were found, then the caller probably mistakenly ordered the positions in reverse.
-      Debug.Assert(positions.Length < 2 
+      Debug.Assert(positions.Length < 2
                 || positions[^1].PieceCount != 32  // quick way of ruling out start position
-                || positions[^1] != Position.StartPosition);
-
+                || EqualityComparer<Position>.Default.Equals(Position.StartPosition, positions[^1]));
+      
       if (recalcRepetitions)
       {
         PositionRepetitionCalc.SetRepetitionsCount(positions);
@@ -405,7 +405,8 @@ namespace Ceres.Chess.Positions
 
         if (i > 0 || !firstPositionMayBeMissingEnPassant)
         {
-          if (!foundContinuation)
+          if (!foundContinuation 
+            && EqualityComparer<Position>.Default.Equals(positions[i], positions[i+1])) // ok if repetition (fill in planes0
           {
             string errMsg = i + " Position sequence illegal, saw " + positions[i + 1].ToMGPosition.ToPosition.FEN
                           + " then " + positions[i].ToMGPosition.ToPosition.FEN
