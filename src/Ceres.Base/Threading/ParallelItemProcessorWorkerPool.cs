@@ -72,11 +72,11 @@ namespace Ceres.Base.Threading
     /// <param name="createWorkerStateFunc">func that returns new state to be associated with a worker</param>
     /// <param name="itemActionFunc">funct to be called for each item added</param>
     /// <param name="disposeStatesWhenDone">if the state should be disposed at end of processing or before recreation</param>
-    /// <param name="workerStateRefreshFrequency">each worker state is recreated after this many calls</param>
+    /// <param name="workerStateRefreshFrequency">interval between recreation of worker engine</param>
     public ParallelItemProcessorWorkerPool(int numWorkerThreads, int maxPendingItems,
                                            Func<S> createWorkerStateFunc, Action<T, S> itemActionFunc,
                                            bool disposeStatesWhenDone = true,
-                                           long workerStateRefreshFrequency = long.MaxValue)
+                                           long workerStateRefreshFrequency = 50_000)
     {
       if (numWorkerThreads <= 0 || maxPendingItems <= 0)
       {
