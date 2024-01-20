@@ -202,13 +202,14 @@ namespace Ceres.APIExamples
 
 //      NET1 = "CUSTOM1:703810,CUSTOM1:703810";
       NET1= "CUSTOM1:753723";
-      //NET2 = "CUSTOM2:753723";
-      //NET1 = "703810";
+      NET2 = "CUSTOM2:753723";
+//      NET1 = "753723";
+//      NET2 = "703810";
 
+//      NET2 = RegisteredNets.Aliased["T80"].NetSpecificationString;
       //      NET1 = ReferenceNetIDs.T2_768_15_T82_4832;
-      NET2 = RegisteredNets.Aliased["T60"].NetSpecificationString;
       //NET1 = NET2 = ReferenceNetIDs.BEST_T80;
-      //NET2 = RegisteredNets.Aliased["T60"].NetSpecificationString;
+//      NET2 = RegisteredNets.Aliased["T60"].NetSpecificationString;
 
       //NET2 = ReferenceNetIDs.T1_DISTILL_256_10_FP16;
       //NET1 = "ONNX_ORT:BT3_750_optimistic#32,BT3_750#32,";
@@ -264,8 +265,9 @@ namespace Ceres.APIExamples
       //      NET2 = ReferenceNetIDs.BT2;
 
       SearchLimit limit1 = SearchLimit.NodesForAllMoves(100_000, 1000) * 3;
-      limit1 = SearchLimit.NodesPerMove(1000 + ((int)DateTime.Now.Millisecond % 500));
-      //limit1 = SearchLimit.BestValueMove;
+      limit1 = SearchLimit.NodesPerMove(1000);
+//      limit1 = SearchLimit.NodesPerMove(1000 + ((int)DateTime.Now.Millisecond % 200));
+//      limit1 = SearchLimit.BestValueMove;
 
       //      limit1 = SearchLimit.SecondsForAllMoves(60, 0.6f);
 
@@ -706,9 +708,9 @@ namespace Ceres.APIExamples
       baseName = "book-ply8-unifen-Q-0.25-0.40";
 //      baseName = "endingbook-10man-3181.pgn";
 //            baseName = "Noomen 2-move Testsuite.pgn";
-      //      baseName = "book-ply8-unifen-Q-0.40-1.0";
-      //      baseName = "book-ply8-unifen-Q-0.0-0.25.pgn";
-//                  baseName = "openings-6ply-1000";
+//            baseName = "book-ply8-unifen-Q-0.40-1.0";
+//      baseName = "book-ply8-unifen-Q-0.0-0.25.pgn";
+//       baseName = "endingbook-10man-3181.pgn";
 //      baseName = "book-ply8-unifen-Q-0.25-0.40";
       const bool KRP =false;
       if (KRP)
