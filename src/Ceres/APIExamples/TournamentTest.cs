@@ -209,7 +209,7 @@ namespace Ceres.APIExamples
 //      NET2 = RegisteredNets.Aliased["T80"].NetSpecificationString;
       //      NET1 = ReferenceNetIDs.T2_768_15_T82_4832;
       //NET1 = NET2 = ReferenceNetIDs.BEST_T80;
-      NET2 = RegisteredNets.Aliased["T60"].NetSpecificationString;
+      //NET2 = RegisteredNets.Aliased["T60"].NetSpecificationString;
 
       //NET2 = ReferenceNetIDs.T1_DISTILL_256_10_FP16;
       //NET1 = "ONNX_ORT:BT3_750_optimistic#32,BT3_750#32,";
@@ -649,7 +649,7 @@ namespace Ceres.APIExamples
 #endif
       // **************************************************
       EnginePlayerDef player1 = playerCeres1;// playerCeres1UCI;// new EnginePlayerDef(engineDefCSNN1, SearchLimit.NodesPerMove(30));
-      EnginePlayerDef player2 = playerCeres2UCI;// playerCeres96;// new EnginePlayerDef(EnginDefStockfish14(), SearchLimit.NodesPerMove(300 * 10_000));
+      EnginePlayerDef player2 = playerCeres2;// playerCeres96;// new EnginePlayerDef(EnginDefStockfish14(), SearchLimit.NodesPerMove(300 * 10_000));
       //new EnginePlayerDef(engineDefCSNoNN, SearchLimit.NodesPerMove(300 * 10_000));
       // **************************************************
 
