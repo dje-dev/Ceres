@@ -26,6 +26,7 @@ using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
 using Ceres.Base.DataTypes;
+using static System.Reflection.Metadata.BlobBuilder;
 
 #endregion
 
@@ -934,6 +935,25 @@ namespace Ceres.Chess.EncodedPositions
         }
 
         return count;
+      }
+    }
+
+
+    /// <summary>
+    /// Returns the Shannon entropy of the policy probabilies.
+    /// </summary>
+    public float Entropy
+    {
+      get
+      {
+        float entropy = 0.0f;
+
+        foreach ((_, float probability) in ProbabilitySummary())
+        {
+          entropy -= probability * MathF.Log(probability, 2);
+        }
+
+        return entropy;
       }
     }
 
