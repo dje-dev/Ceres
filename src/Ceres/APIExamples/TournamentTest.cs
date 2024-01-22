@@ -53,7 +53,7 @@ namespace Ceres.APIExamples
   {
     const bool POOLED = false;
 
-    static int CONCURRENCY = POOLED ? 16 : Environment.MachineName.ToUpper().Contains("DEV") ? 3 : 6;
+    static int CONCURRENCY = POOLED ? 16 : Environment.MachineName.ToUpper().Contains("DEV") ? 3 : 8;
     static int[] OVERRIDE_DEVICE_IDs = POOLED ? null
       : (Environment.MachineName.ToUpper() switch
       {
@@ -206,7 +206,9 @@ namespace Ceres.APIExamples
 //      NET1 = "753723";
 //      NET2 = "703810";
 
-//      NET2 = RegisteredNets.Aliased["T80"].NetSpecificationString;
+      //
+      NET2 = RegisteredNets.Aliased["T1_DISTILL_256_10"].NetSpecificationString;
+//      NET1 = RegisteredNets.Aliased["T60"].NetSpecificationString;
       //      NET1 = ReferenceNetIDs.T2_768_15_T82_4832;
       //NET1 = NET2 = ReferenceNetIDs.BEST_T80;
       //NET2 = RegisteredNets.Aliased["T60"].NetSpecificationString;
@@ -267,7 +269,7 @@ namespace Ceres.APIExamples
       SearchLimit limit1 = SearchLimit.NodesForAllMoves(100_000, 1000) * 3;
       limit1 = SearchLimit.NodesPerMove(1000);
 //      limit1 = SearchLimit.NodesPerMove(1000 + ((int)DateTime.Now.Millisecond % 200));
-//      limit1 = SearchLimit.BestValueMove;
+    //limit1 = SearchLimit.BestValueMove;
 
       //      limit1 = SearchLimit.SecondsForAllMoves(60, 0.6f);
 
