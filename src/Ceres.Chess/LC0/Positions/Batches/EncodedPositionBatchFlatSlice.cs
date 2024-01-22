@@ -80,7 +80,7 @@ namespace Ceres.Chess.LC0.Batches
 
     public Memory<byte> LastMovePlies
     {
-      get => Parent.LastMovePlies.IsEmpty ? default : Parent.LastMovePlies.Slice(StartIndex, Length * 64);
+      get => Parent.LastMovePlies.IsEmpty ? default : Parent.LastMovePlies.Slice(StartIndex * 64, Length * 64);
       set => value.CopyTo(Parent.LastMovePlies);
     }
 
@@ -90,7 +90,7 @@ namespace Ceres.Chess.LC0.Batches
 
     public Memory<float> L => Parent.L.Slice(StartIndex, Length);
 
-    public Memory<FP16> Policy => Parent.Policy.Slice(StartIndex, Length);
+    public Memory<FP16> Policy => Parent.Policy.Slice(StartIndex * EncodedPolicyVector.POLICY_VECTOR_LENGTH, Length * EncodedPolicyVector.POLICY_VECTOR_LENGTH);
 
     public int NumPos => Length;
 
@@ -111,7 +111,19 @@ namespace Ceres.Chess.LC0.Batches
 
     public float[] ValuesFlatFromPlanes(float[] preallocatedBuffer, bool nhwc, bool scale50MoveCounters)
     {
-      throw new NotImplementedException();
+      const int NUM_VALUES_EACH_POS = EncodedPositionWithHistory.NUM_PLANES_TOTAL * 64;
+      float[] parentBuffer = Parent.ValuesFlatFromPlanes(null, nhwc, scale50MoveCounters);
+      if (preallocatedBuffer != null)
+      {
+        Array.Copy(parentBuffer, NUM_VALUES_EACH_POS * StartIndex, preallocatedBuffer, 0, NUM_VALUES_EACH_POS * Length);
+        return preallocatedBuffer;
+      }
+      else
+      {
+        float[] targetBuffer = new float[NUM_VALUES_EACH_POS * Length];
+        Array.Copy(parentBuffer, NUM_VALUES_EACH_POS * StartIndex, targetBuffer, 0, NUM_VALUES_EACH_POS * Length);
+        return targetBuffer;
+      }
     }
 
     public Memory<EncodedPositionWithHistory> PositionsBuffer
