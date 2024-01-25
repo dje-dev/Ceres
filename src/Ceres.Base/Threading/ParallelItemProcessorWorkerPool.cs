@@ -16,7 +16,6 @@
 using System;
 using System.Collections.Concurrent;
 using System.Threading;
-using System.Threading.Tasks;
 
 #endregion
 
@@ -29,7 +28,7 @@ namespace Ceres.Base.Threading
   /// </summary>
   /// <typeparam name="T"></typeparam>
   /// <typeparam name="S"></typeparam>
-  public class ParallelItemProcessorWorkerPool<T, S> where S : IDisposable
+  public class ParallelItemProcessorWorkerPool<T, S> 
   {
     /// <summary>
     /// Function to create a new worker state.
@@ -55,6 +54,8 @@ namespace Ceres.Base.Threading
     /// Frequency with which to recreate worker states (number of action calls).
     /// </summary>
     public readonly long WorkerStateRefreshFrequency;
+
+    public readonly int MaxPendingItems;
 
 
     private BlockingCollection<T> pendingItems;
@@ -88,8 +89,8 @@ namespace Ceres.Base.Threading
       Action = itemActionFunc;
       DisposeStatesWhenDone = disposeStatesWhenDone;
       WorkerStateRefreshFrequency = workerStateRefreshFrequency;
+      MaxPendingItems = maxPendingItems;
 
-      // Create blocking collection to hold a limited number of pending work items.
       pendingItems = new BlockingCollection<T>(maxPendingItems);
 
       // Start all workers and create associated states.
@@ -139,6 +140,7 @@ namespace Ceres.Base.Threading
           }
         }
       }
+
     }
 
 
