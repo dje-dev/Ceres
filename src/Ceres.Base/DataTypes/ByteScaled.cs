@@ -30,6 +30,11 @@ namespace Ceres.Base.DataType
   public struct ByteScaled
   {
     /// <summary>
+    /// Maximum value that can be stored in a ByteScaled.
+    /// </summary>
+    public const float MAX_VALUE = (byte.MaxValue - 1) / SCALING_FACTOR;
+
+    /// <summary>
     /// Floating point values will be stored as bytes
     /// via this implicit fixed scaling factor.
     /// </summary>
@@ -51,7 +56,7 @@ namespace Ceres.Base.DataType
     /// <summary>
     /// Returns raw underlying value, before scaling.
     /// </summary>
-    public byte RawValue => value;
+    public readonly byte RawValue => value;
 
 
     /// <summary>
@@ -59,7 +64,7 @@ namespace Ceres.Base.DataType
     /// </summary>
     public float Value
     {
-      get => value / SCALING_FACTOR;
+      readonly get => value / SCALING_FACTOR;
       set
       {
         if (value == 0)
