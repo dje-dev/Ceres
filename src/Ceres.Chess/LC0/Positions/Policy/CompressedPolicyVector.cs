@@ -26,12 +26,22 @@ using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
 using Ceres.Base.DataTypes;
-using static System.Reflection.Metadata.BlobBuilder;
-
 #endregion
 
 namespace Ceres.Chess.EncodedPositions
 {
+  [InlineArray(CompressedPolicyVector.NUM_MOVE_SLOTS)]
+  public struct PolicyIndices
+  {
+    private ushort PolicyValue;
+  }
+
+  [InlineArray(CompressedPolicyVector.NUM_MOVE_SLOTS)]
+  public struct PolicyValues
+  {
+    private ushort PolicyIndex;
+  }
+
   /// <summary>
   /// Represents a policy vector, encoded in a sparse and quantized way for space efficiency.
   /// 
@@ -50,7 +60,7 @@ namespace Ceres.Chess.EncodedPositions
     /// Maximum number of moves which can be encoded per position
     /// For space efficiency, we cap this at a number of moves that is very rarely exceeded
     /// </summary>
-    public const int NUM_MOVE_SLOTS = 64;
+    public const int NUM_MOVE_SLOTS = 80;
     
     /// <summary>
     /// In most contexts it is desirable to always use nonzero probabilities for legal moves,
@@ -62,145 +72,13 @@ namespace Ceres.Chess.EncodedPositions
 
     #region Move Indices
 
-    // Not possible to make this fixed and readonly
-    //public fixed ushort MoveIndices[NUM_MOVE_SLOTS];
-    readonly ushort MoveIndex_0;
-    readonly ushort MoveIndex_1;
-    readonly ushort MoveIndex_2;
-    readonly ushort MoveIndex_3;
-    readonly ushort MoveIndex_4;
-    readonly ushort MoveIndex_5;
-    readonly ushort MoveIndex_6;
-    readonly ushort MoveIndex_7;
-    readonly ushort MoveIndex_8;
-    readonly ushort MoveIndex_9;
-    readonly ushort MoveIndex_10;
-    readonly ushort MoveIndex_11;
-    readonly ushort MoveIndex_12;
-    readonly ushort MoveIndex_13;
-    readonly ushort MoveIndex_14;
-    readonly ushort MoveIndex_15;
-    readonly ushort MoveIndex_16;
-    readonly ushort MoveIndex_17;
-    readonly ushort MoveIndex_18;
-    readonly ushort MoveIndex_19;
-    readonly ushort MoveIndex_20;
-    readonly ushort MoveIndex_21;
-    readonly ushort MoveIndex_22;
-    readonly ushort MoveIndex_23;
-    readonly ushort MoveIndex_24;
-    readonly ushort MoveIndex_25;
-    readonly ushort MoveIndex_26;
-    readonly ushort MoveIndex_27;
-    readonly ushort MoveIndex_28;
-    readonly ushort MoveIndex_29;
-    readonly ushort MoveIndex_30;
-    readonly ushort MoveIndex_31;
-    readonly ushort MoveIndex_32;
-    readonly ushort MoveIndex_33;
-    readonly ushort MoveIndex_34;
-    readonly ushort MoveIndex_35;
-    readonly ushort MoveIndex_36;
-    readonly ushort MoveIndex_37;
-    readonly ushort MoveIndex_38;
-    readonly ushort MoveIndex_39;
-    readonly ushort MoveIndex_40;
-    readonly ushort MoveIndex_41;
-    readonly ushort MoveIndex_42;
-    readonly ushort MoveIndex_43;
-    readonly ushort MoveIndex_44;
-    readonly ushort MoveIndex_45;
-    readonly ushort MoveIndex_46;
-    readonly ushort MoveIndex_47;
-    readonly ushort MoveIndex_48;
-    readonly ushort MoveIndex_49;
-    readonly ushort MoveIndex_50;
-    readonly ushort MoveIndex_51;
-    readonly ushort MoveIndex_52;
-    readonly ushort MoveIndex_53;
-    readonly ushort MoveIndex_54;
-    readonly ushort MoveIndex_55;
-    readonly ushort MoveIndex_56;
-    readonly ushort MoveIndex_57;
-    readonly ushort MoveIndex_58;
-    readonly ushort MoveIndex_59;
-    readonly ushort MoveIndex_60;
-    readonly ushort MoveIndex_61;
-    readonly ushort MoveIndex_62;
-    readonly ushort MoveIndex_63;
+    readonly PolicyIndices Indices;
 
     #endregion
 
     #region Move Probabilities Encoded
 
-
-    // not possible in C# 7.3
-    //public fixed ushort MoveProbabilitiesEncoded[NUM_MOVE_SLOTS]; // 100 / 65536
-
-    readonly ushort MoveProbEncoded_0;
-    readonly ushort MoveProbEncoded_1;
-    readonly ushort MoveProbEncoded_2;
-    readonly ushort MoveProbEncoded_3;
-    readonly ushort MoveProbEncoded_4;
-    readonly ushort MoveProbEncoded_5;
-    readonly ushort MoveProbEncoded_6;
-    readonly ushort MoveProbEncoded_7;
-    readonly ushort MoveProbEncoded_8;
-    readonly ushort MoveProbEncoded_9;
-    readonly ushort MoveProbEncoded_10;
-    readonly ushort MoveProbEncoded_11;
-    readonly ushort MoveProbEncoded_12;
-    readonly ushort MoveProbEncoded_13;
-    readonly ushort MoveProbEncoded_14;
-    readonly ushort MoveProbEncoded_15;
-    readonly ushort MoveProbEncoded_16;
-    readonly ushort MoveProbEncoded_17;
-    readonly ushort MoveProbEncoded_18;
-    readonly ushort MoveProbEncoded_19;
-    readonly ushort MoveProbEncoded_20;
-    readonly ushort MoveProbEncoded_21;
-    readonly ushort MoveProbEncoded_22;
-    readonly ushort MoveProbEncoded_23;
-    readonly ushort MoveProbEncoded_24;
-    readonly ushort MoveProbEncoded_25;
-    readonly ushort MoveProbEncoded_26;
-    readonly ushort MoveProbEncoded_27;
-    readonly ushort MoveProbEncoded_28;
-    readonly ushort MoveProbEncoded_29;
-    readonly ushort MoveProbEncoded_30;
-    readonly ushort MoveProbEncoded_31;
-    readonly ushort MoveProbEncoded_32;
-    readonly ushort MoveProbEncoded_33;
-    readonly ushort MoveProbEncoded_34;
-    readonly ushort MoveProbEncoded_35;
-    readonly ushort MoveProbEncoded_36;
-    readonly ushort MoveProbEncoded_37;
-    readonly ushort MoveProbEncoded_38;
-    readonly ushort MoveProbEncoded_39;
-    readonly ushort MoveProbEncoded_40;
-    readonly ushort MoveProbEncoded_41;
-    readonly ushort MoveProbEncoded_42;
-    readonly ushort MoveProbEncoded_43;
-    readonly ushort MoveProbEncoded_44;
-    readonly ushort MoveProbEncoded_45;
-    readonly ushort MoveProbEncoded_46;
-    readonly ushort MoveProbEncoded_47;
-    readonly ushort MoveProbEncoded_48;
-    readonly ushort MoveProbEncoded_49;
-    readonly ushort MoveProbEncoded_50;
-    readonly ushort MoveProbEncoded_51;
-    readonly ushort MoveProbEncoded_52;
-    readonly ushort MoveProbEncoded_53;
-    readonly ushort MoveProbEncoded_54;
-    readonly ushort MoveProbEncoded_55;
-    readonly ushort MoveProbEncoded_56;
-    readonly ushort MoveProbEncoded_57;
-    readonly ushort MoveProbEncoded_58;
-    readonly ushort MoveProbEncoded_59;
-    readonly ushort MoveProbEncoded_60;
-    readonly ushort MoveProbEncoded_61;
-    readonly ushort MoveProbEncoded_62;
-    readonly ushort MoveProbEncoded_63;
+    readonly PolicyValues Probabilities;
 
     #endregion
 
@@ -267,9 +145,9 @@ namespace Ceres.Chess.EncodedPositions
       }
 
       float lastProb = float.MaxValue;
-      fixed (ushort* moveIndices = &policy.MoveIndex_0)
+      fixed (ushort* moveIndices = &policy.Indices[0])
       {
-        fixed (ushort* moveProbabilitiesEncoded = &policy.MoveProbEncoded_0)
+        fixed (ushort* moveProbabilitiesEncoded = &policy.Probabilities[0])
         {
           for (int i = 0; i < indices.Length && i < NUM_MOVE_SLOTS; i++)
           {
@@ -309,9 +187,9 @@ namespace Ceres.Chess.EncodedPositions
       float probabilityAcc = 0.0f;
       float priorProb = float.MaxValue; // only used in debug mode for verifying in order
       int numMovesUsed = 0;
-      fixed (ushort* moveIndices = &policy.MoveIndex_0)
+      fixed (ushort* moveIndices = &policy.Indices[0])
       {
-        fixed (ushort* moveProbabilitiesEncoded = &policy.MoveProbEncoded_0)
+        fixed (ushort* moveProbabilitiesEncoded = &policy.Probabilities[0])
         {
           // Move all the probabilities into our array
           for (int i = 0; i < indices.Length && i < NUM_MOVE_SLOTS; i++)
@@ -399,7 +277,7 @@ namespace Ceres.Chess.EncodedPositions
     /// <param name="wide"></param>
     public static void InitializeAsRandom(ref CompressedPolicyVector policy, bool wide)
     {
-      fixed (ushort* moveIndices = &policy.MoveIndex_0)
+      fixed (ushort* moveIndices = &policy.Indices[0])
       {
         // Only need to set first move index
         moveIndices[0] = wide ? SPECIAL_VALUE_RANDOM_WIDE : SPECIAL_VALUE_RANDOM_NARROW;
@@ -452,40 +330,35 @@ namespace Ceres.Chess.EncodedPositions
         Span<ushort> indices = stackalloc ushort[CompressedPolicyVector.NUM_MOVE_SLOTS];
         Span<ushort> probs = stackalloc ushort[CompressedPolicyVector.NUM_MOVE_SLOTS];
 
-        fixed (ushort* moveIndicesSource = &MoveIndex_0)
-        fixed (ushort* moveProbsSource = &MoveProbEncoded_0)
+        
+        for (int i = 0; i < NUM_MOVE_SLOTS; i++)
         {
+          // Tranfer probabiltiy unchanged
+          probs[i] = Probabilities[i];
+
+          // Transfer move mirrored (unless just a sentinel)
+          if (MoveIsSentinel(Indices[i]))
           {
-            for (int i = 0; i < NUM_MOVE_SLOTS; i++)
-            {
-              // Tranfer probabiltiy unchanged
-              probs[i] = moveProbsSource[i];
+            indices[i] = Indices[i];
+          }
+          else
+          {
+            EncodedMove move = EncodedMove.FromNeuralNetIndex(Indices[i]);// EncodedMove.FromNeuralNetIndex(moveIndicesSource[i]);
+            indices[i] = (ushort)move.Mirrored.IndexNeuralNet;
+          }
 
-              // Transfer move mirrored (unless just a sentinel)
-              if (MoveIsSentinel(moveIndicesSource[i]))
-              {
-                indices[i] = moveIndicesSource[i];
-              }
-              else
-              {
-                EncodedMove move = EncodedMove.FromNeuralNetIndex(moveIndicesSource[i]);// EncodedMove.FromNeuralNetIndex(moveIndicesSource[i]);
-                indices[i] = (ushort)move.Mirrored.IndexNeuralNet;
-              }
-
-              // All done if we saw the terminator
-              if (moveIndicesSource[i] == SPECIAL_VALUE_SENTINEL_TERMINATOR)
-              {
-                break;
-              }
-            }
+          // All done if we saw the terminator
+          if (Indices[i] == SPECIAL_VALUE_SENTINEL_TERMINATOR)
+          {
+            break;
           }
         }
 
-        CompressedPolicyVector ret = new CompressedPolicyVector();
-        Initialize(ref ret, indices, probs);
-        return ret;
+          CompressedPolicyVector ret = new CompressedPolicyVector();
+          Initialize(ref ret, indices, probs);
+          return ret;
+        }
       }
-    }
 
 
     /// <summary>
@@ -500,9 +373,9 @@ namespace Ceres.Chess.EncodedPositions
     {
       float probabilityAcc = 0.0f;
       int numSlotsUsed = 0;
-      fixed (ushort* moveIndices = &policy.MoveIndex_0)
+      fixed (ushort* moveIndices = &policy.Indices[0])
       {
-        fixed (ushort* moveProbabilitiesEncoded = &policy.MoveProbEncoded_0)
+        fixed (ushort* moveProbabilitiesEncoded = &policy.Probabilities[0])
         {
           // Move all the probabilities into our array
           for (int i = 0; i < EncodedPolicyVector.POLICY_VECTOR_LENGTH; i++)
@@ -628,43 +501,35 @@ namespace Ceres.Chess.EncodedPositions
     {
       if (preallocatedBuffer != null) Array.Clear(preallocatedBuffer, 0, EncodedPolicyVector.POLICY_VECTOR_LENGTH);
 
-      fixed (ushort* moveIndices = &MoveIndex_0)
+      float acc = 0.0f;
+      float[] ret = preallocatedBuffer ?? new float[EncodedPolicyVector.POLICY_VECTOR_LENGTH];
+      for (int i = 0; i < NUM_MOVE_SLOTS; i++)
       {
-        fixed (ushort* moveProbabilitiesEncoded = &MoveProbEncoded_0)
+        if (Indices[i] == SPECIAL_VALUE_SENTINEL_TERMINATOR)
         {
-          float acc = 0.0f;
-          float[] ret = preallocatedBuffer ?? new float[EncodedPolicyVector.POLICY_VECTOR_LENGTH];
-          for (int i = 0; i < NUM_MOVE_SLOTS; i++)
-          {
-            if (moveIndices[i] == SPECIAL_VALUE_SENTINEL_TERMINATOR)
-            {
-              break; // terminator
-            }
-
-            float decodedProb = DecodedProbability(moveProbabilitiesEncoded[i]);
-            acc += decodedProb;
-
-            // Skip moves which are just special pseudo-values
-            if (moveIndices[i] == SPECIAL_VALUE_RANDOM_WIDE 
-             || moveIndices[i] == SPECIAL_VALUE_RANDOM_NARROW)
-            {
-              continue;
-            }
-
-            Debug.Assert(moveIndices[i] < ret.Length);
-            ret[moveIndices[i]] = decodedProb;
-          }
-
-          return validate && (acc < 0.99 || acc > 1.01) ? throw new Exception("Probability " + acc) 
-                                                        : ret;
+          break; // terminator
         }
+
+        float decodedProb = DecodedProbability(Probabilities[i]);
+        acc += decodedProb;
+
+        // Skip moves which are just special pseudo-values
+        if (Indices[i] == SPECIAL_VALUE_RANDOM_WIDE
+         || Indices[i] == SPECIAL_VALUE_RANDOM_NARROW)
+        {
+          continue;
+        }
+
+        Debug.Assert(Indices[i] < ret.Length);
+        ret[Indices[i]] = decodedProb;
       }
 
+      return validate && (acc < 0.99 || acc > 1.01) ? throw new Exception("Probability " + acc) : ret;
     }
 
-#endregion
+    #endregion
 
-#region Helpers
+    #region Helpers
 
     /// <summary>
     /// Returns the index of the specified move, or -1 if not found.
@@ -674,22 +539,19 @@ namespace Ceres.Chess.EncodedPositions
     public int IndexOfMove(EncodedMove move)
     {
       ushort searchRawValue = (ushort)move.IndexNeuralNet;
-      fixed (ushort* moveIndices = &MoveIndex_0)
+      for (int i = 0; i < NUM_MOVE_SLOTS; i++)
       {
-        for (int i = 0; i < NUM_MOVE_SLOTS; i++)
+        ushort moveRaw = Indices[i];
+        if (moveRaw == SPECIAL_VALUE_SENTINEL_TERMINATOR)
         {
-          ushort moveRaw = moveIndices[i];
-          if (moveRaw == SPECIAL_VALUE_SENTINEL_TERMINATOR)
-          {
-            break;
-          }
-          else if (moveRaw == searchRawValue)
-          {
-            return i;
-          }
+          break;
         }
-        return -1;
+        else if (moveRaw == searchRawValue)
+        {
+          return i;
+        }
       }
+      return -1;
     }
 
 
@@ -700,9 +562,9 @@ namespace Ceres.Chess.EncodedPositions
     /// </summary>
     public void Sort(int numToSort)
     {
-      fixed (ushort* moveIndices = &MoveIndex_0)
+      fixed (ushort* moveIndices = &Indices[0])
       {
-        fixed (ushort* moveProbabilitiesEncoded = &MoveProbEncoded_0)
+        fixed (ushort* moveProbabilitiesEncoded = &Probabilities[0])
         {
           while (true)
           {
@@ -839,22 +701,16 @@ namespace Ceres.Chess.EncodedPositions
     /// <returns></returns>
     public (EncodedMove Move, float Probability) PolicyInfoAtIndex(int index)
     {
-      fixed (ushort* moveIndices = &MoveIndex_0)
+      int moveIndex = Indices[index];
+      if (moveIndex == SPECIAL_VALUE_SENTINEL_TERMINATOR)
       {
-        fixed (ushort* moveProbabilitiesEncoded = &MoveProbEncoded_0)
-        {
-          int moveIndex = moveIndices[index];
-          if (moveIndex == SPECIAL_VALUE_SENTINEL_TERMINATOR)
-          {
-            return (default, 0);
-          }
-          else
-          {
-            EncodedMove move = EncodedMove.FromNeuralNetIndex(moveIndices[index]);
-            float prob = DecodedProbability(moveProbabilitiesEncoded[index]);
-            return (move, prob);
-          }
-        }
+        return (default, 0);
+      }
+      else
+      {
+        EncodedMove move = EncodedMove.FromNeuralNetIndex(Indices[index]);
+        float prob = DecodedProbability(Probabilities[index]);
+        return (move, prob);
       }
     }
 
@@ -867,18 +723,16 @@ namespace Ceres.Chess.EncodedPositions
       get
       {
         int count = 0;
-        fixed (ushort* moveIndices = &MoveIndex_0)
+        for (int i = 0; i < NUM_MOVE_SLOTS; i++)
         {
-          for (int i = 0; i < NUM_MOVE_SLOTS; i++)
+          if (MoveIsSentinel(Indices[i]))
           {
-            if (MoveIsSentinel(moveIndices[i]))
-            {
-              return count;
-            }
-
-            count++;
+            return count;
           }
+
+          count++;
         }
+
         return count;
       }
     }
@@ -890,7 +744,7 @@ namespace Ceres.Chess.EncodedPositions
     /// <param name="minProbability"></param>
     /// <returns></returns>
     public int ProbabilitySummaryList((EncodedMove, float)[] moves,
-                                      float minProbability = 0.0f, int topN = int.MaxValue)
+                                          float minProbability = 0.0f, int topN = int.MaxValue)
     {
       if (topN > NUM_MOVE_SLOTS)
       {
@@ -898,46 +752,40 @@ namespace Ceres.Chess.EncodedPositions
       }
 
       int count = 0;
-      fixed (ushort* moveIndices = &MoveIndex_0)
+      for (int i = 0; i < topN; i++)
       {
-        fixed (ushort* moveProbabilitiesEncoded = &MoveProbEncoded_0)
+        if (MoveIsSentinel(Indices[i]))
         {
-          for (int i = 0; i < topN; i++)
+          if (Indices[i] == SPECIAL_VALUE_SENTINEL_TERMINATOR)
           {
-            if (MoveIsSentinel(moveIndices[i]))
-            {
-              if (moveIndices[i] == SPECIAL_VALUE_SENTINEL_TERMINATOR)
-              {
-                break; // terminator
-              }
-              else if (moveIndices[i] == SPECIAL_VALUE_RANDOM_NARROW || moveIndices[i] == SPECIAL_VALUE_RANDOM_WIDE)
-              {
-                moves[count++] = (new EncodedMove(moveIndices[i]), float.NaN);
-              }
-              else
-              {
-                throw new Exception("Internal error, unknown sentinel.");
-              }
-            }
-            else
-            {
-              float decodedProb = DecodedProbability(moveProbabilitiesEncoded[i]);
-
-              // Break if we see a probability too small (since they are known to be sorted)
-              if (decodedProb < minProbability)
-              {
-                break;
-              }
-
-              moves[count++] = (EncodedMove.FromNeuralNetIndex(moveIndices[i]), decodedProb);
-            }
+            break; // terminator
+          }
+          else if (Indices[i] == SPECIAL_VALUE_RANDOM_NARROW || Indices[i] == SPECIAL_VALUE_RANDOM_WIDE)
+          {
+            moves[count++] = (new EncodedMove(Indices[i]), float.NaN);
+          }
+          else
+          {
+            throw new Exception("Internal error, unknown sentinel.");
           }
         }
+        else
+        {
+          float decodedProb = DecodedProbability(Probabilities[i]);
 
-        return count;
+          // Break if we see a probability too small (since they are known to be sorted)
+          if (decodedProb < minProbability)
+          {
+            break;
+          }
+
+          moves[count++] = (EncodedMove.FromNeuralNetIndex(Indices[i]), decodedProb);
+        }
       }
-    }
 
+      return count;
+
+    }
 
     /// <summary>
     /// Returns the Shannon entropy of the policy probabilies.
