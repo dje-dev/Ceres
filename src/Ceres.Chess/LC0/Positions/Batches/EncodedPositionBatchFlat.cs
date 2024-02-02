@@ -273,7 +273,7 @@ namespace Ceres.Chess.LC0.Batches
     //       There is no highly efficient way to centralize this. 
     // Since this is a performance-critical method, we leave both of these in place.
 
-    public void Set(ReadOnlySpan<EncodedPositionWithHistory> positions, int numToProcess, bool setPositions)
+    public void Set(ReadOnlySpan<EncodedPositionWithHistory> positions, int numToProcess, bool setPositions, bool fillInHistoryPlanes = false)
     {
       NumPos = numToProcess;
       TrainingType = EncodedPositionType.PositionOnly;
@@ -313,7 +313,16 @@ namespace Ceres.Chess.LC0.Batches
       for (int i = 0; i < numToProcess; i++)
       {
         // Set planes (NOTE: we move all 8 history planes)
-        positions[i].ExtractPlanesValuesIntoArray(EncodedPositionBoards.NUM_MOVES_HISTORY, PosPlaneBitmaps, nextOutPlaneIndex);
+        if (fillInHistoryPlanes)
+        {
+          EncodedPositionWithHistory positionCopy = positions[i];
+          positionCopy.FillInEmptyPlanes();
+          positionCopy.ExtractPlanesValuesIntoArray(EncodedPositionBoards.NUM_MOVES_HISTORY, PosPlaneBitmaps, nextOutPlaneIndex);
+        }
+        else
+        {
+          positions[i].ExtractPlanesValuesIntoArray(EncodedPositionBoards.NUM_MOVES_HISTORY, PosPlaneBitmaps, nextOutPlaneIndex);
+        }
 
         // Start by setting all plane values to 1.
         Unsafe.InitBlock(ref PosPlaneValues[nextOutPlaneIndex], 1, (uint)PLANES_WRITTEN);
@@ -427,12 +436,16 @@ namespace Ceres.Chess.LC0.Batches
       PosPlaneBitmaps = GC.AllocateUninitializedArray<ulong>(MaxBatchSize * EncodedPositionWithHistory.NUM_PLANES_TOTAL);
       PosPlaneValues = GC.AllocateUninitializedArray<byte>(MaxBatchSize * EncodedPositionWithHistory.NUM_PLANES_TOTAL);
 
+#if NOT
+      // Actually these allocations below are unnecessary, we only (rarely) use W/L/Policy 
+      // if the SetTrainingData method is called.
       if (trainingType == EncodedPositionType.PositionAndTrainingData)
       {
         W = GC.AllocateUninitializedArray<float>(MaxBatchSize);
         L = GC.AllocateUninitializedArray<float>(MaxBatchSize);
         Policy = GC.AllocateUninitializedArray<FP16>(MaxBatchSize * EncodedPolicyVector.POLICY_VECTOR_LENGTH);
       }
+#endif
     }
 
     const int BATCH_SIZE_ALIGNMENT = 4;
@@ -444,11 +457,12 @@ namespace Ceres.Chess.LC0.Batches
       Init(trainingType);
     }
 
-    public EncodedPositionBatchFlat(ReadOnlySpan<EncodedPositionWithHistory> positions, int numToProcess, bool setPositions)
+    public EncodedPositionBatchFlat(ReadOnlySpan<EncodedPositionWithHistory> positions, int numToProcess, 
+                                    bool setPositions, bool fillInHistoryPlanes = false)
     {
       MaxBatchSize = (int)MathUtils.RoundedUp(numToProcess, BATCH_SIZE_ALIGNMENT);
       Init(EncodedPositionType.PositionOnly);
-      Set(positions, numToProcess, setPositions);
+      Set(positions, numToProcess, setPositions, fillInHistoryPlanes);
     }
 
     public EncodedPositionBatchFlat(ReadOnlySpan<EncodedTrainingPosition> positions, int numToProcess, EncodedPositionType trainingType, bool setPositions)
@@ -809,12 +823,6 @@ namespace Ceres.Chess.LC0.Batches
     Memory<ulong> IEncodedPositionBatchFlat.PosPlaneBitmaps => PosPlaneBitmaps.AsMemory();
 
     Memory<byte> IEncodedPositionBatchFlat.PosPlaneValues => PosPlaneValues.AsMemory();
-
-    Memory<float> IEncodedPositionBatchFlat.W => W.AsMemory();
-
-    Memory<float> IEncodedPositionBatchFlat.L => L.AsMemory();
-
-    Memory<FP16> IEncodedPositionBatchFlat.Policy => Policy.AsMemory();
 
     int IEncodedPositionBatchFlat.NumPos => NumPos;
 

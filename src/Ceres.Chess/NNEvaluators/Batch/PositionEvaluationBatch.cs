@@ -41,6 +41,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     public bool IsWDL;
     public bool HasM;
     public bool HasUncertaintyV;
+    public bool HasValueSecondary;
     public int NumPos;
 
     #region Output raw data
@@ -56,6 +57,16 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// Vector of loss probabilities.
     /// </summary>
     public Memory<FP16> L;
+
+    /// <summary>
+    /// Vector of win probabilities (secondary value head).
+    /// </summary>
+    public Memory<FP16> W2;
+
+    /// <summary>
+    /// Vector of loss probabilities (secondary value head).
+    /// </summary>
+    public Memory<FP16> L2;
 
     /// <summary>
     /// Vector of moves left estimates.
@@ -91,7 +102,6 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <returns></returns>
     public FP16 GetV(int index) => IsWDL ? W.Span[index] - L.Span[index] : W.Span[index];
 
-
     /// <summary>
     /// Returns the win probability from the value head for the position at a specified index in the batch.
     /// </summary>
@@ -112,6 +122,39 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <param name="index"></param>
     /// <returns></returns>
     public FP16 GetLossP(int index) => IsWDL ? L.Span[index] : 0;
+
+    #region Secondary value head
+
+    /// <summary>
+    /// Returns the net win probability (V) from the secondary value head for the position at a specified index in the batch.
+    /// </summary>
+    /// <param name="index"></param>
+    /// <returns></returns>
+    public FP16 GetV2(int index) => IsWDL ? W2.Span[index] - L2.Span[index] : W2.Span[index];
+
+    /// <summary>
+    /// Returns the win probability from the secondary value head for the position at a specified index in the batch.
+    /// </summary>
+    /// <param name="index"></param>
+    /// <returns></returns>
+    public FP16 GetWin2P(int index) => W2.Span[index];
+
+    /// <summary>
+    /// Returns the draw probability from the secondary value head for the position at a specified index in the batch.
+    /// </summary>
+    /// <param name="index"></param>
+    /// <returns></returns>
+    public FP16 GetDraw2P(int index) => IsWDL ? (FP16)(1.0f - (W2.Span[index] + L2.Span[index])) : 0;
+
+    /// <summary>
+    /// Returns the loss probability from the secondary value head for the position at a specified index in the batch.
+    /// </summary>
+    /// <param name="index"></param>
+    /// <returns></returns>
+    public FP16 GetLoss2P(int index) => IsWDL ? L2.Span[index] : 0;
+
+    #endregion
+
 
     /// <summary>
     /// Returns the value of the MLH head for the position at a specified index in the batch.
@@ -184,6 +227,11 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// Returns if the batch was evaluated with a network that has an uncertainty of V head.
     /// </summary>
     bool IPositionEvaluationBatch.HasUncertaintyV => HasUncertaintyV;
+
+    /// <summary>
+    /// Returns if the batch has a secondary value head.
+    /// </summary>
+    bool IPositionEvaluationBatch.HasValueSecondary => HasValueSecondary;
 
     /// <summary>
     /// Returns the number of positions in the batch.
@@ -259,21 +307,32 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <param name="m"></param>
     /// <param name="activations"></param>
     /// <param name="stats"></param>
-    public PositionEvaluationBatch(bool isWDL, bool hasM, bool hasUncertaintyV, int numPos, Memory<CompressedPolicyVector> policies,
-                             Memory<FP16> w, Memory<FP16> l, Memory<FP16> m, Memory<FP16> uncertaintyV,
-                             Memory<NNEvaluatorResultActivations> activations,
-                             TimingStats stats, Memory<FP16> extraStat0 = default, Memory<FP16> extraStat1 = default, bool makeCopy = false)
+    public PositionEvaluationBatch(bool isWDL, bool hasM, bool hasUncertaintyV, bool hasValueSecondary, int numPos, 
+                                   Memory<CompressedPolicyVector> policies,
+                                   Memory<FP16> w, Memory<FP16> l, 
+                                   Memory<FP16> w2, Memory<FP16> l2,
+                                   Memory<FP16> m, Memory<FP16> uncertaintyV,
+                                   Memory<NNEvaluatorResultActivations> activations,
+                                   TimingStats stats, Memory<FP16> extraStat0 = default, Memory<FP16> extraStat1 = default, bool makeCopy = false)
     {
       IsWDL = isWDL;
       HasM = hasM;
       NumPos = numPos;
       HasUncertaintyV = hasUncertaintyV;
+      HasValueSecondary = hasValueSecondary;
 
       Policies = makeCopy ? policies.Slice(0, numPos).ToArray() : policies;
       Activations = (activations.Length != 0 && makeCopy) ? activations.Slice(0, numPos).ToArray() : activations;
 
       W = makeCopy ? w.Slice(0, numPos).ToArray() : w;
       L = (isWDL && makeCopy) ? l.Slice(0, numPos).ToArray() : l;
+
+      if (!w2.IsEmpty)
+      {
+        W2 = makeCopy ? w2.Slice(0, numPos).ToArray() : w2;
+        L2 = (isWDL && makeCopy) ? l2.Slice(0, numPos).ToArray() : l2;
+      }
+
       M = (hasM && makeCopy) ? m.Slice(0, numPos).ToArray() : m;
       UncertaintyV = (HasUncertaintyV && makeCopy) ? uncertaintyV.Slice(0, numPos).ToArray() : uncertaintyV;
 
@@ -298,30 +357,37 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <param name="hasM"></param>
     /// <param name="numPos"></param>
     /// <param name="valueEvals"></param>
-    /// <param name="valueHeadConvFlat"></param>
+    /// <param name="valueEvals2"></param>
     /// <param name="valsAreLogistic"></param>
     /// <param name="stats"></param>
-    private PositionEvaluationBatch(bool isWDL, bool hasM, bool hasUncertaintyV, int numPos,
-                                    Span<FP16> valueEvals, Span<FP16> m, Span<FP16> uncertaintyV,
+    private PositionEvaluationBatch(bool isWDL, bool hasM, bool hasUncertaintyV, bool hasValueSecondary, int numPos,
+                                    Span<FP16> valueEvals, Span<FP16> valueEvals2, 
+                                    Span<FP16> m, Span<FP16> uncertaintyV,
                                     Span<NNEvaluatorResultActivations> activations,
                                     bool valsAreLogistic, TimingStats stats)
     {
       IsWDL = isWDL;
       HasM = hasM;
       HasUncertaintyV = hasUncertaintyV;
-      
+      HasValueSecondary = hasValueSecondary;
+
       NumPos = numPos;
       Activations = activations.ToArray();
 
-      InitializeValueEvals(valueEvals, valsAreLogistic);
+      InitializeValueEvals(valueEvals, valsAreLogistic, false);
+      if (!valueEvals2.IsEmpty)
+      {
+        InitializeValueEvals(valueEvals2, valsAreLogistic, true);
+      }
+
       if (hasM)
       {
-        this.M = m.ToArray();
+        M = m.ToArray();
       }
 
       if (HasUncertaintyV)
       {
-        this.UncertaintyV = uncertaintyV.ToArray();
+        UncertaintyV = uncertaintyV.ToArray();
       }
 
       if (valueEvals != null && valueEvals.Length < numPos * (IsWDL ? 3 : 1))
@@ -343,13 +409,13 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <param name="activations"></param>
     /// <param name="probType"></param>
     /// <param name="stats"></param>
-    public PositionEvaluationBatch(bool isWDL, bool hasM, bool hasUncertaintyV, int numPos, 
-                                   Span<FP16> valueEvals, Memory<float> policyProbs,
+    public PositionEvaluationBatch(bool isWDL, bool hasM, bool hasUncertaintyV, bool hasValueSecondary, int numPos, 
+                                   Span<FP16> valueEvals, Span<FP16> valueEvals2, Memory<float> policyProbs,
                                    FP16[] m, FP16[] uncertaintyV, NNEvaluatorResultActivations[] activations,
                                    bool valsAreLogistic, PolicyType probType, bool policyAlreadySorted,
                                    IEncodedPositionBatchFlat sourceBatchWithValidMoves,
                                    TimingStats stats)
-      : this(isWDL, hasM, hasUncertaintyV, numPos, valueEvals, m, uncertaintyV, activations, valsAreLogistic, stats)
+      : this(isWDL, hasM, hasUncertaintyV, hasValueSecondary, numPos, valueEvals, valueEvals2, m, uncertaintyV, activations, valsAreLogistic, stats)
     {
       Policies = ExtractPoliciesBufferFlat(numPos, policyProbs, probType, policyAlreadySorted, sourceBatchWithValidMoves);
     }
@@ -366,12 +432,13 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <param name="activations"></param>
     /// <param name="probType"></param>
     /// <param name="stats"></param>
-    public PositionEvaluationBatch(bool isWDL, bool hasM, bool hasUncertaintyV, int numPos, Span<FP16> valueEvals,
-                             int topK, Span<int> policyIndices, Span<float> policyProbabilties,
-                             Span<FP16> m, Span<FP16> uncertaintyV,
-                             Span<NNEvaluatorResultActivations> activations, bool valsAreLogistic,
-                             PolicyType probType, TimingStats stats, bool alreadySorted)
-      : this(isWDL, hasM, hasUncertaintyV, numPos, valueEvals, m, uncertaintyV, activations, valsAreLogistic, stats)
+    public PositionEvaluationBatch(bool isWDL, bool hasM, bool hasUncertaintyV, bool hasValueSecondary, int numPos, 
+                                   Span<FP16> valueEvals, Span<FP16> valueEvals2,
+                                   int topK, Span<int> policyIndices, Span<float> policyProbabilties,
+                                   Span<FP16> m, Span<FP16> uncertaintyV,
+                                   Span<NNEvaluatorResultActivations> activations, bool valsAreLogistic,
+                                   PolicyType probType, TimingStats stats, bool alreadySorted)
+      : this(isWDL, hasM, hasUncertaintyV, hasValueSecondary, numPos, valueEvals, valueEvals2, m, uncertaintyV, activations, valsAreLogistic, stats)
     {
       Policies = ExtractPoliciesTopK(numPos, topK, policyIndices, policyProbabilties, probType, alreadySorted);
     }
@@ -381,9 +448,13 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// </summary>
     /// <param name="maxPos"></param>
     /// <param name="retrieveSupplementalResults"></param>
-    public PositionEvaluationBatch(bool isWDL, bool hasM, int maxPos, bool retrieveSupplementalResults)
+    public PositionEvaluationBatch(bool isWDL, bool hasM, bool hasUncertaintyV, bool hasValueSecondary, int maxPos, bool retrieveSupplementalResults)
     {
       Policies = new CompressedPolicyVector[maxPos];
+      HasM = hasM;
+      IsWDL = isWDL;
+      HasUncertaintyV = hasUncertaintyV;
+      HasValueSecondary = hasValueSecondary;
 
       if (retrieveSupplementalResults)
       {
@@ -391,10 +462,12 @@ namespace Ceres.Chess.NetEvaluation.Batch
       }
       
       W = new FP16[maxPos];
+      W2 = hasValueSecondary ? new FP16[maxPos] : default;
       
       if (isWDL)
       {
         L = new FP16[maxPos];
+        L2 = hasValueSecondary ? new FP16[maxPos] : default;
       }
 
       if (hasM)
@@ -420,6 +493,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
       IsWDL = other.IsWDL;
       HasM = other.HasM;
       NumPos = other.NumPos;
+      HasUncertaintyV = other.HasUncertaintyV;
+      HasValueSecondary = other.HasValueSecondary;
 
       int numPos = other.NumPos;
 
@@ -436,9 +511,19 @@ namespace Ceres.Chess.NetEvaluation.Batch
 
       other.W.Slice(0, numPos).CopyTo(W);
 
+      if (!W2.IsEmpty)
+      {
+        other.W2.Slice(0, numPos).CopyTo(W2);
+      }
+
       if (IsWDL)
       {
         other.L.Slice(0, numPos).CopyTo(L);
+
+        if (!L2.IsEmpty)
+        {
+          other.L2.Slice(0, numPos).CopyTo(L2);
+        }
       }
 
       if (HasM)
@@ -626,15 +711,17 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// </summary>
     /// <param name="valueEvals"></param>
     /// <param name="valsAreLogistic"></param>
-    void InitializeValueEvals(Span<FP16> valueEvals, bool valsAreLogistic)
+    void InitializeValueEvals(Span<FP16> valueEvals, bool valsAreLogistic, bool secondaryValue)
     {
+      Debug.Assert(!(secondaryValue && !HasValueSecondary));
+
+      FP16[] w = null;
+      FP16[] l = null;
+
       if (IsWDL)
       {
-        FP16[] w = new FP16[NumPos];
-        FP16[] l = new FP16[NumPos];
-
-        W = w;
-        L = l;
+        w = new FP16[NumPos];
+        l = new FP16[NumPos];
 
         for (int i = 0; i < NumPos; i++)
         {
@@ -661,9 +748,21 @@ namespace Ceres.Chess.NetEvaluation.Batch
       }
       else
       {
-        W = valueEvals.ToArray();
+        Debug.Assert(!valsAreLogistic);
+        w = valueEvals.ToArray();
       }
 
+
+      if (secondaryValue)
+      {
+        W2 = w;
+        L2 = l;
+      }
+      else
+      {
+        W = w;
+        L = l;
+      }
     }
 
 
@@ -671,7 +770,9 @@ namespace Ceres.Chess.NetEvaluation.Batch
     public IEnumerator<NNPositionEvaluationBatchMember> GetEnumerator()
     {
       for (int i = 0; i < NumPos; i++)
+      {
         yield return new NNPositionEvaluationBatchMember(this, i);
+      }
     }
 
 

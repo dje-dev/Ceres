@@ -45,7 +45,7 @@ namespace Chess.Ceres.NNEvaluators.TensorRT
     public override bool IsWDL => Config.IsWDL;
     public override bool HasM => Config.HasM;
     public override bool HasUncertaintyV => Config.HasUncertaintyV;
-
+    public override bool HasValueSecondary => false;
 
     public readonly NNEvaluatorEngineTensorRTConfig Config;
 
@@ -285,12 +285,12 @@ Updated notes:
           Span<Int32> policyIndicies = MemoryMarshal.Cast<float, Int32>(rawResultsPolicy).Slice(0, NUM_ELEMENTS);
           Span<float> policyProbabilities = rawResultsPolicy.Slice(Config.MaxBatchSize * NUM_TOPK_POLICY, NUM_ELEMENTS);
 
-          retBatch = new PositionEvaluationBatch(Config.IsWDL, Config.HasM, Config.HasUncertaintyV,
-                                                 numToProcess, results,
+          retBatch = new PositionEvaluationBatch(Config.IsWDL, Config.HasM, Config.HasUncertaintyV, false,
+                                                 numToProcess, results, default,
                                                  NUM_TOPK_POLICY,
                                                  policyIndicies, policyProbabilities,
-                                                 resultsMLH, resultsUncertaintyV,
-                                                 null, //rawResultsConvValFlat,
+                                                 resultsMLH, 
+                                                 resultsUncertaintyV, null, //rawResultsConvValFlat,
                                                  VALUES_ARE_LOGISTIC,
                                                  PositionEvaluationBatch.PolicyType.Probabilities, timeStats, false);
         }
@@ -305,8 +305,8 @@ Updated notes:
 
           // NOTE: alternative would be to pass in a mask to the GPU, the batch.ValidMovesMasks could be used to help
           // done below instead. batch.MaskIllegalMovesInPolicyArray(rawResultsPolicy);
-          retBatch = new PositionEvaluationBatch(Config.IsWDL, Config.HasM, Config.HasUncertaintyV,
-                                                 numToProcess, results,
+          retBatch = new PositionEvaluationBatch(Config.IsWDL, Config.HasM, Config.HasUncertaintyV, false,
+                                                 numToProcess, results, default,
                                                  rawResultsPolicy.Slice(0, numToProcess*1858).ToArray(), // Inefficient 
                                                  resultsMLH.ToArray(), resultsUncertaintyV.ToArray(),
                                                  null, //rawResultsConvValFlat,

@@ -52,6 +52,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     bool isWDL;
     bool hasM;
     bool hasUncertaintyV;
+    bool hasValueSecondary;
 
     /// <summary>
     /// Constructor.
@@ -65,6 +66,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
       isWDL = batches[0].IsWDL;
       hasM  = batches[0].HasM;
       hasUncertaintyV = batches[0].HasUncertaintyV;
+      hasValueSecondary = batches[0].HasValueSecondary;
     }
 
     bool IPositionEvaluationBatch.IsWDL => isWDL;
@@ -73,7 +75,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
 
     bool IPositionEvaluationBatch.HasUncertaintyV => hasUncertaintyV;
 
-
+    bool IPositionEvaluationBatch.HasValueSecondary => hasValueSecondary;
 
     /// <summary>
     /// Number of positions in batch.
@@ -146,6 +148,12 @@ namespace Ceres.Chess.NetEvaluation.Batch
       return Batches[indices.Item1].GetLossP(indices.Item2);
     }
 
+    FP16 IPositionEvaluationBatch.GetLoss2P(int index)
+    {
+      (int, int) indices = GetIndices(index);
+      return Batches[indices.Item1].GetLoss2P(indices.Item2);
+    }
+
 
     (Memory<CompressedPolicyVector> policies, int index) IPositionEvaluationBatch.GetPolicy(int index)
     {
@@ -165,6 +173,12 @@ namespace Ceres.Chess.NetEvaluation.Batch
     {
       (int, int) indicies = GetIndices(index);
       return Batches[indicies.Item1].GetWinP(indicies.Item2);
+    }
+
+    FP16 IPositionEvaluationBatch.GetWin2P(int index)
+    {
+      (int, int) indicies = GetIndices(index);
+      return Batches[indicies.Item1].GetWin2P(indicies.Item2);
     }
 
     FP16 IPositionEvaluationBatch.GetUncertaintyV(int index)

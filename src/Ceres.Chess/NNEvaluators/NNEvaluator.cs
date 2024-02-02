@@ -108,6 +108,11 @@ namespace Ceres.Chess.NNEvaluators
     public abstract bool HasUncertaintyV { get; }
 
     /// <summary>
+    /// If the evaluator has an secondary value head.
+    /// </summary>
+    public abstract bool HasValueSecondary { get; }
+
+    /// <summary>
     /// The maximum number of positions that can be evaluated in a single batch.
     /// </summary>
     public abstract int MaxBatchSize { get; }
@@ -257,14 +262,21 @@ namespace Ceres.Chess.NNEvaluators
     {
       float w = batch.GetWinP(batchIndex);
       float l = IsWDL ? batch.GetLossP(batchIndex) : float.NaN;
+
+      float w2 = HasValueSecondary ? batch.GetWin2P(batchIndex) : float.NaN;
+      float l2 = HasValueSecondary && IsWDL ? batch.GetLoss2P(batchIndex) : float.NaN;
+
       float m = HasM ? batch.GetM(batchIndex) : float.NaN;
       float uncertaintyV = HasUncertaintyV ? batch.GetUncertaintyV(batchIndex) : float.NaN;
+      
       NNEvaluatorResultActivations activations = batch.GetActivations(batchIndex);
+      
       (Memory<CompressedPolicyVector> policies, int index) policyRef = batch.GetPolicy(batchIndex);
+
       FP16 extraStat0 = batch.GetExtraStat0(batchIndex);
       FP16 extraStat1 = batch.GetExtraStat1(batchIndex);
 
-      result = new NNEvaluatorResult(w, l, m, uncertaintyV, policyRef.policies.Span[policyRef.index], activations, extraStat0, extraStat1);
+      result = new NNEvaluatorResult(w, l, w2, l2, m, uncertaintyV, policyRef.policies.Span[policyRef.index], activations, extraStat0, extraStat1);
     }
 
     #endregion
@@ -340,11 +352,12 @@ namespace Ceres.Chess.NNEvaluators
     /// Helper method to evaluates a single position.
     /// </summary>
     /// <param name="encodedPosition"></param>
+    /// <param name="fillInHistory"></param>
     /// <param name="retrieveSupplementalResults"></param>
     /// <returns></returns>
-    public IPositionEvaluationBatch Evaluate(in EncodedPositionWithHistory encodedPosition, bool retrieveSupplementalResults = false)
+    public IPositionEvaluationBatch Evaluate(in EncodedPositionWithHistory encodedPosition, bool fillInHistory, bool retrieveSupplementalResults)
     {
-      return Evaluate(new EncodedPositionWithHistory[] { encodedPosition }, 1, retrieveSupplementalResults);
+      return Evaluate(new EncodedPositionWithHistory[] { encodedPosition }, 1, fillInHistory, retrieveSupplementalResults);
     }
 
 
@@ -353,9 +366,10 @@ namespace Ceres.Chess.NNEvaluators
     /// </summary>
     /// <param name="encodedPositions"></param>
     /// <param name="numPositions"></param>
+    /// <param name="fillInHistoryPlanes"></param>
     /// <param name="retrieveSupplementalResults"></param>
     /// <returns></returns>
-    public IPositionEvaluationBatch Evaluate(EncodedPositionWithHistory[] encodedPositions, int numPositions, bool retrieveSupplementalResults = false)
+    public IPositionEvaluationBatch Evaluate(EncodedPositionWithHistory[] encodedPositions, int numPositions, bool fillInHistoryPlanes, bool retrieveSupplementalResults)
     {
       if (InputsRequired.HasFlag(InputTypes.LastMovePlies))
       {
@@ -371,14 +385,14 @@ namespace Ceres.Chess.NNEvaluators
         EncodedPositionBatchBuilder builder = new EncodedPositionBatchBuilder(numPositions, InputsRequired | InputTypes.Positions);
         for (int i = 0; i < numPositions; i++)
         {
-          builder.Add(in encodedPositions[i]);
+          builder.Add(in encodedPositions[i], fillInHistoryPlanes);
         }
         batch = builder.GetBatch();
       }
       else
       {
         bool setPositions = InputsRequired.HasFlag(InputTypes.Positions);
-        batch = new EncodedPositionBatchFlat(encodedPositions, numPositions, setPositions);
+        batch = new EncodedPositionBatchFlat(encodedPositions, numPositions, setPositions, fillInHistoryPlanes);        
       }
 
       if (EncodedPositionBatchFlat.RETAIN_POSITION_INTERNALS)
@@ -397,8 +411,10 @@ namespace Ceres.Chess.NNEvaluators
     /// <param name="numPositions"></param>
     /// <param name="retrieveSupplementalResults"></param>
     /// <returns></returns>
-    public IPositionEvaluationBatch Evaluate(Span<EncodedTrainingPosition> encodedPositions, int numPositions, bool retrieveSupplementalResults = false)
+    public IPositionEvaluationBatch Evaluate(Span<EncodedTrainingPosition> encodedPositions, int numPositions, bool fillInHistoryPlanes, bool retrieveSupplementalResults = false)
     {
+      throw new Exception("Method needs retesting. Also the fillInHistoryPlanes is not completely implemented below.");
+
       if (InputsRequired.HasFlag(InputTypes.LastMovePlies))
       {
         // TODO: it should be possible to extract some of the history
@@ -415,7 +431,7 @@ namespace Ceres.Chess.NNEvaluators
         for (int i = 0; i < numPositions; i++)
         {
           // Unmirror before adding.
-          builder.Add(encodedPositions[i].PositionWithBoards);
+          builder.Add(encodedPositions[i].PositionWithBoards, fillInHistoryPlanes);
         }
 
         batch = builder.GetBatch();

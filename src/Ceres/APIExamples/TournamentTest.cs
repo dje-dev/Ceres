@@ -207,7 +207,7 @@ namespace Ceres.APIExamples
 //      NET2 = "703810";
 
       //
-      NET2 = RegisteredNets.Aliased["T1_DISTILL_256_10"].NetSpecificationString;
+NET2 = RegisteredNets.Aliased["T1_DISTILL_256_10"].NetSpecificationString;
 //      NET1 = RegisteredNets.Aliased["T60"].NetSpecificationString;
       //      NET1 = ReferenceNetIDs.T2_768_15_T82_4832;
       //NET1 = NET2 = ReferenceNetIDs.BEST_T80;
@@ -261,7 +261,7 @@ namespace Ceres.APIExamples
       //NET2 = "753723";// "801307";610889
       //      NET2 = "784984";
       //NET2 = @"d:\weights\lczero.org\t12test6-swa-678000.pb.gz";//"610889";//  ;
-      //NET1 = NET2 = "753723";// "703810";
+      NET1 = NET2 = "753723";// "703810";
       //NET2 = "t12test6-swa-678000";
 
       //      NET2 = ReferenceNetIDs.BT2;
@@ -270,6 +270,7 @@ namespace Ceres.APIExamples
       limit1 = SearchLimit.NodesPerMove(1000);
 //      limit1 = SearchLimit.NodesPerMove(1000 + ((int)DateTime.Now.Millisecond % 200));
     //limit1 = SearchLimit.BestValueMove;
+      
 
       //      limit1 = SearchLimit.SecondsForAllMoves(60, 0.6f);
 
@@ -444,7 +445,9 @@ namespace Ceres.APIExamples
       GameEngineDefCeres engineDefCeres3 = new GameEngineDefCeres("Ceres3", evalDef2, evalDefSecondary2, new ParamsSearch(), new ParamsSelect(),
                                                                   null, outputLog ? "Ceres3.log.txt" : null);
 
-//engineDefCeres1.SearchParams.TestFlag = true;
+      //engineDefCeres1.SearchParams.TestFlag = true;
+
+//      engineDefCeres1.SearchParams.HistoryFillIn = false;
 
       //engineDefCeres1.OverrideLimitManager = new  Ceres.MCTS.Managers.Limits.ManagerGameLimitTest();
       if (false)
@@ -605,7 +608,7 @@ namespace Ceres.APIExamples
       EnginePlayerDef playerCeres2 = new EnginePlayerDef(engineDefCeres2, limit2);
       EnginePlayerDef playerCeres3 = new EnginePlayerDef(engineDefCeres3, limit1);
 
-      bool ENABLE_LC0 = false;// evalDef1.Nets[0].Net.Type == NNEvaluatorType.LC0Library && (evalDef1.Nets[0].WeightValue == 1 && evalDef1.Nets[0].WeightPolicy == 1 && evalDef1.Nets[0].WeightM == 1);
+      bool ENABLE_LC0 = true;// evalDef1.Nets[0].Net.Type == NNEvaluatorType.LC0Library && (evalDef1.Nets[0].WeightValue == 1 && evalDef1.Nets[0].WeightPolicy == 1 && evalDef1.Nets[0].WeightM == 1);
       GameEngineDefLC0 engineDefLC1 = ENABLE_LC0 ? new GameEngineDefLC0("LC0_0", evalDef1, forceDisableSmartPruning, null, null) : null;
       GameEngineDefLC0 engineDefLC2 = ENABLE_LC0 ? new GameEngineDefLC0("LC0_2", evalDef2, forceDisableSmartPruning, null, null) : null;
 
@@ -651,7 +654,7 @@ namespace Ceres.APIExamples
 #endif
       // **************************************************
       EnginePlayerDef player1 = playerCeres1;// playerCeres1UCI;// new EnginePlayerDef(engineDefCSNN1, SearchLimit.NodesPerMove(30));
-      EnginePlayerDef player2 = playerCeres2;// playerCeres96;// new EnginePlayerDef(EnginDefStockfish14(), SearchLimit.NodesPerMove(300 * 10_000));
+      EnginePlayerDef player2 = playerCeresPreNC;// playerCeres96;// new EnginePlayerDef(EnginDefStockfish14(), SearchLimit.NodesPerMove(300 * 10_000));
       //new EnginePlayerDef(engineDefCSNoNN, SearchLimit.NodesPerMove(300 * 10_000));
       // **************************************************
 
@@ -708,6 +711,7 @@ namespace Ceres.APIExamples
 
       string baseName = "book-ply8-unifen-Q-0.25-0.40";
       baseName = "book-ply8-unifen-Q-0.25-0.40";
+//      baseName = "single_bad";
 //      baseName = "endingbook-10man-3181.pgn";
 //            baseName = "Noomen 2-move Testsuite.pgn";
 //            baseName = "book-ply8-unifen-Q-0.40-1.0";

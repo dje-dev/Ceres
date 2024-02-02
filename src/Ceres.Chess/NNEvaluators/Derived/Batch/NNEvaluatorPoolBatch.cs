@@ -178,9 +178,12 @@ namespace Ceres.Chess.NNEvaluators
     {
       Span<CompressedPolicyVector> fullPolicyValues = fullBatchResult.Policies.Span;
       Span<FP16> fullW = fullBatchResult.W.Span;
-
       Span<FP16> fullL = fullBatchResult.IsWDL ? fullBatchResult.L.Span : default;
       Span<FP16> fullM = fullBatchResult.HasM ? fullBatchResult.M.Span : default;
+
+      Span<FP16> fullW2 = fullBatchResult.HasValueSecondary ? fullBatchResult.W2.Span : default;
+      Span<FP16> fullL2 = fullBatchResult.HasValueSecondary ? fullBatchResult.L2.Span : default;
+
       Span<FP16> fullUncertaintyV = fullBatchResult.HasUncertaintyV ? fullBatchResult.UncertaintyV.Span : default;
       Span<FP16> fullExtraStat0 = fullBatchResult.ExtraStat0.Span;
       Span<FP16> fullExtraStat1 = fullBatchResult.ExtraStat1.Span;
@@ -197,15 +200,20 @@ namespace Ceres.Chess.NNEvaluators
 
         int numPos = thisBatch.NumPos;
         PositionEvaluationBatch thisResultSubBatch =
-          new PositionEvaluationBatch(fullBatchResult.IsWDL, fullBatchResult.HasM, fullBatchResult.HasUncertaintyV, 
+          new PositionEvaluationBatch(fullBatchResult.IsWDL, fullBatchResult.HasM, fullBatchResult.HasUncertaintyV, fullBatchResult.HasValueSecondary,
                                       thisBatch.NumPos,
                                       fullPolicyValues.Slice(nextPosIndex, numPos).ToArray(),
+
                                       fullW.Slice(nextPosIndex, numPos).ToArray(),
                                       fullBatchResult.IsWDL ? fullL.Slice(nextPosIndex, numPos).ToArray() : null,
+
+                                      fullBatchResult.HasValueSecondary ? fullW2.Slice(nextPosIndex, numPos).ToArray() : null,
+                                      fullBatchResult.HasValueSecondary && fullBatchResult.IsWDL ? fullL2.Slice(nextPosIndex, numPos).ToArray() : null,
+
                                       fullBatchResult.HasM ? fullM.Slice(nextPosIndex, numPos).ToArray() : null,
                                       fullBatchResult.HasUncertaintyV ? fullUncertaintyV.Slice(nextPosIndex, numPos).ToArray() : null,
                                       fullBatchResult.Activations.IsEmpty ? null : fullActivations.Slice(nextPosIndex, numPos).ToArray(),
-                                      fullBatchResult.Stats, 
+                                      fullBatchResult.Stats,
                                       fullExtraStat0.IsEmpty ? default : fullExtraStat0.Slice(nextPosIndex, numPos).ToArray(),
                                       fullExtraStat1.IsEmpty ? default : fullExtraStat1.Slice(nextPosIndex, numPos).ToArray());
 

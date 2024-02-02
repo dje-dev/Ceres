@@ -81,6 +81,11 @@ namespace Ceres.Chess.NNEvaluators.CUDA
     public override bool HasUncertaintyV => false;
 
     /// <summary>
+    /// If the evaluator has an secondary value head.
+    /// </summary>
+    public override bool HasValueSecondary => false;
+
+    /// <summary>
     /// If the network returns policy moves in the same order
     /// as the legal MGMoveList.
     /// </summary>
@@ -257,7 +262,8 @@ namespace Ceres.Chess.NNEvaluators.CUDA
 #endif
       }
 
-      return new PositionEvaluationBatch(IsWDL, HasM, HasUncertaintyV, positions.NumPos, policies, w, l, m, default, 
+      return new PositionEvaluationBatch(IsWDL, HasM, HasUncertaintyV, HasValueSecondary,
+                                         positions.NumPos, policies, w, l, default, default, m, default, 
                                          activations, new TimingStats(), default, default, copyResults);
     }
 

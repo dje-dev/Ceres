@@ -647,7 +647,8 @@ namespace Ceres.MCTS.Iteration
                                                 PositionWithHistory priorMoves, 
                                                 ref MGMoveList moves,
                                                 ref NNEvaluatorResult[] evalResults,
-                                                bool dumpInfo = false)
+                                                bool fillInHistory,
+                                                bool dumpInfo)
     {
       // Compute move list if not already provided.
       if (moves == null)
@@ -683,9 +684,9 @@ namespace Ceres.MCTS.Iteration
         }
 
         EncodedPositionWithHistory eph = new EncodedPositionWithHistory();
-        eph.SetFromSequentialPositions(positions, true);
+        eph.SetFromSequentialPositions(positions, fillInHistory);
 
-        batchBuilder.Add(in eph);
+        batchBuilder.Add(in eph, false);
       }
 
       // Build the batch and evaluate it.
@@ -846,7 +847,9 @@ namespace Ceres.MCTS.Iteration
         }
 
         NNEvaluatorResult[] valueEvalResults = null;
-        (MGMove bestMove, float bestV)  = BestValueMove(manager.Context.NNEvaluators.Evaluator1, priorMoves, ref moves, ref valueEvalResults);
+        (MGMove bestMove, float bestV)  = BestValueMove(manager.Context.NNEvaluators.Evaluator1, priorMoves, 
+                                                        ref moves, ref valueEvalResults,
+                                                        manager.Context.ParamsSearch.HistoryFillIn, false);
 
         context.Root.StructRef.W = bestV;
         context.Root.StructRef.N = 1;

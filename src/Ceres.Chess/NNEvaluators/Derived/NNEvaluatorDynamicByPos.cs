@@ -101,6 +101,8 @@ namespace Ceres.Chess.NNEvaluators
       CompressedPolicyVector[] policies = new CompressedPolicyVector[numPos];
       FP16[] w = new FP16[numPos];
       FP16[] l = new FP16[numPos];
+      FP16[] w2 = new FP16[numPos];
+      FP16[] l2 = new FP16[numPos];
       FP16[] m = HasM ? new FP16[numPos] : null;
       FP16[] uncertaintyV = HasUncertaintyV ? new FP16[numPos] : null;
 
@@ -124,6 +126,7 @@ namespace Ceres.Chess.NNEvaluators
         // Extract out the evaluation results from the preferred evaluator.
 
         bool chosenEvaluatorIsWDL = Evaluators[index].IsWDL;
+        bool chosenEvaluatorHasSecondaryValue = Evaluators[index].HasValueSecondary;
         if (!IsWDL && chosenEvaluatorIsWDL)
         {
           // Need to downgrade representation from the WDL evaluator
@@ -135,6 +138,23 @@ namespace Ceres.Chess.NNEvaluators
         {
           w[posNum] = batches[index].GetWinP(posNum);
           l[posNum] = batches[index].GetLossP(posNum);
+        }
+
+        if (chosenEvaluatorHasSecondaryValue)
+        {
+          if (!IsWDL && chosenEvaluatorIsWDL)
+          {
+            // Need to downgrade representation from the WDL evaluator
+            // to make it expressed in same way as would be by an non-WDL evaluator.
+            w2[posNum] = batches[index].GetWin2P(posNum) - batches[index].GetLoss2P(posNum);
+            l2[posNum] = 0;
+          }
+          else
+          {
+            w2[posNum] = batches[index].GetWin2P(posNum);
+            l2[posNum] = batches[index].GetLoss2P(posNum);
+          }
+
         }
 
         if (HasM)
@@ -154,7 +174,9 @@ namespace Ceres.Chess.NNEvaluators
       }
 
       // Construct an output batch, choosing desired evaluator for each position
-      PositionEvaluationBatch batch = new(IsWDL, HasM, HasUncertaintyV, positions.NumPos, policies, w, l, m, uncertaintyV, null, default, default, default, false);
+      PositionEvaluationBatch batch = new(IsWDL, HasM, HasUncertaintyV, HasValueSecondary,
+                                          positions.NumPos, policies, w, l, w2, l2, m, uncertaintyV, 
+                                          null, default, default, default, false);
 
       return batch;
     }

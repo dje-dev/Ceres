@@ -95,6 +95,12 @@ namespace Chess.Ceres.NNEvaluators
     /// </summary>
     public override bool HasUncertaintyV => hasUncertaintyV;
 
+    /// <summary>
+    /// If the evaluator has an secondary value head.
+    /// </summary>
+    public override bool HasValueSecondary => false;
+
+
     readonly bool isWDL;
     readonly bool hasM;
     readonly bool hasUncertaintyV;
@@ -472,7 +478,7 @@ namespace Chess.Ceres.NNEvaluators
 #endif
 
       // NOTE: inefficient, above we convert from [] (flat) to [][] and here we convert back to []
-      return new PositionEvaluationBatch(IsWDL, HasM, HasUncertaintyV, numPos, result.ValuesRaw,
+      return new PositionEvaluationBatch(IsWDL, HasM, HasUncertaintyV, HasValueSecondary, numPos, result.ValuesRaw, default,
                                          result.PolicyVectors,//*/result.PolicyFlat, 
                                          mFP16, uncertaintyVFP16, null, ValueHeadLogistic,
                                          PositionEvaluationBatch.PolicyType.LogProbabilities, false, batch, stats);

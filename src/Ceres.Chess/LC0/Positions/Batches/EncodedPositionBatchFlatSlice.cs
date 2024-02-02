@@ -85,13 +85,7 @@ namespace Ceres.Chess.LC0.Batches
     }
 
 
-
-    public Memory<float> W => Parent.W.Slice(StartIndex, Length);
-
-    public Memory<float> L => Parent.L.Slice(StartIndex, Length);
-
-    public Memory<FP16> Policy => Parent.Policy.Slice(StartIndex * EncodedPolicyVector.POLICY_VECTOR_LENGTH, Length * EncodedPolicyVector.POLICY_VECTOR_LENGTH);
-
+    
     public int NumPos => Length;
 
     public EncodedPositionType TrainingType => Parent.TrainingType;

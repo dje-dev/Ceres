@@ -43,7 +43,7 @@ namespace Ceres.Chess.NNEvaluators
     /// <summary>
     /// Delegate type which constructs evaluator from specified definition.
     /// </summary>
-    public delegate NNEvaluator CustomDelegate(string netID, int gpuID, NNEvaluator referenceEvaluator);
+    public delegate NNEvaluator CustomDelegate(string netID, int gpuID, NNEvaluator referenceEvaluator, object options);
 
     /// <summary>
     /// Custom factory method installable at runtime (COMBO_PHASED).
@@ -56,9 +56,19 @@ namespace Ceres.Chess.NNEvaluators
     public static CustomDelegate Custom1Factory;
 
     /// <summary>
+    /// Optional options object for use by custom factory method (CUSTOM1). 
+    /// </summary>
+    public static object Custom1Options; 
+
+    /// <summary>
     /// Custom factory method installable at runtime (CUSTOM2).
     /// </summary>
     public static CustomDelegate Custom2Factory;
+
+    /// <summary>
+    /// Optional options object for use by custom factory method (CUSTOM2). 
+    /// </summary>
+    public static object Custom2Options;
 
 
     static Dictionary<object, (NNEvaluatorDef, NNEvaluator)> persistentEvaluators = new();
@@ -275,7 +285,7 @@ namespace Ceres.Chess.NNEvaluators
           {
             throw new Exception("NNEvaluatorFactory.ComboPhasedFactory static variable must be initialized.");
           }
-          ret = ComboPhasedFactory(netDef.NetworkID, deviceDef.DeviceIndex, referenceEvaluator);
+          ret = ComboPhasedFactory(netDef.NetworkID, deviceDef.DeviceIndex, referenceEvaluator, Custom1Options);
           break;
 
         case NNEvaluatorType.Custom1:
@@ -288,7 +298,7 @@ namespace Ceres.Chess.NNEvaluators
           {
             networkID1 = NNWeightsFiles.LookupNetworkFile(netDef.NetworkID).NetworkID;
           }
-          ret = Custom1Factory(networkID1, deviceDef.DeviceIndex, referenceEvaluator);
+          ret = Custom1Factory(networkID1, deviceDef.DeviceIndex, referenceEvaluator, Custom1Options);
           break;
 
         case NNEvaluatorType.Custom2:
@@ -301,7 +311,7 @@ namespace Ceres.Chess.NNEvaluators
           {
             networkID2 = NNWeightsFiles.LookupNetworkFile(netDef.NetworkID).NetworkID;
           }
-          ret = Custom2Factory(networkID2, deviceDef.DeviceIndex, referenceEvaluator);
+          ret = Custom2Factory(networkID2, deviceDef.DeviceIndex, referenceEvaluator, Custom2Options);
           break;
 
         default:

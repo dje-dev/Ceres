@@ -32,6 +32,9 @@ namespace Ceres.Chess.NetEvaluation.Batch
     private readonly float winP;
     private readonly float lossP;
 
+    private readonly float win2P;
+    private readonly float loss2P;
+
     #endregion
 
     /// <summary>
@@ -57,12 +60,12 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <summary>
     ///  Optional extra evaluation statistic 0.
     /// </summary>
-    public readonly FP16 ExtraStat0;
+    public readonly FP16? ExtraStat0;
 
     /// <summary>
     ///  Optional extra evaluation statistic 1.
     /// </summary>
-    public readonly FP16 ExtraStat1;
+    public readonly FP16? ExtraStat1;
 
 
     /// <summary>
@@ -74,13 +77,17 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <param name="uncertaintyV"></param>
     /// <param name="policy"></param>
     /// <param name="activations"></param>
-    public NNEvaluatorResult(float winP, float lossP, float m, float uncertaintyV,
+    public NNEvaluatorResult(float winP, float lossP, 
+                             float win2P, float loss2P, 
+                             float m, float uncertaintyV,
                              CompressedPolicyVector policy, 
                              NNEvaluatorResultActivations activations,
-                             FP16 extraStat0 = default, FP16 extraStat1 = default)
+                             FP16? extraStat0 = null, FP16? extraStat1 = default)
     {
       this.winP = winP;
       this.lossP = lossP;
+      this.win2P = win2P;
+      this.loss2P = loss2P;
       M = Math.Max(0, m);
       UncertaintyV = uncertaintyV;
       Policy = policy;
@@ -97,9 +104,20 @@ namespace Ceres.Chess.NetEvaluation.Batch
 
 
     /// <summary>
+    /// Value of secondary value head (win minus loss probability).
+    /// </summary>
+    public readonly float V2 => float.IsNaN(loss2P) ? win2P : (win2P - loss2P);
+
+
+    /// <summary>
     /// Draw probability.
     /// </summary>
     public readonly float D => 1.0f - (winP + lossP);
+
+    /// <summary>
+    /// Draw probability (secondary value head).
+    /// </summary>
+    public readonly float D2 => 1.0f - (win2P + loss2P);
 
 
     /// <summary>
@@ -109,9 +127,20 @@ namespace Ceres.Chess.NetEvaluation.Batch
 
 
     /// <summary>
-    /// Draw probability.
+    /// Win probability (secondary value head).
+    /// </summary>
+    public readonly float W2 => float.IsNaN(loss2P) ? float.NaN : win2P;
+
+
+    /// <summary>
+    /// Loss probability.
     /// </summary>
     public readonly float L => float.IsNaN(lossP) ? float.NaN : lossP;
+
+    /// <summary>
+    /// Loss probability (secondary value head).
+    /// </summary>
+    public readonly float L2 => float.IsNaN(loss2P) ? float.NaN : loss2P;
 
 
     /// <summary>
@@ -126,7 +155,21 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <returns></returns>
     public override string ToString()
     {
-      return $"<NNPositionEvaluation V={V,6:F2} MLH={M,6:F2} UV={UncertaintyV,6:F2} Policy={Policy}>";
+      string extraV = float.IsNaN(V2) ? "" : $" V2={V2,6:F2}";
+
+      string dev = "";
+      if (ExtraStat0 != null && !float.IsNaN(ExtraStat0.Value))
+      {
+        dev = $" QDEV [{ExtraStat0.Value,4:F2} {ExtraStat1.Value,4:F2}] ";
+      }
+
+      string extras = $"WDL ({W:F2} {1-(W+L):F2} {L:F2}) ";
+      if (!float.IsNaN(W2))
+      {
+        extras += $" WDL2 ({W2:F2} {1 - (W2 + L2):F2} {L2:F2}) ";
+      }
+
+      return $"<NNPositionEvaluation V={V,6:F2}{extraV}{dev} MLH ={M,6:F2} UV={UncertaintyV,6:F2} Policy={Policy}>";
     }
   }
 }

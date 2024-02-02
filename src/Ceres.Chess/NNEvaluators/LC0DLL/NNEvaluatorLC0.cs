@@ -45,6 +45,8 @@ namespace Ceres.Chess.NNEvaluators
     public override bool HasM => hasM;
     public override bool HasUncertaintyV => false;
 
+    public override bool HasValueSecondary => false;
+
     readonly bool isWDL;
     readonly bool hasM;
 
@@ -128,7 +130,7 @@ namespace Ceres.Chess.NNEvaluators
       ParallelOptions parallelOptions = ParallelUtils.ParallelOptions(positions.NumPos, NUM_POSITIONS_PER_THREAD);
       Parallel.For(0, positions.NumPos, parallelOptions, PreparePosition);
 
-      return new PositionEvaluationBatch(IsWDL, HasM, HasUncertaintyV, positions.NumPos, policies, w, l, m, null, null, new TimingStats()); ;
+      return new PositionEvaluationBatch(IsWDL, HasM, HasUncertaintyV, false, positions.NumPos, policies, w, l, default, default, m, null, null, new TimingStats()); ;
     }
 
 

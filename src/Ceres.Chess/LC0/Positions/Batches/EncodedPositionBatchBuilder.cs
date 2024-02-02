@@ -93,7 +93,8 @@ namespace Ceres.Chess.LC0.Batches
     /// Adds a position (with history) to the batch.
     /// </summary>
     /// <param name="positionEncoded"></param>
-    public void Add(in EncodedPositionWithHistory positionEncoded)
+    /// <param name="fillInMissingPlanes"></param>
+    public void Add(in EncodedPositionWithHistory positionEncoded, bool fillInMissingPlanes)
     {
       ulong zobristHashForCaching = 0;
       MGPosition positionMG = default;
@@ -118,7 +119,7 @@ namespace Ceres.Chess.LC0.Batches
         MGMoveGen.GenerateMoves(in positionMG, moves);
       }
 
-      Add(in positionEncoded, in positionMG, zobristHashForCaching, moves, null); // TOFIX
+      Add(in positionEncoded, in positionMG, zobristHashForCaching, moves, null, fillInMissingPlanes); // TOFIX
     }
 
     /// <summary>
@@ -128,10 +129,15 @@ namespace Ceres.Chess.LC0.Batches
     /// <param name="position"></param>
     /// <param name="positionHash"></param>
     /// <param name="moves"></param>
+    /// <param name="lastMovePlies"></param>
+    /// <param name="fillInEmptyPlanes"></param>
     public void Add(in EncodedPositionWithHistory positionEncoded, in MGPosition position, 
-                    ulong positionHash, MGMoveList moves, byte[] lastMovePlies)
+                    ulong positionHash, MGMoveList moves, byte[] lastMovePlies, bool fillInEmptyPlanes)
     {
-      if (batch.Positions == null) throw new Exception("AddPosition requires that constructor argument hashesAndMovesRequired be true");
+      if (batch.Positions == null)
+      {
+        throw new Exception("AddPosition requires that constructor argument hashesAndMovesRequired be true");
+      }
 
       lock (this)
       {
@@ -147,7 +153,14 @@ namespace Ceres.Chess.LC0.Batches
           Array.Copy(lastMovePlies, 0, batch.LastMovePlies, NumPositionsAdded * 64, 64);
         }
 
+        
         pendingPositions[NumPositionsAdded] = positionEncoded;
+
+        if (fillInEmptyPlanes)
+        {
+          pendingPositions[NumPositionsAdded].FillInEmptyPlanes();
+        }
+
 
         NumPositionsAdded++;
       }
@@ -165,14 +178,15 @@ namespace Ceres.Chess.LC0.Batches
       //       properly set up extra en passant plane if needed.
       EncodedPositionWithHistory posRaw = new EncodedPositionWithHistory();
       posRaw.SetFromPosition(in position, fillInMissingPlanes, position.MiscInfo.SideToMove);
-      Add(posRaw);
+      Add(posRaw, false); // History planes already set above, if requested.
   }
 
 
     /// <summary>
     /// Adds a position with history to the batch.
     /// </summary>
-    /// <param name="moveSequence">if history planes should be filled in if incomplete (typically necessary)</param>
+    /// <param name="moveSequence">sequence of positions</param>
+    /// <param name="fillInMissingPlanes">if history planes should be filled in if incomplete (typically necessary)</param>
     public void Add(PositionWithHistory moveSequence, bool fillInMissingPlanes = true)
     {
       MGPosition finalPositionMG = moveSequence.FinalPosMG;
@@ -194,7 +208,8 @@ namespace Ceres.Chess.LC0.Batches
         MGMoveGen.GenerateMoves(in finalPositionMG, moves);
       }
 
-      Add(in posRaw, in finalPositionMG, zobristHashForCaching, moves, null);
+      // Note that fillInMissingPlanes is set false here because it will have already been accomplished above if requrested.
+      Add(in posRaw, in finalPositionMG, zobristHashForCaching, moves, null, false);
     }
 
     /// <summary>

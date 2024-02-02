@@ -207,6 +207,8 @@ namespace Ceres.Chess.NNEvaluators
         // Compute average value result
         FP16[] w = null;
         FP16[] l = null;
+        FP16[] w2 = null;
+        FP16[] l2 = null;
         FP16[] m = null;
         FP16[] uncertaintyV = null;
 
@@ -222,10 +224,22 @@ namespace Ceres.Chess.NNEvaluators
                                                : AverageFP16(positions.NumPos, subResults, (e, i) => e.GetLossP(i), WeightsValueOverrideFunc, positions);
         }
 
+        if (HasValueSecondary)
+        {
+          w2 = WeightsValueOverrideFunc == null ? AverageFP16(positions.NumPos, subResults, (e, i) => e.GetWin2P(i), WeightsValue)
+                                                : AverageFP16(positions.NumPos, subResults, (e, i) => e.GetWin2P(i), WeightsValueOverrideFunc, positions);
+
+          if (IsWDL)
+          {
+            l2 = WeightsValueOverrideFunc == null ? AverageFP16(positions.NumPos, subResults, (e, i) => e.GetLoss2P(i), WeightsValue)
+                                                  : AverageFP16(positions.NumPos, subResults, (e, i) => e.GetLoss2P(i), WeightsValueOverrideFunc, positions);
+          }
+        }
+
         if (HasM)
         { 
           m = WeightsMOverrideFunc == null ? AverageFP16(positions.NumPos, subResults, (e, i) => e.GetM(i), WeightsM)
-                                               : AverageFP16(positions.NumPos, subResults, (e, i) => e.GetM(i), WeightsMOverrideFunc, positions);
+                                           : AverageFP16(positions.NumPos, subResults, (e, i) => e.GetM(i), WeightsMOverrideFunc, positions);
         }
 
         if (HasUncertaintyV)
@@ -235,7 +249,8 @@ namespace Ceres.Chess.NNEvaluators
         }
 
         TimingStats stats = new TimingStats();
-        return new PositionEvaluationBatch(IsWDL, HasM, HasUncertaintyV, positions.NumPos, policies, w, l, m, uncertaintyV, activations, stats);
+        return new PositionEvaluationBatch(IsWDL, HasM, HasUncertaintyV, HasValueSecondary, 
+                                           positions.NumPos, policies, w, l, w2, l2, m, uncertaintyV, activations, stats);
       }
     }
 

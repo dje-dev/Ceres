@@ -68,21 +68,6 @@ namespace Ceres.Chess.LC0.Batches
     Memory<MGMoveList> Moves { get; set; }
 
     /// <summary>
-    /// Memory of W (winning probability forecasts)
-    /// </summary>
-    Memory<float> W { get; }
-
-    /// <summary>
-    /// Memory of L (loss probability forecasts)
-    /// </summary>
-    Memory<float> L { get; }
-
-    /// <summary>
-    /// Memory of policy probabilities, e.g. 0.1 for 10% probability of a move being chosen
-    /// </summary>
-    Memory<FP16> Policy { get; }
-
-    /// <summary>
     /// If originated from EncodedPositionWithHistory then
     /// this field optionally holds the origin data array.
     /// </summary>

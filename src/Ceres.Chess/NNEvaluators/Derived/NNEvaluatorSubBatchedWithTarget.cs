@@ -100,6 +100,7 @@ namespace Ceres.Chess.NNEvaluators
 
     public override bool HasM => Evaluator.HasM;
     public override bool HasUncertaintyV => Evaluator.HasUncertaintyV;
+    public override bool HasValueSecondary => Evaluator.HasValueSecondary;
 
     public override int MaxBatchSize => int.MaxValue;
 
@@ -218,7 +219,7 @@ namespace Ceres.Chess.NNEvaluators
       }
       else if (index == subBatches.Count)
       {
-        PositionEvaluationBatch batch = new PositionEvaluationBatch(IsWDL, HasM, MaxSubBatchSize, retrieveSupplementalResults);
+        PositionEvaluationBatch batch = new PositionEvaluationBatch(IsWDL, HasM, HasUncertaintyV, HasValueSecondary, MaxSubBatchSize, retrieveSupplementalResults);
         subBatches.Add(batch);
         return batch;
       }
