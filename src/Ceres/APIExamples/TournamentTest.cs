@@ -53,7 +53,7 @@ namespace Ceres.APIExamples
   {
     const bool POOLED = false;
 
-    static int CONCURRENCY = POOLED ? 16 : Environment.MachineName.ToUpper().Contains("DEV") ? 3 : 8;
+    static int CONCURRENCY = POOLED ? 16 : Environment.MachineName.ToUpper().Contains("DEV") ? 6 : 8;
     static int[] OVERRIDE_DEVICE_IDs = POOLED ? null
       : (Environment.MachineName.ToUpper() switch
       {
@@ -203,14 +203,14 @@ namespace Ceres.APIExamples
 //      NET1 = "CUSTOM1:703810,CUSTOM1:703810";
       NET1= "CUSTOM1:753723";
       NET2 = "CUSTOM2:753723";
-//      NET1 = "753723";
-//      NET2 = "703810";
+      //      NET1 = "753723";
+      //      NET2 = "703810";
 
       //
-NET2 = RegisteredNets.Aliased["T1_DISTILL_256_10"].NetSpecificationString;
-//      NET1 = RegisteredNets.Aliased["T60"].NetSpecificationString;
+      //NET2 = RegisteredNets.Aliased["T1_DISTILL_256_10"].NetSpecificationString;
+      //      NET1 = RegisteredNets.Aliased["T60"].NetSpecificationString;
       //      NET1 = ReferenceNetIDs.T2_768_15_T82_4832;
-      //NET1 = NET2 = ReferenceNetIDs.BEST_T80;
+      //NET1 = NET2 = "~T80";
       //NET2 = RegisteredNets.Aliased["T60"].NetSpecificationString;
 
       //NET2 = ReferenceNetIDs.T1_DISTILL_256_10_FP16;
@@ -261,7 +261,7 @@ NET2 = RegisteredNets.Aliased["T1_DISTILL_256_10"].NetSpecificationString;
       //NET2 = "753723";// "801307";610889
       //      NET2 = "784984";
       //NET2 = @"d:\weights\lczero.org\t12test6-swa-678000.pb.gz";//"610889";//  ;
-      NET1 = NET2 = "753723";// "703810";
+     // NET1 = NET2 = "753723";// "703810";
       //NET2 = "t12test6-swa-678000";
 
       //      NET2 = ReferenceNetIDs.BT2;
@@ -269,7 +269,7 @@ NET2 = RegisteredNets.Aliased["T1_DISTILL_256_10"].NetSpecificationString;
       SearchLimit limit1 = SearchLimit.NodesForAllMoves(100_000, 1000) * 3;
       limit1 = SearchLimit.NodesPerMove(1000);
 //      limit1 = SearchLimit.NodesPerMove(1000 + ((int)DateTime.Now.Millisecond % 200));
-    //limit1 = SearchLimit.BestValueMove;
+//    limit1 = SearchLimit.BestValueMove;
       
 
       //      limit1 = SearchLimit.SecondsForAllMoves(60, 0.6f);
@@ -608,7 +608,7 @@ NET2 = RegisteredNets.Aliased["T1_DISTILL_256_10"].NetSpecificationString;
       EnginePlayerDef playerCeres2 = new EnginePlayerDef(engineDefCeres2, limit2);
       EnginePlayerDef playerCeres3 = new EnginePlayerDef(engineDefCeres3, limit1);
 
-      bool ENABLE_LC0 = true;// evalDef1.Nets[0].Net.Type == NNEvaluatorType.LC0Library && (evalDef1.Nets[0].WeightValue == 1 && evalDef1.Nets[0].WeightPolicy == 1 && evalDef1.Nets[0].WeightM == 1);
+      bool ENABLE_LC0 = false;// evalDef1.Nets[0].Net.Type == NNEvaluatorType.LC0Library && (evalDef1.Nets[0].WeightValue == 1 && evalDef1.Nets[0].WeightPolicy == 1 && evalDef1.Nets[0].WeightM == 1);
       GameEngineDefLC0 engineDefLC1 = ENABLE_LC0 ? new GameEngineDefLC0("LC0_0", evalDef1, forceDisableSmartPruning, null, null) : null;
       GameEngineDefLC0 engineDefLC2 = ENABLE_LC0 ? new GameEngineDefLC0("LC0_2", evalDef2, forceDisableSmartPruning, null, null) : null;
 
@@ -654,7 +654,7 @@ NET2 = RegisteredNets.Aliased["T1_DISTILL_256_10"].NetSpecificationString;
 #endif
       // **************************************************
       EnginePlayerDef player1 = playerCeres1;// playerCeres1UCI;// new EnginePlayerDef(engineDefCSNN1, SearchLimit.NodesPerMove(30));
-      EnginePlayerDef player2 = playerCeresPreNC;// playerCeres96;// new EnginePlayerDef(EnginDefStockfish14(), SearchLimit.NodesPerMove(300 * 10_000));
+      EnginePlayerDef player2 = playerCeres2;// playerCeres96;// new EnginePlayerDef(EnginDefStockfish14(), SearchLimit.NodesPerMove(300 * 10_000));
       //new EnginePlayerDef(engineDefCSNoNN, SearchLimit.NodesPerMove(300 * 10_000));
       // **************************************************
 
