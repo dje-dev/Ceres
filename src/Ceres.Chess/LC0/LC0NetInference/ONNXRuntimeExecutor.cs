@@ -34,7 +34,7 @@ namespace Ceres.Chess.LC0NetInference
   /// </summary>
   public class ONNXRuntimeExecutor : IDisposable
   {
-    public const int TPG_BYTES_PER_SQUARE_RECORD = 135; // TODO: should be referenced from TPGRecord
+    public const int TPG_BYTES_PER_SQUARE_RECORD = 137; // TODO: should be referenced from TPGRecord
     public const int TPG_MAX_MOVES = 92; //  // TODO: should be referenced from TPGRecord
 
     /// <summary>
