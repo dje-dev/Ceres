@@ -13,18 +13,15 @@
 
 #region Using directives
 
-using Ceres.Base;
+using System;
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
+
 using Ceres.Base.DataTypes;
 using Ceres.Base.Math;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.LC0.Boards;
 using Ceres.Chess.MoveGen;
-using Ceres.Chess.MoveGen.Converters;
-using System;
-using System.Buffers;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Runtime.CompilerServices;
 
 #endregion
 
@@ -660,25 +657,22 @@ namespace Ceres.Chess.LC0.Batches
           float multiplier = (scale50MoveCounter && isMoves50Plane) ? (1.0f / 99.0f) : 1.0f;
           float targetValue = multiplier * thisValues[outer];
 
-          byte* bytes = (byte*)&longs[outer];
-
-          for (int i = 0; i < 8; i++)
+          byte thisSquare;
+          ulong thisLong = longs[outer];
+          while (true)
           {
-            byte val = bytes[i];
-            if (val != 0)
+            thisSquare = (byte)System.Numerics.BitOperations.TrailingZeroCount(thisLong);
+            if (thisSquare < 64)
             {
-              if ((val & (1 << 0)) > 0) targetArray[targetOffset] = targetValue;
-              if ((val & (1 << 1)) > 0) targetArray[targetOffset + 1] = targetValue;
-              if ((val & (1 << 2)) > 0) targetArray[targetOffset + 2] = targetValue;
-              if ((val & (1 << 3)) > 0) targetArray[targetOffset + 3] = targetValue;
-              if ((val & (1 << 4)) > 0) targetArray[targetOffset + 4] = targetValue;
-              if ((val & (1 << 5)) > 0) targetArray[targetOffset + 5] = targetValue;
-              if ((val & (1 << 6)) > 0) targetArray[targetOffset + 6] = targetValue;
-              if ((val & (1 << 7)) > 0) targetArray[targetOffset + 7] = targetValue;
+              targetArray[targetOffset + thisSquare] = targetValue;
+              thisLong ^= 1UL << thisSquare;
             }
-            targetOffset += 8;
+            else
+            {
+              break;
+            }
           }
-
+          targetOffset += 64;
         }
       }
     }
