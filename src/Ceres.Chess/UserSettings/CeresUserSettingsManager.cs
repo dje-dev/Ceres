@@ -198,7 +198,9 @@ namespace Ceres.Chess.UserSettings
         extension = OperatingSystem.IsLinux() ? ".so" : ".dll";
       }
 
-      string fn = Path.Combine(dir, "lc0" + extension);
+      string baseEXEName = Settings.LC0ExeName;
+
+      string fn = Path.Combine(dir, baseEXEName + extension);
 
       if (!System.IO.File.Exists(fn))
       {

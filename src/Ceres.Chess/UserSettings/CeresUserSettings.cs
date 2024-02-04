@@ -32,6 +32,11 @@ namespace Ceres.Chess.UserSettings
     public string DirLC0Binaries { get; set; } = ".";
 
     /// <summary>
+    /// Name of the LC0 executable (e.g. the default of lc0").
+    /// </summary>
+    public string LC0ExeName { get; set; } = "lc0";
+
+    /// <summary>
     /// Directory in which LC0 network weights files are located
     /// </summary>
     public string DirLC0Networks { get; set; } = ".";
