@@ -98,10 +98,11 @@ namespace Chess.Ceres.NNEvaluators
     /// <summary>
     /// If the evaluator has an secondary value head.
     /// </summary>
-    public override bool HasValueSecondary => false;
+    public override bool HasValueSecondary => hasValueSecondary;
 
 
     readonly bool isWDL;
+    readonly bool hasValueSecondary;
     readonly bool hasM;
     readonly bool hasUncertaintyV;
 
@@ -193,6 +194,7 @@ namespace Chess.Ceres.NNEvaluators
                                  bool valueHeadLogistic, bool scale50MoveCounter, 
                                  bool movesEnabled = false, bool enableProfiling = false, 
                                  bool useHistory = true, object options = null,
+                                 bool hasValueSecondary = false,
                                  float temperatureValue1 = 1, float temperatureValue2 = 1, float fractionValueFromValue2 = 0)
     {
       EngineType = type == ONNXRuntimeExecutor.NetTypeEnum.Ceres ? "ONNX_DJE" : "ONNX_LZ0";
@@ -201,6 +203,7 @@ namespace Chess.Ceres.NNEvaluators
       BatchSize = batchSize;
       Precision = precision;
       this.isWDL = isWDL;
+      this.hasValueSecondary = hasValueSecondary;
       this.hasM = hasM;
       this.hasUncertaintyV = hasUncertaintyV;
       DeviceType = deviceType;
