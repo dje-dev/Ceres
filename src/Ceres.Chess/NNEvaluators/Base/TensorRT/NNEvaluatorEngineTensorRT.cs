@@ -310,7 +310,7 @@ Updated notes:
                                                  rawResultsPolicy.Slice(0, numToProcess*1858).ToArray(), // Inefficient 
                                                  resultsMLH.ToArray(), resultsUncertaintyV.ToArray(),
                                                  null, //rawResultsConvValFlat,
-                                                 VALUES_ARE_LOGISTIC,
+                                                 1, 1, 0, VALUES_ARE_LOGISTIC,
                                                  PositionEvaluationBatch.PolicyType.LogProbabilities, false,
                                                  batch, timeStats);
 

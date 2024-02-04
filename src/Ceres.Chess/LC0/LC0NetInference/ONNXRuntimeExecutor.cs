@@ -210,7 +210,7 @@ namespace Ceres.Chess.LC0NetInference
         [2] tf.math.truediv [OMITTED IF NOT ATTENTION]
         [3] value/dense2
 #endif
-        int FindIndex(int expectedPerPosition, int indexToIgnore = -1, string mustContainString = null)
+        int FindIndex(int expectedPerPosition, int indexToIgnore = -1, string mustContainString = null, bool optional = false)
         {
           int expectedLength = numPositionsUsed * expectedPerPosition;
           for (int i = 0; i < eval.Count; i++)
@@ -250,8 +250,10 @@ namespace Ceres.Chess.LC0NetInference
               return i;
             }
           }
-          throw new Exception("No output found with expected length " + expectedPerPosition);
+
+          return optional ? -1 : throw new Exception("No output found with expected length " + expectedPerPosition);
         }
+
 
         // Rather than rely upon names, just look at the dimensions
         // of the outputs to infer the positions of value, policy and MLH heads.
@@ -267,6 +269,7 @@ namespace Ceres.Chess.LC0NetInference
 
         int INDEX_POLICIES = FindIndex(1858);// FIX NetType == NetTypeEnum.Ceres ? 1858 : 96);
         int INDEX_WDL = FindIndex(3);
+        int INDEX_WDL2 = FindIndex(3, INDEX_WDL, "value2", true);
         int INDEX_MLH = FindIndex(1);
         int INDEX_UNC = hasUNC ? FindIndex(1, INDEX_MLH) : -1;
 
@@ -286,8 +289,10 @@ namespace Ceres.Chess.LC0NetInference
         FP16[] values = FP16.ToFP16(eval[INDEX_WDL].Item2);
         Debug.Assert(values.Length == (isWDL ? 3 : 1) * numPositionsUsed);
 
+        FP16[] values2 = INDEX_WDL2 == -1 ? null : FP16.ToFP16(eval[INDEX_WDL2].Item2);
+
         float[][] value_fc_activations = null;// eval.Length < 3 ? null : eval[2];
-        ONNXRuntimeExecutorResultBatch result = new ONNXRuntimeExecutorResultBatch(isWDL, values, policiesLogistics, mlh, 
+        ONNXRuntimeExecutorResultBatch result = new ONNXRuntimeExecutorResultBatch(isWDL, values, values2, policiesLogistics, mlh, 
                                                                                    uncertantiesV, value_fc_activations, 
                                                                                    numPositionsUsed);
         return result;

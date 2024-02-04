@@ -146,6 +146,27 @@ namespace Chess.Ceres.NNEvaluators
     /// </summary>
     public readonly bool UseHistory;
 
+    /// <summary>
+    /// Optional evaluator-specific options object.
+    /// </summary>
+    public readonly object Options;
+
+    /// <summary>
+    /// Temperature value to use for value head.
+    /// </summary>
+    public readonly float TemperatureValue1;
+
+    /// <summary>
+    /// Temperature value to use for value secondary head.
+    /// </summary>
+    public readonly float TemperatureValue2;
+
+    /// <summary>
+    /// Fraction of value from value 2 to be blended into primary value.
+    /// </summary>
+    public readonly float FractionValueFromValue2 = 0;
+
+
     #region Statics
 
     // TODO: clean up this lookaside buffering
@@ -164,12 +185,15 @@ namespace Chess.Ceres.NNEvaluators
 
     public const int TPG_MODE_TOTAL_BYTES_ASSUMED  = 4060 + 782; // see DoEvaluateIntoBuffers
 
-    public NNEvaluatorEngineONNX(string engineID, string onnxModelFileName, byte[] onnxModelBytes, NNDeviceType deviceType, int gpuID, bool useTRT,
+    public NNEvaluatorEngineONNX(string engineID, string onnxModelFileName, byte[] onnxModelBytes, 
+                                 NNDeviceType deviceType, int gpuID, bool useTRT,
                                  ONNXRuntimeExecutor.NetTypeEnum type, int batchSize,
                                  NNEvaluatorPrecision precision, bool isWDL, bool hasM, bool hasUncertaintyV,
                                  string outputValue, string outputWDL, string outputPolicy, string outputMLH, 
                                  bool valueHeadLogistic, bool scale50MoveCounter, 
-                                 bool movesEnabled = false, bool enableProfiling = false, bool useHistory = true)
+                                 bool movesEnabled = false, bool enableProfiling = false, 
+                                 bool useHistory = true, object options = null,
+                                 float temperatureValue1 = 1, float temperatureValue2 = 1, float fractionValueFromValue2 = 0)
     {
       EngineType = type == ONNXRuntimeExecutor.NetTypeEnum.Ceres ? "ONNX_DJE" : "ONNX_LZ0";
       EngineNetworkID = engineID;
@@ -188,6 +212,10 @@ namespace Chess.Ceres.NNEvaluators
       Scale50MoveCounter = scale50MoveCounter;
       MovesEnabled = movesEnabled;
       UseHistory = useHistory;
+      Options = options;
+      TemperatureValue1 = temperatureValue1;
+      TemperatureValue2 = temperatureValue2;
+      FractionValueFromValue2 = fractionValueFromValue2;
 
       bool filesMatch = lastONNXFileName != null && lastONNXFileName == onnxModelFileName;
       bool bytesMatch = onnxModelBytes != null && ArrayUtils.ByteArrayStableHash(onnxModelBytes) == lastONNXBytesHash;
@@ -274,7 +302,7 @@ namespace Chess.Ceres.NNEvaluators
       const float TPG_DIVISOR = 100f; // TODO: receive this in constructor instead. Should refer to TPGSquareRecord.SQUARE_BYTES_DIVISOR.
       PositionEvaluationBatch ret = DoEvaluateBatch(default, inputsPrimaryNativeF, usesSecondaryInputs ? inputsSecondaryNativeF : null, 
                                                     numPositions, retrieveSupplementalResults, posMoveIsLegal,
-                                                    TPG_DIVISOR);
+                                                    TPG_DIVISOR, Options);
       return ret;
     }
 
@@ -343,7 +371,7 @@ namespace Chess.Ceres.NNEvaluators
 
         Func<int, int, bool> posMoveIsLegal = null; // PosMoveIsLegal
         PositionEvaluationBatch ret = DoEvaluateBatch(batch, flatValuesAttentionM, flatValuesMoves, batch.NumPos, 
-                                                      retrieveSupplementalResults, posMoveIsLegal, tpgDivisor:1);
+                                                      retrieveSupplementalResults, posMoveIsLegal, tpgDivisor:1, options:Options);
         Debug.Assert(!retrieveSupplementalResults);
         return ret;
       }
@@ -360,7 +388,7 @@ namespace Chess.Ceres.NNEvaluators
         float[] flatValues = ArrayPool<float>.Shared.Rent(bufferLength);
 
         batch.ValuesFlatFromPlanes(flatValues, false, Scale50MoveCounter);
-        PositionEvaluationBatch ret = DoEvaluateBatch(batch, flatValues, null, batch.NumPos, retrieveSupplementalResults, posMoveIsLegal, tpgDivisor:1);
+        PositionEvaluationBatch ret = DoEvaluateBatch(batch, flatValues, null, batch.NumPos, retrieveSupplementalResults, posMoveIsLegal, tpgDivisor:1, options:Options);
 
         ArrayPool<float>.Shared.Return(flatValues);
         return ret;
@@ -398,7 +426,7 @@ namespace Chess.Ceres.NNEvaluators
                                             Memory<float> flatValuesPrimary, Memory<float> flatValuesSecondary,
                                             int numPos, bool retrieveSupplementalResults, 
                                             Func<int,int, bool> posMoveIsLegal,
-                                            float tpgDivisor)
+                                            float tpgDivisor, object options)
     {
       if (retrieveSupplementalResults) throw new Exception("retrieveSupplementalResults not supported");
 
@@ -478,9 +506,11 @@ namespace Chess.Ceres.NNEvaluators
 #endif
 
       // NOTE: inefficient, above we convert from [] (flat) to [][] and here we convert back to []
-      return new PositionEvaluationBatch(IsWDL, HasM, HasUncertaintyV, HasValueSecondary, numPos, result.ValuesRaw, default,
+      return new PositionEvaluationBatch(IsWDL, HasM, HasUncertaintyV, HasValueSecondary, numPos, result.ValuesRaw, result.Values2Raw,
                                          result.PolicyVectors,//*/result.PolicyFlat, 
-                                         mFP16, uncertaintyVFP16, null, ValueHeadLogistic,
+                                         mFP16, uncertaintyVFP16, null,
+                                         TemperatureValue1, TemperatureValue2, FractionValueFromValue2,
+                                         ValueHeadLogistic,
                                          PositionEvaluationBatch.PolicyType.LogProbabilities, false, batch, stats);
     }
 

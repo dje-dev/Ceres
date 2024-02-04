@@ -364,6 +364,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
                                     Span<FP16> valueEvals, Span<FP16> valueEvals2, 
                                     Span<FP16> m, Span<FP16> uncertaintyV,
                                     Span<NNEvaluatorResultActivations> activations,
+                                    float temperatureValue1, float temperatureValue2, float fractionValueFromValue2,
                                     bool valsAreLogistic, TimingStats stats)
     {
       IsWDL = isWDL;
@@ -374,10 +375,27 @@ namespace Ceres.Chess.NetEvaluation.Batch
       NumPos = numPos;
       Activations = activations.ToArray();
 
-      InitializeValueEvals(valueEvals, valsAreLogistic, false);
+      InitializeValueEvals(valueEvals, valsAreLogistic, temperatureValue1, false);
       if (!valueEvals2.IsEmpty)
       {
-        InitializeValueEvals(valueEvals2, valsAreLogistic, true);
+        InitializeValueEvals(valueEvals2, valsAreLogistic, temperatureValue2, true);
+      }
+
+      if (fractionValueFromValue2 != 0)
+      {
+        Debug.Assert(!W2.IsEmpty);
+
+        Span<FP16> w = W.Span;
+        Span<FP16> w2 = W2.Span;
+        Span<FP16> l = L.Span;
+        Span<FP16> l2 = L2.Span;
+        float fractionValueFromValue1 = 1 - fractionValueFromValue2;
+
+        for (int i=0; i<w.Length; i++)
+        { 
+          w[i] = (FP16)(w[i] * fractionValueFromValue1 + w2[i] * fractionValueFromValue2);
+          l[i] = (FP16)(l[i] * fractionValueFromValue1 + l2[i] * fractionValueFromValue2);
+        }  
       }
 
       if (hasM)
@@ -412,10 +430,12 @@ namespace Ceres.Chess.NetEvaluation.Batch
     public PositionEvaluationBatch(bool isWDL, bool hasM, bool hasUncertaintyV, bool hasValueSecondary, int numPos, 
                                    Span<FP16> valueEvals, Span<FP16> valueEvals2, Memory<float> policyProbs,
                                    FP16[] m, FP16[] uncertaintyV, NNEvaluatorResultActivations[] activations,
+                                   float temperatureValue1, float temperatureValue2, float fractionValue1FromValue2,
                                    bool valsAreLogistic, PolicyType probType, bool policyAlreadySorted,
                                    IEncodedPositionBatchFlat sourceBatchWithValidMoves,
                                    TimingStats stats)
-      : this(isWDL, hasM, hasUncertaintyV, hasValueSecondary, numPos, valueEvals, valueEvals2, m, uncertaintyV, activations, valsAreLogistic, stats)
+      : this(isWDL, hasM, hasUncertaintyV, hasValueSecondary, numPos, valueEvals, valueEvals2, m, uncertaintyV, activations,
+          temperatureValue1, temperatureValue2, fractionValue1FromValue2, valsAreLogistic, stats)
     {
       Policies = ExtractPoliciesBufferFlat(numPos, policyProbs, probType, policyAlreadySorted, sourceBatchWithValidMoves);
     }
@@ -437,8 +457,10 @@ namespace Ceres.Chess.NetEvaluation.Batch
                                    int topK, Span<int> policyIndices, Span<float> policyProbabilties,
                                    Span<FP16> m, Span<FP16> uncertaintyV,
                                    Span<NNEvaluatorResultActivations> activations, bool valsAreLogistic,
-                                   PolicyType probType, TimingStats stats, bool alreadySorted)
-      : this(isWDL, hasM, hasUncertaintyV, hasValueSecondary, numPos, valueEvals, valueEvals2, m, uncertaintyV, activations, valsAreLogistic, stats)
+                                   PolicyType probType, TimingStats stats, bool alreadySorted,
+                                   float temperatureValue1= 1, float temperatureValue2 = 1, float fractionValue1FromValue2 = 0)
+      : this(isWDL, hasM, hasUncertaintyV, hasValueSecondary, numPos, valueEvals, valueEvals2, m, uncertaintyV, activations, 
+             temperatureValue1, temperatureValue2, fractionValue1FromValue2, valsAreLogistic, stats)
     {
       Policies = ExtractPoliciesTopK(numPos, topK, policyIndices, policyProbabilties, probType, alreadySorted);
     }
@@ -711,7 +733,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// </summary>
     /// <param name="valueEvals"></param>
     /// <param name="valsAreLogistic"></param>
-    void InitializeValueEvals(Span<FP16> valueEvals, bool valsAreLogistic, bool secondaryValue)
+    void InitializeValueEvals(Span<FP16> valueEvals, bool valsAreLogistic, float temperature, bool secondaryValue)
     {
       Debug.Assert(!(secondaryValue && !HasValueSecondary));
 
@@ -727,6 +749,11 @@ namespace Ceres.Chess.NetEvaluation.Batch
         {
           if (!valsAreLogistic)
           {
+            if (temperature != 1)
+            {
+              throw new NotImplementedException("temperature with non-logistic values");
+            }
+
             w[i] = valueEvals[i * 3 + 0];
             l[i] = valueEvals[i * 3 + 2];
             Debug.Assert(Math.Abs(1 - (valueEvals[i * 3 + 0] + valueEvals[i * 3 + 1] + valueEvals[i * 3 + 2])) <= 0.001);
@@ -734,9 +761,21 @@ namespace Ceres.Chess.NetEvaluation.Batch
           else
           {
             // NOTE: Use min with 20 to deal with excessively large values (that would go to infinity)
-            double v1 = Math.Exp(Math.Min(20, valueEvals[i * 3 + 0]));
-            double v2 = Math.Exp(Math.Min(20, valueEvals[i * 3 + 1]));
-            double v3 = Math.Exp(Math.Min(20, valueEvals[i * 3 + 2]));
+            double v1;
+            double v2;
+            double v3;
+            if (temperature == 1)
+            {
+              v1 = Math.Exp(Math.Min(20, valueEvals[i * 3 + 0]));
+              v2 = Math.Exp(Math.Min(20, valueEvals[i * 3 + 1]));
+              v3 = Math.Exp(Math.Min(20, valueEvals[i * 3 + 2]));
+            }
+            else
+            {
+              v1 = Math.Exp(Math.Min(20, valueEvals[i * 3 + 0] / temperature));
+              v2 = Math.Exp(Math.Min(20, valueEvals[i * 3 + 1] / temperature));
+              v3 = Math.Exp(Math.Min(20, valueEvals[i * 3 + 2] / temperature));
+            }
 
             double totl = v1 + v2 + v3;
             Debug.Assert(!double.IsNaN(totl));

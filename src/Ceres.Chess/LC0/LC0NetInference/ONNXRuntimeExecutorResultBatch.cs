@@ -14,14 +14,9 @@
 #region Using directives
 
 using System;
-using System.Runtime.InteropServices;
 
-using Ceres.Base.DataType;
 using Ceres.Base.DataTypes;
-using Ceres.Chess.EncodedPositions;
-using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Chess.LC0.Batches;
-using Ceres.Chess.LC0.Positions;
 
 #endregion
 
@@ -33,11 +28,6 @@ namespace Ceres.Chess.LC0NetInference
   public class ONNXRuntimeExecutorResultBatch
   {
     public readonly bool IsWDL;
-
-    /// <summary>
-    /// Value head
-    /// </summary>
-    public readonly EncodedEvalLogistic[] Values;
 
     /// <summary>
     /// Policy head
@@ -60,6 +50,7 @@ namespace Ceres.Chess.LC0NetInference
     public readonly float[][] ValueFCActivations;
 
     public FP16[] ValuesRaw;
+    public FP16[] Values2Raw;
 
     public int BatchSize => PolicyVectors.GetLength(0);
 
@@ -70,9 +61,6 @@ namespace Ceres.Chess.LC0NetInference
     /// </summary>
     public readonly int NumPositionsUsed;
 
-    public FP16[] ValuesLogistics => EncodedEvalLogistic.ToLogisticsArray(Values);
-
-
 
     /// <summary>
     /// Constructor
@@ -80,13 +68,11 @@ namespace Ceres.Chess.LC0NetInference
     /// <param name="values"></param>
     /// <param name="policyLogisticVectors"></param>
     /// <param name="draws"></param>
-    public ONNXRuntimeExecutorResultBatch(bool isWDL, FP16[] values, float[] policyLogisticVectors, 
+    public ONNXRuntimeExecutorResultBatch(bool isWDL, FP16[] values, FP16[] values2, float[] policyLogisticVectors, 
                                           float[] mlh, float[] uncertaintyV, float[][] valueFCActiviations, int numPositionsUsed)
     {
       ValuesRaw = values;
-
-      if (!isWDL)
-        Values = EncodedEvalLogistic.FromLogisticArray(values);
+      Values2Raw = values2;
 
       PolicyVectors = policyLogisticVectors; // still in logistic form
       MLH = mlh;
