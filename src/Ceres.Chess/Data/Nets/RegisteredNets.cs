@@ -45,8 +45,8 @@ namespace Ceres.Chess.Data.Nets
         { "T81", SimpleLC0Net("811971") }, //Training restarted after surgery after 811971
 
         {"BT2", ONNXNet32LC0("BT2-768x15smolgen-12h-do-01-swa-onnx-2350000-rule50.gz")},
-//        {"BT3", ONNXNet32LC0("BT3-768x15x24h-swa-2350000#32")},
-//        {"BT4", ONNXNet32LC0("BT4-1024x15x32h-swa-365000#32")},
+        {"BT3", ONNXNet32LC0("BT3-768x15x24h-swa-2350000#32")},
+        {"BT4", ONNXNet32LC0("BT4_4975#32")},
 
         {"T1_DISTILL_256_10", ONNXNet32LC0("t1-256x10-distilled-swa-2432500")},
         {"T1_DISTILL_256_10_FP16", ONNXNet16LC0("t1-256x10-distilled-swa-2432500_fp16")},
