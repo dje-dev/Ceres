@@ -106,6 +106,12 @@ namespace Ceres.MCTS.Params
     public ParamsSearchSecondaryEvaluator ParamsSecondaryEvaluator;
 
     /// <summary>
+    /// Temperature to be applied to the value head output from the neural network evaluations.
+    /// Values less than 1 sharpen the distribution, values greater than 1 flatten it.
+    /// </summary>
+    public float ValueTemperature = 1.0f; 
+
+    /// <summary>
     /// Optional policy used for applying Dirichlet noise at root.
     /// </summary>
     public SearchNoisePolicyDef SearchNoisePolicy;

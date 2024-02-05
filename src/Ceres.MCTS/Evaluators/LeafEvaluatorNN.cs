@@ -33,6 +33,7 @@ using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.Iteration;
 using Ceres.Base.Threading;
 using Ceres.MCTS.MTCSNodes.Struct;
+using Ceres.Base.OperatingSystem.NVML;
 
 
 #endregion
@@ -274,6 +275,17 @@ namespace Ceres.MCTS.Evaluators
         {
           winP = rawWinP;
           lossP = rawLossP;
+        }
+
+        if (node.Context.ParamsSearch.ValueTemperature != 1)
+        {
+          float temperature = node.Context.ParamsSearch.ValueTemperature;
+          (float winPRaw, float drawPRaw, float lossPRaw) = (winP, 1 - winP - lossP, lossP);
+          (float winPRawLogit, float drawPRawLogit, float lossPRawLogit) = (MathF.Log(winPRaw)/temperature, MathF.Log(drawPRaw)/temperature, MathF.Log(lossPRaw)/temperature);
+          (float winPAdj, float drawPAdj, float lossPAdj) = (MathF.Exp(winPRawLogit), MathF.Exp(drawPRawLogit), MathF.Exp(lossPRawLogit));
+          float sum = winPAdj + drawPAdj + lossPAdj;
+          winP = (FP16) (winPAdj / sum); 
+          lossP = (FP16) (lossPAdj / sum);
         }
 
         byte scaledUncertainty = (byte)Math.Round(MCTSNodeStruct.UNCERTAINTY_SCALE * rawUncertaintyV, 0);
