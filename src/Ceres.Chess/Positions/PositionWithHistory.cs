@@ -357,13 +357,7 @@ namespace Ceres.Chess.Positions
     {
       InitialPosMG = positions[0].ToMGPosition;
       finalPosMG = positions[^1].ToMGPosition;
-
-      // Verify that the final position is not the start position (unless it is the only position).
-      // If it were found, then the caller probably mistakenly ordered the positions in reverse.
-      Debug.Assert(positions.Length < 2
-                || positions[^1].PieceCount != 32  // quick way of ruling out start position
-                || EqualityComparer<Position>.Default.Equals(Position.StartPosition, positions[^1]));
-      
+     
       if (recalcRepetitions)
       {
         PositionRepetitionCalc.SetRepetitionsCount(positions);
