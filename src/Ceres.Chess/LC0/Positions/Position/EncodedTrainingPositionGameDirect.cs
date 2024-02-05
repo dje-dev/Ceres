@@ -14,7 +14,7 @@
 #region Using directives
 
 using System;
-
+using System.Linq;
 
 #endregion
 
@@ -45,5 +45,11 @@ namespace Ceres.Chess.EncodedPositions
     public override EncodedPolicyVector PolicyAtIndex(int index) => positions.Span[index].Policies;
 
     protected override ref readonly EncodedPositionWithHistory PositionRawMirroredRefAtIndex(int index) => ref positions.Span[index].PositionWithBoards;
+
+    public override string ToString()
+    {
+      double avgNumVisits = positions.Span.ToArray().Average(p => p.PositionWithBoards.MiscInfo.InfoTraining.NumVisits);
+      return $"<EncodedPositionWithHistory {NumPositions} moves, {Math.Round(avgNumVisits, 0)} average visits>";
+    }
   }
 }
