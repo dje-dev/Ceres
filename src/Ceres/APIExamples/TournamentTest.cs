@@ -53,14 +53,20 @@ namespace Ceres.APIExamples
   {
     const bool POOLED = false;
 
-    static int CONCURRENCY = POOLED ? 16 : Environment.MachineName.ToUpper().Contains("DEV") ? 6 : 8;
-    static int[] OVERRIDE_DEVICE_IDs = POOLED ? null
-      : (Environment.MachineName.ToUpper() switch
+    static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 8 : 8; // was:6
+    static int[] OVERRIDE_DEVICE_IDs = /*POOLED ? null*/
+       (Environment.MachineName.ToUpper() switch
       {
         var name when name.Contains("DGX") => new int[] { 0, 1, 2, 3 },
         var name when name.Contains("HOP") => new int[] { 0, 1, 2 },
         _ => new int[] { 0 }
       });
+
+    static string GPUS_1 = POOLED ? "GPU:0:POOLED"
+                       : "GPU:0";
+    static string GPUS_2 = POOLED ? "GPU:0:POOLED"
+                           : "GPU:0";
+
 
     static bool RUN_DISTRIBUTED = false;
 
@@ -141,11 +147,6 @@ namespace Ceres.APIExamples
         System.Environment.Exit(3);
       }
 
-      string GPUS_1 = POOLED ? "GPU:0,1,2,3:POOLED"
-                             : "GPU:0";
-      string GPUS_2 = POOLED ? "GPU:0,1,2,3:POOLED"
-                             : "GPU:0";
-
 
       string NET1_SECONDARY1 = null;// "610024";
       string NET1 = "j94-100";
@@ -203,14 +204,14 @@ namespace Ceres.APIExamples
 //      NET1 = "CUSTOM1:703810,CUSTOM1:703810";
       NET1= "CUSTOM1:753723";
       NET2 = "CUSTOM2:753723";
-      //      NET1 = "753723";
+      NET1 = NET2 =  "~T80";
       //      NET2 = "703810";
 
-      //
+      
       //NET2 = RegisteredNets.Aliased["T1_DISTILL_256_10"].NetSpecificationString;
       //      NET1 = RegisteredNets.Aliased["T60"].NetSpecificationString;
       //      NET1 = ReferenceNetIDs.T2_768_15_T82_4832;
-      //NET1 = NET2 = "~T80";
+//NET2 = "~T1_DISTILL_256_10_FP16";
       //NET2 = RegisteredNets.Aliased["T60"].NetSpecificationString;
 
       //NET2 = ReferenceNetIDs.T1_DISTILL_256_10_FP16;
@@ -267,10 +268,10 @@ namespace Ceres.APIExamples
       //      NET2 = ReferenceNetIDs.BT2;
 
       SearchLimit limit1 = SearchLimit.NodesForAllMoves(100_000, 1000) * 3;
-      limit1 = SearchLimit.NodesPerMove(1000);
-//      limit1 = SearchLimit.NodesPerMove(1000 + ((int)DateTime.Now.Millisecond % 200));
-//    limit1 = SearchLimit.BestValueMove;
-      
+      limit1 = SearchLimit.NodesPerMove(5000);
+      //      limit1 = SearchLimit.NodesPerMove(1000 + ((int)DateTime.Now.Millisecond % 200));
+//          limit1 = SearchLimit.BestValueMove;
+
 
       //      limit1 = SearchLimit.SecondsForAllMoves(60, 0.6f);
 
@@ -288,7 +289,7 @@ namespace Ceres.APIExamples
       //NET2 = NET1;
       //**** END WARNING ***
 
-      SearchLimit limit2 = limit1;
+      SearchLimit limit2 = limit1;// SearchLimit.NodesPerMove(1);
 
       //      NET1 = NET2 = "753723";// "610889";
       //      NET1 = "803907";
@@ -445,7 +446,7 @@ namespace Ceres.APIExamples
       GameEngineDefCeres engineDefCeres3 = new GameEngineDefCeres("Ceres3", evalDef2, evalDefSecondary2, new ParamsSearch(), new ParamsSelect(),
                                                                   null, outputLog ? "Ceres3.log.txt" : null);
 
-      //engineDefCeres1.SearchParams.TestFlag = true;
+      engineDefCeres1.SearchParams.ValueTemperature = 0.85f;
 
 //      engineDefCeres1.SearchParams.HistoryFillIn = false;
 
