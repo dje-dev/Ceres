@@ -134,15 +134,19 @@ namespace Ceres.Base.Misc
     /// <param name="struct2"></param>
     public static void CompareAndPrintObjectFields<T>(T struct1, T struct2)
     {
+      int sumBytes = 0;
       Console.WriteLine("\r\nCOMPARE OBJECTS " + typeof(T).Name);
-      foreach (FieldInfo field in typeof(T).GetFields(BindingFlags.Public | BindingFlags.Instance))
+      foreach (FieldInfo field in typeof(T).GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
       {
+        int bytes = Marshal.SizeOf(field.FieldType);
+        sumBytes += bytes;
         string fieldName = field.Name;
         object value1 = field.GetValue(struct1);
         object value2 = field.GetValue(struct2);
 
-        Console.WriteLine($"{fieldName,20}:  {value1} vs {value2}");
+        Console.WriteLine($"  {bytes,4}   {fieldName,20}:  {value1} vs {value2}");
       }
+      Console.WriteLine($"Total bytes: {sumBytes}");
     }
 
 
