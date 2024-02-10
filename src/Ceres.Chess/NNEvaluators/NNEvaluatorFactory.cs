@@ -376,21 +376,24 @@ namespace Ceres.Chess.NNEvaluators
       float[] weightsValue = new float[def.Nets.Length];
       float[] weightsPolicy = new float[def.Nets.Length];
       float[] weightsM = new float[def.Nets.Length];
+      float[] weightsU = new float[def.Nets.Length];
       Parallel.For(0, def.Nets.Length, delegate (int i)
       {
         evaluators[i] = Singleton(def.Nets[i].Net, def.Devices[0].Device, referenceEvaluator);
         weightsValue[i] = def.Nets[i].WeightValue;
         weightsPolicy[i] = def.Nets[i].WeightPolicy;
         weightsM[i] = def.Nets[i].WeightM;
+        weightsU[i] = def.Nets[i].WeightU;
       });
 
       return def.NetCombo switch
       {
-        NNEvaluatorNetComboType.WtdAverage => new NNEvaluatorLinearCombo(evaluators, weightsValue, weightsPolicy, weightsM, null, null),
+        NNEvaluatorNetComboType.WtdAverage => new NNEvaluatorLinearCombo(evaluators, weightsValue, weightsPolicy, weightsM, weightsU, null),
         NNEvaluatorNetComboType.Compare    => new NNEvaluatorCompare(evaluators),
         _ => throw new NotImplementedException()
       };
     }
+
 
     static NNEvaluator DoBuildEvaluator(NNEvaluatorDef def, NNEvaluator referenceEvaluator)
     {

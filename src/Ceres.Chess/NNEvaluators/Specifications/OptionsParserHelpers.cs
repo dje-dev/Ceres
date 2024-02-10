@@ -29,22 +29,29 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
   /// </summary>
   public static class OptionsParserHelpers
   {
-    internal static List<(string netID, NNEvaluatorType type, NNEvaluatorPrecision precision, float wtValue, float wtPolicy, float wtMLH)>
+    /// <summary>
+    /// Delimiter character used to indicate separation between value/policy/mlh weight,
+    /// for example "1.0;0.5;0.5"
+    /// </summary>
+    const char SUB_WEIGHTS_CHAR = ';';
+
+    // The "~" character indicates the name given is an alias and for a registered net (in class RegisteredNets).
+    // This character chosen because it is one of the few that does not have a special meaning in Linux.
+    const string CHAR_ALIAS = "~";
+
+
+    internal static List<(string netID, NNEvaluatorType type, NNEvaluatorPrecision precision, float wtValue, float wtPolicy, float wtMLH, float wtUncertainty)>
       ParseNetworkOptions(string netSpecStr)
     {
-      /// <summary>
-      /// Delimiter character used to indicate separation between value/policy/mlh weight,
-      /// for example "1.0;0.5;0.5"
-      /// </summary>
-      const char SUB_WEIGHTS_CHAR = ';';
-
-      List<(string, NNEvaluatorType type, NNEvaluatorPrecision precision, float, float, float)> ret = new();
+      List<(string, NNEvaluatorType type, NNEvaluatorPrecision precision, float, float, float, float)> ret = new();
 
       string[] nets = netSpecStr.Split(",");
 
       float sumWeightsValue = 0.0f;
       float sumWeightsPolicy = 0.0f;
       float sumWeightsMLH = 0.0f;
+      float sumWeightsUncertainty = 0;
+
       foreach (string netStrWithPrecision in nets)
       {
         const NNEvaluatorPrecision DEFAULT_PRECISION = NNEvaluatorPrecision.FP16;
@@ -65,6 +72,13 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
           }
 
           netStr = netIDs[0];
+
+          // Restore possible weights string which might have followed the alisas/precision indicator.
+          if (netStrWithPrecision.Contains(";"))
+          {
+            string weightsPart = netStrWithPrecision.Substring(netStrWithPrecision.IndexOf(";")); 
+            netStr = netStr + weightsPart;
+          }
           precision = precisionBits == 8 ? NNEvaluatorPrecision.Int8 : (precisionBits == 16 ? NNEvaluatorPrecision.FP16 : NNEvaluatorPrecision.FP32);
         }
         else
@@ -76,6 +90,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
         float weightValue = 1.0f / nets.Length;
         float weightPolicy = 1.0f / nets.Length;
         float weightMLH = 1.0f / nets.Length;
+        float weightUncertainty = 1.0f / nets.Length;
 
         string netID = null;
         if (netStr != null)
@@ -85,15 +100,16 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
             string[] netParts = netStr.Split(SUB_WEIGHTS_CHAR);
             thisNetID = netParts[0];
 
-            if (netParts.Length == 4)
+            if (netParts.Length == 5)
             {
               weightValue = ParseWt(netParts[1]);
               weightPolicy = ParseWt(netParts[2]);
               weightMLH = ParseWt(netParts[3]);
+              weightUncertainty = ParseWt(netParts[4]);
             }
             else
             {
-              throw new Exception("Weight string must be of form value_wt;policy_wt;mlh_wt");
+              throw new Exception("Weight string must be of form value_wt;policy_wt;mlh_wt;uncertainty_wt");
             }
           }
           else if (netStr.Contains("="))
@@ -120,30 +136,23 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
         sumWeightsValue += weightValue;
         sumWeightsPolicy += weightPolicy;
         sumWeightsMLH += weightMLH;
+        sumWeightsUncertainty += weightUncertainty;
 
-        ret.Add((thisNetID, NN_EVAL_TYPE, precision, weightValue, weightPolicy, weightMLH));
+        ret.Add((thisNetID, NN_EVAL_TYPE, precision, weightValue, weightPolicy, weightMLH, weightUncertainty));
       }
 
-      if (MathF.Abs(1.0f - sumWeightsValue) > 0.001)
+      static void CheckWeightSum(float sumWeights, string weightType)
       {
-        if (sumWeightsValue == sumWeightsPolicy && sumWeightsValue == sumWeightsMLH)
+        if (MathF.Abs(1.0f - sumWeights) > 0.001)
         {
-          throw new Exception($"Weights must not sum to 1.0, currently {sumWeightsValue}");
-        }
-        else
-        {
-          throw new Exception($"Weights value must not sum to 1.0, currently {sumWeightsValue}");
+          throw new Exception($"Weights {weightType} must sum to 1.0, currently {sumWeights.ToString("0.##")}");
         }
       }
 
-      if (MathF.Abs(1.0f - sumWeightsPolicy) > 0.001)
-      {
-        throw new Exception($"Weights policy must not sum to 1.0, currently {sumWeightsPolicy}");
-      }
-      if (MathF.Abs(1.0f - sumWeightsMLH) > 0.001)
-      {
-        throw new Exception($"Weights MLH must not sum to 1.0, currently {sumWeightsMLH}");
-      }
+      CheckWeightSum(sumWeightsValue, "value");
+      CheckWeightSum(sumWeightsPolicy, "policy");
+      CheckWeightSum(sumWeightsMLH, "MLH");
+      CheckWeightSum(sumWeightsUncertainty, "uncertainty");
 
       return ret;
     }
@@ -154,11 +163,16 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
       NNEvaluatorType NN_EVAL_TYPE;
       string thisNetID = null;
 
-      // Check for a reference net marked by "~" followed by an alias.
-      // This character chosen because it is one of the few that does not have a special meaning in Linux.
-      if (netStrWithPrecision.StartsWith("~"))
+      if (netStrWithPrecision.StartsWith(OptionsParserHelpers.CHAR_ALIAS))
       {
         string netID = netStrWithPrecision.Substring(1);
+
+        // Strip off possible weighting specifications for the netID to look up.
+        if (netID.Contains(";"))
+        {
+          netID = netID.Split(";")[0];
+        }
+
         if (RegisteredNets.Aliased.TryGetValue(netID, out RegisteredNetInfo baseline))
         {
           // Resolve to underlying network specification, call recursively.
@@ -166,7 +180,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
         }
         else
         {
-          throw new Exception($"Network specification begins with ! but the no such reference net {netID}" 
+          throw new Exception($"Network specification begins with {CHAR_ALIAS} but the no such reference net {netID}" 
                             + $" is registered in ReferenceNets.Common");
         }
       }
