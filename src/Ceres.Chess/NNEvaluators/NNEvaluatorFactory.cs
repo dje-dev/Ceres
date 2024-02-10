@@ -344,7 +344,7 @@ namespace Ceres.Chess.NNEvaluators
             }
             else
             {
-              throw new NotImplementedException();
+             evaluators[i] = BuildNetCombo(def, referenceEvaluator);
             }
 
           fractions[i] = def.Devices[i].Fraction;
@@ -407,11 +407,7 @@ namespace Ceres.Chess.NNEvaluators
         throw new NotImplementedException("Dynamic not yet implemented");
       }
 
-      if (def.NetCombo != NNEvaluatorNetComboType.Single && def.DeviceCombo != NNEvaluatorDeviceComboType.Single)
-      {
-        throw new NotImplementedException("Currently either NetComboType or DeviceComboType must be Single.");
-      }
-
+   
       //        if (Params.EstimatePerformanceCharacteristics) ret.CalcStatistics(true);
 
       // TODO: restore implementation, test more to see if faster or memory efficient

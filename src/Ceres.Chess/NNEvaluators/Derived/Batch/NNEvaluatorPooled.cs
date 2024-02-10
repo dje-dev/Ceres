@@ -371,12 +371,16 @@ namespace Ceres.Chess.NNEvaluators
       bool batchLargeEnough = numPending >= BatchSizeThreshold;
       bool haveWaitedLongEnough = (DateTime.Now - lastBatchTime).TotalSeconds >= (0.001f * BatchDelayMS);
 
-      if (false)
+      if (false && numPending > 0)
       {
         if (batchLargeEnough)
-          Console.WriteLine($"launch multibatch because large enough {numPending} versus threshold {BatchSizeThreshold}");
+        {
+          Console.WriteLine($"{numPending} launch multibatch because large enough {numPending} versus threshold {BatchSizeThreshold}");
+        }
         else if (haveWaitedLongEnough)
-          Console.WriteLine($"launch multibatch because time up,  {(DateTime.Now - lastBatchTime).TotalSeconds} versus threshold {(0.001f * BatchDelayMS)}");
+        {
+          Console.WriteLine($"{numPending} launch multibatch because time up,  {(DateTime.Now - lastBatchTime).TotalSeconds} versus threshold {(0.001f * BatchDelayMS)}");
+        }
       }
 
       return batchLargeEnough || (haveWaitedLongEnough && numPending > 0);
