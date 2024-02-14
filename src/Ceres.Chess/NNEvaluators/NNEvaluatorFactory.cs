@@ -374,6 +374,7 @@ namespace Ceres.Chess.NNEvaluators
       // Build underlying device evaluators in parallel
       NNEvaluator[] evaluators = new NNEvaluator[def.Nets.Length];
       float[] weightsValue = new float[def.Nets.Length];
+      float[] weightsValue2 = new float[def.Nets.Length];
       float[] weightsPolicy = new float[def.Nets.Length];
       float[] weightsM = new float[def.Nets.Length];
       float[] weightsU = new float[def.Nets.Length];
@@ -381,6 +382,7 @@ namespace Ceres.Chess.NNEvaluators
       {
         evaluators[i] = Singleton(def.Nets[i].Net, def.Devices[0].Device, referenceEvaluator);
         weightsValue[i] = def.Nets[i].WeightValue;
+        weightsValue2[i] = def.Nets[i].WeightValue2;
         weightsPolicy[i] = def.Nets[i].WeightPolicy;
         weightsM[i] = def.Nets[i].WeightM;
         weightsU[i] = def.Nets[i].WeightU;
@@ -388,7 +390,7 @@ namespace Ceres.Chess.NNEvaluators
 
       return def.NetCombo switch
       {
-        NNEvaluatorNetComboType.WtdAverage => new NNEvaluatorLinearCombo(evaluators, weightsValue, weightsPolicy, weightsM, weightsU, null),
+        NNEvaluatorNetComboType.WtdAverage => new NNEvaluatorLinearCombo(evaluators, weightsValue, weightsValue2, weightsPolicy, weightsM, weightsU, null),
         NNEvaluatorNetComboType.Compare    => new NNEvaluatorCompare(evaluators),
         _ => throw new NotImplementedException()
       };

@@ -56,7 +56,7 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// Array of networks to be used for the evaluation, with corresponding
     /// weights of their value, policy, MLH, UNC heads in the overall evaluator.
     /// </summary>
-    public readonly (NNEvaluatorNetDef Net, float WeightValue, float WeightPolicy, float WeightM, float WeightU)[] Nets;
+    public readonly (NNEvaluatorNetDef Net, float WeightValue, float WeightValue2, float WeightPolicy, float WeightM, float WeightU)[] Nets;
 
     /// <summary>
     /// Method used to combine (possibly) multiple nets.
@@ -161,8 +161,8 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// <param name="sharedName"></param>
     public NNEvaluatorDef(NNEvaluatorNetDef netDef, NNEvaluatorDeviceDef deviceDef, string sharedName = null)
     {
-      Nets = new (NNEvaluatorNetDef, float, float, float, float)[] { (netDef, 1, 1, 1, 1) };
-      Devices = new (NNEvaluatorDeviceDef, float)[] { (deviceDef, 1) };
+      Nets = [(netDef, 1, 1, 1, 1, 1)];
+      Devices = [(deviceDef, 1)];
       SharedName = sharedName;
       NetCombo = NNEvaluatorNetComboType.Single;
       DeviceCombo = NNEvaluatorDeviceComboType.Single;
@@ -180,7 +180,7 @@ namespace Ceres.Chess.NNEvaluators.Defs
     public NNEvaluatorDef(IEnumerable<(NNEvaluatorDeviceDef, float)> devices, 
                           NNEvaluatorDeviceComboType deviceCombo, NNEvaluatorNetComboType netCombo,
                           string sharedName, 
-                          params (NNEvaluatorNetDef net, float weightValue, float weightPolicy, float weightM, float uncertainty)[] nets)
+                          params (NNEvaluatorNetDef net, float weightValue, float weightValue2, float weightPolicy, float weightM, float uncertainty)[] nets)
     {
       Devices = devices.ToArray();
       Nets = nets;
@@ -207,7 +207,7 @@ namespace Ceres.Chess.NNEvaluators.Defs
       }
 
       Devices = new (NNEvaluatorDeviceDef, float)[] { (new NNEvaluatorDeviceDef(deviceType, deviceIndex), 1.0f) };
-      Nets = new (NNEvaluatorNetDef net, float weightValue, float weightPolicy, float weightM, float uncertainty)[] { (new NNEvaluatorNetDef(networkID, netType, NNEvaluatorPrecision.FP16), 1.0f, 1.0f, 1.0f, 1.0f) };
+      Nets = new (NNEvaluatorNetDef net, float weightValue, float weightValue2, float weightPolicy, float weightM, float uncertainty)[] { (new NNEvaluatorNetDef(networkID, netType, NNEvaluatorPrecision.FP16), 1.0f, 1.0f, 1.0f, 1.0f, 1.0f) };
       DeviceCombo = NNEvaluatorDeviceComboType.Single;
       SharedName = sharedName;
     }
@@ -229,7 +229,7 @@ namespace Ceres.Chess.NNEvaluators.Defs
         Devices[i] = new(devices[i], 1.0f / devices.Length);
       }
 
-      Nets = new (NNEvaluatorNetDef net, float weightValue, float weightPolicy, float weightM, float uncertainty)[] { (net, 1.0f, 1.0f, 1.0f, 1.0f) };
+      Nets = new (NNEvaluatorNetDef net, float weightValue, float weightValue2, float weightPolicy, float weightM, float uncertainty)[] { (net, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f) };
       DeviceCombo = deviceCombo;
       SharedName = sharedName;
     }
@@ -238,7 +238,7 @@ namespace Ceres.Chess.NNEvaluators.Defs
     public NNEvaluatorDef(NNEvaluatorNetDef net, string sharedName = null, params (NNEvaluatorDeviceDef deviceDef, float fraction)[] devices)
     {
       Devices = devices.ToArray();
-      Nets = new (NNEvaluatorNetDef net, float weightValue, float weightPolicy, float weightM, float uncertainty)[] { (net, 1.0f, 1.0f, 1.0f, 1.0f) };
+      Nets = new (NNEvaluatorNetDef net, float weightValue, float weightValue2, float weightPolicy, float weightM, float uncertainty)[] { (net, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f) };
       DeviceCombo = devices.Length == 0 ? NNEvaluatorDeviceComboType.Single : NNEvaluatorDeviceComboType.Pooled;
       SharedName = sharedName;
     }
@@ -249,12 +249,12 @@ namespace Ceres.Chess.NNEvaluators.Defs
       Devices = devices.ToArray();
       DeviceCombo = deviceCombo;
 
-      Nets = new (NNEvaluatorNetDef net, float weightValue, float weightPolicy, float weightM, float uncertainty)[] { (net, 1.0f, 1.0f, 1.0f, 1.0f) };
+      Nets = new (NNEvaluatorNetDef net, float weightValue, float weightValue2, float weightPolicy, float weightM, float uncertainty)[] { (net, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f) };
       NetCombo = NNEvaluatorNetComboType.Single;
       SharedName = sharedName;
     }
 
-    public NNEvaluatorDef(NNEvaluatorNetComboType netCombo, NNEvaluatorDeviceDef device, string sharedName, params (NNEvaluatorNetDef netDef, float weightValue, float weightPolicy, float weightM, float uncertainty)[] netDefs)
+    public NNEvaluatorDef(NNEvaluatorNetComboType netCombo, NNEvaluatorDeviceDef device, string sharedName, params (NNEvaluatorNetDef netDef, float weightValue, float weightValue2, float weightPolicy, float weightM, float uncertainty)[] netDefs)
     {
       NetCombo = netCombo;
       Nets = netDefs;
@@ -265,7 +265,7 @@ namespace Ceres.Chess.NNEvaluators.Defs
     }
 
 
-    public NNEvaluatorDef(NNEvaluatorNetComboType netCombo, IEnumerable<(NNEvaluatorNetDef, float, float, float, float)> nets, 
+    public NNEvaluatorDef(NNEvaluatorNetComboType netCombo, IEnumerable<(NNEvaluatorNetDef, float, float, float, float, float)> nets, 
                           NNEvaluatorDeviceComboType deviceCombo, IEnumerable<(NNEvaluatorDeviceDef, float)> devices,
                           string sharedName)
     {

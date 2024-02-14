@@ -40,14 +40,15 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
     const string CHAR_ALIAS = "~";
 
 
-    internal static List<(string netID, NNEvaluatorType type, NNEvaluatorPrecision precision, float wtValue, float wtPolicy, float wtMLH, float wtUncertainty)>
+    internal static List<(string netID, NNEvaluatorType type, NNEvaluatorPrecision precision, float wtValue, float wtValue2, float wtPolicy, float wtMLH, float wtUncertainty)>
       ParseNetworkOptions(string netSpecStr)
     {
-      List<(string, NNEvaluatorType type, NNEvaluatorPrecision precision, float, float, float, float)> ret = new();
+      List<(string, NNEvaluatorType type, NNEvaluatorPrecision precision, float, float, float, float, float)> ret = new();
 
       string[] nets = netSpecStr.Split(",");
 
       float sumWeightsValue = 0.0f;
+      float sumWeightsValue2 = 0.0f;
       float sumWeightsPolicy = 0.0f;
       float sumWeightsMLH = 0.0f;
       float sumWeightsUncertainty = 0;
@@ -88,6 +89,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
 
         // Default to equal weight
         float weightValue = 1.0f / nets.Length;
+        float weightValue2 = 1.0f / nets.Length;
         float weightPolicy = 1.0f / nets.Length;
         float weightMLH = 1.0f / nets.Length;
         float weightUncertainty = 1.0f / nets.Length;
@@ -106,10 +108,11 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
               weightPolicy = ParseWt(netParts[2]);
               weightMLH = ParseWt(netParts[3]);
               weightUncertainty = ParseWt(netParts[4]);
+              weightValue2 = ParseWt(netParts[5]);
             }
             else
             {
-              throw new Exception("Weight string must be of form value_wt;policy_wt;mlh_wt;uncertainty_wt");
+              throw new Exception("Weight string must be of form value_wt;policy_wt;mlh_wt;uncertainty_wt;value2_wt");
             }
           }
           else if (netStr.Contains("="))
@@ -120,7 +123,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
             if (netParts.Length == 2)
             {
               float wt = float.Parse(netParts[1]);
-              weightValue = weightPolicy = weightMLH = wt;
+              weightValue = weightValue2 = weightPolicy = weightMLH = wt;
             }
             else
             {
@@ -134,11 +137,12 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
         }
 
         sumWeightsValue += weightValue;
+        sumWeightsValue2 += weightValue2;
         sumWeightsPolicy += weightPolicy;
         sumWeightsMLH += weightMLH;
         sumWeightsUncertainty += weightUncertainty;
 
-        ret.Add((thisNetID, NN_EVAL_TYPE, precision, weightValue, weightPolicy, weightMLH, weightUncertainty));
+        ret.Add((thisNetID, NN_EVAL_TYPE, precision, weightValue, weightValue2, weightPolicy, weightMLH, weightUncertainty));
       }
 
       static void CheckWeightSum(float sumWeights, string weightType)

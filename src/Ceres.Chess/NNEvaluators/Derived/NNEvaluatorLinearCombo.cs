@@ -61,6 +61,7 @@ namespace Ceres.Chess.NNEvaluators
     public delegate float[] WeightsOverrideDelegate(in Position pos);
 
     public readonly float[] WeightsValue;
+    public readonly float[] WeightsValue2;
     public readonly float[] WeightsPolicy;
     public readonly float[] WeightsM;
     public readonly float[] WeightsUncertaintyV;
@@ -74,6 +75,11 @@ namespace Ceres.Chess.NNEvaluators
     /// Optional delegate called for each position to determine weights to use for value head for that position.
     /// </summary>
     public readonly WeightsOverrideDelegate WeightsValueOverrideFunc;
+
+    /// <summary>
+    /// Optional delegate called for each position to determine weights to use for value head (econdary) for that position.
+    /// </summary>
+    public readonly WeightsOverrideDelegate WeightsValue2OverrideFunc;
 
     /// <summary>
     /// Optional delegate called for each position to determine weights to use for MLH head for that position.
@@ -121,7 +127,7 @@ namespace Ceres.Chess.NNEvaluators
         weightsArray = weights.ToArray();
       }
 
-      WeightsValue = WeightsPolicy = WeightsM = WeightsUncertaintyV = weightsArray;
+      WeightsValue = WeightsValue2 = WeightsPolicy = WeightsM = WeightsUncertaintyV = weightsArray;
       PolicyAveragingMethod = policyAveragingMethod;
     }
 
@@ -138,11 +144,13 @@ namespace Ceres.Chess.NNEvaluators
     /// <param name="weightsPolicyOverrideFunc"></param>
     /// <param name="policyAveragingMethod"></param>
     public NNEvaluatorLinearCombo(NNEvaluator[] evaluators, 
-                                IList<float> weightsValue, 
+                                IList<float> weightsValue,
+                                IList<float> weightsValue2,
                                 IList<float> weightsPolicy, 
                                 IList<float> weightsM,
                                 IList<float> weightsUncertaintyV,
                                 WeightsOverrideDelegate weightsValueOverrideFunc = null,
+                                WeightsOverrideDelegate weightsValue2OverrideFunc = null,
                                 WeightsOverrideDelegate weightsMOverrideFunc = null,
                                 WeightsOverrideDelegate weightsPolicyOverrideFunc = null,
                                 WeightsOverrideDelegate weightsUncertaintyVOverrideFunc = null,
@@ -150,11 +158,13 @@ namespace Ceres.Chess.NNEvaluators
       : base(evaluators)
     {
       WeightsValue = weightsValue  != null ? weightsValue.ToArray()  : MathUtils.Uniform(evaluators.Length);
+      WeightsValue2 = weightsValue2 != null ? weightsValue2.ToArray() : MathUtils.Uniform(evaluators.Length);
       WeightsPolicy = weightsPolicy != null ? weightsPolicy.ToArray() : MathUtils.Uniform(evaluators.Length);
       WeightsM      = weightsM      != null ? weightsM.ToArray()      : MathUtils.Uniform(evaluators.Length);
       WeightsUncertaintyV = weightsUncertaintyV != null ? weightsUncertaintyV.ToArray() : MathUtils.Uniform(evaluators.Length);
 
       WeightsValueOverrideFunc = weightsValueOverrideFunc;
+      WeightsValue2OverrideFunc = weightsValue2OverrideFunc;
       WeightsMOverrideFunc = weightsMOverrideFunc;
       WeightsPolicyOverrideFunc = weightsPolicyOverrideFunc;
       WeightsUncertaintyVOverrideFunc = weightsUncertaintyVOverrideFunc;
@@ -226,13 +236,13 @@ namespace Ceres.Chess.NNEvaluators
 
         if (HasValueSecondary)
         {
-          w2 = WeightsValueOverrideFunc == null ? AverageFP16(positions.NumPos, subResults, (e, i) => e.GetWin2P(i), WeightsValue)
-                                                : AverageFP16(positions.NumPos, subResults, (e, i) => e.GetWin2P(i), WeightsValueOverrideFunc, positions);
+          w2 = WeightsValueOverrideFunc == null ? AverageFP16(positions.NumPos, subResults, (e, i) => e.GetWin2P(i), WeightsValue2)
+                                                : AverageFP16(positions.NumPos, subResults, (e, i) => e.GetWin2P(i), WeightsValue2OverrideFunc, positions);
 
           if (IsWDL)
           {
-            l2 = WeightsValueOverrideFunc == null ? AverageFP16(positions.NumPos, subResults, (e, i) => e.GetLoss2P(i), WeightsValue)
-                                                  : AverageFP16(positions.NumPos, subResults, (e, i) => e.GetLoss2P(i), WeightsValueOverrideFunc, positions);
+            l2 = WeightsValueOverrideFunc == null ? AverageFP16(positions.NumPos, subResults, (e, i) => e.GetLoss2P(i), WeightsValue2)
+                                                  : AverageFP16(positions.NumPos, subResults, (e, i) => e.GetLoss2P(i), WeightsValue2OverrideFunc, positions);
           }
         }
 
