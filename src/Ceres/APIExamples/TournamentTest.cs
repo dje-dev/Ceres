@@ -53,7 +53,7 @@ namespace Ceres.APIExamples
   {
     const bool POOLED = false;
 
-    static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 8 : 8; // was:6
+    static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 4 : 8;
     static int[] OVERRIDE_DEVICE_IDs = /*POOLED ? null*/
        (Environment.MachineName.ToUpper() switch
       {
@@ -202,19 +202,21 @@ namespace Ceres.APIExamples
       //      NET1 = @"ONNX_TRT:d:\weights\lczero.org\BT2-768x15smolgen-3326000#16";
 
 //      NET1 = "CUSTOM1:703810,CUSTOM1:703810";
-      NET1= "CUSTOM1:753723";
-      NET2 = "CUSTOM2:753723";
-      NET1 = NET2 =  "~T80";
-      //      NET2 = "703810";
+       NET1= "CUSTOM1:703810";
+       NET2 = "CUSTOM2:703810";
+      //      NET1 = NET2 =  "~T75";
+      //      NET1 = NET2 = "703810";
 
-      
-      //NET2 = RegisteredNets.Aliased["T1_DISTILL_256_10"].NetSpecificationString;
-      //      NET1 = RegisteredNets.Aliased["T60"].NetSpecificationString;
+      //      NET1 = "CUSTOM1:753723;1;0;0;1,~T1_DISTILL_512_15;0;1;1;0";
+      //-87     NET1 = "CUSTOM1:753723;0;1;0;1,~T1_DISTILL_512_15;1;0;1;0";
+//NET2 = "~T1_DISTILL_256_10_FP16";//// "~T80";
+      //  ///   "LS15;0.25;0.25;0.25,66666;0.75;0.75;0.75"
+
+
       //      NET1 = ReferenceNetIDs.T2_768_15_T82_4832;
-//NET2 = "~T1_DISTILL_256_10_FP16";
       //NET2 = RegisteredNets.Aliased["T60"].NetSpecificationString;
 
-      //NET2 = ReferenceNetIDs.T1_DISTILL_256_10_FP16;
+      //NET2 = "~T1_DISTILL_512_10_FP16";
       //NET1 = "ONNX_ORT:BT3_750_optimistic#32,BT3_750#32,";
 
       //NET1 = "ONNX_ORT:BT3_750_policy_vanilla#32,ONNX_ORT:BT3_750_policy_optimistic#32";
@@ -268,7 +270,7 @@ namespace Ceres.APIExamples
       //      NET2 = ReferenceNetIDs.BT2;
 
       SearchLimit limit1 = SearchLimit.NodesForAllMoves(100_000, 1000) * 3;
-      limit1 = SearchLimit.NodesPerMove(5000);
+      limit1 = SearchLimit.NodesPerMove(500);
       //      limit1 = SearchLimit.NodesPerMove(1000 + ((int)DateTime.Now.Millisecond % 200));
 //          limit1 = SearchLimit.BestValueMove;
 
@@ -446,7 +448,7 @@ namespace Ceres.APIExamples
       GameEngineDefCeres engineDefCeres3 = new GameEngineDefCeres("Ceres3", evalDef2, evalDefSecondary2, new ParamsSearch(), new ParamsSelect(),
                                                                   null, outputLog ? "Ceres3.log.txt" : null);
 
-      engineDefCeres1.SearchParams.ValueTemperature = 0.85f;
+//      engineDefCeres1.SearchParams.ValueTemperature = 0.85f;
 
 //      engineDefCeres1.SearchParams.HistoryFillIn = false;
 
@@ -481,7 +483,7 @@ namespace Ceres.APIExamples
 
       //      engineDefCeres1.SelectParams.CPUCTDualSelectorDiffFraction = 0.04f;
 
-      //engineDefCeres1.SearchParams.TestFlag = true;
+//      engineDefCeres1.SearchParams.TestFlag2 = true;
       //engineDefCeres1.SearchParams.Execution.MaxBatchSize = 128;
       //      engineDefCeres1.SearchParams.BatchSizeMultiplier = 2;
 
