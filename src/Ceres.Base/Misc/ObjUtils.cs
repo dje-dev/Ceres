@@ -150,6 +150,65 @@ namespace Ceres.Base.Misc
     }
 
 
+    /// <summary>
+    /// Returns string summarizing the differences between fields/propery values in two structs.
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    /// <param name="t1"></param>
+    /// <param name="t2"></param>
+    /// <returns></returns>
+    public static string StructDiffs<T>(T t1, T t2) where T : struct
+    {
+      StringBuilder differences = new StringBuilder();
+      Type type = typeof(T);
+
+      // Process fields.
+      ProcessMembers(differences, type.GetFields(BindingFlags.Public | BindingFlags.Instance), t1, t2);
+
+      // Process properties.
+      ProcessMembers(differences, type.GetProperties(BindingFlags.Public | BindingFlags.Instance), t1, t2);
+
+      return differences.ToString();
+    }
+
+
+    private static void ProcessMembers<T>(StringBuilder differences, IEnumerable<MemberInfo> members, T t1, T t2) where T : struct
+    {
+      foreach (var member in members)
+      {
+        object value1, value2;
+
+        switch (member)
+        {
+          case FieldInfo field:
+            value1 = field.GetValue(t1);
+            value2 = field.GetValue(t2);
+            break;
+
+          case PropertyInfo property:
+            if (property.GetMethod != null) // Ensure the property is readable
+            {
+              value1 = property.GetValue(t1);
+              value2 = property.GetValue(t2);
+              break;
+            }
+            continue;
+
+          default:
+            continue;
+        }
+
+        if (!object.Equals(value1, value2))
+        {
+          if (differences.Length > 0)
+            differences.Append("  ");
+
+          differences.AppendFormat("{0}: {1} --> {2}.", member.Name, value1, value2);
+        }
+      }
+    }
+    
+
     static void DumpArray(StringBuilder sb, Array array)
     {
       sb.Append("{");
