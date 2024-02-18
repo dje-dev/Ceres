@@ -159,21 +159,17 @@ namespace Ceres.Chess.NNEvaluators
 
       // Big batch
       TimingStats statsBig = new TimingStats();
-      while (true)
+      using (new TimingBlock(statsBig, TimingBlock.LoggingType.None))
       {
-        using (new TimingBlock(statsBig, TimingBlock.LoggingType.None))
-        {
-          // To make sure we defeat any possible caching in place,
-          // randomize the batch in some trivial way
-          result = evaluator.EvaluateIntoBuffers(batchBig, false);
-        }
-
-        float npsBatchBig = bigBatchSize / (float)statsBig.ElapsedTimeSecs;
-        Console.WriteLine(npsBatchBig);
-        int[] breaks = computeBreaks ? FindBreaks(evaluator, 48, 432, 0) : null;
+        // To make sure we defeat any possible caching in place,
+        // randomize the batch in some trivial way
+        result = evaluator.EvaluateIntoBuffers(batchBig, false);
       }
 
-      return default;// (npsSingletons, npsBatchBig, breaks);
+      float npsBatchBig = bigBatchSize / (float)statsBig.ElapsedTimeSecs;
+      int[] breaks = computeBreaks ? FindBreaks(evaluator, 48, 432, 0) : null;
+
+      return (npsSingletons, npsBatchBig, breaks);
     }
 
 
