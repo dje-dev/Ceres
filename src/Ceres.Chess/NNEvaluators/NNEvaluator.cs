@@ -19,12 +19,14 @@ using System.Linq;
 using System.Threading.Tasks;
 using Ceres.Base.DataType;
 using Ceres.Base.DataTypes;
+using Ceres.Base.Misc.ONNX;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.LC0.Batches;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.NetEvaluation.Batch;
 using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.Positions;
+using Pblczero;
 
 #endregion
 
@@ -48,6 +50,22 @@ namespace Ceres.Chess.NNEvaluators
       All = Boards | Hashes | Moves | Positions,
       AllWithLastMovePlies = Boards | Hashes | Moves | Positions | LastMovePlies
     };
+
+    /// <summary>
+    /// Miscellaneous information about the evaluator.
+    /// </summary>
+    public record EvaluatorInfo
+    {
+      /// <summary>
+      /// Number of network parameters used during inference.
+      /// </summary>
+      public readonly long NumParameters;
+
+      public EvaluatorInfo(long numParameters)
+      {
+        NumParameters = numParameters;
+      }
+    }
 
 
     /// <summary>
@@ -124,6 +142,11 @@ namespace Ceres.Chess.NNEvaluators
     /// This feature can compensate for lack of history consideration by the neural network.
     /// </summary>
     public virtual bool UseBestValueMoveUseRepetitionHeuristic { get; set; } = false;
+
+    /// <summary>
+    /// Miscellaneous information about the evaluator.
+    /// </summary>
+    public virtual EvaluatorInfo Info => null;
 
 
     #region Static helpers

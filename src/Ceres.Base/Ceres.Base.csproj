@@ -37,10 +37,10 @@
     <PackageReference Include="Microsoft.Extensions.Logging.EventSource" Version="5.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="5.0.0" />
 
-
     <PackageReference Include="protobuf-net" Version="3.0.29" />
-
-
+    <PackageReference Include="protobuf-net.Core" Version="3.2.26" />
+    <PackageReference Include="OnnxSharp" Version="0.2.1" />
+    
     <PackageReference Include="System.Numerics.Tensors" Version="8.0.0" />
   </ItemGroup>
 

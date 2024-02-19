@@ -31,6 +31,7 @@ using Ceres.Chess;
 using System.Diagnostics;
 using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Base.DataType;
+using Ceres.Base.Misc.ONNX;
 
 #endregion
 
@@ -166,6 +167,12 @@ namespace Chess.Ceres.NNEvaluators
     /// Fraction of value from value 2 to be blended into primary value.
     /// </summary>
     public readonly float FractionValueFromValue2 = 0;
+
+    
+    /// <summary>
+    /// Miscellaneous information about the evaluator.
+    /// </summary>
+    public override EvaluatorInfo Info => ONNXFileName == null ? null : new EvaluatorInfo(new ONNXNet(ONNXFileName).NumParams);
 
 
     #region Statics
