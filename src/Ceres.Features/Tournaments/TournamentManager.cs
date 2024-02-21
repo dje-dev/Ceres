@@ -71,6 +71,11 @@ namespace Ceres.Features.Tournaments
         throw new Exception("Missing engine(s). Assign to def.Player1Def and def.Player2Def or call def.AddEngine multiple times."); 
       }
 
+      if (numConcurrent > 1 && deviceIDs == null)
+      {
+        throw new Exception("Must specify deviceIDs if numConcurrent > 1.");
+      }
+      
       Def = def;
       NumConcurrent = Math.Min(numConcurrent, def.NumGamePairs ?? int.MaxValue);
       DeviceIDs = deviceIDs;
