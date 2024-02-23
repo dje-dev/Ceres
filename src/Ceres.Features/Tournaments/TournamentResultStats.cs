@@ -528,7 +528,28 @@ namespace Ceres.Features.Tournaments
       return msg;
     }
 
-    public string ShortEloSummaryStr => ShortEloStrForOpponent(Players[0].Opponents.First());
+
+    /// <summary>
+    /// Returns a short string (W/D/L with error bars) for specified player versus opponent.
+    /// </summary>
+    /// <param name="playerName"></param>
+    /// <returns></returns>
+    /// <exception cref="Exception"></exception>
+    public string ShortEloSummaryStr(string playerName)
+    {
+      PlayerStat player = Players.FirstOrDefault(p => p.Name == playerName);
+      if (player == default)
+      {
+        throw new Exception($"Player {playerName} not found in tournament.");
+      }
+
+      if (player.Opponents.Count != 1)
+      {
+        throw new Exception($"Player {playerName} has more than one opponent.");
+      }
+
+      return ShortEloStrForOpponent(player.Opponents.First());
+    }
 
 
     /// <summary>
