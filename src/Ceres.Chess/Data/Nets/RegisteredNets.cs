@@ -43,6 +43,7 @@ namespace Ceres.Chess.Data.Nets
         { "T78", SimpleLC0Net("784984") },
         { "T80", SimpleLC0Net("809942") }, // 801307
         { "T81", SimpleLC0Net("811971") }, //Training restarted after surgery after 811971
+        { "T82", ONNXNet32LC0("768x15x24h-t82-swa-8164000#32") },
 
         {"BT2", ONNXNet32LC0("BT2-768x15smolgen-12h-do-01-swa-onnx-2350000-rule50.gz")},
         {"BT3", ONNXNet32LC0("BT3-768x15x24h-swa-2790000.pb.gz#32")},
@@ -51,7 +52,7 @@ namespace Ceres.Chess.Data.Nets
         {"T1_DISTILL_256_10", ONNXNet32LC0("t1-256x10-distilled-swa-2432500")},
         {"T1_DISTILL_256_10_FP16", ONNXNet16LC0("t1-256x10-distilled-swa-2432500_fp16")},
         {"T1_DISTILL_512_15", ONNXNet32LC0("t1-512x15x8h-distilled-swa-3395000")},
-        {"T1_DISTILL_512_10_FP16", ONNXNet16LC0("t1-512x15x8h-distilled-swa-3395000_fp16")},
+        {"T1_DISTILL_512_15_FP16", ONNXNet16LC0("t1-512x15x8h-distilled-swa-3395000_fp16")},
 
         {"T1_768_FP16", ONNXNet16LC0("t1-768x15x24h-swa-4000000_fp16")},
         {"T2", ONNXNet16LC0("t2-768x15x24h-swa-5230000.pb.gz_fp16")},
