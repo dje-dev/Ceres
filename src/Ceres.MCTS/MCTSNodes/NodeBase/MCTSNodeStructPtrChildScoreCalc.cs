@@ -16,6 +16,7 @@
 using System;
 using System.Diagnostics;
 using Ceres.Base.Math;
+using Ceres.MCTS.Environment;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.LeafExpansion;
 using Ceres.MCTS.Managers.Uncertainty;
@@ -150,6 +151,58 @@ namespace Ceres.MCTS.MTCSNodes
         }
       }
 #endif
+
+#if ENABLE_REFUTATION_SEARCH_MORE_EXPORATION_FEATURE
+      bool isOpponentMove = depth % 2 == 1;
+      MCTSEventSource.TestCounter1++;
+
+      // Search for refutations only on opponent's move.
+      if (/*Ref.Q < -0.20f && */isOpponentMove && Context.ParamsSearch.TestFlag2 && Context.Root.N > 500)
+      { 
+        float fractionOfTree = (float)N / Context.Root.N;
+        bool isProbablyOnPV = fractionOfTree > 0.2f;
+        bool hasSiblingSupport = false;
+        if (isProbablyOnPV)
+        {
+          if (depth != 1) // Since first move is irrevocable, a sibling move cannot serve as support since we have already committed
+          {
+            ref readonly MCTSNodeStruct parent = ref Ref.ParentRef;
+            foreach (MCTSNodeStructChild sibling in parent.Children)
+            {
+              const float SIBLING_THRESHOLD = 0.10f;
+              if (sibling.IsExpanded && Math.Abs(sibling.ChildRef(parent.Context.Store).Q - Ref.Q) < SIBLING_THRESHOLD)
+              {
+                hasSiblingSupport = true;
+                break;
+              }
+            }
+          }
+        }
+
+        const float CPUCT_MULTIPLIER_IF_REFUTATION_SEARCH= 1.35f;
+        bool boostCPUCT = isOpponentMove && isProbablyOnPV && !hasSiblingSupport;
+        if (boostCPUCT)
+        {
+          cpuctMultiplier *= CPUCT_MULTIPLIER_IF_REFUTATION_SEARCH;
+          MCTSEventSource.TestMetric1++;
+        }
+      }
+
+#endif
+      if (Context.ParamsSearch.TestFlag2)
+      {
+        for (int i = 0; i < NumChildrenVisited; i++)
+        {
+          if (N > 5 && gatherStatsNSpan[i] < 5)// && gatherStatsInFlightSpan[i] == 0)
+          {
+            float boost = 1 * gatherStatsNSpan[i] * (gatherStatsUSpan[i] - 10) * 0.01f;
+            const float MAX = 0.12f;
+            boost = StatUtils.Bounded(boost, -MAX, MAX);
+            gatherStatsWSpan[i] -= boost; // smaller becomes more attractive
+          }
+        }
+      }
+
       if (MCTSParamsFixed.UNCERTAINTY_TESTS_ENABLED && Context.ParamsSearch.TestFlag2)
       {
         float uTotal = 0;
