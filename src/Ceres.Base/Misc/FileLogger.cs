@@ -67,7 +67,25 @@ namespace Ceres.Base.Misc
     public void AddLine(string line, bool isPrefix = false)
     {
       string outLine = DateTime.Now + " " + line;
-      File.AppendAllText(LiveLogFileName, outLine + System.Environment.NewLine);
+
+      // Try possibly multiple times in case file was busy.
+      int tryCount = 0;
+      while (true)
+      {
+        try
+        {
+          File.AppendAllText(LiveLogFileName, outLine + System.Environment.NewLine);
+          break;
+        }
+        catch (Exception)
+        {
+          if (tryCount++ > 10)
+          {
+            throw;
+          }
+          System.Threading.Thread.Sleep(100);
+        }
+      }
 
       if (!isPrefix)
       {
