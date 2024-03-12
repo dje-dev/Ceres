@@ -53,7 +53,7 @@ namespace Ceres.APIExamples
   {
     const bool POOLED = false;
 
-    static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 6 : 8;
+    static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 3 : 8;
     static int[] OVERRIDE_DEVICE_IDs = /*POOLED ? null*/
        (Environment.MachineName.ToUpper() switch
       {
@@ -165,10 +165,6 @@ namespace Ceres.APIExamples
       //NET1 = "790734;0;1;1,753723;1;0;0"; // 8 +/-8 (new policy head)
       // No obvious progress with T79, 790940 vs 790855 tests at +2 Elo (+/-7) using 1000 nodes/move
 
-      //NET1 = @"d:\weights\lczero.org\t12test6-swa-678000.pb.gz";
-      //NET2 = "801307";
-      //      var pb = LC0ProtobufNet.LoadedNet(NET1);
-      //      pb.Dump();
       //var pb1 = LC0ProtobufNet.LoadedNet(NET2);
       //pb1.Dump();
 
@@ -177,9 +173,6 @@ namespace Ceres.APIExamples
       //NET1 = "782344";
       //NET1 = @"d:\weights\lczero.org\ap-mish-20b-swa-2000000.pb.gz";
       //      NET1 = NET2 = "ap-mish-20b-swa-2000000";
-      //NET1 = "mg-40b-swa-1670000,ap-mish-20b-swa-2000000";
-      //NET2 = "20b_mish-swa-2000000";
-      //NET2 = @"d:\weights\lczero.org\ap-mish-20b-swa-2000000.pb.gz";
 
       //NET2 = "781561";
       //NET1 = "803420";
@@ -209,21 +202,21 @@ namespace Ceres.APIExamples
 
       //      NET1 = "CUSTOM1:753723;1;0;0;1,~T1_DISTILL_512_15;0;1;1;0";
       //-87     NET1 = "CUSTOM1:753723;0;1;0;1,~T1_DISTILL_512_15;1;0;1;0";
-//NET2 = "~T1_DISTILL_256_10_FP16";//// "~T80";
+      //NET2 = "t1-512x15x8h-distilled-swa-3395000";
+      //NET2 = "t1-256x10-distilled-swa-2432500";
+//      NET2 = "~T1_DISTILL_256_10_FP16";//// "~T80";
       //  ///   "LS15;0.25;0.25;0.25,66666;0.75;0.75;0.75"
 
+//      NET2 = "~BT4";
+      NET2 = "~T82";
 
-      //      NET1 = ReferenceNetIDs.T2_768_15_T82_4832;
-      //NET2 = RegisteredNets.Aliased["T60"].NetSpecificationString;
 
-      //NET2 = "~T1_DISTILL_512_10_FP16";
+//      NET2 = "~T1_DISTILL_512_15_FP16";
       //NET1 = "ONNX_ORT:BT3_750_optimistic#32,BT3_750#32,";
 
       //NET1 = "ONNX_ORT:BT3_750_policy_vanilla#32,ONNX_ORT:BT3_750_policy_optimistic#32";
       //NET2 = "ONNX_ORT:BT3_750_policy_vanilla#32";
 
-      // NET2 = ReferenceNetIDs.BEST_T78;
-      //NET2 = ReferenceNetIDs.T1_DISTILL_256_10_FP16;
       if (false)
       {
         var evaluator = NNEvaluator.FromSpecification(NET1, "GPU:0");
@@ -270,9 +263,9 @@ namespace Ceres.APIExamples
       //      NET2 = ReferenceNetIDs.BT2;
 
       SearchLimit limit1 = SearchLimit.NodesForAllMoves(100_000, 1000) * 3;
-      limit1 = SearchLimit.NodesPerMove(1000);
+      limit1 = SearchLimit.NodesPerMove(100);
       //      limit1 = SearchLimit.NodesPerMove(1000 + ((int)DateTime.Now.Millisecond % 200));
-//          limit1 = SearchLimit.BestValueMove;
+//      limit1 = SearchLimit.BestValueMove;
 
 
       //      limit1 = SearchLimit.SecondsForAllMoves(60, 0.6f);
