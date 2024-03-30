@@ -15,6 +15,7 @@
 #region Using directives
 
 using System;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Ceres.Chess.EncodedPositions.Basic;
 
@@ -143,6 +144,25 @@ namespace Ceres.Chess.EncodedPositions
 
     #region Helper methods
 
+    public (float w, float d, float l) OriginalWDL
+    {
+      get
+      {
+        if (float.IsNaN(OriginalD+OriginalQ))
+        {
+          return (float.NaN, float.NaN, float.NaN);
+        }
+
+        float l = (OriginalQ - 1 + OriginalD) / -2;
+        float w = 1 - OriginalD - l;
+        Debug.Assert(Math.Abs(w + l + OriginalD - 1) < 0.0001f);
+        Debug.Assert(Math.Abs((w - l) - OriginalQ) < 0.0001f);
+
+        return (w, OriginalD, l);
+      }
+    }
+
+
     /// <summary>
     /// Result (game outcome) WDL distribution.
     /// </summary>
@@ -212,6 +232,25 @@ namespace Ceres.Chess.EncodedPositions
       }
     }
 
+    /// <summary>
+    /// Overwrites the value of OriginalQ, OriginalD, OriginalM.
+    /// WARNING: is unsafe.
+    /// </summary>
+    public readonly unsafe void SetOriginal(float originalQ, float originalD, float originalM)
+    {
+      fixed (float* p = &OriginalQ)
+      {
+        *p = originalQ;
+      }
+      fixed (float* p = &OriginalD)
+      {
+        *p = originalD;
+      }
+      fixed (float* p = &OriginalM)
+      {
+        *p = originalM;
+      }
+    }
 
     /// <summary>
     /// Overwrites the value of Unused1.
@@ -221,6 +260,19 @@ namespace Ceres.Chess.EncodedPositions
     public unsafe void SetUnused1(float value)
     {
       fixed (float* p = &Unused1)
+      {
+        *p = value;
+      }
+    }
+
+    /// <summary>
+    /// Overwrites the value of Unused2.
+    /// WARNING: is unsafe.
+    /// </summary>
+    /// <param name="value"></param>
+    public unsafe void SetUnused2(float value)
+    {
+      fixed (float* p = &Unused2)
       {
         *p = value;
       }

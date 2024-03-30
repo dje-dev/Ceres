@@ -112,7 +112,10 @@ namespace Ceres.MCTS.MTCSNodes.Annotation
     /// the number of ply since each square has seen a move (to/from).
     /// </summary>
     public LastMovePliesTracker LastMovePliesTracker;
-    
+
+
+//    static NNEvaluator evaluator;
+//    static object LockObj = new object();
 
     /// <summary>
     /// Initializes a specified EncodedPosition to reflect the a specified node's position.
@@ -183,6 +186,61 @@ namespace Ceres.MCTS.MTCSNodes.Annotation
           destBoards[nextBoardIndex++] = default;
         }
       }
+
+
+#if NOT
+CODE USED FOR TPGRecordEncoding.ENABLE_PRIOR_VALUE_POSITION
+      float NodePolicySuboptimality() => node.Parent.ChildAtIndexInfo(0).p -  node.Parent.ChildAtIndexInfo(node.IndexInParentsChildren).p;
+
+
+      if (evaluator == null)
+      {
+        lock (LockObj)
+        {
+          if (evaluator == null)
+          {
+            evaluator = NNEvaluatorDef.FromSpecification("CUSTOM1:703810", "GPU:0").ToEvaluator();
+          }
+        }
+      }
+
+      // ************** TEMPORARY (this is a hack and inefficient)
+      EncodedPositionEvalMiscInfoV6 trainInfo = default;
+      const bool USE_Q = false;
+      const float THRESHOLD_POLICY_SUBOPTIMALITY_USE_PRIOR_VALUE_POS = 0.05f;// 0.03f; // use only if was best move or close to it
+      if (!node.IsRoot 
+//        && false
+        && node.Context.ParamsSearch.TestFlag
+        && (node.IndexInParentsChildren == 0 || NodePolicySuboptimality() < THRESHOLD_POLICY_SUBOPTIMALITY_USE_PRIOR_VALUE_POS)) 
+      {
+        // TODO: find a better place to stuff these values.
+        //        trainInfo.SetOriginal(node.Parent.WinP, node.Parent.LossP, node.Parent.DrawP); // reversed to be from our perspective
+
+        if (USE_Q && node.Parent.N > 1)
+        {
+          float l = ((float)node.Parent.Q - 1 + node.DAvg) / -2;
+          float w = 1 - node.DAvg - l;
+          float d = node.DAvg;
+
+          trainInfo.SetOriginal(l, d, w); // reversed to be from our perspective
+        }
+        else
+        {
+          lock (LockObj)
+          {
+            NNEvaluatorResult eval = evaluator.Evaluate(node.Parent.Annotation.Pos);
+            trainInfo.SetOriginal(eval.W, eval.D, eval.L); // reversed to be from our perspective
+          }
+          
+//          trainInfo.SetOriginal(node.Parent.LossP, node.Parent.DrawP, node.Parent.WinP); // reversed to be from our perspective
+        }   
+      }
+      else
+      {
+        trainInfo.SetOriginal(0, 0, 0);
+      }
+      boardsHistory.SetMiscInfo(new EncodedTrainingPositionMiscInfo(MiscInfo, trainInfo));
+#endif
 
       boardsHistory.SetMiscInfo(new EncodedTrainingPositionMiscInfo(MiscInfo, default));
     }
