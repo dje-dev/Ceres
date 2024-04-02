@@ -1959,6 +1959,32 @@ namespace Ceres.Chess.EncodedPositions
 
 
     /// <summary>
+    /// Extracts the policy moves and probabilities into the provided spans.
+    /// </summary>
+    /// <param name="policyMoves"></param>
+    /// <param name="policyProbs"></param>
+    /// <returns></returns>
+    public int ExtractIntoSpans(Span<EncodedMove> policyMoves, Span<float> policyProbs)
+    {      
+      int policyLen = 0;
+      for (short ix = 0; ix < POLICY_VECTOR_LENGTH; ix++)
+      {
+        (EncodedMove move, float probability) tt = this[ix];
+        {
+          if (!float.IsNaN(tt.probability) && tt.probability > 0)
+          {
+            policyMoves[policyLen] = tt.move;
+            policyProbs[policyLen] = tt.probability;
+            policyLen++;
+          }
+        }
+      }
+      return policyLen;
+    }
+
+
+
+    /// <summary>
     /// Dumps all nonzero policy vector entries to the Console.
     /// </summary>
     public void DumpProb()
