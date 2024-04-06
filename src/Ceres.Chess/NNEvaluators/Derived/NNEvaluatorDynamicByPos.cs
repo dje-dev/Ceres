@@ -105,6 +105,7 @@ namespace Ceres.Chess.NNEvaluators
       FP16[] l2 = new FP16[numPos];
       FP16[] m = HasM ? new FP16[numPos] : null;
       FP16[] uncertaintyV = HasUncertaintyV ? new FP16[numPos] : null;
+      FP16[] action = HasAction ? new FP16[numPos *  1858 * 3] : null;
 
       // For each position call the supplied delegate to choose the preferred evaluator.
       NNPositionEvaluationBatchMember[] values = new NNPositionEvaluationBatchMember[Evaluators.Length];
@@ -162,6 +163,17 @@ namespace Ceres.Chess.NNEvaluators
           m[posNum] = batches[index].GetM(posNum);
         }
 
+        if (HasAction)
+        {
+          for (int i=0;i<1858;i++)
+          {
+            (float wA, float dA, float lA) = batches[index].GetA(posNum, i);
+            action[posNum * 1858 * 3 + i] = (FP16)wA;
+            action[posNum * 1858 * 3 + i + 1] = (FP16)dA;
+            action[posNum * 1858 * 3 + i + 2] = (FP16)lA;
+          }
+        }
+
         if (HasUncertaintyV)
         {
           uncertaintyV[posNum] = batches[index].GetUncertaintyV(posNum);
@@ -174,8 +186,8 @@ namespace Ceres.Chess.NNEvaluators
       }
 
       // Construct an output batch, choosing desired evaluator for each position
-      PositionEvaluationBatch batch = new(IsWDL, HasM, HasUncertaintyV, HasValueSecondary,
-                                          positions.NumPos, policies, w, l, w2, l2, m, uncertaintyV, 
+      PositionEvaluationBatch batch = new(IsWDL, HasM, HasUncertaintyV, HasAction, HasValueSecondary,
+                                          positions.NumPos, policies, action, w, l, w2, l2, m, uncertaintyV, 
                                           null, default, default, default, false);
 
       return batch;

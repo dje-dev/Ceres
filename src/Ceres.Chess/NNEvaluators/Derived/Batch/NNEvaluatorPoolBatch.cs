@@ -177,6 +177,7 @@ namespace Ceres.Chess.NNEvaluators
                                                                   List<IEncodedPositionBatchFlat> pendingBatches)
     {
       Span<CompressedPolicyVector> fullPolicyValues = fullBatchResult.Policies.Span;
+      Span<FP16> fullActionValues = fullBatchResult.HasAction ? fullBatchResult.ActionLogits.Span : default;
       Span<FP16> fullW = fullBatchResult.W.Span;
       Span<FP16> fullL = fullBatchResult.IsWDL ? fullBatchResult.L.Span : default;
       Span<FP16> fullM = fullBatchResult.HasM ? fullBatchResult.M.Span : default;
@@ -200,9 +201,11 @@ namespace Ceres.Chess.NNEvaluators
 
         int numPos = thisBatch.NumPos;
         PositionEvaluationBatch thisResultSubBatch =
-          new PositionEvaluationBatch(fullBatchResult.IsWDL, fullBatchResult.HasM, fullBatchResult.HasUncertaintyV, fullBatchResult.HasValueSecondary,
+          new PositionEvaluationBatch(fullBatchResult.IsWDL, fullBatchResult.HasM, fullBatchResult.HasUncertaintyV, 
+                                      fullBatchResult.HasAction, fullBatchResult.HasValueSecondary,
                                       thisBatch.NumPos,
                                       fullPolicyValues.Slice(nextPosIndex, numPos).ToArray(),
+                                      fullActionValues.Slice(nextPosIndex, numPos).ToArray(),
 
                                       fullW.Slice(nextPosIndex, numPos).ToArray(),
                                       fullBatchResult.IsWDL ? fullL.Slice(nextPosIndex, numPos).ToArray() : null,

@@ -17,16 +17,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Ceres.Base.DataType;
 using Ceres.Base.DataTypes;
-using Ceres.Base.Misc.ONNX;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.LC0.Batches;
-using Ceres.Chess.MoveGen;
 using Ceres.Chess.NetEvaluation.Batch;
 using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.Positions;
-using Pblczero;
 
 #endregion
 
@@ -119,6 +115,11 @@ namespace Ceres.Chess.NNEvaluators
     /// If the evaluator has an M (moves left) head.
     /// </summary>
     public abstract bool HasM { get; }
+
+    /// <summary>
+    /// If action head is present in the network.
+    /// </summary>
+    public abstract bool HasAction { get; }
 
     /// <summary>
     /// If the evaluator has an UV (uncertainty of V) head.
@@ -299,7 +300,18 @@ namespace Ceres.Chess.NNEvaluators
       FP16 extraStat0 = batch.GetExtraStat0(batchIndex);
       FP16 extraStat1 = batch.GetExtraStat1(batchIndex);
 
-      result = new NNEvaluatorResult(w, l, w2, l2, m, uncertaintyV, policyRef.policies.Span[policyRef.index], activations, extraStat0, extraStat1);
+      // Extract action values.
+      // TODO: First check a new property HasAction
+      ref readonly CompressedPolicyVector policy = ref policyRef.policies.Span[policyRef.index];
+      ActionValues actionValues = default;
+      int actionIndex = 0;
+      foreach (var move in policy.ProbabilitySummary())
+      {
+        (float aW, float aD, float aL) = batch.GetA(batchIndex, move.Move.IndexNeuralNet);
+        actionValues[actionIndex++] = ((FP16)aW, (FP16)aL);
+      }
+
+      result = new NNEvaluatorResult(w, l, w2, l2, m, uncertaintyV, policyRef.policies.Span[policyRef.index], actionValues, activations, extraStat0, extraStat1);
     }
 
     #endregion

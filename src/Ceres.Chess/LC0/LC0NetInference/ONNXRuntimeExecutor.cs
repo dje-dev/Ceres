@@ -272,6 +272,7 @@ namespace Ceres.Chess.LC0NetInference
         int INDEX_WDL2 = FindIndex(3, INDEX_WDL, "value2", true);
         int INDEX_MLH = FindIndex(1);
         int INDEX_UNC = hasUNC ? FindIndex(1, INDEX_MLH) : -1;
+        int INDEX_ACTION = FindIndex(1858 * 3, -1, "action", true);
 
         if (looksLikeBT3)
         {
@@ -286,6 +287,14 @@ namespace Ceres.Chess.LC0NetInference
         float[] uncertantiesV = hasUNC ? eval[INDEX_UNC].Item2 : null;
         float[] policiesLogistics = eval[INDEX_POLICIES].Item2;
 
+        float[] actionLogistics = INDEX_ACTION != -1 ? eval[INDEX_ACTION].Item2 : null;
+        FP16[] actionLogisticsFP16 = null;
+        if (actionLogistics != null)
+        {
+          Debug.Assert(actionLogistics.Length == 1858 * 3 * numPositionsUsed);
+          actionLogisticsFP16 = FP16.ToFP16(actionLogistics);
+        }
+
         FP16[] values = FP16.ToFP16(eval[INDEX_WDL].Item2);
         Debug.Assert(values.Length == (isWDL ? 3 : 1) * numPositionsUsed);
 
@@ -293,7 +302,8 @@ namespace Ceres.Chess.LC0NetInference
 
         float[][] value_fc_activations = null;// eval.Length < 3 ? null : eval[2];
         ONNXRuntimeExecutorResultBatch result = new ONNXRuntimeExecutorResultBatch(isWDL, values, values2, policiesLogistics, mlh, 
-                                                                                   uncertantiesV, value_fc_activations, 
+                                                                                   uncertantiesV, value_fc_activations,
+                                                                                   actionLogisticsFP16,
                                                                                    numPositionsUsed);
         return result;
 

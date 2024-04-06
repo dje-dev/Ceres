@@ -157,6 +157,11 @@ namespace Ceres.Chess.NNEvaluators
                                 PolicyAveragingType policyAveragingMethod = DEFAULT_POLICY_AVERAGING_TYPE) 
       : base(evaluators)
     {
+      if (evaluators.Any(e => e.HasAction))
+      {
+        throw new NotImplementedException("NNEvaluatorLinearCombo does not yet support evaluators with actions");
+      }
+
       WeightsValue = weightsValue  != null ? weightsValue.ToArray()  : MathUtils.Uniform(evaluators.Length);
       WeightsValue2 = weightsValue2 != null ? weightsValue2.ToArray() : MathUtils.Uniform(evaluators.Length);
       WeightsPolicy = weightsPolicy != null ? weightsPolicy.ToArray() : MathUtils.Uniform(evaluators.Length);
@@ -258,9 +263,12 @@ namespace Ceres.Chess.NNEvaluators
                                                                 : AverageFP16(positions.NumPos, subResults, (e, i) => e.GetUncertaintyV(i), WeightsUncertaintyVOverrideFunc, positions);
         }
 
+        // TODO: transfer actions if present
+        Memory<FP16> actions = null;
+
         TimingStats stats = new TimingStats();
-        return new PositionEvaluationBatch(IsWDL, HasM, HasUncertaintyV, HasValueSecondary, 
-                                           positions.NumPos, policies, w, l, w2, l2, m, uncertaintyV, activations, stats);
+        return new PositionEvaluationBatch(IsWDL, HasM, HasUncertaintyV, HasAction, HasValueSecondary, 
+                                           positions.NumPos, policies, actions, w, l, w2, l2, m, uncertaintyV, activations, stats);
       }
     }
 

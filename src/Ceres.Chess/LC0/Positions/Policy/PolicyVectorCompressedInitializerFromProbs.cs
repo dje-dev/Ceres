@@ -81,8 +81,10 @@ namespace Ceres.Chess.EncodedPositions
 
 
     [SkipLocalsInit]
-    public static void InitializeFromProbsArray(ref CompressedPolicyVector policyRef, bool areLogits, int numMoves, int numMovesToSave, Span<float> probs, 
-                                               float cutoffMinValue = float.MinValue)
+    public static void InitializeFromProbsArray(ref CompressedPolicyVector policyRef, 
+                                                bool areLogits, int numMoves, int numMovesToSave, 
+                                                Span<float> probs, 
+                                                float cutoffMinValue = float.MinValue)
     {
       // Create array of ProbEntry.
       Span<ProbEntry> probsA = stackalloc ProbEntry[numMoves];

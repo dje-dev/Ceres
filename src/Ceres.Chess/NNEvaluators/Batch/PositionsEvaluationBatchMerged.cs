@@ -52,6 +52,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     bool isWDL;
     bool hasM;
     bool hasUncertaintyV;
+    bool hasAction;
     bool hasValueSecondary;
 
     /// <summary>
@@ -66,6 +67,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
       isWDL = batches[0].IsWDL;
       hasM  = batches[0].HasM;
       hasUncertaintyV = batches[0].HasUncertaintyV;
+      hasAction = batches[0].HasAction;
       hasValueSecondary = batches[0].HasValueSecondary;
     }
 
@@ -75,6 +77,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
 
     bool IPositionEvaluationBatch.HasUncertaintyV => hasUncertaintyV;
 
+    bool IPositionEvaluationBatch.HasAction => hasAction;
     bool IPositionEvaluationBatch.HasValueSecondary => hasValueSecondary;
 
     /// <summary>
@@ -191,6 +194,12 @@ namespace Ceres.Chess.NetEvaluation.Batch
     {
       (int, int) indicies = GetIndices(index);
       return Batches[indicies.Item1].GetActivations(indicies.Item2);
+    }
+
+    public (float w, float d, float l) GetA(int index, int policyIndex)
+    {
+      (int, int) indicies = GetIndices(index);
+      return Batches[indicies.Item1].GetA(indicies.Item2, policyIndex);
     }
 
     public FP16 GetExtraStat0(int index)

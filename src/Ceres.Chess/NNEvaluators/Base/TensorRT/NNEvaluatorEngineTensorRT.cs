@@ -45,6 +45,7 @@ namespace Chess.Ceres.NNEvaluators.TensorRT
     public override bool IsWDL => Config.IsWDL;
     public override bool HasM => Config.HasM;
     public override bool HasUncertaintyV => Config.HasUncertaintyV;
+    public override bool HasAction => false;
     public override bool HasValueSecondary => false;
 
     public readonly NNEvaluatorEngineTensorRTConfig Config;
@@ -285,7 +286,7 @@ Updated notes:
           Span<Int32> policyIndicies = MemoryMarshal.Cast<float, Int32>(rawResultsPolicy).Slice(0, NUM_ELEMENTS);
           Span<float> policyProbabilities = rawResultsPolicy.Slice(Config.MaxBatchSize * NUM_TOPK_POLICY, NUM_ELEMENTS);
 
-          retBatch = new PositionEvaluationBatch(Config.IsWDL, Config.HasM, Config.HasUncertaintyV, false,
+          retBatch = new PositionEvaluationBatch(Config.IsWDL, Config.HasM, Config.HasUncertaintyV, false, false,
                                                  numToProcess, results, default,
                                                  NUM_TOPK_POLICY,
                                                  policyIndicies, policyProbabilities,
@@ -305,9 +306,10 @@ Updated notes:
 
           // NOTE: alternative would be to pass in a mask to the GPU, the batch.ValidMovesMasks could be used to help
           // done below instead. batch.MaskIllegalMovesInPolicyArray(rawResultsPolicy);
-          retBatch = new PositionEvaluationBatch(Config.IsWDL, Config.HasM, Config.HasUncertaintyV, false,
+          retBatch = new PositionEvaluationBatch(Config.IsWDL, Config.HasM, Config.HasUncertaintyV, false, false,
                                                  numToProcess, results, default,
                                                  rawResultsPolicy.Slice(0, numToProcess*1858).ToArray(), // Inefficient 
+                                                 default,
                                                  resultsMLH.ToArray(), resultsUncertaintyV.ToArray(),
                                                  null, //rawResultsConvValFlat,
                                                  1, 1, 0, VALUES_ARE_LOGISTIC,

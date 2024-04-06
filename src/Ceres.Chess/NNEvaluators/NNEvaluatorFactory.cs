@@ -138,6 +138,7 @@ namespace Ceres.Chess.NNEvaluators
       const bool DEFAULT_HAS_WDL = true; 
       const bool DEFAULT_HAS_MLH = true;
       const bool DEFAULT_HAS_UNCERTAINTYV = false;
+      const bool DEFAULT_HAS_ACTION = false;
 
       const int DEFAULT_MAX_BATCH_SIZE = 1024;
       const bool ONNX_SCALE_50_MOVE_COUNTER = false; // BT2 already inserts own node to adjust
@@ -152,7 +153,7 @@ namespace Ceres.Chess.NNEvaluators
           //          NNEvaluatorPrecision precision = netDef.NetworkID.EndsWith(".16") ? NNEvaluatorPrecision.FP16 : NNEvaluatorPrecision.FP32;
           ret = new NNEvaluatorEngineONNX(netDef.NetworkID, fullFN, null, deviceDef.Type, deviceDef.DeviceIndex, useTRT: viaTRT,
                                             ONNXRuntimeExecutor.NetTypeEnum.LC0, deviceDef.MaxBatchSize ?? DEFAULT_MAX_BATCH_SIZE,
-                                            netDef.Precision, DEFAULT_HAS_WDL, DEFAULT_HAS_MLH, DEFAULT_HAS_UNCERTAINTYV,
+                                            netDef.Precision, DEFAULT_HAS_WDL, DEFAULT_HAS_MLH, DEFAULT_HAS_UNCERTAINTYV, DEFAULT_HAS_ACTION,
                                             null, null, null, null, false, ONNX_SCALE_50_MOVE_COUNTER, ENABLE_MOVES, false);
           break;
 
@@ -221,7 +222,7 @@ namespace Ceres.Chess.NNEvaluators
               //               NNEvaluatorPrecision precision = netDef.NetworkID.Contains(".16") ? NNEvaluatorPrecision.FP16 : NNEvaluatorPrecision.FP32;
               return new NNEvaluatorEngineONNX(netDef.NetworkID, tempFN, null, deviceDef.Type, deviceDef.DeviceIndex, USE_TRT,
                                                ONNXRuntimeExecutor.NetTypeEnum.LC0, 1024,
-                                               netDef.Precision, netDefONNX.IsWDL, netDefONNX.HasMovesLeft, netDefONNX.HasUncertaintyV,
+                                               netDef.Precision, netDefONNX.IsWDL, netDefONNX.HasMovesLeft, netDefONNX.HasUncertaintyV, false,
                                                pbn.Net.OnnxModel.OutputValue, pbn.Net.OnnxModel.OutputWdl,
                                                pbn.Net.OnnxModel.OutputPolicy, pbn.Net.OnnxModel.OutputMlh, false, ONNX_SCALE_50_MOVE_COUNTER,
                                                ENABLE_MOVES, false);

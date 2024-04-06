@@ -81,6 +81,11 @@ namespace Ceres.Chess.NNEvaluators.CUDA
     public override bool HasUncertaintyV => false;
 
     /// <summary>
+    /// If action head is present in the network.
+    /// </summary>
+    public override bool HasAction => false;
+
+    /// <summary>
     /// If the evaluator has an secondary value head.
     /// </summary>
     public override bool HasValueSecondary => false;
@@ -262,8 +267,8 @@ namespace Ceres.Chess.NNEvaluators.CUDA
 #endif
       }
 
-      return new PositionEvaluationBatch(IsWDL, HasM, HasUncertaintyV, HasValueSecondary,
-                                         positions.NumPos, policies, w, l, default, default, m, default, 
+      return new PositionEvaluationBatch(IsWDL, HasM, HasUncertaintyV, HasAction, HasValueSecondary, 
+                                         positions.NumPos, policies, null, w, l, default, default, m, default, 
                                          activations, new TimingStats(), default, default, copyResults);
     }
 

@@ -16,11 +16,30 @@
 using Ceres.Base.DataTypes;
 using Ceres.Chess.EncodedPositions;
 using System;
+using System.Runtime.CompilerServices;
 
 #endregion
 
 namespace Ceres.Chess.NetEvaluation.Batch
 {
+  [InlineArray(CompressedPolicyVector.NUM_MOVE_SLOTS)]
+  public struct ActionValues
+  {
+    (FP16 W, FP16 L) WL;
+
+    public float W => WL.W; 
+    public float L => WL.L;
+    public float D => 1 - (WL.W + WL.L);  
+    public (float w, float d, float l) WDL => (WL.W, D, WL.L);
+
+  }
+
+  public readonly struct ActionCompressedVector
+  {
+    public readonly ActionValues WL;
+  }
+
+
   /// <summary>
   /// Represents the a evaluation from a neural network
   /// of a single position.
@@ -53,6 +72,11 @@ namespace Ceres.Chess.NetEvaluation.Batch
     public readonly CompressedPolicyVector Policy;
 
     /// <summary>
+    /// Action win/draw/loss probabilities.
+    /// </summary>
+    public readonly ActionValues ActionsWDL;
+
+    /// <summary>
     /// Activations from certain hidden layers (optional).
     /// </summary>
     public readonly NNEvaluatorResultActivations Activations;
@@ -76,11 +100,13 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <param name="m"></param>
     /// <param name="uncertaintyV"></param>
     /// <param name="policy"></param>
+    /// <param name="actionWDL"></param>
     /// <param name="activations"></param>
     public NNEvaluatorResult(float winP, float lossP, 
                              float win2P, float loss2P, 
                              float m, float uncertaintyV,
-                             CompressedPolicyVector policy, 
+                             CompressedPolicyVector policy,
+                             ActionValues actionsWDL,
                              NNEvaluatorResultActivations activations,
                              FP16? extraStat0 = null, FP16? extraStat1 = default)
     {
@@ -88,6 +114,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
       this.lossP = lossP;
       this.win2P = win2P;
       this.loss2P = loss2P;
+      ActionsWDL = actionsWDL;
+
       M = Math.Max(0, m);
       UncertaintyV = uncertaintyV;
       Policy = policy;
@@ -147,6 +175,29 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// Returns most probably game result (win, draw, loss) as an integer (-1, 0, 1).
     /// </summary>
     public readonly int MostProbableGameResult => W > 0.5f ? 1 : (L > 0.5 ? -1 : 0); 
+
+
+    /// <summary>
+    /// Returns the action win/draw/loss probabilities for the move appearing at a specified index in the compressed policy vector.
+    /// </summary>
+    /// <param name="moveIndexInCompressedPolicyVector"></param>
+    /// <returns></returns>
+    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    public readonly (float w, float d, float l) ActionWDL(int moveIndexInCompressedPolicyVector)
+    {
+      if (moveIndexInCompressedPolicyVector < 0 || moveIndexInCompressedPolicyVector >= Policy.Count)
+      {
+        throw new ArgumentOutOfRangeException(nameof(moveIndexInCompressedPolicyVector));
+      }
+
+      if (ActionWDL == null)
+      {
+        return (float.NaN, float.NaN, float.NaN);
+      }
+
+      (FP16 W, FP16 L) thisAction = ActionsWDL[moveIndexInCompressedPolicyVector];
+      return (thisAction.W, 1 - thisAction.W - thisAction.L, thisAction.L); 
+    } 
 
 
     /// <summary>

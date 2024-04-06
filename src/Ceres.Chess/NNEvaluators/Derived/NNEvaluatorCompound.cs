@@ -33,6 +33,7 @@ namespace Ceres.Chess.NNEvaluators
     readonly bool isWDL;
     readonly bool hasM;
     readonly bool hasUncertaintyV;
+    readonly bool hasAction;
     readonly bool hasValueSecondary;
     readonly bool policyReturnedSameOrderMoveList;
 
@@ -54,6 +55,12 @@ namespace Ceres.Chess.NNEvaluators
     /// <summary>
     /// If the evaluator has an M (moves left) head.    /// </summary>
     public override bool HasM => hasM;
+
+    /// <summary>
+    /// If action head is present in the network.
+    /// </summary>
+    public override bool HasAction => hasAction;
+
 
     /// <summary>
     /// If Uncertainty of V head is present in the network.
@@ -86,6 +93,7 @@ namespace Ceres.Chess.NNEvaluators
       hasUncertaintyV = true;
       policyReturnedSameOrderMoveList = true;
       hasValueSecondary = true;
+      hasAction = true;
 
       // We must track additional position information if required by any of the evaluators
       foreach (NNEvaluator evaluator in evaluators)
@@ -97,6 +105,7 @@ namespace Ceres.Chess.NNEvaluators
         if (!evaluator.HasUncertaintyV) hasUncertaintyV = false;
         if (!evaluator.PolicyReturnedSameOrderMoveList) policyReturnedSameOrderMoveList = false;
         if (!evaluator.HasValueSecondary) hasValueSecondary = false;
+        if (!evaluator.HasAction) hasAction = false;
       }
     }
 
