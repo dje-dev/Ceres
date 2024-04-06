@@ -97,6 +97,11 @@ namespace Chess.Ceres.NNEvaluators
     public override bool HasUncertaintyV => hasUncertaintyV;
 
     /// <summary>
+    /// If action head is present in the network.
+    /// </summary>
+    public override bool HasAction => hasAction;
+
+    /// <summary>
     /// If the evaluator has an secondary value head.
     /// </summary>
     public override bool HasValueSecondary => hasValueSecondary;
@@ -106,7 +111,7 @@ namespace Chess.Ceres.NNEvaluators
     readonly bool hasValueSecondary;
     readonly bool hasM;
     readonly bool hasUncertaintyV;
-
+    readonly bool hasAction;
 
     /// <summary>
     /// Name of policy output slot.
@@ -196,7 +201,8 @@ namespace Chess.Ceres.NNEvaluators
     public NNEvaluatorEngineONNX(string engineID, string onnxModelFileName, byte[] onnxModelBytes, 
                                  NNDeviceType deviceType, int gpuID, bool useTRT,
                                  ONNXRuntimeExecutor.NetTypeEnum type, int batchSize,
-                                 NNEvaluatorPrecision precision, bool isWDL, bool hasM, bool hasUncertaintyV,
+                                 NNEvaluatorPrecision precision, 
+                                 bool isWDL, bool hasM, bool hasUncertaintyV, bool hasAction,
                                  string outputValue, string outputWDL, string outputPolicy, string outputMLH, 
                                  bool valueHeadLogistic, bool scale50MoveCounter, 
                                  bool movesEnabled = false, bool enableProfiling = false, 
@@ -213,6 +219,7 @@ namespace Chess.Ceres.NNEvaluators
       this.hasValueSecondary = hasValueSecondary;
       this.hasM = hasM;
       this.hasUncertaintyV = hasUncertaintyV;
+      this.hasAction = hasAction;
       DeviceType = deviceType;
       OutputValue = outputValue;
       OutputWDL = outputWDL;
@@ -516,8 +523,10 @@ namespace Chess.Ceres.NNEvaluators
 #endif
 
       // NOTE: inefficient, above we convert from [] (flat) to [][] and here we convert back to []
-      return new PositionEvaluationBatch(IsWDL, HasM, HasUncertaintyV, HasValueSecondary, numPos, result.ValuesRaw, result.Values2Raw,
+      return new PositionEvaluationBatch(IsWDL, HasM, HasUncertaintyV, HasAction, HasValueSecondary, numPos, 
+                                         result.ValuesRaw, result.Values2Raw,
                                          result.PolicyVectors,//*/result.PolicyFlat, 
+                                         result.ActionLogisticVectors,
                                          mFP16, uncertaintyVFP16, null,
                                          TemperatureValue1, TemperatureValue2, FractionValueFromValue2,
                                          ValueHeadLogistic,
