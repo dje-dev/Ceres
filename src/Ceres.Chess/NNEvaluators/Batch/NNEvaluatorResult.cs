@@ -32,6 +32,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
     public float D => 1 - (WL.W + WL.L);  
     public (float w, float d, float l) WDL => (WL.W, D, WL.L);
 
+    public float V => W - L;
+
   }
 
   public readonly struct ActionCompressedVector

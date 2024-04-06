@@ -98,6 +98,10 @@ namespace Ceres.Chess.GameEngines
     /// </summary>
     public virtual bool SupportsBestValueMoveMode => false;
 
+    /// <summary>
+    /// If this engine supports playing best action move.
+    /// </summary>
+    public virtual bool SupportsBestActionMoveMode => false;
 
     /// <summary>
     /// Constructor.
@@ -248,6 +252,17 @@ namespace Ceres.Chess.GameEngines
           else
           {
             throw new NotImplementedException($"UCI engine {this} does not support BestValueMove.");
+          }
+
+        case SearchLimitType.BestActionMove:
+          if (SupportsBestActionMoveMode)
+          {
+            gameInfo = UCIRunner.EvalPosition(curPositionAndMoves.FENAndMovesString, "action", 1, "go action");
+            break;
+          }
+          else
+          {
+            throw new NotImplementedException($"UCI engine {this} does not support BestActionMove.");
           }
 
 

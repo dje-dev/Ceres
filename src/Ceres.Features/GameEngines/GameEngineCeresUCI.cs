@@ -84,6 +84,8 @@ namespace Ceres.Features.GameEngines
 
     public override bool SupportsBestValueMoveMode => true;
 
+    public override bool SupportsBestActionMoveMode => true;
+
 
     #region Internal helper methods
 

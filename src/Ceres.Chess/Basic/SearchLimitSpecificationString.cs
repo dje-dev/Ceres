@@ -71,6 +71,10 @@ namespace Ceres.Chess
       {
         return new SearchLimit(SearchLimitType.BestValueMove, 1);
       }
+      else if (specificationString.EndsWith("ba"))
+      {
+        return new SearchLimit(SearchLimitType.BestActionMove, 1);
+      }
       else if (specificationString.EndsWith("nt"))
       {
         limitType = SearchLimitType.NodesPerTree;

@@ -783,6 +783,7 @@ namespace Ceres.Features.Tournaments
           SearchLimitType.NodesPerMove => searchLimit,
           SearchLimitType.NodesPerTree => searchLimit,
           SearchLimitType.BestValueMove => searchLimit,
+          SearchLimitType.BestActionMove => searchLimit,
           SearchLimitType.NodesForAllMoves => new SearchLimit(SearchLimitType.NodesForAllMoves,
                                                               Math.Max(0, searchLimit.Value - totalVisitsUsed),
                                                               searchLimit.SearchCanBeExpanded,

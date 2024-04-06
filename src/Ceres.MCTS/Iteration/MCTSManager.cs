@@ -47,6 +47,7 @@ using Ceres.Chess.NetEvaluation.Batch;
 using System.Linq;
 using Ceres.Chess.NNEvaluators;
 using Ceres.Chess.NNEvaluators.LC0DLL;
+using Ceres.Chess.EncodedPositions.Basic;
 
 #endregion
 
@@ -838,6 +839,38 @@ namespace Ceres.MCTS.Iteration
       MGMoveList moves = new MGMoveList();
       MGMoveGen.GenerateMoves(in startPos, moves);
 
+      // Check if playing using only action head.
+      if (manager.SearchLimit.Type == SearchLimitType.BestActionMove)
+      {
+        if (manager.SearchLimit.Value != 1)
+        {
+          throw new Exception("BestValueMove only supported for NodesPerMove == 1.");
+        }
+
+        NNEvaluatorResult rootResult = manager.Context.NNEvaluators.Evaluator1.Evaluate(priorMoves, manager.Context.ParamsSearch.HistoryFillIn, false);
+
+        MGPosition thisPos = priorMoves.FinalPosMG;
+
+        MGMove bestMove = default;
+        float bestV = float.MinValue;
+        foreach ((EncodedMove Move, float Probability) policyMove in rootResult.Policy.ProbabilitySummary())
+        {
+          float actionV = rootResult.ActionsWDL.W;
+          if (actionV > bestV)
+          {
+            bestMove = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(policyMove.Move, thisPos);
+            bestV = actionV;
+            break;
+          }
+        }
+
+        Debug.Assert(bestV != float.MinValue); // expected to find at least one move
+
+        context.Root.StructRef.W = bestV;
+        context.Root.StructRef.N = 1;
+        return context.TopVForcedMove = bestMove;
+      }
+
       // Check if playing using only value head (TopV).
       if (manager.SearchLimit.Type == SearchLimitType.BestValueMove)
       {
@@ -845,7 +878,7 @@ namespace Ceres.MCTS.Iteration
         {
           throw new Exception("BestValueMove only supported for NodesPerMove == 1.");
         }
-
+        
         NNEvaluatorResult[] valueEvalResults = null;
         (MGMove bestMove, float bestV)  = BestValueMove(manager.Context.NNEvaluators.Evaluator1, priorMoves, 
                                                         ref moves, ref valueEvalResults,
@@ -1125,6 +1158,7 @@ namespace Ceres.MCTS.Iteration
           SearchLimitType.NodesPerMove => MathHelpers.Bounded((SearchLimit.Value - NumNodesVisitedThisSearch) / SearchLimit.Value, 0, 1),
           SearchLimitType.NodesPerTree => MathHelpers.Bounded(1.0f - (NumNodesVisitedThisSearch / (SearchLimit.Value - RootNWhenSearchStarted)), 0, 1),
           SearchLimitType.BestValueMove => MathHelpers.Bounded(1.0f - (NumNodesVisitedThisSearch / (SearchLimit.Value - RootNWhenSearchStarted)), 0, 1),
+          SearchLimitType.BestActionMove => MathHelpers.Bounded(1.0f - (NumNodesVisitedThisSearch / (SearchLimit.Value - RootNWhenSearchStarted)), 0, 1),
           _ => throw new NotImplementedException()
         };
       }
@@ -1233,6 +1267,10 @@ namespace Ceres.MCTS.Iteration
         return (int)MathF.Max(0, SearchLimit.Value - Root.N);
       }
       else if (SearchLimit.Type == SearchLimitType.BestValueMove)
+      {
+        return (int)MathF.Max(0, SearchLimit.Value - Root.N);
+      }
+      else if (SearchLimit.Type == SearchLimitType.BestActionMove)
       {
         return (int)MathF.Max(0, SearchLimit.Value - Root.N);
       }

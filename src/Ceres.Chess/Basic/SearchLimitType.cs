@@ -54,5 +54,10 @@ namespace Ceres.Chess
     /// Evaluate all positions possible after one move and play one having best value score.
     /// </summary>
     BestValueMove,
+
+    /// <summary>
+    /// Best move according to the action head.
+    /// </summary>
+    BestActionMove,
   };
 }

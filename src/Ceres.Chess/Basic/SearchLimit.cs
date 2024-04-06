@@ -120,6 +120,7 @@ namespace Ceres.Chess
 
     public static SearchLimit BestValueMove => new SearchLimit(SearchLimitType.BestValueMove, 1, false);
 
+    public static SearchLimit BestActionMove => new SearchLimit(SearchLimitType.BestActionMove, 1, false);
     #endregion
 
 
@@ -183,7 +184,8 @@ namespace Ceres.Chess
     public static bool TypeIsNodesLimit(SearchLimitType type) => type == SearchLimitType.NodesPerMove 
                                                               || type == SearchLimitType.NodesForAllMoves 
                                                               || type == SearchLimitType.NodesPerTree
-                                                              || type == SearchLimitType.BestValueMove;
+                                                              || type == SearchLimitType.BestValueMove
+                                                              || type == SearchLimitType.BestActionMove;
     public static bool TypeIsTimeLimit(SearchLimitType type) => type == SearchLimitType.SecondsPerMove 
                                                              || type == SearchLimitType.SecondsForAllMoves;
 
@@ -243,7 +245,8 @@ namespace Ceres.Chess
       {
         if (Type == SearchLimitType.NodesPerMove 
          || Type == SearchLimitType.NodesPerTree
-         || Type == SearchLimitType.BestValueMove) // upper bound
+         || Type == SearchLimitType.BestValueMove
+         || Type == SearchLimitType.BestActionMove) // upper bound
         {
           return (int)Value;
         }
@@ -281,6 +284,7 @@ namespace Ceres.Chess
         SearchLimitType.SecondsForAllMoves => null,
         SearchLimitType.NodesForAllMoves => (int)Value,
         SearchLimitType.BestValueMove => 1,
+        SearchLimitType.BestActionMove => 1,
         _ => throw new NotImplementedException()
       };
     }
@@ -312,6 +316,7 @@ namespace Ceres.Chess
         SearchLimitType.SecondsForAllMoves => (int)((Value / 20.0f) * estNumNodesPerSecond),
         SearchLimitType.NodesForAllMoves => (int)(Value / 20.0f),
         SearchLimitType.BestValueMove => 1,
+        SearchLimitType.BestActionMove => 1,
         _ => throw new NotImplementedException()
       };
     }
@@ -383,6 +388,7 @@ namespace Ceres.Chess
       SearchLimitType.SecondsForAllMoves => "SG",
       SearchLimitType.SecondsPerMove => "SM",
       SearchLimitType.BestValueMove => "V",
+      SearchLimitType.BestActionMove => "A",
       _ => throw new Exception($"Internal error: unsupported SearchLimitType type {Type}")
     };
 
