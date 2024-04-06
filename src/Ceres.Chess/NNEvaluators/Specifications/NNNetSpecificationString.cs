@@ -48,6 +48,11 @@ namespace Ceres.Chess.NNEvaluators.Specifications
     /// List of nets to be used, and their fractional weights for the value, policy, MLH and uncertainty heads.
     /// </summary>
     public readonly List<(NNEvaluatorNetDef def, float wtValue, float wtValue2, float wtPolicy, float wtMLH, float wtUncertainty)> NetDefs;
+   
+    /// <summary>
+    /// Optional options string (to be passed to the evaluator for interpretation/use).
+    /// </summary>
+    public readonly string OptionsString;
 
 
     /// <summary>
@@ -59,10 +64,12 @@ namespace Ceres.Chess.NNEvaluators.Specifications
       ArgumentException.ThrowIfNullOrEmpty(netString, nameof(netString)); 
 
       // Build network definitions
-      List<(string, NNEvaluatorType, NNEvaluatorPrecision, float, float, float, float, float)> netParts = OptionsParserHelpers.ParseNetworkOptions(netString);
+      (string netOptions, List<(string, NNEvaluatorType, NNEvaluatorPrecision, float, float, float, float, float)> parts) netParts = OptionsParserHelpers.ParseNetworkOptions(netString);
+
+      OptionsString = netParts.netOptions;
 
       NetDefs = new List<(NNEvaluatorNetDef, float, float, float, float, float)>();
-      foreach (var netSegment in netParts)
+      foreach (var netSegment in netParts.parts)
       {
         NetDefs.Add((new NNEvaluatorNetDef(netSegment.Item1, netSegment.Item2, netSegment.Item3), netSegment.Item4, netSegment.Item5, netSegment.Item6, netSegment.Item7, netSegment.Item8));
       }

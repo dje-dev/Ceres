@@ -16,6 +16,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+
 using Ceres.Chess.Data.Nets;
 using Ceres.Chess.NNEvaluators.Defs;
 using Chess.Ceres.NNEvaluators;
@@ -40,9 +41,28 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
     const string CHAR_ALIAS = "~";
 
 
-    internal static List<(string netID, NNEvaluatorType type, NNEvaluatorPrecision precision, float wtValue, float wtValue2, float wtPolicy, float wtMLH, float wtUncertainty)>
+    internal static (string options, List<(string netID, NNEvaluatorType type, NNEvaluatorPrecision precision, float wtValue, float wtValue2, float wtPolicy, float wtMLH, float wtUncertainty)>)
       ParseNetworkOptions(string netSpecStr)
     {
+      string optionsString = null;
+
+      // Split off the options string if present.
+      const string OPTIONS_DELIMITER = "|";
+      string[] parts = netSpecStr.Split(OPTIONS_DELIMITER);
+      if (parts.Length > 2)
+      {
+        throw new Exception("Network specification must have at most one | character to separate netID from options");
+      }
+      else if (parts.Length == 2)
+      {
+        netSpecStr = parts[0];
+        optionsString = parts[1];
+      }
+      else
+      {
+        netSpecStr = parts[0];
+      }
+
       List<(string, NNEvaluatorType type, NNEvaluatorPrecision precision, float, float, float, float, float)> ret = new();
 
       string[] nets = netSpecStr.Split(",");
@@ -158,7 +178,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
       CheckWeightSum(sumWeightsMLH, "MLH");
       CheckWeightSum(sumWeightsUncertainty, "uncertainty");
 
-      return ret;
+      return (optionsString, ret);
     }
 
 
