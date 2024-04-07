@@ -17,6 +17,7 @@ using Ceres.Base.DataTypes;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
+using System.Numerics.Tensors;
 
 #endregion
 
@@ -144,6 +145,24 @@ namespace Ceres.Base.Math
       float tot = 0;
       for (int i = 0; i < xs.Count; i++) tot += xs[i];
       return tot / xs.Count;
+    }
+
+    /// <summary>
+    /// Normalizes (make sum be 1.0) a set of values.
+    /// </summary>
+    /// <param name="values"></param>
+    public static void Normalize(Span<float> values)
+    {
+      float allSum = TensorPrimitives.Sum(values);
+
+      // TODO: someday use Divide next
+      //       but currently seems buggy!
+      // TensorPrimitives.Divide(values, allSum, values);
+
+      for (int i = 0; i < values.Length; i++)
+      {
+        values[i] /= allSum;
+      }
     }
 
 
