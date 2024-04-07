@@ -300,15 +300,17 @@ namespace Ceres.Chess.NNEvaluators
       FP16 extraStat0 = batch.GetExtraStat0(batchIndex);
       FP16 extraStat1 = batch.GetExtraStat1(batchIndex);
 
-      // Extract action values.
-      // TODO: First check a new property HasAction
-      ref readonly CompressedPolicyVector policy = ref policyRef.policies.Span[policyRef.index];
+      // Possibly extract action values.
       ActionValues actionValues = default;
-      int actionIndex = 0;
-      foreach (var move in policy.ProbabilitySummary())
+      if (HasAction)
       {
-        (float aW, float aD, float aL) = batch.GetA(batchIndex, move.Move.IndexNeuralNet);
-        actionValues[actionIndex++] = ((FP16)aW, (FP16)aL);
+        ref readonly CompressedPolicyVector policy = ref policyRef.policies.Span[policyRef.index];
+        int actionIndex = 0;
+        foreach (var move in policy.ProbabilitySummary())
+        {
+          (float aW, float aD, float aL) = batch.GetA(batchIndex, move.Move.IndexNeuralNet);
+          actionValues[actionIndex++] = ((FP16)aW, (FP16)aL);
+        }
       }
 
       result = new NNEvaluatorResult(w, l, w2, l2, m, uncertaintyV, policyRef.policies.Span[policyRef.index], actionValues, activations, extraStat0, extraStat1);
