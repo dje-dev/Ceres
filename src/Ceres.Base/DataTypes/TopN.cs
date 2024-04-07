@@ -34,6 +34,14 @@ namespace Ceres.Base.DataTypes
     /// </summary>
     public readonly int N;
 
+    /// <summary>
+    /// The mapping function used to evaluate the entities.
+    /// </summary>
+    public readonly Func<T, IComparable> Evaluator;
+
+    /// <summary>
+    /// Returns the number of entities currently being tracked.
+    /// </summary>
     public int Count => numFound;
 
     #region Internal data 
@@ -66,10 +74,14 @@ namespace Ceres.Base.DataTypes
     public TopN(IEnumerable<T> items, int maxN, Func<T, IComparable> eval)
     {
       N = maxN;
+      Evaluator = eval; 
 
       tops = new T[maxN];
-      copyFunc = new Comparer<T>(eval);      
-      if (items != null) Add(items);
+      copyFunc = new Comparer<T>(eval);
+      if (items != null)
+      {
+        Add(items);
+      }
     }
 
 
@@ -93,7 +105,9 @@ namespace Ceres.Base.DataTypes
       {
         List<T> ret = new List<T>(tops.Length);
         for (int i = 0; i < tops.Length; i++)
+        {
           ret.Add(tops[i]);
+        }
         return ret;
       }
     }
@@ -115,7 +129,9 @@ namespace Ceres.Base.DataTypes
     public void Add(IEnumerable<T> items)
     {
       foreach (T item in items)
+      {
         Add(item);
+      }
     }
 
 
@@ -148,6 +164,12 @@ namespace Ceres.Base.DataTypes
 
 
     /// <summary>
+    /// Removes all items from the TopN set.
+    /// </summary>
+    public void Clear() => numFound = 0;
+    
+
+    /// <summary>
     /// Enumerates over the top N elements from Top1 to TopN.
     /// </summary>
     /// <returns></returns>
@@ -166,8 +188,26 @@ namespace Ceres.Base.DataTypes
     IEnumerator<T> IEnumerable<T>.GetEnumerator()
     {
       for (int i = 0; i < numFound; i++)
+      {
         yield return tops[numFound - i - 1];
+      }
     }
+
+
+    /// <summary>
+    /// Returns a string representation of the top N entities.
+    /// </summary>
+    /// <returns></returns>
+    public override string ToString()
+    {
+      string str = $"<TopN {Count} : ";
+      for (int i = 0; i < numFound && i < 5; i++)
+      {
+        str += this.Evaluator (tops[i]).ToString() + " ";
+      }
+      return str + ">";
+    }
+
 
     #region Internals
 
