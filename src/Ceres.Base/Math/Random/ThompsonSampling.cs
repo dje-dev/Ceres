@@ -39,11 +39,11 @@ namespace Ceres.Base.Math.Random
     /// <param name="densities"></param>
     /// <param name="temperature"></param>
     /// <returns></returns>
-    public static int Draw(float[] densities, int numDensities, float temperature)
+    public static int Draw(Span<float> densities, int numDensities, float temperature)
     {
-      if (fractionsScratch == null)
+      if (fractionsScratch == null || fractionsScratch.Length < numDensities)
       {
-        fractionsScratch = new float[64];
+        fractionsScratch = new float[System.Math.Max(64, numDensities)];
       }
 
       float sum = 0;
@@ -76,12 +76,17 @@ namespace Ceres.Base.Math.Random
     /// </summary>
     /// <param name="densities"></param>
     /// <returns></returns>
-    public static int Draw(float[] densities, int numDensities)
+    public static int Draw(Span<float> densities, int numDensities)
     {
       if (densitiesScratch == null)
       {
         rand = new System.Random((int)DateTime.Now.Ticks);
         densitiesScratch = new float[64];
+      }
+
+      if (densitiesScratch.Length < numDensities)
+      {
+        densitiesScratch = new float[System.Math.Max(64, numDensities)];
       }
 
       float cum = 0;
