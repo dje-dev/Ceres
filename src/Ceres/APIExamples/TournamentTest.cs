@@ -53,7 +53,7 @@ namespace Ceres.APIExamples
   {
     const bool POOLED = false;
 
-    static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 3 : 8;
+    static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 2 : 6;
     static int[] OVERRIDE_DEVICE_IDs = /*POOLED ? null*/
        (Environment.MachineName.ToUpper() switch
       {
@@ -195,23 +195,32 @@ namespace Ceres.APIExamples
       //      NET1 = @"ONNX_TRT:d:\weights\lczero.org\BT2-768x15smolgen-3326000#16";
 
 //      NET1 = "CUSTOM1:703810,CUSTOM1:703810";
-       NET1= "CUSTOM1:703810";
+       NET1 = "CUSTOM1:703810";
        NET2 = "CUSTOM2:703810";
-      //      NET1 = NET2 =  "~T75";
-      //      NET1 = NET2 = "703810";
+
+//      NET2 = "~T1_DISTILL_256_10_FP16";//// "~T80";
+
+//       NET2 = "~T1_DISTILL_512_15_FP16";
+
+      //      NET2= "~T81";
 
       //      NET1 = "CUSTOM1:753723;1;0;0;1,~T1_DISTILL_512_15;0;1;1;0";
       //-87     NET1 = "CUSTOM1:753723;0;1;0;1,~T1_DISTILL_512_15;1;0;1;0";
-      //NET2 = "t1-512x15x8h-distilled-swa-3395000";
-      //NET2 = "t1-256x10-distilled-swa-2432500";
-//      NET2 = "~T1_DISTILL_256_10_FP16";//// "~T80";
       //  ///   "LS15;0.25;0.25;0.25,66666;0.75;0.75;0.75"
 
-//      NET2 = "~BT4";
-      NET2 = "~T82";
+      //NET1 =   "~T3";
+
+      //NET1 = "~T3_DISTILL";
+      //NET2 = "~BT3";
+
+      //NET2 = "~T1_DISTIL_512_15_NATIVE";
+      //NET2 = "~T1_DISTILL_512_15_FP16";
+
+      //NET2 = "~T70";
+      //      NET2 = "~T81";
 
 
-//      NET2 = "~T1_DISTILL_512_15_FP16";
+      //NET1 = NET2 = "~T80";
       //NET1 = "ONNX_ORT:BT3_750_optimistic#32,BT3_750#32,";
 
       //NET1 = "ONNX_ORT:BT3_750_policy_vanilla#32,ONNX_ORT:BT3_750_policy_optimistic#32";
@@ -263,11 +272,12 @@ namespace Ceres.APIExamples
       //      NET2 = ReferenceNetIDs.BT2;
 
       SearchLimit limit1 = SearchLimit.NodesForAllMoves(100_000, 1000) * 3;
-      limit1 = SearchLimit.NodesPerMove(100);
+      limit1 = SearchLimit.NodesPerMove(1);
       //      limit1 = SearchLimit.NodesPerMove(1000 + ((int)DateTime.Now.Millisecond % 200));
 //      limit1 = SearchLimit.BestValueMove;
+      limit1 = SearchLimit.BestActionMove;
 
-
+      SearchLimit limit2 = SearchLimit.NodesPerMove(1);
       //      limit1 = SearchLimit.SecondsForAllMoves(60, 0.6f);
 
       // coefficient 3, 250 nodes --> 391 (+119,=170,-102), 52.2 %
@@ -284,7 +294,7 @@ namespace Ceres.APIExamples
       //NET2 = NET1;
       //**** END WARNING ***
 
-      SearchLimit limit2 = limit1;// SearchLimit.NodesPerMove(1);
+//      SearchLimit limit2 = limit1;// SearchLimit.NodesPerMove(1);
 
       //      NET1 = NET2 = "753723";// "610889";
       //      NET1 = "803907";
@@ -456,9 +466,11 @@ namespace Ceres.APIExamples
       //engineDefCeres1.SelectParams.CPUCT *= 0.85f;
       //engineDefCeres2.SelectParams.CPUCT *= 0.85f;
 
-//      engineDefCeres1.SearchParams.BestMoveMode = ParamsSearch.BestMoveModeEnum.TopV;
-//      engineDefCeres2.SearchParams.BestMoveMode = ParamsSearch.BestMoveModeEnum.TopV;
+      //      engineDefCeres1.SearchParams.BestMoveMode = ParamsSearch.BestMoveModeEnum.TopV;
+      //      engineDefCeres2.SearchParams.BestMoveMode = ParamsSearch.BestMoveModeEnum.TopV;
 
+//engineDefCeres1.SearchParams.Execution.FlowDualSelectors = false;
+//engineDefCeres2.SearchParams.Execution.FlowDualSelectors = false;
 
       //AdjustSelectParamsNewTuneBR(engineDefCeres1.SelectParams);
       //AdjustSelectParamsNewTuneBR(engineDefCeres2.SelectParams);
@@ -476,7 +488,10 @@ namespace Ceres.APIExamples
 
       //      engineDefCeres1.SelectParams.CPUCTDualSelectorDiffFraction = 0.04f;
 
-//      engineDefCeres1.SearchParams.TestFlag2 = true;
+//engineDefCeres1.SearchParams.TestFlag = true;
+//engineDefCeres1.SearchParams.EnableTablebases = false;
+//engineDefCeres2.SearchParams.EnableTablebases = false;
+
       //engineDefCeres1.SearchParams.Execution.MaxBatchSize = 128;
       //      engineDefCeres1.SearchParams.BatchSizeMultiplier = 2;
 
@@ -605,8 +620,9 @@ namespace Ceres.APIExamples
       EnginePlayerDef playerCeres3 = new EnginePlayerDef(engineDefCeres3, limit1);
 
       bool ENABLE_LC0 = false;// evalDef1.Nets[0].Net.Type == NNEvaluatorType.LC0Library && (evalDef1.Nets[0].WeightValue == 1 && evalDef1.Nets[0].WeightPolicy == 1 && evalDef1.Nets[0].WeightM == 1);
-      GameEngineDefLC0 engineDefLC1 = ENABLE_LC0 ? new GameEngineDefLC0("LC0_0", evalDef1, forceDisableSmartPruning, null, null) : null;
-      GameEngineDefLC0 engineDefLC2 = ENABLE_LC0 ? new GameEngineDefLC0("LC0_2", evalDef2, forceDisableSmartPruning, null, null) : null;
+      string OVERRIDE_LC0_EXE = @"c:\apps\lc0_30\lc0_PR917.exe";
+      GameEngineDefLC0 engineDefLC1 = ENABLE_LC0 ? new GameEngineDefLC0("LC0_0", evalDef1, forceDisableSmartPruning, null, null, overrideEXE: OVERRIDE_LC0_EXE) : null;
+      GameEngineDefLC0 engineDefLC2 = ENABLE_LC0 ? new GameEngineDefLC0("LC0_2", evalDef2, forceDisableSmartPruning, null, null, overrideEXE: OVERRIDE_LC0_EXE) : null;
 
       EnginePlayerDef playerStockfish14 = new EnginePlayerDef(EngineDefStockfish14(), limit2 * 0.30f);// * 350);
       EnginePlayerDef playerLC0 = ENABLE_LC0 ? new EnginePlayerDef(engineDefLC1, limit1) : null;
@@ -708,7 +724,6 @@ namespace Ceres.APIExamples
       string baseName = "book-ply8-unifen-Q-0.25-0.40";
       baseName = "book-ply8-unifen-Q-0.25-0.40";
 //      baseName = "single_bad";
-//      baseName = "endingbook-10man-3181.pgn";
 //            baseName = "Noomen 2-move Testsuite.pgn";
 //            baseName = "book-ply8-unifen-Q-0.40-1.0";
 //      baseName = "book-ply8-unifen-Q-0.0-0.25.pgn";
@@ -878,7 +893,6 @@ namespace Ceres.APIExamples
 
       // Define constants for engine parameters           
 
-      string leela_EXE = Path.Combine(CeresUserSettingsManager.Settings.DirExternalEngines, "lc0-v0.28.0-windows-gpu-nvidia-cuda", "LC0.exe");
       string CERES_NETWORK = CeresUserSettingsManager.Settings.DefaultNetworkSpecString; //"LC0:703810";
       const string CERES_GPU = "GPU:0";
       string TB_DIR = CeresUserSettingsManager.Settings.DirTablebases;
@@ -899,7 +913,7 @@ namespace Ceres.APIExamples
 
       // Define Leela engine (in process) with associated neural network and GPU and parameter customizations
       GameEngineDefLC0 engineDefLC0 = new GameEngineDefLC0("LC0-1", ceresNNDef, forceDisableSmartPruning: false, null, null);
-      GameEngineDefLC0 engineDef1LC0 = new GameEngineDefLC0("LC0-2", ceresNNDef, forceDisableSmartPruning: true, null, null);
+      GameEngineDefLC0 engineDef1LC0 = new GameEngineDefLC0("LC0-2", ceresNNDef, forceDisableSmartPruning: false, null, null);
 
       //NNEvaluatorDef leelaNNDef = NNEvaluatorDefFactory.FromSpecification($"LC0:{CERES_NETWORK}", CERES_GPU);
       //GameEngineDefUCI engineDefLeela1 = new GameEngineDefUCI("Leela", new GameEngineUCISpec("LC0",leela_EXE, syzygyPath: TB_DIR));           
