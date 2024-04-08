@@ -56,7 +56,11 @@ namespace Ceres.Chess.Data.Nets
 
         {"T1_768_FP16", ONNXNet16LC0("t1-768x15x24h-swa-4000000_fp16")},
         {"T2", ONNXNet16LC0("t2-768x15x24h-swa-5230000.pb.gz_fp16")},
-        {"T3", ONNXNet32LC0("t3-512x15x16h-swa-2815000") },
+        {"T3", ONNXNet32LC0("t3-512x15x16h-swa-2815000") }, //Smaller transformer net trained by masterkni. 512 embedding size with 15 encoder layers and 16 encoder heads. Same architecture as BT4.
+
+        {"T1_DISTIL_512_15_NATIVE", SimpleLC0Net("t1-512x15x8h-distilled-swa-3395000") },
+        {"T3_NATIVE", SimpleLC0Net("t3-512x15x16h-swa-2815000") },
+        {"T3_DISTILL", ONNXNet32LC0("t3-512x15x16h-distill-swa-2175000.pb.gz") }
     };
 
 
