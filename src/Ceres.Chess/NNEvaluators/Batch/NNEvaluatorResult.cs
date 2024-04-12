@@ -13,10 +13,14 @@
 
 #region Using directives
 
-using Ceres.Base.DataTypes;
-using Ceres.Chess.EncodedPositions;
 using System;
 using System.Runtime.CompilerServices;
+
+using Ceres.Base.DataTypes;
+using Ceres.Chess.EncodedPositions;
+using Ceres.Chess.EncodedPositions.Basic;
+using Ceres.Chess.MoveGen;
+using Ceres.Chess.MoveGen.Converters;
 
 #endregion
 
@@ -176,7 +180,40 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <summary>
     /// Returns most probably game result (win, draw, loss) as an integer (-1, 0, 1).
     /// </summary>
-    public readonly int MostProbableGameResult => W > 0.5f ? 1 : (L > 0.5 ? -1 : 0); 
+    public readonly int MostProbableGameResult => W > 0.5f ? 1 : (L > 0.5 ? -1 : 0);
+
+    /// <summary>
+    /// Returns the action head evaluation for a specified move.
+    /// </summary>
+    /// <param name="move"></param>
+    /// <returns></returns>
+    /// <exception cref="Exception"></exception>
+    public readonly (float w, float d, float l) ActionWDLForMove(MGMove move)
+      => ActionWDLForMove(ConverterMGMoveEncodedMove.MGChessMoveToEncodedMove(move));
+
+
+
+    /// <summary>
+    /// Returns the action head evaluation for a specified move.
+    /// </summary>
+    /// <param name="move"></param>
+    /// <returns></returns>
+    /// <exception cref="Exception"></exception>
+    public readonly (float w, float d, float l) ActionWDLForMove(EncodedMove move)
+    {
+      int policyIndex = 0;
+      foreach (var policyInfo in Policy.ProbabilitySummary())
+      {
+        if (policyInfo.Move == move)
+        {
+          (FP16 W, FP16 L) thisAction = ActionsWDL[policyIndex];
+          return (thisAction.W, 1 - thisAction.W - thisAction.L, thisAction.L);
+        }
+        policyIndex++;
+      } 
+
+      throw new Exception("Move not found in policy " + move);
+    }
 
 
     /// <summary>
@@ -185,16 +222,11 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <param name="moveIndexInCompressedPolicyVector"></param>
     /// <returns></returns>
     /// <exception cref="ArgumentOutOfRangeException"></exception>
-    public readonly (float w, float d, float l) ActionWDL(int moveIndexInCompressedPolicyVector)
+    public readonly (float w, float d, float l) ActionWDLAtCompressedPolicyIndex(int moveIndexInCompressedPolicyVector)
     {
       if (moveIndexInCompressedPolicyVector < 0 || moveIndexInCompressedPolicyVector >= Policy.Count)
       {
         throw new ArgumentOutOfRangeException(nameof(moveIndexInCompressedPolicyVector));
-      }
-
-      if (ActionWDL == null)
-      {
-        return (float.NaN, float.NaN, float.NaN);
       }
 
       (FP16 W, FP16 L) thisAction = ActionsWDL[moveIndexInCompressedPolicyVector];

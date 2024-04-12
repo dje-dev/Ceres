@@ -49,7 +49,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
 
     public Memory<CompressedPolicyVector> Policies;
 
-    public Memory<FP16> ActionLogits;
+    public Memory<FP16> ActionProbabilities;
 
 
     /// <summary>
@@ -104,6 +104,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
 
     #endregion
 
+
     /// <summary>
     /// Get action WDL for move with specified index.
     /// </summary>
@@ -111,28 +112,17 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <returns></returns>
     public (float w, float d, float l) GetA(int index, int policyIndex)
     {
-      if (ActionLogits.IsEmpty)
+      if (ActionProbabilities.IsEmpty)
       {
         return (float.NaN, float.NaN, float.NaN);
-      } 
+      }
 
+      Span<FP16> actionsSpan = ActionProbabilities.Span;
       int offset = (1858 * 3 * index) + policyIndex * 3;
-      Span<FP16> actionsSpan = ActionLogits.Span;
 
-      float wLogit = actionsSpan[offset];
-      float dLogit = actionsSpan[offset+1];
-      float lLogit = actionsSpan[offset+2];
-
-      float max = MathF.Max(wLogit, MathF.Max(dLogit, lLogit));
-
-      float w = MathF.Exp(wLogit - max);
-      float d = MathF.Exp(dLogit - max);
-      float l = MathF.Exp(lLogit - max);
-
-      float mult = 1.0f / (w + d + l);
-
-      return (w * mult, d * mult, l * mult);
+      return (actionsSpan[offset], actionsSpan[offset+1], actionsSpan[offset+2]);
     }
+
 
     public void RewriteWDLToBlendedValueAction()
     {
@@ -388,7 +378,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <param name="isWDL"></param>
     /// <param name="numPos"></param>
     /// <param name="policies"></param>
-    /// <param name="actionLogits"></param>
+    /// <param name="actionProbabilties"></param>
     /// <param name="w"></param>
     /// <param name="d"></param>
     /// <param name="l"></param>
@@ -397,7 +387,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <param name="stats"></param>
     public PositionEvaluationBatch(bool isWDL, bool hasM, bool hasUncertaintyV, bool hasAction, bool hasValueSecondary, int numPos, 
                                    Memory<CompressedPolicyVector> policies,
-                                   Memory<FP16> actionLogits,
+                                   Memory<FP16> actionProbabilties,
                                    Memory<FP16> w, Memory<FP16> l, 
                                    Memory<FP16> w2, Memory<FP16> l2,
                                    Memory<FP16> m, Memory<FP16> uncertaintyV,
@@ -412,7 +402,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
       HasValueSecondary = hasValueSecondary;
 
       Policies = makeCopy ? policies.Slice(0, numPos).ToArray() : policies;
-      ActionLogits =(hasAction && makeCopy) ? actionLogits.Slice(0, numPos).ToArray() : actionLogits;
+      ActionProbabilities = (hasAction && makeCopy) ? actionProbabilties.Slice(0, numPos).ToArray() : actionProbabilties;
       Activations = (activations.Length != 0 && makeCopy) ? activations.Slice(0, numPos).ToArray() : activations;
 
       W = makeCopy ? w.Slice(0, numPos).ToArray() : w;
@@ -426,7 +416,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
 
       M = (hasM && makeCopy) ? m.Slice(0, numPos).ToArray() : m;
       UncertaintyV = (HasUncertaintyV && makeCopy) ? uncertaintyV.Slice(0, numPos).ToArray() : uncertaintyV;
-      Action = (HasAction && makeCopy) ? actionLogits.Slice(0, numPos).ToArray() : actionLogits;
+      Action = (HasAction && makeCopy) ? actionProbabilties.Slice(0, numPos).ToArray() : actionProbabilties;
 
       if (!extraStat0.IsEmpty)
       {
@@ -532,7 +522,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
           temperatureValue1, temperatureValue2, fractionValue1FromValue2, valsAreLogistic, stats)
     {
       Policies = ExtractPoliciesBufferFlat(numPos, policyProbs, probType, policyAlreadySorted, sourceBatchWithValidMoves);
-      ActionLogits = actionLogits;
+      ActionProbabilities = actionLogits;
     }
 
 

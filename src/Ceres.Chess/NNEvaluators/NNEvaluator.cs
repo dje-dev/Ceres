@@ -277,6 +277,21 @@ namespace Ceres.Chess.NNEvaluators
 
 
     /// <summary>
+    /// Extracts and returns a single NNEvaluatorResult 
+    /// from an IPositionEvaluationBatch (at a specified batch index).
+    /// </summary>
+    /// <param name="batch"></param>
+    /// <param name="batchIndex"></param>
+    /// <returns></returns>
+    public NNEvaluatorResult ResultFromBatch(IPositionEvaluationBatch batch, int batchIndex)
+    {
+
+      ExtractToNNEvaluatorResult(out NNEvaluatorResult resultBoard, batch, batchIndex);
+      return resultBoard;
+    }
+
+
+    /// <summary>
     /// Internal worker to extract a single NNEvaluatorResult from an IPositionEvaluationBatch.
     /// </summary>
     /// <param name="result"></param>

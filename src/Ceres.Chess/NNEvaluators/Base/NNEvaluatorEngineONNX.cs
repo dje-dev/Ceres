@@ -522,6 +522,32 @@ namespace Chess.Ceres.NNEvaluators
       }
 #endif
 
+      if (result.ActionLogisticVectors != null)
+      {
+        throw new Exception("Action needs remediation in ONNX to convert from logistic to probabilities");  
+#if NOT
+        int offset = (1858 * 3 * index) + policyIndex * 3;
+        Span<FP16> actionsSpan = ActionProbabilities.Span;
+
+        float wLogit = actionsSpan[offset];
+        float dLogit = actionsSpan[offset + 1];
+        float lLogit = actionsSpan[offset + 2];
+
+        return (actionsSpan[offset], actionsSpan[offset + 1], actionsSpan[offset + 2]);
+
+        float max = MathF.Max(wLogit, MathF.Max(dLogit, lLogit));
+
+        float w = MathF.Exp(wLogit - max);
+        float d = MathF.Exp(dLogit - max);
+        float l = MathF.Exp(lLogit - max);
+
+        float mult = 1.0f / (w + d + l);
+
+        return (w * mult, d * mult, l * mult);
+#endif
+      }
+
+
       // NOTE: inefficient, above we convert from [] (flat) to [][] and here we convert back to []
       return new PositionEvaluationBatch(IsWDL, HasM, HasUncertaintyV, HasAction, HasValueSecondary, numPos, 
                                          result.ValuesRaw, result.Values2Raw,
