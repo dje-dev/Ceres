@@ -202,7 +202,7 @@ namespace Ceres.APIExamples
 
 //       NET2 = "~T1_DISTILL_512_15_FP16";
 
-      //      NET2= "~T81";
+//      NET2= "~T70";
 
       //      NET1 = "CUSTOM1:753723;1;0;0;1,~T1_DISTILL_512_15;0;1;1;0";
       //-87     NET1 = "CUSTOM1:753723;0;1;0;1,~T1_DISTILL_512_15;1;0;1;0";
@@ -272,12 +272,13 @@ namespace Ceres.APIExamples
       //      NET2 = ReferenceNetIDs.BT2;
 
       SearchLimit limit1 = SearchLimit.NodesForAllMoves(100_000, 1000) * 3;
-      limit1 = SearchLimit.NodesPerMove(1);
+      limit1 = SearchLimit.NodesPerMove(15);
       //      limit1 = SearchLimit.NodesPerMove(1000 + ((int)DateTime.Now.Millisecond % 200));
 //      limit1 = SearchLimit.BestValueMove;
-      limit1 = SearchLimit.BestActionMove;
+//      limit1 = SearchLimit.BestActionMove;
 
-      SearchLimit limit2 = SearchLimit.NodesPerMove(1);
+//      SearchLimit limit2 = SearchLimit.NodesPerMove(1);
+      SearchLimit limit2 = limit1;
       //      limit1 = SearchLimit.SecondsForAllMoves(60, 0.6f);
 
       // coefficient 3, 250 nodes --> 391 (+119,=170,-102), 52.2 %
