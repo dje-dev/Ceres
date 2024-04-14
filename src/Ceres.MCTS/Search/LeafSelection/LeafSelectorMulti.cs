@@ -753,12 +753,13 @@ namespace Ceres.MCTS.Search
         Span<short> allChildrenCounts = stackalloc short[node.StructRef.NumPolicyMoves];
         Span<float> scores = stackalloc float[node.StructRef.NumPolicyMoves];
         node.InfoRef.ComputeTopChildScores(SelectorID, node.Depth,
-                                           vLossDynamicBoost, 0, node.StructRef.NumPolicyMoves - 1, numTargetLeafs,
+                                           vLossDynamicBoost, 0, node.StructRef.NumPolicyMoves - 1, 
+                                           0, // to indicate all scores should be computed
                                            scores, allChildrenCounts, 1, null, 0, 
                                            node.Context.ParamsSearch.ActionHeadSelectionWeight);
 
         // Bubble sort to get items in same order as the scores.
-        const float MIN_PROBABILITY_FOR_ACTION_BOOST = 0.03f;
+        const float MIN_PROBABILITY_FOR_ACTION_BOOST = 0.02f;
 
         Span<MCTSNodeStructChild> childrenSpan = nodeRef.Children;
         ref CompressedActionVector actionVector = ref node.Context.Tree.Store.AllActionVectors[node.Index];
@@ -772,20 +773,10 @@ namespace Ceres.MCTS.Search
             {
               numSwapped++;
 
-              // Swap scores
-              float tempScore = scores[i - 1];
-              scores[i - 1] = scores[i];
-              scores[i] = tempScore;
-
-              // Swap children
-              MCTSNodeStructChild temp = childrenSpan[i - 1];
-              childrenSpan[i - 1] = childrenSpan[i];
-              childrenSpan[i] = temp;
-
-              // Swap action
-              (FP16 W, FP16 L) swapTemp = actionVector[i - 1];
-              actionVector[i - 1] = actionVector[i];
-              actionVector[i] = swapTemp;
+              // Swap scores, children and actions.
+              (scores[i - 1], scores[i]) = (scores[i], scores[i - 1]);
+              (childrenSpan[i - 1], childrenSpan[i]) = (childrenSpan[i], childrenSpan[i - 1]);
+              (actionVector[i - 1], actionVector[i]) = (actionVector[i], actionVector[i - 1]);
             }
 
             // Do not swap for low probability nodes.
@@ -795,7 +786,6 @@ namespace Ceres.MCTS.Search
             }
           }
         } while (numSwapped > 0);
-//        else Console.Write(".");
       }
 
       if (numChildrenToCheck == 1)
