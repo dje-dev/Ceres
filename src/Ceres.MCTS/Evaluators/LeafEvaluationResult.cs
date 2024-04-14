@@ -22,6 +22,7 @@ using System.Runtime.InteropServices;
 using Ceres.Base.DataTypes;
 using Ceres.Chess;
 using Ceres.Chess.EncodedPositions;
+using Ceres.Chess.NetEvaluation.Batch;
 using Ceres.MCTS.Params;
 
 #endregion
@@ -61,6 +62,8 @@ namespace Ceres.MCTS.Evaluators
     /// (but will be released after the policy is applied by being copied into a search node)
     /// </summary>
     private Memory<CompressedPolicyVector> policyArray;
+
+    private Memory<CompressedActionVector> actionArray;
 
     /// <summary>
     /// Index in the policyArray of this policy value.
@@ -155,7 +158,8 @@ namespace Ceres.MCTS.Evaluators
     /// <param name="policyArray"></param>
     /// <param name="policyArrayIndex"></param>
     public LeafEvaluationResult(GameResult terminalStatus, FP16 winP, FP16 lossP, FP16 m, byte uncertaintyV, 
-                                Memory<CompressedPolicyVector> policyArray, short policyArrayIndex)
+                                Memory<CompressedPolicyVector> policyArray, 
+                                Memory<CompressedActionVector> actionArray, short policyArrayIndex)
     {
       Debug.Assert(terminalStatus != GameResult.NotInitialized);
 
@@ -167,6 +171,7 @@ namespace Ceres.MCTS.Evaluators
 
       this.policyArrayIndex = policyArrayIndex;
       this.policyArray = policyArray;
+      this.actionArray = actionArray;
     }
 
 
@@ -185,6 +190,21 @@ namespace Ceres.MCTS.Evaluators
       }
     }
 
+
+    /// <summary>
+    /// Memory reference to underlying actions.
+    /// </summary>
+    public (Memory<CompressedActionVector> actions, int index) ActionInArray
+    {
+      get => (actionArray, policyArrayIndex);
+
+      set
+      {
+        Debug.Assert(policyArrayIndex == -1 && value.index != -1);
+        this.actionArray = value.actions;
+        this.policyArrayIndex = (short)value.index;
+      }
+    } 
 
     /// <summary>
     /// Memory reference to underlying policy.

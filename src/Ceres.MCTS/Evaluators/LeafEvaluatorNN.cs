@@ -290,9 +290,13 @@ namespace Ceres.MCTS.Evaluators
 
         byte scaledUncertainty = (byte)Math.Round(MCTSNodeStruct.UNCERTAINTY_SCALE * rawUncertaintyV, 0);
         LeafEvaluationResult evalResult = new LeafEvaluationResult(GameResult.Unknown, winP, lossP, rawM, scaledUncertainty);
-        evalResult.PolicyInArray = results.GetPolicy(i);
 
-        // Copy policy
+        evalResult.PolicyInArray = results.GetPolicy(i);
+        if (results.HasAction)
+        {
+          evalResult.ActionInArray = results.GetAction(i);
+        }
+
         if (resultTarget == EvalResultTarget.PrimaryEvalResult)
         {
           node.EvalResult = evalResult;

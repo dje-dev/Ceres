@@ -81,12 +81,12 @@ namespace Ceres.MCTS.Evaluators
         }
 
         CompressedPolicyVector[] cpvArray = new CompressedPolicyVector[1];
-        LeafEvaluationResult ret = new(otherNodeRef.Terminal, otherNodeRef.WinP, otherNodeRef.LossP, 
-                                       otherNodeRef.MPosition, otherNodeRef.UncertaintyVPosition, cpvArray, 0);
-        MCTSNodeStructUtils.ExtractPolicyVector(OtherContext.ParamsSelect.PolicySoftmax, in otherNodeRef, ref cpvArray[0]);
-
-        NumHits.Add(1, nodeIndex);
-        return ret;
+        //        LeafEvaluationResult ret = new(otherNodeRef.Terminal, otherNodeRef.WinP, otherNodeRef.LossP, 
+        //                                       otherNodeRef.MPosition, otherNodeRef.UncertaintyVPosition, cpvArray, 0);
+        //        MCTSNodeStructUtils.ExtractPolicyVector(OtherContext.ParamsSelect.PolicySoftmax, in otherNodeRef, ref cpvArray[0]);
+        throw new NotImplementedException();
+//        NumHits.Add(1, nodeIndex);
+//        return ret;
 
       }
       else
