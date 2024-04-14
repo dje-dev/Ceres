@@ -272,7 +272,7 @@ namespace Ceres.APIExamples
       //      NET2 = ReferenceNetIDs.BT2;
 
       SearchLimit limit1 = SearchLimit.NodesForAllMoves(100_000, 1000) * 3;
-      limit1 = SearchLimit.NodesPerMove(15);
+      limit1 = SearchLimit.NodesPerMove(1000);
       //      limit1 = SearchLimit.NodesPerMove(1000 + ((int)DateTime.Now.Millisecond % 200));
 //      limit1 = SearchLimit.BestValueMove;
 //      limit1 = SearchLimit.BestActionMove;
