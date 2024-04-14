@@ -274,7 +274,7 @@ namespace Ceres.MCTS.Iteration
         }
       }
 
-      MCTSNodeStore store = new MCTSNodeStore(maxNodes, priorMoves);
+      MCTSNodeStore store = new MCTSNodeStore(maxNodes, paramsSearch.ActionHeadSelectionWeight != 0, priorMoves);
 
       SearchLimit searchLimitToUse = SearchLimitPerMove(priorMoves.FinalPosition, searchLimit, 0, 0,
                                                           paramsSearch, limitManager,

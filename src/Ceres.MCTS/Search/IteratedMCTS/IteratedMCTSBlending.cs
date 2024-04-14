@@ -21,6 +21,8 @@ using Ceres.MCTS.MTCSNodes;
 using Ceres.Base.DataTypes;
 using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.MCTS.MTCSNodes.Struct;
+using Ceres.Chess.NetEvaluation.Batch;
+using System.Runtime.CompilerServices;
 
 #endregion
 
@@ -144,9 +146,16 @@ namespace Ceres.MCTS.Search.IteratedMCTS
         CompressedPolicyVector newPolicy = default;
         CompressedPolicyVector.Initialize(ref newPolicy, indices, probabilities);
 
+        CompressedActionVector dummyActionVector = default;
+        if (node.Context.NNEvaluators.Evaluator1.HasAction)
+        {
+          throw new NotImplementedException("Action vectors not yet implemented in IteratedMCTSBlending.");
+        }
+
         // Save back to cache
         // TODO: possibly blend in the search Q to the WinP/LossP (possibly M too?)
-        cache.Store(node.StructRef.ZobristHash, node.Terminal, node.WinP, node.LossP, node.MPosition, node.UncertaintyVPosition, in newPolicy);
+        cache.Store(node.StructRef.ZobristHash, node.Terminal, node.WinP, node.LossP, node.MPosition, node.UncertaintyVPosition,
+                    in newPolicy, in dummyActionVector);
       }
     }
 

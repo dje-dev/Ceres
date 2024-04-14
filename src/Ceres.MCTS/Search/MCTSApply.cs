@@ -492,6 +492,11 @@ namespace Ceres.MCTS.Search
             node.SetPolicy(policySoftmax, ParamsSelect.MinPolicyProbability, in node.Annotation.PosMG, node.Annotation.Moves,
                            in node.EvalResult.PolicyRef, returnedMovesAreInSameOrderAsMGMoveList);
 
+            if (node.Store.AllActionVectors != null)
+            {
+              node.Store.AllActionVectors[node.Index] = node.EvalResult.ActionsRef;
+            }
+
             if (node.Context.ParamsSearch.Execution.InFlightOtherBatchLinkageEnabled)
             {
               throw new Exception("Unsupported. We would have to disable the ReleasePolicyValue here but unsure if that would create serious memory leak.");
@@ -501,7 +506,7 @@ namespace Ceres.MCTS.Search
           }
         }
 
-        node.EvalResult.ReleasePolicyValue();
+        node.EvalResult.ReleasePolicyActionsValues();
       }
     }
 

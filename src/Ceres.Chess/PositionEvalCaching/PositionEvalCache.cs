@@ -19,6 +19,7 @@ using Ceres.Base.DataType;
 using Ceres.Base.DataTypes;
 using Ceres.Chess;
 using Ceres.Chess.EncodedPositions;
+using Ceres.Chess.NetEvaluation.Batch;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -110,21 +111,27 @@ namespace Ceres.Chess.PositionEvalCaching
 
 
     /// <summary>
-    /// 
     /// Note that it is possible and acceptable that the specified entry might already exist.
     /// For example, when processing a large batch there might be tranpositions resulting in 
     /// multiple nodes having same position. It is harmless to store two or more times.
     /// </summary>
     /// <param name="hash"></param>
-    /// <param name="value"></param>
+    /// <param name="terminalStatus"></param>
+    /// <param name="winP"></param>
+    /// <param name="lossP"></param>
+    /// <param name="m"></param>
+    /// <param name="uncertaintyV"></param>
     /// <param name="policy"></param>
-    public void Store(ulong hash, GameResult terminalStatus, FP16 winP, FP16 lossP, FP16 m, byte uncertaintyV, in CompressedPolicyVector policy)
+    /// <param name="actions"></param>
+    public void Store(ulong hash, GameResult terminalStatus, FP16 winP, FP16 lossP, FP16 m, byte uncertaintyV, 
+                      in CompressedPolicyVector policy,
+                      in CompressedActionVector actions)
     {
       if (!ReadOnly)
       {
         Debug.Assert(!float.IsNaN(winP + lossP));
 
-        positionCache[hash] = new PositionEvalCacheEntry(terminalStatus, winP, lossP, m, uncertaintyV, in policy);
+        positionCache[hash] = new PositionEvalCacheEntry(terminalStatus, winP, lossP, m, uncertaintyV, in policy, in actions);
       }
     }
 

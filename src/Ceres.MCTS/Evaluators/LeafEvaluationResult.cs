@@ -125,6 +125,7 @@ namespace Ceres.MCTS.Evaluators
       UncertaintyV = uncertaintyV;
       policyArrayIndex = -1;
       policyArray = null;
+      actionArray = null;
     }
 
     /// <summary>
@@ -145,6 +146,7 @@ namespace Ceres.MCTS.Evaluators
       UncertaintyV = uncertaintyV;
       policyArrayIndex = -1;
       policyArray = null;
+      actionArray = null;
     }
 
 
@@ -192,6 +194,22 @@ namespace Ceres.MCTS.Evaluators
 
 
     /// <summary>
+    /// Reference to underlying actions.
+    /// </summary>
+    public ref readonly CompressedActionVector ActionsRef
+    {
+      get
+      {
+        if (policyArrayIndex == -1)
+        {
+          throw new Exception("Internal error: access to release action object");
+        }
+        return ref actionArray.Span[policyArrayIndex];
+      }
+    }
+
+
+    /// <summary>
     /// Memory reference to underlying actions.
     /// </summary>
     public (Memory<CompressedActionVector> actions, int index) ActionInArray
@@ -200,7 +218,7 @@ namespace Ceres.MCTS.Evaluators
 
       set
       {
-        Debug.Assert(policyArrayIndex == -1 && value.index != -1);
+        Debug.Assert((policyArrayIndex == -1 || policyArrayIndex == value.index) && value.index != -1); // possibly already set by policy
         this.actionArray = value.actions;
         this.policyArrayIndex = (short)value.index;
       }
@@ -215,12 +233,22 @@ namespace Ceres.MCTS.Evaluators
 
       set
       {
-        Debug.Assert(policyArrayIndex == -1 && value.index != -1);
+        Debug.Assert((policyArrayIndex == -1 || policyArrayIndex == value.index) && value.index != -1); // possibly already set by action
         this.policyArray = value.policies;
         this.policyArrayIndex = (short)value.index;
       }
     }
 
+
+    public CompressedActionVector ActionSingle
+    {
+      set
+      {
+        Debug.Assert(policyArrayIndex == -1);
+        actionArray = new CompressedActionVector[1] { value };
+        policyArrayIndex = 0;
+      }
+    } 
 
     /// <summary>
     /// Policy as a CompressedPolicyVector.
@@ -238,9 +266,10 @@ namespace Ceres.MCTS.Evaluators
     /// <summary>
     /// Releases underlying policy value.
     /// </summary>
-    public void ReleasePolicyValue()
+    public void ReleasePolicyActionsValues()
     {
       policyArray = null;
+      actionArray = null;
       policyArrayIndex = -1;
     }
 

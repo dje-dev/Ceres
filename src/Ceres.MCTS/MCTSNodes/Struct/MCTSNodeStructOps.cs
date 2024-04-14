@@ -13,8 +13,13 @@
 
 #region Using directives
 
-using Ceres.Base.DataType;
-using Ceres.Base.DataType.Trees;
+using System;
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics.X86;
+using System.Threading;
+
 using Ceres.Base.DataTypes;
 using Ceres.Base.Math;
 using Ceres.Base.OperatingSystem;
@@ -22,24 +27,12 @@ using Ceres.Chess;
 using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
-using Ceres.MCTS.Environment;
-using Ceres.MCTS.Evaluators;
+using Ceres.Chess.NetEvaluation.Batch;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.LeafExpansion;
-using Ceres.MCTS.Managers.Uncertainty;
 using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.Params;
 using Ceres.MCTS.Search;
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq.Expressions;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
-using System.Runtime.Intrinsics;
-using System.Runtime.Intrinsics.X86;
-using System.Text;
-using System.Threading;
 
 #endregion
 
@@ -563,6 +556,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// <param name="u"></param>
     internal void GatherChildInfo(MCTSIterator context, MCTSNodeStructIndex index,
                                 int selectorID, int depth, int maxIndex,
+                                in CompressedActionVector actions,
+                                bool enableActionHead,
                                 GatheredChildStats stats)
     {
       MCTSNodeStore store = context.Tree.Store;
@@ -575,6 +570,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       Span<float> p = stats.P.Span;
       Span<float> w = stats.W.Span;
       Span<float> u = stats.U.Span;
+      Span<float> a = stats.A.Span;
 
       // N.B. This prefetch is critical for performance, circa +15% for CPU bound searches
       PossiblyPrefetchNodeAndChildrenInRange(store, index, 0, (maxIndex + 1));
@@ -594,6 +590,11 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       for (int i = 0; i <= maxIndex; i++)
       {
         MCTSNodeStructChild child = children[i];
+
+        if (enableActionHead)
+        {
+          a[i] = actions[i].W - actions[i].L;
+        }
 
         if (child.IsExpanded)
         {

@@ -314,7 +314,7 @@ namespace Ceres.MCTS.Evaluators
         // Save back to cache
         if (SaveToCache) Cache.Store(node.StructRef.ZobristHash,
                                      GameResult.Unknown, rawWinP, rawLossP, rawM, scaledUncertainty,
-                                     in node.EvalResult.PolicyRef);
+                                     in node.EvalResult.PolicyRef, in node.EvalResult.ActionsRef);
       }
     }
 

@@ -369,6 +369,11 @@ namespace Ceres.MCTS.Params
     public float TranspositionRootPolicyBlendingFraction = 0.0f;
 
     /// <summary>
+    /// Fraction of weight given to action head when performing child expansion selection.
+    /// </summary>
+    public float ActionHeadSelectionWeight = 0f;
+
+    /// <summary>
     /// If the "uncertainty boosting" feature should be enabled.
     /// It adds a small uncertainty-related tweak to the leaf selection formula 
     /// (similar ideas such as UCB-V for classical UCB has already been explored in other domains). 

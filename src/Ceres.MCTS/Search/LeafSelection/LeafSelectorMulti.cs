@@ -553,7 +553,8 @@ namespace Ceres.MCTS.Search
       Span<float> scores = default;
       node.InfoRef.ComputeTopChildScores(selectorID, node.Depth,
                                          vLossDynamicBoost, 0, numChildrenToCheck - 1, numTargetLeafs,
-                                         scores, visitChildCounts, cpuctMultiplier, empiricalDistrib, empiricalWeight);
+                                         scores, visitChildCounts, cpuctMultiplier, empiricalDistrib, empiricalWeight,
+                                         node.Context.ParamsSearch.ActionHeadSelectionWeight);
 
       if (MCTSParamsFixed.UNCERTAINTY_TESTS_ENABLED && node.Context.ParamsSearch.TestFlag2)
       {

@@ -22,6 +22,7 @@ using Ceres.Base.Benchmarking;
 using Ceres.Base.OperatingSystem;
 using Ceres.Base.Threading;
 using Ceres.Chess.EncodedPositions;
+using Ceres.Chess.NetEvaluation.Batch;
 using Ceres.Chess.PositionEvalCaching;
 using Ceres.MCTS.Environment;
 using Ceres.MCTS.Iteration;
@@ -127,8 +128,11 @@ namespace Ceres.MCTS.MTCSNodes.Storage
               {
                 CompressedPolicyVector policy = default;
                 MCTSNodeStructUtils.ExtractPolicyVector(policySoftmax, in nodeRef, ref policy);
+
+                CompressedActionVector actions = store.AllActionVectors != null ? store.AllActionVectors[nodeIndex] : default;
+
                 cacheNodes.Store(nodeRef.ZobristHash, nodeRef.Terminal, nodeRef.WinP, nodeRef.LossP, 
-                                 nodeRef.MPosition, nodeRef.UncertaintyVPosition, in policy);
+                                 nodeRef.MPosition, nodeRef.UncertaintyVPosition, in policy, in actions);
                 if (nodeRef.N > 1) countGT1++;
                 //MCTSEventSource.TestCounter1++;
               }

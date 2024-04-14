@@ -48,7 +48,7 @@ namespace Ceres.MCTS.MTCSNodes
       string miscInfoFN = Path.Combine(directory, id + FN_POSTFIX_MISC_INFO);
       MCTSNodeStoreSerializeMiscInfo miscInfo = FileUtils.ReadObj<MCTSNodeStoreSerializeMiscInfo>(miscInfoFN);
 
-      MCTSNodeStore store = new MCTSNodeStore(miscInfo.NumNodesReserved);
+      MCTSNodeStore store = new MCTSNodeStore(miscInfo.NumNodesReserved, true); // TODO: set enableActionStore more intelligently here
       store.Nodes.InsureAllocated(miscInfo.NumNodesAllocated);
       if (miscInfo.RootIndex.Index != 1)
       {

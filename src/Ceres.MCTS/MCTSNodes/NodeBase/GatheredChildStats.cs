@@ -33,6 +33,7 @@ namespace Ceres.MCTS.MTCSNodes
     internal SpanAligned<float> P;
     internal SpanAligned<float> W;
     internal SpanAligned<float> U;
+    internal SpanAligned<float> A;
 
     internal GatheredChildStats()
     {
@@ -41,6 +42,7 @@ namespace Ceres.MCTS.MTCSNodes
       P = new SpanAligned<float>(MCTSScoreCalcVector.MAX_CHILDREN, ALIGNMENT);
       W = new SpanAligned<float>(MCTSScoreCalcVector.MAX_CHILDREN, ALIGNMENT);
       U = new SpanAligned<float>(MCTSScoreCalcVector.MAX_CHILDREN, ALIGNMENT);
+      A = new SpanAligned<float>(MCTSScoreCalcVector.MAX_CHILDREN, ALIGNMENT);
     }
   }
 }

@@ -16,6 +16,7 @@
 using System;
 using System.Diagnostics;
 using Ceres.Base.Math;
+using Ceres.Chess.NetEvaluation.Batch;
 using Ceres.MCTS.Environment;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.LeafExpansion;
@@ -70,7 +71,7 @@ namespace Ceres.MCTS.MTCSNodes
     public void ComputeTopChildScores(int selectorID, int depth, float dynamicVLossBoost,
                                       int minChildIndex, int maxChildIndex, int numVisitsToCompute,
                                       Span<float> scores, Span<short> childVisitCounts, float cpuctMultiplier,
-                                      float[] empiricalDistrib, float empiricalWeight)
+                                      float[] empiricalDistrib, float empiricalWeight, float actionHeadSelectionWeight)
     {
       GatheredChildStats stats = CheckInitThreadStatics();
 
@@ -90,11 +91,22 @@ namespace Ceres.MCTS.MTCSNodes
       Span<float> gatherStatsWSpan = stats.W.Span;
       Span<float> gatherStatsUSpan = stats.U.Span;
 
+      // TODO: avoid inefficient allocation/initialization of CompressedActionVector even when needed
+      CompressedActionVector actionVector = default;
+      bool hasAction = false;
+      if (actionHeadSelectionWeight != 0 && nodeRef.Context.Store.AllActionVectors != null)
+      {
+        hasAction = true;
+        actionVector = nodeRef.Context.Store.AllActionVectors[index.Index];
+      } 
+
       // Gather necessary fields
       // TODO: often NInFlight of parent is null (thus also children) and we could
       //       have special version of Gather which didn't bother with that
-      nodeRef.GatherChildInfo(Context, new MCTSNodeStructIndex(Index), selectorID, depth, numToProcess - 1, gatherStats);
-
+      nodeRef.GatherChildInfo(Context, new MCTSNodeStructIndex(Index), selectorID, depth, numToProcess - 1,
+                              in actionVector, actionHeadSelectionWeight != 0,
+                              gatherStats);
+      
       if (nodeRef.IsRoot 
         && nodeRef.N > 500 // sufficient number of samples
         && nodeRef.Context.Info.Context.ParamsSelect.FracWeightUseRunningQ > 0)
@@ -365,7 +377,7 @@ namespace Ceres.MCTS.MTCSNodes
                                          (float)nodeRef.Q, nodeRef.SumPVisited,
                                          stats,
                                          numToProcess, numVisitsToCompute,
-                                         scores, childVisitCounts, cpuctMultiplier);
+                                         scores, childVisitCounts, cpuctMultiplier, actionHeadSelectionWeight);
 
       FillInSequentialVisitHoles(childVisitCounts, ref nodeRef, numToProcess);
     }
@@ -475,7 +487,8 @@ namespace Ceres.MCTS.MTCSNodes
       Span<float> scores = new float[NumPolicyMoves];
       Span<short> childVisitCounts = new short[NumPolicyMoves];
 
-      ComputeTopChildScores(selectorID, depth, dynamicVLossBoost, 0, NumPolicyMoves - 1, 0, scores, childVisitCounts, cpuctMultiplier, default, 0);
+      ComputeTopChildScores(selectorID, depth, dynamicVLossBoost, 0, NumPolicyMoves - 1, 0, scores, childVisitCounts, 
+                            cpuctMultiplier, default, 0, Context.ParamsSearch.ActionHeadSelectionWeight);
       return scores.ToArray();
     }
 

@@ -13,10 +13,12 @@
 
 #region Using directives
 
-using Ceres.Base.DataTypes;
-using Ceres.Chess.EncodedPositions;
 using System;
 using System.Runtime.InteropServices;
+
+using Ceres.Base.DataTypes;
+using Ceres.Chess.EncodedPositions;
+using Ceres.Chess.NetEvaluation.Batch;
 
 #endregion
 
@@ -43,10 +45,18 @@ namespace Ceres.Chess.PositionEvalCaching
     /// </summary>
     public CompressedPolicyVector Policy;
 
+    /// <summary>
+    /// Cached actions value.
+    /// </summary>
+    public CompressedActionVector Actions;
+
     public GameResult TerminalStatus;
 
 
-    public PositionEvalCacheEntry(GameResult terminalStatus, FP16 winP, FP16 lossP, FP16 m, byte uncertaintyV, in CompressedPolicyVector policy)
+
+    public PositionEvalCacheEntry(GameResult terminalStatus, FP16 winP, FP16 lossP, FP16 m, byte uncertaintyV, 
+                                  in CompressedPolicyVector policy,
+                                  in CompressedActionVector actions)
     {
       TerminalStatus = terminalStatus;
       WinP = winP;
@@ -54,6 +64,7 @@ namespace Ceres.Chess.PositionEvalCaching
       M = m;
       UncertaintyV = uncertaintyV;
       Policy = policy;
+      Actions = actions;
     }
   }
 

@@ -27,6 +27,7 @@ using Ceres.MCTS.Iteration;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Collections.Concurrent;
+using Ceres.Chess.NetEvaluation.Batch;
 
 
 #endregion
@@ -98,7 +99,9 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     const int MAX_STORES = 255;
     static ConcurrentBag<int> storeIDs;
 
-    public static MCTSNodeStore[] StoresByID = new MCTSNodeStore[MAX_STORES];  
+    public static MCTSNodeStore[] StoresByID = new MCTSNodeStore[MAX_STORES];
+
+    public CompressedActionVector[] AllActionVectors;
 
 
     /// <summary>
@@ -111,7 +114,7 @@ namespace Ceres.MCTS.MTCSNodes.Storage
     /// </summary>
     /// <param name="maxNodes"></param>
     /// <param name="priorMoves"></param>
-    public MCTSNodeStore(int maxNodes, PositionWithHistory priorMoves = null)
+    public MCTSNodeStore(int maxNodes, bool allocateActionStore, PositionWithHistory priorMoves = null)
     {
       if (priorMoves == null)
       {
@@ -133,6 +136,12 @@ namespace Ceres.MCTS.MTCSNodes.Storage
                                         MCTSParamsFixed.STORAGE_USE_INCREMENTAL_ALLOC,
                                         MCTSParamsFixed.TryEnableLargePages,
                                         MCTSParamsFixed.STORAGE_USE_EXISTING_SHARED_MEM);
+
+      if (allocateActionStore)
+      {
+        // TODO: fix hardcoded max size
+        AllActionVectors = new CompressedActionVector[Math.Min(maxNodes, 1_000_000)];
+      } 
 
       long reserveChildren = maxNodes * (long)MAX_AVG_CHILDREN_PER_NODE;
       Children = new MCTSNodeStructChildStorage(this, reserveChildren);
