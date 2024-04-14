@@ -54,7 +54,11 @@ namespace Ceres
     /// <param name="args"></param>
     /// <param name="searchModifier"></param>
     /// <param name="selectModifier"></param>
-    public static void LaunchUCI(string[] args, Action<ParamsSearch> searchModifier = null, Action<ParamsSelect> selectModifier = null)
+    /// <param name="enableLogging"></param>
+    public static void LaunchUCI(string[] args, 
+                                 Action<ParamsSearch> searchModifier = null, 
+                                 Action<ParamsSelect> selectModifier = null,
+                                 bool enableLogging = false)
     {    
 #if DEBUG
       Console.WriteLine();
@@ -76,9 +80,8 @@ namespace Ceres
       }
 
       // Configure logging level
-      const bool LOG = false;
-      CeresEnvironment.MONITORING_EVENTS = LOG;
-      LogLevel logLevel = LOG ? LogLevel.Information : LogLevel.Critical;
+      CeresEnvironment.MONITORING_EVENTS = enableLogging;
+      LogLevel logLevel = enableLogging ? LogLevel.Information : LogLevel.Critical;
       LoggerTypes loggerTypes = LoggerTypes.WinDebugLogger | LoggerTypes.ConsoleLogger;
       CeresEnvironment.Initialize(loggerTypes, logLevel);
 
