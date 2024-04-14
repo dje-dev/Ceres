@@ -547,12 +547,18 @@ namespace Chess.Ceres.NNEvaluators
 #endif
       }
 
+      CompressedActionVector[] actions = null;
+      if (result.ActionLogisticVectors != null)
+      {
+        // TODO: initialize actions from result.ActionLogisticVectors
+        throw new Exception("NNEvaluatorEngineONNX needs minor remediation to pass along converted ActionLogisticVectors below");
+      }
 
       // NOTE: inefficient, above we convert from [] (flat) to [][] and here we convert back to []
       return new PositionEvaluationBatch(IsWDL, HasM, HasUncertaintyV, HasAction, HasValueSecondary, numPos, 
                                          result.ValuesRaw, result.Values2Raw,
                                          result.PolicyVectors,//*/result.PolicyFlat, 
-                                         result.ActionLogisticVectors,
+                                         actions,
                                          mFP16, uncertaintyVFP16, null,
                                          TemperatureValue1, TemperatureValue2, FractionValueFromValue2,
                                          ValueHeadLogistic,

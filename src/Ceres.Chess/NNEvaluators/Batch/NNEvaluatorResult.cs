@@ -14,7 +14,6 @@
 #region Using directives
 
 using System;
-using System.Runtime.CompilerServices;
 
 using Ceres.Base.DataTypes;
 using Ceres.Chess.EncodedPositions;
@@ -26,26 +25,6 @@ using Ceres.Chess.MoveGen.Converters;
 
 namespace Ceres.Chess.NetEvaluation.Batch
 {
-  [InlineArray(CompressedPolicyVector.NUM_MOVE_SLOTS)]
-  public struct ActionValues
-  {
-    (FP16 W, FP16 L) WL;
-
-    public float W => WL.W; 
-    public float L => WL.L;
-    public float D => 1 - (WL.W + WL.L);  
-    public (float w, float d, float l) WDL => (WL.W, D, WL.L);
-
-    public float V => W - L;
-
-  }
-
-  public readonly struct ActionCompressedVector
-  {
-    public readonly ActionValues WL;
-  }
-
-
   /// <summary>
   /// Represents the a evaluation from a neural network
   /// of a single position.
@@ -80,7 +59,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <summary>
     /// Action win/draw/loss probabilities.
     /// </summary>
-    public readonly ActionValues ActionsWDL;
+    public readonly CompressedActionVector ActionsWDL;
 
     /// <summary>
     /// Activations from certain hidden layers (optional).
@@ -112,7 +91,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
                              float win2P, float loss2P, 
                              float m, float uncertaintyV,
                              CompressedPolicyVector policy,
-                             ActionValues actionsWDL,
+                             CompressedActionVector actionsWDL,
                              NNEvaluatorResultActivations activations,
                              FP16? extraStat0 = null, FP16? extraStat1 = default)
     {

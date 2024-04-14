@@ -165,6 +165,13 @@ namespace Ceres.Chess.NetEvaluation.Batch
     }
 
 
+    (Memory<CompressedActionVector> actions, int index) IPositionEvaluationBatch.GetAction(int index)
+    {
+      (int, int) indicies = GetIndices(index);
+      return Batches[indicies.Item1].GetAction(indicies.Item2);
+    }
+
+
     FP16 IPositionEvaluationBatch.GetM(int index)
     {
       (int, int) indicies = GetIndices(index);
@@ -194,12 +201,6 @@ namespace Ceres.Chess.NetEvaluation.Batch
     {
       (int, int) indicies = GetIndices(index);
       return Batches[indicies.Item1].GetActivations(indicies.Item2);
-    }
-
-    public (float w, float d, float l) GetA(int index, int policyIndex)
-    {
-      (int, int) indicies = GetIndices(index);
-      return Batches[indicies.Item1].GetA(indicies.Item2, policyIndex);
     }
 
     public FP16 GetExtraStat0(int index)

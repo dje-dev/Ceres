@@ -49,8 +49,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
 
     public Memory<CompressedPolicyVector> Policies;
 
-    public Memory<FP16> ActionProbabilities;
-
+//    public Memory<FP16> ActionProbabilities;
+    public Memory<CompressedActionVector> Actions;  
 
     /// <summary>
     /// Vector of win probabilities.
@@ -85,7 +85,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <summary>
     /// Vector of uncertainty of action head estimates.
     /// </summary>
-    public Memory<FP16> Action;
+    public Memory<CompressedActionVector> Action;
 
     /// <summary>
     /// Activations of inner layers.
@@ -105,25 +105,6 @@ namespace Ceres.Chess.NetEvaluation.Batch
     #endregion
 
 
-    /// <summary>
-    /// Get action WDL for move with specified index.
-    /// </summary>
-    /// <param name="index"></param>
-    /// <returns></returns>
-    public (float w, float d, float l) GetA(int index, int policyIndex)
-    {
-      if (ActionProbabilities.IsEmpty)
-      {
-        return (float.NaN, float.NaN, float.NaN);
-      }
-
-      Span<FP16> actionsSpan = ActionProbabilities.Span;
-      int offset = (1858 * 3 * index) + policyIndex * 3;
-
-      return (actionsSpan[offset], actionsSpan[offset+1], actionsSpan[offset+2]);
-    }
-
-
     public void RewriteWDLToBlendedValueAction()
     {
       for (int i = 0; i < NumPos; i++)
@@ -136,6 +117,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
 
     (float w, float d, float l) WDLBlendedValueAction(int index)
     {
+      throw new NotImplementedException();
+#if NOT
       float w = W.Span[index];
       float l = L.Span[index];
       float d= 1 - w - l; 
@@ -164,6 +147,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
       return (w * WEIGHT_P + wA * WEIGHT_A, 
               d * WEIGHT_P + dA * WEIGHT_A, 
               l * WEIGHT_P + lA * WEIGHT_A);
+#endif
     }
 
 
@@ -339,6 +323,15 @@ namespace Ceres.Chess.NetEvaluation.Batch
 
 
     /// <summary>
+    /// Returns the action distribution for the position at a specified index.
+    /// </summary>
+    /// <param name="index"></param>
+    /// <returns></returns>
+    (Memory<CompressedActionVector> actions, int index) 
+       IPositionEvaluationBatch.GetAction(int index) => (Actions, index);
+
+
+    /// <summary>
     /// Gets the value from the MLH head at a specified index.
     /// </summary>
     /// <param name="index"></param>
@@ -387,7 +380,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <param name="stats"></param>
     public PositionEvaluationBatch(bool isWDL, bool hasM, bool hasUncertaintyV, bool hasAction, bool hasValueSecondary, int numPos, 
                                    Memory<CompressedPolicyVector> policies,
-                                   Memory<FP16> actionProbabilties,
+                                   Memory<CompressedActionVector> actionProbabilties,
                                    Memory<FP16> w, Memory<FP16> l, 
                                    Memory<FP16> w2, Memory<FP16> l2,
                                    Memory<FP16> m, Memory<FP16> uncertaintyV,
@@ -402,7 +395,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
       HasValueSecondary = hasValueSecondary;
 
       Policies = makeCopy ? policies.Slice(0, numPos).ToArray() : policies;
-      ActionProbabilities = (hasAction && makeCopy) ? actionProbabilties.Slice(0, numPos).ToArray() : actionProbabilties;
+      Actions = (hasAction && makeCopy) ? actionProbabilties.Slice(0, numPos).ToArray() : actionProbabilties;
       Activations = (activations.Length != 0 && makeCopy) ? activations.Slice(0, numPos).ToArray() : activations;
 
       W = makeCopy ? w.Slice(0, numPos).ToArray() : w;
@@ -512,7 +505,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <param name="stats"></param>
     public PositionEvaluationBatch(bool isWDL, bool hasM, bool hasUncertaintyV, bool hasAction, bool hasValueSecondary, int numPos, 
                                    Span<FP16> valueEvals, Span<FP16> valueEvals2, 
-                                   Memory<float> policyProbs, Memory<FP16> actionLogits,
+                                   Memory<float> policyProbs, Memory<CompressedActionVector> actionLogits,
                                    FP16[] m, FP16[] uncertaintyV, NNEvaluatorResultActivations[] activations,
                                    float temperatureValue1, float temperatureValue2, float fractionValue1FromValue2,
                                    bool valsAreLogistic, PolicyType probType, bool policyAlreadySorted,
@@ -521,8 +514,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
       : this(isWDL, hasM, hasUncertaintyV, hasAction, hasValueSecondary, numPos, valueEvals, valueEvals2, m, uncertaintyV, activations,
           temperatureValue1, temperatureValue2, fractionValue1FromValue2, valsAreLogistic, stats)
     {
-      Policies = ExtractPoliciesBufferFlat(numPos, policyProbs, probType, policyAlreadySorted, sourceBatchWithValidMoves);
-      ActionProbabilities = actionLogits;
+      Policies = ExtractPoliciesBufferFlat(numPos, policyProbs, probType, policyAlreadySorted, sourceBatchWithValidMoves, actionLogits, hasAction);
+      Actions = actionLogits;
     }
 
 
@@ -706,7 +699,9 @@ namespace Ceres.Chess.NetEvaluation.Batch
     static CompressedPolicyVector[] ExtractPoliciesBufferFlat(int numPos, 
                                                               Memory<float> policyProbs,
                                                               PolicyType probType, bool alreadySorted, 
-                                                              IEncodedPositionBatchFlat sourceBatchWithValidMoves)
+                                                              IEncodedPositionBatchFlat sourceBatchWithValidMoves,
+                                                              Memory<CompressedActionVector> actions,
+                                                              bool hasActions)
     {
       // TODO: possibly needs work.
       // Do we handle WDL correctly? Do we flip the moves if we are black (using positions) ?
@@ -753,8 +748,15 @@ namespace Ceres.Chess.NetEvaluation.Batch
           
           const float MIN_PROB = -100;
           CompressedPolicyVector ret = default;
-          PolicyVectorCompressedInitializerFromProbs.InitializeFromProbsArray(ref ret, true, EncodedPolicyVector.POLICY_VECTOR_LENGTH, 96,
+          CompressedActionVector dummy = default;
+          if (hasActions)
+          {
+            throw new NotImplementedException("probably need remediation in next line");
+          }
+          PolicyVectorCompressedInitializerFromProbs.InitializeFromProbsArray(ref ret, ref dummy, hasActions,
+                                                                              true, EncodedPolicyVector.POLICY_VECTOR_LENGTH, 96,
                                                                               policyTempBuffer, MIN_PROB);
+
           retPolicies[i] = ret;
         }
         else

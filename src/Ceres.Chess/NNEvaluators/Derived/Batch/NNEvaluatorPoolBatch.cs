@@ -177,7 +177,10 @@ namespace Ceres.Chess.NNEvaluators
                                                                   List<IEncodedPositionBatchFlat> pendingBatches)
     {
       Span<CompressedPolicyVector> fullPolicyValues = fullBatchResult.Policies.Span;
-      Span<FP16> fullActionValues = fullBatchResult.HasAction ? fullBatchResult.ActionProbabilities.Span : default;
+
+      throw new NotImplementedException("action code needs remediation below");
+      Span<CompressedActionVector> fullActionValues = default;// fullBatchResult.HasAction ? fullBatchResult.ActionProbabilities.Span : default;
+
       Span<FP16> fullW = fullBatchResult.W.Span;
       Span<FP16> fullL = fullBatchResult.IsWDL ? fullBatchResult.L.Span : default;
       Span<FP16> fullM = fullBatchResult.HasM ? fullBatchResult.M.Span : default;

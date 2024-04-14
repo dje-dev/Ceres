@@ -173,7 +173,7 @@ namespace Ceres.Chess.NNEvaluators
           FP16[] l2 = HasValueSecondary ? new FP16[positions.NumPos] : null;
           FP16[] m = hasM ? new FP16[positions.NumPos] : null;
           FP16[] uncertaintyV = hasUncertaintyV ? new FP16[positions.NumPos] : null;
-          FP16[] actions = HasAction ? new FP16[positions.NumPos * 1858 * 3] : null;
+          CompressedActionVector[] actions = HasAction ? new CompressedActionVector[positions.NumPos] : null;
 
 
           int nextPosIndex = 0;
@@ -184,6 +184,11 @@ namespace Ceres.Chess.NNEvaluators
 
             resultI.Policies.CopyTo(new Memory<CompressedPolicyVector>(policies).Slice(nextPosIndex, thisNumPos));
             resultI.W.CopyTo(new Memory<FP16>(w).Slice(nextPosIndex, thisNumPos));
+
+            if (hasAction)
+            {
+              resultI.Actions.CopyTo(new Memory<CompressedActionVector>(actions).Slice(nextPosIndex, thisNumPos));
+            }
 
             if (isWDL)
             {

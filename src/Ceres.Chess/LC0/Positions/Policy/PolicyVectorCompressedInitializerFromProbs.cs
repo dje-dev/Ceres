@@ -13,9 +13,10 @@
 
 #region Using directives
 
-using Ceres.Chess.EncodedPositions;
 using System;
 using System.Runtime.CompilerServices;
+
+using Ceres.Chess.NetEvaluation.Batch;
 
 #endregion
 
@@ -28,10 +29,21 @@ namespace Ceres.Chess.EncodedPositions
   public class PolicyVectorCompressedInitializerFromProbs
   {
     [SkipLocalsInit]
-    public static void InitializeFromProbsArray(ref CompressedPolicyVector policyRef, int numMoves, int numMovesToSave, Span<ProbEntry> probs)
+    public static void InitializeFromProbsArray(ref CompressedPolicyVector policyRef, 
+                                                ref CompressedActionVector actions,
+                                                bool sortActionsAlso,
+                                                int numMoves, int numMovesToSave, Span<ProbEntry> probs)
     {
-      // Due to small size insertion sort seems faster
-      InsertionSort(probs, 0, numMoves - 1);
+      if (sortActionsAlso)
+      {
+        InsertionSortWithActions(probs, ref actions, 0, numMoves - 1);
+      }
+      else
+      {
+        InsertionSort(probs, 0, numMoves - 1);
+      }
+
+      // Due to small size insertion sort seems faster.
       // QuickSort(probs, 0, numMoves - 1);
 
       int numToProcess = Math.Min(numMoves, numMovesToSave);
@@ -81,11 +93,17 @@ namespace Ceres.Chess.EncodedPositions
 
 
     [SkipLocalsInit]
-    public static void InitializeFromProbsArray(ref CompressedPolicyVector policyRef, 
+    public static void InitializeFromProbsArray(ref CompressedPolicyVector policyRef,
+                                                ref CompressedActionVector actions, bool hasActions,
                                                 bool areLogits, int numMoves, int numMovesToSave, 
                                                 Span<float> probs, 
                                                 float cutoffMinValue = float.MinValue)
     {
+      if (hasActions)
+      {
+        throw new NotImplementedException(); // array of actions needs to be kept sorted with the policies below
+      }
+
       // Create array of ProbEntry.
       Span<ProbEntry> probsA = stackalloc ProbEntry[numMoves];
       int numFound = 0;
@@ -110,7 +128,8 @@ namespace Ceres.Chess.EncodedPositions
         }
         else
         {
-          InitializeFromProbsArray(ref policyRef, numFound, numMovesToSave, probsA.Slice(0, numFound));
+          CompressedActionVector dummy = default;
+          InitializeFromProbsArray(ref policyRef, ref dummy, hasActions, numFound, numMovesToSave, probsA.Slice(0, numFound));
         }
       }
     }
@@ -167,6 +186,41 @@ namespace Ceres.Chess.EncodedPositions
               j--;
             }
             arrayPtr[j + 1] = x;
+            i++;
+          }
+        }
+      }
+    }
+
+    /// <summary>
+    /// Version of insertion sort that keeps an array of actions sorted in the same order.
+    /// </summary>
+    /// <param name="array"></param>
+    /// <param name="actions"></param>
+    /// <param name="min"></param>
+    /// <param name="max"></param>
+    static void InsertionSortWithActions(Span<ProbEntry> array, ref CompressedActionVector actions, int min, int max)
+    {
+      // Use unsafe code to avoid array boundary checks
+      // since this is very hot code path.
+      unsafe
+      {
+        fixed (ProbEntry* arrayPtr = &array[0])
+        {
+          int i = min + 1;
+          while (i <= max)
+          {
+            ProbEntry x = arrayPtr[i];
+            (Base.DataTypes.FP16 W, Base.DataTypes.FP16 L) action = actions[i];  
+            int j = i - 1;
+            while (j >= 0 && arrayPtr[j].P < x.P)
+            {
+              arrayPtr[j + 1] = arrayPtr[j];
+              actions[j + 1] = actions[j];
+              j--;
+            }
+            arrayPtr[j + 1] = x;
+            actions[j + 1] = action;
             i++;
           }
         }

@@ -63,6 +63,7 @@ namespace Ceres.Chess.NNEvaluators
     public readonly float[] WeightsValue;
     public readonly float[] WeightsValue2;
     public readonly float[] WeightsPolicy;
+    public readonly float[] WeightsAction;
     public readonly float[] WeightsM;
     public readonly float[] WeightsUncertaintyV;
 
@@ -97,6 +98,11 @@ namespace Ceres.Chess.NNEvaluators
     public readonly WeightsOverrideDelegate WeightsPolicyOverrideFunc;
 
     /// <summary>
+    /// Optional delegate called for each position to determine weights to use for action head for that position.
+    /// </summary>
+    public readonly WeightsOverrideDelegate WeightsActionOverrideFunc;
+
+    /// <summary>
     /// If evaluators should be run in parallel.
     /// This can improve perforamance, but may not be safe if evaluators have dependencies.
     /// </summary>
@@ -127,7 +133,7 @@ namespace Ceres.Chess.NNEvaluators
         weightsArray = weights.ToArray();
       }
 
-      WeightsValue = WeightsValue2 = WeightsPolicy = WeightsM = WeightsUncertaintyV = weightsArray;
+      WeightsValue = WeightsValue2 = WeightsPolicy = WeightsM = WeightsUncertaintyV = WeightsAction = weightsArray;
       PolicyAveragingMethod = policyAveragingMethod;
     }
 
@@ -146,13 +152,15 @@ namespace Ceres.Chess.NNEvaluators
     public NNEvaluatorLinearCombo(NNEvaluator[] evaluators, 
                                 IList<float> weightsValue,
                                 IList<float> weightsValue2,
-                                IList<float> weightsPolicy, 
+                                IList<float> weightsPolicy,
+                                IList<float> weightsAction,
                                 IList<float> weightsM,
                                 IList<float> weightsUncertaintyV,
                                 WeightsOverrideDelegate weightsValueOverrideFunc = null,
                                 WeightsOverrideDelegate weightsValue2OverrideFunc = null,
                                 WeightsOverrideDelegate weightsMOverrideFunc = null,
                                 WeightsOverrideDelegate weightsPolicyOverrideFunc = null,
+                                WeightsOverrideDelegate weightsActionOverrideFunc = null,
                                 WeightsOverrideDelegate weightsUncertaintyVOverrideFunc = null,
                                 PolicyAveragingType policyAveragingMethod = DEFAULT_POLICY_AVERAGING_TYPE) 
       : base(evaluators)
@@ -165,13 +173,15 @@ namespace Ceres.Chess.NNEvaluators
       WeightsValue = weightsValue  != null ? weightsValue.ToArray()  : MathUtils.Uniform(evaluators.Length);
       WeightsValue2 = weightsValue2 != null ? weightsValue2.ToArray() : MathUtils.Uniform(evaluators.Length);
       WeightsPolicy = weightsPolicy != null ? weightsPolicy.ToArray() : MathUtils.Uniform(evaluators.Length);
-      WeightsM      = weightsM      != null ? weightsM.ToArray()      : MathUtils.Uniform(evaluators.Length);
+      WeightsAction = weightsAction != null ? weightsAction.ToArray() : MathUtils.Uniform(evaluators.Length);
+      WeightsM = weightsM      != null ? weightsM.ToArray()      : MathUtils.Uniform(evaluators.Length);
       WeightsUncertaintyV = weightsUncertaintyV != null ? weightsUncertaintyV.ToArray() : MathUtils.Uniform(evaluators.Length);
 
       WeightsValueOverrideFunc = weightsValueOverrideFunc;
       WeightsValue2OverrideFunc = weightsValue2OverrideFunc;
       WeightsMOverrideFunc = weightsMOverrideFunc;
       WeightsPolicyOverrideFunc = weightsPolicyOverrideFunc;
+      WeightsActionOverrideFunc = weightsActionOverrideFunc;
       WeightsUncertaintyVOverrideFunc = weightsUncertaintyVOverrideFunc;
 
       PolicyAveragingMethod = policyAveragingMethod;
@@ -213,11 +223,16 @@ namespace Ceres.Chess.NNEvaluators
           }
         }
 
-        if (retrieveSupplementalResults) throw new NotImplementedException();
         float[] valueHeadConvFlat = null;
+        if (retrieveSupplementalResults)
+        {
+          throw new NotImplementedException();
+        }
 
         // Extract the combined policies
         CompressedPolicyVector[] policies = ExtractComboPolicies(positions);
+
+        CompressedActionVector[] actions = HasAction ? ExtractComboActions(positions) : null;
 
         // Compute average value result
         FP16[] w = null;
@@ -264,12 +279,74 @@ namespace Ceres.Chess.NNEvaluators
         }
 
         // TODO: transfer actions if present
-        Memory<FP16> actions = null;
+        if (HasAction)
+        {
+          throw new NotImplementedException("NNEvaluatorLinearCombo does not yet support evaluators with actions");
+        }
 
         TimingStats stats = new TimingStats();
         return new PositionEvaluationBatch(IsWDL, HasM, HasUncertaintyV, HasAction, HasValueSecondary, 
                                            positions.NumPos, policies, actions, w, l, w2, l2, m, uncertaintyV, activations, stats);
       }
+    }
+
+
+    private CompressedActionVector[] ExtractComboActions(IEncodedPositionBatchFlat positions)
+    {
+      Span<float> actionAveragesW = stackalloc float[EncodedPolicyVector.POLICY_VECTOR_LENGTH];
+      Span<float> actionAveragesL = stackalloc float[EncodedPolicyVector.POLICY_VECTOR_LENGTH];
+
+      // Compute average actions result for all positions
+      CompressedActionVector[] actions = new CompressedActionVector[positions.NumPos];
+      for (int posIndex = 0; posIndex < positions.NumPos; posIndex++)
+      {
+        actionAveragesW.Clear();
+        actionAveragesL.Clear();
+
+        float[] weights = WeightsActionOverrideFunc == null ? WeightsAction
+                                                            : WeightsActionOverrideFunc(MGChessPositionConverter.PositionFromMGChessPosition(in positions.Positions.Span[posIndex]));
+
+        for (int evaluatorIndex = 0; evaluatorIndex < Evaluators.Length; evaluatorIndex++)
+        {
+          (Memory<CompressedActionVector> actionsArray, int actionIndex) = subResults[evaluatorIndex].GetAction(posIndex);
+          CompressedActionVector theseActions = actionsArray.Span[actionIndex];
+
+          // TODO: Someday we could be more efficient, only iterate over the populated indices
+          //       (in the CompressedPolicyVector).
+          for (int i=0;i<EncodedPolicyVector.POLICY_VECTOR_LENGTH;i++)
+          {
+            switch (PolicyAveragingMethod)
+            {
+              case PolicyAveragingType.Arithmetic:
+                (FP16 W, FP16 L) wl = theseActions[i];
+
+                actionAveragesW[i] += wl.W * weights[evaluatorIndex];
+                actionAveragesL[i] += wl.L * weights[evaluatorIndex];
+                break;
+              case PolicyAveragingType.Geometric:
+                throw new NotImplementedException("Geometric averaging not yet supported for Actions");
+                break;
+              default:
+                throw new NotImplementedException("Unknown policy averaging method " + PolicyAveragingMethod);
+            }
+
+          }
+
+          // Finalize geometric averaging if in use.
+          if (PolicyAveragingMethod == PolicyAveragingType.Geometric)
+          {
+            throw new NotImplementedException();
+            //FinalizeGeometricAverages(actionAverages);
+          }
+        }
+
+        for (int i = 0; i < EncodedPolicyVector.POLICY_VECTOR_LENGTH; i++)
+        {
+          actions[posIndex][i] = ((FP16)actionAveragesW[i], (FP16)actionAveragesL[i]);  
+        }
+      }
+
+      return actions;
     }
 
 

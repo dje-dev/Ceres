@@ -13,12 +13,11 @@
 
 #region Using directives
 
+using System;
+using System.Collections.Generic;
+
 using Ceres.Base.DataTypes;
 using Ceres.Chess.EncodedPositions;
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Net.Http.Headers;
 
 #endregion
 
@@ -50,9 +49,9 @@ namespace Ceres.Chess.NetEvaluation.Batch
     FP16 GetExtraStat1(int index);
 
     (Memory<CompressedPolicyVector> policies, int index) GetPolicy(int index);
+    (Memory<CompressedActionVector> actions, int index) GetAction(int index);
 
-    public (float w, float d, float l) GetA(int index, int policyIndex);
-   
+  
     public NNEvaluatorResultActivations GetActivations(int index);
 
     public float GetV(int index) => GetWinP(index) - GetLossP(index);

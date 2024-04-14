@@ -105,7 +105,7 @@ namespace Ceres.Chess.NNEvaluators
       FP16[] l2 = new FP16[numPos];
       FP16[] m = HasM ? new FP16[numPos] : null;
       FP16[] uncertaintyV = HasUncertaintyV ? new FP16[numPos] : null;
-      FP16[] action = HasAction ? new FP16[numPos *  1858 * 3] : null;
+      CompressedActionVector[] action = HasAction ? new CompressedActionVector[numPos] : null;
 
       // For each position call the supplied delegate to choose the preferred evaluator.
       NNPositionEvaluationBatchMember[] values = new NNPositionEvaluationBatchMember[Evaluators.Length];
@@ -165,6 +165,8 @@ namespace Ceres.Chess.NNEvaluators
 
         if (HasAction)
         {
+          throw new NotImplementedException("Needs remediation for action head");
+#if NOT
           for (int i=0;i<1858;i++)
           {
             (float wA, float dA, float lA) = batches[index].GetA(posNum, i);
@@ -172,6 +174,7 @@ namespace Ceres.Chess.NNEvaluators
             action[posNum * 1858 * 3 + i + 1] = (FP16)dA;
             action[posNum * 1858 * 3 + i + 2] = (FP16)lA;
           }
+#endif
         }
 
         if (HasUncertaintyV)

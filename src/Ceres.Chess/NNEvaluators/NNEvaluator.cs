@@ -311,24 +311,15 @@ namespace Ceres.Chess.NNEvaluators
       NNEvaluatorResultActivations activations = batch.GetActivations(batchIndex);
       
       (Memory<CompressedPolicyVector> policies, int index) policyRef = batch.GetPolicy(batchIndex);
+      (Memory<CompressedActionVector> actions, int index) actionRef = HasAction ? batch.GetAction(batchIndex) : default;
 
       FP16 extraStat0 = batch.GetExtraStat0(batchIndex);
       FP16 extraStat1 = batch.GetExtraStat1(batchIndex);
 
-      // Possibly extract action values.
-      ActionValues actionValues = default;
-      if (HasAction)
-      {
-        ref readonly CompressedPolicyVector policy = ref policyRef.policies.Span[policyRef.index];
-        int actionIndex = 0;
-        foreach (var move in policy.ProbabilitySummary())
-        {
-          (float aW, float aD, float aL) = batch.GetA(batchIndex, move.Move.IndexNeuralNet);
-          actionValues[actionIndex++] = ((FP16)aW, (FP16)aL);
-        }
-      }
-
-      result = new NNEvaluatorResult(w, l, w2, l2, m, uncertaintyV, policyRef.policies.Span[policyRef.index], actionValues, activations, extraStat0, extraStat1);
+      result = new NNEvaluatorResult(w, l, w2, l2, m, uncertaintyV, 
+                                     policyRef.policies.Span[policyRef.index], 
+                                     HasAction ? actionRef.actions.Span[actionRef.index] : default,
+                                     activations, extraStat0, extraStat1);
     }
 
     #endregion
