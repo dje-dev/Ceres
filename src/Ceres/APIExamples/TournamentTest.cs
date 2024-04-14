@@ -470,8 +470,8 @@ namespace Ceres.APIExamples
       //      engineDefCeres1.SearchParams.BestMoveMode = ParamsSearch.BestMoveModeEnum.TopV;
       //      engineDefCeres2.SearchParams.BestMoveMode = ParamsSearch.BestMoveModeEnum.TopV;
 
-//engineDefCeres1.SearchParams.Execution.FlowDualSelectors = false;
-//engineDefCeres2.SearchParams.Execution.FlowDualSelectors = false;
+      //engineDefCeres1.SearchParams.Execution.FlowDualSelectors = false;
+      //engineDefCeres2.SearchParams.Execution.FlowDualSelectors = false;
 
       //AdjustSelectParamsNewTuneBR(engineDefCeres1.SelectParams);
       //AdjustSelectParamsNewTuneBR(engineDefCeres2.SelectParams);
@@ -489,7 +489,10 @@ namespace Ceres.APIExamples
 
       //      engineDefCeres1.SelectParams.CPUCTDualSelectorDiffFraction = 0.04f;
 
-//engineDefCeres1.SearchParams.TestFlag = true;
+engineDefCeres1.SearchParams.ActionHeadSelectionWeight = 1.0f;
+engineDefCeres1.SearchParams.Execution.TranspositionMode = TranspositionMode.None;
+engineDefCeres2.SearchParams.Execution.TranspositionMode = TranspositionMode.None;
+
 //engineDefCeres1.SearchParams.EnableTablebases = false;
 //engineDefCeres2.SearchParams.EnableTablebases = false;
 
