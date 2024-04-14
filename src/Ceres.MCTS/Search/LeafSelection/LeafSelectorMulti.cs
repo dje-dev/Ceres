@@ -758,6 +758,8 @@ namespace Ceres.MCTS.Search
                                            node.Context.ParamsSearch.ActionHeadSelectionWeight);
 
         // Bubble sort to get items in same order as the scores.
+        const float MIN_PROBABILITY_FOR_ACTION_BOOST = 0.03f;
+
         Span<MCTSNodeStructChild> childrenSpan = nodeRef.Children;
         ref CompressedActionVector actionVector = ref node.Context.Tree.Store.AllActionVectors[node.Index];
         int numSwapped;
@@ -784,6 +786,12 @@ namespace Ceres.MCTS.Search
               (FP16 W, FP16 L) swapTemp = actionVector[i - 1];
               actionVector[i - 1] = actionVector[i];
               actionVector[i] = swapTemp;
+            }
+
+            // Do not swap for low probability nodes.
+            if (childrenSpan[i].p < MIN_PROBABILITY_FOR_ACTION_BOOST)
+            {
+              break;
             }
           }
         } while (numSwapped > 0);
