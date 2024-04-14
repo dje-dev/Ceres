@@ -283,11 +283,11 @@ Note: Possible optimization/inefficiency:
                                        float cpuctSqrtParentN, float uctDenominatorPower,
                                        float actionHeadSelectionWeight)
     {
-      if (actionHeadSelectionWeight != 0 && Avx.IsSupported)
+      if (actionHeadSelectionWeight == 0 && Avx.IsSupported)
       {
         ComputeChildScoresAVX(childStats, numChildren, qWhenNoChildren, virtualLossMultiplier, computedChildScores, cpuctSqrtParentN, uctDenominatorPower, actionHeadSelectionWeight);
       }
-      else if (actionHeadSelectionWeight != 0 && AdvSimd.IsSupported)
+      else if (actionHeadSelectionWeight == 0 && AdvSimd.IsSupported)
       {
         // The SIMD version is about 3x as fast as non-SIMD.
         ComputeChildScoresARM(childStats, numChildren, qWhenNoChildren, virtualLossMultiplier, computedChildScores, cpuctSqrtParentN, uctDenominatorPower, actionHeadSelectionWeight);
