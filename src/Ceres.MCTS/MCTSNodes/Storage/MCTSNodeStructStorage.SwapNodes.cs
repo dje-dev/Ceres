@@ -14,19 +14,10 @@
 #region Using directives
 
 using System;
-using System.Collections;
-using System.Collections.Generic;
 
 using System.Diagnostics;
-using System.Threading.Tasks;
-using Ceres.Base.Benchmarking;
-using Ceres.Base.DataTypes;
-using Ceres.Base.OperatingSystem;
-using Ceres.Chess.EncodedPositions;
-using Ceres.Chess.PositionEvalCaching;
-using Ceres.Chess.Positions;
-using Ceres.MCTS.Iteration;
-using Ceres.MCTS.LeafExpansion;
+
+using Ceres.Chess.NetEvaluation.Batch;
 using Ceres.MCTS.MTCSNodes.Struct;
 
 #endregion
@@ -57,6 +48,14 @@ namespace Ceres.MCTS.MTCSNodes.Storage
         // Swap the parent references of any children in both
         ModifyChildrensParentRef(store, nodes, ref nodes[i1.Index], i2);
         ModifyChildrensParentRef(store, nodes, ref nodes[i2.Index], i1);
+
+        // Swap action information
+        if (store.AllActionVectors != null)
+        { 
+          CompressedActionVector tempAction = store.AllActionVectors[i1.Index];
+          store.AllActionVectors[i1.Index] = store.AllActionVectors[i2.Index];
+          store.AllActionVectors[i2.Index] = tempAction; 
+        }
 
         // Swap nodes themselves
         MCTSNodeStruct temp = nodes[i1.Index];
