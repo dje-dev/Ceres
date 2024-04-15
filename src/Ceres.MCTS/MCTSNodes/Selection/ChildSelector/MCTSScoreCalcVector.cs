@@ -577,8 +577,9 @@ Note: Possible optimization/inefficiency:
         else if (actionHeadSelectionWeight != 0)
         {
           float defaultQ = qWhenNoChildren + _vLossContrib; 
-          _vQ = actionHeadSelectionWeight * vA[i]
-              + (1 - actionHeadSelectionWeight) * defaultQ;
+          float weight = actionHeadSelectionWeight;
+//                                if (vP[i] < 0.02) weight *= 0.333f; // <--------- TEST ----------
+          _vQ = weight * vA[i] + (1 - weight) * defaultQ;
         }
         else        
         {

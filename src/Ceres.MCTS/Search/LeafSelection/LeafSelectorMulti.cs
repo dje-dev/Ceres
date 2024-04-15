@@ -745,7 +745,9 @@ namespace Ceres.MCTS.Search
 
       // If using action head and this is the first visit,
       // resort the children using the scores computed inclusive of the action head influence.
-      if (node.N == 1
+      if (node.N == 1 
+       && node.NInFlight == 0 
+       && node.NInFlight2 == 0
         && node.StructRef.NumPolicyMoves > 1
         && node.Context.ParamsSearch.ActionHeadSelectionWeight > 0)
       {
