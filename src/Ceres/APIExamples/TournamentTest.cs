@@ -467,31 +467,46 @@ namespace Ceres.APIExamples
       //engineDefCeres1.SelectParams.CPUCT *= 0.85f;
       //engineDefCeres2.SelectParams.CPUCT *= 0.85f;
 
-      //      engineDefCeres1.SearchParams.BestMoveMode = ParamsSearch.BestMoveModeEnum.TopV;
-      //      engineDefCeres2.SearchParams.BestMoveMode = ParamsSearch.BestMoveModeEnum.TopV;
+//      engineDefCeres1.SearchParams.BestMoveMode = ParamsSearch.BestMoveModeEnum.TopV;
+//      engineDefCeres2.SearchParams.BestMoveMode = ParamsSearch.BestMoveModeEnum.TopV;
 
-      //engineDefCeres1.SearchParams.Execution.FlowDualSelectors = false;
-      //engineDefCeres2.SearchParams.Execution.FlowDualSelectors = false;
+//engineDefCeres1.SearchParams.Execution.FlowDualSelectors = false;
+//engineDefCeres2.SearchParams.Execution.FlowDualSelectors = false;
 
-      //AdjustSelectParamsNewTuneBR(engineDefCeres1.SelectParams);
-      //AdjustSelectParamsNewTuneBR(engineDefCeres2.SelectParams);
-      //engineDefCeres1.SelectParams.UCTNonRootDenominatorExponent = 0.95f;
-      //engineDefCeres1.SelectParams.UCTRootDenominatorExponent = 0.90f;
+//AdjustSelectParamsNewTuneBR(engineDefCeres1.SelectParams);
+//AdjustSelectParamsNewTuneBR(engineDefCeres2.SelectParams);
+//engineDefCeres1.SelectParams.UCTNonRootDenominatorExponent = 0.95f;
+//engineDefCeres1.SelectParams.UCTRootDenominatorExponent = 0.90f;
 
-      //engineDefCeres1.SelectParams.CPUCTFactorAtRoot *= 1.5f;
-      //engineDefCeres1.SelectParams.VirtualLossDefaultRelative = -0.06f;
-      // This was +2 Elo (+/-13) in 100 seconds games with late T60 *********************************
-      //engineDefCeres1.SelectParams.UCTRootNumeratorExponent = 0.52f;
-      //engineDefCeres1.SelectParams.UCTNonRootNumeratorExponent = 0.48f;
+//engineDefCeres1.SelectParams.CPUCTFactorAtRoot *= 1.5f;
+//engineDefCeres1.SelectParams.VirtualLossDefaultRelative = -0.06f;
+// This was +2 Elo (+/-13) in 100 seconds games with late T60 *********************************
+//engineDefCeres1.SelectParams.UCTRootNumeratorExponent = 0.52f;
+//engineDefCeres1.SelectParams.UCTNonRootNumeratorExponent = 0.48f;
 
-      //      engineDefCeres1.SearchParams.MoveFutilityPruningAggressiveness *= 0.5f;
-      //      engineDefCeres2.SearchParams.MoveFutilityPruningAggressiveness *= 0;// 0.5f;
+//      engineDefCeres1.SearchParams.MoveFutilityPruningAggressiveness *= 0.5f;
+//      engineDefCeres2.SearchParams.MoveFutilityPruningAggressiveness *= 0;// 0.5f;
 
-      //      engineDefCeres1.SelectParams.CPUCTDualSelectorDiffFraction = 0.04f;
+//      engineDefCeres1.SelectParams.CPUCTDualSelectorDiffFraction = 0.04f;
 
-engineDefCeres1.SearchParams.ActionHeadSelectionWeight = 1.0f;
+// &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+#if NOT
+      engineDefCeres1.SearchParams.ActionHeadSelectionWeight = 0.333f;
+
+      engineDefCeres1.SearchParams.Execution.MaxBatchSize = 1;
+      engineDefCeres2.SearchParams.Execution.MaxBatchSize = 1;
+
+      engineDefCeres1.SearchParams.TreeReuseEnabled = false;
+engineDefCeres2.SearchParams.TreeReuseEnabled = false;
+engineDefCeres1.SearchParams.Execution.SelectParallelEnabled = false;
+engineDefCeres2.SearchParams.Execution.SelectParallelEnabled = false;
+engineDefCeres1.SearchParams.Execution.FlowDualSelectors = false;
+engineDefCeres2.SearchParams.Execution.FlowDualSelectors = false;
+
 engineDefCeres1.SearchParams.Execution.TranspositionMode = TranspositionMode.None;
 engineDefCeres2.SearchParams.Execution.TranspositionMode = TranspositionMode.None;
+#endif
+
 
 //engineDefCeres1.SearchParams.EnableTablebases = false;
 //engineDefCeres2.SearchParams.EnableTablebases = false;
