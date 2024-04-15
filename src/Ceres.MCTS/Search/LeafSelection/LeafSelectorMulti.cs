@@ -761,7 +761,7 @@ namespace Ceres.MCTS.Search
                                            node.Context.ParamsSearch.ActionHeadSelectionWeight);
 
         // Bubble sort to get items in same order as the scores.
-        const float MIN_PROBABILITY_FOR_ACTION_BOOST = 0.02f;
+        const float MIN_PROBABILITY_FOR_ACTION_BOOST = 0.00f;
 
         Span<MCTSNodeStructChild> childrenSpan = nodeRef.Children;
         ref CompressedActionVector actionVector = ref node.Context.Tree.Store.AllActionVectors[node.Index];

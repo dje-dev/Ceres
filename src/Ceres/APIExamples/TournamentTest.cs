@@ -272,7 +272,7 @@ namespace Ceres.APIExamples
       //      NET2 = ReferenceNetIDs.BT2;
 
       SearchLimit limit1 = SearchLimit.NodesForAllMoves(100_000, 1000) * 3;
-      limit1 = SearchLimit.NodesPerMove(1000);
+      limit1 = SearchLimit.NodesPerMove(100);
       //      limit1 = SearchLimit.NodesPerMove(1000 + ((int)DateTime.Now.Millisecond % 200));
 //      limit1 = SearchLimit.BestValueMove;
 //      limit1 = SearchLimit.BestActionMove;
@@ -490,22 +490,25 @@ namespace Ceres.APIExamples
 //      engineDefCeres1.SelectParams.CPUCTDualSelectorDiffFraction = 0.04f;
 
 // &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
-#if NOT
-      engineDefCeres1.SearchParams.ActionHeadSelectionWeight = 0.333f;
 
-      engineDefCeres1.SearchParams.Execution.MaxBatchSize = 1;
-      engineDefCeres2.SearchParams.Execution.MaxBatchSize = 1;
+engineDefCeres1.SearchParams.ActionHeadSelectionWeight = 0.666f;
+//engineDefCeres2.SearchParams.ActionHeadSelectionWeight = 0.666f;
 
-      engineDefCeres1.SearchParams.TreeReuseEnabled = false;
+engineDefCeres1.SearchParams.Execution.MaxBatchSize = 4;
+engineDefCeres2.SearchParams.Execution.MaxBatchSize = 4;
+
+engineDefCeres1.SearchParams.TreeReuseEnabled = false;
 engineDefCeres2.SearchParams.TreeReuseEnabled = false;
+
 engineDefCeres1.SearchParams.Execution.SelectParallelEnabled = false;
 engineDefCeres2.SearchParams.Execution.SelectParallelEnabled = false;
+
 engineDefCeres1.SearchParams.Execution.FlowDualSelectors = false;
 engineDefCeres2.SearchParams.Execution.FlowDualSelectors = false;
 
 engineDefCeres1.SearchParams.Execution.TranspositionMode = TranspositionMode.None;
 engineDefCeres2.SearchParams.Execution.TranspositionMode = TranspositionMode.None;
-#endif
+
 
 
 //engineDefCeres1.SearchParams.EnableTablebases = false;
