@@ -833,6 +833,10 @@ namespace Ceres.Features.UCI
       {
         searchLimit = SearchLimit.BestValueMove;
       }
+      else if (goInfo.BestActionMove)
+      {
+        searchLimit = SearchLimit.BestValueMove;
+      }
       else if (goInfo.TimeOurs.HasValue)
       {
         float increment = 0;

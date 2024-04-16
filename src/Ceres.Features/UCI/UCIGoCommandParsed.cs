@@ -49,6 +49,11 @@ namespace Ceres.Features.UCI
     public readonly bool BestValueMove = false;
 
     /// <summary>
+    /// If requested to make move with best action head score (depth 0).
+    /// </summary>
+    public readonly bool BestActionMove = false;
+
+    /// <summary>
     /// Requested move time (in milliseconds)
     /// </summary>
     public readonly int? MoveTime;
@@ -147,6 +152,10 @@ namespace Ceres.Features.UCI
 
           case "value":
             BestValueMove = true;
+            break;
+
+          case "action":
+            BestActionMove = true;
             break;
 
           case "nodes":
