@@ -844,7 +844,7 @@ namespace Ceres.MCTS.Iteration
       {
         if (manager.SearchLimit.Value != 1)
         {
-          throw new Exception("BestValueMove only supported for NodesPerMove == 1.");
+          throw new Exception("BestActionMove only supported for NodesPerMove == 1.");
         }
 
         NNEvaluatorResult rootResult = manager.Context.NNEvaluators.Evaluator1.Evaluate(priorMoves, manager.Context.ParamsSearch.HistoryFillIn, false);
@@ -852,21 +852,21 @@ namespace Ceres.MCTS.Iteration
         MGPosition thisPos = priorMoves.FinalPosMG;
 
         MGMove bestMove = default;
-        float bestV = float.MinValue;
+        float bestActionV = float.MinValue;
         foreach ((EncodedMove Move, float Probability) policyMove in rootResult.Policy.ProbabilitySummary())
         {
-          float actionV = rootResult.ActionsWDL.W;
-          if (actionV > bestV)
+          (float w, float d, float l) zz = rootResult.ActionWDLForMove(policyMove.Move);
+          float actionV = zz.w - zz.l;
+          if (actionV > bestActionV)
           {
             bestMove = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(policyMove.Move, thisPos);
-            bestV = actionV;
-            break;
+            bestActionV = actionV;
           }
         }
 
-        Debug.Assert(bestV != float.MinValue); // expected to find at least one move
+        Debug.Assert(bestActionV != float.MinValue); // expected to find at least one move
 
-        context.Root.StructRef.W = bestV;
+        context.Root.StructRef.W = bestActionV;
         context.Root.StructRef.N = 1;
         return context.TopVForcedMove = bestMove;
       }
