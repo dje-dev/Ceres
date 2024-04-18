@@ -20,6 +20,7 @@ using System.IO;
 using Ceres.Chess;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
+using Ceres.Chess.NetEvaluation.Batch;
 using Ceres.Chess.Positions;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.LeafExpansion;
@@ -135,11 +136,21 @@ namespace Ceres.MCTS.MTCSNodes.Analysis
       //      writer.Write($"{  (nextBestMove?.Annotation == null ? "" : nextBestMove.Annotation.PriorMoveMG.ToString()),8}");
       //      writer.Write($"{diffBestNextBestQ,8:F2}");
 
+      float actionV = 0;
+      if (!node.IsRoot
+        && node.Context.NNEvaluators.Evaluator1.HasAction
+        && node.Context.Tree.Store.AllActionVectors != null)
+      {
+        CompressedActionVector actions = node.Context.Tree.Store.AllActionVectors[node.Parent.Index];
+        int index = node.IndexInParentsChildren;
+        actionV = actions[index].W - actions[index].L;
+      }
 
       writer.Write($"{node.N,13:N0} ");
       writer.Write($" {pctOfVisits,5:F0}%");
       string secondaryChar = node.StructRef.SecondaryNN ? "s" : " ";
       writer.Write($"   {100.0 * node.P,6:F2}%{secondaryChar} ");
+      DumpWithColor(multiplier * -actionV, $" {multiplier * -actionV,6:F3}  ", -0.2f, 0.2f, writer);
       DumpWithColor(multiplier * node.V, $" {multiplier * node.V,6:F3}  ", -0.2f, 0.2f, writer);
       //      DumpWithColor(multiplier * node.VSecondary, $" {multiplier * node.VSecondary,6:F3} ", -0.2f, 0.2f);
       double q = multiplier * node.Q;
@@ -177,7 +188,8 @@ namespace Ceres.MCTS.MTCSNodes.Analysis
     private static void WriteHeaders(bool fullDetail, TextWriter writer)
     {
       // Write headers
-      writer.Write(" Dep  T #M    FirstVisit   MvWh  MvBl           N  Visits    Policy     V         Q     WPos  DPos  LPos   WTree DTree LTree  MPos MTree");
+      writer.Write(" Dep  T #M    FirstVisit   MvWh  MvBl           N  Visits    Policy    Act       V        Q      WPos  DPos  LPos   WTree DTree LTree  MPos MTree");
+
       if (fullDetail)
       {
         writer.WriteLine("  FEN");
@@ -189,14 +201,13 @@ namespace Ceres.MCTS.MTCSNodes.Analysis
 
       if (fullDetail)
       {
-        writer.WriteLine("----  - --  ------------  -----  ---- -----------  ------  --------  -------    -----   ----  ----  ----   -----  ---- -----  ---- -----");
+        writer.WriteLine("----  - --  ------------  -----  ---- -----------  ------  --------   ------  -------   ------   ----  ----  ----   -----  ---- -----  ---- -----");
       }
       else
       {
         writer.WriteLine();
       }
     }
-
 
     static string ToStr(char pieceChar, int count, int maxCount)
     {
@@ -271,7 +282,9 @@ namespace Ceres.MCTS.MTCSNodes.Analysis
                             {
                               int childIndex = 0;
                               foreach (MCTSNodeStructChild childInfo in node.Children)
+                              {
                                 Console.WriteLine($"  {childIndex++,3} {childInfo}");
+                              }
                             }
                             index++;
                             return true;

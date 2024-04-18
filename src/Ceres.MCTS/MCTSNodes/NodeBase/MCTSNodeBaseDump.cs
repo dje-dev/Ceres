@@ -23,6 +23,8 @@ using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.MTCSNodes.Struct;
+using Ceres.Chess.NetEvaluation.Batch;
+using static Tensorflow.CostGraphDef;
 
 #endregion
 
@@ -185,10 +187,23 @@ namespace Ceres.MCTS.MTCSNodes
         extraInfo += $"({fracVisitStr}% {recentQAvgStr}{lastN,11:F0})";
       }
 
+      float actionV = 0;
+      if (!IsRoot 
+        && Context.NNEvaluators.Evaluator1.HasAction 
+        && Context.Tree.Store.AllActionVectors != null)
+      {
+        CompressedActionVector actions = Context.Tree.Store.AllActionVectors[Parent.Index];
+        int index = IndexInParentsChildren;
+        actionV = actions[index].W - actions[index].L;
+      }
+
+
+      extraInfo += $"  A= {actionV,6:F3}  ";
       extraInfo += $" Q= {multiplerOurPerspective * Q,6:F3}  ";
-      extraInfo += $" RSA= {-resampleAvg,6:F3}  ";
-      extraInfo += $" RSS= {resampleSD,6:F3}  ";
-      extraInfo += $"U= {qUncertainty,3:N0}  V= {  multiplerOurPerspective * V,5:F2} {uStr} ";
+
+      //      extraInfo += $" RSA= {-resampleAvg,6:F3}  ";
+      //      extraInfo += $" RSS= {resampleSD,6:F3}  ";
+      extraInfo += $"U= {qUncertainty,3:N0}  V= {  multiplerOurPerspective * V,6:F3} {uStr} ";
 
 
       extraInfo += $" WDL= {(invert ? LossP : WinP),4:F2} {DrawP,4:F2} {(invert ? WinP : LossP),4:F2} ";
