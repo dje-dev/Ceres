@@ -196,6 +196,11 @@ Note: Possible optimization/inefficiency:
           scoresSpan.CopyTo(outputScores);
         }
 
+        if (numVisitsToCompute == 0)
+        {
+          return;
+        }
+
         // Find the best child and record this visit
         int maxIndex = ArrayUtils.IndexOfElementWithMaxValue(localResultAVXScratch, numChildren);
 

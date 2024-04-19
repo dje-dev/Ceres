@@ -378,8 +378,10 @@ namespace Ceres.MCTS.MTCSNodes
                                          stats,
                                          numToProcess, numVisitsToCompute,
                                          scores, childVisitCounts, cpuctMultiplier, actionHeadSelectionWeight);
-
-      FillInSequentialVisitHoles(childVisitCounts, ref nodeRef, numToProcess);
+      if (numVisitsToCompute > 0)
+      {
+        FillInSequentialVisitHoles(childVisitCounts, ref nodeRef, numToProcess);
+      }
     }
 
 

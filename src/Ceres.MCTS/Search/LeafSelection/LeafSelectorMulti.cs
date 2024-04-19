@@ -751,8 +751,12 @@ namespace Ceres.MCTS.Search
         && node.StructRef.NumPolicyMoves > 1
         && node.Context.ParamsSearch.ActionHeadSelectionWeight > 0)
       {
+        if (node.NInFlight > 0 || node.NInFlight2 > 0)
+        {
+          throw new Exception("Internal error, unexpected state.");
+        }
         // Compute scores for all children so we can sort based on that.
-        Span<short> allChildrenCounts = stackalloc short[node.StructRef.NumPolicyMoves];
+        Span<short> allChildrenCounts = default; // not used
         Span<float> scores = stackalloc float[node.StructRef.NumPolicyMoves];
         node.InfoRef.ComputeTopChildScores(SelectorID, node.Depth,
                                            vLossDynamicBoost, 0, node.StructRef.NumPolicyMoves - 1, 
