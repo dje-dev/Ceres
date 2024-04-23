@@ -277,7 +277,7 @@ namespace Ceres.APIExamples
       limit1 = SearchLimit.NodesPerMove(500);
       //      limit1 = SearchLimit.NodesPerMove(1000 + ((int)DateTime.Now.Millisecond % 200));
 //      limit1 = SearchLimit.BestActionMove;
-//      limit1 = SearchLimit.BestActionMove;
+//      SearchLimit limit2 = SearchLimit.BestActionMove;
 
 //      SearchLimit limit2 = SearchLimit.NodesPerMove(1);
       //limit1 = limit2;
@@ -492,9 +492,14 @@ namespace Ceres.APIExamples
 
 //      engineDefCeres1.SelectParams.CPUCTDualSelectorDiffFraction = 0.04f;
 
+//engineDefCeres1.SearchParams.Execution.MaxBatchSize = 1;
+//engineDefCeres2.SearchParams.Execution.MaxBatchSize = 1;
+//engineDefCeres1.SearchParams.Execution.TranspositionMode = TranspositionMode.None;
+//engineDefCeres2.SearchParams.Execution.TranspositionMode = TranspositionMode.None;
+
 // &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
 // engineDefCeres1.SearchParams.ActionHeadSelectionWeight = 0.001f;
-//#if NOT
+#if NOT
  engineDefCeres1.SearchParams.ActionHeadSelectionWeight = 0.3333f;
 //engineDefCeres2.SearchParams.ActionHeadSelectionWeight = 0.666f;
 
@@ -515,7 +520,7 @@ engineDefCeres2.SearchParams.Execution.FlowDualSelectors = false;
 
 engineDefCeres1.SearchParams.Execution.TranspositionMode = TranspositionMode.None;
 engineDefCeres2.SearchParams.Execution.TranspositionMode = TranspositionMode.None;
-//#endif
+#endif
 
 
 //engineDefCeres1.SearchParams.EnableTablebases = false;
