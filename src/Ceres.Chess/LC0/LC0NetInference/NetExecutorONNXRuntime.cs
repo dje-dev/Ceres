@@ -262,7 +262,8 @@ namespace Ceres.Chess.LC0NetInference
       if (inputsMetadata.Count != 1)
       {
         // data type check below is only on first element
-        throw new Exception("Currently only single input ONNX files supported.");
+        Console.WriteLine("WARNING: Currently only single input ONNX files supported definitively.");
+//        throw new Exception("Currently only single input ONNX files supported.");
       }
 
       int inputIndex = 0;
@@ -376,7 +377,10 @@ namespace Ceres.Chess.LC0NetInference
       IDisposableReadOnlyCollection<DisposableNamedOnnxValue> runResult;
       lock (lockObject)
       {
-        runResult = Session.Run(inputsONNX);
+        RunOptions ro = new RunOptions();
+        ro.LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_VERBOSE;
+        ro.LogVerbosityLevel = 999;
+        runResult = Session.Run(inputsONNX);//, ro); // fails on second run, reshape error, may be a bug on ONNXruntime
       }
 
       List<(string, float[])> resultArrays = new(Session.OutputMetadata.Count);

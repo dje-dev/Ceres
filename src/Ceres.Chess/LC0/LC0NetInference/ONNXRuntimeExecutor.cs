@@ -159,7 +159,8 @@ namespace Ceres.Chess.LC0NetInference
 
       if (NetType == NetTypeEnum.TPG)
       {
-        (Memory<float> input, int[] shape)[] inputs = new (Memory<float> input, int[] shape)[flatValuesSecondary.Length == 0 ? 1 : 2];
+        const int NUM_INPUTS = 2; // assume state present
+        (Memory<float> input, int[] shape)[] inputs = new (Memory<float> input, int[] shape)[NUM_INPUTS];
         if (tpgDivisor != 1.0f)
         {
           Span<float> flatValuesPrimarySpan = flatValuesPrimary.Span;
@@ -168,8 +169,12 @@ namespace Ceres.Chess.LC0NetInference
             flatValuesPrimarySpan[i] /= tpgDivisor;
           }
         }
-        inputs[0] = (flatValuesPrimary, new int[] { numPositionsUsed, 64, TPG_BYTES_PER_SQUARE_RECORD });
 
+        inputs[0] = (flatValuesPrimary, new int[] { numPositionsUsed, 64, TPG_BYTES_PER_SQUARE_RECORD });
+        if (inputs.Length > 1)
+        {
+          inputs[1] = (flatValuesSecondary, new int[] { numPositionsUsed, 64, 32 }); // TODO: cleanup, state
+        } 
 #if NOT
         if (flatValuesSecondary.Length > 0)
         {
@@ -272,7 +277,7 @@ namespace Ceres.Chess.LC0NetInference
         int INDEX_WDL2 = FindIndex(3, INDEX_WDL, "value2", true);
         int INDEX_MLH = FindIndex(1);
         int INDEX_UNC = hasUNC ? FindIndex(1, INDEX_MLH) : -1;
-        int INDEX_ACTION = FindIndex(1858 * 3, -1, "action", true);
+        int INDEX_ACTION = FindIndex(1858 * 3, -1, "view_154", true); // TODO: cleanup the output names to be better named
 
         if (looksLikeBT3)
         {

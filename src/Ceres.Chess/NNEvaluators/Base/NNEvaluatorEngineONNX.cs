@@ -343,7 +343,7 @@ namespace Chess.Ceres.NNEvaluators
         float[] flatValuesAttention = ArrayPool<float>.Shared.Rent(inputSizeAttention);
 
         int inputSizeMoves = 0; // batch.NumPos * 782;
-        float[] flatValuesMoves = null;// ArrayPool<float>.Shared.Rent(batch.NumPos * 782);
+        float[] flatValuesMoves = new float[batch.NumPos * 64 * 32]; // ** TEMPORARY: BOARD STATE. Take this from the batch
 
         Memory<float> flatValuesAttentionM = flatValuesAttention.AsMemory().Slice(0, inputSizeAttention);
         Memory<float> flatValuesMovesM = flatValuesMoves == null ? default : flatValuesMoves.AsMemory().Slice(0, inputSizeMoves);
@@ -521,37 +521,38 @@ namespace Chess.Ceres.NNEvaluators
         }
       }
 #endif
-
+#if NOT
       if (result.ActionLogisticVectors != null)
       {
-        throw new Exception("Action needs remediation in ONNX to convert from logistic to probabilities");  
-#if NOT
-        int offset = (1858 * 3 * index) + policyIndex * 3;
-        Span<FP16> actionsSpan = ActionProbabilities.Span;
+        for (int i = 0; i < numPos; i++)
+        {
+          int offset = (1858 * 3 * i) + policyIndex * 3;
+          Span<FP16> actionsSpan = ActionProbabilities.Span;
 
-        float wLogit = actionsSpan[offset];
-        float dLogit = actionsSpan[offset + 1];
-        float lLogit = actionsSpan[offset + 2];
+          float wLogit = actionsSpan[offset];
+          float dLogit = actionsSpan[offset + 1];
+          float lLogit = actionsSpan[offset + 2];
 
-        return (actionsSpan[offset], actionsSpan[offset + 1], actionsSpan[offset + 2]);
+          return (actionsSpan[offset], actionsSpan[offset + 1], actionsSpan[offset + 2]);
 
-        float max = MathF.Max(wLogit, MathF.Max(dLogit, lLogit));
+          float max = MathF.Max(wLogit, MathF.Max(dLogit, lLogit));
 
-        float w = MathF.Exp(wLogit - max);
-        float d = MathF.Exp(dLogit - max);
-        float l = MathF.Exp(lLogit - max);
+          float w = MathF.Exp(wLogit - max);
+          float d = MathF.Exp(dLogit - max);
+          float l = MathF.Exp(lLogit - max);
 
-        float mult = 1.0f / (w + d + l);
+          float mult = 1.0f / (w + d + l);
 
-        return (w * mult, d * mult, l * mult);
-#endif
+          return (w * mult, d * mult, l * mult);
+        }
       }
-
+#endif
       CompressedActionVector[] actions = null;
       if (result.ActionLogisticVectors != null)
       {
         // TODO: initialize actions from result.ActionLogisticVectors
-        throw new Exception("NNEvaluatorEngineONNX needs minor remediation to pass along converted ActionLogisticVectors below");
+        Console.WriteLine("NNEvaluatorEngineONNX needs minor remediation to pass along converted ActionLogisticVectors below");
+        actions = new CompressedActionVector[numPos];
       }
 
       // NOTE: inefficient, above we convert from [] (flat) to [][] and here we convert back to []
