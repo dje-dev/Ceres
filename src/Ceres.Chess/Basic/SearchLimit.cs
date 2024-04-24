@@ -291,6 +291,33 @@ namespace Ceres.Chess
 
 
     /// <summary>
+    /// Estimated hard maximum number of nodes which 
+    /// might be needed to evaluate this search.
+    /// </summary>
+    public long EstimatedMaxPossibleSearchNodes
+    {
+      get
+      {
+        // TODO: Do we need to consider searchLimit.SearchCanBeExpanded here?
+
+        // Maximum plausible nodes per second.
+        const float MAX_NPS = 2_000_000f;
+
+        int maxTreeNodes = MaxTreeNodes ?? int.MaxValue;
+        return Type switch
+        {
+          SearchLimitType.NodesPerMove => Math.Min(maxTreeNodes, (long)(Value + 1000)),
+          SearchLimitType.NodesPerTree => Math.Min(maxTreeNodes, (long)(Value + 1000)),
+          SearchLimitType.SecondsPerMove => Math.Min(maxTreeNodes, (long)(MAX_NPS * Value) + 1000),
+          SearchLimitType.SecondsForAllMoves => Math.Min(maxTreeNodes, (long)(MAX_NPS * Value) + 1000),
+          SearchLimitType.NodesForAllMoves => Math.Min(maxTreeNodes, (long)(Value + 1000)),
+          SearchLimitType.BestValueMove => 1,
+          _ => throw new NotImplementedException()
+        };
+      }
+    }
+
+    /// <summary>
     /// Estimated number of final nodes (N) for the search tree
     /// which starts with specified number of initial nodes and then
     /// searches for this limit.
