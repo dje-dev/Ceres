@@ -57,13 +57,13 @@ namespace Ceres.Base.OperatingSystem
     //bool gcPressureWasAdded;
 
     void* rawMemoryAddress;
-    
+
 
     IRawMemoryManagerIncremental<T> rawMemoryManager;
 
     #region Constructor
 
-    public MemoryBufferOS(long numItems, bool largePages, string sharedMemoryName, 
+    public MemoryBufferOS(long numItems, bool largePages, string sharedMemoryName,
                           bool useExistingSharedMemory, bool useIncrementalAlloc)
     {
       NumItems = numItems;
@@ -72,7 +72,10 @@ namespace Ceres.Base.OperatingSystem
       sizeTInBytes = Marshal.SizeOf<T>();
 
       // Make name unique to this process if we are not sharing
-      if (sharedMemoryName != null && !useExistingSharedMemory) sharedMemoryName += "_" + Process.GetCurrentProcess().Id.ToString();
+      if (sharedMemoryName != null && !useExistingSharedMemory)
+      {
+        sharedMemoryName += "_" + Process.GetCurrentProcess().Id.ToString();
+      }
 
       Allocate(sharedMemoryName, useExistingSharedMemory, numItems, largePages);
     }
@@ -81,21 +84,37 @@ namespace Ceres.Base.OperatingSystem
 
     #region Raw memory allocation/deallocation
 
+    /// <summary>
+    /// Allocates the memory buffer.
+    /// </summary>
+    /// <param name="sharedMemName"></param>
+    /// <param name="useExistingSharedMemory"></param>
+    /// <param name="numItems"></param>
+    /// <param name="largePages"></param>
+    /// <exception cref="Exception"></exception>
     void Allocate(string sharedMemName, bool useExistingSharedMemory, long numItems, bool largePages)
     {
       if (SoftwareManager.IsLinux)
       {
         if (UseIncrementalAlloc)
+        {
           rawMemoryManager = new RawMemoryManagerIncrementalLinux<T>() as IRawMemoryManagerIncremental<T>;
+        }
         else
+        {
           throw new Exception("Only UseIncrementalAlloc mode supported under Linux");
+        }
       }
       else
       {
         if (UseIncrementalAlloc)
+        {
           rawMemoryManager = new RawMemoryManagerIncrementalWindows<T>() as IRawMemoryManagerIncremental<T>;
+        }
         else
+        {
           rawMemoryManager = new WRawMemoryManagerPreallocatedWindows<T>() as IRawMemoryManagerIncremental<T>;
+        }
       }
 
       rawMemoryManager.Reserve(sharedMemName, useExistingSharedMemory, numItems, largePages);
@@ -103,25 +122,46 @@ namespace Ceres.Base.OperatingSystem
       rawMemoryAddress = rawMemoryManager.RawMemoryAddress;
     }
 
+    /// <summary>
+    /// Insures that the specified number of items are allocated and avaliable for use.
+    /// </summary>
+    /// <param name="numItems"></param>
     public void InsureAllocated(long numItems) => rawMemoryManager.InsureAllocated(numItems);
+
+
+    /// <summary>
+    /// Resizes the buffer to the specified number of items.
+    /// </summary>
+    /// <param name="numItems"></param>
     public void ResizeToNumItems(long numItems) => rawMemoryManager.ResizeToNumItems(numItems);
 
+
+    /// <summary>
+    /// Returns the number of items allocated.
+    /// </summary>
     public long NumItemsAllocated => rawMemoryManager.NumItemsAllocated;
 
-    public void Dispose() => rawMemoryManager.Dispose();   
-  
+    public void Dispose() => rawMemoryManager.Dispose();
 
-#endregion
+
+    #endregion
 
     #region Access helpers
-   
+
+    /// <summary>
+    /// Returns a pointer to the raw memory (which is guaranteed fixed within virtual address space).
+    /// </summary>
     public void* RawMemory => rawMemoryAddress;
 
+
+    /// <summary>
+    /// Returns the total number of items in the buffer.
+    /// </summary>
     public long Length => NumItems;
 
-    // --------------------------------------------------------------------------------------------
+
     /// <summary>
-    /// 
+    /// Indexer (using a long).
     /// </summary>
     /// <param name="index"></param>
     /// <returns></returns>
@@ -135,7 +175,7 @@ namespace Ceres.Base.OperatingSystem
 
         return ref Unsafe.AsRef<T>(startPtr.ToPointer());
       }
-     
+
     }
 
     /// <summary>
@@ -158,6 +198,12 @@ namespace Ceres.Base.OperatingSystem
       Buffer.MemoryCopy(sourcePtr.ToPointer(), destPtr.ToPointer(), (uint)numBytes, (uint)numBytes);
     }
 
+
+    /// <summary>
+    /// Clears a section of the buffer to zeros.
+    /// </summary>
+    /// <param name="startIndex"></param>
+    /// <param name="length"></param>
     public void Clear(long startIndex, long length)
     {
       int MAX_PER_BLOCK = int.MaxValue / sizeTInBytes;
@@ -172,6 +218,7 @@ namespace Ceres.Base.OperatingSystem
       }
     }
 
+
     void ClearSmallBlock(long startIndex, long length)
     {
       long sizeBytes = sizeTInBytes * length;
@@ -184,22 +231,33 @@ namespace Ceres.Base.OperatingSystem
       Unsafe.InitBlockUnaligned(startPtr.ToPointer(), 0, (uint)sizeBytes);
     }
 
+
+    /// <summary>
+    /// Returns a Span<T> view of the memory.
+    /// </summary>
     [DebuggerBrowsable(DebuggerBrowsableState.Never)]
     public Span<T> Span
     {
       [MethodImpl(MethodImplOptions.AggressiveInlining)]
       get
       {
-        Debug.Assert(NumItems <= int.MaxValue);
-        return  new Span<T>(RawMemory, (int)NumItems);
+        Debug.Assert(NumItems <= int.MaxValue); // the Length property of a Span<T> is an int
+        return new Span<T>(RawMemory, (int)NumItems);
       }
     }
 
 
+    /// <summary>
+    /// Returns a Span<T> view of a slice of the memory.
+    /// </summary>
+    /// <param name="startIndex"></param>
+    /// <param name="length"></param>
+    /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Span<T> Slice(long startIndex, long length)
     {
-      Debug.Assert(length < int.MaxValue);
+      Debug.Assert(length < int.MaxValue); // TODO: possibly this should be allowed if the length of the slice does not exceed int.MaxValue
+      Debug.Assert(startIndex + length < NumItemsAllocated);
 
       long startBufferAdr = new IntPtr(RawMemory).ToInt64();
       IntPtr startPtr = new IntPtr(startBufferAdr + startIndex * sizeTInBytes);
