@@ -14,6 +14,7 @@
 #region Using directives
 
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
@@ -122,11 +123,11 @@ namespace Ceres.Chess
     /// <summary>
     /// Enumeration indicating the draw status of a position.
     /// </summary>
-    public enum PositionDrawStatus 
-    { 
-      NotDraw, 
-      DrawByInsufficientMaterial, 
-      DrawCanBeClaimed 
+    public enum PositionDrawStatus
+    {
+      NotDraw,
+      DrawByInsufficientMaterial,
+      DrawCanBeClaimed
     };
 
     /// <summary>
@@ -157,9 +158,6 @@ namespace Ceres.Chess
           return PositionDrawStatus.NotDraw;
         }
 
-        // Insufficient material?
-        Span<(Piece, Square)> spanPieces = stackalloc (Piece, Square)[4];
-
         // Count number of bishops and knights, 
         // and immediately return false if Rook or Queen seen
         int bishopCountUs = 0;
@@ -167,7 +165,7 @@ namespace Ceres.Chess
         int knightCountUs = 0;
         int knightCountThem = 0;
         int otherPieceCount = 0;
-        foreach ((Piece piece, Square square) piece in this.GetPiecesOnSquares(spanPieces))
+        foreach ((Piece piece, Square square) piece in this)
         {
           if (piece.piece.Type == PieceType.Bishop)
           {
@@ -523,7 +521,7 @@ namespace Ceres.Chess
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly bool EqualAsRepetition(in Position otherPos)
     {
-      if (PiecesShortHash != otherPos.PiecesShortHash 
+      if (PiecesShortHash != otherPos.PiecesShortHash
        || SideToMove != otherPos.SideToMove)
       {
         // Fast path check.
@@ -558,7 +556,7 @@ namespace Ceres.Chess
        || MiscInfo.EnPassantFileIndex != otherPos.MiscInfo.EnPassantFileIndex)
       {
         return false;
-      }  
+      }
 
       return true;
     }
@@ -693,7 +691,7 @@ namespace Ceres.Chess
         }
       }
     }
-    
+
     #endregion
 
     static ulong[][] FastHashTable; // size [32,256] = 8192*8=128k
@@ -863,38 +861,75 @@ namespace Ceres.Chess
     }
 
 
-    /// <summary>
-    /// Returns a span of (piece, square) tuples representing all pieces on the board.
-    /// </summary>
-    /// <param name="array"></param>
-    /// <returns></returns>
-    public readonly Span<(Piece piece, Square square)> GetPiecesOnSquares(Span<(Piece, Square)> array)
+    public PiecesOnSquaresEnumerator GetEnumerator()
     {
-      int count = 0;
-
       unsafe
       {
         fixed (byte* pieceSquares = &Square_0_1)
         {
-          for (int i = 0; i < 32; i++)
-          {
-            byte rawValue = pieceSquares[i];
-
-            byte valueLeft = (byte)(rawValue & 0b0000_1111);
-            byte valueRight = (byte)(rawValue >> 4);
-            if (valueLeft != 0)
-            {
-              array[count++] = (new Piece(valueLeft), new Square(i * 2));
-            }
-
-            if (valueRight != 0)
-            {
-              array[count++] = (new Piece(valueRight), new Square(i * 2 + 1));
-            }
-          }
+          return new PiecesOnSquaresEnumerator(pieceSquares);
         }
       }
-      return array.Slice(0, count);
+    }
+
+    /// <summary>
+    /// Custom enumerator struct for allocation-free enumeration.
+    /// </summary>
+    public unsafe struct PiecesOnSquaresEnumerator : IEnumerator<(Piece, Square)>
+    {
+      private readonly byte* _pieceSquares;
+      private int index;
+
+      public PiecesOnSquaresEnumerator(byte* pieceSquares)
+      {
+        _pieceSquares = pieceSquares;
+        index = 0;
+        Current = default;
+      }
+
+      public (Piece, Square) Current { get; private set; }
+
+      object IEnumerator.Current => Current;
+
+      public bool MoveNext()
+      {
+        while (index < 64)
+        {
+          byte rawValue = _pieceSquares[index / 2];
+
+          if (index % 2 == 0)
+          {
+            byte valueLeft = (byte)(rawValue & 0b0000_1111);
+            if (valueLeft != 0)
+            {
+              Current = (new Piece(valueLeft), new Square(index));
+              index++;
+              return true;
+            }
+          }
+          else
+          {
+            byte valueRight = (byte)(rawValue >> 4);
+            if (valueRight != 0)
+            {
+              Current = (new Piece(valueRight), new Square(index));
+              index++;
+              return true;
+            }
+          }
+
+          index++;
+        }
+        return false;
+      }
+
+      public void Reset()
+      {
+        index = 0;
+        Current = default;
+      }
+
+      public void Dispose() { }
     }
 
 
@@ -943,7 +978,7 @@ namespace Ceres.Chess
     }
 
 
-    
+
     /// <summary>
     /// Calculates if the position is terminal.
     /// </summary>
@@ -1035,7 +1070,7 @@ namespace Ceres.Chess
     }
 
 
-    
+
     /// <summary>
     /// Returns if any instances of a given piece exist in the position.
     /// </summary>
@@ -1117,7 +1152,7 @@ namespace Ceres.Chess
         }
       }
     }
-    
+
 
 
     /// <summary>
@@ -1180,9 +1215,9 @@ namespace Ceres.Chess
       };
 
       // NOTE: use 2 for ply number so translates to 1 for move number
-      PositionMiscInfo miscInfo = new PositionMiscInfo(true, true, true, true, SideType.White, 
+      PositionMiscInfo miscInfo = new PositionMiscInfo(true, true, true, true, SideType.White,
                                                        0, 0, 2, PositionMiscInfo.EnPassantFileIndexEnum.FileNone);
-      return new Position(pieces,in miscInfo);
+      return new Position(pieces, in miscInfo);
     }
 
     #endregion
@@ -1200,7 +1235,7 @@ namespace Ceres.Chess
         MGMoveList moves = new MGMoveList();
         MGMoveGen.GenerateMoves(in mgPos, moves);
 
-        List<Move> ret = new (moves.NumMovesUsed);
+        List<Move> ret = new(moves.NumMovesUsed);
         foreach (MGMove move in moves)
         {
           ret.Add(MGMoveConverter.ToMove(move));
@@ -1215,7 +1250,7 @@ namespace Ceres.Chess
     /// </summary>
     /// <param name="sanMoveString"></param>
     /// <returns></returns>
-    public Move MoveSAN(string sanMoveString) =>  Move.FromSAN(in this, sanMoveString);
+    public Move MoveSAN(string sanMoveString) => Move.FromSAN(in this, sanMoveString);
 
 
     /// <summary>
@@ -1289,7 +1324,7 @@ namespace Ceres.Chess
     /// </summary>
     public Position Reversed => new Position(this, true, true);
 
-    
+
     /// <summary>
     ///  Returns if two positions are equal (in all respects).
     /// </summary>

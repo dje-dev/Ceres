@@ -33,13 +33,13 @@ namespace Ceres.Chess.EncodedPositions
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     static void ApplyZobrist(ulong[] keys, BitVector64 bv, ref ulong hash)
     {
-        long bv1 = bv.Data;
-        while (bv1 != 0)
-        {
-          long lsbMask = bv1 & -bv1;
-          hash ^= keys[BitOperations.TrailingZeroCount(bv1)];
-          bv1 ^= lsbMask;
-        }
+      long bv1 = bv.Data;
+      while (bv1 != 0)
+      {
+        long lsbMask = bv1 & -bv1;
+        hash ^= keys[BitOperations.TrailingZeroCount(bv1)];
+        bv1 ^= lsbMask;
+      }
     }
 
 
@@ -65,13 +65,10 @@ namespace Ceres.Chess.EncodedPositions
     /// <returns></returns>
     public static ulong ZobristHashSlow(in Position pos, PositionMiscInfo.HashMove50Mode hashMode)
     {
-      Span<(Piece, Square)> arrayPieces = stackalloc (Piece, Square)[32];
-      arrayPieces = pos.GetPiecesOnSquares(arrayPieces);
-
       ulong hash = 0;
-      foreach ((Piece, Square) kvp in arrayPieces)
+      foreach ((Piece, Square) kvp in pos)
       {
-        int squareIndex =  kvp.Item2.SquareIndexStartA1;
+        int squareIndex = kvp.Item2.SquareIndexStartA1;
         hash ^= keys[(int)kvp.Item1.Side][(int)kvp.Item1.Type][squareIndex];
       }
 
@@ -91,8 +88,8 @@ namespace Ceres.Chess.EncodedPositions
     public static ulong ZobristHash(Span<Position> positions, PositionMiscInfo.HashMove50Mode hashMode)
     {
       ulong hash = 0;
-      for (int i = positions.Length - 1; i>=0; i--)
-          hash ^= positions[i].CalcZobristHash(hashMode) << i;
+      for (int i = positions.Length - 1; i >= 0; i--)
+        hash ^= positions[i].CalcZobristHash(hashMode) << i;
 
       return hash;
     }

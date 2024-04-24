@@ -17,6 +17,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+
 using Ceres.Chess.Textual;
 
 #endregion
@@ -71,14 +72,11 @@ namespace Ceres.Chess.MoveGen.Converters
     /// <returns></returns>
     internal static MGPosition MGChessPositionFromPosition(in Position position)
     {
-      // TO DO: someday a custom low-level converter directly between the two board representations
-      //        could be written to improve performance (currently about 400,000 per second)
+      // TODO: someday a custom low-level converter directly between the two board representations
+      //       could be written to improve performance (currently about 400,000 per second)
       MGPosition pos = default;
 
-      Span<(Piece, Square)> arrayPieces = stackalloc (Piece, Square)[position.PieceCount];
-      arrayPieces = position.GetPiecesOnSquares(arrayPieces);
-
-      foreach ((Piece, Square) ps in arrayPieces)
+      foreach ((Piece, Square) ps in position)
       {
         pos.SetPieceAtBitboardSquare((ulong)MGPieceFromPiece(ps.Item1), MGPosition.MGBitBoardFromSquare(ps.Item2));
       }
