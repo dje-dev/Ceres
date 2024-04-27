@@ -500,18 +500,24 @@ namespace Ceres.Chess.NNEvaluators
     /// Evaluates all positions in an oversized batch (that cannot be evaluated all at once).
     /// The batch is broken into sub-batches, evaluated, and each item in the sub-batch is passed to a provided delegate.
     /// </summary>
-    public void EvaluateOversizedBatch(EncodedPositionBatchFlat bigBatch, Action<int, Memory<NNEvaluatorResult>> processor)
+    /// <param name="bigBatch"></param>
+    /// <param name="processor"></param>
+    /// <param name="overrideMaxBatchSize"></param>
+    public void EvaluateOversizedBatch(EncodedPositionBatchFlat bigBatch, 
+                                       Action<int, Memory<NNEvaluatorResult>> processor,
+                                       int? overrideMaxBatchSize = null)
     {
-      bool needsToBeSplit = bigBatch.NumPos > MaxBatchSize;
+      int batchSizeToUse = overrideMaxBatchSize ?? MaxBatchSize;
+      bool needsToBeSplit = bigBatch.NumPos > overrideMaxBatchSize;
 
       int numProcessed = 0;
       int numToProcess = bigBatch.NumPos;
 
-      // Repeatedly process sub-batches no larger than the MaxBatchSize.
+      // Repeatedly process sub-batches no larger than the specified maximum batch size.
       while (numProcessed < numToProcess)
       {
         int numRemaining = numToProcess - numProcessed;
-        int numThisBatch = Math.Min(MaxBatchSize, numRemaining);
+        int numThisBatch = Math.Min(batchSizeToUse, numRemaining);
 
         // Extract a slice of manageable size.
         IEncodedPositionBatchFlat slice = needsToBeSplit ? new EncodedPositionBatchFlatSlice(bigBatch, numProcessed, numThisBatch)
