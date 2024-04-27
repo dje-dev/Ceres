@@ -103,6 +103,8 @@ namespace Ceres.Chess.NNEvaluators
     public override bool HasValueSecondary => Evaluator.HasValueSecondary;
 
     public override bool HasAction => Evaluator.HasAction;
+    public override bool HasState => Evaluator.HasState;
+
     public override int MaxBatchSize => int.MaxValue;
 
     public override bool PolicyReturnedSameOrderMoveList => false; // batching disturbs move list order

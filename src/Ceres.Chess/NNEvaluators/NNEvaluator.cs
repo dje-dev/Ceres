@@ -132,6 +132,12 @@ namespace Ceres.Chess.NNEvaluators
     public abstract bool HasValueSecondary { get; }
 
     /// <summary>
+    /// Optional contextual information to be potentially used 
+    /// as supplemental input for the evaluation of children.
+    /// </summary>
+    public virtual bool HasState { get; } = false;
+
+    /// <summary>
     /// The maximum number of positions that can be evaluated in a single batch.
     /// </summary>
     public abstract int MaxBatchSize { get; }
@@ -309,7 +315,8 @@ namespace Ceres.Chess.NNEvaluators
       float uncertaintyV = HasUncertaintyV ? batch.GetUncertaintyV(batchIndex) : float.NaN;
       
       NNEvaluatorResultActivations activations = batch.GetActivations(batchIndex);
-      
+      Half[] stateInfo = HasState ? batch.GetState(batchIndex) : null;
+
       (Memory<CompressedPolicyVector> policies, int index) policyRef = batch.GetPolicy(batchIndex);
       (Memory<CompressedActionVector> actions, int index) actionRef = HasAction ? batch.GetAction(batchIndex) : default;
 
@@ -319,7 +326,7 @@ namespace Ceres.Chess.NNEvaluators
       result = new NNEvaluatorResult(w, l, w2, l2, m, uncertaintyV, 
                                      policyRef.policies.Span[policyRef.index], 
                                      HasAction ? actionRef.actions.Span[actionRef.index] : default,
-                                     activations, extraStat0, extraStat1);
+                                     activations, stateInfo, extraStat0, extraStat1);
     }
 
     #endregion

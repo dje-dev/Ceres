@@ -131,7 +131,7 @@ namespace Ceres.Chess.NNEvaluators
       ParallelOptions parallelOptions = ParallelUtils.ParallelOptions(positions.NumPos, NUM_POSITIONS_PER_THREAD);
       Parallel.For(0, positions.NumPos, parallelOptions, PreparePosition);
 
-      return new PositionEvaluationBatch(IsWDL, HasM, HasUncertaintyV, HasAction, false, positions.NumPos, policies, null, w, l, default, default, m, null, null, new TimingStats()); ;
+      return new PositionEvaluationBatch(IsWDL, HasM, HasUncertaintyV, HasAction, false, false, positions.NumPos, policies, null, w, l, default, default, m, null, null, null, new TimingStats()); ;
     }
 
 

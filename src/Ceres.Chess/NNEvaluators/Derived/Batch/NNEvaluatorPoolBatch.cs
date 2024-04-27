@@ -178,7 +178,7 @@ namespace Ceres.Chess.NNEvaluators
     {
       Span<CompressedPolicyVector> fullPolicyValues = fullBatchResult.Policies.Span;
 
-      throw new NotImplementedException("action code needs remediation below");
+      throw new NotImplementedException("action code needs remediation below, multiple heads including action/state");
       Span<CompressedActionVector> fullActionValues = default;// fullBatchResult.HasAction ? fullBatchResult.ActionProbabilities.Span : default;
 
       Span<FP16> fullW = fullBatchResult.W.Span;
@@ -189,6 +189,7 @@ namespace Ceres.Chess.NNEvaluators
       Span<FP16> fullL2 = fullBatchResult.HasValueSecondary ? fullBatchResult.L2.Span : default;
 
       Span<FP16> fullUncertaintyV = fullBatchResult.HasUncertaintyV ? fullBatchResult.UncertaintyV.Span : default;
+      Span<Half> fullState = default;
       Span<FP16> fullExtraStat0 = fullBatchResult.ExtraStat0.Span;
       Span<FP16> fullExtraStat1 = fullBatchResult.ExtraStat1.Span;
       Span<NNEvaluatorResultActivations> fullActivations = fullBatchResult.Activations.IsEmpty ? null : fullBatchResult.Activations.Span;
@@ -202,10 +203,14 @@ namespace Ceres.Chess.NNEvaluators
       {
         if (retrieveSupplementalResults) throw new NotImplementedException();
 
+        if (fullBatchResult.HasState)
+        {
+          throw new NotImplementedException("State not implemented below");
+        }
         int numPos = thisBatch.NumPos;
         PositionEvaluationBatch thisResultSubBatch =
           new PositionEvaluationBatch(fullBatchResult.IsWDL, fullBatchResult.HasM, fullBatchResult.HasUncertaintyV, 
-                                      fullBatchResult.HasAction, fullBatchResult.HasValueSecondary,
+                                      fullBatchResult.HasAction, fullBatchResult.HasValueSecondary, fullBatchResult.HasState,
                                       thisBatch.NumPos,
                                       fullPolicyValues.Slice(nextPosIndex, numPos).ToArray(),
                                       fullActionValues.Slice(nextPosIndex, numPos).ToArray(),
@@ -218,6 +223,7 @@ namespace Ceres.Chess.NNEvaluators
 
                                       fullBatchResult.HasM ? fullM.Slice(nextPosIndex, numPos).ToArray() : null,
                                       fullBatchResult.HasUncertaintyV ? fullUncertaintyV.Slice(nextPosIndex, numPos).ToArray() : null,
+                                      fullBatchResult.HasState ? default : default, // ** TO DO
                                       fullBatchResult.Activations.IsEmpty ? null : fullActivations.Slice(nextPosIndex, numPos).ToArray(),
                                       fullBatchResult.Stats,
                                       fullExtraStat0.IsEmpty ? default : fullExtraStat0.Slice(nextPosIndex, numPos).ToArray(),

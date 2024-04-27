@@ -34,6 +34,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     bool HasM { get; }
     bool HasUncertaintyV { get; }
     bool HasAction { get; }
+    bool HasState { get; }
 
     bool HasValueSecondary { get; }
 
@@ -47,6 +48,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
     FP16 GetUncertaintyV(int index);
     FP16 GetExtraStat0(int index);
     FP16 GetExtraStat1(int index);
+
+    Half[] GetState(int index);
 
     (Memory<CompressedPolicyVector> policies, int index) GetPolicy(int index);
     (Memory<CompressedActionVector> actions, int index) GetAction(int index);

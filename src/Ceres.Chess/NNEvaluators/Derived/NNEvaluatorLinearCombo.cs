@@ -67,6 +67,7 @@ namespace Ceres.Chess.NNEvaluators
     public readonly float[] WeightsM;
     public readonly float[] WeightsUncertaintyV;
 
+
     /// <summary>
     /// Method to be used for combining policy values.
     /// </summary>
@@ -229,9 +230,8 @@ namespace Ceres.Chess.NNEvaluators
           throw new NotImplementedException();
         }
 
-        // Extract the combined policies
+        // Extract the combined policies and actions.
         CompressedPolicyVector[] policies = ExtractComboPolicies(positions);
-
         CompressedActionVector[] actions = HasAction ? ExtractComboActions(positions) : null;
 
         // Compute average value result
@@ -285,8 +285,9 @@ namespace Ceres.Chess.NNEvaluators
         }
 
         TimingStats stats = new TimingStats();
-        return new PositionEvaluationBatch(IsWDL, HasM, HasUncertaintyV, HasAction, HasValueSecondary, 
-                                           positions.NumPos, policies, actions, w, l, w2, l2, m, uncertaintyV, activations, stats);
+        return new PositionEvaluationBatch(IsWDL, HasM, HasUncertaintyV, HasAction, HasValueSecondary, false,
+                                           positions.NumPos, policies, actions, w, l, w2, l2, m, uncertaintyV, 
+                                           null, activations, stats); // states are always null, not meaningful to combine them.
       }
     }
 

@@ -17,10 +17,11 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Reflection;
 using System.Threading.Tasks;
+
 using Ceres.Base.Benchmarking;
 using Ceres.Base.DataTypes;
+
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Chess.LC0.Batches;
@@ -43,6 +44,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     public bool HasUncertaintyV;
     public bool HasAction;
     public bool HasValueSecondary;
+    public bool HasState;
     public int NumPos;
 
     #region Output raw data
@@ -86,6 +88,11 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// Vector of uncertainty of action head estimates.
     /// </summary>
     public Memory<CompressedActionVector> Action;
+
+    /// <summary>
+    /// Optional additional state information.
+    /// </summary>
+    public Memory<Half[]> States;
 
     /// <summary>
     /// Activations of inner layers.
@@ -227,6 +234,13 @@ namespace Ceres.Chess.NetEvaluation.Batch
     public FP16 GetUncertaintyV(int index) => HasUncertaintyV ? UncertaintyV.Span[index] : FP16.NaN;
 
     /// <summary>
+    /// Returns optional state information for specified position.
+    /// </summary>
+    /// <param name="index"></param>
+    /// <returns></returns>
+    public Half[] GetState(int index) => HasState ? States.Span[index] : null;
+
+    /// <summary>
     /// Returns inner layer activations.
     /// </summary>
     /// <param name="index"></param>
@@ -249,7 +263,6 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <param name="statIndex"></param>
     /// <returns></returns>
     public FP16 GetExtraStat1(int index) => ExtraStat1.Span[index];
-
 
     /// <summary>
     /// Returns string representation of the WDL values for position at a specified index.
@@ -298,6 +311,11 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// Returns the number of positions in the batch.
     /// </summary>
     int IPositionEvaluationBatch.NumPos => NumPos;
+
+    /// <summary>
+    /// If the batch has state information.
+    /// </summary>
+    bool IPositionEvaluationBatch.HasState => HasState;
 
     /// <summary>
     /// Gets the value from the value head at a specified index indicating the win probabilty.
@@ -360,6 +378,9 @@ namespace Ceres.Chess.NetEvaluation.Batch
     FP16 IPositionEvaluationBatch.GetExtraStat1(int index) => ExtraStat1.IsEmpty ? FP16.NaN : GetExtraStat1(index);
 
 
+    Half[] IPositionEvaluationBatch.GetState(int index) => GetState(index);
+
+
     NNEvaluatorResultActivations IPositionEvaluationBatch.GetActivations(int index) => GetActivations(index);
 
 
@@ -378,12 +399,14 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <param name="m"></param>
     /// <param name="activations"></param>
     /// <param name="stats"></param>
-    public PositionEvaluationBatch(bool isWDL, bool hasM, bool hasUncertaintyV, bool hasAction, bool hasValueSecondary, int numPos, 
+    public PositionEvaluationBatch(bool isWDL, bool hasM, bool hasUncertaintyV, bool hasAction, 
+                                   bool hasValueSecondary, bool hasState, int numPos, 
                                    Memory<CompressedPolicyVector> policies,
                                    Memory<CompressedActionVector> actionProbabilties,
                                    Memory<FP16> w, Memory<FP16> l, 
                                    Memory<FP16> w2, Memory<FP16> l2,
                                    Memory<FP16> m, Memory<FP16> uncertaintyV,
+                                   Memory<Half[]> states,
                                    Memory<NNEvaluatorResultActivations> activations,
                                    TimingStats stats, Memory<FP16> extraStat0 = default, Memory<FP16> extraStat1 = default, bool makeCopy = false)
     {
@@ -393,10 +416,12 @@ namespace Ceres.Chess.NetEvaluation.Batch
       HasUncertaintyV = hasUncertaintyV;
       HasAction = hasAction;
       HasValueSecondary = hasValueSecondary;
+      HasState = hasState;
 
       Policies = makeCopy ? policies.Slice(0, numPos).ToArray() : policies;
       Actions = (hasAction && makeCopy) ? actionProbabilties.Slice(0, numPos).ToArray() : actionProbabilties;
       Activations = (activations.Length != 0 && makeCopy) ? activations.Slice(0, numPos).ToArray() : activations;
+      States = (states.Length != 0 && makeCopy) ? states.Slice(0, numPos).ToArray() : states;
 
       W = makeCopy ? w.Slice(0, numPos).ToArray() : w;
       L = (isWDL && makeCopy) ? l.Slice(0, numPos).ToArray() : l;
@@ -435,9 +460,11 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <param name="valueEvals2"></param>
     /// <param name="valsAreLogistic"></param>
     /// <param name="stats"></param>
-    private PositionEvaluationBatch(bool isWDL, bool hasM, bool hasUncertaintyV, bool hasAction, bool hasValueSecondary, int numPos,
+    private PositionEvaluationBatch(bool isWDL, bool hasM, bool hasUncertaintyV, bool hasAction, 
+                                    bool hasValueSecondary, bool hasState, int numPos,
                                     Span<FP16> valueEvals, Span<FP16> valueEvals2, 
                                     Span<FP16> m, Span<FP16> uncertaintyV,
+                                    Span<Half[]> states,
                                     Span<NNEvaluatorResultActivations> activations,
                                     float temperatureValue1, float temperatureValue2, float fractionValueFromValue2,
                                     bool valsAreLogistic, TimingStats stats)
@@ -447,9 +474,11 @@ namespace Ceres.Chess.NetEvaluation.Batch
       HasUncertaintyV = hasUncertaintyV;
       HasValueSecondary = hasValueSecondary;
       HasAction = hasAction;
-
+      HasState = hasState;
       NumPos = numPos;
+
       Activations = activations.ToArray();
+      States = states.ToArray();
 
       InitializeValueEvals(valueEvals, valsAreLogistic, temperatureValue1, false);
       if (!valueEvals2.IsEmpty)
@@ -503,17 +532,19 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <param name="activations"></param>
     /// <param name="probType"></param>
     /// <param name="stats"></param>
-    public PositionEvaluationBatch(bool isWDL, bool hasM, bool hasUncertaintyV, bool hasAction, bool hasValueSecondary, int numPos, 
+    public PositionEvaluationBatch(bool isWDL, bool hasM, bool hasUncertaintyV, bool hasAction, 
+                                   bool hasValueSecondary, bool hasState, int numPos, 
                                    Span<FP16> valueEvals, Span<FP16> valueEvals2, 
                                    Memory<float> policyProbs, Memory<CompressedActionVector> actionLogits,
-                                   FP16[] m, FP16[] uncertaintyV, NNEvaluatorResultActivations[] activations,
+                                   FP16[] m, FP16[] uncertaintyV, Memory<Half[]> states, NNEvaluatorResultActivations[] activations,
                                    float temperatureValue1, float temperatureValue2, float fractionValue1FromValue2,
                                    bool valsAreLogistic, PolicyType probType, bool policyAlreadySorted,
                                    IEncodedPositionBatchFlat sourceBatchWithValidMoves,
                                    TimingStats stats)
-      : this(isWDL, hasM, hasUncertaintyV, hasAction, hasValueSecondary, numPos, valueEvals, valueEvals2, m, uncertaintyV, activations,
+   : this(isWDL, hasM, hasUncertaintyV, hasAction, hasValueSecondary, hasState, numPos, valueEvals, valueEvals2, 
+          m, uncertaintyV,  states.ToArray(), activations,
           temperatureValue1, temperatureValue2, fractionValue1FromValue2, valsAreLogistic, stats)
-    {
+    {     
       Policies = ExtractPoliciesBufferFlat(numPos, policyProbs, probType, policyAlreadySorted, sourceBatchWithValidMoves, actionLogits, hasAction);
       Actions = actionLogits;
     }
@@ -530,14 +561,16 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <param name="activations"></param>
     /// <param name="probType"></param>
     /// <param name="stats"></param>
-    public PositionEvaluationBatch(bool isWDL, bool hasM, bool hasUncertaintyV, bool hasAction, bool hasValueSecondary, int numPos, 
+    public PositionEvaluationBatch(bool isWDL, bool hasM, bool hasUncertaintyV, bool hasAction, bool hasValueSecondary,
+                                   bool hasState, int numPos, 
                                    Span<FP16> valueEvals, Span<FP16> valueEvals2,
                                    int topK, Span<int> policyIndices, Span<float> policyProbabilties,
-                                   Span<FP16> m, Span<FP16> uncertaintyV,
+                                   Span<FP16> m, Span<FP16> uncertaintyV, Span<Half[]> states,
                                    Span<NNEvaluatorResultActivations> activations, bool valsAreLogistic,
                                    PolicyType probType, TimingStats stats, bool alreadySorted,
                                    float temperatureValue1= 1, float temperatureValue2 = 1, float fractionValue1FromValue2 = 0)
-      : this(isWDL, hasM, hasUncertaintyV, hasAction, hasValueSecondary, numPos, valueEvals, valueEvals2, m, uncertaintyV, activations, 
+      : this(isWDL, hasM, hasUncertaintyV, hasAction, hasValueSecondary, hasState, 
+             numPos, valueEvals, valueEvals2, m, uncertaintyV, states, activations, 
              temperatureValue1, temperatureValue2, fractionValue1FromValue2, valsAreLogistic, stats)
     {
       Policies = ExtractPoliciesTopK(numPos, topK, policyIndices, policyProbabilties, probType, alreadySorted);
@@ -595,6 +628,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
       NumPos = other.NumPos;
       HasUncertaintyV = other.HasUncertaintyV;
       HasValueSecondary = other.HasValueSecondary;
+      HasState = other.HasState;
+      HasAction = other.HasAction;
 
       int numPos = other.NumPos;
 

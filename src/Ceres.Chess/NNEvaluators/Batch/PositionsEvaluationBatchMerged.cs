@@ -54,6 +54,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
     bool hasUncertaintyV;
     bool hasAction;
     bool hasValueSecondary;
+    bool hasState;
+
 
     /// <summary>
     /// Constructor.
@@ -69,7 +71,9 @@ namespace Ceres.Chess.NetEvaluation.Batch
       hasUncertaintyV = batches[0].HasUncertaintyV;
       hasAction = batches[0].HasAction;
       hasValueSecondary = batches[0].HasValueSecondary;
+      hasState = batches[0].HasState;
     }
+
 
     bool IPositionEvaluationBatch.IsWDL => isWDL;
 
@@ -79,6 +83,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
 
     bool IPositionEvaluationBatch.HasAction => hasAction;
     bool IPositionEvaluationBatch.HasValueSecondary => hasValueSecondary;
+
+    bool IPositionEvaluationBatch.HasState => hasState;
 
     /// <summary>
     /// Number of positions in batch.
@@ -215,6 +221,13 @@ namespace Ceres.Chess.NetEvaluation.Batch
       (int, int) indicies = GetIndices(index);
 
       return Batches[indicies.Item1].GetExtraStat1(indicies.Item2);
+    }
+
+    public Half[] GetState(int index)
+    {
+      (int, int) indicies = GetIndices(index);
+
+      return Batches[indicies.Item1].GetState(indicies.Item2);
     }
 
     public IEnumerator<NNPositionEvaluationBatchMember> GetEnumerator()

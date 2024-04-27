@@ -500,6 +500,11 @@ namespace Chess.Ceres.NNEvaluators
         uncertaintyVFP16 = Array.ConvertAll<float, FP16>(result.UncertaintyV, uv => (FP16)uv);
       }
 
+      if (HasState)
+      {
+       throw new NotImplementedException("Needs remediation for state head");
+      } 
+
 #if DONE_BELOW_IN_NEXT_LINE
       // Set probability of illegal moves to 0.
       HashSet<int> legalIndices = new HashSet<int>(96);
@@ -556,14 +561,15 @@ namespace Chess.Ceres.NNEvaluators
       }
 
       // NOTE: inefficient, above we convert from [] (flat) to [][] and here we convert back to []
-      return new PositionEvaluationBatch(IsWDL, HasM, HasUncertaintyV, HasAction, HasValueSecondary, numPos, 
+      return new PositionEvaluationBatch(IsWDL, HasM, HasUncertaintyV, HasAction, HasValueSecondary, HasState, numPos, 
                                          result.ValuesRaw, result.Values2Raw,
                                          result.PolicyVectors,//*/result.PolicyFlat, 
                                          actions,
-                                         mFP16, uncertaintyVFP16, null,
+                                         mFP16, uncertaintyVFP16, null, null,
                                          TemperatureValue1, TemperatureValue2, FractionValueFromValue2,
-                                         ValueHeadLogistic,
-                                         PositionEvaluationBatch.PolicyType.LogProbabilities, false, batch, stats);
+                                         ValueHeadLogistic, PositionEvaluationBatch.PolicyType.LogProbabilities, false, 
+                                         batch, 
+                                         stats);
     }
 
 #endregion

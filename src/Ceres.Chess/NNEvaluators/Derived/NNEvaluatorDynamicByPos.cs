@@ -128,6 +128,14 @@ namespace Ceres.Chess.NNEvaluators
 
         bool chosenEvaluatorIsWDL = Evaluators[index].IsWDL;
         bool chosenEvaluatorHasSecondaryValue = Evaluators[index].HasValueSecondary;
+
+        bool chosenEvaluatorHasAction = Evaluators[index].HasAction;
+        bool chosenEvaluatorHasState = Evaluators[index].HasState;
+        if (chosenEvaluatorHasState || chosenEvaluatorHasAction)
+        {
+          throw new NotImplementedException("Needs remediation for extra heads");
+        }
+
         if (!IsWDL && chosenEvaluatorIsWDL)
         {
           // Need to downgrade representation from the WDL evaluator
@@ -177,6 +185,11 @@ namespace Ceres.Chess.NNEvaluators
 #endif
         }
 
+        if (HasState)
+        {
+          throw new NotImplementedException("Needs remediation for state head");
+        }
+
         if (HasUncertaintyV)
         {
           uncertaintyV[posNum] = batches[index].GetUncertaintyV(posNum);
@@ -189,9 +202,9 @@ namespace Ceres.Chess.NNEvaluators
       }
 
       // Construct an output batch, choosing desired evaluator for each position
-      PositionEvaluationBatch batch = new(IsWDL, HasM, HasUncertaintyV, HasAction, HasValueSecondary,
+      PositionEvaluationBatch batch = new(IsWDL, HasM, HasUncertaintyV, HasAction, HasValueSecondary, HasState,
                                           positions.NumPos, policies, action, w, l, w2, l2, m, uncertaintyV, 
-                                          null, default, default, default, false);
+                                          null, default, default, default, default, false);
 
       return batch;
     }

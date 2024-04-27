@@ -76,6 +76,12 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// </summary>
     public readonly FP16? ExtraStat1;
 
+    /// <summary>
+    /// Optional contextual information to be potentially used 
+    /// as supplemental input for the evaluation of children.
+    /// </summary>
+    public readonly Half[] PriorState;
+
 
     /// <summary>
     /// Constructor.
@@ -93,6 +99,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
                              CompressedPolicyVector policy,
                              CompressedActionVector actionsWDL,
                              NNEvaluatorResultActivations activations,
+                             Half[] priorState,
                              FP16? extraStat0 = null, FP16? extraStat1 = default)
     {
       this.winP = winP;
@@ -105,6 +112,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
       UncertaintyV = uncertaintyV;
       Policy = policy;
       Activations = activations;
+      PriorState = priorState;
       ExtraStat0 = extraStat0;
       ExtraStat1 = extraStat1;
     }

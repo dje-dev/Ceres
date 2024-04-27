@@ -61,6 +61,12 @@ namespace Ceres.Chess.NNEvaluators
     /// </summary>
     public override bool HasAction => hasAction;
 
+    /// <summary>
+    /// Optional contextual information to be potentially used 
+    /// as supplemental input for the evaluation of children.
+    /// </summary>
+    public override bool HasState => false; // not meaningful to combine multiple states
+
 
     /// <summary>
     /// If Uncertainty of V head is present in the network.
