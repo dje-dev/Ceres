@@ -51,9 +51,6 @@ namespace Ceres.Chess.NetEvaluation.Batch
 
     public Memory<CompressedPolicyVector> Policies;
 
-//    public Memory<FP16> ActionProbabilities;
-    public Memory<CompressedActionVector> Actions;  
-
     /// <summary>
     /// Vector of win probabilities.
     /// </summary>
@@ -87,7 +84,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <summary>
     /// Vector of uncertainty of action head estimates.
     /// </summary>
-    public Memory<CompressedActionVector> Action;
+    public Memory<CompressedActionVector> Actions;
 
     /// <summary>
     /// Optional additional state information.
@@ -434,7 +431,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
 
       M = (hasM && makeCopy) ? m.Slice(0, numPos).ToArray() : m;
       UncertaintyV = (HasUncertaintyV && makeCopy) ? uncertaintyV.Slice(0, numPos).ToArray() : uncertaintyV;
-      Action = (HasAction && makeCopy) ? actionProbabilties.Slice(0, numPos).ToArray() : actionProbabilties;
+      Actions = (HasAction && makeCopy) ? actionProbabilties.Slice(0, numPos).ToArray() : actionProbabilties;
 
       if (!extraStat0.IsEmpty)
       {
