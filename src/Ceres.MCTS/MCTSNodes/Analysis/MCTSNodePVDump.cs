@@ -143,7 +143,7 @@ namespace Ceres.MCTS.MTCSNodes.Analysis
       {
         CompressedActionVector actions = node.Context.Tree.Store.AllActionVectors[node.Parent.Index];
         int index = node.IndexInParentsChildren;
-        actionV = actions[index].W - actions[index].L;
+        actionV = (float)actions[index].W - (float)actions[index].L;
       }
 
       writer.Write($"{node.N,13:N0} ");

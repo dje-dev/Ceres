@@ -211,7 +211,7 @@ namespace Ceres.Chess.EncodedPositions
           while (i <= max)
           {
             ProbEntry x = arrayPtr[i];
-            (Base.DataTypes.FP16 W, Base.DataTypes.FP16 L) action = actions[i];  
+            (Half W, Half L) action = actions[i];  
             int j = i - 1;
             while (j >= 0 && arrayPtr[j].P < x.P)
             {

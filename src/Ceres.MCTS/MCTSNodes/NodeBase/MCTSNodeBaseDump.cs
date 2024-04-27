@@ -194,7 +194,7 @@ namespace Ceres.MCTS.MTCSNodes
       {
         CompressedActionVector actions = Context.Tree.Store.AllActionVectors[Parent.Index];
         int index = IndexInParentsChildren;
-        actionV = actions[index].W - actions[index].L;
+        actionV = (float)actions[index].W - (float)actions[index].L;
       }
 
 

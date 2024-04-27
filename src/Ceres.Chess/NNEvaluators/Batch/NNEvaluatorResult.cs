@@ -193,8 +193,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
       {
         if (policyInfo.Move == move)
         {
-          (FP16 W, FP16 L) thisAction = ActionsWDL[policyIndex];
-          return (thisAction.W, 1 - thisAction.W - thisAction.L, thisAction.L);
+          (Half W, Half L) thisAction = ActionsWDL[policyIndex];
+          return ((float)thisAction.W, 1 - (float)thisAction.W - (float)thisAction.L, (float)thisAction.L);
         }
         policyIndex++;
       } 
@@ -216,8 +216,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
         throw new ArgumentOutOfRangeException(nameof(moveIndexInCompressedPolicyVector));
       }
 
-      (FP16 W, FP16 L) thisAction = ActionsWDL[moveIndexInCompressedPolicyVector];
-      return (thisAction.W, 1 - thisAction.W - thisAction.L, thisAction.L); 
+      (Half W, Half L) thisAction = ActionsWDL[moveIndexInCompressedPolicyVector];
+      return ((float) thisAction.W, 1 - (float)thisAction.W - (float)thisAction.L, (float)thisAction.L); 
     } 
 
 

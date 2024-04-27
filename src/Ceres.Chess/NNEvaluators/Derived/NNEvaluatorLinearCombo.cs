@@ -319,10 +319,10 @@ namespace Ceres.Chess.NNEvaluators
             switch (PolicyAveragingMethod)
             {
               case PolicyAveragingType.Arithmetic:
-                (FP16 W, FP16 L) wl = theseActions[i];
+                (Half W, Half L) wl = theseActions[i];
 
-                actionAveragesW[i] += wl.W * weights[evaluatorIndex];
-                actionAveragesL[i] += wl.L * weights[evaluatorIndex];
+                actionAveragesW[i] += (float)wl.W * weights[evaluatorIndex];
+                actionAveragesL[i] += (float)wl.L * weights[evaluatorIndex];
                 break;
               case PolicyAveragingType.Geometric:
                 throw new NotImplementedException("Geometric averaging not yet supported for Actions");
@@ -343,7 +343,7 @@ namespace Ceres.Chess.NNEvaluators
 
         for (int i = 0; i < EncodedPolicyVector.POLICY_VECTOR_LENGTH; i++)
         {
-          actions[posIndex][i] = ((FP16)actionAveragesW[i], (FP16)actionAveragesL[i]);  
+          actions[posIndex][i] = ((Half)actionAveragesW[i], (Half)actionAveragesL[i]);  
         }
       }
 

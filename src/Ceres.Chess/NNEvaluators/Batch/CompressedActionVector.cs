@@ -13,6 +13,7 @@
 
 #region Using directives
 
+using System;
 using System.Runtime.CompilerServices;
 
 using Ceres.Base.DataTypes;
@@ -36,27 +37,27 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <summary>
     /// Win/loss probabilities returned by the action head.
     /// </summary>
-    (FP16 W, FP16 L) WL;
+    (Half W, Half L) WL;
 
     /// <summary>
     /// Win probability.
     /// </summary>
-    public float W => WL.W;
+    public float W => (float)WL.W;
     
     /// <summary>
     /// Loss probability.
     /// </summary>
-    public float L => WL.L;
+    public float L => (float)WL.L;
 
     /// <summary>
     /// Draw probability.
     /// </summary>
-    public float D => 1 - (WL.W + WL.L);  
+    public float D => 1 - ((float)WL.W + (float)WL.L);  
 
     /// <summary>
     /// Tuple of win, draw, loss probabilities.
     /// </summary>
-    public (float w, float d, float l) WDL => (WL.W, D, WL.L);
+    public (float w, float d, float l) WDL => ((float)WL.W, D, (float)WL.L);
 
     /// <summary>
     /// Net win probability.

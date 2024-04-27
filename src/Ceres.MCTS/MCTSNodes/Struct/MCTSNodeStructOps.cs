@@ -593,7 +593,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
         if (enableActionHead)
         {
-          a[i] = actions[i].W - actions[i].L;
+          a[i] = (float)actions[i].W - (float)  actions[i].L;
         }
 
         if (child.IsExpanded)
