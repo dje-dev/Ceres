@@ -87,7 +87,7 @@ namespace Ceres.MCTS.Evaluators
         Debug.Assert(!float.IsNaN(cacheEntry.WinP + cacheEntry.LossP));
 
         LeafEvaluationResult result = new LeafEvaluationResult(cacheEntry.TerminalStatus, cacheEntry.WinP, cacheEntry.LossP, 
-                                                               cacheEntry.M, cacheEntry.UncertaintyV);
+                                                               cacheEntry.M, (byte)Math.Round(100*cacheEntry.UncertaintyV, 0));
         result.PolicySingle = cacheEntry.Policy;
         return result;
       }
