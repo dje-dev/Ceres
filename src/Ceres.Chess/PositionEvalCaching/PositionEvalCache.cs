@@ -123,7 +123,7 @@ namespace Ceres.Chess.PositionEvalCaching
     /// <param name="uncertaintyV"></param>
     /// <param name="policy"></param>
     /// <param name="actions"></param>
-    public void Store(ulong hash, GameResult terminalStatus, FP16 winP, FP16 lossP, FP16 m, byte uncertaintyV, 
+    public void Store(ulong hash, GameResult terminalStatus, FP16 winP, FP16 lossP, FP16 m, FP16 uncertaintyV, 
                       in CompressedPolicyVector policy,
                       in CompressedActionVector actions)
     {
