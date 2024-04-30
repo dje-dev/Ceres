@@ -65,6 +65,11 @@ namespace Ceres.Chess.LC0.Batches
     public byte[] PosPlaneValues;
 
     /// <summary>
+    /// Optionally the set of state information assoicated with these positions.
+    /// </summary>
+    public Half[][] States;
+
+    /// <summary>
     /// Optionally the associated MGPositions
     /// </summary>
     public MGPosition[] Positions;
@@ -158,6 +163,18 @@ namespace Ceres.Chess.LC0.Batches
       Array.Copy(PosPlaneBitmaps, startIndex * EncodedPositionWithHistory.NUM_PLANES_TOTAL, posPlaneBitmaps, 0, count * EncodedPositionWithHistory.NUM_PLANES_TOTAL);
 
       EncodedPositionBatchFlat ret = new EncodedPositionBatchFlat(posPlaneBitmaps, posPlaneValuesEncoded, w, l, null, count);
+
+      if (States != null)
+      {
+        // For safety, make a deep copy.
+        Half[][] states = new Half[count][];
+        for (int i = 0; i < count; i++)
+        {
+          states[i] = new Half[States[i].Length];
+          Array.Copy(States[i], states[i], States[i].Length);
+        }
+        ret.States = states;
+      } 
 
       if (Positions != null)
       {
@@ -828,6 +845,8 @@ namespace Ceres.Chess.LC0.Batches
     Memory<ulong> IEncodedPositionBatchFlat.PositionHashes { get => PositionHashes.AsMemory(); set => PositionHashes = value.ToArray(); }
     Memory<byte> IEncodedPositionBatchFlat.LastMovePlies { get => LastMovePlies.AsMemory(); set => LastMovePlies = value.ToArray(); }
     Memory<MGMoveList> IEncodedPositionBatchFlat.Moves { get => Moves.AsMemory(); set => Moves = value.ToArray(); }
+
+    Memory<Half[]> IEncodedPositionBatchFlat.States { get => States.AsMemory(); set => States = value.ToArray(); }
 
     float[] IEncodedPositionBatchFlat.ValuesFlatFromPlanes(float[] preallocatedBuffer, bool nwhc, bool scaleMove50Counter) => ValuesFlatFromPlanes(preallocatedBuffer, nwhc, scaleMove50Counter);
 

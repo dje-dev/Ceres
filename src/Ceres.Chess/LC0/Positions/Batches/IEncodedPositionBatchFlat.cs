@@ -48,6 +48,12 @@ namespace Ceres.Chess.LC0.Batches
     Memory<byte> PosPlaneValues { get; }
 
     /// <summary>
+    /// Optionally the set of state information assoicated with these positions.
+    /// </summary>
+    Memory<Half[]> States { get; set; }
+
+
+    /// <summary>
     /// Optionally the associated MGPositions
     /// </summary>
     Memory<MGPosition> Positions { get; set; }

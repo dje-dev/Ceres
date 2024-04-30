@@ -19,8 +19,6 @@ using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
 using System;
-using System.Collections.Specialized;
-using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -196,7 +194,7 @@ namespace Ceres.Chess.LC0.Boards
     /// <param name="other"></param>
     /// <param name="mirror"></param>
     /// <param name="reverse"></param>
-    private EncodedPositionBoard(EncodedPositionBoard other)
+    private EncodedPositionBoard(in EncodedPositionBoard other)
     {
       OurPawns = other.OurPawns;
       OurKnights = other.OurKnights;
@@ -408,11 +406,23 @@ namespace Ceres.Chess.LC0.Boards
     {
       string fen = "";
 
-      for (int r = 7; r >=0; r--)
-        fen = fen + EncodedPositionWithHistory.GetRowString(r * 8, this, weAreWhite) + "\r\n";
+      for (int r = 7; r >= 0; r--)
+      {
+        fen = fen + EncodedPositionWithHistory.GetRowString(r * 8, in this, weAreWhite) + "\r\n";
+      }
 
       fen += "Reps = " + Repetitions.Data + "\r\n";
       return fen;
+    }
+
+
+    /// <summary>
+    /// Returns string representation of board.
+    /// </summary>
+    /// <returns></returns>
+    public override string ToString()
+    {
+      return "<EncodedPositionBoard " + GetBoardPicture(true) + ">";
     }
 
 

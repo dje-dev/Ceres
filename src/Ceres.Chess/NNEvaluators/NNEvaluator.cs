@@ -15,9 +15,11 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
+using System.Linq;
+
 using Ceres.Base.DataTypes;
+
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.LC0.Batches;
 using Ceres.Chess.NetEvaluation.Batch;
@@ -42,8 +44,9 @@ namespace Ceres.Chess.NNEvaluators
       Moves = 4,
       Positions = 8,
       LastMovePlies = 16,
+      State = 32,
 
-      All = Boards | Hashes | Moves | Positions,
+      All = Boards | Hashes | Moves | Positions | State,
       AllWithLastMovePlies = Boards | Hashes | Moves | Positions | LastMovePlies
     };
 
@@ -361,7 +364,9 @@ namespace Ceres.Chess.NNEvaluators
     /// <param name="fillInMissingPlanes">if history planes should be filled in if incomplete (typically necessary)</param>
     /// <param name="retrieveSupplementalResults"></param>
     /// <returns></returns>
-    public NNEvaluatorResult[] Evaluate(IEnumerable<PositionWithHistory> positions, bool fillInMissingPlanes = true, bool retrieveSupplementalResults = false)
+    public NNEvaluatorResult[] Evaluate(IEnumerable<PositionWithHistory> positions, 
+                                        bool fillInMissingPlanes = true, 
+                                        bool retrieveSupplementalResults = false)
     {
       if (InputsRequired.HasFlag(InputTypes.LastMovePlies))
       {
@@ -388,11 +393,20 @@ namespace Ceres.Chess.NNEvaluators
     /// <param name="fillInMissingPlanes">if history planes should be filled in if incomplete (typically necessary)</param>
     /// <param name="retrieveSupplementalResults"></param>
     /// <returns></returns>
-    public NNEvaluatorResult Evaluate(in Position position, bool fillInMissingPlanes = true, bool retrieveSupplementalResults = false)
+    public NNEvaluatorResult Evaluate(in Position position, 
+                                      bool fillInMissingPlanes = true, 
+                                      bool retrieveSupplementalResults = false, 
+                                      Half[] state = null)
     {
-      EncodedPositionBatchBuilder builder = new EncodedPositionBatchBuilder(1, InputsRequired | InputTypes.Positions);
-      builder.Add(in position, fillInMissingPlanes);
+      InputTypes types = InputsRequired | InputTypes.Positions;
+      if (state != null)
+      {
+        types |= InputTypes.State;
+      }
 
+      EncodedPositionBatchBuilder builder = new EncodedPositionBatchBuilder(1, types);
+      builder.Add(in position, fillInMissingPlanes, state);
+      
       NNEvaluatorResult[] result = EvaluateBatch(builder.GetBatch(), retrieveSupplementalResults);
       return result[0];
     }

@@ -13,7 +13,6 @@
 
 #region Using directives
 
-using Ceres.Base.DataTypes;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.MoveGen;
 using System;
@@ -60,6 +59,8 @@ namespace Ceres.Chess.LC0.Batches
     public Memory<ulong> PosPlaneBitmaps => Parent.PosPlaneBitmaps.Slice(StartIndex * EncodedPositionWithHistory.NUM_PLANES_TOTAL, Length * EncodedPositionWithHistory.NUM_PLANES_TOTAL);
 
     public Memory<byte> PosPlaneValues => Parent.PosPlaneValues.Slice(StartIndex * EncodedPositionWithHistory.NUM_PLANES_TOTAL, Length * EncodedPositionWithHistory.NUM_PLANES_TOTAL);
+
+    public Memory<Half[]> States => Parent.States.IsEmpty ? default : Parent.States.Slice(StartIndex, Length);
 
     public Memory<MGPosition> Positions
     {
@@ -128,6 +129,7 @@ namespace Ceres.Chess.LC0.Batches
       }
     }
 
+    Memory<Half[]> IEncodedPositionBatchFlat.States { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
   }
 
 }

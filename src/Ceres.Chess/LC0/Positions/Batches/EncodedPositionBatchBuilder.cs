@@ -15,6 +15,7 @@
 
 using System;
 using System.Diagnostics;
+
 using Ceres.Base.DataTypes;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.LC0.Boards;
@@ -80,12 +81,19 @@ namespace Ceres.Chess.LC0.Batches
       InputsRequired = inputsRequired;
 
       pendingPositions = new EncodedPositionWithHistory[MaxPositions];
+
       batch = new EncodedPositionBatchFlat(EncodedPositionType.PositionAndTrainingData, MaxPositions);
 
       if (InputsRequired.HasFlag(NNEvaluator.InputTypes.Positions)) batch.Positions = new MGPosition[MaxPositions];
       if (InputsRequired.HasFlag(NNEvaluator.InputTypes.Hashes)) batch.PositionHashes = new ulong[MaxPositions];
       if (InputsRequired.HasFlag(NNEvaluator.InputTypes.Moves)) batch.Moves = new MGMoveList[MaxPositions];
-      if (InputsRequired.HasFlag(NNEvaluator.InputTypes.LastMovePlies)) batch.LastMovePlies = new byte[MaxPositions * 64];      
+      if (InputsRequired.HasFlag(NNEvaluator.InputTypes.LastMovePlies)) batch.LastMovePlies = new byte[MaxPositions * 64];
+
+      if (InputsRequired.HasFlag(NNEvaluator.InputTypes.State))
+      {
+        batch.States = new Half[MaxPositions][];
+      }
+
     }
 
 
@@ -94,7 +102,7 @@ namespace Ceres.Chess.LC0.Batches
     /// </summary>
     /// <param name="positionEncoded"></param>
     /// <param name="fillInMissingPlanes"></param>
-    public void Add(in EncodedPositionWithHistory positionEncoded, bool fillInMissingPlanes)
+    public void Add(in EncodedPositionWithHistory positionEncoded, bool fillInMissingPlanes, Half[] state = null)
     {
       ulong zobristHashForCaching = 0;
       MGPosition positionMG = default;
@@ -119,8 +127,9 @@ namespace Ceres.Chess.LC0.Batches
         MGMoveGen.GenerateMoves(in positionMG, moves);
       }
 
-      Add(in positionEncoded, in positionMG, zobristHashForCaching, moves, null, fillInMissingPlanes); // TOFIX
+      Add(in positionEncoded, in positionMG, zobristHashForCaching, moves, null, fillInMissingPlanes, state);
     }
+
 
     /// <summary>
     /// Adds a position to the batch.
@@ -132,7 +141,8 @@ namespace Ceres.Chess.LC0.Batches
     /// <param name="lastMovePlies"></param>
     /// <param name="fillInEmptyPlanes"></param>
     public void Add(in EncodedPositionWithHistory positionEncoded, in MGPosition position, 
-                    ulong positionHash, MGMoveList moves, byte[] lastMovePlies, bool fillInEmptyPlanes)
+                    ulong positionHash, MGMoveList moves, byte[] lastMovePlies, bool fillInEmptyPlanes, 
+                    Half[] state = null)
     {
       if (batch.Positions == null)
       {
@@ -153,6 +163,10 @@ namespace Ceres.Chess.LC0.Batches
           Array.Copy(lastMovePlies, 0, batch.LastMovePlies, NumPositionsAdded * 64, 64);
         }
 
+        if (InputsRequired.HasFlag(NNEvaluator.InputTypes.State))
+        {
+          batch.States[NumPositionsAdded] = state;
+        } 
         
         pendingPositions[NumPositionsAdded] = positionEncoded;
 
@@ -160,7 +174,6 @@ namespace Ceres.Chess.LC0.Batches
         {
           pendingPositions[NumPositionsAdded].FillInEmptyPlanes();
         }
-
 
         NumPositionsAdded++;
       }
@@ -172,13 +185,14 @@ namespace Ceres.Chess.LC0.Batches
     /// </summary>
     /// <param name="position"></param>
     /// <param name="fillInMissingPlanes">if history planes should be filled in if incomplete (typically necessary)</param>
-    public void Add(in Position position, bool fillInMissingPlanes = true)
+    public void Add(in Position position, bool fillInMissingPlanes = true, Half[] state = null)
     {
       // NOTE: important to using SetFromPosition which will
       //       properly set up extra en passant plane if needed.
       EncodedPositionWithHistory posRaw = new EncodedPositionWithHistory();
       posRaw.SetFromPosition(in position, fillInMissingPlanes, position.MiscInfo.SideToMove);
-      Add(posRaw, false); // History planes already set above, if requested.
+
+      Add(posRaw, false, state); // History planes already set above, if requested.
   }
 
 
@@ -187,7 +201,8 @@ namespace Ceres.Chess.LC0.Batches
     /// </summary>
     /// <param name="moveSequence">sequence of positions</param>
     /// <param name="fillInMissingPlanes">if history planes should be filled in if incomplete (typically necessary)</param>
-    public void Add(PositionWithHistory moveSequence, bool fillInMissingPlanes = true)
+    /// <param name="state">optional prior state information</param>
+    public void Add(PositionWithHistory moveSequence, bool fillInMissingPlanes = true, Half[] state = null)
     {
       MGPosition finalPositionMG = moveSequence.FinalPosMG;
 
@@ -209,8 +224,9 @@ namespace Ceres.Chess.LC0.Batches
       }
 
       // Note that fillInMissingPlanes is set false here because it will have already been accomplished above if requrested.
-      Add(in posRaw, in finalPositionMG, zobristHashForCaching, moves, null, false);
+      Add(in posRaw, in finalPositionMG, zobristHashForCaching, moves, null, false, state);
     }
+
 
     /// <summary>
     /// Returns the encoded batch.

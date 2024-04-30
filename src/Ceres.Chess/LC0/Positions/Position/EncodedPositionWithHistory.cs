@@ -151,7 +151,7 @@ namespace Ceres.Chess.EncodedPositions
     /// <param name="planes"></param>
     /// <param name="weAreWhite"></param>
     /// <returns></returns>
-    internal static string GetRowString(int startIndex, EncodedPositionBoard planes, bool weAreWhite)
+    internal static string GetRowString(int startIndex, in EncodedPositionBoard planes, bool weAreWhite)
     {
       string ret = "";
       for (int i = 7; i >= 0; i--)
