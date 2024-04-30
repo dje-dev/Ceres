@@ -53,7 +53,7 @@ namespace Ceres.APIExamples
   {
     const bool POOLED = false;
 
-    static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 2 : 6;
+    static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 1 : 6;
     static int[] OVERRIDE_DEVICE_IDs = /*POOLED ? null*/
        (Environment.MachineName.ToUpper() switch
       {
@@ -131,7 +131,8 @@ namespace Ceres.APIExamples
     /// <summary>
     /// Test code.
     /// </summary>
-    public static void Test()
+    public static void Test(GameEngineDef overrideCeresEngine1Def = null, 
+                            GameEngineDef overrideCeresEngine2Def = null)
     {
       //      DisposeTest(); System.Environment.Exit(3);
       //      if (Marshal.SizeOf<MCTSNodeStruct>() != 64)
@@ -266,21 +267,21 @@ namespace Ceres.APIExamples
       //NET2 = "753723";// "801307";610889
       //      NET2 = "784984";
       //NET2 = @"d:\weights\lczero.org\t12test6-swa-678000.pb.gz";//"610889";//  ;
-     // NET1 = NET2 = "753723";// "703810";
+      // NET1 = NET2 = "753723";// "703810";
       //NET2 = "t12test6-swa-678000";
 
       //      NET2 = ReferenceNetIDs.BT2;
 
-      SearchLimit limit1 = SearchLimit.NodesForAllMoves(100_000, 1000) * 3;
+      SearchLimit limit1 = SearchLimit.NodesPerMove(20);
 //      SearchLimit limit2 = limit1;
 
-      limit1 = SearchLimit.NodesPerMove(500);
+//      limit1 = SearchLimit.NodesPerMove(50);
       //      limit1 = SearchLimit.NodesPerMove(1000 + ((int)DateTime.Now.Millisecond % 200));
-//      limit1 = SearchLimit.BestActionMove;
-//      SearchLimit limit2 = SearchLimit.BestActionMove;
+      //      limit1 = SearchLimit.BestActionMove; ;
+//      SearchLimit limit1 = SearchLimit.BestValueMove;
 
-//      SearchLimit limit2 = SearchLimit.NodesPerMove(1);
-      //limit1 = limit2;
+      //SearchLimit limit2 = SearchLimit.NodesPerMove(1);
+
       SearchLimit limit2 = limit1;
       //      limit1 = SearchLimit.SecondsForAllMoves(60, 0.6f);
 
@@ -499,18 +500,17 @@ namespace Ceres.APIExamples
 
 // &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
 // engineDefCeres1.SearchParams.ActionHeadSelectionWeight = 0.001f;
-#if NOT
- engineDefCeres1.SearchParams.ActionHeadSelectionWeight = 0.3333f;
-//engineDefCeres2.SearchParams.ActionHeadSelectionWeight = 0.666f;
 
-engineDefCeres1.SearchParams.Execution.MaxBatchSize = 4;
-engineDefCeres2.SearchParams.Execution.MaxBatchSize = 4;
+//engineDefCeres1.SearchParams.BestMoveMode = ParamsSearch.BestMoveModeEnum.TopQIfSufficientN;
+
+engineDefCeres1.SearchParams.EnableTablebases = false;
+engineDefCeres2.SearchParams.EnableTablebases = false;
+
+engineDefCeres1.SearchParams.Execution.MaxBatchSize = 1;
+engineDefCeres2.SearchParams.Execution.MaxBatchSize = 1;
 
 engineDefCeres1.SearchParams.TreeReuseEnabled = false;
 engineDefCeres2.SearchParams.TreeReuseEnabled = false;
-
-//engineDefCeres1.SelectParams.FPUValue = 0;
-//engineDefCeres1.SelectParams.FPUValueAtRoot = 0;
 
 engineDefCeres1.SearchParams.Execution.SelectParallelEnabled = false;
 engineDefCeres2.SearchParams.Execution.SelectParallelEnabled = false;
@@ -520,11 +520,18 @@ engineDefCeres2.SearchParams.Execution.FlowDualSelectors = false;
 
 engineDefCeres1.SearchParams.Execution.TranspositionMode = TranspositionMode.None;
 engineDefCeres2.SearchParams.Execution.TranspositionMode = TranspositionMode.None;
+
+#if NOT
+ engineDefCeres1.SearchParams.ActionHeadSelectionWeight = 0.3333f;
+//engineDefCeres2.SearchParams.ActionHeadSelectionWeight = 0.666f;
+
+//engineDefCeres1.SelectParams.FPUValue = 0;
+//engineDefCeres1.SelectParams.FPUValueAtRoot = 0;
 #endif
 
 
-//engineDefCeres1.SearchParams.EnableTablebases = false;
-//engineDefCeres2.SearchParams.EnableTablebases = false;
+      //engineDefCeres1.SearchParams.EnableTablebases = false;
+      //engineDefCeres2.SearchParams.EnableTablebases = false;
 
       //engineDefCeres1.SearchParams.Execution.MaxBatchSize = 128;
       //      engineDefCeres1.SearchParams.BatchSizeMultiplier = 2;
@@ -649,8 +656,8 @@ engineDefCeres2.SearchParams.Execution.TranspositionMode = TranspositionMode.Non
       EnginePlayerDef playerCeres96 = new EnginePlayerDef(engineDefCeres96, limit2);
       EnginePlayerDef playerCeresPreNC = new EnginePlayerDef(engineDefCeresPreNC, limit2);
 
-      EnginePlayerDef playerCeres1 = new EnginePlayerDef(engineDefCeres1, limit1);
-      EnginePlayerDef playerCeres2 = new EnginePlayerDef(engineDefCeres2, limit2);
+      EnginePlayerDef playerCeres1 = new EnginePlayerDef(overrideCeresEngine1Def ?? engineDefCeres1, limit1);
+      EnginePlayerDef playerCeres2 = new EnginePlayerDef(overrideCeresEngine2Def ?? engineDefCeres2, limit2);
       EnginePlayerDef playerCeres3 = new EnginePlayerDef(engineDefCeres3, limit1);
 
       bool ENABLE_LC0 = false;// evalDef1.Nets[0].Net.Type == NNEvaluatorType.LC0Library && (evalDef1.Nets[0].WeightValue == 1 && evalDef1.Nets[0].WeightPolicy == 1 && evalDef1.Nets[0].WeightM == 1);
@@ -738,7 +745,7 @@ engineDefCeres2.SearchParams.Execution.TranspositionMode = TranspositionMode.Non
       else
       {
         def = new TournamentDef("TOURN", player1, player2);
-        //def.CheckPlayer2Def = playerLC0;
+//        def.CheckPlayer2Def = player1;
       }
 
       // TODO: UCI engine should point to .NET 6 subdirectory if on .NET 6
