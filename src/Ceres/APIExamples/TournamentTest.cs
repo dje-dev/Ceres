@@ -53,7 +53,7 @@ namespace Ceres.APIExamples
   {
     const bool POOLED = false;
 
-    static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 1 : 6;
+    static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 2 : 6;
     static int[] OVERRIDE_DEVICE_IDs = /*POOLED ? null*/
        (Environment.MachineName.ToUpper() switch
       {
@@ -272,13 +272,13 @@ namespace Ceres.APIExamples
 
       //      NET2 = ReferenceNetIDs.BT2;
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(20);
+      SearchLimit limit1 = SearchLimit.NodesPerMove(5);// 18);
 //      SearchLimit limit2 = limit1;
 
 //      limit1 = SearchLimit.NodesPerMove(50);
       //      limit1 = SearchLimit.NodesPerMove(1000 + ((int)DateTime.Now.Millisecond % 200));
       //      limit1 = SearchLimit.BestActionMove; ;
-//      SearchLimit limit1 = SearchLimit.BestValueMove;
+      //limit1 = SearchLimit.BestActionMove;
 
       //SearchLimit limit2 = SearchLimit.NodesPerMove(1);
 
@@ -471,55 +471,61 @@ namespace Ceres.APIExamples
       //engineDefCeres1.SelectParams.CPUCT *= 0.85f;
       //engineDefCeres2.SelectParams.CPUCT *= 0.85f;
 
-//      engineDefCeres1.SearchParams.BestMoveMode = ParamsSearch.BestMoveModeEnum.TopV;
-//      engineDefCeres2.SearchParams.BestMoveMode = ParamsSearch.BestMoveModeEnum.TopV;
+      //      engineDefCeres1.SearchParams.BestMoveMode = ParamsSearch.BestMoveModeEnum.TopV;
+      //      engineDefCeres2.SearchParams.BestMoveMode = ParamsSearch.BestMoveModeEnum.TopV;
 
-//engineDefCeres1.SearchParams.Execution.FlowDualSelectors = false;
-//engineDefCeres2.SearchParams.Execution.FlowDualSelectors = false;
+      //engineDefCeres1.SearchParams.Execution.FlowDualSelectors = false;
+      //engineDefCeres2.SearchParams.Execution.FlowDualSelectors = false;
 
-//AdjustSelectParamsNewTuneBR(engineDefCeres1.SelectParams);
-//AdjustSelectParamsNewTuneBR(engineDefCeres2.SelectParams);
-//engineDefCeres1.SelectParams.UCTNonRootDenominatorExponent = 0.95f;
-//engineDefCeres1.SelectParams.UCTRootDenominatorExponent = 0.90f;
+      //AdjustSelectParamsNewTuneBR(engineDefCeres1.SelectParams);
+      //AdjustSelectParamsNewTuneBR(engineDefCeres2.SelectParams);
+      //engineDefCeres1.SelectParams.UCTNonRootDenominatorExponent = 0.95f;
+      //engineDefCeres1.SelectParams.UCTRootDenominatorExponent = 0.90f;
 
-//engineDefCeres1.SelectParams.CPUCTFactorAtRoot *= 1.5f;
-//engineDefCeres1.SelectParams.VirtualLossDefaultRelative = -0.06f;
-// This was +2 Elo (+/-13) in 100 seconds games with late T60 *********************************
-//engineDefCeres1.SelectParams.UCTRootNumeratorExponent = 0.52f;
-//engineDefCeres1.SelectParams.UCTNonRootNumeratorExponent = 0.48f;
+      //engineDefCeres1.SelectParams.CPUCTFactorAtRoot *= 1.5f;
+      //engineDefCeres1.SelectParams.VirtualLossDefaultRelative = -0.06f;
+      // This was +2 Elo (+/-13) in 100 seconds games with late T60 *********************************
+      //engineDefCeres1.SelectParams.UCTRootNumeratorExponent = 0.52f;
+      //engineDefCeres1.SelectParams.UCTNonRootNumeratorExponent = 0.48f;
 
-//      engineDefCeres1.SearchParams.MoveFutilityPruningAggressiveness *= 0.5f;
-//      engineDefCeres2.SearchParams.MoveFutilityPruningAggressiveness *= 0;// 0.5f;
+      //      engineDefCeres1.SearchParams.MoveFutilityPruningAggressiveness *= 0.5f;
+      //      engineDefCeres2.SearchParams.MoveFutilityPruningAggressiveness *= 0;// 0.5f;
 
-//      engineDefCeres1.SelectParams.CPUCTDualSelectorDiffFraction = 0.04f;
+      //      engineDefCeres1.SelectParams.CPUCTDualSelectorDiffFraction = 0.04f;
 
-//engineDefCeres1.SearchParams.Execution.MaxBatchSize = 1;
-//engineDefCeres2.SearchParams.Execution.MaxBatchSize = 1;
-//engineDefCeres1.SearchParams.Execution.TranspositionMode = TranspositionMode.None;
-//engineDefCeres2.SearchParams.Execution.TranspositionMode = TranspositionMode.None;
+      //engineDefCeres1.SearchParams.Execution.MaxBatchSize = 1;
+      //engineDefCeres2.SearchParams.Execution.MaxBatchSize = 1;
+      //engineDefCeres1.SearchParams.Execution.TranspositionMode = TranspositionMode.None;
+      //engineDefCeres2.SearchParams.Execution.TranspositionMode = TranspositionMode.None;
 
-// &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
-// engineDefCeres1.SearchParams.ActionHeadSelectionWeight = 0.001f;
+      // &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+      // engineDefCeres1.SearchParams.ActionHeadSelectionWeight = 0.001f;
 
-//engineDefCeres1.SearchParams.BestMoveMode = ParamsSearch.BestMoveModeEnum.TopQIfSufficientN;
+      //engineDefCeres1.SearchParams.BestMoveMode = ParamsSearch.BestMoveModeEnum.TopQIfSufficientN;
 
-engineDefCeres1.SearchParams.EnableTablebases = false;
-engineDefCeres2.SearchParams.EnableTablebases = false;
+      if (true)
+      {
+        engineDefCeres1.SearchParams.EnableTablebases = false;
+        engineDefCeres2.SearchParams.EnableTablebases = false;
 
-engineDefCeres1.SearchParams.Execution.MaxBatchSize = 1;
-engineDefCeres2.SearchParams.Execution.MaxBatchSize = 1;
+        engineDefCeres1.SearchParams.Execution.MaxBatchSize = 1;
+        engineDefCeres2.SearchParams.Execution.MaxBatchSize = 1;
 
-engineDefCeres1.SearchParams.TreeReuseEnabled = false;
-engineDefCeres2.SearchParams.TreeReuseEnabled = false;
+        engineDefCeres1.SearchParams.TreeReuseEnabled = false;
+        engineDefCeres2.SearchParams.TreeReuseEnabled = false;
 
-engineDefCeres1.SearchParams.Execution.SelectParallelEnabled = false;
-engineDefCeres2.SearchParams.Execution.SelectParallelEnabled = false;
+        engineDefCeres1.SearchParams.Execution.SelectParallelEnabled = false;
+        engineDefCeres2.SearchParams.Execution.SelectParallelEnabled = false;
 
-engineDefCeres1.SearchParams.Execution.FlowDualSelectors = false;
-engineDefCeres2.SearchParams.Execution.FlowDualSelectors = false;
+        engineDefCeres1.SearchParams.Execution.FlowDirectOverlapped = false;
+        engineDefCeres2.SearchParams.Execution.FlowDirectOverlapped = false;
 
-engineDefCeres1.SearchParams.Execution.TranspositionMode = TranspositionMode.None;
-engineDefCeres2.SearchParams.Execution.TranspositionMode = TranspositionMode.None;
+        engineDefCeres1.SearchParams.Execution.FlowDualSelectors = false;
+        engineDefCeres2.SearchParams.Execution.FlowDualSelectors = false;
+
+        engineDefCeres1.SearchParams.Execution.TranspositionMode = TranspositionMode.None;
+        engineDefCeres2.SearchParams.Execution.TranspositionMode = TranspositionMode.None;
+      }
 
 #if NOT
  engineDefCeres1.SearchParams.ActionHeadSelectionWeight = 0.3333f;
