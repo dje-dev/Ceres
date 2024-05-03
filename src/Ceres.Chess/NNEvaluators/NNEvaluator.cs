@@ -347,10 +347,11 @@ namespace Ceres.Chess.NNEvaluators
     public NNEvaluatorResult Evaluate(PositionWithHistory position, 
                                       bool fillInMissingPlanes = true, 
                                       bool retrieveSupplementalResults = false,
-                                      InputTypes extraInputs = InputTypes.Undefined)
+                                      InputTypes extraInputs = InputTypes.Undefined,
+                                      Half[] state = null)
     {
       EncodedPositionBatchBuilder builder = new EncodedPositionBatchBuilder(1, InputsRequired | extraInputs);
-      builder.Add(position, fillInMissingPlanes);
+      builder.Add(position, fillInMissingPlanes, state);
 
       NNEvaluatorResult[] result = EvaluateBatch(builder.GetBatch(), retrieveSupplementalResults);
       return result[0];
@@ -419,7 +420,9 @@ namespace Ceres.Chess.NNEvaluators
     /// <param name="fillInHistory"></param>
     /// <param name="retrieveSupplementalResults"></param>
     /// <returns></returns>
-    public IPositionEvaluationBatch Evaluate(in EncodedPositionWithHistory encodedPosition, bool fillInHistory, bool retrieveSupplementalResults)
+    public IPositionEvaluationBatch Evaluate(in EncodedPositionWithHistory encodedPosition, 
+                                             bool fillInHistory, 
+                                             bool retrieveSupplementalResults)
     {
       return Evaluate(new EncodedPositionWithHistory[] { encodedPosition }, 1, fillInHistory, retrieveSupplementalResults);
     }
