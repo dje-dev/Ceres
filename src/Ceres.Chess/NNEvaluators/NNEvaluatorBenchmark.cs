@@ -157,7 +157,12 @@ namespace Ceres.Chess.NNEvaluators
         npsSingletons = 1 / bestTimeSeconds;
       }
 
-      // Big batch
+      // Big batch. First warmup 3 times.
+      for (int i = 0; i < 3; i++)
+      {
+        result = evaluator.EvaluateIntoBuffers(batchBig, false);
+      }
+
       TimingStats statsBig = new TimingStats();
       using (new TimingBlock(statsBig, TimingBlock.LoggingType.None))
       {
