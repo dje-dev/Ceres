@@ -115,7 +115,7 @@ namespace Ceres.MCTS.Iteration
       GetEmpiricalPolicyDistribution(node, node.NumChildrenExpanded, empiricalDistribScratch);
 
       // Use Thompson sampling to pick one of the children according to empirical distribution.
-      int drawIndex = ThompsonSampling.Draw(empiricalDistribScratch, node.NumChildrenExpanded, temperature);
+      int drawIndex = ThompsonSampling.DrawWithTemperature(empiricalDistribScratch, node.NumChildrenExpanded, temperature);
 
       // Get this child node.
       MCTSNode childNode = node.ChildAtIndex(drawIndex);

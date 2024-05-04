@@ -465,7 +465,7 @@ namespace Ceres.MCTS.Managers
       }
       else
       {
-        MCTSNode bestMove = childrenWithinThreshold[ThompsonSampling.Draw(densities.ToArray(), densities.Count, Node.Context.ParamsSearch.SearchNoiseBestMoveSampling.MoveSamplingConsideredMovesTemperature)];
+        MCTSNode bestMove = childrenWithinThreshold[ThompsonSampling.DrawWithTemperature(densities.ToArray(), densities.Count, Node.Context.ParamsSearch.SearchNoiseBestMoveSampling.MoveSamplingConsideredMovesTemperature)];
         if (bestMove != childrenSortedByAttractiveness[0])
         {
           Node.Context.ParamsSearch.SearchNoiseBestMoveSampling.MoveSamplingMaxMoveModificationsPerGame++;

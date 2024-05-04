@@ -14,6 +14,7 @@
 #region Using directives
 using System;
 using System.Diagnostics;
+using System.Numerics.Tensors;
 #endregion
 
 namespace Ceres.Base.Math.Random
@@ -33,25 +34,50 @@ namespace Ceres.Base.Math.Random
     [ThreadStatic]
     static float[] densitiesScratch = null;
 
+
     /// <summary>
-    /// Returns a draw according to specified Thompson sampling parameters (with temperature applied).
+    /// Returns a draw according to specified Thompson sampling parameters 
+    /// (with specified amount of uniform distribution blended in).
     /// </summary>
     /// <param name="densities"></param>
-    /// <param name="temperature"></param>
+    /// <param name="numDensities"></param>
+    /// <param name="weightUniform"></param>
     /// <returns></returns>
-    public static int Draw(Span<float> densities, int numDensities, float temperature)
+    public static int DrawWithUniform(Span<float> densities, int numDensities, float weightUniform)
     {
       if (fractionsScratch == null || fractionsScratch.Length < numDensities)
       {
         fractionsScratch = new float[System.Math.Max(64, numDensities)];
       }
 
-      float sum = 0;
+      float sum = TensorPrimitives.Sum(densities.Slice(numDensities));
+
+      float fractionOriginal = (1.0f - weightUniform) / sum;
+      float uniformPart = weightUniform / numDensities;
+
       for (int i = 0; i < numDensities; i++)
       {
-        sum += densities[i];
+        fractionsScratch[i] = uniformPart + fractionOriginal * densities[i];
       }
 
+      return Draw(fractionsScratch, numDensities);
+    }
+
+
+    /// <summary>
+    /// Returns a draw according to specified Thompson sampling parameters (with temperature applied).
+    /// </summary>
+    /// <param name="densities"></param>
+    /// <param name="temperature"></param>
+    /// <returns></returns>
+    public static int DrawWithTemperature(Span<float> densities, int numDensities, float temperature)
+    {
+      if (fractionsScratch == null || fractionsScratch.Length < numDensities)
+      {
+        fractionsScratch = new float[System.Math.Max(64, numDensities)];
+      }
+
+      float sum = TensorPrimitives.Sum(densities.Slice(numDensities));
       float adjust = 1.0f / sum;
 
       float sumNew = 0;
