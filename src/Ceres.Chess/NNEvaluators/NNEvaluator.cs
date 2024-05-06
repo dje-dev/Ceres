@@ -525,7 +525,7 @@ namespace Ceres.Chess.NNEvaluators
                                        int? overrideMaxBatchSize = null)
     {
       int batchSizeToUse = overrideMaxBatchSize ?? MaxBatchSize;
-      bool needsToBeSplit = bigBatch.NumPos > overrideMaxBatchSize;
+      bool needsToBeSplit = bigBatch.NumPos > batchSizeToUse;
 
       int numProcessed = 0;
       int numToProcess = bigBatch.NumPos;
