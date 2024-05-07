@@ -169,63 +169,52 @@ namespace Ceres.APIExamples
       //var pb1 = LC0ProtobufNet.LoadedNet(NET2);
       //pb1.Dump();
 
-      //NET2 = "ap-mish-20b-swa-2000000";
-      //      NET2 = "781561";
-      //NET1 = "782344";
-      //NET1 = @"d:\weights\lczero.org\ap-mish-20b-swa-2000000.pb.gz";
-      //      NET1 = NET2 = "ap-mish-20b-swa-2000000";
-
-      //NET2 = "781561";
-      //NET1 = "803420";
-      //      NET1 = NET2 = "703810";// "784072"; // late T78, 20b, absolute best July 2022
-      //      NET1 = NET2 = "803420";
-      //NET1 = NET2 = "610889";
-      //      NET1 = "800525";
-      //      NET2 = "781474"; // last 40b in the T78 series but only as good as 784063 and much slower
-      //NET1 = "test-12b1024h8-noclipping-swa-2506000";
-      //      NET2 = "784072";// test-12b1024h8-noclipping-swa-1796000";
-      //      NET2 = "test-12b1024h8-noclipping-swa-762000";
-      //NET1 = "784072";
-      //      NET2 = "ap-mish-20b-swa-2000000";
-      //NET2 = "20b_mish-swa-2000000";
-      //NET1 = "66666";
-      //      NET1 = "610889";//= NET2 = "610889";
-      //NET1 = "703810"; //NET2 = "753723";
 
       //      NET2 = @"ONNX_ORT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-1675000-rule50.gz#32";
-      //      NET1 = @"ONNX_TRT:d:\weights\lczero.org\BT2-768x15smolgen-3326000#16";
-
 //      NET1 = "CUSTOM1:703810,CUSTOM1:703810";
        NET1 = "CUSTOM1:703810";
        NET2 = "CUSTOM2:703810";
 
-//      NET2 = "~T1_DISTILL_256_10_FP16";//// "~T80";
+      //      NET2 = "~T1_DISTILL_256_10_FP16";//// "~T80";
 
-//       NET2 = "~T1_DISTILL_512_15_FP16";
-
-//      NET2= "~T70";
+      //      NET2 = "~T1_DISTILL_512_15_FP16";
 
       //      NET1 = "CUSTOM1:753723;1;0;0;1,~T1_DISTILL_512_15;0;1;1;0";
-      //-87     NET1 = "CUSTOM1:753723;0;1;0;1,~T1_DISTILL_512_15;1;0;1;0";
-      //  ///   "LS15;0.25;0.25;0.25,66666;0.75;0.75;0.75"
-
-      //NET1 =   "~T3";
-
-      //NET1 = "~T3_DISTILL";
-      //NET2 = "~BT3";
-
-      //NET2 = "~T1_DISTIL_512_15_NATIVE";
-      //NET2 = "~T1_DISTILL_512_15_FP16";
-
-      //NET2 = "~T70";
-      //      NET2 = "~T81";
-
-
-      //NET1 = NET2 = "~T80";
-      //NET1 = "ONNX_ORT:BT3_750_optimistic#32,BT3_750#32,";
-
       //NET1 = "ONNX_ORT:BT3_750_policy_vanilla#32,ONNX_ORT:BT3_750_policy_optimistic#32";
-      //NET2 = "ONNX_ORT:BT3_750_policy_vanilla#32";
+      //NET1 = "~T3_DISTILL";
+      NET2 = "~BT2";
+      //NET2 = "~T60";
+      //NET2 = "~T1_DISTIL_512_15_NATIVE";
+
+
+      SearchLimit limit1 = SearchLimit.NodesPerMove(500);// 18);
+      //limit1 = SearchLimit.BestValueMove;
+
+      //SearchLimit limit2 = SearchLimit.NodesPerMove(1);
+
+      SearchLimit limit2 = limit1;
+//      limit2 = SearchLimit.BestValueMove;
+//      limit2 = SearchLimit.BestValueMove;
+
+      //      NET1 = NET2 = "753723";// "610889";
+      //      NET1 = "803907";
+      //      NET2 = "609966";
+      //NET2 = "703810";      
+      //      NET1 = "ONNX_ORT:BT2-768x15smolgen-12h-do-01-swa-onnx-1675000-rule50.gz";
+
+
+
+      // 3 has diffs of ORT vs TRT
+      // for -6: -123 Elo
+      // for -7:  FAIL : TensorRT input: /encoder0/smolgen/ln1 has no shape specified.
+      //        NET1 = @"ONNX_ORT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-1260000-fp16-5#16";
+      //      NET1 = @"ONNX_ORT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-2994000.pb.gz";
+      //NET1 = @"ONNX_ORT:d:\weights\lczero.org\BT2-2994";
+      //        NET2 = @"ONNX_TRT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-1260000-fp16-5#16";
+
+      //NET2 = @"ONNX_ORT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-1800000-rule50.gz#32";
+      //NET2 = @"ONNX_ORT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-1800000-rule50.noscale.gz#32";
+      //NET1 = @"LC0:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-1800000-rule50.pb.gz#32";
 
       if (false)
       {
@@ -241,143 +230,7 @@ namespace Ceres.APIExamples
         }
         System.Environment.Exit(3);
       }
-      // Won't work (old data format) NET1 = @"ONNX_ORT:d:\cnets\ckpt_NENC_768_15_16_NOS_1331200000#32";
 
-
-      //NET2 = @"ONNX_ORT:d:\cnets\ckpt_NENC_768_15_16_NOS_1331200000#32";
-      //NET2 = ReferenceNetIDs.BEST_T60;
-
-      //NET1 = NET2 = ReferenceNetIDs.BEST_T75;
-
-      //NET1 = "753723";
-      //NET2 = "803420";
-      //      NET1 = "753723";
-      //NET2 = "CUSTOM2:703810";
-      //      NET2 = "610889"; //<.................
-
-      //      NET2 = ReferenceNetIDs.BEST_T60;
-      //      NET1 = ReferenceNetIDs.BEST_T81;
-
-      //     NET1 = NET2 = ReferenceNetIDs.BEST_T81;
-      //      NNWeightsFileLC0 xnetWeightsFile = NNWeightsFileLC0.LookupOrDownload("813338");
-
-      //      NET1 = "813514";
-      //NET2 = @"ONNX_ORT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-2350000-rule50.gz#32";
-      // bad NET2 = @"ONNX_ORT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-2090000#32";
-      //NET2 = "753723";// "801307";610889
-      //      NET2 = "784984";
-      //NET2 = @"d:\weights\lczero.org\t12test6-swa-678000.pb.gz";//"610889";//  ;
-      // NET1 = NET2 = "753723";// "703810";
-      //NET2 = "t12test6-swa-678000";
-
-      //      NET2 = ReferenceNetIDs.BT2;
-
-      SearchLimit limit1 = SearchLimit.NodesPerMove(5);// 18);
-//      SearchLimit limit2 = limit1;
-
-//      limit1 = SearchLimit.NodesPerMove(50);
-      //      limit1 = SearchLimit.NodesPerMove(1000 + ((int)DateTime.Now.Millisecond % 200));
-      //      limit1 = SearchLimit.BestActionMove; ;
-      //limit1 = SearchLimit.BestActionMove;
-
-      //SearchLimit limit2 = SearchLimit.NodesPerMove(1);
-
-      SearchLimit limit2 = limit1;
-      //      limit1 = SearchLimit.SecondsForAllMoves(60, 0.6f);
-
-      // coefficient 3, 250 nodes --> 391 (+119,=170,-102), 52.2 %
-      // coefficient 3, 150 nodes -->  138 (+ 47,= 59,- 32), 55.4 %
-      // coefficent 3, 750 nodes
-      //    boostBase = Math.Min(0.20f, 3 * 0.01f * boostBase);
-
-      //*** WARNING ***
-      // ****** NOTE *****
-      //  -  ENABLE_LC0 set from true to false
-      //  - TestFlag enabled below
-      //  - set to run Ceres2 not Ceres2UCI
-      //  - 4 GPUS
-      //NET2 = NET1;
-      //**** END WARNING ***
-
-//      SearchLimit limit2 = limit1;// SearchLimit.NodesPerMove(1);
-
-      //      NET1 = NET2 = "753723";// "610889";
-      //      NET1 = "803907";
-      //      NET2 = "609966";
-      //NET2 = "703810";      
-      //      NET1 = "ONNX_ORT:BT2-768x15smolgen-12h-do-01-swa-onnx-1675000-rule50.gz";
-
-      // LOSES BY >300 ELO
-      //NET1 = @"ONNX_ORT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-1675000-rule50.16y.gz#16";
-      // This is to test for lag in the network and this is to test for lag
-
-      // this is a test
-      // BOTH OK (identical, only name differs)
-      //      NET1 = @"TRT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-2090000#32";
-      //      NET1 = @"ONNX_TRT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-2090000#16";
-      //NET1 = @"ONNX_ORT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-2350000-rule50.gz#32";
-
-      // 3 has diffs of ORT vs TRT
-      // for -6: -123 Elo
-      // for -7:  FAIL : TensorRT input: /encoder0/smolgen/ln1 has no shape specified.
-      //        NET1 = @"ONNX_ORT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-1260000-fp16-5#16";
-      //      NET1 = @"ONNX_ORT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-2994000.pb.gz";
-      //NET1 = @"ONNX_ORT:d:\weights\lczero.org\BT2-2994";
-      //        NET2 = @"ONNX_TRT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-1260000-fp16-5#16";
-
-      //      NET2 = @"LC0:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-2350000-rule50.pb.gz";
-      //
-      //      NET1 = @"TRT:d:\weights\lczero.org\t1-smolgen-1024x10-swa-1625000#16";      
-      //      NET2 = @"ONNX_ORT:d:\weights\lczero.org\t1-smolgen-1024x10-swa-1625000#32";
-
-      //t1-smolgen-1024x10-swa-1625000.onnx
-      //      NET1 = @"ONNX_ORT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-1420000-rule50#16";
-      //      NET2 = @"ONNX_ORT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-1420000-rule50#16";
-
-      //NET1 = @"ONNX_ORT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-1675000-rule50.gz#32";
-      //NET2 = @"ONNX_ORT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-1675000-rule50.16p.gz#16";
-      //      NET1 = @"ONNX_ORT:d:\weights\lczero.org\t1-smolgen-1024x10-swa-1625000.16#32";
-      //      NET2 = @"ONNX_ORT:d:\weights\lczero.org\t1-smolgen-1024x10-swa-1625000#32";
-
-      //NET2 = @"ONNX_ORT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-1800000-rule50.gz#32";
-
-      //NET2 = @"ONNX_ORT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-1800000-rule50.noscale.gz#32";
-
-      //NET1 = @"LC0:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-1800000-rule50.pb.gz#32";
-
-      //NET1 = @"ONNX_ORT:d:\weights\lczero.org\t1-smolgen-1024x10-swa-1625000#16";
-      //NET1 = @"ONNX_ORT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-1675000-rule50.gz#16";
-
-      // NET1 = @"ONNX_ORT:d:\weights\lczero.org\t1-smolgen-1024x10-swa-1625000.16#16";
-      //NET1 = @"ONNX_ORT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-1800000-rule50.16.gz#16";
-
-      //NET2 = @"ONNX_ORT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-1675000-rule50.gz#32";
-
-      //NET1 = @"ONNX_ORT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-1675000-rule50.16.gz";
-
-      //OK
-      //NET1 = @"ONNX_ORT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-1800000-rule50.gz#32";
-
-      //      NET1 = @"ONNX_TRT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-1675000-rule50.16.gz";
-      // ***************************
-      //      NET1 = "t12b1024h8-swa-2938k-nd";
-      //      NET1 = NET2 = "test-12b1024h8-noclipping-swa-2740000";
-
-      //NET1 = @"LC0:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-1800000-rule50.pb.gz#32";
-      //      NET1 = @"LC0:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-1800000-rule50.pb.gz#32"; // ok
-
-      // -100Elo  NET1 = @"ONNX_TRT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-1675000-rule50.16y.gz#16";
-      // -Infinite      NET1 = @"ONNX_ORT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-1675000-rule50.16y.gz#16";
-
-      //      NET1 = @"ONNX_ORT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-1675000-rule50.16y.gz#16";
-      // OK OK      NET1 = @"ONNX_TRT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-1800000-rule50.gz#32"; // ok, 71/sec
-      // OK LC0_      NET1 = "LC0:d:\\weights\\lczero.org\\BT2-768x15smolgen-12h-do-01-swa-onnx-1800000-rule50.pb.gz";
-
-      // TRT bad quality      NET1 = @"LC0:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-1675000-rule50.pb.gz#32"; // see NNEvaluatorFactory line 193
-
-      //try    NET1 = @"ONNX_TRT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-1675000-rule50.gz#16";
-
-      //      NET1 = @"ONNX_ORT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-1675000-rule50.16.gz";
 
       if (false)
       {
@@ -390,9 +243,6 @@ namespace Ceres.APIExamples
         nec2.CalcStatistics(false, 2);
         Console.WriteLine(nec2.EstNPSSingleton + " " + nec2.EstNPSBatch);
 
-        //        var nec2 = NNEvaluator.FromSpecification("ONNX_TRT:d:\\weights\\lczero.org\\BT2-768x15smolgen-12h-do-01-swa-onnx-1675000-rule50.gz#32", "GPU:0");
-        //        var nec2 = NNEvaluator.FromSpecification("ONNX_ORT:d:\\weights\\lczero.org\\BT2-768x15smolgen-12h-do-01-swa-onnx-1420000-rule50.16", "CPU");
-        //var nec2 = nec1;
         NNEvaluatorCompare nec = new NNEvaluatorCompare(nec1, nec2);
         foreach (EPDEntry epd in EPDEntry.EPDEntriesInEPDFile(@"\\synology\dev\chess\data\openings\4mvs_+90_+99.epd"))
         {
@@ -403,11 +253,6 @@ namespace Ceres.APIExamples
         }
         System.Environment.Exit(3);
       }
-      //NET2 = "t12test6-1600000";
-      //NET2 = "CUSTOM1";
-
-      //NET1 = "test-12b1024h8-noclipping-swa-3412000";
-      //NET2 = "test-12b1024h8-noclipping-swa-3142000";
 
       NNEvaluatorDef evalDef1 = NET1 == "CUSTOM1" ? new NNEvaluatorDef(NNEvaluatorType.Custom1, "703810")
                                                  : NNEvaluatorDefFactory.FromSpecification(NET1, GPUS_2);
@@ -423,29 +268,6 @@ namespace Ceres.APIExamples
       NNEvaluatorDef? evalDefSecondary2 = null;
 
 
-
-      //      public NNEvaluatorDynamic(NNEvaluator[] evaluators,
-      //                        Func<IEncodedPositionBatchFlat, int> dynamicEvaluatorIndexPredicate = null)
-
-      //evalDef1 = NNEvaluatorDefFactory.FromSpecification("ONNX:tfmodelc", "GPU:0");
-      //evalDef1 = NNEvaluatorDef.FromSpecification("703810", "GPU:0");
-
-
-      // 140 good for 203 pairs, 300 good for 100 pairs
-      //limit1 = SearchLimit.NodesForAllMoves(200_000, 500);
-      //      limit1 = SearchLimit.SecondsForAllMoves(12 + 0.12f);
-      //      limit1 = SearchLimit.NodesPerMove(1);
-      //limit1 = SearchLimit.SecondsForAllMoves(1);
-      //      limit1 = SearchLimit.NodesForAllMoves(100_000, 1000) * 1.0f;
-      //      limit1 = SearchLimit.SecondsForAllMoves(60, 0.6f);
-      //limit1 = SearchLimit.NodesPerTree(15_000);
-      //limit1 = SearchLimit.SecondsForAllMoves(30, 0.3f) * 5f;
-      //ok      limit1 = SearchLimit.NodesPerMove(350_000); try test3.pgn against T75 opponent Ceres93 (in first position, 50% of time misses win near move 12
-
-      //      SearchLimit limit2 = limit1;// * 1.18f;
-      //      limit2 = SearchLimit.NodesPerMove(1);
-      //limit2 = SearchLimit.NodesPerMove(5000);
-
       // Don't output log if very small games
       // (to avoid making very large log files or slowing down play).
       bool outputLog = true;// limitare1.EstNumNodes(500_000, false) > 10_000;
@@ -457,7 +279,6 @@ namespace Ceres.APIExamples
                                                                   null, outputLog ? "Ceres3.log.txt" : null);
 
 //      engineDefCeres1.SearchParams.ValueTemperature = 0.85f;
-
 //      engineDefCeres1.SearchParams.HistoryFillIn = false;
 
       //engineDefCeres1.OverrideLimitManager = new  Ceres.MCTS.Managers.Limits.ManagerGameLimitTest();
@@ -468,42 +289,11 @@ namespace Ceres.APIExamples
         //engineDefCeres1.SearchParams.EnableInstamoves = false;
       }
 
-      //engineDefCeres1.SelectParams.CPUCT *= 0.85f;
-      //engineDefCeres2.SelectParams.CPUCT *= 0.85f;
-
-      //      engineDefCeres1.SearchParams.BestMoveMode = ParamsSearch.BestMoveModeEnum.TopV;
-      //      engineDefCeres2.SearchParams.BestMoveMode = ParamsSearch.BestMoveModeEnum.TopV;
-
-      //engineDefCeres1.SearchParams.Execution.FlowDualSelectors = false;
-      //engineDefCeres2.SearchParams.Execution.FlowDualSelectors = false;
-
-      //AdjustSelectParamsNewTuneBR(engineDefCeres1.SelectParams);
-      //AdjustSelectParamsNewTuneBR(engineDefCeres2.SelectParams);
-      //engineDefCeres1.SelectParams.UCTNonRootDenominatorExponent = 0.95f;
-      //engineDefCeres1.SelectParams.UCTRootDenominatorExponent = 0.90f;
-
-      //engineDefCeres1.SelectParams.CPUCTFactorAtRoot *= 1.5f;
-      //engineDefCeres1.SelectParams.VirtualLossDefaultRelative = -0.06f;
-      // This was +2 Elo (+/-13) in 100 seconds games with late T60 *********************************
-      //engineDefCeres1.SelectParams.UCTRootNumeratorExponent = 0.52f;
-      //engineDefCeres1.SelectParams.UCTNonRootNumeratorExponent = 0.48f;
-
-      //      engineDefCeres1.SearchParams.MoveFutilityPruningAggressiveness *= 0.5f;
-      //      engineDefCeres2.SearchParams.MoveFutilityPruningAggressiveness *= 0;// 0.5f;
-
-      //      engineDefCeres1.SelectParams.CPUCTDualSelectorDiffFraction = 0.04f;
-
-      //engineDefCeres1.SearchParams.Execution.MaxBatchSize = 1;
-      //engineDefCeres2.SearchParams.Execution.MaxBatchSize = 1;
-      //engineDefCeres1.SearchParams.Execution.TranspositionMode = TranspositionMode.None;
-      //engineDefCeres2.SearchParams.Execution.TranspositionMode = TranspositionMode.None;
-
-      // &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
-      // engineDefCeres1.SearchParams.ActionHeadSelectionWeight = 0.001f;
-
       //engineDefCeres1.SearchParams.BestMoveMode = ParamsSearch.BestMoveModeEnum.TopQIfSufficientN;
 
-      if (true)
+//      engineDefCeres1.SearchParams.ActionHeadSelectionWeight = 0.5f;
+
+      if (false)
       {
         engineDefCeres1.SearchParams.EnableTablebases = false;
         engineDefCeres2.SearchParams.EnableTablebases = false;
@@ -513,6 +303,9 @@ namespace Ceres.APIExamples
 
         engineDefCeres1.SearchParams.TreeReuseEnabled = false;
         engineDefCeres2.SearchParams.TreeReuseEnabled = false;
+
+        engineDefCeres1.SearchParams.ReusePositionEvaluationsFromOtherTree = false;
+        engineDefCeres2.SearchParams.ReusePositionEvaluationsFromOtherTree = false;
 
         engineDefCeres1.SearchParams.Execution.SelectParallelEnabled = false;
         engineDefCeres2.SearchParams.Execution.SelectParallelEnabled = false;
