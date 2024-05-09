@@ -44,7 +44,6 @@ namespace Ceres.Chess.Positions
                                                        bool setRepetitionCounts)
     {
       Debug.Assert(priorMoves != null);
-      Debug.Assert(numPositionsFilled > 0); // expect at least root search node to have been populated
 
       // Try to do fill in of history from moves prior to the root node of the search, if available
       if (depthOfLastNodeAdded == 0)
@@ -56,10 +55,19 @@ namespace Ceres.Chess.Positions
 
         Position[] priorPositions = priorMoves.GetPositions();
         int numTaken = 0;
-        int lastPriorPositionIndex = priorPositions.Length - 2; // do not take last position (^1), this is root (already in tree)
+        int lastPriorPositionIndex;
+        if (numPositionsFilled == 0)
+        {
+          lastPriorPositionIndex = priorPositions.Length - 1;
+        }
+        else
+        {
+          // do not take last position (^1), this is root (already in tree)
+          lastPriorPositionIndex = priorPositions.Length - 2; 
+        }
         while (numPositionsFilled < maxPositions && numTaken <= lastPriorPositionIndex)
         {
-          posSpan[numPositionsFilled++] = priorPositions[priorPositions.Length - 2 - numTaken];
+          posSpan[numPositionsFilled++] = priorPositions[lastPriorPositionIndex - numTaken];
           numTaken++;
         }
       }
