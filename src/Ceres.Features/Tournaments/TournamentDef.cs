@@ -157,6 +157,11 @@ namespace Ceres.Features.Tournaments
     public int AdjudicateDrawThresholdNumMoves = 10;
 
     /// <summary>
+    /// If positions having a nonzero repetition count should immediately be scored as a draw.
+    /// </summary>
+    public bool AdjudicateDrawByRepetitionImmediately = true;
+
+    /// <summary>
     /// The index of the processor group to which the engines should be affinitized. 
     /// </summary>
     public int ProcessGroupIndex = 0;

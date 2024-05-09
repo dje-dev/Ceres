@@ -55,6 +55,7 @@ namespace Ceres.Features.Tournaments
 
     internal static TournamentGameResult TryGetGameResultIfTerminal(PositionWithHistory game, 
                                                                     bool playerIsWhite, bool useTablebasesForAdjudication,
+                                                                    bool adjudicateDrawByRepetitionImmediately,
                                                                     out TournamentGameResultReason reason)
     {
       reason = default;
@@ -88,6 +89,12 @@ namespace Ceres.Features.Tournaments
             return TournamentGameResult.Draw;
           }
         }
+      }
+
+      if (adjudicateDrawByRepetitionImmediately && pos.MiscInfo.RepetitionCount > 0)
+      {
+        reason = TournamentGameResultReason.Repetition;
+        return TournamentGameResult.Draw;
       }
 
       GameResult terminalStatus = pos.CalcTerminalStatus();

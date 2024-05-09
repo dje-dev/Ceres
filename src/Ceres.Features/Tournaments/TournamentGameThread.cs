@@ -710,7 +710,8 @@ namespace Ceres.Features.Tournaments
 
         // Check for terminal result (tablebase or intrinsically terminal)
         TournamentGameResultReason reason;
-        result = TournamentUtils.TryGetGameResultIfTerminal(curPositionAndMoves, !engine2IsWhite, useTablebasesForAdjudication, out reason);
+        result = TournamentUtils.TryGetGameResultIfTerminal(curPositionAndMoves, !engine2IsWhite, useTablebasesForAdjudication, 
+                                                            Def.AdjudicateDrawByRepetitionImmediately, out reason);
         if (result != TournamentGameResult.None)
         {
           return MakeGameInfo(result, reason);
