@@ -312,6 +312,43 @@ namespace Ceres.Chess.EncodedPositions
     public readonly PositionWithHistory ToPositionWithHistory(int maxHistoryPositions) => PositionWithBoards.ToPositionWithHistory(maxHistoryPositions);
 
 
+    #region Miscellaneous
+
+    /// <summary>
+    /// Returns the move played between two history boards.
+    /// </summary>
+    /// <param name="priorIndex"></param>
+    /// <param name="curIndex"></param>
+    /// <returns></returns>
+    public readonly MGMove MoveBetweenHistoryPositions(int priorIndex, int curIndex)
+    {
+      if (priorIndex < curIndex)
+      {
+        throw new Exception("priorIndex must be greater than curIndex");
+      }
+
+      Position curPos = PositionWithBoards.HistoryPosition(curIndex);
+      Position priorPos = PositionWithBoards.HistoryPosition(priorIndex);
+
+      MGMoveList moves = new MGMoveList();
+      MGMoveGen.GenerateMoves(priorPos.ToMGPosition, moves);
+
+      // Iterate thru legal moves to find a move
+      // such that after applying it to priorPos, we get curPos.
+      for (int i = 0; i < moves.NumMovesUsed; i++)
+      {
+        Position newPos = priorPos.AfterMove(MGMoveConverter.ToMove(moves.MovesArray[i]));
+        if (newPos.PiecesEqual(curPos))
+        {
+          return moves.MovesArray[i];
+        }
+      }
+
+      throw new Exception($"No legal move found which transitions between history positions {priorIndex} and {curIndex}");
+    }
+
+    #endregion
+
     #region Overrides
 
     public readonly override bool Equals(object obj)
