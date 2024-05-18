@@ -129,7 +129,11 @@ namespace Ceres.Chess.LC0.Batches
       }
     }
 
-    Memory<Half[]> IEncodedPositionBatchFlat.States { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+    Memory<Half[]> IEncodedPositionBatchFlat.States 
+    {
+      get => Parent.States.IsEmpty ? default : Parent.States.Slice(StartIndex, Length);
+      set => value.CopyTo(Parent.States);      
+    }
   }
 
 }
