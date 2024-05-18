@@ -15,8 +15,8 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
+
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
 
@@ -63,7 +63,17 @@ namespace Ceres.Chess.Positions
     /// <summary>
     /// Total number of positions in history.
     /// </summary>
-    public int Count => positions.Length;
+    public int Count
+    {
+      get 
+      {
+        if (!haveFinalized)
+        {
+          InitPositionsAndFinalPosMG();
+        }
+        return positions.Length;
+      }
+    }
 
     #endregion
 
