@@ -123,7 +123,7 @@ namespace Ceres.Chess.LC0NetInference
     /// <param name="debuggingDump"></param>
     /// <param name="alreadyConvertedToLZ0"></param>
     /// <returns></returns>
-    public ONNXRuntimeExecutorResultBatch Execute(bool isWDL, 
+    public ONNXRuntimeExecutorResultBatch Execute(bool isWDL, bool hasState,
                                                   Memory<float> flatValuesPrimary, Memory<float> flatValuesSecondary, int numPositionsUsed, 
                                                   bool debuggingDump = false, bool alreadyConvertedToLZ0 = false,
                                                   float tpgDivisor = 1)
@@ -159,7 +159,7 @@ namespace Ceres.Chess.LC0NetInference
 
       if (NetType == NetTypeEnum.TPG)
       {
-        const int NUM_INPUTS = 2; // assume state present
+        int NUM_INPUTS = hasState ? 2 : 1; // assume state present
         (Memory<float> input, int[] shape)[] inputs = new (Memory<float> input, int[] shape)[NUM_INPUTS];
         if (tpgDivisor != 1.0f)
         {

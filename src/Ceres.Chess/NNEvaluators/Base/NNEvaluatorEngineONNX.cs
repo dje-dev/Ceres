@@ -453,7 +453,7 @@ namespace Chess.Ceres.NNEvaluators
       {
         lock (Executor)
         {
-          result = Executor.Execute(IsWDL, flatValuesPrimary, flatValuesSecondary, numPos, alreadyConvertedToLZ0: true, tpgDivisor:tpgDivisor);
+          result = Executor.Execute(IsWDL, HasState, flatValuesPrimary, flatValuesSecondary, numPos, alreadyConvertedToLZ0: true, tpgDivisor:tpgDivisor);
 
           // Apply move masking
           if (posMoveIsLegal != null) 
