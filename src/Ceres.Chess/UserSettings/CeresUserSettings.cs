@@ -42,6 +42,11 @@ namespace Ceres.Chess.UserSettings
     public string DirLC0Networks { get; set; } = ".";
 
     /// <summary>
+    /// Directory in which Ceres network weights files are located
+    /// </summary>
+    public string DirCeresNetworks { get; set; } = ".";
+    
+    /// <summary>
     /// Directory in which EPD files are located.
     /// </summary>
     public string DirEPD { get; set; } = ".";
