@@ -234,7 +234,7 @@ namespace Ceres.Chess.NNEvaluators.CUDA
       NNEvaluatorStats.UpdateStatsForBatch(GPUID, numPositions);
     }
 
-    public override IPositionEvaluationBatch DoEvaluateIntoBuffers(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
+    protected override IPositionEvaluationBatch DoEvaluateIntoBuffers(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
     {
       StartEvaluateIntoBuffers(positions, positions.NumPos, retrieveSupplementalResults);
       const bool COPY_RESULTS = false;

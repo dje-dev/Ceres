@@ -330,7 +330,7 @@ namespace Chess.Ceres.NNEvaluators
     /// <param name="batch"></param>
     /// <param name="retrieveSupplementalResults"></param>
     /// <returns></returns>
-    public override IPositionEvaluationBatch DoEvaluateIntoBuffers(IEncodedPositionBatchFlat batch, bool retrieveSupplementalResults = false)
+    protected override IPositionEvaluationBatch DoEvaluateIntoBuffers(IEncodedPositionBatchFlat batch, bool retrieveSupplementalResults = false)
     {
       if (Executor.NetType == ONNXRuntimeExecutor.NetTypeEnum.TPG)
       {

@@ -58,14 +58,18 @@ namespace Ceres.Chess.NNEvaluators
     /// <param name="positions"></param>
     /// <param name="retrieveSupplementalResults"></param>
     /// <returns></returns>
-    public override IPositionEvaluationBatch DoEvaluateIntoBuffers(IEncodedPositionBatchFlat positions, 
+    protected override IPositionEvaluationBatch DoEvaluateIntoBuffers(IEncodedPositionBatchFlat positions, 
                                                                    bool retrieveSupplementalResults = false)
     {
       int index;
       if (DynamicEvaluatorIndexPredicate != null)
+      {
         index = DynamicEvaluatorIndexPredicate(positions);
+      }
       else
+      {
         index = positions.PreferredEvaluatorIndex;
+      }
 
       return Evaluators[index].EvaluateIntoBuffers(positions, retrieveSupplementalResults);
     }

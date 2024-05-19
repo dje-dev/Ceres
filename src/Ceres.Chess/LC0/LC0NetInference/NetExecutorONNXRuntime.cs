@@ -1,12 +1,3 @@
-#define FEATURE_ONNX
-#if NOT
-// requires packages: (actually, probably possible and best to install the Gpu package only)
-// NOTE: the Gpu version may have a dependency on a specific version of CUDA \
-//       and fail to load onnxruntime.dll otherwise
-    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.7.0" />
-    <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu" Version="1.7.1" />
-    <PackageReference Include="Microsoft.ML.OnnxRuntime.Managed" Version="1.7.1" />
-#endif
 #region License notice
 
 /*
@@ -20,13 +11,11 @@
 
 #endregion
 
-#define CUDA 
-
 #region Using directives
 
 using System;
-using System.Collections.Generic;
 using System.IO;
+using System.Collections.Generic;
 using System.Numerics.Tensors;
 using System.Runtime.InteropServices;
 
@@ -35,9 +24,7 @@ using Microsoft.ML.OnnxRuntime.Tensors;
 
 using Ceres.Base.CUDA;
 using Chess.Ceres.NNEvaluators;
-
-#if FEATURE_ONNX
-#endif
+using Ceres.Base.Benchmarking;
 
 #endregion
 
@@ -60,12 +47,10 @@ namespace Ceres.Chess.LC0NetInference
     /// </summary>
     public readonly String ONNXFileName;
 
-#if FEATURE_ONNX
     /// <summary>
     /// Underlying ONNX runtime session
     /// </summary>
     public readonly InferenceSession Session;
-#endif
 
     /// <summary>
     /// ID (index) of GPU to use
@@ -95,7 +80,6 @@ namespace Ceres.Chess.LC0NetInference
     {
       // https://codechina.csdn.net/mirrors/microsoft/onnxruntime/-/blob/skottmckay/CreateHelperForGeneratingIdsForUseInCompilingEPs/docs/execution_providers/TensorRT-ExecutionProvider.md
       //     if (gpuID < 0 || gpuID > 16) throw new Exception($"Invalid GPU ID { gpuID}");
-#if FEATURE_ONNX
       ONNXFileName = onnxFileName;
       if (onnxFileName == null && onnxModelBytes == null)
       {
@@ -133,7 +117,7 @@ namespace Ceres.Chess.LC0NetInference
       }
       else if (useTRT)
       {
-        const bool USE_DML = false; // NOTE: this is not working for unknown reasons
+        const bool USE_DML = false; // This likely requires different ONNXRuntime nuget package
         if (USE_DML)
         {
           so = new SessionOptions();
@@ -146,23 +130,20 @@ namespace Ceres.Chess.LC0NetInference
           // TODO: this code has no effect for unknown reasons.
           var providerOptionsDict = new Dictionary<string, string>();
           providerOptionsDict["device_id"] = gpuID.ToString(); ;
+          providerOptionsDict["trt_max_workspace_size"] = "2147483648";
           providerOptionsDict["trt_engine_cache_enable"] = "1";
           providerOptionsDict["trt_engine_cache_path"] = directoryName;
           providerOptionsDict["trt_fp16_enable"] = Precision == NNEvaluatorPrecision.FP16 ? "1" : "0";
-          providerOptionsDict["trt_dla_enable"] = "1";
-
-          trtProviderOptions.UpdateOptions(providerOptionsDict);
-
-          so = SessionOptions.MakeSessionOptionWithTensorrtProvider(trtProviderOptions);
-
-//'trt_max_workspace_size': 2147483648,
-//'trt_dla_enable': False,
+//          providerOptionsDict["trt_cuda_graph_enable"] = "1"; // NOTE: may fail, requires entire graph to map onto ONNX nodes (?)
 
           // TODO: Someday remove this. In theory, the above two assignments should work (but seems to be ignored).
           // WARNING: This makes a global change that could impact other threads. ****************
           Environment.SetEnvironmentVariable("ORT_TENSORRT_ENGINE_CACHE_ENABLE", "1");
           Environment.SetEnvironmentVariable("ORT_TENSORRT_CACHE_PATH", directoryName);
           Environment.SetEnvironmentVariable("ORT_TENSORRT_FP16_ENABLE", Precision == NNEvaluatorPrecision.FP16 ? "1" : "0");
+
+          trtProviderOptions.UpdateOptions(providerOptionsDict);
+          so = SessionOptions.MakeSessionOptionWithTensorrtProvider(trtProviderOptions);
         }
       }
       else
@@ -215,13 +196,9 @@ namespace Ceres.Chess.LC0NetInference
 
       lock (CUDADevice.InitializingCUDAContextLockObj)
       {
-        Session = new InferenceSession(onnxModelBytes, so);
+        using (new TimingBlock("Session create"))
+          Session = new InferenceSession(onnxModelBytes, so);
       }
-
-#else
-      throw new Exception("NetExecutorONNXRuntine feature is not enabled.");
-#endif
-
     }
 
 
@@ -233,7 +210,6 @@ namespace Ceres.Chess.LC0NetInference
     /// <returns></returns>
     public List<(string, float[])> Run((Memory<float> input, int[] shape)[] inputs, bool float16)
     {
-#if FEATURE_ONNX
       // Determine input name
       // NOTE: experienced strange lowlevel crash when tried to break out this into name retrieval into a separate method
       string inputName = null;
@@ -308,10 +284,6 @@ namespace Ceres.Chess.LC0NetInference
       {
         return RunFloat(inputsONNX);
       }
-
-#else
-      return default;
-#endif
     }
 
 

@@ -107,7 +107,7 @@ namespace Chess.Ceres.NNEvaluators.TensorRT
     }
 
 
-    public override IPositionEvaluationBatch DoEvaluateIntoBuffers(IEncodedPositionBatchFlat batch, bool retrieveSupplementalResults = false) // ** MAKE VIRTUAL
+    protected override IPositionEvaluationBatch DoEvaluateIntoBuffers(IEncodedPositionBatchFlat batch, bool retrieveSupplementalResults = false) // ** MAKE VIRTUAL
     {
       if (RetrieveValueFCActivations != retrieveSupplementalResults) throw new Exception("Value of parameter " + retrieveSupplementalResults + " does not math constructor configuration");
       return EvaluateBatch(batch, batch.NumPos, false, retrieveValueFCActivations: retrieveSupplementalResults);

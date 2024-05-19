@@ -236,7 +236,7 @@ namespace Ceres.Chess.NNEvaluators
     short[] priorMoveIndices = null;
     short[] priorNumMoves = null;
 
-    public override IPositionEvaluationBatch DoEvaluateIntoBuffers(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
+    protected override IPositionEvaluationBatch DoEvaluateIntoBuffers(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
     {
       priorPositions = null;
 

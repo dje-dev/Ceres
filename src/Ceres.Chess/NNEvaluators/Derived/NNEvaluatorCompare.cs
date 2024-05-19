@@ -13,11 +13,11 @@
 
 #region Using directives
 
+using System;
+
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.LC0.Batches;
 using Ceres.Chess.NetEvaluation.Batch;
-using System;
-using System.Collections.Generic;
 
 #endregion
 
@@ -108,15 +108,16 @@ namespace Ceres.Chess.NNEvaluators
     float sumValue0Err = 0;
     float sumValue1Err = 0;
 
+
     /// <summary>
     /// Evaluates specified batch into internal buffers.
     /// </summary>
     /// <param name="positions"></param>
     /// <param name="retrieveSupplementalResults"></param>
     /// <returns></returns>
-    public override IPositionEvaluationBatch DoEvaluateIntoBuffers(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
+    protected override IPositionEvaluationBatch DoEvaluateIntoBuffers(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
     {
-      IPositionEvaluationBatch result = base.DoEvaluateIntoBuffers(positions, retrieveSupplementalResults);
+      IPositionEvaluationBatch result = base.EvaluateIntoBuffers(positions, retrieveSupplementalResults);
 
       static string ErrMagnitudes(float eval0, float eval1, float evalRef, 
                                   ref float sumErr0, ref float sumErr1, ref int count)

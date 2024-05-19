@@ -120,8 +120,8 @@ namespace Ceres.Chess.NNEvaluators
       return EngineNetworkID == evaluator.EngineNetworkID;
     }
 
-        
-    public override IPositionEvaluationBatch DoEvaluateIntoBuffers(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
+
+    protected override IPositionEvaluationBatch DoEvaluateIntoBuffers(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
     {
       if (retrieveSupplementalResults) throw new NotImplementedException("retrieveSupplementalResults not supported");
 
