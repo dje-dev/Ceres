@@ -32,7 +32,9 @@ namespace Ceres.Chess.NNEvaluators.Defs
       NNNetSpecificationString netObj = new NNNetSpecificationString(netSpecification);
       NNDevicesSpecificationString deviceObj = new NNDevicesSpecificationString(deviceSpecification);
       
-      return new NNEvaluatorDef(netObj.ComboType, netObj.NetDefs, deviceObj.ComboType, deviceObj.Devices, deviceObj.SharingName);
+      NNEvaluatorDef ret = new NNEvaluatorDef(netObj.ComboType, netObj.NetDefs, deviceObj.ComboType, deviceObj.Devices, deviceObj.SharingName);
+      ret.OptionsString = netObj.OptionsString;
+      return ret;
     }
 
     public static NNEvaluatorDef SingleNet(string netID, NNEvaluatorType evaluatorType, string sharedName, int[] gpuIDs)

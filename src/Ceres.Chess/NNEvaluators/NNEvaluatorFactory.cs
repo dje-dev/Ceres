@@ -79,6 +79,7 @@ namespace Ceres.Chess.NNEvaluators
       persistentEvaluators.Remove(evaluator.PersistentID);
     }
 
+
     /// <summary>
     /// Constructs an evaluator based on specified definition,
     /// optionally setting an associated (already initialized) 
@@ -88,6 +89,18 @@ namespace Ceres.Chess.NNEvaluators
     /// <param name="referenceEvaluator"></param>
     /// <returns></returns>
     public static NNEvaluator BuildEvaluator(NNEvaluatorDef def, NNEvaluator referenceEvaluator = null)
+    {
+      NNEvaluator evaluator = BuildEvaluatorCore(def, referenceEvaluator);
+      if (def.OptionsString != null)
+      {
+        evaluator = new NNEvaluatorRemapped(evaluator, def.OptionsString);
+      }
+
+      return evaluator;
+    }
+
+
+    public static NNEvaluator BuildEvaluatorCore(NNEvaluatorDef def, NNEvaluator referenceEvaluator = null)
     {
       if (def.IsShared)
       {

@@ -109,52 +109,6 @@ namespace Ceres.Chess.NetEvaluation.Batch
     #endregion
 
 
-    public void RewriteWDLToBlendedValueAction()
-    {
-      for (int i = 0; i < NumPos; i++)
-      {
-        (float w, float d, float l) = WDLBlendedValueAction(i);
-        W.Span[i] = (FP16)w;
-        L.Span[i] = (FP16)l;
-      } 
-    }
-
-    (float w, float d, float l) WDLBlendedValueAction(int index)
-    {
-      throw new NotImplementedException();
-#if NOT
-      float w = W.Span[index];
-      float l = L.Span[index];
-      float d= 1 - w - l; 
-
-      (EncodedMove Move, float Probability) bestPolicy = Policies.Span[index].PolicyInfoAtIndex(0);
-      int bestPolicyIndex = bestPolicy.Move.IndexNeuralNet;
-      (float wA, float dA, float lA) = GetA(index, bestPolicyIndex);
-
-      (EncodedMove Move, float Probability) secondBestPolicy = Policies.Span[index].PolicyInfoAtIndex(1);
-      if (secondBestPolicy.Probability > 0 
-        && (bestPolicy.Probability - secondBestPolicy.Probability) < 0.025)
-      {
-        (float w, float d, float l) secondBestA = GetA(index, secondBestPolicy.Move.IndexNeuralNet);
-        const bool USE_SECOND_POLICY = false; // worse?
-        if (USE_SECOND_POLICY)
-        {
-          wA = 0.5f + wA + 0.5f * secondBestA.w;
-          dA = 0.5f + dA + 0.5f * secondBestA.d;
-          lA = 0.5f + lA + 0.5f * secondBestA.l;
-        } 
-      }
-
-      const float WEIGHT_A = 0.5f;
-      const float WEIGHT_P = 1 - WEIGHT_A;
-
-      return (w * WEIGHT_P + wA * WEIGHT_A, 
-              d * WEIGHT_P + dA * WEIGHT_A, 
-              l * WEIGHT_P + lA * WEIGHT_A);
-#endif
-    }
-
-
     /// <summary>
     /// Returns the net win probability (V) from the value head for the position at a specified index in the batch.
     /// </summary>

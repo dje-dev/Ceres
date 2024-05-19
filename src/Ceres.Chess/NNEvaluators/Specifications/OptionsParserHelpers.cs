@@ -40,6 +40,11 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
     // This character chosen because it is one of the few that does not have a special meaning in Linux.
     const string CHAR_ALIAS = "~";
 
+    /// <summary>
+    /// The "|" character delimites the beginning of a possible options string.
+    /// </summary>
+    const string CHAR_OPTIONS = "|";
+
 
     internal static (string options, List<(string netID, NNEvaluatorType type, NNEvaluatorPrecision precision, float wtValue, float wtValue2, float wtPolicy, float wtMLH, float wtUncertainty)>)
       ParseNetworkOptions(string netSpecStr)
@@ -47,11 +52,10 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
       string optionsString = null;
 
       // Split off the options string if present.
-      const string OPTIONS_DELIMITER = "|";
-      string[] parts = netSpecStr.Split(OPTIONS_DELIMITER);
+      string[] parts = netSpecStr.Split(CHAR_OPTIONS);
       if (parts.Length > 2)
       {
-        throw new Exception("Network specification must have at most one | character to separate netID from options");
+        throw new Exception("Network specification must have at most one " + CHAR_OPTIONS + " character to separate netID from options");
       }
       else if (parts.Length == 2)
       {

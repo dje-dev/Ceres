@@ -74,6 +74,12 @@ namespace Ceres.Chess.NNEvaluators.Defs
     public bool RetrieveSupplementalLayers = false;
 
     /// <summary>
+    /// Optional string containing arbitrary additional options.
+    /// </summary>
+    public string OptionsString { get; set;}
+
+
+    /// <summary>
     /// Caching mode (if evaluations are saved to memory and/or disk).
     /// </summary>
     public PositionEvalCache.CacheMode CacheMode = PositionEvalCache.CacheMode.None;
