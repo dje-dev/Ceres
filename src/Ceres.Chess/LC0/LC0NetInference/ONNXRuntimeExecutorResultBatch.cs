@@ -14,7 +14,7 @@
 #region Using directives
 
 using System;
-
+using System.Diagnostics;
 using Ceres.Base.DataTypes;
 using Ceres.Base.Math;
 using Ceres.Chess.LC0.Batches;
@@ -74,12 +74,18 @@ namespace Ceres.Chess.LC0NetInference
     /// <param name="values"></param>
     /// <param name="policyLogisticVectors"></param>
     /// <param name="draws"></param>
-    public ONNXRuntimeExecutorResultBatch(bool isWDL, FP16[] values, FP16[] values2, float[] policyLogisticVectors, 
-                                          float[] mlh, float[] uncertaintyV, float[][] valueFCActiviations, 
+    public ONNXRuntimeExecutorResultBatch(bool isWDL, FP16[] values, FP16[] values2, float[] policyLogisticVectors,
+                                          float[] mlh, float[] uncertaintyV, float[][] valueFCActiviations,
                                           FP16[] actionLogisticVectors, int numPositionsUsed)
     {
       ValuesRaw = values;
       Values2Raw = values2;
+
+      Debug.Assert(!FP16.IsNaN(values[0]));
+      if (isWDL)
+      { 
+        Debug.Assert(!FP16.IsNaN(values[1]) && !FP16.IsNaN(values[2]));
+      }
 
       PolicyVectors = policyLogisticVectors; // still in logistic form
       ActionLogisticVectors = actionLogisticVectors; // still in logistic form
