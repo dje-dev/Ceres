@@ -137,13 +137,19 @@ namespace Ceres.Chess.EncodedPositions
     /// </summary>
     public readonly short BestIndex;
 
-    // originally: public readonly long Reserved; [8348]
-    public readonly float Unused1;
-    public readonly float Unused2;
+    /// <summary>
+    /// Kullback-Leibler divergence between policy head and visits in nats (originally was unused) [8348] 
+    /// </summary>
+    public readonly float KLDPolicy; 
+
+    public readonly float Unused2; // [8350]
 
 
     #region Helper methods
 
+    /// <summary>
+    /// Value head output (WDL) at root node .
+    /// </summary>
     public (float w, float d, float l) OriginalWDL
     {
       get
@@ -252,18 +258,6 @@ namespace Ceres.Chess.EncodedPositions
       }
     }
 
-    /// <summary>
-    /// Overwrites the value of Unused1.
-    /// WARNING: is unsafe.
-    /// </summary>
-    /// <param name="miscInfo"></param>
-    public unsafe void SetUnused1(float value)
-    {
-      fixed (float* p = &Unused1)
-      {
-        *p = value;
-      }
-    }
 
     /// <summary>
     /// Overwrites the value of Unused2.
@@ -325,7 +319,7 @@ namespace Ceres.Chess.EncodedPositions
       NumVisits = numVisits;
       PlayedIndex = playedIndex;
       BestIndex = bestIndex;
-      Unused1 = unused1;
+      Unused2 = unused1;
       Unused2 = unused2;
     }
 

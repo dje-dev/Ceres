@@ -187,7 +187,7 @@ namespace Ceres.Chess.EncodedPositions
                     // Find the start of the next game to know how long this game is.
                     int nextStartIndex = curIndex + 1;
                     while (nextStartIndex < numRead
-                        && positionsBufferCompressed[nextStartIndex].PositionWithBoards.MiscInfo.InfoTraining.Unused1 != EncodedTrainingPositionCompressedConverter.SENTINEL_MARK_FIRST_MOVE_IN_GAME_IN_UNUSED1)
+                        && positionsBufferCompressed[nextStartIndex].PositionWithBoards.MiscInfo.InfoTraining.Unused2 != EncodedTrainingPositionCompressedConverter.SENTINEL_MARK_FIRST_MOVE_IN_GAME_IN_UNUSED1)
                     {
                       nextStartIndex++;
                     }
@@ -203,7 +203,7 @@ namespace Ceres.Chess.EncodedPositions
 
                     if (!filterOutFRCGames || !ret.IsFRCGame)
                     {
-                      gamePositions.Span[0].PositionWithBoards.MiscInfo.InfoTraining.SetUnused1(0); // reset the sentinel
+                      gamePositions.Span[0].PositionWithBoards.MiscInfo.InfoTraining.SetUnused2(0); // reset the sentinel
                       yield return ret;
 
                     }

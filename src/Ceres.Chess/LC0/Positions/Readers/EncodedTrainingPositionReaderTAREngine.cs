@@ -241,7 +241,7 @@ namespace Ceres.Chess.EncodedPositions
                   throw new Exception("Stream contained no data, expected EncodedTrainingPosition");
                 }
 
-                bool isPackedGames = positionsBuffer[0].PositionWithBoards.MiscInfo.InfoTraining.Unused1 == EncodedTrainingPositionCompressedConverter.SENTINEL_MARK_FIRST_MOVE_IN_GAME_IN_UNUSED1;
+                bool isPackedGames = positionsBuffer[0].PositionWithBoards.MiscInfo.InfoTraining.Unused2 == EncodedTrainingPositionCompressedConverter.SENTINEL_MARK_FIRST_MOVE_IN_GAME_IN_UNUSED1;
                 if (!isPackedGames)
                 {
                   // Single game, not packed with multiple.
@@ -256,14 +256,14 @@ namespace Ceres.Chess.EncodedPositions
                     // Find the start of the next game to know how long this game is.
                     int nextStartIndex = curIndex + 1;
                     while (nextStartIndex < numRead 
-                        && positionsBuffer[nextStartIndex].PositionWithBoards.MiscInfo.InfoTraining.Unused1 != EncodedTrainingPositionCompressedConverter.SENTINEL_MARK_FIRST_MOVE_IN_GAME_IN_UNUSED1)
+                        && positionsBuffer[nextStartIndex].PositionWithBoards.MiscInfo.InfoTraining.Unused2 != EncodedTrainingPositionCompressedConverter.SENTINEL_MARK_FIRST_MOVE_IN_GAME_IN_UNUSED1)
                     {
                       nextStartIndex++;
                     }
 
                     int lengthThisGame = nextStartIndex - curIndex;
                     Memory<EncodedTrainingPosition> thisGame = new Memory<EncodedTrainingPosition>(positionsBuffer, curIndex, lengthThisGame);
-                    thisGame.Span[0].PositionWithBoards.MiscInfo.InfoTraining.SetUnused1(0); // reset the sentinel
+                    thisGame.Span[0].PositionWithBoards.MiscInfo.InfoTraining.SetUnused2(0); // reset the sentinel
                     yield return thisGame;
 
                     curIndex = nextStartIndex;
