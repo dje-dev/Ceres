@@ -207,13 +207,8 @@ namespace Ceres.Chess.NNEvaluators.Defs
     public NNEvaluatorDef(NNEvaluatorType netType, string networkID,
                           NNDeviceType deviceType = NNDeviceType.GPU, int deviceIndex = 0, string sharedName = null)
     {
-      if (networkID == null)
-      {
-        throw new ArgumentNullException(nameof(networkID));
-      }
-
-      Devices = new (NNEvaluatorDeviceDef, float)[] { (new NNEvaluatorDeviceDef(deviceType, deviceIndex), 1.0f) };
-      Nets = new (NNEvaluatorNetDef net, float weightValue, float weightValue2, float weightPolicy, float weightM, float uncertainty)[] { (new NNEvaluatorNetDef(networkID, netType, NNEvaluatorPrecision.FP16), 1.0f, 1.0f, 1.0f, 1.0f, 1.0f) };
+      Devices = [(new NNEvaluatorDeviceDef(deviceType, deviceIndex), 1.0f)];
+      Nets = [(new NNEvaluatorNetDef(networkID, netType, NNEvaluatorPrecision.FP16), 1.0f, 1.0f, 1.0f, 1.0f, 1.0f)];
       DeviceCombo = NNEvaluatorDeviceComboType.Single;
       SharedName = sharedName;
     }
@@ -244,7 +239,7 @@ namespace Ceres.Chess.NNEvaluators.Defs
     public NNEvaluatorDef(NNEvaluatorNetDef net, string sharedName = null, params (NNEvaluatorDeviceDef deviceDef, float fraction)[] devices)
     {
       Devices = devices.ToArray();
-      Nets = new (NNEvaluatorNetDef net, float weightValue, float weightValue2, float weightPolicy, float weightM, float uncertainty)[] { (net, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f) };
+      Nets = [(net, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f)];
       DeviceCombo = devices.Length == 0 ? NNEvaluatorDeviceComboType.Single : NNEvaluatorDeviceComboType.Pooled;
       SharedName = sharedName;
     }
@@ -255,7 +250,7 @@ namespace Ceres.Chess.NNEvaluators.Defs
       Devices = devices.ToArray();
       DeviceCombo = deviceCombo;
 
-      Nets = new (NNEvaluatorNetDef net, float weightValue, float weightValue2, float weightPolicy, float weightM, float uncertainty)[] { (net, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f) };
+      Nets = [(net, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f)];
       NetCombo = NNEvaluatorNetComboType.Single;
       SharedName = sharedName;
     }
@@ -266,7 +261,7 @@ namespace Ceres.Chess.NNEvaluators.Defs
       Nets = netDefs;
 
       DeviceCombo = NNEvaluatorDeviceComboType.Single;
-      Devices = new (NNEvaluatorDeviceDef device, float fraction)[] { (device, 1) };
+      Devices = [(device, 1)];
       SharedName = sharedName;
     }
 
