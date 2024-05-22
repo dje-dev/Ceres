@@ -50,11 +50,6 @@ namespace Ceres.Chess.EncodedPositions
         dst.SetInputFormat(src.InputFormat);
         DecompressPolicy(in src.Policies, ref Unsafe.AsRef(dst.Policies));
         dst.SetPositionWithBoards(in src.PositionWithBoards);
-
-        if (dst.PositionWithBoards.MiscInfo.InfoTraining.Unused2 == EncodedTrainingPositionCompressedConverter.SENTINEL_MARK_FIRST_MOVE_IN_GAME_IN_UNUSED1)
-        {
-//          Console.WriteLine("sentinel at " + i);
-        }
       }
     }
 
