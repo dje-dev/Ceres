@@ -241,7 +241,7 @@ namespace Ceres.Chess.EncodedPositions
                   throw new Exception("Stream contained no data, expected EncodedTrainingPosition");
                 }
 
-                bool isPackedGames = positionsBuffer[0].PositionWithBoards.MiscInfo.InfoTraining.Unused2 == EncodedTrainingPositionCompressedConverter.SENTINEL_MARK_FIRST_MOVE_IN_GAME_IN_UNUSED1;
+                bool isPackedGames = EncodedTrainingPositionCompressedConverter.IsMarkedFirstMoveInGame(in positionsBuffer[0]);
                 if (!isPackedGames)
                 {
                   // Single game, not packed with multiple.
@@ -255,8 +255,7 @@ namespace Ceres.Chess.EncodedPositions
                   {
                     // Find the start of the next game to know how long this game is.
                     int nextStartIndex = curIndex + 1;
-                    while (nextStartIndex < numRead 
-                        && positionsBuffer[nextStartIndex].PositionWithBoards.MiscInfo.InfoTraining.Unused2 != EncodedTrainingPositionCompressedConverter.SENTINEL_MARK_FIRST_MOVE_IN_GAME_IN_UNUSED1)
+                    while (nextStartIndex < numRead && !EncodedTrainingPositionCompressedConverter.IsMarkedFirstMoveInGame(in positionsBuffer[nextStartIndex]))
                     {
                       nextStartIndex++;
                     }

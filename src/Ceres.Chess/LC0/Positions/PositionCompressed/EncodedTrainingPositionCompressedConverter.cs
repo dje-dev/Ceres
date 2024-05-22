@@ -33,6 +33,29 @@ namespace Ceres.Chess.EncodedPositions
     // with a sentinel value so the can be unchunked.
     public const float SENTINEL_MARK_FIRST_MOVE_IN_GAME_IN_UNUSED1 = 999;
 
+
+    /// <summary>
+    /// If the position is marked with a sentinel as the first move in a game.
+    /// NOTE: similar to the method below.
+    /// </summary>
+    /// <param name="pos"></param>
+    /// <returns></returns>
+    public static bool IsMarkedFirstMoveInGame(in EncodedTrainingPositionCompressed pos)
+     => pos.PositionWithBoards.MiscInfo.InfoTraining.Unused2 == SENTINEL_MARK_FIRST_MOVE_IN_GAME_IN_UNUSED1;
+
+
+    /// <summary>
+    /// If the position is marked with a sentinel as the first move in a game.
+    /// NOTE: similar to the method above.
+    /// </summary>
+    /// <param name="pos"></param>
+    /// <returns></returns>
+    public static bool IsMarkedFirstMoveInGame(in EncodedTrainingPosition pos)
+     => pos.PositionWithBoards.MiscInfo.InfoTraining.Unused2 == SENTINEL_MARK_FIRST_MOVE_IN_GAME_IN_UNUSED1;
+
+
+
+
     /// <summary>
     /// Decompresses array of compressed training positions to uncompressed training positions.
     /// </summary>

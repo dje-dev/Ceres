@@ -187,7 +187,7 @@ namespace Ceres.Chess.EncodedPositions
                     // Find the start of the next game to know how long this game is.
                     int nextStartIndex = curIndex + 1;
                     while (nextStartIndex < numRead
-                        && positionsBufferCompressed[nextStartIndex].PositionWithBoards.MiscInfo.InfoTraining.Unused2 != EncodedTrainingPositionCompressedConverter.SENTINEL_MARK_FIRST_MOVE_IN_GAME_IN_UNUSED1)
+                        && !EncodedTrainingPositionCompressedConverter.IsMarkedFirstMoveInGame(in positionsBufferCompressed[nextStartIndex]))
                     {
                       nextStartIndex++;
                     }
