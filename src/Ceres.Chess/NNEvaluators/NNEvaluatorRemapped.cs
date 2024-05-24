@@ -89,17 +89,28 @@ namespace Ceres.Chess.NNEvaluators
       Span<FP16> l = batch.L.Span;
 
       // TODO: remove this from ParamsSearch
-
       for (int i = 0; i < batch.NumPos; i++)
       {
         (float winPRaw, float drawPRaw, float lossPRaw) = (w[i], 1 - w[i] - l[i], l[i]);
-        (float winPRawLogit, float drawPRawLogit, float lossPRawLogit) = (MathF.Log(winPRaw) / Temperature, 
-                                                                          MathF.Log(drawPRaw) / Temperature, 
-                                                                          MathF.Log(lossPRaw) / Temperature);
-        (float winPAdj, float drawPAdj, float lossPAdj) = (MathF.Exp(winPRawLogit), MathF.Exp(drawPRawLogit), MathF.Exp(lossPRawLogit));
-        float sum = winPAdj + drawPAdj + lossPAdj;
-        w[i] = (FP16)(winPAdj / sum);
-        l[i] = (FP16)(lossPAdj / sum);
+        float winRaw = Math.Clamp((float)w[i], 1e-7f, 1f - 1e-7f); // Clamp to avoid log(0)
+        float lossRaw = Math.Clamp((float)l[i], 1e-7f, 1f - 1e-7f);
+        float drawRaw = 1 - winRaw - lossRaw;
+        drawRaw = Math.Clamp(drawRaw, 1e-7f, 1f - 1e-7f);
+
+        // Calculate logits
+        float winLogit = MathF.Log(winRaw) / Temperature;
+        float drawLogit = MathF.Log(drawRaw) / Temperature;
+        float lossLogit = MathF.Log(lossRaw) / Temperature;
+
+        // Calculate adjusted probabilities
+        float winAdj = MathF.Exp(winLogit);
+        float drawAdj = MathF.Exp(drawLogit);
+        float lossAdj = MathF.Exp(lossLogit);
+
+        // Normalize
+        float sumAdj = winAdj + drawAdj + lossAdj;
+        w[i] = (FP16)(winAdj / sumAdj);
+        l[i] = (FP16)(lossAdj / sumAdj);      
       }
 
       return baseBatch;
