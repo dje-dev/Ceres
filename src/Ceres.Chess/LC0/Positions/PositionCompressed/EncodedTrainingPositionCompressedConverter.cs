@@ -31,29 +31,46 @@ namespace Ceres.Chess.EncodedPositions
   {
     // For files written using chunking, we mark the first position of a game
     // with a sentinel value so the can be unchunked.
+    // *** NOTE: See the comment at the field EncodedTrainingPositionV6.KLDPolicyRawOrSentinel
     public const float SENTINEL_MARK_FIRST_MOVE_IN_GAME_IN_UNUSED1 = 999;
 
 
     /// <summary>
     /// If the position is marked with a sentinel as the first move in a game.
-    /// NOTE: similar to the method below.
+    ///  NOTE: See the comment at the field EncodedTrainingPositionV6.KLDPolicyRawOrSentinel
+    /// </summary>
+    /// <param name="pos"></param>
+    public static void SetSentinelIsFirstMoveInGame(ref EncodedTrainingPosition pos)
+    {
+      pos.PositionWithBoards.MiscInfo.InfoTraining.SetKLDPolicy(SENTINEL_MARK_FIRST_MOVE_IN_GAME_IN_UNUSED1);
+    }
+
+    /// <summary>
+    /// If the position is marked with a sentinel as the first move in a game.
+    ///   NOTE: See the comment at the field EncodedTrainingPositionV6.KLDPolicyRawOrSentinel
+    ///   NOTE: similar to the method below.
     /// </summary>
     /// <param name="pos"></param>
     /// <returns></returns>
     public static bool IsMarkedFirstMoveInGame(in EncodedTrainingPositionCompressed pos)
-     => pos.PositionWithBoards.MiscInfo.InfoTraining.Unused2 == SENTINEL_MARK_FIRST_MOVE_IN_GAME_IN_UNUSED1;
+     => pos.PositionWithBoards.MiscInfo.InfoTraining.KLDPolicyRawOrSentinel == SENTINEL_MARK_FIRST_MOVE_IN_GAME_IN_UNUSED1;
 
 
     /// <summary>
     /// If the position is marked with a sentinel as the first move in a game.
-    /// NOTE: similar to the method above.
+    ///   NOTE: See the comment at the field EncodedTrainingPositionV6.KLDPolicyRawOrSentinel
+    ///   NOTE: similar to the method above.
     /// </summary>
     /// <param name="pos"></param>
     /// <returns></returns>
     public static bool IsMarkedFirstMoveInGame(in EncodedTrainingPosition pos)
-     => pos.PositionWithBoards.MiscInfo.InfoTraining.Unused2 == SENTINEL_MARK_FIRST_MOVE_IN_GAME_IN_UNUSED1;
+     => pos.PositionWithBoards.MiscInfo.InfoTraining.KLDPolicyRawOrSentinel == SENTINEL_MARK_FIRST_MOVE_IN_GAME_IN_UNUSED1;
 
 
+    public static void ResetFirstMoveInGameSentinel(ref EncodedTrainingPosition pos)
+    {
+      pos.PositionWithBoards.MiscInfo.InfoTraining.SetKLDPolicy(0.02f); // default value
+    } 
 
 
     /// <summary>

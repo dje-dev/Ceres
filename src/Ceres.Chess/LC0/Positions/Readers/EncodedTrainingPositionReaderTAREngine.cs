@@ -262,7 +262,7 @@ namespace Ceres.Chess.EncodedPositions
 
                     int lengthThisGame = nextStartIndex - curIndex;
                     Memory<EncodedTrainingPosition> thisGame = new Memory<EncodedTrainingPosition>(positionsBuffer, curIndex, lengthThisGame);
-                    thisGame.Span[0].PositionWithBoards.MiscInfo.InfoTraining.SetUnused2(0); // reset the sentinel
+                    //thisGame.Span[0].PositionWithBoards.MiscInfo.InfoTraining.SetUnused2(0); // reset the sentinel  (disabled, unnecessary)
                     yield return thisGame;
 
                     curIndex = nextStartIndex;

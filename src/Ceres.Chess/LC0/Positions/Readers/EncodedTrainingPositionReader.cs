@@ -203,7 +203,7 @@ namespace Ceres.Chess.EncodedPositions
 
                     if (!filterOutFRCGames || !ret.IsFRCGame)
                     {
-                      gamePositions.Span[0].PositionWithBoards.MiscInfo.InfoTraining.SetUnused2(0); // reset the sentinel
+                      //gamePositions.Span[0].PositionWithBoards.MiscInfo.InfoTraining.SetUnused2(0); // reset the sentinel (disabled, unnecessary)
                       yield return ret;
 
                     }

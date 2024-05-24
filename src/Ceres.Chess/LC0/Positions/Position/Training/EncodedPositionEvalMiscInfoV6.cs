@@ -139,8 +139,29 @@ namespace Ceres.Chess.EncodedPositions
 
     /// <summary>
     /// Kullback-Leibler divergence between policy head and visits in nats (originally was unused) [8348] 
+    /// NOTE: Unfortunately this value was accidentally overwritten in the EncodedTrainingPositionCompressed format
+    ///       but only on the first position of each game. The accessor below works around this.
+    /// TODO: Someday fix this, but it will require rewriting all files. When we do this:
+    ///         - instead use the Unused2 field to store these sentinels
+    ///         - remove the accessor below, make it a readonly field just like the others
+    ///         - modify the methods at the top of the EncodedTrainingPositionCompressedConverter class to reflect this
     /// </summary>
-    public readonly float KLDPolicy; 
+    internal readonly float KLDPolicyRawOrSentinel;
+
+    public readonly float KLDPolicy
+    {
+      get
+      {
+        if (KLDPolicyRawOrSentinel == EncodedTrainingPositionCompressedConverter.SENTINEL_MARK_FIRST_MOVE_IN_GAME_IN_UNUSED1)
+        {
+          return 0.02f; // A dummy value, representative of what KLD would typically be for the first position in a game.
+        }
+        else
+        {
+          return KLDPolicyRawOrSentinel;
+        }
+      }
+    }
 
     public readonly float Unused2; // [8350]
 
@@ -258,13 +279,25 @@ namespace Ceres.Chess.EncodedPositions
       }
     }
 
+    /// <summary>
+    /// Overwrites the value of KLDPolicy.
+    /// WARNING: is unsafe.
+    /// </summary>
+    /// <param name="value"></param>
+    internal unsafe void SetKLDPolicy(float value)
+    {
+      fixed (float* p = &KLDPolicyRawOrSentinel)
+      {
+        *p = value;
+      }
+    }
 
     /// <summary>
     /// Overwrites the value of Unused2.
     /// WARNING: is unsafe.
     /// </summary>
     /// <param name="value"></param>
-    public unsafe void SetUnused2(float value)
+    internal unsafe void SetUnused2(float value)
     {
       fixed (float* p = &Unused2)
       {
