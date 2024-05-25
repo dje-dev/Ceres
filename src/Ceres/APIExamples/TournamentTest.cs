@@ -153,15 +153,6 @@ namespace Ceres.APIExamples
       string NET1 = "j94-100";
       string NET2 = "j94-100";
 
-      NET1 = "610235";
-      NET2 = "610235";
-
-      NET1 = "760751";
-      NET2 = "42767";// "753723";
-      NET1 = @"ONNX_ORT:d:\weights\lczero.org\hydra_t00-attn.gz.onnx";// "apv4_t14";// apv4_t16";
-      NET2 = @"ONNX_ORT:d:\weights\lczero.org\apv4_t16.onnx";
-
-      //      NET1 = "760998";
       //      NET1 = "790734;1;0;0,753723;0;1;1"; --> 0 +/-10 (new value head)
       //NET1 = "790734;0;1;1,753723;1;0;0"; // 8 +/-8 (new policy head)
       // No obvious progress with T79, 790940 vs 790855 tests at +2 Elo (+/-7) using 1000 nodes/move
@@ -169,39 +160,48 @@ namespace Ceres.APIExamples
       //var pb1 = LC0ProtobufNet.LoadedNet(NET2);
       //pb1.Dump();
 
-
       //      NET2 = @"ONNX_ORT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-1675000-rule50.gz#32";
-//      NET1 = "CUSTOM1:703810,CUSTOM1:703810";
-       NET1 = "CUSTOM1:703810";
-       NET2 = "CUSTOM2:703810";
+      //      NET1 = "CUSTOM1:703810,CUSTOM1:703810";
 
-      //      NET2 = "~T1_DISTILL_256_10_FP16";//// "~T80";
+      NET1 = "CUSTOM1";//|1.5";//:ckpt_DGX_C5_B4_512_15_16_4_48bn_2024_final.ts";
 
-      //      NET2 = "~T1_DISTILL_512_15_FP16";
+      //NET2 = "CUSTOM2:ckpt_DGX_C5_B4_512_15_16_4_48bn_2024_final.ts";
+      //      NET2 = "CUSTOM2:ckpt_DGX_C5_B1_512_15_16_4_32bn_2024_final.ts";
 
+      //NET2 = "CUSTOM1:testc.ts"; // was 3.2bn
+
+      //NET1 = "CUSTOM1";//:ckpt_HOP_C6_B4_256_12_8_6_BS8_48bn_2024_final.ts";
+
+
+      //NET1 = "CUSTOM1:last256.ts";
+      //NET2 = "~T1_DISTILL_256_10_FP16";
+
+      NET2 = "~T1_DISTILL_512_15_FP16";
       //      NET1 = "CUSTOM1:753723;1;0;0;1,~T1_DISTILL_512_15;0;1;1;0";
       //NET1 = "ONNX_ORT:BT3_750_policy_vanilla#32,ONNX_ORT:BT3_750_policy_optimistic#32";
-      //NET1 = "~T3_DISTILL";
-      NET2 = "~BT2";
-      //NET2 = "~T60";
+      //      NET1 = "~BT4|1.26"; // 1.26 -13+/-13
+      //NET2 = "~T75";
+
+      //      NET2 = "~T70";
+      //NET1 = "~T81|0.85";
+      //NET2 = "~T81";
       //NET2 = "~T1_DISTIL_512_15_NATIVE";
 
+      NET1 = "CUSTOM1:ckpt_DGX_C6_B4_512_8_16_4_500mm_2024_nost_final.ts";
+      NET2 = "CUSTOM2:ckpt_DGX_C6_B4_512_8_16_4_500mm_2024_base_final.ts";
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(500);// 18);
+
+      SearchLimit limit1 = SearchLimit.NodesPerMove(50);
       //limit1 = SearchLimit.BestValueMove;
 
       //SearchLimit limit2 = SearchLimit.NodesPerMove(1);
 
       SearchLimit limit2 = limit1;
-//      limit2 = SearchLimit.BestValueMove;
-//      limit2 = SearchLimit.BestValueMove;
+      //      limit2 = SearchLimit.BestActionMove;
+      //var limit2 = SearchLimit.NodesPerMove(1);
+        
 
-      //      NET1 = NET2 = "753723";// "610889";
-      //      NET1 = "803907";
-      //      NET2 = "609966";
-      //NET2 = "703810";      
       //      NET1 = "ONNX_ORT:BT2-768x15smolgen-12h-do-01-swa-onnx-1675000-rule50.gz";
-
 
 
       // 3 has diffs of ORT vs TRT
@@ -254,10 +254,8 @@ namespace Ceres.APIExamples
         System.Environment.Exit(3);
       }
 
-      NNEvaluatorDef evalDef1 = NET1 == "CUSTOM1" ? new NNEvaluatorDef(NNEvaluatorType.Custom1, "703810")
-                                                 : NNEvaluatorDefFactory.FromSpecification(NET1, GPUS_2);
-      NNEvaluatorDef evalDef2 = NET2 == "CUSTOM2" ? new NNEvaluatorDef(NNEvaluatorType.Custom2, "703810")
-                                                 : NNEvaluatorDefFactory.FromSpecification(NET2, GPUS_2);
+      NNEvaluatorDef evalDef1 =  NNEvaluatorDefFactory.FromSpecification(NET1, GPUS_2);
+      NNEvaluatorDef evalDef2 =  NNEvaluatorDefFactory.FromSpecification(NET2, GPUS_2);
 
       NNEvaluatorDef? evalDefSecondary1 = null;
       if (NET1_SECONDARY1 != null)
@@ -291,7 +289,10 @@ namespace Ceres.APIExamples
 
       //engineDefCeres1.SearchParams.BestMoveMode = ParamsSearch.BestMoveModeEnum.TopQIfSufficientN;
 
-//      engineDefCeres1.SearchParams.ActionHeadSelectionWeight = 0.5f;
+      //      engineDefCeres1.SearchParams.ActionHeadSelectionWeight = 0.5f;
+
+      engineDefCeres1.SearchParams.ReusePositionEvaluationsFromOtherTree = false;
+      engineDefCeres2.SearchParams.ReusePositionEvaluationsFromOtherTree = false;
 
       if (false)
       {
@@ -304,8 +305,6 @@ namespace Ceres.APIExamples
         engineDefCeres1.SearchParams.TreeReuseEnabled = false;
         engineDefCeres2.SearchParams.TreeReuseEnabled = false;
 
-        engineDefCeres1.SearchParams.ReusePositionEvaluationsFromOtherTree = false;
-        engineDefCeres2.SearchParams.ReusePositionEvaluationsFromOtherTree = false;
 
         engineDefCeres1.SearchParams.Execution.SelectParallelEnabled = false;
         engineDefCeres2.SearchParams.Execution.SelectParallelEnabled = false;
@@ -538,13 +537,14 @@ namespace Ceres.APIExamples
 
         def.AddEngines(limit1, engineDefCeres1);
         def.AddEngines(limit1, engineDefLC1);
-        //def.ReferenceEngineId = def.Engines[0].ID;
-
+//        def.ReferenceEngineId = def.Engines[1].ID;
       }
       else
       {
         def = new TournamentDef("TOURN", player1, player2);
-//        def.CheckPlayer2Def = player1;
+//        def.ReferenceEngineId = def.Engines[1].ID;
+
+        //        def.CheckPlayer2Def = player1;
       }
 
       // TODO: UCI engine should point to .NET 6 subdirectory if on .NET 6
