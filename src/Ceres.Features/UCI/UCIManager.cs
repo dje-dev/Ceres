@@ -291,7 +291,7 @@ namespace Ceres.Features.UCI
             UCIWriteLine("dump-processor  - dump information about CPUs in this system");
             UCIWriteLine("dump-params     - dump configuration parameters currently in use for Ceres");
             UCIWriteLine("dump-store      - dumps full node store for tree from last search");
-            UCIWriteLine("dump-nvidia     - dumps informatino about NVIDIA CUDA devices detected in the system");
+            UCIWriteLine("dump-nvidia     - dumps information about NVIDIA CUDA devices detected in the system");
             UCIWriteLine("lc0-config      - shows the command line arguments which would be used for LC0 for comparison searches");
             UCIWriteLine("show-tree-plot  - shows a graphical representation of full search tree");
             UCIWriteLine("graph [1-10]    - invokes graph feature to show the principal variations from last search (requires configuration), e.g. graph 7");
