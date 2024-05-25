@@ -198,17 +198,18 @@ namespace Chess.Ceres.NNEvaluators
 
     public const int TPG_MODE_TOTAL_BYTES_ASSUMED  = 4060 + 782; // see DoEvaluateIntoBuffers
 
-    public NNEvaluatorEngineONNX(string engineID, string onnxModelFileName, byte[] onnxModelBytes, 
+    public NNEvaluatorEngineONNX(string engineID, string onnxModelFileName, byte[] onnxModelBytes,
                                  NNDeviceType deviceType, int gpuID, bool useTRT,
                                  ONNXRuntimeExecutor.NetTypeEnum type, int batchSize,
-                                 NNEvaluatorPrecision precision, 
+                                 NNEvaluatorPrecision precision,
                                  bool isWDL, bool hasM, bool hasUncertaintyV, bool hasAction,
-                                 string outputValue, string outputWDL, string outputPolicy, string outputMLH, 
-                                 bool valueHeadLogistic, bool scale50MoveCounter, 
-                                 bool movesEnabled = false, bool enableProfiling = false, 
+                                 string outputValue, string outputWDL, string outputPolicy, string outputMLH,
+                                 bool valueHeadLogistic, bool scale50MoveCounter,
+                                 bool movesEnabled = false, bool enableProfiling = false,
                                  bool useHistory = true, object options = null,
                                  bool hasValueSecondary = false,
-                                 float temperatureValue1 = 1, float temperatureValue2 = 1, float fractionValueFromValue2 = 0)
+                                 float temperatureValue1 = 1, float temperatureValue2 = 1, float fractionValueFromValue2 = 0,
+                                 bool hasState = false)
     {
       EngineType = type == ONNXRuntimeExecutor.NetTypeEnum.Ceres ? "ONNX_DJE" : "ONNX_LZ0";
       EngineNetworkID = engineID;
@@ -220,6 +221,7 @@ namespace Chess.Ceres.NNEvaluators
       this.hasM = hasM;
       this.hasUncertaintyV = hasUncertaintyV;
       this.hasAction = hasAction;
+      this.HasState = hasState;
       DeviceType = deviceType;
       OutputValue = outputValue;
       OutputWDL = outputWDL;
@@ -430,7 +432,9 @@ namespace Chess.Ceres.NNEvaluators
     public override int MaxBatchSize => BatchSize;
 
 
-#region Internals
+    #region Internals
+
+    static bool warned = false;
 
     /// <summary>
     /// Internal worker method to 
@@ -502,7 +506,11 @@ namespace Chess.Ceres.NNEvaluators
 
       if (HasState)
       {
-       throw new NotImplementedException("Needs remediation for state head");
+        if (!warned)
+        {
+          Console.WriteLine("WARNING: NNEvaluatorEngineONNX needs remediation for state head");
+          warned = true;
+        }
       } 
 
 #if DONE_BELOW_IN_NEXT_LINE
@@ -560,12 +568,23 @@ namespace Chess.Ceres.NNEvaluators
         actions = new CompressedActionVector[numPos];
       }
 
+      Half[][] states = null;
+      if (HasState)
+      {
+        // TODO: this is just a dummy, fill in someday
+        states = new Half[numPos][];
+        for (int i=0;i<numPos;i++)
+        {
+          states[i] = new Half[64 * 4];
+        } 
+      }
+      
       // NOTE: inefficient, above we convert from [] (flat) to [][] and here we convert back to []
       return new PositionEvaluationBatch(IsWDL, HasM, HasUncertaintyV, HasAction, HasValueSecondary, HasState, numPos, 
                                          result.ValuesRaw, result.Values2Raw,
                                          result.PolicyVectors,//*/result.PolicyFlat, 
                                          actions,
-                                         mFP16, uncertaintyVFP16, null, null,
+                                         mFP16, uncertaintyVFP16, new Memory<Half[]>(states), default,
                                          TemperatureValue1, TemperatureValue2, FractionValueFromValue2,
                                          ValueHeadLogistic, PositionEvaluationBatch.PolicyType.LogProbabilities, false, 
                                          batch, 

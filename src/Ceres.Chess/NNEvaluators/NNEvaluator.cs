@@ -138,7 +138,7 @@ namespace Ceres.Chess.NNEvaluators
     /// Optional contextual information to be potentially used 
     /// as supplemental input for the evaluation of children.
     /// </summary>
-    public virtual bool HasState { get; } = false;
+    public virtual bool HasState { get; protected set; } = false;
 
     /// <summary>
     /// The maximum number of positions that can be evaluated in a single batch.

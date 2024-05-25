@@ -50,6 +50,8 @@ namespace Ceres.Chess.LC0NetInference
     /// </summary>
     public readonly float[] UncertaintyV;
 
+    public readonly FP16[] PriorState;
+
     /// <summary>
     /// Activation values for last FC layer before value output (possibly null)
     /// </summary>
@@ -76,7 +78,7 @@ namespace Ceres.Chess.LC0NetInference
     /// <param name="draws"></param>
     public ONNXRuntimeExecutorResultBatch(bool isWDL, FP16[] values, FP16[] values2, float[] policyLogisticVectors,
                                           float[] mlh, float[] uncertaintyV, float[][] valueFCActiviations,
-                                          FP16[] actionLogisticVectors, int numPositionsUsed)
+                                          FP16[] actionLogisticVectors, FP16[] priorState, int numPositionsUsed)
     {
       ValuesRaw = values;
       Values2Raw = values2;
@@ -92,6 +94,7 @@ namespace Ceres.Chess.LC0NetInference
 
       MLH = mlh;
       UncertaintyV = uncertaintyV;
+      PriorState = priorState;
       ValueFCActivations = valueFCActiviations;
       NumPositionsUsed = numPositionsUsed;
       IsWDL = isWDL;

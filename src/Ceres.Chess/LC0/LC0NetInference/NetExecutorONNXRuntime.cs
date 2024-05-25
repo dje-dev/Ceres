@@ -202,6 +202,9 @@ namespace Ceres.Chess.LC0NetInference
     }
 
 
+    bool haveWarned = false;
+
+
     /// <summary>
     /// Evaluates the input.
     /// </summary>
@@ -237,8 +240,12 @@ namespace Ceres.Chess.LC0NetInference
 
       if (inputsMetadata.Count != 1)
       {
-        // data type check below is only on first element
-        Console.WriteLine("WARNING: Currently only single input ONNX files supported definitively.");
+        if (!haveWarned)
+        {
+          // data type check below is only on first element
+          Console.WriteLine("WARNING: Currently only single input ONNX files supported definitively.");
+          haveWarned = true;
+        }
 //        throw new Exception("Currently only single input ONNX files supported.");
       }
 

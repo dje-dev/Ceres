@@ -175,6 +175,14 @@ namespace Ceres.Chess.LC0NetInference
         {
           inputs[1] = (flatValuesSecondary, new int[] { numPositionsUsed, 64, 32 }); // TODO: cleanup, state
         } 
+
+        if (hasState)
+        {
+          // fake it with zeros
+          const int STATE_NUM_PER_SQUARE = 4;
+          inputs[1] = (new float[numPositionsUsed*64* STATE_NUM_PER_SQUARE], new int[] { numPositionsUsed, 64, STATE_NUM_PER_SQUARE });
+
+        }
 #if NOT
         if (flatValuesSecondary.Length > 0)
         {
@@ -304,11 +312,13 @@ namespace Ceres.Chess.LC0NetInference
         Debug.Assert(values.Length == (isWDL ? 3 : 1) * numPositionsUsed);
 
         FP16[] values2 = INDEX_WDL2 == -1 ? null : FP16.ToFP16(eval[INDEX_WDL2].Item2);
-
         float[][] value_fc_activations = null;// eval.Length < 3 ? null : eval[2];
+
+        // TODO: This is just a fake, fill it in someday
+        FP16[] priorState = hasState ? new FP16[numPositionsUsed * 64 * 4] : null;
         ONNXRuntimeExecutorResultBatch result = new ONNXRuntimeExecutorResultBatch(isWDL, values, values2, policiesLogistics, mlh, 
                                                                                    uncertantiesV, value_fc_activations,
-                                                                                   actionLogisticsFP16,
+                                                                                   actionLogisticsFP16, priorState,
                                                                                    numPositionsUsed);
         return result;
 
