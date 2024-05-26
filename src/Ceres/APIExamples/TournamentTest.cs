@@ -53,7 +53,7 @@ namespace Ceres.APIExamples
   {
     const bool POOLED = false;
 
-    static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 2 : 6;
+    static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 1 : 6;
     static int[] OVERRIDE_DEVICE_IDs = /*POOLED ? null*/
        (Environment.MachineName.ToUpper() switch
       {
@@ -170,29 +170,35 @@ namespace Ceres.APIExamples
 
       //NET2 = "CUSTOM1:testc.ts"; // was 3.2bn
 
-      //NET1 = "CUSTOM1";//:ckpt_HOP_C6_B4_256_12_8_6_BS8_48bn_2024_final.ts";
+      NET1 = "CUSTOM1";//:ckpt_HOP_C6_B4_256_12_8_6_BS8_48bn_2024_final.ts";
+//      NET1 = "CUSTOM1";
+      NET2 = "~T1_DISTILL_256_10_FP16";
+      //NET2 = "~T80";
 
 
       //NET1 = "CUSTOM1:last256.ts";
-      //NET2 = "~T1_DISTILL_256_10_FP16";
-
-      NET2 = "~T1_DISTILL_512_15_FP16";
+      //NET1 = "CUSTOM1:ckpt_DGX_C5_B4_512_15_16_4_48bn_2024_final.ts";
+      //NET2 = "~T1_DISTILL_512_15_FP16";
       //      NET1 = "CUSTOM1:753723;1;0;0;1,~T1_DISTILL_512_15;0;1;1;0";
       //NET1 = "ONNX_ORT:BT3_750_policy_vanilla#32,ONNX_ORT:BT3_750_policy_optimistic#32";
       //      NET1 = "~BT4|1.26"; // 1.26 -13+/-13
-      //NET2 = "~T75";
 
       //      NET2 = "~T70";
       //NET1 = "~T81|0.85";
       //NET2 = "~T81";
       //NET2 = "~T1_DISTIL_512_15_NATIVE";
 
-      NET1 = "CUSTOM1:ckpt_DGX_C6_B4_512_8_16_4_500mm_2024_nost_final.ts";
-      NET2 = "CUSTOM2:ckpt_DGX_C6_B4_512_8_16_4_500mm_2024_base_final.ts";
+      //      NET1 = "CUSTOM1:ckpt_DGX_C6_B4_512_8_16_4_500mm_2024_nost_final.ts";
+      //      NET2 = "CUSTOM2:ckpt_DGX_C6_B4_512_8_16_4_500mm_2024_base_final.ts";
+      //NET1 = "CUSTOM1:ckpt_DGX_C6_B4_512_15_16_4_32bn_2024_focus_974770176.ts";
+      //NET2 = "CUSTOM2:ckpt_DGX_C6_B4_512_15_16_4_32bn_2024_focus_974770176.ts";
+      //NET2= "CUSTOM2:ckpt_DGX_C5_B1_512_15_16_4_32bn_2024_962871296.ts";
 
+      NET1 = "CUSTOM1:ckpt_DGX_C6_B4_512_15_16_4_32bn_2024_focus_1063735296.ts";
+      NET2 = "CUSTOM2:ckpt_DGX_C5_B1_512_15_16_4_32bn_2024_1049882624.ts";
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(50);
-      //limit1 = SearchLimit.BestValueMove;
+      SearchLimit limit1 = SearchLimit.NodesPerMove(1000);
+//      limit1 = SearchLimit.BestValueMove;
 
       //SearchLimit limit2 = SearchLimit.NodesPerMove(1);
 
@@ -576,7 +582,7 @@ namespace Ceres.APIExamples
 //        baseName = "endingbook-16man-9609.pgn";
 //        def.AcceptPosExcludeIfContainsPieceTypeList = [PieceType.Queen, PieceType.Bishop, PieceType.Knight];
       }
-//       baseName = "tcec_big";
+       baseName = "tcec_big";
       string postfix = (baseName.ToUpper().EndsWith(".EPD") || baseName.ToUpper().EndsWith(".PGN")) ? "" : ".pgn";
       def.OpeningsFileName = SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/openings/{baseName}{postfix}"
                                                      : @$"\\synology\dev\chess\data\openings\{baseName}{postfix}";
