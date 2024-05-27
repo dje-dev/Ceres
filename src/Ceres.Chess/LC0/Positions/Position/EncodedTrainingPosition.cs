@@ -309,7 +309,8 @@ namespace Ceres.Chess.EncodedPositions
     /// <param name="maxHistoryPositions"></param>
     /// <returns></returns>
     /// <exception cref="NotImplementedException"></exception>
-    public readonly PositionWithHistory ToPositionWithHistory(int maxHistoryPositions) => PositionWithBoards.ToPositionWithHistory(maxHistoryPositions);
+    public readonly PositionWithHistory ToPositionWithHistory(int maxHistoryPositions = EncodedPositionBoards.NUM_MOVES_HISTORY) 
+      => PositionWithBoards.ToPositionWithHistory(maxHistoryPositions);
 
 
     #region Miscellaneous
