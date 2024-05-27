@@ -53,7 +53,7 @@ namespace Ceres.APIExamples
   {
     const bool POOLED = false;
 
-    static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 1 : 6;
+    static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 2 : 6;
     static int[] OVERRIDE_DEVICE_IDs = /*POOLED ? null*/
        (Environment.MachineName.ToUpper() switch
       {
@@ -171,8 +171,8 @@ namespace Ceres.APIExamples
       //NET2 = "CUSTOM1:testc.ts"; // was 3.2bn
 
       NET1 = "CUSTOM1";//:ckpt_HOP_C6_B4_256_12_8_6_BS8_48bn_2024_final.ts";
-//      NET1 = "CUSTOM1";
-      NET2 = "~T1_DISTILL_256_10_FP16";
+      NET2 = "CUSTOM2";
+      //NET2 = "~T1_DISTILL_256_10_FP16";
       //NET2 = "~T80";
 
 
@@ -194,11 +194,11 @@ namespace Ceres.APIExamples
       //NET2 = "CUSTOM2:ckpt_DGX_C6_B4_512_15_16_4_32bn_2024_focus_974770176.ts";
       //NET2= "CUSTOM2:ckpt_DGX_C5_B1_512_15_16_4_32bn_2024_962871296.ts";
 
-      NET1 = "CUSTOM1:ckpt_DGX_C6_B4_512_15_16_4_32bn_2024_focus_1063735296.ts";
-      NET2 = "CUSTOM2:ckpt_DGX_C5_B1_512_15_16_4_32bn_2024_1049882624.ts";
+//      NET1 = "CUSTOM1:ckpt_DGX_C6_B4_512_15_16_4_32bn_2024_focus_1063735296.ts";
+//      NET2 = "CUSTOM2:ckpt_DGX_C5_B1_512_15_16_4_32bn_2024_1049882624.ts";
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(1000);
-//      limit1 = SearchLimit.BestValueMove;
+      SearchLimit limit1 = SearchLimit.NodesPerMove(500);
+      //limit1 = SearchLimit.BestValueMove;
 
       //SearchLimit limit2 = SearchLimit.NodesPerMove(1);
 
@@ -582,7 +582,7 @@ namespace Ceres.APIExamples
 //        baseName = "endingbook-16man-9609.pgn";
 //        def.AcceptPosExcludeIfContainsPieceTypeList = [PieceType.Queen, PieceType.Bishop, PieceType.Knight];
       }
-       baseName = "tcec_big";
+//       baseName = "tcec_big";
       string postfix = (baseName.ToUpper().EndsWith(".EPD") || baseName.ToUpper().EndsWith(".PGN")) ? "" : ".pgn";
       def.OpeningsFileName = SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/openings/{baseName}{postfix}"
                                                      : @$"\\synology\dev\chess\data\openings\{baseName}{postfix}";
