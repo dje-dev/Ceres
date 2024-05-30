@@ -807,6 +807,80 @@ namespace Ceres.Chess.EncodedPositions
 
 
     /// <summary>
+    /// Returns a new policy vector with a specified temperature applied.
+    /// </summary>
+    /// <param name="temperature"></param>
+    /// <param name="minProbability"></param>
+    /// <returns></returns>
+    public CompressedPolicyVector TemperatureApplied(float temperature, float minProbability = DEFAULT_MIN_PROBABILITY_LEGAL_MOVE)
+    {
+      if (temperature <= 0)
+      {
+        throw new ArgumentException("Temperature must be strictly positive.");
+      }
+
+      // First count number of moves and what new sum of exponentiated probabilites would be.
+      int countMoves = 0;
+      float sum = 0;
+      foreach ((EncodedMove move, float probability) in ProbabilitySummary())
+      {
+        sum += MathF.Pow(probability, temperature);
+        countMoves++;
+      }
+
+      float sumToOneMultiplier = 1.0f / sum;
+
+      // Extract values to be used for new policy vector.
+      int index = 0;
+      Span<int> indices = stackalloc int[countMoves];
+      Span<float> probs = stackalloc float[countMoves];
+      foreach ((EncodedMove move, float probability) in ProbabilitySummary())
+      {
+        indices[index] = move.IndexNeuralNet;
+        probs[index] = Math.Max(minProbability, MathF.Pow(probability, temperature) * sumToOneMultiplier);
+        if (float.IsNaN(probs[index]))
+        {
+          throw new Exception("NaN probability");
+        }
+        index++;
+      }
+
+      // Create and return new policy vector with temperature applied.
+      CompressedPolicyVector ret = new();
+      Initialize(ref ret, indices, probs, true);
+
+      return ret;
+    }
+
+
+    /// <summary>
+    /// Returns the cross entropy of the policy with a target policy.
+    /// </summary>
+    /// <param name="pos"></param>
+    /// <param name="target"></param>
+    /// <returns></returns>
+    public readonly float CrossEntropyWith(in CompressedPolicyVector target)
+    {
+      float crossEntropy = 0.0f;
+      foreach ((EncodedMove move, float probability) in ProbabilitySummary())
+      {
+        float targetProb = target.ProbabilityOfMove (move);
+        crossEntropy += probability * MathF.Log(targetProb, 2);
+      }
+      return crossEntropy;
+    }
+
+
+    /// <summary>
+    /// Returns probability of specified move according to the policy.
+    /// </summary>
+    /// <param name="move"></param>
+    /// <returns></returns>
+    public readonly float ProbabilityOfMove(EncodedMove move) => ProbabilitySummary().Where(x => x.Move == move)
+                                                                                     .Select(x => x.Probability)
+                                                                                     .FirstOrDefault();     
+
+    /// <summary>
     /// Returns short summary description string.
     /// </summary>
     /// <param name="minProbability"></param>
