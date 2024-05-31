@@ -50,9 +50,19 @@ namespace Ceres.Chess.Data.Nets
 
         {"BT3", ONNXNet16LC0("BT3-768x15x24h-swa-2790000.pb.gz_fp16#16")},
         {"BT3_TRT", ONNXNet16LC0("BT3-768x15x24h-swa-2790000.pb.gz_fp16#16", true)},
+        {"BT3_160k", ONNXNet32LC0("BT3-768x15x24h-swa-onnx-160000-baseline.pb.gz")},
+        {"BT3_810k", ONNXNet32LC0("BT3-768x15x24h-swa-onnx-810000-baseline.pb.gz")},
 
         {"BT4", ONNXNet16LC0("BT4_4975_fp16#16")},
         {"BT4_TRT", ONNXNet16LC0("BT4_4975_fp16#16", true)},
+        {"BT4_600k", ONNXNet32LC0("BT4-1024x15x32h-swa-600000.pb.gz")},
+        {"BT4_1000k", ONNXNet32LC0("BT4-1024x15x32h-swa-1000000.pb.gz")},
+        {"BT4_1420k", ONNXNet32LC0("BT4-1024x15x32h-swa-1420000.pb.gz")},
+        {"BT4_1800k", ONNXNet32LC0("BT4-1024x15x32h-swa-1800000.pb.gz")},
+        {"BT4_2210k", ONNXNet32LC0("BT4-1024x15x32h-swa-2210000.pb.gz")},
+        {"BT4_3190k", ONNXNet32LC0("BT4-1024x15x32h-swa-3190000.pb.gz")},
+        {"BT4_4230k", ONNXNet32LC0("BT4-1024x15x32h-swa-4230000.pb.gz")},
+        {"BT4_5000k", ONNXNet32LC0("BT4-1024x15x32h-swa-5000000.pb.gz")},
 
         {"T1_DISTILL_256_10", ONNXNet32LC0("t1-256x10-distilled-swa-2432500")},
         {"T1_DISTILL_256_10_FP16", ONNXNet16LC0("t1-256x10-distilled-swa-2432500_fp16")},
@@ -98,7 +108,7 @@ namespace Ceres.Chess.Data.Nets
     static RegisteredNetInfo SimpleLC0Net(string netID) => new RegisteredNetInfo(netID, ReferenceNetType.LC0, netID);
 
     static RegisteredNetInfo ONNXNet16LC0(string netID, bool tensorRT = false) =>  new (netID, ReferenceNetType.LC0, MakeDesc(netID, true, tensorRT) + "#16");
-    static RegisteredNetInfo ONNXNet32LC0(string netID) => new (netID, ReferenceNetType.Ceres, MakeDesc(netID, false, false) + "#32");
+    static RegisteredNetInfo ONNXNet32LC0(string netID) => new (netID, ReferenceNetType.Ceres, MakeDesc(netID, true, false) + "#32");
     static RegisteredNetInfo ONNXNet16Ceres(string netID, bool tensorRT = false) => new(netID, ReferenceNetType.LC0, MakeDesc(netID, false, tensorRT) + "#16");
     static RegisteredNetInfo ONNXNet32Ceres(string netID) => new(netID, ReferenceNetType.Ceres, MakeDesc(netID, false, false) + "#32");
 
