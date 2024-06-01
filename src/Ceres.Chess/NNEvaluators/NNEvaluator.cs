@@ -78,6 +78,16 @@ namespace Ceres.Chess.NNEvaluators
     public string EngineNetworkID;
 
     /// <summary>
+    /// Optional short identification string.
+    /// </summary>
+    public string ShortID;
+
+    /// <summary>
+    /// Optional description string.
+    /// </summary>
+    public string Description;
+
+    /// <summary>
     /// Estimated performance characteristics.
     /// </summary>
     public NNEvaluatorPerformanceStats PerformanceStats;

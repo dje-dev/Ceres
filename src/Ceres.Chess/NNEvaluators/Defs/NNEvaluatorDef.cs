@@ -78,6 +78,11 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// </summary>
     public string OptionsString { get; set;}
 
+    /// <summary>
+    /// Optional description of the evaluator definition;
+    /// </summary>
+    public string Description;
+
 
     /// <summary>
     /// Caching mode (if evaluations are saved to memory and/or disk).
