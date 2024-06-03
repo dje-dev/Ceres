@@ -422,7 +422,7 @@ namespace Ceres.Features.GameEngines
     {
       if (Evaluators == null)
       {
-        Evaluators = new NNEvaluatorSet(EvaluatorDef, SearchParams.Execution.FlowDirectOverlapped, EvaluatorDefSecondary);
+        Evaluators = new NNEvaluatorSet(EvaluatorDef, SearchParams.Execution.FlowDualSelectors, EvaluatorDefSecondary);
         Evaluators.Warmup(false);
       }
     }
