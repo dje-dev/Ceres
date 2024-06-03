@@ -23,8 +23,10 @@ using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 
 using Ceres.Base.CUDA;
-using Chess.Ceres.NNEvaluators;
 using Ceres.Base.Benchmarking;
+using Ceres.Base.Misc;
+
+using Chess.Ceres.NNEvaluators;
 
 #endregion
 
@@ -71,14 +73,15 @@ namespace Ceres.Chess.LC0NetInference
     /// </summary>
     /// <param name="onnxFileName"></param>
     /// <param name="onnxModelBytes"></param>
+    /// <param name="inputNames"></param>
     /// <param name="gpuID"></param>
     /// <param name="useTRT"></param>
     /// <param name="enableProfiling"></param>
     public NetExecutorONNXRuntime(string onnxFileName, byte[] onnxModelBytes,
+                                  string[] inputNames,
                                   NNEvaluatorPrecision precision, int gpuID,
                                   bool useTRT, bool enableProfiling)
     {
-      // https://codechina.csdn.net/mirrors/microsoft/onnxruntime/-/blob/skottmckay/CreateHelperForGeneratingIdsForUseInCompilingEPs/docs/execution_providers/TensorRT-ExecutionProvider.md
       //     if (gpuID < 0 || gpuID > 16) throw new Exception($"Invalid GPU ID { gpuID}");
       ONNXFileName = onnxFileName;
       if (onnxFileName == null && onnxModelBytes == null)
@@ -131,16 +134,45 @@ namespace Ceres.Chess.LC0NetInference
           var providerOptionsDict = new Dictionary<string, string>();
           providerOptionsDict["device_id"] = gpuID.ToString(); ;
           providerOptionsDict["trt_max_workspace_size"] = "2147483648";
-          providerOptionsDict["trt_engine_cache_enable"] = "1";
-          providerOptionsDict["trt_engine_cache_path"] = directoryName;
-          providerOptionsDict["trt_fp16_enable"] = Precision == NNEvaluatorPrecision.FP16 ? "1" : "0";
-//          providerOptionsDict["trt_cuda_graph_enable"] = "1"; // NOTE: may fail, requires entire graph to map onto ONNX nodes (?)
 
-          // TODO: Someday remove this. In theory, the above two assignments should work (but seems to be ignored).
-          // WARNING: This makes a global change that could impact other threads. ****************
-          Environment.SetEnvironmentVariable("ORT_TENSORRT_ENGINE_CACHE_ENABLE", "1");
-          Environment.SetEnvironmentVariable("ORT_TENSORRT_CACHE_PATH", directoryName);
-          Environment.SetEnvironmentVariable("ORT_TENSORRT_FP16_ENABLE", Precision == NNEvaluatorPrecision.FP16 ? "1" : "0");
+          if (inputNames != null)
+          {
+            string MakeShapeStr(int size) // construct a shape string of the form expected by the TensorRT execution provider.
+            {
+              bool firstTime = true;
+              string ret = "";
+              foreach (string inputName in inputNames)
+              {
+                ret += (firstTime ? "" : ",") + inputName + $":{size}x64x{ONNXRuntimeExecutor.TPG_BYTES_PER_SQUARE_RECORD}";
+                firstTime = false;
+              }
+              return ret;
+            }
+
+            // N.B. Using trtexec we seem to see extreme variability of runtime depending on these shapes (espcially optimal)
+            // N.B. For now using optimal batch size of 108, seemed fastest for a certain tested net.
+            providerOptionsDict["trt_profile_min_shapes"] = MakeShapeStr(1);
+            providerOptionsDict["trt_profile_opt_shapes"] = MakeShapeStr(108);
+            providerOptionsDict["trt_profile_max_shapes"] = MakeShapeStr(1024);
+          }
+          //          providerOptionsDict["trt_profile_min_shapes"] = "squares:1x64x137" + (hasStateInput ? ",prior_state.1:1x64x4" : "");
+
+          providerOptionsDict["trt_timing_cache_enable"] = "true";
+          providerOptionsDict["trt_force_timing_cache"] = "true";
+
+          providerOptionsDict["trt_engine_cache_enable"] = "true";
+
+          providerOptionsDict["trt_engine_cache_path"] = Path.Combine(directoryName, "trt_engines");
+          providerOptionsDict["trt_timing_cache_path"] = directoryName;
+          // providerOptionsDict["trt_engine_cache_prefix"] = "Ceres";
+
+          //trt_detailed_build_log=1
+          providerOptionsDict["trt_fp16_enable"] = Precision == NNEvaluatorPrecision.FP16 ? "1" : "0";
+          providerOptionsDict["trt_builder_optimization_level"] = "3";
+
+          // providerOptionsDict["trt_cuda_graph_enable"] = "1"; // NOTE: may fail, requires entire graph to map onto ONNX nodes (?)
+
+          providerOptionsDict["trt_layer_norm_fp32_fallback"] = "1"; // possibly necessary otherwise terrible accuracy
 
           trtProviderOptions.UpdateOptions(providerOptionsDict);
           so = SessionOptions.MakeSessionOptionWithTensorrtProvider(trtProviderOptions);
@@ -148,19 +180,14 @@ namespace Ceres.Chess.LC0NetInference
       }
       else
       {
+        // https://tomwildenhain-microsoft.github.io/onnxruntime/docs/execution-providers/CUDA-ExecutionProvider.html
         OrtCUDAProviderOptions cudaProviderOptions = new();
 
-        var providerOptionsDict = new Dictionary<string, string>();
+        Dictionary<string, string> providerOptionsDict = new();
         providerOptionsDict["device_id"] = gpuID.ToString();
 
 
-        //        providerOptionsDict["gpu_mem_limit"] = "2147483648";
-        //        providerOptionsDict["arena_extend_strategy"] = "kSameAsRequested";
-        //        providerOptionsDict["cudnn_conv_algo_search"] = "DEFAULT";
-        //        providerOptionsDict["do_copy_in_default_stream"] = "1";
-        //        providerOptionsDict["cudnn_conv_use_max_workspace"] = "1";
-        //        providerOptionsDict["cudnn_conv1d_pad_to_nc1d"] = "1";
-        //        providerOptionsDict["enable_cuda_graph"] = "1"; // NOTE: this requires entire graph to map onto ONNX nodes
+//        providerOptionsDict["enable_cuda_graph"] = "1"; // NOTE: may fail, requires entire graph to map onto ONNX nodes
 
         cudaProviderOptions.UpdateOptions(providerOptionsDict);
         so = SessionOptions.MakeSessionOptionWithCudaProvider(cudaProviderOptions);
@@ -185,19 +212,21 @@ namespace Ceres.Chess.LC0NetInference
 
       if (enableProfiling)
       {
-        Console.WriteLine("****************   NetExecutorONNXRuntime is profiling....   ****************");
+        ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, "****************   NetExecutorONNXRuntime is profiling....   ****************");
         so.EnableProfiling = true;
         //so.ProfileOutputPathPrefix = @"d:\temp";
       }
 
       // See: https://onnxruntime.ai/docs/performance/model-optimizations/graph-optimizations.html
-      so.GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL;
-
-
+      so.GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL; // Possibly this is overkill and takes too long?
+      so.ExecutionMode = ExecutionMode.ORT_PARALLEL;
+        
       lock (CUDADevice.InitializingCUDAContextLockObj)
       {
-        using (new TimingBlock("Session create"))
+        using (new TimingBlock($"ONNX InferenceSession create on model of size {onnxModelBytes.Length:N0} bytes"))
+        {
           Session = new InferenceSession(onnxModelBytes, so);
+        }
       }
     }
 
@@ -318,12 +347,20 @@ namespace Ceres.Chess.LC0NetInference
         TensorPrimitives.ConvertToHalf(inputSpan, MemoryMarshal.Cast<Float16, Half>(inputFloat16));
 
         DenseTensor<Float16> inputTensor = new DenseTensor<Float16>(inputFloat16, shape);
-        inputsONNX.Add(NamedOnnxValue.CreateFromTensor<Float16>(inputName, inputTensor));
+        inputsONNX.Add(NamedOnnxValue.CreateFromTensor(inputName, inputTensor));
       }
 
       IDisposableReadOnlyCollection<DisposableNamedOnnxValue> runResult;
       lock (lockObject)
       {
+        if (inputs[0].numElements > 28768)
+        {
+          while (false) // TEST CODE
+          {
+            using (new TimingBlock(ToString() + " RunFloat16 " + inputs[0].numElements))
+              runResult = Session.Run(inputsONNX);
+          }
+        } 
         runResult = Session.Run(inputsONNX);
       }
 
@@ -338,6 +375,7 @@ namespace Ceres.Chess.LC0NetInference
 
         resultArrays.Add((resultValue.Name, resultArray));
       }
+
       return resultArrays;
     }
 

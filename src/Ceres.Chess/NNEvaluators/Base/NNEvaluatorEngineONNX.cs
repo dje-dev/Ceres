@@ -249,7 +249,12 @@ namespace Chess.Ceres.NNEvaluators
       {
         Console.WriteLine("Starting ONNX runtime against " + engineID + " from " + onnxModelFileName + " with " + deviceType + " " + gpuID);
 
-        Executor = new ONNXRuntimeExecutor(onnxModelFileName, onnxModelBytes, batchSize, type, precision, deviceType, gpuID, useTRT, enableProfiling);
+        string[] inputNames = type == ONNXRuntimeExecutor.NetTypeEnum.TPG
+          ? (hasState ? ["squares", "prior_state.1"] : ["squares"])
+          : ["/input/planes"];
+
+        Executor = new ONNXRuntimeExecutor(onnxModelFileName, onnxModelBytes, inputNames,
+                                           batchSize, type, precision, deviceType, gpuID, useTRT, enableProfiling);
         lastONNXFileName = onnxModelFileName;
         lastONNXBytesHash = onnxModelBytes == null ? 0 : ArrayUtils.ByteArrayStableHash(onnxModelBytes);
         lastDeviceType = deviceType;
@@ -321,7 +326,7 @@ namespace Chess.Ceres.NNEvaluators
       const float TPG_DIVISOR = 100f; // TODO: receive this in constructor instead. Should refer to TPGSquareRecord.SQUARE_BYTES_DIVISOR.
       PositionEvaluationBatch ret = DoEvaluateBatch(default, inputsPrimaryNativeF, usesSecondaryInputs ? inputsSecondaryNativeF : null, 
                                                     numPositions, retrieveSupplementalResults, posMoveIsLegal,
-                                                    TPG_DIVISOR, Options);
+                                                    TPG_DIVISOR);
       return ret;
     }
 
@@ -390,7 +395,7 @@ namespace Chess.Ceres.NNEvaluators
 
         Func<int, int, bool> posMoveIsLegal = null; // PosMoveIsLegal
         PositionEvaluationBatch ret = DoEvaluateBatch(batch, flatValuesAttentionM, flatValuesMoves, batch.NumPos, 
-                                                      retrieveSupplementalResults, posMoveIsLegal, tpgDivisor:1, options:Options);
+                                                      retrieveSupplementalResults, posMoveIsLegal, tpgDivisor:1);
         Debug.Assert(!retrieveSupplementalResults);
         return ret;
       }
@@ -407,7 +412,7 @@ namespace Chess.Ceres.NNEvaluators
         float[] flatValues = ArrayPool<float>.Shared.Rent(bufferLength);
 
         batch.ValuesFlatFromPlanes(flatValues, false, Scale50MoveCounter);
-        PositionEvaluationBatch ret = DoEvaluateBatch(batch, flatValues, null, batch.NumPos, retrieveSupplementalResults, posMoveIsLegal, tpgDivisor:1, options:Options);
+        PositionEvaluationBatch ret = DoEvaluateBatch(batch, flatValues, null, batch.NumPos, retrieveSupplementalResults, posMoveIsLegal, tpgDivisor:1);
 
         ArrayPool<float>.Shared.Return(flatValues);
         return ret;
@@ -447,7 +452,7 @@ namespace Chess.Ceres.NNEvaluators
                                             Memory<float> flatValuesPrimary, Memory<float> flatValuesSecondary,
                                             int numPos, bool retrieveSupplementalResults, 
                                             Func<int,int, bool> posMoveIsLegal,
-                                            float tpgDivisor, object options)
+                                            float tpgDivisor)
     {
       if (retrieveSupplementalResults) throw new Exception("retrieveSupplementalResults not supported");
 

@@ -16,10 +16,9 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Text;
-using Ceres.Base.DataType;
+
 using Ceres.Base.DataTypes;
-using Ceres.Base.Math;
+
 using Ceres.Chess.LC0.Batches;
 using Ceres.Chess.NNEvaluators.Defs;
 using Chess.Ceres.NNEvaluators;
@@ -36,6 +35,7 @@ namespace Ceres.Chess.LC0NetInference
   {
     public const int TPG_BYTES_PER_SQUARE_RECORD = 137; // TODO: should be referenced from TPGRecord
     public const int TPG_MAX_MOVES = 92; //  // TODO: should be referenced from TPGRecord
+
 
     /// <summary>
     /// File name of source ONNX file
@@ -57,8 +57,14 @@ namespace Ceres.Chess.LC0NetInference
     /// </summary>
     public enum NetTypeEnum { Ceres, LC0, TPG };
 
+    /// <summary>
+    /// Type of neural network.
+    /// </summary>
     public readonly NetTypeEnum NetType;
 
+    /// <summary>
+    /// Device type (CPU or GPU).
+    /// </summary>
     public readonly NNDeviceType DeviceType;
 
     /// <summary>
@@ -66,19 +72,25 @@ namespace Ceres.Chess.LC0NetInference
     /// </summary>
     NetExecutorONNXRuntime executor;
 
+
     /// <summary>
     /// Constructor.
     /// </summary>
     /// <param name="onnxFileName"></param>
     /// <param name="onnxModelBytes"></param>
-    /// <param name="batchSize"></param>
+    /// <param name="maxBatchSize"></param>
     /// <param name="netType"></param>
     /// <param name="deviceType"></param>
     /// <param name="gpuNum"></param>
     /// <param name="enableProfiling"></param>
-    public ONNXRuntimeExecutor(string onnxFileName, byte[] onnxModelBytes, int batchSize, NetTypeEnum netType, 
-                               NNEvaluatorPrecision precision, NNDeviceType deviceType, int gpuNum, 
-                               bool useTRT, bool enableProfiling)
+    public ONNXRuntimeExecutor(string onnxFileName, byte[] onnxModelBytes, 
+                               string[] inputNames,
+                               int maxBatchSize, 
+                               NetTypeEnum netType, 
+                               NNEvaluatorPrecision precision, 
+                               NNDeviceType deviceType, int gpuNum, 
+                               bool useTRT, 
+                               bool enableProfiling)
     {
       if (onnxFileName != null && !onnxFileName.ToUpper().EndsWith(".ONNX"))
       {
@@ -93,7 +105,7 @@ namespace Ceres.Chess.LC0NetInference
       ONNXFileName = onnxFileName;
       NetType = netType;
       DeviceType = deviceType;
-      BatchSize = batchSize;
+      BatchSize = maxBatchSize;
       Precision = precision;
 
       int deviceIndex;
@@ -110,7 +122,8 @@ namespace Ceres.Chess.LC0NetInference
         throw new NotImplementedException("Unsupported ONNX type " + deviceType);
       }
 
-      executor = new NetExecutorONNXRuntime(onnxFileName, onnxModelBytes, precision, deviceIndex, useTRT, enableProfiling);
+      executor = new NetExecutorONNXRuntime(onnxFileName, onnxModelBytes, inputNames,
+                                            precision, deviceIndex, useTRT, enableProfiling);
     }
 
 
@@ -170,16 +183,17 @@ namespace Ceres.Chess.LC0NetInference
           }
         }
 
+        const int STATE_NUM_PER_SQUARE = 4; // TODO: Fix this, currently hardcoded the only value actually currently used by Ceres nets.
+
         inputs[0] = (flatValuesPrimary, new int[] { numPositionsUsed, 64, TPG_BYTES_PER_SQUARE_RECORD });
         if (inputs.Length > 1)
         {
-          inputs[1] = (flatValuesSecondary, new int[] { numPositionsUsed, 64, 32 }); // TODO: cleanup, state
+          inputs[1] = (flatValuesSecondary, new int[] { numPositionsUsed, 64, STATE_NUM_PER_SQUARE }); 
         } 
 
         if (hasState)
         {
           // fake it with zeros
-          const int STATE_NUM_PER_SQUARE = 4;
           inputs[1] = (new float[numPositionsUsed*64* STATE_NUM_PER_SQUARE], new int[] { numPositionsUsed, 64, STATE_NUM_PER_SQUARE });
 
         }
@@ -313,6 +327,8 @@ namespace Ceres.Chess.LC0NetInference
 
         FP16[] values2 = INDEX_WDL2 == -1 ? null : FP16.ToFP16(eval[INDEX_WDL2].Item2);
         float[][] value_fc_activations = null;// eval.Length < 3 ? null : eval[2];
+       
+        // SWAP VALUE1, VALUE2: (values, values2) = (values2, values); // swap *** TEMPORARY
 
         // TODO: This is just a fake, fill it in someday
         FP16[] priorState = hasState ? new FP16[numPositionsUsed * 64 * 4] : null;
