@@ -327,13 +327,16 @@ namespace Ceres.Chess.LC0NetInference
 
         FP16[] values2 = INDEX_WDL2 == -1 ? null : FP16.ToFP16(eval[INDEX_WDL2].Item2);
         float[][] value_fc_activations = null;// eval.Length < 3 ? null : eval[2];
-       
+
         // SWAP VALUE1, VALUE2: (values, values2) = (values2, values); // swap *** TEMPORARY
+
+        float[] extraStats0 = eval.Count > 5 ? eval[5].Item2 : null;
+        float[] extraStats1 = eval.Count > 6 ? eval[6].Item2 : null;
 
         // TODO: This is just a fake, fill it in someday
         FP16[] priorState = hasState ? new FP16[numPositionsUsed * 64 * 4] : null;
         ONNXRuntimeExecutorResultBatch result = new ONNXRuntimeExecutorResultBatch(isWDL, values, values2, policiesLogistics, mlh, 
-                                                                                   uncertantiesV, value_fc_activations,
+                                                                                   uncertantiesV, extraStats0, extraStats1, value_fc_activations,
                                                                                    actionLogisticsFP16, priorState,
                                                                                    numPositionsUsed);
         return result;

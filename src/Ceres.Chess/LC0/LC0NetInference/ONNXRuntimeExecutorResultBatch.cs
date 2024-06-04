@@ -60,6 +60,9 @@ namespace Ceres.Chess.LC0NetInference
     public FP16[] ValuesRaw;
     public FP16[] Values2Raw;
 
+    public readonly float[] ExtraStats0;
+    public readonly float[] ExtraStats1;
+
     public int BatchSize => PolicyVectors.GetLength(0);
 
     /// <summary>
@@ -77,7 +80,9 @@ namespace Ceres.Chess.LC0NetInference
     /// <param name="policyLogisticVectors"></param>
     /// <param name="draws"></param>
     public ONNXRuntimeExecutorResultBatch(bool isWDL, FP16[] values, FP16[] values2, float[] policyLogisticVectors,
-                                          float[] mlh, float[] uncertaintyV, float[][] valueFCActiviations,
+                                          float[] mlh, float[] uncertaintyV, 
+                                          float[] extraStats0, float[] extraStats1,
+                                          float[][] valueFCActiviations,
                                           FP16[] actionLogisticVectors, FP16[] priorState, int numPositionsUsed)
     {
       ValuesRaw = values;
@@ -93,6 +98,9 @@ namespace Ceres.Chess.LC0NetInference
       ActionLogisticVectors = actionLogisticVectors; // still in logistic form
 
       MLH = mlh;
+      ExtraStats0 = extraStats0;
+      ExtraStats1 = extraStats1;  
+
       UncertaintyV = uncertaintyV;
       PriorState = priorState;
       ValueFCActivations = valueFCActiviations;
