@@ -15,6 +15,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using Ceres.Chess.LC0.Positions;
 using Ceres.Chess.MoveGen;
@@ -150,8 +151,11 @@ namespace Ceres.Chess.ExternalPrograms.UCI
         Check(i, "nps", ref NPS);
         Check(i, "time", ref EngineReportedSearchTime);
 
-        if (Mate < 0) ScoreCentipawns = -2000 + Mate * 10;
-        if (Mate > 0) ScoreCentipawns = 2000 + Mate * 10;
+        if (tokens.Contains("mate"))
+        {
+          if (Mate <= 0) ScoreCentipawns = -2000 + Mate * 5;
+          if (Mate > 0) ScoreCentipawns = 2000 - Mate * 5;
+        }
       }
     }
 
