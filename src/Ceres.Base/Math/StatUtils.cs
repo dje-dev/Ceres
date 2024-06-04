@@ -304,6 +304,7 @@ namespace Ceres.Base.Math
       return avgPower4 / (variance * variance);
     }
 
+
     /// <summary>
     /// Returns the weighted average an array of doubles.
     /// </summary>
@@ -413,12 +414,60 @@ namespace Ceres.Base.Math
 
 
     /// <summary>
+    /// Returns the mean average absolute deviation of two arrays of floats.
+    /// </summary>
+    /// <param name="x"></param>
+    /// <param name="y"></param>
+    /// <returns></returns>
+    /// <exception cref="ArgumentException"></exception>
+    public static double MeanAverageAbsoluteDeviation(ReadOnlySpan<float> x, ReadOnlySpan<float> y)
+    {
+      if (x.Length != y.Length)
+      {
+        throw new ArgumentException("x and y must be of the same length");
+      }
+
+      double sum = 0;
+      for (int i = 0; i < x.Length; i++)
+      {
+        sum += System.Math.Abs(x[i] - y[i]);
+      }
+
+      return sum / x.Length;
+    }
+
+    /// <summary>
+    /// Returns the mean squared difference of two arrays of floats.
+    /// </summary>
+    /// <param name="x"></param>
+    /// <param name="y"></param>
+    /// <returns></returns>
+    /// <exception cref="ArgumentException"></exception>
+    public static float MeanSquaredError(ReadOnlySpan<float> x, ReadOnlySpan<float> y)
+    {
+      if (x.Length != y.Length)
+      {
+        throw new ArgumentException("x and y must be of the same length");
+      }
+
+      double sum = 0;
+      for (int i = 0; i < x.Length; i++)
+      {
+        sum += MathF.Pow(x[i] - y[i], 2);
+      }
+
+      return (float)sum / x.Length;
+    }
+
+
+
+    /// <summary>
     /// Returns the correlation of two spans of doubles.
     /// </summary>
     /// <param name="xs"></param>
     /// <param name="ys"></param>
     /// <returns></returns>
-    public static double Correlation(Span<double> xs, Span<double> ys)
+    public static double Correlation(ReadOnlySpan<double> xs, ReadOnlySpan<double> ys)
     {
       //TODO: check here that arrays are not null, of the same length etc
 
@@ -463,7 +512,7 @@ namespace Ceres.Base.Math
     /// <param name="xs"></param>
     /// <param name="ys"></param>
     /// <returns></returns>
-    public static double Correlation(Span<FP16> xs, Span<FP16> ys)
+    public static double Correlation(ReadOnlySpan<FP16> xs, ReadOnlySpan<FP16> ys)
     {
       //TODO: check here that arrays are not null, of the same length etc
 
@@ -507,7 +556,7 @@ namespace Ceres.Base.Math
     /// <param name="xs"></param>
     /// <param name="ys"></param>
     /// <returns></returns>
-    public static double Correlation(Span<float> xs, Span<float> ys)
+    public static double Correlation(ReadOnlySpan<float> xs, ReadOnlySpan<float> ys)
     {
       if (xs.Length == 0)
       {
@@ -568,7 +617,7 @@ namespace Ceres.Base.Math
     /// <param name="values1"></param>
     /// <param name="values2"></param>
     /// <returns></returns>
-    public static float RankCorrelation(Span<float> values1, Span<float> values2) => (float)StatUtils.Correlation(ToRanks(values1), ToRanks(values2));
+    public static float RankCorrelation(Span<float> values1, Span<float> values2) => (float)Correlation(ToRanks(values1), ToRanks(values2));
 
 
     /// <summary>
