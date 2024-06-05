@@ -18,7 +18,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 
 using Ceres.Base.DataTypes;
-
+using Ceres.Base.Math;
 using Ceres.Chess.LC0.Batches;
 using Ceres.Chess.NNEvaluators.Defs;
 using Chess.Ceres.NNEvaluators;
@@ -330,8 +330,8 @@ namespace Ceres.Chess.LC0NetInference
 
         // SWAP VALUE1, VALUE2: (values, values2) = (values2, values); // swap *** TEMPORARY
 
-        float[] extraStats0 = eval.Count > 5 ? eval[5].Item2 : null;
-        float[] extraStats1 = eval.Count > 6 ? eval[6].Item2 : null;
+        FP16[] extraStats0 = eval.Count > 5 ? FP16.ToFP16(eval[5].Item2) : null;
+        FP16[] extraStats1 = eval.Count > 6 ? FP16.ToFP16(eval[6].Item2) : null;
 
         // TODO: This is just a fake, fill it in someday
         FP16[] priorState = hasState ? new FP16[numPositionsUsed * 64 * 4] : null;

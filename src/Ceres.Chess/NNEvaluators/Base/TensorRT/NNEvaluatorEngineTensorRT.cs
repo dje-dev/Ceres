@@ -291,7 +291,7 @@ Updated notes:
                                                  NUM_TOPK_POLICY,
                                                  policyIndicies, policyProbabilities,
                                                  resultsMLH, 
-                                                 resultsUncertaintyV, null, default, //rawResultsConvValFlat,
+                                                 resultsUncertaintyV, default, default, null, default, //rawResultsConvValFlat,
                                                  VALUES_ARE_LOGISTIC,
                                                  PositionEvaluationBatch.PolicyType.Probabilities, timeStats, false);
         }
@@ -311,6 +311,7 @@ Updated notes:
                                                  rawResultsPolicy.Slice(0, numToProcess*1858).ToArray(), // Inefficient 
                                                  default,
                                                  resultsMLH.ToArray(), resultsUncertaintyV.ToArray(),
+                                                 default, default,
                                                  null, default, //rawResultsConvValFlat,
                                                  1, 1, 0, VALUES_ARE_LOGISTIC,
                                                  PositionEvaluationBatch.PolicyType.LogProbabilities, false,
