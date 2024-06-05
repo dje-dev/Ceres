@@ -137,8 +137,8 @@ namespace Ceres.MCTS.Params
       }
       else
       {
-        ParamsSearch.Execution.SelectParallelEnabled = ParamsSearch.Execution.SelectParallelEnabled;
-        ParamsSearch.Execution.SetPoliciesParallelEnabled = ParamsSearch.Execution.SetPoliciesParallelEnabled;
+        ParamsSearch.Execution.SelectParallelEnabled = DEFAULT_PARAMS.SelectParallelEnabled;
+        ParamsSearch.Execution.SetPoliciesParallelEnabled = DEFAULT_PARAMS.SetPoliciesParallelEnabled;
       }
 
       // TODO: set the GPU fractions if multiple
