@@ -16,6 +16,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading.Tasks;
 
 using Ceres.Base.DataTypes;
@@ -46,6 +47,11 @@ namespace Ceres.Chess.LC0.Batches
     /// except for Move50 plane which can be any integer from 0 to 99.
     /// </summary>
     Memory<byte> PosPlaneValues { get; }
+
+    /// <summary>
+    /// Zeros out all history planes for all positions in the batch.
+    /// </summary>
+    void ZeroHistoryPlanes();
 
     /// <summary>
     /// Optionally the set of state information assoicated with these positions.

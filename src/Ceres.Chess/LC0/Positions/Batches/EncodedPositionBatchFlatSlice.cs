@@ -86,17 +86,16 @@ namespace Ceres.Chess.LC0.Batches
     }
 
 
-    
     public int NumPos => Length;
 
     public EncodedPositionType TrainingType => Parent.TrainingType;
 
     public short PreferredEvaluatorIndex => Parent.PreferredEvaluatorIndex;
 
-    public bool PositionsUseSecondaryEvaluator 
-    { 
-      get {  return Parent.PositionsUseSecondaryEvaluator; } 
-      set { Parent.PositionsUseSecondaryEvaluator = value; } 
+    public bool PositionsUseSecondaryEvaluator
+    {
+      get { return Parent.PositionsUseSecondaryEvaluator; }
+      set { Parent.PositionsUseSecondaryEvaluator = value; }
     }
 
     public IEncodedPositionBatchFlat GetSubBatch(int startIndex, int count)
@@ -129,11 +128,16 @@ namespace Ceres.Chess.LC0.Batches
       }
     }
 
-    Memory<Half[]> IEncodedPositionBatchFlat.States 
+    Memory<Half[]> IEncodedPositionBatchFlat.States
     {
       get => Parent.States.IsEmpty ? default : Parent.States.Slice(StartIndex, Length);
-      set => value.CopyTo(Parent.States);      
+      set => value.CopyTo(Parent.States);
     }
-  }
 
+
+    /// <summary>
+    /// Zero out the history planes for all positions in the batch.
+    /// </summary>
+    public void ZeroHistoryPlanes() => throw new NotImplementedException();
+  }
 }

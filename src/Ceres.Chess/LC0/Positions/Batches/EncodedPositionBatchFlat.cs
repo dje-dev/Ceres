@@ -46,10 +46,6 @@ namespace Ceres.Chess.LC0.Batches
     public const int NUM_HISTORY_POSITIONS = 8;
     public const int NUM_CACHE_HISTORY_POSITIONS = 7; // Number used for memory cache hashing
 
-    public const bool USE_SPATIAL_POLICY = false;
-    public const int NUM_SOURCE_POLICY_FLOATS = EncodedPolicyVector.POLICY_VECTOR_LENGTH;
-    public const int NUM_TARGET_POLICY_FLOATS = USE_SPATIAL_POLICY ? (73 * 64) : NUM_SOURCE_POLICY_FLOATS;
-
     public const int TOTAL_NUM_PLANES_ALL_HISTORIES = (NUM_HISTORY_POSITIONS * NUM_PIECE_PLANES_PER_POS)
                                                      + NUM_MISC_PLANES_PER_POS; // 112
     public const int TOTAL_NUM_PLANE_BYTES_ALL_HISTORIES = TOTAL_NUM_PLANES_ALL_HISTORIES * 64; // 60 * 64 = 3840
@@ -501,6 +497,29 @@ namespace Ceres.Chess.LC0.Batches
         Policy = FP16.ToFP16(policy);
       }
     }
+
+
+    /// <summary>
+    /// Zero out the history planes for all positions in the batch.
+    /// </summary>
+    public void ZeroHistoryPlanes()
+    {
+      Span<ulong> bitmaps = PosPlaneBitmaps;
+      Span<byte> values = PosPlaneValues;
+
+      for (int i = 0; i < NumPos; i++)
+      {
+        for (int j = NUM_PIECE_PLANES_PER_POS;
+                 j < TOTAL_NUM_PLANES_ALL_HISTORIES
+                   - NUM_MISC_PLANES_PER_POS; j++)
+        {
+          int index = i * TOTAL_NUM_PLANES_ALL_HISTORIES + j;
+          bitmaps[index] = 0;
+          values[index] = 0;
+        }
+      }
+    }
+
 
 
     public void DumpPlanes(int positionIndex)
