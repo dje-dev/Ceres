@@ -599,10 +599,12 @@ namespace Chess.Ceres.NNEvaluators
                                          ValueHeadLogistic, PositionEvaluationBatch.PolicyType.LogProbabilities, false, 
                                          batch, 
                                          stats);
-      // -0.5, 1.2, 0.65 --> +0 Elo at 1000 +/-5
 
+#if NOT
+// ** Experimental test code, triggered by having FractionValueFromValue2 >  1
       bool ADJUST = FractionValueFromValue2 > 1 && result.ExtraStats0 != null; // ***** TEMPORARY ******
-      const float THRESHOLD = 0.8f;
+      // flat: 0.8, 0.5
+      const float THRESHOLD = 0.75f;
       float COEFF = 0.5f;
       if (ADJUST)
       {
@@ -635,11 +637,11 @@ namespace Chess.Ceres.NNEvaluators
         }
 
       }
-
+#endif
       return ret;
     }
 
-    #endregion
+#endregion
 
 
     void ConvertTPGPolicyToExpanded(IEncodedPositionBatchFlat batch, ONNXRuntimeExecutorResultBatch result)
