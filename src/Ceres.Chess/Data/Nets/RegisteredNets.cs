@@ -75,6 +75,10 @@ namespace Ceres.Chess.Data.Nets
         {"T1_768_FP16", ONNXNet16LC0("t1-768x15x24h-swa-4000000_fp16")},
         {"T2", ONNXNet16LC0("t2-768x15x24h-swa-5230000.pb.gz_fp16")},
         {"T2_TRT", ONNXNet16LC0("t2-768x15x24h-swa-5230000.pb.gz_fp16", true)},
+
+        {"T2_LEARNED_LOOKAHEAD_PAPER_TRT", ONNXNet32LC0("lc0_t2_learned_look_ahead_paper", false)},
+
+
         {"T3", ONNXNet32LC0("t3-512x15x16h-swa-2815000") }, //Smaller transformer net trained by masterkni. 512 embedding size with 15 encoder layers and 16 encoder heads. Same architecture as BT4.
 
         {"T1_DISTILL_256_10_NATIVE", SimpleLC0Net("t1-256x10-distilled-swa-2432500") },
@@ -100,7 +104,7 @@ namespace Ceres.Chess.Data.Nets
 
     #region Internal helpers
 
-    static string MakeDesc(string netID, bool lc0Net, bool tensorRT)
+    static string MakeDesc(string netID, bool lc0Net, bool tensorRT = false)
       => (tensorRT ? @"ONNX_TRT:" : @"ONNX_ORT:") + Path.Combine(lc0Net ? CeresUserSettingsManager.Settings.DirLC0Networks : 
                                                                           CeresUserSettingsManager.Settings.DirCeresNetworks, netID);
 
@@ -108,7 +112,7 @@ namespace Ceres.Chess.Data.Nets
     static RegisteredNetInfo SimpleLC0Net(string netID) => new RegisteredNetInfo(netID, ReferenceNetType.LC0, netID);
 
     static RegisteredNetInfo ONNXNet16LC0(string netID, bool tensorRT = false) =>  new (netID, ReferenceNetType.LC0, MakeDesc(netID, true, tensorRT) + "#16");
-    static RegisteredNetInfo ONNXNet32LC0(string netID) => new (netID, ReferenceNetType.Ceres, MakeDesc(netID, true, false) + "#32");
+    static RegisteredNetInfo ONNXNet32LC0(string netID, bool tensorRT = false) => new (netID, ReferenceNetType.Ceres, MakeDesc(netID, true, tensorRT) + "#32");
     static RegisteredNetInfo ONNXNet16Ceres(string netID, bool tensorRT = false) => new(netID, ReferenceNetType.LC0, MakeDesc(netID, false, tensorRT) + "#16");
     static RegisteredNetInfo ONNXNet32Ceres(string netID) => new(netID, ReferenceNetType.Ceres, MakeDesc(netID, false, false) + "#32");
 
