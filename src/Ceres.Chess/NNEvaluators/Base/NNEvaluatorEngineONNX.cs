@@ -454,7 +454,10 @@ namespace Chess.Ceres.NNEvaluators
                                             Func<int,int, bool> posMoveIsLegal,
                                             float tpgDivisor)
     {
-      if (retrieveSupplementalResults) throw new Exception("retrieveSupplementalResults not supported");
+      if (retrieveSupplementalResults)
+      {
+        throw new Exception("retrieveSupplementalResults not supported");
+      }
 
       ONNXRuntimeExecutorResultBatch result;
       TimingStats stats = new TimingStats();
@@ -583,20 +586,60 @@ namespace Chess.Ceres.NNEvaluators
           states[i] = new Half[64 * 4];
         } 
       }
-      
+
       // NOTE: inefficient, above we convert from [] (flat) to [][] and here we convert back to []
-      return new PositionEvaluationBatch(IsWDL, HasM, HasUncertaintyV, HasAction, HasValueSecondary, HasState, numPos, 
+      PositionEvaluationBatch ret =  new (IsWDL, HasM, HasUncertaintyV, HasAction, HasValueSecondary, HasState, numPos, 
                                          result.ValuesRaw, result.Values2Raw,
                                          result.PolicyVectors,//*/result.PolicyFlat, 
                                          actions,
-                                         mFP16, uncertaintyVFP16, new Memory<Half[]>(states), default,
+                                         mFP16, uncertaintyVFP16, 
+                                         result.ExtraStats0, result.ExtraStats1,
+                                         new Memory<Half[]>(states), default,
                                          TemperatureValue1, TemperatureValue2, FractionValueFromValue2,
                                          ValueHeadLogistic, PositionEvaluationBatch.PolicyType.LogProbabilities, false, 
                                          batch, 
                                          stats);
+      // -0.5, 1.2, 0.65 --> +0 Elo at 1000 +/-5
+
+      bool ADJUST = FractionValueFromValue2 > 1 && result.ExtraStats0 != null; // ***** TEMPORARY ******
+      const float THRESHOLD = 0.8f;
+      float COEFF = 0.5f;
+      if (ADJUST)
+      {
+        for (int i = 0; i < numPos; i++)
+        {
+          (float w, float l) = ((float)ret.W2.Span[i], (float)ret.L2.Span[i]);
+
+          float v = w - l;
+          if (v > THRESHOLD)
+          {
+            float qDn = result.ExtraStats1[i] - result.ExtraStats0[i];
+            float adjustedV = v  - COEFF * qDn;
+            float movedV = v - adjustedV;
+            w -= movedV / 2;
+            // possibly we could adjust d, but doesn't really matter
+            l += movedV / 2;
+          }
+          else if (v < -THRESHOLD) 
+          {
+            float qUp = result.ExtraStats0[i] - result.ExtraStats1[i];
+            float adjustedV = v + COEFF * qUp;
+            float movedV = adjustedV - v;
+            w += movedV / 2;
+            // possibly we could adjust d, but doesn't really matter
+            l -= movedV / 2;
+          }
+
+          (ret.W2.Span[i], ret.L2.Span[i]) = ((FP16)w, (FP16)l);
+          (ret.W.Span[i], ret.L.Span[i]) = ((FP16)w, (FP16)l);
+        }
+
+      }
+
+      return ret;
     }
 
-#endregion
+    #endregion
 
 
     void ConvertTPGPolicyToExpanded(IEncodedPositionBatchFlat batch, ONNXRuntimeExecutorResultBatch result)
