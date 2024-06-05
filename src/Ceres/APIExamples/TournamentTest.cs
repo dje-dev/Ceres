@@ -163,18 +163,18 @@ namespace Ceres.APIExamples
       //      NET2 = @"ONNX_ORT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-1675000-rule50.gz#32";
       //      NET1 = "CUSTOM1:703810,CUSTOM1:703810";
 
-      NET1 = "CUSTOM1";//|1.5";//:ckpt_DGX_C5_B4_512_15_16_4_48bn_2024_final.ts";
+      NET2 = "CUSTOM1";//|1.5";//:ckpt_DGX_C5_B4_512_15_16_4_48bn_2024_final.ts";
 
       //NET2 = "CUSTOM2:ckpt_DGX_C5_B4_512_15_16_4_48bn_2024_final.ts";
       //      NET2 = "CUSTOM2:ckpt_DGX_C5_B1_512_15_16_4_32bn_2024_final.ts";
 
       //NET2 = "CUSTOM1:testc.ts"; // was 3.2bn
 
-      NET2 = "CUSTOM2";//:ckpt_HOP_C6_B4_256_12_8_6_BS8_48bn_2024_final.ts";
+//      NET2 = "CUSTOM2";//:ckpt_HOP_C6_B4_256_12_8_6_BS8_48bn_2024_final.ts";
       //NET2 = "CUSTOM2";
-      //NET2 = "~T1_DISTILL_256_10_FP16";
-      //NET2 = "~T80";
-
+      NET1 = "~T1_DISTILL_256_10_FP16";
+      //NET1 = "~T80";
+      //NET2 = "~T60";
       //NET1 = "~T2";
       //NET2 = "~T2_LEARNED_LOOKAHEAD_PAPER_TRT|ZeroHistory";
 
@@ -200,7 +200,7 @@ namespace Ceres.APIExamples
 //      NET1 = "CUSTOM1:ckpt_DGX_C6_B4_512_15_16_4_32bn_2024_focus_1063735296.ts";
 //      NET2 = "CUSTOM2:ckpt_DGX_C5_B1_512_15_16_4_32bn_2024_1049882624.ts";
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(2000); // was 500
+      SearchLimit limit1 = SearchLimit.NodesPerMove(5000); // was 500
       //limit1 = SearchLimit.BestValueMove;
 
       //SearchLimit limit2 = SearchLimit.NodesPerMove(1);
@@ -303,10 +303,10 @@ namespace Ceres.APIExamples
       engineDefCeres1.SearchParams.ReusePositionEvaluationsFromOtherTree = false;
       engineDefCeres2.SearchParams.ReusePositionEvaluationsFromOtherTree = false;
 
-//  engineDefCeres1.SearchParams.Execution.FlowDualSelectors = false;
-//  engineDefCeres2.SearchParams.Execution.FlowDualSelectors = false;
-//  engineDefCeres1.SearchParams.Execution.FlowDirectOverlapped = false;
-//  engineDefCeres2.SearchParams.Execution.FlowDirectOverlapped = false;
+  engineDefCeres1.SearchParams.Execution.FlowDualSelectors = false;
+  engineDefCeres2.SearchParams.Execution.FlowDualSelectors = false;
+  engineDefCeres1.SearchParams.Execution.FlowDirectOverlapped = false;
+  engineDefCeres2.SearchParams.Execution.FlowDirectOverlapped = false;
 
       if (false)
       {
