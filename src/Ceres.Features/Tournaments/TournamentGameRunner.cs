@@ -64,8 +64,10 @@ namespace Ceres.Features.Tournaments
       Def = def;
 
       // Create and warmup all engines (in parallel).
+      const int MAX_PARALLEL = 1; // TODO: parallelism currently disabled, pending resolution of apparent
+                                  // concurrency problems when heterogeneous evaluators involved (e.g. direct CUDA and ONNX).
       Engines = new GameEngine[Def.Engines.Length];
-      Parallel.For(0, Def.Engines.Length,
+      Parallel.For(0, Def.Engines.Length, new ParallelOptions() { MaxDegreeOfParallelism = MAX_PARALLEL },
         delegate (int i)
         {
           Engines[i] = Def.Engines[i].EngineDef.CreateEngine();
