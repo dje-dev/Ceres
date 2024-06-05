@@ -164,6 +164,12 @@ namespace Ceres.Chess.NNEvaluators
     public virtual bool UseBestValueMoveUseRepetitionHeuristic { get; set; } = false;
 
     /// <summary>
+    /// If history planes should be zeroed out before evaluation.
+    /// </summary>
+    public bool ZeroHistoryPlanes = false;
+
+
+    /// <summary>
     /// Miscellaneous information about the evaluator.
     /// </summary>
     public virtual EvaluatorInfo Info => null;
@@ -213,6 +219,8 @@ namespace Ceres.Chess.NNEvaluators
 
     public long NumPositionsEvaluated { private set; get; }
 
+
+
     /// <summary>
     /// Evaluates positions into internal buffers. 
     /// 
@@ -227,6 +235,11 @@ namespace Ceres.Chess.NNEvaluators
     public IPositionEvaluationBatch EvaluateIntoBuffers(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
     {
       SetMovesIfNeeded(positions);
+
+      if (ZeroHistoryPlanes)
+      {
+        positions.ZeroHistoryPlanes();
+      }
 
       IPositionEvaluationBatch batch = DoEvaluateIntoBuffers(positions, retrieveSupplementalResults);
 
@@ -616,6 +629,11 @@ namespace Ceres.Chess.NNEvaluators
       if (positions != null && positions.NumPos != numPositions)
       {
         throw new ArgumentException("numPositions wrong size");
+      }
+
+      if (ZeroHistoryPlanes)
+      {
+        positions.ZeroHistoryPlanes();
       }
 
       if (positions != null)

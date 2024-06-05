@@ -93,7 +93,46 @@ namespace Ceres.Chess.NNEvaluators
       NNEvaluator evaluator = BuildEvaluatorCore(def, referenceEvaluator);
       if (def.OptionsString != null)
       {
-        evaluator = new NNEvaluatorRemapped(evaluator, def.OptionsString);
+        // Parse key value pairs from options string (one or more key=value with semicolon separator).
+        Dictionary<string, string> options = new();
+        foreach (string option in def.OptionsString.Split(';'))
+        {
+          string[] parts = option.Split('=');
+          if (parts.Length == 2)
+          {
+            options[parts[0]] = parts[1];
+          }
+          else if (parts.Length == 1)
+          {
+            options[parts[0]] = null;
+          }
+          else
+          {
+            throw new Exception("Invalid option format: " + option);
+          }
+        }
+
+        // Currently on a small number of options are supported.  
+        if (options.TryGetValue("ValueTemp", out string valueTemp))
+        {
+          if (options.Count > 1)
+          {
+            throw new Exception("Implementation limitation: no other options supported in conjunction with Temperature.");
+          }
+          evaluator = new NNEvaluatorRemapped(evaluator, valueTemp);
+        }
+        else if (options.TryGetValue("ZeroHistory", out string zeroHistory))
+        {
+          if (options.Count > 1)
+          {
+            throw new Exception("Implementation limitation: no other options supported in conjunction with ZeroHistory.");
+          }
+          else if (zeroHistory != null)
+          {
+            throw new NotImplementedException("ZeroHistory option not expected to have associated value.");
+          }
+          evaluator.ZeroHistoryPlanes = true;
+        }
       }
 
       return evaluator;
