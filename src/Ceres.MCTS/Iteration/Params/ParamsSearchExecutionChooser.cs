@@ -126,8 +126,8 @@ namespace Ceres.MCTS.Params
       const int CUTOVER_NUM_NODES_TINY = 200;
       const int CUTOVER_NUM_NODES_SMALL = 20_000;
 
-      ParamsSearch.Execution.FlowDirectOverlapped = DEFAULT_PARAMS.FlowDirectOverlapped && estNumNodes > 5000;
-      ParamsSearch.Execution.FlowDualSelectors = DEFAULT_PARAMS.FlowDualSelectors && estNumNodes > 5000;
+      ParamsSearch.Execution.FlowDirectOverlapped = ParamsSearch.Execution.FlowDirectOverlapped && estNumNodes > 5000;
+      ParamsSearch.Execution.FlowDualSelectors = ParamsSearch.Execution.FlowDualSelectors && estNumNodes > 5000;
 
 
       if (estNumNodes < CUTOVER_NUM_NODES_SMALL)
@@ -137,8 +137,8 @@ namespace Ceres.MCTS.Params
       }
       else
       {
-        ParamsSearch.Execution.SelectParallelEnabled = DEFAULT_PARAMS.SelectParallelEnabled;
-        ParamsSearch.Execution.SetPoliciesParallelEnabled = DEFAULT_PARAMS.SetPoliciesParallelEnabled;
+        ParamsSearch.Execution.SelectParallelEnabled = ParamsSearch.Execution.SelectParallelEnabled;
+        ParamsSearch.Execution.SetPoliciesParallelEnabled = ParamsSearch.Execution.SetPoliciesParallelEnabled;
       }
 
       // TODO: set the GPU fractions if multiple
