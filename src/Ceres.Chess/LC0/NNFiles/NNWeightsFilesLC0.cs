@@ -38,8 +38,13 @@ namespace Ceres.Chess.LC0.NNFiles
       {
         if (new FileInfo(id).Exists)
         {
-          // Full filename directly specified, just directly use it.
+          // Full filename directly specified (with path), just directly use it.
           return new NNWeightsFileLC0(id, id);
+        }
+        else if (new FileInfo(Path.Combine(directoryName, id)).Exists)
+        {
+          // Full filename directly specified (in this directory) just directly use it.
+          return new NNWeightsFileLC0(id, Path.Combine(directoryName, id));
         }
         else
         {
