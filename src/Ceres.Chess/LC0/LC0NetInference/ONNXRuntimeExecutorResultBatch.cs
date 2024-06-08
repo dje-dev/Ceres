@@ -18,6 +18,7 @@ using System.Diagnostics;
 using Ceres.Base.DataTypes;
 using Ceres.Base.Math;
 using Ceres.Chess.LC0.Batches;
+using Microsoft.ML.OnnxRuntime;
 
 #endregion
 
@@ -33,37 +34,35 @@ namespace Ceres.Chess.LC0NetInference
     /// <summary>
     /// Policy head.
     /// </summary>
-    public readonly float[] PolicyVectors;
+    public readonly Memory<Float16> PolicyVectors;
 
     /// <summary>
     /// Action head.
     /// </summary>
-    public readonly FP16[] ActionLogisticVectors;
+    public readonly Memory<Float16> ActionLogisticVectors;
 
     /// <summary>
     /// Moves left head.
     /// </summary>
-    public readonly float[] MLH;
+    public readonly Memory<Float16> MLH;
 
     /// <summary>
     /// Uncertainty of V head.
     /// </summary>
-    public readonly float[] UncertaintyV;
+    public readonly Memory<Float16> UncertaintyV;
 
-    public readonly FP16[] PriorState;
+    public readonly Memory<Float16> PriorState;
 
     /// <summary>
     /// Activation values for last FC layer before value output (possibly null)
     /// </summary>
     public readonly float[][] ValueFCActivations;
 
-    public FP16[] ValuesRaw;
-    public FP16[] Values2Raw;
+    public Memory<Float16> ValuesRaw;
+    public Memory<Float16> Values2Raw;
 
-    public readonly FP16[] ExtraStats0;
-    public readonly FP16[] ExtraStats1;
-
-    public int BatchSize => PolicyVectors.GetLength(0);
+    public readonly Memory<Float16> ExtraStats0;
+    public readonly Memory<Float16> ExtraStats1;
 
     /// <summary>
     /// Number of positions with actual data
@@ -79,19 +78,19 @@ namespace Ceres.Chess.LC0NetInference
     /// <param name="values"></param>
     /// <param name="policyLogisticVectors"></param>
     /// <param name="draws"></param>
-    public ONNXRuntimeExecutorResultBatch(bool isWDL, FP16[] values, FP16[] values2, float[] policyLogisticVectors,
-                                          float[] mlh, float[] uncertaintyV, 
-                                          FP16[] extraStats0, FP16[] extraStats1,
+    public ONNXRuntimeExecutorResultBatch(bool isWDL, Memory<Float16> values, Memory<Float16> values2, Memory<Float16> policyLogisticVectors,
+                                          Memory<Float16> mlh, Memory<Float16> uncertaintyV,
+                                          Memory<Float16> extraStats0, Memory<Float16> extraStats1,
                                           float[][] valueFCActiviations,
-                                          FP16[] actionLogisticVectors, FP16[] priorState, int numPositionsUsed)
+                                          Memory<Float16> actionLogisticVectors, Memory<Float16> priorState, int numPositionsUsed)
     {
       ValuesRaw = values;
       Values2Raw = values2;
 
-      Debug.Assert(!FP16.IsNaN(values[0]));
+      Debug.Assert(!float.IsNaN((float)values.Span[0]));
       if (isWDL)
       { 
-        Debug.Assert(!FP16.IsNaN(values[1]) && !FP16.IsNaN(values[2]));
+        Debug.Assert(!float.IsNaN((float)values.Span[1]) && !float.IsNaN((float)values.Span[2]));
       }
 
       PolicyVectors = policyLogisticVectors; // still in logistic form

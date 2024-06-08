@@ -18,10 +18,10 @@ using System.Collections.Generic;
 using System.Diagnostics;
 
 using Ceres.Base.DataTypes;
-using Ceres.Base.Math;
 using Ceres.Chess.LC0.Batches;
 using Ceres.Chess.NNEvaluators.Defs;
 using Chess.Ceres.NNEvaluators;
+using Microsoft.ML.OnnxRuntime;
 
 #endregion
 
@@ -76,6 +76,7 @@ namespace Ceres.Chess.LC0NetInference
     /// <summary>
     /// Constructor.
     /// </summary>
+    /// <param name="shortID"></param>
     /// <param name="onnxFileName"></param>
     /// <param name="onnxModelBytes"></param>
     /// <param name="maxBatchSize"></param>
@@ -83,7 +84,8 @@ namespace Ceres.Chess.LC0NetInference
     /// <param name="deviceType"></param>
     /// <param name="gpuNum"></param>
     /// <param name="enableProfiling"></param>
-    public ONNXRuntimeExecutor(string onnxFileName, byte[] onnxModelBytes, 
+    public ONNXRuntimeExecutor(string shortID,
+                               string onnxFileName, byte[] onnxModelBytes, 
                                string[] inputNames,
                                int maxBatchSize, 
                                NetTypeEnum netType, 
@@ -122,7 +124,7 @@ namespace Ceres.Chess.LC0NetInference
         throw new NotImplementedException("Unsupported ONNX type " + deviceType);
       }
 
-      executor = new NetExecutorONNXRuntime(onnxFileName, onnxModelBytes, inputNames,
+      executor = new NetExecutorONNXRuntime(shortID, onnxFileName, onnxModelBytes, inputNames,
                                             precision, deviceIndex, useTRT, enableProfiling);
     }
 
@@ -168,7 +170,7 @@ namespace Ceres.Chess.LC0NetInference
         EncodedPositionBatchFlat.DumpDecoded(flatValuesPrimary, 112);
       }
 
-      List<(string, float[])> eval;
+      List<(string, Memory<Float16>)> eval;
 
       if (NetType == NetTypeEnum.TPG)
       {
@@ -206,12 +208,12 @@ namespace Ceres.Chess.LC0NetInference
         }
 #endif
 
-        eval = executor.Run(inputs, Precision == NNEvaluatorPrecision.FP16);
+        eval = executor.Run(inputs, numPositionsUsed, Precision == NNEvaluatorPrecision.FP16);
       }
       else
       {
         var input = (flatValuesPrimary, new int[] { numPositionsUsed, 112, 8, 8 });
-        eval = executor.Run(new (Memory<float> input, int[] shape)[] { input }, Precision == NNEvaluatorPrecision.FP16);
+        eval = executor.Run(new (Memory<float> input, int[] shape)[] { input }, numPositionsUsed, Precision == NNEvaluatorPrecision.FP16);
       }
 
       const int VALUE_FC_SIZE = 32 * 64;
@@ -299,7 +301,7 @@ namespace Ceres.Chess.LC0NetInference
         int INDEX_WDL2 = FindIndex(3, INDEX_WDL, "value2", true);
         int INDEX_MLH = FindIndex(1);
         int INDEX_UNC = hasUNC ? FindIndex(1, INDEX_MLH) : -1;
-        int INDEX_ACTION = FindIndex(1858 * 3, -1, "view_154", true); // TODO: cleanup the output names to be better named
+        int INDEX_ACTION = FindIndex(1858 * 3, -1, "action", true); // TODO: cleanup the output names to be better named
 
         if (looksLikeBT3)
         {
@@ -310,34 +312,27 @@ namespace Ceres.Chess.LC0NetInference
           Console.WriteLine("uncertainty --> " + eval[INDEX_UNC].Item1);
         }
 
-        float[] mlh = hasMLH ? eval[INDEX_MLH].Item2 : null;
-        float[] uncertantiesV = hasUNC ? eval[INDEX_UNC].Item2 : null;
-        float[] policiesLogistics = eval[INDEX_POLICIES].Item2;
+        Memory<Float16> mlh = hasMLH ? eval[INDEX_MLH].Item2 : null;
+        Memory<Float16> uncertantiesV = hasUNC ? eval[INDEX_UNC].Item2 : null;
+        Memory<Float16> policiesLogistics = eval[INDEX_POLICIES].Item2;
 
-        float[] actionLogistics = INDEX_ACTION != -1 ? eval[INDEX_ACTION].Item2 : null;
-        FP16[] actionLogisticsFP16 = null;
-        if (actionLogistics != null)
-        {
-          Debug.Assert(actionLogistics.Length == 1858 * 3 * numPositionsUsed);
-          actionLogisticsFP16 = FP16.ToFP16(actionLogistics);
-        }
-
-        FP16[] values = FP16.ToFP16(eval[INDEX_WDL].Item2);
+        Memory<Float16> actionLogistics = INDEX_ACTION != -1 ? eval[INDEX_ACTION].Item2 : default;
+        Memory<Float16> values = eval[INDEX_WDL].Item2;
         Debug.Assert(values.Length == (isWDL ? 3 : 1) * numPositionsUsed);
 
-        FP16[] values2 = INDEX_WDL2 == -1 ? null : FP16.ToFP16(eval[INDEX_WDL2].Item2);
+        Memory<Float16> values2 = INDEX_WDL2 == -1 ? default : eval[INDEX_WDL2].Item2;
         float[][] value_fc_activations = null;// eval.Length < 3 ? null : eval[2];
 
         // SWAP VALUE1, VALUE2: (values, values2) = (values2, values); // swap *** TEMPORARY
 
-        FP16[] extraStats0 = eval.Count > 5 ? FP16.ToFP16(eval[5].Item2) : null;
-        FP16[] extraStats1 = eval.Count > 6 ? FP16.ToFP16(eval[6].Item2) : null;
+        Memory<Float16> extraStats0 = eval.Count > 5 ? eval[5].Item2 : default;
+        Memory<Float16> extraStats1 = eval.Count > 6 ? eval[6].Item2 : default;
 
         // TODO: This is just a fake, fill it in someday
-        FP16[] priorState = hasState ? new FP16[numPositionsUsed * 64 * 4] : null;
+        Memory<Float16> priorState = hasState ? new Float16[numPositionsUsed * 64 * 4] : default;
         ONNXRuntimeExecutorResultBatch result = new ONNXRuntimeExecutorResultBatch(isWDL, values, values2, policiesLogistics, mlh, 
                                                                                    uncertantiesV, extraStats0, extraStats1, value_fc_activations,
-                                                                                   actionLogisticsFP16, priorState,
+                                                                                   actionLogistics, priorState,
                                                                                    numPositionsUsed);
         return result;
 

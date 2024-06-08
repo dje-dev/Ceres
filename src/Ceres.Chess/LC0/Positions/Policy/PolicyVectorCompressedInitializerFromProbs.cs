@@ -95,8 +95,8 @@ namespace Ceres.Chess.EncodedPositions
     [SkipLocalsInit]
     public static void InitializeFromProbsArray(ref CompressedPolicyVector policyRef,
                                                 ref CompressedActionVector actions, bool hasActions,
-                                                bool areLogits, int numMoves, int numMovesToSave, 
-                                                Span<float> probs, 
+                                                bool areLogits, int numMoves, int numMovesToSave,
+                                                ReadOnlySpan<Half> probs, 
                                                 float cutoffMinValue = float.MinValue)
     {
       if (hasActions)
@@ -104,15 +104,16 @@ namespace Ceres.Chess.EncodedPositions
         throw new NotImplementedException(); // array of actions needs to be kept sorted with the policies below
       }
 
+      Half cutoffMinValueFloat16 = (Half)cutoffMinValue;
+
       // Create array of ProbEntry.
       Span<ProbEntry> probsA = stackalloc ProbEntry[numMoves];
       int numFound = 0;
       for (short i=0; i< EncodedPolicyVector.POLICY_VECTOR_LENGTH;i++)
       {
-        float value = probs[i];
-        if (value >= cutoffMinValue)
+        if (probs[i] >= cutoffMinValueFloat16) // Do comparison directly with the Half, avoiding conversion unless necessary
         {
-          probsA[numFound++] = new ProbEntry(i, value);
+          probsA[numFound++] = new ProbEntry(i, (float)probs[i]);
         }
       }
 

@@ -286,6 +286,8 @@ Updated notes:
           Span<Int32> policyIndicies = MemoryMarshal.Cast<float, Int32>(rawResultsPolicy).Slice(0, NUM_ELEMENTS);
           Span<float> policyProbabilities = rawResultsPolicy.Slice(Config.MaxBatchSize * NUM_TOPK_POLICY, NUM_ELEMENTS);
 
+          throw new NotImplementedException("next line needs remediation");
+#if NOT
           retBatch = new PositionEvaluationBatch(Config.IsWDL, Config.HasM, Config.HasUncertaintyV, false, false, false,
                                                  numToProcess, results, default,
                                                  NUM_TOPK_POLICY,
@@ -294,6 +296,7 @@ Updated notes:
                                                  resultsUncertaintyV, default, default, null, default, //rawResultsConvValFlat,
                                                  VALUES_ARE_LOGISTIC,
                                                  PositionEvaluationBatch.PolicyType.Probabilities, timeStats, false);
+#endif
         }
         else
         {
@@ -306,6 +309,9 @@ Updated notes:
 
           // NOTE: alternative would be to pass in a mask to the GPU, the batch.ValidMovesMasks could be used to help
           // done below instead. batch.MaskIllegalMovesInPolicyArray(rawResultsPolicy);
+
+          throw new NotImplementedException("rawResultsPolicy below needs remediation, wrong data type");
+#if NOT
           retBatch = new PositionEvaluationBatch(Config.IsWDL, Config.HasM, Config.HasUncertaintyV, false, false, false,
                                                  numToProcess, results, default,
                                                  rawResultsPolicy.Slice(0, numToProcess*1858).ToArray(), // Inefficient 
@@ -316,6 +322,7 @@ Updated notes:
                                                  1, 1, 0, VALUES_ARE_LOGISTIC,
                                                  PositionEvaluationBatch.PolicyType.LogProbabilities, false,
                                                  batch, timeStats);
+#endif
 
         }
 

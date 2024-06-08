@@ -18,6 +18,8 @@ using System.IO;
 using System.Collections.Generic;
 using System.Numerics.Tensors;
 using System.Runtime.InteropServices;
+using System.Diagnostics;
+using System.Linq;
 
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
@@ -28,22 +30,26 @@ using Ceres.Base.Misc;
 
 using Chess.Ceres.NNEvaluators;
 
+
 #endregion
+
 
 /// <summary>
 /// Manages evaluation of neural networks using ONNX runtime.
 /// 
-///
-/// Docs say: " Key design decisions Multiple threads can invoke the Run() method on the same inference session object. 
-///           See[API doc] (C_API.md) for more details.
-///
-/// NOTE: Float16 not supported, would need to have support in this file: csharp/src/Microsoft.ML.OnnxRuntime/NamedOnnxValue.cs 
-///
+/// Although ONNX the documentation stats that multiple threads can invoke the Run() method
+/// on the same inference session object, we have single-instance buffers for inputs and outputs
+/// and therefore take locks to enforce single-threaded access.
+/// 
+/// TODO: some of the clients of this class could possibly pass in a restricted list of outputNames
+///       to eliminate overhead of retrieving values for outputs which may not be needed in some situations.
 /// </summary>
 namespace Ceres.Chess.LC0NetInference
 {
   public class NetExecutorONNXRuntime : IDisposable
   {
+    const int MAX_BATCH_SIZE = 1024;
+
     /// <summary>
     /// Name of underlying ONNX file;
     /// </summary>
@@ -59,28 +65,40 @@ namespace Ceres.Chess.LC0NetInference
     /// </summary>
     public readonly int GPUID;
 
-    readonly object lockObject = new object();
-    bool disposed;
-
     /// <summary>
     /// Session data type precision to use.
     /// </summary>
     public readonly NNEvaluatorPrecision Precision;
 
 
+    readonly object lockObject = new object();
+    bool disposed;
+
+    IReadOnlyDictionary<string, NodeMetadata> inputsMetadata;
+
+    (string name, NodeMetadata metadata, Float16[] value)[] inputBuffers16;
+    (string name, NodeMetadata metadata, Float16[] value)[] outputBuffers16;
+    (string name, NodeMetadata metadata, float[] value)[] inputBuffers32;
+    (string name, NodeMetadata metadata, float[] value)[] outputBuffers32;
+
+
+
     /// <summary>
     /// Constructor.
     /// </summary>
+    /// <param name="shortID"></param>
     /// <param name="onnxFileName"></param>
     /// <param name="onnxModelBytes"></param>
     /// <param name="inputNames"></param>
     /// <param name="gpuID"></param>
     /// <param name="useTRT"></param>
     /// <param name="enableProfiling"></param>
-    public NetExecutorONNXRuntime(string onnxFileName, byte[] onnxModelBytes,
+    public NetExecutorONNXRuntime(string shortID,
+                                  string onnxFileName, byte[] onnxModelBytes,
                                   string[] inputNames,
                                   NNEvaluatorPrecision precision, int gpuID,
-                                  bool useTRT, bool enableProfiling)
+                                  bool useTRT, bool enableProfiling,
+                                  string[] outputNamesToUse = null)
     {
       //     if (gpuID < 0 || gpuID > 16) throw new Exception($"Invalid GPU ID { gpuID}");
       ONNXFileName = onnxFileName;
@@ -132,7 +150,7 @@ namespace Ceres.Chess.LC0NetInference
           OrtTensorRTProviderOptions trtProviderOptions = new OrtTensorRTProviderOptions();
           // TODO: this code has no effect for unknown reasons.
           var providerOptionsDict = new Dictionary<string, string>();
-          providerOptionsDict["device_id"] = gpuID.ToString(); ;
+          providerOptionsDict["device_id"] = gpuID.ToString();
           providerOptionsDict["trt_max_workspace_size"] = "2147483648";
 
           if (inputNames != null)
@@ -155,7 +173,6 @@ namespace Ceres.Chess.LC0NetInference
             providerOptionsDict["trt_profile_opt_shapes"] = MakeShapeStr(108);
             providerOptionsDict["trt_profile_max_shapes"] = MakeShapeStr(1024);
           }
-          //          providerOptionsDict["trt_profile_min_shapes"] = "squares:1x64x137" + (hasStateInput ? ",prior_state.1:1x64x4" : "");
 
           providerOptionsDict["trt_timing_cache_enable"] = "true";
           providerOptionsDict["trt_force_timing_cache"] = "true";
@@ -164,15 +181,19 @@ namespace Ceres.Chess.LC0NetInference
 
           providerOptionsDict["trt_engine_cache_path"] = Path.Combine(directoryName, "trt_engines");
           providerOptionsDict["trt_timing_cache_path"] = directoryName;
-          // providerOptionsDict["trt_engine_cache_prefix"] = "Ceres";
+          if (shortID != null)
+          {
+            providerOptionsDict["trt_engine_cache_prefix"] = shortID;
+          }
 
-          //trt_detailed_build_log=1
+//          providerOptionsDict["trt_detailed_build_log"] = "1";
           providerOptionsDict["trt_fp16_enable"] = Precision == NNEvaluatorPrecision.FP16 ? "1" : "0";
           providerOptionsDict["trt_builder_optimization_level"] = "3";
 
           // providerOptionsDict["trt_cuda_graph_enable"] = "1"; // NOTE: may fail, requires entire graph to map onto ONNX nodes (?)
 
           providerOptionsDict["trt_layer_norm_fp32_fallback"] = "1"; // possibly necessary otherwise terrible accuracy
+          // providerOptionsDict["trt_auxiliary_streams"] = "0";
 
           trtProviderOptions.UpdateOptions(providerOptionsDict);
           so = SessionOptions.MakeSessionOptionWithTensorrtProvider(trtProviderOptions);
@@ -214,18 +235,37 @@ namespace Ceres.Chess.LC0NetInference
       {
         ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, "****************   NetExecutorONNXRuntime is profiling....   ****************");
         so.EnableProfiling = true;
-        //so.ProfileOutputPathPrefix = @"d:\temp";
+        so.ProfileOutputPathPrefix = @"d:\temp";
       }
 
       // See: https://onnxruntime.ai/docs/performance/model-optimizations/graph-optimizations.html
       so.GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL; // Possibly this is overkill and takes too long?
       so.ExecutionMode = ExecutionMode.ORT_PARALLEL;
-        
+
       lock (CUDADevice.InitializingCUDAContextLockObj)
       {
         using (new TimingBlock($"ONNX InferenceSession create on model of size {onnxModelBytes.Length:N0} bytes"))
         {
           Session = new InferenceSession(onnxModelBytes, so);
+
+          inputsMetadata = Session.InputMetadata;
+
+          // Create input and output buffers.
+          if (Precision == NNEvaluatorPrecision.FP32)
+          {
+            inputBuffers32 = ONNXHelpers.CreateBuffers<float>(Session.InputMetadata, MAX_BATCH_SIZE);
+            outputBuffers32 = ONNXHelpers.CreateBuffers<float>(Session.OutputMetadata, MAX_BATCH_SIZE, outputNamesToUse);
+          }
+          else if (Precision == NNEvaluatorPrecision.FP16)
+          {
+            inputBuffers16 = ONNXHelpers.CreateBuffers<Float16>(Session.InputMetadata, MAX_BATCH_SIZE);
+            outputBuffers16 = ONNXHelpers.CreateBuffers<Float16>(Session.OutputMetadata, MAX_BATCH_SIZE, outputNamesToUse);
+          }
+          else
+          {
+            throw new Exception("Unsupported precision");
+          } 
+
         }
       }
     }
@@ -234,36 +274,28 @@ namespace Ceres.Chess.LC0NetInference
     bool haveWarned = false;
 
 
+
     /// <summary>
     /// Evaluates the input.
     /// </summary>
     /// <param name="input"></param>
     /// <param name="shape"></param>
     /// <returns></returns>
-    public List<(string, float[])> Run((Memory<float> input, int[] shape)[] inputs, bool float16)
+    public List<(string, Memory<Float16>)> Run((Memory<float> input, int[] shape)[] inputs, int batchSize, bool float16)
     {
       // Determine input name
       // NOTE: experienced strange lowlevel crash when tried to break out this into name retrieval into a separate method
       string inputName = null;
-      IReadOnlyDictionary<string, NodeMetadata> inputsMetadata = Session.InputMetadata;
+
       if (inputsMetadata.Count != inputs.Length)
       {
         throw new ArgumentException($"Expected {inputsMetadata.Count} inputs, received " + inputs.Length);
       }
 
-#if NOT
-// see: great code here https://gist.github.com/pranavsharma/f3c3ced552cada00fb556734c6967711
-//      var inputMeta = session.InputMetadata;
-//      float[] inputData = LoadTensorFromFile("C:\\Users\\prs\\source\\repos\\GH8332\\bench.in");
-      var input_tensor = new DenseTensor<float>(inputData, inputMeta["data_0"].Dimensions);
-      var output_mem_info = new OrtMemoryInfo("Cuda", OrtAllocatorType.DeviceAllocator, 0, OrtMemType.Default);
-
-      var io_binding = session.CreateIoBinding();
-      io_binding.BindInput("data_0", FixedBufferOnnxValue.CreateFromTensor(input_tensor));
-      io_binding.BindOutputToDevice("softmaxout_1", output_mem_info);
-
-      session.RunWithBinding(run_options, io_binding);
-#endif
+      if (inputs[0].shape[0] > MAX_BATCH_SIZE)
+      {
+        throw new ArgumentException($"Batch size {inputs[0].shape[0]} exceeds maximum of {MAX_BATCH_SIZE}");
+      }
 
       var inputsONNX = new (Memory<float> input, int[] shape, string inputName, int numElements)[inputsMetadata.Count];
 
@@ -289,17 +321,8 @@ namespace Ceres.Chess.LC0NetInference
           throw new Exception("Unable to retrieve name of input");
         }
 
-        int numElements = 1;
-        foreach (int dimSize in shape)
-        {
-          numElements *= dimSize;
-        }
-
-        if (input.Length != numElements)
-        {
-          // Resize the input (the caller may have passed an oversized buffer for efficiency).
-          input = input.Slice(0, numElements);
-        }
+        int numElements = ONNXHelpers.ProductDimensions(shape, batchSize);
+        Debug.Assert(input.Length == numElements); // caller to have passed the correct size
 
         inputIsFloat = iv.Value.ElementType == typeof(float);
 
@@ -313,14 +336,31 @@ namespace Ceres.Chess.LC0NetInference
       //       (unless we decided to support auto-conversion of ONNX files here).
       if (float16 || !inputIsFloat)
       {
+        return RunFloat16(inputsONNX, batchSize);
+#if NOT
         // TODO: Make more efficient, avoid conversion to FP16 which happens in RunFloat16
-        return RunFloat16(inputsONNX);
+        var ret = new List<(string, Memory<Float16>)>();
+        int i = 0;
+        foreach ((string, Memory<Float16> spanx) rr in RunFloat16(inputsONNX, batchSize))
+        {
+          // TODO: eventually avoid this conversion (in the FP16 case)
+          //          Half[] floats = new Half[rr.Item2.Length];
+          //          TensorPrimitives.ConvertToSingle(MemoryMarshal.Cast < Float16, Half > (rr.Item2.Span), floats);
+          //          Memory<Half> mx = MemoryMarshal.Cast<Float16, Half>(new Float16[22]);
+
+          ret[i] = new(rr.Item1, rr.Item2);
+          i++;
+        }
+        return ret;
+#endif
       }
       else
       {
-        return RunFloat(inputsONNX);
+        throw new NotImplementedException();
+        //return RunFloat(inputsONNX, batchSize);
       }
     }
+
 
 
     /// <summary>
@@ -334,54 +374,61 @@ namespace Ceres.Chess.LC0NetInference
     /// <param name="inputName"></param>
     /// <param name="numElements"></param>
     /// <returns></returns>
-    internal List<(string, float[])> RunFloat16((Memory<float> input, int[] shape, string inputName, int numElements)[] inputs)
+    internal List<(string, Memory<Float16>)> RunFloat16((Memory<float> input, int[] shape, string inputName, int numElements)[] inputs, int batchSize)
     {
       List<NamedOnnxValue> inputsONNX = new(inputs.Length);
 
       for (int i = 0; i < inputs.Length; i++)
       {
         (Memory<float> input, int[] shape, string inputName, int numElements) = inputs[i];
-        Span<float> inputSpan = input.Span;
-        Float16[] inputFloat16 = new Float16[numElements];
 
-        TensorPrimitives.ConvertToHalf(inputSpan, MemoryMarshal.Cast<Float16, Half>(inputFloat16));
-
-        DenseTensor<Float16> inputTensor = new DenseTensor<Float16>(inputFloat16, shape);
-        inputsONNX.Add(NamedOnnxValue.CreateFromTensor(inputName, inputTensor));
+        // Convert float inputs directly into the target Float16 ONNX buffer
+        Span<Half> inputBufferSpanHalf = MemoryMarshal.Cast<Float16, Half>(inputBuffers16[i].value);
+        TensorPrimitives.ConvertToHalf(input.Span, inputBufferSpanHalf);
       }
 
-      IDisposableReadOnlyCollection<DisposableNamedOnnxValue> runResult;
       lock (lockObject)
       {
-        if (inputs[0].numElements > 28768)
+
+        //          using (new TimingBlock(ToString() + " RunFloat16 " + inputs[0].numElements))
         {
-          while (false) // TEST CODE
+          RunOptions runOptions = new RunOptions();
+
+          do
           {
-            using (new TimingBlock(ToString() + " RunFloat16 " + inputs[0].numElements))
-              runResult = Session.Run(inputsONNX);
-          }
-        } 
-        runResult = Session.Run(inputsONNX);
+            //            using (new TimingBlock(ToString() + " RunFloat16 " + inputs[0].numElements))
+            {
+              var inputBuffers = ONNXHelpers.CreateOrtValues(batchSize, inputBuffers16);
+              var outputBuffers = ONNXHelpers.CreateOrtValues(batchSize, outputBuffers16);
+
+              // Note that IOBinding is not used. As noted in the ONNX documentation,
+              // there is not necessarily any benefit of using IOBinding over this simpler
+              // method of passing the OrtValue inputs and outputs directly to the Run method.
+              Session.Run(runOptions,
+                          inputBuffers.names, inputBuffers.values,
+                          outputBuffers.names, outputBuffers.values);
+            }
+          } while (false);// (batchSize > 200); // TEST CODE
+
+        }
       }
 
-      List<(string, float[])> resultArrays = new(Session.OutputMetadata.Count);
-      foreach (DisposableNamedOnnxValue resultValue in runResult)
+      List<(string, Memory<Float16>)> resultArrays = new(outputBuffers16.Length);
+      foreach ((string name, NodeMetadata metadata, Float16[] value) resultItem in outputBuffers16)
       {
-        DenseTensor<Float16> tensor = (DenseTensor<Float16>)resultValue.AsTensor<Float16>();
-        Span<Float16> valuesFloat16 = tensor.Buffer.Span;
-
-        float[] resultArray = new float[valuesFloat16.Length];
-        TensorPrimitives.ConvertToSingle(MemoryMarshal.Cast<Float16, Half>(valuesFloat16), resultArray);
-
-        resultArrays.Add((resultValue.Name, resultArray));
+        // Create a Memory over the ONNX buffer sized to the actual number of elements for this batch.
+        Memory<Float16> memory = new Memory<Float16>(resultItem.value)[..ONNXHelpers.ProductDimensions(resultItem.metadata.Dimensions, batchSize)];
+        resultArrays.Add((resultItem.name, memory));
       }
 
       return resultArrays;
     }
 
 
-    private List<(string, float[])> RunFloat((Memory<float> input, int[] shape, string inputName, int numElements)[] inputs)
+    private List<(string, Memory<float>)> RunFloat((Memory<float> input, int[] shape, string inputName, int numElements)[] inputs, int batchSize)
     {
+      throw new NotImplementedException();
+#if NOT
       List<NamedOnnxValue> inputsONNX = new(inputs.Length);
 
       for (int i = 0; i < inputs.Length; i++)
@@ -408,30 +455,8 @@ namespace Ceres.Chess.LC0NetInference
         resultArrays.Add((resultValue.Name, values));
       }
       return resultArrays;
-    }
-#if NOT
-    DenseTensor<float> inputTensor = new DenseTensor<float>(input.Slice(0, numElements), shape);
-      List<NamedOnnxValue> inputs = new List<NamedOnnxValue>() { NamedOnnxValue.CreateFromTensor(inputName, inputTensor) };
-
-      IDisposableReadOnlyCollection<DisposableNamedOnnxValue> runResult = default;
-
-        lock (lockObject)
-        {
-          runResult = Session.Run(inputs);
-        }
-
-      float[][] resultArrays = new float[Session.OutputMetadata.Count][];
-      int i = 0;
-      foreach (DisposableNamedOnnxValue resultValue in runResult)
-      {
-        DenseTensor<float> tensor = (DenseTensor<float>)resultValue.AsTensor<float>();
-        float[] values = tensor.Buffer.ToArray(); // TO DO: Avoid reallocation ?
-        resultArrays[i] = values;
-        i++;
-      }
-      return resultArrays;
-    }
 #endif
+    }
 
     public void EndProfiling()
     {
@@ -462,31 +487,94 @@ namespace Ceres.Chess.LC0NetInference
 
 
   }
+
+  public static class  ONNXHelpers
+  {
+
+    /// <summary>
+    /// Allocates array of buffers to be used as either inputs or outputs, based on specified metadata.
+    /// 
+    /// NOTE: One possibility would have been to allocate underlying memory via ONNX,
+    ///       opening the door to an on-device buffer allocation.
+    ///       However allocatorCUDA_PINNED was tested and works but does not seem any faster (possibly slightly slower)
+    ///       using (var ortMemInfo = new OrtMemoryInfo(OrtMemoryInfo.allocatorCPU, OrtAllocatorType.DeviceAllocator, DEVICE_ID, OrtMemType.Default))
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    /// <param name="metadata"></param>
+    /// <param name="maxBatchSize"></param>
+    /// <param name="outputNamesToUse"></param>
+    /// <returns></returns>
+    public static (string name, NodeMetadata metadata, T[] value)[]
+      CreateBuffers<T>(IReadOnlyDictionary<string, NodeMetadata> metadata, int maxBatchSize, string[] outputNamesToUse = null) where T : unmanaged
+    {
+      var buffers = new (string name, NodeMetadata metadata, T[] value)[metadata.Count];
+
+      int i = 0;
+      foreach (KeyValuePair<string, NodeMetadata> iv in metadata)
+      {
+        if (outputNamesToUse == null || outputNamesToUse.Contains(iv.Key))
+        {
+
+          int maxElements = ProductDimensions(iv.Value.Dimensions, maxBatchSize);
+          buffers[i] = (iv.Key, iv.Value, new T[maxElements]);
+
+          i++;
+        }
+      }
+      return buffers;
+    }
+
+
+    public static (string[] names, OrtValue[] values) CreateOrtValues<T>(int batchSize, (string name, NodeMetadata metadata, T[] value)[] buffers) where T : unmanaged
+    {
+      (string[] names, OrtValue[] values) ret = new();
+
+      // TODO: eliminate next two allocations
+      ret.names = new string[buffers.Length];
+      ret.values = new OrtValue[buffers.Length];
+
+      int i = 0;
+      foreach ((string name, NodeMetadata metadata, T[] value) in buffers)
+      {
+        OrtValue ortValue = OrtValue.CreateTensorValueFromMemory<T>(value, ToLongArray(metadata.Dimensions, batchSize));
+        ret.names[i] = name;
+        ret.values[i] = ortValue;
+        i++;
+      }
+
+      return ret;
+    }
+
+    public static long[] ToLongArray(int[] values, long firstValue)
+    {
+      long[] ret = new long[values.Length];
+
+      Debug.Assert(values[0] == -1);
+      ret[0] = firstValue;
+
+      for (int i = 1; i < values.Length; i++)
+      {
+        ret[i] = values[i];
+      }
+      return ret;
+    }
+
+
+
+    public static int ProductDimensions(int[] dims, int negativeOneFillInValue = 1)
+    {
+      int productNumElements = 1;
+      foreach (int dimSize in dims)
+      {
+        productNumElements *= dimSize == -1 ? negativeOneFillInValue : dimSize;  
+      }
+
+      return productNumElements;
+    }
+
+
+
+  }
 }
 
 
-#if NOT
-
-// Python example. This successfully runs a model, but very slowly.
-//  (do this first from command line: set CUDA_VISIBLE_DEVICES=3)
-
-os.environ['CUDA_VISIBLE_DEVICES'] = '3'
-
-import numpy.random
-import onnxruntime
-import time
-
-import onnx
-
-session = onnxruntime.InferenceSession(r"d:\converted\run1_62242.onnx", None)
-x = numpy.random.random((8192,112, 64))
-x = x.astype(numpy.float32)
-res = session.run(['value_head:0','policy_head:0'], {'Placeholder:0': x})
-
-for i in range(3):
-  t1 = time.time()
-  res = session.run(['value_head:0','policy_head:0'], {'Placeholder:0': x})
-  t2 = time.time()
-  print('time', t2 - t1)
-
-#endif

@@ -17,6 +17,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
 using Ceres.Base.Benchmarking;
@@ -27,6 +28,7 @@ using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Chess.LC0.Batches;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
+using Microsoft.ML.OnnxRuntime;
 
 #endregion
 
@@ -393,7 +395,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
 
 
     /// <summary>
-    /// Constructor (from specified value and policy valeus).
+    /// Constructor (from specified value and policy values).
     /// </summary>
     /// <param name="isWDL"></param>
     /// <param name="hasM"></param>
@@ -404,9 +406,9 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <param name="stats"></param>
     private PositionEvaluationBatch(bool isWDL, bool hasM, bool hasUncertaintyV, bool hasAction, 
                                     bool hasValueSecondary, bool hasState, int numPos,
-                                    Span<FP16> valueEvals, Span<FP16> valueEvals2, 
-                                    Span<FP16> m, Span<FP16> uncertaintyV,
-                                    Memory<FP16> extraStats0, Memory<FP16> extraStats1,
+                                    ReadOnlySpan<FP16> valueEvals, ReadOnlySpan<FP16> valueEvals2,
+                                    ReadOnlySpan<FP16> m, ReadOnlySpan<FP16> uncertaintyV,
+                                    ReadOnlySpan<FP16> extraStats0, ReadOnlySpan<FP16> extraStats1,
                                     Span<Half[]> states,
                                     Span<NNEvaluatorResultActivations> activations,
                                     float temperatureValue1, float temperatureValue2, float fractionValueFromValue2,
@@ -488,9 +490,9 @@ namespace Ceres.Chess.NetEvaluation.Batch
     public PositionEvaluationBatch(bool isWDL, bool hasM, bool hasUncertaintyV, bool hasAction, 
                                    bool hasValueSecondary, bool hasState, int numPos, 
                                    Span<FP16> valueEvals, Span<FP16> valueEvals2, 
-                                   Memory<float> policyProbs, Memory<CompressedActionVector> actionLogits,
-                                   FP16[] m, FP16[] uncertaintyV, 
-                                   Memory<FP16> extraStats0, Memory<FP16> extraStats1,
+                                   Memory<Float16> policyProbs, Memory<CompressedActionVector> actionVectors,
+                                   ReadOnlySpan<FP16> m, ReadOnlySpan<FP16> uncertaintyV,
+                                   ReadOnlySpan<FP16> extraStats0, ReadOnlySpan<FP16> extraStats1,
                                    Memory<Half[]> states, NNEvaluatorResultActivations[] activations,
                                    float temperatureValue1, float temperatureValue2, float fractionValue1FromValue2,
                                    bool valsAreLogistic, PolicyType probType, bool policyAlreadySorted,
@@ -500,8 +502,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
           m, uncertaintyV,  extraStats0, extraStats1, states.ToArray(), activations,
           temperatureValue1, temperatureValue2, fractionValue1FromValue2, valsAreLogistic, stats)
     {     
-      Policies = ExtractPoliciesBufferFlat(numPos, policyProbs, probType, policyAlreadySorted, sourceBatchWithValidMoves, actionLogits, hasAction);
-      Actions = actionLogits;
+      Policies = ExtractPoliciesBufferFlat(numPos, policyProbs, probType, policyAlreadySorted, sourceBatchWithValidMoves, actionVectors, hasAction);
+      Actions = actionVectors;
     }
 
 
@@ -517,25 +519,27 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <param name="probType"></param>
     /// <param name="stats"></param>
     public PositionEvaluationBatch(bool isWDL, bool hasM, bool hasUncertaintyV, bool hasAction, bool hasValueSecondary,
-                                   bool hasState, int numPos, 
-                                   Span<FP16> valueEvals, Span<FP16> valueEvals2,
-                                   int topK, Span<int> policyIndices, Span<float> policyProbabilties,
-                                   Span<FP16> m, Span<FP16> uncertaintyV,
-                                   Memory<FP16> extraStats0, Memory<FP16> extraStats1,
-                                   Span<Half[]> states,
-                                   Span<NNEvaluatorResultActivations> activations, bool valsAreLogistic,
+                                   bool hasState, int numPos,
+                                   ReadOnlySpan<FP16> valueEvals, ReadOnlySpan<FP16> valueEvals2,
+                                   int topK, ReadOnlySpan<int> policyIndices, ReadOnlySpan<float> policyProbabilties,
+                                   ReadOnlySpan<FP16> m, ReadOnlySpan<FP16> uncertaintyV,
+                                   ReadOnlySpan<FP16> extraStats0, ReadOnlySpan<FP16> extraStats1,
+                                   ReadOnlySpan<Half[]> states,
+                                   ReadOnlySpan<NNEvaluatorResultActivations> activations, bool valsAreLogistic,
                                    PolicyType probType, TimingStats stats, bool alreadySorted,
                                    float temperatureValue1= 1, float temperatureValue2 = 1, float fractionValue1FromValue2 = 0)
-      : this(isWDL, hasM, hasUncertaintyV, hasAction, hasValueSecondary, hasState, 
-             numPos, valueEvals, valueEvals2, m, uncertaintyV, extraStats0, extraStats1, states, activations, 
-             temperatureValue1, temperatureValue2, fractionValue1FromValue2, valsAreLogistic, stats)
+//      : this(isWDL, hasM, hasUncertaintyV, hasAction, hasValueSecondary, hasState, 
+//             numPos, valueEvals, valueEvals2, m, uncertaintyV, extraStats0, extraStats1, states, activations, 
+//             temperatureValue1, temperatureValue2, fractionValue1FromValue2, valsAreLogistic, stats)
     {
+      throw new NotImplementedException();
       if (HasAction)
       {
         throw new NotImplementedException();
       }
-      Policies = ExtractPoliciesTopK(numPos, topK, policyIndices, policyProbabilties, probType, alreadySorted);
+//      Policies = ExtractPoliciesTopK(numPos, topK, policyIndices, policyProbabilties, probType, alreadySorted);
     }
+
 
     /// <summary>
     /// Constructor (for an empty batch, to be filled in later with CopyFrom method).
@@ -544,6 +548,9 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <param name="retrieveSupplementalResults"></param>
     public PositionEvaluationBatch(bool isWDL, bool hasM, bool hasUncertaintyV, bool hasValueSecondary, int maxPos, bool retrieveSupplementalResults)
     {
+      // Likely need to remediate this (and possibly also CopyFrom method, for additional heads).
+      throw new NotImplementedException();
+#if NOT
       Policies = new CompressedPolicyVector[maxPos];
       HasM = hasM;
       IsWDL = isWDL;
@@ -568,7 +575,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
       {
         M = new FP16[maxPos];
       }
-
+#endif
     }
 
     /// <summary>
@@ -579,6 +586,9 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <exception cref="ArgumentException"></exception>
     public void CopyFrom(PositionEvaluationBatch other)
     {
+      // Likely need to remediate for additional heads.
+      throw new NotImplementedException();
+#if NOT
       if (other.NumPos > W.Length)
       {
         throw new ArgumentException($"Other batch number of positions {other.NumPos} exceeds maximum of {W.Length}");
@@ -653,6 +663,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
       }
 
       Stats = other.Stats;
+#endif
     }
 
 
@@ -715,10 +726,13 @@ namespace Ceres.Chess.NetEvaluation.Batch
     static float[] policyTempBuffer;
 
     [ThreadStatic]
+    static Float16[] policyTempBufferFloat16;
+
+    [ThreadStatic]
     static float[] actionTempBuffer;
 
     static CompressedPolicyVector[] ExtractPoliciesBufferFlat(int numPos, 
-                                                              Memory<float> policyProbs,
+                                                              Memory<Float16> policyProbs,
                                                               PolicyType probType, bool alreadySorted, 
                                                               IEncodedPositionBatchFlat sourceBatchWithValidMoves,
                                                               Memory<CompressedActionVector> actions,
@@ -741,11 +755,12 @@ namespace Ceres.Chess.NetEvaluation.Batch
       Memory<MGMoveList> moves = sourceBatchWithValidMoves == null ? default : sourceBatchWithValidMoves.Moves;
       Parallel.For(0, numPos, i =>
       {
-        Span<float> policyProbsSpan = policyProbs.Span;
+        ReadOnlySpan<Float16> policyProbsSpan = policyProbs.Span;
 
         if (policyTempBuffer == null)
         {
           policyTempBuffer = new float[EncodedPolicyVector.POLICY_VECTOR_LENGTH];
+          policyTempBufferFloat16 = new Float16[EncodedPolicyVector.POLICY_VECTOR_LENGTH];
           actionTempBuffer = new float[EncodedPolicyVector.POLICY_VECTOR_LENGTH * 3];
         }
         else
@@ -765,27 +780,29 @@ namespace Ceres.Chess.NetEvaluation.Batch
           // N.B. It is not possible to apply move masking here, 
           //      so it is assumed this is already done by the caller.
           //Array.Copy(policyProbsSpan, startIndex, policyTempBuffer, 0, EncodedPolicyVector.POLICY_VECTOR_LENGTH);
-          policyProbsSpan.Slice(startIndex, EncodedPolicyVector.POLICY_VECTOR_LENGTH).CopyTo(policyTempBuffer.AsSpan().Slice(0, EncodedPolicyVector.POLICY_VECTOR_LENGTH));
+          ReadOnlySpan<Float16> thesePolicyProbsFloat16 = policyProbsSpan.Slice(startIndex, EncodedPolicyVector.POLICY_VECTOR_LENGTH);
+          ReadOnlySpan<Half> thesePolicyProbsHalf = MemoryMarshal.Cast<Float16, Half>(thesePolicyProbsFloat16);
           
           const float MIN_PROB = -100;
-          CompressedPolicyVector ret = default;
-          CompressedActionVector dummy = default;
+          CompressedPolicyVector policyVector = default;
+          CompressedActionVector actionsVector = default;
+          PolicyVectorCompressedInitializerFromProbs.InitializeFromProbsArray(ref policyVector, ref actionsVector, hasActions,
+                                                                              true, EncodedPolicyVector.POLICY_VECTOR_LENGTH, 96,
+                                                                              thesePolicyProbsHalf, MIN_PROB);
+
           if (hasActions)
           {
             throw new NotImplementedException("probably need remediation in next line");
           }
-          PolicyVectorCompressedInitializerFromProbs.InitializeFromProbsArray(ref ret, ref dummy, hasActions,
-                                                                              true, EncodedPolicyVector.POLICY_VECTOR_LENGTH, 96,
-                                                                              policyTempBuffer, MIN_PROB);
 
-          retPolicies[i] = ret;
+          retPolicies[i] = policyVector;
         }
         else
         {
           // Compute an array if indices of valid moves.
-          Span<int> legalMoveIndices = stackalloc int[128]; // TODO: make this short not int?
           MGMoveList movesThis = moves.Span[i];
           int numLegalMoves = movesThis.NumMovesUsed;
+          Span<int> legalMoveIndices = stackalloc int[numLegalMoves]; // TODO: make this short not int?
           for (int im = 0; im < numLegalMoves; im++)
           {
             EncodedMove encodedMove = ConverterMGMoveEncodedMove.MGChessMoveToEncodedMove(movesThis.MovesArray[im]);
@@ -796,14 +813,14 @@ namespace Ceres.Chess.NetEvaluation.Batch
           float max = float.MinValue;
           for (int j = 0; j < numLegalMoves; j++)
           {
-            float val = policyProbsSpan[startIndex + legalMoveIndices[j]];
+            float val = (float)policyProbsSpan[startIndex + legalMoveIndices[j]];
             if (val > max) max = val;
           }
 
           double acc = 0;
           for (int j = 0; j < numLegalMoves; j++)
           {
-            float prob = policyProbsSpan[startIndex + legalMoveIndices[j]];
+            float prob = (float)policyProbsSpan[startIndex + legalMoveIndices[j]];
             if (prob > -1E10)
             {
               float value = (float)Math.Exp(prob - max);
@@ -848,7 +865,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// </summary>
     /// <param name="valueEvals"></param>
     /// <param name="valsAreLogistic"></param>
-    void InitializeValueEvals(Span<FP16> valueEvals, bool valsAreLogistic, float temperature, bool secondaryValue)
+    void InitializeValueEvals(ReadOnlySpan<FP16> valueEvals, bool valsAreLogistic, float temperature, bool secondaryValue)
     {
       Debug.Assert(!(secondaryValue && !HasValueSecondary));
 
