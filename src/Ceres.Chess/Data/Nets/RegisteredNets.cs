@@ -65,10 +65,12 @@ namespace Ceres.Chess.Data.Nets
         {"BT4_5000k", ONNXNet32LC0("BT4-1024x15x32h-swa-5000000.pb.gz")},
 
         {"T1_DISTILL_256_10", ONNXNet32LC0("t1-256x10-distilled-swa-2432500")},
+        {"T1_DISTILL_256_10_TRT", ONNXNet32LC0("t1-256x10-distilled-swa-2432500", true)},
         {"T1_DISTILL_256_10_FP16", ONNXNet16LC0("t1-256x10-distilled-swa-2432500_fp16")},
         {"T1_DISTILL_256_10_FP16_TRT", ONNXNet16LC0("t1-256x10-distilled-swa-2432500_fp16", true)},
 
         {"T1_DISTILL_512_15", ONNXNet32LC0("t1-512x15x8h-distilled-swa-3395000")},
+        {"T1_DISTILL_512_15_TRT", ONNXNet32LC0("t1-512x15x8h-distilled-swa-3395000", true)},
         {"T1_DISTILL_512_15_FP16", ONNXNet16LC0("t1-512x15x8h-distilled-swa-3395000_fp16")},
         {"T1_DISTILL_512_15_FP16_TRT", ONNXNet16LC0("t1-512x15x8h-distilled-swa-3395000_fp16", true)},
 
