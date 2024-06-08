@@ -54,6 +54,11 @@ namespace Ceres.Chess.NNEvaluators.Specifications
     /// </summary>
     public readonly string OptionsString;
 
+    /// <summary>
+    /// Specification string used as the definition.
+    /// </summary>
+    public readonly string SpecString;
+
 
     /// <summary>
     /// Constructor which parses a net specification string.
@@ -62,6 +67,8 @@ namespace Ceres.Chess.NNEvaluators.Specifications
     public NNNetSpecificationString(string netString)
     {
       ArgumentException.ThrowIfNullOrEmpty(netString, nameof(netString)); 
+
+      SpecString = netString;
 
       // Build network definitions
       (string netOptions, List<(string, NNEvaluatorType, NNEvaluatorPrecision, float, float, float, float, float)> parts) netParts = OptionsParserHelpers.ParseNetworkOptions(netString);
@@ -72,6 +79,11 @@ namespace Ceres.Chess.NNEvaluators.Specifications
       foreach (var netSegment in netParts.parts)
       {
         NetDefs.Add((new NNEvaluatorNetDef(netSegment.Item1, netSegment.Item2, netSegment.Item3), netSegment.Item4, netSegment.Item5, netSegment.Item6, netSegment.Item7, netSegment.Item8));
+      }
+
+      if (NetDefs.Count == 1)
+      {
+        NetDefs[0].def.ShortID = netString;
       }
 
       ComboType = NetDefs.Count == 1 ? NNEvaluatorNetComboType.Single : NNEvaluatorNetComboType.WtdAverage;

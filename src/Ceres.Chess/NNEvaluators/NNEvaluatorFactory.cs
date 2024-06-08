@@ -204,7 +204,7 @@ namespace Ceres.Chess.NNEvaluators
           bool viaTRT = netDef.Type == NNEvaluatorType.ONNXViaTRT;
           string fullFN = Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, netDef.NetworkID) + ".onnx";
           //          NNEvaluatorPrecision precision = netDef.NetworkID.EndsWith(".16") ? NNEvaluatorPrecision.FP16 : NNEvaluatorPrecision.FP32;
-          ret = new NNEvaluatorEngineONNX(netDef.NetworkID, fullFN, null, deviceDef.Type, deviceDef.DeviceIndex, useTRT: viaTRT,
+          ret = new NNEvaluatorEngineONNX(netDef.ShortID, fullFN, null, deviceDef.Type, deviceDef.DeviceIndex, useTRT: viaTRT,
                                             ONNXRuntimeExecutor.NetTypeEnum.LC0, deviceDef.MaxBatchSize ?? DEFAULT_MAX_BATCH_SIZE,
                                             netDef.Precision, DEFAULT_HAS_WDL, DEFAULT_HAS_MLH, DEFAULT_HAS_UNCERTAINTYV, DEFAULT_HAS_ACTION,
                                             null, null, null, null, false, ONNX_SCALE_50_MOVE_COUNTER, ENABLE_MOVES, false, hasState: DEFAULT_HAS_STATE);

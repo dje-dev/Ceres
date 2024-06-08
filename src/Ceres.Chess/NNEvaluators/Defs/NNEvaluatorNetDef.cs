@@ -15,6 +15,7 @@
 
 using Chess.Ceres.NNEvaluators;
 using System;
+using System.IO;
 using System.Text.Json.Serialization;
 
 #endregion
@@ -42,7 +43,28 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// </summary>
     public NNEvaluatorPrecision Precision { get; init; }
 
+    string shortID;
 
+    /// <summary>
+    /// Possible short descriptive ID.
+    /// </summary>
+    public string ShortID
+    {
+      get
+      {
+        // String out any path related characters.
+        return shortID ?? NetworkID.Replace("/", "").Replace("\\", "").Replace(":", "");
+      }
+      set => shortID = value; 
+    }
+
+
+    /// <summary>
+    /// Constructor.
+    /// </summary>
+    /// <param name="networkID"></param>
+    /// <param name="type"></param>
+    /// <param name="precision"></param>
     public NNEvaluatorNetDef(string networkID, NNEvaluatorType type, 
                              NNEvaluatorPrecision precision = NNEvaluatorPrecision.FP16)
     {
