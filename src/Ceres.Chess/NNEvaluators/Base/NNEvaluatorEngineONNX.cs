@@ -360,7 +360,7 @@ namespace Chess.Ceres.NNEvaluators
 
         short[] legalMoveIndices = new short[batch.NumPos * MAX_MOVES];
         ConverterToFlat(batch, UseHistory, flatValuesAttention, legalMoveIndices);
-
+#if NOT
         bool xPosMoveIsLegal(int posNum, int nnIndexNum)
         {
           if (batch.Moves.IsEmpty)
@@ -382,10 +382,8 @@ namespace Chess.Ceres.NNEvaluators
               }
             }
             return false;
-          }
-         
+          }         
         }
-
         bool PosMoveIsLegal(int posNum, int nnIndexNum)
         {
           return true;
@@ -396,6 +394,7 @@ namespace Chess.Ceres.NNEvaluators
           //Console.WriteLine(ret);
           return ret;
         }
+#endif
 
         Func<int, int, bool> posMoveIsLegal = null; // PosMoveIsLegal
         PositionEvaluationBatch ret = DoEvaluateBatch(batch, flatValuesAttentionM, null, batch.NumPos, 
