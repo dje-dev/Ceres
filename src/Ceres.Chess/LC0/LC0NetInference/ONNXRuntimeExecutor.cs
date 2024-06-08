@@ -212,11 +212,11 @@ namespace Ceres.Chess.LC0NetInference
       }
       else
       {
-        var input = (flatValuesPrimary, new int[] { numPositionsUsed, 112, 8, 8 });
-        eval = executor.Run(new (Memory<float> input, int[] shape)[] { input }, numPositionsUsed, Precision == NNEvaluatorPrecision.FP16);
+        (Memory<float> flatValuesPrimary, int[]) input = default;
+        input.Item1 = flatValuesPrimary.Slice(0, numPositionsUsed * 112 * 8 * 8);
+        input.Item2 = [numPositionsUsed, 112, 8, 8 ];
+        eval = executor.Run([input], numPositionsUsed, Precision == NNEvaluatorPrecision.FP16);
       }
-
-      const int VALUE_FC_SIZE = 32 * 64;
 
       int numPlanes = NetType == NetTypeEnum.Ceres ? EncodedPositionBatchFlat.TOTAL_NUM_PLANES_ALL_HISTORIES : 112;
 
