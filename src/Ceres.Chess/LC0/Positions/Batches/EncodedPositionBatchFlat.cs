@@ -16,7 +16,7 @@
 using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
-
+using System.Threading.Tasks;
 using Ceres.Base.DataTypes;
 using Ceres.Base.Math;
 using Ceres.Chess.EncodedPositions;
@@ -648,6 +648,7 @@ namespace Ceres.Chess.LC0.Batches
       return convertToNHWC ? ToNHWC(ret, numChannels) : ret;
     }
 
+
     public float[] ValuesFlatFromPlanes(float[] preallocatedBuffer, bool nwhc, bool scale50MoveCounter)
     {
       Debug.Assert(!nwhc); // not implemented
@@ -672,14 +673,16 @@ namespace Ceres.Chess.LC0.Batches
 
 
     unsafe static void BitmapRepresentationExpand(ulong[] thisLongs, byte[] thisValues,
-                                                  float[] targetArray, int numToConvert,
+                                                  float[] targetArray, 
+                                                  int startIndex, int numToConvert, int totalElements,
                                                   bool scale50MoveCounter)
     {
-      int targetOffset = 0;
+      int targetOffset = startIndex * 64;
 
       fixed (ulong* longs = &thisLongs[0])
       {
-        for (int outer = 0; outer < numToConvert; outer++)
+        int endIndex = Math.Min(totalElements, startIndex + numToConvert);
+        for (int outer = startIndex; outer < endIndex; outer++)
         {
           // We can bypass conversion of the value is zero since product will always be zero
           if (longs[outer] == 0)
@@ -721,9 +724,32 @@ namespace Ceres.Chess.LC0.Batches
     /// <param name="encodingType"></param>
     void ConvertToFlat(float[] outBuffer, bool scale50MoveCounter)
     {
+      // TODO: Somehow rework this performance-critical method
+      //       by vectorization or putting expansion on GPU.
       //return ConvertToFlatSlow(outBuffer, encodingType); old slow version
       int numToConvert = NumPos * TOTAL_NUM_PLANES_ALL_HISTORIES;
-      BitmapRepresentationExpand(PosPlaneBitmaps, PosPlaneValues, outBuffer, numToConvert, scale50MoveCounter);
+      if (numToConvert < 64)
+      {
+        BitmapRepresentationExpand(PosPlaneBitmaps, PosPlaneValues, outBuffer,
+                                   0, numToConvert, numToConvert, scale50MoveCounter);
+      }
+      else
+      {
+        // Do a Parallel.For with each thread converting a block of 16 positions
+        const int NUM_PER_BLOCK = 32;
+        int numBlocks = numToConvert / NUM_PER_BLOCK;
+        if (numToConvert % NUM_PER_BLOCK != 0)
+        {
+          numBlocks++;
+        }
+
+        Parallel.For(0, numBlocks, i =>
+        {
+          BitmapRepresentationExpand(PosPlaneBitmaps, PosPlaneValues, outBuffer,
+                                     i * NUM_PER_BLOCK, NUM_PER_BLOCK, numToConvert, scale50MoveCounter);
+        });
+
+      }
     }
 
 
