@@ -117,12 +117,12 @@ namespace Ceres.Chess.LC0NetInference
     /// This involves reordering some planes, dividing the Rule50 by 99, and filling the last plane with 1's
     /// TO DO: possibly adopt this for our inputs
     /// </summary>
-    /// <param name="floats"></param>
+    /// <param name="inputs"></param>
     /// <param name="batchSize"></param>
     /// <returns></returns>
-    public static float[] RebuildInputsForLC0Network(Memory<float> floats, int batchSize)
+    public static Half[] RebuildInputsForLC0Network(Memory<Half> inputs, int batchSize)
     {
-      float[] expandedFloats = new float[batchSize * 64 * EncodedPositionBatchFlat.TOTAL_NUM_PLANES_ALL_HISTORIES];
+      Half[] expandedResults = new Half[batchSize * 64 * EncodedPositionBatchFlat.TOTAL_NUM_PLANES_ALL_HISTORIES];
       for (int i = 0; i < batchSize; i++)
       {
         int baseSrcThisBatchItem = i * EncodedPositionBatchFlat.TOTAL_NUM_PLANES_ALL_HISTORIES * 64;
@@ -130,22 +130,25 @@ namespace Ceres.Chess.LC0NetInference
 
         void CopyPlanes(int numPlanesCopy, int planeFirstIndexInSource, int fillValue = -1, float divideValue = 1.0f)
         {
+          Half fillValueHalf = (Half)fillValue;
           int newSrce = baseSrcThisBatchItem + (planeFirstIndexInSource * 64);
           if (fillValue != -1)
           {
             for (int j = 0; j < numPlanesCopy * 64; j++)
-              expandedFloats[baseDstThisBatchItem + j] = fillValue;
+              expandedResults[baseDstThisBatchItem + j] = fillValueHalf;
           }
           else if (divideValue != 1)
           {
-            Span<float> floatsS = floats.Span;
+            Span<Half> inputsS = inputs.Span;
             for (int j = 0; j < numPlanesCopy * 64; j++)
-              expandedFloats[baseDstThisBatchItem + j] = floatsS[newSrce + j] / divideValue;
+            {
+              expandedResults[baseDstThisBatchItem + j] = (Half)((float)inputsS[newSrce + j] / divideValue);
+            }
           }
           else
           {
             int size = numPlanesCopy * 64;
-            floats.Slice(newSrce, size).CopyTo(expandedFloats.AsMemory<float>().Slice(baseDstThisBatchItem, size));
+            inputs.Slice(newSrce, size).CopyTo(expandedResults.AsMemory<Half>().Slice(baseDstThisBatchItem, size));
 //            Array.Copy(floats, newSrce, expandedFloats, baseDstThisBatchItem, numPlanesCopy * 64);
           }
           baseDstThisBatchItem += numPlanesCopy * 64;
@@ -166,7 +169,7 @@ namespace Ceres.Chess.LC0NetInference
         CopyPlanes(1, 59, fillValue: 1); // last one must be all 1's
       }
 
-      return expandedFloats;
+      return expandedResults;
     }
 
     #endregion

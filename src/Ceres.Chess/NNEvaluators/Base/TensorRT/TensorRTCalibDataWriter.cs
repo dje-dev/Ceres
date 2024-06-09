@@ -95,7 +95,7 @@ namespace Chess.Ceres.NNEvaluators.TensorRT
       // Write expanded planes (with binary data ready for direct loading into neural net)
       string fn = @"d:\temp\calib_batch_flat.dat";
       Console.WriteLine($"writing {fn} ");
-      float[] valuesFlat = batch.ValuesFlatFromPlanes(null, false, scaleMove50Counter);
+      Half[] valuesFlat = batch.ValuesFlatFromPlanes(null, false, scaleMove50Counter);
       WriteAllBytes(fn, SerializationUtils.SerializeArray(valuesFlat), append);
     }
 

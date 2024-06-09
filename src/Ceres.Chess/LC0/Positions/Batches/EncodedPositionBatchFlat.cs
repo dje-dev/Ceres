@@ -310,7 +310,7 @@ namespace Ceres.Chess.LC0.Batches
       [MethodImpl(MethodImplOptions.AggressiveInlining)]
       void WritePair(ulong bitmap, byte value)
       {
-        PosPlaneBitmaps[nextOutPlaneIndex] = bitmap;
+        PosPlaneBitmaps[nextOutPlaneIndex] = bitmap * value;
         PosPlaneValues[nextOutPlaneIndex] = value;
         nextOutPlaneIndex++;
       }
@@ -607,7 +607,8 @@ namespace Ceres.Chess.LC0.Batches
 
       if (numHistoryPositions == NUM_HISTORY_POSITIONS)
       {
-        ret = ValuesFlatFromPlanes(null, convertToNHWC, scale50MoveCounter);
+        throw new NotImplementedException();
+        //ret = ValuesFlatFromPlanes(null, convertToNHWC, scale50MoveCounter);
       }
       else
       {
@@ -649,11 +650,11 @@ namespace Ceres.Chess.LC0.Batches
     }
 
 
-    public float[] ValuesFlatFromPlanes(float[] preallocatedBuffer, bool nwhc, bool scale50MoveCounter)
+    public Half[] ValuesFlatFromPlanes(Half[] preallocatedBuffer, bool nwhc, bool scale50MoveCounter)
     {
       Debug.Assert(!nwhc); // not implemented
 
-      float[] ret;
+      Half[] ret;
 
       int length = TOTAL_NUM_PLANES_ALL_HISTORIES * NumPos * 64;
       if (preallocatedBuffer != null)
@@ -664,7 +665,7 @@ namespace Ceres.Chess.LC0.Batches
       }
       else
       {
-        ret = new float[length];
+        ret = new Half[length];
       }
 
       ConvertToFlat(ret, scale50MoveCounter);
@@ -673,7 +674,7 @@ namespace Ceres.Chess.LC0.Batches
 
 
     unsafe static void BitmapRepresentationExpand(ulong[] thisLongs, byte[] thisValues,
-                                                  float[] targetArray, 
+                                                  Half[] targetArray, 
                                                   int startIndex, int numToConvert, int totalElements,
                                                   bool scale50MoveCounter)
     {
@@ -694,7 +695,7 @@ namespace Ceres.Chess.LC0.Batches
           // Apply the necessary scaling of this is the move counter (50 move rule)
           bool isMoves50Plane = outer % 112 == 109;
           float multiplier = (scale50MoveCounter && isMoves50Plane) ? (1.0f / 99.0f) : 1.0f;
-          float targetValue = multiplier * thisValues[outer];
+          Half targetValue = (Half)(multiplier * thisValues[outer]);
 
           byte thisSquare;
           ulong thisLong = longs[outer];
@@ -722,7 +723,7 @@ namespace Ceres.Chess.LC0.Batches
     /// </summary>
     /// <param name="outBuffer">buffer to receive values. NOTE! This is assumed to start out cleared (all zeros)</param>
     /// <param name="encodingType"></param>
-    void ConvertToFlat(float[] outBuffer, bool scale50MoveCounter)
+    void ConvertToFlat(Half[] outBuffer, bool scale50MoveCounter)
     {
       // TODO: Somehow rework this performance-critical method
       //       by vectorization or putting expansion on GPU.
@@ -760,7 +761,7 @@ namespace Ceres.Chess.LC0.Batches
       DumpDecoded(this.ValuesFlatFromPlanes(null, false, false), TOTAL_NUM_PLANES_ALL_HISTORIES);
     }
 
-    public static void DumpDecoded(Memory<float> encodedPos, int numPlanes)
+    public static void DumpDecoded(Memory<Half> encodedPos, int numPlanes)
     {
       ulong[] decoded = DecodedBits(encodedPos);
       DumpDecoded(decoded, numPlanes);
@@ -777,9 +778,9 @@ namespace Ceres.Chess.LC0.Batches
     }
 
 
-    public static ulong[] DecodedBits(Memory<float> rawMem)
+    public static ulong[] DecodedBits(Memory<Half> rawMem)
     {
-      Span<float> raw = rawMem.Span;
+      Span<Half> raw = rawMem.Span;
 
       ulong[] ret = new ulong[raw.Length / 64];
       for (int i = 0; i < ret.Length; i++)
@@ -787,7 +788,7 @@ namespace Ceres.Chess.LC0.Batches
         BitVector64 v = new BitVector64();
         for (int j = 0; j < 64; j++)
         {
-          float val = raw[i * 64 + j];
+          float val = (float)raw[i * 64 + j];
           if (val == 1)
           {
             v.SetBit(j);
@@ -893,7 +894,7 @@ namespace Ceres.Chess.LC0.Batches
 
     Memory<Half[]> IEncodedPositionBatchFlat.States { get => States.AsMemory(); set => States = value.ToArray(); }
 
-    float[] IEncodedPositionBatchFlat.ValuesFlatFromPlanes(float[] preallocatedBuffer, bool nwhc, bool scaleMove50Counter) => ValuesFlatFromPlanes(preallocatedBuffer, nwhc, scaleMove50Counter);
+    Half[] IEncodedPositionBatchFlat.ValuesFlatFromPlanes(Half[] preallocatedBuffer, bool nwhc, bool scaleMove50Counter) => ValuesFlatFromPlanes(preallocatedBuffer, nwhc, scaleMove50Counter);
 
     Memory<EncodedPositionWithHistory> IEncodedPositionBatchFlat.PositionsBuffer { get => PositionsBuffer; }
 

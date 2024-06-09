@@ -139,7 +139,7 @@ namespace Ceres.Chess.LC0NetInference
     /// <param name="alreadyConvertedToLZ0"></param>
     /// <returns></returns>
     public ONNXRuntimeExecutorResultBatch Execute(bool isWDL, bool hasState,
-                                                  Memory<float> flatValuesPrimary, Memory<float> flatValuesSecondary, int numPositionsUsed, 
+                                                  Memory<Half> flatValuesPrimary, Memory<Half> flatValuesSecondary, int numPositionsUsed, 
                                                   bool debuggingDump = false, bool alreadyConvertedToLZ0 = false,
                                                   float tpgDivisor = 1)
     {
@@ -167,7 +167,8 @@ namespace Ceres.Chess.LC0NetInference
       // ** NICE DEBUGGING!
       if (debuggingDump && NetType != NetTypeEnum.TPG)
       {
-        EncodedPositionBatchFlat.DumpDecoded(flatValuesPrimary, 112);
+        throw new NotImplementedException("Type switched to Half below");
+        //EncodedPositionBatchFlat.DumpDecoded(flatValuesPrimary, 112);
       }
 
       List<(string, Memory<Float16>)> eval;
@@ -175,13 +176,14 @@ namespace Ceres.Chess.LC0NetInference
       if (NetType == NetTypeEnum.TPG)
       {
         int NUM_INPUTS = hasState ? 2 : 1; // assume state present
-        (Memory<float> input, int[] shape)[] inputs = new (Memory<float> input, int[] shape)[NUM_INPUTS];
+        (Memory<Half> input, int[] shape)[] inputs = new (Memory<Half> input, int[] shape)[NUM_INPUTS];
         if (tpgDivisor != 1.0f)
         {
-          Span<float> flatValuesPrimarySpan = flatValuesPrimary.Span;
+          Span<Half> flatValuesPrimarySpan = flatValuesPrimary.Span;
           for (int i=0;i<flatValuesPrimarySpan.Length;i++)
           {
-            flatValuesPrimarySpan[i] /= tpgDivisor;
+            throw new Exception("don't we already divide in CopyAndDivide?");
+            //flatValuesPrimarySpan[i] /= tpgDivisor;
           }
         }
 
@@ -196,7 +198,7 @@ namespace Ceres.Chess.LC0NetInference
         if (hasState)
         {
           // fake it with zeros
-          inputs[1] = (new float[numPositionsUsed*64* STATE_NUM_PER_SQUARE], new int[] { numPositionsUsed, 64, STATE_NUM_PER_SQUARE });
+          inputs[1] = (new Half[numPositionsUsed*64* STATE_NUM_PER_SQUARE], new int[] { numPositionsUsed, 64, STATE_NUM_PER_SQUARE });
 
         }
 #if NOT
@@ -212,7 +214,7 @@ namespace Ceres.Chess.LC0NetInference
       }
       else
       {
-        (Memory<float> flatValuesPrimary, int[]) input = default;
+        (Memory<Half> flatValuesPrimary, int[]) input = default;
         input.Item1 = flatValuesPrimary.Slice(0, numPositionsUsed * 112 * 8 * 8);
         input.Item2 = [numPositionsUsed, 112, 8, 8 ];
         eval = executor.Run([input], numPositionsUsed, Precision == NNEvaluatorPrecision.FP16);

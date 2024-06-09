@@ -103,10 +103,10 @@ namespace Ceres.Chess.LC0.Batches
       throw new NotImplementedException();
     }
 
-    public float[] ValuesFlatFromPlanes(float[] preallocatedBuffer, bool nhwc, bool scale50MoveCounters)
+    public Half[] ValuesFlatFromPlanes(Half[] preallocatedBuffer, bool nhwc, bool scale50MoveCounters)
     {
       const int NUM_VALUES_EACH_POS = EncodedPositionWithHistory.NUM_PLANES_TOTAL * 64;
-      float[] parentBuffer = Parent.ValuesFlatFromPlanes(null, nhwc, scale50MoveCounters);
+      Half[] parentBuffer = Parent.ValuesFlatFromPlanes(null, nhwc, scale50MoveCounters);
       if (preallocatedBuffer != null)
       {
         Array.Copy(parentBuffer, NUM_VALUES_EACH_POS * StartIndex, preallocatedBuffer, 0, NUM_VALUES_EACH_POS * Length);
@@ -114,7 +114,7 @@ namespace Ceres.Chess.LC0.Batches
       }
       else
       {
-        float[] targetBuffer = new float[NUM_VALUES_EACH_POS * Length];
+        Half[] targetBuffer = new Half[NUM_VALUES_EACH_POS * Length];
         Array.Copy(parentBuffer, NUM_VALUES_EACH_POS * StartIndex, targetBuffer, 0, NUM_VALUES_EACH_POS * Length);
         return targetBuffer;
       }

@@ -274,13 +274,13 @@ namespace Chess.Ceres.NNEvaluators
 
 
 
-    public static Action<IEncodedPositionBatchFlat, bool, float[], short[]> ConverterToFlat = null;
+    public static Action<IEncodedPositionBatchFlat, bool, Half[], short[]> ConverterToFlat = null;
     public static Func<object, byte[], int> ConverterToFlatFromTPG = null;
 
     [ThreadStatic] static byte[] inputsPrimaryNative;
     [ThreadStatic] static byte[] inputsSecondaryNative;
-    [ThreadStatic] static float[] inputsPrimaryNativeF;
-    [ThreadStatic] static float[] inputsSecondaryNativeF;
+    [ThreadStatic] static Half[] inputsPrimaryNativeF;
+    [ThreadStatic] static Half[] inputsSecondaryNativeF;
 
 
     /// <summary>
@@ -317,7 +317,7 @@ namespace Chess.Ceres.NNEvaluators
         const int INPUT_SIZE_FLOATS = 2048 * 100 * 128; 
         inputsPrimaryNative = new byte[INPUT_SIZE_FLOATS];
         inputsSecondaryNative = new byte[INPUT_SIZE_FLOATS];
-        inputsPrimaryNativeF = new float[INPUT_SIZE_FLOATS];
+        inputsPrimaryNativeF = new Half[INPUT_SIZE_FLOATS];
       }
 
       int numConverted = ConverterToFlatFromTPG(positionsNativeInput, inputsPrimaryNative);
@@ -355,8 +355,8 @@ namespace Chess.Ceres.NNEvaluators
         }
 
         int inputSizeAttention = batch.NumPos * 64 * ONNXRuntimeExecutor.TPG_BYTES_PER_SQUARE_RECORD;
-        float[] flatValuesAttention = ArrayPool<float>.Shared.Rent(inputSizeAttention);
-        Memory<float> flatValuesAttentionM = flatValuesAttention.AsMemory().Slice(0, inputSizeAttention);
+        Half[] flatValuesAttention = ArrayPool<Half>.Shared.Rent(inputSizeAttention);
+        Memory<Half> flatValuesAttentionM = flatValuesAttention.AsMemory().Slice(0, inputSizeAttention);
 
         short[] legalMoveIndices = new short[batch.NumPos * MAX_MOVES];
         ConverterToFlat(batch, UseHistory, flatValuesAttention, legalMoveIndices);
@@ -412,12 +412,12 @@ namespace Chess.Ceres.NNEvaluators
         }
 
         int bufferLength = 112 * batch.NumPos * 64;
-        float[] flatValues = ArrayPool<float>.Shared.Rent(bufferLength);
+        Half[] flatValues = ArrayPool<Half>.Shared.Rent(bufferLength);
 
         batch.ValuesFlatFromPlanes(flatValues, false, Scale50MoveCounter);
         PositionEvaluationBatch ret = DoEvaluateBatch(batch, flatValues, null, batch.NumPos, retrieveSupplementalResults, posMoveIsLegal, tpgDivisor:1);
 
-        ArrayPool<float>.Shared.Return(flatValues);
+        ArrayPool<Half>.Shared.Return(flatValues);
         return ret;
       }
     }
@@ -452,7 +452,7 @@ namespace Chess.Ceres.NNEvaluators
     /// <param name="retrieveSupplementalResults"></param>
     /// <returns></returns>
     PositionEvaluationBatch DoEvaluateBatch(IEncodedPositionBatchFlat batch, 
-                                            Memory<float> flatValuesPrimary, Memory<float> flatValuesSecondary,
+                                            Memory<Half> flatValuesPrimary, Memory<Half> flatValuesSecondary,
                                             int numPos, bool retrieveSupplementalResults, 
                                             Func<int,int, bool> posMoveIsLegal,
                                             float tpgDivisor)
