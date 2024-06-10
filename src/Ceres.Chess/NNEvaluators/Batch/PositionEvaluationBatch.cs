@@ -20,6 +20,8 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
+using Microsoft.ML.OnnxRuntime;
+
 using Ceres.Base.Benchmarking;
 using Ceres.Base.DataTypes;
 
@@ -28,7 +30,6 @@ using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Chess.LC0.Batches;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
-using Microsoft.ML.OnnxRuntime;
 
 #endregion
 
@@ -726,9 +727,6 @@ namespace Ceres.Chess.NetEvaluation.Batch
     static float[] policyTempBuffer;
 
     [ThreadStatic]
-    static Float16[] policyTempBufferFloat16;
-
-    [ThreadStatic]
     static float[] actionTempBuffer;
 
     static CompressedPolicyVector[] ExtractPoliciesBufferFlat(int numPos, 
@@ -738,6 +736,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
                                                               Memory<CompressedActionVector> actions,
                                                               bool hasActions)
     {
+      Debug.Assert(!alreadySorted); // TODO: it seems nonsensical that these claim to be sorted
       // TODO: possibly needs work.
       // Do we handle WDL correctly? Do we flip the moves if we are black (using positions) ?
 
@@ -757,18 +756,6 @@ namespace Ceres.Chess.NetEvaluation.Batch
       {
         ReadOnlySpan<Float16> policyProbsSpan = policyProbs.Span;
 
-        if (policyTempBuffer == null)
-        {
-          policyTempBuffer = new float[EncodedPolicyVector.POLICY_VECTOR_LENGTH];
-          policyTempBufferFloat16 = new Float16[EncodedPolicyVector.POLICY_VECTOR_LENGTH];
-          actionTempBuffer = new float[EncodedPolicyVector.POLICY_VECTOR_LENGTH * 3];
-        }
-        else
-        {
-          Array.Clear(policyTempBuffer, 0, EncodedPolicyVector.POLICY_VECTOR_LENGTH);
-          Array.Clear(actionTempBuffer, 0, EncodedPolicyVector.POLICY_VECTOR_LENGTH * 3);
-        }
-
         int startIndex = EncodedPolicyVector.POLICY_VECTOR_LENGTH * i;
 
         if (probType == PolicyType.Probabilities)
@@ -777,6 +764,19 @@ namespace Ceres.Chess.NetEvaluation.Batch
         }
         else if (sourceBatchWithValidMoves == default)
         {
+          throw new NotImplementedException(); // the below might be working, but seems not needed
+#if NOT
+          if (policyTempBuffer == null)
+          {
+            policyTempBuffer = new float[EncodedPolicyVector.POLICY_VECTOR_LENGTH];
+            actionTempBuffer = new float[EncodedPolicyVector.POLICY_VECTOR_LENGTH * 3];
+          }
+          else
+          {
+            Array.Clear(policyTempBuffer, 0, EncodedPolicyVector.POLICY_VECTOR_LENGTH);
+            Array.Clear(actionTempBuffer, 0, EncodedPolicyVector.POLICY_VECTOR_LENGTH * 3);
+          }
+
           // N.B. It is not possible to apply move masking here, 
           //      so it is assumed this is already done by the caller.
           //Array.Copy(policyProbsSpan, startIndex, policyTempBuffer, 0, EncodedPolicyVector.POLICY_VECTOR_LENGTH);
@@ -796,63 +796,49 @@ namespace Ceres.Chess.NetEvaluation.Batch
           }
 
           retPolicies[i] = policyVector;
+#endif
         }
         else
         {
-          // Compute an array if indices of valid moves.
+          Debug.Assert(actions.IsEmpty);
+
+          // Collect together all move indices and policy logit values.
           MGMoveList movesThis = moves.Span[i];
           int numLegalMoves = movesThis.NumMovesUsed;
-          Span<int> legalMoveIndices = stackalloc int[numLegalMoves]; // TODO: make this short not int?
+
+          Span<int> legalMoveIndices = stackalloc int[numLegalMoves];
+          Span<float> legalMovePolicies = stackalloc float[numLegalMoves];
+//          Span<Half> legalMovePoliciesHalf = stackalloc Half[numLegalMoves];
+          ReadOnlySpan<Half> policyProbsSpanAsHalf = MemoryMarshal.Cast<Float16, Half>(policyProbsSpan.Slice(startIndex, EncodedPolicyVector.POLICY_VECTOR_LENGTH));
+
+          float max = 0;
           for (int im = 0; im < numLegalMoves; im++)
           {
             EncodedMove encodedMove = ConverterMGMoveEncodedMove.MGChessMoveToEncodedMove(movesThis.MovesArray[im]);
-            legalMoveIndices[im] = encodedMove.IndexNeuralNet;
+            legalMoveIndices[im] = (ushort) encodedMove.IndexNeuralNet;
+
+            float policyValue =  (float)policyProbsSpanAsHalf[encodedMove.IndexNeuralNet];
+            if (policyValue > max)
+            {
+              max = policyValue;
+            } 
+            legalMovePolicies[im] = policyValue;
           }
 
-          // Avoid overflow by subtracting off max
-          float max = float.MinValue;
-          for (int j = 0; j < numLegalMoves; j++)
+          float sum = 0;
+          for (int im = 0; im < numLegalMoves; im++)
           {
-            float val = (float)policyProbsSpan[startIndex + legalMoveIndices[j]];
-            if (val > max) max = val;
+            float expVal = (float)Math.Exp(legalMovePolicies[im] - max);
+            legalMovePolicies[im] = expVal;
+            sum+= expVal;
           }
 
-          double acc = 0;
-          for (int j = 0; j < numLegalMoves; j++)
+          for (int im = 0; im < numLegalMoves; im++)
           {
-            float prob = (float)policyProbsSpan[startIndex + legalMoveIndices[j]];
-            if (prob > -1E10)
-            {
-              float value = (float)Math.Exp(prob - max);
-              policyTempBuffer[legalMoveIndices[j]] = value;
-              acc += value;
-            }
-            else
-            {
-              policyTempBuffer[legalMoveIndices[j]] = 0;
-            }
+            legalMovePolicies[im] /= sum;
           }
 
-          if (numLegalMoves > 0)
-          {
-            if (acc == 0.0)
-            {
-              throw new Exception("Sum of unnormalized probabilities was zero.");
-            }
-
-            // As performance optimization, only adjust if significantly different from 1.0
-            const float MAX_DEVIATION = 0.002f;
-            if (acc < 1.0f - MAX_DEVIATION || acc > 1.0f + MAX_DEVIATION)
-            {
-              for (int j = 0; j < numLegalMoves; j++)
-              {
-                int targetIndex = legalMoveIndices[j];
-                policyTempBuffer[targetIndex] = (float)(policyTempBuffer[targetIndex] / acc);
-              }
-            }
-
-            CompressedPolicyVector.Initialize(ref retPolicies[i], policyTempBuffer, alreadySorted);
-          }
+          CompressedPolicyVector.Initialize(ref retPolicies[i], legalMoveIndices, legalMovePolicies, false);          
         }
       });
 
