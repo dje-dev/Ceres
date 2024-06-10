@@ -47,7 +47,7 @@ namespace Ceres.Commands
     NNDevicesSpecificationString DeviceSpec;
     string batchSpec = null;
 
-    internal void ParseFields(string args)
+    public void ParseFields(string args)
     {
       KeyValueSetParsed keys = new KeyValueSetParsed(args, null);
 
@@ -60,7 +60,7 @@ namespace Ceres.Commands
     const int SKIP = 2;
     const int TRIES = 10;
 
-    internal void ExecuteComparisonTest()
+    public void ExecuteComparisonTest()
     {
       if(batchSpec == null)
       {
@@ -143,7 +143,7 @@ namespace Ceres.Commands
     }
 
 
-    internal void ExecuteBenchmark()
+    public void ExecuteBenchmark()
     {
       NNEvaluatorDef evaluatorDef = new NNEvaluatorDef(NetworkSpec.ComboType, NetworkSpec.NetDefs,
                                                        DeviceSpec.ComboType, DeviceSpec.Devices, null);
