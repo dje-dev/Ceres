@@ -46,7 +46,7 @@ namespace Ceres.Chess.Data.Nets
         { "T82", ONNXNet32LC0("768x15x24h-t82-swa-8164000#32") },
 
         {"BT2", ONNXNet16LC0("BT2-768x15smolgen-12h-do-01-swa-onnx-2350000-rule50.gz_fp16#16")},
-        {"BT2_TRT", ONNXNet16LC0("BT2-768x15smolgen-12h-do-01-swa-onnx-2350000-rule50.gz_fp16#16", true)},
+        {"BT2_FP16_TRT", ONNXNet16LC0("BT2-768x15smolgen-12h-do-01-swa-onnx-2350000-rule50.gz_fp16#16", true)},
 
         {"BT3", ONNXNet16LC0("BT3-768x15x24h-swa-2790000.pb.gz_fp16#16")},
         {"BT3_TRT", ONNXNet16LC0("BT3-768x15x24h-swa-2790000.pb.gz_fp16#16", true)},

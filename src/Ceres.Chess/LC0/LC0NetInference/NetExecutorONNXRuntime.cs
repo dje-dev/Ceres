@@ -151,7 +151,7 @@ namespace Ceres.Chess.LC0NetInference
           // TODO: this code has no effect for unknown reasons.
           var providerOptionsDict = new Dictionary<string, string>();
           providerOptionsDict["device_id"] = gpuID.ToString();
-          providerOptionsDict["trt_max_workspace_size"] = "2147483648";
+          providerOptionsDict["trt_max_workspace_size"] = "4294967296";
 
           if (inputNames != null)
           {
@@ -168,14 +168,17 @@ namespace Ceres.Chess.LC0NetInference
             }
 
             // N.B. Using trtexec we seem to see extreme variability of runtime depending on these shapes (espcially optimal)
-            // N.B. For now using optimal batch size of 108, seemed fastest for a certain tested net.
-            providerOptionsDict["trt_profile_min_shapes"] = MakeShapeStr(1);
-            providerOptionsDict["trt_profile_opt_shapes"] = MakeShapeStr(108);
-            providerOptionsDict["trt_profile_max_shapes"] = MakeShapeStr(1024);
+            // For now we omit specifying them, which seems to do as well.
+            if (true)
+            {
+              providerOptionsDict["trt_profile_min_shapes"] = MakeShapeStr(1);
+              providerOptionsDict["trt_profile_opt_shapes"] = MakeShapeStr(16);
+              providerOptionsDict["trt_profile_max_shapes"] = MakeShapeStr(1024);
+            }
           }
 
           providerOptionsDict["trt_timing_cache_enable"] = "true";
-          providerOptionsDict["trt_force_timing_cache"] = "true";
+          //providerOptionsDict["trt_force_timing_cache"] = "true";
 
           providerOptionsDict["trt_engine_cache_enable"] = "true";
 
@@ -187,13 +190,13 @@ namespace Ceres.Chess.LC0NetInference
           }
 
 //          providerOptionsDict["trt_detailed_build_log"] = "1";
-          providerOptionsDict["trt_fp16_enable"] = Precision == NNEvaluatorPrecision.FP16 ? "1" : "0";
-          providerOptionsDict["trt_builder_optimization_level"] = "3";
+          providerOptionsDict["trt_fp16_enable"] = Precision == NNEvaluatorPrecision.FP16 ? "true" : "false";
+          providerOptionsDict["trt_builder_optimization_level"] = "5";
 
-          // providerOptionsDict["trt_cuda_graph_enable"] = "1"; // NOTE: may fail, requires entire graph to map onto ONNX nodes (?)
+//          providerOptionsDict["trt_cuda_graph_enable"] = "true"; // NOTE: may fail or yield bad output, requires entire graph to map onto ONNX nodes (?)
+//          providerOptionsDict["trt_auxiliary_streams"] = "0";
 
           providerOptionsDict["trt_layer_norm_fp32_fallback"] = "1"; // possibly necessary otherwise terrible accuracy
-          // providerOptionsDict["trt_auxiliary_streams"] = "0";
 
           trtProviderOptions.UpdateOptions(providerOptionsDict);
           so = SessionOptions.MakeSessionOptionWithTensorrtProvider(trtProviderOptions);
@@ -281,7 +284,7 @@ namespace Ceres.Chess.LC0NetInference
     /// <param name="input"></param>
     /// <param name="shape"></param>
     /// <returns></returns>
-    public List<(string, Memory<Float16>)> Run((Memory<float> input, int[] shape)[] inputs, int batchSize, bool float16)
+    public List<(string, Memory<Float16>)> Run((Memory<Half> input, int[] shape)[] inputs, int batchSize, bool float16)
     {
       // Determine input name
       // NOTE: experienced strange lowlevel crash when tried to break out this into name retrieval into a separate method
@@ -297,7 +300,7 @@ namespace Ceres.Chess.LC0NetInference
         throw new ArgumentException($"Batch size {inputs[0].shape[0]} exceeds maximum of {MAX_BATCH_SIZE}");
       }
 
-      var inputsONNX = new (Memory<float> input, int[] shape, string inputName, int numElements)[inputsMetadata.Count];
+      var inputsONNX = new (Memory<Half> input, int[] shape, string inputName, int numElements)[inputsMetadata.Count];
 
       if (inputsMetadata.Count != 1)
       {
@@ -314,7 +317,7 @@ namespace Ceres.Chess.LC0NetInference
       bool inputIsFloat = true;
       foreach (KeyValuePair<string, NodeMetadata> iv in inputsMetadata)
       {
-        (Memory<float> input, int[] shape) = inputs[inputIndex];
+        (Memory<Half> input, int[] shape) = inputs[inputIndex];
         inputName = iv.Key;
         if (inputName == null)
         {
@@ -374,17 +377,18 @@ namespace Ceres.Chess.LC0NetInference
     /// <param name="inputName"></param>
     /// <param name="numElements"></param>
     /// <returns></returns>
-    internal List<(string, Memory<Float16>)> RunFloat16((Memory<float> input, int[] shape, string inputName, int numElements)[] inputs, int batchSize)
+    internal List<(string, Memory<Float16>)> RunFloat16((Memory<Half> input, int[] shape, string inputName, int numElements)[] inputs, int batchSize)
     {
       List<NamedOnnxValue> inputsONNX = new(inputs.Length);
 
       for (int i = 0; i < inputs.Length; i++)
       {
-        (Memory<float> input, int[] shape, string inputName, int numElements) = inputs[i];
+        (Memory<Half> input, int[] shape, string inputName, int numElements) = inputs[i];
 
         // Convert float inputs directly into the target Float16 ONNX buffer
         Span<Half> inputBufferSpanHalf = MemoryMarshal.Cast<Float16, Half>(inputBuffers16[i].value);
-        TensorPrimitives.ConvertToHalf(input.Span, inputBufferSpanHalf);
+        input.Span.CopyTo(inputBufferSpanHalf);
+        //TensorPrimitives.ConvertToHalf(MemoryMarshal.Cast<Half,Float16>(input.Span), inputBufferSpanHalf);
       }
 
       lock (lockObject)
