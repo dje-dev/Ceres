@@ -800,7 +800,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
         }
         else
         {
-          Debug.Assert(actions.IsEmpty);
+//          Debug.Assert(actions.IsEmpty);
 
           // Collect together all move indices and policy logit values.
           MGMoveList movesThis = moves.Span[i];

@@ -187,10 +187,10 @@ namespace Ceres.APIExamples
       NET2 = "~BT4";
 
       NET1 = "CUSTOM1";
-      NET2 = "CUSTOM2";
+      //NET2 = "CUSTOM2";
       //NET2 = "~T1_DISTILL_256_10_NATIVE";
 
-      //NET2 = "t1-512x15x8h-distilled-swa-3395000";
+      NET2 = "~BT2_NATIVE";
       //NET1 = "CUSTOM1:last256.ts";
       //NET1 = "CUSTOM1:ckpt_DGX_C5_B4_512_15_16_4_48bn_2024_final.ts";
       //      NET1 = "CUSTOM1:753723;1;0;0;1,~T1_DISTILL_512_15;0;1;1;0";
@@ -211,8 +211,8 @@ namespace Ceres.APIExamples
       //      NET1 = "CUSTOM1:ckpt_DGX_C6_B4_512_15_16_4_32bn_2024_focus_1063735296.ts";
       //      NET2 = "CUSTOM2:ckpt_DGX_C5_B1_512_15_16_4_32bn_2024_1049882624.ts";
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(1000); // was 500
-      //limit1 = SearchLimit.BestValueMove;
+      SearchLimit limit1 = SearchLimit.NodesPerMove(10_000); // was 500
+//      limit1 = SearchLimit.BestValueMove;
 //limit1 = new SearchLimit(SearchLimitType.SecondsForAllMoves, 15, false, 0.5f);
 //limit1 = new SearchLimit(SearchLimitType.SecondsForAllMoves, 10, false, 0.1f);
       //SearchLimit limit2 = SearchLimit.NodesPerMove(1);
@@ -486,7 +486,7 @@ namespace Ceres.APIExamples
       EnginePlayerDef playerCeres2 = new EnginePlayerDef(overrideCeresEngine2Def ?? engineDefCeres2, limit2);
       EnginePlayerDef playerCeres3 = new EnginePlayerDef(engineDefCeres3, limit1);
 
-      bool ENABLE_LC0 = false;// evalDef1.Nets[0].Net.Type == NNEvaluatorType.LC0Library && (evalDef1.Nets[0].WeightValue == 1 && evalDef1.Nets[0].WeightPolicy == 1 && evalDef1.Nets[0].WeightM == 1);
+      bool ENABLE_LC0 = true;// evalDef1.Nets[0].Net.Type == NNEvaluatorType.LC0Library && (evalDef1.Nets[0].WeightValue == 1 && evalDef1.Nets[0].WeightPolicy == 1 && evalDef1.Nets[0].WeightM == 1);
       string OVERRIDE_LC0_EXE = null;// @"c:\apps\lc0_30\lc0_PR917.exe";
       GameEngineDefLC0 engineDefLC1 = false ? new GameEngineDefLC0("LC0_0", evalDef1, forceDisableSmartPruning, null, null, overrideEXE: OVERRIDE_LC0_EXE) : null;
       GameEngineDefLC0 engineDefLC2 = ENABLE_LC0 ? new GameEngineDefLC0("LC0_2", evalDef2, forceDisableSmartPruning, null, null, overrideEXE: OVERRIDE_LC0_EXE) : null;
@@ -533,7 +533,7 @@ namespace Ceres.APIExamples
 #endif
       // **************************************************
       EnginePlayerDef player1 = playerCeres1;// playerCeres1UCI;// new EnginePlayerDef(engineDefCSNN1, SearchLimit.NodesPerMove(30));
-      EnginePlayerDef player2 = playerCeres2;// playerCeres96;// new EnginePlayerDef(EnginDefStockfish14(), SearchLimit.NodesPerMove(300 * 10_000));
+      EnginePlayerDef player2 = playerLC0_2;// playerCeres96;// new EnginePlayerDef(EnginDefStockfish14(), SearchLimit.NodesPerMove(300 * 10_000));
       //new EnginePlayerDef(engineDefCSNoNN, SearchLimit.NodesPerMove(300 * 10_000));
       // **************************************************
 
