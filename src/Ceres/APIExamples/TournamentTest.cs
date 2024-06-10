@@ -180,10 +180,16 @@ namespace Ceres.APIExamples
       //NET1 = "~T2";
       //NET2 = "~T2_LEARNED_LOOKAHEAD_PAPER_TRT|ZeroHistory";
 
-      NET1 = "~T1_DISTILL_256_10_FP16_TRT";
+
+      NET1 = "~T3_DISTILL_512_15_FP16_TRT";
+      NET2 = "~T3_DISTILL_512_15_NATIVE";
+      NET1 = "~BT4_FP16_TRT";
+      NET2 = "~BT4";
+
+      NET1 = "CUSTOM1";
+      NET2 = "CUSTOM2";
       //NET2 = "~T1_DISTILL_256_10_NATIVE";
-      NET1 = "~T1_DISTILL_512_15_FP16_TRT";
-      NET2 = "~T1_DISTILL_512_15_FP16";
+
       //NET2 = "t1-512x15x8h-distilled-swa-3395000";
       //NET1 = "CUSTOM1:last256.ts";
       //NET1 = "CUSTOM1:ckpt_DGX_C5_B4_512_15_16_4_48bn_2024_final.ts";
@@ -206,8 +212,9 @@ namespace Ceres.APIExamples
       //      NET2 = "CUSTOM2:ckpt_DGX_C5_B1_512_15_16_4_32bn_2024_1049882624.ts";
 
       SearchLimit limit1 = SearchLimit.NodesPerMove(1000); // was 500
-//      limit1 = SearchLimit.BestValueMove;
-
+      //limit1 = SearchLimit.BestValueMove;
+//limit1 = new SearchLimit(SearchLimitType.SecondsForAllMoves, 15, false, 0.5f);
+//limit1 = new SearchLimit(SearchLimitType.SecondsForAllMoves, 10, false, 0.1f);
       //SearchLimit limit2 = SearchLimit.NodesPerMove(1);
 
       SearchLimit limit2 = limit1;
@@ -282,7 +289,7 @@ namespace Ceres.APIExamples
 
       // Don't output log if very small games
       // (to avoid making very large log files or slowing down play).
-      bool outputLog = true;// limitare1.EstNumNodes(500_000, false) > 10_000;
+      bool outputLog = false;// limit1.EstNumSearchNodes(0, 20000, true) > 50_000;
       GameEngineDefCeres engineDefCeres1 = new GameEngineDefCeres("Ceres1", evalDef1, evalDefSecondary1, new ParamsSearch(), new ParamsSelect(),
                                                                   null, outputLog ? "Ceres1.log.txt" : null);
       GameEngineDefCeres engineDefCeres2 = new GameEngineDefCeres("Ceres2", evalDef2, evalDefSecondary2, new ParamsSearch(), new ParamsSelect(),
@@ -308,11 +315,13 @@ namespace Ceres.APIExamples
       engineDefCeres1.SearchParams.ReusePositionEvaluationsFromOtherTree = false;
       engineDefCeres2.SearchParams.ReusePositionEvaluationsFromOtherTree = false;
 
-  engineDefCeres1.SearchParams.Execution.FlowDualSelectors = false;
-  engineDefCeres2.SearchParams.Execution.FlowDualSelectors = false;
-  engineDefCeres1.SearchParams.Execution.FlowDirectOverlapped = false;
-  engineDefCeres2.SearchParams.Execution.FlowDirectOverlapped = false;
-
+      if (false)
+      {
+        engineDefCeres1.SearchParams.Execution.FlowDualSelectors = false;
+        engineDefCeres2.SearchParams.Execution.FlowDualSelectors = false;
+        engineDefCeres1.SearchParams.Execution.FlowDirectOverlapped = false;
+        engineDefCeres2.SearchParams.Execution.FlowDirectOverlapped = false;
+      }
       if (false)
       {
         engineDefCeres1.SearchParams.EnableTablebases = false;
