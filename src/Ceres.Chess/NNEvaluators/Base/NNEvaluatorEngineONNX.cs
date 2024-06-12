@@ -15,25 +15,20 @@
 
 using System;
 using System.Buffers;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+
+using Microsoft.ML.OnnxRuntime;
 
 using Ceres.Chess.LC0NetInference;
-using Ceres.Base;
 using Ceres.Chess.NNEvaluators;
 using Ceres.Chess.NetEvaluation.Batch;
 using Ceres.Chess.LC0.Batches;
 using Ceres.Base.Benchmarking;
 using Ceres.Base.DataTypes;
-using System.Collections.Generic;
-using Ceres.Chess.MoveGen.Converters;
-using Ceres.Chess.EncodedPositions.Basic;
-using Ceres.Chess.MoveGen;
-using Ceres.Chess;
-using System.Diagnostics;
 using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Base.DataType;
 using Ceres.Base.Misc.ONNX;
-using Microsoft.ML.OnnxRuntime;
-using System.Runtime.InteropServices;
 
 #endregion
 
