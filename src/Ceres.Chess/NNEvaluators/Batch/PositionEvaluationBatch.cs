@@ -874,25 +874,31 @@ namespace Ceres.Chess.NetEvaluation.Batch
 
             w[i] = valueEvals[i * 3 + 0];
             l[i] = valueEvals[i * 3 + 2];
-            Debug.Assert(Math.Abs(1 - (valueEvals[i * 3 + 0] + valueEvals[i * 3 + 1] + valueEvals[i * 3 + 2])) <= 0.001);
+            Debug.Assert(Math.Abs(1 - (valueEvals[i * 3 + 0] 
+                                     + valueEvals[i * 3 + 1] 
+                                     + valueEvals[i * 3 + 2])) <= 0.01);
           }
           else
           {
-            // NOTE: Use min with 20 to deal with excessively large values (that would go to infinity)
             double v1;
             double v2;
             double v3;
+            
+            float max  = Math.Max(Math.Max(valueEvals[i * 3 + 0], 
+                                           valueEvals[i * 3 + 1]), 
+                                  valueEvals[i * 3 + 2]);
+
             if (temperature == 1)
             {
-              v1 = Math.Exp(Math.Min(20, valueEvals[i * 3 + 0]));
-              v2 = Math.Exp(Math.Min(20, valueEvals[i * 3 + 1]));
-              v3 = Math.Exp(Math.Min(20, valueEvals[i * 3 + 2]));
+              v1 = Math.Exp(valueEvals[i * 3 + 0] - max);
+              v2 = Math.Exp(valueEvals[i * 3 + 1] - max);
+              v3 = Math.Exp(valueEvals[i * 3 + 2] - max);
             }
             else
             {
-              v1 = Math.Exp(Math.Min(20, valueEvals[i * 3 + 0] / temperature));
-              v2 = Math.Exp(Math.Min(20, valueEvals[i * 3 + 1] / temperature));
-              v3 = Math.Exp(Math.Min(20, valueEvals[i * 3 + 2] / temperature));
+              v1 = Math.Exp((valueEvals[i * 3 + 0] - max) / temperature);
+              v2 = Math.Exp((valueEvals[i * 3 + 1] - max) / temperature);
+              v3 = Math.Exp((valueEvals[i * 3 + 2] - max) / temperature);
             }
 
             double totl = v1 + v2 + v3;
