@@ -50,18 +50,26 @@ namespace Ceres.Chess.Positions
     #region Static factory methods
 
     /// <summary>
-    /// Returns a position source that returns positions from one or more MoveSequences.
+    /// Returns a position source that returns positions from one or more Mo
     /// </summary>
-    /// <param name="fen"></param>
+    /// <param name="moveSequences"></param>
+    /// <param name="removeDuplicates"></param>
     /// <returns></returns>
-    public static PositionsWithHistory FromMoveSequencess(params PositionWithHistory[] moveSequences)
+    public static PositionsWithHistory FromMoveSequences(PositionWithHistory[] moveSequences, bool removeDuplicates = false)
     {
       PositionsWithHistory source = new PositionsWithHistory();
       source.moveSequences = new List<PositionWithHistory>(moveSequences.Length);
+
+      HashSet<string> alreadyProcessedFENs = new HashSet<string>();
       foreach (PositionWithHistory moveSequence in moveSequences)
       {
-        source.moveSequences.Add(moveSequence);
+        if (!removeDuplicates || !alreadyProcessedFENs.Contains(moveSequence.FinalPosition.FEN))
+        {
+          source.moveSequences.Add(moveSequence);
+          alreadyProcessedFENs.Add(moveSequence.FinalPosition.FEN);
+        }
       }
+
       return source;
     }
 
