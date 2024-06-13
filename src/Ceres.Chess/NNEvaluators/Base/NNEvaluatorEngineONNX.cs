@@ -563,14 +563,35 @@ namespace Chess.Ceres.NNEvaluators
         {
           states[i] = new Half[64 * 4];
         } 
-      }      
+      }
 
-     
+
 #if NOT
       Span<FP16> valueEvals, Span<FP16> valueEvals2, 
       Memory<FP16> policyProbs, Memory<CompressedActionVector> actionLogits,
       FP16[] m, FP16[] uncertaintyV, 
 #endif
+
+#if DEBUG
+      if (ValueHeadLogistic)
+      {
+        float sum = IsWDL ? ((float)result.ValuesRaw.Span[0] + (float)result.ValuesRaw.Span[1] + (float)result.ValuesRaw.Span[2])
+                          : (float)result.ValuesRaw.Span[0];
+        if (Math.Abs(1.0 - sum) < 0.001f)
+        {
+          throw new Exception("Values expected logits, but look suspisciously like probabilities.");
+        }
+
+      }
+      else
+      {
+        if ((float)result.ValuesRaw.Span[0] < 0)
+        {
+          throw new Exception("Negative probability found in non-logistic mode.");
+        }
+      }
+#endif
+
       // NOTE: inefficient, above we convert from [] (flat) to [][] and here we convert back to []
       PositionEvaluationBatch ret =  new (IsWDL, HasM, HasUncertaintyV, HasAction, HasValueSecondary, HasState, numPos,
                                          MemoryMarshal.Cast<Float16, FP16>(result.ValuesRaw.Span),
