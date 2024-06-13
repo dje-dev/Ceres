@@ -165,6 +165,12 @@ namespace Ceres.Chess.LC0.Engine
                                                         (int)(searchLimit.ValueIncrement * 1000));
           break;
 
+        case SearchLimitType.BestValueMove:
+          Runner.SendCommand("setoption name ValueOnly value true");
+          searchInfo = Runner.EvalPositionToNodes(fenAndMovesStr, 1);
+          Runner.SendCommand("setoption name ValueOnly value false");
+          break;
+
         default:
           throw new Exception($"Unknown SeachLimit.Type {searchLimit.Type}");
       }
