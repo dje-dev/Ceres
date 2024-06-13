@@ -942,28 +942,44 @@ namespace Ceres.Features.Tournaments
     {
       float max = float.MinValue;
       for (int i = 1; i <= count; i++)
+      {
         if (MathF.Abs(vals[^i]) > max)
-          max = vals[^i];
+        {
+          max = MathF.Abs(vals[^i]);
+        }
+      }
       return max;
     }
 
     static float MinLastN(List<float> vals, int count)
     {
       float min = float.MaxValue;
+
       for (int i = 1; i <= count; i++)
+      {
         if (vals[^i] < min)
+        {
           min = vals[^i];
+        }
+      }
+
       return min;
     }
 
     static float MaxLastN(List<float> vals, int count)
     {
       float max = float.MinValue;
+
       for (int i = 1; i <= count; i++)
+      {
         if (vals[^i] > max)
+        {
           max = vals[^i];
+        }
+      }
       return max;
     }
+
 
     TournamentGameResult CheckResultAgreedBothEngines(List<float> scoresCPEngine1, List<float> scoresCPEngine2, TournamentGameResult result)
     {
