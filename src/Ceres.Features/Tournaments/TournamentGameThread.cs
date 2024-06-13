@@ -40,8 +40,6 @@ namespace Ceres.Features.Tournaments
   /// </summary>
   internal class TournamentGameThread
   {
-    public delegate TournamentGameInfo GamePairRunnerDelegate(string pgnFileName, int gameSequenceNum, int openingIndex, int roundNumber, bool engine2White);
-
     /// <summary>
     /// Definition of associated parent tournament definition.
     /// </summary>
@@ -132,7 +130,7 @@ namespace Ceres.Features.Tournaments
 
       havePrintedHeaders = false;
 
-      SetOpeningsSource();
+      LoadOpenings();
 
       Random rand = new Random();
 
@@ -221,7 +219,11 @@ namespace Ceres.Features.Tournaments
       }
     }
 
-    private void SetOpeningsSource()
+
+    /// <summary>
+    /// Populates the openings collection with the set of positions to be used in the tournament.
+    /// </summary>
+    private void LoadOpenings()
     {
       if (Def.OpeningsFileName != null)
       {
@@ -238,7 +240,7 @@ namespace Ceres.Features.Tournaments
 
       if (Def.AcceptPosExcludeIfContainsPieceTypeList != null)
       {
-        openings = PositionsWithHistory.FromMoveSequencess(
+        openings = PositionsWithHistory.FromMoveSequences(
           openings.Where(pos => !Def.AcceptPosExcludeIfContainsPieceTypeList
                                        .Exists(piece => pos.FinalPosition.PieceExists(new Piece(SideType.White, piece))
                                                      || pos.FinalPosition.PieceExists(new Piece(SideType.Black, piece)))).ToArray());
@@ -246,8 +248,11 @@ namespace Ceres.Features.Tournaments
 
       if (Def.AcceptPosPredicate != null)
       {
-        openings = PositionsWithHistory.FromMoveSequencess(openings.Where(s => Def.AcceptPosPredicate(s.FinalPosition)).ToArray());
+        openings = PositionsWithHistory.FromMoveSequences(openings.Where(s => Def.AcceptPosPredicate(s.FinalPosition)).ToArray());
       }
+
+      // Finally, remove any possible duplicates.
+      openings = PositionsWithHistory.FromMoveSequences(openings.ToArray(), true);
     }
 
 
@@ -526,6 +531,7 @@ namespace Ceres.Features.Tournaments
 
     Dictionary<Position, GameMoveConsoleInfo> referenceEngineMoveHistory = new();
 
+    
     /// <summary>
     /// 
     /// </summary>
