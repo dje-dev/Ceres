@@ -192,7 +192,7 @@ namespace Ceres.APIExamples
 
 //      NET2 = "~T1_DISTILL_512_15_NATIVE";
       //NET2 = "~BT2_FP16_TRT";
-      NET2 = "~BT4_FP16_TRT";
+      NET2 = "~BT2_FP16_TRT";
       //NET2 = "~T4_3355000";
       //NET1 = "CUSTOM1:last256.ts";
       //NET1 = "CUSTOM1:ckpt_DGX_C5_B4_512_15_16_4_48bn_2024_final.ts";
@@ -214,7 +214,7 @@ namespace Ceres.APIExamples
       //      NET1 = "CUSTOM1:ckpt_DGX_C6_B4_512_15_16_4_32bn_2024_focus_1063735296.ts";
       //      NET2 = "CUSTOM2:ckpt_DGX_C5_B1_512_15_16_4_32bn_2024_1049882624.ts";
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(2000); // was 500
+      SearchLimit limit1 = SearchLimit.NodesPerMove(10_000); // was 500
 //      limit1 = SearchLimit.BestValueMove;
 //limit1 = new SearchLimit(SearchLimitType.SecondsForAllMoves, 15, false, 0.5f);
 //limit1 = new SearchLimit(SearchLimitType.SecondsForAllMoves, 10, false, 0.1f);
