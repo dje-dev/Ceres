@@ -224,6 +224,10 @@ namespace Ceres.Chess.ExternalPrograms.UCI
     }
 
 
+    public  void SendCommand(string command)
+    {
+      SendCommandCRLF(engine, command);
+    }
 
     protected void SendCommandCRLF(UCIEngineProcess thisEngine, string cmd)
     {
