@@ -79,6 +79,12 @@ namespace Ceres.Features.GameEngines
     public readonly bool Verbose;
 
     /// <summary>
+    /// Optional override string to be used for the backend argument to LC0.
+    /// </summary>
+    public readonly string? OverrideBackendString = null;
+
+
+    /// <summary>
     /// Constructor.
     /// </summary>
     /// <param name="id"></param>
@@ -95,7 +101,8 @@ namespace Ceres.Features.GameEngines
                             ParamsSelect selectParamsEmulate = null, 
                             string overrideEXE = null,
                             string extraCommandLineArgs = null,
-                            bool verbose = false)
+                            bool verbose = false,
+                            string? overrideBackendString = null)
       : base(id)
     {
       if ((SearchParamsEmulate == null) != (SelectParamsEmulate == null))
@@ -119,6 +126,7 @@ namespace Ceres.Features.GameEngines
       OverrideEXE = overrideEXE;
       ExtraCommandLineArgs = extraCommandLineArgs;
       Verbose = verbose;
+      OverrideBackendString = overrideBackendString;
     }
 
 
@@ -140,7 +148,8 @@ namespace Ceres.Features.GameEngines
                                  SearchParamsEmulate, SelectParamsEmulate, EvaluatorDef,                               
                                  null, OverrideEXE, extraCommandLineArgs:ExtraCommandLineArgs,
                                  verbose:Verbose,
-                                 processorGroupID:ProcessorGroupID);   
+                                 processorGroupID:ProcessorGroupID,
+                                 overrideBackendString : OverrideBackendString);
     }
 
 

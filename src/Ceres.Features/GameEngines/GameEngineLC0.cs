@@ -84,7 +84,8 @@ namespace Ceres.Features.GameEngines
                          int? overrideBatchSize = null,
                          int? overrideCacheSize = null,
                          string extraCommandLineArgs = null,
-                         int processorGroupID = 0) : base(id, processorGroupID)
+                         int processorGroupID = 0,
+                         string? overrideBackendString = null) : base(id, processorGroupID)
     {
       SetupAction = setupAction;
       if (SetupAction != null)
@@ -100,7 +101,7 @@ namespace Ceres.Features.GameEngines
                                                    resetStateAndCachesBeforeMoves, verbose,
                                                    forceDisableSmartPruning,  overrideEXE,
                                                    alwaysFillHistory, extraCommandLineArgs,
-                                                   overrideBatchSize, overrideCacheSize);
+                                                   overrideBatchSize, overrideCacheSize, overrideBackendString);
     }
 
 

@@ -68,7 +68,8 @@ namespace Ceres.Features.GameEngines
                                                  bool forceDisableSmartPruning = false,
                                                  bool alwaysFillHistory = false,
                                                  int? overrideBatchSize = null,
-                                                 int? overrideCacheSize = null)
+                                                 int? overrideCacheSize = null,
+                                                 string? overrideBackendString = null)
     {
       if (paramsSearch == null)
       {
@@ -171,7 +172,7 @@ namespace Ceres.Features.GameEngines
         lzOptions += $@"-w {netSourceFile} -t {NUM_THREADS} " +
 //                    $"--score-type=win_percentage " +
                      // like TCEC 10, only 5% benefit     $"--max-prefetch=160 --max-collision-events=917 " +
-                     BackendArgumentsString(evaluatorDef);
+                     overrideBackendString ?? BackendArgumentsString(evaluatorDef);
 
       }
 
@@ -227,12 +228,13 @@ namespace Ceres.Features.GameEngines
                                          bool alwaysFillHistory = false,
                                          string extraCommandLineArgs = null,
                                          int? overrideBatchSize = null,
-                                         int? overrideCacheSize = null)
+                                         int? overrideCacheSize = null,
+                                         string? overrideBackendString = null)
     {
       (string EXE, string lzOptions) = GetLC0EngineOptions(paramsSearch, paramsSelect, evaluatorDef, network, 
                                                            emulateCeresOptions, verboseOutput, overrideEXE, 
                                                            forceDisableSmartPruning, alwaysFillHistory, 
-                                                           overrideBatchSize, overrideCacheSize);
+                                                           overrideBatchSize, overrideCacheSize, overrideBackendString);
       if (extraCommandLineArgs != null)
       {
         lzOptions += " " + extraCommandLineArgs;
