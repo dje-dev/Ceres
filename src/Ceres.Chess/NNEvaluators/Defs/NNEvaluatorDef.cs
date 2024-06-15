@@ -83,6 +83,11 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// </summary>
     public string Description;
 
+    /// <summary>
+    /// Optional evaluator-specific set of options.
+    /// </summary>
+    public object Options;
+
 
     /// <summary>
     /// Caching mode (if evaluations are saved to memory and/or disk).
@@ -290,10 +295,13 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// </summary>
     /// <param name="netSpecificationString"></param>
     /// <param name="deviceSpecificationString"></param>
+    /// <param name="evaluatorOptions"></param>
     /// <returns></returns>
-    public static NNEvaluatorDef FromSpecification(string netSpecificationString, string deviceSpecificationString)
+    public static NNEvaluatorDef FromSpecification(string netSpecificationString, 
+                                                   string deviceSpecificationString, 
+                                                   object evaluatorOptions = null)
     {
-      return NNEvaluatorDefFactory.FromSpecification(netSpecificationString, deviceSpecificationString);
+      return NNEvaluatorDefFactory.FromSpecification(netSpecificationString, deviceSpecificationString, evaluatorOptions);
     }
 
 

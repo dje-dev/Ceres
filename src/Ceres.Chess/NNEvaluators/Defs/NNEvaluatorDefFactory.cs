@@ -26,8 +26,17 @@ namespace Ceres.Chess.NNEvaluators.Defs
   /// </summary>
   public static class NNEvaluatorDefFactory
   {
-    
-    public static NNEvaluatorDef FromSpecification(string netSpecification, string deviceSpecification)
+   
+    /// <summary>
+    /// Constructor.
+    /// </summary>
+    /// <param name="netSpecification"></param>
+    /// <param name="deviceSpecification"></param>
+    /// <param name="evaluatorOptions"></param>
+    /// <returns></returns>
+    public static NNEvaluatorDef FromSpecification(string netSpecification, 
+                                                   string deviceSpecification, 
+                                                   object evaluatorOptions = null)
     {
       NNNetSpecificationString netObj = new NNNetSpecificationString(netSpecification);
       NNDevicesSpecificationString deviceObj = new NNDevicesSpecificationString(deviceSpecification);
@@ -35,6 +44,8 @@ namespace Ceres.Chess.NNEvaluators.Defs
       NNEvaluatorDef ret = new NNEvaluatorDef(netObj.ComboType, netObj.NetDefs, deviceObj.ComboType, deviceObj.Devices, deviceObj.SharingName);
       ret.OptionsString = netObj.OptionsString;
       ret.Description = netSpecification + " " + deviceSpecification;
+      ret.Options = evaluatorOptions;
+
       return ret;
     }
 

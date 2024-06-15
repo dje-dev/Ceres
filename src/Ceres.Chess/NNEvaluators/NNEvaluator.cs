@@ -78,6 +78,11 @@ namespace Ceres.Chess.NNEvaluators
     public string EngineNetworkID;
 
     /// <summary>
+    /// Optional evaluator-specific set of options.
+    /// </summary>
+    public object OptionsObject;
+
+    /// <summary>
     /// Optional short identification string.
     /// </summary>
     public string ShortID;
@@ -181,9 +186,12 @@ namespace Ceres.Chess.NNEvaluators
     /// </summary>
     /// <param name="netSpecificationString"></param>
     /// <param name="deviceSpecificationString"></param>
+    /// <param name="evaluatorOptions"></param>
     /// <returns></returns>
-    public static NNEvaluator FromSpecification(string netSpecificationString, string deviceSpecificationString)
-      => NNEvaluatorDef.FromSpecification(netSpecificationString, deviceSpecificationString).ToEvaluator();
+    public static NNEvaluator FromSpecification(string netSpecificationString, 
+                                                string deviceSpecificationString, 
+                                                object evaluatorOptions = null)
+      => NNEvaluatorDef.FromSpecification(netSpecificationString, deviceSpecificationString, evaluatorOptions).ToEvaluator();
 
     #endregion
 
