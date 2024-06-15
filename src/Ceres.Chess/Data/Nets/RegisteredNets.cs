@@ -58,14 +58,14 @@ namespace Ceres.Chess.Data.Nets
         {"BT4_NATIVE", SimpleLC0Net("BT4-1024x15x32h-swa-4975000.pb.gz")},
         {"BT4_FP16", ONNXNet16LC0("BT4_4975_fp16#16")},
         {"BT4_FP16_TRT", ONNXNet16LC0("BT4_4975_fp16#16", true)},
-        {"BT4_600k", ONNXNet32LC0("BT4-1024x15x32h-swa-600000.pb.gz")},
-        {"BT4_1000k", ONNXNet32LC0("BT4-1024x15x32h-swa-1000000.pb.gz")},
-        {"BT4_1420k", ONNXNet32LC0("BT4-1024x15x32h-swa-1420000.pb.gz")},
-        {"BT4_1800k", ONNXNet32LC0("BT4-1024x15x32h-swa-1800000.pb.gz")},
-        {"BT4_2210k", ONNXNet32LC0("BT4-1024x15x32h-swa-2210000.pb.gz")},
-        {"BT4_3190k", ONNXNet32LC0("BT4-1024x15x32h-swa-3190000.pb.gz")},
-        {"BT4_4230k", ONNXNet32LC0("BT4-1024x15x32h-swa-4230000.pb.gz")},
-        {"BT4_5000k", ONNXNet32LC0("BT4-1024x15x32h-swa-5000000.pb.gz")},
+        {"BT4_600k", SimpleLC0Net("BT4-1024x15x32h-swa-600000.pb.gz")},
+        {"BT4_1000k", SimpleLC0Net("BT4-1024x15x32h-swa-1000000.pb.gz")},
+        {"BT4_1420k", SimpleLC0Net("BT4-1024x15x32h-swa-1420000.pb.gz")},
+        {"BT4_1800k", SimpleLC0Net("BT4-1024x15x32h-swa-1800000.pb.gz")},
+        {"BT4_2210k", SimpleLC0Net("BT4-1024x15x32h-swa-2210000.pb.gz")},
+        {"BT4_3190k", SimpleLC0Net("BT4-1024x15x32h-swa-3190000.pb.gz")},
+        {"BT4_4230k", SimpleLC0Net("BT4-1024x15x32h-swa-4230000.pb.gz")},
+        {"BT4_5000k", SimpleLC0Net("BT4-1024x15x32h-swa-5000000.pb.gz")},
 
         {"T1_DISTILL_256_10", ONNXNet32LC0("t1-256x10-distilled-swa-2432500")},
         {"T1_DISTILL_256_10_TRT", ONNXNet32LC0("t1-256x10-distilled-swa-2432500", true)},
@@ -95,7 +95,8 @@ namespace Ceres.Chess.Data.Nets
         {"T3_DISTILL_512_15_FP16_TRT", ONNXNet16LC0("t3-512x15x16h-distill-swa-2175000.pb.gz_fp16#16", true)},
         {"T3_DISTILL_512_15_NATIVE", SimpleLC0Net("t3-512x15x16h-distill-swa-2175000.pb.gz#16") },
 
-      {"T4_3355000", ONNXNet16LC0("t4-512x15b-rpe_3355000_fp16", false) },
+      {"T4_3355000_ONNX", ONNXNet16LC0("t4-512x15b-rpe_3355000_fp16", false) },
+      {"T4_3355000", SimpleLC0Net("t4-512x15b-rpe_3355000.pb") },
 
       {"CERES_TRT", ONNXNet16Ceres("ckpt_DGX_C5_B4_768_15_32_3_48bn_2024_last.ts.fp16#16", true)} 
     };
