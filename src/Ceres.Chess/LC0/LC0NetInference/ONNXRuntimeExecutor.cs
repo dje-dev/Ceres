@@ -305,7 +305,7 @@ namespace Ceres.Chess.LC0NetInference
         int INDEX_UNC = hasUNC ? FindIndex(1, INDEX_MLH) : -1;
         int INDEX_ACTION = FindIndex(1858 * 3, -1, "action", true); // TODO: cleanup the output names to be better named
 
-        if (looksLikeBT3)
+        if (false && looksLikeBT3)
         {
           Console.WriteLine("ONNX head mappings for " + ONNXFileName);
           Console.WriteLine("value       --> " + eval[INDEX_WDL].Item1);
