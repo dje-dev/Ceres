@@ -325,8 +325,7 @@ namespace Chess.Ceres.NNEvaluators
         inputsPrimaryNativeF[i] = inputsPrimaryNative[i];
         inputsSecondaryNativeF[i] = inputsSecondaryNative[i];
       }
-
-      const float TPG_DIVISOR = 100f; // TODO: receive this in constructor instead. Should refer to TPGSquareRecord.SQUARE_BYTES_DIVISOR.
+      const float TPG_DIVISOR = ByteScaled.SCALING_FACTOR; // TODO: receive this in constructor instead. Should refer to TPGSquareRecord.SQUARE_BYTES_DIVISOR.
       PositionEvaluationBatch ret = DoEvaluateBatch(default, inputsPrimaryNativeF, usesSecondaryInputs ? inputsSecondaryNativeF : null, 
                                                     numPositions, retrieveSupplementalResults, posMoveIsLegal,
                                                     TPG_DIVISOR);
@@ -613,7 +612,8 @@ namespace Chess.Ceres.NNEvaluators
       bool ADJUST = FractionValueFromValue2 > 1 && !result.ExtraStats0.IsEmpty; // ***** TEMPORARY ******
       // flat: 0.8, 0.5
       const float THRESHOLD = 0.75f;
-      float COEFF = 0.5f;
+      const float BASE_COEFF = 0.4f;
+      const float DRAW_THRESHOLD = 0.20f;
       if (ADJUST)
       {
         Span<Float16> spanExtraStats0 = result.ExtraStats0.Span;
@@ -627,7 +627,7 @@ namespace Chess.Ceres.NNEvaluators
           if (v > THRESHOLD)
           {
             float qDn = (float)spanExtraStats1[i] - (float)spanExtraStats0[i];
-            float adjustedV = v  - COEFF * qDn;
+            float adjustedV = v  - BASE_COEFF * qDn;
             float movedV = v - adjustedV;
             w -= movedV / 2;
             // possibly we could adjust d, but doesn't really matter
@@ -636,11 +636,22 @@ namespace Chess.Ceres.NNEvaluators
           else if (v < -THRESHOLD) 
           {
             float qUp = (float)spanExtraStats0[i] - (float)spanExtraStats1[i];
-            float adjustedV = v + COEFF * qUp;
+            float adjustedV = v + BASE_COEFF * qUp;
             float movedV = adjustedV - v;
             w += movedV / 2;
             // possibly we could adjust d, but doesn't really matter
             l -= movedV / 2;
+          }
+          else if (true && Math.Abs(v) < DRAW_THRESHOLD)
+          {
+            const float COEFF_DRAW = BASE_COEFF * 3;
+            float coeffAdj = COEFF_DRAW * (DRAW_THRESHOLD - MathF.Abs(v));
+            float qVol = ((float)spanExtraStats0[i] + (float)spanExtraStats1[i]) / 2;
+            float adjustedV = MathF.Sign(v) * (MathF.Abs(v) * (1 + COEFF_DRAW * qVol));
+            float movedV = adjustedV - v;
+            w += movedV / 2;
+            l -= movedV / 2;
+            //Console.WriteLine(v + " --> " + (w-l) + "  " + qVol);
           }
 
           (ret.W2.Span[i], ret.L2.Span[i]) = ((FP16)w, (FP16)l);

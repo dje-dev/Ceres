@@ -186,16 +186,23 @@ namespace Ceres.APIExamples
       NET1 = "~BT4_FP16_TRT";
       NET2 = "~BT4";
 
-      NET1 = "CUSTOM1:test.fp16.onnx";
+      //      NET1 = "CUSTOM1:ckpt_DGX_C7_B4_256_10_8_8_32bn_2024_final.ts.fp16.onnx";
+      NET1 = "CUSTOM1:ckpt_DGX_C7_256_12_8_6_40bn_B1_2024f_last.ts.fp16.onnx";
       NET2 = "CUSTOM2:ckpt_DEV_C6_B4_256_12_8_6_BS8_48bn_2024_postconvert.ts.fp16.onnx";
-      //NET2 = "~T1_DISTILL_256_10_NATIVE";
 
-//      NET2 = "~T1_DISTILL_512_15_NATIVE";
-//      NET2 = "~T4_3355000";
-//      NET2 = "~BT2_NATIVE";
-      
-//      NET1 = "~BT4_NATIVE";
-//      NET2 = "~BT4_1000k";
+      NET2 = "CUSTOM1:ckpt_DGX_C7_256_12_8_6_40bn_B1_2024f_1834811392.ts.fp16.onnx";
+NET1 = "CUSTOM2:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_1855.ts"; // 1855
+
+      NET1 = "CUSTOM1:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_postconvert.ts.fp16.onnx";// 2197929984.ts";
+//      NET2 = "CUSTOM2:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_late.ts";// 2197929984.ts";
+      NET2 = "~T1_DISTILL_256_10_FP16_TRT";
+//      NET2 = "~T75";
+      //      NET2 = "~T1_DISTILL_256_10_FP16";
+      //      NET2 = "~T4_3355000";
+      //      NET2 = "~BT2_NATIVE";
+
+      //      NET1 = "~BT4_NATIVE";
+      //      NET2 = "~BT4_1000k";
 
       //NET2 = "~T4_3355000";
       //NET1 = "CUSTOM1:last256.ts";
@@ -211,8 +218,8 @@ namespace Ceres.APIExamples
 
       //      NET1 = "CUSTOM1:ckpt_DGX_C6_B4_512_8_16_4_500mm_2024_nost_final.ts";
       //      NET2 = "CUSTOM2:ckpt_DGX_C6_B4_512_8_16_4_500mm_2024_base_final.ts";
-      //NET1 = "CUSTOM1:ckpt_DGX_C6_B4_512_15_16_4_32bn_2024_focus_974770176.ts";
-      //NET2 = "CUSTOM2:ckpt_DGX_C6_B4_512_15_16_4_32bn_2024_focus_974770176.ts";
+      //      NET1 = "CUSTOM1:ckpt_DGX_C6_B4_512_15_16_4_32bn_2024_focus_974770176.ts";
+      //      NET2 = "CUSTOM2:ckpt_DGX_C6_B4_512_15_16_4_32bn_2024_focus_974770176.ts";
       //NET2= "CUSTOM2:ckpt_DGX_C5_B1_512_15_16_4_32bn_2024_962871296.ts";
 
       //      NET1 = "CUSTOM1:ckpt_DGX_C6_B4_512_15_16_4_32bn_2024_focus_1063735296.ts";
