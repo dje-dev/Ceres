@@ -58,7 +58,7 @@ namespace Ceres.APIExamples
        (Environment.MachineName.ToUpper() switch
       {
         var name when name.Contains("DGX") => new int[] { 0, 1, 2, 3 },
-        var name when name.Contains("HOP") => new int[] { 0, 1, 2 },
+        var name when name.Contains("HOP") => new int[] { 0, 1 },
         _ => new int[] { 0 }
       });
 
@@ -225,7 +225,7 @@ NET1 = "CUSTOM2:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_1855.ts"; // 1855
       //      NET1 = "CUSTOM1:ckpt_DGX_C6_B4_512_15_16_4_32bn_2024_focus_1063735296.ts";
       //      NET2 = "CUSTOM2:ckpt_DGX_C5_B1_512_15_16_4_32bn_2024_1049882624.ts";
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(1000); // was 500
+      SearchLimit limit1 = SearchLimit.NodesPerMove(100); // was 500
 //      limit1 = SearchLimit.BestValueMove;
 //limit1 = new SearchLimit(SearchLimitType.SecondsForAllMoves, 15, false, 0.5f);
 //limit1 = new SearchLimit(SearchLimitType.SecondsForAllMoves, 10, false, 0.1f);
