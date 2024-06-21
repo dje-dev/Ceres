@@ -103,6 +103,7 @@ namespace Ceres.Chess.GameEngines
       if (WhiteScoreCentipawns > 20) Console.ForegroundColor = ConsoleColor.Green;
       if (WhiteScoreCentipawns < -20) Console.ForegroundColor = ConsoleColor.Red;
       Console.Write($"{WhiteScoreCentipawns,5:F0}   ");
+      Console.Write($"{WhiteScoreQ,5:F2}   ");
       Console.ForegroundColor = colorDefault;
 
       //Console.Write($"{BlackSearchLimitPre,15} --> {BlackSearchLimitPost,15} ");
@@ -112,6 +113,7 @@ namespace Ceres.Chess.GameEngines
       if (BlackScoreCentipawns > 20) Console.ForegroundColor = ConsoleColor.Green;
       if (BlackScoreCentipawns < -20) Console.ForegroundColor = ConsoleColor.Red;
       Console.Write($"{BlackScoreCentipawns,5:F0}   ");
+      Console.Write($"{BlackScoreQ,5:F2}   ");
       Console.ForegroundColor = colorDefault;
       Console.Write($"  {FEN,-50} ");
     }
