@@ -33,6 +33,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     bool IsWDL { get; }
     bool HasM { get; }
     bool HasUncertaintyV { get; }
+    bool HasUncertaintyP { get; }
     bool HasAction { get; }
     bool HasState { get; }
 
@@ -41,11 +42,16 @@ namespace Ceres.Chess.NetEvaluation.Batch
     FP16 GetWinP(int index);
     FP16 GetLossP(int index);
 
+
+    FP16 GetWin1P(int index);
+    FP16 GetLoss1P(int index);
+
     FP16 GetWin2P(int index);
     FP16 GetLoss2P(int index);
 
     FP16 GetM(int index);
     FP16 GetUncertaintyV(int index);
+    FP16 GetUncertaintyP(int index);
     FP16 GetExtraStat0(int index);
     FP16 GetExtraStat1(int index);
 

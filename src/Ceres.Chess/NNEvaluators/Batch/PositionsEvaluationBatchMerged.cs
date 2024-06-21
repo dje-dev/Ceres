@@ -52,6 +52,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     bool isWDL;
     bool hasM;
     bool hasUncertaintyV;
+    bool hasUncertaintyP;
     bool hasAction;
     bool hasValueSecondary;
     bool hasState;
@@ -69,6 +70,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
       isWDL = batches[0].IsWDL;
       hasM  = batches[0].HasM;
       hasUncertaintyV = batches[0].HasUncertaintyV;
+      hasUncertaintyP = batches[0].HasUncertaintyP;
       hasAction = batches[0].HasAction;
       hasValueSecondary = batches[0].HasValueSecondary;
       hasState = batches[0].HasState;
@@ -80,6 +82,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     bool IPositionEvaluationBatch.HasM => hasM;
 
     bool IPositionEvaluationBatch.HasUncertaintyV => hasUncertaintyV;
+    bool IPositionEvaluationBatch.HasUncertaintyP => hasUncertaintyP;
 
     bool IPositionEvaluationBatch.HasAction => hasAction;
     bool IPositionEvaluationBatch.HasValueSecondary => hasValueSecondary;
@@ -157,6 +160,12 @@ namespace Ceres.Chess.NetEvaluation.Batch
       return Batches[indices.Item1].GetLossP(indices.Item2);
     }
 
+    FP16 IPositionEvaluationBatch.GetLoss1P(int index)
+    {
+      (int, int) indices = GetIndices(index);
+      return Batches[indices.Item1].GetLoss1P(indices.Item2);
+    }
+
     FP16 IPositionEvaluationBatch.GetLoss2P(int index)
     {
       (int, int) indices = GetIndices(index);
@@ -191,6 +200,12 @@ namespace Ceres.Chess.NetEvaluation.Batch
       return Batches[indicies.Item1].GetWinP(indicies.Item2);
     }
 
+    FP16 IPositionEvaluationBatch.GetWin1P(int index)
+    {
+      (int, int) indicies = GetIndices(index);
+      return Batches[indicies.Item1].GetWin1P(indicies.Item2);
+    }
+
     FP16 IPositionEvaluationBatch.GetWin2P(int index)
     {
       (int, int) indicies = GetIndices(index);
@@ -201,6 +216,12 @@ namespace Ceres.Chess.NetEvaluation.Batch
     {
       (int, int) indicies = GetIndices(index);
       return Batches[indicies.Item1].GetUncertaintyV(indicies.Item2);
+    }
+
+    FP16 IPositionEvaluationBatch.GetUncertaintyP(int index)
+    {
+      (int, int) indicies = GetIndices(index);
+      return Batches[indicies.Item1].GetUncertaintyP(indicies.Item2);
     }
 
     public NNEvaluatorResultActivations GetActivations(int index)

@@ -14,9 +14,6 @@
 #region Using directives
 
 using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
 using Ceres.Base.Benchmarking;
@@ -163,6 +160,7 @@ namespace Ceres.Chess.NNEvaluators
           bool isWDL = results[0].IsWDL;
           bool hasM = results[0].HasM;
           bool hasUncertaintyV = results[0].HasUncertaintyV;
+          bool hasUncertaintyP = results[0].HasUncertaintyP;
           bool hasValueSecondary = results[0].HasValueSecondary;
           bool hasAction = results[0].HasAction;
           bool hasState = results[0].HasState;
@@ -175,6 +173,7 @@ namespace Ceres.Chess.NNEvaluators
           FP16[] l2 = HasValueSecondary ? new FP16[positions.NumPos] : null;
           FP16[] m = hasM ? new FP16[positions.NumPos] : null;
           FP16[] uncertaintyV = hasUncertaintyV ? new FP16[positions.NumPos] : null;
+          FP16[] uncertaintyP = hasUncertaintyP ? new FP16[positions.NumPos] : null;
           CompressedActionVector[] actions = HasAction ? new CompressedActionVector[positions.NumPos] : null;
           Half[][] states = HasState ? new Half[positions.NumPos][] : null;
 
@@ -222,13 +221,18 @@ namespace Ceres.Chess.NNEvaluators
               resultI.UncertaintyV.CopyTo(new Memory<FP16>(uncertaintyV).Slice(nextPosIndex, thisNumPos));
             }
 
+            if (HasUncertaintyP)
+            {
+              resultI.UncertaintyP.CopyTo(new Memory<FP16>(uncertaintyP).Slice(nextPosIndex, thisNumPos));
+            }
+
             nextPosIndex += thisNumPos;
           }
 
           TimingStats stats = new TimingStats();
-          return new PositionEvaluationBatch(isWDL, hasM, hasUncertaintyV, hasAction, hasValueSecondary, hasState,
+          return new PositionEvaluationBatch(isWDL, hasM, hasUncertaintyV, hasUncertaintyP, hasAction, hasValueSecondary, hasState,
                                              positions.NumPos, 
-                                             policies, actions, w, l, w2, l2, m, uncertaintyV, states, null, stats);
+                                             policies, actions, w, l, w2, l2, m, uncertaintyV, uncertaintyP, states, null, stats);
         }
 
       }

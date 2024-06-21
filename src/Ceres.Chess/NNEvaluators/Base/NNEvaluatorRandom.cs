@@ -55,6 +55,7 @@ namespace Ceres.Chess.NNEvaluators
     public override bool IsWDL => isWDL;
     public override bool HasM => false;
     public override bool HasUncertaintyV => false;
+    public override bool HasUncertaintyP => false;
 
     public override bool HasAction => false;
     public override bool HasValueSecondary => false;
@@ -117,8 +118,8 @@ namespace Ceres.Chess.NNEvaluators
           CompressedPolicyVector.InitializeAsRandom(ref policies[i], Type == RandomType.WidePolicy);
         }
 
-        return new PositionEvaluationBatch(IsWDL, HasM, HasUncertaintyV, HasAction, HasValueSecondary,HasState, 
-                                           positions.NumPos, policies, null, w, l, default, default, null, null, null, null, timingStats);
+        return new PositionEvaluationBatch(IsWDL, HasM, HasUncertaintyV, HasUncertaintyP, HasAction, HasValueSecondary,HasState, 
+                                           positions.NumPos, policies, null, w, l, default, default,  null, null, null, null, null, timingStats);
       }
     }
 

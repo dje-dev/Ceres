@@ -60,6 +60,8 @@ namespace Ceres.Chess.NNEvaluators
 
     public override bool HasUncertaintyV => BaseEvaluator.HasUncertaintyV;
 
+    public override bool HasUncertaintyP => BaseEvaluator.HasUncertaintyP;
+
     public override bool HasValueSecondary => BaseEvaluator.HasValueSecondary;
 
     public override int MaxBatchSize => BaseEvaluator.MaxBatchSize;

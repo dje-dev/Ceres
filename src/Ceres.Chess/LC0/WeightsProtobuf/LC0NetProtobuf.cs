@@ -78,6 +78,11 @@ namespace Ceres.Chess.LC0.WeightsProtobuf
     public bool HasUncertaintyV => false;
 
     /// <summary>
+    /// If the network supports the Uncertainty of policy head.
+    /// </summary>
+    public bool HasUncertaintyP => false;
+
+    /// <summary>
     /// If the network supports the WDL (win/draw/loss) head.
     /// </summary>
     public bool HasWDL => Net.Format.NetworkFormat?.Output == NetworkFormat.OutputFormat.OutputWdl;

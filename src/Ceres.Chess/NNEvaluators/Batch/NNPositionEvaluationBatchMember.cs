@@ -46,6 +46,12 @@ namespace Ceres.Chess.NetEvaluation.Batch
     public float UncertaintyV => batch.GetUncertaintyV(index);
 
     /// <summary>
+    /// Uncertainty of P value.
+    /// </summary>
+    public float UncertaintyP => batch.GetUncertaintyP(index);
+
+
+    /// <summary>
     /// Position value head output.
     /// </summary>
     public float V => batch.GetV(index);

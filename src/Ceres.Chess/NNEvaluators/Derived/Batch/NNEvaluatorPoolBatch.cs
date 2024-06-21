@@ -189,6 +189,7 @@ namespace Ceres.Chess.NNEvaluators
       Span<FP16> fullL2 = fullBatchResult.HasValueSecondary ? fullBatchResult.L2.Span : default;
 
       Span<FP16> fullUncertaintyV = fullBatchResult.HasUncertaintyV ? fullBatchResult.UncertaintyV.Span : default;
+      Span<FP16> fullUncertaintyP = fullBatchResult.HasUncertaintyP ? fullBatchResult.UncertaintyP.Span : default;
       Span<Half> fullState = default;
       Span<FP16> fullExtraStat0 = fullBatchResult.ExtraStat0.Span;
       Span<FP16> fullExtraStat1 = fullBatchResult.ExtraStat1.Span;
@@ -209,7 +210,8 @@ namespace Ceres.Chess.NNEvaluators
         }
         int numPos = thisBatch.NumPos;
         PositionEvaluationBatch thisResultSubBatch =
-          new PositionEvaluationBatch(fullBatchResult.IsWDL, fullBatchResult.HasM, fullBatchResult.HasUncertaintyV, 
+          new PositionEvaluationBatch(fullBatchResult.IsWDL, fullBatchResult.HasM, 
+                                      fullBatchResult.HasUncertaintyV, fullBatchResult.HasUncertaintyP,
                                       fullBatchResult.HasAction, fullBatchResult.HasValueSecondary, fullBatchResult.HasState,
                                       thisBatch.NumPos,
                                       fullPolicyValues.Slice(nextPosIndex, numPos).ToArray(),
@@ -223,6 +225,7 @@ namespace Ceres.Chess.NNEvaluators
 
                                       fullBatchResult.HasM ? fullM.Slice(nextPosIndex, numPos).ToArray() : null,
                                       fullBatchResult.HasUncertaintyV ? fullUncertaintyV.Slice(nextPosIndex, numPos).ToArray() : null,
+                                      fullBatchResult.HasUncertaintyP ? fullUncertaintyP.Slice(nextPosIndex, numPos).ToArray() : null,
                                       fullBatchResult.HasState ? default : default, // ** TO DO
                                       fullBatchResult.Activations.IsEmpty ? null : fullActivations.Slice(nextPosIndex, numPos).ToArray(),
                                       fullBatchResult.Stats,

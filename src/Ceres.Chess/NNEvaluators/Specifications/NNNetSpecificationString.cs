@@ -47,7 +47,8 @@ namespace Ceres.Chess.NNEvaluators.Specifications
     /// <summary>
     /// List of nets to be used, and their fractional weights for the value, policy, MLH and uncertainty heads.
     /// </summary>
-    public readonly List<(NNEvaluatorNetDef def, float wtValue, float wtValue2, float wtPolicy, float wtMLH, float wtUncertainty)> NetDefs;
+    public readonly List<(NNEvaluatorNetDef def, float wtValue, float wtValue2, float wtPolicy, 
+                                                 float wtMLH, float wtUncertainty, float wtUncertaintyP)> NetDefs;
    
     /// <summary>
     /// Optional options string (to be passed to the evaluator for interpretation/use).
@@ -71,14 +72,15 @@ namespace Ceres.Chess.NNEvaluators.Specifications
       SpecString = netString;
 
       // Build network definitions
-      (string netOptions, List<(string, NNEvaluatorType, NNEvaluatorPrecision, float, float, float, float, float)> parts) netParts = OptionsParserHelpers.ParseNetworkOptions(netString);
+      (string netOptions, List<(string, NNEvaluatorType, NNEvaluatorPrecision, float, float, float, float, float, float)> parts) netParts = OptionsParserHelpers.ParseNetworkOptions(netString);
 
       OptionsString = netParts.netOptions;
 
-      NetDefs = new List<(NNEvaluatorNetDef, float, float, float, float, float)>();
+      NetDefs = new List<(NNEvaluatorNetDef, float, float, float, float, float, float)>();
       foreach (var netSegment in netParts.parts)
       {
-        NetDefs.Add((new NNEvaluatorNetDef(netSegment.Item1, netSegment.Item2, netSegment.Item3), netSegment.Item4, netSegment.Item5, netSegment.Item6, netSegment.Item7, netSegment.Item8));
+        NetDefs.Add((new NNEvaluatorNetDef(netSegment.Item1, netSegment.Item2, netSegment.Item3), netSegment.Item4, netSegment.Item5, netSegment.Item6, 
+                                           netSegment.Item7, netSegment.Item8, netSegment.Item9));
       }
 
       if (NetDefs.Count == 1)
@@ -114,7 +116,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications
     /// </summary>
     /// <param name="net"></param>
     /// <returns></returns>
-    static string NetInfoStr((NNEvaluatorNetDef def, float wtValue, float wtValue2, float wtPolicy, float wtMLH, float wtUncertainty) net)
+    static string NetInfoStr((NNEvaluatorNetDef def, float wtValue, float wtValue2, float wtPolicy, float wtMLH, float wtUncertainty, float wtUncertaintyP) net)
     {
       if (net.wtValue == 1)
       {
@@ -122,7 +124,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications
       }
       else
       {
-        return $"({net.def} {net.wtValue} {net.wtValue2} {net.wtPolicy} {net.wtMLH} {net.wtUncertainty}) ";
+        return $"({net.def} {net.wtValue} {net.wtValue2} {net.wtPolicy} {net.wtMLH} {net.wtUncertainty} {net.wtUncertaintyP}) ";
       }
     }
 
@@ -133,10 +135,10 @@ namespace Ceres.Chess.NNEvaluators.Specifications
     /// <param name="comboType"></param>
     /// <param name="nets"></param>
     /// <returns></returns>
-    static string ToSpecificationStringComplex(NNEvaluatorNetComboType comboType, IEnumerable<(NNEvaluatorNetDef, float, float, float, float, float)> nets)
+    static string ToSpecificationStringComplex(NNEvaluatorNetComboType comboType, IEnumerable<(NNEvaluatorNetDef, float, float, float, float, float, float)> nets)
     {
       string ret = $"Nets: {comboType} ";
-      foreach ((NNEvaluatorNetDef, float, float, float, float, float) net in nets)
+      foreach ((NNEvaluatorNetDef, float, float, float, float, float, float) net in nets)
       {
         ret += NetInfoStr(net);
       }
@@ -150,7 +152,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications
     /// <param name="comboType"></param>
     /// <param name="nets"></param>
     /// <returns></returns>
-    public static string ToSpecificationString(NNEvaluatorNetComboType comboType, IEnumerable<(NNEvaluatorNetDef, float, float, float, float, float)> nets)
+    public static string ToSpecificationString(NNEvaluatorNetComboType comboType, IEnumerable<(NNEvaluatorNetDef, float, float, float, float, float, float)> nets)
     {
       // TODO: Currently support conversion back to original specification string only for simple cases
       if (comboType == NNEvaluatorNetComboType.Single

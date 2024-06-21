@@ -97,6 +97,11 @@ namespace Chess.Ceres.NNEvaluators
     public override bool HasUncertaintyV => hasUncertaintyV;
 
     /// <summary>
+    /// If the network contains an uncertanity of policy head.
+    /// </summary>
+    public override bool HasUncertaintyP => hasUncertaintyP;
+
+    /// <summary>
     /// If action head is present in the network.
     /// </summary>
     public override bool HasAction => hasAction;
@@ -111,6 +116,7 @@ namespace Chess.Ceres.NNEvaluators
     readonly bool hasValueSecondary;
     readonly bool hasM;
     readonly bool hasUncertaintyV;
+    readonly bool hasUncertaintyP;
     readonly bool hasAction;
 
     /// <summary>
@@ -202,7 +208,7 @@ namespace Chess.Ceres.NNEvaluators
                                  NNDeviceType deviceType, int gpuID, bool useTRT,
                                  ONNXRuntimeExecutor.NetTypeEnum type, int batchSize,
                                  NNEvaluatorPrecision precision,
-                                 bool isWDL, bool hasM, bool hasUncertaintyV, bool hasAction,
+                                 bool isWDL, bool hasM, bool hasUncertaintyV, bool hasUncertaintyP, bool hasAction,
                                  string outputValue, string outputWDL, string outputPolicy, string outputMLH,
                                  bool valueHeadLogistic, bool scale50MoveCounter,
                                  bool movesEnabled = false, bool enableProfiling = false,
@@ -220,6 +226,7 @@ namespace Chess.Ceres.NNEvaluators
       this.hasValueSecondary = hasValueSecondary;
       this.hasM = hasM;
       this.hasUncertaintyV = hasUncertaintyV;
+      this.hasUncertaintyP = hasUncertaintyP;
       this.hasAction = hasAction;
       this.HasState = hasState;
       DeviceType = deviceType;
@@ -592,13 +599,15 @@ namespace Chess.Ceres.NNEvaluators
 #endif
 
       // NOTE: inefficient, above we convert from [] (flat) to [][] and here we convert back to []
-      PositionEvaluationBatch ret =  new (IsWDL, HasM, HasUncertaintyV, HasAction, HasValueSecondary, HasState, numPos,
+      PositionEvaluationBatch ret =  new (IsWDL, HasM, HasUncertaintyV, HasUncertaintyP, 
+                                         HasAction, HasValueSecondary, HasState, numPos,
                                          MemoryMarshal.Cast<Float16, FP16>(result.ValuesRaw.Span),
                                          MemoryMarshal.Cast<Float16, FP16>(result.Values2Raw.Span),
                                          result.PolicyVectors,//*/result.PolicyFlat, 
                                          actions,
                                          MemoryMarshal.Cast<Float16, FP16>(result.MLH.Span),
                                          MemoryMarshal.Cast<Float16, FP16>(result.UncertaintyV.Span),
+                                         MemoryMarshal.Cast<Float16, FP16>(result.UncertaintyP.Span),
                                          MemoryMarshal.Cast<Float16, FP16>(result.ExtraStats0.Span),
                                          MemoryMarshal.Cast<Float16, FP16>(result.ExtraStats1.Span),
                                          new Memory<Half[]>(states), default,

@@ -81,6 +81,11 @@ namespace Ceres.Chess.LC0.NNFiles
     public bool HasUncertaintyV { get; }
 
     /// <summary>
+    /// If the network contains an uncertainty of policy head.
+    /// </summary>
+    public bool HasUncertaintyP { get; }
+
+    /// <summary>
     /// Information about the underlying file from the operating system.
     /// </summary>
     FileInfo fileInfo;
@@ -105,6 +110,7 @@ namespace Ceres.Chess.LC0.NNFiles
       IsWDL = isWDL;
       HasMovesLeft = hasMovesLeft;
       HasUncertaintyV = hasUncertaintyV;
+      HasUncertaintyP = false;
 
       fileInfo = new FileInfo(filename);
     }
@@ -182,6 +188,7 @@ namespace Ceres.Chess.LC0.NNFiles
           IsWDL = !string.IsNullOrEmpty(pbn.Net.OnnxModel.OutputWdl);
           HasMovesLeft = !string.IsNullOrEmpty(pbn.Net.OnnxModel.OutputMlh);
           HasUncertaintyV = false;
+          HasUncertaintyP = false;
 
           // Not possible to determine number of blocks/filters (may be arbitrary structure).
         }
@@ -193,6 +200,7 @@ namespace Ceres.Chess.LC0.NNFiles
           IsWDL = pbn.HasWDL;
           HasMovesLeft = pbn.HasMovesLeft;
           HasUncertaintyV = false;
+          HasUncertaintyP = false;
         }
       }
       catch (Exception exc)

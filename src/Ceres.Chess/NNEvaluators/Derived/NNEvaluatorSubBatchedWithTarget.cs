@@ -100,6 +100,7 @@ namespace Ceres.Chess.NNEvaluators
 
     public override bool HasM => Evaluator.HasM;
     public override bool HasUncertaintyV => Evaluator.HasUncertaintyV;
+    public override bool HasUncertaintyP => Evaluator.HasUncertaintyP;
     public override bool HasValueSecondary => Evaluator.HasValueSecondary;
 
     public override bool HasAction => Evaluator.HasAction;

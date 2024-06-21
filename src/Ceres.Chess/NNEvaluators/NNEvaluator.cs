@@ -145,6 +145,11 @@ namespace Ceres.Chess.NNEvaluators
     public abstract bool HasUncertaintyV { get; }
 
     /// <summary>
+    /// If the evaluator has an UP (uncertainty of policy) head.
+    /// </summary>
+    public abstract bool HasUncertaintyP { get; }
+
+    /// <summary>
     /// If the evaluator has an secondary value head.
     /// </summary>
     public abstract bool HasValueSecondary { get; }
@@ -342,12 +347,16 @@ namespace Ceres.Chess.NNEvaluators
       float w = batch.GetWinP(batchIndex);
       float l = IsWDL ? batch.GetLossP(batchIndex) : float.NaN;
 
+      float w1 = batch.GetWin1P(batchIndex);
+      float l1 = IsWDL ? batch.GetLoss1P(batchIndex) : float.NaN;
+
       float w2 = HasValueSecondary ? batch.GetWin2P(batchIndex) : float.NaN;
       float l2 = HasValueSecondary && IsWDL ? batch.GetLoss2P(batchIndex) : float.NaN;
 
       float m = HasM ? batch.GetM(batchIndex) : float.NaN;
       float uncertaintyV = HasUncertaintyV ? batch.GetUncertaintyV(batchIndex) : float.NaN;
-      
+      float uncertaintyP = HasUncertaintyP ? batch.GetUncertaintyP(batchIndex) : float.NaN;
+
       NNEvaluatorResultActivations activations = batch.GetActivations(batchIndex);
       Half[] stateInfo = HasState ? batch.GetState(batchIndex) : null;
 
@@ -357,7 +366,7 @@ namespace Ceres.Chess.NNEvaluators
       FP16 extraStat0 = batch.GetExtraStat0(batchIndex);
       FP16 extraStat1 = batch.GetExtraStat1(batchIndex);
 
-      result = new NNEvaluatorResult(w, l, w2, l2, m, uncertaintyV, 
+      result = new NNEvaluatorResult(w, l, w1, l1, w2, l2, m, uncertaintyV, uncertaintyP,
                                      policyRef.policies.Span[policyRef.index], 
                                      HasAction ? actionRef.actions.Span[actionRef.index] : default,
                                      activations, stateInfo, extraStat0, extraStat1);

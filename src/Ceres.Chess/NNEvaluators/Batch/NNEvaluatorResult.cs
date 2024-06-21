@@ -36,6 +36,9 @@ namespace Ceres.Chess.NetEvaluation.Batch
     private readonly float winP;
     private readonly float lossP;
 
+    private readonly float win1P;
+    private readonly float loss1P;
+
     private readonly float win2P;
     private readonly float loss2P;
 
@@ -47,9 +50,14 @@ namespace Ceres.Chess.NetEvaluation.Batch
     public readonly float M;
 
     /// <summary>
-    /// Uncertainty of V head output.
+    /// Uncertainty of value head output.
     /// </summary>
     public readonly float UncertaintyV;
+
+    /// <summary>
+    /// Uncertainty of policy head output.
+    /// </summary>
+    public readonly float UncertaintyP;
 
     /// <summary>
     /// Policy head output.
@@ -88,14 +96,21 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// </summary>
     /// <param name="winP"></param>
     /// <param name="lossP"></param>
+    /// <param name="win2P"></param>
+    /// <param name="loss2P"></param>
     /// <param name="m"></param>
     /// <param name="uncertaintyV"></param>
+    /// <param name="uncertaintyP"></param>
     /// <param name="policy"></param>
-    /// <param name="actionWDL"></param>
+    /// <param name="actionsWDL"></param>
     /// <param name="activations"></param>
+    /// <param name="priorState"></param>
+    /// <param name="extraStat0"></param>
+    /// <param name="extraStat1"></param>
     public NNEvaluatorResult(float winP, float lossP, 
-                             float win2P, float loss2P, 
-                             float m, float uncertaintyV,
+                             float win1P, float loss1P,
+                             float win2P, float loss2P,
+                             float m, float uncertaintyV, float uncertaintyP,
                              CompressedPolicyVector policy,
                              CompressedActionVector actionsWDL,
                              NNEvaluatorResultActivations activations,
@@ -104,12 +119,15 @@ namespace Ceres.Chess.NetEvaluation.Batch
     {
       this.winP = winP;
       this.lossP = lossP;
+      this.win1P = win1P;
+      this.loss1P = loss1P;
       this.win2P = win2P;
       this.loss2P = loss2P;
       ActionsWDL = actionsWDL;
 
       M = Math.Max(0, m);
       UncertaintyV = uncertaintyV;
+      UncertaintyP = uncertaintyP;
       Policy = policy;
       Activations = activations;
       PriorState = priorState;
@@ -125,10 +143,15 @@ namespace Ceres.Chess.NetEvaluation.Batch
 
 
     /// <summary>
+    /// Value of primary value head (win minus loss probability).
+    /// </summary>
+    public readonly float V1 => float.IsNaN(loss1P) ? win1P : (win1P - loss1P);
+
+
+    /// <summary>
     /// Value of secondary value head (win minus loss probability).
     /// </summary>
     public readonly float V2 => float.IsNaN(loss2P) ? win2P : (win2P - loss2P);
-
 
     /// <summary>
     /// Draw probability.
@@ -148,6 +171,11 @@ namespace Ceres.Chess.NetEvaluation.Batch
 
 
     /// <summary>
+    /// Win probability (primary value head).
+    /// </summary>
+    public readonly float W1 => float.IsNaN(loss1P) ? float.NaN : winP;
+
+    /// <summary>
     /// Win probability (secondary value head).
     /// </summary>
     public readonly float W2 => float.IsNaN(loss2P) ? float.NaN : win2P;
@@ -157,6 +185,11 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// Loss probability.
     /// </summary>
     public readonly float L => float.IsNaN(lossP) ? float.NaN : lossP;
+
+    /// <summary>
+    /// Loss probability (primary value head).
+    /// </summary>
+    public readonly float L1 => float.IsNaN(loss1P) ? float.NaN : lossP;
 
     /// <summary>
     /// Loss probability (secondary value head).

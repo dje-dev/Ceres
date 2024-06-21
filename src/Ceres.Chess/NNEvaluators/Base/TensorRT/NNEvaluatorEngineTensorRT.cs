@@ -45,6 +45,7 @@ namespace Chess.Ceres.NNEvaluators.TensorRT
     public override bool IsWDL => Config.IsWDL;
     public override bool HasM => Config.HasM;
     public override bool HasUncertaintyV => Config.HasUncertaintyV;
+    public override bool HasUncertaintyP => false;
     public override bool HasAction => false;
     public override bool HasValueSecondary => false;
 
