@@ -47,9 +47,14 @@ namespace Ceres.Chess.LC0NetInference
     public readonly Memory<Float16> MLH;
 
     /// <summary>
-    /// Uncertainty of V head.
+    /// Uncertainty of value head.
     /// </summary>
     public readonly Memory<Float16> UncertaintyV;
+
+    /// <summary>
+    /// Uncertainty of policy head.
+    /// </summary>
+    public readonly Memory<Float16> UncertaintyP;
 
     public readonly Memory<Float16> PriorState;
 
@@ -79,7 +84,7 @@ namespace Ceres.Chess.LC0NetInference
     /// <param name="policyLogisticVectors"></param>
     /// <param name="draws"></param>
     public ONNXRuntimeExecutorResultBatch(bool isWDL, Memory<Float16> values, Memory<Float16> values2, Memory<Float16> policyLogisticVectors,
-                                          Memory<Float16> mlh, Memory<Float16> uncertaintyV,
+                                          Memory<Float16> mlh, Memory<Float16> uncertaintyV, Memory<Float16> uncertaintyP,
                                           Memory<Float16> extraStats0, Memory<Float16> extraStats1,
                                           float[][] valueFCActiviations,
                                           Memory<Float16> actionLogisticVectors, Memory<Float16> priorState, int numPositionsUsed)
@@ -101,6 +106,7 @@ namespace Ceres.Chess.LC0NetInference
       ExtraStats1 = extraStats1;  
 
       UncertaintyV = uncertaintyV;
+      UncertaintyP = uncertaintyP;
       PriorState = priorState;
       ValueFCActivations = valueFCActiviations;
       NumPositionsUsed = numPositionsUsed;

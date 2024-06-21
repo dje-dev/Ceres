@@ -231,6 +231,7 @@ namespace Ceres.Chess.LC0NetInference
       {
         bool hasMLH = eval.Count >= 3;
         bool hasUNC = eval.Count >= 4;
+        bool hasUNC_POLICY = FindIndex(1, -1, "uncertainty_policy", true) != -1;
 #if NOT
         Session.InputMetadata
         [0] input_1
@@ -303,6 +304,7 @@ namespace Ceres.Chess.LC0NetInference
         int INDEX_WDL2 = FindIndex(3, INDEX_WDL, "value2", true);
         int INDEX_MLH = FindIndex(1);
         int INDEX_UNC = hasUNC ? FindIndex(1, INDEX_MLH) : -1;
+        int INDEX_UNC_POLICY = hasUNC_POLICY ? FindIndex(1, INDEX_MLH, "uncertainty_policy") : -1;
         int INDEX_ACTION = FindIndex(1858 * 3, -1, "action", true); // TODO: cleanup the output names to be better named
 
         if (false && looksLikeBT3)
@@ -316,6 +318,7 @@ namespace Ceres.Chess.LC0NetInference
 
         Memory<Float16> mlh = hasMLH ? eval[INDEX_MLH].Item2 : null;
         Memory<Float16> uncertantiesV = hasUNC ? eval[INDEX_UNC].Item2 : null;
+        Memory<Float16> uncertantiesP = hasUNC_POLICY ? eval[INDEX_UNC_POLICY].Item2 : null;
         Memory<Float16> policiesLogistics = eval[INDEX_POLICIES].Item2;
 
         Memory<Float16> actionLogistics = INDEX_ACTION != -1 ? eval[INDEX_ACTION].Item2 : default;
@@ -332,10 +335,10 @@ namespace Ceres.Chess.LC0NetInference
 
         // TODO: This is just a fake, fill it in someday
         Memory<Float16> priorState = hasState ? new Float16[numPositionsUsed * 64 * 4] : default;
-        ONNXRuntimeExecutorResultBatch result = new ONNXRuntimeExecutorResultBatch(isWDL, values, values2, policiesLogistics, mlh, 
-                                                                                   uncertantiesV, extraStats0, extraStats1, value_fc_activations,
-                                                                                   actionLogistics, priorState,
-                                                                                   numPositionsUsed);
+        ONNXRuntimeExecutorResultBatch result = new (isWDL, values, values2, policiesLogistics, mlh, 
+                                                     uncertantiesV, uncertantiesP, extraStats0, extraStats1, value_fc_activations,
+                                                     actionLogistics, priorState,
+                                                     numPositionsUsed);
         return result;
 
       }
