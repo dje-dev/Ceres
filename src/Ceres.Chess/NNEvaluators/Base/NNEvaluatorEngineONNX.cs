@@ -175,6 +175,11 @@ namespace Chess.Ceres.NNEvaluators
     public readonly float TemperatureValue2;
 
     /// <summary>
+    /// Optional multiplier to be used if policy uncertainty is used.
+    /// </summary>
+    public readonly float PolicyUncertaintyMultiplier = 0;
+
+    /// <summary>
     /// Fraction of value from value 2 to be blended into primary value.
     /// </summary>
     public readonly float FractionValueFromValue2 = 0;
@@ -214,7 +219,9 @@ namespace Chess.Ceres.NNEvaluators
                                  bool movesEnabled = false, bool enableProfiling = false,
                                  bool useHistory = true, object options = null,
                                  bool hasValueSecondary = false,
-                                 float temperatureValue1 = 1, float temperatureValue2 = 1, float fractionValueFromValue2 = 0,
+                                 float temperatureValue1 = 1, float temperatureValue2 = 1, 
+                                 float fractionValueFromValue2 = 0,
+                                 float policyTemperatureScalingFactor = 0,
                                  bool hasState = false)
     {
       EngineType = type == ONNXRuntimeExecutor.NetTypeEnum.Ceres ? "ONNX_DJE" : "ONNX_LZ0";
@@ -241,6 +248,7 @@ namespace Chess.Ceres.NNEvaluators
       Options = options;
       TemperatureValue1 = temperatureValue1;
       TemperatureValue2 = temperatureValue2;
+      PolicyUncertaintyMultiplier = policyTemperatureScalingFactor;
       FractionValueFromValue2 = fractionValueFromValue2;
 
       bool filesMatch = lastONNXFileName != null && lastONNXFileName == onnxModelFileName;
@@ -261,7 +269,8 @@ namespace Chess.Ceres.NNEvaluators
           : ["/input/planes"];
 
         Executor = new ONNXRuntimeExecutor(engineID, onnxModelFileName, onnxModelBytes, inputNames,
-                                           batchSize, type, precision, deviceType, gpuID, useTRT, enableProfiling);
+                                           batchSize, type, precision, deviceType, gpuID, useTRT, enableProfiling,
+                                           policyTemperatureScalingFactor);
         lastONNXFileName = onnxModelFileName;
         lastONNXBytesHash = onnxModelBytes == null ? 0 : ArrayUtils.ByteArrayStableHash(onnxModelBytes);
         lastDeviceType = deviceType;

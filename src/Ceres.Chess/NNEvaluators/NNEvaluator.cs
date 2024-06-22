@@ -78,9 +78,9 @@ namespace Ceres.Chess.NNEvaluators
     public string EngineNetworkID;
 
     /// <summary>
-    /// Optional evaluator-specific set of options.
+    /// Optional options relating to evaluator (e.g. output head postprocessing).
     /// </summary>
-    public object OptionsObject;
+    public NNEvaluatorOptions Options;
 
     /// <summary>
     /// Optional short identification string.
