@@ -53,7 +53,7 @@ namespace Ceres.APIExamples
   {
     const bool POOLED = false;
 
-    static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 2 : 6;
+    static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 1 : 4;
     static int[] OVERRIDE_DEVICE_IDs = /*POOLED ? null*/
        (Environment.MachineName.ToUpper() switch
       {
@@ -187,16 +187,23 @@ namespace Ceres.APIExamples
       NET2 = "~BT4";
 
       //      NET1 = "CUSTOM1:ckpt_DGX_C7_B4_256_10_8_8_32bn_2024_final.ts.fp16.onnx";
-      NET1 = "CUSTOM1:ckpt_DGX_C7_256_12_8_6_40bn_B1_2024f_last.ts.fp16.onnx";
-      NET2 = "CUSTOM2:ckpt_DEV_C6_B4_256_12_8_6_BS8_48bn_2024_postconvert.ts.fp16.onnx";
+//NET1 = "CUSTOM1:ckpt_DGX_C7_256_12_8_6_40bn_B1_2024f_last.ts.fp16.onnx"; // copy of best but with focus data
+NET1 = "CUSTOM1:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_postconvert.ts.fp16.onnx"; // best so far
+// NET2 = "CUSTOM2:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_postconvert.ts.fp16.onnx"; // best so far
+//NET2 = "CUSTOM1:ckpt_DGX_C7_B4_256_10_8_8_32bn_2024_final.ts.fp16.onnx"; // prep for Daniel
+//      NET2 = "CUSTOM2:ckpt_DEV_C6_B4_256_12_8_6_BS8_48bn_2024_postconvert.ts.fp16.onnx";
 
-      NET2 = "CUSTOM1:ckpt_DGX_C7_256_12_8_6_40bn_B1_2024f_1834811392.ts.fp16.onnx";
-NET1 = "CUSTOM2:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_1855.ts"; // 1855
+      //      NET2 = "CUSTOM2:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_postconvert.ts.fp16.onnx";// 2197929984.ts";
+      //NET2 = "CUSTOM2:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_postconvert.ts.fp16.onnx";// 2197929984.ts";
 
-      NET1 = "CUSTOM1:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_postconvert.ts.fp16.onnx";// 2197929984.ts";
-//      NET2 = "CUSTOM2:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_late.ts";// 2197929984.ts";
-      NET2 = "~T1_DISTILL_256_10_FP16_TRT";
-//      NET2 = "~T75";
+      //      NET2 = "CUSTOM2:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_late.ts";// 2197929984.ts";
+    NET2 = "~T1_DISTILL_256_10_FP16_TRT";
+
+      // FOCUS TEST
+      //      NET1 = "CUSTOM2:ckpt_DGX_C_256_12_8_6_500mm_B1_2024f_2_270k.ts";
+      //      NET2 = "CUSTOM2:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_2564292608.ts";
+
+//NET2 = "~T80";
       //      NET2 = "~T1_DISTILL_256_10_FP16";
       //      NET2 = "~T4_3355000";
       //      NET2 = "~BT2_NATIVE";
@@ -225,8 +232,8 @@ NET1 = "CUSTOM2:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_1855.ts"; // 1855
       //      NET1 = "CUSTOM1:ckpt_DGX_C6_B4_512_15_16_4_32bn_2024_focus_1063735296.ts";
       //      NET2 = "CUSTOM2:ckpt_DGX_C5_B1_512_15_16_4_32bn_2024_1049882624.ts";
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(100); // was 500
-//      limit1 = SearchLimit.BestValueMove;
+      SearchLimit limit1 = SearchLimit.NodesPerMove(5000); // was 500
+      //limit1 = SearchLimit.BestValueMove;
 //limit1 = new SearchLimit(SearchLimitType.SecondsForAllMoves, 15, false, 0.5f);
 //limit1 = new SearchLimit(SearchLimitType.SecondsForAllMoves, 10, false, 0.1f);
       //SearchLimit limit2 = SearchLimit.NodesPerMove(1);
@@ -329,7 +336,7 @@ NET1 = "CUSTOM2:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_1855.ts"; // 1855
       engineDefCeres1.SearchParams.ReusePositionEvaluationsFromOtherTree = false;
       engineDefCeres2.SearchParams.ReusePositionEvaluationsFromOtherTree = false;
 
-      if (false)
+      if (true)
       {
         engineDefCeres1.SearchParams.Execution.FlowDualSelectors = false;
         engineDefCeres2.SearchParams.Execution.FlowDualSelectors = false;
@@ -621,7 +628,7 @@ string OVERRIDE_LC0_BACKEND_STRING = "";
 //        baseName = "endingbook-16man-9609.pgn";
 //        def.AcceptPosExcludeIfContainsPieceTypeList = [PieceType.Queen, PieceType.Bishop, PieceType.Knight];
       }
-       baseName = "tcec_big";
+//       baseName = "tcec_big";
       string postfix = (baseName.ToUpper().EndsWith(".EPD") || baseName.ToUpper().EndsWith(".PGN")) ? "" : ".pgn";
       def.OpeningsFileName = SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/openings/{baseName}{postfix}"
                                                      : @$"\\synology\dev\chess\data\openings\{baseName}{postfix}";
