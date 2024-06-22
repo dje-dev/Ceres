@@ -50,7 +50,7 @@ namespace Ceres.Chess.EncodedPositions
   /// NOTE:
   ///   - maximum number of possible moves in a chess position believed to be about 218 but this is very artifical position
   ///   - in practice, very difficult to get even near 100 in a reasonable game of chess
-  ///   - for compactness, we use an even small number (64) which almost always suffices
+  ///   - for compactness, we use an even small number (NUM_MOVE_SLOTS) which almost always suffices
   /// </summary>
   [StructLayout(LayoutKind.Sequential, Pack = 2)]
   [Serializable]
