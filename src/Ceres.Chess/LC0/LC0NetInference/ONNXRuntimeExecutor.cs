@@ -16,8 +16,6 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-
-using Ceres.Base.DataTypes;
 using Ceres.Chess.LC0.Batches;
 using Ceres.Chess.NNEvaluators.Defs;
 using Chess.Ceres.NNEvaluators;
@@ -72,8 +70,6 @@ namespace Ceres.Chess.LC0NetInference
     /// </summary>
     NetExecutorONNXRuntime executor;
 
-    public readonly float PolicyUncertaintyMultiplier = 0;
-
 
     /// <summary>
     /// Constructor.
@@ -94,8 +90,7 @@ namespace Ceres.Chess.LC0NetInference
                                NNEvaluatorPrecision precision, 
                                NNDeviceType deviceType, int gpuNum, 
                                bool useTRT, 
-                               bool enableProfiling,
-                               float policyUncertaintyMultiplier)
+                               bool enableProfiling)
     {
       if (onnxFileName != null && !onnxFileName.ToUpper().EndsWith(".ONNX"))
       {
@@ -112,7 +107,6 @@ namespace Ceres.Chess.LC0NetInference
       DeviceType = deviceType;
       BatchSize = maxBatchSize;
       Precision = precision;
-      PolicyUncertaintyMultiplier = policyUncertaintyMultiplier;
 
       int deviceIndex;
       if (deviceType == NNDeviceType.GPU)
@@ -337,16 +331,6 @@ namespace Ceres.Chess.LC0NetInference
         Memory<Float16> extraStats0 = eval.Count > 5 ? eval[5].Item2 : default;
         Memory<Float16> extraStats1 = eval.Count > 6 ? eval[6].Item2 : default;
 
-        if (!uncertantiesP.IsEmpty && PolicyUncertaintyMultiplier > 0)
-        {
-//          Console.WriteLine("yespolunc "  + uncertantiesP.Span[0]);
-          ApplyPolicyTemp(policiesLogistics, uncertantiesP);
-        }   
-        else
-        {
-//          Console.WriteLine("nopolunc");
-        }
-
         // TODO: This is just a fake, fill it in someday
         Memory<Float16> priorState = hasState ? new Float16[numPositionsUsed * 64 * 4] : default;
         ONNXRuntimeExecutorResultBatch result = new (isWDL, values, values2, policiesLogistics, mlh, 
@@ -359,22 +343,24 @@ namespace Ceres.Chess.LC0NetInference
       }
     }
 
+#if OLD
     void ApplyPolicyTemp(Memory<Float16> policies, Memory<Float16> policyUncertainties)
     {
       int numPos = policies.Length / 1858;
-      for (int i = 0; i < numPos; i++)
-      {
-        float unc = (float)policyUncertainties.Span[i];
-        float temp = 1 + PolicyUncertaintyMultiplier * unc;
-        for (int j = 0; j < 1858; j++)
-        {
-          float p = (float)policies.Span[i * 1858 + j];
-          p /= temp;
-          policies.Span[i * 1858 + j] = (Float16)p;
-        }
-      }
+      //      for (int i = 0; i < numPos; i++)
+      Parallel.For(0, numPos, i =>
+            {
+              float unc = (float)policyUncertainties.Span[i];
+              float temp = 1 + PolicyUncertaintyMultiplier * unc;
+              for (int j = 0; j < 1858; j++)
+              {
+                float p = (float)policies.Span[i * 1858 + j];
+                p /= temp;
+                policies.Span[i * 1858 + j] = (Float16)p;
+              }
+            });
     }
-
+#endif
     public void EndProfiling() => executor.EndProfiling();
 
 

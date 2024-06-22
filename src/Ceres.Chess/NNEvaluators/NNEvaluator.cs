@@ -80,7 +80,7 @@ namespace Ceres.Chess.NNEvaluators
     /// <summary>
     /// Optional options relating to evaluator (e.g. output head postprocessing).
     /// </summary>
-    public NNEvaluatorOptions Options;
+    public NNEvaluatorOptions Options = new NNEvaluatorOptions();
 
     /// <summary>
     /// Optional short identification string.

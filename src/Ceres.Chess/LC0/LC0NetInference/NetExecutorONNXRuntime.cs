@@ -359,7 +359,7 @@ namespace Ceres.Chess.LC0NetInference
       }
       else
       {
-        throw new NotImplementedException();
+        throw new NotImplementedException("Float32 version needs remeidiation, use Float16 for ONNX");
         //return RunFloat(inputsONNX, batchSize);
       }
     }

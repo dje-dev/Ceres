@@ -158,33 +158,7 @@ namespace Chess.Ceres.NNEvaluators
     /// If move history should be sent to ONNX network.
     /// </summary>
     public readonly bool UseHistory;
-
-    /// <summary>
-    /// Optional evaluator-specific options object.
-    /// </summary>
-    public readonly object Options;
-
-    /// <summary>
-    /// Temperature value to use for value head.
-    /// </summary>
-    public readonly float TemperatureValue1;
-
-    /// <summary>
-    /// Temperature value to use for value secondary head.
-    /// </summary>
-    public readonly float TemperatureValue2;
-
-    /// <summary>
-    /// Optional multiplier to be used if policy uncertainty is used.
-    /// </summary>
-    public readonly float PolicyUncertaintyMultiplier = 0;
-
-    /// <summary>
-    /// Fraction of value from value 2 to be blended into primary value.
-    /// </summary>
-    public readonly float FractionValueFromValue2 = 0;
-
-    
+   
     /// <summary>
     /// Miscellaneous information about the evaluator.
     /// </summary>
@@ -217,11 +191,8 @@ namespace Chess.Ceres.NNEvaluators
                                  string outputValue, string outputWDL, string outputPolicy, string outputMLH,
                                  bool valueHeadLogistic, bool scale50MoveCounter,
                                  bool movesEnabled = false, bool enableProfiling = false,
-                                 bool useHistory = true, object options = null,
+                                 bool useHistory = true, NNEvaluatorOptions options = null,
                                  bool hasValueSecondary = false,
-                                 float temperatureValue1 = 1, float temperatureValue2 = 1, 
-                                 float fractionValueFromValue2 = 0,
-                                 float policyTemperatureScalingFactor = 0,
                                  bool hasState = false)
     {
       EngineType = type == ONNXRuntimeExecutor.NetTypeEnum.Ceres ? "ONNX_DJE" : "ONNX_LZ0";
@@ -245,11 +216,7 @@ namespace Chess.Ceres.NNEvaluators
       Scale50MoveCounter = scale50MoveCounter;
       MovesEnabled = movesEnabled;
       UseHistory = useHistory;
-      Options = options;
-      TemperatureValue1 = temperatureValue1;
-      TemperatureValue2 = temperatureValue2;
-      PolicyUncertaintyMultiplier = policyTemperatureScalingFactor;
-      FractionValueFromValue2 = fractionValueFromValue2;
+      Options = options ?? new NNEvaluatorOptions();
 
       bool filesMatch = lastONNXFileName != null && lastONNXFileName == onnxModelFileName;
       bool bytesMatch = onnxModelBytes != null && ArrayUtils.ByteArrayStableHash(onnxModelBytes) == lastONNXBytesHash;
@@ -269,8 +236,7 @@ namespace Chess.Ceres.NNEvaluators
           : ["/input/planes"];
 
         Executor = new ONNXRuntimeExecutor(engineID, onnxModelFileName, onnxModelBytes, inputNames,
-                                           batchSize, type, precision, deviceType, gpuID, useTRT, enableProfiling,
-                                           policyTemperatureScalingFactor);
+                                           batchSize, type, precision, deviceType, gpuID, useTRT, enableProfiling);
         lastONNXFileName = onnxModelFileName;
         lastONNXBytesHash = onnxModelBytes == null ? 0 : ArrayUtils.ByteArrayStableHash(onnxModelBytes);
         lastDeviceType = deviceType;
@@ -370,6 +336,7 @@ namespace Chess.Ceres.NNEvaluators
 
         short[] legalMoveIndices = new short[batch.NumPos * MAX_MOVES];
         ConverterToFlat(batch, UseHistory, flatValuesAttention, legalMoveIndices);
+
 #if NOT
         bool xPosMoveIsLegal(int posNum, int nnIndexNum)
         {
@@ -408,7 +375,7 @@ namespace Chess.Ceres.NNEvaluators
 
         Func<int, int, bool> posMoveIsLegal = null; // PosMoveIsLegal
         PositionEvaluationBatch ret = DoEvaluateBatch(batch, flatValuesAttentionM, null, batch.NumPos, 
-                                                      retrieveSupplementalResults, posMoveIsLegal, tpgDivisor:1);
+                                                      retrieveSupplementalResults, posMoveIsLegal, 1);
         Debug.Assert(!retrieveSupplementalResults);
         return ret;
       }
@@ -425,7 +392,7 @@ namespace Chess.Ceres.NNEvaluators
         Half[] flatValues = ArrayPool<Half>.Shared.Rent(bufferLength);
 
         batch.ValuesFlatFromPlanes(flatValues, false, Scale50MoveCounter);
-        PositionEvaluationBatch ret = DoEvaluateBatch(batch, flatValues, null, batch.NumPos, retrieveSupplementalResults, posMoveIsLegal, tpgDivisor:1);
+        PositionEvaluationBatch ret = DoEvaluateBatch(batch, flatValues, null, batch.NumPos, retrieveSupplementalResults, posMoveIsLegal, 1);
 
         ArrayPool<Half>.Shared.Return(flatValues);
         return ret;
@@ -606,6 +573,7 @@ namespace Chess.Ceres.NNEvaluators
         }
       }
 #endif
+      
 
       // NOTE: inefficient, above we convert from [] (flat) to [][] and here we convert back to []
       PositionEvaluationBatch ret =  new (IsWDL, HasM, HasUncertaintyV, HasUncertaintyP, 
@@ -616,24 +584,28 @@ namespace Chess.Ceres.NNEvaluators
                                          actions,
                                          MemoryMarshal.Cast<Float16, FP16>(result.MLH.Span),
                                          MemoryMarshal.Cast<Float16, FP16>(result.UncertaintyV.Span),
-                                         MemoryMarshal.Cast<Float16, FP16>(result.UncertaintyP.Span),
+                                         MemoryMarshal.Cast <Float16, FP16 >(result.UncertaintyP.Span).ToArray(), // TODO: eliminate array conversion
                                          MemoryMarshal.Cast<Float16, FP16>(result.ExtraStats0.Span),
                                          MemoryMarshal.Cast<Float16, FP16>(result.ExtraStats1.Span),
                                          new Memory<Half[]>(states), default,
-                                         TemperatureValue1, TemperatureValue2, FractionValueFromValue2,
+                                         Options.FractionValueHead2,
+                                         Options.ValueHead1Temperature, Options.ValueHead2Temperature, 
+                                         Options.Value1UncertaintyTemperatureScalingFactor, Options.Value2UncertaintyTemperatureScalingFactor,
                                          ValueHeadLogistic, PositionEvaluationBatch.PolicyType.LogProbabilities, false, 
-                                         batch, 
+                                         batch,
+                                         Options.PolicyTemperature, Options.PolicyUncertaintyTemperatureScalingFactor,
                                          stats);
 
 //#if NOT
 // ** Experimental test code, triggered by having FractionValueFromValue2 >  1
-      bool ADJUST = FractionValueFromValue2 > 1 && !result.ExtraStats0.IsEmpty; // ***** TEMPORARY ******
+      bool ADJUST = false && Options.FractionValueHead2 > 1 && !result.ExtraStats0.IsEmpty; // ***** TEMPORARY ******
       // flat: 0.8, 0.5
       const float THRESHOLD = 0.75f;
       const float BASE_COEFF = 0.4f;
       const float DRAW_THRESHOLD = 0.20f;
       if (ADJUST)
       {
+        throw new NotImplementedException();
         Span<Float16> spanExtraStats0 = result.ExtraStats0.Span;
         Span<Float16> spanExtraStats1 = result.ExtraStats1.Span;
 

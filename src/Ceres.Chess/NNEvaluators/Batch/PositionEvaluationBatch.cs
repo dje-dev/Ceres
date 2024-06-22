@@ -423,7 +423,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
                                    Memory<FP16> m, Memory<FP16> uncertaintyV, Memory<FP16> uncertaintyP,
                                    Memory<Half[]> states,
                                    Memory<NNEvaluatorResultActivations> activations,
-                                   TimingStats stats, Memory<FP16> extraStat0 = default, Memory<FP16> extraStat1 = default, bool makeCopy = false)
+                                   TimingStats stats, Memory<FP16> extraStat0 = default, Memory<FP16> extraStat1 = default,
+                                   bool makeCopy = false)
     {
       IsWDL = isWDL;
       HasM = hasM;
@@ -472,12 +473,15 @@ namespace Ceres.Chess.NetEvaluation.Batch
                                     bool hasValueSecondary, bool hasState, int numPos,
                                     ReadOnlySpan<FP16> valueEvals, ReadOnlySpan<FP16> valueEvals2,
                                     ReadOnlySpan<FP16> m, 
-                                    ReadOnlySpan<FP16> uncertaintyV, ReadOnlySpan<FP16> uncertaintyP,
+                                    ReadOnlySpan<FP16> uncertaintyV, ReadOnlyMemory<FP16> uncertaintyP,
                                     ReadOnlySpan<FP16> extraStats0, ReadOnlySpan<FP16> extraStats1,
                                     Span<Half[]> states,
                                     Span<NNEvaluatorResultActivations> activations,
-                                    float temperatureValue1, float temperatureValue2, float fractionValueFromValue2,
-                                    bool valsAreLogistic, TimingStats stats)
+                                    float fractionValueFromValue2,
+                                    float temperatureValue1, float temperatureValue2,
+                                    float value1TemperatureUncertaintyScalingFactor, float value2TemperatureUncertaintyScalingFactor,
+                                    bool valsAreLogistic, 
+                                    TimingStats stats)
     {
       IsWDL = isWDL;
       HasM = hasM;
@@ -491,10 +495,10 @@ namespace Ceres.Chess.NetEvaluation.Batch
       Activations = activations.ToArray();
       States = states.ToArray();
 
-      InitializeValueEvals(valueEvals, valsAreLogistic, temperatureValue1, false);
+      InitializeValueEvals(valueEvals, valsAreLogistic, temperatureValue1, uncertaintyV, value1TemperatureUncertaintyScalingFactor, false);
       if (!valueEvals2.IsEmpty)
       {
-        InitializeValueEvals(valueEvals2, valsAreLogistic, temperatureValue2, true);
+        InitializeValueEvals(valueEvals2, valsAreLogistic, temperatureValue2, uncertaintyV, value2TemperatureUncertaintyScalingFactor, true);
       }
 
       if (fractionValueFromValue2 != 0)
@@ -561,20 +565,28 @@ namespace Ceres.Chess.NetEvaluation.Batch
     public PositionEvaluationBatch(bool isWDL, bool hasM, bool hasUncertaintyV, bool hasUnertaintyP, bool hasAction, 
                                    bool hasValueSecondary, bool hasState, int numPos, 
                                    Span<FP16> valueEvals, Span<FP16> valueEvals2, 
-                                   Memory<Float16> policyProbs, Memory<CompressedActionVector> actionVectors,
+                                   ReadOnlyMemory<Float16> policyProbs, Memory<CompressedActionVector> actionVectors,
                                    ReadOnlySpan<FP16> m, 
-                                   ReadOnlySpan<FP16> uncertaintyV, ReadOnlySpan<FP16> uncertaintyP,
+                                   ReadOnlySpan<FP16> uncertaintyV, ReadOnlyMemory<FP16> uncertaintyP,
                                    ReadOnlySpan<FP16> extraStats0, ReadOnlySpan<FP16> extraStats1,
-                                   Memory<Half[]> states, NNEvaluatorResultActivations[] activations,
-                                   float temperatureValue1, float temperatureValue2, float fractionValue1FromValue2,
+                                   ReadOnlyMemory<Half[]> states, NNEvaluatorResultActivations[] activations,
+                                   float fractionValueFromValue2, 
+                                   float temperatureValue1, float temperatureValue2,
+                                   float value1TemperatureUncertaintyScalingFactor, float value2TemperatureUncertaintyScalingFactor,
                                    bool valsAreLogistic, PolicyType probType, bool policyAlreadySorted,
                                    IEncodedPositionBatchFlat sourceBatchWithValidMoves,
+                                   float policyTemperature, float policyUncertaintyScalingFactor,
                                    TimingStats stats)
    : this(isWDL, hasM, hasUncertaintyV, hasUnertaintyP, hasAction, hasValueSecondary, hasState, numPos, valueEvals, valueEvals2, 
           m, uncertaintyV,  uncertaintyP, extraStats0, extraStats1, states.ToArray(), activations,
-          temperatureValue1, temperatureValue2, fractionValue1FromValue2, valsAreLogistic, stats)
+          fractionValueFromValue2, 
+          temperatureValue1, temperatureValue2,
+          value1TemperatureUncertaintyScalingFactor, value2TemperatureUncertaintyScalingFactor,
+          valsAreLogistic, stats)
     {     
-      Policies = ExtractPoliciesBufferFlat(numPos, policyProbs, probType, policyAlreadySorted, sourceBatchWithValidMoves, actionVectors, hasAction);
+      Policies = ExtractPoliciesBufferFlat(numPos, policyProbs, uncertaintyP,
+                                           policyTemperature, policyUncertaintyScalingFactor,
+                                           probType, policyAlreadySorted, sourceBatchWithValidMoves, actionVectors, hasAction);
       Actions = actionVectors;
     }
 
@@ -804,7 +816,10 @@ namespace Ceres.Chess.NetEvaluation.Batch
     static float[] actionTempBuffer;
 
     static CompressedPolicyVector[] ExtractPoliciesBufferFlat(int numPos, 
-                                                              Memory<Float16> policyProbs,
+                                                              ReadOnlyMemory<Float16> policyProbs,
+                                                              ReadOnlyMemory<FP16> policyUncertainties,
+                                                              float policyTemperature,
+                                                              float policyUncertaintyScalingFactor,
                                                               PolicyType probType, bool alreadySorted, 
                                                               IEncodedPositionBatchFlat sourceBatchWithValidMoves,
                                                               Memory<CompressedActionVector> actions,
@@ -829,6 +844,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
       Parallel.For(0, numPos, i =>
       {
         ReadOnlySpan<Float16> policyProbsSpan = policyProbs.Span;
+        ReadOnlySpan<FP16> policiesUncertaintiesSpan = policyUncertainties.Span;
 
         int startIndex = EncodedPolicyVector.POLICY_VECTOR_LENGTH * i;
 
@@ -902,7 +918,23 @@ namespace Ceres.Chess.NetEvaluation.Batch
           float sum = 0;
           for (int im = 0; im < numLegalMoves; im++)
           {
-            float expVal = (float)Math.Exp(legalMovePolicies[im] - max);
+            float expVal;
+
+            if (policyTemperature != 1 || policyUncertaintyScalingFactor != 0)
+            {
+              float thisTemperature = policyTemperature;
+              if (policyUncertaintyScalingFactor != 0)
+              {
+                thisTemperature += policyUncertaintyScalingFactor * (float)policiesUncertaintiesSpan[i];
+              }
+              expVal = (float)Math.Exp((legalMovePolicies[im] - max) / thisTemperature);
+            }
+            else
+            {
+              // Fast path for temperature 1, no uncertainty.
+              expVal = (float)Math.Exp((legalMovePolicies[im] - max));
+            }
+
             legalMovePolicies[im] = expVal;
             sum+= expVal;
           }
@@ -925,7 +957,9 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// </summary>
     /// <param name="valueEvals"></param>
     /// <param name="valsAreLogistic"></param>
-    void InitializeValueEvals(ReadOnlySpan<FP16> valueEvals, bool valsAreLogistic, float temperature, bool secondaryValue)
+    void InitializeValueEvals(ReadOnlySpan<FP16> valueEvals, bool valsAreLogistic, float temperature,
+                              ReadOnlySpan<FP16> uncertaintyV, float uncertaintyTemperatureScalingFactor,
+                              bool secondaryValue)
     {
       Debug.Assert(!(secondaryValue && !HasValueSecondary));
 
@@ -941,9 +975,9 @@ namespace Ceres.Chess.NetEvaluation.Batch
         {
           if (!valsAreLogistic)
           {
-            if (temperature != 1)
+            if (temperature != 1 || uncertaintyTemperatureScalingFactor != 0)
             {
-              throw new NotImplementedException("temperature with non-logistic values");
+              throw new NotImplementedException("temperature/uncertainty with non-logistic values");
             }
 
             w[i] = valueEvals[i * 3 + 0];
@@ -954,17 +988,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
           }
           else
           {
-            CalcWLWithTemperature(valueEvals, temperature, w, l, i);
-
-            if (false && temperature > 1.25)
-            {
-              float wl = w[i] - l[i];
-              if (Math.Abs(wl) > 0.50f)
-              {
-                const float POSITIVE_EVAL_TEMP_MULTIPLIER = 1.25f;
-                CalcWLWithTemperature(valueEvals, temperature * POSITIVE_EVAL_TEMP_MULTIPLIER, w, l, i);
-              }
-            }
+            CalcWLWithTemperature(valueEvals, temperature, w, l, uncertaintyV, uncertaintyTemperatureScalingFactor, i);
           }
         }
       }
@@ -987,8 +1011,25 @@ namespace Ceres.Chess.NetEvaluation.Batch
       }
     }
 
-    private static void CalcWLWithTemperature(ReadOnlySpan<FP16> valueEvals, float temperature, FP16[] w, FP16[] l, int i)
+    private static void CalcWLWithTemperature(ReadOnlySpan<FP16> valueEvals, float temperature, 
+                                              FP16[] w, FP16[] l,
+                                              ReadOnlySpan<FP16> uncertaintyV, float uncertaintyTemperatureScalingFactor,
+                                              int i)
     {
+
+#if NOT
+// FEATURE FOR ASYMMETRIC TEMPERATURE
+            if (false && temperature > 1.25)
+            {
+              float wl = w[i] - l[i];
+              if (Math.Abs(wl) > 0.50f)
+              {
+                const float POSITIVE_EVAL_TEMP_MULTIPLIER = 1.25f;
+                CalcWLWithTemperature(valueEvals, temperature * POSITIVE_EVAL_TEMP_MULTIPLIER, w, l, i);
+              }
+            }
+#endif
+
       double v1;
       double v2;
       double v3;
@@ -997,7 +1038,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
                                      valueEvals[i * 3 + 1]),
                             valueEvals[i * 3 + 2]);
 
-      if (temperature == 1)
+      if (temperature == 1 && uncertaintyTemperatureScalingFactor == 0)
       {
         v1 = Math.Exp(valueEvals[i * 3 + 0] - max);
         v2 = Math.Exp(valueEvals[i * 3 + 1] - max);
@@ -1005,17 +1046,23 @@ namespace Ceres.Chess.NetEvaluation.Batch
       }
       else
       {
-        v1 = Math.Exp((valueEvals[i * 3 + 0] - max) / temperature);
-        v2 = Math.Exp((valueEvals[i * 3 + 1] - max) / temperature);
-        v3 = Math.Exp((valueEvals[i * 3 + 2] - max) / temperature);
+        float thisTemp = uncertaintyTemperatureScalingFactor == 0
+                        ? temperature :
+                          temperature + uncertaintyTemperatureScalingFactor * uncertaintyV[i];
+
+        v1 = Math.Exp((valueEvals[i * 3 + 0] - max) / thisTemp);
+        v2 = Math.Exp((valueEvals[i * 3 + 1] - max) / thisTemp);
+        v3 = Math.Exp((valueEvals[i * 3 + 2] - max) / thisTemp);
       }
 
       double totl = v1 + v2 + v3;
       Debug.Assert(!double.IsNaN(totl));
-
+      
+      // Set win/loss such that the sum of the three is 1.
       w[i] = (FP16)(v1 / totl);
       l[i] = (FP16)(v3 / totl);
     }
+
 
     public IEnumerator<NNPositionEvaluationBatchMember> GetEnumerator()
     {

@@ -37,7 +37,7 @@ namespace Ceres.Chess.NNEvaluators
     public float FractionValueHead2 { get; init; } = 0;
 
     /// <summary>
-    /// Temperature for the value head 2.
+    /// Temperature for the value head 2. 
     /// </summary>
     public float ValueHead1Temperature { get; init; } = 1;
 
