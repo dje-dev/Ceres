@@ -82,12 +82,12 @@ namespace Ceres.Chess.EncodedPositions
     public readonly float PliesLeft; 
 
     /// <summary>
-    /// Value head output (W-L) of move with max N. [8308]
+    /// Game result (W-L). [8308]
     /// </summary>
     public readonly float ResultQ;
 
     /// <summary>
-    /// Value head output (D) of move with max N. [8312]
+    /// Game result probability of draw. [8312]
     /// </summary>
     public readonly float ResultD;
 
