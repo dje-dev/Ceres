@@ -1050,6 +1050,14 @@ namespace Ceres.Chess.NetEvaluation.Batch
                         ? temperature :
                           temperature + uncertaintyTemperatureScalingFactor * uncertaintyV[i];
 
+#if ASYMMETRIC_VALUE_TEMP        
+        bool isWinning = valueEvals[i * 3 + 0] > valueEvals[i * 3 + 2];
+if (uncertaintyTemperatureScalingFactor > 0)
+{ 
+  thisTemp += isWinning ? 0.50f :  -0.20f;
+}
+#endif
+
         v1 = Math.Exp((valueEvals[i * 3 + 0] - max) / thisTemp);
         v2 = Math.Exp((valueEvals[i * 3 + 1] - max) / thisTemp);
         v3 = Math.Exp((valueEvals[i * 3 + 2] - max) / thisTemp);
