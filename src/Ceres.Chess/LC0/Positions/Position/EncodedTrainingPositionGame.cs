@@ -22,12 +22,12 @@ using Ceres.Chess.LC0.Boards;
 namespace Ceres.Chess.EncodedPositions
 {
   /// <summary>
-  /// Abstract b ase class to encapsulate a game consisting of a sequence of structures 
+  /// Abstract base class to encapsulate a game consisting of a sequence of structures 
   /// implementing EncodedTrainingPosition functionality, providing 
   /// history boards, policy, and ancillary training information (e.g. targets).
   /// 
   /// Two subclasses are available:
-  ///  - EncodedTrainingPositionGamDirect (positions in original LC0 binary V6 format)
+  ///  - EncodedTrainingPositionGameDirect (positions in original LC0 binary V6 format)
   ///  - EncodedTrainingPositionGameCompressed (in a Ceres packed version of original LC0 binary V6 format)
   ///  
   /// Use of this wrapper allows consumers of training data to be somewhat abstracted away from data representation.
