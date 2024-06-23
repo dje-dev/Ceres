@@ -53,7 +53,7 @@ namespace Ceres.APIExamples
   {
     const bool POOLED = false;
 
-    static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 1 : 4;
+    static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 2 : 4;
     static int[] OVERRIDE_DEVICE_IDs = /*POOLED ? null*/
        (Environment.MachineName.ToUpper() switch
       {
@@ -188,8 +188,11 @@ namespace Ceres.APIExamples
 
       //      NET1 = "CUSTOM1:ckpt_DGX_C7_B4_256_10_8_8_32bn_2024_final.ts.fp16.onnx";
 //NET1 = "CUSTOM1:ckpt_DGX_C7_256_12_8_6_40bn_B1_2024f_last.ts.fp16.onnx"; // copy of best but with focus data
+//NET2 = "CUSTOM2:ckpt_DGX_C7_256_12_8_6_40bn_B1_2024f_last.ts.fp16.onnx"; // copy of best but with focus data
+
 NET1 = "CUSTOM1:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_postconvert.ts.fp16.onnx"; // best so far
-// NET2 = "CUSTOM2:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_postconvert.ts.fp16.onnx"; // best so far
+NET2 = "CUSTOM2:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_postconvert.ts.fp16.onnx"; // best so far
+
 //NET2 = "CUSTOM1:ckpt_DGX_C7_B4_256_10_8_8_32bn_2024_final.ts.fp16.onnx"; // prep for Daniel
 //      NET2 = "CUSTOM2:ckpt_DEV_C6_B4_256_12_8_6_BS8_48bn_2024_postconvert.ts.fp16.onnx";
 
