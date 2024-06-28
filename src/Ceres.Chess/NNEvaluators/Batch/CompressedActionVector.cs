@@ -35,33 +35,52 @@ namespace Ceres.Chess.NetEvaluation.Batch
   public struct CompressedActionVector
   {
     /// <summary>
+    /// Constructor.
+    /// </summary>
+    /// <param name="w"></param>
+    /// <param name="l"></param>
+    public CompressedActionVector(Half w, Half l) => WL = (w, l);
+
+    /// <summary>
     /// Win/loss probabilities returned by the action head.
     /// </summary>
-    (Half W, Half L) WL;
+    private (Half W, Half L) WL;
+
+    /// <summary>
+    /// Win - loss probability.
+    /// </summary>
+    public readonly float V => (float)WL.W - (float)WL.L;
 
     /// <summary>
     /// Win probability.
     /// </summary>
-    public float W => (float)WL.W;
+    public readonly float W => (float)WL.W;
     
     /// <summary>
     /// Loss probability.
     /// </summary>
-    public float L => (float)WL.L;
+    public readonly float L => (float)WL.L;
 
     /// <summary>
     /// Draw probability.
     /// </summary>
-    public float D => 1 - ((float)WL.W + (float)WL.L);  
+    public readonly float D => 1 - ((float)WL.W + (float)WL.L);  
 
     /// <summary>
     /// Tuple of win, draw, loss probabilities.
     /// </summary>
-    public (float w, float d, float l) WDL => ((float)WL.W, D, (float)WL.L);
+    public readonly (float w, float d, float l) WDL => ((float)WL.W, D, (float)WL.L);
 
     /// <summary>
     /// Net win probability.
     /// </summary>
-    public float V => W - L;
+    public readonly float V => W - L;
+
+
+    /// <summary>
+    /// Returns string repersentation.
+    /// </summary>
+    /// <returns></returns>
+    public override readonly string ToString() => $"W={W,6:F3}, D={D,6:F3}, L={L,6:F3}";
   }
 }

@@ -411,6 +411,7 @@ namespace Chess.Ceres.NNEvaluators
           && ((NNEvaluatorEngineONNX)evaluator).EngineNetworkID == EngineNetworkID;
     }
 
+
     /// <summary>
     /// The maximum number of positions that can be evaluated in a single batch.
     /// </summary>
@@ -527,14 +528,6 @@ namespace Chess.Ceres.NNEvaluators
         }
       }
 #endif
-      CompressedActionVector[] actions = null;
-      if (!result.ActionLogisticVectors.IsEmpty && !haveWarned)
-      {
-        // TODO: initialize actions from result.ActionLogisticVectors
-        Console.WriteLine("NNEvaluatorEngineONNX needs minor remediation to pass along converted ActionLogisticVectors below");
-        actions = new CompressedActionVector[numPos];
-        haveWarned = true;
-      }
 
       Half[][] states = null;
       if (HasState)
@@ -581,7 +574,7 @@ namespace Chess.Ceres.NNEvaluators
                                          MemoryMarshal.Cast<Float16, FP16>(result.ValuesRaw.Span),
                                          MemoryMarshal.Cast<Float16, FP16>(result.Values2Raw.Span),
                                          result.PolicyVectors,//*/result.PolicyFlat, 
-                                         actions,
+                                         result.ActionLogisticVectors,
                                          MemoryMarshal.Cast<Float16, FP16>(result.MLH.Span),
                                          MemoryMarshal.Cast<Float16, FP16>(result.UncertaintyV.Span),
                                          MemoryMarshal.Cast <Float16, FP16 >(result.UncertaintyP.Span).ToArray(), // TODO: eliminate array conversion

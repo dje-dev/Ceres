@@ -230,16 +230,7 @@ namespace Ceres.Chess.LC0NetInference
         bool hasMLH = eval.Count >= 3;
         bool hasUNC = eval.Count >= 4;
         bool hasUNC_POLICY = FindIndex(1, -1, "uncertainty_policy", true) != -1;
-#if NOT
-        Session.InputMetadata
-        [0] input_1
 
-        Session.OutputMetadata
-        [0] apply_attention_policy_map [apply_policy_map IF NOT ATTENTION]
-        [1] moves_left/dense2
-        [2] tf.math.truediv [OMITTED IF NOT ATTENTION]
-        [3] value/dense2
-#endif
         int FindIndex(int expectedPerPosition, int indexToIgnore = -1, string mustContainString = null, bool optional = false)
         {
           int expectedLength = numPositionsUsed * expectedPerPosition;
