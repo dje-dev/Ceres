@@ -53,12 +53,12 @@ namespace Ceres.APIExamples
   {
     const bool POOLED = false;
 
-    static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 1 : 4;
+    static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 2 : 4;
     static int[] OVERRIDE_DEVICE_IDs = /*POOLED ? null*/
        (Environment.MachineName.ToUpper() switch
       {
         var name when name.Contains("DGX") => new int[] { 0, 1, 2, 3 },
-        var name when name.Contains("HOP") => new int[] { 0, 1 },
+        var name when name.Contains("HOP") => new int[] { 0, 1, 2 },
         _ => new int[] { 0 }
       });
 
@@ -190,11 +190,10 @@ namespace Ceres.APIExamples
 //NET1 = "CUSTOM1:ckpt_DGX_C7_256_12_8_6_40bn_B1_2024f_last.ts.fp16.onnx"; // copy of best but with focus data
 //NET2 = "CUSTOM2:ckpt_DGX_C7_256_12_8_6_40bn_B1_2024f_last.ts.fp16.onnx"; // copy of best but with focus data
 
-//NET2 = "CUSTOM1:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_postconvert.ts.fp16.onnx"; // best so far
 //NET1 = "CUSTOM2:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_postconvert_late8.ts.fp16.onnx";
 //NET2 = "CUSTOM2:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_postconvert.ts.fp16.onnx"; // best so far
 
-NET1 = "CUSTOM2:ckpt_HOP_C6_B4_256_12_8_6_BS8_48bn_2024_final.ts"; // old 4board
+//NET1 = "CUSTOM2:ckpt_HOP_C6_B4_256_12_8_6_BS8_48bn_2024_final.ts"; // old 4board
 
 //NET2 = "CUSTOM1:ckpt_DGX_C7_B4_256_10_8_8_32bn_2024_final.ts.fp16.onnx"; // prep for Daniel
 //      NET2 = "CUSTOM2:ckpt_DEV_C6_B4_256_12_8_6_BS8_48bn_2024_postconvert.ts.fp16.onnx";
@@ -202,8 +201,16 @@ NET1 = "CUSTOM2:ckpt_HOP_C6_B4_256_12_8_6_BS8_48bn_2024_final.ts"; // old 4board
       //      NET2 = "CUSTOM2:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_postconvert.ts.fp16.onnx";// 2197929984.ts";
       //NET2 = "CUSTOM2:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_postconvert.ts.fp16.onnx";// 2197929984.ts";
 
-      //      NET2 = "CUSTOM2:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_late.ts";// 2197929984.ts";
- NET2 = "~T1_DISTILL_256_10_FP16_TRT";
+     //      NET2 = "CUSTOM2:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_late.ts";// 2197929984.ts";
+//NET2 = "~T1_DISTILL_256_10_FP16_TRT";
+
+      NET1 = "CUSTOM2:ckpt_DGX_C_256_12_8_6_60bn_B4_2024_final.ts.fp16.onnx";
+      NET2 = "CUSTOM1:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_postconvert.ts.fp16.onnx"; // best so far
+
+//NET2 = "CUSTOM1:ckpt_DGX_C_256_12_8_6_60bn_B4_2024_final.ts.fp16.onnx";
+//NET1 = "CUSTOM2:ckpt_DGX_C_256_12_8_6_60bn_B4_2024_final.ts";
+
+      //      NET2 = "CUSTOM2:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_postconvert.ts.fp16.onnx";
 
       //NET1 = "~T3_DISTILL_512_15_FP16_TRT";
       //NET2 = "~T3_512_15_FP16_TRT";
@@ -218,7 +225,7 @@ NET1 = "CUSTOM2:ckpt_HOP_C6_B4_256_12_8_6_BS8_48bn_2024_final.ts"; // old 4board
       //      NET2 = "CUSTOM2:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_2564292608.ts";
 
       //NET2 = "~T80";
-      //      NET2 = "~T1_DISTILL_256_10_FP16";
+//      NET2 = "~T1_DISTILL_256_10_FP16";
       //      NET2 = "~T4_3355000";
       //      NET2 = "~BT2_NATIVE";
 
@@ -234,7 +241,7 @@ NET1 = "CUSTOM2:ckpt_HOP_C6_B4_256_12_8_6_BS8_48bn_2024_final.ts"; // old 4board
 
       //      NET2 = "~T70";
       //NET1 = "~T81|0.85";
-      //NET2 = "~T81";
+//      NET2 = "~T80";
       //NET2 = "~T1_DISTIL_512_15_NATIVE";
 
       //      NET1 = "CUSTOM1:ckpt_DGX_C6_B4_512_8_16_4_500mm_2024_nost_final.ts";
@@ -246,8 +253,8 @@ NET1 = "CUSTOM2:ckpt_HOP_C6_B4_256_12_8_6_BS8_48bn_2024_final.ts"; // old 4board
       //      NET1 = "CUSTOM1:ckpt_DGX_C6_B4_512_15_16_4_32bn_2024_focus_1063735296.ts";
       //      NET2 = "CUSTOM2:ckpt_DGX_C5_B1_512_15_16_4_32bn_2024_1049882624.ts";
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(20_000); // was 500
-///      limit1 = SearchLimit.BestValueMove;
+      SearchLimit limit1 = SearchLimit.NodesPerMove(10_000); // was 500
+//      limit1 = SearchLimit.BestValueMove;
 //limit1 = new SearchLimit(SearchLimitType.SecondsForAllMoves, 15, false, 0.5f);
 //limit1 = new SearchLimit(SearchLimitType.SecondsForAllMoves, 10, false, 0.1f);
       //SearchLimit limit2 = SearchLimit.NodesPerMove(1);
@@ -634,7 +641,7 @@ string OVERRIDE_LC0_BACKEND_STRING = "";
 //            baseName = "book-ply8-unifen-Q-0.40-1.0";
 //      baseName = "book-ply8-unifen-Q-0.0-0.25.pgn";
 //       baseName = "endingbook-10man-3181.pgn";
-//      baseName = "book-ply8-unifen-Q-0.25-0.40";
+      baseName = "book-ply8-unifen-Q-0.25-0.40";
       const bool KRP =false;
       if (KRP)
       {
