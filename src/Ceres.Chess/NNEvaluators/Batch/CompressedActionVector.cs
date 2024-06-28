@@ -71,11 +71,6 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// </summary>
     public readonly (float w, float d, float l) WDL => ((float)WL.W, D, (float)WL.L);
 
-    /// <summary>
-    /// Net win probability.
-    /// </summary>
-    public readonly float V => W - L;
-
 
     /// <summary>
     /// Returns string repersentation.
