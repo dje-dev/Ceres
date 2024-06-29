@@ -26,6 +26,7 @@ using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
 using Ceres.Base.DataTypes;
+using Ceres.Chess.NetEvaluation.Batch;
 #endregion
 
 namespace Ceres.Chess.EncodedPositions
@@ -167,6 +168,22 @@ namespace Ceres.Chess.EncodedPositions
       }
     }
 
+    static CompressedActionVector dummyActionVector = default;
+
+
+    /// <summary>
+    /// Initializes values (bypassing readonly) with specified set of move indices and probabilities,
+    /// while also keeping the actions sorted in the same order.
+    /// </summary>
+    /// <param name="policy"></param>
+    /// <param name="indices"></param>
+    /// <param name="probs"></param>
+    public static void Initialize(ref CompressedPolicyVector policy,
+                                  Span<int> indices, Span<float> probs, bool alreadySorted = true)
+    {
+      Initialize(ref policy, indices, probs, alreadySorted, false, ref dummyActionVector);
+    }
+
 
     /// <summary>
     /// Initializes values (bypassing readonly) with specified set of move indices and probabilities.
@@ -175,7 +192,9 @@ namespace Ceres.Chess.EncodedPositions
     /// <param name="indices"></param>
     /// <param name="probs"></param>
     public static void Initialize(ref CompressedPolicyVector policy,
-                                  Span<int> indices, Span<float> probs, bool alreadySorted = true)
+                                  Span<int> indices, Span<float> probs, 
+                                  bool alreadySorted, bool withActions,
+                                  ref CompressedActionVector actions)
     {
       // TODO: the Span<int> can actually be shortend to Span<short>
 
@@ -236,7 +255,17 @@ namespace Ceres.Chess.EncodedPositions
           }
         }
 
-        if (!alreadySorted) policy.Sort(numMovesUsed);
+        if (!alreadySorted)
+        {
+          if (withActions)
+          {
+            policy.SortWithActions(numMovesUsed, ref actions);
+          }
+          else
+          {
+            policy.Sort(numMovesUsed);
+          }
+        }
       }
     }
 
@@ -574,14 +603,8 @@ namespace Ceres.Chess.EncodedPositions
             {
               if (moveProbabilitiesEncoded[i - 1] < moveProbabilitiesEncoded[i])
               {
-                ushort tempI = moveIndices[i];
-                ushort tempP = moveProbabilitiesEncoded[i];
-
-                moveIndices[i] = moveIndices[i - 1];
-                moveProbabilitiesEncoded[i] = moveProbabilitiesEncoded[i - 1];
-
-                moveIndices[i - 1] = tempI;
-                moveProbabilitiesEncoded[i - 1] = tempP;
+                (moveIndices[i], moveIndices[i - 1]) = (moveIndices[i - 1], moveIndices[i]);
+                (moveProbabilitiesEncoded[i], moveProbabilitiesEncoded[i - 1]) = (moveProbabilitiesEncoded[i - 1], moveProbabilitiesEncoded[i]);
 
                 numSwapped++;
               }
@@ -596,10 +619,47 @@ namespace Ceres.Chess.EncodedPositions
       }
     }
 
-#endregion
+
+    /// <summary>
+    /// Reorders the entries to be sorted descending based on policy probability.
+    /// TODO: make faster, or call in parallel over batch? Currently can do about 300/second batches of 1024.
+    /// </summary>
+    public void SortWithActions(int numToSort, ref CompressedActionVector actions)
+    {
+      fixed (ushort* moveIndices = &Indices[0])
+      {
+        fixed (ushort* moveProbabilitiesEncoded = &Probabilities[0])
+        {
+          while (true)
+          {
+            // Bubble sort
+            int numSwapped = 0;
+            for (int i = 1; i < numToSort; i++)
+            {
+              if (moveProbabilitiesEncoded[i - 1] < moveProbabilitiesEncoded[i])
+              {
+                (moveIndices[i], moveIndices[i - 1]) = (moveIndices[i - 1], moveIndices[i]);
+                (moveProbabilitiesEncoded[i], moveProbabilitiesEncoded[i - 1]) = (moveProbabilitiesEncoded[i - 1], moveProbabilitiesEncoded[i]);
+                (actions[i], actions[i - 1]) = (actions[i - 1], actions[i]);
+
+                numSwapped++;
+              }
+            }
+
+            if (numSwapped == 0)
+            {
+              return;
+            }
+          }
+        }
+      }
+    }
 
 
-#region Diagnostics
+    #endregion
+
+
+    #region Diagnostics
 
 
     /// <summary>

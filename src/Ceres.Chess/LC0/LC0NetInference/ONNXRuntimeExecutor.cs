@@ -17,6 +17,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using Ceres.Chess.LC0.Batches;
+using Ceres.Chess.NNEvaluators;
 using Ceres.Chess.NNEvaluators.Defs;
 using Chess.Ceres.NNEvaluators;
 using Microsoft.ML.OnnxRuntime;
@@ -68,7 +69,7 @@ namespace Ceres.Chess.LC0NetInference
     /// <summary>
     /// Underlying ONNX executor object.
     /// </summary>
-    NetExecutorONNXRuntime executor;
+    internal NetExecutorONNXRuntime executor;
 
 
     /// <summary>
@@ -137,7 +138,7 @@ namespace Ceres.Chess.LC0NetInference
     /// <param name="alreadyConvertedToLZ0"></param>
     /// <returns></returns>
     public ONNXRuntimeExecutorResultBatch Execute(bool isWDL, bool hasState,
-                                                  Memory<Half> flatValuesPrimary, Memory<Half> flatValuesSecondary, int numPositionsUsed, 
+                                                  Memory<Half> flatValuesPrimary, Memory<Half[]> flatValuesState, int numPositionsUsed, 
                                                   bool debuggingDump = false, bool alreadyConvertedToLZ0 = false,
                                                   float tpgDivisor = 1)
     {
@@ -173,7 +174,7 @@ namespace Ceres.Chess.LC0NetInference
 
       if (NetType == NetTypeEnum.TPG)
       {
-        int NUM_INPUTS = hasState ? 2 : 1; // assume state present
+        int NUM_INPUTS = executor.NumInputs;
         (Memory<Half> input, int[] shape)[] inputs = new (Memory<Half> input, int[] shape)[NUM_INPUTS];
         if (tpgDivisor != 1.0f)
         {
@@ -185,20 +186,46 @@ namespace Ceres.Chess.LC0NetInference
           }
         }
 
-        const int STATE_NUM_PER_SQUARE = 4; // TODO: Fix this, currently hardcoded the only value actually currently used by Ceres nets.
+        
 
         inputs[0] = (flatValuesPrimary, new int[] { numPositionsUsed, 64, TPG_BYTES_PER_SQUARE_RECORD });
         if (inputs.Length > 1)
         {
-          inputs[1] = (flatValuesSecondary, new int[] { numPositionsUsed, 64, STATE_NUM_PER_SQUARE }); 
+          // TODO: improve efficiency here
+          if (flatValuesState.IsEmpty)
+          {
+            // No state available, pass all zeroes.
+            inputs[1] = (new Half[numPositionsUsed * 64 * NNEvaluator.SIZE_STATE_PER_SQUARE], new int[] { numPositionsUsed, 64, NNEvaluator.SIZE_STATE_PER_SQUARE });
+          }
+          else
+          {
+            Span <Half[]> flatValuesStateSpan = flatValuesState.Span;
+
+            const int STATE_SIZE_PER_SQUARE = 4;
+
+            // Reformat the state data into a 1D array
+            // TODO: improve efficiency
+            Half[] states1D = new Half[numPositionsUsed * 64 * NNEvaluator.SIZE_STATE_PER_SQUARE];
+            for (int i=0;i<numPositionsUsed;i++)
+            {
+              if (flatValuesStateSpan[i] == null)
+              {
+                // No state available, pass all zeroes.
+                // Noting to do since array was created just above and is already zeroed.
+              }
+              else if (flatValuesStateSpan[i].Length != 64 * STATE_SIZE_PER_SQUARE)
+              {
+                throw new Exception("State input size mismatch.");
+              }
+              else
+              {
+                Array.Copy(flatValuesStateSpan[i], 0, states1D, i * 64 * NNEvaluator.SIZE_STATE_PER_SQUARE, 64 * NNEvaluator.SIZE_STATE_PER_SQUARE);
+              }
+            }
+            inputs[1] = (states1D, new int[] { states1D.Length });
+          }
         } 
 
-        if (hasState)
-        {
-          // fake it with zeros
-          inputs[1] = (new Half[numPositionsUsed*64* STATE_NUM_PER_SQUARE], new int[] { numPositionsUsed, 64, STATE_NUM_PER_SQUARE });
-
-        }
 #if NOT
         if (flatValuesSecondary.Length > 0)
         {
@@ -295,7 +322,7 @@ namespace Ceres.Chess.LC0NetInference
         int INDEX_UNC = hasUNC ? FindIndex(1, INDEX_MLH) : -1;
         int INDEX_UNC_POLICY = hasUNC_POLICY ? FindIndex(1, INDEX_MLH, "uncertainty_policy") : -1;
         int INDEX_ACTION = FindIndex(1858 * 3, -1, "action", true); // TODO: cleanup the output names to be better named
-
+        int INDEX_STATE = FindIndex(256, -1, "state", true);
         if (false && looksLikeBT3)
         {
           Console.WriteLine("ONNX head mappings for " + ONNXFileName);
@@ -310,7 +337,7 @@ namespace Ceres.Chess.LC0NetInference
         Memory<Float16> uncertantiesP = hasUNC_POLICY ? eval[INDEX_UNC_POLICY].Item2 : null;
         Memory<Float16> policiesLogistics = eval[INDEX_POLICIES].Item2;
 
-        Memory<Float16> actionLogistics = INDEX_ACTION != -1 ? eval[INDEX_ACTION].Item2 : default;
+        Memory<Float16> actionLogits = INDEX_ACTION != -1 ? eval[INDEX_ACTION].Item2 : default;
         Memory<Float16> values = eval[INDEX_WDL].Item2;
         Debug.Assert(values.Length == (isWDL ? 3 : 1) * numPositionsUsed);
 
@@ -323,11 +350,11 @@ namespace Ceres.Chess.LC0NetInference
         Memory<Float16> extraStats1 = eval.Count > 6 ? eval[6].Item2 : default;
 
         // TODO: This is just a fake, fill it in someday
-        Memory<Float16> priorState = hasState ? new Float16[numPositionsUsed * 64 * 4] : default;
+        Memory<Float16> priorState = hasState ? eval[INDEX_STATE].Item2 : default; //  new Float16[numPositionsUsed * 64 * 4]
         ONNXRuntimeExecutorResultBatch result = new (isWDL, values, values2, policiesLogistics, mlh, 
                                                      uncertantiesV, uncertantiesP, 
                                                      extraStats0, extraStats1, value_fc_activations,
-                                                     actionLogistics, priorState,
+                                                     actionLogits, priorState,
                                                      numPositionsUsed);
         return result;
 

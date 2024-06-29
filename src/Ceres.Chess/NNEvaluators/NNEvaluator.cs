@@ -35,6 +35,12 @@ namespace Ceres.Chess.NNEvaluators
   /// </summary>
   public abstract class NNEvaluator
   {
+    /// <summary>
+    /// Currently hardcoded value for the per-square dimension of the prior state information, 
+    /// if the network has a state output. Linked to TPGRecord.SIZE_STATE_PER_SQUARE.
+    /// </summary>
+    public const int SIZE_STATE_PER_SQUARE = 4;
+
     [Flags]
     public enum InputTypes
     {

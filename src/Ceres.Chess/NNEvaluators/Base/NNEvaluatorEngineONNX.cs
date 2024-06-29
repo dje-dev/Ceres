@@ -74,11 +74,15 @@ namespace Chess.Ceres.NNEvaluators
     /// </summary>
     public readonly ONNXRuntimeExecutor Executor;
 
+    /// <summary>
+    /// Returns number of inputs specified by the ONNX file metadata.
+    /// </summary>
+    public int NumInputs => Executor.executor.NumInputs;
 
     /// <summary>
     /// Types of input(s) required by the evaluator.
     /// </summary>
-    public override InputTypes InputsRequired => InputTypes.Positions | InputTypes.Boards | InputTypes.Moves;
+    public override InputTypes InputsRequired => InputTypes.Positions | InputTypes.Boards | InputTypes.Moves | (HasState ? InputTypes.State : 0);
 
 
     /// <summary>
@@ -232,7 +236,7 @@ namespace Chess.Ceres.NNEvaluators
         Console.WriteLine("Starting ONNX runtime against " + onnxModelFileName + " from " + onnxModelFileName + " with " + deviceType + " " + gpuID);
 
         string[] inputNames = type == ONNXRuntimeExecutor.NetTypeEnum.TPG
-          ? (hasState ? ["squares", "prior_state.1"] : ["squares"])
+          ? ["squares", "prior_state.1"]
           : ["/input/planes"];
 
         Executor = new ONNXRuntimeExecutor(engineID, onnxModelFileName, onnxModelBytes, inputNames,
@@ -272,6 +276,10 @@ namespace Chess.Ceres.NNEvaluators
                                                                          int numPositions, Func<int, int, bool> posMoveIsLegal,
                                                                          bool retrieveSupplementalResults = false)
     {
+      if (HasState)
+      {
+        throw new NotImplementedException("State not supported");
+      }
       if (usesSecondaryInputs)
       {
         throw new NotImplementedException("Secondary inputs not supported");
@@ -308,7 +316,7 @@ namespace Chess.Ceres.NNEvaluators
         inputsSecondaryNativeF[i] = inputsSecondaryNative[i];
       }
       const float TPG_DIVISOR = ByteScaled.SCALING_FACTOR; // TODO: receive this in constructor instead. Should refer to TPGSquareRecord.SQUARE_BYTES_DIVISOR.
-      PositionEvaluationBatch ret = DoEvaluateBatch(default, inputsPrimaryNativeF, usesSecondaryInputs ? inputsSecondaryNativeF : null, 
+      PositionEvaluationBatch ret = DoEvaluateBatch(default, inputsPrimaryNativeF, null, //usesSecondaryInputs ? inputsSecondaryNativeF : null, 
                                                     numPositions, retrieveSupplementalResults, posMoveIsLegal,
                                                     TPG_DIVISOR);
       return ret;
@@ -374,7 +382,7 @@ namespace Chess.Ceres.NNEvaluators
 #endif
 
         Func<int, int, bool> posMoveIsLegal = null; // PosMoveIsLegal
-        PositionEvaluationBatch ret = DoEvaluateBatch(batch, flatValuesAttentionM, null, batch.NumPos, 
+        PositionEvaluationBatch ret = DoEvaluateBatch(batch, flatValuesAttentionM, batch.States, batch.NumPos, 
                                                       retrieveSupplementalResults, posMoveIsLegal, 1);
         Debug.Assert(!retrieveSupplementalResults);
         return ret;
@@ -430,7 +438,7 @@ namespace Chess.Ceres.NNEvaluators
     /// <param name="retrieveSupplementalResults"></param>
     /// <returns></returns>
     PositionEvaluationBatch DoEvaluateBatch(IEncodedPositionBatchFlat batch, 
-                                            Memory<Half> flatValuesPrimary, Memory<Half> flatValuesSecondary,
+                                            Memory<Half> flatValuesPrimary, Memory<Half[]> flatValuesState,
                                             int numPos, bool retrieveSupplementalResults, 
                                             Func<int,int, bool> posMoveIsLegal,
                                             float tpgDivisor)
@@ -446,7 +454,7 @@ namespace Chess.Ceres.NNEvaluators
       {
         lock (Executor)
         {
-          result = Executor.Execute(IsWDL, HasState, flatValuesPrimary, flatValuesSecondary, numPos, alreadyConvertedToLZ0: true, tpgDivisor:tpgDivisor);
+          result = Executor.Execute(IsWDL, HasState, flatValuesPrimary, flatValuesState, numPos, alreadyConvertedToLZ0: true, tpgDivisor:tpgDivisor);
 
           // Apply move masking
           if (posMoveIsLegal != null) 
@@ -471,15 +479,6 @@ namespace Chess.Ceres.NNEvaluators
 #endif
         }
       }
-
-      if (HasState)
-      {
-        if (!warned)
-        {
-          Console.WriteLine("WARNING: NNEvaluatorEngineONNX needs remediation for state head");
-          warned = true;
-        }
-      } 
 
 #if DONE_BELOW_IN_NEXT_LINE
       // Set probability of illegal moves to 0.
@@ -529,18 +528,6 @@ namespace Chess.Ceres.NNEvaluators
       }
 #endif
 
-      Half[][] states = null;
-      if (HasState)
-      {
-        // TODO: this is just a dummy, fill in someday
-        states = new Half[numPos][];
-        for (int i=0;i<numPos;i++)
-        {
-          states[i] = new Half[64 * 4];
-        } 
-      }
-
-
 #if NOT
       Span<FP16> valueEvals, Span<FP16> valueEvals2, 
       Memory<FP16> policyProbs, Memory<CompressedActionVector> actionLogits,
@@ -566,7 +553,33 @@ namespace Chess.Ceres.NNEvaluators
         }
       }
 #endif
-      
+      Half[][] states2D = null;
+      if (HasState || Executor.executor.NumInputs > 1)
+      {
+        states2D = new Half[numPos][];
+        if (result.PriorState.IsEmpty || !HasState)
+        {
+          // dummy values
+          for (int i = 0; i < numPos; i++)
+          {
+            states2D[i] = new Half[64 * 4];
+          }
+        }
+        else
+        {
+          Span<Half> statesSpan = MemoryMarshal.Cast<Float16, Half>(result.PriorState.Span);
+          const int SIZE_STATE_PER_SQUARE = 4;
+          // TODO: improve efficiency
+          for (int i = 0; i < numPos; i++)
+          {
+            states2D[i] = new Half[64 * SIZE_STATE_PER_SQUARE];
+
+            statesSpan.Slice(i * 64 * SIZE_STATE_PER_SQUARE,
+                             64 * SIZE_STATE_PER_SQUARE)
+                      .CopyTo(states2D[i]);
+          }
+        }
+      }
 
       // NOTE: inefficient, above we convert from [] (flat) to [][] and here we convert back to []
       PositionEvaluationBatch ret =  new (IsWDL, HasM, HasUncertaintyV, HasUncertaintyP, 
@@ -574,13 +587,14 @@ namespace Chess.Ceres.NNEvaluators
                                          MemoryMarshal.Cast<Float16, FP16>(result.ValuesRaw.Span),
                                          MemoryMarshal.Cast<Float16, FP16>(result.Values2Raw.Span),
                                          result.PolicyVectors,//*/result.PolicyFlat, 
-                                         result.ActionLogisticVectors,
+                                         result.ActionLogits,
                                          MemoryMarshal.Cast<Float16, FP16>(result.MLH.Span),
                                          MemoryMarshal.Cast<Float16, FP16>(result.UncertaintyV.Span),
                                          MemoryMarshal.Cast <Float16, FP16 >(result.UncertaintyP.Span).ToArray(), // TODO: eliminate array conversion
                                          MemoryMarshal.Cast<Float16, FP16>(result.ExtraStats0.Span),
                                          MemoryMarshal.Cast<Float16, FP16>(result.ExtraStats1.Span),
-                                         new Memory<Half[]>(states), default,
+                                         states2D, // new Memory<Half[]>(states),
+                                         default,
                                          Options.FractionValueHead2,
                                          Options.ValueHead1Temperature, Options.ValueHead2Temperature, 
                                          Options.Value1UncertaintyTemperatureScalingFactor, Options.Value2UncertaintyTemperatureScalingFactor,

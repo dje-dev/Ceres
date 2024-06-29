@@ -370,6 +370,11 @@ namespace Ceres.Chess.NNEvaluators
 
     private CompressedPolicyVector[] ExtractComboPolicies(IEncodedPositionBatchFlat positions)
     {
+      if (HasAction)
+      {
+        throw new NotImplementedException("ExtractComboPolicies does not yet support evaluators with actions, would need to be also resorted");
+      }
+
       Span<float> policyAverages = stackalloc float[EncodedPolicyVector.POLICY_VECTOR_LENGTH];
 
       // Compute average policy result for all positions

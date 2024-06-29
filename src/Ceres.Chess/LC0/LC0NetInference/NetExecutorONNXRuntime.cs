@@ -82,7 +82,6 @@ namespace Ceres.Chess.LC0NetInference
     (string name, NodeMetadata metadata, float[] value)[] outputBuffers32;
 
 
-
     /// <summary>
     /// Constructor.
     /// </summary>
@@ -276,6 +275,10 @@ namespace Ceres.Chess.LC0NetInference
 
     bool haveWarned = false;
 
+    /// <summary>
+    /// Returns the number of inputs as reported by the ONNX model metadata.
+    /// </summary>
+    public int NumInputs => inputsMetadata.Count;
 
 
     /// <summary>

@@ -248,7 +248,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// </summary>
     /// <param name="index"></param>
     /// <returns></returns>
-    public Half[] GetState(int index) => HasState ? States.Span[index] : null;
+    public Half[] GetState(int index) => HasState && !States.IsEmpty ? States.Span[index] : null;
 
     /// <summary>
     /// Returns inner layer activations.
@@ -815,15 +815,15 @@ namespace Ceres.Chess.NetEvaluation.Batch
     [ThreadStatic]
     static float[] actionTempBuffer;
 
-    static (CompressedPolicyVector[], Memory<CompressedActionVector>) 
-      ExtractPoliciesBufferFlat(int numPos, 
+    static (CompressedPolicyVector[], Memory<CompressedActionVector>)
+      ExtractPoliciesBufferFlat(int numPos,
                                 ReadOnlyMemory<Float16> policyProbs,
                                 ReadOnlyMemory<FP16> policyUncertainties,
                                 bool hasActions,
                                 ReadOnlyMemory<Float16> actionLogits,
                                 float policyTemperature,
                                 float policyUncertaintyScalingFactor,
-                                PolicyType probType, bool alreadySorted, 
+                                PolicyType probType, bool alreadySorted,
                                 IEncodedPositionBatchFlat sourceBatchWithValidMoves)
     {
       Debug.Assert(!alreadySorted); // TODO: it seems nonsensical that these claim to be sorted
@@ -848,9 +848,10 @@ namespace Ceres.Chess.NetEvaluation.Batch
       {
         ReadOnlySpan<Float16> policyProbsSpan = policyProbs.Span;
         ReadOnlySpan<FP16> policiesUncertaintiesSpan = policyUncertainties.Span;
-        ReadOnlySpan<FP16> actionLogitsSpan = hasActions ? MemoryMarshal.Cast<Float16, FP16>(actionLogits.Span) : default;
+        ReadOnlySpan<Float16> actionLogitsSpan = hasActions ? actionLogits.Span : default;
+        hasActions = hasActions && !actionLogits.IsEmpty;
 
-        int startIndex = EncodedPolicyVector.POLICY_VECTOR_LENGTH * i;
+        int startIndexPolicy = EncodedPolicyVector.POLICY_VECTOR_LENGTH * i;
 
         if (probType == PolicyType.Probabilities)
         {
@@ -903,7 +904,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
           Span<int> legalMoveIndices = stackalloc int[numLegalMoves];
           Span<float> legalMovePolicies = stackalloc float[numLegalMoves];
 //          Span<Half> legalMovePoliciesHalf = stackalloc Half[numLegalMoves];
-          ReadOnlySpan<Half> policyProbsSpanAsHalf = MemoryMarshal.Cast<Float16, Half>(policyProbsSpan.Slice(startIndex, EncodedPolicyVector.POLICY_VECTOR_LENGTH));
+          ReadOnlySpan<Half> policyProbsSpanAsHalf =  MemoryMarshal.Cast<Float16, Half>(policyProbsSpan.Slice(startIndexPolicy, EncodedPolicyVector.POLICY_VECTOR_LENGTH));
+          ReadOnlySpan<Half> actionLogitsSpanAsHalf = hasActions ? MemoryMarshal.Cast<Float16, Half>(actionLogitsSpan.Slice(i * 3 * EncodedPolicyVector.POLICY_VECTOR_LENGTH, 3 * EncodedPolicyVector.POLICY_VECTOR_LENGTH)) : default;
 
           float policyLogitMax = 0;
           for (int im = 0; im < numLegalMoves; im++)
@@ -915,21 +917,19 @@ namespace Ceres.Chess.NetEvaluation.Batch
             if (hasActions)
             {
               double v1, v2, v3;
-              int actionBaseIndex = (EncodedPolicyVector.POLICY_VECTOR_LENGTH * 3 * i) 
-                                   + 3 * encodedMove.IndexNeuralNet;
-              float actionLogitMax = Math.Max(Math.Max(actionLogitsSpan[actionBaseIndex + 0],
-                                                       actionLogitsSpan[actionBaseIndex + 1]),
-                                                       actionLogitsSpan[actionBaseIndex + 2]);
+              int baseActionIndex = 3 * legalMoveIndices[im];
+              float actionLogitMax = Math.Max(Math.Max((float)actionLogitsSpanAsHalf[baseActionIndex + 0], (float)actionLogitsSpanAsHalf[baseActionIndex + 1]), 
+                                              (float)actionLogitsSpanAsHalf[baseActionIndex + 2]);
 
-              v1 = Math.Exp(actionLogitsSpan[actionBaseIndex + 0] - policyLogitMax);
-              v2 = Math.Exp(actionLogitsSpan[actionBaseIndex + 1] - policyLogitMax);
-              v3 = Math.Exp(actionLogitsSpan[actionBaseIndex + 2] - policyLogitMax);
+              v1 = Math.Exp((float)actionLogitsSpanAsHalf[baseActionIndex + 0] - actionLogitMax);
+              v2 = Math.Exp((float)actionLogitsSpanAsHalf[baseActionIndex + 1] - actionLogitMax);
+              v3 = Math.Exp((float)actionLogitsSpanAsHalf[baseActionIndex + 2] - actionLogitMax);
 
-              double totl = v1 + v2 + v3;
-              Debug.Assert(!double.IsNaN(totl));
+              double actionTotalProbs = v1 + v2 + v3;
+              Debug.Assert(!double.IsNaN(actionTotalProbs));
 
               // Normalize action probabilities to sum to exactly 1.
-              actions[i][im] = ((Half)(v1 / totl), (Half)(v3 / totl));
+              actions[i][im] = ((Half)(v1 / actionTotalProbs), (Half)(v3 / actionTotalProbs));
             }
 
             float policyValue =  (float)policyProbsSpanAsHalf[encodedMove.IndexNeuralNet];
@@ -969,7 +969,14 @@ namespace Ceres.Chess.NetEvaluation.Batch
             legalMovePolicies[im] /= sumPolicyProbs;
           }
 
-          CompressedPolicyVector.Initialize(ref retPolicies[i], legalMoveIndices, legalMovePolicies, false);          
+          if (hasActions)
+          {
+            CompressedPolicyVector.Initialize(ref retPolicies[i], legalMoveIndices, legalMovePolicies, false, true, ref actions[i]);
+          }
+          else
+          {
+            CompressedPolicyVector.Initialize(ref retPolicies[i], legalMoveIndices, legalMovePolicies, false);
+          }
         }
       });
 

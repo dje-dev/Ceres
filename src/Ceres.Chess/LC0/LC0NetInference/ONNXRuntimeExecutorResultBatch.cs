@@ -39,7 +39,7 @@ namespace Ceres.Chess.LC0NetInference
     /// <summary>
     /// Action head.
     /// </summary>
-    public readonly Memory<Float16> ActionLogisticVectors;
+    public readonly Memory<Float16> ActionLogits;
 
     /// <summary>
     /// Moves left head.
@@ -99,7 +99,7 @@ namespace Ceres.Chess.LC0NetInference
       }
 
       PolicyVectors = policyLogisticVectors; // still in logistic form
-      ActionLogisticVectors = actionLogisticVectors; // still in logistic form
+      ActionLogits = actionLogisticVectors; // still in logistic form
 
       MLH = mlh;
       ExtraStats0 = extraStats0;
