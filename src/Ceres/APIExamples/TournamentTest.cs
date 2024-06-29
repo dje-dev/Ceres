@@ -206,7 +206,9 @@ namespace Ceres.APIExamples
 
       NET1 = "CUSTOM2:ckpt_DGX_C_256_12_8_6_60bn_B4_2024_final.ts.fp16.onnx";
       NET2 = "CUSTOM1:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_postconvert.ts.fp16.onnx"; // best so far
+NET1 = "CUSTOM2:512.fp16.onnx";
 
+      NET2 = "~T1_DISTILL_512_15_FP16_TRT";
 //NET2 = "CUSTOM1:ckpt_DGX_C_256_12_8_6_60bn_B4_2024_final.ts.fp16.onnx";
 //NET1 = "CUSTOM2:ckpt_DGX_C_256_12_8_6_60bn_B4_2024_final.ts";
 
@@ -225,7 +227,7 @@ namespace Ceres.APIExamples
       //      NET2 = "CUSTOM2:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_2564292608.ts";
 
       //NET2 = "~T80";
-//      NET2 = "~T1_DISTILL_256_10_FP16";
+      //      NET2 = "~T1_DISTILL_256_10_FP16";
       //      NET2 = "~T4_3355000";
       //      NET2 = "~BT2_NATIVE";
 
@@ -241,7 +243,7 @@ namespace Ceres.APIExamples
 
       //      NET2 = "~T70";
       //NET1 = "~T81|0.85";
-//      NET2 = "~T80";
+      //      NET2 = "~T80";
       //NET2 = "~T1_DISTIL_512_15_NATIVE";
 
       //      NET1 = "CUSTOM1:ckpt_DGX_C6_B4_512_8_16_4_500mm_2024_nost_final.ts";
@@ -649,7 +651,7 @@ string OVERRIDE_LC0_BACKEND_STRING = "";
 //        baseName = "endingbook-16man-9609.pgn";
 //        def.AcceptPosExcludeIfContainsPieceTypeList = [PieceType.Queen, PieceType.Bishop, PieceType.Knight];
       }
-//       baseName = "tcec_big";
+       baseName = "tcec_big";
       string postfix = (baseName.ToUpper().EndsWith(".EPD") || baseName.ToUpper().EndsWith(".PGN")) ? "" : ".pgn";
       def.OpeningsFileName = SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/openings/{baseName}{postfix}"
                                                      : @$"\\synology\dev\chess\data\openings\{baseName}{postfix}";
