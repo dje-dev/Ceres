@@ -279,6 +279,7 @@ namespace Ceres.Chess.LC0.Batches
       }
     }
 
+
     // TODO: The following two versions of Set basically duplciates, but operating on slightly different data structures.
     //       There is no highly efficient way to centralize this. 
     // Since this is a performance-critical method, we leave both of these in place.
@@ -310,7 +311,7 @@ namespace Ceres.Chess.LC0.Batches
       [MethodImpl(MethodImplOptions.AggressiveInlining)]
       void WritePair(ulong bitmap, byte value)
       {
-        PosPlaneBitmaps[nextOutPlaneIndex] = bitmap * value;
+        PosPlaneBitmaps[nextOutPlaneIndex] = bitmap;
         PosPlaneValues[nextOutPlaneIndex] = value;
         nextOutPlaneIndex++;
       }
