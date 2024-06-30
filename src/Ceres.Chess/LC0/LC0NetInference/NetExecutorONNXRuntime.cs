@@ -29,6 +29,7 @@ using Ceres.Base.Benchmarking;
 using Ceres.Base.Misc;
 
 using Chess.Ceres.NNEvaluators;
+using Microsoft.Extensions.Primitives;
 
 
 #endregion
@@ -176,13 +177,15 @@ namespace Ceres.Chess.LC0NetInference
             }
           }
 
+          // Use timing and engine caches, located in a folder specific to this host.
           providerOptionsDict["trt_timing_cache_enable"] = "true";
           //providerOptionsDict["trt_force_timing_cache"] = "true";
-
           providerOptionsDict["trt_engine_cache_enable"] = "true";
+          string trtSubdirectory = Path.Combine(directoryName, "trt_engines", Environment.MachineName);
+          Directory.CreateDirectory(trtSubdirectory);
+          providerOptionsDict["trt_engine_cache_path"] = trtSubdirectory;
+          providerOptionsDict["trt_timing_cache_path"] = trtSubdirectory;
 
-          providerOptionsDict["trt_engine_cache_path"] = Path.Combine(directoryName, Environment.MachineName, "trt_engines");
-          providerOptionsDict["trt_timing_cache_path"] = directoryName;
           if (shortID != null)
           {
             providerOptionsDict["trt_engine_cache_prefix"] = shortID;
