@@ -181,7 +181,7 @@ namespace Ceres.Chess.LC0NetInference
 
           providerOptionsDict["trt_engine_cache_enable"] = "true";
 
-          providerOptionsDict["trt_engine_cache_path"] = Path.Combine(directoryName, "trt_engines");
+          providerOptionsDict["trt_engine_cache_path"] = Path.Combine(directoryName, Environment.MachineName, "trt_engines");
           providerOptionsDict["trt_timing_cache_path"] = directoryName;
           if (shortID != null)
           {
