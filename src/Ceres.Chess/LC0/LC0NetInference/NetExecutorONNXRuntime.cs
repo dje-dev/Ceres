@@ -190,7 +190,7 @@ namespace Ceres.Chess.LC0NetInference
 
 //          providerOptionsDict["trt_detailed_build_log"] = "1";
           providerOptionsDict["trt_fp16_enable"] = Precision == NNEvaluatorPrecision.FP16 ? "true" : "false";
-          providerOptionsDict["trt_builder_optimization_level"] = "5";
+          providerOptionsDict["trt_builder_optimization_level"] = "3"; // N.B. Level 5 may be buggy
 
 //          providerOptionsDict["trt_cuda_graph_enable"] = "true"; // NOTE: may fail or yield bad output, requires entire graph to map onto ONNX nodes (?)
 //          providerOptionsDict["trt_auxiliary_streams"] = "0";
