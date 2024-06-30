@@ -53,7 +53,7 @@ namespace Ceres.APIExamples
   {
     const bool POOLED = false;
 
-    static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 2 : 4;
+    static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 1 : 4;
     static int[] OVERRIDE_DEVICE_IDs = /*POOLED ? null*/
        (Environment.MachineName.ToUpper() switch
       {
@@ -206,11 +206,13 @@ namespace Ceres.APIExamples
 
       NET1 = "CUSTOM2:ckpt_DGX_C_256_12_8_6_60bn_B4_2024_final.ts.fp16.onnx";
       NET2 = "CUSTOM1:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_postconvert.ts.fp16.onnx"; // best so far
-NET1 = "CUSTOM2:512.fp16.onnx";
+NET1 = "CUSTOM2:ckpt_DGX_C_512_15_16_4_32bn_B1_2024_26Jun_final.ts.fp16.onnx";
 
+//NET1 = "CUSTOM1:ckpt_DGX_C5_B1_512_15_16_4_32bn_2024_3100651520.ts";
+      NET2 = "CUSTOM2:ckpt_DGX_C5_B1_512_15_16_4_32bn_2024_fix.ts.onnx_fp16.onnx";
       NET2 = "~T1_DISTILL_512_15_FP16_TRT";
-//NET2 = "CUSTOM1:ckpt_DGX_C_256_12_8_6_60bn_B4_2024_final.ts.fp16.onnx";
-//NET1 = "CUSTOM2:ckpt_DGX_C_256_12_8_6_60bn_B4_2024_final.ts";
+      //NET2 = "CUSTOM1:ckpt_DGX_C_256_12_8_6_60bn_B4_2024_final.ts.fp16.onnx";
+      //NET1 = "CUSTOM2:ckpt_DGX_C_256_12_8_6_60bn_B4_2024_final.ts";
 
       //      NET2 = "CUSTOM2:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_postconvert.ts.fp16.onnx";
 
@@ -255,7 +257,7 @@ NET1 = "CUSTOM2:512.fp16.onnx";
       //      NET1 = "CUSTOM1:ckpt_DGX_C6_B4_512_15_16_4_32bn_2024_focus_1063735296.ts";
       //      NET2 = "CUSTOM2:ckpt_DGX_C5_B1_512_15_16_4_32bn_2024_1049882624.ts";
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(10_000); // was 500
+      SearchLimit limit1 = SearchLimit.NodesPerMove(5000); // was 500
 //      limit1 = SearchLimit.BestValueMove;
 //limit1 = new SearchLimit(SearchLimitType.SecondsForAllMoves, 15, false, 0.5f);
 //limit1 = new SearchLimit(SearchLimitType.SecondsForAllMoves, 10, false, 0.1f);
