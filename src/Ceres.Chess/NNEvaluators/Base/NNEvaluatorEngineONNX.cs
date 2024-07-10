@@ -541,7 +541,8 @@ namespace Chess.Ceres.NNEvaluators
                           : (float)result.ValuesRaw.Span[0];
         if (Math.Abs(1.0 - sum) < 0.001f)
         {
-          throw new Exception("Values expected logits, but look suspisciously like probabilities.");
+          // TODO: remove this someday
+          Console.WriteLine("Warning: values expected logits, but look suspisciously like probabilities.");
         }
 
       }
