@@ -202,15 +202,27 @@ namespace Ceres.APIExamples
       //NET2 = "CUSTOM2:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_postconvert.ts.fp16.onnx";// 2197929984.ts";
 
      //      NET2 = "CUSTOM2:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_late.ts";// 2197929984.ts";
-//NET2 = "~T1_DISTILL_256_10_FP16_TRT";
 
-      NET1 = "CUSTOM2:ckpt_DGX_C_256_12_8_6_60bn_B4_2024_final.ts.fp16.onnx";
-      NET2 = "CUSTOM1:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_postconvert.ts.fp16.onnx"; // best so far
-NET1 = "CUSTOM2:ckpt_DGX_C_512_15_16_4_32bn_B1_2024_26Jun_final.ts.fp16.onnx";
+// FP8 conversion test      NET1 = "CUSTOM1:fp8_256_12_8.onnx";
 
-//NET1 = "CUSTOM1:ckpt_DGX_C5_B1_512_15_16_4_32bn_2024_3100651520.ts";
-      NET2 = "CUSTOM2:ckpt_DGX_C5_B1_512_15_16_4_32bn_2024_fix.ts.onnx_fp16.onnx";
-      NET2 = "~T1_DISTILL_512_15_FP16_TRT";
+
+//      NET2 = "CUSTOM1:ckpt_DGX_C_512_15_16_4_32bn_B1_2024_26Jun_final.ts.fp16.onnx"; // Late June 512
+
+//      NET1 = "CUSTOM1:ckpt_DGX_C_256_12_8_6_4bn_B1_2024_vl01_sf_c3_1bn_vl2p3_last.ts.fp16.onnx";  // extension: value2 loss 0.3 (not 0.1)
+      NET2 = "CUSTOM1:ckpt_DGX_C_256_12_8_6_4bn_B1_2024_vl01_sf_c2_1bn_last.ts.fp16.onnx";          // baseline (+1bn)
+//      NET1 = "CUSTOM1:ckpt_DGX_C_256_12_8_6_4bn_B1_2024_vl01_sf_last.ts.fp16.onnx";                 // baseline
+      NET1 = "CUSTOM1:ckpt_DGX_C_256_12_8_6_4bn_B1_2024_vl01_sf_c3_1bn_wd001_last.ts.fp16.onnx"; // extension: WD 0.001
+      NET1 = "CUSTOM1:HOP_C_256_12_8_6_4bn_B1_2024_vl01_sf_1bn_newdata_999997440.ts.fp16.onnx"; // extension: new data (2024)
+
+      //      NET2 = "CUSTOM1:ckpt_DGX_C_256_12_8_6_60bn_B4_2024_final.ts.fp16.onnx"; // best June2024 (4B)
+      //      NET2 = "CUSTOM1:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_postconvert.ts.fp16.onnx"; // best June2024 (1B)
+      //      NET2 = "~T1_DISTILL_512_15_FP16_TRT";
+      NET2 = "~T1_DISTILL_256_10_FP16";
+
+
+
+      //NET1 = "CUSTOM1:ckpt_DGX_C5_B1_512_15_16_4_32bn_2024_3100651520.ts";
+      //      NET2 = "CUSTOM2:ckpt_DGX_C5_B1_512_15_16_4_32bn_2024_fix.ts.onnx_fp16.onnx";
       //NET2 = "CUSTOM1:ckpt_DGX_C_256_12_8_6_60bn_B4_2024_final.ts.fp16.onnx";
       //NET1 = "CUSTOM2:ckpt_DGX_C_256_12_8_6_60bn_B4_2024_final.ts";
 
@@ -257,7 +269,7 @@ NET1 = "CUSTOM2:ckpt_DGX_C_512_15_16_4_32bn_B1_2024_26Jun_final.ts.fp16.onnx";
       //      NET1 = "CUSTOM1:ckpt_DGX_C6_B4_512_15_16_4_32bn_2024_focus_1063735296.ts";
       //      NET2 = "CUSTOM2:ckpt_DGX_C5_B1_512_15_16_4_32bn_2024_1049882624.ts";
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(5000); // was 500
+      SearchLimit limit1 = SearchLimit.NodesPerMove(1); // was 500
 //      limit1 = SearchLimit.BestValueMove;
 //limit1 = new SearchLimit(SearchLimitType.SecondsForAllMoves, 15, false, 0.5f);
 //limit1 = new SearchLimit(SearchLimitType.SecondsForAllMoves, 10, false, 0.1f);
@@ -605,16 +617,31 @@ string OVERRIDE_LC0_BACKEND_STRING = "";
       }
 
       TournamentDef def;
-      bool roundRobin = false;
+      bool roundRobin = true;
       if (roundRobin)
       {
         def = new TournamentDef("RR");
-        const float SF_TIME_SCALE = 0.8f;
+        //const float SF_TIME_SCALE = 0.8f;
         //        def.AddEngine(playerStockfish14.EngineDef, limit1 * SF_TIME_SCALE);
 
-        def.AddEngines(limit1, engineDefCeres1);
-        def.AddEngines(limit1, engineDefLC1);
-//        def.ReferenceEngineId = def.Engines[1].ID;
+        (string, string)[] nets = 
+        [
+          ("BEST_B1", "CUSTOM1:ckpt_DGX_C_256_12_8_6_60bn_B4_2024_final.ts.fp16.onnx"),// best June2024 (4B)
+          ("BEST_B4", "CUSTOM1:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_postconvert.ts.fp16.onnx"), // best June2024 (1B)
+          ("BASE", "CUSTOM1:ckpt_DGX_C_256_12_8_6_4bn_B1_2024_vl01_sf_c2_1bn_last.ts.fp16.onnx"),          // baseline (+1bn)
+          ("V2_p3", "CUSTOM1:ckpt_DGX_C_256_12_8_6_4bn_B1_2024_vl01_sf_c3_1bn_vl2p3_last.ts.fp16.onnx"),  // extension: value2 loss 0.3 (not 0.1)
+          ("V2_WD001", "CUSTOM1:ckpt_DGX_C_256_12_8_6_4bn_B1_2024_vl01_sf_c3_1bn_wd001_last.ts.fp16.onnx"), // extension: WD 0.001
+          ("V2_NEWDATA", "CUSTOM1:HOP_C_256_12_8_6_4bn_B1_2024_vl01_sf_1bn_newdata_999997440.ts.fp16.onnx"), // extension: new data (2024)
+          ("D256", "~T1_DISTILL_256_10_FP16") 
+        ];
+
+        foreach (var (name, net) in nets)
+        {
+          def.AddEngines(limit1, new GameEngineDefCeres(name, NNEvaluatorDef.FromSpecification(net, "GPU:0"), null));
+        }
+
+        //        def.AddEngines(limit1, engineDefLC1);
+        //        def.ReferenceEngineId = def.Engines[1].ID;
       }
       else
       {
@@ -631,7 +658,7 @@ string OVERRIDE_LC0_BACKEND_STRING = "";
       }
 
 
-      def.NumGamePairs = 10_000;// 2000;// 10_000;// 203;//1000;//203;//203;// 500;// 203;//203;// 102; 203
+      def.NumGamePairs = 200;// 2000;// 10_000;// 203;//1000;//203;//203;// 500;// 203;//203;// 102; 203
       def.ShowGameMoves = false;
 
       //string baseName = "tcec1819";
@@ -653,7 +680,7 @@ string OVERRIDE_LC0_BACKEND_STRING = "";
 //        baseName = "endingbook-16man-9609.pgn";
 //        def.AcceptPosExcludeIfContainsPieceTypeList = [PieceType.Queen, PieceType.Bishop, PieceType.Knight];
       }
-       baseName = "tcec_big";
+//       baseName = "tcec_big";
       string postfix = (baseName.ToUpper().EndsWith(".EPD") || baseName.ToUpper().EndsWith(".PGN")) ? "" : ".pgn";
       def.OpeningsFileName = SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/openings/{baseName}{postfix}"
                                                      : @$"\\synology\dev\chess\data\openings\{baseName}{postfix}";
