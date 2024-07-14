@@ -53,12 +53,12 @@ namespace Ceres.APIExamples
   {
     const bool POOLED = false;
 
-    static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 1 : 4;
+    static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 2 : 4;
     static int[] OVERRIDE_DEVICE_IDs = /*POOLED ? null*/
        (Environment.MachineName.ToUpper() switch
       {
         var name when name.Contains("DGX") => new int[] { 0, 1, 2, 3 },
-        var name when name.Contains("HOP") => new int[] { 0, 1, 2 },
+        var name when name.Contains("HOP") => new int[] { 0, 1, 2, 3 },
         _ => new int[] { 0 }
       });
 
@@ -212,13 +212,18 @@ namespace Ceres.APIExamples
       NET2 = "CUSTOM1:ckpt_DGX_C_256_12_8_6_4bn_B1_2024_vl01_sf_c2_1bn_last.ts.fp16.onnx";          // baseline (+1bn)
 //      NET1 = "CUSTOM1:ckpt_DGX_C_256_12_8_6_4bn_B1_2024_vl01_sf_last.ts.fp16.onnx";                 // baseline
       NET1 = "CUSTOM1:ckpt_DGX_C_256_12_8_6_4bn_B1_2024_vl01_sf_c3_1bn_wd001_last.ts.fp16.onnx"; // extension: WD 0.001
-      NET1 = "CUSTOM1:HOP_C_256_12_8_6_4bn_B1_2024_vl01_sf_1bn_newdata_999997440.ts.fp16.onnx"; // extension: new data (2024)
+//      NET1 = "CUSTOM1:HOP_C_256_12_8_6_4bn_B1_2024_vl01_sf_c3_1bn_auxtenth_2199994368.ts.fp16.onnx"; // extension: new data (2024)
 
       //      NET2 = "CUSTOM1:ckpt_DGX_C_256_12_8_6_60bn_B4_2024_final.ts.fp16.onnx"; // best June2024 (4B)
       //      NET2 = "CUSTOM1:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_postconvert.ts.fp16.onnx"; // best June2024 (1B)
       //      NET2 = "~T1_DISTILL_512_15_FP16_TRT";
-      NET2 = "~T1_DISTILL_256_10_FP16";
 
+      //NET1 = "CUSTOM1:HOP_C_256_12_8_6_4bn_B1_2024_vl01_sf_c3_1bn_auxtenth_1599995904.ts.fp16.onnx";
+      NET2 = "~T1_DISTILL_256_10_FP16";
+      //      NET2 = "~T1_256_RL_NATIVE";
+
+      NET1 = "~BT4-self-quantize4-swa-2092500-fp8-1";
+      NET2 = "~BT4_FP16_TRT";
 
 
       //NET1 = "CUSTOM1:ckpt_DGX_C5_B1_512_15_16_4_32bn_2024_3100651520.ts";
@@ -269,7 +274,7 @@ namespace Ceres.APIExamples
       //      NET1 = "CUSTOM1:ckpt_DGX_C6_B4_512_15_16_4_32bn_2024_focus_1063735296.ts";
       //      NET2 = "CUSTOM2:ckpt_DGX_C5_B1_512_15_16_4_32bn_2024_1049882624.ts";
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(1); // was 500
+      SearchLimit limit1 = SearchLimit.NodesPerMove(1000); // was 500
 //      limit1 = SearchLimit.BestValueMove;
 //limit1 = new SearchLimit(SearchLimitType.SecondsForAllMoves, 15, false, 0.5f);
 //limit1 = new SearchLimit(SearchLimitType.SecondsForAllMoves, 10, false, 0.1f);
@@ -617,7 +622,7 @@ string OVERRIDE_LC0_BACKEND_STRING = "";
       }
 
       TournamentDef def;
-      bool roundRobin = true;
+      bool roundRobin = false;
       if (roundRobin)
       {
         def = new TournamentDef("RR");
@@ -626,13 +631,13 @@ string OVERRIDE_LC0_BACKEND_STRING = "";
 
         (string, string)[] nets = 
         [
+          ("D256", "~T1_DISTILL_256_10_FP16"),
           ("BEST_B1", "CUSTOM1:ckpt_DGX_C_256_12_8_6_60bn_B4_2024_final.ts.fp16.onnx"),// best June2024 (4B)
           ("BEST_B4", "CUSTOM1:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_postconvert.ts.fp16.onnx"), // best June2024 (1B)
           ("BASE", "CUSTOM1:ckpt_DGX_C_256_12_8_6_4bn_B1_2024_vl01_sf_c2_1bn_last.ts.fp16.onnx"),          // baseline (+1bn)
           ("V2_p3", "CUSTOM1:ckpt_DGX_C_256_12_8_6_4bn_B1_2024_vl01_sf_c3_1bn_vl2p3_last.ts.fp16.onnx"),  // extension: value2 loss 0.3 (not 0.1)
           ("V2_WD001", "CUSTOM1:ckpt_DGX_C_256_12_8_6_4bn_B1_2024_vl01_sf_c3_1bn_wd001_last.ts.fp16.onnx"), // extension: WD 0.001
           ("V2_NEWDATA", "CUSTOM1:HOP_C_256_12_8_6_4bn_B1_2024_vl01_sf_1bn_newdata_999997440.ts.fp16.onnx"), // extension: new data (2024)
-          ("D256", "~T1_DISTILL_256_10_FP16") 
         ];
 
         foreach (var (name, net) in nets)
@@ -658,7 +663,7 @@ string OVERRIDE_LC0_BACKEND_STRING = "";
       }
 
 
-      def.NumGamePairs = 200;// 2000;// 10_000;// 203;//1000;//203;//203;// 500;// 203;//203;// 102; 203
+      def.NumGamePairs = 9999;// 2000;// 10_000;// 203;//1000;//203;//203;// 500;// 203;//203;// 102; 203
       def.ShowGameMoves = false;
 
       //string baseName = "tcec1819";
@@ -680,7 +685,7 @@ string OVERRIDE_LC0_BACKEND_STRING = "";
 //        baseName = "endingbook-16man-9609.pgn";
 //        def.AcceptPosExcludeIfContainsPieceTypeList = [PieceType.Queen, PieceType.Bishop, PieceType.Knight];
       }
-//       baseName = "tcec_big";
+       baseName = "tcec_big";
       string postfix = (baseName.ToUpper().EndsWith(".EPD") || baseName.ToUpper().EndsWith(".PGN")) ? "" : ".pgn";
       def.OpeningsFileName = SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/openings/{baseName}{postfix}"
                                                      : @$"\\synology\dev\chess\data\openings\{baseName}{postfix}";
