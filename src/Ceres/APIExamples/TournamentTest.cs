@@ -212,19 +212,30 @@ namespace Ceres.APIExamples
       NET2 = "CUSTOM1:ckpt_DGX_C_256_12_8_6_4bn_B1_2024_vl01_sf_c2_1bn_last.ts.fp16.onnx";          // baseline (+1bn)
 //      NET1 = "CUSTOM1:ckpt_DGX_C_256_12_8_6_4bn_B1_2024_vl01_sf_last.ts.fp16.onnx";                 // baseline
       NET1 = "CUSTOM1:ckpt_DGX_C_256_12_8_6_4bn_B1_2024_vl01_sf_c3_1bn_wd001_last.ts.fp16.onnx"; // extension: WD 0.001
-//      NET1 = "CUSTOM1:HOP_C_256_12_8_6_4bn_B1_2024_vl01_sf_c3_1bn_auxtenth_2199994368.ts.fp16.onnx"; // extension: new data (2024)
+      NET1 = "CUSTOM1:HOP_C_256_12_8_6_4bn_B1_2024_vl01_sf_c3_1bn_auxtenth_2199994368.ts"; // extension: new data (2024)
+//      NET1 = "CUSTOM1:ckpt_HOP_C6_B4_256_12_8_6_BS8_48bn_2024_final.ts";// old generation (May) good net
 
       //      NET2 = "CUSTOM1:ckpt_DGX_C_256_12_8_6_60bn_B4_2024_final.ts.fp16.onnx"; // best June2024 (4B)
-      //      NET2 = "CUSTOM1:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_postconvert.ts.fp16.onnx"; // best June2024 (1B)
+      //      NET1 = "CUSTOM1:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_postconvert.ts.fp16.onnx"; // best June2024 (1B)
       //      NET2 = "~T1_DISTILL_512_15_FP16_TRT";
 
       //NET1 = "CUSTOM1:HOP_C_256_12_8_6_4bn_B1_2024_vl01_sf_c3_1bn_auxtenth_1599995904.ts.fp16.onnx";
       NET2 = "~T1_DISTILL_256_10_FP16";
       //      NET2 = "~T1_256_RL_NATIVE";
 
-      NET1 = "~BT4-self-quantize4-swa-2092500-fp8-1";
-      NET2 = "~BT4_FP16_TRT";
+      //      NET1 = "~BT4-self-quantize4-swa-2092500";
+      //      NET2 = "~BT4_FP16_TRT";
 
+      NET1 = "CUSTOM1:HOP_C_256_12_8_6_500mm_B1_2024_newd_sp_blun_postexport.ts";
+      //      NET2 = "BAD IS ACTUALLY BLUN *** CUSTOM1:HOP_C_256_12_8_6_500mm_B1_2024_newd_sp_noblun_postexport.ts";
+
+      NET1 = "CUSTOM1:HOP_C_256_12_8_6_500mm_B1_2024_newd_sp_base_wd01_postexport.ts";
+      NET2 = "CUSTOM1:HOP_C_256_12_8_6_500mm_B1_2024_newd_sp_base_postexport.ts"; // new baseline 500mm net at size 256
+
+///      NET2 = "CUSTOM1:HOP_C_256_12_8_6_500mm_B1_2024_newd_sp_noblun_postexport.ts"; // version w/out blunder info anywhere
+//      NET2 = "CUSTOM1:ckpt_DGX_C_256_12_8_6_500mm_B1_2024_base_473206784.ts"; // prior 500mm net at eise 256
+      //-23+/-20      NET2 = "CUSTOM2:ckpt_DGX_C_256_12_8_6_500mm_B1_2024_base_473206784.ts.fp16.onnx";
+      //      NET2 = "CUSTOM2:ckpt_DGX_C6_B4_512_8_16_4_500mm_2024_nost_447799296.ts.fp16.onnx";
 
       //NET1 = "CUSTOM1:ckpt_DGX_C5_B1_512_15_16_4_32bn_2024_3100651520.ts";
       //      NET2 = "CUSTOM2:ckpt_DGX_C5_B1_512_15_16_4_32bn_2024_fix.ts.onnx_fp16.onnx";
@@ -241,9 +252,6 @@ namespace Ceres.APIExamples
       //        { "T3_DISTILL_512_15_FP16", ONNXNet32LC0("t3-512x15x16h-distill-swa-2175000.pb.gz_fp16#16") },
       //        { "T3_DISTILL_512_15_FP16_TRT", ONNXNet16LC0("t3-512x15x16h-distill-swa-2175000.pb.gz_fp16#16", true)},
 
-      // FOCUS TEST
-      //      NET1 = "CUSTOM2:ckpt_DGX_C_256_12_8_6_500mm_B1_2024f_2_270k.ts";
-      //      NET2 = "CUSTOM2:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_2564292608.ts";
 
       //NET2 = "~T80";
       //      NET2 = "~T1_DISTILL_256_10_FP16";
@@ -274,7 +282,7 @@ namespace Ceres.APIExamples
       //      NET1 = "CUSTOM1:ckpt_DGX_C6_B4_512_15_16_4_32bn_2024_focus_1063735296.ts";
       //      NET2 = "CUSTOM2:ckpt_DGX_C5_B1_512_15_16_4_32bn_2024_1049882624.ts";
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(1000); // was 500
+      SearchLimit limit1 = SearchLimit.NodesPerMove(10_000); // was 500
 //      limit1 = SearchLimit.BestValueMove;
 //limit1 = new SearchLimit(SearchLimitType.SecondsForAllMoves, 15, false, 0.5f);
 //limit1 = new SearchLimit(SearchLimitType.SecondsForAllMoves, 10, false, 0.1f);
@@ -685,7 +693,7 @@ string OVERRIDE_LC0_BACKEND_STRING = "";
 //        baseName = "endingbook-16man-9609.pgn";
 //        def.AcceptPosExcludeIfContainsPieceTypeList = [PieceType.Queen, PieceType.Bishop, PieceType.Knight];
       }
-       baseName = "tcec_big";
+//       baseName = "tcec_big";
       string postfix = (baseName.ToUpper().EndsWith(".EPD") || baseName.ToUpper().EndsWith(".PGN")) ? "" : ".pgn";
       def.OpeningsFileName = SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/openings/{baseName}{postfix}"
                                                      : @$"\\synology\dev\chess\data\openings\{baseName}{postfix}";
