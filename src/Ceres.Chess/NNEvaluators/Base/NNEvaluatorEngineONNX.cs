@@ -199,7 +199,6 @@ namespace Chess.Ceres.NNEvaluators
                                  bool hasValueSecondary = false,
                                  bool hasState = false)
     {
-      EngineType = type == ONNXRuntimeExecutor.NetTypeEnum.Ceres ? "ONNX_DJE" : "ONNX_LZ0";
       EngineNetworkID = engineID;
       ONNXFileName = onnxModelFileName;
       BatchSize = batchSize;

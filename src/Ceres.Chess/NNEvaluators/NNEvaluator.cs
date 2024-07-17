@@ -28,6 +28,7 @@ using Ceres.Chess.Positions;
 
 #endregion
 
+
 namespace Ceres.Chess.NNEvaluators
 {
   /// <summary>
@@ -72,11 +73,6 @@ namespace Ceres.Chess.NNEvaluators
       }
     }
 
-
-    /// <summary>
-    /// String description of underlying engine type.
-    /// </summary>
-    public string EngineType;
 
     /// <summary>
     /// String identifier of the underlying engine network.
