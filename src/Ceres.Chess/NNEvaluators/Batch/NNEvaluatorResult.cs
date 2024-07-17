@@ -260,7 +260,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <returns></returns>
     public override string ToString()
     {
-      string extraV = float.IsNaN(V2) ? "" : $" V2={V2,6:F2}";
+      string extraV = float.IsNaN(V2) ? "" : $" V2={V2,5:F2}";
 
       string dev = "";
       if (ExtraStat0 != null && !float.IsNaN(ExtraStat0.Value))
@@ -268,13 +268,28 @@ namespace Ceres.Chess.NetEvaluation.Batch
         dev = $" QDEV [{ExtraStat0.Value,4:F2} {ExtraStat1.Value,4:F2}] ";
       }
 
-      string extras = $"WDL ({W:F2} {1-(W+L):F2} {L:F2}) ";
+      string extras = $" WDL ({W:F2} {1-(W+L):F2} {L:F2}) ";
       if (!float.IsNaN(W2))
       {
         extras += $" WDL2 ({W2:F2} {1 - (W2 + L2):F2} {L2:F2}) ";
       }
 
-      return $"<NNPositionEvaluation V={V,6:F2}{extraV}{dev} MLH ={M,6:F2} UV={UncertaintyV,6:F2} Policy={Policy}>";
+      if (!float.IsNaN(M))
+      {
+        extras += $" MLH={M,6:F2}";
+      }
+
+      if (!float.IsNaN(UncertaintyV))
+      {
+        extras += $" UV={UncertaintyV,5:F2}";
+      }
+
+      if (!float.IsNaN(UncertaintyP))
+      {
+        extras += $" UP={UncertaintyP,5:F2}";
+      }
+
+      return $"<NNPositionEvaluation V={V,6:F2}{extraV}{extras}{dev} Policy={Policy}>";
     }
   }
 }
