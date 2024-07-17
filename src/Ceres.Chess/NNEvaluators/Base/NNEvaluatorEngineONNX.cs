@@ -254,8 +254,8 @@ namespace Chess.Ceres.NNEvaluators
 
 
 
-    public static Action<IEncodedPositionBatchFlat, bool, Half[], short[]> ConverterToFlat = null;
-    public static Func<object, byte[], int> ConverterToFlatFromTPG = null;
+    public Action<NNEvaluatorOptions, IEncodedPositionBatchFlat, bool, Half[], short[]> ConverterToFlat = null;
+    public Func<NNEvaluatorOptions, object, byte[], int> ConverterToFlatFromTPG = null;
 
     [ThreadStatic] static byte[] inputsPrimaryNative;
     [ThreadStatic] static byte[] inputsSecondaryNative;
@@ -304,7 +304,7 @@ namespace Chess.Ceres.NNEvaluators
         inputsPrimaryNativeF = new Half[INPUT_SIZE_FLOATS];
       }
 
-      int numConverted = ConverterToFlatFromTPG(positionsNativeInput, inputsPrimaryNative);
+      int numConverted = ConverterToFlatFromTPG(Options, positionsNativeInput, inputsPrimaryNative);
 
       // Convert bytes to float      
       for (int i=0;i<numConverted;i++)
@@ -342,7 +342,7 @@ namespace Chess.Ceres.NNEvaluators
         Memory<Half> flatValuesAttentionM = flatValuesAttention.AsMemory().Slice(0, inputSizeAttention);
 
         short[] legalMoveIndices = new short[batch.NumPos * MAX_MOVES];
-        ConverterToFlat(batch, UseHistory, flatValuesAttention, legalMoveIndices);
+        ConverterToFlat(Options, batch, UseHistory, flatValuesAttention, legalMoveIndices);
 
 #if NOT
         bool xPosMoveIsLegal(int posNum, int nnIndexNum)
