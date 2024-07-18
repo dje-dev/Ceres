@@ -365,8 +365,7 @@ namespace Ceres.Chess.LC0NetInference
       }
       else
       {
-        throw new NotImplementedException("Float32 version needs remeidiation, use Float16 for ONNX");
-        //return RunFloat(inputsONNX, batchSize);
+        return RunFloat(inputsONNX, batchSize);
       }
     }
 
@@ -435,16 +434,28 @@ namespace Ceres.Chess.LC0NetInference
     }
 
 
-    private List<(string, Memory<float>)> RunFloat((Memory<float> input, int[] shape, string inputName, int numElements)[] inputs, int batchSize)
+    /// <summary>
+    /// Runs the network with float inputs (instead of Half).
+    /// 
+    /// Note that this accepts Half inputs and returns Half inputs, 
+    /// but merely upcasts them to floats for ONNX runtime execution and then downcasts results.
+    /// 
+    /// This is in efficient and does not fully exploit the higher precision of float over Half
+    /// (but is intended mostly for debugging purposes).
+    /// </summary>
+    /// <param name="inputs"></param>
+    /// <param name="batchSize"></param>
+    /// <returns></returns>
+    private List<(string, Memory<Float16>)> RunFloat((Memory<Half> input, int[] shape, string inputName, int numElements)[] inputs, int batchSize)
     {
-      throw new NotImplementedException();
-#if NOT
       List<NamedOnnxValue> inputsONNX = new(inputs.Length);
 
       for (int i = 0; i < inputs.Length; i++)
       {
-        (Memory<float> input, int[] shape, string inputName, int numElements) = inputs[i];
-        DenseTensor<float> inputTensor = new DenseTensor<float>(input.Slice(0, numElements), shape);
+        (Memory<Half> input, int[] shape, string inputName, int numElements) = inputs[i];
+        Memory<float> inputFloat = new float[numElements];
+        TensorPrimitives.ConvertToSingle(input.Span, inputFloat.Span);
+        DenseTensor<float> inputTensor = new DenseTensor<float>(inputFloat.Slice(0, numElements), shape);
         inputsONNX.Add(NamedOnnxValue.CreateFromTensor(inputName, inputTensor));
       }
 
@@ -457,16 +468,22 @@ namespace Ceres.Chess.LC0NetInference
         runResult = Session.Run(inputsONNX);//, ro); // fails on second run, reshape error, may be a bug on ONNXruntime
       }
 
-      List<(string, float[])> resultArrays = new(Session.OutputMetadata.Count);
+      List<(string, Memory<Float16>)> resultArrays = new(Session.OutputMetadata.Count);
       foreach (DisposableNamedOnnxValue resultValue in runResult)
       {
         DenseTensor<float> tensor = (DenseTensor<float>)resultValue.AsTensor<float>();
-        float[] values = tensor.Buffer.ToArray(); // TO DO: Avoid reallocation ?
+        //default;// tensor.Buffer.ToArray(); // TO DO: Avoid reallocation ?
+
+        Float16[] values = new Float16[tensor.Buffer.Length];
+        for (int i=0; i<tensor.Buffer.Length; i++)
+        {
+          values[i] = (Float16)tensor.GetValue(i); // Inefficient!
+        } 
         resultArrays.Add((resultValue.Name, values));
       }
       return resultArrays;
-#endif
     }
+
 
     public void EndProfiling()
     {
