@@ -132,7 +132,7 @@ namespace Ceres.Base.Misc
     /// <typeparam name="T"></typeparam>
     /// <param name="struct1"></param>
     /// <param name="struct2"></param>
-    public static void CompareAndPrintObjectFields<T>(T struct1, T struct2)
+    public static void CompareAndPrintObjectFields<T>(in T struct1, in T struct2)
     {
       int sumBytes = 0;
       Console.WriteLine("\r\nCOMPARE OBJECTS " + typeof(T).Name);
