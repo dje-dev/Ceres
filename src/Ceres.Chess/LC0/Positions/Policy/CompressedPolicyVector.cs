@@ -867,6 +867,29 @@ namespace Ceres.Chess.EncodedPositions
 
 
     /// <summary>
+    /// Returns the Kullback-Leibler divergence of this policy from another policy.
+    /// </summary>
+    /// <param name="vOld"></param>
+    /// <returns></returns>
+    public readonly float KLDWith(in CompressedPolicyVector vOld)
+    {
+      float[] decoded = this.DecodedNoValidate;
+      float[] otherDecoded = vOld.DecodedNoValidate;
+
+      float sum = 0;
+      for (int i = 0; i < EncodedPolicyVector.POLICY_VECTOR_LENGTH; i++)
+      {
+        // Ensure that we avoid division by zero or taking the log of zero
+        if (decoded[i] > 0 && otherDecoded[i] > 0)
+        {
+          sum += decoded[i] * (float)Math.Log(decoded[i] / otherDecoded[i]);
+        }
+      }
+      return sum;
+    }
+
+
+    /// <summary>
     /// Returns a new policy vector with a specified temperature applied.
     /// </summary>
     /// <param name="temperature"></param>
