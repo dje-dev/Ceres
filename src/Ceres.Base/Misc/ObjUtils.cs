@@ -138,7 +138,22 @@ namespace Ceres.Base.Misc
       Console.WriteLine("\r\nCOMPARE OBJECTS " + typeof(T).Name);
       foreach (FieldInfo field in typeof(T).GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
       {
-        int bytes = Marshal.SizeOf(field.FieldType);
+        int bytes;
+
+        if (field.FieldType.IsEnum)
+        {
+          // Get the underlying type of the enum
+          Type underlyingType = Enum.GetUnderlyingType(field.FieldType);
+
+          // Get the size of the underlying type
+          bytes = Marshal.SizeOf(underlyingType);
+        }
+        else
+        {
+          // Get the size of the field type
+          bytes = Marshal.SizeOf(field.FieldType);
+        }
+
         sumBytes += bytes;
         string fieldName = field.Name;
         object value1 = field.GetValue(struct1);
