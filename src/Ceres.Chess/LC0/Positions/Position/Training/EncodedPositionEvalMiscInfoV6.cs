@@ -330,7 +330,7 @@ namespace Ceres.Chess.EncodedPositions
                                          float playedQ, float playedD, float playedM, 
                                          float originalQ, float originalD, float originalM, 
                                          int numVisits, short playedIndex, short bestIndex, 
-                                         float unused1, float unused2)
+                                         float kldPolicy, float unused2)
     {
       InvarianceInfo = invarianceInfo;
       DepResult = depResult;
@@ -352,7 +352,7 @@ namespace Ceres.Chess.EncodedPositions
       NumVisits = numVisits;
       PlayedIndex = playedIndex;
       BestIndex = bestIndex;
-      Unused2 = unused1;
+      KLDPolicyRawOrSentinel = kldPolicy;
       Unused2 = unused2;
     }
 
