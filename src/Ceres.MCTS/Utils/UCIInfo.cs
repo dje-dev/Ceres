@@ -14,6 +14,7 @@
 #region Using directives
 
 using System;
+
 using Ceres.Chess;
 using Ceres.Chess.LC0.Positions;
 using Ceres.Chess.MoveGen;
@@ -197,7 +198,8 @@ namespace Ceres.MCTS.Utils
       string scoreStr;
       if (result == GameResult.Checkmate)
       {
-        scoreStr = scoreAsQ ? "1.0" : "9999";
+        string signChar = searchRootNode.Q > 0 ? "" : "-";
+        scoreStr = signChar + (scoreAsQ ? "1.0" : "9999");
       }
       else if (result == GameResult.Draw)
       {
