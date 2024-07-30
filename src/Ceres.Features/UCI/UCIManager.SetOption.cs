@@ -425,10 +425,10 @@ option name UCI_ShowWDL type check default false
 option name SyzygyPath type string default
 option name CPUCT type string default {new ParamsSelect().CPUCT}
 option name CPUCTAtRoot type string default {new ParamsSelect().CPUCTAtRoot}
-option name CPuctBase type string default {new ParamsSelect().CPUCTBase}
-option name CPuctBaseAtRoot type string default {new ParamsSelect().CPUCTBaseAtRoot}
-option name CPuctFactor type string default {new ParamsSelect().CPUCTFactor}
-option name CPuctFactorAtRoot type string default {new ParamsSelect().CPUCTFactorAtRoot}
+option name CPUCTBase type string default {new ParamsSelect().CPUCTBase}
+option name CPUCTBaseAtRoot type string default {new ParamsSelect().CPUCTBaseAtRoot}
+option name CPUCTFactor type string default {new ParamsSelect().CPUCTFactor}
+option name CPUCTFactorAtRoot type string default {new ParamsSelect().CPUCTFactorAtRoot}
 option name PolicyTemperature type string default {new ParamsSelect().PolicySoftmax}
 option name FPU type string default {new ParamsSelect().FPUValue}
 option name FPUAtRoot type string default {new ParamsSelect().FPUValueAtRoot}
