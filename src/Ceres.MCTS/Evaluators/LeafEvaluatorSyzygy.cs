@@ -127,10 +127,7 @@ namespace Ceres.MCTS.Evaluators
           throw new Exception("Internal error: unknown Syzygy tablebase result code");
       }
 
-      if (CeresEnvironment.MONITORING_METRICS)
-      {
-        NumHits.Add(1, pos.PiecesShortHash);
-      }
+      NumHits.Add(1, pos.PiecesShortHash);
 
       return result;
     }
