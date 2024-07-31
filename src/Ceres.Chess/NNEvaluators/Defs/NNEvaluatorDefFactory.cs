@@ -13,6 +13,8 @@
 
 #region Using directives
 
+using System;
+
 using Ceres.Chess.NNEvaluators.Specifications;
 using Chess.Ceres.NNEvaluators;
 
@@ -38,6 +40,9 @@ namespace Ceres.Chess.NNEvaluators.Defs
                                                    string deviceSpecification, 
                                                    object evaluatorOptions = null)
     {
+      ArgumentNullException.ThrowIfNullOrEmpty(netSpecification);
+      ArgumentNullException.ThrowIfNullOrEmpty(deviceSpecification);
+
       NNNetSpecificationString netObj = new NNNetSpecificationString(netSpecification);
       NNDevicesSpecificationString deviceObj = new NNDevicesSpecificationString(deviceSpecification);
       
