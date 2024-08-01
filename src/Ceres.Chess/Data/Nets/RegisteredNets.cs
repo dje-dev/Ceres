@@ -68,9 +68,14 @@ namespace Ceres.Chess.Data.Nets
         {"BT4_4230k", SimpleLC0Net("BT4-1024x15x32h-swa-4230000.pb.gz")},
         {"BT4_5000k", SimpleLC0Net("BT4-1024x15x32h-swa-5000000.pb.gz")},
 
+        {"BT4_600k_ONNX", ONNXNet16LC0("BT4-1024x15x32h-swa-600000.pb.gz_fp16", false) },
+        {"BT4_1000k_ONNX", ONNXNet16LC0("BT4-1024x15x32h-swa-1000000.pb.gz_fp16", false) },
+        {"BT4_3190k_ONNX", ONNXNet16LC0("BT4-1024x15x32h-swa-3190000.pb.gz_fp16", false) },
+        {"BT4_5000k_ONNX", ONNXNet16LC0("BT4-1024x15x32h-swa-5000000.pb.gz_fp16", false) },
+
         {"T1_DISTILL_256_10", ONNXNet32LC0("t1-256x10-distilled-swa-2432500")},
         {"T1_DISTILL_256_10_TRT", ONNXNet32LC0("t1-256x10-distilled-swa-2432500", true)},
-        {"T1_DISTILL_256_10_FP16", ONNXNet16LC0("t1-256x10-distilled-swa-2432500_fp16")},
+        {"T1_DISTILL_256_10_FP16", ONNXNet16LC0("t1-256x10-distilled-swa-2432500_fp16#16")},
         {"T1_DISTILL_256_10_FP16_TRT", ONNXNet16LC0("t1-256x10-distilled-swa-2432500_fp16", true)},
 
         {"T1_256_RL_NATIVE", SimpleLC0Net("t1-256x10-rl-base-swa-2900000.pb.gz") },
@@ -102,12 +107,14 @@ namespace Ceres.Chess.Data.Nets
         {"T3_DISTILL_512_15_FP16_TRT", ONNXNet16LC0("t3-512x15x16h-distill-swa-2175000.pb.gz_fp16#16", true)},
         {"T3_DISTILL_512_15_NATIVE", SimpleLC0Net("t3-512x15x16h-distill-swa-2175000.pb.gz#16") },
 
+      {"kovax", ONNXNet16LC0("t3-512x15x16h-rpe-distill-swa-4677500-fixed-fp16#16") },
 
       {"T4_3355000_ONNX", ONNXNet16LC0("t4-512x15b-rpe_3355000_fp16", false) },
       {"T4_3355000", SimpleLC0Net("t4-512x15b-rpe_3355000.pb") },
 
       {"BT4-self-quantize4-swa-2092500-fp8-1", ONNXNet16LC0("BT4-self-quantize4-swa-2092500-fp8-1", true) },
       {"BT4-self-quantize4-swa-2092500-fp8-2", ONNXNet16LC0("BT4-self-quantize4-swa-2092500-fp8-2", true) },
+      {"BT4-self-quantize4-swa-2092500-fp8-3", ONNXNet16LC0("BT4-self-quantize4-swa-2092500-fp8-3", true) },
       {"BT4-self-quantize4-swa-2092500", ONNXNet16LC0("BT4-self-quantize4-swa-2092500", true) },
 
 
