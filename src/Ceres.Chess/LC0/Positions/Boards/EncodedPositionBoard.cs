@@ -13,14 +13,14 @@
 
 #region Using directives
 
-using Ceres.Base;
+using System;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+
 using Ceres.Base.DataTypes;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
-using System;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 
 #endregion
 
@@ -530,15 +530,14 @@ namespace Ceres.Chess.LC0.Boards
     }
 
 
+    /// <summary>
+    /// Applies an in-place mirror (bit reverse) on all piece planes.
+    /// </summary>
     public readonly unsafe void MirrorPlanesInPlace()
     {
       fixed (void* bitmapsR = &this.OurPawns)
       {
-        ulong* bitmaps = (ulong*)bitmapsR;
-        for (int i = 0; i < NUM_PIECE_PLANES_PER_BOARD; i++)
-        {
-          bitmaps[i] = BitVector64.Mirror(bitmaps[i]);
-        }
+        BitVector64.MirrorSpan(new Span<ulong>(bitmapsR, NUM_PIECE_PLANES_PER_BOARD));
       }
     }
 

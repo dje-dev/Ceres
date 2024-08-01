@@ -249,19 +249,65 @@ namespace Ceres.Base.DataTypes // TO DO: get rid of this in favor of BitVector64
 
 
 
+    // Define bit masks as static readonly fields to avoid recreating them for each function call
+    private static readonly ulong MirrorMask1 = 0xF0F0F0F0F0F0F0F0UL;
+    private static readonly ulong MirrorMask2 = 0x0F0F0F0F0F0F0F0FUL;
+    private static readonly ulong MirrorMask3 = 0xCCCCCCCCCCCCCCCCUL;
+    private static readonly ulong MirrorMask4 = 0x3333333333333333UL;
+    private static readonly ulong MirrorMask5 = 0xAAAAAAAAAAAAAAAAUL;
+    private static readonly ulong MirrorMask6 = 0x5555555555555555UL;
+
+
     /// <summary>
     /// Fast 64 bit reversal (2x faster than table lookup).
-    /// 
     /// With thanks to "steveu" (https://www.dsprelated.com/showthread/comp.dsp/131817-1.php)
     /// </summary>
-    /// <param name="x"></param>
-    /// <returns></returns>
-    public static UInt64 Mirror(UInt64 x)
+    /// <param name="x">The 64-bit unsigned integer to reverse.</param>
+    /// <returns>The bit-reversed version of the input.</returns>
+    public static ulong Mirror(ulong x)
     {
-      x = ((x & 0xF0F0F0F0F0F0F0F0UL) >> 4) | ((x & 0x0F0F0F0F0F0F0F0FUL) << 4);
-      x = ((x & 0xCCCCCCCCCCCCCCCCUL) >> 2) | ((x & 0x3333333333333333UL) << 2);
-      return ((x & 0xAAAAAAAAAAAAAAAAUL) >> 1) | ((x &  0x5555555555555555UL) << 1);
+      x = ((x & MirrorMask1) >> 4) | ((x & MirrorMask2) << 4);
+      x = ((x & MirrorMask3) >> 2) | ((x & MirrorMask4) << 2);
+      return ((x & MirrorMask5) >> 1) | ((x & MirrorMask6) << 1);
     }
+
+
+    // Vectorized masks
+    private static readonly Vector<ulong> VectorMirrorMask1 = new(MirrorMask1);
+    private static readonly Vector<ulong> VectorMirrorMask2 = new(MirrorMask2);
+    private static readonly Vector<ulong> VectorMirrorMask3 = new(MirrorMask3);
+    private static readonly Vector<ulong> VectorMirrorMask4 = new(MirrorMask4);
+    private static readonly Vector<ulong> VectorMirrorMask5 = new(MirrorMask5);
+    private static readonly Vector<ulong> VectorMirrorMask6 = new(MirrorMask6);
+
+
+    /// <summary>
+    /// Reverses a Span of Uint64 (vectorized).
+    /// </summary>
+    /// <param name="data"></param>
+    public static void MirrorSpan(Span<ulong> data)
+    {
+      int vectorSize = Vector<ulong>.Count;
+
+      int i = 0;
+      for (; i <= data.Length - vectorSize; i += vectorSize)
+      {
+        Vector<ulong> vec = new(data.Slice(i, vectorSize));
+
+        // Bit reversal logic (vectorized)
+        vec = (Vector.BitwiseAnd(vec, VectorMirrorMask1) >> 4) | (Vector.BitwiseAnd(vec, VectorMirrorMask2) << 4);
+        vec = (Vector.BitwiseAnd(vec, VectorMirrorMask3) >> 2) | (Vector.BitwiseAnd(vec, VectorMirrorMask4) << 2);
+        vec = (Vector.BitwiseAnd(vec, VectorMirrorMask5) >> 1) | (Vector.BitwiseAnd(vec, VectorMirrorMask6) << 1);
+
+        vec.CopyTo(data.Slice(i, vectorSize));
+      }
+
+      for (; i < data.Length; i++)
+      {
+        data[i] = Mirror(data[i]);
+      }
+    }
+
 
   }
 
