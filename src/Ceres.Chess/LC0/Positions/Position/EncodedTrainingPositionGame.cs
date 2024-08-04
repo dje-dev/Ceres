@@ -144,7 +144,7 @@ namespace Ceres.Chess.EncodedPositions
     /// <summary>
     /// Returns EncodedTrainingPosition at specified index.
     /// </summary>
-    public EncodedTrainingPosition TrainingPosition(int index)
+    public EncodedTrainingPosition TrainingPositionAtIndex(int index)
     {
       return new EncodedTrainingPosition(Version, InputFormat, PositionAtIndex(index), PolicyAtIndex(index));
     }
@@ -156,7 +156,7 @@ namespace Ceres.Chess.EncodedPositions
     /// <param name="index"></param>
     public void ValidateIntegrityAtIndex(int index)
     {
-      TrainingPosition(index).ValidateIntegrity("ValidatePositionAtIndex");
+      TrainingPositionAtIndex(index).ValidateIntegrity("ValidatePositionAtIndex");
     }
 
     #endregion

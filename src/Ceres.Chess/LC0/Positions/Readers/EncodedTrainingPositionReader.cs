@@ -65,7 +65,7 @@ namespace Ceres.Chess.EncodedPositions
       {
         for (int i = 0; i < game.NumPositions; i++)
         {
-          yield return game.TrainingPosition(i);
+          yield return game.TrainingPositionAtIndex(i);
         }
       }
     }

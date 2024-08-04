@@ -323,8 +323,10 @@ namespace Ceres.Chess.EncodedPositions
     /// </summary>
     public const float FILL_IN_UNCERTAINTY = 0.15f;
 
-    public EncodedPositionEvalMiscInfoV6(byte invarianceInfo, byte depResult, float rootQ, float bestQ, float rootD, 
-                                         float bestD, float rootM, float bestM, 
+    public EncodedPositionEvalMiscInfoV6(byte invarianceInfo, byte depResult, 
+                                         float rootQ, float bestQ, 
+                                         float rootD, float bestD, 
+                                         float rootM, float bestM, 
                                          float pliesLeft, 
                                          float resultQ, float resultD,
                                          float playedQ, float playedD, float playedM, 
