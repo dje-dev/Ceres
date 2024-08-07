@@ -46,7 +46,8 @@ namespace Ceres.Chess.NNEvaluators.Defs
       NNNetSpecificationString netObj = new NNNetSpecificationString(netSpecification);
       NNDevicesSpecificationString deviceObj = new NNDevicesSpecificationString(deviceSpecification);
       
-      NNEvaluatorDef ret = new NNEvaluatorDef(netObj.ComboType, netObj.NetDefs, deviceObj.ComboType, deviceObj.Devices, deviceObj.SharingName);
+      NNEvaluatorDef ret = new NNEvaluatorDef(netObj.ComboType, netObj.NetDefs, 
+                                              deviceObj.ComboType, deviceObj.Devices, deviceObj.SharingName);
       ret.OptionsString = netObj.OptionsString;
       ret.Description = netSpecification + " " + deviceSpecification;
       ret.Options = evaluatorOptions;
@@ -54,21 +55,23 @@ namespace Ceres.Chess.NNEvaluators.Defs
       return ret;
     }
 
-    public static NNEvaluatorDef SingleNet(string netID, NNEvaluatorType evaluatorType, string sharedName, int[] gpuIDs)
+
+    public static NNEvaluatorDef SingleNet(string netID, NNEvaluatorType evaluatorType, string sharedName, int[] gpuIDs,
+                                           string overrideEngineType)
     {
-      return SingleNet(netID, evaluatorType, NNEvaluatorPrecision.FP16, sharedName, gpuIDs);
+      return SingleNet(netID, evaluatorType, NNEvaluatorPrecision.FP16, sharedName, overrideEngineType, gpuIDs);
     }
 
 
     public static NNEvaluatorDef SingleNet(string netID, NNEvaluatorType evaluatorType,
                                            NNEvaluatorPrecision precision,
-                                           string sharedName,
+                                           string sharedName, string overrideEngineType,
                                            params int[] gpuIDs)
     {
       NNEvaluatorDeviceDef[] devices = new NNEvaluatorDeviceDef[gpuIDs.Length];
       for (int i = 0; i < gpuIDs.Length; i++)
       {
-        devices[i] = new NNEvaluatorDeviceDef(NNDeviceType.GPU, gpuIDs[i]);
+        devices[i] = new NNEvaluatorDeviceDef(NNDeviceType.GPU, gpuIDs[i], overrideEngineType: overrideEngineType);
       }
 
       NNEvaluatorDeviceComboType type = gpuIDs.Length == 1 ? NNEvaluatorDeviceComboType.Single 
@@ -76,15 +79,17 @@ namespace Ceres.Chess.NNEvaluators.Defs
       return new NNEvaluatorDef(new NNEvaluatorNetDef(netID, evaluatorType, precision), type, sharedName, devices);
     }
 
+
     public static NNEvaluatorDef SingleNet(string netID, NNEvaluatorType evaluatorType, string sharedName, 
-                                           params (int GPUID, float Fraction)[] gpuIDAndFractions)
+                                           string overrideEngineType, params (int GPUID, float Fraction)[] gpuIDAndFractions)
     {
       NNEvaluatorNetDef nd = new NNEvaluatorNetDef(netID, evaluatorType);
 
       (NNEvaluatorDeviceDef device, float fraction)[] deviceWithFractions = new (NNEvaluatorDeviceDef, float)[gpuIDAndFractions.Length];
       for (int i = 0; i < gpuIDAndFractions.Length; i++)
+      {
         deviceWithFractions[i] = (new NNEvaluatorDeviceDef(NNDeviceType.GPU, gpuIDAndFractions[i].GPUID), gpuIDAndFractions[i].Fraction);
-
+      }
       return new NNEvaluatorDef(nd, NNEvaluatorDeviceComboType.Split, sharedName, deviceWithFractions);
     }
 

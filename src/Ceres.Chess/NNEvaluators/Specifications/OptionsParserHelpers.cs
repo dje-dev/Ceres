@@ -296,7 +296,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
       return (NN_EVAL_TYPE, thisNetID);
     }
 
-    internal static (List<(string deviceID, int? maxBatchSize, int? optimalBatchSize, string batchSizesFileName, float weight)>, string overrideEngine)
+    internal static (List<(string deviceID, int? maxBatchSize, int? optimalBatchSize, string batchSizesFileName, float weight)>, string overrideEngineType)
       ParseDeviceOptions(string deviceSpecString)
     {
       /// <summary>

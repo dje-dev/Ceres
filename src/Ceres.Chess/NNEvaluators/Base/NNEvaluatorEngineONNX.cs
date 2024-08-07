@@ -184,7 +184,7 @@ namespace Chess.Ceres.NNEvaluators
     /// <param name="gpuID"></param>
     /// <param name="useTRT"></param>
     /// <param name="type"></param>
-    /// <param name="batchSize"></param>
+    /// <param name="maxBatchSize"></param>
     /// <param name="precision"></param>
     /// <param name="isWDL"></param>
     /// <param name="hasM"></param>
@@ -204,7 +204,7 @@ namespace Chess.Ceres.NNEvaluators
     /// <param name="hasState"></param>
     public NNEvaluatorEngineONNX(string engineID, string onnxModelFileName, byte[] onnxModelBytes,
                                  NNDeviceType deviceType, int gpuID, bool useTRT,
-                                 ONNXRuntimeExecutor.NetTypeEnum type, int batchSize,
+                                 ONNXRuntimeExecutor.NetTypeEnum type, int maxBatchSize,
                                  NNEvaluatorPrecision precision,
                                  bool isWDL, bool hasM, bool hasUncertaintyV, bool hasUncertaintyP, bool hasAction,
                                  string outputValue, string outputWDL, string outputPolicy, string outputMLH,
@@ -216,7 +216,7 @@ namespace Chess.Ceres.NNEvaluators
     {
       EngineNetworkID = engineID;
       ONNXFileName = onnxModelFileName;
-      BatchSize = batchSize;
+      BatchSize = maxBatchSize;
       Precision = precision;
       this.isWDL = isWDL;
       this.hasValueSecondary = hasValueSecondary;
@@ -242,7 +242,7 @@ namespace Chess.Ceres.NNEvaluators
         : ["/input/planes"];
 
       Executor = new ONNXRuntimeExecutor(engineID, onnxModelFileName, onnxModelBytes, inputNames,
-                                         batchSize, type, precision, deviceType, gpuID, useTRT, enableProfiling);
+                                         maxBatchSize, type, precision, deviceType, gpuID, useTRT, enableProfiling);
     }
 
 

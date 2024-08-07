@@ -119,7 +119,8 @@ namespace Ceres.Chess.NNEvaluators.Specifications
           predefinedPartitions = parsedBatchFile.predefinedPartitions;
         }
         Devices.Add((new NNEvaluatorDeviceDef(NNDeviceType.GPU, int.Parse(device.deviceID), false,
-                                              maxBatchSize, optimalBatchSize, predefinedPartitions), device.weight));
+                                              maxBatchSize, optimalBatchSize, deviceSpec.overrideEngineType,
+                                              predefinedPartitions), device.weight));
       }
 
       ComboType = Devices.Count == 1 ? NNEvaluatorDeviceComboType.Single

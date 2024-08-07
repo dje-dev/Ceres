@@ -28,6 +28,7 @@ using Ceres.Chess.NNEvaluators.CUDA;
 using Ceres.Chess.LC0.NNFiles;
 using Ceres.Chess.LC0NetInference;
 using Ceres.Chess.LC0.WeightsProtobuf;
+using Ceres.Chess.LC0.Batches;
 
 
 #endregion
@@ -234,7 +235,48 @@ namespace Ceres.Chess.NNEvaluators
           throw new NotImplementedException();
 
         case NNEvaluatorType.Ceres:
-          throw new NotImplementedException();
+          if (deviceDef.OverrideEngineType == null)
+          {
+            throw new NotImplementedException("Missing required OverrideEngineType");
+          }
+
+          if (deviceDef.OverrideEngineType.ToUpper() == "TORCHSCRIPT")
+          {
+            throw new NotImplementedException("Torchscript executor not currently supported.");
+          }
+
+          const int MAX_BATCH_SIZE = 1024;
+
+          // TODO: Derive these values from NNEvaluatorOptions in the definition object
+          const bool ENABLE_PROFILING = false;
+          const bool USE_HISTORY = true;
+          const bool HAS_UNCERTAINTY_V = true;
+          const bool HAS_UNCERTAINTY_P = true;
+
+          const bool USE_STATE = false;
+          const bool HAS_ACTION = false;
+
+          bool useTensorRT = deviceDef.OverrideEngineType != null &&  deviceDef.OverrideEngineType.ToUpper().StartsWith("TENSORRT");
+          bool useFP16 = deviceDef.OverrideEngineType != null && deviceDef.OverrideEngineType.ToUpper().Contains("16");
+
+          string onnxFileName = null;
+
+          NNEvaluatorOptions evaluatorOptions = new();
+
+          NNEvaluatorEngineONNX onnxEngine = new(netDef.NetworkID, onnxFileName, null, 
+                                                 NNDeviceType.GPU, deviceDef.DeviceIndex, useTensorRT,
+                                                 ONNXRuntimeExecutor.NetTypeEnum.TPG, MAX_BATCH_SIZE,
+                                                 useFP16 ? NNEvaluatorPrecision.FP16 : NNEvaluatorPrecision.FP32,
+                                                 true, true, HAS_UNCERTAINTY_V, HAS_UNCERTAINTY_P, HAS_ACTION, 
+                                                 "policy", "value", "mlh", "unc", true,
+                                                 ENABLE_PROFILING, false, USE_HISTORY, evaluatorOptions,
+                                                 true, USE_STATE);
+
+          EncodedPositionBatchFlat.RETAIN_POSITION_INTERNALS = true; // ** TODO: remove/rework
+
+          throw new NotImplementedException(); // implement below
+//        onnxEngine.ConverterToFlatFromTPG = (options, o, f1) => TPGConvertersToFlat.ConvertToFlatTPGFromTPG(options, o, f1);
+//        onnxEngine.ConverterToFlat = (options, o, history, squares, legalMoveIndices) => TPGConvertersToFlat.ConvertToFlatTPG(options, o, history, squares, legalMoveIndices);
 
 
         case NNEvaluatorType.LC0:
