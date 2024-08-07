@@ -20,15 +20,21 @@ using System.Runtime.InteropServices;
 
 using Microsoft.ML.OnnxRuntime;
 
+using Ceres.Base.Benchmarking;
+using Ceres.Base.DataTypes;
+using Ceres.Base.DataType;
+using Ceres.Base.Misc.ONNX;
+
 using Ceres.Chess.LC0NetInference;
 using Ceres.Chess.NNEvaluators;
 using Ceres.Chess.NetEvaluation.Batch;
 using Ceres.Chess.LC0.Batches;
-using Ceres.Base.Benchmarking;
-using Ceres.Base.DataTypes;
 using Ceres.Chess.NNEvaluators.Defs;
-using Ceres.Base.DataType;
-using Ceres.Base.Misc.ONNX;
+using Ceres.Chess.MoveGen;
+using Ceres.Chess.MoveGen.Converters;
+using Ceres.Chess;
+using Ceres.Chess.EncodedPositions.Basic;
+using System.Threading;
 
 #endregion
 
@@ -154,11 +160,6 @@ namespace Chess.Ceres.NNEvaluators
     public readonly bool Scale50MoveCounter;
 
     /// <summary>
-    /// If MoveRecord should be initialized.
-    /// </summary>
-    public readonly bool MovesEnabled;
-
-    /// <summary>
     /// If move history should be sent to ONNX network.
     /// </summary>
     public readonly bool UseHistory;
@@ -169,24 +170,38 @@ namespace Chess.Ceres.NNEvaluators
     public override EvaluatorInfo Info => ONNXFileName == null ? null : new EvaluatorInfo(new ONNXNet(ONNXFileName).NumParams);
 
 
-    #region Statics
-
-    // TODO: clean up this lookaside buffering
-    static string lastONNXFileName;
-    static long lastONNXBytesHash;
-    static int lastBatchSize;
-    static NNDeviceType lastDeviceType;
-    static bool lastIsWDL;
-    static bool lastUseTRT;
-    static NNEvaluatorPrecision lastPrecision;
-    static ONNXRuntimeExecutor lastExecutor;
-    static ONNXRuntimeExecutor.NetTypeEnum lastType;
-
-    #endregion
-
 
     public const int TPG_MODE_TOTAL_BYTES_ASSUMED  = 4060 + 782; // see DoEvaluateIntoBuffers
 
+
+    /// <summary>
+    /// Constructor.
+    /// </summary>
+    /// <param name="engineID"></param>
+    /// <param name="onnxModelFileName"></param>
+    /// <param name="onnxModelBytes"></param>
+    /// <param name="deviceType"></param>
+    /// <param name="gpuID"></param>
+    /// <param name="useTRT"></param>
+    /// <param name="type"></param>
+    /// <param name="batchSize"></param>
+    /// <param name="precision"></param>
+    /// <param name="isWDL"></param>
+    /// <param name="hasM"></param>
+    /// <param name="hasUncertaintyV"></param>
+    /// <param name="hasUncertaintyP"></param>
+    /// <param name="hasAction"></param>
+    /// <param name="outputValue"></param>
+    /// <param name="outputWDL"></param>
+    /// <param name="outputPolicy"></param>
+    /// <param name="outputMLH"></param>
+    /// <param name="valueHeadLogistic"></param>
+    /// <param name="scale50MoveCounter"></param>
+    /// <param name="enableProfiling"></param>
+    /// <param name="useHistory"></param>
+    /// <param name="options"></param>
+    /// <param name="hasValueSecondary"></param>
+    /// <param name="hasState"></param>
     public NNEvaluatorEngineONNX(string engineID, string onnxModelFileName, byte[] onnxModelBytes,
                                  NNDeviceType deviceType, int gpuID, bool useTRT,
                                  ONNXRuntimeExecutor.NetTypeEnum type, int batchSize,
@@ -194,7 +209,7 @@ namespace Chess.Ceres.NNEvaluators
                                  bool isWDL, bool hasM, bool hasUncertaintyV, bool hasUncertaintyP, bool hasAction,
                                  string outputValue, string outputWDL, string outputPolicy, string outputMLH,
                                  bool valueHeadLogistic, bool scale50MoveCounter,
-                                 bool movesEnabled = false, bool enableProfiling = false,
+                                 bool enableProfiling = false,
                                  bool useHistory = true, NNEvaluatorOptions options = null,
                                  bool hasValueSecondary = false,
                                  bool hasState = false)
@@ -217,39 +232,17 @@ namespace Chess.Ceres.NNEvaluators
       OutputMLH = outputMLH;
       ValueHeadLogistic = valueHeadLogistic;
       Scale50MoveCounter = scale50MoveCounter;
-      MovesEnabled = movesEnabled;
       UseHistory = useHistory;
       Options = options ?? new NNEvaluatorOptions();
 
-      bool filesMatch = lastONNXFileName != null && lastONNXFileName == onnxModelFileName;
-      bool bytesMatch = onnxModelBytes != null && ArrayUtils.ByteArrayStableHash(onnxModelBytes) == lastONNXBytesHash;
+      Console.WriteLine("Starting ONNX runtime against " + onnxModelFileName + " from " + onnxModelFileName + " with " + deviceType + " " + gpuID);
 
-      const bool TRY_REUSE = false; // TODO: remove this completely, it is unsafe (?)
-      if (TRY_REUSE && (filesMatch || bytesMatch) && lastBatchSize == batchSize && precision == lastPrecision
-        && lastIsWDL == isWDL && lastType == type && deviceType == lastDeviceType && lastUseTRT == useTRT)
-      {
-        Executor = lastExecutor;
-      }
-      else
-      {
-        Console.WriteLine("Starting ONNX runtime against " + onnxModelFileName + " from " + onnxModelFileName + " with " + deviceType + " " + gpuID);
+      string[] inputNames = type == ONNXRuntimeExecutor.NetTypeEnum.TPG
+        ? ["squares", "prior_state.1"]
+        : ["/input/planes"];
 
-        string[] inputNames = type == ONNXRuntimeExecutor.NetTypeEnum.TPG
-          ? ["squares", "prior_state.1"]
-          : ["/input/planes"];
-
-        Executor = new ONNXRuntimeExecutor(engineID, onnxModelFileName, onnxModelBytes, inputNames,
-                                           batchSize, type, precision, deviceType, gpuID, useTRT, enableProfiling);
-        lastONNXFileName = onnxModelFileName;
-        lastONNXBytesHash = onnxModelBytes == null ? 0 : ArrayUtils.ByteArrayStableHash(onnxModelBytes);
-        lastDeviceType = deviceType;
-        lastBatchSize = batchSize;
-        lastIsWDL = isWDL;
-        lastType = type;
-        lastPrecision = precision;
-        lastUseTRT = useTRT;
-        lastExecutor = Executor;
-      }
+      Executor = new ONNXRuntimeExecutor(engineID, onnxModelFileName, onnxModelBytes, inputNames,
+                                         batchSize, type, precision, deviceType, gpuID, useTRT, enableProfiling);
     }
 
 
@@ -341,65 +334,21 @@ namespace Chess.Ceres.NNEvaluators
         Half[] flatValuesAttention = ArrayPool<Half>.Shared.Rent(inputSizeAttention);
         Memory<Half> flatValuesAttentionM = flatValuesAttention.AsMemory().Slice(0, inputSizeAttention);
 
-        short[] legalMoveIndices = new short[batch.NumPos * MAX_MOVES];
+        short[] legalMoveIndices = null; // not needed, batch already contains moves
         ConverterToFlat(Options, batch, UseHistory, flatValuesAttention, legalMoveIndices);
 
-#if NOT
-        bool xPosMoveIsLegal(int posNum, int nnIndexNum)
-        {
-          if (batch.Moves.IsEmpty)
-          {
-            return true; // unable to disqualify
-          }
-          else
-          {
-            bool shouldFlip = batch.Positions.Span[posNum].SideToMove == SideType.Black;
-            EncodedMove em = EncodedMove.FromNeuralNetIndex(nnIndexNum);
-            
-            ConverterMGMoveEncodedMove.FromTo mm = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMoveFromTo(em, shouldFlip);
-            foreach (MGMove legalMove in batch.Moves.Span[posNum]) // TO DO: improve efficiency
-            {
-              if (legalMove.FromSquare.SquareIndexStartH1 == mm.From 
-               && legalMove.ToSquare.SquareIndexStartH1 == mm.To)
-              {
-                return true;
-              }
-            }
-            return false;
-          }         
-        }
-        bool PosMoveIsLegal(int posNum, int nnIndexNum)
-        {
-          return true;
-
-          // TODO: The code below doesn't quite work, fix someday
-          //       though masking may be unnecessary.
-          var ret = xPosMoveIsLegal(posNum, nnIndexNum);
-          //Console.WriteLine(ret);
-          return ret;
-        }
-#endif
-
-        Func<int, int, bool> posMoveIsLegal = null; // PosMoveIsLegal
         PositionEvaluationBatch ret = DoEvaluateBatch(batch, flatValuesAttentionM, batch.States, batch.NumPos, 
-                                                      retrieveSupplementalResults, posMoveIsLegal, 1);
+                                                      retrieveSupplementalResults, null, 1);
         Debug.Assert(!retrieveSupplementalResults);
         return ret;
       }
       else
       {
-        Func<int, int, bool> posMoveIsLegal = null; // PosMoveIsLegal
-        bool PosMoveIsLegal(int posNum, int nnIndexNum)
-        {
-          return true; // ** TO DO? Maybe unnecessary?
-          //return tpgRecordBuffer[(numBatchesDone * SUBBATCH_SIZE) + posNum].Policy[nnIndexNum] > 0;
-        }
-
-        int bufferLength = 112 * batch.NumPos * 64;
+        int bufferLength = EncodedPositionBatchFlat.TOTAL_NUM_PLANES_ALL_HISTORIES * batch.NumPos * 64;
         Half[] flatValues = ArrayPool<Half>.Shared.Rent(bufferLength);
 
         batch.ValuesFlatFromPlanes(flatValues, false, Scale50MoveCounter);
-        PositionEvaluationBatch ret = DoEvaluateBatch(batch, flatValues, null, batch.NumPos, retrieveSupplementalResults, posMoveIsLegal, 1);
+        PositionEvaluationBatch ret = DoEvaluateBatch(batch, flatValues, null, batch.NumPos, retrieveSupplementalResults, null, 1);
 
         ArrayPool<Half>.Shared.Return(flatValues);
         return ret;
@@ -453,106 +402,17 @@ namespace Chess.Ceres.NNEvaluators
       {
         lock (Executor)
         {
-          result = Executor.Execute(IsWDL, HasState, flatValuesPrimary, flatValuesState, numPos, alreadyConvertedToLZ0: true, tpgDivisor:tpgDivisor);
+          result = Executor.Execute(IsWDL, HasState, flatValuesPrimary, flatValuesState, numPos,
+                                    alreadyConvertedToLZ0: true, tpgDivisor:tpgDivisor);
 
           // Apply move masking
           if (posMoveIsLegal != null) 
           {
-            for (int i = 0; i < numPos; i++)
-            {
-              for (int j = 0; j < 1858; j++)
-              {
-                if (!posMoveIsLegal(i,j))
-                {
-                  throw new NotImplementedException(); // remediate next line
-                  //result.PolicyVectors[i * 1858 + j] = -100f;
-                }
-              }
-            }
-          }
-#if NO_LONGER_NEEDED_NOT_USING_96_FORMAT
-          if (Executor.NetType == ONNXRuntimeExecutor.NetTypeEnum.TPG)
-          {
-            ConvertTPGPolicyToExpanded(batch, result);
-          }
-#endif
-        }
-      }
-
-#if DONE_BELOW_IN_NEXT_LINE
-      // Set probability of illegal moves to 0.
-      HashSet<int> legalIndices = new HashSet<int>(96);
-      for (int pos=0; pos<numPos;pos++)
-      {
-        legalIndices.Clear();
-        for (int i = 0; i <batch.Moves[pos].NumMovesUsed;i++)
-        {
-          EncodedMove encodedMove  = ConverterMGMoveEncodedMove.MGChessMoveToEncodedMove(batch.Moves[pos].MovesArray[i]);
-          legalIndices.Add(encodedMove.IndexNeuralNet);
-        }
-
-        for (int i=0;i<1858;i++)
-        {
-          if (!legalIndices.Contains(i))
-          {
-            result.PolicyVectors[pos][i] = -1E10f;
+            throw new NotImplementedException(); // currently this is handled by the PositionEvaluationBatch constructor below intead
           }
         }
       }
-#endif
-#if NOT
-      if (result.ActionLogisticVectors != null)
-      {
-        for (int i = 0; i < numPos; i++)
-        {
-          int offset = (1858 * 3 * i) + policyIndex * 3;
-          Span<FP16> actionsSpan = ActionProbabilities.Span;
 
-          float wLogit = actionsSpan[offset];
-          float dLogit = actionsSpan[offset + 1];
-          float lLogit = actionsSpan[offset + 2];
-
-          return (actionsSpan[offset], actionsSpan[offset + 1], actionsSpan[offset + 2]);
-
-          float max = MathF.Max(wLogit, MathF.Max(dLogit, lLogit));
-
-          float w = MathF.Exp(wLogit - max);
-          float d = MathF.Exp(dLogit - max);
-          float l = MathF.Exp(lLogit - max);
-
-          float mult = 1.0f / (w + d + l);
-
-          return (w * mult, d * mult, l * mult);
-        }
-      }
-#endif
-
-#if NOT
-      Span<FP16> valueEvals, Span<FP16> valueEvals2, 
-      Memory<FP16> policyProbs, Memory<CompressedActionVector> actionLogits,
-      FP16[] m, FP16[] uncertaintyV, 
-#endif
-
-#if DEBUG
-      if (ValueHeadLogistic)
-      {
-        float sum = IsWDL ? ((float)result.ValuesRaw.Span[0] + (float)result.ValuesRaw.Span[1] + (float)result.ValuesRaw.Span[2])
-                          : (float)result.ValuesRaw.Span[0];
-        if (Math.Abs(1.0 - sum) < 0.001f)
-        {
-          // TODO: remove this someday
-          Console.WriteLine("Warning: values expected logits, but look suspisciously like probabilities.");
-        }
-
-      }
-      else
-      {
-        if ((float)result.ValuesRaw.Span[0] < 0)
-        {
-          throw new Exception("Negative probability found in non-logistic mode.");
-        }
-      }
-#endif
       Half[][] states2D = null;
       if (HasState || Executor.executor.NumInputs > 1)
       {
@@ -574,8 +434,7 @@ namespace Chess.Ceres.NNEvaluators
           {
             states2D[i] = new Half[64 * SIZE_STATE_PER_SQUARE];
 
-            statesSpan.Slice(i * 64 * SIZE_STATE_PER_SQUARE,
-                             64 * SIZE_STATE_PER_SQUARE)
+            statesSpan.Slice(i * 64 * SIZE_STATE_PER_SQUARE, 64 * SIZE_STATE_PER_SQUARE)
                       .CopyTo(states2D[i]);
           }
         }
@@ -712,5 +571,4 @@ namespace Chess.Ceres.NNEvaluators
     }
 
   }
-
 }

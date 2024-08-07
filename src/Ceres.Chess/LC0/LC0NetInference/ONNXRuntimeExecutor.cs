@@ -16,11 +16,13 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+
+using Microsoft.ML.OnnxRuntime;
+
 using Ceres.Chess.LC0.Batches;
 using Ceres.Chess.NNEvaluators;
 using Ceres.Chess.NNEvaluators.Defs;
 using Chess.Ceres.NNEvaluators;
-using Microsoft.ML.OnnxRuntime;
 
 #endregion
 
@@ -32,6 +34,14 @@ namespace Ceres.Chess.LC0NetInference
   /// </summary>
   public class ONNXRuntimeExecutor : IDisposable
   {
+    /// In August 2024 with TensorRT 10.2 it was discovered that (very) incorrect results
+    /// were returned when batch size 1 was used with certain Ceres networks, presumably a bug.
+    /// It was also observed that batch size 4 is no slower (maybe faster) than 1.
+    /// Therefore as a workaround we use a minimum batch size of 4 for TensorRT execution provider
+    /// for Ceres networks.
+    /// </summary>
+    internal const int MIN_BATCH_SIZE_TENSOR_RT_CERES = 4;
+
     public const int TPG_BYTES_PER_SQUARE_RECORD = 137; // TODO: should be referenced from TPGRecord
     public const int TPG_MAX_MOVES = 92; //  // TODO: should be referenced from TPGRecord
 
@@ -67,6 +77,16 @@ namespace Ceres.Chess.LC0NetInference
     public readonly NNDeviceType DeviceType;
 
     /// <summary>
+    /// If TensorRT execution provider should be used if available.
+    /// </summary>
+    public readonly bool UseTensorRT;
+
+    /// <summary>
+    /// Minimum batch size to be used.
+    /// </summary>
+    internal int MinBatchSize;
+
+    /// <summary>
     /// Underlying ONNX executor object.
     /// </summary>
     internal NetExecutorONNXRuntime executor;
@@ -78,11 +98,17 @@ namespace Ceres.Chess.LC0NetInference
     /// <param name="shortID"></param>
     /// <param name="onnxFileName"></param>
     /// <param name="onnxModelBytes"></param>
+    /// <param name="inputNames"></param>
     /// <param name="maxBatchSize"></param>
     /// <param name="netType"></param>
+    /// <param name="precision"></param>
     /// <param name="deviceType"></param>
     /// <param name="gpuNum"></param>
+    /// <param name="useTensorRT"></param>
     /// <param name="enableProfiling"></param>
+    /// <exception cref="Exception"></exception>
+    /// <exception cref="ArgumentException"></exception>
+    /// <exception cref="NotImplementedException"></exception>
     public ONNXRuntimeExecutor(string shortID,
                                string onnxFileName, byte[] onnxModelBytes, 
                                string[] inputNames,
@@ -90,7 +116,7 @@ namespace Ceres.Chess.LC0NetInference
                                NetTypeEnum netType, 
                                NNEvaluatorPrecision precision, 
                                NNDeviceType deviceType, int gpuNum, 
-                               bool useTRT, 
+                               bool useTensorRT, 
                                bool enableProfiling)
     {
       if (onnxFileName != null && !onnxFileName.ToUpper().EndsWith(".ONNX"))
@@ -108,6 +134,11 @@ namespace Ceres.Chess.LC0NetInference
       DeviceType = deviceType;
       BatchSize = maxBatchSize;
       Precision = precision;
+      UseTensorRT = deviceType == NNDeviceType.GPU && useTensorRT;
+
+      MinBatchSize = NetType == NetTypeEnum.TPG
+                  && UseTensorRT
+                  ? MIN_BATCH_SIZE_TENSOR_RT_CERES : 1;
 
       int deviceIndex;
       if (deviceType == NNDeviceType.GPU)
@@ -123,8 +154,15 @@ namespace Ceres.Chess.LC0NetInference
         throw new NotImplementedException("Unsupported ONNX type " + deviceType);
       }
 
+      int precisionNumBits = precision switch
+      {
+        NNEvaluatorPrecision.FP32 => 32,
+        NNEvaluatorPrecision.FP16 => 16,
+        _ => throw new NotImplementedException($"Unsupported ONNX precision {precision}")
+      };
+
       executor = new NetExecutorONNXRuntime(shortID, onnxFileName, onnxModelBytes, inputNames,
-                                            precision, deviceIndex, useTRT, enableProfiling);
+                                            precisionNumBits, deviceIndex, useTensorRT, MinBatchSize, enableProfiling);
     }
 
 
@@ -138,10 +176,18 @@ namespace Ceres.Chess.LC0NetInference
     /// <param name="alreadyConvertedToLZ0"></param>
     /// <returns></returns>
     public ONNXRuntimeExecutorResultBatch Execute(bool isWDL, bool hasState,
-                                                  Memory<Half> flatValuesPrimary, Memory<Half[]> flatValuesState, int numPositionsUsed, 
+                                                  Memory<Half> flatValuesPrimary, Memory<Half[]> flatValuesState, 
+                                                  int numPositionsUsed, 
                                                   bool debuggingDump = false, bool alreadyConvertedToLZ0 = false,
                                                   float tpgDivisor = 1)
     {
+      if (NetType == NetTypeEnum.TPG && !alreadyConvertedToLZ0)
+      {
+        throw new NotImplementedException();
+      }
+
+      int numPositionsInBatchSentToExecutor = numPositionsUsed < MinBatchSize ? MinBatchSize : numPositionsUsed;
+
       if (!alreadyConvertedToLZ0)
       {
         if (flatValuesPrimary.Length / BatchSize != (64 * EncodedPositionBatchFlat.TOTAL_NUM_PLANES_ALL_HISTORIES))
@@ -179,14 +225,12 @@ namespace Ceres.Chess.LC0NetInference
         if (tpgDivisor != 1.0f)
         {
           Span<Half> flatValuesPrimarySpan = flatValuesPrimary.Span;
-          for (int i=0;i<flatValuesPrimarySpan.Length;i++)
+          for (int i = 0; i < flatValuesPrimarySpan.Length; i++)
           {
             throw new Exception("don't we already divide in CopyAndDivide?");
             //flatValuesPrimarySpan[i] /= tpgDivisor;
           }
         }
-
-        
 
         inputs[0] = (flatValuesPrimary, new int[] { numPositionsUsed, 64, TPG_BYTES_PER_SQUARE_RECORD });
         if (inputs.Length > 1)
@@ -195,18 +239,19 @@ namespace Ceres.Chess.LC0NetInference
           if (flatValuesState.IsEmpty)
           {
             // No state available, pass all zeroes.
-            inputs[1] = (new Half[numPositionsUsed * 64 * NNEvaluator.SIZE_STATE_PER_SQUARE], new int[] { numPositionsUsed, 64, NNEvaluator.SIZE_STATE_PER_SQUARE });
+            inputs[1] = (new Half[numPositionsInBatchSentToExecutor * 64 * NNEvaluator.SIZE_STATE_PER_SQUARE],
+                       new int[] { numPositionsInBatchSentToExecutor, 64, NNEvaluator.SIZE_STATE_PER_SQUARE });
           }
           else
           {
-            Span <Half[]> flatValuesStateSpan = flatValuesState.Span;
+            Span<Half[]> flatValuesStateSpan = flatValuesState.Span;
 
             const int STATE_SIZE_PER_SQUARE = 4;
 
             // Reformat the state data into a 1D array
             // TODO: improve efficiency
-            Half[] states1D = new Half[numPositionsUsed * 64 * NNEvaluator.SIZE_STATE_PER_SQUARE];
-            for (int i=0;i<numPositionsUsed;i++)
+            Half[] states1D = new Half[numPositionsInBatchSentToExecutor * 64 * NNEvaluator.SIZE_STATE_PER_SQUARE];
+            for (int i = 0; i < numPositionsUsed; i++)
             {
               if (flatValuesStateSpan[i] == null)
               {
@@ -224,7 +269,7 @@ namespace Ceres.Chess.LC0NetInference
             }
             inputs[1] = (states1D, new int[] { states1D.Length });
           }
-        } 
+        }
 
 #if NOT
         if (flatValuesSecondary.Length > 0)
@@ -235,13 +280,23 @@ namespace Ceres.Chess.LC0NetInference
         }
 #endif
 
-        eval = executor.Run(inputs, numPositionsUsed, Precision == NNEvaluatorPrecision.FP16);
+
+        eval = executor.Run(inputs, numPositionsInBatchSentToExecutor, Precision == NNEvaluatorPrecision.FP16);
+
+        if (numPositionsInBatchSentToExecutor != numPositionsUsed)
+        {
+          // Resize all results to match the number of positions actually used.
+          for (int i = 0; i < eval.Count; i++)
+          {
+            eval[i] = (eval[i].Item1, eval[i].Item2.Slice(0, numPositionsUsed * eval[i].Item2.Length / numPositionsInBatchSentToExecutor));
+          }
+        }
       }
       else
       {
         (Memory<Half> flatValuesPrimary, int[]) input = default;
         input.Item1 = flatValuesPrimary.Slice(0, numPositionsUsed * 112 * 8 * 8);
-        input.Item2 = [numPositionsUsed, 112, 8, 8 ];
+        input.Item2 = [numPositionsUsed, 112, 8, 8];
         eval = executor.Run([input], numPositionsUsed, Precision == NNEvaluatorPrecision.FP16);
       }
 
@@ -311,7 +366,7 @@ namespace Ceres.Chess.LC0NetInference
           throw new Exception("Implementation restriction, ONNX runtime nets expected to have both WDL and MLH heads.");
         }
 
-        // TODO: remove hack fo rBT3
+        // TODO: remove hack for BT3
         bool looksLikeBT3 = eval.Count > 10;
         string uncMustContainString = looksLikeBT3 ? "value/q/dense_error" : null;
 
@@ -361,24 +416,7 @@ namespace Ceres.Chess.LC0NetInference
       }
     }
 
-#if OLD
-    void ApplyPolicyTemp(Memory<Float16> policies, Memory<Float16> policyUncertainties)
-    {
-      int numPos = policies.Length / 1858;
-      //      for (int i = 0; i < numPos; i++)
-      Parallel.For(0, numPos, i =>
-            {
-              float unc = (float)policyUncertainties.Span[i];
-              float temp = 1 + PolicyUncertaintyMultiplier * unc;
-              for (int j = 0; j < 1858; j++)
-              {
-                float p = (float)policies.Span[i * 1858 + j];
-                p /= temp;
-                policies.Span[i * 1858 + j] = (Float16)p;
-              }
-            });
-    }
-#endif
+
     public void EndProfiling() => executor.EndProfiling();
 
 
@@ -387,6 +425,4 @@ namespace Ceres.Chess.LC0NetInference
       executor.Dispose();
     }
   }
-
 }
-

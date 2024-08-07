@@ -196,7 +196,6 @@ namespace Ceres.Chess.NNEvaluators
 
       const int DEFAULT_MAX_BATCH_SIZE = 1024;
       const bool ONNX_SCALE_50_MOVE_COUNTER = false; // BT2 already inserts own node to adjust
-      const bool ENABLE_MOVES = false;
 
       switch (netDef.Type)
       {
@@ -209,7 +208,7 @@ namespace Ceres.Chess.NNEvaluators
                                             ONNXRuntimeExecutor.NetTypeEnum.LC0, deviceDef.MaxBatchSize ?? DEFAULT_MAX_BATCH_SIZE,
                                             netDef.Precision, DEFAULT_HAS_WDL, DEFAULT_HAS_MLH,
                                             DEFAULT_HAS_UNCERTAINTYV, DEFAULT_HAS_UNCERTAINTYP, DEFAULT_HAS_ACTION,
-                                            null, null, null, null, false, ONNX_SCALE_50_MOVE_COUNTER, ENABLE_MOVES, false, hasState: DEFAULT_HAS_STATE);
+                                            null, null, null, null, false, ONNX_SCALE_50_MOVE_COUNTER, false, hasState: DEFAULT_HAS_STATE);
           break;
 
         case NNEvaluatorType.TRT:
@@ -282,7 +281,7 @@ namespace Ceres.Chess.NNEvaluators
                                                netDefONNX.HasUncertaintyV, netDefONNX.HasUncertaintyP, false,
                                                pbn.Net.OnnxModel.OutputValue, pbn.Net.OnnxModel.OutputWdl,
                                                pbn.Net.OnnxModel.OutputPolicy, pbn.Net.OnnxModel.OutputMlh, false, ONNX_SCALE_50_MOVE_COUNTER,
-                                               ENABLE_MOVES, false);
+                                               false);
             }
           }
           else
