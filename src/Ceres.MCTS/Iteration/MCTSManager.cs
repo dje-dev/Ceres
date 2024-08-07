@@ -643,6 +643,7 @@ namespace Ceres.MCTS.Iteration
 
     public float FractionExtendedSoFar = 0;
 
+    static bool DUMP = false;
 
     public static (MGMove, float) BestValueMove(NNEvaluator nnEvaluator, 
                                                 PositionWithHistory priorMoves, 
@@ -696,6 +697,7 @@ namespace Ceres.MCTS.Iteration
 
       float bestVRaw = evalResults.Min(v => -v.V);
 
+      NNEvaluatorResult parentResult = dumpInfo ? nnEvaluator.Evaluate(priorMoves.FinalPosition) : default;
 
       // Determine which move had position yielding best value evaluation.
       int moveIndex = 0;
@@ -742,8 +744,17 @@ namespace Ceres.MCTS.Iteration
         Console.WriteLine($"BestValueMove detail using {nnEvaluator} from {priorMoves}");
         for (int i = 0; i < moves.Count(); i++)
         {
-          Console.Write(i == bestMoveIndex ? "** " : "  ");
-          Console.WriteLine(moves.MovesArray[i] + " " + -evalResults[i].V);
+          EncodedMove encodedMove = ConverterMGMoveEncodedMove.MGChessMoveToEncodedMove(moves.MovesArray[i]);
+          float policyPct = 0;
+          if (parentResult.Policy.IndexOfMove(encodedMove) != -1)
+          {
+            policyPct = 100 * parentResult.Policy.PolicyInfoAtIndex(parentResult.Policy.IndexOfMove(encodedMove)).Probability;
+          }
+          bool isBest = i == bestMoveIndex;
+          string warnStr = isBest && policyPct < 10 ? "?" : " ";
+          Console.Write(isBest ? "** " : "  ");
+          Console.WriteLine(warnStr + "  " +  moves.MovesArray[i] + " " + -evalResults[i].V
+                      + "   " + policyPct + "%");
         }
       }
 
