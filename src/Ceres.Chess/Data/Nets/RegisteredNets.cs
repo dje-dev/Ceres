@@ -80,6 +80,7 @@ namespace Ceres.Chess.Data.Nets
 
         {"T1_256_RL_NATIVE", SimpleLC0Net("t1-256x10-rl-base-swa-3860000.pb.gz") },
         {"T1_256_RL", ONNXNet16LC0("t1-256x10-rl-base-swa-3860000_fp16") },
+        {"T1_256_RL_TRT", ONNXNet16LC0("t1-256x10-rl-base-swa-3860000_fp16", true) },
 
         {"T1_DISTILL_512_15", ONNXNet32LC0("t1-512x15x8h-distilled-swa-3395000")},
         {"T1_DISTILL_512_15_TRT", ONNXNet32LC0("t1-512x15x8h-distilled-swa-3395000", true)},
