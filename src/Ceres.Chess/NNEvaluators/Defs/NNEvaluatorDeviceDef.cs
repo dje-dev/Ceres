@@ -37,7 +37,12 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// <summary>
     /// Index of the device.
     /// </summary>
-    public  int DeviceIndex;
+    public int DeviceIndex;
+
+    /// <summary>
+    /// Optional arbitrary string which indicates a requested engine type (execution engine).
+    /// </summary>
+    public string OverrideEngineType;
 
     /// <summary>
     /// If evaluations on this device should be done with low priority.
@@ -67,16 +72,20 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// <param name="deviceNum"></param>
     /// <param name="lowPriority"></param>
     /// <param name="maxBatchSize"></param>
+    /// <param name="optimalBatchSize"></param>
+    /// <param name="overrideEngineType"></param>
     /// <param name="predefinedOptimalBatchPartitions"></param>
     public NNEvaluatorDeviceDef(NNDeviceType type, int deviceNum, bool lowPriority = false,
                                 int? maxBatchSize = null, int? optimalBatchSize  = null,
+                                string overrideEngineType = null,
                                 List<(int batchSize, int[] partitionBatchSizes)> predefinedOptimalBatchPartitions = null)
     {
       Type = type;
       DeviceIndex = deviceNum;
       LowPriority = lowPriority;
       MaxBatchSize = maxBatchSize;
-      OptimalBatchSize = optimalBatchSize; 
+      OptimalBatchSize = optimalBatchSize;
+      OverrideEngineType = overrideEngineType;
       PredefinedOptimalBatchPartitions = predefinedOptimalBatchPartitions;
 
       if (MaxBatchSize is not null && OptimalBatchSize is null)
@@ -85,10 +94,11 @@ namespace Ceres.Chess.NNEvaluators.Defs
       }
     }
 
+
     /// <summary>
     /// Default constructor for deserialization.
     /// </summary>
-    [JsonConstructorAttribute]
+    [JsonConstructor]
     NNEvaluatorDeviceDef()
     {
     }
@@ -114,7 +124,7 @@ namespace Ceres.Chess.NNEvaluators.Defs
     {
       string maxStr = MaxBatchSize.HasValue ? $" Max={MaxBatchSize}" : "";
       string optimalStr = OptimalBatchSize.HasValue ? $" Optimal={OptimalBatchSize}" : "";
-      return $"<NNEvaluatorDeviceDef {Type} #{DeviceIndex} {(LowPriority ? "Low Priority" : "")}{maxStr}>";
+      return $"<NNEvaluatorDeviceDef {Type} #{DeviceIndex} {OverrideEngineType} {(LowPriority ? "Low Priority" : "")}{maxStr}>";
     }
 
   }
