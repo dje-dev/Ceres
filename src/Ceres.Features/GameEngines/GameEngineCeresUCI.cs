@@ -106,7 +106,7 @@ namespace Ceres.Features.GameEngines
     /// <returns></returns>
     static string ExtraArgsForEvaluator(NNEvaluatorDef evaluatorDef)
     {
-      if (evaluatorDef.Nets[0].Net.Type != NNEvaluatorType.LC0Library)
+      if (evaluatorDef.Nets[0].Net.Type != NNEvaluatorType.LC0)
       {
         throw new Exception("GameEngineCeresUCI cannot be used with network definition of type " + evaluatorDef.Nets[0].Net.Type);
       }

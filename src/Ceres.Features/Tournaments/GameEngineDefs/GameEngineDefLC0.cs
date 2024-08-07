@@ -111,7 +111,7 @@ namespace Ceres.Features.GameEngines
       // Verify compatability of evaluator for LC0
       if (evaluatorDef == null) throw new ArgumentNullException(nameof(evaluatorDef));
       if (evaluatorDef.Nets.Length != 1) throw new Exception("Exactly one network must be specified for use with LC0.");
-      if (evaluatorDef.Nets[0].Net.Type != NNEvaluatorType.LC0Library) throw new Exception("Network Type must be LC0Library");
+      if (evaluatorDef.Nets[0].Net.Type != NNEvaluatorType.LC0) throw new Exception("Network Type must be LC0Library");
       if (evaluatorDef.NetCombo != NNEvaluatorNetComboType.Single) throw new Exception("Network Type must be Single");
 
       ID = id;

@@ -713,7 +713,7 @@ namespace Ceres.Features.UCI
 
     private void ShowWeightsInfo(int i)
     {
-      if (EvaluatorDef.Nets[i].Net.Type == NNEvaluatorType.LC0Library)
+      if (EvaluatorDef.Nets[i].Net.Type == NNEvaluatorType.LC0)
       {
         INNWeightsFileInfo net = NNWeightsFiles.LookupNetworkFile(EvaluatorDef.Nets[i].Net.NetworkID);
         string infoStr = net == null ? "(unknown)" : net.ShortStr;

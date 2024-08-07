@@ -233,7 +233,11 @@ namespace Ceres.Chess.NNEvaluators
         case NNEvaluatorType.LC0ViaONNXViaTRT:
           throw new NotImplementedException();
 
-        case NNEvaluatorType.LC0Library:
+        case NNEvaluatorType.Ceres:
+          throw new NotImplementedException();
+
+
+        case NNEvaluatorType.LC0:
           INNWeightsFileInfo net = NNWeightsFiles.LookupNetworkFile(netDef.NetworkID);
           if (CeresUserSettingsManager.Settings.UseLegacyLC0Evaluator)
           {
@@ -468,7 +472,7 @@ namespace Ceres.Chess.NNEvaluators
             && def.NetCombo == NNEvaluatorNetComboType.Single
             && def.Devices.Length > 1
             && def.Devices[0].Device.Type == NNDeviceType.GPU 
-            && def.Nets[0].Net.Type == NNEvaluatorType.LC0Library)
+            && def.Nets[0].Net.Type == NNEvaluatorType.LC0)
       {
         int[] deviceIndices = new int[def.Devices.Length];
         for (int i=0; i < def.Devices.Length; i++)

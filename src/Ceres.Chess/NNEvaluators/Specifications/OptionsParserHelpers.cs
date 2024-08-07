@@ -223,7 +223,12 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
       {
         // Net specification "LC0:703810=0.5,66193=0.5";
         thisNetID = netStrWithPrecision.Substring(4);
-        NN_EVAL_TYPE = NNEvaluatorType.LC0Library;
+        NN_EVAL_TYPE = NNEvaluatorType.LC0;
+      }
+      else if (netStrWithPrecision.ToUpper().StartsWith("CERES:"))
+      {
+        thisNetID = netStrWithPrecision.Substring(6);
+        NN_EVAL_TYPE = NNEvaluatorType.Ceres;
       }
       else if (netStrWithPrecision.ToUpper().StartsWith("LC0_ONNX_ORT:"))
       {
@@ -285,22 +290,38 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
       {
         // Prefix optionally omitted
         thisNetID = netStrWithPrecision;
-        NN_EVAL_TYPE = NNEvaluatorType.LC0Library;
+        NN_EVAL_TYPE = NNEvaluatorType.LC0;
       }
 
       return (NN_EVAL_TYPE, thisNetID);
     }
 
-    internal static List<(string netID, int? maxBatchSize, int? optimalBatchSize, string batchSizesFileName, float weight)>  ParseDeviceOptions(string str)
+    internal static (List<(string deviceID, int? maxBatchSize, int? optimalBatchSize, string batchSizesFileName, float weight)>, string overrideEngine)
+      ParseDeviceOptions(string deviceSpecString)
     {
       /// <summary>
-      /// Delimiter character used to indicate beginning of a weights specification.
+      /// Delimiter character used to indicate beginning of a optional weights specification.
       /// </summary>
       const char WEIGHTS_CHAR = '@';
 
-      List<(string, int?, int?, string, float)> ret = new();
+      /// <summary>
+      /// Delimiter character used to indicate beginning of optional device execution engine
+      /// for cases where multiple different engines are available (e.g. CUDA vs TensorRt).
+      /// </summary>
+      const char DEVICE_ENGINE_CHAR = '#';
 
-      string[] nets = str.Split(",");
+      string overrideEngine = null;
+      List<(string, int?, int?, string, float)> deviceList = new();
+
+      // Parse precision string, if any (either #8 or #16 at end of network ID)
+      if (deviceSpecString.Contains(DEVICE_ENGINE_CHAR))
+      {
+        string[] deviceSpecParts = deviceSpecString.Split("#");
+        deviceSpecString = deviceSpecParts[0];
+
+      }
+
+      string[] nets = deviceSpecString.Split(",");
 
       int? maxBatchSize = null;
       int? optimalBatchSize = null;
@@ -310,12 +331,12 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
       {
         string[] netParts = netStr.Split(WEIGHTS_CHAR);
         float weightValue, weightPolicy, weightMLH;
-        string netID = netParts[0];
+        string deviceID = netParts[0];
 
-        if (netID.Contains("["))
+        if (deviceID.Contains("["))
         {
-          ParseBatchSizeSpecification(netID, out maxBatchSize, out optimalBatchSize, out batchSizesFileName);
-          netID = netID.Substring(0, netID.IndexOf("["));
+          ParseBatchSizeSpecification(deviceID, out maxBatchSize, out optimalBatchSize, out batchSizesFileName);
+          deviceID = deviceID.Substring(0, deviceID.IndexOf("["));
         }
 
         float weight = 1.0f / nets.Length; // default equal weight
@@ -324,11 +345,10 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
           weight = float.Parse(netParts[1]);
         }
 
-        ret.Add((netID, maxBatchSize, optimalBatchSize, batchSizesFileName, weight));        
+        deviceList.Add((deviceID, maxBatchSize, optimalBatchSize, batchSizesFileName, weight));
       }
 
-
-      return ret;
+      return (deviceList, overrideEngine);
     }
 
 

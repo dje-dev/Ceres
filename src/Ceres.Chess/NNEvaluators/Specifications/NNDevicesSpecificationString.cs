@@ -45,6 +45,13 @@ namespace Ceres.Chess.NNEvaluators.Specifications
     public readonly List<(NNEvaluatorDeviceDef, float)> Devices;
 
     /// <summary>
+    /// Optional arbitrary string which indicates a requested engine type (execution engine)
+    /// to be used with this device (e.g. TensorRT).
+    /// </summary>
+    public readonly string OverrideEngineType;
+
+
+    /// <summary>
     /// If evaluator is globally shared under a specified name, the name used to identify it.
     /// </summary>
     public readonly string SharingName;
@@ -97,9 +104,10 @@ namespace Ceres.Chess.NNEvaluators.Specifications
         throw new Exception($"{deviceString} not valid, device specification expected to begin with 'GPU:'");
       }
 
-      var deviceParts = OptionsParserHelpers.ParseDeviceOptions(deviceStringParts[1]);
+      var deviceSpec = OptionsParserHelpers.ParseDeviceOptions(deviceStringParts[1]);
+      OverrideEngineType = deviceSpec.Item2;
 
-      foreach (var device in deviceParts)
+      foreach (var device in deviceSpec.Item1)
       {
         int? maxBatchSize = device.maxBatchSize;
         int? optimalBatchSize = device.optimalBatchSize;
@@ -110,7 +118,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications
           maxBatchSize = parsedBatchFile.maxBatchSize;
           predefinedPartitions = parsedBatchFile.predefinedPartitions;
         }
-        Devices.Add((new NNEvaluatorDeviceDef(NNDeviceType.GPU, int.Parse(device.netID), false,
+        Devices.Add((new NNEvaluatorDeviceDef(NNDeviceType.GPU, int.Parse(device.deviceID), false,
                                               maxBatchSize, optimalBatchSize, predefinedPartitions), device.weight));
       }
 

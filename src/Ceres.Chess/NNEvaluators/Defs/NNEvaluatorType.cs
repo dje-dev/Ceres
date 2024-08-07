@@ -21,9 +21,14 @@ namespace Ceres.Chess.NNEvaluators.Defs
   public enum NNEvaluatorType
   {
     /// <summary>
-    /// Leela Zero network, run via slightly modified LC0 library.
+    /// Leela Zero network (112 plane input format).
     /// </summary>
-    LC0Library,
+    LC0,
+
+    /// <summary>
+    /// Ceres neural network (TPG format).
+    /// </summary>
+    Ceres,
 
     /// <summary>
     /// Leela Zero network, run via embedded ONNX file and ONNX runtime with CUDA execution provider

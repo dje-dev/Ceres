@@ -157,7 +157,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications
       // TODO: Currently support conversion back to original specification string only for simple cases
       if (comboType == NNEvaluatorNetComboType.Single
        && nets.Count() == 1
-       && nets.First().Item1.Type == NNEvaluatorType.LC0Library)
+       && nets.First().Item1.Type == NNEvaluatorType.LC0)
       {
         return $"Network=LC0:{nets.First().Item1.NetworkID}";
       }
