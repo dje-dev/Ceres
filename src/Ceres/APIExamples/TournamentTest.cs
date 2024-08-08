@@ -44,6 +44,7 @@ using Ceres.Chess.NetEvaluation.Batch;
 using System.Runtime.InteropServices;
 using Ceres.Chess.Games.Utils;
 using Ceres.Chess.Data.Nets;
+using System.Numerics;
 
 #endregion
 
@@ -53,7 +54,7 @@ namespace Ceres.APIExamples
   {
     const bool POOLED = false;
 
-    static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 2 : 4;
+    static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 3 : 4;
     static int[] OVERRIDE_DEVICE_IDs = /*POOLED ? null*/
        (Environment.MachineName.ToUpper() switch
       {
@@ -187,17 +188,12 @@ namespace Ceres.APIExamples
       NET2 = "~BT4";
 
       //      NET1 = "CUSTOM1:ckpt_DGX_C7_B4_256_10_8_8_32bn_2024_final.ts.fp16.onnx";
-//NET1 = "CUSTOM1:ckpt_DGX_C7_256_12_8_6_40bn_B1_2024f_last.ts.fp16.onnx"; // copy of best but with focus data
-//NET2 = "CUSTOM2:ckpt_DGX_C7_256_12_8_6_40bn_B1_2024f_last.ts.fp16.onnx"; // copy of best but with focus data
-
-//NET1 = "CUSTOM2:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_postconvert_late8.ts.fp16.onnx";
 //NET2 = "CUSTOM2:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_postconvert.ts.fp16.onnx"; // best so far
 
 //NET1 = "CUSTOM2:ckpt_HOP_C6_B4_256_12_8_6_BS8_48bn_2024_final.ts"; // old 4board
 
 //NET2 = "CUSTOM1:ckpt_DGX_C7_B4_256_10_8_8_32bn_2024_final.ts.fp16.onnx"; // prep for Daniel
 //      NET2 = "CUSTOM2:ckpt_DEV_C6_B4_256_12_8_6_BS8_48bn_2024_postconvert.ts.fp16.onnx";
-
       //      NET2 = "CUSTOM2:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_postconvert.ts.fp16.onnx";// 2197929984.ts";
       //NET2 = "CUSTOM2:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_postconvert.ts.fp16.onnx";// 2197929984.ts";
 
@@ -205,87 +201,71 @@ namespace Ceres.APIExamples
 
 // FP8 conversion test      NET1 = "CUSTOM1:fp8_256_12_8.onnx";
 
-
 //      NET2 = "CUSTOM1:ckpt_DGX_C_512_15_16_4_32bn_B1_2024_26Jun_final.ts.fp16.onnx"; // Late June 512
 
 //      NET1 = "CUSTOM1:ckpt_DGX_C_256_12_8_6_4bn_B1_2024_vl01_sf_c3_1bn_vl2p3_last.ts.fp16.onnx";  // extension: value2 loss 0.3 (not 0.1)
-      NET2 = "CUSTOM1:ckpt_DGX_C_256_12_8_6_4bn_B1_2024_vl01_sf_c2_1bn_last.ts.fp16.onnx";          // baseline (+1bn)
+//      NET2 = "CUSTOM1:ckpt_DGX_C_256_12_8_6_4bn_B1_2024_vl01_sf_c2_1bn_last.ts.fp16.onnx";          // baseline (+1bn)
 //      NET1 = "CUSTOM1:ckpt_DGX_C_256_12_8_6_4bn_B1_2024_vl01_sf_last.ts.fp16.onnx";                 // baseline
-      NET1 = "CUSTOM1:ckpt_DGX_C_256_12_8_6_4bn_B1_2024_vl01_sf_c3_1bn_wd001_last.ts.fp16.onnx"; // extension: WD 0.001
-      NET1 = "CUSTOM1:HOP_C_256_12_8_6_4bn_B1_2024_vl01_sf_c3_1bn_auxtenth_2199994368.ts"; // extension: new data (2024)
-//      NET1 = "CUSTOM1:ckpt_HOP_C6_B4_256_12_8_6_BS8_48bn_2024_final.ts";// old generation (May) good net
+//NET2 = "CUSTOM1:HOP_C_256_12_8_6_4bn_B1_2024_wd005_blhead_4000006144.ts.fp16.onnx"; // final blunder->v2, wd 0.005
+                                                                                    //      NET1 = "CUSTOM1:ckpt_DEV_C6_B4_256_12_8_6_BS8_48bn_2024_postconvert.ts.fp16.onnx"; old strong B4 net
+                                                                                    //NET2 = "CUSTOM2:newtest.fp16.onnx";
+
+      //NET1 = "CUSTOM2:ckpt_DGX_C_256_12_8_6_4bn_B1_2024_vl01_sf_c3_1bn_wd001_last.ts.fp16.onnx"; // extension: WD 0.001
+      //      NET1 = "CUSTOM1:HOP_C_256_12_8_6_4bn_B1_2024_vl01_sf_c3_1bn_auxtenth_2199994368.ts"; // extension: new data (2024)
+      //      NET1 = "CUSTOM1:ckpt_HOP_C6_B4_256_12_8_6_BS8_48bn_2024_final.ts";// old generation (May) good net
 
       //      NET2 = "CUSTOM1:ckpt_DGX_C_256_12_8_6_60bn_B4_2024_final.ts.fp16.onnx"; // best June2024 (4B)
-      //      NET1 = "CUSTOM1:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_postconvert.ts.fp16.onnx"; // best June2024 (1B)
-      //      NET2 = "~T1_DISTILL_512_15_FP16_TRT";
+//      NET1 = "CUSTOM1:HOP_C_GL_RPE_lategelu_ln_256_10_FFN4_4bn_fp16_4000006144.onnx";
+//      NET2 = "CUSTOM1:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_postconvert.ts.fp16.onnx"; // best June2024 (1B)
+      //NET2 = "CUSTOM1:HOP_C_GL_RPE_lategelu_ln_256_10_FFN4_4bn_fp16_last.onnx";
 
-      //NET1 = "CUSTOM1:HOP_C_256_12_8_6_4bn_B1_2024_vl01_sf_c3_1bn_auxtenth_1599995904.ts.fp16.onnx";
-      NET2 = "~T1_DISTILL_256_10_FP16";
-      //      NET2 = "~T1_256_RL_NATIVE";
 
-      //      NET1 = "~BT4-self-quantize4-swa-2092500";
+//      NET1 = "CUSTOM1:HOP_CL_CLEAN_256_10_FFN6_B1_NLATT_4bn_fp16_3999989760.onnx"; // _4bn_fp16
+      NET1 = "CUSTOM1:HOP_CL_CLEAN_256_10_FFN6_B1_NLATT_4bn_fp16_3999989760.onnx";
+
+//      NET1 = "CUSTOM1:HOP_CL_CLEAN_256_10_FFN6_B1_4bn_fp16_4000006144.onnx";
+NET2 = "~T1_256_RL_TRT";
+
+            NET2 = "~T80";
+      //      NET2 = "CUSTOM1:HOP_CL_CLEAN_256_10_FFN6_B1_4bn_fp16_399998976.onnx";
+
+      //      NET2 = "CUSTOM1:HOP_C_256_12_8_6_4bn_B1_2024_vl01_sf_c3_1bn_auxtenth_399998976.ts.fp16.onnx";
+      //      NET2 = "CUSTOM1:HOP_C_GL_RPE_lategelu_ln_256_10_FFN4_4bn_fp16_399998976.onnx";
+
+      //NET2 = "~T1_DISTILL_256_10_FP16";
+
+      NET1 = "CUSTOM1:HOP_CL_CLEAN_512_15_FFN4_B1_4bn_fp16_3999989760.onnx";
+//      NET2 = "CUSTOM1:DGX_CL_UNCLEAN_256_10_FFN6_B1_NLATT_4bn_fp16_399998976.onnx";
+//      NET1 = "CUSTOM1:HOP_CL_CLEAN_512_15_FFN4_B1_4bn_fp16_2199994368.onnx";
+//      NET2 = "~T1_DISTILL_512_15_FP16";// _TRT";
+      NET2 = "~T3_DISTILL_512_15_FP16_TRT";
       //      NET2 = "~BT4_FP16_TRT";
 
-      NET1 = "CUSTOM1:HOP_C_256_12_8_6_500mm_B1_2024_newd_sp_blun_postexport.ts";
-      //      NET2 = "BAD IS ACTUALLY BLUN *** CUSTOM1:HOP_C_256_12_8_6_500mm_B1_2024_newd_sp_noblun_postexport.ts";
+      NET1 = "CUSTOM1:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_199999488.onnx";
+      NET2 = "CUSTOM1:HOP_CL_CLEAN_512_15_FFN4_B1_4bn_fp16_199999488.onnx";
+      //      NET2 = "CUSTOM1:HOP_C_256_12_8_6_4bn_B1_2024_vl01_sf_1bn_newdata_999997440.ts.fp16.onnx";
+      //      NET2 = "~T1_256_RL_NATIVE";
 
-      NET1 = "CUSTOM1:HOP_C_256_12_8_6_500mm_B1_2024_newd_sp_base_wd01_postexport.ts";
-      NET2 = "CUSTOM1:HOP_C_256_12_8_6_500mm_B1_2024_newd_sp_base_postexport.ts"; // new baseline 500mm net at size 256
 
-///      NET2 = "CUSTOM1:HOP_C_256_12_8_6_500mm_B1_2024_newd_sp_noblun_postexport.ts"; // version w/out blunder info anywhere
-//      NET2 = "CUSTOM1:ckpt_DGX_C_256_12_8_6_500mm_B1_2024_base_473206784.ts"; // prior 500mm net at eise 256
-      //-23+/-20      NET2 = "CUSTOM2:ckpt_DGX_C_256_12_8_6_500mm_B1_2024_base_473206784.ts.fp16.onnx";
-      //      NET2 = "CUSTOM2:ckpt_DGX_C6_B4_512_8_16_4_500mm_2024_nost_447799296.ts.fp16.onnx";
-
-      //NET1 = "CUSTOM1:ckpt_DGX_C5_B1_512_15_16_4_32bn_2024_3100651520.ts";
-      //      NET2 = "CUSTOM2:ckpt_DGX_C5_B1_512_15_16_4_32bn_2024_fix.ts.onnx_fp16.onnx";
+      ///      NET2 = "CUSTOM1:HOP_C_256_12_8_6_500mm_B1_2024_newd_sp_noblun_postexport.ts"; // version w/out blunder info anywhere
       //NET2 = "CUSTOM1:ckpt_DGX_C_256_12_8_6_60bn_B4_2024_final.ts.fp16.onnx";
-      //NET1 = "CUSTOM2:ckpt_DGX_C_256_12_8_6_60bn_B4_2024_final.ts";
-
-      //      NET2 = "CUSTOM2:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_postconvert.ts.fp16.onnx";
+      //WZNET2 = "CUSTOM2:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_postconvert.ts.fp16.onnx";
 
       //NET1 = "~T3_DISTILL_512_15_FP16_TRT";
       //NET2 = "~T3_512_15_FP16_TRT";
 
-      //      { "T3_512_15", ONNXNet32LC0("t3-512x15x16h-swa-2815000") }, // reshape error trying to convert to fp16
-
-      //        { "T3_DISTILL_512_15_FP16", ONNXNet32LC0("t3-512x15x16h-distill-swa-2175000.pb.gz_fp16#16") },
-      //        { "T3_DISTILL_512_15_FP16_TRT", ONNXNet16LC0("t3-512x15x16h-distill-swa-2175000.pb.gz_fp16#16", true)},
-
-
       //NET2 = "~T80";
       //      NET2 = "~T1_DISTILL_256_10_FP16";
-      //      NET2 = "~T4_3355000";
-      //      NET2 = "~BT2_NATIVE";
-
       //      NET1 = "~BT4_NATIVE";
-      //      NET2 = "~BT4_1000k";
-
-      //NET2 = "~T4_3355000";
-      //NET1 = "CUSTOM1:last256.ts";
-      //NET1 = "CUSTOM1:ckpt_DGX_C5_B4_512_15_16_4_48bn_2024_final.ts";
       //      NET1 = "CUSTOM1:753723;1;0;0;1,~T1_DISTILL_512_15;0;1;1;0";
       //NET1 = "ONNX_ORT:BT3_750_policy_vanilla#32,ONNX_ORT:BT3_750_policy_optimistic#32";
       //      NET1 = "~BT4|1.26"; // 1.26 -13+/-13
-
-      //      NET2 = "~T70";
-      //NET1 = "~T81|0.85";
-      //      NET2 = "~T80";
       //NET2 = "~T1_DISTIL_512_15_NATIVE";
 
-      //      NET1 = "CUSTOM1:ckpt_DGX_C6_B4_512_8_16_4_500mm_2024_nost_final.ts";
-      //      NET2 = "CUSTOM2:ckpt_DGX_C6_B4_512_8_16_4_500mm_2024_base_final.ts";
-      //      NET1 = "CUSTOM1:ckpt_DGX_C6_B4_512_15_16_4_32bn_2024_focus_974770176.ts";
-      //      NET2 = "CUSTOM2:ckpt_DGX_C6_B4_512_15_16_4_32bn_2024_focus_974770176.ts";
-      //NET2= "CUSTOM2:ckpt_DGX_C5_B1_512_15_16_4_32bn_2024_962871296.ts";
 
-      //      NET1 = "CUSTOM1:ckpt_DGX_C6_B4_512_15_16_4_32bn_2024_focus_1063735296.ts";
-      //      NET2 = "CUSTOM2:ckpt_DGX_C5_B1_512_15_16_4_32bn_2024_1049882624.ts";
-
-      SearchLimit limit1 = SearchLimit.NodesPerMove(10_000); // was 500
-//      limit1 = SearchLimit.BestValueMove;
+      SearchLimit limit1 = SearchLimit.NodesPerMove(100);
+//    limit1 = SearchLimit.BestValueMove;
 //limit1 = new SearchLimit(SearchLimitType.SecondsForAllMoves, 15, false, 0.5f);
-//limit1 = new SearchLimit(SearchLimitType.SecondsForAllMoves, 10, false, 0.1f);
       //SearchLimit limit2 = SearchLimit.NodesPerMove(1);
 
       SearchLimit limit2 = limit1;
@@ -557,8 +537,8 @@ namespace Ceres.APIExamples
       EnginePlayerDef playerCeres2 = new EnginePlayerDef(overrideCeresEngine2Def ?? engineDefCeres2, limit2);
       EnginePlayerDef playerCeres3 = new EnginePlayerDef(engineDefCeres3, limit1);
 
-      bool ENABLE_LC0_1 = evalDef1.Nets[0].Net.Type == NNEvaluatorType.LC0Library;// && (evalDef1.Nets[0].WeightValue == 1 && evalDef1.Nets[0].WeightPolicy == 1 && evalDef1.Nets[0].WeightM == 1);
-      bool ENABLE_LC0_2 = evalDef2.Nets[0].Net.Type == NNEvaluatorType.LC0Library;// && (evalDef1.Nets[0].WeightValue == 1 && evalDef1.Nets[0].WeightPolicy == 1 && evalDef1.Nets[0].WeightM == 1);
+      bool ENABLE_LC0_1 = evalDef1.Nets[0].Net.Type == NNEvaluatorType.LC0;// && (evalDef1.Nets[0].WeightValue == 1 && evalDef1.Nets[0].WeightPolicy == 1 && evalDef1.Nets[0].WeightM == 1);
+      bool ENABLE_LC0_2 = evalDef2.Nets[0].Net.Type == NNEvaluatorType.LC0;// && (evalDef1.Nets[0].WeightValue == 1 && evalDef1.Nets[0].WeightPolicy == 1 && evalDef1.Nets[0].WeightM == 1);
 
       string OVERRIDE_LC0_EXE = @"C:\apps\lc0_30_onnx_dml\lc0.exe";
 string OVERRIDE_LC0_BACKEND_STRING = "";
@@ -640,11 +620,12 @@ string OVERRIDE_LC0_BACKEND_STRING = "";
         (string, string)[] nets = 
         [
           ("D256", "~T1_DISTILL_256_10_FP16"),
+          ("BLV2_WD005", "CUSTOM2:HOP_C_256_12_8_6_4bn_B1_2024_wd005_blhead_4000006144.ts.fp16.onnx"), // mid July blunder only into v2, wd005
           ("BEST_B1", "CUSTOM1:ckpt_DGX_C_256_12_8_6_60bn_B4_2024_final.ts.fp16.onnx"),// best June2024 (4B)
           ("BEST_B4", "CUSTOM1:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_postconvert.ts.fp16.onnx"), // best June2024 (1B)
           ("BASE", "CUSTOM1:ckpt_DGX_C_256_12_8_6_4bn_B1_2024_vl01_sf_c2_1bn_last.ts.fp16.onnx"),          // baseline (+1bn)
-          ("V2_p3", "CUSTOM1:ckpt_DGX_C_256_12_8_6_4bn_B1_2024_vl01_sf_c3_1bn_vl2p3_last.ts.fp16.onnx"),  // extension: value2 loss 0.3 (not 0.1)
-          ("V2_WD001", "CUSTOM1:ckpt_DGX_C_256_12_8_6_4bn_B1_2024_vl01_sf_c3_1bn_wd001_last.ts.fp16.onnx"), // extension: WD 0.001
+//          ("V2_p3", "CUSTOM1:ckpt_DGX_C_256_12_8_6_4bn_B1_2024_vl01_sf_c3_1bn_vl2p3_last.ts.fp16.onnx"),  // extension: value2 loss 0.3 (not 0.1)
+//          ("V2_WD001", "CUSTOM1:ckpt_DGX_C_256_12_8_6_4bn_B1_2024_vl01_sf_c3_1bn_wd001_last.ts.fp16.onnx"), // extension: WD 0.001
           ("V2_NEWDATA", "CUSTOM1:HOP_C_256_12_8_6_4bn_B1_2024_vl01_sf_1bn_newdata_999997440.ts.fp16.onnx"), // extension: new data (2024)
         ];
 
@@ -661,7 +642,7 @@ string OVERRIDE_LC0_BACKEND_STRING = "";
         def = new TournamentDef("TOURN", player1, player2);
 //        def.ReferenceEngineId = def.Engines[1].ID;
 
-        //        def.CheckPlayer2Def = player1;
+//        def.CheckPlayer2Def = player1;
       }
 
       // TODO: UCI engine should point to .NET 6 subdirectory if on .NET 6
@@ -693,7 +674,7 @@ string OVERRIDE_LC0_BACKEND_STRING = "";
 //        baseName = "endingbook-16man-9609.pgn";
 //        def.AcceptPosExcludeIfContainsPieceTypeList = [PieceType.Queen, PieceType.Bishop, PieceType.Knight];
       }
-//       baseName = "tcec_big";
+       baseName = "tcec_big";
       string postfix = (baseName.ToUpper().EndsWith(".EPD") || baseName.ToUpper().EndsWith(".PGN")) ? "" : ".pgn";
       def.OpeningsFileName = SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/openings/{baseName}{postfix}"
                                                      : @$"\\synology\dev\chess\data\openings\{baseName}{postfix}";
