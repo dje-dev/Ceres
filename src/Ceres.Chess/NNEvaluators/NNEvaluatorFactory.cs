@@ -257,7 +257,7 @@ namespace Ceres.Chess.NNEvaluators
 
         case NNEvaluatorType.Ceres:
           string[] CERES_ENGINE_TYPES = { "CUDA", "CUDA16", "TENSORRT", "TENSORRT16" };
-          if (deviceDef.OverrideEngineType != null && !CERES_ENGINE_TYPES.Contains(deviceDef.OverrideEngineType))
+          if (deviceDef.OverrideEngineType != null && !CERES_ENGINE_TYPES.Contains(deviceDef.OverrideEngineType.ToUpper()))
           {
             throw new Exception($"Ceres engine type not specified or invalid: {deviceDef.OverrideEngineType}." 
               + System.Environment.NewLine + "Valid types: " + string.Join(", ", CERES_ENGINE_TYPES));
