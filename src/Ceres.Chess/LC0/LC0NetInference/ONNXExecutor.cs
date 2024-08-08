@@ -44,7 +44,7 @@ using static System.Runtime.InteropServices.JavaScript.JSType;
 /// </summary>
 namespace Ceres.Chess.LC0NetInference
 {
-  public class NetExecutorONNXRuntime : IDisposable
+  public class ONNXExecutor : IDisposable
   {
     const int MAX_BATCH_SIZE = 1024;
 
@@ -101,7 +101,7 @@ namespace Ceres.Chess.LC0NetInference
     /// <param name="enableProfiling"></param>
     /// <param name="outputNamesToUse"></param>
     /// <exception cref="Exception"></exception>
-    public NetExecutorONNXRuntime(string shortID,
+    public ONNXExecutor(string shortID,
                                   string onnxFileName, 
                                   byte[] onnxModelBytes,
                                   string[] inputNames,
@@ -178,7 +178,7 @@ namespace Ceres.Chess.LC0NetInference
               string ret = "";
               foreach (string inputName in inputNames)
               {
-                ret += (firstTime ? "" : ",") + inputName + $":{size}x64x{ONNXRuntimeExecutor.TPG_BYTES_PER_SQUARE_RECORD}";
+                ret += (firstTime ? "" : ",") + inputName + $":{size}x64x{ONNXNetExecutor.TPG_BYTES_PER_SQUARE_RECORD}";
                 firstTime = false;
               }
               return ret;

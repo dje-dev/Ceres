@@ -29,10 +29,10 @@ using Chess.Ceres.NNEvaluators;
 namespace Ceres.Chess.LC0NetInference
 {
   /// <summary>
-  /// A neural network executor using the ONNX runtime.
-  /// See: https://github.com/microsoft/onnxruntime.
+  /// Manages execution of ONNX networks for inference of chess neural networks
+  /// (Leela Chess Zero and Ceres).
   /// </summary>
-  public class ONNXRuntimeExecutor : IDisposable
+  public class ONNXNetExecutor : IDisposable
   {
     /// In August 2024 with TensorRT 10.2 it was discovered that (very) incorrect results
     /// were returned when batch size 1 was used with certain Ceres networks, presumably a bug.
@@ -89,7 +89,7 @@ namespace Ceres.Chess.LC0NetInference
     /// <summary>
     /// Underlying ONNX executor object.
     /// </summary>
-    internal NetExecutorONNXRuntime executor;
+    internal ONNXExecutor executor;
 
 
     /// <summary>
@@ -109,7 +109,7 @@ namespace Ceres.Chess.LC0NetInference
     /// <exception cref="Exception"></exception>
     /// <exception cref="ArgumentException"></exception>
     /// <exception cref="NotImplementedException"></exception>
-    public ONNXRuntimeExecutor(string shortID,
+    public ONNXNetExecutor(string shortID,
                                string onnxFileName, byte[] onnxModelBytes, 
                                string[] inputNames,
                                int maxBatchSize, 
@@ -161,7 +161,7 @@ namespace Ceres.Chess.LC0NetInference
         _ => throw new NotImplementedException($"Unsupported ONNX precision {precision}")
       };
 
-      executor = new NetExecutorONNXRuntime(shortID, onnxFileName, onnxModelBytes, inputNames,
+      executor = new ONNXExecutor(shortID, onnxFileName, onnxModelBytes, inputNames,
                                             precisionNumBits, deviceIndex, useTensorRT, MinBatchSize, enableProfiling);
     }
 

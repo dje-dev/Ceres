@@ -205,8 +205,8 @@ namespace Ceres.Chess.NNEvaluators
           bool viaTRT = netDef.Type == NNEvaluatorType.ONNXViaTRT;
           string fullFN = Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, netDef.NetworkID) + ".onnx";
           //          NNEvaluatorPrecision precision = netDef.NetworkID.EndsWith(".16") ? NNEvaluatorPrecision.FP16 : NNEvaluatorPrecision.FP32;
-          ret = new NNEvaluatorEngineONNX(netDef.ShortID, fullFN, null, deviceDef.Type, deviceDef.DeviceIndex, useTRT: viaTRT,
-                                            ONNXRuntimeExecutor.NetTypeEnum.LC0, deviceDef.MaxBatchSize ?? DEFAULT_MAX_BATCH_SIZE,
+          ret = new NNEvaluatorONNX(netDef.ShortID, fullFN, null, deviceDef.Type, deviceDef.DeviceIndex, useTRT: viaTRT,
+                                            ONNXNetExecutor.NetTypeEnum.LC0, deviceDef.MaxBatchSize ?? DEFAULT_MAX_BATCH_SIZE,
                                             netDef.Precision, DEFAULT_HAS_WDL, DEFAULT_HAS_MLH,
                                             DEFAULT_HAS_UNCERTAINTYV, DEFAULT_HAS_UNCERTAINTYP, DEFAULT_HAS_ACTION,
                                             null, null, null, null, false, ONNX_SCALE_50_MOVE_COUNTER, false, hasState: DEFAULT_HAS_STATE);
@@ -263,9 +263,9 @@ namespace Ceres.Chess.NNEvaluators
 
           NNEvaluatorOptions evaluatorOptions = new();
 
-          NNEvaluatorEngineONNX onnxEngine = new(netDef.NetworkID, onnxFileName, null, 
+          NNEvaluatorONNX onnxEngine = new(netDef.NetworkID, onnxFileName, null, 
                                                  NNDeviceType.GPU, deviceDef.DeviceIndex, useTensorRT,
-                                                 ONNXRuntimeExecutor.NetTypeEnum.TPG, MAX_BATCH_SIZE,
+                                                 ONNXNetExecutor.NetTypeEnum.TPG, MAX_BATCH_SIZE,
                                                  useFP16 ? NNEvaluatorPrecision.FP16 : NNEvaluatorPrecision.FP32,
                                                  true, true, HAS_UNCERTAINTY_V, HAS_UNCERTAINTY_P, HAS_ACTION, 
                                                  "policy", "value", "mlh", "unc", true,
@@ -321,8 +321,8 @@ namespace Ceres.Chess.NNEvaluators
               const bool USE_TRT = false;
 
               //               NNEvaluatorPrecision precision = netDef.NetworkID.Contains(".16") ? NNEvaluatorPrecision.FP16 : NNEvaluatorPrecision.FP32;
-              return new NNEvaluatorEngineONNX(netDef.NetworkID, tempFN, null, deviceDef.Type, deviceDef.DeviceIndex, USE_TRT,
-                                               ONNXRuntimeExecutor.NetTypeEnum.LC0, 1024,
+              return new NNEvaluatorONNX(netDef.NetworkID, tempFN, null, deviceDef.Type, deviceDef.DeviceIndex, USE_TRT,
+                                               ONNXNetExecutor.NetTypeEnum.LC0, 1024,
                                                netDef.Precision, netDefONNX.IsWDL, netDefONNX.HasMovesLeft, 
                                                netDefONNX.HasUncertaintyV, netDefONNX.HasUncertaintyP, false,
                                                pbn.Net.OnnxModel.OutputValue, pbn.Net.OnnxModel.OutputWdl,
