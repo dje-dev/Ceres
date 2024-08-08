@@ -18,6 +18,7 @@ using System.IO;
 using System.Diagnostics;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using System.Linq;
 
 using Ceres.Chess.NNEvaluators.Defs;
 using Chess.Ceres.NNEvaluators;
@@ -30,9 +31,7 @@ using Ceres.Chess.LC0NetInference;
 using Ceres.Chess.LC0.WeightsProtobuf;
 using Ceres.Chess.LC0.Batches;
 using Ceres.Chess.NNEvaluators.Ceres.TPG;
-using System.Runtime.CompilerServices;
 using Ceres.Chess.NNEvaluators.Ceres;
-
 
 #endregion
 
@@ -257,14 +256,11 @@ namespace Ceres.Chess.NNEvaluators
           throw new NotImplementedException();
 
         case NNEvaluatorType.Ceres:
-          if (deviceDef.OverrideEngineType == null)
+          string[] CERES_ENGINE_TYPES = { "CUDA", "CUDA16", "TENSORRT", "TENSORRT16" };
+          if (deviceDef.OverrideEngineType != null && !CERES_ENGINE_TYPES.Contains(deviceDef.OverrideEngineType))
           {
-            throw new NotImplementedException("Missing required OverrideEngineType");
-          }
-
-          if (deviceDef.OverrideEngineType.ToUpper() == "TORCHSCRIPT")
-          {
-            throw new NotImplementedException("Torchscript executor not currently supported.");
+            throw new Exception($"Ceres engine type not specified or invalid: {deviceDef.OverrideEngineType}." 
+              + System.Environment.NewLine + "Valid types: " + string.Join(", ", CERES_ENGINE_TYPES));
           }
 
           const int MAX_BATCH_SIZE = 1024;
@@ -275,8 +271,9 @@ namespace Ceres.Chess.NNEvaluators
           const bool HAS_UNCERTAINTY_V = true;
           const bool HAS_UNCERTAINTY_P = true;
 
+          // Default is CUDA 16 bit execution, but look for override.
           bool useTensorRT = deviceDef.OverrideEngineType != null && deviceDef.OverrideEngineType.ToUpper().StartsWith("TENSORRT");
-          bool useFP16 = deviceDef.OverrideEngineType != null && deviceDef.OverrideEngineType.ToUpper().Contains("16");
+          bool useFP16 = !(deviceDef.OverrideEngineType != null && !deviceDef.OverrideEngineType.ToUpper().Contains("16"));
 
           string onnxFileName = null;
 

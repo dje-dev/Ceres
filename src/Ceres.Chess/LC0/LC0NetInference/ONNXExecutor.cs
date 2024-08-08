@@ -362,7 +362,7 @@ namespace Ceres.Chess.LC0NetInference
       //       So the variableIsFloat above should be used to determine this, and
       //       the caller should not be offered the chance to set the precision here
       //       (unless we decided to support auto-conversion of ONNX files here).
-      if (float16 || !inputIsFloat)
+      if (float16)
       {
         return RunFloat16(inputsONNX, batchSize);
       }
@@ -451,9 +451,7 @@ namespace Ceres.Chess.LC0NetInference
       IDisposableReadOnlyCollection<DisposableNamedOnnxValue> runResult;
       lock (lockObject)
       {
-        RunOptions ro = new RunOptions();
-        ro.LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_VERBOSE;
-        ro.LogVerbosityLevel = 999;
+        // TODO: make this code more simlar to RunFloat16, including use of inputBuffers32
         runResult = Session.Run(inputsONNX);//, ro); // fails on second run, reshape error, may be a bug on ONNXruntime
       }
 

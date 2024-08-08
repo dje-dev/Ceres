@@ -235,7 +235,10 @@ namespace Chess.Ceres.NNEvaluators
       UseHistory = useHistory;
       Options = options ?? new NNEvaluatorOptions();
 
-      Console.WriteLine("Starting ONNX runtime against " + onnxModelFileName + " from " + onnxModelFileName + " with " + deviceType + " " + gpuID);
+      string executorType = useTRT ? "TensorRT" : "CUDA";
+      string numBits = precision == NNEvaluatorPrecision.FP16 ? "FP16" : "FP32";
+      Console.WriteLine("Starting ONNX runtime against " + onnxModelFileName + " from " + onnxModelFileName 
+                      + " with " + deviceType + " " + gpuID + " using (" + executorType + " " + numBits + ")");
 
       string[] inputNames = type == ONNXNetExecutor.NetTypeEnum.TPG
         ? ["squares", "prior_state.1"]
