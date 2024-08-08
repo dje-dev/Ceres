@@ -28,6 +28,13 @@ namespace Ceres.Chess.NNEvaluators.Ceres
   public record NNEvaluatorOptionsCeres : NNEvaluatorOptions
   {
     /// <summary>
+    /// Default value for QNegativeBlunders/QPositiveBlunders.
+    /// A value slightly above zero is generally optimal
+    /// (since the training rarely saw values of exactly zero).
+    /// </summary>
+    public const float DEFAULT_Q_BLUNDER = 0.05f;
+
+    /// <summary>
     /// If the prior state information should be used.
     /// </summary>
     public bool UsePriorState { get; init; } = false;
@@ -40,12 +47,12 @@ namespace Ceres.Chess.NNEvaluators.Ceres
     /// <summary>
     /// Assumed magnitude (Q units) of adverse blunders that will follow in the game.
     /// </summary>
-    public float QNegativeBlunders { get; set; } = 0;
+    public float QNegativeBlunders { get; set; } = DEFAULT_Q_BLUNDER;
 
     /// <summary>
     /// Assumed magnitude (Q units) of favorable blunders that will follow in the game.
     /// </summary>
-    public float QPositiveBlunders { get; set; } = 0;
+    public float QPositiveBlunders { get; set; } = DEFAULT_Q_BLUNDER;
 
 
     /// <summary>
@@ -71,18 +78,19 @@ namespace Ceres.Chess.NNEvaluators.Ceres
     /// <param name="useAction"></param>
     /// <param name="usePriorState"></param>
     /// <exception cref="ArgumentException"></exception>
-    public NNEvaluatorOptionsCeres(float qNegativeBlunders = 0, float qPositiveBlunders = 0, 
-                                        float fractionUndeblunderedValueHead = 0,
-                                        bool monitorActivations = false,
-                                        float valueHead1Temperature = 1,
-                                        float valueHead2Temperature = 1,
-                                        float valueHeadAveragePowerMeanOrder = 1,
-                                        float policyTemperatureBase = 1,
-                                        float policyTemperatureUncertaintyScalingFactor = 0,
-                                        bool useAction = false,
-                                        bool usePriorState = false,
-                                        float value1UncertaintyTemperatureScalingFactor = 0,
-                                        float value2UncertaintyTemperatureScalingFactor = 0)
+    public NNEvaluatorOptionsCeres(float qNegativeBlunders = DEFAULT_Q_BLUNDER,
+                                   float qPositiveBlunders = DEFAULT_Q_BLUNDER, 
+                                   float fractionUndeblunderedValueHead = 0,
+                                   bool monitorActivations = false,
+                                   float valueHead1Temperature = 1,
+                                   float valueHead2Temperature = 1,
+                                   float valueHeadAveragePowerMeanOrder = 1,
+                                   float policyTemperatureBase = 1,
+                                   float policyTemperatureUncertaintyScalingFactor = 0,
+                                   bool useAction = false,
+                                   bool usePriorState = false,
+                                   float value1UncertaintyTemperatureScalingFactor = 0,
+                                   float value2UncertaintyTemperatureScalingFactor = 0)
     {
       if (valueHead1Temperature <= 0 || valueHead2Temperature <= 0)
       {

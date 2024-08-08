@@ -29,6 +29,9 @@ using Ceres.Chess.LC0.NNFiles;
 using Ceres.Chess.LC0NetInference;
 using Ceres.Chess.LC0.WeightsProtobuf;
 using Ceres.Chess.LC0.Batches;
+using Ceres.Chess.NNEvaluators.Ceres.TPG;
+using System.Runtime.CompilerServices;
+using Ceres.Chess.NNEvaluators.Ceres;
 
 
 #endregion
@@ -91,16 +94,22 @@ namespace Ceres.Chess.NNEvaluators
     /// <returns></returns>
     public static NNEvaluator BuildEvaluator(NNEvaluatorDef def, NNEvaluator referenceEvaluator = null)
     {
-      NNEvaluator evaluator = BuildEvaluatorCore(def, referenceEvaluator);
+      string shortID = null;
+      Dictionary<string, string> options = null;
       if (def.OptionsString != null)
       {
+        options = new();
+
         // Parse key value pairs from options string (one or more key=value with semicolon separator).
-        Dictionary<string, string> options = new();
         foreach (string option in def.OptionsString.Split(';'))
         {
           string[] parts = option.Split('=');
           if (parts.Length == 2)
           {
+            if (parts[0] == "ID")
+            {
+              shortID = parts[1];
+            }
             options[parts[0]] = parts[1];
           }
           else if (parts.Length == 1)
@@ -112,35 +121,44 @@ namespace Ceres.Chess.NNEvaluators
             throw new Exception("Invalid option format: " + option);
           }
         }
-
-        // Currently on a small number of options are supported.  
-        if (options.TryGetValue("ValueTemp", out string valueTemp))
-        {
-          if (options.Count > 1)
-          {
-            throw new Exception("Implementation limitation: no other options supported in conjunction with Temperature.");
-          }
-          evaluator = new NNEvaluatorRemapped(evaluator, valueTemp);
-        }
-        else if (options.TryGetValue("ZeroHistory", out string zeroHistory))
-        {
-          if (options.Count > 1)
-          {
-            throw new Exception("Implementation limitation: no other options supported in conjunction with ZeroHistory.");
-          }
-          else if (zeroHistory != null)
-          {
-            throw new NotImplementedException("ZeroHistory option not expected to have associated value.");
-          }
-          evaluator.ZeroHistoryPlanes = true;
-        }
       }
+
+      NNEvaluator evaluator = BuildEvaluatorCore(def, referenceEvaluator, options);
+
+
+      if (shortID != null)
+      {
+        evaluator.ShortID = shortID;
+      }
+
+      // Currently on a small number of options are supported.  
+      if (options.TryGetValue("ValueTemp", out string valueTemp))
+      {
+        if (options.Count > 1)
+        {
+          throw new Exception("Implementation limitation: no other options supported in conjunction with Temperature.");
+        }
+        evaluator = new NNEvaluatorRemapped(evaluator, valueTemp);
+      }
+      else if (options.TryGetValue("ZeroHistory", out string zeroHistory))
+      {
+        if (options.Count > 1)
+        {
+          throw new Exception("Implementation limitation: no other options supported in conjunction with ZeroHistory.");
+        }
+        else if (zeroHistory != null)
+        {
+          throw new NotImplementedException("ZeroHistory option not expected to have associated value.");
+        }
+        evaluator.ZeroHistoryPlanes = true;
+      }
+
 
       return evaluator;
     }
 
 
-    public static NNEvaluator BuildEvaluatorCore(NNEvaluatorDef def, NNEvaluator referenceEvaluator = null)
+    public static NNEvaluator BuildEvaluatorCore(NNEvaluatorDef def, NNEvaluator referenceEvaluator, Dictionary<string, string> options)
     {
       if (def.IsShared)
       {
@@ -153,7 +171,7 @@ namespace Ceres.Chess.NNEvaluators
           }
           else
           {
-            NNEvaluator evaluator = DoBuildEvaluator(def, referenceEvaluator);
+            NNEvaluator evaluator = DoBuildEvaluator(def, referenceEvaluator, options);
             evaluator.PersistentID = def.SharedName;
             evaluator.NumInstanceReferences++;
             persistentEvaluators[def.SharedName] = (def, evaluator);
@@ -163,7 +181,7 @@ namespace Ceres.Chess.NNEvaluators
       }
       else
       {
-        return DoBuildEvaluator(def, referenceEvaluator);
+        return DoBuildEvaluator(def, referenceEvaluator, options);
       }
     }
 
@@ -179,7 +197,8 @@ namespace Ceres.Chess.NNEvaluators
     static readonly object onnxFileWriteLock = new();
 
     static NNEvaluator Singleton(NNEvaluatorNetDef netDef, NNEvaluatorDeviceDef deviceDef, 
-                                 NNEvaluator referenceEvaluator, int referenceEvaluatorIndex = 0)
+                                 NNEvaluator referenceEvaluator, int referenceEvaluatorIndex,
+                                 Dictionary<string, string> options)
     {
       NNEvaluator ret = null;
 
@@ -253,31 +272,41 @@ namespace Ceres.Chess.NNEvaluators
           const bool HAS_UNCERTAINTY_V = true;
           const bool HAS_UNCERTAINTY_P = true;
 
-          const bool USE_STATE = false;
-          const bool HAS_ACTION = false;
-
-          bool useTensorRT = deviceDef.OverrideEngineType != null &&  deviceDef.OverrideEngineType.ToUpper().StartsWith("TENSORRT");
+          bool useTensorRT = deviceDef.OverrideEngineType != null && deviceDef.OverrideEngineType.ToUpper().StartsWith("TENSORRT");
           bool useFP16 = deviceDef.OverrideEngineType != null && deviceDef.OverrideEngineType.ToUpper().Contains("16");
 
           string onnxFileName = null;
 
-          NNEvaluatorOptions evaluatorOptions = new();
+          string shortID = options != null && options.TryGetValue("ID", out string id) ? id : netDef.NetworkID;
+          string netFileName = onnxFileName ?? netDef.NetworkID;
+          if (!File.Exists(netFileName))
+          {
+            netFileName = Path.Combine(CeresUserSettingsManager.Settings.DirCeresNetworks, netFileName);
+          }
+          if (!File.Exists(netFileName))
+          {
+            throw new Exception($"Ceres net {netFileName} not found. Use valid full path or set source directory using DirCeresNetworks in Ceres.json");
+          }
 
-          NNEvaluatorONNX onnxEngine = new(netDef.NetworkID, onnxFileName, null, 
-                                                 NNDeviceType.GPU, deviceDef.DeviceIndex, useTensorRT,
-                                                 ONNXNetExecutor.NetTypeEnum.TPG, MAX_BATCH_SIZE,
-                                                 useFP16 ? NNEvaluatorPrecision.FP16 : NNEvaluatorPrecision.FP32,
-                                                 true, true, HAS_UNCERTAINTY_V, HAS_UNCERTAINTY_P, HAS_ACTION, 
-                                                 "policy", "value", "mlh", "unc", true,
-                                                 ENABLE_PROFILING, false, USE_HISTORY, evaluatorOptions,
-                                                 true, USE_STATE);
+          NNEvaluatorOptionsCeres optionsCeres = new NNEvaluatorOptionsCeres()
+          {
 
-          EncodedPositionBatchFlat.RETAIN_POSITION_INTERNALS = true; // ** TODO: remove/rework
+          };
 
-          throw new NotImplementedException(); // implement below
-//        onnxEngine.ConverterToFlatFromTPG = (options, o, f1) => TPGConvertersToFlat.ConvertToFlatTPGFromTPG(options, o, f1);
-//        onnxEngine.ConverterToFlat = (options, o, history, squares, legalMoveIndices) => TPGConvertersToFlat.ConvertToFlatTPG(options, o, history, squares, legalMoveIndices);
+          NNEvaluatorONNX onnxEngine = new(shortID, netFileName, null, 
+                                                NNDeviceType.GPU, deviceDef.DeviceIndex, useTensorRT,
+                                                ONNXNetExecutor.NetTypeEnum.TPG, MAX_BATCH_SIZE,
+                                                useFP16 ? NNEvaluatorPrecision.FP16 : NNEvaluatorPrecision.FP32,
+                                                true, true, HAS_UNCERTAINTY_V, HAS_UNCERTAINTY_P, optionsCeres.UseAction, 
+                                                "policy", "value", "mlh", "unc", true,
+                                                ENABLE_PROFILING, false, USE_HISTORY, optionsCeres,
+                                                true, optionsCeres.UsePriorState);
 
+        EncodedPositionBatchFlat.RETAIN_POSITION_INTERNALS = true; // ** TODO: remove/rework
+        onnxEngine.ConverterToFlatFromTPG = (options, o, f1) => TPGConvertersToFlat.ConvertToFlatTPGFromTPG(options, o, f1);
+        onnxEngine.ConverterToFlat = (options, o, history, squares, legalMoveIndices) => TPGConvertersToFlat.ConvertToFlatTPG(options, o, history, squares, legalMoveIndices);
+
+        return onnxEngine;
 
         case NNEvaluatorType.LC0:
           INNWeightsFileInfo net = NNWeightsFiles.LookupNetworkFile(netDef.NetworkID);
@@ -415,7 +444,7 @@ namespace Ceres.Chess.NNEvaluators
     }
 
 
-    static NNEvaluator BuildDeviceCombo(NNEvaluatorDef def, NNEvaluator referenceEvaluator)
+    static NNEvaluator BuildDeviceCombo(NNEvaluatorDef def, NNEvaluator referenceEvaluator, Dictionary<string, string> options)
     {
       Debug.Assert(def.Nets.Length == 1);
 
@@ -433,11 +462,11 @@ namespace Ceres.Chess.NNEvaluators
           {
             if (def.Nets.Length == 1)
             {
-              evaluators[i] = Singleton(def.Nets[0].Net, def.Devices[i].Device, referenceEvaluator, i);
+              evaluators[i] = Singleton(def.Nets[0].Net, def.Devices[i].Device, referenceEvaluator, i, options);
             }
             else
             {
-             evaluators[i] = BuildNetCombo(def, referenceEvaluator);
+             evaluators[i] = BuildNetCombo(def, referenceEvaluator, options);
             }
 
           fractions[i] = def.Devices[i].Fraction;
@@ -460,7 +489,7 @@ namespace Ceres.Chess.NNEvaluators
     }
 
 
-    static NNEvaluator BuildNetCombo(NNEvaluatorDef def, NNEvaluator referenceEvaluator)
+    static NNEvaluator BuildNetCombo(NNEvaluatorDef def, NNEvaluator referenceEvaluator, Dictionary<string, string> options)
     {
       Debug.Assert(def.Devices.Length == 1);
 
@@ -474,7 +503,7 @@ namespace Ceres.Chess.NNEvaluators
       float[] weightsUPolicy = new float[def.Nets.Length];
       Parallel.For(0, def.Nets.Length, delegate (int i)
       {
-        evaluators[i] = Singleton(def.Nets[i].Net, def.Devices[0].Device, referenceEvaluator);
+        evaluators[i] = Singleton(def.Nets[i].Net, def.Devices[0].Device, referenceEvaluator, i, options);
         weightsValue[i] = def.Nets[i].WeightValue;
         weightsValue2[i] = def.Nets[i].WeightValue2;
         weightsPolicy[i] = def.Nets[i].WeightPolicy;
@@ -493,7 +522,7 @@ namespace Ceres.Chess.NNEvaluators
     }
 
 
-    static NNEvaluator DoBuildEvaluator(NNEvaluatorDef def, NNEvaluator referenceEvaluator)
+    static NNEvaluator DoBuildEvaluator(NNEvaluatorDef def, NNEvaluator referenceEvaluator, Dictionary<string, string> options)
     {
       if (def.DeviceCombo == NNEvaluatorDeviceComboType.Single && def.DeviceIndices.Length > 1)
       {
@@ -525,15 +554,15 @@ namespace Ceres.Chess.NNEvaluators
 
       if (def.DeviceCombo != NNEvaluatorDeviceComboType.Single)
       {
-        return BuildDeviceCombo(def, referenceEvaluator);
+        return BuildDeviceCombo(def, referenceEvaluator, options);
       }
       else if (def.NetCombo != NNEvaluatorNetComboType.Single)
       {
-        return BuildNetCombo(def, referenceEvaluator);
+        return BuildNetCombo(def, referenceEvaluator, options);
       }
       else
       {
-        return Singleton(def.Nets[0].Net, def.Devices[0].Device, referenceEvaluator);
+        return Singleton(def.Nets[0].Net, def.Devices[0].Device, referenceEvaluator, 0, options);
       }
     }
  

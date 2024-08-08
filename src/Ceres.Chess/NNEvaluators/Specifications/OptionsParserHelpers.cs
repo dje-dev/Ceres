@@ -318,6 +318,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
       {
         string[] deviceSpecParts = deviceSpecString.Split("#");
         deviceSpecString = deviceSpecParts[0];
+        overrideEngine = deviceSpecParts[1];
 
       }
 
