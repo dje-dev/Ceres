@@ -131,28 +131,31 @@ namespace Ceres.Chess.NNEvaluators
         evaluator.ShortID = shortID;
       }
 
-      // Currently on a small number of options are supported.  
-      if (options.TryGetValue("ValueTemp", out string valueTemp))
+      if (options != null)
       {
-        if (options.Count > 1)
+        // Currently on a small number of options are supported.  
+        if (options.TryGetValue("ValueTemp", out string valueTemp))
         {
-          throw new Exception("Implementation limitation: no other options supported in conjunction with Temperature.");
+          if (options.Count > 1)
+          {
+            throw new Exception("Implementation limitation: no other options supported in conjunction with Temperature.");
+          }
+          evaluator = new NNEvaluatorRemapped(evaluator, valueTemp);
         }
-        evaluator = new NNEvaluatorRemapped(evaluator, valueTemp);
-      }
-      else if (options.TryGetValue("ZeroHistory", out string zeroHistory))
-      {
-        if (options.Count > 1)
+        else if (options.TryGetValue("ZeroHistory", out string zeroHistory))
         {
-          throw new Exception("Implementation limitation: no other options supported in conjunction with ZeroHistory.");
+          if (options.Count > 1)
+          {
+            throw new Exception("Implementation limitation: no other options supported in conjunction with ZeroHistory.");
+          }
+          else if (zeroHistory != null)
+          {
+            throw new NotImplementedException("ZeroHistory option not expected to have associated value.");
+          }
+          evaluator.ZeroHistoryPlanes = true;
         }
-        else if (zeroHistory != null)
-        {
-          throw new NotImplementedException("ZeroHistory option not expected to have associated value.");
-        }
-        evaluator.ZeroHistoryPlanes = true;
-      }
 
+      }
 
       return evaluator;
     }
