@@ -217,6 +217,7 @@ namespace Ceres.Chess.NNEvaluators
       const bool DEFAULT_HAS_STATE = false;
 
       const int DEFAULT_MAX_BATCH_SIZE = 1024;
+      const int TRT_MAX_BATCH_SIZE = 204; // See note in ONNXExecutor. Configuring profile to include large batches hinders performance.
       const bool ONNX_SCALE_50_MOVE_COUNTER = false; // BT2 already inserts own node to adjust
 
       switch (netDef.Type)
@@ -224,10 +225,12 @@ namespace Ceres.Chess.NNEvaluators
         case NNEvaluatorType.ONNXViaTRT:
         case NNEvaluatorType.ONNXViaORT:
           bool viaTRT = netDef.Type == NNEvaluatorType.ONNXViaTRT;
+          int maxONNXBatchSize = viaTRT ? TRT_MAX_BATCH_SIZE : DEFAULT_MAX_BATCH_SIZE;
+          maxONNXBatchSize = Math.Min(maxONNXBatchSize, deviceDef.MaxBatchSize ?? DEFAULT_MAX_BATCH_SIZE);
           string fullFN = Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, netDef.NetworkID) + ".onnx";
           //          NNEvaluatorPrecision precision = netDef.NetworkID.EndsWith(".16") ? NNEvaluatorPrecision.FP16 : NNEvaluatorPrecision.FP32;
           ret = new NNEvaluatorONNX(netDef.ShortID, fullFN, null, deviceDef.Type, deviceDef.DeviceIndex, useTRT: viaTRT,
-                                            ONNXNetExecutor.NetTypeEnum.LC0, deviceDef.MaxBatchSize ?? DEFAULT_MAX_BATCH_SIZE,
+                                            ONNXNetExecutor.NetTypeEnum.LC0, maxONNXBatchSize,
                                             netDef.Precision, DEFAULT_HAS_WDL, DEFAULT_HAS_MLH,
                                             DEFAULT_HAS_UNCERTAINTYV, DEFAULT_HAS_UNCERTAINTYP, DEFAULT_HAS_ACTION,
                                             null, null, null, null, false, ONNX_SCALE_50_MOVE_COUNTER, false, hasState: DEFAULT_HAS_STATE);
@@ -263,7 +266,10 @@ namespace Ceres.Chess.NNEvaluators
               + System.Environment.NewLine + "Valid types: " + string.Join(", ", CERES_ENGINE_TYPES));
           }
 
-          const int MAX_BATCH_SIZE = 1024;
+          // Temporary hack, Ceres nets requires positions to be retained.
+          // TODO: Remove this, or make it an instance variable not global static.
+          //       Leaving this globally enabled may impact performance of all evaluators.
+          EncodedPositionBatchFlat.RETAIN_POSITION_INTERNALS = true;
 
           // TODO: Derive these values from NNEvaluatorOptions in the definition object
           const bool ENABLE_PROFILING = false;
@@ -279,6 +285,10 @@ namespace Ceres.Chess.NNEvaluators
 
           string shortID = options != null && options.TryGetValue("ID", out string id) ? id : netDef.NetworkID;
           string netFileName = onnxFileName ?? netDef.NetworkID;
+          if (!netFileName.ToUpper().EndsWith("ONNX"))
+          {
+            netFileName += ".onnx";
+          }
           if (!File.Exists(netFileName))
           {
             netFileName = Path.Combine(CeresUserSettingsManager.Settings.DirCeresNetworks, netFileName);
@@ -295,7 +305,8 @@ namespace Ceres.Chess.NNEvaluators
 
           NNEvaluatorONNX onnxEngine = new(shortID, netFileName, null, 
                                                 NNDeviceType.GPU, deviceDef.DeviceIndex, useTensorRT,
-                                                ONNXNetExecutor.NetTypeEnum.TPG, MAX_BATCH_SIZE,
+                                                ONNXNetExecutor.NetTypeEnum.TPG,
+                                                useTensorRT ? TRT_MAX_BATCH_SIZE : DEFAULT_MAX_BATCH_SIZE,
                                                 useFP16 ? NNEvaluatorPrecision.FP16 : NNEvaluatorPrecision.FP32,
                                                 true, true, HAS_UNCERTAINTY_V, HAS_UNCERTAINTY_P, optionsCeres.UseAction, 
                                                 "policy", "value", "mlh", "unc", true,

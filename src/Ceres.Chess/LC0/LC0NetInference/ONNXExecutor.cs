@@ -26,8 +26,6 @@ using Microsoft.ML.OnnxRuntime.Tensors;
 using Ceres.Base.Misc;
 using Ceres.Base.CUDA;
 using Ceres.Base.Benchmarking;
-using static Microsoft.FSharp.Core.ByRefKinds;
-using static System.Runtime.InteropServices.JavaScript.JSType;
 
 #endregion
 
@@ -98,19 +96,21 @@ namespace Ceres.Chess.LC0NetInference
     /// <param name="gpuID"></param>
     /// <param name="useTRT"></param>
     /// <param name="minBatchSize"></param>
+    /// <param name="maxBatchSize"></param>
     /// <param name="enableProfiling"></param>
     /// <param name="outputNamesToUse"></param>
     /// <exception cref="Exception"></exception>
     public ONNXExecutor(string shortID,
-                                  string onnxFileName, 
-                                  byte[] onnxModelBytes,
-                                  string[] inputNames,
-                                  int precisionNumBits, 
-                                  int gpuID,
-                                  bool useTRT, 
-                                  int minBatchSize,
-                                  bool enableProfiling,
-                                  string[] outputNamesToUse = null)
+                        string onnxFileName, 
+                        byte[] onnxModelBytes,
+                        string[] inputNames,
+                        int precisionNumBits, 
+                        int gpuID,
+                        bool useTRT, 
+                        int minBatchSize,
+                        int maxBatchSize,
+                        bool enableProfiling,
+                        string[] outputNamesToUse = null)
     {
       if (precisionNumBits != 32 && precisionNumBits != 16)
       {
@@ -187,12 +187,17 @@ namespace Ceres.Chess.LC0NetInference
             // If no profile is specified then TensorRT will build a new profile/engine
             // each time it sees a differen batch size.
             // Although possibly faster to execute, these rebuilds would be far too slow.
+            // Therefore we build a profile specifying the min, opt, and max batch sizes.
+            //
+            // Note that the actual performance is sensitive to the min/max batch sizes
+            // in unpredictable ways. Seemingly large max batch sizes (e.g. over about 200)
+            // often reduce performance.
             const bool USE_OMNI_PROFILE = true;
             if (USE_OMNI_PROFILE)
             {
               providerOptionsDict["trt_profile_min_shapes"] = MakeShapeStr(minBatchSize);
               providerOptionsDict["trt_profile_opt_shapes"] = MakeShapeStr(128);
-              providerOptionsDict["trt_profile_max_shapes"] = MakeShapeStr(MAX_BATCH_SIZE);
+              providerOptionsDict["trt_profile_max_shapes"] = MakeShapeStr(maxBatchSize); // N.B. see note above
             }
           }
 

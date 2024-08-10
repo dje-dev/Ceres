@@ -162,7 +162,7 @@ namespace Ceres.Chess.LC0NetInference
       };
 
       executor = new ONNXExecutor(shortID, onnxFileName, onnxModelBytes, inputNames,
-                                            precisionNumBits, deviceIndex, useTensorRT, MinBatchSize, enableProfiling);
+                                  precisionNumBits, deviceIndex, useTensorRT, MinBatchSize, maxBatchSize, enableProfiling);
     }
 
 
