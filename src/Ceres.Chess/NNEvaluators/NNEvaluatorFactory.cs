@@ -224,7 +224,8 @@ namespace Ceres.Chess.NNEvaluators
       {
         case NNEvaluatorType.ONNXViaTRT:
         case NNEvaluatorType.ONNXViaORT:
-          bool viaTRT = netDef.Type == NNEvaluatorType.ONNXViaTRT;
+          bool viaTRT = netDef.Type == NNEvaluatorType.ONNXViaTRT
+             || deviceDef.OverrideEngineType.StartsWith("TensorRT16");
           int maxONNXBatchSize = viaTRT ? TRT_MAX_BATCH_SIZE : DEFAULT_MAX_BATCH_SIZE;
           maxONNXBatchSize = Math.Min(maxONNXBatchSize, deviceDef.MaxBatchSize ?? DEFAULT_MAX_BATCH_SIZE);
           string fullFN = Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, netDef.NetworkID) + ".onnx";

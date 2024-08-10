@@ -44,8 +44,6 @@ namespace Ceres.Chess.LC0NetInference
 {
   public class ONNXExecutor : IDisposable
   {
-    const int MAX_BATCH_SIZE = 1024;
-
     /// <summary>
     /// Name of underlying ONNX file;
     /// </summary>
@@ -73,6 +71,8 @@ namespace Ceres.Chess.LC0NetInference
     /// so this might not be strictly necessary.
     /// </summary>
     readonly object lockObject = new object();
+
+    int maxBatchSize;
 
     RunOptions runOptions;
     bool disposed;
@@ -123,12 +123,14 @@ namespace Ceres.Chess.LC0NetInference
         throw new Exception("Must specify either onnxFileName or onnxModelBytes");
       }
 
-      string directoryName = onnxFileName == null ? Path.GetTempPath() : new FileInfo(onnxFileName).DirectoryName;
-
       if (!File.Exists(onnxFileName))
       {
         throw new Exception("ONNX file not found: " + onnxFileName);
       }
+
+      this.maxBatchSize = maxBatchSize;
+      string directoryName = onnxFileName == null ? Path.GetTempPath() : new FileInfo(onnxFileName).DirectoryName;
+
       if (onnxModelBytes == null)
       {
         onnxModelBytes = File.ReadAllBytes(onnxFileName);
@@ -166,7 +168,7 @@ namespace Ceres.Chess.LC0NetInference
         {
           OrtTensorRTProviderOptions trtProviderOptions = new OrtTensorRTProviderOptions();
           // TODO: this code has no effect for unknown reasons.
-          var providerOptionsDict = new Dictionary<string, string>();
+          Dictionary<string, string> providerOptionsDict = new();
           providerOptionsDict["device_id"] = gpuID.ToString();
           providerOptionsDict["trt_max_workspace_size"] = "4294967296";
 
@@ -262,9 +264,9 @@ namespace Ceres.Chess.LC0NetInference
 
       if (enableProfiling)
       {
-        ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, "****************   NetExecutorONNXRuntime is profiling....   ****************");
+        ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, @"****************   NetExecutorONNXRuntime is profiling to c:\temp ....   ****************");
         so.EnableProfiling = true;
-        so.ProfileOutputPathPrefix = @"d:\temp";
+        so.ProfileOutputPathPrefix = @"c:\temp";
       }
 
       // See: https://onnxruntime.ai/docs/performance/model-optimizations/graph-optimizations.html
@@ -282,13 +284,13 @@ namespace Ceres.Chess.LC0NetInference
           // Create input and output buffers.
           if (PrecisionNumBits == 32)
           {
-            inputBuffers32 = ONNXHelpers.CreateBuffers<float>(Session.InputMetadata, MAX_BATCH_SIZE);
-            outputBuffers32 = ONNXHelpers.CreateBuffers<float>(Session.OutputMetadata, MAX_BATCH_SIZE, outputNamesToUse);
+            inputBuffers32 = ONNXHelpers.CreateBuffers<float>(Session.InputMetadata, maxBatchSize);
+            outputBuffers32 = ONNXHelpers.CreateBuffers<float>(Session.OutputMetadata, maxBatchSize, outputNamesToUse);
           }
           else if (PrecisionNumBits == 16)
           {
-            inputBuffers16 = ONNXHelpers.CreateBuffers<Float16>(Session.InputMetadata, MAX_BATCH_SIZE);
-            outputBuffers16 = ONNXHelpers.CreateBuffers<Float16>(Session.OutputMetadata, MAX_BATCH_SIZE, outputNamesToUse);
+            inputBuffers16 = ONNXHelpers.CreateBuffers<Float16>(Session.InputMetadata, maxBatchSize);
+            outputBuffers16 = ONNXHelpers.CreateBuffers<Float16>(Session.OutputMetadata, maxBatchSize, outputNamesToUse);
           }
           else
           {
@@ -325,9 +327,9 @@ namespace Ceres.Chess.LC0NetInference
         throw new ArgumentException($"Expected {inputsMetadata.Count} inputs, received " + inputs.Length);
       }
 
-      if (inputs[0].shape[0] > MAX_BATCH_SIZE)
+      if (inputs[0].shape[0] > maxBatchSize)
       {
-        throw new ArgumentException($"Batch size {inputs[0].shape[0]} exceeds maximum of {MAX_BATCH_SIZE}");
+        throw new ArgumentException($"Batch size {inputs[0].shape[0]} exceeds maximum of {maxBatchSize}");
       }
 
       var inputsONNX = new (Memory<Half> input, int[] shape, string inputName, int numElements)[inputsMetadata.Count];
