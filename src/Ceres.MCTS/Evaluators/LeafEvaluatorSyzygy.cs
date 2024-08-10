@@ -13,17 +13,17 @@
 
 #region Using Directives
 
-using Ceres.Chess;
 using System;
-using Ceres.MCTS.MTCSNodes;
-using Ceres.Chess.NNEvaluators.LC0DLL;
-using Ceres.Base.DataTypes;
-using Ceres.MCTS.LeafExpansion;
-using System.Diagnostics;
-using Ceres.MCTS.Params;
-using Ceres.Base.Threading;
-using Ceres.Base.Environment;
 using System.Runtime.CompilerServices;
+using System.Threading;
+
+using Ceres.Base.DataTypes;
+using Ceres.Base.Threading;
+
+using Ceres.Chess;
+using Ceres.Chess.NNEvaluators.LC0DLL;
+using Ceres.MCTS.MTCSNodes;
+using Ceres.MCTS.Params;
 
 #endregion
 
@@ -41,9 +41,14 @@ namespace Ceres.MCTS.Evaluators
     public readonly int MaxCardinality;
 
     /// <summary>
-    /// Number of probe successes.
+    /// Number of probe successes (global accumulator for Ceres engine).
     /// </summary>
-    internal static AccumulatorMultithreaded NumHits;
+    public static AccumulatorMultithreaded NumHitsGlobal;
+
+    /// <summary>
+    /// Number of probe successes (for this evaluator).
+    /// </summary>
+    public int NumHits;
 
     /// <summary>
     /// 
@@ -127,15 +132,18 @@ namespace Ceres.MCTS.Evaluators
           throw new Exception("Internal error: unknown Syzygy tablebase result code");
       }
 
-      NumHits.Add(1, pos.PiecesShortHash);
+      // Update tablebase hits counter.
+      Interlocked.Increment(ref NumHits);
+      NumHitsGlobal.Add(1, pos.PiecesShortHash);
 
       return result;
     }
 
+
     [ModuleInitializer]
     internal static void ModuleInitialize()
     {
-      NumHits.Initialize();
+      NumHitsGlobal.Initialize();
     }
   }
 }
