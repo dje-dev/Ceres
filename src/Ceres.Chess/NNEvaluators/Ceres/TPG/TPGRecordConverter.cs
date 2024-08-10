@@ -136,12 +136,6 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
 
 
     static bool haveInitialized = false;
-
-    const int MAX_TPG_RECORDS_PER_BUFFER = 4096;
-
-    [ThreadStatic]
-    static TPGRecord[] tempTPGRecords;
-
     static int countConversions = 0;
 
 
@@ -204,39 +198,30 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
       // TODO: for efficiency, avoid doing this if the NN evaluator does not need raw bytes
       const int MAX_THREADS = 8;
       Parallel.For(0, positions.NumPos, new ParallelOptions() { MaxDegreeOfParallelism = MAX_THREADS }, i =>
-
-      //for (int i = 0; i < positions.NumPos; i++)
-      {
-        if (tempTPGRecords == null)
-        {
-          tempTPGRecords = new TPGRecord[MAX_TPG_RECORDS_PER_BUFFER]; // ThreadStatic
-        }
-
+      { 
         if (!lastMovePliesEnabled)
         {
           // Disable any values possibly passed for last used plies since they are not to be used.
           pliesSinceLastMoveAllPositions = null;
         }
 
-        TPGRecord tpgRecord = default;
         Span<byte> thesePliesSinceLastMove = pliesSinceLastMoveAllPositions == null ? default : new Span<byte>(pliesSinceLastMoveAllPositions, i * 64, 64);
 
         float w = TPGRecordEncoding.ENABLE_PRIOR_VALUE_POSITION ? positions.PositionsBuffer.Span[i].MiscInfo.InfoTraining.OriginalQ : float.NaN;
         float d = TPGRecordEncoding.ENABLE_PRIOR_VALUE_POSITION ? positions.PositionsBuffer.Span[i].MiscInfo.InfoTraining.OriginalD : float.NaN;
         float l = TPGRecordEncoding.ENABLE_PRIOR_VALUE_POSITION ? positions.PositionsBuffer.Span[i].MiscInfo.InfoTraining.OriginalM : float.NaN;
 
+        TPGRecord tpgRecord = default;
         ConvertToTPGRecord(in positionsFlat.Span[i], includeHistory, moves, null, null, float.NaN,
-                           ref tpgRecord, thesePliesSinceLastMove, lastMovePliesEnabled, 
-                           qNegativeBlunders, qPositiveBlunders,
-                           w, d, l);
-                           
-        tempTPGRecords[i] = tpgRecord;
+                           ref tpgRecord, thesePliesSinceLastMove, lastMovePliesEnabled,
+                           qNegativeBlunders, qPositiveBlunders, w, d, l);
 
-        const bool VALIDITY_CHECK = true;
-        if (VALIDITY_CHECK && pliesSinceLastMoveAllPositions != null)
+#if DEBUG        
+        if (pliesSinceLastMoveAllPositions != null)
         {
-          tpgRecord = CheckPliesSinceLastMovedCorrect(tpgRecord);
+          CheckPliesSinceLastMovedCorrect(tpgRecord);
         }
+#endif
 
         // Extract as bytes.
         tpgRecord.CopySquares(squareBytesAllCopy, i * 64 * TPGRecord.BYTES_PER_SQUARE_RECORD);
@@ -331,7 +316,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
       }
     }
 
-    private static TPGRecord CheckPliesSinceLastMovedCorrect(TPGRecord tpgRecord)
+    private static void CheckPliesSinceLastMovedCorrect(TPGRecord tpgRecord)
     {
       throw new NotImplementedException();
     }
