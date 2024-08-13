@@ -92,6 +92,7 @@ namespace Ceres.Chess.LC0NetInference
     /// <param name="onnxFileName"></param>
     /// <param name="onnxModelBytes"></param>
     /// <param name="inputNames"></param>
+    /// <param name="nonBatchDimensions"></param>
     /// <param name="precisionNumBits"></param>
     /// <param name="gpuID"></param>
     /// <param name="useTRT"></param>
@@ -104,6 +105,7 @@ namespace Ceres.Chess.LC0NetInference
                         string onnxFileName, 
                         byte[] onnxModelBytes,
                         string[] inputNames,
+                        string nonBatchDimensions,
                         int precisionNumBits, 
                         int gpuID,
                         bool useTRT, 
@@ -170,7 +172,7 @@ namespace Ceres.Chess.LC0NetInference
           // TODO: this code has no effect for unknown reasons.
           Dictionary<string, string> providerOptionsDict = new();
           providerOptionsDict["device_id"] = gpuID.ToString();
-          providerOptionsDict["trt_max_workspace_size"] = "4294967296";
+          providerOptionsDict["trt_max_workspace_size"] = "4294967296"; 
 
           if (inputNames != null)
           {
@@ -180,7 +182,7 @@ namespace Ceres.Chess.LC0NetInference
               string ret = "";
               foreach (string inputName in inputNames)
               {
-                ret += (firstTime ? "" : ",") + inputName + $":{size}x64x{ONNXNetExecutor.TPG_BYTES_PER_SQUARE_RECORD}";
+                ret += (firstTime ? "" : ",") + inputName + $":{size}x{nonBatchDimensions}";
                 firstTime = false;
               }
               return ret;

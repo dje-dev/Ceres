@@ -161,7 +161,14 @@ namespace Ceres.Chess.LC0NetInference
         _ => throw new NotImplementedException($"Unsupported ONNX precision {precision}")
       };
 
-      executor = new ONNXExecutor(shortID, onnxFileName, onnxModelBytes, inputNames,
+      string nonBatchDimensions = netType switch
+      {
+        NetTypeEnum.TPG => $"64x{ONNXNetExecutor.TPG_BYTES_PER_SQUARE_RECORD}",
+        NetTypeEnum.LC0 => $"{EncodedPositionBatchFlat.TOTAL_NUM_PLANES_ALL_HISTORIES}x8x8",
+        _ => throw new NotImplementedException($"The enum type '{netType}' is not handled."),
+      };
+
+      executor = new ONNXExecutor(shortID, onnxFileName, onnxModelBytes, inputNames, nonBatchDimensions,
                                   precisionNumBits, deviceIndex, useTensorRT, MinBatchSize, maxBatchSize, enableProfiling);
     }
 
