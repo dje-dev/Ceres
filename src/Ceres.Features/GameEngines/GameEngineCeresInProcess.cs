@@ -227,7 +227,10 @@ namespace Ceres.Features.GameEngines
     /// <param name="gameID">optional game descriptive string</param>
     public override void ResetGame(string gameID = null)
     {
-      reuseNodeCache = Search?.Manager.Context.Tree.NodeCache;
+      if (Search != null)
+      {
+        reuseNodeCache = Search.Manager.Context.Tree.NodeCache;
+      }
 
       LastSearch?.Manager.Dispose();
       Search?.Manager.Dispose();
