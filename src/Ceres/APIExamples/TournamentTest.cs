@@ -44,7 +44,6 @@ using Ceres.Chess.NetEvaluation.Batch;
 using System.Runtime.InteropServices;
 using Ceres.Chess.Games.Utils;
 using Ceres.Chess.Data.Nets;
-using System.Numerics;
 
 #endregion
 
@@ -54,7 +53,7 @@ namespace Ceres.APIExamples
   {
     const bool POOLED = false;
 
-    static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 3 : 4;
+    static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 3 : 8;
     static int[] OVERRIDE_DEVICE_IDs = /*POOLED ? null*/
        (Environment.MachineName.ToUpper() switch
       {
@@ -63,10 +62,8 @@ namespace Ceres.APIExamples
         _ => new int[] { 0 }
       });
 
-    static string GPUS_1 = POOLED ? "GPU:0:POOLED"
-                       : "GPU:0";
-    static string GPUS_2 = POOLED ? "GPU:0:POOLED"
-                           : "GPU:0";
+    static string GPUS_1 = POOLED ? "GPU:0:POOLED" : "GPU:0";
+    static string GPUS_2 = POOLED ? "GPU:0:POOLED" : "GPU:0";
 
 
     static bool RUN_DISTRIBUTED = false;
@@ -220,29 +217,36 @@ namespace Ceres.APIExamples
       //NET2 = "CUSTOM1:HOP_C_GL_RPE_lategelu_ln_256_10_FFN4_4bn_fp16_last.onnx";
 
 
-//      NET1 = "CUSTOM1:HOP_CL_CLEAN_256_10_FFN6_B1_NLATT_4bn_fp16_3999989760.onnx"; // _4bn_fp16
-      NET1 = "CUSTOM1:HOP_CL_CLEAN_256_10_FFN6_B1_NLATT_4bn_fp16_3999989760.onnx";
+      NET1 = "CUSTOM1:HOP_CL_CLEAN_256_10_FFN6_B1_NLATT_4bn_fp16_x.onnx"; // _4bn_fp16
+      GPUS_1 = "GPU:0";
+      //      NET1 = "CUSTOM1:HOP_CL_CLEAN_256_10_FFN6_B1_NLATT_4bn_fp16_1199996928.onnx";
+      //      NET2 = "CUSTOM1:HOP_CL_CLEAN_256_10_FFN6_B1_4bn_fp16_1199996928.onnx";
+      //NET2 = "~T1_256_RL_TRT";
 
-//      NET1 = "CUSTOM1:HOP_CL_CLEAN_256_10_FFN6_B1_4bn_fp16_4000006144.onnx";
-NET2 = "~T1_256_RL_TRT";
-
-            NET2 = "~T80";
+      //            NET1 = "~T80";
       //      NET2 = "CUSTOM1:HOP_CL_CLEAN_256_10_FFN6_B1_4bn_fp16_399998976.onnx";
 
       //      NET2 = "CUSTOM1:HOP_C_256_12_8_6_4bn_B1_2024_vl01_sf_c3_1bn_auxtenth_399998976.ts.fp16.onnx";
       //      NET2 = "CUSTOM1:HOP_C_GL_RPE_lategelu_ln_256_10_FFN4_4bn_fp16_399998976.onnx";
 
-      //NET2 = "~T1_DISTILL_256_10_FP16";
+      //      NET2 = "~T1_DISTILL_256_10_FP16";
 
-      NET1 = "CUSTOM1:HOP_CL_CLEAN_512_15_FFN4_B1_4bn_fp16_3999989760.onnx";
-//      NET2 = "CUSTOM1:DGX_CL_UNCLEAN_256_10_FFN6_B1_NLATT_4bn_fp16_399998976.onnx";
-//      NET1 = "CUSTOM1:HOP_CL_CLEAN_512_15_FFN4_B1_4bn_fp16_2199994368.onnx";
+      // ** CheckpointState TEST
+      //      NET1 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_last.onnx";
+      //combo_397_4000006144
+      NET1 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_5200003072.onnx|TEST"; // 397 good
+//      NET2 = "Ceres:lastx_fp16.onnx";
+
 //      NET2 = "~T1_DISTILL_512_15_FP16";// _TRT";
       NET2 = "~T3_DISTILL_512_15_FP16_TRT";
-      //      NET2 = "~BT4_FP16_TRT";
+//      NET2 = "~BT3_FP16_TRT";
 
-      NET1 = "CUSTOM1:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_199999488.onnx";
-      NET2 = "CUSTOM1:HOP_CL_CLEAN_512_15_FFN4_B1_4bn_fp16_199999488.onnx";
+/////      NET2 = "~T1_256_RL_TRT";
+//      NET2 = "~T1_256_RL_NATIVE";
+ GPUS_2 = "GPU:0#TensorRT16";
+
+      //      NET1 = "CUSTOM1:last.onnx";
+      //      NET2 = "CUSTOM1:HOP_CL_CLEAN_512_15_FFN4_B1_4bn_fp16_599998464.onnx";
       //      NET2 = "CUSTOM1:HOP_C_256_12_8_6_4bn_B1_2024_vl01_sf_1bn_newdata_999997440.ts.fp16.onnx";
       //      NET2 = "~T1_256_RL_NATIVE";
 
@@ -263,11 +267,11 @@ NET2 = "~T1_256_RL_TRT";
       //NET2 = "~T1_DISTIL_512_15_NATIVE";
 
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(100);
-//    limit1 = SearchLimit.BestValueMove;
+      SearchLimit limit1 = SearchLimit.NodesPerMove(1000);
+    limit1 = SearchLimit.BestValueMove;
 //limit1 = new SearchLimit(SearchLimitType.SecondsForAllMoves, 15, false, 0.5f);
       //SearchLimit limit2 = SearchLimit.NodesPerMove(1);
-
+      
       SearchLimit limit2 = limit1;
       //      limit2 = SearchLimit.BestActionMove;
       //var limit2 = SearchLimit.NodesPerMove(1);
@@ -326,7 +330,7 @@ NET2 = "~T1_256_RL_TRT";
         System.Environment.Exit(3);
       }
 
-      NNEvaluatorDef evalDef1 =  NNEvaluatorDefFactory.FromSpecification(NET1, GPUS_2);
+      NNEvaluatorDef evalDef1 =  NNEvaluatorDefFactory.FromSpecification(NET1, GPUS_1);
       NNEvaluatorDef evalDef2 =  NNEvaluatorDefFactory.FromSpecification(NET2, GPUS_2);
 
       NNEvaluatorDef? evalDefSecondary1 = null;
@@ -444,7 +448,7 @@ NET2 = "~T1_256_RL_TRT";
       //      AdjustSelectParamsNewTune(engineDefCeres1.SelectParams);
       //      AdjustSelectParamsNewTune(engineDefCeres2.SelectParams);
 
-      //engineDefCeres1.SelectParams.CPUCT *= 1.15f;
+//      engineDefCeres1.SelectParams.CPUCT *= 0.75f;
 
       //      engineDefCeres1.SearchParams.TestFlag2 = true;
       //engineDefCeres1.SearchParams.EnableUncertaintyBoosting = true;
@@ -540,7 +544,7 @@ NET2 = "~T1_256_RL_TRT";
       bool ENABLE_LC0_1 = evalDef1.Nets[0].Net.Type == NNEvaluatorType.LC0;// && (evalDef1.Nets[0].WeightValue == 1 && evalDef1.Nets[0].WeightPolicy == 1 && evalDef1.Nets[0].WeightM == 1);
       bool ENABLE_LC0_2 = evalDef2.Nets[0].Net.Type == NNEvaluatorType.LC0;// && (evalDef1.Nets[0].WeightValue == 1 && evalDef1.Nets[0].WeightPolicy == 1 && evalDef1.Nets[0].WeightM == 1);
 
-      string OVERRIDE_LC0_EXE = @"C:\apps\lc0_30_onnx_dml\lc0.exe";
+      string OVERRIDE_LC0_EXE = null;// @"C:\apps\lc0_30_onnx_dml\lc0.exe";
 string OVERRIDE_LC0_BACKEND_STRING = "";
       GameEngineDefLC0 engineDefLC1 = ENABLE_LC0_1 ? new GameEngineDefLC0("LC0_0", evalDef1, forceDisableSmartPruning, null, null, overrideEXE: OVERRIDE_LC0_EXE, overrideBackendString: OVERRIDE_LC0_BACKEND_STRING) : null;
       GameEngineDefLC0 engineDefLC2 = ENABLE_LC0_2 ? new GameEngineDefLC0("LC0_2", evalDef2, forceDisableSmartPruning, null, null, overrideEXE: OVERRIDE_LC0_EXE, overrideBackendString: OVERRIDE_LC0_BACKEND_STRING) : null;
@@ -587,7 +591,7 @@ string OVERRIDE_LC0_BACKEND_STRING = "";
 #endif
       // **************************************************
       EnginePlayerDef player1 = playerCeres1;// playerCeres1UCI;// new EnginePlayerDef(engineDefCSNN1, SearchLimit.NodesPerMove(30));
-      EnginePlayerDef player2 = playerCeres2;// playerCeres96;// new EnginePlayerDef(EnginDefStockfish14(), SearchLimit.NodesPerMove(300 * 10_000));
+      EnginePlayerDef player2 = playerCeres2; ;// playerCeres96;// new EnginePlayerDef(EnginDefStockfish14(), SearchLimit.NodesPerMove(300 * 10_000));
       //new EnginePlayerDef(engineDefCSNoNN, SearchLimit.NodesPerMove(300 * 10_000));
       // **************************************************
 
