@@ -218,7 +218,7 @@ namespace Ceres.APIExamples
 
 
       NET1 = "CUSTOM1:HOP_CL_CLEAN_256_10_FFN6_B1_NLATT_4bn_fp16_x.onnx"; // _4bn_fp16
-      GPUS_1 = "GPU:0";
+      GPUS_1 = "GPU:0#TensorRT16";
       //      NET1 = "CUSTOM1:HOP_CL_CLEAN_256_10_FFN6_B1_NLATT_4bn_fp16_1199996928.onnx";
       //      NET2 = "CUSTOM1:HOP_CL_CLEAN_256_10_FFN6_B1_4bn_fp16_1199996928.onnx";
       //NET2 = "~T1_256_RL_TRT";
@@ -231,6 +231,13 @@ namespace Ceres.APIExamples
 
       //      NET2 = "~T1_DISTILL_256_10_FP16";
 
+      const string NET_256 = "DGX_CL_UNCLEAN_256_10_FFN6_B1_4bn_fp16_399998976.onnx";
+      const string NET_256_NLATTN = "DGX_CL_UNCLEAN_256_10_FFN6_B1_NLATT_4bn_fp16_399998976.onnx";
+
+      const string NET_512 = "HOP_CL_CLEAN_512_15_FFN4_B1_4bn_fp16_4000002048.onnx";
+      const string NET_512_NLATTN = "HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_4000006144.onnx";
+      const string NET_512_NLATTN_52bn = "HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_5200003072.onnx";
+
       // ** CheckpointState TEST
       //      NET1 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_last.onnx";
       //combo_397_4000006144
@@ -239,11 +246,13 @@ namespace Ceres.APIExamples
 
 //      NET2 = "~T1_DISTILL_512_15_FP16";// _TRT";
       NET2 = "~T3_DISTILL_512_15_FP16_TRT";
-//      NET2 = "~BT3_FP16_TRT";
+NET1 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_combo_516_final.onnx"; // 397 good
 
-/////      NET2 = "~T1_256_RL_TRT";
-//      NET2 = "~T1_256_RL_NATIVE";
- GPUS_2 = "GPU:0#TensorRT16";
+      //      NET2 = "~BT3_FP16_TRT";
+
+      /////      NET2 = "~T1_256_RL_TRT";
+      //      NET2 = "~T1_256_RL_NATIVE";
+      GPUS_2 = "GPU:0#TensorRT16";
 
       //      NET1 = "CUSTOM1:last.onnx";
       //      NET2 = "CUSTOM1:HOP_CL_CLEAN_512_15_FFN4_B1_4bn_fp16_599998464.onnx";
@@ -267,8 +276,8 @@ namespace Ceres.APIExamples
       //NET2 = "~T1_DISTIL_512_15_NATIVE";
 
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(1000);
-    limit1 = SearchLimit.BestValueMove;
+      SearchLimit limit1 = SearchLimit.NodesPerMove(100);
+//    limit1 = SearchLimit.BestValueMove;
 //limit1 = new SearchLimit(SearchLimitType.SecondsForAllMoves, 15, false, 0.5f);
       //SearchLimit limit2 = SearchLimit.NodesPerMove(1);
       
@@ -448,7 +457,7 @@ namespace Ceres.APIExamples
       //      AdjustSelectParamsNewTune(engineDefCeres1.SelectParams);
       //      AdjustSelectParamsNewTune(engineDefCeres2.SelectParams);
 
-//      engineDefCeres1.SelectParams.CPUCT *= 0.75f;
+      engineDefCeres1.SelectParams.CPUCT *= 0.75f;
 
       //      engineDefCeres1.SearchParams.TestFlag2 = true;
       //engineDefCeres1.SearchParams.EnableUncertaintyBoosting = true;
