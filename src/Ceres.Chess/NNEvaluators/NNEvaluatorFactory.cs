@@ -299,9 +299,14 @@ namespace Ceres.Chess.NNEvaluators
             throw new Exception($"Ceres net {netFileName} not found. Use valid full path or set source directory using DirCeresNetworks in Ceres.json");
           }
 
+          bool testMode = options != null && options.Keys.Contains("TEST");
           NNEvaluatorOptionsCeres optionsCeres = new NNEvaluatorOptionsCeres()
           {
+            QNegativeBlunders = 0.02f,
+            QPositiveBlunders = 0.02f,
 
+//            FractionValueHead2 = 0.40f,
+//            ValueHead2Temperature = 2.0f
           };
 
           NNEvaluatorONNX onnxEngine = new(shortID, netFileName, null, 
