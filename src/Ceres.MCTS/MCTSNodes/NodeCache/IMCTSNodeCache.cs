@@ -13,10 +13,9 @@
 
 #region Using directives
 
+using System;
 
 using Ceres.MCTS.Iteration;
-using Ceres.MCTS.LeafExpansion;
-using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.MTCSNodes.Struct;
 
@@ -31,7 +30,7 @@ namespace Ceres.MCTS.NodeCache
   /// A least recently used (LRU) strategy may be used to
   /// evict nodes when the cache approaches maximum capacity.
   /// </summary>
-  public unsafe interface IMCTSNodeCache
+  public unsafe interface IMCTSNodeCache : IDisposable
   {
     /// <summary>
     /// Size of cache (number of cache slots).
@@ -101,7 +100,7 @@ namespace Ceres.MCTS.NodeCache
 
     /// <summary>
     /// Nodes in node cache are stamped with the sequence number
-    /// of the last batch in which they were accessed to faciltate LRU determination.
+    /// of the last batch in which they were accessed to facilitate LRU determination.
     /// </summary>
     int NextBatchSequenceNumber { get; set; }
   }

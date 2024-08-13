@@ -42,7 +42,7 @@ namespace Ceres.MCTS.NodeCache
   /// and also the LRU purging becomes slightly approximate 
   /// because it is not coordinated across set members.
   /// </summary>
-  public unsafe class MCTSNodeCacheArrayPurgeableSet : IMCTSNodeCache
+  public unsafe class MCTSNodeCacheArrayPurgeableSet : IMCTSNodeCache, IDisposable
   {
     internal const int MAX_SETS = 256;
 
@@ -60,6 +60,7 @@ namespace Ceres.MCTS.NodeCache
     MemoryBufferOS<MCTSNodeStruct> nodes;
 
     #endregion
+
 
     /// <summary>
     /// Constructor.
@@ -287,6 +288,18 @@ namespace Ceres.MCTS.NodeCache
       }
     }
 
+
+    public void Dispose()
+    {
+      if (subCaches != null)
+      {
+       for (int i=0;i<subCaches.Length; i++)
+        {
+          subCaches[i]?.Dispose();
+        }
+        subCaches = null;
+      }
+    }
   }
 
 }

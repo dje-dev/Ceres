@@ -16,12 +16,10 @@
 using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using System.Threading;
-using System.Threading.Tasks;
-using Ceres.Base.Benchmarking;
 using Ceres.Base.DataTypes;
 using Ceres.Base.OperatingSystem;
+
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.LeafExpansion;
 using Ceres.MCTS.MTCSNodes;
@@ -443,6 +441,13 @@ namespace Ceres.MCTS.NodeCache
         throw new NotImplementedException();
       }
       return maxNumNodes <= MaxCacheSize;
+    }
+
+
+    public void Dispose()
+    {
+      nodesStore?.Dispose();
+      nodesStore = null;
     }
 
     #endregion
