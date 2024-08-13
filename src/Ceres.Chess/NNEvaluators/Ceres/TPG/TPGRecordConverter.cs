@@ -258,7 +258,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
           if (verifyMoveIndices)
           {
             // Old slow code, replaced below with help of the passed in moves argument.
-            TPGRecordMovesExtractor.ExtractLegalMoveIndicesForIndex(tempTPGRecords, moves.Span[i], legalMoveIndicesAlternate, i);
+//            TPGRecordMovesExtractor.ExtractLegalMoveIndicesForIndex(tempTPGRecords, moves.Span[i], legalMoveIndicesAlternate, i);
           }
 #endif
         }
