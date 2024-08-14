@@ -361,7 +361,15 @@ namespace Ceres.Features.UCI
             }
 
             if (CeresEngine != null)
+            {
               CeresEngine.Dispose();
+            }
+
+            // In rare cases we've seen a crash during the Environment.Exit() below,
+            // presumably due to cleanup which was in progress.
+            // To try to avoid this ugliness, do a GC first and pause briefly before exit.
+            GC.Collect(4, GCCollectionMode.Forced, true);
+            Thread.Sleep(500);
 
             System.Environment.Exit(0);
             break;
@@ -381,7 +389,9 @@ namespace Ceres.Features.UCI
             taskSearchCurrentlyExecuting?.Wait(MAX_MILLISECONDS_WAIT);
 
             if (taskSearchCurrentlyExecuting != null && !taskSearchCurrentlyExecuting.IsCompleted)
+            {
               throw new Exception("Received go command when another search was running and not stopped first.");
+            }
 
             InitializeEngineIfNeeded();
 
@@ -436,7 +446,9 @@ namespace Ceres.Features.UCI
               graphGenerator.Write(true);
             }
             else
+            {
               UCIWriteLine("info string No search manager created");
+            }
             break;
 
           case String c when c.StartsWith("gamecomp"):
@@ -520,7 +532,9 @@ namespace Ceres.Features.UCI
               OutputVerboseMoveStats();
             }
             else
+            {
               UCIWriteLine("info string No search manager created");
+            }
             break;
 
           case "dump-pv":
