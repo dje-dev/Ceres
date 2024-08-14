@@ -64,6 +64,10 @@ namespace Ceres.Chess.LC0NetInference
     /// </summary>
     public int PrecisionNumBits;
 
+    /// <summary>
+    /// Minimum supported batch size.
+    /// </summary>
+    public int MinBatchSize;
 
     /// <summary>
     /// Execution is serialized by this lock object.
@@ -143,6 +147,7 @@ namespace Ceres.Chess.LC0NetInference
 
       GPUID = gpuID;
       PrecisionNumBits = precisionNumBits;
+      MinBatchSize = minBatchSize;
 
       // On Linux it was found necessary to touch the instance before any of the operations below
       // to prevent error about a session object not being created.
@@ -182,6 +187,14 @@ namespace Ceres.Chess.LC0NetInference
               string ret = "";
               foreach (string inputName in inputNames)
               {
+                if (!firstTime)
+                {
+                  // Testing with TensorRT 10.3 suggests caching fails if there is more than one input.
+                  ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, "WARNING as workaround for caching failure in ONNXRuntime,"
+                    + " shapes string will omit " + inputName);
+                  continue;
+                }
+
                 ret += (firstTime ? "" : ",") + inputName + $":{size}x{nonBatchDimensions}";
                 firstTime = false;
               }
@@ -189,11 +202,11 @@ namespace Ceres.Chess.LC0NetInference
             }
 
             // If no profile is specified then TensorRT will build a new profile/engine
-            // each time it sees a differen batch size.
+            // each time it sees a different batch size.
             // Although possibly faster to execute, these rebuilds would be far too slow.
             // Therefore we build a profile specifying the min, opt, and max batch sizes.
             //
-            // Note that the actual performance is sensitive to the min/max batch sizes
+            // Note that the actual performance is seemingly sensitive to the min/max batch sizes
             // in unpredictable ways. Seemingly large max batch sizes (e.g. over about 200)
             // often reduce performance.
             const bool USE_OMNI_PROFILE = true;
@@ -204,6 +217,19 @@ namespace Ceres.Chess.LC0NetInference
               providerOptionsDict["trt_profile_max_shapes"] = MakeShapeStr(maxBatchSize); // N.B. see note above
             }
           }
+#if NOT
+Comments from onnxruntime source code:
+ /*
+   * Parse explicit min/max/opt profile shapes from provider options.
+   *
+   * The format of min/max/opt profile shapes is defined as below:
+   * "input1:dim1xdim2...,input2:dim1xdim2...,...,input1:dim3xdim4...,input2:dim3xdim4...,..."
+   *
+   * (Note: if multiple shapes with same input name are specified, TRT EP will consider them as multiple profiles.
+   *  Please refer to ParserProfileShapes() for more details)
+   *
+   */
+#endif
 
           // Use timing and engine caches, located in a folder specific to this host.
           providerOptionsDict["trt_timing_cache_enable"] = "true";
@@ -220,6 +246,7 @@ namespace Ceres.Chess.LC0NetInference
           }
 
 //          providerOptionsDict["trt_detailed_build_log"] = "1";
+
           providerOptionsDict["trt_fp16_enable"] = PrecisionNumBits == 16 ? "true" : "false";
           providerOptionsDict["trt_builder_optimization_level"] = "3"; // N.B. Level 5 may be buggy
 
@@ -396,6 +423,11 @@ namespace Ceres.Chess.LC0NetInference
     /// <returns></returns>
     internal List<(string, Memory<Float16>)> RunFloat16((Memory<Half> input, int[] shape, string inputName, int numElements)[] inputs, int batchSize)
     {
+      if (batchSize < MinBatchSize)
+      {
+        throw new ArgumentException($"Batch size {batchSize} is less than minimum of {MinBatchSize}");
+      }
+
       List<NamedOnnxValue> inputsONNX = new(inputs.Length);
 
       for (int i = 0; i < inputs.Length; i++)
@@ -446,6 +478,11 @@ namespace Ceres.Chess.LC0NetInference
     /// <returns></returns>
     private List<(string, Memory<Float16>)> RunFloat((Memory<Half> input, int[] shape, string inputName, int numElements)[] inputs, int batchSize)
     {
+      if (batchSize < MinBatchSize)
+      {
+        throw new ArgumentException($"Batch size {batchSize} is less than minimum of {MinBatchSize}");
+      }
+
       List<NamedOnnxValue> inputsONNX = new(inputs.Length);
 
       for (int i = 0; i < inputs.Length; i++)
