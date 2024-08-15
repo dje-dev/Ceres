@@ -26,7 +26,7 @@ using Chess.Ceres.NNEvaluators;
 
 #endregion
 
-namespace Ceres.Chess.LC0NetInference
+namespace Ceres.Chess.NNBackends.ONNXRuntime
 {
   /// <summary>
   /// Manages execution of ONNX networks for inference of chess neural networks
@@ -110,13 +110,13 @@ namespace Ceres.Chess.LC0NetInference
     /// <exception cref="ArgumentException"></exception>
     /// <exception cref="NotImplementedException"></exception>
     public ONNXNetExecutor(string shortID,
-                               string onnxFileName, byte[] onnxModelBytes, 
+                               string onnxFileName, byte[] onnxModelBytes,
                                string[] inputNames,
-                               int maxBatchSize, 
-                               NetTypeEnum netType, 
-                               NNEvaluatorPrecision precision, 
-                               NNDeviceType deviceType, int gpuNum, 
-                               bool useTensorRT, 
+                               int maxBatchSize,
+                               NetTypeEnum netType,
+                               NNEvaluatorPrecision precision,
+                               NNDeviceType deviceType, int gpuNum,
+                               bool useTensorRT,
                                bool enableProfiling)
     {
       if (onnxFileName != null && !onnxFileName.ToUpper().EndsWith(".ONNX"))
@@ -163,7 +163,7 @@ namespace Ceres.Chess.LC0NetInference
 
       string nonBatchDimensions = netType switch
       {
-        NetTypeEnum.TPG => $"64x{ONNXNetExecutor.TPG_BYTES_PER_SQUARE_RECORD}",
+        NetTypeEnum.TPG => $"64x{TPG_BYTES_PER_SQUARE_RECORD}",
         NetTypeEnum.LC0 => $"{EncodedPositionBatchFlat.TOTAL_NUM_PLANES_ALL_HISTORIES}x8x8",
         _ => throw new NotImplementedException($"The enum type '{netType}' is not handled."),
       };
@@ -183,8 +183,8 @@ namespace Ceres.Chess.LC0NetInference
     /// <param name="alreadyConvertedToLZ0"></param>
     /// <returns></returns>
     public ONNXRuntimeExecutorResultBatch Execute(bool isWDL, bool hasState,
-                                                  Memory<Half> flatValuesPrimary, Memory<Half[]> flatValuesState, 
-                                                  int numPositionsUsed, 
+                                                  Memory<Half> flatValuesPrimary, Memory<Half[]> flatValuesState,
+                                                  int numPositionsUsed,
                                                   bool debuggingDump = false, bool alreadyConvertedToLZ0 = false,
                                                   float tpgDivisor = 1)
     {
@@ -197,7 +197,7 @@ namespace Ceres.Chess.LC0NetInference
 
       if (!alreadyConvertedToLZ0)
       {
-        if (flatValuesPrimary.Length / BatchSize != (64 * EncodedPositionBatchFlat.TOTAL_NUM_PLANES_ALL_HISTORIES))
+        if (flatValuesPrimary.Length / BatchSize != 64 * EncodedPositionBatchFlat.TOTAL_NUM_PLANES_ALL_HISTORIES)
         {
           throw new Exception("Internal error: incorrect number of planes.");
         }
@@ -325,7 +325,7 @@ namespace Ceres.Chess.LC0NetInference
           int expectedLength = numPositionsUsed * expectedPerPosition;
           for (int i = 0; i < eval.Count; i++)
           {
-            if (eval[i].Item2.Length == expectedLength 
+            if (eval[i].Item2.Length == expectedLength
               && i != indexToIgnore
               && (mustContainString == null || eval[i].Item1.Contains(mustContainString)))
             {
@@ -335,27 +335,27 @@ namespace Ceres.Chess.LC0NetInference
               if (expectedPerPosition == 1858)
               {
                 if (
-                   (ONNXFileName.ToLower().Contains("policy_optimistic") && !eval[i].Item1.ToLower().Contains("optimistic"))
-                || (ONNXFileName.ToLower().Contains("policy_vanilla") && !eval[i].Item1.ToLower().Contains("vanilla"))
+                   ONNXFileName.ToLower().Contains("policy_optimistic") && !eval[i].Item1.ToLower().Contains("optimistic")
+                || ONNXFileName.ToLower().Contains("policy_vanilla") && !eval[i].Item1.ToLower().Contains("vanilla")
                    )
                 {
                   continue;
                 }
               }
-                if (expectedPerPosition == 3)
+              if (expectedPerPosition == 3)
+              {
+                if (
+                   ONNXFileName.ToLower().Contains("value_winner") && !eval[i].Item1.ToLower().Contains("value/winner")
+                || ONNXFileName.ToLower().Contains("value_q") && !eval[i].Item1.ToLower().Contains("value/q")
+                   )
                 {
-                  if (
-                     (ONNXFileName.ToLower().Contains("value_winner") && !eval[i].Item1.ToLower().Contains("value/winner"))
-                  || (ONNXFileName.ToLower().Contains("value_q") && !eval[i].Item1.ToLower().Contains("value/q"))
-                     )
-                  {
-                    continue;
-                  }
+                  continue;
                 }
-                  //+		[25]	("value/q/dense2", {float[3]})	(string, float[])
-                  //                +[26]("value/q/dense_error", { float[1]})	(string, float[])
-                  //               + [29]("value/winner/dense2", { float[3]})	(string, float[])
-               
+              }
+              //+		[25]	("value/q/dense2", {float[3]})	(string, float[])
+              //                +[26]("value/q/dense_error", { float[1]})	(string, float[])
+              //               + [29]("value/winner/dense2", { float[3]})	(string, float[])
+
 
               return i;
             }
@@ -413,8 +413,8 @@ namespace Ceres.Chess.LC0NetInference
 
         // TODO: This is just a fake, fill it in someday
         Memory<Float16> priorState = hasState ? eval[INDEX_STATE].Item2 : default; //  new Float16[numPositionsUsed * 64 * 4]
-        ONNXRuntimeExecutorResultBatch result = new (isWDL, values, values2, policiesLogistics, mlh, 
-                                                     uncertantiesV, uncertantiesP, 
+        ONNXRuntimeExecutorResultBatch result = new(isWDL, values, values2, policiesLogistics, mlh,
+                                                     uncertantiesV, uncertantiesP,
                                                      extraStats0, extraStats1, value_fc_activations,
                                                      actionLogits, priorState,
                                                      numPositionsUsed);

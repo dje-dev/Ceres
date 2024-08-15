@@ -22,7 +22,7 @@ using Microsoft.ML.OnnxRuntime;
 
 #endregion
 
-namespace Ceres.Chess.LC0NetInference
+namespace Ceres.Chess.NNBackends.ONNXRuntime
 {
   /// <summary>
   /// Represents results coming back from NN for a batch of positions.
@@ -94,7 +94,7 @@ namespace Ceres.Chess.LC0NetInference
 
       Debug.Assert(!float.IsNaN((float)values.Span[0]));
       if (isWDL)
-      { 
+      {
         Debug.Assert(!float.IsNaN((float)values.Span[1]) && !float.IsNaN((float)values.Span[2]));
       }
 
@@ -103,7 +103,7 @@ namespace Ceres.Chess.LC0NetInference
 
       MLH = mlh;
       ExtraStats0 = extraStats0;
-      ExtraStats1 = extraStats1;  
+      ExtraStats1 = extraStats1;
 
       UncertaintyV = uncertaintyV;
       UncertaintyP = uncertaintyP;
@@ -137,7 +137,7 @@ namespace Ceres.Chess.LC0NetInference
         void CopyPlanes(int numPlanesCopy, int planeFirstIndexInSource, int fillValue = -1, float divideValue = 1.0f)
         {
           Half fillValueHalf = (Half)fillValue;
-          int newSrce = baseSrcThisBatchItem + (planeFirstIndexInSource * 64);
+          int newSrce = baseSrcThisBatchItem + planeFirstIndexInSource * 64;
           if (fillValue != -1)
           {
             for (int j = 0; j < numPlanesCopy * 64; j++)
@@ -154,8 +154,8 @@ namespace Ceres.Chess.LC0NetInference
           else
           {
             int size = numPlanesCopy * 64;
-            inputs.Slice(newSrce, size).CopyTo(expandedResults.AsMemory<Half>().Slice(baseDstThisBatchItem, size));
-//            Array.Copy(floats, newSrce, expandedFloats, baseDstThisBatchItem, numPlanesCopy * 64);
+            inputs.Slice(newSrce, size).CopyTo(expandedResults.AsMemory().Slice(baseDstThisBatchItem, size));
+            //            Array.Copy(floats, newSrce, expandedFloats, baseDstThisBatchItem, numPlanesCopy * 64);
           }
           baseDstThisBatchItem += numPlanesCopy * 64;
         }

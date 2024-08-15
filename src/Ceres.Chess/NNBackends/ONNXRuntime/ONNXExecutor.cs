@@ -29,7 +29,6 @@ using Ceres.Base.Benchmarking;
 
 #endregion
 
-
 /// <summary>
 /// Manages evaluation of neural networks using ONNX runtime.
 /// 
@@ -40,7 +39,7 @@ using Ceres.Base.Benchmarking;
 /// TODO: some of the clients of this class could possibly pass in a restricted list of outputNames
 ///       to eliminate overhead of retrieving values for outputs which may not be needed in some situations.
 /// </summary>
-namespace Ceres.Chess.LC0NetInference
+namespace Ceres.Chess.NNBackends.ONNXRuntime
 {
   public class ONNXExecutor : IDisposable
   {

@@ -22,7 +22,7 @@ using Microsoft.ML.OnnxRuntime;
 
 #endregion
 
-namespace Ceres.Chess.LC0NetInference
+namespace Ceres.Chess.NNBackends.ONNXRuntime
 {
   /// <summary>
   /// Miscellaneous static helper methods for ONNX operations.
@@ -74,7 +74,7 @@ namespace Ceres.Chess.LC0NetInference
       int i = 0;
       foreach ((string name, NodeMetadata metadata, T[] value) in buffers)
       {
-        OrtValue ortValue = OrtValue.CreateTensorValueFromMemory<T>(value, ToLongArray(metadata.Dimensions, batchSize));
+        OrtValue ortValue = OrtValue.CreateTensorValueFromMemory(value, ToLongArray(metadata.Dimensions, batchSize));
         ret.names[i] = name;
         ret.values[i] = ortValue;
         i++;
@@ -98,21 +98,16 @@ namespace Ceres.Chess.LC0NetInference
     }
 
 
-
     public static int ProductDimensions(int[] dims, int negativeOneFillInValue = 1)
     {
       int productNumElements = 1;
       foreach (int dimSize in dims)
       {
-        productNumElements *= dimSize == -1 ? negativeOneFillInValue : dimSize;  
+        productNumElements *= dimSize == -1 ? negativeOneFillInValue : dimSize;
       }
 
       return productNumElements;
     }
 
-
-
   }
 }
-
-

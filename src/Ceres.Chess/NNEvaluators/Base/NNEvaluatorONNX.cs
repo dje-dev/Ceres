@@ -24,8 +24,6 @@ using Ceres.Base.Benchmarking;
 using Ceres.Base.DataTypes;
 using Ceres.Base.DataType;
 using Ceres.Base.Misc.ONNX;
-
-using Ceres.Chess.LC0NetInference;
 using Ceres.Chess.NNEvaluators;
 using Ceres.Chess.NetEvaluation.Batch;
 using Ceres.Chess.LC0.Batches;
@@ -35,16 +33,17 @@ using Ceres.Chess.MoveGen.Converters;
 using Ceres.Chess;
 using Ceres.Chess.EncodedPositions.Basic;
 using System.Threading;
+using Ceres.Chess.NNBackends.ONNXRuntime;
 
 #endregion
 
 namespace Chess.Ceres.NNEvaluators
 {
-  /// <summary>
-  /// NNEvaluator subclass which reads network definitions from ONNX file
-  /// via the ONNX Runtime (using ONNXRuntimeExecutor).
-  /// </summary>
-  public class NNEvaluatorONNX : NNEvaluator
+    /// <summary>
+    /// NNEvaluator subclass which reads network definitions from ONNX file
+    /// via the ONNX Runtime (using ONNXRuntimeExecutor).
+    /// </summary>
+    public class NNEvaluatorONNX : NNEvaluator
   {
     // TODO: When TPGRecord class is moved to Ceres project, instead reference TPGRecord.MAX_MOVES
     public const int MAX_MOVES = 92; 
