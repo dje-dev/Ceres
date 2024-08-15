@@ -143,8 +143,8 @@ namespace Ceres.Chess.Data.Nets
     #region Internal helpers
 
     static string MakeDesc(string netID, bool lc0Net, bool tensorRT = false)
-      => (tensorRT ? @"ONNX_TRT:" : @"ONNX_ORT:") + Path.Combine(lc0Net ? CeresUserSettingsManager.Settings.DirLC0Networks : 
-                                                                          CeresUserSettingsManager.Settings.DirCeresNetworks, netID);
+      => (tensorRT ? @"ONNX_TRT:" : @"ONNX_ORT:") + Path.Combine(lc0Net ? CeresUserSettingsManager.Settings.DirLC0Networks ?? "." : 
+                                                                          CeresUserSettingsManager.Settings.DirCeresNetworks ?? ".", netID);
 
 
     static RegisteredNetInfo SimpleLC0Net(string netID) => new RegisteredNetInfo(netID, ReferenceNetType.LC0, netID);
