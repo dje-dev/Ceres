@@ -20,7 +20,8 @@ using System;
 namespace Ceres.Chess.Data.Players
 {
   /// <summary>
-  ///  Static collections of various chess players
+  /// Static collections of various chess players.
+  /// Complete game (in PGN format) can be found at https://www.pgnmentor.com/files.html.
   /// </summary>
   public static class ChessPlayers
   {
@@ -32,24 +33,28 @@ namespace Ceres.Chess.Data.Players
     public static ChessPlayer ByLastName(string lastName)
     {
       lastName = lastName.ToUpper();
+
       foreach (ChessPlayer player in FamousPlayers)
-        if (player.LastName.ToUpper() == lastName 
+      {
+        if (player.LastName.ToUpper() == lastName
          || player.AlternateLastName.ToUpper() == lastName)
           return player;
+      }
 
       return null;
     }
 
+
     /// <summary>
     /// Static table of some of the strongest players in history.
     /// </summary>
-    public readonly static ChessPlayer[] FamousPlayers = new ChessPlayer[]
-    {
+    public readonly static ChessPlayer[] FamousPlayers =
+    [
       new("Pachman", 1924, 1976),
       new("Portisch", 1937,1980),
       new("Huebner", 1948,1978),
       new("Lasker", 1868, 1894),
-      new("Capablanca", 1888, 1916),
+      new("Capablanca", 1888, 1925),
       new("Alekhine", 1892, 1930),
       new("Euwe", 1901, 1931),
       new("Botvinnik", 1911, 1948), // 1971 reported as peak rating, but that seems silly
@@ -64,10 +69,10 @@ namespace Ceres.Chess.Data.Players
       new("Anand", 1969, 2011),
       new("Topalov", 1975, 2015),
       new("Kramnik", 1975, 2016),
-      new("Nakamura", 1987, 2015),
-      new("Carlsen", 1990, 2018),
-      new("Caruana", 1992, 2014),
-    };
+      new("Nakamura", 1987, 2021),
+      new("Carlsen", 1990, 2021),
+      new("Caruana", 1992, 2021),
+    ];
 
   }
 }
