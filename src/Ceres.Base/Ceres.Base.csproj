@@ -29,8 +29,8 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="ManagedCuda-12" Version="12.4.57" />
-    <PackageReference Include="ManagedCuda-CUBLAS" Version="12.4.57" />
+    <PackageReference Include="ManagedCuda-11" Version="11.4.47" />
+    <PackageReference Include="ManagedCuda-CUBLAS" Version="11.4.47" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="5.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="5.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="5.0.0" />
