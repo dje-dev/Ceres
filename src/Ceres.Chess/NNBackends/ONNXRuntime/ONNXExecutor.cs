@@ -231,29 +231,49 @@ Comments from onnxruntime source code:
 #endif
 
           // Use timing and engine caches, located in a folder specific to this host.
-          providerOptionsDict["trt_timing_cache_enable"] = "true";
-          //providerOptionsDict["trt_force_timing_cache"] = "true";
-          providerOptionsDict["trt_engine_cache_enable"] = "true";
-          string trtSubdirectory = Path.Combine(directoryName, "trt_engines", Environment.MachineName);
+          string trtSubdirectory;
+          const bool EMBED = false;
+          if (EMBED)
+          {
+            // "In the case of dumping context model and for security purpose,"
+            // "the trt_engine_cache_path should be set with a relative path."
+            trtSubdirectory = Path.Combine(".", "trt_engines_embed", Environment.MachineName);
+            providerOptionsDict["trt_dump_ep_context_model"] = "true";
+            }
+          else
+          {
+            trtSubdirectory = Path.Combine(directoryName, "trt_engines", Environment.MachineName);
+          }
+
           Directory.CreateDirectory(trtSubdirectory);
+          Console.WriteLine("TensorRT engines will be cached in: " + trtSubdirectory);
+
           providerOptionsDict["trt_engine_cache_path"] = trtSubdirectory;
           providerOptionsDict["trt_timing_cache_path"] = trtSubdirectory;
+
+          providerOptionsDict["trt_engine_cache_enable"] = "1";
+          providerOptionsDict["trt_timing_cache_enable"] = "1";
+          //providerOptionsDict["trt_force_timing_cache"] = "true";
 
           if (shortID != null)
           {
             providerOptionsDict["trt_engine_cache_prefix"] = shortID;
           }
 
-//          providerOptionsDict["trt_detailed_build_log"] = "1";
+            //          providerOptionsDict["trt_detailed_build_log"] = "1";
 
-          providerOptionsDict["trt_fp16_enable"] = PrecisionNumBits == 16 ? "true" : "false";
+          if (PrecisionNumBits == 16)
+          {
+            providerOptionsDict["trt_fp16_enable"] = "1";
+          }
+
           providerOptionsDict["trt_builder_optimization_level"] = "3"; // N.B. Level 5 may be buggy
 
           // TODO: For graphs: use IO / Binding to bind input tensors in GPU memory.
           // See: https://github.com/microsoft/onnxruntime/issues/20050
           // "During inference, copy input to same address(input shape shall be the same) of the input used in the first inference run."
           //https://github.com/microsoft/onnxruntime/blob/4a196d15940b0f328735c888e2e861d67602ffcf/onnxruntime/python/tools/transformers/io_binding_helper.py#L212-L307
-          // providerOptionsDict["trt_cuda_graph_enable"] = "true"; // NOTE: may fail or yield bad output, requires entire graph to map onto ONNX nodes (?)
+          // providerOptionsDict["trt_cuda_graph_enable"] = "1"; // NOTE: may fail or yield bad output, requires entire graph to map onto ONNX nodes (?)
           // providerOptionsDict["trt_auxiliary_streams"] = "0";
 
           providerOptionsDict["trt_layer_norm_fp32_fallback"] = "1"; // possibly necessary otherwise terrible accuracy
@@ -301,6 +321,11 @@ Comments from onnxruntime source code:
       so.GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL; // Possibly this is overkill and takes too long?
       so.ExecutionMode = ExecutionMode.ORT_PARALLEL;
 
+      // Take a global lock during session creation for two reasons:
+      //   - we don't want to try to create TensorRT engines for the same network simultaneously
+      //     because this would interfere with performance profiling,
+      //     and the second time a cached version should just be used rather than recreated
+      //   - reduce likelihood of conflict with other initialization (e.g. other threads using ManagedCUDA).
       lock (CUDADevice.InitializingCUDAContextLockObj)
       {
         using (new TimingBlock($"ONNX InferenceSession create on model of size {onnxModelBytes.Length:N0} bytes"))
