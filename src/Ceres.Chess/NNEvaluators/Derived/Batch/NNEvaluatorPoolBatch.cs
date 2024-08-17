@@ -178,7 +178,11 @@ namespace Ceres.Chess.NNEvaluators
     {
       Span<CompressedPolicyVector> fullPolicyValues = fullBatchResult.Policies.Span;
 
-      throw new NotImplementedException("action code needs remediation below, multiple heads including action/state");
+      if (fullBatchResult.HasAction || fullBatchResult.HasState)
+      {
+        throw new NotImplementedException("action code needs remediation below, multiple heads including action/state");
+      }
+
       Span<CompressedActionVector> fullActionValues = default;// fullBatchResult.HasAction ? fullBatchResult.ActionProbabilities.Span : default;
 
       Span<FP16> fullW = fullBatchResult.W.Span;
@@ -215,7 +219,7 @@ namespace Ceres.Chess.NNEvaluators
                                       fullBatchResult.HasAction, fullBatchResult.HasValueSecondary, fullBatchResult.HasState,
                                       thisBatch.NumPos,
                                       fullPolicyValues.Slice(nextPosIndex, numPos).ToArray(),
-                                      fullActionValues.Slice(nextPosIndex, numPos).ToArray(),
+                                      fullBatchResult.HasAction ? fullActionValues.Slice(nextPosIndex, numPos).ToArray() : default,
 
                                       fullW.Slice(nextPosIndex, numPos).ToArray(),
                                       fullBatchResult.IsWDL ? fullL.Slice(nextPosIndex, numPos).ToArray() : null,
