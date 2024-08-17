@@ -47,6 +47,7 @@ namespace Ceres.Commands
     NNDevicesSpecificationString DeviceSpec;
     string batchSpec = null;
 
+
     public void ParseFields(string args)
     {
       KeyValueSetParsed keys = new KeyValueSetParsed(args, null);
@@ -152,16 +153,20 @@ namespace Ceres.Commands
 
 
     /// <summary>
-    /// Runs a benchmark of the NN backend (similar to the LC0 backendbech command).
+    /// Runs a benchmark of the NN backend (similar to the LC0 backendbench command).
     /// </summary>
-    /// <param name="netSpec"></param>
-    /// <param name="gpuSpec"></param>
-    public static (NNEvaluator, List<(int,float)>) BackendBench(NNEvaluatorDef evaluatorDef, int extraSkipMultiplier = 1, int numRunsPerBatchSize = 5, 
-                                                                int firstBatchSize = 1, int maxBatchSize = 4096, bool show = true)
+    /// <param name="evaluatorDef"></param>
+    /// <param name="extraSkipMultiplier"></param>
+    /// <param name="numRunsPerBatchSize"></param>
+    /// <param name="firstBatchSize"></param>
+    /// <param name="maxBatchSize"></param>
+    /// <param name="show"></param>
+    /// <returns></returns>
+    public static (NNEvaluator, List<(int,float)>) BackendBench(NNEvaluatorDef evaluatorDef, 
+                                                                int extraSkipMultiplier = 1, int numRunsPerBatchSize = 5, 
+                                                                int firstBatchSize = 1, int maxBatchSize = 4096, 
+                                                                bool show = true)
     {
-      List<(int, float)> ret = new();
-      InitPositionsBuffer(maxBatchSize);
-
       if (show)
       {
         Console.WriteLine();
@@ -170,6 +175,9 @@ namespace Ceres.Commands
 
       NNEvaluator evaluator = evaluatorDef.ToEvaluator();
       maxBatchSize = Math.Min(maxBatchSize, evaluator.MaxBatchSize);
+
+      List<(int, float)> ret = new();
+      InitPositionsBuffer(maxBatchSize);
 
       TestBatchSize(evaluator, 1, show:show);
 
@@ -203,6 +211,7 @@ namespace Ceres.Commands
     static EncodedPositionWithHistory[] positions;
 
     static EncodedPositionBatchFlat testBatchBuffer;
+
 
     static void InitPositionsBuffer(int maxPositions)
     {
