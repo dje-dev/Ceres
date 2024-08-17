@@ -95,6 +95,11 @@ namespace Ceres.Features.UCI
     Action BackendBenchEvaluator;
 
     /// <summary>
+    /// Optional evaluator to call to search benchmark program (to run for specified number of seconds).
+    /// </summary>
+    Action<NNEvaluatorDef, int> BenchmarkSearchEvaluator;
+
+    /// <summary>
     /// The position and history associated with the current evaluation.
     /// </summary>
     PositionWithHistory curPositionAndMoves;
@@ -141,12 +146,20 @@ namespace Ceres.Features.UCI
 
 
     /// <summary>
-    /// Construtor.
+    /// Constructor.
     /// </summary>
-    /// <param name="evaluatorDef"></param>
+    /// <param name="networkSpec"></param>
+    /// <param name="deviceSpec"></param>
+    /// <param name="searchModifier"></param>
+    /// <param name="selectModifier"></param>
     /// <param name="inStream"></param>
     /// <param name="outStream"></param>
     /// <param name="searchFinishedEvent"></param>
+    /// <param name="disablePruning"></param>
+    /// <param name="uciLogFileName"></param>
+    /// <param name="searchLogFileName"></param>
+    /// <param name="backendBenchEvaluator"></param>
+    /// <param name="benchmarkEvaluator"></param>
     public UCIManager(NNNetSpecificationString networkSpec,
                       NNDevicesSpecificationString deviceSpec,
                       Action<ParamsSearch> searchModifier = null,
@@ -156,7 +169,8 @@ namespace Ceres.Features.UCI
                       bool disablePruning = false,
                       string uciLogFileName = null,
                       string searchLogFileName = null,
-                      Action backendBenchEvaluator = null)
+                      Action backendBenchEvaluator = null,
+                      Action<NNEvaluatorDef, int> benchmarkEvaluator = null)
     {
       InStream = inStream ?? Console.In;
       OutStream = outStream ?? Console.Out;
@@ -168,6 +182,8 @@ namespace Ceres.Features.UCI
       SelectModifier = selectModifier;
       
       BackendBenchEvaluator = backendBenchEvaluator;
+      BenchmarkSearchEvaluator = benchmarkEvaluator;
+
       CreateEvaluator();
 
       if (disablePruning) futilityPruningDisabled = true;
@@ -282,6 +298,7 @@ namespace Ceres.Features.UCI
 
           case "commands":
             UCIWriteLine("backendbench    - run backend benchmark to test nps speed of network evaluation");
+            UCIWriteLine("benchmark       - run search benchmark with specified number of seconds per position, e.g. \"benchmark 10\"");
             UCIWriteLine("dump-fen        - shows FEN of most recently searched position");
             UCIWriteLine("dump-move-stats - dumps information top level candidate moves");
             UCIWriteLine("dump-pv         - dumps principal variation information from last search");
@@ -354,6 +371,8 @@ namespace Ceres.Features.UCI
             break;
 
           case "quit":
+            UCIWriteLine("Ceres shutdown in progress....");
+
             if (taskSearchCurrentlyExecuting != null)
             {
               CeresEngine.Search.Manager.ExternalStopRequested = true;
@@ -476,6 +495,27 @@ namespace Ceres.Features.UCI
             else
             {
               BackendBenchEvaluator();
+            }
+            break;
+
+          case string c when c.StartsWith("benchmark"):
+            string[] parts = c.Split(" ");
+            int numSeconds = 30;
+            if (parts.Length > 1)
+            {
+              if (!int.TryParse(parts[1], out numSeconds))
+              {
+                UCIWriteLine("info string Invalid number of seconds for benchmark");
+                break;
+              }
+            }
+            if (BenchmarkSearchEvaluator == null)
+            {
+              Console.WriteLine("No BenchmarkEvaluator installed, cannot benchmark.");
+            }
+            else
+            {
+              BenchmarkSearchEvaluator(EvaluatorDef, numSeconds);
             }
             break;
 

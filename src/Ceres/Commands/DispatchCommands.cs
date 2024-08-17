@@ -15,13 +15,17 @@
 
 using System;
 using System.IO;
+
 using Ceres.Base.DataTypes;
 using Ceres.Base.Misc;
 using Ceres.Chess;
+using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.UserSettings;
+
+using Ceres.MCTS.Params;
+
 using Ceres.Features.Commands;
 using Ceres.Features.UCI;
-using Ceres.MCTS.Params;
 
 #endregion
 
@@ -33,7 +37,9 @@ namespace Ceres.Commands
     {
       int index = str.IndexOf(" ");
       if (index == -1)
+      {
         return (str, "");
+      }
       else
       {
         string left = str.Substring(0, index);
@@ -107,7 +113,9 @@ namespace Ceres.Commands
       {
         int posLastEquals = args.LastIndexOf("=");
         if (posLastEquals == -1)
+        {
           fen = args;
+        }
         else
         {
           int indexEndValue = args.Substring(posLastEquals).IndexOf(" ");
@@ -117,7 +125,9 @@ namespace Ceres.Commands
             keyValueArgs = args.Substring(0, posLastEquals + indexEndValue);
           }
           else
+          {
             keyValueArgs = args;
+          }
         }
       }
       else
@@ -256,9 +266,16 @@ namespace Ceres.Commands
 
       Action backendBenchEvaluator = delegate ()
       {
-        FeatureBenchmarkBackend backendBench = new FeatureBenchmarkBackend();
+        FeatureBenchmarkBackend backendBench = new ();
         backendBench.ParseFields(keyValueArgs);
         backendBench.ExecuteBenchmark();
+        Console.WriteLine();
+      };
+
+      Action<NNEvaluatorDef, int> searchBenchmarkAction = delegate (NNEvaluatorDef evalDef, int secondsPerMove)
+      {        
+        FeatureBenchmarkSearch.Benchmark(evalDef, SearchLimit.SecondsPerMove(secondsPerMove), false, int.MaxValue);
+        Console.WriteLine();
       };
 
       UCIManager ux = new UCIManager(uciParams.NetworkSpec, uciParams.DeviceSpec,
@@ -266,8 +283,8 @@ namespace Ceres.Commands
                                      uciParams.Pruning == false,
                                      CeresUserSettingsManager.Settings.UCILogFile,
                                      CeresUserSettingsManager.Settings.SearchLogFile,
-                                     backendBenchEvaluator);
-
+                                     backendBenchEvaluator,
+                                     searchBenchmarkAction);
 
       Console.WriteLine();
       Console.WriteLine("Entering UCI command processing mode.");
