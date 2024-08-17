@@ -232,14 +232,19 @@ Comments from onnxruntime source code:
 
           // Use timing and engine caches, located in a folder specific to this host.
           string trtSubdirectory;
-          const bool EMBED = false;
+          bool EMBED = Environment.GetEnvironmentVariable("EMBED_TRT") == "1"; 
           if (EMBED)
           {
             // "In the case of dumping context model and for security purpose,"
             // "the trt_engine_cache_path should be set with a relative path."
             trtSubdirectory = Path.Combine(".", "trt_engines_embed", Environment.MachineName);
-            providerOptionsDict["trt_dump_ep_context_model"] = "true";
-            }
+
+            providerOptionsDict["trt_dump_ep_context_model"] = "1";
+            providerOptionsDict["trt_ep_context_file_path"] = "./";
+            providerOptionsDict["trt_ep_context_embed_mode"] = "1";
+
+            ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, "NOTE: EMBED_TRT is set to 1. TensorRT engine will be embedded in the ONNX file _ctx.onnx.");
+          }
           else
           {
             trtSubdirectory = Path.Combine(directoryName, "trt_engines", Environment.MachineName);
