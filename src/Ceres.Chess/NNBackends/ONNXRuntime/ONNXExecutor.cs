@@ -232,7 +232,7 @@ Comments from onnxruntime source code:
 
           // Use timing and engine caches, located in a folder specific to this host.
           string trtSubdirectory;
-          bool EMBED = Environment.GetEnvironmentVariable("EMBED_TRT") == "1"; 
+          bool EMBED = Environment.GetEnvironmentVariable("EMBED_TRT") == "1";
           if (EMBED)
           {
             // "In the case of dumping context model and for security purpose,"
@@ -243,7 +243,10 @@ Comments from onnxruntime source code:
             providerOptionsDict["trt_ep_context_file_path"] = "./";
             providerOptionsDict["trt_ep_context_embed_mode"] = "1";
 
+            Console.WriteLine();
             ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, "NOTE: EMBED_TRT is set to 1. TensorRT engine will be embedded in the ONNX file _ctx.onnx.");
+            ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, "NOTE: the _ctx.onnx file will only be created only upon normal termination of this process.");
+            Console.WriteLine();
           }
           else
           {
@@ -324,7 +327,10 @@ Comments from onnxruntime source code:
 
       // See: https://onnxruntime.ai/docs/performance/model-optimizations/graph-optimizations.html
       so.GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL; // Possibly this is overkill and takes too long?
-      so.ExecutionMode = ExecutionMode.ORT_PARALLEL;
+      
+      
+      // N.B. Do not use ORT_PARALLEL, this causes failures in ONNXRuntime when using GPUs with index other than 0.
+      so.ExecutionMode = ExecutionMode.ORT_SEQUENTIAL;
 
       // Take a global lock during session creation for two reasons:
       //   - we don't want to try to create TensorRT engines for the same network simultaneously
