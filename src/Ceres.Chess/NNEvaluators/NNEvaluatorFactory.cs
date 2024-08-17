@@ -27,21 +27,21 @@ using Chess.Ceres.NNEvaluators.TensorRT;
 using Ceres.Chess.UserSettings;
 using Ceres.Chess.NNEvaluators.CUDA;
 using Ceres.Chess.LC0.NNFiles;
-using Ceres.Chess.LC0NetInference;
 using Ceres.Chess.LC0.WeightsProtobuf;
 using Ceres.Chess.LC0.Batches;
 using Ceres.Chess.NNEvaluators.Ceres.TPG;
 using Ceres.Chess.NNEvaluators.Ceres;
+using Ceres.Chess.NNBackends.ONNXRuntime;
 
 #endregion
 
 namespace Ceres.Chess.NNEvaluators
 {
-  /// <summary>
-  /// Static factory methods facilitating construction of NNEvaluators,
-  /// including building an NNEvaluator from an NNEvaluatorDef.
-  /// </summary>
-  public static class NNEvaluatorFactory
+    /// <summary>
+    /// Static factory methods facilitating construction of NNEvaluators,
+    /// including building an NNEvaluator from an NNEvaluatorDef.
+    /// </summary>
+    public static class NNEvaluatorFactory
   {
     /// <summary>
     /// Delegate type which constructs evaluator from specified definition.
@@ -217,7 +217,7 @@ namespace Ceres.Chess.NNEvaluators
       const bool DEFAULT_HAS_STATE = false;
 
       const int DEFAULT_MAX_BATCH_SIZE = 1024;
-      const int TRT_MAX_BATCH_SIZE = 204; // See note in ONNXExecutor. Configuring profile to include large batches hinders performance.
+      const int TRT_MAX_BATCH_SIZE = 204;// 204; // See note in ONNXExecutor, possibly configuring profile to include large batches hinders performance.
       const bool ONNX_SCALE_50_MOVE_COUNTER = false; // BT2 already inserts own node to adjust
 
       switch (netDef.Type)
@@ -225,7 +225,7 @@ namespace Ceres.Chess.NNEvaluators
         case NNEvaluatorType.ONNXViaTRT:
         case NNEvaluatorType.ONNXViaORT:
           bool viaTRT = netDef.Type == NNEvaluatorType.ONNXViaTRT
-             || deviceDef.OverrideEngineType.StartsWith("TensorRT16");
+             || (deviceDef.OverrideEngineType != null && deviceDef.OverrideEngineType.StartsWith("TensorRT16"));
           int maxONNXBatchSize = viaTRT ? TRT_MAX_BATCH_SIZE : DEFAULT_MAX_BATCH_SIZE;
           maxONNXBatchSize = Math.Min(maxONNXBatchSize, deviceDef.MaxBatchSize ?? DEFAULT_MAX_BATCH_SIZE);
           string fullFN = Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, netDef.NetworkID) + ".onnx";
@@ -304,9 +304,6 @@ namespace Ceres.Chess.NNEvaluators
           {
             QNegativeBlunders = 0.02f,
             QPositiveBlunders = 0.02f,
-
-//            FractionValueHead2 = 0.40f,
-//            ValueHead2Temperature = 2.0f
           };
 
           NNEvaluatorONNX onnxEngine = new(shortID, netFileName, null, 
