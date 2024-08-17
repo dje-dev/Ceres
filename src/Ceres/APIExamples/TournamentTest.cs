@@ -245,11 +245,17 @@ namespace Ceres.APIExamples
 //      NET2 = "Ceres:lastx_fp16.onnx";
 
 //      NET2 = "~T1_DISTILL_512_15_FP16";// _TRT";
-      NET2 = "~T3_DISTILL_512_15_FP16_TRT";
-NET1 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_combo_516_final.onnx"; // 397 good
-
+NET1 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_combo_473_485_495.onnx"; // -25@100
+      
+//      NET1 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_c6_fp16_6000001024.onnx";
       //      NET2 = "~BT3_FP16_TRT";
 
+//      NET2 = "~T3_DISTILL_512_15_FP16_TRT";
+
+
+      //NET1 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_c6a_fp16_6500007936.onnx";
+      //NET2 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_c6a_fp16_6500007936.onnx";
+      //      NET1 =  @"Ceres:E:\cout\nets\trt_engines_embed\DEV\HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_4000006144.onnx";
       /////      NET2 = "~T1_256_RL_TRT";
       //      NET2 = "~T1_256_RL_NATIVE";
       GPUS_2 = "GPU:0#TensorRT16";
@@ -265,18 +271,23 @@ NET1 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_combo_516_final.onnx";
       //WZNET2 = "CUSTOM2:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_postconvert.ts.fp16.onnx";
 
       //NET1 = "~T3_DISTILL_512_15_FP16_TRT";
-      //NET2 = "~T3_512_15_FP16_TRT";
 
       //NET2 = "~T80";
       //      NET2 = "~T1_DISTILL_256_10_FP16";
-      //      NET1 = "~BT4_NATIVE";
+
+//      NET1 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_4000006144.onnx";
+//NET1 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_c6a_fp16_6500007936.onnx"; // -25@100
+NET1 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_5200003072.onnx";
+NET2 = "~T3_512_15_FP16_TRT";
+
+      //      NET2 = "~T81";
       //      NET1 = "CUSTOM1:753723;1;0;0;1,~T1_DISTILL_512_15;0;1;1;0";
       //NET1 = "ONNX_ORT:BT3_750_policy_vanilla#32,ONNX_ORT:BT3_750_policy_optimistic#32";
       //      NET1 = "~BT4|1.26"; // 1.26 -13+/-13
       //NET2 = "~T1_DISTIL_512_15_NATIVE";
 
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(100);
+      SearchLimit limit1 = SearchLimit.NodesPerMove(1000);
 //    limit1 = SearchLimit.BestValueMove;
 //limit1 = new SearchLimit(SearchLimitType.SecondsForAllMoves, 15, false, 0.5f);
       //SearchLimit limit2 = SearchLimit.NodesPerMove(1);
@@ -456,9 +467,13 @@ NET1 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_combo_516_final.onnx";
 
       //      AdjustSelectParamsNewTune(engineDefCeres1.SelectParams);
       //      AdjustSelectParamsNewTune(engineDefCeres2.SelectParams);
+//      engineDefCeres1.SelectParams.PolicySoftmax *= 0.9f;
+//      engineDefCeres1.SelectParams.CPUCT *= 0.80f;
+//      engineDefCeres2.SelectParams.CPUCT *= 0.80f;
+//engineDefCeres1.SelectParams.CPUCT *= 0.75f;
+//      engineDefCeres2.SelectParams.CPUCT *= 0.75f;
 
-      engineDefCeres1.SelectParams.CPUCT *= 0.75f;
-
+      //    
       //      engineDefCeres1.SearchParams.TestFlag2 = true;
       //engineDefCeres1.SearchParams.EnableUncertaintyBoosting = true;
       //      engineDefCeres2.SearchParams.EnableUncertaintyBoosting = true;
@@ -563,23 +578,27 @@ string OVERRIDE_LC0_BACKEND_STRING = "";
       EnginePlayerDef playerLC0_2 = ENABLE_LC0_2 ? new EnginePlayerDef(engineDefLC2, limit2) : null;
 
 
-      if (false)
+      const bool RUN_SUITE = false;
+      if (RUN_SUITE)
       {
-        string BASE_NAME = "ERET";// nice_lcx Stockfish238 ERET_VESELY203 endgame2 chad_tactics-100M lichess_chad_bad.csv
+        string BASE_NAME = "eret.epd";// eret nice_lcx Stockfish238 ERET_VESELY203 endgame2 chad_tactics-100M lichess_chad_bad.csv
         ParamsSearch paramsNoFutility = new ParamsSearch() { FutilityPruningStopSearchEnabled = false };
 
+        //Z:\chess\data\epd>type lichess.csv 
+//        BASE_NAME = "lichess.csv";
+
         // ===============================================================================
-        string suiteGPU = POOLED ? "GPU:0,1,2,3:POOLED=SHARE1" : "GPU:0";
+        string suiteGPU = POOLED ? "GPU:0:POOLED=SHARE1" : "GPU:0";
         SuiteTestDef suiteDef =
           new SuiteTestDef("Suite",
-                           SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/epd/{BASE_NAME}.epd"
-                                                   : @$"\\synology\dev\chess\data\epd\{BASE_NAME}.epd",
-                           SearchLimit.NodesPerMove(500),
+                           SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/epd/{BASE_NAME}"
+                                                   : @$"\\synology\dev\chess\data\epd\{BASE_NAME}",
+                           limit1,
                            GameEngineDefFactory.CeresInProcess("Ceres1", NET1, suiteGPU, paramsNoFutility with { }),
                            GameEngineDefFactory.CeresInProcess("Ceres2", NET2, suiteGPU, paramsNoFutility with { }),
                            null);// engineDefCeres96);// playerLC0.EngineDef);
 
-        suiteDef.MaxNumPositions = 500;
+        suiteDef.MaxNumPositions = 3000;
         suiteDef.EPDLichessPuzzleFormat = suiteDef.EPDFileName.ToUpper().Contains("LICHESS");
 
         suiteDef.AcceptPosPredicate = null;// p => IsKRP(p);
