@@ -365,14 +365,6 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
         }
 
 
-        // Rather than rely upon names, just look at the dimensions
-        // of the outputs to infer the positions of value, policy and MLH heads.
-        // TODO: currently limited to assuming MLH and WDL true, can this be improved?
-        if (!isWDL || !hasMLH)
-        {
-          throw new Exception("Implementation restriction, ONNX runtime nets expected to have both WDL and MLH heads.");
-        }
-
         // TODO: remove hack for BT3
         bool looksLikeBT3 = eval.Count > 10;
         string uncMustContainString = looksLikeBT3 ? "value/q/dense_error" : null;
@@ -380,7 +372,7 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
         int INDEX_POLICIES = FindIndex(1858);// FIX NetType == NetTypeEnum.Ceres ? 1858 : 96);
         int INDEX_WDL = FindIndex(3);
         int INDEX_WDL2 = FindIndex(3, INDEX_WDL, "value2", true);
-        int INDEX_MLH = FindIndex(1);
+        int INDEX_MLH = FindIndex(1, optional:true);
         int INDEX_UNC = hasUNC ? FindIndex(1, INDEX_MLH) : -1;
         int INDEX_UNC_POLICY = hasUNC_POLICY ? FindIndex(1, INDEX_MLH, "uncertainty_policy") : -1;
         int INDEX_ACTION = FindIndex(1858 * 3, -1, "action", true); // TODO: cleanup the output names to be better named
