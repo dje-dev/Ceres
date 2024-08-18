@@ -53,7 +53,7 @@ namespace Ceres.APIExamples
   {
     const bool POOLED = false;
 
-    static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 3 : 8;
+    static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 1 : 4;
     static int[] OVERRIDE_DEVICE_IDs = /*POOLED ? null*/
        (Environment.MachineName.ToUpper() switch
       {
@@ -67,7 +67,6 @@ namespace Ceres.APIExamples
 
 
     static bool RUN_DISTRIBUTED = false;
-
 
     private static void KillCERES()
     {
@@ -96,19 +95,22 @@ namespace Ceres.APIExamples
     static string SF15_EXE => SoftwareManager.IsLinux ? @"/raid/dev/Stockfish/src/stockfish"
                                                       : @"\\synology\dev\chess\engines\stockfish_15_x64_avx2.exe";
 
+    static string SFDEV_EXE => SoftwareManager.IsLinux ? @"/home/david/apps/SF/stockfish_dev"
+                                                      : @"\\synology\dev\chess\engines\stockfish_dev.exe";
+    static string SF161_EXE => SoftwareManager.IsLinux ? @"/home/david/apps/SF/sf16.1"
+                                                      : @"\\synology\dev\chess\engines\stockfish_16.1-windows-x86-64-avx2.exe";
 
     static List<string> extraUCI = null;// new string[] {"setoption name Contempt value 5000" };
-    static GameEngineDef engineDefStockfish11 = new GameEngineDefUCI("SF11", new GameEngineUCISpec("SF11", SF11_EXE, SF_NUM_THREADS, SF_HASH_SIZE_MB(),
-                                                                     TB_PATH, uciSetOptionCommands: extraUCI));
 
-    public static GameEngineDef EngineDefStockfish14(int numThreads = SF_NUM_THREADS, int hashtableSize = -1) =>
-      new GameEngineDefUCI("SF14.1", new GameEngineUCISpec("SF14.1", SF14_EXE, numThreads,
-                           hashtableSize == -1 ? SF_HASH_SIZE_MB() : hashtableSize, TB_PATH, uciSetOptionCommands: extraUCI));
-    public static GameEngineDef EngineDefStockfish15(int numThreads = SF_NUM_THREADS, int hashtableSize = -1) =>
-      new GameEngineDefUCI("SF15", new GameEngineUCISpec("SF15", SF15_EXE, numThreads,
-                           hashtableSize == -1 ? SF_HASH_SIZE_MB() : hashtableSize, TB_PATH, uciSetOptionCommands: extraUCI));
 
-    const int SF_NUM_THREADS = 24;
+    const int SF_NUM_THREADS = 8;
+    static GameEngineDef MakeEngineDefStockfish(string id, string exePath, int numThreads = SF_NUM_THREADS, int hashtableSize = -1)
+    {
+      return new GameEngineDefUCI(id, new GameEngineUCISpec(id, exePath, numThreads,
+                           hashtableSize == -1 ? SF_HASH_SIZE_MB() : hashtableSize, TB_PATH, uciSetOptionCommands: extraUCI));
+    }
+
+
 
     static string TB_PATH => CeresUserSettingsManager.Settings.TablebaseDirectory;
     static int SF_HASH_SIZE_MB() => HardwareManager.MemorySize > (256L * 1024 * 1024 * 1024) ? 32_768 : 2_048;
@@ -294,8 +296,9 @@ NET2 = "~T3_512_15_FP16_TRT";
       
       SearchLimit limit2 = limit1;
       //      limit2 = SearchLimit.BestActionMove;
-      //var limit2 = SearchLimit.NodesPerMove(1);
-        
+
+      limit1 = limit2 = SearchLimit.SecondsForAllMoves(30, 0.5f);
+
 
       //      NET1 = "ONNX_ORT:BT2-768x15smolgen-12h-do-01-swa-onnx-1675000-rule50.gz";
 
@@ -573,7 +576,7 @@ string OVERRIDE_LC0_BACKEND_STRING = "";
       GameEngineDefLC0 engineDefLC1 = ENABLE_LC0_1 ? new GameEngineDefLC0("LC0_0", evalDef1, forceDisableSmartPruning, null, null, overrideEXE: OVERRIDE_LC0_EXE, overrideBackendString: OVERRIDE_LC0_BACKEND_STRING) : null;
       GameEngineDefLC0 engineDefLC2 = ENABLE_LC0_2 ? new GameEngineDefLC0("LC0_2", evalDef2, forceDisableSmartPruning, null, null, overrideEXE: OVERRIDE_LC0_EXE, overrideBackendString: OVERRIDE_LC0_BACKEND_STRING) : null;
 
-      EnginePlayerDef playerStockfish14 = new EnginePlayerDef(EngineDefStockfish14(), limit2 * 0.30f);// * 350);
+      EnginePlayerDef playerStockfish161 = new EnginePlayerDef(MakeEngineDefStockfish("SF161", SF161_EXE), limit2);// * 350);
       EnginePlayerDef playerLC0 = ENABLE_LC0_1 ? new EnginePlayerDef(engineDefLC1, limit1) : null;
       EnginePlayerDef playerLC0_2 = ENABLE_LC0_2 ? new EnginePlayerDef(engineDefLC2, limit2) : null;
 
@@ -619,7 +622,7 @@ string OVERRIDE_LC0_BACKEND_STRING = "";
 #endif
       // **************************************************
       EnginePlayerDef player1 = playerCeres1;// playerCeres1UCI;// new EnginePlayerDef(engineDefCSNN1, SearchLimit.NodesPerMove(30));
-      EnginePlayerDef player2 = playerCeres2; ;// playerCeres96;// new EnginePlayerDef(EnginDefStockfish14(), SearchLimit.NodesPerMove(300 * 10_000));
+      EnginePlayerDef player2 = playerStockfish161;// playerCeres96;// new EnginePlayerDef(EnginDefStockfish14(), SearchLimit.NodesPerMove(300 * 10_000));
       //new EnginePlayerDef(engineDefCSNoNN, SearchLimit.NodesPerMove(300 * 10_000));
       // **************************************************
 
@@ -642,28 +645,32 @@ string OVERRIDE_LC0_BACKEND_STRING = "";
       }
 
       TournamentDef def;
-      bool roundRobin = false;
+      bool roundRobin = true;
       if (roundRobin)
       {
         def = new TournamentDef("RR");
-        //const float SF_TIME_SCALE = 0.8f;
-        //        def.AddEngine(playerStockfish14.EngineDef, limit1 * SF_TIME_SCALE);
 
         (string, string)[] nets = 
         [
-          ("D256", "~T1_DISTILL_256_10_FP16"),
-          ("BLV2_WD005", "CUSTOM2:HOP_C_256_12_8_6_4bn_B1_2024_wd005_blhead_4000006144.ts.fp16.onnx"), // mid July blunder only into v2, wd005
-          ("BEST_B1", "CUSTOM1:ckpt_DGX_C_256_12_8_6_60bn_B4_2024_final.ts.fp16.onnx"),// best June2024 (4B)
-          ("BEST_B4", "CUSTOM1:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_postconvert.ts.fp16.onnx"), // best June2024 (1B)
-          ("BASE", "CUSTOM1:ckpt_DGX_C_256_12_8_6_4bn_B1_2024_vl01_sf_c2_1bn_last.ts.fp16.onnx"),          // baseline (+1bn)
-//          ("V2_p3", "CUSTOM1:ckpt_DGX_C_256_12_8_6_4bn_B1_2024_vl01_sf_c3_1bn_vl2p3_last.ts.fp16.onnx"),  // extension: value2 loss 0.3 (not 0.1)
-//          ("V2_WD001", "CUSTOM1:ckpt_DGX_C_256_12_8_6_4bn_B1_2024_vl01_sf_c3_1bn_wd001_last.ts.fp16.onnx"), // extension: WD 0.001
-          ("V2_NEWDATA", "CUSTOM1:HOP_C_256_12_8_6_4bn_B1_2024_vl01_sf_1bn_newdata_999997440.ts.fp16.onnx"), // extension: new data (2024)
+//          ("D256", "~T1_DISTILL_256_10_FP16"),
+          ("SF161", "SF161"),
+          ("C52bn", "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_5200003072.onnx"),
+          ("T3D", "~T3_512_15_FP16_TRT"),
         ];
 
+        const float TIME_SCALE = 2f;
         foreach (var (name, net) in nets)
         {
-          def.AddEngines(limit1, new GameEngineDefCeres(name, NNEvaluatorDef.FromSpecification(net, "GPU:0"), null));
+          if (name == "SF161")
+          {
+            def.AddEngine(playerStockfish161.EngineDef, limit1 * TIME_SCALE);
+            def.ReferenceEngineId = "SF161";
+          }
+          else
+          {
+            string GPU_SPEC = "GPU:0#TensorRT16";
+            def.AddEngines(limit1 * TIME_SCALE, new GameEngineDefCeres(name, NNEvaluatorDef.FromSpecification(net, GPU_SPEC), null));
+          }
         }
 
         //        def.AddEngines(limit1, engineDefLC1);
@@ -754,7 +761,7 @@ string OVERRIDE_LC0_BACKEND_STRING = "";
 
       // Define constants for engine parameters
       string SF14_EXE = Path.Combine(CeresUserSettingsManager.Settings.DirExternalEngines, "Stockfish14.1.exe");
-      const int SF_THREADS = 8;
+      const int SF_THREADS = 4;
       const int SF_TB_SIZE_MB = 1024;
 
       string CERES_NETWORK = CeresUserSettingsManager.Settings.DefaultNetworkSpecString; //"LC0:703810";
