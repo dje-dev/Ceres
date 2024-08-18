@@ -217,7 +217,7 @@ namespace Ceres.Chess.NNEvaluators
       const bool DEFAULT_HAS_STATE = false;
 
       const int DEFAULT_MAX_BATCH_SIZE = 1024;
-      const int TRT_MAX_BATCH_SIZE = 204; // See note in ONNXExecutor, possibly configuring profile to include large batches hinders performance.
+      const int TRT_MAX_BATCH_SIZE = 256; // See note in ONNXExecutor, possibly configuring profile to include large batches hinders performance.
       const bool ONNX_SCALE_50_MOVE_COUNTER = false; // BT2 already inserts own node to adjust
 
       switch (netDef.Type)
