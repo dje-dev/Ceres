@@ -373,8 +373,8 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
         int INDEX_WDL = FindIndex(3);
         int INDEX_WDL2 = FindIndex(3, INDEX_WDL, "value2", true);
         int INDEX_MLH = FindIndex(1, optional:true);
-        int INDEX_UNC = hasUNC ? FindIndex(1, INDEX_MLH) : -1;
-        int INDEX_UNC_POLICY = hasUNC_POLICY ? FindIndex(1, INDEX_MLH, "uncertainty_policy") : -1;
+        int INDEX_UNC = hasUNC ? FindIndex(1, INDEX_MLH, optional:true) : -1;
+        int INDEX_UNC_POLICY = hasUNC_POLICY ? FindIndex(1, INDEX_MLH, "uncertainty_policy", true) : -1;
         int INDEX_ACTION = FindIndex(1858 * 3, -1, "action", true); // TODO: cleanup the output names to be better named
         int INDEX_STATE = FindIndex(256, -1, "state", true);
         if (false && looksLikeBT3)
