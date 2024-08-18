@@ -22,12 +22,12 @@ using System.Threading.Tasks;
 
 using Ceres.Base.Benchmarking;
 using Ceres.Base.DataTypes;
-using Ceres.Base.Math;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Chess.LC0.Batches;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
+
 using Microsoft.ML.OnnxRuntime;
 
 #endregion
@@ -227,7 +227,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// </summary>
     /// <param name="index"></param>
     /// <returns></returns>
-    public FP16 GetM(int index) => HasM ? M.Span[index] : FP16.NaN;
+    public FP16 GetM(int index) => HasM ? (M.IsEmpty ? FP16.NaN : M.Span[index]) : FP16.NaN;
 
     /// <summary>
     /// Returns the value of the uncertainty of V head for the position at a specified index in the batch.
