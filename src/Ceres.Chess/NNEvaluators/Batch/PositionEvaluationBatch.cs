@@ -196,28 +196,28 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// </summary>
     /// <param name="index"></param>
     /// <returns></returns>
-    public FP16 GetV2(int index) => IsWDL ? W2.Span[index] - L2.Span[index] : W2.Span[index];
+    public FP16 GetV2(int index) => IsWDL ? GetWin2P(index) - GetLoss2P(index) : GetWin2P(index);
 
     /// <summary>
     /// Returns the win probability from the secondary value head for the position at a specified index in the batch.
     /// </summary>
     /// <param name="index"></param>
     /// <returns></returns>
-    public FP16 GetWin2P(int index) => W2.Span[index];
+    public FP16 GetWin2P(int index) => W2.Span.IsEmpty ? FP16.NaN : W2.Span[index];
 
     /// <summary>
     /// Returns the draw probability from the secondary value head for the position at a specified index in the batch.
     /// </summary>
     /// <param name="index"></param>
     /// <returns></returns>
-    public FP16 GetDraw2P(int index) => IsWDL ? (FP16)(1.0f - (W2.Span[index] + L2.Span[index])) : 0;
+    public FP16 GetDraw2P(int index) => IsWDL ? (FP16)(1.0f - (GetWin2P(index) + GetLoss2P(index))) : 0;
 
     /// <summary>
     /// Returns the loss probability from the secondary value head for the position at a specified index in the batch.
     /// </summary>
     /// <param name="index"></param>
     /// <returns></returns>
-    public FP16 GetLoss2P(int index) => IsWDL ? L2.Span[index] : 0;
+    public FP16 GetLoss2P(int index) => IsWDL ? (L2.Span.IsEmpty ? FP16.NaN : L2.Span[index]) : 0;
 
     #endregion
 
