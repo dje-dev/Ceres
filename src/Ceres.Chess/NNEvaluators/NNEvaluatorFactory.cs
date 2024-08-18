@@ -217,7 +217,7 @@ namespace Ceres.Chess.NNEvaluators
       const bool DEFAULT_HAS_STATE = false;
 
       const int DEFAULT_MAX_BATCH_SIZE = 1024;
-      const int TRT_MAX_BATCH_SIZE = 204;// 204; // See note in ONNXExecutor, possibly configuring profile to include large batches hinders performance.
+      const int TRT_MAX_BATCH_SIZE = 204; // See note in ONNXExecutor, possibly configuring profile to include large batches hinders performance.
       const bool ONNX_SCALE_50_MOVE_COUNTER = false; // BT2 already inserts own node to adjust
 
       switch (netDef.Type)
@@ -307,14 +307,14 @@ namespace Ceres.Chess.NNEvaluators
           };
 
           NNEvaluatorONNX onnxEngine = new(shortID, netFileName, null, 
-                                                NNDeviceType.GPU, deviceDef.DeviceIndex, useTensorRT,
-                                                ONNXNetExecutor.NetTypeEnum.TPG,
-                                                useTensorRT ? TRT_MAX_BATCH_SIZE : DEFAULT_MAX_BATCH_SIZE,
-                                                useFP16 ? NNEvaluatorPrecision.FP16 : NNEvaluatorPrecision.FP32,
-                                                true, true, HAS_UNCERTAINTY_V, HAS_UNCERTAINTY_P, optionsCeres.UseAction, 
-                                                "policy", "value", "mlh", "unc", true,
-                                                ENABLE_PROFILING, false, USE_HISTORY, optionsCeres,
-                                                true, optionsCeres.UsePriorState);
+                                           NNDeviceType.GPU, deviceDef.DeviceIndex, useTensorRT,
+                                           ONNXNetExecutor.NetTypeEnum.TPG,
+                                           useTensorRT ? TRT_MAX_BATCH_SIZE : DEFAULT_MAX_BATCH_SIZE,
+                                           useFP16 ? NNEvaluatorPrecision.FP16 : NNEvaluatorPrecision.FP32,
+                                           true, true, HAS_UNCERTAINTY_V, HAS_UNCERTAINTY_P, optionsCeres.UseAction, 
+                                           "policy", "value", "mlh", "unc", true,
+                                           ENABLE_PROFILING, false, USE_HISTORY, optionsCeres,
+                                           true, optionsCeres.UsePriorState);
 
         EncodedPositionBatchFlat.RETAIN_POSITION_INTERNALS = true; // ** TODO: remove/rework
         onnxEngine.ConverterToFlatFromTPG = (options, o, f1) => TPGConvertersToFlat.ConvertToFlatTPGFromTPG(options, o, f1);

@@ -109,6 +109,7 @@ namespace Ceres.MCTS.Params
 
     public bool PolicyReturnedSameOrderMoveList => evaluator1.PolicyReturnedSameOrderMoveList;
 
+
     /// <summary>
     /// Returns the maximum batch size supported by the NNEvaluatorSet.
     /// </summary>
@@ -117,8 +118,17 @@ namespace Ceres.MCTS.Params
       get
       {
         int max = evaluator1.MaxBatchSize;
-        if (evaluator2 != null) max = Math.Max(max, evaluator2.MaxBatchSize);
-        if (evaluatorSecondary != null) max = Math.Max(max, evaluatorSecondary.MaxBatchSize);
+
+        if (evaluator2 != null)
+        {
+          max = Math.Max(max, evaluator2.MaxBatchSize);
+        }
+
+        if (evaluatorSecondary != null)
+        {
+          max = Math.Max(max, evaluatorSecondary.MaxBatchSize);
+        }
+
         return max;
       }
     }

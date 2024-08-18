@@ -14,6 +14,7 @@
 #region Using directives
 
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 
 using Ceres.Base.Benchmarking;
@@ -71,8 +72,19 @@ namespace Ceres.Chess.NNEvaluators
             maxBatchSizeMostRestrictiveEvaluator = maxThisEvaluator;
           }
         }
-        
-        return maxBatchSizeMostRestrictiveEvaluator;
+
+        bool allFractionsSame = PreferredFractions.All(f => f == PreferredFractions.First());
+        if (allFractionsSame)
+        {
+          // Safe to assume we can spread larger batches evenly across all evaluators
+          return Evaluators.Length * maxBatchSizeMostRestrictiveEvaluator;
+        }
+        else
+        {
+          // TODO: This is too conservative. Someday use the PreferredFractions
+          //       to make a less restrictive estimate on allowable batch size.
+          return maxBatchSizeMostRestrictiveEvaluator;
+        }
       }
     }
 
