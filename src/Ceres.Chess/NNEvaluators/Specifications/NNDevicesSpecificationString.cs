@@ -193,11 +193,17 @@ namespace Ceres.Chess.NNEvaluators.Specifications
         {
           if (count > 0) str += ",";
           str += $"{device.DeviceIndex}";
-          if (weight != 1) str += $"@{weight}";
+
+          if (weight != 1)
+          {
+            str += $"@{weight}";
+          }
+
           if (device.PredefinedOptimalBatchPartitions != null)
           {
             str += $"[<batch_size_file>]";
           }
+
           if (device.MaxBatchSize.HasValue)
           {
             if (device.MaxBatchSize.HasValue)
@@ -210,12 +216,19 @@ namespace Ceres.Chess.NNEvaluators.Specifications
             }
           }
 
+          if (device.OverrideEngineType != null)
+          {
+            str += $"#{device.OverrideEngineType}]";
+          }
+
           count++;
         }
+
         if (comboType == NNEvaluatorDeviceComboType.Pooled)
         {
           str += ":POOLED";
         }
+
         return str;
       }
       else
