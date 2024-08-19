@@ -189,7 +189,7 @@ namespace Ceres.Chess.NNEvaluators
 
     #region Static helpers
 
-    /// Returns an NNEvaluator corresponding to speciifed strings with network and device specifications.
+    /// Returns an NNEvaluator corresponding to specified strings with network and device specifications.
     /// </summary>
     /// <param name="netSpecificationString"></param>
     /// <param name="deviceSpecificationString"></param>
@@ -201,6 +201,7 @@ namespace Ceres.Chess.NNEvaluators
       => NNEvaluatorDef.FromSpecification(netSpecificationString, deviceSpecificationString, evaluatorOptions).ToEvaluator();
 
     #endregion
+
 
     #region Basic evaluator methods
 
@@ -258,16 +259,6 @@ namespace Ceres.Chess.NNEvaluators
 
       IPositionEvaluationBatch batch = DoEvaluateIntoBuffers(positions, retrieveSupplementalResults);
 
-#if DEBUG
-      if (!positions.PositionsBuffer.IsEmpty)
-      {
-        foreach (var pos in positions.PositionsBuffer.Span.Slice(0, positions.NumPos))
-        {
-          pos.Validate();
-        }
-      }
-#endif
-
       NumBatchesEvaluated++;
       NumPositionsEvaluated += positions.NumPos;
       return batch;
@@ -288,7 +279,7 @@ namespace Ceres.Chess.NNEvaluators
       }
     }
 
-    object lockObj = new ();
+    readonly object lockObj = new ();
 
 
     /// <summary>
