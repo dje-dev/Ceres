@@ -211,9 +211,9 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
             const bool USE_OMNI_PROFILE = true;
             if (USE_OMNI_PROFILE)
             {
-              providerOptionsDict["trt_profile_min_shapes"] = MakeShapeStr(minBatchSize);
-              providerOptionsDict["trt_profile_opt_shapes"] = MakeShapeStr(128);
-              providerOptionsDict["trt_profile_max_shapes"] = MakeShapeStr(maxBatchSize); // N.B. see note above
+              providerOptionsDict["trt_profile_min_shapes"] = MakeShapeStr(minBatchSize);// + "," + MakeShapeStr(128);
+              providerOptionsDict["trt_profile_opt_shapes"] = MakeShapeStr(128);// + "," + MakeShapeStr(512);
+              providerOptionsDict["trt_profile_max_shapes"] = MakeShapeStr(maxBatchSize);// + "," + MakeShapeStr(1024); // N.B. see note above
             }
           }
 #if NOT
@@ -275,7 +275,7 @@ Comments from onnxruntime source code:
             providerOptionsDict["trt_fp16_enable"] = "1";
           }
 
-          providerOptionsDict["trt_builder_optimization_level"] = "3"; // N.B. Level 5 may be buggy
+          providerOptionsDict["trt_builder_optimization_level"] = "4"; // N.B. Level 5 may be buggy
 
           // TODO: For graphs: use IO / Binding to bind input tensors in GPU memory.
           // See: https://github.com/microsoft/onnxruntime/issues/20050
@@ -298,13 +298,12 @@ Comments from onnxruntime source code:
         Dictionary<string, string> providerOptionsDict = new();
         providerOptionsDict["device_id"] = gpuID.ToString();
 
-
         cudaProviderOptions.UpdateOptions(providerOptionsDict);
         so = SessionOptions.MakeSessionOptionWithCudaProvider(cudaProviderOptions);
       }
 
 #if DEBUG
-      so.LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_WARNING;
+      so.LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_INFO;
 #else
       so.LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_ERROR;
 #endif
@@ -325,8 +324,9 @@ Comments from onnxruntime source code:
         so.ProfileOutputPathPrefix = @"c:\temp";
       }
 
-      // See: https://onnxruntime.ai/docs/performance/model-optimizations/graph-optimizations.html
-      so.GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL; // Possibly this is overkill and takes too long?
+      // N.B. A random problem with generated engines being slow (ignored FP16 mode)
+      //      may possibly be caused by using ORT_ENABLE_ALL, so instead we use just ORT_ENABLE_EXTENDED.
+      so.GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_EXTENDED;
       
       
       // N.B. Do not use ORT_PARALLEL, this causes failures in ONNXRuntime when using GPUs with index other than 0.
