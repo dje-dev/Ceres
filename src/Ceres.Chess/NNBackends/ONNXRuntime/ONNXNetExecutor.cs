@@ -316,11 +316,23 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
       }
       else
       {
-        bool hasMLH = eval.Count >= 3;
-        bool hasUNC = eval.Count >= 4;
-        bool hasUNC_POLICY = FindIndex(1, -1, "uncertainty_policy", true) != -1;
+        bool hasMLH = FindIndexExact("mlh") != -1;
+        bool hasUNC = FindIndexExact("unc") != -1;
+        bool hasUNC_POLICY = FindIndexExact("uncertainty_policy") != -1;
 
-        int FindIndex(int expectedPerPosition, int indexToIgnore = -1, string mustContainString = null, bool optional = false)
+        int FindIndexExact(string name)
+        {
+          for (int i = 0; i < eval.Count; i++)
+          {
+            if (eval[i].Item1 == name)
+            {
+              return i;
+            }
+          }
+          return -1;
+        }
+
+          int FindIndex(int expectedPerPosition, int indexToIgnore = -1, string mustContainString = null, bool optional = false)
         {
           int expectedLength = numPositionsUsed * expectedPerPosition;
           for (int i = 0; i < eval.Count; i++)
