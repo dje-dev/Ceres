@@ -279,7 +279,7 @@ NET1 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_combo_473_485_495.onnx
 
 //      NET1 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_4000006144.onnx";
 //NET1 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_c6a_fp16_6500007936.onnx"; // -25@100
-NET1 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_5200003072.onnx";
+NET1 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_5200003072_skinny.onnx";
 NET2 = "~T3_512_15_FP16_TRT";
 
       //      NET2 = "~T81";
@@ -289,7 +289,7 @@ NET2 = "~T3_512_15_FP16_TRT";
       //NET2 = "~T1_DISTIL_512_15_NATIVE";
 
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(1000);
+      SearchLimit limit1 = SearchLimit.NodesPerMove(20_000);
 //    limit1 = SearchLimit.BestValueMove;
 //limit1 = new SearchLimit(SearchLimitType.SecondsForAllMoves, 15, false, 0.5f);
       //SearchLimit limit2 = SearchLimit.NodesPerMove(1);
@@ -297,7 +297,7 @@ NET2 = "~T3_512_15_FP16_TRT";
       SearchLimit limit2 = limit1;
       //      limit2 = SearchLimit.BestActionMove;
 
-      limit1 = limit2 = SearchLimit.SecondsForAllMoves(30, 0.5f);
+//      limit1 = limit2 = SearchLimit.SecondsForAllMoves(30, 0.5f);
 
 
       //      NET1 = "ONNX_ORT:BT2-768x15smolgen-12h-do-01-swa-onnx-1675000-rule50.gz";
@@ -581,10 +581,21 @@ string OVERRIDE_LC0_BACKEND_STRING = "";
       EnginePlayerDef playerLC0_2 = ENABLE_LC0_2 ? new EnginePlayerDef(engineDefLC2, limit2) : null;
 
 
-      const bool RUN_SUITE = false;
+      const bool RUN_SUITE = true;
       if (RUN_SUITE)
       {
-        string BASE_NAME = "eret.epd";// eret nice_lcx Stockfish238 ERET_VESELY203 endgame2 chad_tactics-100M lichess_chad_bad.csv
+        NNEvaluator bmEval1 = NNEvaluator.FromSpecification(NET1, "GPU:0#TensorRT16");
+        NNEvaluator bmEval2 = NNEvaluator.FromSpecification(NET2, "GPU:0#TensorRT16");
+
+        Console.WriteLine();
+        Console.WriteLine("BENCHMARK");
+        Console.WriteLine("1: " + NNEvaluatorBenchmark.EstNPS(bmEval1, bigBatchSize: 256).NPSBigBatch);
+        Console.WriteLine("1: " + NNEvaluatorBenchmark.EstNPS(bmEval1, bigBatchSize: 256).NPSBigBatch);
+        Console.WriteLine("2: " + NNEvaluatorBenchmark.EstNPS(bmEval2, bigBatchSize: 256).NPSBigBatch);
+        Console.WriteLine("2: " + NNEvaluatorBenchmark.EstNPS(bmEval2, bigBatchSize: 256).NPSBigBatch);
+        Console.WriteLine();
+
+        string BASE_NAME = "chad_tactics-100M.epd";// eret nice_lcx Stockfish238 ERET_VESELY203 endgame2 chad_tactics-100M lichess_chad_bad.csv
         ParamsSearch paramsNoFutility = new ParamsSearch() { FutilityPruningStopSearchEnabled = false };
 
         //Z:\chess\data\epd>type lichess.csv 
@@ -622,7 +633,7 @@ string OVERRIDE_LC0_BACKEND_STRING = "";
 #endif
       // **************************************************
       EnginePlayerDef player1 = playerCeres1;// playerCeres1UCI;// new EnginePlayerDef(engineDefCSNN1, SearchLimit.NodesPerMove(30));
-      EnginePlayerDef player2 = playerStockfish161;// playerCeres96;// new EnginePlayerDef(EnginDefStockfish14(), SearchLimit.NodesPerMove(300 * 10_000));
+      EnginePlayerDef player2 = playerCeres2;// playerStockfish161;// new EnginePlayerDef(EnginDefStockfish14(), SearchLimit.NodesPerMove(300 * 10_000));
       //new EnginePlayerDef(engineDefCSNoNN, SearchLimit.NodesPerMove(300 * 10_000));
       // **************************************************
 
@@ -645,7 +656,7 @@ string OVERRIDE_LC0_BACKEND_STRING = "";
       }
 
       TournamentDef def;
-      bool roundRobin = true;
+      bool roundRobin = false;
       if (roundRobin)
       {
         def = new TournamentDef("RR");
@@ -655,12 +666,14 @@ string OVERRIDE_LC0_BACKEND_STRING = "";
 //          ("D256", "~T1_DISTILL_256_10_FP16"),
           ("SF161", "SF161"),
 //          ("C52bn", "Ceres:C:\\dev\\Ceres\\artifacts\\release\\net8.0\\_ctx1.onnx"),
-          ("C52bn", "Ceres:/mnt/deve/cout/nets/HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_5200003072_skinny_A100.onnx"),
-          ("T3D", "~T3_512_15_FP16_TRT"),
+//          ("C52bn", @"Ceres:e:\cout\nets\HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_5200003072_skinny_A6000.onnx"),
+          ("C52bn_g", @"Ceres:c:\temp\simple_64bn.onnx"),
+//          ("C52bn", "Ceres:/mnt/deve/cout/nets/HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_5200003072_skinny_A100.onnx"),
+//          ("T3D", "~T3_512_15_FP16_TRT"),
 //          ("LC0_T3D", "~T3_512_15_NATIVE"),
         ];
 
-        const float TIME_SCALE = 3;
+        const float TIME_SCALE = 1f;
         foreach (var (name, net) in nets)
         {
           if (name == "SF161")
@@ -720,6 +733,7 @@ string OVERRIDE_LC0_BACKEND_STRING = "";
 //        def.AcceptPosExcludeIfContainsPieceTypeList = [PieceType.Queen, PieceType.Bishop, PieceType.Knight];
       }
        baseName = "tcec_big";
+      baseName = "UHO_Lichess_4852_v1.epd"; // recommended by Kovax
       string postfix = (baseName.ToUpper().EndsWith(".EPD") || baseName.ToUpper().EndsWith(".PGN")) ? "" : ".pgn";
       def.OpeningsFileName = SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/openings/{baseName}{postfix}"
                                                      : @$"\\synology\dev\chess\data\openings\{baseName}{postfix}";
