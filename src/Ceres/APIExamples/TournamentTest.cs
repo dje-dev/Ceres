@@ -654,11 +654,13 @@ string OVERRIDE_LC0_BACKEND_STRING = "";
         [
 //          ("D256", "~T1_DISTILL_256_10_FP16"),
           ("SF161", "SF161"),
-          ("C52bn", "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_5200003072.onnx"),
+//          ("C52bn", "Ceres:C:\\dev\\Ceres\\artifacts\\release\\net8.0\\_ctx1.onnx"),
+          ("C52bn", "Ceres:/mnt/deve/cout/nets/HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_5200003072_skinny_A100.onnx"),
           ("T3D", "~T3_512_15_FP16_TRT"),
+//          ("LC0_T3D", "~T3_512_15_NATIVE"),
         ];
 
-        const float TIME_SCALE = 2f;
+        const float TIME_SCALE = 3;
         foreach (var (name, net) in nets)
         {
           if (name == "SF161")
@@ -666,15 +668,19 @@ string OVERRIDE_LC0_BACKEND_STRING = "";
             def.AddEngine(playerStockfish161.EngineDef, limit1 * TIME_SCALE);
             def.ReferenceEngineId = "SF161";
           }
+          else if (name.StartsWith("LC0_"))
+          {
+            GameEngineDefLC0 edLC0 = new("LC0", NNEvaluatorDef.FromSpecification(net, "GPU:0"), false);
+            def.AddEngine(edLC0, limit1 * TIME_SCALE);
+          }
           else
           {
             string GPU_SPEC = "GPU:0#TensorRT16";
-            def.AddEngines(limit1 * TIME_SCALE, new GameEngineDefCeres(name, NNEvaluatorDef.FromSpecification(net, GPU_SPEC), null));
+            GameEngineDefCeres engineCeres = new(name, NNEvaluatorDef.FromSpecification(net, GPU_SPEC));
+ //           engineCeres.SelectParams.CPUCT *= 0.85f;
+            def.AddEngine(engineCeres, limit1 * TIME_SCALE); 
           }
         }
-
-        //        def.AddEngines(limit1, engineDefLC1);
-        //        def.ReferenceEngineId = def.Engines[1].ID;
       }
       else
       {
