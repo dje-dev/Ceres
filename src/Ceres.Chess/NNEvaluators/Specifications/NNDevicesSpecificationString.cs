@@ -218,7 +218,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications
 
           if (device.OverrideEngineType != null)
           {
-            str += $"#{device.OverrideEngineType}]";
+            str += $"#{device.OverrideEngineType}";
           }
 
           count++;
