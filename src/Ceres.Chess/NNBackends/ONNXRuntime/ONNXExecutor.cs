@@ -275,7 +275,9 @@ Comments from onnxruntime source code:
             providerOptionsDict["trt_fp16_enable"] = "1";
           }
 
-          providerOptionsDict["trt_builder_optimization_level"] = "4"; // N.B. Level 5 may be buggy
+          // N.B. Using values other than "4" possibly causes engine generation
+          //      to randomly fail to respect the request for FP16, resulting in much slower engine.
+          providerOptionsDict["trt_builder_optimization_level"] = "4";
 
           // TODO: For graphs: use IO / Binding to bind input tensors in GPU memory.
           // See: https://github.com/microsoft/onnxruntime/issues/20050
@@ -284,6 +286,7 @@ Comments from onnxruntime source code:
           // providerOptionsDict["trt_cuda_graph_enable"] = "1"; // NOTE: may fail or yield bad output, requires entire graph to map onto ONNX nodes (?)
           // providerOptionsDict["trt_auxiliary_streams"] = "0";
 
+          //providerOptionsDict["trt_context_memory_sharing_enable"]= "1"; returns error, not obviously faster
           providerOptionsDict["trt_layer_norm_fp32_fallback"] = "1"; // possibly necessary otherwise terrible accuracy
 
           trtProviderOptions.UpdateOptions(providerOptionsDict);
