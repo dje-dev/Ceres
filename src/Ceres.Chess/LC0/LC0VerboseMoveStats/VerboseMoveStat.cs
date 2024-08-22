@@ -25,7 +25,7 @@ namespace Ceres.Chess.SearchResultVerboseMoveInfo
 {
   /// <summary>
   /// Captures the parsed output corresponding to one of the moves 
-  /// from the verobse move statistics output.
+  /// from the verbose move statistics output.
   /// </summary>
   public class VerboseMoveStat
   {
@@ -96,9 +96,24 @@ namespace Ceres.Chess.SearchResultVerboseMoveInfo
     public EncodedEvalLogistic V;
 
     /// <summary>
-    /// Measure of uncertainty of backed up evaluations (such as MAD over some window).
+    /// Uncertainty of value score (UNCV).
     /// </summary>
-    public float Uncertainty;
+    public float UncertaintyValue;
+
+    /// <summary>
+    /// Uncertainty of policy probabilities (UNCP).
+    /// </summary>
+    public float UncertaintyPolicy;
+
+    /// <summary>
+    /// Estimated max Q downside in remainder of game (QDOWN).
+    /// </summary>
+    public float QDown;
+
+    /// <summary>
+    /// Estimated max Q upside in remainder of game (QUP).
+    /// </summary>
+    public float QUp;
 
 
     /// <summary>
