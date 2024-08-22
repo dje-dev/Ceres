@@ -129,7 +129,7 @@ namespace Ceres.Features.UCI
 #if LEGACY_UNCERTAINTY
       stat.Uncertainty = MCTSNodeUncertaintyAccumulator.GetUncertainty(node.N, float.NaN);
 #else
-      stat.Uncertainty = node.UncertaintyVPosition;
+      stat.UncertaintyValue = node.UncertaintyVPosition;
 #endif
 
       return stat;
