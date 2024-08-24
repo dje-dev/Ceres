@@ -31,6 +31,8 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
 {
   public static class ONNXFileAveraging
   {
+    const bool DUMP_MAX_ABS_WEIGHTS_BY_LAYER = false; // currently only shows those >2
+
     public static void Main()
     {
       string modelPath1 = @"e:\cout\nets\HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_511.onnx";
@@ -88,16 +90,30 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
           if (tensorThisItem.DataType == (int)TensorProto.Types.DataType.Float16)
           {
             ReadOnlySpan<Half> value = MemoryMarshal.Cast<byte, Half>(tensorThisItem.RawData.Span);
+            float maxAbs = float.MinValue;
             for (int i = 0; i < value.Length; i++)
             {
               newHalfData[i] += (Half)(item.weight * (float)value[i]);
+
+              if (DUMP_MAX_ABS_WEIGHTS_BY_LAYER && Math.Abs((float)value[i]) > (float)value[i])
+              {
+                maxAbs = Math.Abs((float)value[i]);
+              }
             }
 
+            if (DUMP_MAX_ABS_WEIGHTS_BY_LAYER)
+            {
+              if (maxAbs > 2)
+              {
+                Console.WriteLine(maxAbs + "  " + tensorRoot.Name);
+              }
+            }
           }
           else
           {
             throw new NotImplementedException();
           }
+
         }
 
         avgTensor.RawData = ByteString.CopyFrom(newData);
