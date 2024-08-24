@@ -110,6 +110,7 @@ namespace Ceres.Features.Suites
     int numSearches = 0;
     int numSearchesBothFound = 0;
     int accCeres1 = 0, accCeres2 = 0, accWCeres1 = 0, accWCeres2 = 0, avgOther = 0;
+    int sumCeres1NumNodesWhenChoseTopNode, sumCeres2NumNodesWhenChoseTopNode;
 
     List<float> solvedPct1MinusPct2Samples = new();
 
@@ -430,7 +431,10 @@ namespace Ceres.Features.Suites
       Def.Output.WriteLine($"Num secondary evaluations:   {MCTSManager.NumSecondaryEvaluations,12:N0}");
 
       Def.Output.WriteLine();
+      Def.Output.WriteLine($"Ceres1 total nodes to solve {sumCeres1NumNodesWhenChoseTopNode,12:N0}");
+      Def.Output.WriteLine($"Ceres2 total nodes to solve {sumCeres2NumNodesWhenChoseTopNode,12:N0}");
 
+      Def.Output.WriteLine();
       float avgFaster = (float) StatUtils.Average(solvedPct1MinusPct2Samples);
       float stdFaster = (float)StatUtils.StdDev(solvedPct1MinusPct2Samples) / MathF.Sqrt(solvedPct1MinusPct2Samples.Count);
       Def.Output.WriteLine($"Ceres1 time required to solve vs. Ceres2 (%) {(100* avgFaster),5:F2} +/-{(100 * stdFaster),5:F2}");
@@ -625,6 +629,12 @@ namespace Ceres.Features.Suites
       {
         accCeres1 += scoreCeres1;
         accCeres2 += scoreCeres2;
+
+        sumCeres1NumNodesWhenChoseTopNode += result1.NumNodesWhenChoseTopNNode;
+        if (result2 != null)
+        {
+          sumCeres2NumNodesWhenChoseTopNode += result2.NumNodesWhenChoseTopNNode;
+        }
 
         // Accumulate how many nodes were required to find one of the correct moves
         // (in the cases where both succeeded)
