@@ -166,7 +166,12 @@ namespace Ceres.Features.UCI
       switch (name.ToLower())
       {
         case "weightsfile":
+        case "network":
           ProcessWeightsFile(value);
+          break;
+
+        case "device":
+          ProcessDevice(value);
           break;
 
         case "searchlogfile":
@@ -333,17 +338,40 @@ namespace Ceres.Features.UCI
         {
           if (EvaluatorDef != null && EvaluatorDef.Nets[0].Net.NetworkID.ToLower() == value.ToLower())
           {
-            OutStream.WriteLine($"uci info Specified network file is already {value}");
+            OutStream.WriteLine($"uci info Specified network file is already {value}, ignoring.");
           }
           else
           {
             ReinitializeEngine();
-            NetworkSpec = new NNNetSpecificationString(value);
+            NetworkSpec = new NNNetSpecificationString(value.Replace("\"", null).Replace("'", null));
             CreateEvaluator();
           }
         }
       }
     }
+
+    private void ProcessDevice(string value)
+    {
+      if (taskSearchCurrentlyExecuting != null)
+      {
+        OutStream.WriteLine("uci info Implementation limitation: cannot change device while search is running.");
+      }
+      else
+      {
+        if (value == null || value == "")
+        {
+          OutStream.WriteLine("uci info device specification expected (e.g. \"GPU:0\")");
+        }
+        else
+        {
+          ReinitializeEngine();
+          DeviceSpec = new NNDevicesSpecificationString(value.Replace("\"", null).Replace("'", null));
+          CreateEvaluator();
+        }
+      }
+    }
+
+
 
     void SetBool(string boolStr, ref bool value)
     {

@@ -325,7 +325,7 @@ namespace Ceres.Features.UCI
             {
               stopIsPending = true;
 
-              // Avoid race condition by mkaing sure the search is already created.
+              // Avoid race condition by making sure the search is already created.
               while (CeresEngine.Search?.Manager == null)
               {
                 Thread.Sleep(20);
