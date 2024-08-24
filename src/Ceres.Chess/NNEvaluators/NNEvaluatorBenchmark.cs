@@ -179,7 +179,7 @@ namespace Ceres.Chess.NNEvaluators
 
 
     static float GetNPSEstimate(NNEvaluator evaluator, int numEstimates, int batchSize,
-                                   float abortIfGreaterThanNPS, float latencyAdjustmentSecs)
+                                float abortIfGreaterThanNPS, float latencyAdjustmentSecs)
     {
       float worst = 0;
       float[] samples = new float[numEstimates];
@@ -220,26 +220,29 @@ namespace Ceres.Chess.NNEvaluators
       int? lastBreakPoint = null;
       for (int batchSize = minBatchSize - SKIP_COUNT; batchSize <= maxBatchSize; batchSize += SKIP_COUNT)
       {
-        // Get estimated NPS (several times, to adjust for noise)
-        int NUM_TRIES = 8;
-        float avgNPS = GetNPSEstimate(evaluator, NUM_TRIES, batchSize, lastNPS, latencyAdjustmentSecs);
-        if (lastNPS != 0)
+        if (batchSize <= evaluator.MaxBatchSize)
         {
-          float fraction = (float)avgNPS / (float)lastNPS;
-          const float BREAK_MAX_FRACTION = 0.95f;
-          bool isBreak = fraction <= BREAK_MAX_FRACTION;
-
-          if (isBreak)
+          // Get estimated NPS (several times, to adjust for noise)
+          int NUM_TRIES = 8;
+          float avgNPS = GetNPSEstimate(evaluator, NUM_TRIES, batchSize, lastNPS, latencyAdjustmentSecs);
+          if (lastNPS != 0)
           {
-            breaks.Add(batchSize);
-            lastBreakPoint = batchSize;
-            batchSize += SKIP_COUNT_AFTER_BREAK - SKIP_COUNT;
-          }
-        }
-        lastNPS = avgNPS;
+            float fraction = (float)avgNPS / (float)lastNPS;
+            const float BREAK_MAX_FRACTION = 0.95f;
+            bool isBreak = fraction <= BREAK_MAX_FRACTION;
 
-        // If we haven't seen any breaks within 120, for efficiency assume we won't see any more
-        if (lastBreakPoint is not null && (batchSize - lastBreakPoint > 120)) break;
+            if (isBreak)
+            {
+              breaks.Add(batchSize);
+              lastBreakPoint = batchSize;
+              batchSize += SKIP_COUNT_AFTER_BREAK - SKIP_COUNT;
+            }
+          }
+          lastNPS = avgNPS;
+
+          // If we haven't seen any breaks within 120, for efficiency assume we won't see any more
+          if (lastBreakPoint is not null && (batchSize - lastBreakPoint > 120)) break;
+        }
       }
 
       return breaks.ToArray();
