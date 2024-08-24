@@ -439,6 +439,8 @@ namespace Ceres.Features.UCI
 
     static string SetOptionUCIDescriptions => Invariant(
 @$"
+option name Network type string default <from DefaultNetworkSpecString in Ceres.json>
+option name Device type string default <from DefaultDeviceSpecString in Ceres.json>
 option name WeightsFile type string default <from DefaultNetworkSpecString in Ceres.json>
 option name LogFile type string default
 option name SearchLogFile type string default
