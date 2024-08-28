@@ -260,6 +260,10 @@ namespace Ceres.Chess.NNEvaluators
           throw new NotImplementedException();
 
         case NNEvaluatorType.Ceres:
+          if (deviceDef.OverrideEngineType != null && deviceDef.OverrideEngineType.Contains("Torchscript"))
+          {
+//            NNEvaluatorTorchscript 
+          }
           string[] CERES_ENGINE_TYPES = { "CUDA", "CUDA16", "TENSORRT", "TENSORRT16" };
           if (deviceDef.OverrideEngineType != null && !CERES_ENGINE_TYPES.Contains(deviceDef.OverrideEngineType.ToUpper()))
           {
@@ -278,9 +282,14 @@ namespace Ceres.Chess.NNEvaluators
           const bool HAS_UNCERTAINTY_V = true;
           const bool HAS_UNCERTAINTY_P = true;
 
-          // Default is CUDA 16 bit execution, but look for override.
-          bool useTensorRT = deviceDef.OverrideEngineType != null && deviceDef.OverrideEngineType.ToUpper().StartsWith("TENSORRT");
-          bool useFP16 = !(deviceDef.OverrideEngineType != null && !deviceDef.OverrideEngineType.ToUpper().Contains("16"));
+          bool useTensorRT = false;
+          bool useFP16 = false;
+          if (deviceDef.Type == NNDeviceType.GPU)
+          {
+            // Default is CUDA 16 bit execution, but look for override.
+            useTensorRT = deviceDef.OverrideEngineType != null && deviceDef.OverrideEngineType.ToUpper().StartsWith("TENSORRT");
+            useFP16 = !(deviceDef.OverrideEngineType != null && !deviceDef.OverrideEngineType.ToUpper().Contains("16"));
+          }
 
           string onnxFileName = null;
 
@@ -306,10 +315,13 @@ namespace Ceres.Chess.NNEvaluators
             QPositiveBlunders = 0.02f,
           };
 
-          NNEvaluatorONNX onnxEngine = new(shortID, netFileName, null, 
-                                           NNDeviceType.GPU, deviceDef.DeviceIndex, useTensorRT,
+          int maxCeresBatchSize = useTensorRT ? TRT_MAX_BATCH_SIZE : DEFAULT_MAX_BATCH_SIZE;
+          maxCeresBatchSize = deviceDef.MaxBatchSize.HasValue ? Math.Min(deviceDef.MaxBatchSize.Value, maxCeresBatchSize) : maxCeresBatchSize;
+          
+          NNEvaluatorONNX onnxEngine = new(shortID, netFileName, null,
+                                           deviceDef.Type, deviceDef.DeviceIndex, useTensorRT,
                                            ONNXNetExecutor.NetTypeEnum.TPG,
-                                           useTensorRT ? TRT_MAX_BATCH_SIZE : DEFAULT_MAX_BATCH_SIZE,
+                                           maxCeresBatchSize,
                                            useFP16 ? NNEvaluatorPrecision.FP16 : NNEvaluatorPrecision.FP32,
                                            true, true, HAS_UNCERTAINTY_V, HAS_UNCERTAINTY_P, optionsCeres.UseAction, 
                                            "policy", "value", "mlh", "unc", true,
