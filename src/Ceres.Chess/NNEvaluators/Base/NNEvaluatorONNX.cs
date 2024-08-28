@@ -28,11 +28,6 @@ using Ceres.Chess.NNEvaluators;
 using Ceres.Chess.NetEvaluation.Batch;
 using Ceres.Chess.LC0.Batches;
 using Ceres.Chess.NNEvaluators.Defs;
-using Ceres.Chess.MoveGen;
-using Ceres.Chess.MoveGen.Converters;
-using Ceres.Chess;
-using Ceres.Chess.EncodedPositions.Basic;
-using System.Threading;
 using Ceres.Chess.NNBackends.ONNXRuntime;
 
 #endregion
@@ -52,11 +47,6 @@ namespace Chess.Ceres.NNEvaluators
     /// Name of file containing ONNX network definition.
     /// </summary>
     public readonly string ONNXFileName;
-
-    /// <summary>
-    /// Batch size to be used with this evaluator.
-    /// </summary>
-    public readonly int BatchSize;
 
     /// <summary>
     /// Type of ONNX network.
@@ -162,7 +152,30 @@ namespace Chess.Ceres.NNEvaluators
     /// If move history should be sent to ONNX network.
     /// </summary>
     public readonly bool UseHistory;
-   
+
+
+    private bool retainRawOutputs = false;
+
+    /// <summary>
+    /// If the raw outputs of the network should be retained.
+    /// </summary>
+    public override bool RetainRawOutputs
+    {
+      get => retainRawOutputs;
+      set
+      {
+        retainRawOutputs = value;
+        Executor.RetainRawOutputs = value;
+      }
+    }
+
+
+    /// <summary>
+    /// Maximum batch size to be used with this evaluator.
+    /// </summary>
+    readonly int maxBatchSize;
+
+
     /// <summary>
     /// Miscellaneous information about the evaluator.
     /// </summary>
@@ -202,20 +215,20 @@ namespace Chess.Ceres.NNEvaluators
     /// <param name="hasValueSecondary"></param>
     /// <param name="hasState"></param>
     public NNEvaluatorONNX(string engineID, string onnxModelFileName, byte[] onnxModelBytes,
-                                 NNDeviceType deviceType, int gpuID, bool useTRT,
-                                 ONNXNetExecutor.NetTypeEnum type, int maxBatchSize,
-                                 NNEvaluatorPrecision precision,
-                                 bool isWDL, bool hasM, bool hasUncertaintyV, bool hasUncertaintyP, bool hasAction,
-                                 string outputValue, string outputWDL, string outputPolicy, string outputMLH,
-                                 bool valueHeadLogistic, bool scale50MoveCounter,
-                                 bool enableProfiling = false,
-                                 bool useHistory = true, NNEvaluatorOptions options = null,
-                                 bool hasValueSecondary = false,
-                                 bool hasState = false)
+                           NNDeviceType deviceType, int gpuID, bool useTRT,
+                           ONNXNetExecutor.NetTypeEnum type, int maxBatchSize,
+                           NNEvaluatorPrecision precision,
+                           bool isWDL, bool hasM, bool hasUncertaintyV, bool hasUncertaintyP, bool hasAction,
+                           string outputValue, string outputWDL, string outputPolicy, string outputMLH,
+                           bool valueHeadLogistic, bool scale50MoveCounter,
+                           bool enableProfiling = false,
+                           bool useHistory = true, NNEvaluatorOptions options = null,
+                           bool hasValueSecondary = false,
+                           bool hasState = false)
     {
       EngineNetworkID = engineID;
       ONNXFileName = onnxModelFileName;
-      BatchSize = maxBatchSize;
+      this.maxBatchSize = maxBatchSize;
       Precision = precision;
       this.isWDL = isWDL;
       this.hasValueSecondary = hasValueSecondary;
@@ -244,7 +257,8 @@ namespace Chess.Ceres.NNEvaluators
         : ["/input/planes"];
 
       Executor = new ONNXNetExecutor(engineID, onnxModelFileName, onnxModelBytes, inputNames,
-                                         maxBatchSize, type, precision, deviceType, gpuID, useTRT, enableProfiling);
+                                     maxBatchSize, type, precision, deviceType, gpuID, 
+                                     useTRT, enableProfiling, RetainRawOutputs);
     }
 
 
@@ -373,7 +387,7 @@ namespace Chess.Ceres.NNEvaluators
     /// <summary>
     /// The maximum number of positions that can be evaluated in a single batch.
     /// </summary>
-    public override int MaxBatchSize => BatchSize;
+    public override int MaxBatchSize => maxBatchSize;
 
 
     #region Internals
@@ -442,6 +456,26 @@ namespace Chess.Ceres.NNEvaluators
         }
       }
 
+      // Convert raw network outputs (if retained) to FP16[][][] expected by batch result
+      FP16[][][] rawNetworkOutputs = null;
+      if (result.RawNetworkOutputs != null)
+      {
+        rawNetworkOutputs = new FP16[numPos][][];
+        for (int i = 0; i < numPos; i++)
+        {
+          rawNetworkOutputs[i] = new FP16[result.RawNetworkOutputs.Count][];
+
+          int j = 0;
+          foreach ((string name, Float16[] data) in result.RawNetworkOutputs)
+          {
+            int sizePerPositionThisTensor = data.Length / numPos;
+            Memory<Float16> allValuesThisPosition = data.AsMemory().Slice(i * sizePerPositionThisTensor, sizePerPositionThisTensor);
+            rawNetworkOutputs[i][j] = MemoryMarshal.Cast<Float16, FP16>(allValuesThisPosition.Span).ToArray();
+            j++;
+          }
+        }
+      } 
+
       // NOTE: inefficient, above we convert from [] (flat) to [][] and here we convert back to []
       PositionEvaluationBatch ret =  new (IsWDL, HasM, HasUncertaintyV, HasUncertaintyP, 
                                          HasAction, HasValueSecondary, HasState, numPos,
@@ -462,7 +496,7 @@ namespace Chess.Ceres.NNEvaluators
                                          ValueHeadLogistic, PositionEvaluationBatch.PolicyType.LogProbabilities, false, 
                                          batch,
                                          Options.PolicyTemperature, Options.PolicyUncertaintyTemperatureScalingFactor,
-                                         stats);
+                                         stats, rawNetworkOutputs);
 
 //#if NOT
 // ** Experimental test code, triggered by having FractionValueFromValue2 >  1

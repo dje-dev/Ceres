@@ -19,6 +19,7 @@ using System.Collections.Generic;
 using System.Numerics.Tensors;
 using System.Runtime.InteropServices;
 using System.Diagnostics;
+using System.Linq;
 
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
@@ -69,6 +70,12 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
     public int MinBatchSize;
 
     /// <summary>
+    /// If TensorRT execution provider should be used.
+    /// </summary>
+    public bool UseTensorRT;
+
+
+    /// <summary>
     /// Execution is serialized by this lock object.
     /// Technically, ONNX runtime sessions are thread-safe
     /// so this might not be strictly necessary.
@@ -82,10 +89,10 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
 
     IReadOnlyDictionary<string, NodeMetadata> inputsMetadata;
 
-    (string name, NodeMetadata metadata, Float16[] value)[] inputBuffers16;
-    (string name, NodeMetadata metadata, Float16[] value)[] outputBuffers16;
-    (string name, NodeMetadata metadata, float[] value)[] inputBuffers32;
-    (string name, NodeMetadata metadata, float[] value)[] outputBuffers32;
+    (string name, NodeMetadata metadata, bool isKnownShape, Float16[] value)[] inputBuffers16;
+    (string name, NodeMetadata metadata, bool isKnownShape, Float16[] value)[] outputBuffers16;
+    (string name, NodeMetadata metadata, bool isKnownShape, float[] value)[] inputBuffers32;
+    (string name, NodeMetadata metadata, bool isKnownShape, float[] value)[] outputBuffers32;
 
 
     /// <summary>
@@ -98,7 +105,7 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
     /// <param name="nonBatchDimensions"></param>
     /// <param name="precisionNumBits"></param>
     /// <param name="gpuID"></param>
-    /// <param name="useTRT"></param>
+    /// <param name="useTensorRT"></param>
     /// <param name="minBatchSize"></param>
     /// <param name="maxBatchSize"></param>
     /// <param name="enableProfiling"></param>
@@ -111,7 +118,7 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
                         string nonBatchDimensions,
                         int precisionNumBits, 
                         int gpuID,
-                        bool useTRT, 
+                        bool useTensorRT, 
                         int minBatchSize,
                         int maxBatchSize,
                         bool enableProfiling,
@@ -146,7 +153,9 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
 
       GPUID = gpuID;
       PrecisionNumBits = precisionNumBits;
+      
       MinBatchSize = minBatchSize;
+      UseTensorRT = useTensorRT;
 
       // On Linux it was found necessary to touch the instance before any of the operations below
       // to prevent error about a session object not being created.
@@ -161,7 +170,7 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
       {
         so = new SessionOptions();
       }
-      else if (useTRT)
+      else if (useTensorRT)
       {
         const bool USE_DML = false; // This likely requires different ONNXRuntime nuget package
         if (USE_DML)
@@ -477,25 +486,51 @@ Comments from onnxruntime source code:
         input.Span.CopyTo(inputBufferSpanHalf);
       }
 
+      List<(string, Memory<Float16>)> resultArrays = new(outputBuffers16.Length);
+
       lock (lockObject)
       {
         (string[] names, OrtValue[] values) inputBuffers = ONNXHelpers.CreateOrtValues(batchSize, inputBuffers16);
         (string[] names, OrtValue[] values) outputBuffers = ONNXHelpers.CreateOrtValues(batchSize, outputBuffers16);
 
+        bool unknownShapeExists = outputBuffers16.Any(b => !b.isKnownShape);
+
         // Note that IOBinding is not used. As noted in the ONNX documentation,
         // there is not necessarily any benefit of using IOBinding over this simpler
         // method of passing the OrtValue inputs and outputs directly to the Run method.
-        Session.Run(runOptions,
-                    inputBuffers.names, inputBuffers.values,
-                    outputBuffers.names, outputBuffers.values);
-      }
+        if (unknownShapeExists)
+        {
+          List<string> allOutputNames = outputBuffers16.Select(p => p.name).ToList();
+          IDisposableReadOnlyCollection<OrtValue> rr = Session.Run(runOptions, inputBuffers.names, inputBuffers.values, allOutputNames);
+          for (int i=0;i< outputBuffers.names.Length; i++)
+          {
 
-      List<(string, Memory<Float16>)> resultArrays = new(outputBuffers16.Length);
-      foreach ((string name, NodeMetadata metadata, Float16[] value) resultItem in outputBuffers16)
-      {
-        // Create a Memory over the ONNX buffer sized to the actual number of elements for this batch.
-        Memory<Float16> memory = new Memory<Float16>(resultItem.value)[..ONNXHelpers.ProductDimensions(resultItem.metadata.Dimensions, batchSize)];
-        resultArrays.Add((resultItem.name, memory));
+            if (rr[i].GetTensorTypeAndShape().ElementDataType == TensorElementType.Float16)
+            {
+              ReadOnlySpan<Float16> data1 = rr[i].GetTensorDataAsSpan<Float16>();
+              resultArrays.Add((allOutputNames[i], data1.ToArray()));
+            }
+            else
+            {
+              // for now, do not process if data type other than Float16
+              // TODO: improve this
+              resultArrays.Add((allOutputNames[i], null));
+            }
+          } 
+        }
+        else
+        {
+          Session.Run(runOptions,
+                      inputBuffers.names, inputBuffers.values,
+                      outputBuffers.names, outputBuffers.values);
+
+          foreach ((string name, NodeMetadata metadata, bool isKnownShape, Float16[] value) resultItem in outputBuffers16)
+          {
+            // Create a Memory over the ONNX buffer sized to the actual number of elements for this batch.
+            Memory<Float16> memory = new Memory<Float16>(resultItem.value)[..ONNXHelpers.ProductDimensions(resultItem.metadata.Dimensions, batchSize)];
+            resultArrays.Add((resultItem.name, memory));
+          }
+        }
       }
 
       return resultArrays;
@@ -523,6 +558,13 @@ Comments from onnxruntime source code:
 
       List<NamedOnnxValue> inputsONNX = new(inputs.Length);
 
+      bool unknownShapeExists = outputBuffers32.Any(b => !b.isKnownShape);
+      if (unknownShapeExists)
+      {
+        // TODO: Copy/reference code from float16 version to support also here
+        throw new Exception("Unknown shapes (supplemental outputs) not yet supported for float inputs, try float16");
+      }
+
       for (int i = 0; i < inputs.Length; i++)
       {
         (Memory<Half> input, int[] shape, string inputName, int numElements) = inputs[i];
@@ -535,7 +577,7 @@ Comments from onnxruntime source code:
       IDisposableReadOnlyCollection<DisposableNamedOnnxValue> runResult;
       lock (lockObject)
       {
-        // TODO: make this code more simlar to RunFloat16, including use of inputBuffers32
+        // TODO: make this code more similar to RunFloat16, including use of inputBuffers32
         runResult = Session.Run(inputsONNX);//, ro); // fails on second run, reshape error, may be a bug on ONNXruntime
       }
 
@@ -552,6 +594,9 @@ Comments from onnxruntime source code:
         } 
         resultArrays.Add((resultValue.Name, values));
       }
+      float diff = MathF.Abs((float)(Float16)resultArrays[1].Item2.Span[1] -(float) (Float16)resultArrays[1].Item2.Span[4]);
+      Console.WriteLine("Diff: " + diff + " " + resultArrays[1].Item2.Length);
+      System.Environment.Exit(3);
       return resultArrays;
     }
 

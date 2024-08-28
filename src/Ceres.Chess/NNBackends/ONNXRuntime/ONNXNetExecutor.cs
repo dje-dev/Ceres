@@ -91,6 +91,11 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
     /// </summary>
     internal ONNXExecutor executor;
 
+    /// <summary>
+    /// If raw outputs should be retained.
+    /// </summary>
+    public bool RetainRawOutputs;
+
 
     /// <summary>
     /// Constructor.
@@ -117,7 +122,8 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
                                NNEvaluatorPrecision precision,
                                NNDeviceType deviceType, int gpuNum,
                                bool useTensorRT,
-                               bool enableProfiling)
+                               bool enableProfiling,
+                               bool retainRawOutputs)
     {
       if (onnxFileName != null && !onnxFileName.ToUpper().EndsWith(".ONNX"))
       {
@@ -135,6 +141,7 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
       BatchSize = maxBatchSize;
       Precision = precision;
       UseTensorRT = deviceType == NNDeviceType.GPU && useTensorRT;
+      RetainRawOutputs = retainRawOutputs;
 
       MinBatchSize = NetType == NetTypeEnum.TPG
                   && UseTensorRT
@@ -414,14 +421,14 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
 
         Memory<Float16> extraStats0 = eval.Count > 5 ? eval[5].Item2 : default;
         Memory<Float16> extraStats1 = eval.Count > 6 ? eval[6].Item2 : default;
-
+        
         // TODO: This is just a fake, fill it in someday
         Memory<Float16> priorState = hasState ? eval[INDEX_STATE].Item2 : default; //  new Float16[numPositionsUsed * 64 * 4]
         ONNXRuntimeExecutorResultBatch result = new(isWDL, values, values2, policiesLogistics, mlh,
                                                      uncertantiesV, uncertantiesP,
                                                      extraStats0, extraStats1, value_fc_activations,
                                                      actionLogits, priorState,
-                                                     numPositionsUsed);
+                                                     numPositionsUsed, RetainRawOutputs ? eval : null);
         return result;
 
       }
