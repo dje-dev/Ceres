@@ -124,51 +124,159 @@ namespace Ceres.Base.Misc.ONNX
     public NodeProto? NodeWithName(string nodeName) => Model.Graph.Node.FirstOrDefault(graph => graph.Name == nodeName);
 
 
-    /// <summary>
-    /// Returns a new model with a specified new output (representing output of one of the inner nodes) added.
-    /// </summary>
-    /// <param name="nodeName"></param>
-    /// <param name="outerDim"></param>
-    /// <returns></returns>
-    public T WithAddedOutputNode<T>(string nodeName, int outerDim, Func<ModelProto, T> converter)
+    public static TensorProto.Types.DataType? GetOutputDataType(ModelProto model, string nodeName, string outputName)
     {
-
-      NodeProto node = NodeWithName(nodeName);
+      var node = model.Graph.Node.FirstOrDefault(n => n.Name == nodeName);
       if (node == null)
       {
-        throw new Exception("Node not found: " + nodeName);
+        throw new Exception($"Node {nodeName} not found.");
       }
 
-      if (node.OpType != "MatMul")
+      // Check if the output is associated with a value_info entry
+      var valueInfo = model.Graph.ValueInfo
+          .Concat(model.Graph.Input)
+          .Concat(model.Graph.Output)
+          .FirstOrDefault(info => info.Name == outputName);
+
+      if (valueInfo != null)
       {
-        throw new Exception("Implementation limitation: only MatMul nodes are supported (able to infer output shape).");
+        // Get the data type from the type field (TensorTypeProto)
+        return (TensorProto.Types.DataType)valueInfo.Type?.TensorType?.ElemType;
       }
 
-      string weightsInitializerName = node.Input[1]; // Matrix of weights from which we can infer output dimension
-      TensorProto weightsInitializer = Model.Graph.Initializer.FirstOrDefault(init => init.Name == weightsInitializerName);
-      
+      // If not found in value_info, check if it's in the initializer (constant tensor)
+      var initializer = model.Graph.Initializer.FirstOrDefault(init => init.Name == outputName);
+      if (initializer != null)
+      {
+        return (TensorProto.Types.DataType)initializer.DataType;
+      }
 
-      long outputDim = weightsInitializer.Dims[1];
-      TypeProto tp = TypeProtoFromTensorProto2D(weightsInitializer, outerDim, outputDim); 
+      // If not found, return null or handle accordingly
+      return null;
+    }
+    
+  public List<long> GetOutputShape(ModelProto model, string nodeName, string outputName)
+    {
+      // Look up the node in the graph
+      var node = model.Graph.Node.FirstOrDefault(n => n.Name == nodeName);
+      if (node == null)
+      {
+        throw new Exception($"Node {nodeName} not found.");
+      }
 
-      ValueInfoProto vip = new();
-      vip.Name = node.Name;
-      vip.Type = tp;
+      // Check if the output is associated with a value_info entry
+      ValueInfoProto valueInfo = model.Graph.ValueInfo
+          .Concat(model.Graph.Input)
+          .Concat(model.Graph.Output)
+          .FirstOrDefault(info => info.Name == outputName);
 
+      if (valueInfo != null)
+      {
+        // Get the shape from the type field (TensorTypeProto)
+        var shapeProto = valueInfo.Type?.TensorType?.Shape;
+        if (shapeProto != null)
+        {
+          return shapeProto.Dim.Select(dim => dim.DimValue).ToList();
+        }
+      }
+
+      // If not found in value_info, check if it's in the initializer (constant tensor)
+      var initializer = model.Graph.Initializer.FirstOrDefault(init => init.Name == outputName);
+      if (initializer != null)
+      {
+        return initializer.Dims.ToList();
+      }
+
+      // If shape cannot be determined, return an empty list or null
+      return null;
+  }
+
+
+
+    /// <summary>
+    /// Returns a new model with specified new outputs (from certain of the inner nodes) added.
+    /// </summary>
+    /// <param name="includeNodePredicate"></param>
+    /// <returns></returns>
+    public ModelProto WithAddedOutputNodes(Predicate<NodeProto> includeNodePredicate)
+      => WithAddedOutputNodes(Model.Graph.Node.Where(p => p.Output != null
+                                                       && includeNodePredicate(p)
+                                                       && p.Output.Count > 0).Select(p => p.Name));
+
+
+    /// <summary>
+    /// Returns a new model with specified new outputs (from certain of the inner nodes) added.
+    /// </summary>
+    /// <param name="nodeNames"></param>
+    /// <returns></returns>
+    /// <exception cref="Exception"></exception>
+    public ModelProto WithAddedOutputNodes(IEnumerable<string> nodeNames)
+    {
       ModelProto newModel = Model.Clone();
-      newModel.Graph.Output.Add(vip);
-      return converter(newModel);
-      //newModel.WriteToFile(modelName);
+
+      foreach (string nodeName in nodeNames)
+      {
+        NodeProto node = NodeWithName(nodeName);
+        if (node == null)
+        {
+          throw new Exception("Node not found: " + nodeName);
+        }
+
+        for (int i=0;i<node.Output.Count;i++)
+        {
+          //string weightsInitializerName = node.Input[1]; // Matrix of weights from which we can infer output dimension
+          //TensorProto weightsInitializer = Model.Graph.Initializer.FirstOrDefault(init => init.Name == weightsInitializerName);     
+          //long outputDim = weightsInitializer.Dims[1];
+
+          List<long> thisShape = GetOutputShape(newModel, nodeName, node.Output[i]);
+          if (thisShape == null)
+          {
+            throw new Exception($"Could not infer shape for output {node.Output[i]} of node {nodeName}");
+          }
+
+          TensorProto.Types.DataType? thisDataType = GetOutputDataType(newModel, nodeName, node.Output[i]);
+          if (thisDataType == null)
+          {
+            throw new Exception($"Could not infer data type for output {node.Output[i]} of node {nodeName}");
+          }
+
+          TypeProto tp = new();
+          tp.TensorType = new TypeProto.Types.Tensor();
+          tp.TensorType.ElemType = (int)thisDataType;
+//          tp.TensorType.Shape = ONNXHelpers.MakeTensorShape(thisShape.ToArray());
+
+          ValueInfoProto vip = new();
+          vip.Name = node.Output[i];
+          vip.Type = tp;
+
+          newModel.Graph.Output.Add(vip);
+        }
+      }
+
+      return newModel;
     }
 
-    private static TypeProto TypeProtoFromTensorProto2D(TensorProto weightsInitializer, long dim1, long dim2)
+
+    /// <summary>
+    /// Returns a new model with a specified new output (from one of the inner nodes) added.
+    /// </summary>
+    /// <param name="nodeName"></param>
+    /// <returns></returns>
+    /// <exception cref="Exception"></exception>
+    public ModelProto WithAddedOutputNode(string nodeName)
+      => WithAddedOutputNodes(new string[] { nodeName }); 
+    
+
+
+    private static TypeProto TypeProtoFromTensorProto2D(TensorProto weightsInitializer, params long[] dims)
     {
       TypeProto tp = new();
       tp.TensorType = new TypeProto.Types.Tensor();
       tp.TensorType.ElemType = weightsInitializer.DataType;
-      tp.TensorType.Shape = ONNXHelpers.MakeTensorShape(-1, dim1, dim2);
+      tp.TensorType.Shape = ONNXHelpers.MakeTensorShape(dims);
       return tp;
     }
+
 
     public void DumpInfo() => Console.WriteLine(Model.Graph.Info());
   }

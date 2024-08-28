@@ -42,10 +42,10 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
     /// <param name="maxBatchSize"></param>
     /// <param name="outputNamesToUse"></param>
     /// <returns></returns>
-    public static (string name, NodeMetadata metadata, T[] value)[]
+    public static (string name, NodeMetadata metadata, bool isKnownShape, T[] value)[]
       CreateBuffers<T>(IReadOnlyDictionary<string, NodeMetadata> metadata, int maxBatchSize, string[] outputNamesToUse = null) where T : unmanaged
     {
-      var buffers = new (string name, NodeMetadata metadata, T[] value)[metadata.Count];
+      var buffers = new (string name, NodeMetadata metadata, bool isKnownShape, T[] value)[metadata.Count];
 
       int i = 0;
       foreach (KeyValuePair<string, NodeMetadata> iv in metadata)
@@ -54,7 +54,8 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
         {
 
           int maxElements = ProductDimensions(iv.Value.Dimensions, maxBatchSize);
-          buffers[i] = (iv.Key, iv.Value, new T[maxElements]);
+          bool isKnownShape = iv.Value.Dimensions.Length > 0 && Array.LastIndexOf(iv.Value.Dimensions, -1) <= 0; // if any dimension other than batch size unknown
+          buffers[i] = (iv.Key, iv.Value, isKnownShape, new T[maxElements]);
 
           i++;
         }
@@ -63,7 +64,7 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
     }
 
 
-    public static (string[] names, OrtValue[] values) CreateOrtValues<T>(int batchSize, (string name, NodeMetadata metadata, T[] value)[] buffers) where T : unmanaged
+    public static (string[] names, OrtValue[] values) CreateOrtValues<T>(int batchSize, (string name, NodeMetadata metadata, bool isKnownShape, T[] value)[] buffers) where T : unmanaged
     {
       (string[] names, OrtValue[] values) ret = new();
 
@@ -72,9 +73,11 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
       ret.values = new OrtValue[buffers.Length];
 
       int i = 0;
-      foreach ((string name, NodeMetadata metadata, T[] value) in buffers)
+      foreach ((string name, NodeMetadata metadata, bool isKnownShape, T[] value) in buffers)
       {
-        OrtValue ortValue = OrtValue.CreateTensorValueFromMemory(value, ToLongArray(metadata.Dimensions, batchSize));
+        // If not known shape, the value is a dummy since we wouldn't know the appropriate size.
+        long[] shape = isKnownShape ? ToLongArray(metadata.Dimensions, batchSize) : [0];
+        OrtValue ortValue = OrtValue.CreateTensorValueFromMemory(value, shape);
         ret.names[i] = name;
         ret.values[i] = ortValue;
         i++;
@@ -87,8 +90,10 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
     {
       long[] ret = new long[values.Length];
 
-      Debug.Assert(values[0] == -1);
-      ret[0] = firstValue;
+      if (values[0] == -1)
+      {
+        ret[0] = firstValue;
+      }
 
       for (int i = 1; i < values.Length; i++)
       {

@@ -14,6 +14,7 @@
 #region Using directives
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using Ceres.Base.DataTypes;
 using Ceres.Base.Math;
@@ -70,6 +71,13 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
     public readonly Memory<Float16> ExtraStats1;
 
     /// <summary>
+    /// Optional dictionary of the raw neural network outputs.
+    /// </summary>
+    public Dictionary<string, Float16[]> RawNetworkOutputs;
+
+
+
+    /// <summary>
     /// Number of positions with actual data
     /// If the batch was padded, with actual number of positions less than a full batch,
     /// then NumPositionsUsed will be less than BatchSize.
@@ -87,7 +95,9 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
                                           Memory<Float16> mlh, Memory<Float16> uncertaintyV, Memory<Float16> uncertaintyP,
                                           Memory<Float16> extraStats0, Memory<Float16> extraStats1,
                                           float[][] valueFCActiviations,
-                                          Memory<Float16> actionLogisticVectors, Memory<Float16> priorState, int numPositionsUsed)
+                                          Memory<Float16> actionLogisticVectors, Memory<Float16> priorState, 
+                                          int numPositionsUsed,
+                                          List<(string, Memory<Float16>)> rawNetworkOutputs = null)
     {
       ValuesRaw = values;
       Values2Raw = values2;
@@ -111,7 +121,17 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
       ValueFCActivations = valueFCActiviations;
       NumPositionsUsed = numPositionsUsed;
       IsWDL = isWDL;
+
+      if (rawNetworkOutputs != null)
+      {
+        RawNetworkOutputs = new Dictionary<string, Float16[]>(rawNetworkOutputs.Count);
+        foreach ((string name, Memory<Float16> data) in rawNetworkOutputs)
+        {
+          RawNetworkOutputs[name] = data.ToArray();
+        }
+      } 
     }
+
 
     #region Helpers
 
