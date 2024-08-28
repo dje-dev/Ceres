@@ -180,11 +180,16 @@ namespace Ceres.Chess.NNEvaluators
     /// </summary>
     public bool ZeroHistoryPlanes = false;
 
-
     /// <summary>
     /// Miscellaneous information about the evaluator.
     /// </summary>
     public virtual EvaluatorInfo Info => null;
+
+    /// <summary>
+    /// If the raw neural network outputs should be retained.
+    /// Note that this may be memory intensive.
+    /// </summary>
+    public virtual bool RetainRawOutputs { get; set; } = false;
 
 
     #region Static helpers
@@ -359,10 +364,23 @@ namespace Ceres.Chess.NNEvaluators
       FP16 extraStat0 = batch.GetExtraStat0(batchIndex);
       FP16 extraStat1 = batch.GetExtraStat1(batchIndex);
 
+      // Note that support for rawNetworkOutputs is currently incomplete.
+      // TODO: Improve this, add to the interface, and implement in implementors.
+      FP16[][] rawNetworkOutputs = null;
+      if (batch is PositionEvaluationBatch)
+      {
+        rawNetworkOutputs = new FP16[NumPositionsEvaluated][];
+        PositionEvaluationBatch peb = (PositionEvaluationBatch)batch;
+        if (!peb.RawNetworkOutputs.IsEmpty && peb.RawNetworkOutputs.Length > batchIndex)
+        {
+          rawNetworkOutputs = peb.RawNetworkOutputs.Span[batchIndex];
+        }
+      }
+
       result = new NNEvaluatorResult(w, l, w1, l1, w2, l2, m, uncertaintyV, uncertaintyP,
                                      policyRef.policies.Span[policyRef.index], 
                                      HasAction ? actionRef.actions.Span[actionRef.index] : default,
-                                     activations, stateInfo, extraStat0, extraStat1);
+                                     activations, stateInfo, extraStat0, extraStat1, rawNetworkOutputs);
     }
 
     #endregion

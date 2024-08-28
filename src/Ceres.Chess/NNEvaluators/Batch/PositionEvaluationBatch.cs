@@ -124,6 +124,11 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// </summary>
     public Memory<FP16> ExtraStat1;
 
+    /// <summary>
+    /// Optional dictionary of all raw network outputs.
+    /// </summary>
+    public Memory<FP16[][]> RawNetworkOutputs;
+
     #endregion
 
 
@@ -333,14 +338,14 @@ namespace Ceres.Chess.NetEvaluation.Batch
     bool IPositionEvaluationBatch.HasState => HasState;
 
     /// <summary>
-    /// Gets the value from the value head at a specified index indicating the win probabilty.
+    /// Gets the value from the value head at a specified index indicating the win probability.
     /// </summary>
     /// <param name="index"></param>
     /// <returns></returns>
     FP16 IPositionEvaluationBatch.GetWinP(int index) => GetWinP(index);
 
     /// <summary>
-    /// Gets the value from the value head at a specified index indicating the loss probabilty.
+    /// Gets the value from the value head at a specified index indicating the loss probability.
     /// </summary>
     /// <param name="index"></param>
     /// <returns></returns>
@@ -395,7 +400,6 @@ namespace Ceres.Chess.NetEvaluation.Batch
 
     Half[] IPositionEvaluationBatch.GetState(int index) => GetState(index);
 
-
     NNEvaluatorResultActivations IPositionEvaluationBatch.GetActivations(int index) => GetActivations(index);
 
 
@@ -424,7 +428,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
                                    Memory<Half[]> states,
                                    Memory<NNEvaluatorResultActivations> activations,
                                    TimingStats stats, Memory<FP16> extraStat0 = default, Memory<FP16> extraStat1 = default,
-                                   bool makeCopy = false)
+                                   bool makeCopy = false,
+                                   Memory<FP16[][]> rawNetworkOutputs = default)
     {
       IsWDL = isWDL;
       HasM = hasM;
@@ -456,6 +461,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
       }
 
       Stats = stats;
+      RawNetworkOutputs = rawNetworkOutputs;
     }
 
 
@@ -481,7 +487,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
                                     float temperatureValue1, float temperatureValue2,
                                     float value1TemperatureUncertaintyScalingFactor, float value2TemperatureUncertaintyScalingFactor,
                                     bool valsAreLogistic, 
-                                    TimingStats stats)
+                                    TimingStats stats,
+                                    Memory<FP16[][]> rawNetworkOutputs = default)
     {
       IsWDL = isWDL;
       HasM = hasM;
@@ -494,6 +501,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
 
       Activations = activations.ToArray();
       States = states.ToArray();
+      RawNetworkOutputs = rawNetworkOutputs;
 
       InitializeValueEvals(valueEvals, valsAreLogistic, temperatureValue1, uncertaintyV, value1TemperatureUncertaintyScalingFactor, false);
       if (!valueEvals2.IsEmpty)
@@ -548,7 +556,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
         throw new ArgumentException("Wrong value size");
       }
 
-      Stats = stats;
+      Stats = stats;      
     }
 
     
@@ -576,13 +584,14 @@ namespace Ceres.Chess.NetEvaluation.Batch
                                    bool valsAreLogistic, PolicyType probType, bool policyAlreadySorted,
                                    IEncodedPositionBatchFlat sourceBatchWithValidMoves,
                                    float policyTemperature, float policyUncertaintyScalingFactor,
-                                   TimingStats stats)
+                                   TimingStats stats,
+                                   Memory<FP16[][]> rawNetworkOutputs = default)
    : this(isWDL, hasM, hasUncertaintyV, hasUnertaintyP, hasAction, hasValueSecondary, hasState, numPos, valueEvals, valueEvals2, 
           m, uncertaintyV,  uncertaintyP, extraStats0, extraStats1, states.ToArray(), activations,
           fractionValueFromValue2, 
           temperatureValue1, temperatureValue2,
           value1TemperatureUncertaintyScalingFactor, value2TemperatureUncertaintyScalingFactor,
-          valsAreLogistic, stats)
+          valsAreLogistic, stats, rawNetworkOutputs)
     {     
       (Policies, Actions) = ExtractPoliciesBufferFlat(numPos, policyProbs, uncertaintyP, 
                                                       hasAction, actionLogits,
@@ -613,7 +622,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
                                    ReadOnlySpan<Half[]> states,
                                    ReadOnlySpan<NNEvaluatorResultActivations> activations, bool valsAreLogistic,
                                    PolicyType probType, TimingStats stats, bool alreadySorted,
-                                   float temperatureValue1= 1, float temperatureValue2 = 1, float fractionValue1FromValue2 = 0)
+                                   float temperatureValue1= 1, float temperatureValue2 = 1, float fractionValue1FromValue2 = 0,
+                                   Memory<FP16[][]> rawNetworkOutputs = default)
 //      : this(isWDL, hasM, hasUncertaintyV, hasUncertaintyP, hasAction, hasValueSecondary, hasState, 
 //             numPos, valueEvals, valueEvals2, m, uncertaintyV, uncertaintyP, extraStats0, extraStats1, states, activations, 
 //             temperatureValue1, temperatureValue2, fractionValue1FromValue2, valsAreLogistic, stats)

@@ -14,7 +14,7 @@
 #region Using directives
 
 using System;
-
+using System.Collections.Generic;
 using Ceres.Base.DataTypes;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.EncodedPositions.Basic;
@@ -90,6 +90,11 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// </summary>
     public readonly Half[] PriorState;
 
+    /// <summary>
+    /// Optional raw outputs from neural network.
+    /// </summary>
+    public readonly FP16[][] RawNetworkOutputs;
+
 
     /// <summary>
     /// Constructor.
@@ -115,7 +120,9 @@ namespace Ceres.Chess.NetEvaluation.Batch
                              CompressedActionVector actionsWDL,
                              NNEvaluatorResultActivations activations,
                              Half[] priorState,
-                             FP16? extraStat0 = null, FP16? extraStat1 = default)
+                             FP16? extraStat0 = null, 
+                             FP16? extraStat1 = default,
+                             FP16[][] rawNetworkOutputs = null)
     {
       this.winP = winP;
       this.lossP = lossP;
@@ -133,6 +140,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
       PriorState = priorState;
       ExtraStat0 = extraStat0;
       ExtraStat1 = extraStat1;
+      RawNetworkOutputs = rawNetworkOutputs;
     }
 
 
