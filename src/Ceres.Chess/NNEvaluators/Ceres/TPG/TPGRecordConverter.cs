@@ -163,18 +163,6 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
                                                         out byte[] squareBytesAll,
                                                         short[] legalMoveIndices)
     {
-#if DEBUG
-      short[] legalMoveIndicesAlternate = null;
-      const int FREQUENCY_VERIFY_MOVE_INDICES = 100;
-      bool verifyMoveIndices = countConversions++ % FREQUENCY_VERIFY_MOVE_INDICES == 0;
-
-      if (verifyMoveIndices) 
-      {
-        // Old slow code, replaced below with help of the passed in moves argument.
-        legalMoveIndicesAlternate = new short[positions.NumPos * TPGRecordMovesExtractor.NUM_MOVE_SLOTS_PER_REQUEST];
-      }
-#endif
-
       if (legalMoveIndices != null)
       {
         // Reset legalMoveIndices back to 0.
@@ -254,23 +242,8 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
             thisPositionLegalMoveIndices[indexOfMoveWithNNIndex0] = temp;
           }
 
-#if DEBUG
-          if (verifyMoveIndices)
-          {
-            // Old slow code, replaced below with help of the passed in moves argument.
-//            TPGRecordMovesExtractor.ExtractLegalMoveIndicesForIndex(tempTPGRecords, moves.Span[i], legalMoveIndicesAlternate, i);
-          }
-#endif
         }
       });
-
-#if DEBUG
-      if (verifyMoveIndices && legalMoveIndices != null)
-      {
-        DebugVerifyCorrectLegalMoveIndices(positions, legalMoveIndices, legalMoveIndicesAlternate);
-      }
-#endif
-
     }
 
 
