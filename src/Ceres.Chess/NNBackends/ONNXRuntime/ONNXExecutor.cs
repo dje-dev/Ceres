@@ -74,6 +74,11 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
     /// </summary>
     public bool UseTensorRT;
 
+    /// <summary>
+    /// If all outputs should be retained.
+    /// </summary>
+    public bool RetainRawInputs;
+
 
     /// <summary>
     /// Execution is serialized by this lock object.
@@ -109,7 +114,8 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
     /// <param name="minBatchSize"></param>
     /// <param name="maxBatchSize"></param>
     /// <param name="enableProfiling"></param>
-    /// <param name="outputNamesToUse"></param>
+    /// <param name="retainRawOutputs"></param>
+    /// <param name="outputNamesToRetrieve"></param>
     /// <exception cref="Exception"></exception>
     public ONNXExecutor(string shortID,
                         string onnxFileName, 
@@ -122,7 +128,8 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
                         int minBatchSize,
                         int maxBatchSize,
                         bool enableProfiling,
-                        string[] outputNamesToUse = null)
+                        bool retainRawOutputs,
+                        string[] outputNamesToRetrieve = null)
     {
       if (precisionNumBits != 32 && precisionNumBits != 16)
       {
@@ -156,6 +163,7 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
       
       MinBatchSize = minBatchSize;
       UseTensorRT = useTensorRT;
+      RetainRawInputs = retainRawOutputs;
 
       // On Linux it was found necessary to touch the instance before any of the operations below
       // to prevent error about a session object not being created.
@@ -361,12 +369,12 @@ Comments from onnxruntime source code:
           if (PrecisionNumBits == 32)
           {
             inputBuffers32 = ONNXHelpers.CreateBuffers<float>(Session.InputMetadata, maxBatchSize);
-            outputBuffers32 = ONNXHelpers.CreateBuffers<float>(Session.OutputMetadata, maxBatchSize, outputNamesToUse);
+            outputBuffers32 = ONNXHelpers.CreateBuffers<float>(Session.OutputMetadata, maxBatchSize, outputNamesToRetrieve);
           }
           else if (PrecisionNumBits == 16)
           {
             inputBuffers16 = ONNXHelpers.CreateBuffers<Float16>(Session.InputMetadata, maxBatchSize);
-            outputBuffers16 = ONNXHelpers.CreateBuffers<Float16>(Session.OutputMetadata, maxBatchSize, outputNamesToUse);
+            outputBuffers16 = ONNXHelpers.CreateBuffers<Float16>(Session.OutputMetadata, maxBatchSize, outputNamesToRetrieve);
           }
           else
           {
@@ -495,10 +503,7 @@ Comments from onnxruntime source code:
 
         bool unknownShapeExists = outputBuffers16.Any(b => !b.isKnownShape);
 
-        // Note that IOBinding is not used. As noted in the ONNX documentation,
-        // there is not necessarily any benefit of using IOBinding over this simpler
-        // method of passing the OrtValue inputs and outputs directly to the Run method.
-        if (unknownShapeExists)
+        if (RetainRawInputs || unknownShapeExists)
         {
           List<string> allOutputNames = outputBuffers16.Select(p => p.name).ToList();
           IDisposableReadOnlyCollection<OrtValue> rr = Session.Run(runOptions, inputBuffers.names, inputBuffers.values, allOutputNames);
@@ -520,6 +525,9 @@ Comments from onnxruntime source code:
         }
         else
         {
+          // Note that IOBinding is not used. As noted in the ONNX documentation,
+          // there is not necessarily any benefit of using IOBinding over this simpler
+          // method of passing the OrtValue inputs and outputs directly to the Run method.
           Session.Run(runOptions,
                       inputBuffers.names, inputBuffers.values,
                       outputBuffers.names, outputBuffers.values);

@@ -40,17 +40,17 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
     /// <typeparam name="T"></typeparam>
     /// <param name="metadata"></param>
     /// <param name="maxBatchSize"></param>
-    /// <param name="outputNamesToUse"></param>
+    /// <param name="outputNamesToRetrieve"></param>
     /// <returns></returns>
     public static (string name, NodeMetadata metadata, bool isKnownShape, T[] value)[]
-      CreateBuffers<T>(IReadOnlyDictionary<string, NodeMetadata> metadata, int maxBatchSize, string[] outputNamesToUse = null) where T : unmanaged
+      CreateBuffers<T>(IReadOnlyDictionary<string, NodeMetadata> metadata, int maxBatchSize, string[] outputNamesToRetrieve = null) where T : unmanaged
     {
       var buffers = new (string name, NodeMetadata metadata, bool isKnownShape, T[] value)[metadata.Count];
 
       int i = 0;
       foreach (KeyValuePair<string, NodeMetadata> iv in metadata)
       {
-        if (outputNamesToUse == null || outputNamesToUse.Contains(iv.Key))
+        if (outputNamesToRetrieve == null || outputNamesToRetrieve.Contains(iv.Key))
         {
 
           int maxElements = ProductDimensions(iv.Value.Dimensions, maxBatchSize);

@@ -91,10 +91,23 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
     /// </summary>
     internal ONNXExecutor executor;
 
+    bool retainRawOutputs;
+
     /// <summary>
     /// If raw outputs should be retained.
     /// </summary>
-    public bool RetainRawOutputs;
+    public bool RetainRawOutputs
+    {
+      get => retainRawOutputs;
+      set
+      {
+        retainRawOutputs = value;
+        if (executor != null)
+        {
+          executor.RetainRawInputs = value;
+        }
+      }
+    }
 
 
     /// <summary>
@@ -176,7 +189,8 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
       };
 
       executor = new ONNXExecutor(shortID, onnxFileName, onnxModelBytes, inputNames, nonBatchDimensions,
-                                  precisionNumBits, deviceIndex, useTensorRT, MinBatchSize, maxBatchSize, enableProfiling);
+                                  precisionNumBits, deviceIndex, useTensorRT, MinBatchSize, maxBatchSize, 
+                                  enableProfiling, retainRawOutputs);
     }
 
 
