@@ -45,6 +45,7 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.MemoryMappedFiles;
 using System.Text;
+using Ceres.Base.Misc;
 using Ceres.Base.OperatingSystem;
 using Ceres.Chess.NNEvaluators.LC0DLL;
 using static Ceres.Chess.TBBackends.Fathom.FathomMoveGen;
@@ -810,19 +811,21 @@ namespace Ceres.Chess.TBBackends.Fathom
       }
       else
       {
+
+      }
+      {
         if (VERBOSE) Console.WriteLine("load " + fn);
       }
 
-      FileInfo fileInfo = new FileInfo(fn);
+      FileInfo fileInfo = FileUtils.FileInfoOfTarget(fn);
       if ((fileInfo.Length & 63) != 16)
       {
-        throw new Exception($"Incomplete tablebase file  {fn}");
-        return false;
-        //printf("info string Incomplete tablebase file %s.%s\n", str, suffix); 
+        throw new Exception($"Tablebase file {fn} with unexpected size {fileInfo.Length}, fails test (fileInfo.Length & 63) == 16");
       }
 
       return true;
     }
+
 
     void init_tb(string str)
     {

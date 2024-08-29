@@ -16,7 +16,10 @@
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
+
 using Zstandard.Net;
+
+using Ceres.Base.Misc;
 
 #endregion
 
@@ -97,7 +100,7 @@ namespace Ceres.Base.DataType
         throw new Exception("file not found " + FN);
       }
 
-      long numBytes = new FileInfo(FN).Length;
+      long numBytes = FileUtils.FileInfoOfTarget(FN).Length;
       if (numBytes == 0)
       {
         throw new Exception("File is empty " + FN);

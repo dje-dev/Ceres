@@ -17,6 +17,7 @@ using System;
 using System.IO;
 using System.Threading.Tasks;
 using Ceres.Base.DataTypes;
+using Ceres.Base.Misc;
 using Ceres.Base.OperatingSystem;
 using Ceres.Chess;
 using Ceres.Chess.GameEngines;
@@ -119,7 +120,7 @@ namespace Ceres.Commands
 
 
     /// <summary>
-    /// The speciifed opponent is an UCI engine; creates a properly configured engine definition.
+    /// The specified opponent is an UCI engine; creates a properly configured engine definition.
     /// </summary>
     /// <returns></returns>
     private EnginePlayerDef BuildUCIOpponent()
@@ -132,18 +133,31 @@ namespace Ceres.Commands
         externalEnginePath = Path.Combine(CeresUserSettingsManager.Settings.DirExternalEngines, Opponent);
       }
       else
+      {
         externalEnginePath = Opponent;
+      }
 
       if (OperatingSystem.IsWindows() && !externalEnginePath.ToUpper().EndsWith(".EXE"))
+      {
         externalEnginePath += ".exe";
+      }
 
-      FileInfo infoEngine = new FileInfo(externalEnginePath);
-      if (!infoEngine.Exists) throw new Exception($"Requested opponent engine executable not found {externalEnginePath}");
+      FileInfo infoEngine = FileUtils.FileInfoOfTarget(externalEnginePath);
+      if (!infoEngine.Exists)
+      {
+        throw new Exception($"Requested opponent engine executable not found {externalEnginePath}");
+      }
+
       string name = infoEngine.Name.Split(".")[0];
-      if (name.Length > 12) name = name.Substring(0, 12);
+      if (name.Length > 12)
+      {
+        name = name.Substring(0, 12);
+      }
+
       SearchLimit opponentSearchLimit = SearchLimitOpponent ?? SearchLimit;
       GameEngineUCISpec uciSpec = new GameEngineUCISpec(name, Opponent);
       player1 = new EnginePlayerDef(new GameEngineDefUCI("UCI", uciSpec), opponentSearchLimit, name);
+
       return player1;
     }
 

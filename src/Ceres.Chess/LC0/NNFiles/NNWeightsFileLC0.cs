@@ -17,6 +17,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using Ceres.Base.Misc;
 using Ceres.Chess.LC0.WeightsProtobuf;
 using Ceres.Chess.NNFiles;
 using Ceres.Chess.UserSettings;
@@ -90,6 +91,7 @@ namespace Ceres.Chess.LC0.NNFiles
     /// </summary>
     FileInfo fileInfo;
 
+
     /// <summary>
     /// Constructor for a file with information explicitly provided (obviating reading the protofile).
     /// </summary>
@@ -112,7 +114,7 @@ namespace Ceres.Chess.LC0.NNFiles
       HasUncertaintyV = hasUncertaintyV;
       HasUncertaintyP = false;
 
-      fileInfo = new FileInfo(filename);
+      fileInfo = FileUtils.FileInfoOfTarget(filename);
     }
 
     public LC0ProtobufNet Info => LC0ProtobufNet.LoadedNet(FileName);
@@ -145,7 +147,10 @@ namespace Ceres.Chess.LC0.NNFiles
 
       // Try to load file from local disk, return if found.
       INNWeightsFileInfo existingFile = NNWeightsFiles.LookupNetworkFile(networkID, false);
-      if (existingFile != null) return existingFile as NNWeightsFileLC0;
+      if (existingFile != null)
+      {
+        return existingFile as NNWeightsFileLC0;
+      }
 
       // Download the file.
       string baseURL = CeresUserSettingsManager.URLLC0NetworksValidated;
@@ -177,7 +182,7 @@ namespace Ceres.Chess.LC0.NNFiles
 
       NetworkID = id;
       FileName = filename;
-      fileInfo = new FileInfo(filename);
+      fileInfo = FileUtils.FileInfoOfTarget(filename);
 
       try
       {

@@ -58,6 +58,26 @@ namespace Ceres.Base.Misc
           .ToArray());
     }
 
+
+    /// <summary>
+    ///  Returns the FileInfo associated with a specified file
+    ///  (following links to their targets).
+    /// </summary>
+    /// <param name="filename"></param>
+    /// <returns></returns>
+    public static FileInfo FileInfoOfTarget(string filename)
+    {
+      FileInfo fileInfo = new FileInfo(filename);
+
+      if (fileInfo.LinkTarget is not null)
+      {
+        fileInfo = fileInfo.ResolveLinkTarget(true) as FileInfo;
+      }
+
+      return fileInfo;
+    }
+
+
     /// <summary>
     /// Returns if all of the semicolon/colon separated paths exist.
     /// </summary>
