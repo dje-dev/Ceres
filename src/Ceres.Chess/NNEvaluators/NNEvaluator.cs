@@ -191,6 +191,12 @@ namespace Ceres.Chess.NNEvaluators
     /// </summary>
     public virtual bool RetainRawOutputs { get; set; } = false;
 
+    /// <summary>
+    /// Array of names of raw neural network outputs (if RetainRawOutputs is true).
+    /// </summary>
+    public string[] RawNetworkOutputNames;
+
+
 
     #region Static helpers
 
@@ -380,7 +386,8 @@ namespace Ceres.Chess.NNEvaluators
       result = new NNEvaluatorResult(w, l, w1, l1, w2, l2, m, uncertaintyV, uncertaintyP,
                                      policyRef.policies.Span[policyRef.index], 
                                      HasAction ? actionRef.actions.Span[actionRef.index] : default,
-                                     activations, stateInfo, extraStat0, extraStat1, rawNetworkOutputs);
+                                     activations, stateInfo, extraStat0, extraStat1, 
+                                     rawNetworkOutputs, RawNetworkOutputNames);
     }
 
     #endregion

@@ -95,6 +95,12 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// </summary>
     public readonly FP16[][] RawNetworkOutputs;
 
+    /// <summary>
+    /// Array of names of raw neural network outputs (if RetainRawOutputs is true).
+    /// </summary>
+    public readonly string[] RawNetworkOutputNames;
+
+
 
     /// <summary>
     /// Constructor.
@@ -122,7 +128,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
                              Half[] priorState,
                              FP16? extraStat0 = null, 
                              FP16? extraStat1 = default,
-                             FP16[][] rawNetworkOutputs = null)
+                             FP16[][] rawNetworkOutputs = null,
+                             string[] rawNetworkOutputNames = null)
     {
       this.winP = winP;
       this.lossP = lossP;
@@ -141,6 +148,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
       ExtraStat0 = extraStat0;
       ExtraStat1 = extraStat1;
       RawNetworkOutputs = rawNetworkOutputs;
+      RawNetworkOutputNames = rawNetworkOutputNames;
     }
 
 

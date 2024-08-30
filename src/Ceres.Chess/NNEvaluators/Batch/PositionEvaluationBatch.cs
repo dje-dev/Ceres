@@ -402,6 +402,11 @@ namespace Ceres.Chess.NetEvaluation.Batch
 
     NNEvaluatorResultActivations IPositionEvaluationBatch.GetActivations(int index) => GetActivations(index);
 
+    /// <summary>
+    /// Array of names of raw neural network outputs (if RetainRawOutputs is true).
+    /// </summary>
+    public string[] RawNetworkOutputNames;
+
 
 
     /// <summary>
@@ -429,7 +434,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
                                    Memory<NNEvaluatorResultActivations> activations,
                                    TimingStats stats, Memory<FP16> extraStat0 = default, Memory<FP16> extraStat1 = default,
                                    bool makeCopy = false,
-                                   Memory<FP16[][]> rawNetworkOutputs = default)
+                                   Memory<FP16[][]> rawNetworkOutputs = default,
+                                   string[] rawNetworkOutputNames = null)
     {
       IsWDL = isWDL;
       HasM = hasM;
@@ -462,6 +468,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
 
       Stats = stats;
       RawNetworkOutputs = rawNetworkOutputs;
+      RawNetworkOutputNames = rawNetworkOutputNames;
     }
 
 
@@ -488,7 +495,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
                                     float value1TemperatureUncertaintyScalingFactor, float value2TemperatureUncertaintyScalingFactor,
                                     bool valsAreLogistic, 
                                     TimingStats stats,
-                                    Memory<FP16[][]> rawNetworkOutputs = default)
+                                    Memory<FP16[][]> rawNetworkOutputs = default,
+                                    string[] rawNetworkOutputNames = null)
     {
       IsWDL = isWDL;
       HasM = hasM;
@@ -502,6 +510,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
       Activations = activations.ToArray();
       States = states.ToArray();
       RawNetworkOutputs = rawNetworkOutputs;
+      RawNetworkOutputNames = rawNetworkOutputNames;
 
       InitializeValueEvals(valueEvals, valsAreLogistic, temperatureValue1, uncertaintyV, value1TemperatureUncertaintyScalingFactor, false);
       if (!valueEvals2.IsEmpty)
@@ -585,13 +594,14 @@ namespace Ceres.Chess.NetEvaluation.Batch
                                    IEncodedPositionBatchFlat sourceBatchWithValidMoves,
                                    float policyTemperature, float policyUncertaintyScalingFactor,
                                    TimingStats stats,
-                                   Memory<FP16[][]> rawNetworkOutputs = default)
+                                   Memory<FP16[][]> rawNetworkOutputs = default,                                   
+                                   string[] rawNetworkOutputNames = null)
    : this(isWDL, hasM, hasUncertaintyV, hasUnertaintyP, hasAction, hasValueSecondary, hasState, numPos, valueEvals, valueEvals2, 
           m, uncertaintyV,  uncertaintyP, extraStats0, extraStats1, states.ToArray(), activations,
           fractionValueFromValue2, 
           temperatureValue1, temperatureValue2,
           value1TemperatureUncertaintyScalingFactor, value2TemperatureUncertaintyScalingFactor,
-          valsAreLogistic, stats, rawNetworkOutputs)
+          valsAreLogistic, stats, rawNetworkOutputs, rawNetworkOutputNames)
     {     
       (Policies, Actions) = ExtractPoliciesBufferFlat(numPos, policyProbs, uncertaintyP, 
                                                       hasAction, actionLogits,
@@ -623,7 +633,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
                                    ReadOnlySpan<NNEvaluatorResultActivations> activations, bool valsAreLogistic,
                                    PolicyType probType, TimingStats stats, bool alreadySorted,
                                    float temperatureValue1= 1, float temperatureValue2 = 1, float fractionValue1FromValue2 = 0,
-                                   Memory<FP16[][]> rawNetworkOutputs = default)
+                                   Memory<FP16[][]> rawNetworkOutputs = default,                                   
+                                   string[] rawNetworkOutputNames = null)
 //      : this(isWDL, hasM, hasUncertaintyV, hasUncertaintyP, hasAction, hasValueSecondary, hasState, 
 //             numPos, valueEvals, valueEvals2, m, uncertaintyV, uncertaintyP, extraStats0, extraStats1, states, activations, 
 //             temperatureValue1, temperatureValue2, fractionValue1FromValue2, valsAreLogistic, stats)

@@ -17,6 +17,7 @@ using System;
 using System.Buffers;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Linq;
 
 using Microsoft.ML.OnnxRuntime;
 
@@ -460,6 +461,13 @@ namespace Chess.Ceres.NNEvaluators
       FP16[][][] rawNetworkOutputs = null;
       if (result.RawNetworkOutputs != null)
       {
+        // Copy over the raw output names if not already done.
+        if (RawNetworkOutputNames == null)
+        {
+          RawNetworkOutputNames = result.RawNetworkOutputs.Keys.ToArray();
+        }
+      
+
         rawNetworkOutputs = new FP16[numPos][][];
         for (int i = 0; i < numPos; i++)
         {
@@ -496,7 +504,7 @@ namespace Chess.Ceres.NNEvaluators
                                          ValueHeadLogistic, PositionEvaluationBatch.PolicyType.LogProbabilities, false, 
                                          batch,
                                          Options.PolicyTemperature, Options.PolicyUncertaintyTemperatureScalingFactor,
-                                         stats, rawNetworkOutputs);
+                                         stats, rawNetworkOutputs, RawNetworkOutputNames);
 
 //#if NOT
 // ** Experimental test code, triggered by having FractionValueFromValue2 >  1
