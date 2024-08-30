@@ -602,9 +602,7 @@ Comments from onnxruntime source code:
         } 
         resultArrays.Add((resultValue.Name, values));
       }
-      float diff = MathF.Abs((float)(Float16)resultArrays[1].Item2.Span[1] -(float) (Float16)resultArrays[1].Item2.Span[4]);
-      Console.WriteLine("Diff: " + diff + " " + resultArrays[1].Item2.Length);
-      System.Environment.Exit(3);
+
       return resultArrays;
     }
 
