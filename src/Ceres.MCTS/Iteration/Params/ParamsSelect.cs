@@ -30,7 +30,8 @@ namespace Ceres.MCTS.Params
   public record ParamsSelect
   {
     /// <summary>
-    ///  If the improved tuned ZZTune parameters should be used.
+    /// If the ZZTune parameters should be used
+    /// (alternately the values used by Lc0 in 2024 for TCEC competitions).
     /// </summary>
     public const bool USE_ZZTUNE = true;
 
@@ -61,25 +62,25 @@ namespace Ceres.MCTS.Params
     public float RootCPUCTExtraMultiplierExponent = 0; // zero to disable, typical value 0.43f
 
     [CeresOption(Name = "cpuct", Desc = "Scaling used in node selection to encourage exploration (traditional UCT)", Default = "2.15")]
-    public float CPUCT = USE_ZZTUNE ? 1.745f : 2.15f;
+    public float CPUCT = USE_ZZTUNE ? 1.745f : 2.897f;
 
     [CeresOption(Name = "cpuct-base", Desc = "Constant (base) used in node selection to weight exploration", Default = "18368")]
-    public float CPUCTBase = USE_ZZTUNE ? 38739 : 18368;
+    public float CPUCTBase = USE_ZZTUNE ? 38739 : 45669;
 
     [CeresOption(Name = "cpuct-factor", Desc = "Constant (factor) used in node selection to weight exploration", Default = "2.82")]
-    public float CPUCTFactor = USE_ZZTUNE ? 3.894f : 2.82f;
+    public float CPUCTFactor = USE_ZZTUNE ? 3.894f : 3.973f;
 
 
     [CeresOption(Name = "cpuct-at-root", Desc = "Scaling used in node selection (at root) to encourage exploration (traditional UCT)", Default = "3")]
-    public float CPUCTAtRoot = USE_ZZTUNE ? 1.745f : 2.15f;
+    public float CPUCTAtRoot = USE_ZZTUNE ? 1.745f : 2.897f;
 
 
     [CeresOption(Name = "cpuct-base-at-root", Desc = "Constant (base) used in node selection (at root) to weight exploration", Default = "18368")]
-    public float CPUCTBaseAtRoot = USE_ZZTUNE ? 38739 : 18368;
+    public float CPUCTBaseAtRoot = USE_ZZTUNE ? 38739 : 45669;
 
 
     [CeresOption(Name = "cpuct-factor-at-root", Desc = "Constant (factor) used in node selection (at root) to weight exploration", Default = "2.82")]
-    public float CPUCTFactorAtRoot = USE_ZZTUNE ? 3.894f : 2.82f;
+    public float CPUCTFactorAtRoot = USE_ZZTUNE ? 3.894f : 3.973f;
 
     [CeresOption(Name = "policy-decay-factor", Desc = "Linear scaling factor used in node selection to shrink policy toward uniform as N grows. Zero to disable, typical value 5.0", Default = "0")]
     public float PolicyDecayFactor = 0;
@@ -131,13 +132,13 @@ namespace Ceres.MCTS.Params
     public FPUType FPUModeAtRoot = FPUType.Same;
 
     [CeresOption(Name = "fpu-value", Desc = "FPU constant used at root node", Default = "0.44")]
-    public float FPUValue = USE_ZZTUNE ? 0.33f : 0.44f;
+    public float FPUValue = USE_ZZTUNE ? 0.33f : 0.98416f;
 
     [CeresOption(Name = "fpu-value-at-root", Desc = "FPU constant used at root node", Default = "1")]
     public float FPUValueAtRoot = 1.0f;
 
     [CeresOption(Name = "policy-softmax", Desc = "Controls degree of flatness of policy via specified level of exponentation", Default = "1.61")]
-    public float PolicySoftmax = USE_ZZTUNE ? 1.359f : 1.61f;
+    public float PolicySoftmax = USE_ZZTUNE ? 1.359f : 1.4f;
 
 
     /// <summary>
