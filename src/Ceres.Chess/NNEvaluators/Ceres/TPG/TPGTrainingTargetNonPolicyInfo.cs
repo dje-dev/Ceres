@@ -44,6 +44,13 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
       /// Rescored endgame position from tablebase.
       /// </summary>
       Tablebase,
+
+      /// <summary>
+      /// If the position was not in the training data but instead
+      /// inserted as a random move that will be used only as a source of action head information
+      /// (but not with any value/policy target available).
+      /// </summary>
+      ActionHeadDummyMove,
     };
 
 
