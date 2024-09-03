@@ -201,9 +201,9 @@ namespace Ceres.Chess.EncodedPositions
     /// <summary>
     /// Validates that key fields (game result, best Q, policies, etc.) are all valid.
     /// <param name="desc"></param>
-    public readonly void ValidateIntegrity(string desc)
+    public readonly void ValidateIntegrity(string desc, bool skipValidationTrainingTarget = false)
     {
-      ValidateIntegrity(InputFormat, Version, in PositionWithBoards, in Policies, desc);
+      ValidateIntegrity(InputFormat, Version, in PositionWithBoards, in Policies, desc, skipValidationTrainingTarget);
     }
 
 
@@ -217,7 +217,8 @@ namespace Ceres.Chess.EncodedPositions
     public static void ValidateIntegrity(int inputFormat, int version,
                                          in EncodedPositionWithHistory boardsHistory, 
                                          in EncodedPolicyVector policyVector, 
-                                         string desc)
+                                         string desc,
+                                         bool skipValidationTrainingTarget = false)
     {
       // Make sure this is the supported version and input format of training data
       if (inputFormat != SUPPORTED_INPUT_FORMAT)
@@ -237,67 +238,69 @@ namespace Ceres.Chess.EncodedPositions
         throw new Exception("History board 0 has count pieces " + countPieces + ") " + desc);
       }
 
-      ref readonly EncodedPositionEvalMiscInfoV6 refTraining = ref boardsHistory.MiscInfo.InfoTraining;
-
-      if (float.IsNaN(refTraining.BestD + refTraining.BestQ))
+      if (!skipValidationTrainingTarget)
       {
-        if (!haveWarnedBestQ)
+        ref readonly EncodedPositionEvalMiscInfoV6 refTraining = ref boardsHistory.MiscInfo.InfoTraining;
+
+        if (float.IsNaN(refTraining.BestD + refTraining.BestQ))
         {
-          Console.WriteLine("WARNING: BestD or BestQ is NaN. Omit subsequent warnings of this type.");
-          haveWarnedBestQ = true;
+          if (!haveWarnedBestQ)
+          {
+            Console.WriteLine("WARNING: BestD or BestQ is NaN. Omit subsequent warnings of this type.");
+            haveWarnedBestQ = true;
+          }
         }
-      }
 
-      if (float.IsNaN(refTraining.ResultD + refTraining.ResultQ))
-      {
-        throw new Exception("ResultD or ResultQ is NaN");
-      }
+        if (float.IsNaN(refTraining.ResultD + refTraining.ResultQ))
+        {
+          throw new Exception("ResultD or ResultQ is NaN");
+        }
 
-      if (!float.IsNaN(refTraining.OriginalM) && refTraining.OriginalM < 0)
-      {
-        throw new Exception("OriginalM < 0 (" + refTraining.OriginalM + ") " + desc);
-      }
+        if (!float.IsNaN(refTraining.OriginalM) && refTraining.OriginalM < 0)
+        {
+          throw new Exception("OriginalM < 0 (" + refTraining.OriginalM + ") " + desc);
+        }
 
-      if (refTraining.ResultD == 0 && refTraining.ResultQ == 0)
-      {
-        throw new Exception("Both ResultD and ResultQ are zero. " + desc);
-      }
+        if (refTraining.ResultD == 0 && refTraining.ResultQ == 0)
+        {
+          throw new Exception("Both ResultD and ResultQ are zero. " + desc);
+        }
 
-      if (refTraining.BestD == 0 && refTraining.BestQ == 0)
-      {
-        throw new Exception("Both BestD and BestQ are zero. " + desc);
-      }
+        if (refTraining.BestD == 0 && refTraining.BestQ == 0)
+        {
+          throw new Exception("Both BestD and BestQ are zero. " + desc);
+        }
 
-      ValidateWDL(desc, "BestWDL", refTraining.BestWDL);
-      ValidateWDL(desc, "ResultWDL", refTraining.ResultWDL);
+        ValidateWDL(desc, "BestWDL", refTraining.BestWDL);
+        ValidateWDL(desc, "ResultWDL", refTraining.ResultWDL);
 
 #if DEBUG
       const bool validate = true;
 #else
-      // Computationally expensive, randomly validate only a few in non-debug mode.
-      const int VALIDATE_PCT = 1;
-      bool validate = (refTraining.NumVisits % 100) < VALIDATE_PCT;
+        // Computationally expensive, randomly validate only a few in non-debug mode.
+        const int VALIDATE_PCT = 1;
+        bool validate = (refTraining.NumVisits % 100) < VALIDATE_PCT;
 #endif
-      if (validate)
-      {
-        float[] probs = policyVector.CheckPolicyValidity(desc);
-
-        if (probs[refTraining.BestMove.IndexNeuralNet] <= 0)
+        if (validate)
         {
-          throw new Exception("Best policy index not positive: (" + probs[refTraining.BestIndex] + ") " + desc);
+          float[] probs = policyVector.CheckPolicyValidity(desc);
+
+          if (probs[refTraining.BestMove.IndexNeuralNet] <= 0)
+          {
+            throw new Exception("Best policy index not positive: (" + probs[refTraining.BestIndex] + ") " + desc);
+          }
+
+          if (probs[refTraining.PlayedMove.IndexNeuralNet] <= 0)
+          {
+            throw new Exception("Played policy index not positive: (" + probs[refTraining.PlayedIndex] + ") " + desc);
+          }
         }
 
-        if (probs[refTraining.PlayedMove.IndexNeuralNet] <= 0)
+        if (refTraining.PliesLeft < 0)
         {
-          throw new Exception("Played policy index not positive: (" + probs[refTraining.PlayedIndex] + ") " + desc);
+          throw new Exception("Plies left < 0 (" + refTraining.PliesLeft + ") " + desc);
         }
       }
-
-      if (refTraining.PliesLeft < 0)
-      {
-        throw new Exception("Plies left < 0 (" + refTraining.PliesLeft + ") " + desc);
-      }
-
     }
 
     #endregion
