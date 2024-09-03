@@ -39,6 +39,13 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
       string modelPath2 = @"e:\cout\nets\HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_5200003072.onnx";
       string outputPath = @"e:\cout\nets\combox_511_final.onnx";
 
+      modelPath2 = modelPath1 = @"e:\cout\nets\HOP_CL_384_11_FFN3_H32_B1_NLA_a2x_nowd_ndm_5bn_fp16_last.onnx";
+///*ok*/ modelPath2 = modelPath1 = @"e:\cout\nets\HOP_CL_CLEAN_256_10_FFN6_B1_NLATT_4bn_fp16_4000006144.onnx";
+      outputPath = @"c:\temp\dummy.onnx";
+
+      modelPath1 = "d:\\nets\\BT4-1024x15x32h-swa-6147500.pb.gz.onnx";
+      modelPath2 = "d:\\nets\\bt4-newtune-3rdbranch-1130.pb.gz.onnx";
+
       // Load both ONNX models
       var model1 = LoadOnnxModel(modelPath1);
       var model2 = LoadOnnxModel(modelPath2);
@@ -90,22 +97,26 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
           if (tensorThisItem.DataType == (int)TensorProto.Types.DataType.Float16)
           {
             ReadOnlySpan<Half> value = MemoryMarshal.Cast<byte, Half>(tensorThisItem.RawData.Span);
-            float maxAbs = float.MinValue;
+            float maxAbs = 0;
+            float minAbs = float.MaxValue;
+            float sumAbs = 0;
             for (int i = 0; i < value.Length; i++)
             {
               newHalfData[i] += (Half)(item.weight * (float)value[i]);
-
-              if (DUMP_MAX_ABS_WEIGHTS_BY_LAYER && Math.Abs((float)value[i]) > (float)value[i])
+              if (DUMP_MAX_ABS_WEIGHTS_BY_LAYER)
               {
-                maxAbs = Math.Abs((float)value[i]);
-              }
+                minAbs = value[i] == Half.Zero ? minAbs : Math.Min(minAbs, Math.Abs((float)value[i]));
+                maxAbs =  Math.Max(maxAbs, Math.Abs((float)value[i]));
+                sumAbs+= Math.Abs((float)value[i]);
+              }                      
             }
 
             if (DUMP_MAX_ABS_WEIGHTS_BY_LAYER)
             {
-              if (maxAbs > 2)
+              float avgAbs = sumAbs / value.Length;
+              if (avgAbs < 1E-4 || minAbs > 2 || maxAbs > 2)
               {
-                Console.WriteLine(maxAbs + "  " + tensorRoot.Name);
+                Console.WriteLine(avgAbs + " " + minAbs + " " + maxAbs + "  " + tensorRoot.Name);
               }
             }
           }
