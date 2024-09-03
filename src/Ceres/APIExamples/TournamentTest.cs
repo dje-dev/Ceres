@@ -198,8 +198,6 @@ namespace Ceres.APIExamples
 
      //      NET2 = "CUSTOM2:ckpt_HOP_C7_256_12_8_6_40bn_B1_2024_late.ts";// 2197929984.ts";
 
-// FP8 conversion test      NET1 = "CUSTOM1:fp8_256_12_8.onnx";
-
 //      NET2 = "CUSTOM1:ckpt_DGX_C_512_15_16_4_32bn_B1_2024_26Jun_final.ts.fp16.onnx"; // Late June 512
 
 //      NET1 = "CUSTOM1:ckpt_DGX_C_256_12_8_6_4bn_B1_2024_vl01_sf_c3_1bn_vl2p3_last.ts.fp16.onnx";  // extension: value2 loss 0.3 (not 0.1)
@@ -229,8 +227,11 @@ namespace Ceres.APIExamples
 
       //      NET2 = "~T1_DISTILL_256_10_FP16";
 
-      const string NET_256 = "Ceres:HOP_CL_CLEAN_256_10_FFN6_B1_4bn_fp16_4000006144.onnx";
-      const string NET_256_NLA = "Ceres:HOP_CL_CLEAN_256_10_FFN6_B1_NLATT_4bn_fp16_4000006144.onnx";
+      const string NET_256        = "Ceres:HOP_CL_CLEAN_256_10_FFN6_B1_4bn_fp16_4000006144.onnx";
+      const string NET_256_NLA    = "Ceres:HOP_CL_CLEAN_256_10_FFN6_B1_NLATT_4bn_fp16_4000006144.onnx";
+      const string NET_256_NLA_2x = "Ceres:DGX_CL_256_9_FFN3_H16_B1_NLATTN_a2x_42bn_fp16_4200005632.onnx";
+      const string NET_256_NLA_2x_FIX = "Ceres:DGX_CL_256_9_FFN3_H16_B1_NLATTN_a2x_fixd_noval2_42bn_fp16_4199989248.onnx";
+//BAD      const string NET_256_NLA_2xh_FIX = "Ceres:DGX_CL_256_10_FFN4_H16_B1_NLATTN_a2xpartial_fixd_noval2_42bn_fp16_4200005632.onnx";
 
       const string NET_512_4bn = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_4bn_fp16_4000002048.onnx";
       const string NET_512_NLA_4bn = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_4000006144.onnx";
@@ -239,11 +240,6 @@ namespace Ceres.APIExamples
       const string NET_512_NLA_52bn_SKINNY = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_5200003072_skinny.onnx";
 
 
-      // ** CheckpointState TEST
-      //      NET1 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_last.onnx";
-      //combo_397_4000006144
-      //      NET1 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_5200003072.onnx|TEST"; // 397 good
-      //      NET2 = "Ceres:lastx_fp16.onnx";
 
       //      NET2 = "~T1_DISTILL_512_15_FP16";// _TRT";
       //NET1 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_combo_473_485_495.onnx"; // -25@100
@@ -277,27 +273,59 @@ namespace Ceres.APIExamples
 NET1 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_5200003072_skinny.onnx";
 NET2 = "~T4_RPE_512_15_FP16_TRT";
 
-  //NET2 = "Ceres:DGX_CL_CLEAN_512_12_FFN2_B1_NLATTN_repinit_dn_5bn_fp16_200003584.onnx";
-    NET2 = "Ceres:DGX_CL_CLEAN_512_12_FFN2_B1_NLATTN_repinit_5bn_fp16_200003584.onnx";
-      NET1 = "Ceres:DGX_CL_CLEAN_512_12_FFN2_B1_NLATTN_repinit_a2x_5bn_fp16_200003584.onnx";
-      NET2 = "Ceres:DGX_CL_CLEAN_512_12_FFN2_B1_NLATTN_repinit_dn_5bn_fp16_200003584.onnx";
 
-      NET1 = NET2 = NET_512_NLA_52bn;
-      NET1 = "Ceres:DGX_CL_256_9_FFN3_H16_B1_NLATTN_a2x_42bn_fp16_2199994368.onnx";
-      NET2 = "Ceres:HOP_CL_CLEAN_256_10_FFN6_B1_NLATT_4bn_fp16_2199994368.onnx";
+      //      NET1 = NET2 = NET_512_NLA_52bn;
 
-// 384 vs 512      
-//      NET1 = "Ceres:HOP_CL_CLEAN_384_11_FFN3_H32_B1_NLATTN_a2x_42bn_fp16_last.onnx";
-//      NET2 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_599998464.onnx";
+      NET1 = NET_256_NLA_2x;
+      NET2 = NET_256_NLA;
 
-      NET1 = NET2 = NET_512_NLA_52bn;
+      NET2 = "~T1_256_RL_TRT";
 
-      NET1 = "Ceres:DGX_CL_256_9_FFN3_H16_B1_NLATTN_a2x_fixd_noval2_42bn_fp16_799997952.onnx";
-      NET2 = "Ceres:DGX_CL_256_9_FFN3_H16_B1_NLATTN_a2x_42bn_fp16_799997952.onnx";
+      NET1 = "~T3_512_15_Q_FP16_TRT";
+      NET2 = "~T3_512_15_FP16_TRT";
 
-      NET1 = NET_512_NLA_52bn;// "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_5200003072_skinny_A6000.onnx";
-      NET2 = "~BT4_FP16_TRT";
-      NET2 = "~BT4_NATIVE";
+      // Test HOP Nadam nets
+            NET1 = "Ceres:bbe469c1c0f0_CL_384_11_FFN3_H32_B1_NLA_a2x_nowd_ndm_d_5bn_fp16_1199996928.onnx";
+      //      NET2 = "Ceres:HOP_CL_384_11_FFN3_H32_B1_NLA_a2x_nowd_ndm_5bn_fp16_399998976.onnx";
+            NET2 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_1199996928.onnx";
+
+      //HOP_CL_CLEAN_512_15_FFN4_B1_4b
+
+      // Test 2xpartial on DGX
+      NET1 = "Ceres:DGX_CL_256_10_FFN4_H16_B1_NLATTN_a2xpartial_fixd_noval2_42bn_fp16_last.onnx";
+      NET2 = "Ceres:DGX_CL_256_9_FFN3_H16_B1_NLATTN_a2x_fixd_noval2_42bn_fp16_4199989248.onnx";
+
+      NET1 = NET_512_NLA_52bn + "|TEST";
+      NET2 = NET_512_NLA_52bn;
+      //      NET2 = "~T1_256_RL_TRT";
+
+
+      //      NET1 = "~BT4_SPSA_FP16_TRT";
+      //NET1 = NET2 = "~T3_DISTILL_512_15_FP16_TRT";
+
+      //      NET1 = "Ceres:HOP_CL_384_11_FFN3_H32_B1_NLA_a2x_nowd_5bn_fp16_last.onnx";      // crashed
+      //      NET2 = "Ceres:HOP_CL_CLEAN_256_10_FFN6_B1_4bn_fp16_199999488.onnx"; // weak
+      // 384 vs 512      
+      //NET1 = "Ceres:HOP_CL_384_11_FFN3_H32_B1_NLA_a2x_nowd_ndm_5bn_fp16_199999488.onnx";
+      //      NET1 = "Ceres:HOP_CL_CLEAN_384_11_FFN3_H32_B1_NLATTN_a2x_42bn_fp16_last.onnx";
+      //      NET2 = "Ceres:HOP_CL_384_11_FFN3_H32_B1_NLA_a2x_nowd_5bn_fp16_199999488.onnx";
+      //NET2 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_199999488.onnx";
+
+      //      NET1 = NET2 = NET_512_NLA_52bn;
+
+      //      NET1 = "Ceres:DGX_CL_256_9_FFN3_H16_B1_NLATTN_a2x_fixd_noval2_42bn_fp16_2999992320.onnx";
+      //      NET2 = NET_256_NLA; ;// "Ceres:DGX_CL_256_9_FFN3_H16_B1_NLATTN_a2x_42bn_fp16_2799992832.onnx";
+
+      // CRASH      NET1 = "Ceres:HOP_CL_384_11_FFN3_H32_B1_NLA_a2x_nowd_5bn_fp16_last.onnx";
+      // 384 TESt
+      //      NET1 = "Ceres:HOP_CL_384_11_FFN3_H32_B1_NLA_a2x_nowd_5bn_fp16_199999488.onnx";
+      //      NET2 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_199999488.onnx";
+
+      //      NET2 = "Ceres:HOP_CL_CLEAN_384_11_FFN3_H32_B1_NLATTN_a2x_42bn_fp16_199999488.onnx";
+
+      //      NET1 = NET_512_NLA_52bn;// "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_5200003072_skinny_A6000.onnx";
+      //      NET2 = "~BT4_FP16_TRT";
+      //      NET2 = "~BT4_NATIVE";
 
       //      NET1 = "Ceres:HOP_CL_512_16_FFN4_B1_NLATTN_5bn_fp16_799997952.onnx";
       //      NET2 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_799997952.onnx";
@@ -308,7 +336,6 @@ NET2 = "~T4_RPE_512_15_FP16_TRT";
       //      NET1 = NET_512;
       //      NET2 = "~T3_DISTILL_512_15_FP16_TRT";
 
-      //      NET2 = "~T1_256_RL_TRT";
 
       //  NET1 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_4000006144";
       //  NET2 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_4bn_fp16_4000002048";
@@ -321,9 +348,9 @@ NET2 = "~T4_RPE_512_15_FP16_TRT";
       //NET2 = "~T1_DISTIL_512_15_NATIVE";
 
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(500);
-      //limit1 = SearchLimit.BestValueMove;
-      limit1 = new SearchLimit(SearchLimitType.SecondsForAllMoves, 60, false, 0.1f);
+      SearchLimit limit1 = SearchLimit.NodesPerMove(100);
+//      limit1 = SearchLimit.BestValueMove;
+//      limit1 = new SearchLimit(SearchLimitType.SecondsForAllMoves, 60, false, 0.1f);
       //SearchLimit limit2 = SearchLimit.NodesPerMove(1);
       
       SearchLimit limit2 = limit1;
@@ -476,7 +503,7 @@ NET2 = "~T4_RPE_512_15_FP16_TRT";
       //      engineDefCeres1.SearchParams.EnableSearchExtension = false;
       //      engineDefCeres2.SearchParams.EnableSearchExtension = false;
 
-//engineDefCeres1.SearchParams.TestFlag2 = true; // XXX
+      //engineDefCeres1.SearchParams.TestFlag2 = true; // XXX
       //      engineDefCeres1.SearchParams.Execution.FlowDualSelectors = false;
       //      engineDefCeres1.SearchParams.TranspositionRootPolicyBlendingFraction = 0.5f;
 
@@ -500,7 +527,7 @@ NET2 = "~T4_RPE_512_15_FP16_TRT";
 
       //engineDefCeres2.SearchParams.TestFlag2 = true;
 
-      //      AdjustSelectParamsNewTune(engineDefCeres1.SelectParams);
+//      AdjustSelectParamsNewTune_Lc0_TCEC_2024(engineDefCeres1.SelectParams);
       //      AdjustSelectParamsNewTune(engineDefCeres2.SelectParams);
 //      engineDefCeres1.SelectParams.PolicySoftmax *= 0.9f;
 //      engineDefCeres1.SelectParams.CPUCT *= 0.80f;
@@ -650,7 +677,7 @@ string OVERRIDE_LC0_BACKEND_STRING = "";
         }
         Console.WriteLine();
 
-        string BASE_NAME = "ERET_VESELY203.epd";// "chad_tactics-100M.epd";// eret nice_lcx Stockfish238 ERET_VESELY203 endgame2 chad_tactics-100M lichess_chad_bad.csv
+        string BASE_NAME = "chad_tactics-100M.epd";//"ERET_VESELY203.epd";//  eret nice_lcx Stockfish238 ERET_VESELY203 endgame2 chad_tactics-100M lichess_chad_bad.csv
         ParamsSearch paramsNoFutility = new ParamsSearch() { FutilityPruningStopSearchEnabled = false };
 
         //Z:\chess\data\epd>type lichess.csv 
@@ -667,7 +694,7 @@ string OVERRIDE_LC0_BACKEND_STRING = "";
                            NET2 == null ? null :  GameEngineDefFactory.CeresInProcess("Ceres2", NET2, suiteGPU, paramsNoFutility with { }),
                            null);// engineDefCeres96);// playerLC0.EngineDef);
 
-        suiteDef.MaxNumPositions = 501;
+        suiteDef.MaxNumPositions = 1000;
         suiteDef.EPDLichessPuzzleFormat = suiteDef.EPDFileName.ToUpper().Contains("LICHESS");
 
         suiteDef.AcceptPosPredicate = null;// p => IsKRP(p);
@@ -688,7 +715,7 @@ string OVERRIDE_LC0_BACKEND_STRING = "";
 #endif
       // **************************************************
       EnginePlayerDef player1 = playerCeres1;// playerCeres1UCI;// new EnginePlayerDef(engineDefCSNN1, SearchLimit.NodesPerMove(30));
-      EnginePlayerDef player2 = playerLC0_2;// playerStockfish161;// new EnginePlayerDef(EnginDefStockfish14(), SearchLimit.NodesPerMove(300 * 10_000));
+      EnginePlayerDef player2 = playerCeres2;// playerStockfish161;// new EnginePlayerDef(EnginDefStockfish14(), SearchLimit.NodesPerMove(300 * 10_000));
       //new EnginePlayerDef(engineDefCSNoNN, SearchLimit.NodesPerMove(300 * 10_000));
       // **************************************************
 
@@ -1054,31 +1081,18 @@ string OVERRIDE_LC0_BACKEND_STRING = "";
       CompareEngineResultSummary result = new CompareEnginesVersusOptimal(parms).Run();
     }
 
-    static void AdjustSelectParamsNewTuneBR(ParamsSelect p)
+    static void AdjustSelectParamsNewTune_Lc0_TCEC_2024(ParamsSelect p)
     {
-      p.CPUCT = 1.88f;
-      p.CPUCTAtRoot = 1.88f;
+      p.CPUCT = 2.897f;
+      p.CPUCTAtRoot = p.CPUCT;
       p.CPUCTFactor = 3.973f;
-      p.CPUCTFactorAtRoot = 3.973f;
+      p.CPUCTFactorAtRoot = p.CPUCTFactor;
       p.CPUCTBase = 45669;
       p.CPUCTBaseAtRoot = 45669;
-      p.FPUValue = 0.286f;
-      p.PolicySoftmax = 1.16f;
+      p.FPUValue = 0.98416f;
+      p.PolicySoftmax = 1.4f;
     }
 
-
-
-    static void AdjustSelectParamsNewTuneT60(ParamsSelect p)
-    {
-      p.CPUCT = 1.473f;
-      p.CPUCTAtRoot = 1.473f;
-      p.CPUCTFactor = 3.973f;
-      p.CPUCTFactorAtRoot = 3.973f;
-      p.CPUCTBase = 45669;
-      p.CPUCTBaseAtRoot = 45669;
-      p.FPUValue = 0.2790f;
-      p.PolicySoftmax = 1.3f;
-    }
 
 
     static void DisposeTest()
