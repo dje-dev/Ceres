@@ -14,8 +14,6 @@
 #region Using directives
 
 using System;
-using System.Diagnostics;
-using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
 using Ceres.Chess.EncodedPositions;
@@ -60,8 +58,20 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
 
       // Write squares.
       ConvertToTPGRecordSquares(in encodedPosToConvert, includeHistory, 
-                                ref tpgRecord, pliesSinceLastPieceMoveBySquare, pliesSinceLastPieceMoveBySquare != default,
-                                qNegativeBlunders, qPositiveBlunders); 
+                                tpgRecord.Squares, pliesSinceLastPieceMoveBySquare, pliesSinceLastPieceMoveBySquare != default,
+                                qNegativeBlunders, qPositiveBlunders);
+
+      tpgRecord.IsWhiteToMove = encodedPosToConvert.MiscInfo.WhiteToMove ? (byte)1 : (byte)0;
+
+#if DEBUG
+      const int VALIDATE_FREQUENCY = 100; // too slow to do every time
+      bool validate = convertCount++ % VALIDATE_FREQUENCY == 0;
+      if (validate)
+      {
+        TPGRecordValidation.ValidateHistoryReachability(in tpgRecord);
+        TPGRecordValidation.ValidateSquares(in encodedPosToConvert, ref tpgRecord);
+      }
+#endif
 
       return tpgRecord;
     }
@@ -91,9 +101,11 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
       //       LC0 training data (which is mirrored). Someday undo this mirroring in training and then can remove here.
       EncodedPositionWithHistory encodedPosToConvertMirrored = encodedPosToConvert.Mirrored;
 #endif
-      ConvertToTPGRecordSquares(in encodedPosToConvert, includeHistory, ref tpgRecord, 
+      ConvertToTPGRecordSquares(in encodedPosToConvert, includeHistory, tpgRecord.Squares, 
                                 pliesSinceLastPieceMoveBySquare, emitPlySinceLastMovePerSquare,
                                 qNegativeBlunders, qPositiveBlunders);
+
+      tpgRecord.IsWhiteToMove = encodedPosToConvert.MiscInfo.WhiteToMove ? (byte)1 : (byte)0;
 
       // Convert the values unrelated to moves and squares
       if (targetInfo != null)
@@ -123,6 +135,8 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
       if (validate)
       {
         TPGRecordValidation.Validate(in encodedPosToConvert, in tpgRecord, policyVector is not null);
+        TPGRecordValidation.ValidateHistoryReachability(in tpgRecord);
+        TPGRecordValidation.ValidateSquares(in encodedPosToConvert, ref tpgRecord);
       }
 #endif
 
@@ -147,15 +161,15 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     /// <param name="squareBytesAll">byte array to receive converted encoded positions in TPGSquareRecord format</param>
     /// <param name="legalMoveIndices">optional array to recieve indices of legal moves in position</param>
     /// <exception cref="Exception"></exception>
-    public static void ConvertPositionsToRawSquareBytes(IEncodedPositionBatchFlat positions,
-                                                        bool includeHistory,
-                                                        Memory<MGMoveList> moves,
-                                                        bool lastMovePliesEnabled,
-                                                        float qNegativeBlunders,
-                                                        float qPositiveBlunders,
-                                                        out MGPosition[] mgPos,
-                                                        out byte[] squareBytesAll,
-                                                        short[] legalMoveIndices)
+    public static unsafe void ConvertPositionsToRawSquareBytes(IEncodedPositionBatchFlat positions,
+                                                               bool includeHistory,
+                                                               Memory<MGMoveList> moves,
+                                                               bool lastMovePliesEnabled,
+                                                               float qNegativeBlunders,
+                                                               float qPositiveBlunders,
+                                                               out MGPosition[] mgPos,
+                                                               out byte[] squareBytesAll,
+                                                               short[] legalMoveIndices)
     {
       if (legalMoveIndices != null)
       {
@@ -170,68 +184,65 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
       {
         throw new Exception("PositionsBuffer not initialized, EncodedPositionBatchFlat.RETAIN_POSITIONS_INTERNALS needs to be set true");
       }
+
       mgPos = positions.Positions.ToArray();
       byte[] pliesSinceLastMoveAllPositions = positions.LastMovePlies.ToArray();
 
-      squareBytesAll = new byte[positions.NumPos * Marshal.SizeOf<TPGSquareRecord>() * 64];
-      byte[] squareBytesAllCopy = squareBytesAll;
+      byte[] squareBytesAllLocalRef = new byte[positions.NumPos * TPGRecord.BYTES_PER_SQUARE_RECORD * 64];
+      squareBytesAll = squareBytesAllLocalRef;
 
       // Determine each position and copy converted raw board bytes into rawBoardBytesAll.
       // TODO: for efficiency, avoid doing this if the NN evaluator does not need raw bytes
-      const int MAX_THREADS = 8;
+      int MAX_THREADS = positions.NumPos > 64 ? 6 : 1;
       Parallel.For(0, positions.NumPos, new ParallelOptions() { MaxDegreeOfParallelism = MAX_THREADS }, i =>
       {
-        if (!lastMovePliesEnabled)
+        int tpgSquaresStartOffset = i * 64 * TPGRecord.BYTES_PER_SQUARE_RECORD;
+        fixed (byte* ptrSquareBytes = &squareBytesAllLocalRef[tpgSquaresStartOffset])
         {
-          // Disable any values possibly passed for last used plies since they are not to be used.
-          pliesSinceLastMoveAllPositions = null;
-        }
-
-        Span<byte> thesePliesSinceLastMove = pliesSinceLastMoveAllPositions == null ? default : new Span<byte>(pliesSinceLastMoveAllPositions, i * 64, 64);
-
-        TPGRecord tpgRecord = default;
-        ConvertToTPGRecordSquares(in positionsFlat.Span[i], includeHistory, ref tpgRecord,
-                                  thesePliesSinceLastMove, lastMovePliesEnabled,
-                                  qNegativeBlunders, qPositiveBlunders);
-
-#if DEBUG
-        if (pliesSinceLastMoveAllPositions != null)
-        {
-          CheckPliesSinceLastMovedCorrect(tpgRecord);
-        }
-#endif
-
-        // Extract as bytes.
-        tpgRecord.CopySquares(squareBytesAllCopy, i * 64 * TPGRecord.BYTES_PER_SQUARE_RECORD);
-
-        if (legalMoveIndices != null)
-        {
-          int numMoves = Math.Min(TPGRecordMovesExtractor.NUM_MOVE_SLOTS_PER_REQUEST, moves.Span[i].NumMovesUsed);
-          int indexOfMoveWithNNIndex0 = -1;
-          Span<short> thisPositionLegalMoveIndices = new Span<short>(legalMoveIndices, i * TPGRecordMovesExtractor.NUM_MOVE_SLOTS_PER_REQUEST, TPGRecordMovesExtractor.NUM_MOVE_SLOTS_PER_REQUEST);
-
-          for (int moveNum = 0; moveNum < numMoves; moveNum++)
+          if (!lastMovePliesEnabled)
           {
-            MGMove thisMove = moves.Span[i].MovesArray[moveNum];
-            short nnIndex = (short)ConverterMGMoveEncodedMove.MGChessMoveToEncodedMove(thisMove).IndexNeuralNet;
-            thisPositionLegalMoveIndices[moveNum] = (short)nnIndex;
+            // Disable any values possibly passed for last used plies since they are not to be used.
+            pliesSinceLastMoveAllPositions = null;
+          }
 
-            if (nnIndex == 0)
+          Span<byte> thesePliesSinceLastMove = pliesSinceLastMoveAllPositions == null ? default : new Span<byte>(pliesSinceLastMoveAllPositions, i * 64, 64);
+
+          // Convert to sequence of TPGSquareRecord.
+          // This is done using unsfe code in situ in the raw squareBytesAl array for performance.
+          Span<TPGSquareRecord> squaresSpan = new Span<TPGSquareRecord>(ptrSquareBytes, 64); 
+          ConvertToTPGRecordSquares(in positionsFlat.Span[i], includeHistory, squaresSpan,
+                                    thesePliesSinceLastMove, lastMovePliesEnabled,
+                                    qNegativeBlunders, qPositiveBlunders);
+
+          if (legalMoveIndices != null)
+          {
+            int numMoves = Math.Min(TPGRecordMovesExtractor.NUM_MOVE_SLOTS_PER_REQUEST, moves.Span[i].NumMovesUsed);
+            int indexOfMoveWithNNIndex0 = -1;
+            Span<short> thisPositionLegalMoveIndices = new Span<short>(legalMoveIndices, i * TPGRecordMovesExtractor.NUM_MOVE_SLOTS_PER_REQUEST, TPGRecordMovesExtractor.NUM_MOVE_SLOTS_PER_REQUEST);
+
+            for (int moveNum = 0; moveNum < numMoves; moveNum++)
             {
-              indexOfMoveWithNNIndex0 = moveNum;
+              MGMove thisMove = moves.Span[i].MovesArray[moveNum];
+              short nnIndex = (short)ConverterMGMoveEncodedMove.MGChessMoveToEncodedMove(thisMove).IndexNeuralNet;
+              thisPositionLegalMoveIndices[moveNum] = (short)nnIndex;
+
+              if (nnIndex == 0)
+              {
+                indexOfMoveWithNNIndex0 = moveNum;
+              }
             }
-          }
 
-          // Since we use index 0 as a sentinel (unless appears in first slot),
-          // if index 0 actually is present in the legal moves, swap it into the first slot.
-          if (indexOfMoveWithNNIndex0 != -1)
-          {
-            // Move index 0 must be first.
-            short temp = thisPositionLegalMoveIndices[0];
-            thisPositionLegalMoveIndices[0] = thisPositionLegalMoveIndices[indexOfMoveWithNNIndex0];
-            thisPositionLegalMoveIndices[indexOfMoveWithNNIndex0] = temp;
-          }
+            // Since we use index 0 as a sentinel (unless appears in first slot),
+            // if index 0 actually is present in the legal moves, swap it into the first slot.
+            if (indexOfMoveWithNNIndex0 != -1)
+            {
+              // Move index 0 must be first.
+              short temp = thisPositionLegalMoveIndices[0];
+              thisPositionLegalMoveIndices[0] = thisPositionLegalMoveIndices[indexOfMoveWithNNIndex0];
+              thisPositionLegalMoveIndices[indexOfMoveWithNNIndex0] = temp;
+            }
 
+          }
         }
       });
     }
@@ -335,7 +346,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
 #endif
 
       // Write squares.
-      ConvertToTPGRecordSquares(trainingPos.PositionWithBoards, includeHistory, ref tpgRecord,
+      ConvertToTPGRecordSquares(trainingPos.PositionWithBoards, includeHistory, tpgRecord.Squares,
                                 pliesSinceLastPieceMoveBySquare, emitPlySinceLastMovePerSquare,
                                 qNegativeBlunders, qPositiveBlunders);
 
@@ -444,7 +455,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
 
     public static unsafe void ConvertToTPGRecordSquares(in EncodedPositionWithHistory posWithHistory,
                                                         bool includeHistory,
-                                                        ref TPGRecord tpgRecord,
+                                                        Span<TPGSquareRecord> squares,
                                                         Span<byte> pliesSinceLastPieceMoveBySquare,
                                                         bool emitPlySinceLastMovePerSquare,
                                                         float qNegativeBlunders, float qPositiveBlunders)
@@ -473,8 +484,6 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
         return pos;
       }
 
-      tpgRecord.IsWhiteToMove = posWithHistory.MiscInfo.WhiteToMove ? (byte)1 : (byte)0;
-
       const bool FILL_IN = true;
       Position thisPosition = GetHistoryPosition(in posWithHistory, 0, null);
       Position historyPos1 = GetHistoryPosition(in posWithHistory, 1, FILL_IN ? thisPosition : null);
@@ -501,18 +510,8 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
       // Write squares.
       TPGSquareRecord.WritePosPieces(in thisPosition, in historyPos1, in historyPos2, in historyPos3,
                                      in historyPos4, in historyPos5, in historyPos6, in historyPos7,
-                                     tpgRecord.Squares, pliesSinceLastPieceMoveBySquare, emitPlySinceLastMovePerSquare,
+                                     squares, pliesSinceLastPieceMoveBySquare, emitPlySinceLastMovePerSquare,
                                      qNegativeBlunders, qPositiveBlunders);
-
-#if DEBUG
-      const int VALIDATE_FREQUENCY = 100; // too slow to do every time
-      bool validate = convertCount++ % VALIDATE_FREQUENCY == 0;
-      if (validate)
-      {
-        TPGRecordValidation.ValidateHistoryReachability(in tpgRecord);
-        TPGRecordValidation.ValidateSquares(in posWithHistory, ref tpgRecord);
-      }
-#endif
     }
 
 
