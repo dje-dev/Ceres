@@ -15,6 +15,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 #endregion
@@ -38,13 +39,13 @@ namespace Ceres.Base.DataType
     /// Floating point values will be stored as bytes
     /// via this implicit fixed scaling factor.
     /// </summary>
-    public const float SCALING_FACTOR = 100;
+    public const float SCALING_FACTOR = 100; // N.B. assumed to be an integer by code below
 
     /// <summary>
     /// The value which will be persisted
     /// (but represents the true value scaled up by SCALING_FACTOR).
     /// </summary>
-    private byte value;
+    private byte scaledValue;
 
 
     /// <summary>
@@ -56,7 +57,7 @@ namespace Ceres.Base.DataType
     /// <summary>
     /// Returns raw underlying value, before scaling.
     /// </summary>
-    public readonly byte RawValue => value;
+    public readonly byte RawValue => scaledValue;
 
 
     /// <summary>
@@ -64,26 +65,22 @@ namespace Ceres.Base.DataType
     /// </summary>
     public float Value
     {
-      readonly get => value / SCALING_FACTOR;
+      readonly get => scaledValue / SCALING_FACTOR;
       set
       {
         if (value == 0)
         {
-          this.value = 0; // common case
+          scaledValue = 0; // common case
         }
-        else if (value == SCALING_FACTOR)
+        else if (value == 1)
         {
-          this.value = 1; // common case
+          scaledValue = (byte)SCALING_FACTOR; // common case
         }
         else
         {
           float rawVal = value * SCALING_FACTOR;
-          if (rawVal > byte.MaxValue)
-          {
-            throw new Exception("Requested value for ByteScaled would overflow byte range (255).");
-          }
-
-          this.value = (byte)MathF.Round(rawVal);
+          Debug.Assert(rawVal <= byte.MaxValue, "Requested value for ByteScaled would overflow byte range (255).");
+          scaledValue = (byte)MathF.Round(rawVal);
         }
       }
     }
@@ -92,7 +89,7 @@ namespace Ceres.Base.DataType
     /// <summary>
     /// Returns if value is exactly 0 or 1.
     /// </summary>
-    public readonly bool IsZeroOrOne => value == 0 || value == SCALING_FACTOR;
+    public readonly bool IsZeroOrOne => scaledValue == 0 || scaledValue == SCALING_FACTOR;
 
 
     /// <summary>
@@ -106,7 +103,7 @@ namespace Ceres.Base.DataType
       {
         if (!b.IsZeroOrOne)
         {
-          throw new NotImplementedException("Invalid binary value found inside ByteScaled: " + b.value);
+          throw new NotImplementedException("Invalid binary value found inside ByteScaled: " + b.scaledValue);
         }
       }
     }
@@ -145,8 +142,8 @@ namespace Ceres.Base.DataType
 
     public class ByteScaledComparer : IEqualityComparer<ByteScaled>
     {
-      public bool Equals(ByteScaled x, ByteScaled y) => x.value == y.value;
-      public int GetHashCode(ByteScaled obj) => obj.value;
+      public bool Equals(ByteScaled x, ByteScaled y) => x.scaledValue == y.scaledValue;
+      public int GetHashCode(ByteScaled obj) => obj.scaledValue;
     }
 
     #endregion
@@ -154,7 +151,7 @@ namespace Ceres.Base.DataType
 
     public override string ToString()
     {
-      return $"({Value} as {value})";
+      return $"({Value} as {scaledValue})";
     }
   }
 
