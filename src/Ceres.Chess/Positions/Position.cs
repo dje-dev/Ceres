@@ -133,12 +133,12 @@ namespace Ceres.Chess
     /// <summary>
     /// Returns the side to move.
     /// </summary>
-    public SideType SideToMove => MiscInfo.SideToMove;
+    public readonly SideType SideToMove => MiscInfo.SideToMove;
 
     /// <summary>
     /// If the white player is to move.
     /// </summary>
-    public bool IsWhite => SideToMove == SideType.White;
+    public readonly bool IsWhite => SideToMove == SideType.White;
 
 
     /// <summary>
@@ -496,7 +496,7 @@ namespace Ceres.Chess
     /// <summary>
     /// Returns position mirrored about the vertical divide of the board.
     /// </summary>
-    public Position Mirrored
+    public readonly Position Mirrored
     {
       get
       {
@@ -617,7 +617,7 @@ namespace Ceres.Chess
     ///   (unused, P, N, B, R, Q, K, unused, unused, p, n, b, r, q, k, unused)
     /// </summary>
     /// <param name="bitmaps"></param>
-    public void InitializeBitmaps(Span<BitVector64> bitmaps, bool reversed)
+    public readonly void InitializeBitmaps(Span<BitVector64> bitmaps, bool reversed)
     {
       if (reversed)
       {
@@ -635,7 +635,7 @@ namespace Ceres.Chess
     /// board corresponding to this position.
     /// </summary>
     /// <param name="bitmaps"></param>
-    void DoInitializeBitmaps(Span<BitVector64> bitmaps)
+    readonly void DoInitializeBitmaps(Span<BitVector64> bitmaps)
     {
       unsafe
       {
@@ -861,7 +861,7 @@ namespace Ceres.Chess
     }
 
 
-    public PiecesOnSquaresEnumerator GetEnumerator()
+    public readonly PiecesOnSquaresEnumerator GetEnumerator()
     {
       unsafe
       {
@@ -1169,7 +1169,7 @@ namespace Ceres.Chess
     /// suitable for rendering in a browser or Linqpad results window.
     /// </summary>
     /// <returns></returns>
-    public string DumpHTML(string label)
+    public readonly string DumpHTML(string label)
     {
       PositionDocument pd = new PositionDocument();
       pd.WriteStartSection();
@@ -1227,7 +1227,7 @@ namespace Ceres.Chess
     /// <summary>
     /// Returns a list of all legal Moves from this position.
     /// </summary>
-    public List<Move> Moves
+    public readonly List<Move> Moves
     {
       get
       {
@@ -1246,19 +1246,19 @@ namespace Ceres.Chess
     }
 
     /// <summary>
-    /// Returns the Move corresponding to a speciifed SAN string from this starting position.
+    /// Returns the Move corresponding to a specified SAN string from this starting position.
     /// </summary>
     /// <param name="sanMoveString"></param>
     /// <returns></returns>
-    public Move MoveSAN(string sanMoveString) => Move.FromSAN(in this, sanMoveString);
+    public readonly Move MoveSAN(string sanMoveString) => Move.FromSAN(in this, sanMoveString);
 
 
     /// <summary>
-    /// Returns the Move corresponding to a speciifed UCI string from this starting position.
+    /// Returns the Move corresponding to a specified UCI string from this starting position.
     /// </summary>
     /// <param name="ucImoveString"></param>
     /// <returns></returns>
-    public Move MoveUCI(string ucImoveString) => Move.FromUCI(in this, ucImoveString);
+    public readonly Move MoveUCI(string ucImoveString) => Move.FromUCI(in this, ucImoveString);
 
 
     /// <summary>
@@ -1266,7 +1266,7 @@ namespace Ceres.Chess
     /// </summary>
     /// <param name="sanMoveStrings"></param>
     /// <returns></returns>
-    public Position AfterMovesSAN(params string[] sanMoveStrings)
+    public readonly Position AfterMovesSAN(params string[] sanMoveStrings)
     {
       Position pos = this;
       foreach (string sanMoveString in sanMoveStrings)
@@ -1283,7 +1283,7 @@ namespace Ceres.Chess
     /// </summary>
     /// <param name="move"></param>
     /// <returns></returns>
-    public Position AfterMove(Move move)
+    public readonly Position AfterMove(Move move)
     {
       // TODO: improve efficiency by implementing directly (instead of via MGMove)
       MGMove mgMove = MGMoveConverter.MGMoveFromPosAndMove(in this, move);
@@ -1296,7 +1296,7 @@ namespace Ceres.Chess
     /// <summary>
     /// Returns MGPosition equivalen to this Position.
     /// </summary>
-    public MGPosition ToMGPosition => MGPosition.FromPosition(in this);
+    public readonly MGPosition ToMGPosition => MGPosition.FromPosition(in this);
 
     #endregion
 
@@ -1333,11 +1333,20 @@ namespace Ceres.Chess
     public bool Equals(Position other)
     {
       // Quick first check
-      if (PiecesShortHash != other.PiecesShortHash) return false;
+      if (PiecesShortHash != other.PiecesShortHash)
+      {
+        return false;
+      }
 
-      if (!PiecesEqual(other)) return false;
+      if (!PiecesEqual(other))
+      {
+        return false;
+      }
 
-      if (!MiscInfo.Equals(other.MiscInfo)) return false;
+      if (!MiscInfo.Equals(other.MiscInfo))
+      {
+        return false;
+      }
 
       return true;
     }
