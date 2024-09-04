@@ -102,9 +102,9 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     public const int MAX_MOVES = 92;
 
     // *** WARNING **** value hardcoded in ONNXRuntimeExecutor.TPG_BYTES_PER_SQUARE_RECORD currently, fix 
-    public static int BYTES_PER_SQUARE_RECORD => Marshal.SizeOf<TPGSquareRecord>();
+    public const int BYTES_PER_SQUARE_RECORD = 137;
 
-    public static int TOTAL_BYTES => Marshal.SizeOf<TPGRecord>();
+    public const int TOTAL_BYTES = 9250;
 
     #endregion
 
@@ -581,11 +581,18 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     /// </summary>
     public static void Validate()
     {
-      Debug.Assert(Marshal.SizeOf<TPGSquareRecord>() == BYTES_PER_SQUARE_RECORD);
-      //      Console.WriteLine(Marshal.SizeOf<TPGRecord>());
-      //      Console.WriteLine(TOTAL_BYTES);
-      Debug.Assert(TOTAL_BYTES == Marshal.SizeOf<TPGRecord>());
+      if (BYTES_PER_SQUARE_RECORD != Marshal.SizeOf<TPGSquareRecord>()
+       || TOTAL_BYTES != Marshal.SizeOf<TPGRecord>())
+      {
+        throw new Exception("TPGRecord data structure sizing is incorrect.");
+      }
+    }
+
+
+    [ModuleInitializer]
+    public static void InitializeModule()
+    {
+      Validate();
     }
   }
-
 }

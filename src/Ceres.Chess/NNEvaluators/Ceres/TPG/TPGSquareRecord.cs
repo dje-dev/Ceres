@@ -236,8 +236,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
                                                Span<TPGSquareRecord> squareRecords,
                                                Span<byte> pliesSinceLastPieceMoveBySquare,
                                                bool emitPlySinceLastMovePerSquare,
-                                               float qNegativeBlunders, float qPositiveBlunders,
-                                               float priorPosWinP, float priorPosDrawP, float priorPosLossP)
+                                               float qNegativeBlunders, float qPositiveBlunders)
     {
       bool hasEnPassant = pos.MiscInfo.EnPassantRightsPresent;
       bool sawEnPassant = false;
@@ -341,29 +340,6 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
         bool needsReversal = pos.SideToMove == SideType.Black;
         Square squareInTPG = needsReversal ? squareFromPos.Reversed : squareFromPos;
         TPGRecordUtils.WriteSquareEncoding(squareInTPG, pieceRecord.RankEncodingSetter, pieceRecord.FileEncodingSetter);
-
-        if (TPGRecordEncoding.ENABLE_PRIOR_VALUE_POSITION)
-        {
-
-          // *************** TEMPORARY
-          if (!haveWarned)
-          {
-            Console.WriteLine("TPGSquareRecord: TEMPORARY OVERWRITE OF Move50Count and PlySinceLastMove");
-            haveWarned = true;
-          }
-          // HACK - stuff the values here
-          historyReptitionCountSetter[5].Value = TPGRecordEncoding.PRIOR_POS_VALUE_PROB_MULTIPLIER * priorPosWinP;
-          historyReptitionCountSetter[6].Value = TPGRecordEncoding.PRIOR_POS_VALUE_PROB_MULTIPLIER * priorPosDrawP;
-          historyReptitionCountSetter[7].Value = TPGRecordEncoding.PRIOR_POS_VALUE_PROB_MULTIPLIER * priorPosLossP;
-#if false
-        Console.WriteLine("Offset move50 " + Marshal.OffsetOf(typeof(TPGSquareRecord), "Move50Count"));
-        Console.WriteLine("Offset PlySinceLastMove " + Marshal.OffsetOf(typeof(TPGSquareRecord), "PlySinceLastMove"));
-        Console.WriteLine("Offset historyRepetitionCounts " + Marshal.OffsetOf(typeof(TPGSquareRecord), "historyRepetitionCounts"));
-        System.Environment.Exit(3);
-#endif
-          Debug.Assert(!emitPlySinceLastMovePerSquare);
-          // *************** END TEMPORARY
-        }
 
         if (pos.SideToMove == SideType.White)
         {

@@ -49,8 +49,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     public static TPGRecord ConvertedToTPGRecord(in EncodedPositionWithHistory encodedPosToConvert,
                                                  bool includeHistory,
                                                  Span<byte> pliesSinceLastPieceMoveBySquare = default,
-                                                 float qNegativeBlunders = 0, float qPositiveBlunders = 0,
-                                                 float priorPosWinP = 0, float priorPosDrawP = 0, float priorPosLossP = 0)
+                                                 float qNegativeBlunders = 0, float qPositiveBlunders = 0)
     {
 #if MOVES
         throw new NotImplementedException();
@@ -62,8 +61,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
       // Write squares.
       ConvertToTPGRecordSquares(in encodedPosToConvert, includeHistory, 
                                 ref tpgRecord, pliesSinceLastPieceMoveBySquare, pliesSinceLastPieceMoveBySquare != default,
-                                qNegativeBlunders, qPositiveBlunders,
-                                priorPosWinP, priorPosDrawP, priorPosLossP); 
+                                qNegativeBlunders, qPositiveBlunders); 
 
       return tpgRecord;
     }
@@ -80,9 +78,6 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
                                                  bool emitPlySinceLastMovePerSquare,
                                                  float qNegativeBlunders = 0,
                                                  float qPositiveBlunders = 0,
-                                                 float priorPosWinP = 0, 
-                                                 float priorPosDrawP = 0,
-                                                 float priorPosLossP = 0,
                                                  bool validate = true)
     {
       // N.B. Some logic here is the same as in method above (ConvertedToTPGRecord) and should be kept in sync.
@@ -98,8 +93,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
 #endif
       ConvertToTPGRecordSquares(in encodedPosToConvert, includeHistory, ref tpgRecord, 
                                 pliesSinceLastPieceMoveBySquare, emitPlySinceLastMovePerSquare,
-                                qNegativeBlunders, qPositiveBlunders,
-                                priorPosWinP, priorPosDrawP, priorPosLossP);
+                                qNegativeBlunders, qPositiveBlunders);
 
       // Convert the values unrelated to moves and squares
       if (targetInfo != null)
@@ -186,7 +180,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
       // TODO: for efficiency, avoid doing this if the NN evaluator does not need raw bytes
       const int MAX_THREADS = 8;
       Parallel.For(0, positions.NumPos, new ParallelOptions() { MaxDegreeOfParallelism = MAX_THREADS }, i =>
-      { 
+      {
         if (!lastMovePliesEnabled)
         {
           // Disable any values possibly passed for last used plies since they are not to be used.
@@ -195,16 +189,12 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
 
         Span<byte> thesePliesSinceLastMove = pliesSinceLastMoveAllPositions == null ? default : new Span<byte>(pliesSinceLastMoveAllPositions, i * 64, 64);
 
-        float w = TPGRecordEncoding.ENABLE_PRIOR_VALUE_POSITION ? positions.PositionsBuffer.Span[i].MiscInfo.InfoTraining.OriginalQ : float.NaN;
-        float d = TPGRecordEncoding.ENABLE_PRIOR_VALUE_POSITION ? positions.PositionsBuffer.Span[i].MiscInfo.InfoTraining.OriginalD : float.NaN;
-        float l = TPGRecordEncoding.ENABLE_PRIOR_VALUE_POSITION ? positions.PositionsBuffer.Span[i].MiscInfo.InfoTraining.OriginalM : float.NaN;
-
         TPGRecord tpgRecord = default;
-        ConvertToTPGRecord(in positionsFlat.Span[i], includeHistory, moves, null, null, float.NaN,
-                           ref tpgRecord, thesePliesSinceLastMove, lastMovePliesEnabled,
-                           qNegativeBlunders, qPositiveBlunders, w, d, l);
+        ConvertToTPGRecordSquares(in positionsFlat.Span[i], includeHistory, ref tpgRecord,
+                                  thesePliesSinceLastMove, lastMovePliesEnabled,
+                                  qNegativeBlunders, qPositiveBlunders);
 
-#if DEBUG        
+#if DEBUG
         if (pliesSinceLastMoveAllPositions != null)
         {
           CheckPliesSinceLastMovedCorrect(tpgRecord);
@@ -304,7 +294,6 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
                                                  Span<byte> pliesSinceLastPieceMoveBySquare,
                                                  bool emitPlySinceLastMovePerSquare,
                                                  float qNegativeBlunders, float qPositiveBlunders,
-                                                 float priorPosWinP, float priorPosDrawP, float priorPosLossP,
                                                  bool validate)
                                                  
     {
@@ -348,8 +337,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
       // Write squares.
       ConvertToTPGRecordSquares(trainingPos.PositionWithBoards, includeHistory, ref tpgRecord,
                                 pliesSinceLastPieceMoveBySquare, emitPlySinceLastMovePerSquare,
-                                qNegativeBlunders, qPositiveBlunders,
-                                priorPosWinP, priorPosDrawP, priorPosLossP);
+                                qNegativeBlunders, qPositiveBlunders);
 
 #if DEBUG
       TPGRecordValidation.Validate(in trainingPos.PositionWithBoards, in tpgRecord, overridePolicyVector is not null);
@@ -459,8 +447,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
                                                         ref TPGRecord tpgRecord,
                                                         Span<byte> pliesSinceLastPieceMoveBySquare,
                                                         bool emitPlySinceLastMovePerSquare,
-                                                        float qNegativeBlunders, float qPositiveBlunders,
-                                                        float priorPosWinP, float priorPosDrawP, float priorPosLossP)
+                                                        float qNegativeBlunders, float qPositiveBlunders)
     {
       static Position GetHistoryPosition(in EncodedPositionWithHistory historyPos, int index, in Position? fillInIfEmpty)
       {
@@ -515,8 +502,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
       TPGSquareRecord.WritePosPieces(in thisPosition, in historyPos1, in historyPos2, in historyPos3,
                                      in historyPos4, in historyPos5, in historyPos6, in historyPos7,
                                      tpgRecord.Squares, pliesSinceLastPieceMoveBySquare, emitPlySinceLastMovePerSquare,
-                                     qNegativeBlunders, qPositiveBlunders,
-                                     priorPosWinP, priorPosDrawP, priorPosLossP);
+                                     qNegativeBlunders, qPositiveBlunders);
 
 #if DEBUG
       const int VALIDATE_FREQUENCY = 100; // too slow to do every time

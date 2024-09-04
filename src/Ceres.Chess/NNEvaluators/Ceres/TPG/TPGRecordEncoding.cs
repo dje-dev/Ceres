@@ -27,13 +27,6 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
   /// </summary>
   public static class TPGRecordEncoding
   {
-    /// <summary>
-    /// If experimental feature to include the WDL from prior position in the TPGRecord is enabled.
-    /// 
-    /// TODO: REMOVE THIS
-    /// </summary>
-    public const bool ENABLE_PRIOR_VALUE_POSITION = false;
-
     // Scaling factor by which the win/draw/loss probabilities
     // from the prior board position are multiplied.
     // We expand the range of values to [0, 2.0] to reduce quantization error
