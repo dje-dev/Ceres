@@ -254,8 +254,9 @@ namespace Chess.Ceres.NNEvaluators
                       + " with " + deviceType + " " + gpuID + " using (" + executorType + " " + numBits + ")");
 
       string[] inputNames = type == ONNXNetExecutor.NetTypeEnum.TPG
-        ? ["squares", "prior_state.1"]
-        : ["/input/planes"];
+        ? ["squares", "prior_state.1"] :
+       (engineID.ToUpper().Contains("RPE") || engineID.ToUpper().Contains("BT5") ?  ["input_1"] // TODO: clean up hardcoding
+        : ["/input/planes"]);
 
       Executor = new ONNXNetExecutor(engineID, onnxModelFileName, onnxModelBytes, inputNames,
                                      maxBatchSize, type, precision, deviceType, gpuID, 

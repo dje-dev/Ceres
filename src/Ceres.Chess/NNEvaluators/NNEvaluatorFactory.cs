@@ -228,13 +228,18 @@ namespace Ceres.Chess.NNEvaluators
              || (deviceDef.OverrideEngineType != null && deviceDef.OverrideEngineType.StartsWith("TensorRT16"));
           int maxONNXBatchSize = viaTRT ? TRT_MAX_BATCH_SIZE : DEFAULT_MAX_BATCH_SIZE;
           maxONNXBatchSize = Math.Min(maxONNXBatchSize, deviceDef.MaxBatchSize ?? DEFAULT_MAX_BATCH_SIZE);
-          string fullFN = Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, netDef.NetworkID) + ".onnx";
+          string fullFN = Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, netDef.NetworkID);
+          bool VALUE_IS_LOGISTIC = netDef.Type != NNEvaluatorType.Ceres && fullFN.ToUpper().Contains("RPE");// TODO: eliminate hack
+          if (!fullFN.ToUpper().Contains("ONNX"))
+          {
+            fullFN += ".onnx";
+          }
           //          NNEvaluatorPrecision precision = netDef.NetworkID.EndsWith(".16") ? NNEvaluatorPrecision.FP16 : NNEvaluatorPrecision.FP32;
           ret = new NNEvaluatorONNX(netDef.ShortID, fullFN, null, deviceDef.Type, deviceDef.DeviceIndex, useTRT: viaTRT,
                                             ONNXNetExecutor.NetTypeEnum.LC0, maxONNXBatchSize,
                                             netDef.Precision, DEFAULT_HAS_WDL, DEFAULT_HAS_MLH,
                                             DEFAULT_HAS_UNCERTAINTYV, DEFAULT_HAS_UNCERTAINTYP, DEFAULT_HAS_ACTION,
-                                            null, null, null, null, false, ONNX_SCALE_50_MOVE_COUNTER, false, hasState: DEFAULT_HAS_STATE);
+                                            null, null, null, null, VALUE_IS_LOGISTIC, ONNX_SCALE_50_MOVE_COUNTER, false, hasState: DEFAULT_HAS_STATE);
           break;
 
         case NNEvaluatorType.TRT:
@@ -264,7 +269,7 @@ namespace Ceres.Chess.NNEvaluators
           {
 //            NNEvaluatorTorchscript 
           }
-          string[] CERES_ENGINE_TYPES = { "CUDA", "CUDA16", "TENSORRT", "TENSORRT16" };
+          string[] CERES_ENGINE_TYPES = { "CUDA", "CUDA16", "CUDA32", "TENSORRT", "TENSORRT16", "TENSORRT32" };
           if (deviceDef.OverrideEngineType != null && !CERES_ENGINE_TYPES.Contains(deviceDef.OverrideEngineType.ToUpper()))
           {
             throw new Exception($"Ceres engine type not specified or invalid: {deviceDef.OverrideEngineType}." 
@@ -283,12 +288,12 @@ namespace Ceres.Chess.NNEvaluators
           const bool HAS_UNCERTAINTY_P = true;
 
           bool useTensorRT = false;
-          bool useFP16 = false;
+          bool useFP16 = true;
           if (deviceDef.Type == NNDeviceType.GPU)
           {
             // Default is CUDA 16 bit execution, but look for override.
             useTensorRT = deviceDef.OverrideEngineType != null && deviceDef.OverrideEngineType.ToUpper().StartsWith("TENSORRT");
-            useFP16 = !(deviceDef.OverrideEngineType != null && !deviceDef.OverrideEngineType.ToUpper().Contains("16"));
+            useFP16 = !(deviceDef.OverrideEngineType != null && deviceDef.OverrideEngineType.ToUpper().Contains("32"));
           }
 
           string onnxFileName = null;
@@ -309,12 +314,20 @@ namespace Ceres.Chess.NNEvaluators
           }
 
           bool testMode = options != null && options.Keys.Contains("TEST");
+          bool board4Mode = options != null && options.Keys.Contains("4BOARD");
           NNEvaluatorOptionsCeres optionsCeres = new NNEvaluatorOptionsCeres()
           {
             QNegativeBlunders = 0.02f,
             QPositiveBlunders = 0.02f,
-          };
+            UseAction= board4Mode,
+            UsePriorState= board4Mode
+            //            FractionValueHead2 = testMode ? 1f : 0,
+            //ValueHead2Temperature = testMode ? 1.5f : 1.0f
 
+            // PolicyTemperature = testMode ? 0.85f : 1.20f,
+            // PolicyUncertaintyTemperatureScalingFactor = testMode ? 2.0f : 0,
+          };
+          
           int maxCeresBatchSize = useTensorRT ? TRT_MAX_BATCH_SIZE : DEFAULT_MAX_BATCH_SIZE;
           maxCeresBatchSize = deviceDef.MaxBatchSize.HasValue ? Math.Min(deviceDef.MaxBatchSize.Value, maxCeresBatchSize) : maxCeresBatchSize;
           
