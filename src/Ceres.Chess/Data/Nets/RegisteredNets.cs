@@ -59,6 +59,8 @@ namespace Ceres.Chess.Data.Nets
         {"BT4_FP16", ONNXNet16LC0("BT4-1024x15x32h-swa-6147500.pb.gz_fp16#16")},
         {"BT4_FP16_TRT", ONNXNet16LC0("BT4-1024x15x32h-swa-6147500.pb.gz_fp16", true)},
 
+        {"BT5_FP16_TRT", ONNXNet16LC0("BT5-1024x15x32h-rpe-3302500-vanilla-fp16.pb.gz_fp16", true)},
+
         // From: https://storage.lczero.org/files/networks-contrib/big-transformers/
         {"BT4-1740_FP16_TRT", ONNXNet16LC0("BT4-1740.pb.gz_fp16", true) },
         {"BT4_SPSA_FP16_TRT", ONNXNet32LC0("bt4-newtune-3rdbranch-1130.pb.gz", true)},
@@ -117,13 +119,11 @@ namespace Ceres.Chess.Data.Nets
         {"T3_DISTILL_512_15_FP16_TRT", ONNXNet16LC0("t3-512x15x16h-distill-swa-2767500.pb.gz_fp16#16", true)},
         {"T3_DISTILL_512_15_NATIVE", SimpleLC0Net("t3-512x15x16h-distill-swa-2767500.pb.gz#16") },
 
-        {"T4_RPE_512_15_NATIVE", SimpleLC0Net("t3-512x15x16h-rpe-distill-swa-4677500-vanilla-fp16.pb.gz") },
-      {"T4_RPE_512_15_FP16_TRT", ONNXNet16LC0("t3-512x15x16h-rpe-distill-swa-4677500-vanilla-fp16.pb.gz#16") },
-//      {"T4_RPE_512_15_FP16_TRT", ONNXNet16LC0("t4-512x15x16h-rpe-distill-swa-4677500-fixed-fp16_skinny#16") },
-//      {"T4_RPE_512_15_FP16_TRT", ONNXNet16LC0("t4-512x15x16h-distill-swa-2767500.pb.gz_fp16#16") },
+        {"T3_RPE_512_15_NATIVE", SimpleLC0Net("t3-512x15x16h-rpe-distill-swa-4677500-vanilla-fp16.pb.gz") },
+        {"T3_RPE_512_15_FP16_TRT", ONNXNet16LC0("t3-512x15x16h-rpe-distill-swa-4677500-opset18-vanilla-fp16.pb.gz#16") }, // use CUDA16
 
-      {"T4_3355000_ONNX", ONNXNet16LC0("t4-512x15b-rpe_3355000_fp16", false) },
-      {"T4_3355000", SimpleLC0Net("t4-512x15b-rpe_3355000.pb") },
+      {"T4_RPE_512_15_FP16_TRT", ONNXNet16LC0("t4-512x15b-rpe_3355000_fp16", false) },
+      {"T4_RPE_512_15_FP16_NATIVE", SimpleLC0Net("t4-512x15b-rpe_3355000.pb") }, // bad output
 
       {"BT4-self-quantize4-swa-2092500-fp8-1", ONNXNet16LC0("BT4-self-quantize4-swa-2092500-fp8-1", true) },
       {"BT4-self-quantize4-swa-2092500-fp8-2", ONNXNet16LC0("BT4-self-quantize4-swa-2092500-fp8-2", true) },
