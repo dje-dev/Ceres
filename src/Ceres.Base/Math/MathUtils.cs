@@ -13,14 +13,12 @@
 
 #region Using directive
 
-using Ceres.Base.DataType;
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using System.Runtime.CompilerServices;
-using System.Text;
-using System.Threading.Tasks;
+
+using Ceres.Base.DataType;
+using Ceres.Base.DataTypes;
 
 #endregion
 
@@ -106,6 +104,24 @@ namespace Ceres.Base.Math
     }
 
     #endregion
+
+
+    /// <summary>
+    /// Returns if two floats are equal or both NaN.
+    /// </summary>
+    /// <param name="a"></param>
+    /// <param name="b"></param>
+    /// <returns></returns>
+    public static bool EqualsOrBothNaN(float a, float b) => a == b || (float.IsNaN(a) && float.IsNaN(b));
+
+
+    /// <summary>
+    /// Returns if two FP16 are equal or both NaN.
+    /// </summary>
+    /// <param name="a"></param>
+    /// <param name="b"></param>
+    /// <returns></returns>
+    public static bool EqualsOrBothNaN(FP16 a, FP16 b) => a == b || (FP16.IsNaN(a) && FP16.IsNaN(b));
 
 
     /// <summary>
