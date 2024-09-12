@@ -254,22 +254,18 @@ Comments from onnxruntime source code:
           {
             // "In the case of dumping context model and for security purpose,"
             // "the trt_engine_cache_path should be set with a relative path."
-            trtSubdirectory = Path.Combine(".", "trt_engines_embed", Environment.MachineName);
-
-            providerOptionsDict["trt_dump_ep_context_model"] = "1";
             providerOptionsDict["trt_ep_context_file_path"] = "./";
+            providerOptionsDict["trt_dump_ep_context_model"] = "1";
             providerOptionsDict["trt_ep_context_embed_mode"] = "1";
-
+            
             Console.WriteLine();
             ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, "NOTE: EMBED_TRT is set to 1. TensorRT engine will be embedded in the ONNX file _ctx.onnx.");
             ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, "NOTE: the _ctx.onnx file will only be created only upon normal termination of this process.");
+            ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, "NOTE: For security reasons, this file is emitted in subdirectory trt_engines_embed of the working directory of this process.");
             Console.WriteLine();
           }
-          else
-          {
-            trtSubdirectory = Path.Combine(directoryName, "trt_engines", Environment.MachineName);
-          }
 
+          trtSubdirectory = Path.Combine(directoryName, "trt_engines", Environment.MachineName);
           Directory.CreateDirectory(trtSubdirectory);
           Console.WriteLine("TensorRT engines will be cached in: " + trtSubdirectory);
 
@@ -294,7 +290,10 @@ Comments from onnxruntime source code:
 
           // N.B. Using values other than "4" possibly causes engine generation
           //      to randomly fail to respect the request for FP16, resulting in much slower engine.
+          // NOTE: if we knew in advance this ONNX file already has embedded TensorRT, then
+          //        "It's suggested to set the ORT graph optimization level to 0"
           providerOptionsDict["trt_builder_optimization_level"] = "4";
+
 
           // TODO: For graphs: use IO / Binding to bind input tensors in GPU memory.
           // See: https://github.com/microsoft/onnxruntime/issues/20050
