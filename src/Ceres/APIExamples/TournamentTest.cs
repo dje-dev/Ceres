@@ -163,15 +163,6 @@ namespace Ceres.APIExamples
       //      NET2 = @"ONNX_ORT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-1675000-rule50.gz#32";
       //      NET1 = "CUSTOM1:703810,CUSTOM1:703810";
 
-      NET1 = "CUSTOM1";//|1.5";//:ckpt_DGX_C5_B4_512_15_16_4_48bn_2024_final.ts";
-
-      //NET2 = "CUSTOM2:ckpt_DGX_C5_B4_512_15_16_4_48bn_2024_final.ts";
-      //      NET2 = "CUSTOM2:ckpt_DGX_C5_B1_512_15_16_4_32bn_2024_final.ts";harp
-
-      //NET2 = "CUSTOM1:testc.ts"; // was 3.2bn
-
-      NET2 = "CUSTOM2";//:ckpt_HOP_C6_B4_256_12_8_6_BS8_48bn_2024_final.ts";
-
       //      NET1 = "CUSTOM1";
       //NET2 = "~BT4_TRT";
       //NET1 = "~T80";
@@ -238,6 +229,8 @@ namespace Ceres.APIExamples
       const string NET_512_NLA_52bn = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_5200003072.onnx";
       const string NET_512_NLA_52bn_SKINNY = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_5200003072_skinny.onnx";
 
+      const string NET_384_12_NLA_B4 = "Ceres:DGX_S_384_12_FFN4_H16_NLA_B4_6bn_fp16_6000001024.onnx|4BOARD";
+      const string NET_384_12_NLA_B4_NC = "Ceres:DGX_S_384_12_FFN4_H16_NLA_B4_6bn_fp16_6000001024_nc.onnx|4BOARD";
 
 
       //      NET2 = "~T1_DISTILL_512_15_FP16";// _TRT";
@@ -261,15 +254,12 @@ namespace Ceres.APIExamples
 
 
       //NET2 = "CUSTOM1:ckpt_DGX_C_256_12_8_6_60bn_B4_2024_final.ts.fp16.onnx";
-
-
-      //NET2 = "~T80";
       //      NET2 = "~T1_DISTILL_256_10_FP16";
 
-//      NET1 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_4000006144.onnx";
-//NET1 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_c6a_fp16_6500007936.onnx"; // -25@100
-//NET1 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_5200003072_skinny.onnx";
-//NET2 = "~T4_RPE_512_15_FP16_TRT";
+      //      NET1 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_4000006144.onnx";
+      //NET1 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_c6a_fp16_6500007936.onnx"; // -25@100
+      //NET1 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_5200003072_skinny.onnx";
+      //NET2 = "~T4_RPE_512_15_FP16_TRT";
 
 
       //      NET1 = NET2 = NET_512_NLA_52bn;
@@ -288,12 +278,32 @@ namespace Ceres.APIExamples
 //      NET1 = "Ceres:4a7f3aec0da2_S_768_15_FFN3_H24_NLA_B1_52_68bn_fp16_653bn.onnx"; // policy -2, value 15 +/- 9, 100
 //      NET1 = "Ceres:4a7f3aec0da2_S_768_15_FFN3_H24_NLA_B1_52_68bn_fp16_668bn.onnx";  // value 15+/-9 policy 2+/-9, 100 crash/unclear
       NET1 = "Ceres:4a7f3aec0da2_S_768_15_FFN3_H24_NLA_B1_52_68bn_fp16_6800003072_nc.onnx";  // 671: policy +19 +/-9, value 6 +/-9  100 +4
-//      NET1 = "Ceres:4a7f3aec0da2_S_768_15_FFN3_H24_NLA_B1_52_68bn_fp16_651bn.onnx"; // 100 nodes +21 +/-11, policy -2 +/-10, value 15 +/- 9
+                                                                                             //      NET1 = "Ceres:4a7f3aec0da2_S_768_15_FFN3_H24_NLA_B1_52_68bn_fp16_651bn.onnx"; // 100 nodes +21 +/-11, policy -2 +/-10, value 15 +/- 9
 
-//            NET1 = "Ceres:DGX_S_384_12_FFN4_H16_NLA_B4_6bn_fp16_4799987712.onnx|4BOARD";
-//           NET2 = NET_512_NLA_4bn;
+      NET1 = NET_384_12_NLA_B4_NC;
+      NET2 = NET_384_12_NLA_B4_NC;
 
-//NET1 = "Ceres:B4_384_48bn_A6000.onnx";
+      //      NET2 = NET_512_NLA_4bn;
+
+      //      NET1 = "Ceres:ckpt_DGX_C5_B4_512_15_16_4_48bn_2024_4780638208.ts.fp16.onnx|4BOARD";
+      //      NET2 = NET1;
+      //      NET2 = NET_512_NLA_52bn;
+
+      //      NET1 = NET_384_12_NLA_B4_NC;
+      //      NET2 = NET_384_12_NLA_B4_NC;
+
+      //test 512
+      //      NET1 = "Ceres:d63853d8876d_S_512_15_FFN4_H16_NLA_B4_76bn_fp16_1999994880.onnx";
+      //      NET2 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_1999994880.onnx";
+      // ### TEST 256
+      NET1 = "Ceres:DGX_EX_256_10_16H_FFN6_NLA_EM_B1_4bn_fp16_1399996416.onnx";
+      NET2 = "Ceres:HOP_CL_CLEAN_256_10_FFN6_B1_NLATT_4bn_fp16_1399996416.onnx";
+
+      // ### TEST 512
+      // NET1 = "Ceres:c58d5d5a597d_EX_512_15_16H_FFN4_NLA_MX_B1_4bn_fp16_399998976.onnx";
+      // NET2 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_399998976.onnx";
+
+      //NET1 = "Ceres:B4_384_48bn_A6000.onnx";
       //      NET2 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_2799992832.onnx";
       //      NET2 = NET_256_NLA;
       //      NET2 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_3599990784.onnx";
@@ -352,16 +362,21 @@ namespace Ceres.APIExamples
       //NET2 = "~T1_DISTIL_512_15_NATIVE";
 
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(1000);
-//      limit1 = SearchLimit.BestValueMove;
+      SearchLimit limit1 = SearchLimit.NodesPerMove(1); // 33
+      limit1 = SearchLimit.BestValueMove;
 //      limit1 = new SearchLimit(SearchLimitType.SecondsForAllMoves, 60, false, 0.1f);
       //SearchLimit limit2 = SearchLimit.NodesPerMove(1);
       
       SearchLimit limit2 = limit1;
-//      limit1 = SearchLimit.BestActionMove;
-//SearchLimit limit2 = SearchLimit.NodesPerMove(350_000);
+      //      limit1 = SearchLimit.BestActionMove;
+      //SearchLimit limit2 = SearchLimit.NodesPerMove(350_000);
       //      limit1 = limit2 = SearchLimit.SecondsForAllMoves(30, 0.5f);
 
+#if STOCKFISH_GOOD_LIMIT
+SearchLimit limit1 = SearchLimit.NodesPerMove(500);
+SearchLimit limit2 = SearchLimit.NodesPerMove(350_000);
+
+#endif
 
       //NET2 = @"ONNX_ORT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-1800000-rule50.gz#32";
       //NET2 = @"ONNX_ORT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-1800000-rule50.noscale.gz#32";
@@ -440,7 +455,11 @@ namespace Ceres.APIExamples
 
       //engineDefCeres1.SearchParams.BestMoveMode = ParamsSearch.BestMoveModeEnum.TopQIfSufficientN;
 
-      //      engineDefCeres1.SearchParams.ActionHeadSelectionWeight = 0.5f;
+//engineDefCeres1.SearchParams.ActionHeadSelectionWeight = 0.5f;
+//engineDefCeres1.SearchParams.Execution.MaxBatchSize = 3;
+//engineDefCeres2.SearchParams.Execution.MaxBatchSize = 3;
+
+
 
       engineDefCeres1.SearchParams.ReusePositionEvaluationsFromOtherTree = false;
       engineDefCeres2.SearchParams.ReusePositionEvaluationsFromOtherTree = false;
