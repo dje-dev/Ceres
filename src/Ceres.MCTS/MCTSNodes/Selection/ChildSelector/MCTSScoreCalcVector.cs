@@ -579,18 +579,32 @@ Note: Possible optimization/inefficiency:
         {
           _vQ = (_vLossContrib - vW[i]) / nPlusNInFlight;
         }
-        else if (actionHeadSelectionWeight != 0)
-        {
-          float defaultQ = qWhenNoChildren + _vLossContrib; 
-          float weight = actionHeadSelectionWeight;
-//                                if (vP[i] < 0.02) weight *= 0.333f; // <--------- TEST ----------
-          _vQ = weight * vA[i] + (1 - weight) * defaultQ;
-        }
         else        
         {
+          Debug.Assert(_vLossContrib == 0);
           _vQ = qWhenNoChildren + _vLossContrib;
+          if (i > 0 && actionHeadSelectionWeight != 0)
+          {
+            //          _vQ = Math.Max(_vQ - 0 * 0.10f, vA[i]- 0.10f);
+            //          _vQ = (1.0f - actionHeadSelectionWeight) * _vQ + actionHeadSelectionWeight * vA[i];
+            // +10 Elo            _vQ = Math.Max(_vQ - 0.10f, (1.0f - actionHeadSelectionWeight) * _vQ + actionHeadSelectionWeight * vA[i]);
+//-11            _vQ = Math.Max(_vQ - 0.10f, (1.0f - actionHeadSelectionWeight) * _vQ + actionHeadSelectionWeight * vA[i]);
+float vqOrg = _vQ;
+            _vQ = Math.Max(vqOrg - 0.05f, (1.0f - actionHeadSelectionWeight) * _vQ + actionHeadSelectionWeight * vA[i]);
+            _vQ = Math.Min(vqOrg + 0.05f, _vQ);
+          }
         }
 
+#if NOT
+        if (actionHeadSelectionWeight != 0)
+        {
+          float min = _vQ;
+          _vQ = 0*-0.22f
+            + actionHeadSelectionWeight * vA[i]
+            + (1 - actionHeadSelectionWeight) * _vQ;
+          _vQ = Math.Max(min -0.12f, _vQ);
+        }
+#endif
         // U
         float _vUNumerator = vP[i] * cpuctSqrtParentN;
         float _vDenominator = 1 + _denominator;
@@ -600,7 +614,7 @@ Note: Possible optimization/inefficiency:
       }
     }
 
-    #endregion
+#endregion
 
 
     /// <summary>
