@@ -274,8 +274,6 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
           {
             Span<Half[]> flatValuesStateSpan = flatValuesState.Span;
 
-            const int STATE_SIZE_PER_SQUARE = 4;
-
             // Reformat the state data into a 1D array
             // TODO: improve efficiency
             Half[] states1D = new Half[numPositionsInBatchSentToExecutor * 64 * NNEvaluator.SIZE_STATE_PER_SQUARE];
@@ -286,7 +284,7 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
                 // No state available, pass all zeroes.
                 // Noting to do since array was created just above and is already zeroed.
               }
-              else if (flatValuesStateSpan[i].Length != 64 * STATE_SIZE_PER_SQUARE)
+              else if (flatValuesStateSpan[i].Length != 64 * NNEvaluator.SIZE_STATE_PER_SQUARE)
               {
                 throw new Exception("State input size mismatch.");
               }
@@ -327,8 +325,6 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
         input.Item2 = [numPositionsUsed, 112, 8, 8];
         eval = executor.Run([input], numPositionsUsed, Precision == NNEvaluatorPrecision.FP16);
       }
-
-      int numPlanes = NetType == NetTypeEnum.Ceres ? EncodedPositionBatchFlat.TOTAL_NUM_PLANES_ALL_HISTORIES : 112;
 
       if (NetType == NetTypeEnum.Ceres)
       {
