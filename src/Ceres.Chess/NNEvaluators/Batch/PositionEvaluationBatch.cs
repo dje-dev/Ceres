@@ -971,7 +971,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
               float thisTemperature = policyTemperature;
               if (policyUncertaintyScalingFactor != 0)
               {
-                thisTemperature += policyUncertaintyScalingFactor * (float)policiesUncertaintiesSpan[i];
+                thisTemperature += MathF.Min(0.35f, policyUncertaintyScalingFactor * (float)policiesUncertaintiesSpan[i]);
               }
               expVal = (float)Math.Exp((legalMovePolicies[im] - policyLogitMax) / thisTemperature);
             }
