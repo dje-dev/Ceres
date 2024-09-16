@@ -205,12 +205,15 @@ namespace Ceres.MCTS.MTCSNodes
       {
         for (int i = 0; i < NumChildrenVisited; i++)
         {
-          if (N > 5 && gatherStatsNSpan[i] < 5)// && gatherStatsInFlightSpan[i] == 0)
+          if (N > 3 /*&& gatherStatsNSpan[i] < 2*/ && gatherStatsNSpan[i] > 0)
           {
-            float boost = 1 * gatherStatsNSpan[i] * (gatherStatsUSpan[i] - 10) * 0.01f;
-            const float MAX = 0.12f;
-            boost = StatUtils.Bounded(boost, -MAX, MAX);
+            // *0.02, max 0.05 +6 Elo
+            float boost =  (gatherStatsUSpan[i] - 15) * 0.01f;
+            const float MAX = 0.05f;
+//            boost = gatherStatsNSpan[i] * StatUtils.Bounded(boost, 0, MAX);
+            boost = StatUtils.Bounded(boost, -MAX, MAX); // N.B. not multiplied by NSpan so influence wanes as N grows since W is an accumulator
             gatherStatsWSpan[i] -= boost; // smaller becomes more attractive
+//            Console.WriteLine(gatherStatsUSpan[i] +  " " + boost);
           }
         }
       }
