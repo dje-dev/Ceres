@@ -269,6 +269,11 @@ namespace Ceres.Features.Tournaments
     /// <returns></returns>
     public bool HasSameMovesAs(TournamentGameInfo otherGame)
     {
+      if (GameMoveHistory.Count != otherGame.GameMoveHistory.Count)
+      {
+        return false;
+      }
+
       for (int i = 0; i < GameMoveHistory.Count; i++)
       {
         if (GameMoveHistory[i].Position != otherGame.GameMoveHistory[i].Position)
