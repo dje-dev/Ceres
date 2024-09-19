@@ -194,7 +194,7 @@ namespace Ceres.Features.Tournaments
             throw new Exception("Error in loading reference engine");
           }
 
-          int index =  Array.IndexOf(Run.Engines, refEngine);
+          int index = Array.IndexOf(Run.Engines, refEngine);
           for (int i = 0; i < Run.Engines.Length; i++)
           {
             if (index == i)
@@ -275,7 +275,7 @@ namespace Ceres.Features.Tournaments
     }
 
 
-    HashSet<int> openingsFinishedAtLeastOnce = new();
+    Dictionary<int, TournamentGameInfo> GameInfoFirstFinishedForByOpening = new();
 
     private TournamentGameInfo RunGame(string pgnFileName, bool engine2White, int openingIndex, int gameSequenceNum, int roundNumber)
     {
@@ -320,7 +320,7 @@ namespace Ceres.Features.Tournaments
         }
 
       }
-      
+
       thisResult.PlayerWhite = engine2White ? Run.Engine2.ID : Run.Engine1.ID;
       thisResult.PlayerBlack = engine2White ? Run.Engine1.ID : Run.Engine2.ID;
       thisResult.SearchLimitWhite = engine2White ? Def.Player2Def.SearchLimit : Def.Player1Def.SearchLimit;
@@ -350,7 +350,7 @@ namespace Ceres.Features.Tournaments
       OutputGameResultInfo(engine2White, openingIndex, gameSequenceNum, engine1ID, engine2ID, thisResult);
     }
 
-    private void OutputGameResultInfo(bool engine2White, int openingIndex, int gameSequenceNum, 
+    private void OutputGameResultInfo(bool engine2White, int openingIndex, int gameSequenceNum,
                                       string engineID, string opponentID,
                                       TournamentGameInfo thisResult)
     {
@@ -362,7 +362,7 @@ namespace Ceres.Features.Tournaments
       PlayerStat player = engine2White ?
         ParentStats.GetPlayer(opponentID, engineID) :
         ParentStats.GetPlayer(engineID, opponentID);
-      
+
       float gNumber = NumGames + 1;
       (float eloMin, float eloAvg, float eloMax) = EloCalculator.EloConfidenceInterval(player.PlayerWins, player.Draws, player.PlayerLosses);
       float eloSD = eloMax - eloAvg;
@@ -370,8 +370,21 @@ namespace Ceres.Features.Tournaments
 
       string wdlStr = $"{player.PlayerWins,3} {player.Draws,3} {player.PlayerLosses,3}";
 
-      // Show a "." after the opening index if this was the second of the pair of games played.
-      string openingPlayedBothWaysStr = gameSequenceNum % 2 == 1 && openingsFinishedAtLeastOnce.Contains(openingIndex) ? "." : " ";
+      // Show a either = or ! (same game or differing moves) after the opening index
+      // if this was the second of the pair of games played.
+      string openingPlayedBothWaysStr = " ";
+      bool wasSecondOfPair = gameSequenceNum % 2 == 1
+                          && GameInfoFirstFinishedForByOpening.ContainsKey(openingIndex);
+      if (wasSecondOfPair)
+      {
+        TournamentGameInfo firstGameInfo = GameInfoFirstFinishedForByOpening.GetValueOrDefault(openingIndex);
+        bool wasSameGame = thisResult.HasSameMovesAs(firstGameInfo);
+        openingPlayedBothWaysStr = wasSameGame ? "=" : "!";
+      }
+      else
+      {
+        GameInfoFirstFinishedForByOpening[openingIndex] = thisResult;
+      }
 
       string player1ForfeitChar = thisResult.ShouldHaveForfeitedOnLimitsEngine1 ? "f" : " ";
       string player2ForfeitChar = thisResult.ShouldHaveForfeitedOnLimitsEngine2 ? "f" : " ";
@@ -390,7 +403,7 @@ namespace Ceres.Features.Tournaments
       }
 
       // Possibly show one or two "?" characters if the evaluations of the final two positions
-      // are very inconsisten with the actual game outcome (as a diagnostic).
+      // are very inconsistent with the actual game outcome (as a diagnostic).
       string questionableFinalCP = "  ";
       float endingCP = 0;
       if (thisResult.GameMoveHistory.Count > 0)
@@ -419,11 +432,15 @@ namespace Ceres.Features.Tournaments
         string checkEnginePlyDifferent = thisResult.NumEngine2MovesDifferentFromCheckEngine == 0 ? "   " : $"{thisResult.NumEngine2MovesDifferentFromCheckEngine,3:N0}";
         if (Def.ShowGameMoves) Def.Logger.WriteLine();
         if (engine2White)
+        {
           Def.Logger.Write($" {TrimmedIfNeeded(engine2ID, 10),-10} {TrimmedIfNeeded(engine1ID, 10),-10}");
+        }
         else
+        {
           Def.Logger.Write($" {TrimmedIfNeeded(engine1ID, 10),-10} {TrimmedIfNeeded(engine2ID, 10),-10}");
+        }
         Def.Logger.Write($"{eloAvg,4:0} {eloSD,4:0} {100.0f * los,5:0}  ");
-        Def.Logger.Write($"{gNumber,5} {DateTime.Now.ToString().Split(" ")[1],10}  {gameSequenceNum,4:F0}  {openingIndex,4:F0}{openingPlayedBothWaysStr}  ");
+        Def.Logger.Write($"{gNumber,5} {DateTime.Now.ToString().Split(" ")[1],10}  {gameSequenceNum,4:F0}  {openingIndex,4:F0} {openingPlayedBothWaysStr} ");
 
         if (engine2White)
         {
@@ -459,7 +476,6 @@ namespace Ceres.Features.Tournaments
 
       UpdateAggregateGameStats(thisResult);
 
-      openingsFinishedAtLeastOnce.Add(openingIndex);
       NumGames++;
     }
 
@@ -531,7 +547,7 @@ namespace Ceres.Features.Tournaments
 
     Dictionary<Position, GameMoveConsoleInfo> referenceEngineMoveHistory = new();
 
-    
+
     /// <summary>
     /// 
     /// </summary>
@@ -716,7 +732,7 @@ namespace Ceres.Features.Tournaments
 
         // Check for terminal result (tablebase or intrinsically terminal)
         TournamentGameResultReason reason;
-        result = TournamentUtils.TryGetGameResultIfTerminal(curPositionAndMoves, !engine2IsWhite, useTablebasesForAdjudication, 
+        result = TournamentUtils.TryGetGameResultIfTerminal(curPositionAndMoves, !engine2IsWhite, useTablebasesForAdjudication,
                                                             Def.AdjudicateDrawByRepetitionImmediately, out reason);
         if (result != TournamentGameResult.None)
         {
@@ -725,7 +741,8 @@ namespace Ceres.Features.Tournaments
 
         plyCount++;
 
-        int numPieces = Position.FromFEN(info.FEN).PieceCount;
+        Position position = Position.FromFEN(info.FEN);
+        int numPieces = position.PieceCount;
 
         // Make player's move
         GameMoveStat moveStat;
@@ -735,16 +752,16 @@ namespace Ceres.Features.Tournaments
                         gameMoveHistory, searchLimitWithIncrementsEngine2, scoresEngine2,
                         ref nodesEngine2Tot, ref visitsEngine2Tot, ref timeEngine2Tot, ref numNodesForcedDeterministic);
           movesEngine2++;
-          
+
           if (engine2IsWhite)
           {
             engine2ShouldHaveForfieted |= info.WhiteShouldHaveForfeitedOnLimit;
-            moveStat = new GameMoveStat(plyCount, SideType.White, info.WhiteScoreQ, info.WhiteScoreCentipawns, engine2.CumulativeSearchTimeSeconds, numPieces, info.WhiteMAvg, info.WhiteFinalN, info.WhiteNumNodesComputed, info.WhiteSearchLimitPre, info.WhiteMoveTimeUsed);
+            moveStat = new GameMoveStat(plyCount, SideType.White, position, info.WhiteScoreQ, info.WhiteScoreCentipawns, engine2.CumulativeSearchTimeSeconds, numPieces, info.WhiteMAvg, info.WhiteFinalN, info.WhiteNumNodesComputed, info.WhiteSearchLimitPre, info.WhiteMoveTimeUsed);
           }
           else
           {
             engine2ShouldHaveForfieted |= info.BlackShouldHaveForfeitedOnLimit;
-            moveStat = new GameMoveStat(plyCount, SideType.Black, info.BlackScoreQ, info.BlackScoreCentipawns, engine2.CumulativeSearchTimeSeconds, numPieces, info.BlackMAvg, info.BlackFinalN, info.BlackNumNodesComputed, info.BlackSearchLimitPre, info.BlackMoveTimeUsed);
+            moveStat = new GameMoveStat(plyCount, SideType.Black, position, info.BlackScoreQ, info.BlackScoreCentipawns, engine2.CumulativeSearchTimeSeconds, numPieces, info.BlackMAvg, info.BlackFinalN, info.BlackNumNodesComputed, info.BlackSearchLimitPre, info.BlackMoveTimeUsed);
           }
         }
         else
@@ -756,15 +773,15 @@ namespace Ceres.Features.Tournaments
           if (engine2IsWhite)
           {
             engine1ShouldHaveForfieted |= info.BlackShouldHaveForfeitedOnLimit;
-            moveStat = new GameMoveStat(plyCount, SideType.Black, info.BlackScoreQ, info.BlackScoreCentipawns, engine1.CumulativeSearchTimeSeconds, numPieces, info.BlackMAvg, info.BlackFinalN, info.BlackNumNodesComputed, info.BlackSearchLimitPre, info.BlackMoveTimeUsed);
+            moveStat = new GameMoveStat(plyCount, SideType.Black, position, info.BlackScoreQ, info.BlackScoreCentipawns, engine1.CumulativeSearchTimeSeconds, numPieces, info.BlackMAvg, info.BlackFinalN, info.BlackNumNodesComputed, info.BlackSearchLimitPre, info.BlackMoveTimeUsed);
           }
           else
           {
             engine1ShouldHaveForfieted |= info.WhiteShouldHaveForfeitedOnLimit;
-            moveStat = new GameMoveStat(plyCount, SideType.White, info.WhiteScoreQ, info.WhiteScoreCentipawns, engine1.CumulativeSearchTimeSeconds, numPieces, info.WhiteMAvg, info.WhiteFinalN, info.WhiteNumNodesComputed, info.WhiteSearchLimitPre, info.WhiteMoveTimeUsed);
+            moveStat = new GameMoveStat(plyCount, SideType.White, position, info.WhiteScoreQ, info.WhiteScoreCentipawns, engine1.CumulativeSearchTimeSeconds, numPieces, info.WhiteMAvg, info.WhiteFinalN, info.WhiteNumNodesComputed, info.WhiteSearchLimitPre, info.WhiteMoveTimeUsed);
           }
         }
-                
+
         moveStat.Id = engine2ToMove ? engine2.ID : engine1.ID;
         gameMoveHistory.Add(moveStat);
 
@@ -781,7 +798,7 @@ namespace Ceres.Features.Tournaments
       GameMoveConsoleInfo DoMove(GameEngine engine, GameEngine checkMoveEngine,
                                  List<GameMoveStat> gameMoveHistory,
                                  SearchLimit searchLimit, List<float> scoresCP,
-                                 ref long totalNodesUsed, ref long totalVisitsUsed, ref float totalTimeUsed, 
+                                 ref long totalNodesUsed, ref long totalVisitsUsed, ref float totalTimeUsed,
                                  ref int numNodesForcedDeterministic)
       {
         SearchLimit thisMoveSearchLimit = searchLimit.Type switch
@@ -846,7 +863,7 @@ namespace Ceres.Features.Tournaments
         }
         catch (Exception exc)
         {
-          throw new Exception($"Engine {engine.ID} made illegal move {engineMove.MoveString} " 
+          throw new Exception($"Engine {engine.ID} made illegal move {engineMove.MoveString} "
                            + $"in position {curPositionAndMoves.FinalPosition.FEN} "
                            + $"with limit {thisMoveSearchLimit}");
         }
@@ -878,12 +895,12 @@ namespace Ceres.Features.Tournaments
 
         // Not currently trying to replace the statistics realting to N and time
         // so it doesn't look like the engine falsely violated the limits (at game level).
-        string moveStr              = overrideMoveToUse != null ? (isWhite ? overrideMoveToUse.WhiteMoveStr         : overrideMoveToUse.BlackMoveStr) : engineMove.MoveString;
-        float moveScoreQ            = overrideMoveToUse != null ? (isWhite ? overrideMoveToUse.WhiteScoreQ          : overrideMoveToUse.BlackScoreQ) : engineMove.ScoreQ;
-        float moveScoreCentipawns   = overrideMoveToUse != null ? (isWhite ? overrideMoveToUse.WhiteScoreCentipawns : overrideMoveToUse.BlackScoreCentipawns) : engineMove.ScoreCentipawns;
-        float moveMAvg              = overrideMoveToUse != null ? (isWhite ? overrideMoveToUse.WhiteMAvg            : overrideMoveToUse.BlackMAvg) : engineMove.MAvg;
+        string moveStr = overrideMoveToUse != null ? (isWhite ? overrideMoveToUse.WhiteMoveStr : overrideMoveToUse.BlackMoveStr) : engineMove.MoveString;
+        float moveScoreQ = overrideMoveToUse != null ? (isWhite ? overrideMoveToUse.WhiteScoreQ : overrideMoveToUse.BlackScoreQ) : engineMove.ScoreQ;
+        float moveScoreCentipawns = overrideMoveToUse != null ? (isWhite ? overrideMoveToUse.WhiteScoreCentipawns : overrideMoveToUse.BlackScoreCentipawns) : engineMove.ScoreCentipawns;
+        float moveMAvg = overrideMoveToUse != null ? (isWhite ? overrideMoveToUse.WhiteMAvg : overrideMoveToUse.BlackMAvg) : engineMove.MAvg;
         SearchLimit searchLimitPost = overrideMoveToUse != null ? (isWhite ? overrideMoveToUse.WhiteSearchLimitPost : overrideMoveToUse.BlackSearchLimitPost) : engineMove.Limit;
-        int moveDepth               = overrideMoveToUse != null ? (isWhite ? overrideMoveToUse.WhiteDepth           : overrideMoveToUse.BlackDepth) : engineMove.Depth;
+        int moveDepth = overrideMoveToUse != null ? (isWhite ? overrideMoveToUse.WhiteDepth : overrideMoveToUse.BlackDepth) : engineMove.Depth;
 
         PositionWithHistory newPosition = new PositionWithHistory(curPositionAndMoves);
         newPosition.AppendMove(moveStr);
@@ -892,7 +909,7 @@ namespace Ceres.Features.Tournaments
         pgnWriter.WriteMove(newPosition.Moves[^1], curPositionAndMoves.FinalPosition, engineTime, moveDepth, moveScoreCentipawns);
 
         scoresCP.Add(moveScoreCentipawns);
-    
+
         totalNodesUsed += engineMove.FinalN;
         totalVisitsUsed += engineMove.Visits;
         totalTimeUsed += engineTime;
@@ -930,7 +947,7 @@ namespace Ceres.Features.Tournaments
           info.BlackShouldHaveForfeitedOnLimit = shouldHaveForfeited;
           info.BlackDepth = moveDepth;
         }
-      
+
         if (showMoves)
         {
           info.PutStr();

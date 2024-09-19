@@ -30,10 +30,16 @@ namespace Ceres.Chess.GameEngines
     /// Identifier for player/engine.
     /// </summary>
     public string Id;
+
     /// <summary>
     /// Ply number within game.
     /// </summary>
     public readonly int PlyNum;
+
+    /// <summary>
+    /// The position on the board.
+    /// </summary>
+    public readonly Position Position;
 
     /// <summary>
     /// Side to move.
@@ -101,12 +107,13 @@ namespace Ceres.Chess.GameEngines
     /// </summary>
     private float? nps;
 
-    public GameMoveStat(int plyNum, SideType side, float scoreQ, float scoreCP, float clockSecondsAlreadyConsumed,
-                        int numPieces, float mAvg, int finalN, int numNodesComputed, 
+    public GameMoveStat(int plyNum, SideType side, Position position, float scoreQ, float scoreCP, float clockSecondsAlreadyConsumed,
+                        int numPieces, float mAvg, int finalN, int numNodesComputed,
                         SearchLimit searchLimit, float timeElapsed, float? nps = null)
     {
       PlyNum = plyNum;
       Side = side;
+      Position = position;
       ScoreQ = scoreQ;
       ScoreCentipawns = scoreCP;
       ClockSecondsAlreadyConsumed = clockSecondsAlreadyConsumed;

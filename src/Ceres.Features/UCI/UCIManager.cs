@@ -978,6 +978,7 @@ namespace Ceres.Features.UCI
 
       GameMoveStat moveStat = new GameMoveStat(gameMoveHistory.Count,
                                                curPositionAndMoves.FinalPosition.MiscInfo.SideToMove,
+                                               curPositionAndMoves.FinalPosition,
                                                result.ScoreQ, result.ScoreCentipawns,
                                                float.NaN, //engine1.CumulativeSearchTimeSeconds, 
                                                curPositionAndMoves.FinalPosition.PieceCount,

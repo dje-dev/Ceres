@@ -262,6 +262,24 @@ namespace Ceres.Features.Tournaments
     /// </summary>
     public List<GameMoveStat> GameMoveHistory;
 
+    /// <summary>
+    /// Returns if the game has the same moves as another game.
+    /// </summary>
+    /// <param name="otherGame"></param>
+    /// <returns></returns>
+    public bool HasSameMovesAs(TournamentGameInfo otherGame)
+    {
+      for (int i = 0; i < GameMoveHistory.Count; i++)
+      {
+        if (GameMoveHistory[i].Position != otherGame.GameMoveHistory[i].Position)
+        {
+          return false;
+        }
+      }
+      return true;
+    }
+
+
     #region Limits aggressiveness
 
     public float TimeAggressivenessRatio(bool white)
