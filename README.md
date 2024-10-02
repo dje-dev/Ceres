@@ -1,6 +1,6 @@
 # Ceres - an MCTS chess engine for research and recreation
 
-<img src="./images/CeresLogoLarge.png" width="275" height="275">
+<img src="./images/CeresLogoLarge.png" width="436" height="275">
 
 
 # Ceres Project Update - October 2024
@@ -22,7 +22,7 @@ Extensive architecture search as been performed using PyTorch with the [CeresTra
 
 1. The input preprocessing and output layers are simpler, with merely an embedding layer followed by normalization at input and simple FFN layers as output. The positional encoding takes the simple fo rm of one-hot vectors (for ranks and files).
 2. An added  NonLinear Attention (NLA) feature augments the dot product self attention mechanism by adding an additional linear mappings connected by a nonlinearity in the preprocessing of the K, Q and V matrices. It closely follows the idea as proposed in ["NEURAL ATTENTION: ENHANCING QKV CALCULATION IN SELF-ATTENTION MECHANISM WITH NEURAL NETWORKS
-"](https://arxiv.org/pdf/2310.11398). [Tests](<img src="./images/NLA_performance.png" width="275" height="275">) suggest it adds about 25 Elo for a cost of about 10% slowdown.
+"](https://arxiv.org/abs/2310.11398). [Tests](./images/NLA_performance.png) suggest it adds about 25 Elo for a cost of about 10% slowdown.
 3. The RPE feature of Lc0 is copied, except that only the K and Q parts are used (not V). Tests suggest this improves speed by about 10% with little or no loss of performance.
 4. A new second-order optimizer [SOAP](https://arxiv.org/abs/2409.11321) is used during training instead of Adam. Tests show that training convergence is sped up by about 30% (iterations) and 20% (wall-clock), with possibly superior performance at final convergence.
 5. Auxiliary output heads of potential use for human interest or aiding search are available:
