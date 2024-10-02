@@ -104,10 +104,10 @@ namespace Ceres.MCTS.Params
     }
 
 
-    public bool IsWDL => evaluator1.IsWDL;
-    public bool HasM => evaluator1.HasM;
+    public bool IsWDL => Evaluator1.IsWDL;
+    public bool HasM => Evaluator1.HasM;
 
-    public bool PolicyReturnedSameOrderMoveList => evaluator1.PolicyReturnedSameOrderMoveList;
+    public bool PolicyReturnedSameOrderMoveList => Evaluator1.PolicyReturnedSameOrderMoveList;
 
 
     /// <summary>
@@ -117,7 +117,7 @@ namespace Ceres.MCTS.Params
     {
       get
       {
-        int max = evaluator1.MaxBatchSize;
+        int max = Evaluator1.MaxBatchSize;
 
         if (evaluator2 != null)
         {
@@ -167,9 +167,9 @@ namespace Ceres.MCTS.Params
     {
       if (Evaluator1.PerformanceStats == null)
       {
-        evaluator1.CalcStatistics(computeBreaks, maxSeconds);
+        Evaluator1.CalcStatistics(computeBreaks, maxSeconds);
       }
-      perfStatsPrimary = evaluator1.PerformanceStats;
+      perfStatsPrimary = Evaluator1.PerformanceStats;
     }
 
 
