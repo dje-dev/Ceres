@@ -369,7 +369,9 @@ namespace Ceres.Features.Suites
 
         TotalNodesLC0 = totalNodesOther,
         TotalNodes1 = totalNodes1,
-        TotalNodes2 = totalNodes2
+        TotalNodes2 = totalNodes2,
+
+        AvgAbsQDifference = finalQ2 == null ? 0 : StatUtils.Average(StatUtils.AbsDiff(finalQ1.ToArray(), finalQ2.ToArray()))  
       };
 
     }
@@ -433,6 +435,12 @@ namespace Ceres.Features.Suites
       Def.Output.WriteLine();
       Def.Output.WriteLine($"Ceres1 total nodes to solve {sumCeres1NumNodesWhenChoseTopNode,12:N0}");
       Def.Output.WriteLine($"Ceres2 total nodes to solve {sumCeres2NumNodesWhenChoseTopNode,12:N0}");
+
+      if (Def.CeresEngine2Def != null)
+      {
+        Def.Output.WriteLine();
+        Def.Output.WriteLine($"Average absolute difference in final Q {StatUtils.Average(StatUtils.AbsDiff(finalQ1.ToArray(), finalQ2.ToArray())),5:F3}");
+      }
 
       Def.Output.WriteLine();
       float avgFaster = (float) StatUtils.Average(solvedPct1MinusPct2Samples);

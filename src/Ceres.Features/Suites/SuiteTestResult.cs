@@ -37,6 +37,8 @@ namespace Ceres.Features.Suites
     public float AvgWScore1;
     public float AvgWScore2;
 
+    public float AvgAbsQDifference;
+
     public float TotalRuntimeLC0;
     public float TotalRuntime1;
     public float TotalRuntime2;
