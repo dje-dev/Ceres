@@ -63,6 +63,20 @@ namespace Ceres.Chess.MoveGen
   public partial struct MGPosition
   {
     /// <summary>
+    /// Returns a new MGPosition which results from 
+    /// making a specified move from a specified starting position.
+    /// </summary>
+    /// <param name="mgPos"></param>
+    /// <param name="move"></param>
+    /// <returns></returns>
+    public static MGPosition MGPosAfterMove(MGPosition mgPos, MGMove move)
+    {
+      mgPos.MakeMove(move);
+      return mgPos;
+    }
+
+
+    /// <summary>
     /// Modifies this position to reflect a specified move having been made.
     /// </summary>
     /// <param name="M"></param>
