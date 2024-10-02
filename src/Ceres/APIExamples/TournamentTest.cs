@@ -53,7 +53,7 @@ namespace Ceres.APIExamples
   {
     const bool POOLED = false;
 
-    static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 1 : 4;
+    static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 3 : 4;
     static int[] OVERRIDE_DEVICE_IDs = /*POOLED ? null*/
        (Environment.MachineName.ToUpper() switch
       {
@@ -217,23 +217,40 @@ namespace Ceres.APIExamples
 
       //      NET2 = "~T1_DISTILL_256_10_FP16";
 
+      // First 256x10 net
       const string NET_256        = "Ceres:HOP_CL_CLEAN_256_10_FFN6_B1_4bn_fp16_4000006144.onnx";
+
+      // First 256x10 net (but with NLA)
       const string NET_256_NLA    = "Ceres:HOP_CL_CLEAN_256_10_FFN6_B1_NLATT_4bn_fp16_4000006144.onnx";
-      const string NET_256_NLA_2x = "Ceres:DGX_CL_256_9_FFN3_H16_B1_NLATTN_a2x_42bn_fp16_4200005632.onnx";
-      const string NET_256_NLA_2x_FIX = "Ceres:DGX_CL_256_9_FFN3_H16_B1_NLATTN_a2x_fixd_noval2_42bn_fp16_4199989248.onnx";
+
+      // 256x9 net with 2x attention. Moderately strong, slow.
+      //const string NET_256_NLA_2x = "Ceres:DGX_CL_256_9_FFN3_H16_B1_NLATTN_a2x_42bn_fp16_4200005632.onnx";
+      //const string NET_256_NLA_2x_FIX = "Ceres:DGX_CL_256_9_FFN3_H16_B1_NLATTN_a2x_fixd_noval2_42bn_fp16_4199989248.onnx";
 //BAD      const string NET_256_NLA_2xh_FIX = "Ceres:DGX_CL_256_10_FFN4_H16_B1_NLATTN_a2xpartial_fixd_noval2_42bn_fp16_4200005632.onnx";
 
-      const string NET_256_NLA_EM = "Ceres:DGX_EX_256_10_16H_FFN6_NLA_EM_B1_4bn_fp16_4000006144.onnx";
+      // Amazing 256x10 net with AdEMAMix
+      const string NET_256_NLA_EM = "Ceres:DGX_EX_256_10_16H_FFN6_NLA_EM_B1_4bn_fp16_4000006144_nc.onnx";
 
+      // First 512x15, without NLA
       const string NET_512_4bn = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_4bn_fp16_4000002048.onnx";
       const string NET_512_NLA_4bn = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_4000006144.onnx";
 
+      // First 512x15, but with NLA (played at TCEC)
       const string NET_512_NLA_52bn = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_5200003072.onnx";
       const string NET_512_NLA_52bn_SKINNY = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_5200003072_skinny.onnx";
 
-      const string NET_384_12_NLA_B4 = "Ceres:DGX_S_384_12_FFN4_H16_NLA_B4_6bn_fp16_6000001024.onnx|4BOARD";
-      const string NET_384_12_NLA_B4_NC = "Ceres:DGX_S_384_12_FFN4_H16_NLA_B4_6bn_fp16_6000001024_nc.onnx|4BOARD";
+      // First 384, multiboard
+      const string NET_384_12_NLA_B4 = "Ceres:DGX_S_384_12_FFN4_H16_NLA_B4_6bn_fp16_6000001024_nc.onnx|4BOARD";
 
+      // Second 384 (but B1 not B4), tried AdEMAMix but very low LR/clip to keep stable
+      // (possibly fails when clipping is removed?)
+      const string NET_384_12_NLA_EM_4bn = "Ceres:DGX_EX_384_11_16H_FFN4_NLA_EM_B1_4bn_fp16_4000002048.onnx";
+
+      // Third 384, good clean SOAP run
+      const string NET_384_12_NLA_SOAP_4bn = "Ceres:3ae496bee329_SP_384_11_16H_FFN4_NLA_EMSh_B1_4bn_fp16_4000006144_nc.onnx";
+
+      // Big 768 run for TCEC (ended with SOAP)
+      const string NET_768_15_NLA_9bn = "Ceres:c5f8bf3f7678_S_768_15_FFN3_H24_NLA_B1_SP_9bn_fp16_8999979008_nc.onnx";
 
       //      NET2 = "~T1_DISTILL_512_15_FP16";// _TRT";
       //NET1 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_combo_473_485_495.onnx"; // -25@100
@@ -265,25 +282,17 @@ namespace Ceres.APIExamples
 
       //      NET1 = NET2 = NET_512_NLA_52bn;
 
-      NET1 = NET_256_NLA_2x;
-      NET2 = NET_256_NLA;
-
-      NET2 = "~T1_256_RL_TRT";
+      //NET1 = NET_256_NLA_2x;
+      //NET2 = NET_256_NLA;
+      //NET2 = "~T1_256_RL_TRT";
 
       NET1 = "~T3_512_15_Q_FP16_TRT";
       NET2 = "~T3_512_15_FP16_TRT";
 
-      // Test HOP Nadam nets
-      //NET1 = "Ceres:4a7f3aec0da2_S_768_15_FFN3_H24_NLA_B1_52_68bn_fp16_last.onnx";
-      NET2 = "Ceres:4c10e0e0b1ce_S_768_15_FFN3_H24_NLA_B1_52bn_fp16_5199986688.onnx";// combox_495_511_nc.onnx";
-//      NET1 = "Ceres:4a7f3aec0da2_S_768_15_FFN3_H24_NLA_B1_52_68bn_fp16_653bn.onnx"; // policy -2, value 15 +/- 9, 100
-//      NET1 = "Ceres:4a7f3aec0da2_S_768_15_FFN3_H24_NLA_B1_52_68bn_fp16_668bn.onnx";  // value 15+/-9 policy 2+/-9, 100 crash/unclear
-      NET1 = "Ceres:4a7f3aec0da2_S_768_15_FFN3_H24_NLA_B1_52_68bn_fp16_6800003072_nc.onnx";  // 671: policy +19 +/-9, value 6 +/-9  100 +4
-                                                                                             //      NET1 = "Ceres:4a7f3aec0da2_S_768_15_FFN3_H24_NLA_B1_52_68bn_fp16_651bn.onnx"; // 100 nodes +21 +/-11, policy -2 +/-10, value 15 +/- 9
 
-      NET1 = NET_384_12_NLA_B4_NC;
-      NET2 = NET_384_12_NLA_B4_NC;
-
+      //NET1 = NET_384_12_NLA_B4_NC;
+      //NET2 = NET_384_12_NLA_B4_NC;
+      NET2 = NET_256_NLA;
       //      NET2 = NET_512_NLA_4bn;
 
       //      NET1 = "Ceres:ckpt_DGX_C5_B4_512_15_16_4_48bn_2024_4780638208.ts.fp16.onnx|4BOARD";
@@ -299,18 +308,41 @@ namespace Ceres.APIExamples
 
       // ### TEST 256
       //      NET1 = "Ceres:DGX_EX_256_10_16H_FFN6_NLA_EM_B1_4bn_fp16_last.onnx";
+
       // TEST 512
-      NET1 = "Ceres:19bec799eec4_EX_512_15_16H_FFN4_NLA_MX1_B1_40bn_fp16_1599995904.onnx";      
-      NET2 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_1599995904.onnx";
+      //      NET1 = "Ceres:a8a6c75aeaac_EX_512_15_16H_FFN4_NLA_MX1_B1_42bn_fp16_4199989248_nc.onnx";
+      NET1 = "Ceres:a8a6c75aeaac_EX_512_15_16H_FFN4_NLA_MX1_B1_35bn_fp16_3399991296.onnx";
+      NET2 = NET_512_NLA_52bn;
+
 
       // TEST 384
-//      NET1 = "Ceres:DGX_EX_384_11_16H_FFN4_NLA_EM_B1_4bn_fp16_1999994880.onnx";      
-//      NET2 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_1999994880.onnx";
+      NET1 = NET_384_12_NLA_SOAP_4bn;
+      NET2 = NET_384_12_NLA_EM_4bn;
 
 
-//      NET2 = "Ceres:HOP_CL_CLEAN_256_10_FFN6_B1_NLATT_4bn_fp16_3599990784.onnx";
-//NET2 = NET_256_NLA;
-//NET2 = "~T1_256_RL_TRT";
+      NET1 = "Ceres:39ed759cf2c5_SP_512_10_16H_FFN4_NLA_SP_B1_RPE_250mm_fp16_199999488.onnx";
+      NET2 = "Ceres:39ed759cf2c5_SP_512_10_16H_FFN4_NLA_SP_B1_SMOL_250mm_fp16_199999488.onnx";
+
+      //NET2 = "~T3_DISTILL_512_15_FP16_TRT";
+      //      NET2 = NET_512_NLA_52bn;
+
+
+      //NET2 = NET_768_15_NLA;
+
+      //      NET1 = "Ceres:3ae496bee329_SP_384_11_16H_FFN4_NLA_EMSh_B1_4bn_fp16_999997440.onnx";
+      //      NET2 = "Ceres:DGX_EX_384_11_16H_FFN4_NLA_EM_B1_4bn_fp16_999997440.onnx";
+
+      //      NET1 = NET_768_15_NLA_9bn;
+      //      NET2 = "~BT4_FP16_TRT";
+
+      //      NET2 = NET_256_NLA_EM;
+      //NET2 = NET_512_NLA_52bn;
+
+      //NET1 = NLA_512_NLA_EM_36bn;
+      //      NET2 = NET_512_NLA_52bn;
+      //      NET2 = "Ceres:HOP_CL_CLEAN_256_10_FFN6_B1_NLATT_4bn_fp16_3599990784.onnx";
+
+      //NET2 = "~T1_256_RL_TRT";
 
       // ### TEST 512
       //NET1 = "Ceres:c58d5d5a597d_EX_512_15_16H_FFN4_NLA_MX_B1_45bn_fp16_1799995392.onnx";
@@ -324,14 +356,24 @@ namespace Ceres.APIExamples
       //      NET2 = NET_512_NLA_52bn;
       //      NET2 = "~T1_256_RL_TRT";
 
-      GPUS_1 = "GPU:0#TensorRT16";
+      //      NET1 = NET_256_NLA_EM; 
+      //      NET2 = "~T1_256_RL_TRT";
+      //      NET1 = NET_256_NLA_EM;
+
+      //      NET1 = NET2 = NET_512_NLA_52bn;
+      //      NET1 = NET_768_15_NLA;
+
+      GPUS_1 = "GPU:0#TensorRT16";// TensorRT16";
       GPUS_2 = "GPU:0#TensorRT16";
+
+//      NET1 = NET2 = "~T75";
+//      GPUS_1 = GPUS_2 = "GPU:0";
 
       //      NET2 = "Ceres:4c10e0e0b1ce_S_768_15_FFN3_H24_NLA_B1_52bn_fp16_last.onnx";
       //      NET2 = "~BT5_FP16_TRT";
       //NET1 = NET_512_NLA_4bn + "|TEST";
-//      NET2 = NET_512_NLA_4bn;
-//      NET2 = "~BT4_FP16_TRT";
+      //      NET2 = NET_512_NLA_4bn;
+//     NET2 = "~BT4_FP16_TRT";
 
       //NET2 = "Ceres:HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_3399991296.onnx";
 
@@ -375,8 +417,8 @@ namespace Ceres.APIExamples
       //NET2 = "~T1_DISTIL_512_15_NATIVE";
 
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(1); // 33
-      limit1 = SearchLimit.BestValueMove;
+      SearchLimit limit1 = SearchLimit.NodesPerMove(500);// 2000); // 2000
+//      limit1 = SearchLimit.BestValueMove;
 //      limit1 = new SearchLimit(SearchLimitType.SecondsForAllMoves, 60, false, 0.1f);
       //SearchLimit limit2 = SearchLimit.NodesPerMove(1);
       
@@ -472,7 +514,9 @@ SearchLimit limit2 = SearchLimit.NodesPerMove(350_000);
 //engineDefCeres1.SearchParams.Execution.MaxBatchSize = 3;
 //engineDefCeres2.SearchParams.Execution.MaxBatchSize = 3;
 
-
+//engineDefCeres1.SelectParams.MinimaxSurpriseMultiplier = 0.10f;
+//engineDefCeres1.SelectParams.CPUCT *= 0.80f;
+//engineDefCeres2.SelectParams.CPUCT *= 0.80f;
 
       engineDefCeres1.SearchParams.ReusePositionEvaluationsFromOtherTree = false;
       engineDefCeres2.SearchParams.ReusePositionEvaluationsFromOtherTree = false;
@@ -715,8 +759,8 @@ string OVERRIDE_LC0_BACKEND_STRING = "";
                            SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/epd/{BASE_NAME}"
                                                    : @$"\\synology\dev\chess\data\epd\{BASE_NAME}",
                            limit1,
-                           GameEngineDefFactory.CeresInProcess("Ceres1", NET1, suiteGPU, paramsNoFutility with {  }),
-                           NET2 == null ? null :  GameEngineDefFactory.CeresInProcess("Ceres2", NET2, suiteGPU, paramsNoFutility with { }),
+                           GameEngineDefFactory.CeresInProcess("Ceres1", NET1, suiteGPU, paramsNoFutility with {  }, new ParamsSelect() {}),
+                           NET2 == null ? null :  GameEngineDefFactory.CeresInProcess("Ceres2", NET2, suiteGPU, paramsNoFutility with { }, new ParamsSelect()),
                            null);// engineDefCeres96);// playerLC0.EngineDef);
 
         suiteDef.MaxNumPositions = 1000;
@@ -763,18 +807,30 @@ string OVERRIDE_LC0_BACKEND_STRING = "";
       }
 
       TournamentDef def;
-      bool roundRobin = false;
+      bool roundRobin = true;
       if (roundRobin)
       {
         def = new TournamentDef("RR");
 
         (string, string)[] nets = 
         [
+
+          ("NLA_RPE", "Ceres:39ed759cf2c5_SP_512_10_16H_FFN4_NLA_SP_B1_RPE_250mm_fp16_250003456.onnx"),
+          ("NLA_SMOL", "Ceres:39ed759cf2c5_SP_512_10_16H_FFN4_NLA_SP_B1_SMOL_250mm_fp16_250003456.onnx"),
+          ("NLA_RPEv", "Ceres:39ed759cf2c5_SP_512_10_16H_FFN4_NLA_SP_B1_RPEwV_250mm_fp16_250003456.onnx"),
+
+          ("RPE", "Ceres:39ed759cf2c5_SP_512_10_16H_FFN4_SP_B1_RPE_250mm_fp16_250003456.onnx"),
+          ("SMOL", "Ceres:39ed759cf2c5_SP_512_10_16H_FFN4_SP_B1_SMOL_250mm_fp16_250003456.onnx"),
+
+//          ("NLA_RPE_SP25", "Ceres:39ed759cf2c5_SP_512_10_16H_FFN4_NLA_SP25_B1_RPE_250mm_fp16_250003456.onnx"),
+//          ("NLA_RPE_SP5", "Ceres:bf1db067d53b_SP_512_10_16H_FFN4_NLA_SP5_B1_RPE_250mm_fp16_250003456.onnx"),
+//          ("NLA_Adam", "Ceres:bf1db067d53b_SP_512_10_16H_FFN4_NLA_Adam_B1_RPE_250mm_fp16_250003456.onnx")
+
 //          ("D256", "~T1_DISTILL_256_10_FP16"),
-          ("SF161", "SF161"),
+//          ("SF161", "SF161"),
 //          ("C52bn", "Ceres:C:\\dev\\Ceres\\artifacts\\release\\net8.0\\_ctx1.onnx"),
 //          ("C52bn", @"Ceres:e:\cout\nets\HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_5200003072_skinny_A6000.onnx"),
-          ("C52bn_g", @"Ceres:c:\temp\simple_64bn.onnx"),
+//          ("C52bn_g", @"Ceres:c:\temp\simple_64bn.onnx"),
 //          ("C52bn", "Ceres:/mnt/deve/cout/nets/HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_5200003072_skinny_A100.onnx"),
 //          ("T3D", "~T3_512_15_FP16_TRT"),
 //          ("LC0_T3D", "~T3_512_15_NATIVE"),
@@ -839,8 +895,8 @@ string OVERRIDE_LC0_BACKEND_STRING = "";
 //        baseName = "endingbook-16man-9609.pgn";
 //        def.AcceptPosExcludeIfContainsPieceTypeList = [PieceType.Queen, PieceType.Bishop, PieceType.Knight];
       }
-//       baseName = "tcec_big";
-  baseName = "UHO_Lichess_4852_v1.epd"; // recommended by Kovax
+       baseName = "tcec_big";
+//  baseName = "UHO_Lichess_4852_v1.epd"; // recommended by Kovax
       string postfix = (baseName.ToUpper().EndsWith(".EPD") || baseName.ToUpper().EndsWith(".PGN")) ? "" : ".pgn";
       def.OpeningsFileName = SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/openings/{baseName}{postfix}"
                                                      : @$"\\synology\dev\chess\data\openings\{baseName}{postfix}";
