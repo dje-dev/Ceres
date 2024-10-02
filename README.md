@@ -1,5 +1,39 @@
 # Ceres - an MCTS chess engine for research and recreation
 
+<img src="./images/CeresLogoLarge.png" width="275" height="275">
+
+
+# Ceres Project Update - October 2024
+
+## Status
+The Ceres project has continued to progress since initial engine introduction at the end of 2020 and training pipeline introduction at the end of 2023. Most recently, Ceres made her public debut in tournaments at [TCEC](https://www.chessdom.com/leela-chess-zero-wins-tcec-swiss-7/), utilizing her own neural network.She placed 3rd, behind Leela Chess Zero and Stockfish 17. 
+
+Ceres will reach a milestone in October 2024 as the first complete version (1.0) will be released on GitHub, along with a set of neural networks of various sizes and speeds:
+* 256x10
+* 384x12
+* 512x15 (as played at TCEC Swiss y)
+* 768x15 (as played at TCEC Cup 14 Round 32)
+
+
+* ## Ceres Neural Networks
+The Ceres neural network architecture closely resembles that of that [Lc0](<https://arxiv.org/abs/2409.12272>), featuring a postnorm encoder stack and multiple output heads (value, policy, ancillary). Importantly, Ceres copies extremely helpful the RPE (relative positional encoding) feature.
+
+Extensive architecture search as been performed using PyTorch with the [CeresTrain training pipeline](<https://github.com/dje-dev/CeresTrain>) to try to identify improvements. The version 1.0 Ceres networks incorporate several additional features or adjustments that are believed to modestly boost performance and functionality:
+
+1. The input preprocessing and output layers are simpler, with merely an embedding layer followed by normalization at input and simple FFN layers as output. The positional encoding takes the simple fo rm of one-hot vectors (for ranks and files).
+2. An added  NonLinear Attention (NLA) feature augments the dot product self attention mechanism by adding an additional linear mappings connected by a nonlinearity in the preprocessing of the K, Q and V matrices. It closely follows the idea as proposed in ["NEURAL ATTENTION: ENHANCING QKV CALCULATION IN SELF-ATTENTION MECHANISM WITH NEURAL NETWORKS
+"](https://arxiv.org/pdf/2310.11398). [Tests](<img src="./images/NLA_performance.png" width="275" height="275">) suggest it adds about 25 Elo for a cost of about 10% slowdown.
+3. The RPE feature of Lc0 is copied, except that only the K and Q parts are used (not V). Tests suggest this improves speed by about 10% with little or no loss of performance.
+4. A new second-order optimizer [SOAP](https://arxiv.org/abs/2409.11321) is used during training instead of Adam. Tests show that training convergence is sped up by about 30% (iterations) and 20% (wall-clock), with possibly superior performance at final convergence.
+5. Auxiliary output heads of potential use for human interest or aiding search are available:
+    * value head uncertainty
+    * policy head uncertainty
+    * projected future game score volatility
+
+
+
+
+# Ceres Overview
 Ceres ("Chess Engine for Research") is:
 *  a state-of-the-art UCI-compliant chess engine employing the AlphaZero-style Monte Carlo Tree Search and deep neural networks
 *  a flexible, modular and efficient software library with an exposed API to facilitate research in computer chess
@@ -180,6 +214,7 @@ and software developers, most notably:
 * Judd Niemann for the move generator code (translated and adapted from C++) (https://github.com/jniemann66/juddperft)
 * Microsoft for the elegant C# language, performant .NET runtime, and excellent set of free software development tools such as Visual Studio
 
+Special thanks are owed to to Kan for creating the Ceres logo as shown at the top of this page.
 
 ## License
 
