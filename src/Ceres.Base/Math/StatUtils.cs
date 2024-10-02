@@ -813,6 +813,25 @@ namespace Ceres.Base.Math
 
       return (rSquared, yIntercept, slope);
     }
+
+
+    /// <summary>
+    /// Returns an array of the absolute differences between two spans of floats.
+    /// </summary>
+    /// <param name="finalQ1"></param>
+    /// <param name="finalQ2"></param>
+    /// <returns></returns>
+    public static float[] AbsDiff(Span<float> finalQ1, Span<float> finalQ2)
+    {
+      float[] ret = new float[finalQ1.Length];
+      for (int i = 0; i < finalQ1.Length; i++)
+      {
+        ret[i] = MathF.Abs(finalQ1[i] - finalQ2[i]);
+      }
+
+      return ret;
+    }
+    
   }
 
   #endregion
