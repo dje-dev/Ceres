@@ -53,7 +53,7 @@ namespace Ceres.APIExamples
   {
     const bool POOLED = false;
 
-    static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 3 : 4;
+    static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 5 : 4;
     static int[] OVERRIDE_DEVICE_IDs = /*POOLED ? null*/
        (Environment.MachineName.ToUpper() switch
       {
@@ -311,21 +311,13 @@ namespace Ceres.APIExamples
 
       // TEST 512
       //      NET1 = "Ceres:a8a6c75aeaac_EX_512_15_16H_FFN4_NLA_MX1_B1_42bn_fp16_4199989248_nc.onnx";
-      NET1 = "Ceres:a8a6c75aeaac_EX_512_15_16H_FFN4_NLA_MX1_B1_35bn_fp16_3399991296.onnx";
-      NET2 = NET_512_NLA_52bn;
 
 
-      // TEST 384
-      NET1 = NET_384_12_NLA_SOAP_4bn;
-      NET2 = NET_384_12_NLA_EM_4bn;
-
-
-      NET1 = "Ceres:39ed759cf2c5_SP_512_10_16H_FFN4_NLA_SP_B1_RPE_250mm_fp16_199999488.onnx";
-      NET2 = "Ceres:39ed759cf2c5_SP_512_10_16H_FFN4_NLA_SP_B1_SMOL_250mm_fp16_199999488.onnx";
+      NET1 = NET_768_15_NLA_9bn + "|TEST";
+      NET2 = NET_768_15_NLA_9bn;
 
       //NET2 = "~T3_DISTILL_512_15_FP16_TRT";
       //      NET2 = NET_512_NLA_52bn;
-
 
       //NET2 = NET_768_15_NLA;
 
@@ -417,7 +409,7 @@ namespace Ceres.APIExamples
       //NET2 = "~T1_DISTIL_512_15_NATIVE";
 
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(500);// 2000); // 2000
+      SearchLimit limit1 = SearchLimit.NodesPerMove(100);// 2000); // 2000
 //      limit1 = SearchLimit.BestValueMove;
 //      limit1 = new SearchLimit(SearchLimitType.SecondsForAllMoves, 60, false, 0.1f);
       //SearchLimit limit2 = SearchLimit.NodesPerMove(1);
@@ -807,7 +799,7 @@ string OVERRIDE_LC0_BACKEND_STRING = "";
       }
 
       TournamentDef def;
-      bool roundRobin = true;
+      bool roundRobin = false;
       if (roundRobin)
       {
         def = new TournamentDef("RR");
@@ -873,7 +865,7 @@ string OVERRIDE_LC0_BACKEND_STRING = "";
       }
 
 
-      def.NumGamePairs = 500;// 2000;// 10_000;// 203;//1000;//203;//203;// 500;// 203;//203;// 102; 203
+      def.NumGamePairs = 500;
       def.ShowGameMoves = false;
 
       //string baseName = "tcec1819";
@@ -881,18 +873,17 @@ string OVERRIDE_LC0_BACKEND_STRING = "";
       //      string baseName = "4mvs_+90_+99.epd";
 
       string baseName = "book-ply8-unifen-Q-0.25-0.40";
-      baseName = "book-ply8-unifen-Q-0.25-0.40";
 //      baseName = "single_bad";
 //            baseName = "Noomen 2-move Testsuite.pgn";
 //            baseName = "book-ply8-unifen-Q-0.40-1.0";
 //      baseName = "book-ply8-unifen-Q-0.0-0.25.pgn";
-       baseName = "endingbook-10man-3181.pgn";
-      baseName = "book-ply8-unifen-Q-0.25-0.40";
+//       baseName = "endingbook-10man-3181.pgn";
+//      baseName = "book-ply8-unifen-Q-0.25-0.40";
       const bool KRP =false;
       if (KRP)
       {
         throw new NotImplementedException();
-//        baseName = "endingbook-16man-9609.pgn";
+        baseName = "endingbook-16man-9609.pgn";
 //        def.AcceptPosExcludeIfContainsPieceTypeList = [PieceType.Queen, PieceType.Bishop, PieceType.Knight];
       }
        baseName = "tcec_big";

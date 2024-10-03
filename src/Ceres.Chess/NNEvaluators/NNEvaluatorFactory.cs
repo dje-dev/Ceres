@@ -325,8 +325,8 @@ namespace Ceres.Chess.NNEvaluators
 
 //            ValueHead1Temperature = testMode ? 1.4f : 1.0f
 
-//            FractionValueHead2 = testMode ? 0.35f : 0,
-//            ValueHead2Temperature = testMode ? 1.5f : 1.0f
+            FractionValueHead2 = testMode ? 0.4f : 0,
+            ValueHead2Temperature = testMode ? 1.25f : 1.0f
 
             // PolicyTemperature = testMode ? 0.85f : 1.20f,
             // PolicyUncertaintyTemperatureScalingFactor = testMode ? 2.0f : 0,
