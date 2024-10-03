@@ -47,7 +47,7 @@ namespace Ceres.Chess.NNEvaluators.Defs
       NNDevicesSpecificationString deviceObj = new NNDevicesSpecificationString(deviceSpecification);
       
       NNEvaluatorDef ret = new NNEvaluatorDef(netObj.ComboType, netObj.NetDefs, 
-                                              deviceObj.ComboType, deviceObj.Devices, deviceObj.SharingName);
+                                              deviceObj.ComboType, deviceObj.Devices, netObj.OptionsString, deviceObj.SharingName);
       ret.OptionsString = netObj.OptionsString;
       ret.Description = netSpecification + " " + deviceSpecification;
       ret.Options = evaluatorOptions;

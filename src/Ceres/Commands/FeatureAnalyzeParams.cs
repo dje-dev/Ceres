@@ -73,7 +73,7 @@ namespace Ceres.Commands
     public void Execute(string fen)
     {
       NNEvaluatorDef evaluatorDef = new NNEvaluatorDef(NetworkSpec.ComboType, NetworkSpec.NetDefs,
-                                                        DeviceSpec.ComboType, DeviceSpec.Devices, null);
+                                                        DeviceSpec.ComboType, DeviceSpec.Devices, NetworkSpec.OptionsString, null);
 
       // Check if different network and device specified for opponent
       NNEvaluatorDef evaluatorDefOpponent;
@@ -86,7 +86,7 @@ namespace Ceres.Commands
         }
 
         evaluatorDefOpponent = new NNEvaluatorDef(NetworkOpponentSpec.ComboType, NetworkOpponentSpec.NetDefs,
-                                                  DeviceOpponentSpec.ComboType, DeviceOpponentSpec.Devices, null);
+                                                  DeviceOpponentSpec.ComboType, DeviceOpponentSpec.Devices, NetworkSpec.OptionsString, null);
       }
       else
       {

@@ -175,10 +175,12 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// <param name="netDef"></param>
     /// <param name="deviceDef"></param>
     /// <param name="sharedName"></param>
-    public NNEvaluatorDef(NNEvaluatorNetDef netDef, NNEvaluatorDeviceDef deviceDef, string sharedName = null)
+    public NNEvaluatorDef(NNEvaluatorNetDef netDef, NNEvaluatorDeviceDef deviceDef, 
+                          string optionsString, string sharedName = null)
     {
       Nets = [(netDef, 1, 1, 1, 1, 1, 1)];
       Devices = [(deviceDef, 1)];
+      OptionsString = optionsString;
       SharedName = sharedName;
       NetCombo = NNEvaluatorNetComboType.Single;
       DeviceCombo = NNEvaluatorDeviceComboType.Single;
@@ -265,26 +267,28 @@ namespace Ceres.Chess.NNEvaluators.Defs
       SharedName = sharedName;
     }
 
-    public NNEvaluatorDef(NNEvaluatorNetComboType netCombo, NNEvaluatorDeviceDef device, string sharedName, params (NNEvaluatorNetDef netDef, float weightValue, float weightValue2, float weightPolicy, float weightM, float uncertainty, float uncertaintyP)[] netDefs)
+    public NNEvaluatorDef(NNEvaluatorNetComboType netCombo, NNEvaluatorDeviceDef device, string optionsString, string sharedName, params (NNEvaluatorNetDef netDef, float weightValue, float weightValue2, float weightPolicy, float weightM, float uncertainty, float uncertaintyP)[] netDefs)
     {
       NetCombo = netCombo;
       Nets = netDefs;
 
       DeviceCombo = NNEvaluatorDeviceComboType.Single;
       Devices = [(device, 1)];
+      OptionsString = optionsString;
       SharedName = sharedName;
     }
 
 
     public NNEvaluatorDef(NNEvaluatorNetComboType netCombo, IEnumerable<(NNEvaluatorNetDef, float, float, float, float, float, float)> nets, 
                           NNEvaluatorDeviceComboType deviceCombo, IEnumerable<(NNEvaluatorDeviceDef, float)> devices,
-                          string sharedName)
+                          string optionsString, string sharedName)
     {
       Devices = devices.ToArray();
       DeviceCombo = deviceCombo;
 
       Nets = nets.ToArray();
       NetCombo = netCombo;
+      OptionsString = optionsString;
       SharedName = sharedName;
     }
 

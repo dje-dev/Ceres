@@ -60,7 +60,7 @@ namespace Ceres.Commands
     protected (EnginePlayerDef def1, EnginePlayerDef def2) GetEngineDefs(bool opponentRequired)
     {
       NNEvaluatorDef evaluatorDef = new NNEvaluatorDef(NetworkSpec.ComboType, NetworkSpec.NetDefs,
-                                                       DeviceSpec.ComboType, DeviceSpec.Devices, null);
+                                                       DeviceSpec.ComboType, DeviceSpec.Devices, NetworkSpec.OptionsString, null);
 
       // Check if different network and device speciifed for opponent
       NNEvaluatorDef evaluatorDefOpponent;
@@ -70,7 +70,7 @@ namespace Ceres.Commands
           throw new Exception("Both network-opponent and device-opponent must be provided");
 
         evaluatorDefOpponent = new NNEvaluatorDef(NetworkOpponentSpec.ComboType, NetworkOpponentSpec.NetDefs,
-                                                  DeviceOpponentSpec.ComboType, DeviceOpponentSpec.Devices, null);
+                                                  DeviceOpponentSpec.ComboType, DeviceOpponentSpec.Devices, NetworkOpponentSpec.OptionsString, null);
       }
       else
       {

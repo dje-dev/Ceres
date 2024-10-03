@@ -75,7 +75,7 @@ namespace Ceres.Commands
 
       //NNDevicesSpecificationString deviceSpec = new NNDevicesSpecificationString(modifiedDeviceString);
       NNEvaluatorDef evaluatorDef = new NNEvaluatorDef(NetworkSpec.ComboType, NetworkSpec.NetDefs,
-                                                       DeviceSpec.ComboType, DeviceSpec.Devices, null);
+                                                       DeviceSpec.ComboType, DeviceSpec.Devices, NetworkSpec.OptionsString, null);
 
       Console.WriteLine($"\r\nTESTING WITH BASELINE DEVICE SPECIFICTATION {NNDevicesSpecificationString.ToSpecificationString(DeviceSpec.ComboType, DeviceSpec.Devices)}");
 
@@ -114,7 +114,7 @@ namespace Ceres.Commands
 
 
       NNEvaluatorDef evaluatorDef1 = new NNEvaluatorDef(NetworkSpec.ComboType, NetworkSpec.NetDefs,
-                                                        DeviceSpec.ComboType, DeviceSpec.Devices, null);
+                                                        DeviceSpec.ComboType, DeviceSpec.Devices, NetworkSpec.OptionsString, null);
 
       // Run modified evaluator.
       var (evaluator3, _) = BackendBench(evaluatorDef1, 16, TRIES, maxBatchSize: maxBatchSize, show: false); // warmup
@@ -147,7 +147,7 @@ namespace Ceres.Commands
     public void ExecuteBenchmark()
     {
       NNEvaluatorDef evaluatorDef = new NNEvaluatorDef(NetworkSpec.ComboType, NetworkSpec.NetDefs,
-                                                       DeviceSpec.ComboType, DeviceSpec.Devices, null);
+                                                       DeviceSpec.ComboType, DeviceSpec.Devices, NetworkSpec.OptionsString, null);
       BackendBench(evaluatorDef);
     }
 

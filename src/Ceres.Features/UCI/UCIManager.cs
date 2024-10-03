@@ -139,7 +139,7 @@ namespace Ceres.Features.UCI
     void CreateEvaluator()
     {
       EvaluatorDef = new NNEvaluatorDef(NetworkSpec.ComboType, NetworkSpec.NetDefs,
-                                        DeviceSpec.ComboType, DeviceSpec.Devices, null);
+                                        DeviceSpec.ComboType, DeviceSpec.Devices, NetworkSpec.OptionsString, null);
 
       OutStream.WriteLine($"Network evaluation configured to use: {EvaluatorDef}");
     }
