@@ -207,7 +207,8 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
                                                   Memory<Half> flatValuesPrimary, Memory<Half[]> flatValuesState,
                                                   int numPositionsUsed,
                                                   bool debuggingDump = false, bool alreadyConvertedToLZ0 = false,
-                                                  float tpgDivisor = 1)
+                                                  float tpgDivisor = 1,
+                                                  Predicate<int> shouldUseStateForPos = null)
     {
       if (NetType == NetTypeEnum.TPG && !alreadyConvertedToLZ0)
       {
@@ -279,7 +280,8 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
             Half[] states1D = new Half[numPositionsInBatchSentToExecutor * 64 * NNEvaluator.SIZE_STATE_PER_SQUARE];
             for (int i = 0; i < numPositionsUsed; i++)
             {
-              if (flatValuesStateSpan[i] == null)
+              if (flatValuesStateSpan[i] == null
+               || (shouldUseStateForPos != null && !shouldUseStateForPos(i)))
               {
                 // No state available, pass all zeroes.
                 // Noting to do since array was created just above and is already zeroed.
