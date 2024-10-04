@@ -95,17 +95,18 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
                                           Memory<Float16> mlh, Memory<Float16> uncertaintyV, Memory<Float16> uncertaintyP,
                                           Memory<Float16> extraStats0, Memory<Float16> extraStats1,
                                           float[][] valueFCActiviations,
-                                          Memory<Float16> actionLogisticVectors, Memory<Float16> priorState, 
+                                          Memory<Float16> actionLogisticVectors, Memory<Float16> priorState,
                                           int numPositionsUsed,
                                           List<(string, Memory<Float16>)> rawNetworkOutputs = null)
     {
       ValuesRaw = values;
       Values2Raw = values2;
 
-      Debug.Assert(!float.IsNaN((float)values.Span[0]));
-      if (isWDL)
+      // Quick check one of the outputs (value) for NaNs.
+      float sumValue = (float)values.Span[0] + (isWDL ? (float)values.Span[1] + (float)values.Span[2] : 0);
+      if (float.IsNaN(sumValue))
       {
-        Debug.Assert(!float.IsNaN((float)values.Span[1]) && !float.IsNaN((float)values.Span[2]));
+        throw new Exception("NaN detected in neural network output (value head).");
       }
 
       PolicyVectors = policyLogisticVectors; // still in logistic form
@@ -129,7 +130,7 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
         {
           RawNetworkOutputs[name] = data.ToArray();
         }
-      } 
+      }
     }
 
 
@@ -175,7 +176,6 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
           {
             int size = numPlanesCopy * 64;
             inputs.Slice(newSrce, size).CopyTo(expandedResults.AsMemory().Slice(baseDstThisBatchItem, size));
-            //            Array.Copy(floats, newSrce, expandedFloats, baseDstThisBatchItem, numPlanesCopy * 64);
           }
           baseDstThisBatchItem += numPlanesCopy * 64;
         }
