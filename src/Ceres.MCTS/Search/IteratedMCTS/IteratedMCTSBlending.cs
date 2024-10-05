@@ -144,7 +144,7 @@ namespace Ceres.MCTS.Search.IteratedMCTS
       {
         // Initialize and sort policy entries
         CompressedPolicyVector newPolicy = default;
-        CompressedPolicyVector.Initialize(ref newPolicy, indices, probabilities);
+        CompressedPolicyVector.Initialize(ref newPolicy, node.SideToMove, indices, probabilities);
 
         CompressedActionVector dummyActionVector = default;
         if (node.Context.NNEvaluators.Evaluator1.HasAction)

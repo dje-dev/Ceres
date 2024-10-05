@@ -30,7 +30,8 @@ namespace Ceres.Chess.EncodedPositions
   {
     [SkipLocalsInit]
     public static void InitializeFromProbsArray(ref CompressedPolicyVector policyRef, 
-                                                ref CompressedActionVector actions,
+                                                ref CompressedActionVector actions,                                               
+                                                SideType side,
                                                 bool sortActionsAlso,
                                                 int numMoves, int numMovesToSave, Span<ProbEntry> probs)
     {
@@ -57,12 +58,12 @@ namespace Ceres.Chess.EncodedPositions
         indicesA[j] = probs[j].Index;
       }
 
-      CompressedPolicyVector.Initialize(ref policyRef, indicesA.Slice(0, numToProcess), probsA.Slice(0, numToProcess));
+      CompressedPolicyVector.Initialize(ref policyRef, side, indicesA.Slice(0, numToProcess), probsA.Slice(0, numToProcess));
     }
 
 
     [SkipLocalsInit]
-    public static void InitializeFromLogitProbsArray(ref CompressedPolicyVector policyRef, int numMoves, int numMovesToSave, Span<ProbEntry> probs)
+    public static void InitializeFromLogitProbsArray(ref CompressedPolicyVector policyRef, SideType side, int numMoves, int numMovesToSave, Span<ProbEntry> probs)
     {
       // Due to small size insertion sort seems faster
       InsertionSort(probs, 0, numMoves - 1);
@@ -88,14 +89,15 @@ namespace Ceres.Chess.EncodedPositions
         indicesA[j] = probs[j].Index;
       }
 
-      CompressedPolicyVector.Initialize(ref policyRef, indicesA, probsA);
+      CompressedPolicyVector.Initialize(ref policyRef, side, indicesA, probsA);
     }
 
 
     [SkipLocalsInit]
     public static void InitializeFromProbsArray(ref CompressedPolicyVector policyRef,
-                                                ref CompressedActionVector actions, bool hasActions,
-                                                bool areLogits, int numMoves, int numMovesToSave,
+                                                ref CompressedActionVector actions, 
+                                                SideType side,
+                                                bool hasActions, bool areLogits, int numMoves, int numMovesToSave,
                                                 ReadOnlySpan<Half> probs, 
                                                 float cutoffMinValue = float.MinValue)
     {
@@ -125,12 +127,12 @@ namespace Ceres.Chess.EncodedPositions
       {
         if (areLogits)
         {
-          InitializeFromLogitProbsArray(ref policyRef, numFound, numMovesToSave, probsA.Slice(0, numFound));
+          InitializeFromLogitProbsArray(ref policyRef, side, numFound, numMovesToSave, probsA.Slice(0, numFound));
         }
         else
         {
           CompressedActionVector dummy = default;
-          InitializeFromProbsArray(ref policyRef, ref dummy, hasActions, numFound, numMovesToSave, probsA.Slice(0, numFound));
+          InitializeFromProbsArray(ref policyRef, ref dummy, side, hasActions, numFound, numMovesToSave, probsA.Slice(0, numFound));
         }
       }
     }

@@ -71,6 +71,12 @@ namespace Ceres.Chess.EncodedPositions
 
     #region Raw data
 
+    /// <summary>
+    /// The side to play for the position.
+    /// This is recorded mostly for debugging and diagnostics (to be able to translate to UCI move).
+    /// </summary>
+    public readonly SideType Side;
+
     #region Move Indices
 
     readonly PolicyIndices Indices;
@@ -136,13 +142,22 @@ namespace Ceres.Chess.EncodedPositions
     /// Initializes values (bypassing readonly) with specified set of move indices and probabilities.
     /// </summary>
     /// <param name="policy"></param>
+    /// <param name="side"></param>
     /// <param name="indices"></param>
     /// <param name="probs"></param>
-    public static void Initialize(ref CompressedPolicyVector policy, Span<ushort> indices, Span<ushort> probsEncoded)
+    public static void Initialize(ref CompressedPolicyVector policy, 
+                                  SideType side, 
+                                  Span<ushort> indices, 
+                                  Span<ushort> probsEncoded)
     {
       if (indices.Length != probsEncoded.Length)
       {
-        throw new ArgumentException("Length of indicies and probabilities must be same");
+        throw new ArgumentException("Length of indices and probabilities must be same");
+      }
+
+      fixed (SideType* sideType = &policy.Side)
+      {
+        *sideType = side;
       }
 
       float lastProb = float.MaxValue;
@@ -176,31 +191,38 @@ namespace Ceres.Chess.EncodedPositions
     /// while also keeping the actions sorted in the same order.
     /// </summary>
     /// <param name="policy"></param>
+    /// <param name="side"></param>
     /// <param name="indices"></param>
     /// <param name="probs"></param>
-    public static void Initialize(ref CompressedPolicyVector policy,
+    public static void Initialize(ref CompressedPolicyVector policy, SideType side,
                                   Span<int> indices, Span<float> probs, bool alreadySorted = true)
     {
-      Initialize(ref policy, indices, probs, alreadySorted, false, ref dummyActionVector);
+      Initialize(ref policy, side, indices, probs, alreadySorted, false, ref dummyActionVector);
     }
 
 
     /// <summary>
     /// Initializes values (bypassing readonly) with specified set of move indices and probabilities.
     /// </summary>
-    /// <param name="policy"></param>
+    /// <param name="indices"></param>
+    /// <param name="side"></param>
     /// <param name="indices"></param>
     /// <param name="probs"></param>
-    public static void Initialize(ref CompressedPolicyVector policy,
+    public static void Initialize(ref CompressedPolicyVector policy, SideType side,
                                   Span<int> indices, Span<float> probs, 
                                   bool alreadySorted, bool withActions,
                                   ref CompressedActionVector actions)
     {
-      // TODO: the Span<int> can actually be shortend to Span<short>
+      // TODO: the Span<int> can actually be shortened to Span<short>
 
       if (indices.Length != probs.Length)
       {
-        throw new ArgumentException("Length of indicies and probabilities must be same");
+        throw new ArgumentException("Length of indices and probabilities must be same");
+      }
+
+      fixed (SideType* sideType = &policy.Side)
+      {
+        *sideType = side;
       }
 
       float probabilityAcc = 0.0f;
@@ -274,11 +296,15 @@ namespace Ceres.Chess.EncodedPositions
     /// Initializes values (bypassing readonly) with specified set of move indices and probabilities.
     /// </summary>
     /// <param name="policy"></param>
+    /// <param name="side"></param>
     /// <param name="probabilities"></param>
     /// <param name="alreadySorted"></param>
-    public static void Initialize(ref CompressedPolicyVector policy, Span<float> probabilities, bool alreadySorted)
+    public static void Initialize(ref CompressedPolicyVector policy, 
+                                  SideType side,
+                                  Span<float> probabilities, 
+                                  bool alreadySorted)
     {
-      Initialize(ref policy, Fixed(probabilities), alreadySorted);
+      Initialize(ref policy, side, Fixed(probabilities), alreadySorted);
     }
 
     public const ushort SPECIAL_VALUE_SENTINEL_TERMINATOR = ushort.MaxValue;
@@ -301,10 +327,12 @@ namespace Ceres.Chess.EncodedPositions
     /// randomly (for testing purposes).
     /// 
     /// The actual probabilities cannot be computed here since we don't yet know the move list,
-    /// therefore weput a special value in the array to indicate that this should be expanded in subsequent processing.
+    /// therefore we put a special value in the array to indicate that this should be expanded in subsequent processing.
     /// </summary>
+    /// <param name="policy"></param>
+    /// <param name="side"></param>
     /// <param name="wide"></param>
-    public static void InitializeAsRandom(ref CompressedPolicyVector policy, bool wide)
+    public static void InitializeAsRandom(ref CompressedPolicyVector policy, SideType side, bool wide)
     {
       fixed (ushort* moveIndices = &policy.Indices[0])
       {
@@ -343,7 +371,7 @@ namespace Ceres.Chess.EncodedPositions
       }
 
       CompressedPolicyVector policyRet = default;
-      Initialize(ref policyRet, policyAverages, false);
+      Initialize(ref policyRet, policies[0].Side, policyAverages, false);
       return policyRet;
     }
 
@@ -384,7 +412,7 @@ namespace Ceres.Chess.EncodedPositions
         }
 
           CompressedPolicyVector ret = new CompressedPolicyVector();
-          Initialize(ref ret, indices, probs);
+          Initialize(ref ret, Side, indices, probs);
           return ret;
         }
       }
@@ -395,11 +423,17 @@ namespace Ceres.Chess.EncodedPositions
     /// a specified array of expanded policy probabilities.
     /// </summary>
     /// <param name="policy"></param>
+    /// <param name="isde"></param>
     /// <param name="probabilities"></param>
     /// <param name="alreadySorted"></param>
-    public static void Initialize(ref CompressedPolicyVector policy, float* probabilities, 
+    public static void Initialize(ref CompressedPolicyVector policy, SideType side, float* probabilities, 
                                   bool alreadySorted, bool convertNegativeOneToZero = false)
     {
+      fixed (SideType* sideType = &policy.Side)
+      {
+        *sideType = side;
+      }
+
       float probabilityAcc = 0.0f;
       int numSlotsUsed = 0;
       fixed (ushort* moveIndices = &policy.Indices[0])
@@ -930,7 +964,7 @@ namespace Ceres.Chess.EncodedPositions
 
       // Create and return new policy vector with temperature applied.
       CompressedPolicyVector ret = new();
-      Initialize(ref ret, indices, probs, true);
+      Initialize(ref ret, Side, indices, probs, true);
 
       return ret;
     }
@@ -989,7 +1023,8 @@ namespace Ceres.Chess.EncodedPositions
           break;
         }
 
-        ret += " " + entry.Move.ToString() + " [" + $" {entry.Probability * 100,5:F2}%" + "] ";
+        string moveStr = Side == SideType.White ? entry.Move.ToString() : entry.Move.Flipped.ToString();
+        ret += " " + moveStr + " [" + $" {entry.Probability * 100,5:F2}%" + "] ";
       }
 
       return ret;

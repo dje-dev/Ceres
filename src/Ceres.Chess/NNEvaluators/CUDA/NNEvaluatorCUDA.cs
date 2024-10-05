@@ -255,7 +255,7 @@ namespace Ceres.Chess.NNEvaluators.CUDA
       Parallel.ForEach(Partitioner.Create(0, positions.NumPos), parallelOptions,
         range =>
         {
-          PrepareOutputPositions(numMoves, moveIndices, range.Item1, range.Item2);
+          PrepareOutputPositions(positions, numMoves, moveIndices, range.Item1, range.Item2);
         });
 
       NNEvaluatorResultActivations[] activations = null;
@@ -406,7 +406,7 @@ namespace Ceres.Chess.NNEvaluators.CUDA
 
 
     [SkipLocalsInit]
-    private void PrepareOutputPositions(short[] numMovesArray, short[] moveIndices, int startPos, int endPos)
+    private void PrepareOutputPositions(IEncodedPositionBatchFlat positions, short[] numMovesArray, short[] moveIndices, int startPos, int endPos)
     {
       // TODO: Improve performance of softmax.
       //       Or use AVX (https://github.com/reyoung/avx_mathfun)
@@ -485,7 +485,8 @@ namespace Ceres.Chess.NNEvaluators.CUDA
             }
           }
 
-          PolicyVectorCompressedInitializerFromProbs.InitializeFromLogitProbsArray(ref policies[i], numMoves, numMovesToSave, probs);
+          SideType side = positions.Positions.IsEmpty ? SideType.White : positions.Positions.Span[i].SideToMove;
+          PolicyVectorCompressedInitializerFromProbs.InitializeFromLogitProbsArray(ref policies[i], side, numMoves, numMovesToSave, probs);
         }
       }
     }

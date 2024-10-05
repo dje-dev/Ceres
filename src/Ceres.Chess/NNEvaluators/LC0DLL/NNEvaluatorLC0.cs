@@ -141,6 +141,8 @@ namespace Ceres.Chess.NNEvaluators
     [SkipLocalsInit]
     private void PreparePosition(int i)
     {
+      throw new NotImplementedException();
+#if NOT
       ref readonly CeresTransferBlockOutItem thisItemsOut = ref Evaluator.ItemsOut[i];
       if (IsWDL)
       {
@@ -172,11 +174,15 @@ namespace Ceres.Chess.NNEvaluators
         unsafe
         {
           for (int j = 0; j < numMoves; j++)
+          {
             probs[j] = new PolicyVectorCompressedInitializerFromProbs.ProbEntry(refItem.Moves[j], thisItemsOut.P[j]);
+          }
         }
+
 
         PolicyVectorCompressedInitializerFromProbs.InitializeFromLogitProbsArray(ref policies[i], numMoves, numMovesToSave, probs);
       }
+#endif
     }
 
     protected override void DoShutdown()

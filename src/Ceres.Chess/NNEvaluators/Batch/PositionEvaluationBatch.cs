@@ -799,6 +799,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <returns></returns>
     static CompressedPolicyVector[] ExtractPoliciesTopK(int numPos, int topK, Span<int> indices, Span<float> probabilities, PolicyType probType, bool alreadySorted)
     {
+      throw new NotImplementedException();
+#if NOT
       if (probType == PolicyType.LogProbabilities)
       {
         throw new NotImplementedException();
@@ -814,7 +816,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
       }
       if (probabilities.Length != indices.Length)
       {
-        throw new ArgumentException("Indices and probabilties expected to be same length");
+        throw new ArgumentException("Indices and probabilities expected to be same length");
       }
 
       CompressedPolicyVector[] retPolicies = new CompressedPolicyVector[numPos];
@@ -827,6 +829,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
       }
 
       return retPolicies;
+#endif
     }
 
 
@@ -990,13 +993,16 @@ namespace Ceres.Chess.NetEvaluation.Batch
             legalMovePolicies[im] /= sumPolicyProbs;
           }
 
+          // TODO: is this inefficient? 
+          SideType side = sourceBatchWithValidMoves.Positions.IsEmpty ? SideType.White 
+                                                                      : sourceBatchWithValidMoves.Positions.Span[i].SideToMove; 
           if (hasActions)
           {
-            CompressedPolicyVector.Initialize(ref retPolicies[i], legalMoveIndices, legalMovePolicies, false, true, ref actions[i]);
+            CompressedPolicyVector.Initialize(ref retPolicies[i], side, legalMoveIndices, legalMovePolicies, false, true, ref actions[i]);
           }
           else
           {
-            CompressedPolicyVector.Initialize(ref retPolicies[i], legalMoveIndices, legalMovePolicies, false);
+            CompressedPolicyVector.Initialize(ref retPolicies[i], side, legalMoveIndices, legalMovePolicies, false);
           }
         }
       });
@@ -1103,7 +1109,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
                         ? temperature :
                           temperature + uncertaintyTemperatureScalingFactor * uncertaintyV[i];
 
-#if ASYMMETRIC_VALUE_TEMP        
+#if ASYMMETRIC_VALUE_TEMP
         bool isWinning = valueEvals[i * 3 + 0] > valueEvals[i * 3 + 2];
 if (uncertaintyTemperatureScalingFactor > 0)
 { 

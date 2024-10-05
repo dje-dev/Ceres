@@ -115,7 +115,8 @@ namespace Ceres.Chess.NNEvaluators
           // Initialize policies. Mark them as requests to be random
           // (the actual randomization will be done during search, when we have the set of legal moves handy)
           // TODO: if the batch also contains Positions already, we could do the assignment now
-          CompressedPolicyVector.InitializeAsRandom(ref policies[i], Type == RandomType.WidePolicy);
+          SideType side = positions.Positions.IsEmpty ? SideType.White : positions.Positions.Span[i].SideToMove;
+          CompressedPolicyVector.InitializeAsRandom(ref policies[i], side, Type == RandomType.WidePolicy);
         }
 
         return new PositionEvaluationBatch(IsWDL, HasM, HasUncertaintyV, HasUncertaintyP, HasAction, HasValueSecondary,HasState, 

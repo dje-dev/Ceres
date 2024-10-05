@@ -58,7 +58,7 @@ namespace Ceres.MCTS.MTCSNodes.Node
         }
       }
 
-      CompressedPolicyVector.Initialize(ref policy, indicies, probabilities);
+      CompressedPolicyVector.Initialize(ref policy, node.SideToMove, indicies, probabilities);
     }
   }
 }

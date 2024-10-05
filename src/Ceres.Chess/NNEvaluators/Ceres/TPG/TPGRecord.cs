@@ -570,7 +570,8 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
 
         // Convert to policy vector.
         CompressedPolicyVector policy = default;
-        CompressedPolicyVector.Initialize(ref policy, indices.Slice(0, i), probs.Slice(0, i), false);
+        CompressedPolicyVector.Initialize(ref policy, (IsWhiteToMove == 1) ? SideType.White : SideType.Black,
+                                          indices.Slice(0, i), probs.Slice(0, i), false);
         return policy;
       }
     }

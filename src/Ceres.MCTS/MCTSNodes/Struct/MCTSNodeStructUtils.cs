@@ -20,6 +20,7 @@ using System.Threading;
 using System.Xml.Linq;
 using Ceres.Base.DataTypes;
 using Ceres.Base.OperatingSystem;
+using Ceres.Chess;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.MCTS.MTCSNodes.Storage;
@@ -55,7 +56,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// </summary>
     /// <param name="nodeRef"></param>
     /// <param name="policy"></param>
-    public static void ExtractPolicyVectorFromVisitDistribution(in MCTSNodeStruct nodeRef, ref CompressedPolicyVector policy)
+    public static void ExtractPolicyVectorFromVisitDistribution(SideType sideToMove, in MCTSNodeStruct nodeRef, ref CompressedPolicyVector policy)
     {
       Span<float> probabilities = stackalloc float[nodeRef.NumPolicyMoves];
       Span<int> indices = stackalloc int[nodeRef.NumPolicyMoves];
@@ -79,7 +80,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       // Normalize probabilities and encode.
       Normalize(probabilities);
 
-      CompressedPolicyVector.Initialize(ref policy, indices, probabilities, false);
+      CompressedPolicyVector.Initialize(ref policy, sideToMove, indices, probabilities, false);
     }
   
 
@@ -146,7 +147,8 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         indicies[nodeRef.NumPolicyMoves] = CompressedPolicyVector.SPECIAL_VALUE_SENTINEL_TERMINATOR;
       }
 
-      CompressedPolicyVector.Initialize(ref policy, indicies, probabilities);
+      SideType side = SideType.White; // TODO: This is not correct, not known. Somehow determine this.
+      CompressedPolicyVector.Initialize(ref policy, side, indicies, probabilities);
     }
 
 

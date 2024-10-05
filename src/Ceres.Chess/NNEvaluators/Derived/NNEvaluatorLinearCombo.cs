@@ -385,11 +385,13 @@ namespace Ceres.Chess.NNEvaluators
 
         float[] weights = WeightsPolicyOverrideFunc == null ? WeightsPolicy 
                                                             : WeightsPolicyOverrideFunc(MGChessPositionConverter.PositionFromMGChessPosition(in positions.Positions.Span[posIndex]));
-
+        SideType side = default;
         for (int evaluatorIndex = 0; evaluatorIndex < Evaluators.Length; evaluatorIndex++)
         {
           (Memory<CompressedPolicyVector> policiesArray, int policyIndex) = subResults[evaluatorIndex].GetPolicy(posIndex);
           CompressedPolicyVector thesePolicies = policiesArray.Span[policyIndex];
+          side = thesePolicies.Side;
+
           foreach ((EncodedMove move, float probability) moveInfo in thesePolicies.ProbabilitySummary())
           {
             if (moveInfo.move.RawValue == CompressedPolicyVector.SPECIAL_VALUE_RANDOM_NARROW ||
@@ -428,7 +430,7 @@ namespace Ceres.Chess.NNEvaluators
           }
         }
 
-        CompressedPolicyVector.Initialize(ref policies[posIndex], policyAverages, false);
+        CompressedPolicyVector.Initialize(ref policies[posIndex], side, policyAverages, false);
       }
 
       return policies;
