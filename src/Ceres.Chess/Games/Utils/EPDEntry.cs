@@ -13,11 +13,11 @@
 
 #region Using directives
 
+using System;
+using System.Collections.Generic;
 
 using Ceres.Chess.Positions;
 using Ceres.Chess.Textual;
-using System;
-using System.Collections.Generic;
 
 #endregion
 
@@ -288,6 +288,43 @@ namespace Ceres.Chess.Games.Utils
     }
 
 
+    static Move ParseMove(string moveStr, in Position position, MovesFormatEnum MovesFormat)
+    {
+      try
+      {
+        // Try parsing the move in the first specified format
+        if (MovesFormat == MovesFormatEnum.SAN)
+        {
+          return SANParser.FromSAN(moveStr, position).Move;
+        }
+        else
+        {
+          return Move.FromUCI(position, moveStr);
+        }
+      }
+      catch (Exception firstEx)
+      {
+        try
+        {
+          // If first attempt fails, try the other format
+          if (MovesFormat == MovesFormatEnum.SAN)
+          {
+            return Move.FromUCI(position, moveStr);
+          }
+          else
+          {
+            return SANParser.FromSAN(moveStr, position).Move;
+          }
+        }
+        catch (Exception secondEx)
+        {
+          // If both attempts fail, throw an aggregated exception with both error messages
+          throw new AggregateException("Both SAN and UCI parsing failed.", firstEx, secondEx);
+        }
+      }
+    }
+
+
     /// <summary>
     /// Returns if a specified move is valid from a specified position.
     /// </summary>
@@ -299,8 +336,7 @@ namespace Ceres.Chess.Games.Utils
     {
       try
       {
-        Move epdMove = MovesFormat == MovesFormatEnum.SAN ? SANParser.FromSAN(moveStr, in position).Move
-                                                          : Move.FromUCI(in position, moveStr);
+        Move epdMove = ParseMove(moveStr, in position, MovesFormat);
         errString = null;
         return true;
       }
@@ -319,20 +355,45 @@ namespace Ceres.Chess.Games.Utils
     {
       get
       {
-        if (MovesFormat == MovesFormatEnum.SAN)
+        try
         {
-          return PositionWithHistory.FromFENAndMovesSAN(FEN, StartMoves);
+          // Try the format specified by MovesFormat
+          if (MovesFormat == MovesFormatEnum.SAN)
+          {
+            return PositionWithHistory.FromFENAndMovesSAN(FEN, StartMoves);
+          }
+          else if (MovesFormat == MovesFormatEnum.UCI)
+          {
+            return PositionWithHistory.FromFENAndMovesUCI(FEN, StartMoves);
+          }
+          else
+          {
+            throw new Exception("Unsupported notation type " + MovesFormat);
+          }
         }
-        else if (MovesFormat == MovesFormatEnum.UCI)
+        catch (Exception firstEx)
         {
-          return PositionWithHistory.FromFENAndMovesUCI(FEN, StartMoves);
-        }
-        else
-        {
-          throw new Exception("Unsupported notation type " + MovesFormat);
+          try
+          {
+            // If first attempt fails, try the other format
+            if (MovesFormat == MovesFormatEnum.SAN)
+            {
+              return PositionWithHistory.FromFENAndMovesUCI(FEN, StartMoves);
+            }
+            else
+            {
+              return PositionWithHistory.FromFENAndMovesSAN(FEN, StartMoves);
+            }
+          }
+          catch (Exception secondEx)
+          {
+            // If both attempts fail, throw an aggregated exception with both error messages
+            throw new AggregateException("Both SAN and UCI parsing failed.", firstEx, secondEx);
+          }
         }
       }
     }
+
 
     /// <summary>
     /// Checks the AMMoves and BMMoves for a specified move
@@ -349,8 +410,8 @@ namespace Ceres.Chess.Games.Utils
       if (AMMoves != null)
       {
         // avoid move
-        Move avoidMoveEPD = MovesFormat == MovesFormatEnum.SAN ? SANParser.FromSAN(AMMoves[0], Position).Move
-                                                               : Move.FromUCI(Position, AMMoves[0]);
+        Move avoidMoveEPD = ParseMove(AMMoves[0], Position, MovesFormat);
+
         correct = move != avoidMoveEPD;
         if (correct) value = valueOfBestMove;
       }
@@ -363,9 +424,7 @@ namespace Ceres.Chess.Games.Utils
           {
             if (bmMove != "")
             {
-              Move bmMoveDecoded = MovesFormat == MovesFormatEnum.SAN ? SANParser.FromSAN(BMMoves[0], Position).Move
-                                                                      : Move.FromUCI(Position, BMMoves[0]);
-
+              Move bmMoveDecoded  = ParseMove(BMMoves[0], Position, MovesFormat);
               if (bmMoveDecoded == move)
               {
                 correct = true;
