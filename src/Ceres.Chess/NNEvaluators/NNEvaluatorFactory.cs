@@ -37,12 +37,14 @@ using Ceres.Chess.NNBackends.ONNXRuntime;
 
 namespace Ceres.Chess.NNEvaluators
 {
-    /// <summary>
-    /// Static factory methods facilitating construction of NNEvaluators,
-    /// including building an NNEvaluator from an NNEvaluatorDef.
-    /// </summary>
-    public static class NNEvaluatorFactory
+  /// <summary>
+  /// Static factory methods facilitating construction of NNEvaluators,
+  /// including building an NNEvaluator from an NNEvaluatorDef.
+  /// </summary>
+  public static class NNEvaluatorFactory
   {
+    #region Installable evaluator factories
+
     /// <summary>
     /// Delegate type which constructs evaluator from specified definition.
     /// </summary>
@@ -72,6 +74,29 @@ namespace Ceres.Chess.NNEvaluators
     /// Optional options object for use by custom factory method (CUSTOM2). 
     /// </summary>
     public static object Custom2Options;
+
+
+    /// <summary>
+    /// Delegate type of method that will construct an NNEvaluator which uses the Torchscript evaluator.
+    /// </summary>
+    /// <param name="fn"></param>
+    /// <param name="gpuIndex"></param>
+    /// <param name="options"></param>
+    /// <param name="useBFloat"></param>
+    /// <returns></returns>
+    public delegate NNEvaluator BuildTorchscriptEvaluatorDelegate(string fn,
+                                                                  int gpuIndex,
+                                                                  NNEvaluatorOptionsCeres options,
+                                                                  bool useBFloat = false);
+
+    /// <summary>
+    /// Public static installable method to construct Torchscript evaluator.
+    /// The use of an installed method allows us to avoid adding the large TorchSharp NuGet package to the project.
+    /// </summary>
+    public static BuildTorchscriptEvaluatorDelegate BuildTorchscriptEvaluator = null;
+
+
+    #endregion
 
 
     static Dictionary<object, (NNEvaluatorDef, NNEvaluator)> persistentEvaluators = new();
@@ -198,6 +223,9 @@ namespace Ceres.Chess.NNEvaluators
 
     static readonly object onnxFileWriteLock = new();
 
+
+
+
     static NNEvaluator Singleton(NNEvaluatorNetDef netDef, NNEvaluatorDeviceDef deviceDef, 
                                  NNEvaluator referenceEvaluator, int referenceEvaluatorIndex,
                                  Dictionary<string, string> options)
@@ -265,16 +293,17 @@ namespace Ceres.Chess.NNEvaluators
           throw new NotImplementedException();
 
         case NNEvaluatorType.Ceres:
-          if (deviceDef.OverrideEngineType != null && deviceDef.OverrideEngineType.Contains("Torchscript"))
-          {
-//            NNEvaluatorTorchscript 
-          }
-          string[] CERES_ENGINE_TYPES = { "CUDA", "CUDA16", "CUDA32", "TENSORRT", "TENSORRT16", "TENSORRT32" };
+          string[] CERES_ENGINE_TYPES = { "CUDA", "CUDA16", "CUDA32",
+                                           "TENSORRT", "TENSORRT16", "TENSORRT32",
+                                           "TORCHSCRIPT"};
           if (deviceDef.OverrideEngineType != null && !CERES_ENGINE_TYPES.Contains(deviceDef.OverrideEngineType.ToUpper()))
           {
             throw new Exception($"Ceres engine type not specified or invalid: {deviceDef.OverrideEngineType}." 
               + System.Environment.NewLine + "Valid types: " + string.Join(", ", CERES_ENGINE_TYPES));
           }
+
+          bool isTorchscipt = deviceDef.OverrideEngineType != null
+                           && deviceDef.OverrideEngineType.ToUpper().Contains("TORCHSCRIPT");
 
           // Temporary hack, Ceres nets requires positions to be retained.
           // TODO: Remove this, or make it an instance variable not global static.
@@ -300,10 +329,11 @@ namespace Ceres.Chess.NNEvaluators
 
           string shortID = options != null && options.TryGetValue("ID", out string id) ? id : netDef.NetworkID;
           string netFileName = onnxFileName ?? netDef.NetworkID;
-          if (!netFileName.ToUpper().EndsWith("ONNX"))
+          if (!netFileName.ToUpper().EndsWith("ONNX") && !isTorchscipt)
           {
             netFileName += ".onnx";
           }
+
           if (!File.Exists(netFileName))
           {
             netFileName = Path.Combine(CeresUserSettingsManager.Settings.DirCeresNetworks, netFileName);
@@ -314,42 +344,62 @@ namespace Ceres.Chess.NNEvaluators
           }
 
           bool testMode = options != null && options.Keys.Contains("TEST");
+          bool testPTempMode = options != null && options.Keys.Contains("TEST_PTEMP");
           bool board4Mode = options != null && options.Keys.Contains("4BOARD");
           NNEvaluatorOptionsCeres optionsCeres = new NNEvaluatorOptionsCeres()
           {
-            QNegativeBlunders = 0.02f,
-            QPositiveBlunders = 0.02f,
+            QNegativeBlunders = 0.03f,
+            QPositiveBlunders = 0.03f,
 
             UseAction= board4Mode,
             UsePriorState= board4Mode,
 
 //            ValueHead1Temperature = testMode ? 1.4f : 1.0f
 
-            FractionValueHead2 = testMode ? 0.4f : 0,
-            ValueHead2Temperature = testMode ? 1.25f : 1.0f
+            FractionValueHead2 = testMode ? 0.5f : 0,
+            ValueHead2Temperature = 1,
 
-            // PolicyTemperature = testMode ? 0.85f : 1.20f,
-            // PolicyUncertaintyTemperatureScalingFactor = testMode ? 2.0f : 0,
+            PolicyTemperature = testPTempMode ? 0.8f : 1f,
+            PolicyUncertaintyTemperatureScalingFactor = testPTempMode ? 2f : 0,
           };
           
           int maxCeresBatchSize = useTensorRT ? TRT_MAX_BATCH_SIZE : DEFAULT_MAX_BATCH_SIZE;
           maxCeresBatchSize = deviceDef.MaxBatchSize.HasValue ? Math.Min(deviceDef.MaxBatchSize.Value, maxCeresBatchSize) : maxCeresBatchSize;
-          
-          NNEvaluatorONNX onnxEngine = new(shortID, netFileName, null,
-                                           deviceDef.Type, deviceDef.DeviceIndex, useTensorRT,
-                                           ONNXNetExecutor.NetTypeEnum.TPG,
-                                           maxCeresBatchSize,
-                                           useFP16 ? NNEvaluatorPrecision.FP16 : NNEvaluatorPrecision.FP32,
-                                           true, true, HAS_UNCERTAINTY_V, HAS_UNCERTAINTY_P, optionsCeres.UseAction, 
-                                           "policy", "value", "mlh", "unc", true,
-                                           ENABLE_PROFILING, false, USE_HISTORY, optionsCeres,
-                                           true, optionsCeres.UsePriorState);
 
-        EncodedPositionBatchFlat.RETAIN_POSITION_INTERNALS = true; // ** TODO: remove/rework
-        onnxEngine.ConverterToFlatFromTPG = (options, o, f1) => TPGConvertersToFlat.ConvertToFlatTPGFromTPG(options, o, f1);
-        onnxEngine.ConverterToFlat = (options, o, history, squares, legalMoveIndices) => TPGConvertersToFlat.ConvertToFlatTPG(options, o, history, squares, legalMoveIndices);
+          if (isTorchscipt)
+          {
+            if (BuildTorchscriptEvaluator == null)
+            {
+              throw new Exception("NNEvaluatorFactory.BuildTorchscriptEvaluator static variable must be initialized.");
+            }
 
-        return onnxEngine;
+            const bool USE_BFLOAT = false;
+            NNEvaluator evaluatorTS = BuildTorchscriptEvaluator(netFileName, deviceDef.DeviceIndex, optionsCeres, USE_BFLOAT);
+            if (evaluatorTS == null)
+            {
+              throw new Exception("BuildTorchscriptEvaluator returned null.");
+            }
+
+            return evaluatorTS;
+          }
+          else
+          {
+            NNEvaluatorONNX onnxEngine = new(shortID, netFileName, null,
+                                             deviceDef.Type, deviceDef.DeviceIndex, useTensorRT,
+                                             ONNXNetExecutor.NetTypeEnum.TPG,
+                                             maxCeresBatchSize,
+                                             useFP16 ? NNEvaluatorPrecision.FP16 : NNEvaluatorPrecision.FP32,
+                                             true, true, HAS_UNCERTAINTY_V, HAS_UNCERTAINTY_P, optionsCeres.UseAction,
+                                             "policy", "value", "mlh", "unc", true,
+                                             ENABLE_PROFILING, false, USE_HISTORY, optionsCeres,
+                                             true, optionsCeres.UsePriorState);
+
+            EncodedPositionBatchFlat.RETAIN_POSITION_INTERNALS = true; // ** TODO: remove/rework
+            onnxEngine.ConverterToFlatFromTPG = (options, o, f1) => TPGConvertersToFlat.ConvertToFlatTPGFromTPG(options, o, f1);
+            onnxEngine.ConverterToFlat = (options, o, history, squares, legalMoveIndices) => TPGConvertersToFlat.ConvertToFlatTPG(options, o, history, squares, legalMoveIndices);
+
+            return onnxEngine;
+          }
 
         case NNEvaluatorType.LC0:
           INNWeightsFileInfo net = NNWeightsFiles.LookupNetworkFile(netDef.NetworkID);
