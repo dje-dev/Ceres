@@ -98,7 +98,7 @@ namespace Ceres.Chess.NNBackends.CUDA
       CUgraph graphObj = default;
 
       CUDAUtils.Check(DriverAPINativeMethods.Streams.cuStreamEndCapture(stream.Stream, ref graphObj));
-      CUDAUtils.Check(DriverAPINativeMethods.GraphManagment.cuGraphInstantiate(ref exec, graphObj, ref node, null, 0));
+      CUDAUtils.Check(DriverAPINativeMethods.GraphManagment.cuGraphInstantiate(ref exec, graphObj, 0));
       CUDAUtils.Check(DriverAPINativeMethods.GraphManagment.cuGraphDestroy(graphObj));
       Device.GraphCaptureRWLock.ExitWriteLock();
     }
