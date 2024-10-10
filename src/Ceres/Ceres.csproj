@@ -53,10 +53,4 @@
     <ProjectReference Include="..\Ceres.MCTS\Ceres.MCTS.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <None Update="Ceres.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
-
 </Project>

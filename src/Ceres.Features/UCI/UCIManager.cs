@@ -46,6 +46,7 @@ using Ceres.MCTS.MTCSNodes;
 using Ceres.Features.GameEngines;
 using Ceres.Features.Visualization.TreePlot;
 using Ceres.Features.Visualization.AnalysisGraph;
+using Ceres.Chess.UserSettings;
 
 #endregion
 
@@ -184,7 +185,6 @@ namespace Ceres.Features.UCI
       BackendBenchEvaluator = backendBenchEvaluator;
       BenchmarkSearchEvaluator = benchmarkEvaluator;
 
-      CreateEvaluator();
 
       if (disablePruning) futilityPruningDisabled = true;
 
@@ -247,12 +247,7 @@ namespace Ceres.Features.UCI
       get
       {
         ParamsSearch parms = new ParamsSearch();
-        if (futilityPruningDisabled)
-        {
-          parms.FutilityPruningStopSearchEnabled = false;
-        }
         parms.MoveOverheadSeconds = moveOverheadSeconds;
-        parms.EnableUseSiblingEvaluations = enableSiblingEval;
 
         SearchModifier?.Invoke(parms);
         return parms;
@@ -297,6 +292,7 @@ namespace Ceres.Features.UCI
             break;
 
           case "commands":
+            UCIWriteLine("download <ID>   - attempt to download Ceres network from CeresNets repository");
             UCIWriteLine("backendbench    - run backend benchmark to test nps speed of network evaluation");
             UCIWriteLine("benchmark       - run search benchmark with specified number of seconds per position, e.g. \"benchmark 10\"");
             UCIWriteLine("dump-fen        - shows FEN of most recently searched position");
@@ -361,13 +357,17 @@ namespace Ceres.Features.UCI
             break;
 
           case "isready":
-            InitializeEngineIfNeeded();
-            UCIWriteLine("readyok");
+            if (InitializeEngineIfNeeded())
+            {
+              UCIWriteLine("readyok");
+            }
             break;
 
           case "ucinewgame":
-            InitializeEngineIfNeeded();
-            ResetGame();
+            if (InitializeEngineIfNeeded())
+            {
+              ResetGame();
+            }
             break;
 
           case "quit":
@@ -412,9 +412,10 @@ namespace Ceres.Features.UCI
               throw new Exception("Received go command when another search was running and not stopped first.");
             }
 
-            InitializeEngineIfNeeded();
-
-            taskSearchCurrentlyExecuting = ProcessGo(command);
+            if (InitializeEngineIfNeeded())
+            {
+              taskSearchCurrentlyExecuting = ProcessGo(command);
+            }
             break;
 
           case string c when c.StartsWith("position"):
@@ -485,6 +486,10 @@ namespace Ceres.Features.UCI
 
           case "dump-processor":
             HardwareManager.DumpProcessorInfo();
+            break;
+
+          case string c when c.StartsWith("download"):
+            ProcessDownloadCommand(c);
             break;
 
           case "backendbench":
@@ -629,6 +634,36 @@ namespace Ceres.Features.UCI
       }
     }
 
+    private void ProcessDownloadCommand(string c)
+    {
+      string[] partsDownload = c.Split(" ");
+      if (partsDownload.Length != 2)
+      {
+        UCIWriteLine("info string Invalid download command, expect Ceres network ID after download command");
+        return;
+      }
+
+      string ceresNetID = partsDownload[1].ToUpper();
+      if (!ceresNetID.StartsWith("C"))
+      {
+        UCIWriteLine("info string Invalid Ceres network ID (expected to begin with C, see https://github.com/dje-dev/CeresNets)");
+        return;
+      }
+
+      CeresNetDownloader downloader = new CeresNetDownloader();
+      (bool alreadyDownloaded, string fullNetworkPath) downloadResults;
+      downloadResults = downloader.DownloadCeresNetIfNeeded(ceresNetID, CeresUserSettingsManager.Settings.DirCeresNetworks);
+
+      if (downloadResults.alreadyDownloaded)
+      {
+        UCIWriteLine("info string Network previously downloaded: " + downloadResults.fullNetworkPath);
+      }
+      else
+      {
+        UCIWriteLine("info string Network downloaded to: " + downloadResults.fullNetworkPath);
+      }
+    }
+
     /// <summary>
     /// Dumps the PV (principal variation) to the output stream.
     /// </summary>
@@ -726,10 +761,28 @@ namespace Ceres.Features.UCI
       UCIWriteLine("info engine " + infoMessage);
     }
 
-    private void InitializeEngineIfNeeded()
+    private bool InitializeEngineIfNeeded()
+    {
+      bool success = TryInitializeEngineIfNeeded();
+      if (!success)
+      {
+        UCIWriteLine("Cannot initialize engine.");
+        UCIWriteLine();
+      }
+      return success;
+    }
+
+
+    private bool TryInitializeEngineIfNeeded()
     {
       if (!haveInitializedEngine)
       {
+        if (EvaluatorDef == null && CeresUserSettingsManager.Settings.DefaultNetworkSpecString == null)
+        {
+          UCIWriteLine("info string No default network specified, cannot initialize engine.");
+          UCIWriteLine("info string Use setoption with \"WeightsFile\" to specify neural network weights file to use.");
+          return false;
+        }
         ShowWeightsFileInfo();
 
         // Create the engine (to be subsequently reused).
@@ -745,6 +798,8 @@ namespace Ceres.Features.UCI
         haveInitializedEngine = true;
         OutStream.WriteLine();
       }
+
+      return true;
     }
 
     private void ShowWeightsFileInfo()
