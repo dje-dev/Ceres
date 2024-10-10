@@ -72,11 +72,22 @@ namespace Ceres
       // Load (or cause to be created) a settings file.
       if (!CeresUserSettingsManager.DefaultConfigFileExists)
       {
+        const string DEFAULT_CERES_JSON = @"
+{
+  ""SyzygyPath"": null,
+  ""DirCeresNetworks"": ""."",
+  ""DirLC0Networks"": ""."",
+  ""DefaultDeviceSpecString"": ""GPU:0"",
+}
+";
+
         Console.WriteLine();
         ConsoleUtils.WriteLineColored(ConsoleColor.Red, $"*** NOTE: Configuration file {CeresUserSettingsManager.DefaultCeresConfigFileName} not found in working directory.");
-        Console.WriteLine();
-        Console.WriteLine($"Prompting for 4 configuration values to be written to Ceres.json:");
-        CeresUserSettingsManager.DoSetupInitialize();
+        Console.WriteLine($"A new Ceres.json will be created with default settings:");
+        Console.WriteLine(DEFAULT_CERES_JSON);
+
+        System.IO.File.WriteAllText(CeresUserSettingsManager.DefaultCeresConfigFileName, DEFAULT_CERES_JSON);
+        CeresUserSettingsManager.LoadFromDefaultFile();
       }
 
       // Configure logging level
