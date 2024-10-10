@@ -53,6 +53,7 @@ SOFTWARE.
 
 #region Using directives
 
+using Ceres.Chess.EncodedPositions.Basic;
 using System;
 using System.Numerics;
 using System.Text;
@@ -128,14 +129,14 @@ namespace Ceres.Chess.MoveGen
       int from = BitOperations.TrailingZeroCount(bbFrom);
       int to = BitOperations.TrailingZeroCount(bbTo);
 
-      if(style == MGMoveNotationStyle.StandardCastlingFormat)
+      if (style == MGMoveNotationStyle.StandardCastlingFormat)
       {
         if (IsCastle)
-        {
-          bool isWhite = ToSquare.Rank == 0;
-          if (isWhite)
-            return CastleLong ? "e1c1" : "e1g1";
-          else
+        {                 
+          bool isWhite = Piece == MGPositionConstants.MCChessPositionPieceEnum.WhiteKing;
+          if (isWhite && FromSquareIndex == 3)
+            return CastleLong ?  "e1c1" : "e1g1";
+          else if (!isWhite && FromSquareIndex == 59)
             return CastleLong ? "e8c8" : "e8g8";
         }
         return string.Empty;
@@ -146,7 +147,7 @@ namespace Ceres.Chess.MoveGen
         if (CastleShort) return "O-O";
         if (CastleLong) return "O-O-O";
       }
-    
+
       char c1 = (char)('h' - (from % 8));
       char c2 = (char)('h' - (to % 8));
 

@@ -75,6 +75,12 @@ namespace Ceres.Chess.MoveGen
          || String.Equals(moveTry.MoveStr(MGMoveNotationStyle.StandardCastlingFormat), moveStr, StringComparison.OrdinalIgnoreCase))
         {
           move = moveTry;
+          //if (moveTry.IsCastle)
+          //{
+          //  var res1 = moveTry.MoveStr(MGMoveNotationStyle.LC0Coordinate);
+          //  var res2 = moveTry.MoveStr(MGMoveNotationStyle.LongAlgebraic);
+          //  var res3 = moveTry.MoveStr(MGMoveNotationStyle.StandardCastlingFormat);
+          //}
           return true;
         }
       }

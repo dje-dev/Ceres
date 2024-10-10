@@ -371,11 +371,7 @@ namespace Ceres.Chess.MoveGen
         bool rKMoved = nFromSquare == rKSq && wKingSquare > nFromSquare;
         bool rQMoved = nFromSquare == rQSq && wKingSquare < nFromSquare;
         Debug.Assert((rQMoved && rKMoved) != true);
-
-        int pieceCode = GetPieceAtBitboardSquare(wKingSquare & MGPositionConstants.firstRank);
-        PieceType pieceType = MGPieceCodeToPieceType[pieceCode];
-
-        //if((1LL<<nFromSquare) & WHITEKRPOS)
+      
         if (rKMoved && rooks != 0)
         {
           // White moved K-side Rook and forfeits right to castle K-side
