@@ -126,7 +126,7 @@ namespace Ceres.Chess.MoveGen
       int end = endSquare;
       while (end >= start)
       {
-        var inCheck = MGMoveGen.IsWhiteInCheck(A, B, C, D);
+        bool inCheck = MGMoveGen.IsWhiteInCheck(A, B, C, D);
         if (inCheck)
         {
           return false;

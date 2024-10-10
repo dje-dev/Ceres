@@ -84,7 +84,7 @@ namespace Ceres.Chess.MoveGen.Test
       ulong castleCount = 0;
       ulong captures = 0;
       //add primitive timing with stopwatch
-      var sw = new Stopwatch();
+      Stopwatch sw = new Stopwatch();
       sw.Start();
       using (new TimingBlock("\n", TimingBlock.LoggingType.Console))
       {
@@ -94,17 +94,17 @@ namespace Ceres.Chess.MoveGen.Test
         PerftCollect(chessPos, depth, 1, null, ref moveCount, ref castleCount, ref captures);
       }
       sw.Stop();
-      var ms = sw.ElapsedMilliseconds;
+      long ms = sw.ElapsedMilliseconds;
       //sw.Reset();
-      var secs = ms / 1000.0; //nodes per second
-      var nps = moveCount / secs;
-      var cc = Console.ForegroundColor; //get current console color
+      double secs = ms / 1000.0; //nodes per second
+      double nps = moveCount / secs;
+      ConsoleColor cc = Console.ForegroundColor; //get current console color
       string msg = $"NPS = {nps.ToString("N0")}, Nodes = {moveCount.ToString("N0")} with {castleCount.ToString("N0")} castles and {captures.ToString("N0")} captures\n";
       if (moveCount != correctCount)
       {
         //write red color to console if failed
         Console.ForegroundColor = ConsoleColor.Red;
-        var board = MGChessPositionConverter.MGChessPositionFromFEN(fen);
+        MGPosition board = MGChessPositionConverter.MGChessPositionFromFEN(fen);
         string asciBoard = board.BoardString;
         Console.WriteLine(asciBoard);
         Console.WriteLine(" " + moveCount.ToString("N0") + " FAIL ");
@@ -126,7 +126,7 @@ namespace Ceres.Chess.MoveGen.Test
       MGPosition chessPos = MGChessPositionConverter.MGChessPositionFromFEN(fen);
       //chessPos.Dump();      
       ulong moveCount = 0;
-      var sw = new Stopwatch();
+      Stopwatch sw = new Stopwatch();
       sw.Start();
       using (new TimingBlock("Perft " + fen + " correct #" + correctCount))
       {
@@ -134,18 +134,18 @@ namespace Ceres.Chess.MoveGen.Test
         Perft(chessPos, depth, 1, null, ref moveCount);
       }
       sw.Stop();
-      var ms = sw.ElapsedMilliseconds;
+      double ms = sw.ElapsedMilliseconds;
       //nodes per second
-      var secs = ms / 1000.0;
-      var nps = moveCount / secs;
+      double secs = ms / 1000.0;
+      double nps = moveCount / secs;
       //get current console color
-      var cc = Console.ForegroundColor;
+      ConsoleColor cc = Console.ForegroundColor;
       if (moveCount != correctCount)
       {
         //write red color to console if failed
         Console.ForegroundColor = ConsoleColor.Red;
-        var board = MGChessPositionConverter.MGChessPositionFromFEN(fen);
-        var asciBoard = board.BoardString;
+        MGPosition board = MGChessPositionConverter.MGChessPositionFromFEN(fen);
+        string asciBoard = board.BoardString;
         Console.WriteLine(asciBoard);
         Console.WriteLine(" " + moveCount + " FAIL");
         Console.WriteLine(" " + nps.ToString("N0") + " NPS");
@@ -219,15 +219,15 @@ namespace Ceres.Chess.MoveGen.Test
     public static Chess960Record ParseChess960Record(string input)
     {
       //Console.WriteLine(input);
-      var parts = input.Split('\t');
-      var positionNumber = int.Parse(parts[0]);
-      var fen = parts[1];
-      var depth1 = long.Parse(parts[2]);
-      var depth2 = long.Parse(parts[3]);
-      var depth3 = long.Parse(parts[4]);
-      var depth4 = long.Parse(parts[5]);
-      var depth5 = long.Parse(parts[6]);
-      var depth6 = long.Parse(parts[7]);
+      string[] parts = input.Split('\t');
+      int positionNumber = int.Parse(parts[0]);
+      string fen = parts[1];
+      long depth1 = long.Parse(parts[2]);
+      long depth2 = long.Parse(parts[3]);
+      long depth3 = long.Parse(parts[4]);
+      long depth4 = long.Parse(parts[5]);
+      long depth5 = long.Parse(parts[6]);
+      long depth6 = long.Parse(parts[7]);
 
       return new Chess960Record
       {
@@ -244,15 +244,15 @@ namespace Ceres.Chess.MoveGen.Test
 
     public static Chess960Record[] ParseFile(string filePath)
     {
-      var lines = System.IO.File.ReadAllLines(filePath).Skip(1).ToArray();
-      var records = lines.Select(ParseChess960Record).ToArray();
+      string[] lines = System.IO.File.ReadAllLines(filePath).Skip(1).ToArray();
+      Chess960Record[] records = lines.Select(ParseChess960Record).ToArray();
       return records;
     }
 
     public static IEnumerable<Chess960Record> GetChess960Positions(int numberOfPositions)
     {
-      var positions = CHESS960PERFT_POS.Split(Environment.NewLine).Skip(1).Take(numberOfPositions).ToArray();
-      foreach (var line in positions)
+      string[] positions = CHESS960PERFT_POS.Split(Environment.NewLine).Skip(1).Take(numberOfPositions).ToArray();
+      foreach (string line in positions)
       {
         yield return ParseChess960Record(line);
       }
@@ -275,18 +275,18 @@ namespace Ceres.Chess.MoveGen.Test
 
     public static void RunChess960Verification(int depth, int numberOfPositions = 960)
     {
-      var records = GetChess960Positions(numberOfPositions); // tests.Skip(1).Select(ParseChess960Record).Take(numberOfPositions).ToArray();     
-      var ordered = records; //records.OrderBy(r => GetDepthValue(depth, r));
-      var npsStats = new List<double>();
+      IEnumerable<Chess960Record> records = GetChess960Positions(numberOfPositions); // tests.Skip(1).Select(ParseChess960Record).Take(numberOfPositions).ToArray();     
+      IEnumerable<Chess960Record> ordered = records; //records.OrderBy(r => GetDepthValue(depth, r));
+      List<double> npsStats = new List<double>();
       //var nodeStats = new List<long>();
-      foreach (var record in ordered)
+      foreach (Chess960Record record in ordered)
       {
         Console.WriteLine($"Position Number: {record.PositionNumber}");
-        var perftDepth = GetDepthValue(depth, record);
+        long perftDepth = GetDepthValue(depth, record);
         double nps = RunPerftWithStatsOnPosition(record.FEN, depth, (ulong)perftDepth);
         npsStats.Add(nps);
       }
-      var cc = Console.ForegroundColor;
+      ConsoleColor cc = Console.ForegroundColor;
       string finalStatsForAllPerftPositions = $"\nAverage NPS perft speed for {numberOfPositions} Chess960 positions at depth {depth} = {npsStats.Average().ToString("N0")}";
       Console.ForegroundColor = ConsoleColor.Green;
       Console.WriteLine(finalStatsForAllPerftPositions);
@@ -567,7 +567,7 @@ namespace Ceres.Chess.MoveGen.Test
         nodeCount += (ulong)movesThisDepth.NumMovesUsed;
         for (int i = 0; i < movesThisDepth.NumMovesUsed; i++)
         {
-          var m = movesThisDepth.MovesArray[i];
+          MGMove m = movesThisDepth.MovesArray[i];
           if (m.IsCastle)
             castleCount++;
           if (m.Capture)
@@ -630,7 +630,7 @@ namespace Ceres.Chess.MoveGen.Test
         for (int i = 0; i < movesThisDepth.NumMovesUsed; i++)
         {
           MGPosition Q = new MGPosition(P);
-          var m = movesThisDepth.MovesArray[i];
+          MGMove m = movesThisDepth.MovesArray[i];
           Q.MakeMove(m);
 
 #if MG_USE_HASH

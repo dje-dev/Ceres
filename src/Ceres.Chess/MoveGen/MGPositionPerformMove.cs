@@ -176,9 +176,13 @@ namespace Ceres.Chess.MoveGen
           rookPos = rookPos == 288230376151711744 ? 0 : rookPos | 288230376151711744;
           BitBoard kingAndRooks = kingPos == rookPos ? 0 : kingPos | rookPos;
           if (rookPos == kingPos)
+          {
             kingAndRooks = 0;
+          }
           else if ((rookPos & kingPos) != 0)
+          {
             kingAndRooks = kingPos ^ rookPos;
+          }
           A ^= kingPos;
           B ^= kingPos;
           C ^= kingAndRooks;
@@ -203,10 +207,15 @@ namespace Ceres.Chess.MoveGen
           rookPos = rookPos == 1152921504606846976 ? 0 : rookPos | 1152921504606846976;
           kingPos = nFromSquare == nToSquare ? 0 : kingPos;
           BitBoard kingAndRooks = kingPos == rookPos ? 0 : kingPos | rookPos;
+          
           if (rookPos == kingPos)
+          {
             kingAndRooks = 0;
+          }
           else if ((rookPos & kingPos) != 0)
+          {
             kingAndRooks = kingPos ^ rookPos;
+          }
 
           A ^= kingPos;
           B ^= kingPos;
@@ -245,7 +254,7 @@ namespace Ceres.Chess.MoveGen
         Square rookToSq = new Square((int)nToSquare, Square.SquareIndexType.BottomToTopRightToLeft);
         MGPositionConstants.MCChessPositionPieceEnum pieceToSq = RawPieceAtSquare(rookToSq);
         bool performedCastling = pieceToSq == MGPositionConstants.MCChessPositionPieceEnum.WhiteRook;
-        
+
         if (M.CastleShort && performedCastling)
         {
           Debug.Assert(M.ToString() == "O-O");
@@ -256,9 +265,13 @@ namespace Ceres.Chess.MoveGen
           BitBoard kingPos = nFromSquare == kingIdx ? 0 : (1UL << (int)nFromSquare) | kingToSq;
           BitBoard kingAndRooks = kingPos | rookPos;
           if (rookPos == kingPos)
+          {
             kingAndRooks = 0;
+          }
           else if ((rookPos & kingPos) != 0)
+          {
             kingAndRooks = kingPos ^ rookPos;
+          }
           A ^= kingPos;
           B ^= kingPos;
           C ^= kingAndRooks;
@@ -281,11 +294,15 @@ namespace Ceres.Chess.MoveGen
           BitBoard kingToSq = 32; //c1 in decimals
           BitBoard kingIdx = 5; //c1 represented as index from h1..a8
           BitBoard kingPos = nFromSquare == kingIdx ? 0 : (1UL << (int)nFromSquare) | kingToSq;
-          var kingAndRooks = kingPos == rookPos ? 0 : kingPos | rookPos;
+          BitBoard kingAndRooks = kingPos == rookPos ? 0 : kingPos | rookPos;
           if (rookPos == kingPos)
+          {
             kingAndRooks = 0;
+          }
           else if ((rookPos & kingPos) != 0)
+          {
             kingAndRooks = kingPos ^ rookPos;
+          }
 
           A ^= kingPos;
           B ^= kingPos;
@@ -336,7 +353,7 @@ namespace Ceres.Chess.MoveGen
         bool rQMoved = nFromSquare == rQSq && bKingSquare < nFromSquare;
 
         if (rKMoved && rooks != 0)
-        {          
+        {
           // Black moved K-side Rook and forfeits right to castle K-side
           if (BlackCanCastle)
           {
@@ -371,7 +388,7 @@ namespace Ceres.Chess.MoveGen
         bool rKMoved = nFromSquare == rKSq && wKingSquare > nFromSquare;
         bool rQMoved = nFromSquare == rQSq && wKingSquare < nFromSquare;
         Debug.Assert((rQMoved && rKMoved) != true);
-      
+
         if (rKMoved && rooks != 0)
         {
           // White moved K-side Rook and forfeits right to castle K-side

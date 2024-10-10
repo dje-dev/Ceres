@@ -143,9 +143,13 @@ namespace Ceres.Chess.Textual
       char sideMoveChar = char.ToLower(fen[charIndex++]);
       SideType sideToMove;
       if (sideMoveChar == 'b')
+      {
         sideToMove = SideType.Black;
+      }
       else if (sideMoveChar == 'w')
+      {
         sideToMove = SideType.White;
+      }
       else
         throw new Exception($"Illegal FEN, side to move character {sideMoveChar}");
 
@@ -174,7 +178,9 @@ namespace Ceres.Chess.Textual
 
       // Only proceed if there are castling rights specified (i.e., the string is not "-")
       if (castlingRights == "-")
+      {
         charIndex++;
+      }
       else
       {
         //error here - needs to use another approach to get the castling rights
@@ -186,24 +192,32 @@ namespace Ceres.Chess.Textual
 
         foreach (PieceOnSquare ps in pieces)
         {
-          var mgPiece = MGChessPositionConverter.MGPieceFromPiece(ps.Piece);
-          var mgSquare = MGPosition.MGBitBoardFromSquare(ps.Square);
+          int mgPiece = MGChessPositionConverter.MGPieceFromPiece(ps.Piece);
+          ulong mgSquare = MGPosition.MGBitBoardFromSquare(ps.Square);
           pos.SetPieceAtBitboardSquare((ulong)mgPiece, mgSquare);
 
           // Identify king and rook positions
           if (ps.Piece.Type == PieceType.King)
           {
             if (ps.Piece.Side == SideType.White)
+            {
               whiteKingSquare = ps.Square;
+            }
             else
+            {
               blackKingSquare = ps.Square;
+            }
           }
           else if (ps.Piece.Type == PieceType.Rook)
           {
             if (ps.Piece.Side == SideType.White)
+            {
               whiteRookSquares.Add(ps.Square);
+            }
             else
+            {
               blackRookSquares.Add(ps.Square);
+            }
           }
         }
 
@@ -212,7 +226,7 @@ namespace Ceres.Chess.Textual
 
         for (int i = 0; i < whiteRookSquares.Count; i++)
         {
-          var rook = whiteRookSquares[i].SquareIndexStartH1;
+          byte rook = whiteRookSquares[i].SquareIndexStartH1;
           if (rook < whiteKingSq && rook < 8)
           {
             wKRsquare = whiteRookSquares[i].SquareIndexStartH1;
@@ -225,7 +239,7 @@ namespace Ceres.Chess.Textual
 
         for (int i = 0; i < blackRookSquares.Count; i++)
         {
-          var rook = blackRookSquares[i].SquareIndexStartH1;
+          byte rook = blackRookSquares[i].SquareIndexStartH1;
           if (rook < blackKingSq && rook > 55)
           {
             bKRsquare = blackRookSquares[i].SquareIndexStartH1;
@@ -244,8 +258,8 @@ namespace Ceres.Chess.Textual
 
         foreach (char c in castlingRights)
         {
-          var idx = Array.IndexOf(FileArrayLower, c);
-          var idxUpper = Array.IndexOf(FileArrayUpper, c);
+          int idx = Array.IndexOf(FileArrayLower, c);
+          int idxUpper = Array.IndexOf(FileArrayUpper, c);
           if (char.IsUpper(c) && idxUpper == wKRsquare && wKRsquare < whiteKingSq) // White's castling rights
           {
             whiteKingSideRook = c;

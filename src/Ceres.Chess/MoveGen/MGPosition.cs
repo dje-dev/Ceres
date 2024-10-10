@@ -340,8 +340,8 @@ namespace Ceres.Chess.MoveGen
         Square square = Square.FromFileAndRank(file, rank);
         if (GetPieceAtSquare(square).Type == PieceType.None)
         {
-          var priorFrom = GetPieceAtSquare(Square.FromFileAndRank(file, rankPriorFrom));
-          var priorTo = GetPieceAtSquare(Square.FromFileAndRank(file, rankPriorTo));
+          Piece priorFrom = GetPieceAtSquare(Square.FromFileAndRank(file, rankPriorFrom));
+          Piece priorTo = GetPieceAtSquare(Square.FromFileAndRank(file, rankPriorTo));
 
           if (priorFrom.Type == PieceType.None
            && priorTo.Type == PieceType.Pawn

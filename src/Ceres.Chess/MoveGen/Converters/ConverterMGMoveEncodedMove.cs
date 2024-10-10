@@ -132,7 +132,7 @@ namespace Ceres.Chess.MoveGen.Converters
       PieceType pieceMoving = position.PieceMoving(thisMove);
       MCChessPositionPieceEnum rawPieceAtToSquare = position.PieceCapturingRaw(thisMove);
 
-      var performedCastling =
+      bool performedCastling =
         pieceMoving == PieceType.King &&
         ((blackToMove && rawPieceAtToSquare == MCChessPositionPieceEnum.BlackRook) || (!blackToMove && rawPieceAtToSquare == MCChessPositionPieceEnum.WhiteRook));
 
