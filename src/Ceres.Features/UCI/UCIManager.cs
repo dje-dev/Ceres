@@ -195,6 +195,11 @@ namespace Ceres.Features.UCI
       {
         uciLogWriter = new StreamWriter(new FileStream(uciLogFileName, FileMode.Append, FileAccess.Write));
       }
+
+      if (NetworkSpec != null)
+      {
+        CreateEvaluator();
+      }
     }
 
 
