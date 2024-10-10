@@ -53,6 +53,7 @@ SOFTWARE.
 #region Using directives
 
 using System;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 using BitBoard = System.UInt64;
 
@@ -60,8 +61,216 @@ using BitBoard = System.UInt64;
 
 namespace Ceres.Chess.MoveGen
 {
+  public static class QBBoperations
+  {
+    // Find the most significant bit
+    public static ulong MSB(ulong bb) => 63UL ^ (ulong)BitOperations.LeadingZeroCount(bb);
+
+    // Find the least significant bit
+    public static ulong LSB(ulong bb) => (ulong)BitOperations.TrailingZeroCount(bb);
+
+    public static bool CanBlackKingMoveToCastlingPos(in MGPosition pos, int kingSq, int rookSq, int startSquare, int endSquare, bool moveLeft)
+    {
+      BitBoard rook = 1UL << rookSq;
+      BitBoard maskRook = ~rook;
+      //remove the rook from the board
+      BitBoard A = pos.A & maskRook;
+      BitBoard B = pos.B & maskRook;
+      BitBoard C = pos.C & maskRook;
+      BitBoard D = pos.D & maskRook;
+
+      BitBoard kingStart = 1UL << kingSq;
+      BitBoard moveKing = moveLeft ? kingStart << 1 : kingStart >> 1;
+
+      int start = startSquare;
+      int end = endSquare;
+      while (end >= start)
+      {
+        bool inCheck = MGMoveGen.IsBlackInCheck(A, B, C, D);
+        if (inCheck)
+        {
+          return false;
+        }
+
+        BitBoard mask = ~kingStart;
+        kingStart = moveKing;
+
+        // Apply the mask to each bitboard
+        A = (A & mask) | moveKing;
+        B = (B & mask) | moveKing;
+        C = (C & mask) | moveKing;
+        D = (D & mask) | moveKing;
+        moveKing = moveLeft ? kingStart << 1 : kingStart >> 1;
+        start++;
+      }
+
+      return true;
+    }
+   
+    public static bool CanWhiteKingMoveToCastlingPos(in MGPosition pos, int kingSq, int rookSq, int startSquare, int endSquare, bool moveLeft)
+    {
+      BitBoard rook = 1UL << rookSq;
+      BitBoard maskRook = ~rook;
+
+      //remove the rook from the board
+      BitBoard A = pos.A & maskRook;
+      BitBoard B = pos.B & maskRook;
+      BitBoard C = pos.C & maskRook;
+      BitBoard D = pos.D;
+
+      BitBoard whitePieces = (A | B | C) & ~D;
+      BitBoard kingStart = 1UL << kingSq;
+      BitBoard moveKing = moveLeft ? kingStart << 1 : kingStart >> 1;
+
+      int start = startSquare;
+      int end = endSquare;
+      while (end >= start)
+      {
+        var inCheck = MGMoveGen.IsWhiteInCheck(A, B, C, D);
+        if (inCheck)
+        {
+          return false;
+        }
+
+        BitBoard mask = ~kingStart;
+        kingStart = moveKing;
+
+        // Apply the mask to each bitboard
+        A = (A & mask) | moveKing;
+        B = (B & mask) | moveKing;
+        C = (C & mask) | moveKing;
+
+        moveKing = moveLeft ? kingStart << 1 : kingStart >> 1;
+        start++;
+      }
+
+      return true;
+    }
+
+    public static bool CanBlackKingReachLongRook(in MGPosition pos, out ulong rookPos)
+    {
+      BitBoard occ = pos.A | pos.B | pos.C;
+      BitBoard bKing = (pos.D & pos.C & pos.B & pos.A) & MGPositionConstants.lastRank;
+      BitBoard bRooks = (pos.D & pos.C & ~pos.B & ~pos.A) & MGPositionConstants.lastRank;
+      int kingSq = (int)LSB(bKing);
+      int rookSq = (int)(MSB(bRooks));
+      rookPos = 1UL << rookSq;
+      if (bKing == 0 || bRooks == 0UL || kingSq > rookSq)
+      {
+        return false;
+      }
+
+      BitBoard occRow8WithoutKingAndRook = occ & MGPositionConstants.lastRank & ~(1UL << kingSq | 1UL << rookSq);
+      BitBoard v = MGPositionConstants.LongRookKingMaskBlack[rookSq - 56, kingSq - 56];
+      BitBoard canCastle = v & occRow8WithoutKingAndRook;
+
+      if (canCastle == 0UL)
+      {
+        bool result;
+        if (kingSq > 61)
+        {
+          result = CanBlackKingMoveToCastlingPos(pos, kingSq, rookSq, 61, kingSq, false);
+        }
+        else
+        {
+          result = CanBlackKingMoveToCastlingPos(pos, kingSq, rookSq, kingSq, 61, true);
+        }
+
+        return result;
+      }
+
+      return false;
+    }
+
+    public static bool CanWhiteKingReachLongRook(in MGPosition pos, out ulong rookPos)
+    {
+      BitBoard occ = pos.A | pos.B | pos.C;
+      BitBoard wRooks = (~pos.D & pos.C & ~pos.B & ~pos.A) & MGPositionConstants.firstRank;
+      BitBoard wKing = (~pos.D & pos.C & pos.B & pos.A) & MGPositionConstants.firstRank;
+      int kingSq = (int)LSB(wKing);
+      int rookSq = (int)MSB(wRooks);
+      rookPos = 1UL << rookSq;
+      if (wKing == 0 || wRooks == 0UL || kingSq > rookSq)
+      {
+        return false;
+      }
+
+      BitBoard occRow1WithoutKingAndRook = occ & MGPositionConstants.firstRank & ~(1UL << kingSq | 1UL << rookSq);
+      BitBoard v = MGPositionConstants.LongRookKingMask[rookSq, kingSq];
+      BitBoard canCastle = v & occRow1WithoutKingAndRook;
+
+      if (canCastle == 0UL)
+      {
+        bool result;
+        if (kingSq > 5)
+        {
+          result = CanWhiteKingMoveToCastlingPos(pos, kingSq, rookSq, 5, kingSq, false);
+        }
+        else
+        {
+          result = CanWhiteKingMoveToCastlingPos(pos, kingSq, rookSq, kingSq, 5, true);
+        }
+        return result;
+      }
+      return false;
+
+    }
+
+    public static bool CanBlackKingReachShortRook(in MGPosition pos, out ulong rookPos)
+    {
+      BitBoard bKing = (pos.D & pos.C & pos.B & pos.A) & MGPositionConstants.lastRank;
+      BitBoard bRooks = (pos.D & pos.C & ~pos.B & ~pos.A) & MGPositionConstants.lastRank;
+      int kingSq = (int)LSB(bKing);
+      int rookSq = (int)(LSB(bRooks));
+      rookPos = 1UL << rookSq;
+      if (bKing == 0 || bRooks == 0UL || kingSq < rookSq)
+      {
+        return false;
+      }
+
+      BitBoard occ = pos.A | pos.B | pos.C;
+      BitBoard occRow1WithoutKingAndRook = occ & MGPositionConstants.lastRank & ~(1UL << kingSq | 1UL << rookSq);
+      BitBoard v = MGPositionConstants.ShortRookKingMaskBlack[rookSq - 56, kingSq - 56];
+      BitBoard canCastle = v & occRow1WithoutKingAndRook;
+
+      if (canCastle == 0UL)
+      {
+        bool result = CanBlackKingMoveToCastlingPos(pos, kingSq, rookSq, 57, kingSq, false);
+        return result;
+      }
+
+      return false;
+    }
+
+    public static bool CanWhiteKingReachShortRook(in MGPosition pos, out ulong rookPos)
+    {
+      BitBoard occ = pos.A | pos.B | pos.C;
+      BitBoard wKing = (~pos.D & pos.C & pos.B & pos.A) & MGPositionConstants.firstRank; // pos.B & pos.C; //GetKings(pos.A, pos.B, pos.C, pos.D);
+      BitBoard wRooks = (~pos.D & pos.C & ~pos.B & ~pos.A) & MGPositionConstants.firstRank;
+      int kingSq = (int)LSB(wKing);
+      int rookSq = (int)(LSB(wRooks));
+      rookPos = 1UL << rookSq;
+      if (wKing == 0 || wRooks == 0UL || kingSq < rookSq)
+      {
+        return false;
+      }
+
+      BitBoard occRow1WithoutKingAndRook = occ & MGPositionConstants.firstRank & ~(1UL << (kingSq) | 1UL << (rookSq));
+      BitBoard v = MGPositionConstants.ShortRookKingMask[rookSq, kingSq];
+      BitBoard canCastle = v & occRow1WithoutKingAndRook;
+      if (canCastle == 0UL)
+      {
+        return CanWhiteKingMoveToCastlingPos(pos, kingSq, rookSq, 1, kingSq, false);
+      }
+
+      return false;
+    }
+  }
+
   public static class MGPositionConstants
   {
+    public static bool IsChess960 = true; //not used yet
+
     public const int MOVELIST_SIZE = 128;
 
     public const int CHECKMATE = 9999;
@@ -214,6 +423,56 @@ namespace Ceres.Chess.MoveGen
     internal static int[] MoveKnight7SquareIndex;
 
     internal static int[] MoveKnight8SquareIndex;
+
+    public const ulong firstRank = 0x00000000000000FFUL;
+    public const ulong lastRank = 0xFF00000000000000UL;
+
+    //rook, king
+    public static readonly ulong[,] ShortRookKingMask = {
+      { 0, 7, 7, 15, 31, 63, 127, 0 },
+      { 0, 0, 6, 14, 30, 62, 126, 0 },
+      { 0, 0, 0, 14, 30, 62, 126, 0 },
+      { 0, 0, 0, 0, 30, 62, 126, 0 },
+      { 0, 0, 0, 0, 0, 62, 126, 0 },
+      { 0, 0, 0, 0, 0, 0, 126, 0 },
+      { 0, 0, 0, 0, 0, 0, 0, 0 },
+      { 0, 0, 0, 0, 0, 0, 0, 0 },
+    };
+
+    public static readonly ulong[,] ShortRookKingMaskBlack = {
+      { 0, 504403158265495552, 504403158265495552, 1080863910568919040, 2233785415175766016, 4539628424389459968, 9151314442816847872, 0 },
+      { 0, 0, 432345564227567616, 1008806316530991104, 2161727821137838080, 4467570830351532032, 9079256848778919936, 0 },
+      { 0, 0, 0, 1008806316530991104, 2161727821137838080, 4467570830351532032, 9079256848778919936, 0 },
+      { 0, 0, 0, 0, 2161727821137838080, 4467570830351532032, 9079256848778919936, 0 },
+      { 0, 0, 0, 0, 0, 4467570830351532032, 9079256848778919936, 0 },
+      { 0, 0, 0, 0, 0, 0, 9079256848778919936, 0 },
+      { 0, 0, 0, 0, 0, 0, 0, 0 },
+      { 0, 0, 0, 0, 0, 0, 0, 0 },
+    };
+
+
+    //rook, king
+    public static readonly ulong[,] LongRookKingMask = {
+        { 0, 0, 0, 0, 0, 0, 0, 0 },
+        { 0, 0, 0, 0, 0, 0, 0, 0 },
+        { 0, 62, 0, 0, 0, 0, 0, 0 },
+        { 0, 62, 60, 0, 0, 0, 0, 0 },
+        { 0, 62, 60, 56, 0, 0, 0, 0 },
+        { 0, 62, 60, 56, 48, 0, 0, 0 },
+        { 0, 126, 124, 120, 112, 112, 0, 0 },
+        { 0, 254, 252, 248, 240, 240, 240, 0 }
+    };
+
+    public static readonly ulong[,] LongRookKingMaskBlack = {
+        { 0, 0, 0, 0, 0, 0, 0, 0 },
+        { 0, 0, 0, 0, 0, 0, 0, 0 },
+        { 0, 4467570830351532032, 0, 0, 0, 0, 0, 0 },
+        { 0, 4467570830351532032, 4323455642275676160, 0, 0, 0, 0, 0 },
+        { 0, 4467570830351532032, 4323455642275676160, 4035225266123964416, 0, 0, 0, 0 },
+        { 0, 4467570830351532032, 4323455642275676160, 4035225266123964416, 3458764513820540928, 0, 0, 0 },
+        { 0, 9079256848778919936, 8935141660703064064, 8646911284551352320, 8070450532247928832, 8070450532247928832, 0, 0 },
+        { 0, 18302628885633695744, 18158513697557839872, 17870283321406128128, 17293822569102704640, 17293822569102704640, 17293822569102704640, 0 }
+    };
 
     [ModuleInitializer]
     internal static void ClassInitialize()

@@ -77,8 +77,8 @@ namespace Ceres.Chess.EncodedPositions.Basic
     {
       Debug.Assert(!isCastling || from.Rank == 0); // first rank
       Debug.Assert(!isCastling || to.Rank == 0); // first rank
-      Debug.Assert(!isCastling || from.File == 4); // E1
-      Debug.Assert(!isCastling || to.File == 0 || to.File == 7); // A1 or H1
+      //Debug.Assert(!isCastling || from.File == 4); // E1
+      //Debug.Assert(!isCastling || to.File == 0 || to.File == 7); // A1 or H1
 
       int val = to.Value +
                 (from.Value << 6) +
@@ -231,7 +231,7 @@ namespace Ceres.Chess.EncodedPositions.Basic
     /// Returns index of this move in the neural network (or -1, for moves that are not possible)
     /// In range [0.1857]
     /// </summary>
-    public int IndexNeuralNet => indexesToNNIndices[IndexPacked];    
+    public int IndexNeuralNet => indexesToNNIndices[IndexPacked];
 
 #if WORKS_BUT_SLOW_UNNEEDED
     /// <summary>
@@ -319,8 +319,10 @@ namespace Ceres.Chess.EncodedPositions.Basic
 
       if (pieceInfoWasAvailable)
       {
-        if ((index == 97 || index == 103) && isKingMove) // castling
+        if (raw.IsCastling && isKingMove)
+        {
           return new EncodedMove((ushort)(raw.IndexPacked | MaskCastling));
+        }
         else if (isPawnMove && raw.ToSquare.Rank == 7) // promotion
         {
           char possiblePromoChar = NEURAL_NET_MOVE_STR[index][^1];

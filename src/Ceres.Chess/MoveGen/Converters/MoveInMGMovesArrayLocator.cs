@@ -51,7 +51,7 @@ namespace Ceres.Chess.MoveGen.Converters
       int i = startIndex;
       while (i < numMovesUsed - 3)
       {
-        if (moves[i    ].FromAndToCombined == fromAndTo) return i;
+        if (moves[i].FromAndToCombined == fromAndTo) return i;
         if (moves[i + 1].FromAndToCombined == fromAndTo) return i + 1;
         if (moves[i + 2].FromAndToCombined == fromAndTo) return i + 2;
         if (moves[i + 3].FromAndToCombined == fromAndTo) return i + 3;

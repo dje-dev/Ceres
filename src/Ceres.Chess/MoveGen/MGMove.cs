@@ -30,7 +30,7 @@ namespace Ceres.Chess.MoveGen
   using BitBoard = System.UInt64;
 
   [Serializable]
-  [StructLayout(LayoutKind.Explicit, Pack = 1, Size=4)]
+  [StructLayout(LayoutKind.Explicit, Pack = 1, Size = 4)]
   public partial struct MGMove
   {
     #region Field
@@ -99,18 +99,17 @@ namespace Ceres.Chess.MoveGen
       Unsafe.SkipInit<uint>(out AllFieldsCombined);
 
       Piece = piece;
-  }
+    }
 
 
-  /// <summary>
-  /// Constructor
-  /// </summary>
-  /// <param name="from"></param>
-  /// <param name="to"></param>
-  /// <param name="flags"></param>
-  public MGMove(byte from, byte to, MGChessMoveFlags flags)
+    /// <summary>
+    /// Constructor
+    /// </summary>
+    /// <param name="from"></param>
+    /// <param name="to"></param>
+    /// <param name="flags"></param>
+    public MGMove(byte from, byte to, MGChessMoveFlags flags)
     {
-      Debug.Assert(from != to);
       Debug.Assert(from < 64);
       Debug.Assert(to < 64);
 
@@ -154,8 +153,8 @@ namespace Ceres.Chess.MoveGen
     internal const int PIECE_SHIFT = 12;
     internal const int MOVE_COUNT_SHIFT = 17;
 
-    public const MGChessMoveFlags PromotionFlags = (MGChessMoveFlags.PromoteKnight | MGChessMoveFlags.PromoteBishop 
-                                                 |  MGChessMoveFlags.PromoteRook   | MGChessMoveFlags.PromoteQueen);
+    public const MGChessMoveFlags PromotionFlags = (MGChessMoveFlags.PromoteKnight | MGChessMoveFlags.PromoteBishop
+                                                 | MGChessMoveFlags.PromoteRook | MGChessMoveFlags.PromoteQueen);
 
     /// <summary>
     /// Returns a new MGMove initialized from a specified raw value.
@@ -195,9 +194,9 @@ namespace Ceres.Chess.MoveGen
     /// <summary>
     /// Returns a value (0, 1, 2, 4 or 8) corresonding to none, Knight, Bishop, Rook, or Queen.
     /// </summary>
-    public short PromotionValue => promoFlagsToEnum[(short)((int)(Flags & PromotionFlags)>>7)];
-    
-    
+    public short PromotionValue => promoFlagsToEnum[(short)((int)(Flags & PromotionFlags) >> 7)];
+
+
     /// <summary>
     /// Returns if the move is a promotion.
     /// </summary>
@@ -273,7 +272,7 @@ namespace Ceres.Chess.MoveGen
     /// Returns if the move is either a castle or promotion move.
     /// </summary>
     public bool IsCastleOrPromotion
-      => (Flags & (MGChessMoveFlags.CastleShort 
+      => (Flags & (MGChessMoveFlags.CastleShort
                  | MGChessMoveFlags.CastleLong
                  | MGChessMoveFlags.PromoteQueen
                  | MGChessMoveFlags.PromoteRook
@@ -364,8 +363,8 @@ namespace Ceres.Chess.MoveGen
     {
       [MethodImpl(MethodImplOptions.AggressiveInlining)]
       get
-      { 
-        return (MGPositionConstants.MCChessPositionPieceEnum)(((int)(Flags & MGChessMoveFlags.Piece)) >> PIECE_SHIFT); 
+      {
+        return (MGPositionConstants.MCChessPositionPieceEnum)(((int)(Flags & MGChessMoveFlags.Piece)) >> PIECE_SHIFT);
       }
 
       set
@@ -375,7 +374,7 @@ namespace Ceres.Chess.MoveGen
       }
     }
 
-#region Overrides
+    #region Overrides
 
     public override int GetHashCode()
     {
@@ -383,13 +382,13 @@ namespace Ceres.Chess.MoveGen
     }
     public override string ToString() => MoveStr(MGMoveNotationStyle.LongAlgebraic);
 
-    public static bool operator ==(MGMove move1, MGMove move2) => move1.Equals(move2);    
+    public static bool operator ==(MGMove move1, MGMove move2) => move1.Equals(move2);
 
     public static bool operator !=(MGMove move1, MGMove move2) => !move1.Equals(move2);
 
     public override bool Equals(object obj) => obj is MGMove && Equals((MGMove)obj);
 
-#endregion
+    #endregion
 
     /// <summary>
     /// Helper comparer class for MGMove which uses FromAndToCombined.
@@ -427,7 +426,7 @@ namespace Ceres.Chess.MoveGen
       {
         return true;
       }
-      
+
       return false;
     }
 

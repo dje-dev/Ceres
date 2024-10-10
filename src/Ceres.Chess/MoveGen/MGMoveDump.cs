@@ -95,11 +95,16 @@ namespace Ceres.Chess.MoveGen
     /// <summary>
     /// Leela chess zero coordinate format, with 960 extension for castling moves.
     /// </summary>
-    LC0Coordinate960Format
+    LC0Coordinate960Format,
+
+    /// <summary>
+    /// Normal castling moves, e.g. e1g1 and e1c1.
+    /// </summary>
+    StandardCastlingFormat
   };
 
 
-  
+
   /// <summary>
   /// Methods on MGMove related to dumping to strings (diagnostic).
   /// </summary>
@@ -123,22 +128,17 @@ namespace Ceres.Chess.MoveGen
       int from = BitOperations.TrailingZeroCount(bbFrom);
       int to = BitOperations.TrailingZeroCount(bbTo);
 
-      if (style == MGMoveNotationStyle.LC0Coordinate960Format)
+      if(style == MGMoveNotationStyle.StandardCastlingFormat)
       {
         if (IsCastle)
         {
-          // Castling moves always indicate target file at edge of board
           bool isWhite = ToSquare.Rank == 0;
-          if (isWhite) 
-            return CastleLong ? "e1a1" : "e1h1";
+          if (isWhite)
+            return CastleLong ? "e1c1" : "e1g1";
           else
-            return CastleLong ? "e8a8" : "e8h8";
+            return CastleLong ? "e8c8" : "e8g8";
         }
-        else
-        {
-          // Not castle, so in that case the format will be identical to LC0 coordinate.
-          style = MGMoveNotationStyle.LC0Coordinate;
-        }
+        return string.Empty;
       }
 
       if (style != MGMoveNotationStyle.CoOrdinate && style != MGMoveNotationStyle.LC0Coordinate)
@@ -146,7 +146,7 @@ namespace Ceres.Chess.MoveGen
         if (CastleShort) return "O-O";
         if (CastleLong) return "O-O-O";
       }
-
+    
       char c1 = (char)('h' - (from % 8));
       char c2 = (char)('h' - (to % 8));
 
@@ -176,8 +176,8 @@ namespace Ceres.Chess.MoveGen
           p = "?";
           break;
       }
-      
-      if ((style == MGMoveNotationStyle.LongAlgebraic) 
+
+      if ((style == MGMoveNotationStyle.LongAlgebraic)
        || (style == MGMoveNotationStyle.ShortAlgebraic)
        || (style == MGMoveNotationStyle.StandardAlgebraic)
        || (style == MGMoveNotationStyle.LC0Coordinate))
