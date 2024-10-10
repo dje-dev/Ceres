@@ -46,6 +46,7 @@ using Ceres.MCTS.MTCSNodes;
 using Ceres.Features.GameEngines;
 using Ceres.Features.Visualization.TreePlot;
 using Ceres.Features.Visualization.AnalysisGraph;
+using Ceres.Chess.UserSettings;
 
 #endregion
 
@@ -297,6 +298,7 @@ namespace Ceres.Features.UCI
             break;
 
           case "commands":
+            UCIWriteLine("download <ID>   - attempt to download Ceres network from CeresNets repository");
             UCIWriteLine("backendbench    - run backend benchmark to test nps speed of network evaluation");
             UCIWriteLine("benchmark       - run search benchmark with specified number of seconds per position, e.g. \"benchmark 10\"");
             UCIWriteLine("dump-fen        - shows FEN of most recently searched position");
@@ -487,6 +489,10 @@ namespace Ceres.Features.UCI
             HardwareManager.DumpProcessorInfo();
             break;
 
+          case string c when c.StartsWith("download"):
+            ProcessDownloadCommand(c);
+            break;
+
           case "backendbench":
             if (BackendBenchEvaluator == null)
             {
@@ -626,6 +632,36 @@ namespace Ceres.Features.UCI
             UCIWriteLine($"error Unknown command: {command}");
             break;
         }
+      }
+    }
+
+    private void ProcessDownloadCommand(string c)
+    {
+      string[] partsDownload = c.Split(" ");
+      if (partsDownload.Length != 2)
+      {
+        UCIWriteLine("info string Invalid download command, expect Ceres network ID after download command");
+        return;
+      }
+
+      string ceresNetID = partsDownload[1].ToUpper();
+      if (!ceresNetID.StartsWith("C"))
+      {
+        UCIWriteLine("info string Invalid Ceres network ID (expected to begin with C, see https://github.com/dje-dev/CeresNets)");
+        return;
+      }
+
+      CeresNetDownloader downloader = new CeresNetDownloader();
+      (bool alreadyDownloaded, string fullNetworkPath) downloadResults;
+      downloadResults = downloader.DownloadCeresNetIfNeeded(ceresNetID, CeresUserSettingsManager.Settings.DirCeresNetworks);
+
+      if (downloadResults.alreadyDownloaded)
+      {
+        UCIWriteLine("info string Network previously downloaded: " + downloadResults.fullNetworkPath);
+      }
+      else
+      {
+        UCIWriteLine("info string Network downloaded to: " + downloadResults.fullNetworkPath);
       }
     }
 
