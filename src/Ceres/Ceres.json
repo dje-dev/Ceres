@@ -1,9 +1,0 @@
-﻿{
-  "DefaultNetworkSpecString": "LC0:./Networks/weights_run2_703810.pb.gz",
-  "DefaultDeviceSpecString": "gpu:0",
-  "SyzygyPath": null,
-
-  "DirLC0Networks": null,
-  "DirLC0Binaries": null,
-  "URLLC0Networks": "http://training.lczero.org/networks"
-}

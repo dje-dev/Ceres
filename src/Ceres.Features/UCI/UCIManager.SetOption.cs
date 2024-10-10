@@ -111,7 +111,7 @@ namespace Ceres.Features.UCI
     float policySoftmax = new ParamsSelect().PolicySoftmax;
 
     /// <summary>
-    /// If futiltiy pruning (smart pruning) is disabled.
+    /// If futility pruning (smart pruning) is disabled.
     /// </summary>
     bool futilityPruningDisabled = new ParamsSearch().FutilityPruningStopSearchEnabled == false;
 

@@ -185,7 +185,6 @@ namespace Ceres.Features.UCI
       BackendBenchEvaluator = backendBenchEvaluator;
       BenchmarkSearchEvaluator = benchmarkEvaluator;
 
-      CreateEvaluator();
 
       if (disablePruning) futilityPruningDisabled = true;
 
@@ -248,12 +247,7 @@ namespace Ceres.Features.UCI
       get
       {
         ParamsSearch parms = new ParamsSearch();
-        if (futilityPruningDisabled)
-        {
-          parms.FutilityPruningStopSearchEnabled = false;
-        }
         parms.MoveOverheadSeconds = moveOverheadSeconds;
-        parms.EnableUseSiblingEvaluations = enableSiblingEval;
 
         SearchModifier?.Invoke(parms);
         return parms;
@@ -363,13 +357,17 @@ namespace Ceres.Features.UCI
             break;
 
           case "isready":
-            InitializeEngineIfNeeded();
-            UCIWriteLine("readyok");
+            if (InitializeEngineIfNeeded())
+            {
+              UCIWriteLine("readyok");
+            }
             break;
 
           case "ucinewgame":
-            InitializeEngineIfNeeded();
-            ResetGame();
+            if (InitializeEngineIfNeeded())
+            {
+              ResetGame();
+            }
             break;
 
           case "quit":
@@ -414,9 +412,10 @@ namespace Ceres.Features.UCI
               throw new Exception("Received go command when another search was running and not stopped first.");
             }
 
-            InitializeEngineIfNeeded();
-
-            taskSearchCurrentlyExecuting = ProcessGo(command);
+            if (InitializeEngineIfNeeded())
+            {
+              taskSearchCurrentlyExecuting = ProcessGo(command);
+            }
             break;
 
           case string c when c.StartsWith("position"):
@@ -762,10 +761,28 @@ namespace Ceres.Features.UCI
       UCIWriteLine("info engine " + infoMessage);
     }
 
-    private void InitializeEngineIfNeeded()
+    private bool InitializeEngineIfNeeded()
+    {
+      bool success = TryInitializeEngineIfNeeded();
+      if (!success)
+      {
+        UCIWriteLine("Cannot initialize engine.");
+        UCIWriteLine();
+      }
+      return success;
+    }
+
+
+    private bool TryInitializeEngineIfNeeded()
     {
       if (!haveInitializedEngine)
       {
+        if (EvaluatorDef == null && CeresUserSettingsManager.Settings.DefaultNetworkSpecString == null)
+        {
+          UCIWriteLine("info string No default network specified, cannot initialize engine.");
+          UCIWriteLine("info string Use setoption with \"WeightsFile\" to specify neural network weights file to use.");
+          return false;
+        }
         ShowWeightsFileInfo();
 
         // Create the engine (to be subsequently reused).
@@ -781,6 +798,8 @@ namespace Ceres.Features.UCI
         haveInitializedEngine = true;
         OutStream.WriteLine();
       }
+
+      return true;
     }
 
     private void ShowWeightsFileInfo()
