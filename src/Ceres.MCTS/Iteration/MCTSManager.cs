@@ -601,7 +601,7 @@ namespace Ceres.MCTS.Iteration
           Context.Root.StructRef.LossP = 0;
           Context.Root.StructRef.MPosition = DISTANCE_TO_END_OF_GAME;
           Context.Root.StructRef.Terminal = GameResult.Draw;
-          Context.Root.EvalResult = new LeafEvaluationResult(GameResult.Draw, 0, 0, 1, 0);
+          Context.Root.EvalResult = new LeafEvaluationResult(GameResult.Draw, 0, 0, 1, 0, 0);
         }
         else if (result == WDLResult.Loss && TablebaseImmediateBestMove != default)
         {
@@ -616,7 +616,7 @@ namespace Ceres.MCTS.Iteration
           Context.Root.StructRef.WinP = 0;
           Context.Root.StructRef.LossP = (FP16)lossP;
           Context.Root.StructRef.MPosition = DISTANCE_TO_MATE;
-          Context.Root.EvalResult = new LeafEvaluationResult(GameResult.Checkmate, 0, (FP16)lossP, DISTANCE_TO_MATE, 0);
+          Context.Root.EvalResult = new LeafEvaluationResult(GameResult.Checkmate, 0, (FP16)lossP, DISTANCE_TO_MATE, 0, 0);
           Context.Root.StructRef.Terminal = GameResult.Checkmate;
         }
       }
@@ -635,7 +635,7 @@ namespace Ceres.MCTS.Iteration
       Context.Root.StructRef.WinP = (FP16)winP;
       Context.Root.StructRef.LossP = 0;
       Context.Root.StructRef.MPosition = DISTANCE_TO_MATE;
-      Context.Root.EvalResult = new LeafEvaluationResult(GameResult.Checkmate, (FP16)winP, 0, DISTANCE_TO_MATE, 0);
+      Context.Root.EvalResult = new LeafEvaluationResult(GameResult.Checkmate, (FP16)winP, 0, DISTANCE_TO_MATE, 0, 0);
       Context.Root.StructRef.Terminal = GameResult.Checkmate;
     }
 

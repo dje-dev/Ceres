@@ -58,6 +58,11 @@ namespace Ceres.MCTS.Evaluators
     public byte UncertaintyV;
 
     /// <summary>
+    /// Uncertainty of P (scaled).
+    /// </summary>
+    public byte UncertaintyP;
+
+    /// <summary>
     /// Transiently holds policy array within which the policy resides
     /// (but will be released after the policy is applied by being copied into a search node)
     /// </summary>
@@ -114,7 +119,8 @@ namespace Ceres.MCTS.Evaluators
     /// <param name="winP"></param>
     /// <param name="lossP"></param>
     /// <param name="m"></param>
-    public LeafEvaluationResult(GameResult terminalStatus, FP16 winP, FP16 lossP, FP16 m, byte uncertaintyV)
+    public LeafEvaluationResult(GameResult terminalStatus, FP16 winP, FP16 lossP, FP16 m, 
+                                byte uncertaintyV, byte uncertaintyP)
     {
       Debug.Assert(terminalStatus != GameResult.NotInitialized);
 
@@ -123,6 +129,7 @@ namespace Ceres.MCTS.Evaluators
       LossP = lossP;
       M = m;
       UncertaintyV = uncertaintyV;
+      UncertaintyP = uncertaintyP;
       policyArrayIndex = -1;
       policyArray = null;
       actionArray = null;
@@ -135,7 +142,8 @@ namespace Ceres.MCTS.Evaluators
     /// <param name="winP"></param>
     /// <param name="lossP"></param>
     /// <param name="m"></param>
-    public void Initialize(GameResult terminalStatus, FP16 winP, FP16 lossP, FP16 m, byte uncertaintyV)
+    public void Initialize(GameResult terminalStatus, FP16 winP, FP16 lossP, FP16 m, 
+                           byte uncertaintyV, byte uncertaintyP)
     {
       Debug.Assert(terminalStatus != GameResult.NotInitialized);
 
@@ -144,6 +152,7 @@ namespace Ceres.MCTS.Evaluators
       LossP = lossP;
       M = m;
       UncertaintyV = uncertaintyV;
+      UncertaintyP = uncertaintyP;
       policyArrayIndex = -1;
       policyArray = null;
       actionArray = null;
@@ -159,7 +168,8 @@ namespace Ceres.MCTS.Evaluators
     /// <param name="m"></param>
     /// <param name="policyArray"></param>
     /// <param name="policyArrayIndex"></param>
-    public LeafEvaluationResult(GameResult terminalStatus, FP16 winP, FP16 lossP, FP16 m, byte uncertaintyV, 
+    public LeafEvaluationResult(GameResult terminalStatus, FP16 winP, FP16 lossP, FP16 m, 
+                                byte uncertaintyV, byte uncertaintyP,
                                 Memory<CompressedPolicyVector> policyArray, 
                                 Memory<CompressedActionVector> actionArray, short policyArrayIndex)
     {
@@ -169,6 +179,7 @@ namespace Ceres.MCTS.Evaluators
       WinP = winP;
       LossP = lossP;
       M = m;
+      UncertaintyP = uncertaintyP;
       UncertaintyV = uncertaintyV;
 
       this.policyArrayIndex = policyArrayIndex;

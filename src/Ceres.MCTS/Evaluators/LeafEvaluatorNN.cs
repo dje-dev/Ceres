@@ -237,7 +237,8 @@ namespace Ceres.MCTS.Evaluators
     /// </summary>
     /// <param name="nodes"></param>
     /// <param name="results"></param>
-    void RetrieveResults(ListBounded<MCTSNode> nodes, IPositionEvaluationBatch results, EvalResultTarget resultTarget, bool markSecondaryNN)
+    void RetrieveResults(ListBounded<MCTSNode> nodes, IPositionEvaluationBatch results, 
+                         EvalResultTarget resultTarget, bool markSecondaryNN)
     {
       //if (EvaluateUsingSecondaryEvaluator) Console.WriteLine("early batch " + nodes.Length);
 
@@ -254,6 +255,7 @@ namespace Ceres.MCTS.Evaluators
         FP16 lossP;
         FP16 rawM = results.GetM(i);
         FP16 rawUncertaintyV = results.GetUncertaintyV(i);
+        FP16 rawUncertaintyP = results.GetUncertaintyP(i);  
 
         // Copy WinP
         FP16 rawWinP = results.GetWinP(i);
@@ -288,8 +290,10 @@ namespace Ceres.MCTS.Evaluators
           lossP = (FP16) (lossPAdj / sum);
         }
 
-        byte scaledUncertainty = (byte)Math.Round(MCTSNodeStruct.UNCERTAINTY_SCALE * rawUncertaintyV, 0);
-        LeafEvaluationResult evalResult = new LeafEvaluationResult(GameResult.Unknown, winP, lossP, rawM, scaledUncertainty);
+        byte scaledUncertaintyV = (byte)Math.Round(MCTSNodeStruct.UNCERTAINTY_SCALE * Math.Max(0, rawUncertaintyV), 0);
+        byte scaledUncertaintyP = (byte)Math.Round(MCTSNodeStruct.UNCERTAINTY_SCALE * Math.Max(rawUncertaintyP, 0), 0);
+        LeafEvaluationResult evalResult = new LeafEvaluationResult(GameResult.Unknown, winP, lossP, rawM, 
+                                                                   scaledUncertaintyV, scaledUncertaintyP);
 
         evalResult.PolicyInArray = results.GetPolicy(i);
         if (results.HasAction)
@@ -313,7 +317,8 @@ namespace Ceres.MCTS.Evaluators
 
         // Save back to cache
         if (SaveToCache) Cache.Store(node.StructRef.ZobristHash,
-                                     GameResult.Unknown, rawWinP, rawLossP, rawM, scaledUncertainty,
+                                     GameResult.Unknown, rawWinP, rawLossP, rawM, 
+                                     scaledUncertaintyV, scaledUncertaintyP,
                                      in node.EvalResult.PolicyRef, in node.EvalResult.ActionsRef);
       }
     }

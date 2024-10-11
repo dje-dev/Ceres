@@ -176,6 +176,11 @@ namespace Ceres.MCTS.MTCSNodes
     public byte UncertaintyVPosition => (*structPtr).UncertaintyVPosition;
 
     /// <summary>
+    /// Uncertainty of policy for the position.
+    /// </summary>
+    public byte UncertaintyPPosition => (*structPtr).UncertaintyPPosition;
+
+    /// <summary>
     /// Moves left estimate for this subtree
     /// </summary>
     public float MAvg => (*structPtr).MAvg;

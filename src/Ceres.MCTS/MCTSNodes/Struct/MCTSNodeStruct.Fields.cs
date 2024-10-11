@@ -214,7 +214,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     public const float UNCERTAINTY_SCALE = 100f;
 
     public byte UncertaintyVPosition;
-    public byte Unused;
+    public byte UncertaintyPPosition;
     public FP16 UncertaintyVSubtree; // NOT CURRENTLY USED
 #endif
 

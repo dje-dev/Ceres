@@ -63,12 +63,12 @@ namespace Ceres.MCTS.Evaluators
         if (terminalStatus == GameResult.Draw)
         {
           // Position is stalemate (draw)
-          return new LeafEvaluationResult(GameResult.Draw, 0, 0, 0, 0);
+          return new LeafEvaluationResult(GameResult.Draw, 0, 0, 0, 0, 0);
         }
         else if (terminalStatus == GameResult.Checkmate)
         {
           // Position is checkmate (lost)
-          return new LeafEvaluationResult(GameResult.Checkmate, 0, (FP16)ParamsSelect.LossPForProvenLoss(node.Depth, true), node.Depth, 0);
+          return new LeafEvaluationResult(GameResult.Checkmate, 0, (FP16)ParamsSelect.LossPForProvenLoss(node.Depth, true), node.Depth, 0, 0);
           
         }
         else
@@ -82,7 +82,7 @@ namespace Ceres.MCTS.Evaluators
         if (node.Annotation.Pos.CheckDrawBasedOnMaterial == Position.PositionDrawStatus.DrawByInsufficientMaterial)
         {
           // Position is draw by insufficient material
-          LeafEvaluationResult evalResult = new LeafEvaluationResult(GameResult.Draw, 0, 0, 0, 0);
+          LeafEvaluationResult evalResult = new LeafEvaluationResult(GameResult.Draw, 0, 0, 0, 0, 0);
           return evalResult;
         }
         else if (node.Annotation.Pos.CheckDrawCanBeClaimed == Position.PositionDrawStatus.DrawCanBeClaimed)
@@ -92,7 +92,7 @@ namespace Ceres.MCTS.Evaluators
           // either the opponent (who was about to make this move and could have claimed draw)
           // or we (who are now on move can now claim draw) will
           // consider themselves inferior and will claim the draw
-          LeafEvaluationResult evalResult = new LeafEvaluationResult(GameResult.Draw, 0, 0, 0, 0);
+          LeafEvaluationResult evalResult = new LeafEvaluationResult(GameResult.Draw, 0, 0, 0, 0, 0);
           return evalResult;
         }
         else if (node.Context.ParamsSearch.TwofoldDrawEnabled 
@@ -101,7 +101,7 @@ namespace Ceres.MCTS.Evaluators
         {
           // Experimentally consider repetition a draw
 
-          LeafEvaluationResult evalResult = new LeafEvaluationResult(GameResult.Draw, 0, 0, 0, 0);
+          LeafEvaluationResult evalResult = new LeafEvaluationResult(GameResult.Draw, 0, 0, 0, 0, 0);
           return evalResult;
 
           //node.OverrideVToApplyFromTransposition = node.Context.ContemptManager.BaseContempt;

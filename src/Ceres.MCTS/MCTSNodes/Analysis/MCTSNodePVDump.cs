@@ -170,8 +170,13 @@ namespace Ceres.MCTS.MTCSNodes.Analysis
       //      writer.Write($" +/-:{MathF.Sqrt(node.Ref.QUpdatesWtdVariance),5:F2}  ");
       //      writer.Write($" {node.Ref.TrendBonusToP,5:F2}  ");
 
-      writer.Write($" {node.MPosition,3:F0} ");
-      writer.Write($" {node.MAvg,3:F0}  ");
+      writer.Write($" {node.UncertaintyVPosition,3:F0} ");
+      writer.Write($" {node.UncertaintyPPosition,3:F0}  ");
+
+      writer.Write($" {100*MathF.Abs(node.V - (float) node.Q),3:F0}  ");
+
+      //writer.Write($" {node.MPosition,3:F0} ");
+      //writer.Write($" {node.MAvg,3:F0}  ");
 
       if (fullDetail)
       {
@@ -188,7 +193,7 @@ namespace Ceres.MCTS.MTCSNodes.Analysis
     private static void WriteHeaders(bool fullDetail, TextWriter writer)
     {
       // Write headers
-      writer.Write(" Dep  T #M    FirstVisit   MvWh  MvBl           N  Visits    Policy    Act       V        Q      WPos  DPos  LPos   WTree DTree LTree  MPos MTree");
+      writer.Write(" Dep  T #M    FirstVisit   MvWh  MvBl           N  Visits    Policy    Act       V        Q      WPos  DPos  LPos   WTree DTree LTree  VUnc PUnc  VErr");
 
       if (fullDetail)
       {
@@ -201,7 +206,7 @@ namespace Ceres.MCTS.MTCSNodes.Analysis
 
       if (fullDetail)
       {
-        writer.WriteLine("----  - --  ------------  -----  ---- -----------  ------  --------   ------  -------   ------   ----  ----  ----   -----  ---- -----  ---- -----");
+        writer.WriteLine("----  - --  ------------  -----  ---- -----------  ------  --------   ------  -------   ------   ----  ----  ----   -----  ---- -----  ---- ----- -----");
       }
       else
       {

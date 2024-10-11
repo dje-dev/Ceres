@@ -1087,6 +1087,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       LossP = lossP;
       MPosition = (byte)MathF.Round(m, 0);
       UncertaintyVPosition = 0;
+      UncertaintyPPosition = 0;
 
       if (!IsRoot)
       {
@@ -1097,6 +1098,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         parentRef.WinP = lossP;
         parentRef.LossP = 0;
         parentRef.UncertaintyVPosition = 0;
+        parentRef.UncertaintyPPosition = 0;
         parentRef.W = parentRef.V * parentRef.N; // Make Q come out to be same as V (which has already been set to the sure win)
         parentRef.MPosition = (byte)MathF.Round(m + 1, 0);
 

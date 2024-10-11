@@ -132,7 +132,8 @@ namespace Ceres.MCTS.MTCSNodes.Storage
                 CompressedActionVector actions = store.AllActionVectors != null ? store.AllActionVectors[nodeIndex] : default;
 
                 cacheNodes.Store(nodeRef.ZobristHash, nodeRef.Terminal, nodeRef.WinP, nodeRef.LossP, 
-                                 nodeRef.MPosition, nodeRef.UncertaintyVPosition, in policy, in actions);
+                                 nodeRef.MPosition, nodeRef.UncertaintyVPosition, nodeRef.UncertaintyPPosition, 
+                                 in policy, in actions);
                 if (nodeRef.N > 1) countGT1++;
                 //MCTSEventSource.TestCounter1++;
               }

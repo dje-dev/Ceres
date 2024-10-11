@@ -39,6 +39,7 @@ namespace Ceres.Chess.PositionEvalCaching
     public FP16 LossP;
     public FP16 M;
     public FP16 UncertaintyV;
+    public FP16 UncertaintyP;
 
     /// <summary>
     /// Cached policy value
@@ -54,7 +55,8 @@ namespace Ceres.Chess.PositionEvalCaching
 
 
 
-    public PositionEvalCacheEntry(GameResult terminalStatus, FP16 winP, FP16 lossP, FP16 m, FP16 uncertaintyV, 
+    public PositionEvalCacheEntry(GameResult terminalStatus, FP16 winP, FP16 lossP, FP16 m, 
+                                  FP16 uncertaintyV, FP16 uncertaintyP,
                                   in CompressedPolicyVector policy,
                                   in CompressedActionVector actions)
     {
@@ -63,6 +65,7 @@ namespace Ceres.Chess.PositionEvalCaching
       LossP = lossP;
       M = m;
       UncertaintyV = uncertaintyV;
+      UncertaintyP = uncertaintyP;
       Policy = policy;
       Actions = actions;
     }
