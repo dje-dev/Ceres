@@ -88,7 +88,12 @@ namespace Ceres.Features.UCI
     static VerboseMoveStat BuildStatNoSearch(VerboseMoveStats statsParent, MCTSNode parent, BestMoveInfo info)
     {
       VerboseMoveStat stat = new VerboseMoveStat(statsParent, null);
-      stat.MoveString = info.BestMove.MoveStr(MGMoveNotationStyle.LC0Coordinate);
+
+      MGMoveNotationStyle style = (!MGPositionConstants.IsChess960 && info.BestMove.IsCastle)
+                             ? MGMoveNotationStyle.StandardCastlingFormat
+                             : MGMoveNotationStyle.LC0Coordinate;
+
+      stat.MoveString = info.BestMove.MoveStr(style);
       float v = parent.V;
       stat.WL = v;
       stat.Q = new EncodedEvalLogistic(v);
@@ -116,7 +121,12 @@ namespace Ceres.Features.UCI
 
       node.Annotate();
 
-      stat.MoveString = isSearchRoot ? "node" : node.Annotation.PriorMoveMG.MoveStr(MGMoveNotationStyle.LC0Coordinate);
+      MGMove move = node.Annotation.PriorMoveMG;
+      MGMoveNotationStyle style = (!MGPositionConstants.IsChess960 && move.IsCastle)
+                                   ? MGMoveNotationStyle.StandardCastlingFormat
+                                   : MGMoveNotationStyle.LC0Coordinate;
+
+      stat.MoveString = isSearchRoot ? "node" : move.MoveStr(style);
       stat.MoveCode = isSearchRoot ? 20 : node.Parent.ChildAtIndexInfo(node.IndexInParentsChildren).move.IndexNeuralNet;
       stat.VisitCount = node.N;
       stat.P = isSearchRoot ? 100 : (node.P * 100.0f);

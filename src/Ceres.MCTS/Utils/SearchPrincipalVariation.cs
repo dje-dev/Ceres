@@ -13,18 +13,14 @@
 
 #region Using directives
 
-
-using Ceres.Base.Math;
-using Ceres.Chess.MoveGen;
-using Ceres.Chess.MoveGen.Converters;
-using Ceres.MCTS.Iteration;
-using Ceres.MCTS.MTCSNodes;
-using Ceres.MCTS.MTCSNodes.Analysis;
-using Ceres.MCTS.MTCSNodes.Annotation;
-using Ceres.MCTS.MTCSNodes.Struct;
 using System;
 using System.Collections.Generic;
 using System.Text;
+
+using Ceres.Base.Math;
+using Ceres.Chess.MoveGen;
+using Ceres.MCTS.MTCSNodes;
+using Ceres.MCTS.MTCSNodes.Analysis;
 
 #endregion
 
@@ -98,8 +94,8 @@ namespace Ceres.MCTS.Utils
       {
         float frac = (float)node.N / Nodes[0].N;
 
-//        Console.WriteLine(frac + " " + node.N + " " + LinearRegression(x.ToArray(), y.ToArray()).slope);
-        
+        //        Console.WriteLine(frac + " " + node.N + " " + LinearRegression(x.ToArray(), y.ToArray()).slope);
+
         if (frac < minNFraction)
         {
           break;
@@ -113,8 +109,8 @@ namespace Ceres.MCTS.Utils
     }
 
 
-    public SearchPrincipalVariation(MCTSNode searchRoot, 
-                                    MCTSNode overrideBestMoveNodeAtRoot = default, 
+    public SearchPrincipalVariation(MCTSNode searchRoot,
+                                    MCTSNode overrideBestMoveNodeAtRoot = default,
                                     bool startFromRoot = false)
     {
       HashSet<int> useNodes = startFromRoot ? MCTSPosTreeNodeDumper.NodesToRootSet(searchRoot) : null;
@@ -130,8 +126,8 @@ namespace Ceres.MCTS.Utils
         float fracN = (float)node.N / totalN;
         const float CUTOFF_FRACTION = 0.0005f;
         if (totalN > 1
-         && node.Terminal == Chess.GameResult.Unknown 
-         && node.N < 1000 
+         && node.Terminal == Chess.GameResult.Unknown
+         && node.N < 1000
          && fracN < CUTOFF_FRACTION)
         {
           break;
@@ -180,11 +176,16 @@ namespace Ceres.MCTS.Utils
     /// <returns></returns>
     public string ShortStr()
     {
+
       if (Nodes.Count == 1)
       {
         // In the special case of only root evaluated, show the best policy move so the pv is not completely empty.
         // Otherwise, we choose not to show the best policy move at the terminal node.
-        return Nodes[0].BestMoveInfo(false).BestMove.MoveStr(MGMoveNotationStyle.LC0Coordinate);
+        MGMove bestMoveSingle = Nodes[0].BestMoveInfo(false).BestMove;
+        MGMoveNotationStyle moveStyleSingle = (!MGPositionConstants.IsChess960 && bestMoveSingle.IsCastle)
+                                          ? MGMoveNotationStyle.StandardCastlingFormat
+                                          : MGMoveNotationStyle.LC0Coordinate;
+        return bestMoveSingle.MoveStr(moveStyleSingle);
       }
 
       StringBuilder sb = new StringBuilder();
@@ -194,7 +195,12 @@ namespace Ceres.MCTS.Utils
       {
         if (haveSkippedSearchRoot)
         {
-          sb.Append(node.Annotation.PriorMoveMG.MoveStr(MGMoveNotationStyle.LC0Coordinate) + " ");
+          MGMove bestMoveSkipped = node.Annotation.PriorMoveMG;
+          MGMoveNotationStyle moveStyleSkipped = (!MGPositionConstants.IsChess960 && bestMoveSkipped.IsCastle)
+                                            ? MGMoveNotationStyle.StandardCastlingFormat
+                                            : MGMoveNotationStyle.LC0Coordinate;
+
+          sb.Append(bestMoveSkipped.MoveStr(moveStyleSkipped) + " ");
         }
         else
         {
@@ -235,7 +241,7 @@ namespace Ceres.MCTS.Utils
       {
         acc += MathF.Log(child.N / node.N, 2.0f);
       }
-      return -acc / totalChildren; 
+      return -acc / totalChildren;
     }
 
 

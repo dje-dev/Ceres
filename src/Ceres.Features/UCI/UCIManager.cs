@@ -181,7 +181,7 @@ namespace Ceres.Features.UCI
       DeviceSpec = deviceSpec;
       SearchModifier = searchModifier;
       SelectModifier = selectModifier;
-      
+
       BackendBenchEvaluator = backendBenchEvaluator;
       BenchmarkSearchEvaluator = benchmarkEvaluator;
 
@@ -572,7 +572,7 @@ namespace Ceres.Features.UCI
             {
               UCIWriteLine("info string No search manager created");
             }
-        
+
 
             break;
 
@@ -791,8 +791,8 @@ namespace Ceres.Features.UCI
         ShowWeightsFileInfo();
 
         // Create the engine (to be subsequently reused).
-        CeresEngine = new GameEngineCeresInProcess("Ceres", EvaluatorDef, null, ParamsSearch, ParamsSelect, 
-                                                   logFileName: searchLogFileName, infoLogger:InfoLogger);
+        CeresEngine = new GameEngineCeresInProcess("Ceres", EvaluatorDef, null, ParamsSearch, ParamsSelect,
+                                                   logFileName: searchLogFileName, infoLogger: InfoLogger);
 
         // Disable verbose move stats from the engine since 
         // this class manages the possibly dumping of verbose move stats itself.
@@ -831,7 +831,7 @@ namespace Ceres.Features.UCI
       {
         INNWeightsFileInfo net = NNWeightsFiles.LookupNetworkFile(EvaluatorDef.Nets[i].Net.NetworkID);
         string infoStr = net == null ? "(unknown)" : net.ShortStr;
-        UCIWriteLine($"Loaded network weights: {i} { infoStr}");
+        UCIWriteLine($"Loaded network weights: {i} {infoStr}");
       }
       else
       {
@@ -1053,9 +1053,11 @@ namespace Ceres.Features.UCI
       // Output the final UCI info line containing end of search information
       OutputUCIInfo(result.Search.Manager, result.Search.SearchRootNode, true);
 
-      // Send the best move
-      UCIWriteLine("bestmove " + result.Search.BestMove.MoveStr(MGMoveNotationStyle.LC0Coordinate));
-      //      if (debug) Send("info string " + result.Search.SearchRootNode.BestMoveInfo(false));
+      // Send the best move (using appropriate castling move style).
+      MGMoveNotationStyle style = (!MGPositionConstants.IsChess960 && result.Search.BestMove.IsCastle)
+                                    ? MGMoveNotationStyle.StandardCastlingFormat
+                                    : MGMoveNotationStyle.LC0Coordinate;
+      UCIWriteLine("bestmove " + result.Search.BestMove.MoveStr(style));
 
       return result;
     }
@@ -1091,7 +1093,7 @@ namespace Ceres.Features.UCI
 
         // Finally show moves that had no visits
         float elapsedTimeSeconds = (float)(DateTime.Now - manager.StartTimeThisSearch).TotalSeconds;
-        string timeStr = $"{ elapsedTimeSeconds * 1000.0f:F0}";
+        string timeStr = $"{elapsedTimeSeconds * 1000.0f:F0}";
         for (int i = multiPVIndex - 1; i < numPV; i++)
         {
           (MCTSNode node, EncodedMove move, FP16 p) info = searchRootNode.ChildAtIndexInfo(i);
@@ -1099,7 +1101,7 @@ namespace Ceres.Features.UCI
           {
             bool isWhite = searchRootNode.Annotation.Pos.MiscInfo.SideToMove == SideType.White;
             EncodedMove moveCorrectPerspective = isWhite ? info.move : info.move.Flipped;
-            string str = $"info depth 0 seldepth 0 time { timeStr } nodes 1 score cp 0 tbhits 0 "
+            string str = $"info depth 0 seldepth 0 time {timeStr} nodes 1 score cp 0 tbhits 0 "
                        + $"multipv {multiPVIndex} pv {moveCorrectPerspective.AlgebraicStr} ";
             UCIWriteLine(str);
             multiPVIndex++;

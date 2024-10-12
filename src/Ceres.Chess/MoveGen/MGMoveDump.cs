@@ -135,17 +135,27 @@ namespace Ceres.Chess.MoveGen
         {                 
           bool isWhite = Piece == MGPositionConstants.MCChessPositionPieceEnum.WhiteKing;
           if (isWhite && FromSquareIndex == 3)
-            return CastleLong ?  "e1c1" : "e1g1";
+          {
+            return CastleLong ? "e1c1" : "e1g1";
+          }
           else if (!isWhite && FromSquareIndex == 59)
+          {
             return CastleLong ? "e8c8" : "e8g8";
+          }
         }
         return string.Empty;
       }
 
       if (style != MGMoveNotationStyle.CoOrdinate && style != MGMoveNotationStyle.LC0Coordinate)
       {
-        if (CastleShort) return "O-O";
-        if (CastleLong) return "O-O-O";
+        if (CastleShort)
+        {
+          return "O-O";
+        }
+        if (CastleLong)
+        {
+          return "O-O-O";
+        }
       }
 
       char c1 = (char)('h' - (from % 8));

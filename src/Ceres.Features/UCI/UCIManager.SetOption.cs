@@ -203,6 +203,7 @@ namespace Ceres.Features.UCI
 
         case "uci_chess960":
           SetBool(value, ref UCI_Chess960);
+          MGPositionConstants.IsChess960 = UCI_Chess960; // TODO: Replace this with a context-specific flag
           break;
 
         case "maxtreevisits":

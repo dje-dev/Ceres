@@ -269,7 +269,11 @@ namespace Ceres.Chess.MoveGen
 
   public static class MGPositionConstants
   {
-    public static bool IsChess960 = true; //not used yet
+    /// <summary>
+    /// Temporary global static indicator if this Ceres engine process is in Chess960 mode.
+    /// TODO: To be replaced with context sensitive variables.
+    /// </summary>
+    public static bool IsChess960 = false;
 
     public const int MOVELIST_SIZE = 128;
 

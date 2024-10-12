@@ -65,7 +65,7 @@ namespace Ceres.Chess.Positions
     /// </summary>
     public int Count
     {
-      get 
+      get
       {
         if (!haveFinalized)
         {
@@ -311,29 +311,6 @@ namespace Ceres.Chess.Positions
       return positions;
     }
 
-#if NOT
-    public Position[] GetPositionsWithEnPassantPreExtension()
-    {
-      CheckInit();
-
-      // Nothing to do if first position is not en passant.
-      if (positions[0].MiscInfo.EnPassantFileIndex == PositionMiscInfo.EnPassantFileIndexEnum.FileNone)
-        return positions;
-
-      // Create a new array with one extra slot.
-      Position[] extendedPositions = new Position[positions.Length + 1];
-
-      // The new first move is the pre-extension.
-      extendedPositions[0] = positions[0].PosWithEnPassantUndone();
-
-      // Copy over all the original positions.
-      for (int i = 0; i < positions.Length; i++)
-        extendedPositions[i + 1] = positions[i];
-
-      return extendedPositions;
-    }
-#endif
-
     public MGPosition FinalPosMG
     {
       get
@@ -367,7 +344,7 @@ namespace Ceres.Chess.Positions
     {
       InitialPosMG = positions[0].ToMGPosition;
       finalPosMG = positions[^1].ToMGPosition;
-     
+
       if (recalcRepetitions)
       {
         PositionRepetitionCalc.SetRepetitionsCount(positions);
@@ -377,7 +354,7 @@ namespace Ceres.Chess.Positions
 
       // Reconstruct the sequence of moves from the positions.
       moves = new(positions.Length - 1);
-      for (int i = 0; i< positions.Length - 1; i++)
+      for (int i = 0; i < positions.Length - 1; i++)
       {
         MGPosition posCurrent = positions[i].ToMGPosition;
         MGPosition posNext = positions[i + 1].ToMGPosition;
@@ -394,7 +371,7 @@ namespace Ceres.Chess.Positions
         MGMoveGen.GenerateMoves(posCurrent, movesList);
 
         bool foundContinuation = false;
-        for (int j=0; j<movesList.NumMovesUsed;j++)
+        for (int j = 0; j < movesList.NumMovesUsed; j++)
         {
           MGPosition tryNextPos = posCurrent;
           tryNextPos.MakeMove(movesList.MovesArray[j]);
@@ -409,8 +386,8 @@ namespace Ceres.Chess.Positions
 
         if (i > 0 || !firstPositionMayBeMissingEnPassant)
         {
-          if (!foundContinuation 
-            && EqualityComparer<Position>.Default.Equals(positions[i], positions[i+1])) // ok if repetition (fill in planes0
+          if (!foundContinuation
+            && EqualityComparer<Position>.Default.Equals(positions[i], positions[i + 1])) // ok if repetition (fill in planes0
           {
             string errMsg = i + " Position sequence illegal, saw " + positions[i + 1].ToMGPosition.ToPosition.FEN
                           + " then " + positions[i].ToMGPosition.ToPosition.FEN
@@ -512,7 +489,7 @@ namespace Ceres.Chess.Positions
         foreach (MGMove move in Moves)
         {
           yield return (pos.ToPosition, MGMoveConverter.ToMove(move));
-          pos.MakeMove(move);          
+          pos.MakeMove(move);
         }
       }
     }
@@ -535,7 +512,7 @@ namespace Ceres.Chess.Positions
         {
           // Append this move and return a clone.
           pwh.AppendMove(Moves[i]);
-          yield return new PositionWithHistory(pwh); 
+          yield return new PositionWithHistory(pwh);
         }
       }
     }
@@ -559,7 +536,14 @@ namespace Ceres.Chess.Positions
       get
       {
         string moveStr = "";
-        foreach (MGMove move in Moves) moveStr += move.MoveStr(MGMoveNotationStyle.LC0Coordinate) + " ";
+        foreach (MGMove move in Moves)
+        {
+          MGMoveNotationStyle moveStyle = (!MGPositionConstants.IsChess960 && move.IsCastle)
+                                            ? MGMoveNotationStyle.StandardCastlingFormat
+                                            : MGMoveNotationStyle.LC0Coordinate;
+
+          moveStr += move.MoveStr(moveStyle) + " ";
+        }
         return moveStr;
       }
     }
@@ -590,7 +574,10 @@ namespace Ceres.Chess.Positions
     {
       PositionWithHistory clone = new PositionWithHistory(InitialPosition);
       foreach (MGMove move in Moves)
+      {
         clone.AppendMove(move);
+      }
+
       return clone;
     }
 
