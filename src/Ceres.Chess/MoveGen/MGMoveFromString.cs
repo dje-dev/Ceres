@@ -42,9 +42,12 @@ namespace Ceres.Chess.MoveGen
         return MGMoveConverter.MGMoveFromPosAndMove(in position, mfp.Move);
       }
       else
+      {
+        System.Diagnostics.Debug.Assert(pos.IsLegalMove(move));
         return move;
-    }
+      }
 
+    }
 
     /// <summary>
     /// Attempts to parse a move string in coordinate or long algebraic format.
@@ -63,16 +66,23 @@ namespace Ceres.Chess.MoveGen
 
       MGMoveList moves = new MGMoveList();
       MGMoveGen.GenerateMoves(in pos, moves);
+
       foreach (MGMove moveTry in moves.MovesArray)
       {
         // Accept moves in any of multiple formats, including Chess 960 (for castling variation)
         if (String.Equals(moveTry.MoveStr(MGMoveNotationStyle.LC0Coordinate), moveStr, StringComparison.OrdinalIgnoreCase)
-         || String.Equals(moveTry.MoveStr(MGMoveNotationStyle.LC0Coordinate960Format), moveStr, StringComparison.OrdinalIgnoreCase)
-         || String.Equals(moveTry.MoveStr(MGMoveNotationStyle.LongAlgebraic), moveStr, StringComparison.OrdinalIgnoreCase))
+         || String.Equals(moveTry.MoveStr(MGMoveNotationStyle.LongAlgebraic), moveStr, StringComparison.OrdinalIgnoreCase)
+         || String.Equals(moveTry.MoveStr(MGMoveNotationStyle.StandardCastlingFormat), moveStr, StringComparison.OrdinalIgnoreCase))
         {
           move = moveTry;
+          //if (moveTry.IsCastle)
+          //{
+          //  var res1 = moveTry.MoveStr(MGMoveNotationStyle.LC0Coordinate);
+          //  var res2 = moveTry.MoveStr(MGMoveNotationStyle.LongAlgebraic);
+          //  var res3 = moveTry.MoveStr(MGMoveNotationStyle.StandardCastlingFormat);
+          //}
           return true;
-        }           
+        }
       }
 
       move = default;

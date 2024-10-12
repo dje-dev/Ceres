@@ -21,6 +21,7 @@ using Ceres.Chess.NNEvaluators.Specifications;
 using Ceres.Chess.UserSettings;
 using Ceres.MCTS.Params;
 using Ceres.MCTS.Managers.Limits;
+using Ceres.Chess.MoveGen;
 
 
 #endregion
@@ -43,6 +44,11 @@ namespace Ceres.Features.UCI
     /// If verbose move stats should be output at periodic intervals.
     /// </summary>
     bool logLiveStats = false;
+
+    /// <summary>
+    /// If chess960 is selected enable chess960 logic.
+    /// </summary>
+    bool UCI_Chess960 = false;
 
     /// <summary>
     /// If detailed top-level move info should be output at end of move selection.
@@ -195,6 +201,10 @@ namespace Ceres.Features.UCI
           SetBool(value, ref logLiveStats);
           break;
 
+        case "uci_chess960":
+          SetBool(value, ref UCI_Chess960);
+          break;
+
         case "maxtreevisits":
           SetInt(value, 1, int.MaxValue, ref maxTreeVisits);
           break;
@@ -258,7 +268,7 @@ namespace Ceres.Features.UCI
 
         case "enablesiblingeval":
           SetBool(value, ref enableSiblingEval);
-          break;          
+          break;
 
         case "uci_showwdl":
           SetBool(value, ref showWDL);
@@ -268,12 +278,12 @@ namespace Ceres.Features.UCI
           bool reducedMemory = false;
           SetBool(value, ref reducedMemory);
           CeresUserSettingsManager.Settings.ReducedMemoryMode = reducedMemory;
-          break;          
+          break;
 
         case "syzygypath":
           if (!Directory.Exists(value))
           {
-            OutStream.WriteLine($"Path not found: { value }");
+            OutStream.WriteLine($"Path not found: {value}");
           }
           else
           {
@@ -387,6 +397,7 @@ namespace Ceres.Features.UCI
       {
         OutStream.WriteLine("Invalid value, expected true or false");
       }
+      MGPositionConstants.IsChess960 = value;
     }
 
 
@@ -468,6 +479,7 @@ option name MaxTreeNodes type string default
 option name ReducedMemoryMode type check default false
 option name EnableSiblingEval type check default false
 option name EnableUncertaintyBoosting type check default false
+option name UCI_Chess960 type check default false
 ");
     /* 
 option name ConfigFile type string default lc0.config

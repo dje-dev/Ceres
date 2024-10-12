@@ -244,7 +244,7 @@ namespace Ceres.Chess.MoveGen.Converters
     /// <param name="piece"></param>
     /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    static int MGPieceFromPiece(Piece piece)
+     internal static int MGPieceFromPiece(Piece piece)
       => piece.Side == SideType.White
                      ? PieceMapWhite[(int)piece.Type]
                      : PieceMapBlack[(int)piece.Type];

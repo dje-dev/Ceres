@@ -79,7 +79,7 @@ namespace Ceres.Chess.MoveGen.Converters
 
       MGMoveList moves = new MGMoveList();
       MGMoveGen.GenerateMoves(in mgPos, moves);
-      for (int i=0; i<moves.NumMovesUsed;i++)
+      for (int i = 0; i < moves.NumMovesUsed; i++)
       {
         if (moves.MovesArray[i].EqualsMove(move))
           return moves.MovesArray[i];

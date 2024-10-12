@@ -74,6 +74,7 @@ namespace Ceres.Chess.MoveGen
 
     public short MoveNumber;
     public short Rule50Count;
+
     //    public short material;
 
 #if MG_USE_HASH
@@ -339,8 +340,8 @@ namespace Ceres.Chess.MoveGen
         Square square = Square.FromFileAndRank(file, rank);
         if (GetPieceAtSquare(square).Type == PieceType.None)
         {
-          var priorFrom = GetPieceAtSquare(Square.FromFileAndRank(file, rankPriorFrom));
-          var priorTo = GetPieceAtSquare(Square.FromFileAndRank(file, rankPriorTo));
+          Piece priorFrom = GetPieceAtSquare(Square.FromFileAndRank(file, rankPriorFrom));
+          Piece priorTo = GetPieceAtSquare(Square.FromFileAndRank(file, rankPriorTo));
 
           if (priorFrom.Type == PieceType.None
            && priorTo.Type == PieceType.Pawn
@@ -411,11 +412,11 @@ namespace Ceres.Chess.MoveGen
       ulong whitePawnsRank7 = whitePawns & BOARD_RANK_7;
       ulong blackPawnsRank7 = blackPawns & BOARD_RANK_2;
 
-      return  white ? BitOperations.PopCount(whitePawnsRank7)
-                    : BitOperations.PopCount(blackPawnsRank7);      
+      return white ? BitOperations.PopCount(whitePawnsRank7)
+                    : BitOperations.PopCount(blackPawnsRank7);
     }
 
-    
+
     /// <summary>
     /// Returns number of pawns still on their second rank (not yet advanced).
     /// </summary>
@@ -438,10 +439,10 @@ namespace Ceres.Chess.MoveGen
 
     #region Overrides
 
-    public static bool operator ==(MGPosition pos1, MGPosition pos2) =>  pos1.Equals(pos2);
-    
+    public static bool operator ==(MGPosition pos1, MGPosition pos2) => pos1.Equals(pos2);
+
     public static bool operator !=(MGPosition pos1, MGPosition pos2) => !pos1.Equals(pos2);
-    
+
 
     public override bool Equals(object obj) => obj is MGPosition && Equals(obj);
 

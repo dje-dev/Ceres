@@ -240,6 +240,12 @@ namespace Ceres.Commands
         FeatureBenchmarkSearch analyzeParams = FeatureBenchmarkSearch.ParseBenchmarkCommand(keyValueArgs);
         analyzeParams.Execute();
       }
+
+      else if (featureName == "PERFT")
+      {        
+        FeatureBenchmarkPerft.Execute(keyValueArgs);        
+      }
+
       else if (featureName == "GRAPH")
       {
         KeyValueSetParsed keys = new KeyValueSetParsed(args, null);
@@ -249,7 +255,7 @@ namespace Ceres.Commands
       else
       {
         ShowErrorExit("Expected argument to begin with one of the features " +
-                       "UCI, ANALYZE, SUITE, TOURN, SYSBENCH, BACKENDBENCH, BACKENDCOMPARE, BENCHMARK, GRAPH or SETOPT");
+                       "UCI, ANALYZE, SUITE, TOURN, SYSBENCH, BACKENDBENCH, BACKENDCOMPARE, BENCHMARK, PERFT, GRAPH or SETOPT");
       }
     }
 
