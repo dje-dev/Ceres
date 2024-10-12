@@ -155,18 +155,21 @@ namespace Ceres.Chess.NNEvaluators.Specifications
     public static string ToSpecificationString(NNEvaluatorNetComboType comboType, IEnumerable<(NNEvaluatorNetDef, float, float, float, float, float, float)> nets)
     {
       // TODO: Currently support conversion back to original specification string only for simple cases
-      if (comboType == NNEvaluatorNetComboType.Single
-       && nets.Count() == 1
-       && nets.First().Item1.Type == NNEvaluatorType.LC0)
+      if (comboType == NNEvaluatorNetComboType.Single && nets.Count() == 1)
       {
-        return $"Network=LC0:{nets.First().Item1.NetworkID}";
+        NNEvaluatorType typeOfFirst = nets.First().Item1.Type;
+        if (typeOfFirst == NNEvaluatorType.Ceres)
+        {
+          return $"Network=Ceres:{nets.First().Item1.NetworkID}";
+        }
+        if (typeOfFirst == NNEvaluatorType.LC0)
+        {
+          return $"Network=LC0:{nets.First().Item1.NetworkID}";
+        }
       }
-      else
-      {
-        return ToSpecificationStringComplex(comboType, nets);
-      }
-    }
 
+      return ToSpecificationStringComplex(comboType, nets);
+    }
 
   }
 }
