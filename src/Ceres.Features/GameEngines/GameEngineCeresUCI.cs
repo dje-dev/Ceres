@@ -48,7 +48,7 @@ namespace Ceres.Features.GameEngines
     /// <param name="selectParams"></param>
     /// <param name="uciSetOptionCommands"></param>
     /// <param name="callback"></param>
-    /// <param name="overrideEXE">optinally the full name of the executable file(otherwise looks for Ceres executable in working directory)</param>
+    /// <param name="overrideEXE">optionally the full name of the executable file(otherwise looks for Ceres executable in working directory)</param>
     public GameEngineCeresUCI(string id,
                               NNEvaluatorDef evaluatorDef,
                               bool forceDisableSmartPruning = false,
@@ -63,11 +63,23 @@ namespace Ceres.Features.GameEngines
              callback, false, ExtraArgsForEvaluator(evaluatorDef))
     {
       // TODO: support some limited emulation of options
-      if (searchParams != null || selectParams != null) throw new NotSupportedException("Customized searchParams and selectParams not yet supported");
-      if (evaluatorDef == null) throw new ArgumentNullException(nameof(evaluatorDef));
-      if (emulateCeresSettings) throw new NotImplementedException(nameof(emulateCeresSettings));
+      if (searchParams != null || selectParams != null)
+      {
+        throw new NotSupportedException("Customized searchParams and selectParams not yet supported");
+      }
+      if (evaluatorDef == null)
+      { 
+        throw new ArgumentNullException(nameof(evaluatorDef));
+      }
+      if (emulateCeresSettings)
+      {
+        throw new NotImplementedException(nameof(emulateCeresSettings));
+      }
+
       if (evaluatorDef.DeviceCombo == NNEvaluatorDeviceComboType.Pooled)
+      {
         throw new Exception("Evaluators for GameEngineDefCeresUCI should not be created as Pooled.");
+      }
     }
 
 
@@ -106,19 +118,19 @@ namespace Ceres.Features.GameEngines
     /// <returns></returns>
     static string ExtraArgsForEvaluator(NNEvaluatorDef evaluatorDef)
     {
-      if (evaluatorDef.Nets[0].Net.Type != NNEvaluatorType.LC0)
+      string netSpecString = NNNetSpecificationString.ToSpecificationString(evaluatorDef.NetCombo, evaluatorDef.Nets);
+      if (!netSpecString.Contains("Network="))
       {
-        throw new Exception("GameEngineCeresUCI cannot be used with network definition of type " + evaluatorDef.Nets[0].Net.Type);
+        throw new Exception("Unsupported network specification");
       }
-      else
-      {
-        string netSpecString = NNNetSpecificationString.ToSpecificationString(evaluatorDef.NetCombo, evaluatorDef.Nets);
-        if (!netSpecString.Contains("Network=")) throw new Exception("Unsupported network specification");
 
-        string deviceSpecString = NNDevicesSpecificationString.ToSpecificationString(evaluatorDef.DeviceCombo, evaluatorDef.Devices);
-        if (!deviceSpecString.Contains("Device=")) throw new Exception("Unsupported device specification");
-        return "UCI " + netSpecString + " " + deviceSpecString;
+      string deviceSpecString = NNDevicesSpecificationString.ToSpecificationString(evaluatorDef.DeviceCombo, evaluatorDef.Devices);
+      if (!deviceSpecString.Contains("Device="))
+      {
+        throw new Exception("Unsupported device specification");
       }
+      return "UCI " + netSpecString + " " + deviceSpecString;
+
     }
 
 
@@ -130,7 +142,10 @@ namespace Ceres.Features.GameEngines
     static string GetExecutableFN(string overrideEXE)
     {
       string executableFN = overrideEXE ?? Assembly.GetEntryAssembly().FullName;
-      if (!File.Exists(executableFN)) throw new ArgumentException(nameof(overrideEXE), $"specified executable not found: {executableFN}");
+      if (!File.Exists(executableFN))
+      {
+        throw new ArgumentException(nameof(overrideEXE), $"specified executable not found: {executableFN}");
+      }
       return executableFN;
     }
 
