@@ -356,11 +356,11 @@ namespace Ceres.Chess.NNEvaluators
 
 //            ValueHead1Temperature = testMode ? 1.4f : 1.0f
 
-            FractionValueHead2 = testMode ? 0.5f : 0,
-            ValueHead2Temperature = 1,
+            FractionValueHead2 = testMode ? 0.5f : 0f,
+            //ValueHead2Temperature = testMode ? 1f : 1,
 
-            PolicyTemperature = testPTempMode ? 0.8f : 1f,
-            PolicyUncertaintyTemperatureScalingFactor = testPTempMode ? 2f : 0,
+            PolicyTemperature = testPTempMode ? 0.9f : 1f,
+            PolicyUncertaintyTemperatureScalingFactor = testPTempMode ? 0.5f : 0,
           };
           
           int maxCeresBatchSize = useTensorRT ? TRT_MAX_BATCH_SIZE : DEFAULT_MAX_BATCH_SIZE;
