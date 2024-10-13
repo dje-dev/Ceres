@@ -181,10 +181,10 @@ with color coding showing the moves of agreement or disagreement in their PVs.
 C:\dev\Ceres\artifacts\release\net5.0>ceres ANALYZE network=lc0:703810 device=gpu:0,1 opponent=lc0 limit=200000nm startpos
 ```
 
-![Command Analyze](./images/Command_Analyze.png)
+![Command Analyze](../images/Command_Analyze.png)
 
 The full detail of the output from the above command is shown here:
-[full output](./text/command_analyze_output.txt).
+[full output](../text/command_analyze_output.txt).
 
 Each line in the output is a position.
 
@@ -216,13 +216,13 @@ the correct move(s) and tests each position using searches conducted by Ceres
 and possibly also an opponent engine (such as LC0).
 
 For example:
-![Command Suite](./images/Command_Suite.png)
+![Command Suite](../images/Command_Suite.png)
 
 As another example we run the 103 test positions of the Eigenmann Rapid Engine Test (ERET) suite 
 as described in https://glarean-magazin.ch/2017/03/05/computerschach-testaufgaben-engines-eigenmann-rapid-engine-test-eret/.
 using two GPUs with a comparision against Leela Chess Zero
 
-The most important columns in the [output](./text/command_suite_output.txt) are:
+The most important columns in the [output](../text/command_suite_output.txt) are:
 * CEx - cumulative score attained by external engine (Leela)
 * CC  - cumulative score attained by Ceres
 * TimeEx - search time in seconds for external engine
@@ -237,7 +237,7 @@ tournament are logged to the console and also the games are written to a PGN fil
 
 In this example we run a tournament between Ceres and Stockfish 12.
 
-![Command Tourn](./images/Command_Tourn.png)
+![Command Tourn](../images/Command_Tourn.png)
 
 Additional features to speed up testing are available when running tournaments or suites
 from the C# API, for example:

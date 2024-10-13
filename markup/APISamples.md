@@ -17,7 +17,7 @@ do a monotonically increasing better job of understanding
 in a single-node analysis that the pawn move g2g3 trapping
 the bishop is best.
 
-![A P I Evaluator Compare](./images/API_EvaluatorCompare.png)
+![A P I Evaluator Compare](../images/API_EvaluatorCompare.png)
 
 ```
 703810: 10x128 WDL MLH     <NNPositionEvaluation V= -0.18 Policy= g2g3 [ 27.26%]  e3e4 [ 25.91%]  f2f4 [ 12.23%]  c1b2 [ 10.50%]  a3a4 [  7.08%] >
@@ -33,11 +33,11 @@ J94-80: 30x384 WDL MLH     <NNPositionEvaluation V=  0.51 Policy= g2g3 [ 90.22%]
 ### Human grandmaster move agreement analysis 
 The second sample extracts a large subset of games from a set
 of top chess players in history and compares their actual moves made
-against an LC0 policy network, quantifying the aggrement to 
+against an LC0 policy network, quantifying the agreement to 
 assess their strength and/or similarity to the playing style of 
 the Leela networks.
 
-![A P I Player Analysis](./images/APIPlayerAnalysis.png)
+![A P I Player Analysis](../images/APIPlayerAnalysis.png)
 
 After a couple of minutes of execution the following intriguing results are output:
 
@@ -68,7 +68,7 @@ After a couple of minutes of execution the following intriguing results are outp
 
 
 ### Deep position analysis (with varied CPUCT search parameters)
-The third example analyzes one chess position using mulitple
+The third example analyzes one chess position using multiple
 engines including Stockfish, Leela, the default Ceres engine,
 and a version of the Ceres engine configured with a different
 set of CPUCT tuning parameters. Detailed root move statistics

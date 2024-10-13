@@ -27,4 +27,4 @@ such as the memory consumption of the running process.
 The second section shows statistics specific to Ceres, such as the
 number of nodes evaluated per second. For example:
 
-![Monitor Window](./images/MonitorWindow.png)
+![Monitor Window](../images/MonitorWindow.png)

@@ -37,10 +37,10 @@ Extensive architecture search as been performed using PyTorch with the [CeresTra
 Ceres ("Chess Engine for Research") is:
 *  a state-of-the-art UCI-compliant chess engine employing the AlphaZero-style Monte Carlo Tree Search and deep neural networks
 *  a flexible, modular and efficient software library with an exposed API to facilitate research in computer chess
-*  a set of [integrated tools](Commands.md) for chess research (e.g for position analysis, suite testing, tournament manager)
+*  a set of [integrated tools](./markup/Commands.md) for chess research (e.g for position analysis, suite testing, tournament manager)
 *  ancillary features and applications to facilitate human analysis of chess positions, for example an integrated
-[graphing](Graph.md) feature which generates on-the-fly visualizations of Ceres search results within a web browser,
-or [game comparison](GameComp.md) feature which generates visualizations of differences between 2 or more games from a PGN file.
+[graphing](./markup/Graph.md) feature which generates on-the-fly visualizations of Ceres search results within a web browser,
+or [game comparison](./markup/GameComp.md) feature which generates visualizations of differences between 2 or more games from a PGN file.
 
 The Ceres MCTS engine is a novel implementation written in C# for the Microsoft .NET framework. This system 
 comprises about 80,000 lines of source in 500 source code files, developed
@@ -102,7 +102,7 @@ The external API is not yet considered stable. Future effort will result in the 
 of documentation and more extensive code samples of the API, along with an overview
 of the underlying data structures and algorithms.
 
-As a teaser, the following [examples](APISamples.md)
+As a teaser, the following [examples](./markup/APISamples.md)
 demonstrate how the API can be leveraged to perform complex tasks using 
 only a very small number of lines of code.
 
@@ -171,7 +171,7 @@ or inference precisions (8 bit).
 
 ## Configuration and Installation
 
-The setup [instructions](Setup.md) describe the sequence of steps
+The setup [instructions](./markup/Setup.md) describe the sequence of steps
 currently needed to install and configure Ceres. Although installation procedures
 have been simplified since since first release, the process is not yet "single-click" easy
 and does require several steps and careful attention.
@@ -183,7 +183,7 @@ for MCTS-style engine such as Ceres or Leela Chess Zero.
 
 ## Monitoring Tool
 Event logging and statistics collection are very useful (and interesting) tools.
-Ceres provides an optional realtime [monitoring](Monitoring.md) system.
+Ceres provides an optional realtime [monitoring](./markup/Monitoring.md) system.
 
 
 ## Contributing
