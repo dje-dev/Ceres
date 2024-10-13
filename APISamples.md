@@ -17,7 +17,7 @@ do a monotonically increasing better job of understanding
 in a single-node analysis that the pawn move g2g3 trapping
 the bishop is best.
 
-![A P I Evaluator Compare](API_EvaluatorCompare.png)
+![A P I Evaluator Compare](./images/API_EvaluatorCompare.png)
 
 ```
 703810: 10x128 WDL MLH     <NNPositionEvaluation V= -0.18 Policy= g2g3 [ 27.26%]  e3e4 [ 25.91%]  f2f4 [ 12.23%]  c1b2 [ 10.50%]  a3a4 [  7.08%] >
@@ -37,7 +37,7 @@ against an LC0 policy network, quantifying the aggrement to
 assess their strength and/or similarity to the playing style of 
 the Leela networks.
 
-![A P I Player Analysis](APIPlayerAnalysis.png)
+![A P I Player Analysis](./images/APIPlayerAnalysis.png)
 
 After a couple of minutes of execution the following intriguing results are output:
 

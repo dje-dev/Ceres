@@ -21,10 +21,10 @@ Note that this requires that this .NET utility have already be installed
 dotnet tool install --global dotnet-counters 
 ```
 
-The output of the montitoring tool consists of two sections. 
+The output of the monitoring tool consists of two sections. 
 The first section show standard statistics associated with the .NET runtime,
 such as the memory consumption of the running process.
 The second section shows statistics specific to Ceres, such as the
 number of nodes evaluated per second. For example:
 
-![Monitor Window](MonitorWindow.png)
+![Monitor Window](./images/MonitorWindow.png)

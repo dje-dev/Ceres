@@ -33,10 +33,10 @@ graph 7
 ## Graph Output Examples
 
 **Graph at lowest level of detail (0):**
-![](graph_0_example.PNG)
+![](./images/graph_0_example.PNG)
 
 **Graph at highest level of detail (partial) (9):**
-![](graph_9_example.PNG)
+![](./images/graph_9_example.PNG)
 
 ## Tips on Interpreting the Graph
 - the root position appears on the left followed by one or more "top moves" from this position (each as a boxed subgraph) with the "best move" shown in a slight green background color
@@ -45,8 +45,8 @@ graph 7
 
 - the piece being moved is shown using yellow for the origin square and green for the destination square
 
-- hovering over a board with the mouse will show a tooltiop with additional details about the main possible continuation moves from that position, for example:
-![](graph_tooltip.PNG)
+- hovering over a board with the mouse will show a tooltip with additional details about the main possible continuation moves from that position, for example:
+![](./images/graph_tooltip.PNG)
 
 - clicking on a board will launch the position in lichess.com to facilitate sharing, further analysis, or extracting the corresponding FEN
 
@@ -63,21 +63,21 @@ This will use interprocess communication to send a signal to the other Ceres ins
 
 Most GUIs also provide shortcuts for issuing UCI commands to engines without leaving the GUI application. Examples for Nibbler and Arena are shown here.
 
-![](graph_nibbler.PNG)
-![](graph_arena.PNG)
+![](./images/graph_nibbler.PNG)
+![](./images/graph_arena.PNG)
 
 ## Adding Reference Engine Analysis
-Often it can be helful to evaluate chess positions using more than one engine to get alternative
+Often it can be helpful to evaluate chess positions using more than one engine to get alternative
 opinions of the position and associated best move. For example:
- -  analysis comparing two neural networks (both using Ceres) two undertand different styles and strenghts of various networks, or
+ -  analysis comparing two neural networks (both using Ceres) two understand different styles and strengths of various networks, or
  -  analysis comparing Ceres and LC0 to understand the differences between the two MCTS engines, or
- -  analysis comparing Ceres with an alphabeta engine such as Stockfish using a fudamentally different algorithm (minimax)
+ -  analysis comparing Ceres with an alphabeta engine such as Stockfish using a fundamentally different algorithm (minimax)
 
 The graphing feature supports specifying an additional reference engine in the Ceres.json 
 which will be called to evaluate every position in the diagram and then show the output of this analysis (score and best move) in an additional
-line below the assoicated position. For example, in the example below Stockfish is configured as the reference engine
+line below the associated position. For example, in the example below Stockfish is configured as the reference engine
 and a supplemental line appears at the bottom of the position with the corresponding analysis:
-![](graph_reference_engine.PNG)
+![](./images/graph_reference_engine.PNG)
 
 In this case we see the Stockfish evaluation is much better than Ceres (280cp vs 81cp). We see Stockfish
 suggested best move (Bg5) differs from the Ceres recommended best move (b4), and for this reason 

@@ -38,7 +38,7 @@ gamecomp altsufi.pgn r7
 ## Output Example
 
 **Game deviations from a round of a tournament with 3 players:**
-![](graph_comp.png)
+![](./images/graph_comp.png)
 
 
 ## Tips on Interpreting the Graph
