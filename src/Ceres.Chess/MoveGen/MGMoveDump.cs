@@ -53,10 +53,10 @@ SOFTWARE.
 
 #region Using directives
 
-using Ceres.Chess.EncodedPositions.Basic;
 using System;
 using System.Numerics;
 using System.Text;
+
 using BitBoard = System.UInt64;
 
 #endregion
@@ -79,11 +79,6 @@ namespace Ceres.Chess.MoveGen
     ShortAlgebraic,
 
     /// <summary>
-    /// Standard algebraic, e.g. exf(q)
-    /// </summary>
-    StandardAlgebraic,
-
-    /// <summary>
     /// Coordinate style, e.g. e7f8q.
     /// </summary>
     CoOrdinate,
@@ -92,11 +87,6 @@ namespace Ceres.Chess.MoveGen
     /// Leela chess zero coordinate format.
     /// </summary>
     LC0Coordinate,
-
-    /// <summary>
-    /// Leela chess zero coordinate format, with 960 extension for castling moves.
-    /// </summary>
-    LC0Coordinate960Format,
 
     /// <summary>
     /// Normal castling moves, e.g. e1g1 and e1c1.
@@ -112,27 +102,22 @@ namespace Ceres.Chess.MoveGen
   public partial struct MGMove : IEquatable<MGMove>
   {
     /// <summary>
-    /// Converts a move to ascii and dumps it to stdout, unless a character 
-    /// buffer is supplied, in which case the ascii is written to pBuffer instead.
-    /// A number of notation styles are supported. Usually CoOrdinate should be used
-    /// for WinBoard.
+    /// Converts a move to ASCII and dumps it to stdout, unless a character buffer is supplied, in which case the ASCII is written to pBuffer instead.
+    /// A number of notation styles are supported. Usually CoOrdinate should be used for WinBoard.
     /// </summary>
-    /// <param name="M"></param>
-    /// <param name="style"></param>
+    /// <param name="style">The notation style for the string representation of the MGMove.</param>
+    /// <returns>The string representation of the MGMove.</returns>
     public string MoveStr(MGMoveNotationStyle style = MGMoveNotationStyle.LongAlgebraic)
     {
-      if (FromSquareIndex == 0b0 && ToSquareIndex == 0b0) return "(none)";
-
-      BitBoard bbFrom = 1UL << FromSquareIndex;
-      BitBoard bbTo = 1UL << ToSquareIndex;
-
-      int from = BitOperations.TrailingZeroCount(bbFrom);
-      int to = BitOperations.TrailingZeroCount(bbTo);
+      if (FromSquareIndex == 0 && ToSquareIndex == 0)
+      {
+        return "(none)";
+      }
 
       if (style == MGMoveNotationStyle.StandardCastlingFormat)
       {
         if (IsCastle)
-        {                 
+        {
           bool isWhite = Piece == MGPositionConstants.MCChessPositionPieceEnum.WhiteKing;
           if (isWhite && FromSquareIndex == 3)
           {
@@ -152,63 +137,47 @@ namespace Ceres.Chess.MoveGen
         {
           return "O-O";
         }
+
         if (CastleLong)
         {
           return "O-O-O";
         }
       }
 
+      BitBoard bbFrom = 1UL << FromSquareIndex;
+      BitBoard bbTo = 1UL << ToSquareIndex;
+
+      int from = BitOperations.TrailingZeroCount(bbFrom);
+      int to = BitOperations.TrailingZeroCount(bbTo);
+
       char c1 = (char)('h' - (from % 8));
       char c2 = (char)('h' - (to % 8));
 
       // Determine piece and assign character p accordingly:
-      string p;
-      switch ((byte)Piece & 7)
+      string p = ((byte)Piece & 7) switch
       {
-        case MGPositionConstants.WPAWN:
-          p = "";
-          break;
-        case MGPositionConstants.WKNIGHT:
-          p = "N";
-          break;
-        case MGPositionConstants.WBISHOP:
-          p = "B";
-          break;
-        case MGPositionConstants.WROOK:
-          p = "R";
-          break;
-        case MGPositionConstants.WQUEEN:
-          p = "Q";
-          break;
-        case MGPositionConstants.WKING:
-          p = "K";
-          break;
-        default:
-          p = "?";
-          break;
-      }
+        MGPositionConstants.WPAWN => "",
+        MGPositionConstants.WKNIGHT => "N",
+        MGPositionConstants.WBISHOP => "B",
+        MGPositionConstants.WROOK => "R",
+        MGPositionConstants.WQUEEN => "Q",
+        MGPositionConstants.WKING => "K",
+        _ => "?",
+      };
 
       if ((style == MGMoveNotationStyle.LongAlgebraic)
        || (style == MGMoveNotationStyle.ShortAlgebraic)
-       || (style == MGMoveNotationStyle.StandardAlgebraic)
        || (style == MGMoveNotationStyle.LC0Coordinate))
       {
         // Determine if move is a capture
         char capChar = (Capture || EnPassantCapture) ? 'x' : '-';
 
         StringBuilder sb = new StringBuilder();
-        if ((style == MGMoveNotationStyle.ShortAlgebraic) || (style == MGMoveNotationStyle.LC0Coordinate))
+        if ((style == MGMoveNotationStyle.ShortAlgebraic) 
+         || (style == MGMoveNotationStyle.LC0Coordinate))
         {
           sb.Append(c1);
           sb.Append(1 + (from >> 3));
-          sb.Append(c2);
-          sb.Append(1 + (to >> 3));
-        }
-        else if (style == MGMoveNotationStyle.StandardAlgebraic)
-        {
-          sb.Append(p);
-          sb.Append(1 + (from >> 3));
-          sb.Append(capChar);
           sb.Append(c2);
           sb.Append(1 + (to >> 3));
         }
@@ -233,7 +202,6 @@ namespace Ceres.Chess.MoveGen
       if (style == MGMoveNotationStyle.CoOrdinate)
       {
         StringBuilder sb = new StringBuilder();
-        //string s = $"{p}{c1}{1 + (from >> 3)}{c2}{1 + (to >> 3)}";
         sb.Append(p);
         sb.Append(c1);
         sb.Append(1 + (from >> 3));
@@ -246,20 +214,31 @@ namespace Ceres.Chess.MoveGen
       return "";
     }
 
+
     private string AddPromotions(string s)
     {
       if (PromoteBishop)
+      {
         s += "b";
+      }
+
       if (PromoteKnight)
+      {
         s += "n";
+      }
+
       if (PromoteRook)
+      {
         s += "r";
+      }
+
       if (PromoteQueen)
+      {
         s += "q";
+      }
+
       return s;
     }
   }
 
 }
-
-
