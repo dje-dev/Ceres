@@ -328,7 +328,7 @@ namespace Ceres.Chess.MoveGen
     /// <summary>
     /// Determines if the move is a chess960 castling move (either kingside or queenside).
     /// </summary>
-    public bool IsChess960Caslte => IsCastle && !IsLegacyCastle;
+    public bool IsChess960Castle => IsCastle && !IsLegacyCastle;
 
     /// <summary>
     /// Returns if the move is a castle short move.

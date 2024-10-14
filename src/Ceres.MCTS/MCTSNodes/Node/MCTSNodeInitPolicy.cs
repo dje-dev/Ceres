@@ -144,10 +144,10 @@ namespace Ceres.MCTS.MTCSNodes
         if (indexLegalMove != -1)
         {
           /** FIX ME **/
-          const float threshold = 0.15f;
+          const float threshold = 0.05f;
           MGMove policyMoveMG = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(thisPolicyMove, in posMG);
           
-          if (thisPolicyProb < threshold && policyMoveMG.IsChess960Caslte)
+          if (thisPolicyProb < threshold && policyMoveMG.IsChess960Castle)
           {
             // Force castling moves in Chess960 to have somewhat higher minimum probability
             // neural networks may not be trained to recognize them.
