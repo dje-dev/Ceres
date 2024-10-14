@@ -321,7 +321,7 @@ Comments from onnxruntime source code:
         so = SessionOptions.MakeSessionOptionWithCudaProvider(cudaProviderOptions);
       }
 
-#if DEBUG
+#if NOT // DEBUG
       so.LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_INFO;
 #else
       so.LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_ERROR;
