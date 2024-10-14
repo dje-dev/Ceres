@@ -180,12 +180,8 @@ namespace Ceres.MCTS.Utils
       if (Nodes.Count == 1)
       {
         // In the special case of only root evaluated, show the best policy move so the pv is not completely empty.
-        // Otherwise, we choose not to show the best policy move at the terminal node.
-        MGMove bestMoveSingle = Nodes[0].BestMoveInfo(false).BestMove;
-        MGMoveNotationStyle moveStyleSingle = (!MGPositionConstants.IsChess960 && bestMoveSingle.IsCastle)
-                                          ? MGMoveNotationStyle.StandardCastlingFormat
-                                          : MGMoveNotationStyle.LC0Coordinate;
-        return bestMoveSingle.MoveStr(moveStyleSingle);
+        // Otherwise, we choose not to show the best policy move at the terminal node.        
+        return Nodes[0].BestMoveInfo(false).BestMove.MoveStr(MGMoveNotationStyle.Coordinates);
       }
 
       StringBuilder sb = new StringBuilder();
@@ -194,13 +190,8 @@ namespace Ceres.MCTS.Utils
       foreach (MCTSNode node in Nodes)
       {
         if (haveSkippedSearchRoot)
-        {
-          MGMove bestMoveSkipped = node.Annotation.PriorMoveMG;
-          MGMoveNotationStyle moveStyleSkipped = (!MGPositionConstants.IsChess960 && bestMoveSkipped.IsCastle)
-                                            ? MGMoveNotationStyle.StandardCastlingFormat
-                                            : MGMoveNotationStyle.LC0Coordinate;
-
-          sb.Append(bestMoveSkipped.MoveStr(moveStyleSkipped) + " ");
+        {         
+          sb.Append(node.Annotation.PriorMoveMG.MoveStr(MGMoveNotationStyle.Coordinates) + " ");
         }
         else
         {

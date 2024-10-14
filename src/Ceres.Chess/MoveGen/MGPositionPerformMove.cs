@@ -168,7 +168,6 @@ namespace Ceres.Chess.MoveGen
 
         if (M.CastleShort && performedCastling)
         {
-          Debug.Assert(M.ToString() == "O-O");
           BitBoard kingToSq = 144115188075855872; //g8 in decimals
           BitBoard kingIdx = 57; //g8 represented as index from h1..a1
           BitBoard kingPos = nFromSquare == kingIdx ? 0 : (1UL << (int)nFromSquare) | kingToSq;
@@ -288,7 +287,6 @@ namespace Ceres.Chess.MoveGen
 
         if (M.CastleLong && performedCastling)
         {
-          Debug.Assert(M.ToString() == "O-O-O");
           BitBoard rookPos = 1UL << (int)nToSquare;
           rookPos = rookPos == 16 ? 0 : rookPos | 16;
           BitBoard kingToSq = 32; //c1 in decimals

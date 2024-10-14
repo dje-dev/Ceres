@@ -120,15 +120,11 @@ namespace Ceres.MCTS.Iteration
           }
         }
 
-        MGMoveNotationStyle style = (!MGPositionConstants.IsChess960 && bestMove.IsCastle)
-                 ? MGMoveNotationStyle.StandardCastlingFormat
-                 : MGMoveNotationStyle.LC0Coordinate;
-
         // Output position (with history) information.
         writer.WriteLine("Position            : " + searchRootNode.Annotation.Pos.FEN);
         writer.WriteLine("Tree root position  : " + Context.Tree.Store.Nodes.PriorMoves);
         writer.WriteLine("Search stop status  : " + StopStatus);
-        writer.WriteLine("Best move selected  : " + bestMove.MoveStr(style) + " " + bestMoveInfo);
+        writer.WriteLine("Best move selected  : " + bestMove.MoveStr(MGMoveNotationStyle.Coordinates) + " " + bestMoveInfo);
         writer.WriteLine();
 
         string infoUpdate = UCIInfo.UCIInfoString(this, searchRootNode);

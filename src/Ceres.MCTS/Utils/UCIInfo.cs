@@ -76,10 +76,7 @@ namespace Ceres.MCTS.Utils
 
         MCTSNode root = overrideRootMove.IsNotNull ? overrideRootMove : manager.Root;
         float topVScoreToShow = ScoreToShow(scoreAsQ, (float)root.Q);
-        MGMoveNotationStyle style = (!MGPositionConstants.IsChess960 && manager.Context.TopVForcedMove.IsCastle)
-                                   ? MGMoveNotationStyle.StandardCastlingFormat
-                                   : MGMoveNotationStyle.LC0Coordinate;
-        string moveStr = manager.Context.TopVForcedMove.MoveStr(style);
+        string moveStr = manager.Context.TopVForcedMove.MoveStr(MGMoveNotationStyle.Coordinates);
         string str = $"info depth 1 seldepth 1 time 0 nodes 1 score cp {topVScoreToShow} pv {moveStr}";
         return str;
       }
@@ -215,11 +212,7 @@ namespace Ceres.MCTS.Utils
         scoreStr = scoreAsQ ? "-1.0" : "-9999";
       }
 
-      MGMoveNotationStyle style = (!MGPositionConstants.IsChess960 && manager.TablebaseImmediateBestMove.IsCastle)
-                                 ? MGMoveNotationStyle.StandardCastlingFormat
-                                 : MGMoveNotationStyle.LC0Coordinate;
-
-      string moveStr = manager.TablebaseImmediateBestMove.MoveStr(style);
+      string moveStr = manager.TablebaseImmediateBestMove.MoveStr(MGMoveNotationStyle.Coordinates);
       string str = $"info depth 1 seldepth 1 time 0 nodes 1 score cp {scoreStr} pv {moveStr}";
       return str;
     }

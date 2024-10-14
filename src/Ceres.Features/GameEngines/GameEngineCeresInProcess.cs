@@ -372,12 +372,9 @@ namespace Ceres.Features.GameEngines
 
       isFirstMoveOfGame = false;
       // TODO is the RootNWhenSearchStarted correct because we may be following a continuation (BestMoveRoot)
-      MGMoveNotationStyle style = (!MGPositionConstants.IsChess960 && bestMoveMG.IsCastle)
-                       ? MGMoveNotationStyle.StandardCastlingFormat
-                       : MGMoveNotationStyle.LC0Coordinate;
 
       GameEngineSearchResultCeres result =
-        new GameEngineSearchResultCeres(bestMoveMG.MoveStr(style),
+        new GameEngineSearchResultCeres(bestMoveMG.MoveStr(MGMoveNotationStyle.Coordinates),
                                         (float)bestMoveInfo.QOfBest, scoreCeresCP, searchResult.SearchRootNode.MAvg, searchResult.Manager.SearchLimit,
                                         this.LastSearch.TimingInfo,
                                         searchResult.Manager.RootNWhenSearchStarted, N, (int)Math.Round(searchResult.Manager.Context.AvgDepth),

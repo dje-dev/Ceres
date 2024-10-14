@@ -285,6 +285,52 @@ namespace Ceres.Chess.MoveGen
     public bool IsCastle => (Flags & (MGChessMoveFlags.CastleShort | MGChessMoveFlags.CastleLong)) != 0;
 
     /// <summary>
+    /// Determines if the move is a legacy queenside castling move.
+    /// </summary>
+    public bool IsLegacyCastleQueenside
+    {
+      get
+      {
+        if (!CastleLong)
+        {
+          return false;
+        }
+
+        return BlackToMove ?
+            FromSquareIndex == 59 && ToSquareIndex == 63 :
+            FromSquareIndex == 3 && ToSquareIndex == 7;        
+      }
+    }
+
+    /// <summary>
+    /// Determines if the move is a legacy kingside castling move.
+    /// </summary>
+    public bool IsLegacyCastleKingside
+    {
+      get
+      {
+        if (!CastleShort)
+        {
+          return false;
+        }
+        
+        return BlackToMove ?
+          FromSquareIndex == 59 && ToSquareIndex == 56 :
+          FromSquareIndex == 3 && ToSquareIndex == 0;
+      }
+    }
+
+    /// <summary>
+    /// Determines if the move is a legacy castling move (either kingside or queenside).
+    /// </summary>
+    public bool IsLegacyCastle => IsLegacyCastleQueenside || IsLegacyCastleKingside;
+
+    /// <summary>
+    /// Determines if the move is a chess960 castling move (either kingside or queenside).
+    /// </summary>
+    public bool IsChess960Caslte => IsCastle && !IsLegacyCastle;
+
+    /// <summary>
     /// Returns if the move is a castle short move.
     /// </summary>
     public bool CastleShort

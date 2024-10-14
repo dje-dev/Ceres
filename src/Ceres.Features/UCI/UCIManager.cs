@@ -1054,10 +1054,7 @@ namespace Ceres.Features.UCI
       OutputUCIInfo(result.Search.Manager, result.Search.SearchRootNode, true);
 
       // Send the best move (using appropriate castling move style).
-      MGMoveNotationStyle style = (!MGPositionConstants.IsChess960 && result.Search.BestMove.IsCastle)
-                                    ? MGMoveNotationStyle.StandardCastlingFormat
-                                    : MGMoveNotationStyle.LC0Coordinate;
-      UCIWriteLine("bestmove " + result.Search.BestMove.MoveStr(style));
+      UCIWriteLine("bestmove " + result.Search.BestMove.MoveStr(MGMoveNotationStyle.Coordinates));
 
       return result;
     }

@@ -208,11 +208,7 @@ namespace Ceres.MCTS.MTCSNodes
       string bestQStr = QMaximal == QOfBest ? "(same)" : $"{QMaximal:F3}";
       string mlhStr = MLHBonusApplied == 0 ? "" : $" MLHBonus={MLHBonusApplied}";
 
-      MGMoveNotationStyle style = (!MGPositionConstants.IsChess960 && BestMove.IsCastle)
-         ? MGMoveNotationStyle.StandardCastlingFormat
-         : MGMoveNotationStyle.LC0Coordinate;
-
-      return $"<BestMoveInfo {BestMove.MoveStr(style)} N={N} Q={QOfBest} BestN={bestNStr} BestQ={bestQStr} BestN2={BestNSecond,5:F1} {mlhStr}>";
+      return $"<BestMoveInfo {BestMove.MoveStr(MGMoveNotationStyle.Coordinates)} N={N} Q={QOfBest} BestN={bestNStr} BestQ={bestQStr} BestN2={BestNSecond,5:F1} {mlhStr}>";
     }
   }
 }

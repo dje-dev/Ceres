@@ -537,12 +537,8 @@ namespace Ceres.Chess.Positions
       {
         string moveStr = "";
         foreach (MGMove move in Moves)
-        {
-          MGMoveNotationStyle moveStyle = (!MGPositionConstants.IsChess960 && move.IsCastle)
-                                            ? MGMoveNotationStyle.StandardCastlingFormat
-                                            : MGMoveNotationStyle.LC0Coordinate;
-
-          moveStr += move.MoveStr(moveStyle) + " ";
+        {          
+          moveStr += move.MoveStr(MGMoveNotationStyle.Coordinates) + " ";
         }
         return moveStr;
       }

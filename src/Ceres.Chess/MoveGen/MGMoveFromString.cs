@@ -46,7 +46,6 @@ namespace Ceres.Chess.MoveGen
         System.Diagnostics.Debug.Assert(pos.IsLegalMove(move));
         return move;
       }
-
     }
 
     /// <summary>
@@ -70,17 +69,11 @@ namespace Ceres.Chess.MoveGen
       foreach (MGMove moveTry in moves.MovesArray)
       {
         // Accept moves in any of multiple formats, including Chess 960 (for castling variation)
-        if (String.Equals(moveTry.MoveStr(MGMoveNotationStyle.LC0Coordinate), moveStr, StringComparison.OrdinalIgnoreCase)
+        if (String.Equals(moveTry.MoveStr(MGMoveNotationStyle.Coordinates), moveStr, StringComparison.OrdinalIgnoreCase)
          || String.Equals(moveTry.MoveStr(MGMoveNotationStyle.LongAlgebraic), moveStr, StringComparison.OrdinalIgnoreCase)
-         || String.Equals(moveTry.MoveStr(MGMoveNotationStyle.StandardCastlingFormat), moveStr, StringComparison.OrdinalIgnoreCase))
+         || String.Equals(moveTry.MoveStr(MGMoveNotationStyle.ShortAlgebraic), moveStr, StringComparison.OrdinalIgnoreCase))
         {
-          move = moveTry;
-          //if (moveTry.IsCastle)
-          //{
-          //  var res1 = moveTry.MoveStr(MGMoveNotationStyle.LC0Coordinate);
-          //  var res2 = moveTry.MoveStr(MGMoveNotationStyle.LongAlgebraic);
-          //  var res3 = moveTry.MoveStr(MGMoveNotationStyle.StandardCastlingFormat);
-          //}
+          move = moveTry;         
           return true;
         }
       }

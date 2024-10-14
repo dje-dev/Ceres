@@ -489,7 +489,7 @@ namespace Ceres.Chess.MoveGen.Test
       Console.WriteLine("Num generated: " + moves.NumMovesUsed);
 
       for (int i = 0; i < moves.NumMovesUsed; i++)
-        Console.WriteLine(i + ": " + moves.MovesArray[i].MoveStr(MGMoveNotationStyle.CoOrdinate) + " " + moves.MovesArray[i].FromSquareIndex + " " + moves.MovesArray[i].ToSquareIndex + " " + moves.MovesArray[i].Flags);
+        Console.WriteLine(i + ": " + moves.MovesArray[i].MoveStr(MGMoveNotationStyle.PieceAndCoordinates) + " " + moves.MovesArray[i].FromSquareIndex + " " + moves.MovesArray[i].ToSquareIndex + " " + moves.MovesArray[i].Flags);
       System.Environment.Exit(3);
 
 

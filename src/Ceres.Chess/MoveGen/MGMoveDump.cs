@@ -74,24 +74,19 @@ namespace Ceres.Chess.MoveGen
     LongAlgebraic,
 
     /// <summary>
-    /// Short algebraic
+    /// Short algebraic, e.g. d4, 0-0 or 0-0-0.
     /// </summary>
     ShortAlgebraic,
 
     /// <summary>
-    /// Coordinate style, e.g. e7f8q.
+    /// Coordinate style, e.g. Ng1f3 and e7f8q.
     /// </summary>
-    CoOrdinate,
+    PieceAndCoordinates,
 
     /// <summary>
-    /// Leela chess zero coordinate format.
+    /// Ceres coordinate format, e.g. e2e4 and e1h1 indicates king takes rook for castling
     /// </summary>
-    LC0Coordinate,
-
-    /// <summary>
-    /// Normal castling moves, e.g. e1g1 and e1c1.
-    /// </summary>
-    StandardCastlingFormat
+    Coordinates
   };
 
 
@@ -114,24 +109,20 @@ namespace Ceres.Chess.MoveGen
         return "(none)";
       }
 
-      if (style == MGMoveNotationStyle.StandardCastlingFormat)
+      if (IsLegacyCastle)
       {
-        if (IsCastle)
+        bool isWhite = Piece == MGPositionConstants.MCChessPositionPieceEnum.WhiteKing;
+        if (isWhite && FromSquareIndex == 3)
         {
-          bool isWhite = Piece == MGPositionConstants.MCChessPositionPieceEnum.WhiteKing;
-          if (isWhite && FromSquareIndex == 3)
-          {
-            return CastleLong ? "e1c1" : "e1g1";
-          }
-          else if (!isWhite && FromSquareIndex == 59)
-          {
-            return CastleLong ? "e8c8" : "e8g8";
-          }
+          return CastleLong ? "e1c1" : "e1g1";
         }
-        return string.Empty;
+        else if (!isWhite && FromSquareIndex == 59)
+        {
+          return CastleLong ? "e8c8" : "e8g8";
+        }
       }
 
-      if (style != MGMoveNotationStyle.CoOrdinate && style != MGMoveNotationStyle.LC0Coordinate)
+      if (style == MGMoveNotationStyle.ShortAlgebraic)
       {
         if (CastleShort)
         {
@@ -167,14 +158,14 @@ namespace Ceres.Chess.MoveGen
 
       if ((style == MGMoveNotationStyle.LongAlgebraic)
        || (style == MGMoveNotationStyle.ShortAlgebraic)
-       || (style == MGMoveNotationStyle.LC0Coordinate))
+       || (style == MGMoveNotationStyle.Coordinates))
       {
         // Determine if move is a capture
         char capChar = (Capture || EnPassantCapture) ? 'x' : '-';
 
         StringBuilder sb = new StringBuilder();
-        if ((style == MGMoveNotationStyle.ShortAlgebraic) 
-         || (style == MGMoveNotationStyle.LC0Coordinate))
+        if ((style == MGMoveNotationStyle.ShortAlgebraic)
+         || (style == MGMoveNotationStyle.Coordinates))
         {
           sb.Append(c1);
           sb.Append(1 + (from >> 3));
@@ -199,7 +190,7 @@ namespace Ceres.Chess.MoveGen
         return s;
       }
 
-      if (style == MGMoveNotationStyle.CoOrdinate)
+      if (style == MGMoveNotationStyle.PieceAndCoordinates)
       {
         StringBuilder sb = new StringBuilder();
         sb.Append(p);
