@@ -13,35 +13,50 @@
 
 #region Using directives
 
-using System;
 using System.Runtime.CompilerServices;
-using System.Runtime.Intrinsics;
-using Ceres.Chess.EncodedPositions.Basic;
-#endregion
 
+using Ceres.Chess.EncodedPositions.Basic;
+
+#endregion
 
 namespace Ceres.Chess.MoveGen.Converters
 {
   public static class MoveInMGMovesArrayLocator
   {
-    // --------------------------------------------------------------------------------------------
     /// <summary>
     /// Returns the index of a specified move (starting search at specified index), or -1 if not found.
     /// Optimized for performance.
+    /// </summary>
+    /// <param name="moves"></param>
+    /// <param name="move"></param>
+    /// <param name="startIndex"></param>
+    /// <param name="numMovesUsed"></param>
+    /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static int FindMoveIndex(MGMove[] moves, MGMove move, int startIndex, int numMovesUsed)
     {
       byte moveToSquare = move.ToSquareIndex;
       for (int i = startIndex; i < numMovesUsed; i++)
-        if (moves[i].ToSquareIndex == moveToSquare)
-          if (moves[i] == move)
-            return i;
+      {
+        if (moves[i].ToSquareIndex == moveToSquare && moves[i] == move)
+        {
+          return i;
+        }
+      }
+
       return -1;
     }
+
 
     /// <summary>
     /// Returns the index of a specified move (starting search at specified index), or -1 if not found.
     /// Optimized for performance.
+    /// </summary>
+    /// <param name="moves"></param>
+    /// <param name="moveSquares"></param>
+    /// <param name="startIndex"></param>
+    /// <param name="numMovesUsed"></param>
+    /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int FindMoveIndex(MGMove[] moves, ConverterMGMoveEncodedMove.FromTo moveSquares, int startIndex, int numMovesUsed)
     {
@@ -62,7 +77,9 @@ namespace Ceres.Chess.MoveGen.Converters
       while (i < numMovesUsed)
       {
         if (moves[i].FromAndToCombined == fromAndTo)
+        {
           return i;
+        }
 
         i++;
       }
@@ -70,27 +87,22 @@ namespace Ceres.Chess.MoveGen.Converters
       return -1;
     }
 
-    // --------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Returns the index of a specified move (starting search at specified index), or -1 if not found.
+    /// </summary>
+    /// <param name="posMG"></param>
+    /// <param name="legalMoveArray"></param>
+    /// <param name="thisPolicyMove"></param>
+    /// <param name="countPolicyMovesProcessed"></param>
+    /// <param name="numMovesUsed"></param>
+    /// <param name="blackToMove"></param>
+    /// <returns></returns>
     public static int FindMoveInMGMoves(in MGPosition posMG, MGMove[] legalMoveArray, EncodedMove thisPolicyMove, int countPolicyMovesProcessed, int numMovesUsed, bool blackToMove)
     {
       PieceType pieceMoving = posMG.PieceMoving(thisPolicyMove);
-      int indexNeuralNet = thisPolicyMove.IndexNeuralNet;
 
-      if (indexNeuralNet == 103 && pieceMoving == PieceType.King)
-      {
-        // Remap castling Leela encoding e1-h1 to e1-g1 as used by MGMove
-        ConverterMGMoveEncodedMove.FromTo remapped = new ConverterMGMoveEncodedMove.FromTo((byte)(blackToMove ? 59 : 3),
-                                                                                                            (byte)(blackToMove ? 57 : 1));
-        return FindMoveIndex(legalMoveArray, remapped, countPolicyMovesProcessed, numMovesUsed);
-      }
-      else if (indexNeuralNet == 97 && pieceMoving == PieceType.King)
-      {
-        // Remap castling Leela encoding e1-a1 to e1-b1 as used by MGMove
-        ConverterMGMoveEncodedMove.FromTo remapped = new ConverterMGMoveEncodedMove.FromTo((byte)(blackToMove ? 59 : 3),
-                                                                                                           (byte)(blackToMove ? 61 : 5));
-        return FindMoveIndex(legalMoveArray, remapped, countPolicyMovesProcessed, numMovesUsed);
-      }
-      else if (pieceMoving == PieceType.Pawn && thisPolicyMove.ToSquare.IsRank8) // pawn promotion
+      if (pieceMoving == PieceType.Pawn && thisPolicyMove.ToSquare.IsRank8) // pawn promotion
       {
         // This slower code path is necessary because in this case of promotion the (from, to) are not sufficient to uniquely identify move
         MGMove policyMoveMG = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(thisPolicyMove, in posMG);
