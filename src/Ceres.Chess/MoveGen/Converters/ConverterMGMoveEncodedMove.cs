@@ -216,9 +216,6 @@ namespace Ceres.Chess.MoveGen.Converters
 
     }
 
-    static readonly EncodedMove moveCastle = new EncodedMove("E1", "H1", EncodedMove.PromotionType.None, true);
-    static readonly EncodedMove moveCastleLong = new EncodedMove("E1", "A1", EncodedMove.PromotionType.None, true);
-
 
     public static EncodedMove MGChessMoveToEncodedMove(MGMove thisMove)
     {

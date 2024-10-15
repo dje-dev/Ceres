@@ -35,7 +35,15 @@ namespace Ceres.Chess.EncodedPositions.Basic
   [Serializable]
   public readonly struct EncodedMove : IEquatable<EncodedMove>
   {
-    public enum PromotionType { None, Queen, Rook, Bishop, Knight };
+    public enum PromotionType
+    { 
+      None, 
+      Queen, 
+      Rook, 
+      Bishop, 
+      Knight 
+    };
+    
     readonly static char[] PROMO_CHARS = new char[] { ' ', 'q', 'r', 'b', 'n' };
 
     internal const ushort MaskTo = 0b0000000000111111; // bits [0..5]
@@ -71,9 +79,10 @@ namespace Ceres.Chess.EncodedPositions.Basic
     /// <param name="promotion"></param>
     /// <param name="flipped"></param>
     /// <param name="isCastling"></param>
-    public EncodedMove(EncodedSquare from, EncodedSquare to,
-                          PromotionType promotion = PromotionType.None,
-                          bool isCastling = false, bool flipped = false)
+    public EncodedMove(EncodedSquare from, 
+                       EncodedSquare to,
+                       PromotionType promotion,
+                       bool isCastling)
     {
       Debug.Assert(!isCastling || from.Rank == 0); // first rank
       Debug.Assert(!isCastling || to.Rank == 0); // first rank
@@ -83,48 +92,42 @@ namespace Ceres.Chess.EncodedPositions.Basic
       int val = to.Value +
                 (from.Value << 6) +
                 ((int)promotion << 12);
-      if (flipped) val |= MaskFlip;
-      if (isCastling) val |= MaskCastling;
+
+      if (isCastling)
+      {
+        val |= MaskCastling;
+      }
+
       rawValue = (ushort)val;
     }
 
 
     /// <summary>
-    /// Constructor (from move string).
+    /// Converts a raw move string into NN index.
     /// </summary>
-    /// <param name="pos"></param>
     /// <param name="moveStr"></param>
-    /// <param name="flipped"></param>
-    /// <param name="isCastling"></param>
-    public EncodedMove(string moveStr, bool flipped = false, bool isCastling = false)
+    private static int MoveStrToNNIndex(string moveStr)
     {
-      if (moveStr == "O-O")
-      {
-        rawValue = new EncodedMove("e1h1", false, true).rawValue;
-        return;
-      }
-      else if (moveStr == "O-O-O")
-      {
-        rawValue = new EncodedMove("e1a1", false, true).rawValue;
-        return;
-      }
-
-      EncodedSquare from = new EncodedSquare(moveStr.Substring(0, 2), flipped);
-      EncodedSquare to = new EncodedSquare(moveStr.Substring(2, 2), flipped);
+      EncodedSquare from = new (moveStr.Substring(0, 2));
+      EncodedSquare to = new (moveStr.Substring(2, 2));
       PromotionType promo = PromotionType.None;
 
       // Check for promotion
-      if (moveStr.Length == 5)
+      bool isPromotion = moveStr.Length == 5;
+      if (isPromotion)
       {
         char promoChar = char.ToLower(moveStr[4]);
 
         int promoIndex = Array.IndexOf(PROMO_CHARS, promoChar);
-        if (promoIndex == -1) throw new NotImplementedException("Invalid promotion " + promoChar);
+        if (promoIndex == -1)
+        {
+          throw new NotImplementedException("Invalid promotion " + promoChar);
+        }
 
         promo = (PromotionType)promoIndex;
       }
 
-      rawValue = new EncodedMove(from, to, promo, isCastling, false).rawValue;
+      return new EncodedMove(from, to, promo, false).rawValue;
     }
 
 
@@ -134,7 +137,7 @@ namespace Ceres.Chess.EncodedPositions.Basic
     ///   - not encoding the castling bit, and
     ///   - encoding Knight promotions as if not promotions
     ///
-    /// Conveniently this is equivalent to ignoring the two lefmost bits
+    /// Conveniently this is equivalent to ignoring the two leftmost bits
     /// </summary>
     public uint IndexPacked => (uint)(rawValue & 0b0011_1111_1111_1111);
 
@@ -149,7 +152,7 @@ namespace Ceres.Chess.EncodedPositions.Basic
     /// Returns the promotion flags.
     /// 
     /// Note that Knight promotions are encoded without these flags being set,
-    /// thus a return value of None does not necessarily mean that no promotion occured
+    /// thus a return value of None does not necessarily mean that no promotion occurred
     /// (this can only be determined by also consulting the associated position)
     /// </summary>
     public PromotionType Promotion => (PromotionType)((rawValue & MaskPromotion) >> 12);
@@ -170,8 +173,12 @@ namespace Ceres.Chess.EncodedPositions.Basic
     {
       get
       {
-        if (IsCastling) throw new Exception("Cannot mirror castling moves " + rawValue);
-        return new EncodedMove(FromSquare.Mirrored, ToSquare.Mirrored, Promotion);
+        if (IsCastling)
+        {
+          throw new Exception("Cannot mirror castling moves " + rawValue);
+        }
+
+        return new EncodedMove(FromSquare.Mirrored, ToSquare.Mirrored, Promotion, IsCastling);
       }
     }
 
@@ -187,7 +194,10 @@ namespace Ceres.Chess.EncodedPositions.Basic
 
     public override bool Equals(object obj)
     {
-      if (!(obj is EncodedMove)) return false;
+      if (!(obj is EncodedMove))
+      {
+        return false;
+      }
       return this.Equals((EncodedMove)obj);
     }
 
@@ -196,21 +206,15 @@ namespace Ceres.Chess.EncodedPositions.Basic
 
     #endregion
 
+
     /// <summary>
     /// Returns string representation (algebraic format).
     /// </summary>
-    public string AlgebraicStr
-    {
-      get
-      {
-        return ToString();
-      }
-    }
+    public string AlgebraicStr => ToString();
 
 
     static ushort[] indexesToNNIndices;
     static ushort[] nnIndicesToIndices;
-
 
     static void InitIndicesToNNIndices()
     {
@@ -218,12 +222,11 @@ namespace Ceres.Chess.EncodedPositions.Basic
       nnIndicesToIndices = new ushort[EncodedPolicyVector.POLICY_VECTOR_LENGTH];
       for (int i = 0; i < EncodedPolicyVector.POLICY_VECTOR_LENGTH; i++)
       {
-        uint index = new EncodedMove(NEURAL_NET_MOVE_STR[i]).IndexPacked;
+        int index = MoveStrToNNIndex(NEURAL_NET_MOVE_STR[i]);
         nnIndicesToIndices[i] = (ushort)index;
         temp[index] = (ushort)i;
       }
       indexesToNNIndices = temp;
-
     }
 
 
@@ -233,41 +236,7 @@ namespace Ceres.Chess.EncodedPositions.Basic
     /// </summary>
     public int IndexNeuralNet => indexesToNNIndices[IndexPacked];
 
-#if WORKS_BUT_SLOW_UNNEEDED
-    /// <summary>
-    /// Returns index of this move in the neural network (or -1, for moves that are not possible)
-    /// In range [0.1857]
-    /// </summary>
-    int IndexNeuralNet_OLD
-    {
-      get
-      {
-        if (IsCastling)
-        {
-          // Special logic, we map target squares from G1/C1 to H1/A1
-          if (ToSquare.AsByte == 6)
-            return 103; // H1
-          else if (ToSquare.AsByte == 2)
-            return 97; // A1
-          else
-            throw new Exception("Internal error, unexpected castling encoding");
-        }
-        else
-        {
-          //        if (!IsCastling) return MovesInNNOrder[ValuePacked];
-          string lookupString = AlgebraicStr;
 
-          // promotion piece always lower case
-          Debug.Assert(char.ToLower(lookupString[lookupString.Length - 1]) == lookupString[lookupString.Length - 1]);
-
-          // Knight promotions do not have any special flag set
-          if (lookupString.EndsWith('n')) lookupString = lookupString.Substring(0, lookupString.Length - 1);
-
-          return Array.IndexOf(NEURAL_NET_MOVE_STR, lookupString);
-        }
-      }
-    }
-#endif
 
 
     /// <summary>
@@ -277,11 +246,17 @@ namespace Ceres.Chess.EncodedPositions.Basic
     public override string ToString()
     {
       if (FromSquare.AsByte == 0 && ToSquare.AsByte == 0)
+      {
         return "(none)";
+      }
       else if (Promotion == PromotionType.None)
+      {
         return FromSquare.ToString() + ToSquare.ToString();
+      }
       else
+      {
         return FromSquare.ToString() + ToSquare.ToString() + PROMO_CHARS[(int)Promotion];
+      }
     }
 
 
@@ -304,6 +279,8 @@ namespace Ceres.Chess.EncodedPositions.Basic
     public static EncodedMove FromNeuralNetIndex(int index, bool isPawnMove, bool isKingMove) => FromNeuralNetIndex(index, true, isPawnMove, isKingMove);
 
 
+    const string CASTLING_MOVES = "e1h1 e8h8 e1a1 e8a8";
+
     /// <summary>
     /// Factory method from neural net index
     /// </summary>
@@ -319,7 +296,7 @@ namespace Ceres.Chess.EncodedPositions.Basic
 
       if (pieceInfoWasAvailable)
       {
-        if (raw.IsCastling && isKingMove)
+        if (isKingMove && (CASTLING_MOVES.Contains(raw.AlgebraicStr)))
         {
           return new EncodedMove((ushort)(raw.IndexPacked | MaskCastling));
         }
@@ -330,12 +307,13 @@ namespace Ceres.Chess.EncodedPositions.Basic
           PromotionType promoType = promoIndex == -1 ? PromotionType.Knight // Knight promotion not specifically encoded
                                                      : (PromotionType)promoIndex;
 
-          raw = new EncodedMove(raw.FromSquare, raw.ToSquare, promoType);
+          raw = new EncodedMove(raw.FromSquare, raw.ToSquare, promoType, false);
         }
       }
 
       return raw;
     }
+    
 
     #region NN encoding
 
@@ -583,7 +561,5 @@ namespace Ceres.Chess.EncodedPositions.Basic
       InitIndicesToNNIndices();
     }
 
-
   }
-
 }
