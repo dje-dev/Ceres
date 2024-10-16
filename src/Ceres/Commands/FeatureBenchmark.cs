@@ -68,7 +68,8 @@ namespace Ceres.Commands
 
       Position ps = Position.StartPosition;
       EncodedPositionBoard zb = default;
-      MGMove nmove = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(new EncodedMove("e2e4"), MGChessPositionConverter.MGChessPositionFromFEN(ps.FEN));
+      EncodedMove eMove = new EncodedMove("e2", "e4", EncodedMove.PromotionType.None, false);
+      MGMove nmove = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(eMove, MGChessPositionConverter.MGChessPositionFromFEN(ps.FEN));
 
       float ops1 = Benchmarking.DumpOperationTimeAndMemoryStats(() => MGPosition.FromPosition(ps), "MGPosition.FromPosition");
       float ops2 = Benchmarking.DumpOperationTimeAndMemoryStats(() => MGChessPositionConverter.MGChessPositionFromFEN(ps.FEN), "MGChessPositionFromFEN");
