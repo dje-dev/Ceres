@@ -14,10 +14,10 @@
 #region Using directives
 
 using System;
+
 using Ceres.Base.Math;
 
 #endregion
-
 
 namespace Chess.Ceres.PlayEvaluation
 {
@@ -25,18 +25,15 @@ namespace Chess.Ceres.PlayEvaluation
   /// A set of static methods that compute Elo chess ranking statistics,
   /// including confidence intervals and likelihood of superiority (LOS).
   /// </summary>
-  public class EloCalculator
+  public static class EloCalculator
   {
     /// <summary>
     /// Returns relative Elo for a player having a specified win percentage.
     /// </summary>
     /// <param name="winPercentage"></param>
     /// <returns></returns>
-    public static float EloDiff(float winPercentage)
-    {
-      float eloDiff = -400 * MathF.Log10(1 / winPercentage - 1);
-      return eloDiff;
-    }
+    public static float EloDiff(float winPercentage) => -400 * MathF.Log10(1 / winPercentage - 1);
+
 
     /// <summary>
     /// Returns relative Elo for a player scoring a specified win/draw/loss count.
@@ -47,9 +44,10 @@ namespace Chess.Ceres.PlayEvaluation
     /// <returns></returns>
     public static float EloDiff(int wins, int draws, int losses)
     {
-      float winPercentage = (float)(wins + 0.5 * draws) / (float)(wins + losses + draws);
+      float winPercentage = (wins + 0.5f * draws) / (wins + losses + draws);
       return EloDiff(winPercentage);
     }
+
 
     /// <summary>
     /// Returns likelihood of superiority of a player scoring a specified win/draw/loss count.
@@ -66,8 +64,8 @@ namespace Chess.Ceres.PlayEvaluation
 
 
     /// <summary>
-    /// Returns the mean and confidence intervals of relative Elo for a player scoring
-    /// a specified win/draw/loss count.
+    /// Returns the mean and confidence intervals of relative Elo for a player
+    /// player achieving a specified win/draw/loss count.
     /// </summary>
     /// <param name="wins"></param>
     /// <param name="draws"></param>
