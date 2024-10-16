@@ -134,12 +134,14 @@ namespace Ceres.Chess.MoveGen.Converters
 
       bool performedCastling =
         pieceMoving == PieceType.King &&
-        ((blackToMove && rawPieceAtToSquare == MCChessPositionPieceEnum.BlackRook) || (!blackToMove && rawPieceAtToSquare == MCChessPositionPieceEnum.WhiteRook));
+        ((blackToMove && rawPieceAtToSquare == MCChessPositionPieceEnum.BlackRook) 
+      || (!blackToMove && rawPieceAtToSquare == MCChessPositionPieceEnum.WhiteRook));
 
       if (pieceMoving == PieceType.None)
       {
         throw new Exception("Illegal move " + thisMove + " in position " + position.ToPosition.FEN);
       }
+
       PieceType pieceCapture = position.PieceCapturing(thisMove);
       MCChessPositionPieceEnum pieceMG = PieceToMGPiece(pieceMoving, blackToMove);
       int pieceMGFlags = (int)pieceMG << MGMove.PIECE_SHIFT;
@@ -179,9 +181,13 @@ namespace Ceres.Chess.MoveGen.Converters
         {
           int castlingPart;
           if (toSquare < fromSquare)
+          {
             castlingPart = (int)MGMove.MGChessMoveFlags.CastleShort;
+          }
           else
+          {
             castlingPart = (int)MGMove.MGChessMoveFlags.CastleLong;
+          }
 
           Debug.Assert(castlingPart != 0);
           return new MGMove(fromSquare, toSquare, (MGMove.MGChessMoveFlags)(castlingPart | pieceMGFlags));

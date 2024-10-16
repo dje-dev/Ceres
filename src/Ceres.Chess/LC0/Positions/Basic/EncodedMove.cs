@@ -31,6 +31,10 @@ namespace Ceres.Chess.EncodedPositions.Basic
   ///   - 3 bits promotion code
   ///   - 1 bit if this is a castling move
   ///  See: https://github.com/LeelaChessZero/lczero-training/blob/master/tf/decode_training.py
+  ///  
+  /// N.B. The value stored in training TAR files (such as PlayedIndex) 
+  ///      are just the raw from/to coordinate (first 12 bits) and 
+  ///      do not have promotion code and castling flag set.
   /// </summary>
   [Serializable]
   public readonly struct EncodedMove : IEquatable<EncodedMove>
@@ -153,10 +157,25 @@ namespace Ceres.Chess.EncodedPositions.Basic
     /// 
     /// Note that Knight promotions are encoded without these flags being set,
     /// thus a return value of None does not necessarily mean that no promotion occurred
-    /// (this can only be determined by also consulting the associated position)
+    /// (this can only be determined by also consulting the associated position).
+    /// 
+    /// N.B. In some cases, the EncodedMove may be created when it was not easily
+    ///      possible to determine and set the castling status (when the associated position not handy),
+    ///      for example in CompressedPolicyVector.
+    ///      
+    ///      Therefore use caution because this flag may not always be accurate.
     /// </summary>
     public PromotionType Promotion => (PromotionType)((rawValue & MaskPromotion) >> 12);
 
+    /// <summary>
+    /// If the move was a castling move.
+    /// 
+    /// N.B. In some cases, the EncodedMove may be created when it was not easily
+    ///      possible to determine and set the castling status (when the associated position not handy),
+    ///      for example in CompressedPolicyVector.
+    ///      
+    ///      Therefore use caution because this flag may not always be accurate.
+    /// </summary>
     public bool IsCastling => (rawValue & MaskCastling) != 0;
 
     /// <summary>
@@ -181,6 +200,7 @@ namespace Ceres.Chess.EncodedPositions.Basic
         return new EncodedMove(FromSquare.Mirrored, ToSquare.Mirrored, Promotion, IsCastling);
       }
     }
+
 
     #region Equality 
 
