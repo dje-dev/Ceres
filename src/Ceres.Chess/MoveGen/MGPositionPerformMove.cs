@@ -110,10 +110,15 @@ namespace Ceres.Chess.MoveGen
       MoveNumber++;
 
       // Update Rule 50 count (upon any pawn move or capture)
-      if (M.Capture || (byte)M.Piece == MGPositionConstants.WPAWN || (byte)M.Piece == MGPositionConstants.BPAWN)
+      if (M.Capture || (byte)M.Piece == MGPositionConstants.WPAWN 
+                    || (byte)M.Piece == MGPositionConstants.BPAWN)
+      {
         Rule50Count = 0;
+      }
       else
+      {
         Rule50Count++;
+      }
 
       // clear any enpassant squares
       BitBoard EnPassant = A & B & (~C);
@@ -198,7 +203,6 @@ namespace Ceres.Chess.MoveGen
         }
         else if (M.CastleLong && performedCastling)
         {
-          Debug.Assert(M.ToString() == "O-O-O");
           BitBoard kingToSq = 2305843009213693952; //c8 in decimals
           BitBoard kingIdx = 61; //c8 represented as index from h1..a8
           BitBoard kingPos = nFromSquare == kingIdx ? 0 : (1UL << (int)nFromSquare) | kingToSq;
@@ -256,7 +260,6 @@ namespace Ceres.Chess.MoveGen
 
         if (M.CastleShort && performedCastling)
         {
-          Debug.Assert(M.ToString() == "O-O");
           BitBoard rookPos = 1UL << (int)nToSquare;
           rookPos = rookPos == 4 ? 0 : rookPos | 4;
           BitBoard kingToSq = 2; //g1 in decimals
