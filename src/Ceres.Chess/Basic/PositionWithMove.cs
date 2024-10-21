@@ -44,7 +44,7 @@ namespace Ceres.Chess
     /// </summary>
     /// <param name="move"></param>
     /// <param name="position"></param>
-    public PositionWithMove(Position position, Move move)
+    public PositionWithMove(in Position position, Move move)
     {
       Move = move;
       Position = position;
