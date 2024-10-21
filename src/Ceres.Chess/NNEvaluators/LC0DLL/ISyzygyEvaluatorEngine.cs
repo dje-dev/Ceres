@@ -32,6 +32,10 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
     Win
   }
 
+  public delegate MGMove CheckTablebaseBestNextMoveDelegate(in Position currentPos, out WDLResult result,
+                                                          out List<(MGMove, short)> fullWinningMoveList,
+                                                          out bool winningMoveListOrderedByDTM);
+
 
   /// <summary>
   /// Interface shared by all Syzygy evaluators (and some shared logic).

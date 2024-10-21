@@ -15,9 +15,10 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
+
 using Ceres.Base.Misc;
+
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.NNEvaluators.LC0DLL;
 
@@ -27,12 +28,6 @@ namespace Ceres.Chess.TBBackends.Fathom
 {
   public class FathomEvaluator : ISyzygyEvaluatorEngine
   {
-    // *******************************************************
-    // TEST ONLY 
-    const bool TESTING_MODE_COMPARE_RESULTS = false;
-    static LC0DLLSyzygyEvaluator compEvaluator = null;
-    // *******************************************************
-
     public static void Install()
     {
       SyzygyEvaluatorPool.OverrideEvaluatorFactory = () => new FathomEvaluator();
@@ -80,12 +75,6 @@ namespace Ceres.Chess.TBBackends.Fathom
     /// <returns></returns>
     public bool Initialize(string paths)
     {
-      if (TESTING_MODE_COMPARE_RESULTS && compEvaluator == null)
-      {
-        compEvaluator = new LC0DLLSyzygyEvaluator(0);
-        compEvaluator.Initialize(paths);
-      }
-
       bool ok = FathomTB.Initialize(paths);
 
       if (ok)
@@ -204,18 +193,9 @@ so maybe this engine is not doing this optimally?
         }
       }
 
-      if (TESTING_MODE_COMPARE_RESULTS)
-      {
-        MGMove compMove = compEvaluator.CheckTablebaseBestNextMoveViaDTZ(in currentPos, out WDLResult compResult, out _, out _);
-        if (result != compResult)
-        {
-          Console.WriteLine("DTZ check failure " + currentPos.FEN + " " + result + " " + fathomResult.Move + " vs. compare " + compResult + " " + compMove);
-        }
-      }
-
       if (result != WDLResult.Unknown)
       {
-        LC0DLLSyzygyEvaluator.NumTablebaseHits++;
+// TODO: Reinstate a counter here?        LC0DLLSyzygyEvaluator.NumTablebaseHits++;
       }
 
       return fathomResult.Move;
@@ -242,7 +222,7 @@ so maybe this engine is not doing this optimally?
         return;
       }
 
-      LC0DLLSyzygyEvaluator.NumTablebaseHits++;
+      // TODO: reinstate a counter here? LC0DLLSyzygyEvaluator.NumTablebaseHits++;
 
       result = SyzygyProbeState.Ok;
       score = (SyzygyWDLScore)((int)probeResult) - 2;
@@ -263,17 +243,6 @@ so maybe this engine is not doing this optimally?
         {
           Console.WriteLine(pos.FEN + " " + score + " " + fathomResult + " but DTZ " + minDTZ);
           // int dtz = FathomTB.ProbeDTZOnly(currentPos.FEN, out int success); does not work
-        }
-      }
-
-      if (TESTING_MODE_COMPARE_RESULTS)
-      {
-        compEvaluator.ProbeWDL(in pos, out SyzygyWDLScore compScore, out SyzygyProbeState compResult);
-        if (compResult == SyzygyProbeState.ZeroingBestMove) compResult = SyzygyProbeState.Ok;
-
-        if (compScore != score || compResult != result)
-        {
-          throw new Exception($"DoProbeWDL disagrees with comparison on {pos.FEN}  yields {result},{ score } versus compare {compResult},{compScore}");
         }
       }
     }

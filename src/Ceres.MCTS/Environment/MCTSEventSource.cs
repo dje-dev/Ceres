@@ -173,8 +173,8 @@ namespace Ceres.MCTS.Environment
 
         //        mlhMoveModificationFraction ??= new PollingCounter("mlh-move-modified-pct", this, () => 100.0f * ManagerChooseBestMove.MLHMoveModifiedFraction);
 
-        tablebaseHitsTotal ??= new PollingCounter("tablebase-hits-total", this, () => LC0DLLSyzygyEvaluator.NumTablebaseHits);
-        tablebaseHits ??= new IncrementingPollingCounter("tablebase-hits", this, () => LC0DLLSyzygyEvaluator.NumTablebaseHits);
+//TODO: Restore  tablebaseHitsTotal ??= new PollingCounter("tablebase-hits-total", this, () => LC0DLLSyzygyEvaluator.NumTablebaseHits);
+//TODO: Restore  tablebaseHits ??= new IncrementingPollingCounter("tablebase-hits", this, () => LC0DLLSyzygyEvaluator.NumTablebaseHits);
         tablebasePly1HitsTotal ??= new PollingCounter("tablebase-ply1-hits-total", this, () => LeafEvaluatorSyzygyPly1.NumHits.Value);
         countSiblingEvaluationsUsed ??= new PollingCounter("sibling-evals-used", this, () => MCTSNodeSiblingEval.CountSiblingEvalsUsed.Value);
         
