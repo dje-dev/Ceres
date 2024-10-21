@@ -55,15 +55,7 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
         else
         {
           int sessionID = sessionIDPool.GetFreeID();
-          if (OverrideEvaluatorFactory != null)
-          {
-            evaluator = OverrideEvaluatorFactory();
-          }
-          else
-          {
-            evaluator = CeresUserSettingsManager.Settings.UseLegacyLC0Evaluator ? new LC0DLLSyzygyEvaluator(sessionID) 
-                                                                                : new FathomEvaluator();                                                        
-          }
+          evaluator = OverrideEvaluatorFactory != null ? OverrideEvaluatorFactory() : new FathomEvaluator();                                                        
 
           evaluator.Initialize(paths);
           pathsToEvaluatorDict[paths] = evaluator;

@@ -403,11 +403,7 @@ namespace Ceres.Chess.NNEvaluators
 
         case NNEvaluatorType.LC0:
           INNWeightsFileInfo net = NNWeightsFiles.LookupNetworkFile(netDef.NetworkID);
-          if (CeresUserSettingsManager.Settings.UseLegacyLC0Evaluator)
-          {
-            ret = new NNEvaluatorLC0(net, deviceDef.DeviceIndex, netDef.Precision);
-          }
-          else if ((net as NNWeightsFileLC0).Format == NNWeightsFileLC0.FormatType.EmbeddedONNX)
+          if ((net as NNWeightsFileLC0).Format == NNWeightsFileLC0.FormatType.EmbeddedONNX)
           {
             NNWeightsFileLC0 netDefONNX = net as NNWeightsFileLC0;
 
@@ -420,7 +416,6 @@ namespace Ceres.Chess.NNEvaluators
             {
               lock (onnxFileWriteLock)
               {
-                // string tempFN = Path.GetTempFileName() + ".onnx";
                 Console.WriteLine($"The ONNX protobuf from the LC0 PB file is extracted to {tempFN}");
                 File.WriteAllBytes(tempFN, pbn.Net.OnnxModel.Model);
               }

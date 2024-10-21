@@ -173,11 +173,6 @@ namespace Ceres.Chess.UserSettings
     public bool EnableOverlappingExecutors { get; set; } = true;
 
     /// <summary>
-    /// If the legacy LC0.dll evaluator should be used for NN evaluation.
-    /// </summary>
-    public bool UseLegacyLC0Evaluator { get; set; } = false;
-
-    /// <summary>
     /// If data structures and algorithms should favor low
     /// memory consumption (at a cost of modest performance reduction).
     /// </summary>
