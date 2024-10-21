@@ -74,7 +74,7 @@ namespace Ceres.Chess.MoveGen.Converters
     /// <returns></returns>
     public static MGMove MGMoveFromPosAndMove(in Position pos, Move move)
     {
-      PositionWithMove moveAndPos = new PositionWithMove(pos, move);
+      PositionWithMove moveAndPos = new PositionWithMove(in pos, move);
       MGPosition mgPos = MGPosition.FromPosition(in moveAndPos.Position);
 
       MGMoveList moves = new MGMoveList();
