@@ -43,6 +43,8 @@ namespace Ceres.Chess.Data.Nets
         { "T78", SimpleLC0Net("784984") },
         { "T80", SimpleLC0Net("809942") }, // 801307
         { "T81", SimpleLC0Net("811971") }, //Training restarted after surgery after 811971
+        { "T81_FP16_TRT", ONNXNet16LC0("weights_run1_811971.pb.gz_fp16.onnx#16", true) },
+
         { "T82", ONNXNet32LC0("768x15x24h-t82-swa-8164000#32") },
 
         {"BT2_NATIVE", SimpleLC0Net("BT2-768x15smolgen-12h-do-01-swa-4510000.pb.gz") },
@@ -74,8 +76,12 @@ namespace Ceres.Chess.Data.Nets
         {"BT4_4230k", SimpleLC0Net("BT4-1024x15x32h-swa-4230000.pb.gz")},
         {"BT4_5000k", SimpleLC0Net("BT4-1024x15x32h-swa-5000000.pb.gz")},
 
+        {"BT4_195k_ONNX", ONNXNet16LC0("BT4-1024x15x32h-swa-195000.pb.gz_fp16", false) },
+        {"BT4_320k_ONNX", ONNXNet16LC0("BT4-1024x15x32h-swa-320000.pb.gz_fp16", false) },
         {"BT4_600k_ONNX", ONNXNet16LC0("BT4-1024x15x32h-swa-600000.pb.gz_fp16", false) },
+        {"BT4_915k_ONNX", ONNXNet16LC0("BT4-1024x15x32h-swa-915000.pb.gz_fp16", false) },
         {"BT4_1000k_ONNX", ONNXNet16LC0("BT4-1024x15x32h-swa-1000000.pb.gz_fp16", false) },
+        {"BT4_1420k_ONNX", ONNXNet16LC0("BT4-1024x15x32h-swa-1420000.pb.gz_fp16", false) },
         {"BT4_3190k_ONNX", ONNXNet16LC0("BT4-1024x15x32h-swa-3190000.pb.gz_fp16", false) },
         {"BT4_5000k_ONNX", ONNXNet16LC0("BT4-1024x15x32h-swa-5000000.pb.gz_fp16", false) },
 
