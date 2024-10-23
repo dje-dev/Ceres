@@ -91,7 +91,7 @@ namespace Ceres.Base.Misc
       }
 
       // Verify each of the parts exists.
-      string[] parts = paths.Split(SoftwareManager.IsLinux ? ":" : ";");
+      string[] parts = paths.Split(Path.PathSeparator);
       foreach (string part in parts)
       {
         if (!Directory.Exists(part))
