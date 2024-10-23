@@ -61,6 +61,27 @@ namespace Ceres.Chess.LC0.Positions
       }
     }
 
+
+    /// <summary>
+    /// Returns the logistic value corresponding to the given centipawn value,
+    /// using the Lc0 standard. See:
+    /// https://lczero.org/blog/2023/07/the-lc0-v0.30.0-wdl-rescale/contempt-implementation/
+    /// </summary>
+    /// <param name="v"></param>
+    /// <param name="d"></param>
+    /// <returns></returns>
+    public static float LogisticToCentipawnUsingLc0StockfishConvention(float v, float d)
+    {
+      if (float.IsNaN(d) || d == 0)
+      {
+        return LogisticToCentipawn(v);
+      }
+
+      (float centipawns, float newV, float newD) = WDLRescaleHelper.WDLRescale(v, d);
+      return float.IsNaN(centipawns) ? LogisticToCentipawn(v) : centipawns; 
+    }
+
+
     /// <summary>
     /// Outer multiplier on in conversion formula.
     /// </summary>
