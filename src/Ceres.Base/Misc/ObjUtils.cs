@@ -15,11 +15,9 @@
 
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Runtime.Serialization.Formatters.Binary;
 using System.Text;
 
 #endregion
@@ -32,8 +30,13 @@ namespace Ceres.Base.Misc
   public static class ObjUtils
   {
 
-  public static T DeepClone<T>(T a)
+
+#if NOT
+    // NOTE: Abandon DeepClone due to reliance upon deprecated BinarySerialization.
+    //       Instead utilize AutoMapper where necessary to achieve same effect.
+    public static T DeepClone<T>(T a)
   {
+      return a;
 #if AVOID_BINARY_SERIALIZATION
     throw new Exception("WARNING: Not yet working, causes strange errors on Linux in TournamentManager with AccessDenied on Console.Out");
     return (T)ObjUtilsCopy.Copy(a);
@@ -47,6 +50,7 @@ namespace Ceres.Base.Misc
       }
 #endif
     }
+#endif
 
     /// <summary>
     /// Interprets the given byte array as an array of structures of type T and copies into a specified output buffer of type T.

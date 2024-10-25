@@ -34,32 +34,32 @@ namespace Ceres.Features.GameEngines
     /// <summary>
     /// Definition of NN evaluator.
     /// </summary>
-    public NNEvaluatorDef EvaluatorDef;
+    public readonly NNEvaluatorDef EvaluatorDef;
 
     /// <summary>
     /// Definition of secondary NN evaluator (optional).
     /// </summary>
-    public NNEvaluatorDef EvaluatorDefSecondary;
+    public readonly NNEvaluatorDef EvaluatorDefSecondary;
 
     /// <summary>
     /// Parameters applied to MCTS search.
     /// </summary>
-    public ParamsSearch SearchParams;
+    public readonly ParamsSearch SearchParams;
 
     /// <summary>
     /// Select parameters to be used by MCTS engine.
     /// </summary>
-    public ParamsSelect SelectParams;
+    public readonly ParamsSelect SelectParams;
 
     /// <summary>
     /// Optional override limits manager.
     /// </summary>
-    public IManagerGameLimit OverrideLimitManager;
+    public readonly IManagerGameLimit OverrideLimitManager;
 
     /// <summary>
     /// Optional name of log file to which detailed diagnostics information is written.
     /// </summary>
-    public string LogFileName;
+    public readonly string LogFileName;
 
 
     /// <summary>
@@ -75,8 +75,8 @@ namespace Ceres.Features.GameEngines
       : base(id)
     {
       // Make a defensive clone of the EvaluatorDef so it will definitely not be shared.
-      EvaluatorDef = ObjUtils.DeepClone(evaluatorDef);
-      EvaluatorDefSecondary = evaluatorDefSecondary == null ? null : ObjUtils.DeepClone(evaluatorDefSecondary);
+      EvaluatorDef = evaluatorDef.Clone();
+      EvaluatorDefSecondary = evaluatorDefSecondary == null ? null : evaluatorDefSecondary.Clone();
       SearchParams = searchParams ?? new ParamsSearch();
       SelectParams = selectParams ?? new ParamsSelect();
       OverrideLimitManager = overrideLimitManager;

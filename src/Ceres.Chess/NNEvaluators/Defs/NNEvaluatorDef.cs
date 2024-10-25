@@ -16,7 +16,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Ceres.Chess;
+
+using AutoMapper;
+
 using Ceres.Chess.PositionEvalCaching;
 using Chess.Ceres.NNEvaluators;
 using Ceres.Chess.NNEvaluators.Specifications;
@@ -33,7 +35,7 @@ namespace Ceres.Chess.NNEvaluators.Defs
   /// (for example, by using NNEvaluatorBuilder).
   /// </summary>
   [Serializable]
-  public class NNEvaluatorDef
+  public sealed class NNEvaluatorDef // sealed because the Clone method might not work if derived from
   {
     /// <summary>
     /// Default minimum batch size before a batch can be 
@@ -66,7 +68,7 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// For dynamic by position evaluators (where NetCombo == Dynamic) this function is called
     /// to determine which evaluator to use for a given position.
     /// </summary>
-    public readonly NNEvaluatorDynamicByPos.DynamicEvaluatorIndexPredicate DynamicByPosPredicate = default;
+    public NNEvaluatorDynamicByPos.DynamicEvaluatorIndexPredicate DynamicByPosPredicate = default;
 
     /// <summary>
     /// Minimum number of positions before a batch is possibly split over multiple devices.
@@ -171,7 +173,6 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// incorporated into the hash function (and therefore affects cache equality tests).
     /// </summary>
     public PositionMiscInfo.HashMove50Mode HashMode = PositionMiscInfo.HashMove50Mode.ValueBoolIfAbove98;
-
 
 
     /// <summary>
@@ -477,6 +478,36 @@ namespace Ceres.Chess.NNEvaluators.Defs
 
       Devices[0].Device.DeviceIndex = deviceID;
     }
+
+
+
+    #region Cloning
+
+    static IMapper cloneMapper = null;
+
+    /// <summary>
+    /// Returns a shallow clone of the NNEvaluatorDef.
+    /// 
+    /// This is necessary because an underlying NNEvaluatorDef may be replicated multiple times, 
+    /// each with a different target GPU ID.
+    /// 
+    /// Previously ObjUtils.DeepClone was used but this relied upon the now-deprecated BinarySerialization.
+    /// </summary>
+    /// <returns></returns>
+    public NNEvaluatorDef Clone()
+    {
+      if (cloneMapper == null)
+      {
+        MapperConfiguration config = new MapperConfiguration(cfg => cfg.CreateMap<NNEvaluatorDef, NNEvaluatorDef>());
+        cloneMapper = config.CreateMapper();
+      }
+
+      NNEvaluatorDef ret = cloneMapper.Map<NNEvaluatorDef>(this);
+      ret.DynamicByPosPredicate = this.DynamicByPosPredicate;
+      return ret;
+    }
+
+    #endregion
 
 
     /// <summary>

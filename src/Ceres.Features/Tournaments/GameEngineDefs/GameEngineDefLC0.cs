@@ -117,7 +117,7 @@ namespace Ceres.Features.GameEngines
       ID = id;
 
       // Make a defensive clone of the EvaluatorDef so it will definitely not be shared.
-      EvaluatorDef = ObjUtils.DeepClone(evaluatorDef);
+      EvaluatorDef = evaluatorDef.Clone();
 
       ForceDisableSmartPruning = forceDisableSmartPruning;
 

@@ -17,9 +17,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using AutoMapper;
 using Ceres.Base.Misc;
 using Ceres.Chess;
 using Ceres.Chess.GameEngines;
+using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Features.GameEngines;
 using Ceres.Features.Players;
 
@@ -31,7 +33,7 @@ namespace Ceres.Features.Tournaments
   /// Defines the parameters of a tournament between chess engines.
   /// </summary>
   [Serializable]
-  public class TournamentDef
+  public sealed class TournamentDef // sealed because the Clone method might not work if derived from
   {
     /// <summary>
     /// Descriptive identifying string of tournament.
@@ -94,13 +96,10 @@ namespace Ceres.Features.Tournaments
     /// </summary>
     public string OpeningsFileName;
 
-    [NonSerialized]
-    Predicate<Position> acceptPosPredicate;
-
     /// <summary>
     /// Optional predicate which can be used to specify filter on which positions are accepted.
     /// </summary>    
-    public Predicate<Position> AcceptPosPredicate { get => acceptPosPredicate; set => throw new Exception("Not implemented, serialization of delegate not possible."); }
+    public Predicate<Position> AcceptPosPredicate;
 
     /// <summary>
     /// Optional list of PieceType which define positions that should be excluded if they contain any of those pieces.
@@ -172,7 +171,7 @@ namespace Ceres.Features.Tournaments
     public readonly DateTime StartTime;
 
     /// <summary>
-    /// If the touranment has been instructed to shut down (e.g. Ctrl-C pressed).
+    /// If the tournament has been instructed to shut down (e.g. Ctrl-C pressed).
     /// </summary>
     public bool ShouldShutDown = false;
 
@@ -213,13 +212,6 @@ namespace Ceres.Features.Tournaments
       parentDef = this;
     }
 
-    public TournamentDef Clone()
-    {
-      TournamentDef clone = ObjUtils.DeepClone<TournamentDef>(this);
-      clone.Logger = this.Logger;
-      clone.parentDef = this;
-      return clone;
-    }
 
     public void DumpParams(TextWriter logger)
     {
@@ -304,7 +296,36 @@ namespace Ceres.Features.Tournaments
       }
     }
 
-#endregion
+    #endregion
+
+    #region Cloning
+
+    static IMapper cloneMapper = null;
+
+    /// <summary>
+    /// Returns a shallow clone of the TournamentDef.
+    /// 
+    /// This is necessary because an underlying NNEvaluatorDef may be replicated multiple times, 
+    /// each with a different target GPU ID.
+    /// 
+    /// Previously ObjUtils.DeepClone was used but this relied upon the now-deprecated BinarySerialization.
+    /// </summary>
+    /// <returns></returns>
+    public TournamentDef Clone()
+    {
+      if (cloneMapper == null)
+      {
+        MapperConfiguration config = new MapperConfiguration(cfg => cfg.CreateMap<TournamentDef, TournamentDef>());
+        cloneMapper = config.CreateMapper();
+      }
+
+      TournamentDef clone = cloneMapper.Map<TournamentDef>(this);      
+      clone.parentDef = this;
+      clone.AcceptPosPredicate = this.AcceptPosPredicate;
+      return clone;
+    }
+
+    #endregion
 
     /// <summary>
     /// Returns string summary.
