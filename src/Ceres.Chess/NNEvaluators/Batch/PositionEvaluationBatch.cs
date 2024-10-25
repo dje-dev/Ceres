@@ -131,7 +131,6 @@ namespace Ceres.Chess.NetEvaluation.Batch
 
     #endregion
 
-
     /// <summary>
     /// Returns the net win probability (V) from the value head for the position at a specified index in the batch.
     /// </summary>
@@ -159,6 +158,26 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <param name="index"></param>
     /// <returns></returns>
     public FP16 GetLossP(int index) => IsWDL ? L.Span[index] : 0;
+
+
+    /// <summary>
+    /// Modifies W and L to bend the existing W and L 
+    /// such that they have a specified target Q.
+    /// 
+    /// There is no single unique value that satisfies these conditions.
+    /// However values are returned that do satisfy the condition and
+    /// try to retain the relative draw fraction to be similar.
+    /// </summary>
+    /// <param name="index"></param>
+    /// <param name="targetQ"></param>
+    public void SetQ(int index, float targetQ)
+    {
+      float w = GetWinP(index);
+      float l = GetLossP(index);
+      (float w, float d, float l) rescaledWDL = WDLScalingCalculator.RescaledWDLToDesiredV(w, l, targetQ);
+      W.Span[index] = (FP16)rescaledWDL.w;
+      L.Span[index] = (FP16)rescaledWDL.l;
+    }
 
 
     #region Primary value head
