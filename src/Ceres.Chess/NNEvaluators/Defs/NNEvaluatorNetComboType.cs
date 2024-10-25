@@ -24,23 +24,23 @@ namespace Ceres.Chess.NNEvaluators.Defs
   public enum NNEvaluatorNetComboType
   {
     /// <summary>
-    /// Single neural network
+    /// Single neural network.
     /// </summary>
     Single,
 
     /// <summary>
-    /// Weighted average of several neural neworks
+    /// Weighted average of multiple neural networks.
     /// </summary>
     WtdAverage,
 
     /// <summary>
-    /// Multiple networks with the output from the first returned but compared against another with large deviations reported
+    /// Multiple networks with the output from the first returned but compared against another with large deviations reported.
     /// </summary>
     Compare,
 
     /// <summary>
-    /// Multiple neural networks, only one of which is selected for each evaluation (dynamically selected)
+    /// Multiple neural networks, only one of which is selected for each evaluation (dynamically selected based on position).
     /// </summary>
-    Dynamic
+    DynamicByPos
   };
 }

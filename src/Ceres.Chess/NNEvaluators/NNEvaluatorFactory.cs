@@ -356,7 +356,7 @@ namespace Ceres.Chess.NNEvaluators
 
 //            ValueHead1Temperature = testMode ? 1.4f : 1.0f
 
-            FractionValueHead2 = testMode ? 0.5f : 0f,
+            FractionValueHead2 = testMode ? 1f : 0f,
             //ValueHead2Temperature = testMode ? 1f : 1,
 
             PolicyTemperature = testPTempMode ? 0.9f : 1f,
@@ -600,11 +600,16 @@ namespace Ceres.Chess.NNEvaluators
         weightsUPolicy[i] = def.Nets[i].WeightUPolicy;
       });
 
+
+      
       return def.NetCombo switch
       {
-        NNEvaluatorNetComboType.WtdAverage => new NNEvaluatorLinearCombo(evaluators, weightsValue, weightsValue2, 
+        NNEvaluatorNetComboType.WtdAverage => new NNEvaluatorLinearCombo(evaluators, weightsValue, weightsValue2,
                                                                          weightsPolicy, weightsM, weightsU, weightsUPolicy, null),
-        NNEvaluatorNetComboType.Compare    => new NNEvaluatorCompare(evaluators),
+        NNEvaluatorNetComboType.Compare => new NNEvaluatorCompare(evaluators),
+
+        NNEvaluatorNetComboType.DynamicByPos => new NNEvaluatorDynamicByPos(evaluators, def.DynamicByPosPredicate),
+
         _ => throw new NotImplementedException()
       };
     }
@@ -616,12 +621,6 @@ namespace Ceres.Chess.NNEvaluators
       {
         throw new Exception("DeviceComboType.Single is not expected when number of DeviceIndices is greater than 1.");
       }
-
-      if (def.NetCombo == NNEvaluatorNetComboType.Dynamic)
-      {
-        throw new NotImplementedException("Dynamic not yet implemented");
-      }
-
    
       //        if (Params.EstimatePerformanceCharacteristics) ret.CalcStatistics(true);
 

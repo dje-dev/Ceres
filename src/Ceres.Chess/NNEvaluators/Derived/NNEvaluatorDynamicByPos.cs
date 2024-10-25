@@ -25,7 +25,7 @@ using Ceres.Chess.NetEvaluation.Batch;
 namespace Ceres.Chess.NNEvaluators
 {
   /// <summary>
-  /// An evalutor which for each batch can dynamically choose which 
+  /// An evaluator which for each batch can dynamically choose which 
   /// of several executors to use for a given position.
   /// </summary>
   public class NNEvaluatorDynamicByPos : NNEvaluatorCompound
@@ -48,10 +48,7 @@ namespace Ceres.Chess.NNEvaluators
                                    DynamicEvaluatorIndexPredicate dynamicEvaluatorIndexPredicate)
       : base(evaluators)
     {
-      if (dynamicEvaluatorIndexPredicate == null)
-      {
-        throw new ArgumentNullException(nameof(dynamicEvaluatorIndexPredicate));
-      }
+      ArgumentNullException.ThrowIfNull(dynamicEvaluatorIndexPredicate);
 
       DynamicEvaluatorChooser = dynamicEvaluatorIndexPredicate;
 
@@ -79,7 +76,7 @@ namespace Ceres.Chess.NNEvaluators
     /// <param name="retrieveSupplementalResults"></param>
     /// <returns></returns>
     protected override IPositionEvaluationBatch DoEvaluateIntoBuffers(IEncodedPositionBatchFlat positions,
-                                                                   bool retrieveSupplementalResults = false)
+                                                                      bool retrieveSupplementalResults = false)
     {
       if (retrieveSupplementalResults)
       {

@@ -75,8 +75,11 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// <param name="optimalBatchSize"></param>
     /// <param name="overrideEngineType"></param>
     /// <param name="predefinedOptimalBatchPartitions"></param>
-    public NNEvaluatorDeviceDef(NNDeviceType type, int deviceNum, bool lowPriority = false,
-                                int? maxBatchSize = null, int? optimalBatchSize  = null,
+    public NNEvaluatorDeviceDef(NNDeviceType type, 
+                                int deviceNum, 
+                                bool lowPriority = false,
+                                int? maxBatchSize = null, 
+                                int? optimalBatchSize  = null,
                                 string overrideEngineType = null,
                                 List<(int batchSize, int[] partitionBatchSizes)> predefinedOptimalBatchPartitions = null)
     {
