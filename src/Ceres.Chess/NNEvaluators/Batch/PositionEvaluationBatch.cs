@@ -159,9 +159,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <returns></returns>
     public FP16 GetLossP(int index) => IsWDL ? L.Span[index] : 0;
 
-
     /// <summary>
-    /// Modifies W and L to bend the existing W and L 
+    /// Modifies w and l to bend the existing W1 and L1 
     /// such that they have a specified target Q.
     /// 
     /// There is no single unique value that satisfies these conditions.
@@ -170,15 +169,51 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// </summary>
     /// <param name="index"></param>
     /// <param name="targetQ"></param>
-    public void SetQ(int index, float targetQ)
+    void SetQToTarget(int index, Span<FP16> w, Span<FP16> l, float targetQ)
     {
-      float w = GetWinP(index);
-      float l = GetLossP(index);
-      (float w, float d, float l) rescaledWDL = WDLScalingCalculator.RescaledWDLToDesiredV(w, l, targetQ);
-      W.Span[index] = (FP16)rescaledWDL.w;
-      L.Span[index] = (FP16)rescaledWDL.l;
+      float wV = w[index];
+      float lV = l[index];
+      (float w, float d, float l) rescaledWDL = WDLScalingCalculator.RescaledWDLToDesiredV(wV, lV, targetQ);
+      w[index] = (FP16)rescaledWDL.w;
+      l[index] = (FP16)rescaledWDL.l;
     }
 
+
+    /// <summary>
+    /// Modifies W and L to bend the existing values
+    /// such that they have a specified target Q.
+    /// 
+    /// There is no single unique value that satisfies these conditions.
+    /// However values are returned that do satisfy the condition and
+    /// try to retain the relative draw fraction to be similar.
+    /// </summary>
+    /// <param name="index"></param>
+    /// <param name="targetQ"></param>
+    public void SetWL(int index, float targetQ) => SetQToTarget(index, W.Span, L.Span, targetQ);
+
+    /// <summary>
+    /// Modifies W1 and L1 to bend the existing values
+    /// such that they have a specified target Q.
+    /// 
+    /// There is no single unique value that satisfies these conditions.
+    /// However values are returned that do satisfy the condition and
+    /// try to retain the relative draw fraction to be similar.
+    /// </summary>
+    /// <param name="index"></param>
+    /// <param name="targetQ"></param>
+    public void SetWL1(int index, float targetQ) => SetQToTarget(index, W1.Span, L1.Span, targetQ);
+
+    /// <summary>
+    /// Modifies W2 and L2 to bend the existing values
+    /// such that they have a specified target Q.
+    /// 
+    /// There is no single unique value that satisfies these conditions.
+    /// However values are returned that do satisfy the condition and
+    /// try to retain the relative draw fraction to be similar.
+    /// </summary>
+    /// <param name="index"></param>
+    /// <param name="targetQ"></param>
+    public void SetWL2(int index, float targetQ) => SetQToTarget(index, W2.Span, L2.Span, targetQ);
 
     #region Primary value head
 
@@ -537,6 +572,33 @@ namespace Ceres.Chess.NetEvaluation.Batch
         InitializeValueEvals(valueEvals2, valsAreLogistic, temperatureValue2, uncertaintyV, value2TemperatureUncertaintyScalingFactor, true);
       }
 
+      static float MapValue1ToExpectedValue2(float x)
+      {
+        if (x < 0)
+        {
+          return -MapValue1ToExpectedValue2(-x);
+        }
+        else if (x < 0.15f)
+        {
+          return x / 3.0f;
+        }
+        else
+        {
+
+          // Coefficients of the 4th-degree polynomial
+          const float a4 = -1.42f;
+          const float a3 = 5.27f;
+          const float a2 = -7.60f;
+          const float a1 = 5.35f;
+          const float a0 = -0.59f;
+
+          float ret = a4 * MathF.Pow(x, 4) + a3 * MathF.Pow(x, 3) + a2 * MathF.Pow(x, 2) + a1 * x + a0;
+
+          return MathF.Min(1, ret);
+        }
+      }
+
+
       if (fractionValueFromValue2 != 0)
       {
         Debug.Assert(!W2.IsEmpty);
@@ -544,11 +606,15 @@ namespace Ceres.Chess.NetEvaluation.Batch
         Span<FP16> w = W.Span;
         Span<FP16> w2 = W2.Span;
         Span<FP16> l = L.Span;
-        Span<FP16> l2 = L2.Span;
+        Span<FP16> l2 = L.Span;
         float fractionValueFromValue1 = 1 - fractionValueFromValue2;
 
         for (int i=0; i<w.Length; i++)
-        { 
+        {
+          float q2 = w2[i] - l2[i];
+          q2 = MapValue1ToExpectedValue2(q2);
+          SetWL2(i, q2);        
+
           w[i] = (FP16)(w[i] * fractionValueFromValue1 + w2[i] * fractionValueFromValue2);
           l[i] = (FP16)(l[i] * fractionValueFromValue1 + l2[i] * fractionValueFromValue2);
         }  
