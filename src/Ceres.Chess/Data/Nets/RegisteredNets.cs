@@ -55,18 +55,19 @@ namespace Ceres.Chess.Data.Nets
         {"BT3", ONNXNet16LC0("BT3-768x15x24h-swa-2790000.pb.gz_fp16#16")},
         {"BT3_FP16_TRT", ONNXNet16LC0("BT3-768x15x24h-swa-2790000.pb.gz_fp16#16", true)},
         {"BT3_160k", ONNXNet32LC0("BT3-768x15x24h-swa-onnx-160000-baseline.pb.gz")},
+        {"BT3_480k_TRT", ONNXNet16LC0("BT3-768x15x24h-swa-480000.pb.gz_fp16#16", true)},
         {"BT3_810k", ONNXNet32LC0("BT3-768x15x24h-swa-onnx-810000-baseline.pb.gz")},
 
         {"BT4_NATIVE", SimpleLC0Net("BT4-1024x15x32h-swa-6147500.pb.gz")},
         {"BT4_FP16", ONNXNet16LC0("BT4-1024x15x32h-swa-6147500.pb.gz_fp16#16")},
         {"BT4_FP16_TRT", ONNXNet16LC0("BT4-1024x15x32h-swa-6147500.pb.gz_fp16", true)},
 
-        {"BT5_FP16_TRT", ONNXNet16LC0("BT5-1024x15x32h-rpe-3302500-vanilla-fp16.pb.gz_fp16", true)},
-
+        {"BT5_FP16_TRT", ONNXNet16LC0("BT5-1024x15x32h-rpe-3700000-vanilla-fp16.pb.gz.onnx", true)},
+        
         // From: https://storage.lczero.org/files/networks-contrib/big-transformers/
         {"BT4-1740_FP16_TRT", ONNXNet16LC0("BT4-1740.pb.gz_fp16", true) },
         {"BT4_SPSA_FP16_TRT", ONNXNet32LC0("bt4-newtune-3rdbranch-1130.pb.gz", true)},
-
+        
         {"BT4_600k", SimpleLC0Net("BT4-1024x15x32h-swa-600000.pb.gz")},
         {"BT4_1000k", SimpleLC0Net("BT4-1024x15x32h-swa-1000000.pb.gz")},
         {"BT4_1420k", SimpleLC0Net("BT4-1024x15x32h-swa-1420000.pb.gz")},
@@ -78,10 +79,15 @@ namespace Ceres.Chess.Data.Nets
 
         {"BT4_195k_ONNX", ONNXNet16LC0("BT4-1024x15x32h-swa-195000.pb.gz_fp16", false) },
         {"BT4_320k_ONNX", ONNXNet16LC0("BT4-1024x15x32h-swa-320000.pb.gz_fp16", false) },
+        {"BT4_410k_ONNX", ONNXNet16LC0("BT4-1024x15x32h-swa-410000.pb.gz_fp16", false)},
+        {"BT4_480k_ONNX", ONNXNet16LC0("BT4-1024x15x32h-swa-480000.pb.gz_fp16", false)},
         {"BT4_600k_ONNX", ONNXNet16LC0("BT4-1024x15x32h-swa-600000.pb.gz_fp16", false) },
+        {"BT4_700k_ONNX", ONNXNet16LC0("BT4-1024x15x32h-swa-700000.pb.gz_fp16", false) },
         {"BT4_915k_ONNX", ONNXNet16LC0("BT4-1024x15x32h-swa-915000.pb.gz_fp16", false) },
         {"BT4_1000k_ONNX", ONNXNet16LC0("BT4-1024x15x32h-swa-1000000.pb.gz_fp16", false) },
         {"BT4_1420k_ONNX", ONNXNet16LC0("BT4-1024x15x32h-swa-1420000.pb.gz_fp16", false) },
+        {"BT4_1650k_ONNX", ONNXNet16LC0("BT4-1024x15x32h-swa-1650000.pb.gz_fp16", false) },
+        {"BT4_2210k_ONNX", ONNXNet16LC0("BT4-1024x15x32h-swa-2210000.pb.gz_fp16", false) },
         {"BT4_3190k_ONNX", ONNXNet16LC0("BT4-1024x15x32h-swa-3190000.pb.gz_fp16", false) },
         {"BT4_5000k_ONNX", ONNXNet16LC0("BT4-1024x15x32h-swa-5000000.pb.gz_fp16", false) },
 
