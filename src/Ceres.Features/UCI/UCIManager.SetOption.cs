@@ -481,6 +481,7 @@ option name ReducedMemoryMode type check default false
 option name EnableSiblingEval type check default false
 option name EnableUncertaintyBoosting type check default false
 option name UCI_Chess960 type check default false
+option name LimitsManagerName type string default
 ");
     /* 
 option name ConfigFile type string default lc0.config
