@@ -20,6 +20,7 @@ using Ceres.Base.OperatingSystem;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.Serialization.Formatters.Binary;
+using System;
 
 #endregion
 
@@ -38,7 +39,9 @@ namespace Ceres.Base.Misc
     public static bool IsValidFilename(string filename)
     {
       if (string.IsNullOrEmpty(filename))
+      {
         return false;
+      }
 
       HashSet<char> invalidChars = new HashSet<char>(Path.GetInvalidFileNameChars());
       return !filename.Any(c => invalidChars.Contains(c));
@@ -123,21 +126,25 @@ namespace Ceres.Base.Misc
 
     public static void WriteObj(string FN, object obj)
     {
+      throw new NotImplementedException();
+#if NOT
       FileStream stream = File.Create(FN);
       BinaryFormatter formatter = new BinaryFormatter();
-#pragma warning disable SYSLIB0011 // TODO: remove use of Binary serialization
       formatter.Serialize(stream, obj);
       stream.Close();
+#endif
     }
 
 
     public static T ReadObj<T>(string FN)
     {
+      throw new NotImplementedException();
+#if NOT
       byte[] allBytes = File.ReadAllBytes(FN);
       BinaryFormatter formatter = new BinaryFormatter();
-#pragma warning disable SYSLIB0011 // TODO: remove use of Binary serialization
       object obj = formatter.Deserialize(new FileStream(FN, FileMode.Open, FileAccess.Read));
       return (T)obj;
+#endif
     }
   }
 }
