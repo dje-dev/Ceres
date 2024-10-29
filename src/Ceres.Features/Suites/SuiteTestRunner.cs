@@ -482,216 +482,47 @@ namespace Ceres.Features.Suites
 
       UCISearchInfo otherEngineAnalysis2 = default;
 
-      EPDEntry epdToUse = epd;
 
-      Task RunNonCeres()
+      GameEngineSearchResultCeres search1, search2;
+      int scoreCeres1, scoreCeres2, scoreOtherEngine;
+      SearchResultInfo result1, result2;
+      float otherEngineTime;
+
+      otherEngineAnalysis2 = RunSearch(epdNum, epd, 
+                                       otherEngines, EngineCeres1, EngineCeres2, 
+                                       otherEngineAnalysis2, 
+                                       out search1, out search2, 
+                                       out scoreCeres1, out scoreCeres2,
+                                       out scoreOtherEngine, 
+                                       out result1, out result2,
+                                       out otherEngineTime);
+
+      float avgCeres1 = (float)accCeres1 / numSearches;
+      float avgCeres2 = (float)accCeres2 / numSearches;
+      float avgWCeres1 = (float)accWCeres1 / numSearchesBothFound;
+      float avgWCeres2 = (float)accWCeres2 / numSearchesBothFound;
+
+      float avgOther = (float)this.avgOther / numSearches;
+
+      string MoveIfWrong(Move m) => m.IsNull || epd.CorrectnessScore(m, 10) == 10 ? "    " : m.ToString().ToLower();
+
+      int diff1 = scoreCeres1 - scoreOtherEngine;
+
+      //NodeEvaluatorNeuralNetwork
+      int evalNumBatches1 = result1.NumNNBatches;
+      int evalNumPos1 = result1.NumNNNodes;
+      int evalNumBatches2 = search2 == null ? 0 : result2.NumNNBatches;
+      int evalNumPos2 = search2 == null ? 0 : result2.NumNNNodes;
+
+      string correctMove = null;
+      if (epd.AMMoves != null)
       {
-        if (Def.ExternalEngineDef != null)
-        {
-          object engineObj = otherEngines.GetFromPool();
-
-          SearchLimit adjustedLimit = Def.ExternalEngineDef.SearchLimit.ConvertedGameToMoveLimit;
-          if (engineObj is LC0Engine)
-          {
-            LC0Engine le = (LC0Engine)engineObj;
-            
-            if (epdToUse.StartMoves != null)
-            {
-              throw new NotImplementedException("External engine does not yet support StartMoves moves in EPD file");
-            }
-            // Run test 2 first since that's the one we dump in detail, to avoid any possible caching effect from a prior run
-            otherEngineAnalysis2 = le.AnalyzePositionFromFEN(epdToUse.FENAndMoves, adjustedLimit);
-            //            leelaAnalysis2 = le.AnalyzePositionFromFEN(epdToUse.FEN, new SearchLimit(SearchLimit.LimitType.NodesPerMove, 2)); // **** TEMP
-            otherEngines.RestoreToPool(le);
-          }
-          else
-          {
-            UCIGameRunner runner = (engineObj is UCIGameRunner) ? (engineObj as UCIGameRunner) 
-                                                                : (engineObj as GameEngineUCI).UCIRunner;
-            string moveType = Def.ExternalEngineDef.SearchLimit.Type == SearchLimitType.NodesPerMove ? "nodes" : "movetime";
-            int moveValue = moveType == "nodes" ? (int)Def.ExternalEngineDef.SearchLimit.Value : (int)adjustedLimit.Value * 1000;
-            runner.EvalPositionPrepare();
-            otherEngineAnalysis2 = runner.EvalPosition(epdToUse.FEN, epdToUse.StartMoves, moveType, moveValue, null);
-            otherEngines.RestoreToPool(runner);
-            //          public UCISearchInfo EvalPosition(int engineNum, string fenOrPositionCommand, string moveType, int moveMetric, bool shouldCache = false)
-          }
-        }
-        return Task.CompletedTask;
+        correctMove = "-" + epd.AMMoves[0];
       }
-
-      bool EXTERNAL_CONCURRENT = numConcurrentSuiteThreads > 1;
-
-      Task lzTask = EXTERNAL_CONCURRENT ? Task.Run(RunNonCeres) : RunNonCeres();
-
-      // Compute search limit
-      // If possible, adjust for the fact that LC0 "cheats" by going slightly over node budget
-      SearchLimit ceresSearchLimit1 = Def.CeresEngine1Def.SearchLimit.ConvertedGameToMoveLimit;
-      SearchLimit ceresSearchLimit2 = Def.CeresEngine2Def?.SearchLimit.ConvertedGameToMoveLimit;
-
-      if (Def.CeresEngine1Def.SearchLimit.Type == SearchLimitType.NodesPerMove
-       && otherEngineAnalysis2 != null
-       && !Def.Engine1Def.SearchParams.FutilityPruningStopSearchEnabled)
+      else if (epd.BMMoves != null)
       {
-        if (Def.CeresEngine1Def.SearchLimit.Type == SearchLimitType.NodesPerMove)
-        {
-          ceresSearchLimit1 = new SearchLimit(SearchLimitType.NodesPerMove, otherEngineAnalysis2.Nodes);
-        }
-        if (Def.CeresEngine1Def.SearchLimit.Type == SearchLimitType.NodesPerMove)
-        {
-          ceresSearchLimit2 = new SearchLimit(SearchLimitType.NodesPerMove, otherEngineAnalysis2.Nodes);
-        }
+        correctMove = epd.BMMoves[0];
       }
-
-      PositionWithHistory pos = epd.PosWithHistory;
-
-      // TODO: should this be switched to GameEngineCeresInProcess?
-
-      // Note that if we are running both Ceres1 and Ceres2 we alternate which search goes first.
-      // This prevents any systematic difference/benefit that might come from order
-      // (for example if we reuse position evaluations from the other tree, which can benefit only one of the two searches).
-      GameEngineSearchResultCeres search1 = null;
-      GameEngineSearchResultCeres search2 = null;
-
-      if (epdNum % 2 == 0 || Def.CeresEngine2Def == null)
-      {
-        EngineCeres1.ResetGame();
-        search1 = EngineCeres1.SearchCeres(pos, ceresSearchLimit1);
-
-        MCTSIterator shareContext = null;
-        if (Def.RunCeres2Engine)
-        {
-          if (Def.Engine2Def.SearchParams.ReusePositionEvaluationsFromOtherTree)
-          {
-            shareContext = search1.Search.Manager.Context;
-          }
-
-          search2 = EngineCeres2.SearchCeres(pos, ceresSearchLimit2);
-        }
-        
-      }
-      else
-      {
-        EngineCeres2.ResetGame();
-        search2 = EngineCeres2.SearchCeres(pos, ceresSearchLimit2);
-
-        MCTSIterator shareContext = null;
-        if (Def.Engine1Def.SearchParams.ReusePositionEvaluationsFromOtherTree)
-        {
-          shareContext = search2.Search.Manager.Context;
-        }
-
-        search1 = EngineCeres1.SearchCeres(pos, ceresSearchLimit1);
-
-      }
-
-      // Restore engines to pool
-      EnginesCeres1.Add(EngineCeres1);
-      EnginesCeres2?.Add(EngineCeres2);
-
-      lock (lockObj)
-      {
-        while (finalQ1.Count <= epdNum)
-        {
-          finalQ1.Add(float.NaN);
-        }
-
-        finalQ1[epdNum] = (float)search1.ScoreQ;
-
-        if (search2 != null)
-        {
-          while (finalQ2.Count <= epdNum)
-          {
-            finalQ2.Add(float.NaN);
-          }
-
-          finalQ2[epdNum] = (float)search2.ScoreQ;
-        }
-      }
-
-      // Wait for LZ analysis
-      if (EXTERNAL_CONCURRENT) lzTask.Wait();
-
-      Move bestMoveOtherEngine = default;
-
-      if (Def.ExternalEngineDef != null)
-      {
-        MGPosition thisPosX = PositionWithHistory.FromFENAndMovesUCI(epdToUse.FEN, epdToUse.StartMoves).FinalPosMG;
-
-        MGMove lzMoveMG1 = MGMoveFromString.ParseMove(thisPosX, otherEngineAnalysis2.BestMove);
-        bestMoveOtherEngine = MGMoveConverter.ToMove(lzMoveMG1);
-      }
-
-      Move bestMoveCeres1 = MGMoveConverter.ToMove(search1.BestMove.BestMove);
-      Move bestMoveCeres2 = search2 == null ? default : MGMoveConverter.ToMove(search2.BestMove.BestMove);
-
-      char CorrectStr(Move move) => epdToUse.CorrectnessScore(move, 10) == 10 ? '+' : '.';
-
-      int scoreCeres1 = epdToUse.CorrectnessScore(bestMoveCeres1, 10);
-      int scoreCeres2 = epdToUse.CorrectnessScore(bestMoveCeres2, 10);
-      int scoreOtherEngine = epdToUse.CorrectnessScore(bestMoveOtherEngine, 10);
-
-      SearchResultInfo result1 = new SearchResultInfo(search1.Search.Manager, search1.BestMove);
-      SearchResultInfo result2 = search2 == null ? null : new SearchResultInfo(search2.Search.Manager, search2.BestMove);
-
-      // Possibly invoke callback method.
-      Def.Callback?.Invoke(epdToUse, scoreCeres1, result1);
-
-      float otherEngineTime = otherEngineAnalysis2 == null ? 0 : (float)otherEngineAnalysis2.EngineReportedSearchTime / 1000.0f;
-
-      lock (lockObj)
-      {
-        accCeres1 += scoreCeres1;
-        accCeres2 += scoreCeres2;
-
-        sumCeres1NumNodesWhenChoseTopNode += result1.NumNodesWhenChoseTopNNode;
-        if (result2 != null)
-        {
-          sumCeres2NumNodesWhenChoseTopNode += result2.NumNodesWhenChoseTopNNode;
-        }
-
-        // Accumulate how many nodes were required to find one of the correct moves
-        // (in the cases where both succeeded)
-        if (scoreCeres1 > 0 && (search2 == null || scoreCeres2 > 0))
-        {
-          accWCeres1 += (scoreCeres1 == 0) ? result1.N : result1.NumNodesWhenChoseTopNNode;
-          if (search2 != null)
-          {
-            accWCeres2 += (scoreCeres2 == 0) ? result2.N : result2.NumNodesWhenChoseTopNNode;
-            solvedPct1MinusPct2Samples.Add(result1.FractionNumNodesWhenChoseTopNNode - result2.FractionNumNodesWhenChoseTopNNode);
-          }
-          numSearchesBothFound++;
-        }
-        this.avgOther += scoreOtherEngine;
-
-        numSearches++;
-       }
-
-        float avgCeres1 = (float)accCeres1 / numSearches;
-        float avgCeres2 = (float)accCeres2 / numSearches;
-        float avgWCeres1 = (float)accWCeres1 / numSearchesBothFound;
-        float avgWCeres2 = (float)accWCeres2 / numSearchesBothFound;
-
-        float avgOther = (float)this.avgOther / numSearches;
-
-        string MoveIfWrong(Move m) => m.IsNull || epdToUse.CorrectnessScore(m, 10) == 10 ? "    " : m.ToString().ToLower();
-
-        int diff1 = scoreCeres1 - scoreOtherEngine;
-
-        //NodeEvaluatorNeuralNetwork
-        int evalNumBatches1 = result1.NumNNBatches;
-        int evalNumPos1 = result1.NumNNNodes;
-        int evalNumBatches2 = search2 == null ? 0 : result2.NumNNBatches;
-        int evalNumPos2 = search2 == null ? 0 : result2.NumNNNodes;
-
-        string correctMove = null;
-        if (epdToUse.AMMoves != null)
-        {
-          correctMove = "-" + epdToUse.AMMoves[0];
-        }
-        else if (epdToUse.BMMoves != null)
-        {
-          correctMove = epdToUse.BMMoves[0];
-        }
 
       lock (lockObj)
       {
@@ -764,10 +595,10 @@ namespace Ceres.Features.Suites
         writer.Add("MC2", $"{search2.BestMove.BestMove,7}", 9);
       }
 
-      writer.Add("Fr", $"{worker1PickedNonTopNMoveStr}{ 100.0f * result1.TopNNodeN / result1.N,3:F0}%", 8);
+      writer.Add("Fr", $"{worker1PickedNonTopNMoveStr}{100.0f * result1.TopNNodeN / result1.N,3:F0}%", 8);
       if (c2)
       {
-        writer.Add("Fr2", $"{worker2PickedNonTopNMoveStr}{ 100.0f * result2?.TopNNodeN / result2?.N,3:F0}%", 8);
+        writer.Add("Fr2", $"{worker2PickedNonTopNMoveStr}{100.0f * result2?.TopNNodeN / result2?.N,3:F0}%", 8);
       }
 
       writer.Add("Yld", $"{result1.NodeSelectionYieldFrac,6:f3}", 9);
@@ -783,7 +614,8 @@ namespace Ceres.Features.Suites
       }
 
       writer.Add("TimeC", $"{search1.TimingStats.ElapsedTimeSecs,7:F2}", 9);
-      if (c2) {
+      if (c2)
+      {
         writer.Add("TimeC2", $"{search2.TimingStats.ElapsedTimeSecs,7:F2}", 9);
       }
 
@@ -838,8 +670,8 @@ namespace Ceres.Features.Suites
 
       if (Def.DumpEPDInfo)
       {
-        writer.Add("Themes", epdToUse.Themes, -1);
-        writer.Add("FEN", epdToUse.FEN, -1);
+        writer.Add("Themes", epd.Themes, -1);
+        writer.Add("FEN", epd.FEN, -1);
       }
 
       if (outputDetail)
@@ -852,14 +684,204 @@ namespace Ceres.Features.Suites
         Def.Output.WriteLine(writer.text.ToString());
       }
 
-      //      MCTSNodeStorageSerialize.Save(worker1.Context.Store, @"c:\temp", "TESTSORE");
-
       // TODO: seems not safe to release here, is it ok just to leave to finalization for dispose?
       //search1?.Search.Manager?.Dispose();
       //if (!object.ReferenceEquals(search1?.Search.Manager, search2?.Search.Manager)) search2?.Search.Manager?.Dispose();
     }
 
 
+    private UCISearchInfo RunSearch(int epdNum, EPDEntry epd, 
+                                    ObjectPool<object> otherEngines, 
+                                    GameEngineCeresInProcess EngineCeres1, 
+                                    GameEngineCeresInProcess EngineCeres2, 
+                                    UCISearchInfo otherEngineAnalysis2, 
+                                    out GameEngineSearchResultCeres search1, 
+                                    out GameEngineSearchResultCeres search2, 
+                                    out int scoreCeres1, out int scoreCeres2, out int scoreOtherEngine, 
+                                    out SearchResultInfo result1, out SearchResultInfo result2, 
+                                    out float otherEngineTime)
+    {
+      Task RunNonCeres()
+      {
+        if (Def.ExternalEngineDef != null)
+        {
+          object engineObj = otherEngines.GetFromPool();
+
+          SearchLimit adjustedLimit = Def.ExternalEngineDef.SearchLimit.ConvertedGameToMoveLimit;
+          if (engineObj is LC0Engine)
+          {
+            LC0Engine le = (LC0Engine)engineObj;
+
+            if (epd.StartMoves != null)
+            {
+              throw new NotImplementedException("External engine does not yet support StartMoves moves in EPD file");
+            }
+            // Run test 2 first since that's the one we dump in detail, to avoid any possible caching effect from a prior run
+            otherEngineAnalysis2 = le.AnalyzePositionFromFEN(epd.FENAndMoves, adjustedLimit);
+            //            leelaAnalysis2 = le.AnalyzePositionFromFEN(epdToUse.FEN, new SearchLimit(SearchLimit.LimitType.NodesPerMove, 2)); // **** TEMP
+            otherEngines.RestoreToPool(le);
+          }
+          else
+          {
+            UCIGameRunner runner = (engineObj is UCIGameRunner) ? (engineObj as UCIGameRunner)
+                                                                : (engineObj as GameEngineUCI).UCIRunner;
+            string moveType = Def.ExternalEngineDef.SearchLimit.Type == SearchLimitType.NodesPerMove ? "nodes" : "movetime";
+            int moveValue = moveType == "nodes" ? (int)Def.ExternalEngineDef.SearchLimit.Value : (int)adjustedLimit.Value * 1000;
+            runner.EvalPositionPrepare();
+            otherEngineAnalysis2 = runner.EvalPosition(epd.FEN, epd.StartMoves, moveType, moveValue, null);
+            otherEngines.RestoreToPool(runner);
+            //          public UCISearchInfo EvalPosition(int engineNum, string fenOrPositionCommand, string moveType, int moveMetric, bool shouldCache = false)
+          }
+        }
+        return Task.CompletedTask;
+      }
+
+      bool EXTERNAL_CONCURRENT = numConcurrentSuiteThreads > 1;
+
+      Task lzTask = EXTERNAL_CONCURRENT ? Task.Run(RunNonCeres) : RunNonCeres();
+
+      // Compute search limit
+      // If possible, adjust for the fact that LC0 "cheats" by going slightly over node budget
+      SearchLimit ceresSearchLimit1 = Def.CeresEngine1Def.SearchLimit.ConvertedGameToMoveLimit;
+      SearchLimit ceresSearchLimit2 = Def.CeresEngine2Def?.SearchLimit.ConvertedGameToMoveLimit;
+
+      if (Def.CeresEngine1Def.SearchLimit.Type == SearchLimitType.NodesPerMove
+       && otherEngineAnalysis2 != null
+       && !Def.Engine1Def.SearchParams.FutilityPruningStopSearchEnabled)
+      {
+        if (Def.CeresEngine1Def.SearchLimit.Type == SearchLimitType.NodesPerMove)
+        {
+          ceresSearchLimit1 = new SearchLimit(SearchLimitType.NodesPerMove, otherEngineAnalysis2.Nodes);
+        }
+        if (Def.CeresEngine1Def.SearchLimit.Type == SearchLimitType.NodesPerMove)
+        {
+          ceresSearchLimit2 = new SearchLimit(SearchLimitType.NodesPerMove, otherEngineAnalysis2.Nodes);
+        }
+      }
+
+      PositionWithHistory pos = epd.PosWithHistory;
+
+      // TODO: should this be switched to GameEngineCeresInProcess?
+
+      // Note that if we are running both Ceres1 and Ceres2 we alternate which search goes first.
+      // This prevents any systematic difference/benefit that might come from order
+      // (for example if we reuse position evaluations from the other tree, which can benefit only one of the two searches).
+      search1 = null;
+      search2 = null;
+      if (epdNum % 2 == 0 || Def.CeresEngine2Def == null)
+      {
+        EngineCeres1.ResetGame();
+        search1 = EngineCeres1.SearchCeres(pos, ceresSearchLimit1);
+
+        MCTSIterator shareContext = null;
+        if (Def.RunCeres2Engine)
+        {
+          if (Def.Engine2Def.SearchParams.ReusePositionEvaluationsFromOtherTree)
+          {
+            shareContext = search1.Search.Manager.Context;
+          }
+
+          search2 = EngineCeres2.SearchCeres(pos, ceresSearchLimit2);
+        }
+
+      }
+      else
+      {
+        EngineCeres2.ResetGame();
+        search2 = EngineCeres2.SearchCeres(pos, ceresSearchLimit2);
+
+        MCTSIterator shareContext = null;
+        if (Def.Engine1Def.SearchParams.ReusePositionEvaluationsFromOtherTree)
+        {
+          shareContext = search2.Search.Manager.Context;
+        }
+
+        search1 = EngineCeres1.SearchCeres(pos, ceresSearchLimit1);
+
+      }
+
+      // Restore engines to pool
+      EnginesCeres1.Add(EngineCeres1);
+      EnginesCeres2?.Add(EngineCeres2);
+
+      lock (lockObj)
+      {
+        while (finalQ1.Count <= epdNum)
+        {
+          finalQ1.Add(float.NaN);
+        }
+
+        finalQ1[epdNum] = (float)search1.ScoreQ;
+
+        if (search2 != null)
+        {
+          while (finalQ2.Count <= epdNum)
+          {
+            finalQ2.Add(float.NaN);
+          }
+
+          finalQ2[epdNum] = (float)search2.ScoreQ;
+        }
+      }
+
+      // Wait for LZ analysis
+      if (EXTERNAL_CONCURRENT) lzTask.Wait();
+
+      Move bestMoveOtherEngine = default;
+
+      if (Def.ExternalEngineDef != null)
+      {
+        MGPosition thisPosX = PositionWithHistory.FromFENAndMovesUCI(epd.FEN, epd.StartMoves).FinalPosMG;
+
+        MGMove lzMoveMG1 = MGMoveFromString.ParseMove(thisPosX, otherEngineAnalysis2.BestMove);
+        bestMoveOtherEngine = MGMoveConverter.ToMove(lzMoveMG1);
+      }
+
+      Move bestMoveCeres1 = MGMoveConverter.ToMove(search1.BestMove.BestMove);
+      Move bestMoveCeres2 = search2 == null ? default : MGMoveConverter.ToMove(search2.BestMove.BestMove);
+
+      char CorrectStr(Move move) => epd.CorrectnessScore(move, 10) == 10 ? '+' : '.';
+
+      scoreCeres1 = epd.CorrectnessScore(bestMoveCeres1, 10);
+      scoreCeres2 = epd.CorrectnessScore(bestMoveCeres2, 10);
+      scoreOtherEngine = epd.CorrectnessScore(bestMoveOtherEngine, 10);
+      result1 = new SearchResultInfo(search1.Search.Manager, search1.BestMove);
+      result2 = search2 == null ? null : new SearchResultInfo(search2.Search.Manager, search2.BestMove);
+
+      // Possibly invoke callback method.
+      Def.Callback?.Invoke(epd, scoreCeres1, result1);
+
+      otherEngineTime = otherEngineAnalysis2 == null ? 0 : (float)otherEngineAnalysis2.EngineReportedSearchTime / 1000.0f;
+      lock (lockObj)
+      {
+        accCeres1 += scoreCeres1;
+        accCeres2 += scoreCeres2;
+
+        sumCeres1NumNodesWhenChoseTopNode += result1.NumNodesWhenChoseTopNNode;
+        if (result2 != null)
+        {
+          sumCeres2NumNodesWhenChoseTopNode += result2.NumNodesWhenChoseTopNNode;
+        }
+
+        // Accumulate how many nodes were required to find one of the correct moves
+        // (in the cases where both succeeded)
+        if (scoreCeres1 > 0 && (search2 == null || scoreCeres2 > 0))
+        {
+          accWCeres1 += (scoreCeres1 == 0) ? result1.N : result1.NumNodesWhenChoseTopNNode;
+          if (search2 != null)
+          {
+            accWCeres2 += (scoreCeres2 == 0) ? result2.N : result2.NumNodesWhenChoseTopNNode;
+            solvedPct1MinusPct2Samples.Add(result1.FractionNumNodesWhenChoseTopNNode - result2.FractionNumNodesWhenChoseTopNNode);
+          }
+          numSearchesBothFound++;
+        }
+        this.avgOther += scoreOtherEngine;
+
+        numSearches++;
+      }
+
+      return otherEngineAnalysis2;
+    }
   }
 
   internal class Writer
