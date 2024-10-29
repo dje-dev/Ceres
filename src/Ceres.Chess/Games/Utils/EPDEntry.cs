@@ -50,8 +50,6 @@ namespace Ceres.Chess.Games.Utils
 
     /// <summary>
     /// Optional set of benchmark (good) moves.
-    /// NOTE: For Lichess positions, we set this to the first in the sequence of BMMovesSequence
-    ///       but the true answer requires all moves to be correctly played.
     /// </summary>
     public readonly string[] BMMoves; 
 
@@ -61,9 +59,18 @@ namespace Ceres.Chess.Games.Utils
     public readonly string[] AMMoves;
 
     /// <summary>
-    /// Sequence of benchmark (good) moves.
+    /// Sequence of puzzle sequence moves for Lichess positions.
+    /// NOTE: Fhe first of possibly multiple puzzle positions to be tested 
+    ///       occurs by applying the first move to the FEN. 
+    ///       The remaining (every other) moves are the solution.
+    ///       
+    /// See: https://database.lichess.org/#puzzles
+    public readonly string[] LichessMoveSequence;
+
+    /// <summary>
+    /// If this is a Lichess puzzle, the rating of the puzzle.
     /// </summary>
-    public string[] BMMovesSequence => bmMovesSequenceStr.Split(" ");
+    public readonly int LichessRating;
 
     /// <summary>
     /// Optional description of position.
@@ -95,8 +102,6 @@ namespace Ceres.Chess.Games.Utils
     public EPDEntry WithChangedFEN(string newFEN) => new EPDEntry(newFEN, BMMoves, ID, ScoredMoves);
 
 
-    string bmMovesSequenceStr;
-
 
     /// <summary>
     /// Internal constructor.
@@ -113,6 +118,7 @@ namespace Ceres.Chess.Games.Utils
       ScoredMoves = moves;
     }
 
+
     /// <summary>
     /// Internal constructor.
     /// </summary>
@@ -127,6 +133,7 @@ namespace Ceres.Chess.Games.Utils
       ID = id;
       ScoredMoves = moves;
     }
+
 
     public Position Position => Position.FromFEN(FEN);
 
@@ -151,6 +158,7 @@ namespace Ceres.Chess.Games.Utils
     /// extracting FEN and benchmark moves/commentary
     /// </summary>
     /// <param name="epdLine"></param>
+    /// <param name="lichessPuzzleFormat"></param>
     public EPDEntry(string epdLine, bool lichessPuzzleFormat = false)
     {
       //xxx,r6k/pp2r2p/4Rp1Q/3p4/8/1N1P2R1/PqP2bPP/7K b - - 0 24,f2g3 e6e7 b2b1 b3c1 b1c1 h6c1,2032,75,91,297,crushing hangingPiece long middlegame,https://lichess.org/787zsVup/black#48
@@ -163,8 +171,16 @@ namespace Ceres.Chess.Games.Utils
         string[] parts = epdLine.Split(",");
 
         string fen = parts[0];
-        string movesCorrect = parts[1];
+        FEN = fen;
         string themes = parts.Length > 6 ? parts[6] : null;
+
+        string allMoves = parts[1];
+        LichessMoveSequence = allMoves.Split(" ");
+        StartMoves = LichessMoveSequence[0]; // first one is pre-puzzle
+        BMMoves = [LichessMoveSequence[1]]; // second one is first puzzle move
+        MovesFormat = MovesFormatEnum.UCI;
+        LichessRating = int.Parse(parts[2]);
+
 #if NOT_USED
         string rating = parts[2];
         string ratingDeviation = parts[3];
@@ -174,13 +190,6 @@ namespace Ceres.Chess.Games.Utils
         string openingTags = parts.Length > 8 ? parts[8] : null;
 #endif
 
-
-        FEN = fen;
-//        StartMoves = movePre;
-        bmMovesSequenceStr = movesCorrect;
-        int firstSpace = movesCorrect.IndexOf(" ");
-        BMMoves = new string[] { firstSpace == -1 ? movesCorrect : movesCorrect.Substring(0, firstSpace) };
-        MovesFormat = MovesFormatEnum.UCI;
         Themes = themes;
         
         return;
@@ -458,7 +467,9 @@ namespace Ceres.Chess.Games.Utils
     /// <param name="maxEntries"></param>
     /// <returns></returns>
     public static List<EPDEntry> EPDEntriesInEPDFile(string epdFN, int maxEntries = int.MaxValue, 
-                                                     bool skipFirstColumn = false, Predicate<string> includeFilter = null)
+                                                     bool lichessFormat = false, 
+                                                     Predicate<string> rawIncludeFilter = null,
+                                                     Predicate<EPDEntry> includeFilter = null)
     {
       string[] lines = System.IO.File.ReadAllLines(epdFN);
       List<EPDEntry> ret = new List<EPDEntry>(lines.Length);
@@ -470,7 +481,7 @@ namespace Ceres.Chess.Games.Utils
           break;
         }
 
-        if (includeFilter != null && !includeFilter(line))
+        if (rawIncludeFilter != null && !rawIncludeFilter(line))
         {
           continue;
         }
@@ -487,10 +498,14 @@ namespace Ceres.Chess.Games.Utils
           continue;
         }
 
-        EPDEntry entry = new EPDEntry(line, skipFirstColumn);
+        EPDEntry entry = new EPDEntry(line, lichessFormat);
         if (entry.ID == "PuzzleId" || Position.FromFEN(entry.FEN).CalcTerminalStatus() != GameResult.Unknown)
         {
           // Skip header line if Lichess file
+          continue;
+        }
+        else if (includeFilter != null && !includeFilter(entry))
+        {
           continue;
         }
         else

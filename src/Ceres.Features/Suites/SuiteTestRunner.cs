@@ -177,7 +177,8 @@ namespace Ceres.Features.Suites
 
       // TODO: add path automatically
       List<EPDEntry> epds = EPDEntry.EPDEntriesInEPDFile(Def.EPDFileName, Def.MaxNumPositions, 
-                                                         Def.EPDLichessPuzzleFormat, Def.EPDFilter);
+                                                         Def.EPDLichessPuzzleFormat, 
+                                                         Def.EPDRawLineFilter, Def.EPDFilter);
 
       // Possibly skip some of positions at beginning of file.
       if (Def.SkipNumPositions > 0)
@@ -493,7 +494,11 @@ namespace Ceres.Features.Suites
           if (engineObj is LC0Engine)
           {
             LC0Engine le = (LC0Engine)engineObj;
-
+            
+            if (epdToUse.StartMoves != null)
+            {
+              throw new NotImplementedException("External engine does not yet support StartMoves moves in EPD file");
+            }
             // Run test 2 first since that's the one we dump in detail, to avoid any possible caching effect from a prior run
             otherEngineAnalysis2 = le.AnalyzePositionFromFEN(epdToUse.FENAndMoves, adjustedLimit);
             //            leelaAnalysis2 = le.AnalyzePositionFromFEN(epdToUse.FEN, new SearchLimit(SearchLimit.LimitType.NodesPerMove, 2)); // **** TEMP
@@ -502,7 +507,7 @@ namespace Ceres.Features.Suites
           else
           {
             UCIGameRunner runner = (engineObj is UCIGameRunner) ? (engineObj as UCIGameRunner) 
-            : (engineObj as GameEngineUCI).UCIRunner;
+                                                                : (engineObj as GameEngineUCI).UCIRunner;
             string moveType = Def.ExternalEngineDef.SearchLimit.Type == SearchLimitType.NodesPerMove ? "nodes" : "movetime";
             int moveValue = moveType == "nodes" ? (int)Def.ExternalEngineDef.SearchLimit.Value : (int)adjustedLimit.Value * 1000;
             runner.EvalPositionPrepare();

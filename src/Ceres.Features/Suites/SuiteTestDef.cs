@@ -83,7 +83,12 @@ namespace Ceres.Features.Suites
     /// <summary>
     /// Optional filter predicate to select which raw lines in EPD are processed.
     /// </summary>
-    public Predicate<string> EPDFilter;
+    public Predicate<string> EPDRawLineFilter;
+
+    /// <summary>
+    /// Optional filter predicate to select which entries in EPD are processed.
+    /// </summary>
+    public Predicate<EPDEntry> EPDFilter;
 
     /// <summary>
     /// If specified position should be accepted as part of the suite test.
