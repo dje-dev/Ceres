@@ -288,9 +288,11 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
       }
       else
       {
-        // Prefix optionally omitted
+        // Prefix optionally omitted. Assume Ceres for ONNX files, otherwise LC0.
         thisNetID = netStrWithPrecision;
-        NN_EVAL_TYPE = NNEvaluatorType.LC0;
+        NN_EVAL_TYPE = netStrWithPrecision.ToUpper().EndsWith("ONNX") 
+                         ? NNEvaluatorType.Ceres : 
+                           NNEvaluatorType.LC0;
       }
 
       return (NN_EVAL_TYPE, thisNetID);
