@@ -15,9 +15,7 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Runtime.ConstrainedExecution;
+
 using Ceres.Base.Misc;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
@@ -81,6 +79,7 @@ namespace Ceres.Chess.Textual
       }
     }
 
+
     //create a char array from h..a as a helper for parsing Chess960 fens
     private static readonly char[] FileArrayLower = ['h', 'g', 'f', 'e', 'd', 'c', 'b', 'a'];
 
@@ -105,10 +104,10 @@ namespace Ceres.Chess.Textual
 
       int curRank = 0;
       int curFile = 0;
-      int wKRsquare = -1;
-      int wQRsquare = -1;
-      int bKRsquare = -1;
-      int bQRsquare = -1;
+      int wKRsquare = -999;
+      int wQRsquare = -999;
+      int bKRsquare = -999;
+      int bQRsquare = -999;
 
       // Parse pieces
       while (true)
@@ -151,7 +150,9 @@ namespace Ceres.Chess.Textual
         sideToMove = SideType.White;
       }
       else
+      {
         throw new Exception($"Illegal FEN, side to move character {sideMoveChar}");
+      }
 
       SkipAnySpaces();
 
@@ -455,7 +456,6 @@ namespace Ceres.Chess.Textual
     }
 
     #endregion
-
 
   }
 }
