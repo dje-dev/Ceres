@@ -483,19 +483,62 @@ namespace Ceres.Features.Suites
       UCISearchInfo otherEngineAnalysis2 = default;
 
 
-      GameEngineSearchResultCeres search1, search2;
-      int scoreCeres1, scoreCeres2, scoreOtherEngine;
-      SearchResultInfo result1, result2;
-      float otherEngineTime;
+      GameEngineSearchResultCeres search1 = null; 
+      GameEngineSearchResultCeres search2 = null;
+      int scoreCeres1 = 0, scoreCeres2 = 0, scoreOtherEngine = 0;
+      SearchResultInfo result1 = null, result2 = null;
+      float otherEngineTime = 0; ;
 
-      otherEngineAnalysis2 = RunSearch(epdNum, epd, 
-                                       otherEngines, EngineCeres1, EngineCeres2, 
-                                       otherEngineAnalysis2, 
-                                       out search1, out search2, 
-                                       out scoreCeres1, out scoreCeres2,
-                                       out scoreOtherEngine, 
-                                       out result1, out result2,
-                                       out otherEngineTime);
+      // The case of Lichess puzzles has to be handled specially.
+      // We need to sequentially play out all the moves in the puzzle.
+      // The engine gets all or no credit depending if it finds every one of the correct moves.
+      LichessDatabaseRecord lichessPuzzle = epd.IsLichessPuzzle ? new LichessDatabaseRecord(epd.LichessRawLine) : default;
+      int count = epd.IsLichessPuzzle ? lichessPuzzle.NumPuzzleMoves : 1;
+      int countFailuresCeres1 = 0;
+      int countFailuresCeres2 = 0;
+      int countFailuresOtherEngine = 0;
+      for (int i = 0; i < count; i++)
+      {
+        EPDEntry epdInSequence = epd.IsLichessPuzzle ? lichessPuzzle.EPDForPuzzleMoveAtIndex(i) : epd;
+        
+        otherEngineAnalysis2 = RunSearch(epdNum, epdInSequence,
+                                         otherEngines, EngineCeres1, EngineCeres2,
+                                         otherEngineAnalysis2,
+                                         out search1, out search2,
+                                         out scoreCeres1, out scoreCeres2,
+                                         out scoreOtherEngine,
+                                         out result1, out result2,
+                                         out otherEngineTime);
+
+        if (scoreCeres1 < 10)
+        {
+          countFailuresCeres1++;
+        }
+        if (scoreCeres2 < 10)
+        {
+          countFailuresCeres2++;
+        }
+        if (scoreOtherEngine < 10)
+        {
+          countFailuresOtherEngine++;
+        }
+      }
+
+      if (epd.IsLichessPuzzle && lichessPuzzle.NumPuzzleMoves > 1)
+      {
+        if (countFailuresCeres1 > 0)
+        {
+          scoreCeres1 = 0;
+        }
+        if (countFailuresCeres2 > 0)
+        {
+          scoreCeres2 = 0;
+        }
+        if (countFailuresOtherEngine > 0)
+        {
+          scoreOtherEngine = 0;
+        }
+      }
 
       float avgCeres1 = (float)accCeres1 / numSearches;
       float avgCeres2 = (float)accCeres2 / numSearches;
@@ -670,7 +713,6 @@ namespace Ceres.Features.Suites
 
       if (Def.DumpEPDInfo)
       {
-        writer.Add("Themes", epd.Themes, -1);
         writer.Add("FEN", epd.FEN, -1);
       }
 
@@ -712,13 +754,8 @@ namespace Ceres.Features.Suites
           {
             LC0Engine le = (LC0Engine)engineObj;
 
-            if (epd.StartMoves != null)
-            {
-              throw new NotImplementedException("External engine does not yet support StartMoves moves in EPD file");
-            }
             // Run test 2 first since that's the one we dump in detail, to avoid any possible caching effect from a prior run
             otherEngineAnalysis2 = le.AnalyzePositionFromFEN(epd.FENAndMoves, adjustedLimit);
-            //            leelaAnalysis2 = le.AnalyzePositionFromFEN(epdToUse.FEN, new SearchLimit(SearchLimit.LimitType.NodesPerMove, 2)); // **** TEMP
             otherEngines.RestoreToPool(le);
           }
           else

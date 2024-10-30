@@ -59,28 +59,21 @@ namespace Ceres.Chess.Games.Utils
     public readonly string[] AMMoves;
 
     /// <summary>
-    /// Sequence of puzzle sequence moves for Lichess positions.
-    /// NOTE: Fhe first of possibly multiple puzzle positions to be tested 
-    ///       occurs by applying the first move to the FEN. 
-    ///       The remaining (every other) moves are the solution.
-    ///       
-    /// See: https://database.lichess.org/#puzzles
-    public readonly string[] LichessMoveSequence;
+    /// Returns if this is a Lichess puzzle position.
+    /// </summary>
+    public bool IsLichessPuzzle => LichessRawLine != null;
+
 
     /// <summary>
-    /// If this is a Lichess puzzle, the rating of the puzzle.
+    /// If a Lichess puzzle position this is the raw line from the Lichess database.
     /// </summary>
-    public readonly int LichessRating;
+    public readonly string LichessRawLine;
+
 
     /// <summary>
     /// Optional description of position.
     /// </summary>
     public readonly string ID;
-
-    /// <summary>
-    /// Optional set of themes.
-    /// </summary>
-    public readonly string Themes;
 
     /// <summary>
     /// Notation used to express any associated moves.
@@ -135,6 +128,16 @@ namespace Ceres.Chess.Games.Utils
     }
 
 
+    internal EPDEntry(string id, string fen, string startMoves, string[] bmMoves, MovesFormatEnum movesFormat)
+    {
+      ID = id;
+      FEN = fen;
+      StartMoves = startMoves;
+      BMMoves = bmMoves;
+      MovesFormat = movesFormat;
+    }
+
+
     public Position Position => Position.FromFEN(FEN);
 
     public List<EPDScoredMove> ScoredMoves = new List<EPDScoredMove>();
@@ -154,6 +157,23 @@ namespace Ceres.Chess.Games.Utils
 
 
     /// <summary>
+    /// Returns corresponding LichessDatabaseRecord if this is a Lichess puzzle position.
+    /// </summary>
+    public LichessDatabaseRecord AsLichessDatabaseRecord
+    {
+      get
+      {
+        if (LichessRawLine == null)
+        {
+          throw new Exception("Not a Lichess puzzle position.");
+        }
+
+        return new LichessDatabaseRecord(LichessRawLine);
+      }
+    }
+
+
+    /// <summary>
     /// Constructor which parses an EPD line, 
     /// extracting FEN and benchmark moves/commentary
     /// </summary>
@@ -161,9 +181,20 @@ namespace Ceres.Chess.Games.Utils
     /// <param name="lichessPuzzleFormat"></param>
     public EPDEntry(string epdLine, bool lichessPuzzleFormat = false)
     {
-      //xxx,r6k/pp2r2p/4Rp1Q/3p4/8/1N1P2R1/PqP2bPP/7K b - - 0 24,f2g3 e6e7 b2b1 b3c1 b1c1 h6c1,2032,75,91,297,crushing hangingPiece long middlegame,https://lichess.org/787zsVup/black#48
+      
+      string[] allParts = epdLine.Split(",");
+      string newID;
+      string newFEN;
+      string[] newMoves;
+      string[] otherParts;
+
       if (lichessPuzzleFormat)
       {
+        // Save the raw line for later use
+        LichessRawLine = epdLine;
+
+        // Record only the first puzzle move in the EPD entry
+        // (but allow the other puzzle moves to be retrieved using AsLichessDatabaseRecord).
         int indexFirstComma = epdLine.IndexOf(",");
         ID = epdLine.Substring(0, indexFirstComma);
 
@@ -175,22 +206,11 @@ namespace Ceres.Chess.Games.Utils
         string themes = parts.Length > 6 ? parts[6] : null;
 
         string allMoves = parts[1];
-        LichessMoveSequence = allMoves.Split(" ");
-        StartMoves = LichessMoveSequence[0]; // first one is pre-puzzle
-        BMMoves = [LichessMoveSequence[1]]; // second one is first puzzle move
+        var lichessMoveSequence = allMoves.Split(" ");
+
+        StartMoves = lichessMoveSequence[0]; // first one is pre-puzzle
+        BMMoves = [lichessMoveSequence[1]]; // second one is first puzzle move
         MovesFormat = MovesFormatEnum.UCI;
-        LichessRating = int.Parse(parts[2]);
-
-#if NOT_USED
-        string rating = parts[2];
-        string ratingDeviation = parts[3];
-        string popularity = parts[4];
-        string nbPlays = parts[5];
-        string gameURL = parts.Length > 7 ? parts[7] : null;
-        string openingTags = parts.Length > 8 ? parts[8] : null;
-#endif
-
-        Themes = themes;
         
         return;
       }
