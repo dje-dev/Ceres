@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net9.0</TargetFramework>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
   </PropertyGroup>
 
@@ -9,7 +9,6 @@
     <OutputPath>..\..\artifacts\debug</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
@@ -32,16 +31,16 @@
     </PackageReference>
     <PackageReference Include="ManagedCuda-12" Version="12.4.57" />
     <PackageReference Include="ManagedCuda-CUBLAS" Version="12.4.57" />
-    <PackageReference Include="Microsoft.Extensions.Logging" Version="5.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="5.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="5.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging.EventSource" Version="5.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="5.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="8.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="8.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Logging.EventSource" Version="8.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.2" />
     <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu" Version="1.19.2" />
 
-    <PackageReference Include="protobuf-net" Version="3.0.29" />
-    <PackageReference Include="protobuf-net.Core" Version="3.2.26" />
-    <PackageReference Include="OnnxSharp" Version="0.2.1" />
+    <PackageReference Include="protobuf-net" Version="3.2.45" />
+    <PackageReference Include="protobuf-net.Core" Version="3.2.45" />
+    <PackageReference Include="OnnxSharp" Version="0.3.0" />
     <PackageReference Include="Spectre.Console" Version="0.49.1" />
     
     <PackageReference Include="System.Numerics.Tensors" Version="8.0.0" />
