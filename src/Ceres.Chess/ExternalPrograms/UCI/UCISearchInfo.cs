@@ -249,7 +249,7 @@ namespace Ceres.Chess.ExternalPrograms.UCI
       {
         try
         {
-          MGMove mgMove = MGMoveFromString.ParseMove(curPos, thisMoveStr);
+          MGMove mgMove = MGMoveFromString.ParseMove(in curPos, thisMoveStr);
           string moveNumStr = curPos.BlackToMove ? (count == 0 ? " .. " : " ") : $" {1 + curPos.MoveNumber / 2}. ";
           Move move = MGMoveConverter.ToMove(mgMove);
           movesList.Add(move);

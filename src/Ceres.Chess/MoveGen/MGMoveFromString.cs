@@ -33,9 +33,9 @@ namespace Ceres.Chess.MoveGen
     /// <param name="pos"></param>
     /// <param name="moveStr"></param>
     /// <returns></returns>
-    public static MGMove ParseMove(MGPosition pos, string moveStr)
+    public static MGMove ParseMove(in MGPosition pos, string moveStr)
     {
-      if (!TryParseMoveCoordinateOrAlgebraic(pos, moveStr, out MGMove move))
+      if (!TryParseMoveCoordinateOrAlgebraic(in pos, moveStr, out MGMove move))
       {
         Position position = MGChessPositionConverter.PositionFromMGChessPosition(in pos);
         PositionWithMove mfp = SANParser.FromSAN(moveStr, in position);
@@ -55,13 +55,15 @@ namespace Ceres.Chess.MoveGen
     /// <param name="moveStr"></param>
     /// <param name="move"></param>
     /// <returns></returns>
-    private static bool TryParseMoveCoordinateOrAlgebraic(MGPosition pos, string moveStr, out MGMove move)
+    private static bool TryParseMoveCoordinateOrAlgebraic(in MGPosition pos, string moveStr, out MGMove move)
     {
       moveStr = moveStr.ToLower();
 
       // Sometimes promotions to Knight use the "k" instead of expected "n"
       if (moveStr.EndsWith("k"))
+      {
         moveStr = moveStr.Substring(0, moveStr.Length - 1) + "n";
+      }
 
       MGMoveList moves = new MGMoveList();
       MGMoveGen.GenerateMoves(in pos, moves);
@@ -82,6 +84,5 @@ namespace Ceres.Chess.MoveGen
       return false;
     }
   }
-
 
 }

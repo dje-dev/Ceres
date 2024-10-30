@@ -120,7 +120,7 @@ namespace Ceres.Chess.Positions
     public void AppendMove(string moveStr)
     {
       MGPosition mgPos = MGPosition.FromPosition(FinalPosition);
-      MGMove thisMove = MGMoveFromString.ParseMove(mgPos, moveStr);
+      MGMove thisMove = MGMoveFromString.ParseMove(in mgPos, moveStr);
       if (thisMove.IsNull) throw new Exception("Unexpected null move");
 
       // Verify move is legal from this position
@@ -131,7 +131,7 @@ namespace Ceres.Chess.Positions
         throw new Exception($"The move {moveStr} is not legal from position {FinalPosition.FEN}");
       }
 
-      Moves.Add(MGMoveFromString.ParseMove(mgPos, moveStr));
+      Moves.Add(MGMoveFromString.ParseMove(in mgPos, moveStr));
       if (haveFinalized) InitPositionsAndFinalPosMG();
     }
 
@@ -284,7 +284,7 @@ namespace Ceres.Chess.Positions
           string moveStr = parts[i];
           if (moveStr != "")
           {
-            MGMove mgMove = MGMoveFromString.ParseMove(mgPos, moveStr);
+            MGMove mgMove = MGMoveFromString.ParseMove(in mgPos, moveStr);
             ret.Moves.Add(mgMove);
 
             mgPos.MakeMove(mgMove);
