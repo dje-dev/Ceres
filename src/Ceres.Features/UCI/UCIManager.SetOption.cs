@@ -240,6 +240,7 @@ namespace Ceres.Features.UCI
           break;
 
         case "scoretype":
+          // Lc0 supports: centipawn, centipawn_with_drawscore, centipawn_2019, centipawn_2018, win_percentage, Q, W-L, WDL_mu
           value = value.ToLower();
           if (value == "centipawn")
             scoreAsQ = false;
