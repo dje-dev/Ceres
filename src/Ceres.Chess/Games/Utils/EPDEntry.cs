@@ -518,13 +518,15 @@ namespace Ceres.Chess.Games.Utils
           continue;
         }
 
-        EPDEntry entry = new EPDEntry(line, lichessFormat);
-        if (entry.ID == "PuzzleId" || Position.FromFEN(entry.FEN).CalcTerminalStatus() != GameResult.Unknown)
+        if (line.StartsWith("PuzzleId"))
         {
           // Skip header line if Lichess file
           continue;
         }
-        else if (includeFilter != null && !includeFilter(entry))
+
+        EPDEntry entry = new EPDEntry(line, lichessFormat);
+        if (Position.FromFEN(entry.FEN).CalcTerminalStatus() != GameResult.Unknown || 
+            (includeFilter != null && !includeFilter(entry)))
         {
           continue;
         }
