@@ -252,14 +252,6 @@ namespace Ceres.Features.Suites
 
       if (numConcurrentSuiteThreads > 1)
       {
-        bool evaluator1NonPooled = Def.Engine1Def?.EvaluatorDef != null && Def.Engine1Def.EvaluatorDef.DeviceCombo != Chess.NNEvaluators.Defs.NNEvaluatorDeviceComboType.Pooled;
-        bool evaluator2NonPooled = Def.Engine2Def?.EvaluatorDef != null && Def.Engine2Def.EvaluatorDef.DeviceCombo != Chess.NNEvaluators.Defs.NNEvaluatorDeviceComboType.Pooled;
-
-        if (evaluator1NonPooled || evaluator2NonPooled)
-        {
-          throw new Exception("Must use POOLED neural network evaluator when running suites with parallelism"); ;
-        }
-
         if (Def.ExternalEngineDef != null)
         {
           // For safety (to not overflow main or GPU memory) we limit number of LC0 processes.
@@ -501,9 +493,11 @@ namespace Ceres.Features.Suites
       {
         EPDEntry epdInSequence = epd.IsLichessPuzzle ? lichessPuzzle.EPDForPuzzleMoveAtIndex(i) : epd;
         
+        bool isLastEntry = i == count - 1;
         otherEngineAnalysis2 = RunSearch(epdNum, epdInSequence,
                                          otherEngines, EngineCeres1, EngineCeres2,
                                          otherEngineAnalysis2,
+                                         isLastEntry,
                                          out search1, out search2,
                                          out scoreCeres1, out scoreCeres2,
                                          out scoreOtherEngine,
@@ -734,9 +728,10 @@ namespace Ceres.Features.Suites
 
     private UCISearchInfo RunSearch(int epdNum, EPDEntry epd, 
                                     ObjectPool<object> otherEngines, 
-                                    GameEngineCeresInProcess EngineCeres1, 
-                                    GameEngineCeresInProcess EngineCeres2, 
-                                    UCISearchInfo otherEngineAnalysis2, 
+                                    GameEngineCeresInProcess engineCeres1, 
+                                    GameEngineCeresInProcess engineCeres2, 
+                                    UCISearchInfo otherEngineAnalysis2,
+                                    bool restoreEnginesToPoolWhenDone,
                                     out GameEngineSearchResultCeres search1, 
                                     out GameEngineSearchResultCeres search2, 
                                     out int scoreCeres1, out int scoreCeres2, out int scoreOtherEngine, 
@@ -756,7 +751,11 @@ namespace Ceres.Features.Suites
 
             // Run test 2 first since that's the one we dump in detail, to avoid any possible caching effect from a prior run
             otherEngineAnalysis2 = le.AnalyzePositionFromFEN(epd.FENAndMoves, adjustedLimit);
-            otherEngines.RestoreToPool(le);
+
+            if (restoreEnginesToPoolWhenDone)
+            {
+              otherEngines.RestoreToPool(le);
+            }
           }
           else
           {
@@ -766,7 +765,10 @@ namespace Ceres.Features.Suites
             int moveValue = moveType == "nodes" ? (int)Def.ExternalEngineDef.SearchLimit.Value : (int)adjustedLimit.Value * 1000;
             runner.EvalPositionPrepare();
             otherEngineAnalysis2 = runner.EvalPosition(epd.FEN, epd.StartMoves, moveType, moveValue, null);
-            otherEngines.RestoreToPool(runner);
+            if (restoreEnginesToPoolWhenDone)
+            {
+              otherEngines.RestoreToPool(runner);
+            }
             //          public UCISearchInfo EvalPosition(int engineNum, string fenOrPositionCommand, string moveType, int moveMetric, bool shouldCache = false)
           }
         }
@@ -807,8 +809,8 @@ namespace Ceres.Features.Suites
       search2 = null;
       if (epdNum % 2 == 0 || Def.CeresEngine2Def == null)
       {
-        EngineCeres1.ResetGame();
-        search1 = EngineCeres1.SearchCeres(pos, ceresSearchLimit1);
+        engineCeres1.ResetGame();
+        search1 = engineCeres1.SearchCeres(pos, ceresSearchLimit1);
 
         MCTSIterator shareContext = null;
         if (Def.RunCeres2Engine)
@@ -818,14 +820,14 @@ namespace Ceres.Features.Suites
             shareContext = search1.Search.Manager.Context;
           }
 
-          search2 = EngineCeres2.SearchCeres(pos, ceresSearchLimit2);
+          search2 = engineCeres2.SearchCeres(pos, ceresSearchLimit2);
         }
 
       }
       else
       {
-        EngineCeres2.ResetGame();
-        search2 = EngineCeres2.SearchCeres(pos, ceresSearchLimit2);
+        engineCeres2.ResetGame();
+        search2 = engineCeres2.SearchCeres(pos, ceresSearchLimit2);
 
         MCTSIterator shareContext = null;
         if (Def.Engine1Def.SearchParams.ReusePositionEvaluationsFromOtherTree)
@@ -833,13 +835,16 @@ namespace Ceres.Features.Suites
           shareContext = search2.Search.Manager.Context;
         }
 
-        search1 = EngineCeres1.SearchCeres(pos, ceresSearchLimit1);
+        search1 = engineCeres1.SearchCeres(pos, ceresSearchLimit1);
 
       }
 
-      // Restore engines to pool
-      EnginesCeres1.Add(EngineCeres1);
-      EnginesCeres2?.Add(EngineCeres2);
+      if (restoreEnginesToPoolWhenDone)
+      {
+        // Restore engines to pool
+        EnginesCeres1.Add(engineCeres1);
+        EnginesCeres2?.Add(engineCeres2);
+      }
 
       lock (lockObj)
       {
