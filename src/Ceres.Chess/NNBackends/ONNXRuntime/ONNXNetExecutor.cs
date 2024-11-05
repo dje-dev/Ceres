@@ -36,11 +36,12 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
   {
     /// In August 2024 with TensorRT 10.2 it was discovered that (very) incorrect results
     /// were returned when batch size 1 was used with certain Ceres networks, presumably a bug.
-    /// It was also observed that batch size 4 is no slower (maybe faster) than 1.
-    /// Therefore as a workaround we use a minimum batch size of 4 for TensorRT execution provider
-    /// for Ceres networks.
+    /// It was also observed that batch size 4 was similar in speed as batch size 1.
+    /// Therefore as a workaround we use a minimum batch size of 4 for TensorRT execution provider.
+    /// Subsequently (e.g. TensorRT 10.5) no problems were observed and this was backed out,
+    /// so we allow true batch size of 1 to be sent to the EP.
     /// </summary>
-    internal const int MIN_BATCH_SIZE_TENSOR_RT_CERES = 4;
+    internal const int MIN_BATCH_SIZE_TENSOR_RT_CERES = 1;
 
     public const int TPG_BYTES_PER_SQUARE_RECORD = 137; // TODO: should be referenced from TPGRecord
     public const int TPG_MAX_MOVES = 92; //  // TODO: should be referenced from TPGRecord
@@ -353,34 +354,6 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
             && i != indexToIgnore
             && (mustContainString == null || eval[i].Item1.Contains(mustContainString)))
           {
-            // TODO: find a better way to do this
-            // HACK: If the filename contains "optimistic",
-            //       then accept policy vector only if contains string "optimistic"
-            if (expectedPerPosition == 1858)
-            {
-              if (
-                 ONNXFileName.ToLower().Contains("policy_optimistic") && !eval[i].Item1.ToLower().Contains("optimistic")
-              || ONNXFileName.ToLower().Contains("policy_vanilla") && !eval[i].Item1.ToLower().Contains("vanilla")
-                 )
-              {
-                continue;
-              }
-            }
-            if (expectedPerPosition == 3)
-            {
-              if (
-                 ONNXFileName.ToLower().Contains("value_winner") && !eval[i].Item1.ToLower().Contains("value/winner")
-              || ONNXFileName.ToLower().Contains("value_q") && !eval[i].Item1.ToLower().Contains("value/q")
-                 )
-              {
-                continue;
-              }
-            }
-            //+		[25]	("value/q/dense2", {float[3]})	(string, float[])
-            //                +[26]("value/q/dense_error", { float[1]})	(string, float[])
-            //               + [29]("value/winner/dense2", { float[3]})	(string, float[])
-
-
             return i;
           }
         }
@@ -389,7 +362,7 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
       }
 
 
-      int INDEX_POLICIES = FindIndex(1858);// FIX NetType == NetTypeEnum.Ceres ? 1858 : 96);
+      int INDEX_POLICIES = FindIndex(1858);
       int INDEX_WDL = FindIndex(3);
       int INDEX_WDL2 = FindIndex(3, INDEX_WDL, "value2", true);
       int INDEX_MLH = FindIndex(1, optional: true);
