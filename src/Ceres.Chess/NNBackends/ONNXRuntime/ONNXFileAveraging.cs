@@ -35,16 +35,12 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
 
     public static void Main()
     {
-      string modelPath1 = @"e:\cout\nets\HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_511.onnx";
-      string modelPath2 = @"e:\cout\nets\HOP_CL_CLEAN_512_15_FFN4_B1_NLATTN_4bn_fp16_5200003072.onnx";
-      string outputPath = @"e:\cout\nets\combox_511_final.onnx";
+     
 
-      modelPath2 = modelPath1 = @"e:\cout\nets\HOP_CL_384_11_FFN3_H32_B1_NLA_a2x_nowd_ndm_5bn_fp16_last.onnx";
-///*ok*/ modelPath2 = modelPath1 = @"e:\cout\nets\HOP_CL_CLEAN_256_10_FFN6_B1_NLATT_4bn_fp16_4000006144.onnx";
-      outputPath = @"c:\temp\dummy.onnx";
 
-      modelPath1 = "d:\\nets\\BT4-1024x15x32h-swa-6147500.pb.gz.onnx";
-      modelPath2 = "d:\\nets\\bt4-newtune-3rdbranch-1130.pb.gz.onnx";
+      string modelPath1 = @"e:\cout\nets\HOP_SP_640_25_20H_FFN3_NLA_SMOL_SP_B1_70bn_fp16_5624832000.onnx";
+      string modelPath2 = @"e:\cout\nets\HOP_SP_640_25_20H_FFN3_NLA_SMOL_SP_B1_70bn_fp16_last.onnx";
+      string outputPath = @"e:\cout\nets\combox_5625_final.onnx";
 
       // Load both ONNX models
       var model1 = LoadOnnxModel(modelPath1);
@@ -60,7 +56,7 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
       // Save the new model
       SaveOnnxModel(model1, outputPath);
 
-      Console.WriteLine("New ONNX model 'combo.onnx' created with averaged parameters.");
+      Console.WriteLine($"New ONNX model {outputPath} created with averaged parameters.");
     }
 
 
@@ -122,7 +118,7 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
           }
           else
           {
-            throw new NotImplementedException();
+            throw new NotImplementedException("Unable to process: " + tensorThisItem.DataType + " " + tensorThisItem.Name);
           }
 
         }

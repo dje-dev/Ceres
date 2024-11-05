@@ -62,9 +62,9 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
     public readonly int BatchSize;
 
     /// <summary>
-    /// Type of neural network (Leela Chess Zero or Ceres).
+    /// Type of neural network (Leela Chess Zero or Ceres TPG format).
     /// </summary>
-    public enum NetTypeEnum { Ceres, LC0, TPG };
+    public enum NetTypeEnum { LC0, TPG };
 
     /// <summary>
     /// Type of neural network.
@@ -328,122 +328,99 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
         eval = executor.Run([input], numPositionsUsed, Precision == NNEvaluatorPrecision.FP16);
       }
 
-      if (NetType == NetTypeEnum.Ceres)
+      bool hasMLH = FindIndexExact("mlh") != -1;
+      bool hasUNC = FindIndexExact("unc") != -1;
+      bool hasUNC_POLICY = FindIndexExact("uncertainty_policy") != -1;
+
+      int FindIndexExact(string name)
       {
-        throw new NotImplementedException();
-        //nRunner = session.GetRunner().AddInput("input_1", inputTensor).Fetch("value_out/Tanh").Fetch("policy_out/Softmax").Fetch("draw_out/Sigmoid");
+        for (int i = 0; i < eval.Count; i++)
+        {
+          if (eval[i].Item1 == name)
+          {
+            return i;
+          }
+        }
+        return -1;
       }
-      else
+
+      int FindIndex(int expectedPerPosition, int indexToIgnore = -1, string mustContainString = null, bool optional = false)
       {
-        bool hasMLH = FindIndexExact("mlh") != -1;
-        bool hasUNC = FindIndexExact("unc") != -1;
-        bool hasUNC_POLICY = FindIndexExact("uncertainty_policy") != -1;
-
-        int FindIndexExact(string name)
+        int expectedLength = numPositionsUsed * expectedPerPosition;
+        for (int i = 0; i < eval.Count; i++)
         {
-          for (int i = 0; i < eval.Count; i++)
+          if (eval[i].Item2.Length == expectedLength
+            && i != indexToIgnore
+            && (mustContainString == null || eval[i].Item1.Contains(mustContainString)))
           {
-            if (eval[i].Item1 == name)
+            // TODO: find a better way to do this
+            // HACK: If the filename contains "optimistic",
+            //       then accept policy vector only if contains string "optimistic"
+            if (expectedPerPosition == 1858)
             {
-              return i;
+              if (
+                 ONNXFileName.ToLower().Contains("policy_optimistic") && !eval[i].Item1.ToLower().Contains("optimistic")
+              || ONNXFileName.ToLower().Contains("policy_vanilla") && !eval[i].Item1.ToLower().Contains("vanilla")
+                 )
+              {
+                continue;
+              }
             }
-          }
-          return -1;
-        }
-
-          int FindIndex(int expectedPerPosition, int indexToIgnore = -1, string mustContainString = null, bool optional = false)
-        {
-          int expectedLength = numPositionsUsed * expectedPerPosition;
-          for (int i = 0; i < eval.Count; i++)
-          {
-            if (eval[i].Item2.Length == expectedLength
-              && i != indexToIgnore
-              && (mustContainString == null || eval[i].Item1.Contains(mustContainString)))
+            if (expectedPerPosition == 3)
             {
-              // TODO: find a better way to do this
-              // HACK: If the filename contains "optimistic",
-              //       then accept policy vector only if contains string "optimistic"
-              if (expectedPerPosition == 1858)
+              if (
+                 ONNXFileName.ToLower().Contains("value_winner") && !eval[i].Item1.ToLower().Contains("value/winner")
+              || ONNXFileName.ToLower().Contains("value_q") && !eval[i].Item1.ToLower().Contains("value/q")
+                 )
               {
-                if (
-                   ONNXFileName.ToLower().Contains("policy_optimistic") && !eval[i].Item1.ToLower().Contains("optimistic")
-                || ONNXFileName.ToLower().Contains("policy_vanilla") && !eval[i].Item1.ToLower().Contains("vanilla")
-                   )
-                {
-                  continue;
-                }
+                continue;
               }
-              if (expectedPerPosition == 3)
-              {
-                if (
-                   ONNXFileName.ToLower().Contains("value_winner") && !eval[i].Item1.ToLower().Contains("value/winner")
-                || ONNXFileName.ToLower().Contains("value_q") && !eval[i].Item1.ToLower().Contains("value/q")
-                   )
-                {
-                  continue;
-                }
-              }
-              //+		[25]	("value/q/dense2", {float[3]})	(string, float[])
-              //                +[26]("value/q/dense_error", { float[1]})	(string, float[])
-              //               + [29]("value/winner/dense2", { float[3]})	(string, float[])
-
-
-              return i;
             }
+            //+		[25]	("value/q/dense2", {float[3]})	(string, float[])
+            //                +[26]("value/q/dense_error", { float[1]})	(string, float[])
+            //               + [29]("value/winner/dense2", { float[3]})	(string, float[])
+
+
+            return i;
           }
-
-          return optional ? -1 : throw new Exception("No output found with expected length " + expectedPerPosition);
         }
 
-
-        // TODO: remove hack for BT3
-        bool looksLikeBT3 = eval.Count > 10;
-        string uncMustContainString = looksLikeBT3 ? "value/q/dense_error" : null;
-
-        int INDEX_POLICIES = FindIndex(1858);// FIX NetType == NetTypeEnum.Ceres ? 1858 : 96);
-        int INDEX_WDL = FindIndex(3);
-        int INDEX_WDL2 = FindIndex(3, INDEX_WDL, "value2", true);
-        int INDEX_MLH = FindIndex(1, optional:true);
-        int INDEX_UNC = hasUNC ? FindIndex(1, INDEX_MLH, optional:true) : -1;
-        int INDEX_UNC_POLICY = hasUNC_POLICY ? FindIndex(1, INDEX_MLH, "uncertainty_policy", true) : -1;
-        int INDEX_ACTION = FindIndex(1858 * 3, -1, "action", true); // TODO: cleanup the output names to be better named
-        int INDEX_STATE = FindIndex(256, -1, "state", true);
-        if (false && looksLikeBT3)
-        {
-          Console.WriteLine("ONNX head mappings for " + ONNXFileName);
-          Console.WriteLine("value       --> " + eval[INDEX_WDL].Item1);
-          Console.WriteLine("policy      --> " + eval[INDEX_POLICIES].Item1);
-          Console.WriteLine("mlh         --> " + eval[INDEX_MLH].Item1);
-          Console.WriteLine("uncertainty --> " + eval[INDEX_UNC].Item1);
-        }
-
-        Memory<Float16> mlh = hasMLH ? eval[INDEX_MLH].Item2 : null;
-        Memory<Float16> uncertantiesV = hasUNC ? eval[INDEX_UNC].Item2 : null;
-        Memory<Float16> uncertantiesP = hasUNC_POLICY ? eval[INDEX_UNC_POLICY].Item2 : null;
-        Memory<Float16> policiesLogistics = eval[INDEX_POLICIES].Item2;
-
-        Memory<Float16> actionLogits = INDEX_ACTION != -1 ? eval[INDEX_ACTION].Item2 : default;
-        Memory<Float16> values = eval[INDEX_WDL].Item2;
-        Debug.Assert(values.Length == (isWDL ? 3 : 1) * numPositionsUsed);
-
-        Memory<Float16> values2 = INDEX_WDL2 == -1 ? default : eval[INDEX_WDL2].Item2;
-        float[][] value_fc_activations = null;// eval.Length < 3 ? null : eval[2];
-
-        // SWAP VALUE1, VALUE2: (values, values2) = (values2, values); // swap *** TEMPORARY
-
-        Memory<Float16> extraStats0 = eval.Count > 5 ? eval[5].Item2 : default;
-        Memory<Float16> extraStats1 = eval.Count > 6 ? eval[6].Item2 : default;
-        
-        // TODO: This is just a fake, fill it in someday
-        Memory<Float16> priorState = hasState ? eval[INDEX_STATE].Item2 : default; //  new Float16[numPositionsUsed * 64 * 4]
-        ONNXRuntimeExecutorResultBatch result = new(isWDL, values, values2, policiesLogistics, mlh,
-                                                     uncertantiesV, uncertantiesP,
-                                                     extraStats0, extraStats1, value_fc_activations,
-                                                     actionLogits, priorState,
-                                                     numPositionsUsed, RetainRawOutputs ? eval : null);
-        return result;
-
+        return optional ? -1 : throw new Exception("No output found with expected length " + expectedPerPosition);
       }
+
+
+      int INDEX_POLICIES = FindIndex(1858);// FIX NetType == NetTypeEnum.Ceres ? 1858 : 96);
+      int INDEX_WDL = FindIndex(3);
+      int INDEX_WDL2 = FindIndex(3, INDEX_WDL, "value2", true);
+      int INDEX_MLH = FindIndex(1, optional: true);
+      int INDEX_UNC = hasUNC ? FindIndex(1, INDEX_MLH, optional: true) : -1;
+      int INDEX_UNC_POLICY = hasUNC_POLICY ? FindIndex(1, INDEX_MLH, "uncertainty_policy", true) : -1;
+      int INDEX_ACTION = FindIndex(1858 * 3, -1, "action", true); // TODO: cleanup the output names to be better named
+      int INDEX_STATE = FindIndex(256, -1, "state", true);
+
+      Memory<Float16> mlh = hasMLH ? eval[INDEX_MLH].Item2 : null;
+      Memory<Float16> uncertantiesV = hasUNC ? eval[INDEX_UNC].Item2 : null;
+      Memory<Float16> uncertantiesP = hasUNC_POLICY ? eval[INDEX_UNC_POLICY].Item2 : null;
+      Memory<Float16> policiesLogistics = eval[INDEX_POLICIES].Item2;
+
+      Memory<Float16> actionLogits = INDEX_ACTION != -1 ? eval[INDEX_ACTION].Item2 : default;
+      Memory<Float16> values = eval[INDEX_WDL].Item2;
+      Debug.Assert(values.Length == (isWDL ? 3 : 1) * numPositionsUsed);
+
+      Memory<Float16> values2 = INDEX_WDL2 == -1 ? default : eval[INDEX_WDL2].Item2;
+      float[][] value_fc_activations = null;// eval.Length < 3 ? null : eval[2];
+
+      Memory<Float16> extraStats0 = eval.Count > 5 ? eval[5].Item2 : default;
+      Memory<Float16> extraStats1 = eval.Count > 6 ? eval[6].Item2 : default;
+
+      // TODO: This is just a fake, fill it in someday
+      Memory<Float16> priorState = hasState ? eval[INDEX_STATE].Item2 : default; //  new Float16[numPositionsUsed * 64 * 4]
+      ONNXRuntimeExecutorResultBatch result = new(isWDL, values, values2, policiesLogistics, mlh,
+                                                   uncertantiesV, uncertantiesP,
+                                                   extraStats0, extraStats1, value_fc_activations,
+                                                   actionLogits, priorState,
+                                                   numPositionsUsed, RetainRawOutputs ? eval : null);
+      return result;
     }
 
 
