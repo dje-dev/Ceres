@@ -129,6 +129,96 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// </summary>
     public Memory<FP16[][]> RawNetworkOutputs;
 
+    /// <summary>
+    /// Array of names of raw neural network outputs (if RetainRawOutputs is true).
+    /// </summary>
+    public string[] RawNetworkOutputNames;
+
+    public TimingStats Stats;
+
+    #endregion
+
+    #region Combining batches
+
+    /// <summary>
+    /// Sets batch values to be weighted average over a specified array of other bathces.
+    /// </summary>
+    /// <param name="parts"></param>
+    /// <param name="weights"></param>
+    /// <exception cref="ArgumentException"></exception>
+    public void SetFromWeightedAverage(PositionEvaluationBatch[] parts, float[] weights)
+    {
+      if (parts.Length != weights.Length)
+      {
+        throw new ArgumentException("parts and weights must be of the same length");
+      }
+
+      // Helper function for weighted averages of FP16 values.
+      int numParts = parts.Length;
+      void WeightedAverage(Memory<FP16> destination, Func<PositionEvaluationBatch, Memory<FP16>> selector)
+      {
+        Span<FP16> destinationSpan = destination.Span;
+        int dataLength = destinationSpan.Length; 
+        for (int dataIndex = 0; dataIndex < dataLength; dataIndex++)
+        {
+          float weightedSum = 0;
+          for (int partIndex = 0; partIndex < numParts; partIndex++)
+          {
+            weightedSum += (float)selector(parts[partIndex]).Span[dataIndex] * weights[partIndex];
+          }
+          destinationSpan[dataIndex] = (FP16)weightedSum;
+        }
+      }
+
+      // Weighted average calculations for numeric fields
+      WeightedAverage(W, p => p.W);
+      WeightedAverage(L, p => p.L);
+      WeightedAverage(W1, p => p.W1);
+      WeightedAverage(L1, p => p.L1);
+      WeightedAverage(W2, p => p.W2);
+      WeightedAverage(L2, p => p.L2);
+      WeightedAverage(M, p => p.M);
+      WeightedAverage(UncertaintyV, p => p.UncertaintyV);
+      WeightedAverage(UncertaintyP, p => p.UncertaintyP);
+      WeightedAverage(ExtraStat0, p => p.ExtraStat0);
+      WeightedAverage(ExtraStat1, p => p.ExtraStat1);
+      
+      CompressedPolicyVector[] allPolicies = new CompressedPolicyVector[parts.Length];
+      CompressedActionVector[] allActions = new CompressedActionVector[parts.Length];
+
+      for (int i = 0; i < parts[0].Policies.Length; i++)
+      {
+        for (int part = 0; part < parts.Length; part++)
+        {
+          allPolicies[part] = parts[part].Policies.Span[i];
+          if (HasAction)
+          {
+            allActions[part] = parts[part].Actions.Span[i];
+          }
+        }
+
+        CompressedPolicyVector combinedPolicies = CompressedPolicyVector.LinearlyCombined(allPolicies, weights);
+        Policies.Span[i] = combinedPolicies;
+
+        if (HasAction)
+        {
+          CompressedActionVector combinedActions = CompressedActionVector.LinearlyCombined(allActions, weights);
+          Actions.Span[i] = combinedActions;
+        }
+      }
+
+      // N.B. We don't do anything with state, it is not meaningful to average them.        
+      States = parts[0].States;
+
+      // For non-numeric fields, assign the value of the first element.
+      // It doesn't make sense to try to average these.
+      // TODO: Reconsider, possibly save all separately?
+      Stats = parts[0].Stats;
+      Activations = parts[0].Activations;
+      RawNetworkOutputs = parts[0].RawNetworkOutputs;
+      RawNetworkOutputNames = parts[0].RawNetworkOutputNames;
+    }
+
     #endregion
 
     /// <summary>
@@ -345,11 +435,12 @@ namespace Ceres.Chess.NetEvaluation.Batch
         return $" { GetV(index) } ({GetWinP(index) }/{ GetDrawP(index) }/{ GetLossP(index) })";
       }
       else
+      {
         return $"{W.Span[index]}";
+      }
     }
 
 
-    public TimingStats Stats;
 
     /// <summary>
     /// Returns if the batch was evaluated with a network that has an WDL head.
@@ -455,11 +546,6 @@ namespace Ceres.Chess.NetEvaluation.Batch
     Half[] IPositionEvaluationBatch.GetState(int index) => GetState(index);
 
     NNEvaluatorResultActivations IPositionEvaluationBatch.GetActivations(int index) => GetActivations(index);
-
-    /// <summary>
-    /// Array of names of raw neural network outputs (if RetainRawOutputs is true).
-    /// </summary>
-    public string[] RawNetworkOutputNames;
 
 
 

@@ -16,7 +16,6 @@
 using System;
 using System.Runtime.CompilerServices;
 
-using Ceres.Base.DataTypes;
 using Ceres.Chess.EncodedPositions;
 
 #endregion
@@ -72,8 +71,29 @@ namespace Ceres.Chess.NetEvaluation.Batch
     public readonly (float w, float d, float l) WDL => ((float)WL.W, D, (float)WL.L);
 
 
+
     /// <summary>
-    /// Returns string repersentation.
+    /// Returns the CompressedActionVector which is the linear combination 
+    /// of a set of other raw action vectors (using a specified set of weights).
+    /// </summary>
+    /// <param name="actions"></param>
+    /// <param name="weights"></param>
+    /// <returns></returns>
+    public static CompressedActionVector LinearlyCombined(CompressedActionVector[] actions, float[] weights)
+    {
+      CompressedActionVector ret = new();
+      for (int i = 0; i < actions.Length; i++)
+      {
+        ret.WL.W += actions[i].WL.W * (Half)weights[i];
+        ret.WL.L += actions[i].WL.L * (Half)weights[i];
+      }
+
+      return ret;
+    }
+
+
+    /// <summary>
+    /// Returns string representation.
     /// </summary>
     /// <returns></returns>
     public override readonly string ToString() => $"W={W,6:F3}, D={D,6:F3}, L={L,6:F3}";
