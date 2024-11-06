@@ -204,12 +204,12 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
     /// <param name="debuggingDump"></param>
     /// <param name="alreadyConvertedToLZ0"></param>
     /// <returns></returns>
-    public ONNXRuntimeExecutorResultBatch Execute(bool isWDL, bool hasState,
-                                                  Memory<Half> flatValuesPrimary, Memory<Half[]> flatValuesState,
-                                                  int numPositionsUsed,
-                                                  bool debuggingDump = false, bool alreadyConvertedToLZ0 = false,
-                                                  float tpgDivisor = 1,
-                                                  Predicate<int> shouldUseStateForPos = null)
+    public ONNXRuntimeExecutorResultBatch[] Execute(bool isWDL, bool hasState,
+                                                    Memory<Half> flatValuesPrimary, Memory<Half[]> flatValuesState,
+                                                    int numPositionsUsed,
+                                                    bool debuggingDump = false, bool alreadyConvertedToLZ0 = false,
+                                                    float tpgDivisor = 1,
+                                                    Predicate<int> shouldUseStateForPos = null)
     {
       if (NetType == NetTypeEnum.TPG && !alreadyConvertedToLZ0)
       {
@@ -329,16 +329,20 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
         eval = executor.Run([input], numPositionsUsed, Precision == NNEvaluatorPrecision.FP16);
       }
 
-#if EXPERIMENTAL
-      if (ONNXFileName.ToUpper().Contains("MULTINET"))
-      {
-        ONNXRuntimeExecutorResultBatch outs1 = ExtractNetOutputs("model1_", isWDL, hasState, RetainRawOutputs, numPositionsUsed, eval);
-        ONNXRuntimeExecutorResultBatch outs2 = ExtractNetOutputs("model2_", isWDL, hasState, RetainRawOutputs, numPositionsUsed, eval);
-        return outs2;
-      }
-#endif
 
-      return ExtractNetOutputs(null, isWDL, hasState, RetainRawOutputs, numPositionsUsed, eval);
+      if (executor.MultiNetNames != null)
+      {
+        if (executor.MultiNetWeights == null || executor.MultiNetWeights.Length != 2)
+        {
+          throw new Exception("Expected to find metadata for Ceres_multinet_weights with exactly two constituents.");
+        }
+        ONNXRuntimeExecutorResultBatch model1Outputs = ExtractNetOutputs("model1_", isWDL, hasState, RetainRawOutputs, numPositionsUsed, eval);
+        ONNXRuntimeExecutorResultBatch model2Outputs = ExtractNetOutputs("model2_", isWDL, hasState, RetainRawOutputs, numPositionsUsed, eval);
+        return [model1Outputs, model2Outputs];  
+      }
+
+
+      return [ExtractNetOutputs(null, isWDL, hasState, RetainRawOutputs, numPositionsUsed, eval)];
     }
 
 

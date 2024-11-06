@@ -27,6 +27,8 @@ using Microsoft.ML.OnnxRuntime.Tensors;
 using Ceres.Base.Misc;
 using Ceres.Base.CUDA;
 using Ceres.Base.Benchmarking;
+using Ceres.Base.Misc.ONNX;
+using Onnx;
 
 #endregion
 
@@ -78,6 +80,18 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
     /// If all outputs should be retained.
     /// </summary>
     public bool RetainRawInputs;
+
+
+    /// <summary>
+    /// The names of the sub-networks if the net is a specially prepared 
+    /// Ceres multinet network (containing the string "multinet" in the file name).
+    /// </summary>
+    public readonly string[] MultiNetNames;
+
+
+    /// The weights to be used for inference of the sub-networks if the net is a specially 
+    /// prepared Ceres multinet network (containing the string "multinet" in the file name).
+    public readonly float[] MultiNetWeights;
 
 
     /// <summary>
@@ -155,6 +169,33 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
         onnxModelBytes = File.ReadAllBytes(onnxFileName);
       }
 
+      // Recognize if this is a Ceres "multinet" net and 
+      // extract metadata (names and weights) if so.
+      if (onnxFileName == null || onnxFileName.ToUpper().Contains("MULTINET"))
+      {
+        using (new TimingBlock("ONNX ModelProto parse"))
+        {
+          ModelProto onnxProto = ModelProto.Parser.ParseFrom(onnxModelBytes);
+          string multinetNames = Ceres.Base.Misc.ONNX.ONNXHelpers.GetMetadataValue(onnxProto, "Ceres_multinet_names");
+          if (multinetNames != null)
+          {
+            MultiNetNames = multinetNames.Split(',');
+          } 
+          
+          string multinetWeights = Ceres.Base.Misc.ONNX.ONNXHelpers.GetMetadataValue(onnxProto, "Ceres_multinet_weights");
+          if (multinetWeights != null)
+          {
+            MultiNetWeights = multinetWeights.Split(',').Select(float.Parse).ToArray();
+          }
+
+          Console.WriteLine();
+          Console.Write("LOADING Ceres MultiNet:");
+          for (int i = 0; i < MultiNetNames.Length; i++)
+          {
+            Console.Write(" " + MultiNetNames[i] + "=" + MultiNetWeights[i]);
+          }
+        }
+      }
 
       runOptions = new RunOptions();
 

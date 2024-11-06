@@ -414,9 +414,9 @@ namespace Chess.Ceres.NNEvaluators
         throw new Exception("retrieveSupplementalResults not supported");
       }
 
-      ONNXRuntimeExecutorResultBatch result;
+      ONNXRuntimeExecutorResultBatch[] results;
       TimingStats stats = new TimingStats();
-      //      using (new TimingBlock(stats, TimingBlock.LoggingType.None))
+      using (new TimingBlock(stats, TimingBlock.LoggingType.None))
       {
         lock (Executor)
         {
@@ -424,7 +424,7 @@ namespace Chess.Ceres.NNEvaluators
           Predicate<int> shouldUseStateForPos = i => batch.PositionsBuffer.Span[i].BoardsHistory.History_1
                                                   != batch.PositionsBuffer.Span[i].BoardsHistory.History_2;
 
-          result = Executor.Execute(IsWDL, HasState, flatValuesPrimary, flatValuesState, numPos,
+          results = Executor.Execute(IsWDL, HasState, flatValuesPrimary, flatValuesState, numPos,
                                     alreadyConvertedToLZ0: true, tpgDivisor: tpgDivisor,
                                     shouldUseStateForPos: shouldUseStateForPos);
 
@@ -436,6 +436,32 @@ namespace Chess.Ceres.NNEvaluators
         }
       }
 
+      if (results.Length == 1)
+      {
+        return PrepareBatchFromRawResults(batch, numPos, results[0], stats);
+      }
+      else
+      {
+        // Multinet feature - multiple independent nets in same ONNX file,
+        // all executed and outputs returned.
+        if (results.Length != 2)
+        {
+          throw new NotImplementedException($"Implementation restriction: multinet currently only supports exactly 2 nets, not {results.Length}.");
+        }
+
+        PositionEvaluationBatch batch1 = PrepareBatchFromRawResults(batch, numPos, results[0], stats);
+        PositionEvaluationBatch batch2 = PrepareBatchFromRawResults(batch, numPos, results[1], stats);
+
+        float[] weights = Executor.executor.MultiNetWeights ?? [0.5f, 0.5f];
+        batch1.SetFromWeightedAverage([batch1, batch2], weights);
+        return batch1;
+      }
+    }
+
+
+
+    private PositionEvaluationBatch PrepareBatchFromRawResults(IEncodedPositionBatchFlat batch, int numPos, ONNXRuntimeExecutorResultBatch result, TimingStats stats)
+    {
       Half[][] states2D = null;
       if (HasState || Executor.executor.NumInputs > 1)
       {

@@ -15,6 +15,7 @@
 
 using Onnx;
 using System;
+using System.Linq;
 
 #endregion
 
@@ -110,5 +111,48 @@ namespace Ceres.Base.Misc.ONNX
       return tsp;
     }
 
+
+    /// <summary>
+    /// Adds a metadata key-value pair to the model.
+    /// </summary>
+    /// <param name="model"></param>
+    /// <param name="key"></param>
+    /// <param name="value"></param>
+    public static void AddMetadataValue(ModelProto model, string key, string value)
+    {
+      StringStringEntryProto existingEntry = model.MetadataProps.FirstOrDefault(entry => entry.Key == key);
+
+      if (existingEntry != null)
+      {
+        existingEntry.Value = value;
+      }
+      else
+      {
+        model.MetadataProps.Add(new StringStringEntryProto
+        {
+          Key = key,
+          Value = value
+        });
+      }
+    }
+
+
+    /// <summary>
+    /// Returns the value of a metadata key in the model (or null if not found).
+    /// </summary>
+    /// <param name="model"></param>
+    /// <param name="key"></param>
+    /// <returns></returns>
+    public static string GetMetadataValue(ModelProto model, string key)
+    {
+      foreach (StringStringEntryProto entry in model.MetadataProps)
+      {
+        if (entry.Key == key)
+        {
+          return entry.Value;
+        }
+      }
+      return null;
+    }
   }
 }
