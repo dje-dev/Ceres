@@ -603,17 +603,25 @@ namespace Ceres.Chess.NetEvaluation.Batch
       {
         Debug.Assert(!W2.IsEmpty);
 
+        float fractionValueFromValue1 = 1 - fractionValueFromValue2;
+
         Span<FP16> w = W.Span;
         Span<FP16> w2 = W2.Span;
         Span<FP16> l = L.Span;
-        Span<FP16> l2 = L.Span;
-        float fractionValueFromValue1 = 1 - fractionValueFromValue2;
+        Span<FP16> l2 = L2.Span;
 
         for (int i=0; i<w.Length; i++)
         {
-          float q2 = w2[i] - l2[i];
-          q2 = MapValue1ToExpectedValue2(q2);
-          SetWL2(i, q2);        
+#if EXPERIMENTAL
+          float wl1 = GetWin1P(i) - GetLoss1P(i);
+          float expectedWL2 = MapValue1ToExpectedValue2(wl1);
+
+          float wl2 = w2[i] - l2[i];
+          float deltaWL2FromExpectation = wl2 - expectedWL2;
+
+          float adjustedW2 = wl1 + deltaWL2FromExpectation;
+          SetWL2(i, adjustedW2);        
+#endif
 
           w[i] = (FP16)(w[i] * fractionValueFromValue1 + w2[i] * fractionValueFromValue2);
           l[i] = (FP16)(l[i] * fractionValueFromValue1 + l2[i] * fractionValueFromValue2);
