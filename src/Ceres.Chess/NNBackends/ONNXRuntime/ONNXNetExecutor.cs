@@ -38,10 +38,10 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
     /// were returned when batch size 1 was used with certain Ceres networks, presumably a bug.
     /// It was also observed that batch size 4 was similar in speed as batch size 1.
     /// Therefore as a workaround we use a minimum batch size of 4 for TensorRT execution provider.
-    /// Subsequently (e.g. TensorRT 10.5) no problems were observed and this was backed out,
-    /// so we allow true batch size of 1 to be sent to the EP.
+    /// Subsequent tests with TensorRT 10.5 showed the problem remained,
+    /// sometimes returning NaN or random values for certain networks.
     /// </summary>
-    internal const int MIN_BATCH_SIZE_TENSOR_RT_CERES = 1;
+    internal const int MIN_BATCH_SIZE_TENSOR_RT_CERES = 4;
 
     public const int TPG_BYTES_PER_SQUARE_RECORD = 137; // TODO: should be referenced from TPGRecord
     public const int TPG_MAX_MOVES = 92; //  // TODO: should be referenced from TPGRecord
@@ -329,15 +329,38 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
         eval = executor.Run([input], numPositionsUsed, Precision == NNEvaluatorPrecision.FP16);
       }
 
+#if EXPERIMENTAL
+      if (ONNXFileName.ToUpper().Contains("MULTINET"))
+      {
+        ONNXRuntimeExecutorResultBatch outs1 = ExtractNetOutputs("model1_", isWDL, hasState, RetainRawOutputs, numPositionsUsed, eval);
+        ONNXRuntimeExecutorResultBatch outs2 = ExtractNetOutputs("model2_", isWDL, hasState, RetainRawOutputs, numPositionsUsed, eval);
+        return outs2;
+      }
+#endif
+
+      return ExtractNetOutputs(null, isWDL, hasState, RetainRawOutputs, numPositionsUsed, eval);
+    }
+
+
+    private static ONNXRuntimeExecutorResultBatch ExtractNetOutputs(string namePrefixFilter,
+                                                                    bool isWDL, bool hasState, 
+                                                                    bool retainRawOutputs, int numPositionsUsed, 
+                                                                    List<(string, Memory<Float16>)> eval)
+    {
       bool hasMLH = FindIndexExact("mlh") != -1;
       bool hasUNC = FindIndexExact("unc") != -1;
       bool hasUNC_POLICY = FindIndexExact("uncertainty_policy") != -1;
+
+      bool MatchesNamePrefix(int index) => namePrefixFilter == null || eval[index].Item1.StartsWith(namePrefixFilter);
 
       int FindIndexExact(string name)
       {
         for (int i = 0; i < eval.Count; i++)
         {
-          if (eval[i].Item1 == name)
+          string outputNameWithoutPrefix = namePrefixFilter == null
+                                           ? eval[i].Item1 
+                                           : eval[i].Item1.Replace(namePrefixFilter, "");
+          if (MatchesNamePrefix(i) && outputNameWithoutPrefix == name)
           {
             return i;
           }
@@ -350,7 +373,8 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
         int expectedLength = numPositionsUsed * expectedPerPosition;
         for (int i = 0; i < eval.Count; i++)
         {
-          if (eval[i].Item2.Length == expectedLength
+          if (MatchesNamePrefix(i) && 
+            eval[i].Item2.Length == expectedLength
             && i != indexToIgnore
             && (mustContainString == null || eval[i].Item1.Contains(mustContainString)))
           {
@@ -392,10 +416,9 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
                                                    uncertantiesV, uncertantiesP,
                                                    extraStats0, extraStats1, value_fc_activations,
                                                    actionLogits, priorState,
-                                                   numPositionsUsed, RetainRawOutputs ? eval : null);
+                                                   numPositionsUsed, retainRawOutputs ? eval : null);
       return result;
     }
-
 
     public void EndProfiling() => executor.EndProfiling();
 
