@@ -129,7 +129,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
             string[] netParts = netStr.Split(SUB_WEIGHTS_CHAR);
             thisNetID = netParts[0];
 
-            if (netParts.Length == 5)
+            if (netParts.Length == 7)
             {
               weightValue = ParseWt(netParts[1]);
               weightPolicy = ParseWt(netParts[2]);
