@@ -15,7 +15,10 @@
 
 using Onnx;
 using System;
+using System.IO;
 using System.Linq;
+
+using Google.Protobuf;
 
 #endregion
 
@@ -59,6 +62,32 @@ namespace Ceres.Base.Misc.ONNX
   /// </summary>
   public static class ONNXHelpers
   {
+
+    /// <summary>
+    /// Loads an ONNX model from a file.
+    /// </summary>
+    /// <param name="modelPath"></param>
+    /// <returns></returns>
+    public static ModelProto LoadModel(string modelPath)
+    {
+      using FileStream fileStream = File.OpenRead(modelPath);
+      return ModelProto.Parser.ParseFrom(fileStream);
+    }
+
+
+    /// <summary>
+    /// Saves an ONNX model to a file.
+    /// </summary>
+    /// <param name="model"></param>
+    /// <param name="outputPath"></param>
+    public static void SaveModel(ModelProto model, string outputPath)
+    {
+      File.Delete(outputPath);
+      using FileStream output = File.Create(outputPath);
+      model.WriteTo(output);
+    }
+
+
     /// <summary>
     /// Returns the number of parameters in the model.
     /// </summary>
