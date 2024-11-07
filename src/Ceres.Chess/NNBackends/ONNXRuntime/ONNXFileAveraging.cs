@@ -19,32 +19,26 @@ using System.Linq;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
-using Google.Protobuf.Collections;
-
 using Onnx;
-using System.IO;
 using Google.Protobuf;
+using Google.Protobuf.Collections;
 
 #endregion
 
 namespace Ceres.Chess.NNBackends.ONNXRuntime
 {
+  /// <summary>
+  /// Averages the weights of two ONNX models.
+  /// </summary>
   public static class ONNXFileAveraging
   {
     const bool DUMP_MAX_ABS_WEIGHTS_BY_LAYER = false; // currently only shows those >2
 
-    public static void Main()
+    public static void CreateAveragedFile(string modelPath1, string modelPath2, string outputPath)
     {
-     
-
-
-      string modelPath1 = @"e:\cout\nets\HOP_SP_640_25_20H_FFN3_NLA_SMOL_SP_B1_70bn_fp16_5624832000.onnx";
-      string modelPath2 = @"e:\cout\nets\HOP_SP_640_25_20H_FFN3_NLA_SMOL_SP_B1_70bn_fp16_last.onnx";
-      string outputPath = @"e:\cout\nets\combox_5625_final.onnx";
-
       // Load both ONNX models
-      var model1 = LoadOnnxModel(modelPath1);
-      var model2 = LoadOnnxModel(modelPath2);
+      ModelProto model1 = Base.Misc.ONNX.ONNXHelpers.LoadModel(modelPath1);
+      ModelProto model2 = Base.Misc.ONNX.ONNXHelpers.LoadModel(modelPath2);
 
       // Compute the average of the initializers
       var averagedInitializers = AverageInitializers((0.5f, model1.Graph.Initializer), (0.5f, model2.Graph.Initializer));
@@ -54,7 +48,7 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
       model1.Graph.Initializer.AddRange(averagedInitializers);
 
       // Save the new model
-      SaveOnnxModel(model1, outputPath);
+      Base.Misc.ONNX.ONNXHelpers.SaveModel(model1, outputPath);
 
       Console.WriteLine($"New ONNX model {outputPath} created with averaged parameters.");
     }
@@ -133,20 +127,8 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
     }
 
 
-    static ModelProto LoadOnnxModel(string modelPath)
-    {
-      using var fileStream = File.OpenRead(modelPath);
-      return ModelProto.Parser.ParseFrom(fileStream);
-    }
-
-    static void SaveOnnxModel(ModelProto model, string outputPath)
-    {
-      File.Delete(outputPath);
-      using var output = File.Create(outputPath);
-      model.WriteTo(output);
-    }
-
   }
+
 #if NOT
 
 	static (T[] sum, T min, T max) SumMinMax<T>(params (T weight, T[] data)[] raw1) where T : struct, INumber<T>
