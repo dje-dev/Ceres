@@ -24,11 +24,11 @@ using System.Linq;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 
+using Onnx;
+
 using Ceres.Base.Misc;
 using Ceres.Base.CUDA;
 using Ceres.Base.Benchmarking;
-using Ceres.Base.Misc.ONNX;
-using Onnx;
 
 #endregion
 
@@ -547,6 +547,18 @@ Comments from onnxruntime source code:
         {
           List<string> allOutputNames = outputBuffers16.Select(p => p.name).ToList();
           IDisposableReadOnlyCollection<OrtValue> rr = Session.Run(runOptions, inputBuffers.names, inputBuffers.values, allOutputNames);
+
+          // Dispose of input buffers used.
+          foreach (OrtValue v in inputBuffers.values)
+          {
+            v.Dispose();
+          }
+          foreach (OrtValue v in outputBuffers.values)
+          {
+            v.Dispose();
+          }
+
+          // Extract results from output buffers.
           for (int i=0;i< outputBuffers.names.Length; i++)
           {
 
@@ -561,7 +573,9 @@ Comments from onnxruntime source code:
               // TODO: improve this
               resultArrays.Add((allOutputNames[i], null));
             }
-          } 
+
+            rr[i].Dispose();
+          }
         }
         else
         {
@@ -629,6 +643,8 @@ Comments from onnxruntime source code:
         runResult = Session.Run(inputsONNX);//, ro); // fails on second run, reshape error, may be a bug on ONNXruntime
       }
 
+      // TODO: Is it necessary or even possible to dispose of the the inputsONNX?
+
       List<(string, Memory<Float16>)> resultArrays = new(Session.OutputMetadata.Count);
       foreach (DisposableNamedOnnxValue resultValue in runResult)
       {
@@ -641,6 +657,8 @@ Comments from onnxruntime source code:
           values[i] = (Float16)tensor.GetValue(i); // Inefficient!
         } 
         resultArrays.Add((resultValue.Name, values));
+
+        resultValue.Dispose();
       }
 
       return resultArrays;

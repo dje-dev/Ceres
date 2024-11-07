@@ -393,8 +393,6 @@ namespace Chess.Ceres.NNEvaluators
 
 
     #region Internals
-    static bool haveWarned = false;
-    static bool warned = false;
 
     /// <summary>
     /// Internal worker method to 
