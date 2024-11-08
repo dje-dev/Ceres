@@ -351,15 +351,14 @@ namespace Ceres.Chess.NNEvaluators
             QNegativeBlunders = 0.03f,
             QPositiveBlunders = 0.03f,
 
-            UseAction= board4Mode,
-            UsePriorState= board4Mode,
+            UseAction = board4Mode,
+            UsePriorState = board4Mode,
 
-//            ValueHead1Temperature = testMode ? 1.4f : 1.0f
+            ValueHead1Temperature = 0.85f, // sharpen Value1 to compensate for high entropy training target (Q)
 
-            FractionValueHead2 = testMode ? 1f : 0f,
-            //ValueHead2Temperature = testMode ? 1f : 1,
+            // PolicyTemperature = 0.90f,
 
-            PolicyTemperature = testPTempMode ? 0.9f : 1f,
+            FractionValueHead2 = testMode ? 0.35f : 0f, 
             PolicyUncertaintyTemperatureScalingFactor = testPTempMode ? 0.5f : 0,
           };
           
