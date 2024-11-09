@@ -24,6 +24,12 @@ namespace Ceres.Base.Environment
   public static class GitInfo
   {
     /// <summary>
+    /// Returns raw last git commit SHA.
+    /// </summary>
+    public static string LastCommitSHA => ThisAssembly.Git.Commit;
+
+
+    /// <summary>
     /// Returns a short description version of the current Git version of this code.
     /// </summary>
     public static string VersionString
@@ -32,9 +38,14 @@ namespace Ceres.Base.Environment
       {
         string gitString;
         if (ThisAssembly.Git.Tag != "")
+        {
           gitString = $"git Tag:{ThisAssembly.Git.Tag}";
+        }
         else
+        {
           gitString = $"git Branch:{ThisAssembly.Git.Branch} Commit:{ThisAssembly.Git.Commit} {(ThisAssembly.Git.IsDirty ? "(dirty)" : "")}";
+        }
+
         return gitString;
       }
     }

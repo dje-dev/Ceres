@@ -164,7 +164,6 @@ namespace Ceres
 | Ceres - A Monte Carlo Tree Search Chess Engine          |
 |                                                         |
 | (c) 2020- David Elliott and the Ceres Authors           |
-|   With network backend code from Leela Chess Zero.      |
 |   Use help to list available commands.                  |
 |                                                         |
 |  Version {VER}                                       |
@@ -194,7 +193,7 @@ namespace Ceres
 
         else if (line.StartsWith("|  Version"))
         {
-          string version = $"|  Version {CeresVersion.VersionString}";
+          string version = $"|  Version {CeresVersion.VersionString} [git:{GitInfo.LastCommitSHA}]";
           int spaceLeft = line.Length - version.Length;
           string empty = new string(' ', 3 + spaceLeft - 1);
           Console.WriteLine($"{version}{empty}|");
