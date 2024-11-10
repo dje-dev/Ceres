@@ -304,6 +304,7 @@ namespace Ceres.Chess.NNEvaluators
           {
             QNegativeBlunders = 0.02f,
             QPositiveBlunders = 0.02f,
+            ValueHead1Temperature = 0.85f,
           };
 
           NNEvaluatorONNX onnxEngine = new(shortID, netFileName, null, 
