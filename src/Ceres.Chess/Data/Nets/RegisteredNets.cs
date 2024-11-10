@@ -91,6 +91,9 @@ namespace Ceres.Chess.Data.Nets
         {"BT4_3190k_ONNX", ONNXNet16LC0("BT4-1024x15x32h-swa-3190000.pb.gz_fp16", false) },
         {"BT4_5000k_ONNX", ONNXNet16LC0("BT4-1024x15x32h-swa-5000000.pb.gz_fp16", false) },
 
+        { "BT4_4520_kovax_ONNX", ONNXNet32LC0("bt4-4520.pb.gz", true) },
+        { "BT4_2740_kovax_ONNX", ONNXNet32LC0("bt4-2740.pb.gz", true) },
+
         {"T1_DISTILL_256_10", ONNXNet32LC0("t1-256x10-distilled-swa-2432500")},
         {"T1_DISTILL_256_10_TRT", ONNXNet32LC0("t1-256x10-distilled-swa-2432500", true)},
         {"T1_DISTILL_256_10_FP16", ONNXNet16LC0("t1-256x10-distilled-swa-2432500_fp16#16")},
