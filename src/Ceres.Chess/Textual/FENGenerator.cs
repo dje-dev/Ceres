@@ -25,6 +25,15 @@ namespace Ceres.Chess.Textual
   /// </summary>
   internal static class FENGenerator
   {
+    internal static char GetCastlingFileChar(int fileIndex, bool isWhite)
+    {
+      if (isWhite)
+      {
+        return Char.ToUpper((char)('h' - fileIndex));
+      }
+
+      return (char)('h' - (fileIndex - 56));
+    }
     internal static string GetFEN(Position pos)
     {
       // KQkq - 0 1
@@ -39,19 +48,55 @@ namespace Ceres.Chess.Textual
       StringBuilder castlingSB = new ();
       if (pos.MiscInfo.WhiteCanOO)
       {
-        castlingSB.Append("K");
+        char file = GetCastlingFileChar(pos.MiscInfo.WhiteKRInitPlacement, true);
+        
+        if (file == 'H')
+        {
+          castlingSB.Append("K");
+        }
+        else
+        {
+          castlingSB.Append(file);
+        }
       }
+      
       if (pos.MiscInfo.WhiteCanOOO)
       {
-        castlingSB.Append("Q");
+        char file = GetCastlingFileChar(pos.MiscInfo.WhiteQRInitPlacement, true);        
+        if (file == 'A')
+        {
+          castlingSB.Append("Q");
+        }
+        else
+        {
+          castlingSB.Append(file);
+        }        
       }
+      
       if (pos.MiscInfo.BlackCanOO)
       {
-        castlingSB.Append("k");
+        var file = GetCastlingFileChar(pos.MiscInfo.BlackKRInitPlacement,false);        
+        if (file == 'h')
+        {
+          castlingSB.Append("k");
+        }
+        else
+        {
+          castlingSB.Append(file);
+        }        
       }
+      
       if (pos.MiscInfo.BlackCanOOO)
       {
-        castlingSB.Append("q");
+        var file = GetCastlingFileChar(pos.MiscInfo.BlackQRInitPlacement, false);
+        if (file == 'a')
+        {
+          castlingSB.Append("q");
+        }
+        else
+        {
+          castlingSB.Append(file);
+        }        
       }
 
       string castling = castlingSB.ToString();

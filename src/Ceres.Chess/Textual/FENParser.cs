@@ -424,7 +424,8 @@ namespace Ceres.Chess.Textual
       }
 
       PositionMiscInfo miscInfo = new PositionMiscInfo(whiteCanOO, whiteCanOOO, blackCanOO, blackCanOOO,
-                                                        sideToMove, move50Count, repetitionCount, plyCount, epColIndex);
+                                                        sideToMove, move50Count, repetitionCount, plyCount, epColIndex, 
+                                                        (byte)wKRsquare, (byte)wQRsquare, (byte)bKRsquare, (byte)bQRsquare);
 
       return new FENParseResult(pieces, miscInfo);
     }

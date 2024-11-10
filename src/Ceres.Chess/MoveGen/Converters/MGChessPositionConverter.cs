@@ -88,6 +88,10 @@ namespace Ceres.Chess.MoveGen.Converters
       pos.BlackCanCastle = position.MiscInfo.BlackCanOO;
       pos.WhiteCanCastleLong = position.MiscInfo.WhiteCanOOO;
       pos.BlackCanCastleLong = position.MiscInfo.BlackCanOOO;
+      pos.WhiteKRInitPlacement = position.MiscInfo.WhiteKRInitPlacement;
+      pos.WhiteQRInitPlacement = position.MiscInfo.WhiteQRInitPlacement;
+      pos.BlackKRInitPlacement = position.MiscInfo.BlackKRInitPlacement;
+      pos.BlackQRInitPlacement = position.MiscInfo.BlackQRInitPlacement;
 
       if (position.MiscInfo.EnPassantFileIndex != PositionMiscInfo.EnPassantFileIndexEnum.FileNone)
       {
@@ -220,6 +224,10 @@ namespace Ceres.Chess.MoveGen.Converters
       pos.BlackCanCastle = fenParsed.MiscInfo.BlackCanOO;
       pos.WhiteCanCastleLong = fenParsed.MiscInfo.WhiteCanOOO;
       pos.BlackCanCastleLong = fenParsed.MiscInfo.BlackCanOOO;
+      pos.BlackKRInitPlacement = fenParsed.MiscInfo.BlackKRInitPlacement;
+      pos.BlackQRInitPlacement = fenParsed.MiscInfo.BlackQRInitPlacement;
+      pos.WhiteKRInitPlacement = fenParsed.MiscInfo.WhiteKRInitPlacement;
+      pos.WhiteQRInitPlacement = fenParsed.MiscInfo.WhiteQRInitPlacement;
 
       if (fenParsed.MiscInfo.EnPassantFileIndex != PositionMiscInfo.EnPassantFileIndexEnum.FileNone)
       {
