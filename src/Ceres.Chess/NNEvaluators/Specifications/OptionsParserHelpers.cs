@@ -192,7 +192,8 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
     }
 
 
-    internal static (NNEvaluatorType NN_EVAL_TYPE, string thisNetID) ExtractEvaluatorTypeAndNetID(string netStrWithPrecision)
+    internal static (NNEvaluatorType NN_EVAL_TYPE, string thisNetID) 
+      ExtractEvaluatorTypeAndNetID(string netStrWithPrecision)
     {
       NNEvaluatorType NN_EVAL_TYPE;
       string thisNetID = null;
@@ -288,15 +289,14 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
       }
       else
       {
-        // Prefix optionally omitted. Assume Ceres for ONNX files, otherwise LC0.
+        // Default assumption is Ceres net.
         thisNetID = netStrWithPrecision;
-        NN_EVAL_TYPE = netStrWithPrecision.ToUpper().EndsWith("ONNX") 
-                         ? NNEvaluatorType.Ceres : 
-                           NNEvaluatorType.LC0;
+        NN_EVAL_TYPE = NNEvaluatorType.Ceres;
       }
 
       return (NN_EVAL_TYPE, thisNetID);
     }
+
 
     internal static (List<(string deviceID, int? maxBatchSize, int? optimalBatchSize, string batchSizesFileName, float weight)>, string overrideEngineType)
       ParseDeviceOptions(string deviceSpecString)

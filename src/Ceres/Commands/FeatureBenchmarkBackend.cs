@@ -144,11 +144,14 @@ namespace Ceres.Commands
     }
 
 
-    public void ExecuteBenchmark()
+    public (NNEvaluator, List<(int, float)>) ExecuteBenchmark(NNEvaluatorDef evaluatorDef)
     {
-      NNEvaluatorDef evaluatorDef = new NNEvaluatorDef(NetworkSpec.ComboType, NetworkSpec.NetDefs,
-                                                       DeviceSpec.ComboType, DeviceSpec.Devices, NetworkSpec.OptionsString, null);
-      BackendBench(evaluatorDef);
+      if (evaluatorDef == null)
+      {
+        evaluatorDef = new NNEvaluatorDef(NetworkSpec.ComboType, NetworkSpec.NetDefs,
+                                          DeviceSpec.ComboType, DeviceSpec.Devices, NetworkSpec.OptionsString, null);
+      }
+      return BackendBench(evaluatorDef);
     }
 
 

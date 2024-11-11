@@ -93,7 +93,7 @@ namespace Ceres.Features.UCI
     /// <summary>
     /// Optional evaluator to call to benchmark neural network backend.
     /// </summary>
-    Action BackendBenchEvaluator;
+    Action<NNEvaluatorDef> BackendBenchEvaluator;
 
     /// <summary>
     /// Optional evaluator to call to search benchmark program (to run for specified number of seconds).
@@ -170,7 +170,7 @@ namespace Ceres.Features.UCI
                       bool disablePruning = false,
                       string uciLogFileName = null,
                       string searchLogFileName = null,
-                      Action backendBenchEvaluator = null,
+                      Action<NNEvaluatorDef> backendBenchEvaluator = null,
                       Action<NNEvaluatorDef, int> benchmarkEvaluator = null)
     {
       InStream = inStream ?? Console.In;
@@ -504,7 +504,7 @@ namespace Ceres.Features.UCI
             }
             else
             {
-              BackendBenchEvaluator();
+              BackendBenchEvaluator(EvaluatorDef);
             }
             break;
 
@@ -782,12 +782,26 @@ namespace Ceres.Features.UCI
     {
       if (!haveInitializedEngine)
       {
-        if (EvaluatorDef == null && CeresUserSettingsManager.Settings.DefaultNetworkSpecString == null)
+        if (EvaluatorDef == null)
         {
-          UCIWriteLine("info string No default network specified, cannot initialize engine.");
-          UCIWriteLine("info string Use setoption with \"WeightsFile\" to specify neural network weights file to use.");
-          return false;
+          // Use Ceres.json settings for default network/device if found.
+          if (CeresUserSettingsManager.Settings.DefaultNetworkSpecString == null)
+          {
+            UCIWriteLine("info string No default network specified, cannot initialize engine.");
+            UCIWriteLine("info string Use setoption with \"WeightsFile\" to specify neural network weights file to use.");
+            return false;
+          }
+          else
+          {
+            NetworkSpec = new NNNetSpecificationString(CeresUserSettingsManager.Settings.DefaultNetworkSpecString);
+            const string DEFAULT_DEVICE = "GPU:0";
+            string deviceString = CeresUserSettingsManager.Settings.DefaultDeviceSpecString ?? DEFAULT_DEVICE;
+            DeviceSpec = new NNDevicesSpecificationString(deviceString);
+
+            CreateEvaluator();
+          }
         }
+
         ShowWeightsFileInfo();
 
         // Create the engine (to be subsequently reused).

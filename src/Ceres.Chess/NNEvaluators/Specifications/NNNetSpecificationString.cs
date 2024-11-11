@@ -182,8 +182,10 @@ namespace Ceres.Chess.NNEvaluators.Specifications
     /// are Ceres nets that are not already found locally.
     /// </summary>
     /// <param name="uciMessagesOnly"></param>
-    public void AutodownloadCeresNetIfNeeded(bool uciMessagesOnly)
+    public bool AutodownloadCeresNetIfNeeded(bool uciMessagesOnly)
     {
+      bool anyFailed = false;
+
       foreach ((NNEvaluatorNetDef def, float wtValue, float wtValue2, float wtPolicy, float wtMLH, float wtUncertainty, float wtUncertaintyP) def in NetDefs)
       {
         if (def.def.Type == NNEvaluatorType.Ceres && !File.Exists(def.def.NetworkID))
@@ -192,13 +194,19 @@ namespace Ceres.Chess.NNEvaluators.Specifications
           string ceresNetID = def.def.NetworkID;
 
           CeresNetDownloader downloader = new();
-          (bool alreadyDownloaded, string fullNetworkPath) = downloader.DownloadCeresNetIfNeeded(ceresNetID, ceresNetDirectory, true);
-          if (!alreadyDownloaded)
+          (bool alreadyDownloaded, string downloadedNetworkPath) = downloader.DownloadCeresNetIfNeeded(ceresNetID, ceresNetDirectory, true);
+          if (!alreadyDownloaded && downloadedNetworkPath != null)
           {
             Console.WriteLine($"uci info auto download complete");
           }
+
+          if (downloadedNetworkPath == null)
+          {
+            anyFailed = true;
+          } 
         }
       }
+      return !anyFailed;
     }
 
     #endregion

@@ -15,12 +15,14 @@
 
 using System;
 using System.IO;
+using System.Collections.Generic;
 
 using Ceres.Base.DataTypes;
 using Ceres.Base.Misc;
 using Ceres.Chess;
 using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.UserSettings;
+using Ceres.Chess.NNEvaluators;
 
 using Ceres.MCTS.Params;
 
@@ -227,7 +229,7 @@ namespace Ceres.Commands
       {
         FeatureBenchmarkBackend backendBench = new FeatureBenchmarkBackend();
         backendBench.ParseFields(keyValueArgs);
-        backendBench.ExecuteBenchmark();
+        backendBench.ExecuteBenchmark(null);
       }
       else if (featureName == "BACKENDCOMPARE")
       {
@@ -270,11 +272,10 @@ namespace Ceres.Commands
     {
       FeatureUCIParams uciParams = FeatureUCIParams.ParseUCICommand(keyValueArgs);
 
-      Action backendBenchEvaluator = delegate ()
+      Action<NNEvaluatorDef> backendBenchEvaluator = delegate (NNEvaluatorDef evalDef)
       {
         FeatureBenchmarkBackend backendBench = new ();
-        backendBench.ParseFields(keyValueArgs);
-        backendBench.ExecuteBenchmark();
+        (NNEvaluator, List<(int, float)>) speed = backendBench.ExecuteBenchmark(evalDef);
         Console.WriteLine();
       };
 

@@ -355,10 +355,13 @@ namespace Ceres.Features.UCI
           else
           {
             ReinitializeEngine();
-            NetworkSpec = new NNNetSpecificationString(value.Replace("\"", null).Replace("'", null));
-            NetworkSpec.AutodownloadCeresNetIfNeeded(false);
+            string netIDToUse = value.Replace("\"", null).Replace("'", null);
+            NetworkSpec = new NNNetSpecificationString(netIDToUse);
 
-            CreateEvaluator();
+            if (NetworkSpec.AutodownloadCeresNetIfNeeded(false))
+            {
+              CreateEvaluator();
+            }
           }
         }
       }

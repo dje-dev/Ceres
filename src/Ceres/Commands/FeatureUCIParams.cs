@@ -27,16 +27,23 @@ namespace Ceres.Commands
     public NNDevicesSpecificationString DeviceSpec { init; get; }
     public bool Pruning { init; get; }
 
+    
+    public FeatureUCIParams(NNNetSpecificationString netSpec, NNDevicesSpecificationString devicesSpec, bool pruning)
+    {
+      NetworkSpec = netSpec;
+      DeviceSpec = devicesSpec;
+      Pruning = pruning;
+    }
+
+
     public static FeatureUCIParams ParseUCICommand(string args)
     {
       KeyValueSetParsed keys = new KeyValueSetParsed(args, new string[] { "NETWORK", "DEVICE", "PRUNING" });
 
-      return new FeatureUCIParams()
-      {
-        NetworkSpec = keys.GetValueOrDefaultMapped("Network", null, false, spec => new NNNetSpecificationString(spec)),
-        DeviceSpec = keys.GetValueOrDefaultMapped("Device", "GPU:0", false, spec => new NNDevicesSpecificationString(spec)),
-        Pruning = keys.GetValueOrDefaultMapped("Pruning", "true", false, str => bool.Parse(str))
-      };
+      return new FeatureUCIParams(
+        keys.GetValueOrDefaultMapped("Network", null, false, spec => new NNNetSpecificationString(spec)),
+        keys.GetValueOrDefaultMapped("Device", "GPU:0", false, spec => new NNDevicesSpecificationString(spec)),
+        keys.GetValueOrDefaultMapped("Pruning", "true", false, str => bool.Parse(str)));      
     }
 
   }
