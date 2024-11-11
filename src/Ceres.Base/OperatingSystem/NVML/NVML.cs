@@ -40,6 +40,7 @@ namespace Ceres.Base.OperatingSystem.NVML
       }
     }
 
+
     /// <summary>
     /// Returns information about each of the GPU devices in the system.
     /// </summary>
@@ -48,7 +49,7 @@ namespace Ceres.Base.OperatingSystem.NVML
     {
       CheckInitialized();
 
-      List<NVMLGPUInfo> infos = new List<NVMLGPUInfo>();
+      List<NVMLGPUInfo> infos = [];
 
       for (uint i = 0; i < deviceCount; i++)
       {
@@ -86,8 +87,9 @@ namespace Ceres.Base.OperatingSystem.NVML
                              (float)powerUsage / 1000.0f, (int)temperatureCentigrade, clocksThrottleReasons);
     }
 
-    public const string InfoDescriptionHeaderLine1 = "ID  Name                     Ver  SMClk  GPU%  Mem%   Temp   Throttle Reasons";
-    public const string InfoDescriptionHeaderLine2 = "--  -----------------------  ---  -----  ----  ----   ----   ----------------";
+
+    public const string InfoDescriptionHeaderLine1 = "ID  Name                               Ver  SMClk  GPU%  Mem%   Temp  Throttle Reasons";
+    public const string InfoDescriptionHeaderLine2 = "--  ---------------------------------  ---  -----  ----  ----   ----  ----------------";
 
 
     /// <summary>
@@ -109,7 +111,7 @@ namespace Ceres.Base.OperatingSystem.NVML
     {
       StringBuilder desc = new StringBuilder();
 
-      desc.Append($"{info.ID,2:F0}  {info.Name,-20}     {info.CapabilityMajor,1}{info.CapabilityMinor,1}  ");
+      desc.Append($"{info.ID,2:F0}  {info.Name,-30}     {info.CapabilityMajor,1}{info.CapabilityMinor,1}  ");
       desc.Append($"{info.ClocksSMMhz,5}  {info.GPUUtilizationPct,3}%  {info.MemoryUtilizationPct,3}%  ");
       desc.Append($"{info.TemperatureCentigrade,4}C   {StringUtils.Sized(info.ClocksThrottleReasons.ToString(), 14)}");
 
