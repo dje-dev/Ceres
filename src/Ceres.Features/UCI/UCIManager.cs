@@ -142,7 +142,7 @@ namespace Ceres.Features.UCI
       EvaluatorDef = new NNEvaluatorDef(NetworkSpec.ComboType, NetworkSpec.NetDefs,
                                         DeviceSpec.ComboType, DeviceSpec.Devices, NetworkSpec.OptionsString, null);
 
-      OutStream.WriteLine($"Network evaluation configured to use: {EvaluatorDef}");
+      OutStream.WriteLine($"uci info Network evaluation configured to use: {EvaluatorDef}");
     }
 
 
@@ -310,7 +310,6 @@ namespace Ceres.Features.UCI
             UCIWriteLine("dump-params     - dump configuration parameters currently in use for Ceres");
             UCIWriteLine("dump-store      - dumps full node store for tree from last search");
             UCIWriteLine("dump-nvidia     - dumps information about NVIDIA CUDA devices detected in the system");
-            UCIWriteLine("lc0-config      - shows the command line arguments which would be used for LC0 for comparison searches");
             UCIWriteLine("show-tree-plot  - shows a graphical representation of full search tree");
             UCIWriteLine("graph [1-10]    - invokes graph feature to show the principal variations from last search (requires configuration), e.g. graph 7");
             UCIWriteLine("gamecomp        - invokes the game comparison feature to graph the divergence points in one or more games (requires configuration)");
@@ -435,19 +434,6 @@ namespace Ceres.Features.UCI
             break;
 
           // Proprietary commands
-          case "lc0-config":
-            if (CeresEngine?.Search != null)
-            {
-              string netID = EvaluatorDef.Nets[0].Net.NetworkID;
-              INNWeightsFileInfo netDef = NNWeightsFiles.LookupNetworkFile(netID);
-              (string exe, string options) = LC0EngineConfigured.GetLC0EngineOptions(null, null, CeresEngine.Search.Manager.Context.EvaluatorDef, netDef, false, false);
-              UCIWriteLine("info string " + exe + " " + options);
-            }
-            else
-              UCIWriteLine("info string No search manager created");
-
-            break;
-
           case "dump-info":
             if (CeresEngine?.Search != null)
             {
@@ -777,8 +763,35 @@ namespace Ceres.Features.UCI
       return success;
     }
 
-
+    
     private bool TryInitializeEngineIfNeeded()
+    {
+      try
+      {
+        return DoTryInitializeEngineIfNeeded();
+      }
+      catch (Exception e)
+      {
+        UCIWriteLine();
+        UCIWriteLine(e.ToString());
+        UCIWriteLine($"No evaluator created, ERROR encountered.");
+
+        if (EvaluatorDef != null)
+        {
+          string netSpecString = NNNetSpecificationString.ToSpecificationString(EvaluatorDef.NetCombo, EvaluatorDef.Nets);
+          string deviceSpecString = NNDevicesSpecificationString.ToSpecificationString(EvaluatorDef.DeviceCombo, EvaluatorDef.Devices);
+          
+          UCIWriteLine($"Attempted Network: {netSpecString}");
+          UCIWriteLine($"Attempted Device: {deviceSpecString}");
+        }
+
+        EvaluatorDef = null;
+        return false;
+      }
+    }
+
+
+    private bool DoTryInitializeEngineIfNeeded()
     {
       if (!haveInitializedEngine)
       {
@@ -789,6 +802,7 @@ namespace Ceres.Features.UCI
           {
             UCIWriteLine("info string No default network specified, cannot initialize engine.");
             UCIWriteLine("info string Use setoption with \"WeightsFile\" to specify neural network weights file to use.");
+            UCIWriteLine("info string Example: setoption name WeightsFile value C1-256-10");
             return false;
           }
           else

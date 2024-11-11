@@ -383,7 +383,10 @@ namespace Ceres.Features.UCI
         {
           ReinitializeEngine();
           DeviceSpec = new NNDevicesSpecificationString(value.Replace("\"", null).Replace("'", null));
-          CreateEvaluator();
+          if (NetworkSpec != null)
+          {
+            CreateEvaluator();
+          }
         }
       }
     }
