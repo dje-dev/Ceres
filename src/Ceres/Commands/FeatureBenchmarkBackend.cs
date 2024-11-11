@@ -20,13 +20,14 @@ using System.Threading;
 
 using Ceres.Base.Benchmarking;
 using Ceres.Base.DataTypes;
+
 using Ceres.Chess;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.LC0.Batches;
 using Ceres.Chess.NNEvaluators;
 using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.NNEvaluators.Specifications;
-using Ceres.Chess.NNEvaluators.Specifications.Iternal;
+using Ceres.Chess.NNEvaluators.Specifications.Internal;
 using Ceres.Chess.UserSettings;
 
 #endregion

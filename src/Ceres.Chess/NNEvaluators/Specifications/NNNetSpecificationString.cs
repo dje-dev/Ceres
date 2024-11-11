@@ -22,7 +22,7 @@ using Ceres.Base.Misc;
 
 using Chess.Ceres.NNEvaluators;
 using Ceres.Chess.NNEvaluators.Defs;
-using Ceres.Chess.NNEvaluators.Specifications.Iternal;
+using Ceres.Chess.NNEvaluators.Specifications.Internal;
 using Ceres.Chess.UserSettings;
 
 #endregion

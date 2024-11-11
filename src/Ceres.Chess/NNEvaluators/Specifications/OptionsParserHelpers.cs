@@ -23,7 +23,7 @@ using Chess.Ceres.NNEvaluators;
 
 #endregion
 
-namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
+namespace Ceres.Chess.NNEvaluators.Specifications.Internal
 {
   /// <summary>
   /// Static helper methods to facilitate parsing of options strings.

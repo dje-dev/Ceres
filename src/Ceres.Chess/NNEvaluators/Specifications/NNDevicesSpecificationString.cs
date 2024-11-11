@@ -16,9 +16,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+
 using Ceres.Chess.NNEvaluators.Defs;
-using Ceres.Chess.NNEvaluators.Specifications.Iternal;
-using Chess.Ceres.NNEvaluators;
+using Ceres.Chess.NNEvaluators.Specifications.Internal;
 
 #endregion
 
