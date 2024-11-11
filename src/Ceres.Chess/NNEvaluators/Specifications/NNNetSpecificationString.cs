@@ -14,12 +14,16 @@
 #region Using directives 
 
 using System;
+using System.IO;
 using System.Collections.Generic;
 using System.Linq;
+
+using Ceres.Base.Misc;
 
 using Chess.Ceres.NNEvaluators;
 using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.NNEvaluators.Specifications.Iternal;
+using Ceres.Chess.UserSettings;
 
 #endregion
 
@@ -27,7 +31,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications
 {
   /// <summary>
   /// Manages parsing of a neural net specification string which 
-  /// specifies the neural network(s) to be used for evaluationg positions.
+  /// specifies the neural network(s) to be used for evaluating positions.
   /// 
   /// Examples: 
   ///   "LC0:42767"
@@ -171,5 +175,32 @@ namespace Ceres.Chess.NNEvaluators.Specifications
       return ToSpecificationStringComplex(comboType, nets);
     }
 
+    #region Downloading
+
+    /// <summary>
+    /// Attempts to auto-download any constituent networks 
+    /// are Ceres nets that are not already found locally.
+    /// </summary>
+    /// <param name="uciMessagesOnly"></param>
+    public void AutodownloadCeresNetIfNeeded(bool uciMessagesOnly)
+    {
+      foreach ((NNEvaluatorNetDef def, float wtValue, float wtValue2, float wtPolicy, float wtMLH, float wtUncertainty, float wtUncertaintyP) def in NetDefs)
+      {
+        if (def.def.Type == NNEvaluatorType.Ceres && !File.Exists(def.def.NetworkID))
+        {
+          string ceresNetDirectory = CeresUserSettingsManager.Settings.DirCeresNetworks ?? ".";
+          string ceresNetID = def.def.NetworkID;
+
+          CeresNetDownloader downloader = new();
+          (bool alreadyDownloaded, string fullNetworkPath) = downloader.DownloadCeresNetIfNeeded(ceresNetID, ceresNetDirectory, true);
+          if (!alreadyDownloaded)
+          {
+            Console.WriteLine($"uci info auto download complete");
+          }
+        }
+      }
+    }
+
+    #endregion
   }
 }

@@ -356,6 +356,8 @@ namespace Ceres.Features.UCI
           {
             ReinitializeEngine();
             NetworkSpec = new NNNetSpecificationString(value.Replace("\"", null).Replace("'", null));
+            NetworkSpec.AutodownloadCeresNetIfNeeded(false);
+
             CreateEvaluator();
           }
         }

@@ -657,7 +657,7 @@ namespace Ceres.Features.UCI
 
       CeresNetDownloader downloader = new CeresNetDownloader();
       (bool alreadyDownloaded, string fullNetworkPath) downloadResults;
-      downloadResults = downloader.DownloadCeresNetIfNeeded(ceresNetID, CeresUserSettingsManager.Settings.DirCeresNetworks);
+      downloadResults = downloader.DownloadCeresNetIfNeeded(ceresNetID, CeresUserSettingsManager.Settings.DirCeresNetworks, false);
 
       if (downloadResults.alreadyDownloaded)
       {

@@ -58,8 +58,10 @@ namespace Ceres.Base.Misc
 
       using (new TimingBlock("download"))
       {
-        var downloader = new CeresNetDownloader();
-        downloader.DownloadCeresNetIfNeeded(CERES_NET_ID, CERES_NET_DIR);
+        CeresNetDownloader downloader = new CeresNetDownloader();
+        downloader.DownloadCeresNetIfNeeded(CERES_NET_ID, CERES_NET_DIR, false);
+        Console.WriteLine($"uci info auto-downloaded {CERES_NET_ID} from CeresNets repository into {CERES_NET_DIR}");
+
       }
 
       System.Environment.Exit(3);
@@ -74,20 +76,30 @@ namespace Ceres.Base.Misc
     /// <param name="ceresNetDirectory"></param>
     /// <returns></returns>
     /// <exception cref="Exception"></exception>
-    public (bool alreadyDownloaded, string fullNetworkPath) DownloadCeresNetIfNeeded(string ceresNetID, string ceresNetDirectory)
+    public (bool alreadyDownloaded, string fullNetworkPath) DownloadCeresNetIfNeeded(string ceresNetID, string ceresNetDirectory, bool uciMessagesOnly)
     {
       if (!Directory.Exists(ceresNetDirectory))
       {
         throw new Exception($"CeresNetDir does not exist ({ceresNetDirectory})");
       }
 
-      string targetFileName = Path.Combine(ceresNetDirectory, ceresNetID + ".onnx");
+      string targetFileName = Path.Combine(ceresNetDirectory, ceresNetID);
+      if (!targetFileName.ToUpper().EndsWith(".ONNX"))
+      {
+        targetFileName += ".onnx";
+      }
+
       if (File.Exists(targetFileName))
       {
         return (true, targetFileName);
       }
 
-      return (false, DoDownloadNet(ceresNetID, ceresNetDirectory, ref targetFileName));
+      if (uciMessagesOnly)
+      {
+        Console.WriteLine($"uci info begin auto-download of {ceresNetID} from CeresNets repository into {ceresNetDirectory}");
+      }
+
+      return (false, DoDownloadNet(ceresNetID, ceresNetDirectory, ref targetFileName, uciMessagesOnly));
     }
 
 
@@ -98,9 +110,9 @@ namespace Ceres.Base.Misc
     /// <param name="ceresNetDirectory"></param>
     /// <param name="targetFileName"></param>
     /// <returns></returns>
-    private string DoDownloadNet(string ceresNetID, string ceresNetDirectory, ref string targetFileName)
+    private string DoDownloadNet(string ceresNetID, string ceresNetDirectory, ref string targetFileName, bool uciMessagesOnly)
     {
-      IAnsiConsole console = AnsiConsole.Console;
+      IAnsiConsole console = uciMessagesOnly ? null : AnsiConsole.Console;
 
       // Allow user to cancel download with Ctrl-C.
       Console.CancelKeyPress += (sender, e) =>
@@ -119,7 +131,14 @@ namespace Ceres.Base.Misc
       }
       catch (Exception ex)
       {
-        console.WriteException(ex);
+        if (console != null)
+        {
+          console.WriteException(ex);
+        }
+        else
+        {
+          Console.WriteLine($"uci info error downloading {ceresNetID} into {ceresNetDirectory}");
+        }
         targetFileName = null; // mark as failure
       }
       finally
@@ -162,31 +181,43 @@ namespace Ceres.Base.Misc
       HttpResponseMessage response = client.GetAsync(fileUrl, HttpCompletionOption.ResponseHeadersRead).Result;
       long totalBytes = response.Content.Headers.ContentLength ?? 0;
 
-      console.Progress()
-          .AutoClear(false)
-          .Start(ctx =>
+      void DoDownload(string localFilePath, HttpResponseMessage response, ProgressTask task)
+      {
+        using (Stream stream = response.Content.ReadAsStream())
+        using (FileStream fileStream = new FileStream(localFilePath, FileMode.Create))
+        {
+          byte[] buffer = new byte[1024 * 64];
+          int bytesRead;
+          while (!shouldCancel &&
+                 (bytesRead = stream.Read(buffer, 0, buffer.Length)) > 0)
           {
-            float sizeMB = MathF.Round(totalBytes / (1024 * 1024), 1);
-            var task = ctx.AddTask($"[green]Downloading {downloadID} ({sizeMB:F1} mb) to {targetDirectory}  [/]", new ProgressTaskSettings { MaxValue = totalBytes });
-            using (var stream = response.Content.ReadAsStream())
-            using (var fileStream = new FileStream(localFilePath, FileMode.Create))
-            {
-              byte[] buffer = new byte[1024 * 64];
-              int bytesRead;
-              while (!shouldCancel &&
-                     (bytesRead = stream.Read(buffer, 0, buffer.Length)) > 0)
-              {
-                fileStream.Write(buffer, 0, bytesRead);
-                task.Increment(bytesRead);
-              }
-            }
-          });
+            fileStream.Write(buffer, 0, bytesRead);
+            task?.Increment(bytesRead);
+          }
+        }
+      }
 
+      if (console == null)
+      {
+        DoDownload(localFilePath, response, null);
+      }
+      else
+      {
+        console.Progress()
+            .AutoClear(false)
+            .Start(ctx =>
+            {
+              float sizeMB = MathF.Round(totalBytes / (1024 * 1024), 1);
+              ProgressTask task = ctx.AddTask($"[green]Downloading {downloadID} ({sizeMB:F1} mb) to {targetDirectory}  [/]", new ProgressTaskSettings { MaxValue = totalBytes });
+              DoDownload(localFilePath, response, task);
+            });
+      }
 
       if (!shouldCancel)
       {
         ZipFile.ExtractToDirectory(localFilePath, directoryPath);
       }
+
       return directoryPath;
     }
 
