@@ -41,7 +41,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
     const string CHAR_ALIAS = "~";
 
     /// <summary>
-    /// The "|" character delimites the beginning of a possible options string.
+    /// The "|" character delimits the beginning of a possible options string.
     /// </summary>
     const string CHAR_OPTIONS = "|";
 
@@ -289,9 +289,11 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Iternal
       }
       else
       {
-        // Default assumption is Ceres net.
+        // Default assumption is Ceres net unless see ".pb" (characteristic of Lc0).
         thisNetID = netStrWithPrecision;
-        NN_EVAL_TYPE = NNEvaluatorType.Ceres;
+        NN_EVAL_TYPE = thisNetID.ToUpper().Contains(".PB") 
+                        ? NNEvaluatorType.LC0 
+                        : NNEvaluatorType.Ceres;
       }
 
       return (NN_EVAL_TYPE, thisNetID);
