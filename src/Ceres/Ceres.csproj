@@ -24,16 +24,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Remove="Networks\weights_run2_703810.pb.gz" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Content Include="Networks\weights_run2_703810.pb.gz">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-  </ItemGroup>
-
-  <ItemGroup>
     <PackageReference Include="GitInfo" Version="3.3.5">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
