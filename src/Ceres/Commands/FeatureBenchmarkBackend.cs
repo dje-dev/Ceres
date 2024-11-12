@@ -189,7 +189,7 @@ namespace Ceres.Commands
       int lastBatchSize = firstBatchSize;
       while (true)
       {
-        int skip = extraSkipMultiplier * (lastBatchSize < 512 ? 4 : 8);
+        int skip = extraSkipMultiplier * (lastBatchSize < 256 ? 4 : (lastBatchSize < 512 ? 16 : 32));
         lastBatchSize += skip;
         lastBatchSize = (lastBatchSize / 4) * 4;
 
