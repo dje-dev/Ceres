@@ -18,6 +18,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 using Ceres.Base.Environment;
+using Ceres.Chess.MoveGen;
 
 #endregion
 
@@ -32,10 +33,7 @@ namespace Ceres.Chess
   public readonly struct PositionMiscInfo : IEquatable<PositionMiscInfo>
   {
     public enum HashMove50Mode { Ignore, Value, ValueBoolIfAbove98 };
-    public readonly byte WhiteKRInitPlacement = 100;
-    public readonly byte WhiteQRInitPlacement = 100;
-    public readonly byte BlackKRInitPlacement = 100;
-    public readonly byte BlackQRInitPlacement = 100;
+    public readonly RookPlacementInfo RookInfo;
 
     [Flags]
     enum CastlingFlagsEnum : byte
@@ -300,8 +298,7 @@ namespace Ceres.Chess
     public PositionMiscInfo(bool whiteCanCastleOO, bool whiteCanCastleOOO,
                             bool blackCanCastleOO, bool blackCanCastleOOO,
                             SideType sideToMove, int move50Count, int repetitionCount,
-                            int moveNum, EnPassantFileIndexEnum enPassantColIndex,
-                            byte wKR, byte wQR, byte bKR, byte bQR)
+                            int moveNum, EnPassantFileIndexEnum enPassantColIndex, RookPlacementInfo rookInfo)
     {
       Debug.Assert(repetitionCount >= 0 && move50Count >= 0);
 
@@ -317,11 +314,8 @@ namespace Ceres.Chess
       SideToMove = sideToMove;
       Move50Count = move50Count > 255 ? (byte)255 : (byte)move50Count;
       RepetitionCount = repetitionCount > 3 ? (byte)3 : (byte)repetitionCount;
-      MoveNum = (short)moveNum;
-      WhiteKRInitPlacement = wKR;
-      WhiteQRInitPlacement = wQR;
-      BlackKRInitPlacement = bKR;
-      BlackQRInitPlacement = bQR;
+      MoveNum = (short)moveNum;     
+      RookInfo = rookInfo;
     }
 
 

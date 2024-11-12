@@ -14,6 +14,7 @@
 #region Using directives
 
 using System;
+using System.Linq;
 using System.Text;
 
 #endregion
@@ -25,99 +26,86 @@ namespace Ceres.Chess.Textual
   /// </summary>
   internal static class FENGenerator
   {
-    internal static char GetCastlingFileChar(int fileIndex, bool isWhite)
-    {
-      if (isWhite)
-      {
-        return Char.ToUpper((char)('h' - fileIndex));
-      }
+    internal static char GetCastlingFileChar(int fileIndex, bool isWhite) =>
+      isWhite ? Char.ToUpper((char)('h' - fileIndex)) : (char)('h' - fileIndex);    
 
-      return (char)('h' - (fileIndex - 56));
-    }
+    private static char[] normalCastlingCharsConverted = new[] { 'H', 'A', 'h', 'a' };
+
     internal static string GetFEN(Position pos)
     {
-      // KQkq - 0 1
+      // Determine if the side to move is white
       bool weAreWhite = pos.MiscInfo.SideToMove == 0;
 
-      StringBuilder fen = new ();
+      // Initialize the FEN string with the piece positions
+      StringBuilder fen = new();
       fen.Append(GetFENPieces(pos));
 
+      // Append the side to move
       fen.Append(weAreWhite ? " w" : " b");
       fen.Append(" ");
 
-      StringBuilder castlingSB = new ();
+      // Initialize the castling rights string
+      StringBuilder castlingSB = new();
+
+      // Append castling rights for white kingside
       if (pos.MiscInfo.WhiteCanOO)
       {
-        char file = GetCastlingFileChar(pos.MiscInfo.WhiteKRInitPlacement, true);
-        
-        if (file == 'H')
-        {
-          castlingSB.Append("K");
-        }
-        else
-        {
-          castlingSB.Append(file);
-        }
-      }
-      
-      if (pos.MiscInfo.WhiteCanOOO)
-      {
-        char file = GetCastlingFileChar(pos.MiscInfo.WhiteQRInitPlacement, true);        
-        if (file == 'A')
-        {
-          castlingSB.Append("Q");
-        }
-        else
-        {
-          castlingSB.Append(file);
-        }        
-      }
-      
-      if (pos.MiscInfo.BlackCanOO)
-      {
-        var file = GetCastlingFileChar(pos.MiscInfo.BlackKRInitPlacement,false);        
-        if (file == 'h')
-        {
-          castlingSB.Append("k");
-        }
-        else
-        {
-          castlingSB.Append(file);
-        }        
-      }
-      
-      if (pos.MiscInfo.BlackCanOOO)
-      {
-        var file = GetCastlingFileChar(pos.MiscInfo.BlackQRInitPlacement, false);
-        if (file == 'a')
-        {
-          castlingSB.Append("q");
-        }
-        else
-        {
-          castlingSB.Append(file);
-        }        
+        char file = GetCastlingFileChar(pos.MiscInfo.RookInfo.WhiteKRInitPlacement, true);
+        castlingSB.Append(file);
       }
 
+      // Append castling rights for white queenside
+      if (pos.MiscInfo.WhiteCanOOO)
+      {
+        char file = GetCastlingFileChar(pos.MiscInfo.RookInfo.WhiteQRInitPlacement, true);
+        castlingSB.Append(file);
+      }
+
+      // Append castling rights for black kingside
+      if (pos.MiscInfo.BlackCanOO)
+      {
+        var file = GetCastlingFileChar(pos.MiscInfo.RookInfo.BlackKRInitPlacement, false);
+        castlingSB.Append(file);
+      }
+
+      // Append castling rights for black queenside
+      if (pos.MiscInfo.BlackCanOOO)
+      {
+        var file = GetCastlingFileChar(pos.MiscInfo.RookInfo.BlackQRInitPlacement, false);
+        castlingSB.Append(file);
+      }
+
+      // Convert castling rights to standard notation if applicable
       string castling = castlingSB.ToString();
-      if (castling == "")
+      var normalCastlingPerformed = castling.All(c => normalCastlingCharsConverted.Contains(c));
+      //pos.ToMGPosition.BlackCanCastle
+      // Keep the normal castling notation when in a normal castling position
+      if (normalCastlingPerformed)
+      {
+        castling = castling.Replace('H', 'K').Replace('A', 'Q').Replace('h', 'k').Replace('a', 'q');
+      }
+      if (String.IsNullOrEmpty(castling))
       {
         castling = "-";
       }
 
-      //rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1
+      // Append castling rights to FEN
+      fen.Append(castling + " ");
+
+      // Determine en passant target square
       string epTarget = "-";
       if (pos.MiscInfo.EnPassantFileIndex != PositionMiscInfo.EnPassantFileIndexEnum.FileNone)
       {
         epTarget = pos.MiscInfo.EnPassantFileChar + (weAreWhite ? "6" : "3");
       }
 
-      int moveNumToShow  =  pos.MiscInfo.MoveNum / 2; // move counter incremented only after each black move
-      fen.Append(castling + " ");
+      // Append en passant target square, halfmove clock, and fullmove number to FEN
+      int moveNumToShow = pos.MiscInfo.MoveNum / 2; // move counter incremented only after each black move
       fen.Append(epTarget + " ");
       fen.Append(pos.MiscInfo.Move50Count + " ");
       fen.Append(moveNumToShow);
 
+      // Return the complete FEN string
       return fen.ToString();
     }
 
@@ -135,7 +123,7 @@ namespace Ceres.Chess.Textual
         int numBlank = 0;
         for (int c = 7; c >= 0; c--)
         {
-          char thisChar = pos[Square.FromFileAndRank(7-c, r)].Char;
+          char thisChar = pos[Square.FromFileAndRank(7 - c, r)].Char;
           if (thisChar == Piece.EMPTY_SQUARE_CHAR)
           {
             numBlank++;

@@ -87,11 +87,8 @@ namespace Ceres.Chess.MoveGen.Converters
       pos.WhiteCanCastle = position.MiscInfo.WhiteCanOO;
       pos.BlackCanCastle = position.MiscInfo.BlackCanOO;
       pos.WhiteCanCastleLong = position.MiscInfo.WhiteCanOOO;
-      pos.BlackCanCastleLong = position.MiscInfo.BlackCanOOO;
-      pos.WhiteKRInitPlacement = position.MiscInfo.WhiteKRInitPlacement;
-      pos.WhiteQRInitPlacement = position.MiscInfo.WhiteQRInitPlacement;
-      pos.BlackKRInitPlacement = position.MiscInfo.BlackKRInitPlacement;
-      pos.BlackQRInitPlacement = position.MiscInfo.BlackQRInitPlacement;
+      pos.BlackCanCastleLong = position.MiscInfo.BlackCanOOO;      
+      pos.rookInfo = position.MiscInfo.RookInfo;
 
       if (position.MiscInfo.EnPassantFileIndex != PositionMiscInfo.EnPassantFileIndexEnum.FileNone)
       {
@@ -192,7 +189,7 @@ namespace Ceres.Chess.MoveGen.Converters
       PositionMiscInfo miscInfo = new PositionMiscInfo(mgPos.WhiteCanCastle, mgPos.WhiteCanCastleLong,
                               mgPos.BlackCanCastle, mgPos.BlackCanCastleLong,
                               sideToMove, mgPos.Rule50Count, 0,
-                              mgPos.MoveNumber, enPassantColIndex);
+                              mgPos.MoveNumber, enPassantColIndex, mgPos.rookInfo);
 
       pos.SetMiscInfo(miscInfo);
       pos.SetPieceCount(pieceCount);
@@ -224,10 +221,7 @@ namespace Ceres.Chess.MoveGen.Converters
       pos.BlackCanCastle = fenParsed.MiscInfo.BlackCanOO;
       pos.WhiteCanCastleLong = fenParsed.MiscInfo.WhiteCanOOO;
       pos.BlackCanCastleLong = fenParsed.MiscInfo.BlackCanOOO;
-      pos.BlackKRInitPlacement = fenParsed.MiscInfo.BlackKRInitPlacement;
-      pos.BlackQRInitPlacement = fenParsed.MiscInfo.BlackQRInitPlacement;
-      pos.WhiteKRInitPlacement = fenParsed.MiscInfo.WhiteKRInitPlacement;
-      pos.WhiteQRInitPlacement = fenParsed.MiscInfo.WhiteQRInitPlacement;
+      pos.rookInfo = fenParsed.MiscInfo.RookInfo;
 
       if (fenParsed.MiscInfo.EnPassantFileIndex != PositionMiscInfo.EnPassantFileIndexEnum.FileNone)
       {

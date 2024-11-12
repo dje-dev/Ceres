@@ -106,7 +106,7 @@ namespace Ceres.Chess.MoveGen
 
       return true;
     }
-   
+
     public static bool CanWhiteKingMoveToCastlingPos(in MGPosition pos, int kingSq, int rookSq, int startSquare, int endSquare, bool moveLeft)
     {
       BitBoard rook = 1UL << rookSq;
@@ -153,12 +153,12 @@ namespace Ceres.Chess.MoveGen
       BitBoard bKing = (pos.D & pos.C & pos.B & pos.A) & MGPositionConstants.lastRank;
       BitBoard bRooks = (pos.D & pos.C & ~pos.B & ~pos.A) & MGPositionConstants.lastRank;
       int kingSq = (int)LSB(bKing);
-      int rookSq = pos.BlackQRInitPlacement;
+      int rookSq = pos.rookInfo.BlackQRInitPlacement + 56;
       BitBoard rookBitBoard = 1UL << rookSq;
       bool rookAtStartSquare = (bRooks & rookBitBoard) != 0;
       rookPos = 1UL << rookSq;
 
-      if (bKing == 0 || bRooks == 0UL || kingSq > rookSq || !rookAtStartSquare )
+      if (bKing == 0 || bRooks == 0UL || kingSq > rookSq || !rookAtStartSquare)
       {
         return false;
       }
@@ -191,12 +191,12 @@ namespace Ceres.Chess.MoveGen
       BitBoard wRooks = (~pos.D & pos.C & ~pos.B & ~pos.A) & MGPositionConstants.firstRank;
       BitBoard wKing = (~pos.D & pos.C & pos.B & pos.A) & MGPositionConstants.firstRank;
       int kingSq = (int)LSB(wKing);
-      int rookSq = pos.WhiteQRInitPlacement;
+      int rookSq = pos.rookInfo.WhiteQRInitPlacement;
       BitBoard rookBitBoard = 1UL << rookSq;
-      bool rookAtStartSquare = (wRooks & rookBitBoard) != 0;      
+      bool rookAtStartSquare = (wRooks & rookBitBoard) != 0;
       rookPos = 1UL << rookSq;
 
-      if (wKing == 0 || wRooks == 0UL || kingSq > rookSq || !rookAtStartSquare )
+      if (wKing == 0 || wRooks == 0UL || kingSq > rookSq || !rookAtStartSquare)
       {
         return false;
       }
@@ -227,9 +227,9 @@ namespace Ceres.Chess.MoveGen
       BitBoard bKing = (pos.D & pos.C & pos.B & pos.A) & MGPositionConstants.lastRank;
       BitBoard bRooks = (pos.D & pos.C & ~pos.B & ~pos.A) & MGPositionConstants.lastRank;
       int kingSq = (int)LSB(bKing);
-      int rookSq = pos.BlackKRInitPlacement;
+      int rookSq = pos.rookInfo.BlackKRInitPlacement + 56;
       BitBoard rookBitBoard = 1UL << rookSq;
-      bool rookAtStartSquare = (bRooks & rookBitBoard) != 0;     
+      bool rookAtStartSquare = (bRooks & rookBitBoard) != 0;
       rookPos = 1UL << rookSq;
 
       if (bKing == 0 || bRooks == 0UL || kingSq < rookSq || !rookAtStartSquare)
@@ -257,7 +257,7 @@ namespace Ceres.Chess.MoveGen
       BitBoard wKing = (~pos.D & pos.C & pos.B & pos.A) & MGPositionConstants.firstRank; // pos.B & pos.C; //GetKings(pos.A, pos.B, pos.C, pos.D);
       BitBoard wRooks = (~pos.D & pos.C & ~pos.B & ~pos.A) & MGPositionConstants.firstRank;
       int kingSq = (int)LSB(wKing);
-      int rookSq = pos.WhiteKRInitPlacement; //(int)(LSB(wRooks));
+      int rookSq = pos.rookInfo.WhiteKRInitPlacement;
       BitBoard rookBitBoard = 1UL << rookSq;
       bool rookAtStartSquare = (wRooks & rookBitBoard) != 0;
       rookPos = 1UL << rookSq;
