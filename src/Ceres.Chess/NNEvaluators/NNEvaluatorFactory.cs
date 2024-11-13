@@ -242,7 +242,7 @@ namespace Ceres.Chess.NNEvaluators
         }
       }
 
-      Console.WriteLine($"{optionKey} using " + returnValue + " " + netDef.NetworkID);
+      //Console.WriteLine($"{optionKey} using " + returnValue + " " + netDef.NetworkID);
       return returnValue;
     }
 
