@@ -3,7 +3,7 @@
 <img src="./images/CeresLogoLarge.png" width="436" height="275">
 
 
-# Ceres Project Update - October 2024
+# Ceres Project Update - November 2024
 
 ## Status
 The Ceres project has continued to progress since initial engine introduction at the end of 2020 and training pipeline introduction at the end of 2023. Most recently, Ceres made her public debut in tournaments at [TCEC](https://www.chessdom.com/leela-chess-zero-wins-tcec-swiss-7/), utilizing her own neural network.She placed 3rd, behind Leela Chess Zero and Stockfish 17. 
@@ -13,7 +13,7 @@ Ceres will reach a milestone in October 2024 as the first complete version (1.0)
 * 384x12
 * 512x15 (as played at TCEC S27 Swiss 7, placing 3rd)
 * 768x15 (as played at TCEC S27 Cup 14, placing 4th)
-* 512x25 (as played at TCEC S27 Entrance League/League 2)
+* 512x25 (as played at TCEC S27 Entrance League/League 2, placing 1st)
 * 640x25 (as played at TCEC S27 League 1)
 
 * ## Ceres Neural Networks
