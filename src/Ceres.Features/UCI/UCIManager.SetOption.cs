@@ -462,18 +462,18 @@ namespace Ceres.Features.UCI
 @$"
 option name Device type string default <from DefaultDeviceSpecString in Ceres.json>
 option name WeightsFile type string default <from DefaultNetworkSpecString in Ceres.json>
-option name Network type string default <from DefaultNetworkSpecString in Ceres.json>
+option name SyzygyPath type string default
 option name LogFile type string default
 option name SearchLogFile type string default
 option name MultiPV type spin default 1 min 1 max 500
 option name VerboseMoveStats type check default false
 option name LogLiveStats type check default false
+option name UCI_Chess960 type check default false
 option name SmartPruningFactor type string default 1.33
 option name MoveOverheadMs type spin default {new ParamsSearch().MoveOverheadSeconds * 1000} min 0 max 100000000
 option name PerPVCounters type check default false
 option name ScoreType type combo default centipawn var centipawn var Q var W-L
 option name UCI_ShowWDL type check default false
-option name SyzygyPath type string default
 option name CPUCT type string default {new ParamsSelect().CPUCT}
 option name CPUCTAtRoot type string default {new ParamsSelect().CPUCTAtRoot}
 option name CPUCTBase type string default {new ParamsSelect().CPUCTBase}
@@ -489,8 +489,8 @@ option name MaxTreeNodes type string default
 option name ReducedMemoryMode type check default false
 option name EnableSiblingEval type check default false
 option name EnableUncertaintyBoosting type check default false
-option name UCI_Chess960 type check default false
 option name LimitsManagerName type string default
+option name Network type string default <from DefaultNetworkSpecString in Ceres.json>
 ");
     /* 
 option name ConfigFile type string default lc0.config

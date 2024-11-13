@@ -260,7 +260,7 @@ namespace Ceres.APIExamples
       //NET1 = "~BT4_4520_kovax_ONNX"; //2740
 //      NET1 = "Ceres:HOP_SP_640_25_20H_FFN3_NLA_SMOL_SP_B1_70bn_fp16_6928.onnx";
 
-      NET1 = "Ceres:C1-640-25|TEST75";
+      NET1 = "Ceres:C1-640-25";
       //    NET2 = "Ceres:C1-640-25|TEST85";
 
 //      NET1 = "HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_75bn_fp16_1599995904.onnx";
@@ -337,7 +337,7 @@ NET2 = FN_BASELINE;
       //NET2 = "~T1_DISTIL_512_15_NATIVE";
 
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(5000);
+      SearchLimit limit1 = SearchLimit.NodesPerMove(1000);
       //limit1 = SearchLimit.BestValueMove;
       //      limit1 = new SearchLimit(SearchLimitType.SecondsForAllMoves, 60, false, 0.1f);
       SearchLimit limit2 = limit1;// SearchLimit.NodesPerMove(45);
@@ -650,7 +650,7 @@ SearchLimit limit2 = SearchLimit.NodesPerMove(350_000);
       EnginePlayerDef playerLC0_2 = ENABLE_LC0_2 ? new EnginePlayerDef(engineDefLC2, limit2) : null;
 
 
-      const bool RUN_SUITE = true;
+      const bool RUN_SUITE = false;
       if (RUN_SUITE)
       {
         // NET2 = null;
@@ -836,7 +836,7 @@ SearchLimit limit2 = SearchLimit.NodesPerMove(350_000);
         //        def.AcceptPosExcludeIfContainsPieceTypeList = [PieceType.Queen, PieceType.Bishop, PieceType.Knight];
       }
 
-      baseName = "tcec_big";
+      //baseName = "tcec_big";
       baseName = "UHO_Lichess_4852_v1.epd"; // recommended by Kovax
       string postfix = (baseName.ToUpper().EndsWith(".EPD") || baseName.ToUpper().EndsWith(".PGN")) ? "" : ".pgn";
       def.OpeningsFileName = SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/openings/{baseName}{postfix}"
