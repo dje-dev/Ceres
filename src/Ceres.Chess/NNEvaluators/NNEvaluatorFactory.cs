@@ -225,6 +225,26 @@ namespace Ceres.Chess.NNEvaluators
 
 
 
+    private static float CheckOptionSpecifiedElseDefault(NNEvaluatorNetDef netDef, 
+                                                         Dictionary<string, string> options,
+                                                         string optionKey, 
+                                                         float defaultValue)
+    {
+      float returnValue = defaultValue;
+      string optionString = (options != null && options.Keys.Contains(optionKey))
+                             ? options[optionKey]
+                             : null;
+      if (optionString != null)
+      {
+        if (!float.TryParse(optionString, out returnValue))
+        {
+          throw new Exception($"Invalid value for {optionKey}, expected number but got: {optionString}");
+        }
+      }
+
+      Console.WriteLine($"{optionKey} using " + returnValue + " " + netDef.NetworkID);
+      return returnValue;
+    }
 
     static NNEvaluator Singleton(NNEvaluatorNetDef netDef, NNEvaluatorDeviceDef deviceDef, 
                                  NNEvaluator referenceEvaluator, int referenceEvaluatorIndex,
@@ -343,8 +363,14 @@ namespace Ceres.Chess.NNEvaluators
             throw new Exception($"Ceres net {netFileName} not found. Use valid full path or set source directory using DirCeresNetworks in Ceres.json");
           }
 
-          bool testMode = options != null && options.Keys.Contains("TEST");
-          bool testPTempMode = options != null && options.Keys.Contains("TEST_PTEMP");
+          const float DEFAULT_TEMP1 = 0.80f;
+          const float DEFAULT_V2_FRACTION = 0.0f;
+          const float DEFAULT_POLUNC_SCALE = 0.0f;
+
+          float value1Temperature = CheckOptionSpecifiedElseDefault(netDef, options, "V1TEMP", DEFAULT_TEMP1);
+          float fractionV2 = CheckOptionSpecifiedElseDefault(netDef, options, "V2FRAC", DEFAULT_V2_FRACTION);
+          float policyUncertaintyScaling = CheckOptionSpecifiedElseDefault(netDef, options, "POLUNC_SCALE", DEFAULT_POLUNC_SCALE);
+
           bool board4Mode = options != null && options.Keys.Contains("4BOARD");
           NNEvaluatorOptionsCeres optionsCeres = new NNEvaluatorOptionsCeres()
           {
@@ -354,13 +380,10 @@ namespace Ceres.Chess.NNEvaluators
             UseAction = board4Mode,
             UsePriorState = board4Mode,
 
-            ValueHead1Temperature = 0.85f, // sharpen Value1 to compensate for high entropy training target (Q)
-
-            // PolicyTemperature = 0.90f,
-
-            FractionValueHead2 = testMode ? 0.35f : 0f, 
-            PolicyUncertaintyTemperatureScalingFactor = testPTempMode ? 0.5f : 0,
-          };
+            ValueHead1Temperature = value1Temperature,
+            FractionValueHead2 = fractionV2,
+            PolicyUncertaintyTemperatureScalingFactor = policyUncertaintyScaling,
+          }; 
           
           int maxCeresBatchSize = useTensorRT ? TRT_MAX_BATCH_SIZE : DEFAULT_MAX_BATCH_SIZE;
           maxCeresBatchSize = deviceDef.MaxBatchSize.HasValue ? Math.Min(deviceDef.MaxBatchSize.Value, maxCeresBatchSize) : maxCeresBatchSize;
