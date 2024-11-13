@@ -109,6 +109,37 @@ namespace Ceres.Chess.MoveGen
       // Increment ply count
       MoveNumber++;
 
+      //reset opponents castling rights if there is a capture of one of his rooks
+      if (M.Capture)
+      {
+        if (M.BlackToMove)
+        {
+          if (M.ToSquareIndex == rookInfo.WhiteKRInitPlacement)
+          {
+            WhiteCanCastle = false;
+            WhiteForfeitedCastle = true;
+          }
+          else if (M.ToSquareIndex == rookInfo.WhiteQRInitPlacement)
+          {
+            WhiteCanCastleLong = false;
+            WhiteForfeitedCastleLong = true;
+          }
+        }
+        else
+        {
+          if (M.ToSquareIndex == rookInfo.BlackKRInitPlacement + 56)
+          {
+            BlackCanCastle = false;
+            BlackForfeitedCastle = true;
+          }
+          else if (M.ToSquareIndex == rookInfo.BlackQRInitPlacement + 56)
+          {
+            BlackCanCastleLong = false;
+            BlackForfeitedCastleLong = true;
+          }
+        }
+      }
+
       // Update Rule 50 count (upon any pawn move or capture)
       if (M.Capture || (byte)M.Piece == MGPositionConstants.WPAWN 
                     || (byte)M.Piece == MGPositionConstants.BPAWN)
