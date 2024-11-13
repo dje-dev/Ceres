@@ -696,6 +696,22 @@ namespace Ceres.Chess.NetEvaluation.Batch
         Span<FP16> l = L.Span;
         Span<FP16> l2 = L2.Span;
 
+      static void ReplaceFirstSpanWithGeometricWeightedAverage(Span<FP16> arg1, Span<FP16> arg2, float weight1, float weight2)
+        {
+          if (arg1.Length != arg2.Length)
+          {
+            throw new ArgumentException("Spans must have the same length.");
+          }
+
+          float totalWeight = weight1 + weight2;
+          for (int i = 0; i < arg1.Length; i++)
+          {
+            float product = MathF.Pow(arg1[i], weight1 / totalWeight) 
+                          * MathF.Pow(arg2[i], weight2 / totalWeight);
+            arg1[i] = (FP16)product;
+          }
+        }
+
         for (int i=0; i<w.Length; i++)
         {
 #if EXPERIMENTAL
@@ -711,7 +727,10 @@ namespace Ceres.Chess.NetEvaluation.Batch
 
           w[i] = (FP16)(w[i] * fractionValueFromValue1 + w2[i] * fractionValueFromValue2);
           l[i] = (FP16)(l[i] * fractionValueFromValue1 + l2[i] * fractionValueFromValue2);
-        }  
+
+//          ReplaceFirstSpanWithGeometricWeightedAverage(w.Slice(i, 1), w2.Slice(i, 1), fractionValueFromValue1, fractionValueFromValue2);
+//          ReplaceFirstSpanWithGeometricWeightedAverage(l.Slice(i, 1), l2.Slice(i, 1), fractionValueFromValue1, fractionValueFromValue2);
+        }
       }
 
       if (hasM)
