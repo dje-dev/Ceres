@@ -283,7 +283,7 @@ namespace Ceres.Chess
       MiscInfo = reversedSide ? new(copyPosition.MiscInfo.BlackCanOO, copyPosition.MiscInfo.BlackCanOOO,
                                 copyPosition.MiscInfo.WhiteCanOO, copyPosition.MiscInfo.WhiteCanOOO,
                                 copyPosition.MiscInfo.SideToMove.Reversed(), copyPosition.MiscInfo.Move50Count,
-                                copyPosition.MiscInfo.RepetitionCount, copyPosition.MiscInfo.MoveNum, copyPosition.MiscInfo.EnPassantFileIndex)
+                                copyPosition.MiscInfo.RepetitionCount, copyPosition.MiscInfo.MoveNum, copyPosition.MiscInfo.EnPassantFileIndex, copyPosition.MiscInfo.RookInfo)
                           : copyPosition.MiscInfo;
 
       for (int i = 0; i < 64; i++)
@@ -423,13 +423,13 @@ namespace Ceres.Chess
       {
         newMiscInfo = new PositionMiscInfo(MiscInfo.WhiteCanOO, MiscInfo.WhiteCanOOO, MiscInfo.BlackCanOO, MiscInfo.BlackCanOOO,
                                            MiscInfo.SideToMove.Reversed(), MiscInfo.Move50Count, MiscInfo.RepetitionCount, moveNum,
-                                           PositionMiscInfo.EnPassantFileIndexEnum.FileNone);
+                                           PositionMiscInfo.EnPassantFileIndexEnum.FileNone, MiscInfo.RookInfo);
       }
       else
       {
         newMiscInfo = new PositionMiscInfo(MiscInfo.BlackCanOO, MiscInfo.BlackCanOOO, MiscInfo.WhiteCanOO, MiscInfo.WhiteCanOOO,
                                            MiscInfo.SideToMove.Reversed(), MiscInfo.Move50Count, MiscInfo.RepetitionCount, moveNum,
-                                           PositionMiscInfo.EnPassantFileIndexEnum.FileNone);
+                                           PositionMiscInfo.EnPassantFileIndexEnum.FileNone, MiscInfo.RookInfo);
       }
 
       // TODO: for efficiency, make a [ThreadStatic] PieceOnSquare[] for the temporary here
@@ -1214,9 +1214,14 @@ namespace Ceres.Chess
           (E7, Black,Pawn), (F7, Black,Pawn), (G7, Black,Pawn), (H7, Black,Pawn),
       };
 
+      RookPlacementInfo rookInfo = default;
+      rookInfo.WhiteKRInitPlacement = 0;
+      rookInfo.WhiteQRInitPlacement = 7;
+      rookInfo.BlackKRInitPlacement = 0;
+      rookInfo.BlackQRInitPlacement = 7;
       // NOTE: use 2 for ply number so translates to 1 for move number
       PositionMiscInfo miscInfo = new PositionMiscInfo(true, true, true, true, SideType.White,
-                                                       0, 0, 2, PositionMiscInfo.EnPassantFileIndexEnum.FileNone);
+                                                       0, 0, 2, PositionMiscInfo.EnPassantFileIndexEnum.FileNone, rookInfo);
       return new Position(pieces, in miscInfo);
     }
 

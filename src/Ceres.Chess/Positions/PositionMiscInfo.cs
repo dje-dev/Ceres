@@ -18,6 +18,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 using Ceres.Base.Environment;
+using Ceres.Chess.MoveGen;
 
 #endregion
 
@@ -32,6 +33,7 @@ namespace Ceres.Chess
   public readonly struct PositionMiscInfo : IEquatable<PositionMiscInfo>
   {
     public enum HashMove50Mode { Ignore, Value, ValueBoolIfAbove98 };
+    public readonly RookPlacementInfo RookInfo;
 
     [Flags]
     enum CastlingFlagsEnum : byte
@@ -273,7 +275,7 @@ namespace Ceres.Chess
     /// <param name="enPassantColIndex"></param>
     public PositionMiscInfo(bool whiteCanCastleOO, bool whiteCanCastleOOO,
                             bool blackCanCastleOO, bool blackCanCastleOOO,
-                            SideType sideToMove, int move50Count, int repetitionCount, 
+                            SideType sideToMove, int move50Count, int repetitionCount,
                             int moveNum, EnPassantFileIndexEnum enPassantColIndex)
     {
       Debug.Assert(repetitionCount >= 0 && move50Count >= 0);
@@ -291,6 +293,29 @@ namespace Ceres.Chess
       Move50Count = move50Count > 255 ? (byte)255 : (byte)move50Count;
       RepetitionCount = repetitionCount > 3 ? (byte)3 : (byte)repetitionCount;
       MoveNum = (short)moveNum;
+    }
+
+    public PositionMiscInfo(bool whiteCanCastleOO, bool whiteCanCastleOOO,
+                            bool blackCanCastleOO, bool blackCanCastleOOO,
+                            SideType sideToMove, int move50Count, int repetitionCount,
+                            int moveNum, EnPassantFileIndexEnum enPassantColIndex, RookPlacementInfo rookInfo)
+    {
+      Debug.Assert(repetitionCount >= 0 && move50Count >= 0);
+
+      int epc = 0;
+      if (whiteCanCastleOO) epc |= (int)CastlingFlagsEnum.WhiteCanOO;
+      if (whiteCanCastleOOO) epc |= (int)CastlingFlagsEnum.WhiteCanOOO;
+      if (blackCanCastleOO) epc |= (int)CastlingFlagsEnum.BlackCanOO;
+      if (blackCanCastleOOO) epc |= (int)CastlingFlagsEnum.BlackCanOOO;
+
+      epc |= (byte)enPassantColIndex * 16;
+      EnPassantFileIndexAndCastlingFlags = (byte)epc;
+
+      SideToMove = sideToMove;
+      Move50Count = move50Count > 255 ? (byte)255 : (byte)move50Count;
+      RepetitionCount = repetitionCount > 3 ? (byte)3 : (byte)repetitionCount;
+      MoveNum = (short)moveNum;     
+      RookInfo = rookInfo;
     }
 
 

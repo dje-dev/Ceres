@@ -74,6 +74,7 @@ namespace Ceres.Chess.MoveGen
 
     public short MoveNumber;
     public short Rule50Count;
+    public RookPlacementInfo rookInfo;
 
     //    public short material;
 

@@ -109,6 +109,37 @@ namespace Ceres.Chess.MoveGen
       // Increment ply count
       MoveNumber++;
 
+      //reset opponents castling rights if there is a capture of one of his rooks
+      if (M.Capture)
+      {
+        if (M.BlackToMove)
+        {
+          if (M.ToSquareIndex == rookInfo.WhiteKRInitPlacement)
+          {
+            WhiteCanCastle = false;
+            WhiteForfeitedCastle = true;
+          }
+          else if (M.ToSquareIndex == rookInfo.WhiteQRInitPlacement)
+          {
+            WhiteCanCastleLong = false;
+            WhiteForfeitedCastleLong = true;
+          }
+        }
+        else
+        {
+          if (M.ToSquareIndex == rookInfo.BlackKRInitPlacement + 56)
+          {
+            BlackCanCastle = false;
+            BlackForfeitedCastle = true;
+          }
+          else if (M.ToSquareIndex == rookInfo.BlackQRInitPlacement + 56)
+          {
+            BlackCanCastleLong = false;
+            BlackForfeitedCastleLong = true;
+          }
+        }
+      }
+
       // Update Rule 50 count (upon any pawn move or capture)
       if (M.Capture || (byte)M.Piece == MGPositionConstants.WPAWN 
                     || (byte)M.Piece == MGPositionConstants.BPAWN)
@@ -167,11 +198,7 @@ namespace Ceres.Chess.MoveGen
 
       if ((byte)M.Piece == MGPositionConstants.BKING)
       {
-        Square rookToSq = new Square((int)nToSquare, Square.SquareIndexType.BottomToTopRightToLeft);
-        MGPositionConstants.MCChessPositionPieceEnum pieceToSq = RawPieceAtSquare(rookToSq);
-        bool performedCastling = pieceToSq == MGPositionConstants.MCChessPositionPieceEnum.BlackRook;
-
-        if (M.CastleShort && performedCastling)
+        if (M.CastleShort)
         {
           BitBoard kingToSq = 144115188075855872; //g8 in decimals
           BitBoard kingIdx = 57; //g8 represented as index from h1..a1
@@ -201,7 +228,7 @@ namespace Ceres.Chess.MoveGen
           Flags &= ~FlagsEnum.BlackCanCastleLong;
           return;
         }
-        else if (M.CastleLong && performedCastling)
+        else if (M.CastleLong)
         {
           BitBoard kingToSq = 2305843009213693952; //c8 in decimals
           BitBoard kingIdx = 61; //c8 represented as index from h1..a8
@@ -254,11 +281,7 @@ namespace Ceres.Chess.MoveGen
 
       else if ((byte)M.Piece == MGPositionConstants.WKING)
       {
-        Square rookToSq = new Square((int)nToSquare, Square.SquareIndexType.BottomToTopRightToLeft);
-        MGPositionConstants.MCChessPositionPieceEnum pieceToSq = RawPieceAtSquare(rookToSq);
-        bool performedCastling = pieceToSq == MGPositionConstants.MCChessPositionPieceEnum.WhiteRook;
-
-        if (M.CastleShort && performedCastling)
+        if (M.CastleShort)
         {
           BitBoard rookPos = 1UL << (int)nToSquare;
           rookPos = rookPos == 4 ? 0 : rookPos | 4;
@@ -288,7 +311,7 @@ namespace Ceres.Chess.MoveGen
           return;
         }
 
-        if (M.CastleLong && performedCastling)
+        if (M.CastleLong)
         {
           BitBoard rookPos = 1UL << (int)nToSquare;
           rookPos = rookPos == 16 ? 0 : rookPos | 16;
@@ -346,14 +369,7 @@ namespace Ceres.Chess.MoveGen
       // LOOK FOR FORFEITED CASTLING RIGHTS DUE to ROOK MOVES:
       else if ((byte)M.Piece == MGPositionConstants.BROOK)
       {
-        BitBoard rooks = (~A & ~B & C & D) & MGPositionConstants.lastRank;
-        BitBoard rKSq = QBBoperations.LSB(rooks);
-        BitBoard rQSq = QBBoperations.MSB(rooks);
-        BitBoard bKingSquare = QBBoperations.LSB(D & C & B & A); //black king
-        bool rKMoved = nFromSquare == rKSq && bKingSquare > nFromSquare;
-        bool rQMoved = nFromSquare == rQSq && bKingSquare < nFromSquare;
-
-        if (rKMoved && rooks != 0)
+        if (M.FromSquareIndex == (rookInfo.BlackKRInitPlacement + 56))
         {
           // Black moved K-side Rook and forfeits right to castle K-side
           if (BlackCanCastle)
@@ -366,7 +382,7 @@ namespace Ceres.Chess.MoveGen
           }
         }
         //else if ((1LL<<nFromSquare) & BLACKQRPOS)
-        else if (rQMoved && rooks != 0)
+        else if (M.FromSquareIndex == (rookInfo.BlackQRInitPlacement + 56))
         {
           // Black moved the QS Rook and forfeits right to castle Q-side
           if (BlackCanCastleLong)
@@ -381,16 +397,8 @@ namespace Ceres.Chess.MoveGen
       }
 
       else if ((byte)M.Piece == MGPositionConstants.WROOK)
-      {
-        BitBoard rooks = (~A & ~B & C & ~D) & MGPositionConstants.firstRank;
-        BitBoard rKSq = QBBoperations.LSB(rooks);
-        BitBoard rQSq = QBBoperations.MSB(rooks);
-        BitBoard wKingSquare = QBBoperations.LSB(~D & C & B & A);
-        bool rKMoved = nFromSquare == rKSq && wKingSquare > nFromSquare;
-        bool rQMoved = nFromSquare == rQSq && wKingSquare < nFromSquare;
-        Debug.Assert((rQMoved && rKMoved) != true);
-
-        if (rKMoved && rooks != 0)
+      {        
+        if (M.FromSquareIndex == rookInfo.WhiteKRInitPlacement)
         {
           // White moved K-side Rook and forfeits right to castle K-side
           if (WhiteCanCastle)
@@ -403,7 +411,7 @@ namespace Ceres.Chess.MoveGen
           }
         }
         //	else if((1LL<<nFromSquare) & WHITEQRPOS)
-        else if (rQMoved && rooks != 0)
+        else if (M.FromSquareIndex == rookInfo.WhiteQRInitPlacement)
         {
           // White moved the QSide Rook and forfeits right to castle Q-side
           if (WhiteCanCastleLong)
