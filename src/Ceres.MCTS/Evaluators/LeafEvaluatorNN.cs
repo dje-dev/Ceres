@@ -45,6 +45,12 @@ namespace Ceres.MCTS.Evaluators
   /// </summary>
   public sealed class LeafEvaluatorNN : LeafEvaluatorBase
   {
+
+    public delegate void RewriteBatchQ(IPositionEvaluationBatch batch,
+                                 Func<int, Position> getPositionFunc,
+                                 float evalTimeRewriteEngine);
+    public static RewriteBatchQ RewriteBatchQFunc = null;
+
     /// <summary>
     ///
     /// </summary>
@@ -77,6 +83,7 @@ namespace Ceres.MCTS.Evaluators
 
     public readonly PositionEvalCache Cache;
 
+    public readonly bool RewriteOtherEngine;
 
     /// <summary>
     /// Optional Func that dynamically determines the index of possibly 
@@ -99,7 +106,8 @@ namespace Ceres.MCTS.Evaluators
                            bool lowPriority,
                            PositionEvalCache cache,
                            Func<MCTSIterator, int> batchEvaluatorIndexDynamicSelector,
-                           NNEvaluator evaluatorSecondary)
+                           NNEvaluator evaluatorSecondary,
+                           bool rewriteOtherEngine = false)
     {
       rawPosArray = posArrayPool.Rent(maxBatchSize);
 
@@ -108,6 +116,7 @@ namespace Ceres.MCTS.Evaluators
       LowPriority = lowPriority;
       Cache = cache;
       BatchEvaluatorIndexDynamicSelector = batchEvaluatorIndexDynamicSelector;
+      RewriteOtherEngine = rewriteOtherEngine;
 
       if (evaluatorDef.Location == NNEvaluatorDef.LocationType.Local)
       {
@@ -241,6 +250,25 @@ namespace Ceres.MCTS.Evaluators
                          EvalResultTarget resultTarget, bool markSecondaryNN)
     {
       //if (EvaluateUsingSecondaryEvaluator) Console.WriteLine("early batch " + nodes.Length);
+
+      if (false && RewriteOtherEngine)
+      {
+        const float EVAL_TIME_SF = 0.3f;
+        RewriteBatchQFunc(results, 
+          (int index) =>
+          {
+            Position pos = nodes[index].Annotation.Pos;
+            if (pos.PieceCount > 12)
+            {
+              return default;
+            }
+            else
+            {
+              return pos;
+            }
+          },
+          EVAL_TIME_SF);
+      }
 
       for (int i = 0; i < nodes.Count; i++)
       {

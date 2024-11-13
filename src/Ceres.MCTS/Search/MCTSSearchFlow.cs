@@ -86,7 +86,7 @@ namespace Ceres.MCTS.Search
       }
 
       LeafEvaluatorNN nodeEvaluator1 = new LeafEvaluatorNN(context.EvaluatorDef, context.NNEvaluators.Evaluator1, shouldCache, context.ParamsSearch.Execution.MaxBatchSize,
-                                                           LOW_PRIORITY_PRIMARY, context.Tree.PositionCache, null, evaluatorSecondaryToUseInPrimaryEvaluators);
+                                                           LOW_PRIORITY_PRIMARY, context.Tree.PositionCache, null, evaluatorSecondaryToUseInPrimaryEvaluators, context.ParamsSearch.TestFlag);
       BlockNNEval1 = new MCTSNNEvaluator(nodeEvaluator1, true);
 
       if (context.ParamsSearch.Execution.FlowDirectOverlapped)
@@ -94,7 +94,7 @@ namespace Ceres.MCTS.Search
         // Create a second evaluator (configured like the first) on which to do overlapping.
         LeafEvaluatorNN nodeEvaluator2 = new LeafEvaluatorNN(context.EvaluatorDef, context.NNEvaluators.Evaluator2, shouldCache, 
                                                              manager.Context.ParamsSearch.Execution.MaxBatchSize,
-                                                             false, context.Tree.PositionCache, null, evaluatorSecondaryToUseInPrimaryEvaluators);
+                                                             false, context.Tree.PositionCache, null, evaluatorSecondaryToUseInPrimaryEvaluators, context.ParamsSearch.TestFlag);
         BlockNNEval2 = new MCTSNNEvaluator(nodeEvaluator2, true);
       }
 
