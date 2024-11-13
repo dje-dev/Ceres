@@ -246,9 +246,11 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
               {
                 if (!firstTime)
                 {
+#if DEBUG
                   // Testing with TensorRT 10.3 suggests caching fails if there is more than one input.
                   ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, "WARNING as workaround for caching failure in ONNXRuntime,"
                     + " shapes string will omit " + inputName);
+#endif
                   continue;
                 }
 
