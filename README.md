@@ -11,9 +11,10 @@ The Ceres project has continued to progress since initial engine introduction at
 Ceres will reach a milestone in October 2024 as the first complete version (1.0) will be released on GitHub, along with a set of neural networks of various sizes and speeds:
 * 256x10
 * 384x12
-* 512x15 (as played at TCEC Swiss y)
-* 768x15 (as played at TCEC Cup 14 Round 32)
-
+* 512x15 (as played at TCEC S27 Swiss 7, placing 3rd)
+* 768x15 (as played at TCEC S27 Cup 14, placing 4th)
+* 512x25 (as played at TCEC S27 Entrance League/League 2)
+* 640x25 (as played at TCEC S27 League 1)
 
 * ## Ceres Neural Networks
 The Ceres neural network architecture closely resembles that of that [Lc0](<https://arxiv.org/abs/2409.12272>), featuring a postnorm encoder stack and multiple output heads (value, policy, ancillary). Importantly, Ceres copies extremely helpful the RPE (relative positional encoding) feature.
@@ -23,9 +24,13 @@ Extensive architecture search as been performed using PyTorch with the [CeresTra
 1. The input preprocessing and output layers are simpler, with merely an embedding layer followed by normalization at input and simple FFN layers as output. The positional encoding takes the simple fo rm of one-hot vectors (for ranks and files).
 2. An added  NonLinear Attention (NLA) feature augments the dot product self attention mechanism by adding an additional linear mappings connected by a nonlinearity in the preprocessing of the K, Q and V matrices. It closely follows the idea as proposed in ["NEURAL ATTENTION: ENHANCING QKV CALCULATION IN SELF-ATTENTION MECHANISM WITH NEURAL NETWORKS
 "](https://arxiv.org/abs/2310.11398). [Tests](./images/NLA_performance.png) suggest it adds about 25 Elo for a cost of about 10% slowdown.
-3. The RPE feature of Lc0 is copied, except that only the K and Q parts are used (not V). Tests suggest this improves speed by about 10% with little or no loss of performance.
+3. Initially the RPE feature of Lc0 was copied, except that only the K and Q parts are used (not V). 
+Subsequently (with the 512x25 net) the RPE was replaced with the prior Smolgen technique of Lc0 due to higher inference speed, thanks to the analysis of Kovax.
 4. A new second-order optimizer [SOAP](https://arxiv.org/abs/2409.11321) is used during training instead of Adam. Tests show that training convergence is sped up by about 30% (iterations) and 20% (wall-clock), with possibly superior performance at final convergence.
-5. Auxiliary output heads of potential use for human interest or aiding search are available:
+5. Experiments and also theoretical analysis from the literature suggest the current generation of chess transformers may not have 
+the optimal shape, in particular they could benefit from greater depth relative to width. This seems intuitively plausible given the 
+"lookahead nature" of a sequential decision making process like Chess. See: [Scale efficiently...](https://arxiv.org/abs/2109.10686)" and [Depth to Width Interplay...](https://arxiv.org/abs/2109.10686).
+6. Auxiliary output heads of potential use for human interest or aiding search are available:
     * value head uncertainty
     * policy head uncertainty
     * projected future game score volatility
