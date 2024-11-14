@@ -1182,15 +1182,6 @@ namespace Ceres.Chess
       return pd.FinalText() + label;
     }
 
-    /// <summary>
-    /// Implements a method recognized by Linqpad which renders position into HTML.
-    /// </summary>
-    /// <returns></returns>
-    object ToDump()
-    {
-      return LINQPad.Util.RawHtml(DumpHTML(""));
-    }
-
     #endregion
 
     #region Start position

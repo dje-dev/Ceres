@@ -39,7 +39,6 @@
     <PackageReference Include="Google.Protobuf.Tools" Version="3.28.3" />
     <PackageReference Include="Google.ProtocolBuffers" Version="2.4.1.555" />
     <PackageReference Include="HtmlAgilityPack" Version="1.11.70" />
-    <PackageReference Include="LINQPad.Runtime" Version="8.3.7" />
     <PackageReference Include="protobuf-net" Version="3.2.45" />
     <PackageReference Include="SharpCompress" Version="0.38.0" />
     <PackageReference Include="XPlot.Plotly" Version="4.1.0" />
