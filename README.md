@@ -23,7 +23,7 @@ Ceres reached three milestones in late 2024:
 
 # Installation
 
-[Installing](instructions_1.md) Ceres involves several steps:
+[Installing](./markup/instructions_1.md) Ceres involves several steps:
 * verifying prerequisites
 * installing supporting libraries (Microsoft .NET, NVIDIA CuDNN)
 * installing Ceres engine (either binary executable or building fron source)
@@ -31,7 +31,6 @@ Ceres reached three milestones in late 2024:
 * (optional) configuring Ceres engine for highest performance (with the NVIDA TensorRT library)
 
 
-* 
 ## Ceres Neural Networks
 The Ceres neural network architecture is similar to that of that [Lc0](<https://arxiv.org/abs/2409.12272>), featuring a postnorm encoder stack and multiple output heads (value, policy, ancillary). Importantly, Ceres copies extremely helpful the RPE (relative positional encoding) feature.
 
@@ -81,14 +80,14 @@ is hoped to provide several important benefits:
 * an integrated set of tools (such as suite or tournament management) which simplify and accelerate testing of new research ideas
 * an implementation using a modern programming language with features such as automatic garbage collections and development environments 
  that provide edit/compile/debug inner loops which are almost instantaneous
-* a convenient testbed for implemneting and evaluating potential new algorithmic innovations
+* a convenient testbed for implementing and evaluating potential new algorithmic innovations
 
 ## State of Development
 
 Ceres was first released at the end of 2020 is still relatively early in its development.
 Support for the neural network backend is current limited to CUDA-capable GPUs.
 
-During 2020 numerous significant enhancments were made, including:
+During 2020 numerous significant enhancements were made, including:
 * added support for Linux operating system
 * implemented the CUDA backend directly in C# (using transliteration and enhancement to the LC0 backend code, 
  including of the CUDA graphs feature for reduced inference latency)
@@ -173,12 +172,12 @@ in other branches of the tree (i.e. are transpositions) thereby taking further a
 substantial information captured in the full memory-resident search tree.
 
 * An "uncertainty boosting" technique slightly incentivizes exploration at nodes 
-with high uncertainty (historical variability of backed-up node evaluationss), in the spirit
+with high uncertainty (historical variability of backed-up node evaluations), in the spirit
 of the UCB algorithm's optimism (more variability might signal more potential upside,
 and/or indicates that the marginal information gain of further visits is higher).
 
 * Extensive use is made of fairly fine-grained parallelism to speed up many operations,
-using the .NET Thread Parallel Library (TPL) for covenience and high efficiency.
+using the .NET Thread Parallel Library (TPL) for convenience and high efficiency.
 
 * Critical components of the engine have been extensively optimized with
 the help of tools such as Intel vTune and careful attention to processor 
@@ -186,13 +185,13 @@ details such as memory alignment, false sharing, NUMA effects, locking primitive
 branch prediction, and maximizing instruction-level parallelism.
 
 * The neural network evaluator framework is extensible with current implementations provided 
-for random, CUDA using Leela Chess Zeronetworks, and an experimental NVIDIA Tensor RT backend
+for random, CUDA using Leela Chess Zero networks, and an experimental NVIDIA Tensor RT backend
 accepting ONNX network files, facilitating experimentation with alternate network architectures
 or inference precisions (8 bit).
 
 ## Configuration and Installation
 
-The setup [instructions](./markup/Setup.md) describe the sequence of steps
+The setup [instructions](./markup/instructions_1.md) describe the sequence of steps
 currently needed to install and configure Ceres. Although installation procedures
 have been simplified since since first release, the process is not yet "single-click" easy
 and does require several steps and careful attention.
