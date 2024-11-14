@@ -2,22 +2,38 @@
 
 <img src="./images/CeresLogoLarge.png" width="436" height="275">
 
+# Overview
+Ceres is a strong UCI chess engine that uses the Monte Carlo Tree Search (MCTS) algorithm 
+and deep neural networks. 
 
-# Ceres Project Update - November 2024
+Importantly, Ceres also intended a comprehensive software platform for chess engine and neural network research,
+designed for modularity, flexibility, and efficiency. 
 
 ## Status
-The Ceres project has continued to progress since initial engine introduction at the end of 2020 and training pipeline introduction at the end of 2023. Most recently, Ceres made her public debut in tournaments at [TCEC](https://www.chessdom.com/leela-chess-zero-wins-tcec-swiss-7/), utilizing her own neural network.She placed 3rd, behind Leela Chess Zero and Stockfish 17. 
+The Ceres project has continued to progress since initial engine introduction at the beginning of 2021.
 
-Ceres will reach a milestone in October 2024 as the first complete version (1.0) will be released on GitHub, along with a set of neural networks of various sizes and speeds:
-* 256x10
-* 384x12
-* 512x15 (as played at TCEC S27 Swiss 7, placing 3rd)
-* 768x15 (as played at TCEC S27 Cup 14, placing 4th)
-* 512x25 (as played at TCEC S27 Entrance League/League 2, placing 1st)
-* 640x25 (as played at TCEC S27 League 1)
+Ceres reached three milestones in late 2024:
+* Publishing of multiple neural networks (of various sizes and speeds) trained using [CeresTrain](https://github.com/dje-dev/CeresTrain) on the [CeresNets](https://github.com/dje-dev/Ceres) repository.
+* Publication of the first official engine release (1.0) on GitHub.
+* First public participation in tournaments, including:
+  - TCEC Swiss 7 (3rd place)
+  - TCEC Cup 14 (4th place)
+  - TCEC S27 Entrance League (1st place)
+  - TCEC League 2 (1st place)
 
-* ## Ceres Neural Networks
-The Ceres neural network architecture closely resembles that of that [Lc0](<https://arxiv.org/abs/2409.12272>), featuring a postnorm encoder stack and multiple output heads (value, policy, ancillary). Importantly, Ceres copies extremely helpful the RPE (relative positional encoding) feature.
+# Installation
+
+[Installing](instructions_1.md) Ceres involves several steps:
+* verifying prerequisites
+* installing supporting libraries (Microsoft .NET, NVIDIA CuDNN)
+* installing Ceres engine (either binary executable or building fron source)
+* configuring Ceres engine
+* (optional) configuring Ceres engine for highest performance (with the NVIDA TensorRT library)
+
+
+* 
+## Ceres Neural Networks
+The Ceres neural network architecture is similar to that of that [Lc0](<https://arxiv.org/abs/2409.12272>), featuring a postnorm encoder stack and multiple output heads (value, policy, ancillary). Importantly, Ceres copies extremely helpful the RPE (relative positional encoding) feature.
 
 Extensive architecture search as been performed using PyTorch with the [CeresTrain training pipeline](<https://github.com/dje-dev/CeresTrain>) to try to identify improvements. The version 1.0 Ceres networks incorporate several additional features or adjustments that are believed to modestly boost performance and functionality:
 

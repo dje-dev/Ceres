@@ -1,5 +1,6 @@
 ## Setting up Ceres
 
+
 Please note that currently the installation and configuration is somewhat involved.
 This is expected to be simplified in the future.
 
@@ -23,13 +24,13 @@ This is expected to be simplified in the future.
 
 #### Building and Running from Source Code (alternate approach)
 Please follow these preliminary steps (as needed) for installing the Ceres development environment:
-* Use git to download the Ceres code from github at https://github.com/dje-dev/ceres
+* Use git to download the Ceres code from GitHub at https://github.com/dje-dev/ceres
 * Download and install Microsoft Visual Studio (free Community Edition) from https://visualstudio.microsoft.com/downloads/
 * You can now launch Visual Studio and open the solution file Ceres.sln under the src directory. 
 For best performance, make sure to choose "Release" from the top toolbar (not "Debug").
 You can then run Ceres by "Run without debugging" command (Ctrl-F5.).
 * Alternately, from a command line in the src subdirectory run "dotnet build -c Release"
-and then navigate to and run the Ceres.exe which will be built under artifcacts subdirectories.
+and then navigate to and run the Ceres.exe which will be built under artifacts subdirectories.
 
 
 #### Configuring Ceres
@@ -42,4 +43,4 @@ This file can be edited using a standard text editor to modify or add entries.
 If Ceres launched run without a Ceres.json file in the working directory,
 the user will be prompted to enter the values of 4 required configuration settings.
 These will then be used to initialize a functional Ceres.json file, which 
-can then be customzied at will using a text editor (or the SETOPT command in Ceres).
+can then be customized at will using a text editor (or the SETOPT command in Ceres).
