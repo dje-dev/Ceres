@@ -112,6 +112,9 @@ namespace Ceres.Base.Misc
     /// <returns></returns>
     private string DoDownloadNet(string ceresNetID, string ceresNetDirectory, ref string targetFileName, bool uciMessagesOnly)
     {
+      // Ceres nets always uppercase (GitHub download is Linux-based and case-sensitive).
+      ceresNetID = ceresNetID.ToUpper();
+
       IAnsiConsole console = uciMessagesOnly ? null : AnsiConsole.Console;
 
       // Allow user to cancel download with Ctrl-C.
