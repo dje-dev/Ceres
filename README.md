@@ -13,7 +13,8 @@ designed for modularity, flexibility, and efficiency.
 The Ceres project has continued to progress since initial engine introduction at the beginning of 2021.
 
 Ceres reached three milestones in late 2024:
-* Publishing of multiple neural networks (of various sizes and speeds) trained using [CeresTrain](https://github.com/dje-dev/CeresTrain) on the [CeresNets](https://github.com/dje-dev/Ceres) repository.
+* Publishing of multiple [neural networks](https://github.com/dje-dev/CeresNets) 
+(of various sizes and speeds) trained using [CeresTrain](https://github.com/dje-dev/CeresTrain) on the [CeresNets](https://github.com/dje-dev/Ceres) repository.
 * Publication of the first official engine release (1.0) on GitHub.
 * First public participation in tournaments, including:
   - TCEC Swiss 7 (3rd place)

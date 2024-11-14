@@ -1,4 +1,5 @@
-7. (Optional) Install NVIDIA TensorRT
+# (Optional) Install NVIDIA TensorRT
+
 Ceres can optionally leverage the NVIDIA TensorRT library to increase neural network evaluation speed.
 The speed improvement in nodes per second is typically 1.5x to 2.0x for NVIDIA GPUs in the 30x0 series or later.
 To install TensorRT:
@@ -31,5 +32,5 @@ For example, find the files under the trt_engines/<computer_name> subdirectory a
 ```
 
 Another way of determining if the engine build was optimal is to look at the file size. Suboptimal engine files are approximately 2x larger than the optimal. 
-The table of Ceres nets [https://github.com/dje-dev/CeresNets] lists the expected optimal sizes of engine files for each of the provided Ceres networks in the "TRT Size(mb)" column.
+The [table](https://github.com/dje-dev/CeresNets) of Ceres nets lists the expected optimal sizes of engine files for each of the provided Ceres networks in the "TRT Size(mb)" column.
 
