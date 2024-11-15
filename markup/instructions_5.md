@@ -6,11 +6,11 @@ Because Ceres supports the UCI command line protocol, you can configure and run 
 
 2. Configure the following UCI options:
 
-   - **Device**: Defaults to `GPU:0`, indicating the GPU with index 0 should be used. To use multiple GPUs:
+   - **Device**: Defaults to `GPU:0`, indicating the GPU with index 0 should be used. Alternately, to use multiple GPUs:
      ```
      setoption name device value GPU:0,1
      ```
-
+   
    - **WeightsFile**: Specifies the neural network to use. There is no default value, so this must be set. For example, to use the smallest available Ceres network (dimension 256 with 10 layers):
      ```
      setoption name weightsfile value C1-256-10
@@ -22,5 +22,8 @@ Because Ceres supports the UCI command line protocol, you can configure and run 
    ```
    go nodes 1000
    ```
+
+The following pages describe how to optionally further configure Ceres (e.g. to use endgame tablebases).
+Importantly, it is possible to install an additional network backend (TensorRT) to approximately double Ceres speed.
 
 [← Previous](instructions_4.md) | [Next →](instructions_6.md)
