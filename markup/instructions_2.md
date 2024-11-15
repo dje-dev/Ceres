@@ -13,6 +13,6 @@ On Linux (e.g. Ubuntu) use the package manager to install:
 Hint: If you are not sure if .NET 8 is already installed, look for an entry beginning with "Microsoft.NETCore.App 8.*" from this command:
   dotnet --list-runtimes
 
-
+Hint: Multiple versions of .NET can safely be installed side-by-side on the same system.
 
 [← Previous](instructions_1.md) | [Next →](instructions_3.md)

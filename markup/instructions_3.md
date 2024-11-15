@@ -15,4 +15,7 @@ Ceres leverages the NVIDIA **CuDNN library** to increase the speed of neural net
    where cudnn64_9.dll
    ```
 
+**Hint**: If you require assistance in editing the system path on Windows, see [this](https://www.c-sharpcorner.com/article/how-to-addedit-path-environment-variable-in-windows-11/)
+useful web page of instructions.
+
 [← Previous](instructions_2.md) | [Next →](instructions_4.md)
