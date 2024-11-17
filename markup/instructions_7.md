@@ -16,9 +16,12 @@ setoption name device value GPU:0#TensorRT
 ```
 
 Hint: If you wish to verify that TensorRT is installed and visible on the system path, issue the following commands and confirm the file is located. 
-      Open a new Windows console or terminal session and type the following commands:
-        where nvinfer_10.dll
-        where nvonnxparser_10.dll
+      Open a new Windows console or terminal session and type the following commands to confirm that 
+      the necessary files are now visible on the system path:
+```
+  where nvinfer_10.dll
+  where nvonnxparser_10.dll
+```
 
 Hint: When running on more recent NVIDIA GPUs, you should expect 1.5x to 2.0x raw neural network speed. This can be tested with the Ceres UCI command "backendbench".
 
