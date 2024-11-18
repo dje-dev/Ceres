@@ -32,7 +32,7 @@ set the desired values this Ceres.json file. For example:
   {
     "SyzygyPath": "c:\\Syzygy",
     "DirCeresNetworks": ".",
-    "DirLC0Networks": "c:\\lc0_nets","
+    "DirLC0Networks": "c:\\lc0_nets",
     "DefaultDeviceSpecString": "gpu:0",
     "DefaultNetworkSpecString": "Ceres:C1-640-25",
   }
