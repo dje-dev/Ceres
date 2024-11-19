@@ -98,7 +98,9 @@ namespace Ceres.Commands
 
 
       if (cmd.ToLower().EndsWith("-h") || cmd.ToLower().EndsWith("help"))
+      {
         HelpCommands.ProcessHelpCommand(cmd);
+      }
 
       // Command consists command name, then options (sequence of key=value pairs), sometimes followed by a FEN
       (string featureName, string args) = SplitLeft(cmd);
@@ -106,7 +108,10 @@ namespace Ceres.Commands
       string fen = null;
 
       // Default feature (if not specified) is UCI
-      if (featureName == null) featureName = "UCI";
+      if (featureName == null) 
+      {
+        featureName = "UCI";
+      }
 
       featureName = featureName.ToUpper();
 
@@ -133,9 +138,14 @@ namespace Ceres.Commands
         }
       }
       else
+      {
         keyValueArgs = args;
+      }
 
-      if (fen != null && fen.ToLower() == "startpos") fen = Position.StartPosition.FEN;
+      if (fen != null && fen.ToLower() == "startpos")
+      {
+        fen = Position.StartPosition.FEN;
+      }
 
       // Extract the feature name
 
@@ -226,7 +236,7 @@ namespace Ceres.Commands
         FeatureBenchmark.DumpBenchmark();
       }
       else if (featureName == "BACKENDBENCH")
-      {
+      {        
         FeatureBenchmarkBackend backendBench = new FeatureBenchmarkBackend();
         backendBench.ParseFields(keyValueArgs);
         backendBench.ExecuteBenchmark(null);
