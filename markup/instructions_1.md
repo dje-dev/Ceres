@@ -19,6 +19,10 @@ Ceres requires the following minimum software/hardware configuration:
 
 If these files are not found and you are sure that CUDA 12.x is installed, the problem is likely that the path to CUDA DLLs is not on the Windows system path.
 
+If you do not yet have CUDA 12.x installed, download and install 
+from the [NVIDIA web site](https://developer.nvidia.com/cuda-downloads).
+
+
 You can search your boot drive (typically **C:\**) to find the directory where the files are located.
 Then, use the **"Edit the System Environment Variables"** applet in the Windows Control Panel to append an entry to the **"Path"** environment variable that references the directory.
 

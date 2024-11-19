@@ -3,8 +3,9 @@
 Ceres can optionally leverage the NVIDIA TensorRT library to increase neural network evaluation speed.
 The speed improvement in nodes per second is typically 1.5x to 2.0x for NVIDIA GPUs in the 30x0 series or later.
 To install TensorRT:
-  a. Download and install version 10x.from the NVIDIA web site at <https://developer.nvidia.com/tensorrt/download/10x.html>. This may require creating a (free) NVIDIA developer account. 
-     Versions from 10.3 thru 10.6 have been tested.
+  a. Download and install version 10x.from the NVIDIA web site at <https://developer.nvidia.com/tensorrt>. 
+   a This may require creating an NVIDIA developer account, but this process is free and immediate. 
+     Any version 10.x should work, (but only versions from 10.3 thru 10.6 have been tested).
   b. After download, unzip the compressed file to a location on your system.
   c. On Windows, the path to the DLLs files must be appended to the system path. For example if the files were downloaded to c:\TensorRT15 then the following PATH entry would be added:
        "C:\TensorRT15\lib"
@@ -15,9 +16,12 @@ setoption name device value GPU:0#TensorRT
 ```
 
 Hint: If you wish to verify that TensorRT is installed and visible on the system path, issue the following commands and confirm the file is located. 
-      Open a new Windows console or terminal session and type the following commands:
-        where nvinfer_10.dll
-        where nvonnxparser_10.dll
+      Open a new Windows console or terminal session and type the following commands to confirm that 
+      the necessary files are now visible on the system path:
+```
+  where nvinfer_10.dll
+  where nvonnxparser_10.dll
+```
 
 Hint: When running on more recent NVIDIA GPUs, you should expect 1.5x to 2.0x raw neural network speed. This can be tested with the Ceres UCI command "backendbench".
 

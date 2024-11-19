@@ -496,7 +496,10 @@ namespace Ceres.Features.UCI
             }
             else
             {
-              BackendBenchEvaluator(EvaluatorDef);
+              if (InitializeEngineIfNeeded())
+              {
+                BackendBenchEvaluator(EvaluatorDef);
+              }
             }
             break;
 
@@ -517,7 +520,10 @@ namespace Ceres.Features.UCI
             }
             else
             {
-              BenchmarkSearchEvaluator(EvaluatorDef, numSeconds);
+              if (InitializeEngineIfNeeded())
+              {
+                BenchmarkSearchEvaluator(EvaluatorDef, numSeconds);
+              }
             }
             break;
 

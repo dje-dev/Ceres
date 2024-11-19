@@ -16,7 +16,8 @@
 ### Configuration File
 
 - A configuration file can be used to list options that are desired as persistent defaults. The file `Ceres.json` is auto-created upon the first execution of Ceres.
-- Ceres reads this configuration file at startup, which contains entries for commonly used settings. Initially, the file is empty:
+- Ceres reads this configuration file at startup, which contains entries for commonly used settings.
+Initially, the file is initialized with the most common settings set to default values:
   ```json
   {
     "SyzygyPath": null,
@@ -25,6 +26,17 @@
     "DefaultDeviceSpecString": "GPU:0"
   }
   ```
-  For example, if you wish to centralize the location of all Ceres networks on the file system, the `DirCeresNetworks` field can be set. Subsequent network downloads or load operations will reference that directory.
+- If you wish to customize Ceres so she always starts with certain customized settings, 
+set the desired values this Ceres.json file. For example:
+  ```json
+  {
+    "SyzygyPath": "c:\\Syzygy",
+    "DirCeresNetworks": ".",
+    "DirLC0Networks": "c:\\lc0_nets",
+    "DefaultDeviceSpecString": "gpu:0",
+    "DefaultNetworkSpecString": "Ceres:C1-640-25",
+  }
+  ```
+
 
 [← Previous](instructions_5.md) | [Next →](instructions_7.md)
