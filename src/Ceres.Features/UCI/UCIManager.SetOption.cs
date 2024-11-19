@@ -203,7 +203,7 @@ namespace Ceres.Features.UCI
 
         case "uci_chess960":
           SetBool(value, ref UCI_Chess960);
-          MGPositionConstants.IsChess960 = UCI_Chess960; // TODO: Replace this with a context-specific flag
+          IsChess960OptionSet = UCI_Chess960;          
           break;
 
         case "maxtreevisits":
@@ -406,8 +406,7 @@ namespace Ceres.Features.UCI
       else
       {
         OutStream.WriteLine("Invalid value, expected true or false");
-      }
-      MGPositionConstants.IsChess960 = value;
+      }      
     }
 
 

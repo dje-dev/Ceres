@@ -58,7 +58,8 @@ namespace Ceres.MCTS.Utils
                                        int? multiPVIndex = null,
                                        bool useParentN = true,
                                        bool showWDL = false,
-                                       bool scoreAsQ = false)
+                                       bool scoreAsQ = false,
+                                       bool isChess960 = false)
     {
       if (manager.TablebaseImmediateBestMove != default)
       {
@@ -76,7 +77,7 @@ namespace Ceres.MCTS.Utils
 
         MCTSNode root = overrideRootMove.IsNotNull ? overrideRootMove : manager.Root;
         float topVScoreToShow = ScoreToShow(scoreAsQ, (float)root.Q);
-        string moveStr = manager.Context.TopVForcedMove.MoveStr(MGMoveNotationStyle.Coordinates);
+        string moveStr = manager.Context.TopVForcedMove.MoveStr(MGMoveNotationStyle.Coordinates, isChess960:isChess960);
         string str = $"info depth 1 seldepth 1 time 0 nodes 1 score cp {topVScoreToShow} pv {moveStr}";
         return str;
       }
@@ -150,8 +151,8 @@ namespace Ceres.MCTS.Utils
       int depthOfBestMoveInTree = wasInstamove ? thisRootNode.Depth : 0;
       int depth = 1 + (int)MathF.Round(manager.Context.AvgDepth - depthOfBestMoveInTree, 0);
 
-      string pvString = multiPVIndex.HasValue ? $"multipv {multiPVIndex} pv {pv.ShortStr()}"
-                                              : $"pv {pv.ShortStr()}";
+      string pvString = multiPVIndex.HasValue ? $"multipv {multiPVIndex} pv {pv.ShortStr(isChess960)}"
+                                              : $"pv {pv.ShortStr(isChess960)}";
 
       int n = thisRootNode.N;
       if (!useParentN && overrideBestMoveNodeAtRoot.IsNotNull) n = overrideBestMoveNodeAtRoot.N;

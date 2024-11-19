@@ -71,7 +71,7 @@ namespace Ceres.Chess.MoveGen
       foreach (MGMove moveTry in moves.MovesArray)
       {
         // Accept moves in any of multiple formats, including Chess 960 (for castling variation)
-        if (String.Equals(moveTry.MoveStr(MGMoveNotationStyle.Coordinates), moveStr, StringComparison.OrdinalIgnoreCase)
+        if (String.Equals(moveTry.MoveStr(MGMoveNotationStyle.Coordinates, true), moveStr, StringComparison.OrdinalIgnoreCase)
          || String.Equals(moveTry.MoveStr(MGMoveNotationStyle.LongAlgebraic), moveStr, StringComparison.OrdinalIgnoreCase)
          || String.Equals(moveTry.MoveStr(MGMoveNotationStyle.ShortAlgebraic), moveStr, StringComparison.OrdinalIgnoreCase))
         {

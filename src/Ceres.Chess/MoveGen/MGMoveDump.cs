@@ -53,6 +53,7 @@ SOFTWARE.
 
 #region Using directives
 
+using ManagedCuda.CudaBlas;
 using System;
 using System.Numerics;
 using System.Text;
@@ -102,14 +103,14 @@ namespace Ceres.Chess.MoveGen
     /// </summary>
     /// <param name="style">The notation style for the string representation of the MGMove.</param>
     /// <returns>The string representation of the MGMove.</returns>
-    public string MoveStr(MGMoveNotationStyle style = MGMoveNotationStyle.LongAlgebraic)
+    public string MoveStr(MGMoveNotationStyle style = MGMoveNotationStyle.LongAlgebraic, bool isChess960 = false)
     {
       if (FromSquareIndex == 0 && ToSquareIndex == 0)
       {
         return "(none)";
       }
 
-      if (IsLegacyCastle)
+      if (!isChess960 && IsLegacyCastle)
       {
         bool isWhite = Piece == MGPositionConstants.MCChessPositionPieceEnum.WhiteKing;
         if (isWhite && FromSquareIndex == 3)
@@ -204,8 +205,7 @@ namespace Ceres.Chess.MoveGen
 
       return "";
     }
-
-
+    
     private string AddPromotions(string s)
     {
       if (PromoteBishop)
