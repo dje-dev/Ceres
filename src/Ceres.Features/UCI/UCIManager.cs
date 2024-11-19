@@ -47,6 +47,7 @@ using Ceres.Features.GameEngines;
 using Ceres.Features.Visualization.TreePlot;
 using Ceres.Features.Visualization.AnalysisGraph;
 using Ceres.Chess.UserSettings;
+using Ceres.Chess.MoveGen.Converters;
 
 #endregion
 
@@ -58,6 +59,11 @@ namespace Ceres.Features.UCI
   /// </summary>
   public partial class UCIManager
   {
+    /// <summary>
+    /// Indicates if the UCI option "UCI_Chess960" is set to true for the current game.
+    /// </summary>
+    private bool IsChess960OptionSet = false;
+
     /// <summary>
     /// Input stream.
     /// </summary>
@@ -670,7 +676,7 @@ namespace Ceres.Features.UCI
         else
         {
           SearchPrincipalVariation pv2 = new SearchPrincipalVariation(CeresEngine.Search.Manager.Root);
-          UCIWriteLine(pv2.ShortStr());
+          UCIWriteLine(pv2.ShortStr(IsChess960OptionSet));
         }
       }
       else
@@ -763,7 +769,7 @@ namespace Ceres.Features.UCI
       return success;
     }
 
-    
+
     private bool TryInitializeEngineIfNeeded()
     {
       try
@@ -780,7 +786,7 @@ namespace Ceres.Features.UCI
         {
           string netSpecString = NNNetSpecificationString.ToSpecificationString(EvaluatorDef.NetCombo, EvaluatorDef.Nets);
           string deviceSpecString = NNDevicesSpecificationString.ToSpecificationString(EvaluatorDef.DeviceCombo, EvaluatorDef.Devices);
-          
+
           UCIWriteLine($"Attempted Network: {netSpecString}");
           UCIWriteLine($"Attempted Device: {deviceSpecString}");
         }
@@ -887,8 +893,8 @@ namespace Ceres.Features.UCI
       else
         throw new Exception($"Illegal position command, expected to start with position fen or position startpos");
 
-      PositionWithHistory newPositionAndMoves = PositionWithHistory.FromFENAndMovesUCI(posString);
-
+      PositionWithHistory newPositionAndMoves = PositionWithHistory.FromFENAndMovesUCI(posString);      
+      
       curPositionIsContinuationOfPrior = newPositionAndMoves.IsIdenticalToPriorToLastMove(curPositionAndMoves);
       if (!curPositionIsContinuationOfPrior && CeresEngine != null)
       {
@@ -1082,7 +1088,7 @@ namespace Ceres.Features.UCI
       OutputUCIInfo(result.Search.Manager, result.Search.SearchRootNode, true);
 
       // Send the best move (using appropriate castling move style).
-      UCIWriteLine("bestmove " + result.Search.BestMove.MoveStr(MGMoveNotationStyle.Coordinates));
+      UCIWriteLine("bestmove " + result.Search.BestMove.MoveStr(MGMoveNotationStyle.Coordinates, IsChess960OptionSet));
 
       return result;
     }
@@ -1095,13 +1101,13 @@ namespace Ceres.Features.UCI
       if (numPV == 1)
       {
         UCIWriteLine(UCIInfo.UCIInfoString(manager, searchRootNode, best == null ? default : best.BestMoveNode,
-                                  showWDL: showWDL, scoreAsQ: scoreAsQ));
+                                  showWDL: showWDL, scoreAsQ: scoreAsQ, isChess960: IsChess960OptionSet));
       }
       else
       {
         // Send top move
         UCIWriteLine(UCIInfo.UCIInfoString(manager, searchRootNode, best.BestMoveNode, 1,
-                                   showWDL: showWDL, useParentN: !perPVCounters, scoreAsQ: scoreAsQ));
+                                   showWDL: showWDL, useParentN: !perPVCounters, scoreAsQ: scoreAsQ, isChess960: IsChess960OptionSet));
 
         // Send other moves visited
         MCTSNode[] sortedN = searchRootNode.ChildrenSorted(s => -(float)s.N);
