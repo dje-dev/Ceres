@@ -174,14 +174,14 @@ namespace Ceres.MCTS.Utils
     /// A short descriptive string listing the PV moves (suitable for UCI output).
     /// </summary>
     /// <returns></returns>
-    public string ShortStr()
+    public string ShortStr(bool isChess960 = false)
     {
 
       if (Nodes.Count == 1)
       {
         // In the special case of only root evaluated, show the best policy move so the pv is not completely empty.
         // Otherwise, we choose not to show the best policy move at the terminal node.        
-        return Nodes[0].BestMoveInfo(false).BestMove.MoveStr(MGMoveNotationStyle.Coordinates);
+        return Nodes[0].BestMoveInfo(false).BestMove.MoveStr(MGMoveNotationStyle.Coordinates, isChess960: isChess960);
       }
 
       StringBuilder sb = new StringBuilder();
@@ -191,7 +191,7 @@ namespace Ceres.MCTS.Utils
       {
         if (haveSkippedSearchRoot)
         {         
-          sb.Append(node.Annotation.PriorMoveMG.MoveStr(MGMoveNotationStyle.Coordinates) + " ");
+          sb.Append(node.Annotation.PriorMoveMG.MoveStr(MGMoveNotationStyle.Coordinates, isChess960) + " ");
         }
         else
         {
