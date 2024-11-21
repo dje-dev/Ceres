@@ -291,7 +291,7 @@ namespace Ceres.APIExamples
       NET1 = "d4ae6e742b90_SP_640_35_20H_FFN3_NLA_SMOL_SP_B1_9bn_fp16_last.onnx";
       //NET2 = "d4ae6e742b90_SP_640_35_20H_FFN3_NLA_SMOL_SP_B1_9bn_fp16_last.onnx";
       //NET2 = "HOP_SP_640_25_20H_FFN3_NLA_SMOL_SP_B1_65bn_fix2_fp16_3199991808.onnx";
-      NET2 = "HOP_SP_640_25_20H_FFN3_NLA_SMOL_SP_B1_65bn_fix4_fp16_3999989760.onnx";
+       NET2 = "HOP_SP_640_25_20H_FFN3_NLA_SMOL_SP_B1_65bn_fix4_fp16_3999989760.onnx";
 
       //NET2 = "HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_75bn_fp16_last.onnx";
       //NET1 = "C1-640-25|POLUNC";
@@ -311,7 +311,7 @@ namespace Ceres.APIExamples
       //      NET2 = "Ceres:C1-512-25.onnx";
       //      NET2 = NET_768_15_NLA_9bn;
 
-      //      NET2 = "Ceres:C1-512-25";
+//      NET2 = "Ceres:C1-640-25";
       //      NET2 = "~BT4_FP16_TRT";
       //      NET2 = "~BT4_700k_ONNX";
       //      NET1 = "~T1_256_RL_TRT";
@@ -347,7 +347,7 @@ NET2 = FN_BASELINE;
 
 
       SearchLimit limit1 = SearchLimit.NodesPerMove(1);
-      limit1 = SearchLimit.BestValueMove;
+      //limit1 = SearchLimit.BestValueMove;
       //      limit1 = new SearchLimit(SearchLimitType.SecondsForAllMoves, 60, false, 0.1f);
       SearchLimit limit2 = limit1;// SearchLimit.NodesPerMove(45);
 //      limit1 = limit2 = SearchLimit.SecondsForAllMoves(30, .5f);
@@ -659,7 +659,7 @@ SearchLimit limit2 = SearchLimit.NodesPerMove(350_000);
       EnginePlayerDef playerLC0_2 = ENABLE_LC0_2 ? new EnginePlayerDef(engineDefLC2, limit2) : null;
 
 
-      const bool RUN_SUITE = false;
+      const bool RUN_SUITE = true;
       if (RUN_SUITE)
       {
         // NET2 = null;
