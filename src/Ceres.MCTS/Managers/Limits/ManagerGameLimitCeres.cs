@@ -19,7 +19,6 @@ using Ceres.Chess;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.MTCSNodes;
 
-
 #endregion
 
 namespace Ceres.MCTS.Managers.Limits
@@ -57,7 +56,7 @@ namespace Ceres.MCTS.Managers.Limits
         // small relative to the average over a trailing few moves, 
         // to make sure any move decision is based sufficiently large tree.
         // Never veto if only very little time remains because
-        // instamoves may be particularly helpful to avoid fixed overhead.
+        // instamoves may be particularly helpful to avoid fixed overhead of tree restructuring.
         const float LOW_TIME_THRESHOLD_SECS = 3;
         const int FINAL_N_LOOKBACK_MOVES = 5;
         const float MIN_RELATIVE_TREE_SIZE = 0.70f;
@@ -85,7 +84,7 @@ namespace Ceres.MCTS.Managers.Limits
     /// </summary>
     /// <param name="inputs"></param>
     /// <returns></returns>
-    float FractionOfBasePerMoveToUse(ManagerGameLimitInputs inputs)
+    float FractionOfBasePerMoveToUse(ManagerGameLimitInputs inputs, bool earlyGameExtension)
     {
       // When we are behind then it's worth taking a gamble and using more time
       // but when we are ahead, take a little less time to be sure we don't err in time pressure.
@@ -99,11 +98,11 @@ namespace Ceres.MCTS.Managers.Limits
       };
 
 
-      // Spend 50% more on first move of game (definitely no tree reuse, etc.)
-      float factorFirstMove = inputs.IsFirstMoveOfGame ? 1.50f : 1.0f;
+      // Spend 60% more on first move of game (definitely no tree reuse, etc.)
+      float factorFirstMove = inputs.IsFirstMoveOfGame ? 1.60f : 1.0f;
 
       // Make a divisor which is between about 11 and 17
-      // and a incresing function of the piece count.
+      // and a increasing function of the piece count.
       // Note that this is a relatively small number because
       //  - some moves will not do any search at all (due to instamoves), and
       //  - many moves will not actually run the full search duration (due to smart pruning)
@@ -127,9 +126,16 @@ namespace Ceres.MCTS.Managers.Limits
       // because games are often decided early on missed tactics. 
       // But for longer games (e.g. 3 to 5 minutes) somewhat lower values seem better.
       // Extensive tests at (300 + 5) suggested perhaps 0.70 optimal against LC0, 0.67 against Stockfish.
-      const float BASE_MULTIPLIER = 0.68f;
 
-      float ret = Aggressiveness * BASE_MULTIPLIER * (1.0f / baseDivisor) * factorWinningness * factorFirstMove;
+      // In observing LTC games vs Stockfish, Ceres seemed to be extremely conservative in clock use.
+      // Therefore an adjustment was made to use more time in the early game (first 40% of time used).
+      // However even in this early phases, extensive testing (versus SF) showed that
+      // large increases in time spent are Elo negative; only modest increases are slightly helpful (5 to 10 Elo).
+      const float BASE_MULTIPLIER_EARLY = 0.72f; // use more time early in game
+      const float BASE_MULTIPLIER_NOT_EARLY = 0.68f;
+
+      float adjustedBaseMultiplier = earlyGameExtension ? BASE_MULTIPLIER_EARLY : BASE_MULTIPLIER_NOT_EARLY;
+      float ret = Aggressiveness * adjustedBaseMultiplier * (1.0f / baseDivisor) * factorWinningness * factorFirstMove;
 
       return ret;
     }
@@ -156,10 +162,27 @@ namespace Ceres.MCTS.Managers.Limits
 
     /// Determines how much time or nodes resource to
     /// allocate to the the current move in a game subject to
-    /// a limit on total numbrer of time or nodes over 
+    /// a limit on total number of time or nodes over 
     /// some number of moves (or possibly all moves).
     public ManagerGameLimitOutputs ComputeMoveAllocation(MCTSearch search, ManagerGameLimitInputs inputs)
     {
+      // Check if the early game extension mode should be enabled.
+      bool earlyGameExtensionMode = false;
+      if (inputs.TargetLimitType == SearchLimitType.SecondsPerMove // TODO: Extend this to NodesPerMove?
+       && inputs.PriorMoveStats != null
+       && inputs.PriorMoveStats.Count >= 2 // i.e. not first move
+          )
+      {
+        float totalGameTimeAtLeast = inputs.RemainingFixedSelf + inputs.PriorMoveStats[^2].ClockSecondsAlreadyConsumed;
+        float fractionUsed = inputs.PriorMoveStats[^2].ClockSecondsAlreadyConsumed / totalGameTimeAtLeast;
+
+        const float EARLY_GAME_FRAC_TIME = 0.4f; // Extension only enabled in first 40% of time used
+        if (fractionUsed < EARLY_GAME_FRAC_TIME)
+        {
+          earlyGameExtensionMode = true;
+        }
+      }
+
       ManagerGameLimitOutputs Return(float value, float extensionFraction)
         => new ManagerGameLimitOutputs(new SearchLimit(inputs.TargetLimitType, value,
                                                        fractionExtensibleIfNeeded: extensionFraction,
@@ -188,7 +211,8 @@ namespace Ceres.MCTS.Managers.Limits
 
       }
 
-      float baseTimeToUse = inputs.RemainingFixedSelf * FractionOfBasePerMoveToUse(inputs);
+      float baseTimeToUse = inputs.RemainingFixedSelf * FractionOfBasePerMoveToUse(inputs, earlyGameExtensionMode);
+
 
       float fractionOfIncrementToUse = 0;
       if (inputs.IncrementSelf > 0)
