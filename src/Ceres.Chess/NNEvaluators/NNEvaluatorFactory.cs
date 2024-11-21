@@ -369,6 +369,11 @@ namespace Ceres.Chess.NNEvaluators
           float value1Temperature = CheckOptionSpecifiedElseDefault(netDef, options, "V1TEMP", DEFAULT_TEMP1);
           float fractionV2 = CheckOptionSpecifiedElseDefault(netDef, options, "V2FRAC", DEFAULT_V2_FRACTION);
           float policyUncertaintyScaling = CheckOptionSpecifiedElseDefault(netDef, options, "POLUNC_SCALE", DEFAULT_POLUNC_SCALE);
+          
+          if (options != null && options.Keys.Contains("POLUNC"))
+          {
+            policyUncertaintyScaling = 0.5f;
+          }
 
           bool board4Mode = options != null && options.Keys.Contains("4BOARD");
           NNEvaluatorOptionsCeres optionsCeres = new NNEvaluatorOptionsCeres()
@@ -379,8 +384,8 @@ namespace Ceres.Chess.NNEvaluators
             UseAction = board4Mode,
             UsePriorState = board4Mode,
 
-            ValueHead1Temperature = value1Temperature,
-            FractionValueHead2 = fractionV2,
+            ValueHead1Temperature =  value1Temperature,
+            FractionValueHead2 = options != null && options.Keys.Contains("USEV2") ? 0.4f : 0,//fractionV2,
             PolicyUncertaintyTemperatureScalingFactor = policyUncertaintyScaling,
           }; 
           
