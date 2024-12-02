@@ -16,7 +16,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+
 using Ceres.Base.Misc;
+
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
 using static Ceres.Chess.PieceType;
@@ -37,6 +39,7 @@ namespace Ceres.Chess.Textual
     /// </summary>
     public const string StartFEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
+
     /// <summary>
     /// Static factory method to create a FENParseResult from a FEN string.
     /// 
@@ -56,6 +59,7 @@ namespace Ceres.Chess.Textual
         throw new Exception($"Unable to parse the FEN: {fen}");
       }
     }
+
 
     /// <summary>
     /// Worker method to do FEN parsing.
@@ -81,23 +85,35 @@ namespace Ceres.Chess.Textual
       {
         char thisChar = fen[charIndex++];
 
-        if (thisChar == ' ') break;
+        if (thisChar == ' ') 
+        {
+          break;
+        }
 
         if (thisChar == '/')
         {
-          if (curRank >= 7) throw new Exception("Illegal FEN, too many squares");
+          if (curRank >= 7) 
+          {
+            throw new Exception("Illegal FEN, too many squares");
+          }
           curRank++;
           curFile = 0;
         }
         else if (char.IsDigit(thisChar))
         {
           curFile += (thisChar - '0');
-          if (curFile > 8) throw new Exception("Illegal FEN, too many files");
+          if (curFile > 8) 
+          {
+            throw new Exception("Illegal FEN, too many files");
+          }
         }
         else
         {
           Piece thisPiece = byteToPieces[thisChar];
-          if (thisPiece.Type == PieceType.None) throw new Exception("Illegal FEN, found piece character " + thisChar);
+          if (thisPiece.Type == PieceType.None) 
+          {
+            throw new Exception("Illegal FEN, found piece character " + thisChar);
+          }
           pieces.Add(new PieceOnSquare(Square.FromFileAndRank(curFile, 7 - curRank), thisPiece));
           curFile++;
         }
@@ -155,8 +171,8 @@ namespace Ceres.Chess.Textual
         MGPosition pos = default;
         Square whiteKingSquare = default;
         Square blackKingSquare = default;
-        List<Square> whiteRookSquares = new();
-        List<Square> blackRookSquares = new();
+        List<Square> whiteRookSquares = new(2);
+        List<Square> blackRookSquares = new(2);
 
         foreach (PieceOnSquare ps in pieces)
         {
@@ -195,28 +211,28 @@ namespace Ceres.Chess.Textual
         foreach (char c in castlingRights)
         {
           //first check for normal castling rights
-          if (c == 'K')
+          if (c == 'K' && whiteRookSquares.Count > 0)
           {
             Square rook = whiteRookSquares.First(x => x.FileChar > whiteKingSquare.FileChar); //this is needed when KQkq castling rights is in use in chess960
             whiteCanOO = true;
             rookInfo.WhiteKRInitPlacement = rook.SquareIndexStartH1;
           }
 
-          else if (c == 'Q')
+          else if (c == 'Q' && whiteRookSquares.Count > 0)
           {
             Square rook = whiteRookSquares.First(x => x.FileChar < whiteKingSquare.FileChar);
             whiteCanOOO = true;
             rookInfo.WhiteQRInitPlacement = rook.SquareIndexStartH1;
           }
           
-          else if (c == 'k')
+          else if (c == 'k' && blackRookSquares.Count > 0)
           {
             Square rook = blackRookSquares.First(x => x.FileChar > blackKingSquare.FileChar);
             blackCanOO = true;
             rookInfo.BlackKRInitPlacement = (byte)(rook.SquareIndexStartH1 - 56);
           }
           
-          else if (c == 'q')
+          else if (c == 'q' && blackRookSquares.Count > 0)
           {
             Square rook = blackRookSquares.First(x => x.FileChar < blackKingSquare.FileChar);
             blackCanOOO = true;
@@ -225,7 +241,7 @@ namespace Ceres.Chess.Textual
 
           else //next chess960 castling rights
           {
-            if (char.IsUpper(c)) // White's castling rights
+            if (char.IsUpper(c) && whiteRookSquares.Count > 0) // White's castling rights
             {
               bool kingIsLowerChar = whiteKingSquare.FileChar < c;
               Square whiteRook = whiteRookSquares.First(x => x.FileChar == c);
@@ -242,7 +258,7 @@ namespace Ceres.Chess.Textual
 
             }
 
-            if (char.IsLower(c)) // black's castling rights
+            if (char.IsLower(c) && blackRookSquares.Count > 0) // black's castling rights
             {
               bool kingIsLowerChar = blackKingSquare.FileChar < Char.ToUpper(c);
               Square blackRook = blackRookSquares.First(x => x.FileChar == Char.ToUpper(c));
@@ -274,19 +290,29 @@ namespace Ceres.Chess.Textual
       {
         // Try to work around error in FEN whereby dash is missing, and move number immediately follows
         if (numEPChars == 0 && char.IsDigit(fen[charIndex]))
+        {
           break;
+        }
 
         char thisChar = fen[charIndex++];
         if (thisChar == '-' || thisChar == ' ')
+        {
           break;
+        }
         else
         {
           if (numEPChars == 0)
+          {
             epFile = char.ToLower(thisChar) - 'a';
+          }
           else if (numEPChars == 1)
+          {
             epRank = char.ToLower(thisChar) - '0';
+          }
           else
+          {
             throw new Exception("too many en passant characters");
+          }
 
           numEPChars++;
         }
@@ -299,12 +325,16 @@ namespace Ceres.Chess.Textual
         if (numEPChars == 2)
         {
           if (epFile > (byte)PositionMiscInfo.EnPassantFileIndexEnum.FileH)
+          {
             throw new Exception("Invalid en passant file in FEN");
+          }
           else
             epColIndex = (PositionMiscInfo.EnPassantFileIndexEnum)epFile;
         }
         else
+        {
           throw new Exception("Invalid en passant in FEN");
+        }
       }
 
       SkipAnySpacesOrDash(); // Sometimes we see ill-formed FENs that end with extaneous dash, e.g. "w q - -" 
@@ -315,9 +345,13 @@ namespace Ceres.Chess.Textual
       {
         char thisChar = fen[charIndex++];
         if (thisChar == ' ')
+        {
           break;
+        }
         else
+        {
           move50Count = move50Count * 10 + (thisChar - '0');
+        }
       }
 
       SkipAnySpaces();
