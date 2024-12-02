@@ -8,43 +8,58 @@ using System.Threading.Tasks;
 namespace Ceres.Chess.MoveGen
 {
   /// <summary>
-  /// Efficiently represents initial rook palcement information used in Chess960.
+  /// Efficiently represents initial rook placement information used in Chess960.
   /// Each of the 4 fields supports values in the range [0..15].
   /// 
-  /// Initialized such that values returned by default object will return as 15.
+  /// The internal representation is constructed such that a default value of 
+  /// rookInitPlacementBits = 0 corresponds to:
+  ///   WhiteKRInitPlacement = 0, 
+  ///   WhiteQRInitPlacement = 7,
+  ///   BlackKRInitPlacement = 0, 
+  ///   BlackQRInitPlacement = 7.
   /// </summary>
   [StructLayout(LayoutKind.Sequential, Pack = 1)]
   public record struct RookPlacementInfo
   {
-    // Data representation. Encoded such that the default C#
-    // value of 0 will map to our default value of 15.
+    /// <summary>
+    /// Raw data representation.
+    /// </summary>
     private ushort rookInitPlacementBits;
 
-    private static byte EncodeValue(byte value) => (byte)(((value + 1) & 0x0F) % 16);
-    private static byte DecodeValue(byte value) => (byte)(((value - 1) & 0x0F) % 16);
+    // Encoding logic to pack the 4 fields into a single ushort.
+    private static byte EncodeValue(byte value, byte defaultValue) => (byte)((value - defaultValue) & 0x0F);
+
+    // Decoding logic to unpack the 4 fields from a single ushort.
+    private static byte DecodeValue(byte rawValue, byte defaultValue) => (byte)((rawValue + defaultValue) & 0x0F);
+
+    // Constants to define the default value mapping for each field
+    private const byte WhiteKRDefault = 0;
+    private const byte WhiteQRDefault = 7;
+    private const byte BlackKRDefault = 0;
+    private const byte BlackQRDefault = 7;
 
     public byte WhiteKRInitPlacement
     {
-      get => DecodeValue((byte)((rookInitPlacementBits >> 12) & 0x0F)); // Extract bits 12-15
-      set => rookInitPlacementBits = (ushort)((rookInitPlacementBits & ~(0x0F << 12)) | (EncodeValue(value) << 12)); // Set bits 12-15
+      get => DecodeValue((byte)((rookInitPlacementBits >> 12) & 0x0F), WhiteKRDefault); // Extract and decode bits 12-15
+      set => rookInitPlacementBits = (ushort)((rookInitPlacementBits & ~(0x0F << 12)) | (EncodeValue(value, WhiteKRDefault) << 12)); // Encode and set bits 12-15
     }
 
     public byte WhiteQRInitPlacement
     {
-      get => DecodeValue((byte)((rookInitPlacementBits >> 8) & 0x0F)); // Extract bits 8-11
-      set => rookInitPlacementBits = (ushort)((rookInitPlacementBits & ~(0x0F << 8)) | (EncodeValue(value) << 8)); // Set bits 8-11
+      get => DecodeValue((byte)((rookInitPlacementBits >> 8) & 0x0F), WhiteQRDefault); // Extract and decode bits 8-11
+      set => rookInitPlacementBits = (ushort)((rookInitPlacementBits & ~(0x0F << 8)) | (EncodeValue(value, WhiteQRDefault) << 8)); // Encode and set bits 8-11
     }
 
     public byte BlackKRInitPlacement
     {
-      get => DecodeValue((byte)((rookInitPlacementBits >> 4) & 0x0F)); // Extract bits 4-7
-      set => rookInitPlacementBits = (ushort)((rookInitPlacementBits & ~(0x0F << 4)) | (EncodeValue(value) << 4)); // Set bits 4-7
+      get => DecodeValue((byte)((rookInitPlacementBits >> 4) & 0x0F), BlackKRDefault); // Extract and decode bits 4-7
+      set => rookInitPlacementBits = (ushort)((rookInitPlacementBits & ~(0x0F << 4)) | (EncodeValue(value, BlackKRDefault) << 4)); // Encode and set bits 4-7
     }
 
     public byte BlackQRInitPlacement
     {
-      get => DecodeValue((byte)(rookInitPlacementBits & 0x0F)); // Extract bits 0-3
-      set => rookInitPlacementBits = (ushort)((rookInitPlacementBits & ~0x0F) | EncodeValue(value)); // Set bits 0-3
+      get => DecodeValue((byte)(rookInitPlacementBits & 0x0F), BlackQRDefault); // Extract and decode bits 0-3
+      set => rookInitPlacementBits = (ushort)((rookInitPlacementBits & ~0x0F) | EncodeValue(value, BlackQRDefault)); // Encode and set bits 0-3
     }
   }
 }
