@@ -97,7 +97,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
 
       if (validatePolicy)
       {
-        ValidateMoves(posTraining, in tpgRecord, "training (source)");
+        ValidateMoves(in posTraining, in tpgRecord, "training (source)");
       }
 
     }
@@ -113,15 +113,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     public static unsafe void Validate(in TPGRecord tpgRecord, bool validatePolicy = true)
     {
       ValidateBasic(in tpgRecord);
-
-      Position posCur = tpgRecord.HistoryPosition(0);
-      Position posPrior = tpgRecord.HistoryPosition(1);
-      bool ok = posPrior.PieceCount == 0 || MGPositionReachability.IsProbablyReachable(posPrior.ToMGPosition, posCur.ToMGPosition);
-      if (!ok)
-      {
-        tpgRecord.Dump();
-        throw new Exception("FinalPosition does not look reachable from prior position " + posPrior.FEN + " -- " + posCur.FEN);
-      }
+      ValidateHistoryReachability(in tpgRecord);
 
       if (validatePolicy)
       {
@@ -157,7 +149,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     /// <param name="pos"></param>
     /// <param name="tpgRecord"></param>
     /// <param name="desc"></param>
-    static unsafe void ValidateMoves(Position pos, in TPGRecord tpgRecord, string desc)
+    static unsafe void ValidateMoves(in Position pos, in TPGRecord tpgRecord, string desc)
     {
       MGMoveList legalMoves = new MGMoveList();
       MGMoveGen.GenerateMoves(pos.ToMGPosition, legalMoves);
@@ -182,7 +174,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     }
 
     /// <summary>
-    /// Validates that seqeuence of history positions are valid,
+    /// Validates that sequence of history positions are valid,
     /// i.e. reachable from each other in on move.
     /// </summary>
     /// <param name="tpgRecord"></param>
@@ -208,8 +200,13 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
       bool ok = posPrior.PieceCount == 0 || MGPositionReachability.IsProbablyReachable(posPrior.ToMGPosition, posCur.ToMGPosition);
       if (!ok)
       {
-        tpgRecord.Dump();
-        throw new Exception("At history index " + priorIndex + " position does not look reachable from prior position " + posPrior.FEN + " --> " + posCur.FEN);
+        bool priorLooksLikeFillIn = posCur == posPrior.Reversed;
+        if (!priorLooksLikeFillIn)
+        {
+          // TODO: consider also verifying that once a fill-in appears it then appears for all subsequent positions.
+          tpgRecord.Dump();
+          throw new Exception("At history index " + priorIndex + " position does not look reachable from prior position " + posPrior.FEN + " --> " + posCur.FEN);
+        }
       }
     }
 
