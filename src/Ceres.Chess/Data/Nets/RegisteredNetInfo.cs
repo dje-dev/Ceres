@@ -15,14 +15,10 @@
 
 #endregion
 
+using Ceres.Chess.NNEvaluators.Defs;
+
 namespace Ceres.Chess.Data.Nets
 {
-  public enum ReferenceNetType
-  {
-    LC0,
-    Ceres
-  }
-
   /// <summary>
   /// Describes a registered network.
   /// </summary>
@@ -36,7 +32,7 @@ namespace Ceres.Chess.Data.Nets
     /// <summary>
     /// Type of net (e.g. LC0 or Ceres).
     /// </summary>
-    public readonly ReferenceNetType NetType;
+    public readonly NNEvaluatorType NetType;
 
     /// <summary>
     /// Specification string used to load the net using NNEvaluator.FromSpecification.
@@ -49,7 +45,7 @@ namespace Ceres.Chess.Data.Nets
     /// <param name="id"></param>
     /// <param name="netType"></param>
     /// <param name="netSpecificationString"></param>
-    public RegisteredNetInfo(string id, ReferenceNetType netType, string netSpecificationString)
+    public RegisteredNetInfo(string id, NNEvaluatorType netType, string netSpecificationString)
     {
       ID = id;
       NetType = netType;

@@ -211,7 +211,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Internal
         if (RegisteredNets.Aliased.TryGetValue(netID, out RegisteredNetInfo baseline))
         {
           // Resolve to underlying network specification, call recursively.
-          return ExtractEvaluatorTypeAndNetID(baseline.NetSpecificationString);
+          return (baseline.NetType, baseline.ID);
         }
         else
         {
@@ -230,16 +230,6 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Internal
       {
         thisNetID = netStrWithPrecision.Substring(6);
         NN_EVAL_TYPE = NNEvaluatorType.Ceres;
-      }
-      else if (netStrWithPrecision.ToUpper().StartsWith("LC0_ONNX_ORT:"))
-      {
-        thisNetID = netStrWithPrecision.Substring(13);
-        NN_EVAL_TYPE = NNEvaluatorType.LC0ViaONNXViaORT;
-      }
-      else if (netStrWithPrecision.ToUpper().StartsWith("LC0_ONNX_TRT:"))
-      {
-        thisNetID = netStrWithPrecision.Substring(13);
-        NN_EVAL_TYPE = NNEvaluatorType.LC0ViaONNXViaTRT;
       }
       else if (netStrWithPrecision.ToUpper().StartsWith("ONNX_TRT:"))
       {

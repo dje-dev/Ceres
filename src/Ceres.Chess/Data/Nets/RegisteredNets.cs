@@ -18,6 +18,7 @@ using System.Collections.Generic;
 
 using Ceres.Chess.UserSettings;
 using Ceres.Chess.LC0.NNFiles;
+using Ceres.Chess.NNEvaluators.Defs;
 
 #endregion
 
@@ -105,6 +106,7 @@ namespace Ceres.Chess.Data.Nets
         {"T1_256_RL_TRT", ONNXNet16LC0("t1-256x10-rl-base-swa-3860000_fp16", true) },
         {"T1_256_RL_SPSA_TRT", ONNXNet16LC0("t1-256x10-rl-base-swa-3860000-SPSA-value-and-policy-200.pb.gz_fp16", true) },
 
+        {"T1_512_TRT", ONNXNet16LC0("t1-512x15x8h-distilled-swa-3395000_fp16", true) },
         {"T1_512_RL_NATIVE", SimpleLC0Net("t1-512x15-rl-base-swa-3860000.pb.gz") },
         {"T1_512_RL", ONNXNet16LC0("t1-512x15-rl-base-swa-3860000_fp16") },
         {"T1_512_RL_TRT", ONNXNet16LC0("t1-512x15-rl-base-swa-3860000_fp16", true) },
@@ -168,12 +170,12 @@ namespace Ceres.Chess.Data.Nets
                                                                           CeresUserSettingsManager.Settings.DirCeresNetworks ?? ".", netID);
 
 
-    static RegisteredNetInfo SimpleLC0Net(string netID) => new RegisteredNetInfo(netID, ReferenceNetType.LC0, netID);
+    static RegisteredNetInfo SimpleLC0Net(string netID) => new RegisteredNetInfo(netID, NNEvaluatorType.LC0, netID);
 
-    static RegisteredNetInfo ONNXNet16LC0(string netID, bool tensorRT = false) =>  new (netID, ReferenceNetType.LC0, MakeDesc(netID, true, tensorRT) + "#16");
-    static RegisteredNetInfo ONNXNet32LC0(string netID, bool tensorRT = false) => new (netID, ReferenceNetType.Ceres, MakeDesc(netID, true, tensorRT) + "#32");
-    static RegisteredNetInfo ONNXNet16Ceres(string netID, bool tensorRT = false) => new(netID, ReferenceNetType.LC0, MakeDesc(netID, false, tensorRT) + "#16");
-    static RegisteredNetInfo ONNXNet32Ceres(string netID) => new(netID, ReferenceNetType.Ceres, MakeDesc(netID, false, false) + "#32");
+    static RegisteredNetInfo ONNXNet16LC0(string netID, bool tensorRT = false) =>  new (netID, tensorRT ? NNEvaluatorType.ONNXViaTRT : NNEvaluatorType.ONNXViaORT, MakeDesc(netID, true, tensorRT) + "#16");
+    static RegisteredNetInfo ONNXNet32LC0(string netID, bool tensorRT = false) => new (netID, tensorRT ? NNEvaluatorType.ONNXViaTRT : NNEvaluatorType.ONNXViaORT, MakeDesc(netID, true, tensorRT) + "#32");
+    static RegisteredNetInfo ONNXNet16Ceres(string netID, bool tensorRT = false) => new(netID, tensorRT ? NNEvaluatorType.Ceres : NNEvaluatorType.Ceres, MakeDesc(netID, false, tensorRT) + "#16");
+    static RegisteredNetInfo ONNXNet32Ceres(string netID) => new(netID, NNEvaluatorType.Ceres, MakeDesc(netID, false, false) + "#32");
 
     #endregion
   }

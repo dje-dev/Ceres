@@ -305,12 +305,6 @@ namespace Ceres.Chess.NNEvaluators
           ret = new NNEvaluatorRandom(NNEvaluatorRandom.RandomType.NarrowPolicy, true);
           break;
 
-        case NNEvaluatorType.LC0ViaONNXViaORT:
-          throw new NotImplementedException();
-
-        case NNEvaluatorType.LC0ViaONNXViaTRT:
-          throw new NotImplementedException();
-
         case NNEvaluatorType.Ceres:
           string[] CERES_ENGINE_TYPES = { "CUDA", "CUDA16", "CUDA32",
                                            "TENSORRT", "TENSORRT16", "TENSORRT32",
@@ -385,6 +379,7 @@ namespace Ceres.Chess.NNEvaluators
             UsePriorState = board4Mode,
 
             ValueHead1Temperature =  value1Temperature,
+
             FractionValueHead2 = options != null && options.Keys.Contains("USEV2") ? 0.4f : 0,//fractionV2,
             PolicyUncertaintyTemperatureScalingFactor = policyUncertaintyScaling,
           }; 

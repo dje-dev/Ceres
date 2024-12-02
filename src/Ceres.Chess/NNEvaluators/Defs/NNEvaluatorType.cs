@@ -31,16 +31,6 @@ namespace Ceres.Chess.NNEvaluators.Defs
     Ceres,
 
     /// <summary>
-    /// Leela Zero network, run via embedded ONNX file and ONNX runtime with CUDA execution provider
-    /// </summary>
-    LC0ViaONNXViaORT,
-
-    /// <summary>
-    /// Leela Zero network, run via embedded ONNX file and ONNX runtime with TensorRT execution provider
-    /// </summary>
-    LC0ViaONNXViaTRT,
-
-    /// <summary>
     /// In ONNX format to be run via ONNX runtime via CUDA execution provider
     /// </summary>
     ONNXViaORT,
