@@ -901,14 +901,17 @@ namespace Ceres.Chess.EncodedPositions
 
 
     /// <summary>
-    /// Returns the Kullback-Leibler divergence of this policy from another policy.
+    /// Returns the Kullback-Leibler divergence of this policy from another policy
+    /// (this is P and vOld is Q).
+    /// 
+    /// TODO: Improve efficiency (loop over many items, allocate float arrays).
     /// </summary>
-    /// <param name="vOld"></param>
+    /// <param name="q"></param>
     /// <returns></returns>
-    public readonly float KLDWith(in CompressedPolicyVector vOld)
+    public readonly float KLDWith(in CompressedPolicyVector q)
     {
       float[] decoded = this.DecodedNoValidate;
-      float[] otherDecoded = vOld.DecodedNoValidate;
+      float[] otherDecoded = q.DecodedNoValidate;
 
       float sum = 0;
       for (int i = 0; i < EncodedPolicyVector.POLICY_VECTOR_LENGTH; i++)
