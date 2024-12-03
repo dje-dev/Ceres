@@ -201,14 +201,15 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
 
     /// <summary>
     /// Returns the EncodedMove corresponding to a given neural network index.
-    /// NOTE: This is disabled. The preliminary implementation (commented out)
+    /// NOTE: Warning: this preliminary implementation (commented out)
     ///       does not properly set the Castling and Promotion flags in EncodedMove
     ///       and probably should.
+    /// TODO: use the TPGRecord last position to determine and set these flags.
     /// </summary>
     /// <param name="i"></param>
     /// <returns></returns>
     /// <exception cref="NotImplementedException"></exception>
-    public readonly EncodedMove MoveAtIndex(int i) => throw new NotImplementedException("see comment");// EncodedMove.FromNeuralNetIndex(i);
+    public readonly EncodedMove MoveAtIndex(int i) => EncodedMove.FromNeuralNetIndex(i); // N.B. see comment above
 
     /// <summary>
     /// Array of 64 squares with piece information, history, etc.
@@ -306,8 +307,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
           // Hit beginning of padding (repeated last move).
           break;
         }
-        throw new NotImplementedException();
-        //Console.WriteLine($"Policy[{i}]  {100 * Math.Round((float)PolicyValues[i], 5):N3}%  {MoveAtIndex(PolicyIndices[i])}");
+        Console.WriteLine($"Policy[{i}]  {100 * Math.Round((float)PolicyValues[i], 5):N3}%  {MoveAtIndex(PolicyIndices[i])}");
       }
     }
 
