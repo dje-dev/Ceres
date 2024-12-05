@@ -190,6 +190,12 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
 
     #region Read/Write utilities
 
+    /// <summary>
+    /// Writes a specified array of TPG records to a specified file in ZST format.
+    /// </summary>
+    /// <param name="fileName"></param>
+    /// <param name="records"></param>
+    /// <param name="maxRecords"></param>
     public static void WriteToZSTFile(string fileName, TPGRecord[] records, int maxRecords = int.MaxValue)
     {
       if (maxRecords > records.Length)
@@ -197,13 +203,25 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
         maxRecords = records.Length;
       }
 
-      FileStream es = new FileStream(fileName, FileMode.Create, FileAccess.Write);
-      using (ZstandardStream stream = new(es, CompressionMode.Compress))
+      GCHandle gch = GCHandle.Alloc(records, GCHandleType.Pinned); // Pin the array
+      try
       {
-        ReadOnlySpan<byte> bufferAsBytes = MemoryMarshal.Cast<TPGRecord, byte>(records.AsSpan().Slice(0, maxRecords));
-        stream.Write(bufferAsBytes);
+        using (FileStream es = new FileStream(fileName, FileMode.Create, FileAccess.Write))
+        {
+          const int COMPRESSION_LEVEL = 10;
+          using (ZstandardStream stream = new(es, COMPRESSION_LEVEL))
+          {
+            ReadOnlySpan<byte> bufferAsBytes = MemoryMarshal.Cast<TPGRecord, byte>(records.AsSpan().Slice(0, maxRecords));
+            stream.Write(bufferAsBytes);
+          }
+        }
+      }
+      finally
+      {
+        gch.Free();
       }
     }
+    
 
     [ThreadStatic]
     static byte[] tempBufferBytes = null;
