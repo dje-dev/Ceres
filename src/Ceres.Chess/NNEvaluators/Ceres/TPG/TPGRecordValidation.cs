@@ -200,7 +200,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
       bool ok = posPrior.PieceCount == 0 || MGPositionReachability.IsProbablyReachable(posPrior.ToMGPosition, posCur.ToMGPosition);
       if (!ok)
       {
-        bool priorLooksLikeFillIn = posCur == posPrior.Reversed;
+        bool priorLooksLikeFillIn = posCur.PiecesEqual(posPrior.Reversed);
         if (!priorLooksLikeFillIn)
         {
           // TODO: consider also verifying that once a fill-in appears it then appears for all subsequent positions.
