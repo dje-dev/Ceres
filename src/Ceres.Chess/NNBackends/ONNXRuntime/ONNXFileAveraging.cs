@@ -120,7 +120,7 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
         avgTensor.RawData = ByteString.CopyFrom(newData);
         averagedInitializers.Add(avgTensor);
 
-        Console.WriteLine(avgTensor.Name + " " + avgTensor.RawData.Length / 2);
+//        Console.WriteLine(avgTensor.Name + " " + avgTensor.RawData.Length / 2);
       }
 
       return averagedInitializers;
