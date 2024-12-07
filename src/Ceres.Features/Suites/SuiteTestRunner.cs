@@ -364,7 +364,7 @@ namespace Ceres.Features.Suites
         TotalNodes1 = totalNodes1,
         TotalNodes2 = totalNodes2,
 
-        AvgAbsQDifference = finalQ2 == null ? 0 : StatUtils.Average(StatUtils.AbsDiff(finalQ1.ToArray(), finalQ2.ToArray()))  
+        AvgAbsQDifference = finalQ2.Count == 0 ? 0 : StatUtils.Average(StatUtils.AbsDiff(finalQ1.ToArray(), finalQ2.ToArray()))  
       };
 
     }
