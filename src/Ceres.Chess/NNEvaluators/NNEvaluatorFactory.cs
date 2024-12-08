@@ -275,8 +275,10 @@ namespace Ceres.Chess.NNEvaluators
              || (deviceDef.OverrideEngineType != null && deviceDef.OverrideEngineType.StartsWith("TensorRT16"));
           int maxONNXBatchSize = viaTRT ? TRT_MAX_BATCH_SIZE : DEFAULT_MAX_BATCH_SIZE;
           maxONNXBatchSize = Math.Min(maxONNXBatchSize, deviceDef.MaxBatchSize ?? DEFAULT_MAX_BATCH_SIZE);
-          string fullFN = Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, netDef.NetworkID);
-          bool VALUE_IS_LOGISTIC = netDef.Type != NNEvaluatorType.Ceres && fullFN.ToUpper().Contains("RPE");// TODO: eliminate hack
+          bool netIDExistsAsIS = File.Exists(netDef.NetworkID) || File.Exists(netDef.NetworkID + ".onnx");
+          string pathLc0Networks = CeresUserSettingsManager.Settings.DirLC0Networks;
+          string fullFN = (netIDExistsAsIS || string.IsNullOrEmpty(pathLc0Networks) )? netDef.NetworkID : Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, netDef.NetworkID);
+          const bool VALUE_IS_LOGISTIC = false;
           if (!fullFN.ToUpper().Contains("ONNX"))
           {
             fullFN += ".onnx";
@@ -380,7 +382,7 @@ namespace Ceres.Chess.NNEvaluators
 
             ValueHead1Temperature =  value1Temperature,
 
-            FractionValueHead2 = options != null && options.Keys.Contains("USEV2") ? 0.4f : 0,//fractionV2,
+            FractionValueHead2 = options != null && options.Keys.Contains("USEV2") ? 0.5f : 0,//fractionV2,
             PolicyUncertaintyTemperatureScalingFactor = policyUncertaintyScaling,
           }; 
           
