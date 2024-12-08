@@ -257,12 +257,14 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
           Span<Half> flatValuesPrimarySpan = flatValuesPrimary.Span;
           for (int i = 0; i < flatValuesPrimarySpan.Length; i++)
           {
-            throw new Exception("don't we already divide in CopyAndDivide?");
-            //flatValuesPrimarySpan[i] /= tpgDivisor;
+            // TODO: improve efficiency (slow conversion/ non-SIMD division here)
+            //       possibly use a modified version of TPGConvertersToFlat.CopyAndDivideSIMD
+            flatValuesPrimarySpan[i] = (Half)((float)flatValuesPrimarySpan[i] / tpgDivisor);
           }
         }
 
-        inputs[0] = (flatValuesPrimary, new int[] { numPositionsUsed, 64, TPG_BYTES_PER_SQUARE_RECORD });
+        int TOTAL_LEN = numPositionsUsed * 64 * TPG_BYTES_PER_SQUARE_RECORD;
+        inputs[0] = (flatValuesPrimary.Slice(0, TOTAL_LEN), new int[] { numPositionsUsed, 64, TPG_BYTES_PER_SQUARE_RECORD });
         if (inputs.Length > 1)
         {
           // TODO: improve efficiency here
