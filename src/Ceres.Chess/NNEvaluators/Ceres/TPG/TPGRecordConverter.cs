@@ -14,7 +14,6 @@
 #region Using directives
 
 using System;
-using System.Diagnostics;
 using System.Threading.Tasks;
 
 using Ceres.Chess.EncodedPositions;
@@ -144,9 +143,6 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     }
 
 
-    static bool haveInitialized = false;
-    static int countConversions = 0;
-
 
     /// <summary>
     /// Converts input positions defined as IEncodedPositionFlat 
@@ -160,7 +156,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     /// <param name="qPositiveBlunders">value for expected forward upside blunder to inject</param>
     /// <param name="mgPos">current position</param>
     /// <param name="squareBytesAll">byte array to receive converted encoded positions in TPGSquareRecord format</param>
-    /// <param name="legalMoveIndices">optional array to recieve indices of legal moves in position</param>
+    /// <param name="legalMoveIndices">optional array to receive indices of legal moves in position</param>
     /// <exception cref="Exception"></exception>
     public static unsafe void ConvertPositionsToRawSquareBytes(IEncodedPositionBatchFlat positions,
                                                                bool includeHistory,
@@ -209,7 +205,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
           Span<byte> thesePliesSinceLastMove = pliesSinceLastMoveAllPositions == null ? default : new Span<byte>(pliesSinceLastMoveAllPositions, i * 64, 64);
 
           // Convert to sequence of TPGSquareRecord.
-          // This is done using unsfe code in situ in the raw squareBytesAl array for performance.
+          // This is done using unsafe code in situ in the raw squareBytesAl array for performance.
           Span<TPGSquareRecord> squaresSpan = new Span<TPGSquareRecord>(ptrSquareBytes, 64); 
           ConvertToTPGRecordSquares(in positionsFlat.Span[i], includeHistory, squaresSpan,
                                     thesePliesSinceLastMove, lastMovePliesEnabled,
@@ -410,7 +406,9 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     }
 
 
-    internal static unsafe void ConvertToTPGRecordPolicies(in EncodedTrainingPosition trainingPos, float minLegalMoveProbability, ref TPGRecord tpgRecord)
+    internal static unsafe void ConvertToTPGRecordPolicies(in EncodedTrainingPosition trainingPos, 
+                                                           float minLegalMoveProbability, 
+                                                           ref TPGRecord tpgRecord)
     {
       // TODO: speed up. Check two at a time within loop for better parallelism?
       float* probabilitiesSource = &trainingPos.Policies.ProbabilitiesPtr[0];
@@ -454,23 +452,19 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
 
     static int convertCount;
 
+
     public static unsafe void ConvertToTPGRecordSquares(in EncodedPositionWithHistory posWithHistory,
                                                         bool includeHistory,
                                                         Span<TPGSquareRecord> squares,
                                                         Span<byte> pliesSinceLastPieceMoveBySquare,
                                                         bool emitPlySinceLastMovePerSquare,
-                                                        float qNegativeBlunders, float qPositiveBlunders)
+                                                        float qNegativeBlunders, 
+                                                        float qPositiveBlunders)
     {
       static Position GetHistoryPosition(in EncodedPositionWithHistory historyPos, int index, in Position? fillInIfEmpty)
       {
         Position pos = historyPos.HistoryPositionIsEmpty(index) ? default
                                                                 : historyPos.HistoryPosition(index);
-
-#if NOT
-        // NOTE: This is only to keep compatability with previously written TPG files.
-        //       Someday consider backing this out (also in decode methods).
-        pos = pos.Mirrored; 
-#endif
 
         if (pos.PieceCount == 0 && fillInIfEmpty != null)
         {
@@ -561,7 +555,6 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
 
 
       tpgRecord.PolicyIndexInParent = targetInfo.PolicyIndexInParent;
-
     }
   }
 }
