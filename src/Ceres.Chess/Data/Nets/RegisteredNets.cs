@@ -46,7 +46,8 @@ namespace Ceres.Chess.Data.Nets
         { "T81", SimpleLC0Net("811971") }, //Training restarted after surgery after 811971
         { "T81_FP16_TRT", ONNXNet16LC0("weights_run1_811971.pb.gz_fp16.onnx#16", true) },
 
-        { "T82", ONNXNet32LC0("768x15x24h-t82-swa-8164000#32") },
+        {"T82", ONNXNet16LC0("768x15x24h-t82-swa-7464000.pb.gz_fp16.onnx#16") },
+        {"T82_TUNE_INTERP", ONNXNet16LC0("lc0_t82_tuned_lookahead_fp16.onnx#16") }, // from "Evidence of a Learned Look-ahead in a Chess-Playing Neural Network"
 
         {"BT2_NATIVE", SimpleLC0Net("BT2-768x15smolgen-12h-do-01-swa-4510000.pb.gz") },
         //{"BT2", ONNXNet16LC0("BT2-768x15smolgen-3326000_fp16.onnx#16")},
