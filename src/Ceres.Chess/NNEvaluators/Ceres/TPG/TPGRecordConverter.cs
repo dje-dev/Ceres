@@ -14,6 +14,7 @@
 #region Using directives
 
 using System;
+using System.Diagnostics;
 using System.Threading.Tasks;
 
 using Ceres.Chess.EncodedPositions;
