@@ -22,41 +22,73 @@ using System.Runtime.InteropServices;
 using Onnx;
 using Google.Protobuf;
 using Google.Protobuf.Collections;
+using System.IO;
 
 #endregion
 
 namespace Ceres.Chess.NNBackends.ONNXRuntime
 {
   /// <summary>
-  /// Averages the weights of two ONNX models.
+  /// Generates new ONNX files which contain the averaged weights over multiple ONNX files.
   /// </summary>
   public static class ONNXFileAveraging
   {
     const bool DUMP_MAX_ABS_WEIGHTS_BY_LAYER = false; // currently only shows those >2
 
-    public static void CreateAveragedFile(string modelPath1, string modelPath2, string outputPath)
+
+    /// <summary>
+    /// Creates an equal-weighted average of the weights of the specified ONNX models.
+    /// </summary>
+    /// <param name="outputPath"></param>
+    /// <param name="modelPaths"></param>
+    /// <exception cref="ArgumentException"></exception>
+    public static void CreateAveragedFile(string outputPath, params string[] modelPaths)
     {
-      // Load both ONNX models
-      ModelProto model1 = Base.Misc.ONNX.ONNXHelpers.LoadModel(modelPath1);
-      ModelProto model2 = Base.Misc.ONNX.ONNXHelpers.LoadModel(modelPath2);
+      if (modelPaths == null || modelPaths.Length < 2)
+      {
+        throw new ArgumentException("At least two model paths must be provided.", nameof(modelPaths));
+      }
+
+      if (File.Exists(outputPath))
+      {
+        throw new ArgumentException("Output file already exists.", nameof(outputPath));
+      } 
+
+      // Load all models and prepare their initializers for averaging
+      List<(float weight, RepeatedField<TensorProto> tensors)> modelsAndInitializers = new List<(float weight, RepeatedField<TensorProto> tensors)>();
+      float weight = 1f / modelPaths.Length;
+
+      foreach (string modelPath in modelPaths)
+      {
+        var model = Base.Misc.ONNX.ONNXHelpers.LoadModel(modelPath);
+        modelsAndInitializers.Add((weight, model.Graph.Initializer));
+      }
 
       // Compute the average of the initializers
-      var averagedInitializers = AverageInitializers((0.5f, model1.Graph.Initializer), (0.5f, model2.Graph.Initializer));
+      IEnumerable<TensorProto> averagedInitializers = AverageInitializers(modelsAndInitializers.ToArray());
 
-      // Replace the initializers in model1 with the averaged initializers
-      model1.Graph.Initializer.Clear();
-      model1.Graph.Initializer.AddRange(averagedInitializers);
+      // Start with the first model as a base and update its initializers
+      ModelProto baseModel = Base.Misc.ONNX.ONNXHelpers.LoadModel(modelPaths[0]);
+      baseModel.Graph.Initializer.Clear();
+      baseModel.Graph.Initializer.AddRange(averagedInitializers);
 
-      // Save the new model
-      Base.Misc.ONNX.ONNXHelpers.SaveModel(model1, outputPath);
+      // Save the new averaged model
+      Base.Misc.ONNX.ONNXHelpers.SaveModel(baseModel, outputPath);
 
-      Console.WriteLine($"New ONNX model {outputPath} created with averaged parameters.");
+      Console.WriteLine($"New ONNX model {outputPath} created with averaged parameters from {modelPaths.Length} files.");
     }
 
 
+    /// <summary>
+    /// Internal method to average the initializers of multiple models.
+    /// </summary>
+    /// <param name="items"></param>
+    /// <returns></returns>
+    /// <exception cref="Exception"></exception>
+    /// <exception cref="NotImplementedException"></exception>
     static IEnumerable<TensorProto> AverageInitializers(params (float weight, RepeatedField<TensorProto> tensors)[] items)
     {
-      var averagedInitializers = new List<TensorProto>();
+      List<TensorProto> averagedInitializers = new List<TensorProto>();
 
       RepeatedField<TensorProto> rootTensors = items[0].tensors;
 
