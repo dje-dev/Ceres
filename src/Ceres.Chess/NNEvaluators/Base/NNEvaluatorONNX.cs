@@ -254,9 +254,8 @@ namespace Chess.Ceres.NNEvaluators
                       + " with " + deviceType + " " + gpuID + " using (" + executorType + " " + numBits + ")");
 
       string[] inputNames = type == ONNXNetExecutor.NetTypeEnum.TPG
-        ? ["squares", "prior_state.1"] :
-       (engineID.ToUpper().Contains("RPE") || engineID.ToUpper().Contains("BT5") ? ["input_1"] // TODO: clean up hardcoding
-        : ["/input/planes"]);
+                                  ? ["squares", "prior_state.1"] :
+                                    ["/input/planes"];
 
       Executor = new ONNXNetExecutor(engineID, onnxModelFileName, onnxModelBytes, inputNames,
                                      maxBatchSize, type, precision, deviceType, gpuID,
@@ -311,8 +310,11 @@ namespace Chess.Ceres.NNEvaluators
         // TO DO: Make smarter, check numPositions argument to smart size if possible (instead we make some guesses here on size, assume batch size 
         const int INPUT_SIZE_FLOATS = 2048 * 100 * 128;
         inputsPrimaryNative = new byte[INPUT_SIZE_FLOATS];
-        inputsSecondaryNative = new byte[INPUT_SIZE_FLOATS];
         inputsPrimaryNativeF = new Half[INPUT_SIZE_FLOATS];
+        if (usesSecondaryInputs)
+        {
+          inputsSecondaryNative = new byte[INPUT_SIZE_FLOATS];
+        }
       }
 
       int numConverted = ConverterToFlatFromTPG(Options, positionsNativeInput, inputsPrimaryNative);
@@ -323,7 +325,10 @@ namespace Chess.Ceres.NNEvaluators
         // TODO: Consider improving performance (though this may not be an often used mode of executing TPG files).
         //       To speed up, consider vectorize this, or call a built-in function, or partly unroll loop.
         inputsPrimaryNativeF[i] = inputsPrimaryNative[i];
-        inputsSecondaryNativeF[i] = inputsSecondaryNative[i];
+        if (usesSecondaryInputs)
+        {
+          inputsSecondaryNativeF[i] = inputsSecondaryNative[i];
+        }
       }
       const float TPG_DIVISOR = ByteScaled.SCALING_FACTOR; // TODO: receive this in constructor instead. Should refer to TPGSquareRecord.SQUARE_BYTES_DIVISOR.
       PositionEvaluationBatch ret = DoEvaluateBatch(default, inputsPrimaryNativeF, null, //usesSecondaryInputs ? inputsSecondaryNativeF : null, 
@@ -429,7 +434,7 @@ namespace Chess.Ceres.NNEvaluators
           // Apply move masking
           if (posMoveIsLegal != null)
           {
-            throw new NotImplementedException(); // currently this is handled by the PositionEvaluationBatch constructor below intead
+//            throw new NotImplementedException(); // currently this is handled by the PositionEvaluationBatch constructor below instead
           }
         }
       }
