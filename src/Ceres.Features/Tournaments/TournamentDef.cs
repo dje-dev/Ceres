@@ -315,7 +315,15 @@ namespace Ceres.Features.Tournaments
     {
       if (cloneMapper == null)
       {
-        MapperConfiguration config = new MapperConfiguration(cfg => cfg.CreateMap<TournamentDef, TournamentDef>());
+        MapperConfiguration config = new MapperConfiguration(cfg =>
+        {
+          cfg.CreateMap<TournamentDef, TournamentDef>();
+          cfg.CreateMap<NNEvaluatorDef, NNEvaluatorDef>();
+          cfg.CreateMap<GameEngineDefCeres, GameEngineDefCeres>();
+          cfg.CreateMap<EnginePlayerDef, EnginePlayerDef>();
+        });
+
+
         cloneMapper = config.CreateMapper();
       }
 

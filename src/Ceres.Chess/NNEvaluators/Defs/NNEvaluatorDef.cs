@@ -503,7 +503,13 @@ namespace Ceres.Chess.NNEvaluators.Defs
       }
 
       NNEvaluatorDef ret = cloneMapper.Map<NNEvaluatorDef>(this);
-      ret.DynamicByPosPredicate = this.DynamicByPosPredicate;
+      ret.DynamicByPosPredicate = DynamicByPosPredicate;
+      for (int i=0;i<Devices.Length; i++)
+      {
+        // Make sure the boxed tuple with the DeviceInfo is cloned to a new object.
+        ret.Devices[i].Device = Devices[i].Device with { };
+      }
+
       return ret;
     }
 
