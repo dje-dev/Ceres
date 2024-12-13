@@ -283,12 +283,12 @@ namespace Ceres.Chess.NNEvaluators
           {
             fullFN += ".onnx";
           }
-          //          NNEvaluatorPrecision precision = netDef.NetworkID.EndsWith(".16") ? NNEvaluatorPrecision.FP16 : NNEvaluatorPrecision.FP32;
           ret = new NNEvaluatorONNX(netDef.ShortID, fullFN, null, deviceDef.Type, deviceDef.DeviceIndex, useTRT: viaTRT,
                                             ONNXNetExecutor.NetTypeEnum.LC0, maxONNXBatchSize,
                                             netDef.Precision, DEFAULT_HAS_WDL, DEFAULT_HAS_MLH,
                                             DEFAULT_HAS_UNCERTAINTYV, DEFAULT_HAS_UNCERTAINTYP, DEFAULT_HAS_ACTION,
-                                            null, null, null, null, VALUE_IS_LOGISTIC, ONNX_SCALE_50_MOVE_COUNTER, false, hasState: DEFAULT_HAS_STATE);
+                                            null, null, null, null, VALUE_IS_LOGISTIC, ONNX_SCALE_50_MOVE_COUNTER,
+                                            false, useHistory:true, hasState: DEFAULT_HAS_STATE);
           break;
 
         case NNEvaluatorType.TRT:
@@ -358,7 +358,7 @@ namespace Ceres.Chess.NNEvaluators
             throw new Exception($"Ceres net {netFileName} not found. Use valid full path or set source directory using DirCeresNetworks in Ceres.json");
           }
 
-          const float DEFAULT_TEMP1 = 0.80f;
+const float DEFAULT_TEMP1 = 0.95f; // was 0.95
           const float DEFAULT_V2_FRACTION = 0.0f;
           const float DEFAULT_POLUNC_SCALE = 0.0f;
 
@@ -380,9 +380,11 @@ namespace Ceres.Chess.NNEvaluators
             UseAction = board4Mode,
             UsePriorState = board4Mode,
 
-            ValueHead1Temperature =  value1Temperature,
+            PolicyTemperature = 1.03f,
+            ValueHead1Temperature = 0.95f,//value1Temperature,
+            ValueHead2Temperature = 1.6f - 0.6f,
+            FractionValueHead2 = options != null && options.Keys.Contains("USEV2") ? 0.5f : 0f,//fractionV2,
 
-            FractionValueHead2 = options != null && options.Keys.Contains("USEV2") ? 0.5f : 0,//fractionV2,
             PolicyUncertaintyTemperatureScalingFactor = policyUncertaintyScaling,
           }; 
           
