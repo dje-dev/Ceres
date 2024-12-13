@@ -366,7 +366,7 @@ namespace Ceres.MCTS.LeafExpansion
       {
         // Reconstruct the eval result from value already stored
         node.EvalResult.Initialize(node.Terminal, node.WinP, node.LossP, node.MPosition, 
-                                   node.UncertaintyVPosition, node.UncertaintyPPosition);
+                                   node.VSecondary, node.UncertaintyVPosition, node.UncertaintyPPosition);
 
         // Re-establish linkages to transposition root node, if any.
         if (TranspositionRoots != null)

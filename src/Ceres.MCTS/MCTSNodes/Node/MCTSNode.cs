@@ -171,6 +171,11 @@ namespace Ceres.MCTS.MTCSNodes
     public FP16 MPosition => (*structPtr).MPosition;
 
     /// <summary>
+    /// Optional secondary value head output (W-L).
+    /// </summary>
+    public FP16 VSecondary => (*structPtr).VSecondary;
+
+    /// <summary>
     /// Uncertainty of V for the position.
     /// </summary>
     public byte UncertaintyVPosition => (*structPtr).UncertaintyVPosition;
@@ -230,8 +235,6 @@ namespace Ceres.MCTS.MTCSNodes
     /// </summary>
     public FP16 V => (*structPtr).V;
 
-
-    public FP16 VSecondary => (*structPtr).VSecondary;
 
     public FP16 WinP => (*structPtr).WinP;
 

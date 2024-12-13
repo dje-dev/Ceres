@@ -86,8 +86,9 @@ namespace Ceres.MCTS.Evaluators
 
         Debug.Assert(!float.IsNaN(cacheEntry.WinP + cacheEntry.LossP));
 
+        throw new NotImplementedException("Need to store VSecondary in next line");
         LeafEvaluationResult result = new LeafEvaluationResult(cacheEntry.TerminalStatus, cacheEntry.WinP, cacheEntry.LossP, 
-                                                               cacheEntry.M, (byte)Math.Round(100*cacheEntry.UncertaintyV, 0),
+                                                               cacheEntry.M, /*cacheEntry.VSecondary*/0, (byte)Math.Round(100*cacheEntry.UncertaintyV, 0),
                                                                (byte)Math.Round(100 * cacheEntry.UncertaintyP, 0));
         result.PolicySingle = cacheEntry.Policy;
         return result;

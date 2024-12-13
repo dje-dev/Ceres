@@ -104,7 +104,8 @@ namespace Ceres.MCTS.Evaluators
             NumHits.Add(1, pos.PiecesShortHash);
           }
 
-          return new LeafEvaluationResult(GameResult.Checkmate, result.LossP, result.WinP, result.M, result.UncertaintyV, result.UncertaintyP);
+          return new LeafEvaluationResult(GameResult.Checkmate, result.LossP, result.WinP, result.M,
+                                          result.WinP-result.LossP, result.UncertaintyV, result.UncertaintyP);
         }
       }
 

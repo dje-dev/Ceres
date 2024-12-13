@@ -215,7 +215,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
     public byte UncertaintyVPosition;
     public byte UncertaintyPPosition;
-    public FP16 UncertaintyVSubtree; // NOT CURRENTLY USED
+    public FP16 VSecondary; 
 #endif
 
 #if NOT
@@ -319,18 +319,6 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     /// </summary>
     public readonly bool IsCached => Context.IsCached;
 
-
-    /// <summary>
-    /// V value as returned by an optional secondary network.
-    /// </summary>
-    public FP16 VSecondary
-    {
-      readonly get => FP16.NaN;
-      set 
-      { 
-        if (!FP16.IsNaN(value)) throw new NotImplementedException(); 
-      }
-    }
 
 
     public void ResetSearchInProgressState(int storeID)

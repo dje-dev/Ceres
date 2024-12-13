@@ -48,6 +48,11 @@ namespace Ceres.MCTS.Evaluators
     public FP16 LossP;
 
     /// <summary>
+    /// Optional secondary value head output (W-L).
+    /// </summary>
+    public FP16 VSecondary;
+
+    /// <summary>
     /// Moves left value (if any).
     /// </summary>
     public FP16 M;
@@ -120,13 +125,14 @@ namespace Ceres.MCTS.Evaluators
     /// <param name="lossP"></param>
     /// <param name="m"></param>
     public LeafEvaluationResult(GameResult terminalStatus, FP16 winP, FP16 lossP, FP16 m, 
-                                byte uncertaintyV, byte uncertaintyP)
+                                FP16 vSecondary, byte uncertaintyV, byte uncertaintyP)
     {
       Debug.Assert(terminalStatus != GameResult.NotInitialized);
 
       TerminalStatus = terminalStatus;
       WinP = winP;
       LossP = lossP;
+      VSecondary = vSecondary;
       M = m;
       UncertaintyV = uncertaintyV;
       UncertaintyP = uncertaintyP;
@@ -143,13 +149,14 @@ namespace Ceres.MCTS.Evaluators
     /// <param name="lossP"></param>
     /// <param name="m"></param>
     public void Initialize(GameResult terminalStatus, FP16 winP, FP16 lossP, FP16 m, 
-                           byte uncertaintyV, byte uncertaintyP)
+                           FP16 vSecondary, byte uncertaintyV, byte uncertaintyP)
     {
       Debug.Assert(terminalStatus != GameResult.NotInitialized);
 
       TerminalStatus = terminalStatus;
       WinP = winP;
       LossP = lossP;
+      VSecondary = vSecondary;
       M = m;
       UncertaintyV = uncertaintyV;
       UncertaintyP = uncertaintyP;
@@ -169,7 +176,7 @@ namespace Ceres.MCTS.Evaluators
     /// <param name="policyArray"></param>
     /// <param name="policyArrayIndex"></param>
     public LeafEvaluationResult(GameResult terminalStatus, FP16 winP, FP16 lossP, FP16 m, 
-                                byte uncertaintyV, byte uncertaintyP,
+                                FP16 vSecondary, byte uncertaintyV, byte uncertaintyP,
                                 Memory<CompressedPolicyVector> policyArray, 
                                 Memory<CompressedActionVector> actionArray, short policyArrayIndex)
     {
@@ -178,6 +185,7 @@ namespace Ceres.MCTS.Evaluators
       TerminalStatus = terminalStatus;
       WinP = winP;
       LossP = lossP;
+      VSecondary = vSecondary;
       M = m;
       UncertaintyP = uncertaintyP;
       UncertaintyV = uncertaintyV;
