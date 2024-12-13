@@ -85,16 +85,16 @@ namespace Ceres.MCTS.Search
         evaluatorSecondaryToUseInPrimaryEvaluators = context.NNEvaluators.EvaluatorSecondary;
       }
 
-      LeafEvaluatorNN nodeEvaluator1 = new LeafEvaluatorNN(context.EvaluatorDef, context.NNEvaluators.Evaluator1, shouldCache, context.ParamsSearch.Execution.MaxBatchSize,
-                                                           LOW_PRIORITY_PRIMARY, context.Tree.PositionCache, null, evaluatorSecondaryToUseInPrimaryEvaluators, context.ParamsSearch.TestFlag);
+      LeafEvaluatorNN nodeEvaluator1 = new(context.EvaluatorDef, context.NNEvaluators.Evaluator1, shouldCache, context.ParamsSearch.Execution.MaxBatchSize,
+                                           LOW_PRIORITY_PRIMARY, context.Tree.PositionCache, null, evaluatorSecondaryToUseInPrimaryEvaluators, false);
       BlockNNEval1 = new MCTSNNEvaluator(nodeEvaluator1, true);
 
       if (context.ParamsSearch.Execution.FlowDirectOverlapped)
       {
         // Create a second evaluator (configured like the first) on which to do overlapping.
-        LeafEvaluatorNN nodeEvaluator2 = new LeafEvaluatorNN(context.EvaluatorDef, context.NNEvaluators.Evaluator2, shouldCache, 
-                                                             manager.Context.ParamsSearch.Execution.MaxBatchSize,
-                                                             false, context.Tree.PositionCache, null, evaluatorSecondaryToUseInPrimaryEvaluators, context.ParamsSearch.TestFlag);
+        LeafEvaluatorNN nodeEvaluator2 = new(context.EvaluatorDef, context.NNEvaluators.Evaluator2, shouldCache, 
+                                             manager.Context.ParamsSearch.Execution.MaxBatchSize,
+                                             false, context.Tree.PositionCache, null, evaluatorSecondaryToUseInPrimaryEvaluators, false);
         BlockNNEval2 = new MCTSNNEvaluator(nodeEvaluator2, true);
       }
 
