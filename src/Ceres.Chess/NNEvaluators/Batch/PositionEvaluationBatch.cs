@@ -658,75 +658,33 @@ namespace Ceres.Chess.NetEvaluation.Batch
         InitializeValueEvals(valueEvals2, valsAreLogistic, temperatureValue2, uncertaintyV, value2TemperatureUncertaintyScalingFactor, true);
       }
 
-      static float MapValue1ToExpectedValue2(float x)
+      if (fractionValueFromValue2 == 0)
       {
-        if (x < 0)
-        {
-          return -MapValue1ToExpectedValue2(-x);
-        }
-        else if (x < 0.15f)
-        {
-          return x / 3.0f;
-        }
-        else
-        {
-
-          // Coefficients of the 4th-degree polynomial
-          const float a4 = -1.42f;
-          const float a3 = 5.27f;
-          const float a2 = -7.60f;
-          const float a1 = 5.35f;
-          const float a0 = -0.59f;
-
-          float ret = a4 * MathF.Pow(x, 4) + a3 * MathF.Pow(x, 3) + a2 * MathF.Pow(x, 2) + a1 * x + a0;
-
-          return MathF.Min(1, ret);
-        }
+        // The default value is the same as the first (and only) value head.
+        W = W1;
+        L = L1;
       }
-
-
-      if (fractionValueFromValue2 != 0)
+      else
       {
         Debug.Assert(!W2.IsEmpty);
 
+        // Allocate new default value which will contain the weighted average.
+        FP16[] w = new FP16[NumPos];
+        FP16[] l = new FP16[NumPos];
+        W = w;
+        L = l;
+
         float fractionValueFromValue1 = 1 - fractionValueFromValue2;
 
-        Span<FP16> w = W.Span;
+        Span<FP16> w1 = W1.Span;
         Span<FP16> w2 = W2.Span;
-        Span<FP16> l = L.Span;
+        Span<FP16> l1 = L1.Span;
         Span<FP16> l2 = L2.Span;
-
-      static void ReplaceFirstSpanWithGeometricWeightedAverage(Span<FP16> arg1, Span<FP16> arg2, float weight1, float weight2)
-        {
-          if (arg1.Length != arg2.Length)
-          {
-            throw new ArgumentException("Spans must have the same length.");
-          }
-
-          float totalWeight = weight1 + weight2;
-          for (int i = 0; i < arg1.Length; i++)
-          {
-            float product = MathF.Pow(arg1[i], weight1 / totalWeight) 
-                          * MathF.Pow(arg2[i], weight2 / totalWeight);
-            arg1[i] = (FP16)product;
-          }
-        }
 
         for (int i=0; i<w.Length; i++)
         {
-#if EXPERIMENTAL
-          float wl1 = GetWin1P(i) - GetLoss1P(i);
-          float expectedWL2 = MapValue1ToExpectedValue2(wl1);
-
-          float wl2 = w2[i] - l2[i];
-          float deltaWL2FromExpectation = wl2 - expectedWL2;
-
-          float adjustedW2 = wl1 + deltaWL2FromExpectation;
-          SetWL2(i, adjustedW2);        
-#endif
-
-          w[i] = (FP16)(w[i] * fractionValueFromValue1 + w2[i] * fractionValueFromValue2);
-          l[i] = (FP16)(l[i] * fractionValueFromValue1 + l2[i] * fractionValueFromValue2);
+          w[i] = (FP16)((float)w1[i] * fractionValueFromValue1 + (float)w2[i] * fractionValueFromValue2);
+          l[i] = (FP16)((float)l1[i] * fractionValueFromValue1 + (float)l2[i] * fractionValueFromValue2);
 
 //          ReplaceFirstSpanWithGeometricWeightedAverage(w.Slice(i, 1), w2.Slice(i, 1), fractionValueFromValue1, fractionValueFromValue2);
 //          ReplaceFirstSpanWithGeometricWeightedAverage(l.Slice(i, 1), l2.Slice(i, 1), fractionValueFromValue1, fractionValueFromValue2);
@@ -1081,8 +1039,6 @@ namespace Ceres.Chess.NetEvaluation.Batch
         }
         else if (sourceBatchWithValidMoves == default)
         {
-          throw new NotImplementedException(); // the below might be working, but seems not needed
-#if NOT
           if (policyTempBuffer == null)
           {
             policyTempBuffer = new float[EncodedPolicyVector.POLICY_VECTOR_LENGTH];
@@ -1096,6 +1052,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
 
           // N.B. It is not possible to apply move masking here, 
           //      so it is assumed this is already done by the caller.
+          int startIndex =  i * EncodedPolicyVector.POLICY_VECTOR_LENGTH;
           //Array.Copy(policyProbsSpan, startIndex, policyTempBuffer, 0, EncodedPolicyVector.POLICY_VECTOR_LENGTH);
           ReadOnlySpan<Float16> thesePolicyProbsFloat16 = policyProbsSpan.Slice(startIndex, EncodedPolicyVector.POLICY_VECTOR_LENGTH);
           ReadOnlySpan<Half> thesePolicyProbsHalf = MemoryMarshal.Cast<Float16, Half>(thesePolicyProbsFloat16);
@@ -1103,7 +1060,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
           const float MIN_PROB = -100;
           CompressedPolicyVector policyVector = default;
           CompressedActionVector actionsVector = default;
-          PolicyVectorCompressedInitializerFromProbs.InitializeFromProbsArray(ref policyVector, ref actionsVector, hasActions,
+          SideType side = SideType.White; // TODO: This value only advisory, but still try to fill this in correctly.
+          PolicyVectorCompressedInitializerFromProbs.InitializeFromProbsArray(ref policyVector, ref actionsVector, side, hasActions,
                                                                               true, EncodedPolicyVector.POLICY_VECTOR_LENGTH, 96,
                                                                               thesePolicyProbsHalf, MIN_PROB);
 
@@ -1113,7 +1071,6 @@ namespace Ceres.Chess.NetEvaluation.Batch
           }
 
           retPolicies[i] = policyVector;
-#endif
         }
         else
         {
@@ -1210,7 +1167,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
 
 
     /// <summary>
-    /// Initializes the win/loss array with speicifed values from the value head.
+    /// Initializes the win/loss array with specified values from the value head.
     /// </summary>
     /// <param name="valueEvals"></param>
     /// <param name="valsAreLogistic"></param>
@@ -1220,41 +1177,44 @@ namespace Ceres.Chess.NetEvaluation.Batch
     {
       Debug.Assert(!(secondaryValue && !HasValueSecondary));
 
-      FP16[] w = null;
-      FP16[] l = null;
-
-      if (IsWDL)
+      if (!IsWDL)
       {
-        w = new FP16[NumPos];
-        l = new FP16[NumPos];
-
-        for (int i = 0; i < NumPos; i++)
+        // Handle simple case of non-WDL heads.
+        Debug.Assert(!valsAreLogistic); // Not meaningful combination.
+        Debug.Assert(!HasUncertaintyP); // Possibly uncertainty adjustments below not implemented here.
+        if (secondaryValue)
         {
-          if (!valsAreLogistic)
-          {
-            if (temperature != 1 || uncertaintyTemperatureScalingFactor != 0)
-            {
-              throw new NotImplementedException("temperature/uncertainty with non-logistic values");
-            }
+          // TODO: not yet implemented (would need to implement possible V1/V2 value blending as below).
+          throw new NotImplementedException("Secondary value not currently supported for non-WDL");
+        } 
 
-            w[i] = valueEvals[i * 3 + 0];
-            l[i] = valueEvals[i * 3 + 2];
-            Debug.Assert(Math.Abs(1 - (valueEvals[i * 3 + 0] 
-                                     + valueEvals[i * 3 + 1] 
-                                     + valueEvals[i * 3 + 2])) <= 0.01);
-          }
-          else
+        W = valueEvals.ToArray();
+        return;
+      }
+
+      FP16[] w = new FP16[NumPos];
+      FP16[] l = new FP16[NumPos];
+
+      for (int i = 0; i < NumPos; i++)
+      {
+        if (!valsAreLogistic)
+        {
+          if (temperature != 1 || uncertaintyTemperatureScalingFactor != 0)
           {
-            CalcWLWithTemperature(valueEvals, temperature, w, l, uncertaintyV, uncertaintyTemperatureScalingFactor, i);
+            throw new NotImplementedException("temperature/uncertainty with non-logistic values");
           }
+
+          w[i] = valueEvals[i * 3 + 0];
+          l[i] = valueEvals[i * 3 + 2];
+          Debug.Assert(Math.Abs(1 - (valueEvals[i * 3 + 0]
+                                   + valueEvals[i * 3 + 1]
+                                   + valueEvals[i * 3 + 2])) <= 0.01);
+        }
+        else
+        {
+          CalcWLWithTemperature(valueEvals, temperature, w, l, uncertaintyV, uncertaintyTemperatureScalingFactor, i);
         }
       }
-      else
-      {
-        Debug.Assert(!valsAreLogistic);
-        w = valueEvals.ToArray();
-      }
-
 
       if (secondaryValue)
       {
@@ -1263,10 +1223,11 @@ namespace Ceres.Chess.NetEvaluation.Batch
       }
       else
       {
-        W = w;
-        L = l;
+        W1 = w;
+        L1 = l;
       }
     }
+
 
     private static void CalcWLWithTemperature(ReadOnlySpan<FP16> valueEvals, float temperature, 
                                               FP16[] w, FP16[] l,
@@ -1326,6 +1287,23 @@ if (uncertaintyTemperatureScalingFactor > 0)
       // Set win/loss such that the sum of the three is 1.
       w[i] = (FP16)(v1 / totl);
       l[i] = (FP16)(v3 / totl);
+    }
+
+
+    static void ReplaceFirstSpanWithGeometricWeightedAverage(Span<FP16> arg1, Span<FP16> arg2, float weight1, float weight2)
+    {
+      if (arg1.Length != arg2.Length)
+      {
+        throw new ArgumentException("Spans must have the same length.");
+      }
+
+      float totalWeight = weight1 + weight2;
+      for (int i = 0; i < arg1.Length; i++)
+      {
+        float product = MathF.Pow(arg1[i], weight1 / totalWeight)
+                      * MathF.Pow(arg2[i], weight2 / totalWeight);
+        arg1[i] = (FP16)product;
+      }
     }
 
 
