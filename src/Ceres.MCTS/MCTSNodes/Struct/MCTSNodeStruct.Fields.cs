@@ -79,10 +79,14 @@ namespace Ceres.MCTS.MTCSNodes.Struct
     public FP16 WinP;
 
     /// <summary>
-    /// Loss probabilty
+    /// Loss probability
     /// </summary>
     public FP16 LossP;
 
+    /// <summary>
+    /// Optional secondary value head output (W-L).
+    /// </summary>
+    public FP16 VSecondary;
 
     const byte MAX_M = 255;
 
@@ -215,7 +219,6 @@ namespace Ceres.MCTS.MTCSNodes.Struct
 
     public byte UncertaintyVPosition;
     public byte UncertaintyPPosition;
-    public FP16 VSecondary; 
 #endif
 
 #if NOT
