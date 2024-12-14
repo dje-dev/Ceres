@@ -11,7 +11,6 @@
 
 #endregion
 
-
 #region Using directives
 
 using System;
@@ -48,6 +47,7 @@ namespace Ceres.Base.CUDA
     /// <returns></returns>
     public unsafe Span<T> AsSpan() => new Span<T>((T*)Memory.PinnedHostPointer, NumElements);
 
+
     /// <summary>
     /// Constructor.
     /// </summary>
@@ -60,14 +60,18 @@ namespace Ceres.Base.CUDA
                                                                              : CUMemHostAllocFlags.None);
     }
 
+
     /// <summary>
     /// Copies data from host to device memory.
     /// </summary>
     /// <param name="dest">Destination pointer to host memory</param>
-    public void CopyToDeviceAsync<T>(CudaDeviceVariable<T> dest,
-                                     int numElements, CudaStream stream) where T : unmanaged
+    public void CopyToDeviceAsync(CudaDeviceVariable<T> dest, int numElements, CudaStream stream)
     {
-      if (numElements > dest.Size) throw new ArgumentOutOfRangeException("Array too short");
+      if (numElements > dest.Size)
+      {
+        throw new ArgumentOutOfRangeException("Array too short");
+      }
+
       SizeT aSizeInBytes = numElements * Marshal.SizeOf<T>();
 
       CUResult res = DriverAPINativeMethods.AsynchronousMemcpy_v2.cuMemcpyHtoDAsync_v2(dest.DevicePointer, Memory.PinnedHostPointer, aSizeInBytes, stream.Stream);
@@ -82,10 +86,13 @@ namespace Ceres.Base.CUDA
     /// Copy data from device to host memory.
     /// </summary>
     /// <param name="dest">Destination pointer to host memory</param>
-    public void CopyToHostAsync<T>(CudaDeviceVariable<T> data,
-                                   int numElements, CudaStream stream) where T : unmanaged
+    public void CopyToHostAsync(CudaDeviceVariable<T> data, int numElements, CudaStream stream)
     {
-      if (numElements > NumElements) throw new ArgumentOutOfRangeException("Array too short");
+      if (numElements > NumElements)
+      {
+        throw new ArgumentOutOfRangeException("Array too short");
+      }
+
       SizeT aSizeInBytes = numElements * Marshal.SizeOf<T>();
 
       CUResult res = DriverAPINativeMethods.AsynchronousMemcpy_v2.cuMemcpyDtoHAsync_v2(Memory.PinnedHostPointer, data.DevicePointer, aSizeInBytes, stream.Stream);
@@ -94,6 +101,7 @@ namespace Ceres.Base.CUDA
         throw new CudaException(res);
       }
     }
+
 
     /// <summary>
     /// Destructor.
