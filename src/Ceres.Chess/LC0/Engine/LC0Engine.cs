@@ -169,10 +169,18 @@ namespace Ceres.Chess.LC0.Engine
           Runner.SendCommand("setoption name ValueOnly value true");
           searchInfo = Runner.EvalPositionToNodes(fenAndMovesStr, 1);
           Runner.SendCommand("setoption name ValueOnly value false");
+
+          // Compensate for limitation that Lc0 doesn't return any value score in "ValueOnly" mode
+          // (see https://github.com/LeelaChessZero/lc0/issues/2038)
+          // Make additional search in policy-head mode just to retrieve and patch in this value score
+          Runner.EvalPositionPrepare();
+          UCISearchInfo searchInfoValue = Runner.EvalPositionToNodes(fenAndMovesStr + " " + searchInfo.BestMove, 1);
+          searchInfo.ScoreCentipawns = -searchInfoValue.ScoreCentipawns; // invert score because from opponent's perspective
+
           break;
 
         default:
-          throw new Exception($"Unknown SeachLimit.Type {searchLimit.Type}");
+          throw new Exception($"Unknown SearchLimit.Type {searchLimit.Type}");
       }
 
       double elapsed = 0;//engine.EngineProcess.TotalProcessorTime.TotalSeconds - startTime;
