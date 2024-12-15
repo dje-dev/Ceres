@@ -358,12 +358,16 @@ namespace Ceres.Chess.NNEvaluators
             throw new Exception($"Ceres net {netFileName} not found. Use valid full path or set source directory using DirCeresNetworks in Ceres.json");
           }
 
-const float DEFAULT_TEMP1 = 0.95f; // was 0.95
-          const float DEFAULT_V2_FRACTION = 0.0f;
           const float DEFAULT_POLUNC_SCALE = 0.0f;
 
-          float value1Temperature = CheckOptionSpecifiedElseDefault(netDef, options, "V1TEMP", DEFAULT_TEMP1);
-          float fractionV2 = CheckOptionSpecifiedElseDefault(netDef, options, "V2FRAC", DEFAULT_V2_FRACTION);
+          // Values tuned for Ceres nets.
+          const float DEFAULT_V2_WEIGHT = 0.4f;
+          const float DEFAULT_V1_TEMP = 0.8f;
+          const float DEFAULT_V2_TEMP = 1.5f;
+
+          float value1Temperature = CheckOptionSpecifiedElseDefault(netDef, options, "V1TEMP", DEFAULT_V1_TEMP);
+          float value2Temperature = CheckOptionSpecifiedElseDefault(netDef, options, "V2TEMP", DEFAULT_V2_TEMP);
+          float value2Weight = CheckOptionSpecifiedElseDefault(netDef, options, "V2FRAC", DEFAULT_V2_WEIGHT);
           float policyUncertaintyScaling = CheckOptionSpecifiedElseDefault(netDef, options, "POLUNC_SCALE", DEFAULT_POLUNC_SCALE);
           
           if (options != null && options.Keys.Contains("POLUNC"))
@@ -380,14 +384,17 @@ const float DEFAULT_TEMP1 = 0.95f; // was 0.95
             UseAction = board4Mode,
             UsePriorState = board4Mode,
 
-            PolicyTemperature = 1.03f,
-            ValueHead1Temperature = 0.95f,//value1Temperature,
-            ValueHead2Temperature = 1.6f - 0.6f,
-            FractionValueHead2 = options != null && options.Keys.Contains("USEV2") ? 0.5f : 0f,//fractionV2,
+            PolicyTemperature = 1,
+
+            FractionValueHead2 = value2Weight, //options != null && options.Keys.Contains("USEV2") ? 0.5f : 0f
+            ValueHead1Temperature = value1Temperature,
+            ValueHead2Temperature = value2Temperature,
 
             PolicyUncertaintyTemperatureScalingFactor = policyUncertaintyScaling,
-          }; 
-          
+          };
+
+          //Console.WriteLine("Using Ceres options: " + optionsCeres);
+
           int maxCeresBatchSize = useTensorRT ? TRT_MAX_BATCH_SIZE : DEFAULT_MAX_BATCH_SIZE;
           maxCeresBatchSize = deviceDef.MaxBatchSize.HasValue ? Math.Min(deviceDef.MaxBatchSize.Value, maxCeresBatchSize) : maxCeresBatchSize;
 
