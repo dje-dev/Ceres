@@ -634,7 +634,16 @@ namespace Ceres.MCTS.MTCSNodes.Struct
             }
             else
             {
-              w[i] = (float)childNode.W;
+              const bool ENABLE_SUBSTITUTE_V1_TEST = false;
+              if (ENABLE_SUBSTITUTE_V1_TEST && context.ParamsSearch.TestFlag && childNode.N == 1)
+              {
+                // Console.WriteLine($"Use {childNode.UncertaintyVPosition} not {childNode.W}");
+                w[i] = (float)childNode.VSecondary;
+              }
+              else
+              {
+                w[i] = (float)childNode.W;
+              }
             }
           }
 
@@ -1061,7 +1070,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       Terminal = GameResult.Draw;
       MPosition = 1;
       UncertaintyVPosition = 0;
-
+      VSecondary = 0;
       W = 0;
       dSum = N;
       mSum = 1;
@@ -1088,6 +1097,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
       MPosition = (byte)MathF.Round(m, 0);
       UncertaintyVPosition = 0;
       UncertaintyPPosition = 0;
+      VSecondary = -lossP;
 
       if (!IsRoot)
       {
@@ -1097,6 +1107,7 @@ namespace Ceres.MCTS.MTCSNodes.Struct
         ref MCTSNodeStruct parentRef = ref this.ParentRef;
         parentRef.WinP = lossP;
         parentRef.LossP = 0;
+        parentRef.VSecondary = lossP;
         parentRef.UncertaintyVPosition = 0;
         parentRef.UncertaintyPPosition = 0;
         parentRef.W = parentRef.V * parentRef.N; // Make Q come out to be same as V (which has already been set to the sure win)
