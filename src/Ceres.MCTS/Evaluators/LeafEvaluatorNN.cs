@@ -225,7 +225,7 @@ namespace Ceres.MCTS.Evaluators
         if (EvaluatorDef.Location == NNEvaluatorDef.LocationType.Local)
         {
           const bool SET_POSITIONS = false; // we assume this is already done (if needed)
-          Batch.Set(rawPosArray, nodes.Count, SET_POSITIONS);
+          Batch.Set(rawPosArray, nodes.Count, SET_POSITIONS, fillInHistoryPlanes:true);
         }
 
         if (BatchEvaluatorIndexDynamicSelector != null)
@@ -318,9 +318,11 @@ namespace Ceres.MCTS.Evaluators
           lossP = (FP16) (lossPAdj / sum);
         }
 
+        // TODO: Reconsider, below we store V1 as the secondary value score
         byte scaledUncertaintyV = (byte)Math.Round(MCTSNodeStruct.UNCERTAINTY_SCALE * Math.Max(0, rawUncertaintyV), 0);
         byte scaledUncertaintyP = (byte)Math.Round(MCTSNodeStruct.UNCERTAINTY_SCALE * Math.Max(rawUncertaintyP, 0), 0);
-        LeafEvaluationResult evalResult = new LeafEvaluationResult(GameResult.Unknown, winP, lossP, rawM, 
+        LeafEvaluationResult evalResult = new LeafEvaluationResult(GameResult.Unknown, winP, lossP, rawM,
+                                                                   results.GetWin1P(i) - results.GetLoss1P(i), 
                                                                    scaledUncertaintyV, scaledUncertaintyP);
 
         evalResult.PolicyInArray = results.GetPolicy(i);
