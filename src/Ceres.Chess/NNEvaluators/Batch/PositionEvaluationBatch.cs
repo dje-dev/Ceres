@@ -326,7 +326,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// </summary>
     /// <param name="index"></param>
     /// <returns></returns>
-    public FP16 GetDraw1P(int index) => IsWDL ? GetWin1P(index) - GetLoss1P(index) : 0;
+    public FP16 GetDraw1P(int index) => IsWDL ? (FP16)(1.0f - (GetWin1P(index) + GetLoss1P(index))) : 0;
 
     /// <summary>
     /// Returns the loss probability from the primary value head for the position at a specified index in the batch.
