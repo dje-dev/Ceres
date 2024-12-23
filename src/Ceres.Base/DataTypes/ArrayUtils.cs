@@ -73,22 +73,59 @@ namespace Ceres.Base.DataType
 
     public static T[] To1D<T>(T[][] raw)
     {
-      if (raw.Length == 0) return Array.Empty<T>();
+      if (raw.Length == 0)
+      {
+        return Array.Empty<T>();
+      }
 
       int countRight = raw[0].Length;
       int totalCount = countRight * raw.Length;
       T[] ret = new T[totalCount];
       int offset = 0;
       for (int i = 0; i < raw.Length; i++)
+      {
         for (int j = 0; j < countRight; j++)
+        {
           ret[offset++] = raw[i][j];
+        }
+      }
 
       return ret;
     }
 
 
     /// <summary>
-    /// Converts a #D array to a 1D array.
+    /// Converts a 2D array to a 1D array.
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    /// <param name="raw"></param>
+    /// <returns></returns>
+    public static T[] To1D<T>(T[,] raw)
+    {
+      if (raw.Length == 0)
+      {
+        return Array.Empty<T>();
+      }
+
+      int rows = raw.GetLength(0);
+      int cols = raw.GetLength(1);
+      T[] result = new T[rows * cols];
+
+      int index = 0;
+      for (int i = 0; i < rows; i++)
+      {
+        for (int j = 0; j < cols; j++)
+        {
+          result[index++] = raw[i, j];
+        }
+      }
+
+      return result;    
+    }
+
+
+    /// <summary>
+    /// Converts a 3D array to a 1D array.
     /// </summary>
     /// <typeparam name="T"></typeparam>
     /// <param name="raw"></param>
@@ -103,9 +140,15 @@ namespace Ceres.Base.DataType
       T[] ret = new T[totalCount];
       int offset = 0;
       for (int i = 0; i < raw.GetLength(0); i++)
+      {
         for (int j = 0; j < countMiddle; j++)
+        {
           for (int k = 0; k < countRight; k++)
+          {
             ret[offset++] = raw[i, j, k];
+          }
+        }
+      }
 
       return ret;    
     }
