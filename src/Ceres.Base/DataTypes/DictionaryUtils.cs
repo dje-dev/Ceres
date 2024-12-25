@@ -23,6 +23,46 @@ namespace Ceres.Base.DataTypes
 {
   public static class DictionaryUtils
   {
+    /// <summary>
+    /// Merges two dictionaries into a new returned dictionary.
+    /// </summary>
+    /// <typeparam name="K"></typeparam>
+    /// <typeparam name="V"></typeparam>
+    /// <param name="dict1"></param>
+    /// <param name="dict2"></param>
+    /// <param name="replaceIfExists"></param>
+    /// <returns></returns>
+    /// <exception cref="Exception"></exception>
+    public static Dictionary<K, V> MergedDict<K, V>(Dictionary<K, V> dict1,
+                                                    Dictionary<K, V> dict2,
+                                                    bool replaceIfExists)
+    {
+      // Initialize the resulting dictionary with the contents of dict1
+      Dictionary<K, V> ret = new Dictionary<K, V>(dict1);
+
+      // Iterate through dict2 to merge into ret
+      foreach (KeyValuePair<K, V> kvp in dict2)
+      {
+        if (ret.ContainsKey(kvp.Key))
+        {
+          if (replaceIfExists)
+          {
+            ret[kvp.Key] = kvp.Value;
+          }
+          else
+          {
+            throw new Exception("Key already exists in dict1");
+          }
+        }
+        else
+        {
+          ret[kvp.Key] = kvp.Value;
+        }
+      }
+
+      return ret;
+    }
+
 
     /// <summary>
     /// Modifies an IDictionary by removing to reduce size to below the specified resizeTarget
@@ -48,7 +88,10 @@ namespace Ceres.Base.DataTypes
         // Since the dictionary might keep growing 
         // while we iterate, see if we have reached
         // end of our allocated space and just stop there
-        if (count >= dictCount) break;
+        if (count >= dictCount)
+        {
+          break;
+        }
 
         float priorityValue = priorityFunc(kvp.Value); 
         keyPriorities[count] = priorityValue;
@@ -58,7 +101,10 @@ namespace Ceres.Base.DataTypes
         count++;
       }
 
-      if (count < dictCount) throw new Exception("Internal error: dictionary shrunk during PruneDictionary operation.");
+      if (count < dictCount)
+      {
+        throw new Exception("Internal error: dictionary shrunk during PruneDictionary operation.");
+      }
 
       int numToPrune = dictCount - resizeTarget;
 
@@ -67,8 +113,12 @@ namespace Ceres.Base.DataTypes
       float cutoff = KthSmallestValueFloat.CalcKthSmallestValue(keyPrioritiesForSorting, numToPrune);
 
       for (int i = 0; i < count; i++)
+      {
         if (keyPriorities[i] <= cutoff)
+        {
           dict.Remove(keys[i]);
+        }
+      }
     }
 
   }
