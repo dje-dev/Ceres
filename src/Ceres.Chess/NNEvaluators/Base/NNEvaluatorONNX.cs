@@ -30,6 +30,7 @@ using Ceres.Chess.NetEvaluation.Batch;
 using Ceres.Chess.LC0.Batches;
 using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.NNBackends.ONNXRuntime;
+using Ceres.Chess.NNEvaluators.Ceres.TPG;
 
 #endregion
 
@@ -285,6 +286,11 @@ namespace Chess.Ceres.NNEvaluators
                                                                          int numPositions, Func<int, int, bool> posMoveIsLegal,
                                                                          bool retrieveSupplementalResults = false)
     {
+      if (numPositions > MaxBatchSize)
+      {
+        throw new Exception($"Batch size {numPositions} too large, evaluator constructed for max {MaxBatchSize}.");
+      } 
+
       if (HasState)
       {
         throw new NotImplementedException("State not supported");
@@ -307,13 +313,14 @@ namespace Chess.Ceres.NNEvaluators
 
       if (inputsPrimaryNative == null)
       {
-        // TO DO: Make smarter, check numPositions argument to smart size if possible (instead we make some guesses here on size, assume batch size 
-        const int INPUT_SIZE_FLOATS = 2048 * 100 * 128;
-        inputsPrimaryNative = new byte[INPUT_SIZE_FLOATS];
-        inputsPrimaryNativeF = new Half[INPUT_SIZE_FLOATS];
+        // TO DO: This buffer sizing logic is tied to TPG board representation
+        //        however cleaner would be to have independent of evaluator type.
+        int MAX_BUFFER_SIZE = MaxBatchSize * 64 * Marshal.SizeOf<TPGSquareRecord>();
+        inputsPrimaryNative = new byte[MAX_BUFFER_SIZE];
+        inputsPrimaryNativeF = new Half[MAX_BUFFER_SIZE];
         if (usesSecondaryInputs)
         {
-          inputsSecondaryNative = new byte[INPUT_SIZE_FLOATS];
+          inputsSecondaryNative = new byte[MAX_BUFFER_SIZE];
         }
       }
 
