@@ -121,6 +121,8 @@ namespace Ceres.Chess.NNEvaluators
                                                                                 int bigBatchSize = 256, bool estimateSingletons = true,
                                                                                 int numWarmups = 1)
     {
+      bigBatchSize = Math.Min(bigBatchSize, evaluator.MaxBatchSize);  
+
       if (batch1 == null || batchBig.NumPos != bigBatchSize)
       {
         batchBig = MakeTestBatch(evaluator, bigBatchSize);
