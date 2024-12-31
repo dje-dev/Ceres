@@ -32,7 +32,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres
     /// A value slightly above zero is generally optimal
     /// (since the training rarely saw values of exactly zero).
     /// </summary>
-    public const float DEFAULT_Q_BLUNDER = 0.05f;
+    public const float DEFAULT_Q_BLUNDER = 0.03f;
 
     /// <summary>
     /// If the prior state information should be used.
