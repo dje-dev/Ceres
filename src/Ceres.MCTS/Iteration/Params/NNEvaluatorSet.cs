@@ -103,6 +103,19 @@ namespace Ceres.MCTS.Params
       EvaluatorDefSecondary = evaluatorDefSecondary;
     }
 
+    /// <summary>
+    /// Overrides the evaluators to be used by the NNEvaluatorSet.
+    /// Intended mainly for testing purposes.
+    /// </summary>
+    /// <param name="evaluator1"></param>
+    /// <param name="evaluator2"></param>
+    /// <param name="evaluatorSecondary"></param>
+    public void OverrideEvaluators(NNEvaluator evaluator1, NNEvaluator evaluator2, NNEvaluator evaluatorSecondary)
+    {
+      this.evaluator1 = evaluator1;
+      this.evaluator2 = evaluator2;
+      this.evaluatorSecondary = evaluatorSecondary;
+    }
 
     public bool IsWDL => Evaluator1.IsWDL;
     public bool HasM => Evaluator1.HasM;
