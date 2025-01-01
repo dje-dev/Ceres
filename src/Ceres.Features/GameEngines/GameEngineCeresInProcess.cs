@@ -26,6 +26,9 @@ using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.UserSettings;
 using Ceres.Chess.PositionEvalCaching;
 using Ceres.Chess.Positions;
+using Ceres.Chess.NNEvaluators;
+using Ceres.Chess.SearchResultVerboseMoveInfo;
+
 using Ceres.MCTS.Evaluators;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.Managers.Limits;
@@ -33,8 +36,8 @@ using Ceres.MCTS.Params;
 using Ceres.MCTS.Environment;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.NodeCache;
+
 using Ceres.Features.UCI;
-using Ceres.Chess.SearchResultVerboseMoveInfo;
 using Ceres.Features.Visualization.AnalysisGraph;
 using Ceres.Features.Commands;
 
@@ -422,11 +425,37 @@ namespace Ceres.Features.GameEngines
       PrepareEvaluators();
     }
 
+
+    NNEvaluator overrideEvaluator1 = null;
+    NNEvaluator overrideEvaluator2 = null;
+    NNEvaluator overrideEvaluatorSecondary = null;
+
+
+    /// <summary>
+    /// Overrides the evaluators used for the search.
+    /// This will cause the NNEvaluatorDefs (EvaluatorDef, Evaluator2Def and EvaluatorDefSecondary) to be ignored.
+    /// Intended mainly for testing purposes.
+    /// </summary>
+    /// <param name="evaluator1"></param>
+    /// <param name="evaluator2"></param>
+    /// <param name="evaluatorSecondary"></param>
+    public void OverrideEvaluators(NNEvaluator evaluator1, NNEvaluator evaluator2, NNEvaluator evaluatorSecondary)
+    {
+      overrideEvaluator1 = evaluator1;
+      overrideEvaluator2 = evaluator2;
+      overrideEvaluatorSecondary = evaluatorSecondary;
+    } 
+
+
     void PrepareEvaluators()
     {
       if (Evaluators == null)
       {
         Evaluators = new NNEvaluatorSet(EvaluatorDef, SearchParams.Execution.FlowDualSelectors, EvaluatorDefSecondary);
+        if (overrideEvaluator1 != null)
+        {
+          Evaluators.OverrideEvaluators(overrideEvaluator1, overrideEvaluator2, overrideEvaluatorSecondary);
+        }
         Evaluators.Warmup(false);
       }
     }
