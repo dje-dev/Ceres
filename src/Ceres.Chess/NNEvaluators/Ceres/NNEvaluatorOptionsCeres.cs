@@ -27,12 +27,37 @@ namespace Ceres.Chess.NNEvaluators.Ceres
   /// </summary>
   public record NNEvaluatorOptionsCeres : NNEvaluatorOptions
   {
+    // Values tuned for Ceres nets.
+    public const float DEFAULT_FRACTION_VALUE2    = 0.4f;
+    public const float DEFAULT_VALUE1_TEMPERATURE = 0.8f;
+    public const float DEFAULT_VALUE2_TEMPERATURE = 1.5f;
+
     /// <summary>
     /// Default value for QNegativeBlunders/QPositiveBlunders.
     /// A value slightly above zero is generally optimal
     /// (since the training rarely saw values of exactly zero).
     /// </summary>
     public const float DEFAULT_Q_BLUNDER = 0.03f;
+
+    #region Overrides
+
+    /// <summary>
+    /// Fraction of the value head 2 that is used to blend into the primary value.
+    /// </summary>
+    public override float FractionValueHead2 { get; init; } = DEFAULT_FRACTION_VALUE2;
+
+    /// <summary>
+    /// Temperature for the value head 2. 
+    /// </summary>
+    public override float ValueHead1Temperature { get; init; } = DEFAULT_VALUE1_TEMPERATURE;
+
+    /// <summary>
+    /// Temperature for the value head 2.
+    /// </summary>
+    public override float ValueHead2Temperature { get; init; } = DEFAULT_VALUE2_TEMPERATURE;
+
+    #endregion
+
 
     /// <summary>
     /// If the prior state information should be used.

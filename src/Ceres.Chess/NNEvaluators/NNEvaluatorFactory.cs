@@ -360,10 +360,9 @@ namespace Ceres.Chess.NNEvaluators
 
           const float DEFAULT_POLUNC_SCALE = 0.0f;
 
-          // Values tuned for Ceres nets.
-          const float DEFAULT_V2_WEIGHT = 0.4f;
-          const float DEFAULT_V1_TEMP = 0.8f;
-          const float DEFAULT_V2_TEMP = 1.5f;
+          const float DEFAULT_V2_WEIGHT = NNEvaluatorOptionsCeres.DEFAULT_FRACTION_VALUE2;
+          const float DEFAULT_V1_TEMP = NNEvaluatorOptionsCeres.DEFAULT_VALUE1_TEMPERATURE;
+          const float DEFAULT_V2_TEMP = NNEvaluatorOptionsCeres.DEFAULT_VALUE2_TEMPERATURE;
 
           float value1Temperature = CheckOptionSpecifiedElseDefault(netDef, options, "V1TEMP", DEFAULT_V1_TEMP);
           float value2Temperature = CheckOptionSpecifiedElseDefault(netDef, options, "V2TEMP", DEFAULT_V2_TEMP);

@@ -22,6 +22,10 @@ namespace Ceres.Chess.NNEvaluators
   /// </summary>
   public record NNEvaluatorOptions
   {
+    public const float DEFAULT_FRACTION_VALUE2    = 0f;
+    public const float DEFAULT_VALUE1_TEMPERATURE = 1f;
+    public const float DEFAULT_VALUE2_TEMPERATURE = 1f;
+
     #region Value Head Options
 
     /// <summary>
@@ -34,29 +38,29 @@ namespace Ceres.Chess.NNEvaluators
     /// <summary>
     /// Fraction of the value head 2 that is used to blend into the primary value.
     /// </summary>
-    public float FractionValueHead2 { get; init; } = 0;
+    public virtual float FractionValueHead2 { get; init; } = DEFAULT_FRACTION_VALUE2;
 
     /// <summary>
     /// Temperature for the value head 2. 
     /// </summary>
-    public float ValueHead1Temperature { get; init; } = 1;
+    public virtual float ValueHead1Temperature { get; init; } = DEFAULT_VALUE1_TEMPERATURE;
 
     /// <summary>
     /// Temperature for the value head 2.
     /// </summary>
-    public float ValueHead2Temperature { get; init; } = 1;
+    public virtual float ValueHead2Temperature { get; init; } = DEFAULT_VALUE2_TEMPERATURE;
 
     /// <summary>
     /// Optional scaling factor that determines the amount by which 
     /// the value 1 temperature is scaled based on position-specific value uncertainty.
     /// </summary>
-    public float Value1UncertaintyTemperatureScalingFactor { get; init; } = 0;
+    public virtual float Value1UncertaintyTemperatureScalingFactor { get; init; } = 0;
 
     /// <summary>
     /// Optional scaling factor that determines the amount by which 
     /// the value 2 temperature is scaled based on position-specific value uncertainty.
     /// </summary>
-    public float Value2UncertaintyTemperatureScalingFactor { get; init; } = 0;
+    public virtual float Value2UncertaintyTemperatureScalingFactor { get; init; } = 0;
 
     #endregion
 
@@ -66,13 +70,13 @@ namespace Ceres.Chess.NNEvaluators
     /// <summary>
     /// Base policy temperature to apply.
     /// </summary>
-    public float PolicyTemperature { get; init; } = 1.0f;
+    public virtual float PolicyTemperature { get; init; } = 1.0f;
 
     /// <summary>
     /// Optional scaling factor that determines the amount by which 
     /// the policy temperature is scaled based on position-specific policy uncertainty.
     /// </summary>
-    public float PolicyUncertaintyTemperatureScalingFactor { get; init; } = 0;
+    public virtual float PolicyUncertaintyTemperatureScalingFactor { get; init; } = 0;
 
     #endregion
 
