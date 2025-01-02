@@ -15,8 +15,6 @@
 
 using System;
 
-using Ceres.Chess.NNEvaluators;
-
 #endregion
 
 namespace Ceres.Chess.NNEvaluators.Ceres

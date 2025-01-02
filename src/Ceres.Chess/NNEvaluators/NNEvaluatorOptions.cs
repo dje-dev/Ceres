@@ -80,6 +80,16 @@ namespace Ceres.Chess.NNEvaluators
 
     #endregion
 
+    #region Head Overrides
+
+    /// <summary>
+    /// Optional list of head overrides.
+    /// </summary>
+    public NNEvaluatorHeadOverride[] HeadOverrides;
+
+
+    #endregion
+
 
     #region Miscellaneous Options
 

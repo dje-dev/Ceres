@@ -93,7 +93,7 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// <summary>
     /// Optional evaluator-specific set of options.
     /// </summary>
-    public object Options;
+    public NNEvaluatorOptions Options;
 
 
     /// <summary>
@@ -381,7 +381,7 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// <returns></returns>
     public static NNEvaluatorDef FromSpecification(string netSpecificationString, 
                                                    string deviceSpecificationString, 
-                                                   object evaluatorOptions = null)
+                                                   NNEvaluatorOptions evaluatorOptions = null)
     {
       return NNEvaluatorDefFactory.FromSpecification(netSpecificationString, deviceSpecificationString, evaluatorOptions);
     }

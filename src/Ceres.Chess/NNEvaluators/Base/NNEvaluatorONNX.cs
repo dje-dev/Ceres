@@ -18,6 +18,9 @@ using System.Buffers;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Linq;
+using System.Collections.Generic;
+
+using Onnx;
 
 using Microsoft.ML.OnnxRuntime;
 
@@ -226,7 +229,8 @@ namespace Chess.Ceres.NNEvaluators
                            bool enableProfiling = false,
                            bool useHistory = true, NNEvaluatorOptions options = null,
                            bool hasValueSecondary = false,
-                           bool hasState = false)
+                           bool hasState = false,
+                           NNEvaluatorHeadOverride[] headOverrides = null)
     {
       EngineNetworkID = engineID;
       ONNXFileName = onnxModelFileName;
@@ -249,6 +253,23 @@ namespace Chess.Ceres.NNEvaluators
       UseHistory = useHistory;
       Options = options ?? new NNEvaluatorOptions();
 
+      // If there are any head overrides, write another ONNX file with extra output nodes.
+      if (headOverrides != null && headOverrides.Length > 0)
+      {
+        HeadOverrides = headOverrides;
+        string[] collectedCollectedHeadOverrideInputLayerNames= HeadOverrides.Select(ho => ho.InputLayerName).ToArray();
+
+        // Add some extra output nodes and write to a new ONNX file.
+        // TODO: consider centralizing this logic
+        ONNXNet onnxNet = new (onnxModelFileName);
+        ModelProto onnxNetAugmented = onnxNet.WithAddedOutputNodes(p => Array.Exists(collectedCollectedHeadOverrideInputLayerNames, s => s == p.Name)); 
+        string tempFileName = onnxModelFileName + ".head_overrides.onnx";
+        onnxNetAugmented.WriteToFile(tempFileName);
+
+        // Reset ONNX file name to point to this modified file.
+        onnxModelFileName = tempFileName;
+      }
+
       string executorType = useTRT ? "TensorRT" : "CUDA";
       string numBits = precision == NNEvaluatorPrecision.FP16 ? "FP16" : "FP32";
       Console.WriteLine("Starting ONNX runtime against " + onnxModelFileName + " from " + onnxModelFileName
@@ -258,9 +279,10 @@ namespace Chess.Ceres.NNEvaluators
                                   ? ["squares", "prior_state.1"] :
                                     ["/input/planes"];
 
+      bool mustRetainOutputsForHeadOverrides = headOverrides != null && headOverrides.Length > 0;
       Executor = new ONNXNetExecutor(engineID, onnxModelFileName, onnxModelBytes, inputNames,
                                      maxBatchSize, type, precision, deviceType, gpuID,
-                                     useTRT, enableProfiling, RetainRawOutputs);
+                                     useTRT, enableProfiling, RetainRawOutputs | mustRetainOutputsForHeadOverrides);
     }
 
 
@@ -438,6 +460,41 @@ namespace Chess.Ceres.NNEvaluators
                                     alreadyConvertedToLZ0: true, tpgDivisor: tpgDivisor,
                                     shouldUseStateForPos: shouldUseStateForPos);
 
+          if (Options.HeadOverrides != null)
+          {
+            if (Options.HeadOverrides.Length != 1 || Options.HeadOverrides[0].ID != "value1")
+            {
+              throw new NotImplementedException("Currently only value1 override supported");
+            }
+            if (results.Length != 1)
+            {
+              throw new NotImplementedException("Multinet not yet supported when using head overrides");
+            }
+
+            NNEvaluatorHeadOverride headOverride = Options.HeadOverrides[0];
+            Dictionary<string, Float16[]> rawNetworkOutputs = results[0].RawNetworkOutputs;
+            if (!rawNetworkOutputs.ContainsKey(headOverride.InputLayerOutputName))
+            {
+              throw new Exception($"Head override output layer {headOverride.InputLayerOutputName} not found in network outputs.");
+            }
+
+            Float16[] headOutputLayer = rawNetworkOutputs[headOverride.InputLayerOutputName];
+            Half[] headOutputLayerHalf = new Half[headOutputLayer.Length];
+            // TODO: improve efficiency
+            for (int i = 0; i < headOutputLayer.Length; i++)
+            {
+              headOutputLayerHalf[i] = (Half)(float)headOutputLayer[i];
+            } 
+
+            // Invoke replacement head operators
+            Half[] newHeadOutput = headOverride.HeadOverrideEvaluator(headOutputLayerHalf);
+
+            Span<Float16> valuesToOverwrite = results[0].ValuesRaw.Span;
+            for (int i = 0; i < valuesToOverwrite.Length; i++)
+            {
+              valuesToOverwrite[i] = (Float16)(float)newHeadOutput[i];
+            }
+          }
           // Apply move masking
           if (posMoveIsLegal != null)
           {

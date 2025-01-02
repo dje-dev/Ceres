@@ -105,6 +105,11 @@ namespace Ceres.Chess.NNEvaluators
     /// </summary>
     public virtual bool PolicyReturnedSameOrderMoveList => false;
 
+    /// <summary>
+    /// Optional list of head overrides for the evaluator.
+    /// </summary>
+    public NNEvaluatorHeadOverride[] HeadOverrides;
+
 
 
     internal object PersistentID { set; get; }
@@ -208,7 +213,7 @@ namespace Ceres.Chess.NNEvaluators
     /// <returns></returns>
     public static NNEvaluator FromSpecification(string netSpecificationString, 
                                                 string deviceSpecificationString, 
-                                                object evaluatorOptions = null)
+                                                NNEvaluatorOptions evaluatorOptions = null)
       => NNEvaluatorDef.FromSpecification(netSpecificationString, deviceSpecificationString, evaluatorOptions).ToEvaluator();
 
     #endregion

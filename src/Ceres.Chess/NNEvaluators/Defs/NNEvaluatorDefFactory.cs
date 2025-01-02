@@ -38,7 +38,7 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// <returns></returns>
     public static NNEvaluatorDef FromSpecification(string netSpecification, 
                                                    string deviceSpecification, 
-                                                   object evaluatorOptions = null)
+                                                   NNEvaluatorOptions evaluatorOptions = null)
     {
       ArgumentNullException.ThrowIfNullOrEmpty(netSpecification);
       ArgumentNullException.ThrowIfNullOrEmpty(deviceSpecification);

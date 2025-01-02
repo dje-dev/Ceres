@@ -148,7 +148,7 @@ namespace Ceres.Chess.NNEvaluators
       }
 
       NNEvaluator evaluator = BuildEvaluatorCore(def, referenceEvaluator, options);
-
+      evaluator.Options = def.Options;
 
       if (shortID != null)
       {
@@ -247,7 +247,8 @@ namespace Ceres.Chess.NNEvaluators
 
     static NNEvaluator Singleton(NNEvaluatorNetDef netDef, NNEvaluatorDeviceDef deviceDef, 
                                  NNEvaluator referenceEvaluator, int referenceEvaluatorIndex,
-                                 Dictionary<string, string> options)
+                                 Dictionary<string, string> options,
+                                 NNEvaluatorOptions optionsEvaluator)
     {
       NNEvaluator ret = null;
 
@@ -358,38 +359,31 @@ namespace Ceres.Chess.NNEvaluators
             throw new Exception($"Ceres net {netFileName} not found. Use valid full path or set source directory using DirCeresNetworks in Ceres.json");
           }
 
-          const float DEFAULT_POLUNC_SCALE = 0.0f;
 
-          const float DEFAULT_V2_WEIGHT = NNEvaluatorOptionsCeres.DEFAULT_FRACTION_VALUE2;
-          const float DEFAULT_V1_TEMP = NNEvaluatorOptionsCeres.DEFAULT_VALUE1_TEMPERATURE;
-          const float DEFAULT_V2_TEMP = NNEvaluatorOptionsCeres.DEFAULT_VALUE2_TEMPERATURE;
+          float value1Temperature = CheckOptionSpecifiedElseDefault(netDef, options, "V1TEMP", optionsEvaluator.ValueHead1Temperature);
+          float value2Temperature = CheckOptionSpecifiedElseDefault(netDef, options, "V2TEMP", optionsEvaluator.ValueHead2Temperature);
+          float value2Weight = CheckOptionSpecifiedElseDefault(netDef, options, "V2FRAC", optionsEvaluator.FractionValueHead2);
 
-          float value1Temperature = CheckOptionSpecifiedElseDefault(netDef, options, "V1TEMP", DEFAULT_V1_TEMP);
-          float value2Temperature = CheckOptionSpecifiedElseDefault(netDef, options, "V2TEMP", DEFAULT_V2_TEMP);
-          float value2Weight = CheckOptionSpecifiedElseDefault(netDef, options, "V2FRAC", DEFAULT_V2_WEIGHT);
-          float policyUncertaintyScaling = CheckOptionSpecifiedElseDefault(netDef, options, "POLUNC_SCALE", DEFAULT_POLUNC_SCALE);
-          
-          if (options != null && options.Keys.Contains("POLUNC"))
-          {
-            policyUncertaintyScaling = 0.5f;
-          }
+//          float policyUncertaintyScaling = CheckOptionSpecifiedElseDefault(netDef, options, "POLUNC_SCALE", DEFAULT_POLUNC_SCALE);        
+//          if (options != null && options.Keys.Contains("POLUNC"))
 
           bool board4Mode = options != null && options.Keys.Contains("4BOARD");
-          NNEvaluatorOptionsCeres optionsCeres = new NNEvaluatorOptionsCeres()
-          {
-            QNegativeBlunders = 0.03f,
-            QPositiveBlunders = 0.03f,
 
+          NNEvaluatorOptionsCeres optionsAsCeres = optionsEvaluator as NNEvaluatorOptionsCeres;
+          if (optionsAsCeres == null)
+          {
+            throw new Exception("NNEvaluatorOptionsCeres expected.");
+          }
+
+          NNEvaluatorOptionsCeres optionsCeres = optionsAsCeres with
+          {
             UseAction = board4Mode,
             UsePriorState = board4Mode,
-
-            PolicyTemperature = 1,
 
             FractionValueHead2 = value2Weight, //options != null && options.Keys.Contains("USEV2") ? 0.5f : 0f
             ValueHead1Temperature = value1Temperature,
             ValueHead2Temperature = value2Temperature,
-
-            PolicyUncertaintyTemperatureScalingFactor = policyUncertaintyScaling,
+//            PolicyUncertaintyTemperatureScalingFactor = policyUncertaintyScaling,
           };
 
           //Console.WriteLine("Using Ceres options: " + optionsCeres);
@@ -423,7 +417,7 @@ namespace Ceres.Chess.NNEvaluators
                                              true, true, HAS_UNCERTAINTY_V, HAS_UNCERTAINTY_P, optionsCeres.UseAction,
                                              "policy", "value", "mlh", "unc", true,
                                              ENABLE_PROFILING, false, USE_HISTORY, optionsCeres,
-                                             true, optionsCeres.UsePriorState);
+                                             true, optionsCeres.UsePriorState, optionsCeres.HeadOverrides);
 
             EncodedPositionBatchFlat.RETAIN_POSITION_INTERNALS = true; // ** TODO: remove/rework
             onnxEngine.ConverterToFlatFromTPG = (options, o, f1) => TPGConvertersToFlat.ConvertToFlatTPGFromTPG(options, o, f1);
@@ -559,11 +553,13 @@ namespace Ceres.Chess.NNEvaluators
           throw new Exception($"Requested neural network evaluator type not supported: {netDef.Type}");
       }
 
+      ret.Options = optionsEvaluator; 
       return  ret;
     }
 
 
-    static NNEvaluator BuildDeviceCombo(NNEvaluatorDef def, NNEvaluator referenceEvaluator, Dictionary<string, string> options)
+    static NNEvaluator BuildDeviceCombo(NNEvaluatorDef def, NNEvaluator referenceEvaluator, 
+                                        Dictionary<string, string> options)
     {
       Debug.Assert(def.Nets.Length == 1);
 
@@ -581,7 +577,7 @@ namespace Ceres.Chess.NNEvaluators
           {
             if (def.Nets.Length == 1)
             {
-              evaluators[i] = Singleton(def.Nets[0].Net, def.Devices[i].Device, referenceEvaluator, i, options);
+              evaluators[i] = Singleton(def.Nets[0].Net, def.Devices[i].Device, referenceEvaluator, i, options, def.Options);
             }
             else
             {
@@ -622,7 +618,7 @@ namespace Ceres.Chess.NNEvaluators
       float[] weightsUPolicy = new float[def.Nets.Length];
       Parallel.For(0, def.Nets.Length, delegate (int i)
       {
-        evaluators[i] = Singleton(def.Nets[i].Net, def.Devices[0].Device, referenceEvaluator, i, options);
+        evaluators[i] = Singleton(def.Nets[i].Net, def.Devices[0].Device, referenceEvaluator, i, options, def.Options);
         weightsValue[i] = def.Nets[i].WeightValue;
         weightsValue2[i] = def.Nets[i].WeightValue2;
         weightsPolicy[i] = def.Nets[i].WeightPolicy;
@@ -680,7 +676,7 @@ namespace Ceres.Chess.NNEvaluators
       }
       else
       {
-        return Singleton(def.Nets[0].Net, def.Devices[0].Device, referenceEvaluator, 0, options);
+        return Singleton(def.Nets[0].Net, def.Devices[0].Device, referenceEvaluator, 0, options, def.Options);
       }
     }
  

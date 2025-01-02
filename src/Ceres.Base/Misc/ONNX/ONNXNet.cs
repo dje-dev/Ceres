@@ -17,8 +17,13 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
+using System.Numerics.Tensors;
+using System.Runtime.InteropServices;
 
 using Onnx;
+using Google.Protobuf.Collections;
+using Google.Protobuf;
+
 
 #endregion
 
@@ -154,8 +159,8 @@ namespace Ceres.Base.Misc.ONNX
       // If not found, return null or handle accordingly
       return null;
     }
-    
-  public List<long> GetOutputShape(ModelProto model, string nodeName, string outputName)
+
+    public List<long> GetOutputShape(ModelProto model, string nodeName, string outputName)
     {
       // Look up the node in the graph
       var node = model.Graph.Node.FirstOrDefault(n => n.Name == nodeName);
@@ -189,8 +194,56 @@ namespace Ceres.Base.Misc.ONNX
 
       // If shape cannot be determined, return an empty list or null
       return null;
-  }
+    }
 
+
+    public void SetLinearLayerWeights(Dictionary<string, (float[], float[])> updatedBiasAndWeights)
+    {
+      int numUpdated = 0;
+      foreach (TensorProto initializer in Model.Graph.Initializer)
+      {
+        if (!initializer.Name.EndsWith(".weight"))
+        {
+          continue;
+        }
+        string baseLayerName = initializer.Name.Replace(".weight", "");
+
+        if (updatedBiasAndWeights.TryGetValue(baseLayerName, out var thisLayerUpdate))
+        {
+          // Get the original weights
+          RepeatedField<long> shapeInTransformer = initializer.Dims;
+
+          // Get raw update matrices
+          (float[] updateWeight, float[] updateBias) = thisLayerUpdate;
+
+          float[] thisUpdate1D = initializer.Name.EndsWith(".bias") ? updateBias : updateWeight;
+
+          // Get the original weights
+          Span<Half> originalWeightsHalf = MemoryMarshal.Cast<byte, Half>(initializer.RawData.ToArray());
+          
+          // Verify sizes consistent with the weights
+          if ( originalWeightsHalf.Length != thisUpdate1D.Length)
+          {
+            throw new InvalidOperationException($"Initializer {initializer.Name} does not match expected dimensions.");
+          } 
+
+          Half[] newWeightsHalf = new Half[thisUpdate1D.Length];
+          TensorPrimitives.ConvertToHalf(thisUpdate1D, newWeightsHalf);
+
+          // Update the initializer with the new weights
+          //				initializer.FloatData.Clear();
+          initializer.RawData = ByteString.CopyFrom(MemoryMarshal.Cast<Half, byte>(newWeightsHalf));
+
+          numUpdated++;
+          //Console.WriteLine($"Updated weights for {initializer.Name} length {thisUpdate1D.Length}");
+        }
+      }
+
+      if (numUpdated < updatedBiasAndWeights.Count)
+      {
+        throw new InvalidOperationException($"Only {numUpdated} of {updatedBiasAndWeights.Count} layers updated."); 
+      }
+    }
 
 
     /// <summary>
@@ -212,6 +265,17 @@ namespace Ceres.Base.Misc.ONNX
     /// <exception cref="Exception"></exception>
     public ModelProto WithAddedOutputNodes(IEnumerable<string> nodeNames)
     {
+      if (nodeNames.Count() == 0)
+      {
+#if NOT
+        foreach (var pp in Model.Graph.Node)
+        {
+          Console.WriteLine(pp.Name);
+        }
+#endif
+        throw new Exception("No nodes specified in WithAddedOutputNodes.");
+      }
+
       ModelProto newModel = Model.Clone();
 
       foreach (string nodeName in nodeNames)
