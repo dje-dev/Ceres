@@ -79,10 +79,26 @@ namespace Ceres.Chess.NNEvaluators
     /// </summary>
     public string EngineNetworkID;
 
+    public NNEvaluatorOptions options = new NNEvaluatorOptions();
+
     /// <summary>
     /// Optional options relating to evaluator (e.g. output head postprocessing).
     /// </summary>
-    public NNEvaluatorOptions Options = new NNEvaluatorOptions();
+    public NNEvaluatorOptions Options 
+    {
+      get => options;
+      set
+      {
+        if (value == null)
+        {
+          throw new ArgumentNullException(nameof(value));
+        }
+        else
+        {
+          options = value;
+        }
+      }
+    }
 
     /// <summary>
     /// Optional short identification string.

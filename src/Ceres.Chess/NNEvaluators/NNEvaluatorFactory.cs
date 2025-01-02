@@ -148,7 +148,10 @@ namespace Ceres.Chess.NNEvaluators
       }
 
       NNEvaluator evaluator = BuildEvaluatorCore(def, referenceEvaluator, options);
-      evaluator.Options = def.Options;
+      if (def.Options != null)
+      {
+        evaluator.Options = def.Options;
+      }
 
       if (shortID != null)
       {
@@ -359,6 +362,10 @@ namespace Ceres.Chess.NNEvaluators
             throw new Exception($"Ceres net {netFileName} not found. Use valid full path or set source directory using DirCeresNetworks in Ceres.json");
           }
 
+          if (optionsEvaluator == null)
+          {
+            optionsEvaluator = new NNEvaluatorOptionsCeres();
+          }
 
           float value1Temperature = CheckOptionSpecifiedElseDefault(netDef, options, "V1TEMP", optionsEvaluator.ValueHead1Temperature);
           float value2Temperature = CheckOptionSpecifiedElseDefault(netDef, options, "V2TEMP", optionsEvaluator.ValueHead2Temperature);
@@ -553,7 +560,11 @@ namespace Ceres.Chess.NNEvaluators
           throw new Exception($"Requested neural network evaluator type not supported: {netDef.Type}");
       }
 
-      ret.Options = optionsEvaluator; 
+      if (optionsEvaluator != null)
+      {
+        ret.Options = optionsEvaluator;
+      }
+
       return  ret;
     }
 
