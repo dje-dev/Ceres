@@ -462,9 +462,9 @@ namespace Chess.Ceres.NNEvaluators
 
           if (Options.HeadOverrides != null)
           {
-            if (Options.HeadOverrides.Length != 1 || Options.HeadOverrides[0].ID != "value1")
+            if (Options.HeadOverrides.Length != 1 || Options.HeadOverrides[0].HeadType != NNEvaluatorHeadOverride.HeadTypeEnum.Value1)
             {
-              throw new NotImplementedException("Currently only value1 override supported");
+              throw new NotImplementedException("Currently only Value1 override supported");
             }
             if (results.Length != 1)
             {
@@ -487,14 +487,15 @@ namespace Chess.Ceres.NNEvaluators
             } 
 
             // Invoke replacement head operators
-            Half[] newHeadOutput = headOverride.HeadOverrideEvaluator(headOutputLayerHalf);
+            Half[] newHeadOutput = headOverride.HeadOverrideEvaluator(headOutputLayerHalf, numPos);
 
-            Span<Float16> valuesToOverwrite = results[0].ValuesRaw.Span;
+            Span<Float16> valuesToOverwrite = results[0].ValuesRaw.Span; // <---- hardcoded to Value1
             for (int i = 0; i < valuesToOverwrite.Length; i++)
             {
               valuesToOverwrite[i] = (Float16)(float)newHeadOutput[i];
             }
           }
+
           // Apply move masking
           if (posMoveIsLegal != null)
           {

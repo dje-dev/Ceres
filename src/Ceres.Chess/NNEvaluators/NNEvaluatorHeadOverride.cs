@@ -52,7 +52,7 @@ namespace Ceres.Chess.NNEvaluators
     /// <summary>
     /// Evaluator function that returns override values for the head for a given input.
     /// </summary>
-    public readonly Func<Half[], Half[]> HeadOverrideEvaluator;
+    public readonly Func<Half[], int, Half[]> HeadOverrideEvaluator;
 
 
     /// <summary>
@@ -66,7 +66,7 @@ namespace Ceres.Chess.NNEvaluators
                                    HeadTypeEnum headType, 
                                    string inputLayerName, 
                                    string inputLayerOutputName,
-                                   Func<Half[], Half[]> headOverrideEvaluator)
+                                   Func<Half[], int, Half[]> headOverrideEvaluator)
     {
       ID = id;
       HeadType = headType;
