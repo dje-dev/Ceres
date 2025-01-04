@@ -50,7 +50,7 @@ namespace Ceres.Base.Misc.ONNX
     public ONNXNet(string onnxFileName)
     {
       savedFileName = onnxFileName;
-      Model = ModelProto.Parser.ParseFromFile(onnxFileName);
+      Model = ModelProto.Parser.ParseFrom(File.ReadAllBytes(onnxFileName));
     }
 
 
