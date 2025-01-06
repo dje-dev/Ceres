@@ -143,7 +143,26 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     public byte Unused1;
     public byte Unused2;
     public byte Unused3;
-    public fixed byte UnusedArray[52];
+    public fixed byte UnusedArray[46];
+
+    #region Reference Model 1 Evaluations
+
+    /// <summary>
+    /// Number of nodes visited in the search by reference model 1.
+    /// </summary>
+    public Half RefModel1NumNodes;
+
+    /// <summary>
+    /// Value of the position according to alternate reference model 1.
+    /// </summary>
+    public Half RefModel1Value;
+
+    /// <summary>
+    /// Best move according to alternate reference model 1.
+    /// </summary>
+    public EncodedMove RefModel1BestMove;
+    
+    #endregion
 
     /// <summary>
     /// Kullback-Leibler divergence between policy head and search visits in nats.
