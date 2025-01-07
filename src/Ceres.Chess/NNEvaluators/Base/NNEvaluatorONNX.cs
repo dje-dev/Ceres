@@ -96,12 +96,12 @@ namespace Chess.Ceres.NNEvaluators
     public override bool HasM => hasM;
 
     /// <summary>
-    /// If the network contains an uncertanity of V head.
+    /// If the network contains an uncertainty of V head.
     /// </summary>
     public override bool HasUncertaintyV => hasUncertaintyV;
 
     /// <summary>
-    /// If the network contains an uncertanity of policy head.
+    /// If the network contains an uncertainty of policy head.
     /// </summary>
     public override bool HasUncertaintyP => hasUncertaintyP;
 
@@ -462,9 +462,11 @@ namespace Chess.Ceres.NNEvaluators
 
           if (Options.HeadOverrides != null)
           {
-            if (Options.HeadOverrides.Length != 1 || Options.HeadOverrides[0].HeadType != NNEvaluatorHeadOverride.HeadTypeEnum.Value1)
+            if (Options.HeadOverrides.Length != 1 || 
+              (Options.HeadOverrides[0].HeadType != NNEvaluatorHeadOverride.HeadTypeEnum.Value1
+            && Options.HeadOverrides[0].HeadType != NNEvaluatorHeadOverride.HeadTypeEnum.Value2))
             {
-              throw new NotImplementedException("Currently only Value1 override supported");
+              throw new NotImplementedException("Currently only Value1 or Value2 override supported");
             }
             if (results.Length != 1)
             {
@@ -479,17 +481,16 @@ namespace Chess.Ceres.NNEvaluators
             }
 
             Float16[] headOutputLayer = rawNetworkOutputs[headOverride.InputLayerOutputName];
-            Half[] headOutputLayerHalf = new Half[headOutputLayer.Length];
-            // TODO: improve efficiency
-            for (int i = 0; i < headOutputLayer.Length; i++)
-            {
-              headOutputLayerHalf[i] = (Half)(float)headOutputLayer[i];
-            } 
+
+            // TODO: Improve efficiency, don't create new array.
+            Half[] headOutputLayerHalf = MemoryMarshal.Cast<Float16, Half>(headOutputLayer).ToArray();
 
             // Invoke replacement head operators
             Half[] newHeadOutput = headOverride.HeadOverrideEvaluator(headOutputLayerHalf, numPos);
 
-            Span<Float16> valuesToOverwrite = results[0].ValuesRaw.Span; // <---- hardcoded to Value1
+            Span<Float16> valuesToOverwrite = Options.HeadOverrides[0].HeadType == NNEvaluatorHeadOverride.HeadTypeEnum.Value1
+                                                ? results[0].ValuesRaw.Span 
+                                                : results[0].Values2Raw.Span; // <---- hardcoded to Value1/Value2
             for (int i = 0; i < valuesToOverwrite.Length; i++)
             {
               valuesToOverwrite[i] = (Float16)(float)newHeadOutput[i];
