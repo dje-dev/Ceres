@@ -202,11 +202,11 @@ namespace Ceres.Base.Misc.ONNX
       int numUpdated = 0;
       foreach (TensorProto initializer in Model.Graph.Initializer)
       {
-        if (!initializer.Name.EndsWith(".weight"))
+        if (!initializer.Name.EndsWith(".weight") && !initializer.Name.EndsWith(".bias"))
         {
           continue;
         }
-        string baseLayerName = initializer.Name.Replace(".weight", "");
+        string baseLayerName = initializer.Name.Replace(".weight", "").Replace(".bias", ""); 
 
         if (updatedBiasAndWeights.TryGetValue(baseLayerName, out var thisLayerUpdate))
         {
@@ -222,7 +222,12 @@ namespace Ceres.Base.Misc.ONNX
           Span<Half> originalWeightsHalf = MemoryMarshal.Cast<byte, Half>(initializer.RawData.ToArray());
           
           // Verify sizes consistent with the weights
-          if ( originalWeightsHalf.Length != thisUpdate1D.Length)
+          if (originalWeightsHalf.Length == 0)
+          {
+            long size = initializer.Dims.Aggregate(1L, (a, b) => a * b);
+            originalWeightsHalf = new Half[size]; 
+          }
+          else if (originalWeightsHalf.Length != thisUpdate1D.Length)
           {
             throw new InvalidOperationException($"Initializer {initializer.Name} does not match expected dimensions.");
           } 
