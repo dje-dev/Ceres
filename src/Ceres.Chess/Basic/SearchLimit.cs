@@ -196,6 +196,10 @@ namespace Ceres.Chess
     [JsonIgnore]
     public bool IsTimeLimit => TypeIsTimeLimit(Type);
 
+    [JsonIgnore]
+    public bool IsHeadTestLimit => (Type == SearchLimitType.NodesPerMove && Value == 1)
+                                 || Type == SearchLimitType.BestValueMove
+                                 || Type == SearchLimitType.BestActionMove;
     #endregion
 
     public SearchLimit WithIncrementApplied()
