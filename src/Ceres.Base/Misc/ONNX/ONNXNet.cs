@@ -244,7 +244,7 @@ namespace Ceres.Base.Misc.ONNX
         }
       }
 
-      if (numUpdated < updatedBiasAndWeights.Count)
+      if (numUpdated < updatedBiasAndWeights.Count * 2)
       {
         throw new InvalidOperationException($"Only {numUpdated} of {updatedBiasAndWeights.Count} layers updated."); 
       }
@@ -300,18 +300,25 @@ namespace Ceres.Base.Misc.ONNX
           List<long> thisShape = GetOutputShape(newModel, nodeName, node.Output[i]);
           if (thisShape == null)
           {
-            throw new Exception($"Could not infer shape for output {node.Output[i]} of node {nodeName}");
+            Console.WriteLine($"NOTE: Could not infer shape for output {node.Output[i]} of node {nodeName}");
           }
 
           TensorProto.Types.DataType? thisDataType = GetOutputDataType(newModel, nodeName, node.Output[i]);
           if (thisDataType == null)
           {
-            throw new Exception($"Could not infer data type for output {node.Output[i]} of node {nodeName}");
+            Console.WriteLine($"Could not infer data type for output {node.Output[i]} of node {nodeName}");
           }
 
           TypeProto tp = new();
           tp.TensorType = new TypeProto.Types.Tensor();
-          tp.TensorType.ElemType = (int)thisDataType;
+          if (thisDataType != null)
+          {
+            tp.TensorType.ElemType = (int)thisDataType;
+          }
+          else
+          {
+            tp.TensorType.ElemType = 10;
+          }
 //          tp.TensorType.Shape = ONNXHelpers.MakeTensorShape(thisShape.ToArray());
 
           ValueInfoProto vip = new();
