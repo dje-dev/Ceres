@@ -94,7 +94,7 @@ namespace Ceres.Chess.Data.Nets
         {"BT4_3190k_ONNX", ONNXNet16LC0("BT4-1024x15x32h-swa-3190000.pb.gz_fp16", false) },
         {"BT4_5000k_ONNX", ONNXNet16LC0("BT4-1024x15x32h-swa-5000000.pb.gz_fp16", false) },
 
-        { "BT4_4520_kovax_ONNX", ONNXNet32LC0("bt4-4520.pb.gz", true) },
+        { "BT4_4520_kovax_ONNX", ONNXNet16LC0("bt4-4520.pb.gz_fp16", true) },
         { "BT4_2740_kovax_ONNX", ONNXNet32LC0("bt4-2740.pb.gz", true) },
 
         {"T1_DISTILL_256_10", ONNXNet32LC0("t1-256x10-distilled-swa-2432500")},
@@ -133,7 +133,6 @@ namespace Ceres.Chess.Data.Nets
         {"T3_512_15_FP16_TRT", ONNXNet16LC0("t3-512x15x16h-swa-2815000.pb.gz_fp16#16", true) },
 
 
-
         {"T3_DISTILL_512_15_FP16", ONNXNet32LC0("t3-512x15x16h-distill-swa-2767500.pb.gz_fp16#16") },
         {"T3_DISTILL_512_15_FP16_TRT", ONNXNet16LC0("t3-512x15x16h-distill-swa-2767500.pb.gz_fp16#16", true)},
         {"T3_DISTILL_512_15_NATIVE", SimpleLC0Net("t3-512x15x16h-distill-swa-2767500.pb.gz#16") },
@@ -143,14 +142,6 @@ namespace Ceres.Chess.Data.Nets
 
       {"T4_RPE_512_15_FP16_TRT", ONNXNet16LC0("t4-512x15b-rpe_3355000_fp16", false) },
       {"T4_RPE_512_15_FP16_NATIVE", SimpleLC0Net("t4-512x15b-rpe_3355000.pb") }, // bad output
-
-      {"BT4-self-quantize4-swa-2092500-fp8-1", ONNXNet16LC0("BT4-self-quantize4-swa-2092500-fp8-1", true) },
-      {"BT4-self-quantize4-swa-2092500-fp8-2", ONNXNet16LC0("BT4-self-quantize4-swa-2092500-fp8-2", true) },
-      {"BT4-self-quantize4-swa-2092500-fp8-3", ONNXNet16LC0("BT4-self-quantize4-swa-2092500-fp8-3", true) },
-      {"BT4-self-quantize4-swa-2092500", ONNXNet16LC0("BT4-self-quantize4-swa-2092500", true) },
-
-
-      {"CERES_TRT", ONNXNet16Ceres("ckpt_DGX_C5_B4_768_15_32_3_48bn_2024_last.ts.fp16#16", true)} 
     };
 
 
