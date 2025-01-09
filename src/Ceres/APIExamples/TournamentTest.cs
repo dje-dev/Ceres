@@ -57,8 +57,9 @@ namespace Ceres.APIExamples
     static int[] OVERRIDE_DEVICE_IDs = /*POOLED ? null*/
        (Environment.MachineName.ToUpper() switch
        {
-         var name when name.Contains("DGX") => new int[] { 0, 1, 2, 3 },
-         var name when name.Contains("HOP") => new int[] { 0, 1, 2, 3 },
+         var name when name.ToUpper().Contains("SUPER") => new int[] { 0 },
+         var name when name.ToUpper().Contains("DGX") => [0, 1, 2, 3],
+         var name when name.ToUpper().Contains("HOP") => [0, 1, 2, 3],
          _ => new int[] { 0 }
        });
 
@@ -114,8 +115,8 @@ namespace Ceres.APIExamples
 
     static string TB_PATH => CeresUserSettingsManager.Settings.TablebaseDirectory;
     static int SF_HASH_SIZE_MB() => HardwareManager.MemorySize > (256L * 1024 * 1024 * 1024)
-                                                                ? 16_384
-                                                                 : 1_024;
+                                                                ? 4096
+                                                                 : 512;
 
     public static void PreTournamentCleanup()
     {
@@ -165,16 +166,12 @@ namespace Ceres.APIExamples
       //var pb1 = LC0ProtobufNet.LoadedNet(NET2);
       //pb1.Dump();
 
-      //      NET2 = @"ONNX_ORT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-1675000-rule50.gz#32";
-      //      NET1 = "CUSTOM1:703810,CUSTOM1:703810";
-
       //NET2 = "~T2_LEARNED_LOOKAHEAD_PAPER_TRT|ZeroHistory";
 
 
       NET1 = "~T3_DISTILL_512_15_FP16_TRT";
       NET2 = "~T3_DISTILL_512_15_NATIVE";
       NET1 = "~BT4_FP16_TRT";
-      NET2 = "~BT4";
 
 
       //      NET2 = "~T1_DISTILL_256_10_FP16";
@@ -254,14 +251,6 @@ namespace Ceres.APIExamples
       //   new NNEvaluatorDynamicByPos([evaluatorCeres, evaluatorLC0], (pos, _) => PIECES.PositionMatches(in pos) ? 0 : 1);
 
 
-      // GOOD! NET1 = "Ceres:combo_6058_6082_nc.onnx";
-
-      //lepned      NET1 = "Ceres:HOP_SP_640_25_20H_FFN3_NLA_SMOL_SP_B1_70bn_fp16_6531_avg.onnx";
-
-
-      //NET1 = "~BT4_4520_kovax_ONNX"; //2740
-//      NET1 = "Ceres:HOP_SP_640_25_20H_FFN3_NLA_SMOL_SP_B1_70bn_fp16_6928.onnx";
-
       NET1 = "Ceres:C1-640-25";
       //    NET2 = "Ceres:C1-640-25|TEST85";
 
@@ -291,38 +280,30 @@ namespace Ceres.APIExamples
       //NET1 = "d4ae6e742b90_SP_640_35_20H_FFN3_NLA_SMOL_SP_B1_9bn_fp16_1799998464.onnx";
       //      NET1 = "9ae67f7c4630_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_3699993600.onnx";//|USEV2";
 
-      NET1 = "f2c88aecad90_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_last_8999980032_8899980288_8799977472_monster_8699980800_8599981056_8499981312.onnx"; // even at 100 nodes!
-      NET1 = "f2c88aecad90_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_9099979776_8999980032_8899980288_8799977472_monster_8699980800_8599981056_8499981312.onnx";
-      NET1 = "eb56f5ba64f9_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_HeadNoMish_90bn_fp16_427am_830pm_8899981824_last.onnx";
 
-      NET1 = "eb56f5ba64f9_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_WD2x_HeadNoMish_90bn_fp16_last.onnx";
-      NET1 = "wdmulti2.onnx";
-      NET1 = "bothrun.onnx";
-//great,lepned
-NET1 = "f2c88aecad90_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_7999982592_8199979008_8399978496_8599981056_8799977472_8999980032_9199979520_9399979008.onnx";
+//great,lepned, became final 640x34
+//NET1 = "f2c88aecad90_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_7999982592_8199979008_8399978496_8599981056_8799977472_8999980032_9199979520_9399979008.onnx";
 
-      NET1 = "z77.onnx";
+//      NET1 = "HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_80bn_fp16_last_nc.onnx";
 //      NET1 = "C1-640-34.onnx|USEV2";
-      NET2 = "C1-640-34.onnx";
+//      NET1 = "C1-640-34.onnx";
+//      NET2 = "C1-640-34.onnx|USEV2";
 
-//      NET1 = "f2c88aecad90_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_7999982592_8199979008_8399978496_8599981056_8799977472_8999980032_9199979520_9399979008_7899979776_8099979264_8299978752_8499978240_8699980800_8899977216_9099979776_9299976192.onnx";
-//+3@1000      NET1 = "f2c88aecad90_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_monster_8599981056_8799977472_last.onnx";
-//      NET1 = "f2c88aecad90_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_7999982592_8199979008_8399978496_8599981056_8799977472_8999980032_9199979520_9399979008_8299978752_8499978240_8699980800_8899977216_9099979776_9299976192_9599978496_9803.onnx";
+     NET1 = "Ceres:HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_80bn_fp16_last.onnx";
 
-      //      NET1 = "f2c88aecad90_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_LORA_8799977472.onnx";
-
-//      NET1 = "eb56f5ba64f9_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_HeadNoMish_90bn_fp16_1030pm_830pm_8899981824_last.onnx";
+      //      NET1 = "f2c88aecad90_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_7999982592_8199979008_8399978496_8599981056_8799977472_8999980032_9199979520_9399979008_7899979776_8099979264_8299978752_8499978240_8699980800_8899977216_9099979776_9299976192.onnx";
+      //+3@1000      NET1 = "f2c88aecad90_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_monster_8599981056_8799977472_last.onnx";
+      //      NET1 = "f2c88aecad90_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_7999982592_8199979008_8399978496_8599981056_8799977472_8999980032_9199979520_9399979008_8299978752_8499978240_8699980800_8899977216_9099979776_9299976192_9599978496_9803.onnx";
 
 
       //NET1 = "C1-640-25|POLUNC";
-//      NET2 = "C1-640-25";
 
       // LORA
       //      NET1 = "9ae67f7c4630_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_LORA_6799985664.onnx";
       //      NET2 = "9ae67f7c4630_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_6799985664.onnx";
 
-//      NET1 = "~T82_TUNE_INTERP";
-//      NET2 = "~T82";
+      //      NET1 = "~T82_TUNE_INTERP";
+      //      NET2 = "~T82";
 
       //NET2 = "~T75";
       //NET2 = "C1-512-25";
@@ -330,7 +311,7 @@ NET1 = "f2c88aecad90_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_7999982592_8199
 
       //NET2 = NET1 = "~T60";
       //    NET1 = "~BT5_FP16";
-//NET2 = "~BT4_FP16_TRT";
+      //NET2 = "~BT4_FP16_TRT";
 
       //NET1 = "HOP_SP_640_25_20H_FFN3_NLA_SMOL_SP_B1_70bn_fp16_7000002560.onnx";
       //NET2 = "HOP_SP_640_25_20H_FFN3_NLA_SMOL_SP_B1_70bn_fp16_6449807360.onnx";
@@ -341,18 +322,67 @@ NET1 = "f2c88aecad90_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_7999982592_8199
       //NET2 = "f2c88aecad90_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_combo2.onnx"; // best is combo2
 
       //      NET1 = "~T1_256_RL_TRT";
-      //      NET2 = "C1-256-10";
       //NET2 = "~BT5_FP16";
-      //NET2 = "~BT4_FP16_TRT";
+      
+      NET1 = "C1-512-25";
 
-//NET2 = null;
+
+      // 512x35 test
+      //NET1 = "combo35p8,C1-640-34";
+      //      NET1 = "HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_80bn_fp16_7399983104.onnx";
+      //      NET2 = "f2c88aecad90_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_7399981056.onnx";
+
+      //NET2 = "HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_80bn_fp16_6499985408";
+      //      NET2 = "HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_80bn_fp16_7399983104.onnx";/
+      //      NET2 = "C1-640-34";
+      NET1 = "C1-640-34,combo35j5_nc,~BT4_FP16_TRT,HOP_SP_512_55_16H_FFN3_NLA_SMOL_SP_B1_8bn_BASE_fp16_2599993344";
+      //,~BT5_FP16";
+   //      NET2 = "combo35j_nc";
+
+
+      //      NET1 = "HOP_SP_512_55_16H_FFN3_NLA_SMOL_SP_B1_8bn_BASE_fp16_last";
+      NET1 = "HOP_SP_512_55_16H_FFN3_NLA_SMOL_SP_B1_8bn_BASE_fp16_36bn.onnx";
+      NET1 = "55_combo36";
+      NET2 = "HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_80bn_fp16_3599990784_nc.onnx";
+
+      //      NET1 = "combo35j5_nc.onnx.nondeblundered2800";//|V2FRAC=0";
+      //      NET2 = "HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_80bn_fp16_7399983104";
+
+      //      NET2 = "C1-640-25";
+
+      //      NET1 = "c1-512-15_LORA.onnx";
+      //      NET2 = "C1-512-15.onnx";
+
+      //      NET1 = "combo35j5_nc";
+      //NET2 = "combo35j_nc";
+      //      NET1 = "HOP_SP_512_55_16H_FFN3_NLA_SMOL_SP_B1_8bn_BASE_fp16_2199994368,C1-640-34";
+      NET2 = "~BT4_FP16_TRT";
+//      NET1 = "ONNX_TRT:bt4-4520.pb.gz_fp16";
+
+//      NET1 = "~T81";
+//NET2 = "C1-640-34";
+//      NET2 = "~BT4_NATIVE";
+//      NET2 = "~BT4_FP16";
+
+      //      NET2 = "~T81";
+      //NET2 = "~T81_FP16_TRT";
+
+      //NET1 = "CUSTOM1";
+
+      NET1 = "C1-640-34.value3_L32_x2.onnx|V2TEMP=1.0;V2FRAC=0.5";
+//      NET2 = "C1-640-34.value3_L32_x2.onnx|V2FRAC=0";
+      NET2 = "C1-640-34";
+      //      NET2 = "C1-640-34";
+      //NET2 = "CUSTOM2";
+      //      NET1 = "C1-512-35.value3_L33_x2";
+      //      NET1 = "C1-640-34.value3_L32_x2";
 
       NET1 = overrideNET1 ?? NET1;
       NET2 = overrideNET2 ?? NET2;
       if (NET2 == "NONE") NET2 = null;
 
-      GPUS_1 = "GPU:0#TensorRT16";// overrideNET1 != null ? "GPU:0" : "GPU:0#TensorRT16";
-      GPUS_2 = "GPU:0#TensorRT16";
+      GPUS_1 = "GPU:0#TensorRT";// overrideNET1 != null ? "GPU:0" : "GPU:0#TensorRT16";
+      GPUS_2 = "GPU:0#TensorRT";
 
 #if NOT
 Test of Torchscript evaluator at 1000 nodes showed it is:
@@ -373,12 +403,10 @@ NET2 = FN_BASELINE;
 #endif
 
       //      NET1 = "CUSTOM1:753723;1;0;0;1,~T1_DISTILL_512_15;0;1;1;0";
-      //NET1 = "ONNX_ORT:BT3_750_policy_vanilla#32,ONNX_ORT:BT3_750_policy_optimistic#32";
-      //      NET1 = "~BT4|1.26"; // 1.26 -13+/-13
       //NET2 = "~T1_DISTIL_512_15_NATIVE";
 
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(100);
+      SearchLimit limit1 = SearchLimit.NodesPerMove(10_000);
       //limit1 = SearchLimit.BestValueMove;
       if (headType == HeadTestType.Policy)
       {
@@ -393,25 +421,28 @@ NET2 = FN_BASELINE;
       SearchLimit limit2 = limit1;
 //      limit1 = limit2 = SearchLimit.SecondsForAllMoves(30, .5f);
 
-#if NOT
-      foreach (string mm in MODELS)
-      {
-        Console.WriteLine();
-        var onnxModel = new ONNXNet(@"e:\cout\nets\" + mm.Replace("Ceres:", ""));
-        Console.WriteLine(onnxModel.NumParams + mm);
-        // onnxModel.DumpInfo();
-      }
-#endif
+
       Console.WriteLine();
+
 #if STOCKFISH_GOOD_LIMIT
 SearchLimit limit1 = SearchLimit.NodesPerMove(500);
 SearchLimit limit2 = SearchLimit.NodesPerMove(350_000);
 
+or better (timed):
+
+SF +46 Elo (+/9) on DEV
+BT4 800 nodes vs SF17 0.20sec (6 threads)
+  <Ceres1 SearchLimit=<NM  800 nodes> Def=<Ceres1 using <Nets: Single <ONNXViaTRT BT4-1024x15x32h-swa-6147500.pb.gz_fp16 FP16>  Device=GPU:0#TensorRT >>>
+  <SF17 SearchLimit=<SM 0.20s> Def=<<SF17 using \\synology\dev\chess\engines\stockfish17-windows-x86-64-avx2.exe NumThreads=6 HashSizeMB=64 SyzygyPath=i:\sygyzy\5and6man;i:\sygyzy\7man >>>
+---------------------------------------------------------------------------------------------
+|         Player          |  Elo   | +/- | CFS(%) |    W-D-L    |    Time    |   NPS-avg    |
+---------------------------------------------------------------------------------------------
+|          SF17*          |  0.0   | --- |  ----  | +175=351-94 |  5576.70   |    6,332,002 |
+|           BT4           |  -46   |  9  |   0%   | +94=351-175 |  7196.43   |        5,707 |
+---------------------------------------------------------------------------------------------
+
 #endif
 
-      //NET2 = @"ONNX_ORT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-1800000-rule50.gz#32";
-      //NET2 = @"ONNX_ORT:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-1800000-rule50.noscale.gz#32";
-      //NET1 = @"LC0:d:\weights\lczero.org\BT2-768x15smolgen-12h-do-01-swa-onnx-1800000-rule50.pb.gz#32";
 
       if (false)
       {
@@ -505,8 +536,8 @@ SearchLimit limit2 = SearchLimit.NodesPerMove(350_000);
       //engineDefCeres2.SearchParams.Execution.MaxBatchSize = 3;
 
       //engineDefCeres1.SelectParams.MinimaxSurpriseMultiplier = 0.10f;
-      //engineDefCeres1.SelectParams.CPUCT *= 0.80f;
-      //engineDefCeres2.SelectParams.CPUCT *= 0.80f;
+//      engineDefCeres1.SelectParams.CPUCT *= 0.70f;
+//      engineDefCeres2.SelectParams.CPUCT *= 0.70f;
 
 //      engineDefCeres1.SelectParams.PolicySoftmax *= 0.85f;
 
@@ -567,7 +598,7 @@ SearchLimit limit2 = SearchLimit.NodesPerMove(350_000);
 
       //      engineDefCeres1.SearchParams.EnableSearchExtension = false;
       //      engineDefCeres2.SearchParams.EnableSearchExtension = false;
-      //      engineDefCeres1.SearchParams.TestFlag = true;
+//engineDefCeres1.SearchParams.TestFlag = true;
       //      engineDefCeres1.SearchParams.Execution.FlowDualSelectors = false;
       //      engineDefCeres1.SearchParams.TranspositionRootPolicyBlendingFraction = 0.5f;
 
@@ -689,12 +720,12 @@ SearchLimit limit2 = SearchLimit.NodesPerMove(350_000);
       GameEngineDefLC0 engineDefLC1 = ENABLE_LC0_1 ? new GameEngineDefLC0("LC0_0", evalDef1, forceDisableSmartPruning, null, null, overrideEXE: OVERRIDE_LC0_EXE, overrideBackendString: OVERRIDE_LC0_BACKEND_STRING) : null;
       GameEngineDefLC0 engineDefLC2 = ENABLE_LC0_2 ? new GameEngineDefLC0("LC0_2", evalDef2, forceDisableSmartPruning, null, null, overrideEXE: OVERRIDE_LC0_EXE, overrideBackendString: OVERRIDE_LC0_BACKEND_STRING) : null;
 
-      EnginePlayerDef playerStockfish17 = new EnginePlayerDef(MakeEngineDefStockfish("SF17", SF17_EXE), limit2);// * 350);
+      EnginePlayerDef playerStockfish17 = new EnginePlayerDef(MakeEngineDefStockfish("SF17", SF17_EXE, hashtableSize:64, numThreads:6), limit2);// * 350);
       EnginePlayerDef playerLC0 = ENABLE_LC0_1 ? new EnginePlayerDef(engineDefLC1, limit1) : null;
       EnginePlayerDef playerLC0_2 = ENABLE_LC0_2 ? new EnginePlayerDef(engineDefLC2, limit2) : null;
 
 
-      const bool RUN_SUITE = false;
+      const bool RUN_SUITE = true;
       if (RUN_SUITE)
       {
         // NET2 = null;
@@ -734,7 +765,7 @@ SearchLimit limit2 = SearchLimit.NodesPerMove(350_000);
           Console.WriteLine();
         }
 
-        string BASE_NAME = "lichess_db_puzzle.epd";//"ERET_VESELY203.epd"; //"chad_tactics-100M.epd";//"hard-talkchess-2022.epd";//"hard-talkchess-2022.epd"; //   "endgame2.epd";// "benchmark.epd";// "endgame2.epd";//  eret nice_lcx Stockfish238
+        string BASE_NAME = "ERET_VESELY203.epd";//"hard-talkchess-2022.epd";//"lichess_db_puzzle.epd"; //"chad_tactics-100M.epd";//"hard-talkchess-2022.epd";//"hard-talkchess-2022.epd"; //   "endgame2.epd";// "benchmark.epd";// "endgame2.epd";//  eret nice_lcx Stockfish238
         ParamsSearch paramsNoFutility = new ParamsSearch() { FutilityPruningStopSearchEnabled = false };
 
         // ===============================================================================
@@ -882,11 +913,13 @@ SearchLimit limit2 = SearchLimit.NodesPerMove(350_000);
         //        def.AcceptPosExcludeIfContainsPieceTypeList = [PieceType.Queen, PieceType.Bishop, PieceType.Knight];
       }
 
-      baseName = "tcec_big";
+      //baseName = "tcec_big";
       baseName = "UHO_Lichess_4852_v1.epd"; // recommended by Kovax
       //baseName = "endingbook-10man-3181.pgn";
-      //baseName = "endingbook-16man-9609.pgn";
-      //baseName = "endingbook-12man-4624.pgn";
+//baseName = "endingbook-16man-9609.pgn";
+//      baseName = "endingbook-12man-4624.pgn";
+//      baseName = "UHO_Lichess_4582_v1_last_10000.epd";
+
       string postfix = (baseName.ToUpper().EndsWith(".EPD") || baseName.ToUpper().EndsWith(".PGN")) ? "" : ".pgn";
       def.OpeningsFileName = SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/openings/{baseName}{postfix}"
                                                      : @$"\\synology\dev\chess\data\openings\{baseName}{postfix}";
@@ -895,14 +928,17 @@ SearchLimit limit2 = SearchLimit.NodesPerMove(350_000);
       //ConsoleUtils.WriteLineColored(ConsoleColor.Red, "WARNING TB ADJUDICATION OFF");
       //def.UseTablebasesForAdjudication = false;
 
-      if (false)
+      // Result very sensitive to adjudication, value estimates unreliable.
+      // TODO: someday use a strong reference engine for adjudication
+      bool DISABLE_ADJUDICATION = limit1.IsHeadTestLimit || limit2.IsHeadTestLimit;
+      if (DISABLE_ADJUDICATION)
       {
         def.AdjudicateDrawThresholdCentipawns = 0;
         def.AdjudicateDrawThresholdNumMoves = 999;
 
         def.AdjudicateWinThresholdCentipawns = int.MaxValue;
         def.AdjudicateWinThresholdNumMovesDecisive = 3000;
-        def.UseTablebasesForAdjudication = false;
+        //def.UseTablebasesForAdjudication = false;
       }
 
       TournamentManager runner = new TournamentManager(def, CONCURRENCY, OVERRIDE_DEVICE_IDs);
@@ -921,9 +957,12 @@ SearchLimit limit2 = SearchLimit.NodesPerMove(350_000);
       Console.WriteLine($"Tournament completed in {stats.ElapsedTimeSecs,8:F2} seconds.");
       //Console.WriteLine(results.GameOutcomesString);
 
-      Console.WriteLine();
-      Console.WriteLine("<CRLF> to continue");
-      Console.ReadLine();
+      if (false)
+      {
+        Console.WriteLine();
+        Console.WriteLine("<CRLF> to continue");
+        Console.ReadLine();
+      }
       return 0;
     }
 
