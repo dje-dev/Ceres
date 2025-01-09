@@ -395,6 +395,15 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
       int INDEX_POLICIES = FindIndex(1858);
       int INDEX_WDL = FindIndex(3);
       int INDEX_WDL2 = FindIndex(3, INDEX_WDL, "value2", true);
+      int INDEX_WDL3 = FindIndex(3, INDEX_WDL, "value3", true);
+
+      const bool SUBSTITUTE_VALUE3_INTO_VALUE2_IF_FOUND = true;
+      if (SUBSTITUTE_VALUE3_INTO_VALUE2_IF_FOUND && INDEX_WDL3 != -1)
+      {
+        // TODO: Consider adding a slot for value 3 instead?
+        INDEX_WDL2 = INDEX_WDL3;
+      }
+
       int INDEX_MLH = FindIndex(1, optional: true);
       int INDEX_UNC = hasUNC ? FindIndex(1, INDEX_MLH, optional: true) : -1;
       int INDEX_UNC_POLICY = hasUNC_POLICY ? FindIndex(1, INDEX_MLH, "uncertainty_policy", true) : -1;
