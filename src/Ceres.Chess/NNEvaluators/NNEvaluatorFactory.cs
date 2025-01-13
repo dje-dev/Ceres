@@ -48,12 +48,21 @@ namespace Ceres.Chess.NNEvaluators
     /// <summary>
     /// Delegate type which constructs evaluator from specified definition.
     /// </summary>
-    public delegate NNEvaluator CustomDelegate(string netID, int gpuID, NNEvaluator referenceEvaluator, object options);
+    public delegate NNEvaluator CustomDelegate(string netID, 
+                                               int gpuID, 
+                                               NNEvaluator referenceEvaluator,
+                                               object options, 
+                                               Dictionary<string, string> optionsDict);
 
     /// <summary>
     /// Custom factory method installable at runtime (COMBO_PHASED).
     /// </summary>
     public static CustomDelegate ComboPhasedFactory;
+
+    /// <summary>
+    /// Optional options object for use by combo phased custom factory.
+    /// </summary>
+    public static NNEvaluatorOptions CustomPhasedOptions;
 
     /// <summary>
     /// Custom factory method installable at runtime (CUSTOM1).
@@ -63,7 +72,7 @@ namespace Ceres.Chess.NNEvaluators
     /// <summary>
     /// Optional options object for use by custom factory method (CUSTOM1). 
     /// </summary>
-    public static object Custom1Options; 
+    public static NNEvaluatorOptions Custom1Options; 
 
     /// <summary>
     /// Custom factory method installable at runtime (CUSTOM2).
@@ -73,7 +82,7 @@ namespace Ceres.Chess.NNEvaluators
     /// <summary>
     /// Optional options object for use by custom factory method (CUSTOM2). 
     /// </summary>
-    public static object Custom2Options;
+    public static NNEvaluatorOptions Custom2Options;
 
 
     /// <summary>
@@ -228,29 +237,10 @@ namespace Ceres.Chess.NNEvaluators
 
 
 
-    private static float CheckOptionSpecifiedElseDefault(NNEvaluatorNetDef netDef, 
-                                                         Dictionary<string, string> options,
-                                                         string optionKey, 
-                                                         float defaultValue)
-    {
-      float returnValue = defaultValue;
-      string optionString = (options != null && options.Keys.Contains(optionKey))
-                             ? options[optionKey]
-                             : null;
-      if (optionString != null)
-      {
-        if (!float.TryParse(optionString, out returnValue))
-        {
-          throw new Exception($"Invalid value for {optionKey}, expected number but got: {optionString}");
-        }
-      }
-
-      return returnValue;
-    }
 
     static NNEvaluator Singleton(NNEvaluatorNetDef netDef, NNEvaluatorDeviceDef deviceDef, 
                                  NNEvaluator referenceEvaluator, int referenceEvaluatorIndex,
-                                 Dictionary<string, string> options,
+                                 Dictionary<string, string> optionsDict,
                                  NNEvaluatorOptions optionsEvaluator)
     {
       NNEvaluator ret = null;
@@ -268,7 +258,7 @@ namespace Ceres.Chess.NNEvaluators
       const bool DEFAULT_HAS_STATE = false;
 
       const int DEFAULT_MAX_BATCH_SIZE = 1024;
-      const int TRT_MAX_BATCH_SIZE = 256; // See note in ONNXExecutor, possibly configuring profile to include large batches hinders performance.
+      const int TRT_MAX_BATCH_SIZE = 1024; // See note in ONNXExecutor, possibly configuring profile to include large batches hinders performance.
       const bool ONNX_SCALE_50_MOVE_COUNTER = false; // BT2 already inserts own node to adjust
 
       switch (netDef.Type)
@@ -346,7 +336,7 @@ namespace Ceres.Chess.NNEvaluators
 
           string onnxFileName = null;
 
-          string shortID = options != null && options.TryGetValue("ID", out string id) ? id : netDef.NetworkID;
+          string shortID = optionsDict != null && optionsDict.TryGetValue("ID", out string id) ? id : netDef.NetworkID;
           string netFileName = onnxFileName ?? netDef.NetworkID;
           if (!netFileName.ToUpper().EndsWith("ONNX") && !isTorchscipt)
           {
@@ -362,38 +352,7 @@ namespace Ceres.Chess.NNEvaluators
             throw new Exception($"Ceres net {netFileName} not found. Use valid full path or set source directory using DirCeresNetworks in Ceres.json");
           }
 
-          if (optionsEvaluator == null)
-          {
-            optionsEvaluator = new NNEvaluatorOptionsCeres();
-          }
-
-          float value1Temperature = CheckOptionSpecifiedElseDefault(netDef, options, "V1TEMP", optionsEvaluator.ValueHead1Temperature);
-          float value2Temperature = CheckOptionSpecifiedElseDefault(netDef, options, "V2TEMP", optionsEvaluator.ValueHead2Temperature);
-          float value2Weight = CheckOptionSpecifiedElseDefault(netDef, options, "V2FRAC", optionsEvaluator.FractionValueHead2);
-
-//          float policyUncertaintyScaling = CheckOptionSpecifiedElseDefault(netDef, options, "POLUNC_SCALE", DEFAULT_POLUNC_SCALE);        
-//          if (options != null && options.Keys.Contains("POLUNC"))
-
-          bool board4Mode = options != null && options.Keys.Contains("4BOARD");
-
-          NNEvaluatorOptionsCeres optionsAsCeres = optionsEvaluator as NNEvaluatorOptionsCeres;
-          if (optionsAsCeres == null)
-          {
-            throw new Exception("NNEvaluatorOptionsCeres expected.");
-          }
-
-          NNEvaluatorOptionsCeres optionsCeres = optionsAsCeres with
-          {
-            UseAction = board4Mode,
-            UsePriorState = board4Mode,
-
-            FractionValueHead2 = value2Weight, //options != null && options.Keys.Contains("USEV2") ? 0.5f : 0f
-            ValueHead1Temperature = value1Temperature,
-            ValueHead2Temperature = value2Temperature,
-//            PolicyUncertaintyTemperatureScalingFactor = policyUncertaintyScaling,
-          };
-
-          //Console.WriteLine("Using Ceres options: " + optionsCeres);
+          NNEvaluatorOptionsCeres optionsCeres = new NNEvaluatorOptionsCeres().OptionsWithOptionsDictApplied(optionsDict) as NNEvaluatorOptionsCeres;
 
           int maxCeresBatchSize = useTensorRT ? TRT_MAX_BATCH_SIZE : DEFAULT_MAX_BATCH_SIZE;
           maxCeresBatchSize = deviceDef.MaxBatchSize.HasValue ? Math.Min(deviceDef.MaxBatchSize.Value, maxCeresBatchSize) : maxCeresBatchSize;
@@ -533,11 +492,18 @@ namespace Ceres.Chess.NNEvaluators
           break;
 
         case NNEvaluatorType.ComboPhased:
+          // TODO: 
           if (ComboPhasedFactory == null)
           {
             throw new Exception("NNEvaluatorFactory.ComboPhasedFactory static variable must be initialized.");
           }
-          ret = ComboPhasedFactory(netDef.NetworkID, deviceDef.DeviceIndex, referenceEvaluator, Custom1Options);
+
+          if (Custom1Options == null && optionsDict != null && optionsDict != null)
+          {
+            throw new NotImplementedException("Cannot apply options to ComboPhased without Custom1Options.");
+          }
+          NNEvaluatorOptions optionsPhased = CustomPhasedOptions ?? new NNEvaluatorOptions();
+          ret = ComboPhasedFactory(netDef.NetworkID, deviceDef.DeviceIndex, referenceEvaluator, optionsPhased, optionsDict);
           break;
 
         case NNEvaluatorType.Custom1:
@@ -545,7 +511,12 @@ namespace Ceres.Chess.NNEvaluators
           {
             throw new Exception("NNEvaluatorFactory.Custom1Factory static variable must be initialized.");
           }
-          ret = Custom1Factory(netDef.NetworkID, deviceDef.DeviceIndex, referenceEvaluator, Custom1Options);
+          if (Custom1Options == null && optionsDict != null && optionsDict != null)
+          {
+            throw new NotImplementedException("Cannot apply options to Custom1 without Custom1Options.");
+          }
+          NNEvaluatorOptions options1 = Custom1Options ?? new NNEvaluatorOptions();
+          ret = Custom1Factory(netDef.NetworkID, deviceDef.DeviceIndex, referenceEvaluator, options1, optionsDict);
           break;
 
         case NNEvaluatorType.Custom2:
@@ -553,7 +524,12 @@ namespace Ceres.Chess.NNEvaluators
           {
             throw new Exception("NNEvaluatorFactory.Custom2Factory static variable must be initialized.");
           }
-          ret = Custom2Factory(netDef.NetworkID, deviceDef.DeviceIndex, referenceEvaluator, Custom2Options);
+          if (Custom1Options == null && optionsDict != null && optionsDict != null)
+          {
+            throw new NotImplementedException("Cannot apply options to Custom2 without Custom1Options.");
+          }
+          NNEvaluatorOptions options2 = Custom2Options ?? new NNEvaluatorOptions();
+          ret = Custom2Factory(netDef.NetworkID, deviceDef.DeviceIndex, referenceEvaluator, options2, optionsDict);
           break;
 
         default:

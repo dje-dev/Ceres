@@ -13,6 +13,9 @@
 
 #region Using directives
 
+using System;
+using System.Collections.Generic;
+
 #endregion
 
 namespace Ceres.Chess.NNEvaluators
@@ -64,6 +67,19 @@ namespace Ceres.Chess.NNEvaluators
 
     #endregion
 
+    #region Applying supplemental options
+
+    public virtual NNEvaluatorOptions OptionsWithOptionsDictApplied(Dictionary<string, string> optionsDict)
+    {
+      if (optionsDict != null && optionsDict.Count > 0)
+      {
+         throw new Exception("OptionsWithOptionsDictApplied not implemented for this class");
+      }
+
+      return this with { };
+    }
+
+    #endregion
 
     #region Policy Head Options
 
