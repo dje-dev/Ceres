@@ -36,46 +36,157 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
     const bool DUMP_MAX_ABS_WEIGHTS_BY_LAYER = false; // currently only shows those >2
 
 
+
     /// <summary>
-    /// Creates an equal-weighted average of the weights of the specified ONNX models.
+    /// Creates an equal-weighted average of the specified ONNX models, with optional min/max discarding.
     /// </summary>
-    /// <param name="outputPath"></param>
-    /// <param name="modelPaths"></param>
-    /// <exception cref="ArgumentException"></exception>
-    public static void CreateAveragedFile(string outputPath, params string[] modelPaths)
+    public static void CreateAveragedFile(string outputPath, bool discardMinAndMaxValues, params string[] modelPaths)
     {
-      if (modelPaths == null || modelPaths.Length < 2)
+      (string, float)[] modelPathsAndWeights = modelPaths.Select(p => (p, 1f / modelPaths.Length)).ToArray(); // equal weights
+      CreateAveragedFile(outputPath, discardMinAndMaxValues, modelPathsAndWeights);
+    }
+
+
+    /// <summary>
+    /// Creates an equal-weighted average of the specified ONNX models, with optional min/max discarding.
+    /// </summary>
+    public static void CreateAveragedFile(string outputPath,  params string[] modelPaths) =>  CreateAveragedFile(outputPath, false, modelPaths);
+    
+
+
+    /// <summary>
+    /// Creates a weighted average of the specified ONNX models, with optional min/max discarding.
+    /// </summary>
+    /// <param name="outputPath">Path for the output ONNX file.</param>
+    /// <param name="discardMinAndMaxValues">If true, discards the largest and smallest values before averaging.</param>
+    /// <param name="modelPaths">Tuples of (string modelPath, float weight).</param>
+    /// <exception cref="ArgumentException"></exception>
+    public static void CreateAveragedFile(string outputPath, bool discardMinAndMaxValues, params (string, float)[] modelPaths)
+    {
+      if (modelPaths.Length < 3 && discardMinAndMaxValues)
       {
-        throw new ArgumentException("At least two model paths must be provided.", nameof(modelPaths));
+        throw new ArgumentException("At least three model paths must be provided with discardMinAndMaxValues.", nameof(modelPaths));
       }
 
       if (File.Exists(outputPath))
       {
         throw new ArgumentException("Output file already exists.", nameof(outputPath));
-      } 
-
-      // Load all models and prepare their initializers for averaging
-      List<(float weight, RepeatedField<TensorProto> tensors)> modelsAndInitializers = new List<(float weight, RepeatedField<TensorProto> tensors)>();
-      float weight = 1f / modelPaths.Length;
-
-      foreach (string modelPath in modelPaths)
-      {
-        var model = Base.Misc.ONNX.ONNXHelpers.LoadModel(modelPath);
-        modelsAndInitializers.Add((weight, model.Graph.Initializer));
       }
 
-      // Compute the average of the initializers
-      IEnumerable<TensorProto> averagedInitializers = AverageInitializers(modelsAndInitializers.ToArray());
+      // Load all models and prepare their initializers for averaging
+      List<(float weight, RepeatedField<TensorProto> tensors)> modelsAndInitializers
+          = new List<(float weight, RepeatedField<TensorProto> tensors)>();
+
+      foreach ((string path, float wgt) in modelPaths)
+      {
+        ModelProto model = Base.Misc.ONNX.ONNXHelpers.LoadModel(path);
+        modelsAndInitializers.Add((wgt, model.Graph.Initializer));
+      }
+
+      // Compute the average of the initializers (assume two different methods exist, 
+      // one with discard and one without)
+      IEnumerable<TensorProto> averagedInitializers =  AverageInitializersMulti(discardMinAndMaxValues, modelsAndInitializers.ToArray());
 
       // Start with the first model as a base and update its initializers
-      ModelProto baseModel = Base.Misc.ONNX.ONNXHelpers.LoadModel(modelPaths[0]);
+      ModelProto baseModel = Base.Misc.ONNX.ONNXHelpers.LoadModel(modelPaths[0].Item1);
       baseModel.Graph.Initializer.Clear();
       baseModel.Graph.Initializer.AddRange(averagedInitializers);
 
       // Save the new averaged model
       Base.Misc.ONNX.ONNXHelpers.SaveModel(baseModel, outputPath);
 
-      Console.WriteLine($"New ONNX model {outputPath} created with averaged parameters from {modelPaths.Length} files.");
+      Console.WriteLine($"New ONNX model {outputPath} created with weighted averaged parameters from {modelPaths.Length} files.");
+    }
+
+
+    /// <summary>
+    /// Computes a weighted average of the given 2D inputs (per "column" index),
+    /// optionally removing the min and max values across the N inputs for each column.
+    /// 
+    /// If removeMinAndMax is true, then for each column j, we exclude from the
+    /// weighted average any inputs[i][j] that match the minimum or maximum in that column.
+    /// 
+    /// Throws if removeMinAndMax is true and fewer than 3 total "rows" (i.e. inputs.Length < 3).
+    /// </summary>
+    /// <param name="inputs">2D array of Half, where each inputs[i] has the same length.</param>
+    /// <param name="weights">Array of float weights, one weight per row in inputs.</param>
+    /// <param name="removeMinAndMax">Whether to discard each column's min and max from the average.</param>
+    /// <returns>A 1D array of Half, where each index corresponds to the column-averaged result.</returns>
+    /// <exception cref="ArgumentException"></exception>
+    public static void ComputedWtdAveragesWithDiscard(Span<Half> result, Half[][] inputs, float[] weights, bool removeMinAndMax)
+    {
+      if (inputs == null || weights == null)
+      {
+        throw new ArgumentException("Input arrays cannot be null.");
+      }
+      if (inputs.Length != weights.Length)
+      {
+        throw new ArgumentException("Number of input rows must match number of weights.");
+      }
+      if (inputs.Length == 0)
+      {
+        throw new ArgumentException("No input data provided.");
+      }
+      if (removeMinAndMax && inputs.Length < 3)
+      {
+        throw new ArgumentException("At least three rows are required to remove min and max.");
+      }
+
+      // Check that all rows have the same length
+      int widthInputs = inputs[0].Length;
+      for (int i = 1; i < inputs.Length; i++)
+      {
+        if (inputs[i].Length != widthInputs)
+        {
+          throw new ArgumentException("All input rows must have the same number of columns.");
+        }
+      }
+
+      // For each column j, gather N values from the N rows
+      for (int j = 0; j < widthInputs; j++)
+      {
+        float minVal = float.MaxValue;
+        float maxVal = float.MinValue;
+
+        // 1) Find min and max across the N inputs for column j
+        for (int i = 0; i < inputs.Length; i++)
+        {
+          float current = (float)inputs[i][j];
+          if (current < minVal)
+          {
+            minVal = current;
+          }
+          if (current > maxVal)
+          {
+            maxVal = current;
+          }
+        }
+
+        // 2) Sum up (value * weight) and sum of weights, excluding min and max if requested
+        float sumWeighted = 0f;
+        float sumWeights = 0f;
+        for (int i = 0; i < inputs.Length; i++)
+        {
+          float current = (float)inputs[i][j];
+          if (removeMinAndMax && (current == minVal || current == maxVal))
+          {
+            // Skip these
+            continue;
+          }
+          sumWeighted += current * weights[i];
+          sumWeights += weights[i];
+        }
+
+        // 3) Compute the final average for this column
+        float finalAverage = 0f;
+        if (sumWeights > 1e-12f)
+        {
+          finalAverage = sumWeighted / sumWeights;
+        }
+
+        // 4) Store as Half in the result array
+        result[j] = (Half)finalAverage;
+      }
     }
 
 
@@ -86,18 +197,29 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
     /// <returns></returns>
     /// <exception cref="Exception"></exception>
     /// <exception cref="NotImplementedException"></exception>
-    static IEnumerable<TensorProto> AverageInitializers(params (float weight, RepeatedField<TensorProto> tensors)[] items)
+    static IEnumerable<TensorProto> AverageInitializersMulti(bool discardMinMax, params (float weight, RepeatedField<TensorProto> tensors)[] items)
     {
       List<TensorProto> averagedInitializers = new List<TensorProto>();
 
       RepeatedField<TensorProto> rootTensors = items[0].tensors;
+      float[] weights = items.Length == 1 ? new float[] { 1f } : items.Select(i => i.weight).ToArray();
 
       foreach (TensorProto tensorRoot in rootTensors)
       {
         TensorProto avgTensor = default;
-        byte[] newData = new byte[tensorRoot.RawData.Length];
-        Span<Half> newHalfData = MemoryMarshal.Cast<byte, Half>(newData);
 
+        if (avgTensor == null)
+        {
+          avgTensor = new()
+          {
+            Name = tensorRoot.Name,
+            DataType = tensorRoot.DataType,
+            Dims = { tensorRoot.Dims }
+          };
+        }
+
+        Half[][] inputs = new Half[items.Length][];
+        int index = 0;
         foreach ((float weight, RepeatedField<TensorProto> tensors) item in items)
         {
           TensorProto tensorThisItem = item.tensors.FirstOrDefault(t => tensorRoot.Name == t.Name);
@@ -106,47 +228,35 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
             throw new Exception($"Tensor {tensorRoot.Name} not found in all models.");
           }
 
-          if (avgTensor == null)
-          {
-            avgTensor = new()
-            {
-              Name = tensorRoot.Name,
-              DataType = tensorRoot.DataType,
-              Dims = { tensorRoot.Dims }
-            };
-          }
 
           if (tensorThisItem.DataType == (int)TensorProto.Types.DataType.Float16)
           {
-            ReadOnlySpan<Half> value = MemoryMarshal.Cast<byte, Half>(tensorThisItem.RawData.Span);
-            float maxAbs = 0;
-            float minAbs = float.MaxValue;
-            float sumAbs = 0;
-            for (int i = 0; i < value.Length; i++)
-            {
-              newHalfData[i] += (Half)(item.weight * (float)value[i]);
-              if (DUMP_MAX_ABS_WEIGHTS_BY_LAYER)
-              {
-                minAbs = value[i] == Half.Zero ? minAbs : Math.Min(minAbs, Math.Abs((float)value[i]));
-                maxAbs =  Math.Max(maxAbs, Math.Abs((float)value[i]));
-                sumAbs+= Math.Abs((float)value[i]);
-              }                      
-            }
-
-            if (DUMP_MAX_ABS_WEIGHTS_BY_LAYER)
-            {
-              float avgAbs = sumAbs / value.Length;
-              if (avgAbs < 1E-4 || minAbs > 2 || maxAbs > 2)
-              {
-                Console.WriteLine(avgAbs + " " + minAbs + " " + maxAbs + "  " + tensorRoot.Name);
-              }
-            }
+            inputs[index++] = MemoryMarshal.Cast<byte, Half>(tensorThisItem.RawData.Span).ToArray();
           }
           else
           {
             throw new NotImplementedException("Unable to process: " + tensorThisItem.DataType + " " + tensorThisItem.Name);
           }
 
+        }
+
+        // Create the newData buffer
+        byte[] newData = new byte[tensorRoot.RawData.Length];
+
+        // Pin the array, so GC won't relocate it during our operations
+        GCHandle handle = GCHandle.Alloc(newData, GCHandleType.Pinned);
+        try
+        {
+          // Safely cast to Span<Half> after pinning
+          Span<Half> newHalfData = MemoryMarshal.Cast<byte, Half>(newData);
+
+          // Call your function on the newly pinned span
+          ComputedWtdAveragesWithDiscard(newHalfData, inputs, weights, discardMinMax);
+        }
+        finally
+        {
+          // Free the handle once you're done
+          handle.Free();
         }
 
         avgTensor.RawData = ByteString.CopyFrom(newData);
