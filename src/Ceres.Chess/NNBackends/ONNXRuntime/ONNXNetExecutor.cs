@@ -401,6 +401,7 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
       if (SUBSTITUTE_VALUE3_INTO_VALUE2_IF_FOUND && INDEX_WDL3 != -1)
       {
         // TODO: Consider adding a slot for value 3 instead?
+        // Store value3 in 2
         INDEX_WDL2 = INDEX_WDL3;
       }
 
