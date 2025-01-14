@@ -44,6 +44,10 @@ using Ceres.Chess.NetEvaluation.Batch;
 using System.Runtime.InteropServices;
 using Ceres.Chess.Games.Utils;
 using Ceres.Chess.Data.Nets;
+using Chess.Ceres.PlayEvaluation;
+using Newtonsoft.Json.Linq;
+using static Microsoft.FSharp.Core.ByRefKinds;
+using System.Linq;
 
 #endregion
 
@@ -140,20 +144,8 @@ namespace Ceres.APIExamples
                              string overrideNET1 = null, string overrideNET2 = null,
                              HeadTestType headType = HeadTestType.Default)
     {
-      //      DisposeTest(); System.Environment.Exit(3);
-      //      if (Marshal.SizeOf<MCTSNodeStruct>() != 64)
-      //        throw new Exception("Wrong size " + Marshal.SizeOf<MCTSNodeStruct>().ToString());
-      if (Marshal.SizeOf<MCTS.MTCSNodes.Struct.MCTSNodeStruct>() != 64)
-        throw new Exception("Wrong size " + Marshal.SizeOf<MCTS.MTCSNodes.Struct.MCTSNodeStruct>().ToString());
       //      PreTournamentCleanup();
       //RunEngineComparisons(); return;
-
-      if (false)
-      {
-        Parallel.Invoke(() => TestSF(0, true), () => { Thread.Sleep(7_000); TestSF(1, false); });
-        System.Environment.Exit(3);
-      }
-
 
       string NET1_SECONDARY1 = null;
       string NET1 = "TBD";
@@ -342,7 +334,6 @@ namespace Ceres.APIExamples
 
       //      NET1 = "HOP_SP_512_55_16H_FFN3_NLA_SMOL_SP_B1_8bn_BASE_fp16_last";
       NET1 = "HOP_SP_512_55_16H_FFN3_NLA_SMOL_SP_B1_8bn_BASE_fp16_36bn.onnx";
-      NET1 = "55_combo36";
       NET2 = "HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_80bn_fp16_3599990784_nc.onnx";
 
       //      NET1 = "combo35j5_nc.onnx.nondeblundered2800";//|V2FRAC=0";
@@ -365,17 +356,37 @@ namespace Ceres.APIExamples
 //      NET2 = "~BT4_FP16";
 
       //      NET2 = "~T81";
-      //NET2 = "~T81_FP16_TRT";
+//NET2 = "~T81_FP16_TRT";
 
       //NET1 = "CUSTOM1";
 
-      NET1 = "C1-640-34.value3_L32_x2.onnx|V2TEMP=1.0;V2FRAC=0.5";
-//      NET2 = "C1-640-34.value3_L32_x2.onnx|V2FRAC=0";
-      NET2 = "C1-640-34";
-      //      NET2 = "C1-640-34";
+//      NET1 = "C1-640-34.value3_L32_x2.onnx|V2TEMP=1.0;V2FRAC=0.5";
+      //      NET2 = "C1-640-34.value3_L32_x2.onnx|V2FRAC=0";
+      //      NET2 = "C1-640-34"
+//      NET1 = "55_comboX";
+
+      NET1 = "HOP_SP_512_55_16H_FFN3_NLA_SMOL_SP_B1_8bn_BASE_fp16_5799985152.onnx|V2FRAC=0.4;V1TEMP=0.8;V2TEMP=1.5";
+      NET1 = "combo35j5T_nc";
+//      NET2 = "9ae67f7c4630_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_5999984640.onnx";
+//      NET2 = "HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_80bn_fp16_5399986176.onnx";
+
+//good      NET1 = "CUSTOM1|V2FRAC=0.0;V1TEMP=1.15;V2TEMP=1.5";
+      NET1 = "CUSTOM1|V2FRAC=0.5;V1TEMP=0.8;V2TEMP=1.15";
+      //x      NET1 = "C1-512-35.onnx.deblundered5500|V2FRAC=0;V1TEMP=1.0;V2TEMP=1.5";
       //NET2 = "CUSTOM2";
+
+//      NET1 = @"e:\cout\nets\C1-512-35.value3_L33_x2.onnx.value3|V2FRAC=0.6;V1TEMP=0.80;V2TEMP=1.1";
+      NET1 = @"e:\cout\nets\C1-512-35.value3_L33_x2.onnx.value3|V2FRAC=1;V1TEMP=0.80;V2TEMP=1.0";
+      //      NET2 = "C1-512-35";//|V2FRAC=0.4;V1TEMP=0.8;V2TEMP=1.5";
       //      NET1 = "C1-512-35.value3_L33_x2";
       //      NET1 = "C1-640-34.value3_L32_x2";
+
+      //      NET1 = "HOP_SP_512_55_16H_FFN3_NLA_SMOL_SP_B1_8bn_BASE_fp16_6299983872";
+      //NET2 = "HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_80bn_fp16_6299983872";
+      //      NET2 = "9ae67f7c4630_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_6299986944";
+
+      NET1 = "combo640T_nc";
+      NET2 = "C1-640-34";
 
       NET1 = overrideNET1 ?? NET1;
       NET2 = overrideNET2 ?? NET2;
@@ -385,28 +396,20 @@ namespace Ceres.APIExamples
       GPUS_2 = "GPU:0#TensorRT";
 
 #if NOT
-Test of Torchscript evaluator at 1000 nodes showed it is:
-  - slower (as expected, about half speed)
-  - probably weaker, -21 +/- 21 (perhaps due to lack of automatic conversion to FP32 for normalization layers (?).
----------------------------------------------------------------------------------------------
-|         Player          |  Elo   | +/- | CFS(%) |    W-D-L    |    Time    |   NPS-avg    |
----------------------------------------------------------------------------------------------
-|         Ceres2*         |  0.0   | --- |  ----  |  +36=70-28  |  5238.25   |        2,682 |
-|         Ceres1          |  -21   | 21  |  16%   |  +28=70-36  |  11461.72  |        1,221 |
----------------------------------------------------------------------------------------------
-const string BASE_FNAME = "b6c528ec4923_SP_512_25_16H_FFN3_NLA_SMOL_SOAP_B1_6bn_fp16_1399996416";
-string FN_BASELINE = "Ceres:" + BASE_FNAME + ".onnx";,
-string FN_TS = "Ceres:" + BASE_FNAME.Replace("_fp16", "") + ".ts";
-NET1 = FN_TS;
-GPUS_1 = "GPU:0#Torchscript";
-NET2 = FN_BASELINE;
+  To build Torchscript evaluator:
+  const string BASE_FNAME = "b6c528ec4923_SP_512_25_16H_FFN3_NLA_SMOL_SOAP_B1_6bn_fp16_1399996416";
+  string FN_BASELINE = "Ceres:" + BASE_FNAME + ".onnx";,
+  string FN_TS = "Ceres:" + BASE_FNAME.Replace("_fp16", "") + ".ts";
+  NET1 = FN_TS;
+  GPUS_1 = "GPU:0#Torchscript";
+  NET2 = FN_BASELINE;
 #endif
 
       //      NET1 = "CUSTOM1:753723;1;0;0;1,~T1_DISTILL_512_15;0;1;1;0";
       //NET2 = "~T1_DISTIL_512_15_NATIVE";
 
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(10_000);
+      SearchLimit limit1 = SearchLimit.NodesPerMove(1);
       //limit1 = SearchLimit.BestValueMove;
       if (headType == HeadTestType.Policy)
       {
@@ -725,7 +728,7 @@ BT4 800 nodes vs SF17 0.20sec (6 threads)
       EnginePlayerDef playerLC0_2 = ENABLE_LC0_2 ? new EnginePlayerDef(engineDefLC2, limit2) : null;
 
 
-      const bool RUN_SUITE = true;
+      const bool RUN_SUITE = false;
       if (RUN_SUITE)
       {
         // NET2 = null;
@@ -963,7 +966,13 @@ BT4 800 nodes vs SF17 0.20sec (6 threads)
         Console.WriteLine("<CRLF> to continue");
         Console.ReadLine();
       }
-      return 0;
+
+      // Compute and return ELO performance of first player
+      PlayerStat player = results.Players.FirstOrDefault(p => p.Name == "Ceres1");
+      int numDraws = player.NumGames - player.PlayerWins - player.PlayerLosses;
+      float eloPerf = EloCalculator.EloDiff(player.PlayerWins, numDraws, player.PlayerLosses);
+
+      return eloPerf;
     }
 
 
