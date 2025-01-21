@@ -592,7 +592,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
       Activations = (activations.Length != 0 && makeCopy) ? activations.Slice(0, numPos).ToArray() : activations;
       States = (states.Length != 0 && makeCopy) ? states.Slice(0, numPos).ToArray() : states;
       ExtraStat0 = (extraStat0.Length != 0 && makeCopy) ? extraStat0.Slice(0, numPos).ToArray() : extraStat0;
-      ExtraStat1 = (extraStat1.Length != 0 && makeCopy) ? extraStat1.Slice(0, numPos).ToArray() : extraStat0;
+      ExtraStat1 = (extraStat1.Length != 0 && makeCopy) ? extraStat1.Slice(0, numPos).ToArray() : extraStat1;
       UncertaintyV = (HasUncertaintyV && makeCopy) ? uncertaintyV.Slice(0, numPos).ToArray() : uncertaintyV;
       UncertaintyP = (HasUncertaintyP && makeCopy) ? uncertaintyP.Slice(0, numPos).ToArray() : uncertaintyP;
       Actions = (HasAction && makeCopy) ? actionProbabilties.Slice(0, numPos).ToArray() : actionProbabilties;
