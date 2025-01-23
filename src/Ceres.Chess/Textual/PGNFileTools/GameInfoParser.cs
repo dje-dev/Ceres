@@ -304,9 +304,15 @@ namespace Ceres.Chess.Textual.PgnFileTools
       _moveVariations.Clear();
 
       GameInfo gameInfo = new GameInfo(numGamesRead++);
-      foreach (var ch in source.GenerateFrom())
+      foreach (char ch in source.GenerateFrom())
       {
-        var success = _handle(ch, gameInfo);
+        if (gameInfo.Moves.Count > 0 && ch == '[')
+        {
+          // added by DJE, in case prior game did not end with any recognized result code 
+          _handle = Done;
+          break;
+        }
+        bool success = _handle(ch, gameInfo);
         if (!success)
         {
           gameInfo.HasError = true;
