@@ -115,10 +115,12 @@ namespace Ceres.Chess.Positions
     /// <param name="maxOpenings"></param>
     /// <param name="firstPositionWithPieceList"></param>
     /// <returns></returns>
-    public static PositionsWithHistory FromEPDOrPGNFile(string fileName, int maxOpenings = int.MaxValue, Predicate<Position> firstPositionFilter = null)
+    public static PositionsWithHistory FromEPDOrPGNFile(string fileName, int maxOpenings = int.MaxValue,
+                                                        Predicate<Game> gamePredicate = null,
+                                                        Predicate<Position> firstPositionFilter = null)
     {
       PositionsWithHistory source = new PositionsWithHistory();
-      source.LoadOpenings(fileName, maxOpenings, firstPositionFilter);
+      source.LoadOpenings(fileName, maxOpenings, gamePredicate, firstPositionFilter);
       return source;
     }
 
@@ -274,15 +276,18 @@ namespace Ceres.Chess.Positions
     /// </summary>
     /// <param name="fileName"></param>
     /// <param name="maxOpenings"></param>
+    /// <param name="gameFilter"></param>
     /// <param name="firstPositionFilter"></param>
-    /// <exception cref="Exception"></exception>
-    void LoadOpenings(string fileName, int maxOpenings = int.MaxValue, Predicate<Position> firstPositionFilter = null)
+    void LoadOpenings(string fileName, 
+                      int maxOpenings = int.MaxValue, 
+                      Predicate<Game> gameFilter = null, 
+                      Predicate<Position> firstPositionFilter = null)
     {
       if (fileName.ToUpper().EndsWith(".PGN"))
       {
-        if (firstPositionFilter != null)
+        if (gameFilter != null || firstPositionFilter != null)
         {
-          LoadOpeningsPGNFiltered(fileName, firstPositionFilter, maxOpenings);
+          LoadOpeningsPGNFiltered(fileName, gameFilter, firstPositionFilter, maxOpenings);
         }
         else
         {
@@ -338,7 +343,10 @@ namespace Ceres.Chess.Positions
     /// <param name="pgnFileName"></param>
     /// <param name="firstPositionWithPieceList"></param>
     /// <param name="maxOpenings"></param>
-    private void LoadOpeningsPGNFiltered(string pgnFileName, Predicate<Position> firstPositionFilter, int maxOpenings = int.MaxValue)
+    private void LoadOpeningsPGNFiltered(string pgnFileName,  
+                                         Predicate<Game> gameFilter, 
+                                         Predicate<Position> firstPositionFilter, 
+                                         int maxOpenings = int.MaxValue)
     {
       pgnFileName = GetFullFilename(pgnFileName);
 
@@ -350,10 +358,22 @@ namespace Ceres.Chess.Positions
           break;
         }
 
-        Position finalPos = game.FirstMatchingPosition(p => firstPositionFilter(p), out int moveIndex);
-        if (moveIndex != -1 && finalPos.CalcTerminalStatus() == GameResult.Unknown)
+        if (gameFilter != null && !gameFilter(game))
         {
-          moveSequences.Add(game.TruncatedAtMove(moveIndex).FinalPositionWithHistory);
+          continue;
+        }
+
+        if (firstPositionFilter != null)
+        {
+          Position finalPos = game.FirstMatchingPosition(p => firstPositionFilter(p), out int moveIndex);
+          if (moveIndex != -1 && finalPos.CalcTerminalStatus() == GameResult.Unknown)
+          {
+            moveSequences.Add(game.TruncatedAtMove(moveIndex).FinalPositionWithHistory);
+          }
+        }
+        else
+        {
+          moveSequences.Add(game.FinalPositionWithHistory);
         }
       }
     }

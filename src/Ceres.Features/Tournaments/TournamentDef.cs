@@ -102,6 +102,12 @@ namespace Ceres.Features.Tournaments
     public Predicate<Position> AcceptPosPredicate;
 
     /// <summary>
+    /// Optional predicate which can be used to specify filter on which games are accepted 
+    /// </summary>
+    public Predicate<Game> AcceptGamePredicate;
+
+
+    /// <summary>
     /// Optional list of PieceType which define positions that should be excluded if they contain any of those pieces.
     /// </summary>
     public List<PieceType> AcceptPosExcludeIfContainsPieceTypeList;

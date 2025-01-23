@@ -227,7 +227,7 @@ namespace Ceres.Features.Tournaments
     {
       if (Def.OpeningsFileName != null)
       {
-        openings = PositionsWithHistory.FromEPDOrPGNFile(Def.OpeningsFileName);
+        openings = PositionsWithHistory.FromEPDOrPGNFile(Def.OpeningsFileName, int.MaxValue, Def.AcceptGamePredicate, Def.AcceptPosPredicate);
       }
       else if (Def.StartingFEN != null)
       {

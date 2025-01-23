@@ -58,7 +58,7 @@ namespace Ceres.Chess.Textual
 
       using TextWriter textWriter = (TextWriter)new StreamWriter(new FileStream(outputFN, FileMode.Create));
 
-      PositionsWithHistory allPos = PositionsWithHistory.FromEPDOrPGNFile(sourcePGN, maxPositions, truncateAtPos);
+      PositionsWithHistory allPos = PositionsWithHistory.FromEPDOrPGNFile(sourcePGN, maxPositions, null, truncateAtPos);
       foreach (PositionWithHistory thisPos in allPos)
       {
         PGNWriter pgnWriter = outputPGN ? new PGNWriter(idString ?? "Extracted", "Player1", "Player2") : null;
