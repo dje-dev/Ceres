@@ -45,8 +45,6 @@ using System.Runtime.InteropServices;
 using Ceres.Chess.Games.Utils;
 using Ceres.Chess.Data.Nets;
 using Chess.Ceres.PlayEvaluation;
-using Newtonsoft.Json.Linq;
-using static Microsoft.FSharp.Core.ByRefKinds;
 using System.Linq;
 
 #endregion
@@ -347,7 +345,6 @@ namespace Ceres.APIExamples
       //      NET1 = "combo35j5_nc";
       //NET2 = "combo35j_nc";
       //      NET1 = "HOP_SP_512_55_16H_FFN3_NLA_SMOL_SP_B1_8bn_BASE_fp16_2199994368,C1-640-34";
-      NET2 = "~BT4_FP16_TRT";
 //      NET1 = "ONNX_TRT:bt4-4520.pb.gz_fp16";
 
 //      NET1 = "~T81";
@@ -370,9 +367,7 @@ namespace Ceres.APIExamples
 //      NET2 = "9ae67f7c4630_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_5999984640.onnx";
 //      NET2 = "HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_80bn_fp16_5399986176.onnx";
 
-//good      NET1 = "CUSTOM1|V2FRAC=0.0;V1TEMP=1.15;V2TEMP=1.5";
-      NET1 = "CUSTOM1|V2FRAC=0.5;V1TEMP=0.8;V2TEMP=1.15";
-      //x      NET1 = "C1-512-35.onnx.deblundered5500|V2FRAC=0;V1TEMP=1.0;V2TEMP=1.5";
+//      NET1 = "CUSTOM1|V2FRAC=0.5;V1TEMP=0.8;V2TEMP=1.15";
       //NET2 = "CUSTOM2";
 
 //      NET1 = @"e:\cout\nets\C1-512-35.value3_L33_x2.onnx.value3|V2FRAC=0.6;V1TEMP=0.80;V2TEMP=1.1";
@@ -381,12 +376,39 @@ namespace Ceres.APIExamples
       //      NET1 = "C1-512-35.value3_L33_x2";
       //      NET1 = "C1-640-34.value3_L32_x2";
 
-      //      NET1 = "HOP_SP_512_55_16H_FFN3_NLA_SMOL_SP_B1_8bn_BASE_fp16_6299983872";
-      //NET2 = "HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_80bn_fp16_6299983872";
+      NET1 = "HOP_SP_512_55_16H_FFN3_NLA_SMOL_SP_B1_8bn_BASE_fp16_7319994368.onnx";
+      //NET2 = "HOP_SP_512_55_16H_FFN3_NLA_SMOL_SP_B1_8bn_BASE_fp16_6799982592.onnx";
       //      NET2 = "9ae67f7c4630_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_6299986944";
 
-      NET1 = "combo640T_nc";
+      //      NET1 = "combo640T_nc";
+
+//      NET1 = "combo_55_2last.onnx|V2FRAC=1;V2TEMP=1.2";
+      //NET1 = NET2 = "C1-512-25";
+
+      NET1 = "C1-640-34.value3_L32_x4.onnx.value3.onnx|V2FRAC=1;V1TEMP=0.8;V2TEMP=1.4";
+//      NET2 = "C1-640-34.value3_L32_x2.onnx.value3.onnx|V2FRAC=1;V1TEMP=0.8;V2TEMP=1";
+      NET2 = "C1-640-34|V2FRAC=0";//
+
+      NET2 = "HOP_SP_512_55_16H_FFN4_NLA_SMOL_SP_B1_9bn_fp16_5599985664.onnx";
+      
+      NET1 = "frankenstein8x2_nc.onnx";
+
+//      NET1 = "lepned.lora";
+//      NET1 = "C1-512-35.french002.lora.onnx";
+
+//      NET1 = "HOP_SP_512_55_16H_FFN4_NLA_SMOL_SP_B1_9bn_fp16_6799982592";
       NET2 = "C1-640-34";
+
+      //      NET1 = "HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_80bn_fp16_7399983104_lora.onnx";
+      //      NET2 = "HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_80bn_fp16_7399983104.onnx";
+
+      //NET1 = "HOP_SP_512_55_16H_FFN4_NLA_SMOL_SP_B1_9bn_fp16_last.onnx";
+      NET2 = "~BT4_FP16_TRT";
+      //NET2 = "combo_55_6x_67bn";
+
+
+      //NET1 = "C1-512-35.value3_L33_x2.onnx.value3.onnx|V2FRAC=0.5;V1TEMP=0.8;V2TEMP=1.2";
+      //      NET2 = "C1-512-35";//|V2FRAC=0;V1TEMP=1.0;V2TEMP=1.5";
 
       NET1 = overrideNET1 ?? NET1;
       NET2 = overrideNET2 ?? NET2;
@@ -409,7 +431,7 @@ namespace Ceres.APIExamples
       //NET2 = "~T1_DISTIL_512_15_NATIVE";
 
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(1);
+      SearchLimit limit1 = SearchLimit.NodesPerMove(2000); //with 100 game pairs 20=78sec, 50=105sec
       //limit1 = SearchLimit.BestValueMove;
       if (headType == HeadTestType.Policy)
       {
@@ -916,12 +938,19 @@ BT4 800 nodes vs SF17 0.20sec (6 threads)
         //        def.AcceptPosExcludeIfContainsPieceTypeList = [PieceType.Queen, PieceType.Bishop, PieceType.Knight];
       }
 
-      //baseName = "tcec_big";
-      baseName = "UHO_Lichess_4852_v1.epd"; // recommended by Kovax
+      baseName = "tcec_big";
+      //baseName = "UHO_Lichess_4852_v1.epd"; // recommended by Kovax
+      baseName = "UHO_Lichess_4852_v1_first.epd"; // approximately first 2500 positions for faster loading
+                                                  //baseName = "UHO_Lichess_4582_v1_last_10000.epd";
+      if (false)
+      {
+        baseName = "eco_test";
+        def.AcceptGamePredicate = (Game game) => game.PlayerWhite.Contains("French");
+      }
+
       //baseName = "endingbook-10man-3181.pgn";
-//baseName = "endingbook-16man-9609.pgn";
-//      baseName = "endingbook-12man-4624.pgn";
-//      baseName = "UHO_Lichess_4582_v1_last_10000.epd";
+      //baseName = "endingbook-16man-9609.pgn";
+      //      baseName = "endingbook-12man-4624.pgn";
 
       string postfix = (baseName.ToUpper().EndsWith(".EPD") || baseName.ToUpper().EndsWith(".PGN")) ? "" : ".pgn";
       def.OpeningsFileName = SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/openings/{baseName}{postfix}"
@@ -933,7 +962,7 @@ BT4 800 nodes vs SF17 0.20sec (6 threads)
 
       // Result very sensitive to adjudication, value estimates unreliable.
       // TODO: someday use a strong reference engine for adjudication
-      bool DISABLE_ADJUDICATION = limit1.IsHeadTestLimit || limit2.IsHeadTestLimit;
+      bool DISABLE_ADJUDICATION = false;// limit1.IsHeadTestLimit || limit2.IsHeadTestLimit;
       if (DISABLE_ADJUDICATION)
       {
         def.AdjudicateDrawThresholdCentipawns = 0;
