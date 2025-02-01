@@ -110,10 +110,15 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     public TargetSourceInfo Source;
 
     /// <summary>
-    /// Esimated Q by which the move played to get this position was 
+    /// Estimated Q by which the move played to get this position was 
     /// worse than the best move available at the parent.
     /// </summary>
     public float PlayedMoveQSuboptimality;
+
+    /// <summary>
+    /// Number of search nodes in the search tree.
+    /// </summary>
+    public int NumSearchNodes;
 
     /// <summary>
     /// Sum of Q of all injected favorable training game blunders from here to end of game.

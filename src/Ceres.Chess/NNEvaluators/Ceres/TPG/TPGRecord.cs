@@ -143,7 +143,13 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     public byte Unused1;
     public byte Unused2;
     public byte Unused3;
-    public fixed byte UnusedArray[46];
+    public fixed byte UnusedArray[42];
+
+    /// <summary>
+    /// Number of search nodes in the search.
+    /// (not always available).
+    /// </summary>
+    public int NumSearchNodes;
 
     #region Reference Model 1 Evaluations
 

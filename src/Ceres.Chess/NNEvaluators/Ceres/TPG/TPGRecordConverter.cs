@@ -89,6 +89,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
                                                  bool emitPlySinceLastMovePerSquare,
                                                  float qNegativeBlunders = 0,
                                                  float qPositiveBlunders = 0,
+                                                 int numSearchNodes = 0,
                                                  bool validate = true)
     {
       // N.B. Some logic here is the same as in method above (ConvertedToTPGRecord) and should be kept in sync.
@@ -107,7 +108,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
                                 qNegativeBlunders, qPositiveBlunders);
 
       tpgRecord.IsWhiteToMove = encodedPosToConvert.MiscInfo.WhiteToMove ? (byte)1 : (byte)0;
-
+      tpgRecord.NumSearchNodes = numSearchNodes;
       // Convert the values unrelated to moves and squares
       if (targetInfo != null)
       {
@@ -544,6 +545,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
 
       tpgRecord.MLH = targetInfo.MLH;
       tpgRecord.DeltaQVersusV = targetInfo.DeltaQVersusV;
+      tpgRecord.NumSearchNodes = targetInfo.NumSearchNodes;
 
       // Note that suboptimality will almost always be positive, but take absolute value to be sure.
       // (to compensate for numerical rounding or the chosen best N move not being quite best Q).
