@@ -402,7 +402,7 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
       {
         // TODO: Consider adding a slot for value 3 instead?
         // Store value3 in 2
-        INDEX_WDL2 = INDEX_WDL3;
+        INDEX_WDL = INDEX_WDL3;
       }
 
       int INDEX_MLH = FindIndex(1, optional: true);
