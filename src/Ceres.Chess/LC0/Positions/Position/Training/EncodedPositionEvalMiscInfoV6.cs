@@ -18,6 +18,8 @@ using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Ceres.Chess.EncodedPositions.Basic;
+using Ceres.Chess.Textual.PgnFileTools;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 #endregion
 
@@ -26,6 +28,13 @@ namespace Ceres.Chess.EncodedPositions
   /// <summary>
   /// Miscellaneous information associated with a position appearing in training data
   /// (binary compatible with LZ training files).
+  /// 
+  /// Note on prefixes (from crem):
+  ///   result_q and result_d   game outcome
+  ///   orig_*                  values from the value head.
+  ///   root_*                  value after running the MCTS
+  ///   best_*                  same, but after playing the "best" move
+  ///   played_*                what actually was played (due to randomness)
   /// </summary>
   [StructLayout(LayoutKind.Sequential, Pack = 1)]
   public readonly record struct EncodedPositionEvalMiscInfoV6: IEquatable<EncodedPositionEvalMiscInfoV6>
