@@ -246,7 +246,7 @@ namespace Ceres.Base.Misc.ONNX
 
       if (numUpdated < updatedBiasAndWeights.Count * 2)
       {
-        throw new InvalidOperationException($"Only {numUpdated} of {updatedBiasAndWeights.Count} layers updated."); 
+        throw new InvalidOperationException($"Only {numUpdated} of {updatedBiasAndWeights.Count * 2} layers updated."); 
       }
     }
 
