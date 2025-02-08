@@ -348,22 +348,39 @@ namespace Chess.Ceres.NNEvaluators
 
       int numConverted = ConverterToFlatFromTPG(Options, positionsNativeInput, inputsPrimaryNative);
 
-      // Convert bytes to float      
+      if (!haveInitializedLookupByteToHalf)
+      {
+        InitLookupTable();
+      }
+
+      // Convert bytes to Half (efficiently via lookup table).
       for (int i = 0; i < numConverted; i++)
       {
-        // TODO: Consider improving performance (though this may not be an often used mode of executing TPG files).
-        //       To speed up, consider vectorize this, or call a built-in function, or partly unroll loop.
-        inputsPrimaryNativeF[i] = inputsPrimaryNative[i];
-        if (usesSecondaryInputs)
-        {
-          inputsSecondaryNativeF[i] = inputsSecondaryNative[i];
-        }
+        inputsPrimaryNativeF[i] = LookupByteToHalf[inputsPrimaryNative[i]];
       }
+
+      if (usesSecondaryInputs)
+      {
+        throw new NotImplementedException(); // would need code as above
+      }
+
       const float TPG_DIVISOR = ByteScaled.SCALING_FACTOR; // TODO: receive this in constructor instead. Should refer to TPGSquareRecord.SQUARE_BYTES_DIVISOR.
       PositionEvaluationBatch ret = DoEvaluateBatch(default, inputsPrimaryNativeF, null, //usesSecondaryInputs ? inputsSecondaryNativeF : null, 
                                                     numPositions, retrieveSupplementalResults, posMoveIsLegal,
                                                     TPG_DIVISOR);
       return ret;
+    }
+
+
+    static bool haveInitializedLookupByteToHalf = false;
+    static readonly Half[] LookupByteToHalf = new Half[256];
+    static void InitLookupTable()
+    {
+      for (int i = 0; i <= byte.MaxValue; i++)
+      {
+        LookupByteToHalf[i] = (Half)i;
+      }
+      haveInitializedLookupByteToHalf = true;
     }
 
 
