@@ -899,10 +899,15 @@ namespace Ceres.Features.Suites
         accCeres1 += scoreCeres1;
         accCeres2 += scoreCeres2;
 
-        sumCeres1NumNodesWhenChoseTopNode += result1.NumNodesWhenChoseTopNNode;
-        if (result2 != null)
+        // Accumulate how many nodes were required to find one of the correct moves
+        // (only in cases where both engines found correct move at some point).
+        if (scoreCeres1 > 0 && (search2 == null || scoreCeres2 > 0))
         {
-          sumCeres2NumNodesWhenChoseTopNode += result2.NumNodesWhenChoseTopNNode;
+          sumCeres1NumNodesWhenChoseTopNode += result1.NumNodesWhenChoseTopNNode;
+          if (result2 != null)
+          {
+            sumCeres2NumNodesWhenChoseTopNode += result2.NumNodesWhenChoseTopNNode;
+          }
         }
 
         // Accumulate how many nodes were required to find one of the correct moves
