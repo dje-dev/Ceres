@@ -126,7 +126,14 @@ namespace Ceres.Chess.NNEvaluators
     /// </summary>
     public NNEvaluatorHeadOverride[] HeadOverrides;
 
-
+    /// <summary>
+    /// Optional Action that is invoked with:
+    ///   - object (typically a tree object) ]
+    ///   - bool "searchDone":
+    ///     - if true, then is the call after a search is about to be performed
+    ///     - if false, then the call is before a search is performed
+    /// </summary>
+    public Action<object, bool> RetrainFunc;
 
     internal object PersistentID { set; get; }
     public bool IsPersistent => PersistentID != null;
@@ -396,7 +403,7 @@ namespace Ceres.Chess.NNEvaluators
       FP16[][] rawNetworkOutputs = null;
       if (batch is PositionEvaluationBatch)
       {
-        rawNetworkOutputs = new FP16[NumPositionsEvaluated][];
+        rawNetworkOutputs = new FP16[batch.NumPos][];
         PositionEvaluationBatch peb = (PositionEvaluationBatch)batch;
         if (!peb.RawNetworkOutputs.IsEmpty && peb.RawNetworkOutputs.Length > batchIndex)
         {
