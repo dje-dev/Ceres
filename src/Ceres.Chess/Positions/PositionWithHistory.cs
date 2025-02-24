@@ -121,42 +121,56 @@ namespace Ceres.Chess.Positions
     {
       MGPosition mgPos = MGPosition.FromPosition(FinalPosition);
       MGMove thisMove = MGMoveFromString.ParseMove(in mgPos, moveStr);
-      if (thisMove.IsNull) throw new Exception("Unexpected null move");
-
-      // Verify move is legal from this position
-      MGMoveList moves = new MGMoveList();
-      MGMoveGen.GenerateMoves(in mgPos, moves);
-      if (Array.IndexOf(moves.MovesArray, thisMove) == -1)
+      if (thisMove.IsNull)
       {
-        throw new Exception($"The move {moveStr} is not legal from position {FinalPosition.FEN}");
+        throw new Exception("Unexpected null move");
       }
 
-      Moves.Add(MGMoveFromString.ParseMove(in mgPos, moveStr));
-      if (haveFinalized) InitPositionsAndFinalPosMG();
+      AppendMove(thisMove);
     }
+
 
     public void AppendPosition(MGPosition position, MGMove move)
     {
-      Position[] newPositions = new Position[positions.Length + 1];
-      Array.Copy(Positions, newPositions, positions.Length);
-      newPositions[^1] = position.ToPosition;
-      positions = newPositions;
-
       Moves.Add(move);
-
-      PositionRepetitionCalc.SetRepetitionsCount(positions);
-      finalPosMG = position;
+      InitPositionsAndFinalPosMG();
     }
 
 
     public void AppendMove(MGMove move)
     {
-      Moves.Add(move);
-      if (haveFinalized)
+      // Verify move is legal from this position.
+      MGMoveList moves = new MGMoveList();
+      MGMoveGen.GenerateMoves(FinalPosMG, moves);
+      if (Array.IndexOf(moves.MovesArray, move) == -1)
       {
-        InitPositionsAndFinalPosMG();
+        throw new Exception($"The move {move} is not legal from position {FinalPosition.FEN}");
       }
+
+      Moves.Add(move);
+
+      InitPositionsAndFinalPosMG();
     }
+
+    /// <summary>
+    /// Forces the final position to a specified value.
+    /// This may be needed in rare cases where this was derived from an EncodedBoardPosition/TPG.
+    /// In that case, the state of the castling flags at the beginning of the sequence is not known for sure.
+    /// Therefore reconstructing the final position from the moves may not be correct,
+    /// (as might happen if an AppendMove call were made to thi sposition).
+    /// This methods allows overriding the final position with the correct castling rights.
+    /// 
+    /// TODO: someday try to modify TGPRecord/EncodedPositionBoard to better reconstruct castling rights
+    ///       by assuming all positions have castling rights as final position
+    ///       but then adding back castling rights at point in prior sequence before castling moves were made (if any).
+    /// </summary>
+    /// <param name="mgPos"></param>
+    public void ForceFinalPosMG(MGPosition mgPos)
+    {
+      finalPosMG = mgPos;
+      positions[^1] = mgPos.ToPosition;
+    }
+
 
     /// <summary>
     /// Searches the position list for a given position, or -1 if not present.
