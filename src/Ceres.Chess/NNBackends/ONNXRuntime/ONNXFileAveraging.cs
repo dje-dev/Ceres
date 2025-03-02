@@ -23,6 +23,7 @@ using Onnx;
 using Google.Protobuf;
 using Google.Protobuf.Collections;
 using System.IO;
+using System.Threading.Tasks;
 
 #endregion
 
@@ -142,51 +143,59 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
         }
       }
 
+      Half[] tempResult = new Half[widthInputs];
+
       // For each column j, gather N values from the N rows
-      for (int j = 0; j < widthInputs; j++)
-      {
-        float minVal = float.MaxValue;
-        float maxVal = float.MinValue;
+      //      for (int j = 0; j < widthInputs; j++)
+      Parallel.For(0, widthInputs, new ParallelOptions() { MaxDegreeOfParallelism = 16 }, j =>
+            {
+              float minVal = float.MaxValue;
+              float maxVal = float.MinValue;
 
-        // 1) Find min and max across the N inputs for column j
-        for (int i = 0; i < inputs.Length; i++)
-        {
-          float current = (float)inputs[i][j];
-          if (current < minVal)
-          {
-            minVal = current;
-          }
-          if (current > maxVal)
-          {
-            maxVal = current;
-          }
-        }
+              if (removeMinAndMax)
+              {
+                // 1) Find min and max across the N inputs for column j
+                for (int i = 0; i < inputs.Length; i++)
+                {
+                  float current = (float)inputs[i][j];
+                  if (current < minVal)
+                  {
+                    minVal = current;
+                  }
+                  if (current > maxVal)
+                  {
+                    maxVal = current;
+                  }
+                }
+              }
 
-        // 2) Sum up (value * weight) and sum of weights, excluding min and max if requested
-        float sumWeighted = 0f;
-        float sumWeights = 0f;
-        for (int i = 0; i < inputs.Length; i++)
-        {
-          float current = (float)inputs[i][j];
-          if (removeMinAndMax && (current == minVal || current == maxVal))
-          {
-            // Skip these
-            continue;
-          }
-          sumWeighted += current * weights[i];
-          sumWeights += weights[i];
-        }
+              // 2) Sum up (value * weight) and sum of weights, excluding min and max if requested
+              float sumWeighted = 0f;
+              float sumWeights = 0f;
+              for (int i = 0; i < inputs.Length; i++)
+              {
+                float current = (float)inputs[i][j];
+                if (removeMinAndMax && (current == minVal || current == maxVal))
+                {
+                  // Skip these
+                  continue;
+                }
+                sumWeighted += current * weights[i];
+                sumWeights += weights[i];
+              }
 
-        // 3) Compute the final average for this column
-        float finalAverage = 0f;
-        if (sumWeights > 1e-12f)
-        {
-          finalAverage = sumWeighted / sumWeights;
-        }
+              // 3) Compute the final average for this column
+              float finalAverage = 0f;
+              if (sumWeights > 1e-12f)
+              {
+                finalAverage = sumWeighted / sumWeights;
+              }
 
-        // 4) Store as Half in the result array
-        result[j] = (Half)finalAverage;
-      }
+              // 4) Store as Half in the result array
+              tempResult[j] = (Half)finalAverage;
+            });
+
+            tempResult.CopyTo(result);
     }
 
 
