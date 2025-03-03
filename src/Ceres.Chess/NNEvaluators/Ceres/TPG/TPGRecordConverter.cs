@@ -15,6 +15,7 @@
 
 using System;
 using System.Diagnostics;
+using System.Text;
 using System.Threading.Tasks;
 
 using Ceres.Chess.EncodedPositions;
@@ -212,7 +213,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
           ConvertToTPGRecordSquares(in positionsFlat.Span[i], includeHistory, squaresSpan,
                                     thesePliesSinceLastMove, lastMovePliesEnabled,
                                     qNegativeBlunders, qPositiveBlunders);
-
+ 
           if (legalMoveIndices != null)
           {
             int numMoves = Math.Min(TPGRecordMovesExtractor.NUM_MOVE_SLOTS_PER_REQUEST, moves.Span[i].NumMovesUsed);
@@ -348,6 +349,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
       ConvertToTPGRecordSquares(trainingPos.PositionWithBoards, includeHistory, tpgRecord.Squares,
                                 pliesSinceLastPieceMoveBySquare, emitPlySinceLastMovePerSquare,
                                 qNegativeBlunders, qPositiveBlunders);
+      tpgRecord.IsWhiteToMove = trainingPos.PositionWithBoards.MiscInfo.WhiteToMove ? (byte)1 : (byte)0;
 
 #if DEBUG
       TPGRecordValidation.Validate(in trainingPos.PositionWithBoards, in tpgRecord, overridePolicyVector is not null);
