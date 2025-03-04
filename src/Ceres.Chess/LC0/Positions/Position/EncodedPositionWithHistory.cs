@@ -83,7 +83,11 @@ namespace Ceres.Chess.EncodedPositions
       Span<Position> positions = stackalloc Position[maxHistoryPositions];
       for (int i = maxHistoryPositions - 1; i >= 0; i--)
       {
-        if (!GetPlanesForHistoryBoard(i).IsEmpty)
+        // Positions at index > 0 which are all zeros or same as prior position are
+        // just "fill-in" for the neural network.
+        bool isActualBoardPosition = (i == 0)
+                                  || (!GetPlanesForHistoryBoard(i).IsEmpty && (GetPlanesForHistoryBoard(i - 1) != GetPlanesForHistoryBoard(i)));
+        if (isActualBoardPosition)
         {
           positions[numAdded++] = HistoryPosition(i);
         }
