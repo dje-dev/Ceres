@@ -40,7 +40,7 @@ namespace Ceres.Chess.Positions
   ///       and a final representation of a sequence of positions.
   /// </summary>
   [Serializable]
-  public class PositionWithHistory : ICloneable
+  public class PositionWithHistory : ICloneable, IEquatable<PositionWithHistory>
   {
     #region Private data
 
@@ -54,6 +54,7 @@ namespace Ceres.Chess.Positions
     MGPosition finalPosMG;
 
     Position[] positions;
+  
 
     /// <summary>
     /// Optionally the next actual move (made after the final position).
@@ -591,7 +592,46 @@ namespace Ceres.Chess.Positions
       return clone;
     }
 
+
+    #region Equality
+
+    /// <summary>
+    /// Returns if two PositionWithHistory objects are equal.
+    /// </summary>
+    /// <param name="a"></param>
+    /// <param name="b"></param>
+    /// <returns></returns>
+    public static bool operator ==(PositionWithHistory a, PositionWithHistory b)
+    {
+      return a.Equals(b);
+    }
+
+    /// <summary>
+    /// Returns if two PositionWithHistory objects are not equal.
+    /// </summary>
+    /// <param name="a"></param>
+    /// <param name="b"></param>
+    /// <returns></returns>
+    public static bool operator !=(PositionWithHistory a, PositionWithHistory b)
+    {
+      return !a.Equals(b);
+    }   
+
+    /// <summary>
+    /// Implements equality operator.
+    /// </summary>
+    /// <param name="other"></param>
+    /// <returns></returns>
+    public bool Equals(PositionWithHistory other)
+    {
+      // Equality of positions suffices.
+      return positions.Length == other.positions.Length
+          && positions.SequenceEqual(other.positions);
+    }
+
     #endregion
   }
 
+  #endregion
 }
+
