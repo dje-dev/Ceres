@@ -603,8 +603,17 @@ namespace Ceres.Chess.Positions
     /// <returns></returns>
     public static bool operator ==(PositionWithHistory a, PositionWithHistory b)
     {
-      return a.Equals(b);
+      if (a is null)
+      {
+        return b is null;
+      }
+      else
+      {
+        return a.Equals(b);
+      }
     }
+
+
 
     /// <summary>
     /// Returns if two PositionWithHistory objects are not equal.
@@ -612,10 +621,8 @@ namespace Ceres.Chess.Positions
     /// <param name="a"></param>
     /// <param name="b"></param>
     /// <returns></returns>
-    public static bool operator !=(PositionWithHistory a, PositionWithHistory b)
-    {
-      return !a.Equals(b);
-    }   
+    public static bool operator !=(PositionWithHistory a, PositionWithHistory b) => !(a == b);
+
 
     /// <summary>
     /// Implements equality operator.
@@ -625,7 +632,8 @@ namespace Ceres.Chess.Positions
     public bool Equals(PositionWithHistory other)
     {
       // Equality of positions suffices.
-      return positions.Length == other.positions.Length
+      return other != null 
+          && positions.Length == other.positions.Length
           && positions.SequenceEqual(other.positions);
     }
 
