@@ -256,10 +256,10 @@ namespace Ceres.Base.Misc.ONNX
     /// </summary>
     /// <param name="includeNodePredicate"></param>
     /// <returns></returns>
-    public ModelProto WithAddedOutputNodes(Predicate<NodeProto> includeNodePredicate)
+    public ModelProto WithAddedOutputNodes(Predicate<NodeProto> includeNodePredicate, bool force32Bit = false)
       => WithAddedOutputNodes(Model.Graph.Node.Where(p => p.Output != null
                                                        && includeNodePredicate(p)
-                                                       && p.Output.Count > 0).Select(p => p.Name));
+                                                       && p.Output.Count > 0).Select(p => p.Name), force32Bit);
 
 
     /// <summary>
@@ -268,7 +268,7 @@ namespace Ceres.Base.Misc.ONNX
     /// <param name="nodeNames"></param>
     /// <returns></returns>
     /// <exception cref="Exception"></exception>
-    public ModelProto WithAddedOutputNodes(IEnumerable<string> nodeNames)
+    public ModelProto WithAddedOutputNodes(IEnumerable<string> nodeNames, bool force32Bit = false)
     {
       if (nodeNames.Count() == 0)
       {
@@ -300,26 +300,33 @@ namespace Ceres.Base.Misc.ONNX
           List<long> thisShape = GetOutputShape(newModel, nodeName, node.Output[i]);
           if (thisShape == null)
           {
-            Console.WriteLine($"NOTE: Could not infer shape for output {node.Output[i]} of node {nodeName}");
-          }
-
-          TensorProto.Types.DataType? thisDataType = GetOutputDataType(newModel, nodeName, node.Output[i]);
-          if (thisDataType == null)
-          {
-            Console.WriteLine($"Could not infer data type for output {node.Output[i]} of node {nodeName}");
+//            Console.WriteLine($"NOTE: Could not infer shape for output {node.Output[i]} of node {nodeName}");
           }
 
           TypeProto tp = new();
           tp.TensorType = new TypeProto.Types.Tensor();
-          if (thisDataType != null)
+          if (force32Bit)
           {
-            tp.TensorType.ElemType = (int)thisDataType;
+            tp.TensorType.ElemType = 1; // float
           }
           else
           {
-            tp.TensorType.ElemType = 10;
+            TensorProto.Types.DataType? thisDataType = GetOutputDataType(newModel, nodeName, node.Output[i]);
+            if (thisDataType == null)
+            {
+ //             Console.WriteLine($"Could not infer data type for output {node.Output[i]} of node {nodeName}");
+            }
+
+            if (thisDataType != null)
+            {
+              tp.TensorType.ElemType = (int)thisDataType;
+            }
+            else
+            {
+              tp.TensorType.ElemType = 10; // Half
+            }
+            //          tp.TensorType.Shape = ONNXHelpers.MakeTensorShape(thisShape.ToArray());
           }
-//          tp.TensorType.Shape = ONNXHelpers.MakeTensorShape(thisShape.ToArray());
 
           ValueInfoProto vip = new();
           vip.Name = node.Output[i];
