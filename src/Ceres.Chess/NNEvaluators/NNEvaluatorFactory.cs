@@ -273,6 +273,9 @@ namespace Ceres.Chess.NNEvaluators
           string pathLc0Networks = CeresUserSettingsManager.Settings.DirLC0Networks;
           string fullFN = (netIDExistsAsIS || string.IsNullOrEmpty(pathLc0Networks) )? netDef.NetworkID : Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, netDef.NetworkID);
           const bool VALUE_IS_LOGISTIC = false;
+
+          NNEvaluatorOptions options = new NNEvaluatorOptions().OptionsWithOptionsDictApplied(optionsDict);
+
           if (!fullFN.ToUpper().Contains("ONNX"))
           {
             fullFN += ".onnx";
@@ -282,7 +285,7 @@ namespace Ceres.Chess.NNEvaluators
                                             netDef.Precision, DEFAULT_HAS_WDL, DEFAULT_HAS_MLH,
                                             DEFAULT_HAS_UNCERTAINTYV, DEFAULT_HAS_UNCERTAINTYP, DEFAULT_HAS_ACTION,
                                             null, null, null, null, VALUE_IS_LOGISTIC, ONNX_SCALE_50_MOVE_COUNTER,
-                                            false, useHistory:true, hasState: DEFAULT_HAS_STATE);
+                                            false, useHistory:true, hasState: DEFAULT_HAS_STATE, options:options);
           break;
 
         case NNEvaluatorType.TRT:
@@ -428,14 +431,16 @@ namespace Ceres.Chess.NNEvaluators
               // TODO: consider possibility of other precisions than FP32
               const bool USE_TRT = false;
 
+              NNEvaluatorOptions optionsEvaluatorONNX = new NNEvaluatorOptions().OptionsWithOptionsDictApplied(optionsDict);
+
               //               NNEvaluatorPrecision precision = netDef.NetworkID.Contains(".16") ? NNEvaluatorPrecision.FP16 : NNEvaluatorPrecision.FP32;
               return new NNEvaluatorONNX(netDef.NetworkID, tempFN, null, deviceDef.Type, deviceDef.DeviceIndex, USE_TRT,
-                                               ONNXNetExecutor.NetTypeEnum.LC0, 1024,
-                                               netDef.Precision, netDefONNX.IsWDL, netDefONNX.HasMovesLeft, 
-                                               netDefONNX.HasUncertaintyV, netDefONNX.HasUncertaintyP, false,
-                                               pbn.Net.OnnxModel.OutputValue, pbn.Net.OnnxModel.OutputWdl,
-                                               pbn.Net.OnnxModel.OutputPolicy, pbn.Net.OnnxModel.OutputMlh, false, ONNX_SCALE_50_MOVE_COUNTER,
-                                               false);
+                                         ONNXNetExecutor.NetTypeEnum.LC0, 1024,
+                                         netDef.Precision, netDefONNX.IsWDL, netDefONNX.HasMovesLeft, 
+                                         netDefONNX.HasUncertaintyV, netDefONNX.HasUncertaintyP, false,
+                                         pbn.Net.OnnxModel.OutputValue, pbn.Net.OnnxModel.OutputWdl,
+                                         pbn.Net.OnnxModel.OutputPolicy, pbn.Net.OnnxModel.OutputMlh, false, ONNX_SCALE_50_MOVE_COUNTER,
+                                         false, options: optionsEvaluatorONNX);
             }
           }
           else
@@ -463,8 +468,11 @@ namespace Ceres.Chess.NNEvaluators
             }
 
             bool enableCUDAGraphs = CeresUserSettingsManager.Settings.EnableCUDAGraphs;
+
+            // TODO: should the NNEvaluatorCUDA constructor accept options directly so it can see them immediately?
             NNEvaluatorCUDA evaluator = new(net as NNWeightsFileLC0, deviceDef.DeviceIndex, maxBatchSize,
                                              false, netDef.Precision, false, enableCUDAGraphs, 1, referenceEvaluatorCast);
+            evaluator.Options = new NNEvaluatorOptions().OptionsWithOptionsDictApplied(optionsDict);
 
             // Possibly specialize as NNEvaluatorSubBatchedWithTarget if device batch size is set.
             bool useTargetedEvaluator = (deviceDef.PredefinedOptimalBatchPartitions != null

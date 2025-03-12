@@ -143,62 +143,38 @@ namespace Ceres.Chess.NNEvaluators.Ceres
                            + $"T: {PolicyTemperature,4:F2}  TS: {PolicyUncertaintyTemperatureScalingFactor,4:F2} ";
 
 
-    #region Options helpers
-    private static float CheckOptionSpecifiedElseDefault(Dictionary<string, string> options,
-                                                         string optionKey,
-                                                         float defaultValue)
-    {
-      float returnValue = defaultValue;
-      string optionString = (options != null && options.Keys.Contains(optionKey))
-                             ? options[optionKey]
-                             : null;
-      if (optionString != null)
-      {
-        if (!float.TryParse(optionString, out returnValue))
-        {
-          throw new Exception($"Invalid value for {optionKey}, expected number but got: {optionString}");
-        }
-      }
-
-      return returnValue;
-    }
-
 
     /// <summary>
     /// Applies options from a dictionary to the given options object (or creates a new one if null).
     /// </summary>
-    /// <param name="options"></param>
     /// <param name="optionsDict"></param>
     /// <returns></returns>
     /// <exception cref="Exception"></exception>
     public override NNEvaluatorOptions OptionsWithOptionsDictApplied(Dictionary<string, string> optionsDict)
     {
-   
-      float value1Temperature = CheckOptionSpecifiedElseDefault(optionsDict, "V1TEMP", ValueHead1Temperature);
-      float value2Temperature = CheckOptionSpecifiedElseDefault(optionsDict, "V2TEMP", ValueHead2Temperature);
-      float value2Weight = CheckOptionSpecifiedElseDefault(optionsDict, "V2FRAC", FractionValueHead2);
-      Console.WriteLine(value2Weight + " " + value1Temperature + " " + value2Temperature);
-      //          float policyUncertaintyScaling = CheckOptionSpecifiedElseDefault(netDef, options, "POLUNC_SCALE", DEFAULT_POLUNC_SCALE);        
-      //          if (options != null && options.Keys.Contains("POLUNC"))
+      // Mostly just rely upon base class to parse options.
+      NNEvaluatorOptions baseOptions = base.OptionsWithOptionsDictApplied(optionsDict);
 
+      // But add on one more option.
       bool board4Mode = optionsDict != null && optionsDict.Keys.Contains("4BOARD");
 
+      // Return composite options.
+      // TODO: This is brittle, if we add more options to the base class, we need to
+      //       remember to add them here too.
       NNEvaluatorOptionsCeres optionsCeres = this with
       {
         UseAction = board4Mode,
         UsePriorState = board4Mode,
 
-        FractionValueHead2 = value2Weight, //options != null && options.Keys.Contains("USEV2") ? 0.5f : 0f
-        ValueHead1Temperature = value1Temperature,
-        ValueHead2Temperature = value2Temperature,
-        //            PolicyUncertaintyTemperatureScalingFactor = policyUncertaintyScaling,
+        FractionValueHead2 = baseOptions.FractionValueHead2,
+        ValueHead1Temperature = baseOptions.ValueHead1Temperature,
+        ValueHead2Temperature = baseOptions.ValueHead2Temperature,
+        PVExtensionDepth = baseOptions.PVExtensionDepth,
+        PolicyUncertaintyTemperatureScalingFactor = baseOptions.PolicyUncertaintyTemperatureScalingFactor,
       };
 
       return optionsCeres;
     }
 
-    #endregion
-
   }
-
 }

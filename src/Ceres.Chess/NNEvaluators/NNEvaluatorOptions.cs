@@ -65,18 +65,45 @@ namespace Ceres.Chess.NNEvaluators
     /// </summary>
     public virtual float Value2UncertaintyTemperatureScalingFactor { get; init; } = 0;
 
+    /// <summary>
+    /// Number of additional PV children by which each evaluated position is extended.
+    /// </summary>
+    public int PVExtensionDepth { get; init;  } = 0;
+
     #endregion
 
     #region Applying supplemental options
 
+    /// <summary>
+    /// Applies options from a dictionary to the given options object (or creates a new one if null).
+    /// </summary>
+    /// <param name="optionsDict"></param>
+    /// <returns></returns>
+    /// <exception cref="Exception"></exception>
     public virtual NNEvaluatorOptions OptionsWithOptionsDictApplied(Dictionary<string, string> optionsDict)
     {
-      if (optionsDict != null && optionsDict.Count > 0)
+      float pvExtensionDepth = CheckOptionSpecifiedElseDefault(optionsDict, "DEPTH", PVExtensionDepth);
+
+      float value1Temperature = CheckOptionSpecifiedElseDefault(optionsDict, "V1TEMP", ValueHead1Temperature);
+      float value2Temperature = CheckOptionSpecifiedElseDefault(optionsDict, "V2TEMP", ValueHead2Temperature);
+      float value2Weight = CheckOptionSpecifiedElseDefault(optionsDict, "V2FRAC", FractionValueHead2);
+      float policyUncertaintyScaling = CheckOptionSpecifiedElseDefault(optionsDict, "POLUNC_SCALE", PolicyUncertaintyTemperatureScalingFactor);
+
+      if (value2Weight != 0 || value1Temperature != 1 || value2Temperature != 1)
       {
-         throw new Exception("OptionsWithOptionsDictApplied not implemented for this class");
+        Console.WriteLine("OVERRIDDEN V2FRAC/V1TEMP/V2TEMP: " + value2Weight + " " + value1Temperature + " " + value2Temperature);
       }
 
-      return this with { };
+      NNEvaluatorOptions options = this with
+      {
+        FractionValueHead2 = value2Weight,
+        ValueHead1Temperature = value1Temperature,
+        ValueHead2Temperature = value2Temperature,
+        PVExtensionDepth = (int)pvExtensionDepth,
+        PolicyUncertaintyTemperatureScalingFactor = policyUncertaintyScaling,
+      };
+
+      return options;
     }
 
     #endregion
@@ -106,13 +133,44 @@ namespace Ceres.Chess.NNEvaluators
 
     #endregion
 
-
     #region Miscellaneous Options
 
     /// <summary>
     /// If true, monitor activations of the neural network. 
     /// </summary>
     public bool MonitorActivations { get; init; } = false;
+
+    #endregion
+
+
+    #region Options helpers
+
+    /// <summary>
+    /// Returns value in dictinoary with specified key (parsed as a float) specified default if not found.
+    /// </summary>
+    /// <param name="options"></param>
+    /// <param name="optionKey"></param>
+    /// <param name="defaultValue"></param>
+    /// <returns></returns>
+    /// <exception cref="Exception"></exception>
+    protected static float CheckOptionSpecifiedElseDefault(Dictionary<string, string> options,
+                                                           string optionKey,
+                                                           float defaultValue)
+    {
+      float returnValue = defaultValue;
+      string optionString = (options != null && options.Keys.Contains(optionKey))
+                             ? options[optionKey]
+                             : null;
+      if (optionString != null)
+      {
+        if (!float.TryParse(optionString, out returnValue))
+        {
+          throw new Exception($"Invalid value for {optionKey}, expected number but got: {optionString}");
+        }
+      }
+
+      return returnValue;
+    }
 
     #endregion
   }
