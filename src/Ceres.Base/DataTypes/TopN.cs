@@ -61,9 +61,10 @@ namespace Ceres.Base.DataTypes
     /// </summary>
     int numFound;
 
-    Comparer<T> copyFunc;
+    TopNComparer copyFunc;
 
     #endregion
+
 
     /// <summary>
     /// Constructor (including a set of initial entities to scan)
@@ -74,10 +75,10 @@ namespace Ceres.Base.DataTypes
     public TopN(IEnumerable<T> items, int maxN, Func<T, IComparable> eval)
     {
       N = maxN;
-      Evaluator = eval; 
+      Evaluator = eval ?? throw new ArgumentNullException(nameof(eval));
 
       tops = new T[maxN];
-      copyFunc = new Comparer<T>(eval);
+      copyFunc = new TopNComparer(eval);
       if (items != null)
       {
         Add(items);
@@ -103,8 +104,8 @@ namespace Ceres.Base.DataTypes
     {
       get
       {
-        List<T> ret = new List<T>(tops.Length);
-        for (int i = 0; i < tops.Length; i++)
+        List<T> ret = new List<T>(numFound);
+        for (int i = 0; i < numFound; i++)
         {
           ret.Add(tops[i]);
         }
@@ -124,15 +125,14 @@ namespace Ceres.Base.DataTypes
     /// <summary>
     /// Scans entities for potential addition to TopN set.
     /// </summary>
-    /// <param name="items"></param>
-    /// <returns></returns>
+    /// <param name="items">Items to scan for potential addition</param>
     public void Add(IEnumerable<T> items)
     {
       foreach (T item in items)
       {
         Add(item);
       }
-    }
+    }
 
 
     /// <summary>
@@ -203,7 +203,7 @@ namespace Ceres.Base.DataTypes
       string str = $"<TopN {Count} : ";
       for (int i = 0; i < numFound && i < 5; i++)
       {
-        str += this.Evaluator (tops[i]).ToString() + " ";
+        str += Evaluator (tops[i]).ToString() + " ";
       }
       return str + ">";
     }
@@ -211,18 +211,18 @@ namespace Ceres.Base.DataTypes
 
     #region Internals
 
-    public class Comparer<C> : IComparer<C>
+    private class TopNComparer : IComparer<T>
     {
-      Func<C, IComparable> mapper;
-      public Comparer(Func<C, IComparable> mapper)
+      readonly Func<T, IComparable> mapper;
+      public TopNComparer(Func<T, IComparable> mapper)
       {
         this.mapper = mapper;
       }
 
-      public int Compare(C t1, C t2) => mapper(t1).CompareTo(mapper(t2));
+      public int Compare(T t1, T t2) => mapper(t1).CompareTo(mapper(t2));
     }
+
     #endregion
   }
-
 
 }
