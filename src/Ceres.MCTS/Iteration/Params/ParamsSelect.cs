@@ -140,6 +140,11 @@ namespace Ceres.MCTS.Params
     [CeresOption(Name = "policy-softmax", Desc = "Controls degree of flatness of policy via specified level of exponentation", Default = "1.61")]
     public float PolicySoftmax = USE_ZZTUNE ? 1.359f : 1.4f;
 
+    /// <summary>
+    /// Flag used for debugging/testing purposes that can be set to true to enable test code.
+    /// </summary>
+    public bool TestFlag = false;
+
 
     /// <summary>
     /// Constructor (uses default values for the class unless overridden in settings file).
