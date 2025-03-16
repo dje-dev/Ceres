@@ -25,6 +25,9 @@ using Ceres.Chess.LC0.Batches;
 using Ceres.Chess.NetEvaluation.Batch;
 using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.Positions;
+using Ceres.Chess.EncodedPositions.Basic;
+using Ceres.Chess.MoveGen.Converters;
+using Ceres.Chess.MoveGen;
 
 #endregion
 
@@ -84,7 +87,7 @@ namespace Ceres.Chess.NNEvaluators
     /// <summary>
     /// Optional options relating to evaluator (e.g. output head postprocessing).
     /// </summary>
-    public NNEvaluatorOptions Options 
+    public NNEvaluatorOptions Options
     {
       get => options;
       set
@@ -144,7 +147,7 @@ namespace Ceres.Chess.NNEvaluators
     /// If the underlying execution engine is threadsafe, 
     /// i.e. can support concurrent execution from 
     /// </summary>
-    public virtual bool SupportsParallelExecution => true; 
+    public virtual bool SupportsParallelExecution => true;
 
     public virtual float EstNPSBatch => PerformanceStats == null ? 30_000 : PerformanceStats.BigBatchNPS;
     public virtual float EstNPSSingleton => PerformanceStats == null ? 500 : PerformanceStats.SingletonNPS;
@@ -234,8 +237,8 @@ namespace Ceres.Chess.NNEvaluators
     /// <param name="deviceSpecificationString"></param>
     /// <param name="evaluatorOptions"></param>
     /// <returns></returns>
-    public static NNEvaluator FromSpecification(string netSpecificationString, 
-                                                string deviceSpecificationString, 
+    public static NNEvaluator FromSpecification(string netSpecificationString,
+                                                string deviceSpecificationString,
                                                 NNEvaluatorOptions evaluatorOptions = null)
       => NNEvaluatorDef.FromSpecification(netSpecificationString, deviceSpecificationString, evaluatorOptions).ToEvaluator();
 
@@ -296,12 +299,38 @@ namespace Ceres.Chess.NNEvaluators
         positions.ZeroHistoryPlanes();
       }
 
-      IPositionEvaluationBatch batch = DoEvaluateIntoBuffers(positions, retrieveSupplementalResults);
+      IPositionEvaluationBatch batchEvaluation = DoEvaluateIntoBuffers(positions, retrieveSupplementalResults);
 
       NumBatchesEvaluated++;
       NumPositionsEvaluated += positions.NumPos;
-      return batch;
+
+      if (Options.PVExtensionDepth > 0)
+      {
+        PositionEvaluationBatch parentEvaluations = batchEvaluation as PositionEvaluationBatch;
+
+        //        Func<int, float> priorityScore = index => parentEvaluations.UncertaintyV.Span[index];
+        const float V_CUTOFF = 0.9f;
+        Func<int, float> priorityScore = index => MathF.Abs((float)parentEvaluations.GetV(index)) < V_CUTOFF ? 1 : -1;
+
+        if (extensionEvaluator == null)
+        {
+          extensionEvaluator = NNEvaluator.FromSpecification("~BT4_FP16_TRT", "GPU:0", Options with { PVExtensionDepth=0 });
+        }
+        NNEvaluator extensionEvaluatorToUse = extensionEvaluator;
+
+        ChildBatchEvaluator evaluator = new ChildBatchEvaluator(extensionEvaluatorToUse, parentEvaluations, positions, priorityScore);
+
+        // Recursively evaluate the child batches.
+        // This call will update the parentEvaluations with improvements propagated from deeper levels.
+        int numToEvaluate = int.MaxValue;// Math.Max(1, parentEvaluations.NumPos / 2);
+        const float MIN_PRIORITY = 1;
+        const float FRACTION_CHILD = 0.666f;
+        evaluator.EvaluateRecursive(Options.PVExtensionDepth, numToEvaluate, MIN_PRIORITY, FRACTION_CHILD);
+      }
+      
+      return batchEvaluation;
     }
+    NNEvaluator extensionEvaluator;
 
 
     private void SetMovesIfNeeded(IEncodedPositionBatchFlat positions)
@@ -318,7 +347,7 @@ namespace Ceres.Chess.NNEvaluators
       }
     }
 
-    readonly object lockObj = new ();
+    readonly object lockObj = new();
 
 
     /// <summary>
@@ -412,9 +441,9 @@ namespace Ceres.Chess.NNEvaluators
       }
 
       result = new NNEvaluatorResult(w, l, w1, l1, w2, l2, m, uncertaintyV, uncertaintyP,
-                                     policyRef.policies.Span[policyRef.index], 
+                                     policyRef.policies.Span[policyRef.index],
                                      HasAction ? actionRef.actions.Span[actionRef.index] : default,
-                                     activations, stateInfo, extraStat0, extraStat1, 
+                                     activations, stateInfo, extraStat0, extraStat1,
                                      rawNetworkOutputs, RawNetworkOutputNames);
     }
 
@@ -430,8 +459,8 @@ namespace Ceres.Chess.NNEvaluators
     /// <param name="retrieveSupplementalResults"></param>
     /// <param name="extraInputs">optional set of additional inputs to be set within the encoded batch</param>
     /// <returns></returns>
-    public NNEvaluatorResult Evaluate(PositionWithHistory position, 
-                                      bool fillInMissingPlanes = true, 
+    public NNEvaluatorResult Evaluate(PositionWithHistory position,
+                                      bool fillInMissingPlanes = true,
                                       bool retrieveSupplementalResults = false,
                                       InputTypes extraInputs = InputTypes.Undefined,
                                       Half[] state = null)
@@ -451,8 +480,8 @@ namespace Ceres.Chess.NNEvaluators
     /// <param name="fillInMissingPlanes">if history planes should be filled in if incomplete (typically necessary)</param>
     /// <param name="retrieveSupplementalResults"></param>
     /// <returns></returns>
-    public NNEvaluatorResult[] Evaluate(IEnumerable<PositionWithHistory> positions, 
-                                        bool fillInMissingPlanes = true, 
+    public NNEvaluatorResult[] Evaluate(IEnumerable<PositionWithHistory> positions,
+                                        bool fillInMissingPlanes = true,
                                         bool retrieveSupplementalResults = false)
     {
       if (InputsRequired.HasFlag(InputTypes.LastMovePlies))
@@ -480,9 +509,9 @@ namespace Ceres.Chess.NNEvaluators
     /// <param name="fillInMissingPlanes">if history planes should be filled in if incomplete (typically necessary)</param>
     /// <param name="retrieveSupplementalResults"></param>
     /// <returns></returns>
-    public NNEvaluatorResult Evaluate(in Position position, 
-                                      bool fillInMissingPlanes = true, 
-                                      bool retrieveSupplementalResults = false, 
+    public NNEvaluatorResult Evaluate(in Position position,
+                                      bool fillInMissingPlanes = true,
+                                      bool retrieveSupplementalResults = false,
                                       Half[] state = null)
     {
       InputTypes types = InputsRequired | InputTypes.Positions;
@@ -493,7 +522,7 @@ namespace Ceres.Chess.NNEvaluators
 
       EncodedPositionBatchBuilder builder = new EncodedPositionBatchBuilder(1, types);
       builder.Add(in position, fillInMissingPlanes, state);
-      
+
       NNEvaluatorResult[] result = EvaluateBatch(builder.GetBatch(), retrieveSupplementalResults);
       return result[0];
     }
@@ -506,11 +535,11 @@ namespace Ceres.Chess.NNEvaluators
     /// <param name="fillInHistory"></param>
     /// <param name="retrieveSupplementalResults"></param>
     /// <returns></returns>
-    public IPositionEvaluationBatch Evaluate(in EncodedPositionWithHistory encodedPosition, 
-                                             bool fillInHistory, 
+    public IPositionEvaluationBatch Evaluate(in EncodedPositionWithHistory encodedPosition,
+                                             bool fillInHistory,
                                              bool retrieveSupplementalResults)
     {
-      return Evaluate(new EncodedPositionWithHistory[] { encodedPosition }, 1, fillInHistory, retrieveSupplementalResults);
+      return Evaluate([encodedPosition], 1, fillInHistory, retrieveSupplementalResults);
     }
 
 
@@ -545,7 +574,7 @@ namespace Ceres.Chess.NNEvaluators
       else
       {
         bool setPositions = InputsRequired.HasFlag(InputTypes.Positions);
-        batch = new EncodedPositionBatchFlat(encodedPositions, numPositions, setPositions, fillInHistoryPlanes);        
+        batch = new EncodedPositionBatchFlat(encodedPositions, numPositions, setPositions, fillInHistoryPlanes);
       }
 
       if (EncodedPositionBatchFlat.RETAIN_POSITION_INTERNALS)
@@ -606,7 +635,7 @@ namespace Ceres.Chess.NNEvaluators
     /// <param name="bigBatch"></param>
     /// <param name="processor"></param>
     /// <param name="overrideMaxBatchSize"></param>
-    public void EvaluateOversizedBatch(EncodedPositionBatchFlat bigBatch, 
+    public void EvaluateOversizedBatch(EncodedPositionBatchFlat bigBatch,
                                        Action<int, Memory<NNEvaluatorResult>> processor,
                                        int? overrideMaxBatchSize = null)
     {
@@ -791,5 +820,181 @@ namespace Ceres.Chess.NNEvaluators
     }
 
     #endregion
+
+
+    public class ChildBatchEvaluator
+    {
+      NNEvaluator baseEvaluator;
+
+      private readonly PositionEvaluationBatch _parentEvaluations;
+      private readonly IEncodedPositionBatchFlat _positions;
+      private readonly Func<int, float> _priorityScore;
+      private List<int> _selectedIndices;
+      private EncodedPositionBatchBuilder _batchBuilder;
+      private IPositionEvaluationBatch _childEvaluations;
+
+      public ChildBatchEvaluator(NNEvaluator baseEvaluator,
+                                 PositionEvaluationBatch parentEvaluations,
+                                 IEncodedPositionBatchFlat positions,
+                                 Func<int, float> priorityScore)
+      {
+        this.baseEvaluator = baseEvaluator;
+        _parentEvaluations = parentEvaluations;
+        _positions = positions;
+        _priorityScore = priorityScore;
+        _selectedIndices = new List<int>();
+        // EncodedPositionBatchFlat.RETAIN_POSITIONS_INTERNALS = true;
+      }
+
+      /// <summary>
+      /// Prepares a child batch from the parent's positions. Only those indices that have a
+      /// priority score above minPriorityScore are considered, and if there are too many,
+      /// only the top maxPositions (by descending priority) are selected.
+      /// </summary>
+      public int BuildChildBatch(int maxPositions = int.MaxValue, float minPriorityScore = float.MinValue)
+      {
+        // Gather candidate indices based on the priority function.
+        List<(int index, float score)> candidates = new();
+        for (int i = 0; i < _parentEvaluations.NumPos; i++)
+        {
+          if (_parentEvaluations.Policies.Span[i].Count > 0)
+          {
+            float score = _priorityScore(i);
+            if (score >= minPriorityScore)
+            {
+              candidates.Add((i, score));
+            }
+          }
+        }
+
+        // Select top candidates by priority (if there are more than maxPositions)
+        _selectedIndices = candidates
+            .OrderByDescending(c => c.score)
+            .Take(maxPositions)
+            .Select(c => c.index)
+            .ToList();
+
+        // Build the child batch for the selected indices.
+        _batchBuilder = new EncodedPositionBatchBuilder(_positions.NumPos, InputTypes.All);
+        foreach (int i in _selectedIndices)
+        {
+          // Convert the parent's position to a PositionWithHistory.
+          PositionWithHistory parentPWH = _positions.PositionsBuffer.Span[i].ToPositionWithHistory(8);
+          CompressedPolicyVector childPolicy = _parentEvaluations.Policies.Span[i];
+
+          (EncodedMove Move, float Probability) thisPolicyMove = childPolicy.PolicyInfoAtIndex(0);
+
+          if (false)
+          {
+            if (childPolicy.Count > 1)
+            {
+              (EncodedMove Move, float Probability) thisPolicyMove1 = childPolicy.PolicyInfoAtIndex(1);
+              float diff = thisPolicyMove.Probability - thisPolicyMove1.Probability;
+              if (diff < 0.05f)
+              {
+                thisPolicyMove = thisPolicyMove1;
+              }
+            }
+          }
+
+          // Convert the encoded move into an MGMove.
+          MGMove thisMove = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(thisPolicyMove.Move, parentPWH.FinalPosMG);
+
+          // Determine the child position after the move.
+          MGPosition childPos = parentPWH.FinalPosMG;
+          childPos.MakeMove(thisMove);
+
+          // Construct a child PositionWithHistory.
+          PositionWithHistory childPWH = new PositionWithHistory(parentPWH);
+          childPWH.AppendMove(thisMove);
+          childPWH.ForceFinalPosMG(childPos);
+
+          // Add the computed child position to the batch.
+          _batchBuilder.Add(childPWH);
+        }
+
+        return _selectedIndices.Count;
+      }
+
+      /// <summary>
+      /// Evaluates the built child batch.
+      /// </summary>
+      public void EvaluateChildBatch()
+      {
+        // Evaluate the child batch using an evaluation function.
+        // (Assumes DoEvaluateIntoBuffers is accessible in the context.)
+        EncodedPositionBatchFlat batch = _batchBuilder.GetBatch();
+        if (batch.NumPos == 0)
+        {
+          throw new Exception("Child batch is empty.");
+        }
+        _childEvaluations = baseEvaluator.DoEvaluateIntoBuffers(batch, false);
+      }
+
+
+      /// <summary>
+      /// Applies the child evaluations back to the parent evaluations.
+      /// Only updates positions that were selected for child evaluation.
+      /// </summary>
+      /// <param name="fractionChild">Fraction to blend the child evaluation with the parent's.</param>
+      public void ApplyChildBatch(float fractionChild)
+      {
+        // Iterate through the child evaluations.
+        for (int j = 0; j < _selectedIndices.Count; j++)
+        {
+          int parentIndex = _selectedIndices[j];
+
+          _parentEvaluations.W.Span[parentIndex] = (FP16)((1.0f - fractionChild) * _parentEvaluations.W.Span[parentIndex]
+              + fractionChild * _childEvaluations.GetLossP(j)); // Using LossP due to perspective change.
+          _parentEvaluations.L.Span[parentIndex] = (FP16)((1.0f - fractionChild) * _parentEvaluations.L.Span[parentIndex]
+              + fractionChild * _childEvaluations.GetWinP(j)); // Using WinP due to perspective change.
+        }
+      }
+
+      /// <summary>
+      /// Recursively evaluates child batches down to the specified depth.
+      /// For depth = 1, this is equivalent to a single-level evaluation.
+      /// For depth > 1, the evaluator recursively builds, evaluates, and updates the child batches.
+      /// </summary>
+      /// <param name="depth">Depth level for recursive evaluation (>= 1)</param>
+      /// <param name="maxPositions">Optional limit on positions per batch</param>
+      /// <param name="minPriorityScore">Optional minimum priority score to consider</param>
+      /// <param name="fractionChild">Fraction to blend the child evaluation with the parent's</param>
+      public void EvaluateRecursive(int depth, int maxPositions = int.MaxValue, float minPriorityScore = float.MinValue, float fractionChild = 0.5f)
+      {
+        // Build and evaluate the child batch at the current level.
+        int numChildren = BuildChildBatch(maxPositions, minPriorityScore);
+        if (numChildren > 0)
+        {
+          EvaluateChildBatch();
+
+          // If deeper recursion is requested, recursively evaluate the child batch.
+          if (depth > 1)
+          {
+            IEncodedPositionBatchFlat childPositions = _batchBuilder.GetBatch();
+            if (_childEvaluations is PositionEvaluationBatch childEvaluations)
+            {
+              ChildBatchEvaluator deeperEvaluator = new ChildBatchEvaluator(baseEvaluator, childEvaluations, childPositions, _priorityScore);
+
+              // Continue evaluation recursively (all nodes).
+              const int MAX_POSITIONS_RECURSIVE = int.MaxValue;
+              const float MIN_PRIORITY_SCORE_RECURSIVE = float.MaxValue;
+              deeperEvaluator.EvaluateRecursive(depth - 1, MAX_POSITIONS_RECURSIVE, MIN_PRIORITY_SCORE_RECURSIVE, fractionChild);
+            }
+
+            // Otherwise, if the cast fails, we simply proceed with applying the evaluations.
+          }
+
+          // Finally, update the parent evaluations with the (possibly recursively updated) child evaluations.
+          ApplyChildBatch(fractionChild);
+        }
+      }
+    }
+
+
   }
 }
+
+
+    
+  
