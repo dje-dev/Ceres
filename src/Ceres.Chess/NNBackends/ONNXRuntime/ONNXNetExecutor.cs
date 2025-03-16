@@ -92,6 +92,11 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
     /// </summary>
     internal ONNXExecutor executor;
 
+    /// <summary>
+    /// Name of the LoRA adapter file (if any).
+    /// </summary>
+    public readonly string LoRAAdapterFileName;
+
     bool retainRawOutputs;
 
     /// <summary>
@@ -137,7 +142,8 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
                                NNDeviceType deviceType, int gpuNum,
                                bool useTensorRT,
                                bool enableProfiling,
-                               bool retainRawOutputs)
+                               bool retainRawOutputs,
+                               string loraAdapterFileName = null)
     {
       if (onnxFileName != null && !onnxFileName.ToUpper().EndsWith(".ONNX"))
       {
@@ -160,6 +166,7 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
       MinBatchSize = NetType == NetTypeEnum.TPG
                   && UseTensorRT
                   ? MIN_BATCH_SIZE_TENSOR_RT_CERES : 1;
+      LoRAAdapterFileName = loraAdapterFileName;
 
       int deviceIndex;
       if (deviceType == NNDeviceType.GPU)

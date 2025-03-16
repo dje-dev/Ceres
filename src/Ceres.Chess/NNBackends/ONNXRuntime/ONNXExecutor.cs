@@ -40,7 +40,7 @@ using Ceres.Base.Benchmarking;
 /// and therefore take locks to enforce single-threaded access.
 /// 
 /// TODO: some of the clients of this class could possibly pass in a restricted list of outputNames
-///       to eliminate overhead of retrieving values for outputs which may not be needed in some situations.
+///       to eliminate overhead of retrieving values for outputs which moray not be needed in some situations.
 /// </summary>
 namespace Ceres.Chess.NNBackends.ONNXRuntime
 {
@@ -93,6 +93,10 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
     /// prepared Ceres multinet network (containing the string "multinet" in the file name).
     public readonly float[] MultiNetWeights;
 
+    /// <summary>
+    /// Name of the LoRA adapter file (if any).
+    /// </summary>
+    public readonly string LoRAAdapterFileName;
 
     /// <summary>
     /// Execution is serialized by this lock object.
@@ -130,6 +134,7 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
     /// <param name="enableProfiling"></param>
     /// <param name="retainRawOutputs"></param>
     /// <param name="outputNamesToRetrieve"></param>
+    /// <param name="loraAdapterFileName"></param>
     /// <exception cref="Exception"></exception>
     public ONNXExecutor(string shortID,
                         string onnxFileName, 
@@ -143,7 +148,8 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
                         int maxBatchSize,
                         bool enableProfiling,
                         bool retainRawOutputs,
-                        string[] outputNamesToRetrieve = null)
+                        string[] outputNamesToRetrieve = null,
+                        string loraAdapterFileName = null)
     {
       if (precisionNumBits != 32 && precisionNumBits != 16)
       {
@@ -199,12 +205,21 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
 
       runOptions = new RunOptions();
 
+      if (loraAdapterFileName != null)
+      {
+        ConsoleUtils.WriteLineColored(ConsoleColor.Red, "Install LoRA adapter " + loraAdapterFileName);
+        OrtLoraAdapter adapterCeres = OrtLoraAdapter.Create(loraAdapterFileName, null);
+        runOptions.AddActiveLoraAdapter(adapterCeres);
+      }
+
+
       GPUID = gpuID;
       PrecisionNumBits = precisionNumBits;
       
       MinBatchSize = minBatchSize;
       UseTensorRT = useTensorRT;
       RetainRawInputs = retainRawOutputs;
+      LoRAAdapterFileName = loraAdapterFileName;
 
       // On Linux it was found necessary to touch the instance before any of the operations below
       // to prevent error about a session object not being created.
@@ -403,19 +418,35 @@ Comments from onnxruntime source code:
       {
         using (new TimingBlock($"ONNX InferenceSession create on model of size {onnxModelBytes.Length:N0} bytes"))
         {
-          Session = new InferenceSession(onnxModelBytes, so);
 
+          Session = new InferenceSession(onnxModelBytes, so);
           inputsMetadata = Session.InputMetadata;
+
+          // Rewrite the inputsMetadata to ignore any input
+          // having one of its dimensions 0.
+          // These occur (only?) for inputs which will be used with MultiLoRA adapter feature.
+          // The values of those nodes are not explicitly provided upon calls to Run,
+          // but rather the ONNX runtime system will fill them in using active LoRA adapters
+          // specified in the RunOptions (if any).
+          Dictionary<string, NodeMetadata> newDict = new();
+          foreach (KeyValuePair<string, NodeMetadata> kvp in inputsMetadata)
+          {
+            if (!kvp.Value.Dimensions.Contains(0))
+            {
+              newDict.Add(kvp.Key, kvp.Value);
+            }
+          }
+          inputsMetadata = newDict;
 
           // Create input and output buffers.
           if (PrecisionNumBits == 32)
           {
-            inputBuffers32 = ONNXHelpers.CreateBuffers<float>(Session.InputMetadata, maxBatchSize);
+            inputBuffers32 = ONNXHelpers.CreateBuffers<float>(inputsMetadata, maxBatchSize);
             outputBuffers32 = ONNXHelpers.CreateBuffers<float>(Session.OutputMetadata, maxBatchSize, outputNamesToRetrieve);
           }
           else if (PrecisionNumBits == 16)
           {
-            inputBuffers16 = ONNXHelpers.CreateBuffers<Float16>(Session.InputMetadata, maxBatchSize);
+            inputBuffers16 = ONNXHelpers.CreateBuffers<Float16>(inputsMetadata, maxBatchSize);
             outputBuffers16 = ONNXHelpers.CreateBuffers<Float16>(Session.OutputMetadata, maxBatchSize, outputNamesToRetrieve);
           }
           else
@@ -620,47 +651,79 @@ Comments from onnxruntime source code:
         throw new ArgumentException($"Batch size {batchSize} is less than minimum of {MinBatchSize}");
       }
 
-      List<NamedOnnxValue> inputsONNX = new(inputs.Length);
-
-      bool unknownShapeExists = outputBuffers32.Any(b => !b.isKnownShape);
-      if (unknownShapeExists)
-      {
-        // TODO: Copy/reference code from float16 version to support also here
-        throw new Exception("Unknown shapes (supplemental outputs) not yet supported for float inputs, try float16");
-      }
-
+      // Convert inputs to float buffers using pre-allocated inputBuffers32.
       for (int i = 0; i < inputs.Length; i++)
       {
         (Memory<Half> input, int[] shape, string inputName, int numElements) = inputs[i];
-        Memory<float> inputFloat = new float[numElements];
-        TensorPrimitives.ConvertToSingle(input.Span, inputFloat.Span);
-        DenseTensor<float> inputTensor = new DenseTensor<float>(inputFloat.Slice(0, numElements), shape);
-        inputsONNX.Add(NamedOnnxValue.CreateFromTensor(inputName, inputTensor));
+        Span<float> inputBufferSpanFloat = inputBuffers32[i].value.AsSpan(0, numElements);
+        TensorPrimitives.ConvertToSingle(input.Span, inputBufferSpanFloat);
       }
 
-      IDisposableReadOnlyCollection<DisposableNamedOnnxValue> runResult;
+      List<(string, Memory<Float16>)> resultArrays = new(outputBuffers32.Length);
+
       lock (lockObject)
       {
-        // TODO: make this code more similar to RunFloat16, including use of inputBuffers32
-        runResult = Session.Run(inputsONNX);//, ro); // fails on second run, reshape error, may be a bug on ONNXruntime
-      }
+        (string[] names, OrtValue[] values) inputBuffers = ONNXHelpers.CreateOrtValues(batchSize, inputBuffers32);
+        (string[] names, OrtValue[] values) outputBuffers = ONNXHelpers.CreateOrtValues(batchSize, outputBuffers32);
 
-      // TODO: Is it necessary or even possible to dispose of the the inputsONNX?
+        bool unknownShapeExists = outputBuffers32.Any(b => !b.isKnownShape);
 
-      List<(string, Memory<Float16>)> resultArrays = new(Session.OutputMetadata.Count);
-      foreach (DisposableNamedOnnxValue resultValue in runResult)
-      {
-        DenseTensor<float> tensor = (DenseTensor<float>)resultValue.AsTensor<float>();
-        //default;// tensor.Buffer.ToArray(); // TO DO: Avoid reallocation ?
-
-        Float16[] values = new Float16[tensor.Buffer.Length];
-        for (int i=0; i<tensor.Buffer.Length; i++)
+        if (RetainRawInputs || unknownShapeExists)
         {
-          values[i] = (Float16)tensor.GetValue(i); // Inefficient!
-        } 
-        resultArrays.Add((resultValue.Name, values));
+          List<string> allOutputNames = outputBuffers32.Select(p => p.name).ToList();
+          IDisposableReadOnlyCollection<OrtValue> rr = Session.Run(runOptions, inputBuffers.names, inputBuffers.values, allOutputNames);
 
-        resultValue.Dispose();
+          // Dispose of input buffers used.
+          foreach (OrtValue v in inputBuffers.values)
+          {
+            v.Dispose();
+          }
+          foreach (OrtValue v in outputBuffers.values)
+          {
+            v.Dispose();
+          }
+
+          // Extract results from output buffers.
+          for (int i = 0; i < outputBuffers.names.Length; i++)
+          {
+            if (rr[i].GetTensorTypeAndShape().ElementDataType == TensorElementType.Float)
+            {
+              ReadOnlySpan<float> data = rr[i].GetTensorDataAsSpan<float>();
+              Float16[] halfValues = new Float16[data.Length];
+              for (int j = 0; j < data.Length; j++)
+              {
+                halfValues[j] = (Float16)data[j];
+              }
+              resultArrays.Add((allOutputNames[i], halfValues));
+            }
+            else
+            {
+              // for now, do not process if data type other than float
+              resultArrays.Add((allOutputNames[i], null));
+            }
+            rr[i].Dispose();
+          }
+        }
+        else
+        {
+          // Note that IOBinding is not used. As noted in the ONNX documentation,
+          // there is not necessarily any benefit of using IOBinding over this simpler
+          // method of passing the OrtValue inputs and outputs directly to the Run method.
+          Session.Run(runOptions,
+                      inputBuffers.names, inputBuffers.values,
+                      outputBuffers.names, outputBuffers.values);
+
+          foreach ((string name, NodeMetadata metadata, bool isKnownShape, float[] value) resultItem in outputBuffers32)
+          {
+            int count = ONNXHelpers.ProductDimensions(resultItem.metadata.Dimensions, batchSize);
+            Float16[] halfResult = new Float16[count];
+            for (int j = 0; j < count; j++)
+            {
+              halfResult[j] = (Float16)resultItem.value[j];
+            }
+            resultArrays.Add((resultItem.name, halfResult));
+          }
+        }
       }
 
       return resultArrays;
