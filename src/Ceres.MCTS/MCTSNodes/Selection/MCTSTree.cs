@@ -87,6 +87,10 @@ namespace Ceres.MCTS.LeafExpansion
     public List<EncodedPositionBoard> EncodedPriorPositions;
 
 
+    public object FineTuneHistory; // Experimental
+
+
+
     /// <summary>
     /// Constructor.
     /// </summary>
