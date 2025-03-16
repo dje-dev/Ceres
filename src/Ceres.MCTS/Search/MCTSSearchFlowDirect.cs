@@ -1,3 +1,5 @@
+#define FINE_TUNE_EXPERIMENTAL_SUPPORT
+
 #region License notice
 
 /*
@@ -20,13 +22,12 @@ using System.Diagnostics;
 using Ceres.Base.DataTypes;
 using Ceres.Base.Environment;
 
+using Ceres.Chess;
+
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.MTCSNodes.Struct;
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.Params;
-using Ceres.MCTS.Utils;
-using Ceres.MCTS.Environment;
-using Ceres.Chess;
 
 #endregion
 
@@ -151,6 +152,10 @@ namespace Ceres.MCTS.Search
       }
 
       MCTSNode rootNode = Context.Root;
+
+#if FINE_TUNE_EXPERIMENTAL_SUPPORT
+      rootNode.Tree.FineTuneHistory = null;
+#endif
 
       bool overlappingAllowed = Context.ParamsSearch.Execution.FlowDirectOverlapped;
       int initialRootN = rootNode.N;
@@ -382,6 +387,13 @@ namespace Ceres.MCTS.Search
                                  + $"yields NN={nodesSelectedSet.NodesNN.Count} Immediate= {nodesSelectedSet.NodesImmediateNotYetApplied.Count} "
                                  + $"[CacheOnly={nodesSelectedSet.NumCacheOnly} None={nodesSelectedSet.NumNotApply}]", manager.InstanceID);
 
+#if FINE_TUNE_EXPERIMENTAL_SUPPORT
+        if (Context.NNEvaluators.Evaluator1.RetrainFunc != null)
+        {
+          Context.NNEvaluators.Evaluator1.RetrainFunc(this.Manager.Context.Tree, false);
+        }
+#endif
+
         // Now launch NN evaluation on the non-immediate nodes
         bool isPrimary = selectorID == 0;
         if (overlapThisSet)
@@ -429,6 +441,13 @@ namespace Ceres.MCTS.Search
         });
         haveWarned = true;
       }
+
+#if FINE_TUNE_EXPERIMENTAL_SUPPORT
+      if (Context.NNEvaluators.Evaluator1.RetrainFunc != null)
+      {
+        Context.NNEvaluators.Evaluator1.RetrainFunc(this.Manager.Context.Tree, true);
+      }
+#endif
 
       selector1.Shutdown();
       selector2?.Shutdown();
