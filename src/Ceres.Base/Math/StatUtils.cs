@@ -100,6 +100,24 @@ namespace Ceres.Base.Math
 
 
     /// <summary>
+    /// Returns the median value of a given array of floats.
+    /// </summary>
+    /// <param name="source">An array of floating-point numbers used to compute the median.</param>
+    /// <returns>The median value as a floating-point number.</returns>
+    public static float Median(float[] source)
+    {
+      float[] sortedArray = (float[])source.Clone();
+      Array.Sort(sortedArray);
+
+      int size = sortedArray.Length;
+      int mid = size / 2;
+
+      return (size % 2 != 0) ? sortedArray[mid] 
+                             : (sortedArray[mid - 1] + sortedArray[mid]) / 2;
+    }
+
+
+    /// <summary>
     /// Returns the maximum value in an array of floats.
     /// </summary>
     /// <param name="xs"></param>
@@ -617,54 +635,46 @@ namespace Ceres.Base.Math
     /// <param name="values1"></param>
     /// <param name="values2"></param>
     /// <returns></returns>
-    public static float RankCorrelation(Span<float> values1, Span<float> values2) => (float)Correlation(ToRanks(values1), ToRanks(values2));
+    public static float RankCorrelation(Span<float> values1, Span<float> values2) 
+      => (float)Correlation(ToRanks(values1), ToRanks(values2));
 
 
-    /// <summary>
-    /// Returns array of ranks of values in specified array (starting with 0).
-    /// </summary>
-    /// <param name="values"></param>
-    /// <returns></returns>
     public static float[] ToRanks(Span<float> values)
     {
       int N = values.Length;
 
+      // Create a copy of the span to avoid capturing the ref-like type in the lambda.
+      float[] data = values.ToArray();
       float[] ranks = new float[N];
-
+      int[] indices = new int[N];
       for (int i = 0; i < N; i++)
       {
-        int rank1 = 0;
-        int rank2 = 0;
-
-        for (int j = 0; j < i; j++)
-        {
-          if (values[j] < values[i])
-          {
-            rank1++;
-          }
-          else if (values[j] == values[i])
-          {
-            rank2++;
-          }
-        }
-
-        for (int j = i + 1; j < N; j++)
-        {
-          if (values[j] < values[i])
-          {
-            rank1++;
-          }
-          else if (values[j] == values[i])
-
-          {
-            rank2++;
-          }
-        }
-
-        ranks[i] = rank1 + (rank2 - 1f) * 0.5f;
+        indices[i] = i;
       }
 
+      // Sort indices based on the corresponding value in 'data'
+      Array.Sort(indices, (int a, int b) =>
+      {
+        return data[a].CompareTo(data[b]);
+      });
 
+      int iIndex = 0;
+      while (iIndex < N)
+      {
+        int jIndex = iIndex;
+        // Count how many tied elements exist
+        while ((jIndex < N) && (data[indices[iIndex]] == data[indices[jIndex]]))
+        {
+          jIndex++;
+        }
+        // Average rank for tied values: starting rank + (number of ties - 1)/2
+        float averageRank = iIndex + ((jIndex - iIndex - 1) / 2f);
+        for (int k = iIndex; k < jIndex; k++)
+        {
+          ranks[indices[k]] = averageRank;
+        }
+        iIndex = jIndex;
+      }
       return ranks;
     }
 
@@ -684,21 +694,27 @@ namespace Ceres.Base.Math
       return ret;
     }
 
+
     /// <summary>
     /// Computes softmax function.
     /// </summary>
     public static float[] Softmax(float[] f)
     {
-      float acc = 0;
-      for (int i = 0; i < f.Length; i++)
-      {
-        acc += MathF.Exp(f[i]);
-      }
+      int length = f.Length;
 
-      float[] ret = new float[f.Length];
-      for (int i = 0; i < f.Length; i++)
+      float[] expValues = new float[length];
+
+      float sumExp = 0;
+      for (int i = 0; i < length; i++)
       {
-        ret[i] = MathF.Exp(f[i]) / acc;
+        expValues[i] = MathF.Exp(f[i]);
+        sumExp += expValues[i];
+      }
+     
+      float[] ret = new float[length];
+      for (int i = 0; i < length; i++)
+      {
+        ret[i] = expValues[i] / sumExp;
       }
       return ret;
     }
