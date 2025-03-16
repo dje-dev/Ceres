@@ -37,6 +37,7 @@
     <PackageReference Include="Microsoft.Extensions.Logging.EventSource" Version="8.0.1" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.2" />
     <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu" Version="1.21.0" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.21.0" />
 
     <PackageReference Include="protobuf-net" Version="3.2.45" />
     <PackageReference Include="protobuf-net.Core" Version="3.2.45" />
