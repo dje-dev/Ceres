@@ -79,6 +79,7 @@ namespace Ceres.MCTS.LeafExpansion
                                       float cpuctMultiplier,
                                       float actionHeadSelectionWeight)
     {
+      childStats.QParent = qParent;
 #if NOT
 Note: Possible optimization/inefficiency: 
        the profiler shows about 5% of runtime here, 
@@ -132,7 +133,7 @@ Note: Possible optimization/inefficiency:
               parentIsRoot ? paramsSelect.UCTRootNumeratorExponent : paramsSelect.UCTNonRootNumeratorExponent,
               cpuctValue, qWhenNoChildren,
               parentIsRoot ? paramsSelect.UCTRootDenominatorExponent : paramsSelect.UCTNonRootDenominatorExponent,
-              actionHeadSelectionWeight);
+              actionHeadSelectionWeight, paramsSelect.TestFlag);
     }
 
 
@@ -163,7 +164,7 @@ Note: Possible optimization/inefficiency:
                                 Span<float> outputScores, Span<short> outputChildVisitCounts,
                                 float virtualLossMultiplier, float uctParentPower,
                                 float cpuctValue, float qWhenNoChildren, float uctDenominatorPower,
-                                float actionHeadSelectionWeight)
+                                float actionHeadSelectionWeight, object optionsObj)
     {
       // Load the vectors that do not change
       Span<float> nInFlight = childStats.InFlight.Span;
@@ -185,7 +186,7 @@ Note: Possible optimization/inefficiency:
         float numVisitsByParentToChildren = parentNInFlight + ((parentN < 2) ? 1 : parentN - 1);
         float cpuctSqrtParentN = cpuctValue * ParamsSelect.UCTParentMultiplier(numVisitsByParentToChildren, uctParentPower);
         ComputeChildScores(childStats, numChildren, qWhenNoChildren, virtualLossMultiplier,
-                           localResultAVXScratch, cpuctSqrtParentN, uctDenominatorPower, actionHeadSelectionWeight);
+                           localResultAVXScratch, cpuctSqrtParentN, uctDenominatorPower, actionHeadSelectionWeight, optionsObj);
 
         // Save back to output scores (if these were requested)
         if (outputScores != default)
@@ -235,7 +236,7 @@ Note: Possible optimization/inefficiency:
             numVisitsByParentToChildren = newNInFlight + parentNInFlight + ((parentN < 2) ? 1 : parentN - 1);
             cpuctSqrtParentN = cpuctValue * ParamsSelect.UCTParentMultiplier(numVisitsByParentToChildren, uctParentPower);
             ComputeChildScores(childStats, numChildren, qWhenNoChildren, virtualLossMultiplier,
-                                 localResultAVXScratch, cpuctSqrtParentN, uctDenominatorPower, actionHeadSelectionWeight);
+                                 localResultAVXScratch, cpuctSqrtParentN, uctDenominatorPower, actionHeadSelectionWeight, optionsObj);
 
             // Check if the best child was still the same
             if (maxIndex == ArrayUtils.IndexOfElementWithMaxValue(localResultAVXScratch, numChildren))
@@ -286,20 +287,20 @@ Note: Possible optimization/inefficiency:
                                        int numChildren, float qWhenNoChildren,
                                        float virtualLossMultiplier, float[] computedChildScores,
                                        float cpuctSqrtParentN, float uctDenominatorPower,
-                                       float actionHeadSelectionWeight)
+                                       float actionHeadSelectionWeight, object optionsObj)
     {
       if (actionHeadSelectionWeight == 0 && Avx.IsSupported)
       {
-        ComputeChildScoresAVX(childStats, numChildren, qWhenNoChildren, virtualLossMultiplier, computedChildScores, cpuctSqrtParentN, uctDenominatorPower, actionHeadSelectionWeight);
+        ComputeChildScoresAVX(childStats, numChildren, qWhenNoChildren, virtualLossMultiplier, computedChildScores, cpuctSqrtParentN, uctDenominatorPower, actionHeadSelectionWeight, optionsObj);
       }
       else if (actionHeadSelectionWeight == 0 && AdvSimd.IsSupported)
       {
         // The SIMD version is about 3x as fast as non-SIMD.
-        ComputeChildScoresARM(childStats, numChildren, qWhenNoChildren, virtualLossMultiplier, computedChildScores, cpuctSqrtParentN, uctDenominatorPower, actionHeadSelectionWeight);
+        ComputeChildScoresARM(childStats, numChildren, qWhenNoChildren, virtualLossMultiplier, computedChildScores, cpuctSqrtParentN, uctDenominatorPower, actionHeadSelectionWeight, optionsObj);
       }
       else
       {
-        ComputeChildScoresNonSIMD(childStats, numChildren, qWhenNoChildren, virtualLossMultiplier, computedChildScores, cpuctSqrtParentN, uctDenominatorPower, actionHeadSelectionWeight);
+        ComputeChildScoresNonSIMD(childStats, numChildren, qWhenNoChildren, virtualLossMultiplier, computedChildScores, cpuctSqrtParentN, uctDenominatorPower, actionHeadSelectionWeight, optionsObj);
       }
     }
 
@@ -308,7 +309,7 @@ Note: Possible optimization/inefficiency:
                                               int numChildren, float qWhenNoChildren,
                                               float virtualLossMultiplier, float[] computedChildScores,
                                               float cpuctSqrtParentN, float uctDenominatorPower,
-                                              float actionHeadSelectionWeight)
+                                              float actionHeadSelectionWeight, object optionsObj)
     {
       int numBlocks = (numChildren / 8) + ((numChildren % 8 == 0) ? 0 : 1);
 
@@ -316,6 +317,7 @@ Note: Possible optimization/inefficiency:
       Span<float> w = childStats.W.Span;
       Span<float> n = childStats.N.Span;
       Span<float> nInFlight = childStats.InFlight.Span;
+      Span<float> uv = childStats.U.Span;
 
       // Process in AVX blocks of 8 at a time
       int blockCount = 0;
@@ -327,6 +329,7 @@ Note: Possible optimization/inefficiency:
                       pP = &p[startOffset],
                       pW = &w[startOffset],
                       pN = &n[startOffset],
+                      pUV = &uv[startOffset],
                       pComputedChildScores = &computedChildScores[startOffset])
         {
           // Load vector registers
@@ -334,11 +337,12 @@ Note: Possible optimization/inefficiency:
           Vector256<float> vN = Avx.LoadAlignedVector256(pN);
           Vector256<float> vP = Avx.LoadAlignedVector256(pP);
           Vector256<float> vQWhenNoChildren = Vector256.Create(qWhenNoChildren);
+          Vector256<float> vUV = Avx.LoadAlignedVector256(pUV);
 
           // Do computation
           Vector256<float> vNInFlight = Avx.LoadAlignedVector256(pNInFlight);
           Vector256<float> vScore = ComputeScoresAVX(vW, vN, vP, virtualLossMultiplier, cpuctSqrtParentN, uctDenominatorPower,
-                                                      actionHeadSelectionWeight, vQWhenNoChildren, vNInFlight);
+                                                      actionHeadSelectionWeight, vQWhenNoChildren, vNInFlight, vUV, optionsObj, childStats.QParent);
           Avx.Store(pComputedChildScores, vScore);
         }
 
@@ -350,8 +354,14 @@ Note: Possible optimization/inefficiency:
                                           int numChildren, float qWhenNoChildren,
                                           float virtualLossMultiplier, float[] computedChildScores,
                                           float cpuctSqrtParentN, float uctDenominatorPower,
-                                          float actionHeadSelectionWeight)
+                                          float actionHeadSelectionWeight,
+                                          object optionsObj)
     {
+      if (optionsObj != null || actionHeadSelectionWeight != 0)
+      {
+        throw new NotImplementedException();
+      }
+
       int numBlocks = (numChildren / 4) + ((numChildren % 4 == 0) ? 0 : 1);
 
       Span<float> p = childStats.P.Span;
@@ -380,13 +390,14 @@ Note: Possible optimization/inefficiency:
           // Do computation
           Vector128<float> vNInFlight = AdvSimd.LoadVector128(pNInFlight);
           Vector128<float> vScore = ComputeScoresARM(vW, vN, vP, virtualLossMultiplier, cpuctSqrtParentN, uctDenominatorPower, actionHeadSelectionWeight,
-                                                     vQWhenNoChildren, vNInFlight);
+                                                     vQWhenNoChildren, vNInFlight, optionsObj);
           AdvSimd.Store(pComputedChildScores, vScore);
         }
 
         blockCount++;
       }
     }
+
 
     /// <summary>
     /// Returns the value obtained by raising every element of a vector to a speciifed power.
@@ -417,6 +428,7 @@ Note: Possible optimization/inefficiency:
     }
 
 
+
     /// <summary>
     /// Low-level AVX worker method that implements the CPUCT math.
     /// </summary>
@@ -434,9 +446,10 @@ Note: Possible optimization/inefficiency:
                                                      float virtualLossMultiplier,
                                                      float cpuctSqrtParentN, float uctDenominatorPower,
                                                      float actionHeadSelectionWeight,
-                                                     Vector256<float> vQWhenNoChildren, Vector256<float> vNInFlight)
+                                                     Vector256<float> vQWhenNoChildren, Vector256<float> vNInFlight,
+                                                     Vector256<float> vUV, object optionsObj, float qParent)
     {
-      if (actionHeadSelectionWeight != 0)
+      if (optionsObj != null || actionHeadSelectionWeight != 0)
       {
         throw new NotImplementedException();
       }
@@ -491,9 +504,9 @@ Note: Possible optimization/inefficiency:
     private static Vector128<float> ComputeScoresARM(Vector128<float> vW, Vector128<float> vN, Vector128<float> vP,
                                                      float virtualLossMultiplier,
                                                      float cpuctSqrtParentN, float uctDenominatorPower, float actionHeadSelectionWeight,
-                                                     Vector128<float> vQWhenNoChildren, Vector128<float> vNInFlight)
+                                                     Vector128<float> vQWhenNoChildren, Vector128<float> vNInFlight, object optionsObj)
     {
-      if (actionHeadSelectionWeight != 0)
+      if (optionsObj != null || actionHeadSelectionWeight != 0)
       {
         throw new NotImplementedException();
       }
@@ -542,11 +555,12 @@ Note: Possible optimization/inefficiency:
     private unsafe static void ComputeChildScoresNonSIMD(GatheredChildStats childStats,
                                                          int numChildren, float qWhenNoChildren,
                                                          float virtualLossMultiplier, float[] computedChildScores,
-                                                         float cpuctSqrtParentN, float uctDenominatorPower, float actionHeadSelectionWeight)
+                                                         float cpuctSqrtParentN, float uctDenominatorPower, 
+                                                         float actionHeadSelectionWeight, object optionsObj)
     {
       ComputeScoresNonSIMD(numChildren, childStats.W.Span, childStats.N.Span, childStats.P.Span, childStats.A.Span,
-                              virtualLossMultiplier, cpuctSqrtParentN, uctDenominatorPower,
-                           qWhenNoChildren, childStats.InFlight.Span, computedChildScores, actionHeadSelectionWeight);
+                           virtualLossMultiplier, cpuctSqrtParentN, uctDenominatorPower,
+                           qWhenNoChildren, childStats.InFlight.Span, computedChildScores, actionHeadSelectionWeight, optionsObj);
     }
 
 
@@ -554,8 +568,13 @@ Note: Possible optimization/inefficiency:
                                              float virtualLossMultiplier,
                                              float cpuctSqrtParentN, float uctDenominatorPower,
                                              float qWhenNoChildren, Span<float> vNInFlight,
-                                             Span<float> outputVScore, float actionHeadSelectionWeight)
+                                             Span<float> outputVScore, float actionHeadSelectionWeight, object optionsObj)
     {
+      if (optionsObj != null || actionHeadSelectionWeight != 0)
+      {
+        throw new NotImplementedException();
+      }
+
       for (int i = 0; i < numScores; i++)
       {
         float nPlusNInFlight = vN[i] + vNInFlight[i];
@@ -579,7 +598,7 @@ Note: Possible optimization/inefficiency:
         {
           _vQ = (_vLossContrib - vW[i]) / nPlusNInFlight;
         }
-        else        
+        else
         {
           Debug.Assert(_vLossContrib == 0);
           _vQ = qWhenNoChildren + _vLossContrib;
@@ -588,8 +607,8 @@ Note: Possible optimization/inefficiency:
             //          _vQ = Math.Max(_vQ - 0 * 0.10f, vA[i]- 0.10f);
             //          _vQ = (1.0f - actionHeadSelectionWeight) * _vQ + actionHeadSelectionWeight * vA[i];
             // +10 Elo            _vQ = Math.Max(_vQ - 0.10f, (1.0f - actionHeadSelectionWeight) * _vQ + actionHeadSelectionWeight * vA[i]);
-//-11            _vQ = Math.Max(_vQ - 0.10f, (1.0f - actionHeadSelectionWeight) * _vQ + actionHeadSelectionWeight * vA[i]);
-float vqOrg = _vQ;
+            //-11            _vQ = Math.Max(_vQ - 0.10f, (1.0f - actionHeadSelectionWeight) * _vQ + actionHeadSelectionWeight * vA[i]);
+            float vqOrg = _vQ;
             _vQ = Math.Max(vqOrg - 0.05f, (1.0f - actionHeadSelectionWeight) * _vQ + actionHeadSelectionWeight * vA[i]);
             _vQ = Math.Min(vqOrg + 0.05f, _vQ);
           }
@@ -614,7 +633,7 @@ float vqOrg = _vQ;
       }
     }
 
-#endregion
+    #endregion
 
 
     /// <summary>

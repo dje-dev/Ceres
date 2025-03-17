@@ -34,6 +34,7 @@ namespace Ceres.MCTS.MTCSNodes
     internal SpanAligned<float> W;
     internal SpanAligned<float> U;
     internal SpanAligned<float> A;
+    internal float QParent;
 
     internal GatheredChildStats()
     {
