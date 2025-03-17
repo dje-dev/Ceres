@@ -12,6 +12,9 @@
 
 #region Using directives
 
+using Ceres.Base.DataTypes;
+using Ceres.Base.OperatingSystem;
+using ManagedCuda;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -19,10 +22,6 @@ using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading;
-
-using Ceres.Base.DataTypes;
-
-using ManagedCuda;
 
 #endregion
 
@@ -92,6 +91,7 @@ namespace Ceres.Base.CUDA
       }
     }
 
+
     static int driverVersionMajor = -1;
     static int driverVersionMinor = -1;
 
@@ -101,6 +101,11 @@ namespace Ceres.Base.CUDA
     /// <returns></returns>
     public static (int majorVersion, int minorVersion) GetCUDAVersion()
     {
+      if (!SoftwareManager.IsCUDAInstalled)
+      {
+        return default;
+      }
+
       if (driverVersionMajor == -1)
       {
         // No device ever initialized; force this now (then release).
