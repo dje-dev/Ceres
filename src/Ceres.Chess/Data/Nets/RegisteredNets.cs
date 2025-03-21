@@ -40,6 +40,7 @@ namespace Ceres.Chess.Data.Nets
 //        { "T40", SimpleLC0Net("42850") },
         { "T70", SimpleLC0Net("703810") },
         { "T75", SimpleLC0Net("753723") },
+        { "T74", SimpleLC0Net("744706") },
         { "T60", SimpleLC0Net("606512") },
         { "T78", SimpleLC0Net("784984") },
         { "T80", SimpleLC0Net("809942") }, // 801307
