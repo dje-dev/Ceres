@@ -56,6 +56,7 @@ namespace Ceres.Chess.LC0.WeightsProtobuf
         haveWarned = true;
       }
 
+      // NOTE: vectorization (AVX2) was not found to be meaningfully faster than this scalar code.
       for (int i = 0; i < ret.Length; i++)
       {
         ret[i] = GetLayerLinear16Single(layer, i, minVal, scaleUsed);
@@ -74,6 +75,7 @@ namespace Ceres.Chess.LC0.WeightsProtobuf
     {
       FP16[] ret = new FP16[layer.Params.Length / 2];
 
+      // NOTE: vectorization (AVX2) was not found to be meaningfully faster than this scalar code.
       for (int i = 0; i < ret.Length; i++)
       {
         ret[i] = (FP16)GetLayerLinear16Single(layer, i);
