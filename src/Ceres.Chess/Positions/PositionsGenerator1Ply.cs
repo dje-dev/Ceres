@@ -38,7 +38,7 @@ namespace Ceres.Chess.Positions
     /// <returns></returns>
     public static IEnumerable<(MGMove, Position)> GenPositions(Position startPos, Predicate<MGMove> moveToIncludeFilter = null)
     {
-      MGPosition posMG = MGChessPositionConverter.MGChessPositionFromFEN(startPos.FEN); // TODO: more efficient?
+      MGPosition posMG = startPos.ToMGPosition;
       MGMoveList moves = new MGMoveList();
       MGMoveGen.GenerateMoves(in posMG, moves);
 
