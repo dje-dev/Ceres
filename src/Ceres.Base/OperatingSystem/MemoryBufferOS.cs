@@ -16,7 +16,6 @@
 using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 
 #endregion
 
@@ -36,22 +35,20 @@ namespace Ceres.Base.OperatingSystem
   ///   
   /// </summary>
   /// <typeparam name="T"></typeparam>
-  public unsafe class MemoryBufferOS<T> where T : unmanaged
+  public unsafe class MemoryBufferOS<T> : IDisposable where T : unmanaged
   {
     public readonly bool UseExistingSharedMemory;
 
     /// <summary>
     /// Number of items requested to be allocated
     /// </summary>
-    public readonly long NumItems;
+    public readonly long MaxItems;
 
     /// <summary>
     /// If memory should be allocated only incrementally as needed
     /// (by extending the allocated region of the large block reserved at initialization)
     /// </summary>
     public readonly bool UseIncrementalAlloc;
-
-    int sizeTInBytes;
 
     // TODO: restore GC pressure (?)
     //bool gcPressureWasAdded;
@@ -63,13 +60,20 @@ namespace Ceres.Base.OperatingSystem
 
     #region Constructor
 
-    public MemoryBufferOS(long numItems, bool largePages, string sharedMemoryName,
+    /// <summary>
+    /// Constructor.
+    /// </summary>
+    /// <param name="maxItems"></param>
+    /// <param name="largePages"></param>
+    /// <param name="sharedMemoryName"></param>
+    /// <param name="useExistingSharedMemory"></param>
+    /// <param name="useIncrementalAlloc"></param>
+    public MemoryBufferOS(long maxItems, bool largePages, string sharedMemoryName,
                           bool useExistingSharedMemory, bool useIncrementalAlloc)
     {
-      NumItems = numItems;
+      MaxItems = maxItems;
       UseExistingSharedMemory = useExistingSharedMemory;
       UseIncrementalAlloc = useIncrementalAlloc;
-      sizeTInBytes = Marshal.SizeOf<T>();
 
       // Make name unique to this process if we are not sharing
       if (sharedMemoryName != null && !useExistingSharedMemory)
@@ -77,7 +81,7 @@ namespace Ceres.Base.OperatingSystem
         sharedMemoryName += "_" + Process.GetCurrentProcess().Id.ToString();
       }
 
-      Allocate(sharedMemoryName, useExistingSharedMemory, numItems, largePages);
+      Allocate(sharedMemoryName, useExistingSharedMemory, maxItems, largePages);
     }
 
     #endregion
@@ -141,6 +145,9 @@ namespace Ceres.Base.OperatingSystem
     /// </summary>
     public long NumItemsAllocated => rawMemoryManager.NumItemsAllocated;
 
+    /// <summary>
+    /// Releases the memory buffer.
+    /// </summary>
     public void Dispose() => rawMemoryManager.Dispose();
 
 
@@ -157,7 +164,7 @@ namespace Ceres.Base.OperatingSystem
     /// <summary>
     /// Returns the total number of items in the buffer.
     /// </summary>
-    public long Length => NumItems;
+    public long Length => MaxItems;
 
 
     /// <summary>
@@ -168,15 +175,9 @@ namespace Ceres.Base.OperatingSystem
     public ref T this[long index]
     {
       [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-      get
-      {
-        long startBufferAdr = new IntPtr(RawMemory).ToInt64();
-        IntPtr startPtr = new IntPtr(startBufferAdr + index * sizeTInBytes);
-
-        return ref Unsafe.AsRef<T>(startPtr.ToPointer());
-      }
-
+      get => ref ((T*)rawMemoryAddress)[index];
     }
+
 
     /// <summary>
     /// Copies specified number of entries from one location to another.
@@ -186,16 +187,15 @@ namespace Ceres.Base.OperatingSystem
     /// <param name="numEntries"></param>
     public void CopyEntries(long sourceIndex, long destinationIndex, int numEntries)
     {
-      long startBufferAdr = new IntPtr(RawMemory).ToInt64();
+      byte* start = (byte*)rawMemoryAddress;
+      byte* source = start + sourceIndex * sizeof(T);
+      byte* dest = start + destinationIndex * sizeof(T);
 
-      IntPtr sourcePtr = new IntPtr(startBufferAdr + sourceIndex * sizeTInBytes);
-      IntPtr destPtr = new IntPtr(startBufferAdr + destinationIndex * sizeTInBytes);
-
-      long numBytes = sizeTInBytes * numEntries;
+      long numBytes = sizeof(T) * numEntries;
       Debug.Assert(numBytes < int.MaxValue);
 
       // N.B. memory ranges may overlap so don't use (for example) Unsafe.CopyBlock.
-      Buffer.MemoryCopy(sourcePtr.ToPointer(), destPtr.ToPointer(), (uint)numBytes, (uint)numBytes);
+      Buffer.MemoryCopy(source, dest, (uint)numBytes, (uint)numBytes);
     }
 
 
@@ -206,7 +206,7 @@ namespace Ceres.Base.OperatingSystem
     /// <param name="length"></param>
     public void Clear(long startIndex, long length)
     {
-      int MAX_PER_BLOCK = int.MaxValue / sizeTInBytes;
+      int MAX_PER_BLOCK = int.MaxValue / sizeof(T);
 
       while (length > 0)
       {
@@ -219,16 +219,19 @@ namespace Ceres.Base.OperatingSystem
     }
 
 
+    /// <summary>
+    /// Clears a block of memory starting from a specified index for a given length by setting the bytes to zero.
+    /// </summary>
+    /// <param name="startIndex">Indicates the starting position in memory from which the clearing operation begins.</param>
+    /// <param name="length">Specifies the number of elements to clear from the starting position.</param>
     void ClearSmallBlock(long startIndex, long length)
     {
-      long sizeBytes = sizeTInBytes * length;
+      long sizeBytes = sizeof(T) * length;
       Debug.Assert(sizeBytes < uint.MaxValue);
       Debug.Assert(startIndex + length < uint.MaxValue);
 
-      long startBufferAdr = new IntPtr(RawMemory).ToInt64();
-      IntPtr startPtr = new IntPtr(startBufferAdr + startIndex * sizeTInBytes);
-
-      Unsafe.InitBlockUnaligned(startPtr.ToPointer(), 0, (uint)sizeBytes);
+      byte* ptr = (byte*)rawMemoryAddress + startIndex * sizeof(T);
+      Unsafe.InitBlockUnaligned(ptr, 0, (uint)sizeBytes);
     }
 
 
@@ -241,8 +244,9 @@ namespace Ceres.Base.OperatingSystem
       [MethodImpl(MethodImplOptions.AggressiveInlining)]
       get
       {
-        Debug.Assert(NumItems <= int.MaxValue); // the Length property of a Span<T> is an int
-        return new Span<T>(RawMemory, (int)NumItems);
+        Debug.Assert(MaxItems <= int.MaxValue); // the Length property of a Span<T> is an int
+
+        return new Span<T>(rawMemoryAddress, (int)MaxItems);
       }
     }
 
@@ -257,14 +261,11 @@ namespace Ceres.Base.OperatingSystem
     public Span<T> Slice(long startIndex, long length)
     {
       Debug.Assert(length < int.MaxValue); // TODO: possibly this should be allowed if the length of the slice does not exceed int.MaxValue
-      Debug.Assert(startIndex + length < NumItemsAllocated);
+      Debug.Assert(startIndex + length <= NumItemsAllocated);
 
-      long startBufferAdr = new IntPtr(RawMemory).ToInt64();
-      IntPtr startPtr = new IntPtr(startBufferAdr + startIndex * sizeTInBytes);
-      return new Span<T>(startPtr.ToPointer(), (int)length);
+      return new Span<T>((T*)rawMemoryAddress + startIndex, (int)length);
     }
 
     #endregion
-
   }
 }
