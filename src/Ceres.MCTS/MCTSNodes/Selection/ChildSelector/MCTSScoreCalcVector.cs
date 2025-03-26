@@ -133,7 +133,7 @@ Note: Possible optimization/inefficiency:
               parentIsRoot ? paramsSelect.UCTRootNumeratorExponent : paramsSelect.UCTNonRootNumeratorExponent,
               cpuctValue, qWhenNoChildren,
               parentIsRoot ? paramsSelect.UCTRootDenominatorExponent : paramsSelect.UCTNonRootDenominatorExponent,
-              actionHeadSelectionWeight, paramsSelect.TestFlag);
+              actionHeadSelectionWeight, paramsSelect.TestFlag ? paramsSelect.TestFlag : null);
     }
 
 
@@ -262,7 +262,9 @@ Note: Possible optimization/inefficiency:
             parentNInFlight += numSuccessfulVisitsAllIterations;
             numVisits += numSuccessfulVisitsAllIterations;
             if (outputChildVisitCounts != default)
+            {
               outputChildVisitCounts[maxIndex] += (short)numSuccessfulVisitsAllIterations;
+            }
           }
         }
       }
@@ -471,6 +473,10 @@ Note: Possible optimization/inefficiency:
       // because the JIT has specific knowledge of inline Vector*.Create methods.
       Vector256<float> vCPUCTSqrtParentN = Vector256.Create(cpuctSqrtParentN);
       Vector256<float> vUNumerator = Avx.Multiply(vP, vCPUCTSqrtParentN);
+
+
+
+
       Vector256<float> vDenominator = Avx.Add(Vector256.Create(1f), denominator);
       Vector256<float> vU = Avx.Divide(vUNumerator, vDenominator);
 
