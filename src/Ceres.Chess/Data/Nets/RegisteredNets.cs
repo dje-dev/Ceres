@@ -40,7 +40,13 @@ namespace Ceres.Chess.Data.Nets
 //        { "T40", SimpleLC0Net("42850") },
         { "T70", SimpleLC0Net("703810") },
         { "T75", SimpleLC0Net("753723") },
+
         { "T74", SimpleLC0Net("744706") },
+        { "T74_SPSA", SimpleLC0Net("744706_spsa032025") },
+
+        { "T74_FP16_TRT", ONNXNet16LC0("744706.pb.gz_fp16.onnx#16", true) },
+        { "T74_SPSA_FP16_TRT", ONNXNet16LC0("744706_spsa032025.pb_fp16.onnx#16", true) },
+
         { "T60", SimpleLC0Net("606512") },
         { "T78", SimpleLC0Net("784984") },
         { "T80", SimpleLC0Net("809942") }, // 801307
