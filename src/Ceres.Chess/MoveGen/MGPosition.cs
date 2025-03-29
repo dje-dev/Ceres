@@ -385,7 +385,7 @@ namespace Ceres.Chess.MoveGen
     /// </summary>
     /// <param name="move"></param>
     /// <returns></returns>
-    public bool IsLegalMove(MGMove move)
+    public readonly bool IsLegalMove(MGMove move)
     {
       MGMoveList moves = new MGMoveList();
       MGMoveGen.GenerateMoves(in this, moves);
@@ -399,10 +399,48 @@ namespace Ceres.Chess.MoveGen
       return false;
     }
 
+
+    /// <summary>
+    /// Returns count of total number of pieces on the board.
+    /// </summary>
+    public readonly int PieceCount
+    {
+      get
+      {
+        // Identify squares that are definitely NOT actual pieces.
+        // Nibble values we exclude:
+        //    0  => (A=0, B=0, C=0, D=0)  => empty squares
+        //    3  => (A=1, B=1, C=0, D=0)  => white en-passant
+        //    8  => (A=0, B=0, C=0, D=1)  => reserved/unused
+        //    11 => (A=1, B=1, C=0, D=1)  => black en-passant
+
+        // 1) Squares with nibble = 0 (empty squares):
+        ulong emptySquares = ~(A | B | C | D);
+
+        // 2) Squares with nibble = 3 (white en-passant):
+        ulong whiteEnPassant = A & B & ~C & ~D;
+
+        // 3) Squares with nibble = 8 (reserved):
+        ulong reserved = ~A & ~B & ~C & D;
+
+        // 4) Squares with nibble = 11 (black en-passant):
+        ulong blackEnPassant = A & B & ~C & D;
+
+        // Combine all invalid squares (where there is no real piece):
+        ulong invalidMask = emptySquares | whiteEnPassant | reserved | blackEnPassant;
+
+        // The complement contains all squares with valid pieces.
+        ulong pieceMask = ~invalidMask;
+
+        return BitOperations.PopCount(pieceMask);
+      }
+    }
+
+
     /// <summary>
     /// Returns number of white pawns on 7th rank.
     /// </summary>
-    public int NumPawnsRank7(bool white)
+    public readonly int NumPawnsRank7(bool white)
     {
       ulong whitePawns = ~D & ~C & ~B & A;
       ulong blackPawns = D & ~C & ~B & A;
@@ -421,7 +459,7 @@ namespace Ceres.Chess.MoveGen
     /// <summary>
     /// Returns number of pawns still on their second rank (not yet advanced).
     /// </summary>
-    public int NumPawnsRank2
+    public readonly int NumPawnsRank2
     {
       get
       {
