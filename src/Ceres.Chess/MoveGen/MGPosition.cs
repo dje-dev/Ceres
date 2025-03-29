@@ -13,13 +13,15 @@
 
 #region Using directives
 
-using System;
-using System.Runtime.CompilerServices;
 using BitBoard = System.UInt64;
+
+using System;
+using System.Numerics;
+using System.Runtime.CompilerServices;
 
 using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Chess.MoveGen.Converters;
-using System.Numerics;
+using static Ceres.Chess.Position;
 
 #endregion
 
@@ -473,6 +475,35 @@ namespace Ceres.Chess.MoveGen
         ulong blackPawnsRank2 = blackPawns & BOARD_RANK_7;
 
         return BitOperations.PopCount(whitePawnsRank2) + BitOperations.PopCount(blackPawnsRank2);
+      }
+    }
+
+
+    /// <summary>
+    /// Calculates to draw status for this position.
+    /// </summary>
+    public readonly PositionDrawStatus CheckDrawBasedOnMaterial
+    {
+      get
+      {
+        // TODO: consider a short circuited version of PieceCount for improved efficiency
+        int pieceCount = PieceCount;
+
+        if (pieceCount == 2)
+        { 
+          return PositionDrawStatus.DrawByInsufficientMaterial;
+        }
+        else if (pieceCount > 4)
+        {
+          // Our special material rules only apply of 4 or less pieces
+          return PositionDrawStatus.NotDraw;
+        }
+        else
+        {         
+          // Fallback, convert to Position use method there.
+          // TODO: For performance, implement directly here without conversion
+          return ToPosition.CheckDrawBasedOnMaterial;
+        }
       }
     }
 
