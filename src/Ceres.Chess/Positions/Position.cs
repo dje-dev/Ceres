@@ -13,23 +13,21 @@
 
 #region Using directives
 
+using Ceres.Base.DataTypes;
+using Ceres.Chess.EncodedPositions;
+using Ceres.Chess.Games.Utils;
+using Ceres.Chess.MoveGen;
+using Ceres.Chess.MoveGen.Converters;
+using Ceres.Chess.Textual;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-
 using System.Text;
-using Ceres.Base.DataTypes;
-
-using Ceres.Chess.EncodedPositions;
-using Ceres.Chess.Games.Utils;
-using Ceres.Chess.MoveGen;
-using Ceres.Chess.MoveGen.Converters;
-using Ceres.Chess.Textual;
-
 using static Ceres.Chess.PieceType;
+using static Ceres.Chess.PositionMiscInfo;
 using static Ceres.Chess.SideType;
 using static Ceres.Chess.SquareNames;
 
@@ -1295,6 +1293,325 @@ namespace Ceres.Chess
     public readonly MGPosition ToMGPosition => MGPosition.FromPosition(in this);
 
     #endregion
+
+
+    #region Make move
+
+    /// <summary>
+    /// Mutates this position to reflect the new board position after the speciifed move.
+    /// </summary>
+    /// <param name="move"></param>
+    /// <exception cref="Exception"></exception>
+    public unsafe void MakeMove(Move move)
+    {
+      // Mostly working, but needs more testing (for hours...) and also with FRC.
+      // Also needs more optimization, e.g. the loop that counts number of pieces at the end of the method.
+      throw new NotImplementedException("MakeMove disabled pending more testing and optimization.");
+
+      // Extract current PositionMiscInfo fields into locals.
+      bool newWhiteCanOO = this.MiscInfo.WhiteCanOO;
+      bool newWhiteCanOOO = this.MiscInfo.WhiteCanOOO;
+      bool newBlackCanOO = this.MiscInfo.BlackCanOO;
+      bool newBlackCanOOO = this.MiscInfo.BlackCanOOO;
+      int newMove50Count = this.MiscInfo.Move50Count;
+      int newRepetitionCount = this.MiscInfo.RepetitionCount;
+      int newMoveNum = this.MiscInfo.MoveNum;
+      EnPassantFileIndexEnum newEnPassant = this.MiscInfo.EnPassantFileIndex;
+      SideType newSide = this.MiscInfo.SideToMove;
+
+      // Save the moving piece before any mutations.
+      Piece movingPiece = (move.Type == Move.MoveType.MoveCastleShort || move.Type == Move.MoveType.MoveCastleLong)
+          ? // For castling, we need to find the king on the board.
+            new Piece(newSide, PieceType.King) // assume the side to move is correct.
+          : this.PieceOnSquare(move.FromSquare);
+
+      // Determine if the move is a pawn move.
+      bool pawnMoved = (movingPiece.Type == PieceType.Pawn);
+
+      bool isCapture = false;
+
+      if (move.Type == Move.MoveType.MoveCastleShort || move.Type == Move.MoveType.MoveCastleLong)
+      {
+        // --- CASTLING MOVE ---
+        // For castling moves, FromSquare and ToSquare in Move are invalid.
+        // We must determine the king and rook positions based on the board.
+
+        // Find the king for the side to move.
+        Square kingSquare = FindKing(this.MiscInfo.SideToMove);
+
+        // Define standard castling destination squares.
+        Square kingDest, rookDest;
+        if (this.MiscInfo.SideToMove == SideType.White)
+        {
+          if (move.Type == Move.MoveType.MoveCastleShort)
+          {
+            kingDest = new Square("G1");
+            rookDest = new Square("F1");
+          }
+          else // MoveCastleLong
+          {
+            kingDest = new Square("C1");
+            rookDest = new Square("D1");
+          }
+        }
+        else // Black
+        {
+          if (move.Type == Move.MoveType.MoveCastleShort)
+          {
+            kingDest = new Square("G8");
+            rookDest = new Square("F8");
+          }
+          else // MoveCastleLong
+          {
+            kingDest = new Square("C8");
+            rookDest = new Square("D8");
+          }
+        }
+
+        // Identify the appropriate rook:
+        // For kingside, choose the rook that is on a file greater than the king.
+        // For queenside, choose the rook on a file less than the king.
+        Square rookFrom = default(Square);
+        if (move.Type == Move.MoveType.MoveCastleShort)
+        {
+          int bestFile = -1;
+          for (int i = 0; i < 64; i++)
+          {
+            Square sq = new Square(i);
+            Piece p = this.PieceOnSquare(sq);
+            if (p.Type == PieceType.Rook && p.Side == this.MiscInfo.SideToMove && sq.File > kingSquare.File)
+            {
+              if (sq.File > bestFile)
+              {
+                bestFile = sq.File;
+                rookFrom = sq;
+              }
+            }
+          }
+          if (bestFile == -1)
+          {
+            throw new Exception("Kingside rook not found for castling.");
+          }
+        }
+        else
+        {
+          int bestFile = 8;
+          for (int i = 0; i < 64; i++)
+          {
+            Square sq = new Square(i);
+            Piece p = this.PieceOnSquare(sq);
+            if (p.Type == PieceType.Rook && p.Side == this.MiscInfo.SideToMove && sq.File < kingSquare.File)
+            {
+              if (sq.File < bestFile)
+              {
+                bestFile = sq.File;
+                rookFrom = sq;
+              }
+            }
+          }
+
+          if (bestFile == 8)
+          {
+            throw new Exception("Queenside rook not found for castling.");
+          }
+        }
+
+        // Move the king.
+        SetPieceOnSquare(kingSquare.SquareIndexStartA1, new Piece(this.MiscInfo.SideToMove, PieceType.None));
+        SetPieceOnSquare(kingDest.SquareIndexStartA1, new Piece(this.MiscInfo.SideToMove, PieceType.King));
+
+        // Move the rook.
+        Piece rookPiece = this.PieceOnSquare(rookFrom);
+        SetPieceOnSquare(rookFrom.SquareIndexStartA1, new Piece(rookPiece.Side, PieceType.None));
+        SetPieceOnSquare(rookDest.SquareIndexStartA1, new Piece(rookPiece.Side, PieceType.Rook));
+
+        // Remove castling rights for the moving side.
+        if (this.MiscInfo.SideToMove == SideType.White)
+        {
+          newWhiteCanOO = false;
+          newWhiteCanOOO = false;
+        }
+        else
+        {
+          newBlackCanOO = false;
+          newBlackCanOOO = false;
+        }
+
+        // Clear en passant.
+        newEnPassant = PositionMiscInfo.EnPassantFileIndexEnum.FileNone;
+      }
+      else
+      {
+        // --- REGULAR MOVE (including promotion and en passant) ---
+        Piece targetPiece = this.PieceOnSquare(move.ToSquare);
+        if (targetPiece.Type != PieceType.None)
+        {
+          isCapture = true;
+        }
+        // Handle en passant capture: pawn moves diagonally into an empty square.
+        if (movingPiece.Type == PieceType.Pawn &&
+            move.FromSquare.File != move.ToSquare.File &&
+            targetPiece.Type == PieceType.None)
+        {
+          isCapture = true;
+          int captureRank = (movingPiece.Side == SideType.White) ? move.ToSquare.Rank - 1 : move.ToSquare.Rank + 1;
+          Square epSquare = Square.FromFileAndRank(move.ToSquare.File, captureRank);
+          SetPieceOnSquare(epSquare.SquareIndexStartA1, new Piece(
+              (movingPiece.Side == SideType.White) ? SideType.Black : SideType.White, PieceType.None));
+        }
+
+        // Remove the moving piece from its source.
+        SetPieceOnSquare(move.FromSquare.SquareIndexStartA1, new Piece(movingPiece.Side, PieceType.None));
+
+        // Handle promotion.
+        Piece pieceToPlace = movingPiece;
+        if (movingPiece.Type == PieceType.Pawn && move.PromoteTo != PieceType.None)
+        {
+          pieceToPlace = new Piece(movingPiece.Side, move.PromoteTo);
+        }
+
+        // Place the (possibly promoted) piece on the destination.
+        SetPieceOnSquare(move.ToSquare.SquareIndexStartA1, pieceToPlace);
+
+        // Update en passant: if a pawn moves two squares forward.
+        int rankDiff = move.ToSquare.Rank - move.FromSquare.Rank;
+        if (movingPiece.Type == PieceType.Pawn && Math.Abs(rankDiff) == 2)
+        {
+          newEnPassant = (EnPassantFileIndexEnum)move.FromSquare.File;
+        }
+        else
+        {
+          newEnPassant = PositionMiscInfo.EnPassantFileIndexEnum.FileNone;
+        }
+
+        // Update castling rights if a king or rook moved.
+        if (movingPiece.Type == PieceType.King)
+        {
+          if (movingPiece.Side == SideType.White)
+          {
+            newWhiteCanOO = false;
+            newWhiteCanOOO = false;
+          }
+          else
+          {
+            newBlackCanOO = false;
+            newBlackCanOOO = false;
+          }
+        }
+        else if (movingPiece.Type == PieceType.Rook)
+        {
+          // Standard chess: white rooks start at A1 (file 0) and H1 (file 7),
+          // black rooks at A8 (file 0) and H8 (file 7).
+          if (movingPiece.Side == SideType.White)
+          {
+            if (move.FromSquare.File == 7 && move.FromSquare.Rank == 0)
+              newWhiteCanOO = false;
+            else if (move.FromSquare.File == 0 && move.FromSquare.Rank == 0)
+              newWhiteCanOOO = false;
+          }
+          else
+          {
+            if (move.FromSquare.File == 7 && move.FromSquare.Rank == 7)
+              newBlackCanOO = false;
+            else if (move.FromSquare.File == 0 && move.FromSquare.Rank == 7)
+              newBlackCanOOO = false;
+          }
+        }
+        // If a rook is captured, update opponent's castling rights.
+        if (isCapture && targetPiece.Type == PieceType.Rook)
+        {
+          if (targetPiece.Side == SideType.White)
+          {
+            if (move.ToSquare.File == 7 && move.ToSquare.Rank == 0)
+            {
+              newWhiteCanOO = false;
+            }
+            else if (move.ToSquare.File == 0 && move.ToSquare.Rank == 0)
+            {
+              newWhiteCanOOO = false;
+            }
+          }
+          else
+          {
+            if (move.ToSquare.File == 7 && move.ToSquare.Rank == 7)
+            {
+              newBlackCanOO = false;
+            }
+            else if (move.ToSquare.File == 0 && move.ToSquare.Rank == 7)
+            {
+              newBlackCanOOO = false;
+            }
+          }
+        }
+      }
+
+      // Toggle the side to move.
+      newSide = (this.MiscInfo.SideToMove == SideType.White) ? SideType.Black : SideType.White;
+
+      // Move number stored is actually ply number; always increment it
+      newMoveNum = this.MiscInfo.MoveNum + 1;
+
+      // Reset the 50-move counter if the move is a pawn move, a capture, or a castling move.
+      if (pawnMoved || isCapture)
+      {
+        newMove50Count = 0;
+      }
+      else
+      {
+        newMove50Count = this.MiscInfo.Move50Count + 1;
+      }
+
+      // Construct a new, immutable PositionMiscInfo.
+      PositionMiscInfo updatedMiscInfo = new PositionMiscInfo(
+          newWhiteCanOO,
+          newWhiteCanOOO,
+          newBlackCanOO,
+          newBlackCanOOO,
+          newSide,
+          newMove50Count,
+          newRepetitionCount,
+          newMoveNum,
+          newEnPassant
+      );
+      SetMiscInfo(updatedMiscInfo);
+
+      // Recalculate the piece count.
+      int newPieceCount = 0;
+      for (int i = 0; i < 64; i++)
+      {
+        Square sq = new Square(i);
+        if (PieceOnSquare(sq).Type != PieceType.None)
+        {
+          newPieceCount++;
+        }
+      }
+      SetPieceCount((byte)newPieceCount);
+      SetShortHash();
+    }
+
+
+    /// <summary>
+    // Helper method to locate the king of a given side.
+    /// </summary>
+    /// <param name="side"></param>
+    /// <returns></returns>
+    /// <exception cref="Exception"></exception>
+    private readonly Square FindKing(SideType side)
+    {
+      for (int i = 0; i < 64; i++)
+      {
+        Square sq = new Square(i);
+        Piece p = PieceOnSquare(sq);
+        if (p.Type == PieceType.King && p.Side == side)
+        {
+          return sq;
+        }
+      }
+      throw new Exception("King not found on the board.");
+    }
+
+    #endregion
+
 
     #region Equality 
 
