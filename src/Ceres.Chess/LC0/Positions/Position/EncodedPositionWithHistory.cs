@@ -223,7 +223,7 @@ namespace Ceres.Chess.EncodedPositions
       }
     }
 
-    
+
     public void SetHistoryPlanes(in EncodedPositionBoard plane, int firstBoardIndex, int numBoards)
     {
       int lastBoardIndex = firstBoardIndex + numBoards - 1;
@@ -317,7 +317,7 @@ namespace Ceres.Chess.EncodedPositions
       for (int i = 1; i < NUM_MISC_PLANES; i++)
       {
         if (!GetPlanesForHistoryBoard(i).IsEmpty)
-        { 
+        {
           // Considering castling, maximum of 4 different piece placements could change in a single move.
           if (GetPlanesForHistoryBoard(i - 1).NumDifferentPiecePlacements(GetPlanesForHistoryBoard(i)) > 4)
           {
@@ -326,7 +326,7 @@ namespace Ceres.Chess.EncodedPositions
           }
 
           // Check for reachability
-          Position posCur = HistoryPosition(i-1);
+          Position posCur = HistoryPosition(i - 1);
           Position posPrior = HistoryPosition(i);
           if (!MGPositionReachability.IsProbablyReachable(posPrior.ToMGPosition, posCur.ToMGPosition))
           {
@@ -355,6 +355,8 @@ namespace Ceres.Chess.EncodedPositions
 
     /// <summary>
     /// Sets the boards from a Span of Position indicating full history.
+    ///
+    /// TODO: this method is very similar to the one of the same of name but accepting Span<Position>
     /// </summary>
     /// <param name="sequentialPositions">sequence of positions, with the last entry being the latest move in the sequence</param>
     /// <param name="fillInMissingPlanes">if history planes should be filled in if incomplete (typically necessary)</param>
@@ -364,9 +366,9 @@ namespace Ceres.Chess.EncodedPositions
 
       // All the positions must be from the perspective of the side to move (last position)
       SideType sideToMove = sequentialPositions[LAST_POSITION_INDEX].MiscInfo.SideToMove;
-      
+
       // Setting miscellaneous planes is easy; take from last position
-      SetMiscFromPosition(sequentialPositions[LAST_POSITION_INDEX].MiscInfo);
+      SetMiscFromPosition(in sequentialPositions[LAST_POSITION_INDEX].MiscInfo);
 
       // Cache the first position in sequence from our perspective (which would be used for any possible fill)
       EncodedPositionBoard fillBoardFromOurPerspective = EncodedPositionBoard.FromPosition(in sequentialPositions[0], sideToMove);
@@ -391,8 +393,7 @@ namespace Ceres.Chess.EncodedPositions
         else
         {
           // Put last positions first in board array
-          ref Position thisPos = ref sequentialPositions[LAST_POSITION_INDEX - i];
-
+          ref readonly Position thisPos = ref sequentialPositions[LAST_POSITION_INDEX - i];
           boards[i] = EncodedPositionBoard.FromPosition(in thisPos, sideToMove);
 
 #if DEBUG
@@ -401,6 +402,68 @@ namespace Ceres.Chess.EncodedPositions
             throw new Exception("Sequential positions are expected to be on alternating sides");
 #endif
           lastPosSide = thisPos.MiscInfo.SideToMove;
+        }
+      }
+
+      SetHistoryPlanes(boards);
+    }
+
+
+    /// <summary>
+    /// Sets the boards from a Span of MGPosition indicating full history.
+    ///
+    /// TODO: this method is very similar to the one of the same of name but accepting Span<Position>
+    /// </summary>
+    /// <param name="sequentialPositions">sequence of positions, with the last entry being the latest move in the sequence</param>
+    /// <param name="fillInMissingPlanes">if history planes should be filled in if incomplete (typically necessary)</param>
+    public void SetFromSequentialPositions(Span<MGPosition> sequentialPositions,
+                                           bool fillInMissingPlanes,
+                                           bool lastPositionWasRepetition)
+    {
+      int LAST_POSITION_INDEX = sequentialPositions.Length - 1;
+
+      // All the positions must be from the perspective of the side to move (last position)
+      SideType sideToMove = sequentialPositions[LAST_POSITION_INDEX].SideToMove;
+
+      // Setting miscellaneous planes is easy; take from last position
+      SetMiscFromMGPosition(in sequentialPositions[LAST_POSITION_INDEX]);
+
+      // Cache the first position in sequence from our perspective (which would be used for any possible fill)
+      // no longer needed      EncodedPositionBoard fillBoardFromOurPerspective = EncodedPositionBoard.FromPosition(in sequentialPositions[0], sideToMove);
+
+      Span<EncodedPositionBoard> boards = ScratchBoards();
+
+      SideType lastPosSide = default; // not used first time through the the loop
+      for (int i = 0; i < EncodedPositionBoards.NUM_MOVES_HISTORY; i++)
+      {
+        if (i >= sequentialPositions.Length)
+        {
+          // We are past the number of boards supplied. Fill in board (only if requested)
+          if (fillInMissingPlanes)
+          {
+            boards[i] = boards[0]; // use the first board as the fill value
+          }
+          else
+          {
+            boards[i].Clear(); // must clear the bits since we are reusing a scratch area which may have remnants from prior position
+          }
+        }
+        else
+        {
+          // Put last positions first in board array
+          ref readonly MGPosition thisPos = ref sequentialPositions[LAST_POSITION_INDEX - i];
+
+          // Only the first position is marked as repetition
+          // TODO: Is this correct, are history positions also so marked?
+          bool isRepetition = lastPositionWasRepetition;
+          boards[i] = EncodedPositionBoard.GetBoard(in sequentialPositions[LAST_POSITION_INDEX - i], sideToMove, isRepetition);
+
+#if DEBUG
+          // Make sure the sides alternates between moves
+          if (i > 0 && lastPosSide == thisPos.SideToMove)
+            throw new Exception("Sequential positions are expected to be on alternating sides");
+#endif
+          lastPosSide = thisPos.SideToMove;
         }
       }
 
@@ -450,13 +513,34 @@ namespace Ceres.Chess.EncodedPositions
     /// Sets the MiscInfo substructure based on specified PositionMiscInfo.
     /// </summary>
     /// <param name="posMiscInfo"></param>
-    public void SetMiscFromPosition(PositionMiscInfo posMiscInfo)
+    public void SetMiscFromPosition(in PositionMiscInfo posMiscInfo)
     {
       EncodedPositionMiscInfo miscInfo = GetMiscFromPosition(posMiscInfo);
       MiscInfo.SetMisc(miscInfo.Castling_US_OOO, miscInfo.Castling_US_OO,
                        miscInfo.Castling_Them_OOO, miscInfo.Castling_Them_OO,
                        (byte)miscInfo.SideToMove, miscInfo.Rule50Count);
 
+    }
+
+    /// <summary>
+    /// Sets the MiscInfo substructure based on specified MGPosition..
+    /// </summary>
+    /// <param name="posMiscInfo"></param>
+    public void SetMiscFromMGPosition(in MGPosition mgPos)
+    {
+
+      if (mgPos.SideToMove == SideType.White)
+      {
+        MiscInfo.SetMisc((byte)(mgPos.WhiteCanCastleLong ? 1 : 0), (byte)(mgPos.WhiteCanCastle ? 1 : 0),
+                         (byte)(mgPos.BlackCanCastleLong ? 1 : 0), (byte)(mgPos.BlackCanCastle ? 1 : 0),
+                         0, (byte)mgPos.Rule50Count);
+      }
+      else
+      {
+        MiscInfo.SetMisc((byte)(mgPos.BlackCanCastleLong ? 1 : 0), (byte)(mgPos.BlackCanCastle ? 1 : 0),
+                         (byte)(mgPos.WhiteCanCastleLong ? 1 : 0), (byte)(mgPos.WhiteCanCastle ? 1 : 0),
+                         1, (byte)mgPos.Rule50Count);
+      }
     }
 
 
@@ -466,7 +550,7 @@ namespace Ceres.Chess.EncodedPositions
     /// </summary>
     /// <param name="posMiscInfo"></param>
     /// <returns></returns>
-    public static EncodedPositionMiscInfo GetMiscFromPosition(PositionMiscInfo posMiscInfo)
+    public static EncodedPositionMiscInfo GetMiscFromPosition(in PositionMiscInfo posMiscInfo)
     {
       bool weAreWhite = posMiscInfo.SideToMove != SideType.Black;
 
@@ -493,7 +577,7 @@ namespace Ceres.Chess.EncodedPositions
                                            (EncodedPositionMiscInfo.SideToMoveEnum)sideToMove, rule50);
     }
 
-    
+
 
     static bool CheckMovedTheirPiece(in EncodedPositionBoardPlane planeAfter, in EncodedPositionBoardPlane planeBefore, ref Square destSquare)
     {
@@ -758,7 +842,7 @@ namespace Ceres.Chess.EncodedPositions
       // Although training inputs may or may not be sensitive to his value, we still reject as invalid
       Debug.Assert(pos.MiscInfo.MoveNum > 0);
 
-      SetMiscFromPosition(pos.MiscInfo);
+      SetMiscFromPosition(in pos.MiscInfo);
 
       EncodedPositionBoard planes = EncodedPositionBoard.FromPosition(in pos, desiredFromSidePerspective);
 
