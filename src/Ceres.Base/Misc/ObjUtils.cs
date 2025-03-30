@@ -90,6 +90,14 @@ namespace Ceres.Base.Misc
     }
 
 
+    /// <summary>
+    /// Dumps the field values of an object of type T into a string (via reflection).
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    /// <param name="obj"></param>
+    /// <param name="comparisonValue"></param>
+    /// <param name="differentOnly"></param>
+    /// <returns></returns>
     public static string FieldValuesDumpString<T>(object obj, object comparisonValue, bool differentOnly = false) where T : class
     {
       StringBuilder sb = new StringBuilder();
@@ -123,6 +131,54 @@ namespace Ceres.Base.Misc
           {
             sb.AppendLine(val == null ? "(null)" : val.ToString());
           }
+        }
+      }
+
+      return differentOnly && countDifferent == 0 ? null : sb.ToString();
+    }
+
+
+    /// <summary>
+    /// Dumps the field values of a struct of type T into a string (via reflection).
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    /// <param name="obj"></param>
+    /// <param name="comparisonValue"></param>
+    /// <param name="differentOnly"></param>
+    /// <returns></returns>
+    public static string FieldValuesDumpString<T>(T obj, T comparisonValue, bool differentOnly = false) where T : struct
+    {
+      StringBuilder sb = new StringBuilder();
+      sb.AppendLine(typeof(T).Name);
+
+      int countDifferent = 0;
+      // Loop over the fields declared in T.
+      foreach (FieldInfo fieldInfo in typeof(T).GetFields())
+      {
+        object val = fieldInfo.GetValue(obj);
+        object compVal = fieldInfo.GetValue(comparisonValue);
+
+        // For value types the null-check is usually redundant,
+        // but we include it for safety (in case a field is a reference type).
+        bool different = ((val == null) != (compVal == null)) || (val != null && !val.Equals(compVal));
+        if (different)
+        {
+          countDifferent++;
+        }
+
+        if (!different && differentOnly)
+          continue;
+
+        sb.Append(different ? "* " : "  ");
+        sb.Append($"{fieldInfo.Name,-60}");
+
+        if (fieldInfo.FieldType.IsArray && val != null)
+        {
+          DumpArray(sb, (Array)val);
+        }
+        else
+        {
+          sb.AppendLine(val == null ? "(null)" : val.ToString());
         }
       }
 
@@ -226,7 +282,7 @@ namespace Ceres.Base.Misc
         }
       }
     }
-    
+
 
     static void DumpArray(StringBuilder sb, Array array)
     {
