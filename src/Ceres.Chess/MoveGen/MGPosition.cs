@@ -239,6 +239,43 @@ namespace Ceres.Chess.MoveGen
     }
 
 
+    /// <summary>
+    /// Returns hash value over this chess position.
+    /// TODO: Consider instead using the Zobrist hash logic already included (but disabled) 
+    ///       in this class instead.
+    /// </summary>
+    /// <param name="move50Mode"></param>
+    /// <returns></returns>
+    public ulong HashValue(PositionMiscInfo.HashMove50Mode move50Mode)
+    {
+      ulong hash = A;
+      hash ^= B * 0x9E3779B97F4A7C15UL;
+      hash ^= C * 0xC2B2AE3D27D4EB4FUL;
+      hash ^= D * 0x165667B19E3779F9UL;
+
+      ushort rule50ToUse = move50Mode switch
+      {
+        PositionMiscInfo.HashMove50Mode.Ignore => 0,
+        PositionMiscInfo.HashMove50Mode.Value => (ushort)Rule50Count,
+        PositionMiscInfo.HashMove50Mode.ValueBoolIfAbove98 => Rule50Count > 98 ? (ushort)Rule50Count : (ushort)0,
+      };
+
+      // Combine shorts into one packed ulong
+      ulong shorts = ((ulong)(ushort)Flags << 48) |
+                     ((ulong)(ushort)rule50ToUse << 32) |
+                     ((ulong)(ushort)rookInfo.RawValue << 16);
+      hash ^= shorts;
+
+      // Final mixing (inspired by SplitMix64 / MurmurHash3)
+      hash ^= hash >> 33;
+      hash *= 0xff51afd7ed558ccdUL;
+      hash ^= hash >> 33;
+      hash *= 0xc4ceb9fe1a85ec53UL;
+      hash ^= hash >> 33;
+
+      return hash;
+    }
+
 
 #if MG_USE_HASH
     // --------------------------------------------------------------------------------------------
@@ -480,6 +517,41 @@ namespace Ceres.Chess.MoveGen
 
 
     /// <summary>
+    /// Calculates if the position is terminal.
+    /// </summary>
+    /// <param name="knownMoveList"></param>
+    /// <returns></returns>
+    public readonly GameResult CalcTerminalStatus(MGMoveList knownMoveList = null)
+    {
+      // Generate moves to check for checkmate
+      MGMoveList moves;
+      if (knownMoveList != null)
+      {
+        moves = knownMoveList;
+      }
+      else
+      {
+        // Move list not already known, generate
+        moves = new MGMoveList();
+        MGMoveGen.GenerateMoves(in this, moves);
+      }
+
+      if (moves.NumMovesUsed > 0)
+      {
+        return GameResult.Unknown;
+      }
+      else if (MGMoveGen.IsInCheck(in this, BlackToMove))
+      {
+        return GameResult.Checkmate;
+      }
+      else
+      {
+        return GameResult.Draw; // stalemate
+      }
+    }
+
+
+    /// <summary>
     /// Calculates to draw status for this position.
     /// </summary>
     public readonly PositionDrawStatus CheckDrawBasedOnMaterial
@@ -490,7 +562,7 @@ namespace Ceres.Chess.MoveGen
         int pieceCount = PieceCount;
 
         if (pieceCount == 2)
-        { 
+        {
           return PositionDrawStatus.DrawByInsufficientMaterial;
         }
         else if (pieceCount > 4)
@@ -499,7 +571,7 @@ namespace Ceres.Chess.MoveGen
           return PositionDrawStatus.NotDraw;
         }
         else
-        {         
+        {
           // Fallback, convert to Position use method there.
           // TODO: For performance, implement directly here without conversion
           return ToPosition.CheckDrawBasedOnMaterial;

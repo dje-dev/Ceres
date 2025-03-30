@@ -26,6 +26,11 @@ namespace Ceres.Chess.MoveGen
     /// </summary>
     private ushort rookInitPlacementBits;
 
+    /// <summary>
+    /// Underlying raw storage value.
+    /// </summary>
+    public ushort RawValue => rookInitPlacementBits;
+
     // Encoding logic to pack the 4 fields into a single ushort.
     private static byte EncodeValue(byte value, byte defaultValue) => (byte)((value - defaultValue) & 0x0F);
 
