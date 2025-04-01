@@ -42,6 +42,7 @@ namespace Ceres.Base.Threading
     /// </summary>
     public bool IsInitialized => accumulators != null;
 
+
     /// <summary>
     /// Initializes for use.
     /// </summary>
@@ -50,6 +51,7 @@ namespace Ceres.Base.Threading
       accumulators = new long[NUM_BUCKETS * NUM_PER_BUCKET];
     }
 
+
     /// <summary>
     /// Increments the accumulator by specified amount.
     /// </summary>
@@ -57,6 +59,7 @@ namespace Ceres.Base.Threading
     /// <param name="randomValue">any pseudorandom value (used to distribute across buckets)</param>
     public void Add(long increment, int randomValue)
     {
+      randomValue = System.Math.Abs(randomValue); 
       Interlocked.Add(ref accumulators[(randomValue % NUM_BUCKETS) * NUM_PER_BUCKET], increment);
     }
 
