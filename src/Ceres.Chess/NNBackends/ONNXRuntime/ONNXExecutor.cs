@@ -334,10 +334,7 @@ Comments from onnxruntime source code:
           providerOptionsDict["trt_timing_cache_enable"] = "1";
           //providerOptionsDict["trt_force_timing_cache"] = "true";
 
-          if (shortID != null)
-          {
-            providerOptionsDict["trt_engine_cache_prefix"] = shortID;
-          }
+          providerOptionsDict["trt_engine_cache_prefix"] = "Ceres_ONNX_TRT"; // Essential to be populated for caching to work
 
             //          providerOptionsDict["trt_detailed_build_log"] = "1";
 
