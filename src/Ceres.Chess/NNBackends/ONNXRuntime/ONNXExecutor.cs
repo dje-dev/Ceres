@@ -334,9 +334,10 @@ Comments from onnxruntime source code:
           providerOptionsDict["trt_timing_cache_enable"] = "1";
           //providerOptionsDict["trt_force_timing_cache"] = "true";
 
-          providerOptionsDict["trt_engine_cache_prefix"] = "Ceres_ONNX_TRT"; // Essential to be populated for caching to work
+          // Essential to populate prefix for caching to work
+          providerOptionsDict["trt_engine_cache_prefix"] = FileUtils.FileNameSanitized(shortID);
 
-            //          providerOptionsDict["trt_detailed_build_log"] = "1";
+          // providerOptionsDict["trt_detailed_build_log"] = "1";
 
           if (PrecisionNumBits == 16)
           {

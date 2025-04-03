@@ -13,14 +13,15 @@
 
 #region Using directives
 
-using System.IO;
 using Ceres.Base.DataType;
-using System.Runtime.InteropServices;
 using Ceres.Base.OperatingSystem;
-using System.Collections.Generic;
-using System.Linq;
-using System.Runtime.Serialization.Formatters.Binary;
 using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Runtime.InteropServices;
+using System.Runtime.Serialization.Formatters.Binary;
+using System.Text.RegularExpressions;
 
 #endregion
 
@@ -55,16 +56,19 @@ namespace Ceres.Base.Misc
     /// <returns></returns>
     public static string FileNameSanitized(string input)
     {
+      // Replace directory separators with underscores to preserve structure
+      string cleaned = input.Replace(Path.DirectorySeparatorChar, '_')
+                            .Replace(Path.AltDirectorySeparatorChar, '_');
+
+      // Remove invalid filename characters
       char[] invalidChars = Path.GetInvalidFileNameChars();
-      return new string(input
-          .Where(c => !invalidChars.Contains(c))
-          .ToArray());
+      return new string(cleaned.Where(c => !invalidChars.Contains(c)).ToArray());
     }
 
 
     /// <summary>
-    ///  Returns the FileInfo associated with a specified file
-    ///  (following links to their targets).
+    /// Returns the FileInfo associated with a specified file
+    /// (following links to their targets).
     /// </summary>
     /// <param name="filename"></param>
     /// <returns></returns>
