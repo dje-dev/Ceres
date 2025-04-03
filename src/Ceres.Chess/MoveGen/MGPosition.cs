@@ -71,14 +71,21 @@ namespace Ceres.Chess.MoveGen
     public BitBoard C;
     public BitBoard D;
 
-
     public FlagsEnum Flags;
 
     public short MoveNumber;
-    public short Rule50Count;
     public RookPlacementInfo rookInfo;
 
-    //    public short material;
+    /// <summary>
+    /// Rule 50 count.
+    /// </summary>
+    public byte Rule50Count;
+
+    /// <summary>
+    /// Repetition count.
+    /// N.B. This is populated only in certain situations.
+    /// </summary>
+    public byte RepetitionCount;
 
 #if MG_USE_HASH
     public ulong HK;

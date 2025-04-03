@@ -58,15 +58,21 @@ namespace Ceres.Chess.MoveGen
     public override int GetHashCode() => (int)HK;
 #endif
 
-    public override string ToString() => $"<MGChessPosition A= {A}, B= {B}, C= {C}, D= {D}, Flags={Flags}>";
+    /// <summary>
+    /// Returns a string representation.
+    /// </summary>
+    /// <returns></returns>
+    public override string ToString() => $"<MGChessPosition {ToPosition.FEN} Reps={RepetitionCount}  A= {A}, B= {B}, C= {C}, D= {D}, Flags={Flags}>";
 
-    // --------------------------------------------------------------------------------------------
     public readonly void Dump()
     {
       Console.WriteLine(BoardString);
     }
 
-    // --------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Returns board as a string representation, useful for debugging.
+    /// </summary>
     public readonly string BoardString
     {
       get
@@ -86,14 +92,6 @@ namespace Ceres.Chess.MoveGen
           V |= ((B) & M) >> q;
           V <<= 1;
           V |= ((A) & M) >> q;
-
-#if SOMEDAY_CSHARP_LATER_VERSION
-        string chars = V.Bits switch
-        {
-          PositionConstants.WPAWN => " | P ";
-          _ => "|   ");
-    };
-#endif
 
           switch (V)
           {
@@ -148,15 +146,28 @@ namespace Ceres.Chess.MoveGen
           {
             ret.Append("|   ");
             if ((q == 56) && (BlackCanCastle))
+            {
               ret.Append("Black can Castle");
-            if ((q == 48) && (BlackCanCastleLong))
+            }
+            else if ((q == 48) && (BlackCanCastleLong))
+            {
               ret.Append("Black can Castle Long");
-            if ((q == 40) && (WhiteCanCastle))
+            }
+
+            else if ((q == 40) && (WhiteCanCastle))
+            {
               ret.Append("White can Castle");
-            if ((q == 32) && (WhiteCanCastleLong))
+            }
+            else if ((q == 32) && (WhiteCanCastleLong))
+            {
               ret.Append("White can Castle Long");
+            }
             //if (q == 8) ret.Append($"material={ p.material}");
-            if (q == 0) ret.Append(BlackToMove ? "Black" : "White" + " to move");
+            else if (q == 0)
+            {
+              ret.Append(BlackToMove ? "Black" : "White" + " to move");
+            }
+
             ret.AppendLine("\r\n---------------------------------");
           }
         }
@@ -167,5 +178,3 @@ namespace Ceres.Chess.MoveGen
 
   }
 }
-
-

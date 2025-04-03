@@ -417,8 +417,7 @@ namespace Ceres.Chess.EncodedPositions
     /// <param name="sequentialPositions">sequence of positions, with the last entry being the latest move in the sequence</param>
     /// <param name="fillInMissingPlanes">if history planes should be filled in if incomplete (typically necessary)</param>
     public void SetFromSequentialPositions(Span<MGPosition> sequentialPositions,
-                                           bool fillInMissingPlanes,
-                                           bool lastPositionWasRepetition)
+                                           bool fillInMissingPlanes)
     {
       int LAST_POSITION_INDEX = sequentialPositions.Length - 1;
 
@@ -453,9 +452,7 @@ namespace Ceres.Chess.EncodedPositions
           // Put last positions first in board array
           ref readonly MGPosition thisPos = ref sequentialPositions[LAST_POSITION_INDEX - i];
 
-          // Only the first position is marked as repetition
-          // TODO: Is this correct, are history positions also so marked?
-          bool isRepetition = lastPositionWasRepetition;
+          bool isRepetition = thisPos.RepetitionCount > 0;
           boards[i] = EncodedPositionBoard.GetBoard(in sequentialPositions[LAST_POSITION_INDEX - i], sideToMove, isRepetition);
 
 #if DEBUG
