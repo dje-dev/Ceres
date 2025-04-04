@@ -60,7 +60,7 @@ namespace Ceres.Base.Threading
     public void Add(long increment, int randomValue)
     {
       int index = (int)((uint)randomValue % NUM_BUCKETS);
-      Interlocked.Add(ref accumulators[(randomValue % NUM_BUCKETS) * NUM_PER_BUCKET], increment);
+      Interlocked.Add(ref accumulators[index * NUM_PER_BUCKET], increment);
     }
 
 
