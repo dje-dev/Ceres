@@ -59,7 +59,7 @@ namespace Ceres.Base.Threading
     /// <param name="randomValue">any pseudorandom value (used to distribute across buckets)</param>
     public void Add(long increment, int randomValue)
     {
-      randomValue = System.Math.Abs(randomValue); 
+      int index = (int)((uint)randomValue % NUM_BUCKETS);
       Interlocked.Add(ref accumulators[(randomValue % NUM_BUCKETS) * NUM_PER_BUCKET], increment);
     }
 
