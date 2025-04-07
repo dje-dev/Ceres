@@ -255,6 +255,12 @@ namespace Ceres.Chess.MoveGen
     /// <returns></returns>
     public ulong HashValue(PositionMiscInfo.HashMove50Mode move50Mode)
     {
+      const FlagsEnum KEEP_FLAGS = FlagsEnum.BlackToMove
+                                 | FlagsEnum.WhiteCanCastle
+                                 | FlagsEnum.WhiteCanCastleLong
+                                 | FlagsEnum.BlackCanCastle
+                                 | FlagsEnum.BlackCanCastleLong;
+
       ulong hash = A;
       hash ^= B * 0x9E3779B97F4A7C15UL;
       hash ^= C * 0xC2B2AE3D27D4EB4FUL;
@@ -268,7 +274,7 @@ namespace Ceres.Chess.MoveGen
       };
 
       // Combine shorts into one packed ulong
-      ulong shorts = ((ulong)(ushort)Flags << 48) |
+      ulong shorts = ((ulong)(ushort)(Flags & KEEP_FLAGS) << 48) |
                      ((ulong)(ushort)rule50ToUse << 32) |
                      ((ulong)(ushort)rookInfo.RawValue << 16);
       hash ^= shorts;
