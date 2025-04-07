@@ -452,7 +452,8 @@ namespace Ceres.Chess.EncodedPositions
           // Put last positions first in board array
           ref readonly MGPosition thisPos = ref sequentialPositions[LAST_POSITION_INDEX - i];
 
-          bool isRepetition = thisPos.RepetitionCount > 0;
+          const bool REPETITIONS_ONLY_FIRST_PLANE = false; // Lc0 training data (2024) definitely populates all planes with repetitions
+          bool isRepetition = thisPos.RepetitionCount > 0 && (!REPETITIONS_ONLY_FIRST_PLANE || i == 0);
           boards[i] = EncodedPositionBoard.GetBoard(in sequentialPositions[LAST_POSITION_INDEX - i], sideToMove, isRepetition);
 
 #if DEBUG
