@@ -253,7 +253,7 @@ namespace Ceres.Chess.MoveGen
     /// </summary>
     /// <param name="move50Mode"></param>
     /// <returns></returns>
-    public ulong HashValue(PositionMiscInfo.HashMove50Mode move50Mode)
+    public readonly ulong HashValue(PositionMiscInfo.HashMove50Mode move50Mode)
     {
       const FlagsEnum KEEP_FLAGS = FlagsEnum.BlackToMove
                                  | FlagsEnum.WhiteCanCastle
