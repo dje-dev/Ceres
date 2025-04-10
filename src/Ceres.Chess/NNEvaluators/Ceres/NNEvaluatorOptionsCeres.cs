@@ -158,6 +158,11 @@ namespace Ceres.Chess.NNEvaluators.Ceres
       // But add on one more option.
       bool board4Mode = optionsDict != null && optionsDict.Keys.Contains("4BOARD");
 
+      // Also up/down blunder default
+      float blunderDown = CheckOptionSpecifiedElseDefault(optionsDict, "BLUN_NEG", DEFAULT_Q_BLUNDER);
+      float blunderUp = CheckOptionSpecifiedElseDefault(optionsDict, "BLUN_POS", DEFAULT_Q_BLUNDER);
+
+
       // Return composite options.
       // TODO: This is brittle, if we add more options to the base class, we need to
       //       remember to add them here too.
@@ -165,6 +170,9 @@ namespace Ceres.Chess.NNEvaluators.Ceres
       {
         UseAction = board4Mode,
         UsePriorState = board4Mode,
+
+        QNegativeBlunders = blunderDown,
+        QPositiveBlunders = blunderUp,
 
         FractionValueHead2 = baseOptions.FractionValueHead2,
         ValueHead1Temperature = baseOptions.ValueHead1Temperature,

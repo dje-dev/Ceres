@@ -28,6 +28,7 @@ namespace Ceres.Chess.NNEvaluators
     public const float DEFAULT_FRACTION_VALUE2    = 0f;
     public const float DEFAULT_VALUE1_TEMPERATURE = 1f;
     public const float DEFAULT_VALUE2_TEMPERATURE = 1f;
+    public const float DEFAULT_POLICY_TEMPERATURE = 1f;
 
     #region Value Head Options
 
@@ -88,10 +89,16 @@ namespace Ceres.Chess.NNEvaluators
       float value2Temperature = CheckOptionSpecifiedElseDefault(optionsDict, "V2TEMP", ValueHead2Temperature);
       float value2Weight = CheckOptionSpecifiedElseDefault(optionsDict, "V2FRAC", FractionValueHead2);
       float policyUncertaintyScaling = CheckOptionSpecifiedElseDefault(optionsDict, "POLUNC_SCALE", PolicyUncertaintyTemperatureScalingFactor);
+      float policyTemperature = CheckOptionSpecifiedElseDefault(optionsDict, "POLTEMP", PolicyTemperature);
 
-      if (value2Weight != 0 || value1Temperature != 1 || value2Temperature != 1)
+//      float blunderNegative = CheckOptionSpecifiedElseDefault(optionsDict, "BLUN_NEG", QDev);
+//      float blunderPositive = CheckOptionSpecifiedElseDefault(optionsDict, "BLUN_POS", QDev);
+
+      if (value2Weight != 0 || value1Temperature != 1 || value2Temperature != 1 || policyTemperature != 1)
       {
-        Console.WriteLine("OVERRIDDEN V2FRAC/V1TEMP/V2TEMP: " + value2Weight + " " + value1Temperature + " " + value2Temperature);
+        Console.WriteLine("OVERRIDDEN V2FRAC/V1TEMP/V2TEMP/POLTEMP/BLUN_NEG/BLUN_POS: " + value2Weight + " " + value1Temperature + " "
+                                                                      + value2Temperature + " " + policyTemperature);
+//                                                                      blunderNegative + " " + blunderPositive);
       }
 
       NNEvaluatorOptions options = this with
@@ -101,6 +108,7 @@ namespace Ceres.Chess.NNEvaluators
         ValueHead2Temperature = value2Temperature,
         PVExtensionDepth = (int)pvExtensionDepth,
         PolicyUncertaintyTemperatureScalingFactor = policyUncertaintyScaling,
+        PolicyTemperature = CheckOptionSpecifiedElseDefault(optionsDict, "POLTEMP", policyTemperature),
       };
 
       return options;
