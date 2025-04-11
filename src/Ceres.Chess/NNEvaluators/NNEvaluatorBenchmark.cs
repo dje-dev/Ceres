@@ -21,7 +21,6 @@ using Ceres.Base.Math;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.LC0.Batches;
 using Ceres.Chess.MoveGen;
-using Ceres.Chess.MoveGen.Converters;
 using Ceres.Chess.NetEvaluation.Batch;
 
 #endregion
@@ -102,7 +101,9 @@ namespace Ceres.Chess.NNEvaluators
     public static void Warmup(NNEvaluator evaluator)
     {
       NNEvaluatorResult[] results = evaluator.EvaluateBatch(MakeTestBatch(evaluator, 2), false);
+      evaluator.BuffersLock?.Release();
     }
+
 
     static EncodedPositionBatchFlat batch1;
     static EncodedPositionBatchFlat batchBig;
