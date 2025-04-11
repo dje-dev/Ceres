@@ -15,19 +15,20 @@
 
 using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 using Ceres.Base.DataTypes;
 
 using Ceres.Chess.EncodedPositions;
+using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Chess.LC0.Batches;
+using Ceres.Chess.MoveGen;
+using Ceres.Chess.MoveGen.Converters;
 using Ceres.Chess.NetEvaluation.Batch;
 using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.Positions;
-using Ceres.Chess.EncodedPositions.Basic;
-using Ceres.Chess.MoveGen.Converters;
-using Ceres.Chess.MoveGen;
 
 #endregion
 
@@ -117,6 +118,14 @@ namespace Ceres.Chess.NNEvaluators
     /// Estimated performance characteristics.
     /// </summary>
     public NNEvaluatorPerformanceStats PerformanceStats;
+
+    /// <summary>
+    /// Optional buffers synchronization object.
+    /// If not null, the base evaluator will acquire this before DoEvaluateIntoBuffers.
+    /// The client is thereafter responsible for releasing the lock when the internal buffers
+    /// are no longer needed.
+    /// </summary>
+    public SemaphoreSlim BuffersLock;
 
     /// <summary>
     /// If the network returns policy moves in the same order
@@ -278,7 +287,6 @@ namespace Ceres.Chess.NNEvaluators
     public long NumPositionsEvaluated { private set; get; }
 
 
-
     /// <summary>
     /// Evaluates positions into internal buffers. 
     /// 
@@ -299,6 +307,10 @@ namespace Ceres.Chess.NNEvaluators
         positions.ZeroHistoryPlanes();
       }
 
+      // Acquire the buffers lock, if any.
+      BuffersLock?.Wait();
+
+      // Do the actual subclass evaluation.
       IPositionEvaluationBatch batchEvaluation = DoEvaluateIntoBuffers(positions, retrieveSupplementalResults);
 
       NumBatchesEvaluated++;
@@ -314,7 +326,7 @@ namespace Ceres.Chess.NNEvaluators
 
         if (extensionEvaluator == null)
         {
-          extensionEvaluator = NNEvaluator.FromSpecification("~BT4_FP16_TRT", "GPU:0", Options with { PVExtensionDepth=0 });
+          extensionEvaluator = NNEvaluator.FromSpecification("~BT4_FP16_TRT", "GPU:0", Options with { PVExtensionDepth = 0 });
         }
         NNEvaluator extensionEvaluatorToUse = extensionEvaluator;
 
@@ -327,7 +339,7 @@ namespace Ceres.Chess.NNEvaluators
         const float FRACTION_CHILD = 0.666f;
         evaluator.EvaluateRecursive(Options.PVExtensionDepth, numToEvaluate, MIN_PRIORITY, FRACTION_CHILD);
       }
-      
+
       return batchEvaluation;
     }
     NNEvaluator extensionEvaluator;
@@ -994,7 +1006,3 @@ namespace Ceres.Chess.NNEvaluators
 
   }
 }
-
-
-    
-  
