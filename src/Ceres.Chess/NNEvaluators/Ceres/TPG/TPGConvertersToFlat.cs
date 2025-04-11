@@ -79,9 +79,9 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     /// </summary>
     /// <param name="sourceBytes"></param>
     /// <param name="targetHalves"></param>
-    static unsafe void CopyAndDivide(byte[] sourceBytes, Half[] targetHalves, float divisor)
+    static void CopyAndDivide(byte[] sourceBytes, Half[] targetHalves, float divisor)
     {
-      const int CHUNK_SIZE = 1024 * 128;
+      const int CHUNK_SIZE = 2 * 1024 * 128;
 
       if (sourceBytes.Length < CHUNK_SIZE * 2)
       {
@@ -89,7 +89,12 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
       }
       else
       {
-        Parallel.For(0, sourceBytes.Length / CHUNK_SIZE + 1, (chunkIndex) =>
+        Parallel.For(0, sourceBytes.Length / CHUNK_SIZE + 1,
+                     new ParallelOptions() 
+                     { 
+                       MaxDegreeOfParallelism = 5 // limit parallelism because already threaded if multiple GPUs
+                     },
+          (chunkIndex) =>
         {
           int startIndex = chunkIndex * CHUNK_SIZE;
           int numThisBlock = Math.Min(CHUNK_SIZE, sourceBytes.Length - startIndex);
