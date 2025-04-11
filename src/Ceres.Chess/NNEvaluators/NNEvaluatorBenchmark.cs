@@ -137,8 +137,10 @@ namespace Ceres.Chess.NNEvaluators
         for (int j = 0; j < 20; j++)
         {
           evaluator.EvaluateIntoBuffers(batch1, false);
+          evaluator.BuffersLock?.Release();
         }
         result = evaluator.EvaluateIntoBuffers(batchBig, false);
+        evaluator.BuffersLock?.Release();
       }
 
       float npsSingletons = float.NaN;
@@ -153,6 +155,7 @@ namespace Ceres.Chess.NNEvaluators
           using (new TimingBlock(statsSingletons, TimingBlock.LoggingType.None))
           {
             result = evaluator.EvaluateIntoBuffers(batch1, false);
+            evaluator.BuffersLock?.Release();
           }
           bestTimeSeconds = Math.Min(bestTimeSeconds, (float)statsSingletons.ElapsedTimeSecs);
         }
@@ -163,6 +166,7 @@ namespace Ceres.Chess.NNEvaluators
       for (int i = 0; i < numWarmups; i++)
       {
         result = evaluator.EvaluateIntoBuffers(batchBig, false);
+        evaluator.BuffersLock?.Release();
       }
 
       TimingStats statsBig = new TimingStats();
@@ -171,6 +175,7 @@ namespace Ceres.Chess.NNEvaluators
         // To make sure we defeat any possible caching in place,
         // randomize the batch in some trivial way
         result = evaluator.EvaluateIntoBuffers(batchBig, false);
+        evaluator.BuffersLock?.Release();
       }
 
       float npsBatchBig = bigBatchSize / (float)statsBig.ElapsedTimeSecs;
@@ -265,6 +270,7 @@ namespace Ceres.Chess.NNEvaluators
       using (new TimingBlock(statsBig, TimingBlock.LoggingType.None))
       {
         IPositionEvaluationBatch result = evaluator.EvaluateIntoBuffers(positions, false);
+        evaluator.BuffersLock?.Release();
       }
 
       float npsBatchBig = batchSize / ((float)statsBig.ElapsedTimeSecs - latencyAdjustmentSecs);

@@ -13,14 +13,7 @@
 
 #region Using directives
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-
 using Ceres.Base.DataTypes;
-
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Chess.LC0.Batches;
@@ -29,6 +22,12 @@ using Ceres.Chess.MoveGen.Converters;
 using Ceres.Chess.NetEvaluation.Batch;
 using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.Positions;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 #endregion
 
@@ -308,6 +307,7 @@ namespace Ceres.Chess.NNEvaluators
       }
 
       // Acquire the buffers lock, if any.
+      Debug.Assert(BuffersLock == null || BuffersLock.CurrentCount == 0);
       BuffersLock?.Wait();
 
       // Do the actual subclass evaluation.
