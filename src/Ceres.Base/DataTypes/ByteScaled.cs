@@ -109,13 +109,24 @@ namespace Ceres.Base.DataType
     }
 
 
-    #region Static helper methods
+    #region Conversion operators
 
     /// <summary>
-    /// Implicitly converts an integer value to ByteScaled.
+    /// Implicit conversion from float to ByteScaled.
     /// </summary>
-    /// <param name="value">Integer value to be converted.</param>
-    public static implicit operator ByteScaled(int value) => new ByteScaled(value);
+    /// <param name="value">Float value to convert.</param>
+    public static implicit operator ByteScaled(float value) => new ByteScaled { Value = value };
+
+    /// <summary>
+    /// Implicit conversion from ByteScaled to float.
+    /// </summary>
+    /// <param name="b">ByteScaled value to convert.</param>
+    public static implicit operator float(ByteScaled b) => b.Value;
+
+    #endregion
+
+
+    #region Static helper methods
 
     /// <summary>
     /// Determines if two spans of ByteScaled are equal.
