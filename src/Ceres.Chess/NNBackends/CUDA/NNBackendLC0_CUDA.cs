@@ -300,7 +300,9 @@ namespace Ceres.Chess.NNBackends.CUDA
 
 
     public int DeviceComputeCapabilityMajor => deviceProperties.ComputeCapability.Major;
-    
+
+    static bool[] haveLoggedDevice = new bool[16];
+
     private void InitCUDAContextAndTakeWriteLock()
     {
       CUDADevice deviceContext = null;
@@ -321,9 +323,13 @@ namespace Ceres.Chess.NNBackends.CUDA
       }
       else
       {
-        Console.WriteLine($"CUDA device {GPUID}:  { deviceProperties.DeviceName}" 
-                        + $" Compute: {deviceProperties.ComputeCapability.Major}.{deviceProperties.ComputeCapability.Minor}" 
-                        + $" SMs: { deviceProperties.MultiProcessorCount } Mem: { deviceProperties.TotalGlobalMemory / (1024 * 1024 * 1024) }gb");
+        if (!haveLoggedDevice[GPUID])
+        {
+          Console.WriteLine($"CUDA device {GPUID}:  {deviceProperties.DeviceName}"
+                          + $" Compute: {deviceProperties.ComputeCapability.Major}.{deviceProperties.ComputeCapability.Minor}"
+                          + $" SMs: {deviceProperties.MultiProcessorCount} Mem: {deviceProperties.TotalGlobalMemory / (1024 * 1024 * 1024)}gb");
+          haveLoggedDevice[GPUID] = true;
+        }
       }
       // showInfo();
 
@@ -345,7 +351,7 @@ namespace Ceres.Chess.NNBackends.CUDA
         }
       }
 
-      ExecContext = new (deviceContext, stream, stream2, cuBlas, ltHandle, GetType().Assembly, DumpTiming, deviceProperties.MaxSharedMemoryPerBlockOptin);
+      ExecContext = new(deviceContext, stream, stream2, cuBlas, ltHandle, GetType().Assembly, DumpTiming, deviceProperties.MaxSharedMemoryPerBlockOptin);
     }
 
     void SetCUDAState()
@@ -355,13 +361,14 @@ namespace Ceres.Chess.NNBackends.CUDA
       ExecContext.CuBlas.Stream = ExecContext.Stream.Stream;
     }
 
+
     public void InitNetwork(Net net)
     {
       weights = new LC0LegacyWeights(net.Weights);
       LargestLayerWeightsScale = weights.LargestScaleSeen;
 
       ExecContext.ReferenceLayers = ReferenceBackend?.Layers;
-      Layers = new NNBackendCUDALayers(ExecContext, DeviceComputeCapabilityMajor, 
+      Layers = new NNBackendCUDALayers(ExecContext, DeviceComputeCapabilityMajor,
                                        net, weights, SaveActivations, ReferenceBackend?.Layers);
 
       CheckNetworkCompatible(net);
@@ -470,7 +477,6 @@ namespace Ceres.Chess.NNBackends.CUDA
 
       return size;
     }
-
 
     private void AllocateGPUMemory(Net net, LC0LegacyWeights weights)
     {
@@ -796,11 +802,11 @@ namespace Ceres.Chess.NNBackends.CUDA
         ints.Add(i);
       }
 
-      for (int i = max1; i < max2; i += skip2/ batchSizeDivisor)
+      for (int i = max1; i < max2; i += skip2 / batchSizeDivisor)
       {
         ints.Add(i);
       }
-      
+
       return ints.ToArray();
     }
 
@@ -816,20 +822,20 @@ namespace Ceres.Chess.NNBackends.CUDA
       switch (NumFilters)
       {
         case > 256:
-          breaks = Set(batchSizeDivisor, 
-                       8, 4, 32, 
+          breaks = Set(batchSizeDivisor,
+                       8, 4, 32,
                        4, 160, MIN_BATCH_SIZE);
           break;
 
         case >= 192:
-          breaks = Set(batchSizeDivisor, 
-                       8, 4, 96, 
+          breaks = Set(batchSizeDivisor,
+                       8, 4, 96,
                        6, 320, MIN_BATCH_SIZE);
           break;
 
         default:
-          breaks = Set(batchSizeDivisor, 
-                       12, 4, 48, 
+          breaks = Set(batchSizeDivisor,
+                       12, 4, 48,
                        12, 384, MIN_BATCH_SIZE);
           break;
       }
@@ -875,7 +881,7 @@ namespace Ceres.Chess.NNBackends.CUDA
       }
     }
 
-#region Disposal
+    #region Disposal
 
     protected virtual void Dispose(bool disposing)
     {
@@ -883,7 +889,7 @@ namespace Ceres.Chess.NNBackends.CUDA
       {
         if (disposing)
         {
-// may be reused?  Layers = new NNBackendCUDALayers(ExecContext, net, weights, SaveActivations, ReferenceBackend?.Layers);
+          // may be reused?  Layers = new NNBackendCUDALayers(ExecContext, net, weights, SaveActivations, ReferenceBackend?.Layers);
 
           inputOutput?.Dispose();
           mlhOutputBuffer?.Dispose();
@@ -918,6 +924,4 @@ namespace Ceres.Chess.NNBackends.CUDA
 
     public override string ToString() => $"<NNBackendLC0_CUDA> {Net.FileInfo.Name} on GPU {GPUID}";
   }
-
-
 }
