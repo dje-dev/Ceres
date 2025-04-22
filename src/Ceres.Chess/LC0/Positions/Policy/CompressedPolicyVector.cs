@@ -62,12 +62,12 @@ namespace Ceres.Chess.EncodedPositions
     /// For space efficiency, we cap this at a number of moves that is very rarely exceeded
     /// </summary>
     public const int NUM_MOVE_SLOTS = 80;
-    
+
     /// <summary>
     /// In most contexts it is desirable to always use nonzero probabilities for legal moves,
     /// both to insure they are not masked out and because exactly zero probability is implausible.
     /// </summary>
-    public const float DEFAULT_MIN_PROBABILITY_LEGAL_MOVE  = 0.01f * 0.05f; // 0.05%
+    public const float DEFAULT_MIN_PROBABILITY_LEGAL_MOVE = 0.01f * 0.05f; // 0.05%
 
     #region Raw data
 
@@ -85,7 +85,7 @@ namespace Ceres.Chess.EncodedPositions
 
     #region Move Probabilities Encoded
 
-    readonly PolicyValues Probabilities;
+    internal readonly PolicyValues Probabilities;
 
     #endregion
 
@@ -98,7 +98,7 @@ namespace Ceres.Chess.EncodedPositions
 
     const float HALF_INCREMENT = (float)(0.5 / 65536.0);
 
-    
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ushort EncodedProbability(float v)
     {
@@ -145,9 +145,9 @@ namespace Ceres.Chess.EncodedPositions
     /// <param name="side"></param>
     /// <param name="indices"></param>
     /// <param name="probs"></param>
-    public static void Initialize(ref CompressedPolicyVector policy, 
-                                  SideType side, 
-                                  Span<ushort> indices, 
+    public static void Initialize(ref CompressedPolicyVector policy,
+                                  SideType side,
+                                  Span<ushort> indices,
                                   Span<ushort> probsEncoded)
     {
       if (indices.Length != probsEncoded.Length)
@@ -209,7 +209,7 @@ namespace Ceres.Chess.EncodedPositions
     /// <param name="indices"></param>
     /// <param name="probs"></param>
     public static void Initialize(ref CompressedPolicyVector policy, SideType side,
-                                  Span<int> indices, Span<float> probs, 
+                                  Span<int> indices, Span<float> probs,
                                   bool alreadySorted, bool withActions,
                                   ref CompressedActionVector actions)
     {
@@ -299,9 +299,9 @@ namespace Ceres.Chess.EncodedPositions
     /// <param name="side"></param>
     /// <param name="probabilities"></param>
     /// <param name="alreadySorted"></param>
-    public static void Initialize(ref CompressedPolicyVector policy, 
+    public static void Initialize(ref CompressedPolicyVector policy,
                                   SideType side,
-                                  Span<float> probabilities, 
+                                  Span<float> probabilities,
                                   bool alreadySorted)
     {
       Initialize(ref policy, side, Fixed(probabilities), alreadySorted);
@@ -387,7 +387,7 @@ namespace Ceres.Chess.EncodedPositions
         Span<ushort> indices = stackalloc ushort[CompressedPolicyVector.NUM_MOVE_SLOTS];
         Span<ushort> probs = stackalloc ushort[CompressedPolicyVector.NUM_MOVE_SLOTS];
 
-        
+
         for (int i = 0; i < NUM_MOVE_SLOTS; i++)
         {
           // Tranfer probabiltiy unchanged
@@ -411,11 +411,11 @@ namespace Ceres.Chess.EncodedPositions
           }
         }
 
-          CompressedPolicyVector ret = new CompressedPolicyVector();
-          Initialize(ref ret, Side, indices, probs);
-          return ret;
-        }
+        CompressedPolicyVector ret = new CompressedPolicyVector();
+        Initialize(ref ret, Side, indices, probs);
+        return ret;
       }
+    }
 
 
     /// <summary>
@@ -426,7 +426,7 @@ namespace Ceres.Chess.EncodedPositions
     /// <param name="isde"></param>
     /// <param name="probabilities"></param>
     /// <param name="alreadySorted"></param>
-    public static void Initialize(ref CompressedPolicyVector policy, SideType side, float* probabilities, 
+    public static void Initialize(ref CompressedPolicyVector policy, SideType side, float* probabilities,
                                   bool alreadySorted, bool convertNegativeOneToZero = false)
     {
       fixed (SideType* sideType = &policy.Side)
@@ -509,32 +509,32 @@ namespace Ceres.Chess.EncodedPositions
       }
     }
 
-#endregion
+    #endregion
 
-#region Decoding
+    #region Decoding
 
-  /// <summary>
-  // Returns sum of all probabilities.
-  /// </summary>
-  public float SumProbabilities
-  {
-    get
+    /// <summary>
+    // Returns sum of all probabilities.
+    /// </summary>
+    public float SumProbabilities
     {
-      float acc = 0;
-      foreach ((EncodedMove move, float probability) in ProbabilitySummary(0, int.MaxValue))
+      get
       {
-        acc += probability;
+        float acc = 0;
+        foreach ((EncodedMove move, float probability) in ProbabilitySummary(0, int.MaxValue))
+        {
+          acc += probability;
+        }
+        return acc;
       }
-      return acc;
     }
-  }
 
 
-  /// <summary>
-  /// Returns an expanded array of all policy probabilities
-  /// over all 1858 possible moves (with normalization to sum to 1.0).
-  /// </summary>
-  public float[] DecodedAndNormalized
+    /// <summary>
+    /// Returns an expanded array of all policy probabilities
+    /// over all 1858 possible moves (with normalization to sum to 1.0).
+    /// </summary>
+    public float[] DecodedAndNormalized
     {
       get
       {
@@ -749,7 +749,7 @@ namespace Ceres.Chess.EncodedPositions
     /// <param name="topN"></param>
     /// <returns></returns>
     public IEnumerable<(Move Move, float Probability)>
-      MovesAndProbabilities(Position startPosition, 
+      MovesAndProbabilities(Position startPosition,
                             float minProbability = 0.0f, int topN = int.MaxValue)
     {
       MGPosition mgPos = MGPosition.FromPosition(in startPosition);
@@ -833,7 +833,10 @@ namespace Ceres.Chess.EncodedPositions
 
 
     /// <summary>
-    /// Populates an array of tuples with moves and associated probabilites.
+    /// Populates an array of tuples with moves and associated probabilities.
+    /// 
+    /// NOTE: Consider using EnumerateProbabilityTuples instead (allocation free enumerator).
+    /// TODO: Consider removing this to use above instead.
     /// </summary>
     /// <param name="minProbability"></param>
     /// <returns></returns>
@@ -881,8 +884,120 @@ namespace Ceres.Chess.EncodedPositions
 
     }
 
+
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ProbabilityTupleEnumerable EnumerateProbabilityTuples(float minProbability = 0.0f, int topN = int.MaxValue)
+    {
+      if (topN > NUM_MOVE_SLOTS)
+      {
+        topN = NUM_MOVE_SLOTS;
+      }
+
+      return new ProbabilityTupleEnumerable(this, minProbability, topN);
+    }
+
+    public readonly ref struct ProbabilityTupleEnumerable
+    {
+      private readonly CompressedPolicyVector _owner;
+      private readonly float _minProbability;
+      private readonly int _topN;
+
+      [MethodImpl(MethodImplOptions.AggressiveInlining)]
+      internal ProbabilityTupleEnumerable(CompressedPolicyVector owner, float minProbability, int topN)
+      {
+        _owner = owner;
+        _minProbability = minProbability;
+        _topN = topN;
+      }
+
+      [MethodImpl(MethodImplOptions.AggressiveInlining)]
+      public ProbabilityTupleEnumerator GetEnumerator()
+      {
+        return new ProbabilityTupleEnumerator(_owner, _minProbability, _topN);
+      }
+    }
+
+    public ref struct ProbabilityTupleEnumerator
+    {
+      private readonly CompressedPolicyVector _owner;
+      private readonly float _minProbability;
+      private readonly int _topN;
+      private int _index;
+      private int _yielded;
+      private (int, EncodedMove, float) _current;
+
+      [MethodImpl(MethodImplOptions.AggressiveInlining)]
+      internal ProbabilityTupleEnumerator(CompressedPolicyVector owner, float minProbability, int topN)
+      {
+        _owner = owner;
+        _minProbability = minProbability;
+        _topN = topN;
+        _index = -1;
+        _yielded = 0;
+        _current = default;
+      }
+
+      public (int, EncodedMove, float) Current
+      {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _current;
+      }
+
+      [MethodImpl(MethodImplOptions.AggressiveInlining)]
+      public bool MoveNext()
+      {
+        if (_yielded >= _topN)
+        {
+          return false;
+        }
+
+        int i = _index + 1;
+
+        while (i < CompressedPolicyVector.NUM_MOVE_SLOTS)
+        {
+          ushort rawIdx = _owner.Indices[i];
+
+          if (MoveIsSentinel(rawIdx))
+          {
+            if (rawIdx == CompressedPolicyVector.SPECIAL_VALUE_SENTINEL_TERMINATOR)
+            {
+              _index = CompressedPolicyVector.NUM_MOVE_SLOTS;
+              return false;
+            }
+
+            if (rawIdx == CompressedPolicyVector.SPECIAL_VALUE_RANDOM_NARROW ||
+                rawIdx == CompressedPolicyVector.SPECIAL_VALUE_RANDOM_WIDE)
+            {
+              _current = (_yielded, new EncodedMove(rawIdx), float.NaN);
+              _index = i;
+              _yielded++;
+              return true;
+            }
+
+            throw new Exception("Internal error, unknown sentinel value.");
+          }
+
+          float decodedProb = DecodedProbability(_owner.Probabilities[i]);
+
+          if (decodedProb < _minProbability)
+          {
+            _index = CompressedPolicyVector.NUM_MOVE_SLOTS;
+            return false;
+          }
+
+          _current = (_yielded, EncodedMove.FromNeuralNetIndex(rawIdx), decodedProb);
+          _index = i;
+          _yielded++;
+          return true;
+        }
+
+        return false;
+      }
+    }
+
     /// <summary>
-    /// Returns the Shannon entropy of the policy probabilies.
+    /// Returns the Shannon entropy of the policy probabilities.
     /// </summary>
     public float Entropy
     {
@@ -984,7 +1099,7 @@ namespace Ceres.Chess.EncodedPositions
       float crossEntropy = 0.0f;
       foreach ((EncodedMove move, float probability) in ProbabilitySummary())
       {
-        float targetProb = target.ProbabilityOfMove (move);
+        float targetProb = target.ProbabilityOfMove(move);
         crossEntropy += probability * MathF.Log(targetProb, 2);
       }
       return crossEntropy;
@@ -998,7 +1113,7 @@ namespace Ceres.Chess.EncodedPositions
     /// <returns></returns>
     public readonly float ProbabilityOfMove(EncodedMove move) => ProbabilitySummary().Where(x => x.Move == move)
                                                                                      .Select(x => x.Probability)
-                                                                                     .FirstOrDefault();     
+                                                                                     .FirstOrDefault();
 
     /// <summary>
     /// Returns short summary description string.
@@ -1050,7 +1165,7 @@ namespace Ceres.Chess.EncodedPositions
       }
     }
 
-#endregion
+    #endregion
 
 
     /// <summary>
