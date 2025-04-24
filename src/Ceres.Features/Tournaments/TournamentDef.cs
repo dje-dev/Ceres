@@ -17,11 +17,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using AutoMapper;
+
 using Ceres.Base.Misc;
 using Ceres.Chess;
-using Ceres.Chess.GameEngines;
-using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Features.GameEngines;
 using Ceres.Features.Players;
 
@@ -306,38 +304,15 @@ namespace Ceres.Features.Tournaments
 
     #region Cloning
 
-    static IMapper cloneMapper = null;
-
-    /// <summary>
-    /// Returns a shallow clone of the TournamentDef.
-    /// 
-    /// This is necessary because an underlying NNEvaluatorDef may be replicated multiple times, 
-    /// each with a different target GPU ID.
-    /// 
-    /// Previously ObjUtils.DeepClone was used but this relied upon the now-deprecated BinarySerialization.
-    /// </summary>
-    /// <returns></returns>
     public TournamentDef Clone()
     {
-      if (cloneMapper == null)
-      {
-        MapperConfiguration config = new MapperConfiguration(cfg =>
-        {
-          cfg.CreateMap<TournamentDef, TournamentDef>();
-          cfg.CreateMap<NNEvaluatorDef, NNEvaluatorDef>();
-          cfg.CreateMap<GameEngineDefCeres, GameEngineDefCeres>();
-          cfg.CreateMap<EnginePlayerDef, EnginePlayerDef>();
-        });
-
-
-        cloneMapper = config.CreateMapper();
-      }
-
-      TournamentDef clone = cloneMapper.Map<TournamentDef>(this);      
+      TournamentDef clone = ObjUtils.DeepClone(this);
+      clone.Logger = Logger;
       clone.parentDef = this;
-      clone.AcceptPosPredicate = this.AcceptPosPredicate;
+      clone.AcceptPosPredicate = AcceptPosPredicate;
       return clone;
     }
+
 
     #endregion
 

@@ -44,6 +44,8 @@
     <PackageReference Include="Spectre.Console" Version="0.49.1" />
     
     <PackageReference Include="System.Numerics.Tensors" Version="9.0.3" />
+    
+    <PackageReference Include="System.Runtime.Serialization.Formatters" Version="9.0.4" />
   </ItemGroup>
 
 </Project>

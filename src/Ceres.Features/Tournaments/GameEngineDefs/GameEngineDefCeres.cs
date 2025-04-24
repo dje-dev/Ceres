@@ -77,8 +77,8 @@ namespace Ceres.Features.GameEngines
       ArgumentNullException.ThrowIfNull(evaluatorDef);
 
       // Make a defensive clone of the EvaluatorDef so it will definitely not be shared.
-      EvaluatorDef = evaluatorDef.Clone();
-      EvaluatorDefSecondary = evaluatorDefSecondary == null ? null : evaluatorDefSecondary.Clone();
+      EvaluatorDef = ObjUtils.DeepClone(evaluatorDef);
+      EvaluatorDefSecondary = evaluatorDefSecondary == null ? null : ObjUtils.DeepClone(evaluatorDefSecondary);
       SearchParams = searchParams ?? new ParamsSearch();
       SelectParams = selectParams ?? new ParamsSelect();
       OverrideLimitManager = overrideLimitManager;

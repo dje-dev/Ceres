@@ -15,6 +15,7 @@
 
 using System;
 using System.Collections.Generic;
+using Microsoft.FSharp.Core;
 
 #endregion
 
@@ -23,6 +24,7 @@ namespace Ceres.Chess.NNEvaluators
   /// <summary>
   /// Options relating to an NNEvaluator, including output head postprocessing.
   /// </summary>
+  [Serializable]
   public record NNEvaluatorOptions
   {
     public const float DEFAULT_FRACTION_VALUE2    = 0f;
