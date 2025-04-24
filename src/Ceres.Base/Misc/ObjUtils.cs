@@ -46,7 +46,9 @@ namespace Ceres.Base.Misc
     {
       using (MemoryStream stream = new MemoryStream())
       {
+#pragma warning disable SYSLIB0011 // Type or member is obsolete
         BinaryFormatter formatter = new BinaryFormatter();
+#pragma warning restore SYSLIB0011 // Type or member is obsolete
         formatter.Serialize(stream, a);
         stream.Position = 0;
         return (T)formatter.Deserialize(stream);
