@@ -136,6 +136,7 @@ namespace Ceres.Features.Tournaments
             openingsDraws = new RandomDrawWithoutReplacement<int>(numbers);
           }
 
+          numGamePairsLaunched++;
           return openingsDraws.TryDraw(out int openingIndex) ? openingIndex : -1;
         }
         else
