@@ -31,7 +31,7 @@ namespace Ceres.Features.Tournaments
     {
       try
       {
-        gameTest.RunGameTests(threadIndex, () => GetNextOpeningIndexForLocalThread(Def.NumGamePairs ?? int.MaxValue));
+        gameTest.RunGameTests(threadIndex, (int numOpeningsAvailable) => GetNextOpeningIndexForLocalThread(numOpeningsAvailable, Def.NumGamePairs ?? int.MaxValue));
       }
       catch (Exception exc)
       {
@@ -50,7 +50,7 @@ namespace Ceres.Features.Tournaments
       {
         try
         {
-          int openingIndex = GetNextOpeningIndexForLocalThread(Def.NumGamePairs ?? int.MaxValue);
+          int openingIndex = GetNextOpeningIndexForLocalThread(-1, Def.NumGamePairs ?? int.MaxValue);
           if (openingIndex == -1)
           {
             return;

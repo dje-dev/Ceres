@@ -91,7 +91,7 @@ namespace Ceres.Features.Tournaments
     /// Waits until a game request appears in the directory and then returns.
     /// </summary>
     /// <returns></returns>
-    public int GetEnqueuedOpeningRequest()
+    public int GetEnqueuedOpeningRequest(int numOpeningsAvailable)
     {
       while (true)
       {

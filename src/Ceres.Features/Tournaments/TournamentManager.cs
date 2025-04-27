@@ -22,6 +22,7 @@ using System.Threading;
 using Ceres.Chess;
 using Ceres.Chess.UserSettings;
 using Ceres.Features.Players;
+using Ceres.Base.DataTypes;
 
 #endregion
 
@@ -99,23 +100,48 @@ namespace Ceres.Features.Tournaments
     int numGamePairsLaunched = 0;
     readonly object lockObj = new();
 
+    RandomDrawWithoutReplacement<int> openingsDraws = null;
+
 
     /// <summary>
     /// Method called by threads to get the next available game to be played.
     /// </summary>
     /// <returns></returns>
-    int GetNextOpeningIndexForLocalThread(int maxOpenings)
+    int GetNextOpeningIndexForLocalThread(int numOpeningsAvailable, int maxOpenings)
     {
-      if (Def.RandomizeOpenings) throw new NotImplementedException();
+      if (numGamePairsLaunched >= maxOpenings)
+      {
+        return -1;
+      }
 
       lock (lockObj)
       {
-        if (numGamePairsLaunched < maxOpenings)
+        if (Def.RandomizeOpenings)
+        {
+          if (openingsDraws == null)
+          {
+            if (numOpeningsAvailable <= maxOpenings)
+            {
+              throw new Exception($"Insufficient openings in opening book to play {maxOpenings} games.");
+            }
+
+            // Create an array of indices of all possible openings.
+            int[] numbers = new int[numOpeningsAvailable];
+            for (int i = 0; i < numOpeningsAvailable; i++)
+            {
+              numbers[i] = i;
+            }
+
+            // Create a random chooser on top of that list.
+            openingsDraws = new RandomDrawWithoutReplacement<int>(numbers);
+          }
+
+          return openingsDraws.TryDraw(out int openingIndex) ? openingIndex : -1;
+        }
+        else
         {
           return numGamePairsLaunched++;
         }
-        else
-          return -1;
       }
     }
 

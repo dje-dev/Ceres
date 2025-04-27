@@ -109,7 +109,7 @@ namespace Ceres.Features.Tournaments
       }
     }
 
-    public void RunGameTests(int runnerIndex, Func<int> getGamePairToProcess,
+    public void RunGameTests(int runnerIndex, Func<int, int> getGamePairToProcess,
                              Action<TournamentGameInfo, TournamentGameInfo> doneGamePairCallback = null)
     {
       Run = new TournamentGameRunner(Def);
@@ -141,7 +141,7 @@ namespace Ceres.Features.Tournaments
 
       while (!Def.parentDef.ShouldShutDown)
       {
-        int openingIndex = getGamePairToProcess();
+        int openingIndex = getGamePairToProcess(openings.Count);
 
         // Look for sentinel indicating end
         if (openingIndex < 0)
