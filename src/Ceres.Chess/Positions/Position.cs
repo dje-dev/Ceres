@@ -893,27 +893,17 @@ namespace Ceres.Chess
       {
         while (index < 64)
         {
-          byte rawValue = _pieceSquares[index / 2];
+          // Use bit-twiddling to locate the 4-bit nibble that encodes the piece on square index;
+          // half selects the containing byte, and nibbleShift (0 or 4) positions that nibble for masking with 0xF.
+          int half = index >> 1;
+          int nibbleShift = (index & 1) * 4;
+          byte nibble = (byte)((_pieceSquares[half] >> nibbleShift) & 0xF);
 
-          if (index % 2 == 0)
+          if (nibble != 0)
           {
-            byte valueLeft = (byte)(rawValue & 0b0000_1111);
-            if (valueLeft != 0)
-            {
-              Current = (new Piece(valueLeft), new Square(index));
-              index++;
-              return true;
-            }
-          }
-          else
-          {
-            byte valueRight = (byte)(rawValue >> 4);
-            if (valueRight != 0)
-            {
-              Current = (new Piece(valueRight), new Square(index));
-              index++;
-              return true;
-            }
+            Current = (new Piece(nibble), new Square(index));
+            index++;
+            return true;
           }
 
           index++;
