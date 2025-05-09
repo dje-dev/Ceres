@@ -859,65 +859,48 @@ namespace Ceres.Chess
     }
 
 
-    public readonly PiecesOnSquaresEnumerator GetEnumerator()
-    {
-      unsafe
-      {
-        fixed (byte* pieceSquares = &Square_0_1)
-        {
-          return new PiecesOnSquaresEnumerator(pieceSquares);
-        }
-      }
-    }
 
     /// <summary>
     /// Custom enumerator struct for allocation-free enumeration.
     /// </summary>
-    public unsafe struct PiecesOnSquaresEnumerator : IEnumerator<(Piece, Square)>
+    public PiecesOnSquaresEnumerator GetEnumerator()
     {
-      private readonly byte* _pieceSquares;
-      private int index;
+      // Create a span that covers the 32 bytes holding the 64 nibbles
+      ReadOnlySpan<byte> squares = MemoryMarshal.CreateReadOnlySpan(ref Unsafe.AsRef(in Square_0_1), 32);
 
-      public PiecesOnSquaresEnumerator(byte* pieceSquares)
+      return new PiecesOnSquaresEnumerator(squares);
+    }
+
+    public ref struct PiecesOnSquaresEnumerator
+    {
+      private readonly ReadOnlySpan<byte> _pieceSquares;
+      private int _index;
+
+      public PiecesOnSquaresEnumerator(ReadOnlySpan<byte> pieceSquares)
       {
         _pieceSquares = pieceSquares;
-        index = 0;
+        _index = -1;
         Current = default;
       }
 
       public (Piece, Square) Current { get; private set; }
 
-      object IEnumerator.Current => Current;
-
       public bool MoveNext()
       {
-        while (index < 64)
+        while (++_index < 64)
         {
-          // Use bit-twiddling to locate the 4-bit nibble that encodes the piece on square index;
-          // half selects the containing byte, and nibbleShift (0 or 4) positions that nibble for masking with 0xF.
-          int half = index >> 1;
-          int nibbleShift = (index & 1) * 4;
+          int half = _index >> 1;              // which byte
+          int nibbleShift = (_index & 1) * 4;  // left or right nibble
           byte nibble = (byte)((_pieceSquares[half] >> nibbleShift) & 0xF);
 
           if (nibble != 0)
           {
-            Current = (new Piece(nibble), new Square(index));
-            index++;
+            Current = (new Piece(nibble), new Square(_index));
             return true;
           }
-
-          index++;
         }
         return false;
       }
-
-      public void Reset()
-      {
-        index = 0;
-        Current = default;
-      }
-
-      public void Dispose() { }
     }
 
 
