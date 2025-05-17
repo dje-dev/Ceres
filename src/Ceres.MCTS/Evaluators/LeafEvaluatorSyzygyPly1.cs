@@ -81,12 +81,12 @@ namespace Ceres.MCTS.Evaluators
       // Abort immediately unless this position has exactly
       // one more piece than the max cardinality of our tablebases.
       if (pos.PieceCount != (Ply0Evaluator.MaxCardinality + 1))
-      { 
+      {
         return default;
       }
 
       // Iterate over the capture moves.
-      foreach ((MGMove move, Position newPos) in PositionsGenerator1Ply.GenPositions(pos, move => move.Capture))
+      foreach ((MGMove move, MGPosition newPos) in PositionsGenerator1Ply.GenPositions(pos.ToMGPosition, move => move.Capture))
       {
         // Check if this position is in tablebase and it is a definitive win for our side.
         LeafEvaluationResult result = Ply0Evaluator.Lookup(in newPos);
@@ -105,7 +105,7 @@ namespace Ceres.MCTS.Evaluators
           }
 
           return new LeafEvaluationResult(GameResult.Checkmate, result.LossP, result.WinP, result.M,
-                                          result.WinP-result.LossP, result.UncertaintyV, result.UncertaintyP);
+                                          result.WinP - result.LossP, result.UncertaintyV, result.UncertaintyP);
         }
       }
 

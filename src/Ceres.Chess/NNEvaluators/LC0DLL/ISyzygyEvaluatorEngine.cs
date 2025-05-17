@@ -67,7 +67,7 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
     /// The case of partial DTZ availability is not generally supported
     /// (not guaranteed to produce correct play).
     /// </summary>
-    public bool DTZAvailable { get;}
+    public bool DTZAvailable { get; }
 
     /// <summary>
     /// The number of wdl tablebase files available, if known.
@@ -106,8 +106,8 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
     /// <param name="returnOnlyWinningMoves"></param>
     /// <param name="succeedIfIncompleteDTZInfo">If true, succeeds even if some DTZ probes failed, with incomplete partial moveList (unknown DTZ filled in as 9999.</param>
     /// <returns></returns>
-    public MGMove CheckTablebaseBestNextMoveViaDTZ(in Position currentPos, out WDLResult result, 
-                                                   out List<(MGMove, short)> moveList, 
+    public MGMove CheckTablebaseBestNextMoveViaDTZ(in Position currentPos, out WDLResult result,
+                                                   out List<(MGMove, short)> moveList,
                                                    out short dtz, bool returnOnlyWinningMoves = true,
                                                    bool succeedIfIncompleteDTZInfo = false);
 
@@ -178,7 +178,7 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
       {
         // If we don't know the WDL status of the new position, then we don't know the move is optimal.
         return false;
-      } 
+      }
 
       // Check if WDL status for current and new position is same (after negation to adjust for perspective change).
       return ProbeWDLAsV(in pos) == -newPosEval;
@@ -225,11 +225,11 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
       }
 
       // Fall thru to use WDL
-      MGMove ret =  CheckTablebaseBestNextMoveViaWDL(in currentPos, out result, out List<MGMove> winningMoves);
+      MGMove ret = CheckTablebaseBestNextMoveViaWDL(in currentPos, out result, out List<MGMove> winningMoves);
       if (result == WDLResult.Unknown)
       {
         return default;
-      } 
+      }
 
       if (fullWinningMoveList != null)
       {
@@ -260,9 +260,10 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
       bool allNextPositionsInTablebase = true;
 
       // Generate all possible next moves and look up in tablebase
-      foreach ((MGMove move, Position nextPos) in PositionsGenerator1Ply.GenPositions(currentPos))
+      foreach ((MGMove move, MGPosition nextPos) in PositionsGenerator1Ply.GenPositions(currentPos.ToMGPosition))
       {
-        ProbeWDL(in nextPos, out SyzygyWDLScore score, out SyzygyProbeState probeResult);
+        // TODO: someday make a version of ProbeWDL that can directly process MGPosition
+        ProbeWDL(nextPos.ToPosition, out SyzygyWDLScore score, out SyzygyProbeState probeResult);
         if (!(probeResult == SyzygyProbeState.Ok || probeResult == SyzygyProbeState.ZeroingBestMove))
         {
           allNextPositionsInTablebase = false;
@@ -314,7 +315,7 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
         bestMove = drawingMove;
         result = WDLResult.Draw;
       }
-      else 
+      else
       {
         bestMove = default; // all moves lose, we don't know which is least bad
         result = WDLResult.Loss;
@@ -323,7 +324,7 @@ namespace Ceres.Chess.NNEvaluators.LC0DLL
       return bestMove;
     }
 
-#endregion
+    #endregion
   }
 
 }

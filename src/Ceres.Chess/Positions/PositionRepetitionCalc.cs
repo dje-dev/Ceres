@@ -56,7 +56,7 @@ namespace Ceres.Chess
 
       // Only need to check positions with same side to play
       int count = 0;
-      for (int i = posSpan.Length - 3; i >= 0; i-=2)
+      for (int i = posSpan.Length - 3; i >= 0; i -= 2)
       {
         ref readonly Position thisPosition = ref posSpan[i];
         if (thisPosition.EqualAsRepetition(in finalPosition))
@@ -143,15 +143,17 @@ namespace Ceres.Chess
       positionsAll.Add(newPosAfterOurMove);
 
       // Loop thru all possible opponent moves.
-      foreach ((MGMove _, Position newPosAfterOpponentMove) in PositionsGenerator1Ply.GenPositions(newPosAfterOurMove))
-      {
-        // Check for draw by repetition claimable after the opponent makes the candidate move.
-        bool wouldBeDrawByRepetition = NewPosWouldResultInDrawByRepetition(in newPosAfterOpponentMove, positionsAll);
-        if (wouldBeDrawByRepetition)
+      foreach ((MGMove _, Position newPosAfterOpponentMove) in PositionsGenerator1Ply.GenPositions(mgPos))
+        foreach ((MGMove _, MGPosition newPosAfterOpponentMove) in PositionsGenerator1Ply.GenPositions(mgPos))
         {
-          return true;
+          // Check for draw by repetition claimable after the opponent makes the candidate move.
+          bool wouldBeDrawByRepetition = NewPosWouldResultInDrawByRepetition(in newPosAfterOpponentMove, positionsAll);
+          bool wouldBeDrawByRepetition = NewPosWouldResultInDrawByRepetition(newPosAfterOpponentMove.ToPosition, positionsAll);
+          if (wouldBeDrawByRepetition)
+          {
+            return true;
+          }
         }
-      }
 
 
       return false;

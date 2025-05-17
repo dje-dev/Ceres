@@ -21,6 +21,7 @@ using Ceres.Base.DataTypes;
 using Ceres.Base.Threading;
 
 using Ceres.Chess;
+using Ceres.Chess.MoveGen;
 using Ceres.Chess.NNEvaluators.LC0DLL;
 using Ceres.MCTS.MTCSNodes;
 using Ceres.MCTS.Params;
@@ -92,15 +93,17 @@ namespace Ceres.MCTS.Evaluators
       return result;
     }
 
+    internal LeafEvaluationResult Lookup(in MGPosition pos) => Lookup(pos.ToPosition);
+
     internal LeafEvaluationResult Lookup(in Position pos)
     {
-      Evaluator.ProbeWDL(in pos, out SyzygyWDLScore score, 
+      Evaluator.ProbeWDL(in pos, out SyzygyWDLScore score,
                                  out SyzygyProbeState resultCode);
       if (resultCode == SyzygyProbeState.Fail ||
           resultCode == SyzygyProbeState.ChangeSTM)
       {
         return default;
-      }   
+      }
 
       LeafEvaluationResult result;
       switch (score)
