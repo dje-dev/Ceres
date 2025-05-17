@@ -143,17 +143,15 @@ namespace Ceres.Chess
       positionsAll.Add(newPosAfterOurMove);
 
       // Loop thru all possible opponent moves.
-      foreach ((MGMove _, Position newPosAfterOpponentMove) in PositionsGenerator1Ply.GenPositions(mgPos))
-        foreach ((MGMove _, MGPosition newPosAfterOpponentMove) in PositionsGenerator1Ply.GenPositions(mgPos))
+      foreach ((MGMove _, MGPosition newPosAfterOpponentMove) in PositionsGenerator1Ply.GenPositions(mgPos))
+      {
+        // Check for draw by repetition claimable after the opponent makes the candidate move.
+        bool wouldBeDrawByRepetition = NewPosWouldResultInDrawByRepetition(newPosAfterOpponentMove.ToPosition, positionsAll);
+        if (wouldBeDrawByRepetition)
         {
-          // Check for draw by repetition claimable after the opponent makes the candidate move.
-          bool wouldBeDrawByRepetition = NewPosWouldResultInDrawByRepetition(in newPosAfterOpponentMove, positionsAll);
-          bool wouldBeDrawByRepetition = NewPosWouldResultInDrawByRepetition(newPosAfterOpponentMove.ToPosition, positionsAll);
-          if (wouldBeDrawByRepetition)
-          {
-            return true;
-          }
+          return true;
         }
+      }
 
 
       return false;
