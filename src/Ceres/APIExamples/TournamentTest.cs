@@ -14,38 +14,37 @@
 #region Using directives
 
 using System;
-using System.IO;
-using System.Diagnostics;
-using System.Threading.Tasks;
-using System.Threading;
 using System.Collections.Generic;
-
-using Ceres.Base.OperatingSystem;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Ceres.Base.Benchmarking;
-
+using Ceres.Base.OperatingSystem;
 using Ceres.Chess;
+using Ceres.Chess.Data.Nets;
 using Ceres.Chess.GameEngines;
+using Ceres.Chess.Games.Utils;
+using Ceres.Chess.LC0.NNFiles;
+using Ceres.Chess.LC0.WeightsProtobuf;
+using Ceres.Chess.NetEvaluation.Batch;
+using Ceres.Chess.NNBackends.CUDA;
+using Ceres.Chess.NNEvaluators;
 using Ceres.Chess.NNEvaluators.Defs;
+using Ceres.Chess.Positions;
 using Ceres.Chess.UserSettings;
+using Ceres.Features;
+using Ceres.Features.EngineTests;
+using Ceres.Features.GameEngines;
 using Ceres.Features.Players;
 using Ceres.Features.Suites;
 using Ceres.Features.Tournaments;
-using Ceres.Features.GameEngines;
-using Ceres.MCTS.Params;
-using Ceres.Chess.NNEvaluators;
-using Ceres.Features;
 using Ceres.MCTS.Environment;
-using Ceres.Features.EngineTests;
-using Ceres.Chess.NNBackends.CUDA;
-using Ceres.Chess.LC0.WeightsProtobuf;
-using Ceres.Chess.LC0.NNFiles;
-using Ceres.Chess.Positions;
-using Ceres.Chess.NetEvaluation.Batch;
-using System.Runtime.InteropServices;
-using Ceres.Chess.Games.Utils;
-using Ceres.Chess.Data.Nets;
+using Ceres.MCTS.Params;
 using Chess.Ceres.PlayEvaluation;
-using System.Linq;
+using Pblczero;
+using static Microsoft.FSharp.Core.ByRefKinds;
 
 #endregion
 
@@ -55,7 +54,7 @@ namespace Ceres.APIExamples
   {
     const bool POOLED = false;
 
-   static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 3 : 3;
+    static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 3 : 3;
     static int[] OVERRIDE_DEVICE_IDs = /*POOLED ? null*/
        (Environment.MachineName.ToUpper() switch
        {
@@ -132,7 +131,7 @@ namespace Ceres.APIExamples
     }
 
 
-    public enum HeadTestType {  Default, Policy, Value};
+    public enum HeadTestType { Default, Policy, Value };
 
     /// <summary>
     /// Test code.
@@ -140,7 +139,9 @@ namespace Ceres.APIExamples
     public static float Test(GameEngineDef overrideCeresEngine1Def = null,
                              GameEngineDef overrideCeresEngine2Def = null,
                              string overrideNET1 = null, string overrideNET2 = null,
-                             HeadTestType headType = HeadTestType.Default)
+                             HeadTestType headType = HeadTestType.Default,
+                             SearchLimit overrideSearchLimit1 = null,
+                             SearchLimit overrideSearchLimit2 = null)
     {
       //      PreTournamentCleanup();
       //RunEngineComparisons(); return;
@@ -216,18 +217,18 @@ namespace Ceres.APIExamples
 
       //      NET2 = "~T1_DISTILL_256_10_FP16";
 
-      
+
       //NET2 = "~BT4_FP16_TRT";
       //NET2 = "~T3_512_15_FP16_TRT";
 
-//      NNEvaluatorDef t1Distill = NNEvaluatorDef.FromSpecification("~T1_512_RL_TRT", "GPU:0#TensorRT16");
+      //      NNEvaluatorDef t1Distill = NNEvaluatorDef.FromSpecification("~T1_512_RL_TRT", "GPU:0#TensorRT16");
       NNEvaluatorDef t1Distill = NNEvaluatorDef.FromSpecification("~T1_DISTILL_256_10_FP16", "GPU:0#TensorRT16");
       NNEvaluatorDef bt4 = NNEvaluatorDef.FromSpecification("~BT4_FP16_TRT", "GPU:0#TensorRT16");
 
       NNEvaluatorDef evaluatorDefEndgameStrong = new((Position p, NNPositionEvaluationBatchMember[] batchMember) =>
-        {
-          return p.PieceCount <= 12 ? 1 : 0;
-        },
+      {
+        return p.PieceCount <= 12 ? 1 : 0;
+      },
         bt4.Devices[0].Device,
         // new NNDevicesSpecificationString("X").Devices,
         null, null,
@@ -241,181 +242,14 @@ namespace Ceres.APIExamples
       //   new NNEvaluatorDynamicByPos([evaluatorCeres, evaluatorLC0], (pos, _) => PIECES.PositionMatches(in pos) ? 0 : 1);
 
 
-      NET1 = "Ceres:C1-640-25";
-      //    NET2 = "Ceres:C1-640-25|TEST85";
-
-      //      NET1 = "HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_75bn_fp16_1599995904.onnx";
-      //      NET2 = "HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_75bn_fp16_1399996416.onnx";
-      //      NET2 = "HOP_SP_640_25_20H_FFN3_NLA_SMOL_SP_B1_64bn_fp16_1599995904.onnx";
-
-      //      NET1 = "Ceres:HOP_SP_640_25_20H_FFN3_NLA_SMOL_SP_B1_70bn_fp16_6513_avg.onnx";
-      //      NET2 = "Ceres:HOP_SP_640_25_20H_FFN3_NLA_SMOL_SP_B1_70bn_fp16_6531_avg.onnx";
-
-      //      NET1 = "Ceres:multinet_avg_5980_final.onnx";
-      //      NET1 = "Ceres:multinet_5950_final.onnx";
-
-      //NET1 = NET2 = "Ceres:C1-512-25";
-      // NET2 = "~BT4_FP16_TRT";
-      //NET2 = "Ceres:C1-768-15";
-
-      //      NET1 = "HOP_SP_640_25_20H_FFN3_NLA_SMOL_SP_B1_70bn_fp16_last.onnx,C1-768-15.onnx";
-      //NET1 = NET2 = "multinet.onnx";
-      //NET2 = "Ceres:HOP_SP_640_25_20H_FFN3_NLA_SMOL_SP_B1_65bn_fix4_fp16_3999989760.onnx";
-
-
-
-      //NET2 = "~BT4_3190k_ONNX";
-      //NET2 = "Ceres:C1-768-15";
-
-      //NET1 = "d4ae6e742b90_SP_640_35_20H_FFN3_NLA_SMOL_SP_B1_9bn_fp16_1799998464.onnx";
-      //      NET1 = "9ae67f7c4630_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_3699993600.onnx";//|USEV2";
-
-
-//great,lepned, became final 640x34
-//NET1 = "f2c88aecad90_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_7999982592_8199979008_8399978496_8599981056_8799977472_8999980032_9199979520_9399979008.onnx";
-
-//      NET1 = "HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_80bn_fp16_last_nc.onnx";
-//      NET1 = "C1-640-34.onnx|USEV2";
-//      NET1 = "C1-640-34.onnx";
-//      NET2 = "C1-640-34.onnx|USEV2";
-
-     NET1 = "Ceres:HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_80bn_fp16_last.onnx";
-
-      //      NET1 = "f2c88aecad90_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_7999982592_8199979008_8399978496_8599981056_8799977472_8999980032_9199979520_9399979008_7899979776_8099979264_8299978752_8499978240_8699980800_8899977216_9099979776_9299976192.onnx";
-      //+3@1000      NET1 = "f2c88aecad90_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_monster_8599981056_8799977472_last.onnx";
-      //      NET1 = "f2c88aecad90_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_7999982592_8199979008_8399978496_8599981056_8799977472_8999980032_9199979520_9399979008_8299978752_8499978240_8699980800_8899977216_9099979776_9299976192_9599978496_9803.onnx";
-
-
-      //NET1 = "C1-640-25|POLUNC";
-
-      // LORA
-      //      NET1 = "9ae67f7c4630_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_LORA_6799985664.onnx";
-      //      NET2 = "9ae67f7c4630_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_6799985664.onnx";
-
-      //      NET1 = "~T82_TUNE_INTERP";
-      //      NET2 = "~T82";
-
-      //NET2 = "~T75";
-      //NET2 = "C1-512-25";
-      //      NET2 = "~T81_FP16_TRT";
-
-      //NET2 = NET1 = "~T60";
-      //    NET1 = "~BT5_FP16";
-      //NET2 = "~BT4_FP16_TRT";
-
-      //NET1 = "HOP_SP_640_25_20H_FFN3_NLA_SMOL_SP_B1_70bn_fp16_7000002560.onnx";
-      //NET2 = "HOP_SP_640_25_20H_FFN3_NLA_SMOL_SP_B1_70bn_fp16_6449807360.onnx";
-      //      NET1 = @"e:\cout\nets\f2c88aecad90_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_LORA_8299981824.onnx";
-      //      NET2 = @"e:\cout\nets\f2c88aecad90_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_8299981824.onnx";
-
-      //     NET2 = "~BT4_2740_kovax_ONNX";
-      //NET2 = "f2c88aecad90_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_combo2.onnx"; // best is combo2
-
-      //      NET1 = "~T1_256_RL_TRT";
-      //NET2 = "~BT5_FP16";
-      
-      NET1 = "C1-512-25";
-
-
-      // 512x35 test
-      //NET1 = "combo35p8,C1-640-34";
-      //      NET1 = "HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_80bn_fp16_7399983104.onnx";
-      //      NET2 = "f2c88aecad90_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_7399981056.onnx";
-
-      //NET2 = "HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_80bn_fp16_6499985408";
-      //      NET2 = "HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_80bn_fp16_7399983104.onnx";/
-      //      NET2 = "C1-640-34";
-      NET1 = "C1-640-34,combo35j5_nc,~BT4_FP16_TRT,HOP_SP_512_55_16H_FFN3_NLA_SMOL_SP_B1_8bn_BASE_fp16_2599993344";
-      //,~BT5_FP16";
-   //      NET2 = "combo35j_nc";
-
-
-      //      NET1 = "HOP_SP_512_55_16H_FFN3_NLA_SMOL_SP_B1_8bn_BASE_fp16_last";
-      NET1 = "HOP_SP_512_55_16H_FFN3_NLA_SMOL_SP_B1_8bn_BASE_fp16_36bn.onnx";
-      NET2 = "HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_80bn_fp16_3599990784_nc.onnx";
-
-      //      NET1 = "combo35j5_nc.onnx.nondeblundered2800";//|V2FRAC=0";
-      //      NET2 = "HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_80bn_fp16_7399983104";
-
-      //      NET2 = "C1-640-25";
-
-      //      NET1 = "c1-512-15_LORA.onnx";
-      //      NET2 = "C1-512-15.onnx";
-
-      //      NET1 = "combo35j5_nc";
-      //NET2 = "combo35j_nc";
-      //      NET1 = "HOP_SP_512_55_16H_FFN3_NLA_SMOL_SP_B1_8bn_BASE_fp16_2199994368,C1-640-34";
-//      NET1 = "ONNX_TRT:bt4-4520.pb.gz_fp16";
-
-//      NET1 = "~T81";
-//NET2 = "C1-640-34";
-//      NET2 = "~BT4_NATIVE";
-//      NET2 = "~BT4_FP16";
-
-      //      NET2 = "~T81";
-//NET2 = "~T81_FP16_TRT";
-
-      //NET1 = "CUSTOM1";
-
-//      NET1 = "C1-640-34.value3_L32_x2.onnx|V2TEMP=1.0;V2FRAC=0.5";
-      //      NET2 = "C1-640-34.value3_L32_x2.onnx|V2FRAC=0";
-      //      NET2 = "C1-640-34"
-//      NET1 = "55_comboX";
-
-      NET1 = "HOP_SP_512_55_16H_FFN3_NLA_SMOL_SP_B1_8bn_BASE_fp16_5799985152.onnx|V2FRAC=0.4;V1TEMP=0.8;V2TEMP=1.5";
-      NET1 = "combo35j5T_nc";
-//      NET2 = "9ae67f7c4630_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_5999984640.onnx";
-//      NET2 = "HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_80bn_fp16_5399986176.onnx";
-
-//      NET1 = "CUSTOM1|V2FRAC=0.5;V1TEMP=0.8;V2TEMP=1.15";
-      //NET2 = "CUSTOM2";
-
-//      NET1 = @"e:\cout\nets\C1-512-35.value3_L33_x2.onnx.value3|V2FRAC=0.6;V1TEMP=0.80;V2TEMP=1.1";
-      NET1 = @"e:\cout\nets\C1-512-35.value3_L33_x2.onnx.value3|V2FRAC=1;V1TEMP=0.80;V2TEMP=1.0";
-      //      NET2 = "C1-512-35";//|V2FRAC=0.4;V1TEMP=0.8;V2TEMP=1.5";
-      //      NET1 = "C1-512-35.value3_L33_x2";
-      //      NET1 = "C1-640-34.value3_L32_x2";
-
-      NET1 = "HOP_SP_512_55_16H_FFN3_NLA_SMOL_SP_B1_8bn_BASE_fp16_7319994368.onnx";
-      //NET2 = "HOP_SP_512_55_16H_FFN3_NLA_SMOL_SP_B1_8bn_BASE_fp16_6799982592.onnx";
-      //      NET2 = "9ae67f7c4630_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_6299986944";
-
-      //      NET1 = "combo640T_nc";
-
-//      NET1 = "combo_55_2last.onnx|V2FRAC=1;V2TEMP=1.2";
-      //NET1 = NET2 = "C1-512-25";
-
-      NET1 = "C1-640-34.value3_L32_x4.onnx.value3.onnx|V2FRAC=1;V1TEMP=0.8;V2TEMP=1.4";
-//      NET2 = "C1-640-34.value3_L32_x2.onnx.value3.onnx|V2FRAC=1;V1TEMP=0.8;V2TEMP=1";
-      NET2 = "C1-640-34|V2FRAC=0";//
-
-      NET2 = "HOP_SP_512_55_16H_FFN4_NLA_SMOL_SP_B1_9bn_fp16_5599985664.onnx";
-      
-      NET1 = "frankenstein8x2_nc.onnx";
-
-//      NET1 = "lepned.lora";
-//      NET1 = "C1-512-35.french002.lora.onnx";
-
-//      NET1 = "HOP_SP_512_55_16H_FFN4_NLA_SMOL_SP_B1_9bn_fp16_6799982592";
-      NET2 = "C1-640-34";
-
-      //      NET1 = "HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_80bn_fp16_7399983104_lora.onnx";
-      //      NET2 = "HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_80bn_fp16_7399983104.onnx";
-
-      //NET1 = "HOP_SP_512_55_16H_FFN4_NLA_SMOL_SP_B1_9bn_fp16_last.onnx";
-      NET2 = "~BT4_FP16_TRT";
-      //NET2 = "combo_55_6x_67bn";
-
-
-      //NET1 = "C1-512-35.value3_L33_x2.onnx.value3.onnx|V2FRAC=0.5;V1TEMP=0.8;V2TEMP=1.2";
-      //      NET2 = "C1-512-35";//|V2FRAC=0;V1TEMP=1.0;V2TEMP=1.5";
-
+      NET1 = "~T75";
+      NET2 = "~T75";
       NET1 = overrideNET1 ?? NET1;
       NET2 = overrideNET2 ?? NET2;
       if (NET2 == "NONE") NET2 = null;
 
-      GPUS_1 = "GPU:0#TensorRT";// overrideNET1 != null ? "GPU:0" : "GPU:0#TensorRT16";
-      GPUS_2 = "GPU:0#TensorRT";
+      GPUS_1 = "GPU:0#TensorRT16";// overrideNET1 != null ? "GPU:0" : "GPU:0#TensorRT16";
+      GPUS_2 = "GPU:0#TensorRT16";
 
 #if NOT
   To build Torchscript evaluator:
@@ -427,11 +261,7 @@ namespace Ceres.APIExamples
   NET2 = FN_BASELINE;
 #endif
 
-      //      NET1 = "CUSTOM1:753723;1;0;0;1,~T1_DISTILL_512_15;0;1;1;0";
-      //NET2 = "~T1_DISTIL_512_15_NATIVE";
-
-
-      SearchLimit limit1 = SearchLimit.NodesPerMove(2000); //with 100 game pairs 20=78sec, 50=105sec
+      SearchLimit limit1 = SearchLimit.NodesPerMove(500); //with 100 game pairs 20=78sec, 50=105sec
       //limit1 = SearchLimit.BestValueMove;
       if (headType == HeadTestType.Policy)
       {
@@ -444,9 +274,19 @@ namespace Ceres.APIExamples
 
       //      limit1 = new SearchLimit(SearchLimitType.SecondsForAllMoves, 60, false, 0.1f);
       SearchLimit limit2 = limit1;
-//      limit1 = limit2 = SearchLimit.SecondsForAllMoves(30, .5f);
+      //limit2 *= 0.75f;
 
+      //      limit1 = limit2 = SearchLimit.SecondsForAllMoves(30, .5f);
 
+      if (overrideSearchLimit1 != null)
+      {
+        limit1 = overrideSearchLimit1;
+      }
+
+      if (overrideSearchLimit2 != null)
+      {
+        limit2 = overrideSearchLimit2;
+      }
       Console.WriteLine();
 
 #if STOCKFISH_GOOD_LIMIT
@@ -510,8 +350,8 @@ BT4 800 nodes vs SF17 0.20sec (6 threads)
       NNEvaluatorDef evalDef1 = NNEvaluatorDefFactory.FromSpecification(NET1, GPUS_1);
       NNEvaluatorDef evalDef2 = NET2 == null ? null : NNEvaluatorDefFactory.FromSpecification(NET2, GPUS_2);
 
-//      evalDef1 = evaluatorDefEndgameStrong;
-//      evalDef2 = t1Distill;
+      //      evalDef1 = evaluatorDefEndgameStrong;
+      //      evalDef2 = t1Distill;
 
       NNEvaluatorDef? evalDefSecondary1 = null;
       if (NET1_SECONDARY1 != null)
@@ -561,10 +401,13 @@ BT4 800 nodes vs SF17 0.20sec (6 threads)
       //engineDefCeres2.SearchParams.Execution.MaxBatchSize = 3;
 
       //engineDefCeres1.SelectParams.MinimaxSurpriseMultiplier = 0.10f;
-//      engineDefCeres1.SelectParams.CPUCT *= 0.70f;
-//      engineDefCeres2.SelectParams.CPUCT *= 0.70f;
+      //      engineDefCeres1.SelectParams.CPUCT *= 0.70f;
+      // engineDefCeres1.SelectParams.CPUCT *= 0.65f;
+      //      engineDefCeres2.SelectParams.CPUCT *= 0.55f; // .80->42, 0.70
+      //engineDefCeres1.SelectParams.PolicySoftmax *= 0.85f;
 
-//      engineDefCeres1.SelectParams.PolicySoftmax *= 0.85f;
+      //engineDefCeres1.SelectParams.TestFlag = true; // <------------ ************************************* ---------->
+      //engineDefCeres1.SelectParams.CPUCT *= 0.6f;
 
       engineDefCeres1.SearchParams.ReusePositionEvaluationsFromOtherTree = false;
       engineDefCeres2.SearchParams.ReusePositionEvaluationsFromOtherTree = false;
@@ -623,7 +466,7 @@ BT4 800 nodes vs SF17 0.20sec (6 threads)
 
       //      engineDefCeres1.SearchParams.EnableSearchExtension = false;
       //      engineDefCeres2.SearchParams.EnableSearchExtension = false;
-//engineDefCeres1.SearchParams.TestFlag = true;
+      //engineDefCeres1.SearchParams.TestFlag = true;
       //      engineDefCeres1.SearchParams.Execution.FlowDualSelectors = false;
       //      engineDefCeres1.SearchParams.TranspositionRootPolicyBlendingFraction = 0.5f;
 
@@ -745,7 +588,7 @@ BT4 800 nodes vs SF17 0.20sec (6 threads)
       GameEngineDefLC0 engineDefLC1 = ENABLE_LC0_1 ? new GameEngineDefLC0("LC0_0", evalDef1, forceDisableSmartPruning, null, null, overrideEXE: OVERRIDE_LC0_EXE, overrideBackendString: OVERRIDE_LC0_BACKEND_STRING) : null;
       GameEngineDefLC0 engineDefLC2 = ENABLE_LC0_2 ? new GameEngineDefLC0("LC0_2", evalDef2, forceDisableSmartPruning, null, null, overrideEXE: OVERRIDE_LC0_EXE, overrideBackendString: OVERRIDE_LC0_BACKEND_STRING) : null;
 
-      EnginePlayerDef playerStockfish17 = new EnginePlayerDef(MakeEngineDefStockfish("SF17", SF17_EXE, hashtableSize:64, numThreads:6), limit2);// * 350);
+      EnginePlayerDef playerStockfish17 = new EnginePlayerDef(MakeEngineDefStockfish("SF17", SF17_EXE, hashtableSize: 64, numThreads: 6), limit2);// * 350);
       EnginePlayerDef playerLC0 = ENABLE_LC0_1 ? new EnginePlayerDef(engineDefLC1, limit1) : null;
       EnginePlayerDef playerLC0_2 = ENABLE_LC0_2 ? new EnginePlayerDef(engineDefLC2, limit2) : null;
 
@@ -790,28 +633,33 @@ BT4 800 nodes vs SF17 0.20sec (6 threads)
           Console.WriteLine();
         }
 
-        string BASE_NAME = "ERET_VESELY203.epd";//"hard-talkchess-2022.epd";//"lichess_db_puzzle.epd"; //"chad_tactics-100M.epd";//"hard-talkchess-2022.epd";//"hard-talkchess-2022.epd"; //   "endgame2.epd";// "benchmark.epd";// "endgame2.epd";//  eret nice_lcx Stockfish238
+        string BASE_NAME = "lichess_db_puzzle.epd"; //"hardtestpos-clean.epd";// "ERET_VESELY203.epd";//"chad_tactics-100M.epd";//"jhorthos_problem_suite.1.2_half2.epd"; // "Elo2500_10k.epd";// "hard-talkchess-2022.epd";//  "endgame2.epd";// "benchmark.epd";// "endgame2.epd";//  Stockfish238
         ParamsSearch paramsNoFutility = new ParamsSearch() { FutilityPruningStopSearchEnabled = false };
 
         // ===============================================================================
         string suiteGPU = POOLED ? "GPU:0:POOLED=SHARE1" : GPUS_1;
+        string epdName = SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/epd/{BASE_NAME}"
+                                                   : @$"\\synology\dev\chess\data\epd\{BASE_NAME}";
         const bool BIG_TEST = true;
-        SuiteTestDef suiteDef =
-          new SuiteTestDef("Suite",
-                           SoftwareManager.IsLinux ? @$"/mnt/syndev/chess/data/epd/{BASE_NAME}"
-                                                   : @$"\\synology\dev\chess\data\epd\{BASE_NAME}",
-                           limit1,
-                           GameEngineDefFactory.CeresInProcess("Ceres1", NET1, suiteGPU, paramsNoFutility with { }, new ParamsSelect() { }),
-                           NET2 == null ? null : GameEngineDefFactory.CeresInProcess("Ceres2", NET2, suiteGPU, paramsNoFutility with { }, new ParamsSelect()),
-                           null);// engineDefCeres96);// playerLC0.EngineDef);
+        SuiteTestDef suiteDef;
+        if (overrideCeresEngine1Def != null)
+        {
+          suiteDef = new("Suite", epdName, limit1, overrideCeresEngine1Def, overrideCeresEngine2Def, null);
+        }
+        else
+        {
+          suiteDef = new("Suite", epdName, limit1,
+                                               GameEngineDefFactory.CeresInProcess("Ceres1", NET1, suiteGPU, engineDefCeres1.SearchParams with { FutilityPruningStopSearchEnabled = false }, engineDefCeres1.SelectParams),
+                         NET2 == null ? null : GameEngineDefFactory.CeresInProcess("Ceres2", NET2, suiteGPU, engineDefCeres2.SearchParams with { FutilityPruningStopSearchEnabled = false }, engineDefCeres2.SelectParams),
+                         null);
+        }
+        suiteDef.MaxNumPositions = BIG_TEST ? 3500 : 1000; // 38
 
-        suiteDef.MaxNumPositions = BIG_TEST ? 2500 : 1000;
-        
         suiteDef.EPDLichessPuzzleFormat = suiteDef.EPDFileName.ToUpper().Contains("LICHESS");
         if (suiteDef.EPDLichessPuzzleFormat)
         {
           suiteDef.EPDFilter = epd => !epd.AsLichessDatabaseRecord.Description.Contains("ZZZ")
-                                   && epd.AsLichessDatabaseRecord.Rating > (BIG_TEST ? 2400 : 2500);
+                                   && epd.AsLichessDatabaseRecord.Rating > (BIG_TEST ? 2600 : 2700);
         }
 
         suiteDef.AcceptPosPredicate = null;// p => IsKRP(p);
@@ -919,7 +767,7 @@ BT4 800 nodes vs SF17 0.20sec (6 threads)
       }
 
 
-      def.NumGamePairs = 500;
+      def.NumGamePairs = 250;
       def.ShowGameMoves = false;
 
       //string baseName = "tcec1819";
@@ -941,7 +789,7 @@ BT4 800 nodes vs SF17 0.20sec (6 threads)
       baseName = "tcec_big";
       //baseName = "UHO_Lichess_4852_v1.epd"; // recommended by Kovax
       baseName = "UHO_Lichess_4852_v1_first.epd"; // approximately first 2500 positions for faster loading
-                                                  //baseName = "UHO_Lichess_4582_v1_last_10000.epd";
+                                                  //    baseName = "UHO_Lichess_4582_v1_last_10000.epd";
       if (false)
       {
         baseName = "eco_test";
@@ -997,7 +845,8 @@ BT4 800 nodes vs SF17 0.20sec (6 threads)
       }
 
       // Compute and return ELO performance of first player
-      PlayerStat player = results.Players.FirstOrDefault(p => p.Name == "Ceres1");
+      string firstPlayerID = overrideCeresEngine1Def != null ? overrideCeresEngine1Def.ID : "Ceres1";
+      PlayerStat player = results.Players.FirstOrDefault(p => p.Name == firstPlayerID);
       int numDraws = player.NumGames - player.PlayerWins - player.PlayerLosses;
       float eloPerf = EloCalculator.EloDiff(player.PlayerWins, numDraws, player.PlayerLosses);
 
@@ -1190,41 +1039,31 @@ BT4 800 nodes vs SF17 0.20sec (6 threads)
       string pgnFileName = SoftwareManager.IsWindows ? @"\\synology\dev\chess\data\pgn\raw\ceres_big.pgn"
                                                : @"/mnt/syndev/chess/data/pgn/raw/ceres_big.pgn";
       string NET_ID = RegisteredNets.Aliased["T78"].NetSpecificationString;// "753723";// "610889";// "803907";
-      CompareEngineParams parms = new CompareEngineParams("Resapling", pgnFileName,
-                                              10_000, // number of positions
-                                              s => true,//s.FinalPosition.PieceCount > 15,
-                                              CompareEnginesVersusOptimal.PlayerMode.CeresCustom1, "703810", //610034
-                                              CompareEnginesVersusOptimal.PlayerMode.UCI, NET_ID,
-                                              CompareEnginesVersusOptimal.PlayerMode.LC0, RegisteredNets.Aliased["T80"].NetSpecificationString,
-                                              SearchLimit.NodesPerMove(50), // search limit
-                                              new int[] { 0 },//new int[] { 0, 1, 2, 3 },
-                                              s =>
-                                              {
-                                                //s.TestFlag = true;
-                                                //s.Execution.MaxBatchSize = 256;
-                                                //s.ResamplingMoveSelectionFractionMove = 1f;
-                                                //s.ResamplingMoveSelectionTemperature = 1.5f;
-                                                //s.TranspositionRootPolicyBlendingFraction = 0.25f;
-                                                // s.TranspositionRootPolicyBlendingFraction = 0.333f;
-                                                //s.EnableUncertaintyBoosting = true;
-                                              },
-                                              l =>
-                                              {
-                                                //l.CPUCT *= 1.2f;
-                                                //l.size
-                                                //l.VirtualLossDefaultRelative = -0.02f;
-                                                //AdjustSelectParamsNewTune(l);
-                                              },
-                                              null, // l => l.CPUCT = 1.1f,
-                                              null,
-                                              true,
-                                              1,
-                                              20,
-                                              true, // Stockfish crosscheck
-                                              null,
-                                              exeCeres(),
-                                              0.25f
-                                             );
+      CompareEngineParams parms = new CompareEngineParams(
+            "Resapling", pgnFileName,
+            10_000, // number of positions
+            s => true,//s.FinalPosition.PieceCount > 15,
+            CompareEnginesVersusOptimal.PlayerMode.Ceres, "703810",
+            CompareEnginesVersusOptimal.PlayerMode.Ceres, NET_ID,
+            CompareEnginesVersusOptimal.PlayerMode.Ceres, RegisteredNets.Aliased["T80"].NetSpecificationString,
+            SearchLimit.NodesPerMove(50), // search limit
+            new int[] { 0 },//new int[] { 0, 1, 2, 3 },
+            s =>
+            {
+            },
+            l =>
+            {
+            },
+            null, // l => l.CPUCT = 1.1f,
+            null,
+            Verbose: true,
+            Engine1LimitMultiplier: 1,
+            EngineArbiterLimitMultiplier: 20,
+            RunStockfishCrosscheck: true,
+            PosResultCallback: null,
+            EngineUCIFileNameEXE: exeCeres(),
+            QDiffThresholdDumpVerboseMoveStats: 0.25f
+           );
 
 
       CompareEngineResultSummary result = new CompareEnginesVersusOptimal(parms).Run();
