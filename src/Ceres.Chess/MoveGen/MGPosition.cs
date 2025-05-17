@@ -13,15 +13,15 @@
 
 #region Using directives
 
-using BitBoard = System.UInt64;
-
 using System;
 using System.Numerics;
 using System.Runtime.CompilerServices;
-
+using System.Runtime.InteropServices;
 using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Chess.MoveGen.Converters;
+using static Ceres.Chess.MoveGen.MGPosition;
 using static Ceres.Chess.Position;
+using BitBoard = System.UInt64;
 
 #endregion
 
@@ -246,52 +246,10 @@ namespace Ceres.Chess.MoveGen
     }
 
 
-    /// <summary>
-    /// Returns hash value over this chess position.
-    /// TODO: Consider instead using the Zobrist hash logic already included (but disabled) 
-    ///       in this class instead.
-    /// </summary>
-    /// <param name="move50Mode"></param>
-    /// <returns></returns>
-    public readonly ulong HashValue(PositionMiscInfo.HashMove50Mode move50Mode)
-    {
-      const FlagsEnum KEEP_FLAGS = FlagsEnum.BlackToMove
-                                 | FlagsEnum.WhiteCanCastle
-                                 | FlagsEnum.WhiteCanCastleLong
-                                 | FlagsEnum.BlackCanCastle
-                                 | FlagsEnum.BlackCanCastleLong;
-
-      ulong hash = A;
-      hash ^= B * 0x9E3779B97F4A7C15UL;
-      hash ^= C * 0xC2B2AE3D27D4EB4FUL;
-      hash ^= D * 0x165667B19E3779F9UL;
-
-      ushort rule50ToUse = move50Mode switch
-      {
-        PositionMiscInfo.HashMove50Mode.Ignore => 0,
-        PositionMiscInfo.HashMove50Mode.Value => (ushort)Rule50Count,
-        PositionMiscInfo.HashMove50Mode.ValueBoolIfAbove98 => Rule50Count > 98 ? (ushort)Rule50Count : (ushort)0,
-      };
-
-      // Combine shorts into one packed ulong
-      ulong shorts = ((ulong)(ushort)(Flags & KEEP_FLAGS) << 48) |
-                     ((ulong)(ushort)rule50ToUse << 32) |
-                     ((ulong)(ushort)rookInfo.RawValue << 16);
-      hash ^= shorts;
-
-      // Final mixing (inspired by SplitMix64 / MurmurHash3)
-      hash ^= hash >> 33;
-      hash *= 0xff51afd7ed558ccdUL;
-      hash ^= hash >> 33;
-      hash *= 0xc4ceb9fe1a85ec53UL;
-      hash ^= hash >> 33;
-
-      return hash;
-    }
 
 
 #if MG_USE_HASH
-    // --------------------------------------------------------------------------------------------
+    // TODO: make use of the 
     public void CalculateHash()
     {
       HK = 0;
@@ -592,6 +550,7 @@ namespace Ceres.Chess.MoveGen
       }
     }
 
+
     #region Overrides
 
     public static bool operator ==(MGPosition pos1, MGPosition pos2) => pos1.Equals(pos2);
@@ -632,6 +591,58 @@ namespace Ceres.Chess.MoveGen
       return posThis.EqualPiecePositionsIncludingEnPassant(in posOther);
     }
 
+
+    /// <summary>
+    /// Returns <c>true</c> if <paramref name="move"/> produces an
+    /// irreversible change when going from the current position (<c>this</c>)
+    /// to <paramref name="nextPosition"/>.
+    /// </summary>
+    public readonly bool IsIrreversibleMove(MGMove move, in MGPosition nextPosition)
+    {
+      // Material changes
+      if (move.Capture | move.EnPassantCapture)
+      {
+        return true;
+      }
+
+      // Pawn activity.
+      byte pc = (byte)move.Piece;
+      bool pawnMove = pc == MGPositionConstants.WPAWN || pc == MGPositionConstants.BPAWN;
+
+      if (pawnMove || move.DoublePawnMove || move.IsPromotion)
+      {
+        return true;
+      }
+
+      // Castling
+      if (move.CastleShort | move.CastleLong)
+      {
+        return true;
+      }
+
+      // Change in castling rights (king/rook moves).
+      if (WhiteCanCastle && !nextPosition.WhiteCanCastle)
+      {
+        return true;
+      }
+
+      if (WhiteCanCastleLong && !nextPosition.WhiteCanCastleLong)
+      {
+        return true;
+      }
+
+      if (BlackCanCastle && !nextPosition.BlackCanCastle)
+      {
+        return true;
+      }
+
+      if (BlackCanCastleLong && !nextPosition.BlackCanCastleLong)
+      {
+        return true;
+      }
+
+      return false;
+    }
 
     /// <summary>
     /// Tests for equality with another MGChessMove
@@ -682,5 +693,143 @@ namespace Ceres.Chess.MoveGen
     #endregion
 
   }
+
+  public static class MGPositionHashing
+  {
+    new
+    /// <summary>
+    /// Computes a 96-bit position hash for mgPos>.
+    /// The extraValue parameter (default 0) can be used to salt the hash
+    /// with an additional 32-bit value used as a discriminator.
+    /// </summary>
+    public static PositionHash96 HashValue96(in MGPosition mgPos, PositionMiscInfo.HashMove50Mode move50Mode, uint extraValue = 0)
+    {
+      static ulong Fmix64(ulong k)
+      {
+        k ^= k >> 33; k *= 0xff51afd7ed558ccdUL;
+        k ^= k >> 33; k *= 0xc4ceb9fe1a85ec53UL;
+        k ^= k >> 33;
+        return k;
+      }
+
+      // xxHash-like primes (must be odd)
+      const ulong P1 = 0x9E3779B185EBCA87UL;
+      const ulong P2 = 0xC2B2AE3D27D4EB4FUL;
+      const ulong P3 = 0x165667B19E3779F9UL;
+      const ulong P4 = 0x27D4EB2F165667C5UL;
+
+      ulong acc = 0;
+
+      static void Mix(ref ulong a, ulong k, ulong prime)
+      {
+        a ^= Fmix64(k * prime);                 // per-word avalanche + odd prime
+        a = BitOperations.RotateLeft(a, 27);
+        a *= P1;
+        a += P4;
+      }
+
+      // Four 64-bit core words from the position itself
+      Mix(ref acc, mgPos.A, P1);
+      Mix(ref acc, mgPos.B, P2);
+      Mix(ref acc, mgPos.C, P3);
+      Mix(ref acc, mgPos.D, P4);
+
+      // Misc-info bundle (castling flags, rule-50 counter, rookInfo)
+      const FlagsEnum KEEP =
+            FlagsEnum.BlackToMove
+          | FlagsEnum.WhiteCanCastle | FlagsEnum.WhiteCanCastleLong
+          | FlagsEnum.BlackCanCastle | FlagsEnum.BlackCanCastleLong;
+
+      ushort rule50 = move50Mode switch
+      {
+        PositionMiscInfo.HashMove50Mode.Ignore => 0,
+        PositionMiscInfo.HashMove50Mode.Value => (ushort)mgPos.Rule50Count,
+        PositionMiscInfo.HashMove50Mode.ValueBoolIfAbove98 =>
+                mgPos.Rule50Count > 98 ? (ushort)mgPos.Rule50Count : (ushort)0,
+        _ => 0
+      };
+
+      ulong misc = ((ulong)(ushort)(mgPos.Flags & KEEP) << 48)
+                 | ((ulong)rule50 << 32)
+                 | ((ulong)(ushort)mgPos.rookInfo.RawValue << 16);
+
+      Mix(ref acc, misc, P2);
+
+      // Mix in the caller-supplied 32-bit salt.
+      if (extraValue != 0u)
+      {
+        // Treat it as an unsigned 32-bit word and stir with a distinct prime.
+        Mix(ref acc, (ulong)extraValue, P3);
+      }
+
+      // Finalization – two decorrelated 64-bit blocks --> 96 bits total
+      ulong low64 = Fmix64(acc);
+      ulong hi64 = Fmix64(acc ^ 0x9E3779B97F4A7C15UL);
+      uint high32 = (uint)(hi64 >> 32);
+
+      return new PositionHash96(high32, low64);
+    }
+
+
+
+  }
+
+
+  /// <summary>
+  /// Immutable 96-bit value (High = upper 32 bits, Low = lower 64 bits).
+  /// `record struct` already supplies
+  ///   • value-based equality / != / ==  
+  ///   • GetHashCode()  
+  ///   • Deconstruct(out uint High, out ulong Low)  
+  ///   • Printable ToString() – we override for hex formatting.
+  /// </summary>
+  [Serializable]
+  [StructLayout(LayoutKind.Sequential, Pack = 1, Size = 6)]
+  public record struct PositionHash96(uint High, ulong Low)
+  {
+    /// <summary>
+    /// Adds <paramref name="delta"/> to this (a running 96-bit hash).
+    /// Operation is commutative (order-insensitive) because it is
+    /// simple 96-bit modular addition.
+    public void Add(PositionHash96 delta)
+    {
+      // 96-bit modular addition with carry propagation.
+      // (this = this + delta)
+      ulong newLow = unchecked(Low + delta.Low);
+      uint carry = (uint)(newLow < Low ? 1u : 0u);
+
+      Low = newLow;
+      High = unchecked(High + delta.High + carry);
+    }
+
+
+    /// <summary>
+    /// Adds hash value of a "final "position to a running 96-bit hash in an
+    /// order-sensitive manner and returns the new accumulated value.
+    /// * Not commutative.
+    /// * One fused multiply --> rotate --> xor step (FNV/xxHash flavor).  
+    /// </summary>
+    public void AddFinal(PositionHash96 finalHash)
+    {
+      // 64- & 32-bit odd primes (xxHash / Murmur lineage)
+      const ulong P_LOW = 0x9E3779B97F4A7C15UL; // 64-bit
+      const uint P_HIGH = 0x85EBCA77u;          // 32-bit
+
+      // Low 64 bits. 
+      // FNV-like: H = (H * P) rotl r  ^  delta
+      Low = BitOperations.RotateLeft(Low * P_LOW, 27);
+      Low ^= finalHash.Low;
+
+      // High 32 bits.
+      High = BitOperations.RotateLeft(High * P_HIGH, 15);
+      High ^= finalHash.High;
+
+      // Cross-feed a few high bits of ‘low’ for extra diffusion
+      High += (uint)(Low >> 32);
+    }
+
+    public override string ToString() => $"0x{High:X8}{Low:X16}";
+  }
+
 
 }
