@@ -13,16 +13,27 @@
 
 #region Using directives
 
-using Ceres.Chess.NNEvaluators;
-using Ceres.MCTS.Params;
 using System;
+
+using Ceres.MCTS.Params;
 
 #endregion
 
 namespace Ceres.MCTS.Search
 {
-  internal static class OptimalBatchSizeCalculator
+  public static class OptimalBatchSizeCalculator
   {
+    /// <summary>
+    /// Override logic for batch size calculations.
+    /// </summary>
+    public delegate int BatchSizeOverride(int currentTreeSize, int maxBatchSize);
+
+    /// <summary>
+    /// Optional delegate to override logic in CalcOptimalBatchSize.
+    /// </summary>
+    public static BatchSizeOverride OverrideBatchSizeFunc;
+
+
     /// <summary>
     /// Calculates the target batch size to be used given specified 
     /// current search tree characteristics.
@@ -31,7 +42,7 @@ namespace Ceres.MCTS.Search
     /// i.e. the nodes selected are increasingly away from the optimal CPUCT choices
     /// due to the effect of collisions.
     /// 
-    /// Smaller batch sizes have two disdvantages:
+    /// Smaller batch sizes have two disadvantages:
     ///   - slower NN evaluation because with very small batch sizes the fraction of time 
     ///     consumed by GPU launch latency is relatively high, and
     ///   - more CPU overhead because the opportunity for parallelism in selecting the batch members is reduced
@@ -45,11 +56,16 @@ namespace Ceres.MCTS.Search
     /// <param name="batchSizeMultiplier"></param>
     /// <param name="paramsSearch"></param>
     /// <returns></returns>
-    internal static int CalcOptimalBatchSize(int estimatedTotalSearchNodes, int currentTreeSize,
+    public static int CalcOptimalBatchSize(int estimatedTotalSearchNodes, int currentTreeSize,
                                              bool overlapInUse, bool dualSelectorsInUse,
                                              int maxBatchSize, float batchSizeMultiplier,
                                              ParamsSearch paramsSearch)
     {
+      if (OverrideBatchSizeFunc is not null)
+      {
+        return OverrideBatchSizeFunc(currentTreeSize, maxBatchSize);
+      }
+
       // Follow pure MCTS for extremely small searches.
       if (estimatedTotalSearchNodes < 10) return 1;
 
