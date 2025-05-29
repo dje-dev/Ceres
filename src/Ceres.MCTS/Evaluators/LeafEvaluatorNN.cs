@@ -45,6 +45,7 @@ namespace Ceres.MCTS.Evaluators
   /// </summary>
   public sealed class LeafEvaluatorNN : LeafEvaluatorBase
   {
+    public static long TOTAL_NUM_NN_EVALS = 0;
 
     public delegate void RewriteBatchQ(IPositionEvaluationBatch batch,
                                  Func<int, Position> getPositionFunc,
@@ -438,6 +439,8 @@ namespace Ceres.MCTS.Evaluators
     {
       try
       {
+        TOTAL_NUM_NN_EVALS += nodes.Count;
+
         if (EvaluatorDef.Location == NNEvaluatorDef.LocationType.Remote)
         {
           throw new NotImplementedException();
