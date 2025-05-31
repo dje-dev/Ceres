@@ -33,12 +33,9 @@ using Ceres.Chess.MoveGen;
 using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.NNFiles;
 using Ceres.Chess.SearchResultVerboseMoveInfo;
-using Ceres.Chess.Textual.PgnFileTools;
-using Ceres.Chess.Games.Utils;
 
 using Ceres.MCTS.Iteration;
 using Ceres.MCTS.Params;
-using Ceres.MCTS.MTCSNodes.Storage;
 using Ceres.MCTS.MTCSNodes.Analysis;
 using Ceres.MCTS.Utils;
 using Ceres.MCTS.MTCSNodes;
@@ -469,7 +466,7 @@ namespace Ceres.Features.UCI
             break;
 
           case String c when c.StartsWith("gamecomp"):
-            ProcessGameComp(c);
+            UCIManagerHelpers.ProcessGameComp(c, UCIWriteLine);
             break;
 
           case "dump-params":
@@ -486,7 +483,7 @@ namespace Ceres.Features.UCI
             break;
 
           case string c when c.StartsWith("download"):
-            ProcessDownloadCommand(c);
+            UCIManagerHelpers.ProcessDownloadCommand(c, UCIWriteLine);
             break;
 
           case "backendbench":
@@ -637,36 +634,6 @@ namespace Ceres.Features.UCI
       }
     }
 
-    private void ProcessDownloadCommand(string c)
-    {
-      string[] partsDownload = c.Split(" ");
-      if (partsDownload.Length != 2)
-      {
-        UCIWriteLine("info string Invalid download command, expect Ceres network ID after download command");
-        return;
-      }
-
-      string ceresNetID = partsDownload[1].ToUpper();
-      if (!ceresNetID.StartsWith("C"))
-      {
-        UCIWriteLine("info string Invalid Ceres network ID (expected to begin with C, see https://github.com/dje-dev/CeresNets)");
-        return;
-      }
-
-      CeresNetDownloader downloader = new CeresNetDownloader();
-      (bool alreadyDownloaded, string fullNetworkPath) downloadResults;
-      downloadResults = downloader.DownloadCeresNetIfNeeded(ceresNetID, CeresUserSettingsManager.Settings.DirCeresNetworks, false);
-
-      if (downloadResults.alreadyDownloaded)
-      {
-        UCIWriteLine("info string Network previously downloaded: " + downloadResults.fullNetworkPath);
-      }
-      else
-      {
-        UCIWriteLine("info string Network downloaded to: " + downloadResults.fullNetworkPath);
-      }
-    }
-
     /// <summary>
     /// Dumps the PV (principal variation) to the output stream.
     /// </summary>
@@ -692,55 +659,6 @@ namespace Ceres.Features.UCI
     }
 
 
-    /// <summary>
-    /// Parses and process the game comparison feature command.
-    /// </summary>
-    /// <param name="c"></param>
-    void ProcessGameComp(string c)
-    {
-      string[] parts = c.TrimEnd().Split(" ");
-      if (parts.Length < 2)
-      {
-        UCIWriteLine("Expected name of PGN file possibly followed by list of games (e.g. \"1,2\") or a round number \"e.g. r1\")");
-        return;
-      }
-      string fn = parts[1];
-      if (!System.IO.File.Exists(fn))
-      {
-        UCIWriteLine($"Specified file not found {fn}");
-        return;
-      }
-
-      List<PGNGame> games = PgnStreamReader.ReadGames(fn);
-      if (parts.Length == 3)
-      {
-        string gamesList = parts[2].ToUpper();
-
-        if (gamesList.StartsWith("R"))
-        {
-          // One round with specified index.
-          int round = int.Parse(gamesList.Substring(1));
-          UCIWriteLine($"Generating game comparison graph of round {round} from {fn}");
-          GameCompareGraphGenerator comp = new(games, s => s.Round == round, s => s.Round);
-          comp.Write(launchWithBrowser: true);
-        }
-        else
-        {
-          // List of games by index.
-          string[] gameIndices = gamesList.Split(",");
-          UCIWriteLine($"Generating game comparison graph of games {gamesList} from {fn}");
-          GameCompareGraphGenerator comp = new(games, s => Array.IndexOf(gameIndices, s.GameIndex.ToString()) != -1, s => 1);
-          comp.Write(launchWithBrowser: true);
-        }
-      }
-      else
-      {
-        // All games by round.
-        UCIWriteLine($"Generating game comparison graph of all rounds from {fn}");
-        GameCompareGraphGenerator comp = new(games, s => true, s => s.Round);
-        comp.Write(launchWithBrowser: true);
-      }
-    }
 
 
     /// <summary>
@@ -926,7 +844,7 @@ namespace Ceres.Features.UCI
           SearchLimit searchLimit;
 
           // Parse the search limit
-          searchLimit = GetSearchLimit(command);
+          searchLimit = UCIManagerHelpers.GetSearchLimit(command, curPositionAndMoves, UCIWriteLine);
 
           GameEngineSearchResultCeres result = null;
           if (searchLimit != null)
@@ -958,68 +876,6 @@ namespace Ceres.Features.UCI
       });
     }
 
-
-    /// <summary>
-    /// Parses a specification of search time in UCI format into an equivalent SearchLimit.
-    /// Returns null if parsing failed.
-    /// </summary>
-    /// <param name="command"></param>
-    /// <returns></returns>
-    private SearchLimit GetSearchLimit(string command)
-    {
-      SearchLimit searchLimit;
-      UCIGoCommandParsed goInfo = new UCIGoCommandParsed(command, curPositionAndMoves.FinalPosition);
-      if (!goInfo.IsValid) return null;
-
-      if (goInfo.Nodes.HasValue)
-      {
-        searchLimit = SearchLimit.NodesPerMove(goInfo.Nodes.Value);
-      }
-      else if (goInfo.MoveTime.HasValue)
-      {
-        searchLimit = SearchLimit.SecondsPerMove(goInfo.MoveTime.Value / 1000.0f);
-      }
-      else if (goInfo.Infinite)
-      {
-        searchLimit = SearchLimit.NodesPerMove(MCTSNodeStore.MAX_NODES);
-      }
-      else if (goInfo.BestValueMove)
-      {
-        searchLimit = SearchLimit.BestValueMove;
-      }
-      else if (goInfo.BestActionMove)
-      {
-        searchLimit = SearchLimit.BestValueMove;
-      }
-      else if (goInfo.TimeOurs.HasValue)
-      {
-        float increment = 0;
-        if (goInfo.IncrementOurs.HasValue) increment = goInfo.IncrementOurs.Value / 1000.0f;
-
-        int? movesToGo = null;
-        if (goInfo.MovesToGo.HasValue) movesToGo = goInfo.MovesToGo.Value;
-
-        searchLimit = SearchLimit.SecondsForAllMoves(goInfo.TimeOurs.Value / 1000.0f, increment, movesToGo, true);
-      }
-      else if (goInfo.NodesOurs.HasValue)
-      {
-        float increment = 0;
-        if (goInfo.IncrementOurs.HasValue) increment = goInfo.IncrementOurs.Value;
-
-        int? movesToGo = null;
-        if (goInfo.MovesToGo.HasValue) movesToGo = goInfo.MovesToGo.Value;
-
-        searchLimit = SearchLimit.NodesForAllMoves(goInfo.NodesOurs.Value, (int)increment, movesToGo, true);
-      }
-      else
-      {
-        UCIWriteLine($"Unsupported time control in UCI go command {command}");
-        return null;
-      }
-
-      // Add on possible search moves restriction.
-      return searchLimit with { SearchMoves = goInfo.SearchMoves };
-    }
 
 
     /// <summary>
