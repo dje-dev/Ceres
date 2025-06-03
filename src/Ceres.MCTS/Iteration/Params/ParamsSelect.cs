@@ -266,14 +266,14 @@ namespace Ceres.MCTS.Params
     {
       if (parentIsRoot)
       {
-        float CPUCT_EXTRA = (CPUCTFactorAtRoot == 0) ? 0 : CPUCTFactorAtRoot * FastLog.Ln((parentN + CPUCTBaseAtRoot + 1.0f) / CPUCTBaseAtRoot);
+        float CPUCT_EXTRA = (CPUCTFactorAtRoot == 0) ? 0 : CPUCTFactorAtRoot * MathF.Log((parentN + CPUCTBaseAtRoot + 1.0f) / CPUCTBaseAtRoot);
         float thisCPUCT = CPUCTAtRoot + CPUCT_EXTRA;
         float cpuctValue = CPUCTForSelector(dualSelectorMode, selectorID, thisCPUCT);
         return cpuctValue;
       }
       else
       {
-        float CPUCT_EXTRA = (CPUCTFactor == 0) ? 0 : CPUCTFactor * FastLog.Ln((parentN + CPUCTBase + 1.0f) / CPUCTBase);
+        float CPUCT_EXTRA = (CPUCTFactor == 0) ? 0 : CPUCTFactor * MathF.Log((parentN + CPUCTBase + 1.0f) / CPUCTBase);
         float thisCPUCT = CPUCT + CPUCT_EXTRA;
         float cpuctValue = CPUCTForSelector(dualSelectorMode, selectorID, thisCPUCT);
         return cpuctValue;

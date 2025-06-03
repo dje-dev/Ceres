@@ -101,7 +101,7 @@ namespace Ceres.MCTS.Iteration
 
     static float CalcCPUCT(int n)
     {
-      float CPUCT_EXTRA = (CPUCT_FACTOR == 0) ? 0 : CPUCT_FACTOR * FastLog.Ln((n + CPUCT_BASE + 1.0f) / CPUCT_BASE); // ?? should parentN be min 1.0f as above
+      float CPUCT_EXTRA = (CPUCT_FACTOR == 0) ? 0 : CPUCT_FACTOR * MathF.Log((n + CPUCT_BASE + 1.0f) / CPUCT_BASE); // ?? should parentN be min 1.0f as above
       float thisCPUCT = CPUCT + CPUCT_EXTRA;
       return thisCPUCT;
     }

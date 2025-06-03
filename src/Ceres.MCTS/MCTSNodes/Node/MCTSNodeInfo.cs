@@ -476,7 +476,7 @@ namespace Ceres.MCTS.MTCSNodes
 
     static float CalcCPUCT(int n, float cpuct, float cpuctBase, float cpuctFactor)
     {
-      float CPUCT_EXTRA = (cpuctFactor == 0) ? 0 : cpuctFactor * FastLog.Ln((n + cpuctBase + 1.0f) / cpuctBase);
+      float CPUCT_EXTRA = (cpuctFactor == 0) ? 0 : cpuctFactor * MathF.Log((n + cpuctBase + 1.0f) / cpuctBase);
       float thisCPUCT = cpuct + CPUCT_EXTRA;
       return thisCPUCT;
     }
