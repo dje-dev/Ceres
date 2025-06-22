@@ -600,7 +600,7 @@ namespace Ceres.Chess.MoveGen
     public readonly bool IsIrreversibleMove(MGMove move, in MGPosition nextPosition)
     {
       // Material changes
-      if (move.Capture | move.EnPassantCapture)
+      if (move.Capture || move.EnPassantCapture)
       {
         return true;
       }
@@ -615,34 +615,23 @@ namespace Ceres.Chess.MoveGen
       }
 
       // Castling
-      if (move.CastleShort | move.CastleLong)
+      if (move.CastleShort || move.CastleLong)
       {
         return true;
       }
 
       // Change in castling rights (king/rook moves).
-      if (WhiteCanCastle && !nextPosition.WhiteCanCastle)
-      {
-        return true;
-      }
-
-      if (WhiteCanCastleLong && !nextPosition.WhiteCanCastleLong)
-      {
-        return true;
-      }
-
-      if (BlackCanCastle && !nextPosition.BlackCanCastle)
-      {
-        return true;
-      }
-
-      if (BlackCanCastleLong && !nextPosition.BlackCanCastleLong)
+      if ((WhiteCanCastle && !nextPosition.WhiteCanCastle) ||
+          (WhiteCanCastleLong && !nextPosition.WhiteCanCastleLong) ||
+          (BlackCanCastle && !nextPosition.BlackCanCastle) ||
+          (BlackCanCastleLong && !nextPosition.BlackCanCastleLong))
       {
         return true;
       }
 
       return false;
     }
+
 
     /// <summary>
     /// Tests for equality with another MGChessMove
