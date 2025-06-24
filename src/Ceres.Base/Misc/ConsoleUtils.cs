@@ -26,14 +26,44 @@ namespace Ceres.Base.Misc
   /// </summary>
   public static class ConsoleUtils
   {
+    static bool? colorDisabled = null;
+
     /// <summary>
-    /// Writes a line of output to Conole in specified color.
+    /// Checks if NO_COLOR is set in the environment, per https://no-color.org. 
+    /// </summary>
+    /// <returns></returns>
+    private static bool IsNoColorEnabled()
+    {
+      if (colorDisabled is not null)
+      {
+        return colorDisabled.Value;
+      }
+      else
+      {
+        string noColor = System.Environment.GetEnvironmentVariable("NO_COLOR");
+        colorDisabled = !string.IsNullOrEmpty(noColor);
+        return colorDisabled.Value;
+      }
+    }
+
+
+    /// <summary>
+    /// Writes a line of output to Console in specified color, unless NO_COLOR is set.
     /// </summary>
     /// <param name="str"></param>
     /// <param name="color"></param>
     /// <param name="endLine"></param>
     public static void WriteLineColored(ConsoleColor color, string str, bool endLine = true)
     {
+      if (IsNoColorEnabled())
+      {
+        Console.Write(str);
+        if (endLine)
+        {
+          Console.WriteLine();
+        }
+        return;
+      }
       ConsoleColor priorColor = Console.ForegroundColor;
       Console.ForegroundColor = color;
       Console.Write(str);
@@ -44,7 +74,6 @@ namespace Ceres.Base.Misc
         Console.WriteLine();
       }
     }
-
 
     /// <summary>
     /// Prompts for and returns a string from the Console, without echoing the input.
