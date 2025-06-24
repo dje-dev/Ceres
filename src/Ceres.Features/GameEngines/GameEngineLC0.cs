@@ -35,7 +35,7 @@ namespace Ceres.Features.GameEngines
   /// <summary>
   /// Subclass of GameEngine for Leela Zero chess engine accessed via UCI protocol.
   /// </summary>
-  public class GameEngineLC0 : GameEngine, IUCIGameRunnerProvider                       
+  public class GameEngineLC0 : GameEngine, IUCIGameRunnerProvider
   {
     /// <summary>
     /// Underlying LC0 engine object.
@@ -53,6 +53,7 @@ namespace Ceres.Features.GameEngines
     /// </summary>
     public UCIGameRunner UCIRunner => LC0Engine.Runner;
 
+    public bool DisableTreeReuse;
 
 
     /// <summary>
@@ -74,18 +75,19 @@ namespace Ceres.Features.GameEngines
     /// <param name="extraCommandLineArgs"></param>
     /// <param name="processorGroupID"></param>
     public GameEngineLC0(string id, string networkID, bool forceDisableSmartPruning = false,
-                         bool emulateCeresSettings = false, 
-                         ParamsSearch searchParams = null, ParamsSelect selectParams = null, 
-                         NNEvaluatorDef paramsNN = null, 
-                         Action setupAction = null, 
+                         bool emulateCeresSettings = false,
+                         ParamsSearch searchParams = null, ParamsSelect selectParams = null,
+                         NNEvaluatorDef paramsNN = null,
+                         Action setupAction = null,
                          string overrideEXE = null,
-                         bool verbose = false, 
+                         bool verbose = false,
                          bool alwaysFillHistory = true,
                          int? overrideBatchSize = null,
                          int? overrideCacheSize = null,
                          string extraCommandLineArgs = null,
                          int processorGroupID = 0,
-                         string? overrideBackendString = null) : base(id, processorGroupID)
+                         string? overrideBackendString = null,
+                         bool disableTreeReuse = false) : base(id, processorGroupID)
     {
       SetupAction = setupAction;
       if (SetupAction != null)
@@ -94,12 +96,13 @@ namespace Ceres.Features.GameEngines
       }
 
       bool resetStateAndCachesBeforeMoves = searchParams != null && !searchParams.TreeReuseEnabled;
+      DisableTreeReuse = disableTreeReuse;
 
-      LC0Engine = LC0EngineConfigured.GetLC0Engine(searchParams, selectParams, paramsNN, 
+      LC0Engine = LC0EngineConfigured.GetLC0Engine(searchParams, selectParams, paramsNN,
                                                    NNWeightsFiles.LookupNetworkFile(networkID),
                                                    processorGroupID, emulateCeresSettings,
                                                    resetStateAndCachesBeforeMoves, verbose,
-                                                   forceDisableSmartPruning,  overrideEXE,
+                                                   forceDisableSmartPruning, overrideEXE,
                                                    alwaysFillHistory, extraCommandLineArgs,
                                                    overrideBatchSize, overrideCacheSize, overrideBackendString);
     }
@@ -124,13 +127,13 @@ namespace Ceres.Features.GameEngines
     /// </summary>
     /// <param name="gameID">optional game descriptive string</param>
     public override void ResetGame(string gameID = null) => UCIRunner.StartNewGame();
-    
+
 
     /// <summary>
     /// Dispose method which releases underlying engine object.
     /// </summary>
-    public override void Dispose() =>  LC0Engine.Dispose();
-        
+    public override void Dispose() => LC0Engine.Dispose();
+
 
     /// <summary>
     /// Executes any preparatory steps (that should not be counted in thinking time) before a search.
@@ -149,12 +152,16 @@ namespace Ceres.Features.GameEngines
     /// <param name="gameMoveHistory"></param>
     /// <param name="callback"></param>
     /// <returns></returns>
-    protected override GameEngineSearchResult DoSearch(PositionWithHistory curPositionAndMoves, 
+    protected override GameEngineSearchResult DoSearch(PositionWithHistory curPositionAndMoves,
                                                        SearchLimit searchLimit,
-                                                       List<GameMoveStat> gameMoveHistory, 
+                                                       List<GameMoveStat> gameMoveHistory,
                                                        ProgressCallback callback, bool verbose)
     {
       DoSearchPrepare();
+      if (DisableTreeReuse)
+      {
+        UCIRunner.StartNewGame();
+      }
 
       if (SetupAction != null) SetupAction();
 
@@ -167,7 +174,7 @@ namespace Ceres.Features.GameEngines
       }
 
       // TODO: can we somehow correctly set the staring N arugment here?
-      float boundedCP = StatUtils.Bounded(lc0Analysis.ScoreCentipawns, - 9999, 9999);
+      float boundedCP = StatUtils.Bounded(lc0Analysis.ScoreCentipawns, -9999, 9999);
       float lc0Q = EncodedEvalLogistic.CentipawnToLogistic(boundedCP);
       return new GameEngineSearchResult(lc0Analysis.BestMove, lc0Q, boundedCP, float.NaN,
                                         searchLimit, default, 0, (int)lc0Analysis.NumNodes,

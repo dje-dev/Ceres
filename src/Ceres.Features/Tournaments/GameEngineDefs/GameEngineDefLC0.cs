@@ -68,6 +68,11 @@ namespace Ceres.Features.GameEngines
     public readonly bool AlwaysFillInHistory;
 
     /// <summary>
+    /// If tree reuse should be disabled.
+    /// </summary>
+    public readonly bool DisableTreeReuse;
+
+    /// <summary>
     /// If a non-default executable file should be used 
     /// (otherwise LC0 binary in directory CeresUserSettings.DirLC0Binaries is used).
     /// </summary>
@@ -108,7 +113,8 @@ namespace Ceres.Features.GameEngines
                             string extraCommandLineArgs = null,
                             bool verbose = false,
                             string? overrideBackendString = null,
-                            bool alwaysFillInHistory = false)
+                            bool alwaysFillInHistory = false,
+                            bool disableTreeReuse = false)
       : base(id)
     {
       if ((SearchParamsEmulate == null) != (SelectParamsEmulate == null))
@@ -123,10 +129,11 @@ namespace Ceres.Features.GameEngines
       ID = id;
 
       // Make a defensive clone of the EvaluatorDef so it will definitely not be shared.
-      EvaluatorDef = ObjUtils.DeepClone(evaluatorDef);
+      EvaluatorDef = evaluatorDef.Clone();
 
       ForceDisableSmartPruning = forceDisableSmartPruning;
       AlwaysFillInHistory = alwaysFillInHistory;
+      DisableTreeReuse = disableTreeReuse;
 
       SearchParamsEmulate = searchParamsEmulate;
       SelectParamsEmulate = selectParamsEmulate;
@@ -157,7 +164,8 @@ namespace Ceres.Features.GameEngines
                                verbose: Verbose,
                                processorGroupID: ProcessorGroupID,
                                alwaysFillHistory: AlwaysFillInHistory,
-                               overrideBackendString: OverrideBackendString);
+                               overrideBackendString: OverrideBackendString,
+                               disableTreeReuse: DisableTreeReuse);
     }
 
 
