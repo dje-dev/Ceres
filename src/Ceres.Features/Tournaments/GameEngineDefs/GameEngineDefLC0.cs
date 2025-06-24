@@ -46,7 +46,7 @@ namespace Ceres.Features.GameEngines
     /// evaluator options are 
     /// </summary>
     public readonly NNEvaluatorDef EvaluatorDef;
-    
+
     /// <summary>
     /// If not null, LC0 is configured to emulate Ceres settings where comparable.
     /// </summary>
@@ -61,6 +61,11 @@ namespace Ceres.Features.GameEngines
     /// If smart pruning should be disabled.
     /// </summary>
     public readonly bool ForceDisableSmartPruning;
+
+    /// <summary>
+    /// If the history of search information should always be filled in.
+    /// </summary>
+    public readonly bool AlwaysFillInHistory;
 
     /// <summary>
     /// If a non-default executable file should be used 
@@ -97,12 +102,13 @@ namespace Ceres.Features.GameEngines
     public GameEngineDefLC0(string id,
                             NNEvaluatorDef evaluatorDef,
                             bool forceDisableSmartPruning,
-                            ParamsSearch searchParamsEmulate = null, 
-                            ParamsSelect selectParamsEmulate = null, 
+                            ParamsSearch searchParamsEmulate = null,
+                            ParamsSelect selectParamsEmulate = null,
                             string overrideEXE = null,
                             string extraCommandLineArgs = null,
                             bool verbose = false,
-                            string? overrideBackendString = null)
+                            string? overrideBackendString = null,
+                            bool alwaysFillInHistory = false)
       : base(id)
     {
       if ((SearchParamsEmulate == null) != (SelectParamsEmulate == null))
@@ -120,6 +126,7 @@ namespace Ceres.Features.GameEngines
       EvaluatorDef = ObjUtils.DeepClone(evaluatorDef);
 
       ForceDisableSmartPruning = forceDisableSmartPruning;
+      AlwaysFillInHistory = alwaysFillInHistory;
 
       SearchParamsEmulate = searchParamsEmulate;
       SelectParamsEmulate = selectParamsEmulate;
@@ -143,13 +150,14 @@ namespace Ceres.Features.GameEngines
     public override GameEngine CreateEngine()
     {
       bool emulate = SearchParamsEmulate != null;
-        return new GameEngineLC0(ID, EvaluatorDef.Nets[0].Net.NetworkID, 
-                                 ForceDisableSmartPruning, emulate,
-                                 SearchParamsEmulate, SelectParamsEmulate, EvaluatorDef,                               
-                                 null, OverrideEXE, extraCommandLineArgs:ExtraCommandLineArgs,
-                                 verbose:Verbose,
-                                 processorGroupID:ProcessorGroupID,
-                                 overrideBackendString : OverrideBackendString);
+      return new GameEngineLC0(ID, EvaluatorDef.Nets[0].Net.NetworkID,
+                               ForceDisableSmartPruning, emulate,
+                               SearchParamsEmulate, SelectParamsEmulate, EvaluatorDef,
+                               null, OverrideEXE, extraCommandLineArgs: ExtraCommandLineArgs,
+                               verbose: Verbose,
+                               processorGroupID: ProcessorGroupID,
+                               alwaysFillHistory: AlwaysFillInHistory,
+                               overrideBackendString: OverrideBackendString);
     }
 
 
