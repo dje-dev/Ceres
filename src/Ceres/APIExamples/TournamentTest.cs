@@ -54,7 +54,7 @@ namespace Ceres.APIExamples
   {
     const bool POOLED = false;
 
-    static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 3 : 3;
+    static int CONCURRENCY = POOLED ? 8 : Environment.MachineName.ToUpper().Contains("DEV") ? 4 : 4;
     static int[] OVERRIDE_DEVICE_IDs = /*POOLED ? null*/
        (Environment.MachineName.ToUpper() switch
        {
@@ -244,6 +244,363 @@ namespace Ceres.APIExamples
 
       NET1 = "~T75";
       NET2 = "~T75";
+
+      //      NET1 = "HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_75bn_fp16_1599995904.onnx";
+      //      NET2 = "HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_75bn_fp16_1399996416.onnx";
+      //      NET2 = "HOP_SP_640_25_20H_FFN3_NLA_SMOL_SP_B1_64bn_fp16_1599995904.onnx";
+
+      //      NET1 = "Ceres:HOP_SP_640_25_20H_FFN3_NLA_SMOL_SP_B1_70bn_fp16_6513_avg.onnx";
+      //      NET2 = "Ceres:HOP_SP_640_25_20H_FFN3_NLA_SMOL_SP_B1_70bn_fp16_6531_avg.onnx";
+
+      //      NET1 = "Ceres:multinet_avg_5980_final.onnx";
+      //      NET1 = "Ceres:multinet_5950_final.onnx";
+
+      //NET1 = NET2 = "Ceres:C1-512-25";
+      // NET2 = "~BT4_FP16_TRT";
+      //NET2 = "Ceres:C1-768-15";
+
+      //      NET1 = "HOP_SP_640_25_20H_FFN3_NLA_SMOL_SP_B1_70bn_fp16_last.onnx,C1-768-15.onnx";
+      //NET1 = NET2 = "multinet.onnx";
+      //NET2 = "Ceres:HOP_SP_640_25_20H_FFN3_NLA_SMOL_SP_B1_65bn_fix4_fp16_3999989760.onnx";
+
+
+
+      //NET2 = "~BT4_3190k_ONNX";
+      //NET2 = "Ceres:C1-768-15";
+
+      //NET1 = "d4ae6e742b90_SP_640_35_20H_FFN3_NLA_SMOL_SP_B1_9bn_fp16_1799998464.onnx";
+      //      NET1 = "9ae67f7c4630_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_3699993600.onnx";//|USEV2";
+
+
+      //great,lepned, became final 640x34
+      //NET1 = "f2c88aecad90_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_7999982592_8199979008_8399978496_8599981056_8799977472_8999980032_9199979520_9399979008.onnx";
+
+      //      NET1 = "HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_80bn_fp16_last_nc.onnx";
+      //      NET1 = "C1-640-34.onnx|USEV2";
+      //      NET1 = "C1-640-34.onnx";
+      //      NET2 = "C1-640-34.onnx|USEV2";
+
+      NET1 = "Ceres:HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_80bn_fp16_last.onnx";
+
+      //      NET1 = "f2c88aecad90_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_7999982592_8199979008_8399978496_8599981056_8799977472_8999980032_9199979520_9399979008_7899979776_8099979264_8299978752_8499978240_8699980800_8899977216_9099979776_9299976192.onnx";
+      //+3@1000      NET1 = "f2c88aecad90_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_monster_8599981056_8799977472_last.onnx";
+      //      NET1 = "f2c88aecad90_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_7999982592_8199979008_8399978496_8599981056_8799977472_8999980032_9199979520_9399979008_8299978752_8499978240_8699980800_8899977216_9099979776_9299976192_9599978496_9803.onnx";
+
+
+      //NET1 = "C1-640-25|POLUNC";
+
+      // LORA
+      //      NET1 = "9ae67f7c4630_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_LORA_6799985664.onnx";
+      //      NET2 = "9ae67f7c4630_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_6799985664.onnx";
+
+      //      NET1 = "~T82_TUNE_INTERP";
+      //      NET2 = "~T82";
+
+      //NET2 = "~T75";
+      //NET2 = "C1-512-25";
+      //      NET2 = "~T81_FP16_TRT";
+
+      //NET2 = NET1 = "~T60";
+      //    NET1 = "~BT5_FP16";
+      //NET2 = "~BT4_FP16_TRT";
+
+      //NET1 = "HOP_SP_640_25_20H_FFN3_NLA_SMOL_SP_B1_70bn_fp16_7000002560.onnx";
+      //NET2 = "HOP_SP_640_25_20H_FFN3_NLA_SMOL_SP_B1_70bn_fp16_6449807360.onnx";
+      //      NET1 = @"e:\cout\nets\f2c88aecad90_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_LORA_8299981824.onnx";
+      //      NET2 = @"e:\cout\nets\f2c88aecad90_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_8299981824.onnx";
+
+      //     NET2 = "~BT4_2740_kovax_ONNX";
+      //NET2 = "f2c88aecad90_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_combo2.onnx"; // best is combo2
+
+      //      NET1 = "~T1_256_RL_TRT";
+      //NET2 = "~BT5_FP16";
+
+      NET1 = "C1-512-25";
+
+
+      // 512x35 test
+      //NET1 = "combo35p8,C1-640-34";
+      //      NET1 = "HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_80bn_fp16_7399983104.onnx";
+      //      NET2 = "f2c88aecad90_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_7399981056.onnx";
+
+      //NET2 = "HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_80bn_fp16_6499985408";
+      //      NET2 = "HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_80bn_fp16_7399983104.onnx";/
+      //      NET2 = "C1-640-34";
+      NET1 = "C1-640-34,combo35j5_nc,~BT4_FP16_TRT,HOP_SP_512_55_16H_FFN3_NLA_SMOL_SP_B1_8bn_BASE_fp16_2599993344";
+      //,~BT5_FP16";
+      //      NET2 = "combo35j_nc";
+
+
+      //      NET1 = "HOP_SP_512_55_16H_FFN3_NLA_SMOL_SP_B1_8bn_BASE_fp16_last";
+      //NET2 = "HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_80bn_fp16_3599990784_nc.onnx";
+
+      //      NET1 = "combo35j5_nc.onnx.nondeblundered2800";//|V2FRAC=0";
+      //      NET2 = "HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_80bn_fp16_7399983104";
+
+      //      NET2 = "C1-640-25";
+
+      //      NET1 = "c1-512-15_LORA.onnx";
+      //      NET2 = "C1-512-15.onnx";
+
+      //      NET1 = "combo35j5_nc";
+      //NET2 = "combo35j_nc";
+      //      NET1 = "HOP_SP_512_55_16H_FFN3_NLA_SMOL_SP_B1_8bn_BASE_fp16_2199994368,C1-640-34";
+      //      NET1 = "ONNX_TRT:bt4-4520.pb.gz_fp16";
+
+      //      NET1 = "~T81";
+      //NET2 = "C1-640-34";
+      //      NET2 = "~BT4_NATIVE";
+      //      NET2 = "~BT4_FP16";
+
+      //      NET2 = "~T81";
+      //NET2 = "~T81_FP16_TRT";
+
+      //NET1 = "CUSTOM1";
+
+      //      NET1 = "C1-640-34.value3_L32_x2.onnx|V2TEMP=1.0;V2FRAC=0.5";
+      //      NET2 = "C1-640-34.value3_L32_x2.onnx|V2FRAC=0";
+      //      NET2 = "C1-640-34"
+      //      NET1 = "55_comboX";
+
+      NET1 = "HOP_SP_512_55_16H_FFN3_NLA_SMOL_SP_B1_8bn_BASE_fp16_5799985152.onnx|V2FRAC=0.4;V1TEMP=0.8;V2TEMP=1.5";
+      NET1 = "combo35j5T_nc";
+      //      NET2 = "9ae67f7c4630_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_5999984640.onnx";
+      //      NET2 = "HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_80bn_fp16_5399986176.onnx";
+
+      //      NET1 = "CUSTOM1|V2FRAC=0.5;V1TEMP=0.8;V2TEMP=1.15";
+      //NET2 = "CUSTOM2";
+
+      //      NET1 = @"e:\cout\nets\C1-512-35.value3_L33_x2.onnx.value3|V2FRAC=0.6;V1TEMP=0.80;V2TEMP=1.1";
+      NET1 = @"e:\cout\nets\C1-512-35.value3_L33_x2.onnx.value3|V2FRAC=1;V1TEMP=0.80;V2TEMP=1.0";
+      //      NET2 = "C1-512-35";//|V2FRAC=0.4;V1TEMP=0.8;V2TEMP=1.5";
+      //      NET1 = "C1-512-35.value3_L33_x2";
+      //      NET1 = "C1-640-34.value3_L32_x2";
+
+      NET1 = "HOP_SP_512_55_16H_FFN3_NLA_SMOL_SP_B1_8bn_BASE_fp16_7319994368.onnx";
+      //NET2 = "HOP_SP_512_55_16H_FFN3_NLA_SMOL_SP_B1_8bn_BASE_fp16_6799982592.onnx";
+      //      NET2 = "9ae67f7c4630_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_6299986944";
+
+      //      NET1 = "combo640T_nc";
+
+      //      NET1 = "combo_55_2last.onnx|V2FRAC=1;V2TEMP=1.2";
+      //NET1 = NET2 = "C1-512-25";
+
+      NET1 = "C1-640-34.value3_L32_x4.onnx.value3.onnx|V2FRAC=1;V1TEMP=0.8;V2TEMP=1.4";
+      //      NET2 = "C1-640-34.value3_L32_x2.onnx.value3.onnx|V2FRAC=1;V1TEMP=0.8;V2TEMP=1";
+      NET2 = "C1-640-34|V2FRAC=0";//
+
+
+      NET1 = "post81bn_11x_nc";
+      NET1 = "C1-512-25";
+
+      //      NET1 = "HOP_SP_512_15_16H_FFN2_NLA_SMOL_SP_B1_nl_8bn_GL_every1_fp16_499998720";//
+      NET2 = "HOP_SP_512_15_16H_FFN2_NLA_SMOL_SP_B1_nl_8bn_BASE_fp16_600000512";//
+
+      NET1 = "HOP_SP_512_15_16H_FFN2_NLA_SMOL_SP_B1_nl_8bn_GL_every3_fp16_last";
+
+      NET1 = "every32x.onnx";
+      NET2 = "base2x.onnx";
+
+      NET1 = "CUSTOM1";
+      NET1 = "C1-512-15.value3_L-1_x1.onnx.value3";
+
+      NET1 = "C1-512-15.value3_L-1_x1.onnx.value3|V2FRAC=1;V2TEMP=0.82";
+      NET2 = "C1-512-15|V2FRAC=0;V1TEMP=1";
+
+      //      NET1 = "C1-512-15.value3_L-1_x1.onnx.value3|V2FRAC=0";
+      //NET1 = "e:\\cout\\nets\\C1-512-35.value3_L54_x4.onnx";
+      //      NET2 = "C1-512-15|V2FRAC=1;V2TEMP=0.9"; 
+
+
+      //      NET1 = "C1-640-34.value3_L-1_x1.onnx.value3.ReferenceEngine|V1TEMP=0.60"; // <---- NEED 0.60
+      //      NET2 = "C1-640-34";
+
+      //NET1 = "C1-512-55-pre1.value3_L-1_x1.onnx.value3.onnx";//|V2FRAC=1;V2TEMP=0.81";
+
+      string T512_55_NonDeb = "C1-512-55-pre1.value3_L-1_x1.onnx.value3.ZNonDeblundered|V2FRAC=0;V1TEMP=1.15";
+      string T512_55_Deb = "C1-512-55-pre1.value3_L-1_x1.onnx.value3.ZDeblundered|V2FRAC=0;V1TEMP=0.92";
+      string T512_55_Q = "C1-512-55-pre1.value3_L-1_x1.onnx.value3.Q|V2FRAC=0;V1TEMP=0.80";
+      string T640_SF = "C1 -640-34.value3_L-1_x1.onnx.value3.ReferenceEngine.onnx"; // perhaps 6mm
+
+      NET1 = T512_55_Deb;
+      NET1 = "C1-512-55-pre1.value3_L-1_x1.onnx.value3.ZDeblundered|V1TEMP=0.76";
+
+      NET2 = "C1-512-55-pre1";//|V2FRAC=0;V1TEMP=1.0";
+
+      //      NET1 = "C1 -640-34.value3_L-1_x1.onnx.value3.ReferenceEngine.onnx|V2FRAC=0;V1TEMP=1";
+      //      NET2 = "C1-640-34|V2FRAC=0;V1TEMP=1";
+      NET1 = "C1-640-34.value3_L-1_x1.onnx.value3.ReferenceEngine|V1TEMP=0.63";
+      NET2 = "C1-640-34";
+
+      //NET1 = "HOP_SP_512_55_16H_FFN4_NLA_SMOL_SP_B1_9bn_fp16_last.onnx";
+      //NET2 = "combo_55_6x_67bn";
+
+      NET1 = "C1-512-55-pre1.value3_L53_ZDeblundered_x1_d2.onnx.value3|V1TEMP=0.93;V2FRAC=0";
+      NET2 = "C1-512-55-pre1.value3_L53_ZNonDeblundered_x1_d2.onnx.value3|V1TEMP=0.93;V2FRAC=0";
+
+      NET1 = "C1-512-55-pre1.value3_L53_ZDeblundered_x1_d2.onnx.value3";
+      NET2 = "NONE";
+
+      //      NET2 = "HOP_SP_512_55_16H_FFN3_NLA_SMOL_SP_B1_8bn_BASE_fp16_2499993600";
+
+      //NET1 = "C1-512-35.value3_L33_x2.onnx.value3.onnx|V2FRAC=0.5;V1TEMP=0.8;V2TEMP=1.2";
+      //      NET2 = "C1-512-35";//|V2FRAC=0;V1TEMP=1.0;V2TEMP=1.5";
+
+      //      NET1 = "C1-512-55-pre1.value3_L53_x1_d2.onnx.value3|V1TEMP=0.87"; // deblunder
+      //tested      NET1 = "C1-512-55-pre1.value3_L53_ReferenceEngine_x1_d2.onnx.value3|V1TEMP=0.94;V2FRAC=0";
+      NET1 = "C1-512-55-pre1.value3_L53_Test_x1_d2.onnx.value3.onnx";//|V1TEMP=0.94;V2FRAC=0";
+      ///was:NET1 = "C1-512-55-pre1.value3_L53_ReferenceEngine_x1_d2.onnx.value3|V1TEMP=1;V2FRAC=0";
+      //NET1 = "CUSTOM1";
+
+      //      NET1 = "C1-640-34.value3_L32_ZDeblundered_x1_d2.onnx.value3|V1TEMP=0.93;V2FRAC=0";
+      //NET1 = "C1-512-55-pre1.value3_L53_ReferenceEngine_x1_d1.onnx.value3|V2FRAC=0";
+      //NET2 = "C1-640-34.value3_L32_ZDeblundered_x1_d2.onnx.value3|V2FRAC=0";//|V1TEMP=0.94;V2FRAC=0";
+      NET2 = "NONE";
+
+      NET1 = "HOP_SP_768_28_24H_FFN2_NLA_SMOL_SP_B1_GL_9bn_fp16_last";
+      //NET1 = "combo768s";
+
+      //      NET1 = "HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_80bn_fp16_7399983104";
+      //      NET2 = "NONE";
+      //      NET1 = @"e:\cout\nets\HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_80bn_fp16_7399983104.onnx";
+      //      NET2 = "NONE";// @"e:\cout\nets\HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_80bn_fp16_7399983104.onnx";
+
+      //NET1 = "CUSTOM1";
+      //      NET1 = "C1-512-55-pre1|V2FRAC=0";
+      //      NET2 = "C1-640-34|V2FRAC=0";
+      //NET2 = "C1-512-55-pre1";
+      //      NET1 = "e:\\cout\\nets\\C1-512-55-pre1.value3_L53_x1_d2.onnx.value3.onnx|V1TEMP=0.72";
+
+      //      NET1 = "C1-512-55-pre1.value3_L53_ZDeblundered_x1_d2.onnx.value3|V2FRAC=0";
+      //      NET2 = "HOP_SP_512_55_16H_FFN3_NLA_SMOL_SP_B1_8bn_BASE_fp16_5999984640_nc";
+      //      NET2 = "C1-512-15";
+      //      NET2 = "C1-512-55-pre1";
+      //      NET1 = "C1-512-55-pre1.value3_L53_ZDeblundered_x1_d4.onnx.value3.onnx";
+      //      NET2 = "C1-512-55-pre1.value3_L53_ZDeblundered_x1_d2.onnx.value3.12mm.onnx";
+
+      //      NET1 = "HOP_SP_768_28_24H_FFN2_NLA_SMOL_SP_B1_GL_85bn_fp16_2799992832";
+      //      NET2 = "HOP_SP_512_55_16H_FFN3_NLA_SMOL_SP_B1_8bn_BASE_fp16_2799992832";
+
+
+      //      NET1 = "HOP_SP_768_28_24H_FFN2_NLA_SMOL_SP_B1_GL_9bn_8799977472.ts";
+      NET1 = "combo768_85p.onnx";
+      NET2 = "combo768_85m.onnx";
+      NET1 = "DEV_SP_384_8_FFN2_12H_FFN2_FUSEKQV_fp16_last.onnx";
+      NET2 = "DEV_SP_384_8_FFN2_12H_FFN2_BASE_fp16_last.onnx";
+
+      NET2 = "HOP_SP_768_28_24H_FFN2_NLA_SMOL_SP_B1_GL_muon_9bn_fp16_7999979520.onnx"; // 7999979520
+                                                                                       //NET2 = "HOP_SP_768_28_24H_FFN2_NLA_SMOL_SP_B1_GL_muon_9bn_fp16_7399981056.onnx";
+
+      //NET1 = @"f2c88aecad90_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_8299978752";
+      //      NET1 = @"HOP_SP_768_28_24H_FFN2_NLA_SMOL_SP_B1_GL_9bn_fp16_7299981312";
+      //      NET2 = "NONE";
+
+      //      NET1 = "HOP_SP_768_28_24H_FFN2_NLA_SMOL_SP_B1_GL_9bn_fp16_last.onnx";
+      //      NET2 = "HOP_SP_768_28_24H_FFN2_NLA_SMOL_SP_B1_GL_muon_9bn_fp16_last.onnx";
+      //NET2 = "HOP_SP_768_28_24H_FFN2_NLA_SMOL_SP_B1_GL_9bn_fp16_last.onnx";
+
+
+      //      NET1 = "C1-512-15|DEPTH=1";
+      //      NET2 = "C1-512-15";
+
+      //      NET1 = "~BT4_FP16_TRT|DEPTH=1";
+      NET1 = "HOP_SP_512_55_16H_FFN4_NLA_SMOL_SP_B1_9bn_fp16_5899984896.onnx";
+
+
+      NET1 = "HOP_SP_768_28_24H_FFN2_NLA_SMOL_SP_B1_GL_muon_9bn_80_fr1_fp16_8100000768.onnx";
+      NET2 = "HOP_SP_768_28_24H_FFN2_NLA_SMOL_SP_B1_GL_muon_9bn_85_fr1_fp16_8600000512.onnx";
+      //start      NET2 = "HOP_SP_768_28_24H_FFN2_NLA_SMOL_SP_B1_GL_muon_9bn_fp16_8499978240.onnx"; //8499978240
+
+      NET1 = "HOP_SP_768_28_24H_FFN2_NLA_SMOL_SP_B1_GL_muon_9bn_85_fr1_wd5_fp16_8600000512.onnx";
+      NET2 = "HOP_SP_768_28_24H_FFN2_NLA_SMOL_SP_B1_GL_muon_9bn_fp16_last.onnx";
+
+      NET1 = "HOP_SP_768_28_24H_FFN2_NLA_SMOL_SP_B1_GL_muon_9bn_80_fr1_wd3_fp16_8499978240.onnx";
+      NET2 = "HOP_SP_768_28_24H_FFN2_NLA_SMOL_SP_B1_GL_muon_9bn_fp16_8499978240.onnx";
+
+      NET1 = "HOP_SP_384_1212H_FFN2_NLA_SMOL_B1_GL_muon_4bn_80_wd3_fp16_1099997184";
+      NET2 = "HOP_SP_384_1212H_FFN2_NLA_SMOL_B1_GL_muon_4bn_80_wd05_fp16_1099997184";
+
+      //super
+      //NET1 = "HOP_SP_384_1212H_FFN2_NLA_SMOL_B1_GL_muon_4bn_80_wd3_fp16_1099997184.onnx";
+      //NET2 = "HOP_SP_384_1212H_FFN2_NLA_SMOL_B1_GL_muon_4bn_80_wd05_fp16_1099997184.onnx";
+
+      //      NET2 = "C1-384-12";
+
+      //      NET2 = "b67555cd6ccd_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_nowd_clp5_85bn_fp16_7099986432.onnx";
+
+      //      NET2 = "C1-640-34";
+
+      NET1 = "HOP_SP_384_1212H_FFN2_NLA_SMOL_B1_GL_muon_4bn_80_qkn_fp16_699998208.onnx";
+      NET2 = "HOP_SP_384_1212H_FFN2_NLA_SMOL_B1_GL_muon_4bn_80_qkn_nogl_fp16_699998208.onnx";
+
+      NET1 = "HOP_SP_768_28_24H_FFN2_NLA_SMOL_SP_B1_GL_muon_9bn_9099976704";
+      //NET1 = "combo768_85m.onnx";
+      //T81_FP16_TRT
+
+      //NET1 = NET2 = "C1-384-12";//
+      //NET1 = NET2 = "C1-512-35";
+      //      NET1 = "~T81|DEPTH=1";
+      //      NET2 = "~T81";
+      //      NET1 = "combo768_25_NLA";
+      //NET1 = NET2 = "C1-512-35";
+
+      NET1 = "HOP_SP_768_25_24H_FFN2_B1_SOAP_QKN_NOGL_NLA_fp16_3099992064";
+      NET2 = "HOP_SP_768_28_24H_FFN2_NLA_SMOL_SP_B1_GL_9bn_fp16_3099992064";
+
+      NET1 = "HOP_SP_768_28_24H_FFN2_NLA_SMOL_SP_B1_GL_85bn_fp16_2999992320.onnx";
+      NET2 = "HOP_SP_768_28_24H_FFN2_NLA_SMOL_SP_B1_GL_85bn_fp16_2499993600.onnx";
+
+      NET1 = "HOP_SP_768_25_24H_FFN2_B1_SOAP_QKN_NOGL_NLA_fp16_last.onnx";
+
+      NET1 = "HOP_SP_768_25_24H_FFN2_B1_SOAP_QKN_NOGL_NLA_fp16_4899987456";
+
+      string C1_640_34_91bn = "f2c88aecad90_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_last_9099979776.onnx"; // 133+/-10 @v, 7 +/-9 @50_BT4 p/v: 25/39, @500 -1 +/-10
+      string C1_512_55_last = "HOP_SP_512_55_16H_FFN3_NLA_SMOL_SP_B1_8bn_BASE_fp16_last.onnx"; // 128 +/10 @v, -16 +/-8@500_BT4, p/v 4,47
+
+
+      //      NET2 = "d4ae6e742b90_SP_640_35_20H_FFN3_NLA_SMOL_SP_B1_9bn_fp16_3074995200";
+      //NET1 = NET2 = "~T81";
+      //      NET1 = NET2 = "C1-384-12";
+      NET1 = "combo768_25_NLA|V2FRAC=1;BLUN_NEG=0.01;BLUN_POS=0.07"; //14/3 ok, 3/14 BAD
+      NET2 = "combo768_25_NLA|V2FRAC=1";
+
+      //NET1 = "HOP_SP_768_23_24H_FFN3_SMOL_RPE_GL_B1_MUON_7bn_fp16_99999744";
+      //NET1 = "HOP_SP_768_23_24H_FFN3_SMOL_RPE_GL_B1_MUON_7bn_fp16_4599988224";
+      NET1 = "combo768_26.onnx";
+      //NET1 = "HOP_SP_768_23_24H_FFN3_SMOL_RPE_GL_B1_MUON_7bn_fp16_5199986688.onnx";
+
+      NET1 = "combo768_26.onnx";
+      //NET2 = "9ae67f7c4630_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_6499986432.onnx";// 5699988480";//
+
+      NET1 = @"HOP_SP_768_23_24H_FFN3_SMOL_RPE_GL_B1_MUON_7bn_fp16_6199984128.onnx";
+      NET1 = @"HOP_SP_768_26_24H_FFN3_SMOL_RPE_B1_MUON_7bn_fp16_6599983104.onnx";
+
+      //      NET1 = "C1-640-34";
+      //NET2 = "9ae67f7c4630_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_6099984384";// 5699988480";//
+      //NET2 = "9ae67f7c4630_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_4299992064.onnx";
+      //NET2 = "9ae67f7c4630_SP_640_34_20H_FFN3_NLA_SMOL_SP_B1_10bn_fp16_3999989760";
+
+      NET1 = "combo768_23_GL";
+      //NET2 = "HOP_SP_768_23_24H_FFN3_SMOL_RPE_GL_B1_MUON_10bn_fp16_10000002048.onnx";
+      NET1 = "HOP_SP_768_26_24H_FFN3_SMOL_RPE_B1_MUON_10bn_fp16_last.onnx";
+      //NET2 = "C1-640-34";
+      NET2 = "~BT4_FP16_TRT";
+      //NET2 = "combo768_25_NONLA";
+      //    NET1 = "~T74_SPSA";// 744706_spsa032025";
+      //    NET2 = "~T74";
+
+      //NET1 = "~BT5_BIG_FP16";
+      NET1 = "~BT5_SMALL_FP16";
+      NET2 = "~BT4_FP16_TRT";
+      //      NET1 = "HOP_SP_768_25_24H_FFN2_B1_SOAP_QKN_NOGL_NLA_fp16_2799992832";
+      //      NET2 = "HOP_SP_768_28_24H_FFN2_NLA_SMOL_SP_B1_GL_85bn_fp16_2799992832";
+
+      //      NET1 = "C1-512-55-pre2";
+      //      NET2 = "C1-512-55-pre1";
+
+      NET1 = "~T75";
+      NET2 = "~T75";
+
       NET1 = overrideNET1 ?? NET1;
       NET2 = overrideNET2 ?? NET2;
       if (NET2 == "NONE") NET2 = null;
@@ -680,7 +1037,7 @@ BT4 800 nodes vs SF17 0.20sec (6 threads)
 #endif
       // **************************************************
       EnginePlayerDef player1 = playerCeres1;// playerCeres1UCI;// new EnginePlayerDef(engineDefCSNN1, SearchLimit.NodesPerMove(30));
-      EnginePlayerDef player2 = playerCeres2;// new EnginePlayerDef(EnginDefStockfish14(), SearchLimit.NodesPerMove(300 * 10_000));
+      EnginePlayerDef player2 = playerLC0;// new EnginePlayerDef(EnginDefStockfish14(), SearchLimit.NodesPerMove(300 * 10_000));
       //new EnginePlayerDef(engineDefCSNoNN, SearchLimit.NodesPerMove(300 * 10_000));
       // **************************************************
 
