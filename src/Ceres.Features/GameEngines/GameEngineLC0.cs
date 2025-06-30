@@ -15,9 +15,12 @@
 
 using System;
 
+using System.Collections.Generic;
+
+using Ceres.Base.Math;
+
 using Ceres.Chess;
 using Ceres.Chess.NNEvaluators.Defs;
-using System.Collections.Generic;
 using Ceres.Chess.LC0.Positions;
 using Ceres.Chess.LC0.Engine;
 using Ceres.Chess.SearchResultVerboseMoveInfo;
@@ -26,7 +29,6 @@ using Ceres.Chess.ExternalPrograms.UCI;
 using Ceres.Chess.GameEngines;
 using Ceres.Chess.Positions;
 using Ceres.MCTS.Params;
-using Ceres.Base.Math;
 
 #endregion
 
@@ -113,6 +115,10 @@ namespace Ceres.Features.GameEngines
     /// </summary>
     public override bool SupportsNodesPerGameMode => false;
 
+    /// <summary>
+    /// If the game engine should reset its state before each search.
+    /// </summary>
+    public override bool ResetGameAlwaysBeforeSearch => DisableTreeReuse;
 
     /// <summary>
     /// Returns UCI search information 

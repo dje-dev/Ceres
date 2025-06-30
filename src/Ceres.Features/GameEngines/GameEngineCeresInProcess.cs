@@ -460,6 +460,7 @@ namespace Ceres.Features.GameEngines
       }
     }
 
+
     /// <summary>
     /// Launches search, possibly as continuation from last search.
     /// </summary>
