@@ -97,13 +97,13 @@ namespace Ceres.Features.GameEngines
         SetupAction();
       }
 
-      bool resetStateAndCachesBeforeMoves = searchParams != null && !searchParams.TreeReuseEnabled;
+      bool resetStateAndCachesBeforeMoves = disableTreeReuse || (searchParams != null && !searchParams.TreeReuseEnabled);
       DisableTreeReuse = disableTreeReuse;
 
       LC0Engine = LC0EngineConfigured.GetLC0Engine(searchParams, selectParams, paramsNN,
                                                    NNWeightsFiles.LookupNetworkFile(networkID),
-                                                   processorGroupID, emulateCeresSettings,
-                                                   resetStateAndCachesBeforeMoves, verbose,
+                                                   processorGroupID, resetStateAndCachesBeforeMoves,
+                                                   emulateCeresSettings, verbose,
                                                    forceDisableSmartPruning, overrideEXE,
                                                    alwaysFillHistory, extraCommandLineArgs,
                                                    overrideBatchSize, overrideCacheSize, overrideBackendString);
