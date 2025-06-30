@@ -41,6 +41,11 @@ namespace Ceres.Chess.GameEngines
     public int ProcessorGroupID;
 
     /// <summary>
+    /// If the game engine should reset its state before each search.
+    /// </summary>
+    public virtual bool ResetGameAlwaysBeforeSearch => false;
+
+    /// <summary>
     /// Delegate type that may be called (potentially many times) during search,
     /// allowing updates to progress or other actions.
     /// </summary>
@@ -105,6 +110,12 @@ namespace Ceres.Chess.GameEngines
       }
 
       inSearch = true;
+
+      // Possibly reset game state.
+      if (ResetGameAlwaysBeforeSearch)
+      {
+         ResetGame(); 
+      }
 
       // Execute any preparation which should not be counted against thinking time
       // For example, Stockfish can require hundreds of milliseconds to process "ucinewgame"
