@@ -18,6 +18,7 @@ using Ceres.Chess.GameEngines;
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using Ceres.MCTS.Params;
 
 #endregion
 
@@ -61,6 +62,18 @@ namespace Ceres.Features.GameEngines
     /// </summary>
     public readonly bool DisableFutilityStopSearch;
 
+
+    /// <summary>
+    /// Optional override search parameters to be (partially) applied.
+    /// </summary>
+    public readonly ParamsSearch ParamsSearch = null;
+
+    /// <summary>
+    /// Optional override select parameters to be (partially) applied.
+    /// </summary>
+    public readonly ParamsSelect ParamsSelect = null;
+
+
     /// <summary>
     /// Constructor.
     /// </summary>
@@ -69,13 +82,15 @@ namespace Ceres.Features.GameEngines
     /// <param name="uciSetOptionCommands"></param>
     /// <param name="callback"></param>
     /// <param name="overrideEXE"></param>
-    public GameEngineDefCeresUCI(string id, 
+    public GameEngineDefCeresUCI(string id,
                                  NNEvaluatorDef evaluatorDef,
                                  List<string> uciSetOptionCommands = null,
                                  GameEngine.ProgressCallback callback = null,
                                  string overrideEXE = null,
                                  bool disableFutilityStopSearch = false,
-                                 int processorGroupID = 0) 
+                                 int processorGroupID = 0,
+                                 ParamsSearch paramsSearch = null,
+                                 ParamsSelect paramsSelect = null)
       : base(id)
     {
       EvaluatorDef = evaluatorDef;
@@ -84,6 +99,8 @@ namespace Ceres.Features.GameEngines
       OverrideEXE = overrideEXE ?? Assembly.GetExecutingAssembly().Location;
       DisableFutilityStopSearch = disableFutilityStopSearch;
       ProcessorGroupID = processorGroupID;
+      ParamsSearch = paramsSearch;
+      ParamsSelect = paramsSelect;
     }
 
 
@@ -99,8 +116,8 @@ namespace Ceres.Features.GameEngines
     /// <returns></returns>
     public override GameEngine CreateEngine()
     {
-      return new GameEngineCeresUCI(ID, EvaluatorDef, DisableFutilityStopSearch, 
-                                    false, null, null, UCISetOptionCommands, Callback, OverrideEXE);
+      return new GameEngineCeresUCI(ID, EvaluatorDef, DisableFutilityStopSearch,
+                                    false, ParamsSearch, ParamsSelect, UCISetOptionCommands, Callback, OverrideEXE);
     }
 
 

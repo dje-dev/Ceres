@@ -53,22 +53,22 @@ namespace Ceres.Features.GameEngines
                               NNEvaluatorDef evaluatorDef,
                               bool forceDisableSmartPruning = false,
                               bool emulateCeresSettings = false,
-                              ParamsSearch searchParams = null, 
+                              ParamsSearch searchParams = null,
                               ParamsSelect selectParams = null,
                               List<string> uciSetOptionCommands = null,
                               ProgressCallback callback = null,
                               string overrideEXE = null)
-      : base(id, GetExecutableFN(overrideEXE), null, null, null, 
+      : base(id, GetExecutableFN(overrideEXE), null, null, null,
              forceDisableSmartPruning ? AddedDisableSetSmartPruning(uciSetOptionCommands) : uciSetOptionCommands,
-             callback, false, ExtraArgsForEvaluator(evaluatorDef))
+             callback, !searchParams.TreeReuseEnabled, ExtraArgsForEvaluator(evaluatorDef))
     {
-      // TODO: support some limited emulation of options
+      // TODO: support additional limited emulation of options (TreeReuseEnabled already set above)
       if (searchParams != null || selectParams != null)
       {
-        throw new NotSupportedException("Customized searchParams and selectParams not yet supported");
       }
+
       if (evaluatorDef == null)
-      { 
+      {
         throw new ArgumentNullException(nameof(evaluatorDef));
       }
       if (emulateCeresSettings)
