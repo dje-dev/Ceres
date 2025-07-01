@@ -98,7 +98,7 @@ namespace Ceres.Features.UCI
     }
 
 
-    static internal void ProcessDownloadCommand(string c, Action<string> uciWriteLine)
+    static public void ProcessDownloadCommand(string c, Action<string> uciWriteLine)
     {
       string[] partsDownload = c.Split(" ");
       if (partsDownload.Length != 2)
