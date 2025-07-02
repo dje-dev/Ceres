@@ -101,6 +101,7 @@ namespace Ceres.Features.Tournaments
     readonly object lockObj = new();
 
     RandomDrawWithoutReplacement<int> openingsDraws = null;
+    int[] shuffledOpeningIndices = null;
 
 
     /// <summary>
@@ -116,32 +117,60 @@ namespace Ceres.Features.Tournaments
 
       lock (lockObj)
       {
-        if (Def.RandomizeOpenings)
+        switch (Def.OpeningRandomization)
         {
-          if (openingsDraws == null)
-          {
-            if (numOpeningsAvailable <= maxOpenings)
+          case OpeningRandomizationEnum.None:
+            return numGamePairsLaunched++;
+
+          case OpeningRandomizationEnum.ShuffleDeterministic:
+            if (shuffledOpeningIndices == null)
             {
-              throw new Exception($"Insufficient openings in opening book to play {maxOpenings} games.");
+              if (numOpeningsAvailable < maxOpenings)
+              {
+                throw new Exception($"Insufficient openings in opening book to play {maxOpenings} games.");
+              }
+
+              shuffledOpeningIndices = new int[numOpeningsAvailable];
+              for (int i = 0; i < numOpeningsAvailable; i++)
+              {
+                shuffledOpeningIndices[i] = i;
+              }
+
+              Random rng = new Random(0); // Use fixed seed for deterministic shuffle
+              int n = shuffledOpeningIndices.Length;
+              while (n > 1)
+              {
+                n--;
+                int k = rng.Next(n + 1);
+                (shuffledOpeningIndices[k], shuffledOpeningIndices[n]) = (shuffledOpeningIndices[n], shuffledOpeningIndices[k]);
+              }
+            }
+            return shuffledOpeningIndices[numGamePairsLaunched++];
+
+          case OpeningRandomizationEnum.Randomize:
+            if (openingsDraws == null)
+            {
+              if (numOpeningsAvailable < maxOpenings)
+              {
+                throw new Exception($"Insufficient openings in opening book to play {maxOpenings} games.");
+              }
+
+              // Create an array of indices of all possible openings.
+              int[] numbers = new int[numOpeningsAvailable];
+              for (int i = 0; i < numOpeningsAvailable; i++)
+              {
+                numbers[i] = i;
+              }
+
+              // Create a random chooser on top of that list.
+              openingsDraws = new RandomDrawWithoutReplacement<int>(numbers);
             }
 
-            // Create an array of indices of all possible openings.
-            int[] numbers = new int[numOpeningsAvailable];
-            for (int i = 0; i < numOpeningsAvailable; i++)
-            {
-              numbers[i] = i;
-            }
+            numGamePairsLaunched++;
+            return openingsDraws.TryDraw(out int openingIndex) ? openingIndex : -1;
 
-            // Create a random chooser on top of that list.
-            openingsDraws = new RandomDrawWithoutReplacement<int>(numbers);
-          }
-
-          numGamePairsLaunched++;
-          return openingsDraws.TryDraw(out int openingIndex) ? openingIndex : -1;
-        }
-        else
-        {
-          return numGamePairsLaunched++;
+          default:
+            throw new Exception($"Unknown RandomizeOpenings mode: {Def.OpeningRandomization}");
         }
       }
     }

@@ -28,6 +28,30 @@ using Ceres.Features.Players;
 namespace Ceres.Features.Tournaments
 {
   /// <summary>
+  /// Defines the randomization method for openings in a tournament.
+  /// </summary>
+  [Serializable]
+  public enum OpeningRandomizationEnum
+  {
+    /// <summary>
+    /// Openings are used in the order they appear in the file.
+    /// </summary>
+    None,
+
+    /// <summary>
+    /// Openings are shuffled once at the beginning of the tournament and then used in that order.
+    /// This is deterministic.
+    /// </summary>
+    ShuffleDeterministic,
+
+    /// <summary>
+    /// Openings are drawn randomly without replacement for each game.
+    /// </summary>
+    Randomize
+  }
+
+
+  /// <summary>
   /// Defines the parameters of a tournament between chess engines.
   /// </summary>
   [Serializable]
@@ -119,7 +143,7 @@ namespace Ceres.Features.Tournaments
     /// <summary>
     /// If the order of the openings from the book should be randomized.
     /// </summary>
-    public bool RandomizeOpenings = false;
+    public OpeningRandomizationEnum OpeningRandomization = OpeningRandomizationEnum.None;
 
     /// <summary>
     /// If tablebases should be consulted for adjudication purposes.
@@ -324,8 +348,15 @@ namespace Ceres.Features.Tournaments
     {
       string openingsInfo = OpeningsDescription();
 
+      string randomStr = OpeningRandomization switch
+      {
+        OpeningRandomizationEnum.Randomize => " Randomized",
+        OpeningRandomizationEnum.ShuffleDeterministic => " Shuffled",
+        _ => ""
+      };
+
       return $"<TournamentDef {ID} with {NumGamePairs} game pairs from "
-           + $"{openingsInfo} {(RandomizeOpenings ? " Randomized" : "")} "
+           + $"{openingsInfo}{randomStr} "
            + $" adjudicate {AdjudicateWinThresholdNumMovesDecisive} moves at {AdjudicateWinThresholdCentipawns}cp "
            + $"{(UseTablebasesForAdjudication ? " or via tablebases" : "")}"
            + $"{Player1Def} vs {Player2Def}"

@@ -96,7 +96,10 @@ namespace Ceres.Features.Tournaments
     /// <returns></returns>
     int GetNextOpeningIndexForLocalThread(int maxOpenings)
     {
-      if (Def.RandomizeOpenings) throw new NotImplementedException();
+      if (Def.OpeningRandomization != OpeningRandomizationEnum.None)
+      {
+        throw new NotImplementedException();
+      }
 
       lock (lockObj)
       {
