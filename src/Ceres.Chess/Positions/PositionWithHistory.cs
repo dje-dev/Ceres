@@ -54,7 +54,7 @@ namespace Ceres.Chess.Positions
     MGPosition finalPosMG;
 
     Position[] positions;
-  
+
 
     /// <summary>
     /// Optionally the next actual move (made after the final position).
@@ -305,6 +305,7 @@ namespace Ceres.Chess.Positions
             mgPos.MakeMove(mgMove);
           }
         }
+        ret.InitPositionsAndFinalPosMG();
       }
 
       return ret;
@@ -536,7 +537,14 @@ namespace Ceres.Chess.Positions
     /// <summary>
     /// Enumerates all the positions in the history.
     /// </summary>
-    public Position[] Positions => positions;
+    public Position[] Positions
+    {
+      get
+      {
+        CheckInit();
+        return positions;
+      }
+    }
 
     #endregion
 
@@ -552,7 +560,7 @@ namespace Ceres.Chess.Positions
       {
         string moveStr = "";
         foreach (MGMove move in Moves)
-        {          
+        {
           moveStr += move.MoveStr(MGMoveNotationStyle.Coordinates) + " ";
         }
         return moveStr;
@@ -632,7 +640,7 @@ namespace Ceres.Chess.Positions
     public bool Equals(PositionWithHistory other)
     {
       // Equality of positions suffices.
-      return other != null 
+      return other != null
           && positions.Length == other.positions.Length
           && positions.SequenceEqual(other.positions);
     }
