@@ -402,7 +402,9 @@ namespace Ceres.MCTS.Iteration
                                float thresholdMinFractionNodesRetained,
                                bool isFirstMoveOfGame = false,
                                bool moveImmediateIfOnlyOneMove = false,
-                               MGMove forcedMove = default)
+                               MGMove forcedMove = default,
+                               bool searchLimitWasAlreadyAdjusted = false)
+
     {
       CountSearchContinuations = priorSearch.CountSearchContinuations;
       Manager = priorSearch.Manager;
@@ -410,7 +412,10 @@ namespace Ceres.MCTS.Iteration
       Manager.RootNWhenSearchStarted = priorSearch.SearchRootNode.N;
       Manager.TerminationManager.SearchMoves?.Clear();
 
-      searchLimit = AdjustedSearchLimit(searchLimit, Manager.Context.ParamsSearch);
+      if (!searchLimitWasAlreadyAdjusted)
+      {
+        searchLimit = AdjustedSearchLimit(searchLimit, Manager.Context.ParamsSearch);
+      }
 
       MCTSIterator priorContext = Manager.Context;
       MCTSNodeStore store = priorContext.Tree.Store;

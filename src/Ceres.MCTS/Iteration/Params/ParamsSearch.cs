@@ -402,7 +402,7 @@ namespace Ceres.MCTS.Params
     /// Amount of time subtracted from time allotments to 
     /// compensate for lag or various unpredictable latencies.
     /// </summary>
-    public float MoveOverheadSeconds = 0.25f;
+    public float MoveOverheadSeconds = 0.15f;
 
 
     /// <summary>
