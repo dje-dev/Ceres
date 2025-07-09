@@ -225,7 +225,15 @@ namespace Ceres.Chess.Positions
       }
     }
 
-  
+    /// <summary>
+    /// Returns the PGN game at a specified index.
+    /// </summary>
+    /// <param name="index"></param>
+    /// <returns></returns>
+    public PGNGame GameAtIndex(int index) => openings != null ? openings[index]
+                                                              : throw new Exception("PositionsWithHistory does not contain PGN games.");
+
+
     public void LoadOpeningsFENsAndMoves(string[] fensAndMoves)
     {
       this.fensAndMoves = fensAndMoves.ToList();
@@ -278,9 +286,9 @@ namespace Ceres.Chess.Positions
     /// <param name="maxOpenings"></param>
     /// <param name="gameFilter"></param>
     /// <param name="firstPositionFilter"></param>
-    void LoadOpenings(string fileName, 
-                      int maxOpenings = int.MaxValue, 
-                      Predicate<Game> gameFilter = null, 
+    void LoadOpenings(string fileName,
+                      int maxOpenings = int.MaxValue,
+                      Predicate<Game> gameFilter = null,
                       Predicate<Position> firstPositionFilter = null)
     {
       if (fileName.ToUpper().EndsWith(".PGN"))
@@ -343,9 +351,9 @@ namespace Ceres.Chess.Positions
     /// <param name="pgnFileName"></param>
     /// <param name="firstPositionWithPieceList"></param>
     /// <param name="maxOpenings"></param>
-    private void LoadOpeningsPGNFiltered(string pgnFileName,  
-                                         Predicate<Game> gameFilter, 
-                                         Predicate<Position> firstPositionFilter, 
+    private void LoadOpeningsPGNFiltered(string pgnFileName,
+                                         Predicate<Game> gameFilter,
+                                         Predicate<Position> firstPositionFilter,
                                          int maxOpenings = int.MaxValue)
     {
       pgnFileName = GetFullFilename(pgnFileName);
