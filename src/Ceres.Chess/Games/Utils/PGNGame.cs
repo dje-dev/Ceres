@@ -81,7 +81,7 @@ namespace Ceres.Chess.Games.Utils
     /// <summary>
     /// Players evaluation in centipawns after each move.
     /// </summary>
-    public float MovePlayerEvalCP(int moveIndex) => moveTimeSeconds == null ? float.NaN : movePlayerEvalCP[moveIndex];
+    public float MovePlayerEvalCP(int moveIndex) => movePlayerEvalCP == null ? float.NaN : movePlayerEvalCP[moveIndex];
 
     /// <summary>
     /// Number of nodes in search tree at end of each move.
