@@ -46,6 +46,23 @@ namespace Ceres.Base.Math
     }
 
     /// <summary>
+    /// Returns the value bounded within the range [min, max].
+    /// </summary>
+    /// <param name="value"></param>
+    /// <param name="min"></param>
+    /// <param name="max"></param>
+    /// <returns></returns>
+    public static double Bounded(double value, float min, float max)
+    {
+      if (value < min)
+        return min;
+      else if (value > max)
+        return max;
+      else
+        return value;
+    }
+
+    /// <summary>
     /// Returns count of number of values in array which are not NaN.
     /// </summary>
     /// <param name="values"></param>
@@ -53,7 +70,7 @@ namespace Ceres.Base.Math
     public static int CountNonNaN(float[] values)
     {
       int count = 0;
-      for (int i=0; i<values.Length;i++)
+      for (int i = 0; i < values.Length; i++)
       {
         if (!float.IsNaN(values[i]))
         {
@@ -112,7 +129,7 @@ namespace Ceres.Base.Math
       int size = sortedArray.Length;
       int mid = size / 2;
 
-      return (size % 2 != 0) ? sortedArray[mid] 
+      return (size % 2 != 0) ? sortedArray[mid]
                              : (sortedArray[mid - 1] + sortedArray[mid]) / 2;
     }
 
@@ -635,7 +652,7 @@ namespace Ceres.Base.Math
     /// <param name="values1"></param>
     /// <param name="values2"></param>
     /// <returns></returns>
-    public static float RankCorrelation(Span<float> values1, Span<float> values2) 
+    public static float RankCorrelation(Span<float> values1, Span<float> values2)
       => (float)Correlation(ToRanks(values1), ToRanks(values2));
 
 
@@ -710,7 +727,7 @@ namespace Ceres.Base.Math
         expValues[i] = MathF.Exp(f[i]);
         sumExp += expValues[i];
       }
-     
+
       float[] ret = new float[length];
       for (int i = 0; i < length; i++)
       {
@@ -728,7 +745,7 @@ namespace Ceres.Base.Math
     public static float Entropy(Span<float> f)
     {
       float acc = 0;
-      for (int i=0; i<f.Length;i++)
+      for (int i = 0; i < f.Length; i++)
       {
         float value = f[i];
         if (value > 0)
@@ -847,7 +864,7 @@ namespace Ceres.Base.Math
 
       return ret;
     }
-    
+
   }
 
   #endregion
