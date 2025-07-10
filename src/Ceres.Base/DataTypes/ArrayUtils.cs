@@ -120,7 +120,7 @@ namespace Ceres.Base.DataType
         }
       }
 
-      return result;    
+      return result;
     }
 
 
@@ -131,7 +131,7 @@ namespace Ceres.Base.DataType
     /// <param name="raw"></param>
     /// <returns></returns>
     public static T[] To1D<T>(T[,,] raw)
-    { 
+    {
       if (raw.Length == 0) return Array.Empty<T>();
 
       int countRight = raw.GetLength(2);
@@ -150,7 +150,7 @@ namespace Ceres.Base.DataType
         }
       }
 
-      return ret;    
+      return ret;
     }
 
 
@@ -555,7 +555,7 @@ namespace Ceres.Base.DataType
         if (minValue0 <= minValue1)
           return minValue0 <= last ? minIndex0 : lastIndex;
         else
-          return minValue1  <= last ? minIndex1 : lastIndex;
+          return minValue1 <= last ? minIndex1 : lastIndex;
       }
       else
         return minValue0 <= minValue1 ? minIndex0 : minIndex1;
@@ -578,9 +578,13 @@ namespace Ceres.Base.DataType
 
       // Efficiently handle common cases with small count
       if (count == 1)
+      {
         return 0;
+      }
       else if (count == 2)
+      {
         return array[1] > array[0] ? 1 : 0;
+      }
 
       // For better performance, we run two sets of comparisons (odd and even)
       // at the same time (to increase instruction level parallelism)
@@ -625,13 +629,101 @@ namespace Ceres.Base.DataType
       {
         float last = array[lastIndex];
         if (maxValue0 >= maxValue1)
+        {
           return maxValue0 >= last ? maxIndex0 : lastIndex;
+        }
         else
+        {
           return maxValue1 >= last ? maxIndex1 : lastIndex;
+        }
       }
       else
+      {
         return maxValue0 >= maxValue1 ? maxIndex0 : maxIndex1;
+      }
     }
+
+
+    /// <summary>
+    /// Returns the index of the element having maximal value.
+    /// 
+    /// In the case of ties, the smallest index is returned.
+    /// </summary>
+    /// <param name="array"></param>
+    /// <param name="count"></param>
+    /// <returns></returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int IndexOfElementWithMaxValue(Span<double> array, int count)
+    {
+      Debug.Assert(count > 0);
+
+      // Efficiently handle common cases with small count
+      if (count == 1)
+      {
+        return 0;
+      }
+      else if (count == 2)
+      {
+        return array[1] > array[0] ? 1 : 0;
+      }
+
+      // For better performance, we run two sets of comparisons (odd and even)
+      // at the same time (to increase instruction level parallelism)
+      // This improves performance by about 40%
+      int maxIndex0 = 0;
+      int maxIndex1 = 1;
+      double maxValue0 = array[0];
+      double maxValue1 = array[1];
+
+      int i = 2;
+      while (i < count - 1)
+      {
+        if (array[i] > maxValue0)
+        {
+          maxValue0 = array[i];
+          maxIndex0 = i;
+        }
+        if (array[i + 1] > maxValue1)
+        {
+          maxValue1 = array[i + 1];
+          maxIndex1 = i + 1;
+        }
+
+        i += 2;
+      }
+
+      // Make sure maxIndex0 has the smaller index
+      // (we prefer smaller indices in case of ties of values)
+      if (maxIndex0 > maxIndex1)
+      {
+        int temp = maxIndex0;
+        maxIndex0 = maxIndex1;
+        maxIndex1 = temp;
+
+        double tempV = maxValue0;
+        maxValue0 = maxValue1;
+        maxValue1 = tempV;
+      }
+
+      int lastIndex = count - 1;
+      if (i == lastIndex)
+      {
+        double last = array[lastIndex];
+        if (maxValue0 >= maxValue1)
+        {
+          return maxValue0 >= last ? maxIndex0 : lastIndex;
+        }
+        else
+        {
+          return maxValue1 >= last ? maxIndex1 : lastIndex;
+        }
+      }
+      else
+      {
+        return maxValue0 >= maxValue1 ? maxIndex0 : maxIndex1;
+      }
+    }
+
 
   }
 
