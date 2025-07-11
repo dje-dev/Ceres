@@ -60,7 +60,7 @@ namespace Ceres.Features.GameEngines
                               string overrideEXE = null)
       : base(id, GetExecutableFN(overrideEXE), null, null, null,
              forceDisableSmartPruning ? AddedDisableSetSmartPruning(uciSetOptionCommands) : uciSetOptionCommands,
-             callback, !searchParams.TreeReuseEnabled, ExtraArgsForEvaluator(evaluatorDef))
+             callback, searchParams == null ? false : !searchParams.TreeReuseEnabled, ExtraArgsForEvaluator(evaluatorDef))
     {
       // TODO: support additional limited emulation of options (TreeReuseEnabled already set above)
       if (searchParams != null || selectParams != null)
