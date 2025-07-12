@@ -51,7 +51,7 @@ namespace Ceres.Base.OperatingSystem
     long numBytesAllocated = 0;
 
 
-    const long ALLOCATE_INCREMENTAL_BYTES = 1024 * 1024 * 2;
+    const long ALLOCATE_INCREMENTAL_BYTES = 1024 * 1024 * 4;
     const int PAGE_SIZE = 1024 * 2048;
 
     static long RoundToHugePageSize(long numBytes)

@@ -115,7 +115,7 @@ namespace Ceres.Base.OperatingSystem
       // VirtualAlloc works at minimum granularity of 64KB
       // but for efficiency reasons we allocate even larger blocks
       // of 512KB to reduce number of calls to VirtualAlloc
-      const int BLOCK_SIZE_BYTES = 2 * 1024 * 1024;
+      const int BLOCK_SIZE_BYTES = 4 * 1024 * 1024;
       Debug.Assert(BLOCK_SIZE_BYTES % info.dwPageSize == 0);
 
       long requiredMaxBytes = MathUtils.RoundedUp(maxItems * itemSizeBytes, info.dwPageSize);
