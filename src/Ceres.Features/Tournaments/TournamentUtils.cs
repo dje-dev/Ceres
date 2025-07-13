@@ -91,7 +91,8 @@ namespace Ceres.Features.Tournaments
         }
       }
 
-      if (adjudicateDrawByRepetitionImmediately && pos.MiscInfo.RepetitionCount > 0)
+      if ((adjudicateDrawByRepetitionImmediately && pos.MiscInfo.RepetitionCount > 0)
+        || (!adjudicateDrawByRepetitionImmediately && pos.MiscInfo.RepetitionCount > 1))
       {
         reason = TournamentGameResultReason.Repetition;
         return TournamentGameResult.Draw;
