@@ -53,7 +53,7 @@ namespace Ceres.Features.Tournaments
     static Lazy<ISyzygyEvaluatorEngine> tbEvaluator = new Lazy<ISyzygyEvaluatorEngine>(() =>
     SyzygyEvaluatorPool.GetSessionForPaths(CeresUserSettingsManager.Settings.TablebaseDirectory));
 
-    internal static TournamentGameResult TryGetGameResultIfTerminal(PositionWithHistory game, 
+    internal static TournamentGameResult TryGetGameResultIfTerminal(PositionWithHistory game,
                                                                     bool playerIsWhite, bool useTablebasesForAdjudication,
                                                                     bool adjudicateDrawByRepetitionImmediately,
                                                                     out TournamentGameResultReason reason)
@@ -89,13 +89,6 @@ namespace Ceres.Features.Tournaments
             return TournamentGameResult.Draw;
           }
         }
-      }
-
-      if ((adjudicateDrawByRepetitionImmediately && pos.MiscInfo.RepetitionCount > 0)
-        || (!adjudicateDrawByRepetitionImmediately && pos.MiscInfo.RepetitionCount > 1))
-      {
-        reason = TournamentGameResultReason.Repetition;
-        return TournamentGameResult.Draw;
       }
 
       GameResult terminalStatus = pos.CalcTerminalStatus();
