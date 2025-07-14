@@ -440,7 +440,7 @@ namespace Ceres.Chess.EncodedPositions
           // We are past the number of boards supplied. Fill in board (only if requested)
           if (fillInMissingPlanes)
           {
-            boards[i] = boards[0]; // use the first board as the fill value
+            boards[i] = boards[sequentialPositions.Length - 1]; // use the board for last provided position fill value
           }
           else
           {
