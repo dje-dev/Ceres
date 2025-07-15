@@ -119,9 +119,16 @@ namespace Ceres.Features.GameEngines
     static string ExtraArgsForEvaluator(NNEvaluatorDef evaluatorDef)
     {
       string netSpecString = NNNetSpecificationString.ToSpecificationString(evaluatorDef.NetCombo, evaluatorDef.Nets);
-      if (!netSpecString.Contains("Network="))
+      if (evaluatorDef.Description.StartsWith("~"))
       {
-        throw new Exception("Unsupported network specification");
+        netSpecString = "Network=" + evaluatorDef.Description.Split(" ")[0]; // split off only network parg
+      }
+      else
+      {
+        if (!netSpecString.Contains("Network="))
+        {
+          throw new Exception("Unsupported network specification");
+        }
       }
 
       string deviceSpecString = NNDevicesSpecificationString.ToSpecificationString(evaluatorDef.DeviceCombo, evaluatorDef.Devices);
