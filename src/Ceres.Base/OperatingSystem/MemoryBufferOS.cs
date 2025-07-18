@@ -90,7 +90,7 @@ namespace Ceres.Base.OperatingSystem
              (UseIncrementalAlloc ? "incremental " : "preallocated ") +
              NumItems + " items, " +
              rawMemoryManager.NumItemsAllocated + " reserved " +
-             MathF.Round((float)rawMemoryManager.NumItemsAllocated / NumItems, 3) + " use ratio>";
+             MathF.Round((float)rawMemoryManager.NumItemsAllocated / NumItems, 4) + " use ratio>";
     }
 
 
