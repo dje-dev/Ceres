@@ -76,7 +76,7 @@ namespace Ceres.Base.OperatingSystem
       this.itemsPerBlock = itemsPerBlock;
       this.bufferExtraItems = bufferExtraItems;
 
-      int maxItemsWithBuffer = (int)maxItems + bufferExtraItems;
+      long maxItemsWithBuffer = maxItems + bufferExtraItems;
       entries = new MemoryBufferOS<T>(maxItemsWithBuffer, tryEnableLargePages, sharedMemName,
                                      useExistingSharedMem, useIncrementalAlloc);
     }

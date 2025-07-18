@@ -16,6 +16,7 @@
 using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Threading;
 
 #endregion
@@ -76,6 +77,21 @@ namespace Ceres.Base.OperatingSystem
 
 
     IRawMemoryManagerIncremental<T> rawMemoryManager;
+
+
+    /// <summary>
+    /// Returns a summary string about this buffer.
+    /// </summary>
+    /// <returns></returns>
+    public string StoreInfoString()
+    {
+      return "MemoryBufferOS<" + typeof(T).Name + "[" + Marshal.SizeOf<T>() + " bytes] " +
+             (UseExistingSharedMemory ? "shared " : "private ") +
+             (UseIncrementalAlloc ? "incremental " : "preallocated ") +
+             NumItems + " items, " +
+             rawMemoryManager.NumItemsAllocated + " reserved " +
+             MathF.Round((float)rawMemoryManager.NumItemsAllocated / NumItems, 3) + " use ratio>";
+    }
 
 
     #region Constructor
@@ -293,5 +309,16 @@ namespace Ceres.Base.OperatingSystem
     }
 
     #endregion
+
+    /// <summary>
+    /// Dumps a summary of memory use to the console.
+    /// </summary>
+    public void DumpMemoryUseSummary()
+    {
+      Console.WriteLine(typeof(T).Name + " size=" + Marshal.SizeOf<T>() + " bytes " +
+                           (int)(NumItems / (1024.0 * 1024.0)) + "m items " + (NumItems * Marshal.SizeOf<T>() / (int)(1024.0 * 1024.0 * 1024.0))
+                          + "GB");
+    }
+
   }
 }
