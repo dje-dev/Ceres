@@ -390,7 +390,8 @@ namespace Ceres.Chess.NNEvaluators
 
             EncodedPositionBatchFlat.RETAIN_POSITION_INTERNALS = true; // ** TODO: remove/rework
             onnxEngine.ConverterToFlatFromTPG = (options, o, f1) => TPGConvertersToFlat.ConvertToFlatTPGFromTPG(options, o, f1);
-            onnxEngine.ConverterToFlat = (options, o, history, squares, legalMoveIndices) => TPGConvertersToFlat.ConvertToFlatTPG(options, o, history, squares, legalMoveIndices);
+            onnxEngine.ConverterToFlat = (options, o, history, squaresBytes, squares, legalMoveIndices) 
+              => TPGConvertersToFlat.ConvertToFlatTPG(options, o, history, squaresBytes, squares, legalMoveIndices);
 
             return onnxEngine;
           }

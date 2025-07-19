@@ -110,9 +110,13 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
     RunOptions runOptions;
     bool disposed;
 
-    IReadOnlyDictionary<string, NodeMetadata> inputsMetadata;
+    public readonly IReadOnlyDictionary<string, NodeMetadata> InputsMetadata;
+
+    public enum ONNXInputTypeEnum { Float32, Float16, Byte };
+
 
     (string name, NodeMetadata metadata, bool isKnownShape, Float16[] value)[] inputBuffers16;
+    (string name, NodeMetadata metadata, bool isKnownShape, byte[] value)[] inputBuffersByte;
     (string name, NodeMetadata metadata, bool isKnownShape, Float16[] value)[] outputBuffers16;
     (string name, NodeMetadata metadata, bool isKnownShape, float[] value)[] inputBuffers32;
     (string name, NodeMetadata metadata, bool isKnownShape, float[] value)[] outputBuffers32;
@@ -137,13 +141,13 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
     /// <param name="loraAdapterFileName"></param>
     /// <exception cref="Exception"></exception>
     public ONNXExecutor(string shortID,
-                        string onnxFileName, 
+                        string onnxFileName,
                         byte[] onnxModelBytes,
                         string[] inputNames,
                         string nonBatchDimensions,
-                        int precisionNumBits, 
+                        int precisionNumBits,
                         int gpuID,
-                        bool useTensorRT, 
+                        bool useTensorRT,
                         int minBatchSize,
                         int maxBatchSize,
                         bool enableProfiling,
@@ -182,12 +186,13 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
         using (new TimingBlock("ONNX ModelProto parse"))
         {
           ModelProto onnxProto = ModelProto.Parser.ParseFrom(onnxModelBytes);
+//          bool usesSquaresBytes = Ceres.Base.Misc.ONNX.ONNXHelpers.GetMetadataValue(onnxProto, "uses_square_bytes_input") != null;
           string multinetNames = Ceres.Base.Misc.ONNX.ONNXHelpers.GetMetadataValue(onnxProto, "Ceres_multinet_names");
           if (multinetNames != null)
           {
             MultiNetNames = multinetNames.Split(',');
-          } 
-          
+          }
+
           string multinetWeights = Ceres.Base.Misc.ONNX.ONNXHelpers.GetMetadataValue(onnxProto, "Ceres_multinet_weights");
           if (multinetWeights != null)
           {
@@ -215,7 +220,7 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
 
       GPUID = gpuID;
       PrecisionNumBits = precisionNumBits;
-      
+
       MinBatchSize = minBatchSize;
       UseTensorRT = useTensorRT;
       RetainRawInputs = retainRawOutputs;
@@ -249,7 +254,7 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
           // TODO: this code has no effect for unknown reasons.
           Dictionary<string, string> providerOptionsDict = new();
           providerOptionsDict["device_id"] = gpuID.ToString();
-          providerOptionsDict["trt_max_workspace_size"] = "4294967296"; 
+          providerOptionsDict["trt_max_workspace_size"] = "4294967296";
 
           if (inputNames != null)
           {
@@ -315,7 +320,7 @@ Comments from onnxruntime source code:
             providerOptionsDict["trt_ep_context_file_path"] = "./";
             providerOptionsDict["trt_dump_ep_context_model"] = "1";
             providerOptionsDict["trt_ep_context_embed_mode"] = "1";
-            
+
             Console.WriteLine();
             ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, "NOTE: EMBED_TRT is set to 1. TensorRT engine will be embedded in the ONNX file _ctx.onnx.");
             ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, "NOTE: the _ctx.onnx file will only be created only upon normal termination of this process.");
@@ -334,10 +339,9 @@ Comments from onnxruntime source code:
           providerOptionsDict["trt_timing_cache_enable"] = "1";
           //providerOptionsDict["trt_force_timing_cache"] = "true";
 
-          // Essential to populate prefix for caching to work
           providerOptionsDict["trt_engine_cache_prefix"] = FileUtils.FileNameSanitized(shortID);
 
-          // providerOptionsDict["trt_detailed_build_log"] = "1";
+          //          providerOptionsDict["trt_detailed_build_log"] = "1";
 
           if (PrecisionNumBits == 16)
           {
@@ -402,8 +406,8 @@ Comments from onnxruntime source code:
       // N.B. A random problem with generated engines being slow (ignored FP16 mode)
       //      may possibly be caused by using ORT_ENABLE_ALL, so instead we use just ORT_ENABLE_EXTENDED.
       so.GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_EXTENDED;
-      
-      
+
+
       // N.B. Do not use ORT_PARALLEL, this causes failures in ONNXRuntime when using GPUs with index other than 0.
       so.ExecutionMode = ExecutionMode.ORT_SEQUENTIAL;
 
@@ -418,7 +422,7 @@ Comments from onnxruntime source code:
         {
 
           Session = new InferenceSession(onnxModelBytes, so);
-          inputsMetadata = Session.InputMetadata;
+          InputsMetadata = Session.InputMetadata;
 
           // Rewrite the inputsMetadata to ignore any input
           // having one of its dimensions 0.
@@ -427,30 +431,31 @@ Comments from onnxruntime source code:
           // but rather the ONNX runtime system will fill them in using active LoRA adapters
           // specified in the RunOptions (if any).
           Dictionary<string, NodeMetadata> newDict = new();
-          foreach (KeyValuePair<string, NodeMetadata> kvp in inputsMetadata)
+          foreach (KeyValuePair<string, NodeMetadata> kvp in InputsMetadata)
           {
             if (!kvp.Value.Dimensions.Contains(0))
             {
               newDict.Add(kvp.Key, kvp.Value);
             }
           }
-          inputsMetadata = newDict;
+          InputsMetadata = newDict;
 
           // Create input and output buffers.
           if (PrecisionNumBits == 32)
           {
-            inputBuffers32 = ONNXHelpers.CreateBuffers<float>(inputsMetadata, maxBatchSize);
+            inputBuffers32 = ONNXHelpers.CreateBuffers<float>(InputsMetadata, maxBatchSize);
             outputBuffers32 = ONNXHelpers.CreateBuffers<float>(Session.OutputMetadata, maxBatchSize, outputNamesToRetrieve);
           }
           else if (PrecisionNumBits == 16)
           {
-            inputBuffers16 = ONNXHelpers.CreateBuffers<Float16>(inputsMetadata, maxBatchSize);
+            inputBuffersByte = ONNXHelpers.CreateBuffers<byte>(InputsMetadata, maxBatchSize);
+            inputBuffers16 = ONNXHelpers.CreateBuffers<Float16>(InputsMetadata, maxBatchSize);
             outputBuffers16 = ONNXHelpers.CreateBuffers<Float16>(Session.OutputMetadata, maxBatchSize, outputNamesToRetrieve);
           }
           else
           {
             throw new Exception("Unsupported precision (" + PrecisionNumBits + ")");
-          } 
+          }
 
         }
       }
@@ -462,24 +467,21 @@ Comments from onnxruntime source code:
     /// <summary>
     /// Returns the number of inputs as reported by the ONNX model metadata.
     /// </summary>
-    public int NumInputs => inputsMetadata.Count;
+    public int NumInputs => InputsMetadata.Count;
 
 
     /// <summary>
-    /// Evaluates the input.
+    /// Common validation and input processing logic shared by both Run method overloads.
     /// </summary>
-    /// <param name="input"></param>
-    /// <param name="shape"></param>
-    /// <returns></returns>
-    public List<(string, Memory<Float16>)> Run((Memory<Half> input, int[] shape)[] inputs, int batchSize, bool float16)
+    /// <typeparam name="T">The input data type (byte or Half)</typeparam>
+    /// <param name="inputs">Input array containing memory, shape, and metadata</param>
+    /// <param name="batchSize">Batch size for processing</param>
+    /// <returns>Processed input data with names and element counts</returns>
+    private (Memory<T> input, int[] shape, string inputName, int numElements)[] ValidateAndProcessInputs<T>((Memory<T> input, int[] shape)[] inputs, int batchSize)
     {
-      // Determine input name
-      // NOTE: experienced strange lowlevel crash when tried to break out this into name retrieval into a separate method
-      string inputName = null;
-
-      if (inputsMetadata.Count != inputs.Length)
+      if (InputsMetadata.Count != inputs.Length)
       {
-        throw new ArgumentException($"Expected {inputsMetadata.Count} inputs, received " + inputs.Length);
+        throw new ArgumentException($"Expected {InputsMetadata.Count} inputs, received " + inputs.Length);
       }
 
       if (inputs[0].shape[0] > maxBatchSize)
@@ -487,9 +489,9 @@ Comments from onnxruntime source code:
         throw new ArgumentException($"Batch size {inputs[0].shape[0]} exceeds maximum of {maxBatchSize}");
       }
 
-      var inputsONNX = new (Memory<Half> input, int[] shape, string inputName, int numElements)[inputsMetadata.Count];
+      var inputsONNX = new (Memory<T> input, int[] shape, string inputName, int numElements)[InputsMetadata.Count];
 
-      if (inputsMetadata.Count != 1)
+      if (InputsMetadata.Count != 1)
       {
         if (!haveWarned)
         {
@@ -497,15 +499,13 @@ Comments from onnxruntime source code:
           Console.WriteLine("WARNING: Currently only single input ONNX files supported definitively.");
           haveWarned = true;
         }
-//        throw new Exception("Currently only single input ONNX files supported.");
       }
 
       int inputIndex = 0;
-      bool inputIsFloat = true;
-      foreach (KeyValuePair<string, NodeMetadata> iv in inputsMetadata)
+      foreach (KeyValuePair<string, NodeMetadata> iv in InputsMetadata)
       {
-        (Memory<Half> input, int[] shape) = inputs[inputIndex];
-        inputName = iv.Key;
+        (Memory<T> input, int[] shape) = inputs[inputIndex];
+        string inputName = iv.Key;
         if (inputName == null)
         {
           throw new Exception("Unable to retrieve name of input");
@@ -514,23 +514,68 @@ Comments from onnxruntime source code:
         int numElements = ONNXHelpers.ProductDimensions(shape, batchSize);
         Debug.Assert(input.Length == numElements); // caller to have passed the correct size
 
-        inputIsFloat = iv.Value.ElementType == typeof(float);
-
         inputsONNX[inputIndex] = (input, shape, inputName, numElements);
         inputIndex++;
       }
 
+      return inputsONNX;
+    }
+
+    /// <summary>
+    /// Evaluates the input.
+    /// </summary>
+    /// <param name="inputType"></param>
+    /// <param name="inputs"></param>
+    /// <param name="batchSize"></param>
+    /// <returns></returns>
+    public List<(string, Memory<Float16>)> Run(ONNXInputTypeEnum inputType, (Memory<byte> input, int[] shape)[] inputs, int batchSize)
+    {
+      var inputsONNX = ValidateAndProcessInputs(inputs, batchSize);
+
       // TODO: Actually the precision of the network is defined by the net itself.
-      //       So the variableIsFloat above should be used to determine this, and
+      //       So the inputIsFloat above should be used to determine this, and
       //       the caller should not be offered the chance to set the precision here
       //       (unless we decided to support auto-conversion of ONNX files here).
-      if (float16)
+      if (inputType == ONNXInputTypeEnum.Byte)
       {
-        return RunFloat16(inputsONNX, batchSize);
+        return RunInputByteOutputFloat16(inputsONNX, batchSize);
       }
       else
       {
-        return RunFloat(inputsONNX, batchSize);
+        throw new NotImplementedException("Unexpected ONNXInputTypeEnum" + inputType);
+      }
+    }
+
+    /// <summary>
+    /// Evaluates the input.
+    /// </summary>
+    /// <param name="inputType"></param>
+    /// <param name="inputs"></param>
+    /// <param name="batchSize"></param>
+    /// <returns></returns>
+    public List<(string, Memory<Float16>)> Run(ONNXInputTypeEnum inputType, (Memory<Half> input, int[] shape)[] inputs, int batchSize)
+    {
+      var inputsONNX = ValidateAndProcessInputs(inputs, batchSize);
+
+      // TODO: Actually the precision of the network is defined by the net itself.
+      //       So the inputIsFloat above should be used to determine this, and
+      //       the caller should not be offered the chance to set the precision here
+      //       (unless we decided to support auto-conversion of ONNX files here).
+      if (inputType == ONNXInputTypeEnum.Float16)
+      {
+        return RunInputHalfOutputFloat16(inputsONNX, batchSize);
+      }
+      else if (inputType == ONNXInputTypeEnum.Float32)
+      {
+        return RunOutputFloat(inputsONNX, batchSize);
+      }
+      else if (inputType == ONNXInputTypeEnum.Byte)
+      {
+        throw new Exception("Use the overloaded function for Byte instead");
+      }
+      else
+      {
+        throw new NotImplementedException("Unknown ONNXInputTypeEnum" + inputType);
       }
     }
 
@@ -547,7 +592,40 @@ Comments from onnxruntime source code:
     /// <param name="inputName"></param>
     /// <param name="numElements"></param>
     /// <returns></returns>
-    internal List<(string, Memory<Float16>)> RunFloat16((Memory<Half> input, int[] shape, string inputName, int numElements)[] inputs, int batchSize)
+    internal List<(string, Memory<Float16>)> RunInputByteOutputFloat16((Memory<byte> input, int[] shape, string inputName, int numElements)[] inputs, int batchSize)
+    {
+      if (batchSize < MinBatchSize)
+      {
+        throw new ArgumentException($"Batch size {batchSize} is less than minimum of {MinBatchSize}");
+      }
+
+      List<NamedOnnxValue> inputsONNX = new(inputs.Length);
+
+      for (int i = 0; i < inputs.Length; i++)
+      {
+        (Memory<byte> input, int[] shape, string inputName, int numElements) = inputs[i];
+
+        // Cast float inputs directly into the target byte ONNX buffer
+        input.Span.CopyTo(inputBuffersByte[i].value);
+      }
+
+      (string[] names, OrtValue[] values) inputBuffers = ONNXHelpers.CreateOrtValues(batchSize, inputBuffersByte);
+
+      return RunOutputFloat16Inner<byte>(inputs, inputBuffers, batchSize);
+    }
+
+    /// <summary>
+    /// 
+    /// 
+    /// TO DO: eventually we could have a separate (more efficient) code path 
+    ///        which is FP16 throughout rather than multiple conversions.
+    /// </summary>
+    /// <param name="input"></param>
+    /// <param name="shape"></param>
+    /// <param name="inputName"></param>
+    /// <param name="numElements"></param>
+    /// <returns></returns>
+    internal List<(string, Memory<Float16>)> RunInputHalfOutputFloat16((Memory<Half> input, int[] shape, string inputName, int numElements)[] inputs, int batchSize)
     {
       if (batchSize < MinBatchSize)
       {
@@ -565,11 +643,21 @@ Comments from onnxruntime source code:
         input.Span.CopyTo(inputBufferSpanHalf);
       }
 
+      (string[] names, OrtValue[] values) inputBuffers = ONNXHelpers.CreateOrtValues(batchSize, inputBuffers16);
+
+      return RunOutputFloat16Inner<Half>(inputs, inputBuffers, batchSize);
+    }
+
+
+
+    internal List<(string, Memory<Float16>)> RunOutputFloat16Inner<T>(
+      (Memory<T> input, int[] shape, string inputName, int numElements)[] inputs,
+      (string[] names, OrtValue[] values) inputBuffers, int batchSize)
+    {
       List<(string, Memory<Float16>)> resultArrays = new(outputBuffers16.Length);
 
       lock (lockObject)
       {
-        (string[] names, OrtValue[] values) inputBuffers = ONNXHelpers.CreateOrtValues(batchSize, inputBuffers16);
         (string[] names, OrtValue[] values) outputBuffers = ONNXHelpers.CreateOrtValues(batchSize, outputBuffers16);
 
         bool unknownShapeExists = outputBuffers16.Any(b => !b.isKnownShape);
@@ -590,7 +678,7 @@ Comments from onnxruntime source code:
           }
 
           // Extract results from output buffers.
-          for (int i=0;i< outputBuffers.names.Length; i++)
+          for (int i = 0; i < outputBuffers.names.Length; i++)
           {
 
             if (rr[i].GetTensorTypeAndShape().ElementDataType == TensorElementType.Float16)
@@ -642,7 +730,7 @@ Comments from onnxruntime source code:
     /// <param name="inputs"></param>
     /// <param name="batchSize"></param>
     /// <returns></returns>
-    private List<(string, Memory<Float16>)> RunFloat((Memory<Half> input, int[] shape, string inputName, int numElements)[] inputs, int batchSize)
+    private List<(string, Memory<Float16>)> RunOutputFloat((Memory<Half> input, int[] shape, string inputName, int numElements)[] inputs, int batchSize)
     {
       if (batchSize < MinBatchSize)
       {
@@ -743,7 +831,7 @@ Comments from onnxruntime source code:
     /// <returns></returns>
     public override string ToString()
     {
-      return "<NetExecutorONNXRuntime " + ONNXFileName + " (" + PrecisionNumBits + ")>"; 
+      return "<NetExecutorONNXRuntime " + ONNXFileName + " (" + PrecisionNumBits + ")>";
     }
 
 

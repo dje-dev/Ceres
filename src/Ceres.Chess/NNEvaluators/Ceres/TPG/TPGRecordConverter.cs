@@ -168,7 +168,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
                                                                float qNegativeBlunders,
                                                                float qPositiveBlunders,
                                                                out MGPosition[] mgPos,
-                                                               out byte[] squareBytesAll,
+                                                               byte[] squareBytesAll,
                                                                short[] legalMoveIndices)
     {
       if (legalMoveIndices != null)
@@ -188,8 +188,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
       mgPos = positions.Positions.ToArray();
       byte[] pliesSinceLastMoveAllPositions = positions.LastMovePlies.ToArray();
 
-      byte[] squareBytesAllLocalRef = new byte[positions.NumPos * TPGRecord.BYTES_PER_SQUARE_RECORD * 64];
-      squareBytesAll = squareBytesAllLocalRef;
+      byte[] squareBytesAllLocalRef = squareBytesAll;
 
       // Determine each position and copy converted raw board bytes into rawBoardBytesAll.
       // TODO: for efficiency, avoid doing this if the NN evaluator does not need raw bytes
