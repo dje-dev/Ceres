@@ -82,7 +82,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     static void CopyAndDivide(byte[] sourceBytes, Half[] targetHalves, float divisor)
     {
       const int CHUNK_SIZE = 2 * 1024 * 128;
-
+      
       if (sourceBytes.Length < CHUNK_SIZE * 2)
       {
         CopyAndDivideSIMD(sourceBytes, targetHalves, divisor);
@@ -256,7 +256,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     /// <exception cref="NotImplementedException"></exception>
     public static void ConvertToFlatTPG(NNEvaluatorOptions options, 
                                         IEncodedPositionBatchFlat batch,
-                                        bool includeHistory, Half[] squareValues, short[] legalMoveIndices)
+                                        bool includeHistory, byte[] squareValuesByte, Half[] squareValues, short[] legalMoveIndices)
     {
       if (TPGRecord.EMIT_PLY_SINCE_LAST_MOVE_PER_SQUARE)
       {
@@ -275,17 +275,21 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
       //       this version computed here against the new more efficient code.
       // TODO: someday handle since ply, does that need to be passed in from the search engine?
 
-      byte[] squareBytesAll;
       byte[] moveBytesAll;
 
       NNEvaluatorOptionsCeres optionsCeres = options as NNEvaluatorOptionsCeres;
       // TODO: consider pushing the CopyAndDivide below into this next method
       TPGRecordConverter.ConvertPositionsToRawSquareBytes(batch, includeHistory, batch.Moves, EMIT_PLY_SINCE,
                                                           optionsCeres.QNegativeBlunders, optionsCeres.QPositiveBlunders,
-                                                          out _, out squareBytesAll, legalMoveIndices);
+                                                          out _, squareValuesByte, legalMoveIndices);
 
-      // TODO: push this division onto the GPU
-      CopyAndDivide(squareBytesAll, squareValues, TPGSquareRecord.SQUARE_BYTES_DIVISOR);
+      // If we are providing float inputs, then it is necessary to do the
+      // (slow) convertion from Half to float (and also divide by 100).
+      if (squareValues != null)
+      {
+        CopyAndDivide(squareValuesByte, squareValues, TPGSquareRecord.SQUARE_BYTES_DIVISOR);
+      }
+
 
 #if OLD_TPG_COMBO_DIRECT_CONVER
       static bool HAVE_WARNED = false;

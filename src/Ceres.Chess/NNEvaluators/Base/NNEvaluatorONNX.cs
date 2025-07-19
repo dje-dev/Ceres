@@ -15,25 +15,23 @@
 
 using System;
 using System.Buffers;
-using System.Diagnostics;
-using System.Runtime.InteropServices;
-using System.Linq;
 using System.Collections.Generic;
-
-using Onnx;
-
-using Microsoft.ML.OnnxRuntime;
-
+using System.Diagnostics;
+using System.Linq;
+using System.Runtime.InteropServices;
 using Ceres.Base.Benchmarking;
-using Ceres.Base.DataTypes;
 using Ceres.Base.DataType;
+using Ceres.Base.DataTypes;
 using Ceres.Base.Misc.ONNX;
-using Ceres.Chess.NNEvaluators;
-using Ceres.Chess.NetEvaluation.Batch;
 using Ceres.Chess.LC0.Batches;
-using Ceres.Chess.NNEvaluators.Defs;
+using Ceres.Chess.NetEvaluation.Batch;
 using Ceres.Chess.NNBackends.ONNXRuntime;
+using Ceres.Chess.NNEvaluators;
 using Ceres.Chess.NNEvaluators.Ceres.TPG;
+using Ceres.Chess.NNEvaluators.Defs;
+using Microsoft.ML.OnnxRuntime;
+using Onnx;
+using ProtoBuf.Meta;
 
 #endregion
 
@@ -122,6 +120,12 @@ namespace Chess.Ceres.NNEvaluators
     readonly bool hasUncertaintyV;
     readonly bool hasUncertaintyP;
     readonly bool hasAction;
+
+    /// <summary>
+    /// If an input with the name "squares_byte" exists
+    /// indicating the network can accept TPG style data in pure byte format.
+
+    public bool HasSquaresByteInput;
 
     /// <summary>
     /// Name of policy output slot.
@@ -275,8 +279,13 @@ namespace Chess.Ceres.NNEvaluators
       Console.WriteLine("Starting ONNX runtime against " + onnxModelFileName + " from " + onnxModelFileName
                       + " with " + deviceType + " " + gpuID + " using (" + executorType + " " + numBits + ")");
 
+      // TODO: Clean up, this is a hack.
+      // Look for the input with name with -I8 indicating
+      // the network can directly accept byte inputs.
+      HasSquaresByteInput = type == ONNXNetExecutor.NetTypeEnum.TPG && ONNXFileName.ToUpper().Contains("-I8");
+
       string[] inputNames = type == ONNXNetExecutor.NetTypeEnum.TPG
-                                  ? ["squares", "prior_state.1"] :
+                                  ? [HasSquaresByteInput ? "squares_byte" : "squares", "prior_state.1"] :
                                     ["/input/planes"];
 
       bool mustRetainOutputsForHeadOverrides = headOverrides != null && headOverrides.Length > 0;
@@ -287,7 +296,7 @@ namespace Chess.Ceres.NNEvaluators
 
 
 
-    public Action<NNEvaluatorOptions, IEncodedPositionBatchFlat, bool, Half[], short[]> ConverterToFlat = null;
+    public Action<NNEvaluatorOptions, IEncodedPositionBatchFlat, bool, byte[], Half[], short[]> ConverterToFlat = null;
     public Func<NNEvaluatorOptions, object, byte[], int> ConverterToFlatFromTPG = null;
 
     [ThreadStatic] static byte[] inputsPrimaryNative;
@@ -365,7 +374,7 @@ namespace Chess.Ceres.NNEvaluators
       }
 
       const float TPG_DIVISOR = ByteScaled.SCALING_FACTOR; // TODO: receive this in constructor instead. Should refer to TPGSquareRecord.SQUARE_BYTES_DIVISOR.
-      PositionEvaluationBatch ret = DoEvaluateBatch(default, inputsPrimaryNativeF, null, //usesSecondaryInputs ? inputsSecondaryNativeF : null, 
+      PositionEvaluationBatch ret = DoEvaluateBatch(default, inputsPrimaryNative, inputsPrimaryNativeF, null, //usesSecondaryInputs ? inputsSecondaryNativeF : null, 
                                                     numPositions, retrieveSupplementalResults, posMoveIsLegal,
                                                     TPG_DIVISOR);
       return ret;
@@ -400,13 +409,19 @@ namespace Chess.Ceres.NNEvaluators
         }
 
         int inputSizeAttention = batch.NumPos * 64 * ONNXNetExecutor.TPG_BYTES_PER_SQUARE_RECORD;
-        Half[] flatValuesAttention = ArrayPool<Half>.Shared.Rent(inputSizeAttention);
-        Memory<Half> flatValuesAttentionM = flatValuesAttention.AsMemory().Slice(0, inputSizeAttention);
+        Half[] flatValuesAttention = null;
+        byte[] squareValuesByte = new byte[inputSizeAttention];
+        Memory<Half> flatValuesAttentionM = default;
+        if (!HasSquaresByteInput)
+        {
+          flatValuesAttention = ArrayPool<Half>.Shared.Rent(inputSizeAttention);
+          flatValuesAttentionM = flatValuesAttention.AsMemory().Slice(0, inputSizeAttention); //// TODO: where are these released?
+        }
 
         short[] legalMoveIndices = null; // not needed, batch already contains moves
-        ConverterToFlat(Options, batch, UseHistory, flatValuesAttention, legalMoveIndices);
+        ConverterToFlat(Options, batch, UseHistory, squareValuesByte, flatValuesAttention, legalMoveIndices);
 
-        PositionEvaluationBatch ret = DoEvaluateBatch(batch, flatValuesAttentionM, batch.States, batch.NumPos,
+        PositionEvaluationBatch ret = DoEvaluateBatch(batch, squareValuesByte, flatValuesAttentionM, batch.States, batch.NumPos,
                                                       retrieveSupplementalResults, null, 1);
         Debug.Assert(!retrieveSupplementalResults);
         return ret;
@@ -417,7 +432,7 @@ namespace Chess.Ceres.NNEvaluators
         Half[] flatValues = ArrayPool<Half>.Shared.Rent(bufferLength);
 
         batch.ValuesFlatFromPlanes(flatValues, false, Scale50MoveCounter);
-        PositionEvaluationBatch ret = DoEvaluateBatch(batch, flatValues, null, batch.NumPos, retrieveSupplementalResults, null, 1);
+        PositionEvaluationBatch ret = DoEvaluateBatch(batch, null, flatValues, null, batch.NumPos, retrieveSupplementalResults, null, 1);
 
         ArrayPool<Half>.Shared.Return(flatValues);
         return ret;
@@ -453,6 +468,7 @@ namespace Chess.Ceres.NNEvaluators
     /// <param name="retrieveSupplementalResults"></param>
     /// <returns></returns>
     PositionEvaluationBatch DoEvaluateBatch(IEncodedPositionBatchFlat batch,
+                                            Memory<byte> flatValuesPrimaryBytes,
                                             Memory<Half> flatValuesPrimary, Memory<Half[]> flatValuesState,
                                             int numPos, bool retrieveSupplementalResults,
                                             Func<int, int, bool> posMoveIsLegal,
@@ -473,9 +489,17 @@ namespace Chess.Ceres.NNEvaluators
           Predicate<int> shouldUseStateForPos = i => batch.PositionsBuffer.Span[i].BoardsHistory.History_1
                                                   != batch.PositionsBuffer.Span[i].BoardsHistory.History_2;
 
-          results = Executor.Execute(IsWDL, HasState, flatValuesPrimary, flatValuesState, numPos,
-                                    alreadyConvertedToLZ0: true, tpgDivisor: tpgDivisor,
-                                    shouldUseStateForPos: shouldUseStateForPos);
+          if (HasSquaresByteInput)
+          {
+            results = Executor.ExecuteTPGByteInputs(IsWDL, HasState, flatValuesPrimaryBytes, flatValuesState, numPos,
+                                                    shouldUseStateForPos: shouldUseStateForPos);
+          }
+          else
+          {
+            results = Executor.Execute(IsWDL, HasState, flatValuesPrimary, flatValuesState, numPos,
+                                      alreadyConvertedToLZ0: true, tpgDivisor: tpgDivisor,
+                                      shouldUseStateForPos: shouldUseStateForPos);
+          }
 
           if (Options.HeadOverrides != null)
           {
