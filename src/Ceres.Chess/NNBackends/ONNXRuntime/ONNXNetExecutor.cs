@@ -357,8 +357,8 @@ throw new Exception("Needs remeditation; the inputs are assumed all byte but for
       int NUM_INPUTS = executor.NumInputs;
       (Memory<byte> input, int[] shape)[] inputs = new (Memory<byte> input, int[] shape)[NUM_INPUTS];
 
-      int TOTAL_LEN = numPositionsUsed * 64 * TPG_BYTES_PER_SQUARE_RECORD;
-      inputs[0] = (flatValuesPrimary.Slice(0, TOTAL_LEN), new int[] { numPositionsUsed, 64, TPG_BYTES_PER_SQUARE_RECORD });
+      int TOTAL_LEN = numPositionsInBatchSentToExecutor * 64 * TPG_BYTES_PER_SQUARE_RECORD;
+      inputs[0] = (flatValuesPrimary.Slice(0, TOTAL_LEN), new int[] { numPositionsInBatchSentToExecutor, 64, TPG_BYTES_PER_SQUARE_RECORD });
       if (inputs.Length > 1)
       {
         // TODO: improve efficiency here
@@ -427,7 +427,7 @@ throw new Exception("Needs remeditation; the inputs are assumed all byte but for
       //          }
 
       inputsByte[0].shape = inputs[0].shape;
-      eval = executor.Run(ONNXExecutor.ONNXInputTypeEnum.Byte, inputsByte, numPositionsUsed);
+      eval = executor.Run(ONNXExecutor.ONNXInputTypeEnum.Byte, inputsByte, numPositionsInBatchSentToExecutor);
 
 
       if (numPositionsInBatchSentToExecutor != numPositionsUsed)
