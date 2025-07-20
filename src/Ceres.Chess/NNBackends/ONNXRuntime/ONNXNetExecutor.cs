@@ -16,12 +16,13 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+
+using Microsoft.ML.OnnxRuntime;
+
 using Ceres.Chess.LC0.Batches;
 using Ceres.Chess.NNEvaluators;
 using Ceres.Chess.NNEvaluators.Defs;
 using Chess.Ceres.NNEvaluators;
-using Microsoft.ML.OnnxRuntime;
-using ProtoBuf.Meta;
 
 #endregion
 
@@ -224,7 +225,8 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
     /// <param name="alreadyConvertedToLZ0"></param>
     /// <returns></returns>
     public ONNXRuntimeExecutorResultBatch[] ExecuteTPGByteInputs(bool isWDL, bool hasState,
-                                                                 Memory<byte> flatValuesPrimary, Memory<Half[]> flatValuesState,
+                                                                 Memory<byte> flatValuesPrimary, 
+                                                                 Memory<Half[]> flatValuesState,
                                                                  int numPositionsUsed,
                                                                  Predicate<int> shouldUseStateForPos = null)
     {
@@ -234,51 +236,71 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
 
       List<(string, Memory<Float16>)> eval;
 
-      if (NetType == NetTypeEnum.TPG)
+      int NUM_INPUTS = executor.NumInputs;
+      (Memory<byte> input, int[] shape)[] inputs = new (Memory<byte> input, int[] shape)[NUM_INPUTS];
+
+      int TOTAL_LEN = numPositionsInBatchSentToExecutor * 64 * TPG_BYTES_PER_SQUARE_RECORD;
+      Memory<byte> input0;
+      if (numPositionsUsed == numPositionsInBatchSentToExecutor)
       {
-        int NUM_INPUTS = executor.NumInputs;
-        (Memory<byte> input, int[] shape)[] inputs = new (Memory<byte> input, int[] shape)[NUM_INPUTS];
+        input0 = flatValuesPrimary.Slice(0, TOTAL_LEN);
+      }
+      else
+      {
+        input0 = new byte[numPositionsInBatchSentToExecutor * 64 * TPG_BYTES_PER_SQUARE_RECORD];
+        flatValuesPrimary.CopyTo(input0);
 
-        int TOTAL_LEN = numPositionsUsed * 64 * TPG_BYTES_PER_SQUARE_RECORD;
-        inputs[0] = (flatValuesPrimary.Slice(0, TOTAL_LEN), new int[] { numPositionsInBatchSentToExecutor, 64, TPG_BYTES_PER_SQUARE_RECORD });
-        if (inputs.Length > 1)
+        // Avoid sending uninitialized data for the unused positions
+        // (the neural net might return NaN for an out of distribution input).
+        // Instead fill buffer with a known good position.
+        Span<byte> spanFirstPosition = flatValuesPrimary.Span.Slice(0, 64 * TPG_BYTES_PER_SQUARE_RECORD);
+        for (int i = numPositionsUsed; i < numPositionsInBatchSentToExecutor; i++)
         {
-          // TODO: improve efficiency here
-          if (flatValuesState.IsEmpty)
-          {
-            // No state available, pass all zeroes.
-            inputs[1] = (new byte[numPositionsInBatchSentToExecutor * 64 * NNEvaluator.SIZE_STATE_PER_SQUARE],
-                       new int[] { numPositionsInBatchSentToExecutor, 64, NNEvaluator.SIZE_STATE_PER_SQUARE });
-          }
-          else
-          {
-            Span<Half[]> flatValuesStateSpan = flatValuesState.Span;
-
-            // Reformat the state data into a 1D array
-            // TODO: improve efficiency
-//            Half[] states1D = new Half[numPositionsInBatchSentToExecutor * 64 * NNEvaluator.SIZE_STATE_PER_SQUARE];
-throw new Exception("Needs remeditation; the inputs are assumed all byte but for this case the second one should be Half");
-            byte[] states1D = new byte[numPositionsInBatchSentToExecutor * 64 * NNEvaluator.SIZE_STATE_PER_SQUARE];
-            for (int i = 0; i < numPositionsUsed; i++)
-            {
-              if (flatValuesStateSpan[i] == null
-               || (shouldUseStateForPos != null && !shouldUseStateForPos(i)))
-              {
-                // No state available, pass all zeroes.
-                // Noting to do since array was created just above and is already zeroed.
-              }
-              else if (flatValuesStateSpan[i].Length != 64 * NNEvaluator.SIZE_STATE_PER_SQUARE)
-              {
-                throw new Exception("State input size mismatch.");
-              }
-              else
-              {
-                Array.Copy(flatValuesStateSpan[i], 0, states1D, i * 64 * NNEvaluator.SIZE_STATE_PER_SQUARE, 64 * NNEvaluator.SIZE_STATE_PER_SQUARE);
-              }
-            }
-            inputs[1] = (states1D, new int[] { states1D.Length });
-          }
+          spanFirstPosition.CopyTo(input0.Span.Slice(i * 64 * TPG_BYTES_PER_SQUARE_RECORD,
+                                                         64 * TPG_BYTES_PER_SQUARE_RECORD));
         }
+      }
+
+      inputs[0] = (input0, [numPositionsInBatchSentToExecutor, 64, TPG_BYTES_PER_SQUARE_RECORD]);
+
+      if (inputs.Length > 1)
+      {
+        // TODO: improve efficiency here
+        if (flatValuesState.IsEmpty)
+        {
+          // No state available, pass all zeroes.
+          inputs[1] = (new byte[numPositionsInBatchSentToExecutor * 64 * NNEvaluator.SIZE_STATE_PER_SQUARE],
+                     new int[] { numPositionsInBatchSentToExecutor, 64, NNEvaluator.SIZE_STATE_PER_SQUARE });
+        }
+        else
+        {
+          Span<Half[]> flatValuesStateSpan = flatValuesState.Span;
+
+          // Reformat the state data into a 1D array
+          // TODO: improve efficiency
+          //            Half[] states1D = new Half[numPositionsInBatchSentToExecutor * 64 * NNEvaluator.SIZE_STATE_PER_SQUARE];
+          throw new Exception("Needs remeditation; the inputs are assumed all byte but for this case the second one should be Half");
+          byte[] states1D = new byte[numPositionsInBatchSentToExecutor * 64 * NNEvaluator.SIZE_STATE_PER_SQUARE];
+          for (int i = 0; i < numPositionsUsed; i++)
+          {
+            if (flatValuesStateSpan[i] == null
+             || (shouldUseStateForPos != null && !shouldUseStateForPos(i)))
+            {
+              // No state available, pass all zeroes.
+              // Noting to do since array was created just above and is already zeroed.
+            }
+            else if (flatValuesStateSpan[i].Length != 64 * NNEvaluator.SIZE_STATE_PER_SQUARE)
+            {
+              throw new Exception("State input size mismatch.");
+            }
+            else
+            {
+              Array.Copy(flatValuesStateSpan[i], 0, states1D, i * 64 * NNEvaluator.SIZE_STATE_PER_SQUARE, 64 * NNEvaluator.SIZE_STATE_PER_SQUARE);
+            }
+          }
+          inputs[1] = (states1D, new int[] { states1D.Length });
+        }
+      }
 
 #if NOT
         if (flatValuesSecondary.Length > 0)
@@ -289,29 +311,17 @@ throw new Exception("Needs remeditation; the inputs are assumed all byte but for
         }
 #endif
 
-        // TODO: Clean up, this is a hack.
-        // Look for the input with name with -I8 indicating
-        // the network can directly accept byte inputs.
-        HasSquaresByteInput = NetType == NetTypeEnum.TPG && ONNXFileName.ToUpper().Contains("-I8");
+      eval = executor.Run(HasSquaresByteInput ? ONNXExecutor.ONNXInputTypeEnum.Byte 
+                                              : ONNXExecutor.ONNXInputTypeEnum.Float16,
+                          inputs, numPositionsInBatchSentToExecutor);
 
-        eval = executor.Run(HasSquaresByteInput ? ONNXExecutor.ONNXInputTypeEnum.Byte  :ONNXExecutor.ONNXInputTypeEnum.Float16, 
-                            inputs, numPositionsInBatchSentToExecutor);
-
-        if (numPositionsInBatchSentToExecutor != numPositionsUsed)
-        {
-          // Resize all results to match the number of positions actually used.
-          for (int i = 0; i < eval.Count; i++)
-          {
-            eval[i] = (eval[i].Item1, eval[i].Item2.Slice(0, numPositionsUsed * eval[i].Item2.Length / numPositionsInBatchSentToExecutor));
-          }
-        }
-      }
-      else
+      if (numPositionsInBatchSentToExecutor != numPositionsUsed)
       {
-        (Memory<byte> flatValuesPrimary, int[]) input = default;
-        input.Item1 = flatValuesPrimary.Slice(0, numPositionsUsed * 112 * 8 * 8);
-        input.Item2 = [numPositionsUsed, 112, 8, 8];
-        eval = executor.Run(ONNXExecutor.ONNXInputTypeEnum.Byte, [input], numPositionsUsed);
+        // Resize all results to match the number of positions actually used.
+        for (int i = 0; i < eval.Count; i++)
+        {
+          eval[i] = (eval[i].Item1, eval[i].Item2.Slice(0, numPositionsUsed * eval[i].Item2.Length / numPositionsInBatchSentToExecutor));
+        }
       }
 
       if (executor.MultiNetNames != null)
@@ -327,8 +337,6 @@ throw new Exception("Needs remeditation; the inputs are assumed all byte but for
 
       return [ExtractNetOutputs(null, isWDL, hasState, RetainRawOutputs, numPositionsUsed, eval)];
     }
-
-
 
 
 
@@ -357,8 +365,31 @@ throw new Exception("Needs remeditation; the inputs are assumed all byte but for
       int NUM_INPUTS = executor.NumInputs;
       (Memory<byte> input, int[] shape)[] inputs = new (Memory<byte> input, int[] shape)[NUM_INPUTS];
 
+      // TODO: this code duplicated below, refactor/clean up.
       int TOTAL_LEN = numPositionsInBatchSentToExecutor * 64 * TPG_BYTES_PER_SQUARE_RECORD;
-      inputs[0] = (flatValuesPrimary.Slice(0, TOTAL_LEN), new int[] { numPositionsInBatchSentToExecutor, 64, TPG_BYTES_PER_SQUARE_RECORD });
+      Memory<byte> input0;
+      if (numPositionsUsed == numPositionsInBatchSentToExecutor)
+      {
+        input0 = flatValuesPrimary.Slice(0, TOTAL_LEN);
+      }
+      else
+      {
+        input0 = new byte[numPositionsInBatchSentToExecutor * 64 * TPG_BYTES_PER_SQUARE_RECORD];
+        flatValuesPrimary.CopyTo(input0);
+
+        // Avoid sending uninitialized data for the unused positions
+        // (the neural net might return NaN for an out of distribution input).
+        // Instead fill buffer with a known good position.
+        Span<byte> spanFirstPosition = flatValuesPrimary.Span.Slice(0, 64 * TPG_BYTES_PER_SQUARE_RECORD);
+        for (int i = numPositionsUsed; i < numPositionsInBatchSentToExecutor; i++)
+        {
+          spanFirstPosition.CopyTo(input0.Span.Slice(i * 64 * TPG_BYTES_PER_SQUARE_RECORD,
+                                                         64 * TPG_BYTES_PER_SQUARE_RECORD));
+        }
+      }
+
+      inputs[0] = (input0, [numPositionsInBatchSentToExecutor, 64, TPG_BYTES_PER_SQUARE_RECORD]);
+
       if (inputs.Length > 1)
       {
         // TODO: improve efficiency here
@@ -523,8 +554,29 @@ throw new Exception("Needs remeditation; the inputs are assumed all byte but for
           }
         }
 
-        int TOTAL_LEN = numPositionsUsed * 64 * TPG_BYTES_PER_SQUARE_RECORD;
-        inputs[0] = (flatValuesPrimary.Slice(0, TOTAL_LEN), new int[] { numPositionsUsed, 64, TPG_BYTES_PER_SQUARE_RECORD });
+        int TOTAL_LEN = numPositionsInBatchSentToExecutor * 64 * TPG_BYTES_PER_SQUARE_RECORD;
+        Memory<Half> input0;
+        if (numPositionsUsed == numPositionsInBatchSentToExecutor)
+        {
+          input0 = flatValuesPrimary.Slice(0, TOTAL_LEN);
+        }
+        else
+        {
+          input0 = new Half[numPositionsInBatchSentToExecutor * 64 * TPG_BYTES_PER_SQUARE_RECORD];
+          flatValuesPrimary.CopyTo(input0);
+
+          // Avoid sending uninitialized data for the unused positions
+          // (the neural net might return NaN for an out of distribution input).
+          // Instead fill buffer with a known good position.
+          Span<Half> spanFirstPosition = flatValuesPrimarySpan.Slice(0, 64 * TPG_BYTES_PER_SQUARE_RECORD);
+          for (int i=numPositionsUsed; i<numPositionsInBatchSentToExecutor;i++)
+          {
+            spanFirstPosition.CopyTo(input0.Span.Slice(i * 64 * TPG_BYTES_PER_SQUARE_RECORD, 
+                                                           64 * TPG_BYTES_PER_SQUARE_RECORD));
+          }
+        }
+        inputs[0] = (input0, [ numPositionsInBatchSentToExecutor, 64, TPG_BYTES_PER_SQUARE_RECORD]);
+
         if (inputs.Length > 1)
         {
           // TODO: improve efficiency here
