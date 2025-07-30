@@ -94,6 +94,53 @@ namespace Ceres.Base.Misc
     }
 
 
+
+    /// <summary>
+    /// Helper hash function.
+    /// </summary>
+    /// <param name="s"></param>
+    /// <returns></returns>
+    static uint Fnv1a(string s)
+    {
+      unchecked
+      {
+        uint h = 2166136261;
+        foreach (char c in s)
+        {
+          h = (h ^ c) * 16777619;
+        }
+        return h;
+      }
+    }
+
+    /// <summary>
+    /// Computes a hash over a type's public and non-public instance fields, 
+    /// considering their name, type, offset, and size.
+    /// 
+    /// This helper method can be used in Debug.Assert in code which assumes a certain 
+    /// set of struct fields (to detect changes that have not yet been reflected in that code).
+    /// </summary>
+    public static uint CalcTypeLayoutHash(Type t)
+    {
+      FieldInfo[] fields = t.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+      // To ensure stable results, sort by metadata order (using MetadataToken is generally stable in the same assembly)
+      Array.Sort(fields, (a, b) => a.Name.CompareTo(b.Name));// a.MetadataToken.CompareTo(b.MetadataToken));//
+
+      uint hash = 2166136261u;
+      foreach (FieldInfo f in fields)
+      {
+        int offset = 0;// (int)Marshal.OffsetOf(t, f.Name)!;
+        Type ft = f.FieldType;
+        int size = (ft.IsClass || ft.IsGenericType) ? 8 : Marshal.SizeOf(ft);
+
+        hash = (hash ^ (uint)offset) * 16777619;
+        hash = (hash ^ (uint)size) * 16777619;
+        hash = (hash ^ (uint)(Fnv1a(ft.FullName) * 16777619));
+      }
+      return hash;
+    }
+
     /// <summary>
     /// Dumps the field values of an object of type T into a string (via reflection).
     /// </summary>
