@@ -140,8 +140,9 @@ namespace Ceres.Chess.MoveGen
         }
       }
 
-      // Update Rule 50 count (upon any pawn move or capture)
-      if (M.Capture || (byte)M.Piece == MGPositionConstants.WPAWN 
+      // Update Rule 50 count (upon any pawn move or capture).
+      // (Update for castling is performed below as well).
+      if (M.Capture || (byte)M.Piece == MGPositionConstants.WPAWN
                     || (byte)M.Piece == MGPositionConstants.BPAWN)
       {
         Rule50Count = 0;
@@ -237,7 +238,7 @@ namespace Ceres.Chess.MoveGen
           rookPos = rookPos == 1152921504606846976 ? 0 : rookPos | 1152921504606846976;
           kingPos = nFromSquare == nToSquare ? 0 : kingPos;
           BitBoard kingAndRooks = kingPos == rookPos ? 0 : kingPos | rookPos;
-          
+
           if (rookPos == kingPos)
           {
             kingAndRooks = 0;
@@ -259,6 +260,7 @@ namespace Ceres.Chess.MoveGen
           BlackDidCastleLong = true;
           BlackCanCastle = false;
           BlackCanCastleLong = false;
+          Rule50Count = 0;
           return;
         }
         else
@@ -308,6 +310,7 @@ namespace Ceres.Chess.MoveGen
           WhiteDidCastle = true;
           WhiteCanCastle = false;
           WhiteCanCastleLong = false;
+          Rule50Count = 0;
           return;
         }
 
@@ -397,7 +400,7 @@ namespace Ceres.Chess.MoveGen
       }
 
       else if ((byte)M.Piece == MGPositionConstants.WROOK)
-      {        
+      {
         if (M.FromSquareIndex == rookInfo.WhiteKRInitPlacement)
         {
           // White moved K-side Rook and forfeits right to castle K-side
