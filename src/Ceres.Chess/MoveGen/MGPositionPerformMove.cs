@@ -260,7 +260,6 @@ namespace Ceres.Chess.MoveGen
           BlackDidCastleLong = true;
           BlackCanCastle = false;
           BlackCanCastleLong = false;
-          Rule50Count = 0;
           return;
         }
         else
@@ -310,7 +309,6 @@ namespace Ceres.Chess.MoveGen
           WhiteDidCastle = true;
           WhiteCanCastle = false;
           WhiteCanCastleLong = false;
-          Rule50Count = 0;
           return;
         }
 
