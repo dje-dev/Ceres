@@ -163,7 +163,7 @@ namespace Ceres.Base.Misc
           object val = propInfo.GetValue(obj);
           object valDefault = propInfo.GetValue(comparisonValue);
 
-          bool different = ((val == null) != (valDefault == null)) || !val.Equals(valDefault);
+          bool different = ((val == null) != (valDefault == null)) || (val is not null && !val.Equals(valDefault));
           if (different)
           {
             countDifferent++;
