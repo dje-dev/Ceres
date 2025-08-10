@@ -181,7 +181,9 @@ namespace Ceres.Features.GameEngines
 
       // TODO: can we somehow correctly set the staring N arugment here?
       float boundedCP = StatUtils.Bounded(lc0Analysis.ScoreCentipawns, -9999, 9999);
-      float lc0Q = EncodedEvalLogistic.CentipawnToLogistic(boundedCP);
+      float lc0Q = (lc0Analysis.UCIInfo != null && !float.IsNaN(lc0Analysis.UCIInfo.Q))
+                    ? lc0Analysis.UCIInfo.Q
+                    : EncodedEvalLogistic.CentipawnToLogistic(boundedCP);
       return new GameEngineSearchResult(lc0Analysis.BestMove, lc0Q, boundedCP, float.NaN,
                                         searchLimit, default, 0, (int)lc0Analysis.NumNodes,
                                         lc0Analysis.UCIInfo.NPS, (int)lc0Analysis.UCIInfo.Depth,
