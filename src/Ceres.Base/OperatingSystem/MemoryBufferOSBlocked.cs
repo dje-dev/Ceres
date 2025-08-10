@@ -96,14 +96,14 @@ namespace Ceres.Base.OperatingSystem
     /// <summary>
     /// Gets the total number of items allocated (by block).
     /// </summary>
-    public long NumAllocatedItems => nextFreeBlockIndex * itemsPerBlock;
+    public long NumAllocatedItems => (long)nextFreeBlockIndex * itemsPerBlock;
 
     /// <summary>
     /// Copies entries from one block area to another.
     /// </summary>
     public void CopyEntries(long sourceBlockIndex, long destinationBlockIndex, int numItems)
-        => entries.CopyEntries(sourceBlockIndex * (long)itemsPerBlock,
-                              destinationBlockIndex * (long)itemsPerBlock,
+        => entries.CopyEntries(sourceBlockIndex * itemsPerBlock,
+                              destinationBlockIndex * itemsPerBlock,
                               numItems);
 
     /// <summary>
@@ -115,7 +115,7 @@ namespace Ceres.Base.OperatingSystem
     /// <summary>
     /// Resizes the underlying memory to exactly the number of currently used items.
     /// </summary>
-    public void ResizeToCurrent() => ResizeToNumItems(nextFreeBlockIndex * itemsPerBlock);
+    public void ResizeToCurrent() => ResizeToNumItems((long)nextFreeBlockIndex * itemsPerBlock);
 
 
     /// <summary>
@@ -190,7 +190,7 @@ namespace Ceres.Base.OperatingSystem
       {
         return Span<T>.Empty;
       }
-      return entries.Slice(blockIndex * itemsPerBlock, count);
+      return entries.Slice((blockIndex) * itemsPerBlock, count);
     }
 
 
@@ -204,6 +204,6 @@ namespace Ceres.Base.OperatingSystem
 
 
     public override string ToString() =>
-        $"<Buffer NumAllocatedItems={NumAllocatedItems} UsedItems~{nextFreeBlockIndex * itemsPerBlock}>";
+        $"<MemoryBufferOSBlocked NumAllocatedItems={NumAllocatedItems} UsedItems~{nextFreeBlockIndex * itemsPerBlock}>";
   }
 }
