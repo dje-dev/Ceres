@@ -143,18 +143,6 @@ namespace Ceres.MCTS.MTCSNodes
         // The NN might output illegal moves (not found in list of legal moves), ignore these
         if (indexLegalMove != -1)
         {
-          /** FIX ME **/
-          const float threshold = 0.05f;
-          MGMove policyMoveMG = ConverterMGMoveEncodedMove.EncodedMoveToMGChessMove(thisPolicyMove, in posMG);
-          
-          if (thisPolicyProb < threshold && policyMoveMG.IsChess960Castle)
-          {
-            // Force castling moves in Chess960 to have somewhat higher minimum probability
-            // neural networks may not be trained to recognize them.
-            const float MIN_CASTLING_PROBABILITY_CHESS_960 = threshold;
-            thisPolicyProb = MathF.Max(thisPolicyProb, MIN_CASTLING_PROBABILITY_CHESS_960);
-          }
-
           probabilitySumBeforeAdjust += thisPolicyProb;
           probabilitiesTemp[countPolicyMovesProcessed] = thisPolicyProb;
 
