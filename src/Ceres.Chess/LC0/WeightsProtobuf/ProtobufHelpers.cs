@@ -13,13 +13,14 @@
 
 #region Using directives
 
+using System;
+using System.Buffers.Binary;
+using System.IO;
+using System.Runtime.CompilerServices;
 using Ceres.Base.DataType;
 using Ceres.Base.DataTypes;
 using Pblczero;
 using ProtoBuf;
-using System;
-using System.IO;
-using System.Runtime.CompilerServices;
 
 #endregion
 
@@ -134,11 +135,10 @@ namespace Ceres.Chess.LC0.WeightsProtobuf
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static float GetLayerLinear16Single(Weights.Layer layer, int index, float minVal, float scale)
     {
-      byte b0 = layer.Params[index * 2];
-      byte b1 = layer.Params[index * 2 + 1];
-      float v1 = 256 * b1 + b0;
-      float v1a = minVal + v1 * scale;
-      return v1a;
+      // Read two bytes as a single little-endian 16-bit value.
+      int offset = index << 1;
+      ushort v = BinaryPrimitives.ReadUInt16LittleEndian(layer.Params.AsSpan(offset));
+      return minVal + (float)v * scale;
     }
 
 
