@@ -49,6 +49,8 @@ namespace Ceres.Chess.Data.Nets
 
         { "T60", SimpleLC0Net("606512") },
         { "T78", SimpleLC0Net("784984") },
+        { "T79", SimpleLC0Net("791556") }, // included in LCZero package
+        { "T79_FP16_TRT", ONNXNet16LC0("791556.pb.gz_fp16.onnx#16", true) },
         { "T80", SimpleLC0Net("809942") }, // 801307
         { "T81", SimpleLC0Net("811971") }, //Training restarted after surgery after 811971
         { "T81_FP16_TRT", ONNXNet16LC0("weights_run1_811971.pb.gz_fp16.onnx#16", true) },
@@ -178,6 +180,7 @@ namespace Ceres.Chess.Data.Nets
 
     static RegisteredNetInfo ONNXNet16LC0(string netID, bool tensorRT = false) =>  new (netID, tensorRT ? NNEvaluatorType.ONNXViaTRT : NNEvaluatorType.ONNXViaORT, MakeDesc(netID, true, tensorRT) + "#16");
     static RegisteredNetInfo ONNXNet32LC0(string netID, bool tensorRT = false) => new (netID, tensorRT ? NNEvaluatorType.ONNXViaTRT : NNEvaluatorType.ONNXViaORT, MakeDesc(netID, true, tensorRT) + "#32");
+
     static RegisteredNetInfo ONNXNet16Ceres(string netID, bool tensorRT = false) => new(netID, tensorRT ? NNEvaluatorType.Ceres : NNEvaluatorType.Ceres, MakeDesc(netID, false, tensorRT) + "#16");
     static RegisteredNetInfo ONNXNet32Ceres(string netID) => new(netID, NNEvaluatorType.Ceres, MakeDesc(netID, false, false) + "#32");
 
