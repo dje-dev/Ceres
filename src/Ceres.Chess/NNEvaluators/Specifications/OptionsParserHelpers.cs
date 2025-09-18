@@ -46,7 +46,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Internal
     const string CHAR_OPTIONS = "|";
 
 
-    internal static (string options, List<(string netID, NNEvaluatorType type, NNEvaluatorPrecision precision, 
+    internal static (string options, List<(string netID, NNEvaluatorType type, NNEvaluatorPrecision precision,
                      float wtValue, float wtValue2, float wtPolicy, float wtMLH, float wtUncertainty, float wtUncertaintyP)>)
       ParseNetworkOptions(string netSpecStr)
     {
@@ -103,7 +103,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Internal
           // Restore possible weights string which might have followed the alisas/precision indicator.
           if (netStrWithPrecision.Contains(";"))
           {
-            string weightsPart = netStrWithPrecision.Substring(netStrWithPrecision.IndexOf(";")); 
+            string weightsPart = netStrWithPrecision.Substring(netStrWithPrecision.IndexOf(";"));
             netStr = netStr + weightsPart;
           }
           precision = precisionBits == 8 ? NNEvaluatorPrecision.Int8 : (precisionBits == 16 ? NNEvaluatorPrecision.FP16 : NNEvaluatorPrecision.FP32);
@@ -192,12 +192,13 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Internal
     }
 
 
-    internal static (NNEvaluatorType NN_EVAL_TYPE, string thisNetID) 
+    internal static (NNEvaluatorType NN_EVAL_TYPE, string thisNetID)
       ExtractEvaluatorTypeAndNetID(string netStrWithPrecision)
     {
       NNEvaluatorType NN_EVAL_TYPE;
       string thisNetID = null;
 
+      string weightsToAppend = "";
       if (netStrWithPrecision.StartsWith(OptionsParserHelpers.CHAR_ALIAS))
       {
         string netID = netStrWithPrecision.Substring(1);
@@ -205,17 +206,18 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Internal
         // Strip off possible weighting specifications for the netID to look up.
         if (netID.Contains(";"))
         {
+          weightsToAppend = netStrWithPrecision.Substring(netStrWithPrecision.IndexOf(";")).Split("#")[0];
           netID = netID.Split(";")[0];
         }
 
         if (RegisteredNets.Aliased.TryGetValue(netID, out RegisteredNetInfo baseline))
         {
           // Resolve to underlying network specification, call recursively.
-          return (baseline.NetType, baseline.ID);
+          return (baseline.NetType, baseline.ID + weightsToAppend);
         }
         else
         {
-          throw new Exception($"Network specification begins with {CHAR_ALIAS} but the no such reference net {netID}" 
+          throw new Exception($"Network specification begins with {CHAR_ALIAS} but the no such reference net {netID}"
                             + $" is registered in ReferenceNets.Common");
         }
       }
@@ -281,12 +283,13 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Internal
       {
         // Default assumption is Ceres net unless see ".pb" (characteristic of Lc0).
         thisNetID = netStrWithPrecision;
-        NN_EVAL_TYPE = thisNetID.ToUpper().Contains(".PB") 
-                        ? NNEvaluatorType.LC0 
+        NN_EVAL_TYPE = thisNetID.ToUpper().Contains(".PB")
+                        ? NNEvaluatorType.LC0
                         : NNEvaluatorType.Ceres;
       }
 
-      return (NN_EVAL_TYPE, thisNetID);
+
+      return (NN_EVAL_TYPE, thisNetID + weightsToAppend);
     }
 
 
@@ -321,7 +324,7 @@ namespace Ceres.Chess.NNEvaluators.Specifications.Internal
       int? maxBatchSize = null;
       int? optimalBatchSize = null;
       string batchSizesFileName = null;
-      
+
       foreach (string netStr in nets)
       {
         string[] netParts = netStr.Split(WEIGHTS_CHAR);
