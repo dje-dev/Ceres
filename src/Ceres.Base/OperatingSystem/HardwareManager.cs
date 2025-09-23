@@ -16,12 +16,11 @@
 using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using System.Runtime.Intrinsics.X86;
-using System.Security.Policy;
+
 using Ceres.Base.Misc;
 using Ceres.Base.OperatingSystem.Linux;
 using Ceres.Base.OperatingSystem.Windows;
-using Microsoft.Extensions.Logging;
+
 
 #endregion
 
@@ -32,6 +31,11 @@ namespace Ceres.Base.OperatingSystem
   /// </summary>
   public static class HardwareManager
   {
+    public readonly record struct ProcessMemoryInfo(long ManagedBytes,
+                                                    long WorkingSetBytes,
+                                                    long VirtualBytes,
+                                                    long PrivateBytes,
+                                                    long UnmanagedEstimateBytes);
     /// <summary>
     /// Maximum expected pages size across all supported OS.
     /// </summary>
@@ -41,6 +45,12 @@ namespace Ceres.Base.OperatingSystem
     /// Maximum number of processors which are active for this process.
     /// </summary>
     public static int MaxAvailableProcessors { private set; get; } = System.Environment.ProcessorCount;
+
+    /// <summary>
+    /// Cached Process object.
+    /// </summary>
+    static Process process = Process.GetCurrentProcess();
+
 
     public static void Initialize(int numaNode)
     {
@@ -97,20 +107,26 @@ namespace Ceres.Base.OperatingSystem
     /// <summary>
     /// Returns amount physical memory visible (in bytes).
     /// </summary>
-    public static long MemorySize
+    public static long MemorySize => SoftwareManager.IsLinux ? LinuxAPI.PhysicalMemorySize
+                                                             : (long)Win32.MemorySize;
+
+
+    /// <summary>
+    /// Returns estimted managed and native memory usage for the current process.
+    /// </summary>
+    /// <param name="forceFullGC">if a full garbage collection should be processed</param>
+    /// <returns></returns>
+    public static ProcessMemoryInfo GetProcessMemoryInfo(bool forceFullGC = false)
     {
-      get
-      {
-        if (SoftwareManager.IsLinux)
-        {
-          return LinuxAPI.PhysicalMemorySize;
-        }
-        else
-        {
-          return (long)Win32.MemorySize;
-        }
-      }
+      long managed = GC.GetTotalMemory(forceFullGC);
+      long workingSet = process.WorkingSet64;           // resident (physical) bytes — RSS on Linux
+      long virtualMemory = process.VirtualMemorySize64; // VMSIZE
+      long privateBytes = process.PrivateMemorySize64;  // "private bytes" (may be 0 or unreliable on some Unix builds)
+      long unmanagedEstimate = System.Math.Max(0L, workingSet - managed);
+
+      return new ProcessMemoryInfo(managed, workingSet, virtualMemory, privateBytes, unmanagedEstimate);
     }
+
 
 #if NOT
     /// <summary>
