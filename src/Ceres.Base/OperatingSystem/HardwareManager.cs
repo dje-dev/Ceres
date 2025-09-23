@@ -119,6 +119,8 @@ namespace Ceres.Base.OperatingSystem
     public static ProcessMemoryInfo GetProcessMemoryInfo(bool forceFullGC = false)
     {
       long managed = GC.GetTotalMemory(forceFullGC);
+
+      process.Refresh();
       long workingSet = process.WorkingSet64;           // resident (physical) bytes — RSS on Linux
       long virtualMemory = process.VirtualMemorySize64; // VMSIZE
       long privateBytes = process.PrivateMemorySize64;  // "private bytes" (may be 0 or unreliable on some Unix builds)
