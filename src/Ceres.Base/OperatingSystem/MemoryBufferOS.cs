@@ -85,12 +85,15 @@ namespace Ceres.Base.OperatingSystem
     /// <returns></returns>
     public string StoreInfoString()
     {
+
+      double gbUsed = Marshal.SizeOf<T>() * rawMemoryManager.NumItemsAllocated / (1024.0 * 1024.0 * 1024.0);
       return "MemoryBufferOS<" + typeof(T).Name + "[" + Marshal.SizeOf<T>() + " bytes] " +
              (UseExistingSharedMemory ? "shared " : "private ") +
              (UseIncrementalAlloc ? "incremental " : "preallocated ") +
              NumItems + " items, " +
              rawMemoryManager.NumItemsAllocated + " reserved " +
-             MathF.Round((float)rawMemoryManager.NumItemsAllocated / NumItems, 4) + " use ratio>";
+             MathF.Round((float)rawMemoryManager.NumItemsAllocated / NumItems, 4) + " use ratio, " +
+             $"{System.Math.Round(gbUsed, 3)}gb used>";
     }
 
 
