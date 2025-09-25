@@ -42,7 +42,7 @@ namespace Ceres.Commands
 
       return new FeatureUCIParams(
         keys.GetValueOrDefaultMapped("Network", null, false, spec => new NNNetSpecificationString(spec)),
-        keys.GetValueOrDefaultMapped("Device", "GPU:0", false, spec => new NNDevicesSpecificationString(spec)),
+        keys.GetValueOrDefaultMapped("Device",  null, false, spec => new NNDevicesSpecificationString(spec)),
         keys.GetValueOrDefaultMapped("Pruning", "true", false, str => bool.Parse(str)));      
     }
 
