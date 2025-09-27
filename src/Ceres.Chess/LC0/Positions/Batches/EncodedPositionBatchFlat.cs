@@ -741,15 +741,16 @@ namespace Ceres.Chess.LC0.Batches
       //       by vectorization or putting expansion on GPU.
       //return ConvertToFlatSlow(outBuffer, encodingType); old slow version
       int numToConvert = NumPos * TOTAL_NUM_PLANES_ALL_HISTORIES;
-      if (numToConvert < 64)
+
+      const int NUM_PER_BLOCK = 48;
+      if (numToConvert < NUM_PER_BLOCK * 2)
       {
         BitmapRepresentationExpand(PosPlaneBitmaps, PosPlaneValues, outBuffer,
                                    0, numToConvert, numToConvert, scale50MoveCounter);
       }
       else
       {
-        // Do a Parallel.For with each thread converting a block of 48 positions
-        const int NUM_PER_BLOCK = 48;
+        // Do a Parallel.For with each thread converting a block of 16 positions
         int numBlocks = numToConvert / NUM_PER_BLOCK;
         if (numToConvert % NUM_PER_BLOCK != 0)
         {
@@ -763,7 +764,6 @@ namespace Ceres.Chess.LC0.Batches
         });
 
       }
-    }
 
 
     #region Dump diagostics
