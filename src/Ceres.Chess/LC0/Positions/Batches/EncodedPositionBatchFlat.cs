@@ -687,6 +687,8 @@ namespace Ceres.Chess.LC0.Batches
     {
       Span<Half> targetSpan = targetArrayMemory.Span;
       ref Half dst = ref MemoryMarshal.GetReference(targetSpan);
+      ref ulong longsRef = ref MemoryMarshal.GetArrayDataReference(thisLongs);
+      ref byte valsRef = ref MemoryMarshal.GetArrayDataReference(thisValues);
 
       const int SQUARES_PER_PLANE = 64;
       const int PLANES_PER_BLOCK = 112;
@@ -694,55 +696,39 @@ namespace Ceres.Chess.LC0.Batches
       const float INV_99 = 1.0f / 99.0f;
 
       int endIndex = startIndex + numToConvert;
-      if (endIndex > totalElements)
-      {
-        endIndex = totalElements;
-      }
+      if (endIndex > totalElements) { endIndex = totalElements; }
 
       int targetOffset = startIndex * SQUARES_PER_PLANE;
-
-      // Rolling remainder so we don't pay outer % 112 each iteration
       int rem112 = startIndex % PLANES_PER_BLOCK;
 
-      fixed (ulong* pLongs = &thisLongs[0])
+      for (int outer = startIndex; outer < endIndex; outer++)
       {
-        for (int outer = startIndex; outer < endIndex; outer++)
+        ulong bits = Unsafe.Add(ref longsRef, outer);
+        if (bits != 0UL)
         {
-          ulong bits = pLongs[outer];
-
-          if (bits != 0UL)
+          float val = (float)Unsafe.Add(ref valsRef, outer);
+          if (scale50MoveCounter && rem112 == MOVES50_PLANE_MOD)
           {
-            bool isMoves50Plane = rem112 == MOVES50_PLANE_MOD;
-
-            // Compute value once per plane
-            float val = thisValues[outer];
-            if (scale50MoveCounter && isMoves50Plane)
-            {
-              val *= INV_99;
-            }
-            Half hval = (Half)val;
-
-            // Iterate set bits: clear lowest set bit each step
-            while (bits != 0UL)
-            {
-              int tz = BitOperations.TrailingZeroCount(bits);
-              Unsafe.Add(ref dst, targetOffset + tz) = hval;
-              bits &= (bits - 1);
-            }
+            val *= INV_99;
           }
+          Half hval = (Half)val;
 
-          // Advance to next plane
-          targetOffset += SQUARES_PER_PLANE;
+          // Base of the 64-wide stripe
+          ref Half dstStripe = ref Unsafe.Add(ref dst, targetOffset);
 
-          rem112++;
-          if (rem112 == PLANES_PER_BLOCK)
+          while (bits != 0UL)
           {
-            rem112 = 0;
+            int tz = BitOperations.TrailingZeroCount(bits);
+            Unsafe.Add(ref dstStripe, tz) = hval;
+            bits &= bits - 1; // clear lowest set bit
           }
         }
+
+        targetOffset += SQUARES_PER_PLANE;
+        rem112++;
+        if (rem112 == PLANES_PER_BLOCK) { rem112 = 0; }
       }
     }
-
 
     /// <summary>
     /// 
