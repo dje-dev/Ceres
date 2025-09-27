@@ -63,7 +63,7 @@ namespace Ceres.Chess.NNEvaluators
       get
       {
         int maxBatchSizeMostRestrictiveEvaluator = int.MaxValue;
-        for (int i=0; i<Evaluators.Length; i++)
+        for (int i = 0; i < Evaluators.Length; i++)
         {
           int maxThisEvaluator = Evaluators[i].MaxBatchSize;
 
@@ -96,8 +96,8 @@ namespace Ceres.Chess.NNEvaluators
     /// <param name="preferredFractions"></param>
     /// <param name="minSplitSize"></param>
     /// <param name="useMergedBatch"></param>
-    public NNEvaluatorSplit(NNEvaluator[] evaluators, 
-                            float[] preferredFractions = null, 
+    public NNEvaluatorSplit(NNEvaluator[] evaluators,
+                            float[] preferredFractions = null,
                             int minSplitSize = 48, // TODO: make this smarter (based on NPS)
                             bool useMergedBatch = true)
       : base(evaluators)
@@ -121,10 +121,14 @@ namespace Ceres.Chess.NNEvaluators
         int numEvaluators = evaluators.Length;
         PreferredFractions = new float[numEvaluators];
         for (int i = 0; i < numEvaluators; i++)
+        {
           PreferredFractions[i] = 1.0f / numEvaluators;
+        }
       }
       else
+      {
         PreferredFractions = preferredFractions;
+      }
 
       indexPerferredEvalator = ArrayUtils.IndexOfElementWithMaxValue(PreferredFractions, PreferredFractions.Length);
     }
@@ -140,113 +144,133 @@ namespace Ceres.Chess.NNEvaluators
     {
       if (retrieveSupplementalResults) throw new NotImplementedException();
 
-      if (positions.NumPos <= MinSplitSize)
+      // Determine how many evaluators to actually use for this batch.
+      // Never use more than positions.NumPos / 48 (integer division) evaluators.
+      const int MIN_EVALUTOR_POSITIONS = 48;
+      int maxAllowedBySize = Math.Max(1, positions.NumPos / MIN_EVALUTOR_POSITIONS); // safeguard
+      int evaluatorsToUse = Math.Min(Evaluators.Length, maxAllowedBySize);
+
+      // If after capping we only use one, just evaluate with the preferred (fastest) evaluator directly.
+      if (evaluatorsToUse == 1)
       {
-        // Too small to profitably split across multiple devices
         return Evaluators[indexPerferredEvalator].EvaluateIntoBuffers(positions, retrieveSupplementalResults);
+      }
+
+      // Build a local fraction array "scrunched down" to the subset we are using
+      float[] localPreferredFractions = new float[evaluatorsToUse];
+      float fracSum = 0;
+      for (int i = 0; i < evaluatorsToUse; i++)
+      {
+        localPreferredFractions[i] = PreferredFractions[i];
+        fracSum += localPreferredFractions[i];
+      }
+      // Normalize to keep proportions
+      if (fracSum <= 0)
+      {
+        // Fallback uniform if something pathological
+        for (int i = 0; i < evaluatorsToUse; i++) localPreferredFractions[i] = 1.0f / evaluatorsToUse;
       }
       else
       {
-        // TODO: someday we could use the idea already used in LZTrainingPositionServerBatchSlice
-        //       and construct custom WFEvaluationBatch which are just using approrpiate Memory slices
-        //       Need to create a new constructor for WFEvaluationBatch
-        IPositionEvaluationBatch[] results = new IPositionEvaluationBatch[Evaluators.Length];
+        for (int i = 0; i < evaluatorsToUse; i++) localPreferredFractions[i] /= fracSum;
+      }
 
-        Task[] tasks = new Task[Evaluators.Length];
-        int[] subBatchSizes = new int[Evaluators.Length];
-        for (int i = 0; i < Evaluators.Length; i++)
+      // Allocate arrays sized only for the evaluators we will actually use
+      IPositionEvaluationBatch[] results = new IPositionEvaluationBatch[evaluatorsToUse];
+      Task[] tasks = new Task[evaluatorsToUse];
+      int[] subBatchSizes = new int[evaluatorsToUse];
+
+      for (int i = 0; i < evaluatorsToUse; i++)
+      {
+        int capI = i;
+        IEncodedPositionBatchFlat thisSubBatch = GetSubBatch(positions, localPreferredFractions, capI);
+        subBatchSizes[capI] = thisSubBatch.NumPos;
+        tasks[i] = Task.Run(() => results[capI] = Evaluators[capI].EvaluateIntoBuffers(thisSubBatch, retrieveSupplementalResults));
+      }
+      Task.WaitAll(tasks);
+
+      if (UseMergedBatch)
+      {
+        return new PositionsEvaluationBatchMerged(results, subBatchSizes);
+      }
+      else
+      {
+        bool isWDL = results[0].IsWDL;
+        bool hasM = results[0].HasM;
+        bool hasUncertaintyV = results[0].HasUncertaintyV;
+        bool hasUncertaintyP = results[0].HasUncertaintyP;
+        bool hasValueSecondary = results[0].HasValueSecondary;
+        bool hasAction = results[0].HasAction;
+        bool hasState = results[0].HasState;
+
+
+        CompressedPolicyVector[] policies = new CompressedPolicyVector[positions.NumPos];
+        FP16[] w = new FP16[positions.NumPos];
+        FP16[] l = new FP16[positions.NumPos];
+        FP16[] w2 = HasValueSecondary ? new FP16[positions.NumPos] : null;
+        FP16[] l2 = HasValueSecondary ? new FP16[positions.NumPos] : null;
+        FP16[] m = hasM ? new FP16[positions.NumPos] : null;
+        FP16[] uncertaintyV = hasUncertaintyV ? new FP16[positions.NumPos] : null;
+        FP16[] uncertaintyP = hasUncertaintyP ? new FP16[positions.NumPos] : null;
+        CompressedActionVector[] actions = HasAction ? new CompressedActionVector[positions.NumPos] : null;
+        Half[][] states = HasState ? new Half[positions.NumPos][] : null;
+
+        int nextPosIndex = 0;
+        for (int i = 0; i < evaluatorsToUse; i++)
         {
-          int capI = i;
-          IEncodedPositionBatchFlat thisSubBatch = GetSubBatch(positions, PreferredFractions, capI);
-          subBatchSizes[capI] = thisSubBatch.NumPos;
-          tasks[i] = Task.Run(() => results[capI] = Evaluators[capI].EvaluateIntoBuffers(thisSubBatch, retrieveSupplementalResults));
-        }
-        Task.WaitAll(tasks);
+          PositionEvaluationBatch resultI = (PositionEvaluationBatch)results[i];
+          int thisNumPos = resultI.NumPos;
 
-        if (UseMergedBatch)
-        {
-          return new PositionsEvaluationBatchMerged(results, subBatchSizes);
-        }
-        else
-        {
-          bool isWDL = results[0].IsWDL;
-          bool hasM = results[0].HasM;
-          bool hasUncertaintyV = results[0].HasUncertaintyV;
-          bool hasUncertaintyP = results[0].HasUncertaintyP;
-          bool hasValueSecondary = results[0].HasValueSecondary;
-          bool hasAction = results[0].HasAction;
-          bool hasState = results[0].HasState;
+          resultI.Policies.CopyTo(new Memory<CompressedPolicyVector>(policies).Slice(nextPosIndex, thisNumPos));
+          resultI.W.CopyTo(new Memory<FP16>(w).Slice(nextPosIndex, thisNumPos));
 
-
-          CompressedPolicyVector[] policies = new CompressedPolicyVector[positions.NumPos];
-          FP16[] w = new FP16[positions.NumPos];
-          FP16[] l = new FP16[positions.NumPos];
-          FP16[] w2 = HasValueSecondary ? new FP16[positions.NumPos] : null;
-          FP16[] l2 = HasValueSecondary ? new FP16[positions.NumPos] : null;
-          FP16[] m = hasM ? new FP16[positions.NumPos] : null;
-          FP16[] uncertaintyV = hasUncertaintyV ? new FP16[positions.NumPos] : null;
-          FP16[] uncertaintyP = hasUncertaintyP ? new FP16[positions.NumPos] : null;
-          CompressedActionVector[] actions = HasAction ? new CompressedActionVector[positions.NumPos] : null;
-          Half[][] states = HasState ? new Half[positions.NumPos][] : null;
-
-          int nextPosIndex = 0;
-          for (int i = 0; i < Evaluators.Length; i++)
+          if (hasAction)
           {
-            PositionEvaluationBatch resultI = (PositionEvaluationBatch)results[i];
-            int thisNumPos = resultI.NumPos;
+            resultI.Actions.CopyTo(new Memory<CompressedActionVector>(actions).Slice(nextPosIndex, thisNumPos));
+          }
 
-            resultI.Policies.CopyTo(new Memory<CompressedPolicyVector>(policies).Slice(nextPosIndex, thisNumPos));
-            resultI.W.CopyTo(new Memory<FP16>(w).Slice(nextPosIndex, thisNumPos));
+          if (hasState)
+          {
+            resultI.States.CopyTo(new Memory<Half[]>(states).Slice(nextPosIndex, thisNumPos));
+          }
 
-            if (hasAction)
-            {
-              resultI.Actions.CopyTo(new Memory<CompressedActionVector>(actions).Slice(nextPosIndex, thisNumPos));
-            }
+          if (isWDL)
+          {
+            resultI.L.CopyTo(new Memory<FP16>(l).Slice(nextPosIndex, thisNumPos));
+          }
 
-            if (hasState)
-            {
-              resultI.States.CopyTo(new Memory<Half[]>(states).Slice(nextPosIndex, thisNumPos));
-            }
+          if (hasValueSecondary)
+          {
+            resultI.W2.CopyTo(new Memory<FP16>(w2).Slice(nextPosIndex, thisNumPos));
 
             if (isWDL)
             {
-              resultI.L.CopyTo(new Memory<FP16>(l).Slice(nextPosIndex, thisNumPos));
+              resultI.L2.CopyTo(new Memory<FP16>(l2).Slice(nextPosIndex, thisNumPos));
             }
-
-            if (hasValueSecondary)
-            {
-              resultI.W2.CopyTo(new Memory<FP16>(w2).Slice(nextPosIndex, thisNumPos));
-
-              if (isWDL)
-              {
-                resultI.L2.CopyTo(new Memory<FP16>(l2).Slice(nextPosIndex, thisNumPos));
-              }
-            }
-
-            if (hasM)
-            {
-              resultI.M.CopyTo(new Memory<FP16>(m).Slice(nextPosIndex, thisNumPos));
-            }
-
-            if (HasUncertaintyV)
-            {
-              resultI.UncertaintyV.CopyTo(new Memory<FP16>(uncertaintyV).Slice(nextPosIndex, thisNumPos));
-            }
-
-            if (HasUncertaintyP)
-            {
-              resultI.UncertaintyP.CopyTo(new Memory<FP16>(uncertaintyP).Slice(nextPosIndex, thisNumPos));
-            }
-
-            nextPosIndex += thisNumPos;
           }
 
-          TimingStats stats = new TimingStats();
-          return new PositionEvaluationBatch(isWDL, hasM, hasUncertaintyV, hasUncertaintyP, hasAction, hasValueSecondary, hasState,
-                                             positions.NumPos, 
-                                             policies, actions, w, l, w2, l2, m, uncertaintyV, uncertaintyP, states, null, stats);
+          if (hasM)
+          {
+            resultI.M.CopyTo(new Memory<FP16>(m).Slice(nextPosIndex, thisNumPos));
+          }
+
+          if (HasUncertaintyV)
+          {
+            resultI.UncertaintyV.CopyTo(new Memory<FP16>(uncertaintyV).Slice(nextPosIndex, thisNumPos));
+          }
+
+          if (HasUncertaintyP)
+          {
+            resultI.UncertaintyP.CopyTo(new Memory<FP16>(uncertaintyP).Slice(nextPosIndex, thisNumPos));
+          }
+
+          nextPosIndex += thisNumPos;
         }
 
+        TimingStats stats = new TimingStats();
+        return new PositionEvaluationBatch(isWDL, hasM, hasUncertaintyV, hasUncertaintyP, hasAction, hasValueSecondary, hasState,
+                                           positions.NumPos,
+                                           policies, actions, w, l, w2, l2, m, uncertaintyV, uncertaintyP, states, null, stats);
       }
 
 
