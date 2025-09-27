@@ -170,7 +170,7 @@ namespace Ceres.Chess.LC0.Batches
           Array.Copy(States[i], states[i], States[i].Length);
         }
         ret.States = states;
-      } 
+      }
 
       if (Positions != null)
       {
@@ -468,7 +468,7 @@ namespace Ceres.Chess.LC0.Batches
       Init(trainingType);
     }
 
-    public EncodedPositionBatchFlat(ReadOnlySpan<EncodedPositionWithHistory> positions, int numToProcess, 
+    public EncodedPositionBatchFlat(ReadOnlySpan<EncodedPositionWithHistory> positions, int numToProcess,
                                     bool setPositions, bool fillInHistoryPlanes = false)
     {
       MaxBatchSize = (int)MathUtils.RoundedUp(numToProcess, BATCH_SIZE_ALIGNMENT);
@@ -651,18 +651,18 @@ namespace Ceres.Chess.LC0.Batches
     }
 
 
-    public Half[] ValuesFlatFromPlanes(Half[] preallocatedBuffer, bool nwhc, bool scale50MoveCounter)
+    public Memory<Half> ValuesFlatFromPlanes(Memory<Half> preallocatedBuffer, bool nhwc, bool scale50MoveCounter)
     {
-      Debug.Assert(!nwhc); // not implemented
+      Debug.Assert(!nhwc); // not implemented
 
-      Half[] ret;
+      Memory<Half> ret;
 
       int length = TOTAL_NUM_PLANES_ALL_HISTORIES * NumPos * 64;
-      if (preallocatedBuffer != null)
+      if (!preallocatedBuffer.IsEmpty)
       {
         Debug.Assert(preallocatedBuffer.Length >= length);
         ret = preallocatedBuffer;
-        Array.Clear(ret, 0, length);
+        ret.Slice(0, length).Span.Clear();
       }
       else
       {
@@ -675,10 +675,11 @@ namespace Ceres.Chess.LC0.Batches
 
 
     unsafe static void BitmapRepresentationExpand(ulong[] thisLongs, byte[] thisValues,
-                                                  Half[] targetArray, 
+                                                  Memory<Half> targetArrayMemory,
                                                   int startIndex, int numToConvert, int totalElements,
                                                   bool scale50MoveCounter)
     {
+      Span<Half> targetArray = targetArrayMemory.Span;
       int targetOffset = startIndex * 64;
 
       fixed (ulong* longs = &thisLongs[0])
@@ -724,7 +725,7 @@ namespace Ceres.Chess.LC0.Batches
     /// </summary>
     /// <param name="outBuffer">buffer to receive values. NOTE! This is assumed to start out cleared (all zeros)</param>
     /// <param name="encodingType"></param>
-    void ConvertToFlat(Half[] outBuffer, bool scale50MoveCounter)
+    void ConvertToFlat(Memory<Half> outBuffer, bool scale50MoveCounter)
     {
       // TODO: Somehow rework this performance-critical method
       //       by vectorization or putting expansion on GPU.
@@ -759,7 +760,7 @@ namespace Ceres.Chess.LC0.Batches
 
     public void DumpDecoded()
     {
-      DumpDecoded(this.ValuesFlatFromPlanes(null, false, false), TOTAL_NUM_PLANES_ALL_HISTORIES);
+      DumpDecoded(ValuesFlatFromPlanes(default, false, false).ToArray(), TOTAL_NUM_PLANES_ALL_HISTORIES);
     }
 
     public static void DumpDecoded(Memory<Half> encodedPos, int numPlanes)
@@ -895,7 +896,7 @@ namespace Ceres.Chess.LC0.Batches
 
     Memory<Half[]> IEncodedPositionBatchFlat.States { get => States.AsMemory(); set => States = value.ToArray(); }
 
-    Half[] IEncodedPositionBatchFlat.ValuesFlatFromPlanes(Half[] preallocatedBuffer, bool nwhc, bool scaleMove50Counter) => ValuesFlatFromPlanes(preallocatedBuffer, nwhc, scaleMove50Counter);
+    Memory<Half> IEncodedPositionBatchFlat.ValuesFlatFromPlanes(Memory<Half> preallocatedBuffer, bool nwhc, bool scaleMove50Counter) => ValuesFlatFromPlanes(preallocatedBuffer, nwhc, scaleMove50Counter);
 
     Memory<EncodedPositionWithHistory> IEncodedPositionBatchFlat.PositionsBuffer { get => PositionsBuffer; }
 
@@ -909,7 +910,7 @@ namespace Ceres.Chess.LC0.Batches
     /// <returns></returns>
     public override string ToString()
     {
-      return $"<EncodedPositionBatchFlat of size { NumPos } of type { TrainingType }>";
+      return $"<EncodedPositionBatchFlat of size {NumPos} of type {TrainingType}>";
     }
 
     #endregion

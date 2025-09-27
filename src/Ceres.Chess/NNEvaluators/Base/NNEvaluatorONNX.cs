@@ -261,12 +261,12 @@ namespace Chess.Ceres.NNEvaluators
       if (headOverrides != null && headOverrides.Length > 0)
       {
         HeadOverrides = headOverrides;
-        string[] collectedCollectedHeadOverrideInputLayerNames= HeadOverrides.Select(ho => ho.InputLayerName).ToArray();
+        string[] collectedCollectedHeadOverrideInputLayerNames = HeadOverrides.Select(ho => ho.InputLayerName).ToArray();
 
         // Add some extra output nodes and write to a new ONNX file.
         // TODO: consider centralizing this logic
-        ONNXNet onnxNet = new (onnxModelFileName);
-        ModelProto onnxNetAugmented = onnxNet.WithAddedOutputNodes(p => Array.Exists(collectedCollectedHeadOverrideInputLayerNames, s => s == p.Name)); 
+        ONNXNet onnxNet = new(onnxModelFileName);
+        ModelProto onnxNetAugmented = onnxNet.WithAddedOutputNodes(p => Array.Exists(collectedCollectedHeadOverrideInputLayerNames, s => s == p.Name));
         string tempFileName = onnxModelFileName + ".head_overrides.onnx";
         onnxNetAugmented.WriteToFile(tempFileName);
 
@@ -320,7 +320,7 @@ namespace Chess.Ceres.NNEvaluators
       if (numPositions > MaxBatchSize)
       {
         throw new Exception($"Batch size {numPositions} too large, evaluator constructed for max {MaxBatchSize}.");
-      } 
+      }
 
       if (HasState)
       {
@@ -429,12 +429,14 @@ namespace Chess.Ceres.NNEvaluators
       else
       {
         int bufferLength = EncodedPositionBatchFlat.TOTAL_NUM_PLANES_ALL_HISTORIES * batch.NumPos * 64;
-        Half[] flatValues = ArrayPool<Half>.Shared.Rent(bufferLength);
+        Half[] flatValuesBuffer = ArrayPool<Half>.Shared.Rent(bufferLength);
 
-        batch.ValuesFlatFromPlanes(flatValues, false, Scale50MoveCounter);
-        PositionEvaluationBatch ret = DoEvaluateBatch(batch, null, flatValues, null, batch.NumPos, retrieveSupplementalResults, null, 1);
+        PositionEvaluationBatch ret;
 
-        ArrayPool<Half>.Shared.Return(flatValues);
+        Memory<Half> flatValues = batch.ValuesFlatFromPlanes(flatValuesBuffer, false, Scale50MoveCounter);
+        ret = DoEvaluateBatch(batch, null, flatValues, null, batch.NumPos, retrieveSupplementalResults, null, 1);
+
+        ArrayPool<Half>.Shared.Return(flatValuesBuffer);
         return ret;
       }
     }
@@ -503,7 +505,7 @@ namespace Chess.Ceres.NNEvaluators
 
           if (Options.HeadOverrides != null)
           {
-            if (Options.HeadOverrides.Length != 1 || 
+            if (Options.HeadOverrides.Length != 1 ||
               (Options.HeadOverrides[0].HeadType != NNEvaluatorHeadOverride.HeadTypeEnum.Value1
             && Options.HeadOverrides[0].HeadType != NNEvaluatorHeadOverride.HeadTypeEnum.Value2))
             {
@@ -530,7 +532,7 @@ namespace Chess.Ceres.NNEvaluators
             Half[] newHeadOutput = headOverride.HeadOverrideEvaluator(headOutputLayerHalf, numPos);
 
             Span<Float16> valuesToOverwrite = Options.HeadOverrides[0].HeadType == NNEvaluatorHeadOverride.HeadTypeEnum.Value1
-                                                ? results[0].ValuesRaw.Span 
+                                                ? results[0].ValuesRaw.Span
                                                 : results[0].Values2Raw.Span; // <---- hardcoded to Value1/Value2
             for (int i = 0; i < valuesToOverwrite.Length; i++)
             {
@@ -541,7 +543,7 @@ namespace Chess.Ceres.NNEvaluators
           // Apply move masking
           if (posMoveIsLegal != null)
           {
-//            throw new NotImplementedException(); // currently this is handled by the PositionEvaluationBatch constructor below instead
+            //            throw new NotImplementedException(); // currently this is handled by the PositionEvaluationBatch constructor below instead
           }
         }
       }

@@ -13,9 +13,10 @@
 
 #region Using directives
 
+using System;
+
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.MoveGen;
-using System;
 
 #endregion
 
@@ -103,22 +104,14 @@ namespace Ceres.Chess.LC0.Batches
       throw new NotImplementedException();
     }
 
-    public Half[] ValuesFlatFromPlanes(Half[] preallocatedBuffer, bool nhwc, bool scale50MoveCounters)
+
+    public Memory<Half> ValuesFlatFromPlanes(Memory<Half> preallocatedBuffer, bool nhwc, bool scale50MoveCounter)
     {
+      Memory<Half> parentBuffer = Parent.ValuesFlatFromPlanes(default, nhwc, scale50MoveCounter);
       const int NUM_VALUES_EACH_POS = EncodedPositionWithHistory.NUM_PLANES_TOTAL * 64;
-      Half[] parentBuffer = Parent.ValuesFlatFromPlanes(null, nhwc, scale50MoveCounters);
-      if (preallocatedBuffer != null)
-      {
-        Array.Copy(parentBuffer, NUM_VALUES_EACH_POS * StartIndex, preallocatedBuffer, 0, NUM_VALUES_EACH_POS * Length);
-        return preallocatedBuffer;
-      }
-      else
-      {
-        Half[] targetBuffer = new Half[NUM_VALUES_EACH_POS * Length];
-        Array.Copy(parentBuffer, NUM_VALUES_EACH_POS * StartIndex, targetBuffer, 0, NUM_VALUES_EACH_POS * Length);
-        return targetBuffer;
-      }
+      return parentBuffer.Slice(NUM_VALUES_EACH_POS * StartIndex, NUM_VALUES_EACH_POS * Length);
     }
+
 
     public Memory<EncodedPositionWithHistory> PositionsBuffer
     {

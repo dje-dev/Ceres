@@ -39,7 +39,7 @@ namespace Ceres.Chess.LC0.Batches
     /// <summary>
     // Bitmaps for the multiple board planes.
     /// </summary>
-    Memory<ulong> PosPlaneBitmaps { get;  }
+    Memory<ulong> PosPlaneBitmaps { get; }
 
     /// <summary>
     /// One byte for each bitmap with corresopnding value.
@@ -72,7 +72,7 @@ namespace Ceres.Chess.LC0.Batches
     /// <summary>
     /// Optionally the arrays of "plies since last move on square."
     /// </summary>
-    Memory<byte> LastMovePlies{ get; set; }
+    Memory<byte> LastMovePlies { get; set; }
 
     /// <summary>
     /// Optionally the set of moves from this position
@@ -83,7 +83,7 @@ namespace Ceres.Chess.LC0.Batches
     /// If originated from EncodedPositionWithHistory then
     /// this field optionally holds the origin data array.
     /// </summary>
-    Memory<EncodedPositionWithHistory> PositionsBuffer 
+    Memory<EncodedPositionWithHistory> PositionsBuffer
     {
       get
       {
@@ -108,9 +108,8 @@ namespace Ceres.Chess.LC0.Batches
 
     #region Implmentation
 
-    Half[] ValuesFlatFromPlanes(Half[] preallocatedBuffer, bool nhwc, bool scale50MoveCounter);
+    Memory<Half> ValuesFlatFromPlanes(Memory<Half> preallocatedBuffer, bool nhwc, bool scale50MoveCounter);
 
-    
     public IEncodedPositionBatchFlat GetSubBatchSlice(int startIndex, int count)
     {
       return new EncodedPositionBatchFlatSlice(this, startIndex, count);

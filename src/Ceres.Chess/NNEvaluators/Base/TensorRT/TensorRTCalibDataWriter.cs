@@ -35,10 +35,10 @@ namespace Chess.Ceres.NNEvaluators.TensorRT
     public static void WriteCalibFilesNEW(bool scaleMove50Counter)
     {
       const string DIR = @"z:\chess\data\epd\";
-      WriteCalibFilesNEW(scaleMove50Counter, 
+      WriteCalibFilesNEW(scaleMove50Counter,
         (DIR + @"dje.epd", 1024 * 64)
-//        (DIR + @"mea_allsets_nodupes_from_pohl.epd", 1024),
-//        (DIR + @"ECE3.epd", 1024)
+        //        (DIR + @"mea_allsets_nodupes_from_pohl.epd", 1024),
+        //        (DIR + @"ECE3.epd", 1024)
         );
     }
 
@@ -70,7 +70,7 @@ namespace Chess.Ceres.NNEvaluators.TensorRT
         }
 #endif
         bool append = numWritten > 0;
-        WriteCalibFilesNEW(batch,batch.NumPos, append, scaleMove50Counter);
+        WriteCalibFilesNEW(batch, batch.NumPos, append, scaleMove50Counter);
 
         numWritten += count;
       }
@@ -95,8 +95,8 @@ namespace Chess.Ceres.NNEvaluators.TensorRT
       // Write expanded planes (with binary data ready for direct loading into neural net)
       string fn = @"d:\temp\calib_batch_flat.dat";
       Console.WriteLine($"writing {fn} ");
-      Half[] valuesFlat = batch.ValuesFlatFromPlanes(null, false, scaleMove50Counter);
-      WriteAllBytes(fn, SerializationUtils.SerializeArray(valuesFlat), append);
+      Memory<Half> valuesFlat = batch.ValuesFlatFromPlanes(default, false, scaleMove50Counter);
+      WriteAllBytes(fn, SerializationUtils.SerializeArray(valuesFlat.ToArray()), append);
     }
 
 
