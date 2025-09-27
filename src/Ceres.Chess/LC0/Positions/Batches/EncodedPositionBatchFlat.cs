@@ -15,7 +15,9 @@
 
 using System;
 using System.Diagnostics;
+using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Ceres.Base.DataTypes;
 using Ceres.Base.Math;
@@ -674,47 +676,69 @@ namespace Ceres.Chess.LC0.Batches
     }
 
 
-    unsafe static void BitmapRepresentationExpand(ulong[] thisLongs, byte[] thisValues,
-                                                  Memory<Half> targetArrayMemory,
-                                                  int startIndex, int numToConvert, int totalElements,
-                                                  bool scale50MoveCounter)
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
+    public static unsafe void BitmapRepresentationExpand(ulong[] thisLongs,
+                                                         byte[] thisValues,
+                                                         Memory<Half> targetArrayMemory,
+                                                         int startIndex,
+                                                         int numToConvert,
+                                                         int totalElements,
+                                                         bool scale50MoveCounter)
     {
-      Span<Half> targetArray = targetArrayMemory.Span;
-      int targetOffset = startIndex * 64;
+      Span<Half> targetSpan = targetArrayMemory.Span;
+      ref Half dst = ref MemoryMarshal.GetReference(targetSpan);
 
-      fixed (ulong* longs = &thisLongs[0])
+      const int SQUARES_PER_PLANE = 64;
+      const int PLANES_PER_BLOCK = 112;
+      const int MOVES50_PLANE_MOD = 109;
+      const float INV_99 = 1.0f / 99.0f;
+
+      int endIndex = startIndex + numToConvert;
+      if (endIndex > totalElements)
       {
-        int endIndex = Math.Min(totalElements, startIndex + numToConvert);
+        endIndex = totalElements;
+      }
+
+      int targetOffset = startIndex * SQUARES_PER_PLANE;
+
+      // Rolling remainder so we don't pay outer % 112 each iteration
+      int rem112 = startIndex % PLANES_PER_BLOCK;
+
+      fixed (ulong* pLongs = &thisLongs[0])
+      {
         for (int outer = startIndex; outer < endIndex; outer++)
         {
-          // We can bypass conversion of the value is zero since product will always be zero
-          if (longs[outer] == 0)
-          {
-            targetOffset += 64;
-            continue;
-          }
+          ulong bits = pLongs[outer];
 
-          // Apply the necessary scaling of this is the move counter (50 move rule)
-          bool isMoves50Plane = outer % 112 == 109;
-          float multiplier = (scale50MoveCounter && isMoves50Plane) ? (1.0f / 99.0f) : 1.0f;
-          Half targetValue = (Half)(multiplier * thisValues[outer]);
-
-          byte thisSquare;
-          ulong thisLong = longs[outer];
-          while (true)
+          if (bits != 0UL)
           {
-            thisSquare = (byte)System.Numerics.BitOperations.TrailingZeroCount(thisLong);
-            if (thisSquare < 64)
+            bool isMoves50Plane = rem112 == MOVES50_PLANE_MOD;
+
+            // Compute value once per plane
+            float val = thisValues[outer];
+            if (scale50MoveCounter && isMoves50Plane)
             {
-              targetArray[targetOffset + thisSquare] = targetValue;
-              thisLong ^= 1UL << thisSquare;
+              val *= INV_99;
             }
-            else
+            Half hval = (Half)val;
+
+            // Iterate set bits: clear lowest set bit each step
+            while (bits != 0UL)
             {
-              break;
+              int tz = BitOperations.TrailingZeroCount(bits);
+              Unsafe.Add(ref dst, targetOffset + tz) = hval;
+              bits &= (bits - 1);
             }
           }
-          targetOffset += 64;
+
+          // Advance to next plane
+          targetOffset += SQUARES_PER_PLANE;
+
+          rem112++;
+          if (rem112 == PLANES_PER_BLOCK)
+          {
+            rem112 = 0;
+          }
         }
       }
     }
@@ -738,8 +762,8 @@ namespace Ceres.Chess.LC0.Batches
       }
       else
       {
-        // Do a Parallel.For with each thread converting a block of 16 positions
-        const int NUM_PER_BLOCK = 32;
+        // Do a Parallel.For with each thread converting a block of 48 positions
+        const int NUM_PER_BLOCK = 48;
         int numBlocks = numToConvert / NUM_PER_BLOCK;
         if (numToConvert % NUM_PER_BLOCK != 0)
         {
