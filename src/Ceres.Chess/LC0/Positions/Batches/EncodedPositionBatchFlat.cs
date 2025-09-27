@@ -764,6 +764,7 @@ namespace Ceres.Chess.LC0.Batches
         });
 
       }
+    }
 
 
     #region Dump diagostics
