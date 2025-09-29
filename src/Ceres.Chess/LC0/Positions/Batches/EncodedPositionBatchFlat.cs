@@ -766,7 +766,8 @@ namespace Ceres.Chess.LC0.Batches
         Parallel.For(0, numBlocks, i =>
         {
           BitmapRepresentationExpand(PosPlaneBitmaps, PosPlaneValues, outBuffer,
-                                     indexFirstPlane + i * NUM_POS_PER_BLOCK, NUM_POS_PER_BLOCK,
+                                     indexFirstPlane + i * NUM_POS_PER_BLOCK * EncodedPositionWithHistory.NUM_PLANES_TOTAL,
+                                     NUM_POS_PER_BLOCK * EncodedPositionWithHistory.NUM_PLANES_TOTAL,
                                      lengthNumPlanes, scale50MoveCounter);
         });
 
