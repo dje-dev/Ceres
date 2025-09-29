@@ -748,14 +748,11 @@ namespace Ceres.Chess.LC0.Batches
     {
       // TODO: Somehow rework this performance-critical method
       //       by vectorization or putting expansion on GPU.
-      //return ConvertToFlatSlow(outBuffer, encodingType); old slow version
-      int numPlanesToConvert = lengthNumPlanes * TOTAL_NUM_PLANES_ALL_HISTORIES;
-
       const int NUM_POS_PER_BLOCK = 48;
       if (NumPos <= NUM_POS_PER_BLOCK * 2)
       {
         BitmapRepresentationExpand(PosPlaneBitmaps, PosPlaneValues, outBuffer,
-                                   indexFirstPlane, numPlanesToConvert, numPlanesToConvert, scale50MoveCounter);
+                                   indexFirstPlane, lengthNumPlanes, lengthNumPlanes, scale50MoveCounter);
       }
       else
       {
@@ -769,7 +766,8 @@ namespace Ceres.Chess.LC0.Batches
         Parallel.For(0, numBlocks, i =>
         {
           BitmapRepresentationExpand(PosPlaneBitmaps, PosPlaneValues, outBuffer,
-                                     indexFirstPlane + i * NUM_POS_PER_BLOCK, NUM_POS_PER_BLOCK, numPlanesToConvert, scale50MoveCounter);
+                                     indexFirstPlane + i * NUM_POS_PER_BLOCK, NUM_POS_PER_BLOCK,
+                                     lengthNumPlanes, scale50MoveCounter);
         });
 
       }
