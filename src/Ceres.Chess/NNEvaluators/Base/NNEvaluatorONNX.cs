@@ -433,7 +433,7 @@ namespace Chess.Ceres.NNEvaluators
 
         PositionEvaluationBatch ret;
 
-        Memory<Half> flatValues = batch.ValuesFlatFromPlanes(flatValuesBuffer, false, Scale50MoveCounter);
+        Memory<Half> flatValues = batch.ValuesFlatFromPlanes(flatValuesBuffer, 0, batch.NumPos, Scale50MoveCounter);
         ret = DoEvaluateBatch(batch, null, flatValues, null, batch.NumPos, retrieveSupplementalResults, null, 1);
 
         ArrayPool<Half>.Shared.Return(flatValuesBuffer);

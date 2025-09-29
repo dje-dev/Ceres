@@ -42,12 +42,6 @@ namespace Ceres.Chess.NNEvaluators
     public readonly float[] PreferredFractions;
 
     /// <summary>
-    /// More efficient mode which returns a WFEvaluationBatchMerged
-    /// which is just a merged view over multiple batches (without copying data)
-    /// </summary>
-    public readonly bool UseMergedBatch;
-
-    /// <summary>
     /// Minimum number of positions before splitting begins.
     /// </summary>
     public readonly int MinSplitSize;
@@ -95,11 +89,9 @@ namespace Ceres.Chess.NNEvaluators
     /// <param name="evaluators"></param>
     /// <param name="preferredFractions"></param>
     /// <param name="minSplitSize"></param>
-    /// <param name="useMergedBatch"></param>
     public NNEvaluatorSplit(NNEvaluator[] evaluators,
                             float[] preferredFractions = null,
-                            int minSplitSize = 48, // TODO: make this smarter (based on NPS)
-                            bool useMergedBatch = true)
+                            int minSplitSize = 48) // TODO: make this smarter (based on NPS)
       : base(evaluators)
     {
       if (preferredFractions != null && preferredFractions.Length != evaluators.Length)
@@ -113,7 +105,6 @@ namespace Ceres.Chess.NNEvaluators
       }
 
       MinSplitSize = minSplitSize;
-      UseMergedBatch = useMergedBatch;
 
       if (preferredFractions == null)
       {
@@ -133,6 +124,21 @@ namespace Ceres.Chess.NNEvaluators
       indexPerferredEvalator = ArrayUtils.IndexOfElementWithMaxValue(PreferredFractions, PreferredFractions.Length);
     }
 
+
+    static void CalcToCumulative(Span<float> values, Span<float> cums)
+    {
+      float acc = 0;
+      for (int i = 0; i < values.Length; i++)
+      {
+        cums[i] = acc;
+        acc += values[i];
+      }
+
+      if (Math.Abs(acc - 1.0f) > 0.001)
+      {
+        throw new Exception("Fractions should sum to 1.0");
+      }
+    }
 
     /// <summary>
     /// Implementation of virtual method to actually evaluate the batch.
@@ -157,7 +163,7 @@ namespace Ceres.Chess.NNEvaluators
       }
 
       // Build a local fraction array "scrunched down" to the subset we are using
-      float[] localPreferredFractions = new float[evaluatorsToUse];
+      Span<float> localPreferredFractions = stackalloc float[evaluatorsToUse];
       float fracSum = 0;
       for (int i = 0; i < evaluatorsToUse; i++)
       {
@@ -168,28 +174,49 @@ namespace Ceres.Chess.NNEvaluators
       if (fracSum <= 0)
       {
         // Fallback uniform if something pathological
-        for (int i = 0; i < evaluatorsToUse; i++) localPreferredFractions[i] = 1.0f / evaluatorsToUse;
+        for (int i = 0; i < evaluatorsToUse; i++)
+        {
+          localPreferredFractions[i] = 1.0f / evaluatorsToUse;
+        }
       }
       else
       {
-        for (int i = 0; i < evaluatorsToUse; i++) localPreferredFractions[i] /= fracSum;
+        for (int i = 0; i < evaluatorsToUse; i++)
+        {
+          localPreferredFractions[i] /= fracSum;
+        }
       }
 
       // Allocate arrays sized only for the evaluators we will actually use
       IPositionEvaluationBatch[] results = new IPositionEvaluationBatch[evaluatorsToUse];
-      Task[] tasks = new Task[evaluatorsToUse];
+      Task[] tasks = new Task[evaluatorsToUse - 1];
       int[] subBatchSizes = new int[evaluatorsToUse];
 
+      // Dispatch the sub-batches across the evaluators.
       for (int i = 0; i < evaluatorsToUse; i++)
       {
         int capI = i;
         IEncodedPositionBatchFlat thisSubBatch = GetSubBatch(positions, localPreferredFractions, capI);
         subBatchSizes[capI] = thisSubBatch.NumPos;
-        tasks[i] = Task.Run(() => results[capI] = Evaluators[capI].EvaluateIntoBuffers(thisSubBatch, retrieveSupplementalResults));
+
+        if (i == evaluatorsToUse - 1)
+        {
+          // Execute the last one inline
+          results[capI] = Evaluators[capI].EvaluateIntoBuffers(thisSubBatch, retrieveSupplementalResults);
+        }
+        else
+        {
+          tasks[i] = Task.Run(() => results[capI] = Evaluators[capI].EvaluateIntoBuffers(thisSubBatch, retrieveSupplementalResults));
+        }
       }
+
       Task.WaitAll(tasks);
 
-      if (UseMergedBatch)
+      /// More efficient mode which is just a merged view over multiple batches 
+      /// (without copying data)
+      const bool USE_MERGED_BATCH_VIEW = true;
+
+      if (USE_MERGED_BATCH_VIEW)
       {
         return new PositionsEvaluationBatchMerged(results, subBatchSizes);
       }
@@ -274,36 +301,18 @@ namespace Ceres.Chess.NNEvaluators
       }
 
 
-      static float[] ToCumulative(float[] values)
+      IEncodedPositionBatchFlat GetSubBatch(IEncodedPositionBatchFlat fullBatch,
+                                            Span<float> splitFracs,
+                                            int thisSplitIndex)
       {
-        float[] ret = new float[values.Length];
-        float acc = 0;
-        for (int i = 0; i < ret.Length; i++)
-        {
-          ret[i] = acc;
-          acc += values[i];
-        }
+        Span<float> cums = stackalloc float[splitFracs.Length + 1];
+        CalcToCumulative(splitFracs, cums);
 
-        if (Math.Abs(acc - 1.0f) > 0.001) throw new Exception("Fractions should sum to 1.0");
-
-        return ret;
-      }
-
-
-      IEncodedPositionBatchFlat GetSubBatch(IEncodedPositionBatchFlat fullBatch, float[] splitFracs, int thisSplitIndex)
-      {
-        float[] cums = ToCumulative(splitFracs);
-
-        int StartIndex(int i) => (int)(fullBatch.NumPos * cums[i]);
-
-        int start = StartIndex(thisSplitIndex);
+        int start = (int)(fullBatch.NumPos * cums[thisSplitIndex]);
         int end;
 
         bool isLastSplit = thisSplitIndex == splitFracs.Length - 1;
-        if (isLastSplit)
-          end = fullBatch.NumPos;
-        else
-          end = StartIndex(thisSplitIndex + 1);
+        end = isLastSplit ? fullBatch.NumPos : (int)(fullBatch.NumPos * cums[thisSplitIndex + 1]);
 
         int length = end - start;
 

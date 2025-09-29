@@ -16,16 +16,13 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Threading.Tasks;
 
-using Ceres.Base.DataTypes;
 using Ceres.Base.Threading;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
-using Ceres.Chess.NNEvaluators;
 
 #endregion
 
@@ -42,7 +39,7 @@ namespace Ceres.Chess.LC0.Batches
     Memory<ulong> PosPlaneBitmaps { get; }
 
     /// <summary>
-    /// One byte for each bitmap with corresopnding value.
+    /// One byte for each bitmap with corresponding value.
     /// These values are generally 0 or 1, 
     /// except for Move50 plane which can be any integer from 0 to 99.
     /// </summary>
@@ -108,12 +105,12 @@ namespace Ceres.Chess.LC0.Batches
 
     #region Implmentation
 
-    Memory<Half> ValuesFlatFromPlanes(Memory<Half> preallocatedBuffer, bool nhwc, bool scale50MoveCounter);
+
+    Memory<Half> ValuesFlatFromPlanes(Memory<Half> preallocatedBuffer, int indexFirstPosition, int numPositions, bool scaleMove50Counter);
+
 
     public IEncodedPositionBatchFlat GetSubBatchSlice(int startIndex, int count)
-    {
-      return new EncodedPositionBatchFlatSlice(this, startIndex, count);
-    }
+      => new EncodedPositionBatchFlatSlice(this, startIndex, count);
 
 
     /// <summary>
