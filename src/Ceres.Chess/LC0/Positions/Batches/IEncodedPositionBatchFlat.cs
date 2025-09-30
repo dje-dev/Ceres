@@ -16,6 +16,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading.Tasks;
 
 using Ceres.Base.Threading;
@@ -39,7 +40,7 @@ namespace Ceres.Chess.LC0.Batches
     Memory<ulong> PosPlaneBitmaps { get; }
 
     /// <summary>
-    /// One byte for each bitmap with corresponding value.
+    /// One byte for each bitmap with corresopnding value.
     /// These values are generally 0 or 1, 
     /// except for Move50 plane which can be any integer from 0 to 99.
     /// </summary>
@@ -105,12 +106,12 @@ namespace Ceres.Chess.LC0.Batches
 
     #region Implmentation
 
-
-    Memory<Half> ValuesFlatFromPlanes(Memory<Half> preallocatedBuffer, int indexFirstPosition, int numPositions, bool scaleMove50Counter);
-
+    Memory<Half> ValuesFlatFromPlanes(Memory<Half> preallocatedBuffer, bool nhwc, bool scale50MoveCounter);
 
     public IEncodedPositionBatchFlat GetSubBatchSlice(int startIndex, int count)
-      => new EncodedPositionBatchFlatSlice(this, startIndex, count);
+    {
+      return new EncodedPositionBatchFlatSlice(this, startIndex, count);
+    }
 
 
     /// <summary>

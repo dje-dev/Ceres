@@ -105,12 +105,21 @@ namespace Ceres.Chess.LC0.Batches
     }
 
 
-    public Memory<Half> ValuesFlatFromPlanes(Memory<Half> preallocatedBuffer, int indexFirstPosition, int numPositions, bool scaleMove50Counter)
-      => Parent.ValuesFlatFromPlanes(preallocatedBuffer, indexFirstPosition, numPositions, scaleMove50Counter);
+    public Memory<Half> ValuesFlatFromPlanes(Memory<Half> preallocatedBuffer, bool nhwc, bool scale50MoveCounter)
+    {
+      Memory<Half> parentBuffer = Parent.ValuesFlatFromPlanes(default, nhwc, scale50MoveCounter);
+      const int NUM_VALUES_EACH_POS = EncodedPositionWithHistory.NUM_PLANES_TOTAL * 64;
+      return parentBuffer.Slice(NUM_VALUES_EACH_POS * StartIndex, NUM_VALUES_EACH_POS * Length);
+    }
 
 
-    public Memory<EncodedPositionWithHistory> PositionsBuffer => Parent.PositionsBuffer.Slice(StartIndex, Length);
-
+    public Memory<EncodedPositionWithHistory> PositionsBuffer
+    {
+      get
+      {
+        return Parent.PositionsBuffer.Slice(StartIndex, Length);
+      }
+    }
 
     Memory<Half[]> IEncodedPositionBatchFlat.States
     {

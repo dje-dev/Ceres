@@ -170,6 +170,7 @@ namespace Ceres.Chess.NNEvaluators
         localPreferredFractions[i] = PreferredFractions[i];
         fracSum += localPreferredFractions[i];
       }
+
       // Normalize to keep proportions
       if (fracSum <= 0)
       {
@@ -186,10 +187,33 @@ namespace Ceres.Chess.NNEvaluators
           localPreferredFractions[i] /= fracSum;
         }
       }
+      for (int i = 0; i < evaluatorsToUse; i++)
+      {
+        if (localPreferredFractions[i] <= 0)
+        {
+          // Fallback uniform if something pathological
+          for (int j = 0; j < evaluatorsToUse; j++)
+          {
+            localPreferredFractions[j] = 1.0f / evaluatorsToUse;
+          }
+          break;
+        }
+      }
 
-      // Allocate arrays sized only for the evaluators we will actually use
+      if (false)
+      {
+        Console.WriteLine("\r\n" + positions.NumPos + " " + Evaluators.Length);
+        for (int i = 0; i < evaluatorsToUse; i++)
+        {
+          Console.Write(localPreferredFractions[i] + " ");
+        }
+        Console.WriteLine();
+      }
+
+
+      // Allocate arrays sized only for the evaluators we will actually use.
       IPositionEvaluationBatch[] results = new IPositionEvaluationBatch[evaluatorsToUse];
-      Task[] tasks = new Task[evaluatorsToUse - 1];
+      Task[] tasks = new Task[evaluatorsToUse];
       int[] subBatchSizes = new int[evaluatorsToUse];
 
       // Dispatch the sub-batches across the evaluators.
@@ -198,16 +222,7 @@ namespace Ceres.Chess.NNEvaluators
         int capI = i;
         IEncodedPositionBatchFlat thisSubBatch = GetSubBatch(positions, localPreferredFractions, capI);
         subBatchSizes[capI] = thisSubBatch.NumPos;
-
-        if (i == evaluatorsToUse - 1)
-        {
-          // Execute the last one inline
-          results[capI] = Evaluators[capI].EvaluateIntoBuffers(thisSubBatch, retrieveSupplementalResults);
-        }
-        else
-        {
-          tasks[i] = Task.Run(() => results[capI] = Evaluators[capI].EvaluateIntoBuffers(thisSubBatch, retrieveSupplementalResults));
-        }
+        tasks[i] = Task.Run(() => results[capI] = Evaluators[capI].EvaluateIntoBuffers(thisSubBatch, retrieveSupplementalResults));
       }
 
       Task.WaitAll(tasks);

@@ -431,10 +431,9 @@ namespace Chess.Ceres.NNEvaluators
         int bufferLength = EncodedPositionBatchFlat.TOTAL_NUM_PLANES_ALL_HISTORIES * batch.NumPos * 64;
         Half[] flatValuesBuffer = ArrayPool<Half>.Shared.Rent(bufferLength);
 
-        PositionEvaluationBatch ret;
-
-        Memory<Half> flatValues = batch.ValuesFlatFromPlanes(flatValuesBuffer, 0, batch.NumPos, Scale50MoveCounter);
-        ret = DoEvaluateBatch(batch, null, flatValues, null, batch.NumPos, retrieveSupplementalResults, null, 1);
+        Memory<Half> flatValues = batch.ValuesFlatFromPlanes(flatValuesBuffer, false, Scale50MoveCounter);
+        Debug.Assert(flatValues.Length == bufferLength);
+        PositionEvaluationBatch ret = DoEvaluateBatch(batch, null, flatValues, null, batch.NumPos, retrieveSupplementalResults, null, 1);
 
         ArrayPool<Half>.Shared.Return(flatValuesBuffer);
         return ret;

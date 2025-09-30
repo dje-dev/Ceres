@@ -60,15 +60,15 @@ namespace Ceres.Chess.NetEvaluation.Batch
     (Memory<CompressedPolicyVector> policies, int index) GetPolicy(int index);
     (Memory<CompressedActionVector> actions, int index) GetAction(int index);
 
-  
+
     public NNEvaluatorResultActivations GetActivations(int index);
 
     public float GetV(int index) => GetWinP(index) - GetLossP(index);
 
     public ref readonly CompressedPolicyVector PolicyRef(int index)
     {
-      (Memory<CompressedPolicyVector> policies, _) = GetPolicy(index);
-      return ref policies.Span[index];
+      (Memory<CompressedPolicyVector> policies, int subIndex) = GetPolicy(index);
+      return ref policies.Span[subIndex];
     }
   }
 }
