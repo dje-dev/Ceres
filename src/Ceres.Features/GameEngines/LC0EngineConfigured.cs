@@ -172,7 +172,7 @@ namespace Ceres.Features.GameEngines
         lzOptions += $@"-w {netSourceFile} -t {NUM_THREADS} " +
                      //                    $"--score-type=win_percentage " +
                      // like TCEC 10, only 5% benefit     $"--max-prefetch=160 --max-collision-events=917 " +
-                     overrideBackendString ?? BackendArgumentsString(evaluatorDef);
+                     (overrideBackendString ?? BackendArgumentsString(evaluatorDef));
 
       }
 
