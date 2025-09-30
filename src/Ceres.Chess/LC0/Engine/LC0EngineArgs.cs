@@ -30,8 +30,8 @@ namespace Ceres.Chess.LC0.Engine
     public static string PrecisionString(NNEvaluatorPrecision precision)
   => precision switch
   {
-    NNEvaluatorPrecision.FP16 => "cuda-fp16",
-    NNEvaluatorPrecision.FP32 => "cuda",
+    NNEvaluatorPrecision.FP16 => "onnx-trt",
+    NNEvaluatorPrecision.FP32 => "onnx-cuda",
     NNEvaluatorPrecision.Int8 => "trt-int8", // requies special build with TensorRT support
     _ => throw new Exception("Internal error: unknown precision type")
   };
@@ -52,14 +52,14 @@ namespace Ceres.Chess.LC0.Engine
 
       if (gpuIDs.Length == 1)
       {
-        return $"--backend={backendName} --backend-opts=multi_stream=true,gpu={gpuIDs[0]} ";
+        return $"--backend={backendName} --backend-opts=gpu={gpuIDs[0]} ";
       }
       else
       {
         //--backend=demux --backend-opts=(backend=cudnn-fp16,gpu=0),(backend=cudnn-fp16,gpu=1),(backend=cudnn-fp16,gpu=2),(backend=cudnn-fp16,gpu=3) --nncache=0 --movetime=-1 --nodes=1000000 -t 5
         //minimum-split-size=32,
         StringBuilder arg = new StringBuilder($"--backend={(fractionsAreEqual ? "demux" : "roundrobin")} "
-                                            + $"--backend-opts=multi_stream=true,{(fractionsAreEqual ? "minimum-split-size=32," : "")}");
+                                            + $"--backend-opts={(fractionsAreEqual ? "minimum-split-size=32," : "")}");
         for (int gpuIndex = 0; gpuIndex < gpuIDs.Length; gpuIndex++)
         {
           arg.Append($"(backend={backendName},gpu={gpuIDs[gpuIndex]}){(gpuIndex < gpuIDs.Length - 1 ? "," : " ")}");
