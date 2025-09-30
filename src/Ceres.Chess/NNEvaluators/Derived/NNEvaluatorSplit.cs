@@ -14,9 +14,10 @@
 #region Using directives
 
 using System;
+using System.Buffers;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
-
 using Ceres.Base.Benchmarking;
 using Ceres.Base.DataType;
 using Ceres.Base.DataTypes;
@@ -216,6 +217,16 @@ namespace Ceres.Chess.NNEvaluators
       Task[] tasks = new Task[evaluatorsToUse];
       int[] subBatchSizes = new int[evaluatorsToUse];
 
+      const bool USE_PREALLOCATED_BUFFER = true;
+      Half[] flatValuesBuffer = null;
+      if (USE_PREALLOCATED_BUFFER)
+      {
+        // Allocate a temporary buffer for the flat values and force evaluation using this buffer.
+        int bufferLength = EncodedPositionBatchFlat.TOTAL_NUM_PLANES_ALL_HISTORIES * positions.NumPos * 64;
+        flatValuesBuffer = ArrayPool<Half>.Shared.Rent(bufferLength);
+        Memory<Half> forceInitialize = positions.ValuesFlatFromPlanes(flatValuesBuffer, nhwc: false, scale50MoveCounter: false);
+      }
+
       // Dispatch the sub-batches across the evaluators.
       for (int i = 0; i < evaluatorsToUse; i++)
       {
@@ -226,6 +237,12 @@ namespace Ceres.Chess.NNEvaluators
       }
 
       Task.WaitAll(tasks);
+
+      if (USE_PREALLOCATED_BUFFER)
+      {
+        // Release flat values buffer.
+        ArrayPool<Half>.Shared.Return(flatValuesBuffer);
+      }
 
       /// More efficient mode which is just a merged view over multiple batches 
       /// (without copying data)
