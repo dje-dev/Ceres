@@ -937,6 +937,8 @@ namespace Ceres.Chess.LC0.Batches
 
     Memory<Half> IEncodedPositionBatchFlat.ValuesFlatFromPlanes(Memory<Half> preallocatedBuffer, bool nwhc, bool scaleMove50Counter) => ValuesFlatFromPlanes(preallocatedBuffer, nwhc, scaleMove50Counter);
 
+    bool IEncodedPositionBatchFlat.ValuesFlatFromPlanesCanUsePreallocatedBuffer => true;
+
     Memory<EncodedPositionWithHistory> IEncodedPositionBatchFlat.PositionsBuffer { get => PositionsBuffer; }
 
     #endregion

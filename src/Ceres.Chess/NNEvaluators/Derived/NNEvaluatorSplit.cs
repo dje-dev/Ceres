@@ -25,6 +25,7 @@ using Ceres.Base.Math;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.LC0.Batches;
 using Ceres.Chess.NetEvaluation.Batch;
+using Chess.Ceres.NNEvaluators;
 
 #endregion
 
@@ -217,15 +218,18 @@ namespace Ceres.Chess.NNEvaluators
       Task[] tasks = new Task[evaluatorsToUse];
       int[] subBatchSizes = new int[evaluatorsToUse];
 
-      const bool USE_PREALLOCATED_BUFFER = true;
+      // TODO: make this cleaner, create a virtual method at NNEvaluator
+      bool usePreallocatedFixedBuffer = (Evaluators[0] is not NNEvaluatorONNX)
+                                      || ((NNEvaluatorONNX)Evaluators[0]).Type == NNBackends.ONNXRuntime.ONNXNetExecutor.NetTypeEnum.LC0;
       Half[] flatValuesBuffer = null;
-      if (USE_PREALLOCATED_BUFFER)
+      if (usePreallocatedFixedBuffer)
       {
         // Allocate a temporary buffer for the flat values and force evaluation using this buffer.
         int bufferLength = EncodedPositionBatchFlat.TOTAL_NUM_PLANES_ALL_HISTORIES * positions.NumPos * 64;
         flatValuesBuffer = ArrayPool<Half>.Shared.Rent(bufferLength);
         Memory<Half> forceInitialize = positions.ValuesFlatFromPlanes(flatValuesBuffer, nhwc: false, scale50MoveCounter: false);
       }
+
 
       // Dispatch the sub-batches across the evaluators.
       for (int i = 0; i < evaluatorsToUse; i++)
@@ -238,7 +242,7 @@ namespace Ceres.Chess.NNEvaluators
 
       Task.WaitAll(tasks);
 
-      if (USE_PREALLOCATED_BUFFER)
+      if (usePreallocatedFixedBuffer)
       {
         // Release flat values buffer.
         ArrayPool<Half>.Shared.Return(flatValuesBuffer);

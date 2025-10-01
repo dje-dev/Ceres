@@ -14,7 +14,7 @@
 #region Using directives
 
 using System;
-
+using System.Diagnostics;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.MoveGen;
 
@@ -107,10 +107,14 @@ namespace Ceres.Chess.LC0.Batches
 
     public Memory<Half> ValuesFlatFromPlanes(Memory<Half> preallocatedBuffer, bool nhwc, bool scale50MoveCounter)
     {
+      Debug.Assert(preallocatedBuffer.IsEmpty); // not expected since ValuesFlatFromPlanesCanUsePreallocatedBuffer returns false
+
       Memory<Half> parentBuffer = Parent.ValuesFlatFromPlanes(default, nhwc, scale50MoveCounter);
       const int NUM_VALUES_EACH_POS = EncodedPositionWithHistory.NUM_PLANES_TOTAL * 64;
       return parentBuffer.Slice(NUM_VALUES_EACH_POS * StartIndex, NUM_VALUES_EACH_POS * Length);
     }
+
+    bool IEncodedPositionBatchFlat.ValuesFlatFromPlanesCanUsePreallocatedBuffer => false;
 
 
     public Memory<EncodedPositionWithHistory> PositionsBuffer

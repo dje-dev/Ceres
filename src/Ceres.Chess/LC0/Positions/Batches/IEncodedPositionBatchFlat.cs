@@ -108,6 +108,8 @@ namespace Ceres.Chess.LC0.Batches
 
     Memory<Half> ValuesFlatFromPlanes(Memory<Half> preallocatedBuffer, bool nhwc, bool scale50MoveCounter);
 
+    bool ValuesFlatFromPlanesCanUsePreallocatedBuffer { get; }
+
     public IEncodedPositionBatchFlat GetSubBatchSlice(int startIndex, int count)
     {
       return new EncodedPositionBatchFlatSlice(this, startIndex, count);

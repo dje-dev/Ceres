@@ -56,7 +56,6 @@ namespace Chess.Ceres.NNEvaluators
     /// </summary>
     public readonly ONNXNetExecutor.NetTypeEnum Type;
 
-
     /// <summary>
     /// Precision of network.
     /// </summary>
@@ -240,6 +239,7 @@ namespace Chess.Ceres.NNEvaluators
       ONNXFileName = onnxModelFileName;
       this.maxBatchSize = maxBatchSize;
       Precision = precision;
+      this.Type = type;
       this.isWDL = isWDL;
       this.hasValueSecondary = hasValueSecondary;
       this.hasM = hasM;
@@ -410,7 +410,7 @@ namespace Chess.Ceres.NNEvaluators
 
         int inputSizeAttention = batch.NumPos * 64 * ONNXNetExecutor.TPG_BYTES_PER_SQUARE_RECORD;
         Half[] flatValuesAttention = null;
-        byte[] squareValuesByte = new byte[inputSizeAttention];
+        byte[] squareValuesByte = ArrayPool<byte>.Shared.Rent(inputSizeAttention);
         Memory<Half> flatValuesAttentionM = default;
         if (!HasSquaresByteInput)
         {
@@ -423,19 +423,23 @@ namespace Chess.Ceres.NNEvaluators
 
         PositionEvaluationBatch ret = DoEvaluateBatch(batch, squareValuesByte, flatValuesAttentionM, batch.States, batch.NumPos,
                                                       retrieveSupplementalResults, null, 1);
+        ArrayPool<byte>.Shared.Return(squareValuesByte);
         Debug.Assert(!retrieveSupplementalResults);
         return ret;
       }
       else
       {
         int bufferLength = EncodedPositionBatchFlat.TOTAL_NUM_PLANES_ALL_HISTORIES * batch.NumPos * 64;
-        Half[] flatValuesBuffer = ArrayPool<Half>.Shared.Rent(bufferLength);
+        Half[] flatValuesBuffer = batch.ValuesFlatFromPlanesCanUsePreallocatedBuffer ? ArrayPool<Half>.Shared.Rent(bufferLength) : null;
 
         Memory<Half> flatValues = batch.ValuesFlatFromPlanes(flatValuesBuffer, false, Scale50MoveCounter);
         Debug.Assert(flatValues.Length == bufferLength);
         PositionEvaluationBatch ret = DoEvaluateBatch(batch, null, flatValues, null, batch.NumPos, retrieveSupplementalResults, null, 1);
 
-        ArrayPool<Half>.Shared.Return(flatValuesBuffer);
+        if (flatValuesBuffer != null)
+        {
+          ArrayPool<Half>.Shared.Return(flatValuesBuffer);
+        }
         return ret;
       }
     }
