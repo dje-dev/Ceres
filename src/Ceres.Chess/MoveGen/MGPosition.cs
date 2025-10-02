@@ -14,6 +14,7 @@
 #region Using directives
 
 using System;
+using System.Collections.Generic;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -887,17 +888,47 @@ namespace Ceres.Chess.MoveGen
 }
 
 public record struct PosHash64(ulong Hash);
-public record struct PosHash64WithMove50AndReps(ulong Hash);
+public readonly record struct PosHash64WithMove50AndReps(ulong Hash);
 
-public record struct PosHash96(uint High, ulong Low)
+public readonly record struct PosHash96(uint High, ulong Low)
 {
   public readonly string ShortStr() => $"{High % 10_000}/{Low % 10_000}";
   public override readonly string ToString() => $"0x{High:X8}/{Low:X16}";
 }
 
-public record struct PosHash96MultisetFinalized(uint High, ulong Low)
+
+public readonly record struct PosHash96MultisetFinalized(uint High, ulong Low) : IEqualityComparer<PosHash96MultisetFinalized>
 {
+  public readonly bool Equals(PosHash96MultisetFinalized other)
+    => High == other.High && Low == other.Low;
+
+  public readonly bool Equals(PosHash96MultisetFinalized x, PosHash96MultisetFinalized y)
+    => x.High == y.High && x.Low == y.Low;
+
+
+  public override int GetHashCode()
+  {
+    // Mix the 96 bits (High:32, Low:64) into a strong 32-bit hash.
+    // SplitMix64-style avalanching: fast, excellent diffusion.
+    ulong x = Low ^ ((ulong)High << 32);
+
+    x ^= 0x9E3779B97F4A7C15ul;               // add a large odd constant
+    x ^= x >> 30;
+    x *= 0xBF58476D1CE4E5B9ul;
+    x ^= x >> 27;
+    x *= 0x94D049BB133111EBul;
+    x ^= x >> 31;
+
+    return (int)(x ^ (x >> 32));
+  }
+
+  public int GetHashCode(PosHash96MultisetFinalized obj)
+  {
+    return obj.GetHashCode();
+  }
+
   public readonly string ShortStr() => $"{High % 10_000}/{Low % 10_000}";
+
   public override readonly string ToString() => $"0x{High:X8}/{Low:X16}";
 }
 
