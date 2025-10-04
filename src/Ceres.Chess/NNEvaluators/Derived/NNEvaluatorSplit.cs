@@ -105,6 +105,9 @@ namespace Ceres.Chess.NNEvaluators
     }
 
 
+    const int DEFAULT_MIN_SPLIT_SIZE = 24;
+
+
     /// <summary>
     /// Constructor.
     /// </summary>
@@ -113,7 +116,7 @@ namespace Ceres.Chess.NNEvaluators
     /// <param name="minSplitSize"></param>
     public NNEvaluatorSplit(NNEvaluator[] evaluators,
                             float[] preferredFractions = null,
-                            int minSplitSize = 32) // TODO: make this smarter (based on NPS)
+                            int minSplitSize = DEFAULT_MIN_SPLIT_SIZE) // TODO: make this smarter (based on NPS)
       : base(evaluators)
     {
       if (preferredFractions != null && preferredFractions.Length != evaluators.Length)
@@ -158,9 +161,8 @@ namespace Ceres.Chess.NNEvaluators
       if (retrieveSupplementalResults) throw new NotImplementedException();
 
       // Determine how many evaluators to actually use for this batch.
-      // Never use more than positions.NumPos / 32 (integer division) evaluators.
-      const int MIN_EVALUTOR_POSITIONS = 32;
-      int maxAllowedBySize = Math.Max(1, (int)Math.Round((float)positions.NumPos / MIN_EVALUTOR_POSITIONS, 0)); // safeguard
+      // Never use more than Round(positions.NumPos / MinSplitSize) evaluators.
+      int maxAllowedBySize = Math.Max(1, (int)Math.Round((float)positions.NumPos / MinSplitSize, 0)); // safeguard
       int evaluatorsToUse = Math.Min(Evaluators.Length, maxAllowedBySize);
 
       // If after capping we only use one, just evaluate with the preferred (fastest) evaluator directly.

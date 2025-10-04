@@ -41,7 +41,7 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// Default minimum batch size before a batch can be 
     /// possibly split over multiple evaluators.
     /// </summary>
-    const int DEFAULT_MIN_SPLIT_POSITIONS = 32;
+    const int DEFAULT_MIN_SPLIT_POSITIONS = 24;
 
     /// <summary>
     /// Array of devices used for the evaluation.
