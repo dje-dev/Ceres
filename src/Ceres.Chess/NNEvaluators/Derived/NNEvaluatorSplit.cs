@@ -15,6 +15,7 @@
 
 using System;
 using System.Buffers;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
@@ -194,21 +195,27 @@ namespace Ceres.Chess.NNEvaluators
       }
 
       // Dispatch the sub-batches across the evaluators.
-      int totalAllocated = 0;
-      for (int i = 0; i < evaluatorsToUse; i++)
+      int positionsAllocated = 0;
+      int evaluatorsAllocated = 0;
+      for (int i = 0; i < Evaluators.Length; i++)
       {
         int numAllocated = allocations[i];
-        if (allocations[i] > 0)
+        if (numAllocated > 0)
         {
           int capI = i;
-          IEncodedPositionBatchFlat thisSubBatch = positions.GetSubBatchSlice(totalAllocated, numAllocated);
-          subBatchSizes[capI] = numAllocated;
-          tasks[i] = Task.Run(() => results[capI] = Evaluators[capI].EvaluateIntoBuffers(thisSubBatch, retrieveSupplementalResults));
-          totalAllocated += allocations[i];
+          int capEvaluatorsCap = evaluatorsAllocated;
+
+          IEncodedPositionBatchFlat thisSubBatch = positions.GetSubBatchSlice(positionsAllocated, numAllocated);
+
+          subBatchSizes[evaluatorsAllocated] = numAllocated;
+          tasks[evaluatorsAllocated] = Task.Run(() => results[capEvaluatorsCap] = Evaluators[capI].EvaluateIntoBuffers(thisSubBatch, retrieveSupplementalResults));
+
+          evaluatorsAllocated++;
+          positionsAllocated += numAllocated;
         }
       }
 
-      Task.WaitAll(tasks);
+      Task.WaitAll(tasks.ToArray());
 
       EvaluatorAllocator.Deallocate(allocations);
 
