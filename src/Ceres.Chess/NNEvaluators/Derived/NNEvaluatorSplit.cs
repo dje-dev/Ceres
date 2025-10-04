@@ -165,11 +165,13 @@ namespace Ceres.Chess.NNEvaluators
       int maxAllowedBySize = Math.Max(1, (int)Math.Round((float)positions.NumPos / MinSplitSize, 0)); // safeguard
       int evaluatorsToUse = Math.Min(Evaluators.Length, maxAllowedBySize);
 
+#if NOT
       // If after capping we only use one, just evaluate with the preferred (fastest) evaluator directly.
       if (evaluatorsToUse == 1)
       {
         return Evaluators[indexPerferredEvalator].EvaluateIntoBuffers(positions, retrieveSupplementalResults);
       }
+#endif
 
       // Compute the allocation of positions across evaluators.
       int[] allocations = EvaluatorAllocator.Allocate(evaluatorsToUse, positions.NumPos);
