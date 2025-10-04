@@ -18,10 +18,12 @@ using System.Buffers;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
+
 using Ceres.Base.Benchmarking;
 using Ceres.Base.DataType;
 using Ceres.Base.DataTypes;
 using Ceres.Base.Math;
+
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.LC0.Batches;
 using Ceres.Chess.NetEvaluation.Batch;
@@ -47,6 +49,12 @@ namespace Ceres.Chess.NNEvaluators
     /// Minimum number of positions before splitting begins.
     /// </summary>
     public readonly int MinSplitSize;
+
+    /// <summary>
+    /// Allocator that manages the splitting of positions into batches across evaluators.
+    /// </summary>
+    public ItemsInBucketsAllocator EvaluatorAllocator;
+
 
     int indexPerferredEvalator;
 
@@ -86,6 +94,18 @@ namespace Ceres.Chess.NNEvaluators
 
 
     /// <summary>
+    /// Switches the evaluator allocator to a specified (potentially shared) one.
+    /// </summary>
+    /// <param name="allocator"></param>
+    public void SetAllocator(ItemsInBucketsAllocator allocator)
+    {
+      Debug.Assert(allocator.BucketCount == allocator.BucketCount);
+
+      EvaluatorAllocator = allocator;
+    }
+
+
+    /// <summary>
     /// Constructor.
     /// </summary>
     /// <param name="evaluators"></param>
@@ -112,35 +132,20 @@ namespace Ceres.Chess.NNEvaluators
       {
         // Default assumption is equality
         int numEvaluators = evaluators.Length;
-        PreferredFractions = new float[numEvaluators];
+        preferredFractions = new float[numEvaluators];
         for (int i = 0; i < numEvaluators; i++)
         {
-          PreferredFractions[i] = 1.0f / numEvaluators;
+          preferredFractions[i] = 1.0f / numEvaluators;
         }
       }
-      else
-      {
-        PreferredFractions = preferredFractions;
-      }
+
+      // By default use our own private allocator.
+      EvaluatorAllocator = new ItemsInBucketsAllocator(preferredFractions);
+      PreferredFractions = preferredFractions;
 
       indexPerferredEvalator = ArrayUtils.IndexOfElementWithMaxValue(PreferredFractions, PreferredFractions.Length);
     }
 
-
-    static void CalcToCumulative(Span<float> values, Span<float> cums)
-    {
-      float acc = 0;
-      for (int i = 0; i < values.Length; i++)
-      {
-        cums[i] = acc;
-        acc += values[i];
-      }
-
-      if (Math.Abs(acc - 1.0f) > 0.001)
-      {
-        throw new Exception("Fractions should sum to 1.0");
-      }
-    }
 
     /// <summary>
     /// Implementation of virtual method to actually evaluate the batch.
@@ -164,54 +169,8 @@ namespace Ceres.Chess.NNEvaluators
         return Evaluators[indexPerferredEvalator].EvaluateIntoBuffers(positions, retrieveSupplementalResults);
       }
 
-      // Build a local fraction array "scrunched down" to the subset we are using
-      Span<float> localPreferredFractions = stackalloc float[evaluatorsToUse];
-      float fracSum = 0;
-      for (int i = 0; i < evaluatorsToUse; i++)
-      {
-        localPreferredFractions[i] = PreferredFractions[i];
-        fracSum += localPreferredFractions[i];
-      }
-
-      // Normalize to keep proportions
-      if (fracSum <= 0)
-      {
-        // Fallback uniform if something pathological
-        for (int i = 0; i < evaluatorsToUse; i++)
-        {
-          localPreferredFractions[i] = 1.0f / evaluatorsToUse;
-        }
-      }
-      else
-      {
-        for (int i = 0; i < evaluatorsToUse; i++)
-        {
-          localPreferredFractions[i] /= fracSum;
-        }
-      }
-      for (int i = 0; i < evaluatorsToUse; i++)
-      {
-        if (localPreferredFractions[i] <= 0)
-        {
-          // Fallback uniform if something pathological
-          for (int j = 0; j < evaluatorsToUse; j++)
-          {
-            localPreferredFractions[j] = 1.0f / evaluatorsToUse;
-          }
-          break;
-        }
-      }
-
-      if (false)
-      {
-        Console.WriteLine("\r\n" + positions.NumPos + " " + Evaluators.Length);
-        for (int i = 0; i < evaluatorsToUse; i++)
-        {
-          Console.Write(localPreferredFractions[i] + " ");
-        }
-        Console.WriteLine();
-      }
-
+      // Compute the allocation of positions across evaluators.
+      int[] allocations = EvaluatorAllocator.Allocate(evaluatorsToUse, positions.NumPos);
 
       // Allocate arrays sized only for the evaluators we will actually use.
       IPositionEvaluationBatch[] results = new IPositionEvaluationBatch[evaluatorsToUse];
@@ -230,17 +189,24 @@ namespace Ceres.Chess.NNEvaluators
         Memory<Half> forceInitialize = positions.ValuesFlatFromPlanes(flatValuesBuffer, nhwc: false, scale50MoveCounter: false);
       }
 
-
       // Dispatch the sub-batches across the evaluators.
+      int totalAllocated = 0;
       for (int i = 0; i < evaluatorsToUse; i++)
       {
-        int capI = i;
-        IEncodedPositionBatchFlat thisSubBatch = GetSubBatch(positions, localPreferredFractions, capI);
-        subBatchSizes[capI] = thisSubBatch.NumPos;
-        tasks[i] = Task.Run(() => results[capI] = Evaluators[capI].EvaluateIntoBuffers(thisSubBatch, retrieveSupplementalResults));
+        int numAllocated = allocations[i];
+        if (allocations[i] > 0)
+        {
+          int capI = i;
+          IEncodedPositionBatchFlat thisSubBatch = positions.GetSubBatchSlice(totalAllocated, numAllocated);
+          subBatchSizes[capI] = numAllocated;
+          tasks[i] = Task.Run(() => results[capI] = Evaluators[capI].EvaluateIntoBuffers(thisSubBatch, retrieveSupplementalResults));
+          totalAllocated += allocations[i];
+        }
       }
 
       Task.WaitAll(tasks);
+
+      EvaluatorAllocator.Deallocate(allocations);
 
       if (usePreallocatedFixedBuffer)
       {
@@ -336,24 +302,6 @@ namespace Ceres.Chess.NNEvaluators
                                            policies, actions, w, l, w2, l2, m, uncertaintyV, uncertaintyP, states, null, stats);
       }
 
-
-      IEncodedPositionBatchFlat GetSubBatch(IEncodedPositionBatchFlat fullBatch,
-                                            Span<float> splitFracs,
-                                            int thisSplitIndex)
-      {
-        Span<float> cums = stackalloc float[splitFracs.Length + 1];
-        CalcToCumulative(splitFracs, cums);
-
-        int start = (int)(fullBatch.NumPos * cums[thisSplitIndex]);
-        int end;
-
-        bool isLastSplit = thisSplitIndex == splitFracs.Length - 1;
-        end = isLastSplit ? fullBatch.NumPos : (int)(fullBatch.NumPos * cums[thisSplitIndex + 1]);
-
-        int length = end - start;
-
-        return fullBatch.GetSubBatchSlice(start, length);
-      }
     }
 
   }
