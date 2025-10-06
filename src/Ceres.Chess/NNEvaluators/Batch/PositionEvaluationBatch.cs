@@ -1186,7 +1186,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
         {
           // TODO: not yet implemented (would need to implement possible V1/V2 value blending as below).
           throw new NotImplementedException("Secondary value not currently supported for non-WDL");
-        } 
+        }
 
         W = valueEvals.ToArray();
         return;
@@ -1195,15 +1195,12 @@ namespace Ceres.Chess.NetEvaluation.Batch
       FP16[] w = new FP16[NumPos];
       FP16[] l = new FP16[NumPos];
 
+
       for (int i = 0; i < NumPos; i++)
       {
-        if (!valsAreLogistic)
+        if (!valsAreLogistic && temperature == 1 && uncertaintyTemperatureScalingFactor == 0)
         {
-          if (temperature != 1 || uncertaintyTemperatureScalingFactor != 0)
-          {
-            throw new NotImplementedException("temperature/uncertainty with non-logistic values");
-          }
-
+          // Fast case of direct probabilities available and no temperature use.
           w[i] = valueEvals[i * 3 + 0];
           l[i] = valueEvals[i * 3 + 2];
           Debug.Assert(Math.Abs(1 - (valueEvals[i * 3 + 0]
@@ -1212,7 +1209,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
         }
         else
         {
-          CalcWLWithTemperature(valueEvals, temperature, w, l, uncertaintyV, uncertaintyTemperatureScalingFactor, i);
+          CalcWLWithTemperature(valueEvals, valsAreLogistic, temperature, w, l, uncertaintyV, uncertaintyTemperatureScalingFactor, i);
         }
       }
 
@@ -1229,7 +1226,9 @@ namespace Ceres.Chess.NetEvaluation.Batch
     }
 
 
-    private static void CalcWLWithTemperature(ReadOnlySpan<FP16> valueEvals, float temperature, 
+
+    private static void CalcWLWithTemperature(ReadOnlySpan<FP16> valueEvals, bool valuesAreLogistics,
+                                              float temperature,
                                               FP16[] w, FP16[] l,
                                               ReadOnlySpan<FP16> uncertaintyV, float uncertaintyTemperatureScalingFactor,
                                               int i)
@@ -1248,19 +1247,24 @@ namespace Ceres.Chess.NetEvaluation.Batch
             }
 #endif
 
-      double v1;
-      double v2;
-      double v3;
+      double v1 = valueEvals[i * 3 + 0];
+      double v2 = valueEvals[i * 3 + 1];
+      double v3 = valueEvals[i * 3 + 2];
 
-      float max = Math.Max(Math.Max(valueEvals[i * 3 + 0],
-                                     valueEvals[i * 3 + 1]),
-                            valueEvals[i * 3 + 2]);
+      if (!valuesAreLogistics)
+      {
+        v1 = Math.Log(v1);
+        v2 = Math.Log(v2);
+        v3 = Math.Log(v3);
+      }
+
+      double max = Math.Max(Math.Max(v1, v2), v3);
 
       if (temperature == 1 && uncertaintyTemperatureScalingFactor == 0)
       {
-        v1 = Math.Exp(valueEvals[i * 3 + 0] - max);
-        v2 = Math.Exp(valueEvals[i * 3 + 1] - max);
-        v3 = Math.Exp(valueEvals[i * 3 + 2] - max);
+        v1 = Math.Exp(v1 - max);
+        v2 = Math.Exp(v2 - max);
+        v3 = Math.Exp(v3 - max);
       }
       else
       {
@@ -1268,27 +1272,19 @@ namespace Ceres.Chess.NetEvaluation.Batch
                         ? temperature :
                           temperature + uncertaintyTemperatureScalingFactor * uncertaintyV[i];
 
-#if ASYMMETRIC_VALUE_TEMP
-        bool isWinning = valueEvals[i * 3 + 0] > valueEvals[i * 3 + 2];
-if (uncertaintyTemperatureScalingFactor > 0)
-{ 
-  thisTemp += isWinning ? 0.50f :  -0.20f;
-}
-#endif
+        v1 = Math.Exp((v1 - max) / thisTemp);
+        v2 = Math.Exp((v2 - max) / thisTemp);
+        v3 = Math.Exp((v3 - max) / thisTemp);
+      }      
 
-        v1 = Math.Exp((valueEvals[i * 3 + 0] - max) / thisTemp);
-        v2 = Math.Exp((valueEvals[i * 3 + 1] - max) / thisTemp);
-        v3 = Math.Exp((valueEvals[i * 3 + 2] - max) / thisTemp);
-      }
 
       double totl = v1 + v2 + v3;
       Debug.Assert(!double.IsNaN(totl));
-      
+
       // Set win/loss such that the sum of the three is 1.
       w[i] = (FP16)(v1 / totl);
       l[i] = (FP16)(v3 / totl);
     }
-
 
     static void ReplaceFirstSpanWithGeometricWeightedAverage(Span<FP16> arg1, Span<FP16> arg2, float weight1, float weight2)
     {
