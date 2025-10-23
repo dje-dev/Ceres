@@ -475,7 +475,7 @@ int precisionNumBits, int minBatch, int maxBatch, bool useCudaGraphs)
     providerOptionsDict["trt_engine_cache_path"] = trtSubdirectory;
 
     string cachePrefix = FileUtils.FileNameSanitized(shortID);
-    cachePrefix += $"_bs{minBatch}-{maxBatch}";
+    cachePrefix += $"_gpu{GPUID}_bs{minBatch}-{maxBatch}";
     if (useCudaGraphs)
     {
       cachePrefix += "_graph";
