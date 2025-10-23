@@ -890,6 +890,8 @@ namespace Ceres.Chess.MoveGen
 public record struct PosHash64(ulong Hash);
 public readonly record struct PosHash64WithMove50AndReps(ulong Hash);
 
+[Serializable]
+[StructLayout(LayoutKind.Sequential, Pack = 1, Size = 12)]
 public readonly record struct PosHash96(uint High, ulong Low)
 {
   public readonly string ShortStr() => $"{High % 10_000}/{Low % 10_000}";
@@ -897,6 +899,8 @@ public readonly record struct PosHash96(uint High, ulong Low)
 }
 
 
+[Serializable]
+[StructLayout(LayoutKind.Sequential, Pack = 1, Size = 12)]
 public readonly record struct PosHash96MultisetFinalized(uint High, ulong Low) : IEqualityComparer<PosHash96MultisetFinalized>
 {
   public readonly bool Equals(PosHash96MultisetFinalized other)
@@ -942,7 +946,7 @@ public readonly record struct PosHash96MultisetFinalized(uint High, ulong Low) :
 ///   • Printable ToString() – we override for hex formatting.
 /// </summary>
 [Serializable]
-[StructLayout(LayoutKind.Sequential, Pack = 1, Size = 6)]
+[StructLayout(LayoutKind.Sequential, Pack = 1, Size = 12)]
 public record struct PosHash96MultisetRunning(uint High, ulong Low)
 {
   /// <summary>
