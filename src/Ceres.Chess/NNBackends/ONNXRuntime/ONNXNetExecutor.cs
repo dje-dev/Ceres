@@ -208,8 +208,9 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
       // the network can directly accept byte inputs.
       HasSquaresByteInput = netType == NetTypeEnum.TPG && onnxFileName.ToUpper().Contains("-I8");
 
+      int inputsNumBits = HasSquaresByteInput ? 8 : (Precision == NNEvaluatorPrecision.FP16 ? 16 : 32);
       executor = new ONNXExecutor(shortID, onnxFileName, onnxModelBytes, inputNames, nonBatchDimensions,
-                                  precisionNumBits, deviceIndex, useTensorRT, MinBatchSize, maxBatchSize,
+                                  inputsNumBits, precisionNumBits, true, deviceIndex, useTensorRT, MinBatchSize, maxBatchSize,
                                   enableProfiling, retainRawOutputs);
 
     }
@@ -649,7 +650,7 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
         else
         {
           eval = executor.Run(Precision == NNEvaluatorPrecision.FP16 ? ONNXExecutor.ONNXInputTypeEnum.Float16
-                                                             : ONNXExecutor.ONNXInputTypeEnum.Float32,
+                                                                     : ONNXExecutor.ONNXInputTypeEnum.Float32,
                               inputs, numPositionsInBatchSentToExecutor);
         }
 
@@ -667,9 +668,7 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
         (Memory<Half> flatValuesPrimary, int[]) input = default;
         input.Item1 = flatValuesPrimary.Slice(0, numPositionsUsed * 112 * 8 * 8);
         input.Item2 = [numPositionsUsed, 112, 8, 8];
-        eval = executor.Run(Precision == NNEvaluatorPrecision.FP16 ? ONNXExecutor.ONNXInputTypeEnum.Float16
-                                                                   : ONNXExecutor.ONNXInputTypeEnum.Float32,
-                            [input], numPositionsUsed);
+        eval = executor.Run(ONNXExecutor.ONNXInputTypeEnum.Float16, [input], numPositionsUsed);
       }
 
 

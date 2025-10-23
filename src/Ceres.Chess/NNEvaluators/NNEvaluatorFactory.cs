@@ -48,10 +48,10 @@ namespace Ceres.Chess.NNEvaluators
     /// <summary>
     /// Delegate type which constructs evaluator from specified definition.
     /// </summary>
-    public delegate NNEvaluator CustomDelegate(string netID, 
-                                               int gpuID, 
+    public delegate NNEvaluator CustomDelegate(string netID,
+                                               int gpuID,
                                                NNEvaluator referenceEvaluator,
-                                               object options, 
+                                               object options,
                                                Dictionary<string, string> optionsDict);
 
     /// <summary>
@@ -72,7 +72,7 @@ namespace Ceres.Chess.NNEvaluators
     /// <summary>
     /// Optional options object for use by custom factory method (CUSTOM1). 
     /// </summary>
-    public static NNEvaluatorOptions Custom1Options; 
+    public static NNEvaluatorOptions Custom1Options;
 
     /// <summary>
     /// Custom factory method installable at runtime (CUSTOM2).
@@ -238,7 +238,7 @@ namespace Ceres.Chess.NNEvaluators
 
 
 
-    static NNEvaluator Singleton(NNEvaluatorNetDef netDef, NNEvaluatorDeviceDef deviceDef, 
+    static NNEvaluator Singleton(NNEvaluatorNetDef netDef, NNEvaluatorDeviceDef deviceDef,
                                  NNEvaluator referenceEvaluator, int referenceEvaluatorIndex,
                                  Dictionary<string, string> optionsDict,
                                  NNEvaluatorOptions optionsEvaluator)
@@ -246,11 +246,11 @@ namespace Ceres.Chess.NNEvaluators
       NNEvaluator ret = null;
 
       const bool LOW_PRIORITY = false;
-     
+
       const bool TRT_SHARED = false; // TODO: when is this needed,  when pooled?
 
       // For ONNX files loaded directly, now way to really know of WDL/MLH present.
-      const bool DEFAULT_HAS_WDL = true; 
+      const bool DEFAULT_HAS_WDL = true;
       const bool DEFAULT_HAS_MLH = false;
       const bool DEFAULT_HAS_UNCERTAINTYV = true;
       const bool DEFAULT_HAS_UNCERTAINTYP = true;
@@ -271,7 +271,7 @@ namespace Ceres.Chess.NNEvaluators
           maxONNXBatchSize = Math.Min(maxONNXBatchSize, deviceDef.MaxBatchSize ?? DEFAULT_MAX_BATCH_SIZE);
           bool netIDExistsAsIS = File.Exists(netDef.NetworkID) || File.Exists(netDef.NetworkID + ".onnx");
           string pathLc0Networks = CeresUserSettingsManager.Settings.DirLC0Networks;
-          string fullFN = (netIDExistsAsIS || string.IsNullOrEmpty(pathLc0Networks) )? netDef.NetworkID : Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, netDef.NetworkID);
+          string fullFN = (netIDExistsAsIS || string.IsNullOrEmpty(pathLc0Networks)) ? netDef.NetworkID : Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, netDef.NetworkID);
           const bool VALUE_IS_LOGISTIC = false;
 
           NNEvaluatorOptions options = new NNEvaluatorOptions().OptionsWithOptionsDictApplied(optionsDict);
@@ -285,7 +285,7 @@ namespace Ceres.Chess.NNEvaluators
                                             netDef.Precision, DEFAULT_HAS_WDL, DEFAULT_HAS_MLH,
                                             DEFAULT_HAS_UNCERTAINTYV, DEFAULT_HAS_UNCERTAINTYP, DEFAULT_HAS_ACTION,
                                             null, null, null, null, VALUE_IS_LOGISTIC, ONNX_SCALE_50_MOVE_COUNTER,
-                                            false, useHistory:true, hasState: DEFAULT_HAS_STATE, options:options);
+                                            false, useHistory: true, hasState: DEFAULT_HAS_STATE, options: options);
           break;
 
         case NNEvaluatorType.TRT:
@@ -310,7 +310,7 @@ namespace Ceres.Chess.NNEvaluators
                                            "TORCHSCRIPT"};
           if (deviceDef.OverrideEngineType != null && !CERES_ENGINE_TYPES.Contains(deviceDef.OverrideEngineType.ToUpper()))
           {
-            throw new Exception($"Ceres engine type not specified or invalid: {deviceDef.OverrideEngineType}." 
+            throw new Exception($"Ceres engine type not specified or invalid: {deviceDef.OverrideEngineType}."
               + System.Environment.NewLine + "Valid types: " + string.Join(", ", CERES_ENGINE_TYPES));
           }
 
@@ -389,8 +389,8 @@ namespace Ceres.Chess.NNEvaluators
                                              true, optionsCeres.UsePriorState, optionsCeres.HeadOverrides);
 
             EncodedPositionBatchFlat.RETAIN_POSITION_INTERNALS = true; // ** TODO: remove/rework
-            onnxEngine.ConverterToFlatFromTPG = (options, o, f1) => TPGConvertersToFlat.ConvertToFlatTPGFromTPG(options, o, f1);
-            onnxEngine.ConverterToFlat = (options, o, history, squaresBytes, squares, legalMoveIndices) 
+            onnxEngine.ConverterToFlatFromTPG = (options, o, f1) => TPGConvertersToFlat.ConvertToFlatTPGFromTPG(options, o, f1.Span);
+            onnxEngine.ConverterToFlat = (options, o, history, squaresBytes, squares, legalMoveIndices)
               => TPGConvertersToFlat.ConvertToFlatTPG(options, o, history, squaresBytes, squares, legalMoveIndices);
 
             return onnxEngine;
@@ -419,10 +419,10 @@ namespace Ceres.Chess.NNEvaluators
             bool useTRT = tempFN.ToUpper().Contains(".TRT"); // TODO: TEMPORARY HACK - way to request using TRT
             if (useTRT)
             {
-              return new NNEvaluatorEngineTensorRT(netDef.NetworkID, tempFN, net.IsWDL, net.HasMovesLeft, 
+              return new NNEvaluatorEngineTensorRT(netDef.NetworkID, tempFN, net.IsWDL, net.HasMovesLeft,
                                                    net.HasUncertaintyV, deviceDef.DeviceIndex,
                                                    NNEvaluatorEngineTensorRTConfig.NetTypeEnum.LC0,
-                                                   1024,netDef.Precision, //netDef.Precision,
+                                                   1024, netDef.Precision, //netDef.Precision,
                                                    NNEvaluatorEngineTensorRTConfig.TRTPriorityLevel.Medium, null, false, TRT_SHARED);
             }
             else
@@ -437,7 +437,7 @@ namespace Ceres.Chess.NNEvaluators
               //               NNEvaluatorPrecision precision = netDef.NetworkID.Contains(".16") ? NNEvaluatorPrecision.FP16 : NNEvaluatorPrecision.FP32;
               return new NNEvaluatorONNX(netDef.NetworkID, tempFN, null, deviceDef.Type, deviceDef.DeviceIndex, USE_TRT,
                                          ONNXNetExecutor.NetTypeEnum.LC0, 1024,
-                                         netDef.Precision, netDefONNX.IsWDL, netDefONNX.HasMovesLeft, 
+                                         netDef.Precision, netDefONNX.IsWDL, netDefONNX.HasMovesLeft,
                                          netDefONNX.HasUncertaintyV, netDefONNX.HasUncertaintyP, false,
                                          pbn.Net.OnnxModel.OutputValue, pbn.Net.OnnxModel.OutputWdl,
                                          pbn.Net.OnnxModel.OutputPolicy, pbn.Net.OnnxModel.OutputMlh, false, ONNX_SCALE_50_MOVE_COUNTER,
@@ -480,9 +480,9 @@ namespace Ceres.Chess.NNEvaluators
                                       || (deviceDef.MaxBatchSize.HasValue && deviceDef.MaxBatchSize.Value < maxSearchBatchSize));
             if (useTargetedEvaluator)
             {
-              return new NNEvaluatorSubBatchedWithTarget(evaluator, 
-                                                         deviceDef.MaxBatchSize.Value, 
-                                                         deviceDef.OptimalBatchSize.Value, 
+              return new NNEvaluatorSubBatchedWithTarget(evaluator,
+                                                         deviceDef.MaxBatchSize.Value,
+                                                         deviceDef.OptimalBatchSize.Value,
                                                          deviceDef.PredefinedOptimalBatchPartitions);
 #if NOT
           NNEvaluator copySinglegon = Singleton(def.Nets[0].Net, def.Devices[0].Device, referenceEvaluator);
@@ -550,11 +550,11 @@ namespace Ceres.Chess.NNEvaluators
         ret.Options = optionsEvaluator;
       }
 
-      return  ret;
+      return ret;
     }
 
 
-    static NNEvaluator BuildDeviceCombo(NNEvaluatorDef def, NNEvaluator referenceEvaluator, 
+    static NNEvaluator BuildDeviceCombo(NNEvaluatorDef def, NNEvaluator referenceEvaluator,
                                         Dictionary<string, string> options)
     {
       Debug.Assert(def.Nets.Length == 1);
@@ -567,8 +567,8 @@ namespace Ceres.Chess.NNEvaluators
       {
         // Option to disable if problems are seen
         const bool PARALLEL_INIT_ENABLED = true;
-  
-        Parallel.For(0, def.Devices.Length, new ParallelOptions() { MaxDegreeOfParallelism = PARALLEL_INIT_ENABLED ? int.MaxValue : 1 }, 
+
+        Parallel.For(0, def.Devices.Length, new ParallelOptions() { MaxDegreeOfParallelism = PARALLEL_INIT_ENABLED ? int.MaxValue : 1 },
           delegate (int i)
           {
             if (def.Nets.Length == 1)
@@ -577,10 +577,10 @@ namespace Ceres.Chess.NNEvaluators
             }
             else
             {
-             evaluators[i] = BuildNetCombo(def, referenceEvaluator, options);
+              evaluators[i] = BuildNetCombo(def, referenceEvaluator, options);
             }
 
-          fractions[i] = def.Devices[i].Fraction;
+            fractions[i] = def.Devices[i].Fraction;
           });
       }
       catch (Exception exc)
@@ -591,10 +591,10 @@ namespace Ceres.Chess.NNEvaluators
       // Combine together devices
       return def.DeviceCombo switch
       {
-        NNEvaluatorDeviceComboType.Split      => new NNEvaluatorSplit(evaluators, fractions, def.MinSplitNumPositions),
+        NNEvaluatorDeviceComboType.Split => new NNEvaluatorSplit(evaluators, fractions, def.MinSplitNumPositions),
         NNEvaluatorDeviceComboType.RoundRobin => new NNEvaluatorRoundRobin(evaluators),
-        NNEvaluatorDeviceComboType.Pooled     => new NNEvaluatorPooled(evaluators),
-        NNEvaluatorDeviceComboType.Compare    => new NNEvaluatorCompare(evaluators),
+        NNEvaluatorDeviceComboType.Pooled => new NNEvaluatorPooled(evaluators),
+        NNEvaluatorDeviceComboType.Compare => new NNEvaluatorCompare(evaluators),
         _ => throw new NotImplementedException()
       };
     }
@@ -624,7 +624,7 @@ namespace Ceres.Chess.NNEvaluators
       });
 
 
-      
+
       return def.NetCombo switch
       {
         NNEvaluatorNetComboType.WtdAverage => new NNEvaluatorLinearCombo(evaluators, weightsValue, weightsValue2,
@@ -644,7 +644,7 @@ namespace Ceres.Chess.NNEvaluators
       {
         throw new Exception("DeviceComboType.Single is not expected when number of DeviceIndices is greater than 1.");
       }
-   
+
       //        if (Params.EstimatePerformanceCharacteristics) ret.CalcStatistics(true);
 
       // TODO: restore implementation, test more to see if faster or memory efficient
@@ -652,11 +652,11 @@ namespace Ceres.Chess.NNEvaluators
       if (LC0_SERVER_ENABLE_MULTI_GPU
             && def.NetCombo == NNEvaluatorNetComboType.Single
             && def.Devices.Length > 1
-            && def.Devices[0].Device.Type == NNDeviceType.GPU 
+            && def.Devices[0].Device.Type == NNDeviceType.GPU
             && def.Nets[0].Net.Type == NNEvaluatorType.LC0)
       {
         int[] deviceIndices = new int[def.Devices.Length];
-        for (int i=0; i < def.Devices.Length; i++)
+        for (int i = 0; i < def.Devices.Length; i++)
         {
           throw new NotImplementedException();
         }
@@ -675,7 +675,7 @@ namespace Ceres.Chess.NNEvaluators
         return Singleton(def.Nets[0].Net, def.Devices[0].Device, referenceEvaluator, 0, options, def.Options);
       }
     }
- 
+
 
   }
 }

@@ -59,7 +59,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
       TPGRecord tpgRecord = default;
 
       // Write squares.
-      ConvertToTPGRecordSquares(in encodedPosToConvert, includeHistory, 
+      ConvertToTPGRecordSquares(in encodedPosToConvert, includeHistory,
                                 tpgRecord.Squares, pliesSinceLastPieceMoveBySquare, pliesSinceLastPieceMoveBySquare != default,
                                 qNegativeBlunders, qPositiveBlunders);
 
@@ -97,14 +97,14 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
 
       // Clear out any prior values.
       tpgRecord = default;
-      
+
       // Write squares.
 #if DISABLED_MIRROR
       // TODO: we mirror the position here to match expectation of trained net based on 
       //       LC0 training data (which is mirrored). Someday undo this mirroring in training and then can remove here.
       EncodedPositionWithHistory encodedPosToConvertMirrored = encodedPosToConvert.Mirrored;
 #endif
-      ConvertToTPGRecordSquares(in encodedPosToConvert, includeHistory, tpgRecord.Squares, 
+      ConvertToTPGRecordSquares(in encodedPosToConvert, includeHistory, tpgRecord.Squares,
                                 pliesSinceLastPieceMoveBySquare, emitPlySinceLastMovePerSquare,
                                 qNegativeBlunders, qPositiveBlunders);
 
@@ -168,7 +168,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
                                                                float qNegativeBlunders,
                                                                float qPositiveBlunders,
                                                                out MGPosition[] mgPos,
-                                                               byte[] squareBytesAll,
+                                                               Memory<byte> squareBytesAll,
                                                                short[] legalMoveIndices)
     {
       if (legalMoveIndices != null)
@@ -188,13 +188,12 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
       mgPos = positions.Positions.ToArray();
       byte[] pliesSinceLastMoveAllPositions = positions.LastMovePlies.ToArray();
 
-      byte[] squareBytesAllLocalRef = squareBytesAll;
-
       // Determine each position and copy converted raw board bytes into rawBoardBytesAll.
       // TODO: for efficiency, avoid doing this if the NN evaluator does not need raw bytes
       int MAX_THREADS = positions.NumPos > 64 ? 6 : 1;
       Parallel.For(0, positions.NumPos, new ParallelOptions() { MaxDegreeOfParallelism = MAX_THREADS }, i =>
       {
+        Span<byte> squareBytesAllLocalRef = squareBytesAll.Span;
         int tpgSquaresStartOffset = i * 64 * TPGRecord.BYTES_PER_SQUARE_RECORD;
         fixed (byte* ptrSquareBytes = &squareBytesAllLocalRef[tpgSquaresStartOffset])
         {
@@ -208,11 +207,11 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
 
           // Convert to sequence of TPGSquareRecord.
           // This is done using unsafe code in situ in the raw squareBytesAl array for performance.
-          Span<TPGSquareRecord> squaresSpan = new Span<TPGSquareRecord>(ptrSquareBytes, 64); 
+          Span<TPGSquareRecord> squaresSpan = new Span<TPGSquareRecord>(ptrSquareBytes, 64);
           ConvertToTPGRecordSquares(in positionsFlat.Span[i], includeHistory, squaresSpan,
                                     thesePliesSinceLastMove, lastMovePliesEnabled,
                                     qNegativeBlunders, qPositiveBlunders);
- 
+
           if (legalMoveIndices != null)
           {
             int numMoves = Math.Min(TPGRecordMovesExtractor.NUM_MOVE_SLOTS_PER_REQUEST, moves.Span[i].NumMovesUsed);
@@ -254,7 +253,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     /// <param name="legalMoveIndices"></param>
     /// <param name="legalMoveIndicesAlternate"></param>
     /// <exception cref="Exception"></exception>
-    private static void DebugVerifyCorrectLegalMoveIndices(IEncodedPositionBatchFlat positions, 
+    private static void DebugVerifyCorrectLegalMoveIndices(IEncodedPositionBatchFlat positions,
                                                            short[] legalMoveIndices,
                                                            short[] legalMoveIndicesAlternate)
     {
@@ -305,7 +304,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
                                                  bool emitPlySinceLastMovePerSquare,
                                                  float qNegativeBlunders, float qPositiveBlunders,
                                                  bool validate)
-                                                 
+
     {
       if (validate)
       {
@@ -409,8 +408,8 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     }
 
 
-    internal static unsafe void ConvertToTPGRecordPolicies(in EncodedTrainingPosition trainingPos, 
-                                                           float minLegalMoveProbability, 
+    internal static unsafe void ConvertToTPGRecordPolicies(in EncodedTrainingPosition trainingPos,
+                                                           float minLegalMoveProbability,
                                                            ref TPGRecord tpgRecord)
     {
       // TODO: speed up. Check two at a time within loop for better parallelism?
@@ -461,7 +460,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
                                                         Span<TPGSquareRecord> squares,
                                                         Span<byte> pliesSinceLastPieceMoveBySquare,
                                                         bool emitPlySinceLastMovePerSquare,
-                                                        float qNegativeBlunders, 
+                                                        float qNegativeBlunders,
                                                         float qPositiveBlunders)
     {
       static Position GetHistoryPosition(in EncodedPositionWithHistory historyPos, int index, in Position? fillInIfEmpty)
@@ -529,7 +528,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
         if (IsInvalid(targetInfo.BestWDL)) throw new Exception("Bad BestWDL " + targetInfo.BestWDL);
         if (IsInvalid(targetInfo.MLH)) throw new Exception("Bad MLH " + targetInfo.MLH);
         if (IsInvalid(targetInfo.DeltaQVersusV)) throw new Exception("Bad UNC " + targetInfo.DeltaQVersusV);
-        if (IsInvalid(targetInfo.KLDPolicy)) throw new Exception("Bad KLDPolicy " + targetInfo.KLDPolicy); 
+        if (IsInvalid(targetInfo.KLDPolicy)) throw new Exception("Bad KLDPolicy " + targetInfo.KLDPolicy);
       }
 
       tpgRecord.WDLResultNonDeblundered[0] = targetInfo.ResultNonDeblunderedWDL.w;

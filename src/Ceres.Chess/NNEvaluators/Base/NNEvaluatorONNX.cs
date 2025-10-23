@@ -296,8 +296,8 @@ namespace Chess.Ceres.NNEvaluators
 
 
 
-    public Action<NNEvaluatorOptions, IEncodedPositionBatchFlat, bool, byte[], Half[], short[]> ConverterToFlat = null;
-    public Func<NNEvaluatorOptions, object, byte[], int> ConverterToFlatFromTPG = null;
+    public Action<NNEvaluatorOptions, IEncodedPositionBatchFlat, bool, Memory<byte>, Memory<Half>, short[]> ConverterToFlat = null;
+    public Func<NNEvaluatorOptions, object, Memory<byte>, int> ConverterToFlatFromTPG = null;
 
     [ThreadStatic] static byte[] inputsPrimaryNative;
     [ThreadStatic] static byte[] inputsSecondaryNative;
@@ -409,37 +409,38 @@ namespace Chess.Ceres.NNEvaluators
         }
 
         int inputSizeAttention = batch.NumPos * 64 * ONNXNetExecutor.TPG_BYTES_PER_SQUARE_RECORD;
-        Half[] flatValuesAttention = null;
-        byte[] squareValuesByte = ArrayPool<byte>.Shared.Rent(inputSizeAttention);
-        Memory<Half> flatValuesAttentionM = default;
-        if (!HasSquaresByteInput)
+
+        Memory<byte> evaluatorInputBuffer = default;
+        Memory<Half> evaluatorInputBufferHalf = default;
+
+        if (HasSquaresByteInput)
         {
-          flatValuesAttention = ArrayPool<Half>.Shared.Rent(inputSizeAttention);
-          flatValuesAttentionM = flatValuesAttention.AsMemory().Slice(0, inputSizeAttention); //// TODO: where are these released?
+          evaluatorInputBuffer = Executor.executor.InputBufferForBatchSize<byte, byte>(0, batch.NumPos);
+        }
+        else
+        {
+          evaluatorInputBufferHalf = Executor.executor.InputBufferForBatchSize<Float16, Half>(0, batch.NumPos);
         }
 
-        short[] legalMoveIndices = null; // not needed, batch already contains moves
-        ConverterToFlat(Options, batch, UseHistory, squareValuesByte, flatValuesAttention, legalMoveIndices);
 
-        PositionEvaluationBatch ret = DoEvaluateBatch(batch, squareValuesByte, flatValuesAttentionM, batch.States, batch.NumPos,
+        short[] legalMoveIndices = null; // not needed, batch already contains moves
+        ConverterToFlat(Options, batch, UseHistory, evaluatorInputBuffer, evaluatorInputBufferHalf, legalMoveIndices);
+
+        PositionEvaluationBatch ret = DoEvaluateBatch(batch, evaluatorInputBuffer, evaluatorInputBufferHalf, batch.States, batch.NumPos,
                                                       retrieveSupplementalResults, null, 1);
-        ArrayPool<byte>.Shared.Return(squareValuesByte);
         Debug.Assert(!retrieveSupplementalResults);
         return ret;
       }
       else
       {
         int bufferLength = EncodedPositionBatchFlat.TOTAL_NUM_PLANES_ALL_HISTORIES * batch.NumPos * 64;
-        Half[] flatValuesBuffer = batch.ValuesFlatFromPlanesCanUsePreallocatedBuffer ? ArrayPool<Half>.Shared.Rent(bufferLength) : null;
 
-        Memory<Half> flatValues = batch.ValuesFlatFromPlanes(flatValuesBuffer, false, Scale50MoveCounter);
+        Memory<Half> evaluatorInputBuffer = Executor.executor.InputBufferForBatchSize<Float16, Half>(0, batch.NumPos);
+        Memory<Half> flatValues = batch.ValuesFlatFromPlanes(evaluatorInputBuffer, false, Scale50MoveCounter);
         Debug.Assert(flatValues.Length == bufferLength);
+
         PositionEvaluationBatch ret = DoEvaluateBatch(batch, null, flatValues, null, batch.NumPos, retrieveSupplementalResults, null, 1);
 
-        if (flatValuesBuffer != null)
-        {
-          ArrayPool<Half>.Shared.Return(flatValuesBuffer);
-        }
         return ret;
       }
     }

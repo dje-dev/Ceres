@@ -14,15 +14,13 @@
 #region Using directives
 
 using System;
-using System.Threading.Tasks;
+using System.Buffers;
 using System.Runtime.InteropServices;
-using System.Runtime.Intrinsics.X86;
 using System.Runtime.Intrinsics;
-using System.Runtime.CompilerServices;
-
-using Ceres.Chess.NNEvaluators;
+using System.Runtime.Intrinsics.X86;
+using System.Threading.Tasks;
 using Ceres.Chess.LC0.Batches;
-
+using Ceres.Chess.NNEvaluators;
 //using CeresTrain.NNEvaluators;
 using Ceres.Chess.NNEvaluators.Ceres.TPG;
 
@@ -42,7 +40,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     /// <param name="flatValues"></param>
     /// <returns></returns>
     /// <exception cref="NotImplementedException"></exception>
-    public static int ConvertToFlatTPGFromTPG(NNEvaluatorOptions options, object records, byte[] flatValues)
+    public static int ConvertToFlatTPGFromTPG(NNEvaluatorOptions options, object records, Span<byte> flatValues)
     {
       NNEvaluatorOptionsCeres optionsCeres = (NNEvaluatorOptionsCeres)options;
 
@@ -52,7 +50,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
       {
         throw new NotImplementedException("Expected input to be TPGRecord[]");
       }
-      
+
       byte[] squareBytesAll = new byte[tpgRecords.Length * Marshal.SizeOf<TPGSquareRecord>() * 64];
 
       for (int i = 0; i < tpgRecords.Length; i++)
@@ -79,10 +77,10 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     /// </summary>
     /// <param name="sourceBytes"></param>
     /// <param name="targetHalves"></param>
-    static void CopyAndDivide(byte[] sourceBytes, Half[] targetHalves, float divisor)
+    static void CopyAndDivide(Memory<byte> sourceBytes, Memory<Half> targetHalves, float divisor)
     {
       const int CHUNK_SIZE = 2 * 1024 * 128;
-      
+
       if (sourceBytes.Length < CHUNK_SIZE * 2)
       {
         CopyAndDivideSIMD(sourceBytes, targetHalves, divisor);
@@ -90,22 +88,22 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
       else
       {
         Parallel.For(0, sourceBytes.Length / CHUNK_SIZE + 1,
-                     new ParallelOptions() 
-                     { 
+                     new ParallelOptions()
+                     {
                        MaxDegreeOfParallelism = 5 // limit parallelism because already threaded if multiple GPUs
                      },
           (chunkIndex) =>
-        {
-          int startIndex = chunkIndex * CHUNK_SIZE;
-          int numThisBlock = Math.Min(CHUNK_SIZE, sourceBytes.Length - startIndex);
-
-          if (numThisBlock > 0)
           {
-            Span<byte> sourceBytesThisBlock = sourceBytes.AsSpan().Slice(startIndex, numThisBlock);
-            Span<Half> targetHalvesThisBlock = targetHalves.AsSpan().Slice(startIndex, numThisBlock);
-            CopyAndDivideSIMD(sourceBytesThisBlock, targetHalvesThisBlock, divisor);
-          }
-        });
+            int startIndex = chunkIndex * CHUNK_SIZE;
+            int numThisBlock = Math.Min(CHUNK_SIZE, sourceBytes.Length - startIndex);
+
+            if (numThisBlock > 0)
+            {
+              Memory<byte> sourceBytesThisBlock = sourceBytes.Slice(startIndex, numThisBlock);
+              Memory<Half> targetHalvesThisBlock = targetHalves.Slice(startIndex, numThisBlock);
+              CopyAndDivideSIMD(sourceBytesThisBlock, targetHalvesThisBlock, divisor);
+            }
+          });
       }
 
     }
@@ -116,7 +114,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     /// </summary>
     /// <param name="sourceBytes"></param>
     /// <param name="targetHalfs"></param>
-    static unsafe void CopyAndDivideSIMD(Span<byte> sourceBytes, Span<Half> targetHalfs, float divisor)
+    static unsafe void CopyAndDivideSIMD(Memory<byte> sourceBytes, Memory<Half> targetHalfs, float divisor)
     {
       int vectorSize = Vector256<byte>.Count;
       int i = 0;
@@ -124,36 +122,36 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
       if (Avx2.IsSupported)
       {
         Vector256<float> divisorVec = Vector256.Create(divisor);
-        ushort* ptrTargetHalfs = (ushort*)Unsafe.AsPointer(ref targetHalfs[0]); // pinned just below
+        using MemoryHandle sourceHandle = sourceBytes.Pin();
+        using MemoryHandle targetHandle = targetHalfs.Pin();
 
-        fixed (byte* squareBytesAllPtr = sourceBytes)
-        fixed (Half* flatValuesPrimaryPtr = targetHalfs)
+        byte* squareBytesAllPtr = (byte*)sourceHandle.Pointer;
+        ushort* targetFlatValuesPrimaryPtr = (ushort*)targetHandle.Pointer;
+
+        // Process in chunks of 32 bytes
+        for (i = 0; i <= sourceBytes.Length - vectorSize; i += vectorSize)
         {
-          // Process in chunks of 32 bytes
-          for (i = 0; i <= sourceBytes.Length - vectorSize; i += vectorSize)
-          {
-            // Load 32 bytes from the byte array
-            Vector256<byte> byteVec = Avx.LoadVector256(&squareBytesAllPtr[i]);
+          // Load 32 bytes from the byte array
+          Vector256<byte> byteVec = Avx.LoadVector256(&squareBytesAllPtr[i]);
 
-            // Convert the 32 bytes to 32 floats
-            Vector256<short> ushortLow = Avx2.ConvertToVector256Int16(byteVec.GetLower());
-            Vector256<float> floatLowLow = Avx.ConvertToVector256Single(Avx2.ConvertToVector256Int32(ushortLow.GetLower()));
-            Vector256<float> floatLowHigh = Avx.ConvertToVector256Single(Avx2.ConvertToVector256Int32(ushortLow.GetUpper()));
-            Vector256<uint> r1 = SingleToHalfAsWidenedUInt32_Vector256(floatLowLow, divisorVec);
-            Vector256<uint> r2 = SingleToHalfAsWidenedUInt32_Vector256(floatLowHigh, divisorVec);
-            Vector256<ushort> source2 = Vector256.Narrow(r1, r2);
-            Avx.Store(&ptrTargetHalfs[i], source2);
+          // Convert the 32 bytes to 32 floats
+          Vector256<short> ushortLow = Avx2.ConvertToVector256Int16(byteVec.GetLower());
+          Vector256<float> floatLowLow = Avx.ConvertToVector256Single(Avx2.ConvertToVector256Int32(ushortLow.GetLower()));
+          Vector256<float> floatLowHigh = Avx.ConvertToVector256Single(Avx2.ConvertToVector256Int32(ushortLow.GetUpper()));
+          Vector256<uint> r1 = SingleToHalfAsWidenedUInt32_Vector256(floatLowLow, divisorVec);
+          Vector256<uint> r2 = SingleToHalfAsWidenedUInt32_Vector256(floatLowHigh, divisorVec);
+          Vector256<ushort> source2 = Vector256.Narrow(r1, r2);
+          Avx.Store(&targetFlatValuesPrimaryPtr[i], source2);
 
-            Vector256<short> ushortHigh = Avx2.ConvertToVector256Int16(byteVec.GetUpper());
-            Vector256<float> floatHighLow = Avx.ConvertToVector256Single(Avx2.ConvertToVector256Int32(ushortHigh.GetLower()));
-            Vector256<float> floatHighHigh = Avx.ConvertToVector256Single(Avx2.ConvertToVector256Int32(ushortHigh.GetUpper()));
-            Vector256<uint> r1H = SingleToHalfAsWidenedUInt32_Vector256(floatHighLow, divisorVec);
-            Vector256<uint> r2H = SingleToHalfAsWidenedUInt32_Vector256(floatHighHigh, divisorVec);
-            Vector256<ushort> source2H = Vector256.Narrow(r1H, r2H);
+          Vector256<short> ushortHigh = Avx2.ConvertToVector256Int16(byteVec.GetUpper());
+          Vector256<float> floatHighLow = Avx.ConvertToVector256Single(Avx2.ConvertToVector256Int32(ushortHigh.GetLower()));
+          Vector256<float> floatHighHigh = Avx.ConvertToVector256Single(Avx2.ConvertToVector256Int32(ushortHigh.GetUpper()));
+          Vector256<uint> r1H = SingleToHalfAsWidenedUInt32_Vector256(floatHighLow, divisorVec);
+          Vector256<uint> r2H = SingleToHalfAsWidenedUInt32_Vector256(floatHighHigh, divisorVec);
+          Vector256<ushort> source2H = Vector256.Narrow(r1H, r2H);
 
-            // Store the results
-            Avx.Store(&ptrTargetHalfs[i + 16], source2H);
-          }
+          // Store the results
+          Avx.Store(&targetFlatValuesPrimaryPtr[i + 16], source2H);
         }
       }
 #if NOT
@@ -207,9 +205,11 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
       }
 #endif
       // Process remaining elements (15x slower than vectorized).
+      Span<byte> sourceSpan = sourceBytes.Span;
+      Span<Half> targetSpan = targetHalfs.Span;
       for (; i < sourceBytes.Length; i++)
       {
-        targetHalfs[i] = (Half)(sourceBytes[i] / divisor);
+        targetSpan[i] = (Half)(sourceSpan[i] / divisor);
       }
 
     }
@@ -254,9 +254,9 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     /// <param name="includeHistory"></param>
     /// <param name="squareValues"></param>
     /// <exception cref="NotImplementedException"></exception>
-    public static void ConvertToFlatTPG(NNEvaluatorOptions options, 
+    public static void ConvertToFlatTPG(NNEvaluatorOptions options,
                                         IEncodedPositionBatchFlat batch,
-                                        bool includeHistory, byte[] squareValuesByte, Half[] squareValues, short[] legalMoveIndices)
+                                        bool includeHistory, Memory<byte> squareValuesByte, Memory<Half> squareValues, short[] legalMoveIndices)
     {
       if (TPGRecord.EMIT_PLY_SINCE_LAST_MOVE_PER_SQUARE)
       {
@@ -285,7 +285,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
 
       // If we are providing float inputs, then it is necessary to do the
       // (slow) convertion from Half to float (and also divide by 100).
-      if (squareValues != null)
+      if (!squareValues.IsEmpty)
       {
         CopyAndDivide(squareValuesByte, squareValues, TPGSquareRecord.SQUARE_BYTES_DIVISOR);
       }
