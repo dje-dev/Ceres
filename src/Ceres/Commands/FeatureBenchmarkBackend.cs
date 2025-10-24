@@ -183,6 +183,12 @@ namespace Ceres.Commands
       List<(int, float)> ret = new();
       InitPositionsBuffer(maxBatchSize);
 
+      // Warmup at various batch sizes.
+      for (int warmupBS = 1; warmupBS <= maxBatchSize; warmupBS *= 2)
+      {
+        _ = TestBatchSize(evaluator, warmupBS, show: false);
+      }
+
       TestBatchSize(evaluator, 1, show:show);
 
       // Loop over a set of batch sizes.
