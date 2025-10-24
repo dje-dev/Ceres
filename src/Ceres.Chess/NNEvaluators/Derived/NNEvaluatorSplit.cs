@@ -106,7 +106,7 @@ namespace Ceres.Chess.NNEvaluators
     }
 
 
-    const int DEFAULT_MIN_SPLIT_SIZE = 24;
+    const int DEFAULT_MIN_SPLIT_SIZE = 18;
 
 
     /// <summary>
