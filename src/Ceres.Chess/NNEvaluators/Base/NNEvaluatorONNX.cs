@@ -433,17 +433,25 @@ namespace Chess.Ceres.NNEvaluators
       }
       else
       {
-        int bufferLength = EncodedPositionBatchFlat.TOTAL_NUM_PLANES_ALL_HISTORIES * batch.NumPos * 64;
-
         Memory<Half> evaluatorInputBuffer = Executor.executor.InputBufferForBatchSize<Float16, Half>(0, batch.NumPos);
-        Memory<Half> flatValues = batch.ValuesFlatFromPlanes(evaluatorInputBuffer, false, Scale50MoveCounter);
-        Debug.Assert(flatValues.Length == bufferLength);
+        batch.ConvertValuesToFlatFromPlanes(evaluatorInputBuffer, false, Scale50MoveCounter);
+        PositionEvaluationBatch ret = DoEvaluateBatch(batch, null, evaluatorInputBuffer, null, batch.NumPos, retrieveSupplementalResults, null, 1);
 
-        PositionEvaluationBatch ret = DoEvaluateBatch(batch, null, flatValues, null, batch.NumPos, retrieveSupplementalResults, null, 1);
-
+#if NOT
+      //    Lazy<NNEvaluator> checkEval = new (()=>NNEvaluatorDef.FromSpecification("~T81", "GPU:0").ToEvaluator());
+        if (false)
+        {
+          float otherEval = checkEval.Value.Evaluate(batch.Positions.Span[0].ToPosition).V;
+          if (Math.Abs(ret.GetV(0) - otherEval) > 0.30)
+          {
+            Console.WriteLine(ret.GetV(0) + " vs correct " + otherEval);
+          }
+        }
+#endif
         return ret;
       }
     }
+
 
 
     /// <summary>

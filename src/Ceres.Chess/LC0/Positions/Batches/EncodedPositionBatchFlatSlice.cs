@@ -30,7 +30,7 @@ namespace Ceres.Chess.LC0.Batches
     /// <summary>
     /// Parent batch from which this slice was taken.
     /// </summary>
-    public readonly IEncodedPositionBatchFlat Parent;
+    public readonly IEncodedPositionBatchFlat SliceParent;
 
     /// <summary>
     /// Starting index of the slice.
@@ -51,52 +51,55 @@ namespace Ceres.Chess.LC0.Batches
     /// <param name="length"></param>
     public EncodedPositionBatchFlatSlice(IEncodedPositionBatchFlat parent, int startIndex, int length)
     {
-      Parent = parent;
+      SliceParent = parent;
       StartIndex = startIndex;
       Length = length;
 
     }
 
-    public Memory<ulong> PosPlaneBitmaps => Parent.PosPlaneBitmaps.Slice(StartIndex * EncodedPositionWithHistory.NUM_PLANES_TOTAL, Length * EncodedPositionWithHistory.NUM_PLANES_TOTAL);
+    public IEncodedPositionBatchFlat Parent => SliceParent;
 
-    public Memory<byte> PosPlaneValues => Parent.PosPlaneValues.Slice(StartIndex * EncodedPositionWithHistory.NUM_PLANES_TOTAL, Length * EncodedPositionWithHistory.NUM_PLANES_TOTAL);
 
-    public Memory<Half[]> States => Parent.States.IsEmpty ? default : Parent.States.Slice(StartIndex, Length);
+    public Memory<ulong> PosPlaneBitmaps => SliceParent.PosPlaneBitmaps.Slice(StartIndex * EncodedPositionWithHistory.NUM_PLANES_TOTAL, Length * EncodedPositionWithHistory.NUM_PLANES_TOTAL);
+
+    public Memory<byte> PosPlaneValues => SliceParent.PosPlaneValues.Slice(StartIndex * EncodedPositionWithHistory.NUM_PLANES_TOTAL, Length * EncodedPositionWithHistory.NUM_PLANES_TOTAL);
+
+    public Memory<Half[]> States => SliceParent.States.IsEmpty ? default : SliceParent.States.Slice(StartIndex, Length);
 
     public Memory<MGPosition> Positions
     {
-      get => Parent.Positions.IsEmpty ? default : Parent.Positions.Slice(StartIndex, Length);
-      set => value.CopyTo(Parent.Positions);
+      get => SliceParent.Positions.IsEmpty ? default : SliceParent.Positions.Slice(StartIndex, Length);
+      set => value.CopyTo(SliceParent.Positions);
     }
 
     public Memory<ulong> PositionHashes
     {
-      get => Parent.PositionHashes.IsEmpty ? default : Parent.PositionHashes.Slice(StartIndex, Length);
-      set => value.CopyTo(Parent.PositionHashes);
+      get => SliceParent.PositionHashes.IsEmpty ? default : SliceParent.PositionHashes.Slice(StartIndex, Length);
+      set => value.CopyTo(SliceParent.PositionHashes);
     }
     public Memory<MGMoveList> Moves
     {
-      get => Parent.Moves.IsEmpty ? default : Parent.Moves.Slice(StartIndex, Length);
-      set => value.CopyTo(Parent.Moves);
+      get => SliceParent.Moves.IsEmpty ? default : SliceParent.Moves.Slice(StartIndex, Length);
+      set => value.CopyTo(SliceParent.Moves);
     }
 
     public Memory<byte> LastMovePlies
     {
-      get => Parent.LastMovePlies.IsEmpty ? default : Parent.LastMovePlies.Slice(StartIndex * 64, Length * 64);
-      set => value.CopyTo(Parent.LastMovePlies);
+      get => SliceParent.LastMovePlies.IsEmpty ? default : SliceParent.LastMovePlies.Slice(StartIndex * 64, Length * 64);
+      set => value.CopyTo(SliceParent.LastMovePlies);
     }
 
 
     public int NumPos => Length;
 
-    public EncodedPositionType TrainingType => Parent.TrainingType;
+    public EncodedPositionType TrainingType => SliceParent.TrainingType;
 
-    public short PreferredEvaluatorIndex => Parent.PreferredEvaluatorIndex;
+    public short PreferredEvaluatorIndex => SliceParent.PreferredEvaluatorIndex;
 
     public bool PositionsUseSecondaryEvaluator
     {
-      get { return Parent.PositionsUseSecondaryEvaluator; }
-      set { Parent.PositionsUseSecondaryEvaluator = value; }
+      get { return SliceParent.PositionsUseSecondaryEvaluator; }
+      set { SliceParent.PositionsUseSecondaryEvaluator = value; }
     }
 
     public IEncodedPositionBatchFlat GetSubBatch(int startIndex, int count)
@@ -105,30 +108,25 @@ namespace Ceres.Chess.LC0.Batches
     }
 
 
-    public Memory<Half> ValuesFlatFromPlanes(Memory<Half> preallocatedBuffer, bool nhwc, bool scale50MoveCounter)
+    public void ConvertValuesToFlatFromPlanes(Memory<Half> targetBuffer, bool nhwc, bool scale50MoveCounter)
     {
-      Debug.Assert(preallocatedBuffer.IsEmpty); // not expected since ValuesFlatFromPlanesCanUsePreallocatedBuffer returns false
-
-      Memory<Half> parentBuffer = Parent.ValuesFlatFromPlanes(default, nhwc, scale50MoveCounter);
-      const int NUM_VALUES_EACH_POS = EncodedPositionWithHistory.NUM_PLANES_TOTAL * 64;
-      return parentBuffer.Slice(NUM_VALUES_EACH_POS * StartIndex, NUM_VALUES_EACH_POS * Length);
+      (SliceParent as EncodedPositionBatchFlat).ConvertToFlat(StartIndex, Length, targetBuffer, scale50MoveCounter);
     }
 
-    bool IEncodedPositionBatchFlat.ValuesFlatFromPlanesCanUsePreallocatedBuffer => false;
 
 
     public Memory<EncodedPositionWithHistory> PositionsBuffer
     {
       get
       {
-        return Parent.PositionsBuffer.Slice(StartIndex, Length);
+        return SliceParent.PositionsBuffer.Slice(StartIndex, Length);
       }
     }
 
     Memory<Half[]> IEncodedPositionBatchFlat.States
     {
-      get => Parent.States.IsEmpty ? default : Parent.States.Slice(StartIndex, Length);
-      set => value.CopyTo(Parent.States);
+      get => SliceParent.States.IsEmpty ? default : SliceParent.States.Slice(StartIndex, Length);
+      set => value.CopyTo(SliceParent.States);
     }
 
 

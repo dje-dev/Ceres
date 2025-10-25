@@ -104,15 +104,15 @@ namespace Ceres.Chess.LC0.Batches
 
     bool PositionsUseSecondaryEvaluator { get; set; }
 
+    IEncodedPositionBatchFlat Parent => default;
+
     #region Implmentation
 
-    Memory<Half> ValuesFlatFromPlanes(Memory<Half> preallocatedBuffer, bool nhwc, bool scale50MoveCounter);
-
-    bool ValuesFlatFromPlanesCanUsePreallocatedBuffer { get; }
+    void ConvertValuesToFlatFromPlanes(Memory<Half> destinationBuffer, bool nhwc, bool scale50MoveCounter);
 
     public IEncodedPositionBatchFlat GetSubBatchSlice(int startIndex, int count)
     {
-      return new EncodedPositionBatchFlatSlice(this, startIndex, count);
+      return new EncodedPositionBatchFlatSlice(Parent, startIndex, count);
     }
 
 
