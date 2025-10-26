@@ -21,6 +21,7 @@ using Ceres.Base.Math;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.LC0.Batches;
 using Ceres.Chess.MoveGen;
+using Ceres.Chess.MoveGen.Converters;
 using Ceres.Chess.NetEvaluation.Batch;
 
 #endregion
@@ -57,7 +58,7 @@ namespace Ceres.Chess.NNEvaluators
 
       // Alternate between two positions.
       EncodedPositionWithHistory[] positions = new EncodedPositionWithHistory[count];
-      for (int i=0; i<count; i++)
+      for (int i = 0; i < count; i++)
       {
         positions[i] = (i % 2 == 0) ? position0 : position1;
       }
@@ -69,16 +70,16 @@ namespace Ceres.Chess.NNEvaluators
       bool hasLastMovePlies = evaluator.InputsRequired.HasFlag(NNEvaluator.InputTypes.LastMovePlies);
 
       // TODO: handle the case of having LastMovePlies
-//      if (hasLastMovePlies)
-//      {
-//        throw new NotImplementedException();
-//      }
+      //      if (hasLastMovePlies)
+      //      {
+      //        throw new NotImplementedException();
+      //      }
 
       batch = new EncodedPositionBatchFlat(positions, count, hasPositions);
 
-        if (hasPositions) batch.Positions = new MGPosition[count];
-        if (hasHashes) batch.PositionHashes = new ulong[count];
-        if (hasMoves) batch.Moves = new MGMoveList[count];
+      if (hasPositions) batch.Positions = new MGPosition[count];
+      if (hasHashes) batch.PositionHashes = new ulong[count];
+      if (hasMoves) batch.Moves = new MGMoveList[count];
 
       for (int i = 0; i < count; i++)
       {
@@ -98,10 +99,14 @@ namespace Ceres.Chess.NNEvaluators
     }
 
 
-    public static void Warmup(NNEvaluator evaluator)
+
+    public static void Warmup(NNEvaluator evaluator, int maxBatchSize = 1)
     {
-      NNEvaluatorResult[] results = evaluator.EvaluateBatch(MakeTestBatch(evaluator, 2), false);
-      evaluator.BuffersLock?.Release();
+      // Warmup at various batch sizes (powers of two).
+      for (int warmupBS = 1; warmupBS <= Math.Min(maxBatchSize, evaluator.MaxBatchSize); warmupBS *= 2)
+      {
+        _ = evaluator.EvaluateBatch(MakeTestBatch(evaluator, warmupBS), false);
+      }
     }
 
 
@@ -122,7 +127,7 @@ namespace Ceres.Chess.NNEvaluators
                                                                                 int bigBatchSize = 256, bool estimateSingletons = true,
                                                                                 int numWarmups = 1)
     {
-      bigBatchSize = Math.Min(bigBatchSize, evaluator.MaxBatchSize);  
+      bigBatchSize = Math.Min(bigBatchSize, evaluator.MaxBatchSize);
 
       if (batch1 == null || batchBig.NumPos != bigBatchSize)
       {
