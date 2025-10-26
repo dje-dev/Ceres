@@ -17,11 +17,14 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Numerics.Tensors;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
 using Ceres.Base.Benchmarking;
 using Ceres.Base.DataTypes;
+using Ceres.Base.Threading;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Chess.LC0.Batches;
@@ -118,7 +121,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// Optional additional statistic 0.
     /// </summary>
     public Memory<FP16> ExtraStat0;
-    
+
     /// <summary>
     /// Optional additional statistic 1.
     /// </summary>
@@ -158,7 +161,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
       void WeightedAverage(Memory<FP16> destination, Func<PositionEvaluationBatch, Memory<FP16>> selector)
       {
         Span<FP16> destinationSpan = destination.Span;
-        int dataLength = destinationSpan.Length; 
+        int dataLength = destinationSpan.Length;
         for (int dataIndex = 0; dataIndex < dataLength; dataIndex++)
         {
           float weightedSum = 0;
@@ -182,7 +185,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
       WeightedAverage(UncertaintyP, p => p.UncertaintyP);
       WeightedAverage(ExtraStat0, p => p.ExtraStat0);
       WeightedAverage(ExtraStat1, p => p.ExtraStat1);
-      
+
       CompressedPolicyVector[] allPolicies = new CompressedPolicyVector[parts.Length];
       CompressedActionVector[] allActions = new CompressedActionVector[parts.Length];
 
@@ -432,7 +435,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     {
       if (IsWDL)
       {
-        return $" { GetV(index) } ({GetWinP(index) }/{ GetDrawP(index) }/{ GetLossP(index) })";
+        return $" {GetV(index)} ({GetWinP(index)}/{GetDrawP(index)}/{GetLossP(index)})";
       }
       else
       {
@@ -446,7 +449,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// Returns if the batch was evaluated with a network that has an WDL head.
     /// </summary>
     bool IPositionEvaluationBatch.IsWDL => IsWDL;
-    
+
     /// <summary>
     /// Returns if the batch was evaluated with a network that has an MLH head.
     /// </summary>
@@ -510,7 +513,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// </summary>
     /// <param name="index"></param>
     /// <returns></returns>
-    (Memory<CompressedActionVector> actions, int index) 
+    (Memory<CompressedActionVector> actions, int index)
        IPositionEvaluationBatch.GetAction(int index) => (Actions, index);
 
 
@@ -563,11 +566,11 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <param name="m"></param>
     /// <param name="activations"></param>
     /// <param name="stats"></param>
-    public PositionEvaluationBatch(bool isWDL, bool hasM, bool hasUncertaintyV, bool hasUncertaintyP, bool hasAction, 
-                                   bool hasValueSecondary, bool hasState, int numPos, 
+    public PositionEvaluationBatch(bool isWDL, bool hasM, bool hasUncertaintyV, bool hasUncertaintyP, bool hasAction,
+                                   bool hasValueSecondary, bool hasState, int numPos,
                                    Memory<CompressedPolicyVector> policies,
                                    Memory<CompressedActionVector> actionProbabilties,
-                                   Memory<FP16> w, Memory<FP16> l, 
+                                   Memory<FP16> w, Memory<FP16> l,
                                    Memory<FP16> w2, Memory<FP16> l2,
                                    Memory<FP16> m, Memory<FP16> uncertaintyV, Memory<FP16> uncertaintyP,
                                    Memory<Half[]> states,
@@ -622,10 +625,10 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <param name="valueEvals2"></param>
     /// <param name="valsAreLogistic"></param>
     /// <param name="stats"></param>
-    private PositionEvaluationBatch(bool isWDL, bool hasM, bool hasUncertaintyV, bool hasUncertaintyP, bool hasAction, 
+    private PositionEvaluationBatch(bool isWDL, bool hasM, bool hasUncertaintyV, bool hasUncertaintyP, bool hasAction,
                                     bool hasValueSecondary, bool hasState, int numPos,
                                     ReadOnlySpan<FP16> valueEvals, ReadOnlySpan<FP16> valueEvals2,
-                                    ReadOnlySpan<FP16> m, 
+                                    ReadOnlySpan<FP16> m,
                                     ReadOnlySpan<FP16> uncertaintyV, ReadOnlyMemory<FP16> uncertaintyP,
                                     ReadOnlySpan<FP16> extraStats0, ReadOnlySpan<FP16> extraStats1,
                                     Span<Half[]> states,
@@ -633,7 +636,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
                                     float fractionValueFromValue2,
                                     float temperatureValue1, float temperatureValue2,
                                     float value1TemperatureUncertaintyScalingFactor, float value2TemperatureUncertaintyScalingFactor,
-                                    bool valsAreLogistic, 
+                                    bool valsAreLogistic,
                                     TimingStats stats,
                                     Memory<FP16[][]> rawNetworkOutputs = default,
                                     string[] rawNetworkOutputNames = null)
@@ -681,13 +684,13 @@ namespace Ceres.Chess.NetEvaluation.Batch
         Span<FP16> l1 = L1.Span;
         Span<FP16> l2 = L2.Span;
 
-        for (int i=0; i<w.Length; i++)
+        for (int i = 0; i < w.Length; i++)
         {
           w[i] = (FP16)((float)w1[i] * fractionValueFromValue1 + (float)w2[i] * fractionValueFromValue2);
           l[i] = (FP16)((float)l1[i] * fractionValueFromValue1 + (float)l2[i] * fractionValueFromValue2);
 
-//          ReplaceFirstSpanWithGeometricWeightedAverage(w.Slice(i, 1), w2.Slice(i, 1), fractionValueFromValue1, fractionValueFromValue2);
-//          ReplaceFirstSpanWithGeometricWeightedAverage(l.Slice(i, 1), l2.Slice(i, 1), fractionValueFromValue1, fractionValueFromValue2);
+          //          ReplaceFirstSpanWithGeometricWeightedAverage(w.Slice(i, 1), w2.Slice(i, 1), fractionValueFromValue1, fractionValueFromValue2);
+          //          ReplaceFirstSpanWithGeometricWeightedAverage(l.Slice(i, 1), l2.Slice(i, 1), fractionValueFromValue1, fractionValueFromValue2);
         }
       }
 
@@ -721,10 +724,10 @@ namespace Ceres.Chess.NetEvaluation.Batch
         throw new ArgumentException("Wrong value size");
       }
 
-      Stats = stats;      
+      Stats = stats;
     }
 
-    
+
     /// <summary>
     /// Constructor (when the policies are full arrays of 1858 each)
     /// </summary>
@@ -735,31 +738,31 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <param name="activations"></param>
     /// <param name="probType"></param>
     /// <param name="stats"></param>
-    public PositionEvaluationBatch(bool isWDL, bool hasM, bool hasUncertaintyV, bool hasUnertaintyP, bool hasAction, 
-                                   bool hasValueSecondary, bool hasState, int numPos, 
-                                   Span<FP16> valueEvals, Span<FP16> valueEvals2, 
+    public PositionEvaluationBatch(bool isWDL, bool hasM, bool hasUncertaintyV, bool hasUnertaintyP, bool hasAction,
+                                   bool hasValueSecondary, bool hasState, int numPos,
+                                   Span<FP16> valueEvals, Span<FP16> valueEvals2,
                                    ReadOnlyMemory<Float16> policyProbs, ReadOnlyMemory<Float16> actionLogits,
-                                   ReadOnlySpan<FP16> m, 
+                                   ReadOnlySpan<FP16> m,
                                    ReadOnlySpan<FP16> uncertaintyV, ReadOnlyMemory<FP16> uncertaintyP,
                                    ReadOnlySpan<FP16> extraStats0, ReadOnlySpan<FP16> extraStats1,
                                    ReadOnlyMemory<Half[]> states, NNEvaluatorResultActivations[] activations,
-                                   float fractionValueFromValue2, 
+                                   float fractionValueFromValue2,
                                    float temperatureValue1, float temperatureValue2,
                                    float value1TemperatureUncertaintyScalingFactor, float value2TemperatureUncertaintyScalingFactor,
                                    bool valsAreLogistic, PolicyType probType, bool policyAlreadySorted,
                                    IEncodedPositionBatchFlat sourceBatchWithValidMoves,
                                    float policyTemperature, float policyUncertaintyScalingFactor,
                                    TimingStats stats,
-                                   Memory<FP16[][]> rawNetworkOutputs = default,                                   
+                                   Memory<FP16[][]> rawNetworkOutputs = default,
                                    string[] rawNetworkOutputNames = null)
-   : this(isWDL, hasM, hasUncertaintyV, hasUnertaintyP, hasAction, hasValueSecondary, hasState, numPos, valueEvals, valueEvals2, 
-          m, uncertaintyV,  uncertaintyP, extraStats0, extraStats1, states.ToArray(), activations,
-          fractionValueFromValue2, 
+   : this(isWDL, hasM, hasUncertaintyV, hasUnertaintyP, hasAction, hasValueSecondary, hasState, numPos, valueEvals, valueEvals2,
+          m, uncertaintyV, uncertaintyP, extraStats0, extraStats1, states.ToArray(), activations,
+          fractionValueFromValue2,
           temperatureValue1, temperatureValue2,
           value1TemperatureUncertaintyScalingFactor, value2TemperatureUncertaintyScalingFactor,
           valsAreLogistic, stats, rawNetworkOutputs, rawNetworkOutputNames)
-    {     
-      (Policies, Actions) = ExtractPoliciesBufferFlat(numPos, policyProbs, uncertaintyP, 
+    {
+      (Policies, Actions) = ExtractPoliciesBufferFlat(numPos, policyProbs, uncertaintyP,
                                                       hasAction, actionLogits,
                                                       policyTemperature, policyUncertaintyScalingFactor,
                                                       probType, policyAlreadySorted, sourceBatchWithValidMoves);
@@ -782,25 +785,25 @@ namespace Ceres.Chess.NetEvaluation.Batch
                                    bool hasState, int numPos,
                                    ReadOnlySpan<FP16> valueEvals, ReadOnlySpan<FP16> valueEvals2,
                                    int topK, ReadOnlySpan<int> policyIndices, ReadOnlySpan<float> policyProbabilties,
-                                   ReadOnlySpan<FP16> m, 
+                                   ReadOnlySpan<FP16> m,
                                    ReadOnlySpan<FP16> uncertaintyV, ReadOnlySpan<FP16> uncertaintyP,
                                    ReadOnlySpan<FP16> extraStats0, ReadOnlySpan<FP16> extraStats1,
                                    ReadOnlySpan<Half[]> states,
                                    ReadOnlySpan<NNEvaluatorResultActivations> activations, bool valsAreLogistic,
                                    PolicyType probType, TimingStats stats, bool alreadySorted,
-                                   float temperatureValue1= 1, float temperatureValue2 = 1, float fractionValue1FromValue2 = 0,
-                                   Memory<FP16[][]> rawNetworkOutputs = default,                                   
+                                   float temperatureValue1 = 1, float temperatureValue2 = 1, float fractionValue1FromValue2 = 0,
+                                   Memory<FP16[][]> rawNetworkOutputs = default,
                                    string[] rawNetworkOutputNames = null)
-//      : this(isWDL, hasM, hasUncertaintyV, hasUncertaintyP, hasAction, hasValueSecondary, hasState, 
-//             numPos, valueEvals, valueEvals2, m, uncertaintyV, uncertaintyP, extraStats0, extraStats1, states, activations, 
-//             temperatureValue1, temperatureValue2, fractionValue1FromValue2, valsAreLogistic, stats)
+    //      : this(isWDL, hasM, hasUncertaintyV, hasUncertaintyP, hasAction, hasValueSecondary, hasState, 
+    //             numPos, valueEvals, valueEvals2, m, uncertaintyV, uncertaintyP, extraStats0, extraStats1, states, activations, 
+    //             temperatureValue1, temperatureValue2, fractionValue1FromValue2, valsAreLogistic, stats)
     {
       throw new NotImplementedException();
       if (HasAction)
       {
         throw new NotImplementedException();
       }
-//      Policies = ExtractPoliciesTopK(numPos, topK, policyIndices, policyProbabilties, probType, alreadySorted);
+      //      Policies = ExtractPoliciesTopK(numPos, topK, policyIndices, policyProbabilties, probType, alreadySorted);
     }
 
 
@@ -809,7 +812,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// </summary>
     /// <param name="maxPos"></param>
     /// <param name="retrieveSupplementalResults"></param>
-    public PositionEvaluationBatch(bool isWDL, bool hasM, bool hasUncertaintyV, bool hasValueSecondary, 
+    public PositionEvaluationBatch(bool isWDL, bool hasM, bool hasUncertaintyV, bool hasValueSecondary,
                                    int maxPos, bool retrieveSupplementalResults)
     {
       // Likely need to remediate this (and possibly also CopyFrom method, for additional heads).
@@ -1021,10 +1024,10 @@ namespace Ceres.Chess.NetEvaluation.Batch
       }
 
       CompressedActionVector[] actions = hasActions ? new CompressedActionVector[numPos] : default;
-
       CompressedPolicyVector[] retPolicies = new CompressedPolicyVector[numPos];
       Memory<MGMoveList> moves = sourceBatchWithValidMoves == null ? default : sourceBatchWithValidMoves.Moves;
-      Parallel.For(0, numPos, i =>
+
+      Parallel.For(0, numPos, new ParallelOptions() { MaxDegreeOfParallelism = ParallelUtils.CalcMaxParallelism(numPos, 32) }, i =>
       {
         ReadOnlySpan<Float16> policyProbsSpan = policyProbs.Span;
         ReadOnlySpan<FP16> policiesUncertaintiesSpan = policyUncertainties.Span;
@@ -1052,11 +1055,11 @@ namespace Ceres.Chess.NetEvaluation.Batch
 
           // N.B. It is not possible to apply move masking here, 
           //      so it is assumed this is already done by the caller.
-          int startIndex =  i * EncodedPolicyVector.POLICY_VECTOR_LENGTH;
+          int startIndex = i * EncodedPolicyVector.POLICY_VECTOR_LENGTH;
           //Array.Copy(policyProbsSpan, startIndex, policyTempBuffer, 0, EncodedPolicyVector.POLICY_VECTOR_LENGTH);
           ReadOnlySpan<Float16> thesePolicyProbsFloat16 = policyProbsSpan.Slice(startIndex, EncodedPolicyVector.POLICY_VECTOR_LENGTH);
           ReadOnlySpan<Half> thesePolicyProbsHalf = MemoryMarshal.Cast<Float16, Half>(thesePolicyProbsFloat16);
-          
+
           const float MIN_PROB = -100;
           CompressedPolicyVector policyVector = default;
           CompressedActionVector actionsVector = default;
@@ -1074,31 +1077,30 @@ namespace Ceres.Chess.NetEvaluation.Batch
         }
         else
         {
-//          Debug.Assert(actions.IsEmpty);
-
           // Collect together all move indices and policy logit values.
           MGMoveList movesThis = moves.Span[i];
           int numLegalMoves = movesThis.NumMovesUsed;
 
           Span<int> legalMoveIndices = stackalloc int[numLegalMoves];
           Span<float> legalMovePolicies = stackalloc float[numLegalMoves];
-//          Span<Half> legalMovePoliciesHalf = stackalloc Half[numLegalMoves];
-          ReadOnlySpan<Half> policyProbsSpanAsHalf =  MemoryMarshal.Cast<Float16, Half>(policyProbsSpan.Slice(startIndexPolicy, EncodedPolicyVector.POLICY_VECTOR_LENGTH));
+          //          Span<Half> legalMovePoliciesHalf = stackalloc Half[numLegalMoves];
+          ReadOnlySpan<Half> policyProbsSpanAsHalf = MemoryMarshal.Cast<Float16, Half>(policyProbsSpan.Slice(startIndexPolicy, EncodedPolicyVector.POLICY_VECTOR_LENGTH));
           ReadOnlySpan<Half> actionLogitsSpanAsHalf = hasActions ? MemoryMarshal.Cast<Float16, Half>(actionLogitsSpan.Slice(i * 3 * EncodedPolicyVector.POLICY_VECTOR_LENGTH, 3 * EncodedPolicyVector.POLICY_VECTOR_LENGTH)) : default;
 
           float policyLogitMax = 0;
           for (int im = 0; im < numLegalMoves; im++)
           {
             EncodedMove encodedMove = ConverterMGMoveEncodedMove.MGChessMoveToEncodedMove(movesThis.MovesArray[im]);
-            legalMoveIndices[im] = (ushort) encodedMove.IndexNeuralNet;
+            legalMoveIndices[im] = (ushort)encodedMove.IndexNeuralNet;
 
             // Extract action WDL (if any).
             if (hasActions)
             {
               double v1, v2, v3;
               int baseActionIndex = 3 * legalMoveIndices[im];
-              float actionLogitMax = Math.Max(Math.Max((float)actionLogitsSpanAsHalf[baseActionIndex + 0], (float)actionLogitsSpanAsHalf[baseActionIndex + 1]), 
-                                              (float)actionLogitsSpanAsHalf[baseActionIndex + 2]);
+              float actionLogitMax = Math.Max(Math.Max((float)actionLogitsSpanAsHalf[baseActionIndex + 0],
+                                                       (float)actionLogitsSpanAsHalf[baseActionIndex + 1]),
+                                                       (float)actionLogitsSpanAsHalf[baseActionIndex + 2]);
 
               v1 = Math.Exp((float)actionLogitsSpanAsHalf[baseActionIndex + 0] - actionLogitMax);
               v2 = Math.Exp((float)actionLogitsSpanAsHalf[baseActionIndex + 1] - actionLogitMax);
@@ -1111,46 +1113,19 @@ namespace Ceres.Chess.NetEvaluation.Batch
               actions[i][im] = ((Half)(v1 / actionTotalProbs), (Half)(v3 / actionTotalProbs));
             }
 
-            float policyValue =  (float)policyProbsSpanAsHalf[encodedMove.IndexNeuralNet];
+            float policyValue = (float)policyProbsSpanAsHalf[encodedMove.IndexNeuralNet];
             if (policyValue > policyLogitMax)
             {
               policyLogitMax = policyValue;
-            } 
+            }
             legalMovePolicies[im] = policyValue;
           }
 
-          float sumPolicyProbs = 0;
-          for (int im = 0; im < numLegalMoves; im++)
-          {
-            float expVal;
+          SoftmaxInPlace(legalMovePolicies, numLegalMoves, policyTemperature,
+                          policyUncertaintyScalingFactor, policiesUncertaintiesSpan, i, policyLogitMax);
 
-            if (policyTemperature != 1 || policyUncertaintyScalingFactor != 0)
-            {
-              float thisTemperature = policyTemperature;
-              if (policyUncertaintyScalingFactor != 0)
-              {
-                thisTemperature += MathF.Min(0.35f, policyUncertaintyScalingFactor * (float)policiesUncertaintiesSpan[i]);
-              }
-              expVal = (float)Math.Exp((legalMovePolicies[im] - policyLogitMax) / thisTemperature);
-            }
-            else
-            {
-              // Fast path for temperature 1, no uncertainty.
-              expVal = (float)Math.Exp((legalMovePolicies[im] - policyLogitMax));
-            }
-
-            legalMovePolicies[im] = expVal;
-            sumPolicyProbs+= expVal;
-          }
-
-          for (int im = 0; im < numLegalMoves; im++)
-          {
-            legalMovePolicies[im] /= sumPolicyProbs;
-          }
-
-          // TODO: is this inefficient? 
-          SideType side = sourceBatchWithValidMoves.Positions.IsEmpty ? SideType.White 
-                                                                      : sourceBatchWithValidMoves.Positions.Span[i].SideToMove; 
+          SideType side = sourceBatchWithValidMoves.Positions.IsEmpty ? SideType.White
+                                                                      : sourceBatchWithValidMoves.Positions.Span[i].SideToMove;
           if (hasActions)
           {
             CompressedPolicyVector.Initialize(ref retPolicies[i], side, legalMoveIndices, legalMovePolicies, false, true, ref actions[i]);
@@ -1166,14 +1141,58 @@ namespace Ceres.Chess.NetEvaluation.Batch
     }
 
 
+
+
+    public static void SoftmaxInPlace(Span<float> legalMovePolicies,
+                                      int numLegalMoves,
+                                      float policyTemperature,
+                                      float policyUncertaintyScalingFactor,
+                                      ReadOnlySpan<FP16> policiesUncertainties,
+                                      int i,
+                                      float policyLogitMax)
+    {
+      // Slice to the active region.
+      Span<float> logits = legalMovePolicies.Slice(0, numLegalMoves);
+
+      // Compute effective temperature once.
+      float thisTemperature = policyTemperature;
+      if (policyUncertaintyScalingFactor != 0.0f)
+      {
+        float bump = policyUncertaintyScalingFactor * policiesUncertainties[i];
+        if (bump > 0.35f) { bump = 0.35f; }
+        thisTemperature += bump;
+      }
+
+      // Center by max and (optionally) scale by temperature.
+      TensorPrimitives.Subtract(logits, policyLogitMax, logits); // logits = logits - max
+      if (thisTemperature != 1.0f)
+      {
+        TensorPrimitives.Multiply(logits, 1.0f / thisTemperature, logits); // logits = logits * (1/T)
+      }
+
+      // Exponentiate in place.
+      TensorPrimitives.Exp(logits, logits);
+
+      // Sum and normalize.
+      float sum = TensorPrimitives.Sum(logits);
+
+      // (Optional) guard against degenerate sums
+      // if (sum <= 0f) { sum = 1e-20f; }
+
+      float invSum = 1.0f / sum;
+      TensorPrimitives.Multiply(logits, invSum, logits);
+    }
+
+
+
     /// <summary>
     /// Initializes the win/loss array with specified values from the value head.
     /// </summary>
     /// <param name="valueEvals"></param>
     /// <param name="valsAreLogistic"></param>
     void InitializeValueEvals(ReadOnlySpan<FP16> valueEvals, bool valsAreLogistic, float temperature,
-                              ReadOnlySpan<FP16> uncertaintyV, float uncertaintyTemperatureScalingFactor,
-                              bool secondaryValue)
+                                ReadOnlySpan<FP16> uncertaintyV, float uncertaintyTemperatureScalingFactor,
+                                bool secondaryValue)
     {
       Debug.Assert(!(secondaryValue && !HasValueSecondary));
 
@@ -1226,7 +1245,6 @@ namespace Ceres.Chess.NetEvaluation.Batch
     }
 
 
-
     private static void CalcWLWithTemperature(ReadOnlySpan<FP16> valueEvals, bool valuesAreLogistics,
                                               float temperature,
                                               FP16[] w, FP16[] l,
@@ -1275,7 +1293,69 @@ namespace Ceres.Chess.NetEvaluation.Batch
         v1 = Math.Exp((v1 - max) / thisTemp);
         v2 = Math.Exp((v2 - max) / thisTemp);
         v3 = Math.Exp((v3 - max) / thisTemp);
-      }      
+      }
+
+      bool TEST_TEMP = temperature == 0.8001f || temperature == 1.001f || temperature == 1.5001f;
+      //Console.WriteLine("TEST_TEMP " + thisTemp + " " + TEST_TEMP);
+
+      if (TEST_TEMP)
+      {
+        double sumP = v1 + v2 + v3;
+        v1 /= sumP;
+        v2 /= sumP;
+        v3 /= sumP;
+
+        // 0.3 +3 Elo +/-8
+        // 0.5 -5 Elo +/-9
+
+        // vs BT4 @50
+        // 0.3 -27+/-23
+        // -0.3 +2 +/-13
+        // -0.5 -8 +/-18
+        // -0.2 -4 +- 15
+        const float BETA = -0.20f;
+        var finalWDL = WdlTemperature.ApplyDrawTemperature((float)v1, (float)v2, (float)v3, BETA);
+
+        w[i] = (FP16)finalWDL.W;
+        l[i] = (FP16)finalWDL.L;
+
+        if (false)
+        {
+          Console.WriteLine();
+          Console.WriteLine(v1 + " " + v3 + "  to  " + finalWDL.W + " " + finalWDL.L);
+          Console.WriteLine((v1 - v3) + "  to  " + (finalWDL.W - finalWDL.L));
+        }
+        return;
+
+        const float D_DIVISOR = 2;
+
+        double wPost = v1;
+        //        double dPost = v2 / D_DIVISOR;
+        double dPost = v2 + (1 - v2) * 0.2;
+        double lPost = v3;
+
+        double sum = wPost + dPost + lPost;
+
+        wPost /= sum;
+        dPost /= sum;
+        lPost /= sum;
+
+        //        w[i] = (FP16)((wPost + lPost) / 2);
+        //        l[i] = (FP16)((wPost - lPost) / 2);
+
+        w[i] = (FP16)(wPost);
+        l[i] = (FP16)(lPost);
+
+        if (FP16.IsNaN(w[i] + l[i]))
+          throw new Exception("badbad");
+
+        return;
+        //max = Math.Max(valueEvals[i * 3 + 0], valueEvals[i * 3 + 2]);
+        //v1 = Math.Exp((valueEvals[i * 3 + 0] - max) / thisTemp);
+        //v2 = 0;
+        //v3 = Math.Exp((valueEvals[i * 3 + 2] - max) / thisTemp);
+
+      }
 
 
       double totl = v1 + v2 + v3;
@@ -1285,6 +1365,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
       w[i] = (FP16)(v1 / totl);
       l[i] = (FP16)(v3 / totl);
     }
+
 
     static void ReplaceFirstSpanWithGeometricWeightedAverage(Span<FP16> arg1, Span<FP16> arg2, float weight1, float weight2)
     {
@@ -1316,7 +1397,188 @@ namespace Ceres.Chess.NetEvaluation.Batch
     {
       throw new NotImplementedException();
     }
+  }
 
+  public static class WdlTemperature
+  {
+    private const float Eps = 1e-8f;
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static float Clamp01(float x)
+    {
+      if (x < 0f) return 0f;
+      if (x > 1f) return 1f;
+      return x;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static float SafeLogit01(float p)
+    {
+      float x = MathF.Min(1f - Eps, MathF.Max(Eps, p));
+      return MathF.Log(x) - MathF.Log(1f - x);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static float Sigmoid(float z)
+    {
+      // Stable logistic for float
+      if (z >= 0f)
+      {
+        float ez = MathF.Exp(-z);
+        return 1f / (1f + ez);
+      }
+      else
+      {
+        float ez = MathF.Exp(z);
+        return ez / (1f + ez);
+      }
+    }
+
+    /// <summary>
+    /// PURE temperature: scale draw-odds by exp(beta) and keep W:L ratio inside decisives.
+    /// This WILL generally change the expected score S=W+0.5*D unless W==L.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static (float W, float D, float L) ApplyDrawTemperature(float w, float d, float l, float beta)
+    {
+      // Normalize input once (tolerate small drift)
+      float sum = w + d + l;
+      if (sum <= 0f) return (0f, 1f, 0f);
+      if (Math.Abs(sum - 1f) > 1e-6f)
+      {
+        float inv = 1f / sum;
+        w *= inv; d *= inv; l *= inv;
+      }
+
+      // No decisive mass => cannot change anything
+      float c = w + l;
+      if (c <= Eps) return (0f, 1f, 0f);
+
+      float logitD = SafeLogit01(d);
+      float dPrime = Sigmoid(logitD + beta); // D' = sigma(logit(D) + beta)
+      float cPrime = 1f - dPrime;
+
+      // Preserve W:L ratio inside decisives
+      float ratioW = w / c;
+      float ratioL = l / c;
+      float wPrime = ratioW * cPrime;
+      float lPrime = ratioL * cPrime;
+
+      // Final safety clamp & tiny renorm
+      wPrime = Clamp01(wPrime);
+      dPrime = Clamp01(dPrime);
+      lPrime = Clamp01(lPrime);
+      float s2 = wPrime + dPrime + lPrime;
+      if (Math.Abs(s2 - 1f) > 1e-6f)
+      {
+        float inv = 1f / s2;
+        wPrime *= inv; dPrime *= inv; lPrime *= inv;
+      }
+      return (wPrime, dPrime, lPrime);
+    }
+
+    /// <summary>
+    /// Compute the beta that would map D to targetD under the pure-temperature rule,
+    /// i.e., beta = logit(targetD) - logit(D). Returns (beta, feasible).
+    /// Feasible is false only when there is no decisive mass (W+L approx equal 0) and targetD<>1.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static (float Beta, bool Feasible) BetaForTargetDraw(float d, float w, float l, float targetD)
+    {
+      float tgt = Clamp01(targetD);
+      float c = w + l;
+      if (c <= Eps)
+      {
+        // Already all draws; only target 1.0 is feasible without changing W,L
+        return (0f, Math.Abs(tgt - 1f) <= 1e-7f);
+      }
+      float beta = SafeLogit01(tgt) - SafeLogit01(d);
+      return (beta, true);
+    }
+
+    /// <summary>
+    /// Convenience wrapper: hit a target draw rate with pure temperature semantics.
+    /// Preserves W:L ratio, but NOT expected score.
+    /// Returns adjusted (W,D,L), beta used, and whether target was hit (in practice yes if W+L>0).
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static (float W, float D, float L, float BetaUsed, bool TargetHit)
+      ApplyDrawTemperatureToTarget(float w, float d, float l, float targetD)
+    {
+      (float beta, bool feasible) = BetaForTargetDraw(d, w, l, targetD);
+      if (!feasible)
+      {
+        // All draws already; just return original (or clamp to exact all-draws)
+        return (0f, 1f, 0f, 0f, Math.Abs(Clamp01(targetD) - 1f) <= 1e-7f);
+      }
+      (float w2, float d2, float l2) = ApplyDrawTemperature(w, d, l, beta);
+      bool hit = Math.Abs(d2 - Clamp01(targetD)) <= 1e-6f; // Numerically should be exact
+      return (w2, d2, l2, beta, hit);
+    }
+
+    // ---------- Temperature-derived but SCORE-NEUTRAL projection ----------
+
+    /// <summary>
+    /// Internal: neutral shift that changes D by t while preserving expected score
+    /// and W-L (takes t/2 from W and t/2 from L, adds t to D), with safety caps.
+    /// If target is infeasible (W or L would go negative), it saturates and reports hit=false.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static (float W, float D, float L, float kUsed, bool Hit)
+      InflateDrawToTargetNeutral(float w, float d, float l, float targetD)
+    {
+      // Normalize
+      float sum = w + d + l;
+      if (sum <= 0f) return (0f, 1f, 0f, 0f, targetD >= 1f);
+      if (Math.Abs(sum - 1f) > 1e-6f)
+      {
+        float inv = 1f / sum;
+        w *= inv; d *= inv; l *= inv;
+      }
+
+      float tgt = Clamp01(targetD);
+      if (tgt <= d + 1e-7f)
+      {
+        // Nothing to increase; k=0
+        return (w, d, l, 0f, Math.Abs(tgt - d) <= 1e-7f);
+      }
+
+      float c = w + l;
+      if (c <= Eps) return (0f, 1f, 0f, 0f, tgt >= 1f);
+
+      float tReq = tgt - d;
+      float tMax = MathF.Min(c, 2f * MathF.Min(w, l));   // ensure W',L' >= 0
+      float t = MathF.Min(tReq, tMax);
+      float kUsed = t / c;
+
+      float w2 = w - 0.5f * t;
+      float l2 = l - 0.5f * t;
+      float d2 = d + t;
+
+      // Renorm & clamp
+      float s2 = w2 + d2 + l2;
+      if (Math.Abs(s2 - 1f) > 1e-6f)
+      {
+        float inv = 1f / s2;
+        w2 *= inv; d2 *= inv; l2 *= inv;
+      }
+      w2 = Clamp01(w2); d2 = Clamp01(d2); l2 = Clamp01(l2);
+      bool hit = (t >= tReq - 1e-7f);
+      return (w2, d2, l2, kUsed, hit);
+    }
+
+    /// <summary>
+    /// Temperature-derived, score-neutral: compute D* = sigma(logit(D)+beta), then
+    /// move mass equally from W and L into D (or back) to hit D* while preserving
+    /// expected score (W+0.5*D) and W-L.
+    /// Returns adjusted (W,D,L), the neutral kUsed (fraction of decisive mass moved), and Hit.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static (float W, float D, float L, float kUsed, bool TargetHit)
+      ApplyDrawTemperatureScoreNeutral(float w, float d, float l, float beta)
+    {
+      float dStar = Sigmoid(SafeLogit01(d) + beta);
+      return InflateDrawToTargetNeutral(w, d, l, dStar);
+    }
   }
 }
