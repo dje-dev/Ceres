@@ -246,7 +246,7 @@ public class ONNXExecutor : IDisposable
     //      BATCH_SIZE_ANCHORS = testMode ? [16, 64] : [];
     BATCH_SIZE_ANCHORS = multiEngineMode ? [16, 64, 256] : [];
     UseCUDAGraphsBelowBatchSize = 0;  // disabled due to ONNXRuntime bugs (see below)
-
+    // UseCUDAGraphsBelowBatchSize = 12;  // for testing
 
     if (UseCUDAGraphsBelowBatchSize > 0)
     {
@@ -414,7 +414,7 @@ public class ONNXExecutor : IDisposable
             string nonBatchDimensions, int gpuID,
 int precisionNumBits, int minBatch, int maxBatch, bool useCudaGraphs)
   {
-    OrtTensorRTProviderOptions trtProviderOptions = new OrtTensorRTProviderOptions();
+    using OrtTensorRTProviderOptions trtProviderOptions = new OrtTensorRTProviderOptions();
     Dictionary<string, string> providerOptionsDict = new();
 
     providerOptionsDict["device_id"] = gpuID.ToString();
@@ -522,7 +522,7 @@ int precisionNumBits, int minBatch, int maxBatch, bool useCudaGraphs)
   /// </summary>
   private SessionOptions CreateCUDASessionOptions(int gpuID)
   {
-    OrtCUDAProviderOptions cudaProviderOptions = new();
+    using OrtCUDAProviderOptions cudaProviderOptions = new();
     Dictionary<string, string> providerOptionsDict = new();
     providerOptionsDict["device_id"] = gpuID.ToString();
     cudaProviderOptions.UpdateOptions(providerOptionsDict);
@@ -900,11 +900,14 @@ int precisionNumBits, int minBatch, int maxBatch, bool useCudaGraphs)
 
         try
         {
-          // Create input OrtValues
-          for (int i = 0; i < context.InputOrtValues.Count; i++)
+          // Create input OrtValues from InputBuffers
+          for (int i = 0; i < context.InputBuffers.Count; i++)
           {
-            var (name, ortValue, originalShape) = context.InputOrtValues[i];
+            string name = InputsMetadata.ElementAt(i).Key;
             float[] buf = (float[])context.InputBuffers[i];
+            long[] shape = ONNXHelpers.ToLongArray(InputsMetadata.ElementAt(i).Value.Dimensions, batchSize);
+
+            OrtValue ortValue = OrtValue.CreateTensorValueFromMemory(buf, shape);
             inputOrtValuesList.Add(ortValue);
             inputNames.Add(name);
           }
@@ -1111,7 +1114,7 @@ int precisionNumBits, int minBatch, int maxBatch, bool useCudaGraphs)
     bool useCudaGraphs = maxBatch < UseCUDAGraphsBelowBatchSize;
 
     // Create session options
-    SessionOptions so = CreateSessionOptions(sessionCreationParams, minBatch, maxBatch, useCudaGraphs);
+    using SessionOptions so = CreateSessionOptions(sessionCreationParams, minBatch, maxBatch, useCudaGraphs);
 
     // Create the session
     InferenceSession newSession;
