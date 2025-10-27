@@ -16,257 +16,238 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+
 using Ceres.Base.DataTypes;
 using Ceres.Chess.EncodedPositions;
 
 #endregion
 
-namespace Ceres.Chess.NetEvaluation.Batch
+namespace Ceres.Chess.NetEvaluation.Batch;
+
+/// <summary>
+/// An implementation of IPositionEvaluationBatch which efficiently 
+/// merges together several consecutive sub-batches (using indexing into sub-arrays).
+/// </summary>
+internal class PositionsEvaluationBatchMerged : IPositionEvaluationBatch
 {
+  internal readonly IPositionEvaluationBatch[] Batches;
+  internal readonly int[] BatchSizes;
+
   /// <summary>
-  /// An implementation of IPositionEvaluationBatch which 
-  /// efficiently merges together several consecutive sub-batches
-  /// (using indexing into sub-arrays).
+  /// Cumulative offsets for each batch to enable O(log n) lookup.
+  /// CumulativeOffsets[i] = sum of BatchSizes[0..i-1]
   /// </summary>
-  internal class PositionsEvaluationBatchMerged : IPositionEvaluationBatch
+  private readonly int[] cumulativeOffsets;
+
+  /// <summary>
+  /// Total number of positions across all batches.
+  /// </summary>
+  private readonly int totalNumPos;
+
+  private readonly bool isWDL;
+  private readonly bool hasM;
+  private readonly bool hasUncertaintyV;
+  private readonly bool hasUncertaintyP;
+  private readonly bool hasAction;
+  private readonly bool hasValueSecondary;
+  private readonly bool hasState;
+
+  /// <summary>
+  /// Constructor.
+  /// </summary>
+  /// <param name="batches"></param>
+  /// <param name="batchSizes"></param>
+  internal PositionsEvaluationBatchMerged(IPositionEvaluationBatch[] batches, int[] batchSizes)
   {
-    internal readonly IPositionEvaluationBatch[] Batches;
-    internal readonly int[] BatchSizes;
+    Batches = batches;
+    BatchSizes = batchSizes;
 
-    /// <summary>
-    /// Index of element last requested. We track this to allow 
-    /// efficient traversal of items in order (the typical use case).
-    /// </summary>
-    int lastIndex = 0;
-
-    /// <summary>
-    /// The index of the sub-batch to which the last requested item belongs
-    /// </summary>
-    int lastEvaluatorIndex = 0;
-
-    /// <summary>
-    /// The index within the last evalutor at which last element was found
-    /// </summary>
-    int lastEvaluatorInnerIndex = 0;
-
-    bool isWDL;
-    bool hasM;
-    bool hasUncertaintyV;
-    bool hasUncertaintyP;
-    bool hasAction;
-    bool hasValueSecondary;
-    bool hasState;
-
-
-    /// <summary>
-    /// Constructor.
-    /// </summary>
-    /// <param name="batches"></param>
-    /// <param name="batchSizes"></param>
-    internal PositionsEvaluationBatchMerged(IPositionEvaluationBatch[] batches, int[] batchSizes)
+    // Pre-compute cumulative offsets for efficient lookup
+    cumulativeOffsets = new int[batches.Length];
+    int cumulativeSum = 0;
+    for (int i = 0; i < batches.Length; i++)
     {
-      Batches = batches;
-      BatchSizes = batchSizes;
-      isWDL = batches[0].IsWDL;
-      hasM  = batches[0].HasM;
-      hasUncertaintyV = batches[0].HasUncertaintyV;
-      hasUncertaintyP = batches[0].HasUncertaintyP;
-      hasAction = batches[0].HasAction;
-      hasValueSecondary = batches[0].HasValueSecondary;
-      hasState = batches[0].HasState;
+      cumulativeOffsets[i] = cumulativeSum;
+      cumulativeSum += batchSizes[i];
     }
+    totalNumPos = cumulativeSum;
+
+    // Cache batch properties from first batch
+    isWDL = batches[0].IsWDL;
+    hasM = batches[0].HasM;
+    hasUncertaintyV = batches[0].HasUncertaintyV;
+    hasUncertaintyP = batches[0].HasUncertaintyP;
+    hasAction = batches[0].HasAction;
+    hasValueSecondary = batches[0].HasValueSecondary;
+    hasState = batches[0].HasState;
+  }
 
 
-    bool IPositionEvaluationBatch.IsWDL => isWDL;
+  bool IPositionEvaluationBatch.IsWDL => isWDL;
 
-    bool IPositionEvaluationBatch.HasM => hasM;
+  bool IPositionEvaluationBatch.HasM => hasM;
 
-    bool IPositionEvaluationBatch.HasUncertaintyV => hasUncertaintyV;
-    bool IPositionEvaluationBatch.HasUncertaintyP => hasUncertaintyP;
+  bool IPositionEvaluationBatch.HasUncertaintyV => hasUncertaintyV;
 
-    bool IPositionEvaluationBatch.HasAction => hasAction;
-    bool IPositionEvaluationBatch.HasValueSecondary => hasValueSecondary;
+  bool IPositionEvaluationBatch.HasUncertaintyP => hasUncertaintyP;
 
-    bool IPositionEvaluationBatch.HasState => hasState;
+  bool IPositionEvaluationBatch.HasAction => hasAction;
 
-    /// <summary>
-    /// Number of positions in batch.
-    /// </summary>
-    int IPositionEvaluationBatch.NumPos
+  bool IPositionEvaluationBatch.HasValueSecondary => hasValueSecondary;
+
+  bool IPositionEvaluationBatch.HasState => hasState;
+
+  /// <summary>
+  /// Number of positions in batch.
+  /// </summary>
+  int IPositionEvaluationBatch.NumPos => totalNumPos;
+
+
+  /// <summary>
+  /// Maps a global index to (batchIndex, localIndex) tuple using binary search.
+  /// </summary>
+  /// <param name="index">Global index across all batches</param>
+  private (int batchIndex, int localIndex) GetIndices(int index)
+  {
+    // Binary search to find which batch contains this index
+    int left = 0;
+    int right = cumulativeOffsets.Length - 1;
+    int batchIndex = 0;
+
+    while (left <= right)
     {
-      get
-      {
-        int count = 0;
-        for (int i = 0; i < Batches.Length; i++)
-        {
-          count += BatchSizes[i];
-        }
-        return count;
-      }
-    }
+      int mid = left + ((right - left) >> 1);
 
-
-    /// <summary>
-    /// Next available set of indices.
-    /// </summary>
-    /// <param name="index"></param>
-    /// <returns></returns>
-    (int, int) GetIndices(int index)
-    {
-      (int, int) nextIndices = DoGetIndices(index);
-      lastIndex = index;
-      return nextIndices;
-    }
-
-
-    (int, int) DoGetIndices(int index)
-    {
-      if (index == lastIndex)
+      if (cumulativeOffsets[mid] <= index)
       {
-        return (lastEvaluatorIndex, lastEvaluatorInnerIndex);
-      }
-      else if (index == 0)
-      {
-        // Support restart from beginning
-        lastEvaluatorIndex = 0;
-        lastEvaluatorInnerIndex = 0;
-        return (0, 0);
-      }
-      else if (index == lastIndex + 1)
-      {
-        int nextEvaluatorInnerIndex = lastEvaluatorInnerIndex + 1;
-        if (nextEvaluatorInnerIndex == BatchSizes[lastEvaluatorIndex])
-        {
-          // Advance to next evaluator
-          lastEvaluatorIndex++;
-          lastEvaluatorInnerIndex = 0;
-          return (lastEvaluatorIndex, 0);
-        }
-        else
-        {
-          // Just advance to next slog within same evaluator
-          lastEvaluatorInnerIndex = nextEvaluatorInnerIndex;
-          return (lastEvaluatorIndex, lastEvaluatorInnerIndex);
-        }
+        batchIndex = mid;
+        left = mid + 1;
       }
       else
-        throw new Exception("Internal error: implementation currently only supports sequential acccess");
-    }
-
-
-    FP16 IPositionEvaluationBatch.GetLossP(int index)
-    {
-      (int, int) indices = GetIndices(index);
-      return Batches[indices.Item1].GetLossP(indices.Item2);
-    }
-
-    FP16 IPositionEvaluationBatch.GetLoss1P(int index)
-    {
-      (int, int) indices = GetIndices(index);
-      return Batches[indices.Item1].GetLoss1P(indices.Item2);
-    }
-
-    FP16 IPositionEvaluationBatch.GetLoss2P(int index)
-    {
-      (int, int) indices = GetIndices(index);
-      return Batches[indices.Item1].GetLoss2P(indices.Item2);
-    }
-
-
-    (Memory<CompressedPolicyVector> policies, int index) IPositionEvaluationBatch.GetPolicy(int index)
-    {
-      (int, int) indicies = GetIndices(index);
-      return Batches[indicies.Item1].GetPolicy(indicies.Item2);
-    }
-
-
-    (Memory<CompressedActionVector> actions, int index) IPositionEvaluationBatch.GetAction(int index)
-    {
-      (int, int) indicies = GetIndices(index);
-      return Batches[indicies.Item1].GetAction(indicies.Item2);
-    }
-
-
-    FP16 IPositionEvaluationBatch.GetM(int index)
-    {
-      (int, int) indicies = GetIndices(index);
-      return Batches[indicies.Item1].GetM(indicies.Item2);
-    }
-
-
-    FP16 IPositionEvaluationBatch.GetWinP(int index)
-    {
-      (int, int) indicies = GetIndices(index);
-      return Batches[indicies.Item1].GetWinP(indicies.Item2);
-    }
-
-    FP16 IPositionEvaluationBatch.GetWin1P(int index)
-    {
-      (int, int) indicies = GetIndices(index);
-      return Batches[indicies.Item1].GetWin1P(indicies.Item2);
-    }
-
-    FP16 IPositionEvaluationBatch.GetWin2P(int index)
-    {
-      (int, int) indicies = GetIndices(index);
-      return Batches[indicies.Item1].GetWin2P(indicies.Item2);
-    }
-
-    FP16 IPositionEvaluationBatch.GetUncertaintyV(int index)
-    {
-      (int, int) indicies = GetIndices(index);
-      return Batches[indicies.Item1].GetUncertaintyV(indicies.Item2);
-    }
-
-    FP16 IPositionEvaluationBatch.GetUncertaintyP(int index)
-    {
-      (int, int) indicies = GetIndices(index);
-      return Batches[indicies.Item1].GetUncertaintyP(indicies.Item2);
-    }
-
-    public NNEvaluatorResultActivations GetActivations(int index)
-    {
-      (int, int) indicies = GetIndices(index);
-      return Batches[indicies.Item1].GetActivations(indicies.Item2);
-    }
-
-    public FP16 GetExtraStat0(int index)
-    {
-      (int, int) indicies = GetIndices(index);
-
-      return Batches[indicies.Item1].GetExtraStat0(indicies.Item2);
-    }
-
-    public FP16 GetExtraStat1(int index)
-    {
-      (int, int) indicies = GetIndices(index);
-
-      return Batches[indicies.Item1].GetExtraStat1(indicies.Item2);
-    }
-
-    public Half[] GetState(int index)
-    {
-      (int, int) indicies = GetIndices(index);
-
-      return Batches[indicies.Item1].GetState(indicies.Item2);
-    }
-
-    public IEnumerator<NNPositionEvaluationBatchMember> GetEnumerator()
-    {
-      int index = 0;
-      for (int i = 0; i < ((IPositionEvaluationBatch)this).NumPos; i++)
       {
-        // TODO: make more efficient by tracking batch/pos indices directly rather than use GetIndices.
-        (int, int) indicies = GetIndices(index);
-        yield return new NNPositionEvaluationBatchMember(Batches[indicies.Item1], indicies.Item2);
-        index++;
+        right = mid - 1;
       }
     }
 
-    IEnumerator IEnumerable.GetEnumerator()
-    {
-      throw new NotImplementedException();
-    }
+    // Calculate local index within the batch
+    int localIndex = index - cumulativeOffsets[batchIndex];
 
+    return (batchIndex, localIndex);
+  }
+
+
+  FP16 IPositionEvaluationBatch.GetLossP(int index)
+  {
+    (int batchIndex, int localIndex) = GetIndices(index);
+    return Batches[batchIndex].GetLossP(localIndex);
+  }
+
+  FP16 IPositionEvaluationBatch.GetLoss1P(int index)
+  {
+    (int batchIndex, int localIndex) = GetIndices(index);
+    return Batches[batchIndex].GetLoss1P(localIndex);
+  }
+
+  FP16 IPositionEvaluationBatch.GetLoss2P(int index)
+  {
+    (int batchIndex, int localIndex) = GetIndices(index);
+    return Batches[batchIndex].GetLoss2P(localIndex);
+  }
+
+
+  (Memory<CompressedPolicyVector> policies, int index) IPositionEvaluationBatch.GetPolicy(int index)
+  {
+    (int batchIndex, int localIndex) = GetIndices(index);
+    return Batches[batchIndex].GetPolicy(localIndex);
+  }
+
+
+  (Memory<CompressedActionVector> actions, int index) IPositionEvaluationBatch.GetAction(int index)
+  {
+    (int batchIndex, int localIndex) = GetIndices(index);
+    return Batches[batchIndex].GetAction(localIndex);
+  }
+
+
+  FP16 IPositionEvaluationBatch.GetM(int index)
+  {
+    (int batchIndex, int localIndex) = GetIndices(index);
+    return Batches[batchIndex].GetM(localIndex);
+  }
+
+
+  FP16 IPositionEvaluationBatch.GetWinP(int index)
+  {
+    (int batchIndex, int localIndex) = GetIndices(index);
+    return Batches[batchIndex].GetWinP(localIndex);
+  }
+
+  FP16 IPositionEvaluationBatch.GetWin1P(int index)
+  {
+    (int batchIndex, int localIndex) = GetIndices(index);
+    return Batches[batchIndex].GetWin1P(localIndex);
+  }
+
+  FP16 IPositionEvaluationBatch.GetWin2P(int index)
+  {
+    (int batchIndex, int localIndex) = GetIndices(index);
+    return Batches[batchIndex].GetWin2P(localIndex);
+  }
+
+  FP16 IPositionEvaluationBatch.GetUncertaintyV(int index)
+  {
+    (int batchIndex, int localIndex) = GetIndices(index);
+    return Batches[batchIndex].GetUncertaintyV(localIndex);
+  }
+
+  FP16 IPositionEvaluationBatch.GetUncertaintyP(int index)
+  {
+    (int batchIndex, int localIndex) = GetIndices(index);
+    return Batches[batchIndex].GetUncertaintyP(localIndex);
+  }
+
+  public NNEvaluatorResultActivations GetActivations(int index)
+  {
+    (int batchIndex, int localIndex) = GetIndices(index);
+    return Batches[batchIndex].GetActivations(localIndex);
+  }
+
+  public FP16 GetExtraStat0(int index)
+  {
+    (int batchIndex, int localIndex) = GetIndices(index);
+    return Batches[batchIndex].GetExtraStat0(localIndex);
+  }
+
+  public FP16 GetExtraStat1(int index)
+  {
+    (int batchIndex, int localIndex) = GetIndices(index);
+    return Batches[batchIndex].GetExtraStat1(localIndex);
+  }
+
+  public Half[] GetState(int index)
+  {
+    (int batchIndex, int localIndex) = GetIndices(index);
+    return Batches[batchIndex].GetState(localIndex);
+  }
+
+  public IEnumerator<NNPositionEvaluationBatchMember> GetEnumerator()
+  {
+    int globalIndex = 0;
+    for (int batchIndex = 0; batchIndex < Batches.Length; batchIndex++)
+    {
+      int batchSize = BatchSizes[batchIndex];
+      IPositionEvaluationBatch batch = Batches[batchIndex];
+
+      for (int localIndex = 0; localIndex < batchSize; localIndex++)
+      {
+        yield return new NNPositionEvaluationBatchMember(batch, localIndex);
+        globalIndex++;
+      }
+    }
+  }
+
+  IEnumerator IEnumerable.GetEnumerator()
+  {
+    return GetEnumerator();
   }
 }
