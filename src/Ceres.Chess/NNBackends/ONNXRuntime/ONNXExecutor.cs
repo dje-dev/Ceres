@@ -407,6 +407,9 @@ public class ONNXExecutor : IDisposable
   }
 
 
+  static bool haveNotifiedTRTCacheDir;
+
+
   /// <summary>
   /// Creates TensorRT-specific session options.
   /// </summary>
@@ -486,7 +489,11 @@ int precisionNumBits, int minBatch, int maxBatch, bool useCudaGraphs)
       Console.WriteLine();
     }
 
-    Console.WriteLine("TensorRT engines will be cached in: " + trtSubdirectory);
+    if (!haveNotifiedTRTCacheDir)
+    {
+      Console.WriteLine("TensorRT engines will be cached in: " + trtSubdirectory);
+      haveNotifiedTRTCacheDir = true;
+    }
 
     providerOptionsDict["trt_engine_cache_enable"] = "1";
     providerOptionsDict["trt_engine_cache_path"] = trtSubdirectory;
@@ -900,7 +907,7 @@ int precisionNumBits, int minBatch, int maxBatch, bool useCudaGraphs)
 
         try
         {
-          // Create input OrtValues from InputBuffers
+          // Create input OrtValues from InputBuffers (not from context.InputOrtValues which are null)
           for (int i = 0; i < context.InputBuffers.Count; i++)
           {
             string name = InputsMetadata.ElementAt(i).Key;
@@ -1208,7 +1215,6 @@ int precisionNumBits, int minBatch, int maxBatch, bool useCudaGraphs)
       }
     }
 
-    Console.WriteLine($"Created session context for batch size {maxBatch} with {context.InputOrtValues.Count} inputs and {context.OutputOrtValues.Count} outputs");
     return context;
   }
 
