@@ -294,7 +294,7 @@ namespace Ceres.Chess.LC0.Batches
 
       if (RETAIN_POSITION_INTERNALS)
       {
-        PositionsBuffer = positions.ToArray();
+        PositionsBuffer = positions.Slice(0, numToProcess).ToArray();
       }
 
       int nextOutPlaneIndex = 0;
