@@ -243,8 +243,8 @@ public class ONNXExecutor : IDisposable
     bool multiEngineMode = useTensorRT;// && ONNXFileName != null && !ONNXFileName.ToLower().Contains("copy");
     UseMultipleProfilesPerSession = false;
 
-    //      BATCH_SIZE_ANCHORS = testMode ? [16, 64] : [];
-    BATCH_SIZE_ANCHORS = multiEngineMode ? [16, 64, 256] : [];
+    //    BATCH_SIZE_ANCHORS = multiEngineMode ? [16, 64, 256] : [];
+    BATCH_SIZE_ANCHORS = multiEngineMode ? [48, 128] : [];
     UseCUDAGraphsBelowBatchSize = 0;  // disabled due to ONNXRuntime bugs (see below)
     // UseCUDAGraphsBelowBatchSize = 12;  // for testing
 
@@ -407,15 +407,28 @@ public class ONNXExecutor : IDisposable
   }
 
 
-  static bool haveNotifiedTRTCacheDir;
+  static string lastNotifiedTRTCacheDir;
+
+  string GetTRTEngineCacheDir()
+  {
+    string directoryName = ONNXFileName == null ? Path.GetTempPath() : new FileInfo(ONNXFileName).DirectoryName;
+    string trtSubdirectory = Path.Combine(directoryName, "trt_engines", Environment.MachineName);
+    if (trtSubdirectory != lastNotifiedTRTCacheDir)
+    {
+      Console.WriteLine("TensorRT engines will be cached in: " + trtSubdirectory);
+      lastNotifiedTRTCacheDir = trtSubdirectory;
+    }
+
+    return trtSubdirectory;
+  }
 
 
   /// <summary>
   /// Creates TensorRT-specific session options.
   /// </summary>
   private SessionOptions CreateTensorRTSessionOptions(string shortID, string[] inputNames,
-            string nonBatchDimensions, int gpuID,
-int precisionNumBits, int minBatch, int maxBatch, bool useCudaGraphs)
+                                                      string nonBatchDimensions, int gpuID,
+                                                      int precisionNumBits, int minBatch, int maxBatch, bool useCudaGraphs)
   {
     using OrtTensorRTProviderOptions trtProviderOptions = new OrtTensorRTProviderOptions();
     Dictionary<string, string> providerOptionsDict = new();
@@ -471,8 +484,7 @@ int precisionNumBits, int minBatch, int maxBatch, bool useCudaGraphs)
     }
 
     // Engine cache configuration
-    string directoryName = ONNXFileName == null ? Path.GetTempPath() : new FileInfo(ONNXFileName).DirectoryName;
-    string trtSubdirectory = Path.Combine(directoryName, "trt_engines", Environment.MachineName);
+    string trtSubdirectory = GetTRTEngineCacheDir();
     Directory.CreateDirectory(trtSubdirectory);
 
     bool EMBED = Environment.GetEnvironmentVariable("EMBED_TRT") == "1";
@@ -487,12 +499,6 @@ int precisionNumBits, int minBatch, int maxBatch, bool useCudaGraphs)
       ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, "NOTE: the _ctx.onnx file will only be created only upon normal termination of this process.");
       ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, "NOTE: For security reasons, this file is emitted in subdirectory trt_engines_embed of the working directory of this process.");
       Console.WriteLine();
-    }
-
-    if (!haveNotifiedTRTCacheDir)
-    {
-      Console.WriteLine("TensorRT engines will be cached in: " + trtSubdirectory);
-      haveNotifiedTRTCacheDir = true;
     }
 
     providerOptionsDict["trt_engine_cache_enable"] = "1";
@@ -1074,20 +1080,32 @@ int precisionNumBits, int minBatch, int maxBatch, bool useCudaGraphs)
       return context;
     }
 
+    if (UseTensorRT)
+    {
+      // Trigger calculation of the target cache directory (to force user output message to appear first).
+      _ = GetTRTEngineCacheDir();
+    }
+
     // Create new session context for this batch size anchor
-    string graphStatus = bucketKey.useCudaGraphs ? "with CUDA graphs" : "without CUDA graphs";
-    Console.WriteLine($"Creating new session for batch size bucket [{bucketKey.min}..{bucketKey.max}] {graphStatus} (requested: {batchSize})");
+    string graphStatus = bucketKey.useCudaGraphs ? "(CUDA graph)" : "(no CUDA graphs)";
+    ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"Creating new session for batch size bucket [{bucketKey.min}..{bucketKey.max}] {graphStatus} (requested: {batchSize}) ... ", endLine: false);
 
     // Take a global lock during session creation for two reasons:
     //   - we don't want to try to create TensorRT engines for the same network simultaneously
     //     because this would interfere with performance profiling,
     //     and the second time a cached version should just be used rather than recreated
     //   - reduce likelihood of conflict with other initialization (e.g. other threads using ManagedCUDA).
-    lock (CUDADevice.InitializingCUDAContextLockObj)
+    TimingStats stats = new();
+    using (new TimingBlock(stats, TimingBlock.LoggingType.None))
     {
-      context = CreateSessionForBatchSize(bucketKey.min, bucketKey.max);
+      lock (CUDADevice.InitializingCUDAContextLockObj)
+      {
+        context = CreateSessionForBatchSize(bucketKey.min, bucketKey.max);
+      }
     }
     sessionCache[bucketKey] = context;
+
+    ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, "done in " + Math.Round(stats.ElapsedTimeSecs, 2) + " seconds.");
 
     if (UseIOBinding)
     {
