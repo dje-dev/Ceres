@@ -7,28 +7,33 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Numerics.Tensors;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+
 using Ceres.Base.Benchmarking;
 using Ceres.Base.CUDA;
+using Ceres.Base.DataTypes;
 using Ceres.Base.Math;
 using Ceres.Base.Misc;
 
-using Microsoft.ML.OnnxRuntime;
+using ManagedCuda;
+using ManagedCuda.BasicTypes;
 
 using Onnx;
+
+using Microsoft.ML.OnnxRuntime;
+using Microsoft.ML.OnnxRuntime.Tensors;
 
 #endregion
 
 #region License notice
 
 /*
-  This file is part of the Ceres project at https://github.com/dje-dev/ceres.
-  Copyright (C) 2020- by David Elliott and the Ceres Authors.
+ This file is part of the Ceres project at https://github.com/dje-dev/ceres.
+ Copyright (C)2020- by David Elliott and the Ceres Authors.
 
-  Ceres is free software under the terms of the GNU General Public License v3.0.
-  You should have received a copy of the GNU General Public License
-  along with Ceres. If not, see <http://www.gnu.org/licenses/>.
+ Ceres is free software under the terms of the GNU General Public License v3.0.
+ You should have received a copy of the GNU General Public License
+ along with Ceres. If not, see <http://www.gnu.org/licenses/>.
 */
 
 #endregion
@@ -84,22 +89,15 @@ public class ONNXExecutor : IDisposable
   public bool InputBuffersArePrepopulated;
 
   /// <summary>
-  /// If true, use direct Run method with OrtValues instead of IOBinding.
-  /// Default is false (uses IOBinding).
-  /// </summary>
-  public readonly bool UseIOBinding;
-
-
-  /// <summary>
   /// The names of the sub-networks if the net is a specially prepared 
   /// Ceres multinet network (containing the string "multinet" in the file name).
   /// </summary>
-  public readonly string[] MultiNetNames;
+  public string[] MultiNetNames { get; private set; }
 
 
   /// The weights to be used for inference of the sub-networks if the net is a specially 
   /// prepared Ceres multinet network (containing the string "multinet" in the file name).
-  public readonly float[] MultiNetWeights;
+  public float[] MultiNetWeights { get; private set; }
 
   /// <summary>
   /// Name of the LoRA adapter file (if any).
@@ -126,22 +124,37 @@ public class ONNXExecutor : IDisposable
   private Dictionary<(int min, int max, bool useCudaGraphs), SessionForBatchSize> sessionCache;
 
   /// <summary>
-  /// Batch size anchors for CUDA graph sessions.
+  /// Batch size anchors for sessions without CUDA graphs.
   /// Actual batch sizes will be rounded up to the nearest anchor.
   /// </summary>
-  private readonly int[] BATCH_SIZE_ANCHORS;
-
-
-  public readonly int InputsNumBits;
-
+  public readonly int[] BATCH_SIZE_ANCHORS_WITHOUT_GRAPH;
 
   /// <summary>
-  /// Batch sizes below this threshold will use CUDA graphs (if TensorRT is enabled).
-  /// Default value is 12. Set to 0 to disable CUDA graphs for all batch sizes.
-  /// Set to int.MaxValue to enable CUDA graphs for all batch sizes.
+  /// Batch size anchors for sessions with CUDA graphs.
+  /// Actual batch sizes will be rounded up to the nearest anchor.
   /// </summary>
-  public int UseCUDAGraphsBelowBatchSize { get; private set; } = 0; // disable, non-functional currently (see comments below)
+  public readonly int[] BATCH_SIZE_ANCHORS_WITH_GRAPH;
 
+  /// <summary>
+  /// Version of BATCH_SIZE_ANCHORS_WITH_GRAPH adjusted such that
+  /// the breakpoints are rounded up to represent the actual fixed size of the batch.
+  /// </summary>
+  private readonly int[] BATCH_SIZE_ANCHORS_WITH_GRAPH_ADJUSTED;
+
+  /// <summary>
+  /// Underlying CUDA device which this evaluator uses.
+  /// </summary>
+  private CUDADevice cudaDevice;
+
+  /// <summary>
+  /// Size of the input data type (in bits).
+  /// </summary>
+  public readonly int InputsNumBits;
+
+  /// <summary>
+  /// If a single session can support multiple batch size profiles.
+  /// (See notes; this is currently not supported in TensorRT (only TensorRT RTX).
+  /// </summary>
   public bool UseMultipleProfilesPerSession { get; private set; }
 
   /// <summary>
@@ -216,12 +229,21 @@ public class ONNXExecutor : IDisposable
       bool enableProfiling,
       bool retainRawOutputs,
       string[] outputNamesToRetrieve = null,
-      string loraAdapterFileName = null,
-      bool useIOBinding = false)
+      string loraAdapterFileName = null)
   {
-    if (UseCUDAGraphsBelowBatchSize != 0 && !useIOBinding)
+    if (!inputBuffersArePrepopulated)
     {
-      throw new ArgumentException("IOBinding mode must be used in CUDA graph mode.");
+      throw new NotImplementedException("Currently only inputBuffersArePrepopulated=true is supported.");
+    }
+
+    if (onnxFileName != null && !File.Exists(onnxFileName))
+    {
+      throw new Exception("ONNX file not found: " + onnxFileName);
+    }
+
+    if (minBatchSize != 1)
+    {
+      throw new NotImplementedException(shortID + ": Currently only minBatchSize=1 is supported.");
     }
 
     if (precisionNumBits != 32 && precisionNumBits != 16)
@@ -237,28 +259,29 @@ public class ONNXExecutor : IDisposable
 
     InputsNumBits = inputsNumBits;
     InputBuffersArePrepopulated = inputBuffersArePrepopulated;
-    UseIOBinding = useIOBinding;
 
     // Multiple engines only beneficial when using TensorRT
     bool multiEngineMode = useTensorRT;// && ONNXFileName != null && !ONNXFileName.ToLower().Contains("copy");
     UseMultipleProfilesPerSession = false;
 
-    //    BATCH_SIZE_ANCHORS = multiEngineMode ? [16, 64, 256] : [];
-    BATCH_SIZE_ANCHORS = multiEngineMode ? [48, 128] : [];
-    UseCUDAGraphsBelowBatchSize = 0;  // disabled due to ONNXRuntime bugs (see below)
-    // UseCUDAGraphsBelowBatchSize = 12;  // for testing
+    bool testMode = true;// ONNXFileName != null && ONNXFileName.ToLower().Contains("copy");
 
-    if (UseCUDAGraphsBelowBatchSize > 0)
+    BATCH_SIZE_ANCHORS_WITHOUT_GRAPH = [48, 128];
+    BATCH_SIZE_ANCHORS_WITH_GRAPH = testMode ? [12, 32, 56, 88] : null;
+
+#if NOT
+    // Possible ONNX bugs
+    // Graph capture/replay only works one time: https://github.com/microsoft/onnxruntime/issues/22583
+    // Device memory allocations only work on device with index 0: https://github.com/microsoft/onnxruntime/issues/24453
+#endif
+
+    if (BATCH_SIZE_ANCHORS_WITH_GRAPH != null)
     {
-      throw new NotImplementedException("CUDA graphs not currently supported due to ONNXRuntime bugs (see issues 22583 and 24453).");
-
-      // Graph capture/replay only works one time: https://github.com/microsoft/onnxruntime/issues/22583
-      // Device memory allocations only work on device with index 0: https://github.com/microsoft/onnxruntime/issues/24453
-    }
-
-    if (onnxFileName != null && !File.Exists(onnxFileName))
-    {
-      throw new Exception("ONNX file not found: " + onnxFileName);
+      BATCH_SIZE_ANCHORS_WITH_GRAPH_ADJUSTED = new int[BATCH_SIZE_ANCHORS_WITH_GRAPH.Length];
+      for (int i = 0; i < BATCH_SIZE_ANCHORS_WITH_GRAPH.Length; i++)
+      {
+        BATCH_SIZE_ANCHORS_WITH_GRAPH_ADJUSTED[i] = Math.Min(maxBatchSize, BATCH_SIZE_ANCHORS_WITH_GRAPH[i] + 1);
+      }
     }
 
     this.maxBatchSize = maxBatchSize;
@@ -271,10 +294,43 @@ public class ONNXExecutor : IDisposable
     // Store ONNX model bytes and session creation parameters for lazy initialization
     storedOnnxModelBytes = onnxModelBytes;
     sessionCreationParams = (shortID, inputNames, nonBatchDimensions, precisionNumBits,
-       gpuID, useTensorRT, minBatchSize, maxBatchSize,
-      enableProfiling, outputNamesToRetrieve);
+                             gpuID, useTensorRT, minBatchSize, maxBatchSize,
+                             enableProfiling, outputNamesToRetrieve);
 
-    // Extract multinet metadata if applicable
+    ExtractMultinetMetadataIfApplicable(onnxFileName, onnxModelBytes);
+
+    cudaDevice = CUDADevice.GetContext(gpuID);
+    runOptions = new RunOptions();
+
+    if (loraAdapterFileName != null)
+    {
+      ConsoleUtils.WriteLineColored(ConsoleColor.Red, "Install LoRA adapter " + loraAdapterFileName);
+      OrtLoraAdapter adapterCeres = OrtLoraAdapter.Create(loraAdapterFileName, null);
+      runOptions.AddActiveLoraAdapter(adapterCeres);
+    }
+
+    GPUID = gpuID;
+    PrecisionNumBits = precisionNumBits;
+    MinBatchSize = minBatchSize;
+    UseTensorRT = useTensorRT;
+    RetainRawInputs = retainRawOutputs;
+    LoRAAdapterFileName = loraAdapterFileName;
+
+    // On Linux it was found necessary to touch the instance before any of the operations below
+    // to prevent error about a session object not being created.
+    // https://github.com/microsoft/onnxruntime/issues/11572
+    OrtEnv ortInstance = OrtEnv.Instance();
+
+    // Initialize session cache
+    sessionCache = new Dictionary<(int, int, bool), SessionForBatchSize>();
+
+    Console.WriteLine($"ONNXExecutor initialized on GPU {GPUID} (sessions will be created on-demand)");
+    Warmup();
+  }
+
+
+  private void ExtractMultinetMetadataIfApplicable(string onnxFileName, byte[] onnxModelBytes)
+  {
     if (onnxFileName == null || onnxFileName.ToUpper().Contains("MULTINET"))
     {
       using (new TimingBlock("ONNX ModelProto parse"))
@@ -303,32 +359,6 @@ public class ONNXExecutor : IDisposable
         }
       }
     }
-
-    runOptions = new RunOptions();
-
-    if (loraAdapterFileName != null)
-    {
-      ConsoleUtils.WriteLineColored(ConsoleColor.Red, "Install LoRA adapter " + loraAdapterFileName);
-      OrtLoraAdapter adapterCeres = OrtLoraAdapter.Create(loraAdapterFileName, null);
-      runOptions.AddActiveLoraAdapter(adapterCeres);
-    }
-
-    GPUID = gpuID;
-    PrecisionNumBits = precisionNumBits;
-    MinBatchSize = minBatchSize;
-    UseTensorRT = useTensorRT;
-    RetainRawInputs = retainRawOutputs;
-    LoRAAdapterFileName = loraAdapterFileName;
-
-    // On Linux it was found necessary to touch the instance before any of the operations below
-    // to prevent error about a session object not being created.
-    // https://github.com/microsoft/onnxruntime/issues/11572
-    OrtEnv ortInstance = OrtEnv.Instance();
-
-    // Initialize session cache
-    sessionCache = new Dictionary<(int, int, bool), SessionForBatchSize>();
-
-    Console.WriteLine($"ONNXExecutor initialized on GPU {GPUID} (sessions will be created on-demand)");
   }
 
 
@@ -370,8 +400,10 @@ public class ONNXExecutor : IDisposable
     }
     else if (useTensorRT)
     {
+      // Batches for CUDA graphs always execute full set 
+      int minBatchSizetoUse = useCudaGraphs ? maxBatch : minBatch;
       so = CreateTensorRTSessionOptions(shortID, inputNames, nonBatchDimensions, gpuID,
-           precisionNumBits, minBatch, maxBatch, useCudaGraphs);
+                                        precisionNumBits, minBatchSizetoUse, maxBatch, useCudaGraphs);
     }
     else
     {
@@ -427,14 +459,14 @@ public class ONNXExecutor : IDisposable
   /// Creates TensorRT-specific session options.
   /// </summary>
   private SessionOptions CreateTensorRTSessionOptions(string shortID, string[] inputNames,
-                                                      string nonBatchDimensions, int gpuID,
-                                                      int precisionNumBits, int minBatch, int maxBatch, bool useCudaGraphs)
+                                                      string nonBatchDimensions, int gpuID, int precisionNumBits,
+                                                      int minBatch, int maxBatch, bool useCudaGraphs)
   {
     using OrtTensorRTProviderOptions trtProviderOptions = new OrtTensorRTProviderOptions();
     Dictionary<string, string> providerOptionsDict = new();
 
     providerOptionsDict["device_id"] = gpuID.ToString();
-    providerOptionsDict["trt_max_workspace_size"] = (8L * 1024 * 1024 * 1024).ToString();
+    providerOptionsDict["trt_max_workspace_size"] = (4L * 1024 * 1024 * 1024).ToString();
 
     if (inputNames != null)
     {
@@ -465,20 +497,19 @@ public class ONNXExecutor : IDisposable
       else
       {
         int optimalBatchSize;
-        if (BATCH_SIZE_ANCHORS.Length == 0)
+        if (minBatch <= 64 && maxBatch > 512)
         {
-          // Only one range with maximum probably very large (MaxBatchSize).
-          // Don't use midpoint with MinBatchSize (would probably be atypical large).
-          optimalBatchSize = Math.Min(maxBatch, 128);
+          // Don't set optimal excessively high
+          optimalBatchSize = Math.Min(maxBatch, 256);
         }
         else
         {
           // Use midpoint
-          optimalBatchSize = (int)MathUtils.RoundedUp((minBatch + maxBatch) / 2, 2);
+          optimalBatchSize = Math.Min(maxBatch, (int)MathUtils.RoundedUp((minBatch + maxBatch) / 2, 2));
         }
 
         providerOptionsDict["trt_profile_min_shapes"] = MakeShapeStr(minBatch);
-        providerOptionsDict["trt_profile_opt_shapes"] = MakeShapeStr((minBatch + maxBatch) / 2);
+        providerOptionsDict["trt_profile_opt_shapes"] = MakeShapeStr(optimalBatchSize);
         providerOptionsDict["trt_profile_max_shapes"] = MakeShapeStr(maxBatch);
       }
     }
@@ -501,20 +532,21 @@ public class ONNXExecutor : IDisposable
       Console.WriteLine();
     }
 
-    providerOptionsDict["trt_engine_cache_enable"] = "1";
-    providerOptionsDict["trt_engine_cache_path"] = trtSubdirectory;
 
-    string cachePrefix = FileUtils.FileNameSanitized(shortID);
-    cachePrefix += $"_bs{minBatch}-{maxBatch}";
-    if (useCudaGraphs)
+    const bool ENABLE_CACHING = true;
+    if (ENABLE_CACHING)
     {
-      cachePrefix += "_graph";
-    }
+      providerOptionsDict["trt_engine_cache_enable"] = "1";
+      providerOptionsDict["trt_engine_cache_path"] = trtSubdirectory;
 
-    providerOptionsDict["trt_engine_cache_prefix"] = cachePrefix;
-    providerOptionsDict["trt_timing_cache_enable"] = "1";
-    providerOptionsDict["trt_timing_cache_path"] = trtSubdirectory;
-    providerOptionsDict["trt_force_timing_cache"] = "1";
+      string cachePrefix = FileUtils.FileNameSanitized(shortID);
+      cachePrefix += $"_bs{minBatch}-{maxBatch}" + (useCudaGraphs ? "-graph" : "");
+
+      providerOptionsDict["trt_engine_cache_prefix"] = cachePrefix;
+      providerOptionsDict["trt_timing_cache_enable"] = "1";
+      providerOptionsDict["trt_timing_cache_path"] = trtSubdirectory;
+      providerOptionsDict["trt_force_timing_cache"] = "1";
+    }
 
     providerOptionsDict["trt_fp16_enable"] = precisionNumBits == 16 ? "1" : "0";
     providerOptionsDict["trt_builder_optimization_level"] = OptimizationLevel.ToString();
@@ -540,6 +572,28 @@ public class ONNXExecutor : IDisposable
     providerOptionsDict["device_id"] = gpuID.ToString();
     cudaProviderOptions.UpdateOptions(providerOptionsDict);
     return SessionOptions.MakeSessionOptionWithCudaProvider(cudaProviderOptions);
+  }
+
+
+  /// <summary>
+  /// Performs any initialization to prepare evaluator for delay-free execution.
+  /// </summary>
+  public void Warmup()
+  {
+    // Get engines at/around the breakpoints to trigger creation if needed.
+    foreach (int b in BATCH_SIZE_ANCHORS_WITHOUT_GRAPH)
+    {
+      _ = GetOrCreateSessionForBatchSize(b);
+      _ = GetOrCreateSessionForBatchSize(Math.Max(1, b - 1));
+    }
+
+    if (BATCH_SIZE_ANCHORS_WITH_GRAPH_ADJUSTED != null)
+    {
+      foreach (int b in BATCH_SIZE_ANCHORS_WITH_GRAPH_ADJUSTED)
+      {
+        _ = GetOrCreateSessionForBatchSize(b);
+      }
+    }
   }
 
 
@@ -675,9 +729,12 @@ public class ONNXExecutor : IDisposable
   /// <param name="numElements"></param>
   /// <returns></returns>
   internal List<(string, Memory<Float16>)> RunInputByteOutputFloat16((Memory<byte> input, int[] shape, string inputName, int numElements)[] inputs, int batchSize)
-    => UseIOBinding ? RunWithIOBinding<byte, Float16>(inputs, batchSize)
-                     : RunWithDirectRun<byte, Float16>(inputs, batchSize);
 
+  {
+    SessionForBatchSize session = GetOrCreateSessionForBatchSize(batchSize);
+    return session.UsesCUDAGraphs ? RunWithIOBinding<byte, Float16>(inputs, batchSize)
+                                  : RunWithDirectRun<byte, Float16>(inputs, batchSize);
+  }
 
 
   /// <summary>
@@ -692,14 +749,23 @@ public class ONNXExecutor : IDisposable
   /// <param name="numElements"></param>
   /// <returns></returns>
   internal List<(string, Memory<Float16>)> RunInputHalfOutputFloat16((Memory<Half> input, int[] shape, string inputName, int numElements)[] inputs, int batchSize)
-    => UseIOBinding ? RunWithIOBinding<Half, Float16>(inputs, batchSize)
-                    : RunWithDirectRun<Half, Float16>(inputs, batchSize);
+  {
+    SessionForBatchSize session = GetOrCreateSessionForBatchSize(batchSize);
+    return session.UsesCUDAGraphs ? RunWithIOBinding<Half, Float16>(inputs, batchSize)
+                                  : RunWithDirectRun<Half, Float16>(inputs, batchSize);
+  }
+
 
 
   public Memory<TDest> InputBufferForBatchSize<T, TDest>(int inputIndex, int batchSize)
                          where T : unmanaged
                          where TDest : unmanaged
   {
+    if (batchSize > maxBatchSize)
+    {
+      throw new ArgumentOutOfRangeException($"Batch size {batchSize} exceeds maximum of {maxBatchSize}");
+    }
+
     int evaluatorBatchSize = Math.Max(MinBatchSize, batchSize);
     T[] rawArray = ((T[])GetOrCreateSessionForBatchSize(evaluatorBatchSize).InputBuffers[inputIndex]);
     int numElements = ONNXHelpers.ProductDimensions(InputsMetadata.ElementAt(inputIndex).Value.Dimensions, batchSize);
@@ -716,27 +782,98 @@ public class ONNXExecutor : IDisposable
       where TInput : unmanaged
       where TBuffer : unmanaged
   {
+    //if (ONNXFileName.ToLower().Contains("copy"))  Console.WriteLine("zzzIOBINDING " + batchSize + "  " + ONNXFileName);
+
     if (batchSize < MinBatchSize)
     {
       throw new ArgumentException($"Batch size {batchSize} is less than minimum of {MinBatchSize}");
     }
+    List<(string, Memory<Float16>)> resultArrays = new();
 
-    throw new NotImplementedException();
+    lock (lockObject)
+    {
+      SessionForBatchSize context = GetOrCreateSessionForBatchSize(batchSize);
 
-    Debug.Assert(this.InputBuffersArePrepopulated);
+      cudaDevice.SetCurrent();
 
-#if NOT
-    Similar to RunWithDirectRun except just call this
-    
-    <no input prep reqiured!>
+      //runOptions.AddRunConfigEntry("gpu_graph_id", "1");
 
-    // Use IOBinding
-    context.IoBinding.SynchronizeBoundInputs();
-    context.Session.RunWithBinding(runOptions, context.IoBinding);
-    context.IoBinding.SynchronizeBoundOutputs();
+      //context.IoBinding.ClearBoundInputs();
 
-    <extract output similar to RunWithDirectRun>
-#endif
+      // DJE: found necessary to rebind every time
+      int inputVarIndex = 0;
+      foreach (var (name, ortValue, shape, cudaBuffer, cudaBufferFloat16) in context.InputOrtValues)
+      {
+        Array array = context.InputBuffers[inputVarIndex];
+        int numElements = (int)ONNXHelpers.ProductDimensionsLong(shape, batchSize);
+        int numBytes = numElements * Marshal.SizeOf(typeof(TInput));
+
+        switch (typeof(TInput))
+        {
+          case Type t when t == typeof(byte):
+            cudaBuffer.CopyToDevice((byte[])array, 0, 0, numBytes);
+            break;
+
+          case Type t when t == typeof(Half):
+            cudaBufferFloat16.CopyToDevice((Float16[])array, 0, 0, numBytes);
+            break;
+
+          default:
+            throw new NotImplementedException();
+        }
+
+        context.IoBinding.BindInput(name, ortValue);
+        inputVarIndex++;
+      }
+
+      // For CUDA graphs, bindings are already set up at session creation time
+      // We just need to synchronize and run
+      cudaDevice.Context.Synchronize();
+      context.Session.RunWithBinding(runOptions, context.IoBinding);
+      cudaDevice.Context.Synchronize();
+
+      int outputVarIndex = 0;
+      foreach (var (name, ortValue, shape, cudaBuffer) in context.OutputOrtValues)
+      {
+        int numElements = (int)ONNXHelpers.ProductDimensionsLong(shape, batchSize);
+        int numBytes = numElements * Marshal.SizeOf(typeof(Float16));
+
+        cudaBuffer.CopyToHost((Float16[])context.OutputBuffers[outputVarIndex].buffer, 0, 0, numBytes);
+        outputVarIndex++;
+      }
+
+      // Package up restult array.
+      for (int i = 0; i < context.OutputOrtValues.Count; i++)
+      {
+        var (name, ortValue, shape, cudaBuffer) = context.OutputOrtValues[i];
+        NodeMetadata metadata = context.OutputBuffers[i].metadata;
+        int usedElements = ONNXHelpers.ProductDimensions(metadata.Dimensions, batchSize);
+
+        if (typeof(TBuffer) == typeof(Float16))
+        {
+          resultArrays.Add((name, new Memory<Float16>((Float16[])context.OutputBuffers[i].buffer, 0, usedElements)));
+        }
+        else if (typeof(TBuffer) == typeof(float))
+        {
+          // Convert to Float16 for return. TODO: improve efficiency (avoid allocation)
+          float[] resultBuffer = (float[])context.OutputBuffers[i].buffer;
+          Float16[] retBuffer16 = new Float16[usedElements];
+          for (int j = 0; j < usedElements; j++)
+          {
+            retBuffer16[j] = (Float16)resultBuffer[j];
+          }
+
+          resultArrays.Add((name, new Memory<Float16>(retBuffer16, 0, usedElements)));
+        }
+        else
+        {
+          throw new NotSupportedException($"Unsupported output buffer type {typeof(TBuffer)}");
+        }
+
+      }
+    }
+
+    return resultArrays;
   }
 
 
@@ -748,6 +885,7 @@ public class ONNXExecutor : IDisposable
       where TInput : unmanaged
       where TBuffer : unmanaged
   {
+    //    if (ONNXFileName.ToLower().Contains("copy")) Console.WriteLine("zzzDirectRun " + batchSize + " --------------------");
     if (batchSize < MinBatchSize)
     {
       throw new ArgumentException($"Batch size {batchSize} is less than minimum of {MinBatchSize}");
@@ -758,39 +896,6 @@ public class ONNXExecutor : IDisposable
     lock (lockObject)
     {
       SessionForBatchSize context = GetOrCreateSessionForBatchSize(batchSize);
-
-      if (!InputBuffersArePrepopulated)
-      {
-        throw new NotImplementedException();
-#if NOT
-        // Copy into backing CPU buffers
-        for (int i = 0; i < inputs.Length; i++)
-        {
-          (Memory<TInput> input, int[] shape, string _, int numElements) = inputs[i];
-          Array destArray = context.InputBuffers[i];
-
-          if (typeof(TInput) == typeof(byte))
-          {
-            Span<byte> src = MemoryMarshal.Cast<TInput, byte>(input.Span);
-            src.Slice(0, numElements).CopyTo(((byte[])destArray).AsSpan(0, numElements));
-          }
-          else if (typeof(TInput) == typeof(Half))
-          {
-            Span<Float16> src = MemoryMarshal.Cast<Half, Float16>(MemoryMarshal.Cast<TInput, Half>(input.Span));
-            src.Slice(0, numElements).CopyTo(((Float16[])destArray).AsSpan(0, numElements));
-          }
-          else if (typeof(TInput) == typeof(float))
-          {
-            Span<float> src = MemoryMarshal.Cast<TInput, float>(input.Span);
-            src.Slice(0, numElements).CopyTo(((float[])destArray).AsSpan(0, numElements));
-          }
-          else
-          {
-            throw new NotSupportedException($"Unsupported input type {typeof(TInput)}");
-          }
-        }
-#endif
-      }
 
       // Create temporary OrtValues with actual batch size for this run
       List<OrtValue> inputOrtValuesList = new List<OrtValue>();
@@ -904,12 +1009,15 @@ public class ONNXExecutor : IDisposable
         TensorPrimitives.ConvertToSingle(input.Span, inputBufferSpanFloat);
       }
 
-      if (!UseIOBinding)
+      if (!context.UsesCUDAGraphs)
       {
         // Create temporary OrtValues for direct Run
         OrtMemoryInfo cpuMemInfo = OrtMemoryInfo.DefaultInstance;
         List<OrtValue> inputOrtValuesList = new List<OrtValue>();
-        List<string> inputNames = new List<string>();
+        List<OrtValue> outputOrtValuesList2 = new List<OrtValue>();
+
+        List<string> inputNames = new List<string>(InputsMetadata.Count);
+        List<string> outputNames2 = new List<string>(); // TODO: preallocate
 
         try
         {
@@ -1007,7 +1115,7 @@ public class ONNXExecutor : IDisposable
   /// </summary>
   public void EndProfiling()
   {
-    foreach (var context in sessionCache.Values)
+    foreach (SessionForBatchSize context in sessionCache.Values)
     {
       context.Session.EndProfiling();
     }
@@ -1034,7 +1142,7 @@ public class ONNXExecutor : IDisposable
       // Dispose CUDA graph contexts
       if (sessionCache != null)
       {
-        foreach (var context in sessionCache.Values)
+        foreach (SessionForBatchSize context in sessionCache.Values)
         {
           context.Dispose();
         }
@@ -1047,24 +1155,41 @@ public class ONNXExecutor : IDisposable
   }
 
 
-  private (int min, int max, bool useCudaGraphs) FindBatchSizeBucket(int batchSize)
+  private (int min, int max, bool useCudaGraphs) FindBatchSizeBucket(int batchSize, bool useCudaGraphs)
   {
+
+    // Select the appropriate anchors array
+    int[] anchors = useCudaGraphs ? BATCH_SIZE_ANCHORS_WITH_GRAPH_ADJUSTED
+                                  : BATCH_SIZE_ANCHORS_WITHOUT_GRAPH;
+
+    // If no anchors are configured, fallback to a single bucket spanning the full range
+    if (anchors == null || anchors.Length == 0)
+    {
+      return (MinBatchSize, maxBatchSize, useCudaGraphs);
+    }
+
     int currentMin = MinBatchSize;
-    foreach (int anchor in BATCH_SIZE_ANCHORS)
+    foreach (int anchor in anchors)
     {
       int currentMax = anchor - 1;
       if (batchSize >= currentMin && batchSize <= currentMax)
       {
-        bool useCudaGraphs = batchSize < UseCUDAGraphsBelowBatchSize;
         return (currentMin, currentMax, useCudaGraphs);
       }
       currentMin = anchor;
     }
 
-    // If batchSize is larger than or equal to the last anchor, it belongs to the last bucket.
-    // The max of this bucket is the global maxBatchSize for the executor.
-    bool useCudaGraphsForLast = batchSize < UseCUDAGraphsBelowBatchSize;
-    return (currentMin, maxBatchSize, useCudaGraphsForLast);
+    // If batchSize is larger than or equal to the last anchor
+    int lastAnchor = anchors[^1];
+    if (useCudaGraphs)
+    {
+      // Batch size exceeds CUDA graph anchors - fall back to non-CUDA-graph mode
+      // and recursively find the appropriate bucket
+      return FindBatchSizeBucket(batchSize, useCudaGraphs: false);
+    }
+
+    // Non-graph: catch-all bucket to global max
+    return (currentMin, maxBatchSize, useCudaGraphs);
   }
 
 
@@ -1074,7 +1199,11 @@ public class ONNXExecutor : IDisposable
   /// </summary>
   private SessionForBatchSize GetOrCreateSessionForBatchSize(int batchSize)
   {
-    (int min, int max, bool useCudaGraphs) bucketKey = FindBatchSizeBucket(batchSize);
+    int effectiveBatchSize = Math.Max(MinBatchSize, batchSize);
+
+    bool useCudaGraphs = DetermineIfCUDAGraphsShouldBeUsed(effectiveBatchSize);
+
+    (int min, int max, bool useCudaGraphs) bucketKey = FindBatchSizeBucket(batchSize, useCudaGraphs);
     if (sessionCache.TryGetValue(bucketKey, out var context))
     {
       return context;
@@ -1087,8 +1216,14 @@ public class ONNXExecutor : IDisposable
     }
 
     // Create new session context for this batch size anchor
-    string graphStatus = bucketKey.useCudaGraphs ? "(CUDA graph)" : "(no CUDA graphs)";
-    ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"Creating new session for batch size bucket [{bucketKey.min}..{bucketKey.max}] {graphStatus} (requested: {batchSize}) ... ", endLine: false);
+    if (bucketKey.useCudaGraphs)
+    {
+      ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"Creating new graph session for batch size {bucketKey.max} (requested: {batchSize}) ... ", endLine: false);
+    }
+    else
+    {
+      ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"Creating new non-graph session for batch size bucket [{bucketKey.min}..{bucketKey.max}] (requested: {batchSize}) ... ", endLine: false);
+    }
 
     // Take a global lock during session creation for two reasons:
     //   - we don't want to try to create TensorRT engines for the same network simultaneously
@@ -1100,22 +1235,16 @@ public class ONNXExecutor : IDisposable
     {
       lock (CUDADevice.InitializingCUDAContextLockObj)
       {
-        context = CreateSessionForBatchSize(bucketKey.min, bucketKey.max);
+        context = CreateSessionForBatchSize(bucketKey.min, bucketKey.max, useCudaGraphs);
       }
     }
     sessionCache[bucketKey] = context;
 
     ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, "done in " + Math.Round(stats.ElapsedTimeSecs, 2) + " seconds.");
 
-    if (UseIOBinding)
+    if (context.UsesCUDAGraphs)
     {
-      // Bind inputs and outputs once. This is crucial for CUDA graphs.
-      // The bindings will be reused for every run with this session context.
-      foreach (var (name, ortValue, _) in context.InputOrtValues)
-      {
-        context.IoBinding.BindInput(name, ortValue);
-      }
-      foreach (var (name, ortValue, _) in context.OutputOrtValues)
+      foreach (var (name, ortValue, _, cudaBuffer) in context.OutputOrtValues)
       {
         context.IoBinding.BindOutput(name, ortValue);
       }
@@ -1124,19 +1253,61 @@ public class ONNXExecutor : IDisposable
     return context;
   }
 
+
+  private bool DetermineIfCUDAGraphsShouldBeUsed(int effectiveBatchSize)
+  {
+    // Determine if CUDA graphs should be used based on:
+    // 1. CUDA graphs are configured (BATCH_SIZE_ANCHORS_WITH_GRAPH is not null)
+    // 2. There exists a suitable batch size range
+    // 3. The effective batch size is close enough to the range maximum (within 50% of anchor value)
+    bool useCudaGraphs = false;
+    if (BATCH_SIZE_ANCHORS_WITH_GRAPH_ADJUSTED != null && BATCH_SIZE_ANCHORS_WITH_GRAPH_ADJUSTED.Length > 0)
+    {
+      // Find the smallest anchor that can accommodate the effective batch size
+      int? closestGraphMaxBatch = null;
+      foreach (int anchor in BATCH_SIZE_ANCHORS_WITH_GRAPH_ADJUSTED)
+      {
+        if (effectiveBatchSize <= anchor)
+        {
+          closestGraphMaxBatch = anchor;
+          break;
+        }
+      }
+
+      // Use CUDA graphs if we found a suitable range and the batch size is within 40% of the anchor
+      // (or if the unused positions would be very small, i.e., less than 12).
+      if (closestGraphMaxBatch.HasValue)
+      {
+        float maxUnusedPositions = Math.Max(12, closestGraphMaxBatch.Value * 0.40f);
+        if ((closestGraphMaxBatch.Value - effectiveBatchSize) <= maxUnusedPositions)
+        {
+          useCudaGraphs = true;
+        }
+      }
+    }
+
+    return useCudaGraphs;
+  }
+
+
+  /// <summary>
+  /// Converts a ManagedCUDA CUdeviceptr to an IntPtr for use with ONNX Runtime.
+  /// </summary>
+  /// <param name="dptr"></param>
+  /// <returns></returns>
+  static IntPtr CUdeviceptrToIntPtr(CUdeviceptr dptr) => (IntPtr)(long)(ulong)dptr;
+
+
   /// <summary>
   /// Creates a new InferenceSession and SessionContext for a specific batch size.
   /// Each session gets its own TensorRT engine optimized for that batch size,
   /// enabling proper CUDA graph capture.
   /// </summary>
-  private SessionForBatchSize CreateSessionForBatchSize(int minBatch, int maxBatch)
+  private SessionForBatchSize CreateSessionForBatchSize(int minBatch, int maxBatch, bool useCudaGraphs)
   {
     var (shortID, inputNames, nonBatchDimensions, precisionNumBits,
-     gpuID, useTensorRT, minBatchSize, maxBatchSize,
+         gpuID, useTensorRT, minBatchSize, maxBatchSize,
          enableProfiling, outputNamesToRetrieve) = sessionCreationParams;
-
-    // Determine if CUDA graphs should be enabled for this batch size range
-    bool useCudaGraphs = maxBatch < UseCUDAGraphsBelowBatchSize;
 
     // Create session options
     using SessionOptions so = CreateSessionOptions(sessionCreationParams, minBatch, maxBatch, useCudaGraphs);
@@ -1160,16 +1331,29 @@ public class ONNXExecutor : IDisposable
       UsesCUDAGraphs = useCudaGraphs,
       Session = newSession,
       IoBinding = newIoBinding,
-      InputOrtValues = new List<(string, OrtValue, long[])>(),
-      OutputOrtValues = new List<(string, OrtValue, long[])>(),
+      InputOrtValues = new List<(string, OrtValue, long[], CudaDeviceVariable<byte>, CudaDeviceVariable<Float16>)>(),
+      OutputOrtValues = new List<(string, OrtValue, long[], CudaDeviceVariable<Float16>)>(),
       InputBuffers = new List<Array>(),
       OutputBuffers = new List<(string, NodeMetadata, Array)>()
     };
 
-    // Use CPU memory for OrtValues - IOBinding will handle GPU transfer
-    OrtMemoryInfo cpuMemInfo = OrtMemoryInfo.DefaultInstance;
+    // Determine memory allocation type based on CUDA graphs usage
+    OrtMemoryInfo memInfo;
+    OrtAllocator allocator = null;
 
-    // Create OrtValues for inputs - allocated on CPU
+    if (useCudaGraphs)
+    {
+      // For CUDA graphs, use GPU-allocated pinned memory
+      memInfo = new(OrtMemoryInfo.allocatorCUDA, OrtAllocatorType.DeviceAllocator, gpuID, OrtMemType.CpuOutput);
+      allocator = new OrtAllocator(newSession, memInfo);
+    }
+    else
+    {
+      // Use CPU memory for non-CUDA graph scenarios
+      memInfo = OrtMemoryInfo.DefaultInstance;
+    }
+
+    // Create OrtValues for inputs
     if (InputsNumBits < 32)
     {
       if (InputsNumBits == 8)
@@ -1180,8 +1364,27 @@ public class ONNXExecutor : IDisposable
         {
           (string name, NodeMetadata metadata, bool isKnownShape, byte[] value) buffer = inputBuffersByte[i];
           long[] shape = ONNXHelpers.ToLongArray(buffer.metadata.Dimensions, maxBatch);
-          OrtValue ortValue = UseIOBinding ? OrtValue.CreateTensorValueFromMemory(cpuMemInfo, new Memory<byte>(buffer.value), shape) : default;
-          context.InputOrtValues.Add((buffer.name, ortValue, shape));
+
+          OrtValue ortValue;
+          CudaDeviceVariable<byte> cudaBuffer = default;
+          if (useCudaGraphs)
+          {
+            // Allocate GPU memory for CUDA graphs
+            //            ortValue = OrtValue.CreateAllocatedTensorValue(allocator, TensorElementType.UInt8, shape);
+            long numElements = ONNXHelpers.ProductDimensions(buffer.metadata.Dimensions, maxBatch);
+            cudaDevice.SetCurrent();
+            cudaBuffer = new CudaDeviceVariable<byte>(numElements);
+
+            // 5) Wrap existing DEVICE pointers as OrtValue tensors (no copies; ORT doesn't own memory)
+            ortValue = OrtValue.CreateTensorValueWithData(memInfo, TensorElementType.UInt8, shape,
+                                                          CUdeviceptrToIntPtr(cudaBuffer.DevicePointer), sizeof(byte) * numElements);
+          }
+          else
+          {
+            ortValue = default; // Will create on-demand in RunWithDirectRun
+          }
+
+          context.InputOrtValues.Add((buffer.name, ortValue, shape, cudaBuffer, default));
         }
       }
       else if (InputsNumBits == 16)
@@ -1192,8 +1395,26 @@ public class ONNXExecutor : IDisposable
         {
           (string name, NodeMetadata metadata, bool isKnownShape, Float16[] value) buffer = inputBuffers16[i];
           long[] shape = ONNXHelpers.ToLongArray(buffer.metadata.Dimensions, maxBatch);
-          OrtValue ortValue = UseIOBinding ? OrtValue.CreateTensorValueFromMemory(cpuMemInfo, new Memory<Float16>(buffer.value), shape) : default;
-          context.InputOrtValues.Add((buffer.name, ortValue, shape));
+
+          OrtValue ortValue;
+          CudaDeviceVariable<Float16> cudaBufferFloat16 = default;
+
+          if (useCudaGraphs)
+          {
+            long numElements = ONNXHelpers.ProductDimensions(buffer.metadata.Dimensions, maxBatch);
+            cudaDevice.SetCurrent();
+            cudaBufferFloat16 = new CudaDeviceVariable<Float16>(numElements);
+            // 5) Wrap existing DEVICE pointers as OrtValue tensors (no copies; ORT doesn't own memory)
+            ortValue = OrtValue.CreateTensorValueWithData(memInfo, TensorElementType.Float16, shape,
+                                                          CUdeviceptrToIntPtr(cudaBufferFloat16.DevicePointer),
+                                                          2 * numElements);
+          }
+          else
+          {
+            ortValue = default; // Will create on-demand in RunWithDirectRun
+          }
+
+          context.InputOrtValues.Add((buffer.name, ortValue, shape, default, cudaBufferFloat16));
         }
       }
       else
@@ -1202,12 +1423,32 @@ public class ONNXExecutor : IDisposable
       }
 
       (string name, NodeMetadata metadata, bool isKnownShape, Float16[] value)[] outputBuffers16 = ONNXHelpers.CreateBuffers<Float16>(sessionOutputMetadata, maxBatch, outputNamesToRetrieve);
-      foreach (var buffer in outputBuffers16)
+      foreach (var outputBuffer in outputBuffers16)
       {
-        context.OutputBuffers.Add((buffer.name, buffer.metadata, buffer.value));
-        long[] shape = ONNXHelpers.ToLongArray(buffer.metadata.Dimensions, maxBatch);
-        OrtValue ortValue = UseIOBinding ? OrtValue.CreateTensorValueFromMemory(cpuMemInfo, new Memory<Float16>(buffer.value), shape) : default;
-        context.OutputOrtValues.Add((buffer.name, ortValue, shape));
+        context.OutputBuffers.Add((outputBuffer.name, outputBuffer.metadata, outputBuffer.value));
+        long[] shape = ONNXHelpers.ToLongArray(outputBuffer.metadata.Dimensions, maxBatch);
+
+        OrtValue ortValue;
+        CudaDeviceVariable<Float16> cudaBuffer = default;
+
+        if (useCudaGraphs)
+        {
+          // Allocate GPU memory for CUDA graphs
+          //          ortValue = OrtValue.CreateAllocatedTensorValue(allocator, TensorElementType.Float16, shape);
+          long numElements = ONNXHelpers.ProductDimensions(outputBuffer.metadata.Dimensions, maxBatch);
+          cudaDevice.SetCurrent();
+          cudaBuffer = new CudaDeviceVariable<Float16>(numElements);
+
+          ortValue = OrtValue.CreateTensorValueWithData(memInfo, TensorElementType.Float16, shape,
+                                                        CUdeviceptrToIntPtr(cudaBuffer.DevicePointer),
+                                                        Marshal.SizeOf<Float16>() * numElements);
+        }
+        else
+        {
+          ortValue = default;
+        }
+
+        context.OutputOrtValues.Add((outputBuffer.name, ortValue, shape, cudaBuffer));
       }
     }
     else
@@ -1219,8 +1460,23 @@ public class ONNXExecutor : IDisposable
       {
         (string name, NodeMetadata metadata, bool isKnownShape, float[] value) buffer = inputBuffers32[i];
         long[] shape = ONNXHelpers.ToLongArray(buffer.metadata.Dimensions, maxBatch);
-        OrtValue ortValue = UseIOBinding ? OrtValue.CreateTensorValueFromMemory(cpuMemInfo, new Memory<float>(buffer.value), shape) : default;
-        context.InputOrtValues.Add((buffer.name, ortValue, shape));
+
+        OrtValue ortValue;
+        CudaDeviceVariable<byte> cudaBuffer = default;
+
+        if (useCudaGraphs)
+        {
+          ortValue = OrtValue.CreateAllocatedTensorValue(allocator, TensorElementType.Float, shape);
+          throw new Exception("need to adjust data type from byte to Float16 and allocate here");
+          cudaDevice.SetCurrent();
+          //cudaBuffer = new CudaDeviceVariable<float>(ONNXHelpers.ProductDimensions(buffer.metadata.Dimensions, maxBatch) * sizeof(float));
+        }
+        else
+        {
+          ortValue = default;
+        }
+
+        context.InputOrtValues.Add((buffer.name, ortValue, shape, cudaBuffer, default));
       }
 
       var outputBuffers32 = ONNXHelpers.CreateBuffers<float>(sessionOutputMetadata, maxBatch, outputNamesToRetrieve);
@@ -1228,10 +1484,28 @@ public class ONNXExecutor : IDisposable
       {
         context.OutputBuffers.Add((buffer.name, buffer.metadata, buffer.value));
         long[] shape = ONNXHelpers.ToLongArray(buffer.metadata.Dimensions, maxBatch);
-        OrtValue ortValue = UseIOBinding ? OrtValue.CreateTensorValueFromMemory(cpuMemInfo, new Memory<float>(buffer.value), shape) : default;
-        context.OutputOrtValues.Add((buffer.name, ortValue, shape));
+
+        OrtValue ortValue;
+        CudaDeviceVariable<Float16> cudaBuffer = default;
+
+        if (useCudaGraphs)
+        {
+          ortValue = OrtValue.CreateAllocatedTensorValue(allocator, TensorElementType.Float, shape);
+          cudaDevice.SetCurrent();
+          //cudaBuffer = new CudaDeviceVariable<Float16>(ONNXHelpers.ProductDimensions(buffer.metadata.Dimensions, maxBatch));
+          throw new Exception("need to adjust data type from Float16 to float and allocate here");
+        }
+        else
+        {
+          ortValue = default;
+        }
+
+        context.OutputOrtValues.Add((buffer.name, ortValue, shape, cudaBuffer));
       }
     }
+
+    // Store allocators in context so they can be disposed later
+    context.Allocator = allocator;
 
     return context;
   }
@@ -1287,112 +1561,31 @@ public class ONNXExecutor : IDisposable
     public bool UsesCUDAGraphs { get; set; }
     public InferenceSession Session { get; set; }
     public OrtIoBinding IoBinding { get; set; }
-    public List<(string name, OrtValue ortValue, long[] shape)> InputOrtValues { get; set; }
-    public List<(string name, OrtValue ortValue, long[] shape)> OutputOrtValues { get; set; }
+    public List<(string name, OrtValue ortValue, long[] shape, CudaDeviceVariable<byte> cudaBufferByte, CudaDeviceVariable<Float16> cudaBufferFloat16)> InputOrtValues { get; set; }
+    public List<(string name, OrtValue ortValue, long[] shape, CudaDeviceVariable<Float16> cudaBuffer)> OutputOrtValues { get; set; }
     public List<Array> InputBuffers { get; set; }
     public List<(string name, NodeMetadata metadata, Array buffer)> OutputBuffers { get; set; }
+    public OrtAllocator Allocator { get; set; }
 
     public void Dispose()
     {
-      foreach ((string _, OrtValue ortValue, long[] _) in InputOrtValues)
+      foreach ((string _, OrtValue ortValue, long[] _, CudaDeviceVariable<byte> cudaBuffer, CudaDeviceVariable<Float16> cudaBufferFloat16) in InputOrtValues)
       {
         ortValue?.Dispose();
+        cudaBuffer?.Dispose();
+        cudaBufferFloat16?.Dispose();
       }
-      foreach ((string _, OrtValue ortValue, long[] _) in OutputOrtValues)
+      foreach ((string _, OrtValue ortValue, long[] _, CudaDeviceVariable<Float16> cudaBuffer) in OutputOrtValues)
       {
         ortValue?.Dispose();
+        cudaBuffer?.Dispose();
       }
+
       InputOrtValues?.Clear();
       OutputOrtValues?.Clear();
       IoBinding?.Dispose();
       Session?.Dispose();
+      Allocator?.Dispose();
     }
-  }
-}
-
-/// <summary>
-/// TODO: Move this into Ceres.Base
-/// </summary>
-public static class MemoryCasted
-{
-  public static Memory<TDest> AsMemory<TSrc, TDest>(TSrc[] array)
-      where TSrc : unmanaged
-      where TDest : unmanaged
-  {
-    if (array is null) { return Memory<TDest>.Empty; }
-    if (Unsafe.SizeOf<TSrc>() != Unsafe.SizeOf<TDest>())
-    {
-      throw new NotSupportedException("TSrc and TDest must be the same size.");
-    }
-    // Types must be blittable / no refs.
-    if (RuntimeHelpers.IsReferenceOrContainsReferences<TSrc>() ||
-        RuntimeHelpers.IsReferenceOrContainsReferences<TDest>())
-    {
-      throw new NotSupportedException("TSrc/TDest must be unmanaged (no references).");
-    }
-
-    return new ReinterpretingArrayMemoryManager<TSrc, TDest>(array).Memory;
-  }
-
-  private sealed class ReinterpretingArrayMemoryManager<TFrom, TTo> : MemoryManager<TTo>
-      where TFrom : unmanaged
-      where TTo : unmanaged
-  {
-    private readonly TFrom[] _array;
-    private MemoryHandle _pinned;
-    private bool _isPinned;
-
-    public ReinterpretingArrayMemoryManager(TFrom[] array)
-    {
-      _array = array ?? Array.Empty<TFrom>();
-    }
-
-    public override Span<TTo> GetSpan()
-    {
-      if (_array.Length == 0) { return Span<TTo>.Empty; }
-
-      // Reinterpret ref to first element, then create a span of same element count.
-      ref TFrom srcRef = ref MemoryMarshal.GetArrayDataReference(_array);
-      ref TTo dstRef = ref Unsafe.As<TFrom, TTo>(ref srcRef);
-      return MemoryMarshal.CreateSpan(ref dstRef, _array.Length);
-    }
-
-    public override unsafe MemoryHandle Pin(int elementIndex = 0)
-    {
-      if (_isPinned) { throw new InvalidOperationException("Already pinned."); }
-      if ((uint)elementIndex > (uint)_array.Length)
-      {
-        throw new ArgumentOutOfRangeException(nameof(elementIndex));
-      }
-
-      // Pin the source array and adjust the pointer for the TTo element index.
-      _pinned = new Memory<TFrom>(_array).Pin();
-      _isPinned = true;
-
-      byte* basePtr = (byte*)_pinned.Pointer;
-      byte* adjPtr = basePtr + (nuint)elementIndex * (nuint)Unsafe.SizeOf<TTo>();
-
-      // Tie lifetime to this manager so Unpin() is called on dispose.
-      return new MemoryHandle(adjPtr, default, this);
-    }
-
-    public override void Unpin()
-    {
-      if (_isPinned)
-      {
-        _pinned.Dispose();
-        _isPinned = false;
-      }
-    }
-
-    protected override void Dispose(bool disposing)
-    {
-      if (disposing && _isPinned)
-      {
-        _pinned.Dispose();
-        _isPinned = false;
-      }
-    }
-
   }
 }

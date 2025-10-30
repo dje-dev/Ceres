@@ -103,7 +103,7 @@ public static class ONNXHelpers
   }
 
 
-  public static long ProductDimensions(long[] dims, int negativeOneFillInValue = 1)
+  public static long ProductDimensionsLong(long[] dims, int negativeOneFillInValue = 1)
   {
     long productNumElements = 1;
     foreach (long dimSize in dims)

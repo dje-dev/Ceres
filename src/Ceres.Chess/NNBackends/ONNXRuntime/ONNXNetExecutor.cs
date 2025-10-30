@@ -23,6 +23,7 @@ using Ceres.Chess.LC0.Batches;
 using Ceres.Chess.NNEvaluators;
 using Ceres.Chess.NNEvaluators.Defs;
 using Chess.Ceres.NNEvaluators;
+using System.Threading;
 
 #endregion
 
@@ -34,15 +35,6 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
   /// </summary>
   public class ONNXNetExecutor : IDisposable
   {
-    /// In August 2024 with TensorRT 10.2 it was discovered that (very) incorrect results
-    /// were returned when batch size 1 was used with certain Ceres networks, presumably a bug.
-    /// It was also observed that batch size 4 was similar in speed as batch size 1.
-    /// Therefore as a workaround we use a minimum batch size of 4 for TensorRT execution provider.
-    /// Subsequent tests with TensorRT 10.5 showed the problem remained,
-    /// sometimes returning NaN or random values for certain networks.
-    /// </summary>
-    internal const int MIN_BATCH_SIZE_TENSOR_RT_CERES = 4;
-
     public const int TPG_BYTES_PER_SQUARE_RECORD = 137; // TODO: should be referenced from TPGRecord
     public const int TPG_MAX_MOVES = 92; //  // TODO: should be referenced from TPGRecord
 
@@ -170,9 +162,7 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
       UseTensorRT = deviceType == NNDeviceType.GPU && useTensorRT;
       RetainRawOutputs = retainRawOutputs;
 
-      MinBatchSize = NetType == NetTypeEnum.TPG
-                  && UseTensorRT
-                  ? MIN_BATCH_SIZE_TENSOR_RT_CERES : 1;
+      MinBatchSize = 1;
       LoRAAdapterFileName = loraAdapterFileName;
 
       int deviceIndex;
@@ -232,37 +222,16 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
                                                                  Predicate<int> shouldUseStateForPos = null)
     {
       Debug.Assert(NetType == NetTypeEnum.TPG);
-      int numPositionsInBatchSentToExecutor = numPositionsUsed < MinBatchSize ? MinBatchSize : numPositionsUsed;
-
 
       List<(string, Memory<Float16>)> eval;
 
       int NUM_INPUTS = executor.NumInputs;
       (Memory<byte> input, int[] shape)[] inputs = new (Memory<byte> input, int[] shape)[NUM_INPUTS];
 
-      int TOTAL_LEN = numPositionsInBatchSentToExecutor * 64 * TPG_BYTES_PER_SQUARE_RECORD;
-      Memory<byte> input0;
-      if (numPositionsUsed == numPositionsInBatchSentToExecutor)
-      {
-        input0 = flatValuesPrimary.Slice(0, TOTAL_LEN);
-      }
-      else
-      {
-        input0 = new byte[numPositionsInBatchSentToExecutor * 64 * TPG_BYTES_PER_SQUARE_RECORD];
-        flatValuesPrimary.CopyTo(input0);
+      int TOTAL_LEN = numPositionsUsed * 64 * TPG_BYTES_PER_SQUARE_RECORD;
+      Memory<byte> input0 = flatValuesPrimary.Slice(0, TOTAL_LEN);
 
-        // Avoid sending uninitialized data for the unused positions
-        // (the neural net might return NaN for an out of distribution input).
-        // Instead fill buffer with a known good position.
-        Span<byte> spanFirstPosition = flatValuesPrimary.Span.Slice(0, 64 * TPG_BYTES_PER_SQUARE_RECORD);
-        for (int i = numPositionsUsed; i < numPositionsInBatchSentToExecutor; i++)
-        {
-          spanFirstPosition.CopyTo(input0.Span.Slice(i * 64 * TPG_BYTES_PER_SQUARE_RECORD,
-                                                         64 * TPG_BYTES_PER_SQUARE_RECORD));
-        }
-      }
-
-      inputs[0] = (input0, [numPositionsInBatchSentToExecutor, 64, TPG_BYTES_PER_SQUARE_RECORD]);
+      inputs[0] = (input0, [numPositionsUsed, 64, TPG_BYTES_PER_SQUARE_RECORD]);
 
       if (inputs.Length > 1)
       {
@@ -270,8 +239,8 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
         if (flatValuesState.IsEmpty)
         {
           // No state available, pass all zeroes.
-          inputs[1] = (new byte[numPositionsInBatchSentToExecutor * 64 * NNEvaluator.SIZE_STATE_PER_SQUARE],
-                     new int[] { numPositionsInBatchSentToExecutor, 64, NNEvaluator.SIZE_STATE_PER_SQUARE });
+          inputs[1] = (new byte[numPositionsUsed * 64 * NNEvaluator.SIZE_STATE_PER_SQUARE],
+                     new int[] { numPositionsUsed, 64, NNEvaluator.SIZE_STATE_PER_SQUARE });
         }
         else
         {
@@ -281,7 +250,7 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
           // TODO: improve efficiency
           //            Half[] states1D = new Half[numPositionsInBatchSentToExecutor * 64 * NNEvaluator.SIZE_STATE_PER_SQUARE];
           throw new Exception("Needs remeditation; the inputs are assumed all byte but for this case the second one should be Half");
-          byte[] states1D = new byte[numPositionsInBatchSentToExecutor * 64 * NNEvaluator.SIZE_STATE_PER_SQUARE];
+          byte[] states1D = new byte[numPositionsUsed * 64 * NNEvaluator.SIZE_STATE_PER_SQUARE];
           for (int i = 0; i < numPositionsUsed; i++)
           {
             if (flatValuesStateSpan[i] == null
@@ -314,16 +283,7 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
 
       eval = executor.Run(HasSquaresByteInput ? ONNXExecutor.ONNXInputTypeEnum.Byte
                                               : ONNXExecutor.ONNXInputTypeEnum.Float16,
-                          inputs, numPositionsInBatchSentToExecutor);
-
-      if (numPositionsInBatchSentToExecutor != numPositionsUsed)
-      {
-        // Resize all results to match the number of positions actually used.
-        for (int i = 0; i < eval.Count; i++)
-        {
-          eval[i] = (eval[i].Item1, eval[i].Item2.Slice(0, numPositionsUsed * eval[i].Item2.Length / numPositionsInBatchSentToExecutor));
-        }
-      }
+                          inputs, numPositionsUsed);
 
       if (executor.MultiNetNames != null)
       {
@@ -356,8 +316,6 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
                                                                      int numPositionsUsed,
                                                                      Predicate<int> shouldUseStateForPos = null)
     {
-      int numPositionsInBatchSentToExecutor = numPositionsUsed < MinBatchSize ? MinBatchSize : numPositionsUsed;
-
       List<(string, Memory<Float16>)> eval;
       Span<byte> flatValuesPrimarySpan = flatValuesPrimary.Span;
 
@@ -367,29 +325,10 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
       (Memory<byte> input, int[] shape)[] inputs = new (Memory<byte> input, int[] shape)[NUM_INPUTS];
 
       // TODO: this code duplicated below, refactor/clean up.
-      int TOTAL_LEN = numPositionsInBatchSentToExecutor * 64 * TPG_BYTES_PER_SQUARE_RECORD;
-      Memory<byte> input0;
-      if (numPositionsUsed == numPositionsInBatchSentToExecutor)
-      {
-        input0 = flatValuesPrimary.Slice(0, TOTAL_LEN);
-      }
-      else
-      {
-        input0 = new byte[numPositionsInBatchSentToExecutor * 64 * TPG_BYTES_PER_SQUARE_RECORD];
-        flatValuesPrimary.CopyTo(input0);
+      int TOTAL_LEN = numPositionsUsed * 64 * TPG_BYTES_PER_SQUARE_RECORD;
+      Memory<byte> input0 = flatValuesPrimary.Slice(0, TOTAL_LEN);
 
-        // Avoid sending uninitialized data for the unused positions
-        // (the neural net might return NaN for an out of distribution input).
-        // Instead fill buffer with a known good position.
-        Span<byte> spanFirstPosition = flatValuesPrimary.Span.Slice(0, 64 * TPG_BYTES_PER_SQUARE_RECORD);
-        for (int i = numPositionsUsed; i < numPositionsInBatchSentToExecutor; i++)
-        {
-          spanFirstPosition.CopyTo(input0.Span.Slice(i * 64 * TPG_BYTES_PER_SQUARE_RECORD,
-                                                         64 * TPG_BYTES_PER_SQUARE_RECORD));
-        }
-      }
-
-      inputs[0] = (input0, [numPositionsInBatchSentToExecutor, 64, TPG_BYTES_PER_SQUARE_RECORD]);
+      inputs[0] = (input0, [numPositionsUsed, 64, TPG_BYTES_PER_SQUARE_RECORD]);
 
       if (inputs.Length > 1)
       {
@@ -397,8 +336,8 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
         if (flatValuesState.IsEmpty)
         {
           // No state available, pass all zeroes.
-          inputs[1] = (new byte[numPositionsInBatchSentToExecutor * 64 * NNEvaluator.SIZE_STATE_PER_SQUARE],
-                     new int[] { numPositionsInBatchSentToExecutor, 64, NNEvaluator.SIZE_STATE_PER_SQUARE });
+          inputs[1] = (new byte[numPositionsUsed * 64 * NNEvaluator.SIZE_STATE_PER_SQUARE],
+                     new int[] { numPositionsUsed, 64, NNEvaluator.SIZE_STATE_PER_SQUARE });
         }
         else
         {
@@ -459,17 +398,7 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
       //          }
 
       inputsByte[0].shape = inputs[0].shape;
-      eval = executor.Run(ONNXExecutor.ONNXInputTypeEnum.Byte, inputsByte, numPositionsInBatchSentToExecutor);
-
-
-      if (numPositionsInBatchSentToExecutor != numPositionsUsed)
-      {
-        // Resize all results to match the number of positions actually used.
-        for (int i = 0; i < eval.Count; i++)
-        {
-          eval[i] = (eval[i].Item1, eval[i].Item2.Slice(0, numPositionsUsed * eval[i].Item2.Length / numPositionsInBatchSentToExecutor));
-        }
-      }
+      eval = executor.Run(ONNXExecutor.ONNXInputTypeEnum.Byte, inputsByte, numPositionsUsed);
 
       if (executor.MultiNetNames != null)
       {
@@ -507,8 +436,6 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
       {
         throw new NotImplementedException();
       }
-
-      int numPositionsInBatchSentToExecutor = numPositionsUsed < MinBatchSize ? MinBatchSize : numPositionsUsed;
 
       if (!alreadyConvertedToLZ0)
       {
@@ -555,28 +482,9 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
           }
         }
 
-        int TOTAL_LEN = numPositionsInBatchSentToExecutor * 64 * TPG_BYTES_PER_SQUARE_RECORD;
-        Memory<Half> input0;
-        if (numPositionsUsed == numPositionsInBatchSentToExecutor)
-        {
-          input0 = flatValuesPrimary.Slice(0, TOTAL_LEN);
-        }
-        else
-        {
-          input0 = new Half[numPositionsInBatchSentToExecutor * 64 * TPG_BYTES_PER_SQUARE_RECORD];
-          flatValuesPrimary.CopyTo(input0);
-
-          // Avoid sending uninitialized data for the unused positions
-          // (the neural net might return NaN for an out of distribution input).
-          // Instead fill buffer with a known good position.
-          Span<Half> spanFirstPosition = flatValuesPrimarySpan.Slice(0, 64 * TPG_BYTES_PER_SQUARE_RECORD);
-          for (int i = numPositionsUsed; i < numPositionsInBatchSentToExecutor; i++)
-          {
-            spanFirstPosition.CopyTo(input0.Span.Slice(i * 64 * TPG_BYTES_PER_SQUARE_RECORD,
-                                                           64 * TPG_BYTES_PER_SQUARE_RECORD));
-          }
-        }
-        inputs[0] = (input0, [numPositionsInBatchSentToExecutor, 64, TPG_BYTES_PER_SQUARE_RECORD]);
+        int TOTAL_LEN = numPositionsUsed * 64 * TPG_BYTES_PER_SQUARE_RECORD;
+        Memory<Half> input0 = flatValuesPrimary.Slice(0, TOTAL_LEN);
+        inputs[0] = (input0, [numPositionsUsed, 64, TPG_BYTES_PER_SQUARE_RECORD]);
 
         if (inputs.Length > 1)
         {
@@ -584,16 +492,17 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
           if (flatValuesState.IsEmpty)
           {
             // No state available, pass all zeroes.
-            inputs[1] = (new Half[numPositionsInBatchSentToExecutor * 64 * NNEvaluator.SIZE_STATE_PER_SQUARE],
-                       new int[] { numPositionsInBatchSentToExecutor, 64, NNEvaluator.SIZE_STATE_PER_SQUARE });
+            inputs[1] = (new Half[numPositionsUsed * 64 * NNEvaluator.SIZE_STATE_PER_SQUARE],
+                       new int[] { numPositionsUsed, 64, NNEvaluator.SIZE_STATE_PER_SQUARE });
           }
           else
           {
+            throw new Exception("Need to access predefined buffer in ONNXExecutor, not allocate here");
             Span<Half[]> flatValuesStateSpan = flatValuesState.Span;
 
             // Reformat the state data into a 1D array
             // TODO: improve efficiency
-            Half[] states1D = new Half[numPositionsInBatchSentToExecutor * 64 * NNEvaluator.SIZE_STATE_PER_SQUARE];
+            Half[] states1D = new Half[numPositionsUsed * 64 * NNEvaluator.SIZE_STATE_PER_SQUARE];
             for (int i = 0; i < numPositionsUsed; i++)
             {
               if (flatValuesStateSpan[i] == null
@@ -651,16 +560,7 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
         {
           eval = executor.Run(Precision == NNEvaluatorPrecision.FP16 ? ONNXExecutor.ONNXInputTypeEnum.Float16
                                                                      : ONNXExecutor.ONNXInputTypeEnum.Float32,
-                              inputs, numPositionsInBatchSentToExecutor);
-        }
-
-        if (numPositionsInBatchSentToExecutor != numPositionsUsed)
-        {
-          // Resize all results to match the number of positions actually used.
-          for (int i = 0; i < eval.Count; i++)
-          {
-            eval[i] = (eval[i].Item1, eval[i].Item2.Slice(0, numPositionsUsed * eval[i].Item2.Length / numPositionsInBatchSentToExecutor));
-          }
+                              inputs, numPositionsUsed);
         }
       }
       else
@@ -777,6 +677,15 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
     }
 
     public void EndProfiling() => executor.EndProfiling();
+
+
+    /// <summary>
+    /// Performs any initialization to prepare evaluator for delay-free execution.
+    /// </summary>
+    public void Warmup()
+    {
+      this.executor.Warmup();
+    }
 
 
     public void Dispose()

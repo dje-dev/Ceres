@@ -394,6 +394,15 @@ namespace Chess.Ceres.NNEvaluators
 
 
     /// <summary>
+    /// Performs any initialization to prepare evaluator for delay-free execution.
+    /// </summary>
+    public override void Warmup()
+    {
+      Executor.Warmup();
+    }
+
+
+    /// <summary>
     /// Overrides worker method to evaluate a specified batch into internal buffers.
     /// </summary>
     /// <param name="batch"></param>
@@ -401,6 +410,8 @@ namespace Chess.Ceres.NNEvaluators
     /// <returns></returns>
     protected override IPositionEvaluationBatch DoEvaluateIntoBuffers(IEncodedPositionBatchFlat batch, bool retrieveSupplementalResults = false)
     {
+      int numPositionsInBatchSentToExecutor = batch.NumPos < Executor.MinBatchSize ? Executor.MinBatchSize : batch.NumPos;
+
       if (Executor.NetType == ONNXNetExecutor.NetTypeEnum.TPG)
       {
         if (ConverterToFlat == null)
@@ -415,13 +426,12 @@ namespace Chess.Ceres.NNEvaluators
 
         if (HasSquaresByteInput)
         {
-          evaluatorInputBuffer = Executor.executor.InputBufferForBatchSize<byte, byte>(0, batch.NumPos);
+          evaluatorInputBuffer = Executor.executor.InputBufferForBatchSize<byte, byte>(0, numPositionsInBatchSentToExecutor);
         }
         else
         {
-          evaluatorInputBufferHalf = Executor.executor.InputBufferForBatchSize<Float16, Half>(0, batch.NumPos);
+          evaluatorInputBufferHalf = Executor.executor.InputBufferForBatchSize<Float16, Half>(0, numPositionsInBatchSentToExecutor);
         }
-
 
         short[] legalMoveIndices = null; // not needed, batch already contains moves
         ConverterToFlat(Options, batch, UseHistory, evaluatorInputBuffer, evaluatorInputBufferHalf, legalMoveIndices);
@@ -433,7 +443,7 @@ namespace Chess.Ceres.NNEvaluators
       }
       else
       {
-        Memory<Half> evaluatorInputBuffer = Executor.executor.InputBufferForBatchSize<Float16, Half>(0, batch.NumPos);
+        Memory<Half> evaluatorInputBuffer = Executor.executor.InputBufferForBatchSize<Float16, Half>(0, numPositionsInBatchSentToExecutor);
         batch.ConvertValuesToFlatFromPlanes(evaluatorInputBuffer, false, Scale50MoveCounter);
         PositionEvaluationBatch ret = DoEvaluateBatch(batch, null, evaluatorInputBuffer, null, batch.NumPos, retrieveSupplementalResults, null, 1);
 
@@ -502,15 +512,18 @@ namespace Chess.Ceres.NNEvaluators
           // Do not use state if we are lacking early history (seems the net does not expect that).
           Predicate<int> shouldUseStateForPos = i => batch.PositionsBuffer.Span[i].BoardsHistory.History_1
                                                   != batch.PositionsBuffer.Span[i].BoardsHistory.History_2;
+          int numPositionsInBatchSentToExecutor = numPos < Executor.MinBatchSize ? Executor.MinBatchSize : numPos;
 
           if (HasSquaresByteInput)
           {
-            results = Executor.ExecuteTPGByteInputs(IsWDL, HasState, flatValuesPrimaryBytes, flatValuesState, numPos,
+            results = Executor.ExecuteTPGByteInputs(IsWDL, HasState, flatValuesPrimaryBytes,
+                                                    flatValuesState, numPositionsInBatchSentToExecutor,
                                                     shouldUseStateForPos: shouldUseStateForPos);
           }
           else
           {
-            results = Executor.Execute(IsWDL, HasState, flatValuesPrimary, flatValuesState, numPos,
+            results = Executor.Execute(IsWDL, HasState, flatValuesPrimary,
+                                      flatValuesState, numPositionsInBatchSentToExecutor,
                                       alreadyConvertedToLZ0: true, tpgDivisor: tpgDivisor,
                                       shouldUseStateForPos: shouldUseStateForPos);
           }
