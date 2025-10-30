@@ -154,23 +154,11 @@ namespace Ceres.MCTS.Params
     /// <param name="alsoCalcStatistics"></param>
     public void Warmup(bool alsoCalcStatistics = false)
     {
-      if (alsoCalcStatistics)
-      {
-        Parallel.Invoke(
-          () => CalcStatistics(true),
-          () => { if (UsesEvaluator2) NNEvaluatorBenchmark.Warmup(Evaluator2); },
-          () => { if (EvaluatorSecondary is not null) NNEvaluatorBenchmark.Warmup(EvaluatorSecondary); }
-          );
-      }
-      else
-      {
-        Parallel.Invoke(
-          () => NNEvaluatorBenchmark.Warmup(Evaluator1),
-          () => { if (UsesEvaluator2) NNEvaluatorBenchmark.Warmup(Evaluator2); },
-          () => { if (EvaluatorSecondary is not null) NNEvaluatorBenchmark.Warmup(EvaluatorSecondary); }
-          );
-      }
+      Evaluator1.Warmup();
+      Evaluator2?.Warmup();
+      EvaluatorSecondary?.Warmup();
     }
+
 
     NNEvaluatorPerformanceStats perfStatsPrimary = null;
 
