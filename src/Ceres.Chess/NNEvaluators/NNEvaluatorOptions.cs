@@ -15,7 +15,6 @@
 
 using System;
 using System.Collections.Generic;
-using Microsoft.FSharp.Core;
 
 #endregion
 
@@ -27,7 +26,7 @@ namespace Ceres.Chess.NNEvaluators
   [Serializable]
   public record NNEvaluatorOptions
   {
-    public const float DEFAULT_FRACTION_VALUE2    = 0f;
+    public const float DEFAULT_FRACTION_VALUE2 = 0f;
     public const float DEFAULT_VALUE1_TEMPERATURE = 1f;
     public const float DEFAULT_VALUE2_TEMPERATURE = 1f;
     public const float DEFAULT_POLICY_TEMPERATURE = 1f;
@@ -71,7 +70,12 @@ namespace Ceres.Chess.NNEvaluators
     /// <summary>
     /// Number of additional PV children by which each evaluated position is extended.
     /// </summary>
-    public int PVExtensionDepth { get; init;  } = 0;
+    public int PVExtensionDepth { get; init; } = 0;
+
+    /// <summary>
+    /// If CUDA graphs are to be enabled (if supported by the backend).
+    /// </summary>
+    public bool EnableCUDAGraphs { get; init; } = true;
 
     #endregion
 
@@ -85,22 +89,19 @@ namespace Ceres.Chess.NNEvaluators
     /// <exception cref="Exception"></exception>
     public virtual NNEvaluatorOptions OptionsWithOptionsDictApplied(Dictionary<string, string> optionsDict)
     {
-      float pvExtensionDepth = CheckOptionSpecifiedElseDefault(optionsDict, "DEPTH", PVExtensionDepth);
+      float pvExtensionDepth = CheckOptionSpecifiedElseDefaultFloat(optionsDict, "DEPTH", PVExtensionDepth);
 
-      float value1Temperature = CheckOptionSpecifiedElseDefault(optionsDict, "V1TEMP", ValueHead1Temperature);
-      float value2Temperature = CheckOptionSpecifiedElseDefault(optionsDict, "V2TEMP", ValueHead2Temperature);
-      float value2Weight = CheckOptionSpecifiedElseDefault(optionsDict, "V2FRAC", FractionValueHead2);
-      float policyUncertaintyScaling = CheckOptionSpecifiedElseDefault(optionsDict, "POLUNC_SCALE", PolicyUncertaintyTemperatureScalingFactor);
-      float policyTemperature = CheckOptionSpecifiedElseDefault(optionsDict, "POLTEMP", PolicyTemperature);
+      float value1Temperature = CheckOptionSpecifiedElseDefaultFloat(optionsDict, "V1TEMP", ValueHead1Temperature);
+      float value2Temperature = CheckOptionSpecifiedElseDefaultFloat(optionsDict, "V2TEMP", ValueHead2Temperature);
+      float value2Weight = CheckOptionSpecifiedElseDefaultFloat(optionsDict, "V2FRAC", FractionValueHead2);
+      float policyUncertaintyScaling = CheckOptionSpecifiedElseDefaultFloat(optionsDict, "POLUNC_SCALE", PolicyUncertaintyTemperatureScalingFactor);
+      float policyTemperature = CheckOptionSpecifiedElseDefaultFloat(optionsDict, "POLTEMP", PolicyTemperature);
 
-//      float blunderNegative = CheckOptionSpecifiedElseDefault(optionsDict, "BLUN_NEG", QDev);
-//      float blunderPositive = CheckOptionSpecifiedElseDefault(optionsDict, "BLUN_POS", QDev);
+      bool useCUDAGraphs = CheckOptionSpecifiedElseDefaultBoolean(optionsDict, "CUDAGRAPHS", EnableCUDAGraphs);
 
-      if (value2Weight != 0 || value1Temperature != 1 || value2Temperature != 1 || policyTemperature != 1)
+      if (value2Weight != 0 || value1Temperature != 1 || value2Temperature != 1)
       {
-        Console.WriteLine("OVERRIDDEN V2FRAC/V1TEMP/V2TEMP/POLTEMP/BLUN_NEG/BLUN_POS: " + value2Weight + " " + value1Temperature + " "
-                                                                      + value2Temperature + " " + policyTemperature);
-//                                                                      blunderNegative + " " + blunderPositive);
+        Console.WriteLine("OVERRIDDEN V2FRAC/V1TEMP/V2TEMP: " + value2Weight + " " + value1Temperature + " " + value2Temperature);
       }
 
       NNEvaluatorOptions options = this with
@@ -108,9 +109,10 @@ namespace Ceres.Chess.NNEvaluators
         FractionValueHead2 = value2Weight,
         ValueHead1Temperature = value1Temperature,
         ValueHead2Temperature = value2Temperature,
+        PolicyTemperature = policyTemperature,
         PVExtensionDepth = (int)pvExtensionDepth,
+        EnableCUDAGraphs = useCUDAGraphs,
         PolicyUncertaintyTemperatureScalingFactor = policyUncertaintyScaling,
-        PolicyTemperature = CheckOptionSpecifiedElseDefault(optionsDict, "POLTEMP", policyTemperature),
       };
 
       return options;
@@ -123,7 +125,7 @@ namespace Ceres.Chess.NNEvaluators
     /// <summary>
     /// Base policy temperature to apply.
     /// </summary>
-    public virtual float PolicyTemperature { get; init; } = 1.0f;
+    public virtual float PolicyTemperature { get; init; } =  DEFAULT_POLICY_TEMPERATURE;
 
     /// <summary>
     /// Optional scaling factor that determines the amount by which 
@@ -152,6 +154,7 @@ namespace Ceres.Chess.NNEvaluators
 
     #endregion
 
+    public bool UseMiddlegameSlowdown = false;
 
     #region Options helpers
 
@@ -162,10 +165,8 @@ namespace Ceres.Chess.NNEvaluators
     /// <param name="optionKey"></param>
     /// <param name="defaultValue"></param>
     /// <returns></returns>
-    /// <exception cref="Exception"></exception>
-    protected static float CheckOptionSpecifiedElseDefault(Dictionary<string, string> options,
-                                                           string optionKey,
-                                                           float defaultValue)
+    protected static float CheckOptionSpecifiedElseDefaultFloat(Dictionary<string, string> options,
+                                                                string optionKey, float defaultValue)
     {
       float returnValue = defaultValue;
       string optionString = (options != null && options.Keys.Contains(optionKey))
@@ -182,6 +183,31 @@ namespace Ceres.Chess.NNEvaluators
       return returnValue;
     }
 
+
+    /// <summary>
+    /// Returns value in dictionary with specified key (parsed as a "true" or "false") specified default if not found.
+    /// </summary>
+    /// <param name="options"></param>
+    /// <param name="optionKey"></param>
+    /// <param name="defaultValue"></param>
+    /// <returns></returns>
+    protected static bool CheckOptionSpecifiedElseDefaultBoolean(Dictionary<string, string> options,
+                                                                 string optionKey, bool defaultValue)
+    {
+      bool returnValue = defaultValue;
+      string optionString = (options != null && options.Keys.Contains(optionKey))
+                             ? options[optionKey]
+                             : null;
+      if (optionString != null)
+      {
+        if (!bool.TryParse(optionString, out returnValue))
+        {
+          throw new Exception($"Invalid value for {optionKey}, expected 'true' or 'false' but got: {optionString}");
+        }
+      }
+
+      return returnValue;
+    }
     #endregion
   }
 }

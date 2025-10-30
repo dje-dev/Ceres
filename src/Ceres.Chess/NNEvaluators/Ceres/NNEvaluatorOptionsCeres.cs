@@ -159,8 +159,8 @@ namespace Ceres.Chess.NNEvaluators.Ceres
       bool board4Mode = optionsDict != null && optionsDict.Keys.Contains("4BOARD");
 
       // Also up/down blunder default
-      float blunderDown = CheckOptionSpecifiedElseDefault(optionsDict, "BLUN_NEG", DEFAULT_Q_BLUNDER);
-      float blunderUp = CheckOptionSpecifiedElseDefault(optionsDict, "BLUN_POS", DEFAULT_Q_BLUNDER);
+      float blunderDown = CheckOptionSpecifiedElseDefaultFloat(optionsDict, "BLUN_NEG", DEFAULT_Q_BLUNDER);
+      float blunderUp = CheckOptionSpecifiedElseDefaultFloat(optionsDict, "BLUN_POS", DEFAULT_Q_BLUNDER);
 
 
       // Return composite options.
@@ -173,11 +173,12 @@ namespace Ceres.Chess.NNEvaluators.Ceres
 
         QNegativeBlunders = blunderDown,
         QPositiveBlunders = blunderUp,
-
         FractionValueHead2 = baseOptions.FractionValueHead2,
         ValueHead1Temperature = baseOptions.ValueHead1Temperature,
         ValueHead2Temperature = baseOptions.ValueHead2Temperature,
         PVExtensionDepth = baseOptions.PVExtensionDepth,
+        UseMiddlegameSlowdown = baseOptions.UseMiddlegameSlowdown,
+        EnableCUDAGraphs = baseOptions.EnableCUDAGraphs,
         PolicyUncertaintyTemperatureScalingFactor = baseOptions.PolicyUncertaintyTemperatureScalingFactor,
       };
 
