@@ -674,42 +674,44 @@ namespace Ceres.Chess.LC0.Batches
     /// <param name="numToConvert"></param>
     /// <param name="scale50MoveCounter"></param>
     unsafe static void BitmapRepresentationExpandSLOW(ulong[] thisLongs, byte[] thisValues,
-                                                      float[] targetArray, int numToConvert,
+                                                      Memory<Half> targetArrayM, int numToConvert,
                                                       bool scale50MoveCounter)
     {
       int targetOffset = 0;
-
+      Span<Half> targetArray = targetArrayM.Span;
       fixed (ulong* longs = &thisLongs[0])
       {
-        for (int outer = 0; outer < numToConvert; outer++)
+        for (int planeIndex = 0; planeIndex < numToConvert; planeIndex++)
         {
-          // We can bypass conversion of the value is zero since product will always be zero
-          if (longs[outer] == 0)
-          {
-            targetOffset += 64;
-            continue;
-          }
-
           // Apply the necessary scaling of this is the move counter (50 move rule)
-          bool isMoves50Plane = outer % 112 == 109;
+          bool isMoves50Plane = planeIndex % 112 == 109;
           float multiplier = (scale50MoveCounter && isMoves50Plane) ? (1.0f / 99.0f) : 1.0f;
-          float targetValue = multiplier * thisValues[outer];
+          float targetValue = multiplier * thisValues[planeIndex];
 
-          byte* bytes = (byte*)&longs[outer];
+          byte* bytes = (byte*)&longs[planeIndex];
 
           for (int i = 0; i < 8; i++)
           {
+            targetArray[targetOffset] = default;
+            targetArray[targetOffset + 1] = default;
+            targetArray[targetOffset + 2] = default;
+            targetArray[targetOffset + 3] = default;
+            targetArray[targetOffset + 4] = default;
+            targetArray[targetOffset + 5] = default;
+            targetArray[targetOffset + 6] = default;
+            targetArray[targetOffset + 7] = default;
+
             byte val = bytes[i];
             if (val != 0)
             {
-              if ((val & (1 << 0)) > 0) targetArray[targetOffset] = targetValue;
-              if ((val & (1 << 1)) > 0) targetArray[targetOffset + 1] = targetValue;
-              if ((val & (1 << 2)) > 0) targetArray[targetOffset + 2] = targetValue;
-              if ((val & (1 << 3)) > 0) targetArray[targetOffset + 3] = targetValue;
-              if ((val & (1 << 4)) > 0) targetArray[targetOffset + 4] = targetValue;
-              if ((val & (1 << 5)) > 0) targetArray[targetOffset + 5] = targetValue;
-              if ((val & (1 << 6)) > 0) targetArray[targetOffset + 6] = targetValue;
-              if ((val & (1 << 7)) > 0) targetArray[targetOffset + 7] = targetValue;
+              if ((val & (1 << 0)) > 0) targetArray[targetOffset] = (Half)targetValue;
+              if ((val & (1 << 1)) > 0) targetArray[targetOffset + 1] = (Half)targetValue;
+              if ((val & (1 << 2)) > 0) targetArray[targetOffset + 2] = (Half)targetValue;
+              if ((val & (1 << 3)) > 0) targetArray[targetOffset + 3] = (Half)targetValue;
+              if ((val & (1 << 4)) > 0) targetArray[targetOffset + 4] = (Half)targetValue;
+              if ((val & (1 << 5)) > 0) targetArray[targetOffset + 5] = (Half)targetValue;
+              if ((val & (1 << 6)) > 0) targetArray[targetOffset + 6] = (Half)targetValue;
+              if ((val & (1 << 7)) > 0) targetArray[targetOffset + 7] = (Half)targetValue;
             }
             targetOffset += 8;
           }
@@ -785,40 +787,26 @@ namespace Ceres.Chess.LC0.Batches
     /// </summary>
     /// <param name="destinationBuffer">buffer to receive values. NOTE! This is assumed to start out cleared (all zeros)</param>
     /// <param name="encodingType"></param>
-    internal void ConvertToFlat(int startPosToConvertIndex, int numPositionsToConvert, Memory<Half> destinationBuffer, bool scale50MoveCounter)
+    internal void ConvertToFlat(int startPosToConvertIndex, int numPositionsToConvert,
+                                Memory<Half> destinationBuffer, bool scale50MoveCounter)
     {
       // TODO: Somehow rework this performance-critical method
       //       by vectorization or putting expansion on GPU.
-      //return ConvertToFlatSlow(outBuffer, encodingType); old slow version
       int numPlanesTotal = NumPos * TOTAL_NUM_PLANES_ALL_HISTORIES;
       int startPlanesToConvert = startPosToConvertIndex * TOTAL_NUM_PLANES_ALL_HISTORIES;
       int numPlanesToConvert = numPositionsToConvert * TOTAL_NUM_PLANES_ALL_HISTORIES;
 
+      if (false)
+      {
+        BitmapRepresentationExpandSLOW(PosPlaneBitmaps, PosPlaneValues, destinationBuffer,
+                                       numPlanesToConvert, scale50MoveCounter); //old slow version
+        return;
+      }
       //      const int NUM_PER_BLOCK = 64;
       //      if (NumPos <= NUM_PER_BLOCK * 2)
       {
         BitmapRepresentationExpand(PosPlaneBitmaps, PosPlaneValues, destinationBuffer,
                                    startPlanesToConvert, numPlanesToConvert, numPlanesTotal, scale50MoveCounter);
-        if (numPlanesToConvert == 112 * 4)
-        {
-          for (int i = 0; i < 112; i++)
-          {
-            Debug.Assert(this.PosPlaneBitmaps[i] == PosPlaneBitmaps[i + 112 * 1]);
-            Debug.Assert(this.PosPlaneBitmaps[i] == PosPlaneBitmaps[i + 112 * 2]);
-            Debug.Assert(this.PosPlaneBitmaps[i] == PosPlaneBitmaps[i + 112 * 3]);
-
-            Debug.Assert(this.PosPlaneValues[i] == PosPlaneValues[i + 112 * 1]);
-            Debug.Assert(this.PosPlaneValues[i] == PosPlaneValues[i + 112 * 2]);
-            Debug.Assert(this.PosPlaneValues[i] == PosPlaneValues[i + 112 * 3]);
-          }
-
-          for (int i = 0; i < 7168; i++)
-          {
-            Debug.Assert(destinationBuffer.Span[i] == destinationBuffer.Span[i + 7168 * 1]);
-            Debug.Assert(destinationBuffer.Span[i] == destinationBuffer.Span[i + 7168 * 2]);
-            Debug.Assert(destinationBuffer.Span[i] == destinationBuffer.Span[i + 7168 * 3]);
-          }
-        }
       }
 #if TODO_RESTORE
       else
