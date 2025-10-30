@@ -465,6 +465,15 @@ namespace Ceres.Chess.NNEvaluators
     #region Helper methods
 
     /// <summary>
+    /// Performs any initialization to prepare evaluator for delay-free execution.
+    /// </summary>
+    public virtual void Warmup()
+    {
+
+    }
+
+
+    /// <summary>
     /// Helper method to evaluates a single position.
     /// </summary>
     /// <param name="position"></param>
