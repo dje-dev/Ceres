@@ -42,7 +42,7 @@ namespace Ceres.Base.CUDA
     /// <summary>
     /// Associated (default) context for this device.
     /// </summary>
-    public CudaContext Context;
+    public PrimaryContext Context;
 
 
     /// <summary>
@@ -83,7 +83,7 @@ namespace Ceres.Base.CUDA
       lock (InitializingCUDAContextLockObj)
       {
         GPUID = gpuID;
-        Context = new CudaContext(gpuID, false);
+        Context = new PrimaryContext(gpuID);
 
         CudaDeviceProperties deviceProperties = Context.GetDeviceInfo();
         driverVersionMajor = deviceProperties.DriverVersion.Major;
