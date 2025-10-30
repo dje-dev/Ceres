@@ -291,7 +291,8 @@ namespace Chess.Ceres.NNEvaluators
       bool mustRetainOutputsForHeadOverrides = headOverrides != null && headOverrides.Length > 0;
       Executor = new ONNXNetExecutor(engineID, onnxModelFileName, onnxModelBytes, inputNames,
                                      maxBatchSize, type, precision, deviceType, gpuID,
-                                     useTRT, enableProfiling, RetainRawOutputs | mustRetainOutputsForHeadOverrides);
+                                     useTRT, options.EnableCUDAGraphs,
+                                     enableProfiling, RetainRawOutputs | mustRetainOutputsForHeadOverrides);
     }
 
 

@@ -77,6 +77,11 @@ public class ONNXExecutor : IDisposable
   public bool UseTensorRT;
 
   /// <summary>
+  /// If CUDA graphs should be used (if the backend supports it).
+  /// </summary>
+  public bool EnableCUDAGraphs;
+
+  /// <summary>
   /// If all outputs should be retained.
   /// </summary>
   public bool RetainRawInputs;
@@ -224,6 +229,7 @@ public class ONNXExecutor : IDisposable
       bool inputBuffersArePrepopulated,
       int gpuID,
       bool useTensorRT,
+      bool enableCUDAGraphs,
       int minBatchSize,
       int maxBatchSize,
       bool enableProfiling,
@@ -264,10 +270,8 @@ public class ONNXExecutor : IDisposable
     bool multiEngineMode = useTensorRT;// && ONNXFileName != null && !ONNXFileName.ToLower().Contains("copy");
     UseMultipleProfilesPerSession = false;
 
-    bool testMode = true;// ONNXFileName != null && ONNXFileName.ToLower().Contains("copy");
-
     BATCH_SIZE_ANCHORS_WITHOUT_GRAPH = [48, 128];
-    BATCH_SIZE_ANCHORS_WITH_GRAPH = testMode ? [12, 32, 56, 88] : null;
+    BATCH_SIZE_ANCHORS_WITH_GRAPH = EnableCUDAGraphs && useTensorRT ? [12, 32, 56, 88] : null;
 
 #if NOT
     // Possible ONNX bugs
@@ -313,6 +317,7 @@ public class ONNXExecutor : IDisposable
     PrecisionNumBits = precisionNumBits;
     MinBatchSize = minBatchSize;
     UseTensorRT = useTensorRT;
+    EnableCUDAGraphs = enableCUDAGraphs;
     RetainRawInputs = retainRawOutputs;
     LoRAAdapterFileName = loraAdapterFileName;
 
@@ -325,8 +330,14 @@ public class ONNXExecutor : IDisposable
     sessionCache = new Dictionary<(int, int, bool), SessionForBatchSize>();
 
     Console.WriteLine($"ONNXExecutor initialized on GPU {GPUID} (sessions will be created on-demand)");
-    Warmup();
+    lock (warmupLock) // Prevent overlapping stream capture
+    {
+      Warmup();
+    }
   }
+
+
+  static readonly object warmupLock = new();
 
 
   private void ExtractMultinetMetadataIfApplicable(string onnxFileName, byte[] onnxModelBytes)
@@ -589,7 +600,7 @@ public class ONNXExecutor : IDisposable
 
     if (BATCH_SIZE_ANCHORS_WITH_GRAPH_ADJUSTED != null)
     {
-      foreach (int b in BATCH_SIZE_ANCHORS_WITH_GRAPH_ADJUSTED)
+      foreach (int b in BATCH_SIZE_ANCHORS_WITH_GRAPH)
       {
         _ = GetOrCreateSessionForBatchSize(b);
       }
@@ -1218,11 +1229,11 @@ public class ONNXExecutor : IDisposable
     // Create new session context for this batch size anchor
     if (bucketKey.useCudaGraphs)
     {
-      ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"Creating new graph session for batch size {bucketKey.max} (requested: {batchSize}) ... ", endLine: false);
+      ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"[{GPUID}: Creating new graph session for batch size {bucketKey.max} (requested: {batchSize}) ... ", endLine: false);
     }
     else
     {
-      ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"Creating new non-graph session for batch size bucket [{bucketKey.min}..{bucketKey.max}] (requested: {batchSize}) ... ", endLine: false);
+      ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"{GPUID}: Creating new non-graph session for batch size bucket [{bucketKey.min}..{bucketKey.max}] (requested: {batchSize}) ... ", endLine: false);
     }
 
     // Take a global lock during session creation for two reasons:

@@ -140,6 +140,7 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
                                NNEvaluatorPrecision precision,
                                NNDeviceType deviceType, int gpuNum,
                                bool useTensorRT,
+                               bool enableCUDAGraphs,
                                bool enableProfiling,
                                bool retainRawOutputs,
                                string loraAdapterFileName = null)
@@ -200,8 +201,8 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
 
       int inputsNumBits = HasSquaresByteInput ? 8 : (Precision == NNEvaluatorPrecision.FP16 ? 16 : 32);
       executor = new ONNXExecutor(shortID, onnxFileName, onnxModelBytes, inputNames, nonBatchDimensions,
-                                  inputsNumBits, precisionNumBits, true, deviceIndex, useTensorRT, MinBatchSize, maxBatchSize,
-                                  enableProfiling, retainRawOutputs);
+                                  inputsNumBits, precisionNumBits, true, deviceIndex, useTensorRT, enableCUDAGraphs,
+                                  MinBatchSize, maxBatchSize, enableProfiling, retainRawOutputs);
 
     }
 
