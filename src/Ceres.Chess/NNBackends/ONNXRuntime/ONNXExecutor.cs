@@ -817,7 +817,7 @@ public class ONNXExecutor : IDisposable
       where TInput : unmanaged
       where TBuffer : unmanaged
   {
-    Console.WriteLine("zzzIOBINDING " + batchSize + "  " + ONNXFileName);
+    //Console.WriteLine("zzzIOBINDING " + batchSize + "  " + ONNXFileName);
 
     if (batchSize < MinBatchSize)
     {
