@@ -271,7 +271,7 @@ public class ONNXExecutor : IDisposable
     UseMultipleProfilesPerSession = false;
 
     BATCH_SIZE_ANCHORS_WITHOUT_GRAPH = [48, 128];
-    BATCH_SIZE_ANCHORS_WITH_GRAPH = EnableCUDAGraphs && useTensorRT ? [12, 32, 56, 88] : null;
+    BATCH_SIZE_ANCHORS_WITH_GRAPH = enableCUDAGraphs && useTensorRT ? [12, 32, 56, 88] : null;
 
 #if NOT
     // Possible ONNX bugs
@@ -594,8 +594,8 @@ public class ONNXExecutor : IDisposable
     // Get engines at/around the breakpoints to trigger creation if needed.
     foreach (int b in BATCH_SIZE_ANCHORS_WITHOUT_GRAPH)
     {
-      _ = GetOrCreateSessionForBatchSize(b);
-      _ = GetOrCreateSessionForBatchSize(Math.Max(1, b - 1));
+      _ = GetOrCreateSessionForBatchSize(b, false);
+      _ = GetOrCreateSessionForBatchSize(Math.Max(1, b - 1), false);
     }
 
     if (BATCH_SIZE_ANCHORS_WITH_GRAPH_ADJUSTED != null)
@@ -1208,11 +1208,11 @@ public class ONNXExecutor : IDisposable
   /// Gets or creates a session context for the specified batch size.
   /// Rounds up to the nearest batch size anchor.
   /// </summary>
-  private SessionForBatchSize GetOrCreateSessionForBatchSize(int batchSize)
+  private SessionForBatchSize GetOrCreateSessionForBatchSize(int batchSize, bool cudaGraphsEligible = true)
   {
     int effectiveBatchSize = Math.Max(MinBatchSize, batchSize);
 
-    bool useCudaGraphs = DetermineIfCUDAGraphsShouldBeUsed(effectiveBatchSize);
+    bool useCudaGraphs = cudaGraphsEligible && DetermineIfCUDAGraphsShouldBeUsed(effectiveBatchSize);
 
     (int min, int max, bool useCudaGraphs) bucketKey = FindBatchSizeBucket(batchSize, useCudaGraphs);
     if (sessionCache.TryGetValue(bucketKey, out var context))
@@ -1229,11 +1229,11 @@ public class ONNXExecutor : IDisposable
     // Create new session context for this batch size anchor
     if (bucketKey.useCudaGraphs)
     {
-      ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"[{GPUID}: Creating new graph session for batch size {bucketKey.max} (requested: {batchSize}) ... ", endLine: false);
+      ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"[{GPUID}]: Creating new graph session for batch size {bucketKey.max} (requested: {batchSize}) ... ", endLine: false);
     }
     else
     {
-      ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"{GPUID}: Creating new non-graph session for batch size bucket [{bucketKey.min}..{bucketKey.max}] (requested: {batchSize}) ... ", endLine: false);
+      ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"[{GPUID}]: Creating new non-graph session for batch size bucket [{bucketKey.min}..{bucketKey.max}] (requested: {batchSize}) ... ", endLine: false);
     }
 
     // Take a global lock during session creation for two reasons:
