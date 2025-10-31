@@ -98,7 +98,7 @@ namespace Ceres.Commands
       if (withLC0)
       {
         //NNEvaluatorDef nnDefLC0 = nnDefCeres.ToEvaluator();
-        engineLC0 = new GameEngineLC0("LC0", nnDefCeres.Nets[0].Net.NetworkID, 
+        engineLC0 = new GameEngineLC0("LC0", nnDefCeres.Nets[0].Net.NetworkID,
                                       forceDisableSmartPruning: true, paramsNN: nnDefCeres,
                                       alwaysFillHistory: true, verbose: false);
         engineLC0.Warmup();
@@ -137,8 +137,8 @@ namespace Ceres.Commands
         float ceresSearchSecs = (float)resultCeres.TimingStats.ElapsedTimeSecs;
         float thisNpsCeres = resultCeres.FinalN / ceresSearchSecs;
         npsCeres.Add(thisNpsCeres);
-          
-        Console.WriteLine($"{ i+1,5:N0}. {resultCeres.FinalN,10:N0} nodes " + $" {ceresSearchSecs,7:F2} secs  {thisNpsCeres,8:N0} / sec"
+
+        Console.WriteLine($"{i + 1,5:N0}. {resultCeres.FinalN,10:N0} nodes " + $" {ceresSearchSecs,7:F2} secs  {thisNpsCeres,8:N0} / sec"
           + $"  {resultCeres.ScoreCentipawns,6:N0} cp {resultCeres.MoveString,7}      {fen}");
 
         numNodesCeres += resultCeres.Search.SearchRootNode.N;
@@ -194,7 +194,7 @@ namespace Ceres.Commands
 
 
 
-    // Standard positions copied from Stockfish and LC0.
+    // Standard positions copied from Stockfish and LC0 (except 19th)
     static readonly string[] BENCHMARK_POS = new string[] {
       "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
       "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 10",
@@ -214,7 +214,7 @@ namespace Ceres.Commands
       "3q2k1/pb3p1p/4pbp1/2r5/PpN2N2/1P2P2P/5PP1/Q2R2K1 b - - 4 26",
       "6k1/6p1/6Pp/ppp5/3pn2P/1P3K2/1PP2P2/3N4 b - - 0 1",
       "3b4/5kp1/1p1p1p1p/pP1PpP1P/P1P1P3/3KN3/8/8 w - - 0 1",
-      "2K5/p7/7P/5pR1/8/5k2/r7/8 w - - 0 1 moves g5g6 f3e3 g6g5 e3f3",
+      "8/1q5k/6p1/K2p2Pp/1P1Q3P/8/8/8 b - - 1 57", // was: "2K5/p7/7P/5pR1/8/5k2/r7/8 w - - 0 1 moves g5g6 f3e3 g6g5 e3f3",
       "8/6pk/1p6/8/PP3p1p/5P2/4KP1q/3Q4 w - - 0 1",
       "7k/3p2pp/4q3/8/4Q3/5Kp1/P6b/8 w - - 0 1",
       "8/2p5/8/2kPKp1p/2p4P/2P5/3P4/8 w - - 0 1",
