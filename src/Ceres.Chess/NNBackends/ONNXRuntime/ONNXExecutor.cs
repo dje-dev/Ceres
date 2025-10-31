@@ -547,7 +547,9 @@ public class ONNXExecutor : IDisposable
       providerOptionsDict["trt_engine_cache_enable"] = "1";
       providerOptionsDict["trt_engine_cache_path"] = trtSubdirectory;
 
-      string cachePrefix = FileUtils.FileNameSanitized(shortID);
+      string shortIDNoPrefix = shortID.Split("|")[0]; // remove anything after pipe character (options string)
+      string cachePrefix = FileUtils.FileNameSanitized(shortIDNoPrefix);
+
       cachePrefix += $"_bs{minBatch}-{maxBatch}" + (useCudaGraphs ? "-graph" : "");
 
       providerOptionsDict["trt_engine_cache_prefix"] = cachePrefix;
