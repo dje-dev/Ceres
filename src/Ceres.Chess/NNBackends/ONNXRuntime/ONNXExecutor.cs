@@ -14,7 +14,7 @@ using Ceres.Base.CUDA;
 using Ceres.Base.DataTypes;
 using Ceres.Base.Math;
 using Ceres.Base.Misc;
-
+using Ceres.Chess.UserSettings;
 using ManagedCuda;
 using ManagedCuda.BasicTypes;
 using Microsoft.ML.OnnxRuntime;
@@ -470,7 +470,16 @@ public class ONNXExecutor : IDisposable
 
   string GetTRTEngineCacheDir()
   {
-    string directoryName = ONNXFileName == null ? Path.GetTempPath() : new FileInfo(ONNXFileName).DirectoryName;
+    string directoryName;
+    if (CeresUserSettingsManager.Settings != null && CeresUserSettingsManager.Settings.DirTRTEngines != null)
+    {
+      directoryName = CeresUserSettingsManager.Settings.DirTRTEngines;
+    }
+    else
+    {
+      directoryName = ONNXFileName == null ? Path.GetTempPath() : new FileInfo(ONNXFileName).DirectoryName;
+    }
+
     string trtSubdirectory = Path.Combine(directoryName, "trt_engines", Environment.MachineName);
     if (trtSubdirectory != lastTRTCacheDir)
     {
