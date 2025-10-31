@@ -802,31 +802,31 @@ namespace Ceres.Chess.LC0.Batches
                                        numPlanesToConvert, scale50MoveCounter); //old slow version
         return;
       }
-      //      const int NUM_PER_BLOCK = 64;
-      //      if (NumPos <= NUM_PER_BLOCK * 2)
+
+      const int NUM_PER_BLOCK = 48;
+      const bool ENABLE_PARALLEL = false; // disabled, needs more test and probably not impactful
+      if (!ENABLE_PARALLEL || NumPos <= NUM_PER_BLOCK * 2)
       {
         BitmapRepresentationExpand(PosPlaneBitmaps, PosPlaneValues, destinationBuffer,
                                    startPlanesToConvert, numPlanesToConvert, numPlanesTotal, scale50MoveCounter);
       }
-#if TODO_RESTORE
       else
       {
         // Do a Parallel.For with each thread converting a subblock
-        int numBlocks = numToConvert / NUM_PER_BLOCK;
-        if (numToConvert % NUM_PER_BLOCK != 0)
+        int numBlocks = numPlanesToConvert / NUM_PER_BLOCK;
+        if (numPlanesToConvert % NUM_PER_BLOCK != 0)
         {
           numBlocks++;
         }
 
         Parallel.For(0, numBlocks, i =>
         {
-          BitmapRepresentationExpand(PosPlaneBitmaps, PosPlaneValues, outBuffer,
-                                     i * NUM_PER_BLOCK, NUM_PER_BLOCK, 
-                                     numToConvert, scale50MoveCounter);
+          BitmapRepresentationExpand(PosPlaneBitmaps, PosPlaneValues, destinationBuffer,
+                                     i * NUM_PER_BLOCK, NUM_PER_BLOCK,
+                                     numPlanesTotal, scale50MoveCounter);
         });
 
       }
-#endif
     }
 
 
