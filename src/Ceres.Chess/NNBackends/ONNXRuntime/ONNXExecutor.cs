@@ -471,7 +471,10 @@ public class ONNXExecutor : IDisposable
   string GetTRTEngineCacheDir()
   {
     string directoryName;
-    if (CeresUserSettingsManager.Settings != null && CeresUserSettingsManager.Settings.DirTRTEngines != null)
+    if (CeresUserSettingsManager.Settings != null
+     && CeresUserSettingsManager.Settings.DirTRTEngines != null
+     && CeresUserSettingsManager.Settings.DirTRTEngines != string.Empty
+     && Directory.Exists(CeresUserSettingsManager.Settings.DirTRTEngines))
     {
       directoryName = CeresUserSettingsManager.Settings.DirTRTEngines;
     }
