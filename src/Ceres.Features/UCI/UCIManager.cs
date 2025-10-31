@@ -45,6 +45,7 @@ using Ceres.Features.Visualization.TreePlot;
 using Ceres.Features.Visualization.AnalysisGraph;
 using Ceres.Chess.UserSettings;
 using Ceres.Chess.MoveGen.Converters;
+using Ceres.Chess.NNEvaluators;
 
 #endregion
 
@@ -96,7 +97,7 @@ namespace Ceres.Features.UCI
     /// <summary>
     /// Optional evaluator to call to benchmark neural network backend.
     /// </summary>
-    Action<NNEvaluatorDef> BackendBenchEvaluator;
+    Action<NNEvaluatorDef, NNEvaluator> BackendBenchEvaluator;
 
     /// <summary>
     /// Optional evaluator to call to search benchmark program (to run for specified number of seconds).
@@ -109,7 +110,7 @@ namespace Ceres.Features.UCI
     PositionWithHistory curPositionAndMoves;
     bool curPositionIsContinuationOfPrior;
 
-    List<GameMoveStat> gameMoveHistory = new List<GameMoveStat>();
+    List<GameMoveStat> gameMoveHistory = [];
 
     bool stopIsPending;
     bool debug = false;
@@ -173,7 +174,7 @@ namespace Ceres.Features.UCI
                       bool disablePruning = false,
                       string uciLogFileName = null,
                       string searchLogFileName = null,
-                      Action<NNEvaluatorDef> backendBenchEvaluator = null,
+                      Action<NNEvaluatorDef, NNEvaluator> backendBenchEvaluator = null,
                       Action<NNEvaluatorDef, int> benchmarkEvaluator = null)
     {
       InStream = inStream ?? Console.In;
@@ -454,7 +455,7 @@ namespace Ceres.Features.UCI
             if (CeresEngine?.Search != null)
             {
               string[] partsGraph = c.TrimEnd().Split(" ");
-              string optionsStr = partsGraph.Length > 1 ? c.Substring(6) : null;
+              string optionsStr = partsGraph.Length > 1 ? c[6..] : null;
               AnalysisGraphOptions options = AnalysisGraphOptions.FromString(optionsStr);
               AnalysisGraphGenerator graphGenerator = new AnalysisGraphGenerator(CeresEngine.Search, options);
               graphGenerator.Write(true);
@@ -495,7 +496,7 @@ namespace Ceres.Features.UCI
             {
               if (InitializeEngineIfNeeded())
               {
-                BackendBenchEvaluator(EvaluatorDef);
+                BackendBenchEvaluator(EvaluatorDef, CeresEngine.Evaluators.Evaluator1);
               }
             }
             break;
@@ -811,14 +812,14 @@ namespace Ceres.Features.UCI
 
       string posString;
       if (commandLower.StartsWith("position fen "))
-        posString = command.Substring(13);
+        posString = command[13..];
       else if (commandLower.StartsWith("position startpos"))
-        posString = command.Substring(9);
+        posString = command[9..];
       else
         throw new Exception($"Illegal position command, expected to start with position fen or position startpos");
 
-      PositionWithHistory newPositionAndMoves = PositionWithHistory.FromFENAndMovesUCI(posString);      
-      
+      PositionWithHistory newPositionAndMoves = PositionWithHistory.FromFENAndMovesUCI(posString);
+
       curPositionIsContinuationOfPrior = newPositionAndMoves.IsIdenticalToPriorToLastMove(curPositionAndMoves);
       if (!curPositionIsContinuationOfPrior && CeresEngine != null)
       {
@@ -944,7 +945,7 @@ namespace Ceres.Features.UCI
 
       gameMoveHistory.Add(moveStat);
 
-      if (SearchFinishedEvent != null) SearchFinishedEvent(result.Search.Manager);
+      SearchFinishedEvent?.Invoke(result.Search.Manager);
 
       // Output the final UCI info line containing end of search information
       OutputUCIInfo(result.Search.Manager, result.Search.SearchRootNode, true);

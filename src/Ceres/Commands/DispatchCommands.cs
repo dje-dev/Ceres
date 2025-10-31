@@ -108,7 +108,7 @@ namespace Ceres.Commands
       string fen = null;
 
       // Default feature (if not specified) is UCI
-      if (featureName == null) 
+      if (featureName == null)
       {
         featureName = "UCI";
       }
@@ -236,10 +236,10 @@ namespace Ceres.Commands
         FeatureBenchmark.DumpBenchmark();
       }
       else if (featureName == "BACKENDBENCH")
-      {        
+      {
         FeatureBenchmarkBackend backendBench = new FeatureBenchmarkBackend();
         backendBench.ParseFields(keyValueArgs);
-        backendBench.ExecuteBenchmark(null);
+        backendBench.ExecuteBenchmark(null, null);
       }
       else if (featureName == "BACKENDCOMPARE")
       {
@@ -254,8 +254,8 @@ namespace Ceres.Commands
       }
 
       else if (featureName == "PERFT")
-      {        
-        FeatureBenchmarkPerft.Execute(keyValueArgs);        
+      {
+        FeatureBenchmarkPerft.Execute(keyValueArgs);
       }
 
       else if (featureName == "GRAPH")
@@ -274,7 +274,7 @@ namespace Ceres.Commands
     static void SetoptError()
     {
       ShowErrorExit("Expected key=value pairs with keys: { network, device, dir-pgn, dir-epd, dir-lc0networks\r\n"
-                   +"                                      dir-tablebases, launch-monitor, log-info, log-warn }");
+                   + "                                      dir-tablebases, launch-monitor, log-info, log-warn }");
     }
 
 
@@ -282,15 +282,15 @@ namespace Ceres.Commands
     {
       FeatureUCIParams uciParams = FeatureUCIParams.ParseUCICommand(keyValueArgs);
 
-      Action<NNEvaluatorDef> backendBenchEvaluator = delegate (NNEvaluatorDef evalDef)
+      Action<NNEvaluatorDef, NNEvaluator> backendBenchEvaluator = delegate (NNEvaluatorDef evalDef, NNEvaluator evaluator)
       {
-        FeatureBenchmarkBackend backendBench = new ();
-        (NNEvaluator, List<(int, float)>) speed = backendBench.ExecuteBenchmark(evalDef);
+        FeatureBenchmarkBackend backendBench = new();
+        (NNEvaluator, List<(int, float)>) speed = backendBench.ExecuteBenchmark(evalDef, evaluator);
         Console.WriteLine();
       };
 
       Action<NNEvaluatorDef, int> searchBenchmarkAction = delegate (NNEvaluatorDef evalDef, int secondsPerMove)
-      {        
+      {
         FeatureBenchmarkSearch.Benchmark(evalDef, SearchLimit.SecondsPerMove(secondsPerMove), false, int.MaxValue);
         Console.WriteLine();
       };
