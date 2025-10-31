@@ -45,7 +45,14 @@ namespace Ceres.Chess.UserSettings
     /// Directory in which Ceres network weights files are located
     /// </summary>
     public string DirCeresNetworks { get; set; } = ".";
-    
+
+    /// <summary>
+    /// Directory in which cached TensorRT engine files are cached.
+    /// Default value of null causes a system-created temporary directory to be used.
+    /// </summary>
+    public string DirTRTEngines { get; set; } = null;
+
+
     /// <summary>
     /// Directory in which EPD files are located.
     /// </summary>
@@ -240,7 +247,7 @@ namespace Ceres.Chess.UserSettings
     /// Directory in which Syzygy tablebases are located, or null if none
     /// (synonym for SyzygyPath).
     /// </summary>
-    public string DirTablebases { get { return dirTablebases ?? SyzygyPath; }  set { dirTablebases = value; } }
+    public string DirTablebases { get { return dirTablebases ?? SyzygyPath; } set { dirTablebases = value; } }
 
 
     /// <summary>
