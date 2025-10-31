@@ -144,6 +144,7 @@ namespace Ceres.Chess.NNEvaluators
               shortID = parts[1];
             }
             options[parts[0]] = parts[1];
+            options[parts[0].ToUpper()] = parts[1];
           }
           else if (parts.Length == 1)
           {
