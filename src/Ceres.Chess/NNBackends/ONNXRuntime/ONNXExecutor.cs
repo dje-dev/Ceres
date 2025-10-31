@@ -8,16 +8,18 @@ using System.IO;
 using System.Linq;
 using System.Numerics.Tensors;
 using System.Runtime.InteropServices;
-using System.Threading;
+
 using Ceres.Base.Benchmarking;
 using Ceres.Base.CUDA;
 using Ceres.Base.DataTypes;
 using Ceres.Base.Math;
 using Ceres.Base.Misc;
+
 using ManagedCuda;
 using ManagedCuda.BasicTypes;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
+
 using Onnx;
 
 #endregion
@@ -213,6 +215,11 @@ public class ONNXExecutor : IDisposable
 
   static bool VERBOSE_LOGGING = false;
 
+
+  int MAX_UNUSED_POSITIONS_THRESHOLD_NUM_POS;
+  float MAX_UNUSED_POSITIONS_THRESHOLD_FRAC;
+
+
   /// <summary>
   /// Constructor.
   /// </summary>
@@ -260,6 +267,11 @@ public class ONNXExecutor : IDisposable
       throw new Exception("Must specify either onnxFileName or onnxModelBytes");
     }
 
+    // Determine if this is a "large" model (appropriate for different batch size anchors)
+    long modelSizeInBytes = onnxModelBytes != null ? onnxModelBytes.Length
+                                                      : new FileInfo(onnxFileName).Length;
+    bool isLargeNetwork = modelSizeInBytes > (100 * 1024 * 1024); // arbitrary 100mb custoff in bytes = 50mm parameters
+
     InputsNumBits = inputsNumBits;
     InputBuffersArePrepopulated = inputBuffersArePrepopulated;
 
@@ -268,7 +280,14 @@ public class ONNXExecutor : IDisposable
     UseMultipleProfilesPerSession = false;
 
     BATCH_SIZE_ANCHORS_WITHOUT_GRAPH = [48, 128];
-    BATCH_SIZE_ANCHORS_WITH_GRAPH = enableCUDAGraphs && useTensorRT ? [12, 32, 56, 88] : null;
+
+    // Set batch size anchors when using CUDA graphs.
+    // The benefits of CUDA graphs are more limited to smaller batches for bigger networks.
+    MAX_UNUSED_POSITIONS_THRESHOLD_NUM_POS = 14;
+    MAX_UNUSED_POSITIONS_THRESHOLD_FRAC = isLargeNetwork ? 0.4f : 0.5f;
+    BATCH_SIZE_ANCHORS_WITH_GRAPH = enableCUDAGraphs && useTensorRT
+      ? (isLargeNetwork ? [14, 28, 44, 64] : [12, 32, 56, 88])
+      : null;
 
 #if NOT
     // Possible ONNX bugs
@@ -447,16 +466,16 @@ public class ONNXExecutor : IDisposable
   }
 
 
-  static string lastNotifiedTRTCacheDir;
+  static string lastTRTCacheDir;
 
   string GetTRTEngineCacheDir()
   {
     string directoryName = ONNXFileName == null ? Path.GetTempPath() : new FileInfo(ONNXFileName).DirectoryName;
     string trtSubdirectory = Path.Combine(directoryName, "trt_engines", Environment.MachineName);
-    if (trtSubdirectory != lastNotifiedTRTCacheDir)
+    if (trtSubdirectory != lastTRTCacheDir)
     {
       Console.WriteLine("TensorRT engines will be cached in: " + trtSubdirectory);
-      lastNotifiedTRTCacheDir = trtSubdirectory;
+      lastTRTCacheDir = trtSubdirectory;
     }
 
     return trtSubdirectory;
@@ -819,8 +838,6 @@ public class ONNXExecutor : IDisposable
       where TInput : unmanaged
       where TBuffer : unmanaged
   {
-    //Console.WriteLine("zzzIOBINDING " + batchSize + "  " + ONNXFileName);
-
     if (batchSize < MinBatchSize)
     {
       throw new ArgumentException($"Batch size {batchSize} is less than minimum of {MinBatchSize}");
@@ -922,7 +939,7 @@ public class ONNXExecutor : IDisposable
       where TInput : unmanaged
       where TBuffer : unmanaged
   {
-    //    if (ONNXFileName.ToLower().Contains("copy")) Console.WriteLine("zzzDirectRun " + batchSize + " --------------------");
+    //Console.WriteLine("zzzDirectRun " + batchSize + " --------------------");
     if (batchSize < MinBatchSize)
     {
       throw new ArgumentException($"Batch size {batchSize} is less than minimum of {MinBatchSize}");
@@ -1311,11 +1328,11 @@ public class ONNXExecutor : IDisposable
         }
       }
 
-      // Use CUDA graphs if we found a suitable range and the batch size is within 40% of the anchor
-      // (or if the unused positions would be very small, i.e., less than 12).
+      // Use CUDA graphs if we found a suitable range and the batch size close to anchor
+      // (on absolute or relative basis).
       if (closestGraphMaxBatch.HasValue)
       {
-        float maxUnusedPositions = Math.Max(12, closestGraphMaxBatch.Value * 0.40f);
+        float maxUnusedPositions = Math.Max(MAX_UNUSED_POSITIONS_THRESHOLD_NUM_POS, closestGraphMaxBatch.Value * MAX_UNUSED_POSITIONS_THRESHOLD_FRAC);
         if ((closestGraphMaxBatch.Value - effectiveBatchSize) <= maxUnusedPositions)
         {
           useCudaGraphs = true;
