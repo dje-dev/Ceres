@@ -610,21 +610,26 @@ public class ONNXExecutor : IDisposable
     // Additionally we need to run once to capture the CUDA graphs
     // (over uninitialized buffers).
     // Seemingly CUDA capture operations must be strictly globally serialized.
-    foreach (int batchSizeToRun in batchSizesToRunWithGraphs)
+    lock (cudaGraphSessionCaptureGlobalLock)
     {
-      switch (InputsNumBits)
+      foreach (int batchSizeToRun in batchSizesToRunWithGraphs)
       {
-        case 8:
-          _ = RunWithIOBinding<byte, Float16>(null, batchSizeToRun, false);
-          break;
-        case 16:
-          _ = RunWithIOBinding<Half, Float16>(null, batchSizeToRun, false);
-          break;
-        default:
-          throw new NotImplementedException();
+        switch (InputsNumBits)
+        {
+          case 8:
+            _ = RunWithIOBinding<byte, Float16>(null, batchSizeToRun, false);
+            break;
+          case 16:
+            _ = RunWithIOBinding<Half, Float16>(null, batchSizeToRun, false);
+            break;
+          default:
+            throw new NotImplementedException();
+        }
       }
     }
   }
+
+  static readonly object cudaGraphSessionCaptureGlobalLock = new();
 
 
   /// <summary>
@@ -812,7 +817,7 @@ public class ONNXExecutor : IDisposable
       where TInput : unmanaged
       where TBuffer : unmanaged
   {
-    //if (ONNXFileName.ToLower().Contains("copy"))  Console.WriteLine("zzzIOBINDING " + batchSize + "  " + ONNXFileName);
+    Console.WriteLine("zzzIOBINDING " + batchSize + "  " + ONNXFileName);
 
     if (batchSize < MinBatchSize)
     {
@@ -1227,7 +1232,7 @@ public class ONNXExecutor : IDisposable
   /// Gets or creates a session context for the specified batch size.
   /// Rounds up to the nearest batch size anchor.
   /// </summary>
-  private SessionForBatchSize GetOrCreateSessionForBatchSize(int batchSize, bool disableCUDAGraphs = true)
+  private SessionForBatchSize GetOrCreateSessionForBatchSize(int batchSize, bool disableCUDAGraphs = false)
   {
     int effectiveBatchSize = Math.Max(MinBatchSize, batchSize);
 
