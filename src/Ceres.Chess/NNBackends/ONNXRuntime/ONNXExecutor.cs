@@ -8,20 +8,17 @@ using System.IO;
 using System.Linq;
 using System.Numerics.Tensors;
 using System.Runtime.InteropServices;
-
+using System.Threading;
 using Ceres.Base.Benchmarking;
 using Ceres.Base.CUDA;
 using Ceres.Base.DataTypes;
 using Ceres.Base.Math;
 using Ceres.Base.Misc;
-
 using ManagedCuda;
 using ManagedCuda.BasicTypes;
-
-using Onnx;
-
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
+using Onnx;
 
 #endregion
 
@@ -591,11 +588,14 @@ public class ONNXExecutor : IDisposable
   /// </summary>
   public void Warmup()
   {
+    List<int> batchSizesToRunWithGraphs = new List<int>();
+
+    _ = GetOrCreateSessionForBatchSize(1, true);
+
     // Get engines at/around the breakpoints to trigger creation if needed.
     foreach (int b in BATCH_SIZE_ANCHORS_WITHOUT_GRAPH)
     {
-      _ = GetOrCreateSessionForBatchSize(b, false);
-      _ = GetOrCreateSessionForBatchSize(Math.Max(1, b - 1), false);
+      _ = GetOrCreateSessionForBatchSize(b, true);
     }
 
     if (BATCH_SIZE_ANCHORS_WITH_GRAPH_ADJUSTED != null)
@@ -603,6 +603,25 @@ public class ONNXExecutor : IDisposable
       foreach (int b in BATCH_SIZE_ANCHORS_WITH_GRAPH)
       {
         _ = GetOrCreateSessionForBatchSize(b);
+        batchSizesToRunWithGraphs.Add(b);
+      }
+    }
+
+    // Additionally we need to run once to capture the CUDA graphs
+    // (over uninitialized buffers).
+    // Seemingly CUDA capture operations must be strictly globally serialized.
+    foreach (int batchSizeToRun in batchSizesToRunWithGraphs)
+    {
+      switch (InputsNumBits)
+      {
+        case 8:
+          _ = RunWithIOBinding<byte, Float16>(null, batchSizeToRun, false);
+          break;
+        case 16:
+          _ = RunWithIOBinding<Half, Float16>(null, batchSizeToRun, false);
+          break;
+        default:
+          throw new NotImplementedException();
       }
     }
   }
@@ -789,7 +808,7 @@ public class ONNXExecutor : IDisposable
   /// Executes inference using IOBinding (required for CUDA graphs).
   /// </summary>
   private List<(string, Memory<Float16>)> RunWithIOBinding<TInput, TBuffer>(
-    (Memory<TInput> input, int[] shape, string inputName, int numElements)[] inputs, int batchSize)
+    (Memory<TInput> input, int[] shape, string inputName, int numElements)[] inputs, int batchSize, bool disableCUDAGraphs = false)
       where TInput : unmanaged
       where TBuffer : unmanaged
   {
@@ -803,7 +822,7 @@ public class ONNXExecutor : IDisposable
 
     lock (lockObject)
     {
-      SessionForBatchSize context = GetOrCreateSessionForBatchSize(batchSize);
+      SessionForBatchSize context = GetOrCreateSessionForBatchSize(batchSize, disableCUDAGraphs);
 
       cudaDevice.SetCurrent();
 
@@ -1208,11 +1227,11 @@ public class ONNXExecutor : IDisposable
   /// Gets or creates a session context for the specified batch size.
   /// Rounds up to the nearest batch size anchor.
   /// </summary>
-  private SessionForBatchSize GetOrCreateSessionForBatchSize(int batchSize, bool cudaGraphsEligible = true)
+  private SessionForBatchSize GetOrCreateSessionForBatchSize(int batchSize, bool disableCUDAGraphs = true)
   {
     int effectiveBatchSize = Math.Max(MinBatchSize, batchSize);
 
-    bool useCudaGraphs = cudaGraphsEligible && DetermineIfCUDAGraphsShouldBeUsed(effectiveBatchSize);
+    bool useCudaGraphs = !disableCUDAGraphs && DetermineIfCUDAGraphsShouldBeUsed(effectiveBatchSize);
 
     (int min, int max, bool useCudaGraphs) bucketKey = FindBatchSizeBucket(batchSize, useCudaGraphs);
     if (sessionCache.TryGetValue(bucketKey, out var context))
