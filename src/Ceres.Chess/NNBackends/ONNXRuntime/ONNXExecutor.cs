@@ -183,7 +183,8 @@ public class ONNXExecutor : IDisposable
 
   int maxBatchSize;
 
-  RunOptions runOptions;
+  RunOptions runOptionsBlocking;
+  RunOptions runOptionsNonBlocking;
   bool disposed;
   bool haveWarned = false;
 
@@ -333,16 +334,21 @@ public class ONNXExecutor : IDisposable
 
     cudaDevice = CUDADevice.GetContext(gpuID);
     cudaDevice.SetCurrent();
-    cuStream = new CudaStream();
+    if (enableCUDAGraphs)
+    {
+      cuStream = new CudaStream();
+    }
 
-    runOptions = new RunOptions();
-    runOptions.AddRunConfigEntry("disable_synchronize_execution_providers", "1");
+    runOptionsBlocking = new RunOptions();
+    runOptionsNonBlocking = new RunOptions();
+    runOptionsNonBlocking.AddRunConfigEntry("disable_synchronize_execution_providers", "1");
 
     if (loraAdapterFileName != null)
     {
       ConsoleUtils.WriteLineColored(ConsoleColor.Red, "Install LoRA adapter " + loraAdapterFileName);
       OrtLoraAdapter adapterCeres = OrtLoraAdapter.Create(loraAdapterFileName, null);
-      runOptions.AddActiveLoraAdapter(adapterCeres);
+      runOptionsBlocking.AddActiveLoraAdapter(adapterCeres);
+      runOptionsNonBlocking.AddActiveLoraAdapter(adapterCeres);
     }
 
     GPUID = gpuID;
@@ -522,7 +528,11 @@ public class ONNXExecutor : IDisposable
 
     providerOptionsDict["device_id"] = gpuID.ToString();
     providerOptionsDict["trt_max_workspace_size"] = (4L * 1024 * 1024 * 1024).ToString();
-    providerOptionsDict["user_compute_stream"] = cuStream.Stream.Pointer.ToString();
+
+    if (useCudaGraphs)
+    {
+      providerOptionsDict["user_compute_stream"] = cuStream.Stream.Pointer.ToString();
+    }
 
     if (inputNames != null)
     {
@@ -667,10 +677,10 @@ public class ONNXExecutor : IDisposable
         switch (InputsNumBits)
         {
           case 8:
-            _ = RunWithIOBinding<byte, Float16>(null, batchSizeToRun, false);
+            _ = RunWithIOBinding<byte, Float16>(null, batchSizeToRun);
             break;
           case 16:
-            _ = RunWithIOBinding<Half, Float16>(null, batchSizeToRun, false);
+            _ = RunWithIOBinding<Half, Float16>(null, batchSizeToRun);
             break;
           default:
             throw new NotImplementedException();
@@ -863,7 +873,7 @@ public class ONNXExecutor : IDisposable
   /// Executes inference using IOBinding (required for CUDA graphs).
   /// </summary>
   private List<(string, Memory<Float16>)> RunWithIOBinding<TInput, TBuffer>(
-    (Memory<TInput> input, int[] shape, string inputName, int numElements)[] inputs, int batchSize, bool disableCUDAGraphs = false)
+    (Memory<TInput> input, int[] shape, string inputName, int numElements)[] inputs, int batchSize)
       where TInput : unmanaged
       where TBuffer : unmanaged
   {
@@ -877,7 +887,8 @@ public class ONNXExecutor : IDisposable
     {
       cudaDevice.SetCurrent();
 
-      SessionForBatchSize context = GetOrCreateSessionForBatchSize(batchSize, disableCUDAGraphs);
+      SessionForBatchSize context = GetOrCreateSessionForBatchSize(batchSize, false);
+      Debug.Assert(context.UsesCUDAGraphs);
 
       // DJE: found necessary to rebind every time
       int inputVarIndex = 0;
@@ -912,7 +923,7 @@ public class ONNXExecutor : IDisposable
       using CudaEvent stopEvt = new CudaEvent();
 
       startEvt.Record(cuStream.Stream);
-      context.Session.RunWithBinding(runOptions, context.IoBinding);
+      context.Session.RunWithBinding(runOptionsBlocking, context.IoBinding);
       stopEvt.Record(cuStream.Stream);
 
       // Wait only for this stream's work to finish
@@ -999,7 +1010,6 @@ public class ONNXExecutor : IDisposable
         for (int i = 0; i < context.InputOrtValues.Count; i++)
         {
           long[] shape = ONNXHelpers.ToLongArray(InputsMetadata[context.InputOrtValues[i].name].Dimensions, batchSize);
-
           inputOrtValuesList.Add(InputsNumBits switch
           {
             8 => OrtValue.CreateTensorValueFromMemory((byte[])context.InputBuffers[i], shape),
@@ -1028,13 +1038,13 @@ public class ONNXExecutor : IDisposable
         }
 
         // Run inference using direct Run method with per-stream CUDA event timing
-        using CudaEvent startEvt = new CudaEvent();
-        using CudaEvent stopEvt = new CudaEvent();
-        startEvt.Record(cuStream.Stream);
-        context.Session.Run(runOptions, inputNames, inputOrtValuesList, outputNames, outputOrtValuesList);
-        stopEvt.Record(cuStream.Stream);
-        stopEvt.Synchronize();
-        LastCudaExecutionMS = CudaEvent.ElapsedTime(startEvt, stopEvt);
+        //        using CudaEvent startEvt = new CudaEvent();
+        //        using CudaEvent stopEvt = new CudaEvent(CUEventFlags.BlockingSync);
+        //        startEvt.Record(cuStream.Stream);
+        context.Session.Run(runOptionsBlocking, inputNames, inputOrtValuesList, outputNames, outputOrtValuesList);
+        //        stopEvt.Record(cuStream.Stream);
+        //        stopEvt.Synchronize();
+        //        LastCudaExecutionMS = CudaEvent.ElapsedTime(startEvt, stopEvt);
 
         // Read output buffers
         for (int i = 0; i < context.OutputBuffers.Count; i++)
@@ -1150,14 +1160,8 @@ public class ONNXExecutor : IDisposable
               outputNames.Add(name);
             }
 
-            // Run inference with per-stream event timing
-            using CudaEvent startEvt = new CudaEvent();
-            using CudaEvent stopEvt = new CudaEvent();
-            startEvt.Record(cuStream.Stream);
-            context.Session.Run(runOptions, inputNames, inputOrtValuesList, outputNames, outputOrtValuesList);
-            stopEvt.Record(cuStream.Stream);
-            stopEvt.Synchronize();
-            LastCudaExecutionMS = CudaEvent.ElapsedTime(startEvt, stopEvt);
+            throw new Exception("Needs remediation to look like other one");
+            context.Session.Run(runOptionsNonBlocking, inputNames, inputOrtValuesList, outputNames, outputOrtValuesList);
 
             // Convert results
             foreach (var (name, metadata, buffer) in context.OutputBuffers)
@@ -1194,7 +1198,7 @@ public class ONNXExecutor : IDisposable
         using CudaEvent startEvt = new CudaEvent();
         using CudaEvent stopEvt = new CudaEvent();
         startEvt.Record(cuStream.Stream);
-        context.Session.RunWithBinding(runOptions, context.IoBinding);
+        context.Session.RunWithBinding(runOptionsNonBlocking, context.IoBinding);
         stopEvt.Record(cuStream.Stream);
         stopEvt.Synchronize();
         LastCudaExecutionMS = CudaEvent.ElapsedTime(startEvt, stopEvt);
@@ -1256,7 +1260,8 @@ public class ONNXExecutor : IDisposable
         sessionCache.Clear();
       }
 
-      runOptions.Dispose();
+      runOptionsBlocking.Dispose();
+      runOptionsNonBlocking.Dispose();
       cuStream?.Dispose();
 
       disposed = true;
