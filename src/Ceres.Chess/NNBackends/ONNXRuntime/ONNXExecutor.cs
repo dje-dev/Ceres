@@ -655,14 +655,14 @@ public class ONNXExecutor : IDisposable
     // Get engines at/around the breakpoints to trigger creation if needed.
     foreach (int b in BATCH_SIZE_ANCHORS_WITHOUT_GRAPH)
     {
-      _ = GetOrCreateSessionForBatchSize(b, true);
+      _ = GetOrCreateSessionForBatchSize(b, false);
     }
 
     if (BATCH_SIZE_ANCHORS_WITH_GRAPH_ADJUSTED != null)
     {
       foreach (int b in BATCH_SIZE_ANCHORS_WITH_GRAPH)
       {
-        _ = GetOrCreateSessionForBatchSize(b);
+        _ = GetOrCreateSessionForBatchSize(b, true, true);
         batchSizesToRunWithGraphs.Add(b);
       }
     }
@@ -877,6 +877,7 @@ public class ONNXExecutor : IDisposable
       where TInput : unmanaged
       where TBuffer : unmanaged
   {
+    //    Console.WriteLine("zzzIOBinding " + batchSize + " --------------------");
     if (batchSize < MinBatchSize)
     {
       throw new ArgumentException($"Batch size {batchSize} is less than minimum of {MinBatchSize}");
@@ -887,8 +888,7 @@ public class ONNXExecutor : IDisposable
     {
       cudaDevice.SetCurrent();
 
-      SessionForBatchSize context = GetOrCreateSessionForBatchSize(batchSize, false);
-      Debug.Assert(context.UsesCUDAGraphs);
+      SessionForBatchSize context = GetOrCreateSessionForBatchSize(batchSize, true, true);
 
       // DJE: found necessary to rebind every time
       int inputVarIndex = 0;
@@ -1269,17 +1269,23 @@ public class ONNXExecutor : IDisposable
   }
 
 
-  private (int min, int max, bool useCudaGraphs) FindBatchSizeBucket(int batchSize, bool useCudaGraphs)
+  private (int min, int max, bool useCudaGraphs) FindBatchSizeBucket(int batchSize,
+                                                                     bool cudaGraphEligible,
+                                                                     bool cudaGraphRequired = false)
   {
 
     // Select the appropriate anchors array
-    int[] anchors = useCudaGraphs ? BATCH_SIZE_ANCHORS_WITH_GRAPH_ADJUSTED
-                                  : BATCH_SIZE_ANCHORS_WITHOUT_GRAPH;
+    int[] anchors = cudaGraphEligible ? BATCH_SIZE_ANCHORS_WITH_GRAPH_ADJUSTED
+                                      : BATCH_SIZE_ANCHORS_WITHOUT_GRAPH;
 
     // If no anchors are configured, fallback to a single bucket spanning the full range
     if (anchors == null || anchors.Length == 0)
     {
-      return (MinBatchSize, maxBatchSize, useCudaGraphs);
+      if (cudaGraphRequired)
+      {
+        throw new Exception($"No suitable CUDA graph batch size bucket found for batch size {batchSize}");
+      }
+      return (MinBatchSize, maxBatchSize, cudaGraphEligible);
     }
 
     int currentMin = MinBatchSize;
@@ -1288,22 +1294,28 @@ public class ONNXExecutor : IDisposable
       int currentMax = anchor - 1;
       if (batchSize >= currentMin && batchSize <= currentMax)
       {
-        return (currentMin, currentMax, useCudaGraphs);
+        return (currentMin, currentMax, cudaGraphEligible);
       }
       currentMin = anchor;
     }
 
+    if (cudaGraphRequired)
+    {
+      throw new Exception($"No suitable CUDA graph batch size bucket found for batch size {batchSize}");
+    }
+
     // If batchSize is larger than or equal to the last anchor
     int lastAnchor = anchors[^1];
-    if (useCudaGraphs)
+
+    if (cudaGraphEligible)
     {
       // Batch size exceeds CUDA graph anchors - fall back to non-CUDA-graph mode
       // and recursively find the appropriate bucket
-      return FindBatchSizeBucket(batchSize, useCudaGraphs: false);
+      return FindBatchSizeBucket(batchSize, cudaGraphEligible: false);
     }
 
     // Non-graph: catch-all bucket to global max
-    return (currentMin, maxBatchSize, useCudaGraphs);
+    return (currentMin, maxBatchSize, cudaGraphEligible);
   }
 
 
@@ -1311,13 +1323,13 @@ public class ONNXExecutor : IDisposable
   /// Gets or creates a session context for the specified batch size.
   /// Rounds up to the nearest batch size anchor.
   /// </summary>
-  private SessionForBatchSize GetOrCreateSessionForBatchSize(int batchSize, bool disableCUDAGraphs = false)
+  private SessionForBatchSize GetOrCreateSessionForBatchSize(int batchSize, bool cudaGraphEligible = true, bool cudaGraphRequired = false)
   {
     int effectiveBatchSize = Math.Max(MinBatchSize, batchSize);
 
-    bool useCudaGraphs = !disableCUDAGraphs && DetermineIfCUDAGraphsShouldBeUsed(effectiveBatchSize);
+    bool useCudaGraphs = cudaGraphRequired || (cudaGraphEligible && DetermineIfCUDAGraphsShouldBeUsed(effectiveBatchSize));
 
-    (int min, int max, bool useCudaGraphs) bucketKey = FindBatchSizeBucket(batchSize, useCudaGraphs);
+    (int min, int max, bool useCudaGraphs) bucketKey = FindBatchSizeBucket(batchSize, useCudaGraphs, cudaGraphRequired);
     if (sessionCache.TryGetValue(bucketKey, out var context))
     {
       return context;
