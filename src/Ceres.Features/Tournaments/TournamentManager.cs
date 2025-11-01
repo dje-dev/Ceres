@@ -250,7 +250,7 @@ namespace Ceres.Features.Tournaments
     {
       shutdownComplete.Reset();
       Def.ShouldShutDown = false;
-        
+
       if (Def.Engines.Length > 0)
       {
         foreach (EnginePlayerDef engine in Def.Engines)
@@ -285,11 +285,11 @@ namespace Ceres.Features.Tournaments
         // Install Ctrl-C handler to allow ad hoc clean termination of tournament (with stats).
         ConsoleCancelEventHandler ctrlCHandler = new ConsoleCancelEventHandler((object sender,
           ConsoleCancelEventArgs args) =>
-          {
-            Console.WriteLine("Tournament pending shutdown....");
-            Def.parentDef.ShouldShutDown = true;
-            shutdownComplete.WaitOne();
-          }); ;
+        {
+          Console.WriteLine("Tournament pending shutdown....");
+          Def.parentDef.ShouldShutDown = true;
+          shutdownComplete.WaitOne();
+        }); ;
         Console.CancelKeyPress += ctrlCHandler;
       }
 
@@ -309,12 +309,14 @@ namespace Ceres.Features.Tournaments
       // If we are a worker process then run only a single game thread.
       int numConcurrent = queueManager != null && !queueManager.IsCoordinator ? 1 : NumConcurrent;
 
+      // First loop instantiats/warms up all the engines
+      // (without concurrency due to potential CUDA synchronization conflicts).
       for (int i = 0; i < numConcurrent; i++)
       {
         TournamentDef tournamentDefClone = Def.Clone();
 
         // Make sure the threads will use either different or pooled evaluators
-        if (NumConcurrent > 1 || DeviceIDs != null)
+        if (NumConcurrent > 1)
         {
           int deviceID = DeviceIDs == null ? i : DeviceIDs[i % DeviceIDs.Length];
           TrySetRelativeDeviceIDIfNotPooled(tournamentDefClone, deviceID);
@@ -326,6 +328,12 @@ namespace Ceres.Features.Tournaments
 
         TournamentGameThread gameTest = new TournamentGameThread(tournamentDefClone, parentTest);
         gameThreads.Add(gameTest);
+      }
+
+      // Second loop creates and launches tasks for each.
+      for (int i = 0; i < numConcurrent; i++)
+      {
+        TournamentGameThread gameTest = gameThreads[i];
 
         Action action;
         if (QueueManager == null)

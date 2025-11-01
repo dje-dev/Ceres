@@ -69,6 +69,8 @@ namespace Ceres.Features.Tournaments
       {
         def.Engines[i].EngineDef.ProcessorGroupID = def.ProcessGroupIndex;
       }
+
+      Run = new TournamentGameRunner(Def);
     }
 
 
@@ -115,8 +117,6 @@ namespace Ceres.Features.Tournaments
     public void RunGameTests(int runnerIndex, Func<int, int> getGamePairToProcess,
                              Action<TournamentGameInfo, TournamentGameInfo> doneGamePairCallback = null)
     {
-      Run = new TournamentGameRunner(Def);
-
       // Create a file name that will be common to all threads in tournament.
       string pgnFileName;
       if (Run.Engines.Length > 2)
