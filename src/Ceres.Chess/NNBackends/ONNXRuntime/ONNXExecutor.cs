@@ -15,8 +15,10 @@ using Ceres.Base.DataTypes;
 using Ceres.Base.Math;
 using Ceres.Base.Misc;
 using Ceres.Chess.UserSettings;
+
 using ManagedCuda;
 using ManagedCuda.BasicTypes;
+
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 
@@ -188,6 +190,9 @@ public class ONNXExecutor : IDisposable
   private IReadOnlyDictionary<string, NodeMetadata> inputsMetadata;
   private readonly object metadataLock = new object();
 
+  CudaStream cuStream;
+
+
   /// <summary>
   /// Lazily initialized input metadata from the ONNX model.
   /// </summary>
@@ -320,6 +325,9 @@ public class ONNXExecutor : IDisposable
     ExtractMultinetMetadataIfApplicable(onnxFileName, onnxModelBytes);
 
     cudaDevice = CUDADevice.GetContext(gpuID);
+    cudaDevice.SetCurrent();
+    cuStream = new CudaStream();
+
     runOptions = new RunOptions();
 
     if (loraAdapterFileName != null)
@@ -506,6 +514,7 @@ public class ONNXExecutor : IDisposable
 
     providerOptionsDict["device_id"] = gpuID.ToString();
     providerOptionsDict["trt_max_workspace_size"] = (4L * 1024 * 1024 * 1024).ToString();
+    providerOptionsDict["user_compute_stream"] = cuStream.Stream.Pointer.ToString();
 
     if (inputNames != null)
     {
@@ -894,9 +903,10 @@ public class ONNXExecutor : IDisposable
 
       // For CUDA graphs, bindings are already set up at session creation time
       // We just need to synchronize and run
-      cudaDevice.Context.Synchronize();
+      //      cudaDevice.Context.Synchronize();
+      cuStream.Synchronize();
       context.Session.RunWithBinding(runOptions, context.IoBinding);
-      cudaDevice.Context.Synchronize();
+      cuStream.Synchronize();
 
       int outputVarIndex = 0;
       foreach (var (name, ortValue, shape, cudaBuffer) in context.OutputOrtValues)
@@ -1005,7 +1015,9 @@ public class ONNXExecutor : IDisposable
         }
 
         // Run inference using direct Run method
+        cuStream.Synchronize();
         context.Session.Run(runOptions, inputNames, inputOrtValuesList, outputNames, outputOrtValuesList);
+        cuStream.Synchronize();
 
         // Read output buffers
         for (int i = 0; i < context.OutputBuffers.Count; i++)
@@ -1120,7 +1132,9 @@ public class ONNXExecutor : IDisposable
             }
 
             // Run inference
+            cuStream.Synchronize();
             context.Session.Run(runOptions, inputNames, inputOrtValuesList, outputNames, outputOrtValuesList);
+            cuStream.Synchronize();
 
             // Convert results
             foreach (var (name, metadata, buffer) in context.OutputBuffers)
@@ -1216,6 +1230,8 @@ public class ONNXExecutor : IDisposable
       }
 
       runOptions.Dispose();
+      cuStream?.Dispose();
+
       disposed = true;
     }
   }
