@@ -875,9 +875,9 @@ public class ONNXExecutor : IDisposable
 
     lock (lockObject)
     {
-      SessionForBatchSize context = GetOrCreateSessionForBatchSize(batchSize, disableCUDAGraphs);
-
       cudaDevice.SetCurrent();
+
+      SessionForBatchSize context = GetOrCreateSessionForBatchSize(batchSize, disableCUDAGraphs);
 
       // DJE: found necessary to rebind every time
       int inputVarIndex = 0;
@@ -982,6 +982,8 @@ public class ONNXExecutor : IDisposable
 
     lock (lockObject)
     {
+      cudaDevice.SetCurrent();
+
       SessionForBatchSize context = GetOrCreateSessionForBatchSize(batchSize);
 
       // Create temporary OrtValues with actual batch size for this run
@@ -1026,7 +1028,6 @@ public class ONNXExecutor : IDisposable
         }
 
         // Run inference using direct Run method with per-stream CUDA event timing
-        cudaDevice.SetCurrent();
         using CudaEvent startEvt = new CudaEvent();
         using CudaEvent stopEvt = new CudaEvent();
         startEvt.Record(cuStream.Stream);
@@ -1092,6 +1093,8 @@ public class ONNXExecutor : IDisposable
     // TODO: improve this method to be more like RunOutputHalf (copy or share logic)
     lock (lockObject)
     {
+      cudaDevice.SetCurrent();
+
       SessionForBatchSize context = GetOrCreateSessionForBatchSize(batchSize);
 
       // Convert inputs to float buffers using pre-allocated inputBuffers32.
@@ -1148,7 +1151,6 @@ public class ONNXExecutor : IDisposable
             }
 
             // Run inference with per-stream event timing
-            cudaDevice.SetCurrent();
             using CudaEvent startEvt = new CudaEvent();
             using CudaEvent stopEvt = new CudaEvent();
             startEvt.Record(cuStream.Stream);
@@ -1423,8 +1425,10 @@ public class ONNXExecutor : IDisposable
     InferenceSession newSession;
     lock (CUDADevice.InitializingCUDAContextLockObj)
     {
+      cudaDevice.SetCurrent();
       newSession = new InferenceSession(storedOnnxModelBytes, so);
     }
+
 
     // Extract and filter metadata from this session
     IReadOnlyDictionary<string, NodeMetadata> sessionInputMetadata = FilterMetadata(newSession.InputMetadata);
@@ -1479,7 +1483,6 @@ public class ONNXExecutor : IDisposable
             // Allocate GPU memory for CUDA graphs
             //            ortValue = OrtValue.CreateAllocatedTensorValue(allocator, TensorElementType.UInt8, shape);
             long numElements = ONNXHelpers.ProductDimensions(buffer.metadata.Dimensions, maxBatch);
-            cudaDevice.SetCurrent();
             cudaBuffer = new CudaDeviceVariable<byte>(numElements);
 
             // 5) Wrap existing DEVICE pointers as OrtValue tensors (no copies; ORT doesn't own memory)
@@ -1509,7 +1512,6 @@ public class ONNXExecutor : IDisposable
           if (useCudaGraphs)
           {
             long numElements = ONNXHelpers.ProductDimensions(buffer.metadata.Dimensions, maxBatch);
-            cudaDevice.SetCurrent();
             cudaBufferFloat16 = new CudaDeviceVariable<Float16>(numElements);
             // 5) Wrap existing DEVICE pointers as OrtValue tensors (no copies; ORT doesn't own memory)
             ortValue = OrtValue.CreateTensorValueWithData(memInfo, TensorElementType.Float16, shape,
@@ -1543,7 +1545,6 @@ public class ONNXExecutor : IDisposable
           // Allocate GPU memory for CUDA graphs
           //          ortValue = OrtValue.CreateAllocatedTensorValue(allocator, TensorElementType.Float16, shape);
           long numElements = ONNXHelpers.ProductDimensions(outputBuffer.metadata.Dimensions, maxBatch);
-          cudaDevice.SetCurrent();
           cudaBuffer = new CudaDeviceVariable<Float16>(numElements);
 
           ortValue = OrtValue.CreateTensorValueWithData(memInfo, TensorElementType.Float16, shape,
@@ -1575,7 +1576,6 @@ public class ONNXExecutor : IDisposable
         {
           ortValue = OrtValue.CreateAllocatedTensorValue(allocator, TensorElementType.Float, shape);
           throw new Exception("need to adjust data type from byte to Float16 and allocate here");
-          cudaDevice.SetCurrent();
           //cudaBuffer = new CudaDeviceVariable<float>(ONNXHelpers.ProductDimensions(buffer.metadata.Dimensions, maxBatch) * sizeof(float));
         }
         else
@@ -1598,7 +1598,6 @@ public class ONNXExecutor : IDisposable
         if (useCudaGraphs)
         {
           ortValue = OrtValue.CreateAllocatedTensorValue(allocator, TensorElementType.Float, shape);
-          cudaDevice.SetCurrent();
           //cudaBuffer = new CudaDeviceVariable<Float16>(ONNXHelpers.ProductDimensions(buffer.metadata.Dimensions, maxBatch));
           throw new Exception("need to adjust data type from Float16 to float and allocate here");
         }
