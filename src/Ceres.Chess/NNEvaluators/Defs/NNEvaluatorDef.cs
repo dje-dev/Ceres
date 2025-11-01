@@ -41,7 +41,7 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// Default minimum batch size before a batch can be 
     /// possibly split over multiple evaluators.
     /// </summary>
-    const int DEFAULT_MIN_SPLIT_POSITIONS = 24;
+    const int DEFAULT_MIN_SPLIT_POSITIONS = 16;
 
     /// <summary>
     /// Array of devices used for the evaluation.
@@ -83,7 +83,7 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// <summary>
     /// Optional string containing arbitrary additional options.
     /// </summary>
-    public string OptionsString { get; set;}
+    public string OptionsString { get; set; }
 
     /// <summary>
     /// Optional description of the evaluator definition;
@@ -152,7 +152,7 @@ namespace Ceres.Chess.NNEvaluators.Defs
         return ret;
       }
     }
-    
+
     // ..........................................................
     /// <summary>
     /// When hashing in cache, how many positions should be included in the hash.
@@ -181,9 +181,9 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// <param name="netDef"></param>
     /// <param name="deviceDef"></param>
     /// <param name="sharedName"></param>
-    public NNEvaluatorDef(NNEvaluatorNetDef netDef, 
-                          NNEvaluatorDeviceDef deviceDef, 
-                          string optionsString, 
+    public NNEvaluatorDef(NNEvaluatorNetDef netDef,
+                          NNEvaluatorDeviceDef deviceDef,
+                          string optionsString,
                           string sharedName = null)
     {
       Nets = [(netDef, 1, 1, 1, 1, 1, 1)];
@@ -203,9 +203,9 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// <param name="netCombo"></param>
     /// <param name="sharedName"></param>
     /// <param name="nets"></param>
-    public NNEvaluatorDef(IEnumerable<(NNEvaluatorDeviceDef, float)> devices, 
+    public NNEvaluatorDef(IEnumerable<(NNEvaluatorDeviceDef, float)> devices,
                           NNEvaluatorDeviceComboType deviceCombo, NNEvaluatorNetComboType netCombo,
-                          string sharedName, 
+                          string sharedName,
                           params (NNEvaluatorNetDef net, float weightValue, float weightValue2, float weightPolicy, float weightM, float uncertainty, float uncertaintyP)[] netDefs)
     {
       if (netDefs.Length == 0)
@@ -229,10 +229,10 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// <param name="deviceType"></param>
     /// <param name="deviceIndex"></param>
     /// <param name="sharedName"></param>
-    public NNEvaluatorDef(NNEvaluatorType netType, 
+    public NNEvaluatorDef(NNEvaluatorType netType,
                           string networkID,
-                          NNDeviceType deviceType = NNDeviceType.GPU, 
-                          int deviceIndex = 0, 
+                          NNDeviceType deviceType = NNDeviceType.GPU,
+                          int deviceIndex = 0,
                           string sharedName = null)
     {
       Devices = [(new NNEvaluatorDeviceDef(deviceType, deviceIndex), 1.0f)];
@@ -250,9 +250,9 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// <param name="deviceCombo"></param>
     /// <param name="sharedName"></param>
     /// <param name="deviceDefs"></param>
-    public NNEvaluatorDef(NNEvaluatorNetDef net, 
-                          NNEvaluatorDeviceComboType deviceCombo, 
-                          string sharedName, 
+    public NNEvaluatorDef(NNEvaluatorNetDef net,
+                          NNEvaluatorDeviceComboType deviceCombo,
+                          string sharedName,
                           params NNEvaluatorDeviceDef[] deviceDefs)
     {
       if (deviceDefs.Length == 0)
@@ -272,8 +272,8 @@ namespace Ceres.Chess.NNEvaluators.Defs
     }
 
 
-    public NNEvaluatorDef(NNEvaluatorNetDef net, 
-                          string sharedName = null, 
+    public NNEvaluatorDef(NNEvaluatorNetDef net,
+                          string sharedName = null,
                           params (NNEvaluatorDeviceDef deviceDef, float fraction)[] deviceDefs)
     {
       if (deviceDefs.Length == 0)
@@ -288,9 +288,9 @@ namespace Ceres.Chess.NNEvaluators.Defs
     }
 
 
-    public NNEvaluatorDef(NNEvaluatorNetDef net, 
-                          NNEvaluatorDeviceComboType deviceCombo, 
-                          string sharedName, 
+    public NNEvaluatorDef(NNEvaluatorNetDef net,
+                          NNEvaluatorDeviceComboType deviceCombo,
+                          string sharedName,
                           params (NNEvaluatorDeviceDef deviceDef, float fraction)[] deviceDefs)
     {
       if (deviceDefs.Length == 0)
@@ -327,16 +327,16 @@ namespace Ceres.Chess.NNEvaluators.Defs
 
 
 
-    public NNEvaluatorDef(NNEvaluatorNetComboType netCombo, 
-                          NNEvaluatorDeviceDef device, 
-                          string optionsString, 
-                          string sharedName, 
+    public NNEvaluatorDef(NNEvaluatorNetComboType netCombo,
+                          NNEvaluatorDeviceDef device,
+                          string optionsString,
+                          string sharedName,
                           params (NNEvaluatorNetDef netDef, float weightValue, float weightValue2, float weightPolicy, float weightM, float uncertainty, float uncertaintyP)[] netDefs)
     {
       if (netDefs.Length == 0)
       {
         throw new Exception("Must have at least one net");
-      } 
+      }
 
       NetCombo = netCombo;
       Nets = netDefs;
@@ -379,8 +379,8 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// <param name="deviceSpecificationString"></param>
     /// <param name="evaluatorOptions"></param>
     /// <returns></returns>
-    public static NNEvaluatorDef FromSpecification(string netSpecificationString, 
-                                                   string deviceSpecificationString, 
+    public static NNEvaluatorDef FromSpecification(string netSpecificationString,
+                                                   string deviceSpecificationString,
                                                    NNEvaluatorOptions evaluatorOptions = null)
     {
       return NNEvaluatorDefFactory.FromSpecification(netSpecificationString, deviceSpecificationString, evaluatorOptions);
@@ -392,7 +392,7 @@ namespace Ceres.Chess.NNEvaluators.Defs
     /// </summary>
     /// <returns></returns>
     public NNEvaluator ToEvaluator() => NNEvaluatorFactory.BuildEvaluator(this);
-    
+
 
     #endregion
 
@@ -504,7 +504,7 @@ namespace Ceres.Chess.NNEvaluators.Defs
 
       NNEvaluatorDef ret = cloneMapper.Map<NNEvaluatorDef>(this);
       ret.DynamicByPosPredicate = DynamicByPosPredicate;
-      for (int i=0;i<Devices.Length; i++)
+      for (int i = 0; i < Devices.Length; i++)
       {
         // Make sure the boxed tuple with the DeviceInfo is cloned to a new object.
         ret.Devices[i].Device = Devices[i].Device with { };
@@ -523,7 +523,7 @@ namespace Ceres.Chess.NNEvaluators.Defs
     public override string ToString()
     {
       string ret = $"<NNEvaluatorDef {NNNetSpecificationString.ToSpecificationString(NetCombo, Nets)} " +
-                   $"{NNDevicesSpecificationString.ToSpecificationString(DeviceCombo, Devices) } ";
+                   $"{NNDevicesSpecificationString.ToSpecificationString(DeviceCombo, Devices)} ";
 
       if (PositionTransform != PositionTransformType.None)
       {
