@@ -194,6 +194,13 @@ public class ONNXExecutor : IDisposable
 
 
   /// <summary>
+  /// High-resolution GPU execution time in milliseconds for the last run on this executor's stream.
+  /// Populated via CUDA events around the inference call.
+  /// </summary>
+  public double LastCudaExecutionMS { get; private set; }
+
+
+  /// <summary>
   /// Lazily initialized input metadata from the ONNX model.
   /// </summary>
   public IReadOnlyDictionary<string, NodeMetadata> InputsMetadata
@@ -329,6 +336,7 @@ public class ONNXExecutor : IDisposable
     cuStream = new CudaStream();
 
     runOptions = new RunOptions();
+    runOptions.AddRunConfigEntry("disable_synchronize_execution_providers", "1");
 
     if (loraAdapterFileName != null)
     {
@@ -871,10 +879,6 @@ public class ONNXExecutor : IDisposable
 
       cudaDevice.SetCurrent();
 
-      //runOptions.AddRunConfigEntry("gpu_graph_id", "1");
-
-      //context.IoBinding.ClearBoundInputs();
-
       // DJE: found necessary to rebind every time
       int inputVarIndex = 0;
       foreach (var (name, ortValue, shape, cudaBuffer, cudaBufferFloat16) in context.InputOrtValues)
@@ -901,12 +905,19 @@ public class ONNXExecutor : IDisposable
         inputVarIndex++;
       }
 
-      // For CUDA graphs, bindings are already set up at session creation time
-      // We just need to synchronize and run
-      //      cudaDevice.Context.Synchronize();
-      cuStream.Synchronize();
+      //runOptions.AddRunConfigEntry("gpu_graph_id", "1");
+
+      // CUDA event timing and fine-grained sync
+      using CudaEvent startEvt = new CudaEvent();
+      using CudaEvent stopEvt = new CudaEvent();
+
+      startEvt.Record(cuStream.Stream);
       context.Session.RunWithBinding(runOptions, context.IoBinding);
-      cuStream.Synchronize();
+      stopEvt.Record(cuStream.Stream);
+
+      // Wait only for this stream's work to finish
+      stopEvt.Synchronize();
+      LastCudaExecutionMS = CudaEvent.ElapsedTime(startEvt, stopEvt);
 
       int outputVarIndex = 0;
       foreach (var (name, ortValue, shape, cudaBuffer) in context.OutputOrtValues)
@@ -1014,10 +1025,15 @@ public class ONNXExecutor : IDisposable
           outputNames.Add(name);
         }
 
-        // Run inference using direct Run method
-        cuStream.Synchronize();
+        // Run inference using direct Run method with per-stream CUDA event timing
+        cudaDevice.SetCurrent();
+        using CudaEvent startEvt = new CudaEvent();
+        using CudaEvent stopEvt = new CudaEvent();
+        startEvt.Record(cuStream.Stream);
         context.Session.Run(runOptions, inputNames, inputOrtValuesList, outputNames, outputOrtValuesList);
-        cuStream.Synchronize();
+        stopEvt.Record(cuStream.Stream);
+        stopEvt.Synchronize();
+        LastCudaExecutionMS = CudaEvent.ElapsedTime(startEvt, stopEvt);
 
         // Read output buffers
         for (int i = 0; i < context.OutputBuffers.Count; i++)
@@ -1131,10 +1147,15 @@ public class ONNXExecutor : IDisposable
               outputNames.Add(name);
             }
 
-            // Run inference
-            cuStream.Synchronize();
+            // Run inference with per-stream event timing
+            cudaDevice.SetCurrent();
+            using CudaEvent startEvt = new CudaEvent();
+            using CudaEvent stopEvt = new CudaEvent();
+            startEvt.Record(cuStream.Stream);
             context.Session.Run(runOptions, inputNames, inputOrtValuesList, outputNames, outputOrtValuesList);
-            cuStream.Synchronize();
+            stopEvt.Record(cuStream.Stream);
+            stopEvt.Synchronize();
+            LastCudaExecutionMS = CudaEvent.ElapsedTime(startEvt, stopEvt);
 
             // Convert results
             foreach (var (name, metadata, buffer) in context.OutputBuffers)
@@ -1167,10 +1188,14 @@ public class ONNXExecutor : IDisposable
       }
       else
       {
-        // Use IOBinding
-        context.IoBinding.SynchronizeBoundInputs();
+        // Use IOBinding path; synchronize via CUDA events instead of stream-wide syncs
+        using CudaEvent startEvt = new CudaEvent();
+        using CudaEvent stopEvt = new CudaEvent();
+        startEvt.Record(cuStream.Stream);
         context.Session.RunWithBinding(runOptions, context.IoBinding);
-        context.IoBinding.SynchronizeBoundOutputs();
+        stopEvt.Record(cuStream.Stream);
+        stopEvt.Synchronize();
+        LastCudaExecutionMS = CudaEvent.ElapsedTime(startEvt, stopEvt);
 
         foreach (var (name, metadata, buffer) in context.OutputBuffers)
         {
