@@ -650,7 +650,7 @@ public class ONNXExecutor : IDisposable
   {
     List<int> batchSizesToRunWithGraphs = new List<int>();
 
-    _ = GetOrCreateSessionForBatchSize(1, true);
+    _ = GetOrCreateSessionForBatchSize(1, false);
 
     // Get engines at/around the breakpoints to trigger creation if needed.
     foreach (int b in BATCH_SIZE_ANCHORS_WITHOUT_GRAPH)
