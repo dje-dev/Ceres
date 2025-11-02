@@ -334,10 +334,7 @@ public class ONNXExecutor : IDisposable
 
     cudaDevice = CUDADevice.GetContext(gpuID);
     cudaDevice.SetCurrent();
-    if (enableCUDAGraphs)
-    {
-      cuStream = new CudaStream();
-    }
+    cuStream = new CudaStream();
 
     runOptionsBlocking = new RunOptions();
     runOptionsNonBlocking = new RunOptions();
@@ -529,10 +526,7 @@ public class ONNXExecutor : IDisposable
     providerOptionsDict["device_id"] = gpuID.ToString();
     providerOptionsDict["trt_max_workspace_size"] = (4L * 1024 * 1024 * 1024).ToString();
 
-    if (useCudaGraphs)
-    {
-      providerOptionsDict["user_compute_stream"] = cuStream.Stream.Pointer.ToString();
-    }
+    providerOptionsDict["user_compute_stream"] = cuStream.Stream.Pointer.ToString();
 
     if (inputNames != null)
     {
@@ -923,7 +917,7 @@ public class ONNXExecutor : IDisposable
       using CudaEvent stopEvt = new CudaEvent();
 
       startEvt.Record(cuStream.Stream);
-      context.Session.RunWithBinding(runOptionsBlocking, context.IoBinding);
+      context.Session.RunWithBinding(runOptionsNonBlocking, context.IoBinding);
       stopEvt.Record(cuStream.Stream);
 
       // Wait only for this stream's work to finish
@@ -1039,11 +1033,12 @@ public class ONNXExecutor : IDisposable
 
         // Run inference using direct Run method with per-stream CUDA event timing
         //        using CudaEvent startEvt = new CudaEvent();
-        //        using CudaEvent stopEvt = new CudaEvent(CUEventFlags.BlockingSync);
+        using CudaEvent stopEvt = new CudaEvent();
         //        startEvt.Record(cuStream.Stream);
-        context.Session.Run(runOptionsBlocking, inputNames, inputOrtValuesList, outputNames, outputOrtValuesList);
-        //        stopEvt.Record(cuStream.Stream);
-        //        stopEvt.Synchronize();
+        context.Session.Run(runOptionsNonBlocking, inputNames, inputOrtValuesList, outputNames, outputOrtValuesList);
+        //        context.Session.RunAsync(runOptionsBlocking, inputNames, inputOrtValuesList, outputNames, outputOrtValuesList).Wait();
+        stopEvt.Record(cuStream.Stream);
+        stopEvt.Synchronize();
         //        LastCudaExecutionMS = CudaEvent.ElapsedTime(startEvt, stopEvt);
 
         // Read output buffers
