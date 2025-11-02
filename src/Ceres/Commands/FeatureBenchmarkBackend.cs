@@ -217,7 +217,6 @@ namespace Ceres.Commands
       {
         Console.WriteLine();
       }
-      evaluator.Shutdown();
 
       return (evaluator, ret);
     }

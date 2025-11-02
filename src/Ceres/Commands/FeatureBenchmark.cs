@@ -122,8 +122,6 @@ namespace Ceres.Commands
 
         countGPU++;
         sumNPS += (int)npsBigBatch;
-
-        evaluator.Dispose();
       }
 
       return (countGPU, sumNPS);
