@@ -452,7 +452,7 @@ namespace Ceres.Chess.NNEvaluators
         {
           if (thread != null && thread.IsAlive)
           {
-            thread.Join(millisecondsTimeout: 10);
+            thread.Join();
           }
         }
 
@@ -469,6 +469,7 @@ namespace Ceres.Chess.NNEvaluators
         }
 
         shutdownTokenSource.Dispose();
+        shutdownTokenSource = null;
       }
 
       base.DoShutdown();
