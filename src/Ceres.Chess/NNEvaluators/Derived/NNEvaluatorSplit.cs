@@ -14,11 +14,11 @@
 #region Using directives
 
 using System;
-using System.Buffers;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using System.Threading.Tasks;
+using System.Threading;
 
 using Ceres.Base.Benchmarking;
 using Ceres.Base.DataType;
@@ -28,7 +28,6 @@ using Ceres.Base.Math;
 using Ceres.Chess.EncodedPositions;
 using Ceres.Chess.LC0.Batches;
 using Ceres.Chess.NetEvaluation.Batch;
-using Chess.Ceres.NNEvaluators;
 
 #endregion
 
@@ -58,6 +57,53 @@ namespace Ceres.Chess.NNEvaluators
 
 
     int indexPerferredEvalator;
+
+    /// <summary>
+    /// Work item for dedicated evaluator threads.
+    /// </summary>
+    private sealed class EvaluatorWorkItem
+    {
+      public IEncodedPositionBatchFlat SubBatch;
+      public bool RetrieveSupplementalResults;
+      public IPositionEvaluationBatch Result;
+      public ManualResetEventSlim CompletionSignal;
+
+      public void Reset()
+      {
+        SubBatch = null;
+        Result = null;
+        RetrieveSupplementalResults = false;
+        CompletionSignal.Reset();
+      }
+    }
+
+    /// <summary>
+    /// Dedicated worker threads for each evaluator
+    /// (do not rely upon thread pool to minimize latency).
+    /// </summary>
+    private Thread[] workerThreads;
+
+    /// <summary>
+    /// Work queues for each evaluator thread.
+    /// </summary>
+    private BlockingCollection<EvaluatorWorkItem>[] workQueues;
+
+    /// <summary>
+    /// Pre-allocated work item pools.
+    /// </summary>
+    private EvaluatorWorkItem[] workItemPool;
+
+    /// <summary>
+    /// Cancellation token source for shutdown.
+    /// </summary>
+    private CancellationTokenSource shutdownTokenSource;
+
+    /// <summary>
+    /// Pre-allocated arrays to avoid allocations during evaluation.
+    /// </summary>
+    private IPositionEvaluationBatch[] resultsBuffer;
+    private int[] subBatchSizesBuffer;
+    private int[] evaluatorIndicesBuffer;
 
 
     /// <summary>
@@ -116,8 +162,8 @@ namespace Ceres.Chess.NNEvaluators
     /// <param name="preferredFractions"></param>
     /// <param name="minSplitSize"></param>
     public NNEvaluatorSplit(NNEvaluator[] evaluators,
-                            float[] preferredFractions = null,
-                            int minSplitSize = DEFAULT_MIN_SPLIT_SIZE) // TODO: make this smarter (based on NPS)
+                           float[] preferredFractions = null,
+                           int minSplitSize = DEFAULT_MIN_SPLIT_SIZE) // TODO: make this smarter (based on NPS)
       : base(evaluators)
     {
       if (preferredFractions != null && preferredFractions.Length != evaluators.Length)
@@ -148,6 +194,81 @@ namespace Ceres.Chess.NNEvaluators
       PreferredFractions = preferredFractions;
 
       indexPerferredEvalator = ArrayUtils.IndexOfElementWithMaxValue(PreferredFractions, PreferredFractions.Length);
+
+      // Initialize dedicated worker threads
+      InitializeWorkerThreads();
+
+      // Pre-allocate fixed-length buffers to avoid ArrayPool allocations during evaluation
+      resultsBuffer = new IPositionEvaluationBatch[Evaluators.Length];
+      subBatchSizesBuffer = new int[Evaluators.Length];
+      evaluatorIndicesBuffer = new int[Evaluators.Length];
+    }
+
+
+    /// <summary>
+    /// Initializes dedicated worker threads for each evaluator.
+    /// </summary>
+    private void InitializeWorkerThreads()
+    {
+      shutdownTokenSource = new CancellationTokenSource();
+      workerThreads = new Thread[Evaluators.Length];
+      workQueues = new BlockingCollection<EvaluatorWorkItem>[Evaluators.Length];
+
+      // Pre-allocate one work item per evaluator (reused across calls)
+      workItemPool = new EvaluatorWorkItem[Evaluators.Length];
+
+      for (int i = 0; i < Evaluators.Length; i++)
+      {
+        int evaluatorIndex = i;
+        workQueues[i] = new BlockingCollection<EvaluatorWorkItem>(boundedCapacity: 1);
+
+        // Pre-allocate and reuse work item
+        workItemPool[i] = new EvaluatorWorkItem
+        {
+          CompletionSignal = new ManualResetEventSlim(false)
+        };
+
+        workerThreads[i] = new Thread(() => EvaluatorWorkerThread(evaluatorIndex))
+        {
+          IsBackground = true,
+          Name = $"NNEvaluatorSplit-Worker-{evaluatorIndex}",
+          Priority = ThreadPriority.AboveNormal
+        };
+        workerThreads[i].Start();
+      }
+    }
+
+
+    /// <summary>
+    /// Worker thread that processes evaluation requests for a specific evaluator.
+    /// </summary>
+    /// <param name="evaluatorIndex"></param>
+    private void EvaluatorWorkerThread(int evaluatorIndex)
+    {
+      try
+      {
+        foreach (EvaluatorWorkItem workItem in workQueues[evaluatorIndex].GetConsumingEnumerable(shutdownTokenSource.Token))
+        {
+          try
+          {
+            workItem.Result = Evaluators[evaluatorIndex].EvaluateIntoBuffers(workItem.SubBatch, workItem.RetrieveSupplementalResults);
+          }
+          catch (Exception ex)
+          {
+            // Store exception in result or handle appropriately
+            Console.Error.WriteLine($"Error in evaluator {evaluatorIndex}: {ex}");
+            throw;
+          }
+          finally
+          {
+            workItem.CompletionSignal.Set();
+          }
+        }
+      }
+      catch (OperationCanceledException)
+      {
+        // Normal shutdown
+      }
     }
 
 
@@ -159,7 +280,10 @@ namespace Ceres.Chess.NNEvaluators
     /// <returns></returns>
     protected override IPositionEvaluationBatch DoEvaluateIntoBuffers(IEncodedPositionBatchFlat positions, bool retrieveSupplementalResults = false)
     {
-      if (retrieveSupplementalResults) throw new NotImplementedException();
+      if (retrieveSupplementalResults)
+      {
+        throw new NotImplementedException();
+      }
 
       // Determine how many evaluators to actually use for this batch.
       // Never use more than Round(positions.NumPos / MinSplitSize) evaluators.
@@ -171,16 +295,15 @@ namespace Ceres.Chess.NNEvaluators
       if (evaluatorsToUse == 1)
       {
         return Evaluators[indexPerferredEvalator].EvaluateIntoBuffers(positions, retrieveSupplementalResults);
-      }
+}
 #endif
 
       // Compute the allocation of positions across evaluators.
       int[] allocations = EvaluatorAllocator.Allocate(evaluatorsToUse, positions.NumPos);
 
-      // Allocate arrays sized only for the evaluators we will actually use.
-      IPositionEvaluationBatch[] results = new IPositionEvaluationBatch[evaluatorsToUse];
-      Task[] tasks = new Task[evaluatorsToUse];
-      int[] subBatchSizes = new int[evaluatorsToUse];
+      IPositionEvaluationBatch[] results = resultsBuffer;
+      int[] subBatchSizes = subBatchSizesBuffer;
+      int[] evaluatorIndices = evaluatorIndicesBuffer;
 
       // Dispatch the sub-batches across the evaluators.
       int positionsAllocated = 0;
@@ -190,20 +313,33 @@ namespace Ceres.Chess.NNEvaluators
         int numAllocated = allocations[i];
         if (numAllocated > 0)
         {
-          int capI = i;
-          int capEvaluatorsCap = evaluatorsAllocated;
-
           IEncodedPositionBatchFlat thisSubBatch = positions.GetSubBatchSlice(positionsAllocated, numAllocated);
 
+          // Reuse pre-allocated work item instead of creating new one
+          EvaluatorWorkItem workItem = workItemPool[i];
+          workItem.Reset();
+          workItem.SubBatch = thisSubBatch;
+          workItem.RetrieveSupplementalResults = retrieveSupplementalResults;
+
           subBatchSizes[evaluatorsAllocated] = numAllocated;
-          tasks[evaluatorsAllocated] = Task.Run(() => results[capEvaluatorsCap] = Evaluators[capI].EvaluateIntoBuffers(thisSubBatch, retrieveSupplementalResults));
+          evaluatorIndices[evaluatorsAllocated] = i;
+
+          // Submit work to dedicated thread
+          workQueues[i].Add(workItem);
 
           evaluatorsAllocated++;
           positionsAllocated += numAllocated;
         }
       }
 
-      Task.WaitAll(tasks.ToArray());
+      // Wait for all work items to complete.
+      for (int i = 0; i < evaluatorsAllocated; i++)
+      {
+        int evaluatorIndex = evaluatorIndicesBuffer[i];
+        EvaluatorWorkItem workItem = workItemPool[evaluatorIndex];
+        workItem.CompletionSignal.Wait();
+        resultsBuffer[i] = workItem.Result;
+      }
 
       EvaluatorAllocator.Deallocate(allocations);
 
@@ -213,17 +349,17 @@ namespace Ceres.Chess.NNEvaluators
 
       if (USE_MERGED_BATCH_VIEW)
       {
-        return new PositionsEvaluationBatchMerged(results, subBatchSizes);
+        return new PositionsEvaluationBatchMerged(resultsBuffer, subBatchSizesBuffer);
       }
       else
       {
-        bool isWDL = results[0].IsWDL;
-        bool hasM = results[0].HasM;
-        bool hasUncertaintyV = results[0].HasUncertaintyV;
-        bool hasUncertaintyP = results[0].HasUncertaintyP;
-        bool hasValueSecondary = results[0].HasValueSecondary;
-        bool hasAction = results[0].HasAction;
-        bool hasState = results[0].HasState;
+        bool isWDL = resultsBuffer[0].IsWDL;
+        bool hasM = resultsBuffer[0].HasM;
+        bool hasUncertaintyV = resultsBuffer[0].HasUncertaintyV;
+        bool hasUncertaintyP = resultsBuffer[0].HasUncertaintyP;
+        bool hasValueSecondary = resultsBuffer[0].HasValueSecondary;
+        bool hasAction = resultsBuffer[0].HasAction;
+        bool hasState = resultsBuffer[0].HasState;
 
 
         CompressedPolicyVector[] policies = new CompressedPolicyVector[positions.NumPos];
@@ -240,7 +376,7 @@ namespace Ceres.Chess.NNEvaluators
         int nextPosIndex = 0;
         for (int i = 0; i < evaluatorsToUse; i++)
         {
-          PositionEvaluationBatch resultI = (PositionEvaluationBatch)results[i];
+          PositionEvaluationBatch resultI = (PositionEvaluationBatch)resultsBuffer[i];
           int thisNumPos = resultI.NumPos;
 
           resultI.Policies.CopyTo(new Memory<CompressedPolicyVector>(policies).Slice(nextPosIndex, thisNumPos));
@@ -291,11 +427,51 @@ namespace Ceres.Chess.NNEvaluators
 
         TimingStats stats = new TimingStats();
         return new PositionEvaluationBatch(isWDL, hasM, hasUncertaintyV, hasUncertaintyP, hasAction, hasValueSecondary, hasState,
-                                           positions.NumPos,
-                                           policies, actions, w, l, w2, l2, m, uncertaintyV, uncertaintyP, states, null, stats);
+                                           positions.NumPos, policies, actions, w, l, w2, l2, m, uncertaintyV, uncertaintyP, states, null, stats);
       }
-
     }
 
+
+    /// <summary>
+    /// Shutdown worker threads.
+    /// </summary>
+    protected override void DoShutdown()
+    {
+      if (shutdownTokenSource != null)
+      {
+        shutdownTokenSource.Cancel();
+
+        // Complete all work queues to unblock worker threads
+        foreach (BlockingCollection<EvaluatorWorkItem> queue in workQueues)
+        {
+          queue.CompleteAdding();
+        }
+
+        // Wait for all threads to finish
+        foreach (Thread thread in workerThreads)
+        {
+          if (thread != null && thread.IsAlive)
+          {
+            thread.Join(millisecondsTimeout: 10);
+          }
+        }
+
+        // Dispose resources
+        foreach (BlockingCollection<EvaluatorWorkItem> queue in workQueues)
+        {
+          queue.Dispose();
+        }
+
+        // Dispose work items (specifically the ManualResetEventSlim)
+        foreach (EvaluatorWorkItem workItem in workItemPool)
+        {
+          workItem.CompletionSignal.Dispose();
+        }
+
+        shutdownTokenSource.Dispose();
+      }
+
+      base.DoShutdown();
+    }
   }
 }
