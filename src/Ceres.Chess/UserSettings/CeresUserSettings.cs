@@ -210,6 +210,7 @@ namespace Ceres.Chess.UserSettings
     public float? CPUCTFactor { get; set; }
     public float? CPUCTFactorAtRoot { get; set; }
     public float? PolicyTemperature { get; set; }
+    public float? ValueTemperature { get; set; }
     public float? FPU { get; set; }
     public float? FPUAtRoot { get; set; }
 
