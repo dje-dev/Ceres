@@ -1,51 +1,50 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
-  </PropertyGroup>
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+	</PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-    <OutputPath>..\..\artifacts\debug</OutputPath>
-    <DefineConstants>DEBUG;TRACE</DefineConstants>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-  </PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+		<OutputPath>..\..\artifacts\debug</OutputPath>
+		<DefineConstants>DEBUG;TRACE</DefineConstants>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+	</PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <OutputPath>..\..\artifacts\release</OutputPath>
-    <EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
-  </PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<OutputPath>..\..\artifacts\release</OutputPath>
+		<EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
+	</PropertyGroup>
 
-  <ItemGroup>
-    <Compile Remove="Environment\Logging\**" />
-    <EmbeddedResource Remove="Environment\Logging\**" />
-    <None Remove="Environment\Logging\**" />
-  </ItemGroup>
+	<ItemGroup>
+		<Compile Remove="Environment\Logging\**" />
+		<EmbeddedResource Remove="Environment\Logging\**" />
+		<None Remove="Environment\Logging\**" />
+	</ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Include="AutoMapper" Version="13.0.1" />
-    <PackageReference Include="GitInfo" Version="3.5.0">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
-    <PackageReference Include="ManagedCuda-12" Version="12.4.57" />
-    <PackageReference Include="ManagedCuda-CUBLAS" Version="12.4.57" />
-    <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.1" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="8.0.1" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="8.0.1" />
-    <PackageReference Include="Microsoft.Extensions.Logging.EventSource" Version="8.0.1" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.2" />
+	<ItemGroup>
+		<PackageReference Include="AutoMapper" Version="13.0.1" />
+		<PackageReference Include="GitInfo" Version="3.6.0">
+			<PrivateAssets>all</PrivateAssets>
+			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		</PackageReference>
+		<PackageReference Include="ManagedCuda-12" Version="12.4.57" />
+		<PackageReference Include="ManagedCuda-CUBLAS" Version="12.4.57" />
+		<PackageReference Include="Microsoft.Diagnostics.NETCore.Client" Version="0.2.652701" />
+		<PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.10" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.10" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="9.0.10" />
+		<PackageReference Include="Microsoft.Extensions.Logging.EventSource" Version="9.0.10" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.10" />
 		<PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu" Version="1.23.2" />
 
 		<PackageReference Include="protobuf-net" Version="3.2.45" />
-    <PackageReference Include="protobuf-net.Core" Version="3.2.45" />
-    <PackageReference Include="OnnxSharp" Version="0.3.2" />
-    <PackageReference Include="Spectre.Console" Version="0.49.1" />
-    
-    <PackageReference Include="System.Numerics.Tensors" Version="9.0.3" />
-    
-    <PackageReference Include="System.Runtime.Serialization.Formatters" Version="9.0.4" />
-  </ItemGroup>
+		<PackageReference Include="protobuf-net.Core" Version="3.2.45" />
+		<PackageReference Include="OnnxSharp" Version="0.3.2" />
+		<PackageReference Include="Spectre.Console" Version="0.53.0" />
+
+		<PackageReference Include="System.Numerics.Tensors" Version="9.0.10" />
+	</ItemGroup>
 
 </Project>

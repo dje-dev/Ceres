@@ -1,46 +1,45 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
-  </PropertyGroup>
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<TargetFramework>net9.0</TargetFramework>
+	</PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
-    <LangVersion>preview</LangVersion>
-    <ApplicationIcon />
-    <OutputType>Exe</OutputType>
-    <StartupObject />
-    <GCLargePages>false</GCLargePages>
-    <ServerGarbageCollection>true</ServerGarbageCollection>
-    <GCLOHThreshold>100000</GCLOHThreshold>
-    <RunAnalyzersDuringBuild>true</RunAnalyzersDuringBuild>
-    <AnalysisLevel>latest</AnalysisLevel>
-    <OutputPath>..\..\artifacts\release</OutputPath>
-    <EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
-  </PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+		<LangVersion>preview</LangVersion>
+		<ApplicationIcon />
+		<OutputType>Exe</OutputType>
+		<StartupObject />
+		<GCLargePages>false</GCLargePages>
+		<ServerGarbageCollection>true</ServerGarbageCollection>
+		<GCLOHThreshold>100000</GCLOHThreshold>
+		<RunAnalyzersDuringBuild>true</RunAnalyzersDuringBuild>
+		<AnalysisLevel>latest</AnalysisLevel>
+		<OutputPath>..\..\artifacts\release</OutputPath>
+		<EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
+	</PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-    <OutputPath>..\..\artifacts\debug</OutputPath>
-    <EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
-  </PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+		<OutputPath>..\..\artifacts\debug</OutputPath>
+	</PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="GitInfo" Version="3.3.5">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
-    <PackageReference Include="Microsoft.Extensions.Configuration" Version="8.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.CommandLine" Version="8.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="8.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.FileExtensions" Version="8.0.1" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.1" />
-  </ItemGroup>
+	<ItemGroup>
+		<PackageReference Include="GitInfo" Version="3.3.5">
+			<PrivateAssets>all</PrivateAssets>
+			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		</PackageReference>
+		<PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.10" />
+		<PackageReference Include="Microsoft.Extensions.Configuration.CommandLine" Version="9.0.10" />
+		<PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="9.0.10" />
+		<PackageReference Include="Microsoft.Extensions.Configuration.FileExtensions" Version="9.0.10" />
+		<PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.1" />
+	</ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\Ceres.Base\Ceres.Base.csproj" />
-    <ProjectReference Include="..\Ceres.Chess\Ceres.Chess.csproj" />
-    <ProjectReference Include="..\Ceres.Features\Ceres.Features.csproj" />
-    <ProjectReference Include="..\Ceres.MCTS\Ceres.MCTS.csproj" />
-  </ItemGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\Ceres.Base\Ceres.Base.csproj" />
+		<ProjectReference Include="..\Ceres.Chess\Ceres.Chess.csproj" />
+		<ProjectReference Include="..\Ceres.Features\Ceres.Features.csproj" />
+		<ProjectReference Include="..\Ceres.MCTS\Ceres.MCTS.csproj" />
+	</ItemGroup>
 
 </Project>
