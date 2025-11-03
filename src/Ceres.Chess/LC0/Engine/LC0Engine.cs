@@ -51,7 +51,9 @@ namespace Ceres.Chess.LC0.Engine
     /// <param name="resetStateAndCachesBeforeMoves"></param>
     public LC0Engine(string exePath, int processorGroupID, string options, bool resetStateAndCachesBeforeMoves)
     {
-      Runner = new UCIGameRunner(exePath, resetStateAndCachesBeforeMoves, options, null);
+      string[] extraSetOptions = ["setoption name UCI_ShowWDL value true", 
+                                  "setoption name UCI_ShowEPS value true"];
+      Runner = new UCIGameRunner(exePath, resetStateAndCachesBeforeMoves, options, extraSetOptions);
     }
 
   
