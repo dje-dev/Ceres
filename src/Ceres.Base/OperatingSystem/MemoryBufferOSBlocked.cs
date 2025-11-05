@@ -157,11 +157,16 @@ namespace Ceres.Base.OperatingSystem
       // Compute the new required allocation including extra padding.
       long newNumEntriesWithPadding = newNextFreeBlockIndex * itemsPerBlock + bufferExtraItems;
 
-      if (entries.NumItemsAllocated <= newNumEntriesWithPadding)
+      // Check if we need to allocate (optimistic check without lock)
+      if (entries.NumItemsAllocated < newNumEntriesWithPadding)
       {
         lock (lockObj)
         {
-          entries.InsureAllocated(newNumEntriesWithPadding);
+          // Re-check inside lock - another thread might have already allocated
+          if (entries.NumItemsAllocated < newNumEntriesWithPadding)
+          {
+            entries.InsureAllocated(newNumEntriesWithPadding);
+          }
         }
       }
 
