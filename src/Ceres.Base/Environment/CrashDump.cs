@@ -27,7 +27,7 @@ public static class CrashDump
   /// </summary>
   public static void WriteDump(string outputPath,
                                DumpType dumpType = DumpType.Normal,
-                               bool logProgress = true)
+                               bool logProgress = false)
   {
     DiagnosticsClient client = new DiagnosticsClient(Process.GetCurrentProcess().Id);
     client.WriteDump(dumpType, outputPath, logDumpGeneration: logProgress);
