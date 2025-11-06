@@ -485,7 +485,9 @@ public class ONNXExecutor : IDisposable
   }
 
 
-  static string lastTRTCacheDir;
+  string lastTRTCacheDir;
+  string lastTRTPrefix;
+
 
   string GetTRTEngineCacheDir()
   {
@@ -601,8 +603,8 @@ public class ONNXExecutor : IDisposable
 
       string shortIDNoPrefix = shortID.Split("|")[0]; // remove anything after pipe character (options string)
       string cachePrefix = FileUtils.FileNameSanitized(shortIDNoPrefix);
-
       cachePrefix += $"_bs{minBatch}-{maxBatch}" + (useCudaGraphs ? "-graph" : "");
+      lastTRTPrefix = cachePrefix;
 
       providerOptionsDict["trt_engine_cache_prefix"] = cachePrefix;
       providerOptionsDict["trt_timing_cache_enable"] = "1";
@@ -934,7 +936,7 @@ public class ONNXExecutor : IDisposable
         outputVarIndex++;
       }
 
-      // Package up restult array.
+      // Package up result array.
       for (int i = 0; i < context.OutputOrtValues.Count; i++)
       {
         var (name, ortValue, shape, cudaBuffer) = context.OutputOrtValues[i];
@@ -1339,11 +1341,11 @@ public class ONNXExecutor : IDisposable
     // Create new session context for this batch size anchor
     if (bucketKey.useCudaGraphs)
     {
-      ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"[{GPUID}]: Creating new graph session for batch size {bucketKey.max} (requested: {batchSize}) ... ", endLine: false);
+      ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"[{GPUID}]: Creating new graph session for batch size {bucketKey.max} (requested: {batchSize}) ... ");
     }
     else
     {
-      ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"[{GPUID}]: Creating new non-graph session for batch size bucket [{bucketKey.min}..{bucketKey.max}] (requested: {batchSize}) ... ", endLine: false);
+      ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"[{GPUID}]: Creating new non-graph session for batch size bucket [{bucketKey.min}..{bucketKey.max}] (requested: {batchSize}) ... ");
     }
 
     // Take a global lock during session creation for two reasons:
@@ -1361,7 +1363,9 @@ public class ONNXExecutor : IDisposable
     }
     sessionCache[bucketKey] = context;
 
-    ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, "done in " + Math.Round(stats.ElapsedTimeSecs, 2) + " seconds.");
+    ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"[{GPUID}]: done creating "
+                                + $"{(bucketKey.useCudaGraphs ? "graph session" : "non-graph session")}"
+                                + $" in {Math.Round(stats.ElapsedTimeSecs, 2)} seconds.");
 
     if (context.UsesCUDAGraphs)
     {
@@ -1434,11 +1438,55 @@ public class ONNXExecutor : IDisposable
     using SessionOptions so = CreateSessionOptions(sessionCreationParams, minBatch, maxBatch, useCudaGraphs);
 
     // Create the session
-    InferenceSession newSession;
+    InferenceSession newSession = null;
     lock (CUDADevice.InitializingCUDAContextLockObj)
     {
       cudaDevice.SetCurrent();
-      newSession = new InferenceSession(storedOnnxModelBytes, so);
+
+      bool haveOKEngine = false;
+      int numTries = 0;
+      const int MAX_TRIES = 10;
+      string engineFN = null;
+      while (!haveOKEngine && numTries < MAX_TRIES)
+      {
+        numTries++;
+        newSession = new InferenceSession(storedOnnxModelBytes, so);
+
+        if (PrecisionNumBits == 16 && useTensorRT)
+        {
+          // Check if TensorRT engine was created for this session
+          (haveOKEngine, engineFN) = CheckEngineCorrectnessIfGenerated();
+        }
+        else
+        {
+          haveOKEngine = true;
+        }
+
+        if (!haveOKEngine)
+        {
+
+          if (numTries < MAX_TRIES)
+          {
+            File.Delete(engineFN);
+            Console.WriteLine($"[{GPUID}]: WARNING: Retrying ...");
+          }
+          else
+          {
+            bool allowBadEngine = System.Environment.GetEnvironmentVariable("CERES_ALLOW_BAD_TRT_ENGINE") == "1";
+            if (allowBadEngine)
+            {
+              ConsoleUtils.WriteLineColored(ConsoleColor.Red, $"[{GPUID}]: WARNING: Failed, will fallback to engine with incorrect precision...");
+            }
+            else
+            {
+              File.Delete(engineFN);
+              ConsoleUtils.WriteLineColored(ConsoleColor.Red, $"[{GPUID}]: WARNING: Exiting, unable to create TRT engine after multiple attempts."
+                                           + " Set environment variable CERES_ALLOW_BAD_TRT_ENGINE to 1 to override this behavior.");
+              System.Environment.Exit(3);
+            }
+          }
+        }
+      }
     }
 
 
@@ -1626,6 +1674,51 @@ public class ONNXExecutor : IDisposable
     context.Allocator = allocator;
 
     return context;
+  }
+
+  private (bool engineOK, string engineFN) CheckEngineCorrectnessIfGenerated()
+  {
+    string lastCreatedEngineFN = Directory.EnumerateFiles(lastTRTCacheDir, "*.engine")
+                                          .Where(f => Path.GetFileName(f).Contains(lastTRTPrefix))
+                                          .OrderByDescending(f => File.GetLastWriteTimeUtc(f))
+                                          .FirstOrDefault();
+    if (lastCreatedEngineFN == null)
+    {
+      // Didn't find the cache file for some reason.
+      // So there is no way to validate it. Just report success.
+      return (true, null);
+    }
+    else
+    {
+      TimeSpan timeSinceLastWrite = DateTime.Now - File.GetLastWriteTimeUtc(lastCreatedEngineFN);
+      if (timeSinceLastWrite.TotalSeconds > 5)
+      {
+        // File found but is old - assume it was successfully built from a prior run.
+        return (true, null);
+      }
+      else
+      {
+        long fileSize = new FileInfo(lastCreatedEngineFN).Length;
+        long networkFileSize = storedOnnxModelBytes.Length;
+        double ratioEngineToNetFile = (double)fileSize / networkFileSize;
+        if (ratioEngineToNetFile > 1.5)
+        {
+          ConsoleUtils.WriteLineColored(ConsoleColor.Yellow,
+                                        $"[{GPUID}]: TensorRT engine generated wrong percision! {Path.GetFileName(lastCreatedEngineFN)} " +
+                                        $"(size: {fileSize / 1024} KB; ONNX model size: {networkFileSize / 1024} KB)");
+          return (false, lastCreatedEngineFN);
+        }
+        else
+        {
+          ConsoleUtils.WriteLineColored(ConsoleColor.Green,
+                                        $"[{GPUID}]: TensorRT engine created: {Path.GetFileName(lastCreatedEngineFN)} " +
+                                        $"(size: {fileSize / 1024} KB; ONNX model size: {networkFileSize / 1024} KB)");
+          return (true, lastCreatedEngineFN);
+        }
+      }
+    }
+
+    throw new Exception("Internal error checking TensorRT engine correctness.");
   }
 
 
