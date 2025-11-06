@@ -107,9 +107,15 @@ namespace Ceres.Chess.GameEngines
     /// </summary>
     private float? nps;
 
+    /// <summary>
+    /// Optional eps (network evaluation nodes per second) reported directly by an engine.
+    /// </summary>
+    private float? eps;
+
+
     public GameMoveStat(int plyNum, SideType side, Position position, float scoreQ, float scoreCP, float clockSecondsAlreadyConsumed,
                         int numPieces, float mAvg, int finalN, int numNodesComputed,
-                        SearchLimit searchLimit, float timeElapsed, float? nps = null)
+                        SearchLimit searchLimit, float timeElapsed, float? nps = null, float? eps = null)
     {
       PlyNum = plyNum;
       Side = side;
@@ -124,6 +130,7 @@ namespace Ceres.Chess.GameEngines
       SearchLimit = searchLimit;
       TimeElapsed = timeElapsed;
       this.nps = nps;
+      this.eps = eps;
     }
 
 
