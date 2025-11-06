@@ -186,8 +186,8 @@ namespace Ceres.Features.GameEngines
                     : EncodedEvalLogistic.CentipawnToLogistic(boundedCP);
       return new GameEngineSearchResult(lc0Analysis.BestMove, lc0Q, boundedCP, float.NaN,
                                         searchLimit, default, 0, (int)lc0Analysis.NumNodes,
-                                        lc0Analysis.UCIInfo.NPS, (int)lc0Analysis.UCIInfo.Depth,
-                                        lc0Analysis.Moves);
+                                        lc0Analysis.UCIInfo.NPS, lc0Analysis.UCIInfo.EPS,
+                                        (int)lc0Analysis.UCIInfo.Depth, lc0Analysis.Moves);
     }
 
     /// <summary>

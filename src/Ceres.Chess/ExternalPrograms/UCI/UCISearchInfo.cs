@@ -62,6 +62,11 @@ namespace Ceres.Chess.ExternalPrograms.UCI
     public int NPS;
 
     /// <summary>
+    /// Neural network evaluator evaluations per second.
+    /// </summary>
+    public int EPS;
+
+    /// <summary>
     /// Search time reported by engine (in milliseconds).
     /// </summary>
     public int EngineReportedSearchTime;
@@ -145,6 +150,7 @@ namespace Ceres.Chess.ExternalPrograms.UCI
       ScoreCentipawns = -1;
       Nodes = 0;
       NPS = -1;
+      EPS = -1;
       EngineReportedSearchTime = -1;
       Mate = 0;
 
@@ -164,6 +170,7 @@ namespace Ceres.Chess.ExternalPrograms.UCI
         Check(i, "mate", ref Mate);
         CheckU(i, "nodes", ref Nodes);
         Check(i, "nps", ref NPS);
+        Check(i, "eps", ref EPS);
         Check(i, "time", ref EngineReportedSearchTime);
 
         if (tokens[i].ToUpper() == "WDL")

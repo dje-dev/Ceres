@@ -81,6 +81,11 @@ namespace Ceres.Chess.GameEngines
     public int NPS;
 
     /// <summary>
+    /// Engine's reported EPS (neural network evaluator nodes per move).
+    /// </summary>
+    public int EPS;
+
+    /// <summary>
     /// Time required for search.
     /// </summary>
     public TimingStats TimingStats;
@@ -94,7 +99,7 @@ namespace Ceres.Chess.GameEngines
 
     public GameEngineSearchResult(string moveString, float scoreQ, float scoreCentipawns, float mAvg, 
                                   SearchLimit searchLimit, TimingStats timingStats, 
-                                  int startingN, int finalN, int nps, int depth,
+                                  int startingN, int finalN, int nps, int eps, int depth,
                                   List<VerboseMoveStat> verboseMoveStats = null)
     {
       MoveString = moveString ?? throw new ArgumentNullException(nameof(moveString));
@@ -106,6 +111,7 @@ namespace Ceres.Chess.GameEngines
       StartingN = startingN;
       FinalN = finalN;
       NPS = nps;
+      EPS = eps;
       Depth = depth;
       VerboseMoveStats = verboseMoveStats;
     }

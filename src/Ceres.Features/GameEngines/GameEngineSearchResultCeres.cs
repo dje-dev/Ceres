@@ -57,10 +57,13 @@ namespace Ceres.Features.GameEngines
     /// <param name="bestMoveInfo"></param>
     public GameEngineSearchResultCeres(string moveString, float scoreQ, float scoreCentipawns, float mAvg,
                                        SearchLimit searchLimit, TimingStats timingStats,
-                                       int startingN, int endingN, int depth, MCTSearch search,
+                                       int startingN, int endingN, int eps, int depth, MCTSearch search,
                                        BestMoveInfo bestMove)
       : base(moveString, scoreQ, scoreCentipawns, mAvg, searchLimit, timingStats,
-             startingN, endingN, (int)MathF.Round((endingN - startingN) / (float)timingStats.ElapsedTimeSecs, 1), depth)
+             startingN, endingN, 
+             (int)MathF.Round((endingN - startingN) / (float)timingStats.ElapsedTimeSecs, 1), 
+             eps,
+             depth)
     {
       Search = search;
       BestMove = bestMove;
