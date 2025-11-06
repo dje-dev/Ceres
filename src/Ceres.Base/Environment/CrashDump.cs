@@ -30,6 +30,6 @@ public static class CrashDump
                                bool logProgress = false)
   {
     DiagnosticsClient client = new DiagnosticsClient(Process.GetCurrentProcess().Id);
-    client.WriteDump(dumpType, outputPath, logDumpGeneration: logProgress);
+    client.WriteDump(dumpType, outputPath.Replace(" ", ""), logDumpGeneration: logProgress);
   }
 }
