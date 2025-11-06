@@ -109,7 +109,7 @@ namespace Ceres.Base.OperatingSystem
     /// <summary>
     /// Ensures that the buffer has allocated space for at least the specified number of items.
     /// </summary>
-    public void InsureAllocated(long numItems) => entries.InsureAllocated(numItems);
+    public void InsureAllocated(long numItems) { lock (lockObj) entries.InsureAllocated(numItems); }
 
 
     /// <summary>
