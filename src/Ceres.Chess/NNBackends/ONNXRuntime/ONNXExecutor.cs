@@ -449,6 +449,8 @@ public class ONNXExecutor : IDisposable
     }
     else if (useTensorRT)
     {
+      cudaDevice.SetCurrent();
+
       // Batches for CUDA graphs always execute full set 
       int minBatchSizetoUse = useCudaGraphs ? maxBatch : minBatch;
       so = CreateTensorRTSessionOptions(shortID, inputNames, nonBatchDimensions, gpuID,
@@ -456,6 +458,7 @@ public class ONNXExecutor : IDisposable
     }
     else
     {
+      cudaDevice.SetCurrent();
       so = CreateCUDASessionOptions(gpuID);
     }
 
