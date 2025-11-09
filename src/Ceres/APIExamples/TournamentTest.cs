@@ -84,8 +84,8 @@ namespace Ceres.APIExamples
 
     static string exeCeres() => SoftwareManager.IsLinux ? @"/raid/dev/Ceres/artifacts/release/net8.0/Ceres.dll"
                                           : @"C:\dev\ceres\artifacts\release\net8.0\ceres.exe";
-    static string exeCeres93() => SoftwareManager.IsLinux ? @"/raid/dev/Ceres93/artifacts/release/5.0/Ceres.dll"
-                                                : @"C:\ceres\releases\v0.93\ceres.exe";
+    static string exeCeresV2() => SoftwareManager.IsLinux ? throw new NotImplementedException()
+                                                : @"G:\dev\Ceres.MCGS.ok\artifacts\release\net10.0\ceres.mcgs.exe";
     static string exeCeres96() => SoftwareManager.IsLinux ? @"/raid/dev/Ceres96/Ceres.dll"
                                                 : @"C:\ceres\releases\v0.96\ceres.exe";
     static string exeCeresPreNC() => SoftwareManager.IsLinux ? @"/raid/dev/v0.97RC3/artifacts/release/5.0/Ceres.dll"
@@ -396,19 +396,19 @@ namespace Ceres.APIExamples
 
       NET2 = "HOP_SP_512_55_16H_FFN4_NLA_SMOL_SP_B1_9bn_fp16_5599985664.onnx";
 
-      NET1 = "~T70";
+      NET1 = "~T81";
+      NET2 = "~T81";// "C1-640-34";
 
       //      NET1 = "lepned.lora";
       //      NET1 = "C1-512-35.french002.lora.onnx";
 
       //      NET1 = "HOP_SP_512_55_16H_FFN4_NLA_SMOL_SP_B1_9bn_fp16_6799982592";
-      NET2 = "~T70";// "C1-640-34";
 
       //      NET1 = "HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_80bn_fp16_7399983104_lora.onnx";
       //      NET2 = "HOP_SP_512_35_16H_FFN3_NLA_SMOL_SP_B1_80bn_fp16_7399983104.onnx";
 
       //NET1 = "HOP_SP_512_55_16H_FFN4_NLA_SMOL_SP_B1_9bn_fp16_last.onnx";
-      NET2 = "~BT4_FP16_TRT";
+      //NET2 = "~BT4_FP16_TRT";
       //NET2 = "combo_55_6x_67bn";
 
 
@@ -436,7 +436,8 @@ namespace Ceres.APIExamples
       //NET2 = "~T1_DISTIL_512_15_NATIVE";
 
 
-      SearchLimit limit1 = SearchLimit.NodesPerMove(2000); //with 100 game pairs 20=78sec, 50=105sec
+      SearchLimit limit1 = SearchLimit.NodesPerMove(100); //with 100 game pairs 20=78sec, 50=105sec
+//SearchLimit limit1 = SearchLimit.SecondsPerMove(3);
       //limit1 = SearchLimit.BestValueMove;
       if (headType == HeadTestType.Policy)
       {
@@ -582,7 +583,7 @@ BT4 800 nodes vs SF17 0.20sec (6 threads)
       engineDefCeres1.SearchParams.ReusePositionEvaluationsFromOtherTree = false;
       engineDefCeres2.SearchParams.ReusePositionEvaluationsFromOtherTree = false;
 
-      if (true)
+      if (false)
       {
         engineDefCeres1.SearchParams.Execution.FlowDualSelectors = false;
         engineDefCeres2.SearchParams.Execution.FlowDualSelectors = false;
@@ -590,8 +591,8 @@ BT4 800 nodes vs SF17 0.20sec (6 threads)
         engineDefCeres2.SearchParams.Execution.FlowDirectOverlapped = false;
       }
 
-      engineDefCeres1.SearchParams.FutilityPruningStopSearchEnabled = false;
-      engineDefCeres2.SearchParams.FutilityPruningStopSearchEnabled = false;
+      //engineDefCeres1.SearchParams.FutilityPruningStopSearchEnabled = false;
+      //engineDefCeres2.SearchParams.FutilityPruningStopSearchEnabled = false;
 
 
       if (false)
@@ -721,7 +722,7 @@ BT4 800 nodes vs SF17 0.20sec (6 threads)
 
 
       // TODO: support this in GameEngineDefCeresUCI
-      bool forceDisableSmartPruning = limit1.IsNodesLimit && !limit1.IsPerGameLimit;
+      bool forceDisableSmartPruning = !limit1.IsPerGameLimit;
       if (forceDisableSmartPruning)
       {
         engineDefCeres1.SearchParams.FutilityPruningStopSearchEnabled = false;
@@ -736,13 +737,13 @@ BT4 800 nodes vs SF17 0.20sec (6 threads)
       GameEngineDef engineDefCeresUCI1 = new GameEngineDefCeresUCI("CeresUCINew", evalDef1, overrideEXE: exeCeres(), disableFutilityStopSearch: forceDisableSmartPruning);
       GameEngineDef engineDefCeresUCI2 = new GameEngineDefCeresUCI("CeresUCINew", evalDef2, overrideEXE: exeCeres(), disableFutilityStopSearch: forceDisableSmartPruning);
 
-      GameEngineDef engineDefCeres93 = new GameEngineDefCeresUCI("Ceres93", evalDef2, overrideEXE: exeCeres93(), disableFutilityStopSearch: forceDisableSmartPruning);
+      GameEngineDef ceresV2 = new GameEngineDefCeresUCI("CeresV2", evalDef2, overrideEXE: exeCeresV2(), disableFutilityStopSearch: forceDisableSmartPruning);
       GameEngineDef engineDefCeres96 = new GameEngineDefCeresUCI("Ceres96", evalDef2, overrideEXE: exeCeres96(), disableFutilityStopSearch: forceDisableSmartPruning);
       GameEngineDef engineDefCeresPreNC = new GameEngineDefCeresUCI("CeresPreNC", evalDef2, overrideEXE: exeCeresPreNC(), disableFutilityStopSearch: forceDisableSmartPruning);
 
       EnginePlayerDef playerCeres1UCI = new EnginePlayerDef(engineDefCeresUCI1, limit1);
       EnginePlayerDef playerCeres2UCI = new EnginePlayerDef(engineDefCeresUCI2, limit2);
-      EnginePlayerDef playerCeres93 = new EnginePlayerDef(engineDefCeres93, limit2);
+      EnginePlayerDef playerCeresV2 = new EnginePlayerDef(ceresV2, limit2);
       EnginePlayerDef playerCeres96 = new EnginePlayerDef(engineDefCeres96, limit2);
       EnginePlayerDef playerCeresPreNC = new EnginePlayerDef(engineDefCeresPreNC, limit2);
 
@@ -763,7 +764,7 @@ BT4 800 nodes vs SF17 0.20sec (6 threads)
       EnginePlayerDef playerLC0_2 = ENABLE_LC0_2 ? new EnginePlayerDef(engineDefLC2, limit2) : null;
 
 
-      bool RUN_SUITE = (runSuite is not null) && runSuite.Value;
+      bool RUN_SUITE = true;// (runSuite is not null) && runSuite.Value;
       if (RUN_SUITE)
       {
         // NET2 = null;
@@ -806,7 +807,8 @@ BT4 800 nodes vs SF17 0.20sec (6 threads)
           }
         }
 
-        string BASE_NAME = "hard-talkchess-2022.epd";// "endgame2.epd";// "ERET_VESELY203.epd"; //"hard-talkchess-2022.epd";//"lichess_db_puzzle.epd"; //"chad_tactics-100M.epd";//"hard-talkchess-2022.epd";//"hard-talkchess-2022.epd"; //    "benchmark.epd";// "endgame2.epd";//  eret nice_lcx Stockfish238
+        string BASE_NAME = "hard-talkchess-2022.epd";//"chad_tactics-100M.epd";//"ERET_VESELY203.epd"; //"endgame2.epd";// "lichess_db_puzzle.epd"; "hard-talkchess-2022.epd";    "benchmark.epd";// "endgame2.epd";//  eret nice_lcx Stockfish238
+                                                     //        BASE_NAME = "endgame2.epd";
         ParamsSearch paramsNoFutility = new ParamsSearch() { FutilityPruningStopSearchEnabled = false };
 
         // ===============================================================================
@@ -820,8 +822,10 @@ BT4 800 nodes vs SF17 0.20sec (6 threads)
                                                    : @$"\\synology\dev\chess\data\epd\{BASE_NAME}",
                            limit1,
                            engine1Def,
-                           NET2 == null ? null : GameEngineDefFactory.CeresInProcess("Ceres2", NET2, suiteGPU, paramsNoFutility with { }, new ParamsSelect()),
-                           overrideExternalEngineDef);// engineDefCeres96);// playerLC0.EngineDef);
+                           null,//NET2 == null ? null : GameEngineDefFactory.CeresInProcess("Ceres2", NET2, suiteGPU, paramsNoFutility with { }, new ParamsSelect()),
+                         playerCeresV2.EngineDef);
+
+        //                           overrideExternalEngineDef);// engineDefCeres96);// playerLC0.EngineDef);
 
         suiteDef.DumpEPDInfo = true;
         suiteDef.MaxNumPositions = 250;// BIG_TEST ? 2500 : 1000;
@@ -969,7 +973,7 @@ BT4 800 nodes vs SF17 0.20sec (6 threads)
       }
 
       //baseName = "endingbook-10man-3181.pgn";
-      //baseName = "endingbook-16man-9609.pgn";
+//      baseName = "endingbook-16man-9609.pgn";
       //  baseName = "endingbook-12man-4624.pgn";
 
       string postfix = (baseName.ToUpper().EndsWith(".EPD") || baseName.ToUpper().EndsWith(".PGN")) ? "" : ".pgn";
