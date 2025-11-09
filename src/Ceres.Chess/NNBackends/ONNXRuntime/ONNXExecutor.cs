@@ -607,8 +607,16 @@ public class ONNXExecutor : IDisposable
       providerOptionsDict["trt_engine_cache_enable"] = "1";
       providerOptionsDict["trt_engine_cache_path"] = trtSubdirectory;
 
+      // Cache filename starts with sanitized version of network file name.
       string shortIDNoPrefix = shortID.Split("|")[0]; // remove anything after pipe character (options string)
       string cachePrefix = FileUtils.FileNameSanitized(shortIDNoPrefix);
+
+      // Add on information about device (e.g. number of SMs) to keep engines for different hardware distinct
+      string deviceInfoString = $"_{cudaDevice.NumStreamingMultiprocessors}sm_"
+                              + $"cuda{cudaDevice.CUDACapabilityMajor}.{cudaDevice.CUDACapabilityMinor}";
+      cachePrefix += deviceInfoString;
+
+      // Add on batch size/graphs information
       cachePrefix += $"_bs{minBatch}-{maxBatch}" + (useCudaGraphs ? "-graph" : "");
       lastTRTPrefix = cachePrefix;
 
