@@ -44,6 +44,25 @@ namespace Ceres.Base.CUDA
     /// </summary>
     public PrimaryContext Context;
 
+    #region Device information
+
+    /// <summary>
+    /// CUDA capability major version of this device.
+    /// </summary>
+    public int CUDACapabilityMajor => Context.GetDeviceInfo().ComputeCapability.Major;
+
+    /// <summary>
+    /// CUDA capability minor version of this device.
+    /// </summary>
+    public int CUDACapabilityMinor => Context.GetDeviceInfo().ComputeCapability.Minor;
+
+    /// <summary>
+    /// Number of streaming multiprocessors on this device.
+    /// </summary>
+    public int NumStreamingMultiprocessors => Context.GetDeviceInfo().MultiProcessorCount;
+
+    #endregion
+
 
     /// <summary>
     /// Lock to prevent concurrent evaluation.
