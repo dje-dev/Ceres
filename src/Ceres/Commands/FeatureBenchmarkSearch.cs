@@ -50,7 +50,7 @@ namespace Ceres.Commands
       return parms;
     }
 
-    internal void Execute()
+    public void Execute()
     {
       bool withLC0 = false;
 
