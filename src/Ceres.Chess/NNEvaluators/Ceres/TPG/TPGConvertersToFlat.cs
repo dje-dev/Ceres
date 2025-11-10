@@ -79,13 +79,13 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     /// <param name="targetHalves"></param>
     static void CopyAndDivide(Memory<byte> sourceBytes, Memory<Half> targetHalves, float divisor)
     {
+      CopyAndDivideSIMD(sourceBytes, targetHalves, divisor);
+#if NOT
+      // Disabled. Incompatible with the MemoryHandle.Pin used in CopyAndDivideSIMD that objects to re-pinning.
+      // Also the parallelism may not be very helpful or needed given that the common path now uses
+      // byte inputs and completely avoids this code path.
       const int CHUNK_SIZE = 2 * 1024 * 128;
-
-      if (sourceBytes.Length < CHUNK_SIZE * 2)
-      {
-        CopyAndDivideSIMD(sourceBytes, targetHalves, divisor);
-      }
-      else
+      if (sourceBytes.Length >= CHUNK_SIZE * 2)
       {
         Parallel.For(0, sourceBytes.Length / CHUNK_SIZE + 1,
                      new ParallelOptions()
@@ -105,7 +105,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
             }
           });
       }
-
+#endif
     }
 
 
@@ -246,6 +246,8 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     }
 
 
+    [ThreadStatic] static byte[] squareValuesByteTemporary;
+
     /// <summary>
     /// Converts a IEncodedPositionBatchFlat of encoded positions into TPG flat square values.
     /// </summary>
@@ -277,6 +279,18 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
 
       byte[] moveBytesAll;
 
+      int numConvertedElements = TPGRecord.BYTES_PER_SQUARE_RECORD * 64 * batch.NumPos;
+      bool useTemporarySqureValuesByte = squareValuesByte.IsEmpty;
+      if (useTemporarySqureValuesByte)
+      {
+        squareValuesByteTemporary ??= new byte[137 * 64 * 1024];   // intial guess for max batch size 1024
+        if (squareValuesByteTemporary.Length < numConvertedElements)
+        {
+          squareValuesByteTemporary ??= new byte[numConvertedElements];
+        }
+        squareValuesByte = squareValuesByteTemporary;
+      }
+
       NNEvaluatorOptionsCeres optionsCeres = options as NNEvaluatorOptionsCeres;
       // TODO: consider pushing the CopyAndDivide below into this next method
       TPGRecordConverter.ConvertPositionsToRawSquareBytes(batch, includeHistory, batch.Moves, EMIT_PLY_SINCE,
@@ -285,9 +299,10 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
 
       // If we are providing float inputs, then it is necessary to do the
       // (slow) convertion from Half to float (and also divide by 100).
-      if (!squareValues.IsEmpty)
+      if (useTemporarySqureValuesByte)
       {
-        CopyAndDivide(squareValuesByte, squareValues, TPGSquareRecord.SQUARE_BYTES_DIVISOR);
+        CopyAndDivide(new Memory<byte>(squareValuesByteTemporary, 0, numConvertedElements),
+                      squareValues, TPGSquareRecord.SQUARE_BYTES_DIVISOR);
       }
 
 
