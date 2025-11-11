@@ -193,6 +193,12 @@ public class ONNXExecutor : IDisposable
 
   CudaStream cuStream;
 
+  // Creation of ONNX sessions for the TRT provider should be serialized per device.
+  // This prevents problems such as two engines concurrently compiling engines for same device
+  // (rather than waiting for one to finish and letting the other then find it in the cache).
+  const int MAX_DEVICES = 16;
+  static readonly object[] deviceLockTRTInitialization = new object[MAX_DEVICES];
+
 
   /// <summary>
   /// High-resolution GPU execution time in milliseconds for the last run on this executor's stream.
@@ -368,14 +374,8 @@ public class ONNXExecutor : IDisposable
     sessionCache = new Dictionary<(int, int, bool), SessionForBatchSize>();
 
     Console.WriteLine($"ONNXExecutor initialized on GPU {GPUID} (sessions will be created on-demand)");
-    lock (warmupLock) // Prevent overlapping stream capture
-    {
-      Warmup();
-    }
   }
 
-
-  static readonly object warmupLock = new();
 
 
   private void ExtractMultinetMetadataIfApplicable(string onnxFileName, byte[] onnxModelBytes)
@@ -656,11 +656,18 @@ public class ONNXExecutor : IDisposable
   }
 
 
+  bool haveWarmedUp = false;
+
   /// <summary>
   /// Performs any initialization to prepare evaluator for delay-free execution.
   /// </summary>
   public void Warmup()
   {
+    if (haveWarmedUp)
+    {
+      return;
+    }
+
     List<int> batchSizesToRunWithGraphs = new List<int>();
 
     _ = GetOrCreateSessionForBatchSize(1, false);
@@ -683,8 +690,10 @@ public class ONNXExecutor : IDisposable
     // Additionally we need to run once to capture the CUDA graphs
     // (over uninitialized buffers).
     // Seemingly CUDA capture operations must be strictly globally serialized.
-    lock (cudaGraphSessionCaptureGlobalLock)
+    try
     {
+      cudaDevice.GraphCaptureRWLock.EnterWriteLock();
+
       foreach (int batchSizeToRun in batchSizesToRunWithGraphs)
       {
         switch (InputsNumBits)
@@ -700,9 +709,13 @@ public class ONNXExecutor : IDisposable
         }
       }
     }
-  }
+    finally
+    {
+      cudaDevice.GraphCaptureRWLock.ExitWriteLock();
+    }
 
-  static readonly object cudaGraphSessionCaptureGlobalLock = new();
+    haveWarmedUp = true;
+  }
 
 
   /// <summary>
@@ -1370,9 +1383,10 @@ public class ONNXExecutor : IDisposable
     //     and the second time a cached version should just be used rather than recreated
     //   - reduce likelihood of conflict with other initialization (e.g. other threads using ManagedCUDA).
     TimingStats stats = new();
+    object deviceLockObj = deviceLockTRTInitialization[GPUID] = deviceLockTRTInitialization[GPUID] ?? new object();
     using (new TimingBlock(stats, TimingBlock.LoggingType.None))
     {
-      lock (CUDADevice.InitializingCUDAContextLockObj)
+      lock (deviceLockObj)
       {
         context = CreateSessionForBatchSize(bucketKey.min, bucketKey.max, useCudaGraphs);
       }
