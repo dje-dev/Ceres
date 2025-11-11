@@ -1345,6 +1345,9 @@ public class ONNXExecutor : IDisposable
   }
 
 
+  static readonly object consoleOutputSyncLock = new();
+
+
   /// <summary>
   /// Gets or creates a session context for the specified batch size.
   /// Rounds up to the nearest batch size anchor.
@@ -1367,14 +1370,17 @@ public class ONNXExecutor : IDisposable
       _ = GetTRTEngineCacheDir();
     }
 
-    // Create new session context for this batch size anchor
-    if (bucketKey.useCudaGraphs)
+    lock (consoleOutputSyncLock)
     {
-      ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"[{GPUID}]: Creating new graph session for batch size {bucketKey.max} (requested: {batchSize}) ... ");
-    }
-    else
-    {
-      ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"[{GPUID}]: Creating new non-graph session for batch size bucket [{bucketKey.min}..{bucketKey.max}] (requested: {batchSize}) ... ");
+      // Create new session context for this batch size anchor
+      if (bucketKey.useCudaGraphs)
+      {
+        ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"[{GPUID}]: Creating new graph session for batch size {bucketKey.max} (requested: {batchSize}) ... ");
+      }
+      else
+      {
+        ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"[{GPUID}]: Creating new non-graph session for batch size bucket [{bucketKey.min}..{bucketKey.max}] (requested: {batchSize}) ... ");
+      }
     }
 
     // Take a global lock during session creation for two reasons:
@@ -1393,9 +1399,12 @@ public class ONNXExecutor : IDisposable
     }
     sessionCache[bucketKey] = context;
 
-    ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"[{GPUID}]: done creating "
+    lock (consoleOutputSyncLock)
+    {
+      ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"[{GPUID}]: done creating "
                                 + $"{(bucketKey.useCudaGraphs ? "graph session" : "non-graph session")}"
                                 + $" in {Math.Round(stats.ElapsedTimeSecs, 2)} seconds.");
+    }
 
     if (context.UsesCUDAGraphs)
     {
@@ -1469,55 +1478,53 @@ public class ONNXExecutor : IDisposable
 
     // Create the session
     InferenceSession newSession = null;
-    lock (CUDADevice.InitializingCUDAContextLockObj)
+    cudaDevice.SetCurrent();
+
+    bool haveOKEngine = false;
+    int numTries = 0;
+    const int MAX_TRIES = 10;
+    string engineFN = null;
+    while (!haveOKEngine && numTries < MAX_TRIES)
     {
-      cudaDevice.SetCurrent();
+      numTries++;
+      newSession = new InferenceSession(storedOnnxModelBytes, so);
 
-      bool haveOKEngine = false;
-      int numTries = 0;
-      const int MAX_TRIES = 10;
-      string engineFN = null;
-      while (!haveOKEngine && numTries < MAX_TRIES)
+      if (PrecisionNumBits == 16 && useTensorRT)
       {
-        numTries++;
-        newSession = new InferenceSession(storedOnnxModelBytes, so);
+        // Check if TensorRT engine was created for this session
+        (haveOKEngine, engineFN) = CheckEngineCorrectnessIfGenerated();
+      }
+      else
+      {
+        haveOKEngine = true;
+      }
 
-        if (PrecisionNumBits == 16 && useTensorRT)
+      if (!haveOKEngine)
+      {
+
+        if (numTries < MAX_TRIES)
         {
-          // Check if TensorRT engine was created for this session
-          (haveOKEngine, engineFN) = CheckEngineCorrectnessIfGenerated();
+          File.Delete(engineFN);
+          Console.WriteLine($"[{GPUID}]: WARNING: Retrying ...");
         }
         else
         {
-          haveOKEngine = true;
-        }
-
-        if (!haveOKEngine)
-        {
-
-          if (numTries < MAX_TRIES)
+          bool allowBadEngine = System.Environment.GetEnvironmentVariable("CERES_ALLOW_BAD_TRT_ENGINE") == "1";
+          if (allowBadEngine)
           {
-            File.Delete(engineFN);
-            Console.WriteLine($"[{GPUID}]: WARNING: Retrying ...");
+            ConsoleUtils.WriteLineColored(ConsoleColor.Red, $"[{GPUID}]: WARNING: Failed, will fallback to engine with incorrect precision...");
           }
           else
           {
-            bool allowBadEngine = System.Environment.GetEnvironmentVariable("CERES_ALLOW_BAD_TRT_ENGINE") == "1";
-            if (allowBadEngine)
-            {
-              ConsoleUtils.WriteLineColored(ConsoleColor.Red, $"[{GPUID}]: WARNING: Failed, will fallback to engine with incorrect precision...");
-            }
-            else
-            {
-              File.Delete(engineFN);
-              ConsoleUtils.WriteLineColored(ConsoleColor.Red, $"[{GPUID}]: WARNING: Exiting, unable to create TRT engine after multiple attempts."
-                                           + " Set environment variable CERES_ALLOW_BAD_TRT_ENGINE to 1 to override this behavior.");
-              System.Environment.Exit(3);
-            }
+            File.Delete(engineFN);
+            ConsoleUtils.WriteLineColored(ConsoleColor.Red, $"[{GPUID}]: WARNING: Exiting, unable to create TRT engine after multiple attempts."
+                                         + " Set environment variable CERES_ALLOW_BAD_TRT_ENGINE to 1 to override this behavior.");
+            System.Environment.Exit(3);
           }
         }
       }
     }
+
 
 
     // Extract and filter metadata from this session
