@@ -13,6 +13,8 @@
 
 #region Using directives
 
+using System.Threading.Tasks;
+using Ceres.Base.Benchmarking;
 
 #endregion
 
@@ -143,10 +145,7 @@ namespace Ceres.Chess.NNEvaluators
     /// </summary>
     public override void Warmup()
     {
-      foreach (NNEvaluator evaluator in Evaluators)
-      {
-        evaluator.Warmup();
-      }
+      Parallel.ForEach(Evaluators, evaluator => evaluator.Warmup());
     }
 
 

@@ -193,6 +193,12 @@ public class ONNXExecutor : IDisposable
 
   CudaStream cuStream;
 
+  // Creation of ONNX sessions for the TRT provider should be serialized per device.
+  // This prevents problems such as two engines concurrently compiling engines for same device
+  // (rather than waiting for one to finish and letting the other then find it in the cache).
+  const int MAX_DEVICES = 16;
+  static readonly object[] deviceLockTRTInitialization = new object[MAX_DEVICES];
+
 
   /// <summary>
   /// High-resolution GPU execution time in milliseconds for the last run on this executor's stream.
@@ -368,14 +374,8 @@ public class ONNXExecutor : IDisposable
     sessionCache = new Dictionary<(int, int, bool), SessionForBatchSize>();
 
     Console.WriteLine($"ONNXExecutor initialized on GPU {GPUID} (sessions will be created on-demand)");
-    lock (warmupLock) // Prevent overlapping stream capture
-    {
-      Warmup();
-    }
   }
 
-
-  static readonly object warmupLock = new();
 
 
   private void ExtractMultinetMetadataIfApplicable(string onnxFileName, byte[] onnxModelBytes)
@@ -656,11 +656,18 @@ public class ONNXExecutor : IDisposable
   }
 
 
+  bool haveWarmedUp = false;
+
   /// <summary>
   /// Performs any initialization to prepare evaluator for delay-free execution.
   /// </summary>
   public void Warmup()
   {
+    if (haveWarmedUp)
+    {
+      return;
+    }
+
     List<int> batchSizesToRunWithGraphs = new List<int>();
 
     _ = GetOrCreateSessionForBatchSize(1, false);
@@ -683,8 +690,10 @@ public class ONNXExecutor : IDisposable
     // Additionally we need to run once to capture the CUDA graphs
     // (over uninitialized buffers).
     // Seemingly CUDA capture operations must be strictly globally serialized.
-    lock (cudaGraphSessionCaptureGlobalLock)
+    try
     {
+      cudaDevice.GraphCaptureRWLock.EnterWriteLock();
+
       foreach (int batchSizeToRun in batchSizesToRunWithGraphs)
       {
         switch (InputsNumBits)
@@ -700,9 +709,13 @@ public class ONNXExecutor : IDisposable
         }
       }
     }
-  }
+    finally
+    {
+      cudaDevice.GraphCaptureRWLock.ExitWriteLock();
+    }
 
-  static readonly object cudaGraphSessionCaptureGlobalLock = new();
+    haveWarmedUp = true;
+  }
 
 
   /// <summary>
@@ -1332,6 +1345,9 @@ public class ONNXExecutor : IDisposable
   }
 
 
+  static readonly object consoleOutputSyncLock = new();
+
+
   /// <summary>
   /// Gets or creates a session context for the specified batch size.
   /// Rounds up to the nearest batch size anchor.
@@ -1354,14 +1370,17 @@ public class ONNXExecutor : IDisposable
       _ = GetTRTEngineCacheDir();
     }
 
-    // Create new session context for this batch size anchor
-    if (bucketKey.useCudaGraphs)
+    lock (consoleOutputSyncLock)
     {
-      ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"[{GPUID}]: Creating new graph session for batch size {bucketKey.max} (requested: {batchSize}) ... ");
-    }
-    else
-    {
-      ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"[{GPUID}]: Creating new non-graph session for batch size bucket [{bucketKey.min}..{bucketKey.max}] (requested: {batchSize}) ... ");
+      // Create new session context for this batch size anchor
+      if (bucketKey.useCudaGraphs)
+      {
+        ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"[{GPUID}]: Creating new graph session for batch size {bucketKey.max} (requested: {batchSize}) ... ");
+      }
+      else
+      {
+        ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"[{GPUID}]: Creating new non-graph session for batch size bucket [{bucketKey.min}..{bucketKey.max}] (requested: {batchSize}) ... ");
+      }
     }
 
     // Take a global lock during session creation for two reasons:
@@ -1370,18 +1389,22 @@ public class ONNXExecutor : IDisposable
     //     and the second time a cached version should just be used rather than recreated
     //   - reduce likelihood of conflict with other initialization (e.g. other threads using ManagedCUDA).
     TimingStats stats = new();
+    object deviceLockObj = deviceLockTRTInitialization[GPUID] = deviceLockTRTInitialization[GPUID] ?? new object();
     using (new TimingBlock(stats, TimingBlock.LoggingType.None))
     {
-      lock (CUDADevice.InitializingCUDAContextLockObj)
+      lock (deviceLockObj)
       {
         context = CreateSessionForBatchSize(bucketKey.min, bucketKey.max, useCudaGraphs);
       }
     }
     sessionCache[bucketKey] = context;
 
-    ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"[{GPUID}]: done creating "
+    lock (consoleOutputSyncLock)
+    {
+      ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"[{GPUID}]: done creating "
                                 + $"{(bucketKey.useCudaGraphs ? "graph session" : "non-graph session")}"
                                 + $" in {Math.Round(stats.ElapsedTimeSecs, 2)} seconds.");
+    }
 
     if (context.UsesCUDAGraphs)
     {
@@ -1455,55 +1478,53 @@ public class ONNXExecutor : IDisposable
 
     // Create the session
     InferenceSession newSession = null;
-    lock (CUDADevice.InitializingCUDAContextLockObj)
+    cudaDevice.SetCurrent();
+
+    bool haveOKEngine = false;
+    int numTries = 0;
+    const int MAX_TRIES = 10;
+    string engineFN = null;
+    while (!haveOKEngine && numTries < MAX_TRIES)
     {
-      cudaDevice.SetCurrent();
+      numTries++;
+      newSession = new InferenceSession(storedOnnxModelBytes, so);
 
-      bool haveOKEngine = false;
-      int numTries = 0;
-      const int MAX_TRIES = 10;
-      string engineFN = null;
-      while (!haveOKEngine && numTries < MAX_TRIES)
+      if (PrecisionNumBits == 16 && useTensorRT)
       {
-        numTries++;
-        newSession = new InferenceSession(storedOnnxModelBytes, so);
+        // Check if TensorRT engine was created for this session
+        (haveOKEngine, engineFN) = CheckEngineCorrectnessIfGenerated();
+      }
+      else
+      {
+        haveOKEngine = true;
+      }
 
-        if (PrecisionNumBits == 16 && useTensorRT)
+      if (!haveOKEngine)
+      {
+
+        if (numTries < MAX_TRIES)
         {
-          // Check if TensorRT engine was created for this session
-          (haveOKEngine, engineFN) = CheckEngineCorrectnessIfGenerated();
+          File.Delete(engineFN);
+          Console.WriteLine($"[{GPUID}]: WARNING: Retrying ...");
         }
         else
         {
-          haveOKEngine = true;
-        }
-
-        if (!haveOKEngine)
-        {
-
-          if (numTries < MAX_TRIES)
+          bool allowBadEngine = System.Environment.GetEnvironmentVariable("CERES_ALLOW_BAD_TRT_ENGINE") == "1";
+          if (allowBadEngine)
           {
-            File.Delete(engineFN);
-            Console.WriteLine($"[{GPUID}]: WARNING: Retrying ...");
+            ConsoleUtils.WriteLineColored(ConsoleColor.Red, $"[{GPUID}]: WARNING: Failed, will fallback to engine with incorrect precision...");
           }
           else
           {
-            bool allowBadEngine = System.Environment.GetEnvironmentVariable("CERES_ALLOW_BAD_TRT_ENGINE") == "1";
-            if (allowBadEngine)
-            {
-              ConsoleUtils.WriteLineColored(ConsoleColor.Red, $"[{GPUID}]: WARNING: Failed, will fallback to engine with incorrect precision...");
-            }
-            else
-            {
-              File.Delete(engineFN);
-              ConsoleUtils.WriteLineColored(ConsoleColor.Red, $"[{GPUID}]: WARNING: Exiting, unable to create TRT engine after multiple attempts."
-                                           + " Set environment variable CERES_ALLOW_BAD_TRT_ENGINE to 1 to override this behavior.");
-              System.Environment.Exit(3);
-            }
+            File.Delete(engineFN);
+            ConsoleUtils.WriteLineColored(ConsoleColor.Red, $"[{GPUID}]: WARNING: Exiting, unable to create TRT engine after multiple attempts."
+                                         + " Set environment variable CERES_ALLOW_BAD_TRT_ENGINE to 1 to override this behavior.");
+            System.Environment.Exit(3);
           }
         }
       }
     }
+
 
 
     // Extract and filter metadata from this session
