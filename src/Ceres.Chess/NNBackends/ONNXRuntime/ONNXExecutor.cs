@@ -238,6 +238,8 @@ public class ONNXExecutor : IDisposable
   int MAX_UNUSED_POSITIONS_THRESHOLD_NUM_POS;
   float MAX_UNUSED_POSITIONS_THRESHOLD_FRAC;
 
+  public static int[] OVERRIDE_CUDA_GRAPH_BATCH_SIZES = null;
+
 
   /// <summary>
   /// Constructor.
@@ -304,10 +306,13 @@ public class ONNXExecutor : IDisposable
     // The benefits of CUDA graphs are more limited to smaller batches for bigger networks.
     MAX_UNUSED_POSITIONS_THRESHOLD_NUM_POS = 14;
     MAX_UNUSED_POSITIONS_THRESHOLD_FRAC = isLargeNetwork ? 0.4f : 0.5f;
-    BATCH_SIZE_ANCHORS_WITH_GRAPH = enableCUDAGraphs && useTensorRT
-      ? (isLargeNetwork ? [14, 28, 44, 64] : [12, 32, 56, 88])
-      : null;
-
+    BATCH_SIZE_ANCHORS_WITH_GRAPH = null;
+    if (enableCUDAGraphs && useTensorRT)
+    {
+      BATCH_SIZE_ANCHORS_WITH_GRAPH = OVERRIDE_CUDA_GRAPH_BATCH_SIZES ??
+                                      (isLargeNetwork ? [14, 28, 44, 64]
+                                                      : [12, 32, 56, 88]);
+    }
 #if NOT
     // Possible ONNX bugs
     // Graph capture/replay only works one time: https://github.com/microsoft/onnxruntime/issues/22583
