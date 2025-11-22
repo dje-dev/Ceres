@@ -84,7 +84,7 @@ namespace Ceres.APIExamples
 
     static string exeCeres() => SoftwareManager.IsLinux ? @"/raid/dev/Ceres/artifacts/release/net8.0/Ceres.dll"
                                           : @"C:\dev\ceres\artifacts\release\net8.0\ceres.exe";
-    static string exeCeresV2() => SoftwareManager.IsLinux ? throw new NotImplementedException()
+    static string exeCeresV2() => SoftwareManager.IsLinux ? ""//throw new NotImplementedException()
                                                 : @"G:\dev\Ceres.MCGS.ok\artifacts\release\net10.0\ceres.mcgs.exe";
     static string exeCeres96() => SoftwareManager.IsLinux ? @"/raid/dev/Ceres96/Ceres.dll"
                                                 : @"C:\ceres\releases\v0.96\ceres.exe";
@@ -764,7 +764,7 @@ BT4 800 nodes vs SF17 0.20sec (6 threads)
       EnginePlayerDef playerLC0_2 = ENABLE_LC0_2 ? new EnginePlayerDef(engineDefLC2, limit2) : null;
 
 
-      bool RUN_SUITE = true;// (runSuite is not null) && runSuite.Value;
+      bool RUN_SUITE = false;// (runSuite is not null) && runSuite.Value;
       if (RUN_SUITE)
       {
         // NET2 = null;
