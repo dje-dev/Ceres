@@ -932,11 +932,11 @@ public class ONNXExecutor : IDisposable
         switch (typeof(TInput))
         {
           case Type t when t == typeof(byte):
-            cudaBuffer.CopyToDevice((byte[])array, 0, 0, numBytes);
+            cudaBuffer.AsyncCopyToDevice((byte[])array, 0, 0, numBytes, cuStream);
             break;
 
           case Type t when t == typeof(Half):
-            cudaBufferFloat16.CopyToDevice((Float16[])array, 0, 0, numBytes);
+            cudaBufferFloat16.AsyncCopyToDevice((Float16[])array, 0, 0, numBytes, cuStream);
             break;
 
           default:
@@ -1551,19 +1551,23 @@ public class ONNXExecutor : IDisposable
     };
 
     // Determine memory allocation type based on CUDA graphs usage
-    OrtMemoryInfo memInfo;
-    OrtAllocator allocator = null;
+    OrtMemoryInfo memInfoInput;
+    OrtMemoryInfo memInfoOutput;
+    OrtAllocator allocatorInput = null;
+    OrtAllocator allocatorOutput = null;
 
     if (useCudaGraphs)
     {
       // For CUDA graphs, use GPU-allocated pinned memory
-      memInfo = new(OrtMemoryInfo.allocatorCUDA, OrtAllocatorType.DeviceAllocator, gpuID, OrtMemType.CpuOutput);
-      allocator = new OrtAllocator(newSession, memInfo);
+      memInfoInput = new(OrtMemoryInfo.allocatorCUDA, OrtAllocatorType.DeviceAllocator, gpuID, OrtMemType.CpuInput);
+      memInfoOutput = new(OrtMemoryInfo.allocatorCUDA, OrtAllocatorType.DeviceAllocator, gpuID, OrtMemType.CpuOutput);
+      allocatorInput = new OrtAllocator(newSession, memInfoInput);
+      allocatorOutput = new OrtAllocator(newSession, memInfoOutput);
     }
     else
     {
       // Use CPU memory for non-CUDA graph scenarios
-      memInfo = OrtMemoryInfo.DefaultInstance;
+      memInfoInput = memInfoOutput = OrtMemoryInfo.DefaultInstance;
     }
 
     // Create OrtValues for inputs
@@ -1588,7 +1592,7 @@ public class ONNXExecutor : IDisposable
             cudaBuffer = new CudaDeviceVariable<byte>(numElements);
 
             // 5) Wrap existing DEVICE pointers as OrtValue tensors (no copies; ORT doesn't own memory)
-            ortValue = OrtValue.CreateTensorValueWithData(memInfo, TensorElementType.UInt8, shape,
+            ortValue = OrtValue.CreateTensorValueWithData(memInfoInput, TensorElementType.UInt8, shape,
                                                           CUdeviceptrToIntPtr(cudaBuffer.DevicePointer), sizeof(byte) * numElements);
           }
           else
@@ -1616,7 +1620,7 @@ public class ONNXExecutor : IDisposable
             long numElements = ONNXHelpers.ProductDimensions(buffer.metadata.Dimensions, maxBatch);
             cudaBufferFloat16 = new CudaDeviceVariable<Float16>(numElements);
             // 5) Wrap existing DEVICE pointers as OrtValue tensors (no copies; ORT doesn't own memory)
-            ortValue = OrtValue.CreateTensorValueWithData(memInfo, TensorElementType.Float16, shape,
+            ortValue = OrtValue.CreateTensorValueWithData(memInfoInput, TensorElementType.Float16, shape,
                                                           CUdeviceptrToIntPtr(cudaBufferFloat16.DevicePointer),
                                                           2 * numElements);
           }
@@ -1649,7 +1653,7 @@ public class ONNXExecutor : IDisposable
           long numElements = ONNXHelpers.ProductDimensions(outputBuffer.metadata.Dimensions, maxBatch);
           cudaBuffer = new CudaDeviceVariable<Float16>(numElements);
 
-          ortValue = OrtValue.CreateTensorValueWithData(memInfo, TensorElementType.Float16, shape,
+          ortValue = OrtValue.CreateTensorValueWithData(memInfoOutput, TensorElementType.Float16, shape,
                                                         CUdeviceptrToIntPtr(cudaBuffer.DevicePointer),
                                                         Marshal.SizeOf<Float16>() * numElements);
         }
@@ -1676,7 +1680,7 @@ public class ONNXExecutor : IDisposable
 
         if (useCudaGraphs)
         {
-          ortValue = OrtValue.CreateAllocatedTensorValue(allocator, TensorElementType.Float, shape);
+          ortValue = OrtValue.CreateAllocatedTensorValue(allocatorInput, TensorElementType.Float, shape);
           throw new Exception("need to adjust data type from byte to Float16 and allocate here");
           //cudaBuffer = new CudaDeviceVariable<float>(ONNXHelpers.ProductDimensions(buffer.metadata.Dimensions, maxBatch) * sizeof(float));
         }
@@ -1699,7 +1703,7 @@ public class ONNXExecutor : IDisposable
 
         if (useCudaGraphs)
         {
-          ortValue = OrtValue.CreateAllocatedTensorValue(allocator, TensorElementType.Float, shape);
+          ortValue = OrtValue.CreateAllocatedTensorValue(allocatorOutput, TensorElementType.Float, shape);
           //cudaBuffer = new CudaDeviceVariable<Float16>(ONNXHelpers.ProductDimensions(buffer.metadata.Dimensions, maxBatch));
           throw new Exception("need to adjust data type from Float16 to float and allocate here");
         }
@@ -1713,7 +1717,8 @@ public class ONNXExecutor : IDisposable
     }
 
     // Store allocators in context so they can be disposed later
-    context.Allocator = allocator;
+    context.AllocatorInput = allocatorInput;
+    context.AllocatorOutput = allocatorOutput;
 
     return context;
   }
@@ -1818,7 +1823,8 @@ public class ONNXExecutor : IDisposable
     public List<(string name, OrtValue ortValue, long[] shape, CudaDeviceVariable<Float16> cudaBuffer)> OutputOrtValues { get; set; }
     public List<Array> InputBuffers { get; set; }
     public List<(string name, NodeMetadata metadata, Array buffer)> OutputBuffers { get; set; }
-    public OrtAllocator Allocator { get; set; }
+    public OrtAllocator AllocatorInput { get; set; }
+    public OrtAllocator AllocatorOutput { get; set; }
 
     public void Dispose()
     {
@@ -1838,7 +1844,8 @@ public class ONNXExecutor : IDisposable
       OutputOrtValues?.Clear();
       IoBinding?.Dispose();
       Session?.Dispose();
-      Allocator?.Dispose();
+      AllocatorInput?.Dispose();
+      AllocatorOutput?.Dispose();
     }
   }
 }
