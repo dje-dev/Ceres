@@ -901,38 +901,19 @@ public readonly record struct PosHash96(uint High, ulong Low)
 
 [Serializable]
 [StructLayout(LayoutKind.Sequential, Pack = 1, Size = 12)]
-public readonly record struct PosHash96MultisetFinalized(uint High, ulong Low) : IEqualityComparer<PosHash96MultisetFinalized>
+public readonly record struct PosHash96MultisetFinalized(uint High, ulong Low)
 {
-  public readonly bool Equals(PosHash96MultisetFinalized other)
-    => High == other.High && Low == other.Low;
-
-  public readonly bool Equals(PosHash96MultisetFinalized x, PosHash96MultisetFinalized y)
-    => x.High == y.High && x.Low == y.Low;
-
-
   public override int GetHashCode()
   {
-    // Mix the 96 bits (High:32, Low:64) into a strong 32-bit hash.
-    // SplitMix64-style avalanching: fast, excellent diffusion.
-    ulong x = Low ^ ((ulong)High << 32);
-
-    x ^= 0x9E3779B97F4A7C15ul;               // add a large odd constant
-    x ^= x >> 30;
-    x *= 0xBF58476D1CE4E5B9ul;
-    x ^= x >> 27;
-    x *= 0x94D049BB133111EBul;
-    x ^= x >> 31;
-
-    return (int)(x ^ (x >> 32));
-  }
-
-  public int GetHashCode(PosHash96MultisetFinalized obj)
-  {
-    return obj.GetHashCode();
+    unchecked
+    {
+      // Cheap fold of 96 bits into 32.
+      ulong x = Low ^ ((ulong)High << 32);
+      return (int)(x ^ (x >> 32));
+    }
   }
 
   public readonly string ShortStr() => $"{High % 10_000}/{Low % 10_000}";
-
   public override readonly string ToString() => $"0x{High:X8}/{Low:X16}";
 }
 
@@ -953,47 +934,63 @@ public record struct PosHash96MultisetRunning(uint High, ulong Low)
   /// Adds <paramref name="delta"/> to this (a running 96-bit hash).
   /// Operation is commutative (order-insensitive) because it is
   /// simple 96-bit modular addition.
+  /// </summary>
   public void Add(PosHash96 delta)
   {
-    // 96-bit modular addition with carry propagation.
-    // (this = this + delta)
-    ulong newLow = unchecked(Low + delta.Low);
-    uint carry = (uint)(newLow < Low ? 1u : 0u);
+    unchecked
+    {
+      // 96-bit modular addition with carry propagation.
+      // (this = this + delta)
+      ulong oldLow = Low;
+      ulong newLow = oldLow + delta.Low;
 
-    Low = newLow;
-    High = unchecked(High + delta.High + carry);
+      Low = newLow;
+
+      uint carry = newLow < oldLow ? 1u : 0u;
+      High += delta.High + carry;
+    }
   }
 
 
   /// <summary>
-  /// Adds hash value of a "final "position to a running 96-bit hash in an
+  /// Adds hash value of a "final" position to a running 96-bit hash in an
   /// order-sensitive manner and returns the new accumulated value.
   /// * Not commutative.
-  /// * One fused multiply --> rotate --> xor step (FNV/xxHash flavor).  
+  /// * One fused multiply --> rotate --> xor step (FNV/xxHash flavor).
   /// </summary>
   public readonly PosHash96MultisetFinalized Finalized(PosHash96 finalHash)
   {
-    // 64- & 32-bit odd primes (xxHash / Murmur lineage)
-    const ulong P_LOW = 0x9E3779B97F4A7C15UL; // 64-bit
-    const uint P_HIGH = 0x85EBCA77u;          // 32-bit
+    unchecked
+    {
+      // 64- & 32-bit odd primes (xxHash / Murmur lineage)
+      const ulong P_LOW = 0x9E3779B97F4A7C15UL; // 64-bit
+      const uint P_HIGH = 0x85EBCA77u;          // 32-bit
 
-    // Low 64 bits. 
-    // FNV-like: H = (H * P) rotl r  ^  delta
-    var low = BitOperations.RotateLeft(Low * P_LOW, 27);
-    low ^= finalHash.Low;
+      // Low 64 bits: H = (H * P) rotl r ^ delta
+      ulong low = BitOperations.RotateLeft(Low * P_LOW, 27) ^ finalHash.Low;
 
-    // High 32 bits.
-    uint high = BitOperations.RotateLeft(High * P_HIGH, 15);
-    high ^= finalHash.High;
+      // High 32 bits.
+      uint high = BitOperations.RotateLeft(High * P_HIGH, 15) ^ finalHash.High;
 
-    // Cross-feed a few high bits of ‘low’ for extra diffusion
-    high += (uint)(Low >> 32);
+      // Cross-feed a few high bits of mixed 'low' for extra diffusion
+      high += (uint)(low >> 32);
 
-    return new PosHash96MultisetFinalized(High: high, Low: low);
+      return new PosHash96MultisetFinalized(high, low);
+    }
   }
+
 
   public readonly string ShortStr() => $"{High % 10_000}/{Low % 10_000}";
 
-  public override string ToString() => $"0x{High:X8}{Low:X16}";
-}
+  public override readonly string ToString() => $"0x{High:X8}{Low:X16}";
 
+  public override readonly int GetHashCode()
+  {
+    unchecked
+    {
+      ulong low = Low;
+      uint hi = High;
+      return (int)(low ^ (low >> 32) ^ hi);
+    }
+  }
+}
