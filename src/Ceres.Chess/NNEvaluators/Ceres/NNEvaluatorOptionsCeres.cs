@@ -28,7 +28,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres
   {
     // Values tuned for Ceres nets.
     public const float DEFAULT_FRACTION_VALUE2 = 0.4f;
-    public const float DEFAULT_VALUE1_TEMPERATURE = 0.8f;
+    public const float DEFAULT_VALUE1_TEMPERATURE = 0.55f;
     public const float DEFAULT_VALUE2_TEMPERATURE = 1.5f;
 
     /// <summary>
