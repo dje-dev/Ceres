@@ -190,8 +190,8 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
 
       // Determine each position and copy converted raw board bytes into rawBoardBytesAll.
       // TODO: for efficiency, avoid doing this if the NN evaluator does not need raw bytes
-      int MAX_THREADS = positions.NumPos > 64 ? 6 : 1;
-      Parallel.For(0, positions.NumPos, new ParallelOptions() { MaxDegreeOfParallelism = MAX_THREADS }, i =>
+      int numThreads = Math.Min(1 + positions.NumPos / 32, 32); // This value was carefully tuned
+      Parallel.For(0, positions.NumPos, new ParallelOptions() { MaxDegreeOfParallelism = numThreads }, i =>
       {
         Span<byte> squareBytesAllLocalRef = squareBytesAll.Span;
         int tpgSquaresStartOffset = i * 64 * TPGRecord.BYTES_PER_SQUARE_RECORD;
