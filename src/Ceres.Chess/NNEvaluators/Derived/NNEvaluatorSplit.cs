@@ -48,7 +48,7 @@ namespace Ceres.Chess.NNEvaluators
     /// <summary>
     /// Minimum number of positions before splitting begins.
     /// </summary>
-    public readonly int MinSplitSize;
+    public int MinSplitSize;
 
     /// <summary>
     /// Allocator that manages the splitting of positions into batches across evaluators.
@@ -152,7 +152,7 @@ namespace Ceres.Chess.NNEvaluators
     }
 
 
-    const int DEFAULT_MIN_SPLIT_SIZE = 18;
+    const int DEFAULT_MIN_SPLIT_SIZE = 16;
 
 
     /// <summary>
