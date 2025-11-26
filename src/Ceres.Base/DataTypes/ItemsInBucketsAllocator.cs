@@ -23,18 +23,20 @@ using System.Threading;
 namespace Ceres.Base.DataTypes;
 
 /// <summary>
-/// Manages allocation of items into a fixed number of buckets,
-/// with the constraint that buckets already allocated cannot be used.
+/// Manages allocation of items into a fixed number of buckets.
+/// Buckets may be shared by multiple clients, but allocation
+/// preferentially uses buckets that currently have zero active users.
 /// </summary>
 public class ItemsInBucketsAllocator
 {
   /// <summary>
-  /// Tracks whether a bucket is currently allocated.
+  /// Per-bucket usage count: how many clients are currently using this bucket.
+  /// 0 means "not in use by any client".
   /// </summary>
-  private readonly bool[] allocated;
+  private readonly int[] bucketUseCounts;
 
   /// <summary>
-  /// Lock to protect access to the allocated array and inUseCount.
+  /// Lock to protect access to the bucketUseCounts array and inUseCount.
   /// </summary>
   private readonly object itemsLock;
 
@@ -44,12 +46,12 @@ public class ItemsInBucketsAllocator
   private readonly int numBuckets;
 
   /// <summary>
-  /// How many buckets are currently allocated.
+  /// Number of buckets that currently have usage &gt; 0.
   /// </summary>
   private int inUseCount;
 
   /// <summary>
-  // User-supplied per-bucket weights.
+  /// User-supplied per-bucket weights.
   /// </summary>
   private readonly float[] preferredFractions;
 
@@ -60,38 +62,21 @@ public class ItemsInBucketsAllocator
 
 
   /// <summary>
-  /// Count of currently allocated buckets.
+  /// Count of buckets that currently have at least one active client.
   /// </summary>
-  public int AllocatedBucketCount
-  {
-    get
-    {
-      lock (itemsLock)
-      {
-        return inUseCount;
-      }
-    }
-  }
+  public int AllocatedBucketCount => inUseCount;
+
 
   /// <summary>
-  /// Gets the number of buckets that are currently available for allocation.
+  /// Gets the number of buckets that are currently unused (usage == 0).
   /// </summary>
-  public int FreeBucketCount
-  {
-    get
-    {
-      lock (itemsLock)
-      {
-        return BucketCount - inUseCount;
-      }
-    }
-  }
+  public int FreeBucketCount => BucketCount - inUseCount;
 
 
   /// <summary>
   /// Constructor.
   /// </summary>
-  /// <param name="preferredFractions"></param>
+  /// <param name="preferredFractions">Non-negative per-bucket weights.</param>
   public ItemsInBucketsAllocator(float[] preferredFractions)
   {
     if (preferredFractions == null)
@@ -115,7 +100,7 @@ public class ItemsInBucketsAllocator
 
     this.preferredFractions = (float[])preferredFractions.Clone();
 
-    allocated = new bool[this.preferredFractions.Length];
+    bucketUseCounts = new int[this.preferredFractions.Length];
     itemsLock = new object();
     numBuckets = this.preferredFractions.Length;
     inUseCount = 0;
@@ -123,11 +108,13 @@ public class ItemsInBucketsAllocator
 
 
   /// <summary>
-  /// Spreads totalItemCount across bucketsToUse distinct free buckets.
-  /// Returns an array for each bucket (indicating item assignments for each).
-  /// Call blocks if there are not enough free buckets.
-  /// Allocation among the chosen buckets is pro-rated 
-  /// according to the corresponding preferredFractions.
+  /// Spreads totalItemCount across bucketsToUse distinct buckets.
+  /// Buckets may already be in use by other clients; this method
+  /// *prefers* buckets that currently have zero active clients,
+  /// and only reuses in-use buckets if necessary.
+  ///
+  /// Returns an array of length numBuckets giving the number of
+  /// items assigned to each bucket for this allocation.
   /// </summary>
   public int[] Allocate(int bucketsToUse, int totalItemCount)
   {
@@ -163,31 +150,51 @@ public class ItemsInBucketsAllocator
 
     lock (itemsLock)
     {
-      // Block until enough free buckets exist.
-      while ((numBuckets - inUseCount) < bucketsToUse)
-      {
-        Monitor.Wait(itemsLock);
-      }
+      // Build lists of unused (usage == 0) and in-use (usage > 0) buckets.
+      List<int> unused = new(numBuckets);
+      List<int> inUse = new(numBuckets);
 
-      // Build a list of free bucket indices.
-      int freeBuckets = numBuckets - inUseCount;
-      List<int> free = new(freeBuckets);
       for (int i = 0; i < numBuckets; i++)
       {
-        if (!allocated[i])
+        if (bucketUseCounts[i] == 0)
         {
-          free.Add(i);
+          unused.Add(i);
+        }
+        else
+        {
+          inUse.Add(i);
         }
       }
 
-      // Shuffle free indices to randomize choice.
-      FisherYatesShuffleInPlace(free);
+      // Shuffle both lists so we randomize choice within each class.
+      FisherYatesShuffleInPlace(unused);
+      FisherYatesShuffleInPlace(inUse);
 
-      // Pick the first bucketsToUse indices from the shuffled list.
+      // Select bucketsToUse distinct buckets:
+      // 1) take as many as possible from unused (usage == 0),
+      // 2) if needed, fill remainder from inUse (usage > 0).
       int[] selected = new int[bucketsToUse];
-      for (int i = 0; i < bucketsToUse; i++)
+      int selectedCount = 0;
+
+      int fromUnused = System.Math.Min(bucketsToUse, unused.Count);
+      for (int i = 0; i < fromUnused; i++)
       {
-        selected[i] = free[i];
+        selected[selectedCount++] = unused[i];
+      }
+
+      int remainingToSelect = bucketsToUse - selectedCount;
+      if (remainingToSelect > 0)
+      {
+        if (inUse.Count < remainingToSelect)
+        {
+          // Defensive check; should not occur because bucketsToUse <= numBuckets.
+          throw new InvalidOperationException("Internal error: not enough buckets to allocate.");
+        }
+
+        for (int i = 0; i < remainingToSelect; i++)
+        {
+          selected[selectedCount++] = inUse[i];
+        }
       }
 
       // Begin with the "at least one per bucket" guarantee.
@@ -276,22 +283,28 @@ public class ItemsInBucketsAllocator
         }
       }
 
-      // Mark selected buckets as allocated.
+      // Update per-bucket usage counts and global inUseCount.
       for (int i = 0; i < bucketsToUse; i++)
       {
-        allocated[selected[i]] = true;
+        int idx = selected[i];
+        if (bucketUseCounts[idx] == 0)
+        {
+          inUseCount++;
+        }
+        bucketUseCounts[idx]++;
       }
 
-      inUseCount += bucketsToUse;
       return result;
     }
   }
 
-
   /// <summary>
   /// Deallocates the buckets indicated by the nonzero entries in <paramref name="allocatedBucketItems"/>.
-  /// The array must be exactly the length of the bucket set. Entries &gt; 0 deallocate that bucket.
-  /// Signals waiting allocators when buckets become free.
+  /// The array must be exactly the length of the bucket set. Entries &gt; 0 mean:
+  /// "this client was using that bucket and is now releasing it".
+  ///
+  /// Each such bucket's usage count is decremented; if it reaches zero, the bucket becomes "free"
+  /// (no active clients) again.
   /// </summary>
   public void Deallocate(int[] allocatedBucketItems)
   {
@@ -307,7 +320,7 @@ public class ItemsInBucketsAllocator
 
     lock (itemsLock)
     {
-      int toFree = 0;
+      int bucketsFreed = 0;
 
       // Validate first.
       for (int i = 0; i < numBuckets; i++)
@@ -320,12 +333,10 @@ public class ItemsInBucketsAllocator
 
         if (count > 0)
         {
-          if (!allocated[i])
+          if (bucketUseCounts[i] <= 0)
           {
-            throw new InvalidOperationException("Attempted to deallocate a bucket that is not allocated: " + i.ToString());
+            throw new InvalidOperationException("Attempted to deallocate a bucket that has no active clients: " + i.ToString());
           }
-
-          toFree++;
         }
       }
 
@@ -334,16 +345,24 @@ public class ItemsInBucketsAllocator
       {
         if (allocatedBucketItems[i] > 0)
         {
-          allocated[i] = false;
+          int before = bucketUseCounts[i];
+          bucketUseCounts[i] = before - 1;
+
+          if (bucketUseCounts[i] < 0)
+          {
+            throw new InvalidOperationException("Bucket usage count became negative for bucket: " + i.ToString());
+          }
+
+          if (before > 0 && bucketUseCounts[i] == 0)
+          {
+            bucketsFreed++;
+          }
         }
       }
 
-      if (toFree > 0)
+      if (bucketsFreed > 0)
       {
-        inUseCount -= toFree;
-
-        // Wake up any waiting allocators.
-        Monitor.PulseAll(itemsLock);
+        inUseCount -= bucketsFreed;
       }
     }
   }
@@ -379,7 +398,7 @@ public class ItemsInBucketsAllocator
         array[j] = tmp;
       }
     }
-
-    #endregion
   }
+
+  #endregion
 }
