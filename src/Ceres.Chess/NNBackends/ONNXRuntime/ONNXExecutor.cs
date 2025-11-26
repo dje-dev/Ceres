@@ -288,11 +288,6 @@ public class ONNXExecutor : IDisposable
       throw new Exception("Must specify either onnxFileName or onnxModelBytes");
     }
 
-    // Determine if this is a "large" model (appropriate for different batch size anchors)
-    long modelSizeInBytes = onnxModelBytes != null ? onnxModelBytes.Length
-                                                      : new FileInfo(onnxFileName).Length;
-    bool isLargeNetwork = modelSizeInBytes > (100 * 1024 * 1024); // arbitrary 100mb custoff in bytes = 50mm parameters
-
     InputsNumBits = inputsNumBits;
     InputBuffersArePrepopulated = inputBuffersArePrepopulated;
 
@@ -305,13 +300,10 @@ public class ONNXExecutor : IDisposable
     // Set batch size anchors when using CUDA graphs.
     // The benefits of CUDA graphs are more limited to smaller batches for bigger networks.
     MAX_UNUSED_POSITIONS_THRESHOLD_NUM_POS = 14;
-    MAX_UNUSED_POSITIONS_THRESHOLD_FRAC = isLargeNetwork ? 0.4f : 0.5f;
     BATCH_SIZE_ANCHORS_WITH_GRAPH = null;
     if (enableCUDAGraphs && useTensorRT)
     {
-      BATCH_SIZE_ANCHORS_WITH_GRAPH = OVERRIDE_CUDA_GRAPH_BATCH_SIZES ??
-                                      (isLargeNetwork ? [14, 28, 44, 64]
-                                                      : [12, 32, 56, 88]);
+      BATCH_SIZE_ANCHORS_WITH_GRAPH = [16, 32, 48, 64, 80];
     }
 #if NOT
     // Possible ONNX bugs
