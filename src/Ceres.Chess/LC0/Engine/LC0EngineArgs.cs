@@ -27,10 +27,10 @@ namespace Ceres.Chess.LC0.Engine
   /// </summary>
   public static class LC0EngineArgs
   {
-    public static string PrecisionString(NNEvaluatorPrecision precision)
+    public static string PrecisionString(NNEvaluatorPrecision precision, bool useCUDAFP16)
   => precision switch
   {
-    NNEvaluatorPrecision.FP16 => "onnx-trt",
+    NNEvaluatorPrecision.FP16 => useCUDAFP16 ? "cuda-fp16" : "onnx-trt",
     NNEvaluatorPrecision.FP32 => "onnx-cuda",
     NNEvaluatorPrecision.Int8 => "trt-int8", // requies special build with TensorRT support
     _ => throw new Exception("Internal error: unknown precision type")
@@ -43,9 +43,9 @@ namespace Ceres.Chess.LC0.Engine
     }
 
 
-    public static string BackendArgumentsString(int[] gpuIDs, NNEvaluatorPrecision backend, bool fractionsAreEqual = true)
+    public static string BackendArgumentsString(int[] gpuIDs, NNEvaluatorPrecision backend, bool fractionsAreEqual, bool useCUDAFP16)
     {
-      string backendName = PrecisionString(backend);
+      string backendName = PrecisionString(backend, useCUDAFP16);
 
       // Default GPU ID is 0 if not specified
       if (gpuIDs == null) gpuIDs = new int[] { 0 };

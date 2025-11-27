@@ -64,12 +64,13 @@ namespace Ceres.Features.GameEngines
                                                  INNWeightsFileInfo network,
                                                  bool emulateCeresOptions,
                                                  bool verboseOutput,
-                                                 string overrideEXE = null,
-                                                 bool forceDisableSmartPruning = false,
-                                                 bool alwaysFillHistory = false,
-                                                 int? overrideBatchSize = null,
-                                                 int? overrideCacheSize = null,
-                                                 string? overrideBackendString = null)
+                                                 string overrideEXE,
+                                                 bool forceDisableSmartPruning,
+                                                 bool alwaysFillHistory,
+                                                 int? overrideBatchSize,
+                                                 int? overrideCacheSize,
+                                                 string? overrideBackendString,
+                                                 bool useCUDAFP16)
     {
       if (paramsSearch == null)
       {
@@ -172,7 +173,7 @@ namespace Ceres.Features.GameEngines
         lzOptions += $@"-w {netSourceFile} -t {NUM_THREADS} " +
                      //                    $"--score-type=win_percentage " +
                      // like TCEC 10, only 5% benefit     $"--max-prefetch=160 --max-collision-events=917 " +
-                     (overrideBackendString ?? BackendArgumentsString(evaluatorDef));
+                     (overrideBackendString ?? BackendArgumentsString(evaluatorDef, useCUDAFP16));
 
       }
 
@@ -231,10 +232,13 @@ namespace Ceres.Features.GameEngines
                                          int? overrideCacheSize = null,
                                          string? overrideBackendString = null)
     {
+      // TODO: this is a hack, presence of "-cuda" in executable name triggers use of lc0's cuda-fp16 backend
+      bool useCUDAFP16 = overrideEXE != null && overrideEXE.ToLower().Contains("-cuda");
       (string EXE, string lzOptions) = GetLC0EngineOptions(paramsSearch, paramsSelect, evaluatorDef, network,
                                                            emulateCeresOptions, verboseOutput, overrideEXE,
                                                            forceDisableSmartPruning, alwaysFillHistory,
-                                                           overrideBatchSize, overrideCacheSize, overrideBackendString);
+                                                           overrideBatchSize, overrideCacheSize, overrideBackendString,
+                                                           useCUDAFP16);
       if (extraCommandLineArgs != null)
       {
         // Put the extraCommandLineArgs at the beginning
@@ -252,7 +256,7 @@ namespace Ceres.Features.GameEngines
     /// </summary>
     /// <param name="evaluatorDef"></param>
     /// <returns></returns>
-    static string BackendArgumentsString(NNEvaluatorDef evaluatorDef)
+    static string BackendArgumentsString(NNEvaluatorDef evaluatorDef, bool useCUDAFP16)
     {
       if (evaluatorDef == null)
       {
@@ -267,7 +271,8 @@ namespace Ceres.Features.GameEngines
           precision = NNEvaluatorPrecision.FP16;
         }
 
-        return LC0EngineArgs.BackendArgumentsString(evaluatorDef.DeviceIndices, precision, evaluatorDef.EqualFractions);
+        bool isONNX = evaluatorDef.Nets[0].Net.NetworkID.ToLower().EndsWith(".onnx");
+        return LC0EngineArgs.BackendArgumentsString(evaluatorDef.DeviceIndices, precision, evaluatorDef.EqualFractions, useCUDAFP16);
       }
     }
 
