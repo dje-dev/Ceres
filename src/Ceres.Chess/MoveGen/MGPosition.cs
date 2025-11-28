@@ -708,6 +708,12 @@ namespace Ceres.Chess.MoveGen
 
   public static class MGPositionHashing
   {
+    /// <summary>
+    /// Returns 64-bit hash for an MGPosition.
+    /// Note that simpler/faster hash functions were found insufficient to prevent collisions.
+    /// </summary>
+    /// <param name="mgPos"></param>
+    /// <returns></returns>
     public static PosHash64 Hash64(in MGPosition mgPos)
     {
       static ulong Fmix64(ulong k)
