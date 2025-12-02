@@ -14,33 +14,30 @@
 #region Using directives
 
 using System;
-using System.Linq;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-
-
 using Ceres.Base.Math;
 using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
-using Ceres.Base.DataTypes;
 using Ceres.Chess.NetEvaluation.Batch;
 #endregion
 
 namespace Ceres.Chess.EncodedPositions
 {
   [InlineArray(CompressedPolicyVector.NUM_MOVE_SLOTS)]
-  public struct PolicyIndices
+  public struct PolicyIndicesInlineArray
   {
-    private ushort PolicyValue;
+    internal ushort PolicyIndex;
   }
 
   [InlineArray(CompressedPolicyVector.NUM_MOVE_SLOTS)]
-  public struct PolicyValues
+  public struct PolicyValuesInlineArray
   {
-    private ushort PolicyIndex;
+    internal ushort PolicyValue;
   }
 
   /// <summary>
@@ -79,20 +76,32 @@ namespace Ceres.Chess.EncodedPositions
 
     #region Move Indices
 
-    readonly PolicyIndices Indices;
+    readonly PolicyIndicesInlineArray Indices;
 
     #endregion
 
     #region Move Probabilities Encoded
 
-    internal readonly PolicyValues Probabilities;
+    internal readonly PolicyValuesInlineArray Probabilities;
 
     #endregion
 
     #endregion
 
-    // Not possible due to struct being readonly
-    //public ReadOnlySpan<ushort> MoveProbsEncoded => MemoryMarshal.CreateReadOnlySpan(ref MoveProbEncoded_0, 1);
+
+    #region Spans
+
+    /// <summary>
+    /// Returns span over the encoded probabilities.  
+    /// </summary>
+    public ReadOnlySpan<ushort> ProbabilitiesSpan => MemoryMarshal.CreateReadOnlySpan(ref Unsafe.AsRef(in Probabilities.PolicyValue), NUM_MOVE_SLOTS);
+
+    /// <summary>
+    /// Returns span over the encoded move indices.  
+    /// </summary>
+    public ReadOnlySpan<ushort> MoveIndicesSpan => MemoryMarshal.CreateReadOnlySpan(ref Unsafe.AsRef(in Indices.PolicyIndex), NUM_MOVE_SLOTS);
+
+    #endregion
 
     #region Single float encodings
 
