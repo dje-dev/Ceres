@@ -282,7 +282,8 @@ namespace Ceres.Commands
     {
       FeatureUCIParams uciParams = FeatureUCIParams.ParseUCICommand(keyValueArgs);
 
-      Action<NNEvaluatorDef, NNEvaluator> backendBenchEvaluator = delegate (NNEvaluatorDef evalDef, NNEvaluator evaluator)
+      Action<NNEvaluatorDef, NNEvaluator, int, int, int?> backendBenchEvaluator = delegate (NNEvaluatorDef evalDef, NNEvaluator evaluator,
+                                                                                            int minSize, int maxSize, int? stepSize)
       {
         FeatureBenchmarkBackend backendBench = new();
         (NNEvaluator, List<(int, float)>) speed = backendBench.ExecuteBenchmark(evalDef, evaluator);
