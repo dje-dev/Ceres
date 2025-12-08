@@ -205,7 +205,8 @@ namespace Ceres.Commands
       {
         int skip = explicitStepSize ?? (lastBatchSize < 256 ? 4 : (lastBatchSize < 512 ? 16 : 32));
         lastBatchSize += skip;
-        lastBatchSize = (lastBatchSize / 4) * 4;
+        int roundTo = Math.Min(skip, 4);
+        lastBatchSize = (lastBatchSize / roundTo) * roundTo;
 
         if (lastBatchSize > maxBatchSize)
         {
