@@ -97,7 +97,7 @@ namespace Ceres.Features.UCI
     /// <summary>
     /// Optional evaluator to call to benchmark neural network backend.
     /// </summary>
-    Action<NNEvaluatorDef, NNEvaluator> BackendBenchEvaluator;
+    Action<NNEvaluatorDef, NNEvaluator, int, int, int?> BackendBenchEvaluator;
 
     /// <summary>
     /// Optional evaluator to call to search benchmark program (to run for specified number of seconds).
@@ -174,7 +174,7 @@ namespace Ceres.Features.UCI
                       bool disablePruning = false,
                       string uciLogFileName = null,
                       string searchLogFileName = null,
-                      Action<NNEvaluatorDef, NNEvaluator> backendBenchEvaluator = null,
+                      Action<NNEvaluatorDef, NNEvaluator, int, int, int?> backendBenchEvaluator = null,
                       Action<NNEvaluatorDef, int> benchmarkEvaluator = null)
     {
       InStream = inStream ?? Console.In;
@@ -496,7 +496,7 @@ namespace Ceres.Features.UCI
             {
               if (InitializeEngineIfNeeded())
               {
-                BackendBenchEvaluator(EvaluatorDef, CeresEngine.Evaluators.Evaluator1);
+                BackendBenchEvaluator(EvaluatorDef, CeresEngine.Evaluators.Evaluator1, 1, 1024, 16);
               }
             }
             break;

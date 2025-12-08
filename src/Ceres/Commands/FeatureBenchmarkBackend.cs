@@ -147,7 +147,10 @@ namespace Ceres.Commands
     }
 
 
-    public (NNEvaluator, List<(int, float)>) ExecuteBenchmark(NNEvaluatorDef evaluatorDef, NNEvaluator evaluator)
+    public (NNEvaluator, List<(int, float)>) ExecuteBenchmark(NNEvaluatorDef evaluatorDef, NNEvaluator evaluator,
+                                                              int numRunsPerBatchSize = 5,
+                                                              int firstBatchSize = 1, int maxBatchSize = 2048,
+                                                              int? explicitStepSize = null, bool show = true)
     {
       if (evaluatorDef == null)
       {
@@ -159,7 +162,7 @@ namespace Ceres.Commands
         evaluator = evaluatorDef.ToEvaluator();
       }
 
-      return BackendBench(evaluatorDef, evaluator);
+      return BackendBench(evaluatorDef, evaluator, numRunsPerBatchSize, firstBatchSize, maxBatchSize, explicitStepSize);
     }
 
 
@@ -176,8 +179,9 @@ namespace Ceres.Commands
     /// <returns></returns>
     public static (NNEvaluator, List<(int, float)>) BackendBench(NNEvaluatorDef evaluatorDef,
                                                                 NNEvaluator evaluator,
-                                                                int extraSkipMultiplier = 1, int numRunsPerBatchSize = 5,
-                                                                int firstBatchSize = 1, int maxBatchSize = 4096,
+                                                                int numRunsPerBatchSize = 5,
+                                                                int firstBatchSize = 1, int maxBatchSize = 2048,
+                                                                int? explicitStepSize = null,
                                                                 bool show = true)
     {
       if (show)
@@ -199,7 +203,7 @@ namespace Ceres.Commands
       int lastBatchSize = firstBatchSize;
       while (true)
       {
-        int skip = extraSkipMultiplier * (lastBatchSize < 256 ? 4 : (lastBatchSize < 512 ? 16 : 32));
+        int skip = explicitStepSize ?? (lastBatchSize < 256 ? 4 : (lastBatchSize < 512 ? 16 : 32));
         lastBatchSize += skip;
         lastBatchSize = (lastBatchSize / 4) * 4;
 
