@@ -191,7 +191,11 @@ public class ONNXExecutor : IDisposable
   private IReadOnlyDictionary<string, NodeMetadata> inputsMetadata;
   private readonly object metadataLock = new object();
 
+  List<string> inputNames;
+  List<string> outputNames;
+
   CudaStream cuStream;
+
 
   // Creation of ONNX sessions for the TRT provider should be serialized per device.
   // This prevents problems such as two engines concurrently compiling engines for same device
@@ -369,6 +373,8 @@ public class ONNXExecutor : IDisposable
 
     // Initialize session cache
     sessionCache = new Dictionary<(int, int, bool), SessionForBatchSize>();
+
+    InitializeInputOutputNames();
 
     Console.WriteLine($"ONNXExecutor initialized on GPU {GPUID} (sessions will be created on-demand)");
   }
@@ -998,6 +1004,27 @@ public class ONNXExecutor : IDisposable
   }
 
 
+
+  void InitializeInputOutputNames()
+  {
+    // Get context for one of the batch sizes (arbitrarily chosen to be 1)
+    SessionForBatchSize context = GetOrCreateSessionForBatchSize(1);
+
+    inputNames = new List<string>(InputsMetadata.Count);
+    for (int i = 0; i < context.InputOrtValues.Count; i++)
+    {
+      inputNames.Add(context.InputOrtValues[i].name);
+    }
+
+    outputNames = new List<string>();
+    for (int i = 0; i < context.OutputBuffers.Count; i++)
+    {
+      outputNames.Add(context.OutputBuffers[i].name);
+    }
+  }
+
+
+
   /// <summary>
   /// Executes inference using direct Run method with OrtValues (alternative to IOBinding).
   /// </summary>
@@ -1024,9 +1051,6 @@ public class ONNXExecutor : IDisposable
       List<OrtValue> inputOrtValuesList = new List<OrtValue>();
       List<OrtValue> outputOrtValuesList = new List<OrtValue>();
 
-      List<string> inputNames = new List<string>(InputsMetadata.Count); // TODO: preallocate
-      List<string> outputNames = new List<string>(); // TODO: preallocate
-
       try
       {
         // Create input OrtValues for this specific batch size
@@ -1040,7 +1064,6 @@ public class ONNXExecutor : IDisposable
             32 => OrtValue.CreateTensorValueFromMemory((float[])context.InputBuffers[i], shape),
             _ => throw new NotSupportedException($"Unsupported InputsNumBits {InputsNumBits}"),
           });
-          inputNames.Add(context.InputOrtValues[i].name);
         }
 
         for (int i = 0; i < context.OutputBuffers.Count; i++)
@@ -1057,7 +1080,6 @@ public class ONNXExecutor : IDisposable
           };
 
           outputOrtValuesList.Add(ortVal);
-          outputNames.Add(name);
         }
 
         // Run inference using direct Run method with per-stream CUDA event timing
@@ -1077,7 +1099,7 @@ public class ONNXExecutor : IDisposable
 
           if (cpuBuffer is Float16[] float16Buffer)
           {
-            resultArrays.Add((context.OutputBuffers[i].name, new Memory<Float16>(float16Buffer, 0, usedElements)));
+            resultArrays.Add((outputNames[i], new Memory<Float16>(float16Buffer, 0, usedElements)));
           }
           else if (cpuBuffer is float[] floatBuffer)
           {
