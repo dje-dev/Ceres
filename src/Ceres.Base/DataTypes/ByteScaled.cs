@@ -87,6 +87,12 @@ namespace Ceres.Base.DataType
 
 
     /// <summary>
+    /// Sets value to exactly 1.
+    /// </summary>
+    public void SetOne() => scaledValue = (byte)SCALING_FACTOR;
+
+
+    /// <summary>
     /// Returns if value is exactly 0 or 1.
     /// </summary>
     public readonly bool IsZeroOrOne => scaledValue == 0 || scaledValue == SCALING_FACTOR;
