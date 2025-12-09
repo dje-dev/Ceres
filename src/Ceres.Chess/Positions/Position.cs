@@ -912,16 +912,19 @@ namespace Ceres.Chess
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly Piece PieceOnSquare(Square square)
     {
-      byte rawValue = 0;
+      int idx = square.SquareIndexStartA1;
+
       unsafe
       {
         fixed (byte* pieceSquares = &Square_0_1)
         {
-          rawValue = pieceSquares[square.SquareIndexStartA1 / 2];
-          rawValue = square.SquareIndexStartA1 % 2 == 1 ? (byte)(rawValue >> 4) : (byte)(rawValue & 0b0000_1111);
+          byte raw = pieceSquares[idx >> 1];                 // / 2
+          int shift = (idx & 1) << 2;                        // 0 or 4
+          raw = (byte)((raw >> shift) & 0x0F);               // select lower/upper nibble
+
+          return new Piece(raw);
         }
       }
-      return new Piece(rawValue);
     }
 
 
