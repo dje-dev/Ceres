@@ -102,9 +102,8 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
       ValuesRaw = values;
       Values2Raw = values2;
 
-      // Quick check one of the outputs (value) for NaNs.
-      float sumValue = (float)values.Span[0] + (isWDL ? (float)values.Span[1] + (float)values.Span[2] : 0);
-      if (float.IsNaN(sumValue))
+      // Quick check outputs (value) for NaNs.
+      if (Float16.IsNaN(values.Span[0]) || (isWDL && Float16.IsNaN(values.Span[2])))
       {
         throw new Exception("NaN detected in neural network output (value head).");
       }
