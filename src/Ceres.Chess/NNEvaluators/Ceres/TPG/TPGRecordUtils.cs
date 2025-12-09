@@ -79,10 +79,10 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     /// <param name="ranks"></param>
     /// <param name="files"></param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static unsafe void WriteSquareEncoding(Square sq, Span<ByteScaled> ranks, Span<ByteScaled> files)
+    public static void WriteSquareEncoding(Square sq, Span<ByteScaled> ranks, Span<ByteScaled> files)
     {
-      ranks[sq.Rank].Value = 1;
-      files[sq.File].Value = 1;
+      ranks[sq.Rank].SetOne();
+      files[sq.File].SetOne();
     }
 
 
@@ -93,23 +93,24 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     /// <param name="pieceType"></param>
     /// <param name="pieces"></param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static unsafe void WritePieceEncoding(bool isOurPiece, PieceType pieceType, Span<ByteScaled> pieces)
+    public static void WritePieceEncoding(bool isOurPiece, PieceType pieceType, Span<ByteScaled> pieces)
     {
       if (pieceType == PieceType.None)
       {
-        pieces[0].Value = 1;
+        pieces[0].SetOne();
       }
       else if (isOurPiece)
       {
-        pieces[(int)pieceType].Value = 1;
+        pieces[(int)pieceType].SetOne();
       }
       else
       {
-        pieces[(int)pieceType + 6].Value = 1;
+        pieces[(int)pieceType + 6].SetOne();
       }
     }
 
-    static unsafe internal void WritePieceEncoding(MGPositionConstants.MCChessPositionPieceEnum pieceType, Span<ByteScaled> pieces) => WriteBinaryEncoding((byte)pieceType, 3, pieces);
+
+    static internal void WritePieceEncoding(MGPositionConstants.MCChessPositionPieceEnum pieceType, Span<ByteScaled> pieces) => WriteBinaryEncoding((byte)pieceType, 3, pieces);
 
     /// <summary>
     /// Returns the square represented by a specified spans of rank/file one-hot encodings.
@@ -117,7 +118,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     /// <param name="ranks"></param>
     /// <param name="files"></param>
     /// <returns></returns>
-    public static unsafe Square ToSquare(ReadOnlySpan<ByteScaled> ranks, ReadOnlySpan<ByteScaled> files)
+    public static Square ToSquare(ReadOnlySpan<ByteScaled> ranks, ReadOnlySpan<ByteScaled> files)
     {
       int rank = -1;
       int file = -1;
@@ -221,7 +222,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
         gch.Free();
       }
     }
-    
+
 
     [ThreadStatic]
     static byte[] tempBufferBytes = null;
