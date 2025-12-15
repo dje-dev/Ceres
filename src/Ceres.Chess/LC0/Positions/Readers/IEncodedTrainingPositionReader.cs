@@ -18,62 +18,60 @@ using System.Collections.Generic;
 
 #endregion
 
-namespace Ceres.Chess.EncodedPositions
+namespace Ceres.Chess.EncodedPositions;
+
+/// <summary>
+/// Interface for an object capable of producing an
+/// IEnumerable of EncodedTrainingPosition.
+/// </summary>
+public interface IEncodedTrainingPositionReader
 {
   /// <summary>
-  /// Interface for an object capable of producing an
-  /// IEnumerable of EncodedTrainingPosition.
+  /// Enumerates all positions sequentially.
   /// </summary>
-  public interface IEncodedTrainingPositionReader
+  /// <param name="filterOutFRCGames"></param>
+  /// <param name="maxPositions"></param>
+  /// <returns></returns>
+  IEnumerable<EncodedTrainingPosition> EnumeratePositions(bool filterOutFRCGames = true, long maxPositions = long.MaxValue);
+
+
+  /// <summary>
+  /// Enumerates as a sequence of batches of specified maximum size.
+  /// </summary>
+  /// <param name="maxPositionsPerBatch"></param>
+  /// <param name="positionSkipCount">difference in sequential position index between selected positions, 1 for all positions</param>
+  /// <param name="returnFinalPartialBatch">if any final batch which would be less than requested batch size should be returned</param>
+  /// <param name="filterOutFRCGames"></param>
+  /// <returns></returns>
+  IEnumerable<Memory<EncodedTrainingPosition>> EnumerateBatches(int maxPositionsPerBatch,
+                                                                int positionSkipCount = 1,
+                                                                bool returnFinalPartialBatch = true,
+                                                                bool filterOutFRCGames = true)
   {
-    /// <summary>
-    /// Enumerates all positions sequentially.
-    /// </summary>
-    /// <param name="filterOutFRCGames"></param>
-    /// <returns></returns>
-    IEnumerable<EncodedTrainingPosition> EnumeratePositions(bool filterOutFRCGames = true);
+    EncodedTrainingPosition[] buffer = new EncodedTrainingPosition[maxPositionsPerBatch];
 
-
-    /// <summary>
-    /// Enumerates as a sequence of batches of specified maximum size.
-    /// </summary>
-    /// <param name="maxPositionsPerBatch"></param>
-    /// <param name="positionSkipCount">difference in sequential position index between selected positions, 1 for all positions</param>
-    /// <param name="returnFinalPartialBatch">if any final batch which would be less than requested batch size should be returned</param>
-    /// <param name="filterOutFRCGames"></param>
-    /// <returns></returns>
-    IEnumerable<Memory<EncodedTrainingPosition>> EnumerateBatches(int maxPositionsPerBatch, 
-                                                                  int positionSkipCount = 1, 
-                                                                  bool returnFinalPartialBatch = true,
-                                                                  bool filterOutFRCGames = true)
+    int countRead = 0;
+    int countWrittenThisBatch = 0;
+    foreach (EncodedTrainingPosition pos in EnumeratePositions(filterOutFRCGames))
     {
-      EncodedTrainingPosition[] buffer = new EncodedTrainingPosition[maxPositionsPerBatch];
-
-      int countRead = 0;
-      int countWrittenThisBatch = 0;
-      foreach (EncodedTrainingPosition pos in EnumeratePositions(filterOutFRCGames))
+      if (countRead++ % positionSkipCount != 0)
       {
-        if (countRead++ % positionSkipCount != 0)
-        {
-          continue;
-        }
-
-        buffer[countWrittenThisBatch++] = pos;
-
-        if (countWrittenThisBatch >= maxPositionsPerBatch)
-        {
-          yield return buffer;
-          countWrittenThisBatch = 0;
-        }
+        continue;
       }
 
-      // Return any residual positions not filling batch.
-      if (returnFinalPartialBatch && countWrittenThisBatch > 0)
+      buffer[countWrittenThisBatch++] = pos;
+
+      if (countWrittenThisBatch >= maxPositionsPerBatch)
       {
-        yield return new Memory<EncodedTrainingPosition>(buffer).Slice(0, countWrittenThisBatch);
+        yield return buffer;
+        countWrittenThisBatch = 0;
       }
     }
 
+    // Return any residual positions not filling batch.
+    if (returnFinalPartialBatch && countWrittenThisBatch > 0)
+    {
+      yield return new Memory<EncodedTrainingPosition>(buffer).Slice(0, countWrittenThisBatch);
+    }
   }
-
 }

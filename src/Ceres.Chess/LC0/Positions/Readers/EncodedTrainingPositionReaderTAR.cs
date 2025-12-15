@@ -19,61 +19,65 @@ using System.IO;
 
 #endregion
 
-namespace Ceres.Chess.EncodedPositions
+namespace Ceres.Chess.EncodedPositions;
+
+/// <summary>
+/// Allows iterations over all positions/games in a single TAR file 
+/// containing v6 LC0 training data games.
+/// </summary>
+public class EncodedTrainingPositionReaderTAR : IEncodedTrainingPositionReader
 {
-  /// <summary>
-  /// Allows iterations over all positions/games in a single TAR file 
-  /// containing v6 LC0 training data games.
-  /// </summary>
-  public class EncodedTrainingPositionReaderTAR : IEncodedTrainingPositionReader
+  public readonly string FileName;
+
+  public EncodedTrainingPositionReaderTAR(string fileName)
   {
-    public readonly string FileName;
-
-    public EncodedTrainingPositionReaderTAR(string fileName)
+    if (!File.Exists(fileName))
     {
-      if (!File.Exists(fileName))
-      {
-        throw new ArgumentException($"{fileName} does not exist");
-      }
-
-      FileName = fileName;
+      throw new ArgumentException($"{fileName} does not exist");
     }
 
+    FileName = fileName;
+  }
 
-    /// <summary>
-    /// Enumerates all games in the TAR.
-    /// </summary>
-    /// <param name="filterOutFRCGames"></param>
-    /// <returns></returns>
-    public IEnumerable<Memory<EncodedTrainingPosition>> EnumerateGames(bool filterOutFRCGames = true)
+
+  /// <summary>
+  /// Enumerates all games in the TAR.
+  /// </summary>
+  /// <param name="filterOutFRCGames"></param>
+  /// <returns></returns>
+  public IEnumerable<Memory<EncodedTrainingPosition>> EnumerateGames(bool filterOutFRCGames = true)
+  {
+    var reader = EncodedTrainingPositionReaderTAREngine.EnumerateGames(FileName, s => true, default, filterOutFRCGames: filterOutFRCGames);
+
+    foreach (Memory<EncodedTrainingPosition> games in reader)
     {
-      var reader = EncodedTrainingPositionReaderTAREngine.EnumerateGames(FileName, s => true, default, filterOutFRCGames:filterOutFRCGames);
-
-      foreach (Memory<EncodedTrainingPosition> games in reader)
-      {
-        yield return games;
-      }
+      yield return games;
     }
+  }
 
 
-    /// <summary>
-    /// Enumerates all positions across all games in the TAR (optionally excluding those from FRC games).
-    /// </summary>
-    /// <param name="filterOutFRCGames"></param>
-    /// <returns></returns>
-    public IEnumerable<EncodedTrainingPosition> EnumeratePositions(bool filterOutFRCGames = true)
+  /// <summary>
+  /// Enumerates all positions across all games in the TAR (optionally excluding those from FRC games).
+  /// </summary>
+  /// <param name="filterOutFRCGames"></param>
+  /// <returns></returns>
+  public IEnumerable<EncodedTrainingPosition> EnumeratePositions(bool filterOutFRCGames = true, long maxPositions = long.MaxValue)
+  {
+    var reader = EncodedTrainingPositionReaderTAREngine.EnumerateGames(FileName, s => true, default, filterOutFRCGames: filterOutFRCGames);
+
+    long numRead = 0;
+    foreach (Memory<EncodedTrainingPosition> gamePositionsBuffer in reader)
     {
-      var reader = EncodedTrainingPositionReaderTAREngine.EnumerateGames(FileName, s => true, default, filterOutFRCGames : filterOutFRCGames);
-
-      foreach (Memory<EncodedTrainingPosition> gamePositionsBuffer in reader)
+      for (int i = 0; i < gamePositionsBuffer.Length; i++)
       {
-        for (int i = 0; i < gamePositionsBuffer.Length; i++)
+        yield return gamePositionsBuffer.Span[i];
+
+        if (numRead++ >= maxPositions)
         {
-          yield return gamePositionsBuffer.Span[i];
+          yield break;
         }
       }
     }
-
   }
 
 }

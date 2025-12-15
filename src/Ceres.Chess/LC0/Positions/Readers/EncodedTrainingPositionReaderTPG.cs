@@ -14,131 +14,130 @@
 #region Using directives
 
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Runtime.InteropServices;
-using System.Threading.Tasks;
+
 using Zstandard.Net;
 
 #endregion
 
-namespace Ceres.Chess.EncodedPositions
+namespace Ceres.Chess.EncodedPositions;
+
+/// <summary>
+/// Allows iterations over all positions/games in a single TPG
+/// (training position generator) file containing a sequence 
+/// of raw v6 LC0 training records (in GZIP format)
+/// </summary>
+public class EncodedTrainingPositionReaderTPG : IEncodedTrainingPositionReader, IDisposable
 {
   /// <summary>
-  /// Allows iterations over all positions/games in a single TPG
-  /// (training position generator) file containing a sequence 
-  /// of raw v6 LC0 training records (in GZIP format)
+  /// Name of TPG file containing data.
   /// </summary>
-  public class EncodedTrainingPositionReaderTPG : IEncodedTrainingPositionReader, IDisposable
+  public readonly string FileName;
+
+  const int BUFFER_POSITIONS_PER_BUFFER = 1024;
+
+  FileStream rf;
+  Stream gu;
+
+  byte[] buffer;
+
+
+  /// <summary>
+  /// Constructor to iterate over all positions in a specified file.
+  /// </summary>
+  public EncodedTrainingPositionReaderTPG(string fileName)
   {
-    /// <summary>
-    /// Name of TPG file containing data.
-    /// </summary>
-    public readonly string FileName;
-
-    const int BUFFER_POSITIONS_PER_BUFFER = 1024;
-
-    FileStream rf;
-    Stream gu;
-
-    byte[] buffer;
-
-
-    /// <summary>
-    /// Constructor to iterate over all positions in a specified file.
-    /// </summary>
-    public EncodedTrainingPositionReaderTPG(string fileName)
+    if (!File.Exists(fileName))
     {
-      if (!File.Exists(fileName))
+      throw new ArgumentException($"{fileName} does not exist");
+    }
+
+    Debug.Assert(EncodedTrainingPosition.V6_LEN == Marshal.SizeOf<EncodedTrainingPosition>());
+
+    FileName = fileName;
+
+    rf = new FileStream(FileName, FileMode.Open, FileAccess.Read);
+    if (fileName.ToLower().Contains("zst"))
+    {
+      gu = new ZstandardStream(rf, CompressionMode.Decompress);
+    }
+    else
+    {
+      gu = new GZipStream(rf, CompressionMode.Decompress);
+    }
+
+    buffer = new byte[BUFFER_POSITIONS_PER_BUFFER * EncodedTrainingPosition.V6_LEN];
+  }
+
+
+  /// <summary>
+  /// Enumerates over all positions.
+  /// 
+  /// NOTE: TPG are never written with FRC games, so the argument is ignored.
+  /// </summary>
+  /// <param name="filterOutFRCGames"></param>
+  /// <param name="maxPositions"></param>
+  /// <returns></returns>
+  public IEnumerable<EncodedTrainingPosition> EnumeratePositions(bool filterOutFRCGames = true, long maxPositions = int.MaxValue)
+  {
+
+    while (true)
+    {
+      EncodedTrainingPosition[] block = Read(BUFFER_POSITIONS_PER_BUFFER).ToArray();
+      if (block != null)
       {
-        throw new ArgumentException($"{fileName} does not exist");
-      }
-
-      Debug.Assert(EncodedTrainingPosition.V6_LEN == Marshal.SizeOf<EncodedTrainingPosition>());
-
-      FileName = fileName;
-
-      rf = new FileStream(FileName, FileMode.Open, FileAccess.Read);
-      if (fileName.ToLower().Contains("zst"))
-      {
-        gu = new ZstandardStream(rf, CompressionMode.Decompress);
+        foreach (EncodedTrainingPosition position in block)
+        {
+          yield return position;
+        }
       }
       else
       {
-        gu = new GZipStream(rf, CompressionMode.Decompress);
-      }
-
-      buffer = new byte[BUFFER_POSITIONS_PER_BUFFER * EncodedTrainingPosition.V6_LEN];
-    }
-
-
-    /// <summary>
-    /// Enumerates over all positions.
-    /// 
-    /// NOTE: TPG are never written with FRC games, so the argument is ignored.
-    /// </summary>
-    /// <param name="filterOutFRCGames"></param>
-    /// <returns></returns>
-    public IEnumerable<EncodedTrainingPosition> EnumeratePositions(bool filterOutFRCGames = true)
-    {
-
-      while (true)
-      {
-        EncodedTrainingPosition[] block = Read(BUFFER_POSITIONS_PER_BUFFER).ToArray();
-        if (block != null)
-        {
-          foreach (EncodedTrainingPosition position in block)
-          {
-            yield return position;
-          }
-        }
-        else
-        {
-          yield break;
-        }
+        yield break;
       }
     }
-
-
-    /// <summary>
-    /// Reads a specified number of positions from the file at the current position.
-    /// </summary>
-    public ReadOnlySpan<EncodedTrainingPosition> Read(int numPositions)
-    {
-      int totalBytesToTryRead = numPositions * EncodedTrainingPosition.V6_LEN;
-      if (buffer == null || buffer.Length < totalBytesToTryRead)
-      {
-        buffer = new byte[numPositions * Marshal.SizeOf<EncodedTrainingPosition>()];
-      }
-
-      int totalBytesRead = 0;
-      checked
-      {
-        while (totalBytesRead < totalBytesToTryRead)
-        {
-          int numBytesRead = gu.Read(buffer, totalBytesRead, totalBytesToTryRead - totalBytesRead);
-          if (numBytesRead == 0)
-          {
-            break;
-          }
-          totalBytesRead += numBytesRead;
-        }
-      }
-
-      Span<byte> bufferSpan = buffer.AsSpan().Slice(0, totalBytesRead);
-      ReadOnlySpan<EncodedTrainingPosition> bufferAsPositions = MemoryMarshal.Cast<byte, EncodedTrainingPosition>(bufferSpan);
-      return bufferAsPositions;
-    }
-
-
-    public void Dispose()
-    {
-      gu.Dispose();
-      rf.Dispose();
-    }
-
   }
+
+
+  /// <summary>
+  /// Reads a specified number of positions from the file at the current position.
+  /// </summary>
+  public ReadOnlySpan<EncodedTrainingPosition> Read(int numPositions)
+  {
+    int totalBytesToTryRead = numPositions * EncodedTrainingPosition.V6_LEN;
+    if (buffer == null || buffer.Length < totalBytesToTryRead)
+    {
+      buffer = new byte[numPositions * Marshal.SizeOf<EncodedTrainingPosition>()];
+    }
+
+    int totalBytesRead = 0;
+    checked
+    {
+      while (totalBytesRead < totalBytesToTryRead)
+      {
+        int numBytesRead = gu.Read(buffer, totalBytesRead, totalBytesToTryRead - totalBytesRead);
+        if (numBytesRead == 0)
+        {
+          break;
+        }
+        totalBytesRead += numBytesRead;
+      }
+    }
+
+    Span<byte> bufferSpan = buffer.AsSpan().Slice(0, totalBytesRead);
+    ReadOnlySpan<EncodedTrainingPosition> bufferAsPositions = MemoryMarshal.Cast<byte, EncodedTrainingPosition>(bufferSpan);
+    return bufferAsPositions;
+  }
+
+
+  public void Dispose()
+  {
+    gu.Dispose();
+    rf.Dispose();
+  }
+
 }
