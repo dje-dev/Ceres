@@ -22,6 +22,8 @@ using System.Runtime.InteropServices;
 
 #endregion
 
+#pragma warning disable CA1416 // Windows-only native interop requires platform guards elsewhere
+
 namespace Ceres.Base.OperatingSystem
 {
   /// <summary>
@@ -48,6 +50,8 @@ namespace Ceres.Base.OperatingSystem
     internal WRawMemoryManagerPreallocatedWindows()
     {
     }
+
+#pragma warning restore CA1416 // platform compatability warnings
 
     void IRawMemoryManagerIncremental<T>.Reserve(string sharedMemName, bool useExistingSharedMemory, long numItems, bool largePages)
     {
