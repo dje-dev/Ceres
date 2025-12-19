@@ -767,7 +767,7 @@ namespace Ceres.Chess.LC0.Batches
       Debug.Assert(targetArrayMemory.Length >= numPlanesToConvert * SQUARES_PER_PLANE);
 
       // Choose vectorized path if AVX2 is available (x64)
-      if (false && Avx2.IsSupported)
+      if (Avx2.IsSupported)
       {
         BitmapRepresentationExpandAVX2(thisLongs, thisValues, targetArrayMemory,
                                        startPlaneIndex, numPlanesToConvert, totalElements, scale50MoveCounter);
