@@ -630,7 +630,7 @@ namespace Ceres.Chess.EncodedPositions
 
     /// <summary>
     /// Reorders the entries to be sorted descending based on policy probability.
-    /// TODO: make faster, or call in parallel over batch? Currently can do about 300/second batches of 1024.
+    /// Uses insertion sort which is optimal for small arrays (~30 elements).
     /// </summary>
     public void Sort(int numToSort)
     {
@@ -638,25 +638,23 @@ namespace Ceres.Chess.EncodedPositions
       {
         fixed (ushort* moveProbabilitiesEncoded = &Probabilities[0])
         {
-          while (true)
+          // Insertion sort (more than 2x faster than bubble sort)
+          for (int i = 1; i < numToSort; i++)
           {
-            // Bubble sort
-            int numSwapped = 0;
-            for (int i = 1; i < numToSort; i++)
-            {
-              if (moveProbabilitiesEncoded[i - 1] < moveProbabilitiesEncoded[i])
-              {
-                (moveIndices[i], moveIndices[i - 1]) = (moveIndices[i - 1], moveIndices[i]);
-                (moveProbabilitiesEncoded[i], moveProbabilitiesEncoded[i - 1]) = (moveProbabilitiesEncoded[i - 1], moveProbabilitiesEncoded[i]);
+            ushort keyProb = moveProbabilitiesEncoded[i];
+            ushort keyIndex = moveIndices[i];
+            int j = i - 1;
 
-                numSwapped++;
-              }
+            // Shift elements that are smaller than keyProb to the right
+            while (j >= 0 && moveProbabilitiesEncoded[j] < keyProb)
+            {
+              moveProbabilitiesEncoded[j + 1] = moveProbabilitiesEncoded[j];
+              moveIndices[j + 1] = moveIndices[j];
+              j--;
             }
 
-            if (numSwapped == 0)
-            {
-              return;
-            }
+            moveProbabilitiesEncoded[j + 1] = keyProb;
+            moveIndices[j + 1] = keyIndex;
           }
         }
       }
@@ -664,8 +662,9 @@ namespace Ceres.Chess.EncodedPositions
 
 
     /// <summary>
-    /// Reorders the entries to be sorted descending based on policy probability.
-    /// TODO: make faster, or call in parallel over batch? Currently can do about 300/second batches of 1024.
+    /// Reorders the entries to be sorted descending based on policy probability,
+    /// while also keeping the actions sorted in the same order.
+    /// Uses insertion sort which is optimal for small arrays (~30 elements).
     /// </summary>
     public void SortWithActions(int numToSort, ref CompressedActionVector actions)
     {
@@ -673,26 +672,26 @@ namespace Ceres.Chess.EncodedPositions
       {
         fixed (ushort* moveProbabilitiesEncoded = &Probabilities[0])
         {
-          while (true)
+          // Insertion sort (descending order by probability)
+          for (int i = 1; i < numToSort; i++)
           {
-            // Bubble sort
-            int numSwapped = 0;
-            for (int i = 1; i < numToSort; i++)
-            {
-              if (moveProbabilitiesEncoded[i - 1] < moveProbabilitiesEncoded[i])
-              {
-                (moveIndices[i], moveIndices[i - 1]) = (moveIndices[i - 1], moveIndices[i]);
-                (moveProbabilitiesEncoded[i], moveProbabilitiesEncoded[i - 1]) = (moveProbabilitiesEncoded[i - 1], moveProbabilitiesEncoded[i]);
-                (actions[i], actions[i - 1]) = (actions[i - 1], actions[i]);
+            ushort keyProb = moveProbabilitiesEncoded[i];
+            ushort keyIndex = moveIndices[i];
+            var keyAction = actions[i];
+            int j = i - 1;
 
-                numSwapped++;
-              }
+            // Shift elements that are smaller than keyProb to the right
+            while (j >= 0 && moveProbabilitiesEncoded[j] < keyProb)
+            {
+              moveProbabilitiesEncoded[j + 1] = moveProbabilitiesEncoded[j];
+              moveIndices[j + 1] = moveIndices[j];
+              actions[j + 1] = actions[j];
+              j--;
             }
 
-            if (numSwapped == 0)
-            {
-              return;
-            }
+            moveProbabilitiesEncoded[j + 1] = keyProb;
+            moveIndices[j + 1] = keyIndex;
+            actions[j + 1] = keyAction;
           }
         }
       }
