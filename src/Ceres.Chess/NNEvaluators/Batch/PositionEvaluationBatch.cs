@@ -14,6 +14,7 @@
 #region Using directives
 
 using System;
+using System.Buffers;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -52,6 +53,16 @@ namespace Ceres.Chess.NetEvaluation.Batch
     public bool HasValueSecondary;
     public bool HasState;
     public int NumPos;
+
+    /// <summary>
+    /// If true, the Policies array was rented from ArrayPool and must be returned on Dispose.
+    /// </summary>
+    private bool policiesBufferIsRented;
+
+    /// <summary>
+    /// The rented array reference (needed for returning to pool since Memory may be a slice).
+    /// </summary>
+    private CompressedPolicyVector[] rentedPoliciesArray;
 
     #region Output raw data
 
@@ -754,7 +765,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
                                    float policyTemperature, float policyUncertaintyScalingFactor,
                                    TimingStats stats,
                                    Memory<FP16[][]> rawNetworkOutputs = default,
-                                   string[] rawNetworkOutputNames = null)
+                                   string[] rawNetworkOutputNames = null,
+                                   bool useArrayPoolForPolicyBuffer = false)
    : this(isWDL, hasM, hasUncertaintyV, hasUnertaintyP, hasAction, hasValueSecondary, hasState, numPos, valueEvals, valueEvals2,
           m, uncertaintyV, uncertaintyP, extraStats0, extraStats1, states.ToArray(), activations,
           fractionValueFromValue2,
@@ -762,10 +774,18 @@ namespace Ceres.Chess.NetEvaluation.Batch
           value1TemperatureUncertaintyScalingFactor, value2TemperatureUncertaintyScalingFactor,
           valsAreLogistic, stats, rawNetworkOutputs, rawNetworkOutputNames)
     {
-      (Policies, Actions) = ExtractPoliciesBufferFlat(numPos, policyProbs, uncertaintyP,
+      CompressedPolicyVector[] policiesArray;
+      (policiesArray, Actions) = ExtractPoliciesBufferFlat(numPos, policyProbs, uncertaintyP,
                                                       hasAction, actionLogits,
                                                       policyTemperature, policyUncertaintyScalingFactor,
-                                                      probType, policyAlreadySorted, sourceBatchWithValidMoves);
+                                                      probType, policyAlreadySorted, sourceBatchWithValidMoves,
+                                                      useArrayPoolForPolicyBuffer);
+      Policies = policiesArray;
+      if (useArrayPoolForPolicyBuffer && policiesArray != null)
+      {
+        policiesBufferIsRented = true;
+        rentedPoliciesArray = policiesArray;
+      }
     }
 
 
@@ -1007,7 +1027,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
                                 float policyTemperature,
                                 float policyUncertaintyScalingFactor,
                                 PolicyType probType, bool alreadySorted,
-                                IEncodedPositionBatchFlat sourceBatchWithValidMoves)
+                                IEncodedPositionBatchFlat sourceBatchWithValidMoves,
+                                bool useArrayPool = false)
     {
       Debug.Assert(!alreadySorted); // TODO: it seems nonsensical that these claim to be sorted
       // TODO: possibly needs work.
@@ -1024,7 +1045,9 @@ namespace Ceres.Chess.NetEvaluation.Batch
       }
 
       CompressedActionVector[] actions = hasActions ? new CompressedActionVector[numPos] : default;
-      CompressedPolicyVector[] retPolicies = new CompressedPolicyVector[numPos];
+      CompressedPolicyVector[] retPolicies = useArrayPool 
+        ? ArrayPool<CompressedPolicyVector>.Shared.Rent(numPos) 
+        : new CompressedPolicyVector[numPos];
       Memory<MGMoveList> moves = sourceBatchWithValidMoves == null ? default : sourceBatchWithValidMoves.Moves;
 
       Parallel.For(0, numPos, new ParallelOptions() { MaxDegreeOfParallelism = ParallelUtils.CalcMaxParallelism(numPos, 32) }, i =>
@@ -1396,6 +1419,20 @@ namespace Ceres.Chess.NetEvaluation.Batch
     IEnumerator IEnumerable.GetEnumerator()
     {
       throw new NotImplementedException();
+    }
+
+
+    /// <summary>
+    /// Disposes of resources held by this batch.
+    /// </summary>
+    public void Dispose()
+    {
+      if (policiesBufferIsRented && rentedPoliciesArray != null)
+      {
+        ArrayPool<CompressedPolicyVector>.Shared.Return(rentedPoliciesArray);
+        rentedPoliciesArray = null;
+        policiesBufferIsRented = false;
+      }
     }
   }
 

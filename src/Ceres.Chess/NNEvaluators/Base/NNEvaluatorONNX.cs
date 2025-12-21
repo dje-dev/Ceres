@@ -576,7 +576,7 @@ namespace Chess.Ceres.NNEvaluators
 
       if (results.Length == 1)
       {
-        return PrepareBatchFromRawResults(batch, numPos, results[0], stats);
+        return PrepareBatchFromRawResults(batch, numPos, results[0], UseRentedPolicyBuffer, stats);
       }
       else
       {
@@ -587,8 +587,9 @@ namespace Chess.Ceres.NNEvaluators
           throw new NotImplementedException($"Implementation restriction: multinet currently only supports exactly 2 nets, not {results.Length}.");
         }
 
-        PositionEvaluationBatch batch1 = PrepareBatchFromRawResults(batch, numPos, results[0], stats);
-        PositionEvaluationBatch batch2 = PrepareBatchFromRawResults(batch, numPos, results[1], stats);
+        // TODO: support useRentedPolicyBuffer in this code path as well
+        PositionEvaluationBatch batch1 = PrepareBatchFromRawResults(batch, numPos, results[0], false, stats);
+        PositionEvaluationBatch batch2 = PrepareBatchFromRawResults(batch, numPos, results[1], false, stats);
 
         float[] weights = Executor.executor.MultiNetWeights ?? [0.5f, 0.5f];
         batch1.SetFromWeightedAverage([batch1, batch2], weights);
@@ -598,7 +599,9 @@ namespace Chess.Ceres.NNEvaluators
 
 
 
-    private PositionEvaluationBatch PrepareBatchFromRawResults(IEncodedPositionBatchFlat batch, int numPos, ONNXRuntimeExecutorResultBatch result, TimingStats stats)
+    private PositionEvaluationBatch PrepareBatchFromRawResults(IEncodedPositionBatchFlat batch, int numPos,
+                                                               ONNXRuntimeExecutorResultBatch result,
+                                                               bool useRentedPolicyBuffer, TimingStats stats)
     {
       Half[][] states2D = null;
       if (HasState || Executor.executor.NumInputs > 1)
@@ -674,7 +677,7 @@ namespace Chess.Ceres.NNEvaluators
                                          ValueHeadLogistic, PositionEvaluationBatch.PolicyType.LogProbabilities, false,
                                          batch,
                                          Options.PolicyTemperature, Options.PolicyUncertaintyTemperatureScalingFactor,
-                                         stats, rawNetworkOutputs, RawNetworkOutputNames);
+                                         stats, rawNetworkOutputs, RawNetworkOutputNames, useRentedPolicyBuffer);
 
       //#if NOT
       // ** Experimental test code, triggered by having FractionValueFromValue2 >  1

@@ -250,4 +250,16 @@ internal class PositionsEvaluationBatchMerged : IPositionEvaluationBatch
   {
     return GetEnumerator();
   }
+
+
+  /// <summary>
+  /// Disposes of resources held by this batch.
+  /// </summary>
+  public void Dispose()
+  {
+    foreach (IPositionEvaluationBatch batch in Batches)
+    {
+      batch?.Dispose();
+    }
+  }
 }

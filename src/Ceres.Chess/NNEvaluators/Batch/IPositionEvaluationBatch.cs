@@ -27,7 +27,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
   /// Interface defining common operations supported by 
   /// batches of neural network evaluations of positions.
   /// </summary>
-  public interface IPositionEvaluationBatch : IEnumerable<NNPositionEvaluationBatchMember>
+  public interface IPositionEvaluationBatch : IEnumerable<NNPositionEvaluationBatchMember>, IDisposable
   {
     int NumPos { get; }
     bool IsWDL { get; }

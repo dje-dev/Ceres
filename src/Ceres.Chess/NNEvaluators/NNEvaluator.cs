@@ -148,6 +148,11 @@ namespace Ceres.Chess.NNEvaluators
     /// </summary>
     public Action<object, bool> RetrainFunc;
 
+    /// <summary>
+    /// If true, use rented buffers for policy output to reduce allocations.
+    /// </summary>
+    public bool UseRentedPolicyBuffer;
+
     internal object PersistentID { set; get; }
     public bool IsPersistent => PersistentID != null;
     public int NumInstanceReferences { internal set; get; }
