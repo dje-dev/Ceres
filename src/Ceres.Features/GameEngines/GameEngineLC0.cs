@@ -101,7 +101,7 @@ namespace Ceres.Features.GameEngines
       DisableTreeReuse = disableTreeReuse;
 
       LC0Engine = LC0EngineConfigured.GetLC0Engine(searchParams, selectParams, paramsNN,
-                                                   NNWeightsFiles.LookupNetworkFile(networkID),
+                                                   NNWeightsFiles.LookupNetworkFile(paramsNN.Nets[0].Net.NetworkID),
                                                    processorGroupID, resetStateAndCachesBeforeMoves,
                                                    emulateCeresSettings, verbose,
                                                    forceDisableSmartPruning, overrideEXE,
