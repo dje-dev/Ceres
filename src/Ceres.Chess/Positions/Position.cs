@@ -971,8 +971,7 @@ namespace Ceres.Chess
       else
       {
         // Move list not already known, generate
-        moves = new MGMoveList();
-        MGMoveGen.GenerateMoves(in posMG, moves);
+        moves = MGMoveGen.GeneratedMoves(in posMG);
       }
 
       if (moves.NumMovesUsed > 0)

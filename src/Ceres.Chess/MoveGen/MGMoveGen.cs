@@ -85,10 +85,40 @@ namespace Ceres.Chess.MoveGen
 #endif
 
       if (P.BlackToMove)
+      {
         DoGenBlackMoves(in P, moves, MoveGenMode.AllMoves);
+      }
       else
+      {
         DoGenWhiteMoves(in P, moves, MoveGenMode.AllMoves);
+      }
     }
+
+
+    [ThreadStatic]
+    static MGMoveList movesTempForGeneratedMoves;
+
+    /// <summary>
+    /// Generates all legal moves for the given position and returns a new MGMoveList sized exactly to the number of moves.
+    /// </summary>
+    /// <param name="P"></param>
+    /// <returns></returns>
+    public static MGMoveList GeneratedMoves(in MGPosition P)
+    {
+      movesTempForGeneratedMoves ??= new MGMoveList();
+      movesTempForGeneratedMoves.NumMovesUsed = 0;
+
+      GenerateMoves(in P, movesTempForGeneratedMoves);
+
+      // Create a new MGMoveList sized exactly to the number of moves and copy
+      int numMoves = movesTempForGeneratedMoves.NumMovesUsed;
+      MGMoveList result = new MGMoveList(numMoves);
+      result.NumMovesUsed = numMoves;
+      movesTempForGeneratedMoves.MovesArray.AsSpan(0, numMoves).CopyTo(result.MovesArray);
+
+      return result;
+    }
+
 
     static void AddWhiteKnightMoves(in MGPosition P, MGMoveList moves, byte q, BitBoard WhiteFree)
     {
