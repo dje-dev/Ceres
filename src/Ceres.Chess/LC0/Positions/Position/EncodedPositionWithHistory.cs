@@ -15,6 +15,7 @@
 
 using System;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -411,8 +412,6 @@ namespace Ceres.Chess.EncodedPositions
 
     /// <summary>
     /// Sets the boards from a Span of MGPosition indicating full history.
-    ///
-    /// TODO: this method is very similar to the one of the same of name but accepting Span<Position>
     /// </summary>
     /// <param name="sequentialPositions">sequence of positions, with the last entry being the latest move in the sequence</param>
     /// <param name="fillInMissingPlanes">if history planes should be filled in if incomplete (typically necessary)</param>
@@ -427,45 +426,55 @@ namespace Ceres.Chess.EncodedPositions
       // Setting miscellaneous planes is easy; take from last position
       SetMiscFromMGPosition(in sequentialPositions[LAST_POSITION_INDEX]);
 
-      // Cache the first position in sequence from our perspective (which would be used for any possible fill)
-      // no longer needed      EncodedPositionBoard fillBoardFromOurPerspective = EncodedPositionBoard.FromPosition(in sequentialPositions[0], sideToMove);
-
-      Span<EncodedPositionBoard> boards = ScratchBoards();
-
-      SideType lastPosSide = default; // not used first time through the the loop
-      for (int i = 0; i < EncodedPositionBoards.NUM_MOVES_HISTORY; i++)
+      // Write directly to BoardsHistory to avoid intermediate scratch buffer and copy
+      fixed (EncodedPositionBoard* boardsPtr = &BoardsHistory.History_0)
       {
-        if (i >= sequentialPositions.Length)
+        // Determine how many positions we will actually process from the input
+        int numToProcess = Math.Min(sequentialPositions.Length, EncodedPositionBoards.NUM_MOVES_HISTORY);
+
+#if DEBUG
+        SideType lastPosSide = default;
+#endif
+        // Process provided positions (write directly to destination)
+        for (int i = 0; i < numToProcess; i++)
         {
-          // We are past the number of boards supplied. Fill in board (only if requested)
-          if (fillInMissingPlanes)
-          {
-            boards[i] = boards[sequentialPositions.Length - 1]; // use the board for last provided position fill value
-          }
-          else
-          {
-            boards[i].Clear(); // must clear the bits since we are reusing a scratch area which may have remnants from prior position
-          }
-        }
-        else
-        {
-          // Put last positions first in board array
           ref readonly MGPosition thisPos = ref sequentialPositions[LAST_POSITION_INDEX - i];
 
           const bool REPETITIONS_ONLY_FIRST_PLANE = false; // Lc0 training data (2024) definitely populates all planes with repetitions
           bool isRepetition = thisPos.RepetitionCount > 0 && (!REPETITIONS_ONLY_FIRST_PLANE || i == 0);
-          boards[i] = EncodedPositionBoard.GetBoard(in sequentialPositions[LAST_POSITION_INDEX - i], sideToMove, isRepetition);
+
+          // Use SetBoard to write directly to destination, avoiding struct return copy
+          EncodedPositionBoard.SetBoard(ref boardsPtr[i], in thisPos, sideToMove, isRepetition);
 
 #if DEBUG
           // Make sure the sides alternates between moves
           if (i > 0 && lastPosSide == thisPos.SideToMove)
             throw new Exception("Sequential positions are expected to be on alternating sides");
-#endif
           lastPosSide = thisPos.SideToMove;
+#endif
+        }
+
+        // Handle remaining slots if we have fewer positions than history slots
+        if (numToProcess < EncodedPositionBoards.NUM_MOVES_HISTORY)
+        {
+          if (fillInMissingPlanes)
+          {
+            // Fill remaining slots with the last processed board using memory copy
+            int remainingSlots = EncodedPositionBoards.NUM_MOVES_HISTORY - numToProcess;
+            uint boardSize = (uint)sizeof(EncodedPositionBoard);
+            for (int i = numToProcess; i < EncodedPositionBoards.NUM_MOVES_HISTORY; i++)
+            {
+              Buffer.MemoryCopy(&boardsPtr[numToProcess - 1], &boardsPtr[i], boardSize, boardSize);
+            }
+          }
+          else
+          {
+            // Clear remaining slots
+            uint bytesToClear = (uint)((EncodedPositionBoards.NUM_MOVES_HISTORY - numToProcess) * sizeof(EncodedPositionBoard));
+            Unsafe.InitBlockUnaligned(&boardsPtr[numToProcess], 0, bytesToClear);
+          }
         }
       }
-
-      SetHistoryPlanes(boards);
     }
 
 
