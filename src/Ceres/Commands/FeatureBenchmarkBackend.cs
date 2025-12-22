@@ -247,7 +247,7 @@ namespace Ceres.Commands
       (testBatchBuffer as IEncodedPositionBatchFlat).TrySetMoves();
     }
 
-    private static float TestBatchSize(NNEvaluator evaluator, int batchSize, int numRunsPerBatchSize = 5, bool show = false)
+    private static float TestBatchSize(NNEvaluator evaluator, int batchSize, int numRunsPerBatchSize = 4, bool show = false)
     {
       // Prepare batch with test positions.
       IEncodedPositionBatchFlat testBatch = testBatchBuffer.GetSubBatchSlice(0, batchSize);
@@ -263,15 +263,14 @@ namespace Ceres.Commands
       }
 
       // Keep track of all timings except the worst.
-      TopN<float> bestTimings = new(numRunsPerBatchSize - 1, s => s);
+      TopN<float> bestTimings = new(Math.Max(1, numRunsPerBatchSize - 1), s => s);
       for (int runIndex = 0; runIndex < numRunsPerBatchSize; runIndex++)
       {
-        TimingStats stats = new();
-        using (new TimingBlock(stats, TimingBlock.LoggingType.None))
-        {
-          evaluator.EvaluateIntoBuffers(testBatch);
-        }
-        bestTimings.Add((float)stats.ElapsedTimeSecs);
+        DateTime startTime = DateTime.Now;
+        evaluator.EvaluateIntoBuffers(testBatch);
+        DateTime endTime = DateTime.Now;
+
+        bestTimings.Add((float)(endTime - startTime).TotalSeconds);
       }
 
       float bestSeconds = bestTimings.Members.Min(f => f);
