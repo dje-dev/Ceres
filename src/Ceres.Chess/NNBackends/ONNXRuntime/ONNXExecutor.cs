@@ -196,6 +196,11 @@ public class ONNXExecutor : IDisposable
 
   CudaStream cuStream;
 
+  // Reusable lists to avoid allocations in Run methods
+  List<(string, Memory<Float16>)> resultArrays;
+  List<OrtValue> inputOrtValuesList;
+  List<OrtValue> outputOrtValuesList;
+
 
   // Creation of ONNX sessions for the TRT provider should be serialized per device.
   // This prevents problems such as two engines concurrently compiling engines for same device
@@ -373,6 +378,11 @@ public class ONNXExecutor : IDisposable
 
     // Initialize session cache
     sessionCache = new Dictionary<(int, int, bool), SessionForBatchSize>();
+
+    // Initialize reusable lists to avoid allocations in Run methods
+    resultArrays = new List<(string, Memory<Float16>)>();
+    inputOrtValuesList = new List<OrtValue>();
+    outputOrtValuesList = new List<OrtValue>();
 
     InitializeInputOutputNames();
 
@@ -911,10 +921,11 @@ public class ONNXExecutor : IDisposable
     {
       throw new ArgumentException($"Batch size {batchSize} is less than minimum of {MinBatchSize}");
     }
-    List<(string, Memory<Float16>)> resultArrays = new();
 
     lock (lockObject)
     {
+      resultArrays.Clear();
+
       cudaDevice.SetCurrent();
 
       SessionForBatchSize context = GetOrCreateSessionForBatchSize(batchSize, true, true);
@@ -1039,17 +1050,15 @@ public class ONNXExecutor : IDisposable
       throw new ArgumentException($"Batch size {batchSize} is less than minimum of {MinBatchSize}");
     }
 
-    List<(string, Memory<Float16>)> resultArrays = new();
-
     lock (lockObject)
     {
+      resultArrays.Clear();
+      inputOrtValuesList.Clear();
+      outputOrtValuesList.Clear();
+
       cudaDevice.SetCurrent();
 
       SessionForBatchSize context = GetOrCreateSessionForBatchSize(batchSize);
-
-      // Create temporary OrtValues with actual batch size for this run
-      List<OrtValue> inputOrtValuesList = new List<OrtValue>();
-      List<OrtValue> outputOrtValuesList = new List<OrtValue>();
 
       try
       {
