@@ -445,6 +445,11 @@ namespace Ceres.Chess.EncodedPositions
 
       float probabilityAcc = 0.0f;
       int numSlotsUsed = 0;
+
+      // Track smallest value/index for when slots are full (avoids repeated linear scans)
+      int smallestSlotIndex = 0;
+      ushort smallestSlotValue = ushort.MaxValue;
+
       fixed (ushort* moveIndices = &policy.Indices[0])
       {
         fixed (ushort* moveProbabilitiesEncoded = &policy.Probabilities[0])
@@ -459,48 +464,47 @@ namespace Ceres.Chess.EncodedPositions
             }
             probabilityAcc += thisProb;
 
-            if (probabilities[i] > HALF_INCREMENT)
+            if (thisProb > HALF_INCREMENT)
             {
-              ushort encodedProb = EncodedProbability(probabilities[i]);
+              ushort encodedProb = EncodedProbability(thisProb);
               if (numSlotsUsed < NUM_MOVE_SLOTS)
               {
                 moveIndices[numSlotsUsed] = (ushort)i;
                 moveProbabilitiesEncoded[numSlotsUsed] = encodedProb;
-                //Console.WriteLine("direct " + i + " " + probabilities[i]);
+
+                // Track smallest for potential future overflow handling
+                if (encodedProb < smallestSlotValue)
+                {
+                  smallestSlotValue = encodedProb;
+                  smallestSlotIndex = numSlotsUsed;
+                }
+
                 numSlotsUsed++;
               }
-              else
+              else if (encodedProb > smallestSlotValue)
               {
-                // Find smallest index/value
-                int smallestIndex = -1;
-                ushort smallestValue = ushort.MaxValue;
+                // Replace the smallest entry
+                moveIndices[smallestSlotIndex] = (ushort)i;
+                moveProbabilitiesEncoded[smallestSlotIndex] = encodedProb;
+
+                // Find new smallest (only need to scan when we replace)
+                smallestSlotValue = ushort.MaxValue;
                 for (int si = 0; si < NUM_MOVE_SLOTS; si++)
                 {
-                  if (moveProbabilitiesEncoded[si] < smallestValue)
+                  if (moveProbabilitiesEncoded[si] < smallestSlotValue)
                   {
-                    smallestIndex = si;
-                    smallestValue = moveProbabilitiesEncoded[si];
+                    smallestSlotIndex = si;
+                    smallestSlotValue = moveProbabilitiesEncoded[si];
                   }
-                }
-
-                ushort encodedSmallest = EncodedProbability(probabilities[smallestIndex]);
-                if (moveProbabilitiesEncoded[smallestIndex] < encodedProb)
-                {
-                  moveIndices[smallestIndex] = (ushort)i;
-                  moveProbabilitiesEncoded[smallestIndex] = encodedProb;
-                }
-                else
-                {
-                  // just drop it (lost)
                 }
               }
             }
+          }
 
-            // Add terminator if not full
-            if (numSlotsUsed < NUM_MOVE_SLOTS)
-            {
-              moveIndices[numSlotsUsed] = SPECIAL_VALUE_SENTINEL_TERMINATOR;
-            }
+          // Add terminator if not full
+          if (numSlotsUsed < NUM_MOVE_SLOTS)
+          {
+            moveIndices[numSlotsUsed] = SPECIAL_VALUE_SENTINEL_TERMINATOR;
           }
 
 #if DEBUG
