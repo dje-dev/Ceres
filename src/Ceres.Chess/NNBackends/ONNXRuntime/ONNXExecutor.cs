@@ -930,7 +930,8 @@ public class ONNXExecutor : IDisposable
 
       SessionForBatchSize context = GetOrCreateSessionForBatchSize(batchSize, true, true);
 
-      // DJE: found necessary to rebind every time
+      // Copy input data to GPU (inputs are pre-bound, just need to update data)
+      // N.B. It was found that AsyncCopytoDevice (using the cuStream) was dramatically slower (on Linux only)
       int inputVarIndex = 0;
       foreach (var (name, ortValue, shape, cudaBuffer, cudaBufferFloat16) in context.InputOrtValues)
       {
@@ -941,35 +942,30 @@ public class ONNXExecutor : IDisposable
         switch (typeof(TInput))
         {
           case Type t when t == typeof(byte):
-            cudaBuffer.AsyncCopyToDevice((byte[])array, 0, 0, numBytes, cuStream);
+            cudaBuffer.CopyToDevice((byte[])array, 0, 0, numBytes);
             break;
 
           case Type t when t == typeof(Half):
-            cudaBufferFloat16.AsyncCopyToDevice((Float16[])array, 0, 0, numBytes, cuStream);
+            cudaBufferFloat16.CopyToDevice((Float16[])array, 0, 0, numBytes);
             break;
 
           default:
             throw new NotImplementedException();
         }
 
-        context.IoBinding.BindInput(name, ortValue);
         inputVarIndex++;
       }
 
-      //runOptions.AddRunConfigEntry("gpu_graph_id", "1");
-
-      // CUDA event timing and fine-grained sync
-      using CudaEvent startEvt = new CudaEvent();
-      using CudaEvent stopEvt = new CudaEvent();
-
-      startEvt.Record(cuStream.Stream);
+      // Use reusable CUDA events for timing
+      context.StartEvent.Record(cuStream.Stream);
       context.Session.RunWithBinding(runOptionsNonBlocking, context.IoBinding);
-      stopEvt.Record(cuStream.Stream);
+      context.StopEvent.Record(cuStream.Stream);
 
-      // Wait only for this stream's work to finish
-      stopEvt.Synchronize();
-      LastCudaExecutionMS = CudaEvent.ElapsedTime(startEvt, stopEvt);
+      // Synchronize the stream to ensure inference is complete before copying outputs
+      cuStream.Synchronize();
+      LastCudaExecutionMS = CudaEvent.ElapsedTime(context.StartEvent, context.StopEvent);
 
+      // Copy output data from GPU to host
       int outputVarIndex = 0;
       foreach (var (name, ortValue, shape, cudaBuffer) in context.OutputOrtValues)
       {
@@ -1436,10 +1432,22 @@ public class ONNXExecutor : IDisposable
 
     if (context.UsesCUDAGraphs)
     {
+      // Pre-bind inputs (GPU memory addresses are stable for CUDA graphs)
+      foreach (var (name, ortValue, _, _, _) in context.InputOrtValues)
+      {
+        context.IoBinding.BindInput(name, ortValue);
+      }
+      context.InputsAreBound = true;
+
+      // Pre-bind outputs
       foreach (var (name, ortValue, _, cudaBuffer) in context.OutputOrtValues)
       {
         context.IoBinding.BindOutput(name, ortValue);
       }
+
+      // Create reusable CUDA events for timing
+      context.StartEvent = new CudaEvent();
+      context.StopEvent = new CudaEvent();
     }
 
     return context;
@@ -1849,6 +1857,13 @@ public class ONNXExecutor : IDisposable
     public OrtAllocator AllocatorInput { get; set; }
     public OrtAllocator AllocatorOutput { get; set; }
 
+    // Reusable CUDA events for timing (avoids per-call allocation overhead)
+    public CudaEvent StartEvent { get; set; }
+    public CudaEvent StopEvent { get; set; }
+
+    // Flag indicating if inputs have been pre-bound to IoBinding
+    public bool InputsAreBound { get; set; }
+
     public void Dispose()
     {
       foreach ((string _, OrtValue ortValue, long[] _, CudaDeviceVariable<byte> cudaBuffer, CudaDeviceVariable<Float16> cudaBufferFloat16) in InputOrtValues)
@@ -1869,6 +1884,8 @@ public class ONNXExecutor : IDisposable
       Session?.Dispose();
       AllocatorInput?.Dispose();
       AllocatorOutput?.Dispose();
+      StartEvent?.Dispose();
+      StopEvent?.Dispose();
     }
   }
 }
