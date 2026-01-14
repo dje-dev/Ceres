@@ -215,16 +215,25 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
 
       foreach (TensorProto tensorRoot in rootTensors)
       {
-        TensorProto avgTensor = default;
-
-        if (avgTensor == null)
+        TensorProto avgTensor = new()
         {
-          avgTensor = new()
-          {
-            Name = tensorRoot.Name,
-            DataType = tensorRoot.DataType,
-            Dims = { tensorRoot.Dims }
-          };
+          Name = tensorRoot.Name,
+          DataType = tensorRoot.DataType,
+          Dims = { tensorRoot.Dims }
+        };
+
+        // Handle integer tensors separately - just copy from first model (no averaging for indices/config data)
+        if (tensorRoot.DataType == (int)TensorProto.Types.DataType.Int32 ||
+            tensorRoot.DataType == (int)TensorProto.Types.DataType.Int64)
+        {
+          avgTensor.RawData = tensorRoot.RawData;
+          averagedInitializers.Add(avgTensor);
+          continue;
+        }
+
+        if (tensorRoot.DataType != (int)TensorProto.Types.DataType.Float16)
+        {
+          throw new NotImplementedException("Unable to process: " + tensorRoot.DataType + " " + tensorRoot.Name);
         }
 
         Half[][] inputs = new Half[items.Length][];
@@ -237,16 +246,12 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
             throw new Exception($"Tensor {tensorRoot.Name} not found in all models.");
           }
 
-
-          if (tensorThisItem.DataType == (int)TensorProto.Types.DataType.Float16)
+          if (tensorThisItem.DataType != (int)TensorProto.Types.DataType.Float16)
           {
-            inputs[index++] = MemoryMarshal.Cast<byte, Half>(tensorThisItem.RawData.Span).ToArray();
-          }
-          else
-          {
-            throw new NotImplementedException("Unable to process: " + tensorThisItem.DataType + " " + tensorThisItem.Name);
+            throw new Exception($"Tensor {tensorRoot.Name} has inconsistent data types across models.");
           }
 
+          inputs[index++] = MemoryMarshal.Cast<byte, Half>(tensorThisItem.RawData.Span).ToArray();
         }
 
         // Create the newData buffer
@@ -257,7 +262,7 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
         try
         {
           // Safely cast to Span<Half> after pinning
-          Span<Half> newHalfData = MemoryMarshal.Cast<byte, Half>(newData);
+          Span<Half> newHalfData = MemoryMarshal.Cast<byte, Half>(newData.AsSpan());
 
           // Call your function on the newly pinned span
           ComputedWtdAveragesWithDiscard(newHalfData, inputs, weights, discardMinMax);

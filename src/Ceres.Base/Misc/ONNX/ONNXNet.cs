@@ -219,7 +219,7 @@ namespace Ceres.Base.Misc.ONNX
           float[] thisUpdate1D = initializer.Name.EndsWith(".bias") ? updateBias : updateWeight;
 
           // Get the original weights
-          Span<Half> originalWeightsHalf = MemoryMarshal.Cast<byte, Half>(initializer.RawData.ToArray());
+          ReadOnlySpan<Half> originalWeightsHalf = MemoryMarshal.Cast<byte, Half>(initializer.RawData.ToArray());
           
           // Verify sizes consistent with the weights
           if (originalWeightsHalf.Length == 0)

@@ -65,7 +65,8 @@ namespace Ceres.Base.DataTypes
     public static FP16[] ToFP16(float[] data)
     {
       FP16[] ret = new FP16[data.Length];
-      Span<Half> halfs = MemoryMarshal.Cast<FP16, Half>(ret);
+      Span<FP16> fp16Span = ret;
+      Span<Half> halfs = MemoryMarshal.Cast<FP16, Half>(fp16Span);
       TensorPrimitives.ConvertToHalf(data, halfs);
 
       return ret;
