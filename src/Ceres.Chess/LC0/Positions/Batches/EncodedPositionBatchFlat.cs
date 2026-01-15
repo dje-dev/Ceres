@@ -129,6 +129,11 @@ namespace Ceres.Chess.LC0.Batches
 
     public bool PositionsUseSecondaryEvaluator { get; set; }
 
+    /// <summary>
+    /// If the engine performing the search has the white pieces.
+    /// </summary>
+    public bool? EngineIsWhite { get; set; }
+
     public IEncodedPositionBatchFlat GetSubBatchSlice(int startIndex, int count)
     {
       return new EncodedPositionBatchFlatSlice(this, startIndex, count);

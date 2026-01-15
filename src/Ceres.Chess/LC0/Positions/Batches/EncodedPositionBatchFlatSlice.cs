@@ -102,6 +102,15 @@ namespace Ceres.Chess.LC0.Batches
       set { SliceParent.PositionsUseSecondaryEvaluator = value; }
     }
 
+    /// <summary>
+    /// If the engine performing the search has the white pieces.
+    /// </summary>
+    public bool? EngineIsWhite
+    {
+      get => SliceParent.EngineIsWhite;
+      set => SliceParent.EngineIsWhite = value;
+    }
+
     public IEncodedPositionBatchFlat GetSubBatch(int startIndex, int count)
     {
       throw new NotImplementedException();

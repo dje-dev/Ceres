@@ -104,6 +104,12 @@ namespace Ceres.Chess.LC0.Batches
 
     bool PositionsUseSecondaryEvaluator { get; set; }
 
+    /// <summary>
+    /// If the engine performing the search has the white pieces.
+    /// This information potentially used by asymmetric evaluators.
+    /// </summary>
+    bool? EngineIsWhite { get; set; }
+
     IEncodedPositionBatchFlat Parent => default;
 
     #region Implmentation
