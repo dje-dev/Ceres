@@ -205,12 +205,26 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
 
           Span<byte> thesePliesSinceLastMove = pliesSinceLastMoveAllPositions == null ? default : new Span<byte>(pliesSinceLastMoveAllPositions, i * 64, 64);
 
+          float thisQNegativeBlunders;
+          float thisQPositiveBlunders;
+          if (positions.EngineIsWhite is not null)
+          {
+            bool isWhite = positionsFlat.Span[i].FinalPosition.IsWhite;
+            thisQNegativeBlunders = isWhite ? qNegativeBlunders : qPositiveBlunders;
+            thisQPositiveBlunders = isWhite ? qPositiveBlunders : qNegativeBlunders;
+          }
+          else
+          {
+            thisQNegativeBlunders = qNegativeBlunders;
+            thisQPositiveBlunders = qPositiveBlunders;
+          }
+
           // Convert to sequence of TPGSquareRecord.
           // This is done using unsafe code in situ in the raw squareBytesAl array for performance.
           Span<TPGSquareRecord> squaresSpan = new Span<TPGSquareRecord>(ptrSquareBytes, 64);
           ConvertToTPGRecordSquares(in positionsFlat.Span[i], includeHistory, squaresSpan,
                                     thesePliesSinceLastMove, lastMovePliesEnabled,
-                                    qNegativeBlunders, qPositiveBlunders);
+                                    thisQNegativeBlunders, thisQPositiveBlunders);
 
           if (legalMoveIndices != null)
           {
