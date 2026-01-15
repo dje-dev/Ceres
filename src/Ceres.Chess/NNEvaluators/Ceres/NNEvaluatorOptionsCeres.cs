@@ -176,6 +176,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres
         FractionValueHead2 = baseOptions.FractionValueHead2,
         ValueHead1Temperature = baseOptions.ValueHead1Temperature,
         ValueHead2Temperature = baseOptions.ValueHead2Temperature,
+        PolicyTemperature = baseOptions.PolicyTemperature,
         PVExtensionDepth = baseOptions.PVExtensionDepth,
         UseMiddlegameSlowdown = baseOptions.UseMiddlegameSlowdown,
         EnableCUDAGraphs = baseOptions.EnableCUDAGraphs,
