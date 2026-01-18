@@ -19,6 +19,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Text.Json.Serialization;
 using Ceres.Base.Math;
 using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Chess.MoveGen;
@@ -94,11 +95,13 @@ namespace Ceres.Chess.EncodedPositions
     /// <summary>
     /// Returns span over the encoded probabilities.  
     /// </summary>
+    [JsonIgnore]
     public ReadOnlySpan<ushort> ProbabilitiesSpan => MemoryMarshal.CreateReadOnlySpan(ref Unsafe.AsRef(in Probabilities.PolicyValue), NUM_MOVE_SLOTS);
 
     /// <summary>
     /// Returns span over the encoded move indices.  
     /// </summary>
+    [JsonIgnore]
     public ReadOnlySpan<ushort> MoveIndicesSpan => MemoryMarshal.CreateReadOnlySpan(ref Unsafe.AsRef(in Indices.PolicyIndex), NUM_MOVE_SLOTS);
 
     #endregion
