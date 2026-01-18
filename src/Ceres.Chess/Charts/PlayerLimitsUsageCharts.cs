@@ -16,19 +16,18 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using XPlot.Plotly;
 
 #endregion
 
 namespace Ceres.Chess.Charts
 {
-
   /// <summary>
   /// Static helper methods that generate Plotly Chart objects
   /// depicting limit usage for both players in a game.
   /// </summary>
   public static class PlayerLimitsUsageCharts
   {
+#if DISABLED_NO_PLOTLY
     /// <summary>
     /// Returns a chart with lines for cumulative usage by both players
     /// (and optionally the allotted time as of each move according to the limits control).
@@ -292,7 +291,10 @@ namespace Ceres.Chess.Charts
 
       return plot;
     }
+#endif
   }
+
+
   public class PlotData
   {
     public string Title { get; set; }

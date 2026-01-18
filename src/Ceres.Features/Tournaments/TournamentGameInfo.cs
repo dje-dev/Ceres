@@ -15,7 +15,6 @@
 
 using System;
 using System.Collections.Generic;
-using XPlot.Plotly;
 
 using Ceres.Base.Math;
 using Ceres.Chess;
@@ -354,13 +353,25 @@ namespace Ceres.Features.Tournaments
 
     public enum LimitsUsageChartType { Bar, Line };
 
+    // NOTE: Chart functionality disabled.
+    // The XPlot.Plotly package (v4.1.0) has a transitive dependency on Newtonsoft.Json 12.0.3
+    // which has a known high severity vulnerability (NU1903). XPlot.Plotly is unmaintained
+    // and its successor Plotly.NET has complex F#/C# interop issues making migration difficult.
+    // To eliminate the security vulnerability, the charting package was removed entirely.
+    //
+    // /// <summary>
+    // /// Returns a chart of the limits usage of two players throughout the game.
+    // /// </summary>
+    // public PlotlyChart LimitsUsageChart(LimitsUsageChartType chartType) { ... }
+    //
     /// <summary>
-    /// Returns a chart of the limits usage of two players throughout the game.
+    /// Chart functionality is currently disabled due to package security vulnerabilities.
     /// </summary>
-    /// <param name="chartType"></param>
-    /// <returns></returns>
-    /// <exception cref="NotImplementedException"></exception>
+    public object LimitsUsageChart(LimitsUsageChartType chartType)
+    {
+#if NOT
     public PlotlyChart LimitsUsageChart(LimitsUsageChartType chartType)
+    public object LimitsUsageChart(LimitsUsageChartType chartType)
     {
       string title = Result.ToString();
 
@@ -395,7 +406,11 @@ namespace Ceres.Features.Tournaments
         LimitsUsageChartType.Line => PlayerLimitsUsageCharts.LineChart(title, PlayerWhite, PlayerBlack, limitsWhite.ToArray(), limitsBlack.ToArray(), limitBase, limitIncrement),
         _ => throw new NotImplementedException(chartType.ToString())
       };
+#endif
 
+      throw new NotSupportedException(
+        "Chart functionality disabled. XPlot.Plotly was removed due to Newtonsoft.Json 12.0.3 vulnerability (NU1903). " +
+        "Use LimitsUsageChartData() to get raw chart data instead.");
     }
 
     public PlotData LimitsUsageChartData(LimitsUsageChartType chartType)
@@ -429,14 +444,14 @@ namespace Ceres.Features.Tournaments
 
       return chartType switch
       {
-        LimitsUsageChartType.Bar => PlayerLimitsUsageCharts.BarChartData(title, PlayerWhite, PlayerBlack, limitsWhite.ToArray(), limitsBlack.ToArray()),
-        LimitsUsageChartType.Line => PlayerLimitsUsageCharts.LineChartData(title, PlayerWhite, PlayerBlack, limitsWhite.ToArray(), limitsBlack.ToArray(), limitBase, limitIncrement),
+        LimitsUsageChartType.Bar => throw new NotImplementedException(), //PlayerLimitsUsageCharts.BarChartData(title, PlayerWhite, PlayerBlack, limitsWhite.ToArray(), limitsBlack.ToArray()),
+        LimitsUsageChartType.Line => throw new NotImplementedException(), //PlayerLimitsUsageCharts.LineChartData(title, PlayerWhite, PlayerBlack, limitsWhite.ToArray(), limitsBlack.ToArray(), limitBase, limitIncrement),
         _ => throw new NotImplementedException(chartType.ToString())
       };
 
     }
 
-    #endregion
+#endregion
 
 
   }

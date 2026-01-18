@@ -7,7 +7,6 @@ using Ceres.Base.Benchmarking;
 using Ceres.Chess.EncodedPositions.Basic;
 using Ceres.Chess.MoveGen.Converters;
 using Ceres.Chess.Textual.PgnFileTools;
-using Microsoft.FSharp.Data.UnitSystems.SI.UnitNames;
 using SharpCompress.Common;
 using System;
 using System.Collections.Generic;
