@@ -114,7 +114,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     /// </summary>
     /// <param name="sourceBytes"></param>
     /// <param name="targetHalfs"></param>
-    static unsafe void CopyAndDivideSIMD(Memory<byte> sourceBytes, Memory<Half> targetHalfs, float divisor)
+    internal static unsafe void CopyAndDivideSIMD(Memory<byte> sourceBytes, Memory<Half> targetHalfs, float divisor)
     {
       int vectorSize = Vector256<byte>.Count;
       int i = 0;
