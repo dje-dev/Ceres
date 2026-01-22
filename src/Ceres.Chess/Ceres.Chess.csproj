@@ -46,9 +46,16 @@
     <PackageReference Include="XPlot.Plotly" Version="4.1.0" />
   </ItemGroup>
 
-  <ItemGroup>
+  <ItemGroup Condition="'$(OS)' == 'Windows_NT'">
     <None Include="NNEvaluators\Base\TensorRT\Native\TensorRTWrapper.dll">
       <Link>TensorRTWrapper.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(OS)' != 'Windows_NT'">
+    <None Include="NNEvaluators\Base\TensorRT\Native\libTensorRTWrapper.so">
+      <Link>libTensorRTWrapper.so</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
