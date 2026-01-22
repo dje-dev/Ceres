@@ -152,9 +152,31 @@ public class NNEvaluatorTensorRT : NNEvaluator
   /// <param name="gpuIDs">GPU IDs to use, defaults to [0]</param>
   /// <param name="useCudaGraphs">Enable CUDA graphs for faster inference</param>
   /// <param name="softMaxBatchSize">Soft max batch size (can exceed largest engine via splitting)</param>
-  public NNEvaluatorTensorRT(string onnxFileName, 
+  public NNEvaluatorTensorRT(string onnxFileName,
                              EnginePoolMode poolMode,
                              int[] batchSizes,
+                             int[] gpuIDs = null,
+                             bool useCudaGraphs = false,
+                             int softMaxBatchSize = 0)
+    : this(onnxFileName, poolMode, batchSizes, null, gpuIDs, useCudaGraphs, softMaxBatchSize)
+  {
+  }
+
+
+  /// <summary>
+  /// Creates evaluator with pool of exact batch size engines for intelligent batch splitting.
+  /// Uses MultiGPUEnginePool for multi-GPU support and optimized batch handling.
+  /// </summary>
+  /// <param name="onnxFileName">Path to ONNX model file</param>
+  /// <param name="batchSizes">Array of exact batch sizes for engines</param>
+  /// <param name="buildOptions">Optional TensorRT build options (null uses default BF16)</param>
+  /// <param name="gpuIDs">GPU IDs to use, defaults to [0]</param>
+  /// <param name="useCudaGraphs">Enable CUDA graphs for faster inference</param>
+  /// <param name="softMaxBatchSize">Soft max batch size (can exceed largest engine via splitting)</param>
+  public NNEvaluatorTensorRT(string onnxFileName,
+                             EnginePoolMode poolMode,
+                             int[] batchSizes,
+                             TensorRTBuildOptions? buildOptions,
                              int[] gpuIDs = null,
                              bool useCudaGraphs = false,
                              int softMaxBatchSize = 0)
@@ -191,14 +213,25 @@ public class NNEvaluatorTensorRT : NNEvaluator
     Console.WriteLine($"  GPUs: [{string.Join(", ", GpuIDs)}]");
     Console.WriteLine($"  Engine batch sizes: [{string.Join(", ", batchSizes)}]");
     Console.WriteLine($"  Max batch size (soft): {maxBatchSize}");
-    
-    TensorRTBuildOptions options = TensorRTBuildOptions.Default;
-    options.BuilderOptimizationLevel = 3;
-    options.UseFP16 = 0;
-    options.UseBF16 = 1;
-    options.ForceRMSNormFP32 = 0; // it seems BF16 may be better than FP16+ForceRMSNormFP32, but needs more testing
-    options.UseCudaGraphs = useCudaGraphs ? 1 : 0;
+
+    TensorRTBuildOptions options;
+    if (buildOptions.HasValue)
+    {
+      options = buildOptions.Value;
+      options.UseCudaGraphs = useCudaGraphs ? 1 : 0;
+    }
+    else
+    {
+      options = TensorRTBuildOptions.Default;
+      options.BuilderOptimizationLevel = 3;
+      options.UseFP16 = 0;
+      options.UseBF16 = 1;
+      options.ForceRMSNormFP32 = 0; // it seems BF16 may be better than FP16+ForceRMSNormFP32, but needs more testing
+      options.UseCudaGraphs = useCudaGraphs ? 1 : 0;
+    }
     options.Validate();
+
+    Console.WriteLine($"  Build options: FP16={options.UseFP16}, BF16={options.UseBF16}, ForceRMSNormFP32={options.ForceRMSNormFP32}");
     
     const int MIN_BATCH_SIZE_PER_GPU = 8;
     pool = new MultiGPUEnginePool(trt, onnxFileName, batchSizes, poolMode, options, 0, 0, 
