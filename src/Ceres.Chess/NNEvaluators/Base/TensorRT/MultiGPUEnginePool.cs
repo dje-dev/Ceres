@@ -86,7 +86,7 @@ public sealed class MultiGPUEnginePool : IDisposable
   /// </summary>
   public MultiGPUEnginePool(TensorRT trt, string onnxPath, int[] sizes, EnginePoolMode mode,
                              TensorRTBuildOptions options, int inputElementsPerPos, int outputElementsPerPos,
-                             int[] deviceIds, int minBatchSizePerGPU = 8, string cacheDir = "/tmp/tensorrt_cache")
+                             int[] deviceIds, int minBatchSizePerGPU = 8, string cacheDir = null)
   {
     this.trt = trt;
     deviceIDs = deviceIds;
