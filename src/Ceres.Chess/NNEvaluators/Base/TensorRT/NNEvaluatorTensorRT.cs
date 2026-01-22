@@ -100,6 +100,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
   private FP16[] lBuffer;
   private FP16[] w2Buffer;
   private FP16[] l2Buffer;
+  private FP16[] blendedWBuffer;
+  private FP16[] blendedLBuffer;
   private FP16[] mBuffer;
   private FP16[] uncVBuffer;
   private FP16[] uncPBuffer;
@@ -272,6 +274,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
     lBuffer = new FP16[maxBatchSize];
     w2Buffer = hasValueSecondary ? new FP16[maxBatchSize] : Array.Empty<FP16>();
     l2Buffer = hasValueSecondary ? new FP16[maxBatchSize] : Array.Empty<FP16>();
+    blendedWBuffer = hasValueSecondary ? new FP16[maxBatchSize] : Array.Empty<FP16>();
+    blendedLBuffer = hasValueSecondary ? new FP16[maxBatchSize] : Array.Empty<FP16>();
     mBuffer = hasM ? new FP16[maxBatchSize] : Array.Empty<FP16>();
     uncVBuffer = hasUncertaintyV ? new FP16[maxBatchSize] : Array.Empty<FP16>();
     uncPBuffer = hasUncertaintyP ? new FP16[maxBatchSize] : Array.Empty<FP16>();
@@ -382,13 +386,18 @@ public class NNEvaluatorTensorRT : NNEvaluator
     CompressedPolicyVector[] policies = policiesBuffer;
     CompressedActionVector[] actions = Array.Empty<CompressedActionVector>();
 
+    // Get option values for value head temperature
+    float valueHead1Temperature = Options?.ValueHead1Temperature ?? 1.0f;
+    float valueHead2Temperature = Options?.ValueHead2Temperature ?? 1.0f;
+
     SubBatchOutputHandler handler = (int globalStartPosition, int positionCount, int engineBatchSize, Half[] rawOutput) =>
     {
       // Vectorized conversion from Half to float
       TensorPrimitives.ConvertToSingle(rawOutput, outputFloatBuffer.AsSpan(0, rawOutput.Length));
 
       ExtractSubBatchResults(batch, globalStartPosition, positionCount, engineBatchSize,
-                             outputFloatBuffer, w, l, w2, l2, m, uncV, uncP, policies);
+                             outputFloatBuffer, w, l, w2, l2, m, uncV, uncP, policies,
+                             valueHead1Temperature, valueHead2Temperature);
     };
 
     if (useByteInputs)
@@ -401,7 +410,34 @@ public class NNEvaluatorTensorRT : NNEvaluator
       Memory<byte> sourceBytes = new Memory<byte>(squareByteBuffer, 0, elemsToCopy);
       Memory<Half> targetHalfs = new Memory<Half>(inputHalfBuffer, 0, elemsToCopy);
       TPGConvertersToFlat.CopyAndDivideSIMD(sourceBytes, targetHalfs, 100.0f);
-      pool.ProcessWithHandler(inputHalfBuffer, numPos, handler);
+      pool.ProcessWithHandler(inputHalfBuffer, numPos, handler);  
+    }
+
+    // Apply value head blending into separate buffers if FractionValueHead2 is specified
+    // This preserves original w/l (head 1) values, matching ONNX behavior where W1/L1 remain accessible
+    float fractionValueHead2 = Options?.FractionValueHead2 ?? 0.0f;
+    FP16[] finalW, finalL;
+
+    if (fractionValueHead2 > 0.0f && hasValueSecondary)
+    {
+      // Blend into pre-allocated buffers, preserving original head 1 values
+      float fractionValueHead1 = 1.0f - fractionValueHead2;
+      FP16[] blendedW = blendedWBuffer;
+      FP16[] blendedL = blendedLBuffer;
+
+      for (int i = 0; i < numPos; i++)
+      {
+        blendedW[i] = (FP16)((float)w[i] * fractionValueHead1 + (float)w2[i] * fractionValueHead2);
+        blendedL[i] = (FP16)((float)l[i] * fractionValueHead1 + (float)l2[i] * fractionValueHead2);
+      }
+      finalW = blendedW;
+      finalL = blendedL;
+    }
+    else
+    {
+      // No blending - use head 1 values directly
+      finalW = w;
+      finalL = l;
     }
 
     return new PositionEvaluationBatch(
@@ -415,8 +451,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
       numPos: numPos,
       policies: policies,
       actionProbabilties: actions,
-      w: w,
-      l: l,
+      w: finalW,
+      l: finalL,
       w2: w2,
       l2: l2,
       m: m,
@@ -434,7 +470,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
   private void ExtractSubBatchResults(IEncodedPositionBatchFlat batch, int startPos, int count, int engineBatchSize,
                                       float[] subBatchOutput,
                                       FP16[] w, FP16[] l, FP16[] w2, FP16[] l2, FP16[] m, FP16[] uncV, FP16[] uncP,
-                                      CompressedPolicyVector[] policies)
+                                      CompressedPolicyVector[] policies,
+                                      float valueHead1Temperature = 1.0f, float valueHead2Temperature = 1.0f)
   {
     int valueOffset = 0;
     int value2Offset = 0;
@@ -489,9 +526,10 @@ public class NNEvaluatorTensorRT : NNEvaluator
         float vL = subBatchOutput[posValueOffset + 2];
 
         float maxV = Math.Max(vW, Math.Max(vD, vL));
-        float expW = MathF.Exp(vW - maxV);
-        float expD = MathF.Exp(vD - maxV);
-        float expL = MathF.Exp(vL - maxV);
+        float invTemp1 = 1.0f / valueHead1Temperature;
+        float expW = MathF.Exp((vW - maxV) * invTemp1);
+        float expD = MathF.Exp((vD - maxV) * invTemp1);
+        float expL = MathF.Exp((vL - maxV) * invTemp1);
         float sum = expW + expD + expL;
 
         w[resultIndex] = (FP16)(expW / sum);
@@ -512,9 +550,10 @@ public class NNEvaluatorTensorRT : NNEvaluator
         float vL2 = subBatchOutput[posValue2Offset + 2];
 
         float maxV2 = Math.Max(vW2, Math.Max(vD2, vL2));
-        float expW2 = MathF.Exp(vW2 - maxV2);
-        float expD2 = MathF.Exp(vD2 - maxV2);
-        float expL2 = MathF.Exp(vL2 - maxV2);
+        float invTemp2 = 1.0f / valueHead2Temperature;
+        float expW2 = MathF.Exp((vW2 - maxV2) * invTemp2);
+        float expD2 = MathF.Exp((vD2 - maxV2) * invTemp2);
+        float expL2 = MathF.Exp((vL2 - maxV2) * invTemp2);
         float sum2 = expW2 + expD2 + expL2;
 
         w2[resultIndex] = (FP16)(expW2 / sum2);
@@ -541,7 +580,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
     }
 
     // Extract policies using optimized batch path or with validation
-    ExtractPoliciesBatch(batch, startPos, count, policyOffset, subBatchOutput, policies);
+    float policyTemperature = Options?.PolicyTemperature ?? 1.0f;
+    ExtractPoliciesBatch(batch, startPos, count, policyOffset, subBatchOutput, policies, policyTemperature);
   }
 
 
@@ -550,9 +590,9 @@ public class NNEvaluatorTensorRT : NNEvaluator
   /// </summary>
   private void ExtractPoliciesBatch(IEncodedPositionBatchFlat batch, int startPos, int count,
                                     int policyOffset, float[] outputBuffer,
-                                    CompressedPolicyVector[] policies)
+                                    CompressedPolicyVector[] policies, float policyTemperature)
   {
-    ExtractPoliciesBatchFast(batch, startPos, count, policyOffset, outputBuffer, policies, startPos);
+    ExtractPoliciesBatchFast(batch, startPos, count, policyOffset, outputBuffer, policies, startPos, policyTemperature);
   }
 
 
@@ -566,9 +606,11 @@ public class NNEvaluatorTensorRT : NNEvaluator
   /// <param name="outputBuffer">Buffer containing policy logits</param>
   /// <param name="policies">Output array for compressed policy vectors</param>
   /// <param name="policiesStartIndex">Starting index in the policies array for writing output</param>
+  /// <param name="policyTemperature">Temperature to apply to policy softmax</param>
   private void ExtractPoliciesBatchFast(IEncodedPositionBatchFlat batch, int batchStartPos, int count,
                                         int policyOffset, float[] outputBuffer,
-                                        CompressedPolicyVector[] policies, int policiesStartIndex)
+                                        CompressedPolicyVector[] policies, int policiesStartIndex,
+                                        float policyTemperature = 1.0f)
   {
     ReadOnlyMemory<MGMoveList> moves = batch.Moves;
     ReadOnlyMemory<MGPosition> positions = batch.Positions;
@@ -619,6 +661,13 @@ public class NNEvaluatorTensorRT : NNEvaluator
       // Apply softmax using TensorPrimitives for vectorization
       // Center by max
       TensorPrimitives.Subtract(logits, maxLogit, logits);
+
+      // Apply temperature scaling if not 1.0
+      if (policyTemperature != 1.0f)
+      {
+        float invTemp = 1.0f / policyTemperature;
+        TensorPrimitives.Multiply(logits, invTemp, logits);
+      }
 
       // Exponentiate
       TensorPrimitives.Exp(logits, logits);
