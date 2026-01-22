@@ -1,0 +1,48 @@
+Linux Build Instructions
+
+  Directory under Ceres project
+  cd src/Ceres.Chess/NNEvaluators/Base/TensorRT/Native
+
+  Build:
+  make clean && make
+
+  Output: libTensorRTWrapper.so
+
+  ---
+  System-Specific Issues
+
+  The current Makefile is configured for ARM64 Linux (aarch64) 
+
+  CUDA_PATH = /usr/local/cuda-13.0
+  INCLUDES = -I/usr/include/aarch64-linux-gnu -I$(CUDA_PATH)/targets/sbsa-linux/include
+  LDFLAGS = -shared -L/usr/lib/aarch64-linux-gnu -L$(CUDA_PATH)/targets/sbsa-linux/lib
+
+  For x86_64 Linux, you'd need:
+
+  CUDA_PATH = /usr/local/cuda-12.x
+  INCLUDES = -I$(CUDA_PATH)/include
+  LDFLAGS = -shared -L$(CUDA_PATH)/lib64
+
+  Considerations:
+  ┌──────────────┬────────────────────────────┬────────────────────────┐
+  │    Issue     │    ARM64 (your system)     │         x86_64         │
+  ├──────────────┼────────────────────────────┼────────────────────────┤
+  │ CUDA path    │ /usr/local/cuda-13.0       │ /usr/local/cuda-12.x   │
+  ├──────────────┼────────────────────────────┼────────────────────────┤
+  │ Include path │ targets/sbsa-linux/include │ include                │
+  ├──────────────┼────────────────────────────┼────────────────────────┤
+  │ Lib path     │ targets/sbsa-linux/lib     │ lib64                  │
+  ├──────────────┼────────────────────────────┼────────────────────────┤
+  │ TensorRT     │ Usually system-installed   │ May need explicit path │
+  └──────────────┴────────────────────────────┴────────────────────────┘
+  Runtime dependency
+
+  On Linux, libnvinfer.so and libnvonnxparser.so must be in LD_LIBRARY_PATH or system lib paths at runtime. On your ARM system they're likely already in /usr/lib/aarch64-linux-gnu/.
+
+  ---
+  Deployment
+
+  After building, copy to the runtimes folder:
+  # Linux
+  cp libTensorRTWrapper.so /path/to/Ceres/artifacts/release/net10.0/runtimes/linux-x64/native/
+  # or linux-arm64 for your ARM system

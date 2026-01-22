@@ -16,7 +16,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-     <EmbeddedResource Include="NNBackends\CUDA\Kernels\CU\ceres_kernels.cu" />
+    <None Remove="NNEvaluators\Base\TensorRT\Native\TensorRTWrapper.exp" />
+    <None Remove="NNEvaluators\Base\TensorRT\Native\TensorRTWrapper.lib" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="NNBackends\CUDA\Kernels\CU\ceres_kernels.cu" />
     <EmbeddedResource Include="NNBackends\CUDA\Kernels\CU\common_kernels.cu" />
     <EmbeddedResource Include="NNBackends\CUDA\Kernels\CU\fp16_kernels.cu" />
     <EmbeddedResource Include="NNBackends\CUDA\Kernels\PTX\ceres_kernels.ptx" />
@@ -38,6 +43,14 @@
     <PackageReference Include="HtmlAgilityPack" Version="1.11.70" />
     <PackageReference Include="protobuf-net" Version="3.2.45" />
     <PackageReference Include="SharpCompress" Version="0.38.0" />
+    <PackageReference Include="XPlot.Plotly" Version="4.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="NNEvaluators\Base\TensorRT\Native\TensorRTWrapper.dll">
+      <Link>TensorRTWrapper.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>

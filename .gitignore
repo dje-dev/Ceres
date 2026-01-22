@@ -351,3 +351,8 @@ MigrationBackup/
 
 # Git bundle files
 *.bundle
+
+# TensorRT native build artifacts
+src/Ceres.Chess/NNEvaluators/Base/TensorRT/Native/TensorRTWrapper.dll
+src/Ceres.Chess/NNEvaluators/Base/TensorRT/Native/TensorRTWrapper.exp
+src/Ceres.Chess/NNEvaluators/Base/TensorRT/Native/TensorRTWrapper.lib

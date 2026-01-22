@@ -504,11 +504,12 @@ public class ONNXExecutor : IDisposable
   }
 
 
-  string lastTRTCacheDir;
+  static string lastTRTCacheDir;
   string lastTRTPrefix;
 
 
-  string GetTRTEngineCacheDir()
+  string GetTRTEngineCacheDir() => GetTRTEngineCacheDir(ONNXFileName);
+  public static string GetTRTEngineCacheDir(string onnxFileName)
   {
     string directoryName;
     if (CeresUserSettingsManager.Settings != null
@@ -520,7 +521,7 @@ public class ONNXExecutor : IDisposable
     }
     else
     {
-      directoryName = ONNXFileName == null ? Path.GetTempPath() : new FileInfo(ONNXFileName).DirectoryName;
+      directoryName = onnxFileName == null ? Path.GetTempPath() : new FileInfo(onnxFileName).DirectoryName;
     }
 
     string trtSubdirectory = Path.Combine(directoryName, "trt_engines", Environment.MachineName);

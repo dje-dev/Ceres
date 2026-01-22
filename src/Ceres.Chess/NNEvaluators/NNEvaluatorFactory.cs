@@ -14,24 +14,24 @@
 #region Using directives
 
 using System;
-using System.IO;
-using System.Diagnostics;
-using System.Threading.Tasks;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
 using System.Linq;
-
-using Ceres.Chess.NNEvaluators.Defs;
-using Chess.Ceres.NNEvaluators;
-using Ceres.Chess.NNFiles;
-using Chess.Ceres.NNEvaluators.TensorRT;
-using Ceres.Chess.UserSettings;
-using Ceres.Chess.NNEvaluators.CUDA;
+using System.Threading.Tasks;
+using Ceres.Chess.LC0.Batches;
 using Ceres.Chess.LC0.NNFiles;
 using Ceres.Chess.LC0.WeightsProtobuf;
-using Ceres.Chess.LC0.Batches;
-using Ceres.Chess.NNEvaluators.Ceres.TPG;
-using Ceres.Chess.NNEvaluators.Ceres;
 using Ceres.Chess.NNBackends.ONNXRuntime;
+using Ceres.Chess.NNEvaluators.Ceres;
+using Ceres.Chess.NNEvaluators.Ceres.TPG;
+using Ceres.Chess.NNEvaluators.CUDA;
+using Ceres.Chess.NNEvaluators.Defs;
+using Ceres.Chess.NNEvaluators.TensorRT;
+using Ceres.Chess.NNFiles;
+using Ceres.Chess.UserSettings;
+using Chess.Ceres.NNEvaluators;
+using Chess.Ceres.NNEvaluators.TensorRT;
 
 #endregion
 
@@ -307,16 +307,17 @@ namespace Ceres.Chess.NNEvaluators
 
         case NNEvaluatorType.Ceres:
           string[] CERES_ENGINE_TYPES = { "CUDA", "CUDA16", "CUDA32",
-                                           "TENSORRT", "TENSORRT16", "TENSORRT32",
-                                           "TORCHSCRIPT"};
+                                          "TENSORRTNATIVE",
+                                          "TENSORRT", "TENSORRT16", "TENSORRT32",
+                                          "TORCHSCRIPT"};
           if (deviceDef.OverrideEngineType != null && !CERES_ENGINE_TYPES.Contains(deviceDef.OverrideEngineType.ToUpper()))
           {
             throw new Exception($"Ceres engine type not specified or invalid: {deviceDef.OverrideEngineType}."
               + System.Environment.NewLine + "Valid types: " + string.Join(", ", CERES_ENGINE_TYPES));
           }
 
-          bool isTorchscipt = deviceDef.OverrideEngineType != null
-                           && deviceDef.OverrideEngineType.ToUpper().Contains("TORCHSCRIPT");
+          bool isTorchscipt = deviceDef.OverrideEngineType?.Contains("TORCHSCRIPT", StringComparison.OrdinalIgnoreCase) == true;
+          bool isTensorRTNative = deviceDef.OverrideEngineType?.Contains("TensorRTNative", StringComparison.OrdinalIgnoreCase) == true;
 
           // Temporary hack, Ceres nets requires positions to be retained.
           // TODO: Remove this, or make it an instance variable not global static.
@@ -377,7 +378,27 @@ namespace Ceres.Chess.NNEvaluators
 
             return evaluatorTS;
           }
-          else
+          else if (isTensorRTNative)
+          {
+            if (optionsCeres.HeadOverrides != null)
+            {
+              throw new NotImplementedException("Ceres TensorRT Native evaluator does not yet support head overrides.");
+            }
+
+            bool EXACT_BATCHES = true;// optionsCeres.EnableCUDAGraphs; // <<<<<<<<<<<<<<<<<< TO DO SETTING BELOW
+            NNEvaluatorTensorRT trtNativeEngine = new(netFileName,
+                                                      EXACT_BATCHES ? EnginePoolMode.Exact : EnginePoolMode.Range,
+                                                      EXACT_BATCHES ? [1, 8, 32, 64, 128, 256] : [48, 128, 1024],
+                                                      useCudaGraphs: EXACT_BATCHES && optionsCeres.EnableCUDAGraphs,
+                                                      softMaxBatchSize: 1024);
+            trtNativeEngine.Options = optionsCeres;
+
+            EncodedPositionBatchFlat.RETAIN_POSITION_INTERNALS = true; // ** TODO: remove/rework
+            trtNativeEngine.ConverterToFlatFromTPG = (options, o, f1) => TPGConvertersToFlat.ConvertToFlatTPGFromTPG(options, o, f1.Span);
+            trtNativeEngine.ConverterToFlat = (options, o, history, squaresBytes, squares, legalMoveIndices)
+              => TPGConvertersToFlat.ConvertToFlatTPG(options, o, history, squaresBytes, squares, legalMoveIndices);
+            return trtNativeEngine;
+          }
           {
             NNEvaluatorONNX onnxEngine = new(shortID, netFileName, null,
                                              deviceDef.Type, deviceDef.DeviceIndex, useTensorRT,

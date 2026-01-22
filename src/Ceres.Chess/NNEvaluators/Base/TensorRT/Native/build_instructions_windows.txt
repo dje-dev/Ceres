@@ -1,0 +1,24 @@
+On Linux:
+
+
+On Windows:
+-----------
+ Open "x64 Native Tools Command Prompt for VS 2022" (or similar), then:
+
+  cd D:\dev1\Ceres\src\Ceres.Chess\NNEvaluators\Base\TensorRT\Native
+
+  cl /std:c++17 /O2 /MD /LD /EHsc ^
+     /I"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.9\include" ^
+     /I"D:\TensorRT10.14.1.48\include" ^
+     TensorRTWrapper.cpp ^
+     /link /LIBPATH:"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.9\lib\x64" ^
+           /LIBPATH:"D:\TensorRT10.14.1.48\lib" ^
+           nvinfer_10.lib nvonnxparser_10.lib cudart.lib ^
+     /OUT:TensorRTWrapper.dll
+
+  NOTE: No need for manual copy, the .csproj is configured to move from this directory to release directory.
+
+  Adjust CUDA path to match your version. This produces:
+  - TensorRTWrapper.dll - the DLL you need
+  - TensorRTWrapper.lib - import library (not needed)
+  - TensorRTWrapper.exp - exports file (not needed)
