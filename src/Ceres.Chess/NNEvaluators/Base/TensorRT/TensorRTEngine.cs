@@ -311,6 +311,12 @@ public sealed class TensorRTEngine : IDisposable
   /// </summary>
   public bool UsesCudaGraphs => TensorRTNative.UsesCudaGraphs(handle) == 1;
 
+  /// <summary>
+  /// Returns true if the CUDA graph for the specified stream has already been captured.
+  /// </summary>
+  /// <param name="streamIdx">Stream index (0 or 1)</param>
+  public bool IsStreamGraphCaptured(int streamIdx) => TensorRTNative.IsStreamGraphCaptured(handle, streamIdx) == 1;
+
 
   /// <summary>
   /// Get metadata for all output tensors (up to 16).
@@ -615,6 +621,53 @@ public sealed class TensorRTEngine : IDisposable
     {
       string error = TensorRTNative.GetLastErrorString();
       throw new InvalidOperationException($"InferOnStreamWithGraph failed on stream {streamIdx}: {error ?? "unknown error"}");
+    }
+  }
+
+
+  /// <summary>
+  /// Asynchronously runs inference on the specified stream with CUDA graph support and proper locking.
+  /// On first call per stream, acquires write lock on graphCaptureRWLock, captures a CUDA graph, then releases.
+  /// Subsequent calls replay the graph without needing the write lock.
+  /// For engines with useCudaGraphs=false, this behaves like InferOnStreamAsync.
+  /// Use this for Exact mode engines where batch size is fixed.
+  /// </summary>
+  /// <param name="streamIdx">Stream index (0 or 1)</param>
+  /// <param name="gpuInput">GPU input buffer pointer</param>
+  /// <param name="gpuOutput">GPU output buffer pointer</param>
+  /// <param name="graphCaptureRWLock">Reader/writer lock to acquire during graph capture (null to skip locking)</param>
+  public void InferOnStreamWithGraphAsync(int streamIdx, IntPtr gpuInput, IntPtr gpuOutput,
+                                          System.Threading.ReaderWriterLockSlim graphCaptureRWLock)
+  {
+    bool needsCapture = UsesCudaGraphs && !IsStreamGraphCaptured(streamIdx);
+
+    if (needsCapture && graphCaptureRWLock != null)
+    {
+      // Acquire write lock during graph capture - no other CUDA graph capture can happen concurrently
+      graphCaptureRWLock.EnterWriteLock();
+      try
+      {
+        int result = TensorRTNative.InferOnStreamWithGraph(handle, streamIdx, gpuInput, gpuOutput);
+        if (result != 0)
+        {
+          string error = TensorRTNative.GetLastErrorString();
+          throw new InvalidOperationException($"InferOnStreamWithGraph failed on stream {streamIdx}: {error ?? "unknown error"}");
+        }
+      }
+      finally
+      {
+        graphCaptureRWLock.ExitWriteLock();
+      }
+    }
+    else
+    {
+      // Graph already captured or graphs disabled - no lock needed
+      int result = TensorRTNative.InferOnStreamWithGraph(handle, streamIdx, gpuInput, gpuOutput);
+      if (result != 0)
+      {
+        string error = TensorRTNative.GetLastErrorString();
+        throw new InvalidOperationException($"InferOnStreamWithGraph failed on stream {streamIdx}: {error ?? "unknown error"}");
+      }
     }
   }
 

@@ -1908,6 +1908,13 @@ TRT_API int32_t TRT_UsesCudaGraphs(TRT_EngineHandle handle)
   return ec->useCudaGraphs ? 1 : 0;
 }
 
+TRT_API int32_t TRT_IsStreamGraphCaptured(TRT_EngineHandle handle, int32_t streamIdx)
+{
+  if (!handle || streamIdx < 0 || streamIdx > 1) return -1;
+  auto* ec = static_cast<EngineContext*>(handle);
+  return ec->streamGraphsCaptured[streamIdx] ? 1 : 0;
+}
+
 TRT_API int64_t TRT_GetInputElementsPerPosition(TRT_EngineHandle handle)
 {
   if (!handle) return -1;

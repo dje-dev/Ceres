@@ -272,6 +272,10 @@ extern "C"
     // Returns 1 if enabled, 0 if disabled, -1 on error.
     TRT_API int32_t TRT_UsesCudaGraphs(TRT_EngineHandle handle);
 
+    // Check if a stream graph has already been captured.
+    // Returns 1 if captured, 0 if not captured, -1 on error.
+    TRT_API int32_t TRT_IsStreamGraphCaptured(TRT_EngineHandle handle, int32_t streamIdx);
+
     // Get input elements per position (total input size / batch size).
     TRT_API int64_t TRT_GetInputElementsPerPosition(TRT_EngineHandle handle);
 

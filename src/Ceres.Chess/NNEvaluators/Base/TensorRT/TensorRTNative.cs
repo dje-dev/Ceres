@@ -261,6 +261,9 @@ internal static partial class TensorRTNative
   [LibraryImport(LibraryName, EntryPoint = "TRT_UsesCudaGraphs")]
   internal static partial int UsesCudaGraphs(IntPtr handle);
 
+  [LibraryImport(LibraryName, EntryPoint = "TRT_IsStreamGraphCaptured")]
+  internal static partial int IsStreamGraphCaptured(IntPtr handle, int streamIdx);
+
   [LibraryImport(LibraryName, EntryPoint = "TRT_GetInputElementsPerPosition")]
   internal static partial long GetInputElementsPerPosition(IntPtr handle);
 

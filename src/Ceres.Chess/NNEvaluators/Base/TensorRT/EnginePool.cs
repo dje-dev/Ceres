@@ -15,6 +15,9 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading;
+
+using Ceres.Base.CUDA;
 
 #endregion
  
@@ -102,6 +105,13 @@ public sealed class EnginePool : IDisposable
   public int OutputElementsPerPosition { get; private set; }
   public int DeviceId => deviceId;
   public bool UseByteInputs => useByteInputs;
+
+  /// <summary>
+  /// Reader/writer lock for CUDA graph capture synchronization.
+  /// Graph capture requires exclusive access - no other CUDA activity can happen concurrently.
+  /// Uses the same lock as CUDADevice to synchronize across all CUDA backends.
+  /// </summary>
+  private static ReaderWriterLockSlim GraphCaptureRWLock => CUDADevice.GetContext(0).GraphCaptureRWLock;
 
   /// <summary>
   /// Gets output tensor info from the largest engine.
@@ -575,7 +585,8 @@ public sealed class EnginePool : IDisposable
       else
       {
         // Use graph-aware inference for Exact mode - captures and replays CUDA graph when enabled
-        engine.InferOnStreamWithGraphAsync(0, gpuIn, gpuOut);
+        // Pass the global graph capture lock to prevent concurrent graph capture across devices
+        engine.InferOnStreamWithGraphAsync(0, gpuIn, gpuOut, GraphCaptureRWLock);
       }
       
       // For dynamic mode, output size matches actual count; for static mode, it's engine batch size
@@ -622,7 +633,8 @@ public sealed class EnginePool : IDisposable
     else
     {
       // Use graph-aware inference for Exact mode - captures and replays CUDA graph when enabled
-      batch0Engine.InferOnStreamWithGraphAsync(0, gpuInputs[0], gpuOutputs[0]);
+      // Pass the global graph capture lock to prevent concurrent graph capture across devices
+      batch0Engine.InferOnStreamWithGraphAsync(0, gpuInputs[0], gpuOutputs[0], GraphCaptureRWLock);
     }
 
     // Process remaining batches with pre-staging
@@ -665,7 +677,8 @@ public sealed class EnginePool : IDisposable
       else
       {
         // Use graph-aware inference for Exact mode - captures and replays CUDA graph when enabled
-        currEngine.InferOnStreamWithGraphAsync(0, gpuInputs[currBuffer], gpuOutputs[currBuffer]);
+        // Pass the global graph capture lock to prevent concurrent graph capture across devices
+        currEngine.InferOnStreamWithGraphAsync(0, gpuInputs[currBuffer], gpuOutputs[currBuffer], GraphCaptureRWLock);
       }
 
       // D2H + post-process previous batch while current batch computes
