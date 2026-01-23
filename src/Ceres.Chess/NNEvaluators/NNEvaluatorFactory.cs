@@ -385,10 +385,11 @@ namespace Ceres.Chess.NNEvaluators
               throw new NotImplementedException("Ceres TensorRT Native evaluator does not yet support head overrides.");
             }
 
-            bool EXACT_BATCHES = true;// optionsCeres.EnableCUDAGraphs; // <<<<<<<<<<<<<<<<<< TO DO SETTING BELOW
+            bool EXACT_BATCHES = true; // seems always fastest to use exact batches
             NNEvaluatorTensorRT trtNativeEngine = new(netFileName,
                                                       EXACT_BATCHES ? EnginePoolMode.Exact : EnginePoolMode.Range,
                                                       EXACT_BATCHES ? [1, 8, 32, 64, 128, 256] : [48, 128, 1024],
+                                                      gpuIDs: [deviceDef.DeviceIndex],
                                                       useCudaGraphs: EXACT_BATCHES && optionsCeres.EnableCUDAGraphs,
                                                       softMaxBatchSize: 1024);
             trtNativeEngine.Options = optionsCeres;
@@ -686,6 +687,23 @@ namespace Ceres.Chess.NNEvaluators
 
       if (def.DeviceCombo != NNEvaluatorDeviceComboType.Single)
       {
+        // Check for special case: Split with TensorRTNative on all devices with identical nets
+        // In this case, use FromDefinition which handles multi-GPU natively
+        if (def.DeviceCombo == NNEvaluatorDeviceComboType.Split
+            && def.Devices.Length > 0
+            && def.Nets.Length > 0)
+        {
+          bool allTensorRTNative = def.Devices.All(d => 
+            d.Device.OverrideEngineType?.Contains("TensorRTNative", StringComparison.OrdinalIgnoreCase) == true);
+          
+          bool allNetsMatch = def.Nets.Length == 1 || def.Nets.All(n => n.Net.Equals(def.Nets[0].Net));
+
+          if (allTensorRTNative && allNetsMatch)
+          {
+            return NNEvaluatorTensorRT.FromDefinition(def, def.Options, def.DeviceIndices);
+          }
+        }
+
         return BuildDeviceCombo(def, referenceEvaluator, options);
       }
       else if (def.NetCombo != NNEvaluatorNetComboType.Single)

@@ -29,7 +29,10 @@ using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
 using Ceres.Chess.NetEvaluation.Batch;
 using Ceres.Chess.NNBackends.ONNXRuntime;
+using Ceres.Chess.NNEvaluators.Ceres;
 using Ceres.Chess.NNEvaluators.Ceres.TPG;
+using Ceres.Chess.NNEvaluators.Defs;
+using Ceres.Chess.UserSettings;
 
 #endregion
 
@@ -225,13 +228,13 @@ public class NNEvaluatorTensorRT : NNEvaluator
       options = TensorRTBuildOptions.Default;
       options.BuilderOptimizationLevel = 3;
       options.UseFP16 = 0;
-      options.UseBF16 = 1;
-      options.ForceRMSNormFP32 = 0; // it seems BF16 may be better than FP16+ForceRMSNormFP32, but needs more testing
+      options.UseBF16 = 0;
+      options.FP32PostAttentionNorm = 1;  // certain models are catestrophically bad without this
       options.UseCudaGraphs = useCudaGraphs ? 1 : 0;
     }
     options.Validate();
 
-    Console.WriteLine($"  Build options: FP16={options.UseFP16}, BF16={options.UseBF16}, ForceRMSNormFP32={options.ForceRMSNormFP32}, UseCUDAGraphs={options.UseCudaGraphs}");
+    Console.WriteLine($"  Build options: FP16={options.UseFP16}, BF16={options.UseBF16}, FP32PostAttentionNorm={options.FP32PostAttentionNorm}, UseCUDAGraphs={options.UseCudaGraphs}");
 
     const int MIN_BATCH_SIZE_PER_GPU = 8;
     pool = new MultiGPUEnginePool(trt, onnxFileName, batchSizes, poolMode, options, 0, 0, GpuIDs, MIN_BATCH_SIZE_PER_GPU, cacheDir);
@@ -718,6 +721,93 @@ public class NNEvaluatorTensorRT : NNEvaluator
     });
   }
 
+
+
+  /// <summary>
+  /// Creates an NNEvaluatorTensorRT from an NNEvaluatorDef.
+  /// Supports multi-GPU configurations when multiple devices are specified.
+  /// </summary>
+  /// <param name="def">The evaluator definition containing network and device specifications.</param>
+  /// <param name="options">Optional evaluator options (if null, extracted from def.Options).</param>
+  /// <param name="gpuIDs">Optional GPU IDs to use (if null, extracted from def.Devices).</param>
+  /// <returns>A configured NNEvaluatorTensorRT instance.</returns>
+  public static NNEvaluatorTensorRT FromDefinition(NNEvaluatorDef def, NNEvaluatorOptions options = null, int[] gpuIDs = null)
+  {
+    // Validate multi-device configuration
+    if (def.Devices.Length > 1)
+    {
+      // Verify all devices have TensorRTNative as OverrideEngineType
+      for (int i = 0; i < def.Devices.Length; i++)
+      {
+        string engineType = def.Devices[i].Device.OverrideEngineType;
+        if (engineType == null || !engineType.Contains("TensorRTNative", StringComparison.OrdinalIgnoreCase))
+        {
+          throw new Exception($"All devices must have OverrideEngineType of 'TensorRTNative' for multi-GPU TensorRT. Device {i} has: {engineType ?? "null"}");
+        }
+      }
+
+      // Verify all nets are the same
+      var firstNet = def.Nets[0].Net;
+      for (int i = 1; i < def.Nets.Length; i++)
+      {
+        if (!def.Nets[i].Net.Equals(firstNet))
+        {
+          throw new Exception($"All nets must be identical for multi-GPU TensorRT. Net {i} differs from Net 0.");
+        }
+      }
+    }
+
+    // Extract GPU IDs from devices if not provided
+    if (gpuIDs == null)
+    {
+      gpuIDs = def.DeviceIndices;
+    }
+
+    // Get network definition (all should be the same, use first)
+    var netDef = def.Nets[0].Net;
+
+    // Determine network file path
+    string netFileName = netDef.NetworkID;
+    if (!netFileName.ToUpper().EndsWith("ONNX"))
+    {
+      netFileName += ".onnx";
+    }
+
+    if (!System.IO.File.Exists(netFileName))
+    {
+      netFileName = System.IO.Path.Combine(CeresUserSettingsManager.Settings.DirCeresNetworks, netFileName);
+    }
+    if (!System.IO.File.Exists(netFileName))
+    {
+      throw new Exception($"Ceres net {netFileName} not found. Use valid full path or set source directory using DirCeresNetworks in Ceres.json");
+    }
+
+    // Get options from def if not provided
+    NNEvaluatorOptionsCeres optionsCeres = options as NNEvaluatorOptionsCeres 
+      ?? def.Options as NNEvaluatorOptionsCeres 
+      ?? new NNEvaluatorOptionsCeres();
+
+    if (optionsCeres.HeadOverrides != null)
+    {
+      throw new NotImplementedException("Ceres TensorRT Native evaluator does not yet support head overrides.");
+    }
+
+    bool EXACT_BATCHES = true; // seems always fastest to use exact batches
+    NNEvaluatorTensorRT trtNativeEngine = new(netFileName,
+                                              EXACT_BATCHES ? EnginePoolMode.Exact : EnginePoolMode.Range,
+                                              EXACT_BATCHES ? [1, 8, 32, 64, 128, 256] : [48, 128, 1024],
+                                              gpuIDs: gpuIDs,
+                                              useCudaGraphs: EXACT_BATCHES && optionsCeres.EnableCUDAGraphs,
+                                              softMaxBatchSize: 1024);
+    trtNativeEngine.Options = optionsCeres;
+
+    EncodedPositionBatchFlat.RETAIN_POSITION_INTERNALS = true; // ** TODO: remove/rework
+    trtNativeEngine.ConverterToFlatFromTPG = (opts, o, f1) => TPGConvertersToFlat.ConvertToFlatTPGFromTPG(opts, o, f1.Span);
+    trtNativeEngine.ConverterToFlat = (opts, o, history, squaresBytes, squares, legalMoveIndices)
+      => TPGConvertersToFlat.ConvertToFlatTPG(opts, o, history, squaresBytes, squares, legalMoveIndices);
+
+    return trtNativeEngine;
+  }
 
 
   /// <inheritdoc/>
