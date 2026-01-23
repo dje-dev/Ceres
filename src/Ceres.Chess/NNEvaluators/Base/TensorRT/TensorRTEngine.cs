@@ -558,6 +558,75 @@ public sealed class TensorRTEngine : IDisposable
   }
 
 
+  #region Pipelined Sub-Batch Stream-Based Operations
+
+  /// <summary>
+  /// Asynchronously copies data from pinned host memory to GPU memory on the specified stream.
+  /// </summary>
+  /// <param name="streamIdx">Stream index (0 or 1)</param>
+  /// <param name="gpuDst">GPU destination pointer</param>
+  /// <param name="pinnedSrc">Pinned host source pointer</param>
+  /// <param name="bytes">Number of bytes to copy</param>
+  public void CopyToGPUOnStreamAsync(int streamIdx, IntPtr gpuDst, IntPtr pinnedSrc, long bytes)
+  {
+    int result = TensorRTNative.CopyToGPUOnStream(handle, streamIdx, gpuDst, pinnedSrc, bytes);
+    if (result != 0)
+    {
+      throw new InvalidOperationException($"CopyToGPUOnStream failed on stream {streamIdx}");
+    }
+  }
+
+
+  /// <summary>
+  /// Asynchronously runs inference on the specified stream using pre-staged GPU buffers.
+  /// </summary>
+  /// <param name="streamIdx">Stream index (0 or 1)</param>
+  /// <param name="gpuInput">GPU input buffer pointer</param>
+  /// <param name="gpuOutput">GPU output buffer pointer</param>
+  public void InferOnStreamAsync(int streamIdx, IntPtr gpuInput, IntPtr gpuOutput)
+  {
+    int result = TensorRTNative.InferOnStream(handle, streamIdx, gpuInput, gpuOutput);
+    if (result != 0)
+    {
+      string error = TensorRTNative.GetLastErrorString();
+      throw new InvalidOperationException($"InferOnStream failed on stream {streamIdx}: {error ?? "unknown error"}");
+    }
+  }
+
+
+  /// <summary>
+  /// Asynchronously copies data from GPU memory to pinned host memory on the specified stream.
+  /// </summary>
+  /// <param name="streamIdx">Stream index (0 or 1)</param>
+  /// <param name="pinnedDst">Pinned host destination pointer</param>
+  /// <param name="gpuSrc">GPU source pointer</param>
+  /// <param name="bytes">Number of bytes to copy</param>
+  public void CopyFromGPUOnStreamAsync(int streamIdx, IntPtr pinnedDst, IntPtr gpuSrc, long bytes)
+  {
+    int result = TensorRTNative.CopyFromGPUOnStream(handle, streamIdx, pinnedDst, gpuSrc, bytes);
+    if (result != 0)
+    {
+      throw new InvalidOperationException($"CopyFromGPUOnStream failed on stream {streamIdx}");
+    }
+  }
+
+
+  /// <summary>
+  /// Synchronizes the specified CUDA stream, blocking until all operations complete.
+  /// </summary>
+  /// <param name="streamIdx">Stream index (0 or 1)</param>
+  public void SyncStream(int streamIdx)
+  {
+    int result = TensorRTNative.SyncStreamIdx(handle, streamIdx);
+    if (result != 0)
+    {
+      throw new InvalidOperationException($"SyncStreamIdx failed on stream {streamIdx}");
+    }
+  }
+
+  #endregion
+
+
   /// <summary>
   /// Dispose the engine and release native resources.
   /// </summary>
