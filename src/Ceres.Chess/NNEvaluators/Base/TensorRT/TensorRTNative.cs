@@ -221,6 +221,9 @@ internal static partial class TensorRTNative
   [LibraryImport(LibraryName, EntryPoint = "TRT_InferOnStream")]
   internal static partial int InferOnStream(IntPtr handle, int streamIdx, IntPtr gpuInput, IntPtr gpuOutput);
 
+  [LibraryImport(LibraryName, EntryPoint = "TRT_InferOnStreamWithGraph")]
+  internal static partial int InferOnStreamWithGraph(IntPtr handle, int streamIdx, IntPtr gpuInput, IntPtr gpuOutput);
+
   [LibraryImport(LibraryName, EntryPoint = "TRT_InferOnStreamDynamic")]
   internal static partial int InferOnStreamDynamic(IntPtr handle, int streamIdx, IntPtr gpuInput, IntPtr gpuOutput, int actualBatchSize);
 
@@ -247,6 +250,9 @@ internal static partial class TensorRTNative
 
   [LibraryImport(LibraryName, EntryPoint = "TRT_GetEngineBatchSize")]
   internal static partial int GetEngineBatchSize(IntPtr handle);
+
+  [LibraryImport(LibraryName, EntryPoint = "TRT_UsesCudaGraphs")]
+  internal static partial int UsesCudaGraphs(IntPtr handle);
 
   [LibraryImport(LibraryName, EntryPoint = "TRT_GetInputElementsPerPosition")]
   internal static partial long GetInputElementsPerPosition(IntPtr handle);

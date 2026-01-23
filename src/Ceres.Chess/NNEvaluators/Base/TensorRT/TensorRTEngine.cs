@@ -306,6 +306,11 @@ public sealed class TensorRTEngine : IDisposable
   /// </summary>
   public bool HasByteInput => NumInputs > 0 && GetInputElementSize(0) == 1;
 
+  /// <summary>
+  /// Returns true if this engine uses CUDA graphs for inference.
+  /// </summary>
+  public bool UsesCudaGraphs => TensorRTNative.UsesCudaGraphs(handle) == 1;
+
 
   /// <summary>
   /// Get metadata for all output tensors (up to 16).
@@ -590,6 +595,26 @@ public sealed class TensorRTEngine : IDisposable
     {
       string error = TensorRTNative.GetLastErrorString();
       throw new InvalidOperationException($"InferOnStream failed on stream {streamIdx}: {error ?? "unknown error"}");
+    }
+  }
+
+
+  /// <summary>
+  /// Asynchronously runs inference on the specified stream with CUDA graph support.
+  /// On first call per stream, captures a CUDA graph. Subsequent calls replay the graph.
+  /// For engines with useCudaGraphs=false, this behaves like InferOnStreamAsync.
+  /// Use this for Exact mode engines where batch size is fixed.
+  /// </summary>
+  /// <param name="streamIdx">Stream index (0 or 1)</param>
+  /// <param name="gpuInput">GPU input buffer pointer</param>
+  /// <param name="gpuOutput">GPU output buffer pointer</param>
+  public void InferOnStreamWithGraphAsync(int streamIdx, IntPtr gpuInput, IntPtr gpuOutput)
+  {
+    int result = TensorRTNative.InferOnStreamWithGraph(handle, streamIdx, gpuInput, gpuOutput);
+    if (result != 0)
+    {
+      string error = TensorRTNative.GetLastErrorString();
+      throw new InvalidOperationException($"InferOnStreamWithGraph failed on stream {streamIdx}: {error ?? "unknown error"}");
     }
   }
 

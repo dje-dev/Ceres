@@ -112,11 +112,23 @@ namespace
     bool useCudaGraphs = false;
     bool graphCaptured = false;
 
+    // Per-stream CUDA graphs for pipelined inference (2 streams)
+    // These are used when external GPU buffers are provided (pipelined mode)
+    cudaGraph_t streamGraphs[2] = { nullptr, nullptr };
+    cudaGraphExec_t streamGraphExecs[2] = { nullptr, nullptr };
+    bool streamGraphsCaptured[2] = { false, false };
+
     ~EngineContext()
     {
       cudaSetDevice(deviceId);  // Ensure correct device for cleanup
       if (graphExec) cudaGraphExecDestroy(graphExec);
       if (graph) cudaGraphDestroy(graph);
+      // Cleanup per-stream graphs
+      for (int i = 0; i < 2; ++i)
+      {
+        if (streamGraphExecs[i]) cudaGraphExecDestroy(streamGraphExecs[i]);
+        if (streamGraphs[i]) cudaGraphDestroy(streamGraphs[i]);
+      }
       if (streams[0]) cudaStreamDestroy(streams[0]);
       if (streams[1]) cudaStreamDestroy(streams[1]);
       for (void* buf : gpuBuffers)
@@ -1564,6 +1576,97 @@ TRT_API int32_t TRT_InferOnStream(TRT_EngineHandle handle, int32_t streamIdx,
   return success ? 0 : -2;
 }
 
+TRT_API int32_t TRT_InferOnStreamWithGraph(TRT_EngineHandle handle, int32_t streamIdx,
+  void* gpuInput, void* gpuOutput)
+{
+  constexpr size_t ELEM_SIZE = 2;  // FP16
+  if (!handle || streamIdx < 0 || streamIdx > 1) return -1;
+  auto* ec = static_cast<EngineContext*>(handle);
+
+  // Set tensor addresses (must be consistent for graph capture and replay)
+  if (!ec->inputNames.empty())
+    ec->context->setTensorAddress(ec->inputNames[0].c_str(), gpuInput);
+
+  size_t outputOffset = 0;
+  for (size_t i = 0; i < ec->outputNames.size(); ++i)
+  {
+    void* outPtr = static_cast<char*>(gpuOutput) + outputOffset * ELEM_SIZE;
+    ec->context->setTensorAddress(ec->outputNames[i].c_str(), outPtr);
+    outputOffset += ec->outputSizes[i];
+  }
+
+  if (!ec->useCudaGraphs)
+  {
+    // CUDA graphs disabled - use direct enqueue
+    bool success = ec->context->enqueueV3(ec->streams[streamIdx]);
+    return success ? 0 : -2;
+  }
+
+  if (ec->streamGraphsCaptured[streamIdx])
+  {
+    // Graph already captured - launch it
+    cudaError_t err = cudaGraphLaunch(ec->streamGraphExecs[streamIdx], ec->streams[streamIdx]);
+    if (err != cudaSuccess)
+    {
+      std::lock_guard<std::mutex> lock(g_mutex);
+      SetError("cudaGraphLaunch failed on stream " + std::to_string(streamIdx) + ": " + cudaGetErrorString(err));
+      return -3;
+    }
+    return 0;
+  }
+
+  // First call on this stream - capture the graph
+  cudaError_t err = cudaStreamBeginCapture(ec->streams[streamIdx], cudaStreamCaptureModeGlobal);
+  if (err != cudaSuccess)
+  {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    SetError("cudaStreamBeginCapture failed: " + std::string(cudaGetErrorString(err)));
+    return -4;
+  }
+
+  bool success = ec->context->enqueueV3(ec->streams[streamIdx]);
+
+  err = cudaStreamEndCapture(ec->streams[streamIdx], &ec->streamGraphs[streamIdx]);
+  if (err != cudaSuccess || !ec->streamGraphs[streamIdx])
+  {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    SetError("cudaStreamEndCapture failed: " + std::string(cudaGetErrorString(err)));
+    return -5;
+  }
+
+  if (!success)
+  {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    SetError("Inference failed during graph capture");
+    cudaGraphDestroy(ec->streamGraphs[streamIdx]);
+    ec->streamGraphs[streamIdx] = nullptr;
+    return -6;
+  }
+
+  err = cudaGraphInstantiate(&ec->streamGraphExecs[streamIdx], ec->streamGraphs[streamIdx], 0);
+  if (err != cudaSuccess)
+  {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    SetError("cudaGraphInstantiate failed: " + std::string(cudaGetErrorString(err)));
+    cudaGraphDestroy(ec->streamGraphs[streamIdx]);
+    ec->streamGraphs[streamIdx] = nullptr;
+    return -7;
+  }
+
+  ec->streamGraphsCaptured[streamIdx] = true;
+
+  // Launch the newly instantiated graph
+  err = cudaGraphLaunch(ec->streamGraphExecs[streamIdx], ec->streams[streamIdx]);
+  if (err != cudaSuccess)
+  {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    SetError("cudaGraphLaunch failed after capture: " + std::string(cudaGetErrorString(err)));
+    return -8;
+  }
+
+  return 0;
+}
+
 TRT_API int32_t TRT_InferOnStreamDynamic(TRT_EngineHandle handle, int32_t streamIdx,
   void* gpuInput, void* gpuOutput, int32_t actualBatchSize)
 {
@@ -1785,6 +1888,13 @@ TRT_API int32_t TRT_GetEngineBatchSize(TRT_EngineHandle handle)
   if (!handle) return -1;
   auto* ec = static_cast<EngineContext*>(handle);
   return ec->batchSize;
+}
+
+TRT_API int32_t TRT_UsesCudaGraphs(TRT_EngineHandle handle)
+{
+  if (!handle) return -1;
+  auto* ec = static_cast<EngineContext*>(handle);
+  return ec->useCudaGraphs ? 1 : 0;
 }
 
 TRT_API int64_t TRT_GetInputElementsPerPosition(TRT_EngineHandle handle)

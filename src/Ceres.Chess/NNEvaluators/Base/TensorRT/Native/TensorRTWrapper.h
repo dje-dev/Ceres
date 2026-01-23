@@ -216,6 +216,12 @@ extern "C"
     TRT_API int32_t TRT_InferOnStream(TRT_EngineHandle handle, int32_t streamIdx,
                                       void* gpuInput, void* gpuOutput);
 
+    // Run inference on stream with CUDA graph support (for Exact mode engines).
+    // On first call per stream, captures a CUDA graph. Subsequent calls replay the graph.
+    // For engines with useCudaGraphs=false, this behaves like TRT_InferOnStream.
+    TRT_API int32_t TRT_InferOnStreamWithGraph(TRT_EngineHandle handle, int32_t streamIdx,
+                                                void* gpuInput, void* gpuOutput);
+
     // Run inference on stream with dynamic batch size (for range-mode engines).
     // Sets input shape to actualBatchSize before inference.
     TRT_API int32_t TRT_InferOnStreamDynamic(TRT_EngineHandle handle, int32_t streamIdx,
@@ -257,6 +263,10 @@ extern "C"
 
     // Get the batch size the engine was built with (max batch for range engines).
     TRT_API int32_t TRT_GetEngineBatchSize(TRT_EngineHandle handle);
+
+    // Check if this engine uses CUDA graphs for inference.
+    // Returns 1 if enabled, 0 if disabled, -1 on error.
+    TRT_API int32_t TRT_UsesCudaGraphs(TRT_EngineHandle handle);
 
     // Get input elements per position (total input size / batch size).
     TRT_API int64_t TRT_GetInputElementsPerPosition(TRT_EngineHandle handle);

@@ -385,21 +385,9 @@ namespace Ceres.Chess.NNEvaluators
               throw new NotImplementedException("Ceres TensorRT Native evaluator does not yet support head overrides.");
             }
 
-            bool EXACT_BATCHES = true; // seems always fastest to use exact batches
-            NNEvaluatorTensorRT trtNativeEngine = new(netFileName,
-                                                      EXACT_BATCHES ? EnginePoolMode.Exact : EnginePoolMode.Range,
-                                                      EXACT_BATCHES ? [1, 8, 32, 64, 128, 256] : [48, 128, 1024],
-                                                      gpuIDs: [deviceDef.DeviceIndex],
-                                                      useCudaGraphs: EXACT_BATCHES && optionsCeres.EnableCUDAGraphs,
-                                                      softMaxBatchSize: 1024);
-            trtNativeEngine.Options = optionsCeres;
-
-            EncodedPositionBatchFlat.RETAIN_POSITION_INTERNALS = true; // ** TODO: remove/rework
-            trtNativeEngine.ConverterToFlatFromTPG = (options, o, f1) => TPGConvertersToFlat.ConvertToFlatTPGFromTPG(options, o, f1.Span);
-            trtNativeEngine.ConverterToFlat = (options, o, history, squaresBytes, squares, legalMoveIndices)
-              => TPGConvertersToFlat.ConvertToFlatTPG(options, o, history, squaresBytes, squares, legalMoveIndices);
-            return trtNativeEngine;
+            return NNEvaluatorTensorRT.BuildEvaluator(netDef, gpuIDs: [deviceDef.DeviceIndex], optionsCeres);
           }
+          else
           {
             NNEvaluatorONNX onnxEngine = new(shortID, netFileName, null,
                                              deviceDef.Type, deviceDef.DeviceIndex, useTensorRT,

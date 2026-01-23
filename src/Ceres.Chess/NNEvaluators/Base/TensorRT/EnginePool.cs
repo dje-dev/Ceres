@@ -17,7 +17,7 @@ using System;
 using System.Collections.Generic;
 
 #endregion
-
+ 
 namespace Ceres.Chess.NNEvaluators.TensorRT;
 
 public sealed class EnginePool : IDisposable
@@ -74,6 +74,10 @@ public sealed class EnginePool : IDisposable
   private byte[][] perEngineByteInputBuffers;
   private Half[][] perEngineHalfInputBuffers;
   private Half[][] perEngineOutputBuffers;
+
+  // Cached batch plan to avoid allocations in pipelined processing
+  // Each entry: (start position, actual positions, engine, engine batch size, use dynamic inference, engine index)
+  private readonly List<(int start, int count, TensorRTEngine engine, int engineBatchSize, bool useDynamic, int engineIndex)> cachedBatchPlan = new();
 
   /// <summary>
   /// In Exact mode, the maximum fraction of an engine's batch size that can be padding
@@ -269,8 +273,8 @@ public sealed class EnginePool : IDisposable
     // Integrated GPUs have unified memory with lower kernel launch overhead relative to compute,
     // so we should be more conservative about accepting padding (prefer exact-fit batches).
     bool isIntegrated = TensorRTNative.IsIntegratedGPU(this.deviceId) == 1;
-    ExactModeBatchFractionAcceptablePadding = isIntegrated ? 0.20f : 0.30f;
-    ExactModeBatchNumPositionsAcceptablePadding = isIntegrated ? 4 : 12;
+    ExactModeBatchNumPositionsAcceptablePadding = isIntegrated ? 10 : 25; // was:10:20
+    ExactModeBatchFractionAcceptablePadding = isIntegrated ? 0.10f : 0.25f; // was: 0.1:0.2
 
     // Note: Warmup is skipped here - caller should warmup before benchmarking
   }
@@ -535,37 +539,23 @@ public sealed class EnginePool : IDisposable
   ///   - D2H + post-process batch N (while batch N+1 computes)
   /// 
   /// This overlaps CPU prep and H2D with GPU compute, without concurrent GPU computes.
-  /// Uses dynamic batch size inference for Range mode engines to handle partial batches correctly.
+  /// Uses the centralized batch planning logic (ComputeBatchPlan) to respect engine selection
+  /// including padding thresholds and optimal engine choices for each sub-batch.
   /// </summary>
   private unsafe void ProcessBytesWithHandlerPipelined(byte[] input, int totalPositions, SubBatchOutputHandler handler, int globalPositionOffset)
   {
-    // Get largest engine for consistent processing
-    TensorRTEngine engine = mode == EnginePoolMode.Range ? engines[^1] : engines[0];
-    int engineBatchSize = mode == EnginePoolMode.Range ? ranges[^1].max : ranges[0].max;
+    // Compute batch boundaries using the centralized engine selection logic
+    ComputeBatchPlan(totalPositions);
 
-    // Determine if we should use dynamic batch size inference
-    // Range mode engines support dynamic batches; Exact mode engines do not
-    bool useDynamicBatch = (mode == EnginePoolMode.Range);
-
-    // Pre-compute batch boundaries
-    List<(int start, int count)> batches = new();
-    int pos = 0;
-    while (pos < totalPositions)
-    {
-      int count = Math.Min(engineBatchSize, totalPositions - pos);
-      batches.Add((pos, count));
-      pos += count;
-    }
-
-    if (batches.Count == 0)
+    if (cachedBatchPlan.Count == 0)
     {
       return;
     }
 
     // For single batch, just use the simple path
-    if (batches.Count == 1)
+    if (cachedBatchPlan.Count == 1)
     {
-      int count = batches[0].count;
+      (int start, int count, TensorRTEngine engine, int engineBatchSize, bool useDynamic, int engineIndex) = cachedBatchPlan[0];
       int inputBytes = count * InputElementsPerPosition;
 
       // Copy to pinned memory
@@ -578,16 +568,19 @@ public sealed class EnginePool : IDisposable
       engine.CopyToGPUOnStreamAsync(0, gpuIn, pinnedIn, inputBytes);
       
       // Use dynamic inference for Range mode to set correct batch size
-      if (useDynamicBatch)
+      if (useDynamic)
       {
         engine.InferOnStreamDynamicAsync(0, gpuIn, gpuOut, count);
       }
       else
       {
-        engine.InferOnStreamAsync(0, gpuIn, gpuOut);
+        // Use graph-aware inference for Exact mode - captures and replays CUDA graph when enabled
+        engine.InferOnStreamWithGraphAsync(0, gpuIn, gpuOut);
       }
       
-      long outputBytes = count * OutputElementsPerPosition * sizeof(ushort);
+      // For dynamic mode, output size matches actual count; for static mode, it's engine batch size
+      int outputPositions = useDynamic ? count : engineBatchSize;
+      long outputBytes = outputPositions * OutputElementsPerPosition * sizeof(ushort);
       engine.CopyFromGPUOnStreamAsync(0, pinnedOut, gpuOut, outputBytes);
       engine.SyncStream(0);  // Single sync at end before CPU access
 
@@ -596,7 +589,8 @@ public sealed class EnginePool : IDisposable
       {
         Buffer.MemoryCopy((void*)pinnedOut, dstPtr, outputBytes, outputBytes);
       }
-      handler(globalPositionOffset, count, count, cachedOutputBuffer);
+      // For dynamic: engineBatchSize param = count; for static: engineBatchSize param = engine's batch size
+      handler(globalPositionOffset, count, outputPositions, cachedOutputBuffer);
       return;
     }
 
@@ -610,39 +604,40 @@ public sealed class EnginePool : IDisposable
     byte[][] managedInputs = [cachedByteInputBuffer, cachedByteInputBuffer2];
 
     // Stage first batch: CPU prep + H2D
-    int batch0Count = batches[0].count;
+    (int batch0Start, int batch0Count, TensorRTEngine batch0Engine, int batch0EngineSize, bool batch0UseDynamic, int batch0EngineIndex) = cachedBatchPlan[0];
     int batch0InputBytes = batch0Count * InputElementsPerPosition;
     Array.Copy(input, 0, managedInputs[0], 0, batch0InputBytes);
     fixed (byte* srcPtr = managedInputs[0])
     {
       Buffer.MemoryCopy(srcPtr, (void*)pinnedInputs[0], batch0InputBytes, batch0InputBytes);
     }
-    engine.CopyToGPUOnStreamAsync(0, gpuInputs[0], pinnedInputs[0], batch0InputBytes);
+    batch0Engine.CopyToGPUOnStreamAsync(0, gpuInputs[0], pinnedInputs[0], batch0InputBytes);
     // No sync needed - Infer on same stream will wait for H2D
 
     // Launch first batch compute (output to buffer 0)
-    if (useDynamicBatch)
+    if (batch0UseDynamic)
     {
-      engine.InferOnStreamDynamicAsync(0, gpuInputs[0], gpuOutputs[0], batch0Count);
+      batch0Engine.InferOnStreamDynamicAsync(0, gpuInputs[0], gpuOutputs[0], batch0Count);
     }
     else
     {
-      engine.InferOnStreamAsync(0, gpuInputs[0], gpuOutputs[0]);
+      // Use graph-aware inference for Exact mode - captures and replays CUDA graph when enabled
+      batch0Engine.InferOnStreamWithGraphAsync(0, gpuInputs[0], gpuOutputs[0]);
     }
 
     // Process remaining batches with pre-staging
-    for (int i = 1; i < batches.Count; i++)
+    for (int i = 1; i < cachedBatchPlan.Count; i++)
     {
       int prevBuffer = (i - 1) % 2;
       int currBuffer = i % 2;
 
+      // Get current batch info
+      (int currStart, int currCount, TensorRTEngine currEngine, int currEngineSize, bool currUseDynamic, int currEngineIndex) = cachedBatchPlan[i];
+
       // WHILE PREVIOUS BATCH COMPUTES: Pre-stage current batch (CPU prep + H2D on stream 1)
-      int currCount;
       {
-        (int start, int count) = batches[i];
-        currCount = count;
-        int inputBytes = count * InputElementsPerPosition;
-        int inputOffset = start * InputElementsPerPosition;
+        int inputBytes = currCount * InputElementsPerPosition;
+        int inputOffset = currStart * InputElementsPerPosition;
 
         // CPU prep: copy to managed buffer, then to pinned memory
         Array.Copy(input, inputOffset, managedInputs[currBuffer], 0, inputBytes);
@@ -652,61 +647,98 @@ public sealed class EnginePool : IDisposable
         }
 
         // H2D on stream 1 (overlaps with compute on stream 0)
-        engine.CopyToGPUOnStreamAsync(1, gpuInputs[currBuffer], pinnedInputs[currBuffer], inputBytes);
+        currEngine.CopyToGPUOnStreamAsync(1, gpuInputs[currBuffer], pinnedInputs[currBuffer], inputBytes);
       }
 
       // Wait for H2D first (typically faster than compute, so returns quickly)
-      engine.SyncStream(1);
+      currEngine.SyncStream(1);
 
-      // Wait for previous batch compute to finish
-      engine.SyncStream(0);
+      // Wait for previous batch compute to finish (sync on previous engine's stream)
+      TensorRTEngine prevEngine = cachedBatchPlan[i - 1].engine;
+      prevEngine.SyncStream(0);
 
       // Launch current batch compute to alternating output buffer
-      if (useDynamicBatch)
+      if (currUseDynamic)
       {
-        engine.InferOnStreamDynamicAsync(0, gpuInputs[currBuffer], gpuOutputs[currBuffer], currCount);
+        currEngine.InferOnStreamDynamicAsync(0, gpuInputs[currBuffer], gpuOutputs[currBuffer], currCount);
       }
       else
       {
-        engine.InferOnStreamAsync(0, gpuInputs[currBuffer], gpuOutputs[currBuffer]);
+        // Use graph-aware inference for Exact mode - captures and replays CUDA graph when enabled
+        currEngine.InferOnStreamWithGraphAsync(0, gpuInputs[currBuffer], gpuOutputs[currBuffer]);
       }
 
       // D2H + post-process previous batch while current batch computes
       // Previous batch wrote to gpuOutputs[prevBuffer], so read from there (no race!)
       {
-        (int prevStart, int prevCount) = batches[i - 1];
-        long prevOutputBytes = prevCount * OutputElementsPerPosition * sizeof(ushort);
+        (int prevStart, int prevCount, TensorRTEngine prevBatchEngine, int prevEngineSize, bool prevUseDynamic, int prevEngineIndex) = cachedBatchPlan[i - 1];
+        
+        // For dynamic mode, output size matches actual count; for static mode, it's engine batch size
+        int prevOutputPositions = prevUseDynamic ? prevCount : prevEngineSize;
+        long prevOutputBytes = prevOutputPositions * OutputElementsPerPosition * sizeof(ushort);
 
         // D2H for previous batch from its dedicated output buffer
-        engine.CopyFromGPUOnStreamAsync(1, pinnedOutputs[prevBuffer], gpuOutputs[prevBuffer], prevOutputBytes);
-        engine.SyncStream(1);  // Need data for handler
+        prevBatchEngine.CopyFromGPUOnStreamAsync(1, pinnedOutputs[prevBuffer], gpuOutputs[prevBuffer], prevOutputBytes);
+        prevBatchEngine.SyncStream(1);  // Need data for handler
 
         // Copy to managed buffer and call handler
         fixed (Half* dstPtr = managedOutputs[prevBuffer])
         {
           Buffer.MemoryCopy((void*)pinnedOutputs[prevBuffer], dstPtr, prevOutputBytes, prevOutputBytes);
         }
-        handler(globalPositionOffset + prevStart, prevCount, prevCount, managedOutputs[prevBuffer]);
+        // For dynamic: engineBatchSize param = count; for static: engineBatchSize param = engine's batch size
+        handler(globalPositionOffset + prevStart, prevCount, prevOutputPositions, managedOutputs[prevBuffer]);
       }
     }
 
     // Handle last batch (no next batch to pre-stage)
     {
-      int lastIdx = batches.Count - 1;
+      int lastIdx = cachedBatchPlan.Count - 1;
       int lastBuffer = lastIdx % 2;
-      (int start, int count) = batches[lastIdx];
-      long outputBytes = count * OutputElementsPerPosition * sizeof(ushort);
+      (int start, int count, TensorRTEngine lastEngine, int lastEngineSize, bool lastUseDynamic, int lastEngineIndex) = cachedBatchPlan[lastIdx];
+      
+      // For dynamic mode, output size matches actual count; for static mode, it's engine batch size
+      int lastOutputPositions = lastUseDynamic ? count : lastEngineSize;
+      long outputBytes = lastOutputPositions * OutputElementsPerPosition * sizeof(ushort);
 
       // D2H on same stream as compute - CUDA guarantees compute finishes first (in-order execution)
-      engine.CopyFromGPUOnStreamAsync(0, pinnedOutputs[lastBuffer], gpuOutputs[lastBuffer], outputBytes);
-      engine.SyncStream(0);  // Single sync before CPU access
+      lastEngine.CopyFromGPUOnStreamAsync(0, pinnedOutputs[lastBuffer], gpuOutputs[lastBuffer], outputBytes);
+      lastEngine.SyncStream(0);  // Single sync before CPU access
 
       // Copy to managed buffer and call handler
       fixed (Half* dstPtr = managedOutputs[lastBuffer])
       {
         Buffer.MemoryCopy((void*)pinnedOutputs[lastBuffer], dstPtr, outputBytes, outputBytes);
       }
-      handler(globalPositionOffset + start, count, count, managedOutputs[lastBuffer]);
+      // For dynamic: engineBatchSize param = count; for static: engineBatchSize param = engine's batch size
+      handler(globalPositionOffset + start, count, lastOutputPositions, managedOutputs[lastBuffer]);
+    }
+  }
+
+
+  /// <summary>
+  /// Computes the batch plan for processing totalPositions using the engine selection logic.
+  /// Results are stored in cachedBatchPlan to avoid allocations.
+  /// Each entry contains: (start position, actual positions, engine, engine batch size, use dynamic inference, engine index)
+  /// </summary>
+  private void ComputeBatchPlan(int totalPositions)
+  {
+    cachedBatchPlan.Clear();
+    int processed = 0;
+    int lastBatchSize = 0;
+
+    while (processed < totalPositions)
+    {
+      int remaining = totalPositions - processed;
+      (TensorRTEngine engine, int batchSize, bool useDynamic, int engineIndex) = SelectEngineWithMode(remaining, lastBatchSize);
+
+      // For Exact mode, batchSize is the engine's configured size (may exceed remaining).
+      // We process actualPositions but allocate/compute with engine's batchSize.
+      int actualPositions = Math.Min(batchSize, remaining);
+      cachedBatchPlan.Add((processed, actualPositions, engine, batchSize, useDynamic, engineIndex));
+
+      processed += actualPositions;
+      lastBatchSize = batchSize;
     }
   }
 

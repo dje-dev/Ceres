@@ -14,7 +14,6 @@
 #region Using directives
 
 using System;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Numerics.Tensors;
@@ -227,9 +226,9 @@ public class NNEvaluatorTensorRT : NNEvaluator
     {
       options = TensorRTBuildOptions.Default;
       options.BuilderOptimizationLevel = 3;
-      options.UseFP16 = 0;
+      options.UseFP16 = 1;
       options.UseBF16 = 0;
-      options.FP32PostAttentionNorm = 1;  // certain models are catestrophically bad without this
+      options.FP32PostAttentionNorm = 0;  // certain models completely fail without this
       options.UseCudaGraphs = useCudaGraphs ? 1 : 0;
     }
     options.Validate();
@@ -764,8 +763,19 @@ public class NNEvaluatorTensorRT : NNEvaluator
     }
 
     // Get network definition (all should be the same, use first)
-    var netDef = def.Nets[0].Net;
+    NNEvaluatorNetDef netDef = def.Nets[0].Net;
 
+    // Get options from def if not provided
+    options = options ?? def.Options;
+
+    NNEvaluatorTensorRT trtNativeEngine = BuildEvaluator(netDef, gpuIDs, options);
+
+    return trtNativeEngine;
+  }
+
+
+  internal static NNEvaluatorTensorRT BuildEvaluator(NNEvaluatorNetDef netDef, int[] gpuIDs, NNEvaluatorOptions options)
+  {
     // Determine network file path
     string netFileName = netDef.NetworkID;
     if (!netFileName.ToUpper().EndsWith("ONNX"))
@@ -782,31 +792,91 @@ public class NNEvaluatorTensorRT : NNEvaluator
       throw new Exception($"Ceres net {netFileName} not found. Use valid full path or set source directory using DirCeresNetworks in Ceres.json");
     }
 
-    // Get options from def if not provided
-    NNEvaluatorOptionsCeres optionsCeres = options as NNEvaluatorOptionsCeres 
-      ?? def.Options as NNEvaluatorOptionsCeres 
-      ?? new NNEvaluatorOptionsCeres();
+    //    if (optionsCeres.HeadOverrides != null)
+    //    {
+    //      throw new NotImplementedException("Ceres TensorRT Native evaluator does not yet support head overrides.");
+    //    }
 
-    if (optionsCeres.HeadOverrides != null)
-    {
-      throw new NotImplementedException("Ceres TensorRT Native evaluator does not yet support head overrides.");
-    }
-
-    bool EXACT_BATCHES = true; // seems always fastest to use exact batches
+    const bool EXACT_BATCHES = true; // seems always fastest to use exact batches
+    const bool ENABLE_GRAPHS = true;
+    const int NUM_STREAMING_MULTIPROCESSORS = 120;
+    const int THRESHOLD_ADJUST_SIZE = 10;
     NNEvaluatorTensorRT trtNativeEngine = new(netFileName,
                                               EXACT_BATCHES ? EnginePoolMode.Exact : EnginePoolMode.Range,
-                                              EXACT_BATCHES ? [1, 8, 32, 64, 128, 256] : [48, 128, 1024],
+                                              EXACT_BATCHES ? AdjustSizes([1, 16, 32, 64, 96, 128, 192 /*, 256, 512*/], NUM_STREAMING_MULTIPROCESSORS, THRESHOLD_ADJUST_SIZE) 
+                                                            : [48, 128, 1024],
                                               gpuIDs: gpuIDs,
-                                              useCudaGraphs: EXACT_BATCHES && optionsCeres.EnableCUDAGraphs,
+                                              useCudaGraphs: EXACT_BATCHES && ENABLE_GRAPHS, //optionsCeres.EnableCUDAGraphs,
                                               softMaxBatchSize: 1024);
-    trtNativeEngine.Options = optionsCeres;
+    trtNativeEngine.Options = options;
 
     EncodedPositionBatchFlat.RETAIN_POSITION_INTERNALS = true; // ** TODO: remove/rework
     trtNativeEngine.ConverterToFlatFromTPG = (opts, o, f1) => TPGConvertersToFlat.ConvertToFlatTPGFromTPG(opts, o, f1.Span);
     trtNativeEngine.ConverterToFlat = (opts, o, history, squaresBytes, squares, legalMoveIndices)
       => TPGConvertersToFlat.ConvertToFlatTPG(opts, o, history, squaresBytes, squares, legalMoveIndices);
-
     return trtNativeEngine;
+  }
+
+
+  /// <summary>
+  /// Modifies in place a sequence of batch sizes to be 
+  /// (if possible) multiples of common GPU SM counts within a specified tolerance.
+  /// </summary>
+  /// <param name="sizes"></param>
+  /// <param name="smCount"></param>
+  /// <param name="tolerance"></param>
+  /// <returns></returns>
+  public static int[] AdjustSizes(int[] sizes, int smCount, int tolerance)
+  {
+    int[] bases = { (3 * smCount) / 2, smCount, smCount / 2, smCount / 3, smCount / 4 };
+
+    for (int i = 0; i < sizes.Length; i++)
+    {
+      int original = sizes[i];
+      int bestAdjusted = original;
+      int bestDistance = int.MaxValue;
+
+      foreach (int baseVal in bases)
+      {
+        if (baseVal < 1) continue;
+
+        int lower = (original / baseVal) * baseVal;
+        int upper = lower + baseVal;
+
+        if (lower > 0)
+        {
+          int dist = Math.Abs(original - lower);
+          if (dist <= tolerance && dist < bestDistance)
+          {
+            bestDistance = dist;
+            bestAdjusted = lower;
+          }
+        }
+
+        int distUpper = Math.Abs(original - upper);
+        if (distUpper <= tolerance && distUpper < bestDistance)
+        {
+          bestDistance = distUpper;
+          bestAdjusted = upper;
+        }
+      }
+
+      sizes[i] = bestAdjusted;
+    }
+
+    const bool DEBUG_DUMP_BATCH_SIZES = false;
+
+    if (DEBUG_DUMP_BATCH_SIZES)
+    {
+      Console.Write("[");
+      foreach (int r in sizes)
+      {
+        Console.Write(r + ",");
+      }
+      Console.WriteLine("]");
+    }
+
+    return sizes;
   }
 
 
