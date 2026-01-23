@@ -216,6 +216,12 @@ extern "C"
     TRT_API int32_t TRT_InferOnStream(TRT_EngineHandle handle, int32_t streamIdx,
                                       void* gpuInput, void* gpuOutput);
 
+    // Run inference on stream with dynamic batch size (for range-mode engines).
+    // Sets input shape to actualBatchSize before inference.
+    TRT_API int32_t TRT_InferOnStreamDynamic(TRT_EngineHandle handle, int32_t streamIdx,
+                                              void* gpuInput, void* gpuOutput,
+                                              int32_t actualBatchSize);
+
     // Async copy on specified stream
     TRT_API int32_t TRT_CopyToGPUOnStream(TRT_EngineHandle handle, int32_t streamIdx,
                                           void* dst, const void* src, int64_t bytes);

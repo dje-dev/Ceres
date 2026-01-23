@@ -221,6 +221,9 @@ internal static partial class TensorRTNative
   [LibraryImport(LibraryName, EntryPoint = "TRT_InferOnStream")]
   internal static partial int InferOnStream(IntPtr handle, int streamIdx, IntPtr gpuInput, IntPtr gpuOutput);
 
+  [LibraryImport(LibraryName, EntryPoint = "TRT_InferOnStreamDynamic")]
+  internal static partial int InferOnStreamDynamic(IntPtr handle, int streamIdx, IntPtr gpuInput, IntPtr gpuOutput, int actualBatchSize);
+
   [LibraryImport(LibraryName, EntryPoint = "TRT_CopyToGPUOnStream")]
   internal static partial int CopyToGPUOnStream(IntPtr handle, int streamIdx, IntPtr dst, IntPtr src, long bytes);
 

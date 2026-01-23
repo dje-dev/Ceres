@@ -200,7 +200,7 @@ TRT_API void TRT_InitBuildOptions(TRT_BuildOptions* options)
   options->minBatchSize = 0;  // 0 = use batchSize parameter
   options->optBatchSize = 0;
   options->maxBatchSize = 0;
-  options->forceRMSNormFP32 = 0;
+  options->fp32PostAttentionNorm = 0;
 }
 
   // Helper: print colored console message
@@ -554,7 +554,7 @@ static uint64_t HashBuildOptions(const TRT_BuildOptions* opts)
   hash ^= std::hash<int32_t>{}(opts->useBF16) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
   hash ^= std::hash<int32_t>{}(opts->useFP8) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
   hash ^= std::hash<int32_t>{}(opts->useBest) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
-  hash ^= std::hash<int32_t>{}(opts->forceRMSNormFP32) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+  hash ^= std::hash<int32_t>{}(opts->fp32PostAttentionNorm) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
   return hash;
 }
 
@@ -1558,6 +1558,48 @@ TRT_API int32_t TRT_InferOnStream(TRT_EngineHandle handle, int32_t streamIdx,
     void* outPtr = static_cast<char*>(gpuOutput) + outputOffset * ELEM_SIZE;
     ec->context->setTensorAddress(ec->outputNames[i].c_str(), outPtr);
     outputOffset += ec->outputSizes[i];
+  }
+
+  bool success = ec->context->enqueueV3(ec->streams[streamIdx]);
+  return success ? 0 : -2;
+}
+
+TRT_API int32_t TRT_InferOnStreamDynamic(TRT_EngineHandle handle, int32_t streamIdx,
+  void* gpuInput, void* gpuOutput, int32_t actualBatchSize)
+{
+  constexpr size_t ELEM_SIZE = 2;  // FP16
+  if (!handle || streamIdx < 0 || streamIdx > 1) return -1;
+  auto* ec = static_cast<EngineContext*>(handle);
+
+  // Set dynamic input shapes for actualBatchSize
+  for (size_t i = 0; i < ec->inputNames.size(); ++i)
+  {
+    const char* name = ec->inputNames[i].c_str();
+    auto dims = ec->engine->getTensorShape(name);
+    if (dims.d[0] == -1)
+    {
+      dims.d[0] = actualBatchSize;
+    }
+    if (!ec->context->setInputShape(name, dims))
+    {
+      std::lock_guard<std::mutex> lock(g_mutex);
+      SetError("Failed to set input shape for " + std::string(name) + " to batch " + std::to_string(actualBatchSize));
+      return -3;
+    }
+  }
+
+  if (!ec->inputNames.empty())
+    ec->context->setTensorAddress(ec->inputNames[0].c_str(), gpuInput);
+
+  // Compute per-position output sizes and set tensor addresses
+  size_t outputOffset = 0;
+  for (size_t i = 0; i < ec->outputNames.size(); ++i)
+  {
+    void* outPtr = static_cast<char*>(gpuOutput) + outputOffset * ELEM_SIZE;
+    ec->context->setTensorAddress(ec->outputNames[i].c_str(), outPtr);
+    // Use per-position size * actualBatchSize for the offset calculation
+    int64_t perPosSize = ec->outputSizes[i] / ec->batchSize;
+    outputOffset += perPosSize * actualBatchSize;
   }
 
   bool success = ec->context->enqueueV3(ec->streams[streamIdx]);

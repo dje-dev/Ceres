@@ -595,6 +595,25 @@ public sealed class TensorRTEngine : IDisposable
 
 
   /// <summary>
+  /// Asynchronously runs inference on the specified stream with dynamic batch size.
+  /// Sets the input shape to the actual batch size before inference.
+  /// </summary>
+  /// <param name="streamIdx">Stream index (0 or 1)</param>
+  /// <param name="gpuInput">GPU input buffer pointer</param>
+  /// <param name="gpuOutput">GPU output buffer pointer</param>
+  /// <param name="actualBatchSize">The actual number of positions to process</param>
+  public void InferOnStreamDynamicAsync(int streamIdx, IntPtr gpuInput, IntPtr gpuOutput, int actualBatchSize)
+  {
+    int result = TensorRTNative.InferOnStreamDynamic(handle, streamIdx, gpuInput, gpuOutput, actualBatchSize);
+    if (result != 0)
+    {
+      string error = TensorRTNative.GetLastErrorString();
+      throw new InvalidOperationException($"InferOnStreamDynamic failed on stream {streamIdx} for batch {actualBatchSize}: {error ?? "unknown error"}");
+    }
+  }
+
+
+  /// <summary>
   /// Asynchronously copies data from GPU memory to pinned host memory on the specified stream.
   /// </summary>
   /// <param name="streamIdx">Stream index (0 or 1)</param>
