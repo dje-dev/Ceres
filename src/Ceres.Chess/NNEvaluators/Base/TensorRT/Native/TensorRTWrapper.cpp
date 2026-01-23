@@ -224,21 +224,11 @@ TRT_API void TRT_InitBuildOptions(TRT_BuildOptions* options)
     PrintColored("\033[34m", message);
   }
 
-  // Helper: check if layer name matches RMSNorm pattern
-static bool IsRMSNormLayer(const char* layerName)
+  // Helper: check if layer name is a post-attention normalization layer (ln1)
+static bool IsPostAttentionNormLayer(const char* layerName)
 {
   std::string name(layerName);
-  // Match layers that are part of RMSNorm/LayerNorm patterns
-  // These include: ReduceMean, Pow, Sqrt, Div operations within norm blocks
-  // Also match explicit "norm", "ln", "rms" naming patterns
-  if (name.find("norm") != std::string::npos ||
-      name.find("ln1") != std::string::npos ||
-      name.find("ln2") != std::string::npos ||
-      name.find("qkvLN") != std::string::npos)
-  {
-    return true;
-  }
-  return false;
+  return name.find("ln1") != std::string::npos;
 }
 
 TRT_API TRT_EngineHandle TRT_LoadONNXWithOptions(const char* onnxPath, int32_t batchSize,
@@ -336,8 +326,8 @@ TRT_API TRT_EngineHandle TRT_LoadONNXWithOptions(const char* onnxPath, int32_t b
   // Enable detailed profiling for layer precision inspection
   config->setProfilingVerbosity(nvinfer1::ProfilingVerbosity::kDETAILED);
 
-  // Force FP32 precision for RMSNorm/LayerNorm layers if requested
-  if (opts->forceRMSNormFP32)
+  // Force FP32 precision for post-attention normalization (ln1) layers if requested
+  if (opts->fp32PostAttentionNorm)
   {
     config->setFlag(nvinfer1::BuilderFlag::kPREFER_PRECISION_CONSTRAINTS);
     int layersMarked = 0;
@@ -346,7 +336,7 @@ TRT_API TRT_EngineHandle TRT_LoadONNXWithOptions(const char* onnxPath, int32_t b
     {
       auto* layer = network->getLayer(i);
       const char* layerName = layer->getName();
-      if (IsRMSNormLayer(layerName))
+      if (IsPostAttentionNormLayer(layerName))
       {
         layer->setPrecision(nvinfer1::DataType::kFLOAT);
         for (int32_t j = 0; j < layer->getNbOutputs(); ++j)
@@ -356,7 +346,7 @@ TRT_API TRT_EngineHandle TRT_LoadONNXWithOptions(const char* onnxPath, int32_t b
         layersMarked++;
       }
     }
-    fprintf(stderr, "[TensorRT] Marked %d/%d layers as FP32 for RMSNorm precision\n", layersMarked, totalLayers);
+    fprintf(stderr, "[TensorRT] Marked %d/%d layers as FP32 for post-attention norm (ln1)\n", layersMarked, totalLayers);
   }
 
   // Determine batch sizes for optimization profile

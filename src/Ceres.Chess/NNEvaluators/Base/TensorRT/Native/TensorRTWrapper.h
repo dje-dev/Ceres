@@ -52,7 +52,7 @@ extern "C"
         int32_t minBatchSize;              // Min batch size for optimization profile (0 = use batchSize)
         int32_t optBatchSize;              // Optimal batch size for optimization profile (0 = use batchSize)
         int32_t maxBatchSize;              // Max batch size for optimization profile (0 = use batchSize)
-        int32_t forceRMSNormFP32;          // 1 = force FP32 for RMSNorm layers, 0 = false (default)
+        int32_t fp32PostAttentionNorm;     // 1 = force FP32 for post-attention norm (ln1) layers, 0 = false (default)
     };
 
     // Initialize build options with defaults

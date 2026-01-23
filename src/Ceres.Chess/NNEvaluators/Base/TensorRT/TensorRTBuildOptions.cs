@@ -84,10 +84,11 @@ public record struct TensorRTBuildOptions
   public int MaxBatchSize;
 
   /// <summary>
-  /// Force FP32 precision for RMSNorm/LayerNorm layers (1 = true, 0 = false (default)).
+  /// Force FP32 precision for post-attention normalization (ln1) layers.
+  /// 0 = disabled (default), 1 = enabled.
   /// This can improve numerical stability for models with normalization layers.
   /// </summary>
-  public int ForceRMSNormFP32;
+  public int FP32PostAttentionNorm;
 
   /// <summary>
   /// Returns default build options.
@@ -105,7 +106,7 @@ public record struct TensorRTBuildOptions
     MinBatchSize = 0,
     OptBatchSize = 0,
     MaxBatchSize = 0,
-    ForceRMSNormFP32 = 0
+    FP32PostAttentionNorm = 0
   };
 
 
