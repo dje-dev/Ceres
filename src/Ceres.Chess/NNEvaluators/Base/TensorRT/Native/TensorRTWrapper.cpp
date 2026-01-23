@@ -1014,6 +1014,17 @@ TRT_API int32_t TRT_IsIntegratedGPU(int32_t deviceId)
   return props.integrated ? 1 : 0;
 }
 
+TRT_API int32_t TRT_GetMultiProcessorCount(int32_t deviceId)
+{
+  cudaDeviceProp props;
+  cudaError_t err = cudaGetDeviceProperties(&props, deviceId);
+  if (err != cudaSuccess)
+  {
+    return -1;
+  }
+  return props.multiProcessorCount;
+}
+
 TRT_API void TRT_FreeEngine(TRT_EngineHandle handle)
 {
   if (handle)

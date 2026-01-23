@@ -97,6 +97,13 @@ internal static partial class TensorRTNative
   [LibraryImport(LibraryName, EntryPoint = "TRT_IsIntegratedGPU")]
   internal static partial int IsIntegratedGPU(int deviceId);
 
+  /// <summary>
+  /// Get the number of streaming multiprocessors (SMs) on a GPU device.
+  /// Returns SM count on success, -1 on error.
+  /// </summary>
+  [LibraryImport(LibraryName, EntryPoint = "TRT_GetMultiProcessorCount")]
+  internal static partial int GetMultiProcessorCount(int deviceId);
+
   [LibraryImport(LibraryName, EntryPoint = "TRT_FreeEngine")]
   internal static partial void FreeEngine(IntPtr handle);
 

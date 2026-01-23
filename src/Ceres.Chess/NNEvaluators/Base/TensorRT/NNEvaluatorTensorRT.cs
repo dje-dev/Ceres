@@ -797,13 +797,20 @@ public class NNEvaluatorTensorRT : NNEvaluator
     //      throw new NotImplementedException("Ceres TensorRT Native evaluator does not yet support head overrides.");
     //    }
 
+    // Query actual SM count from GPU device
+    int numStreamingMultiprocessors = TensorRTNative.GetMultiProcessorCount(gpuIDs[0]);
+    if (numStreamingMultiprocessors < 0)
+    {
+      throw new Exception($"Failed to query SM count for GPU {gpuIDs[0]}");
+    }
+
     const bool EXACT_BATCHES = true; // seems always fastest to use exact batches
     const bool ENABLE_GRAPHS = true;
-    const int NUM_STREAMING_MULTIPROCESSORS = 120;
     const int THRESHOLD_ADJUST_SIZE = 10;
+
     NNEvaluatorTensorRT trtNativeEngine = new(netFileName,
                                               EXACT_BATCHES ? EnginePoolMode.Exact : EnginePoolMode.Range,
-                                              EXACT_BATCHES ? AdjustSizes([1, 16, 32, 64, 96, 128, 192 /*, 256, 512*/], NUM_STREAMING_MULTIPROCESSORS, THRESHOLD_ADJUST_SIZE) 
+                                              EXACT_BATCHES ? AdjustSizes([1, 16, 32, 64, 96, 128, 192], numStreamingMultiprocessors, THRESHOLD_ADJUST_SIZE) 
                                                             : [48, 128, 1024],
                                               gpuIDs: gpuIDs,
                                               useCudaGraphs: EXACT_BATCHES && ENABLE_GRAPHS, //optionsCeres.EnableCUDAGraphs,
@@ -862,18 +869,6 @@ public class NNEvaluatorTensorRT : NNEvaluator
       }
 
       sizes[i] = bestAdjusted;
-    }
-
-    const bool DEBUG_DUMP_BATCH_SIZES = false;
-
-    if (DEBUG_DUMP_BATCH_SIZES)
-    {
-      Console.Write("[");
-      foreach (int r in sizes)
-      {
-        Console.Write(r + ",");
-      }
-      Console.WriteLine("]");
     }
 
     return sizes;

@@ -108,6 +108,10 @@ extern "C"
     // Returns 1 if integrated, 0 if discrete, -1 on error.
     TRT_API int32_t TRT_IsIntegratedGPU(int32_t deviceId);
 
+    // Get the number of streaming multiprocessors (SMs) on a GPU device.
+    // Returns SM count on success, -1 on error.
+    TRT_API int32_t TRT_GetMultiProcessorCount(int32_t deviceId);
+
     // Engine inspection - get layer information as JSON string
     // Returns allocated string that must be freed with TRT_FreeString, or nullptr on error
     TRT_API char* TRT_GetEngineLayerInfo(TRT_EngineHandle handle, int32_t layerIndex);
