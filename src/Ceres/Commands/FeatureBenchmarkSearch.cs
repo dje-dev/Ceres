@@ -15,6 +15,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 using Ceres.Chess;
 using Ceres.Chess.GameEngines;
@@ -113,6 +114,7 @@ namespace Ceres.Commands
       Console.WriteLine();
 
       List<float> npsCeres = new();
+      List<float> epsCeres = new();
       List<float> npsLC0 = new();
 
       searchLimit = searchLimit with { SearchCanBeExpanded = false };
@@ -136,9 +138,11 @@ namespace Ceres.Commands
         GameEngineSearchResultCeres resultCeres = engineCeres.SearchCeres(benchmarkPos, searchLimit);
         float ceresSearchSecs = (float)resultCeres.TimingStats.ElapsedTimeSecs;
         float thisNpsCeres = resultCeres.FinalN / ceresSearchSecs;
+        float thisEpsCeres = resultCeres.EPS;
         npsCeres.Add(thisNpsCeres);
+        epsCeres.Add(thisEpsCeres);
 
-        Console.WriteLine($"{i + 1,5:N0}. {resultCeres.FinalN,10:N0} nodes " + $" {ceresSearchSecs,7:F2} secs  {thisNpsCeres,8:N0} / sec"
+        Console.WriteLine($"{i + 1,5:N0}. {resultCeres.FinalN,10:N0} nodes " + $" {ceresSearchSecs,7:F2} secs  {thisNpsCeres,8:N0} / sec  {thisEpsCeres,8:N0} eps "
           + $"  {resultCeres.ScoreCentipawns,6:N0} cp {resultCeres.MoveString,7}      {fen}");
 
         numNodesCeres += resultCeres.Search.SearchRootNode.N;
@@ -173,6 +177,10 @@ namespace Ceres.Commands
       Console.WriteLine($"Nodes searched   : {numNodesCeres,12:N0}");
       Console.WriteLine($"Avg nodes/sec    : {1000 * numNodesCeres / timeMSCeres,12:N0}");
       Console.WriteLine($"Median nodes/sec : {npsCeres[npsCeres.Count / 2],12:N0}");
+      if (epsCeres.Average() != 0)
+      {
+        Console.WriteLine($"Avg eps          : {epsCeres.Average(),12:N0}");
+      }
 
       if (withLC0)
       {
