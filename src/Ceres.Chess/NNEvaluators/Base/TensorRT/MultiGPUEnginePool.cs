@@ -15,6 +15,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 #endregion
@@ -26,6 +27,11 @@ namespace Ceres.Chess.NNEvaluators.TensorRT;
 /// </summary>
 public sealed class MultiGPUEnginePool : IDisposable
 {
+  /// <summary>
+  /// Maximum number of GPUs supported for stackalloc optimization.
+  /// </summary>
+  private const int MAX_GPUS_STACKALLOC = 16;
+
   private readonly TensorRT trt;
   private readonly List<EnginePool> pools = new();
   private readonly int[] deviceIDs;
@@ -40,6 +46,18 @@ public sealed class MultiGPUEnginePool : IDisposable
   private IntPtr pinnedOutput;
   private long pinnedInputBytes;
   private long pinnedOutputBytes;
+  // Cached arrays per GPU to avoid per-batch allocations
+  private readonly Half[][] cachedHalfInputs;
+  private readonly Half[][] cachedHalfOutputs;
+  private readonly byte[][] cachedByteInputs;
+  private readonly int[] cachedInputCapacities;
+  private readonly int[] cachedOutputCapacities;
+
+  // Cached unique device set (cleared and reused)
+  private readonly HashSet<int> cachedUniqueDevices = new();
+
+  // Reusable lock object for handler synchronization
+  private readonly object handlerLock = new();
 
   /// <summary>
   /// Input elements per position.
@@ -111,6 +129,13 @@ public sealed class MultiGPUEnginePool : IDisposable
     pinnedOutputBytes = maxBatch * OutputElementsPerPosition * sizeof(ushort);
     pinnedInput = TensorRTNative.AllocPinned(pinnedInputBytes);
     pinnedOutput = TensorRTNative.AllocPinned(pinnedOutputBytes);
+    // Initialize cached arrays for each GPU
+    int numPools = pools.Count;
+    cachedHalfInputs = new Half[numPools][];
+    cachedHalfOutputs = new Half[numPools][];
+    cachedByteInputs = new byte[numPools][];
+    cachedInputCapacities = new int[numPools];
+    cachedOutputCapacities = new int[numPools];
   }
 
 
@@ -128,6 +153,66 @@ public sealed class MultiGPUEnginePool : IDisposable
         max = Math.Max(max, s);
       }
       return max;
+    }
+  }
+
+
+  /// <summary>
+  /// Ensures cached Half input/output arrays for the given GPU index have sufficient capacity.
+  /// </summary>
+  private void EnsureHalfArrayCapacity(int gpuIndex, int requiredInputElements, int requiredOutputElements)
+  {
+    if (cachedInputCapacities[gpuIndex] < requiredInputElements)
+    {
+      cachedHalfInputs[gpuIndex] = new Half[requiredInputElements];
+      cachedInputCapacities[gpuIndex] = requiredInputElements;
+    }
+
+    if (cachedOutputCapacities[gpuIndex] < requiredOutputElements)
+    {
+      cachedHalfOutputs[gpuIndex] = new Half[requiredOutputElements];
+      cachedOutputCapacities[gpuIndex] = requiredOutputElements;
+    }
+  }
+
+
+  /// <summary>
+  /// Ensures cached byte input array for the given GPU index has sufficient capacity.
+  /// </summary>
+  private void EnsureByteInputCapacity(int gpuIndex, int requiredInputElements)
+  {
+    if (cachedInputCapacities[gpuIndex] < requiredInputElements)
+    {
+      cachedByteInputs[gpuIndex] = new byte[requiredInputElements];
+      cachedInputCapacities[gpuIndex] = requiredInputElements;
+    }
+  }
+
+
+  /// <summary>
+  /// Synchronizes all unique devices in the pool.
+  /// </summary>
+  private void SynchronizeUniqueDevices()
+  {
+    cachedUniqueDevices.Clear();
+    foreach (int deviceId in deviceIDs)
+    {
+      if (cachedUniqueDevices.Add(deviceId))
+      {
+        TensorRTNative.SynchronizeDevice(deviceId);
+      }
+    }
+  }
+
+
+  /// <summary>
+  /// Synchronizes only the devices that were marked as unique.
+  /// </summary>
+  private void SynchronizeTrackedDevices()
+  {
+    foreach (int deviceId in cachedUniqueDevices)
+    {
+      TensorRTNative.SynchronizeDevice(deviceId);
     }
   }
 
@@ -189,11 +274,19 @@ public sealed class MultiGPUEnginePool : IDisposable
     int numGPUs = Math.Min(pools.Count, totalPositions / minBatchSizePerGPU);
     numGPUs = Math.Max(1, numGPUs);
 
+    if (numGPUs > MAX_GPUS_STACKALLOC)
+    {
+      throw new InvalidOperationException($"Number of GPUs ({numGPUs}) exceeds maximum supported ({MAX_GPUS_STACKALLOC}).");
+    }
+
     int baseSize = totalPositions / numGPUs;
     int remainder = totalPositions % numGPUs;
 
     int[] starts = new int[numGPUs];
     int[] counts = new int[numGPUs];
+    // Use stackalloc for small fixed-size arrays
+    Span<int> starts = stackalloc int[numGPUs];
+    Span<int> counts = stackalloc int[numGPUs];
     int offset = 0;
     for (int i = 0; i < numGPUs; i++)
     {
@@ -210,32 +303,46 @@ public sealed class MultiGPUEnginePool : IDisposable
         TensorRTNative.SynchronizeDevice(deviceId);
       }
     }
+    SynchronizeUniqueDevices();
 
     Half[][] subInputs = new Half[numGPUs][];
     Half[][] subOutputs = new Half[numGPUs][];
+    // Prepare cached sub-arrays and copy input data
     for (int i = 0; i < numGPUs; i++)
     {
       subInputs[i] = new Half[counts[i] * InputElementsPerPosition];
       subOutputs[i] = new Half[counts[i] * OutputElementsPerPosition];
       Array.Copy(input, starts[i] * InputElementsPerPosition, subInputs[i], 0, subInputs[i].Length);
+      int inputElements = counts[i] * InputElementsPerPosition;
+      int outputElements = counts[i] * OutputElementsPerPosition;
+      EnsureHalfArrayCapacity(i, inputElements, outputElements);
+      Array.Copy(input, starts[i] * InputElementsPerPosition, cachedHalfInputs[i], 0, inputElements);
     }
 
     string[] logs = new string[numGPUs];
+    // Capture values for lambda closure (Span cannot be captured)
+    int[] startsArray = starts.ToArray();
+    int[] countsArray = counts.ToArray();
+
     Parallel.For(0, numGPUs, i =>
     {
       pools[i].Process(subInputs[i], subOutputs[i], counts[i]);
       logs[i] = $"GPU{deviceIDs[i]}({counts[i]})";
+      pools[i].Process(cachedHalfInputs[i], cachedHalfOutputs[i], countsArray[i]);
     });
 
     foreach (int deviceId in uniqueDevices)
     {
       TensorRTNative.SynchronizeDevice(deviceId);
     }
+    SynchronizeTrackedDevices();
 
     for (int i = 0; i < numGPUs; i++)
     {
       Array.Copy(subOutputs[i], 0, output, starts[i] * OutputElementsPerPosition, subOutputs[i].Length);
       ExecutionLog.Add(logs[i]);
+      int outputElements = countsArray[i] * OutputElementsPerPosition;
+      Array.Copy(cachedHalfOutputs[i], 0, output, startsArray[i] * OutputElementsPerPosition, outputElements);
     }
   }
 
@@ -256,11 +363,19 @@ public sealed class MultiGPUEnginePool : IDisposable
     int numGPUs = Math.Min(pools.Count, totalPositions / minBatchSizePerGPU);
     numGPUs = Math.Max(1, numGPUs);
 
+    if (numGPUs > MAX_GPUS_STACKALLOC)
+    {
+      throw new InvalidOperationException($"Number of GPUs ({numGPUs}) exceeds maximum supported ({MAX_GPUS_STACKALLOC}).");
+    }
+
     int baseSize = totalPositions / numGPUs;
     int remainder = totalPositions % numGPUs;
 
     int[] starts = new int[numGPUs];
     int[] counts = new int[numGPUs];
+    // Use stackalloc for small fixed-size arrays
+    Span<int> starts = stackalloc int[numGPUs];
+    Span<int> counts = stackalloc int[numGPUs];
     int offset = 0;
     for (int i = 0; i < numGPUs; i++)
     {
@@ -277,32 +392,47 @@ public sealed class MultiGPUEnginePool : IDisposable
         TensorRTNative.SynchronizeDevice(deviceId);
       }
     }
+    SynchronizeUniqueDevices();
 
     byte[][] subInputs = new byte[numGPUs][];
     Half[][] subOutputs = new Half[numGPUs][];
+    // Prepare cached sub-arrays and copy input data
     for (int i = 0; i < numGPUs; i++)
     {
       subInputs[i] = new byte[counts[i] * InputElementsPerPosition];
       subOutputs[i] = new Half[counts[i] * OutputElementsPerPosition];
       Array.Copy(input, starts[i] * InputElementsPerPosition, subInputs[i], 0, subInputs[i].Length);
+      int inputElements = counts[i] * InputElementsPerPosition;
+      int outputElements = counts[i] * OutputElementsPerPosition;
+      EnsureByteInputCapacity(i, inputElements);
+      EnsureHalfArrayCapacity(i, 0, outputElements);
+      Array.Copy(input, starts[i] * InputElementsPerPosition, cachedByteInputs[i], 0, inputElements);
     }
 
     string[] logs = new string[numGPUs];
+    // Capture values for lambda closure (Span cannot be captured)
+    int[] startsArray = starts.ToArray();
+    int[] countsArray = counts.ToArray();
+
     Parallel.For(0, numGPUs, i =>
     {
       pools[i].ProcessBytes(subInputs[i], subOutputs[i], counts[i]);
       logs[i] = $"GPU{deviceIDs[i]}({counts[i]})";
+      pools[i].ProcessBytes(cachedByteInputs[i], cachedHalfOutputs[i], countsArray[i]);
     });
 
     foreach (int deviceId in uniqueDevices)
     {
       TensorRTNative.SynchronizeDevice(deviceId);
     }
+    SynchronizeTrackedDevices();
 
     for (int i = 0; i < numGPUs; i++)
     {
       Array.Copy(subOutputs[i], 0, output, starts[i] * OutputElementsPerPosition, subOutputs[i].Length);
       ExecutionLog.Add(logs[i]);
+      int outputElements = countsArray[i] * OutputElementsPerPosition;
+      Array.Copy(cachedHalfOutputs[i], 0, output, startsArray[i] * OutputElementsPerPosition, outputElements);
     }
   }
 
@@ -324,11 +454,19 @@ public sealed class MultiGPUEnginePool : IDisposable
     int numGPUs = Math.Min(pools.Count, totalPositions / minBatchSizePerGPU);
     numGPUs = Math.Max(1, numGPUs);
 
+    if (numGPUs > MAX_GPUS_STACKALLOC)
+    {
+      throw new InvalidOperationException($"Number of GPUs ({numGPUs}) exceeds maximum supported ({MAX_GPUS_STACKALLOC}).");
+    }
+
     int baseSize = totalPositions / numGPUs;
     int remainder = totalPositions % numGPUs;
 
     int[] starts = new int[numGPUs];
     int[] counts = new int[numGPUs];
+    // Use stackalloc for small fixed-size arrays
+    Span<int> starts = stackalloc int[numGPUs];
+    Span<int> counts = stackalloc int[numGPUs];
     int offset = 0;
     for (int i = 0; i < numGPUs; i++)
     {
@@ -345,21 +483,32 @@ public sealed class MultiGPUEnginePool : IDisposable
         TensorRTNative.SynchronizeDevice(deviceId);
       }
     }
+    SynchronizeUniqueDevices();
 
     Half[][] subInputs = new Half[numGPUs][];
+    // Prepare cached sub-arrays and copy input data
     for (int i = 0; i < numGPUs; i++)
     {
       subInputs[i] = new Half[counts[i] * InputElementsPerPosition];
       Array.Copy(input, starts[i] * InputElementsPerPosition, subInputs[i], 0, subInputs[i].Length);
+      int inputElements = counts[i] * InputElementsPerPosition;
+      EnsureHalfArrayCapacity(i, inputElements, 0);
+      Array.Copy(input, starts[i] * InputElementsPerPosition, cachedHalfInputs[i], 0, inputElements);
     }
 
     string[] logs = new string[numGPUs];
     object handlerLock = new object();
+    // Capture values for lambda closure (Span cannot be captured)
+    int[] startsArray = starts.ToArray();
+    int[] countsArray = counts.ToArray();
+
     Parallel.For(0, numGPUs, i =>
     {
+      int capturedStart = startsArray[i];
       SubBatchOutputHandler wrappedHandler = (globalStart, count, engineBatchSize, rawOutput) =>
       {
         int trueGlobalStart = starts[i] + globalStart;
+        int trueGlobalStart = capturedStart + globalStart;
         lock (handlerLock)
         {
           handler(trueGlobalStart, count, engineBatchSize, rawOutput);
@@ -368,6 +517,7 @@ public sealed class MultiGPUEnginePool : IDisposable
 
       pools[i].ProcessWithHandler(subInputs[i], counts[i], wrappedHandler, globalPositionOffset: 0);
       logs[i] = $"GPU{deviceIDs[i]}({counts[i]})";
+      pools[i].ProcessWithHandler(cachedHalfInputs[i], countsArray[i], wrappedHandler, globalPositionOffset: 0);
     });
 
     foreach (int deviceId in uniqueDevices)
@@ -379,6 +529,7 @@ public sealed class MultiGPUEnginePool : IDisposable
     {
       ExecutionLog.Add(logs[i]);
     }
+    SynchronizeTrackedDevices();
   }
 
 
@@ -399,11 +550,19 @@ public sealed class MultiGPUEnginePool : IDisposable
     int numGPUs = Math.Min(pools.Count, totalPositions / minBatchSizePerGPU);
     numGPUs = Math.Max(1, numGPUs);
 
+    if (numGPUs > MAX_GPUS_STACKALLOC)
+    {
+      throw new InvalidOperationException($"Number of GPUs ({numGPUs}) exceeds maximum supported ({MAX_GPUS_STACKALLOC}).");
+    }
+
     int baseSize = totalPositions / numGPUs;
     int remainder = totalPositions % numGPUs;
 
     int[] starts = new int[numGPUs];
     int[] counts = new int[numGPUs];
+    // Use stackalloc for small fixed-size arrays
+    Span<int> starts = stackalloc int[numGPUs];
+    Span<int> counts = stackalloc int[numGPUs];
     int offset = 0;
     for (int i = 0; i < numGPUs; i++)
     {
@@ -420,21 +579,32 @@ public sealed class MultiGPUEnginePool : IDisposable
         TensorRTNative.SynchronizeDevice(deviceId);
       }
     }
+    SynchronizeUniqueDevices();
 
     byte[][] subInputs = new byte[numGPUs][];
+    // Prepare cached sub-arrays and copy input data
     for (int i = 0; i < numGPUs; i++)
     {
       subInputs[i] = new byte[counts[i] * InputElementsPerPosition];
       Array.Copy(input, starts[i] * InputElementsPerPosition, subInputs[i], 0, subInputs[i].Length);
+      int inputElements = counts[i] * InputElementsPerPosition;
+      EnsureByteInputCapacity(i, inputElements);
+      Array.Copy(input, starts[i] * InputElementsPerPosition, cachedByteInputs[i], 0, inputElements);
     }
 
     string[] logs = new string[numGPUs];
     object handlerLock = new object();
+    // Capture values for lambda closure (Span cannot be captured)
+    int[] startsArray = starts.ToArray();
+    int[] countsArray = counts.ToArray();
+
     Parallel.For(0, numGPUs, i =>
     {
+      int capturedStart = startsArray[i];
       SubBatchOutputHandler wrappedHandler = (globalStart, count, engineBatchSize, rawOutput) =>
       {
         int trueGlobalStart = starts[i] + globalStart;
+        int trueGlobalStart = capturedStart + globalStart;
         lock (handlerLock)
         {
           handler(trueGlobalStart, count, engineBatchSize, rawOutput);
@@ -443,6 +613,7 @@ public sealed class MultiGPUEnginePool : IDisposable
 
       pools[i].ProcessBytesWithHandler(subInputs[i], counts[i], wrappedHandler, globalPositionOffset: 0);
       logs[i] = $"GPU{deviceIDs[i]}({counts[i]})";
+      pools[i].ProcessBytesWithHandler(cachedByteInputs[i], countsArray[i], wrappedHandler, globalPositionOffset: 0);
     });
 
     foreach (int deviceId in uniqueDevices)
@@ -454,6 +625,7 @@ public sealed class MultiGPUEnginePool : IDisposable
     {
       ExecutionLog.Add(logs[i]);
     }
+    SynchronizeTrackedDevices();
   }
 
 
