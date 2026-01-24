@@ -656,8 +656,6 @@ namespace Ceres.Chess.NNEvaluators
         throw new Exception("DeviceComboType.Single is not expected when number of DeviceIndices is greater than 1.");
       }
 
-      //        if (Params.EstimatePerformanceCharacteristics) ret.CalcStatistics(true);
-
       // TODO: restore implementation, test more to see if faster or memory efficient
       const bool LC0_SERVER_ENABLE_MULTI_GPU = false; // seems somewhat slower
       if (LC0_SERVER_ENABLE_MULTI_GPU
@@ -681,13 +679,14 @@ namespace Ceres.Chess.NNEvaluators
             && def.Devices.Length > 0
             && def.Nets.Length > 0)
         {
-          bool allTensorRTNative = def.Devices.All(d => 
+          bool allTensorRTNative = def.Devices.All(d =>
             d.Device.OverrideEngineType?.Contains("TensorRTNative", StringComparison.OrdinalIgnoreCase) == true);
-          
+
           bool allNetsMatch = def.Nets.Length == 1 || def.Nets.All(n => n.Net.Equals(def.Nets[0].Net));
 
           if (allTensorRTNative && allNetsMatch)
           {
+            def.Options = new NNEvaluatorOptionsCeres().OptionsWithOptionsDictApplied(options);
             return NNEvaluatorTensorRT.FromDefinition(def, def.Options, def.DeviceIndices);
           }
         }
