@@ -226,8 +226,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
     {
       options = TensorRTBuildOptions.Default;
       options.BuilderOptimizationLevel = 3;
-      options.UseFP16 = 1;
-      options.UseBF16 = 0;
+      options.UseFP16 = 0;
+      options.UseBF16 = 1;
       options.FP32PostAttentionNorm = 0;  // certain models completely fail without this
       options.UseCudaGraphs = useCudaGraphs ? 1 : 0;
     }
@@ -316,9 +316,9 @@ public class NNEvaluatorTensorRT : NNEvaluator
     policiesBuffer = new CompressedPolicyVector[maxBatchSize];
 
     // Cache ParallelOptions to avoid allocation per batch
-    cachedParallelOptions = new ParallelOptions 
-    { 
-      MaxDegreeOfParallelism = ParallelUtils.CalcMaxParallelism(maxBatchSize, 32) 
+    cachedParallelOptions = new ParallelOptions
+    {
+      MaxDegreeOfParallelism = ParallelUtils.CalcMaxParallelism(maxBatchSize, 32)
     };
   }
 
@@ -391,9 +391,9 @@ public class NNEvaluatorTensorRT : NNEvaluator
       throw new InvalidOperationException("ConverterToFlat must be set before evaluation");
     }
 
-// clearing not needed
-//    squareByteBuffer.AsSpan(0, numPos * 64 * TPGRecord.BYTES_PER_SQUARE_RECORD).Clear();
-//    Array.Clear(squareByteBuffer, 0, squareByteBuffer.Length);
+    // clearing not needed
+    //    squareByteBuffer.AsSpan(0, numPos * 64 * TPGRecord.BYTES_PER_SQUARE_RECORD).Clear();
+    //    Array.Clear(squareByteBuffer, 0, squareByteBuffer.Length);
 
     Memory<byte> byteBuffer = new Memory<byte>(squareByteBuffer, 0, numPos * 64 * TPGRecord.BYTES_PER_SQUARE_RECORD);
     Memory<Half> emptyHalf = Memory<Half>.Empty;
@@ -444,7 +444,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
       Memory<byte> sourceBytes = new Memory<byte>(squareByteBuffer, 0, elemsToCopy);
       Memory<Half> targetHalfs = new Memory<Half>(inputHalfBuffer, 0, elemsToCopy);
       TPGConvertersToFlat.CopyAndDivideSIMD(sourceBytes, targetHalfs, 100.0f);
-      pool.ProcessWithHandler(inputHalfBuffer, numPos, handler);  
+      pool.ProcessWithHandler(inputHalfBuffer, numPos, handler);
     }
 
     // Apply value head blending into separate buffers if FractionValueHead2 is specified
@@ -806,11 +806,11 @@ public class NNEvaluatorTensorRT : NNEvaluator
 
     const bool EXACT_BATCHES = true; // seems always fastest to use exact batches
     const bool ENABLE_GRAPHS = true;
-    const int THRESHOLD_ADJUST_SIZE = 10;
+    const int THRESHOLD_ADJUST_SIZE = 12;
 
     NNEvaluatorTensorRT trtNativeEngine = new(netFileName,
                                               EXACT_BATCHES ? EnginePoolMode.Exact : EnginePoolMode.Range,
-                                              EXACT_BATCHES ? AdjustSizes([1, 16, 32, 64, 96, 128, 192], numStreamingMultiprocessors, THRESHOLD_ADJUST_SIZE) 
+                                              EXACT_BATCHES ? AdjustSizes([8, 20, 32, 64, 96, 192], numStreamingMultiprocessors, THRESHOLD_ADJUST_SIZE)
                                                             : [48, 128, 1024],
                                               gpuIDs: gpuIDs,
                                               useCudaGraphs: EXACT_BATCHES && ENABLE_GRAPHS, //optionsCeres.EnableCUDAGraphs,
@@ -876,9 +876,9 @@ public class NNEvaluatorTensorRT : NNEvaluator
 
 
   /// <inheritdoc/>
-  public override bool IsEquivalentTo(NNEvaluator evaluator) => evaluator is NNEvaluatorTensorRT other 
+  public override bool IsEquivalentTo(NNEvaluator evaluator) => evaluator is NNEvaluatorTensorRT other
                                                              && other.ONNXFileName == ONNXFileName;
- 
+
 
 
   /// <inheritdoc/>

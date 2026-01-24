@@ -455,7 +455,7 @@ public sealed class TensorRTEngine : IDisposable
   /// <param name="actualBatchSize">The actual number of positions to process</param>
   /// <param name="actualInputElements">Actual input elements to use (must be &lt;= input.Length)</param>
   /// <param name="actualOutputElements">Actual output elements to use (must be &lt;= output.Length)</param>
-  public unsafe void InferHostDynamic(Half[] input, Half[] output, int actualBatchSize, 
+  public unsafe void InferHostDynamic(Half[] input, Half[] output, int actualBatchSize,
                                        long actualInputElements, long actualOutputElements)
   {
     if (input.Length < actualInputElements)
@@ -639,14 +639,27 @@ public sealed class TensorRTEngine : IDisposable
   public void InferOnStreamWithGraphAsync(int streamIdx, IntPtr gpuInput, IntPtr gpuOutput,
                                           System.Threading.ReaderWriterLockSlim graphCaptureRWLock)
   {
-    bool needsCapture = UsesCudaGraphs && !IsStreamGraphCaptured(streamIdx);
-
-    if (needsCapture && graphCaptureRWLock != null)
+    // Fast path: if graphs are disabled or already captured, no lock needed
+    if (!UsesCudaGraphs || IsStreamGraphCaptured(streamIdx))
     {
-      // Acquire write lock during graph capture - no other CUDA graph capture can happen concurrently
+      int result = TensorRTNative.InferOnStreamWithGraph(handle, streamIdx, gpuInput, gpuOutput);
+      if (result != 0)
+      {
+        string error = TensorRTNative.GetLastErrorString();
+        throw new InvalidOperationException($"InferOnStreamWithGraph failed on stream {streamIdx}: {error ?? "unknown error"}");
+      }
+      return;
+    }
+
+    // Slow path: graph capture may be needed - must acquire lock and re-check
+    // This avoids TOCTOU race where multiple threads see needsCapture=true before any acquires the lock
+    if (graphCaptureRWLock != null)
+    {
       graphCaptureRWLock.EnterWriteLock();
       try
       {
+        // Re-check inside lock - another thread may have captured while we waited
+        // The native InferOnStreamWithGraph will handle this gracefully (replay if captured)
         int result = TensorRTNative.InferOnStreamWithGraph(handle, streamIdx, gpuInput, gpuOutput);
         if (result != 0)
         {
@@ -661,7 +674,7 @@ public sealed class TensorRTEngine : IDisposable
     }
     else
     {
-      // Graph already captured or graphs disabled - no lock needed
+      // No lock provided but capture needed - caller's responsibility to ensure no concurrent capture
       int result = TensorRTNative.InferOnStreamWithGraph(handle, streamIdx, gpuInput, gpuOutput);
       if (result != 0)
       {

@@ -20,7 +20,7 @@ using System.Threading;
 using Ceres.Base.CUDA;
 
 #endregion
- 
+
 namespace Ceres.Chess.NNEvaluators.TensorRT;
 
 public sealed class EnginePool : IDisposable
@@ -33,6 +33,8 @@ public sealed class EnginePool : IDisposable
   /// <summary>
   /// If true, uses pipelined sub-batch processing where H2D of the next batch
   /// overlaps with compute of the current batch using two CUDA streams.
+  /// NOTE: Pipelining is automatically disabled when CUDA graph capture is pending,
+  /// since graph capture requires exclusive GPU access (no concurrent stream activity).
   /// </summary>
   private const bool USE_PIPELINED_SUBBATCHES = true;
 
@@ -45,6 +47,13 @@ public sealed class EnginePool : IDisposable
   private readonly int deviceId;
   private readonly bool useByteInputs;
   private bool disposed;
+
+  /// <summary>
+  /// Flag indicating WarmupWithGraphCapture() has been called and completed.
+  /// When true, all CUDA graphs are captured and pipelining can safely use direct replay calls.
+  /// Marked volatile for thread-safe reads in the fast path.
+  /// </summary>
+  private volatile bool warmupCompleted;
 
   // Pinned memory and GPU buffers for the largest engine
   private IntPtr pinnedIn;
@@ -107,11 +116,19 @@ public sealed class EnginePool : IDisposable
   public bool UseByteInputs => useByteInputs;
 
   /// <summary>
+  /// Returns true if WarmupWithGraphCapture() has been called.
+  /// When true, all CUDA graphs are captured and direct replay calls can be used.
+  /// </summary>
+  public bool IsWarmedUp => warmupCompleted;
+
+  /// <summary>
   /// Reader/writer lock for CUDA graph capture synchronization.
   /// Graph capture requires exclusive access - no other CUDA activity can happen concurrently.
   /// Uses the same lock as CUDADevice to synchronize across all CUDA backends.
+  /// Only used during WarmupWithGraphCapture() - not needed after warmup.
   /// </summary>
   private static ReaderWriterLockSlim GraphCaptureRWLock => CUDADevice.GetContext(0).GraphCaptureRWLock;
+
 
   /// <summary>
   /// Gets output tensor info from the largest engine.
@@ -133,6 +150,7 @@ public sealed class EnginePool : IDisposable
   /// </summary>
   public int MaxEngineBatchSize =>
       mode == EnginePoolMode.Range ? ranges[^1].max : ranges[0].max;
+
 
   public EnginePool(TensorRT trt, string onnxPath, int[] sizes, EnginePoolMode mode,
                     TensorRTBuildOptions options, int inputElementsPerPos, int outputElementsPerPos,
@@ -189,7 +207,7 @@ public sealed class EnginePool : IDisposable
         // TODO: currently disabled, this may only help on certain GPUs (e.g. GB10) and is very slow to build
         if (size >= 128)
         {
-          // TODO: currently always disabled: opts.TilingOptimizationLevel = 3; // note: can be 5x to 20x slower to build
+          opts.TilingOptimizationLevel = 3; // note: can be 5x to 20x slower to build
         }
 
         TensorRTEngine engine = this.trt.LoadEngineWithCache(onnxPath, size, opts, cacheDir, deviceId);
@@ -283,11 +301,59 @@ public sealed class EnginePool : IDisposable
     // Integrated GPUs have unified memory with lower kernel launch overhead relative to compute,
     // so we should be more conservative about accepting padding (prefer exact-fit batches).
     bool isIntegrated = TensorRTNative.IsIntegratedGPU(this.deviceId) == 1;
-    ExactModeBatchNumPositionsAcceptablePadding = isIntegrated ? 10 : 25; // was:10:20
+    ExactModeBatchNumPositionsAcceptablePadding = isIntegrated ? 10 : 30; // was:10:20
     ExactModeBatchFractionAcceptablePadding = isIntegrated ? 0.10f : 0.25f; // was: 0.1:0.2
 
-    // Note: Warmup is skipped here - caller should warmup before benchmarking
+    if (options.UseCudaGraphs != 0)
+    {
+      WarmupWithGraphCapture();
+    }
   }
+
+
+  /// <summary>
+  /// Warms up all engines by running inference and capturing CUDA graphs if enabled.
+  /// This method uses only stream 0 (no pipelining) to safely capture graphs.
+  /// Must be called before ProcessBytesWithHandler for optimal performance with CUDA graphs.
+  /// Thread-safe: uses global graph capture lock to prevent concurrent capture across devices.
+  /// After this method completes, IsWarmedUp returns true and pipelining uses direct graph replay.
+  /// </summary>
+  public unsafe void WarmupWithGraphCapture()
+  {
+    // Already warmed up - nothing to do
+    if (warmupCompleted)
+    {
+      return;
+    }
+
+    // Warm up each engine to trigger CUDA graph capture on stream 0
+    // Uses single-stream path to avoid concurrent CUDA activity during capture
+    foreach (TensorRTEngine engine in engines)
+    {
+      if (!engine.UsesCudaGraphs || engine.IsStreamGraphCaptured(0))
+      {
+        continue;
+      }
+
+      // Allocate dummy buffers sized for this engine's batch size
+      int inputBytes = (int)engine.TotalInputSize * (useByteInputs ? 1 : 2);
+      int outputBytes = (int)engine.TotalOutputSize * 2;
+
+      // Copy dummy input to pinned memory (zeros are fine for warmup)
+      // Use H2D, Infer (with graph capture), D2H all on stream 0
+      engine.CopyToGPUOnStreamAsync(0, gpuIn, pinnedIn, inputBytes);
+
+      // This call will capture the CUDA graph on first execution
+      // Pass the lock to ensure exclusive access during capture (no concurrent CUDA activity allowed)
+      engine.InferOnStreamWithGraphAsync(0, gpuIn, gpuOut, GraphCaptureRWLock);
+
+      engine.CopyFromGPUOnStreamAsync(0, pinnedOut, gpuOut, outputBytes);
+      engine.SyncStream(0);
+    }
+
+    warmupCompleted = true;
+  }
+
 
   public void Process(Half[] input, Half[] output, int totalPositions)
   {
@@ -471,21 +537,34 @@ public sealed class EnginePool : IDisposable
   }
 
 
+
+
+
+
   /// <summary>
   /// Process byte inputs with callback for tensor-major output extraction.
   /// The handler is called after each sub-batch inference with the raw output buffer.
   /// Uses pre-allocated buffers when possible to reduce GC pressure.
-  /// When USE_PIPELINED_SUBBATCHES is enabled, overlaps H2D of next batch with compute of current batch.
   /// </summary>
   public void ProcessBytesWithHandler(byte[] input, int totalPositions, SubBatchOutputHandler handler, int globalPositionOffset = 0)
   {
-    // Use pipelined processing when enabled and we have multiple sub-batches
     if (USE_PIPELINED_SUBBATCHES)
     {
       ProcessBytesWithHandlerPipelined(input, totalPositions, handler, globalPositionOffset);
-      return;
     }
+    else
+    {
+      // Pipelining disabled - use non-pipelined path (still uses graph replay after warmup)
+      ProcessBytesWithHandlerNonPipelined(input, totalPositions, handler, globalPositionOffset);
+    }
+  }
 
+
+  /// <summary>
+  /// Non-pipelined processing path that uses synchronous host-based inference.
+  /// </summary>
+  private void ProcessBytesWithHandlerNonPipelined(byte[] input, int totalPositions, SubBatchOutputHandler handler, int globalPositionOffset)
+  {
     int processed = 0;
     int lastBatchSize = 0;
 
@@ -525,7 +604,7 @@ public sealed class EnginePool : IDisposable
         {
           Array.Copy(input, inputOffset, batchInput, 0, inputElements);
         }
-        
+
         // Synchronous inference with byte inputs
         engine.InferHostBytes(batchInput, batchOutput);
 
@@ -540,17 +619,19 @@ public sealed class EnginePool : IDisposable
 
 
   /// <summary>
-  /// Pipelined sub-batch processing: pre-stages next batch while current computes.
+  /// Pipelined sub-batch processing with CUDA graph replay.
   /// 
-  /// Refined pipeline pattern:
+  /// PREREQUISITE: WarmupWithGraphCapture() must have been called first.
+  /// All CUDA graphs are pre-captured during warmup, so this method uses direct
+  /// graph replay calls without any locking overhead.
+  /// 
+  /// Pipeline pattern:
   ///   - While batch N computes: CPU prep + H2D for batch N+1 (on stream 1)
   ///   - Sync batch N compute
   ///   - Launch batch N+1 compute immediately (before post-processing N)
   ///   - D2H + post-process batch N (while batch N+1 computes)
   /// 
   /// This overlaps CPU prep and H2D with GPU compute, without concurrent GPU computes.
-  /// Uses the centralized batch planning logic (ComputeBatchPlan) to respect engine selection
-  /// including padding thresholds and optimal engine choices for each sub-batch.
   /// </summary>
   private unsafe void ProcessBytesWithHandlerPipelined(byte[] input, int totalPositions, SubBatchOutputHandler handler, int globalPositionOffset)
   {
@@ -576,7 +657,7 @@ public sealed class EnginePool : IDisposable
 
       // H2D, Compute, D2H all on stream 0 - CUDA guarantees in-order execution
       engine.CopyToGPUOnStreamAsync(0, gpuIn, pinnedIn, inputBytes);
-      
+
       // Use dynamic inference for Range mode to set correct batch size
       if (useDynamic)
       {
@@ -584,11 +665,10 @@ public sealed class EnginePool : IDisposable
       }
       else
       {
-        // Use graph-aware inference for Exact mode - captures and replays CUDA graph when enabled
-        // Pass the global graph capture lock to prevent concurrent graph capture across devices
-        engine.InferOnStreamWithGraphAsync(0, gpuIn, gpuOut, GraphCaptureRWLock);
+        // CUDA graphs already captured during warmup - direct replay (no locking needed)
+        engine.InferOnStreamWithGraphAsync(0, gpuIn, gpuOut);
       }
-      
+
       // For dynamic mode, output size matches actual count; for static mode, it's engine batch size
       int outputPositions = useDynamic ? count : engineBatchSize;
       long outputBytes = outputPositions * OutputElementsPerPosition * sizeof(ushort);
@@ -632,9 +712,7 @@ public sealed class EnginePool : IDisposable
     }
     else
     {
-      // Use graph-aware inference for Exact mode - captures and replays CUDA graph when enabled
-      // Pass the global graph capture lock to prevent concurrent graph capture across devices
-      batch0Engine.InferOnStreamWithGraphAsync(0, gpuInputs[0], gpuOutputs[0], GraphCaptureRWLock);
+      batch0Engine.InferOnStreamWithGraphAsync(0, gpuInputs[0], gpuOutputs[0]);
     }
 
     // Process remaining batches with pre-staging
@@ -643,7 +721,6 @@ public sealed class EnginePool : IDisposable
       int prevBuffer = (i - 1) % 2;
       int currBuffer = i % 2;
 
-      // Get current batch info
       (int currStart, int currCount, TensorRTEngine currEngine, int currEngineSize, bool currUseDynamic, int currEngineIndex) = cachedBatchPlan[i];
 
       // WHILE PREVIOUS BATCH COMPUTES: Pre-stage current batch (CPU prep + H2D on stream 1)
@@ -676,16 +753,15 @@ public sealed class EnginePool : IDisposable
       }
       else
       {
-        // Use graph-aware inference for Exact mode - captures and replays CUDA graph when enabled
-        // Pass the global graph capture lock to prevent concurrent graph capture across devices
-        currEngine.InferOnStreamWithGraphAsync(0, gpuInputs[currBuffer], gpuOutputs[currBuffer], GraphCaptureRWLock);
+        // CUDA graphs already captured during warmup - direct replay (no locking needed)
+        currEngine.InferOnStreamWithGraphAsync(0, gpuInputs[currBuffer], gpuOutputs[currBuffer]);
       }
 
       // D2H + post-process previous batch while current batch computes
       // Previous batch wrote to gpuOutputs[prevBuffer], so read from there (no race!)
       {
         (int prevStart, int prevCount, TensorRTEngine prevBatchEngine, int prevEngineSize, bool prevUseDynamic, int prevEngineIndex) = cachedBatchPlan[i - 1];
-        
+
         // For dynamic mode, output size matches actual count; for static mode, it's engine batch size
         int prevOutputPositions = prevUseDynamic ? prevCount : prevEngineSize;
         long prevOutputBytes = prevOutputPositions * OutputElementsPerPosition * sizeof(ushort);
@@ -709,7 +785,7 @@ public sealed class EnginePool : IDisposable
       int lastIdx = cachedBatchPlan.Count - 1;
       int lastBuffer = lastIdx % 2;
       (int start, int count, TensorRTEngine lastEngine, int lastEngineSize, bool lastUseDynamic, int lastEngineIndex) = cachedBatchPlan[lastIdx];
-      
+
       // For dynamic mode, output size matches actual count; for static mode, it's engine batch size
       int lastOutputPositions = lastUseDynamic ? count : lastEngineSize;
       long outputBytes = lastOutputPositions * OutputElementsPerPosition * sizeof(ushort);
@@ -764,11 +840,11 @@ public sealed class EnginePool : IDisposable
   private (TensorRTEngine engine, int batchSize, bool useDynamic, int engineIndex) SelectEngineWithMode(int remaining, int lastBatchSize)
   {
     (TensorRTEngine engine, int engineBatchSize, int engineIndex) = DoSelectEngineWithIndex(remaining, lastBatchSize);
-    
+
     // For Range mode, use dynamic inference with actual batch size
     // For Exact mode, use static inference (engine expects its exact configured batch size)
     bool useDynamic = (mode == EnginePoolMode.Range);
-    
+
     // For dynamic mode, the engineBatchSize returned is the engine's max, but we'll use 'remaining' 
     // as the actual batch size (up to the engine's max)
     int actualBatch = useDynamic ? Math.Min(remaining, engineBatchSize) : engineBatchSize;
@@ -779,7 +855,7 @@ public sealed class EnginePool : IDisposable
     {
       DumpBatchInfo(actualBatch, engineBatchSize, engineIndex, padded, remainingAfter);
     }
-    
+
     return (engine, actualBatch, useDynamic, engineIndex);
   }
 
@@ -791,7 +867,7 @@ public sealed class EnginePool : IDisposable
   {
     string engineDesc;
     string paddedStr;
-    
+
     if (mode == EnginePoolMode.Range)
     {
       (int min, int max) = ranges[engineIndex];
@@ -830,7 +906,6 @@ public sealed class EnginePool : IDisposable
     else // Exact mode
     {
       // Engines are sorted descending by size in Exact mode.
-      // First, check if any engine can handle the request with acceptable padding.
       // Acceptable padding is satisfied if EITHER:
       //   1. Fraction-based: (engineSize - remaining) <= engineSize * ExactModeBatchFractionAcceptablePadding
       //      Which simplifies to: remaining >= engineSize * (1 - ExactModeBatchFractionAcceptablePadding)
@@ -839,13 +914,17 @@ public sealed class EnginePool : IDisposable
 
       for (int i = 0; i < ranges.Count; i++)
       {
-        int engineSize = ranges[i].min;
-
-        if (engineSize <= remaining)
+        // If the next smaller is already big enough then don't consider this one.
+        if (i < ranges.Count - 1)
         {
-          // Engine fits exactly (no padding needed), use it
-          return (engines[i], engineSize, i);
+          int nextSmallerEngineSize = ranges[i + 1].min;
+          if (remaining <= nextSmallerEngineSize)
+          {
+            continue;
+          }
         }
+
+        int engineSize = ranges[i].min;
 
         // Check if padding is acceptable for this oversized engine
         int paddingPositions = engineSize - remaining;
@@ -864,6 +943,7 @@ public sealed class EnginePool : IDisposable
       return (engines[^1], ranges[^1].min, lastIndex);
     }
   }
+
 
 
   /// <summary>
