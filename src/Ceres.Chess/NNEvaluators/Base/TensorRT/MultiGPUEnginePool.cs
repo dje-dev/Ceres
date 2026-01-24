@@ -15,6 +15,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -59,6 +60,10 @@ public sealed class MultiGPUEnginePool : IDisposable
   // Reusable lock object for handler synchronization
   private readonly object handlerLock = new();
 
+  // Execution times (average) by GPU (outer index) and batch size index (inner index)
+  // Initialized during Warmup()
+  private float[][] executionTimesPerGPU;
+
   /// <summary>
   /// Input elements per position.
   /// </summary>
@@ -93,6 +98,12 @@ public sealed class MultiGPUEnginePool : IDisposable
   /// Gets the largest engine batch size across all pools.
   /// </summary>
   public int MaxEngineBatchSize => pools[0].MaxEngineBatchSize;
+
+  /// <summary>
+  /// Execution times (in milliseconds) by GPU (outer index) and batch size index (inner index).
+  /// Populated by Warmup() method. Returns null if Warmup() has not been called.
+  /// </summary>
+  public float[][] ExecutionTimesPerGPU => executionTimesPerGPU;
 
   /// <summary>
   /// Constructor.
@@ -208,6 +219,84 @@ public sealed class MultiGPUEnginePool : IDisposable
     foreach (int deviceId in cachedUniqueDevices)
     {
       TensorRTNative.SynchronizeDevice(deviceId);
+    }
+  }
+
+
+  /// <summary>
+  /// Warms up all GPUs and benchmarks execution times for each batch size.
+  /// Runs each batch size 3 times and takes the minimum (best) time as the estimate.
+  /// Must be called before using ExecutionTimesPerGPU property.
+  /// </summary>
+  public void Warmup()
+  {
+    const int WARMUP_ITERATIONS = 7;
+
+    int numGPUs = pools.Count;
+    int numBatchSizes = sizes.Length;
+
+    executionTimesPerGPU = new float[numGPUs][];
+
+    for (int gpuIndex = 0; gpuIndex < numGPUs; gpuIndex++)
+    {
+      executionTimesPerGPU[gpuIndex] = new float[numBatchSizes];
+      EnginePool pool = pools[gpuIndex];
+
+      for (int sizeIndex = 0; sizeIndex < numBatchSizes; sizeIndex++)
+      {
+        int batchSize = sizes[sizeIndex];
+
+        // Allocate dummy input/output arrays for this batch size
+        int inputElements = batchSize * InputElementsPerPosition;
+        int outputElements = batchSize * OutputElementsPerPosition;
+
+        float bestTimeMs = float.MaxValue;
+
+        if (useByteInputs)
+        {
+          byte[] dummyInput = new byte[inputElements];
+          Half[] dummyOutput = new Half[outputElements];
+
+          for (int iter = 0; iter < WARMUP_ITERATIONS; iter++)
+          {
+            // Synchronize before timing
+            TensorRTNative.SynchronizeDevice(deviceIDs[gpuIndex]);
+
+            Stopwatch sw = Stopwatch.StartNew();
+            pool.ProcessBytes(dummyInput, dummyOutput, batchSize);
+            TensorRTNative.SynchronizeDevice(deviceIDs[gpuIndex]);
+            sw.Stop();
+
+            float elapsedMs = (float)sw.Elapsed.TotalMilliseconds;
+            bestTimeMs = Math.Min(bestTimeMs, elapsedMs);
+          }
+        }
+        else
+        {
+          Half[] dummyInput = new Half[inputElements];
+          Half[] dummyOutput = new Half[outputElements];
+
+          for (int iter = 0; iter < WARMUP_ITERATIONS; iter++)
+          {
+            // Synchronize before timing
+            TensorRTNative.SynchronizeDevice(deviceIDs[gpuIndex]);
+
+            Stopwatch sw = Stopwatch.StartNew();
+            pool.Process(dummyInput, dummyOutput, batchSize);
+            TensorRTNative.SynchronizeDevice(deviceIDs[gpuIndex]);
+            sw.Stop();
+
+            float elapsedMs = (float)sw.Elapsed.TotalMilliseconds;
+            bestTimeMs = Math.Min(bestTimeMs, elapsedMs);
+          }
+        }
+
+        executionTimesPerGPU[gpuIndex][sizeIndex] = bestTimeMs;
+      }
+
+      // Output timing estimates for this GPU
+      string timingsStr = string.Join(", ", executionTimesPerGPU[gpuIndex].Select(t => t.ToString("F1")));
+      Console.WriteLine($"DEVICE {deviceIDs[gpuIndex]} timings: [{timingsStr}] ms");
     }
   }
 
