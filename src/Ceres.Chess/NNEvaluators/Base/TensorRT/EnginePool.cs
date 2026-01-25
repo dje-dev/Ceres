@@ -228,7 +228,7 @@ public sealed class EnginePool : IDisposable
         // TODO: currently disabled, this may only help on certain GPUs (e.g. GB10) and is very slow to build
         if (size >= 128)
         {
-          //opts.TilingOptimizationLevel = 3; // note: can be 5x to 20x slower to build
+          opts.TilingOptimizationLevel = 3; // note: can be 5x to 20x slower to build
         }
 
         TensorRTEngine engine = this.trt.LoadEngineWithCache(onnxPath, size, opts, cacheDir, deviceId);
