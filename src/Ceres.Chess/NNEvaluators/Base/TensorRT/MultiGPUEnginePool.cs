@@ -64,6 +64,14 @@ public sealed class MultiGPUEnginePool : IDisposable
   // Initialized during Warmup()
   private float[][] executionTimesPerGPU;
 
+  // Device names for each GPU (e.g., "NVIDIA RTX PRO 6000 Blackwell")
+  // Used for grouping identical GPUs when computing speed fractions
+  private readonly string[] deviceNames;
+
+  // Cached speed-normalized fractions for each GPU count (computed once after warmup)
+  // Index is numGPUs, value is the fractions array for that GPU count
+  private float[][] cachedSpeedFractions;
+
   /// <summary>
   /// Input elements per position.
   /// </summary>
@@ -110,7 +118,7 @@ public sealed class MultiGPUEnginePool : IDisposable
   /// </summary>
   public MultiGPUEnginePool(TensorRT trt, string onnxPath, int[] sizes, EnginePoolMode mode,
                              TensorRTBuildOptions options, int inputElementsPerPos, int outputElementsPerPos,
-                             int[] deviceIds, int minBatchSizePerGPU = 8, string cacheDir = null)
+                             int[] deviceIds, int minBatchSizePerGPU, string cacheDir)
   {
     this.trt = trt;
     deviceIDs = deviceIds;
@@ -142,6 +150,13 @@ public sealed class MultiGPUEnginePool : IDisposable
     cachedByteInputs = new byte[numPools][];
     cachedInputCapacities = new int[numPools];
     cachedOutputCapacities = new int[numPools];
+
+    // Get device names for each GPU (used for grouping identical GPUs)
+    deviceNames = new string[numPools];
+    for (int i = 0; i < numPools; i++)
+    {
+      deviceNames[i] = TensorRTNative.GetDeviceName(deviceIds[i]);
+    }
 
     Warmup();
   }
@@ -232,7 +247,7 @@ public sealed class MultiGPUEnginePool : IDisposable
   /// </summary>
   public void Warmup()
   {
-    const int WARMUP_ITERATIONS = 7;
+    const int WARMUP_ITERATIONS = 5;
 
     int numGPUs = pools.Count;
     int numBatchSizes = sizes.Length;
@@ -298,10 +313,18 @@ public sealed class MultiGPUEnginePool : IDisposable
 
       // Output timing estimates for this GPU
       string timingsStr = string.Join(", ", executionTimesPerGPU[gpuIndex].Select(t => t.ToString("F1")));
-      Console.WriteLine($"DEVICE {deviceIDs[gpuIndex]} timings: [{timingsStr}] ms");
+      Console.WriteLine($"DEVICE {deviceIDs[gpuIndex]} timings: [{timingsStr}] ms ({deviceNames[gpuIndex]})");
 
       // Pass execution times to the EnginePool for optimized scheduling
       pool.ExecutionTimes = executionTimesPerGPU[gpuIndex];
+    }
+
+    // Pre-compute speed fractions for all possible GPU counts (1 to numGPUs)
+    // This avoids recomputation on every ComputeOptimalDistribution call
+    cachedSpeedFractions = new float[numGPUs + 1][];
+    for (int n = 1; n <= numGPUs; n++)
+    {
+      cachedSpeedFractions[n] = BatchScheduler.ComputeSpeedNormalizedFractions(executionTimesPerGPU, deviceNames, n);
     }
   }
 
@@ -366,17 +389,31 @@ public sealed class MultiGPUEnginePool : IDisposable
       throw new InvalidOperationException($"Number of GPUs ({numGPUs}) exceeds maximum supported ({MAX_GPUS_STACKALLOC}).");
     }
 
-    int baseSize = totalPositions / numGPUs;
-    int remainder = totalPositions % numGPUs;
-
     Span<int> starts = stackalloc int[numGPUs];
     Span<int> counts = stackalloc int[numGPUs];
     int offset = 0;
-    for (int i = 0; i < numGPUs; i++)
+
+    // Try to get optimal distribution, fall back to equal split
+    if (TryComputeOptimalDistribution(totalPositions, numGPUs, counts))
     {
-      starts[i] = offset;
-      counts[i] = baseSize + (i < remainder ? 1 : 0);
-      offset += counts[i];
+      // Compute starts from the optimal counts
+      for (int i = 0; i < numGPUs; i++)
+      {
+        starts[i] = offset;
+        offset += counts[i];
+      }
+    }
+    else
+    {
+      // Fall back to equal distribution
+      int baseSize = totalPositions / numGPUs;
+      int remainder = totalPositions % numGPUs;
+      for (int i = 0; i < numGPUs; i++)
+      {
+        starts[i] = offset;
+        counts[i] = baseSize + (i < remainder ? 1 : 0);
+        offset += counts[i];
+      }
     }
 
     SynchronizeUniqueDevices();
@@ -432,17 +469,31 @@ public sealed class MultiGPUEnginePool : IDisposable
       throw new InvalidOperationException($"Number of GPUs ({numGPUs}) exceeds maximum supported ({MAX_GPUS_STACKALLOC}).");
     }
 
-    int baseSize = totalPositions / numGPUs;
-    int remainder = totalPositions % numGPUs;
-
     Span<int> starts = stackalloc int[numGPUs];
     Span<int> counts = stackalloc int[numGPUs];
     int offset = 0;
-    for (int i = 0; i < numGPUs; i++)
+
+    // Try to get optimal distribution, fall back to equal split
+    if (TryComputeOptimalDistribution(totalPositions, numGPUs, counts))
     {
-      starts[i] = offset;
-      counts[i] = baseSize + (i < remainder ? 1 : 0);
-      offset += counts[i];
+      // Compute starts from the optimal counts
+      for (int i = 0; i < numGPUs; i++)
+      {
+        starts[i] = offset;
+        offset += counts[i];
+      }
+    }
+    else
+    {
+      // Fall back to equal distribution
+      int baseSize = totalPositions / numGPUs;
+      int remainder = totalPositions % numGPUs;
+      for (int i = 0; i < numGPUs; i++)
+      {
+        starts[i] = offset;
+        counts[i] = baseSize + (i < remainder ? 1 : 0);
+        offset += counts[i];
+      }
     }
 
     SynchronizeUniqueDevices();
@@ -500,17 +551,31 @@ public sealed class MultiGPUEnginePool : IDisposable
       throw new InvalidOperationException($"Number of GPUs ({numGPUs}) exceeds maximum supported ({MAX_GPUS_STACKALLOC}).");
     }
 
-    int baseSize = totalPositions / numGPUs;
-    int remainder = totalPositions % numGPUs;
-
     Span<int> starts = stackalloc int[numGPUs];
     Span<int> counts = stackalloc int[numGPUs];
     int offset = 0;
-    for (int i = 0; i < numGPUs; i++)
+
+    // Try to get optimal distribution, fall back to equal split
+    if (TryComputeOptimalDistribution(totalPositions, numGPUs, counts))
     {
-      starts[i] = offset;
-      counts[i] = baseSize + (i < remainder ? 1 : 0);
-      offset += counts[i];
+      // Compute starts from the optimal counts
+      for (int i = 0; i < numGPUs; i++)
+      {
+        starts[i] = offset;
+        offset += counts[i];
+      }
+    }
+    else
+    {
+      // Fall back to equal distribution
+      int baseSize = totalPositions / numGPUs;
+      int remainder = totalPositions % numGPUs;
+      for (int i = 0; i < numGPUs; i++)
+      {
+        starts[i] = offset;
+        counts[i] = baseSize + (i < remainder ? 1 : 0);
+        offset += counts[i];
+      }
     }
 
     SynchronizeUniqueDevices();
@@ -570,17 +635,31 @@ public sealed class MultiGPUEnginePool : IDisposable
       throw new InvalidOperationException($"Number of GPUs ({numGPUs}) exceeds maximum supported ({MAX_GPUS_STACKALLOC}).");
     }
 
-    int baseSize = totalPositions / numGPUs;
-    int remainder = totalPositions % numGPUs;
-
     Span<int> starts = stackalloc int[numGPUs];
     Span<int> counts = stackalloc int[numGPUs];
     int offset = 0;
-    for (int i = 0; i < numGPUs; i++)
+
+    // Try to get optimal distribution, fall back to equal split
+    if (TryComputeOptimalDistribution(totalPositions, numGPUs, counts))
     {
-      starts[i] = offset;
-      counts[i] = baseSize + (i < remainder ? 1 : 0);
-      offset += counts[i];
+      // Compute starts from the optimal counts
+      for (int i = 0; i < numGPUs; i++)
+      {
+        starts[i] = offset;
+        offset += counts[i];
+      }
+    }
+    else
+    {
+      // Fall back to equal distribution
+      int baseSize = totalPositions / numGPUs;
+      int remainder = totalPositions % numGPUs;
+      for (int i = 0; i < numGPUs; i++)
+      {
+        starts[i] = offset;
+        counts[i] = baseSize + (i < remainder ? 1 : 0);
+        offset += counts[i];
+      }
     }
 
     SynchronizeUniqueDevices();
@@ -617,6 +696,62 @@ public sealed class MultiGPUEnginePool : IDisposable
     });
 
     SynchronizeTrackedDevices();
+  }
+
+
+  /// <summary>
+  /// Computes optimal position distribution across GPUs based on their measured performance.
+  /// Uses cached speed-normalized fractions (computed once during warmup).
+  /// Writes directly to the provided Span to avoid allocation.
+  /// </summary>
+  /// <param name="totalPositions">Total positions to distribute</param>
+  /// <param name="numGPUs">Number of GPUs to use (may be less than pools.Count for small batches)</param>
+  /// <param name="distribution">Span to write position counts per GPU</param>
+  /// <returns>True if optimal distribution was computed, false to use default equal distribution</returns>
+  private bool TryComputeOptimalDistribution(int totalPositions, int numGPUs, Span<int> distribution)
+  {
+    // Only use optimized scheduling when cached fractions are available
+    if (cachedSpeedFractions == null || !EnginePool.OPTIMIZED_SCHEDULING || 
+        numGPUs <= 0 || numGPUs >= cachedSpeedFractions.Length)
+    {
+      return false;
+    }
+
+    float[] fractions = cachedSpeedFractions[numGPUs];
+    if (fractions == null)
+    {
+      return false;
+    }
+
+    // Distribute positions based on cached fractions
+    int remaining = totalPositions;
+
+    for (int gpu = 0; gpu < numGPUs && remaining > 0; gpu++)
+    {
+      int positionsForGpu;
+
+      if (gpu == numGPUs - 1)
+      {
+        // Last GPU gets remainder to avoid rounding issues
+        positionsForGpu = remaining;
+      }
+      else
+      {
+        positionsForGpu = (int)Math.Round(fractions[gpu] * totalPositions);
+        positionsForGpu = Math.Min(positionsForGpu, remaining);
+
+        // Enforce minimum batch size per GPU (except for last GPU which gets remainder)
+        if (positionsForGpu < minBatchSizePerGPU && remaining > minBatchSizePerGPU)
+        {
+          positionsForGpu = minBatchSizePerGPU;
+        }
+      }
+
+      distribution[gpu] = positionsForGpu;
+      remaining -= positionsForGpu;
+    }
+
+    return true;
   }
 
 

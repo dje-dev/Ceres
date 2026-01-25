@@ -868,36 +868,53 @@ public sealed class EnginePool : IDisposable
   /// </summary>
   private void ComputeBatchPlanOptimized(int totalPositions)
   {
-    // Get engine sizes (batch sizes) - ranges[i].min contains the size in Exact mode
-    // Note: ranges is sorted descending, but ExecutionTimes is indexed by original (ascending) order
-    int[] engineSizes = ranges.Select(r => r.min).ToArray();
+    int numEngines = ranges.Count;
 
-    // Build lookup from size to engine index
-    Dictionary<int, int> sizeToEngineIndex = [];
-    for (int i = 0; i < ranges.Count; i++)
+    // Build engine sizes array - ranges[i].min contains the size in Exact mode
+    // Note: ranges is sorted descending, but ExecutionTimes is indexed by original (ascending) order
+    Span<int> engineSizes = stackalloc int[numEngines];
+    for (int i = 0; i < numEngines; i++)
     {
-      sizeToEngineIndex[ranges[i].min] = i;
+      engineSizes[i] = ranges[i].min;
     }
 
     // Build correctly-ordered execution times array to match engineSizes order
     // ExecutionTimes is indexed by original order (ascending), we need it in ranges order (descending)
-    float[] orderedExecutionTimes = new float[engineSizes.Length];
-    int[] originalSizes = engineSizes.OrderBy(s => s).ToArray(); // Sort ascending to match ExecutionTimes order
-    for (int i = 0; i < engineSizes.Length; i++)
+    Span<float> orderedExecutionTimes = stackalloc float[numEngines];
+    for (int i = 0; i < numEngines; i++)
     {
       int size = engineSizes[i];
-      int originalIndex = Array.IndexOf(originalSizes, size);
+      // Find this size's index in ascending order (original ExecutionTimes order)
+      // Since ranges is descending and ExecutionTimes is ascending, index is (numEngines - 1 - position in descending)
+      int originalIndex = 0;
+      for (int j = 0; j < numEngines; j++)
+      {
+        if (ranges[j].min < size)
+        {
+          originalIndex++;
+        }
+      }
       orderedExecutionTimes[i] = ExecutionTimes[originalIndex];
     }
 
-    // Use the optimized single-GPU scheduler
+    // Use the optimized single-GPU scheduler (accepts ReadOnlySpan, no allocation needed)
     int[] batchSizes = BatchScheduler.ScheduleSingleGPU(engineSizes, orderedExecutionTimes, totalPositions);
 
     // Convert batch sizes to batch plan entries
     int processed = 0;
     foreach (int batchSize in batchSizes)
     {
-      int engineIndex = sizeToEngineIndex[batchSize];
+      // Find engine index by linear scan (numEngines is small, typically < 8)
+      int engineIndex = -1;
+      for (int i = 0; i < numEngines; i++)
+      {
+        if (ranges[i].min == batchSize)
+        {
+          engineIndex = i;
+          break;
+        }
+      }
+
       TensorRTEngine engine = engines[engineIndex];
 
       // In Exact mode, we process up to batchSize positions but use the full engine batch
@@ -916,7 +933,18 @@ public sealed class EnginePool : IDisposable
     if (VERBOSE_DUMP_BATCHES)
     {
       int totalPos = batchSizes.Sum();
-      float totalTime = batchSizes.Sum(b => orderedExecutionTimes[Array.IndexOf(engineSizes, b)]);
+      float totalTime = 0;
+      foreach (int b in batchSizes)
+      {
+        for (int i = 0; i < numEngines; i++)
+        {
+          if (engineSizes[i] == b)
+          {
+            totalTime += orderedExecutionTimes[i];
+            break;
+          }
+        }
+      }
       Console.WriteLine($"OPTIMIZED_PLAN: {totalPositions} -> [{string.Join(", ", batchSizes)}] " +
                         $"total={totalPos} padding={totalPos - totalPositions} time={totalTime:F1}ms");
     }

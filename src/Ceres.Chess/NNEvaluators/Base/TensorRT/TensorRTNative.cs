@@ -104,6 +104,12 @@ internal static partial class TensorRTNative
   [LibraryImport(LibraryName, EntryPoint = "TRT_GetMultiProcessorCount")]
   internal static partial int GetMultiProcessorCount(int deviceId);
 
+  /// <summary>
+  /// Get the device name string for a GPU device (e.g., "NVIDIA RTX PRO 6000 Blackwell").
+  /// </summary>
+  [LibraryImport(LibraryName, EntryPoint = "TRT_GetDeviceName")]
+  internal static partial IntPtr GetDeviceNamePtr(int deviceId);
+
   [LibraryImport(LibraryName, EntryPoint = "TRT_FreeEngine")]
   internal static partial void FreeEngine(IntPtr handle);
 
@@ -283,5 +289,14 @@ internal static partial class TensorRTNative
   internal static string PtrToString(IntPtr ptr)
   {
     return ptr == IntPtr.Zero ? null : Marshal.PtrToStringAnsi(ptr);
+  }
+
+  /// <summary>
+  /// Get the device name string for a GPU device.
+  /// </summary>
+  internal static string GetDeviceName(int deviceId)
+  {
+    IntPtr ptr = GetDeviceNamePtr(deviceId);
+    return ptr == IntPtr.Zero ? "Unknown" : Marshal.PtrToStringAnsi(ptr);
   }
 }

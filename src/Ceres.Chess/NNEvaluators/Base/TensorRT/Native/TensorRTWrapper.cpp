@@ -1028,6 +1028,20 @@ extern "C"
     return props.multiProcessorCount;
   }
 
+  TRT_API const char* TRT_GetDeviceName(int32_t deviceId)
+  {
+    static thread_local char nameBuffer[256];
+    cudaDeviceProp props;
+    cudaError_t err = cudaGetDeviceProperties(&props, deviceId);
+    if (err != cudaSuccess)
+    {
+      snprintf(nameBuffer, sizeof(nameBuffer), "Unknown");
+      return nameBuffer;
+    }
+    snprintf(nameBuffer, sizeof(nameBuffer), "%s", props.name);
+    return nameBuffer;
+  }
+
   TRT_API void TRT_FreeEngine(TRT_EngineHandle handle)
   {
     if (handle)

@@ -235,7 +235,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
 
     Console.WriteLine($"  Build options: FP16={options.UseFP16}, BF16={options.UseBF16}, FP32PostAttentionNorm={options.FP32PostAttentionNorm}, UseCUDAGraphs={options.UseCudaGraphs}");
 
-    const int MIN_BATCH_SIZE_PER_GPU = 8;
+    const int MIN_BATCH_SIZE_PER_GPU = 6;
     pool = new MultiGPUEnginePool(trt, onnxFileName, batchSizes, poolMode, options, 0, 0, GpuIDs, MIN_BATCH_SIZE_PER_GPU, cacheDir);
 
     inputElementsPerPosition = pool.InputElementsPerPosition;

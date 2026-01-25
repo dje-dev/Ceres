@@ -119,23 +119,36 @@ public static class BatchScheduler
   /// Simplified single-GPU scheduling that returns batch sequence.
   /// Accounts for per-batch overhead when comparing plans.
   /// </summary>
-  public static int[] ScheduleSingleGPU(int[] engineSizes, float[] executionTimes, int targetBatch)
+  public static int[] ScheduleSingleGPU(ReadOnlySpan<int> engineSizes, ReadOnlySpan<float> executionTimes, int targetBatch)
   {
-    if (targetBatch <= 0)
+    if (targetBatch <= 0 || engineSizes.Length == 0)
     {
       return [];
     }
 
-    // Build engine info sorted by size descending
-    (int Size, float TimeMS)[] engines = engineSizes
-      .Select((s, i) => (Size: s, TimeMS: executionTimes[i]))
-      .OrderByDescending(e => e.Size)
-      .ToArray();
+    int numEngines = engineSizes.Length;
 
-    Dictionary<int, float> sizeToTime = engines.ToDictionary(e => e.Size, e => e.TimeMS);
+    // Build engine info sorted by size descending (small array, use simple sort)
+    Span<(int Size, float TimeMS)> engines = stackalloc (int, float)[numEngines];
+    for (int i = 0; i < numEngines; i++)
+    {
+      engines[i] = (engineSizes[i], executionTimes[i]);
+    }
+    // Simple descending sort by size (n is small, typically < 8)
+    for (int i = 0; i < numEngines - 1; i++)
+    {
+      for (int j = i + 1; j < numEngines; j++)
+      {
+        if (engines[j].Size > engines[i].Size)
+        {
+          (engines[i], engines[j]) = (engines[j], engines[i]);
+        }
+      }
+    }
 
-    // Generate candidates
-    List<int[]> candidates = GenerateCandidates(engines, targetBatch, numGPUs: 1);
+    // Generate candidates (this still allocates, but only during scheduling)
+    (int Size, float TimeMS)[] enginesArray = engines.ToArray();
+    List<int[]> candidates = GenerateCandidates(enginesArray, targetBatch, numGPUs: 1);
 
     if (candidates.Count == 0)
     {
@@ -150,8 +163,21 @@ public static class BatchScheduler
     foreach (int[] batches in candidates)
     {
       // Include per-batch overhead for each inference call
-      float totalTime = batches.Sum(b => sizeToTime[b]) + batches.Length * PER_BATCH_OVERHEAD_MS;
-      int totalPos = batches.Sum();
+      float totalTime = batches.Length * PER_BATCH_OVERHEAD_MS;
+      int totalPos = 0;
+      foreach (int b in batches)
+      {
+        // Find time for this batch size (linear scan, n is small)
+        for (int i = 0; i < numEngines; i++)
+        {
+          if (engines[i].Size == b)
+          {
+            totalTime += engines[i].TimeMS;
+            break;
+          }
+        }
+        totalPos += b;
+      }
       int padding = totalPos - targetBatch;
 
       // Within 3% of best time, prefer less padding
@@ -439,5 +465,89 @@ public static class BatchScheduler
     }
 
     return gpuBatches.Select(g => g.ToArray()).ToArray();
+  }
+
+
+  /// <summary>
+  /// Computes normalized speed fractions for each GPU based on execution times.
+  /// Uses sum of execution times across all batch sizes as the metric (lower = faster).
+  /// GPUs with identical device names have their speeds averaged before computing fractions.
+  /// </summary>
+  /// <param name="executionTimesPerGPU">Execution times [gpu][batchSizeIdx] in milliseconds</param>
+  /// <param name="deviceNames">Device name strings for each GPU (e.g., "NVIDIA RTX PRO 6000 Blackwell")</param>
+  /// <param name="numGPUs">Number of GPUs to compute fractions for (may be less than total pools)</param>
+  /// <returns>Array of fractions per GPU, summing to 1.0. Faster GPUs get higher fractions.</returns>
+  public static float[] ComputeSpeedNormalizedFractions(float[][] executionTimesPerGPU, string[] deviceNames, int numGPUs)
+  {
+    if (executionTimesPerGPU == null || numGPUs <= 0)
+    {
+      return null;
+    }
+
+    // Compute sum of execution times for each GPU (lower = faster)
+    float[] totalTimes = new float[numGPUs];
+    for (int gpu = 0; gpu < numGPUs; gpu++)
+    {
+      totalTimes[gpu] = executionTimesPerGPU[gpu].Sum();
+    }
+
+    // Average times for GPUs with identical device names (O(n²) but n is tiny, typically < 8)
+    if (deviceNames != null && deviceNames.Length >= numGPUs)
+    {
+      for (int gpu = 0; gpu < numGPUs; gpu++)
+      {
+        string name = deviceNames[gpu];
+        if (name == null)
+        {
+          continue;
+        }
+
+        // Sum times and count for all GPUs with this name
+        float sum = 0;
+        int count = 0;
+        for (int other = 0; other < numGPUs; other++)
+        {
+          if (string.Equals(name, deviceNames[other], StringComparison.Ordinal))
+          {
+            sum += executionTimesPerGPU[other].Sum();
+            count++;
+          }
+        }
+
+        // Replace with average if there are multiple identical GPUs
+        if (count > 1)
+        {
+          totalTimes[gpu] = sum / count;
+        }
+      }
+    }
+
+    // Convert to inverse speed and normalize to fractions in a single pass
+    float[] fractions = new float[numGPUs];
+    float speedSum = 0;
+    for (int gpu = 0; gpu < numGPUs; gpu++)
+    {
+      fractions[gpu] = totalTimes[gpu] > 0 ? 1.0f / totalTimes[gpu] : 0;
+      speedSum += fractions[gpu];
+    }
+
+    if (speedSum > 0)
+    {
+      for (int gpu = 0; gpu < numGPUs; gpu++)
+      {
+        fractions[gpu] /= speedSum;
+      }
+    }
+    else
+    {
+      // Fallback to equal distribution
+      float equalFraction = 1.0f / numGPUs;
+      for (int gpu = 0; gpu < numGPUs; gpu++)
+      {
+        fractions[gpu] = equalFraction;
+      }
+    }
+
+    return fractions;
   }
 }
