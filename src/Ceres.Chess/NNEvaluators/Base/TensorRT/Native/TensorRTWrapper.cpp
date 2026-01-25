@@ -216,6 +216,8 @@ extern "C"
     options->optBatchSize = 0;
     options->maxBatchSize = 0;
     options->fp32PostAttentionNorm = 0;
+    options->fp32PostAttentionNormStrict = 0;
+    options->fp32SmolgenNorm = 0;
   }
 
   // Helper: print colored console message
@@ -240,10 +242,36 @@ extern "C"
   }
 
   // Helper: check if layer name is a post-attention normalization layer (ln1)
+  // Broad mode: matches any layer with "ln1" in name (includes smolgen ln1)
+  // This converts ~216 layers for a 12-layer network
   static bool IsPostAttentionNormLayer(const char* layerName)
   {
     std::string name(layerName);
     return name.find("ln1") != std::string::npos;
+  }
+
+  // Helper: strict mode - only match main encoder post-attention ln1
+  // Matches: /transformer_layer.X/ln1/...
+  // Excludes: /transformer_layer.X/attention/ln1/... (smolgen related)
+  // NOTE: Testing shows this does NOT fix FP16 accuracy issues!
+  //       The main encoder ln1 layers are NOT the cause of overflow.
+  static bool IsPostAttentionNormLayerStrict(const char* layerName)
+  {
+    std::string name(layerName);
+    // Must contain "/ln1/" but NOT "/attention/ln1/"
+    return name.find("/ln1/") != std::string::npos &&
+           name.find("/attention/ln1/") == std::string::npos;
+  }
+
+  // Helper: smolgen mode - only match smolgen-related ln1 inside attention
+  // Matches: /transformer_layer.X/attention/ln1/...
+  // Excludes: /transformer_layer.X/ln1/... (main encoder)
+  // RECOMMENDED: Testing shows this mode achieves the SAME accuracy as broad mode
+  //              while converting ~55% fewer layers (~96 vs ~216 for 12-layer net)
+  static bool IsSmolgenNormLayer(const char* layerName)
+  {
+    std::string name(layerName);
+    return name.find("/attention/ln1/") != std::string::npos;
   }
 
   TRT_API TRT_EngineHandle TRT_LoadONNXWithOptions(const char* onnxPath, int32_t batchSize,
@@ -342,16 +370,40 @@ extern "C"
     config->setProfilingVerbosity(nvinfer1::ProfilingVerbosity::kDETAILED);
 
     // Force FP32 precision for post-attention normalization (ln1) layers if requested
-    if (opts->fp32PostAttentionNorm)
+    // Three modes: broad (fp32PostAttentionNorm) includes all ln1 layers,
+    //              strict (fp32PostAttentionNormStrict) only main encoder ln1 (excludes smolgen)
+    //              smolgen (fp32SmolgenNorm) only smolgen-related ln1 inside attention
+    if (opts->fp32PostAttentionNorm || opts->fp32PostAttentionNormStrict || opts->fp32SmolgenNorm)
     {
       config->setFlag(nvinfer1::BuilderFlag::kPREFER_PRECISION_CONSTRAINTS);
+
+      // Determine which filter to use
+      const char* modeName = "broad";
       int layersMarked = 0;
       int totalLayers = network->getNbLayers();
+
       for (int32_t i = 0; i < totalLayers; ++i)
       {
         auto* layer = network->getLayer(i);
         const char* layerName = layer->getName();
-        if (IsPostAttentionNormLayer(layerName))
+        bool shouldMark = false;
+
+        if (opts->fp32SmolgenNorm)
+        {
+          shouldMark = IsSmolgenNormLayer(layerName);
+          modeName = "smolgen";
+        }
+        else if (opts->fp32PostAttentionNormStrict)
+        {
+          shouldMark = IsPostAttentionNormLayerStrict(layerName);
+          modeName = "strict";
+        }
+        else
+        {
+          shouldMark = IsPostAttentionNormLayer(layerName);
+        }
+
+        if (shouldMark)
         {
           layer->setPrecision(nvinfer1::DataType::kFLOAT);
           for (int32_t j = 0; j < layer->getNbOutputs(); ++j)
@@ -361,7 +413,8 @@ extern "C"
           layersMarked++;
         }
       }
-      fprintf(stderr, "[TensorRT] Marked %d/%d layers as FP32 for post-attention norm (ln1)\n", layersMarked, totalLayers);
+      fprintf(stderr, "[TensorRT] Marked %d/%d layers as FP32 for post-attention norm (ln1, %s mode)\n",
+              layersMarked, totalLayers, modeName);
     }
 
     // Determine batch sizes for optimization profile
@@ -570,6 +623,8 @@ extern "C"
     hash ^= std::hash<int32_t>{}(opts->useFP8) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
     hash ^= std::hash<int32_t>{}(opts->useBest) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
     hash ^= std::hash<int32_t>{}(opts->fp32PostAttentionNorm) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+    hash ^= std::hash<int32_t>{}(opts->fp32PostAttentionNormStrict) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+    hash ^= std::hash<int32_t>{}(opts->fp32SmolgenNorm) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
     return hash;
   }
 

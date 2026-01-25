@@ -87,8 +87,25 @@ public record struct TensorRTBuildOptions
   /// Force FP32 precision for post-attention normalization (ln1) layers.
   /// 0 = disabled (default), 1 = enabled.
   /// This can improve numerical stability for models with normalization layers.
+  /// Broad mode: affects all ln1 layers including smolgen-related ones.
   /// </summary>
   public int FP32PostAttentionNorm;
+
+  /// <summary>
+  /// Force FP32 precision for post-attention normalization (ln1) layers (strict mode).
+  /// 0 = disabled (default), 1 = enabled.
+  /// Strict mode: only affects main encoder ln1 layers, excludes smolgen-related ln1.
+  /// NOTE: Testing shows this does NOT fix FP16 accuracy issues - use FP32SmolgenNorm instead.
+  /// </summary>
+  public int FP32PostAttentionNormStrict;
+
+  /// <summary>
+  /// Force FP32 precision for smolgen-related normalization layers inside attention.
+  /// 0 = disabled (default), 1 = enabled.
+  /// This targets only the /attention/ln1/ layers which are the critical ones for numerical stability.
+  /// Use this for optimal balance of speed and accuracy.
+  /// </summary>
+  public int FP32SmolgenNorm;
 
   /// <summary>
   /// Returns default build options.
@@ -106,7 +123,9 @@ public record struct TensorRTBuildOptions
     MinBatchSize = 0,
     OptBatchSize = 0,
     MaxBatchSize = 0,
-    FP32PostAttentionNorm = 0
+    FP32PostAttentionNorm = 0,
+    FP32PostAttentionNormStrict = 0,
+    FP32SmolgenNorm = 0
   };
 
 
