@@ -320,12 +320,14 @@ public class NNEvaluatorTensorRT : NNEvaluator
     {
       MaxDegreeOfParallelism = ParallelUtils.CalcMaxParallelism(maxBatchSize, 32)
     };
+
+    // Important to capture possible CUDA graphs and timing statistics up front
+    Warmup();
   }
 
 
   /// <summary>
   /// Performs warmup by running dummy evaluations at each defined batch size.
-  /// Also benchmarks execution times for each GPU and batch size.
   /// Only executes on first call; subsequent calls are no-ops.
   /// </summary>
   public override void Warmup()
@@ -335,8 +337,36 @@ public class NNEvaluatorTensorRT : NNEvaluator
       return;
     }
 
-    // Run warmup and benchmarking on the pool
-    pool.Warmup();
+    // Determine batch sizes to warm up based on pool mode
+    int[] warmupSizes;
+    if (PoolMode == EnginePoolMode.Range)
+    {
+      // For Range mode, warm up at each range maximum
+      warmupSizes = BatchSizes;
+    }
+    else
+    {
+      // For Exact mode, warm up at each exact batch size
+      warmupSizes = BatchSizes;
+    }
+
+    // Allocate dummy input buffers for warmup
+    int maxWarmupSize = warmupSizes.Max();
+    Half[] dummyOutputBuffer = new Half[maxWarmupSize * outputElementsPerPosition];
+
+    foreach (int batchSize in warmupSizes)
+    {
+      if (useByteInputs)
+      {
+        byte[] dummyInput = new byte[batchSize * inputElementsPerPosition];
+        pool.ProcessBytes(dummyInput, dummyOutputBuffer, batchSize);
+      }
+      else
+      {
+        Half[] dummyInput = new Half[batchSize * inputElementsPerPosition];
+        pool.Process(dummyInput, dummyOutputBuffer, batchSize);
+      }
+    }
 
     haveWarmedUp = true;
   }

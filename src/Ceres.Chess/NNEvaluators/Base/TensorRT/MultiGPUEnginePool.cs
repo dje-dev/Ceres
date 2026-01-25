@@ -142,6 +142,8 @@ public sealed class MultiGPUEnginePool : IDisposable
     cachedByteInputs = new byte[numPools][];
     cachedInputCapacities = new int[numPools];
     cachedOutputCapacities = new int[numPools];
+
+    Warmup();
   }
 
 
@@ -297,6 +299,9 @@ public sealed class MultiGPUEnginePool : IDisposable
       // Output timing estimates for this GPU
       string timingsStr = string.Join(", ", executionTimesPerGPU[gpuIndex].Select(t => t.ToString("F1")));
       Console.WriteLine($"DEVICE {deviceIDs[gpuIndex]} timings: [{timingsStr}] ms");
+
+      // Pass execution times to the EnginePool for optimized scheduling
+      pool.ExecutionTimes = executionTimesPerGPU[gpuIndex];
     }
   }
 

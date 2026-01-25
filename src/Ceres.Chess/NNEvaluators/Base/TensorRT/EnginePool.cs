@@ -15,6 +15,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 
 using Ceres.Base.CUDA;
@@ -37,6 +38,14 @@ public sealed class EnginePool : IDisposable
   /// since graph capture requires exclusive GPU access (no concurrent stream activity).
   /// </summary>
   private const bool USE_PIPELINED_SUBBATCHES = true;
+
+  /// <summary>
+  /// If true, uses the optimized batch scheduling algorithm that considers
+  /// actual execution times per batch size to minimize total inference time.
+  /// When false, uses the legacy greedy algorithm with ExactModeBatchFractionAcceptablePadding.
+  /// </summary>
+  public static bool OPTIMIZED_SCHEDULING = true;
+
 
   private readonly TensorRT trt;
   private readonly bool ownsTrt;
@@ -109,6 +118,19 @@ public sealed class EnginePool : IDisposable
   /// </summary>
   public int ExactModeBatchNumPositionsAcceptablePadding { get; set; }
 
+  /// <summary>
+  /// Execution times in milliseconds for each engine batch size.
+  /// Index corresponds to the engine index (same order as ranges).
+  /// Set by MultiGPUEnginePool.Warmup() or manually for optimized scheduling.
+  /// </summary>
+  public float[] ExecutionTimes { get; set; }
+
+  /// <summary>
+  /// Engine sizes array (batch sizes) for use by the optimized scheduler.
+  /// In Exact mode, these are the exact batch sizes sorted descending.
+  /// </summary>
+  public int[] EngineSizes => ranges.Select(r => r.min).ToArray();
+
 
   public int InputElementsPerPosition { get; private set; }
   public int OutputElementsPerPosition { get; private set; }
@@ -148,8 +170,7 @@ public sealed class EnginePool : IDisposable
   /// For Exact mode, engines are sorted descending so _ranges[0].max is largest.
   /// For Range mode, engines are sorted ascending so _ranges[^1].max is largest.
   /// </summary>
-  public int MaxEngineBatchSize =>
-      mode == EnginePoolMode.Range ? ranges[^1].max : ranges[0].max;
+  public int MaxEngineBatchSize => mode == EnginePoolMode.Range ? ranges[^1].max : ranges[0].max;
 
 
   public EnginePool(TensorRT trt, string onnxPath, int[] sizes, EnginePoolMode mode,
@@ -373,7 +394,7 @@ public sealed class EnginePool : IDisposable
 
       if (useDynamic)
       {
-        // Dynamic inference: reuse pre-allocated max-size buffers (no new allocations!)
+        // Dynamic inference: reuse pre-allocated max-size buffers
         // Copy input to cached buffer
         if (inputElements > 0)
         {
@@ -391,7 +412,7 @@ public sealed class EnginePool : IDisposable
       }
       else
       {
-        // Static inference: use pre-allocated per-engine buffers (no new allocations!)
+        // Static inference: use pre-allocated per-engine buffers
         Half[] batchInput = perEngineHalfInputBuffers[engineIndex];
         Half[] batchOutput = perEngineOutputBuffers[engineIndex];
 
@@ -434,7 +455,7 @@ public sealed class EnginePool : IDisposable
 
       if (useDynamic)
       {
-        // Dynamic inference: reuse pre-allocated max-size buffers (no new allocations!)
+        // Dynamic inference: reuse pre-allocated max-size buffers
         // Copy input to cached buffer
         if (inputElements > 0)
         {
@@ -452,7 +473,7 @@ public sealed class EnginePool : IDisposable
       }
       else
       {
-        // Static inference: use pre-allocated per-engine buffers (no new allocations!)
+        // Static inference: use pre-allocated per-engine buffers
         byte[] batchInput = perEngineByteInputBuffers[engineIndex];
         Half[] batchOutput = perEngineOutputBuffers[engineIndex];
 
@@ -499,7 +520,7 @@ public sealed class EnginePool : IDisposable
 
       if (useDynamic)
       {
-        // Dynamic inference: reuse pre-allocated max-size buffers (no new allocations!)
+        // Dynamic inference: reuse pre-allocated max-size buffers
         // Copy input to cached buffer
         if (inputElements > 0)
         {
@@ -514,7 +535,7 @@ public sealed class EnginePool : IDisposable
       }
       else
       {
-        // Static inference: use pre-allocated per-engine buffers (no new allocations!)
+        // Static inference: use pre-allocated per-engine buffers
         Half[] batchInput = perEngineHalfInputBuffers[engineIndex];
         Half[] batchOutput = perEngineOutputBuffers[engineIndex];
 
@@ -580,7 +601,7 @@ public sealed class EnginePool : IDisposable
 
       if (useDynamic)
       {
-        // Dynamic inference: reuse pre-allocated max-size buffers (no new allocations!)
+        // Dynamic inference: reuse pre-allocated max-size buffers
         // Copy input to cached buffer
         if (inputElements > 0)
         {
@@ -595,7 +616,7 @@ public sealed class EnginePool : IDisposable
       }
       else
       {
-        // Static inference: use pre-allocated per-engine buffers (no new allocations!)
+        // Static inference: use pre-allocated per-engine buffers
         byte[] batchInput = perEngineByteInputBuffers[engineIndex];
         Half[] batchOutput = perEngineOutputBuffers[engineIndex];
 
@@ -813,6 +834,15 @@ public sealed class EnginePool : IDisposable
   private void ComputeBatchPlan(int totalPositions)
   {
     cachedBatchPlan.Clear();
+
+    // Use optimized scheduling if enabled and execution times are available (Exact mode only)
+    if (OPTIMIZED_SCHEDULING && ExecutionTimes != null && mode == EnginePoolMode.Exact)
+    {
+      ComputeBatchPlanOptimized(totalPositions);
+      return;
+    }
+
+    // Legacy greedy algorithm
     int processed = 0;
     int lastBatchSize = 0;
 
@@ -828,6 +858,67 @@ public sealed class EnginePool : IDisposable
 
       processed += actualPositions;
       lastBatchSize = batchSize;
+    }
+  }
+
+
+  /// <summary>
+  /// Computes batch plan using the optimized BatchScheduler algorithm.
+  /// This considers actual execution times per batch size to minimize total inference time.
+  /// </summary>
+  private void ComputeBatchPlanOptimized(int totalPositions)
+  {
+    // Get engine sizes (batch sizes) - ranges[i].min contains the size in Exact mode
+    // Note: ranges is sorted descending, but ExecutionTimes is indexed by original (ascending) order
+    int[] engineSizes = ranges.Select(r => r.min).ToArray();
+
+    // Build lookup from size to engine index
+    Dictionary<int, int> sizeToEngineIndex = [];
+    for (int i = 0; i < ranges.Count; i++)
+    {
+      sizeToEngineIndex[ranges[i].min] = i;
+    }
+
+    // Build correctly-ordered execution times array to match engineSizes order
+    // ExecutionTimes is indexed by original order (ascending), we need it in ranges order (descending)
+    float[] orderedExecutionTimes = new float[engineSizes.Length];
+    int[] originalSizes = engineSizes.OrderBy(s => s).ToArray(); // Sort ascending to match ExecutionTimes order
+    for (int i = 0; i < engineSizes.Length; i++)
+    {
+      int size = engineSizes[i];
+      int originalIndex = Array.IndexOf(originalSizes, size);
+      orderedExecutionTimes[i] = ExecutionTimes[originalIndex];
+    }
+
+    // Use the optimized single-GPU scheduler
+    int[] batchSizes = BatchScheduler.ScheduleSingleGPU(engineSizes, orderedExecutionTimes, totalPositions);
+
+    // Convert batch sizes to batch plan entries
+    int processed = 0;
+    foreach (int batchSize in batchSizes)
+    {
+      int engineIndex = sizeToEngineIndex[batchSize];
+      TensorRTEngine engine = engines[engineIndex];
+
+      // In Exact mode, we process up to batchSize positions but use the full engine batch
+      int actualPositions = Math.Min(batchSize, totalPositions - processed);
+
+      // Exact mode always uses static inference (useDynamic = false)
+      cachedBatchPlan.Add((processed, actualPositions, engine, batchSize, false, engineIndex));
+
+      processed += actualPositions;
+      if (processed >= totalPositions)
+      {
+        break;
+      }
+    }
+
+    if (VERBOSE_DUMP_BATCHES)
+    {
+      int totalPos = batchSizes.Sum();
+      float totalTime = batchSizes.Sum(b => orderedExecutionTimes[Array.IndexOf(engineSizes, b)]);
+      Console.WriteLine($"OPTIMIZED_PLAN: {totalPositions} -> [{string.Join(", ", batchSizes)}] " +
+                        $"total={totalPos} padding={totalPos - totalPositions} time={totalTime:F1}ms");
     }
   }
 
