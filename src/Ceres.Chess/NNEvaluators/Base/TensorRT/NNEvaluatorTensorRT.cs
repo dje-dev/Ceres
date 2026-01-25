@@ -226,9 +226,9 @@ public class NNEvaluatorTensorRT : NNEvaluator
     {
       options = TensorRTBuildOptions.Default;
       options.BuilderOptimizationLevel = 3;
-      options.UseFP16 = 0;
-      options.UseBF16 = 1;
-      options.FP32PostAttentionNorm = 0;  // certain models completely fail without this
+      options.UseFP16 = 1;
+      options.UseBF16 = 0;
+      options.FP32PostAttentionNorm = 1;  // certain models completely fail without this
       options.UseCudaGraphs = useCudaGraphs ? 1 : 0;
     }
     options.Validate();
@@ -809,11 +809,10 @@ public class NNEvaluatorTensorRT : NNEvaluator
 
     const bool EXACT_BATCHES = true; // seems always fastest to use exact batches
     const bool ENABLE_GRAPHS = true;
-    const int THRESHOLD_ADJUST_SIZE = 12;
-
+    const int THRESHOLD_ADJUST_SIZE = 8;
     NNEvaluatorTensorRT trtNativeEngine = new(netFileName,
                                               EXACT_BATCHES ? EnginePoolMode.Exact : EnginePoolMode.Range,
-                                              EXACT_BATCHES ? AdjustSizes([8, 20, 32, 64, 96, 192], numStreamingMultiprocessors, THRESHOLD_ADJUST_SIZE)
+                                              EXACT_BATCHES ? AdjustSizes([1, 8, 32, 48, 64, 96, 128, 256], numStreamingMultiprocessors, THRESHOLD_ADJUST_SIZE)
                                                             : [48, 128, 1024],
                                               gpuIDs: gpuIDs,
                                               useCudaGraphs: EXACT_BATCHES && ENABLE_GRAPHS, //optionsCeres.EnableCUDAGraphs,
@@ -838,7 +837,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
   /// <returns></returns>
   public static int[] AdjustSizes(int[] sizes, int smCount, int tolerance)
   {
-    int[] bases = { (3 * smCount) / 2, smCount, smCount / 2, smCount / 3, smCount / 4 };
+    int[] bases = { (3 * smCount) / 2, smCount, smCount / 2 };
 
     for (int i = 0; i < sizes.Length; i++)
     {
