@@ -226,10 +226,10 @@ public class NNEvaluatorTensorRT : NNEvaluator
     {
       options = TensorRTBuildOptions.Default;
       options.BuilderOptimizationLevel = 3;
-      options.UseFP16 = 1;
-      options.UseBF16 = 0;
+      options.UseFP16 = 0;
+      options.UseBF16 = 1;
 //      options.FP32PostAttentionNorm = 1;  // certain models completely fail without this
-      options.FP32SmolgenNorm = 1;
+      options.FP32SmolgenNorm = 0;
       options.UseCudaGraphs = useCudaGraphs ? 1 : 0;
     }
     options.Validate();
