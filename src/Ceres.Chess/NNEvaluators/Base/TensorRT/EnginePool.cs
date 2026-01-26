@@ -224,11 +224,12 @@ public sealed class EnginePool : IDisposable
 
         TensorRTBuildOptions opts = options;
 
-        // Use tiling optimization level 3 for batch sizes >= 128
-        // TODO: currently disabled, this may only help on certain GPUs (e.g. GB10) and is very slow to build
+        // Use tiling optimization level 3 for batch sizes >= 128.
+        // Certain GPUs (e.g. GB10) show improvement (5% to 15%) for larger batch sizes.
         if (size >= 128)
         {
-          opts.TilingOptimizationLevel = 3; // note: can be 5x to 20x slower to build
+          // TODO: make an option? Currently disabled, increases buld time by 2x to 10x 
+          //opts.TilingOptimizationLevel = 3;
         }
 
         TensorRTEngine engine = this.trt.LoadEngineWithCache(onnxPath, size, opts, cacheDir, deviceId);
