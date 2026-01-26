@@ -48,6 +48,7 @@ namespace Ceres.Chess.NNEvaluators.TensorRT;
 public class NNEvaluatorTensorRT : NNEvaluator
 {
   const bool USE_HISTORY = true;
+  const bool SUBSTITUTE_VALUE3_INTO_VALUE2_IF_FOUND = true;
 
 
   /// <summary>
@@ -71,6 +72,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
   // Network outputs layout - sizes are per-position
   private int valueSize;
   private int value2Size;
+  private int value3Size;
   private int policySize;
   private int mlhSize;
   private int uncVSize;
@@ -79,6 +81,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
   // Tensor indices in output (for computing per-engine offsets)
   private int valueTensorIndex;
   private int value2TensorIndex;
+  private int value3TensorIndex;
   private int policyTensorIndex;
   private int mlhTensorIndex;
   private int uncVTensorIndex;
@@ -261,6 +264,10 @@ public class NNEvaluatorTensorRT : NNEvaluator
           value2TensorIndex = tensorIndex;
           value2Size = sizePerPos;
           break;
+        case "value3":
+          value3TensorIndex = tensorIndex;
+          value3Size = sizePerPos;
+          break;
         case "policy":
           policyTensorIndex = tensorIndex;
           policySize = sizePerPos;
@@ -288,7 +295,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
     hasM = mlhSize > 0;
     hasUncertaintyV = uncVSize > 0;
     hasUncertaintyP = uncPSize > 0;
-    hasValueSecondary = value2Size > 0;
+    hasValueSecondary = value2Size > 0 || (SUBSTITUTE_VALUE3_INTO_VALUE2_IF_FOUND && value3Size > 0);
 
     int bytesPerSquareRecord = TPGRecord.BYTES_PER_SQUARE_RECORD;
     squareByteBuffer = new byte[maxBatchSize * 64 * bytesPerSquareRecord];
@@ -513,6 +520,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
   {
     int valueOffset = 0;
     int value2Offset = 0;
+    int value3Offset = 0;
     int policyOffset = 0;
     int mlhOffset = 0;
     int uncVOffset = 0;
@@ -532,6 +540,10 @@ public class NNEvaluatorTensorRT : NNEvaluator
       {
         value2Offset = currentOffset;
       }
+      else if (t == value3TensorIndex)
+      {
+        value3Offset = currentOffset;
+      }
       else if (t == policyTensorIndex)
       {
         policyOffset = currentOffset;
@@ -550,6 +562,12 @@ public class NNEvaluatorTensorRT : NNEvaluator
       }
 
       currentOffset += tensorSize;
+    }
+
+    // Substitute value3 into value2 if enabled and value3 is present
+    if (SUBSTITUTE_VALUE3_INTO_VALUE2_IF_FOUND && value3Size > 0)
+    {
+      value2Offset = value3Offset;
     }
 
     for (int i = 0; i < count; i++)
