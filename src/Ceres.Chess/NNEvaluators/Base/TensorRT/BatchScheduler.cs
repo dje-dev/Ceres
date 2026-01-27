@@ -14,7 +14,6 @@
 #region Using directives
 
 using System;
-using System.Collections.Generic;
 using System.Linq;
 
 #endregion
@@ -45,7 +44,8 @@ public static class BatchScheduler
   );
 
   /// <summary>
-  /// Schedules batch execution across GPUs optimally.
+  /// Schedules batch execution across multiple GPUs optimally.
+  /// Uses bounded recursive search over engine-size multisets with LPT assignment and greedy-seeded pruning.
   /// </summary>
   /// <param name="numGPUs">Number of available GPUs</param>
   /// <param name="engineSizes">Available engine batch sizes (e.g., [8, 20, 32, 64, 96, 192])</param>
@@ -59,65 +59,118 @@ public static class BatchScheduler
   {
     if (targetBatch <= 0 || numGPUs <= 0)
     {
-      return new ScheduleResult(Enumerable.Range(0, numGPUs).Select(_ => Array.Empty<int>()).ToArray(), 0, 0, 0);
+      int[][] emptyPlan = new int[Math.Max(numGPUs, 0)][];
+      for (int i = 0; i < emptyPlan.Length; i++)
+      {
+        emptyPlan[i] = [];
+      }
+      return new ScheduleResult(emptyPlan, 0, 0, 0);
     }
 
-    // Clamp preferredGPU to valid range
     preferredGPU = Math.Clamp(preferredGPU, 0, numGPUs - 1);
+    int n = engineSizes.Length;
 
-    // Build engine info using preferred GPU's times for candidate generation
-    (int Size, float TimeMS)[] engines = engineSizes
-      .Select((s, i) => (Size: s, TimeMS: executionTimesPerGPU[preferredGPU][i]))
-      .OrderByDescending(e => e.Size)
-      .ToArray();
-
-    // Build per-GPU lookup: sizeToTime[gpu][size] = time
-    Dictionary<int, float>[] sizeToTimePerGPU = new Dictionary<int, float>[numGPUs];
-    for (int gpu = 0; gpu < numGPUs; gpu++)
+    // Sort engines descending by size, tracking original indices for per-GPU time lookup
+    Span<int> sizes = stackalloc int[n];
+    Span<int> origIndices = stackalloc int[n];
+    for (int i = 0; i < n; i++)
     {
-      sizeToTimePerGPU[gpu] = engineSizes
-        .Select((s, i) => (Size: s, Time: executionTimesPerGPU[gpu][i]))
-        .ToDictionary(x => x.Size, x => x.Time);
+      sizes[i] = engineSizes[i];
+      origIndices[i] = i;
+    }
+    for (int i = 0; i < n - 1; i++)
+    {
+      for (int j = i + 1; j < n; j++)
+      {
+        if (sizes[j] > sizes[i])
+        {
+          (sizes[i], sizes[j]) = (sizes[j], sizes[i]);
+          (origIndices[i], origIndices[j]) = (origIndices[j], origIndices[i]);
+        }
+      }
     }
 
-    // Generate candidate batch combinations using multiple strategies
-    List<int[]> candidates = GenerateCandidates(engines, targetBatch, numGPUs);
-
-    if (candidates.Count == 0)
+    // Build flat per-GPU times reordered to sorted engine order: allGPUTimes[gpu * n + sortedIdx]
+    // Also compute per-engine minimum time across GPUs (for pruning lower bound)
+    Span<float> allGPUTimes = stackalloc float[numGPUs * n];
+    Span<float> minGPUTimes = stackalloc float[n];
+    float globalMinTime = float.MaxValue;
+    for (int e = 0; e < n; e++)
     {
-      // Fallback: single largest batch
-      int[] fallback = [engines[0].Size];
-      candidates.Add(fallback);
+      int origIdx = origIndices[e];
+      float minT = float.MaxValue;
+      for (int g = 0; g < numGPUs; g++)
+      {
+        float t = executionTimesPerGPU[g][origIdx];
+        allGPUTimes[g * n + e] = t;
+        if (t < minT)
+        {
+          minT = t;
+        }
+      }
+      minGPUTimes[e] = minT;
+      if (minT < globalMinTime)
+      {
+        globalMinTime = minT;
+      }
     }
 
-    // Evaluate each candidate
-    List<(int[][] Plan, float MaxTime, int TotalPos)> evaluated = [];
+    int maxBatches = Math.Min((targetBatch + sizes[n - 1] - 1) / sizes[n - 1], 24);
 
-    foreach (int[] batches in candidates)
+    Span<int> bestPlan = stackalloc int[maxBatches];
+    int bestLen = 0;
+    float bestMakespan = float.MaxValue;
+    int bestPadding = int.MaxValue;
+
+    // Seed with greedy solution (largest-first) so pruning is effective from the start
     {
-      int[][] plan = AssignToGPUs(batches, sizeToTimePerGPU, numGPUs, preferredGPU);
-      float maxTime = ComputeMaxTime(plan, sizeToTimePerGPU);
-      int totalPos = batches.Sum();
-      evaluated.Add((plan, maxTime, totalPos));
+      Span<int> greedy = stackalloc int[maxBatches];
+      int remaining = targetBatch;
+      int len = 0;
+      while (remaining > 0 && len < maxBatches)
+      {
+        int chosen = n - 1;
+        for (int i = 0; i < n; i++)
+        {
+          if (sizes[i] <= remaining)
+          {
+            chosen = i;
+            break;
+          }
+        }
+        greedy[len] = chosen;
+        remaining -= sizes[chosen];
+        len++;
+      }
+      bestLen = len;
+      greedy.Slice(0, len).CopyTo(bestPlan);
+      bestPadding = Math.Max(0, -remaining);
+      bestMakespan = ComputeLPTMakespan(bestPlan, bestLen, allGPUTimes, numGPUs, n, preferredGPU);
     }
 
-    // Find minimum maxTime
-    float minMaxTime = evaluated.Min(e => e.MaxTime);
+    // Exhaustive search with pruning
+    Span<int> current = stackalloc int[maxBatches];
+    SearchBatchesMultiGPU(sizes, n, allGPUTimes, minGPUTimes, numGPUs, preferredGPU,
+                          targetBatch, current, 0, 0, 0f, globalMinTime,
+                          bestPlan, ref bestLen, ref bestMakespan, ref bestPadding, maxBatches);
 
-    // Filter to within 3% of optimal, then pick minimum padding
-    (int[][] Plan, float MaxTime, int TotalPos) best = evaluated
-      .Where(e => e.MaxTime <= minMaxTime * 1.03f)
-      .OrderBy(e => e.TotalPos)
-      .ThenBy(e => e.MaxTime)
-      .First();
+    // Reconstruct per-GPU assignment from best plan using LPT
+    int[][] executionPlan = BuildLPTAssignment(bestPlan, bestLen, sizes, allGPUTimes, numGPUs, n, preferredGPU);
 
-    return new ScheduleResult(best.Plan, (int)Math.Ceiling(best.MaxTime), best.TotalPos, best.TotalPos - targetBatch);
+    int totalPos = 0;
+    for (int i = 0; i < bestLen; i++)
+    {
+      totalPos += sizes[bestPlan[i]];
+    }
+
+    return new ScheduleResult(executionPlan, (int)Math.Ceiling(bestMakespan), totalPos, totalPos - targetBatch);
   }
 
 
   /// <summary>
-  /// Simplified single-GPU scheduling that returns batch sequence.
-  /// Accounts for per-batch overhead when comparing plans.
+  /// Single-GPU scheduling: finds the batch sequence minimizing total inference time.
+  /// Uses bounded recursive search over engine-size multisets with greedy-seeded pruning.
+  /// No managed allocations except the returned result array.
   /// </summary>
   public static int[] ScheduleSingleGPU(ReadOnlySpan<int> engineSizes, ReadOnlySpan<float> executionTimes, int targetBatch)
   {
@@ -126,345 +179,354 @@ public static class BatchScheduler
       return [];
     }
 
-    int numEngines = engineSizes.Length;
+    int n = engineSizes.Length;
 
-    // Build engine info sorted by size descending (small array, use simple sort)
-    Span<(int Size, float TimeMS)> engines = stackalloc (int, float)[numEngines];
-    for (int i = 0; i < numEngines; i++)
+    // Sort engines descending by size (n <= 12, simple bubble sort)
+    Span<int> sizes = stackalloc int[n];
+    Span<float> times = stackalloc float[n];
+    for (int i = 0; i < n; i++)
     {
-      engines[i] = (engineSizes[i], executionTimes[i]);
+      sizes[i] = engineSizes[i];
+      times[i] = executionTimes[i];
     }
-    // Simple descending sort by size (n is small, typically < 8)
-    for (int i = 0; i < numEngines - 1; i++)
+    for (int i = 0; i < n - 1; i++)
     {
-      for (int j = i + 1; j < numEngines; j++)
+      for (int j = i + 1; j < n; j++)
       {
-        if (engines[j].Size > engines[i].Size)
+        if (sizes[j] > sizes[i])
         {
-          (engines[i], engines[j]) = (engines[j], engines[i]);
+          (sizes[i], sizes[j]) = (sizes[j], sizes[i]);
+          (times[i], times[j]) = (times[j], times[i]);
         }
       }
     }
 
-    // Generate candidates (this still allocates, but only during scheduling)
-    (int Size, float TimeMS)[] enginesArray = engines.ToArray();
-    List<int[]> candidates = GenerateCandidates(enginesArray, targetBatch, numGPUs: 1);
-
-    if (candidates.Count == 0)
+    // Minimum execution time across all engines (for pruning lower bound)
+    float minEngineTime = times[0];
+    for (int i = 1; i < n; i++)
     {
-      return [engines[0].Size];
+      if (times[i] < minEngineTime)
+      {
+        minEngineTime = times[i];
+      }
     }
 
-    // For single GPU, optimize for: minimal time (including per-batch overhead), then minimal padding
-    float minTime = float.MaxValue;
-    int[] bestPlan = null;
+    // Max batches: ceil(target / smallest engine), capped to limit stack and search depth
+    int maxBatches = Math.Min((targetBatch + sizes[n - 1] - 1) / sizes[n - 1], 24);
+
+    Span<int> bestPlan = stackalloc int[maxBatches];
+    int bestLen = 0;
+    float bestCost = float.MaxValue;
     int bestPadding = int.MaxValue;
 
-    foreach (int[] batches in candidates)
+    // Seed with greedy solution (largest-first) so pruning is effective from the start
     {
-      // Include per-batch overhead for each inference call
-      float totalTime = batches.Length * PER_BATCH_OVERHEAD_MS;
-      int totalPos = 0;
-      foreach (int b in batches)
+      Span<int> greedy = stackalloc int[maxBatches];
+      int remaining = targetBatch;
+      int len = 0;
+      float cost = 0;
+      while (remaining > 0 && len < maxBatches)
       {
-        // Find time for this batch size (linear scan, n is small)
-        for (int i = 0; i < numEngines; i++)
+        // Largest engine that fits, or smallest engine if none fit
+        int chosen = n - 1;
+        for (int i = 0; i < n; i++)
         {
-          if (engines[i].Size == b)
+          if (sizes[i] <= remaining)
           {
-            totalTime += engines[i].TimeMS;
+            chosen = i;
             break;
           }
         }
-        totalPos += b;
+        greedy[len] = chosen;
+        cost += times[chosen];
+        remaining -= sizes[chosen];
+        len++;
       }
-      int padding = totalPos - targetBatch;
-
-      // Within 3% of best time, prefer less padding
-      if (totalTime < minTime * 0.97f || (totalTime <= minTime * 1.03f && padding < bestPadding))
-      {
-        if (totalTime < minTime)
-        {
-          minTime = totalTime;
-        }
-        bestPlan = batches;
-        bestPadding = padding;
-      }
+      bestCost = cost + len * PER_BATCH_OVERHEAD_MS;
+      bestPadding = Math.Max(0, -remaining);
+      bestLen = len;
+      greedy.Slice(0, len).CopyTo(bestPlan);
     }
 
-    return bestPlan ?? [engines[0].Size];
-  }
+    // Exhaustive search with pruning (generates multisets via non-decreasing engine index)
+    Span<int> current = stackalloc int[maxBatches];
+    SearchBatches(sizes, times, n, targetBatch, current, 0, 0, 0f, minEngineTime,
+                  bestPlan, ref bestLen, ref bestCost, ref bestPadding, maxBatches);
 
-  /// <summary>
-  /// Compute max execution time across all GPUs using per-GPU times.
-  /// </summary>
-  static float ComputeMaxTime(int[][] plan, Dictionary<int, float>[] sizeToTimePerGPU)
-  {
-    float maxTime = 0;
-    for (int gpu = 0; gpu < plan.Length; gpu++)
+    // Build result array (only managed allocation)
+    int[] result = new int[bestLen];
+    for (int i = 0; i < bestLen; i++)
     {
-      float gpuTime = plan[gpu].Sum(b => sizeToTimePerGPU[gpu][b]);
-      maxTime = Math.Max(maxTime, gpuTime);
+      result[i] = sizes[bestPlan[i]];
     }
-    return maxTime;
-  }
-
-  /// <summary>
-  /// Generate candidate batch combinations using multiple strategies.
-  /// </summary>
-  static List<int[]> GenerateCandidates((int Size, float TimeMS)[] engines, int target, int numGPUs)
-  {
-    HashSet<string> seen = [];
-    List<int[]> result = [];
-
-    // Strategy 1: Greedy largest-first (minimal batches)
-    AddCandidate(GreedyLargest(engines, target), seen, result);
-
-    // Strategy 2: Try to find exact k batches for k = 1 to numGPUs * 6
-    for (int k = 1; k <= Math.Min(numGPUs * 6, 40); k++)
-    {
-      int[] combo = FindKBatches(engines, target, k);
-      if (combo != null)
-      {
-        AddCandidate(combo, seen, result);
-      }
-    }
-
-    // Strategy 3: Try uniform batch sizes (good for load balancing)
-    foreach ((int Size, float TimeMS) engine in engines)
-    {
-      int count = (target + engine.Size - 1) / engine.Size;
-      if (count <= numGPUs * 4)
-      {
-        AddCandidate(Enumerable.Repeat(engine.Size, count).ToArray(), seen, result);
-      }
-    }
-
-    // Strategy 4: Exhaustive search for small targets
-    int maxEngineSize = engines.Max(e => e.Size);
-    if (target <= maxEngineSize * 8)
-    {
-      ExhaustiveSearch(engines, target, [], 0, seen, result, maxDepth: 20);
-    }
-
-    // Strategy 5: Mixed strategies - try combinations of 2 different sizes
-    for (int i = 0; i < engines.Length; i++)
-    {
-      for (int j = i; j < engines.Length; j++)
-      {
-        int[] mixed = FindMixedBatches(engines[i].Size, engines[j].Size, target);
-        if (mixed != null)
-        {
-          AddCandidate(mixed, seen, result);
-        }
-      }
-    }
-
     return result;
   }
 
-  static void AddCandidate(int[] batches, HashSet<string> seen, List<int[]> result)
-  {
-    if (batches == null || batches.Length == 0) return;
-    string key = string.Join(",", batches.OrderByDescending(x => x));
-    if (seen.Add(key))
-    {
-      result.Add(batches);
-    }
-  }
 
   /// <summary>
-  /// Greedy: use largest engines first until target is met.
+  /// Recursive search for optimal batch combination.
+  /// Generates multisets by requiring engine index >= startIdx (avoids duplicates).
+  /// Prunes branches whose lower-bound cost exceeds best known cost.
   /// </summary>
-  static int[] GreedyLargest((int Size, float TimeMS)[] engines, int target)
+  private static void SearchBatches(
+    ReadOnlySpan<int> sizes, ReadOnlySpan<float> times, int n,
+    int remaining, Span<int> current, int depth, int startIdx,
+    float costSoFar, float minEngineTime,
+    Span<int> bestPlan, ref int bestLen, ref float bestCost, ref int bestPadding,
+    int maxDepth)
   {
-    List<int> batches = [];
-    int remaining = target;
-
-    while (remaining > 0)
+    if (remaining <= 0)
     {
-      (int Size, float TimeMS) chosen = engines.FirstOrDefault(e => e.Size <= remaining);
-      if (chosen == default)
+      // Valid plan: engine sizes sum >= target
+      float totalCost = costSoFar + depth * PER_BATCH_OVERHEAD_MS;
+      int padding = -remaining;
+
+      // Accept if clearly better time, or similar time (within 3%) with less padding
+      if (totalCost < bestCost * 0.97f || (totalCost <= bestCost * 1.03f && padding < bestPadding))
       {
-        chosen = engines[^1]; // Smallest engine
-      }
-      batches.Add(chosen.Size);
-      remaining -= chosen.Size;
-    }
-
-    return [.. batches];
-  }
-
-  /// <summary>
-  /// Find exactly k batches that cover target with minimal excess.
-  /// </summary>
-  static int[] FindKBatches((int Size, float TimeMS)[] engines, int target, int k)
-  {
-    if (k <= 0) return null;
-
-    int avgSize = (target + k - 1) / k;
-
-    (int Size, float TimeMS) baseEngine = engines
-      .Where(e => e.Size >= avgSize)
-      .OrderBy(e => e.Size)
-      .FirstOrDefault();
-
-    if (baseEngine == default)
-    {
-      baseEngine = engines[0]; // Largest
-    }
-
-    List<int> batches = Enumerable.Repeat(baseEngine.Size, k).ToList();
-    int sum = baseEngine.Size * k;
-
-    if (sum >= target)
-    {
-      // Try to reduce padding by using smaller engines where possible
-      for (int i = 0; i < k && sum > target; i++)
-      {
-        foreach ((int Size, float TimeMS) smaller in engines.Where(e => e.Size < batches[i]).OrderByDescending(e => e.Size))
+        if (totalCost < bestCost)
         {
-          int newSum = sum - batches[i] + smaller.Size;
-          if (newSum >= target)
-          {
-            sum = newSum;
-            batches[i] = smaller.Size;
-            break;
-          }
+          bestCost = totalCost;
         }
-      }
-      return [.. batches];
-    }
-
-    // Need to use larger engines for some slots
-    for (int i = 0; i < k && sum < target; i++)
-    {
-      foreach ((int Size, float TimeMS) larger in engines.Where(e => e.Size > batches[i]).OrderBy(e => e.Size))
-      {
-        int newSum = sum - batches[i] + larger.Size;
-        sum = newSum;
-        batches[i] = larger.Size;
-        if (sum >= target) break;
-      }
-      if (sum >= target) break;
-    }
-
-    return sum >= target ? [.. batches] : null;
-  }
-
-  /// <summary>
-  /// Find a combination using exactly two engine sizes.
-  /// </summary>
-  static int[] FindMixedBatches(int size1, int size2, int target)
-  {
-    int bestExcess = int.MaxValue;
-    int[] best = null;
-
-    int maxA = (target / size1) + 2;
-    for (int a = 0; a <= maxA; a++)
-    {
-      int remaining = target - a * size1;
-      if (remaining <= 0)
-      {
-        int excess = a * size1 - target;
-        if (excess < bestExcess)
-        {
-          bestExcess = excess;
-          best = Enumerable.Repeat(size1, a).ToArray();
-        }
-        break;
-      }
-
-      int b = (remaining + size2 - 1) / size2;
-      int total = a * size1 + b * size2;
-      int excess2 = total - target;
-
-      if (excess2 < bestExcess && a + b <= 50)
-      {
-        bestExcess = excess2;
-        best = Enumerable.Repeat(size1, a).Concat(Enumerable.Repeat(size2, b)).ToArray();
-      }
-    }
-
-    return best;
-  }
-
-  /// <summary>
-  /// Exhaustive search for small targets.
-  /// </summary>
-  static void ExhaustiveSearch((int Size, float TimeMS)[] engines,
-                               int target, List<int> current, int startIdx,
-                               HashSet<string> seen, List<int[]> result, int maxDepth)
-  {
-    int sum = current.Sum();
-    if (sum >= target)
-    {
-      int maxPadding = engines.Max(e => e.Size) * 2;
-      if (sum - target <= maxPadding)
-      {
-        AddCandidate([.. current], seen, result);
+        bestPadding = padding;
+        bestLen = depth;
+        current.Slice(0, depth).CopyTo(bestPlan);
       }
       return;
     }
 
-    if (current.Count >= maxDepth) return;
-
-    for (int i = startIdx; i < engines.Length; i++)
+    if (depth >= maxDepth)
     {
-      current.Add(engines[i].Size);
-      ExhaustiveSearch(engines, target, current, i, seen, result, maxDepth);
-      current.RemoveAt(current.Count - 1);
+      return;
+    }
+
+    // Lower bound: need at least ceil(remaining / largestAvailable) more batches,
+    // each costing at least minEngineTime + PER_BATCH_OVERHEAD_MS
+    int largestAvailable = sizes[startIdx];
+    int minBatchesNeeded = (remaining + largestAvailable - 1) / largestAvailable;
+    float lowerBound = costSoFar + (depth + minBatchesNeeded) * PER_BATCH_OVERHEAD_MS
+                       + minBatchesNeeded * minEngineTime;
+    if (lowerBound > bestCost * 1.03f)
+    {
+      return;
+    }
+
+    for (int i = startIdx; i < n; i++)
+    {
+      current[depth] = i;
+      SearchBatches(sizes, times, n, remaining - sizes[i], current, depth + 1, i,
+                    costSoFar + times[i], minEngineTime,
+                    bestPlan, ref bestLen, ref bestCost, ref bestPadding, maxDepth);
     }
   }
 
   /// <summary>
-  /// Assign batches to GPUs. Longest-executing batches go to preferredGPU first,
-  /// then remaining batches distributed via LPT to minimize makespan.
+  /// Recursive search for optimal multi-GPU batch combination.
+  /// Generates multisets by requiring engine index >= startIdx (avoids duplicates).
+  /// Evaluates each valid plan by LPT makespan; prunes using total-work / numGPUs lower bound.
   /// </summary>
-  static int[][] AssignToGPUs(int[] batches, Dictionary<int, float>[] sizeToTimePerGPU, int numGPUs, int preferredGPU)
+  private static void SearchBatchesMultiGPU(
+    ReadOnlySpan<int> sizes, int n,
+    ReadOnlySpan<float> allGPUTimes, ReadOnlySpan<float> minGPUTimes, int numGPUs, int preferredGPU,
+    int remaining, Span<int> current, int depth, int startIdx,
+    float minCostSoFar, float globalMinTime,
+    Span<int> bestPlan, ref int bestLen, ref float bestMakespan, ref int bestPadding,
+    int maxDepth)
   {
-    // Sort batches by execution time on preferred GPU (descending)
-    List<int> sorted = [.. batches.OrderByDescending(b => sizeToTimePerGPU[preferredGPU][b])];
-
-    float[] gpuLoads = new float[numGPUs];
-    List<int>[] gpuBatches = new List<int>[numGPUs];
-    for (int i = 0; i < numGPUs; i++)
+    if (remaining <= 0)
     {
-      gpuBatches[i] = [];
+      float makespan = ComputeLPTMakespan(current, depth, allGPUTimes, numGPUs, n, preferredGPU);
+      int padding = -remaining;
+
+      if (makespan < bestMakespan * 0.97f || (makespan <= bestMakespan * 1.03f && padding < bestPadding))
+      {
+        if (makespan < bestMakespan)
+        {
+          bestMakespan = makespan;
+        }
+        bestPadding = padding;
+        bestLen = depth;
+        current.Slice(0, depth).CopyTo(bestPlan);
+      }
+      return;
     }
 
-    // Assign first batch (longest) to preferred GPU
-    bool firstBatch = true;
-
-    foreach (int batch in sorted)
+    if (depth >= maxDepth)
     {
-      int targetGPU;
+      return;
+    }
 
-      if (firstBatch)
+    // Lower bound: total minimum work / numGPUs assumes perfect load balance
+    int largestAvailable = sizes[startIdx];
+    int minBatchesNeeded = (remaining + largestAvailable - 1) / largestAvailable;
+    int totalBatches = depth + minBatchesNeeded;
+    float lowerBound = (minCostSoFar + minBatchesNeeded * globalMinTime
+                        + totalBatches * PER_BATCH_OVERHEAD_MS) / numGPUs;
+    if (lowerBound > bestMakespan * 1.03f)
+    {
+      return;
+    }
+
+    for (int i = startIdx; i < n; i++)
+    {
+      current[depth] = i;
+      SearchBatchesMultiGPU(sizes, n, allGPUTimes, minGPUTimes, numGPUs, preferredGPU,
+                            remaining - sizes[i], current, depth + 1, i,
+                            minCostSoFar + minGPUTimes[i], globalMinTime,
+                            bestPlan, ref bestLen, ref bestMakespan, ref bestPadding, maxDepth);
+    }
+  }
+
+
+  /// <summary>
+  /// Computes makespan using LPT (Longest Processing Time first) assignment.
+  /// First batch goes to preferredGPU, remaining batches go to least-loaded GPU.
+  /// Each GPU's load includes per-batch overhead.
+  /// </summary>
+  private static float ComputeLPTMakespan(
+    ReadOnlySpan<int> batchIndices, int batchCount,
+    ReadOnlySpan<float> allGPUTimes, int numGPUs, int n, int preferredGPU)
+  {
+    if (batchCount == 0)
+    {
+      return 0;
+    }
+
+    // Sort batches descending by preferred GPU time for LPT ordering
+    Span<int> sorted = stackalloc int[batchCount];
+    batchIndices.Slice(0, batchCount).CopyTo(sorted);
+    for (int a = 0; a < batchCount - 1; a++)
+    {
+      for (int b = a + 1; b < batchCount; b++)
       {
-        targetGPU = preferredGPU;
-        firstBatch = false;
-      }
-      else
-      {
-        // LPT: assign to GPU with minimum current load
-        targetGPU = 0;
-        float minLoad = gpuLoads[0];
-        for (int i = 1; i < numGPUs; i++)
+        if (allGPUTimes[preferredGPU * n + sorted[b]] > allGPUTimes[preferredGPU * n + sorted[a]])
         {
-          if (gpuLoads[i] < minLoad)
-          {
-            targetGPU = i;
-            minLoad = gpuLoads[i];
-          }
+          (sorted[a], sorted[b]) = (sorted[b], sorted[a]);
         }
       }
-
-      gpuBatches[targetGPU].Add(batch);
-      gpuLoads[targetGPU] += sizeToTimePerGPU[targetGPU][batch];
     }
 
-    return gpuBatches.Select(g => g.ToArray()).ToArray();
+    // Track per-GPU execution time and batch count
+    Span<float> gpuLoads = stackalloc float[numGPUs];
+    Span<int> gpuCounts = stackalloc int[numGPUs];
+    gpuLoads.Clear();
+    gpuCounts.Clear();
+
+    // First batch to preferred GPU
+    gpuLoads[preferredGPU] = allGPUTimes[preferredGPU * n + sorted[0]];
+    gpuCounts[preferredGPU] = 1;
+
+    // Remaining batches: assign to GPU with lowest effective load
+    for (int b = 1; b < batchCount; b++)
+    {
+      int targetGPU = 0;
+      float minLoad = gpuLoads[0] + gpuCounts[0] * PER_BATCH_OVERHEAD_MS;
+      for (int g = 1; g < numGPUs; g++)
+      {
+        float load = gpuLoads[g] + gpuCounts[g] * PER_BATCH_OVERHEAD_MS;
+        if (load < minLoad)
+        {
+          targetGPU = g;
+          minLoad = load;
+        }
+      }
+      gpuLoads[targetGPU] += allGPUTimes[targetGPU * n + sorted[b]];
+      gpuCounts[targetGPU]++;
+    }
+
+    // Makespan = max GPU time (execution + overhead)
+    float makespan = 0;
+    for (int g = 0; g < numGPUs; g++)
+    {
+      float gpuTime = gpuLoads[g] + gpuCounts[g] * PER_BATCH_OVERHEAD_MS;
+      if (gpuTime > makespan)
+      {
+        makespan = gpuTime;
+      }
+    }
+    return makespan;
+  }
+
+
+  /// <summary>
+  /// Builds the per-GPU execution plan from a batch plan using LPT assignment.
+  /// Returns int[numGPUs][] with each inner array containing engine batch sizes for that GPU.
+  /// </summary>
+  private static int[][] BuildLPTAssignment(
+    ReadOnlySpan<int> batchIndices, int batchCount,
+    ReadOnlySpan<int> sizes, ReadOnlySpan<float> allGPUTimes, int numGPUs, int n, int preferredGPU)
+  {
+    if (batchCount == 0)
+    {
+      int[][] empty = new int[numGPUs][];
+      for (int g = 0; g < numGPUs; g++)
+      {
+        empty[g] = [];
+      }
+      return empty;
+    }
+
+    // Sort batches descending by preferred GPU time (same ordering as ComputeLPTMakespan)
+    Span<int> sorted = stackalloc int[batchCount];
+    batchIndices.Slice(0, batchCount).CopyTo(sorted);
+    for (int a = 0; a < batchCount - 1; a++)
+    {
+      for (int b = a + 1; b < batchCount; b++)
+      {
+        if (allGPUTimes[preferredGPU * n + sorted[b]] > allGPUTimes[preferredGPU * n + sorted[a]])
+        {
+          (sorted[a], sorted[b]) = (sorted[b], sorted[a]);
+        }
+      }
+    }
+
+    // LPT assignment tracking
+    Span<float> gpuLoads = stackalloc float[numGPUs];
+    Span<int> gpuCounts = stackalloc int[numGPUs];
+    Span<int> assignments = stackalloc int[batchCount];
+    gpuLoads.Clear();
+    gpuCounts.Clear();
+
+    // First batch to preferred GPU
+    assignments[0] = preferredGPU;
+    gpuLoads[preferredGPU] = allGPUTimes[preferredGPU * n + sorted[0]];
+    gpuCounts[preferredGPU] = 1;
+
+    for (int b = 1; b < batchCount; b++)
+    {
+      int targetGPU = 0;
+      float minLoad = gpuLoads[0] + gpuCounts[0] * PER_BATCH_OVERHEAD_MS;
+      for (int g = 1; g < numGPUs; g++)
+      {
+        float load = gpuLoads[g] + gpuCounts[g] * PER_BATCH_OVERHEAD_MS;
+        if (load < minLoad)
+        {
+          targetGPU = g;
+          minLoad = load;
+        }
+      }
+      assignments[b] = targetGPU;
+      gpuLoads[targetGPU] += allGPUTimes[targetGPU * n + sorted[b]];
+      gpuCounts[targetGPU]++;
+    }
+
+    // Build per-GPU result arrays
+    int[][] result = new int[numGPUs][];
+    for (int g = 0; g < numGPUs; g++)
+    {
+      result[g] = new int[gpuCounts[g]];
+    }
+
+    Span<int> fillIdx = stackalloc int[numGPUs];
+    fillIdx.Clear();
+    for (int b = 0; b < batchCount; b++)
+    {
+      int g = assignments[b];
+      result[g][fillIdx[g]] = sizes[sorted[b]];
+      fillIdx[g]++;
+    }
+
+    return result;
   }
 
 
