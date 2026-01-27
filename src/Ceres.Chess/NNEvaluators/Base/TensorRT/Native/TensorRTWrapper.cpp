@@ -31,6 +31,13 @@
 #include <sys/stat.h>
 #endif
 
+// CUDA 12+ uses simplified 3-arg cudaGraphInstantiate; older versions use 5-arg form
+#if CUDART_VERSION >= 12000
+#define CUDA_GRAPH_INSTANTIATE(exec, graph) cudaGraphInstantiate(exec, graph, 0)
+#else
+#define CUDA_GRAPH_INSTANTIATE(exec, graph) cudaGraphInstantiate(exec, graph, nullptr, nullptr, 0)
+#endif
+
 namespace
 {
   // Simple logger implementation for TensorRT
@@ -260,7 +267,7 @@ extern "C"
     std::string name(layerName);
     // Must contain "/ln1/" but NOT "/attention/ln1/"
     return name.find("/ln1/") != std::string::npos &&
-           name.find("/attention/ln1/") == std::string::npos;
+      name.find("/attention/ln1/") == std::string::npos;
   }
 
   // Helper: smolgen mode - only match smolgen-related ln1 inside attention
@@ -298,11 +305,9 @@ extern "C"
       return nullptr;
     }
 
-    // Create network with explicit batch
-    const uint32_t explicitBatch = 1U << static_cast<uint32_t>(
-      nvinfer1::NetworkDefinitionCreationFlag::kEXPLICIT_BATCH);
+    // Create network (kEXPLICIT_BATCH is deprecated in TRT 10+; 0 is equivalent)
     auto network = std::unique_ptr<nvinfer1::INetworkDefinition>(
-      builder->createNetworkV2(explicitBatch));
+      builder->createNetworkV2(0));
     if (!network)
     {
       SetError("Failed to create network");
@@ -414,7 +419,7 @@ extern "C"
         }
       }
       fprintf(stderr, "[TensorRT] Marked %d/%d layers as FP32 for post-attention norm (ln1, %s mode)\n",
-              layersMarked, totalLayers, modeName);
+        layersMarked, totalLayers, modeName);
     }
 
     // Determine batch sizes for optimization profile
@@ -1395,7 +1400,7 @@ extern "C"
         return -4;
       }
 
-      cudaGraphInstantiate(&ec->graphExec, ec->graph, 0);
+      CUDA_GRAPH_INSTANTIATE(&ec->graphExec, ec->graph);
       ec->graphCaptured = true;
 
       // Now execute the graph
@@ -1737,7 +1742,7 @@ extern "C"
       return -6;
     }
 
-    err = cudaGraphInstantiate(&ec->streamGraphExecs[streamIdx], ec->streamGraphs[streamIdx], 0);
+    err = CUDA_GRAPH_INSTANTIATE(&ec->streamGraphExecs[streamIdx], ec->streamGraphs[streamIdx]);
     if (err != cudaSuccess)
     {
       std::lock_guard<std::mutex> lock(g_mutex);
