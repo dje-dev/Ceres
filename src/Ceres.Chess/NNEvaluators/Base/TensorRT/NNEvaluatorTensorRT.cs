@@ -433,7 +433,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
     {
       // LC0 path: convert positions to 112-plane format directly into inputHalfBuffer
       Memory<Half> inputBuffer = new Memory<Half>(inputHalfBuffer, 0, numPos * inputElementsPerPosition);
-      batch.ConvertValuesToFlatFromPlanes(inputBuffer, false, true);
+      batch.ConvertValuesToFlatFromPlanes(inputBuffer, false, false);
     }
     else
     {
