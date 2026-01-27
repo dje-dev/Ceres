@@ -262,10 +262,13 @@ namespace Ceres.Chess.NNEvaluators
       const int TRT_MAX_BATCH_SIZE = 1024; // See note in ONNXExecutor, possibly configuring profile to include large batches hinders performance.
       const bool ONNX_SCALE_50_MOVE_COUNTER = false; // BT2 already inserts own node to adjust
 
+      bool isTensorRTNative = deviceDef.OverrideEngineType?.Contains("TensorRTNative", StringComparison.OrdinalIgnoreCase) == true;
+
       switch (netDef.Type)
       {
         case NNEvaluatorType.ONNXViaTRT:
         case NNEvaluatorType.ONNXViaORT:
+
           bool viaTRT = netDef.Type == NNEvaluatorType.ONNXViaTRT
              || (deviceDef.OverrideEngineType != null && deviceDef.OverrideEngineType.StartsWith("TensorRT16"));
           int maxONNXBatchSize = viaTRT ? TRT_MAX_BATCH_SIZE : DEFAULT_MAX_BATCH_SIZE;
@@ -280,6 +283,12 @@ namespace Ceres.Chess.NNEvaluators
           if (!fullFN.ToUpper().Contains("ONNX"))
           {
             fullFN += ".onnx";
+          }
+
+          if (isTensorRTNative)
+          {
+            return NNEvaluatorTensorRT.BuildEvaluator(netDef, gpuIDs: [deviceDef.DeviceIndex], options,
+                                                      ONNXNetExecutor.NetTypeEnum.LC0, fullFN);
           }
           ret = new NNEvaluatorONNX(netDef.ShortID, fullFN, null, deviceDef.Type, deviceDef.DeviceIndex, useTRT: viaTRT,
                                             ONNXNetExecutor.NetTypeEnum.LC0, maxONNXBatchSize,
@@ -317,7 +326,6 @@ namespace Ceres.Chess.NNEvaluators
           }
 
           bool isTorchscipt = deviceDef.OverrideEngineType?.Contains("TORCHSCRIPT", StringComparison.OrdinalIgnoreCase) == true;
-          bool isTensorRTNative = deviceDef.OverrideEngineType?.Contains("TensorRTNative", StringComparison.OrdinalIgnoreCase) == true;
 
           // Temporary hack, Ceres nets requires positions to be retained.
           // TODO: Remove this, or make it an instance variable not global static.
@@ -679,8 +687,7 @@ namespace Ceres.Chess.NNEvaluators
             && def.Devices.Length > 0
             && def.Nets.Length > 0)
         {
-          bool allTensorRTNative = def.Devices.All(d =>
-            d.Device.OverrideEngineType?.Contains("TensorRTNative", StringComparison.OrdinalIgnoreCase) == true);
+          bool allTensorRTNative = def.Devices.All(d => d.Device.OverrideEngineType?.Contains("TensorRTNative", StringComparison.OrdinalIgnoreCase) == true);
 
           bool allNetsMatch = def.Nets.Length == 1 || def.Nets.All(n => n.Net.Equals(def.Nets[0].Net));
 

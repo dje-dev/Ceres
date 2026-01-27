@@ -41,7 +41,8 @@ namespace Ceres.Chess.NNEvaluators.TensorRT;
 /// TensorRT-based neural network evaluator for Ceres.
 ///
 /// Supports:
-/// - TPG networks with Half (FP16) or Byte (INT8) inputs
+/// - TPG (Ceres) networks with Half (FP16) or Byte (INT8) inputs
+/// - LC0 (Leela Chess Zero) networks with Half (FP16) plane inputs
 /// - Multi-GPU with intelligent batch splitting
 /// - Exact batch size engines for optimal performance
 /// </summary>
@@ -55,6 +56,11 @@ public class NNEvaluatorTensorRT : NNEvaluator
   /// Path to the ONNX model file.
   /// </summary>
   public readonly string ONNXFileName;
+
+  /// <summary>
+  /// Type of neural network (LC0 or TPG).
+  /// </summary>
+  public readonly ONNXNetExecutor.NetTypeEnum NetType;
 
   public readonly EnginePoolMode PoolMode;
   public readonly int[] BatchSizes;
@@ -153,17 +159,20 @@ public class NNEvaluatorTensorRT : NNEvaluator
   /// Uses MultiGPUEnginePool for multi-GPU support and optimized batch handling.
   /// </summary>
   /// <param name="onnxFileName">Path to ONNX model file</param>
+  /// <param name="netType">Type of neural network (LC0 or TPG)</param>
+  /// <param name="poolMode">Engine pool mode (Exact or Range)</param>
   /// <param name="batchSizes">Array of exact batch sizes for engines</param>
   /// <param name="gpuIDs">GPU IDs to use, defaults to [0]</param>
   /// <param name="useCudaGraphs">Enable CUDA graphs for faster inference</param>
   /// <param name="softMaxBatchSize">Soft max batch size (can exceed largest engine via splitting)</param>
   public NNEvaluatorTensorRT(string onnxFileName,
+                             ONNXNetExecutor.NetTypeEnum netType,
                              EnginePoolMode poolMode,
                              int[] batchSizes,
                              int[] gpuIDs = null,
                              bool useCudaGraphs = false,
                              int softMaxBatchSize = 0)
-    : this(onnxFileName, poolMode, batchSizes, null, gpuIDs, useCudaGraphs, softMaxBatchSize)
+    : this(onnxFileName, netType, poolMode, batchSizes, null, gpuIDs, useCudaGraphs, softMaxBatchSize)
   {
   }
 
@@ -173,12 +182,15 @@ public class NNEvaluatorTensorRT : NNEvaluator
   /// Uses MultiGPUEnginePool for multi-GPU support and optimized batch handling.
   /// </summary>
   /// <param name="onnxFileName">Path to ONNX model file</param>
+  /// <param name="netType">Type of neural network (LC0 or TPG)</param>
+  /// <param name="poolMode">Engine pool mode (Exact or Range)</param>
   /// <param name="batchSizes">Array of exact batch sizes for engines</param>
   /// <param name="buildOptions">Optional TensorRT build options (null uses default BF16)</param>
   /// <param name="gpuIDs">GPU IDs to use, defaults to [0]</param>
   /// <param name="useCudaGraphs">Enable CUDA graphs for faster inference</param>
   /// <param name="softMaxBatchSize">Soft max batch size (can exceed largest engine via splitting)</param>
   public NNEvaluatorTensorRT(string onnxFileName,
+                             ONNXNetExecutor.NetTypeEnum netType,
                              EnginePoolMode poolMode,
                              int[] batchSizes,
                              TensorRTBuildOptions? buildOptions,
@@ -192,6 +204,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
     }
 
     ONNXFileName = onnxFileName;
+    NetType = netType;
     PoolMode = poolMode;
     BatchSizes = batchSizes;
     GpuIDs = gpuIDs ?? [0];
@@ -231,8 +244,13 @@ public class NNEvaluatorTensorRT : NNEvaluator
       options.BuilderOptimizationLevel = 3;
       options.UseFP16 = 0;
       options.UseBF16 = 1;
-//      options.FP32PostAttentionNorm = 1;  // certain models completely fail without this
-      options.FP32SmolgenNorm = 0;
+
+      // NOTE: currently favor BF16 thus upcasting is disabled
+      //options.FP32PostAttentionNorm = 1;
+      if (netType == ONNXNetExecutor.NetTypeEnum.TPG)
+      {
+        //options.FP32SmolgenNorm = 1;
+      }
       options.UseCudaGraphs = useCudaGraphs ? 1 : 0;
     }
     options.Validate();
@@ -254,7 +272,18 @@ public class NNEvaluatorTensorRT : NNEvaluator
     {
       int sizePerPos = (int)(info.Size / largestEngineBatchSize);
 
-      switch (info.Name.ToLower())
+      // Normalize output name: strip "/output/" prefix (LC0 format) and map "wdl" to "value"
+      string name = info.Name.ToLower();
+      if (name.StartsWith("/output/"))
+      {
+        name = name["/output/".Length..];
+      }
+      if (name == "wdl")
+      {
+        name = "value";
+      }
+
+      switch (name)
       {
         case "value":
           valueTensorIndex = tensorIndex;
@@ -297,8 +326,11 @@ public class NNEvaluatorTensorRT : NNEvaluator
     hasUncertaintyP = uncPSize > 0;
     hasValueSecondary = value2Size > 0 || (SUBSTITUTE_VALUE3_INTO_VALUE2_IF_FOUND && value3Size > 0);
 
-    int bytesPerSquareRecord = TPGRecord.BYTES_PER_SQUARE_RECORD;
-    squareByteBuffer = new byte[maxBatchSize * 64 * bytesPerSquareRecord];
+    if (netType == ONNXNetExecutor.NetTypeEnum.TPG)
+    {
+      int bytesPerSquareRecord = TPGRecord.BYTES_PER_SQUARE_RECORD;
+      squareByteBuffer = new byte[maxBatchSize * 64 * bytesPerSquareRecord];
+    }
 
     if (useByteInputs)
     {
@@ -397,19 +429,24 @@ public class NNEvaluatorTensorRT : NNEvaluator
       throw new ArgumentException($"Batch size {numPos} exceeds maximum {maxBatchSize}");
     }
 
-    if (ConverterToFlatFromTPG == null)
+    if (NetType == ONNXNetExecutor.NetTypeEnum.LC0)
     {
-      throw new InvalidOperationException("ConverterToFlat must be set before evaluation");
+      // LC0 path: convert positions to 112-plane format directly into inputHalfBuffer
+      Memory<Half> inputBuffer = new Memory<Half>(inputHalfBuffer, 0, numPos * inputElementsPerPosition);
+      batch.ConvertValuesToFlatFromPlanes(inputBuffer, false, true);
     }
+    else
+    {
+      // TPG path: convert positions to flat TPG byte format
+      if (ConverterToFlat == null)
+      {
+        throw new InvalidOperationException("ConverterToFlat must be set before evaluation for TPG networks");
+      }
 
-    // clearing not needed
-    //    squareByteBuffer.AsSpan(0, numPos * 64 * TPGRecord.BYTES_PER_SQUARE_RECORD).Clear();
-    //    Array.Clear(squareByteBuffer, 0, squareByteBuffer.Length);
-
-    Memory<byte> byteBuffer = new Memory<byte>(squareByteBuffer, 0, numPos * 64 * TPGRecord.BYTES_PER_SQUARE_RECORD);
-    Memory<Half> emptyHalf = Memory<Half>.Empty;
-
-    ConverterToFlat(Options, batch, USE_HISTORY, byteBuffer, emptyHalf, null);
+      Memory<byte> byteBuffer = new Memory<byte>(squareByteBuffer, 0, numPos * 64 * TPGRecord.BYTES_PER_SQUARE_RECORD);
+      Memory<Half> emptyHalf = Memory<Half>.Empty;
+      ConverterToFlat(Options, batch, USE_HISTORY, byteBuffer, emptyHalf, null);
+    }
 
     return ProcessBatchWithPool(batch, numPos);
   }
@@ -445,12 +482,19 @@ public class NNEvaluatorTensorRT : NNEvaluator
                              valueHead1Temperature, valueHead2Temperature);
     };
 
-    if (useByteInputs)
+    if (NetType == ONNXNetExecutor.NetTypeEnum.LC0)
     {
+      // LC0: inputHalfBuffer already contains the encoded planes from DoEvaluateIntoBuffers
+      pool.ProcessWithHandler(inputHalfBuffer, numPos, handler);
+    }
+    else if (useByteInputs)
+    {
+      // TPG byte path
       pool.ProcessBytesWithHandler(squareByteBuffer, numPos, handler);
     }
     else
     {
+      // TPG half path: convert byte buffer to half buffer with /100 scaling
       int elemsToCopy = numPos * inputElementsPerPosition;
       Memory<byte> sourceBytes = new Memory<byte>(squareByteBuffer, 0, elemsToCopy);
       Memory<Half> targetHalfs = new Memory<Half>(inputHalfBuffer, 0, elemsToCopy);
@@ -790,16 +834,33 @@ public class NNEvaluatorTensorRT : NNEvaluator
     // Get options from def if not provided
     options = options ?? def.Options;
 
-    NNEvaluatorTensorRT trtNativeEngine = BuildEvaluator(netDef, gpuIDs, options);
+    string overrideFN = null;
+    if (netDef.Type != NNEvaluatorType.Ceres)
+    {
+      string pathLc0Networks = CeresUserSettingsManager.Settings.DirLC0Networks;
+      overrideFN = Path.Combine(CeresUserSettingsManager.Settings.DirLC0Networks, netDef.NetworkID);
+      if (!overrideFN.ToUpper().Contains("ONNX"))
+      {
+        overrideFN += ".onnx";
+      }
+    }
+    NNEvaluatorTensorRT trtNativeEngine = BuildEvaluator(netDef, gpuIDs, options, 
+                                                         netDef.Type == NNEvaluatorType.Ceres ? ONNXNetExecutor.NetTypeEnum.TPG 
+                                                                                              : ONNXNetExecutor.NetTypeEnum.LC0,
+                                                         overrideFN);
 
     return trtNativeEngine;
   }
 
 
-  internal static NNEvaluatorTensorRT BuildEvaluator(NNEvaluatorNetDef netDef, int[] gpuIDs, NNEvaluatorOptions options)
+  internal static NNEvaluatorTensorRT BuildEvaluator(NNEvaluatorNetDef netDef, 
+                                                     int[] gpuIDs, 
+                                                     NNEvaluatorOptions options,
+                                                     ONNXNetExecutor.NetTypeEnum netType = ONNXNetExecutor.NetTypeEnum.TPG,
+                                                     string overrideFileName = null)
   {
     // Determine network file path
-    string netFileName = netDef.NetworkID;
+    string netFileName = overrideFileName ?? netDef.NetworkID;
     if (!netFileName.ToUpper().EndsWith("ONNX"))
     {
       netFileName += ".onnx";
@@ -830,6 +891,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
     const bool ENABLE_GRAPHS = true;
     const int THRESHOLD_ADJUST_SIZE = 8;
     NNEvaluatorTensorRT trtNativeEngine = new(netFileName,
+                                              netType,
                                               EXACT_BATCHES ? EnginePoolMode.Exact : EnginePoolMode.Range,
                                               EXACT_BATCHES ? AdjustSizes([1, 8, 32, 48, 64, 96, 128, 256], numStreamingMultiprocessors, THRESHOLD_ADJUST_SIZE)
                                                             : [48, 128, 1024],
@@ -839,9 +901,14 @@ public class NNEvaluatorTensorRT : NNEvaluator
     trtNativeEngine.Options = options;
 
     EncodedPositionBatchFlat.RETAIN_POSITION_INTERNALS = true; // ** TODO: remove/rework
-    trtNativeEngine.ConverterToFlatFromTPG = (opts, o, f1) => TPGConvertersToFlat.ConvertToFlatTPGFromTPG(opts, o, f1.Span);
-    trtNativeEngine.ConverterToFlat = (opts, o, history, squaresBytes, squares, legalMoveIndices)
-      => TPGConvertersToFlat.ConvertToFlatTPG(opts, o, history, squaresBytes, squares, legalMoveIndices);
+
+    if (netType == ONNXNetExecutor.NetTypeEnum.TPG)
+    {
+      trtNativeEngine.ConverterToFlatFromTPG = (opts, o, f1) => TPGConvertersToFlat.ConvertToFlatTPGFromTPG(opts, o, f1.Span);
+      trtNativeEngine.ConverterToFlat = (opts, o, history, squaresBytes, squares, legalMoveIndices)
+        => TPGConvertersToFlat.ConvertToFlatTPG(opts, o, history, squaresBytes, squares, legalMoveIndices);
+    }
+
     return trtNativeEngine;
   }
 
