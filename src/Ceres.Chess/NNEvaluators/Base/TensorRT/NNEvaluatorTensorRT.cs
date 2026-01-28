@@ -210,6 +210,13 @@ public class NNEvaluatorTensorRT : NNEvaluator
     GpuIDs = gpuIDs ?? [0];
     EngineNetworkID = System.IO.Path.GetFileNameWithoutExtension(onnxFileName);
 
+    // Build per-GPU sizes: use provided sizesPerGPU or replicate batchSizes for all GPUs
+    int[][] effectiveSizesPerGPU = new int[gpuIDs.Length][];
+    for (int i = 0; i < GpuIDs.Length; i++)
+    {
+      effectiveSizesPerGPU[i] = AdjustToSM(i, batchSizes);
+    }    
+  
     string cacheDir = ONNXExecutor.GetTRTEngineCacheDir(onnxFileName);
 
     trt = TensorRT.Instance;
@@ -220,10 +227,13 @@ public class NNEvaluatorTensorRT : NNEvaluator
     }
 
     // Compute max engine batch size based on mode
-    int maxEngineBatchSize = poolMode == EnginePoolMode.Range
-           ? batchSizes[^1]  // Last element is max in range mode
-           : batchSizes.Max();
-    maxBatchSize = softMaxBatchSize > 0 ? softMaxBatchSize : maxEngineBatchSize;
+    int maxEngineBatchSize = poolMode == EnginePoolMode.Range ? effectiveSizesPerGPU[0][^1]
+                                                              : effectiveSizesPerGPU[0].Max();
+    int maxEngineBatchSizeAll = poolMode == EnginePoolMode.Range
+                                          ? effectiveSizesPerGPU.Max(s => s[^1])
+                                          : effectiveSizesPerGPU.Max(s => s.Max());
+    maxBatchSize = softMaxBatchSize > 0 ? softMaxBatchSize : maxEngineBatchSizeAll;
+
     largestEngineBatchSize = maxEngineBatchSize;
 
     string graphsLabel = useCudaGraphs ? " [CUDA Graphs]" : "";
@@ -258,7 +268,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
     Console.WriteLine($"  Build options: FP16={options.UseFP16}, BF16={options.UseBF16}, FP32PostAttentionNorm={options.FP32PostAttentionNorm}, UseCUDAGraphs={options.UseCudaGraphs}");
 
     const int MIN_BATCH_SIZE_PER_GPU = 6;
-    pool = new MultiGPUEnginePool(trt, onnxFileName, batchSizes, poolMode, options, 0, 0, GpuIDs, MIN_BATCH_SIZE_PER_GPU, cacheDir);
+    pool = new MultiGPUEnginePool(trt, onnxFileName, effectiveSizesPerGPU, poolMode, options, 0, 0, GpuIDs, MIN_BATCH_SIZE_PER_GPU, cacheDir);
 
     inputElementsPerPosition = pool.InputElementsPerPosition;
     outputElementsPerPosition = pool.OutputElementsPerPosition;
@@ -880,20 +890,12 @@ public class NNEvaluatorTensorRT : NNEvaluator
     //      throw new NotImplementedException("Ceres TensorRT Native evaluator does not yet support head overrides.");
     //    }
 
-    // Query actual SM count from GPU device
-    int numStreamingMultiprocessors = TensorRTNative.GetMultiProcessorCount(gpuIDs[0]);
-    if (numStreamingMultiprocessors < 0)
-    {
-      throw new Exception($"Failed to query SM count for GPU {gpuIDs[0]}");
-    }
-
     const bool EXACT_BATCHES = true; // seems always fastest to use exact batches
     const bool ENABLE_GRAPHS = true;
-    const int THRESHOLD_ADJUST_SIZE = 8;
     NNEvaluatorTensorRT trtNativeEngine = new(netFileName,
                                               netType,
                                               EXACT_BATCHES ? EnginePoolMode.Exact : EnginePoolMode.Range,
-                                              EXACT_BATCHES ? AdjustSizes([1, 8, 32, 48, 64, 96, 128, 256], numStreamingMultiprocessors, THRESHOLD_ADJUST_SIZE)
+                                              EXACT_BATCHES ? [1, 8, 32, 48, 64, 96, 128, 256]
                                                             : [48, 128, 1024],
                                               gpuIDs: gpuIDs,
                                               useCudaGraphs: EXACT_BATCHES && ENABLE_GRAPHS, //optionsCeres.EnableCUDAGraphs,
@@ -917,17 +919,25 @@ public class NNEvaluatorTensorRT : NNEvaluator
   /// Modifies in place a sequence of batch sizes to be 
   /// (if possible) multiples of common GPU SM counts within a specified tolerance.
   /// </summary>
-  /// <param name="sizes"></param>
-  /// <param name="smCount"></param>
-  /// <param name="tolerance"></param>
+  /// <param name="anchorBatchSizes"></param>
   /// <returns></returns>
-  public static int[] AdjustSizes(int[] sizes, int smCount, int tolerance)
+  public static int[] AdjustToSM(int deviceID, int[] anchorBatchSizes)
   {
+    int[] adjustedSizes = new int[anchorBatchSizes.Length];
+
+    // Query actual SM count from GPU device
+    int smCount = TensorRTNative.GetMultiProcessorCount(deviceID);
+    if (smCount < 0)
+    {
+      throw new Exception($"Failed to query SM count for GPU {deviceID}");
+    }
+    const int THRESHOLD_ADJUST_TO_SM_DISTANCE = 8;
+
     int[] bases = { (3 * smCount) / 2, smCount, smCount / 2 };
 
-    for (int i = 0; i < sizes.Length; i++)
+    for (int i = 0; i < anchorBatchSizes.Length; i++)
     {
-      int original = sizes[i];
+      int original = anchorBatchSizes[i];
       int bestAdjusted = original;
       int bestDistance = int.MaxValue;
 
@@ -941,7 +951,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
         if (lower > 0)
         {
           int dist = Math.Abs(original - lower);
-          if (dist <= tolerance && dist < bestDistance)
+          if (dist <= THRESHOLD_ADJUST_TO_SM_DISTANCE && dist < bestDistance)
           {
             bestDistance = dist;
             bestAdjusted = lower;
@@ -949,17 +959,17 @@ public class NNEvaluatorTensorRT : NNEvaluator
         }
 
         int distUpper = Math.Abs(original - upper);
-        if (distUpper <= tolerance && distUpper < bestDistance)
+        if (distUpper <= THRESHOLD_ADJUST_TO_SM_DISTANCE && distUpper < bestDistance)
         {
           bestDistance = distUpper;
           bestAdjusted = upper;
         }
       }
 
-      sizes[i] = bestAdjusted;
+      adjustedSizes[i] = bestAdjusted;
     }
 
-    return sizes;
+    return adjustedSizes;
   }
 
 

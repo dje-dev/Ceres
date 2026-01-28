@@ -38,7 +38,7 @@ public sealed class MultiGPUEnginePool : IDisposable
   private readonly int[] deviceIDs;
   private readonly int minBatchSizePerGPU;
   private readonly EnginePoolMode mode;
-  private readonly int[] sizes;
+  private readonly int[][] sizesPerGPU;
   private readonly bool useByteInputs;
   private bool disposed;
 
@@ -71,6 +71,22 @@ public sealed class MultiGPUEnginePool : IDisposable
   // Cached speed-normalized fractions for each GPU count (computed once after warmup)
   // Index is numGPUs, value is the fractions array for that GPU count
   private float[][] cachedSpeedFractions;
+
+  // Precomputed per-GPU cost tables: gpuCostTable[g][n] = min execution time (ms)
+  // for GPU g to process n positions using optimal engine combination.
+  // Computed during Warmup() via DP over engine sizes.
+  private float[][] gpuCostTable;
+  private int maxCostTableSize;
+
+  // Preallocated DP buffers for TryComputeOptimalDistribution (avoids per-call allocation)
+  private float[] dpBufA, dpBufB;
+  private int[] dpChoices;
+
+  // Per-session distribution cache: since engine sizes, GPU timings, and penalty constants
+  // are fixed for the session, the optimal distribution for a given totalPositions is invariant.
+  // distCache[totalPositions * pools.Count + g] = positions assigned to GPU g.
+  private int[] distCache;
+  private bool[] distCacheValid;
 
   /// <summary>
   /// Input elements per position.
@@ -116,7 +132,7 @@ public sealed class MultiGPUEnginePool : IDisposable
   /// <summary>
   /// Constructor.
   /// </summary>
-  public MultiGPUEnginePool(TensorRT trt, string onnxPath, int[] sizes, EnginePoolMode mode,
+  public MultiGPUEnginePool(TensorRT trt, string onnxPath, int[][] sizesPerGPU, EnginePoolMode mode,
                              TensorRTBuildOptions options, int inputElementsPerPos, int outputElementsPerPos,
                              int[] deviceIds, int minBatchSizePerGPU, string cacheDir)
   {
@@ -124,12 +140,12 @@ public sealed class MultiGPUEnginePool : IDisposable
     deviceIDs = deviceIds;
     this.minBatchSizePerGPU = minBatchSizePerGPU;
     this.mode = mode;
-    this.sizes = (int[])sizes.Clone();
+    this.sizesPerGPU = sizesPerGPU;
 
-    foreach (int deviceId in deviceIds)
+    for (int i = 0; i < deviceIds.Length; i++)
     {
-      EnginePool pool = new EnginePool(trt, onnxPath, (int[])sizes.Clone(), mode, options,
-                                        inputElementsPerPos, outputElementsPerPos, deviceId, cacheDir);
+      EnginePool pool = new EnginePool(trt, onnxPath, (int[])sizesPerGPU[i].Clone(), mode, options,
+                                        inputElementsPerPos, outputElementsPerPos, deviceIds[i], cacheDir);
       pools.Add(pool);
     }
 
@@ -164,19 +180,13 @@ public sealed class MultiGPUEnginePool : IDisposable
 
   private int GetMaxBatchSize()
   {
-    if (mode == EnginePoolMode.Range)
+    int max = 0;
+    foreach (int[] gpuSizes in sizesPerGPU)
     {
-      return sizes[^1];
+      int gpuMax = mode == EnginePoolMode.Range ? gpuSizes[^1] : gpuSizes.Max();
+      max = Math.Max(max, gpuMax);
     }
-    else
-    {
-      int max = 0;
-      foreach (int s in sizes)
-      {
-        max = Math.Max(max, s);
-      }
-      return max;
-    }
+    return max;
   }
 
 
@@ -250,18 +260,19 @@ public sealed class MultiGPUEnginePool : IDisposable
     const int WARMUP_ITERATIONS = 5;
 
     int numGPUs = pools.Count;
-    int numBatchSizes = sizes.Length;
 
     executionTimesPerGPU = new float[numGPUs][];
 
     for (int gpuIndex = 0; gpuIndex < numGPUs; gpuIndex++)
     {
+      int[] gpuSizes = sizesPerGPU[gpuIndex];
+      int numBatchSizes = gpuSizes.Length;
       executionTimesPerGPU[gpuIndex] = new float[numBatchSizes];
       EnginePool pool = pools[gpuIndex];
 
       for (int sizeIndex = 0; sizeIndex < numBatchSizes; sizeIndex++)
       {
-        int batchSize = sizes[sizeIndex];
+        int batchSize = gpuSizes[sizeIndex];
 
         // Allocate dummy input/output arrays for this batch size
         int inputElements = batchSize * InputElementsPerPosition;
@@ -311,12 +322,63 @@ public sealed class MultiGPUEnginePool : IDisposable
         executionTimesPerGPU[gpuIndex][sizeIndex] = bestTimeMs;
       }
 
-      // Output timing estimates for this GPU
+      // Output raw timing estimates for this GPU
+      string sizesStr = string.Join(", ", sizesPerGPU[gpuIndex]);
       string timingsStr = string.Join(", ", executionTimesPerGPU[gpuIndex].Select(t => t.ToString("F1")));
-      Console.WriteLine($"DEVICE {deviceIDs[gpuIndex]} timings: [{timingsStr}] ms ({deviceNames[gpuIndex]})");
+      Console.WriteLine($"DEVICE {deviceIDs[gpuIndex]} sizes: [{sizesStr}] timings: [{timingsStr}] ms ({deviceNames[gpuIndex]})");
+    }
 
-      // Pass execution times to the EnginePool for optimized scheduling
-      pool.ExecutionTimes = executionTimesPerGPU[gpuIndex];
+    // Average execution timings for identical GPU types to reduce measurement noise.
+    // GPUs with the same device name have the same SM count and engine sizes.
+    float[][] rawTimings = new float[numGPUs][];
+    for (int g = 0; g < numGPUs; g++)
+    {
+      rawTimings[g] = (float[])executionTimesPerGPU[g].Clone();
+    }
+    for (int g = 0; g < numGPUs; g++)
+    {
+      string name = deviceNames[g];
+      if (name == null)
+      {
+        continue;
+      }
+      int numSizes = rawTimings[g].Length;
+      int count = 0;
+      for (int other = 0; other < numGPUs; other++)
+      {
+        if (string.Equals(name, deviceNames[other], StringComparison.Ordinal)
+            && rawTimings[other].Length == numSizes)
+        {
+          count++;
+        }
+      }
+      if (count <= 1)
+      {
+        continue;
+      }
+      for (int s = 0; s < numSizes; s++)
+      {
+        float sum = 0;
+        for (int other = 0; other < numGPUs; other++)
+        {
+          if (string.Equals(name, deviceNames[other], StringComparison.Ordinal))
+          {
+            sum += rawTimings[other][s];
+          }
+        }
+        executionTimesPerGPU[g][s] = sum / count;
+      }
+    }
+
+    // Log averaged timings and pass to each EnginePool
+    for (int g = 0; g < numGPUs; g++)
+    {
+      if (executionTimesPerGPU[g][0] != rawTimings[g][0] || executionTimesPerGPU[g][^1] != rawTimings[g][^1])
+      {
+        string avgStr = string.Join(", ", executionTimesPerGPU[g].Select(t => t.ToString("F1")));
+        Console.WriteLine($"DEVICE {deviceIDs[g]} averaged timings: [{avgStr}] ms");
+      }
+      pools[g].ExecutionTimes = executionTimesPerGPU[g];
     }
 
     // Pre-compute speed fractions for all possible GPU counts (1 to numGPUs)
@@ -325,6 +387,51 @@ public sealed class MultiGPUEnginePool : IDisposable
     for (int n = 1; n <= numGPUs; n++)
     {
       cachedSpeedFractions[n] = BatchScheduler.ComputeSpeedNormalizedFractions(executionTimesPerGPU, deviceNames, n);
+    }
+
+    // Precompute cost-per-position tables for engine-aware multi-GPU distribution.
+    // gpuCostTable[g][n] = min execution time for GPU g to process n positions,
+    // using DP: cost[n] = min over engines e of (cost[max(0,n-sizes[e])] + times[e] + overhead).
+    if (mode == EnginePoolMode.Exact)
+    {
+      int maxSize = 0;
+      foreach (int[] gpuSizes in sizesPerGPU)
+      {
+        maxSize = Math.Max(maxSize, gpuSizes[^1]);
+      }
+      int maxN = maxSize * numGPUs;
+      maxCostTableSize = maxN;
+      gpuCostTable = new float[numGPUs][];
+      for (int g = 0; g < numGPUs; g++)
+      {
+        int[] gSizes = sizesPerGPU[g];
+        int numGpuBatchSizes = gSizes.Length;
+        gpuCostTable[g] = new float[maxN + 1];
+        gpuCostTable[g][0] = 0;
+        for (int n = 1; n <= maxN; n++)
+        {
+          float best = float.MaxValue;
+          for (int e = 0; e < numGpuBatchSizes; e++)
+          {
+            int remainder = Math.Max(0, n - gSizes[e]);
+            float credit = remainder > 0 ? BatchScheduler.PER_BATCH_OVERHEAD_MS : 0;
+            float cost = gpuCostTable[g][remainder]
+                       + executionTimesPerGPU[g][e]
+                       + credit;
+            if (cost < best)
+            {
+              best = cost;
+            }
+          }
+          gpuCostTable[g][n] = best;
+        }
+      }
+
+      dpBufA = new float[maxN + 1];
+      dpBufB = new float[maxN + 1];
+      dpChoices = new int[numGPUs * (maxN + 1)];
+      distCache = new int[(maxN + 1) * numGPUs];
+      distCacheValid = new bool[maxN + 1];
     }
   }
 
@@ -341,9 +448,35 @@ public sealed class MultiGPUEnginePool : IDisposable
       return true;
     }
 
+    // When cost tables are available, compare single-GPU cost against
+    // the best multi-GPU estimate (with per-GPU coordination overhead).
+    if (gpuCostTable != null && EnginePool.OPTIMIZED_SCHEDULING && totalPositions <= maxCostTableSize)
+    {
+      float singleGPUCost = gpuCostTable[0][totalPositions];
+      int maxGPUs = Math.Min(pools.Count, totalPositions / Math.Max(1, minBatchSizePerGPU));
+      for (int k = 2; k <= maxGPUs; k++)
+      {
+        int perGPU = (totalPositions + k - 1) / k;
+        float worstGPUCost = 0;
+        for (int g = 0; g < k; g++)
+        {
+          float cost = gpuCostTable[g][perGPU];
+          if (cost > worstGPUCost)
+          {
+            worstGPUCost = cost;
+          }
+        }
+        if (worstGPUCost + k * BatchScheduler.PER_GPU_FIXED_COST_MS < singleGPUCost)
+        {
+          return false; // Multi-GPU with k GPUs beats single GPU
+        }
+      }
+      return true; // No multi-GPU config beats single GPU with overhead
+    }
+
     if (mode == EnginePoolMode.Exact)
     {
-      foreach (int size in sizes)
+      foreach (int size in sizesPerGPU[0])
       {
         if (totalPositions <= size && (size - totalPositions) < minBatchSizePerGPU)
         {
@@ -355,7 +488,7 @@ public sealed class MultiGPUEnginePool : IDisposable
     if (mode == EnginePoolMode.Range)
     {
       int prevMax = 0;
-      foreach (int maxSize in sizes)
+      foreach (int maxSize in sizesPerGPU[0])
       {
         int minSize = prevMax + 1;
         if (totalPositions >= minSize && totalPositions <= maxSize)
@@ -375,6 +508,8 @@ public sealed class MultiGPUEnginePool : IDisposable
   /// </summary>
   public void Process(Half[] input, Half[] output, int totalPositions)
   {
+    for (int i = 0; i < pools.Count; i++) pools[i].MarkNewBatch();
+
     if (ShouldUseSingleGPU(totalPositions))
     {
       pools[0].Process(input, output, totalPositions);
@@ -416,6 +551,12 @@ public sealed class MultiGPUEnginePool : IDisposable
       }
     }
 
+    // Trim unused trailing GPUs (distribution may use fewer than numGPUs)
+    while (numGPUs > 1 && counts[numGPUs - 1] == 0)
+    {
+      numGPUs--;
+    }
+
     SynchronizeUniqueDevices();
 
     // Prepare cached sub-arrays and copy input data
@@ -427,13 +568,9 @@ public sealed class MultiGPUEnginePool : IDisposable
       Array.Copy(input, starts[i] * InputElementsPerPosition, cachedHalfInputs[i], 0, inputElements);
     }
 
-    // Copy to local arrays for lambda capture (Span cannot be captured)
-    Span<int> startsLocal = stackalloc int[numGPUs];
-    Span<int> countsLocal = stackalloc int[numGPUs];
-    starts.CopyTo(startsLocal);
-    counts.CopyTo(countsLocal);
-    int[] startsArray = startsLocal.ToArray();
-    int[] countsArray = countsLocal.ToArray();
+    // Convert to arrays for lambda capture (Span cannot be captured)
+    int[] startsArray = starts.Slice(0, numGPUs).ToArray();
+    int[] countsArray = counts.Slice(0, numGPUs).ToArray();
 
     Parallel.For(0, numGPUs, i =>
     {
@@ -455,6 +592,8 @@ public sealed class MultiGPUEnginePool : IDisposable
   /// </summary>
   public void ProcessBytes(byte[] input, Half[] output, int totalPositions)
   {
+    for (int i = 0; i < pools.Count; i++) pools[i].MarkNewBatch();
+
     if (ShouldUseSingleGPU(totalPositions))
     {
       pools[0].ProcessBytes(input, output, totalPositions);
@@ -496,6 +635,12 @@ public sealed class MultiGPUEnginePool : IDisposable
       }
     }
 
+    // Trim unused trailing GPUs (distribution may use fewer than numGPUs)
+    while (numGPUs > 1 && counts[numGPUs - 1] == 0)
+    {
+      numGPUs--;
+    }
+
     SynchronizeUniqueDevices();
 
     // Prepare cached sub-arrays and copy input data
@@ -508,13 +653,9 @@ public sealed class MultiGPUEnginePool : IDisposable
       Array.Copy(input, starts[i] * InputElementsPerPosition, cachedByteInputs[i], 0, inputElements);
     }
 
-    // Copy to local arrays for lambda capture (Span cannot be captured)
-    Span<int> startsLocal = stackalloc int[numGPUs];
-    Span<int> countsLocal = stackalloc int[numGPUs];
-    starts.CopyTo(startsLocal);
-    counts.CopyTo(countsLocal);
-    int[] startsArray = startsLocal.ToArray();
-    int[] countsArray = countsLocal.ToArray();
+    // Convert to arrays for lambda capture (Span cannot be captured)
+    int[] startsArray = starts.Slice(0, numGPUs).ToArray();
+    int[] countsArray = counts.Slice(0, numGPUs).ToArray();
 
     Parallel.For(0, numGPUs, i =>
     {
@@ -537,6 +678,8 @@ public sealed class MultiGPUEnginePool : IDisposable
   /// </summary>
   public void ProcessWithHandler(Half[] input, int totalPositions, SubBatchOutputHandler handler)
   {
+    for (int i = 0; i < pools.Count; i++) pools[i].MarkNewBatch();
+
     if (ShouldUseSingleGPU(totalPositions))
     {
       pools[0].ProcessWithHandler(input, totalPositions, handler, globalPositionOffset: 0);
@@ -578,6 +721,12 @@ public sealed class MultiGPUEnginePool : IDisposable
       }
     }
 
+    // Trim unused trailing GPUs (distribution may use fewer than numGPUs)
+    while (numGPUs > 1 && counts[numGPUs - 1] == 0)
+    {
+      numGPUs--;
+    }
+
     SynchronizeUniqueDevices();
 
     // Prepare cached sub-arrays and copy input data
@@ -588,13 +737,9 @@ public sealed class MultiGPUEnginePool : IDisposable
       Array.Copy(input, starts[i] * InputElementsPerPosition, cachedHalfInputs[i], 0, inputElements);
     }
 
-    // Copy to local arrays for lambda capture (Span cannot be captured)
-    Span<int> startsLocal = stackalloc int[numGPUs];
-    Span<int> countsLocal = stackalloc int[numGPUs];
-    starts.CopyTo(startsLocal);
-    counts.CopyTo(countsLocal);
-    int[] startsArray = startsLocal.ToArray();
-    int[] countsArray = countsLocal.ToArray();
+    // Convert to arrays for lambda capture (Span cannot be captured)
+    int[] startsArray = starts.Slice(0, numGPUs).ToArray();
+    int[] countsArray = counts.Slice(0, numGPUs).ToArray();
 
     Parallel.For(0, numGPUs, i =>
     {
@@ -621,6 +766,8 @@ public sealed class MultiGPUEnginePool : IDisposable
   /// </summary>
   public void ProcessBytesWithHandler(byte[] input, int totalPositions, SubBatchOutputHandler handler)
   {
+    for (int i = 0; i < pools.Count; i++) pools[i].MarkNewBatch();
+
     if (ShouldUseSingleGPU(totalPositions))
     {
       pools[0].ProcessBytesWithHandler(input, totalPositions, handler, globalPositionOffset: 0);
@@ -662,6 +809,12 @@ public sealed class MultiGPUEnginePool : IDisposable
       }
     }
 
+    // Trim unused trailing GPUs (distribution may use fewer than numGPUs)
+    while (numGPUs > 1 && counts[numGPUs - 1] == 0)
+    {
+      numGPUs--;
+    }
+
     SynchronizeUniqueDevices();
 
     // Prepare cached sub-arrays and copy input data
@@ -672,13 +825,9 @@ public sealed class MultiGPUEnginePool : IDisposable
       Array.Copy(input, starts[i] * InputElementsPerPosition, cachedByteInputs[i], 0, inputElements);
     }
 
-    // Copy to local arrays for lambda capture (Span cannot be captured)
-    Span<int> startsLocal = stackalloc int[numGPUs];
-    Span<int> countsLocal = stackalloc int[numGPUs];
-    starts.CopyTo(startsLocal);
-    counts.CopyTo(countsLocal);
-    int[] startsArray = startsLocal.ToArray();
-    int[] countsArray = countsLocal.ToArray();
+    // Convert to arrays for lambda capture (Span cannot be captured)
+    int[] startsArray = starts.Slice(0, numGPUs).ToArray();
+    int[] countsArray = counts.Slice(0, numGPUs).ToArray();
 
     Parallel.For(0, numGPUs, i =>
     {
@@ -700,19 +849,235 @@ public sealed class MultiGPUEnginePool : IDisposable
 
 
   /// <summary>
-  /// Computes optimal position distribution across GPUs based on their measured performance.
-  /// Uses cached speed-normalized fractions (computed once during warmup).
-  /// Writes directly to the provided Span to avoid allocation.
+  /// Computes optimal position distribution across GPUs using DP over position counts.
+  /// Uses precomputed gpuCostTable[g][n] (min time for GPU g to process n positions
+  /// with optimal engine combination) to find the distribution minimizing makespan.
+  /// The per-GPU EnginePool then independently schedules sub-batches for its allocation.
+  /// Falls back to fraction-based distribution when cost tables are unavailable.
   /// </summary>
-  /// <param name="totalPositions">Total positions to distribute</param>
-  /// <param name="numGPUs">Number of GPUs to use (may be less than pools.Count for small batches)</param>
-  /// <param name="distribution">Span to write position counts per GPU</param>
-  /// <returns>True if optimal distribution was computed, false to use default equal distribution</returns>
   private bool TryComputeOptimalDistribution(int totalPositions, int numGPUs, Span<int> distribution)
   {
-    // Only use optimized scheduling when cached fractions are available
-    if (cachedSpeedFractions == null || !EnginePool.OPTIMIZED_SCHEDULING || 
-        numGPUs <= 0 || numGPUs >= cachedSpeedFractions.Length)
+    if (gpuCostTable == null || !EnginePool.OPTIMIZED_SCHEDULING ||
+        numGPUs <= 0 || mode != EnginePoolMode.Exact || totalPositions > maxCostTableSize)
+    {
+      return TryFractionBasedDistribution(totalPositions, numGPUs, distribution);
+    }
+
+    // Check session cache (engine sizes, timings, and penalties are constant)
+    if (distCacheValid[totalPositions])
+    {
+      int cBase = totalPositions * pools.Count;
+      for (int g = 0; g < numGPUs; g++)
+      {
+        distribution[g] = distCache[cBase + g];
+      }
+      return true;
+    }
+
+    // Select optimal GPU count by running lightweight DP for each k.
+    // Unlike an even-split heuristic, this accounts for uneven distributions
+    // across heterogeneous GPUs (e.g., NVL vs PCIe).
+    int stride = maxCostTableSize + 1;
+    int minPerGPU = minBatchSizePerGPU;
+    int bestK = 2;
+    float bestTotalCost = float.MaxValue;
+
+    for (int k = 2; k <= numGPUs; k++)
+    {
+      if ((totalPositions + k - 1) / k < minPerGPU)
+      {
+        break;
+      }
+
+      // Lightweight DP (no choice tracking) to compute true makespan for k GPUs
+      float[] dpA = dpBufA;
+      float[] dpB = dpBufB;
+      float[] lastCost = gpuCostTable[k - 1];
+      for (int r = 0; r <= totalPositions; r++)
+      {
+        dpA[r] = r >= minPerGPU ? lastCost[r] : float.MaxValue;
+      }
+
+      for (int g = k - 2; g >= 0; g--)
+      {
+        float[] gCost = gpuCostTable[g];
+        int trailing = k - 1 - g;
+        for (int r = 0; r <= totalPositions; r++)
+        {
+          int maxN = r - trailing * minPerGPU;
+          if (maxN < minPerGPU)
+          {
+            dpB[r] = float.MaxValue;
+            continue;
+          }
+          maxN = Math.Min(maxN, maxCostTableSize);
+
+          // Binary search for crossing: smallest ng where gCost[ng] >= dpA[r - ng]
+          int lo = minPerGPU, hi = maxN;
+          while (lo < hi)
+          {
+            int mid = lo + (hi - lo) / 2;
+            if (gCost[mid] < dpA[r - mid])
+            {
+              lo = mid + 1;
+            }
+            else
+            {
+              hi = mid;
+            }
+          }
+          float best = float.MaxValue;
+          int cLo = Math.Max(minPerGPU, lo - 1);
+          int cHi = Math.Min(maxN, lo + 1);
+          for (int ng = cLo; ng <= cHi; ng++)
+          {
+            float hv = dpA[r - ng];
+            if (hv >= float.MaxValue)
+            {
+              continue;
+            }
+            float m = Math.Max(gCost[ng], hv);
+            if (m < best)
+            {
+              best = m;
+            }
+          }
+          dpB[r] = best;
+        }
+        (dpA, dpB) = (dpB, dpA);
+      }
+
+      float makespan = dpA[totalPositions];
+      if (makespan < float.MaxValue * 0.5f)
+      {
+        float total = makespan + k * BatchScheduler.PER_GPU_FIXED_COST_MS;
+        if (total < bestTotalCost)
+        {
+          bestTotalCost = total;
+          bestK = k;
+        }
+      }
+    }
+
+    // Base case: last GPU (index bestK-1) handles all remaining positions
+    float[] dpNext = dpBufA;
+    float[] dpThis = dpBufB;
+    float[] lastGpuCost = gpuCostTable[bestK - 1];
+    for (int r = 0; r <= totalPositions; r++)
+    {
+      dpNext[r] = r >= minPerGPU ? lastGpuCost[r] : float.MaxValue;
+    }
+
+    // DP from second-to-last GPU down to first.
+    // dpNext[r] = min makespan distributing r positions across GPUs [g+1..bestK-1].
+    // dpThis[r] = min makespan distributing r positions across GPUs [g..bestK-1].
+    for (int g = bestK - 2; g >= 0; g--)
+    {
+      float[] gpuCost = gpuCostTable[g];
+      int choiceBase = g * stride;
+      int trailingGPUs = bestK - 1 - g;
+
+      for (int r = 0; r <= totalPositions; r++)
+      {
+        // Ensure trailing GPUs can each get minPerGPU
+        int maxN = r - trailingGPUs * minPerGPU;
+        if (maxN < minPerGPU)
+        {
+          dpThis[r] = float.MaxValue;
+          dpChoices[choiceBase + r] = 0;
+          continue;
+        }
+        maxN = Math.Min(maxN, maxCostTableSize);
+
+        // Binary search for crossing: smallest ng where gpuCost[ng] >= dpNext[r - ng]
+        int lo = minPerGPU, hi = maxN;
+        while (lo < hi)
+        {
+          int mid = lo + (hi - lo) / 2;
+          if (gpuCost[mid] < dpNext[r - mid])
+          {
+            lo = mid + 1;
+          }
+          else
+          {
+            hi = mid;
+          }
+        }
+        float bestMakespan = float.MaxValue;
+        int bestN = minPerGPU;
+        int checkLo = Math.Max(minPerGPU, lo - 1);
+        int checkHi = Math.Min(maxN, lo + 1);
+        for (int ng = checkLo; ng <= checkHi; ng++)
+        {
+          float rest = dpNext[r - ng];
+          if (rest >= float.MaxValue)
+          {
+            continue;
+          }
+          float makespan = Math.Max(gpuCost[ng], rest);
+          if (makespan <= bestMakespan)
+          {
+            bestMakespan = makespan;
+            bestN = ng;
+          }
+        }
+
+        dpThis[r] = bestMakespan;
+        dpChoices[choiceBase + r] = bestN;
+      }
+
+      (dpNext, dpThis) = (dpThis, dpNext);
+    }
+
+    // Check feasibility
+    if (dpNext[totalPositions] >= float.MaxValue * 0.5f)
+    {
+      if (!TryFractionBasedDistribution(totalPositions, numGPUs, distribution))
+      {
+        return false;
+      }
+      StoreDistCache(totalPositions, numGPUs, distribution);
+      return true;
+    }
+
+    // Backtrack to recover distribution for bestK GPUs
+    int rem = totalPositions;
+    for (int g = 0; g < bestK - 1; g++)
+    {
+      int ng = dpChoices[g * stride + rem];
+      distribution[g] = ng;
+      rem -= ng;
+    }
+    distribution[bestK - 1] = rem;
+
+    // Zero out unused GPU slots
+    for (int g = bestK; g < numGPUs; g++)
+    {
+      distribution[g] = 0;
+    }
+
+    StoreDistCache(totalPositions, numGPUs, distribution);
+    return true;
+  }
+
+
+  private void StoreDistCache(int totalPositions, int numGPUs, Span<int> distribution)
+  {
+    int cBase = totalPositions * pools.Count;
+    for (int g = 0; g < numGPUs; g++)
+    {
+      distCache[cBase + g] = distribution[g];
+    }
+    distCacheValid[totalPositions] = true;
+  }
+
+
+  /// <summary>
+  /// Fraction-based distribution fallback using cached speed-normalized fractions.
+  /// </summary>
+  private bool TryFractionBasedDistribution(int totalPositions, int numGPUs, Span<int> distribution)
+  {
+    if (cachedSpeedFractions == null || numGPUs <= 0 || numGPUs >= cachedSpeedFractions.Length)
     {
       return false;
     }
@@ -723,30 +1088,23 @@ public sealed class MultiGPUEnginePool : IDisposable
       return false;
     }
 
-    // Distribute positions based on cached fractions
     int remaining = totalPositions;
-
     for (int gpu = 0; gpu < numGPUs && remaining > 0; gpu++)
     {
       int positionsForGpu;
-
       if (gpu == numGPUs - 1)
       {
-        // Last GPU gets remainder to avoid rounding issues
         positionsForGpu = remaining;
       }
       else
       {
         positionsForGpu = (int)Math.Round(fractions[gpu] * totalPositions);
         positionsForGpu = Math.Min(positionsForGpu, remaining);
-
-        // Enforce minimum batch size per GPU (except for last GPU which gets remainder)
         if (positionsForGpu < minBatchSizePerGPU && remaining > minBatchSizePerGPU)
         {
           positionsForGpu = minBatchSizePerGPU;
         }
       }
-
       distribution[gpu] = positionsForGpu;
       remaining -= positionsForGpu;
     }

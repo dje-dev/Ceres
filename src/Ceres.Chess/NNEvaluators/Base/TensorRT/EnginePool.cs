@@ -99,6 +99,17 @@ public sealed class EnginePool : IDisposable
   // Cached batch plan to avoid allocations in pipelined processing
   // Each entry: (start position, actual positions, engine, engine batch size, use dynamic inference, engine index)
   private readonly List<(int start, int count, TensorRTEngine engine, int engineBatchSize, bool useDynamic, int engineIndex)> cachedBatchPlan = new();
+  private int lastBatchPlanPositions = -1;
+  private bool verboseDumpPending;
+
+  /// <summary>
+  /// Signals that a new multi-GPU batch is starting, so the next ComputeBatchPlan
+  /// should produce verbose output even if the position count is unchanged.
+  /// </summary>
+  internal void MarkNewBatch() => verboseDumpPending = true;
+
+  // Session cache: batch plan per totalPositions (engine sizes/timings are constant)
+  private readonly Dictionary<int, (int start, int count, TensorRTEngine engine, int engineBatchSize, bool useDynamic, int engineIndex)[]> batchPlanCache = new();
 
   /// <summary>
   /// In Exact mode, the maximum fraction of an engine's batch size that can be padding
@@ -224,12 +235,11 @@ public sealed class EnginePool : IDisposable
 
         TensorRTBuildOptions opts = options;
 
-        // Use tiling optimization level 3 for batch sizes >= 128.
-        // Certain GPUs (e.g. GB10) show improvement (5% to 15%) for larger batch sizes.
+        // Use tiling optimization level 3 for batch sizes >= 128
+        // TODO: currently disabled, this may only help on certain GPUs (e.g. GB10) and is very slow to build
         if (size >= 128)
         {
-          // TODO: make an option? Currently disabled, increases buld time by 2x to 10x 
-          //opts.TilingOptimizationLevel = 3;
+          // opts.TilingOptimizationLevel = 3; // note: can be 5x to 20x slower to build
         }
 
         TensorRTEngine engine = this.trt.LoadEngineWithCache(onnxPath, size, opts, cacheDir, deviceId);
@@ -834,32 +844,59 @@ public sealed class EnginePool : IDisposable
   /// </summary>
   private void ComputeBatchPlan(int totalPositions)
   {
+    // Fast path: identical to last call, cachedBatchPlan already populated
+    if (totalPositions == lastBatchPlanPositions)
+    {
+      if (verboseDumpPending)
+      {
+        verboseDumpPending = false;
+        DumpBatchPlanVerbose(totalPositions);
+      }
+      return;
+    }
+
     cachedBatchPlan.Clear();
+    lastBatchPlanPositions = totalPositions;
+    verboseDumpPending = false;
+
+    // Session cache: engine sizes/timings are constant so the plan is invariant per totalPositions
+    if (batchPlanCache.TryGetValue(totalPositions, out var cached))
+    {
+      foreach (var entry in cached)
+      {
+        cachedBatchPlan.Add(entry);
+      }
+      DumpBatchPlanVerbose(totalPositions);
+      return;
+    }
 
     // Use optimized scheduling if enabled and execution times are available (Exact mode only)
     if (OPTIMIZED_SCHEDULING && ExecutionTimes != null && mode == EnginePoolMode.Exact)
     {
       ComputeBatchPlanOptimized(totalPositions);
-      return;
     }
-
-    // Legacy greedy algorithm
-    int processed = 0;
-    int lastBatchSize = 0;
-
-    while (processed < totalPositions)
+    else
     {
-      int remaining = totalPositions - processed;
-      (TensorRTEngine engine, int batchSize, bool useDynamic, int engineIndex) = SelectEngineWithMode(remaining, lastBatchSize);
+      // Legacy greedy algorithm
+      int processed = 0;
+      int lastBatchSize = 0;
 
-      // For Exact mode, batchSize is the engine's configured size (may exceed remaining).
-      // We process actualPositions but allocate/compute with engine's batchSize.
-      int actualPositions = Math.Min(batchSize, remaining);
-      cachedBatchPlan.Add((processed, actualPositions, engine, batchSize, useDynamic, engineIndex));
+      while (processed < totalPositions)
+      {
+        int remaining = totalPositions - processed;
+        (TensorRTEngine engine, int batchSize, bool useDynamic, int engineIndex) = SelectEngineWithMode(remaining, lastBatchSize);
 
-      processed += actualPositions;
-      lastBatchSize = batchSize;
+        // For Exact mode, batchSize is the engine's configured size (may exceed remaining).
+        // We process actualPositions but allocate/compute with engine's batchSize.
+        int actualPositions = Math.Min(batchSize, remaining);
+        cachedBatchPlan.Add((processed, actualPositions, engine, batchSize, useDynamic, engineIndex));
+
+        processed += actualPositions;
+        lastBatchSize = batchSize;
+      }
     }
+
+    batchPlanCache[totalPositions] = [.. cachedBatchPlan];
   }
 
 
@@ -899,7 +936,7 @@ public sealed class EnginePool : IDisposable
     }
 
     // Use the optimized single-GPU scheduler (accepts ReadOnlySpan, no allocation needed)
-    int[] batchSizes = BatchScheduler.ScheduleSingleGPU(engineSizes, orderedExecutionTimes, totalPositions);
+    int[] batchSizes = BatchScheduler.ScheduleSingleGPU(engineSizes, orderedExecutionTimes, totalPositions, deviceId);
 
     // Convert batch sizes to batch plan entries
     int processed = 0;
@@ -946,9 +983,54 @@ public sealed class EnginePool : IDisposable
           }
         }
       }
-      Console.WriteLine($"OPTIMIZED_PLAN: {totalPositions} -> [{string.Join(", ", batchSizes)}] " +
+      Console.WriteLine($"OPTIMIZED_PLAN [device {deviceId}]: {totalPositions} -> [{string.Join(", ", batchSizes)}] " +
                         $"total={totalPos} padding={totalPos - totalPositions} time={totalTime:F1}ms");
     }
+  }
+
+
+  /// <summary>
+  /// Dumps the current cached batch plan in OPTIMIZED_PLAN format.
+  /// Called on cache hits so verbose output is always shown.
+  /// </summary>
+  private void DumpBatchPlanVerbose(int totalPositions)
+  {
+    if (!BatchScheduler.VERBOSE_DETAILS || cachedBatchPlan.Count == 0 || ExecutionTimes == null)
+    {
+      return;
+    }
+
+    int numEngines = ranges.Count;
+    int totalBatched = 0;
+    float totalTime = 0;
+    Span<int> planSizes = stackalloc int[cachedBatchPlan.Count];
+    for (int i = 0; i < cachedBatchPlan.Count; i++)
+    {
+      int batchSize = cachedBatchPlan[i].engineBatchSize;
+      planSizes[i] = batchSize;
+      totalBatched += batchSize;
+
+      // Map engine batch size to ExecutionTimes index (ascending order)
+      int originalIndex = 0;
+      for (int j = 0; j < numEngines; j++)
+      {
+        if (ranges[j].min < batchSize)
+        {
+          originalIndex++;
+        }
+      }
+      totalTime += ExecutionTimes[originalIndex];
+    }
+
+    // Add per-batch overhead for each batch beyond the first (matches BatchScheduler DP formula)
+    if (cachedBatchPlan.Count > 1)
+    {
+      totalTime += (cachedBatchPlan.Count - 1) * BatchScheduler.PER_BATCH_OVERHEAD_MS;
+    }
+
+    int[] sizes = planSizes.ToArray();
+    Console.WriteLine($"  OPTIMIZED_PLAN [device {deviceId}]: {totalPositions} -> [{string.Join(", ", sizes)}] " +
+                      $"total={totalBatched} padding={totalBatched - totalPositions} time={totalTime:F1}ms");
   }
 
 
