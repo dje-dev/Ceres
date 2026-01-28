@@ -142,11 +142,39 @@ public sealed class MultiGPUEnginePool : IDisposable
     this.mode = mode;
     this.sizesPerGPU = sizesPerGPU;
 
-    for (int i = 0; i < deviceIds.Length; i++)
+    // Load engines in parallel across GPUs when enabled, multi-GPU, and all device IDs are unique
+    // (duplicate device IDs can occur for testing purposes and require sequential loading)
+    bool hasDuplicateDevices = deviceIds.Length != deviceIds.Distinct().Count();
+    bool useParallel = NNEvaluatorTensorRT.PARALLEL_ENGINE_LOAD_ENABLED 
+                       && deviceIds.Length > 1 
+                       && !hasDuplicateDevices;
+
+    if (useParallel)
     {
-      EnginePool pool = new EnginePool(trt, onnxPath, (int[])sizesPerGPU[i].Clone(), mode, options,
+      // Pre-allocate array for thread-safe parallel assignment
+      EnginePool[] poolsArray = new EnginePool[deviceIds.Length];
+
+      Parallel.For(0, deviceIds.Length, i =>
+      {
+        poolsArray[i] = new EnginePool(trt, onnxPath, (int[])sizesPerGPU[i].Clone(), mode, options,
                                         inputElementsPerPos, outputElementsPerPos, deviceIds[i], cacheDir);
-      pools.Add(pool);
+      });
+
+      // Add to list in order
+      for (int i = 0; i < deviceIds.Length; i++)
+      {
+        pools.Add(poolsArray[i]);
+      }
+    }
+    else
+    {
+      // Sequential loading for single GPU or when parallel loading is disabled
+      for (int i = 0; i < deviceIds.Length; i++)
+      {
+        EnginePool pool = new EnginePool(trt, onnxPath, (int[])sizesPerGPU[i].Clone(), mode, options,
+                                          inputElementsPerPos, outputElementsPerPos, deviceIds[i], cacheDir);
+        pools.Add(pool);
+      }
     }
 
     InputElementsPerPosition = pools[0].InputElementsPerPosition;

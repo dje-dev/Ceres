@@ -51,6 +51,11 @@ public class NNEvaluatorTensorRT : NNEvaluator
   const bool USE_HISTORY = true;
   const bool SUBSTITUTE_VALUE3_INTO_VALUE2_IF_FOUND = true;
 
+  /// <summary>
+  /// If true, loads TensorRT engines in parallel across GPUs.
+  /// </summary>
+  public const bool PARALLEL_ENGINE_LOAD_ENABLED = true;
+
 
   /// <summary>
   /// Path to the ONNX model file.
@@ -214,7 +219,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
     int[][] effectiveSizesPerGPU = new int[gpuIDs.Length][];
     for (int i = 0; i < GpuIDs.Length; i++)
     {
-      effectiveSizesPerGPU[i] = AdjustToSM(i, batchSizes);
+      effectiveSizesPerGPU[i] = AdjustToSM(GpuIDs[i], batchSizes);
     }    
   
     string cacheDir = ONNXExecutor.GetTRTEngineCacheDir(onnxFileName);
