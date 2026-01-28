@@ -54,7 +54,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
   /// <summary>
   /// If true, loads TensorRT engines in parallel across GPUs.
   /// </summary>
-  public const bool PARALLEL_ENGINE_LOAD_ENABLED = true;
+  public const bool PARALLEL_ENGINE_LOAD_ENABLED = false; // Needs more testing
 
 
   /// <summary>
@@ -894,13 +894,13 @@ public class NNEvaluatorTensorRT : NNEvaluator
     //    {
     //      throw new NotImplementedException("Ceres TensorRT Native evaluator does not yet support head overrides.");
     //    }
-
     const bool EXACT_BATCHES = true; // seems always fastest to use exact batches
     const bool ENABLE_GRAPHS = true;
     NNEvaluatorTensorRT trtNativeEngine = new(netFileName,
                                               netType,
                                               EXACT_BATCHES ? EnginePoolMode.Exact : EnginePoolMode.Range,
-                                              EXACT_BATCHES ? [1, 8, 32, 48, 64, 96, 128, 256]
+                                              EXACT_BATCHES ? [1, 8, 20, 42, 64, 88, 116, 240]
+                                                           // [1, 8, 32, 48, 64, 96, 128, 256]
                                                             : [48, 128, 1024],
                                               gpuIDs: gpuIDs,
                                               useCudaGraphs: EXACT_BATCHES && ENABLE_GRAPHS, //optionsCeres.EnableCUDAGraphs,
@@ -922,7 +922,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
 
   /// <summary>
   /// Modifies in place a sequence of batch sizes to be 
-  /// (if possible) multiples of common GPU SM counts within a specified tolerance.
+  /// aligned with exact SM count (if within a specified tolerance).
   /// </summary>
   /// <param name="anchorBatchSizes"></param>
   /// <returns></returns>
@@ -938,7 +938,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
     }
     const int THRESHOLD_ADJUST_TO_SM_DISTANCE = 8;
 
-    int[] bases = { (3 * smCount) / 2, smCount, smCount / 2 };
+    int[] bases = { smCount };
 
     for (int i = 0; i < anchorBatchSizes.Length; i++)
     {
