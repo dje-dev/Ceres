@@ -67,6 +67,29 @@ namespace
   std::string g_lastError;
   bool g_initialized = false;
 
+  // Thread-local cache for current CUDA device to avoid redundant cudaSetDevice() calls.
+  // Value of -1 means no device has been set on this thread yet.
+  // This significantly reduces multi-GPU overhead when threads repeatedly call inference
+  // on the same device, as cudaSetDevice() has non-trivial driver overhead.
+  static thread_local int32_t tls_currentDevice = -1;
+
+  // Ensures the CUDA device is set to the specified deviceId, but only calls
+  // cudaSetDevice() if the device has changed from the last call on this thread.
+  // Returns true on success, false on failure.
+  inline bool EnsureDevice(int32_t deviceId)
+  {
+    if (tls_currentDevice != deviceId)
+    {
+      cudaError_t err = cudaSetDevice(deviceId);
+      if (err != cudaSuccess)
+      {
+        return false;
+      }
+      tls_currentDevice = deviceId;
+    }
+    return true;
+  }
+
   void SetError(const std::string& error)
   {
     g_lastError = error;
@@ -1314,7 +1337,12 @@ extern "C"
     }
 
     auto* ec = static_cast<EngineContext*>(handle);
-    cudaSetDevice(ec->deviceId);  // Ensure correct device
+    if (!EnsureDevice(ec->deviceId))  // Ensure correct device (cached to avoid redundant calls)
+    {
+      std::lock_guard<std::mutex> lock(g_mutex);
+      SetError("Failed to set CUDA device " + std::to_string(ec->deviceId));
+      return -1;
+    }
     char* inPtr = static_cast<char*>(inputData);
     char* outPtr = static_cast<char*>(outputData);
 
@@ -1870,7 +1898,12 @@ extern "C"
     }
 
     auto* ec = static_cast<EngineContext*>(handle);
-    cudaSetDevice(ec->deviceId);
+    if (!EnsureDevice(ec->deviceId))
+    {
+      std::lock_guard<std::mutex> lock(g_mutex);
+      SetError("Failed to set CUDA device " + std::to_string(ec->deviceId));
+      return -1;
+    }
 
     // Compute per-position sizes
     std::vector<int64_t> inputPerPos, outputPerPos;
