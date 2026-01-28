@@ -448,7 +448,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
     {
       // LC0 path: convert positions to 112-plane format directly into inputHalfBuffer
       Memory<Half> inputBuffer = new Memory<Half>(inputHalfBuffer, 0, numPos * inputElementsPerPosition);
-      batch.ConvertValuesToFlatFromPlanes(inputBuffer, false, false);
+      batch.ConvertValuesToFlatFromPlanes(inputBuffer, false, true);
     }
     else
     {
@@ -494,7 +494,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
 
       ExtractSubBatchResults(batch, globalStartPosition, positionCount, engineBatchSize,
                              outputFloatBuffer, w, l, w2, l2, m, uncV, uncP, policies,
-                             valueHead1Temperature, valueHead2Temperature);
+                             valueHead1Temperature, valueHead2Temperature, 
+                             NetType == ONNXNetExecutor.NetTypeEnum.TPG);
     };
 
     if (NetType == ONNXNetExecutor.NetTypeEnum.LC0)
@@ -575,7 +576,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
                                       float[] subBatchOutput,
                                       FP16[] w, FP16[] l, FP16[] w2, FP16[] l2, FP16[] m, FP16[] uncV, FP16[] uncP,
                                       CompressedPolicyVector[] policies,
-                                      float valueHead1Temperature = 1.0f, float valueHead2Temperature = 1.0f)
+                                      float valueHead1Temperature, float valueHead2Temperature,
+                                      bool wdlIsLogistic)
   {
     int valueOffset = 0;
     int value2Offset = 0;
@@ -636,19 +638,27 @@ public class NNEvaluatorTensorRT : NNEvaluator
       int posValueOffset = valueOffset + i * valueSize;
       if (isWDL)
       {
-        float vW = subBatchOutput[posValueOffset];
-        float vD = subBatchOutput[posValueOffset + 1];
-        float vL = subBatchOutput[posValueOffset + 2];
+        if (wdlIsLogistic)
+        {
+          float vW = subBatchOutput[posValueOffset];
+          float vD = subBatchOutput[posValueOffset + 1];
+          float vL = subBatchOutput[posValueOffset + 2];
 
-        float maxV = Math.Max(vW, Math.Max(vD, vL));
-        float invTemp1 = 1.0f / valueHead1Temperature;
-        float expW = MathF.Exp((vW - maxV) * invTemp1);
-        float expD = MathF.Exp((vD - maxV) * invTemp1);
-        float expL = MathF.Exp((vL - maxV) * invTemp1);
-        float sum = expW + expD + expL;
+          float maxV = Math.Max(vW, Math.Max(vD, vL));
+          float invTemp1 = 1.0f / valueHead1Temperature;
+          float expW = MathF.Exp((vW - maxV) * invTemp1);
+          float expD = MathF.Exp((vD - maxV) * invTemp1);
+          float expL = MathF.Exp((vL - maxV) * invTemp1);
+          float sum = expW + expD + expL;
 
-        w[resultIndex] = (FP16)(expW / sum);
-        l[resultIndex] = (FP16)(expL / sum);
+          w[resultIndex] = (FP16)(expW / sum);
+          l[resultIndex] = (FP16)(expL / sum);
+        }
+        else
+        {
+          w[resultIndex] = (FP16)subBatchOutput[posValueOffset];
+          l[resultIndex] = (FP16)subBatchOutput[posValueOffset + 2];
+        }
       }
       else
       {
