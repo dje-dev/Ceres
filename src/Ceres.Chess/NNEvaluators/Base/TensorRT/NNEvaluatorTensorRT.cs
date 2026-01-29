@@ -108,8 +108,13 @@ public class NNEvaluatorTensorRT : NNEvaluator
   private byte[] squareByteBuffer;
   private byte[] inputByteBuffer;
   private Half[] inputHalfBuffer;
-  private float[] outputFloatBuffer;
   private int maxBatchSize;
+
+  // Thread-static output buffer for parallel multi-GPU processing.
+  // Each GPU thread gets its own buffer, eliminating lock contention.
+  [ThreadStatic]
+  private static float[] threadLocalOutputFloatBuffer;
+  private int outputFloatBufferSize; // Required size, stored for thread-local allocation
 
   // Pre-allocated result buffers to reduce GC pressure
   private FP16[] wBuffer;
@@ -356,7 +361,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
       inputHalfBuffer = new Half[maxBatchSize * inputElementsPerPosition];
     }
 
-    outputFloatBuffer = new float[maxBatchSize * outputElementsPerPosition];
+    outputFloatBufferSize = maxBatchSize * outputElementsPerPosition;
 
     // Pre-allocate result buffers
     wBuffer = new FP16[maxBatchSize];
@@ -487,14 +492,23 @@ public class NNEvaluatorTensorRT : NNEvaluator
     float valueHead1Temperature = Options?.ValueHead1Temperature ?? 1.0f;
     float valueHead2Temperature = Options?.ValueHead2Temperature ?? 1.0f;
 
+    // Capture buffer size for thread-local allocation in handler
+    int requiredBufferSize = outputFloatBufferSize;
+
     SubBatchOutputHandler handler = (int globalStartPosition, int positionCount, int engineBatchSize, Half[] rawOutput) =>
     {
-      // Vectorized conversion from Half to float
-      TensorPrimitives.ConvertToSingle(rawOutput, outputFloatBuffer.AsSpan(0, rawOutput.Length));
+      // Ensure thread-local buffer is allocated (each GPU thread gets its own buffer)
+      if (threadLocalOutputFloatBuffer == null || threadLocalOutputFloatBuffer.Length < requiredBufferSize)
+      {
+        threadLocalOutputFloatBuffer = new float[requiredBufferSize];
+      }
+
+      // Vectorized conversion from Half to float using thread-local buffer
+      TensorPrimitives.ConvertToSingle(rawOutput, threadLocalOutputFloatBuffer.AsSpan(0, rawOutput.Length));
 
       ExtractSubBatchResults(batch, globalStartPosition, positionCount, engineBatchSize,
-                             outputFloatBuffer, w, l, w2, l2, m, uncV, uncP, policies,
-                             valueHead1Temperature, valueHead2Temperature, 
+                             threadLocalOutputFloatBuffer, w, l, w2, l2, m, uncV, uncP, policies,
+                             valueHead1Temperature, valueHead2Temperature,
                              NetType == ONNXNetExecutor.NetTypeEnum.TPG);
     };
 

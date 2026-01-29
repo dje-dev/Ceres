@@ -57,9 +57,6 @@ public sealed class MultiGPUEnginePool : IDisposable
   // Cached unique device set (cleared and reused)
   private readonly HashSet<int> cachedUniqueDevices = new();
 
-  // Reusable lock object for handler synchronization
-  private readonly object handlerLock = new();
-
   // Execution times (average) by GPU (outer index) and batch size index (inner index)
   // Initialized during Warmup()
   private float[][] executionTimesPerGPU;
@@ -702,7 +699,8 @@ public sealed class MultiGPUEnginePool : IDisposable
 
   /// <summary>
   /// Process with callback for tensor-major output extraction.
-  /// Thread-safe: handler may be called concurrently from multiple GPU threads.
+  /// Thread-safe: handler is called concurrently from multiple GPU threads.
+  /// Handlers must use thread-local buffers and write to non-overlapping position ranges.
   /// </summary>
   public void ProcessWithHandler(Half[] input, int totalPositions, SubBatchOutputHandler handler)
   {
@@ -775,10 +773,9 @@ public sealed class MultiGPUEnginePool : IDisposable
       SubBatchOutputHandler wrappedHandler = (globalStart, count, engineBatchSize, rawOutput) =>
       {
         int trueGlobalStart = capturedStart + globalStart;
-        lock (handlerLock)
-        {
-          handler(trueGlobalStart, count, engineBatchSize, rawOutput);
-        }
+        // No lock needed: handler uses thread-local buffers for intermediate storage,
+        // and writes to distinct position ranges in the result arrays (no overlap).
+        handler(trueGlobalStart, count, engineBatchSize, rawOutput);
       };
 
       pools[i].ProcessWithHandler(cachedHalfInputs[i], countsArray[i], wrappedHandler, globalPositionOffset: 0);
@@ -790,7 +787,7 @@ public sealed class MultiGPUEnginePool : IDisposable
 
   /// <summary>
   /// Process byte inputs with callback for tensor-major output extraction.
-  /// Thread-safe: handler may be called concurrently from multiple GPU threads.
+  /// Thread-safe: handler uses thread-local buffers and writes to non-overlapping position ranges.
   /// </summary>
   public void ProcessBytesWithHandler(byte[] input, int totalPositions, SubBatchOutputHandler handler)
   {
@@ -863,10 +860,9 @@ public sealed class MultiGPUEnginePool : IDisposable
       SubBatchOutputHandler wrappedHandler = (globalStart, count, engineBatchSize, rawOutput) =>
       {
         int trueGlobalStart = capturedStart + globalStart;
-        lock (handlerLock)
-        {
-          handler(trueGlobalStart, count, engineBatchSize, rawOutput);
-        }
+        // No lock needed: handler uses thread-local buffers for intermediate storage,
+        // and writes to distinct position ranges in the result arrays (no overlap).
+        handler(trueGlobalStart, count, engineBatchSize, rawOutput);
       };
 
       pools[i].ProcessBytesWithHandler(cachedByteInputs[i], countsArray[i], wrappedHandler, globalPositionOffset: 0);
