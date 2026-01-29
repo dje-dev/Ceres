@@ -787,7 +787,7 @@ namespace Ceres.Chess.LC0.Batches
 
     /// <summary>
     /// AVX2-optimized version of BitmapRepresentationExpand.
-    /// Uses SIMD to expand 8 bits to 8 Half values at a time.
+    /// Uses per-byte fast paths for sparse data with optimized SIMD for general case.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private static unsafe void BitmapRepresentationExpandAVX2(ulong[] thisLongs,
@@ -811,11 +811,12 @@ namespace Ceres.Chess.LC0.Batches
       fixed (ulong* longsPtr = thisLongs)
       fixed (byte* valsPtr = thisValues)
       fixed (Half* dstPtr = targetSpan)
-      fixed (Half* lutPtr = ByteToHalfLUT)
       {
         // Precompute bit masks for expansion: [1, 2, 4, 8, 16, 32, 64, 128]
         Vector128<byte> bitMasks = Vector128.Create((byte)1, 2, 4, 8, 16, 32, 64, 128,
                                                      1, 2, 4, 8, 16, 32, 64, 128);
+        Vector256<short> zero256 = Vector256<short>.Zero;
+        Vector128<short> zero128 = Vector128<short>.Zero;
 
         for (int outer = startPlaneIndex; outer < endIndex; outer++)
         {
@@ -825,7 +826,6 @@ namespace Ceres.Chess.LC0.Batches
           if (bits == 0UL)
           {
             // Fast path: zero the entire plane using vectorized stores
-            Vector256<short> zero256 = Vector256<short>.Zero;
             Avx.Store((short*)dst, zero256);
             Avx.Store((short*)(dst + 16), zero256);
             Avx.Store((short*)(dst + 32), zero256);
@@ -853,7 +853,8 @@ namespace Ceres.Chess.LC0.Batches
             else
             {
               // General case: expand each byte of the ulong
-              // Process using LUT + scalar multiplication for value scaling
+              // Hoist value vector creation outside byte loop
+              Vector128<ushort> valVec128 = Vector128.Create(hvalBits);
               byte* bitsBytes = (byte*)&bits;
 
               for (int byteIdx = 0; byteIdx < 8; byteIdx++)
@@ -864,27 +865,17 @@ namespace Ceres.Chess.LC0.Batches
                 if (b == 0)
                 {
                   // Zero 8 Half values (16 bytes) - use 128-bit store
-                  Sse2.Store((short*)dstByte, Vector128<short>.Zero);
+                  Sse2.Store((short*)dstByte, zero128);
                 }
                 else if (b == 0xFF)
                 {
                   // All 8 bits set - fill with hval
-                  Vector128<ushort> valVec128 = Vector128.Create(hvalBits);
                   Sse2.Store((ushort*)dstByte, valVec128);
                 }
                 else
                 {
-                  // Use LUT for bit pattern, then multiply by value
-                  Half* lutEntry = lutPtr + b * 8;
-
-                  // Load 8 Half values from LUT (0.0 or 1.0)
-                  Vector128<short> lutVec = Sse2.LoadVector128((short*)lutEntry);
-
-                  // Convert to float, multiply by hval, convert back
-                  // Since LUT contains 0 or 1, we can use integer masking instead:
-                  // Create mask where set bits become 0xFFFF
-                  Vector128<byte> byteVec = Vector128.Create(b, b, b, b, b, b, b, b,
-                                                              b, b, b, b, b, b, b, b);
+                  // General case: create mask where set bits become 0xFFFF
+                  Vector128<byte> byteVec = Vector128.Create(b);
                   Vector128<byte> expanded = Sse2.And(byteVec, bitMasks);
                   Vector128<byte> mask8 = Sse2.CompareEqual(expanded, bitMasks);
 
@@ -892,7 +883,6 @@ namespace Ceres.Chess.LC0.Batches
                   Vector128<short> maskLo = Sse2.UnpackLow(mask8, mask8).AsInt16();
 
                   // Apply mask to select hval or zero
-                  Vector128<ushort> valVec128 = Vector128.Create(hvalBits);
                   Vector128<short> result = Sse2.And(valVec128.AsInt16(), maskLo);
 
                   Sse2.Store((short*)dstByte, result);
