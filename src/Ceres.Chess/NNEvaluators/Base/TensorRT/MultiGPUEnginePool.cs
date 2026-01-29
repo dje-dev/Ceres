@@ -33,14 +33,25 @@ public sealed class MultiGPUEnginePool : IDisposable
   /// </summary>
   private const int MAX_GPUS_STACKALLOC = 16;
 
+  /// <summary>
+  /// When true, runs batch size optimization during warmup and actually rebuilds
+  /// engines with the optimized sizes for improved throughput.
+  /// </summary>
+  public static bool APPLY_BATCH_SIZE_OPTIMIZATION = true;
+
   private readonly TensorRT trt;
-  private readonly List<EnginePool> pools = new();
+  private List<EnginePool> pools = new();
   private readonly int[] deviceIDs;
   private readonly int minBatchSizePerGPU;
   private readonly EnginePoolMode mode;
-  private readonly int[][] sizesPerGPU;
+  private int[][] sizesPerGPU;
   private readonly bool useByteInputs;
   private bool disposed;
+
+  // Fields needed for rebuilding pools with optimized sizes
+  private readonly string onnxPath;
+  private readonly TensorRTBuildOptions buildOptions;
+  private readonly string cacheDir;
 
   // Pinned memory buffers for async transfers
   private IntPtr pinnedInput;
@@ -134,6 +145,9 @@ public sealed class MultiGPUEnginePool : IDisposable
                              int[] deviceIds, int minBatchSizePerGPU, string cacheDir)
   {
     this.trt = trt;
+    this.onnxPath = onnxPath;
+    this.buildOptions = options;
+    this.cacheDir = cacheDir;
     deviceIDs = deviceIds;
     this.minBatchSizePerGPU = minBatchSizePerGPU;
     this.mode = mode;
@@ -142,8 +156,8 @@ public sealed class MultiGPUEnginePool : IDisposable
     // Load engines in parallel across GPUs when enabled, multi-GPU, and all device IDs are unique
     // (duplicate device IDs can occur for testing purposes and require sequential loading)
     bool hasDuplicateDevices = deviceIds.Length != deviceIds.Distinct().Count();
-    bool useParallel = NNEvaluatorTensorRT.PARALLEL_ENGINE_LOAD_ENABLED 
-                       && deviceIds.Length > 1 
+    bool useParallel = NNEvaluatorTensorRT.PARALLEL_ENGINE_LOAD_ENABLED
+                       && deviceIds.Length > 1
                        && !hasDuplicateDevices;
 
     if (useParallel)
@@ -406,6 +420,42 @@ public sealed class MultiGPUEnginePool : IDisposable
       pools[g].ExecutionTimes = executionTimesPerGPU[g];
     }
 
+    // Run batch size optimization if enabled
+    if (APPLY_BATCH_SIZE_OPTIMIZATION && mode == EnginePoolMode.Exact)
+    {
+      int maxBatchSize = sizesPerGPU[0][^1] * numGPUs;
+      BatchSizeOptimizer.OptimizationResult result =
+        BatchSizeOptimizer.Optimize(sizesPerGPU[0], executionTimesPerGPU, numGPUs, maxBatchSize);
+
+      // Check if sizes actually changed
+      bool changed = false;
+      for (int i = 0; i < sizesPerGPU[0].Length; i++)
+      {
+        if (sizesPerGPU[0][i] != result.OptimizedSizes[i])
+        {
+          changed = true;
+          break;
+        }
+      }
+
+      if (changed)
+      {
+        Console.WriteLine($"Batch size optimization: [{string.Join(", ", result.OriginalSizes)}] -> [{string.Join(", ", result.OptimizedSizes)}]");
+        float origThroughput = -result.OriginalScore / 1000f;
+        float optThroughput = -result.OptimizedScore / 1000f;
+        float pctImprove = origThroughput > 0 ? (optThroughput - origThroughput) / origThroughput * 100f : 0f;
+        Console.WriteLine($"  Estimated throughput: {origThroughput:F0}k -> {optThroughput:F0}k nps ({pctImprove:+0.0;-0.0}%)");
+
+        // Rebuild pools with optimized sizes
+        RebuildPoolsWithSizes(result.OptimizedSizes);
+        return; // Warmup will be called again by RebuildPoolsWithSizes
+      }
+      else
+      {
+        Console.WriteLine("Batch size optimization: sizes are near-optimal.");
+      }
+    }
+
     // Pre-compute speed fractions for all possible GPU counts (1 to numGPUs)
     // This avoids recomputation on every ComputeOptimalDistribution call
     cachedSpeedFractions = new float[numGPUs + 1][];
@@ -458,6 +508,71 @@ public sealed class MultiGPUEnginePool : IDisposable
       distCache = new int[(maxN + 1) * numGPUs];
       distCacheValid = new bool[maxN + 1];
     }
+  }
+
+
+  /// <summary>
+  /// Rebuilds all engine pools with new batch sizes.
+  /// Disposes existing pools and creates new ones with optimized sizes.
+  /// </summary>
+  private void RebuildPoolsWithSizes(int[] newSizes)
+  {
+    // Dispose existing pools
+    foreach (EnginePool pool in pools)
+    {
+      pool.Dispose();
+    }
+    pools.Clear();
+
+    // Update sizesPerGPU with new sizes for all GPUs
+    for (int i = 0; i < deviceIDs.Length; i++)
+    {
+      sizesPerGPU[i] = NNEvaluatorTensorRT.AdjustToSM(deviceIDs[i], newSizes);
+    }
+
+    Console.WriteLine($"Rebuilding engines with optimized sizes...");
+
+    // Rebuild pools with new sizes (same logic as constructor)
+    bool hasDuplicateDevices = deviceIDs.Length != deviceIDs.Distinct().Count();
+    bool useParallel = NNEvaluatorTensorRT.PARALLEL_ENGINE_LOAD_ENABLED
+                       && deviceIDs.Length > 1
+                       && !hasDuplicateDevices;
+
+    if (useParallel)
+    {
+      EnginePool[] poolsArray = new EnginePool[deviceIDs.Length];
+      Parallel.For(0, deviceIDs.Length, i =>
+      {
+        poolsArray[i] = new EnginePool(trt, onnxPath, (int[])sizesPerGPU[i].Clone(), mode, buildOptions,
+                                        InputElementsPerPosition, OutputElementsPerPosition, deviceIDs[i], cacheDir);
+      });
+      for (int i = 0; i < deviceIDs.Length; i++)
+      {
+        pools.Add(poolsArray[i]);
+      }
+    }
+    else
+    {
+      for (int i = 0; i < deviceIDs.Length; i++)
+      {
+        EnginePool pool = new EnginePool(trt, onnxPath, (int[])sizesPerGPU[i].Clone(), mode, buildOptions,
+                                          InputElementsPerPosition, OutputElementsPerPosition, deviceIDs[i], cacheDir);
+        pools.Add(pool);
+      }
+    }
+
+    // Clear caches that depend on old sizes
+    cachedSpeedFractions = null;
+    gpuCostTable = null;
+    distCache = null;
+    distCacheValid = null;
+
+    // Re-run warmup with new engines (this will measure timings and rebuild cost tables)
+    // Temporarily disable optimization to prevent infinite recursion
+    bool savedFlag = APPLY_BATCH_SIZE_OPTIMIZATION;
+    APPLY_BATCH_SIZE_OPTIMIZATION = false;
+    Warmup();
+    APPLY_BATCH_SIZE_OPTIMIZATION = savedFlag;
   }
 
 

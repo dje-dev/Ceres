@@ -225,8 +225,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
     for (int i = 0; i < GpuIDs.Length; i++)
     {
       effectiveSizesPerGPU[i] = AdjustToSM(GpuIDs[i], batchSizes);
-    }    
-  
+    }
+
     string cacheDir = ONNXExecutor.GetTRTEngineCacheDir(onnxFileName);
 
     trt = TensorRT.Instance;
@@ -236,15 +236,11 @@ public class NNEvaluatorTensorRT : NNEvaluator
       System.IO.Directory.CreateDirectory(cacheDir);
     }
 
-    // Compute max engine batch size based on mode
-    int maxEngineBatchSize = poolMode == EnginePoolMode.Range ? effectiveSizesPerGPU[0][^1]
-                                                              : effectiveSizesPerGPU[0].Max();
+    // Compute max batch size for soft limit (pre-pool creation estimate)
     int maxEngineBatchSizeAll = poolMode == EnginePoolMode.Range
                                           ? effectiveSizesPerGPU.Max(s => s[^1])
                                           : effectiveSizesPerGPU.Max(s => s.Max());
     maxBatchSize = softMaxBatchSize > 0 ? softMaxBatchSize : maxEngineBatchSizeAll;
-
-    largestEngineBatchSize = maxEngineBatchSize;
 
     string graphsLabel = useCudaGraphs ? " [CUDA Graphs]" : "";
     Console.WriteLine($"Creating NNEvaluatorTensorRT for {onnxFileName}{graphsLabel}");
@@ -279,6 +275,9 @@ public class NNEvaluatorTensorRT : NNEvaluator
 
     const int MIN_BATCH_SIZE_PER_GPU = 6;
     pool = new MultiGPUEnginePool(trt, onnxFileName, effectiveSizesPerGPU, poolMode, options, 0, 0, GpuIDs, MIN_BATCH_SIZE_PER_GPU, cacheDir);
+
+    // Query actual max batch size from pool AFTER construction (may differ if optimization rebuilt engines)
+    largestEngineBatchSize = pool.MaxEngineBatchSize;
 
     inputElementsPerPosition = pool.InputElementsPerPosition;
     outputElementsPerPosition = pool.OutputElementsPerPosition;
@@ -854,8 +853,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
         overrideFN += ".onnx";
       }
     }
-    NNEvaluatorTensorRT trtNativeEngine = BuildEvaluator(netDef, gpuIDs, options, 
-                                                         netDef.Type == NNEvaluatorType.Ceres ? ONNXNetExecutor.NetTypeEnum.TPG 
+    NNEvaluatorTensorRT trtNativeEngine = BuildEvaluator(netDef, gpuIDs, options,
+                                                         netDef.Type == NNEvaluatorType.Ceres ? ONNXNetExecutor.NetTypeEnum.TPG
                                                                                               : ONNXNetExecutor.NetTypeEnum.LC0,
                                                          overrideFN);
 
@@ -863,8 +862,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
   }
 
 
-  internal static NNEvaluatorTensorRT BuildEvaluator(NNEvaluatorNetDef netDef, 
-                                                     int[] gpuIDs, 
+  internal static NNEvaluatorTensorRT BuildEvaluator(NNEvaluatorNetDef netDef,
+                                                     int[] gpuIDs,
                                                      NNEvaluatorOptions options,
                                                      ONNXNetExecutor.NetTypeEnum netType = ONNXNetExecutor.NetTypeEnum.TPG,
                                                      string overrideFileName = null)
@@ -895,7 +894,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
                                               netType,
                                               EXACT_BATCHES ? EnginePoolMode.Exact : EnginePoolMode.Range,
                                               EXACT_BATCHES ? [1, 8, 20, 42, 64, 88, 116, 240]
-                                                           // [1, 8, 32, 48, 64, 96, 128, 256]
+                                                            // [1, 8, 32, 48, 64, 96, 128, 256]
                                                             : [48, 128, 1024],
                                               gpuIDs: gpuIDs,
                                               useCudaGraphs: EXACT_BATCHES && ENABLE_GRAPHS, //optionsCeres.EnableCUDAGraphs,
