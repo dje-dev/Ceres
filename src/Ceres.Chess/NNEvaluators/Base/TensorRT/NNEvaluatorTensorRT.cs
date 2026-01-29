@@ -571,6 +571,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
 
   /// <summary>
   /// Extract results from a sub-batch output buffer into the result arrays.
+  /// Uses parallel processing for all per-position extractions (values, policies, etc.)
+  /// for improved performance, matching the pattern used in the ONNX backend.
   /// </summary>
   private void ExtractSubBatchResults(IEncodedPositionBatchFlat batch, int startPos, int count, int engineBatchSize,
                                       float[] subBatchOutput,
@@ -579,6 +581,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
                                       float valueHead1Temperature, float valueHead2Temperature,
                                       bool wdlIsLogistic)
   {
+    // Compute tensor offsets once outside the parallel loop
     int valueOffset = 0;
     int value2Offset = 0;
     int value3Offset = 0;
@@ -626,15 +629,26 @@ public class NNEvaluatorTensorRT : NNEvaluator
     }
 
     // Substitute value3 into value2 if enabled and value3 is present
-    if (SUBSTITUTE_VALUE3_INTO_VALUE2_IF_FOUND && value3Size > 0)
-    {
-      value2Offset = value3Offset;
-    }
+    int effectiveValue2Offset = (SUBSTITUTE_VALUE3_INTO_VALUE2_IF_FOUND && value3Size > 0) ? value3Offset : value2Offset;
 
-    for (int i = 0; i < count; i++)
+    // Get policy temperature once
+    float policyTemperature = Options?.PolicyTemperature ?? 1.0f;
+
+    // Pre-compute inverse temperatures to avoid division in hot loop
+    float invTemp1 = 1.0f / valueHead1Temperature;
+    float invTemp2 = 1.0f / valueHead2Temperature;
+
+    // Capture batch data for parallel access
+    ReadOnlyMemory<MGMoveList> moves = batch.Moves;
+    ReadOnlyMemory<MGPosition> positions = batch.Positions;
+
+    // Single parallel loop extracts all per-position results: values, M, uncertainties, and policies.
+    // This improves cache locality and parallelism compared to separate sequential + parallel passes.
+    Parallel.For(0, count, new ParallelOptions() { MaxDegreeOfParallelism = 1 + count / 48 }, /*cachedParallelOptions,*/ i =>
     {
       int resultIndex = startPos + i;
 
+      // ===== Extract Value Head 1 =====
       int posValueOffset = valueOffset + i * valueSize;
       if (isWDL)
       {
@@ -644,15 +658,14 @@ public class NNEvaluatorTensorRT : NNEvaluator
           float vD = subBatchOutput[posValueOffset + 1];
           float vL = subBatchOutput[posValueOffset + 2];
 
-          float maxV = Math.Max(vW, Math.Max(vD, vL));
-          float invTemp1 = 1.0f / valueHead1Temperature;
+          float maxV = MathF.Max(vW, MathF.Max(vD, vL));
           float expW = MathF.Exp((vW - maxV) * invTemp1);
           float expD = MathF.Exp((vD - maxV) * invTemp1);
           float expL = MathF.Exp((vL - maxV) * invTemp1);
-          float sum = expW + expD + expL;
+          float sumV = expW + expD + expL;
 
-          w[resultIndex] = (FP16)(expW / sum);
-          l[resultIndex] = (FP16)(expL / sum);
+          w[resultIndex] = (FP16)(expW / sumV);
+          l[resultIndex] = (FP16)(expL / sumV);
         }
         else
         {
@@ -663,115 +676,78 @@ public class NNEvaluatorTensorRT : NNEvaluator
       else
       {
         float v = subBatchOutput[posValueOffset];
-        w[resultIndex] = (FP16)((v + 1) / 2);
-        l[resultIndex] = (FP16)((1 - v) / 2);
+        w[resultIndex] = (FP16)((v + 1) * 0.5f);
+        l[resultIndex] = (FP16)((1 - v) * 0.5f);
       }
 
+      // ===== Extract Value Head 2 (if present) =====
       if (hasValueSecondary)
       {
-        int posValue2Offset = value2Offset + i * value2Size;
+        int posValue2Offset = effectiveValue2Offset + i * value2Size;
         float vW2 = subBatchOutput[posValue2Offset];
         float vD2 = subBatchOutput[posValue2Offset + 1];
         float vL2 = subBatchOutput[posValue2Offset + 2];
 
-        float maxV2 = Math.Max(vW2, Math.Max(vD2, vL2));
-        float invTemp2 = 1.0f / valueHead2Temperature;
+        float maxV2 = MathF.Max(vW2, MathF.Max(vD2, vL2));
         float expW2 = MathF.Exp((vW2 - maxV2) * invTemp2);
         float expD2 = MathF.Exp((vD2 - maxV2) * invTemp2);
         float expL2 = MathF.Exp((vL2 - maxV2) * invTemp2);
-        float sum2 = expW2 + expD2 + expL2;
+        float sumV2 = expW2 + expD2 + expL2;
 
-        w2[resultIndex] = (FP16)(expW2 / sum2);
-        l2[resultIndex] = (FP16)(expL2 / sum2);
+        w2[resultIndex] = (FP16)(expW2 / sumV2);
+        l2[resultIndex] = (FP16)(expL2 / sumV2);
       }
 
+      // ===== Extract MLH =====
       if (hasM)
       {
         int posMlhOffset = mlhOffset + i * mlhSize;
         m[resultIndex] = (FP16)subBatchOutput[posMlhOffset];
       }
 
+      // ===== Extract Uncertainty V =====
       if (hasUncertaintyV)
       {
         int posUncVOffset = uncVOffset + i * uncVSize;
         uncV[resultIndex] = (FP16)subBatchOutput[posUncVOffset];
       }
 
+      // ===== Extract Uncertainty P =====
       if (hasUncertaintyP)
       {
         int posUncPOffset = uncPOffset + i * uncPSize;
         uncP[resultIndex] = (FP16)subBatchOutput[posUncPOffset];
       }
-    }
 
-    // Extract policies using optimized batch path or with validation
-    float policyTemperature = Options?.PolicyTemperature ?? 1.0f;
-    ExtractPoliciesBatch(batch, startPos, count, policyOffset, subBatchOutput, policies, policyTemperature);
-  }
-
-
-  /// <summary>
-  /// Extract policies for a batch of positions using vectorized operations.
-  /// </summary>
-  private void ExtractPoliciesBatch(IEncodedPositionBatchFlat batch, int startPos, int count,
-                                    int policyOffset, float[] outputBuffer,
-                                    CompressedPolicyVector[] policies, float policyTemperature)
-  {
-    ExtractPoliciesBatchFast(batch, startPos, count, policyOffset, outputBuffer, policies, startPos, policyTemperature);
-  }
-
-
-  /// <summary>
-  /// Fast vectorized batch policy extraction using TensorPrimitives and parallel processing.
-  /// </summary>
-  /// <param name="batch">The batch containing position data</param>
-  /// <param name="batchStartPos">Starting index in the batch data (for reading moves/positions)</param>
-  /// <param name="count">Number of positions to process</param>
-  /// <param name="policyOffset">Offset into the output buffer for policy logits</param>
-  /// <param name="outputBuffer">Buffer containing policy logits</param>
-  /// <param name="policies">Output array for compressed policy vectors</param>
-  /// <param name="policiesStartIndex">Starting index in the policies array for writing output</param>
-  /// <param name="policyTemperature">Temperature to apply to policy softmax</param>
-  private void ExtractPoliciesBatchFast(IEncodedPositionBatchFlat batch, int batchStartPos, int count,
-                                        int policyOffset, float[] outputBuffer,
-                                        CompressedPolicyVector[] policies, int policiesStartIndex,
-                                        float policyTemperature = 1.0f)
-  {
-    ReadOnlyMemory<MGMoveList> moves = batch.Moves;
-    ReadOnlyMemory<MGPosition> positions = batch.Positions;
-
-    // Reuse cached ParallelOptions (MaxDegreeOfParallelism is set once at construction)
-    Parallel.For(0, count, cachedParallelOptions, i =>
-    {
-      int batchIndex = batchStartPos + i;  // Index into batch data
-      int outputIndex = policiesStartIndex + i;  // Index into policies output array
+      // ===== Extract Policy =====
+      int batchIndex = startPos + i;
       int posPolicyOffset = policyOffset + i * policySize;
 
       MGMoveList moveList = moves.Span[batchIndex];
-      ReadOnlySpan<float> policyLogits = outputBuffer.AsSpan().Slice(posPolicyOffset, policySize);
-
       int numMoves = moveList.NumMovesUsed;
       if (numMoves == 0)
       {
         return;
       }
 
+      ReadOnlySpan<float> policyLogits = subBatchOutput.AsSpan().Slice(posPolicyOffset, policySize);
+
       // Collect move indices and find max logit in a single pass
       Span<int> indices = stackalloc int[numMoves];
       Span<float> logits = stackalloc float[numMoves];
       float maxLogit = float.NegativeInfinity;
 
-      for (int m = 0; m < numMoves; m++)
+      for (int mv = 0; mv < numMoves; mv++)
       {
-        MGMove move = moveList.MovesArray[m];
+        MGMove move = moveList.MovesArray[mv];
         EncodedMove encoded = ConverterMGMoveEncodedMove.MGChessMoveToEncodedMove(move);
         int nnIndex = encoded.IndexNeuralNet;
-        indices[m] = nnIndex;
+        indices[mv] = nnIndex;
 
         if (nnIndex >= 0 && nnIndex < policySize)
         {
           float logit = policyLogits[nnIndex];
-          logits[m] = logit;
+          logits[mv] = logit;
           if (logit > maxLogit)
           {
             maxLogit = logit;
@@ -779,25 +755,21 @@ public class NNEvaluatorTensorRT : NNEvaluator
         }
         else
         {
-          logits[m] = float.NegativeInfinity;
+          logits[mv] = float.NegativeInfinity;
         }
       }
 
       // Apply softmax using TensorPrimitives for vectorization
-      // Center by max
       TensorPrimitives.Subtract(logits, maxLogit, logits);
 
-      // Apply temperature scaling if not 1.0
       if (policyTemperature != 1.0f)
       {
-        float invTemp = 1.0f / policyTemperature;
-        TensorPrimitives.Multiply(logits, invTemp, logits);
+        float invPolicyTemp = 1.0f / policyTemperature;
+        TensorPrimitives.Multiply(logits, invPolicyTemp, logits);
       }
 
-      // Exponentiate
       TensorPrimitives.Exp(logits, logits);
 
-      // Normalize
       float sum = TensorPrimitives.Sum(logits);
       if (sum > 0)
       {
@@ -805,9 +777,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
         TensorPrimitives.Multiply(logits, invSum, logits);
       }
 
-      // Initialize policy (will sort internally using insertion sort)
       SideType side = positions.Span[batchIndex].SideToMove;
-      CompressedPolicyVector.Initialize(ref policies[outputIndex], side, indices, logits, alreadySorted: false);
+      CompressedPolicyVector.Initialize(ref policies[resultIndex], side, indices, logits, alreadySorted: false);
     });
   }
 
