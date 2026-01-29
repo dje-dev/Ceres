@@ -895,6 +895,18 @@ public sealed class MultiGPUEnginePool : IDisposable
       {
         distribution[g] = distCache[cBase + g];
       }
+
+      if (BatchScheduler.VERBOSE_DETAILS)
+      {
+        int usedGPUs = 0;
+        for (int g = 0; g < numGPUs; g++)
+        {
+          if (distribution[g] > 0) usedGPUs++;
+        }
+        Console.WriteLine($"  MULTI_GPU_DIST (cached): {totalPositions} positions -> GPUs used={usedGPUs} " +
+                          $"distribution=[{string.Join(", ", distribution.Slice(0, numGPUs).ToArray())}]");
+      }
+
       return true;
     }
 
@@ -1078,6 +1090,15 @@ public sealed class MultiGPUEnginePool : IDisposable
     for (int g = bestK; g < numGPUs; g++)
     {
       distribution[g] = 0;
+    }
+
+    if (BatchScheduler.VERBOSE_DETAILS)
+    {
+      float makespan = dpNext[totalPositions];
+      float penalty = BatchScheduler.PER_GPU_FIXED_COST_MS * Math.Max(0, bestK - 1);
+      Console.WriteLine($"  MULTI_GPU_DIST: {totalPositions} positions -> GPUs used={bestK} " +
+                        $"distribution=[{string.Join(", ", distribution.Slice(0, numGPUs).ToArray())}] " +
+                        $"makespan={makespan:F1}ms penalty={penalty:F1}ms total={makespan + penalty:F1}ms");
     }
 
     StoreDistCache(totalPositions, numGPUs, distribution);

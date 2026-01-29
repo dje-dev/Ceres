@@ -513,36 +513,37 @@ public sealed class EnginePool : IDisposable
   /// Process with callback for tensor-major output extraction.
   /// The handler is called after each sub-batch inference with the raw output buffer.
   /// Uses pre-allocated buffers when possible to reduce GC pressure.
+  /// Uses optimized batch scheduling when available (Exact mode with ExecutionTimes).
   /// </summary>
   public void ProcessWithHandler(Half[] input, int totalPositions, SubBatchOutputHandler handler, int globalPositionOffset = 0)
   {
-    int processed = 0;
-    int lastBatchSize = 0;
+    // Use optimized scheduling path if available
+    ComputeBatchPlan(totalPositions);
 
-    while (processed < totalPositions)
+    if (cachedBatchPlan.Count == 0)
     {
-      int remaining = totalPositions - processed;
-      (TensorRTEngine engine, int batchSize, bool useDynamic, int engineIndex) = SelectEngineWithMode(remaining, lastBatchSize);
+      return;
+    }
 
-      int actualPositions = Math.Min(batchSize, remaining);
-      int inputOffset = processed * InputElementsPerPosition;
-      int inputElements = actualPositions * InputElementsPerPosition;
-      int outputElements = actualPositions * OutputElementsPerPosition;
+    foreach (var (start, count, engine, engineBatchSize, useDynamic, engineIndex) in cachedBatchPlan)
+    {
+      int inputOffset = start * InputElementsPerPosition;
+      int inputElements = count * InputElementsPerPosition;
+      int outputElements = count * OutputElementsPerPosition;
 
       if (useDynamic)
       {
         // Dynamic inference: reuse pre-allocated max-size buffers
-        // Copy input to cached buffer
         if (inputElements > 0)
         {
           Array.Copy(input, inputOffset, cachedHalfInputBuffer, 0, inputElements);
         }
 
         // Dynamic inference with actual batch size using oversized buffers
-        engine.InferHostDynamic(cachedHalfInputBuffer, cachedOutputBuffer, actualPositions, inputElements, outputElements);
+        engine.InferHostDynamic(cachedHalfInputBuffer, cachedOutputBuffer, count, inputElements, outputElements);
 
         // Call handler with raw output (tensor-major layout) and actual batch size
-        handler(globalPositionOffset + processed, actualPositions, actualPositions, cachedOutputBuffer);
+        handler(globalPositionOffset + start, count, count, cachedOutputBuffer);
       }
       else
       {
@@ -550,7 +551,6 @@ public sealed class EnginePool : IDisposable
         Half[] batchInput = perEngineHalfInputBuffers[engineIndex];
         Half[] batchOutput = perEngineOutputBuffers[engineIndex];
 
-        // Copy input to buffer
         if (inputElements > 0)
         {
           Array.Copy(input, inputOffset, batchInput, 0, inputElements);
@@ -560,11 +560,8 @@ public sealed class EnginePool : IDisposable
         engine.InferHost(batchInput, batchOutput);
 
         // Call handler with raw output (tensor-major layout)
-        handler(globalPositionOffset + processed, actualPositions, batchSize, batchOutput);
+        handler(globalPositionOffset + start, count, engineBatchSize, batchOutput);
       }
-
-      processed += actualPositions;
-      lastBatchSize = batchSize;
     }
   }
 
