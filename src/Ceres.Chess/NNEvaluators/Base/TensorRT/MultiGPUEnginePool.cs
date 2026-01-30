@@ -36,8 +36,11 @@ public sealed class MultiGPUEnginePool : IDisposable
   /// <summary>
   /// When true, runs batch size optimization during warmup and actually rebuilds
   /// engines with the optimized sizes for improved throughput.
+  /// N.B. This significantly slows down initialization and has unclear benefit.
+  ///      Therefore disabled by default (but can be run manually for experimentation).
   /// </summary>
-  public static bool APPLY_BATCH_SIZE_OPTIMIZATION = true;
+  public static bool APPLY_BATCH_SIZE_OPTIMIZATION = false;
+
 
   private readonly TensorRT trt;
   private List<EnginePool> pools = new();
