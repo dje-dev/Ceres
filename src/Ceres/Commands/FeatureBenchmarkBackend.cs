@@ -220,6 +220,11 @@ namespace Ceres.Commands
       }
       if (show)
       {
+        if (ret.Count > 0)
+        {
+          float averageNPS = ret.Average(r => r.Item2);
+          Console.WriteLine($"Average NPS across all tested batch sizes: {averageNPS,9:N0}");
+        }
         Console.WriteLine();
       }
 
