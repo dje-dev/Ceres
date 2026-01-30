@@ -424,9 +424,8 @@ public sealed class MultiGPUEnginePool : IDisposable
     if (APPLY_BATCH_SIZE_OPTIMIZATION && mode == EnginePoolMode.Exact)
     {
       int maxBatchSize = sizesPerGPU[0][^1] * numGPUs;
-      BatchSizeOptimizer.OptimizationResult result =
-        BatchSizeOptimizer.Optimize(sizesPerGPU[0], executionTimesPerGPU, numGPUs, maxBatchSize);
-
+      BatchSizeOptimizer.OptimizationResult result = BatchSizeOptimizer.Optimize(sizesPerGPU[0], executionTimesPerGPU, numGPUs, 1024);
+      
       // Check if sizes actually changed
       bool changed = false;
       for (int i = 0; i < sizesPerGPU[0].Length; i++)

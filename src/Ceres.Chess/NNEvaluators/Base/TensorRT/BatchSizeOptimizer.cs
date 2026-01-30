@@ -34,6 +34,8 @@ namespace Ceres.Chess.NNEvaluators.TensorRT;
 /// </summary>
 public static class BatchSizeOptimizer
 {
+  const int NUM_ITERATIONS = 50;
+
   /// <summary>
   /// Result of the optimization.
   /// </summary>
@@ -59,8 +61,7 @@ public static class BatchSizeOptimizer
     int[] originalSizes,
     float[][] originalTimingsPerGPU,
     int numGPUs,
-    int maxBatch,
-    int maxIterations = 20)
+    int maxBatch)
   {
     if (originalSizes == null || originalSizes.Length == 0)
     {
@@ -97,7 +98,7 @@ public static class BatchSizeOptimizer
     // Delta percentages of base batch size, rounded to nearest multiple of 2
     int[] deltaPercents = { -10, -7, -4, -2, 2, 4, 7, 10 };
 
-    for (int iter = 0; iter < maxIterations; iter++)
+    for (int iter = 0; iter < NUM_ITERATIONS; iter++)
     {
       // Generate all valid candidate moves
       List<(int idx, int delta, int[] candidate)> candidates = new();
@@ -114,7 +115,7 @@ public static class BatchSizeOptimizer
           // All batch sizes must be even
           if (newVal % 2 != 0)
           {
-            continue;
+            newVal += 1;
           }
 
           // Check bounds
@@ -223,11 +224,10 @@ public static class BatchSizeOptimizer
   /// </summary>
   private static List<int> GenerateSamplePoints(int[] batchSizes, int maxBatch)
   {
-    // Dense sampling: every 17th batch size from 16 to maxBatch
     // This provides good coverage while keeping evaluation fast
     List<int> points = new();
     int limit = Math.Min(maxBatch, batchSizes[^1] * 4);
-    for (int k = 16; k <= limit; k += 17)
+    for (int k = 16; k <= limit; k += 1)
     {
       points.Add(k);
     }
