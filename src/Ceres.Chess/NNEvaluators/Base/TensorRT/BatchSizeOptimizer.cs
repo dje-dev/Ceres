@@ -94,8 +94,8 @@ public static class BatchSizeOptimizer
     float bestScore = originalScore;
 
     // Parallel hill climbing: evaluate all single-dimension moves in parallel
-    // Use even deltas only (all batch sizes must be even), include larger jumps for better exploration
-    int[] deltas = { -8, -6, -4, -2, 2, 4, 6, 8 };
+    // Delta percentages of base batch size, rounded to nearest multiple of 2
+    int[] deltaPercents = { -10, -7, -4, -2, 2, 4, 7, 10 };
 
     for (int iter = 0; iter < maxIterations; iter++)
     {
@@ -103,8 +103,12 @@ public static class BatchSizeOptimizer
       List<(int idx, int delta, int[] candidate)> candidates = new();
       for (int i = 0; i < n; i++)
       {
-        foreach (int d in deltas)
+        foreach (int pct in deltaPercents)
         {
+          // Compute delta as percentage of base batch size, rounded to nearest multiple of 2
+          int rawDelta = (int)Math.Round(best[i] * pct / 100.0);
+          int d = ((rawDelta + (rawDelta >= 0 ? 1 : -1)) / 2) * 2; // Round to nearest even
+          if (d == 0) d = pct > 0 ? 2 : -2; // Ensure non-zero delta
           int newVal = best[i] + d;
 
           // All batch sizes must be even
