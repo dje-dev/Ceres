@@ -48,13 +48,13 @@ public static class BatchScheduler
   /// standalone execution time. Applied as max(0, numBatches - 1) * PER_BATCH_OVERHEAD_MS,
   /// so the first batch always pays its full engine time with no adjustment.
   /// </summary>
-  public const float PER_BATCH_OVERHEAD_MS = 1.5f;
+  public const float PER_BATCH_OVERHEAD_MS = 0.5f;
 
   /// Estimated per-GPU coordination overhead in milliseconds.
   /// Accounts for CUDA context switching (cudaSetDevice + cudaDeviceSynchronize)
   /// on dispatch and collection, plus Parallel.For thread scheduling.
   /// Used to decide optimal GPU count: multi-GPU only when engine time savings exceed this cost.
-  public const float PER_GPU_FIXED_COST_MS = 1f;
+  public const float PER_GPU_FIXED_COST_MS = 0f;
 
   /// <summary>
   /// Result of the scheduling algorithm.

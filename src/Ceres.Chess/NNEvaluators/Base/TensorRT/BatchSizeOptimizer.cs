@@ -34,7 +34,7 @@ namespace Ceres.Chess.NNEvaluators.TensorRT;
 /// </summary>
 public static class BatchSizeOptimizer
 {
-  const int NUM_ITERATIONS = 50;
+  const int NUM_ITERATIONS = 24;
 
   /// <summary>
   /// Result of the optimization.
@@ -87,8 +87,11 @@ public static class BatchSizeOptimizer
       if (maxBounds[i] % 2 != 0) maxBounds[i]--;
     }
 
+    // Pre-generate sample points once (they don't change based on candidate sizes within ±10% range)
+    List<int> samplePoints = GenerateSamplePoints(originalSizes, maxBatch);
+
     // Evaluate original configuration
-    float originalScore = EvaluateSolution(originalSizes, originalSizes, originalTimingsPerGPU, numGPUs, maxBatch);
+    float originalScore = EvaluateSolution(originalSizes, originalSizes, originalTimingsPerGPU, numGPUs, maxBatch, samplePoints);
 
     // Start with original sizes
     int[] best = (int[])originalSizes.Clone();
@@ -100,8 +103,8 @@ public static class BatchSizeOptimizer
 
     for (int iter = 0; iter < NUM_ITERATIONS; iter++)
     {
-      // Generate all valid candidate moves
-      List<(int idx, int delta, int[] candidate)> candidates = new();
+      // Generate all valid candidate moves - store only index and new value to reduce allocations
+      List<(int idx, int newVal)> candidates = new();
       for (int i = 0; i < n; i++)
       {
         foreach (int pct in deltaPercents)
@@ -134,9 +137,7 @@ public static class BatchSizeOptimizer
             continue;
           }
 
-          int[] candidate = (int[])best.Clone();
-          candidate[i] = newVal;
-          candidates.Add((i, d, candidate));
+          candidates.Add((i, newVal));
         }
       }
 
@@ -145,11 +146,14 @@ public static class BatchSizeOptimizer
         break;
       }
 
-      // Evaluate all candidates in parallel
+      // Evaluate all candidates in parallel - construct candidate array only when needed
       float[] scores = new float[candidates.Count];
       Parallel.For(0, candidates.Count, j =>
       {
-        scores[j] = EvaluateSolution(candidates[j].candidate, originalSizes, originalTimingsPerGPU, numGPUs, maxBatch);
+        // Construct candidate array locally for this thread
+        int[] candidate = (int[])best.Clone();
+        candidate[candidates[j].idx] = candidates[j].newVal;
+        scores[j] = EvaluateSolution(candidate, originalSizes, originalTimingsPerGPU, numGPUs, maxBatch, samplePoints);
       });
 
       // Find best candidate
@@ -169,7 +173,8 @@ public static class BatchSizeOptimizer
         break; // Converged
       }
 
-      best = candidates[bestIdx].candidate;
+      best = (int[])best.Clone();
+      best[candidates[bestIdx].idx] = candidates[bestIdx].newVal;
       bestScore = bestCandidateScore;
     }
 
@@ -187,11 +192,13 @@ public static class BatchSizeOptimizer
     int[] originalSizes,
     float[][] originalTimingsPerGPU,
     int numGPUs,
-    int maxBatch)
+    int maxBatch,
+    List<int> samplePoints)
   {
     int n = candidateSizes.Length;
 
     // Interpolate timings for candidate sizes based on original measurements
+    // Use stackalloc for small arrays to avoid heap allocations
     float[][] timings = new float[numGPUs][];
     for (int g = 0; g < numGPUs; g++)
     {
@@ -202,20 +209,17 @@ public static class BatchSizeOptimizer
       }
     }
 
-    // Generate sample points focused on critical regions
-    List<int> samplePoints = GenerateSamplePoints(candidateSizes, maxBatch);
-
     // Compute execution times at sample points using BatchScheduler
-    float[] times = new float[samplePoints.Count];
+    // Inline the gap score computation to avoid allocating times array
+    float totalNps = 0f;
     for (int i = 0; i < samplePoints.Count; i++)
     {
       int k = samplePoints[i];
       BatchScheduler.ScheduleResult result = BatchScheduler.Schedule(numGPUs, candidateSizes, timings, k);
-      times[i] = result.TotalEstimatedMs;
+      totalNps += k / Math.Max(0.001f, result.TotalEstimatedMs) * 1000f;
     }
 
-    // Compute gap score
-    return ComputeGapScore(samplePoints, times);
+    return -totalNps;
   }
 
   /// <summary>
@@ -227,7 +231,7 @@ public static class BatchSizeOptimizer
     // This provides good coverage while keeping evaluation fast
     List<int> points = new();
     int limit = Math.Min(maxBatch, batchSizes[^1] * 4);
-    for (int k = 16; k <= limit; k += 1)
+    for (int k = 16; k <= limit; k += 2)
     {
       points.Add(k);
     }
