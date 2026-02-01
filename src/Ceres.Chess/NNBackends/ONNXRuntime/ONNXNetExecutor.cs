@@ -143,7 +143,8 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
                                bool enableCUDAGraphs,
                                bool enableProfiling,
                                bool retainRawOutputs,
-                               string loraAdapterFileName = null)
+                               string loraAdapterFileName = null,
+                               int optimizationLevel = 3)
     {
       if (onnxFileName != null && !onnxFileName.ToUpper().EndsWith(".ONNX"))
       {
@@ -202,7 +203,8 @@ namespace Ceres.Chess.NNBackends.ONNXRuntime
       int inputsNumBits = HasSquaresByteInput ? 8 : (Precision == NNEvaluatorPrecision.FP16 ? 16 : 32);
       executor = new ONNXExecutor(shortID, onnxFileName, onnxModelBytes, inputNames, nonBatchDimensions,
                                   inputsNumBits, precisionNumBits, true, deviceIndex, useTensorRT, enableCUDAGraphs,
-                                  MinBatchSize, maxBatchSize, enableProfiling, retainRawOutputs);
+                                  MinBatchSize, maxBatchSize, enableProfiling, retainRawOutputs,
+                                  optimizationLevel: optimizationLevel);
 
     }
 

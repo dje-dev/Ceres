@@ -269,7 +269,8 @@ public class ONNXExecutor : IDisposable
       bool enableProfiling,
       bool retainRawOutputs,
       string[] outputNamesToRetrieve = null,
-      string loraAdapterFileName = null)
+      string loraAdapterFileName = null,
+      int optimizationLevel = 3)
   {
     if (!inputBuffersArePrepopulated)
     {
@@ -370,6 +371,7 @@ public class ONNXExecutor : IDisposable
     EnableCUDAGraphs = enableCUDAGraphs;
     RetainRawInputs = retainRawOutputs;
     LoRAAdapterFileName = loraAdapterFileName;
+    OptimizationLevel = optimizationLevel;
 
     // On Linux it was found necessary to touch the instance before any of the operations below
     // to prevent error about a session object not being created.

@@ -291,7 +291,8 @@ public class NNEvaluatorONNX : NNEvaluator
     Executor = new ONNXNetExecutor(engineID, onnxModelFileName, onnxModelBytes, inputNames,
                                    maxBatchSize, type, precision, deviceType, gpuID,
                                    useTRT, options.EnableCUDAGraphs,
-                                   enableProfiling, RetainRawOutputs | mustRetainOutputsForHeadOverrides);
+                                   enableProfiling, RetainRawOutputs | mustRetainOutputsForHeadOverrides,
+                                   optimizationLevel: options.OptimizationLevel);
   }
 
 
