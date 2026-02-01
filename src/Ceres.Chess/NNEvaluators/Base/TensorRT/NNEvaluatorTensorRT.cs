@@ -181,8 +181,9 @@ public class NNEvaluatorTensorRT : NNEvaluator
                              int[] batchSizes,
                              int[] gpuIDs = null,
                              bool useCudaGraphs = false,
-                             int softMaxBatchSize = 0)
-    : this(onnxFileName, netType, poolMode, batchSizes, null, gpuIDs, useCudaGraphs, softMaxBatchSize)
+                             int softMaxBatchSize = 0,
+                             int optimizationLevel = 3)
+    : this(onnxFileName, netType, poolMode, batchSizes, null, gpuIDs, useCudaGraphs, softMaxBatchSize, optimizationLevel)
   {
   }
 
@@ -206,7 +207,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
                              TensorRTBuildOptions? buildOptions,
                              int[] gpuIDs = null,
                              bool useCudaGraphs = false,
-                             int softMaxBatchSize = 0)
+                             int softMaxBatchSize = 0,
+                             int optimizationLevel = 3)
   {
     if (!File.Exists(onnxFileName))
     {
@@ -256,11 +258,12 @@ public class NNEvaluatorTensorRT : NNEvaluator
     }
     else
     {
-      const int OPTIMIZATION_LEVEL_WITH_CUDA_GRAPHS = 4;
-      const int OPTIMIZATION_LEVEL_WITHOUT_CUDA_GRAPHS = 2;
       options = TensorRTBuildOptions.Default;
-      options.BuilderOptimizationLevel = options.UseCudaGraphs > 0 ? OPTIMIZATION_LEVEL_WITH_CUDA_GRAPHS 
-                                                                   : OPTIMIZATION_LEVEL_WITHOUT_CUDA_GRAPHS;
+      options.BuilderOptimizationLevel = optimizationLevel;
+      if (optimizationLevel == 5)
+      {
+        options.TilingOptimizationLevel = 3; // Also do tiling search, but this can be slow.
+      }
       options.UseFP16 = 0;
       options.UseBF16 = 1;
 
@@ -900,7 +903,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
                                                             : [96, 1024],
                                               gpuIDs: gpuIDs,
                                               useCudaGraphs: EXACT_BATCHES,
-                                              softMaxBatchSize: 1024);
+                                              softMaxBatchSize: 1024,
+                                              optimizationLevel:options.OptimizationLevel);
     trtNativeEngine.Options = options;
 
     EncodedPositionBatchFlat.RETAIN_POSITION_INTERNALS = true; // ** TODO: remove/rework

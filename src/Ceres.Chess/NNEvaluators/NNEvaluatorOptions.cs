@@ -77,6 +77,12 @@ namespace Ceres.Chess.NNEvaluators
     /// </summary>
     public bool EnableCUDAGraphs { get; init; } = false;
 
+    /// <summary>
+    /// Optimization level for the neural network evaluator.
+    /// Valid values are 0 through 5 (inclusive), where 0 is no optimization and 5 is highest optimization.
+    /// </summary>
+    public virtual int OptimizationLevel { get; init; } = 3;
+
     #endregion
 
     #region Applying supplemental options
@@ -98,6 +104,7 @@ namespace Ceres.Chess.NNEvaluators
       float policyTemperature = CheckOptionSpecifiedElseDefaultFloat(optionsDict, "POLTEMP", PolicyTemperature);
 
       bool useCUDAGraphs = CheckOptionSpecifiedElseDefaultBoolean(optionsDict, "CUDAGRAPHS", EnableCUDAGraphs);
+      int optimizationLevel = CheckOptionSpecifiedElseDefaultInt(optionsDict, "OPT", OptimizationLevel, 0, 5);
 
       if (value2Weight != 0 || value1Temperature != 1 || value2Temperature != 1)
       {
@@ -113,6 +120,7 @@ namespace Ceres.Chess.NNEvaluators
         PVExtensionDepth = (int)pvExtensionDepth,
         EnableCUDAGraphs = useCUDAGraphs,
         PolicyUncertaintyTemperatureScalingFactor = policyUncertaintyScaling,
+        OptimizationLevel = optimizationLevel,
       };
 
       return options;
@@ -203,6 +211,40 @@ namespace Ceres.Chess.NNEvaluators
         if (!bool.TryParse(optionString, out returnValue))
         {
           throw new Exception($"Invalid value for {optionKey}, expected 'true' or 'false' but got: {optionString}");
+        }
+      }
+
+      return returnValue;
+    }
+
+
+    /// <summary>
+    /// Returns value in dictionary with specified key (parsed as an int) or specified default if not found.
+    /// Validates that the value is within the specified range.
+    /// </summary>
+    /// <param name="options"></param>
+    /// <param name="optionKey"></param>
+    /// <param name="defaultValue"></param>
+    /// <param name="minValue"></param>
+    /// <param name="maxValue"></param>
+    /// <returns></returns>
+    protected static int CheckOptionSpecifiedElseDefaultInt(Dictionary<string, string> options,
+                                                            string optionKey, int defaultValue,
+                                                            int minValue, int maxValue)
+    {
+      int returnValue = defaultValue;
+      string optionString = (options != null && options.Keys.Contains(optionKey))
+                             ? options[optionKey]
+                             : null;
+      if (optionString != null)
+      {
+        if (!int.TryParse(optionString, out returnValue))
+        {
+          throw new Exception($"Invalid value for {optionKey}, expected integer but got: {optionString}");
+        }
+        if (returnValue < minValue || returnValue > maxValue)
+        {
+          throw new Exception($"Invalid value for {optionKey}, expected value between {minValue} and {maxValue} but got: {returnValue}");
         }
       }
 

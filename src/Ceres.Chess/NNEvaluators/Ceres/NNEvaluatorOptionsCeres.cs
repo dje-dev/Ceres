@@ -180,6 +180,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres
         PVExtensionDepth = baseOptions.PVExtensionDepth,
         UseMiddlegameSlowdown = baseOptions.UseMiddlegameSlowdown,
         EnableCUDAGraphs = baseOptions.EnableCUDAGraphs,
+        OptimizationLevel = baseOptions.OptimizationLevel,
         PolicyUncertaintyTemperatureScalingFactor = baseOptions.PolicyUncertaintyTemperatureScalingFactor,
       };
 
