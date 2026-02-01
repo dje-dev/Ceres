@@ -264,11 +264,12 @@ public class NNEvaluatorTensorRT : NNEvaluator
       {
         options.TilingOptimizationLevel = 3; // Also do tiling search, but this can be slow.
       }
-      options.UseFP16 = 0;
-      options.UseBF16 = 1;
+      options.UseFP16 = 1;
+      options.UseBF16 = 0;
+      options.FP32PostAttentionNorm = 1;
 
-      // NOTE: currently favor BF16 thus upcasting is disabled
-      //options.FP32PostAttentionNorm = 1;
+      // NOTE: BF16 is best on datacenter cards (works for all nets, no upcasting required)
+      //       Consumer cards can use FP32+post attention norm which is high accuraacy for most nets
       if (netType == ONNXNetExecutor.NetTypeEnum.TPG)
       {
         //options.FP32SmolgenNorm = 1;
