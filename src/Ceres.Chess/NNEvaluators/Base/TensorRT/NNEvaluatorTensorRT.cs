@@ -49,7 +49,7 @@ namespace Ceres.Chess.NNEvaluators.TensorRT;
 public class NNEvaluatorTensorRT : NNEvaluator
 {
   const bool USE_HISTORY = true;
-  const bool SUBSTITUTE_VALUE3_INTO_VALUE2_IF_FOUND = true;
+  const bool SUBSTITUTE_VALUE3_INTO_VALUE2_IF_FOUND = false;
 
   /// <summary>
   /// If true, loads TensorRT engines in parallel across GPUs.
@@ -256,8 +256,11 @@ public class NNEvaluatorTensorRT : NNEvaluator
     }
     else
     {
+      const int OPTIMIZATION_LEVEL_WITH_CUDA_GRAPHS = 4;
+      const int OPTIMIZATION_LEVEL_WITHOUT_CUDA_GRAPHS = 2;
       options = TensorRTBuildOptions.Default;
-      options.BuilderOptimizationLevel = 3;
+      options.BuilderOptimizationLevel = options.UseCudaGraphs > 0 ? OPTIMIZATION_LEVEL_WITH_CUDA_GRAPHS 
+                                                                   : OPTIMIZATION_LEVEL_WITHOUT_CUDA_GRAPHS;
       options.UseFP16 = 0;
       options.UseBF16 = 1;
 
@@ -888,16 +891,15 @@ public class NNEvaluatorTensorRT : NNEvaluator
     //    {
     //      throw new NotImplementedException("Ceres TensorRT Native evaluator does not yet support head overrides.");
     //    }
-    const bool EXACT_BATCHES = true; // seems always fastest to use exact batches
-    const bool ENABLE_GRAPHS = true;
+    bool EXACT_BATCHES = options.EnableCUDAGraphs;
+    //const bool ENABLE_GRAPHS = false;
     NNEvaluatorTensorRT trtNativeEngine = new(netFileName,
                                               netType,
                                               EXACT_BATCHES ? EnginePoolMode.Exact : EnginePoolMode.Range,
                                               EXACT_BATCHES ? [1, 8, 20, 42, 64, 88, 116, 240]
-                                                            // [1, 8, 32, 48, 64, 96, 128, 256]
-                                                            : [48, 128, 1024],
+                                                            : [96, 1024],
                                               gpuIDs: gpuIDs,
-                                              useCudaGraphs: EXACT_BATCHES && ENABLE_GRAPHS, //optionsCeres.EnableCUDAGraphs,
+                                              useCudaGraphs: EXACT_BATCHES,
                                               softMaxBatchSize: 1024);
     trtNativeEngine.Options = options;
 
