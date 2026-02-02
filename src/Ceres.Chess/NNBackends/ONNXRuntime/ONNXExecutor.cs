@@ -1395,18 +1395,18 @@ public class ONNXExecutor : IDisposable
     {
       // Trigger calculation of the target cache directory (to force user output message to appear first).
       _ = GetTRTEngineCacheDir();
-    }
 
-    lock (consoleOutputSyncLock)
-    {
-      // Create new session context for this batch size anchor
-      if (bucketKey.useCudaGraphs)
+      lock (consoleOutputSyncLock)
       {
-        ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"[{GPUID}]: Creating new graph session for batch size {bucketKey.max} (requested: {batchSize}) ... ");
-      }
-      else
-      {
-        ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"[{GPUID}]: Creating new non-graph session for batch size bucket [{bucketKey.min}..{bucketKey.max}] (requested: {batchSize}) ... ");
+        // Create new session context for this batch size anchor
+        if (bucketKey.useCudaGraphs)
+        {
+          ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"[{GPUID}]: Creating new graph session for batch size {bucketKey.max} (requested: {batchSize}) ... ");
+        }
+        else
+        {
+          ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"[{GPUID}]: Creating new non-graph session for batch size bucket [{bucketKey.min}..{bucketKey.max}] (requested: {batchSize}) ... ");
+        }
       }
     }
 
@@ -1426,31 +1426,34 @@ public class ONNXExecutor : IDisposable
     }
     sessionCache[bucketKey] = context;
 
-    lock (consoleOutputSyncLock)
+    if (UseTensorRT)
     {
-      ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"[{GPUID}]: done creating "
-                                + $"{(bucketKey.useCudaGraphs ? "graph session" : "non-graph session")}"
-                                + $" in {Math.Round(stats.ElapsedTimeSecs, 2)} seconds.");
-    }
-
-    if (context.UsesCUDAGraphs)
-    {
-      // Pre-bind inputs (GPU memory addresses are stable for CUDA graphs)
-      foreach (var (name, ortValue, _, _, _) in context.InputOrtValues)
+      lock (consoleOutputSyncLock)
       {
-        context.IoBinding.BindInput(name, ortValue);
-      }
-      context.InputsAreBound = true;
-
-      // Pre-bind outputs
-      foreach (var (name, ortValue, _, cudaBuffer) in context.OutputOrtValues)
-      {
-        context.IoBinding.BindOutput(name, ortValue);
+        ConsoleUtils.WriteLineColored(ConsoleColor.Yellow, $"[{GPUID}]: done creating "
+                                  + $"{(bucketKey.useCudaGraphs ? "graph session" : "non-graph session")}"
+                                  + $" in {Math.Round(stats.ElapsedTimeSecs, 2)} seconds.");
       }
 
-      // Create reusable CUDA events for timing
-      context.StartEvent = new CudaEvent();
-      context.StopEvent = new CudaEvent();
+      if (context.UsesCUDAGraphs)
+      {
+        // Pre-bind inputs (GPU memory addresses are stable for CUDA graphs)
+        foreach (var (name, ortValue, _, _, _) in context.InputOrtValues)
+        {
+          context.IoBinding.BindInput(name, ortValue);
+        }
+        context.InputsAreBound = true;
+
+        // Pre-bind outputs
+        foreach (var (name, ortValue, _, cudaBuffer) in context.OutputOrtValues)
+        {
+          context.IoBinding.BindOutput(name, ortValue);
+        }
+
+        // Create reusable CUDA events for timing
+        context.StartEvent = new CudaEvent();
+        context.StopEvent = new CudaEvent();
+      }
     }
 
     return context;
