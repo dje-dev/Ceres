@@ -367,7 +367,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
       inputHalfBuffer = new Half[maxBatchSize * inputElementsPerPosition];
     }
 
-    outputFloatBufferSize = maxBatchSize * outputElementsPerPosition;
+    outputFloatBufferSize = largestEngineBatchSize * outputElementsPerPosition;
 
     // Pre-allocate result buffers
     wBuffer = new FP16[maxBatchSize];
