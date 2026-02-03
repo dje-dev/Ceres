@@ -246,9 +246,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
 
     string graphsLabel = useCudaGraphs ? " [CUDA Graphs]" : "";
     Console.WriteLine($"Creating NNEvaluatorTensorRT for {onnxFileName}{graphsLabel}");
-    Console.WriteLine($"  GPUs: [{string.Join(", ", GpuIDs)}]");
-    Console.WriteLine($"  Engine batch sizes: [{string.Join(", ", batchSizes)}]");
-    Console.WriteLine($"  Max batch size (soft): {maxBatchSize}");
+    Console.WriteLine($"  GPUs: [{string.Join(", ", GpuIDs)}]  Batch sizes: [{string.Join(", ", batchSizes)}]");
 
     TensorRTBuildOptions options;
     if (buildOptions.HasValue)
@@ -497,6 +495,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
     // Get option values for value head temperature
     float valueHead1Temperature = Options?.ValueHead1Temperature ?? 1.0f;
     float valueHead2Temperature = Options?.ValueHead2Temperature ?? 1.0f;
+    float valueHead1TemperatureScaling = Options?.Value1UncertaintyTemperatureScalingFactor ?? 0.0f;
+    float valueHead2TemperatureScaling = Options?.Value2UncertaintyTemperatureScalingFactor ?? 0.0f;
 
     // Capture buffer size for thread-local allocation in handler
     int requiredBufferSize = outputFloatBufferSize;
@@ -515,6 +515,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
       ExtractSubBatchResults(batch, globalStartPosition, positionCount, engineBatchSize,
                              threadLocalOutputFloatBuffer, w, l, w2, l2, m, uncV, uncP, policies,
                              valueHead1Temperature, valueHead2Temperature,
+                             valueHead1TemperatureScaling, valueHead2TemperatureScaling,
                              NetType == ONNXNetExecutor.NetTypeEnum.TPG);
     };
 
@@ -599,6 +600,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
                                       FP16[] w, FP16[] l, FP16[] w2, FP16[] l2, FP16[] m, FP16[] uncV, FP16[] uncP,
                                       CompressedPolicyVector[] policies,
                                       float valueHead1Temperature, float valueHead2Temperature,
+                                      float valueHead1TemperatureScaling, float valueHead2TemperatureScaling,
                                       bool wdlIsLogistic)
   {
     // Compute tensor offsets once outside the parallel loop
@@ -668,6 +670,29 @@ public class NNEvaluatorTensorRT : NNEvaluator
     {
       int resultIndex = startPos + i;
 
+      // ===== Extract MLH =====
+      if (hasM)
+      {
+        int posMlhOffset = mlhOffset + i * mlhSize;
+        m[resultIndex] = (FP16)subBatchOutput[posMlhOffset];
+      }
+
+      // ===== Extract Uncertainty V =====
+      float uncertaintyV = 0;
+      if (hasUncertaintyV)
+      {
+        int posUncVOffset = uncVOffset + i * uncVSize;
+        uncertaintyV = subBatchOutput[posUncVOffset];
+        uncV[resultIndex] = (FP16)uncertaintyV;
+      }
+
+      // ===== Extract Uncertainty P =====
+      if (hasUncertaintyP)
+      {
+        int posUncPOffset = uncPOffset + i * uncPSize;
+        uncP[resultIndex] = (FP16)subBatchOutput[posUncPOffset];
+      }
+
       // ===== Extract Value Head 1 =====
       int posValueOffset = valueOffset + i * valueSize;
       if (isWDL)
@@ -677,6 +702,11 @@ public class NNEvaluatorTensorRT : NNEvaluator
           float vW = subBatchOutput[posValueOffset];
           float vD = subBatchOutput[posValueOffset + 1];
           float vL = subBatchOutput[posValueOffset + 2];
+
+          if (valueHead1TemperatureScaling > 0)
+          {
+            invTemp1 = 1.0f / (valueHead1Temperature + uncertaintyV * valueHead1TemperatureScaling);
+          }
 
           float maxV = MathF.Max(vW, MathF.Max(vD, vL));
           float expW = MathF.Exp((vW - maxV) * invTemp1);
@@ -708,6 +738,11 @@ public class NNEvaluatorTensorRT : NNEvaluator
         float vD2 = subBatchOutput[posValue2Offset + 1];
         float vL2 = subBatchOutput[posValue2Offset + 2];
 
+        if (valueHead2TemperatureScaling > 0)
+        {
+          invTemp2 = 1.0f / (valueHead2Temperature + uncertaintyV * valueHead2TemperatureScaling);
+        }
+
         float maxV2 = MathF.Max(vW2, MathF.Max(vD2, vL2));
         float expW2 = MathF.Exp((vW2 - maxV2) * invTemp2);
         float expD2 = MathF.Exp((vD2 - maxV2) * invTemp2);
@@ -716,27 +751,6 @@ public class NNEvaluatorTensorRT : NNEvaluator
 
         w2[resultIndex] = (FP16)(expW2 / sumV2);
         l2[resultIndex] = (FP16)(expL2 / sumV2);
-      }
-
-      // ===== Extract MLH =====
-      if (hasM)
-      {
-        int posMlhOffset = mlhOffset + i * mlhSize;
-        m[resultIndex] = (FP16)subBatchOutput[posMlhOffset];
-      }
-
-      // ===== Extract Uncertainty V =====
-      if (hasUncertaintyV)
-      {
-        int posUncVOffset = uncVOffset + i * uncVSize;
-        uncV[resultIndex] = (FP16)subBatchOutput[posUncVOffset];
-      }
-
-      // ===== Extract Uncertainty P =====
-      if (hasUncertaintyP)
-      {
-        int posUncPOffset = uncPOffset + i * uncPSize;
-        uncP[resultIndex] = (FP16)subBatchOutput[posUncPOffset];
       }
 
       // ===== Extract Policy =====
@@ -905,7 +919,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
                                               gpuIDs: gpuIDs,
                                               useCudaGraphs: EXACT_BATCHES,
                                               softMaxBatchSize: 1024,
-                                              optimizationLevel:options.OptimizationLevel);
+                                              optimizationLevel: options.OptimizationLevel);
     trtNativeEngine.Options = options;
 
     EncodedPositionBatchFlat.RETAIN_POSITION_INTERNALS = true; // ** TODO: remove/rework

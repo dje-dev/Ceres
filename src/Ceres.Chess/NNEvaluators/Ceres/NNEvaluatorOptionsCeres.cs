@@ -162,6 +162,8 @@ namespace Ceres.Chess.NNEvaluators.Ceres
       float blunderDown = CheckOptionSpecifiedElseDefaultFloat(optionsDict, "BLUN_NEG", DEFAULT_Q_BLUNDER);
       float blunderUp = CheckOptionSpecifiedElseDefaultFloat(optionsDict, "BLUN_POS", DEFAULT_Q_BLUNDER);
 
+      float valueUncertaintyTempScalingFactor1 = CheckOptionSpecifiedElseDefaultFloat(optionsDict, "V1_UNC_SCALE", 0f);
+      float valueUncertaintyTempScalingFactor2 = CheckOptionSpecifiedElseDefaultFloat(optionsDict, "V2_UNC_SCALE", 0f);
 
       // Return composite options.
       // TODO: This is brittle, if we add more options to the base class, we need to
@@ -176,6 +178,8 @@ namespace Ceres.Chess.NNEvaluators.Ceres
         FractionValueHead2 = baseOptions.FractionValueHead2,
         ValueHead1Temperature = baseOptions.ValueHead1Temperature,
         ValueHead2Temperature = baseOptions.ValueHead2Temperature,
+        Value1UncertaintyTemperatureScalingFactor = valueUncertaintyTempScalingFactor1,
+        Value2UncertaintyTemperatureScalingFactor = valueUncertaintyTempScalingFactor2,
         PolicyTemperature = baseOptions.PolicyTemperature,
         PVExtensionDepth = baseOptions.PVExtensionDepth,
         UseMiddlegameSlowdown = baseOptions.UseMiddlegameSlowdown,
