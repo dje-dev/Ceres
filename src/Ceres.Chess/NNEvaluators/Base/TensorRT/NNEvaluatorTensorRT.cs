@@ -208,7 +208,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
                              int[] gpuIDs = null,
                              bool useCudaGraphs = false,
                              int softMaxBatchSize = 0,
-                             int optimizationLevel = 3)
+                             int optimizationLevel = 3,
+                             bool forceBF16 = false)
   {
     if (!File.Exists(onnxFileName))
     {
@@ -274,6 +275,16 @@ public class NNEvaluatorTensorRT : NNEvaluator
       }
       options.UseCudaGraphs = useCudaGraphs ? 1 : 0;
     }
+
+    if (forceBF16)
+    {
+      options.UseBF16 = 1;
+      options.UseFP16 = 0;
+      options.FP32PostAttentionNorm = 0;
+      options.FP32PostAttentionNormStrict = 0;
+      options.FP32SmolgenNorm = 0;
+    }
+
     options.Validate();
 
     Console.WriteLine($"  Build options: FP16={options.UseFP16}, BF16={options.UseBF16}, FP32PostAttentionNorm={options.FP32PostAttentionNorm}, UseCUDAGraphs={options.UseCudaGraphs}");
@@ -910,16 +921,23 @@ public class NNEvaluatorTensorRT : NNEvaluator
     //      throw new NotImplementedException("Ceres TensorRT Native evaluator does not yet support head overrides.");
     //    }
     bool EXACT_BATCHES = options.EnableCUDAGraphs;
+
+    // Check if BF16 mode is requested via NNEvaluatorOptionsCeres
+    TensorRTBuildOptions? buildOptions = null;
+    
     //const bool ENABLE_GRAPHS = false;
+    bool forceBF16 = options is NNEvaluatorOptionsCeres optionsCeres && optionsCeres.UseBF16;
     NNEvaluatorTensorRT trtNativeEngine = new(netFileName,
                                               netType,
                                               EXACT_BATCHES ? EnginePoolMode.Exact : EnginePoolMode.Range,
                                               EXACT_BATCHES ? [1, 8, 20, 42, 64, 88, 116, 240]
                                                             : [96, 1024],
+                                              buildOptions,
                                               gpuIDs: gpuIDs,
                                               useCudaGraphs: EXACT_BATCHES,
                                               softMaxBatchSize: 1024,
-                                              optimizationLevel: options.OptimizationLevel);
+                                              optimizationLevel: options.OptimizationLevel,
+                                              forceBF16 : forceBF16);
     trtNativeEngine.Options = options;
 
     EncodedPositionBatchFlat.RETAIN_POSITION_INTERNALS = true; // ** TODO: remove/rework
