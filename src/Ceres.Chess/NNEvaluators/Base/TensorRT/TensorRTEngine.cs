@@ -737,6 +737,85 @@ public sealed class TensorRTEngine : IDisposable
   #endregion
 
 
+  #region Weight Refitting
+
+  /// <summary>
+  /// Sets weights for a named tensor in the engine and refits immediately.
+  /// The engine must have been built with Refittable=1 in build options.
+  /// </summary>
+  /// <param name="weightTensorName">Name of the weight tensor to update (e.g., "conv1.weight")</param>
+  /// <param name="weights">FP16 weight data to set</param>
+  /// <exception cref="InvalidOperationException">If the engine was not built with refit support or the operation fails</exception>
+  public unsafe void SetNamedWeights(string weightTensorName, Half[] weights)
+  {
+    if (string.IsNullOrEmpty(weightTensorName))
+    {
+      throw new ArgumentException("Weight tensor name cannot be null or empty", nameof(weightTensorName));
+    }
+    if (weights == null || weights.Length == 0)
+    {
+      throw new ArgumentException("Weights array cannot be null or empty", nameof(weights));
+    }
+
+    fixed (Half* weightsPtr = weights)
+    {
+      int result = TensorRTNative.SetNamedWeights(handle, weightTensorName, weightsPtr, weights.Length);
+      if (result != 0)
+      {
+        string error = TensorRTNative.GetLastErrorString();
+        throw new InvalidOperationException($"Failed to set named weights ({result}): {error ?? "unknown error"}");
+      }
+    }
+  }
+
+  /// <summary>
+  /// Sets weights for a named tensor in the engine and refits immediately.
+  /// The engine must have been built with Refittable=1 in build options.
+  /// </summary>
+  /// <param name="weightTensorName">Name of the weight tensor to update (e.g., "conv1.weight")</param>
+  /// <param name="weights">FP16 weight data as a span</param>
+  /// <exception cref="InvalidOperationException">If the engine was not built with refit support or the operation fails</exception>
+  public unsafe void SetNamedWeights(string weightTensorName, ReadOnlySpan<Half> weights)
+  {
+    if (string.IsNullOrEmpty(weightTensorName))
+    {
+      throw new ArgumentException("Weight tensor name cannot be null or empty", nameof(weightTensorName));
+    }
+    if (weights.IsEmpty)
+    {
+      throw new ArgumentException("Weights span cannot be empty", nameof(weights));
+    }
+
+    fixed (Half* weightsPtr = weights)
+    {
+      int result = TensorRTNative.SetNamedWeights(handle, weightTensorName, weightsPtr, weights.Length);
+      if (result != 0)
+      {
+        string error = TensorRTNative.GetLastErrorString();
+        throw new InvalidOperationException($"Failed to set named weights ({result}): {error ?? "unknown error"}");
+      }
+    }
+  }
+
+  /// <summary>
+  /// Refits the CUDA engine after weight updates.
+  /// This is typically called automatically by SetNamedWeights, but can be called
+  /// separately if multiple weight updates need to be batched.
+  /// </summary>
+  /// <exception cref="InvalidOperationException">If the engine was not built with refit support or the operation fails</exception>
+  public void RefitEngine()
+  {
+    int result = TensorRTNative.RefitEngine(handle);
+    if (result != 0)
+    {
+      string error = TensorRTNative.GetLastErrorString();
+      throw new InvalidOperationException($"Failed to refit engine ({result}): {error ?? "unknown error"}");
+    }
+  }
+
+  #endregion
+
+
   /// <summary>
   /// Dispose the engine and release native resources.
   /// </summary>

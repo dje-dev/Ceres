@@ -248,6 +248,7 @@ extern "C"
     options->fp32PostAttentionNorm = 0;
     options->fp32PostAttentionNormStrict = 0;
     options->fp32SmolgenNorm = 0;
+    options->refittable = 0;
   }
 
   // Helper: print colored console message
@@ -392,6 +393,13 @@ extern "C"
     if (opts->useFP8)
     {
       config->setFlag(nvinfer1::BuilderFlag::kFP8);
+    }
+
+    // Enable refit support if requested
+    if (opts->refittable)
+    {
+      config->setFlag(nvinfer1::BuilderFlag::kREFIT_IDENTICAL);
+      fprintf(stderr, "[TensorRT] Building with REFIT_IDENTICAL support enabled\n");
     }
 
     // Enable detailed profiling for layer precision inspection
@@ -2051,6 +2059,113 @@ extern "C"
     if (!handle) return -1;
     auto* ec = static_cast<EngineContext*>(handle);
     return ec->totalOutputElements / ec->batchSize;
+  }
+
+  // =========================================================================
+  // Weight Refitting (for refittable engines)
+  // =========================================================================
+
+  TRT_API int32_t TRT_SetNamedWeights(TRT_EngineHandle handle, const char* weightTensorName,
+                                       const void* weights, int64_t numElements)
+  {
+    if (!handle)
+    {
+      std::lock_guard<std::mutex> lock(g_mutex);
+      SetError("Invalid handle");
+      return -1;
+    }
+    if (!weightTensorName || !weights)
+    {
+      std::lock_guard<std::mutex> lock(g_mutex);
+      SetError("Invalid weight tensor name or weights pointer");
+      return -2;
+    }
+
+    auto* ec = static_cast<EngineContext*>(handle);
+    if (!EnsureDevice(ec->deviceId))
+    {
+      std::lock_guard<std::mutex> lock(g_mutex);
+      SetError("Failed to set CUDA device " + std::to_string(ec->deviceId));
+      return -3;
+    }
+
+    // Create refitter if not exists
+    nvinfer1::IRefitter* refitter = nvinfer1::createInferRefitter(*ec->engine, g_logger);
+    if (!refitter)
+    {
+      std::lock_guard<std::mutex> lock(g_mutex);
+      SetError("Failed to create refitter - engine may not have been built with refittable=1");
+      return -4;
+    }
+
+    // Set the named weights
+    // Weights are expected to be FP16 (Half precision)
+    nvinfer1::Weights trtWeights;
+    trtWeights.type = nvinfer1::DataType::kHALF;
+    trtWeights.values = weights;
+    trtWeights.count = numElements;
+
+    bool success = refitter->setNamedWeights(weightTensorName, trtWeights);
+    if (!success)
+    {
+      delete refitter;
+      std::lock_guard<std::mutex> lock(g_mutex);
+      SetError("Failed to set weights for tensor: " + std::string(weightTensorName));
+      return -5;
+    }
+
+    // Refit the engine immediately
+    success = refitter->refitCudaEngine();
+    delete refitter;
+
+    if (!success)
+    {
+      std::lock_guard<std::mutex> lock(g_mutex);
+      SetError("Failed to refit CUDA engine after setting weights");
+      return -6;
+    }
+
+    return 0;
+  }
+
+  TRT_API int32_t TRT_RefitEngine(TRT_EngineHandle handle)
+  {
+    if (!handle)
+    {
+      std::lock_guard<std::mutex> lock(g_mutex);
+      SetError("Invalid handle");
+      return -1;
+    }
+
+    auto* ec = static_cast<EngineContext*>(handle);
+    if (!EnsureDevice(ec->deviceId))
+    {
+      std::lock_guard<std::mutex> lock(g_mutex);
+      SetError("Failed to set CUDA device " + std::to_string(ec->deviceId));
+      return -2;
+    }
+
+    // Create refitter
+    nvinfer1::IRefitter* refitter = nvinfer1::createInferRefitter(*ec->engine, g_logger);
+    if (!refitter)
+    {
+      std::lock_guard<std::mutex> lock(g_mutex);
+      SetError("Failed to create refitter - engine may not have been built with refittable=1");
+      return -3;
+    }
+
+    // Refit the engine
+    bool success = refitter->refitCudaEngine();
+    delete refitter;
+
+    if (!success)
+    {
+      std::lock_guard<std::mutex> lock(g_mutex);
+      SetError("Failed to refit CUDA engine");
+      return -4;
+    }
+
+    return 0;
   }
 
 }

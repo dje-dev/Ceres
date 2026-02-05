@@ -277,6 +277,17 @@ internal static partial class TensorRTNative
   internal static partial long GetOutputElementsPerPosition(IntPtr handle);
 
   // =========================================================================
+  // Weight Refitting (for refittable engines)
+  // =========================================================================
+
+  [LibraryImport(LibraryName, EntryPoint = "TRT_SetNamedWeights", StringMarshalling = StringMarshalling.Utf8)]
+  internal static unsafe partial int SetNamedWeights(IntPtr handle, string weightTensorName,
+                                                      Half* weights, long numElements);
+
+  [LibraryImport(LibraryName, EntryPoint = "TRT_RefitEngine")]
+  internal static partial int RefitEngine(IntPtr handle);
+
+  // =========================================================================
   // Helper methods
   // =========================================================================
 

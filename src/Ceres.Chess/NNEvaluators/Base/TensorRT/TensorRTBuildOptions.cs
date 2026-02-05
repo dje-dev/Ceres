@@ -108,6 +108,13 @@ public record struct TensorRTBuildOptions
   public int FP32SmolgenNorm;
 
   /// <summary>
+  /// Enable engine refitting support (1 = true, 0 = false (default)).
+  /// When enabled, the engine can have its weights updated at runtime without rebuilding.
+  /// Uses BuilderFlag::kREFIT_IDENTICAL which requires identical weight shapes.
+  /// </summary>
+  public int Refittable;
+
+  /// <summary>
   /// Returns default build options.
   /// </summary>
   public static TensorRTBuildOptions Default => new TensorRTBuildOptions
@@ -125,7 +132,8 @@ public record struct TensorRTBuildOptions
     MaxBatchSize = 0,
     FP32PostAttentionNorm = 0,
     FP32PostAttentionNormStrict = 0,
-    FP32SmolgenNorm = 0
+    FP32SmolgenNorm = 0,
+    Refittable = 0
   };
 
 

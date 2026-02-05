@@ -85,6 +85,13 @@ namespace Ceres.Chess.NNEvaluators.Ceres
     /// </summary>
     public bool UseBF16 { get; init; } = false;
 
+    /// <summary>
+    /// If engine refitting support should be enabled for TensorRT.
+    /// When true, the engine can have its weights updated at runtime without rebuilding.
+    /// Uses BuilderFlag::kREFIT_IDENTICAL which requires identical weight shapes.
+    /// </summary>
+    public bool Refittable { get; init; } = false;
+
 
     /// <summary>
     /// Default constructor.
@@ -173,6 +180,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres
       float valueUncertaintyTempScalingFactor2 = CheckOptionSpecifiedElseDefaultFloat(optionsDict, "V2_UNC_SCALE", 0f);
 
       bool useBF16 = CheckOptionSpecifiedElseDefaultBoolean(optionsDict, "BF16", false);
+      bool refittable = CheckOptionSpecifiedElseDefaultBoolean(optionsDict, "REFITTABLE", false);
 
       // Return composite options.
       // TODO: This is brittle, if we add more options to the base class, we need to
@@ -196,6 +204,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres
         OptimizationLevel = baseOptions.OptimizationLevel,
         PolicyUncertaintyTemperatureScalingFactor = baseOptions.PolicyUncertaintyTemperatureScalingFactor,
         UseBF16 = useBF16,
+        Refittable = refittable,
       };
 
       return optionsCeres;

@@ -183,7 +183,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
                              bool useCudaGraphs = false,
                              int softMaxBatchSize = 0,
                              int optimizationLevel = 3)
-    : this(onnxFileName, netType, poolMode, batchSizes, null, gpuIDs, useCudaGraphs, softMaxBatchSize, optimizationLevel)
+    : this(onnxFileName, netType, poolMode, batchSizes, null, gpuIDs, useCudaGraphs, softMaxBatchSize, optimizationLevel, forceBF16: false, refittable: false)
   {
   }
 
@@ -209,7 +209,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
                              bool useCudaGraphs = false,
                              int softMaxBatchSize = 0,
                              int optimizationLevel = 3,
-                             bool forceBF16 = false)
+                             bool forceBF16 = false,
+                             bool refittable = false)
   {
     if (!File.Exists(onnxFileName))
     {
@@ -283,6 +284,11 @@ public class NNEvaluatorTensorRT : NNEvaluator
       options.FP32PostAttentionNorm = 0;
       options.FP32PostAttentionNormStrict = 0;
       options.FP32SmolgenNorm = 0;
+    }
+
+    if (refittable)
+    {
+      options.Refittable = 1;
     }
 
     options.Validate();
@@ -922,11 +928,12 @@ public class NNEvaluatorTensorRT : NNEvaluator
     //    }
     bool EXACT_BATCHES = options.EnableCUDAGraphs;
 
-    // Check if BF16 mode is requested via NNEvaluatorOptionsCeres
+    // Check if BF16 mode or refittable is requested via NNEvaluatorOptionsCeres
     TensorRTBuildOptions? buildOptions = null;
-    
+
     //const bool ENABLE_GRAPHS = false;
     bool forceBF16 = options is NNEvaluatorOptionsCeres optionsCeres && optionsCeres.UseBF16;
+    bool refittable = options is NNEvaluatorOptionsCeres optionsCeresRefit && optionsCeresRefit.Refittable;
     NNEvaluatorTensorRT trtNativeEngine = new(netFileName,
                                               netType,
                                               EXACT_BATCHES ? EnginePoolMode.Exact : EnginePoolMode.Range,
@@ -937,7 +944,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
                                               useCudaGraphs: EXACT_BATCHES,
                                               softMaxBatchSize: 1024,
                                               optimizationLevel: options.OptimizationLevel,
-                                              forceBF16 : forceBF16);
+                                              forceBF16: forceBF16,
+                                              refittable: refittable);
     trtNativeEngine.Options = options;
 
     EncodedPositionBatchFlat.RETAIN_POSITION_INTERNALS = true; // ** TODO: remove/rework

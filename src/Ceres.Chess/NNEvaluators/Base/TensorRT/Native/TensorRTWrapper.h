@@ -55,6 +55,7 @@ extern "C"
         int32_t fp32PostAttentionNorm;     // 1 = force FP32 for post-attention norm (ln1) layers, 0 = false (default)
         int32_t fp32PostAttentionNormStrict; // 1 = stricter filter: only main encoder ln1, exclude smolgen ln1
         int32_t fp32SmolgenNorm;           // 1 = only smolgen-related ln1 inside attention (the critical layers)
+        int32_t refittable;                // 1 = enable refit support (kREFIT_IDENTICAL), 0 = false (default)
     };
 
     // Initialize build options with defaults
@@ -283,4 +284,20 @@ extern "C"
 
     // Get output elements per position (total output size / batch size).
     TRT_API int64_t TRT_GetOutputElementsPerPosition(TRT_EngineHandle handle);
+
+    // =========================================================================
+    // Weight Refitting (for refittable engines)
+    // =========================================================================
+
+    // Set weights for a named tensor in the engine. Requires engine built with refittable=1.
+    // weightTensorName: name of the weight tensor to update (e.g., "conv1.weight")
+    // weights: pointer to FP16 weight data
+    // numElements: number of elements in the weights array
+    // Returns 0 on success, negative on error.
+    TRT_API int32_t TRT_SetNamedWeights(TRT_EngineHandle handle, const char* weightTensorName,
+                                         const void* weights, int64_t numElements);
+
+    // Refit the engine after setting weights. Must be called after TRT_SetNamedWeights
+    // to apply the weight changes. Returns 0 on success, negative on error.
+    TRT_API int32_t TRT_RefitEngine(TRT_EngineHandle handle);
 }
