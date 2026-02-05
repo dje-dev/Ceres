@@ -50,6 +50,11 @@ namespace Ceres.Chess.ExternalPrograms.UCI
 
     public bool IsShutdown => engine == null;
 
+    /// <summary>
+    /// The engine identification string as reported by the UCI "id name" response.
+    /// </summary>
+    public string EngineID { get; private set; }
+
     protected string curPosAndMoves = null;
 
     protected int doneCount = 0;
@@ -147,7 +152,11 @@ namespace Ceres.Chess.ExternalPrograms.UCI
       double elapsedTime = (double)(Stopwatch.GetTimestamp() - startTime) / freq;
       if (UCI_VERBOSE_LOGGING) Console.WriteLine(Math.Round(elapsedTime, 3) + " ENGINE::{0}::{1}", id, data);
 
-      if (data.Contains("error"))
+      if (data.StartsWith("id name "))
+      {
+        EngineID = data.Substring("id name ".Length).Trim();
+      }
+      else if (data.Contains("error"))
       {
         lastError = data;
       }

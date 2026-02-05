@@ -37,6 +37,12 @@ namespace Ceres.Chess.GameEngines
   public class GameEngineUCI : GameEngine, IUCIGameRunnerProvider
   {
     /// <summary>
+    /// Identifying string of the engine.
+    /// Returns the UCI "id name" value if available, otherwise the provided name.
+    /// </summary>
+    public override string ID => UCIRunner?.EngineID ?? Name;
+
+    /// <summary>
     /// Name of engine.
     /// </summary>
     public readonly string Name;

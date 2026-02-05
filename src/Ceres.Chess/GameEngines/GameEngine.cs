@@ -31,9 +31,11 @@ namespace Ceres.Chess.GameEngines
   public abstract class GameEngine : IDisposable
   {
     /// <summary>
-    /// Identifying string of the engine.
+    /// Identifying string of the engine (defaults to the name provided at construction).
+    /// Can be overridden by derived classes to provide a more specific identifier
+    /// (e.g., from UCI engine identification).
     /// </summary>
-    public readonly string ID;
+    public virtual string ID { get; protected set; }
 
     /// <summary>
     /// Processor group on which engine will execute.
