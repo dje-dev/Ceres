@@ -45,6 +45,7 @@
     <PackageReference Include="SharpCompress" Version="0.38.0" />
   </ItemGroup>
 
+  <!-- Windows (x64 only typically) -->
   <ItemGroup Condition="'$(OS)' == 'Windows_NT'">
     <None Include="NNEvaluators\Base\TensorRT\Native\TensorRTWrapper.dll">
       <Link>TensorRTWrapper.dll</Link>
@@ -52,8 +53,17 @@
     </None>
   </ItemGroup>
 
-  <ItemGroup Condition="'$(OS)' != 'Windows_NT'">
-    <None Include="NNEvaluators\Base\TensorRT\Native\libTensorRTWrapper.so">
+  <!-- Linux x64 -->
+  <ItemGroup Condition="'$(OS)' != 'Windows_NT' AND '$(RuntimeIdentifier)' != 'linux-arm64' AND '$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)' != 'Arm64'">
+    <None Include="NNEvaluators\Base\TensorRT\Native\linux-x64\libTensorRTWrapper.so">
+      <Link>libTensorRTWrapper.so</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <!-- Linux ARM64 -->
+  <ItemGroup Condition="'$(OS)' != 'Windows_NT' AND ('$(RuntimeIdentifier)' == 'linux-arm64' OR '$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)' == 'Arm64')">
+    <None Include="NNEvaluators\Base\TensorRT\Native\linux-arm64\libTensorRTWrapper.so">
       <Link>libTensorRTWrapper.so</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
