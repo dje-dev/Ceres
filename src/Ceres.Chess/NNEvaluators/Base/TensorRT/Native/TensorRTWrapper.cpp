@@ -661,6 +661,11 @@ extern "C"
     hash ^= std::hash<int32_t>{}(opts->fp32PostAttentionNorm) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
     hash ^= std::hash<int32_t>{}(opts->fp32PostAttentionNormStrict) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
     hash ^= std::hash<int32_t>{}(opts->fp32SmolgenNorm) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+    // Only include refittable in hash when true, so existing cached files (with false) remain valid
+    if (opts->refittable)
+    {
+      hash ^= std::hash<int32_t>{}(opts->refittable) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+    }
     return hash;
   }
 
