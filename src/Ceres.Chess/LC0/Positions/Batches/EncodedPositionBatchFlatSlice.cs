@@ -69,24 +69,24 @@ namespace Ceres.Chess.LC0.Batches
     public Memory<MGPosition> Positions
     {
       get => SliceParent.Positions.IsEmpty ? default : SliceParent.Positions.Slice(StartIndex, Length);
-      set => value.CopyTo(SliceParent.Positions);
+      set => value.CopyTo(SliceParent.Positions.Slice(StartIndex, Length));
     }
 
     public Memory<ulong> PositionHashes
     {
       get => SliceParent.PositionHashes.IsEmpty ? default : SliceParent.PositionHashes.Slice(StartIndex, Length);
-      set => value.CopyTo(SliceParent.PositionHashes);
+      set => value.CopyTo(SliceParent.PositionHashes.Slice(StartIndex, Length));
     }
     public Memory<MGMoveList> Moves
     {
       get => SliceParent.Moves.IsEmpty ? default : SliceParent.Moves.Slice(StartIndex, Length);
-      set => value.CopyTo(SliceParent.Moves);
+      set => value.CopyTo(SliceParent.Moves.Slice(StartIndex, Length));
     }
 
     public Memory<byte> LastMovePlies
     {
       get => SliceParent.LastMovePlies.IsEmpty ? default : SliceParent.LastMovePlies.Slice(StartIndex * 64, Length * 64);
-      set => value.CopyTo(SliceParent.LastMovePlies);
+      set => value.CopyTo(SliceParent.LastMovePlies.Slice(StartIndex * 64, Length * 64));
     }
 
 
@@ -135,7 +135,7 @@ namespace Ceres.Chess.LC0.Batches
     Memory<Half[]> IEncodedPositionBatchFlat.States
     {
       get => SliceParent.States.IsEmpty ? default : SliceParent.States.Slice(StartIndex, Length);
-      set => value.CopyTo(SliceParent.States);
+      set => value.CopyTo(SliceParent.States.Slice(StartIndex, Length));
     }
 
 
