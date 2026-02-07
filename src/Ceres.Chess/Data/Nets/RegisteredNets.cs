@@ -166,13 +166,13 @@ namespace Ceres.Chess.Data.Nets
                                                                           CeresUserSettingsManager.Settings.DirCeresNetworks ?? ".", netID);
 
 
-    static RegisteredNetInfo SimpleLC0Net(string netID) => new RegisteredNetInfo(netID, NNEvaluatorType.LC0, netID);
+    public static RegisteredNetInfo SimpleLC0Net(string netID) => new RegisteredNetInfo(netID, NNEvaluatorType.LC0, netID);
 
-    static RegisteredNetInfo ONNXNet16LC0(string netID, bool tensorRT = false) =>  new (netID, tensorRT ? NNEvaluatorType.ONNXViaTRT : NNEvaluatorType.ONNXViaORT, MakeDesc(netID, true, tensorRT) + "#16");
-    static RegisteredNetInfo ONNXNet32LC0(string netID, bool tensorRT = false) => new (netID, tensorRT ? NNEvaluatorType.ONNXViaTRT : NNEvaluatorType.ONNXViaORT, MakeDesc(netID, true, tensorRT) + "#32");
+    public static RegisteredNetInfo ONNXNet16LC0(string netID, bool tensorRT = false) =>  new (netID, tensorRT ? NNEvaluatorType.ONNXViaTRT : NNEvaluatorType.ONNXViaORT, MakeDesc(netID, true, tensorRT) + "#16");
+    public static RegisteredNetInfo ONNXNet32LC0(string netID, bool tensorRT = false) => new (netID, tensorRT ? NNEvaluatorType.ONNXViaTRT : NNEvaluatorType.ONNXViaORT, MakeDesc(netID, true, tensorRT) + "#32");
 
-    static RegisteredNetInfo ONNXNet16Ceres(string netID, bool tensorRT = false) => new(netID, tensorRT ? NNEvaluatorType.Ceres : NNEvaluatorType.Ceres, MakeDesc(netID, false, tensorRT) + "#16");
-    static RegisteredNetInfo ONNXNet32Ceres(string netID) => new(netID, NNEvaluatorType.Ceres, MakeDesc(netID, false, false) + "#32");
+    public static RegisteredNetInfo ONNXNet16Ceres(string netID, bool tensorRT = false) => new(netID, tensorRT ? NNEvaluatorType.Ceres : NNEvaluatorType.Ceres, MakeDesc(netID, false, tensorRT) + "#16");
+    public static RegisteredNetInfo ONNXNet32Ceres(string netID) => new(netID, NNEvaluatorType.Ceres, MakeDesc(netID, false, false) + "#32");
 
     #endregion
   }
