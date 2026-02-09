@@ -57,11 +57,7 @@ public static class BatchSizeOptimizer
   /// <param name="maxBatch">Maximum batch size to evaluate (1..maxBatch).</param>
   /// <param name="maxIterations">Maximum hill-climbing iterations (default 20 for speed).</param>
   /// <returns>Optimization result with original and optimized sizes.</returns>
-  public static OptimizationResult Optimize(
-    int[] originalSizes,
-    float[][] originalTimingsPerGPU,
-    int numGPUs,
-    int maxBatch)
+  public static OptimizationResult Optimize(int[] originalSizes, float[][] originalTimingsPerGPU, int numGPUs, int maxBatch)
   {
     if (originalSizes == null || originalSizes.Length == 0)
     {

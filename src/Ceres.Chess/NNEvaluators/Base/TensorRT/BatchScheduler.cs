@@ -14,7 +14,6 @@
 #region Using directives
 
 using System;
-using System.Linq;
 
 #endregion
 
@@ -32,7 +31,7 @@ namespace Ceres.Chess.NNEvaluators.TensorRT;
 /// Handles heterogeneous GPUs with different timing profiles and accounts for
 /// per-batch pipeline overlap credits on consecutive engine executions.
 ///
-/// Uses ThreadStatic buffers for near-zero managed allocation on steady-state calls.
+/// Uses stackalloc buffers for zero managed allocation.
 /// </summary>
 public static class BatchScheduler
 {
@@ -83,39 +82,6 @@ public static class BatchScheduler
   }
 
 
-  // =====================================================================
-  // ThreadStatic buffers for zero steady-state allocation in Schedule()
-  // =====================================================================
-  [ThreadStatic] static float[] sGpuCost;     // [G * stride]
-  [ThreadStatic] static int[] sGpuChoice;     // [G * stride]
-  [ThreadStatic] static int[] sGpuBatched;    // [G * stride]
-  [ThreadStatic] static float[] sDpA;          // [(G+1) * stride]
-  [ThreadStatic] static float[] sDpB;          // [(G+1) * stride]
-  [ThreadStatic] static int[] sDpPadA;        // [(G+1) * stride]
-  [ThreadStatic] static int[] sDpPadB;        // [(G+1) * stride]
-  [ThreadStatic] static int[] sDistChoice;    // [(G-1) * (G+1) * stride]
-
-  // ThreadStatic buffers for ScheduleSingleGPU()
-  [ThreadStatic] static float[] sSingleCost;
-  [ThreadStatic] static int[] sSingleChoice;
-
-  static void EnsureSize(ref float[] buf, int minSize)
-  {
-    if (buf == null || buf.Length < minSize)
-    {
-      buf = new float[minSize];
-    }
-  }
-
-  static void EnsureSize(ref int[] buf, int minSize)
-  {
-    if (buf == null || buf.Length < minSize)
-    {
-      buf = new int[minSize];
-    }
-  }
-
-
   /// <summary>
   /// Schedules batch execution across multiple GPUs optimally, accounting for
   /// multi-GPU coordination penalty.
@@ -147,7 +113,7 @@ public static class BatchScheduler
       int[][] emptyPlan = new int[Math.Max(numGPUs, 0)][];
       for (int i = 0; i < emptyPlan.Length; i++)
       {
-        emptyPlan[i] = [];
+        emptyPlan[i] = Array.Empty<int>();
       }
       return new ScheduleResult(emptyPlan, 0, 0, 0)
       {
@@ -175,16 +141,16 @@ public static class BatchScheduler
     // When costs tie, prefer the engine choice with less padding.
     // -------------------------------------------------------------------
     int gpuBufSize = G * stride;
-    EnsureSize(ref sGpuCost, gpuBufSize);
-    EnsureSize(ref sGpuChoice, gpuBufSize);
-    EnsureSize(ref sGpuBatched, gpuBufSize);
+    Span<float> gpuCost = stackalloc float[gpuBufSize];
+    Span<int> gpuChoice = stackalloc int[gpuBufSize];
+    Span<int> gpuBatched = stackalloc int[gpuBufSize];
 
     for (int g = 0; g < G; g++)
     {
       int off = g * stride;
-      sGpuCost[off] = 0f;
-      sGpuChoice[off] = 0;
-      sGpuBatched[off] = 0;
+      gpuCost[off] = 0f;
+      gpuChoice[off] = 0;
+      gpuBatched[off] = 0;
       float[] timings = executionTimesPerGPU[g];
 
       for (int k = 1; k <= N; k++)
@@ -200,8 +166,8 @@ public static class BatchScheduler
           {
             prev = 0;
           }
-          float c = sGpuCost[off + prev] + timings[e] - overlapCredit;
-          int b = sGpuBatched[off + prev] + engineSizes[e];
+          float c = gpuCost[off + prev] + timings[e] - overlapCredit;
+          int b = gpuBatched[off + prev] + engineSizes[e];
           if (c < best - 0.001f || (c <= best + 0.001f && b < bestB))
           {
             best = c;
@@ -210,9 +176,9 @@ public static class BatchScheduler
           }
         }
 
-        sGpuCost[off + k] = best;
-        sGpuChoice[off + k] = bestE;
-        sGpuBatched[off + k] = bestB;
+        gpuCost[off + k] = best;
+        gpuChoice[off + k] = bestE;
+        gpuBatched[off + k] = bestB;
       }
     }
 
@@ -235,18 +201,18 @@ public static class BatchScheduler
     // -------------------------------------------------------------------
     int uCount = G + 1; // u ranges 0..G
     int dpLayerSize = uCount * stride;
-    EnsureSize(ref sDpA, dpLayerSize);
-    EnsureSize(ref sDpB, dpLayerSize);
-    EnsureSize(ref sDpPadA, dpLayerSize);
-    EnsureSize(ref sDpPadB, dpLayerSize);
+    Span<float> dpBufA = stackalloc float[dpLayerSize];
+    Span<float> dpBufB = stackalloc float[dpLayerSize];
+    Span<int> dpPadBufA = stackalloc int[dpLayerSize];
+    Span<int> dpPadBufB = stackalloc int[dpLayerSize];
 
     int distSize = Math.Max(1, G - 1) * uCount * stride;
-    EnsureSize(ref sDistChoice, distSize);
+    Span<int> distChoice = stackalloc int[distSize];
 
-    float[] dpNext = sDpA;
-    float[] dpCur = sDpB;
-    int[] dpPadNext = sDpPadA;
-    int[] dpPadCur = sDpPadB;
+    Span<float> dpNext = dpBufA;
+    Span<float> dpCur = dpBufB;
+    Span<int> dpPadNext = dpPadBufA;
+    Span<int> dpPadCur = dpPadBufB;
 
     // Initialize dpNext to infinity
     for (int i = 0; i < dpLayerSize; i++)
@@ -264,8 +230,8 @@ public static class BatchScheduler
     int lastOff = (G - 1) * stride;
     for (int r = 1; r <= N; r++)
     {
-      dpNext[stride + r] = sGpuCost[lastOff + r] + overlapCredit;
-      dpPadNext[stride + r] = sGpuBatched[lastOff + r];
+      dpNext[stride + r] = gpuCost[lastOff + r] + overlapCredit;
+      dpPadNext[stride + r] = gpuBatched[lastOff + r];
     }
 
     // DP from GPU G-2 down to GPU 0
@@ -313,7 +279,7 @@ public static class BatchScheduler
             while (lo < hi)
             {
               int mid = lo + (hi - lo) / 2;
-              float fMid = sGpuCost[gOff + mid] + overlapCredit;
+              float fMid = gpuCost[gOff + mid] + overlapCredit;
               float hMid = dpNext[prevUOff + r - mid];
               if (fMid < hMid)
               {
@@ -332,7 +298,7 @@ public static class BatchScheduler
             int checkHi = Math.Min(r, lo + 1);
             for (int n = checkLo; n <= checkHi; n++)
             {
-              float fn = sGpuCost[gOff + n] + overlapCredit;
+              float fn = gpuCost[gOff + n] + overlapCredit;
               float hn = dpNext[prevUOff + r - n];
               if (hn >= float.MaxValue)
               {
@@ -378,7 +344,7 @@ public static class BatchScheduler
                 while (sLo < sHi)
                 {
                   int mid = sLo + (sHi - sLo + 1) / 2;
-                  float fv = sGpuCost[gOff + mid] + overlapCredit;
+                  float fv = gpuCost[gOff + mid] + overlapCredit;
                   if (fv <= threshold)
                   {
                     sLo = mid;
@@ -391,7 +357,7 @@ public static class BatchScheduler
                 nMaxF = sLo;
               }
 
-              int activeBestPad = sGpuBatched[gOff + activeBestN] + dpPadNext[prevUOff + r - activeBestN];
+              int activeBestPad = gpuBatched[gOff + activeBestN] + dpPadNext[prevUOff + r - activeBestN];
               for (int n = nMinH; n <= nMaxF; n++)
               {
                 int hPad = dpPadNext[prevUOff + r - n];
@@ -399,7 +365,7 @@ public static class BatchScheduler
                 {
                   continue;
                 }
-                int pad = sGpuBatched[gOff + n] + hPad;
+                int pad = gpuBatched[gOff + n] + hPad;
                 if (pad < activeBestPad)
                 {
                   activeBestPad = pad;
@@ -424,13 +390,13 @@ public static class BatchScheduler
 
           dpCur[uOff + r] = bestMs;
           dpPadCur[uOff + r] = bestPad;
-          sDistChoice[distBase + uOff + r] = bestN;
+          distChoice[distBase + uOff + r] = bestN;
         }
       }
 
       // Swap buffers
-      (dpNext, dpCur) = (dpCur, dpNext);
-      (dpPadNext, dpPadCur) = (dpPadCur, dpPadNext);
+      Span<float> tmpF = dpNext; dpNext = dpCur; dpCur = tmpF;
+      Span<int> tmpI = dpPadNext; dpPadNext = dpPadCur; dpPadCur = tmpI;
     }
 
     // Find optimal u: minimize makespan + penalty
@@ -463,7 +429,7 @@ public static class BatchScheduler
     int remR = N;
     for (int g = 0; g < G - 1; g++)
     {
-      int n = sDistChoice[g * uCount * stride + remU * stride + remR];
+      int n = distChoice[g * uCount * stride + remU * stride + remR];
       assigned[g] = n;
       if (n > 0)
       {
@@ -483,7 +449,7 @@ public static class BatchScheduler
       int items = assigned[g];
       if (items <= 0)
       {
-        plan[g] = [];
+        plan[g] = Array.Empty<int>();
         continue;
       }
 
@@ -495,7 +461,7 @@ public static class BatchScheduler
       for (int k = items; k > 0;)
       {
         seqLen++;
-        k = Math.Max(0, k - engineSizes[sGpuChoice[gOff + k]]);
+        k = Math.Max(0, k - engineSizes[gpuChoice[gOff + k]]);
       }
 
       // Fill sequence and compute total
@@ -504,7 +470,7 @@ public static class BatchScheduler
       int idx = 0;
       for (int k = items; k > 0;)
       {
-        int e = sGpuChoice[gOff + k];
+        int e = gpuChoice[gOff + k];
         seq[idx++] = engineSizes[e];
         batched += engineSizes[e];
         k = Math.Max(0, k - engineSizes[e]);
@@ -515,7 +481,7 @@ public static class BatchScheduler
 
       if (VERBOSE_DETAILS)
       {
-        float time = sGpuCost[gOff + items] + overlapCredit;
+        float time = gpuCost[gOff + items] + overlapCredit;
         int padding = batched - items;
         Console.WriteLine($"  OPTIMIZED_PLAN [device {g}]: {items} -> [{string.Join(", ", seq)}] total={batched} padding={padding} time={time:F1}ms");
       }
@@ -538,25 +504,22 @@ public static class BatchScheduler
   /// <summary>
   /// Single-GPU scheduling: finds the batch sequence minimizing total inference time.
   /// Uses DP over position counts with pipeline overlap credits.
-  /// Only managed allocation is the returned result array; all working buffers
-  /// are ThreadStatic.
+  /// Only managed allocation is the returned result array; working buffers
+  /// use stackalloc.
   /// </summary>
   public static int[] ScheduleSingleGPU(ReadOnlySpan<int> engineSizes, ReadOnlySpan<float> executionTimes, int targetBatch, int deviceIndex = -1)
   {
     if (targetBatch <= 0 || engineSizes.Length == 0)
     {
-      return [];
+      return Array.Empty<int>();
     }
 
     int M = engineSizes.Length;
     int N = targetBatch;
     float overlapCredit = -PER_BATCH_OVERHEAD_MS;
 
-    EnsureSize(ref sSingleCost, N + 1);
-    EnsureSize(ref sSingleChoice, N + 1);
-    float[] cost = sSingleCost;
-    int[] choice = sSingleChoice;
-    cost[0] = 0f;
+    Span<float> cost = stackalloc float[N + 1];
+    Span<int> choice = stackalloc int[N + 1];
 
     for (int k = 1; k <= N; k++)
     {
@@ -627,10 +590,16 @@ public static class BatchScheduler
       return null;
     }
 
-    float[] totalTimes = new float[numGPUs];
+    Span<float> totalTimes = stackalloc float[numGPUs];
     for (int gpu = 0; gpu < numGPUs; gpu++)
     {
-      totalTimes[gpu] = executionTimesPerGPU[gpu].Sum();
+      float s = 0;
+      float[] times = executionTimesPerGPU[gpu];
+      for (int i = 0; i < times.Length; i++)
+      {
+        s += times[i];
+      }
+      totalTimes[gpu] = s;
     }
 
     if (deviceNames != null && deviceNames.Length >= numGPUs)
@@ -649,7 +618,7 @@ public static class BatchScheduler
         {
           if (string.Equals(name, deviceNames[other], StringComparison.Ordinal))
           {
-            sum += executionTimesPerGPU[other].Sum();
+            sum += totalTimes[other];
             count++;
           }
         }
