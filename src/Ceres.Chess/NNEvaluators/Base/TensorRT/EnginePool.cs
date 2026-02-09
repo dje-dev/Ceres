@@ -229,20 +229,14 @@ public sealed class EnginePool : IDisposable
       // sizes defines exact batch sizes, sorted descending for processing
       Array.Sort(sizes);
       Array.Reverse(sizes);
-      foreach (int size in sizes)
+
+      // Build a single multi-profile engine with shared weights across all batch sizes.
+      // This eliminates N-fold weight duplication in VRAM and requires only one cache file.
+      TensorRTEngine[] multiEngines = this.trt.LoadMultiProfileEngineWithCache(
+        onnxPath, sizes, options, cacheDir, deviceId);
+      foreach (TensorRTEngine engine in multiEngines)
       {
-        ranges.Add((size, size));
-
-        TensorRTBuildOptions opts = options;
-
-        // Use tiling optimization level 3 for batch sizes >= 128
-        // TODO: currently disabled, this may only help on certain GPUs (e.g. GB10) and is very slow to build
-        if (size >= 128)
-        {
-          // opts.TilingOptimizationLevel = 3; // note: can be 5x to 20x slower to build
-        }
-
-        TensorRTEngine engine = this.trt.LoadEngineWithCache(onnxPath, size, opts, cacheDir, deviceId);
+        ranges.Add((engine.BatchSize, engine.BatchSize));
         engines.Add(engine);
       }
     }

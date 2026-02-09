@@ -179,6 +179,40 @@ public sealed class TensorRTEngine : IDisposable
 
 
   /// <summary>
+  /// Build a single multi-profile TensorRT engine with shared weights,
+  /// returning one TensorRTEngine per batch size. Each engine wraps an
+  /// independent execution context but shares the underlying ICudaEngine.
+  /// </summary>
+  public static unsafe TensorRTEngine[] LoadMultiProfileWithCache(string onnxPath, int[] batchSizes,
+      TensorRTBuildOptions options, int deviceId = -1, string cacheDir = null, bool forceRebuild = false)
+  {
+    int numProfiles = batchSizes.Length;
+    IntPtr* handles = stackalloc IntPtr[numProfiles];
+
+    int wasCached;
+    int result;
+    fixed (int* sizesPtr = batchSizes)
+    {
+      result = TensorRTNative.LoadONNXMultiProfileCached(onnxPath, sizesPtr, numProfiles,
+          ref options, deviceId, cacheDir, forceRebuild ? 1 : 0, out wasCached, handles);
+    }
+
+    if (result != 0)
+    {
+      string error = TensorRTNative.GetLastErrorString();
+      throw new InvalidOperationException($"Failed to load multi-profile ONNX ({result}): {error ?? "unknown error"}");
+    }
+
+    TensorRTEngine[] engines = new TensorRTEngine[numProfiles];
+    for (int i = 0; i < numProfiles; i++)
+    {
+      engines[i] = new TensorRTEngine(handles[i], batchSizes[i], onnxPath, wasCached != 0);
+    }
+    return engines;
+  }
+
+
+  /// <summary>
   /// Load from either ONNX or engine file based on file extension, with optional caching.
   /// </summary>
   public static TensorRTEngine Load(string path, int batchSize, TensorRTBuildOptions? options = null,

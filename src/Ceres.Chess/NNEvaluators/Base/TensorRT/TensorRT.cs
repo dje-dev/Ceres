@@ -89,6 +89,17 @@ public sealed class TensorRT : IDisposable
 
 
   /// <summary>
+  /// Build a single multi-profile engine with shared weights,
+  /// returning one TensorRTEngine per batch size.
+  /// </summary>
+  public TensorRTEngine[] LoadMultiProfileEngineWithCache(string onnxPath, int[] batchSizes,
+      TensorRTBuildOptions options, string cacheDir, int deviceId = -1, bool forceRebuild = false)
+  {
+    return TensorRTEngine.LoadMultiProfileWithCache(onnxPath, batchSizes, options, deviceId, cacheDir, forceRebuild);
+  }
+
+
+  /// <summary>
   /// Load a pre-built engine file (.engine).
   /// </summary>
   public TensorRTEngine LoadEngineFile(string enginePath, int batchSize, int deviceId = -1)

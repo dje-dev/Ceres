@@ -271,6 +271,33 @@ extern "C"
     // Get the batch size the engine was built with (max batch for range engines).
     TRT_API int32_t TRT_GetEngineBatchSize(TRT_EngineHandle handle);
 
+    // =========================================================================
+    // Multi-Profile Engine (shared weights, N execution contexts)
+    // =========================================================================
+
+    // Build a single engine with N optimization profiles (one per batch size),
+    // then create N independent execution contexts sharing that engine.
+    // outHandles must point to an array of numProfiles TRT_EngineHandle slots.
+    // Returns 0 on success, negative on error.
+    TRT_API int32_t TRT_LoadONNXMultiProfile(const char* onnxPath,
+        const int32_t* batchSizes, int32_t numProfiles,
+        const TRT_BuildOptions* options, int32_t deviceId,
+        TRT_EngineHandle* outHandles);
+
+    // Multi-profile engine with caching support.
+    // Serializes/deserializes a single engine file containing all profiles.
+    TRT_API int32_t TRT_LoadONNXMultiProfileCached(const char* onnxPath,
+        const int32_t* batchSizes, int32_t numProfiles,
+        const TRT_BuildOptions* options, int32_t deviceId,
+        const char* cacheDir, int32_t forceRebuild,
+        int32_t* outWasCached, TRT_EngineHandle* outHandles);
+
+    // Generate cache filename for a multi-profile engine.
+    // Caller must free returned string with TRT_FreeString.
+    TRT_API char* TRT_GenerateMultiProfileCacheFilename(const char* onnxPath,
+        const int32_t* batchSizes, int32_t numProfiles,
+        const TRT_BuildOptions* options, int32_t deviceId);
+
     // Check if this engine uses CUDA graphs for inference.
     // Returns 1 if enabled, 0 if disabled, -1 on error.
     TRT_API int32_t TRT_UsesCudaGraphs(TRT_EngineHandle handle);
