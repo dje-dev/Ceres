@@ -19,6 +19,8 @@
 #include <functional>
 #include <cstring>
 #include <atomic>
+#include <unordered_map>
+#include <unordered_set>
 
 // Platform-specific includes for file stat
 #ifdef _WIN32
@@ -276,59 +278,249 @@ extern "C"
     options->refittable = 0;
   }
 
-  // Helper: print colored console message
-  static void PrintColored(const char* color, const char* message)
+} // end extern "C" (temporarily, for C++ helper functions below)
+
+// Helper: print colored console message
+static void PrintColored(const char* color, const char* message)
+{
+  fprintf(stderr, "%s%s\033[0m\n", color, message);
+}
+
+static void PrintYellow(const char* message)
+{
+  PrintColored("\033[33m", message);
+}
+
+static void PrintGreen(const char* message)
+{
+  PrintColored("\033[32m", message);
+}
+
+// Helper: check if a layer name matches any normalization naming convention.
+static bool HasNormName(const char* layerName)
+{
+  std::string name(layerName);
+  return name.find("rms_norm") != std::string::npos
+    || name.find("ln1") != std::string::npos
+    || name.find("/ln2/") != std::string::npos
+    || name.find("qkvLN") != std::string::npos
+    || name.find("embedding_norm") != std::string::npos
+    || name.find("LayerNorm") != std::string::npos
+    || name.find("layer_norm") != std::string::npos
+    || name.find("rmsnorm") != std::string::npos;
+}
+
+// Check if a layer type performs actual computation (not just data/shape).
+static bool IsComputeLayerType(nvinfer1::LayerType type)
+{
+  return type == nvinfer1::LayerType::kELEMENTWISE
+    || type == nvinfer1::LayerType::kREDUCE
+    || type == nvinfer1::LayerType::kUNARY
+    || type == nvinfer1::LayerType::kNORMALIZATION;
+}
+
+// Build set of residual-stream normalization layer indices.
+// For native kNORMALIZATION layers: mark only those fed by a residual Add.
+// For decomposed norms: find entry points on the residual stream, propagate
+// through the chain, but only mark compute layers (skip kCONSTANT, etc.).
+static std::unordered_set<int32_t> FindResidualStreamNormLayers(
+  const nvinfer1::INetworkDefinition* network, int32_t totalLayers)
+{
+  // Build producer map: tensor name -> producing layer index
+  std::unordered_map<std::string, int32_t> tensorProducer;
+  for (int32_t i = 0; i < totalLayers; ++i)
   {
-    fprintf(stderr, "%s%s\033[0m\n", color, message);
+    auto* layer = network->getLayer(i);
+    for (int32_t j = 0; j < layer->getNbOutputs(); ++j)
+    {
+      auto* tensor = layer->getOutput(j);
+      if (tensor && tensor->getName())
+      {
+        tensorProducer[tensor->getName()] = i;
+      }
+    }
   }
 
-  static void PrintYellow(const char* message)
+  // Count native kNORMALIZATION layers
+  int nativeNormCount = 0;
+  for (int32_t i = 0; i < totalLayers; ++i)
   {
-    PrintColored("\033[33m", message);
+    if (network->getLayer(i)->getType() == nvinfer1::LayerType::kNORMALIZATION)
+      nativeNormCount++;
   }
 
-  static void PrintGreen(const char* message)
+  std::unordered_set<int32_t> residualNormLayers;
+
+  if (nativeNormCount > 0)
   {
-    PrintColored("\033[32m", message);
+    // Path A: native kNORMALIZATION layers exist - mark only those on residual stream
+    for (int32_t i = 0; i < totalLayers; ++i)
+    {
+      auto* layer = network->getLayer(i);
+      if (layer->getType() != nvinfer1::LayerType::kNORMALIZATION)
+        continue;
+
+      auto* inputTensor = layer->getInput(0);
+      if (!inputTensor || !inputTensor->getName())
+        continue;
+
+      auto it = tensorProducer.find(inputTensor->getName());
+      if (it == tensorProducer.end())
+        continue;
+
+      auto* producer = network->getLayer(it->second);
+      for (int depth = 0; depth < 5; ++depth)
+      {
+        std::string rpName(producer->getName());
+        if (rpName.find("ONNXTRT_") != std::string::npos
+          || rpName.find("castHelper") != std::string::npos)
+        {
+          auto* rpInput = producer->getInput(0);
+          if (rpInput && rpInput->getName())
+          {
+            auto rpIt = tensorProducer.find(rpInput->getName());
+            if (rpIt != tensorProducer.end())
+            {
+              producer = network->getLayer(rpIt->second);
+              continue;
+            }
+          }
+        }
+        break;
+      }
+
+      std::string realName(producer->getName());
+      bool isResidualAdd = (producer->getType() == nvinfer1::LayerType::kELEMENTWISE)
+        && (realName.find("add") != std::string::npos
+          || realName.find("Add") != std::string::npos
+          || realName.find("skip") != std::string::npos);
+
+      if (isResidualAdd)
+      {
+        residualNormLayers.insert(i);
+      }
+    }
+    fprintf(stderr, "[TensorRT] Found %d native kNORMALIZATION layers, %d on residual stream\n",
+      nativeNormCount, (int)residualNormLayers.size());
+  }
+  else
+  {
+    // Path B: decomposed norms - mark compute layers in residual-stream norm chains.
+    // Pass 1: find entry-point norm layers fed by residual Add
+    for (int32_t i = 0; i < totalLayers; ++i)
+    {
+      auto* layer = network->getLayer(i);
+      if (!HasNormName(layer->getName()))
+        continue;
+
+      auto* inputTensor = layer->getInput(0);
+      if (!inputTensor || !inputTensor->getName())
+        continue;
+
+      auto it = tensorProducer.find(inputTensor->getName());
+      if (it == tensorProducer.end())
+        continue;
+
+      auto* producer = network->getLayer(it->second);
+      bool producerIsNorm = HasNormName(producer->getName());
+      if (producerIsNorm)
+        continue;
+
+      auto* realProducer = producer;
+      for (int depth = 0; depth < 5; ++depth)
+      {
+        std::string rpName(realProducer->getName());
+        if (rpName.find("ONNXTRT_") != std::string::npos
+          || rpName.find("castHelper") != std::string::npos)
+        {
+          auto* rpInput = realProducer->getInput(0);
+          if (rpInput && rpInput->getName())
+          {
+            auto rpIt = tensorProducer.find(rpInput->getName());
+            if (rpIt != tensorProducer.end())
+            {
+              realProducer = network->getLayer(rpIt->second);
+              continue;
+            }
+          }
+        }
+        break;
+      }
+
+      std::string realName(realProducer->getName());
+      bool isResidualAdd = (realProducer->getType() == nvinfer1::LayerType::kELEMENTWISE)
+        && (realName.find("add") != std::string::npos
+          || realName.find("Add") != std::string::npos
+          || realName.find("skip") != std::string::npos);
+
+      if (isResidualAdd && IsComputeLayerType(layer->getType()))
+      {
+        residualNormLayers.insert(i);
+      }
+    }
+
+    int entryCount = (int)residualNormLayers.size();
+
+    // Pass 2: propagate through norm chain, only marking compute layers
+    bool changed = true;
+    while (changed)
+    {
+      changed = false;
+      for (int32_t i = 0; i < totalLayers; ++i)
+      {
+        if (residualNormLayers.count(i))
+          continue;
+        auto* layer = network->getLayer(i);
+        if (!HasNormName(layer->getName()))
+          continue;
+        if (!IsComputeLayerType(layer->getType()))
+          continue;
+
+        for (int32_t inp = 0; inp < layer->getNbInputs(); ++inp)
+        {
+          auto* inputTensor = layer->getInput(inp);
+          if (!inputTensor || !inputTensor->getName())
+            continue;
+          auto it = tensorProducer.find(inputTensor->getName());
+          if (it != tensorProducer.end() && residualNormLayers.count(it->second))
+          {
+            residualNormLayers.insert(i);
+            changed = true;
+            break;
+          }
+        }
+      }
+    }
+
+    fprintf(stderr, "[TensorRT] Decomposed norms: %d entry-point + %d chain = %d compute layers on residual stream\n",
+      entryCount, (int)residualNormLayers.size() - entryCount, (int)residualNormLayers.size());
   }
 
-  static void PrintBlue(const char* message)
-  {
-    PrintColored("\033[34m", message);
-  }
+  return residualNormLayers;
+}
 
-  // Helper: check if layer name is a post-attention normalization layer (ln1)
-  // Broad mode: matches any layer with "ln1" in name (includes smolgen ln1)
-  // This converts ~216 layers for a 12-layer network
-  static bool IsPostAttentionNormLayer(const char* layerName)
-  {
-    std::string name(layerName);
-    return name.find("ln1") != std::string::npos;
-  }
+// Helper: strict mode - only match main encoder post-attention ln1
+// Matches: /transformer_layer.X/ln1/...
+// Excludes: /transformer_layer.X/attention/ln1/... (smolgen related)
+// NOTE: This is LC0-specific and does NOT cover Ceres-style nets.
+static bool IsPostAttentionNormLayerStrict(const char* layerName)
+{
+  std::string name(layerName);
+  return name.find("/ln1/") != std::string::npos &&
+    name.find("/attention/ln1/") == std::string::npos;
+}
 
-  // Helper: strict mode - only match main encoder post-attention ln1
-  // Matches: /transformer_layer.X/ln1/...
-  // Excludes: /transformer_layer.X/attention/ln1/... (smolgen related)
-  // NOTE: Testing shows this does NOT fix FP16 accuracy issues!
-  //       The main encoder ln1 layers are NOT the cause of overflow.
-  static bool IsPostAttentionNormLayerStrict(const char* layerName)
-  {
-    std::string name(layerName);
-    // Must contain "/ln1/" but NOT "/attention/ln1/"
-    return name.find("/ln1/") != std::string::npos &&
-      name.find("/attention/ln1/") == std::string::npos;
-  }
+// Helper: smolgen mode - only match smolgen-related ln1 inside attention
+// Matches: /transformer_layer.X/attention/ln1/...
+// NOTE: This is LC0-specific and does NOT cover Ceres-style nets.
+static bool IsSmolgenNormLayer(const char* layerName)
+{
+  std::string name(layerName);
+  return name.find("/attention/ln1/") != std::string::npos;
+}
 
-  // Helper: smolgen mode - only match smolgen-related ln1 inside attention
-  // Matches: /transformer_layer.X/attention/ln1/...
-  // Excludes: /transformer_layer.X/ln1/... (main encoder)
-  // RECOMMENDED: Testing shows this mode achieves the SAME accuracy as broad mode
-  //              while converting ~55% fewer layers (~96 vs ~216 for 12-layer net)
-  static bool IsSmolgenNormLayer(const char* layerName)
-  {
-    std::string name(layerName);
-    return name.find("/attention/ln1/") != std::string::npos;
-  }
+extern "C"
+{
 
   TRT_API TRT_EngineHandle TRT_LoadONNXWithOptions(const char* onnxPath, int32_t batchSize,
     const TRT_BuildOptions* options)
@@ -430,38 +622,39 @@ extern "C"
     // Enable detailed profiling for layer precision inspection
     config->setProfilingVerbosity(nvinfer1::ProfilingVerbosity::kDETAILED);
 
-    // Force FP32 precision for post-attention normalization (ln1) layers if requested
-    // Three modes: broad (fp32PostAttentionNorm) includes all ln1 layers,
-    //              strict (fp32PostAttentionNormStrict) only main encoder ln1 (excludes smolgen)
-    //              smolgen (fp32SmolgenNorm) only smolgen-related ln1 inside attention
+    // Force FP32 precision for normalization layers to prevent FP16 overflow.
+    // Three modes: broad (fp32PostAttentionNorm) = all normalization layers (recommended),
+    //              strict (fp32PostAttentionNormStrict) = only main encoder ln1 (LC0-specific),
+    //              smolgen (fp32SmolgenNorm) = only smolgen attention ln1 (LC0-specific).
     if (opts->fp32PostAttentionNorm || opts->fp32PostAttentionNormStrict || opts->fp32SmolgenNorm)
     {
-      config->setFlag(nvinfer1::BuilderFlag::kPREFER_PRECISION_CONSTRAINTS);
+      config->setFlag(nvinfer1::BuilderFlag::kOBEY_PRECISION_CONSTRAINTS);
 
-      // Determine which filter to use
       const char* modeName = "broad";
       int layersMarked = 0;
       int totalLayers = network->getNbLayers();
 
+      // Compute residual-stream norm layer set for the broad mode
+      auto residualNormSet = FindResidualStreamNormLayers(network.get(), totalLayers);
+
       for (int32_t i = 0; i < totalLayers; ++i)
       {
         auto* layer = network->getLayer(i);
-        const char* layerName = layer->getName();
         bool shouldMark = false;
 
         if (opts->fp32SmolgenNorm)
         {
-          shouldMark = IsSmolgenNormLayer(layerName);
+          shouldMark = IsSmolgenNormLayer(layer->getName());
           modeName = "smolgen";
         }
         else if (opts->fp32PostAttentionNormStrict)
         {
-          shouldMark = IsPostAttentionNormLayerStrict(layerName);
+          shouldMark = IsPostAttentionNormLayerStrict(layer->getName());
           modeName = "strict";
         }
         else
         {
-          shouldMark = IsPostAttentionNormLayer(layerName);
+          shouldMark = residualNormSet.count(i) > 0;
         }
 
         if (shouldMark)
@@ -474,7 +667,7 @@ extern "C"
           layersMarked++;
         }
       }
-      fprintf(stderr, "[TensorRT] Marked %d/%d layers as FP32 for post-attention norm (ln1, %s mode)\n",
+      fprintf(stderr, "[TensorRT] Marked %d/%d layers as FP32 for normalization (%s mode)\n",
         layersMarked, totalLayers, modeName);
     }
 
@@ -2096,7 +2289,7 @@ extern "C"
   // =========================================================================
 
   TRT_API int32_t TRT_SetNamedWeights(TRT_EngineHandle handle, const char* weightTensorName,
-                                       const void* weights, int64_t numElements)
+    const void* weights, int64_t numElements)
   {
     if (!handle)
     {
@@ -2436,34 +2629,36 @@ extern "C"
 
     config->setProfilingVerbosity(nvinfer1::ProfilingVerbosity::kDETAILED);
 
-    // Force FP32 precision for specific layers if requested
+    // Force FP32 precision for normalization layers to prevent FP16 overflow.
     if (opts->fp32PostAttentionNorm || opts->fp32PostAttentionNormStrict || opts->fp32SmolgenNorm)
     {
-      config->setFlag(nvinfer1::BuilderFlag::kPREFER_PRECISION_CONSTRAINTS);
+      config->setFlag(nvinfer1::BuilderFlag::kOBEY_PRECISION_CONSTRAINTS);
 
       const char* modeName = "broad";
       int layersMarked = 0;
       int totalLayers = network->getNbLayers();
 
+      // Compute residual-stream norm layer set for the broad mode
+      auto residualNormSet = FindResidualStreamNormLayers(network.get(), totalLayers);
+
       for (int32_t i = 0; i < totalLayers; ++i)
       {
         auto* layer = network->getLayer(i);
-        const char* layerName = layer->getName();
         bool shouldMark = false;
 
         if (opts->fp32SmolgenNorm)
         {
-          shouldMark = IsSmolgenNormLayer(layerName);
+          shouldMark = IsSmolgenNormLayer(layer->getName());
           modeName = "smolgen";
         }
         else if (opts->fp32PostAttentionNormStrict)
         {
-          shouldMark = IsPostAttentionNormLayerStrict(layerName);
+          shouldMark = IsPostAttentionNormLayerStrict(layer->getName());
           modeName = "strict";
         }
         else
         {
-          shouldMark = IsPostAttentionNormLayer(layerName);
+          shouldMark = residualNormSet.count(i) > 0;
         }
 
         if (shouldMark)
@@ -2476,7 +2671,7 @@ extern "C"
           layersMarked++;
         }
       }
-      fprintf(stderr, "[TensorRT] Marked %d/%d layers as FP32 for post-attention norm (ln1, %s mode)\n",
+      fprintf(stderr, "[TensorRT] Marked %d/%d layers as FP32 for normalization (%s mode)\n",
         layersMarked, totalLayers, modeName);
     }
 
