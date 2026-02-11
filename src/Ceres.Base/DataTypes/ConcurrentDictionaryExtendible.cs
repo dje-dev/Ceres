@@ -40,11 +40,6 @@ public class ConcurrentDictionaryExtendible<TKey, TValue> : IConcurrentDictionar
   /// </summary>
   const int INITIAL_BUCKET_CAPACITY = 8;
 
-  /// <summary>
-  /// Number of lock stripes for synchronizing writers. 
-  /// </summary>
-  const int NUM_LOCK_STRIPES = 1024;
-
 
   struct Entry
   {
@@ -59,6 +54,7 @@ public class ConcurrentDictionaryExtendible<TKey, TValue> : IConcurrentDictionar
     public int LocalDepth;
     public int Count;
     public Entry[] Entries;
+    public readonly Lock SyncRoot = new();
   }
 
 
@@ -73,22 +69,6 @@ public class ConcurrentDictionaryExtendible<TKey, TValue> : IConcurrentDictionar
     return System.Math.Min(cap, BUCKET_CAPACITY);
   }
 
-
-  readonly Lock[] lockStripes = InitLockStripes();
-
-  static Lock[] InitLockStripes()
-  {
-    Lock[] stripes = new Lock[NUM_LOCK_STRIPES];
-    for (int i = 0; i < NUM_LOCK_STRIPES; i++)
-    {
-      stripes[i] = new Lock();
-    }
-    return stripes;
-  }
-
-
-  [MethodImpl(MethodImplOptions.AggressiveInlining)]
-  Lock GetStripeLock(int hashCode) => lockStripes[(uint)hashCode % NUM_LOCK_STRIPES];
 
   Bucket[] directory;
   int globalDepth;
@@ -122,8 +102,7 @@ public class ConcurrentDictionaryExtendible<TKey, TValue> : IConcurrentDictionar
 
   /// <summary>
   /// Attempts to get the value associated with the specified key.
-  /// Lock-free: uses acquire/release ordering with copy-on-split
-  /// so the read path never enters a Monitor.
+  /// Uses per-bucket locking to avoid races with concurrent modifications.
   /// </summary>
   public bool TryGetValue(TKey key, out TValue value)
   {
@@ -133,34 +112,30 @@ public class ConcurrentDictionaryExtendible<TKey, TValue> : IConcurrentDictionar
     {
       Bucket bucket = GetBucket(hashCode);
 
-      // Acquire-read of Count guarantees that all entry writes committed
-      // before the corresponding count increment are visible.
-      int count = Volatile.Read(ref bucket.Count);
-      Entry[] entries = bucket.Entries;
-
-      for (int i = 0; i < count; i++)
+      lock (bucket.SyncRoot)
       {
-        ref Entry entry = ref entries[i];
-        if (entry.HashCode == hashCode && entry.Key.Equals(key))
+        // Re-check bucket after acquiring lock (split may have redirected).
+        Bucket currentBucket = GetBucket(hashCode);
+        if (currentBucket != bucket)
         {
-          value = entry.Value;
-          return true;
+          continue; // Retry with correct bucket.
         }
-      }
 
-      // Key not found — verify this bucket is still the correct one.
-      // A concurrent split may have moved the key to a sibling bucket
-      // and redirected the directory entry.
-      if (GetBucket(hashCode) != bucket)
-      {
-        continue; // Bucket was split; retry with the new bucket.
-      }
+        for (int i = 0; i < bucket.Count; i++)
+        {
+          ref Entry entry = ref bucket.Entries[i];
+          if (entry.HashCode == hashCode && entry.Key.Equals(key))
+          {
+            value = entry.Value;
+            return true;
+          }
+        }
 
-      value = default;
-      return false;
+        value = default;
+        return false;
+      }
     }
   }
-
 
   /// <summary>
   /// Attempts to add a key/value pair. Returns true if added, false if key already exists.
@@ -171,9 +146,16 @@ public class ConcurrentDictionaryExtendible<TKey, TValue> : IConcurrentDictionar
 
     while (true)
     {
-      lock (GetStripeLock(hashCode))
+      Bucket bucket = GetBucket(hashCode);
+
+      lock (bucket.SyncRoot)
       {
-        Bucket bucket = GetBucket(hashCode);
+        // Re-check bucket after acquiring lock (split may have redirected).
+        Bucket currentBucket = GetBucket(hashCode);
+        if (currentBucket != bucket)
+        {
+          continue; // Retry with correct bucket.
+        }
 
         // Check for existing key.
         for (int i = 0; i < bucket.Count; i++)
@@ -192,7 +174,7 @@ public class ConcurrentDictionaryExtendible<TKey, TValue> : IConcurrentDictionar
           newEntry.HashCode = hashCode;
           newEntry.Key = key;
           newEntry.Value = value;
-          Volatile.Write(ref bucket.Count, bucket.Count + 1);
+          bucket.Count++;
           Interlocked.Increment(ref totalCount);
           return true;
         }
@@ -208,7 +190,7 @@ public class ConcurrentDictionaryExtendible<TKey, TValue> : IConcurrentDictionar
           newEntry.Key = key;
           newEntry.Value = value;
           bucket.Entries = grown;
-          Volatile.Write(ref bucket.Count, bucket.Count + 1);
+          bucket.Count++;
           Interlocked.Increment(ref totalCount);
           return true;
         }
@@ -232,9 +214,16 @@ public class ConcurrentDictionaryExtendible<TKey, TValue> : IConcurrentDictionar
 
       while (true)
       {
-        lock (GetStripeLock(hashCode))
+        Bucket bucket = GetBucket(hashCode);
+
+        lock (bucket.SyncRoot)
         {
-          Bucket bucket = GetBucket(hashCode);
+          // Re-check bucket after acquiring lock (split may have redirected).
+          Bucket currentBucket = GetBucket(hashCode);
+          if (currentBucket != bucket)
+          {
+            continue; // Retry with correct bucket.
+          }
 
           // Check for existing key - update in place.
           for (int i = 0; i < bucket.Count; i++)
@@ -254,7 +243,7 @@ public class ConcurrentDictionaryExtendible<TKey, TValue> : IConcurrentDictionar
             newEntry.HashCode = hashCode;
             newEntry.Key = key;
             newEntry.Value = value;
-            Volatile.Write(ref bucket.Count, bucket.Count + 1);
+            bucket.Count++;
             Interlocked.Increment(ref totalCount);
             return;
           }
@@ -270,7 +259,7 @@ public class ConcurrentDictionaryExtendible<TKey, TValue> : IConcurrentDictionar
             newEntry.Key = key;
             newEntry.Value = value;
             bucket.Entries = grown;
-            Volatile.Write(ref bucket.Count, bucket.Count + 1);
+            bucket.Count++;
             Interlocked.Increment(ref totalCount);
             return;
           }
@@ -296,7 +285,7 @@ public class ConcurrentDictionaryExtendible<TKey, TValue> : IConcurrentDictionar
 
 
   /// <summary>
-  /// Splits an overflowing bucket. Caller must hold the stripe lock for hashCode.
+  /// Splits an overflowing bucket. Caller must hold bucket.SyncRoot.
   /// May double the directory if localDepth == globalDepth.
   /// </summary>
   void SplitBucket(Bucket bucket, int hashCode)
