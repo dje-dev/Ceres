@@ -33,12 +33,18 @@ public class ConcurrentDictionaryExtendible<TKey, TValue> : IConcurrentDictionar
   /// <summary>
   /// Maximum number of entries per bucket before a split is required.
   /// </summary>
-  const int BUCKET_CAPACITY = 64;
+  const int BUCKET_CAPACITY = 128;
 
   /// <summary>
   /// Starting array size for buckets. 
   /// </summary>
-  const int INITIAL_BUCKET_CAPACITY = 4;
+  const int INITIAL_BUCKET_CAPACITY = 8;
+
+  /// <summary>
+  /// Number of lock stripes for synchronizing writers. 
+  /// </summary>
+  const int NUM_LOCK_STRIPES = 1024;
+
 
   struct Entry
   {
@@ -47,12 +53,14 @@ public class ConcurrentDictionaryExtendible<TKey, TValue> : IConcurrentDictionar
     public TValue Value;
   }
 
+  
   sealed class Bucket
   {
     public int LocalDepth;
     public int Count;
     public Entry[] Entries;
   }
+
 
   /// <summary>
   /// Returns the smallest power-of-2 capacity that can hold <paramref name="count"/> entries,
@@ -65,26 +73,27 @@ public class ConcurrentDictionaryExtendible<TKey, TValue> : IConcurrentDictionar
     return System.Math.Min(cap, BUCKET_CAPACITY);
   }
 
-  const int NUM_LOCK_STRIPES = 512;
-  readonly object[] lockStripes = InitLockStripes();
 
-  static object[] InitLockStripes()
+  readonly Lock[] lockStripes = InitLockStripes();
+
+  static Lock[] InitLockStripes()
   {
-    object[] stripes = new object[NUM_LOCK_STRIPES];
+    Lock[] stripes = new Lock[NUM_LOCK_STRIPES];
     for (int i = 0; i < NUM_LOCK_STRIPES; i++)
     {
-      stripes[i] = new object();
+      stripes[i] = new Lock();
     }
     return stripes;
   }
 
+
   [MethodImpl(MethodImplOptions.AggressiveInlining)]
-  object GetStripeLock(int hashCode) => lockStripes[(uint)hashCode % NUM_LOCK_STRIPES];
+  Lock GetStripeLock(int hashCode) => lockStripes[(uint)hashCode % NUM_LOCK_STRIPES];
 
   Bucket[] directory;
   int globalDepth;
   int totalCount;
-  readonly object directoryLock = new();
+  readonly Lock directoryLock = new();
 
 
   /// <summary>
@@ -439,18 +448,15 @@ public class ConcurrentDictionaryExtendible<TKey, TValue> : IConcurrentDictionar
         continue;
       }
 
-      // Lock the stripe corresponding to this directory slot.
-      // This is diagnostic-only; provides best-effort mutual exclusion with writers.
-      lock (lockStripes[(uint)i % NUM_LOCK_STRIPES])
+      for (int j = 0; j < bucket.Count; j++)
       {
-        for (int j = 0; j < bucket.Count; j++)
-        {
-          ref Entry entry = ref bucket.Entries[j];
-          yield return new KeyValuePair<TKey, TValue>(entry.Key, entry.Value);
-        }
+        ref Entry entry = ref bucket.Entries[j];
+        yield return new KeyValuePair<TKey, TValue>(entry.Key, entry.Value);
       }
+
     }
   }
+
 
   IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 }
