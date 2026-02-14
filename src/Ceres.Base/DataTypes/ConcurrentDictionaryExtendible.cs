@@ -48,7 +48,7 @@ public class ConcurrentDictionaryExtendible<TKey, TValue> : IConcurrentDictionar
     public TValue Value;
   }
 
-  
+
   sealed class Bucket
   {
     public int LocalDepth;
@@ -304,10 +304,14 @@ public class ConcurrentDictionaryExtendible<TKey, TValue> : IConcurrentDictionar
           int newLen = oldLen * 2;
           Bucket[] newDir = new Bucket[newLen];
 
+          // GetBucket indexes by lowest globalDepth bits: hashCode & (dir.Length - 1).
+          // Doubling adds one new high bit (bit D). For hash h with lowest D bits = b:
+          //   new index = b (bit D=0) or b+oldLen (bit D=1).
+          // Both must initially point to the same bucket as old index b.
           for (int i = 0; i < oldLen; i++)
           {
-            newDir[2 * i] = directory[i];
-            newDir[2 * i + 1] = directory[i];
+            newDir[i] = directory[i];
+            newDir[i + oldLen] = directory[i];
           }
 
           globalDepth++;
