@@ -2958,4 +2958,95 @@ extern "C"
     return 0;
   }
 
+
+  TRT_API int32_t TRT_LoadMultiProfileEngineFile(const char* enginePath,
+    const int32_t* batchSizes, int32_t numProfiles,
+    int32_t useCudaGraphs, int32_t useSpinWait, int32_t deviceId,
+    TRT_EngineHandle* outHandles)
+  {
+    if (!enginePath || !batchSizes || numProfiles <= 0 || !outHandles)
+    {
+      std::lock_guard<std::mutex> lock(g_mutex);
+      SetError("Invalid arguments for LoadMultiProfileEngineFile");
+      return -1;
+    }
+
+    // Handle deviceId
+    if (deviceId < 0)
+    {
+      cudaGetDevice(&deviceId);
+    }
+    else
+    {
+      cudaError_t err = cudaSetDevice(deviceId);
+      if (err != cudaSuccess)
+      {
+        std::lock_guard<std::mutex> lock(g_mutex);
+        SetError("Failed to set CUDA device " + std::to_string(deviceId));
+        return -2;
+      }
+    }
+
+    // Read engine file
+    std::ifstream file(enginePath, std::ios::binary | std::ios::ate);
+    if (!file.is_open())
+    {
+      std::lock_guard<std::mutex> lock(g_mutex);
+      SetError("Failed to open engine file: " + std::string(enginePath));
+      return -3;
+    }
+
+    std::streamsize size = file.tellg();
+    file.seekg(0, std::ios::beg);
+    std::vector<char> buffer(size);
+    if (!file.read(buffer.data(), size))
+    {
+      file.close();
+      std::lock_guard<std::mutex> lock(g_mutex);
+      SetError("Failed to read engine file: " + std::string(enginePath));
+      return -4;
+    }
+    file.close();
+
+    // Deserialize engine
+    std::lock_guard<std::mutex> lock(g_mutex);
+
+    if (!g_initialized)
+    {
+      SetError("TensorRT not initialized");
+      return -5;
+    }
+
+    nvinfer1::ICudaEngine* engine = g_runtime->deserializeCudaEngine(buffer.data(), buffer.size());
+    if (!engine)
+    {
+      SetError("Failed to deserialize engine from file: " + std::string(enginePath));
+      return -6;
+    }
+
+    int32_t result = CreateContextsFromEngine(engine, batchSizes, numProfiles,
+      useCudaGraphs != 0, useSpinWait != 0, deviceId, outHandles);
+    if (result != 0)
+    {
+      SetError("Failed to create execution contexts from engine file");
+      return -7;
+    }
+
+    // Build batch sizes string for logging
+    std::string batchDesc;
+    for (int32_t p = 0; p < numProfiles; ++p)
+    {
+      if (p > 0) batchDesc += ",";
+      batchDesc += std::to_string(batchSizes[p]);
+    }
+    std::string basename = GetBaseName(enginePath);
+    char msg[512];
+    snprintf(msg, sizeof(msg), "[TensorRT] Loaded multi-profile engine from file %s: batches=[%s], %d profiles",
+      basename.c_str(), batchDesc.c_str(), numProfiles);
+    PrintGreen(msg);
+
+    g_lastError.clear();
+    return 0;
+  }
+
 }

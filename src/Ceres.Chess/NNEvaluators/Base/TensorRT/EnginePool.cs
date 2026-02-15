@@ -232,8 +232,19 @@ public sealed class EnginePool : IDisposable
 
       // Build a single multi-profile engine with shared weights across all batch sizes.
       // This eliminates N-fold weight duplication in VRAM and requires only one cache file.
-      TensorRTEngine[] multiEngines = this.trt.LoadMultiProfileEngineWithCache(
-        onnxPath, sizes, options, cacheDir, deviceId);
+      string ext = System.IO.Path.GetExtension(onnxPath).ToLowerInvariant();
+      TensorRTEngine[] multiEngines;
+      if (ext == ".engine" || ext == ".plan")
+      {
+        // Load pre-built engine file directly (bypasses ONNX parsing and cache)
+        multiEngines = this.trt.LoadMultiProfileEngineFile(onnxPath, sizes, options, deviceId);
+      }
+      else
+      {
+        multiEngines = this.trt.LoadMultiProfileEngineWithCache(
+          onnxPath, sizes, options, cacheDir, deviceId);
+      }
+
       foreach (TensorRTEngine engine in multiEngines)
       {
         ranges.Add((engine.BatchSize, engine.BatchSize));

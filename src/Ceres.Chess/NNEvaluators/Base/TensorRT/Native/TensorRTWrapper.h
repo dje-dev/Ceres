@@ -298,6 +298,17 @@ extern "C"
     const int32_t* batchSizes, int32_t numProfiles,
     const TRT_BuildOptions* options, int32_t deviceId);
 
+  // Load a pre-built multi-profile engine file (.engine) directly.
+  // Deserializes the engine and creates N execution contexts, one per batch size.
+  // This bypasses ONNX parsing and cache validation — useful for loading
+  // pre-refitted engines produced by external tooling (e.g., Python TensorRT).
+  // outHandles must point to an array of numProfiles TRT_EngineHandle slots.
+  // Returns 0 on success, negative on error.
+  TRT_API int32_t TRT_LoadMultiProfileEngineFile(const char* enginePath,
+    const int32_t* batchSizes, int32_t numProfiles,
+    int32_t useCudaGraphs, int32_t useSpinWait, int32_t deviceId,
+    TRT_EngineHandle* outHandles);
+
   // Check if this engine uses CUDA graphs for inference.
   // Returns 1 if enabled, 0 if disabled, -1 on error.
   TRT_API int32_t TRT_UsesCudaGraphs(TRT_EngineHandle handle);

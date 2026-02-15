@@ -213,6 +213,40 @@ public sealed class TensorRTEngine : IDisposable
 
 
   /// <summary>
+  /// Load a pre-built multi-profile engine file (.engine) directly.
+  /// Deserializes the engine and creates N execution contexts, one per batch size.
+  /// Bypasses ONNX parsing and cache validation — useful for loading
+  /// pre-refitted engines produced by external tooling (e.g., Python TensorRT).
+  /// </summary>
+  public static unsafe TensorRTEngine[] LoadMultiProfileEngineFile(string enginePath, int[] batchSizes,
+      bool useCudaGraphs = false, bool useSpinWait = true, int deviceId = -1)
+  {
+    int numProfiles = batchSizes.Length;
+    IntPtr* handles = stackalloc IntPtr[numProfiles];
+
+    int result;
+    fixed (int* sizesPtr = batchSizes)
+    {
+      result = TensorRTNative.LoadMultiProfileEngineFile(enginePath, sizesPtr, numProfiles,
+          useCudaGraphs ? 1 : 0, useSpinWait ? 1 : 0, deviceId, handles);
+    }
+
+    if (result != 0)
+    {
+      string error = TensorRTNative.GetLastErrorString();
+      throw new InvalidOperationException($"Failed to load multi-profile engine file ({result}): {error ?? "unknown error"}");
+    }
+
+    TensorRTEngine[] engines = new TensorRTEngine[numProfiles];
+    for (int i = 0; i < numProfiles; i++)
+    {
+      engines[i] = new TensorRTEngine(handles[i], batchSizes[i], enginePath, wasLoadedFromCache: true);
+    }
+    return engines;
+  }
+
+
+  /// <summary>
   /// Load from either ONNX or engine file based on file extension, with optional caching.
   /// </summary>
   public static TensorRTEngine Load(string path, int batchSize, TensorRTBuildOptions? options = null,

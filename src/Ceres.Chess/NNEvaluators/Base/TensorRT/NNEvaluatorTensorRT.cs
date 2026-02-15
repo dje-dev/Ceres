@@ -998,7 +998,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
   {
     // Determine network file path
     string netFileName = overrideFileName ?? netDef.NetworkID;
-    if (!netFileName.ToUpper().EndsWith("ONNX"))
+    string extUpper = System.IO.Path.GetExtension(netFileName).ToUpper();
+    if (extUpper != ".ONNX" && extUpper != ".ENGINE" && extUpper != ".PLAN")
     {
       netFileName += ".onnx";
     }
