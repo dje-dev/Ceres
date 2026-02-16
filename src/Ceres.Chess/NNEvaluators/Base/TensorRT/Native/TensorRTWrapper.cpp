@@ -1645,8 +1645,8 @@ extern "C"
         byteOffset += bytes;
       }
 
-      // Capture graph
-      cudaStreamBeginCapture(ec->stream, cudaStreamCaptureModeGlobal);
+      // Capture graph (ThreadLocal mode avoids blocking other GPU contexts in multi-GPU setups)
+      cudaStreamBeginCapture(ec->stream, cudaStreamCaptureModeThreadLocal);
 
       bool success = ec->context->enqueueV3(ec->stream);
 
@@ -1858,6 +1858,7 @@ extern "C"
     constexpr size_t ELEM_SIZE = 2;  // FP16
     if (!handle) return -1;
     auto* ec = static_cast<EngineContext*>(handle);
+    if (!EnsureDevice(ec->deviceId)) return -1;
 
     // Set tensor addresses
     if (!ec->inputNames.empty())
@@ -1907,6 +1908,7 @@ extern "C"
     constexpr size_t ELEM_SIZE = 2;  // FP16
     if (!handle || streamIdx < 0 || streamIdx > 1) return -1;
     auto* ec = static_cast<EngineContext*>(handle);
+    if (!EnsureDevice(ec->deviceId)) return -1;
 
     if (!ec->inputNames.empty())
       ec->context->setTensorAddress(ec->inputNames[0].c_str(), gpuInput);
@@ -1929,6 +1931,7 @@ extern "C"
     constexpr size_t ELEM_SIZE = 2;  // FP16
     if (!handle || streamIdx < 0 || streamIdx > 1) return -1;
     auto* ec = static_cast<EngineContext*>(handle);
+    if (!EnsureDevice(ec->deviceId)) return -1;
 
     // Set tensor addresses (must be consistent for graph capture and replay)
     if (!ec->inputNames.empty())
@@ -1973,8 +1976,8 @@ extern "C"
       }
     }
 
-    // First call on this stream - capture the graph
-    cudaError_t err = cudaStreamBeginCapture(ec->streams[streamIdx], cudaStreamCaptureModeGlobal);
+    // First call on this stream - capture the graph (ThreadLocal mode for multi-GPU compatibility)
+    cudaError_t err = cudaStreamBeginCapture(ec->streams[streamIdx], cudaStreamCaptureModeThreadLocal);
     if (err != cudaSuccess)
     {
       std::lock_guard<std::mutex> lock(g_mutex);
@@ -2034,6 +2037,7 @@ extern "C"
     constexpr size_t ELEM_SIZE = 2;  // FP16
     if (!handle || streamIdx < 0 || streamIdx > 1) return -1;
     auto* ec = static_cast<EngineContext*>(handle);
+    if (!EnsureDevice(ec->deviceId)) return -1;
 
     // Set dynamic input shapes for actualBatchSize
     for (size_t i = 0; i < ec->inputNames.size(); ++i)
@@ -2074,6 +2078,7 @@ extern "C"
   {
     if (!handle || streamIdx < 0 || streamIdx > 1) return -1;
     auto* ec = static_cast<EngineContext*>(handle);
+    if (!EnsureDevice(ec->deviceId)) return -1;
     cudaMemcpyAsync(dst, src, bytes, cudaMemcpyHostToDevice, ec->streams[streamIdx]);
     return 0;
   }
@@ -2082,6 +2087,7 @@ extern "C"
   {
     if (!handle || streamIdx < 0 || streamIdx > 1) return -1;
     auto* ec = static_cast<EngineContext*>(handle);
+    if (!EnsureDevice(ec->deviceId)) return -1;
     cudaMemcpyAsync(dst, src, bytes, cudaMemcpyDeviceToHost, ec->streams[streamIdx]);
     return 0;
   }
@@ -2090,6 +2096,7 @@ extern "C"
   {
     if (!handle || streamIdx < 0 || streamIdx > 1) return -1;
     auto* ec = static_cast<EngineContext*>(handle);
+    if (!EnsureDevice(ec->deviceId)) return -1;
     cudaStreamSynchronize(ec->streams[streamIdx]);
     return 0;
   }
@@ -2400,6 +2407,12 @@ extern "C"
     SharedEngine* shared, int32_t profileIndex, int32_t batchSize,
     bool useCudaGraphs, bool useSpinWait, int32_t deviceId)
   {
+    // Ensure correct device for stream/buffer creation (keeps tls_currentDevice in sync)
+    if (!EnsureDevice(deviceId))
+    {
+      return nullptr;
+    }
+
     nvinfer1::IExecutionContext* context = engine->createExecutionContext();
     if (!context)
     {
