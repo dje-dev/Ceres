@@ -18,7 +18,7 @@ using System.IO;
 using System.Linq;
 using System.Numerics.Tensors;
 using System.Threading.Tasks;
-
+using Ceres.Base.CUDA;
 using Ceres.Base.DataTypes;
 using Ceres.Base.Threading;
 using Ceres.Chess.EncodedPositions;
@@ -32,6 +32,7 @@ using Ceres.Chess.NNEvaluators.Ceres;
 using Ceres.Chess.NNEvaluators.Ceres.TPG;
 using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.UserSettings;
+using Microsoft.ML.OnnxRuntime;
 
 #endregion
 
@@ -136,7 +137,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
   private readonly bool hasUncertaintyP;
   private readonly bool hasValueSecondary;
 
-  // Warmup tracking
+  // Warmup tracking (static lock ensures only one Warmup runs at a time across all instances)
   private bool haveWarmedUp;
 
   /// <inheritdoc/>
@@ -406,11 +407,13 @@ public class NNEvaluatorTensorRT : NNEvaluator
     Warmup();
   }
 
+  private static readonly object warmupLock = new();
 
   /// <summary>
   /// Performs warmup by running dummy evaluations at each defined batch size.
   /// Only executes on first call; subsequent calls are no-ops.
   /// </summary>
+
   public override void Warmup()
   {
     if (haveWarmedUp)
@@ -418,38 +421,46 @@ public class NNEvaluatorTensorRT : NNEvaluator
       return;
     }
 
-    // Determine batch sizes to warm up based on pool mode
-    int[] warmupSizes;
-    if (PoolMode == EnginePoolMode.Range)
+    lock (warmupLock)
     {
-      // For Range mode, warm up at each range maximum
-      warmupSizes = BatchSizes;
-    }
-    else
-    {
-      // For Exact mode, warm up at each exact batch size
-      warmupSizes = BatchSizes;
-    }
-
-    // Allocate dummy input buffers for warmup
-    int maxWarmupSize = warmupSizes.Max();
-    Half[] dummyOutputBuffer = new Half[maxWarmupSize * outputElementsPerPosition];
-
-    foreach (int batchSize in warmupSizes)
-    {
-      if (useByteInputs)
+      if (haveWarmedUp)
       {
-        byte[] dummyInput = new byte[batchSize * inputElementsPerPosition];
-        pool.ProcessBytes(dummyInput, dummyOutputBuffer, batchSize);
+        return;
+      }
+
+      // Determine batch sizes to warm up based on pool mode
+      int[] warmupSizes;
+      if (PoolMode == EnginePoolMode.Range)
+      {
+        // For Range mode, warm up at each range maximum
+        warmupSizes = BatchSizes;
       }
       else
       {
-        Half[] dummyInput = new Half[batchSize * inputElementsPerPosition];
-        pool.Process(dummyInput, dummyOutputBuffer, batchSize);
+        // For Exact mode, warm up at each exact batch size
+        warmupSizes = BatchSizes;
       }
-    }
 
-    haveWarmedUp = true;
+      // Allocate dummy input buffers for warmup
+      int maxWarmupSize = warmupSizes.Max();
+      Half[] dummyOutputBuffer = new Half[maxWarmupSize * outputElementsPerPosition];
+
+      foreach (int batchSize in warmupSizes)
+      {
+        if (useByteInputs)
+        {
+          byte[] dummyInput = new byte[batchSize * inputElementsPerPosition];
+          pool.ProcessBytes(dummyInput, dummyOutputBuffer, batchSize);
+        }
+        else
+        {
+          Half[] dummyInput = new Half[batchSize * inputElementsPerPosition];
+          pool.Process(dummyInput, dummyOutputBuffer, batchSize);
+        }
+      }
+
+      haveWarmedUp = true;
+    }
   }
 
 
@@ -608,6 +619,105 @@ public class NNEvaluatorTensorRT : NNEvaluator
 
 
   /// <summary>
+  /// Computes inverse hyperbolic tangent (artanh).
+  /// </summary>
+  private static float Atanh(float x) => 0.5f * MathF.Log((1f + x) / (1f - x));
+
+
+  /// <summary>
+  /// Applies softmax-based temperature scaling to WDL logits.
+  /// </summary>
+  private static (float W, float L) ApplySoftmaxTemperature(float vW, float vD, float vL, float invTemp)
+  {
+    float maxV = MathF.Max(vW, MathF.Max(vD, vL));
+    float expW = MathF.Exp((vW - maxV) * invTemp);
+    float expD = MathF.Exp((vD - maxV) * invTemp);
+    float expL = MathF.Exp((vL - maxV) * invTemp);
+    float sumV = expW + expD + expL;
+    return (expW / sumV, expL / sumV);
+  }
+
+
+  /// <summary>
+  /// Applies temperature scaling to a WDL (win/draw/loss) distribution,
+  /// compressing or sharpening the value (W-L) while preserving the draw probability.
+  ///
+  /// Temperature operates in arctanh (logit) space on V = W - L, then redistributes
+  /// W and L symmetrically around the fixed draw mass.
+  ///
+  /// Parameters:
+  ///   w, d, l      - Original win/draw/loss probabilities (should sum to 1).
+  ///   temperature  - Temperature. t=1 returns original values unchanged.
+  ///                  t>1 compresses V toward 0 (more uncertain).
+  ///                  t&lt;1 pushes V toward ±1 (more decisive).
+  ///   drawFactor   - Controls how much the draw probability resists temperature [0, 1].
+  ///                  0: drawish positions are heavily resistant to temperature changes,
+  ///                     preserving the natural buffering effect of high draw probability.
+  ///                  1: temperature acts with full force regardless of draw probability,
+  ///                     as if operating purely in value space.
+  ///                  Values in between blend smoothly between these two extremes.
+  /// </summary>
+  private static (float W, float L) ApplyTanhTemperature(float w, float d, float l, float temperature, float drawFactor)
+  {
+    float v = Math.Clamp(w - l, -0.9999f, 0.9999f);
+
+    // Draws resist temperature change, modulated by drawFactor
+    // drawFactor=1: full bypass (temperature acts with full force)
+    // drawFactor=0: draws fully dampen temperature effect
+    float damping = MathF.Pow(1f - d, 1f - drawFactor);
+    float tEff = 1f + (temperature - 1f) * damping;
+
+    float vt = MathF.Tanh(Atanh(v) / tEff);
+
+    // Preserve original draw, redistribute W/L to hit new V
+    float delta = 1f - d;
+    float newW = (delta + vt) / 2f;
+    float newL = (delta - vt) / 2f;
+    return (newW, newL);
+  }
+
+
+  /// <summary>
+  /// Extracts WDL values from logits and applies appropriate temperature scaling.
+  /// When temperatureScaling > 0: uses softmax with dynamic temperature based on uncertainty.
+  /// When temperatureScaling < 0: uses tanh-based scaling with dynamic temperature based on uncertainty.
+  /// When temperatureScaling == 0: uses softmax with fixed base temperature.
+  /// </summary>
+  private static (float W, float L) ExtractAndScaleWDL(float vW, float vD, float vL,
+                                                        float baseTemperature, float temperatureScaling,
+                                                        float uncertaintyV, bool wdlIsLogistic)
+  {
+    if (temperatureScaling < 0)
+    {
+      // Tanh-based scaling: first convert logits to probabilities, then apply tanh scaling
+      float effectiveTemp = baseTemperature + uncertaintyV * (-temperatureScaling);
+
+      // Convert logits to probabilities first (softmax with temp=1)
+      float maxV = MathF.Max(vW, MathF.Max(vD, vL));
+      float expW = MathF.Exp(vW - maxV);
+      float expD = MathF.Exp(vD - maxV);
+      float expL = MathF.Exp(vL - maxV);
+      float sumV = expW + expD + expL;
+      float probW = expW / sumV;
+      float probD = expD / sumV;
+      float probL = expL / sumV;
+
+      const float DRAW_FACTOR = 0.3f;
+      return ApplyTanhTemperature(probW, probD, probL, effectiveTemp, DRAW_FACTOR);
+    }
+    else
+    {
+      // Softmax-based scaling
+      float effectiveTemp = temperatureScaling > 0
+                          ? baseTemperature + uncertaintyV * temperatureScaling
+                          : baseTemperature;
+      float invTemp = 1.0f / effectiveTemp;
+      return ApplySoftmaxTemperature(vW, vD, vL, invTemp);
+    }
+  }
+
+
+  /// <summary>
   /// Extract results from a sub-batch output buffer into the result arrays.
   /// Uses parallel processing for all per-position extractions (values, policies, etc.)
   /// for improved performance, matching the pattern used in the ONNX backend.
@@ -673,10 +783,6 @@ public class NNEvaluatorTensorRT : NNEvaluator
     // Get policy temperature once
     float policyTemperature = Options?.PolicyTemperature ?? 1.0f;
 
-    // Pre-compute inverse temperatures to avoid division in hot loop
-    float invTemp1 = 1.0f / valueHead1Temperature;
-    float invTemp2 = 1.0f / valueHead2Temperature;
-
     // Capture batch data for parallel access
     ReadOnlyMemory<MGMoveList> moves = batch.Moves;
     ReadOnlyMemory<MGPosition> positions = batch.Positions;
@@ -720,19 +826,11 @@ public class NNEvaluatorTensorRT : NNEvaluator
           float vD = subBatchOutput[posValueOffset + 1];
           float vL = subBatchOutput[posValueOffset + 2];
 
-          if (valueHead1TemperatureScaling > 0)
-          {
-            invTemp1 = 1.0f / (valueHead1Temperature + uncertaintyV * valueHead1TemperatureScaling);
-          }
-
-          float maxV = MathF.Max(vW, MathF.Max(vD, vL));
-          float expW = MathF.Exp((vW - maxV) * invTemp1);
-          float expD = MathF.Exp((vD - maxV) * invTemp1);
-          float expL = MathF.Exp((vL - maxV) * invTemp1);
-          float sumV = expW + expD + expL;
-
-          w[resultIndex] = (FP16)(expW / sumV);
-          l[resultIndex] = (FP16)(expL / sumV);
+          (float wVal, float lVal) = ExtractAndScaleWDL(vW, vD, vL,
+                                                         valueHead1Temperature, valueHead1TemperatureScaling,
+                                                         uncertaintyV, wdlIsLogistic);
+          w[resultIndex] = (FP16)wVal;
+          l[resultIndex] = (FP16)lVal;
         }
         else
         {
@@ -755,19 +853,11 @@ public class NNEvaluatorTensorRT : NNEvaluator
         float vD2 = subBatchOutput[posValue2Offset + 1];
         float vL2 = subBatchOutput[posValue2Offset + 2];
 
-        if (valueHead2TemperatureScaling > 0)
-        {
-          invTemp2 = 1.0f / (valueHead2Temperature + uncertaintyV * valueHead2TemperatureScaling);
-        }
-
-        float maxV2 = MathF.Max(vW2, MathF.Max(vD2, vL2));
-        float expW2 = MathF.Exp((vW2 - maxV2) * invTemp2);
-        float expD2 = MathF.Exp((vD2 - maxV2) * invTemp2);
-        float expL2 = MathF.Exp((vL2 - maxV2) * invTemp2);
-        float sumV2 = expW2 + expD2 + expL2;
-
-        w2[resultIndex] = (FP16)(expW2 / sumV2);
-        l2[resultIndex] = (FP16)(expL2 / sumV2);
+        (float w2Val, float l2Val) = ExtractAndScaleWDL(vW2, vD2, vL2,
+                                                         valueHead2Temperature, valueHead2TemperatureScaling,
+                                                         uncertaintyV, wdlIsLogistic: true);
+        w2[resultIndex] = (FP16)w2Val;
+        l2[resultIndex] = (FP16)l2Val;
       }
 
       // ===== Extract Policy =====
