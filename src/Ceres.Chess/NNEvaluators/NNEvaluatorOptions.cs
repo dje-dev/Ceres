@@ -75,7 +75,7 @@ namespace Ceres.Chess.NNEvaluators
     /// <summary>
     /// If CUDA graphs are to be enabled (if supported by the backend).
     /// </summary>
-    public bool EnableCUDAGraphs { get; init; } = false;
+    public bool EnableCUDAGraphs { get; init; } = true;
 
     /// <summary>
     /// Optimization level for the neural network evaluator.
