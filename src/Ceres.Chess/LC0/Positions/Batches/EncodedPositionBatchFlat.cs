@@ -20,6 +20,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
+using System.Runtime.Intrinsics.Arm;
 using System.Threading.Tasks;
 using Ceres.Base.Benchmarking;
 using Ceres.Base.DataTypes;
@@ -771,11 +772,16 @@ namespace Ceres.Chess.LC0.Batches
       Debug.Assert(startPlaneIndex + numPlanesToConvert <= thisLongs.Length);
       Debug.Assert(targetArrayMemory.Length >= numPlanesToConvert * SQUARES_PER_PLANE);
 
-      // Choose vectorized path if AVX2 is available (x64)
+      // Choose vectorized path based on hardware support
       if (Avx2.IsSupported)
       {
         BitmapRepresentationExpandAVX2(thisLongs, thisValues, targetArrayMemory,
                                        startPlaneIndex, numPlanesToConvert, totalElements, scale50MoveCounter);
+      }
+      else if (AdvSimd.Arm64.IsSupported)
+      {
+        BitmapRepresentationExpandAdvSimd(thisLongs, thisValues, targetArrayMemory,
+                                          startPlaneIndex, numPlanesToConvert, totalElements, scale50MoveCounter);
       }
       else
       {
@@ -812,11 +818,12 @@ namespace Ceres.Chess.LC0.Batches
       fixed (byte* valsPtr = thisValues)
       fixed (Half* dstPtr = targetSpan)
       {
-        // Precompute bit masks for expansion: [1, 2, 4, 8, 16, 32, 64, 128]
-        Vector128<byte> bitMasks = Vector128.Create((byte)1, 2, 4, 8, 16, 32, 64, 128,
-                                                     1, 2, 4, 8, 16, 32, 64, 128);
+        // Precompute bit masks for expansion (256-bit for processing byte pairs)
+        Vector256<byte> bitMasks256 = Vector256.Create((byte)1, 2, 4, 8, 16, 32, 64, 128,
+                                                        1, 2, 4, 8, 16, 32, 64, 128,
+                                                        1, 2, 4, 8, 16, 32, 64, 128,
+                                                        1, 2, 4, 8, 16, 32, 64, 128);
         Vector256<short> zero256 = Vector256<short>.Zero;
-        Vector128<short> zero128 = Vector128<short>.Zero;
 
         for (int outer = startPlaneIndex; outer < endIndex; outer++)
         {
@@ -852,40 +859,36 @@ namespace Ceres.Chess.LC0.Batches
             }
             else
             {
-              // General case: expand each byte of the ulong
-              // Hoist value vector creation outside byte loop
-              Vector128<ushort> valVec128 = Vector128.Create(hvalBits);
+              // General case: expand byte pairs of the ulong using 256-bit AVX2
+              Vector256<ushort> valVec256 = Vector256.Create(hvalBits);
               byte* bitsBytes = (byte*)&bits;
 
-              for (int byteIdx = 0; byteIdx < 8; byteIdx++)
+              for (int byteIdx = 0; byteIdx < 8; byteIdx += 2)
               {
-                byte b = bitsBytes[byteIdx];
-                Half* dstByte = dst + byteIdx * 8;
+                byte b0 = bitsBytes[byteIdx];
+                byte b1 = bitsBytes[byteIdx + 1];
+                Half* dstPair = dst + byteIdx * 8;
 
-                if (b == 0)
+                if ((b0 | b1) == 0)
                 {
-                  // Zero 8 Half values (16 bytes) - use 128-bit store
-                  Sse2.Store((short*)dstByte, zero128);
+                  // Both bytes zero - clear 16 Halfs with one 256-bit store
+                  Avx.Store((short*)dstPair, zero256);
                 }
-                else if (b == 0xFF)
+                else if ((b0 & b1) == 0xFF)
                 {
-                  // All 8 bits set - fill with hval
-                  Sse2.Store((ushort*)dstByte, valVec128);
+                  // Both bytes all-ones - fill 16 Halfs with value
+                  Avx.Store((ushort*)dstPair, valVec256);
                 }
                 else
                 {
-                  // General case: create mask where set bits become 0xFFFF
-                  Vector128<byte> byteVec = Vector128.Create(b);
-                  Vector128<byte> expanded = Sse2.And(byteVec, bitMasks);
-                  Vector128<byte> mask8 = Sse2.CompareEqual(expanded, bitMasks);
-
-                  // Expand 8-bit mask to 16-bit mask for Half values
-                  Vector128<short> maskLo = Sse2.UnpackLow(mask8, mask8).AsInt16();
-
-                  // Apply mask to select hval or zero
-                  Vector128<short> result = Sse2.And(valVec128.AsInt16(), maskLo);
-
-                  Sse2.Store((short*)dstByte, result);
+                  // Expand 2 bytes to 16 Halfs: low lane = byte[i], high lane = byte[i+1]
+                  Vector256<byte> combined = Vector256.Create(
+                    Vector128.Create(b0), Vector128.Create(b1));
+                  Vector256<byte> expanded = Avx2.And(combined, bitMasks256);
+                  Vector256<byte> mask8 = Avx2.CompareEqual(expanded, bitMasks256);
+                  Vector256<short> mask16 = Avx2.UnpackLow(mask8, mask8).AsInt16();
+                  Vector256<short> result = Avx2.And(valVec256.AsInt16(), mask16);
+                  Avx.Store((short*)dstPair, result);
                 }
               }
             }
@@ -897,6 +900,112 @@ namespace Ceres.Chess.LC0.Batches
         }
       }
     }
+
+    /// <summary>
+    /// ARM AdvSimd (NEON) optimized version of BitmapRepresentationExpand.
+    /// Uses per-byte fast paths for sparse data with SIMD expansion for general case.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
+    private static unsafe void BitmapRepresentationExpandAdvSimd(ulong[] thisLongs,
+                                                                  byte[] thisValues,
+                                                                  Memory<Half> targetArrayMemory,
+                                                                  int startPlaneIndex,
+                                                                  int numPlanesToConvert,
+                                                                  int totalElements,
+                                                                  bool scale50MoveCounter)
+    {
+      const int SQUARES_PER_PLANE = 64;
+      const int PLANES_PER_BLOCK = 112;
+      const int MOVES50_PLANE_MOD = 109;
+      const float INV_99 = 1.0f / 99.0f;
+
+      Span<Half> targetSpan = targetArrayMemory.Span;
+      int endIndex = startPlaneIndex + numPlanesToConvert;
+      int targetOffset = 0;
+      int rem112 = startPlaneIndex % PLANES_PER_BLOCK;
+
+      fixed (ulong* longsPtr = thisLongs)
+      fixed (byte* valsPtr = thisValues)
+      fixed (Half* dstPtr = targetSpan)
+      {
+        // Precompute bit masks for expansion: [1, 2, 4, 8, 16, 32, 64, 128] repeated
+        Vector128<byte> bitMasks = Vector128.Create((byte)1, 2, 4, 8, 16, 32, 64, 128,
+                                                     1, 2, 4, 8, 16, 32, 64, 128);
+        Vector128<short> zero128 = Vector128<short>.Zero;
+
+        for (int outer = startPlaneIndex; outer < endIndex; outer++)
+        {
+          Half* dst = dstPtr + targetOffset;
+          ulong bits = longsPtr[outer];
+
+          if (bits == 0UL)
+          {
+            // Fast path: zero the entire plane (8 x 128-bit stores = 128 bytes)
+            AdvSimd.Store((short*)dst, zero128);
+            AdvSimd.Store((short*)(dst + 8), zero128);
+            AdvSimd.Store((short*)(dst + 16), zero128);
+            AdvSimd.Store((short*)(dst + 24), zero128);
+            AdvSimd.Store((short*)(dst + 32), zero128);
+            AdvSimd.Store((short*)(dst + 40), zero128);
+            AdvSimd.Store((short*)(dst + 48), zero128);
+            AdvSimd.Store((short*)(dst + 56), zero128);
+          }
+          else
+          {
+            float val = (float)valsPtr[outer];
+            if (scale50MoveCounter && rem112 == MOVES50_PLANE_MOD)
+            {
+              val *= INV_99;
+            }
+            Half hval = (Half)val;
+            ushort hvalBits = Unsafe.As<Half, ushort>(ref hval);
+
+            if (bits == ulong.MaxValue)
+            {
+              // Fast path: all bits set - fill with hval (8 x 128-bit stores)
+              Vector128<ushort> valVec = Vector128.Create(hvalBits);
+              AdvSimd.Store((ushort*)dst, valVec);
+              AdvSimd.Store((ushort*)(dst + 8), valVec);
+              AdvSimd.Store((ushort*)(dst + 16), valVec);
+              AdvSimd.Store((ushort*)(dst + 24), valVec);
+              AdvSimd.Store((ushort*)(dst + 32), valVec);
+              AdvSimd.Store((ushort*)(dst + 40), valVec);
+              AdvSimd.Store((ushort*)(dst + 48), valVec);
+              AdvSimd.Store((ushort*)(dst + 56), valVec);
+            }
+            else
+            {
+              // General case: expand each byte of the ulong (branchless SIMD)
+              Vector128<ushort> valVec128 = Vector128.Create(hvalBits);
+              byte* bitsBytes = (byte*)&bits;
+
+              for (int byteIdx = 0; byteIdx < 8; byteIdx++)
+              {
+                byte b = bitsBytes[byteIdx];
+                Half* dstByte = dst + byteIdx * 8;
+
+                // SIMD expansion: broadcast byte, AND with bit masks, compare to get mask
+                Vector128<byte> byteVec = Vector128.Create(b);
+                Vector128<byte> expanded = AdvSimd.And(byteVec, bitMasks);
+                Vector128<byte> mask8 = AdvSimd.CompareEqual(expanded, bitMasks);
+
+                // Expand 8-bit mask to 16-bit using ZIP (NEON equivalent of UnpackLow)
+                Vector128<short> mask16 = AdvSimd.Arm64.ZipLow(mask8, mask8).AsInt16();
+
+                // Apply mask to select hval or zero
+                Vector128<short> result = AdvSimd.And(valVec128.AsInt16(), mask16);
+                AdvSimd.Store((short*)dstByte, result);
+              }
+            }
+          }
+
+          targetOffset += SQUARES_PER_PLANE;
+          rem112++;
+          if (rem112 == PLANES_PER_BLOCK) { rem112 = 0; }
+        }
+      }
+    }
+
 
     /// <summary>
     /// Optimized scalar fallback using lookup table.
