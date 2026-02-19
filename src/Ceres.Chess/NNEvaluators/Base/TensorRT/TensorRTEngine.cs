@@ -539,7 +539,7 @@ public sealed class TensorRTEngine : IDisposable
     {
       fixed (Half* outputPtr = output)
       {
-        int result = TensorRTNative.InferHostDynamic(handle, inputPtr, actualInputElements, outputPtr, actualOutputElements, actualBatchSize);
+                                                 int result = TensorRTNative.InferHostDynamic(handle, inputPtr, actualInputElements, outputPtr, actualOutputElements, actualBatchSize);
         if (result != 0)
         {
           string error = TensorRTNative.GetLastErrorString();
