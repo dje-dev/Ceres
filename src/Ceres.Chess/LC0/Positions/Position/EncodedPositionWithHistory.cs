@@ -591,7 +591,7 @@ namespace Ceres.Chess.EncodedPositions
       int theirMovedPlane = System.Numerics.BitOperations.LeadingZeroCount((ulong)(planeAfter.Bits.Data & ~planeBefore.Bits.Data));
       if (theirMovedPlane < 64)
       {
-        destSquare = new Square(63 - theirMovedPlane, Square.SquareIndexType.BottomToTopRightToLeft);
+        destSquare = new Square(63 - theirMovedPlane);
         return true;
       }
       return false;
@@ -603,14 +603,8 @@ namespace Ceres.Chess.EncodedPositions
     }
 
 
-    static bool HAVE_WARNED = false;
     public static (PieceType pieceType, Square fromSquare, Square toSquare, bool wasCastle) LastMoveInfoFromSideToMovePerspective(in EncodedPositionBoard board0, in EncodedPositionBoard board1)
     {
-      if (!HAVE_WARNED)
-      {
-        Console.WriteLine("LastMoveInfoFromSideToMovePerspective Method needs to be retested *after changes to mirroring policy)");
-        HAVE_WARNED = true;
-      }
 
       Square sourceSquare = default;
       Square destSquare = default;
