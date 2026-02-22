@@ -156,8 +156,19 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     /// </summary>
     public byte IsWhiteToMove;
     public byte Unused1;
-    public byte Unused2;
-    public byte Unused3;
+
+    /// <summary>
+    /// Ply until next irreversible move by self (one-hot encoded over 8 bins).
+    /// An irreversible move is a pawn move or capture.
+    /// </summary>
+    public byte PUNIMSelf;
+
+    /// <summary>
+    /// Ply until next irreversible move by opponent (one-hot encoded over 8 bins).
+    /// An irreversible move is a pawn move or capture.
+    /// </summary>
+    public byte PUNIMOpponent;
+
     public fixed byte UnusedArray[42];
 
     /// <summary>

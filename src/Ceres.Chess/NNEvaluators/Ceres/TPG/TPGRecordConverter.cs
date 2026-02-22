@@ -585,6 +585,10 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
 
 
       tpgRecord.PolicyIndexInParent = targetInfo.PolicyIndexInParent;
+
+      // Copy PUNIM (ply until next irreversible move) values.
+      tpgRecord.PUNIMSelf = targetInfo.PUNIMSelf;
+      tpgRecord.PUNIMOpponent = targetInfo.PUNIMOpponent;
     }
   }
 }
