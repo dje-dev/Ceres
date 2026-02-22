@@ -65,6 +65,17 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     private TPGSquareRecord Square;
   }
 
+#if USE_V2_TPG_RECORD
+  /// <summary>
+  /// Array of 64 ply-bin bytes, one per square.
+  /// </summary>
+  [InlineArray(64)]
+  public struct PlyBinPerSquare64
+  {
+    private byte Value;
+  }
+#endif
+
 
   /// <summary>
   /// Binary structure for one neural network training sample
@@ -104,7 +115,11 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     // *** WARNING **** value hardcoded in ONNXRuntimeExecutor.TPG_BYTES_PER_SQUARE_RECORD currently, fix 
     public const int BYTES_PER_SQUARE_RECORD = 137;
 
+#if USE_V2_TPG_RECORD
+    public const int TOTAL_BYTES = 9378; // 9250 + 128
+#else
     public const int TOTAL_BYTES = 9250;
+#endif
 
     #endregion
 
@@ -201,6 +216,18 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     /// Neural net index (0...1857) of the move played from prior move in game (or -1 if none).
     /// </summary>
     public short PolicyIndexInParent;
+
+#if USE_V2_TPG_RECORD
+    /// <summary>
+    /// Per-square ply-bin encoding of the number of half-moves until the piece occupancy changes.
+    /// </summary>
+    public PlyBinPerSquare64 PlyUntilSquareChangePiece;
+
+    /// <summary>
+    /// Per-square ply-bin encoding of the number of half-moves until the piece currently on the square is captured.
+    /// </summary>
+    public PlyBinPerSquare64 PlyUntilSquarePieceCapture;
+#endif
 
     /// <summary>
     /// Policy training target with array of move indices having nozero probabilities.

@@ -149,6 +149,18 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     /// Neural net index (0...1857) of the move played from prior move in game (or -1 if none).
     /// </summary>
     public short PolicyIndexInParent;
+
+#if USE_V2_TPG_RECORD
+    /// <summary>
+    /// Per-square ply-bin encoding of the number of half-moves until the piece occupancy changes.
+    /// </summary>
+    public PlyBinPerSquare64 PlyUntilSquareChangePiece;
+
+    /// <summary>
+    /// Per-square ply-bin encoding of the number of half-moves until a capture occurs on that square.
+    /// </summary>
+    public PlyBinPerSquare64 PlyUntilSquarePieceCapture;
+#endif
   }
 
 }

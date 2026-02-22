@@ -97,5 +97,25 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     }
 
     public static float MLHDecoded(float mlh) => MathF.Pow(mlh / MLH_SCALING_FACTOR, 2);
+
+#if USE_V2_TPG_RECORD
+    /// <summary>
+    /// Encodes a ply count into a one-hot byte over 8 ply-distance bins.
+    /// </summary>
+    public static byte EncodePlyBin(int plyCount)
+    {
+      return plyCount switch
+      {
+        <= 0  => 0x80,  // never
+        <= 2  => 0x01,  // [1-2]
+        <= 4  => 0x02,  // [3-4]
+        <= 10 => 0x04,  // [5-10]
+        <= 22 => 0x08,  // [11-22]
+        <= 40 => 0x10,  // [23-40]
+        <= 65 => 0x20,  // [41-65]
+        _     => 0x40   // [66+]
+      };
+    }
+#endif
   }
 }
