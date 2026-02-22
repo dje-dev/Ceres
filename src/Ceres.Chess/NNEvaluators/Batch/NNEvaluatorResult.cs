@@ -110,6 +110,16 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// </summary>
     public readonly Half[] PlyBinCaptureProbs;
 
+    /// <summary>
+    /// PUNIM self probabilities (8 elements: 8 bins), or null.
+    /// </summary>
+    public readonly Half[] PunimSelfProbs;
+
+    /// <summary>
+    /// PUNIM opponent probabilities (8 elements: 8 bins), or null.
+    /// </summary>
+    public readonly Half[] PunimOpponentProbs;
+
 
     /// <summary>
     /// Constructor.
@@ -140,7 +150,9 @@ namespace Ceres.Chess.NetEvaluation.Batch
                              FP16[][] rawNetworkOutputs = null,
                              string[] rawNetworkOutputNames = null,
                              Half[] plyBinMoveProbs = null,
-                             Half[] plyBinCaptureProbs = null)
+                             Half[] plyBinCaptureProbs = null,
+                             Half[] punimSelfProbs = null,
+                             Half[] punimOpponentProbs = null)
     {
       this.winP = winP;
       this.lossP = lossP;
@@ -162,6 +174,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
       RawNetworkOutputNames = rawNetworkOutputNames;
       PlyBinMoveProbs = plyBinMoveProbs;
       PlyBinCaptureProbs = plyBinCaptureProbs;
+      PunimSelfProbs = punimSelfProbs;
+      PunimOpponentProbs = punimOpponentProbs;
     }
 
 

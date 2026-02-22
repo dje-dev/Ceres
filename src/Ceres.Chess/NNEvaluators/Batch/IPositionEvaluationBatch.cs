@@ -37,6 +37,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     bool HasAction { get; }
     bool HasState { get; }
     bool HasPlyBinOutputs => false;
+    bool HasPunimOutputs => false;
 
     bool HasValueSecondary { get; }
 
@@ -60,6 +61,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
 
     ReadOnlySpan<Half> GetPlyBinMoveProbs(int index) => default;
     ReadOnlySpan<Half> GetPlyBinCaptureProbs(int index) => default;
+    ReadOnlySpan<Half> GetPunimSelfProbs(int index) => default;
+    ReadOnlySpan<Half> GetPunimOpponentProbs(int index) => default;
 
     (Memory<CompressedPolicyVector> policies, int index) GetPolicy(int index);
     (Memory<CompressedActionVector> actions, int index) GetAction(int index);

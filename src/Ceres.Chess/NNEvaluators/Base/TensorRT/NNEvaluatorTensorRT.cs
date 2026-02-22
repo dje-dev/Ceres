@@ -100,11 +100,18 @@ public class NNEvaluatorTensorRT : NNEvaluator
   private int uncPTensorIndex;
   private int pieceMoveTensorIndex = -1;
   private int pieceCaptureTensorIndex = -1;
+  private int punimSelfTensorIndex = -1;
+  private int punimOpponentTensorIndex = -1;
 
   // Per-position sizes for ply-bin tensors
   private int pieceMoveSizePerPos;
   private int pieceCaptureSizePerPos;
   private bool hasPlyBinOutputs;
+
+  // Per-position sizes for PUNIM tensors
+  private int punimSelfSizePerPos;
+  private int punimOpponentSizePerPos;
+  private bool hasPunimOutputs;
 
   private readonly int inputElementsPerPosition;
   private readonly int outputElementsPerPosition;
@@ -127,6 +134,10 @@ public class NNEvaluatorTensorRT : NNEvaluator
   // Pre-allocated ply-bin result buffers
   private Half[] plyBinMoveBuffer;
   private Half[] plyBinCaptureBuffer;
+
+  // Pre-allocated PUNIM result buffers
+  private Half[] punimSelfBuffer;
+  private Half[] punimOpponentBuffer;
 
   // Pre-allocated result buffers to reduce GC pressure
   private FP16[] wBuffer;
@@ -377,6 +388,14 @@ public class NNEvaluatorTensorRT : NNEvaluator
           pieceCaptureTensorIndex = tensorIndex;
           pieceCaptureSizePerPos = sizePerPos;
           break;
+        case "punim_self":
+          punimSelfTensorIndex = tensorIndex;
+          punimSelfSizePerPos = sizePerPos;
+          break;
+        case "punim_opponent":
+          punimOpponentTensorIndex = tensorIndex;
+          punimOpponentSizePerPos = sizePerPos;
+          break;
       }
       tensorIndex++;
     }
@@ -387,6 +406,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
     hasUncertaintyP = uncPSize > 0;
     hasValueSecondary = value2Size > 0 || (SUBSTITUTE_VALUE3_INTO_VALUE2_IF_FOUND && value3Size > 0);
     hasPlyBinOutputs = pieceMoveSizePerPos == 512 && pieceCaptureSizePerPos == 512;
+    hasPunimOutputs = punimSelfSizePerPos == 8 && punimOpponentSizePerPos == 8;
 
     if (netType == ONNXNetExecutor.NetTypeEnum.TPG)
     {
@@ -418,6 +438,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
     policiesBuffer = new CompressedPolicyVector[maxBatchSize];
     plyBinMoveBuffer = hasPlyBinOutputs ? new Half[maxBatchSize * 512] : Array.Empty<Half>();
     plyBinCaptureBuffer = hasPlyBinOutputs ? new Half[maxBatchSize * 512] : Array.Empty<Half>();
+    punimSelfBuffer = hasPunimOutputs ? new Half[maxBatchSize * 8] : Array.Empty<Half>();
+    punimOpponentBuffer = hasPunimOutputs ? new Half[maxBatchSize * 8] : Array.Empty<Half>();
 
     // Cache ParallelOptions to avoid allocation per batch
     cachedParallelOptions = new ParallelOptions
@@ -543,6 +565,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
     CompressedActionVector[] actions = Array.Empty<CompressedActionVector>();
     Half[] plyBinMove = plyBinMoveBuffer;
     Half[] plyBinCapture = plyBinCaptureBuffer;
+    Half[] punimSelf = punimSelfBuffer;
+    Half[] punimOpponent = punimOpponentBuffer;
 
     // Get option values for value head temperature
     float valueHead1Temperature = Options?.ValueHead1Temperature ?? 1.0f;
@@ -566,7 +590,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
 
       ExtractSubBatchResults(batch, globalStartPosition, positionCount, engineBatchSize,
                              threadLocalOutputFloatBuffer, w, l, w2, l2, m, uncV, uncP, policies,
-                             plyBinMove, plyBinCapture,
+                             plyBinMove, plyBinCapture, punimSelf, punimOpponent,
                              valueHead1Temperature, valueHead2Temperature,
                              valueHead1TemperatureScaling, valueHead2TemperatureScaling,
                              NetType == ONNXNetExecutor.NetTypeEnum.TPG);
@@ -641,7 +665,9 @@ public class NNEvaluatorTensorRT : NNEvaluator
       activations: default,
       stats: default,
       plyBinMoveProbs: hasPlyBinOutputs ? plyBinMove : default,
-      plyBinCaptureProbs: hasPlyBinOutputs ? plyBinCapture : default);
+      plyBinCaptureProbs: hasPlyBinOutputs ? plyBinCapture : default,
+      punimSelfProbs: hasPunimOutputs ? punimSelf : default,
+      punimOpponentProbs: hasPunimOutputs ? punimOpponent : default);
   }
 
 
@@ -754,6 +780,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
                                       FP16[] w, FP16[] l, FP16[] w2, FP16[] l2, FP16[] m, FP16[] uncV, FP16[] uncP,
                                       CompressedPolicyVector[] policies,
                                       Half[] plyBinMove, Half[] plyBinCapture,
+                                      Half[] punimSelf, Half[] punimOpponent,
                                       float valueHead1Temperature, float valueHead2Temperature,
                                       float valueHead1TemperatureScaling, float valueHead2TemperatureScaling,
                                       bool wdlIsLogistic)
@@ -768,6 +795,8 @@ public class NNEvaluatorTensorRT : NNEvaluator
     int uncPOffset = 0;
     int pieceMoveOffset = 0;
     int pieceCaptureOffset = 0;
+    int punimSelfOffset = 0;
+    int punimOpponentOffset = 0;
 
     int currentOffset = 0;
     for (int t = 0; t < outputInfos.Length; t++)
@@ -810,6 +839,14 @@ public class NNEvaluatorTensorRT : NNEvaluator
       else if (t == pieceCaptureTensorIndex)
       {
         pieceCaptureOffset = currentOffset;
+      }
+      else if (t == punimSelfTensorIndex)
+      {
+        punimSelfOffset = currentOffset;
+      }
+      else if (t == punimOpponentTensorIndex)
+      {
+        punimOpponentOffset = currentOffset;
       }
 
       currentOffset += tensorSize;
@@ -1021,6 +1058,64 @@ public class NNEvaluatorTensorRT : NNEvaluator
           for (int b = 0; b < 8; b++)
           {
             plyBinCapture[dstBase + b] = (Half)(exps[7 - b] * invSum);
+          }
+        }
+      }
+
+      // ===== Extract PUNIM Outputs (if present) =====
+      if (hasPunimOutputs)
+      {
+        int punimDestOffset = resultIndex * 8;
+
+        // punim_self: softmax of 8 bins, reverse bin order
+        int posPunimSelfOffset = punimSelfOffset + i * punimSelfSizePerPos;
+        {
+          float max = subBatchOutput[posPunimSelfOffset];
+          for (int b = 1; b < 8; b++)
+          {
+            float v = subBatchOutput[posPunimSelfOffset + b];
+            if (v > max) max = v;
+          }
+
+          float expSum = 0;
+          Span<float> exps = stackalloc float[8];
+          for (int b = 0; b < 8; b++)
+          {
+            float e = MathF.Exp(subBatchOutput[posPunimSelfOffset + b] - max);
+            exps[b] = e;
+            expSum += e;
+          }
+
+          float invSum = 1.0f / expSum;
+          for (int b = 0; b < 8; b++)
+          {
+            punimSelf[punimDestOffset + b] = (Half)(exps[7 - b] * invSum);
+          }
+        }
+
+        // punim_opponent: softmax of 8 bins, reverse bin order
+        int posPunimOpponentOffset = punimOpponentOffset + i * punimOpponentSizePerPos;
+        {
+          float max = subBatchOutput[posPunimOpponentOffset];
+          for (int b = 1; b < 8; b++)
+          {
+            float v = subBatchOutput[posPunimOpponentOffset + b];
+            if (v > max) max = v;
+          }
+
+          float expSum = 0;
+          Span<float> exps = stackalloc float[8];
+          for (int b = 0; b < 8; b++)
+          {
+            float e = MathF.Exp(subBatchOutput[posPunimOpponentOffset + b] - max);
+            exps[b] = e;
+            expSum += e;
+          }
+
+          float invSum = 1.0f / expSum;
+          for (int b = 0; b < 8; b++)
+          {
+            punimOpponent[punimDestOffset + b] = (Half)(exps[7 - b] * invSum);
           }
         }
       }

@@ -53,6 +53,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     public bool HasValueSecondary;
     public bool HasState;
     public bool HasPlyBinOutputs;
+    public bool HasPunimOutputs;
     public int NumPos;
 
     /// <summary>
@@ -150,6 +151,16 @@ namespace Ceres.Chess.NetEvaluation.Batch
     public Memory<Half> PlyBinCaptureProbs;
 
     /// <summary>
+    /// PUNIM self probabilities (flat: numPos * 8 Half values).
+    /// </summary>
+    public Memory<Half> PunimSelfProbs;
+
+    /// <summary>
+    /// PUNIM opponent probabilities (flat: numPos * 8 Half values).
+    /// </summary>
+    public Memory<Half> PunimOpponentProbs;
+
+    /// <summary>
     /// Optional dictionary of all raw network outputs.
     /// </summary>
     public Memory<FP16[][]> RawNetworkOutputs;
@@ -238,6 +249,10 @@ namespace Ceres.Chess.NetEvaluation.Batch
       // Ply-bin outputs: take from first part (no meaningful averaging).
       PlyBinMoveProbs = parts[0].PlyBinMoveProbs;
       PlyBinCaptureProbs = parts[0].PlyBinCaptureProbs;
+
+      // PUNIM outputs: take from first part (no meaningful averaging).
+      PunimSelfProbs = parts[0].PunimSelfProbs;
+      PunimOpponentProbs = parts[0].PunimOpponentProbs;
 
       // For non-numeric fields, assign the value of the first element.
       // It doesn't make sense to try to average these.
@@ -441,6 +456,18 @@ namespace Ceres.Chess.NetEvaluation.Batch
       HasPlyBinOutputs && !PlyBinCaptureProbs.IsEmpty ? PlyBinCaptureProbs.Span.Slice(index * 512, 512) : default;
 
     /// <summary>
+    /// Returns PUNIM self probabilities for specified position (8 Half values: 8 bins).
+    /// </summary>
+    public ReadOnlySpan<Half> GetPunimSelfProbs(int index) =>
+      HasPunimOutputs && !PunimSelfProbs.IsEmpty ? PunimSelfProbs.Span.Slice(index * 8, 8) : default;
+
+    /// <summary>
+    /// Returns PUNIM opponent probabilities for specified position (8 Half values: 8 bins).
+    /// </summary>
+    public ReadOnlySpan<Half> GetPunimOpponentProbs(int index) =>
+      HasPunimOutputs && !PunimOpponentProbs.IsEmpty ? PunimOpponentProbs.Span.Slice(index * 8, 8) : default;
+
+    /// <summary>
     /// Returns inner layer activations.
     /// </summary>
     /// <param name="index"></param>
@@ -528,8 +555,15 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// </summary>
     bool IPositionEvaluationBatch.HasPlyBinOutputs => HasPlyBinOutputs;
 
+    /// <summary>
+    /// If the batch has PUNIM outputs.
+    /// </summary>
+    bool IPositionEvaluationBatch.HasPunimOutputs => HasPunimOutputs;
+
     ReadOnlySpan<Half> IPositionEvaluationBatch.GetPlyBinMoveProbs(int index) => GetPlyBinMoveProbs(index);
     ReadOnlySpan<Half> IPositionEvaluationBatch.GetPlyBinCaptureProbs(int index) => GetPlyBinCaptureProbs(index);
+    ReadOnlySpan<Half> IPositionEvaluationBatch.GetPunimSelfProbs(int index) => GetPunimSelfProbs(index);
+    ReadOnlySpan<Half> IPositionEvaluationBatch.GetPunimOpponentProbs(int index) => GetPunimOpponentProbs(index);
 
     /// <summary>
     /// Gets the value from the value head at a specified index indicating the win probability.
@@ -626,7 +660,9 @@ namespace Ceres.Chess.NetEvaluation.Batch
                                    Memory<FP16[][]> rawNetworkOutputs = default,
                                    string[] rawNetworkOutputNames = null,
                                    Memory<Half> plyBinMoveProbs = default,
-                                   Memory<Half> plyBinCaptureProbs = default)
+                                   Memory<Half> plyBinCaptureProbs = default,
+                                   Memory<Half> punimSelfProbs = default,
+                                   Memory<Half> punimOpponentProbs = default)
     {
       IsWDL = isWDL;
       HasM = hasM;
@@ -637,6 +673,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
       HasValueSecondary = hasValueSecondary;
       HasState = hasState;
       HasPlyBinOutputs = !plyBinMoveProbs.IsEmpty;
+      HasPunimOutputs = !punimSelfProbs.IsEmpty;
 
       W = makeCopy ? w.Slice(0, numPos).ToArray() : w;
       Policies = makeCopy ? policies.Slice(0, numPos).ToArray() : policies;
@@ -653,6 +690,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
       L = (isWDL && makeCopy) ? l.Slice(0, numPos).ToArray() : l;
       PlyBinMoveProbs = plyBinMoveProbs;
       PlyBinCaptureProbs = plyBinCaptureProbs;
+      PunimSelfProbs = punimSelfProbs;
+      PunimOpponentProbs = punimOpponentProbs;
 
       if (!w2.IsEmpty)
       {
