@@ -298,6 +298,12 @@ internal static partial class TensorRTNative
       int* batchSizes, int numProfiles,
       ref TensorRTBuildOptions options, int deviceId);
 
+  [LibraryImport(LibraryName, EntryPoint = "TRT_LoadMultiProfileEngineFile", StringMarshalling = StringMarshalling.Utf8)]
+  internal static unsafe partial int LoadMultiProfileEngineFile(string enginePath,
+      int* batchSizes, int numProfiles,
+      int useCudaGraphs, int useSpinWait, int deviceId,
+      IntPtr* outHandles);
+
   // =========================================================================
   // Weight Refitting (for refittable engines)
   // =========================================================================

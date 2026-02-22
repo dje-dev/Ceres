@@ -351,7 +351,8 @@ namespace Ceres.Chess.NNEvaluators
 
           string shortID = optionsDict != null && optionsDict.TryGetValue("ID", out string id) ? id : netDef.NetworkID;
           string netFileName = onnxFileName ?? netDef.NetworkID;
-          if (!netFileName.ToUpper().EndsWith("ONNX") && !isTorchscipt)
+          string extUpper = Path.GetExtension(netFileName).ToUpper();
+          if (extUpper != ".ONNX" && extUpper != ".ENGINE" && extUpper != ".PLAN" && !isTorchscipt)
           {
             netFileName += ".onnx";
           }

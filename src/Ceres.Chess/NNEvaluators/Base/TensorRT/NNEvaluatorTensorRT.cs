@@ -32,6 +32,7 @@ using Ceres.Chess.NNEvaluators.Ceres;
 using Ceres.Chess.NNEvaluators.Ceres.TPG;
 using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.UserSettings;
+using Microsoft.ML.OnnxRuntime;
 
 #endregion
 
@@ -641,6 +642,105 @@ public class NNEvaluatorTensorRT : NNEvaluator
       stats: default,
       plyBinMoveProbs: hasPlyBinOutputs ? plyBinMove : default,
       plyBinCaptureProbs: hasPlyBinOutputs ? plyBinCapture : default);
+  }
+
+
+  /// <summary>
+  /// Computes inverse hyperbolic tangent (artanh).
+  /// </summary>
+  private static float Atanh(float x) => 0.5f * MathF.Log((1f + x) / (1f - x));
+
+
+  /// <summary>
+  /// Applies softmax-based temperature scaling to WDL logits.
+  /// </summary>
+  private static (float W, float L) ApplySoftmaxTemperature(float vW, float vD, float vL, float invTemp)
+  {
+    float maxV = MathF.Max(vW, MathF.Max(vD, vL));
+    float expW = MathF.Exp((vW - maxV) * invTemp);
+    float expD = MathF.Exp((vD - maxV) * invTemp);
+    float expL = MathF.Exp((vL - maxV) * invTemp);
+    float sumV = expW + expD + expL;
+    return (expW / sumV, expL / sumV);
+  }
+
+
+  /// <summary>
+  /// Applies temperature scaling to a WDL (win/draw/loss) distribution,
+  /// compressing or sharpening the value (W-L) while preserving the draw probability.
+  ///
+  /// Temperature operates in arctanh (logit) space on V = W - L, then redistributes
+  /// W and L symmetrically around the fixed draw mass.
+  ///
+  /// Parameters:
+  ///   w, d, l      - Original win/draw/loss probabilities (should sum to 1).
+  ///   temperature  - Temperature. t=1 returns original values unchanged.
+  ///                  t>1 compresses V toward 0 (more uncertain).
+  ///                  t&lt;1 pushes V toward ±1 (more decisive).
+  ///   drawFactor   - Controls how much the draw probability resists temperature [0, 1].
+  ///                  0: drawish positions are heavily resistant to temperature changes,
+  ///                     preserving the natural buffering effect of high draw probability.
+  ///                  1: temperature acts with full force regardless of draw probability,
+  ///                     as if operating purely in value space.
+  ///                  Values in between blend smoothly between these two extremes.
+  /// </summary>
+  private static (float W, float L) ApplyTanhTemperature(float w, float d, float l, float temperature, float drawFactor)
+  {
+    float v = Math.Clamp(w - l, -0.9999f, 0.9999f);
+
+    // Draws resist temperature change, modulated by drawFactor
+    // drawFactor=1: full bypass (temperature acts with full force)
+    // drawFactor=0: draws fully dampen temperature effect
+    float damping = MathF.Pow(1f - d, 1f - drawFactor);
+    float tEff = 1f + (temperature - 1f) * damping;
+
+    float vt = MathF.Tanh(Atanh(v) / tEff);
+
+    // Preserve original draw, redistribute W/L to hit new V
+    float delta = 1f - d;
+    float newW = (delta + vt) / 2f;
+    float newL = (delta - vt) / 2f;
+    return (newW, newL);
+  }
+
+
+  /// <summary>
+  /// Extracts WDL values from logits and applies appropriate temperature scaling.
+  /// When temperatureScaling > 0: uses softmax with dynamic temperature based on uncertainty.
+  /// When temperatureScaling < 0: uses tanh-based scaling with dynamic temperature based on uncertainty.
+  /// When temperatureScaling == 0: uses softmax with fixed base temperature.
+  /// </summary>
+  private static (float W, float L) ExtractAndScaleWDL(float vW, float vD, float vL,
+                                                        float baseTemperature, float temperatureScaling,
+                                                        float uncertaintyV, bool wdlIsLogistic)
+  {
+    if (temperatureScaling < 0)
+    {
+      // Tanh-based scaling: first convert logits to probabilities, then apply tanh scaling
+      float effectiveTemp = baseTemperature + uncertaintyV * (-temperatureScaling);
+
+      // Convert logits to probabilities first (softmax with temp=1)
+      float maxV = MathF.Max(vW, MathF.Max(vD, vL));
+      float expW = MathF.Exp(vW - maxV);
+      float expD = MathF.Exp(vD - maxV);
+      float expL = MathF.Exp(vL - maxV);
+      float sumV = expW + expD + expL;
+      float probW = expW / sumV;
+      float probD = expD / sumV;
+      float probL = expL / sumV;
+
+      const float DRAW_FACTOR = 0.3f;
+      return ApplyTanhTemperature(probW, probD, probL, effectiveTemp, DRAW_FACTOR);
+    }
+    else
+    {
+      // Softmax-based scaling
+      float effectiveTemp = temperatureScaling > 0
+                          ? baseTemperature + uncertaintyV * temperatureScaling
+                          : baseTemperature;
+      float invTemp = 1.0f / effectiveTemp;
+      return ApplySoftmaxTemperature(vW, vD, vL, invTemp);
+    }
   }
 
 

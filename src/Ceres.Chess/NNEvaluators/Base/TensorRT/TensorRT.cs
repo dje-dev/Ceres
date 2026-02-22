@@ -100,6 +100,18 @@ public sealed class TensorRT : IDisposable
 
 
   /// <summary>
+  /// Load a pre-built multi-profile engine file (.engine) directly,
+  /// bypassing ONNX parsing and cache validation.
+  /// </summary>
+  public TensorRTEngine[] LoadMultiProfileEngineFile(string enginePath, int[] batchSizes,
+      TensorRTBuildOptions options, int deviceId = -1)
+  {
+    return TensorRTEngine.LoadMultiProfileEngineFile(enginePath, batchSizes,
+        options.UseCudaGraphs != 0, options.UseSpinWait != 0, deviceId);
+  }
+
+
+  /// <summary>
   /// Load a pre-built engine file (.engine).
   /// </summary>
   public TensorRTEngine LoadEngineFile(string enginePath, int batchSize, int deviceId = -1)

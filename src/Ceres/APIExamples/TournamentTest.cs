@@ -1011,6 +1011,8 @@ BT4 800 nodes vs SF17 0.20sec (6 threads)
 
       Console.WriteLine();
       Console.WriteLine($"Tournament completed in {stats.ElapsedTimeSecs,8:F2} seconds.");
+      Console.WriteLine($"Total managed memory allocated: {GC.GetTotalMemory(false) / (float)(1024 * 1024 * 1024)} GB");
+      Console.WriteLine($"Peak memory allocated according to OS: {Process.GetCurrentProcess().PeakWorkingSet64 / (1024.0 * 1024 * 1024):F2} GB");
       //Console.WriteLine(results.GameOutcomesString);
 
       if (false)

@@ -47,11 +47,15 @@ namespace Ceres.Base.DataTypes
 
         foreach (string part in parts)
         {
-          string[] kvpParts = part.Split("=");
+          string[] kvpParts = part.Split('=', 2);
           if (kvpParts.Length == 2)
+          {
             KeyValuePairs.Add((kvpParts[0], kvpParts[1]));
+          }
           else
+          {
             throw new Exception("Expected key=value pair (without spaces)");
+          }
         }
       }
 

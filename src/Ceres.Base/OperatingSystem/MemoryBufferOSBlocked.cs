@@ -138,7 +138,7 @@ namespace Ceres.Base.OperatingSystem
     /// <summary>
     /// Computes the number of blocks needed to hold the specified number of items.
     /// </summary>
-    protected int NumBlocksReservedForNumItems(int numItems)
+    public int NumBlocksReservedForNumItems(int numItems)
     {
       bool fitsExactly = numItems % itemsPerBlock == 0;
       return numItems / itemsPerBlock + (fitsExactly ? 0 : 1);
