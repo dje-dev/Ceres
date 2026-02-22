@@ -100,6 +100,15 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// </summary>
     public readonly string[] RawNetworkOutputNames;
 
+    /// <summary>
+    /// Per-square ply-bin move probabilities (512 elements: 64 squares * 8 bins), or null.
+    /// </summary>
+    public readonly Half[] PlyBinMoveProbs;
+
+    /// <summary>
+    /// Per-square ply-bin capture probabilities (512 elements: 64 squares * 8 bins), or null.
+    /// </summary>
+    public readonly Half[] PlyBinCaptureProbs;
 
 
     /// <summary>
@@ -129,7 +138,9 @@ namespace Ceres.Chess.NetEvaluation.Batch
                              FP16? extraStat0 = null, 
                              FP16? extraStat1 = default,
                              FP16[][] rawNetworkOutputs = null,
-                             string[] rawNetworkOutputNames = null)
+                             string[] rawNetworkOutputNames = null,
+                             Half[] plyBinMoveProbs = null,
+                             Half[] plyBinCaptureProbs = null)
     {
       this.winP = winP;
       this.lossP = lossP;
@@ -149,6 +160,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
       ExtraStat1 = extraStat1;
       RawNetworkOutputs = rawNetworkOutputs;
       RawNetworkOutputNames = rawNetworkOutputNames;
+      PlyBinMoveProbs = plyBinMoveProbs;
+      PlyBinCaptureProbs = plyBinCaptureProbs;
     }
 
 

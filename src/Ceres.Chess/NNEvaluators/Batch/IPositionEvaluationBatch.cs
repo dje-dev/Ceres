@@ -36,6 +36,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     bool HasUncertaintyP { get; }
     bool HasAction { get; }
     bool HasState { get; }
+    bool HasPlyBinOutputs => false;
 
     bool HasValueSecondary { get; }
 
@@ -56,6 +57,9 @@ namespace Ceres.Chess.NetEvaluation.Batch
     FP16 GetExtraStat1(int index);
 
     Half[] GetState(int index);
+
+    ReadOnlySpan<Half> GetPlyBinMoveProbs(int index) => default;
+    ReadOnlySpan<Half> GetPlyBinCaptureProbs(int index) => default;
 
     (Memory<CompressedPolicyVector> policies, int index) GetPolicy(int index);
     (Memory<CompressedActionVector> actions, int index) GetAction(int index);

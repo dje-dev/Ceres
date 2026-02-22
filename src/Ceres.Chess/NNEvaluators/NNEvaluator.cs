@@ -458,11 +458,28 @@ namespace Ceres.Chess.NNEvaluators
         }
       }
 
+      Half[] plyBinMove = null;
+      Half[] plyBinCapture = null;
+      if (batch.HasPlyBinOutputs)
+      {
+        ReadOnlySpan<Half> moveSpan = batch.GetPlyBinMoveProbs(batchIndex);
+        if (!moveSpan.IsEmpty)
+        {
+          plyBinMove = moveSpan.ToArray();
+        }
+        ReadOnlySpan<Half> captureSpan = batch.GetPlyBinCaptureProbs(batchIndex);
+        if (!captureSpan.IsEmpty)
+        {
+          plyBinCapture = captureSpan.ToArray();
+        }
+      }
+
       result = new NNEvaluatorResult(w, l, w1, l1, w2, l2, m, uncertaintyV, uncertaintyP,
                                      policyRef.policies.Span[policyRef.index],
                                      HasAction ? actionRef.actions.Span[actionRef.index] : default,
                                      activations, stateInfo, extraStat0, extraStat1,
-                                     rawNetworkOutputs, RawNetworkOutputNames);
+                                     rawNetworkOutputs, RawNetworkOutputNames,
+                                     plyBinMove, plyBinCapture);
     }
 
     #endregion

@@ -52,6 +52,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     public bool HasAction;
     public bool HasValueSecondary;
     public bool HasState;
+    public bool HasPlyBinOutputs;
     public int NumPos;
 
     /// <summary>
@@ -139,6 +140,16 @@ namespace Ceres.Chess.NetEvaluation.Batch
     public Memory<FP16> ExtraStat1;
 
     /// <summary>
+    /// Per-square ply-bin move probabilities (flat: numPos * 512 Half values).
+    /// </summary>
+    public Memory<Half> PlyBinMoveProbs;
+
+    /// <summary>
+    /// Per-square ply-bin capture probabilities (flat: numPos * 512 Half values).
+    /// </summary>
+    public Memory<Half> PlyBinCaptureProbs;
+
+    /// <summary>
     /// Optional dictionary of all raw network outputs.
     /// </summary>
     public Memory<FP16[][]> RawNetworkOutputs;
@@ -221,8 +232,12 @@ namespace Ceres.Chess.NetEvaluation.Batch
         }
       }
 
-      // N.B. We don't do anything with state, it is not meaningful to average them.        
+      // N.B. We don't do anything with state, it is not meaningful to average them.
       States = parts[0].States;
+
+      // Ply-bin outputs: take from first part (no meaningful averaging).
+      PlyBinMoveProbs = parts[0].PlyBinMoveProbs;
+      PlyBinCaptureProbs = parts[0].PlyBinCaptureProbs;
 
       // For non-numeric fields, assign the value of the first element.
       // It doesn't make sense to try to average these.
@@ -414,6 +429,18 @@ namespace Ceres.Chess.NetEvaluation.Batch
     public Half[] GetState(int index) => HasState && !States.IsEmpty ? States.Span[index] : null;
 
     /// <summary>
+    /// Returns ply-bin move probabilities for specified position (512 Half values: 64 squares * 8 bins).
+    /// </summary>
+    public ReadOnlySpan<Half> GetPlyBinMoveProbs(int index) =>
+      HasPlyBinOutputs && !PlyBinMoveProbs.IsEmpty ? PlyBinMoveProbs.Span.Slice(index * 512, 512) : default;
+
+    /// <summary>
+    /// Returns ply-bin capture probabilities for specified position (512 Half values: 64 squares * 8 bins).
+    /// </summary>
+    public ReadOnlySpan<Half> GetPlyBinCaptureProbs(int index) =>
+      HasPlyBinOutputs && !PlyBinCaptureProbs.IsEmpty ? PlyBinCaptureProbs.Span.Slice(index * 512, 512) : default;
+
+    /// <summary>
     /// Returns inner layer activations.
     /// </summary>
     /// <param name="index"></param>
@@ -495,6 +522,14 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// If the batch has state information.
     /// </summary>
     bool IPositionEvaluationBatch.HasState => HasState;
+
+    /// <summary>
+    /// If the batch has ply-bin outputs.
+    /// </summary>
+    bool IPositionEvaluationBatch.HasPlyBinOutputs => HasPlyBinOutputs;
+
+    ReadOnlySpan<Half> IPositionEvaluationBatch.GetPlyBinMoveProbs(int index) => GetPlyBinMoveProbs(index);
+    ReadOnlySpan<Half> IPositionEvaluationBatch.GetPlyBinCaptureProbs(int index) => GetPlyBinCaptureProbs(index);
 
     /// <summary>
     /// Gets the value from the value head at a specified index indicating the win probability.
@@ -589,7 +624,9 @@ namespace Ceres.Chess.NetEvaluation.Batch
                                    TimingStats stats, Memory<FP16> extraStat0 = default, Memory<FP16> extraStat1 = default,
                                    bool makeCopy = false,
                                    Memory<FP16[][]> rawNetworkOutputs = default,
-                                   string[] rawNetworkOutputNames = null)
+                                   string[] rawNetworkOutputNames = null,
+                                   Memory<Half> plyBinMoveProbs = default,
+                                   Memory<Half> plyBinCaptureProbs = default)
     {
       IsWDL = isWDL;
       HasM = hasM;
@@ -599,6 +636,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
       HasAction = hasAction;
       HasValueSecondary = hasValueSecondary;
       HasState = hasState;
+      HasPlyBinOutputs = !plyBinMoveProbs.IsEmpty;
 
       W = makeCopy ? w.Slice(0, numPos).ToArray() : w;
       Policies = makeCopy ? policies.Slice(0, numPos).ToArray() : policies;
@@ -613,6 +651,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
       States = (HasState && makeCopy) ? states.Slice(0, numPos).ToArray() : states;
       M = (hasM && makeCopy) ? m.Slice(0, numPos).ToArray() : m;
       L = (isWDL && makeCopy) ? l.Slice(0, numPos).ToArray() : l;
+      PlyBinMoveProbs = plyBinMoveProbs;
+      PlyBinCaptureProbs = plyBinCaptureProbs;
 
       if (!w2.IsEmpty)
       {

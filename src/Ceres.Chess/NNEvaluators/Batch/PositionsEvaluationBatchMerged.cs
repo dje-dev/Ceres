@@ -51,6 +51,7 @@ internal class PositionsEvaluationBatchMerged : IPositionEvaluationBatch
   private readonly bool hasAction;
   private readonly bool hasValueSecondary;
   private readonly bool hasState;
+  private readonly bool hasPlyBinOutputs;
 
   /// <summary>
   /// Constructor.
@@ -80,6 +81,7 @@ internal class PositionsEvaluationBatchMerged : IPositionEvaluationBatch
     hasAction = batches[0].HasAction;
     hasValueSecondary = batches[0].HasValueSecondary;
     hasState = batches[0].HasState;
+    hasPlyBinOutputs = batches[0].HasPlyBinOutputs;
   }
 
 
@@ -96,6 +98,8 @@ internal class PositionsEvaluationBatchMerged : IPositionEvaluationBatch
   bool IPositionEvaluationBatch.HasValueSecondary => hasValueSecondary;
 
   bool IPositionEvaluationBatch.HasState => hasState;
+
+  bool IPositionEvaluationBatch.HasPlyBinOutputs => hasPlyBinOutputs;
 
   /// <summary>
   /// Number of positions in batch.
@@ -228,6 +232,18 @@ internal class PositionsEvaluationBatchMerged : IPositionEvaluationBatch
   {
     (int batchIndex, int localIndex) = GetIndices(index);
     return Batches[batchIndex].GetState(localIndex);
+  }
+
+  public ReadOnlySpan<Half> GetPlyBinMoveProbs(int index)
+  {
+    (int batchIndex, int localIndex) = GetIndices(index);
+    return Batches[batchIndex].GetPlyBinMoveProbs(localIndex);
+  }
+
+  public ReadOnlySpan<Half> GetPlyBinCaptureProbs(int index)
+  {
+    (int batchIndex, int localIndex) = GetIndices(index);
+    return Batches[batchIndex].GetPlyBinCaptureProbs(localIndex);
   }
 
   public IEnumerator<NNPositionEvaluationBatchMember> GetEnumerator()
