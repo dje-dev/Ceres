@@ -84,6 +84,17 @@ public sealed class EnginePool : IDisposable
   private Half[] cachedHalfInputBuffer;
   private Half[] cachedOutputBuffer;
 
+  /// <summary>
+  /// CUDA graph capture requires 256-byte aligned memory addresses.
+  /// This rounds up byte sizes to ensure proper alignment.
+  /// </summary>
+  private const int CUDA_GRAPH_ALIGNMENT = 256;
+
+  /// <summary>
+  /// Rounds up a byte size to the next 256-byte boundary for CUDA graph compatibility.
+  /// </summary>
+  private static long AlignForCudaGraph(long bytes) => (bytes + CUDA_GRAPH_ALIGNMENT - 1) & ~(CUDA_GRAPH_ALIGNMENT - 1);
+
   // Second input buffer for pipelined processing
   private byte[] cachedByteInputBuffer2;
 
@@ -265,6 +276,7 @@ public sealed class EnginePool : IDisposable
     useByteInputs = largestEngine.HasByteInput;
 
     // Allocate buffers sized for largest engine
+    // Apply 256-byte alignment for CUDA graph capture compatibility
     maxInputBytes = 0;
     maxOutputBytes = 0;
     foreach (TensorRTEngine e in engines)
@@ -273,19 +285,24 @@ public sealed class EnginePool : IDisposable
       maxOutputBytes = Math.Max(maxOutputBytes, e.TotalOutputSize * sizeof(float));
     }
 
-    pinnedIn = TensorRTNative.AllocPinned(maxInputBytes);
-    pinnedOut = TensorRTNative.AllocPinned(maxOutputBytes);
-    gpuIn = TensorRTNative.AllocGPU(maxInputBytes);
-    gpuOut = TensorRTNative.AllocGPU(maxOutputBytes);
+    // Round up to 256-byte alignment for CUDA graph capture (required on some platforms)
+    long alignedInputBytes = AlignForCudaGraph(maxInputBytes);
+    long alignedOutputBytes = AlignForCudaGraph(maxOutputBytes);
+
+    pinnedIn = TensorRTNative.AllocPinned(alignedInputBytes);
+    pinnedOut = TensorRTNative.AllocPinned(alignedOutputBytes);
+    gpuIn = TensorRTNative.AllocGPU(alignedInputBytes);
+    gpuOut = TensorRTNative.AllocGPU(alignedOutputBytes);
 
     if (USE_PIPELINED_SUBBATCHES)
     {
       // Allocate second set of input and output buffers for pipelined sub-batch processing
-      pinnedIn2 = TensorRTNative.AllocPinned(maxInputBytes);
-      gpuIn2 = TensorRTNative.AllocGPU(maxInputBytes);
-      pinnedOut2 = TensorRTNative.AllocPinned(maxOutputBytes);
-      gpuOut2 = TensorRTNative.AllocGPU(maxOutputBytes);
+      pinnedIn2 = TensorRTNative.AllocPinned(alignedInputBytes);
+      gpuIn2 = TensorRTNative.AllocGPU(alignedInputBytes);
+      pinnedOut2 = TensorRTNative.AllocPinned(alignedOutputBytes);
+      gpuOut2 = TensorRTNative.AllocGPU(alignedOutputBytes);
     }
+
 
     // Pre-allocate managed buffers sized for largest engine
     long maxInputElements = largestEngine.TotalInputSize;
