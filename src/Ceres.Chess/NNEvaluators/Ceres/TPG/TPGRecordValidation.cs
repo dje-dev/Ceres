@@ -61,11 +61,10 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
         ByteScaled.ValidateZeroOrOne(tpgRecord.Squares[i].RankEncoding);
         ByteScaled.ValidateZeroOrOne(tpgRecord.Squares[i].FileEncoding);
         if (!(tpgRecord.Squares[i].IsEnPassant.IsZeroOrOne
-             || tpgRecord.Squares[i].IsEnPassant.IsZeroOrOne
-             || tpgRecord.Squares[i].CanOO.IsZeroOrOne
-             || tpgRecord.Squares[i].CanOOO.IsZeroOrOne
-             || tpgRecord.Squares[i].OpponentCanOO.IsZeroOrOne
-             || tpgRecord.Squares[i].OpponentCanOOO.IsZeroOrOne
+             && tpgRecord.Squares[i].CanOO.IsZeroOrOne
+             && tpgRecord.Squares[i].CanOOO.IsZeroOrOne
+             && tpgRecord.Squares[i].OpponentCanOO.IsZeroOrOne
+             && tpgRecord.Squares[i].OpponentCanOOO.IsZeroOrOne
              )
             )
         {
