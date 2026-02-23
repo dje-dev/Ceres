@@ -41,6 +41,17 @@
 #define CUDA_GRAPH_INSTANTIATE(exec, graph) cudaGraphInstantiate(exec, graph, nullptr, nullptr, 0)
 #endif
 
+// Alignment for output tensor addresses in fp16 elements.
+// 128 elements * 2 bytes = 256 bytes, satisfying CUDA/TensorRT alignment requirements.
+// Without this, small tensors (e.g. 8-element PUNIM outputs) cause misaligned addresses
+// that fail cudaStreamBeginCapture during CUDA graph capture.
+constexpr size_t OUTPUT_TENSOR_ALIGN_ELEMS = 128;
+
+inline int64_t AlignUp(int64_t value, int64_t alignment)
+{
+  return ((value + alignment - 1) / alignment) * alignment;
+}
+
 namespace
 {
   // Simple logger implementation for TensorRT
@@ -774,7 +785,7 @@ extern "C"
         ec->outputNames.push_back(name);
         ec->outputSizes.push_back(size);
         ec->outputElemSizes.push_back(elemSize);
-        ec->totalOutputElements += size;
+        ec->totalOutputElements += AlignUp(size, OUTPUT_TENSOR_ALIGN_ELEMS);
       }
     }
 
@@ -971,7 +982,7 @@ extern "C"
         ec->outputNames.push_back(name);
         ec->outputSizes.push_back(size);
         ec->outputElemSizes.push_back(elemSize);
-        ec->totalOutputElements += size;
+        ec->totalOutputElements += AlignUp(size, OUTPUT_TENSOR_ALIGN_ELEMS);
       }
     }
 
@@ -1515,7 +1526,7 @@ extern "C"
       outputInfo[i].name = ec->outputNames[i].c_str();
       outputInfo[i].offset = offset;
       outputInfo[i].size = ec->outputSizes[i];
-      offset += ec->outputSizes[i];
+      offset += AlignUp(ec->outputSizes[i], OUTPUT_TENSOR_ALIGN_ELEMS);
     }
 
     return numOutputs;
@@ -1620,14 +1631,14 @@ extern "C"
       // Launch graph
       cudaGraphLaunch(ec->graphExec, ec->stream);
 
-      // Copy outputs from GPU (using actual element sizes)
+      // Copy outputs from GPU (using actual element sizes, with alignment gaps)
       byteOffset = 0;
       for (size_t i = 0; i < ec->outputSizes.size(); ++i)
       {
         size_t bytes = ec->outputSizes[i] * ec->outputElemSizes[i];
         cudaMemcpyAsync(outPtr + byteOffset, ec->gpuBuffers[outputBufferStart + i],
           bytes, cudaMemcpyDeviceToHost, ec->stream);
-        byteOffset += bytes;
+        byteOffset += AlignUp(ec->outputSizes[i], OUTPUT_TENSOR_ALIGN_ELEMS) * ec->outputElemSizes[i];
       }
 
       cudaStreamSynchronize(ec->stream);
@@ -1666,14 +1677,14 @@ extern "C"
       cudaGraphLaunch(ec->graphExec, ec->stream);
       cudaStreamSynchronize(ec->stream);
 
-      // Copy outputs from GPU (using actual element sizes)
+      // Copy outputs from GPU (using actual element sizes, with alignment gaps)
       byteOffset = 0;
       for (size_t i = 0; i < ec->outputSizes.size(); ++i)
       {
         size_t bytes = ec->outputSizes[i] * ec->outputElemSizes[i];
         cudaMemcpy(outPtr + byteOffset, ec->gpuBuffers[outputBufferStart + i],
           bytes, cudaMemcpyDeviceToHost);
-        byteOffset += bytes;
+        byteOffset += AlignUp(ec->outputSizes[i], OUTPUT_TENSOR_ALIGN_ELEMS) * ec->outputElemSizes[i];
       }
     }
     else
@@ -1698,14 +1709,14 @@ extern "C"
         return -4;
       }
 
-      // Copy outputs from GPU (using actual element sizes)
+      // Copy outputs from GPU (using actual element sizes, with alignment gaps)
       byteOffset = 0;
       for (size_t i = 0; i < ec->outputSizes.size(); ++i)
       {
         size_t bytes = ec->outputSizes[i] * ec->outputElemSizes[i];
         cudaMemcpyAsync(outPtr + byteOffset, ec->gpuBuffers[outputBufferStart + i],
           bytes, cudaMemcpyDeviceToHost, ec->stream);
-        byteOffset += bytes;
+        byteOffset += AlignUp(ec->outputSizes[i], OUTPUT_TENSOR_ALIGN_ELEMS) * ec->outputElemSizes[i];
       }
 
       // Synchronize our stream
@@ -1871,7 +1882,7 @@ extern "C"
     {
       void* outPtr = static_cast<char*>(gpuOutput) + outputOffset * ELEM_SIZE;
       ec->context->setTensorAddress(ec->outputNames[i].c_str(), outPtr);
-      outputOffset += ec->outputSizes[i];
+      outputOffset += AlignUp(ec->outputSizes[i], OUTPUT_TENSOR_ALIGN_ELEMS);
     }
 
     // Execute without sync
@@ -1918,7 +1929,7 @@ extern "C"
     {
       void* outPtr = static_cast<char*>(gpuOutput) + outputOffset * ELEM_SIZE;
       ec->context->setTensorAddress(ec->outputNames[i].c_str(), outPtr);
-      outputOffset += ec->outputSizes[i];
+      outputOffset += AlignUp(ec->outputSizes[i], OUTPUT_TENSOR_ALIGN_ELEMS);
     }
 
     bool success = ec->context->enqueueV3(ec->streams[streamIdx]);
@@ -1942,7 +1953,7 @@ extern "C"
     {
       void* outPtr = static_cast<char*>(gpuOutput) + outputOffset * ELEM_SIZE;
       ec->context->setTensorAddress(ec->outputNames[i].c_str(), outPtr);
-      outputOffset += ec->outputSizes[i];
+      outputOffset += AlignUp(ec->outputSizes[i], OUTPUT_TENSOR_ALIGN_ELEMS);
     }
 
     if (!ec->useCudaGraphs)
@@ -2067,7 +2078,7 @@ extern "C"
       ec->context->setTensorAddress(ec->outputNames[i].c_str(), outPtr);
       // Use per-position size * actualBatchSize for the offset calculation
       int64_t perPosSize = ec->outputSizes[i] / ec->batchSize;
-      outputOffset += perPosSize * actualBatchSize;
+      outputOffset += AlignUp(perPosSize * actualBatchSize, OUTPUT_TENSOR_ALIGN_ELEMS);
     }
 
     bool success = ec->context->enqueueV3(ec->streams[streamIdx]);
@@ -2156,7 +2167,7 @@ extern "C"
     }
     for (size_t i = 0; i < outputPerPos.size(); ++i)
     {
-      expectedOutputSize += outputPerPos[i] * actualBatchSize;
+      expectedOutputSize += AlignUp(outputPerPos[i] * actualBatchSize, OUTPUT_TENSOR_ALIGN_ELEMS);
     }
 
     // Verify input size
@@ -2228,7 +2239,7 @@ extern "C"
       return -5;
     }
 
-    // Copy outputs from GPU (only the actual data)
+    // Copy outputs from GPU (only the actual data, with alignment gaps)
     byteOffset = 0;
     for (size_t i = 0; i < ec->outputSizes.size(); ++i)
     {
@@ -2236,7 +2247,7 @@ extern "C"
       size_t bytes = actualElements * ec->outputElemSizes[i];
       cudaMemcpyAsync(outPtr + byteOffset, ec->gpuBuffers[outputBufferStart + i],
         bytes, cudaMemcpyDeviceToHost, ec->stream);
-      byteOffset += bytes;
+      byteOffset += AlignUp(actualElements, OUTPUT_TENSOR_ALIGN_ELEMS) * ec->outputElemSizes[i];
     }
 
     // Synchronize
@@ -2516,7 +2527,7 @@ extern "C"
       ec->outputNames.push_back(name);
       ec->outputSizes.push_back(size);
       ec->outputElemSizes.push_back(elemSize);
-      ec->totalOutputElements += size;
+      ec->totalOutputElements += AlignUp(size, OUTPUT_TENSOR_ALIGN_ELEMS);
     }
 
     // Pre-allocate GPU buffers

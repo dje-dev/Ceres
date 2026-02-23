@@ -28,6 +28,13 @@ namespace Ceres.Chess.NNEvaluators.TensorRT;
 public sealed class TensorRTEngine : IDisposable
 {
   /// <summary>
+  /// Alignment for output tensor elements in the flat buffer (must match OUTPUT_TENSOR_ALIGN_ELEMS in C++).
+  /// </summary>
+  const int OUTPUT_TENSOR_ALIGN_ELEMS = 128;
+
+  static long AlignUp(long value, long alignment) => ((value + alignment - 1) / alignment) * alignment;
+
+  /// <summary>
   /// Batch size this engine was built for.
   /// </summary>
   public int BatchSize;
@@ -93,7 +100,7 @@ public sealed class TensorRTEngine : IDisposable
     TotalOutputSize = 0;
     for (int i = 0; i < NumOutputs; i++)
     {
-      TotalOutputSize += TensorRTNative.GetOutputSize(this.handle, i);
+      TotalOutputSize += AlignUp(TensorRTNative.GetOutputSize(this.handle, i), OUTPUT_TENSOR_ALIGN_ELEMS);
     }
   }
 
@@ -140,7 +147,7 @@ public sealed class TensorRTEngine : IDisposable
     TotalOutputSize = 0;
     for (int i = 0; i < NumOutputs; i++)
     {
-      TotalOutputSize += TensorRTNative.GetOutputSize(handle, i);
+      TotalOutputSize += AlignUp(TensorRTNative.GetOutputSize(handle, i), OUTPUT_TENSOR_ALIGN_ELEMS);
     }
   }
 

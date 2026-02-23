@@ -109,6 +109,8 @@ public sealed class MultiGPUEnginePool : IDisposable
   /// </summary>
   public int OutputElementsPerPosition { get; private set; }
 
+  public long MaxTotalOutputSize { get; private set; }
+
   /// <summary>
   /// Number of GPU devices in the pool.
   /// </summary>
@@ -193,6 +195,7 @@ public sealed class MultiGPUEnginePool : IDisposable
 
     InputElementsPerPosition = pools[0].InputElementsPerPosition;
     OutputElementsPerPosition = pools[0].OutputElementsPerPosition;
+    MaxTotalOutputSize = pools[0].MaxTotalOutputSize;
 
     useByteInputs = pools[0].UseByteInputs;
 

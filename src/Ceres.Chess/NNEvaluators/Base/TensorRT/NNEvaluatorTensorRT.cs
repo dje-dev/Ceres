@@ -423,7 +423,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
       inputHalfBuffer = new Half[maxBatchSize * inputElementsPerPosition];
     }
 
-    outputFloatBufferSize = largestEngineBatchSize * outputElementsPerPosition;
+    outputFloatBufferSize = (int)pool.MaxTotalOutputSize;
 
     // Pre-allocate result buffers
     wBuffer = new FP16[maxBatchSize];
@@ -849,7 +849,12 @@ public class NNEvaluatorTensorRT : NNEvaluator
         punimOpponentOffset = currentOffset;
       }
 
-      currentOffset += tensorSize;
+      // Align to 256-byte boundary (128 fp16 elements) to match
+      // OUTPUT_TENSOR_ALIGN_ELEMS in TensorRTWrapper.cpp.
+      // Required for CUDA graphs: small tensors (e.g. 8-element PUNIM)
+      // would otherwise cause misaligned addresses during graph capture.
+      const int ALIGN = 128;
+      currentOffset += (tensorSize + ALIGN - 1) / ALIGN * ALIGN;
     }
 
     // Substitute value3 into value2 if enabled and value3 is present
