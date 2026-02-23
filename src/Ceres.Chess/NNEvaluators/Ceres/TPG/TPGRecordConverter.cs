@@ -523,11 +523,11 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
         // TODO: make more efficient
         if (FILL_IN)
         {
-          historyPos1 = historyPos2 = historyPos3 = historyPos4 = historyPos5 = historyPos6 = historyPos6 = historyPos7 = thisPosition;
+          historyPos1 = historyPos2 = historyPos3 = historyPos4 = historyPos5 = historyPos6 = historyPos7 = thisPosition;
         }
         else
         {
-          historyPos1 = historyPos2 = historyPos3 = historyPos4 = historyPos5 = historyPos6 = historyPos6 = historyPos7 = default;
+          historyPos1 = historyPos2 = historyPos3 = historyPos4 = historyPos5 = historyPos6 = historyPos7 = default;
         }
       }
 
