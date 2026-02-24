@@ -243,8 +243,12 @@ namespace Ceres.Chess.Textual
           {
             if (char.IsUpper(c) && whiteRookSquares.Count > 0) // White's castling rights
             {
+              Square whiteRook = whiteRookSquares.FirstOrDefault(x => x.FileChar == c);
+              if (whiteRook == default)
+              {
+                throw new Exception($"Chess960 castling rights specify file '{c}' but no white rook found on that file");
+              }
               bool kingIsLowerChar = whiteKingSquare.FileChar < c;
-              Square whiteRook = whiteRookSquares.First(x => x.FileChar == c);
               if (kingIsLowerChar)
               {
                 whiteCanOO = true;
@@ -255,13 +259,16 @@ namespace Ceres.Chess.Textual
                 whiteCanOOO = true;
                 rookInfo.WhiteQRInitPlacement = (byte)whiteRook.SquareIndexStartH1;
               }
-
             }
 
             if (char.IsLower(c) && blackRookSquares.Count > 0) // black's castling rights
             {
+              Square blackRook = blackRookSquares.FirstOrDefault(x => x.FileChar == Char.ToUpper(c));
+              if (blackRook == default)
+              {
+                throw new Exception($"Chess960 castling rights specify file '{c}' but no black rook found on that file");
+              }
               bool kingIsLowerChar = blackKingSquare.FileChar < Char.ToUpper(c);
-              Square blackRook = blackRookSquares.First(x => x.FileChar == Char.ToUpper(c));
               if (kingIsLowerChar)
               {
                 blackCanOO = true;
