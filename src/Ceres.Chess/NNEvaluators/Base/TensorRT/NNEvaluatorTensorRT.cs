@@ -877,7 +877,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
       if (hasM)
       {
         int posMlhOffset = mlhOffset + i * mlhSize;
-        m[resultIndex] = (FP16)subBatchOutput[posMlhOffset];
+        m[resultIndex] = (FP16)MathF.Max(subBatchOutput[posMlhOffset] * 100, 0); // NetTransformer.MLH_DIVISOR = 100
       }
 
       // ===== Extract Uncertainty V =====
