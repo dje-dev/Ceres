@@ -472,7 +472,7 @@ public sealed class EnginePool : IDisposable
         // Dynamic inference with actual batch size using oversized buffers
         engine.InferHostDynamic(cachedHalfInputBuffer, cachedOutputBuffer, actualPositions, inputElements, outputElements);
 
-        // Copy output from cached buffer — copy only the unaligned per-position data
+        // Copy output from cached buffer   copy only the unaligned per-position data
         int unalignedElements = actualPositions * OutputElementsPerPosition;
         if (unalignedElements > 0)
         {
@@ -534,7 +534,7 @@ public sealed class EnginePool : IDisposable
         // Dynamic inference with actual batch size using oversized buffers
         engine.InferHostBytesDynamic(cachedByteInputBuffer, cachedOutputBuffer, actualPositions, inputElements, outputElements);
 
-        // Copy output from cached buffer — copy only the unaligned per-position data
+        // Copy output from cached buffer   copy only the unaligned per-position data
         int unalignedElements = actualPositions * OutputElementsPerPosition;
         if (unalignedElements > 0)
         {
@@ -759,7 +759,7 @@ public sealed class EnginePool : IDisposable
 
       // For dynamic mode, output size matches actual count; for static mode, it's engine batch size
       int outputPositions = useDynamic ? count : engineBatchSize;
-      long outputBytes = (useDynamic ? ComputeAlignedOutputSize(count) : (long)engineBatchSize * OutputElementsPerPosition) * sizeof(ushort);
+      long outputBytes = (long)ComputeAlignedOutputSize(useDynamic ? count : engineBatchSize) * sizeof(ushort);
       engine.CopyFromGPUOnStreamAsync(0, pinnedOut, gpuOut, outputBytes);
       engine.SyncStream(0);  // Single sync at end before CPU access
 
@@ -852,7 +852,7 @@ public sealed class EnginePool : IDisposable
 
         // For dynamic mode, output size matches actual count; for static mode, it's engine batch size
         int prevOutputPositions = prevUseDynamic ? prevCount : prevEngineSize;
-        long prevOutputBytes = (prevUseDynamic ? ComputeAlignedOutputSize(prevCount) : (long)prevEngineSize * OutputElementsPerPosition) * sizeof(ushort);
+        long prevOutputBytes = (long)ComputeAlignedOutputSize(prevUseDynamic ? prevCount : prevEngineSize) * sizeof(ushort);
 
         // D2H for previous batch from its dedicated output buffer
         prevBatchEngine.CopyFromGPUOnStreamAsync(1, pinnedOutputs[prevBuffer], gpuOutputs[prevBuffer], prevOutputBytes);
@@ -876,7 +876,7 @@ public sealed class EnginePool : IDisposable
 
       // For dynamic mode, output size matches actual count; for static mode, it's engine batch size
       int lastOutputPositions = lastUseDynamic ? count : lastEngineSize;
-      long outputBytes = (lastUseDynamic ? ComputeAlignedOutputSize(count) : (long)lastEngineSize * OutputElementsPerPosition) * sizeof(ushort);
+      long outputBytes = (long)ComputeAlignedOutputSize(lastUseDynamic ? count : lastEngineSize) * sizeof(ushort);
 
       // D2H on same stream as compute - CUDA guarantees compute finishes first (in-order execution)
       lastEngine.CopyFromGPUOnStreamAsync(0, pinnedOutputs[lastBuffer], gpuOutputs[lastBuffer], outputBytes);
