@@ -17,6 +17,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 #endregion
@@ -70,6 +71,29 @@ public sealed class MultiGPUEnginePool : IDisposable
 
   // Cached unique device set (cleared and reused)
   private readonly HashSet<int> cachedUniqueDevices = new();
+
+  // Pre-allocated arrays for parallel dispatch (avoids per-batch heap allocations)
+  private readonly int[] cachedStarts;
+  private readonly int[] cachedCounts;
+
+  // Dedicated worker threads for zero-allocation multi-GPU dispatch.
+  // Each non-primary GPU gets a persistent background thread that waits for work signals.
+  private readonly Thread[] workerThreads;
+  private readonly ManualResetEventSlim[] workerStartSignals;
+  private readonly ManualResetEventSlim[] workerDoneSignals;
+  private volatile bool workerShutdown;
+
+  // Shared work parameters (set by main thread before signaling workers).
+  // Memory ordering guaranteed by ManualResetEventSlim Set/Wait memory barriers.
+  private const int WORK_PROCESS = 0;
+  private const int WORK_PROCESS_BYTES = 1;
+  private const int WORK_WITH_HANDLER = 2;
+  private const int WORK_BYTES_WITH_HANDLER = 3;
+  private int workerWorkType;
+  private byte[] workerByteInput;
+  private Half[] workerHalfInput;
+  private Half[] workerHalfOutput;
+  private SubBatchOutputHandler workerHandler;
 
   // Execution times (average) by GPU (outer index) and batch size index (inner index)
   // Initialized during Warmup()
@@ -212,6 +236,28 @@ public sealed class MultiGPUEnginePool : IDisposable
     cachedInputCapacities = new int[numPools];
     cachedOutputCapacities = new int[numPools];
 
+    // Pre-allocate arrays for parallel dispatch (avoids per-batch heap allocations)
+    cachedStarts = new int[numPools];
+    cachedCounts = new int[numPools];
+
+    // Create dedicated worker threads for non-primary GPUs
+    int numWorkers = Math.Max(0, numPools - 1);
+    workerThreads = new Thread[numWorkers];
+    workerStartSignals = new ManualResetEventSlim[numWorkers];
+    workerDoneSignals = new ManualResetEventSlim[numWorkers];
+    for (int w = 0; w < numWorkers; w++)
+    {
+      workerStartSignals[w] = new ManualResetEventSlim(false);
+      workerDoneSignals[w] = new ManualResetEventSlim(false);
+      int workerIndex = w;
+      workerThreads[w] = new Thread(() => WorkerLoop(workerIndex))
+      {
+        IsBackground = true,
+        Name = $"GPU-{w + 1}-Worker"
+      };
+      workerThreads[w].Start();
+    }
+
     // Get device names for each GPU (used for grouping identical GPUs)
     deviceNames = new string[numPools];
     for (int i = 0; i < numPools; i++)
@@ -220,6 +266,101 @@ public sealed class MultiGPUEnginePool : IDisposable
     }
 
     Warmup();
+  }
+
+
+  /// <summary>
+  /// Persistent worker loop for non-primary GPU threads.
+  /// Waits for work signal, processes based on workerWorkType, then signals completion.
+  /// </summary>
+  private void WorkerLoop(int workerIndex)
+  {
+    int poolIndex = workerIndex + 1;
+    while (true)
+    {
+      workerStartSignals[workerIndex].Wait();
+      workerStartSignals[workerIndex].Reset();
+      if (workerShutdown)
+      {
+        return;
+      }
+
+      int start = cachedStarts[poolIndex];
+      int count = cachedCounts[poolIndex];
+      int inputByteOff = start * InputElementsPerPosition;
+      int outputElemOff = start * OutputElementsPerPosition;
+
+      switch (workerWorkType)
+      {
+        case WORK_PROCESS:
+          pools[poolIndex].Process(workerHalfInput, workerHalfOutput, count,
+            inputElementOffset: inputByteOff, outputElementOffset: outputElemOff);
+          break;
+        case WORK_PROCESS_BYTES:
+          pools[poolIndex].ProcessBytes(workerByteInput, workerHalfOutput, count,
+            inputByteOffset: inputByteOff, outputElementOffset: outputElemOff);
+          break;
+        case WORK_WITH_HANDLER:
+          pools[poolIndex].ProcessWithHandler(workerHalfInput, count, workerHandler,
+            globalPositionOffset: start, inputElementOffset: inputByteOff);
+          break;
+        case WORK_BYTES_WITH_HANDLER:
+          pools[poolIndex].ProcessBytesWithHandler(workerByteInput, count, workerHandler,
+            globalPositionOffset: start, inputByteOffset: inputByteOff);
+          break;
+      }
+
+      workerDoneSignals[workerIndex].Set();
+    }
+  }
+
+
+  /// <summary>
+  /// Dispatches work to worker threads and runs GPU 0 on the current thread.
+  /// Zero-allocation: uses pre-set shared state and ManualResetEventSlim signals.
+  /// </summary>
+  private void DispatchAndWait(int numGPUs, int workType)
+  {
+    int numWorkers = numGPUs - 1;
+
+    // Signal workers (they read shared state after ManualResetEventSlim memory barrier)
+    for (int i = 0; i < numWorkers; i++)
+    {
+      workerDoneSignals[i].Reset();
+      workerStartSignals[i].Set();
+    }
+
+    int start0 = cachedStarts[0];
+    int count0 = cachedCounts[0];
+    int inputByteOff0 = start0 * InputElementsPerPosition;
+    int outputElemOff0 = start0 * OutputElementsPerPosition;
+
+    // GPU 0 on current thread
+    switch (workType)
+    {
+      case WORK_PROCESS:
+        pools[0].Process(workerHalfInput, workerHalfOutput, count0,
+          inputElementOffset: inputByteOff0, outputElementOffset: outputElemOff0);
+        break;
+      case WORK_PROCESS_BYTES:
+        pools[0].ProcessBytes(workerByteInput, workerHalfOutput, count0,
+          inputByteOffset: inputByteOff0, outputElementOffset: outputElemOff0);
+        break;
+      case WORK_WITH_HANDLER:
+        pools[0].ProcessWithHandler(workerHalfInput, count0, workerHandler,
+          globalPositionOffset: start0, inputElementOffset: inputByteOff0);
+        break;
+      case WORK_BYTES_WITH_HANDLER:
+        pools[0].ProcessBytesWithHandler(workerByteInput, count0, workerHandler,
+          globalPositionOffset: start0, inputByteOffset: inputByteOff0);
+        break;
+    }
+
+    // Wait for all workers to complete
+    for (int i = 0; i < numWorkers; i++)
+    {
+      workerDoneSignals[i].Wait();
+    }
   }
 
 
@@ -431,7 +572,7 @@ public sealed class MultiGPUEnginePool : IDisposable
     {
       int maxBatchSize = sizesPerGPU[0][^1] * numGPUs;
       BatchSizeOptimizer.OptimizationResult result = BatchSizeOptimizer.Optimize(sizesPerGPU[0], executionTimesPerGPU, numGPUs, 1024);
-      
+
       // Check if sizes actually changed
       bool changed = false;
       for (int i = 0; i < sizesPerGPU[0].Length; i++)
@@ -669,30 +810,30 @@ public sealed class MultiGPUEnginePool : IDisposable
       throw new InvalidOperationException($"Number of GPUs ({numGPUs}) exceeds maximum supported ({MAX_GPUS_STACKALLOC}).");
     }
 
-    Span<int> starts = stackalloc int[numGPUs];
     Span<int> counts = stackalloc int[numGPUs];
     int offset = 0;
 
     // Try to get optimal distribution, fall back to equal split
     if (TryComputeOptimalDistribution(totalPositions, numGPUs, counts))
     {
-      // Compute starts from the optimal counts
       for (int i = 0; i < numGPUs; i++)
       {
-        starts[i] = offset;
+        cachedStarts[i] = offset;
+        cachedCounts[i] = counts[i];
         offset += counts[i];
       }
     }
     else
     {
-      // Fall back to equal distribution
       int baseSize = totalPositions / numGPUs;
       int remainder = totalPositions % numGPUs;
       for (int i = 0; i < numGPUs; i++)
       {
-        starts[i] = offset;
-        counts[i] = baseSize + (i < remainder ? 1 : 0);
-        offset += counts[i];
+        cachedStarts[i] = offset;
+        int c = baseSize + (i < remainder ? 1 : 0);
+        cachedCounts[i] = c;
+        counts[i] = c;
+        offset += c;
       }
     }
 
@@ -702,33 +843,10 @@ public sealed class MultiGPUEnginePool : IDisposable
       numGPUs--;
     }
 
-    SynchronizeUniqueDevices();
-
-    // Prepare cached sub-arrays and copy input data
-    for (int i = 0; i < numGPUs; i++)
-    {
-      int inputElements = counts[i] * InputElementsPerPosition;
-      int outputElements = counts[i] * OutputElementsPerPosition;
-      EnsureHalfArrayCapacity(i, inputElements, outputElements);
-      Array.Copy(input, starts[i] * InputElementsPerPosition, cachedHalfInputs[i], 0, inputElements);
-    }
-
-    // Convert to arrays for lambda capture (Span cannot be captured)
-    int[] startsArray = starts.Slice(0, numGPUs).ToArray();
-    int[] countsArray = counts.Slice(0, numGPUs).ToArray();
-
-    Parallel.For(0, numGPUs, i =>
-    {
-      pools[i].Process(cachedHalfInputs[i], cachedHalfOutputs[i], countsArray[i]);
-    });
-
-    SynchronizeTrackedDevices();
-
-    for (int i = 0; i < numGPUs; i++)
-    {
-      int outputElements = counts[i] * OutputElementsPerPosition;
-      Array.Copy(cachedHalfOutputs[i], 0, output, starts[i] * OutputElementsPerPosition, outputElements);
-    }
+    workerHalfInput = input;
+    workerHalfOutput = output;
+    workerWorkType = WORK_PROCESS;
+    DispatchAndWait(numGPUs, WORK_PROCESS);
   }
 
 
@@ -753,30 +871,30 @@ public sealed class MultiGPUEnginePool : IDisposable
       throw new InvalidOperationException($"Number of GPUs ({numGPUs}) exceeds maximum supported ({MAX_GPUS_STACKALLOC}).");
     }
 
-    Span<int> starts = stackalloc int[numGPUs];
     Span<int> counts = stackalloc int[numGPUs];
     int offset = 0;
 
     // Try to get optimal distribution, fall back to equal split
     if (TryComputeOptimalDistribution(totalPositions, numGPUs, counts))
     {
-      // Compute starts from the optimal counts
       for (int i = 0; i < numGPUs; i++)
       {
-        starts[i] = offset;
+        cachedStarts[i] = offset;
+        cachedCounts[i] = counts[i];
         offset += counts[i];
       }
     }
     else
     {
-      // Fall back to equal distribution
       int baseSize = totalPositions / numGPUs;
       int remainder = totalPositions % numGPUs;
       for (int i = 0; i < numGPUs; i++)
       {
-        starts[i] = offset;
-        counts[i] = baseSize + (i < remainder ? 1 : 0);
-        offset += counts[i];
+        cachedStarts[i] = offset;
+        int c = baseSize + (i < remainder ? 1 : 0);
+        cachedCounts[i] = c;
+        counts[i] = c;
+        offset += c;
       }
     }
 
@@ -786,34 +904,10 @@ public sealed class MultiGPUEnginePool : IDisposable
       numGPUs--;
     }
 
-    SynchronizeUniqueDevices();
-
-    // Prepare cached sub-arrays and copy input data
-    for (int i = 0; i < numGPUs; i++)
-    {
-      int inputElements = counts[i] * InputElementsPerPosition;
-      int outputElements = counts[i] * OutputElementsPerPosition;
-      EnsureByteInputCapacity(i, inputElements);
-      EnsureHalfArrayCapacity(i, 0, outputElements);
-      Array.Copy(input, starts[i] * InputElementsPerPosition, cachedByteInputs[i], 0, inputElements);
-    }
-
-    // Convert to arrays for lambda capture (Span cannot be captured)
-    int[] startsArray = starts.Slice(0, numGPUs).ToArray();
-    int[] countsArray = counts.Slice(0, numGPUs).ToArray();
-
-    Parallel.For(0, numGPUs, i =>
-    {
-      pools[i].ProcessBytes(cachedByteInputs[i], cachedHalfOutputs[i], countsArray[i]);
-    });
-
-    SynchronizeTrackedDevices();
-
-    for (int i = 0; i < numGPUs; i++)
-    {
-      int outputElements = counts[i] * OutputElementsPerPosition;
-      Array.Copy(cachedHalfOutputs[i], 0, output, starts[i] * OutputElementsPerPosition, outputElements);
-    }
+    workerByteInput = input;
+    workerHalfOutput = output;
+    workerWorkType = WORK_PROCESS_BYTES;
+    DispatchAndWait(numGPUs, WORK_PROCESS_BYTES);
   }
 
 
@@ -840,30 +934,30 @@ public sealed class MultiGPUEnginePool : IDisposable
       throw new InvalidOperationException($"Number of GPUs ({numGPUs}) exceeds maximum supported ({MAX_GPUS_STACKALLOC}).");
     }
 
-    Span<int> starts = stackalloc int[numGPUs];
     Span<int> counts = stackalloc int[numGPUs];
     int offset = 0;
 
     // Try to get optimal distribution, fall back to equal split
     if (TryComputeOptimalDistribution(totalPositions, numGPUs, counts))
     {
-      // Compute starts from the optimal counts
       for (int i = 0; i < numGPUs; i++)
       {
-        starts[i] = offset;
+        cachedStarts[i] = offset;
+        cachedCounts[i] = counts[i];
         offset += counts[i];
       }
     }
     else
     {
-      // Fall back to equal distribution
       int baseSize = totalPositions / numGPUs;
       int remainder = totalPositions % numGPUs;
       for (int i = 0; i < numGPUs; i++)
       {
-        starts[i] = offset;
-        counts[i] = baseSize + (i < remainder ? 1 : 0);
-        offset += counts[i];
+        cachedStarts[i] = offset;
+        int c = baseSize + (i < remainder ? 1 : 0);
+        cachedCounts[i] = c;
+        counts[i] = c;
+        offset += c;
       }
     }
 
@@ -873,35 +967,10 @@ public sealed class MultiGPUEnginePool : IDisposable
       numGPUs--;
     }
 
-    SynchronizeUniqueDevices();
-
-    // Prepare cached sub-arrays and copy input data
-    for (int i = 0; i < numGPUs; i++)
-    {
-      int inputElements = counts[i] * InputElementsPerPosition;
-      EnsureHalfArrayCapacity(i, inputElements, 0);
-      Array.Copy(input, starts[i] * InputElementsPerPosition, cachedHalfInputs[i], 0, inputElements);
-    }
-
-    // Convert to arrays for lambda capture (Span cannot be captured)
-    int[] startsArray = starts.Slice(0, numGPUs).ToArray();
-    int[] countsArray = counts.Slice(0, numGPUs).ToArray();
-
-    Parallel.For(0, numGPUs, i =>
-    {
-      int capturedStart = startsArray[i];
-      SubBatchOutputHandler wrappedHandler = (globalStart, count, engineBatchSize, rawOutput) =>
-      {
-        int trueGlobalStart = capturedStart + globalStart;
-        // No lock needed: handler uses thread-local buffers for intermediate storage,
-        // and writes to distinct position ranges in the result arrays (no overlap).
-        handler(trueGlobalStart, count, engineBatchSize, rawOutput);
-      };
-
-      pools[i].ProcessWithHandler(cachedHalfInputs[i], countsArray[i], wrappedHandler, globalPositionOffset: 0);
-    });
-
-    SynchronizeTrackedDevices();
+    workerHalfInput = input;
+    workerHandler = handler;
+    workerWorkType = WORK_WITH_HANDLER;
+    DispatchAndWait(numGPUs, WORK_WITH_HANDLER);
   }
 
 
@@ -927,30 +996,30 @@ public sealed class MultiGPUEnginePool : IDisposable
       throw new InvalidOperationException($"Number of GPUs ({numGPUs}) exceeds maximum supported ({MAX_GPUS_STACKALLOC}).");
     }
 
-    Span<int> starts = stackalloc int[numGPUs];
     Span<int> counts = stackalloc int[numGPUs];
     int offset = 0;
 
     // Try to get optimal distribution, fall back to equal split
     if (TryComputeOptimalDistribution(totalPositions, numGPUs, counts))
     {
-      // Compute starts from the optimal counts
       for (int i = 0; i < numGPUs; i++)
       {
-        starts[i] = offset;
+        cachedStarts[i] = offset;
+        cachedCounts[i] = counts[i];
         offset += counts[i];
       }
     }
     else
     {
-      // Fall back to equal distribution
       int baseSize = totalPositions / numGPUs;
       int remainder = totalPositions % numGPUs;
       for (int i = 0; i < numGPUs; i++)
       {
-        starts[i] = offset;
-        counts[i] = baseSize + (i < remainder ? 1 : 0);
-        offset += counts[i];
+        cachedStarts[i] = offset;
+        int c = baseSize + (i < remainder ? 1 : 0);
+        cachedCounts[i] = c;
+        counts[i] = c;
+        offset += c;
       }
     }
 
@@ -960,35 +1029,10 @@ public sealed class MultiGPUEnginePool : IDisposable
       numGPUs--;
     }
 
-    SynchronizeUniqueDevices();
-
-    // Prepare cached sub-arrays and copy input data
-    for (int i = 0; i < numGPUs; i++)
-    {
-      int inputElements = counts[i] * InputElementsPerPosition;
-      EnsureByteInputCapacity(i, inputElements);
-      Array.Copy(input, starts[i] * InputElementsPerPosition, cachedByteInputs[i], 0, inputElements);
-    }
-
-    // Convert to arrays for lambda capture (Span cannot be captured)
-    int[] startsArray = starts.Slice(0, numGPUs).ToArray();
-    int[] countsArray = counts.Slice(0, numGPUs).ToArray();
-
-    Parallel.For(0, numGPUs, i =>
-    {
-      int capturedStart = startsArray[i];
-      SubBatchOutputHandler wrappedHandler = (globalStart, count, engineBatchSize, rawOutput) =>
-      {
-        int trueGlobalStart = capturedStart + globalStart;
-        // No lock needed: handler uses thread-local buffers for intermediate storage,
-        // and writes to distinct position ranges in the result arrays (no overlap).
-        handler(trueGlobalStart, count, engineBatchSize, rawOutput);
-      };
-
-      pools[i].ProcessBytesWithHandler(cachedByteInputs[i], countsArray[i], wrappedHandler, globalPositionOffset: 0);
-    });
-
-    SynchronizeTrackedDevices();
+    workerByteInput = input;
+    workerHandler = handler;
+    workerWorkType = WORK_BYTES_WITH_HANDLER;
+    DispatchAndWait(numGPUs, WORK_BYTES_WITH_HANDLER);
   }
 
 
@@ -1297,6 +1341,16 @@ public sealed class MultiGPUEnginePool : IDisposable
       return;
     }
     disposed = true;
+
+    // Shutdown worker threads
+    workerShutdown = true;
+    for (int i = 0; i < workerThreads.Length; i++)
+    {
+      workerStartSignals[i].Set();
+      workerThreads[i].Join(1000);
+      workerStartSignals[i].Dispose();
+      workerDoneSignals[i].Dispose();
+    }
 
     if (pinnedInput != IntPtr.Zero)
     {

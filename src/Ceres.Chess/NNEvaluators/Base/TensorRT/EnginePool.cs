@@ -105,6 +105,13 @@ public sealed class EnginePool : IDisposable
   // Second output buffer for pipelined processing
   private Half[] cachedOutputBuffer2;
 
+  // Pre-allocated ping-pong index arrays for pipelined processing (avoids per-call heap allocations)
+  private IntPtr[] pingPongPinnedInputs;
+  private IntPtr[] pingPongGpuInputs;
+  private IntPtr[] pingPongPinnedOutputs;
+  private IntPtr[] pingPongGpuOutputs;
+  private Half[][] pingPongManagedOutputs;
+
   // Per-engine cached buffers for Exact mode (indexed by engine index)
   // Eliminates per-batch allocations when using multiple exact-size engines
   private byte[][] perEngineByteInputBuffers;
@@ -360,6 +367,13 @@ public sealed class EnginePool : IDisposable
     if (USE_PIPELINED_SUBBATCHES)
     {
       cachedOutputBuffer2 = new Half[maxOutputElements];
+
+      // Pre-allocate ping-pong index arrays for pipelined processing
+      pingPongPinnedInputs = [pinnedIn, pinnedIn2];
+      pingPongGpuInputs = [gpuIn, gpuIn2];
+      pingPongPinnedOutputs = [pinnedOut, pinnedOut2];
+      pingPongGpuOutputs = [gpuOut, gpuOut2];
+      pingPongManagedOutputs = [cachedOutputBuffer, cachedOutputBuffer2];
     }
 
     // Pre-allocate per-engine buffers for Exact mode to eliminate GC pressure
@@ -444,7 +458,8 @@ public sealed class EnginePool : IDisposable
   }
 
 
-  public void Process(Half[] input, Half[] output, int totalPositions)
+  public void Process(Half[] input, Half[] output, int totalPositions,
+                      int inputElementOffset = 0, int outputElementOffset = 0)
   {
     int processed = 0;
     int lastBatchSize = 0;
@@ -455,8 +470,8 @@ public sealed class EnginePool : IDisposable
       (TensorRTEngine engine, int batchSize, bool useDynamic, int engineIndex) = SelectEngineWithMode(remaining, lastBatchSize);
 
       int actualPositions = Math.Min(batchSize, remaining);
-      int inputOffset = processed * InputElementsPerPosition;
-      int outputOffset = processed * OutputElementsPerPosition;
+      int inputOffset = inputElementOffset + processed * InputElementsPerPosition;
+      int outputOffset = outputElementOffset + processed * OutputElementsPerPosition;
       int inputElements = actualPositions * InputElementsPerPosition;
       int outputElements = useDynamic ? ComputeAlignedOutputSize(actualPositions) : actualPositions * OutputElementsPerPosition;
 
@@ -506,7 +521,8 @@ public sealed class EnginePool : IDisposable
     }
   }
 
-  public void ProcessBytes(byte[] input, Half[] output, int totalPositions)
+  public void ProcessBytes(byte[] input, Half[] output, int totalPositions,
+                           int inputByteOffset = 0, int outputElementOffset = 0)
   {
     int processed = 0;
     int lastBatchSize = 0;
@@ -517,8 +533,8 @@ public sealed class EnginePool : IDisposable
       (TensorRTEngine engine, int batchSize, bool useDynamic, int engineIndex) = SelectEngineWithMode(remaining, lastBatchSize);
 
       int actualPositions = Math.Min(batchSize, remaining);
-      int inputOffset = processed * InputElementsPerPosition;
-      int outputOffset = processed * OutputElementsPerPosition;
+      int inputOffset = inputByteOffset + processed * InputElementsPerPosition;
+      int outputOffset = outputElementOffset + processed * OutputElementsPerPosition;
       int inputElements = actualPositions * InputElementsPerPosition;
       int outputElements = useDynamic ? ComputeAlignedOutputSize(actualPositions) : actualPositions * OutputElementsPerPosition;
 
@@ -574,7 +590,8 @@ public sealed class EnginePool : IDisposable
   /// Uses pre-allocated buffers when possible to reduce GC pressure.
   /// Uses optimized batch scheduling when available (Exact mode with ExecutionTimes).
   /// </summary>
-  public void ProcessWithHandler(Half[] input, int totalPositions, SubBatchOutputHandler handler, int globalPositionOffset = 0)
+  public void ProcessWithHandler(Half[] input, int totalPositions, SubBatchOutputHandler handler,
+                                 int globalPositionOffset = 0, int inputElementOffset = 0)
   {
     // Use optimized scheduling path if available
     ComputeBatchPlan(totalPositions);
@@ -586,7 +603,7 @@ public sealed class EnginePool : IDisposable
 
     foreach (var (start, count, engine, engineBatchSize, useDynamic, engineIndex) in cachedBatchPlan)
     {
-      int inputOffset = start * InputElementsPerPosition;
+      int inputOffset = inputElementOffset + start * InputElementsPerPosition;
       int inputElements = count * InputElementsPerPosition;
       int outputElements = useDynamic ? ComputeAlignedOutputSize(count) : count * OutputElementsPerPosition;
 
@@ -634,16 +651,17 @@ public sealed class EnginePool : IDisposable
   /// The handler is called after each sub-batch inference with the raw output buffer.
   /// Uses pre-allocated buffers when possible to reduce GC pressure.
   /// </summary>
-  public void ProcessBytesWithHandler(byte[] input, int totalPositions, SubBatchOutputHandler handler, int globalPositionOffset = 0)
+  public void ProcessBytesWithHandler(byte[] input, int totalPositions, SubBatchOutputHandler handler,
+                                      int globalPositionOffset = 0, int inputByteOffset = 0)
   {
     if (USE_PIPELINED_SUBBATCHES)
     {
-      ProcessBytesWithHandlerPipelined(input, totalPositions, handler, globalPositionOffset);
+      ProcessBytesWithHandlerPipelined(input, totalPositions, handler, globalPositionOffset, inputByteOffset);
     }
     else
     {
       // Pipelining disabled - use non-pipelined path (still uses graph replay after warmup)
-      ProcessBytesWithHandlerNonPipelined(input, totalPositions, handler, globalPositionOffset);
+      ProcessBytesWithHandlerNonPipelined(input, totalPositions, handler, globalPositionOffset, inputByteOffset);
     }
   }
 
@@ -651,7 +669,8 @@ public sealed class EnginePool : IDisposable
   /// <summary>
   /// Non-pipelined processing path that uses synchronous host-based inference.
   /// </summary>
-  private void ProcessBytesWithHandlerNonPipelined(byte[] input, int totalPositions, SubBatchOutputHandler handler, int globalPositionOffset)
+  private void ProcessBytesWithHandlerNonPipelined(byte[] input, int totalPositions, SubBatchOutputHandler handler,
+                                                    int globalPositionOffset, int inputByteOffset = 0)
   {
     int processed = 0;
     int lastBatchSize = 0;
@@ -662,7 +681,7 @@ public sealed class EnginePool : IDisposable
       (TensorRTEngine engine, int batchSize, bool useDynamic, int engineIndex) = SelectEngineWithMode(remaining, lastBatchSize);
 
       int actualPositions = Math.Min(batchSize, remaining);
-      int inputOffset = processed * InputElementsPerPosition;
+      int inputOffset = inputByteOffset + processed * InputElementsPerPosition;
       int inputElements = actualPositions * InputElementsPerPosition;
       int outputElements = useDynamic ? ComputeAlignedOutputSize(actualPositions) : actualPositions * OutputElementsPerPosition;
 
@@ -721,7 +740,8 @@ public sealed class EnginePool : IDisposable
   /// 
   /// This overlaps CPU prep and H2D with GPU compute, without concurrent GPU computes.
   /// </summary>
-  private unsafe void ProcessBytesWithHandlerPipelined(byte[] input, int totalPositions, SubBatchOutputHandler handler, int globalPositionOffset)
+  private unsafe void ProcessBytesWithHandlerPipelined(byte[] input, int totalPositions, SubBatchOutputHandler handler,
+                                                       int globalPositionOffset, int inputByteOffset = 0)
   {
     // Compute batch boundaries using the centralized engine selection logic
     ComputeBatchPlan(totalPositions);
@@ -740,7 +760,7 @@ public sealed class EnginePool : IDisposable
       // Copy to pinned memory
       fixed (byte* srcPtr = input)
       {
-        Buffer.MemoryCopy(srcPtr, (void*)pinnedIn, inputBytes, inputBytes);
+        Buffer.MemoryCopy(srcPtr + inputByteOffset, (void*)pinnedIn, inputBytes, inputBytes);
       }
 
       // H2D, Compute, D2H all on stream 0 - CUDA guarantees in-order execution
@@ -774,21 +794,19 @@ public sealed class EnginePool : IDisposable
     }
 
     // Multi-batch pipelined processing
-    // Ping-pong between two sets of input and output buffers
-    IntPtr[] pinnedInputs = [pinnedIn, pinnedIn2];
-    IntPtr[] gpuInputs = [gpuIn, gpuIn2];
-    IntPtr[] pinnedOutputs = [pinnedOut, pinnedOut2];
-    IntPtr[] gpuOutputs = [gpuOut, gpuOut2];
-    Half[][] managedOutputs = [cachedOutputBuffer, cachedOutputBuffer2];
-    byte[][] managedInputs = [cachedByteInputBuffer, cachedByteInputBuffer2];
+    // Ping-pong between two sets of pre-allocated input and output buffers
+    IntPtr[] pinnedInputs = pingPongPinnedInputs;
+    IntPtr[] gpuInputs = pingPongGpuInputs;
+    IntPtr[] pinnedOutputs = pingPongPinnedOutputs;
+    IntPtr[] gpuOutputs = pingPongGpuOutputs;
+    Half[][] managedOutputs = pingPongManagedOutputs;
 
     // Stage first batch: CPU prep + H2D
     (int batch0Start, int batch0Count, TensorRTEngine batch0Engine, int batch0EngineSize, bool batch0UseDynamic, int batch0EngineIndex) = cachedBatchPlan[0];
     int batch0InputBytes = batch0Count * InputElementsPerPosition;
-    Array.Copy(input, 0, managedInputs[0], 0, batch0InputBytes);
-    fixed (byte* srcPtr = managedInputs[0])
+    fixed (byte* srcPtr = input)
     {
-      Buffer.MemoryCopy(srcPtr, (void*)pinnedInputs[0], batch0InputBytes, batch0InputBytes);
+      Buffer.MemoryCopy(srcPtr + inputByteOffset, (void*)pinnedInputs[0], batch0InputBytes, batch0InputBytes);
     }
     batch0Engine.CopyToGPUOnStreamAsync(0, gpuInputs[0], pinnedInputs[0], batch0InputBytes);
     // No sync needed - Infer on same stream will wait for H2D
@@ -814,13 +832,12 @@ public sealed class EnginePool : IDisposable
       // WHILE PREVIOUS BATCH COMPUTES: Pre-stage current batch (CPU prep + H2D on stream 1)
       {
         int inputBytes = currCount * InputElementsPerPosition;
-        int inputOffset = currStart * InputElementsPerPosition;
+        int inputOffset = inputByteOffset + currStart * InputElementsPerPosition;
 
-        // CPU prep: copy to managed buffer, then to pinned memory
-        Array.Copy(input, inputOffset, managedInputs[currBuffer], 0, inputBytes);
-        fixed (byte* srcPtr = managedInputs[currBuffer])
+        // CPU prep: copy directly from input to pinned memory (skip managed buffer intermediary)
+        fixed (byte* srcPtr = input)
         {
-          Buffer.MemoryCopy(srcPtr, (void*)pinnedInputs[currBuffer], inputBytes, inputBytes);
+          Buffer.MemoryCopy(srcPtr + inputOffset, (void*)pinnedInputs[currBuffer], inputBytes, inputBytes);
         }
 
         // H2D on stream 1 (overlaps with compute on stream 0)
