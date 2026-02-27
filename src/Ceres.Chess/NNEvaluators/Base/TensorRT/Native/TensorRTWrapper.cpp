@@ -143,6 +143,11 @@ namespace
   {
     nvinfer1::ICudaEngine* engine = nullptr;
     nvinfer1::IExecutionContext* context = nullptr;
+    // Second execution context for stream 2 concurrent compute.
+    // TensorRT execution contexts are NOT thread-safe across streams, so concurrent
+    // graph replay on streams 0 and 2 requires separate contexts with independent
+    // tensor address bindings.
+    nvinfer1::IExecutionContext* context2 = nullptr;
     SharedEngine* sharedOwner = nullptr;  // Non-null when sharing engine via multi-profile
     int32_t batchSize = 0;
     int32_t deviceId = 0;  // GPU device ID
@@ -159,22 +164,22 @@ namespace
     int64_t totalInputElements = 0;
     int64_t totalOutputElements = 0;
 
-    // CUDA streams (2 for double-buffering) and graph support
-    cudaStream_t streams[2] = { nullptr, nullptr };
+    // CUDA streams (3: stream 0 = compute A, stream 1 = transfers, stream 2 = compute B)
+    cudaStream_t streams[3] = { nullptr, nullptr, nullptr };
     cudaStream_t stream = nullptr;  // Alias to streams[0] for compatibility
     cudaGraph_t graph = nullptr;
     cudaGraphExec_t graphExec = nullptr;
     bool useCudaGraphs = false;
     bool graphCaptured = false;
 
-    // Per-stream CUDA graphs for pipelined inference (2 streams)
+    // Per-stream CUDA graphs for pipelined inference (3 streams)
     // These are used when external GPU buffers are provided (pipelined mode)
-    cudaGraph_t streamGraphs[2] = { nullptr, nullptr };
-    cudaGraphExec_t streamGraphExecs[2] = { nullptr, nullptr };
-    bool streamGraphsCaptured[2] = { false, false };
+    cudaGraph_t streamGraphs[3] = { nullptr, nullptr, nullptr };
+    cudaGraphExec_t streamGraphExecs[3] = { nullptr, nullptr, nullptr };
+    bool streamGraphsCaptured[3] = { false, false, false };
     // Track captured buffer addresses to detect when re-capture is needed
-    void* streamCapturedInput[2] = { nullptr, nullptr };
-    void* streamCapturedOutput[2] = { nullptr, nullptr };
+    void* streamCapturedInput[3] = { nullptr, nullptr, nullptr };
+    void* streamCapturedOutput[3] = { nullptr, nullptr, nullptr };
 
     ~EngineContext()
     {
@@ -182,17 +187,20 @@ namespace
       if (graphExec) cudaGraphExecDestroy(graphExec);
       if (graph) cudaGraphDestroy(graph);
       // Cleanup per-stream graphs
-      for (int i = 0; i < 2; ++i)
+      for (int i = 0; i < 3; ++i)
       {
         if (streamGraphExecs[i]) cudaGraphExecDestroy(streamGraphExecs[i]);
         if (streamGraphs[i]) cudaGraphDestroy(streamGraphs[i]);
       }
-      if (streams[0]) cudaStreamDestroy(streams[0]);
-      if (streams[1]) cudaStreamDestroy(streams[1]);
+      for (int i = 0; i < 3; ++i)
+      {
+        if (streams[i]) cudaStreamDestroy(streams[i]);
+      }
       for (void* buf : gpuBuffers)
       {
         if (buf) cudaFree(buf);
       }
+      if (context2) delete context2;
       if (context) delete context;
       if (sharedOwner)
       {
@@ -750,9 +758,10 @@ extern "C"
     ec->batchSize = batchSize;
     ec->useCudaGraphs = opts->useCudaGraphs != 0;
 
-    // Create CUDA stream
+    // Create CUDA streams (0=compute A, 1=transfers, 2=compute B)
     cudaStreamCreate(&ec->streams[0]);
     cudaStreamCreate(&ec->streams[1]);
+    cudaStreamCreate(&ec->streams[2]);
     ec->stream = ec->streams[0];  // Alias for compatibility
 
     // Collect input/output info
@@ -813,6 +822,21 @@ extern "C"
       void* buf = nullptr;
       cudaMalloc(&buf, ec->outputSizes[i] * ec->outputElemSizes[i]);
       ec->gpuBuffers.push_back(buf);
+    }
+
+    // Create context2 for concurrent compute on stream 2
+    if (ec->useCudaGraphs)
+    {
+      ec->context2 = engine->createExecutionContext();
+      if (ec->context2)
+      {
+        for (size_t i = 0; i < ec->inputNames.size(); ++i)
+        {
+          auto dims = engine->getTensorShape(ec->inputNames[i].c_str());
+          if (dims.d[0] == -1) dims.d[0] = batchSize;
+          ec->context2->setInputShape(ec->inputNames[i].c_str(), dims);
+        }
+      }
     }
 
     g_lastError.clear();
@@ -951,6 +975,7 @@ extern "C"
 
     cudaStreamCreate(&ec->streams[0]);
     cudaStreamCreate(&ec->streams[1]);
+    cudaStreamCreate(&ec->streams[2]);
     ec->stream = ec->streams[0];
 
     // Collect input/output info
@@ -1010,6 +1035,21 @@ extern "C"
       void* buf = nullptr;
       cudaMalloc(&buf, ec->outputSizes[i] * ec->outputElemSizes[i]);
       ec->gpuBuffers.push_back(buf);
+    }
+
+    // Create context2 for concurrent compute on stream 2
+    if (ec->useCudaGraphs)
+    {
+      ec->context2 = engine->createExecutionContext();
+      if (ec->context2)
+      {
+        for (size_t i = 0; i < ec->inputNames.size(); ++i)
+        {
+          auto dims = engine->getTensorShape(ec->inputNames[i].c_str());
+          if (dims.d[0] == -1) dims.d[0] = batchSize;
+          ec->context2->setInputShape(ec->inputNames[i].c_str(), dims);
+        }
+      }
     }
 
     return ec;
@@ -1913,26 +1953,36 @@ extern "C"
     return ec->gpuBuffers[ec->inputSizes.size() + index];
   }
 
+  // Returns the appropriate execution context for a given stream index.
+  // Stream 2 (concurrent compute B) uses context2 to avoid state conflicts
+  // with stream 0/1 operations on the primary context.
+  static nvinfer1::IExecutionContext* GetContextForStream(EngineContext* ec, int32_t streamIdx)
+  {
+    return (streamIdx == 2 && ec->context2) ? ec->context2 : ec->context;
+  }
+
   TRT_API int32_t TRT_InferOnStream(TRT_EngineHandle handle, int32_t streamIdx,
     void* gpuInput, void* gpuOutput)
   {
     constexpr size_t ELEM_SIZE = 2;  // FP16
-    if (!handle || streamIdx < 0 || streamIdx > 1) return -1;
+    if (!handle || streamIdx < 0 || streamIdx > 2) return -1;
     auto* ec = static_cast<EngineContext*>(handle);
     if (!EnsureDevice(ec->deviceId)) return -1;
 
+    auto* ctx = GetContextForStream(ec, streamIdx);
+
     if (!ec->inputNames.empty())
-      ec->context->setTensorAddress(ec->inputNames[0].c_str(), gpuInput);
+      ctx->setTensorAddress(ec->inputNames[0].c_str(), gpuInput);
 
     size_t outputOffset = 0;
     for (size_t i = 0; i < ec->outputNames.size(); ++i)
     {
       void* outPtr = static_cast<char*>(gpuOutput) + outputOffset * ELEM_SIZE;
-      ec->context->setTensorAddress(ec->outputNames[i].c_str(), outPtr);
+      ctx->setTensorAddress(ec->outputNames[i].c_str(), outPtr);
       outputOffset += AlignUp(ec->outputSizes[i], OUTPUT_TENSOR_ALIGN_ELEMS);
     }
 
-    bool success = ec->context->enqueueV3(ec->streams[streamIdx]);
+    bool success = ctx->enqueueV3(ec->streams[streamIdx]);
     return success ? 0 : -2;
   }
 
@@ -1940,26 +1990,31 @@ extern "C"
     void* gpuInput, void* gpuOutput)
   {
     constexpr size_t ELEM_SIZE = 2;  // FP16
-    if (!handle || streamIdx < 0 || streamIdx > 1) return -1;
+    if (!handle || streamIdx < 0 || streamIdx > 2) return -1;
     auto* ec = static_cast<EngineContext*>(handle);
     if (!EnsureDevice(ec->deviceId)) return -1;
 
-    // Set tensor addresses (must be consistent for graph capture and replay)
+    // Select the execution context for this stream.
+    // Stream 2 uses a separate context2 so that concurrent graph launches
+    // on streams 0 and 2 don't interfere with each other's tensor addresses.
+    auto* ctx = GetContextForStream(ec, streamIdx);
+
+    // Set tensor addresses on the appropriate context
     if (!ec->inputNames.empty())
-      ec->context->setTensorAddress(ec->inputNames[0].c_str(), gpuInput);
+      ctx->setTensorAddress(ec->inputNames[0].c_str(), gpuInput);
 
     size_t outputOffset = 0;
     for (size_t i = 0; i < ec->outputNames.size(); ++i)
     {
       void* outPtr = static_cast<char*>(gpuOutput) + outputOffset * ELEM_SIZE;
-      ec->context->setTensorAddress(ec->outputNames[i].c_str(), outPtr);
+      ctx->setTensorAddress(ec->outputNames[i].c_str(), outPtr);
       outputOffset += AlignUp(ec->outputSizes[i], OUTPUT_TENSOR_ALIGN_ELEMS);
     }
 
     if (!ec->useCudaGraphs)
     {
       // CUDA graphs disabled - use direct enqueue
-      bool success = ec->context->enqueueV3(ec->streams[streamIdx]);
+      bool success = ctx->enqueueV3(ec->streams[streamIdx]);
       return success ? 0 : -2;
     }
 
@@ -1982,7 +2037,7 @@ extern "C"
       else
       {
         // Addresses changed - fall back to direct enqueue (no graph)
-        bool success = ec->context->enqueueV3(ec->streams[streamIdx]);
+        bool success = ctx->enqueueV3(ec->streams[streamIdx]);
         return success ? 0 : -2;
       }
     }
@@ -1996,7 +2051,7 @@ extern "C"
       return -4;
     }
 
-    bool success = ec->context->enqueueV3(ec->streams[streamIdx]);
+    bool success = ctx->enqueueV3(ec->streams[streamIdx]);
 
     err = cudaStreamEndCapture(ec->streams[streamIdx], &ec->streamGraphs[streamIdx]);
     if (err != cudaSuccess || !ec->streamGraphs[streamIdx])
@@ -2046,9 +2101,11 @@ extern "C"
     void* gpuInput, void* gpuOutput, int32_t actualBatchSize)
   {
     constexpr size_t ELEM_SIZE = 2;  // FP16
-    if (!handle || streamIdx < 0 || streamIdx > 1) return -1;
+    if (!handle || streamIdx < 0 || streamIdx > 2) return -1;
     auto* ec = static_cast<EngineContext*>(handle);
     if (!EnsureDevice(ec->deviceId)) return -1;
+
+    auto* ctx = GetContextForStream(ec, streamIdx);
 
     // Set dynamic input shapes for actualBatchSize
     for (size_t i = 0; i < ec->inputNames.size(); ++i)
@@ -2059,7 +2116,7 @@ extern "C"
       {
         dims.d[0] = actualBatchSize;
       }
-      if (!ec->context->setInputShape(name, dims))
+      if (!ctx->setInputShape(name, dims))
       {
         std::lock_guard<std::mutex> lock(g_mutex);
         SetError("Failed to set input shape for " + std::string(name) + " to batch " + std::to_string(actualBatchSize));
@@ -2068,26 +2125,26 @@ extern "C"
     }
 
     if (!ec->inputNames.empty())
-      ec->context->setTensorAddress(ec->inputNames[0].c_str(), gpuInput);
+      ctx->setTensorAddress(ec->inputNames[0].c_str(), gpuInput);
 
     // Compute per-position output sizes and set tensor addresses
     size_t outputOffset = 0;
     for (size_t i = 0; i < ec->outputNames.size(); ++i)
     {
       void* outPtr = static_cast<char*>(gpuOutput) + outputOffset * ELEM_SIZE;
-      ec->context->setTensorAddress(ec->outputNames[i].c_str(), outPtr);
+      ctx->setTensorAddress(ec->outputNames[i].c_str(), outPtr);
       // Use per-position size * actualBatchSize for the offset calculation
       int64_t perPosSize = ec->outputSizes[i] / ec->batchSize;
       outputOffset += AlignUp(perPosSize * actualBatchSize, OUTPUT_TENSOR_ALIGN_ELEMS);
     }
 
-    bool success = ec->context->enqueueV3(ec->streams[streamIdx]);
+    bool success = ctx->enqueueV3(ec->streams[streamIdx]);
     return success ? 0 : -2;
   }
 
   TRT_API int32_t TRT_CopyToGPUOnStream(TRT_EngineHandle handle, int32_t streamIdx, void* dst, const void* src, int64_t bytes)
   {
-    if (!handle || streamIdx < 0 || streamIdx > 1) return -1;
+    if (!handle || streamIdx < 0 || streamIdx > 2) return -1;
     auto* ec = static_cast<EngineContext*>(handle);
     if (!EnsureDevice(ec->deviceId)) return -1;
     cudaMemcpyAsync(dst, src, bytes, cudaMemcpyHostToDevice, ec->streams[streamIdx]);
@@ -2096,7 +2153,7 @@ extern "C"
 
   TRT_API int32_t TRT_CopyFromGPUOnStream(TRT_EngineHandle handle, int32_t streamIdx, void* dst, const void* src, int64_t bytes)
   {
-    if (!handle || streamIdx < 0 || streamIdx > 1) return -1;
+    if (!handle || streamIdx < 0 || streamIdx > 2) return -1;
     auto* ec = static_cast<EngineContext*>(handle);
     if (!EnsureDevice(ec->deviceId)) return -1;
     cudaMemcpyAsync(dst, src, bytes, cudaMemcpyDeviceToHost, ec->streams[streamIdx]);
@@ -2105,7 +2162,7 @@ extern "C"
 
   TRT_API int32_t TRT_SyncStreamIdx(TRT_EngineHandle handle, int32_t streamIdx)
   {
-    if (!handle || streamIdx < 0 || streamIdx > 1) return -1;
+    if (!handle || streamIdx < 0 || streamIdx > 2) return -1;
     auto* ec = static_cast<EngineContext*>(handle);
     if (!EnsureDevice(ec->deviceId)) return -1;
     cudaStreamSynchronize(ec->streams[streamIdx]);
@@ -2283,7 +2340,7 @@ extern "C"
 
   TRT_API int32_t TRT_IsStreamGraphCaptured(TRT_EngineHandle handle, int32_t streamIdx)
   {
-    if (!handle || streamIdx < 0 || streamIdx > 1) return -1;
+    if (!handle || streamIdx < 0 || streamIdx > 2) return -1;
     auto* ec = static_cast<EngineContext*>(handle);
     return ec->streamGraphsCaptured[streamIdx] ? 1 : 0;
   }
@@ -2441,6 +2498,7 @@ extern "C"
     // Create streams first (needed for setOptimizationProfileAsync)
     cudaStreamCreate(&ec->streams[0]);
     cudaStreamCreate(&ec->streams[1]);
+    cudaStreamCreate(&ec->streams[2]);
     ec->stream = ec->streams[0];
 
     // Select the optimization profile for this context (TRT 10+ API)
@@ -2542,6 +2600,37 @@ extern "C"
       void* buf = nullptr;
       cudaMalloc(&buf, ec->outputSizes[i] * ec->outputElemSizes[i]);
       ec->gpuBuffers.push_back(buf);
+    }
+
+    // Create second execution context for stream 2 (concurrent compute).
+    // TensorRT execution contexts are not thread-safe, so concurrent graph replay
+    // on streams 0 and 2 requires separate contexts with independent tensor bindings.
+    if (useCudaGraphs)
+    {
+      ec->context2 = engine->createExecutionContext();
+      if (ec->context2)
+      {
+        if (profileIndex > 0)
+        {
+          ec->context2->setOptimizationProfileAsync(profileIndex, ec->streams[2]);
+          cudaStreamSynchronize(ec->streams[2]);
+        }
+        if (useSpinWait)
+        {
+          ec->context2->setEnqueueEmitsProfile(false);
+          ec->context2->setPersistentCacheLimit(0);
+        }
+        // Set input shapes on context2 (must match context)
+        for (size_t i = 0; i < ec->inputNames.size(); ++i)
+        {
+          auto dims = engine->getTensorShape(ec->inputNames[i].c_str());
+          if (dims.d[0] == -1)
+          {
+            dims.d[0] = batchSize;
+          }
+          ec->context2->setInputShape(ec->inputNames[i].c_str(), dims);
+        }
+      }
     }
 
     return ec;
