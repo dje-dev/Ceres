@@ -17,6 +17,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Numerics;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -392,7 +393,11 @@ namespace Ceres.Chess.NNEvaluators
         // Extract values to copy buffers
         for (int i = 0; i < bufferedResult.NumPos; i++)
         {
-          ExtractToNNEvaluatorResult(out ret[i], bufferedResult, i);
+          // Only extract position if needed for VCapture (when ply-bin outputs are available).
+          MGPosition? mgPos = bufferedResult.HasPlyBinOutputs && !positions.Positions.IsEmpty
+                              ? positions.Positions.Span[i]
+                              : null;
+          ExtractToNNEvaluatorResult(out ret[i], bufferedResult, i, mgPos);
         }
 
         return ret;
@@ -421,7 +426,8 @@ namespace Ceres.Chess.NNEvaluators
     /// <param name="result"></param>
     /// <param name="batch"></param>
     /// <param name="batchIndex"></param>
-    public void ExtractToNNEvaluatorResult(out NNEvaluatorResult result, IPositionEvaluationBatch batch, int batchIndex)
+    /// <param name="mgPos">Optional position for computing king squares (for VCapture).</param>
+    public void ExtractToNNEvaluatorResult(out NNEvaluatorResult result, IPositionEvaluationBatch batch, int batchIndex, MGPosition? mgPos = null)
     {
       float w = batch.GetWinP(batchIndex);
       float l = IsWDL ? batch.GetLossP(batchIndex) : float.NaN;
@@ -490,13 +496,22 @@ namespace Ceres.Chess.NNEvaluators
         }
       }
 
+      // Extract king squares for VCapture calculation if position is available and capture probs exist.
+      byte ourKingSquare = 0;
+      byte theirKingSquare = 0;
+      if (batch.HasPlyBinOutputs && mgPos.HasValue && plyBinCapture != null)
+      {
+        (ourKingSquare, theirKingSquare) = mgPos.Value.KingSquares;
+      }
+
       result = new NNEvaluatorResult(w, l, w1, l1, w2, l2, m, uncertaintyV, uncertaintyP,
                                      policyRef.policies.Span[policyRef.index],
                                      HasAction ? actionRef.actions.Span[actionRef.index] : default,
                                      activations, stateInfo, extraStat0, extraStat1,
                                      rawNetworkOutputs, RawNetworkOutputNames,
                                      plyBinMove, plyBinCapture,
-                                     punimSelf, punimOpponent);
+                                     punimSelf, punimOpponent,
+                                     ourKingSquare, theirKingSquare);
     }
 
     #endregion

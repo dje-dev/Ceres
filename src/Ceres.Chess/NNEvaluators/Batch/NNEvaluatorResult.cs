@@ -120,6 +120,18 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// </summary>
     public readonly Half[] PunimOpponentProbs;
 
+    /// <summary>
+    /// Square index (0-63) of the side-to-move's king.
+    /// Used for VCapture calculation from PlyBinCaptureProbs.
+    /// </summary>
+    private readonly byte ourKingSquare;
+
+    /// <summary>
+    /// Square index (0-63) of the opponent's king.
+    /// Used for VCapture calculation from PlyBinCaptureProbs.
+    /// </summary>
+    private readonly byte theirKingSquare;
+
 
     /// <summary>
     /// Constructor.
@@ -137,6 +149,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <param name="priorState"></param>
     /// <param name="extraStat0"></param>
     /// <param name="extraStat1"></param>
+    /// <param name="ourKingSquare">Square index of the side-to-move's king (for VCapture).</param>
+    /// <param name="theirKingSquare">Square index of the opponent's king (for VCapture).</param>
     public NNEvaluatorResult(float winP, float lossP, 
                              float win1P, float loss1P,
                              float win2P, float loss2P,
@@ -152,7 +166,9 @@ namespace Ceres.Chess.NetEvaluation.Batch
                              Half[] plyBinMoveProbs = null,
                              Half[] plyBinCaptureProbs = null,
                              Half[] punimSelfProbs = null,
-                             Half[] punimOpponentProbs = null)
+                             Half[] punimOpponentProbs = null,
+                             byte ourKingSquare = 0,
+                             byte theirKingSquare = 0)
     {
       this.winP = winP;
       this.lossP = lossP;
@@ -176,6 +192,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
       PlyBinCaptureProbs = plyBinCaptureProbs;
       PunimSelfProbs = punimSelfProbs;
       PunimOpponentProbs = punimOpponentProbs;
+      this.ourKingSquare = ourKingSquare;
+      this.theirKingSquare = theirKingSquare;
     }
 
 
@@ -195,6 +213,41 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// Value of secondary value head (win minus loss probability).
     /// </summary>
     public readonly float V2 => float.IsNaN(loss2P) ? win2P : (win2P - loss2P);
+
+
+    /// <summary>
+    /// Value derived from ply-bin capture probabilities on king squares.
+    /// 
+    /// VCapture = P(we capture their king) - P(they capture our king)
+    /// 
+    /// Positive values indicate we are more likely to deliver checkmate than receive one.
+    /// Returns NaN if capture probabilities are not available.
+    /// </summary>
+    public readonly float VCapture
+    {
+      get
+      {
+        if (PlyBinCaptureProbs == null)
+        {
+          return float.NaN;
+        }
+
+        const int NUM_BINS = 8;
+        const int NEVER_CAPTURED_BIN = 7;
+
+        // Read "never captured" probability (bin 7) for each king.
+        // Array layout: 64 squares × 8 bins = 512 elements, indexed as [square * 8 + bin].
+        float pNeverOurKing = (float)PlyBinCaptureProbs[ourKingSquare * NUM_BINS + NEVER_CAPTURED_BIN];
+        float pNeverTheirKing = (float)PlyBinCaptureProbs[theirKingSquare * NUM_BINS + NEVER_CAPTURED_BIN];
+
+        // Convert to capture probabilities.
+        float selfCaptureProb = 1f - pNeverTheirKing;     // P(we eventually capture their king)
+        float opponentCaptureProb = 1f - pNeverOurKing;   // P(they eventually capture our king)
+
+        return selfCaptureProb - opponentCaptureProb;
+      }
+    }
+
 
     /// <summary>
     /// Draw probability.

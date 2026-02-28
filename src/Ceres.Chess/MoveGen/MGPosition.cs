@@ -461,6 +461,53 @@ namespace Ceres.Chess.MoveGen
 
 
     /// <summary>
+    /// Returns king square indices for both sides.
+    /// The returned tuple contains (ourKingSquare, theirKingSquare) where "our" is the side to move.
+    /// Square indices use standard notation: A1=0, B1=1, ..., H1=7, A2=8, etc.
+    /// </summary>
+    /// <returns>Tuple of (side-to-move king square, opponent king square).</returns>
+    public readonly (byte ourKingSquare, byte theirKingSquare) KingSquares
+    {
+      get
+      {
+        // King piece codes: WKING = 7 (0111), BKING = 15 (1111)
+        // Using bitboard representation: A=1, B=1, C=1 for kings, D distinguishes color.
+        // White king: A & B & C & ~D
+        // Black king: A & B & C & D
+        ulong kingMask = A & B & C;
+        ulong whiteKingBB = kingMask & ~D;
+        ulong blackKingBB = kingMask & D;
+
+        // Get square indices (0-63) using trailing zero count.
+        int whiteKingSq = whiteKingBB != 0 ? BitOperations.TrailingZeroCount(whiteKingBB) : 0;
+        int blackKingSq = blackKingBB != 0 ? BitOperations.TrailingZeroCount(blackKingBB) : 0;
+
+        // Convert from MGPosition's bit ordering to standard square index.
+        // MGPosition uses H1=0, G1=1, ..., A1=7, H2=8, etc.
+        // Standard square index A1=0, B1=1, ..., H1=7, A2=8, etc.
+        // Conversion: rank stays same, file is mirrored (7 - file).
+        int wRank = whiteKingSq / 8;
+        int wFile = 7 - (whiteKingSq % 8);
+        int whiteKingStd = wRank * 8 + wFile;
+
+        int bRank = blackKingSq / 8;
+        int bFile = 7 - (blackKingSq % 8);
+        int blackKingStd = bRank * 8 + bFile;
+
+        // Return based on side to move.
+        if (BlackToMove)
+        {
+          return ((byte)blackKingStd, (byte)whiteKingStd);
+        }
+        else
+        {
+          return ((byte)whiteKingStd, (byte)blackKingStd);
+        }
+      }
+    }
+
+
+    /// <summary>
     /// Returns number of white pawns on 7th rank.
     /// </summary>
     public readonly int NumPawnsRank7(bool white)
