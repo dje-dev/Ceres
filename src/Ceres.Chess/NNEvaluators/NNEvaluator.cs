@@ -497,11 +497,18 @@ namespace Ceres.Chess.NNEvaluators
       }
 
       // Extract king squares for VCapture calculation if position is available and capture probs exist.
+      // The NN outputs capture probs in side-to-move perspective (board is rank-flipped for black),
+      // so king squares must also be rank-flipped for black-to-move positions.
       byte ourKingSquare = 0;
       byte theirKingSquare = 0;
       if (batch.HasPlyBinOutputs && mgPos.HasValue && plyBinCapture != null)
       {
         (ourKingSquare, theirKingSquare) = mgPos.Value.KingSquares;
+        if (mgPos.Value.BlackToMove)
+        {
+          ourKingSquare = (byte)(ourKingSquare ^ 56);
+          theirKingSquare = (byte)(theirKingSquare ^ 56);
+        }
       }
 
       result = new NNEvaluatorResult(w, l, w1, l1, w2, l2, m, uncertaintyV, uncertaintyP,
