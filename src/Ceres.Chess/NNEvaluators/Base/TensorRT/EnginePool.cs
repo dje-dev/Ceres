@@ -436,19 +436,31 @@ public sealed class EnginePool : IDisposable
       int inputBytes = (int)engine.TotalInputSize * (useByteInputs ? 1 : 2);
       int outputBytes = (int)engine.TotalOutputSize * 2;
 
-      // Capture CUDA graph on each compute stream
-      for (int s = 0; s < NUM_COMPUTE_STREAMS; s++)
+      // Capture CUDA graph on each compute stream.
+      // If capture fails (e.g., resource exhaustion with many profiles),
+      // disable CUDA graphs for this engine and continue — it will fall back
+      // to direct enqueue at inference time.
+      try
       {
-        int streamId = COMPUTE_STREAM_IDS[s];
-        if (s > 0 && engine.IsStreamGraphCaptured(streamId))
+        for (int s = 0; s < NUM_COMPUTE_STREAMS; s++)
         {
-          continue;
-        }
+          int streamId = COMPUTE_STREAM_IDS[s];
+          if (s > 0 && engine.IsStreamGraphCaptured(streamId))
+          {
+            continue;
+          }
 
-        engine.CopyToGPUOnStreamAsync(streamId, streamBuffers[s].GpuInput, streamBuffers[s].PinnedInput, inputBytes);
-        engine.InferOnStreamWithGraphAsync(streamId, streamBuffers[s].GpuInput, streamBuffers[s].GpuOutput, GraphCaptureRWLock);
-        engine.CopyFromGPUOnStreamAsync(streamId, streamBuffers[s].PinnedOutput, streamBuffers[s].GpuOutput, outputBytes);
-        engine.SyncStream(streamId);
+          engine.CopyToGPUOnStreamAsync(streamId, streamBuffers[s].GpuInput, streamBuffers[s].PinnedInput, inputBytes);
+          engine.InferOnStreamWithGraphAsync(streamId, streamBuffers[s].GpuInput, streamBuffers[s].GpuOutput, GraphCaptureRWLock);
+          engine.CopyFromGPUOnStreamAsync(streamId, streamBuffers[s].PinnedOutput, streamBuffers[s].GpuOutput, outputBytes);
+          engine.SyncStream(streamId);
+        }
+      }
+      catch (Exception ex)
+      {
+        Console.Error.WriteLine($"[TensorRT] CUDA graph warmup failed for batch={engine.BatchSize}: {ex.Message}");
+        Console.Error.WriteLine($"[TensorRT] Disabling CUDA graphs for this engine (will use direct enqueue).");
+        engine.DisableCudaGraphs();
       }
     }
 

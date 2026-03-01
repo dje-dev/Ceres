@@ -2147,7 +2147,19 @@ extern "C"
     if (!handle || streamIdx < 0 || streamIdx > 2) return -1;
     auto* ec = static_cast<EngineContext*>(handle);
     if (!EnsureDevice(ec->deviceId)) return -1;
-    cudaMemcpyAsync(dst, src, bytes, cudaMemcpyHostToDevice, ec->streams[streamIdx]);
+    // Clear any stale CUDA error from prior unchecked operations
+    cudaGetLastError();
+    cudaError_t err = cudaMemcpyAsync(dst, src, bytes, cudaMemcpyHostToDevice, ec->streams[streamIdx]);
+    if (err != cudaSuccess)
+    {
+      std::lock_guard<std::mutex> lock(g_mutex);
+      SetError("cudaMemcpyAsync H2D failed on stream " + std::to_string(streamIdx) +
+               ": " + cudaGetErrorString(err) +
+               " (dst=" + std::to_string((uintptr_t)dst) +
+               " src=" + std::to_string((uintptr_t)src) +
+               " bytes=" + std::to_string(bytes) + ")");
+      return -2;
+    }
     return 0;
   }
 
@@ -2156,7 +2168,15 @@ extern "C"
     if (!handle || streamIdx < 0 || streamIdx > 2) return -1;
     auto* ec = static_cast<EngineContext*>(handle);
     if (!EnsureDevice(ec->deviceId)) return -1;
-    cudaMemcpyAsync(dst, src, bytes, cudaMemcpyDeviceToHost, ec->streams[streamIdx]);
+    cudaGetLastError();
+    cudaError_t err = cudaMemcpyAsync(dst, src, bytes, cudaMemcpyDeviceToHost, ec->streams[streamIdx]);
+    if (err != cudaSuccess)
+    {
+      std::lock_guard<std::mutex> lock(g_mutex);
+      SetError("cudaMemcpyAsync D2H failed on stream " + std::to_string(streamIdx) +
+               ": " + cudaGetErrorString(err));
+      return -2;
+    }
     return 0;
   }
 
@@ -2338,6 +2358,13 @@ extern "C"
     return ec->useCudaGraphs ? 1 : 0;
   }
 
+  TRT_API void TRT_DisableCudaGraphs(TRT_EngineHandle handle)
+  {
+    if (!handle) return;
+    auto* ec = static_cast<EngineContext*>(handle);
+    ec->useCudaGraphs = false;
+  }
+
   TRT_API int32_t TRT_IsStreamGraphCaptured(TRT_EngineHandle handle, int32_t streamIdx)
   {
     if (!handle || streamIdx < 0 || streamIdx > 2) return -1;
@@ -2496,9 +2523,21 @@ extern "C"
     ec->useCudaGraphs = useCudaGraphs;
 
     // Create streams first (needed for setOptimizationProfileAsync)
-    cudaStreamCreate(&ec->streams[0]);
-    cudaStreamCreate(&ec->streams[1]);
-    cudaStreamCreate(&ec->streams[2]);
+    for (int i = 0; i < 3; ++i)
+    {
+      cudaError_t serr = cudaStreamCreate(&ec->streams[i]);
+      if (serr != cudaSuccess)
+      {
+        // Clean up already-created streams
+        for (int j = 0; j < i; ++j)
+        {
+          cudaStreamDestroy(ec->streams[j]);
+        }
+        delete context;
+        delete ec;
+        return nullptr;
+      }
+    }
     ec->stream = ec->streams[0];
 
     // Select the optimization profile for this context (TRT 10+ API)

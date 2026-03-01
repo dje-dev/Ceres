@@ -387,6 +387,11 @@ public sealed class TensorRTEngine : IDisposable
   public bool UsesCudaGraphs => TensorRTNative.UsesCudaGraphs(handle) == 1;
 
   /// <summary>
+  /// Disable CUDA graphs for this engine (fallback to direct enqueue).
+  /// </summary>
+  public void DisableCudaGraphs() => TensorRTNative.DisableCudaGraphs(handle);
+
+  /// <summary>
   /// Returns true if the CUDA graph for the specified stream has already been captured.
   /// </summary>
   /// <param name="streamIdx">Stream index (0 or 1)</param>
@@ -658,7 +663,11 @@ public sealed class TensorRTEngine : IDisposable
     int result = TensorRTNative.CopyToGPUOnStream(handle, streamIdx, gpuDst, pinnedSrc, bytes);
     if (result != 0)
     {
-      throw new InvalidOperationException($"CopyToGPUOnStream failed on stream {streamIdx}");
+      string error = TensorRTNative.GetLastErrorString();
+      throw new InvalidOperationException(
+        $"CopyToGPUOnStream failed (rc={result}) on stream {streamIdx}, " +
+        $"batch={BatchSize}, handle={handle}, dst={gpuDst}, src={pinnedSrc}, bytes={bytes}" +
+        (error != null ? $": {error}" : ""));
     }
   }
 
