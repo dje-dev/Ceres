@@ -222,6 +222,8 @@ namespace Ceres.Features.UCI
           float moveOverheadMilliseconds = 0;
           SetFloat(value, 0, int.MaxValue, ref moveOverheadMilliseconds);
           moveOverheadSeconds = moveOverheadMilliseconds / 1000f;
+          if (CeresEngine is not null)
+            CeresEngine.SearchParams.MoveOverheadSeconds = moveOverheadSeconds;
           break;
 
         case "smartpruningfactor":
@@ -233,6 +235,8 @@ namespace Ceres.Features.UCI
             futilityPruningDisabled = false;
           else
             OutStream.Write($"Ceres does not support {factor}, only value 0 (indicating turned off) or 1.33 (indicating default) for SmartPruningFactor");
+          if (CeresEngine is not null)
+            CeresEngine.SearchParams.FutilityPruningStopSearchEnabled =  !futilityPruningDisabled;
           break;
 
         case "verbosemovestats":
@@ -296,39 +300,39 @@ namespace Ceres.Features.UCI
 
 
         case "cpuct":
-          SetFloat(value, 0, float.MaxValue, ref cpuct);
+          SetFloat(value, 0, float.MaxValue, ref (CeresEngine is not null ? ref CeresEngine.ChildSelectParams.CPUCT : ref cpuct));
           break;
 
         case "cpuctbase":
-          SetFloat(value, 1, float.MaxValue, ref cpuctBase);
+          SetFloat(value, 1, float.MaxValue, ref (CeresEngine is not null ? ref CeresEngine.ChildSelectParams.CPUCTBase : ref cpuctBase));
           break;
 
         case "cpuctfactor":
-          SetFloat(value, 0, float.MaxValue, ref cpuctFactor);
+          SetFloat(value, 0, float.MaxValue, ref (CeresEngine is not null ? ref CeresEngine.ChildSelectParams.CPUCTFactor : ref cpuctFactor));
           break;
 
         case "cpuctatroot":
-          SetFloat(value, 0, float.MaxValue, ref cpuctAtRoot);
+          SetFloat(value, 0, float.MaxValue, ref (CeresEngine is not null ? ref CeresEngine.ChildSelectParams.CPUCTAtRoot : ref cpuctAtRoot));
           break;
 
         case "cpuctbaseatroot":
-          SetFloat(value, 1, float.MaxValue, ref cpuctBaseAtRoot);
+          SetFloat(value, 1, float.MaxValue, ref (CeresEngine is not null ? ref CeresEngine.ChildSelectParams.CPUCTBaseAtRoot : ref cpuctBaseAtRoot));
           break;
 
         case "cpuctfactoratroot":
-          SetFloat(value, 0, float.MaxValue, ref cpuctFactorAtRoot);
+          SetFloat(value, 0, float.MaxValue, ref (CeresEngine is not null ? ref CeresEngine.ChildSelectParams.CPUCTFactorAtRoot : ref cpuctFactorAtRoot));
           break;
 
         case "policytemperature":
-          SetFloat(value, 0.1f, float.MaxValue, ref policySoftmax);
+          SetFloat(value, 0.1f, float.MaxValue, ref (CeresEngine is not null ? ref CeresEngine.ChildSelectParams.PolicySoftmax : ref policySoftmax));
           break;
 
         case "fpu":
-          SetFloat(value, 0, float.MaxValue, ref fpu);
+          SetFloat(value, 0, float.MaxValue, ref (CeresEngine is not null ? ref CeresEngine.ChildSelectParams.FPUValue : ref fpu));
           break;
 
         case "fpuatroot":
-          SetFloat(value, 0, float.MaxValue, ref fpuAtRoot);
+          SetFloat(value, 0, float.MaxValue, ref (CeresEngine is not null ? ref CeresEngine.ChildSelectParams.FPUValueAtRoot : ref fpuAtRoot));
           break;
       }
     }
