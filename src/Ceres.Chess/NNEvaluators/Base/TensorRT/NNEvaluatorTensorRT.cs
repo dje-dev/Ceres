@@ -248,7 +248,7 @@ public class NNEvaluatorTensorRT : NNEvaluator
     EngineNetworkID = System.IO.Path.GetFileNameWithoutExtension(onnxFileName);
 
     // Build per-GPU sizes: use provided sizesPerGPU or replicate batchSizes for all GPUs
-    int[][] effectiveSizesPerGPU = new int[gpuIDs.Length][];
+    int[][] effectiveSizesPerGPU = new int[GpuIDs.Length][];
     for (int i = 0; i < GpuIDs.Length; i++)
     {
       effectiveSizesPerGPU[i] = AdjustToSM(GpuIDs[i], batchSizes);

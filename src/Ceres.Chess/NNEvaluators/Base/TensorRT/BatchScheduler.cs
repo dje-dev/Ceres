@@ -506,10 +506,12 @@ public static class BatchScheduler
   /// <summary>
   /// Single-GPU scheduling: finds the batch sequence minimizing total inference time.
   /// Uses DP over position counts with pipeline overlap credits.
-  /// Only managed allocation is the returned result array; working buffers
-  /// use stackalloc.
+  /// When concurrent=true, also evaluates concurrent cost (pairs on separate CUDA streams)
+  /// for diagnostic output. The plan itself is unchanged; the caller controls execution strategy.
+  /// Only managed allocation is the returned result array; working buffers use stackalloc.
   /// </summary>
-  public static int[] ScheduleSingleGPU(ReadOnlySpan<int> engineSizes, ReadOnlySpan<float> executionTimes, int targetBatch, int deviceIndex = -1)
+  public static int[] ScheduleSingleGPU(ReadOnlySpan<int> engineSizes, ReadOnlySpan<float> executionTimes,
+                                         int targetBatch, int deviceIndex = -1, bool concurrent = false)
   {
     if (targetBatch <= 0 || engineSizes.Length == 0)
     {
@@ -576,6 +578,16 @@ public static class BatchScheduler
       Console.WriteLine($"  OPTIMIZED_PLAN [{label}]: {N} -> [{string.Join(", ", result)}] total={batched} padding={batched - N} time={time:F1}ms");
     }
 
+    // When concurrent execution is enabled, evaluate concurrent cost for diagnostics.
+    // The plan itself is unchanged; the caller controls execution via NUM_COMPUTE_STREAMS.
+    if (concurrent && result.Length > 1 && VERBOSE_DETAILS)
+    {
+      float seqCost = ComputeSequentialCost(result, engineSizes, executionTimes);
+      float concCost = ComputeConcurrentCost(result, engineSizes, executionTimes);
+      string concLabel = deviceIndex >= 0 ? $"device {deviceIndex}" : "single GPU";
+      Console.WriteLine($"  CONCURRENT_EVAL [{concLabel}]: seq={seqCost:F2}ms conc={concCost:F2}ms plan=[{string.Join(", ", result)}]");
+    }
+
     return result;
   }
 
@@ -586,47 +598,6 @@ public static class BatchScheduler
   /// the two launches happen in quick succession.
   /// </summary>
   public const float PER_CONCURRENT_PAIR_OVERHEAD_MS = 0.3f;
-
-
-  /// <summary>
-  /// Single-GPU concurrent scheduling: finds the batch sequence minimizing total inference
-  /// time when consecutive pairs of batches can execute concurrently on separate CUDA streams.
-  ///
-  /// First computes the sequential plan via ScheduleSingleGPU. Then evaluates the concurrent
-  /// cost: pairs of consecutive batches pay max(time_a, time_b) + overhead instead of
-  /// time_a + time_b - pipeline_credit. Returns whichever plan has lower estimated time.
-  ///
-  /// The returned array is the same format as ScheduleSingleGPU (batch sizes in order).
-  /// The caller uses USE_CONCURRENT_COMPUTE to decide the execution strategy.
-  /// </summary>
-  public static int[] ScheduleSingleGPUConcurrent(ReadOnlySpan<int> engineSizes, ReadOnlySpan<float> executionTimes,
-                                                   int targetBatch, int deviceIndex = -1)
-  {
-    // Get the sequential plan first (this is the baseline)
-    int[] seqPlan = ScheduleSingleGPU(engineSizes, executionTimes, targetBatch, deviceIndex);
-
-    if (seqPlan.Length <= 1)
-    {
-      return seqPlan; // Single batch: no concurrency possible
-    }
-
-    // Compute sequential cost: sum of times - pipeline credits
-    float seqCost = ComputeSequentialCost(seqPlan, engineSizes, executionTimes);
-
-    // Compute concurrent cost: pairs pay max(time_a, time_b) + overhead
-    float concCost = ComputeConcurrentCost(seqPlan, engineSizes, executionTimes);
-
-    if (VERBOSE_DETAILS)
-    {
-      string label = deviceIndex >= 0 ? $"device {deviceIndex}" : "single GPU";
-      Console.WriteLine($"  CONCURRENT_EVAL [{label}]: seq={seqCost:F2}ms conc={concCost:F2}ms plan=[{string.Join(", ", seqPlan)}]");
-    }
-
-    // The same batch plan is returned either way; the caller controls the execution strategy.
-    // But if the concurrent cost model suggests it's faster, the caller's USE_CONCURRENT_COMPUTE
-    // flag will cause it to use the concurrent path.
-    return seqPlan;
-  }
 
 
   /// <summary>
