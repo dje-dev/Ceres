@@ -31,20 +31,20 @@
 		</PackageReference>
 		<PackageReference Include="ManagedCuda-12" Version="12.4.57" />
 		<PackageReference Include="ManagedCuda-CUBLAS" Version="12.4.57" />
-		<PackageReference Include="Microsoft.Diagnostics.NETCore.Client" Version="0.2.652701" />
-		<PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.10" />
-		<PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.10" />
-		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="9.0.10" />
-		<PackageReference Include="Microsoft.Extensions.Logging.EventSource" Version="9.0.10" />
-		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.10" />
-		<PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu" Version="1.23.2" />
+		<PackageReference Include="Microsoft.Diagnostics.NETCore.Client" Version="0.2.661903" />
+		<PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.3" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.3" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.3" />
+		<PackageReference Include="Microsoft.Extensions.Logging.EventSource" Version="10.0.3" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.3" />
+		<PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu" Version="1.24.2" />
 
 		<PackageReference Include="protobuf-net" Version="3.2.45" />
 		<PackageReference Include="protobuf-net.Core" Version="3.2.45" />
 		<PackageReference Include="OnnxSharp" Version="0.3.2" />
 		<PackageReference Include="Spectre.Console" Version="0.53.0" />
 
-		<PackageReference Include="System.Numerics.Tensors" Version="9.0.10" />
+		<PackageReference Include="System.Numerics.Tensors" Version="10.0.3" />
 	</ItemGroup>
 
 </Project>
