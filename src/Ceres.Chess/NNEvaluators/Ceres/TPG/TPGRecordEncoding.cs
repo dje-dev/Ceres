@@ -69,6 +69,12 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
 
     internal const int PlySinceLastMoveValueIfWasLastMove = 2;
 
+    /// <summary>
+    /// Encodes ply count into scaled value for TPGSquareRecord.
+    /// Formula: 2 / sqrt(plies + 1), giving range approximately [0.125, 2.0].
+    /// </summary>
+    /// <param name="numPlies">Number of plies since last move on this square (1 = just moved).</param>
+    /// <returns>Encoded value in range suitable for ByteScaled storage.</returns>
     internal static float PliesSinceLastMoveEncoded(int numPlies)
     {
       numPlies = Math.Min(numPlies, byte.MaxValue);
@@ -78,6 +84,27 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
       // Then scale so max value is 2.
       //        return MathF.Sqrt(numPlies) / 5;
       return PlySinceLastMoveValueIfWasLastMove / MathF.Sqrt(numPlies + 1);
+    }
+
+
+    /// <summary>
+    /// Decodes encoded ply-since-last-move value back to integer ply count.
+    /// Inverse of PliesSinceLastMoveEncoded: plies = (2/encoded)² - 1.
+    /// </summary>
+    /// <param name="encodedValue">Encoded value from PliesSinceLastMoveEncoded or TPGSquareRecord.PlySinceLastMove.Value.</param>
+    /// <returns>Decoded ply count (rounded to nearest integer).</returns>
+    public static int PliesSinceLastMoveDecoded(float encodedValue)
+    {
+      if (encodedValue <= 0)
+      {
+        return DEFAULT_PLIES_SINCE_LAST_PIECE_MOVED_IF_STARTPOS;
+      }
+
+      // Inverse of: encoded = 2 / sqrt(plies + 1)
+      // plies + 1 = (2 / encoded)²
+      // plies = (2 / encoded)² - 1
+      float ratio = PlySinceLastMoveValueIfWasLastMove / encodedValue;
+      return (int)MathF.Round(ratio * ratio - 1);
     }
 
     internal const float MAX_MLH = byte.MaxValue;

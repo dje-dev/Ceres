@@ -260,14 +260,9 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
                                         IEncodedPositionBatchFlat batch,
                                         bool includeHistory, Memory<byte> squareValuesByte, Memory<Half> squareValues, short[] legalMoveIndices)
     {
-      if (TPGRecord.EMIT_PLY_SINCE_LAST_MOVE_PER_SQUARE)
-      {
-        throw new NotImplementedException();
-      }
-
-      const bool EMIT_PLY_SINCE = false;
       TPGRecord tpgRecord = default;
       EncodedPositionBatchFlat ebf = batch as EncodedPositionBatchFlat;
+      bool EMIT_PLY_SINCE = ebf?.LastMovePlies != null;
 
       // TODO: Consider possibly restoring the commented out code below 
       //       to efficiently decode the two top positions into TPGRecord

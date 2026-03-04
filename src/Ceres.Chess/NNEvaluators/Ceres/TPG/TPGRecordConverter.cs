@@ -205,13 +205,9 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
         int tpgSquaresStartOffset = i * 64 * TPGRecord.BYTES_PER_SQUARE_RECORD;
         fixed (byte* ptrSquareBytes = &squareBytesAllLocalRef[tpgSquaresStartOffset])
         {
-          if (!lastMovePliesEnabled)
-          {
-            // Disable any values possibly passed for last used plies since they are not to be used.
-            pliesSinceLastMoveAllPositions = null;
-          }
-
-          Span<byte> thesePliesSinceLastMove = pliesSinceLastMoveAllPositions == null ? default : new Span<byte>(pliesSinceLastMoveAllPositions, i * 64, 64);
+          Span<byte> thesePliesSinceLastMove = (!lastMovePliesEnabled || pliesSinceLastMoveAllPositions == null || pliesSinceLastMoveAllPositions.Length == 0)
+            ? default
+            : new Span<byte>(pliesSinceLastMoveAllPositions, i * 64, 64);
 
           float thisQNegativeBlunders;
           float thisQPositiveBlunders;
