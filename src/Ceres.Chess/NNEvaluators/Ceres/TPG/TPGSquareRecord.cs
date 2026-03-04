@@ -78,7 +78,8 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
 
     public override string ToString()
     {
-      string str = $"[-{PlySinceLastMove} ply] ";
+      int decodedPly = TPGRecordEncoding.PliesSinceLastMoveDecoded(PlySinceLastMove.Value);
+      string str = $"[{decodedPly} ply (enc={PlySinceLastMove.Value:F2})] ";
       str += (IsOurPiece(PieceTypeHistory(0)) ? "Our " : "Opponent ") + GetPieceInfo(PieceTypeHistory(0)).pieceType + " on " + GetSquare();
 
       str += " EP= " + this.IsEnPassant;
