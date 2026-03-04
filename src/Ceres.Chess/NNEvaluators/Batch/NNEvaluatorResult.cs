@@ -151,7 +151,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <param name="extraStat1"></param>
     /// <param name="ourKingSquare">Square index of the side-to-move's king (for VCapture).</param>
     /// <param name="theirKingSquare">Square index of the opponent's king (for VCapture).</param>
-    public NNEvaluatorResult(float winP, float lossP, 
+    public NNEvaluatorResult(float winP, float lossP,
                              float win1P, float loss1P,
                              float win2P, float loss2P,
                              float m, float uncertaintyV, float uncertaintyP,
@@ -159,7 +159,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
                              CompressedActionVector actionsWDL,
                              NNEvaluatorResultActivations activations,
                              Half[] priorState,
-                             FP16? extraStat0 = null, 
+                             FP16? extraStat0 = null,
                              FP16? extraStat1 = default,
                              FP16[][] rawNetworkOutputs = null,
                              string[] rawNetworkOutputNames = null,
@@ -263,18 +263,18 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <summary>
     /// Win probability.
     /// </summary>
-    public readonly float W => float.IsNaN(lossP) ? float.NaN : winP;
+    public readonly float W => float.IsNaN(winP) ? float.NaN : winP;
 
 
     /// <summary>
     /// Win probability (primary value head).
     /// </summary>
-    public readonly float W1 => float.IsNaN(loss1P) ? float.NaN : winP;
+    public readonly float W1 => float.IsNaN(win1P) ? float.NaN : win1P;
 
     /// <summary>
     /// Win probability (secondary value head).
     /// </summary>
-    public readonly float W2 => float.IsNaN(loss2P) ? float.NaN : win2P;
+    public readonly float W2 => float.IsNaN(win2P) ? float.NaN : win2P;
 
 
     /// <summary>
@@ -285,7 +285,7 @@ namespace Ceres.Chess.NetEvaluation.Batch
     /// <summary>
     /// Loss probability (primary value head).
     /// </summary>
-    public readonly float L1 => float.IsNaN(loss1P) ? float.NaN : lossP;
+    public readonly float L1 => float.IsNaN(loss1P) ? float.NaN : loss1P;
 
     /// <summary>
     /// Loss probability (secondary value head).
@@ -294,9 +294,9 @@ namespace Ceres.Chess.NetEvaluation.Batch
 
 
     /// <summary>
-    /// Returns most probably game result (win, draw, loss) as an integer (-1, 0, 1).
+    /// Returns most probable game result (win, draw, loss) as an integer (1, 0, -1).
     /// </summary>
-    public readonly int MostProbableGameResult => W > 0.5f ? 1 : (L > 0.5 ? -1 : 0);
+    public readonly int MostProbableGameResult => W > 0.5f ? 1 : (L > 0.5f ? -1 : 0);
 
     /// <summary>
     /// Returns the action head evaluation for a specified move.
@@ -326,9 +326,9 @@ namespace Ceres.Chess.NetEvaluation.Batch
           return ((float)thisAction.W, 1 - (float)thisAction.W - (float)thisAction.L, (float)thisAction.L);
         }
         policyIndex++;
-      } 
+      }
 
-      throw new Exception("Move not found in policy " + move);
+      throw new ArgumentException($"Move {move} not found in policy.", nameof(move));
     }
 
 
@@ -346,8 +346,8 @@ namespace Ceres.Chess.NetEvaluation.Batch
       }
 
       (Half W, Half L) thisAction = ActionsWDL[moveIndexInCompressedPolicyVector];
-      return ((float) thisAction.W, 1 - (float)thisAction.W - (float)thisAction.L, (float)thisAction.L); 
-    } 
+      return ((float)thisAction.W, 1 - (float)thisAction.W - (float)thisAction.L, (float)thisAction.L);
+    }
 
 
     /// <summary>
@@ -364,10 +364,10 @@ namespace Ceres.Chess.NetEvaluation.Batch
         dev = $" QDEV [{ExtraStat0.Value,4:F2} {ExtraStat1.Value,4:F2}] ";
       }
 
-      string extras = $" WDL ({W:F2} {1-(W+L):F2} {L:F2}) ";
+      string extras = $" WDL ({W:F2} {D:F2} {L:F2}) ";
       if (!float.IsNaN(W2))
       {
-        extras += $" WDL2 ({W2:F2} {1 - (W2 + L2):F2} {L2:F2}) ";
+        extras += $" WDL2 ({W2:F2} {D2:F2} {L2:F2}) ";
       }
 
       if (!float.IsNaN(M))
