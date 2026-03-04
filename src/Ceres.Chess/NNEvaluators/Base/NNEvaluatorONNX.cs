@@ -312,8 +312,6 @@ public class NNEvaluatorONNX : NNEvaluator
   /// <param name="positionsNativeInput"></param>
   /// <param name="usesSecondaryInputs"></param>
   /// <param name="retrieveSupplementalResults"></param>
-  /// <returns></returns>
-  /// <exception cref="NotImplementedException"></exception>
   public override IPositionEvaluationBatch DoEvaluateNativeIntoBuffers(object positionsNativeInput, bool usesSecondaryInputs,
                                                                        int numPositions, Func<int, int, bool> posMoveIsLegal,
                                                                        bool retrieveSupplementalResults = false)
@@ -343,6 +341,11 @@ public class NNEvaluatorONNX : NNEvaluator
       throw new Exception("ConverterToFlatFromTPG must be provided");
     }
 
+    if (!haveInitializedLookupByteToHalf)
+    {
+      InitLookupTable();
+    }
+
     if (inputsPrimaryNative == null)
     {
       // TO DO: This buffer sizing logic is tied to TPG board representation
@@ -357,11 +360,6 @@ public class NNEvaluatorONNX : NNEvaluator
     }
 
     int numConverted = ConverterToFlatFromTPG(Options, positionsNativeInput, inputsPrimaryNative);
-
-    if (!haveInitializedLookupByteToHalf)
-    {
-      InitLookupTable();
-    }
 
     // Convert bytes to Half (efficiently via lookup table).
     for (int i = 0; i < numConverted; i++)
@@ -436,6 +434,14 @@ public class NNEvaluatorONNX : NNEvaluator
 
       short[] legalMoveIndices = null; // not needed, batch already contains moves
       ConverterToFlat(Options, batch, UseHistory, evaluatorInputBuffer, evaluatorInputBufferHalf, legalMoveIndices);
+
+      // Apply PlySinceLastMove transformation for byte input case.
+      // Pass pre-computed LastMovePlies if available; otherwise history-based estimation is used.
+      if (HasSquaresByteInput)
+      {
+        ReadOnlySpan<byte> lastMovePlies = batch.LastMovePlies.IsEmpty ? default : batch.LastMovePlies.Span.Slice(0, batch.NumPos * 64);
+        ApplyPlySinceLastMoveTransformationToTPGBuffer(evaluatorInputBuffer.Span, batch.NumPos, lastMovePlies);
+      }
 
       PositionEvaluationBatch ret = DoEvaluateBatch(batch, evaluatorInputBuffer, evaluatorInputBufferHalf, batch.States, batch.NumPos,
                                                     retrieveSupplementalResults, null, 1);

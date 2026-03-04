@@ -18,7 +18,6 @@ using System.IO;
 using System.Linq;
 using System.Numerics.Tensors;
 using System.Threading.Tasks;
-using Ceres.Base.CUDA;
 using Ceres.Base.DataTypes;
 using Ceres.Base.Threading;
 using Ceres.Chess.EncodedPositions;
@@ -572,9 +571,14 @@ public class NNEvaluatorTensorRT : NNEvaluator
       throw new Exception("ConverterToFlatFromTPG must be provided");
     }
 
+    if (!haveInitializedLookupByteToHalf)
+    {
+      InitLookupTable();
+    }
+
     // Allocate thread-static buffers if needed
     int bytesPerSquareRecord = TPGRecord.BYTES_PER_SQUARE_RECORD;
-    int maxBufferSize = MaxBatchSize * 64 * bytesPerSquareRecord;
+    int maxBufferSize = MaxBatchSize * 64 * TPGRecord.BYTES_PER_SQUARE_RECORD;
 
     if (inputsPrimaryNative == null || inputsPrimaryNative.Length < maxBufferSize)
     {
@@ -584,11 +588,6 @@ public class NNEvaluatorTensorRT : NNEvaluator
 
     // Convert native input to flat format
     int numConverted = ConverterToFlatFromTPG(Options, positionsNativeInput, inputsPrimaryNative);
-
-    if (!haveInitializedLookupByteToHalf)
-    {
-      InitLookupTable();
-    }
 
     if (useByteInputs)
     {
@@ -1097,6 +1096,11 @@ public class NNEvaluatorTensorRT : NNEvaluator
       Memory<byte> byteBuffer = new Memory<byte>(squareByteBuffer, 0, numPos * 64 * TPGRecord.BYTES_PER_SQUARE_RECORD);
       Memory<Half> emptyHalf = Memory<Half>.Empty;
       ConverterToFlat(Options, batch, USE_HISTORY, byteBuffer, emptyHalf, null);
+
+      // Apply PlySinceLastMove transformation for each position in the batch.
+      // Pass pre-computed LastMovePlies if available; otherwise history-based estimation is used.
+      ReadOnlySpan<byte> lastMovePlies = batch.LastMovePlies.IsEmpty ? default : batch.LastMovePlies.Span.Slice(0, numPos * 64);
+      ApplyPlySinceLastMoveTransformationToTPGBuffer(byteBuffer.Span, numPos, lastMovePlies);
     }
 
     return ProcessBatchWithPool(batch, numPos);

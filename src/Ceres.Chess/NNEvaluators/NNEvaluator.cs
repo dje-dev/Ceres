@@ -18,9 +18,11 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Numerics;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 
+using Ceres.Base.DataType;
 using Ceres.Base.DataTypes;
 
 using Ceres.Chess.EncodedPositions;
@@ -29,6 +31,7 @@ using Ceres.Chess.LC0.Batches;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
 using Ceres.Chess.NetEvaluation.Batch;
+using Ceres.Chess.NNEvaluators.Ceres.TPG;
 using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.Positions;
 
@@ -38,10 +41,28 @@ using Ceres.Chess.Positions;
 namespace Ceres.Chess.NNEvaluators
 {
   /// <summary>
-  /// Abstract base class for objects which can evaluate positions via neural network.
+  /// Ancillary per-position data that can be passed through the Evaluate(PositionWithHistory) path.
   /// </summary>
+  public class NNEvalautorAncillaryPositionInfo
+  {
+    /// <summary>
+    /// Per-square ply counts since last move (64 bytes, raw ply counts, not encoded).
+    /// </summary>
+    public byte[] LastMovePlies;
+  }
+
+
+/// <summary>
+/// Abstract base class for objects which can evaluate positions via neural network.
+/// </summary>
   public abstract class NNEvaluator
   {
+    /// <summary>
+    /// If true, the PlySinceLastMove field in TPGSquareRecord will be filled in
+    /// by inspecting history planes during TPG evaluation.
+    /// </summary>
+    public const bool FILL_IN_PLY_SINCE_LAST_PIECE_MOVED = true;
+
     /// <summary>
     /// Currently hardcoded value for the per-square dimension of the prior state information, 
     /// if the network has a state output. Linked to TPGRecord.SIZE_STATE_PER_SQUARE.
@@ -526,6 +547,256 @@ namespace Ceres.Chess.NNEvaluators
     #region Helper methods
 
     /// <summary>
+    /// Sets PlySinceLastMove for each square by inspecting the 8 history planes.
+    /// If history is missing (plane 0 == plane 1, indicating fill-in), uses default of 30.
+    /// Encoding: 2 / sqrt(plies + 1), stored as ByteScaled (raw byte = encoded * 100).
+    /// </summary>
+    /// <param name="squares">Span of 64 TPGSquareRecord representing all squares for one position</param>
+    public static void SetPlySinceLastMoveFromHistory(Span<TPGSquareRecord> squares)
+    {
+      const int DEFAULT_PLIES = 30; // TPGRecordEncoding.DEFAULT_PLIES_SINCE_LAST_PIECE_MOVED_IF_STARTPOS
+
+      // Detect if history planes are populated by checking whether plane 0 and plane 1
+      // differ on at least one square. If all 64 squares have identical plane 0 and plane 1,
+      // history was filled in by copying the current position and is not real.
+      bool hasHistory = false;
+      for (int sq = 0; sq < 64; sq++)
+      {
+        ReadOnlySpan<ByteScaled> p0 = squares[sq].PieceTypeHistory(0);
+        ReadOnlySpan<ByteScaled> p1 = squares[sq].PieceTypeHistory(1);
+        for (int b = 0; b < 13; b++)
+        {
+          if (p0[b].RawValue != p1[b].RawValue) { hasHistory = true; break; }
+        }
+        if (hasHistory) break;
+      }
+
+      if (!hasHistory)
+      {
+        // No real history available - use default for all squares.
+        float encoded = TPGRecordEncoding.PliesSinceLastMoveEncoded(DEFAULT_PLIES);
+        for (int sq = 0; sq < 64; sq++)
+        {
+          squares[sq].PlySinceLastMove.Value = encoded;
+        }
+        return;
+      }
+
+      for (int sq = 0; sq < 64; sq++)
+      {
+        ReadOnlySpan<ByteScaled> cur = squares[sq].PieceTypeHistory(0);
+
+        // Walk backward through history planes to find when this square last changed.
+        // Plane h represents h plies ago (alternating side to move).
+        int estimatedPlies = DEFAULT_PLIES; // default if unchanged through all history
+        for (int h = 1; h < 8; h++)
+        {
+          ReadOnlySpan<ByteScaled> hist = squares[sq].PieceTypeHistory(h);
+          bool same = true;
+          for (int b = 0; b < 13; b++)
+          {
+            if (cur[b].RawValue != hist[b].RawValue) { same = false; break; }
+          }
+          if (!same)
+          {
+            // Square changed between plane h and plane h-1, so piece arrived h plies ago.
+            estimatedPlies = h;
+            break;
+          }
+        }
+
+        squares[sq].PlySinceLastMove.Value = TPGRecordEncoding.PliesSinceLastMoveEncoded(estimatedPlies);
+      }
+    }
+
+
+    /// <summary>
+    /// Applies the PlySinceLastMove transformation to all positions in a TPG byte buffer.
+    /// Only applies if FILL_IN_PLY_SINCE_LAST_PIECE_MOVED is true.
+    /// </summary>
+    /// <param name="tpgByteBuffer">Byte buffer containing TPGSquareRecord data for all positions</param>
+    /// <param name="numPositions">Number of positions in the buffer</param>
+    /// <param name="lastMovePlies">Optional pre-computed ply-since-last-move values (64 bytes per position).
+    /// If provided and non-empty, these values are used directly instead of estimating from history.</param>
+    public static void ApplyPlySinceLastMoveTransformationToTPGBuffer(Span<byte> tpgByteBuffer, int numPositions,
+                                                                      ReadOnlySpan<byte> lastMovePlies = default)
+    {
+      if (!FILL_IN_PLY_SINCE_LAST_PIECE_MOVED)
+      {
+        return;
+      }
+
+      int bytesPerSquare = Marshal.SizeOf<TPGSquareRecord>();
+      Span<TPGSquareRecord> allSquares = MemoryMarshal.Cast<byte, TPGSquareRecord>(tpgByteBuffer.Slice(0, numPositions * 64 * bytesPerSquare));
+
+      // Check if pre-computed plies are available AND actually populated (not just allocated).
+      // A span of all zeros indicates the array was allocated but never populated - treat as not available.
+      bool hasPrecomputedPlies = !lastMovePlies.IsEmpty
+                              && lastMovePlies.Length >= numPositions * 64
+                              && !IsAllZeros(lastMovePlies.Slice(0, 64)); // Check first position as sentinel
+      
+Console.WriteLine("NNevaluator hasPrecomputedPliesZ: " + hasPrecomputedPlies);
+
+      for (int pos = 0; pos < numPositions; pos++)
+      {
+        Span<TPGSquareRecord> posSquares = allSquares.Slice(pos * 64, 64);
+
+        if (hasPrecomputedPlies)
+        {
+          // Use pre-computed ply-since-last-move values directly.
+          ReadOnlySpan<byte> posPlies = lastMovePlies.Slice(pos * 64, 64);
+          SetPlySinceLastMoveFromPrecomputed(posSquares, posPlies);
+        }
+        else
+        {
+          // Fall back to estimating from history planes.
+          SetPlySinceLastMoveFromHistory(posSquares);
+        }
+      }
+    }
+
+
+    /// <summary>
+    /// Checks if all bytes in the span are zero.
+    /// </summary>
+    private static bool IsAllZeros(ReadOnlySpan<byte> span)
+    {
+      foreach (byte b in span)
+      {
+        if (b != 0) return false;
+      }
+      return true;
+    }
+
+
+    /// <summary>
+    /// Sets PlySinceLastMove for each square from pre-computed ply values.
+    /// </summary>
+    /// <param name="squares">Span of 64 TPGSquareRecord representing all squares for one position</param>
+    /// <param name="plySinceLastMove">Pre-computed ply values (64 bytes, one per square)</param>
+    /// <exception cref="InvalidOperationException">Thrown if any ply value is zero, indicating uninitialized data.</exception>
+    public static void SetPlySinceLastMoveFromPrecomputed(Span<TPGSquareRecord> squares, ReadOnlySpan<byte> plySinceLastMove)
+    {
+      for (int sq = 0; sq < 64; sq++)
+      {
+        byte plyValue = plySinceLastMove[sq];
+
+        // Zero is invalid - it means "never moved" which cannot occur for properly computed ply-since values.
+        // A zero indicates the buffer was allocated but not populated.
+        if (plyValue == 0)
+        {
+          throw new InvalidOperationException(
+            $"Invalid zero value in pre-computed LastMovePlies at square {sq}. " +
+            "This indicates the buffer was allocated but not populated. " +
+            "Ensure the code path that enables LastMovePlies also populates the values.");
+        }
+
+        squares[sq].PlySinceLastMove.Value = TPGRecordEncoding.PliesSinceLastMoveEncoded(plyValue);
+      }
+
+      // DEBUG: Validate pre-computed ply values against history planes.
+      // If history shows a recent change but ply value is high, something is wrong.
+      Debug.Assert(ValidatePlySinceLastMoveAgainstHistory(squares, plySinceLastMove),
+        "Pre-computed ply-since-last-move values are inconsistent with history planes. " +
+        "A square shows recent history change but has a high ply value.");
+    }
+
+
+    /// <summary>
+    /// Validates that pre-computed ply-since-last-move values are consistent with history planes.
+    /// Returns false if any inconsistency is detected.
+    /// </summary>
+    private static bool ValidatePlySinceLastMoveAgainstHistory(Span<TPGSquareRecord> squares, ReadOnlySpan<byte> plySinceLastMove)
+    {
+      const int HIGH_PLY_THRESHOLD = 20; // Ply values >= this are considered "high" (expecting no recent change)
+      const byte DEFAULT_PLY_VALUE = 30; // TPGRecordEncoding.DEFAULT_PLIES_SINCE_LAST_PIECE_MOVED_IF_STARTPOS
+
+      // First check: if ALL values are the default, the buffer was never populated with actual move data.
+      int defaultCount = 0;
+      for (int i = 0; i < 64; i++)
+      {
+        if (plySinceLastMove[i] == DEFAULT_PLY_VALUE)
+        {
+          defaultCount++;
+        }
+      }
+
+      if (defaultCount == 64)
+      {
+        Console.WriteLine("WARNING: All 64 LastMovePlies values are the default (30). " +
+          "This suggests the buffer was initialized but PlySinceLastMoveUpdater.ApplyMove was never called, " +
+          "or the updated buffer was not propagated to this evaluation.");
+      }
+
+      for (int sq = 0; sq < 64; sq++)
+      {
+        byte plyValue = plySinceLastMove[sq];
+
+        // Only check squares with high ply values (claiming no recent move on this square).
+        if (plyValue < HIGH_PLY_THRESHOLD)
+        {
+          continue;
+        }
+
+        // Check if history planes show the square contents changed recently.
+        // Compare current plane (0) with history planes (1-7).
+        ReadOnlySpan<ByteScaled> currentPlane = squares[sq].PieceTypeHistory(0);
+
+        for (int h = 1; h < 8; h++)
+        {
+          ReadOnlySpan<ByteScaled> histPlane = squares[sq].PieceTypeHistory(h);
+
+          // Check if the piece on this square changed between plane 0 and plane h.
+          bool changed = false;
+          for (int b = 0; b < 13; b++)
+          {
+            if (currentPlane[b].RawValue != histPlane[b].RawValue)
+            {
+              changed = true;
+              break;
+            }
+          }
+
+          if (changed)
+          {
+            // History shows the square changed h plies ago, but pre-computed says ply >= HIGH_PLY_THRESHOLD.
+            // This is inconsistent.
+            (PieceType currentPiece, bool currentIsOurs) = TPGSquareRecord.GetPieceInfo(currentPlane);
+            (PieceType histPiece, bool histIsOurs) = TPGSquareRecord.GetPieceInfo(histPlane);
+
+            // Check if the XOR'd index would have given the correct value.
+            // This tests if there's an indexing convention mismatch.
+            int flippedSq = sq ^ 56;
+            byte flippedPlyValue = plySinceLastMove[flippedSq];
+
+            Console.WriteLine($"ERROR: PlySinceLastMove inconsistency at square {sq}: " +
+              $"pre-computed ply={plyValue} but history shows change at plane {h}. " +
+              $"Current: {(currentIsOurs ? "Our" : "Opp")} {currentPiece}, " +
+              $"Plane {h}: {(histIsOurs ? "Our" : "Opp")} {histPiece}");
+            Console.WriteLine($"  DEBUG: If we had read from flipped index {flippedSq} (sq^56), ply would be {flippedPlyValue}");
+            Console.WriteLine($"  DEBUG: Square {sq} (rank {sq / 8}, file {sq % 8}), Flipped {flippedSq} (rank {flippedSq / 8}, file {flippedSq % 8})");
+
+            // Count how many values are the default to help diagnose
+            Console.WriteLine($"  DEBUG: {defaultCount}/64 values are the default ({DEFAULT_PLY_VALUE})");
+
+            // Dump unique values in the array
+            HashSet<byte> uniqueValues = new HashSet<byte>();
+            for (int i = 0; i < 64; i++)
+            {
+              uniqueValues.Add(plySinceLastMove[i]);
+            }
+            Console.WriteLine($"  DEBUG: Unique values in LastMovePlies: [{string.Join(", ", uniqueValues.OrderBy(v => v))}]");
+
+            return false;
+          }
+        }
+      }
+
+      return true;
+    }
+
+
+    /// <summary>
     /// Performs any initialization to prepare evaluator for delay-free execution.
     /// </summary>
     public virtual void Warmup()
@@ -546,10 +817,18 @@ namespace Ceres.Chess.NNEvaluators
                                       bool fillInMissingPlanes = true,
                                       bool retrieveSupplementalResults = false,
                                       InputTypes extraInputs = InputTypes.Undefined,
-                                      Half[] state = null)
+                                      Half[] state = null,
+                                      NNEvalautorAncillaryPositionInfo ancillaryInfo = null)
     {
-      EncodedPositionBatchBuilder builder = new EncodedPositionBatchBuilder(1, InputsRequired | extraInputs);
-      builder.Add(position, fillInMissingPlanes, state);
+      InputTypes inputs = InputsRequired | extraInputs;
+      byte[] lastMovePlies = ancillaryInfo?.LastMovePlies;
+      if (lastMovePlies != null)
+      {
+        inputs |= InputTypes.LastMovePlies;
+      }
+
+      EncodedPositionBatchBuilder builder = new EncodedPositionBatchBuilder(1, inputs);
+      builder.Add(position, fillInMissingPlanes, state, lastMovePlies);
 
       NNEvaluatorResult[] result = EvaluateBatch(builder.GetBatch(), retrieveSupplementalResults);
       return result[0];
