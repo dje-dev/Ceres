@@ -65,16 +65,14 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     private TPGSquareRecord Square;
   }
 
-#if USE_V2_TPG_RECORD
   /// <summary>
   /// Array of 64 ply-bin bytes, one per square.
   /// </summary>
-  [InlineArray(64)]
+  [InlineArray(TPGRecord.NUM_PLY_BIN_PER_SQUARE)]
   public struct PlyBinPerSquare64
   {
     private byte Value;
   }
-#endif
 
 
   /// <summary>
@@ -85,6 +83,9 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
   [StructLayout(LayoutKind.Sequential, Pack = 1)]
   public unsafe struct TPGRecord
   {
+    public const bool USE_V2_TPG_RECORD = true;
+    internal const int NUM_PLY_BIN_PER_SQUARE = USE_V2_TPG_RECORD ? 64 : 0;
+
     /// <summary>
     /// Currently hardcoded value for the per-square dimension of the prior state information, 
     /// if the network has a state output. Linked to TPGRecord.SIZE_STATE_PER_SQUARE.NNEvaluator
@@ -115,11 +116,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     // *** WARNING **** value hardcoded in ONNXRuntimeExecutor.TPG_BYTES_PER_SQUARE_RECORD currently, fix 
     public const int BYTES_PER_SQUARE_RECORD = 137;
 
-#if USE_V2_TPG_RECORD
-    public const int TOTAL_BYTES = 9378; // 9250 + 128
-#else
-    public const int TOTAL_BYTES = 9250;
-#endif
+    public const int TOTAL_BYTES = 9250 + (USE_V2_TPG_RECORD ? (2 * 64) : 0);
 
     #endregion
 
@@ -228,7 +225,6 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     /// </summary>
     public short PolicyIndexInParent;
 
-#if USE_V2_TPG_RECORD
     /// <summary>
     /// Per-square ply-bin encoding of the number of half-moves until the piece occupancy changes.
     /// </summary>
@@ -238,7 +234,6 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     /// Per-square ply-bin encoding of the number of half-moves until the piece currently on the square is captured.
     /// </summary>
     public PlyBinPerSquare64 PlyUntilSquarePieceCapture;
-#endif
 
     /// <summary>
     /// Policy training target with array of move indices having nozero probabilities.
@@ -659,7 +654,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
       if (BYTES_PER_SQUARE_RECORD != Marshal.SizeOf<TPGSquareRecord>()
        || TOTAL_BYTES != Marshal.SizeOf<TPGRecord>())
       {
-        throw new Exception("TPGRecord data structure sizing is incorrect.");
+        throw new Exception("TPGRecord data structure sizing is incorrect");
       }
     }
 

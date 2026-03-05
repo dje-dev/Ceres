@@ -162,7 +162,6 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     /// </summary>
     public byte PUNIMOpponent;
 
-#if USE_V2_TPG_RECORD
     /// <summary>
     /// Per-square ply-bin encoding of the number of half-moves until the piece occupancy changes.
     /// </summary>
@@ -172,7 +171,6 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
     /// Per-square ply-bin encoding of the number of half-moves until a capture occurs on that square.
     /// </summary>
     public PlyBinPerSquare64 PlyUntilSquarePieceCapture;
-#endif
   }
 
 }

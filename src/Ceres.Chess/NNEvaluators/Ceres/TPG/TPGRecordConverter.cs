@@ -116,13 +116,15 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
         ConvertToTPGEvalInfo(targetInfo.Value, ref tpgRecord, validate);
       }
 
-#if USE_V2_TPG_RECORD
-      if (targetInfo != null)
+      if (TPGRecord.USE_V2_TPG_RECORD)
       {
-        tpgRecord.PlyUntilSquareChangePiece = targetInfo.Value.PlyUntilSquareChangePiece;
-        tpgRecord.PlyUntilSquarePieceCapture = targetInfo.Value.PlyUntilSquarePieceCapture;
+        if (targetInfo != null)
+        {
+          tpgRecord.PlyUntilSquareChangePiece = targetInfo.Value.PlyUntilSquareChangePiece;
+          tpgRecord.PlyUntilSquarePieceCapture = targetInfo.Value.PlyUntilSquarePieceCapture;
+        }
       }
-#endif
+
 
       if (policyVector is not null)
       {
@@ -361,10 +363,11 @@ namespace Ceres.Chess.NNEvaluators.Ceres.TPG
       Debug.Assert(qPositiveBlunders == targetInfo.ForwardSumPositiveBlunders);
 #endif
 
-#if USE_V2_TPG_RECORD
-      tpgRecord.PlyUntilSquareChangePiece = targetInfo.PlyUntilSquareChangePiece;
-      tpgRecord.PlyUntilSquarePieceCapture = targetInfo.PlyUntilSquarePieceCapture;
-#endif
+      if (TPGRecord.USE_V2_TPG_RECORD)
+      {
+        tpgRecord.PlyUntilSquareChangePiece = targetInfo.PlyUntilSquareChangePiece;
+        tpgRecord.PlyUntilSquarePieceCapture = targetInfo.PlyUntilSquarePieceCapture;
+      }
 
       // Write squares.
       ConvertToTPGRecordSquares(trainingPos.PositionWithBoards, includeHistory, tpgRecord.Squares,
