@@ -554,7 +554,7 @@ namespace Ceres.Chess.NNEvaluators
     /// <param name="squares">Span of 64 TPGSquareRecord representing all squares for one position</param>
     public static void SetPlySinceLastMoveFromHistory(Span<TPGSquareRecord> squares)
     {
-      const int DEFAULT_PLIES = 30; // TPGRecordEncoding.DEFAULT_PLIES_SINCE_LAST_PIECE_MOVED_IF_STARTPOS
+      const int DEFAULT_PLIES = TPGRecordEncoding.DEFAULT_PLIES_SINCE_LAST_PIECE_MOVED_IF_STARTPOS;
 
       // Detect if history planes are populated by checking whether plane 0 and plane 1
       // differ on at least one square. If all 64 squares have identical plane 0 and plane 1,
@@ -571,13 +571,15 @@ namespace Ceres.Chess.NNEvaluators
         if (hasHistory) break;
       }
 
-      if (!hasHistory)
+      const bool FILL_FROM_HISTORY_HEURISTIC_ENABLED = false;
+
+      if (!hasHistory || !FILL_FROM_HISTORY_HEURISTIC_ENABLED)
       {
         // No real history available - use default for all squares.
-        float encoded = TPGRecordEncoding.PliesSinceLastMoveEncoded(DEFAULT_PLIES);
+        float defaultFillInValueEncoded = TPGRecordEncoding.PliesSinceLastMoveEncoded(DEFAULT_PLIES);
         for (int sq = 0; sq < 64; sq++)
         {
-          squares[sq].PlySinceLastMove.Value = encoded;
+          squares[sq].PlySinceLastMove.Value = defaultFillInValueEncoded;
         }
         return;
       }
@@ -635,8 +637,6 @@ namespace Ceres.Chess.NNEvaluators
                               && lastMovePlies.Length >= numPositions * 64
                               && !IsAllZeros(lastMovePlies.Slice(0, 64)); // Check first position as sentinel
       
-Console.WriteLine("NNevaluator hasPrecomputedPliesZ: " + hasPrecomputedPlies);
-
       for (int pos = 0; pos < numPositions; pos++)
       {
         Span<TPGSquareRecord> posSquares = allSquares.Slice(pos * 64, 64);
