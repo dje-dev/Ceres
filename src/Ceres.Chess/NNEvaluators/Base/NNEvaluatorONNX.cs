@@ -19,6 +19,10 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
+
+using Onnx;
+using Microsoft.ML.OnnxRuntime;
+
 using Ceres.Base.Benchmarking;
 using Ceres.Base.DataType;
 using Ceres.Base.DataTypes;
@@ -27,10 +31,10 @@ using Ceres.Chess.LC0.Batches;
 using Ceres.Chess.NetEvaluation.Batch;
 using Ceres.Chess.NNBackends.ONNXRuntime;
 using Ceres.Chess.NNEvaluators;
+using Ceres.Chess.NNEvaluators.Ceres;
 using Ceres.Chess.NNEvaluators.Ceres.TPG;
 using Ceres.Chess.NNEvaluators.Defs;
-using Microsoft.ML.OnnxRuntime;
-using Onnx;
+
 
 #endregion
 
@@ -437,10 +441,11 @@ public class NNEvaluatorONNX : NNEvaluator
 
       // Apply PlySinceLastMove transformation for byte input case.
       // Pass pre-computed LastMovePlies if available; otherwise history-based estimation is used.
-      if (HasSquaresByteInput)
+      // Only apply if Options is NNEvaluatorOptionsCeres; otherwise skip ply-since logic entirely.
+      if (Options is NNEvaluatorOptionsCeres ceresOptions)
       {
         ReadOnlySpan<byte> lastMovePlies = batch.LastMovePlies.IsEmpty ? default : batch.LastMovePlies.Span.Slice(0, batch.NumPos * 64);
-        ApplyPlySinceLastMoveTransformationToTPGBuffer(evaluatorInputBuffer.Span, batch.NumPos, lastMovePlies);
+        ApplyPlySinceLastMoveTransformationToTPGBuffer(evaluatorInputBuffer.Span, batch.NumPos, ceresOptions.PlySinceLastMoveMode, lastMovePlies);
       }
 
       PositionEvaluationBatch ret = DoEvaluateBatch(batch, evaluatorInputBuffer, evaluatorInputBufferHalf, batch.States, batch.NumPos,

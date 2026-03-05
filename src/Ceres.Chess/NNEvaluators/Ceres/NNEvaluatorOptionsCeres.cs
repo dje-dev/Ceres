@@ -26,6 +26,27 @@ namespace Ceres.Chess.NNEvaluators.Ceres
   /// </summary>
   public record NNEvaluatorOptionsCeres : NNEvaluatorOptions
   {
+    public enum PlySinceLastMoveModeEnum
+    {
+      /// <summary>
+      /// Raw value set to zero (e.g. if net not trained with this feature).
+      /// </summary>
+      Zero,
+
+      /// <summary>
+      /// Uses the 8 history planes to attempt to recontruct certain of 
+      /// the plys since last move information, else using the default value (e.g. used for starting position).
+      /// </summary>
+      HistoryPlanesApproximation,
+
+      /// <summary>
+      /// Uses the exact values passed in to the evaluator,
+      /// computed by the engine or from a PositionWithHistory.
+      /// </summary>
+      PlySinceLastMovesInputArray
+    };
+
+
     // Values tuned for Ceres nets.
     public const float DEFAULT_FRACTION_VALUE2 = 0.4f;
     public const float DEFAULT_VALUE1_TEMPERATURE = 0.55f;
@@ -91,6 +112,12 @@ namespace Ceres.Chess.NNEvaluators.Ceres
     /// Uses BuilderFlag::kREFIT_IDENTICAL which requires identical weight shapes.
     /// </summary>
     public bool Refittable { get; init; } = false;
+
+    /// <summary>
+    /// Mode for determining "plys since last move" value to feed into the neural network.
+    /// </summary>
+    public PlySinceLastMoveModeEnum PlySinceLastMoveMode { get; init; } = PlySinceLastMoveModeEnum.Zero;
+
 
 
     /// <summary>
@@ -182,6 +209,22 @@ namespace Ceres.Chess.NNEvaluators.Ceres
       bool useBF16 = CheckOptionSpecifiedElseDefaultBoolean(optionsDict, "BF16", false);
       bool refittable = CheckOptionSpecifiedElseDefaultBoolean(optionsDict, "REFITTABLE", false);
 
+      PlySinceLastMoveModeEnum plySinceMode = baseOptions is NNEvaluatorOptionsCeres ceresOptions
+                                                           ? ceresOptions.PlySinceLastMoveMode
+                                                           : default;
+
+      // Parse LASTPLY option if specified.
+      if (optionsDict != null && optionsDict.TryGetValue("LASTPLY", out string lastPlyValue))
+      {
+        plySinceMode = lastPlyValue.ToUpperInvariant() switch
+        {
+          "ZERO" => PlySinceLastMoveModeEnum.Zero,
+          "POS_HISTORY" => PlySinceLastMoveModeEnum.HistoryPlanesApproximation,
+          "SEARCH_HISTORY" => PlySinceLastMoveModeEnum.PlySinceLastMovesInputArray,
+          _ => throw new ArgumentException($"Invalid LASTPLY value '{lastPlyValue}'. Must be one of: ZERO, POS_HISTORY, SEARCH_HISTORY")
+        };
+      }
+
       // Return composite options.
       // TODO: This is brittle, if we add more options to the base class, we need to
       //       remember to add them here too.
@@ -203,6 +246,7 @@ namespace Ceres.Chess.NNEvaluators.Ceres
         EnableCUDAGraphs = baseOptions.EnableCUDAGraphs,
         OptimizationLevel = baseOptions.OptimizationLevel,
         PolicyUncertaintyTemperatureScalingFactor = baseOptions.PolicyUncertaintyTemperatureScalingFactor,
+        PlySinceLastMoveMode = plySinceMode,
         UseBF16 = useBF16,
         Refittable = refittable,
       };

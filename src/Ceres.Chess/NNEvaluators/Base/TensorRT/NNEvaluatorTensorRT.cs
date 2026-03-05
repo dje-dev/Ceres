@@ -1099,8 +1099,12 @@ public class NNEvaluatorTensorRT : NNEvaluator
 
       // Apply PlySinceLastMove transformation for each position in the batch.
       // Pass pre-computed LastMovePlies if available; otherwise history-based estimation is used.
-      ReadOnlySpan<byte> lastMovePlies = batch.LastMovePlies.IsEmpty ? default : batch.LastMovePlies.Span.Slice(0, numPos * 64);
-      ApplyPlySinceLastMoveTransformationToTPGBuffer(byteBuffer.Span, numPos, lastMovePlies);
+      // Only apply if Options is NNEvaluatorOptionsCeres; otherwise skip ply-since logic entirely.
+      if (Options is NNEvaluatorOptionsCeres ceresOptions)
+      {
+        ReadOnlySpan<byte> lastMovePlies = batch.LastMovePlies.IsEmpty ? default : batch.LastMovePlies.Span.Slice(0, numPos * 64);
+        ApplyPlySinceLastMoveTransformationToTPGBuffer(byteBuffer.Span, numPos, ceresOptions.PlySinceLastMoveMode, lastMovePlies);
+      }
     }
 
     return ProcessBatchWithPool(batch, numPos);

@@ -366,7 +366,8 @@ namespace Ceres.Chess.NNEvaluators
             throw new Exception($"Ceres net {netFileName} not found. Use valid full path or set source directory using DirCeresNetworks in Ceres.json");
           }
 
-          NNEvaluatorOptionsCeres optionsCeres = new NNEvaluatorOptionsCeres().OptionsWithOptionsDictApplied(optionsDict) as NNEvaluatorOptionsCeres;
+          NNEvaluatorOptionsCeres optionsCeres = (optionsEvaluator as NNEvaluatorOptionsCeres) ?? new NNEvaluatorOptionsCeres();
+          optionsCeres = optionsCeres.OptionsWithOptionsDictApplied(optionsDict) as NNEvaluatorOptionsCeres;
 
           int maxCeresBatchSize = useTensorRT ? TRT_MAX_BATCH_SIZE : DEFAULT_MAX_BATCH_SIZE;
           maxCeresBatchSize = deviceDef.MaxBatchSize.HasValue ? Math.Min(deviceDef.MaxBatchSize.Value, maxCeresBatchSize) : maxCeresBatchSize;

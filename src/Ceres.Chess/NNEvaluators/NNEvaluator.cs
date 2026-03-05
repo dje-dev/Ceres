@@ -31,9 +31,12 @@ using Ceres.Chess.LC0.Batches;
 using Ceres.Chess.MoveGen;
 using Ceres.Chess.MoveGen.Converters;
 using Ceres.Chess.NetEvaluation.Batch;
+using Ceres.Chess.NNEvaluators.Ceres;
 using Ceres.Chess.NNEvaluators.Ceres.TPG;
 using Ceres.Chess.NNEvaluators.Defs;
 using Ceres.Chess.Positions;
+
+using static Ceres.Chess.NNEvaluators.Ceres.NNEvaluatorOptionsCeres;
 
 #endregion
 
@@ -52,9 +55,9 @@ namespace Ceres.Chess.NNEvaluators
   }
 
 
-/// <summary>
-/// Abstract base class for objects which can evaluate positions via neural network.
-/// </summary>
+  /// <summary>
+  /// Abstract base class for objects which can evaluate positions via neural network.
+  /// </summary>
   public abstract class NNEvaluator
   {
     /// <summary>
@@ -571,9 +574,7 @@ namespace Ceres.Chess.NNEvaluators
         if (hasHistory) break;
       }
 
-      const bool FILL_FROM_HISTORY_HEURISTIC_ENABLED = false;
-
-      if (!hasHistory || !FILL_FROM_HISTORY_HEURISTIC_ENABLED)
+      if (!hasHistory)
       {
         // No real history available - use default for all squares.
         float defaultFillInValueEncoded = TPGRecordEncoding.PliesSinceLastMoveEncoded(DEFAULT_PLIES);
@@ -613,18 +614,21 @@ namespace Ceres.Chess.NNEvaluators
 
 
     /// <summary>
-    /// Applies the PlySinceLastMove transformation to all positions in a TPG byte buffer.
-    /// Only applies if FILL_IN_PLY_SINCE_LAST_PIECE_MOVED is true.
+    /// Applies the PlySinceLastMove transformation to all positions in a TPG byte buffer
+    /// based on the specified mode from NNEvaluatorOptionsCeres.
     /// </summary>
     /// <param name="tpgByteBuffer">Byte buffer containing TPGSquareRecord data for all positions</param>
     /// <param name="numPositions">Number of positions in the buffer</param>
+    /// <param name="mode">Mode controlling how ply-since-last-move values are determined</param>
     /// <param name="lastMovePlies">Optional pre-computed ply-since-last-move values (64 bytes per position).
     /// If provided and non-empty, these values are used directly instead of estimating from history.</param>
     public static void ApplyPlySinceLastMoveTransformationToTPGBuffer(Span<byte> tpgByteBuffer, int numPositions,
+                                                                      PlySinceLastMoveModeEnum mode,
                                                                       ReadOnlySpan<byte> lastMovePlies = default)
     {
-      if (!FILL_IN_PLY_SINCE_LAST_PIECE_MOVED)
+      if (mode == PlySinceLastMoveModeEnum.Zero)
       {
+        // Zero mode: leave values as-is (already zero from initialization).
         return;
       }
 
@@ -636,22 +640,31 @@ namespace Ceres.Chess.NNEvaluators
       bool hasPrecomputedPlies = !lastMovePlies.IsEmpty
                               && lastMovePlies.Length >= numPositions * 64
                               && !IsAllZeros(lastMovePlies.Slice(0, 64)); // Check first position as sentinel
-      
+
       for (int pos = 0; pos < numPositions; pos++)
       {
         Span<TPGSquareRecord> posSquares = allSquares.Slice(pos * 64, 64);
 
-        if (hasPrecomputedPlies)
+        if (mode == PlySinceLastMoveModeEnum.PlySinceLastMovesInputArray)
         {
+          if (!hasPrecomputedPlies)
+          {
+            throw new InvalidOperationException("PlySinceLastMovesInputArray mode requires pre-computed lastMovePlies values");
+          }
+
           // Use pre-computed ply-since-last-move values directly.
           ReadOnlySpan<byte> posPlies = lastMovePlies.Slice(pos * 64, 64);
-
           SetPlySinceLastMoveFromPrecomputed(posSquares, posPlies);
+        }
+        else if (mode == PlySinceLastMoveModeEnum.HistoryPlanesApproximation)
+        {
+          // HistoryPlanesApproximation mode, or PlySinceLastMovesInputArrayElseHistoryApproximation without precomputed values:
+          // Fall back to estimating from history planes.
+          SetPlySinceLastMoveFromHistory(posSquares);
         }
         else
         {
-          // Fall back to estimating from history planes.
-          SetPlySinceLastMoveFromHistory(posSquares);
+          throw new Exception($"Unsupported PlySinceLastMoveModeEnum value");
         }
       }
     }
