@@ -32,7 +32,7 @@ namespace Ceres.Chess.Positions;
 ///   - N = square was last involved in a move N plies ago
 ///   - 0 = invalid (never used in computed values; would incorrectly indicate "never moved")
 /// </summary>
-public record struct PlySinceLastMove
+public record struct PlySinceLastMoveArray
 {
   /// <summary>
   /// Array of 64 bytes representing the ply count since last move for each square.
@@ -237,12 +237,12 @@ public record struct PlySinceLastMove
   /// <param name="current">Reference to the current PlySinceLastMove</param>
   /// <param name="temp">Reference to the temporary PlySinceLastMove</param>
   /// <param name="move">The move being applied</param>
-  public static void ApplyMoveWithSwap(ref PlySinceLastMove current, ref PlySinceLastMove temp, in MGMove move)
+  public static void ApplyMoveWithSwap(ref PlySinceLastMoveArray current, ref PlySinceLastMoveArray temp, in MGMove move)
   {
     ApplyMove(current.SquarePlySince, temp.SquarePlySince, in move);
 
     // Swap
-    PlySinceLastMove swap = current;
+    PlySinceLastMoveArray swap = current;
     current = temp;
     temp = swap;
   }
